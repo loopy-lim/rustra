@@ -1,0 +1,41 @@
+{
+  "commands": [
+    {
+      "inputSchema": {
+        "properties": {
+          "a": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "b": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "a",
+          "b"
+        ],
+        "title": "AddNumbersInput",
+        "type": "object"
+      },
+      "inputType": "AddNumbersInput",
+      "name": "addNumbers",
+      "outputSchema": {
+        "properties": {
+          "value": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "AddNumbersOutput",
+        "type": "object"
+      },
+      "outputType": "AddNumbersOutput"
+    }
+  ],
+  "packageId": "examples.calculator"
+}

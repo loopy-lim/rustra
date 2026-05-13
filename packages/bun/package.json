@@ -1,0 +1,31 @@
+{
+  "name": "@rustra/bun",
+  "version": "0.1.0",
+  "description": "Bun adapter for rustra-bridge",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  },
+  "keywords": [
+    "rustra",
+    "bridge",
+    "bun",
+    "adapter"
+  ]
+}

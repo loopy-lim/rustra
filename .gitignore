@@ -1,0 +1,12 @@
+/target/
+/dist/
+/dist-ts/
+packages/*/dist/
+/examples/calculator/dist-ts/
+/examples/tauri-calculator/dist/examples/
+/examples/tauri-calculator/dist/packages/
+*.tsbuildinfo
+/node_modules/
+/examples/react-native-calculator/node_modules/
+.DS_Store
+.npm-cache/
