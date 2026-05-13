@@ -8,7 +8,25 @@ rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 
 
 ## 1. 설치
 
-### Cargo.toml 설정
+### 외부 프로젝트에서 사용
+
+```toml
+[dependencies]
+rustra = "0.1"
+serde = { version = "1", features = ["derive"] }
+schemars = { version = "0.8", features = ["derive"] }
+```
+
+TypeScript 어댑터는 사용할 환경만 설치하면 된다:
+
+```bash
+npm install @rustra/node      # Node.js
+npm install @rustra/bun       # Bun
+npm install @rustra/tauri     # Tauri
+npm install @rustra/react-native  # React Native
+```
+
+### 모노레포 / workspace에서 사용
 
 rustra는 workspace 기반으로 관리하는 것이 권장된다. 최상위 `Cargo.toml`에 다음 의존성을 추가한다.
 
@@ -422,6 +440,149 @@ npm run test:runtime:node
 # Tauri 런타임만 테스트
 npm run test:runtime:tauri
 ```
+
+---
+
+## 6. 생성된 TypeScript를 프로젝트에 통합하기
+
+코드 생성 후 TypeScript 프로젝트에서 생성된 파일을 사용하는 방법.
+
+### 디렉토리 구성 예시
+
+```
+my-app/
+├── rust-core/            # Rust 패키지 (rustra 사용)
+│   ├── Cargo.toml
+│   ├── src/lib.rs
+│   └── generated/        ← rustra가 여기에 TS 생성
+│       ├── types.ts
+│       ├── commands.ts
+│       ├── contract.ts
+│       └── schema.json
+├── src/
+│   └── app.ts            # 여기서 생성된 TS를 import
+├── tsconfig.json
+└── package.json
+```
+
+### tsconfig.json 설정
+
+생성된 파일이 프로젝트 외부에 있으면 `paths`로 매핑한다:
+
+```json
+{
+  "compilerOptions": {
+    "paths": {
+      "@generated/*": ["./rust-core/generated/*"]
+    }
+  }
+}
+```
+
+### 빌드 파이프라인
+
+**권장 방식: 빌드 스크립트에서 코드 생성 → TypeScript 빌드**
+
+```json
+// package.json
+{
+  "scripts": {
+    "build:rust": "cargo build -p my-package && cargo run -p my-package -- generate",
+    "build:ts": "tsc",
+    "build": "npm run build:rust && npm run build:ts",
+    "dev": "npm run build:rust && tsc --watch"
+  }
+}
+```
+
+`cargo run`에서 `generate` 서브커맨드를 처리하도록 `main.rs`를 작성하면 된다:
+
+```rust
+fn main() -> rustra::Result<()> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(|s| s.as_str()) == Some("generate") {
+        let package = my_package();
+        package.generate_typescript()?.write_to_dir("generated")?;
+    }
+    Ok(())
+}
+```
+
+### CI에서 계약 검증
+
+생성된 파일이 Rust 코드와 동기화되어 있는지 확인하려면:
+
+```bash
+# 기존 생성 파일을 백업, 재생성 후 diff
+cargo run -p my-package -- generate
+git diff --exit-code generated/
+```
+
+`git diff --exit-code`가 0이 아니면 Rust 코드는 바뀌었는데 TS 파일이 갱신되지 않은 것이다. CI에서 이 검사를 넣으면 계약 불일치를 사전에 발견할 수 있다.
+
+---
+
+## 7. 에러 처리
+
+### Rust 측
+
+`RustraError`로 에러를 반환한다. `Serialize`가 구현되어 있어 JSON으로 직렬화된다.
+
+```rust
+use rustra::prelude::*;
+
+#[command]
+fn divide(input: DivideInput) -> Result<DivideOutput> {
+    if input.b == 0 {
+        return Err(RustraError::custom("division.by_zero", "cannot divide by zero"));
+    }
+    Ok(DivideOutput { value: input.a / input.b })
+}
+```
+
+에러 코드 종류:
+
+| 에러 코드 | 발생 조건 |
+|----------|----------|
+| `command.not_found` | 존재하지 않는 커맨드 호출 |
+| `command.invalid_args` | 입력 JSON 역직렬화 실패 |
+| `internal` | 내부 오류 (직렬화 실패, I/O 등) |
+| custom (지정한 코드) | `RustraError::custom(code, message)` |
+
+### TypeScript 측
+
+커맨드 호출이 실패하면 어댑터가 에러를 throw한다. Tauri 어댑터는 `RustraCommandError` 클래스를 제공한다:
+
+```ts
+import { RustraCommandError } from '@rustra/tauri';
+
+try {
+  const result = await divide(engine, { a: 10, b: 0 });
+} catch (e) {
+  if (e instanceof RustraCommandError) {
+    console.log(e.code);    // "division.by_zero"
+    console.log(e.message); // "cannot divide by zero"
+  }
+}
+```
+
+Node, Bun, React Native 어댑터는 transport 구현에 따라 에러 형태가 달라진다. 공통적으로 에러 응답은 `{ ok: false, error: { code, message } }` 형태의 JSON이다.
+
+---
+
+## 8. TypeScript 타입 매핑 한계
+
+대부분의 Rust 타입이 TypeScript로 올바르게 변환되지만, 현재 다음 타입은 `unknown`으로 폴백된다:
+
+| 미지원 타입 | 이유 |
+|------------|------|
+| `tuple` (`(A, B)`) | `prefixItems` 미처리 |
+| `oneOf` | `anyOf`만 처리 |
+| `allOf` | 교차 타입(intersection) 미처리 |
+| integer enum | string enum만 리터럴 union 변환 |
+| 중첩 `$ref` (다단계) | 1단계까지만 해석 |
+
+이런 타입이 필요하면 `types.ts`를 직접 수정하거나, `#[command(name = "...")]`으로 명시적 이름을 지정하는 방식으로 우회할 수 있다.
 
 ---
 
