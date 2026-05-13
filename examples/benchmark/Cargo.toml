@@ -1,0 +1,12 @@
+[package]
+name = "rustra-benchmark"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[dependencies]
+rustra = { workspace = true }
+rustra-macros = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars = { workspace = true }
