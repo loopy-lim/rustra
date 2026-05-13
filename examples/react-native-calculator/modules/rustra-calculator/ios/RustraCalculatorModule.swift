@@ -15,6 +15,12 @@ public class RustraCalculatorModule: Module {
         decodeRustString(rustra_calculator_invoke(pointer))
       }
     }
+
+    Function("invokeRawSync") { (payload: String) -> String in
+      return payload.withCString { pointer in
+        decodeRustString(rustra_calculator_invoke(pointer))
+      }
+    }
   }
 }
 
