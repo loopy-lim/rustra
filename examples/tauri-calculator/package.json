@@ -1,0 +1,11 @@
+{
+  "name": "rustra-tauri-calculator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:frontend && npm_config_cache=/tmp/rustra-npm-cache npx @tauri-apps/cli build",
+    "build:frontend": "tsc -p tsconfig.json",
+    "smoke": "node runtime-smoke.mjs"
+  }
+}

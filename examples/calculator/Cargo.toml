@@ -1,0 +1,15 @@
+[package]
+name = "rustra-calculator-example"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish = false
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+rustra.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "rustra"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[features]
+tauri = ["dep:tauri"]
+
+[dependencies]
+rustra-macros.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
+tauri = { version = "2", optional = true }

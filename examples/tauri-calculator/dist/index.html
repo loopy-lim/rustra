@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Rustra Tauri Calculator</title>
+  </head>
+  <body>
+    <main>
+      <h1>Rustra Tauri Calculator</h1>
+      <output id="result">pending</output>
+    </main>
+    <script type="module">
+      import("./examples/tauri-calculator/src/app.js").catch((error) => {
+        document.body.dataset.error = String(error);
+        console.error(error);
+      });
+    </script>
+  </body>
+</html>
