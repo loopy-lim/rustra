@@ -1,6 +1,6 @@
 # rustra
 
-Rust에서 명령을 한 번 정의하면, 어디서든 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크.
+Rust에서 명령을 한 번 정의하면, Node / Bun / Tauri / React Native 어디서든 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크.
 
 ## 작동 방식
 
@@ -11,6 +11,64 @@ Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플�
 - Rust 쪽에서 `#[command]`로 함수를 정의
 - `generate_typescript()` 호출 시 타입 안전한 TS 클라이언트 코드 생성
 - Node, Bun, Tauri, React Native 어댑터가 동일한 `EngineClient` 인터페이스로 라우팅
+
+## 설치
+
+### Rust
+
+```toml
+[dependencies]
+rustra = "0.1"
+serde = { version = "1", features = ["derive"] }
+schemars = { version = "0.8", features = ["derive"] }
+```
+
+### TypeScript 어댑터 (필요한 환경만)
+
+```bash
+npm install @rustra/node      # Node.js
+npm install @rustra/bun       # Bun
+npm install @rustra/tauri     # Tauri
+npm install @rustra/react-native  # React Native
+```
+
+## 빠른 예제
+
+```rust
+use rustra::prelude::*;
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct AddNumbersInput { a: i64, b: i64 }
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct AddNumbersOutput { value: i64 }
+
+#[command]
+fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
+    Ok(AddNumbersOutput { value: input.a + input.b })
+}
+
+fn main() -> Result<()> {
+    let package = Package::builder("example.calculator")
+        .command_fn(add_numbers)
+        .build();
+
+    // TypeScript 클라이언트 생성
+    package.generate_typescript()?.write_to_dir("generated")?;
+    Ok(())
+}
+```
+
+```ts
+// TypeScript — 모든 플랫폼에서 동일
+import { createNodeEngine } from "@rustra/node";
+import { addNumbers } from "./generated/commands.js";
+
+const engine = createNodeEngine({ invoke: myTransport });
+const result = await addNumbers(engine, { a: 20, b: 22 }); // { value: 42 }
+```
 
 ## 프로젝트 구조
 
@@ -28,6 +86,7 @@ packages/
 examples/
   calculator/              기본 예시 (Rust crate + C FFI + stdio + 생성된 TS)
   tauri-calculator/        Tauri 런타임 예시
+  react-native-calculator/ React Native 런타임 예시
 ```
 
 ## Rust: 명령 정의
@@ -171,3 +230,19 @@ cargo test --workspace
 # calculator 예시 빌드 및 TS 생성
 cargo run -p rustra-calculator-example
 ```
+
+## 문서
+
+전체 문서는 [`docs/`](docs/)에 있다.
+
+| 문서 | 내용 |
+|------|------|
+| [시작하기](docs/getting-started.md) | 설치, 첫 패키지 만들기, 어댑터 선택 |
+| [아키텍처 개요](docs/architecture.md) | 데이터 흐름, EngineClient 계약, transport 분리 |
+| [Transport 교체 가이드](docs/extending/transport-guide.md) | Bun FFI, Node napi-rs 교체 |
+| [새 Host 추가 가이드](docs/extending/adding-host.md) | Electron, Deno 등 새 어댑터 추가 |
+| [전체 문서 목록](docs/README.md) | 사용자 / 기여자별 읽기 경로 |
+
+## 기여
+
+[CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.
