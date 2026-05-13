@@ -10,5 +10,9 @@ class RustraCalculatorModule : Module() {
     AsyncFunction("invokeRaw") { payload: String ->
       """{"ok":false,"error":"Android Rust transport is not implemented yet","payload":$payload}"""
     }
+
+    Function("invokeRawSync") { payload: String ->
+      """{"ok":false,"error":"Android Rust transport is not implemented yet","payload":$payload}"""
+    }
   }
 }
