@@ -27,6 +27,7 @@ RUSTRA_IOS_TARGET=aarch64-apple-ios-sim ./ios/build-rust-ios.sh
 ```
 
 The script:
+
 - Compiles your crate as a static library (`--lib --release`)
 - Copies `lib<crate_name>.a` into `ios/rust/lib/`
 
@@ -44,6 +45,7 @@ s.pod_target_xcconfig = {
 ### 3. Create the Expo Module
 
 `expo-module.config.json`:
+
 ```json
 {
   "platforms": ["ios"],
@@ -107,17 +109,22 @@ Android support requires a Kotlin module with JNI bindings to the Rust library. 
 
 ## Troubleshooting
 
-### "library not found for -lrustra_..."
+### "library not found for -lrustra\_..."
+
 Run the Rust build script before `pod install`:
+
 ```sh
 ./ios/build-rust-ios.sh && cd ios && pod install
 ```
 
 ### Metro can't resolve @rustra/react-native
+
 Ensure `watchFolders` in `metro.config.js` points to the monorepo root.
 
 ### "RustraCalculator" is undefined
+
 Verify the Expo module is properly linked:
+
 1. Check `expo-module.config.json` references the correct Swift class
 2. Run `npx expo-modules-core` to regenerate module providers
 3. Clean build: `cd ios && pod deintegrate && pod install`

@@ -63,8 +63,8 @@ fn main() -> Result<()> {
 
 ```ts
 // TypeScript — 모든 플랫폼에서 동일
-import { createNodeEngine } from "@rustra/node";
-import { addNumbers } from "./generated/commands.js";
+import { createNodeEngine } from '@rustra/node';
+import { addNumbers } from './generated/commands.js';
 
 const engine = createNodeEngine({ invoke: myTransport });
 const result = await addNumbers(engine, { a: 20, b: 22 }); // { value: 42 }
@@ -155,17 +155,17 @@ type RustraError = {
 
 ### 타입 매핑
 
-| Rust | TypeScript |
-|------|-----------|
-| `i64`, `u32`, `f64` | `number` |
-| `String` | `string` |
-| `bool` | `boolean` |
-| `Vec<T>` | `T[]` |
-| `(A, B, C)` | `[A, B, C]` |
-| `HashMap<String, T>` | `Record<string, T>` |
-| `Option<T>` | `T \| null` (필드가 optional이면 `?:`도 추가) |
-| `enum { A, B }` | `'A' \| 'B'` |
-| 구조체 | `{ field: type; ... }` |
+| Rust                 | TypeScript                                    |
+| -------------------- | --------------------------------------------- |
+| `i64`, `u32`, `f64`  | `number`                                      |
+| `String`             | `string`                                      |
+| `bool`               | `boolean`                                     |
+| `Vec<T>`             | `T[]`                                         |
+| `(A, B, C)`          | `[A, B, C]`                                   |
+| `HashMap<String, T>` | `Record<string, T>`                           |
+| `Option<T>`          | `T \| null` (필드가 optional이면 `?:`도 추가) |
+| `enum { A, B }`      | `'A' \| 'B'`                                  |
+| 구조체               | `{ field: type; ... }`                        |
 
 각 어댑터가 `EngineClient`를 구현하므로, 생성된 커맨드 헬퍼는 플랫폼에 관계없이 동일하게 동작한다.
 
@@ -258,14 +258,14 @@ npx rustra generate --watch --schema ./generated/schema.json --output ./src/gene
 
 전체 문서는 [`docs/`](docs/)에 있다.
 
-| 문서 | 내용 |
-|------|------|
-| [시작하기](docs/getting-started.md) | 설치, 첫 패키지 만들기, 어댑터 선택 |
-| [아키텍처 개요](docs/architecture.md) | 데이터 흐름, EngineClient 계약, transport 분리 |
-| [Transport 교체 가이드](docs/extending/transport-guide.md) | Bun FFI, Node napi-rs 교체 |
-| [React Native 설정 가이드](docs/extending/react-native-setup.md) | iOS JSI 모듈 설정, 사용법, 트러블슈팅 |
-| [새 Host 추가 가이드](docs/extending/adding-host.md) | Electron, Deno 등 새 어댑터 추가 |
-| [전체 문서 목록](docs/README.md) | 사용자 / 기여자별 읽기 경로 |
+| 문서                                                             | 내용                                           |
+| ---------------------------------------------------------------- | ---------------------------------------------- |
+| [시작하기](docs/getting-started.md)                              | 설치, 첫 패키지 만들기, 어댑터 선택            |
+| [아키텍처 개요](docs/architecture.md)                            | 데이터 흐름, EngineClient 계약, transport 분리 |
+| [Transport 교체 가이드](docs/extending/transport-guide.md)       | Bun FFI, Node napi-rs 교체                     |
+| [React Native 설정 가이드](docs/extending/react-native-setup.md) | iOS JSI 모듈 설정, 사용법, 트러블슈팅          |
+| [새 Host 추가 가이드](docs/extending/adding-host.md)             | Electron, Deno 등 새 어댑터 추가               |
+| [전체 문서 목록](docs/README.md)                                 | 사용자 / 기여자별 읽기 경로                    |
 
 ## 기여
 

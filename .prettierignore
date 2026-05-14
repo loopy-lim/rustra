@@ -1,0 +1,5 @@
+dist/
+dist-ts/
+node_modules/
+package-lock.json
+*.d.ts
