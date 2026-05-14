@@ -483,3 +483,28 @@ fn ts_generator_handles_deep_nesting() {
         generated.types_ts
     );
 }
+
+#[test]
+fn bridge_type_replaces_four_derives() {
+    #[rustra::bridge_type]
+    struct BridgedInput {
+        pub name: String,
+        pub age: Option<u32>,
+    }
+
+    // Verify serialization with camelCase
+    let input = BridgedInput { name: "test".into(), age: Some(25) };
+    let json = serde_json::to_value(&input).unwrap();
+    assert_eq!(json["name"], "test");
+    assert_eq!(json["age"], 25);
+
+    // Verify round-trip
+    let de: BridgedInput = serde_json::from_value(json).unwrap();
+    assert_eq!(de.name, "test");
+    assert_eq!(de.age, Some(25));
+
+    // Verify JsonSchema works
+    let schema = schemars::schema_for!(BridgedInput);
+    let schema_json = serde_json::to_value(&schema).unwrap();
+    assert!(schema_json["$schema"].is_string());
+}
