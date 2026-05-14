@@ -2,11 +2,11 @@ pre-commit:
   parallel: true
   commands:
     eslint:
-      glob: "packages/*/src/**/*.ts"
-      run: eslint --fix {staged_files}
+      glob: 'packages/*/src/**/*.ts'
+      run: npx eslint --fix {staged_files}
     prettier:
-      glob: "packages/*/src/**/*.ts"
-      run: prettier --write {staged_files}
+      glob: '*.{ts,js,json,yml,md}'
+      run: npx prettier --write {staged_files}
     rustfmt:
-      glob: "*.rs"
+      glob: '*.rs'
       run: rustfmt -- {staged_files}

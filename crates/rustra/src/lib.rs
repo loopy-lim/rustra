@@ -83,7 +83,7 @@ fn is_false(v: &bool) -> bool {
 }
 
 impl RustraError {
-        /// Command not found error. Code: `command.not_found`.
+    /// Command not found error. Code: `command.not_found`.
     pub fn command_not_found(name: impl Into<String>) -> Self {
         let name = name.into();
         Self {
@@ -93,7 +93,7 @@ impl RustraError {
         }
     }
 
-        /// Invalid arguments error. Code: `command.invalid_args`.
+    /// Invalid arguments error. Code: `command.invalid_args`.
     pub fn invalid_args(error: impl fmt::Display) -> Self {
         Self {
             code: "command.invalid_args",
@@ -102,7 +102,7 @@ impl RustraError {
         }
     }
 
-        /// Internal error. Code: `internal`.
+    /// Internal error. Code: `internal`.
     pub fn internal(error: impl fmt::Display) -> Self {
         Self {
             code: "internal",
@@ -111,7 +111,7 @@ impl RustraError {
         }
     }
 
-        /// Custom error with a user-defined code.
+    /// Custom error with a user-defined code.
     pub fn custom(code: &'static str, message: impl Into<String>) -> Self {
         Self {
             code,
@@ -120,7 +120,7 @@ impl RustraError {
         }
     }
 
-        /// Transport/network error. Code: `transport.error`. Retryable.
+    /// Transport/network error. Code: `transport.error`. Retryable.
     pub fn transport(error: impl fmt::Display) -> Self {
         Self {
             code: "transport.error",
@@ -129,7 +129,7 @@ impl RustraError {
         }
     }
 
-        /// Timeout error. Code: `transport.timeout`. Retryable.
+    /// Timeout error. Code: `transport.timeout`. Retryable.
     pub fn timeout(error: impl fmt::Display) -> Self {
         Self {
             code: "transport.timeout",
@@ -138,7 +138,7 @@ impl RustraError {
         }
     }
 
-        /// Builder-style method to mark any error as retryable.
+    /// Builder-style method to mark any error as retryable.
     pub fn retryable(mut self) -> Self {
         self.retryable = true;
         self

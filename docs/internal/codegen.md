@@ -55,20 +55,20 @@ fn schema_value<T: JsonSchema>() -> (Value, Value) {
 
 ### 매핑 테이블
 
-| JSON Schema type | TypeScript 타입 | 비고 |
-|---|---|---|
-| `"$ref": "#/definitions/X"` | `X` (참조된 타입 이름) | `resolve_ref()`로 이름 추출 |
-| `"anyOf": [...]` | `A \| B \| ...` | 각 스키마에 재귀 호출 후 union 생성 |
-| `"object"` | `{ field: type; ... }` | `ts_object_from_schema()` 호출 |
-| `"integer"` | `number` | |
-| `"number"` | `number` | |
-| `"string"` + `"enum"` | `'A' \| 'B'` | string enum 값을 문자열 리터럴 union으로 변환 |
-| `"string"` | `string` | enum이 없으면 일반 string |
-| `"boolean"` | `boolean` | |
-| `"array"` | `type[]` | `items`에서 재귀 호출, 없으면 `unknown[]` |
-| `"null"` | `null` | |
-| `["string", "null"]` 등 | `string \| null` | type 배열을 union으로 변환 |
-| 그 외 | `unknown` | |
+| JSON Schema type            | TypeScript 타입        | 비고                                          |
+| --------------------------- | ---------------------- | --------------------------------------------- |
+| `"$ref": "#/definitions/X"` | `X` (참조된 타입 이름) | `resolve_ref()`로 이름 추출                   |
+| `"anyOf": [...]`            | `A \| B \| ...`        | 각 스키마에 재귀 호출 후 union 생성           |
+| `"object"`                  | `{ field: type; ... }` | `ts_object_from_schema()` 호출                |
+| `"integer"`                 | `number`               |                                               |
+| `"number"`                  | `number`               |                                               |
+| `"string"` + `"enum"`       | `'A' \| 'B'`           | string enum 값을 문자열 리터럴 union으로 변환 |
+| `"string"`                  | `string`               | enum이 없으면 일반 string                     |
+| `"boolean"`                 | `boolean`              |                                               |
+| `"array"`                   | `type[]`               | `items`에서 재귀 호출, 없으면 `unknown[]`     |
+| `"null"`                    | `null`                 |                                               |
+| `["string", "null"]` 등     | `string \| null`       | type 배열을 union으로 변환                    |
+| 그 외                       | `unknown`              |                                               |
 
 ### `$ref` 해석 (`resolve_ref`)
 
@@ -209,7 +209,10 @@ export type AddNumbersOutput = {
 ```typescript
 import type { AddNumbersInput, AddNumbersOutput, EngineClient, RustraError } from './types.js';
 
-export function addNumbers(engine: EngineClient, input: AddNumbersInput): Promise<AddNumbersOutput> {
+export function addNumbers(
+  engine: EngineClient,
+  input: AddNumbersInput,
+): Promise<AddNumbersOutput> {
   return engine.invoke<AddNumbersOutput>('addNumbers', input);
 }
 ```
@@ -230,21 +233,21 @@ export const GENERATED_CONTRACT_HASH = '<sha256-hex>';
 
 JSON Schema → TypeScript 변환에서 다음 타입은 **`unknown`** 으로 폴백된다.
 
-| 미지원 타입 | 이유 |
-|---|---|
-| `tuple` | `"type": "array"` + `prefixItems` 미처리 |
-| `oneOf` | `anyOf`만 처리, `oneOf`는 미처리 |
-| `allOf` | 교차 타입(intersection) 미처리 |
-| integer enum | string enum만 리터럴 union으로 변환, integer enum은 미처리 |
+| 미지원 타입          | 이유                                                                                     |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| `tuple`              | `"type": "array"` + `prefixItems` 미처리                                                 |
+| `oneOf`              | `anyOf`만 처리, `oneOf`는 미처리                                                         |
+| `allOf`              | 교차 타입(intersection) 미처리                                                           |
+| integer enum         | string enum만 리터럴 union으로 변환, integer enum은 미처리                               |
 | 중첩 `$ref` (다단계) | 1단계 `$ref` 해석만 지원. definitions 내부에 또 `$ref`가 있는 경우 재귀 resolve하지 않음 |
 
 ### 이미 지원되는 타입 (이전에는 미지원)
 
-| 타입 | 지원 방식 |
-|---|---|
-| `$ref` | `#/definitions/X`, `#/$defs/X` → 타입 이름 추출 |
-| `anyOf` | 각 스키마에 재귀 호출 후 `A \| B` union 생성 |
-| string `enum` | `'Value1' \| 'Value2'` 문자열 리터럴 union |
-| `null` | `null` 타입 |
-| type 배열 union | `["string", "null"]` → `string \| null` |
-| optional 필드 | `required`에 없으면 `?` + `\| null` (schemars가 `anyOf`로 표현) |
+| 타입            | 지원 방식                                                       |
+| --------------- | --------------------------------------------------------------- |
+| `$ref`          | `#/definitions/X`, `#/$defs/X` → 타입 이름 추출                 |
+| `anyOf`         | 각 스키마에 재귀 호출 후 `A \| B` union 생성                    |
+| string `enum`   | `'Value1' \| 'Value2'` 문자열 리터럴 union                      |
+| `null`          | `null` 타입                                                     |
+| type 배열 union | `["string", "null"]` → `string \| null`                         |
+| optional 필드   | `required`에 없으면 `?` + `\| null` (schemars가 `anyOf`로 표현) |
