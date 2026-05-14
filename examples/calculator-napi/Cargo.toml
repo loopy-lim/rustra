@@ -1,0 +1,18 @@
+[package]
+name = "rustra-calculator-napi"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+rustra-calculator-example = { path = "../calculator" }
+napi = { version = "2", default-features = false, features = ["napi4"] }
+napi-derive = "2"
+serde_json = { workspace = true }
+
+[build-dependencies]
+napi-build = "2"

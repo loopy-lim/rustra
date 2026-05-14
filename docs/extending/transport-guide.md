@@ -234,18 +234,11 @@ Bun은 `bun:ffi`로 `.dylib` / `.so`를 직접 로드할 수 있습니다. Rust 
 
 ### Rust 준비
 
-`examples/calculator/Cargo.toml`에 이미 `staticlib`이 포함되어 있습니다:
+`examples/calculator/Cargo.toml`에 `cdylib`을 추가합니다 (`staticlib`은 RN iOS용으로 유지):
 
 ```toml
 [lib]
-crate-type = ["rlib", "staticlib"]
-```
-
-동적 라이브러리로 빌드하려면 `cdylib`을 추가합니다:
-
-```toml
-[lib]
-crate-type = ["rlib", "cdylib"]
+crate-type = ["rlib", "cdylib", "staticlib"]
 ```
 
 빌드:
@@ -258,31 +251,30 @@ cargo build -p rustra-calculator-example
 
 ### Bun FFI transport 구현
 
+**주의**: `FFIType.cstring`을 리턴 타입으로 사용하면 메모리 누수가 발생합니다. Rust의 `CString::into_raw()`로 할당된 메모리는 반드시 `CString::from_raw()`로 해제해야 합니다. Bun의 `FFIType.cstring`은 C 문자열을 읽어 JS 문자열로 복사만 할 뿐 원본 메모리를 해제하지 않습니다. 따라서 `FFIType.ptr`로 포인터를 받은 뒤 수동으로 문자열을 읽고 `free_string`을 호출해야 합니다.
+
 ```ts
 import { dlopen, FFIType, suffix } from 'bun:ffi';
 import { createBunEngine } from '../../../packages/bun/src/index.js';
+import { addNumbers } from '../generated/commands.js';
 
-// 동적 라이브러리 로드
-const lib = dlopen(`./target/debug/librustra_calculator_example.${suffix}`, {
+const lib = dlopen(`target/debug/librustra_calculator_example.${suffix}`, {
   rustra_calculator_invoke: {
     args: [FFIType.cstring],
-    returns: FFIType.cstring,
+    returns: FFIType.ptr,       // FFIType.cstring이 아님 — 수동 메모리 관리 필요
   },
   rustra_calculator_free_string: {
-    args: [FFIType.cstring],
-    returns: void,
+    args: [FFIType.ptr],
+    returns: FFIType.void,
   },
 });
 
-// transport 구현
 const engine = createBunEngine({
   invoke(command: string, args?: unknown): unknown {
     const payload = JSON.stringify({ command, args });
-    const rawResponse = lib.symbols.rustra_calculator_invoke(payload) as string;
-
-    // Bun FFI는 cstring 반환 시 자동으로 JS string으로 변환하므로
-    // rustra_calculator_free_string을 직접 호출할 필요가 없을 수 있음
-    // (Bun이 메모리를 관리하는지 확인 필요 — 필요하면 수동 해제)
+    const rawPtr = lib.symbols.rustra_calculator_invoke(payload);
+    const rawResponse = new CString(rawPtr);
+    lib.symbols.rustra_calculator_free_string(rawPtr);  // Rust가 CString::from_raw로 해제
 
     const response = JSON.parse(rawResponse) as {
       ok: boolean;
@@ -298,8 +290,6 @@ const engine = createBunEngine({
   },
 });
 
-// 동일한 방식으로 사용
-import { addNumbers } from '../generated/commands.js';
 const result = await addNumbers(engine, { a: 20, b: 22 });
 console.log(`bun FFI result: ${result.value}`); // 42
 ```
