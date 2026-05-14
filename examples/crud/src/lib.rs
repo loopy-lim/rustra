@@ -77,10 +77,13 @@ static STORE: std::sync::LazyLock<Mutex<HashMap<String, Item>>> =
     std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn next_id() -> String {
-    format!("{:016x}", std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos() as u64)
+    format!(
+        "{:016x}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos() as u64
+    )
 }
 
 #[command]
@@ -109,9 +112,7 @@ pub fn list_items(input: ListItemsInput) -> Result<ListItemsOutput> {
     let store = STORE.lock().unwrap();
     let items: Vec<Item> = store
         .values()
-        .filter(|item| {
-            input.min_value.map_or(true, |min| item.value >= min)
-        })
+        .filter(|item| input.min_value.map_or(true, |min| item.value >= min))
         .cloned()
         .collect();
     Ok(ListItemsOutput { items })
