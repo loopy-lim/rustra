@@ -5,6 +5,13 @@ import { watch, readFileSync } from 'node:fs';
 import type { PackageSchema } from './schema.js';
 import { generateTypesTs, generateCommandsTs, generateContractTs } from './generate.js';
 
+export { generateTypesTs, generateCommandsTs, generateContractTs } from './generate.js';
+export type { PackageSchema, CommandSchema, JsonSchema } from './schema.js';
+export { diffSchemas, formatDiffResult } from './schema-diff.js';
+export type { BreakingChange, DiffResult } from './schema-diff.js';
+export { createValidatedEngine } from './validate-engine.js';
+export type { EngineClient as ValidateEngineClient, ValidateOptions } from './validate-engine.js';
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
