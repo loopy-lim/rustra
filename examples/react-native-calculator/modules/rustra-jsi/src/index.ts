@@ -2,6 +2,13 @@ import { NativeModules } from 'react-native';
 
 export type RustraNative = {
   invoke(payload: ArrayBuffer): ArrayBuffer;
+  invokeMsgpack(payload: ArrayBuffer): ArrayBuffer;
+  invokeBincode(payload: ArrayBuffer): ArrayBuffer;
+  invokePostcard(payload: ArrayBuffer): ArrayBuffer;
+  invokeRkyv(payload: ArrayBuffer): ArrayBuffer;
+  invokeHybrid(payload: ArrayBuffer): ArrayBuffer;
+  invokeRaw(payload: ArrayBuffer): ArrayBuffer;
+  noop(payload: ArrayBuffer): ArrayBuffer;
 };
 
 declare global {
