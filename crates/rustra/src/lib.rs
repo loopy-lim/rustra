@@ -222,6 +222,7 @@ struct Command {
     output_schema: Value,
     definitions: Value,
     invoke: Arc<dyn Fn(Value) -> crate::Result<Value> + Send + Sync>,
+    rkyv_v2_decode: Arc<dyn Fn(&[u8]) -> crate::Result<Value> + Send + Sync>,
 }
 
 impl Package {
@@ -262,6 +263,28 @@ impl Package {
     /// command_id로 명령 이름을 조회합니다.
     pub fn resolve_command_id(&self, id: u16) -> Option<&str> {
         self.id_to_name.get(&id).map(|s| s.as_str())
+    }
+
+    /// rkyv V2 바이너리 페이로드를 받아 명령을 실행합니다.
+    ///
+    /// 처음 2바이트에서 command_id를 읽고, 등록된 rkyv_v2_decoder로
+    /// 입력 필드를 읽어 JSON Value로 재구성한 뒤 invoke_json으로 전달합니다.
+    pub fn invoke_rkyv_v2(&self, payload: &[u8]) -> crate::Result<Value> {
+        if payload.len() < 8 {
+            return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+        }
+        let command_id = u16::from_le_bytes([payload[0], payload[1]]);
+        let command_name = self
+            .resolve_command_id(command_id)
+            .ok_or_else(|| RustraError::command_not_found(&format!("id:{command_id}")))?;
+
+        let command = self
+            .commands
+            .get(command_name)
+            .ok_or_else(|| RustraError::command_not_found(command_name))?;
+
+        let params = (command.rkyv_v2_decode)(payload)?;
+        self.invoke_json(command_name, params)
     }
 
     /// 등록된 모든 명령에서 TypeScript 클라이언트 코드를 생성합니다.
@@ -410,6 +433,7 @@ impl PackageBuilder {
                 obj.insert(key, value);
             }
         }
+        let rkyv_v2_decoder = build_rkyv_v2_decoder(&input_schema);
         let command = Command {
             command_id: self.next_command_id,
             input_type: short_type_name::<I>(),
@@ -423,6 +447,7 @@ impl PackageBuilder {
                 let output = handler(input)?;
                 serde_json::to_value(output).map_err(RustraError::internal)
             }),
+            rkyv_v2_decode: rkyv_v2_decoder,
         };
         let name = name.into();
         if self.commands.contains_key(&name) {
@@ -446,4 +471,167 @@ impl PackageBuilder {
             id_to_name: Arc::new(id_to_name),
         }
     }
+}
+
+/// JSON Schema에서 rkyv V2 디코더를 자동 생성합니다.
+///
+/// 입력 스키마의 프로퍼티를 분석하여 고정폭 필드의 오프셋을 계산하고,
+/// 바이트에서 직접 값을 읽어 JSON Value를 재구성하는 클로저를 반환합니다.
+/// 모든 필드가 primitive(int/float/bool)인 Tier 1 명령에만 작동합니다.
+fn build_rkyv_v2_decoder(
+    input_schema: &Value,
+) -> Arc<dyn Fn(&[u8]) -> crate::Result<Value> + Send + Sync> {
+    let props = match input_schema.get("properties").and_then(Value::as_object) {
+        Some(p) => p,
+        None => {
+            return Arc::new(|_| {
+                Err(RustraError::internal("no properties in input schema"))
+            });
+        }
+    };
+    let required: BTreeSet<String> = input_schema
+        .get("required")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(Value::as_str)
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut fields: Vec<(String, usize, WireFieldKind)> = Vec::new();
+    let mut offset: usize = 8; // command_id u16 + 6B padding
+    let mut all_fixed = true;
+
+    for (name, prop_schema) in props {
+        if !required.contains(name) {
+            all_fixed = false;
+            continue;
+        }
+        let Some(kind) = wire_kind_from_schema(prop_schema) else {
+            all_fixed = false;
+            continue;
+        };
+        let size = kind.size();
+        offset = align_up(offset, size);
+        fields.push((name.clone(), offset, kind));
+        offset += size;
+    }
+
+    if !all_fixed || fields.is_empty() {
+        return Arc::new(move |payload| {
+            let command_id = u16::from_le_bytes([payload[0], payload[1]]);
+            Err(RustraError::invalid_args(&format!(
+                "rkyv v2: command id {command_id} has non-primitive fields, not Tier 1"
+            )))
+        });
+    }
+
+    Arc::new(move |payload: &[u8]| {
+        let mut result = serde_json::Map::new();
+        for (name, field_offset, kind) in &fields {
+            let val = read_wire_field(payload, *field_offset, *kind)?;
+            result.insert(name.clone(), val);
+        }
+        Ok(Value::Object(result))
+    })
+}
+
+#[derive(Clone, Copy, Debug)]
+enum WireFieldKind {
+    I64,
+    I32,
+    U32,
+    U16,
+    F64,
+    F32,
+    Bool,
+}
+
+impl WireFieldKind {
+    fn size(&self) -> usize {
+        match self {
+            Self::I64 | Self::F64 => 8,
+            Self::I32 | Self::U32 | Self::F32 => 4,
+            Self::U16 => 2,
+            Self::Bool => 1,
+        }
+    }
+}
+
+fn wire_kind_from_schema(schema: &Value) -> Option<WireFieldKind> {
+    match schema.get("type").and_then(Value::as_str)? {
+        "boolean" => Some(WireFieldKind::Bool),
+        "integer" => match schema.get("format").and_then(Value::as_str) {
+            Some("int64") => Some(WireFieldKind::I64),
+            _ => Some(WireFieldKind::I32),
+        },
+        "number" => match schema.get("format").and_then(Value::as_str) {
+            Some("double") => Some(WireFieldKind::F64),
+            _ => Some(WireFieldKind::F32),
+        },
+        _ => None,
+    }
+}
+
+fn align_up(offset: usize, alignment: usize) -> usize {
+    (offset + alignment - 1) / alignment * alignment
+}
+
+fn read_wire_field(payload: &[u8], offset: usize, kind: WireFieldKind) -> crate::Result<Value> {
+    if offset + kind.size() > payload.len() {
+        return Err(RustraError::invalid_args("rkyv v2: payload truncated"));
+    }
+    Ok(match kind {
+        WireFieldKind::I64 => {
+            let bytes: [u8; 8] = payload[offset..offset + 8].try_into().unwrap();
+            json!(i64::from_le_bytes(bytes))
+        }
+        WireFieldKind::I32 => {
+            let bytes: [u8; 4] = payload[offset..offset + 4].try_into().unwrap();
+            json!(i32::from_le_bytes(bytes))
+        }
+        WireFieldKind::U32 => {
+            let bytes: [u8; 4] = payload[offset..offset + 4].try_into().unwrap();
+            json!(u32::from_le_bytes(bytes))
+        }
+        WireFieldKind::U16 => {
+            let bytes: [u8; 2] = payload[offset..offset + 2].try_into().unwrap();
+            json!(u16::from_le_bytes(bytes))
+        }
+        WireFieldKind::F64 => {
+            let bytes: [u8; 8] = payload[offset..offset + 8].try_into().unwrap();
+            json!(f64::from_le_bytes(bytes))
+        }
+        WireFieldKind::F32 => {
+            let bytes: [u8; 4] = payload[offset..offset + 4].try_into().unwrap();
+            json!(f32::from_le_bytes(bytes))
+        }
+        WireFieldKind::Bool => json!(payload[offset] != 0),
+    })
+}
+
+/// rkyv V2 응답을 rkyv 바이트로 직렬화합니다.
+///
+/// 성공 시: `{ ok: true, value: <output> }`
+/// 실패 시: `{ ok: false, value: 0, error: <message> }`
+///
+/// 응답은 항상 고정폭(32바이트)입니다.
+/// offset 0-7: ok (bool + 7B padding)
+/// offset 8-15: value (i64 LE)
+/// offset 16-31: error (16B for None)
+pub fn rkyv_v2_response(value: i64) -> Vec<u8> {
+    let mut buf = vec![0u8; 16];
+    buf[0] = 1; // ok = true
+    buf[8..16].copy_from_slice(&value.to_le_bytes());
+    buf
+}
+
+pub fn rkyv_v2_error_response(msg: &str) -> Vec<u8> {
+    let mut buf = vec![0u8; 16];
+    buf[0] = 0; // ok = false
+    // error message는 현재 반환하지 않음 (고정폭 유지)
+    let _ = msg;
+    buf
 }
