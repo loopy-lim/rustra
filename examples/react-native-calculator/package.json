@@ -16,7 +16,7 @@
     "react-native": "0.81.5",
     "react-native-nitro-modules": "^0.35.6",
     "nitro-bench": "file:./modules/nitro-bench/nitro-bench",
-    "rustra-calculator": "file:./modules/rustra-calculator"
+    "rustra-jsi": "file:./modules/rustra-jsi"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",

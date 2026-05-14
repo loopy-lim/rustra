@@ -1,0 +1,5 @@
+{
+  "name": "NitroBench",
+  "platforms": ["apple", "android"],
+  "cxx": "NitroBench.cxx"
+}

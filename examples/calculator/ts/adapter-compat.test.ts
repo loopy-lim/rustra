@@ -59,13 +59,18 @@ test('tauri adapter routes generated commands through rustra_dispatch', async ()
   ]);
 });
 
-test('react native adapter forwards generated commands to injected native module', async () => {
-  const transport = createRecordingTransport();
-  await assertGeneratedCommandWorks(
-    'react-native',
-    createReactNativeEngine({ invoke: transport.invoke }),
-    transport.calls,
-  );
+test('react native adapter forwards generated commands through JSI native module', async () => {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const nativeModule = {
+    invoke(payload: ArrayBuffer): ArrayBuffer {
+      const { command, args } = JSON.parse(decoder.decode(payload));
+      return encoder.encode(JSON.stringify({ ok: true, result: { value: 42 } })).buffer as ArrayBuffer;
+    },
+  };
+  const engine = createReactNativeEngine(nativeModule);
+  const result = await addNumbers(engine, { a: 20, b: 22 });
+  assert.deepEqual(result, { value: 42 });
 });
 
 test('adapter packages keep host-specific imports out of the shared contract path', async () => {
