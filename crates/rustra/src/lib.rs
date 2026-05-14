@@ -1,9 +1,9 @@
 pub use rustra_macros::command;
 pub use rustra_macros::register;
 
-use schemars::{schema_for, JsonSchema};
-use serde::{de::DeserializeOwned, Serialize};
-use serde_json::{json, Value};
+use schemars::{JsonSchema, schema_for};
+use serde::{Serialize, de::DeserializeOwned};
+use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::any::type_name;
 use std::collections::{BTreeMap, BTreeSet};
@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 pub mod prelude {
     pub use crate::{
-        command, register, GeneratedPackage, Package, PackageBuilder, Result, RustraError,
+        GeneratedPackage, Package, PackageBuilder, Result, RustraError, command, register,
     };
     pub use schemars::JsonSchema;
     pub use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ pub mod prelude {
 
 pub mod __private {
     use schemars::JsonSchema;
-    use serde::{de::DeserializeOwned, Serialize};
+    use serde::{Serialize, de::DeserializeOwned};
 
     pub trait CommandInput: DeserializeOwned + JsonSchema + 'static {}
     impl<T: DeserializeOwned + JsonSchema + 'static> CommandInput for T {}
@@ -34,7 +34,7 @@ pub mod __private {
 #[cfg(feature = "tauri")]
 pub mod tauri_support {
     use crate::Package;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use tauri::State;
 
     pub struct RustraState {
