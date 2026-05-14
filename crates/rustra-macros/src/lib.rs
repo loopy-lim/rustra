@@ -2,8 +2,8 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{
-    GenericArgument, Ident, ItemFn, LitStr, PathArguments, ReturnType, Token, Type, parse::Parse,
-    parse::ParseStream, parse_macro_input,
+    parse::Parse, parse::ParseStream, parse_macro_input, GenericArgument, Ident, ItemFn, LitStr,
+    PathArguments, ReturnType, Token, Type,
 };
 
 struct CommandAttr {
