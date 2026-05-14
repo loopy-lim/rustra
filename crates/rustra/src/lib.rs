@@ -13,7 +13,9 @@ use std::path::Path;
 use std::sync::Arc;
 
 pub mod prelude {
-    pub use crate::{GeneratedPackage, Package, PackageBuilder, Result, RustraError, command, register};
+    pub use crate::{
+        GeneratedPackage, Package, PackageBuilder, Result, RustraError, command, register,
+    };
     pub use schemars::JsonSchema;
     pub use serde::{Deserialize, Serialize};
 }
@@ -280,7 +282,8 @@ impl Package {
     }
 
     fn generate_commands_ts(&self) -> String {
-        let mut type_names = BTreeSet::from(["EngineClient".to_string(), "RustraError".to_string()]);
+        let mut type_names =
+            BTreeSet::from(["EngineClient".to_string(), "RustraError".to_string()]);
         for command in self.commands.values() {
             type_names.insert(command.input_type.clone());
             type_names.insert(command.output_type.clone());
@@ -324,9 +327,7 @@ impl PackageBuilder {
         let (input_schema, input_defs) = schema_value::<I>();
         let (output_schema, output_defs) = schema_value::<O>();
         let mut definitions = input_defs;
-        if let (Value::Object(obj), Value::Object(other)) =
-            (&mut definitions, output_defs)
-        {
+        if let (Value::Object(obj), Value::Object(other)) = (&mut definitions, output_defs) {
             for (key, value) in other {
                 obj.insert(key, value);
             }
@@ -442,11 +443,13 @@ fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String {
                     "boolean" => "boolean".to_string(),
                     "null" => "null".to_string(),
                     "object" => ts_object_from_schema(schema, definitions),
-                    "array" => schema
-                        .get("items")
-                        .map(|s| ts_type_from_schema(s, definitions))
-                        .unwrap_or_else(|| "unknown".to_string())
-                        + "[]",
+                    "array" => {
+                        schema
+                            .get("items")
+                            .map(|s| ts_type_from_schema(s, definitions))
+                            .unwrap_or_else(|| "unknown".to_string())
+                            + "[]"
+                    }
                     _ => "unknown".to_string(),
                 })
                 .collect();
