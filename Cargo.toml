@@ -3,6 +3,7 @@ members = [
   "crates/rustra",
   "crates/rustra-macros",
   "examples/calculator",
+  "examples/calculator-napi",
   "examples/tauri-calculator/src-tauri",
   "examples/benchmark",
 ]

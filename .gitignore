@@ -10,3 +10,5 @@ packages/*/dist/
 /examples/react-native-calculator/node_modules/
 .DS_Store
 .npm-cache/
+*.node
+examples/calculator-napi/node_modules/
