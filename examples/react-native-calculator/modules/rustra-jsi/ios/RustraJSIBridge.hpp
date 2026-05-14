@@ -21,6 +21,8 @@ extern "C" {
     const uint8_t* payload, size_t payload_len, size_t* out_len);
   uint8_t* rustra_calculator_invoke_hybrid(
     const uint8_t* payload, size_t payload_len, size_t* out_len);
+  uint8_t* rustra_calculator_invoke_rkyv_v2(
+    const uint8_t* payload, size_t payload_len, size_t* out_len);
   void rustra_calculator_free_buffer(uint8_t* ptr, size_t len);
 }
 
