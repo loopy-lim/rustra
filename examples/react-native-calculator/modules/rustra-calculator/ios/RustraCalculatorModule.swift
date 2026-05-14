@@ -21,6 +21,16 @@ public class RustraCalculatorModule: Module {
         decodeRustString(rustra_calculator_invoke(pointer))
       }
     }
+
+    // Pure Swift computation — no Rust FFI, no JSON.
+    // Measures raw Expo sync bridge overhead (comparable to Nitro JSI).
+    Function("addSync") { (a: Double, b: Double) -> Double in
+      return a + b
+    }
+
+    Function("echoSync") { (value: Double) -> Double in
+      return value
+    }
   }
 }
 
