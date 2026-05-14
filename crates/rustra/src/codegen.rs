@@ -15,6 +15,14 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
         return resolve_ref(r#ref);
     }
 
+    if let Some(one_of) = schema.get("oneOf").and_then(Value::as_array) {
+        let parts: Vec<String> = one_of
+            .iter()
+            .map(|s| ts_type_from_schema(s, definitions))
+            .collect();
+        return parts.join(" | ");
+    }
+
     if let Some(any_of) = schema.get("anyOf").and_then(Value::as_array) {
         let parts: Vec<String> = any_of
             .iter()
@@ -44,6 +52,13 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
             }
             "boolean" => "boolean".to_string(),
             "array" => {
+                if let Some(items_arr) = schema.get("items").and_then(Value::as_array) {
+                    let elements: Vec<String> = items_arr
+                        .iter()
+                        .map(|s| ts_type_from_schema(s, definitions))
+                        .collect();
+                    return format!("[{}]", elements.join(", "));
+                }
                 let item_type = schema
                     .get("items")
                     .map(|s| ts_type_from_schema(s, definitions))
@@ -93,6 +108,10 @@ pub(super) fn ts_object_from_schema(schema: &Value, definitions: &Value) -> Stri
         })
         .unwrap_or_default();
     let Some(properties) = schema.get("properties").and_then(Value::as_object) else {
+        if let Some(additional) = schema.get("additionalProperties") {
+            let value_type = ts_type_from_schema(additional, definitions);
+            return format!("Record<string, {value_type}>");
+        }
         return "Record<string, unknown>".to_string();
     };
 
