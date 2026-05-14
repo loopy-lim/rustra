@@ -1,0 +1,26 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": [
+    "nitrobench"
+  ],
+  "ios": {
+    "iosModuleName": "NitroBench"
+  },
+  "android": {
+    "androidNamespace": [
+      "nitrobench"
+    ],
+    "androidCxxLibName": "NitroBench"
+  },
+  "autolinking": {
+    "NitroBench": {
+      "all": {
+        "language": "c++",
+        "implementationClassName": "HybridNitroBench"
+      }
+    }
+  },
+  "ignorePaths": [
+    "**/node_modules"
+  ]
+}
