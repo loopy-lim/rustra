@@ -1,9 +1,9 @@
 pub use rustra_macros::command;
 pub use rustra_macros::register;
 
-use schemars::{JsonSchema, schema_for};
-use serde::{Serialize, de::DeserializeOwned};
-use serde_json::{Value, json};
+use schemars::{schema_for, JsonSchema};
+use serde::{de::DeserializeOwned, Serialize};
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::any::type_name;
 use std::collections::{BTreeMap, BTreeSet};
@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 pub mod prelude {
     pub use crate::{
-        GeneratedPackage, Package, PackageBuilder, Result, RustraError, command, register,
+        command, register, GeneratedPackage, Package, PackageBuilder, Result, RustraError,
     };
     pub use schemars::JsonSchema;
     pub use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ pub mod prelude {
 
 pub mod __private {
     use schemars::JsonSchema;
-    use serde::{Serialize, de::DeserializeOwned};
+    use serde::{de::DeserializeOwned, Serialize};
 
     pub trait CommandInput: DeserializeOwned + JsonSchema + 'static {}
     impl<T: DeserializeOwned + JsonSchema + 'static> CommandInput for T {}
@@ -34,7 +34,7 @@ pub mod __private {
 #[cfg(feature = "tauri")]
 pub mod tauri_support {
     use crate::Package;
-    use serde_json::{Value, json};
+    use serde_json::{json, Value};
     use tauri::State;
 
     pub struct RustraState {
@@ -424,6 +424,13 @@ fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String {
             }
             "boolean" => "boolean".to_string(),
             "array" => {
+                if let Some(items) = schema.get("items").and_then(Value::as_array) {
+                    let types: Vec<String> =
+                        items.iter().map(|s| ts_type_from_schema(s, definitions)).collect();
+                    if !types.is_empty() {
+                        return format!("[{}]", types.join(", "));
+                    }
+                }
                 let item_type = schema
                     .get("items")
                     .map(|s| ts_type_from_schema(s, definitions))

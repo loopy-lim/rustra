@@ -99,6 +99,10 @@ function tsTypeFromSchema(schema: JsonSchema, definitions: Record<string, JsonSc
       case 'boolean':
         return 'boolean';
       case 'array': {
+        if (Array.isArray(schema.items) && schema.items.length > 0) {
+          const types = schema.items.map((s) => tsTypeFromSchema(s, definitions));
+          return `[${types.join(', ')}]`;
+        }
         const itemType = schema.items ? tsTypeFromSchema(schema.items, definitions) : 'unknown';
         return `${itemType}[]`;
       }
