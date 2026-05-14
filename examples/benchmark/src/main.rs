@@ -69,19 +69,11 @@ struct PayloadOutput {
 fn process_payload(input: PayloadInput) -> Result<PayloadOutput> {
     let count = input.items.len() as i64;
     let total_score: f64 = input.items.iter().map(|i| i.score).sum();
-    Ok(PayloadOutput {
-        count,
-        total_score,
-    })
+    Ok(PayloadOutput { count, total_score })
 }
 
 fn build_benchmark_package() -> rustra::Package {
-    register!(
-        Package::builder("benchmark"),
-        add_numbers,
-        process_payload
-    )
-    .build()
+    register!(Package::builder("benchmark"), add_numbers, process_payload).build()
 }
 
 fn make_items(n: usize) -> Vec<Item> {
@@ -114,9 +106,7 @@ fn bench_package_creation() {
     let p99 = percentile(&times, 99.0);
 
     println!("│  {} iterations", iterations);
-    println!(
-        "│  avg: {avg_ns:>8.0} ns | p50: {p50:>8.0} ns | p99: {p99:>8.0} ns"
-    );
+    println!("│  avg: {avg_ns:>8.0} ns | p50: {p50:>8.0} ns | p99: {p99:>8.0} ns");
     println!("└─────────────────────────────────────────────────────────┘");
     println!();
 }
@@ -143,9 +133,7 @@ fn bench_command_invocation(package: &rustra::Package) {
     let p99 = percentile(&times, 99.0);
 
     println!("│  {} iterations", iterations);
-    println!(
-        "│  avg: {avg_ns:>8.0} ns | p50: {p50:>8.0} ns | p99: {p99:>8.0} ns"
-    );
+    println!("│  avg: {avg_ns:>8.0} ns | p50: {p50:>8.0} ns | p99: {p99:>8.0} ns");
     println!("└─────────────────────────────────────────────────────────┘");
     println!();
 }
@@ -154,10 +142,31 @@ fn bench_serialization() {
     println!("┌─ Serialization (serde_json to_value) ──────────────────┐");
 
     let cases = [
-        ("Simple struct", serde_json::to_value(SimpleInput { a: 1, b: 2 }).unwrap()),
-        ("10 items", serde_json::to_value(PayloadInput { items: make_items(10) }).unwrap()),
-        ("100 items", serde_json::to_value(PayloadInput { items: make_items(100) }).unwrap()),
-        ("1000 items", serde_json::to_value(PayloadInput { items: make_items(1000) }).unwrap()),
+        (
+            "Simple struct",
+            serde_json::to_value(SimpleInput { a: 1, b: 2 }).unwrap(),
+        ),
+        (
+            "10 items",
+            serde_json::to_value(PayloadInput {
+                items: make_items(10),
+            })
+            .unwrap(),
+        ),
+        (
+            "100 items",
+            serde_json::to_value(PayloadInput {
+                items: make_items(100),
+            })
+            .unwrap(),
+        ),
+        (
+            "1000 items",
+            serde_json::to_value(PayloadInput {
+                items: make_items(1000),
+            })
+            .unwrap(),
+        ),
     ];
 
     let iterations = 50_000;
@@ -186,10 +195,31 @@ fn bench_deserialization() {
     println!("┌─ Deserialization (serde_json from_value) ──────────────┐");
 
     let cases: Vec<(&str, Value)> = vec![
-        ("Simple struct", serde_json::to_value(SimpleInput { a: 1, b: 2 }).unwrap()),
-        ("10 items", serde_json::to_value(PayloadInput { items: make_items(10) }).unwrap()),
-        ("100 items", serde_json::to_value(PayloadInput { items: make_items(100) }).unwrap()),
-        ("1000 items", serde_json::to_value(PayloadInput { items: make_items(1000) }).unwrap()),
+        (
+            "Simple struct",
+            serde_json::to_value(SimpleInput { a: 1, b: 2 }).unwrap(),
+        ),
+        (
+            "10 items",
+            serde_json::to_value(PayloadInput {
+                items: make_items(10),
+            })
+            .unwrap(),
+        ),
+        (
+            "100 items",
+            serde_json::to_value(PayloadInput {
+                items: make_items(100),
+            })
+            .unwrap(),
+        ),
+        (
+            "1000 items",
+            serde_json::to_value(PayloadInput {
+                items: make_items(1000),
+            })
+            .unwrap(),
+        ),
     ];
 
     let iterations = 50_000;
@@ -224,15 +254,24 @@ fn bench_json_roundtrip(package: &rustra::Package) {
         ),
         (
             "10 items",
-            serde_json::to_value(PayloadInput { items: make_items(10) }).unwrap(),
+            serde_json::to_value(PayloadInput {
+                items: make_items(10),
+            })
+            .unwrap(),
         ),
         (
             "100 items",
-            serde_json::to_value(PayloadInput { items: make_items(100) }).unwrap(),
+            serde_json::to_value(PayloadInput {
+                items: make_items(100),
+            })
+            .unwrap(),
         ),
         (
             "1000 items",
-            serde_json::to_value(PayloadInput { items: make_items(1000) }).unwrap(),
+            serde_json::to_value(PayloadInput {
+                items: make_items(1000),
+            })
+            .unwrap(),
         ),
     ];
 
@@ -250,7 +289,10 @@ fn bench_json_roundtrip(package: &rustra::Package) {
         results.push((label, avg));
     }
 
-    let max_avg = results.iter().map(|(_, v)| *v).fold(f64::NEG_INFINITY, f64::max);
+    let max_avg = results
+        .iter()
+        .map(|(_, v)| *v)
+        .fold(f64::NEG_INFINITY, f64::max);
 
     for (label, avg) in &results {
         let bar_len = (*avg / max_avg * 40.0) as usize;
@@ -284,9 +326,7 @@ fn bench_ts_generation(package: &rustra::Package) {
     let commands_size = generated.commands_ts.len();
 
     println!("│  {} iterations", iterations);
-    println!(
-        "│  avg: {avg_ns:>8.0} ns | p50: {p50:>8.0} ns | p99: {p99:>8.0} ns"
-    );
+    println!("│  avg: {avg_ns:>8.0} ns | p50: {p50:>8.0} ns | p99: {p99:>8.0} ns");
     println!("│  schema.json:  {schema_size:>6} bytes");
     println!("│  types.ts:     {types_size:>6} bytes");
     println!("│  commands.ts:  {commands_size:>6} bytes");
@@ -323,17 +363,21 @@ fn bench_payload_scaling(package: &rustra::Package) {
         .map(|(_, v, _)| *v)
         .fold(f64::NEG_INFINITY, f64::max);
 
-    println!("│  {:<8} {:>10} {:>10}  Throughput", "Items", "JSON bytes", "Avg (ns)");
-    println!("│  {:<8} {:>10} {:>10}  ──────────", "─────", "─────────", "────────");
+    println!(
+        "│  {:<8} {:>10} {:>10}  Throughput",
+        "Items", "JSON bytes", "Avg (ns)"
+    );
+    println!(
+        "│  {:<8} {:>10} {:>10}  ──────────",
+        "─────", "─────────", "────────"
+    );
 
     for (size, avg, json_size) in &results {
         let bar_len = (*avg / max_avg * 30.0) as usize;
         let bar: String = "█".repeat(bar_len);
         let throughput = *json_size as f64 / (*avg / 1000.0); // bytes per us -> MB/s
         let mbps = throughput / 1000.0;
-        println!(
-            "│  {size:<8} {json_size:>10} {avg:>10.0}  {bar} {mbps:.1} MB/s"
-        );
+        println!("│  {size:<8} {json_size:>10} {avg:>10.0}  {bar} {mbps:.1} MB/s");
     }
 
     println!("└─────────────────────────────────────────────────────────┘");
@@ -360,7 +404,7 @@ fn bench_concurrent_invocation(package: &rustra::Package) {
 
     // Throughput bar
     let bar_width = 50;
-    let segments = [
+    let _segments = [
         (100_000.0, "░"),
         (500_000.0, "▒"),
         (1_000_000.0, "▓"),
