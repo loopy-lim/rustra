@@ -41,7 +41,12 @@ test('generateTypesTs maps tuple types', () => {
         name: 'pair',
         inputType: 'PairInput',
         outputType: 'PairOutput',
-        inputSchema: { type: 'object', properties: { data: { type: 'array', items: [{ type: 'string' }, { type: 'integer' }] } }, required: ['data'], title: 'PairInput' },
+        inputSchema: {
+          type: 'object',
+          properties: { data: { type: 'array', items: [{ type: 'string' }, { type: 'integer' }] } },
+          required: ['data'],
+          title: 'PairInput',
+        },
         outputSchema: { type: 'object', properties: {}, required: [], title: 'PairOutput' },
       },
     ],
@@ -58,7 +63,12 @@ test('generateTypesTs maps Record types', () => {
         name: 'lookup',
         inputType: 'LookupInput',
         outputType: 'LookupOutput',
-        inputSchema: { type: 'object', properties: { map: { type: 'object', additionalProperties: { type: 'integer' } } }, required: ['map'], title: 'LookupInput' },
+        inputSchema: {
+          type: 'object',
+          properties: { map: { type: 'object', additionalProperties: { type: 'integer' } } },
+          required: ['map'],
+          title: 'LookupInput',
+        },
         outputSchema: { type: 'object', properties: {}, required: [], title: 'LookupOutput' },
       },
     ],
@@ -69,7 +79,7 @@ test('generateTypesTs maps Record types', () => {
 
 test('generateCommandsTs produces command function', () => {
   const commands = generateCommandsTs(simpleSchema);
-  assert.ok(commands.includes("export function add("));
+  assert.ok(commands.includes('export function add('));
   assert.ok(commands.includes("engine.invoke<AddOutput>('add'"));
 });
 
