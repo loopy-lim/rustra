@@ -115,7 +115,7 @@ async function runWatch(args: string[]): Promise<void> {
 
 async function generateFromSchema(schemaPath: string, outputPath: string): Promise<void> {
   const schemaContent = await readFile(schemaPath, 'utf-8');
-  const schema: PackageSchema = JSON.parse(schemaContent);
+  const schema: PackageSchema = parsePackageSchema(JSON.parse(schemaContent));
 
   const typesTs = generateTypesTs(schema);
   const commandsTs = generateCommandsTs(schema);
@@ -164,6 +164,32 @@ function readConfigSync(configPath: string): RustraConfig {
   }
 
   return config;
+}
+
+function parsePackageSchema(value: unknown): PackageSchema {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('Invalid schema: expected an object');
+  }
+  const obj = value as Record<string, unknown>;
+  if (typeof obj.packageId !== 'string') {
+    throw new Error('Invalid schema: missing or invalid "packageId"');
+  }
+  if (!Array.isArray(obj.commands)) {
+    throw new Error('Invalid schema: missing or invalid "commands" array');
+  }
+  for (let i = 0; i < obj.commands.length; i++) {
+    const cmd = obj.commands[i] as Record<string, unknown>;
+    if (typeof cmd.name !== 'string') {
+      throw new Error(`Invalid schema: commands[${i}].name must be a string`);
+    }
+    if (typeof cmd.inputType !== 'string' || typeof cmd.outputType !== 'string') {
+      throw new Error(`Invalid schema: commands[${i}] must have inputType and outputType`);
+    }
+    if (typeof cmd.inputSchema !== 'object' || typeof cmd.outputSchema !== 'object') {
+      throw new Error(`Invalid schema: commands[${i}] must have inputSchema and outputSchema`);
+    }
+  }
+  return value as PackageSchema;
 }
 
 main().catch((error) => {
