@@ -28,6 +28,48 @@
 
 > JS 어댑터(Bun, Node) 수치는 `EngineClient.invoke` JS측 오버헤드만 측정한 것으로, 실제 IPC/FFI 비용은 별도다.
 
+## Transport별 End-to-End 성능
+
+단일 `addNumbers({ a: 42, b: 58 })` 호출 기준 (10,000회 반복, debug 빌드). Rust 실행 + JSON 직렬화 + transport 오버헤드를 모두 포함한 실제 측정값.
+
+| Transport | 평균 지연 | p50 | p99 | 처리량 (ops/s) |
+|-----------|----------|-----|-----|---------------|
+| Node.js subprocess (stdio) | 1.84 ms | 1.77 ms | 2.41 ms | ~542 |
+| **Node.js napi-rs** | **24.3 µs** | **24.0 µs** | **26.5 µs** | **~41,172** |
+| Bun subprocess (stdio) | 1.69 ms | 1.62 ms | 2.24 ms | ~593 |
+| **Bun FFI** | **26.8 µs** | **26.3 µs** | **33.6 µs** | **~37,250** |
+
+### Transport 오버헤드 분석
+
+```
+Node.js napi-rs:
+  Rust core + serde     █                              ~200 ns   (0.8%)
+  JS JSON ser/de        █                              ~459 ns   (1.9%)
+  napi-rs bridge        ████████████████████████████  ~23.8 µs  (97.9%)
+  Total                 █████████████████████████████  ~24.3 µs
+
+Bun FFI:
+  Rust core + serde     █                              ~200 ns   (0.7%)
+  JS JSON ser/de        █                              ~203 ns   (0.8%)
+  Bun FFI bridge        ████████████████████████████  ~26.6 µs  (99.2%)
+  Total                 █████████████████████████████  ~26.8 µs
+```
+
+napi-rs와 Bun FFI는 subprocess 대비 각각 **76x**, **63x** 빠르다. 대부분의 지연은 FFI/napi 브릿지 레이어에서 발생하며, Rust core와 JSON 처리는 전체의 1-3%에 불과하다.
+
+### 벤치마크 실행
+
+```bash
+# Transport 벤치마크 (Node)
+node scripts/transport-bench.mjs
+
+# Transport 벤치마크 (Bun)
+bun scripts/transport-bench.mjs
+
+# Transport 성능 회귀 테스트
+npm run test:runtime:node-napi
+```
+
 ## Rust 코어 성능
 
 ### 패키지 생성
