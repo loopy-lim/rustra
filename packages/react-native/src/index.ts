@@ -26,16 +26,6 @@
  * 입력으로 JSON 문자열이 인코딩된 ArrayBuffer를 받고,
  * 결과도 ArrayBuffer로 반환합니다. 네이티브 측에서 Rust FFI를 통해
  * 명령을 실행하고 결과를 반환합니다.
- *
- * @example
- * ```ts
- * // Kotlin (Expo Module)
- * override fun invoke(payload: ByteArray): ByteArray {
- *     val json = String(payload, Charsets.UTF_8)
- *     val result = rustEngine.invoke(json)
- *     return result.toByteArray(Charsets.UTF_8)
- * }
- * ```
  */
 export type RustraJSINative = {
   /**
@@ -57,7 +47,7 @@ export type ReactNativeEngineClient = {
 };
 
 /**
- * React Native JSI 네이티브 모듈로 EngineClient를 생성합니다.
+ * React Native JSI 네이티브 모듈로 EngineClient을 생성합니다.
  *
  * 명령 호출 시 `{ command, args }`를 JSON으로 직렬화하여 ArrayBuffer로 네이티브에 전달하고,
  * 응답을 `{ ok, result, error }` 형태로 파싱합니다.
