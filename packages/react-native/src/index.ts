@@ -1,70 +1,122 @@
 /**
  * @rustra/react-native — React Native용 rustra 엔진 어댑터
  *
- * React Native 환경에서 rustra 명령을 실행할 수 있는 EngineClient 구현체를 제공합니다.
- * JSI(Javascript Interface)를 통해 네이티브 모듈과 통신하며,
- * 직렬화에 ArrayBuffer 기반 JSON 인코딩을 사용합니다.
+ * Tauri-like 글로벌 invoke 패턴을 제공합니다.
+ * `configure()`로 한 번 설정하면, 생성된 명령 함수를 engine 없이 직접 호출할 수 있습니다.
  *
- * ## 설정
+ * ## 설정 (앱 시작 시 한 번)
  *
- * 네이티브 모듈이 {@link RustraJSINative} 인터페이스를 구현해야 합니다.
- * Turbo Module 또는 Expo Module로 구현할 수 있습니다.
- *
- * @example
  * ```ts
- * import { createReactNativeEngine } from '@rustra/react-native';
- * import { addNumbers } from './generated/commands.js';
+ * import { configure } from '@rustra/react-native';
+ * import { rkyvV2Registry } from './generated/rkyv-registry.js';
+ * import { installRustraJSI, getRustraNative } from './modules/rustra-jsi/src';
  *
- * const engine = createReactNativeEngine(RustraCalculatorModule);
- * const result = await addNumbers(engine, { a: 20, b: 22 }); // { value: 42 }
+ * await installRustraJSI();
+ * configure(getRustraNative(), rkyvV2Registry);
+ * ```
+ *
+ * ## 사용 (어디서든)
+ *
+ * ```ts
+ * import { addNumbers } from './generated/commands.js';
+ * const result = await addNumbers({ a: 20, b: 22 }); // { value: 42 }
  * ```
  */
 
-/**
- * React Native 네이티브 모듈이 구현해야 하는 JSI 인터페이스입니다.
- *
- * 입력으로 JSON 문자열이 인코딩된 ArrayBuffer를 받고,
- * 결과도 ArrayBuffer로 반환합니다. 네이티브 측에서 Rust FFI를 통해
- * 명령을 실행하고 결과를 반환합니다.
- */
+// ── Types ───────────────────────────────────────────────────
+
+export type RkyvV2Native = {
+  invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
+};
+
+export type RkyvV2Codec<I, O> = {
+  commandId: number;
+  encode(args: I): ArrayBuffer;
+  decode(buf: ArrayBuffer): { ok: boolean; result?: O; error?: string };
+};
+
 export type RustraJSINative = {
-  /**
-   * ArrayBuffer 형태의 JSON 페이로드를 전송하여 명령을 실행합니다.
-   *
-   * @param payload - `{ command: string, args: unknown }` 형태의 JSON이 인코딩된 ArrayBuffer
-   * @returns `{ ok: boolean, result?: T, error?: string }` 형태의 JSON이 인코딩된 ArrayBuffer
-   */
   invoke(payload: ArrayBuffer): ArrayBuffer;
 };
 
-/**
- * React Native EngineClient의 타입 정의입니다.
- *
- * {@link EngineClient}과 동일한 시그니처를 가집니다.
- */
-export type ReactNativeEngineClient = {
+export type EngineClient = {
   invoke<T>(command: string, args?: unknown): Promise<T>;
 };
 
+// ── Global state ────────────────────────────────────────────
+
+let _engine: EngineClient | null = null;
+
 /**
- * React Native JSI 네이티브 모듈로 EngineClient을 생성합니다.
+ * 글로벌 엔진을 설정합니다. 앱 시작 시 한 번만 호출합니다.
  *
- * 명령 호출 시 `{ command, args }`를 JSON으로 직렬화하여 ArrayBuffer로 네이티브에 전달하고,
- * 응답을 `{ ok, result, error }` 형태로 파싱합니다.
- *
- * 동기 JSI 호출을 사용하므로 Promise.resolve로 래핑하여 비동기 인터페이스를 제공합니다.
- *
- * @param native - JSI 네이티브 모듈 구현체
- * @returns EngineClient 인터페이스를 충족하는 엔진
+ * @param native - `invokeRkyvV2` 메서드가 있는 JSI 네이티브 모듈
+ * @param registry - 명령 이름 → 코덱 매핑 (`rkyv-registry.ts`에서 자동 생성)
  *
  * @example
  * ```ts
- * const engine = createReactNativeEngine(NativeModules.RustraCalculator);
+ * import { configure } from '@rustra/react-native';
+ * import { rkyvV2Registry } from './generated/rkyv-registry.js';
+ *
+ * await installRustraJSI();
+ * configure(getRustraNative(), rkyvV2Registry);
  * ```
  */
-export function createReactNativeEngine(
-  native: RustraJSINative,
-): ReactNativeEngineClient {
+export function configure(
+  native: RkyvV2Native,
+  registry: Map<string, RkyvV2Codec<any, any>>,
+): void {
+  _engine = createRkyvV2Engine(native, registry);
+}
+
+/**
+ * 글로벌 엔진으로 명령을 호출합니다.
+ *
+ * `configure()`로 설정된 엔진을 사용합니다.
+ * 일반적으로 직접 호출하지 않고, 코드젠이 생성한 명령 함수(`addNumbers` 등)를 사용합니다.
+ *
+ * @example
+ * ```ts
+ * // 직접 호출
+ * const result = await invoke<AddNumbersOutput>('addNumbers', { a: 42, b: 58 });
+ *
+ * // 또는 생성된 함수 사용 (권장)
+ * const result = await addNumbers({ a: 42, b: 58 });
+ * ```
+ */
+export function invoke<T>(command: string, args?: unknown): Promise<T> {
+  if (!_engine) {
+    throw new Error(
+      'Rustra not configured. Call configure(native, registry) first.',
+    );
+  }
+  return _engine.invoke<T>(command, args);
+}
+
+// ── Engine factories ────────────────────────────────────────
+
+export function createRkyvV2Engine(
+  native: RkyvV2Native,
+  registry: Map<string, RkyvV2Codec<any, any>>,
+): EngineClient {
+  return {
+    invoke<T>(command: string, args?: unknown): Promise<T> {
+      const codec = registry.get(command);
+      if (!codec) {
+        throw new Error(`RkyvV2: no codec for "${command}"`);
+      }
+      const payload = codec.encode(args);
+      const resultBytes = native.invokeRkyvV2(payload);
+      const response = codec.decode(resultBytes);
+      if (!response.ok) {
+        throw new Error(response.error ?? 'RkyvV2 invoke failed');
+      }
+      return Promise.resolve(response.result as T);
+    },
+  };
+}
+
+export function createReactNativeEngine(native: RustraJSINative): EngineClient {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
@@ -81,65 +133,6 @@ export function createReactNativeEngine(
       };
       if (!response.ok) {
         throw new Error(response.error ?? 'Rustra invoke failed');
-      }
-      return Promise.resolve(response.result as T);
-    },
-  };
-}
-
-// ── rkyv V2 (command_id, fixed-width binary) ───────────────
-
-/**
- * rkyv V2 네이티브 모듈이 구현해야 하는 인터페이스입니다.
- */
-export type RkyvV2Native = {
-  invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
-};
-
-/**
- * rkyv V2 코덱 — 각 명령의 바이너리 인코딩/디코딩을 담당합니다.
- *
- * 코드젠이 명령별로 자동 생성합니다.
- */
-export type RkyvV2Codec<I, O> = {
-  commandId: number;
-  encode(args: I): ArrayBuffer;
-  decode(buf: ArrayBuffer): { ok: boolean; result?: O; error?: string };
-};
-
-/**
- * rkyv V2 네이티브 모듈로 EngineClient을 생성합니다.
- *
- * 명령 이름으로 코덱 레지스트리에서 인코더를 찾아 고정폭 바이너리로 직렬화하고,
- * 네이티브 JSI를 통해 전송한 뒤 코덱의 디코더로 응답을 파싱합니다.
- *
- * @param native - `invokeRkyvV2` 메서드가 있는 JSI 네이티브 모듈
- * @param registry - 명령 이름 → 코덱 매핑 (코드젠으로 자동 생성)
- *
- * @example
- * ```ts
- * import { createRkyvV2Engine } from '@rustra/react-native';
- * import { rkyvV2Registry } from './generated/rkyv-registry.js';
- *
- * const engine = createRkyvV2Engine(native, rkyvV2Registry);
- * const result = await addNumbers(engine, { a: 20, b: 22 }); // { value: 42 }
- * ```
- */
-export function createRkyvV2Engine(
-  native: RkyvV2Native,
-  registry: Map<string, RkyvV2Codec<any, any>>,
-): ReactNativeEngineClient {
-  return {
-    invoke<T>(command: string, args?: unknown): Promise<T> {
-      const codec = registry.get(command);
-      if (!codec) {
-        throw new Error(`RkyvV2: no codec for "${command}"`);
-      }
-      const payload = codec.encode(args);
-      const resultBytes = native.invokeRkyvV2(payload);
-      const response = codec.decode(resultBytes);
-      if (!response.ok) {
-        throw new Error(response.error ?? 'RkyvV2 invoke failed');
       }
       return Promise.resolve(response.result as T);
     },

@@ -51,22 +51,26 @@ export function generateTypesTs(schema: PackageSchema): string {
 
 /**
  * 패키지 스키마에서 TypeScript 명령 헬퍼 함수 파일(`commands.ts`)을 생성합니다.
+ *
+ * Tauri-like 글로벌 invoke 패턴: `configure()`로 엔진을 한 번 설정하면
+ * 이후 `addNumbers({ a: 42 })`로 engine 파라미터 없이 호출 가능합니다.
  */
 export function generateCommandsTs(schema: PackageSchema): string {
-  const typeNames = new Set(['EngineClient', 'RustraError']);
+  const typeNames = new Set<string>();
   for (const command of schema.commands) {
     typeNames.add(command.inputType);
     typeNames.add(command.outputType);
   }
 
   const imports = Array.from(typeNames).sort().join(', ');
-  let output = `import type { ${imports} } from './types.js';\n\n`;
+  let output = `import type { ${imports} } from './types.js';\n`;
+  output += `import { invoke } from '@rustra/react-native';\n\n`;
 
   for (const command of schema.commands) {
     const fnName = commandFunctionName(command.name);
     output +=
-      `export function ${fnName}(engine: EngineClient, input: ${command.inputType}): Promise<${command.outputType}> {\n` +
-      `  return engine.invoke<${command.outputType}>('${command.name}', input);\n` +
+      `export function ${fnName}(input: ${command.inputType}): Promise<${command.outputType}> {\n` +
+      `  return invoke<${command.outputType}>('${command.name}', input);\n` +
       `}\n\n`;
   }
 
