@@ -1,0 +1,1 @@
+export const GENERATED_CONTRACT_HASH = '3bb49b67ae56f8f84e6f4c8cef56a8c81dd0cac4e6252f276fb8b8e539d0c728';
