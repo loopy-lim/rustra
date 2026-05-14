@@ -28,5 +28,14 @@
     "bridge",
     "tauri",
     "adapter"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/loopy-lim/rustra.git",
+    "directory": "packages/"
+  },
+  "bugs": {
+    "url": "https://github.com/loopy-lim/rustra/issues"
+  },
+  "homepage": "https://github.com/loopy-lim/rustra#readme"
 }
