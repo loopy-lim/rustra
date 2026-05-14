@@ -304,3 +304,182 @@ fn command_macro_rejects_wrong_signature() {
     );
     assert!(!wrong_return, "non-Result return should fail");
 }
+
+#[test]
+fn ts_generator_handles_hashmap() {
+    use std::collections::HashMap;
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct MapInput {
+        scores: HashMap<String, i64>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct MapOutput {
+        result: HashMap<String, String>,
+    }
+
+    #[command]
+    fn map_cmd(input: MapInput) -> Result<MapOutput> {
+        let mut result = HashMap::new();
+        for (k, v) in input.scores {
+            result.insert(k, v.to_string());
+        }
+        Ok(MapOutput { result })
+    }
+
+    let package = Package::builder("test.map")
+        .command("mapCmd", map_cmd)
+        .build();
+    let generated = package.generate_typescript().unwrap();
+
+    assert!(
+        generated.types_ts.contains("scores: Record<string, number>;"),
+        "HashMap<String, i64> should become Record<string, number>, got:\n{}",
+        generated.types_ts
+    );
+    assert!(
+        generated.types_ts.contains("result: Record<string, string>;"),
+        "HashMap<String, String> should become Record<string, string>, got:\n{}",
+        generated.types_ts
+    );
+}
+
+#[test]
+fn ts_generator_handles_tuples() {
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct TupleInput {
+        pair: (String, i64),
+        triple: (String, i64, bool),
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct TupleOutput {
+        value: (i64, String),
+    }
+
+    #[command]
+    fn tuple_cmd(input: TupleInput) -> Result<TupleOutput> {
+        Ok(TupleOutput {
+            value: (input.pair.1, input.pair.0),
+        })
+    }
+
+    let package = Package::builder("test.tuple")
+        .command("tupleCmd", tuple_cmd)
+        .build();
+    let generated = package.generate_typescript().unwrap();
+
+    assert!(
+        generated.types_ts.contains("pair: [string, number];"),
+        "tuple (String, i64) should become [string, number], got:\n{}",
+        generated.types_ts
+    );
+    assert!(
+        generated.types_ts.contains("triple: [string, number, boolean];"),
+        "tuple (String, i64, bool) should become [string, number, boolean], got:\n{}",
+        generated.types_ts
+    );
+}
+
+#[test]
+fn ts_generator_handles_enum_with_data() {
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    enum Shape {
+        Circle { radius: f64 },
+        Rectangle { width: f64, height: f64 },
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct EnumDataInput {
+        shape: Shape,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct EnumDataOutput {
+        description: String,
+    }
+
+    #[command]
+    fn enum_data_cmd(input: EnumDataInput) -> Result<EnumDataOutput> {
+        let desc = match input.shape {
+            Shape::Circle { radius } => format!("circle(r={radius})"),
+            Shape::Rectangle { width, height } => format!("rect({width}x{height})"),
+        };
+        Ok(EnumDataOutput { description: desc })
+    }
+
+    let package = Package::builder("test.enum_data")
+        .command("enumDataCmd", enum_data_cmd)
+        .build();
+    let generated = package.generate_typescript().unwrap();
+
+    assert!(
+        generated.types_ts.contains("Circle") && generated.types_ts.contains("Rectangle"),
+        "enum with data should contain variant names, got:\n{}",
+        generated.types_ts
+    );
+    assert!(
+        generated.types_ts.contains("radius") && generated.types_ts.contains("width") && generated.types_ts.contains("height"),
+        "enum with data should contain variant fields, got:\n{}",
+        generated.types_ts
+    );
+}
+
+#[test]
+fn ts_generator_handles_deep_nesting() {
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct Tag {
+        label: String,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct Nested {
+        tags: Vec<Tag>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct DeepInput {
+        matrix: Vec<Vec<i64>>,
+        maybe_items: Option<Vec<Option<Tag>>>,
+        nested: Nested,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct DeepOutput {
+        count: i64,
+    }
+
+    #[command]
+    fn deep_cmd(input: DeepInput) -> Result<DeepOutput> {
+        Ok(DeepOutput {
+            count: input.matrix.iter().map(|r| r.len() as i64).sum(),
+        })
+    }
+
+    let package = Package::builder("test.deep")
+        .command("deepCmd", deep_cmd)
+        .build();
+    let generated = package.generate_typescript().unwrap();
+
+    assert!(
+        generated.types_ts.contains("matrix: number[][];"),
+        "Vec<Vec<i64>> should become number[][], got:\n{}",
+        generated.types_ts
+    );
+    assert!(
+        generated.types_ts.contains("export type Tag"),
+        "Tag type should be emitted, got:\n{}",
+        generated.types_ts
+    );
+}
