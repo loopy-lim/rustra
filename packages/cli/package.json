@@ -13,6 +13,22 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js"
+    },
+    "./generate": {
+      "types": "./dist/generate.d.ts",
+      "import": "./dist/generate.js"
+    },
+    "./schema-diff": {
+      "types": "./dist/schema-diff.d.ts",
+      "import": "./dist/schema-diff.js"
+    },
+    "./validate-engine": {
+      "types": "./dist/validate-engine.d.ts",
+      "import": "./dist/validate-engine.js"
     }
   },
   "files": [
