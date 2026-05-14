@@ -28,6 +28,10 @@ pub fn calculator_package() -> Package {
     register!(Package::builder("examples.calculator"), add_numbers).build()
 }
 
+/// # Safety
+///
+/// `payload` must be a valid pointer to a null-terminated C string containing UTF-8 JSON.
+/// The caller must free the returned pointer with `rustra_calculator_free_string`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_calculator_invoke(payload: *const c_char) -> *mut c_char {
     if payload.is_null() {
@@ -66,6 +70,10 @@ pub unsafe extern "C" fn rustra_calculator_invoke(payload: *const c_char) -> *mu
     }
 }
 
+/// # Safety
+///
+/// `ptr` must be a pointer previously returned by `rustra_calculator_invoke`,
+/// or null. Must not be called more than once for the same pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_calculator_free_string(ptr: *mut c_char) {
     if !ptr.is_null() {

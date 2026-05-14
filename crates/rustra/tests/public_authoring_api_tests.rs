@@ -245,7 +245,8 @@ fn ts_generator_handles_vec_and_optional_struct() {
 #[test]
 fn command_macro_rejects_wrong_signature() {
     let try_compile = |source: &str| -> bool {
-        let tmp_dir = std::env::temp_dir().join(format!("rustra-macro-test-{}", std::process::id()));
+        let tmp_dir =
+            std::env::temp_dir().join(format!("rustra-macro-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp_dir);
         std::fs::create_dir_all(tmp_dir.join("src")).unwrap();
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
