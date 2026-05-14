@@ -15,8 +15,8 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{
-    Ident, LitStr,
-    parse::Parse, parse::ParseStream, parse_macro_input, GenericArgument, ItemFn, PathArguments,
+    Attribute, DeriveInput, Ident, LitStr, Meta,
+    parse::Parse, parse::ParseStream, parse_macro_input, parse_quote, GenericArgument, ItemFn, PathArguments,
     ReturnType, Token, Type,
 };
 
@@ -216,6 +216,155 @@ pub fn register(input: TokenStream) -> TokenStream {
     };
 
     expanded.into()
+}
+
+/// Struct/enum에 `Debug`, `Serialize`, `Deserialize`, `JsonSchema` derive와
+/// `#[serde(rename_all = "camelCase")]`를 자동 추가하는 속성 매크로입니다.
+///
+/// `#[bridge(rename_all = "snake_case")]`로 기본 `camelCase`를 오버라이드할 수 있습니다.
+/// 이미 `#[serde(rename_all = ...)]`가 있으면 그 값을 유지합니다.
+///
+/// ## 예제
+///
+/// ```rust,ignore
+/// #[rustra::bridge_type]
+/// struct MyInput {
+///     field_name: String, // → "fieldName" in JSON
+/// }
+///
+/// #[rustra::bridge_type]
+/// #[bridge(rename_all = "snake_case")]
+/// struct RawInput {
+///     field_name: String, // → "field_name" in JSON
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn bridge_type(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as DeriveInput);
+
+    // Check if rename_all is already specified in #[serde(...)] or #[bridge(...)]
+    let existing_rename_all = find_rename_all(&input.attrs);
+    let bridge_rename = find_bridge_rename_all(&input.attrs);
+
+    // Determine the final rename_all value
+    let rename_all_lit = match (&existing_rename_all, &bridge_rename) {
+        (Some(existing), _) => existing.clone(), // serde attr takes precedence
+        (None, Some(bridge)) => bridge.clone(),  // bridge attr overrides default
+        (None, None) => "camelCase".to_string(), // default
+    };
+
+    // Remove #[bridge(...)] attributes — they are consumed, not passed through
+    let mut filtered_attrs: Vec<Attribute> = input
+        .attrs
+        .iter()
+        .filter(|attr| !is_bridge_attr(attr))
+        .cloned()
+        .collect();
+
+    // Build the new derive and serde attributes
+    let derive_attr: Attribute = parse_quote! {
+        #[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+    };
+    let serde_attr: Attribute = parse_quote! {
+        #[serde(rename_all = #rename_all_lit)]
+    };
+
+    // Prepend our new attributes (derive first, then serde)
+    filtered_attrs.insert(0, derive_attr);
+    filtered_attrs.insert(1, serde_attr);
+
+    let vis = &input.vis;
+    let ident = &input.ident;
+    let generics = &input.generics;
+    let where_clause = &generics.where_clause;
+    let body_tokens = match &input.data {
+        syn::Data::Struct(data) => {
+            let fields = &data.fields;
+            quote! { #fields }
+        }
+        syn::Data::Enum(data) => {
+            let variants = &data.variants;
+            quote! { #variants }
+        }
+        syn::Data::Union(data) => {
+            let fields = &data.fields;
+            quote! { #fields }
+        }
+    };
+
+    let item_type = match &input.data {
+        syn::Data::Struct(_) => quote! { struct },
+        syn::Data::Enum(_) => quote! { enum },
+        syn::Data::Union(_) => quote! { union },
+    };
+
+    let expanded = quote! {
+        #(#filtered_attrs)*
+        #vis #item_type #ident #generics #where_clause #body_tokens
+    };
+
+    expanded.into()
+}
+
+/// Find `rename_all` value in `#[serde(rename_all = "...")]` attributes.
+fn find_rename_all(attrs: &[Attribute]) -> Option<String> {
+    for attr in attrs {
+        if attr.path().is_ident("serde") {
+            if let Meta::List(list) = &attr.meta {
+                let nested: Result<Vec<Meta>, _> = list.parse_args_with(
+                    syn::punctuated::Punctuated::<Meta, Token![,]>::parse_terminated
+                ).map(|p| p.into_iter().collect());
+                if let Ok(metas) = nested {
+                    for meta in metas {
+                        if let Meta::NameValue(nv) = meta {
+                            if nv.path.is_ident("rename_all") {
+                                if let syn::Expr::Lit(syn::ExprLit {
+                                    lit: syn::Lit::Str(s),
+                                    ..
+                                }) = &nv.value {
+                                    return Some(s.value());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Find `rename_all` value in `#[bridge(rename_all = "...")]` attributes.
+fn find_bridge_rename_all(attrs: &[Attribute]) -> Option<String> {
+    for attr in attrs {
+        if attr.path().is_ident("bridge") {
+            if let Meta::List(list) = &attr.meta {
+                let nested: Result<Vec<Meta>, _> = list.parse_args_with(
+                    syn::punctuated::Punctuated::<Meta, Token![,]>::parse_terminated
+                ).map(|p| p.into_iter().collect());
+                if let Ok(metas) = nested {
+                    for meta in metas {
+                        if let Meta::NameValue(nv) = meta {
+                            if nv.path.is_ident("rename_all") {
+                                if let syn::Expr::Lit(syn::ExprLit {
+                                    lit: syn::Lit::Str(s),
+                                    ..
+                                }) = &nv.value {
+                                    return Some(s.value());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Check if an attribute is `#[bridge(...)]`.
+fn is_bridge_attr(attr: &Attribute) -> bool {
+    attr.path().is_ident("bridge")
 }
 
 /// `Result<O>` 타입에서 내부 `O` 타입을 추출합니다.

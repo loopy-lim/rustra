@@ -40,6 +40,7 @@
 //! }
 //! ```
 
+pub use rustra_macros::bridge_type;
 pub use rustra_macros::command;
 pub use rustra_macros::register;
 
@@ -66,7 +67,7 @@ use schema::{command_name_from_handler, schema_value, short_type_name};
 /// use rustra::prelude::*;
 /// ```
 pub mod prelude {
-    pub use crate::{GeneratedPackage, Package, PackageBuilder, Result, RustraError, command, register};
+    pub use crate::{GeneratedPackage, Package, PackageBuilder, Result, RustraError, bridge_type, command, register};
     pub use schemars::JsonSchema;
     pub use serde::{Deserialize, Serialize};
 }
