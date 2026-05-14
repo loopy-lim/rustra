@@ -14,6 +14,11 @@ import {
   createHybridEngine,
   hybridRegistry,
 } from "./src/adapters/hybrid-adapter";
+import {
+  createRkyvV2Engine,
+  rkyvV2Registry,
+} from "./src/adapters/rkyv-v2-adapter";
+} from "./src/adapters/hybrid-adapter";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -72,12 +77,13 @@ async function runBenchmarks(): Promise<string[]> {
   await installRustraJSI();
   const native = getRustraNative();
 
-  // Create 4 engines with identical API
+  // Create engines with identical API
   const jsonEngine = createJsonEngine(native);
   const msgpackEngine = createMsgpackEngine(native);
   const postcardEngine = createPostcardEngine(native, postcardRegistry);
   const rkyvEngine = createRkyvEngine(native);
   const hybridEngine = createHybridEngine(native, hybridRegistry);
+  const rkyvV2Engine = createRkyvV2Engine(native, rkyvV2Registry);
 
   const nitroBench = NitroModules.createHybridObject<{
     add(a: number, b: number): number;
@@ -100,6 +106,7 @@ async function runBenchmarks(): Promise<string[]> {
     { name: "Postcard", engine: postcardEngine },
     { name: "rkyv", engine: rkyvEngine },
     { name: "Hybrid", engine: hybridEngine },
+    { name: "rkyvV2", engine: rkyvV2Engine },
   ];
 
   for (const { name, engine } of adapters) {
@@ -185,6 +192,16 @@ async function runBenchmarks(): Promise<string[]> {
   log("└───────────────────────────────────────────────┘");
   log("");
 
+  // ── 8. rkyv V2 (command_id, pure fixed-width) ─────────
+  log("┌─ 8. rkyv V2 (command_id, fixed-width) ─────────┐");
+  const rkyvV2Result = await measure("addNumbers (rkyvV2)", () =>
+    addNumbers(rkyvV2Engine, INPUT),
+  );
+  log(`│  avg: ${formatNs(rkyvV2Result.avg).padStart(10)}  p50: ${formatNs(rkyvV2Result.p50).padStart(10)}`);
+  log(`│  ${formatOps(rkyvV2Result.ops)} ops/sec`);
+  log("└───────────────────────────────────────────────┘");
+  log("");
+
   // ── Head-to-head ──────────────────────────────────────
   log("╔════════════════════════════════════════════════╗");
   log("║         Head-to-Head (same DX)                ║");
@@ -194,6 +211,7 @@ async function runBenchmarks(): Promise<string[]> {
   const allResults = [
     { name: "Nitro (JSI C++)", result: nitroResult },
     { name: "JSI noop", result: noopResult },
+    { name: "rkyv V2 ★", result: rkyvV2Result },
     { name: "Hybrid", result: hybridResult },
     { name: "rkyv", result: rkyvResult },
     { name: "Postcard", result: postcardResult },
@@ -210,16 +228,16 @@ async function runBenchmarks(): Promise<string[]> {
   log("│");
   log(`│  Same DX: addNumbers(engine, {a:42, b:58})`);
   log("│");
+  log(`│  rkyv V2 / Nitro = ${(rkyvV2Result.avg / nitroResult.avg).toFixed(1)}x`);
   log(`│  Hybrid  / Nitro = ${(hybridResult.avg / nitroResult.avg).toFixed(1)}x`);
   log(`│  rkyv    / Nitro = ${(rkyvResult.avg / nitroResult.avg).toFixed(1)}x`);
   log(`│  Postcard/ Nitro = ${(postcardResult.avg / nitroResult.avg).toFixed(1)}x`);
   log(`│  Msgpack / Nitro = ${(msgpackResult.avg / nitroResult.avg).toFixed(1)}x`);
   log(`│  JSON    / Nitro = ${(jsonResult.avg / nitroResult.avg).toFixed(1)}x`);
   log("│");
-  log(`│  Hybrid  vs JSON = ${(jsonResult.avg / hybridResult.avg).toFixed(1)}x faster`);
-  log(`│  rkyv    vs JSON = ${(jsonResult.avg / rkyvResult.avg).toFixed(1)}x faster`);
-  log(`│  Postcard vs JSON = ${(jsonResult.avg / postcardResult.avg).toFixed(1)}x faster`);
-  log(`│  Hybrid  vs Post = ${(postcardResult.avg / hybridResult.avg).toFixed(1)}x faster`);
+  log(`│  rkyv V2 vs JSON = ${(jsonResult.avg / rkyvV2Result.avg).toFixed(1)}x faster`);
+  log(`│  rkyv V2 vs Post = ${(postcardResult.avg / rkyvV2Result.avg).toFixed(1)}x faster`);
+  log(`│  rkyv V2 vs rkyv = ${(rkyvResult.avg / rkyvV2Result.avg).toFixed(1)}x faster`);
   log("╚════════════════════════════════════════════════╝");
 
   for (const line of lines) console.log(line);
