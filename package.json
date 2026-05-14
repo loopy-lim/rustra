@@ -26,7 +26,9 @@
     "test:runtime:native": "npm run test:runtime:node-napi && npm run test:runtime:bun-ffi",
     "test:compat": "npm run test:ts:node && npm run test:ts:bun && npm run test:adapters && npm run test:runtime",
     "bench": "node scripts/transport-bench.mjs",
-    "bench:bun": "bun scripts/transport-bench.mjs"
+    "bench:bun": "bun scripts/transport-bench.mjs",
+    "lint": "eslint packages/*/src/**/*.ts",
+    "lint:fix": "eslint packages/*/src/**/*.ts --fix"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
