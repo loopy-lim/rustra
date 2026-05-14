@@ -15,7 +15,8 @@ export type JsonSchema = {
   type?: string | string[];
   properties?: Record<string, JsonSchema>;
   required?: string[];
-  items?: JsonSchema;
+  items?: JsonSchema | JsonSchema[];
+  additionalProperties?: JsonSchema;
   $ref?: string;
   anyOf?: JsonSchema[];
   enum?: string[];
