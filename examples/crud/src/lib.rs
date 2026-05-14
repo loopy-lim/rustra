@@ -112,7 +112,7 @@ pub fn list_items(input: ListItemsInput) -> Result<ListItemsOutput> {
     let store = STORE.lock().unwrap();
     let items: Vec<Item> = store
         .values()
-        .filter(|item| input.min_value.map_or(true, |min| item.value >= min))
+        .filter(|item| input.min_value.is_none_or(|min| item.value >= min))
         .cloned()
         .collect();
     Ok(ListItemsOutput { items })

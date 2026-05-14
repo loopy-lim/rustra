@@ -100,9 +100,7 @@ async function runWatch(args: string[]): Promise<void> {
         await generateFromSchema(schemaPath, outputPath);
         console.log(`[${new Date().toLocaleTimeString()}] Regenerated`);
       } catch (error) {
-        console.error(
-          `Regeneration failed: ${error instanceof Error ? error.message : error}`,
-        );
+        console.error(`Regeneration failed: ${error instanceof Error ? error.message : error}`);
       }
     }, 100);
   });
