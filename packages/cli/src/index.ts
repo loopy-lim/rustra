@@ -3,9 +3,9 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { watch, readFileSync } from 'node:fs';
 import type { PackageSchema } from './schema.js';
-import { generateTypesTs, generateCommandsTs, generateContractTs } from './generate.js';
+import { generateTypesTs, generateCommandsTs, generateContractTs, generateRkyvCodecsTs, generateRkyvRegistryTs } from './generate.js';
 
-export { generateTypesTs, generateCommandsTs, generateContractTs } from './generate.js';
+export { generateTypesTs, generateCommandsTs, generateContractTs, generateRkyvCodecsTs, generateRkyvRegistryTs } from './generate.js';
 export type { PackageSchema, CommandSchema, JsonSchema } from './schema.js';
 export { diffSchemas, formatDiffResult } from './schema-diff.js';
 export type { BreakingChange, DiffResult } from './schema-diff.js';
@@ -69,6 +69,8 @@ async function runGenerate(args: string[]): Promise<void> {
   console.log('  types.ts');
   console.log('  commands.ts');
   console.log('  contract.ts');
+  console.log('  rkyv-codecs.ts');
+  console.log('  rkyv-registry.ts');
 }
 
 function resolvePaths(args: string[]): { schemaPath: string; outputPath: string } {
@@ -120,11 +122,15 @@ async function generateFromSchema(schemaPath: string, outputPath: string): Promi
   const typesTs = generateTypesTs(schema);
   const commandsTs = generateCommandsTs(schema);
   const contractTs = generateContractTs(schemaContent);
+  const rkyvCodecsTs = generateRkyvCodecsTs(schema);
+  const rkyvRegistryTs = generateRkyvRegistryTs(schema);
 
   await mkdir(outputPath, { recursive: true });
   await writeFile(resolve(outputPath, 'types.ts'), typesTs);
   await writeFile(resolve(outputPath, 'commands.ts'), commandsTs);
   await writeFile(resolve(outputPath, 'contract.ts'), contractTs);
+  await writeFile(resolve(outputPath, 'rkyv-codecs.ts'), rkyvCodecsTs);
+  await writeFile(resolve(outputPath, 'rkyv-registry.ts'), rkyvRegistryTs);
 }
 
 function parseGenerateArgs(args: string[]): GenerateOptions {
