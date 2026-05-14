@@ -8,5 +8,6 @@
     "outDir": "../../dist-ts",
     "skipLibCheck": true
   },
-  "include": ["generated/**/*.ts", "ts/**/*.ts", "apps/**/*.ts", "../../packages/**/*.ts"]
+  "include": ["generated/**/*.ts", "ts/**/*.ts", "apps/**/*.ts", "../../packages/**/*.ts"],
+  "exclude": ["apps/bun-ffi-app.ts"]
 }

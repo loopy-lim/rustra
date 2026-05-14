@@ -6,7 +6,7 @@ version.workspace = true
 publish = false
 
 [lib]
-crate-type = ["rlib", "staticlib"]
+crate-type = ["rlib", "cdylib", "staticlib"]
 
 [dependencies]
 rustra.workspace = true
