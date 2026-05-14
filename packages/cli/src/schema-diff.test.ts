@@ -45,7 +45,11 @@ test('detects removed field', () => {
         inputType: 'AddInput',
         outputType: 'AddOutput',
         inputSchema: { type: 'object', properties: { a: { type: 'integer' } }, required: ['a'] },
-        outputSchema: { type: 'object', properties: { value: { type: 'integer' } }, required: ['value'] },
+        outputSchema: {
+          type: 'object',
+          properties: { value: { type: 'integer' } },
+          required: ['value'],
+        },
       },
     ],
   };
@@ -66,7 +70,11 @@ test('detects type change', () => {
           properties: { a: { type: 'string' }, b: { type: 'integer' } },
           required: ['a', 'b'],
         },
-        outputSchema: { type: 'object', properties: { value: { type: 'integer' } }, required: ['value'] },
+        outputSchema: {
+          type: 'object',
+          properties: { value: { type: 'integer' } },
+          required: ['value'],
+        },
       },
     ],
   };
@@ -87,7 +95,11 @@ test('detects required field added', () => {
           properties: { a: { type: 'integer' }, b: { type: 'integer' }, c: { type: 'integer' } },
           required: ['a', 'b', 'c'],
         },
-        outputSchema: { type: 'object', properties: { value: { type: 'integer' } }, required: ['value'] },
+        outputSchema: {
+          type: 'object',
+          properties: { value: { type: 'integer' } },
+          required: ['value'],
+        },
       },
     ],
   };
