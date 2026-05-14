@@ -20,6 +20,9 @@
     "clean": "rm -rf dist",
     "test": "tsc --noEmit"
   },
+  "dependencies": {
+    "@rustra/types": "^0.1.0"
+  },
   "devDependencies": {
     "typescript": "^5.9.0"
   },
