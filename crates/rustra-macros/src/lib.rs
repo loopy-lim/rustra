@@ -34,10 +34,28 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr = parse_macro_input!(attr as CommandAttr);
     let func = parse_macro_input!(item as ItemFn);
 
-    if func.sig.inputs.len() != 1 {
+    if func.sig.inputs.is_empty() {
         return syn::Error::new_spanned(
             &func.sig,
-            "#[command] function must have exactly one input parameter",
+            "#[command] requires exactly one input parameter, but none were provided",
+        )
+        .to_compile_error()
+        .into();
+    }
+
+    if func.sig.inputs.len() > 1 {
+        return syn::Error::new_spanned(
+            &func.sig.inputs[1],
+            "#[command] requires exactly one input parameter; remove additional parameters",
+        )
+        .to_compile_error()
+        .into();
+    }
+
+    if func.sig.asyncness.is_some() {
+        return syn::Error::new_spanned(
+            &func.sig.fn_token,
+            "#[command] functions must be synchronous — use `fn` not `async fn`",
         )
         .to_compile_error()
         .into();
@@ -48,7 +66,7 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         _ => {
             return syn::Error::new_spanned(
                 &func.sig.inputs[0],
-                "#[command] function must take a typed parameter",
+                "#[command] parameter must be a typed value (e.g., `input: MyInput`), not `self`",
             )
             .to_compile_error()
             .into();
@@ -59,15 +77,21 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         ReturnType::Type(_, ty) => match extract_result_inner(ty) {
             Some(inner) => inner,
             None => {
-                return syn::Error::new_spanned(ty, "#[command] must return Result<O>")
-                    .to_compile_error()
-                    .into();
+                return syn::Error::new_spanned(
+                    ty,
+                    "#[command] must return `Result<O>` where O: Serialize + JsonSchema",
+                )
+                .to_compile_error()
+                .into();
             }
         },
         _ => {
-            return syn::Error::new_spanned(&func.sig, "#[command] must return Result<O>")
-                .to_compile_error()
-                .into();
+            return syn::Error::new_spanned(
+                &func.sig,
+                "#[command] must have an explicit return type `Result<O>`",
+            )
+            .to_compile_error()
+            .into();
         }
     };
 
@@ -135,6 +159,15 @@ impl Parse for RegisterInput {
 #[proc_macro]
 pub fn register(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as RegisterInput);
+
+    if input.commands.is_empty() {
+        return syn::Error::new(
+            proc_macro2::Span::call_site(),
+            "register! requires at least one command function after the builder expression",
+        )
+        .to_compile_error()
+        .into();
+    }
 
     let builder = &input.builder;
     let chain: TokenStream2 = input
