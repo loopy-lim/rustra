@@ -86,3 +86,62 @@ export function createReactNativeEngine(
     },
   };
 }
+
+// ── rkyv V2 (command_id, fixed-width binary) ───────────────
+
+/**
+ * rkyv V2 네이티브 모듈이 구현해야 하는 인터페이스입니다.
+ */
+export type RkyvV2Native = {
+  invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
+};
+
+/**
+ * rkyv V2 코덱 — 각 명령의 바이너리 인코딩/디코딩을 담당합니다.
+ *
+ * 코드젠이 명령별로 자동 생성합니다.
+ */
+export type RkyvV2Codec<I, O> = {
+  commandId: number;
+  encode(args: I): ArrayBuffer;
+  decode(buf: ArrayBuffer): { ok: boolean; result?: O; error?: string };
+};
+
+/**
+ * rkyv V2 네이티브 모듈로 EngineClient을 생성합니다.
+ *
+ * 명령 이름으로 코덱 레지스트리에서 인코더를 찾아 고정폭 바이너리로 직렬화하고,
+ * 네이티브 JSI를 통해 전송한 뒤 코덱의 디코더로 응답을 파싱합니다.
+ *
+ * @param native - `invokeRkyvV2` 메서드가 있는 JSI 네이티브 모듈
+ * @param registry - 명령 이름 → 코덱 매핑 (코드젠으로 자동 생성)
+ *
+ * @example
+ * ```ts
+ * import { createRkyvV2Engine } from '@rustra/react-native';
+ * import { rkyvV2Registry } from './generated/rkyv-registry.js';
+ *
+ * const engine = createRkyvV2Engine(native, rkyvV2Registry);
+ * const result = await addNumbers(engine, { a: 20, b: 22 }); // { value: 42 }
+ * ```
+ */
+export function createRkyvV2Engine(
+  native: RkyvV2Native,
+  registry: Map<string, RkyvV2Codec<any, any>>,
+): ReactNativeEngineClient {
+  return {
+    invoke<T>(command: string, args?: unknown): Promise<T> {
+      const codec = registry.get(command);
+      if (!codec) {
+        throw new Error(`RkyvV2: no codec for "${command}"`);
+      }
+      const payload = codec.encode(args);
+      const resultBytes = native.invokeRkyvV2(payload);
+      const response = codec.decode(resultBytes);
+      if (!response.ok) {
+        throw new Error(response.error ?? 'RkyvV2 invoke failed');
+      }
+      return Promise.resolve(response.result as T);
+    },
+  };
+}

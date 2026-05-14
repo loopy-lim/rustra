@@ -48,8 +48,8 @@ mod error;
 mod schema;
 
 use schemars::JsonSchema;
-use serde::{Serialize, de::DeserializeOwned};
-use serde_json::{Value, json};
+use serde::{de::DeserializeOwned, Serialize};
+use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
