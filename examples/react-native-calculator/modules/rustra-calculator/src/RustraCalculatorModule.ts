@@ -3,6 +3,8 @@ import { NativeModule, requireNativeModule } from 'expo';
 declare class NativeRustraCalculatorModule extends NativeModule {
   invokeRaw(payload: string): Promise<string>;
   invokeRawSync(payload: string): string;
+  addSync(a: number, b: number): number;
+  echoSync(value: number): number;
 }
 
 type InvokeResponse = {
@@ -32,5 +34,9 @@ export default {
     const payload = JSON.stringify({ command, args });
     const rawResponse = NativeRustraCalculator.invokeRawSync(payload);
     return parseResponse(rawResponse);
+  },
+
+  addSync(a: number, b: number): number {
+    return NativeRustraCalculator.addSync(a, b);
   },
 };
