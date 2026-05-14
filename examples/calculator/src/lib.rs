@@ -89,3 +89,109 @@ fn json_string(value: Value) -> *mut c_char {
         .expect("JSON response should not contain interior null bytes")
         .into_raw()
 }
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_calculator_invoke_bytes(
+    payload: *const u8,
+    payload_len: usize,
+    out_len: *mut usize,
+) -> *mut u8 {
+    if payload.is_null() || out_len.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    if payload_len > MAX_PAYLOAD_BYTES {
+        let error = format!(r#"{{"ok":false,"error":"payload exceeds size limit"}}"#);
+        return alloc_response(error.into_bytes(), out_len);
+    }
+
+    let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
+
+    let payload_str = match std::str::from_utf8(bytes) {
+        Ok(s) => s,
+        Err(e) => {
+            let error = format!(r#"{{"ok":false,"error":"payload was not UTF-8: {e}"}}"#);
+            return alloc_response(error.into_bytes(), out_len);
+        }
+    };
+
+    let c_payload = match CString::new(payload_str) {
+        Ok(c) => c,
+        Err(_) => {
+            let error = r#"{"ok":false,"error":"payload contained null byte"}"#;
+            return alloc_response(error.as_bytes().to_vec(), out_len);
+        }
+    };
+
+    let result_ptr = unsafe { rustra_calculator_invoke(c_payload.as_ptr()) };
+    let result_cstr = unsafe { std::ffi::CStr::from_ptr(result_ptr) };
+    let result_bytes = result_cstr.to_bytes().to_vec();
+    unsafe { rustra_calculator_free_string(result_ptr) };
+
+    alloc_response(result_bytes, out_len)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_calculator_free_buffer(ptr: *mut u8, len: usize) {
+    if !ptr.is_null() && len > 0 {
+        unsafe {
+            let slice = std::slice::from_raw_parts_mut(ptr, len);
+            let _ = Box::from_raw(slice as *mut [u8]);
+        }
+    }
+}
+
+fn alloc_response(data: Vec<u8>, out_len: *mut usize) -> *mut u8 {
+    unsafe { *out_len = data.len() };
+    let boxed: Box<[u8]> = data.into_boxed_slice();
+    Box::into_raw(boxed) as *mut u8
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_invoke_bytes_round_trip() {
+        let input = r#"{"command":"addNumbers","args":{"a":42,"b":58}}"#;
+        let payload = input.as_bytes();
+        let mut out_len: usize = 0;
+
+        let result_ptr = unsafe {
+            rustra_calculator_invoke_bytes(payload.as_ptr(), payload.len(), &mut out_len)
+        };
+
+        assert!(!result_ptr.is_null());
+        assert!(out_len > 0);
+
+        let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
+        let result_str = std::str::from_utf8(result_bytes).unwrap();
+        let result: serde_json::Value = serde_json::from_str(result_str).unwrap();
+
+        assert_eq!(result["ok"], true);
+        assert_eq!(result["result"]["value"], 100);
+
+        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+    }
+
+    #[test]
+    fn test_invoke_bytes_null_payload() {
+        let mut out_len: usize = 0;
+        let result = unsafe { rustra_calculator_invoke_bytes(std::ptr::null(), 0, &mut out_len) };
+        assert!(result.is_null());
+    }
+
+    #[test]
+    fn test_invoke_bytes_bad_json() {
+        let payload = b"not json";
+        let mut out_len: usize = 0;
+        let result_ptr = unsafe {
+            rustra_calculator_invoke_bytes(payload.as_ptr(), payload.len(), &mut out_len)
+        };
+        assert!(!result_ptr.is_null());
+        let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
+        let result_str = std::str::from_utf8(result_bytes).unwrap();
+        assert!(result_str.contains(r#""ok":false"#));
+        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+    }
+}

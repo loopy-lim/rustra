@@ -1,9 +1,0 @@
-{
-  "platforms": ["apple", "android"],
-  "apple": {
-    "modules": ["RustraCalculatorModule"]
-  },
-  "android": {
-    "modules": ["expo.modules.rustracalculator.RustraCalculatorModule"]
-  }
-}
