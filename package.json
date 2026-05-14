@@ -27,9 +27,13 @@
     "lint:rust": "cargo clippy --all-targets -- -D warnings",
     "fmt:rust": "cargo fmt --all",
     "fmt:rust:check": "cargo fmt --all -- --check",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "npm run build && changeset publish",
     "prepare": "lefthook install"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.0",
     "@eslint/js": "^10.0.1",
     "@evilmartians/lefthook": "^2.1.6",
     "@types/node": "^24.0.0",
