@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { CommandSchema, JsonSchema, PackageSchema } from './schema.js';
+import type { JsonSchema, PackageSchema } from './schema.js';
 
 export function generateTypesTs(schema: PackageSchema): string {
   let output =
