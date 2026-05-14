@@ -42,11 +42,7 @@ export function createValidatedEngine(options: ValidateOptions): EngineClient {
   };
 }
 
-function validateAgainstSchema(
-  value: unknown,
-  schema: JsonSchema,
-  path: string,
-): string[] {
+function validateAgainstSchema(value: unknown, schema: JsonSchema, path: string): string[] {
   const errors: string[] = [];
 
   if (schema.$ref || schema.anyOf) return errors;
