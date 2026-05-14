@@ -86,6 +86,10 @@ function tsTypeFromSchema(schema: JsonSchema, definitions: Record<string, JsonSc
   if (typeof type === 'string') {
     switch (type) {
       case 'object':
+        if (!schema.properties && schema.additionalProperties) {
+          const valueType = tsTypeFromSchema(schema.additionalProperties, definitions);
+          return `Record<string, ${valueType}>`;
+        }
         return tsObjectFromSchema(schema, definitions);
       case 'integer':
       case 'number':
