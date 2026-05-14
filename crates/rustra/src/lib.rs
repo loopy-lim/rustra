@@ -1,9 +1,9 @@
 pub use rustra_macros::command;
 pub use rustra_macros::register;
 
-use schemars::{JsonSchema, schema_for};
-use serde::{Serialize, de::DeserializeOwned};
-use serde_json::{Value, json};
+use schemars::{schema_for, JsonSchema};
+use serde::{de::DeserializeOwned, Serialize};
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::any::type_name;
 use std::collections::{BTreeMap, BTreeSet};
@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 pub mod prelude {
     pub use crate::{
-        GeneratedPackage, Package, PackageBuilder, Result, RustraError, command, register,
+        command, register, GeneratedPackage, Package, PackageBuilder, Result, RustraError,
     };
     pub use schemars::JsonSchema;
     pub use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ pub mod prelude {
 
 pub mod __private {
     use schemars::JsonSchema;
-    use serde::{Serialize, de::DeserializeOwned};
+    use serde::{de::DeserializeOwned, Serialize};
 
     pub trait CommandInput: DeserializeOwned + JsonSchema + 'static {}
     impl<T: DeserializeOwned + JsonSchema + 'static> CommandInput for T {}
@@ -34,7 +34,7 @@ pub mod __private {
 #[cfg(feature = "tauri")]
 pub mod tauri_support {
     use crate::Package;
-    use serde_json::{Value, json};
+    use serde_json::{json, Value};
     use tauri::State;
 
     pub struct RustraState {
@@ -441,11 +441,11 @@ fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String {
     match schema.get("type") {
         Some(Value::String(t)) => match t.as_str() {
             "object" => {
-                if schema.get("properties").is_none() {
-                    if let Some(additional) = schema.get("additionalProperties") {
-                        let value_type = ts_type_from_schema(additional, definitions);
-                        return format!("Record<string, {value_type}>");
-                    }
+                if schema.get("properties").is_none() && schema.get("additionalProperties").is_some()
+                {
+                    let value_type =
+                        ts_type_from_schema(schema.get("additionalProperties").unwrap(), definitions);
+                    return format!("Record<string, {value_type}>");
                 }
                 ts_object_from_schema(schema, definitions)
             }
