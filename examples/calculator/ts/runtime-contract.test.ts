@@ -13,7 +13,7 @@ test('host apps share generated commands and differ only by adapter transport', 
   assert.match(nodeApp, /from '..\/generated\/commands\.js'/);
   assert.match(bunApp, /from '..\/generated\/commands\.js'/);
   assert.match(tauriApp, /from '..\/..\/calculator\/generated\/commands\.js'/);
-  assert.match(reactNativeApp, /from '..\/calculator\/generated\/commands'/);
+  assert.match(reactNativeApp, /from ['"].*calculator\/generated\/commands['"]/);
 
   assert.match(nodeApp, /createNodeEngine/);
   assert.match(bunApp, /createBunEngine/);

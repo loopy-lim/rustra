@@ -19,6 +19,9 @@
     "build": "tsc",
     "clean": "rm -rf dist"
   },
+  "dependencies": {
+    "@rustra/types": "^0.1.0"
+  },
   "devDependencies": {
     "typescript": "^5.9.0"
   },
