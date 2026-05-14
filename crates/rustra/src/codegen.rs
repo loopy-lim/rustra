@@ -63,11 +63,13 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
                     "boolean" => "boolean".to_string(),
                     "null" => "null".to_string(),
                     "object" => ts_object_from_schema(schema, definitions),
-                    "array" => schema
-                        .get("items")
-                        .map(|s| ts_type_from_schema(s, definitions))
-                        .unwrap_or_else(|| "unknown".to_string())
-                        + "[]",
+                    "array" => {
+                        schema
+                            .get("items")
+                            .map(|s| ts_type_from_schema(s, definitions))
+                            .unwrap_or_else(|| "unknown".to_string())
+                            + "[]"
+                    }
                     _ => "unknown".to_string(),
                 })
                 .collect();
