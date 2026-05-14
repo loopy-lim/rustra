@@ -21,12 +21,15 @@
     "test:runtime": "npm run test:runtime:node && npm run test:runtime:bun && npm run test:runtime:tauri",
     "test:compat": "npm run test:ts:node && npm run test:ts:bun && npm run test:adapters && npm run test:runtime",
     "lint": "eslint packages/*/src/**/*.ts",
-    "lint:fix": "eslint packages/*/src/**/*.ts --fix"
+    "lint:fix": "eslint packages/*/src/**/*.ts --fix",
+    "format": "prettier --write 'packages/*/src/**/*.ts'",
+    "format:check": "prettier --check 'packages/*/src/**/*.ts'"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.0.0",
     "eslint": "^10.3.0",
+    "prettier": "^3.8.3",
     "typescript": "^5.9.0",
     "typescript-eslint": "^8.59.3"
   }

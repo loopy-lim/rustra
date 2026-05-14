@@ -1,22 +1,18 @@
 #!/usr/bin/env node
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { resolve, dirname } from "node:path";
-import type { PackageSchema } from "./schema.js";
-import {
-  generateTypesTs,
-  generateCommandsTs,
-  generateContractTs,
-} from "./generate.js";
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { resolve, dirname } from 'node:path';
+import type { PackageSchema } from './schema.js';
+import { generateTypesTs, generateCommandsTs, generateContractTs } from './generate.js';
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
-  if (args.length === 0 || args[0] === "--help" || args[0] === "-h") {
+  if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
     printHelp();
     process.exit(0);
   }
 
-  if (args[0] === "generate") {
+  if (args[0] === 'generate') {
     await runGenerate(args.slice(1));
     return;
   }
@@ -65,16 +61,14 @@ async function runGenerate(args: string[]): Promise<void> {
     schemaPath = options.schemaPath;
     outputPath = options.outputPath;
   } else {
-    console.error(
-      "Error: Provide --schema and --output, or --config with a config file.",
-    );
+    console.error('Error: Provide --schema and --output, or --config with a config file.');
     process.exit(1);
   }
 
   schemaPath = resolve(schemaPath);
   outputPath = resolve(outputPath);
 
-  const schemaContent = await readFile(schemaPath, "utf-8");
+  const schemaContent = await readFile(schemaPath, 'utf-8');
   const schema: PackageSchema = JSON.parse(schemaContent);
 
   const typesTs = generateTypesTs(schema);
@@ -82,14 +76,14 @@ async function runGenerate(args: string[]): Promise<void> {
   const contractTs = generateContractTs(schemaContent);
 
   await mkdir(outputPath, { recursive: true });
-  await writeFile(resolve(outputPath, "types.ts"), typesTs);
-  await writeFile(resolve(outputPath, "commands.ts"), commandsTs);
-  await writeFile(resolve(outputPath, "contract.ts"), contractTs);
+  await writeFile(resolve(outputPath, 'types.ts'), typesTs);
+  await writeFile(resolve(outputPath, 'commands.ts'), commandsTs);
+  await writeFile(resolve(outputPath, 'contract.ts'), contractTs);
 
   console.log(`Generated TypeScript files in ${outputPath}:`);
-  console.log("  types.ts");
-  console.log("  commands.ts");
-  console.log("  contract.ts");
+  console.log('  types.ts');
+  console.log('  commands.ts');
+  console.log('  contract.ts');
 }
 
 function parseGenerateArgs(args: string[]): GenerateOptions {
@@ -97,13 +91,13 @@ function parseGenerateArgs(args: string[]): GenerateOptions {
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
-      case "--schema":
+      case '--schema':
         options.schemaPath = args[++i];
         break;
-      case "--output":
+      case '--output':
         options.outputPath = args[++i];
         break;
-      case "--config":
+      case '--config':
         options.configPath = args[++i];
         break;
     }
@@ -118,7 +112,7 @@ interface RustraConfig {
 }
 
 async function readConfig(configPath: string): Promise<RustraConfig> {
-  const content = await readFile(resolve(configPath), "utf-8");
+  const content = await readFile(resolve(configPath), 'utf-8');
   const config = JSON.parse(content) as RustraConfig;
 
   if (!config.schema || !config.output) {
@@ -132,6 +126,6 @@ async function readConfig(configPath: string): Promise<RustraConfig> {
 }
 
 main().catch((error) => {
-  console.error("Error:", error instanceof Error ? error.message : error);
+  console.error('Error:', error instanceof Error ? error.message : error);
   process.exit(1);
 });
