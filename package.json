@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "build": "npm run -ws build",
-    "test:ts:node": "tsc -p examples/calculator/tsconfig.json && node --test dist-ts/examples/calculator/ts/*.test.js",
+    "test:ts:node": "tsc -p examples/calculator/tsconfig.json && tsc -p examples/crud/tsconfig.json && node --test dist-ts/examples/calculator/ts/*.test.js dist-ts/examples/crud/ts/*.test.js",
     "test:ts:bun": "bun test examples/calculator/ts/*.test.ts",
     "test:runtime:node": "cargo build -p rustra-calculator-example && tsc -p examples/calculator/tsconfig.json && node dist-ts/examples/calculator/apps/node-app.js",
     "test:runtime:bun": "cargo build -p rustra-calculator-example && bun examples/calculator/apps/bun-app.ts",
