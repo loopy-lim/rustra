@@ -1,6 +1,7 @@
 {
   "commands": [
     {
+      "commandId": 1,
       "inputSchema": {
         "properties": {
           "a": {

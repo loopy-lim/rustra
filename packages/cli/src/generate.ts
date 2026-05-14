@@ -64,7 +64,7 @@ export function generateCommandsTs(schema: PackageSchema): string {
 
   const imports = Array.from(typeNames).sort().join(', ');
   let output = `import type { ${imports} } from './types.js';\n`;
-  output += `import { invoke } from '@rustra/react-native';\n\n`;
+  output += `import { invoke } from '@rustra/types';\n\n`;
 
   for (const command of schema.commands) {
     const fnName = commandFunctionName(command.name);
@@ -203,7 +203,7 @@ function readDataViewExpr(field: WireField, outputVar: string): string {
  */
 export function generateRkyvCodecsTs(schema: PackageSchema): string {
   let output =
-    "import type { RkyvV2Codec } from '@rustra/react-native';\n" +
+    "import type { RkyvV2Codec } from '@rustra/types';\n" +
     "import type { " +
     schema.commands
       .flatMap((c) => [c.inputType, c.outputType])
@@ -294,7 +294,7 @@ export function generateRkyvRegistryTs(schema: PackageSchema): string {
 
   return (
     `import { ${schema.commands.map((c) => commandFunctionName(c.name) + 'Codec').join(', ')} } from './rkyv-codecs.js';\n\n` +
-    `export const rkyvV2Registry = new Map<string, import('@rustra/react-native').RkyvV2Codec<any, any>>([\n` +
+    `export const rkyvV2Registry = new Map<string, import('@rustra/types').RkyvV2Codec<any, any>>([\n` +
     entries +
     `,\n]);\n`
   );
