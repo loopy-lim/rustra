@@ -156,15 +156,13 @@ pub mod tauri_support {
 pub struct Package {
     id: String,
     commands: Arc<BTreeMap<String, Command>>,
+    id_to_name: Arc<BTreeMap<u16, String>>,
 }
 
-/// 명령을 점진적으로 등록하는 빌더입니다.
-///
-/// [`Package::builder`]로 생성하며, 체이닝으로 여러 명령을 추가한 후
-/// [`build`](PackageBuilder::build)로 [`Package`]를 완성합니다.
 pub struct PackageBuilder {
     id: String,
     commands: BTreeMap<String, Command>,
+    next_command_id: u16,
 }
 
 /// TypeScript 코드 생성 결과입니다.
@@ -217,6 +215,7 @@ impl GeneratedPackage {
 /// 단일 명령의 메타데이터와 핸들러입니다.
 #[derive(Clone)]
 struct Command {
+    command_id: u16,
     input_type: String,
     output_type: String,
     input_schema: Value,
@@ -234,6 +233,7 @@ impl Package {
         PackageBuilder {
             id: id.into(),
             commands: BTreeMap::new(),
+            next_command_id: 1,
         }
     }
 
@@ -259,6 +259,11 @@ impl Package {
         (command.invoke)(params)
     }
 
+    /// command_id로 명령 이름을 조회합니다.
+    pub fn resolve_command_id(&self, id: u16) -> Option<&str> {
+        self.id_to_name.get(&id).map(|s| s.as_str())
+    }
+
     /// 등록된 모든 명령에서 TypeScript 클라이언트 코드를 생성합니다.
     pub fn generate_typescript(&self) -> crate::Result<GeneratedPackage> {
         let schema_json =
@@ -282,6 +287,7 @@ impl Package {
             .map(|(name, command)| {
                 json!({
                     "name": name,
+                    "commandId": command.command_id,
                     "inputType": command.input_type,
                     "outputType": command.output_type,
                     "inputSchema": command.input_schema,
@@ -405,6 +411,7 @@ impl PackageBuilder {
             }
         }
         let command = Command {
+            command_id: self.next_command_id,
             input_type: short_type_name::<I>(),
             output_type: short_type_name::<O>(),
             input_schema,
@@ -422,14 +429,21 @@ impl PackageBuilder {
             panic!("duplicate command registration: '{name}'");
         }
         self.commands.insert(name, command);
+        self.next_command_id += 1;
         self
     }
 
     /// 등록된 모든 명령을 불변 [`Package`]로 빌드합니다.
     pub fn build(self) -> Package {
+        let id_to_name: BTreeMap<u16, String> = self
+            .commands
+            .iter()
+            .map(|(name, cmd)| (cmd.command_id, name.clone()))
+            .collect();
         Package {
             id: self.id,
             commands: Arc::new(self.commands),
+            id_to_name: Arc::new(id_to_name),
         }
     }
 }
