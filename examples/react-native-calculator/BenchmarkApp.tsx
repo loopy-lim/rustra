@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View, ScrollView } from "react-native";
+import { NitroModules } from "react-native-nitro-modules";
 import { addNumbers } from "../calculator/generated/commands";
 import { createReactNativeEngine } from "../../packages/react-native/src";
 import RustraCalculatorModule from "./modules/rustra-calculator";
@@ -7,6 +8,7 @@ import RustraCalculatorModule from "./modules/rustra-calculator";
 type RustraNativeModule = {
   invoke(command: string, args?: unknown): Promise<unknown>;
   invokeSync(command: string, args?: unknown): unknown;
+  addSync(a: number, b: number): number;
 };
 
 const nativeModule = RustraCalculatorModule as RustraNativeModule;
@@ -68,13 +70,29 @@ async function runBenchmarks(): Promise<string[]> {
   const syncEngine = createReactNativeEngine(nativeModule);
   const asyncEngine = createReactNativeEngine(nativeModule, { mode: "async" });
 
+  // Load Nitro HybridObject
+  const nitroBench = NitroModules.createHybridObject<{
+    add(a: number, b: number): number;
+  }>("NitroBench");
+
   log("╔════════════════════════════════════════════════╗");
-  log("║   rustra-bridge RN Benchmark (iOS Simulator)  ║");
+  log("║       Rustra vs Nitro (iOS Simulator)         ║");
   log("╚════════════════════════════════════════════════╝");
   log("");
 
-  // 1. Sync mode (new)
-  log("┌─ SYNC MODE (Function) ────────────────────────┐");
+  // 1. Nitro (JSI C++ direct)
+  log("┌─ Nitro Modules (JSI C++ HybridObject) ────────┐");
+  const nitroResult = await measure("NitroBench.add", () =>
+    Promise.resolve(nitroBench.add(42, 58)),
+  );
+  log(`│  10,000 iterations`);
+  log(`│  avg: ${formatNs(nitroResult.avg).padStart(10)}  p50: ${formatNs(nitroResult.p50).padStart(10)}  p99: ${formatNs(nitroResult.p99).padStart(10)}`);
+  log(`│  ${formatOps(nitroResult.ops)} ops/sec`);
+  log("└───────────────────────────────────────────────┘");
+  log("");
+
+  // 2. Rustra sync
+  log("┌─ Rustra SYNC (Expo + JSON + Rust FFI) ────────┐");
   const syncResult = await measure("addNumbers (sync)", () =>
     addNumbers(syncEngine, { a: 42, b: 58 }),
   );
@@ -84,8 +102,8 @@ async function runBenchmarks(): Promise<string[]> {
   log("└───────────────────────────────────────────────┘");
   log("");
 
-  // 2. Async mode (original)
-  log("┌─ ASYNC MODE (AsyncFunction) ──────────────────┐");
+  // 3. Rustra async
+  log("┌─ Rustra ASYNC (Expo AsyncFunction) ───────────┐");
   const asyncResult = await measure("addNumbers (async)", () =>
     addNumbers(asyncEngine, { a: 42, b: 58 }),
   );
@@ -95,65 +113,40 @@ async function runBenchmarks(): Promise<string[]> {
   log("└───────────────────────────────────────────────┘");
   log("");
 
-  // 3. JSON-only baseline
-  log("┌─ JS JSON roundtrip (no bridge) ───────────────┐");
-  const jsonInput = { command: "addNumbers", args: { a: 42, b: 58 } };
-  const jsonBench = await measure("JSON roundtrip", () =>
-    Promise.resolve(JSON.parse(JSON.stringify(jsonInput))),
+  // 4. Expo native baseline
+  log("┌─ Expo Function (Swift only, no Rust) ─────────┐");
+  const rawResult = await measure("addSync (Swift)", () =>
+    Promise.resolve(nativeModule.addSync(42, 58)),
   );
-  log(`│  avg: ${formatNs(jsonBench.avg).padStart(10)}  p50: ${formatNs(jsonBench.p50).padStart(10)}`);
+  log(`│  avg: ${formatNs(rawResult.avg).padStart(10)}  p50: ${formatNs(rawResult.p50).padStart(10)}`);
   log("└───────────────────────────────────────────────┘");
   log("");
 
-  // 4. Sync vs Async comparison
-  const speedup = asyncResult.avg / syncResult.avg;
-  const saved = asyncResult.avg - syncResult.avg;
-
-  log("┌─ Sync vs Async Improvement ───────────────────┐");
+  // 5. Head-to-head
+  log("╔════════════════════════════════════════════════╗");
+  log("║         Head-to-Head Comparison               ║");
+  log("╠════════════════════════════════════════════════╣");
   log("│");
-  log(`│  Async:  ${bar(asyncResult.avg, asyncResult.avg)} ${formatNs(asyncResult.avg)}`);
-  log(`│  Sync:   ${bar(syncResult.avg, asyncResult.avg)} ${formatNs(syncResult.avg)}`);
-  log("│");
-  log(`│  ${speedup.toFixed(1)}x faster  (${formatNs(saved)} saved per call)`);
-  log("└───────────────────────────────────────────────┘");
-  log("");
 
-  // 5. Overhead breakdown (sync)
-  log("┌─ Sync Overhead Breakdown ─────────────────────┐");
-  const syncOverhead = syncResult.avg - jsonBench.avg;
-  const layers = [
-    { name: "JSON ser/de (JS)", ns: jsonBench.avg, ch: "▓" },
-    { name: "Sync bridge + FFI", ns: syncOverhead, ch: "▒" },
+  const allResults = [
+    { name: "Nitro (JSI C++)", result: nitroResult },
+    { name: "Expo Function (Swift)", result: rawResult },
+    { name: "Rustra sync", result: syncResult },
+    { name: "Rustra async", result: asyncResult },
   ];
-  const maxNs = Math.max(...layers.map((l) => l.ns));
-  for (const l of layers) {
-    const b = bar(l.ns, maxNs);
-    log(`│  ${l.name.padEnd(20)} ${b} ${formatNs(l.ns)}`);
-  }
-  log(`│  Total: ${formatNs(syncResult.avg)}`);
-  log("└───────────────────────────────────────────────┘");
-  log("");
 
-  // 6. All adapters comparison
-  log("┌─ Comparison: All Adapters ────────────────────┐");
-  log("│");
-  log("│  Adapter        Avg latency    Throughput");
-  log("│  ───────────    ───────────    ──────────");
-  const adapters = [
-    { name: "Rust (typed)", avgNs: 209, ops: 5093309 },
-    { name: "Swift FFI", avgNs: 3500, ops: 296710 },
-    { name: "RN sync", avgNs: syncResult.avg, ops: syncResult.ops },
-    { name: "RN async", avgNs: asyncResult.avg, ops: asyncResult.ops },
-    { name: "Bun (est.)", avgNs: 5000, ops: 200000 },
-    { name: "Node (est.)", avgNs: 50000, ops: 20000 },
-  ];
-  const maxOps = Math.max(...adapters.map((a) => a.ops));
-  for (const a of adapters) {
-    const b = bar(a.ops, maxOps);
-    log(`│  ${a.name.padEnd(16)} ${formatNs(a.avgNs).padStart(10)}  ${b} ${formatOps(a.ops)}`);
+  const maxAvg = Math.max(...allResults.map((r) => r.result.avg));
+  for (const r of allResults) {
+    const b = bar(r.result.avg, maxAvg);
+    log(`│  ${r.name.padEnd(24)} ${b} ${formatNs(r.result.avg)}`);
   }
+
   log("│");
-  log("└───────────────────────────────────────────────┘");
+  const rustraVsNitro = syncResult.avg / nitroResult.avg;
+  const overhead = syncResult.avg - nitroResult.avg;
+  log(`│  Rustra sync / Nitro = ${rustraVsNitro.toFixed(1)}x`);
+  log(`│  Rustra overhead: ${formatNs(overhead)}`);
+  log("╚════════════════════════════════════════════════╝");
 
   return lines;
 }
