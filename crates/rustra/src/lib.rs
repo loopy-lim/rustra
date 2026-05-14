@@ -405,7 +405,15 @@ fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String {
 
     match schema.get("type") {
         Some(Value::String(t)) => match t.as_str() {
-            "object" => ts_object_from_schema(schema, definitions),
+            "object" => {
+                if schema.get("properties").is_none() {
+                    if let Some(additional) = schema.get("additionalProperties") {
+                        let value_type = ts_type_from_schema(additional, definitions);
+                        return format!("Record<string, {value_type}>");
+                    }
+                }
+                ts_object_from_schema(schema, definitions)
+            }
             "integer" | "number" => "number".to_string(),
             "string" => {
                 if let Some(enum_values) = schema.get("enum").and_then(Value::as_array) {
@@ -425,8 +433,10 @@ fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String {
             "boolean" => "boolean".to_string(),
             "array" => {
                 if let Some(items) = schema.get("items").and_then(Value::as_array) {
-                    let types: Vec<String> =
-                        items.iter().map(|s| ts_type_from_schema(s, definitions)).collect();
+                    let types: Vec<String> = items
+                        .iter()
+                        .map(|s| ts_type_from_schema(s, definitions))
+                        .collect();
                     if !types.is_empty() {
                         return format!("[{}]", types.join(", "));
                     }
