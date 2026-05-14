@@ -63,8 +63,13 @@ pub mod tauri_support {
     }
 }
 
+/// Result type alias for rustra operations.
 pub type Result<T> = std::result::Result<T, RustraError>;
 
+/// Error type for all rustra operations.
+///
+/// Use the factory methods to create domain-specific errors with structured error codes.
+/// The `retryable` field indicates whether the caller should retry the operation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RustraError {
     code: &'static str,
@@ -78,6 +83,7 @@ fn is_false(v: &bool) -> bool {
 }
 
 impl RustraError {
+        /// Command not found error. Code: `command.not_found`.
     pub fn command_not_found(name: impl Into<String>) -> Self {
         let name = name.into();
         Self {
@@ -87,6 +93,7 @@ impl RustraError {
         }
     }
 
+        /// Invalid arguments error. Code: `command.invalid_args`.
     pub fn invalid_args(error: impl fmt::Display) -> Self {
         Self {
             code: "command.invalid_args",
@@ -95,6 +102,7 @@ impl RustraError {
         }
     }
 
+        /// Internal error. Code: `internal`.
     pub fn internal(error: impl fmt::Display) -> Self {
         Self {
             code: "internal",
@@ -103,6 +111,7 @@ impl RustraError {
         }
     }
 
+        /// Custom error with a user-defined code.
     pub fn custom(code: &'static str, message: impl Into<String>) -> Self {
         Self {
             code,
@@ -111,6 +120,7 @@ impl RustraError {
         }
     }
 
+        /// Transport/network error. Code: `transport.error`. Retryable.
     pub fn transport(error: impl fmt::Display) -> Self {
         Self {
             code: "transport.error",
@@ -119,6 +129,7 @@ impl RustraError {
         }
     }
 
+        /// Timeout error. Code: `transport.timeout`. Retryable.
     pub fn timeout(error: impl fmt::Display) -> Self {
         Self {
             code: "transport.timeout",
@@ -127,6 +138,7 @@ impl RustraError {
         }
     }
 
+        /// Builder-style method to mark any error as retryable.
     pub fn retryable(mut self) -> Self {
         self.retryable = true;
         self
@@ -159,17 +171,20 @@ impl From<std::io::Error> for RustraError {
     }
 }
 
+/// A collection of registered commands that can be invoked and generate TypeScript clients.
 #[derive(Clone)]
 pub struct Package {
     id: String,
     commands: Arc<BTreeMap<String, Command>>,
 }
 
+/// Builder for constructing a [`Package`] with registered commands.
 pub struct PackageBuilder {
     id: String,
     commands: BTreeMap<String, Command>,
 }
 
+/// Generated TypeScript output: schema JSON, types, commands, and contract hash.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GeneratedPackage {
     pub schema_json: String,
@@ -441,10 +456,13 @@ fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String {
     match schema.get("type") {
         Some(Value::String(t)) => match t.as_str() {
             "object" => {
-                if schema.get("properties").is_none() && schema.get("additionalProperties").is_some()
+                if schema.get("properties").is_none()
+                    && schema.get("additionalProperties").is_some()
                 {
-                    let value_type =
-                        ts_type_from_schema(schema.get("additionalProperties").unwrap(), definitions);
+                    let value_type = ts_type_from_schema(
+                        schema.get("additionalProperties").unwrap(),
+                        definitions,
+                    );
                     return format!("Record<string, {value_type}>");
                 }
                 ts_object_from_schema(schema, definitions)
