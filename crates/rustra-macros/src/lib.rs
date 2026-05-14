@@ -2,8 +2,8 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{
-    parse::Parse, parse::ParseStream, parse_macro_input, GenericArgument, Ident, ItemFn, LitStr,
-    PathArguments, ReturnType, Token, Type,
+    GenericArgument, Ident, ItemFn, LitStr, PathArguments, ReturnType, Token, Type, parse::Parse,
+    parse::ParseStream, parse_macro_input,
 };
 
 struct CommandAttr {
@@ -54,7 +54,7 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     if func.sig.asyncness.is_some() {
         return syn::Error::new_spanned(
-            &func.sig.fn_token,
+            func.sig.fn_token,
             "#[command] functions must be synchronous — use `fn` not `async fn`",
         )
         .to_compile_error()
