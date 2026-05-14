@@ -407,21 +407,7 @@ pub unsafe extern "C" fn rustra_calculator_invoke_hybrid(
     alloc_response(resp_bytes.to_vec(), out_len)
 }
 
-/// rkyv v2: command_id (u16) based request — no String, fully fixed-width.
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
-struct CmdRequest {
-    command_id: u16,
-    a: i64,
-    b: i64,
-}
-
-fn resolve_command(command_id: u16) -> Option<&'static str> {
-    match command_id {
-        1 => Some("addNumbers"),
-        _ => None,
-    }
-}
-
+/// rkyv v2: command_id (u16) based request — generic dispatch via Package::invoke_rkyv_v2()
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2(
     payload: *const u8,
@@ -432,26 +418,9 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2(
         return std::ptr::null_mut();
     }
 
-    // Read fixed-width request directly (bypass rkyv bytecheck for FFI bytes)
-    // Layout: [command_id: u16 @0] [pad 6B] [a: i64 @8] [b: i64 @16] = 24 bytes
-    if payload_len < 24 {
-        let resp = RkyvResponse { ok: false, value: 0, error: Some("rkyv v2: payload too short".into()) };
-        let resp_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&resp).unwrap_or_default();
-        return alloc_response(resp_bytes.to_vec(), out_len);
-    }
-
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
-    let command_id = u16::from_le_bytes([bytes[0], bytes[1]]);
-    let a = i64::from_le_bytes(bytes[8..16].try_into().unwrap());
-    let b = i64::from_le_bytes(bytes[16..24].try_into().unwrap());
 
-    let Some(command) = resolve_command(command_id) else {
-        let resp = RkyvResponse { ok: false, value: 0, error: Some(format!("unknown command_id: {command_id}")) };
-        let resp_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&resp).unwrap_or_default();
-        return alloc_response(resp_bytes.to_vec(), out_len);
-    };
-
-    let result = match calculator_package().invoke_json(command, serde_json::json!({"a": a, "b": b})) {
+    let result = match calculator_package().invoke_rkyv_v2(bytes) {
         Ok(result) => {
             let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
             RkyvResponse { ok: true, value, error: None }
@@ -755,36 +724,11 @@ mod tests {
     }
 
     #[test]
-    fn test_cmd_request_wire_format() {
-        let req = CmdRequest { command_id: 1, a: 42, b: 58 };
-        let bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&req).unwrap();
-        let hex: Vec<String> = bytes.iter().map(|x| format!("{:02x}", x)).collect();
-        println!("CmdRequest hex: {}", hex.join(" "));
-        println!("CmdRequest len: {}", bytes.len());
-
-        // Print per-offset analysis
-        for (i, b) in bytes.iter().enumerate() {
-            println!("  offset {:2}: 0x{:02x} ({})", i, b, b);
-        }
-
-        // Verify round-trip
-        let archived = rkyv::access::<ArchivedCmdRequest, rkyv::rancor::Error>(&bytes).unwrap();
-        assert_eq!(u16::from(archived.command_id), 1);
-        assert_eq!(i64::from(archived.a), 42);
-        assert_eq!(i64::from(archived.b), 58);
-
-        // Also test with larger values
-        let req2 = CmdRequest { command_id: 255, a: -42, b: 100000 };
-        let bytes2 = rkyv::to_bytes::<rkyv::rancor::Error>(&req2).unwrap();
-        println!("CmdRequest(255,-42,100000) hex: {}", bytes2.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
-        println!("CmdRequest(255,-42,100000) len: {}", bytes2.len());
-    }
-
-    #[test]
-    fn test_invoke_rkyv_v2_round_trip() {
-        // Build request bytes matching the fixed-width layout
+    fn test_rkyv_v2_generic_dispatch() {
+        // Build request bytes matching the fixed-width layout:
+        // [command_id: u16 @0] [pad 6B] [a: i64 @8] [b: i64 @16] = 24 bytes
         let mut payload = vec![0u8; 24];
-        payload[0..2].copy_from_slice(&1u16.to_le_bytes()); // command_id
+        payload[0..2].copy_from_slice(&1u16.to_le_bytes()); // command_id = 1 (addNumbers)
         payload[8..16].copy_from_slice(&42i64.to_le_bytes()); // a
         payload[16..24].copy_from_slice(&58i64.to_le_bytes()); // b
 
