@@ -4,7 +4,7 @@ import type { JsonSchema, PackageSchema } from './schema.js';
 export function generateTypesTs(schema: PackageSchema): string {
   let output =
     'export type EngineClient = {\n  invoke<T>(command: string, args?: unknown): Promise<T>;\n};\n\n' +
-    'export type RustraError = {\n  readonly code: string;\n  readonly message: string;\n};\n\n';
+    'export type RustraError = {\n  readonly code: string;\n  readonly message: string;\n  readonly retryable?: boolean;\n};\n\n';
 
   const allDefinitions: Record<string, JsonSchema> = {};
   for (const command of schema.commands) {
