@@ -2810,6 +2810,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustra-crud-example"
+version = "0.1.0"
+dependencies = [
+ "rustra",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "rustra-macros"
 version = "0.1.0"
 dependencies = [
