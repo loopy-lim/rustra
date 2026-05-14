@@ -1,11 +1,5 @@
-export type EngineClient = {
-  invoke<T>(command: string, args?: unknown): Promise<T>;
-};
-
-export type RustraError = {
-  readonly code: string;
-  readonly message: string;
-};
+export type { EngineClient, RustraError } from '@rustra/types';
+export { RustraCommandError } from '@rustra/types';
 
 export type AddNumbersInput = {
   a: number;
