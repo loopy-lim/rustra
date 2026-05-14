@@ -432,23 +432,21 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2(
         return std::ptr::null_mut();
     }
 
+    // Read fixed-width request directly (bypass rkyv bytecheck for FFI bytes)
+    // Layout: [command_id: u16 @0] [pad 6B] [a: i64 @8] [b: i64 @16] = 24 bytes
+    if payload_len < 24 {
+        let resp = RkyvResponse { ok: false, value: 0, error: Some("rkyv v2: payload too short".into()) };
+        let resp_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&resp).unwrap_or_default();
+        return alloc_response(resp_bytes.to_vec(), out_len);
+    }
+
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
+    let command_id = u16::from_le_bytes([bytes[0], bytes[1]]);
+    let a = i64::from_le_bytes(bytes[8..16].try_into().unwrap());
+    let b = i64::from_le_bytes(bytes[16..24].try_into().unwrap());
 
-    let archived = match rkyv::access::<ArchivedCmdRequest, rkyv::rancor::Error>(bytes) {
-        Ok(a) => a,
-        Err(_) => {
-            let resp = RkyvResponse { ok: false, value: 0, error: Some("rkyv v2 access failed".into()) };
-            let resp_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&resp).unwrap_or_default();
-            return alloc_response(resp_bytes.to_vec(), out_len);
-        }
-    };
-
-    let cmd_id: u16 = archived.command_id.into();
-    let a: i64 = archived.a.into();
-    let b: i64 = archived.b.into();
-
-    let Some(command) = resolve_command(cmd_id) else {
-        let resp = RkyvResponse { ok: false, value: 0, error: Some(format!("unknown command_id: {cmd_id}")) };
+    let Some(command) = resolve_command(command_id) else {
+        let resp = RkyvResponse { ok: false, value: 0, error: Some(format!("unknown command_id: {command_id}")) };
         let resp_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&resp).unwrap_or_default();
         return alloc_response(resp_bytes.to_vec(), out_len);
     };
@@ -784,8 +782,11 @@ mod tests {
 
     #[test]
     fn test_invoke_rkyv_v2_round_trip() {
-        let request = CmdRequest { command_id: 1, a: 42, b: 58 };
-        let payload = rkyv::to_bytes::<rkyv::rancor::Error>(&request).unwrap();
+        // Build request bytes matching the fixed-width layout
+        let mut payload = vec![0u8; 24];
+        payload[0..2].copy_from_slice(&1u16.to_le_bytes()); // command_id
+        payload[8..16].copy_from_slice(&42i64.to_le_bytes()); // a
+        payload[16..24].copy_from_slice(&58i64.to_le_bytes()); // b
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {

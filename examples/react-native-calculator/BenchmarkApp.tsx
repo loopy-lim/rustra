@@ -18,7 +18,6 @@ import {
   createRkyvV2Engine,
   rkyvV2Registry,
 } from "./src/adapters/rkyv-v2-adapter";
-} from "./src/adapters/hybrid-adapter";
 
 // ── Helpers ──────────────────────────────────────────────
 
