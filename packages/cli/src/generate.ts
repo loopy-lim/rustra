@@ -1,10 +1,10 @@
-import { createHash } from "node:crypto";
-import type { CommandSchema, JsonSchema, PackageSchema } from "./schema.js";
+import { createHash } from 'node:crypto';
+import type { JsonSchema, PackageSchema } from './schema.js';
 
 export function generateTypesTs(schema: PackageSchema): string {
   let output =
-    "export type EngineClient = {\n  invoke<T>(command: string, args?: unknown): Promise<T>;\n};\n\n" +
-    "export type RustraError = {\n  readonly code: string;\n  readonly message: string;\n};\n\n";
+    'export type EngineClient = {\n  invoke<T>(command: string, args?: unknown): Promise<T>;\n};\n\n' +
+    'export type RustraError = {\n  readonly code: string;\n  readonly message: string;\n  readonly retryable?: boolean;\n};\n\n';
 
   const allDefinitions: Record<string, JsonSchema> = {};
   for (const command of schema.commands) {
@@ -35,13 +35,13 @@ export function generateTypesTs(schema: PackageSchema): string {
 }
 
 export function generateCommandsTs(schema: PackageSchema): string {
-  const typeNames = new Set(["EngineClient", "RustraError"]);
+  const typeNames = new Set(['EngineClient', 'RustraError']);
   for (const command of schema.commands) {
     typeNames.add(command.inputType);
     typeNames.add(command.outputType);
   }
 
-  const imports = Array.from(typeNames).sort().join(", ");
+  const imports = Array.from(typeNames).sort().join(', ');
   let output = `import type { ${imports} } from './types.js';\n\n`;
 
   for (const command of schema.commands) {
@@ -61,13 +61,10 @@ export function generateContractTs(schemaJson: string): string {
 }
 
 function contractHash(input: string): string {
-  return createHash("sha256").update(input).digest("hex");
+  return createHash('sha256').update(input).digest('hex');
 }
 
-function collectDefinitions(
-  schema: JsonSchema,
-  out: Record<string, JsonSchema>,
-): void {
+function collectDefinitions(schema: JsonSchema, out: Record<string, JsonSchema>): void {
   if (schema.definitions) {
     for (const [key, value] of Object.entries(schema.definitions)) {
       out[key] = value;
@@ -75,47 +72,49 @@ function collectDefinitions(
   }
 }
 
-function tsTypeFromSchema(
-  schema: JsonSchema,
-  definitions: Record<string, JsonSchema>,
-): string {
+function tsTypeFromSchema(schema: JsonSchema, definitions: Record<string, JsonSchema>): string {
   if (schema.$ref) {
     return resolveRef(schema.$ref, definitions);
   }
 
   if (schema.anyOf) {
-    return schema.anyOf
-      .map((s) => tsTypeFromSchema(s, definitions))
-      .join(" | ");
+    return schema.anyOf.map((s) => tsTypeFromSchema(s, definitions)).join(' | ');
   }
 
   const type = schema.type;
 
-  if (typeof type === "string") {
+  if (typeof type === 'string') {
     switch (type) {
-      case "object":
-        return tsObjectFromSchema(schema, definitions);
-      case "integer":
-      case "number":
-        return "number";
-      case "string": {
-        if (schema.enum && schema.enum.length > 0) {
-          return schema.enum.map((v) => `'${v}'`).join(" | ");
+      case 'object':
+        if (!schema.properties && schema.additionalProperties) {
+          const valueType = tsTypeFromSchema(schema.additionalProperties, definitions);
+          return `Record<string, ${valueType}>`;
         }
-        return "string";
+        return tsObjectFromSchema(schema, definitions);
+      case 'integer':
+      case 'number':
+        return 'number';
+      case 'string': {
+        if (schema.enum && schema.enum.length > 0) {
+          return schema.enum.map((v) => `'${v}'`).join(' | ');
+        }
+        return 'string';
       }
-      case "boolean":
-        return "boolean";
-      case "array": {
-        const itemType = schema.items
-          ? tsTypeFromSchema(schema.items, definitions)
-          : "unknown";
+      case 'boolean':
+        return 'boolean';
+      case 'array': {
+        if (Array.isArray(schema.items) && schema.items.length > 0) {
+          const types = schema.items.map((s) => tsTypeFromSchema(s, definitions));
+          return `[${types.join(', ')}]`;
+        }
+        const itemSchema = Array.isArray(schema.items) ? undefined : schema.items;
+        const itemType = itemSchema ? tsTypeFromSchema(itemSchema, definitions) : 'unknown';
         return `${itemType}[]`;
       }
-      case "null":
-        return "null";
+      case 'null':
+        return 'null';
       default:
-        return "unknown";
+        return 'unknown';
     }
   }
 
@@ -123,68 +122,61 @@ function tsTypeFromSchema(
     const parts = type
       .map((t) => {
         switch (t) {
-          case "integer":
-          case "number":
-            return "number";
-          case "string":
-            return "string";
-          case "boolean":
-            return "boolean";
-          case "null":
-            return "null";
-          case "object":
+          case 'integer':
+          case 'number':
+            return 'number';
+          case 'string':
+            return 'string';
+          case 'boolean':
+            return 'boolean';
+          case 'null':
+            return 'null';
+          case 'object':
             return tsObjectFromSchema(schema, definitions);
-          case "array":
-            return schema.items
-              ? `${tsTypeFromSchema(schema.items, definitions)}[]`
-              : "unknown[]";
+          case 'array': {
+            const arrItem = Array.isArray(schema.items) ? undefined : schema.items;
+            return arrItem ? `${tsTypeFromSchema(arrItem, definitions)}[]` : 'unknown[]';
+          }
           default:
-            return "unknown";
+            return 'unknown';
         }
       })
       .filter((v, i, a) => a.indexOf(v) === i);
-    return parts.join(" | ");
+    return parts.join(' | ');
   }
 
-  return "unknown";
+  return 'unknown';
 }
 
-function resolveRef(
-  ref: string,
-  _definitions: Record<string, JsonSchema>,
-): string {
-  const name =
-    ref.startsWith("#/definitions/")
-      ? ref.slice("#/definitions/".length)
-      : ref.startsWith("#/$defs/")
-        ? ref.slice("#/$defs/".length)
-        : ref;
+function resolveRef(ref: string, _definitions: Record<string, JsonSchema>): string {
+  const name = ref.startsWith('#/definitions/')
+    ? ref.slice('#/definitions/'.length)
+    : ref.startsWith('#/$defs/')
+      ? ref.slice('#/$defs/'.length)
+      : ref;
   return name;
 }
 
-function tsObjectFromSchema(
-  schema: JsonSchema,
-  definitions: Record<string, JsonSchema>,
-): string {
+function tsObjectFromSchema(schema: JsonSchema, definitions: Record<string, JsonSchema>): string {
   const required = new Set(schema.required ?? []);
   const properties = schema.properties;
 
   if (!properties) {
-    return "Record<string, unknown>";
+    return 'Record<string, unknown>';
   }
 
   const fields = Object.entries(properties)
     .map(([name, propSchema]) => {
-      const optional = required.has(name) ? "" : "?";
+      const optional = required.has(name) ? '' : '?';
       return `  ${name}${optional}: ${tsTypeFromSchema(propSchema, definitions)};`;
     })
-    .join("\n");
+    .join('\n');
 
   return `{\n${fields}\n}`;
 }
 
 function commandFunctionName(name: string): string {
-  let output = "";
+  let output = '';
   let uppercaseNext = false;
 
   for (const char of name) {
@@ -202,14 +194,10 @@ function commandFunctionName(name: string): string {
     }
   }
 
-  return output.length > 0 ? output : "command";
+  return output.length > 0 ? output : 'command';
 }
 
 function isAsciiAlphanumeric(char: string): boolean {
   const code = char.charCodeAt(0);
-  return (
-    (code >= 48 && code <= 57) ||
-    (code >= 65 && code <= 90) ||
-    (code >= 97 && code <= 122)
-  );
+  return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
 }

@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "build": "npm run -ws build",
-    "test:ts:node": "tsc -p examples/calculator/tsconfig.json && node --test dist-ts/examples/calculator/ts/*.test.js",
+    "test:ts:node": "tsc -p examples/calculator/tsconfig.json && tsc -p examples/crud/tsconfig.json && node --test dist-ts/examples/calculator/ts/*.test.js dist-ts/examples/crud/ts/*.test.js",
     "test:ts:bun": "bun test examples/calculator/ts/*.test.ts",
     "test:runtime:node": "cargo build -p rustra-calculator-example && tsc -p examples/calculator/tsconfig.json && node dist-ts/examples/calculator/apps/node-app.js",
     "test:runtime:bun": "cargo build -p rustra-calculator-example && bun examples/calculator/apps/bun-app.ts",
@@ -19,10 +19,27 @@
     "test:runtime:tauri": "cd examples/tauri-calculator && npm run build && npm run smoke",
     "test:adapters": "npm run test:adapter:tauri && npm run test:adapter:react-native && npm run test:app:react-native",
     "test:runtime": "npm run test:runtime:node && npm run test:runtime:bun && npm run test:runtime:tauri",
-    "test:compat": "npm run test:ts:node && npm run test:ts:bun && npm run test:adapters && npm run test:runtime"
+    "test:compat": "npm run test:ts:node && npm run test:ts:bun && npm run test:adapters && npm run test:runtime",
+    "lint": "eslint packages/*/src/**/*.ts",
+    "lint:fix": "eslint packages/*/src/**/*.ts --fix",
+    "format": "prettier --write 'packages/*/src/**/*.ts'",
+    "format:check": "prettier --check 'packages/*/src/**/*.ts'",
+    "lint:rust": "cargo clippy --all-targets -- -D warnings",
+    "fmt:rust": "cargo fmt --all",
+    "fmt:rust:check": "cargo fmt --all -- --check",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "npm run build && changeset publish",
+    "prepare": "lefthook install"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.0",
+    "@eslint/js": "^10.0.1",
+    "@evilmartians/lefthook": "^2.1.6",
     "@types/node": "^24.0.0",
-    "typescript": "^5.9.0"
+    "eslint": "^10.3.0",
+    "prettier": "^3.8.3",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.59.3"
   }
 }
