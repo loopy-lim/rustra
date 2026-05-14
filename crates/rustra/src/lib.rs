@@ -67,7 +67,8 @@ use schema::{command_name_from_handler, schema_value, short_type_name};
 /// ```
 pub mod prelude {
     pub use crate::{
-        command, register, GeneratedPackage, Package, PackageBuilder, Result, RustraError,
+        command, encode_rkyv_v2_error, register, GeneratedPackage, Package, PackageBuilder, Result,
+        RustraError,
     };
     pub use schemars::JsonSchema;
     pub use serde::{Deserialize, Serialize};
@@ -223,6 +224,7 @@ struct Command {
     definitions: Value,
     invoke: Arc<dyn Fn(Value) -> crate::Result<Value> + Send + Sync>,
     rkyv_v2_decode: Arc<dyn Fn(&[u8]) -> crate::Result<Value> + Send + Sync>,
+    rkyv_v2_encode_response: Arc<dyn Fn(&Value) -> Vec<u8> + Send + Sync>,
 }
 
 impl Package {
@@ -269,7 +271,8 @@ impl Package {
     ///
     /// 처음 2바이트에서 command_id를 읽고, 등록된 rkyv_v2_decoder로
     /// 입력 필드를 읽어 JSON Value로 재구성한 뒤 invoke_json으로 전달합니다.
-    pub fn invoke_rkyv_v2(&self, payload: &[u8]) -> crate::Result<Value> {
+    /// 결과는 rkyv_v2_encode_response로 바이너리로 인코딩하여 반환합니다.
+    pub fn invoke_rkyv_v2(&self, payload: &[u8]) -> crate::Result<Vec<u8>> {
         if payload.len() < 8 {
             return Err(RustraError::invalid_args("rkyv v2: payload too short"));
         }
@@ -284,7 +287,8 @@ impl Package {
             .ok_or_else(|| RustraError::command_not_found(command_name))?;
 
         let params = (command.rkyv_v2_decode)(payload)?;
-        self.invoke_json(command_name, params)
+        let result = self.invoke_json(command_name, params)?;
+        Ok((command.rkyv_v2_encode_response)(&result))
     }
 
     /// 등록된 모든 명령에서 TypeScript 클라이언트 코드를 생성합니다.
@@ -433,7 +437,8 @@ impl PackageBuilder {
                 obj.insert(key, value);
             }
         }
-        let rkyv_v2_decoder = build_rkyv_v2_decoder(&input_schema);
+        let (rkyv_v2_decoder, _tier) = build_rkyv_v2_decoder(&input_schema);
+        let rkyv_v2_response_encoder = build_rkyv_v2_response_encoder(&output_schema);
         let command = Command {
             command_id: self.next_command_id,
             input_type: short_type_name::<I>(),
@@ -448,6 +453,7 @@ impl PackageBuilder {
                 serde_json::to_value(output).map_err(RustraError::internal)
             }),
             rkyv_v2_decode: rkyv_v2_decoder,
+            rkyv_v2_encode_response: rkyv_v2_response_encoder,
         };
         let name = name.into();
         if self.commands.contains_key(&name) {
@@ -475,18 +481,25 @@ impl PackageBuilder {
 
 /// JSON Schema에서 rkyv V2 디코더를 자동 생성합니다.
 ///
-/// 입력 스키마의 프로퍼티를 분석하여 고정폭 필드의 오프셋을 계산하고,
+/// 입력 스키마의 프로퍼티를 분석하여 고정폭 필드와 가변폭 필드를 분리하고,
 /// 바이트에서 직접 값을 읽어 JSON Value를 재구성하는 클로저를 반환합니다.
-/// 모든 필드가 primitive(int/float/bool)인 Tier 1 명령에만 작동합니다.
+///
+/// Tier 1: 모든 필드가 고정폭 primitive (i64, i32, f64, …)
+/// Tier 2: String 또는 Vec<primitive> 필드 포함
+/// Tier 3: 중첩 구조체, enum, Option<T> 등 — 아직 미지원
 fn build_rkyv_v2_decoder(
     input_schema: &Value,
-) -> Arc<dyn Fn(&[u8]) -> crate::Result<Value> + Send + Sync> {
+) -> (
+    Arc<dyn Fn(&[u8]) -> crate::Result<Value> + Send + Sync>,
+    Tier,
+) {
     let props = match input_schema.get("properties").and_then(Value::as_object) {
         Some(p) => p,
         None => {
-            return Arc::new(|_| {
-                Err(RustraError::internal("no properties in input schema"))
-            });
+            return (
+                Arc::new(|_| Err(RustraError::internal("no properties in input schema"))),
+                Tier::Tier3,
+            );
         }
     };
     let required: BTreeSet<String> = input_schema
@@ -500,46 +513,367 @@ fn build_rkyv_v2_decoder(
         })
         .unwrap_or_default();
 
-    let mut fields: Vec<(String, usize, WireFieldKind)> = Vec::new();
+    // Classify fields into fixed and variable, and determine the tier.
+    let mut fixed_fields: Vec<(String, usize, WireFieldKind)> = Vec::new();
+    let mut var_fields: Vec<(String, WireFieldKind)> = Vec::new();
+    let mut tier = Tier::Tier1;
+
     let mut offset: usize = 8; // command_id u16 + 6B padding
-    let mut all_fixed = true;
 
     for (name, prop_schema) in props {
         if !required.contains(name) {
-            all_fixed = false;
+            tier = Tier::Tier3;
             continue;
         }
         let Some(kind) = wire_kind_from_schema(prop_schema) else {
-            all_fixed = false;
+            tier = Tier::Tier3;
             continue;
         };
-        let size = kind.size();
-        offset = align_up(offset, size);
-        fields.push((name.clone(), offset, kind));
-        offset += size;
-    }
 
-    if !all_fixed || fields.is_empty() {
-        return Arc::new(move |payload| {
-            let command_id = u16::from_le_bytes([payload[0], payload[1]]);
-            Err(RustraError::invalid_args(&format!(
-                "rkyv v2: command id {command_id} has non-primitive fields, not Tier 1"
-            )))
-        });
-    }
-
-    Arc::new(move |payload: &[u8]| {
-        let mut result = serde_json::Map::new();
-        for (name, field_offset, kind) in &fields {
-            let val = read_wire_field(payload, *field_offset, *kind)?;
-            result.insert(name.clone(), val);
+        if kind.is_fixed() {
+            let size = kind.size();
+            offset = align_up(offset, size);
+            fixed_fields.push((name.clone(), offset, kind));
+            offset += size;
+        } else {
+            tier = if tier == Tier::Tier1 {
+                Tier::Tier2
+            } else {
+                tier
+            };
+            var_fields.push((name.clone(), kind));
         }
-        Ok(Value::Object(result))
+    }
+
+    if tier == Tier::Tier3 {
+        return (
+            Arc::new(move |payload| {
+                let command_id = u16::from_le_bytes([payload[0], payload[1]]);
+                Err(RustraError::invalid_args(&format!(
+                    "rkyv v2: command id {command_id} uses Tier 3 types, not yet supported"
+                )))
+            }),
+            Tier::Tier3,
+        );
+    }
+
+    // var_data_start is where variable-length fields begin in the payload.
+    let var_data_start = offset;
+
+    (
+        Arc::new(move |payload: &[u8]| {
+            let mut result = serde_json::Map::new();
+
+            // Read fixed fields at their pre-computed offsets.
+            for (name, field_offset, kind) in &fixed_fields {
+                let val = read_wire_field(payload, *field_offset, *kind)?;
+                result.insert(name.clone(), val);
+            }
+
+            // Read variable-length fields sequentially after the fixed region.
+            let mut cursor = var_data_start;
+            for (name, kind) in &var_fields {
+                // u32 LE length prefix
+                if cursor + 4 > payload.len() {
+                    return Err(RustraError::invalid_args(
+                        "rkyv v2: payload truncated at var-field length",
+                    ));
+                }
+                let len_bytes: [u8; 4] = payload[cursor..cursor + 4].try_into().unwrap();
+                let field_len = u32::from_le_bytes(len_bytes) as usize;
+                cursor += 4;
+
+                if cursor + field_len > payload.len() {
+                    return Err(RustraError::invalid_args(
+                        "rkyv v2: payload truncated at var-field data",
+                    ));
+                }
+
+                let val = match kind {
+                    WireFieldKind::String => {
+                        let s = std::str::from_utf8(&payload[cursor..cursor + field_len]).map_err(
+                            |_| RustraError::invalid_args("rkyv v2: invalid UTF-8 in string field"),
+                        )?;
+                        json!(s)
+                    }
+                    WireFieldKind::VecI64 => {
+                        let elem_size = 8usize;
+                        if field_len % elem_size != 0 {
+                            return Err(RustraError::invalid_args(
+                                "rkyv v2: Vec<i64> data length not a multiple of 8",
+                            ));
+                        }
+                        let count = field_len / elem_size;
+                        let mut arr = Vec::with_capacity(count);
+                        for i in 0..count {
+                            let off = cursor + i * elem_size;
+                            let bytes: [u8; 8] = payload[off..off + 8].try_into().unwrap();
+                            arr.push(i64::from_le_bytes(bytes));
+                        }
+                        json!(arr)
+                    }
+                    WireFieldKind::VecF64 => {
+                        let elem_size = 8usize;
+                        if field_len % elem_size != 0 {
+                            return Err(RustraError::invalid_args(
+                                "rkyv v2: Vec<f64> data length not a multiple of 8",
+                            ));
+                        }
+                        let count = field_len / elem_size;
+                        let mut arr = Vec::with_capacity(count);
+                        for i in 0..count {
+                            let off = cursor + i * elem_size;
+                            let bytes: [u8; 8] = payload[off..off + 8].try_into().unwrap();
+                            arr.push(f64::from_le_bytes(bytes));
+                        }
+                        json!(arr)
+                    }
+                    WireFieldKind::VecI32 => {
+                        let elem_size = 4usize;
+                        if field_len % elem_size != 0 {
+                            return Err(RustraError::invalid_args(
+                                "rkyv v2: Vec<i32> data length not a multiple of 4",
+                            ));
+                        }
+                        let count = field_len / elem_size;
+                        let mut arr = Vec::with_capacity(count);
+                        for i in 0..count {
+                            let off = cursor + i * elem_size;
+                            let bytes: [u8; 4] = payload[off..off + 4].try_into().unwrap();
+                            arr.push(i32::from_le_bytes(bytes));
+                        }
+                        json!(arr)
+                    }
+                    WireFieldKind::VecBool => {
+                        let count = field_len;
+                        let mut arr = Vec::with_capacity(count);
+                        for i in 0..count {
+                            arr.push(payload[cursor + i] != 0);
+                        }
+                        json!(arr)
+                    }
+                    WireFieldKind::VecU8 => {
+                        json!(payload[cursor..cursor + field_len])
+                    }
+                    _ => unreachable!("fixed kind in var_fields"),
+                };
+                result.insert(name.clone(), val);
+                cursor += field_len;
+            }
+
+            Ok(Value::Object(result))
+        }),
+        tier,
+    )
+}
+
+/// Builds a response encoder that turns a JSON Value (output from invoke_json)
+/// into the rkyv V2 binary response format.
+///
+/// Wire format:
+/// ```text
+/// [ok: u8 @0][pad 7B]
+/// [fixed output fields @8...][var output fields...]
+/// ```
+///
+/// For errors the encoder is not used; `encode_rkyv_v2_error` is called instead.
+fn build_rkyv_v2_response_encoder(
+    output_schema: &Value,
+) -> Arc<dyn Fn(&Value) -> Vec<u8> + Send + Sync> {
+    let props = match output_schema.get("properties").and_then(Value::as_object) {
+        Some(p) => p,
+        None => {
+            return Arc::new(|_| {
+                // No properties → return ok-only response (8 bytes)
+                let mut buf = vec![0u8; 8];
+                buf[0] = 1; // ok = true
+                buf
+            });
+        }
+    };
+
+    let required: BTreeSet<String> = output_schema
+        .get("required")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(Value::as_str)
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut fixed_fields: Vec<(String, usize, WireFieldKind)> = Vec::new();
+    let mut var_fields: Vec<(String, WireFieldKind)> = Vec::new();
+    let mut offset: usize = 8; // ok u8 + 7B padding
+
+    // Sort fields by alignment descending then by original order to match
+    // the decoder's layout (the decoder iterates properties in schema order).
+    let ordered: Vec<_> = props
+        .iter()
+        .filter(|(name, _)| required.contains(name.as_str()))
+        .collect();
+
+    for (name, prop_schema) in &ordered {
+        if let Some(kind) = wire_kind_from_schema(prop_schema) {
+            if kind.is_fixed() {
+                let size = kind.size();
+                offset = align_up(offset, size);
+                fixed_fields.push(((*name).clone(), offset, kind));
+                offset += size;
+            } else {
+                var_fields.push(((*name).clone(), kind));
+            }
+        }
+    }
+
+    // Pre-compute the total buffer size needed for the fixed region so we
+    // can allocate once and fill in-place.
+    let fixed_end = offset;
+
+    Arc::new(move |value: &Value| {
+        let mut buf = vec![0u8; fixed_end];
+        buf[0] = 1; // ok = true
+
+        // Encode fixed fields
+        for (name, field_offset, kind) in &fixed_fields {
+            let val = value.get(name);
+            match kind {
+                WireFieldKind::I64 => {
+                    let v = val.and_then(Value::as_i64).unwrap_or(0);
+                    buf[*field_offset..*field_offset + 8].copy_from_slice(&v.to_le_bytes());
+                }
+                WireFieldKind::I32 => {
+                    let v = val.and_then(Value::as_i64).unwrap_or(0) as i32;
+                    buf[*field_offset..*field_offset + 4].copy_from_slice(&v.to_le_bytes());
+                }
+                WireFieldKind::U32 => {
+                    let v = val.and_then(Value::as_u64).unwrap_or(0) as u32;
+                    buf[*field_offset..*field_offset + 4].copy_from_slice(&v.to_le_bytes());
+                }
+                WireFieldKind::U16 => {
+                    let v = val.and_then(Value::as_u64).unwrap_or(0) as u16;
+                    buf[*field_offset..*field_offset + 2].copy_from_slice(&v.to_le_bytes());
+                }
+                WireFieldKind::F64 => {
+                    let v = val.and_then(Value::as_f64).unwrap_or(0.0);
+                    buf[*field_offset..*field_offset + 8].copy_from_slice(&v.to_le_bytes());
+                }
+                WireFieldKind::F32 => {
+                    let v = val.and_then(Value::as_f64).unwrap_or(0.0) as f32;
+                    buf[*field_offset..*field_offset + 4].copy_from_slice(&v.to_le_bytes());
+                }
+                WireFieldKind::Bool => {
+                    buf[*field_offset] = if val.and_then(Value::as_bool).unwrap_or(false) {
+                        1
+                    } else {
+                        0
+                    };
+                }
+                _ => unreachable!("var kind in fixed_fields"),
+            }
+        }
+
+        // Encode variable-length fields
+        for (name, kind) in &var_fields {
+            let val = value.get(name);
+            match kind {
+                WireFieldKind::String => {
+                    let s = val.and_then(Value::as_str).unwrap_or("");
+                    let s_bytes = s.as_bytes();
+                    buf.extend_from_slice(&(s_bytes.len() as u32).to_le_bytes());
+                    buf.extend_from_slice(s_bytes);
+                }
+                WireFieldKind::VecI64 => {
+                    let arr = val
+                        .and_then(Value::as_array)
+                        .map(|a| a.as_slice())
+                        .unwrap_or(&[]);
+                    let data_len = arr.len() * 8;
+                    buf.extend_from_slice(&(data_len as u32).to_le_bytes());
+                    for item in arr {
+                        let v = item.as_i64().unwrap_or(0);
+                        buf.extend_from_slice(&v.to_le_bytes());
+                    }
+                }
+                WireFieldKind::VecF64 => {
+                    let arr = val
+                        .and_then(Value::as_array)
+                        .map(|a| a.as_slice())
+                        .unwrap_or(&[]);
+                    let data_len = arr.len() * 8;
+                    buf.extend_from_slice(&(data_len as u32).to_le_bytes());
+                    for item in arr {
+                        let v = item.as_f64().unwrap_or(0.0);
+                        buf.extend_from_slice(&v.to_le_bytes());
+                    }
+                }
+                WireFieldKind::VecI32 => {
+                    let arr = val
+                        .and_then(Value::as_array)
+                        .map(|a| a.as_slice())
+                        .unwrap_or(&[]);
+                    let data_len = arr.len() * 4;
+                    buf.extend_from_slice(&(data_len as u32).to_le_bytes());
+                    for item in arr {
+                        let v = item.as_i64().unwrap_or(0) as i32;
+                        buf.extend_from_slice(&v.to_le_bytes());
+                    }
+                }
+                WireFieldKind::VecBool => {
+                    let arr = val
+                        .and_then(Value::as_array)
+                        .map(|a| a.as_slice())
+                        .unwrap_or(&[]);
+                    buf.extend_from_slice(&(arr.len() as u32).to_le_bytes());
+                    for item in arr {
+                        buf.push(if item.as_bool().unwrap_or(false) {
+                            1
+                        } else {
+                            0
+                        });
+                    }
+                }
+                WireFieldKind::VecU8 => {
+                    // Vec<u8> encodes as the raw byte slice
+                    let arr = val
+                        .and_then(Value::as_array)
+                        .map(|a| a.as_slice())
+                        .unwrap_or(&[]);
+                    buf.extend_from_slice(&(arr.len() as u32).to_le_bytes());
+                    for item in arr {
+                        buf.push(item.as_u64().unwrap_or(0) as u8);
+                    }
+                }
+                _ => unreachable!("fixed kind in var_fields"),
+            }
+        }
+
+        buf
     })
 }
 
+/// Encodes an rkyv V2 error response.
+///
+/// Wire format:
+/// ```text
+/// [ok: u8 @0 = 0][pad 7B][error_len: u16 @8][error_bytes...]
+/// ```
+pub fn encode_rkyv_v2_error(msg: &str) -> Vec<u8> {
+    let msg_bytes = msg.as_bytes();
+    let msg_len = msg_bytes.len().min(u16::MAX as usize) as u16;
+    let mut buf = vec![0u8; 8 + 2 + msg_len as usize];
+    buf[0] = 0; // ok = false
+    buf[8..10].copy_from_slice(&msg_len.to_le_bytes());
+    buf[10..10 + msg_len as usize].copy_from_slice(&msg_bytes[..msg_len as usize]);
+    buf.truncate(10 + msg_len as usize);
+    buf
+}
+
 #[derive(Clone, Copy, Debug)]
+#[allow(dead_code)]
 enum WireFieldKind {
+    // Tier 1 — fixed-width primitives
     I64,
     I32,
     U32,
@@ -547,8 +881,16 @@ enum WireFieldKind {
     F64,
     F32,
     Bool,
+    // Tier 2 — variable-length
+    String,
+    VecI64,
+    VecF64,
+    VecU8,
+    VecI32,
+    VecBool,
 }
 
+#[allow(dead_code)]
 impl WireFieldKind {
     fn size(&self) -> usize {
         match self {
@@ -556,8 +898,44 @@ impl WireFieldKind {
             Self::I32 | Self::U32 | Self::F32 => 4,
             Self::U16 => 2,
             Self::Bool => 1,
+            // Variable-length fields have no fixed size;
+            // return 1 so alignment computation is a no-op.
+            Self::String
+            | Self::VecI64
+            | Self::VecF64
+            | Self::VecU8
+            | Self::VecI32
+            | Self::VecBool => 1,
         }
     }
+
+    fn element_size(&self) -> usize {
+        match self {
+            Self::VecI64 | Self::VecF64 => 8,
+            Self::VecI32 => 4,
+            Self::VecBool => 1,
+            Self::VecU8 => 1,
+            _ => 0,
+        }
+    }
+
+    fn is_fixed(&self) -> bool {
+        !matches!(
+            self,
+            Self::String | Self::VecI64 | Self::VecF64 | Self::VecU8 | Self::VecI32 | Self::VecBool
+        )
+    }
+}
+
+/// Determines which serialisation tier a command belongs to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Tier {
+    /// All fields are fixed-width primitives (i64, i32, f64, …).
+    Tier1,
+    /// Has at least one String or Vec<primitive> field.
+    Tier2,
+    /// Has nested structs, enums, Option<T>, or other unsupported types.
+    Tier3,
 }
 
 fn wire_kind_from_schema(schema: &Value) -> Option<WireFieldKind> {
@@ -571,6 +949,24 @@ fn wire_kind_from_schema(schema: &Value) -> Option<WireFieldKind> {
             Some("double") => Some(WireFieldKind::F64),
             _ => Some(WireFieldKind::F32),
         },
+        "string" => Some(WireFieldKind::String),
+        "array" => {
+            let items = schema.get("items")?;
+            let item_type = items.get("type").and_then(Value::as_str)?;
+            match item_type {
+                "integer" => match items.get("format").and_then(Value::as_str) {
+                    Some("int64") | None => Some(WireFieldKind::VecI64),
+                    Some("int32") => Some(WireFieldKind::VecI32),
+                    _ => None,
+                },
+                "number" => match items.get("format").and_then(Value::as_str) {
+                    Some("double") | None => Some(WireFieldKind::VecF64),
+                    _ => None,
+                },
+                "boolean" => Some(WireFieldKind::VecBool),
+                _ => None,
+            }
+        }
         _ => None,
     }
 }
@@ -609,29 +1005,15 @@ fn read_wire_field(payload: &[u8], offset: usize, kind: WireFieldKind) -> crate:
             json!(f32::from_le_bytes(bytes))
         }
         WireFieldKind::Bool => json!(payload[offset] != 0),
+        // Variable-length kinds should not be read via read_wire_field;
+        // they are handled inline in the decoder closure.
+        WireFieldKind::String
+        | WireFieldKind::VecI64
+        | WireFieldKind::VecF64
+        | WireFieldKind::VecU8
+        | WireFieldKind::VecI32
+        | WireFieldKind::VecBool => {
+            unreachable!("variable-length fields are read inline")
+        }
     })
-}
-
-/// rkyv V2 응답을 rkyv 바이트로 직렬화합니다.
-///
-/// 성공 시: `{ ok: true, value: <output> }`
-/// 실패 시: `{ ok: false, value: 0, error: <message> }`
-///
-/// 응답은 항상 고정폭(32바이트)입니다.
-/// offset 0-7: ok (bool + 7B padding)
-/// offset 8-15: value (i64 LE)
-/// offset 16-31: error (16B for None)
-pub fn rkyv_v2_response(value: i64) -> Vec<u8> {
-    let mut buf = vec![0u8; 16];
-    buf[0] = 1; // ok = true
-    buf[8..16].copy_from_slice(&value.to_le_bytes());
-    buf
-}
-
-pub fn rkyv_v2_error_response(msg: &str) -> Vec<u8> {
-    let mut buf = vec![0u8; 16];
-    buf[0] = 0; // ok = false
-    // error message는 현재 반환하지 않음 (고정폭 유지)
-    let _ = msg;
-    buf
 }
