@@ -2,8 +2,18 @@ import { useEffect, useState } from "react";
 import { StyleSheet, Text, View, ScrollView } from "react-native";
 import { NitroModules } from "react-native-nitro-modules";
 import { addNumbers } from "../calculator/generated/commands";
-import { createReactNativeEngine } from "../../packages/react-native/src";
 import { installRustraJSI, getRustraNative } from "./modules/rustra-jsi/src";
+import { createJsonEngine } from "./src/adapters/json-adapter";
+import { createMsgpackEngine } from "./src/adapters/msgpack-adapter";
+import {
+  createPostcardEngine,
+  postcardRegistry,
+} from "./src/adapters/postcard-adapter";
+import { createRkyvEngine } from "./src/adapters/rkyv-adapter";
+import {
+  createHybridEngine,
+  hybridRegistry,
+} from "./src/adapters/hybrid-adapter";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -60,65 +70,159 @@ async function runBenchmarks(): Promise<string[]> {
   const log = (s: string) => lines.push(s);
 
   await installRustraJSI();
-  const rustraNative = getRustraNative();
-  const engine = createReactNativeEngine(rustraNative);
+  const native = getRustraNative();
 
-  // Load Nitro HybridObject
+  // Create 4 engines with identical API
+  const jsonEngine = createJsonEngine(native);
+  const msgpackEngine = createMsgpackEngine(native);
+  const postcardEngine = createPostcardEngine(native, postcardRegistry);
+  const rkyvEngine = createRkyvEngine(native);
+  const hybridEngine = createHybridEngine(native, hybridRegistry);
+
   const nitroBench = NitroModules.createHybridObject<{
     add(a: number, b: number): number;
   }>("NitroBench");
 
+  const encoder = new TextEncoder();
+
   log("╔════════════════════════════════════════════════╗");
-  log("║    Rustra JSI vs Nitro (iOS Simulator)        ║");
+  log("║  Fair DX Bench: JSON/Msgp/Post/rkyv/Hybrid   ║");
   log("╚════════════════════════════════════════════════╝");
   log("");
 
-  // 1. Nitro (JSI C++ direct)
-  log("┌─ Nitro Modules (JSI C++ HybridObject) ────────┐");
+  // ── Verification ───────────────────────────────────────
+  log("┌─ Verify all adapters return correct result ──┐");
+  const INPUT = { a: 42, b: 58 };
+
+  const adapters = [
+    { name: "JSON", engine: jsonEngine },
+    { name: "Msgpack", engine: msgpackEngine },
+    { name: "Postcard", engine: postcardEngine },
+    { name: "rkyv", engine: rkyvEngine },
+    { name: "Hybrid", engine: hybridEngine },
+  ];
+
+  for (const { name, engine } of adapters) {
+    try {
+      const r = await addNumbers(engine, INPUT);
+      log(`│  ${name.padEnd(10)} value=${r.value} ${r.value === 100 ? "✓" : "✗"}`);
+    } catch (e: any) {
+      log(`│  ${name.padEnd(10)} FAIL ${String(e).slice(0, 50)}`);
+    }
+  }
+
+  log("└───────────────────────────────────────────────┘");
+  log("");
+
+  // ── 1. Nitro baseline ──────────────────────────────────
+  log("┌─ 1. Nitro (raw JSI C++ add) ─────────────────┐");
   const nitroResult = await measure("NitroBench.add", () =>
     Promise.resolve(nitroBench.add(42, 58)),
   );
-  log(`│  10,000 iterations`);
-  log(`│  avg: ${formatNs(nitroResult.avg).padStart(10)}  p50: ${formatNs(nitroResult.p50).padStart(10)}  p99: ${formatNs(nitroResult.p99).padStart(10)}`);
+  log(`│  avg: ${formatNs(nitroResult.avg).padStart(10)}  p50: ${formatNs(nitroResult.p50).padStart(10)}`);
   log(`│  ${formatOps(nitroResult.ops)} ops/sec`);
   log("└───────────────────────────────────────────────┘");
   log("");
 
-  // 2. Rustra JSI
-  log("┌─ Rustra JSI (byte buffer + Rust FFI) ─────────┐");
-  const rustraResult = await measure("addNumbers (JSI)", () =>
-    addNumbers(engine, { a: 42, b: 58 }),
+  // ── 2. JSI noop ────────────────────────────────────────
+  log("┌─ 2. JSI noop (ArrayBuffer round-trip) ────────┐");
+  const noopPayload = encoder.encode('{"command":"addNumbers","args":{"a":42,"b":58}}');
+  const noopResult = await measure("JSI noop", () =>
+    Promise.resolve(native.noop(noopPayload.buffer)),
   );
-  log(`│  10,000 iterations`);
-  log(`│  avg: ${formatNs(rustraResult.avg).padStart(10)}  p50: ${formatNs(rustraResult.p50).padStart(10)}  p99: ${formatNs(rustraResult.p99).padStart(10)}`);
-  log(`│  ${formatOps(rustraResult.ops)} ops/sec`);
+  log(`│  avg: ${formatNs(noopResult.avg).padStart(10)}  p50: ${formatNs(noopResult.p50).padStart(10)}`);
+  log(`│  ${formatOps(noopResult.ops)} ops/sec`);
   log("└───────────────────────────────────────────────┘");
   log("");
 
-  // 3. Head-to-head
+  // ── 3. JSON ────────────────────────────────────────────
+  log("┌─ 3. JSON (addNumbers via JSON adapter) ───────┐");
+  const jsonResult = await measure("addNumbers (JSON)", () =>
+    addNumbers(jsonEngine, INPUT),
+  );
+  log(`│  avg: ${formatNs(jsonResult.avg).padStart(10)}  p50: ${formatNs(jsonResult.p50).padStart(10)}`);
+  log(`│  ${formatOps(jsonResult.ops)} ops/sec`);
+  log("└───────────────────────────────────────────────┘");
+  log("");
+
+  // ── 4. Msgpack ────────────────────────────────────────
+  log("┌─ 4. Msgpack (addNumbers via msgpack adapter) ─┐");
+  const msgpackResult = await measure("addNumbers (msgpack)", () =>
+    addNumbers(msgpackEngine, INPUT),
+  );
+  log(`│  avg: ${formatNs(msgpackResult.avg).padStart(10)}  p50: ${formatNs(msgpackResult.p50).padStart(10)}`);
+  log(`│  ${formatOps(msgpackResult.ops)} ops/sec`);
+  log("└───────────────────────────────────────────────┘");
+  log("");
+
+  // ── 5. Postcard ────────────────────────────────────────
+  log("┌─ 5. Postcard (addNumbers via postcard adapter)┐");
+  const postcardResult = await measure("addNumbers (postcard)", () =>
+    addNumbers(postcardEngine, INPUT),
+  );
+  log(`│  avg: ${formatNs(postcardResult.avg).padStart(10)}  p50: ${formatNs(postcardResult.p50).padStart(10)}`);
+  log(`│  ${formatOps(postcardResult.ops)} ops/sec`);
+  log("└───────────────────────────────────────────────┘");
+  log("");
+
+  // ── 6. rkyv ────────────────────────────────────────────
+  log("┌─ 6. rkyv (addNumbers via rkyv adapter) ───────┐");
+  const rkyvResult = await measure("addNumbers (rkyv)", () =>
+    addNumbers(rkyvEngine, INPUT),
+  );
+  log(`│  avg: ${formatNs(rkyvResult.avg).padStart(10)}  p50: ${formatNs(rkyvResult.p50).padStart(10)}`);
+  log(`│  ${formatOps(rkyvResult.ops)} ops/sec`);
+  log("└───────────────────────────────────────────────┘");
+  log("");
+
+  // ── 7. Hybrid (postcard req + rkyv resp) ──────────────
+  log("┌─ 7. Hybrid (postcard→rkyv) ───────────────────┐");
+  const hybridResult = await measure("addNumbers (hybrid)", () =>
+    addNumbers(hybridEngine, INPUT),
+  );
+  log(`│  avg: ${formatNs(hybridResult.avg).padStart(10)}  p50: ${formatNs(hybridResult.p50).padStart(10)}`);
+  log(`│  ${formatOps(hybridResult.ops)} ops/sec`);
+  log("└───────────────────────────────────────────────┘");
+  log("");
+
+  // ── Head-to-head ──────────────────────────────────────
   log("╔════════════════════════════════════════════════╗");
-  log("║         Head-to-Head Comparison               ║");
+  log("║         Head-to-Head (same DX)                ║");
   log("╠════════════════════════════════════════════════╣");
   log("│");
 
   const allResults = [
     { name: "Nitro (JSI C++)", result: nitroResult },
-    { name: "Rustra JSI", result: rustraResult },
+    { name: "JSI noop", result: noopResult },
+    { name: "Hybrid", result: hybridResult },
+    { name: "rkyv", result: rkyvResult },
+    { name: "Postcard", result: postcardResult },
+    { name: "Msgpack", result: msgpackResult },
+    { name: "JSON", result: jsonResult },
   ];
 
   const maxAvg = Math.max(...allResults.map((r) => r.result.avg));
   for (const r of allResults) {
     const b = bar(r.result.avg, maxAvg);
-    log(`│  ${r.name.padEnd(24)} ${b} ${formatNs(r.result.avg)}`);
+    log(`│  ${r.name.padEnd(20)} ${b} ${formatNs(r.result.avg)}`);
   }
 
   log("│");
-  const ratio = rustraResult.avg / nitroResult.avg;
-  const overhead = rustraResult.avg - nitroResult.avg;
-  log(`│  Rustra JSI / Nitro = ${ratio.toFixed(1)}x`);
-  log(`│  Rustra overhead: ${formatNs(overhead)}`);
+  log(`│  Same DX: addNumbers(engine, {a:42, b:58})`);
+  log("│");
+  log(`│  Hybrid  / Nitro = ${(hybridResult.avg / nitroResult.avg).toFixed(1)}x`);
+  log(`│  rkyv    / Nitro = ${(rkyvResult.avg / nitroResult.avg).toFixed(1)}x`);
+  log(`│  Postcard/ Nitro = ${(postcardResult.avg / nitroResult.avg).toFixed(1)}x`);
+  log(`│  Msgpack / Nitro = ${(msgpackResult.avg / nitroResult.avg).toFixed(1)}x`);
+  log(`│  JSON    / Nitro = ${(jsonResult.avg / nitroResult.avg).toFixed(1)}x`);
+  log("│");
+  log(`│  Hybrid  vs JSON = ${(jsonResult.avg / hybridResult.avg).toFixed(1)}x faster`);
+  log(`│  rkyv    vs JSON = ${(jsonResult.avg / rkyvResult.avg).toFixed(1)}x faster`);
+  log(`│  Postcard vs JSON = ${(jsonResult.avg / postcardResult.avg).toFixed(1)}x faster`);
+  log(`│  Hybrid  vs Post = ${(postcardResult.avg / hybridResult.avg).toFixed(1)}x faster`);
   log("╚════════════════════════════════════════════════╝");
 
+  for (const line of lines) console.log(line);
   return lines;
 }
 

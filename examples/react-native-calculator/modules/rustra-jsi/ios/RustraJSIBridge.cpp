@@ -38,6 +38,38 @@ static std::pair<const uint8_t*, size_t> extractBytes(Runtime& rt, const Value& 
 Value RustraHostObject::get(Runtime& rt, const PropNameID& name) {
   auto propName = name.utf8(rt);
 
+  if (propName == "noop") {
+    return Function::createFromHostFunction(
+      rt, name, 0,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        auto [data, size] = extractBytes(rt, args[0]);
+        return createArrayBuffer(rt, data, size);
+      });
+  }
+
+  if (propName == "invokeRaw") {
+    return Function::createFromHostFunction(
+      rt, name, 1,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1) {
+          throw JSError(rt, "RustraJSI.invokeRaw requires 1 argument: (payload)");
+        }
+
+        auto [data, size] = extractBytes(rt, args[0]);
+
+        size_t out_len = 0;
+        uint8_t* result = rustra_calculator_invoke_raw(data, size, &out_len);
+
+        if (!result) {
+          throw JSError(rt, "RustraJSI: Rust invoke_raw returned null");
+        }
+
+        auto returnValue = createArrayBuffer(rt, result, out_len);
+        rustra_calculator_free_buffer(result, out_len);
+        return returnValue;
+      });
+  }
+
   if (propName == "invoke") {
     return Function::createFromHostFunction(
       rt, name, 1,
@@ -61,13 +93,135 @@ Value RustraHostObject::get(Runtime& rt, const PropNameID& name) {
       });
   }
 
+  if (propName == "invokeMsgpack") {
+    return Function::createFromHostFunction(
+      rt, name, 1,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1) {
+          throw JSError(rt, "RustraJSI.invokeMsgpack requires 1 argument: (payload)");
+        }
+
+        auto [data, size] = extractBytes(rt, args[0]);
+
+        size_t out_len = 0;
+        uint8_t* result = rustra_calculator_invoke_msgpack(data, size, &out_len);
+
+        if (!result) {
+          throw JSError(rt, "RustraJSI: Rust msgpack returned null");
+        }
+
+        auto returnValue = createArrayBuffer(rt, result, out_len);
+        rustra_calculator_free_buffer(result, out_len);
+        return returnValue;
+      });
+  }
+
+  if (propName == "invokeBincode") {
+    return Function::createFromHostFunction(
+      rt, name, 1,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1) {
+          throw JSError(rt, "RustraJSI.invokeBincode requires 1 argument: (payload)");
+        }
+
+        auto [data, size] = extractBytes(rt, args[0]);
+
+        size_t out_len = 0;
+        uint8_t* result = rustra_calculator_invoke_bincode(data, size, &out_len);
+
+        if (!result) {
+          throw JSError(rt, "RustraJSI: Rust bincode returned null");
+        }
+
+        auto returnValue = createArrayBuffer(rt, result, out_len);
+        rustra_calculator_free_buffer(result, out_len);
+        return returnValue;
+      });
+  }
+
+  if (propName == "invokePostcard") {
+    return Function::createFromHostFunction(
+      rt, name, 1,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1) {
+          throw JSError(rt, "RustraJSI.invokePostcard requires 1 argument: (payload)");
+        }
+
+        auto [data, size] = extractBytes(rt, args[0]);
+
+        size_t out_len = 0;
+        uint8_t* result = rustra_calculator_invoke_postcard(data, size, &out_len);
+
+        if (!result) {
+          throw JSError(rt, "RustraJSI: Rust postcard returned null");
+        }
+
+        auto returnValue = createArrayBuffer(rt, result, out_len);
+        rustra_calculator_free_buffer(result, out_len);
+        return returnValue;
+      });
+  }
+
+  if (propName == "invokeRkyv") {
+    return Function::createFromHostFunction(
+      rt, name, 1,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1) {
+          throw JSError(rt, "RustraJSI.invokeRkyv requires 1 argument: (payload)");
+        }
+
+        auto [data, size] = extractBytes(rt, args[0]);
+
+        size_t out_len = 0;
+        uint8_t* result = rustra_calculator_invoke_rkyv(data, size, &out_len);
+
+        if (!result) {
+          throw JSError(rt, "RustraJSI: Rust rkyv returned null");
+        }
+
+        auto returnValue = createArrayBuffer(rt, result, out_len);
+        rustra_calculator_free_buffer(result, out_len);
+        return returnValue;
+      });
+  }
+
+  if (propName == "invokeHybrid") {
+    return Function::createFromHostFunction(
+      rt, name, 1,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1) {
+          throw JSError(rt, "RustraJSI.invokeHybrid requires 1 argument: (payload)");
+        }
+
+        auto [data, size] = extractBytes(rt, args[0]);
+
+        size_t out_len = 0;
+        uint8_t* result = rustra_calculator_invoke_hybrid(data, size, &out_len);
+
+        if (!result) {
+          throw JSError(rt, "RustraJSI: Rust hybrid returned null");
+        }
+
+        auto returnValue = createArrayBuffer(rt, result, out_len);
+        rustra_calculator_free_buffer(result, out_len);
+        return returnValue;
+      });
+  }
+
   return Value::undefined();
 }
 
 std::vector<PropNameID> RustraHostObject::getPropertyNames(Runtime& rt) {
   std::vector<PropNameID> names;
-  names.reserve(1);
+  names.reserve(8);
   names.push_back(PropNameID::forAscii(rt, "invoke"));
+  names.push_back(PropNameID::forAscii(rt, "invokeMsgpack"));
+  names.push_back(PropNameID::forAscii(rt, "invokeBincode"));
+  names.push_back(PropNameID::forAscii(rt, "invokePostcard"));
+  names.push_back(PropNameID::forAscii(rt, "invokeRkyv"));
+  names.push_back(PropNameID::forAscii(rt, "invokeHybrid"));
+  names.push_back(PropNameID::forAscii(rt, "invokeRaw"));
+  names.push_back(PropNameID::forAscii(rt, "noop"));
   return names;
 }
 
