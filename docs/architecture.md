@@ -79,11 +79,11 @@ export type EngineClient = {
 
 각 host adapter는 transport를 주입받아 이 인터페이스를 구현한 객체를 반환한다:
 
-| adapter 패키지 | 팩토리 함수 | 반환 타입 | 파일 경로 |
-|---|---|---|---|
-| `packages/node` | `createNodeEngine(transport)` | `NodeEngineClient` | `packages/node/src/index.ts` |
-| `packages/bun` | `createBunEngine(transport)` | `BunEngineClient` | `packages/bun/src/index.ts` |
-| `packages/tauri` | `createTauriEngine({ invoke })` | `TauriEngineClient` | `packages/tauri/src/index.ts` |
+| adapter 패키지          | 팩토리 함수                             | 반환 타입                 | 파일 경로                            |
+| ----------------------- | --------------------------------------- | ------------------------- | ------------------------------------ |
+| `packages/node`         | `createNodeEngine(transport)`           | `NodeEngineClient`        | `packages/node/src/index.ts`         |
+| `packages/bun`          | `createBunEngine(transport)`            | `BunEngineClient`         | `packages/bun/src/index.ts`          |
+| `packages/tauri`        | `createTauriEngine({ invoke })`         | `TauriEngineClient`       | `packages/tauri/src/index.ts`        |
 | `packages/react-native` | `createReactNativeEngine(nativeModule)` | `ReactNativeEngineClient` | `packages/react-native/src/index.ts` |
 
 모든 반환 타입(`NodeEngineClient`, `BunEngineClient`, `TauriEngineClient`, `ReactNativeEngineClient`)은 구조적으로 `EngineClient`와 동일한 `invoke<T>` 메서드를 제공한다.
@@ -96,7 +96,10 @@ export type EngineClient = {
 // examples/calculator/generated/commands.ts (자동 생성됨)
 import type { AddNumbersInput, AddNumbersOutput, EngineClient } from './types.js';
 
-export function addNumbers(engine: EngineClient, input: AddNumbersInput): Promise<AddNumbersOutput> {
+export function addNumbers(
+  engine: EngineClient,
+  input: AddNumbersInput,
+): Promise<AddNumbersOutput> {
   return engine.invoke<AddNumbersOutput>('addNumbers', input);
 }
 ```
@@ -131,15 +134,15 @@ crates/
 
 핵심 타입과 로직을 제공한다.
 
-| 구성 요소 | 설명 |
-|---|---|
-| `Package` | 등록된 command들의 컬렉션. `invoke_json()`으로 런타임 디스패치, `generate_typescript()`로 코드 생성 |
-| `PackageBuilder` | `Package::builder(id)`로 생성. `.command_fn(handler)` / `.command(name, handler)`로 command 등록 후 `.build()` |
-| `GeneratedPackage` | `generate_typescript()`의 결과. `schema_json`, `types_ts`, `commands_ts`, `contract_hash` 필드 보유. `write_to_dir()`로 파일 출력 |
-| `RustraError` | `Serialize` 구현. `command.not_found`, `command.invalid_args`, `internal` 에러 코드 + `custom(code, message)` 생성자 + `code()`, `message()` getter |
-| `register!` | `rustra-macros`에서 제공. `register!(Package::builder("id"), fn1, fn2).build()` 형태로 다중 command 일괄 등록 |
-| `tauri_support` | `cfg(feature = "tauri")` 활성화 시 제공. `RustraState`, `rustra_dispatch` 단일 Tauri command, `register()` 빌더 주입 함수 |
-| `__private` 모듈 | `CommandInput`, `CommandOutput` sealed 트레이트. proc macro가 컴파일 타임에 command 타입 제약을 검증하는 데 사용. public API로 노출되지 않음 |
+| 구성 요소          | 설명                                                                                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Package`          | 등록된 command들의 컬렉션. `invoke_json()`으로 런타임 디스패치, `generate_typescript()`로 코드 생성                                                 |
+| `PackageBuilder`   | `Package::builder(id)`로 생성. `.command_fn(handler)` / `.command(name, handler)`로 command 등록 후 `.build()`                                      |
+| `GeneratedPackage` | `generate_typescript()`의 결과. `schema_json`, `types_ts`, `commands_ts`, `contract_hash` 필드 보유. `write_to_dir()`로 파일 출력                   |
+| `RustraError`      | `Serialize` 구현. `command.not_found`, `command.invalid_args`, `internal` 에러 코드 + `custom(code, message)` 생성자 + `code()`, `message()` getter |
+| `register!`        | `rustra-macros`에서 제공. `register!(Package::builder("id"), fn1, fn2).build()` 형태로 다중 command 일괄 등록                                       |
+| `tauri_support`    | `cfg(feature = "tauri")` 활성화 시 제공. `RustraState`, `rustra_dispatch` 단일 Tauri command, `register()` 빌더 주입 함수                           |
+| `__private` 모듈   | `CommandInput`, `CommandOutput` sealed 트레이트. proc macro가 컴파일 타임에 command 타입 제약을 검증하는 데 사용. public API로 노출되지 않음        |
 
 #### `crates/rustra-macros` (proc-macro)
 
@@ -241,14 +244,14 @@ pub fn calculator_package() -> Package {
 
 타입 변환 규칙 (`ts_type_from_schema`):
 
-| JSON Schema type | TypeScript |
-|---|---|
-| `object` | `{ property: type; ... }` |
-| `integer` / `number` | `number` |
-| `string` | `string` |
-| `boolean` | `boolean` |
-| `array` | `itemType[]` |
-| 기타 | `unknown` |
+| JSON Schema type     | TypeScript                |
+| -------------------- | ------------------------- |
+| `object`             | `{ property: type; ... }` |
+| `integer` / `number` | `number`                  |
+| `string`             | `string`                  |
+| `boolean`            | `boolean`                 |
+| `array`              | `itemType[]`              |
+| 기타                 | `unknown`                 |
 
 `$defs` (공유 정의)는 모든 command의 정의를 병합한 뒤 인라인으로 전개한다. 현재는 별도의 named 타입 추출 없이 전체 스키마 트리를 직접 변환한다.
 
@@ -256,12 +259,12 @@ pub fn calculator_package() -> Package {
 
 `GeneratedPackage::write_to_dir(output_dir)`이 출력하는 파일:
 
-| 파일 | 내용 | 용도 |
-|---|---|---|
-| `schema.json` | 전체 계약의 JSON Schema 표현 | 디버깅, 도구 연동 |
-| `types.ts` | `EngineClient` + I/O 타입 정의 | command helper의 의존 대상 |
-| `commands.ts` | command helper 함수들 | 앱 코드에서 import하여 사용 |
-| `contract.ts` | `GENERATED_CONTRACT_HASH` 상수 | 런타임 계약 무결성 검증 |
+| 파일          | 내용                           | 용도                        |
+| ------------- | ------------------------------ | --------------------------- |
+| `schema.json` | 전체 계약의 JSON Schema 표현   | 디버깅, 도구 연동           |
+| `types.ts`    | `EngineClient` + I/O 타입 정의 | command helper의 의존 대상  |
+| `commands.ts` | command helper 함수들          | 앱 코드에서 import하여 사용 |
+| `contract.ts` | `GENERATED_CONTRACT_HASH` 상수 | 런타임 계약 무결성 검증     |
 
 ---
 
@@ -390,19 +393,19 @@ pub struct RustraError {
 
 **생성자:**
 
-| 메서드 | 에러 코드 | 발생 조건 |
-|---|---|---|
-| `RustraError::command_not_found(name)` | `command.not_found` | `invoke_json()`에서 명시된 이름의 command가 `Package.commands`에 없을 때 |
-| `RustraError::invalid_args(error)` | `command.invalid_args` | `serde_json::from_value` 역직렬화 실패 시 |
-| `RustraError::internal(error)` | `internal` | `serde_json::to_value` 직렬화 실패, I/O 에러 등 |
-| `RustraError::custom(code, message)` | 지정한 코드 | 사용자 정의 에러 |
+| 메서드                                 | 에러 코드              | 발생 조건                                                                |
+| -------------------------------------- | ---------------------- | ------------------------------------------------------------------------ |
+| `RustraError::command_not_found(name)` | `command.not_found`    | `invoke_json()`에서 명시된 이름의 command가 `Package.commands`에 없을 때 |
+| `RustraError::invalid_args(error)`     | `command.invalid_args` | `serde_json::from_value` 역직렬화 실패 시                                |
+| `RustraError::internal(error)`         | `internal`             | `serde_json::to_value` 직렬화 실패, I/O 에러 등                          |
+| `RustraError::custom(code, message)`   | 지정한 코드            | 사용자 정의 에러                                                         |
 
 **Getter:**
 
-| 메서드 | 반환 타입 | 설명 |
-|---|---|---|
-| `error.code()` | `&'static str` | 에러 코드 조회 |
-| `error.message()` | `&str` | 에러 메시지 조회 |
+| 메서드            | 반환 타입      | 설명             |
+| ----------------- | -------------- | ---------------- |
+| `error.code()`    | `&'static str` | 에러 코드 조회   |
+| `error.message()` | `&str`         | 에러 메시지 조회 |
 
 `std::io::Error`는 `From` 트레이트를 통해 자동으로 `RustraError::internal`로 변환된다.
 
