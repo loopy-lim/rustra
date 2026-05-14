@@ -1274,10 +1274,14 @@ mod tests {
     }
 
     #[test]
-    fn test_rkyv_v2_tier3_unsupported() {
-        // process_item (command_id = 9): input has nested struct Item → Tier 3, should fail
-        let mut payload = vec![0u8; 8];
+    fn test_rkyv_v2_tier3_json_fallback() {
+        // process_item (command_id = 9): input has nested struct Item → Tier 3 JSON fallback
+        // Wire: [cmd_id: u16 @0 LE][json_string @2...]
+        let json_args = r#"{"item":{"name":"widget","value":50,"active":true}}"#;
+        let json_bytes = json_args.as_bytes();
+        let mut payload = vec![0u8; 2 + json_bytes.len()];
         payload[0..2].copy_from_slice(&9u16.to_le_bytes()); // command_id = 9 (processItem)
+        payload[2..2 + json_bytes.len()].copy_from_slice(json_bytes);
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
@@ -1286,15 +1290,51 @@ mod tests {
 
         assert!(!result_ptr.is_null());
         let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
-        assert_eq!(result_bytes[0], 0); // ok = false
+        assert_eq!(result_bytes[0], 1); // ok = true
 
-        // Error format: [ok=0 @0][pad 7B][error_len: u16 @8][error_bytes...]
-        let error_len = u16::from_le_bytes(result_bytes[8..10].try_into().unwrap()) as usize;
-        let error_msg = std::str::from_utf8(&result_bytes[10..10 + error_len]).unwrap();
-        assert!(
-            error_msg.contains("Tier 3"),
-            "expected Tier 3 error, got: {error_msg}"
-        );
+        // Tier 3 response: [ok=1 @0][pad 3B][json_len: u32 @4 LE][json_bytes @8...]
+        let json_len = u32::from_le_bytes(result_bytes[4..8].try_into().unwrap()) as usize;
+        let json_str = std::str::from_utf8(&result_bytes[8..8 + json_len]).unwrap();
+        let result: serde_json::Value = serde_json::from_str(json_str).unwrap();
+
+        // process_item with value=50 → doubled=false (value not > 100)
+        // active = input.item.active && doubled = true && false = false
+        assert_eq!(result["item"]["name"], "processed_widget");
+        assert_eq!(result["item"]["value"], 100);
+        assert_eq!(result["item"]["active"], false);
+        assert_eq!(result["doubled"], false);
+
+        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+    }
+
+    #[test]
+    fn test_rkyv_v2_tier3_create_item() {
+        // create_item (command_id = 8): input has String + i64 (Tier 2 input),
+        // but output has nested struct Item (Tier 3 output).
+        // Since output is Tier 3, this uses the Tier 3 JSON fallback.
+        let json_args = r#"{"name":"gadget","value":42}"#;
+        let json_bytes = json_args.as_bytes();
+        let mut payload = vec![0u8; 2 + json_bytes.len()];
+        payload[0..2].copy_from_slice(&8u16.to_le_bytes()); // command_id = 8 (createItem)
+        payload[2..2 + json_bytes.len()].copy_from_slice(json_bytes);
+
+        let mut out_len: usize = 0;
+        let result_ptr = unsafe {
+            rustra_calculator_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+        };
+
+        assert!(!result_ptr.is_null());
+        let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
+        assert_eq!(result_bytes[0], 1); // ok = true
+
+        // Tier 3 response
+        let json_len = u32::from_le_bytes(result_bytes[4..8].try_into().unwrap()) as usize;
+        let json_str = std::str::from_utf8(&result_bytes[8..8 + json_len]).unwrap();
+        let result: serde_json::Value = serde_json::from_str(json_str).unwrap();
+
+        assert_eq!(result["item"]["name"], "gadget");
+        assert_eq!(result["item"]["value"], 42);
+        assert_eq!(result["item"]["active"], true);
 
         unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
     }

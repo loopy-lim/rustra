@@ -225,6 +225,8 @@ struct Command {
     invoke: Arc<dyn Fn(Value) -> crate::Result<Value> + Send + Sync>,
     rkyv_v2_decode: Arc<dyn Fn(&[u8]) -> crate::Result<Value> + Send + Sync>,
     rkyv_v2_encode_response: Arc<dyn Fn(&Value) -> Vec<u8> + Send + Sync>,
+    /// true when this command uses Tier 3 (JSON fallback) wire format.
+    rkyv_v2_tier3: bool,
 }
 
 impl Package {
@@ -272,8 +274,11 @@ impl Package {
     /// 처음 2바이트에서 command_id를 읽고, 등록된 rkyv_v2_decoder로
     /// 입력 필드를 읽어 JSON Value로 재구성한 뒤 invoke_json으로 전달합니다.
     /// 결과는 rkyv_v2_encode_response로 바이너리로 인코딩하여 반환합니다.
+    ///
+    /// Tier 1/2 commands require at least 8 bytes (fixed header).
+    /// Tier 3 commands require at least 2 bytes (command_id only, rest is JSON).
     pub fn invoke_rkyv_v2(&self, payload: &[u8]) -> crate::Result<Vec<u8>> {
-        if payload.len() < 8 {
+        if payload.len() < 2 {
             return Err(RustraError::invalid_args("rkyv v2: payload too short"));
         }
         let command_id = u16::from_le_bytes([payload[0], payload[1]]);
@@ -285,6 +290,12 @@ impl Package {
             .commands
             .get(command_name)
             .ok_or_else(|| RustraError::command_not_found(command_name))?;
+
+        // Tier 3 commands only need the 2-byte command_id header; the rest is
+        // a JSON string.  Tier 1/2 commands need the full 8-byte fixed header.
+        if !command.rkyv_v2_tier3 && payload.len() < 8 {
+            return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+        }
 
         let params = (command.rkyv_v2_decode)(payload)?;
         let result = self.invoke_json(command_name, params)?;
@@ -437,8 +448,18 @@ impl PackageBuilder {
                 obj.insert(key, value);
             }
         }
-        let (rkyv_v2_decoder, _tier) = build_rkyv_v2_decoder(&input_schema);
-        let rkyv_v2_response_encoder = build_rkyv_v2_response_encoder(&output_schema);
+        let (rkyv_v2_decoder, input_tier) = build_rkyv_v2_decoder(&input_schema);
+        let output_tier3 = is_output_tier3(&output_schema);
+        let is_tier3 = input_tier == Tier::Tier3 || output_tier3;
+        // If the command uses Tier 3 for either input or output, force the
+        // input decoder to the Tier 3 JSON fallback as well.
+        let rkyv_v2_decoder = if is_tier3 && input_tier != Tier::Tier3 {
+            build_tier3_json_decoder()
+        } else {
+            rkyv_v2_decoder
+        };
+        let rkyv_v2_response_encoder =
+            build_rkyv_v2_response_encoder(&output_schema, is_tier3);
         let command = Command {
             command_id: self.next_command_id,
             input_type: short_type_name::<I>(),
@@ -454,6 +475,7 @@ impl PackageBuilder {
             }),
             rkyv_v2_decode: rkyv_v2_decoder,
             rkyv_v2_encode_response: rkyv_v2_response_encoder,
+            rkyv_v2_tier3: is_tier3,
         };
         let name = name.into();
         if self.commands.contains_key(&name) {
@@ -477,6 +499,26 @@ impl PackageBuilder {
             id_to_name: Arc::new(id_to_name),
         }
     }
+}
+
+/// Build the Tier 3 JSON fallback decoder.
+///
+/// Wire format: `[command_id: u16 @0 LE][json_string @2...]`
+///
+/// Reads bytes after the 2-byte command_id as a UTF-8 JSON string and
+/// deserializes it into a [`serde_json::Value`].
+fn build_tier3_json_decoder() -> Arc<dyn Fn(&[u8]) -> crate::Result<Value> + Send + Sync> {
+    Arc::new(|payload: &[u8]| {
+        if payload.len() < 2 {
+            return Err(RustraError::invalid_args(
+                "rkyv v2 tier3: payload too short for command_id",
+            ));
+        }
+        let json_str = std::str::from_utf8(&payload[2..])
+            .map_err(|_| RustraError::invalid_args("rkyv v2 tier3: invalid UTF-8"))?;
+        serde_json::from_str(json_str)
+            .map_err(|e| RustraError::invalid_args(&format!("rkyv v2 tier3: JSON parse failed: {e}")))
+    })
 }
 
 /// JSON Schema에서 rkyv V2 디코더를 자동 생성합니다.
@@ -546,15 +588,7 @@ fn build_rkyv_v2_decoder(
     }
 
     if tier == Tier::Tier3 {
-        return (
-            Arc::new(move |payload| {
-                let command_id = u16::from_le_bytes([payload[0], payload[1]]);
-                Err(RustraError::invalid_args(&format!(
-                    "rkyv v2: command id {command_id} uses Tier 3 types, not yet supported"
-                )))
-            }),
-            Tier::Tier3,
-        );
+        return (build_tier3_json_decoder(), Tier::Tier3);
     }
 
     // var_data_start is where variable-length fields begin in the payload.
@@ -670,16 +704,35 @@ fn build_rkyv_v2_decoder(
 /// Builds a response encoder that turns a JSON Value (output from invoke_json)
 /// into the rkyv V2 binary response format.
 ///
-/// Wire format:
+/// Tier 1/2 wire format:
 /// ```text
 /// [ok: u8 @0][pad 7B]
 /// [fixed output fields @8...][var output fields...]
 /// ```
 ///
+/// Tier 3 wire format:
+/// ```text
+/// [ok: u8 @0][pad 3B][json_len: u32 @4 LE][json_bytes @8...]
+/// ```
+///
 /// For errors the encoder is not used; `encode_rkyv_v2_error` is called instead.
 fn build_rkyv_v2_response_encoder(
     output_schema: &Value,
+    is_tier3: bool,
 ) -> Arc<dyn Fn(&Value) -> Vec<u8> + Send + Sync> {
+    // Tier 3: encode response as JSON string after ok byte
+    if is_tier3 {
+        return Arc::new(move |value: &Value| {
+            let json_str = serde_json::to_string(value).unwrap_or_default();
+            let json_bytes = json_str.as_bytes();
+            let json_len = json_bytes.len() as u32;
+            let mut buf = vec![0u8; 8 + json_bytes.len()];
+            buf[0] = 1; // ok = true
+            buf[4..8].copy_from_slice(&json_len.to_le_bytes());
+            buf[8..8 + json_bytes.len()].copy_from_slice(json_bytes);
+            buf
+        });
+    }
     let props = match output_schema.get("properties").and_then(Value::as_object) {
         Some(p) => p,
         None => {
@@ -973,6 +1026,38 @@ fn wire_kind_from_schema(schema: &Value) -> Option<WireFieldKind> {
 
 fn align_up(offset: usize, alignment: usize) -> usize {
     (offset + alignment - 1) / alignment * alignment
+}
+
+/// Check if an output schema requires Tier 3 encoding (JSON fallback).
+///
+/// Returns true if any property is a nested struct, enum, Option, or other
+/// type that cannot be represented as a fixed-width or simple variable-length
+/// wire field.
+fn is_output_tier3(output_schema: &Value) -> bool {
+    let props = match output_schema.get("properties").and_then(Value::as_object) {
+        Some(p) => p,
+        None => return false,
+    };
+    let required: BTreeSet<String> = output_schema
+        .get("required")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(Value::as_str)
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    for (name, prop_schema) in props {
+        if !required.contains(name) {
+            return true; // optional field → Tier 3
+        }
+        if wire_kind_from_schema(prop_schema).is_none() {
+            return true; // unsupported type → Tier 3
+        }
+    }
+    false
 }
 
 fn read_wire_field(payload: &[u8], offset: usize, kind: WireFieldKind) -> crate::Result<Value> {

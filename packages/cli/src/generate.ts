@@ -454,7 +454,7 @@ function readVarFieldDecodeExpr(field: VarWireField, lvalue: string): string {
  *
  * Tier 1: 고정폭 프리미티브 필드만
  * Tier 2: String 또는 Vec<primitive> 필드 포함
- * Tier 3: 중첩 구조체, enum 등 — 미지원 (스킵)
+ * Tier 3: 중첩 구조체, enum, Option<T> 등 — JSON fallback
  */
 export function generateRkyvCodecsTs(schema: PackageSchema): string {
   const allTypes = schema.commands
@@ -467,10 +467,11 @@ export function generateRkyvCodecsTs(schema: PackageSchema): string {
 
   for (const command of schema.commands) {
     const layout = computeWireLayout(command);
-    const outputSupported = isOutputSupported(command);
+    const outputTier3 = !isOutputSupported(command);
 
-    if (layout.tier === 3 || !outputSupported) {
-      output += `// ${command.name}: skipped (Tier 3 — complex types not yet supported)\n\n`;
+    if (layout.tier === 3 || outputTier3) {
+      // Tier 3: JSON fallback codec
+      output += generateTier3Codec(command);
       continue;
     }
 
@@ -491,6 +492,48 @@ export function generateRkyvCodecsTs(schema: PackageSchema): string {
   }
 
   return output;
+}
+
+/** Generate a Tier 3 (JSON fallback) codec for a command. */
+function generateTier3Codec(command: CommandSchema): string {
+  const fnName = commandFunctionName(command.name);
+  const inType = command.inputType;
+  const outType = command.outputType;
+
+  const lines: string[] = [];
+  lines.push(`export const ${fnName}Codec: RkyvV2Codec<${inType}, ${outType}> = {`);
+  lines.push(`  commandId: ${command.commandId},`);
+  lines.push('');
+  lines.push(`  encode(args: ${inType}): ArrayBuffer {`);
+  lines.push(`    const json = JSON.stringify(args);`);
+  lines.push(`    const jsonBytes = new TextEncoder().encode(json);`);
+  lines.push(`    const buf = new ArrayBuffer(2 + jsonBytes.length);`);
+  lines.push(`    const view = new DataView(buf);`);
+  lines.push(`    view.setUint16(0, ${command.commandId}, true);`);
+  lines.push(`    new Uint8Array(buf, 2).set(jsonBytes);`);
+  lines.push(`    return buf;`);
+  lines.push(`  },`);
+  lines.push('');
+  lines.push(`  decode(buf: ArrayBuffer): { ok: boolean; result?: ${outType}; error?: string } {`);
+  lines.push(`    if (buf.byteLength < 8) return { ok: false, error: 'response too short' };`);
+  lines.push(`    const u8 = new Uint8Array(buf);`);
+  lines.push(`    const view = new DataView(buf);`);
+  lines.push(`    const ok = u8[0] === 1;`);
+  lines.push(`    if (!ok) {`);
+  lines.push(`      const errLen = view.getUint16(8, true);`);
+  lines.push(`      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';`);
+  lines.push(`      return { ok: false, error: err };`);
+  lines.push(`    }`);
+  lines.push(`    // Tier 3 success: [ok=1 @0][pad 3B][json_len: u32 @4 LE][json_bytes @8...]`);
+  lines.push(`    const jsonLen = view.getUint32(4, true);`);
+  lines.push(`    const jsonStr = new TextDecoder().decode(u8.slice(8, 8 + jsonLen));`);
+  lines.push(`    const result: ${outType} = JSON.parse(jsonStr);`);
+  lines.push(`    return { ok: true, result };`);
+  lines.push(`  },`);
+  lines.push(`};`);
+  lines.push('');
+
+  return lines.join('\n') + '\n';
 }
 
 function generateEncodeMethod(command: CommandSchema, layout: WireLayout): string {
@@ -597,12 +640,11 @@ function generateDecodeMethod(command: CommandSchema): string {
 
 /**
  * 패키지 스키마에서 rkyv V2 레지스트리 파일(`rkyv-registry.ts`)을 생성합니다.
+ * Tier 1/2/3 모든 명령을 포함합니다.
  */
 export function generateRkyvRegistryTs(schema: PackageSchema): string {
-  const included = schema.commands.filter((c) => {
-    const layout = computeWireLayout(c);
-    return layout.tier !== 3 && isOutputSupported(c);
-  });
+  // Include all commands (Tier 1, 2, and 3)
+  const included = schema.commands;
 
   const entries = included
     .map((c) => {
