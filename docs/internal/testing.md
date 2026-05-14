@@ -32,25 +32,25 @@ Compat 테스트 (전체 파이프라인 통합)
 
 10개 테스트. rustra의 공개 저작 API(authoring API)를 검증한다.
 
-| 테스트 함수 | 검증 내용 |
-|---|---|
-| `user_builds_package_without_touching_raw_engine_types` | `Package::builder().command().build()` + `invoke()` 기본 흐름. 결과값 42 확인 |
-| `user_can_register_command_without_writing_command_name_string` | `command_fn()`으로 자동 이름 추출. 생성된 `commands.ts`에 함수명과 command 이름 포함 확인 |
-| `register_macro_uses_macro_derived_name` | `register!` 매크로로 command 등록. `__RUstra_meta_*` 상수에서 이름을 자동 추출하여 올바르게 invoke되는지 확인 |
-| `package_generates_host_neutral_typescript_client` | `generate_typescript()` 결과에 `AddNumbersInput` 타입, `addNumbers` 함수, `invoke<AddNumbersOutput>` 포함 확인. `EngineRequest`, `Attachment`, `node:`, `react-native` 미포함 확인 |
-| `generated_package_can_be_written_to_a_directory` | `write_to_dir()`로 `schema.json`, `types.ts`, `commands.ts`, `contract.ts` 4개 파일 생성 확인 |
-| `unknown_command_uses_package_level_error` | 미등록 command 호출 시 `RustraError` 코드가 `"command.not_found"`인지 확인. `error.code()` getter 사용 |
-| `ts_generator_handles_optional_fields` | `Option<i64>`, `Option<String>` 필드가 `age?: number \| null`, `label?: string \| null`으로 생성되는지 확인 |
-| `ts_generator_handles_enums` | enum 타입이 `Status` 참조 타입 + `'Active' \| 'Inactive'` union으로 생성되는지 확인 |
-| `ts_generator_handles_vec_and_optional_struct` | `Vec<String>` → `string[]`, `Option<Item>` → `Item \| null` 생성 확인 |
-| `command_macro_rejects_wrong_signature` | `#[command]` 매크로가 잘못된 시그니처를 거부하는지 컴파일 체크로 검증. 유효 시그니처는 통과, 파라미터 없는 함수와 `Result`가 아닌 반환은 실패 |
+| 테스트 함수                                                     | 검증 내용                                                                                                                                                                          |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user_builds_package_without_touching_raw_engine_types`         | `Package::builder().command().build()` + `invoke()` 기본 흐름. 결과값 42 확인                                                                                                      |
+| `user_can_register_command_without_writing_command_name_string` | `command_fn()`으로 자동 이름 추출. 생성된 `commands.ts`에 함수명과 command 이름 포함 확인                                                                                          |
+| `register_macro_uses_macro_derived_name`                        | `register!` 매크로로 command 등록. `__RUstra_meta_*` 상수에서 이름을 자동 추출하여 올바르게 invoke되는지 확인                                                                      |
+| `package_generates_host_neutral_typescript_client`              | `generate_typescript()` 결과에 `AddNumbersInput` 타입, `addNumbers` 함수, `invoke<AddNumbersOutput>` 포함 확인. `EngineRequest`, `Attachment`, `node:`, `react-native` 미포함 확인 |
+| `generated_package_can_be_written_to_a_directory`               | `write_to_dir()`로 `schema.json`, `types.ts`, `commands.ts`, `contract.ts` 4개 파일 생성 확인                                                                                      |
+| `unknown_command_uses_package_level_error`                      | 미등록 command 호출 시 `RustraError` 코드가 `"command.not_found"`인지 확인. `error.code()` getter 사용                                                                             |
+| `ts_generator_handles_optional_fields`                          | `Option<i64>`, `Option<String>` 필드가 `age?: number \| null`, `label?: string \| null`으로 생성되는지 확인                                                                        |
+| `ts_generator_handles_enums`                                    | enum 타입이 `Status` 참조 타입 + `'Active' \| 'Inactive'` union으로 생성되는지 확인                                                                                                |
+| `ts_generator_handles_vec_and_optional_struct`                  | `Vec<String>` → `string[]`, `Option<Item>` → `Item \| null` 생성 확인                                                                                                              |
+| `command_macro_rejects_wrong_signature`                         | `#[command]` 매크로가 잘못된 시그니처를 거부하는지 컴파일 체크로 검증. 유효 시그니처는 통과, 파라미터 없는 함수와 `Result`가 아닌 반환은 실패                                      |
 
 ### 파일: `examples/calculator/tests/example_contract.rs`
 
 1개 통합 테스트. 계산기 예제 빌드 산출물을 종단 간 검증한다.
 
-| 테스트 함수 | 검증 내용 |
-|---|---|
+| 테스트 함수                                    | 검증 내용                                                                                                                                                                                                                |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `calculator_example_runs_and_generates_client` | `rustra-calculator-example` 바이너리 실행 → stdout에 `2 + 3 = 5` 포함 확인. `generated/commands.ts`에 `addNumbers` 함수와 `engine.invoke<AddNumbersOutput>('addNumbers')` 포함, `EngineRequest`/`Attachment` 미포함 확인 |
 
 이 테스트는 `cargo test` 실행 시 `CARGO_BIN_EXE_rustra-calculator-example` 환경변수를 통해 빌드된 바이너리를 직접 실행하므로, 코드 생성 파이프라인 전체를 검증한다.
@@ -69,22 +69,22 @@ cargo test
 
 2개 테스트. 생성된 TS 클라이언트의 동작을 검증한다.
 
-| 테스트 | 검증 내용 |
-|---|---|
-| `generated command helper calls the host EngineClient invoke contract` | `addNumbers(engine, input)` 호출 시 engine.invoke에 올바른 command 이름과 args가 전달되는지 확인 |
+| 테스트                                                                       | 검증 내용                                                                                                                                          |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `generated command helper calls the host EngineClient invoke contract`       | `addNumbers(engine, input)` 호출 시 engine.invoke에 올바른 command 이름과 args가 전달되는지 확인                                                   |
 | `generated client stays host neutral for Node, Bun, Tauri, and React Native` | `commands.ts` + `types.ts`에 `node:`, `bun:`, `@tauri-apps`, `react-native`, `@expo/`, `expo-modules`, `EngineRequest`, `Attachment`가 없는지 확인 |
 
 ### 파일: `examples/calculator/ts/adapter-compat.test.ts`
 
 6개 테스트. 4개 adapter 패키지의 동작과 무결성을 검증한다.
 
-| 테스트 | 검증 내용 |
-|---|---|
-| `node adapter forwards generated commands to injected Node transport` | `createNodeEngine`이 transport의 invoke를 올바르게 호출 |
-| `bun adapter forwards generated commands to injected Bun transport` | `createBunEngine`이 transport의 invoke를 올바르게 호출 |
-| `tauri adapter forwards generated commands to injected Tauri invoke` | `createTauriEngine`이 `rustra_dispatch`로 래핑하여 invoke 호출. `RustraCommandError` 에러 변환 동작 확인 |
-| `react native adapter forwards generated commands to injected native module` | `createReactNativeEngine`이 native module의 invoke를 올바르게 호출 |
-| `adapter packages keep host-specific imports out of the shared contract path` | 4개 adapter 소스에 `@tauri-apps`, `react-native`, `@expo/`, `expo-modules`가 없는지 확인 |
+| 테스트                                                                        | 검증 내용                                                                                                |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `node adapter forwards generated commands to injected Node transport`         | `createNodeEngine`이 transport의 invoke를 올바르게 호출                                                  |
+| `bun adapter forwards generated commands to injected Bun transport`           | `createBunEngine`이 transport의 invoke를 올바르게 호출                                                   |
+| `tauri adapter forwards generated commands to injected Tauri invoke`          | `createTauriEngine`이 `rustra_dispatch`로 래핑하여 invoke 호출. `RustraCommandError` 에러 변환 동작 확인 |
+| `react native adapter forwards generated commands to injected native module`  | `createReactNativeEngine`이 native module의 invoke를 올바르게 호출                                       |
+| `adapter packages keep host-specific imports out of the shared contract path` | 4개 adapter 소스에 `@tauri-apps`, `react-native`, `@expo/`, `expo-modules`가 없는지 확인                 |
 
 공통 패턴: `createRecordingTransport()`로 호출을 기록하고, `addNumbers` generated command가 올바른 파라미터로 transport에 도달하는지 확인.
 
@@ -92,10 +92,10 @@ cargo test
 
 2개 테스트. host 앱들이 동일한 generated commands를 사용하는지, RN FFI 연결이 올바른지 검증한다.
 
-| 테스트 | 검증 내용 |
-|---|---|
+| 테스트                                                                    | 검증 내용                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `host apps share generated commands and differ only by adapter transport` | Node, Bun, Tauri, RN 앱이 모두 `../generated/commands.js`를 import. 각각 `createNodeEngine`, `createBunEngine`, `createTauriEngine`, `createReactNativeEngine` 사용. Tauri `main.rs`는 Rust에서 직접 `invoke` 호출하며 JS로 덧셈을 수행하지 않음 |
-| `react native runtime fixture exposes a native Rust-backed invoke module` | Swift 모듈이 `RustraCalculator` 이름으로 등록, `invokeRaw` async function 노출, `rustra_calculator_invoke` / `rustra_calculator_free_string` FFI 함수 호출. Rust lib.rs에서 FFI export 확인 |
+| `react native runtime fixture exposes a native Rust-backed invoke module` | Swift 모듈이 `RustraCalculator` 이름으로 등록, `invokeRaw` async function 노출, `rustra_calculator_invoke` / `rustra_calculator_free_string` FFI 함수 호출. Rust lib.rs에서 FFI export 확인                                                      |
 
 ### 실행
 
@@ -141,13 +141,13 @@ test:compat         → test:adapters + test:runtime
 
 ## React Native 테스트 상태
 
-| 계층 | 상태 | 비고 |
-|---|---|---|
-| adapter-compat.test.ts | PASS | `createReactNativeEngine` 동작 확인 |
-| runtime-contract.test.ts | PASS | Swift 모듈 + FFI export 구조 검증 |
-| test:adapter:react-native | PASS | `bun react-native-app.ts` 실행 |
-| test:app:react-native | PASS | TypeScript 타입체크 통과 |
-| 실제 시뮬레이터 실행 | 대기중 | iOS/Android 시뮬레이터에서 실제 FFI 호출 필요 |
+| 계층                      | 상태   | 비고                                          |
+| ------------------------- | ------ | --------------------------------------------- |
+| adapter-compat.test.ts    | PASS   | `createReactNativeEngine` 동작 확인           |
+| runtime-contract.test.ts  | PASS   | Swift 모듈 + FFI export 구조 검증             |
+| test:adapter:react-native | PASS   | `bun react-native-app.ts` 실행                |
+| test:app:react-native     | PASS   | TypeScript 타입체크 통과                      |
+| 실제 시뮬레이터 실행      | 대기중 | iOS/Android 시뮬레이터에서 실제 FFI 호출 필요 |
 
 **이유:** RN 런타임 테스트는 Xcode 시뮬레이터 또는 Android 에뮬레이터가 필요하므로 CI 환경에서는 제외된다.
 

@@ -7,47 +7,47 @@
 RN에서 Rust local engine을 쓸 때 HTTP/fetch local server는 mobile main path로 너무 비싸다. 대신 Tauri처럼 `invoke(command, args)` 하나를 public API로 두고, 내부에서 JSON command, binary attachment, file/resource handle을 선택하는 구조가 가장 실용적이다.
 
 ```ts
-await engine.invoke("document.search", { query: "rust", limit: 20 });
-await engine.invoke("image.thumbnail", { input: imageBytes, width: 512 });
-await engine.invoke("video.probe", { input: { type: "file", uri } });
+await engine.invoke('document.search', { query: 'rust', limit: 20 });
+await engine.invoke('image.thumbnail', { input: imageBytes, width: 512 });
+await engine.invoke('video.probe', { input: { type: 'file', uri } });
 ```
 
 ## 지금까지 만든 경로
 
-| 경로 | 목적 | 판단 |
-| --- | --- | --- |
-| HTTP/fetch JSON-RPC over localhost | Rust engine을 local server처럼 쓰는 형태 확인 | 동작은 하지만 RN iOS에서 sequential 약 60 calls/s로 너무 느림 |
-| Native JSON invoke | HTTP/TCP/fetch 제거, Swift FFI로 Rust dispatcher 호출 | 가장 실용적인 기본 경로 |
-| Native Protobuf invoke | JSON 제거가 tiny-call 성능에 도움이 되는지 확인 | 작은 command에서는 JSON보다 빠르지 않았음 |
-| JSON command + binary payload | 이미지/문서 같은 bytes를 base64 없이 넘기는지 확인 | 256KB-1MB급 payload에서 현실성 있음 |
-| Tauri-like single invoke wrapper | public API를 `invoke(command, args)` 하나로 유지 | DX와 성능 모두 가장 균형 좋음 |
+| 경로                               | 목적                                                  | 판단                                                          |
+| ---------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------- |
+| HTTP/fetch JSON-RPC over localhost | Rust engine을 local server처럼 쓰는 형태 확인         | 동작은 하지만 RN iOS에서 sequential 약 60 calls/s로 너무 느림 |
+| Native JSON invoke                 | HTTP/TCP/fetch 제거, Swift FFI로 Rust dispatcher 호출 | 가장 실용적인 기본 경로                                       |
+| Native Protobuf invoke             | JSON 제거가 tiny-call 성능에 도움이 되는지 확인       | 작은 command에서는 JSON보다 빠르지 않았음                     |
+| JSON command + binary payload      | 이미지/문서 같은 bytes를 base64 없이 넘기는지 확인    | 256KB-1MB급 payload에서 현실성 있음                           |
+| Tauri-like single invoke wrapper   | public API를 `invoke(command, args)` 하나로 유지      | DX와 성능 모두 가장 균형 좋음                                 |
 
 ## 최종 Run 7 핵심 결과
 
 환경:
 
-| 항목 | 값 |
-| --- | --- |
-| 날짜 | 2026-05-13 |
-| Simulator | iPhone 17, iOS 26.2 |
-| Build | Debug simulator |
-| RN | 0.81.5 |
-| Expo | 54.0.33 / native pods 54.0.34 |
-| JS engine | Hermes |
-| 측정 위치 | iOS RN 앱 내부 |
+| 항목      | 값                            |
+| --------- | ----------------------------- |
+| 날짜      | 2026-05-13                    |
+| Simulator | iPhone 17, iOS 26.2           |
+| Build     | Debug simulator               |
+| RN        | 0.81.5                        |
+| Expo      | 54.0.33 / native pods 54.0.34 |
+| JS engine | Hermes                        |
+| 측정 위치 | iOS RN 앱 내부                |
 
 핵심 수치:
 
-| Metric | 호출 | p50 | p95 | p99 | 총 시간 | 처리량 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| single invoke JSON `addNumbers` | 1,000 sequential | 0.07ms | 0.10ms | 0.14ms | 78.72ms | 12,703.7/s |
-| single invoke JSON `addNumbers` | 1,000 burst, concurrency 10 | 0.26ms | 0.31ms | 0.55ms | 27.73ms | 36,057.0/s |
-| Protobuf `addNumbers` | 1,000 sequential | 0.07ms | 0.08ms | 0.10ms | 82.93ms | 12,058.8/s |
-| Protobuf `addNumbers` | 1,000 burst, concurrency 10 | 0.44ms | 0.51ms | 0.73ms | 45.27ms | 22,091.6/s |
-| HTTP/fetch `addNumbers` | 1,000 sequential | 16.66ms | 17.99ms | 19.78ms | 16.67s | 60.0/s |
-| binary echo | 256KB, 50 calls | 0.21ms | 0.44ms | 0.65ms | 25.68ms | 1,946.8/s |
-| binary invert | 256KB, 50 calls | 1.99ms | 2.12ms | 2.41ms | 111.37ms | 448.9/s |
-| binary checksum | 1MB, 20 calls | 3.60ms | 3.88ms | 3.88ms | 83.22ms | 240.3/s |
+| Metric                          |                        호출 |     p50 |     p95 |     p99 |  총 시간 |     처리량 |
+| ------------------------------- | --------------------------: | ------: | ------: | ------: | -------: | ---------: |
+| single invoke JSON `addNumbers` |            1,000 sequential |  0.07ms |  0.10ms |  0.14ms |  78.72ms | 12,703.7/s |
+| single invoke JSON `addNumbers` | 1,000 burst, concurrency 10 |  0.26ms |  0.31ms |  0.55ms |  27.73ms | 36,057.0/s |
+| Protobuf `addNumbers`           |            1,000 sequential |  0.07ms |  0.08ms |  0.10ms |  82.93ms | 12,058.8/s |
+| Protobuf `addNumbers`           | 1,000 burst, concurrency 10 |  0.44ms |  0.51ms |  0.73ms |  45.27ms | 22,091.6/s |
+| HTTP/fetch `addNumbers`         |            1,000 sequential | 16.66ms | 17.99ms | 19.78ms |   16.67s |     60.0/s |
+| binary echo                     |             256KB, 50 calls |  0.21ms |  0.44ms |  0.65ms |  25.68ms |  1,946.8/s |
+| binary invert                   |             256KB, 50 calls |  1.99ms |  2.12ms |  2.41ms | 111.37ms |    448.9/s |
+| binary checksum                 |               1MB, 20 calls |  3.60ms |  3.88ms |  3.88ms |  83.22ms |    240.3/s |
 
 중요 비교:
 
@@ -76,12 +76,12 @@ HTTP/fetch는 RN iOS에서 sequential 약 60 calls/s로 묶였다. p50도 대부
 
 이 경로는 다음 용도에는 괜찮다.
 
-| 용도 | 판단 |
-| --- | --- |
-| desktop/debug reuse | 가능 |
-| 개발 중 curl/debug endpoint | 가능 |
-| mobile high-frequency command | 부적합 |
-| coarse background command | 제한적으로 가능 |
+| 용도                          | 판단            |
+| ----------------------------- | --------------- |
+| desktop/debug reuse           | 가능            |
+| 개발 중 curl/debug endpoint   | 가능            |
+| mobile high-frequency command | 부적합          |
+| coarse background command     | 제한적으로 가능 |
 
 ### 2. Native invoke가 핵심 전환점이다
 
@@ -94,9 +94,9 @@ HTTP/TCP/fetch를 제거하고 Expo Module/Swift FFI로 Rust를 직접 호출하
 아래처럼 public lane을 나누면 호출부가 transport 정책을 알아야 한다.
 
 ```ts
-invokeJson("document.search", params);
-invokeBinary("image.resize", params, bytes);
-invokeHandle("video.probe", uri);
+invokeJson('document.search', params);
+invokeBinary('image.resize', params, bytes);
+invokeHandle('video.probe', uri);
 ```
 
 대신 public API는 하나여야 한다.
@@ -113,11 +113,11 @@ Protobuf 자체가 나쁜 것은 아니다. 하지만 이번 PoC의 tiny command
 
 Protobuf를 다시 볼 조건:
 
-| 조건 | 이유 |
-| --- | --- |
-| generated codec이 생김 | manual JS codec 비용 제거 |
-| payload가 크고 schema 안정성이 중요함 | JSON보다 binary schema가 유리해질 수 있음 |
-| cross-language strict contract가 더 중요함 | DX보다 protocol stability 우선 |
+| 조건                                       | 이유                                      |
+| ------------------------------------------ | ----------------------------------------- |
+| generated codec이 생김                     | manual JS codec 비용 제거                 |
+| payload가 크고 schema 안정성이 중요함      | JSON보다 binary schema가 유리해질 수 있음 |
+| cross-language strict contract가 더 중요함 | DX보다 protocol stability 우선            |
 
 현재 다음 단계에는 JSON Schema 기반 Rust-owned codegen이 더 맞다.
 
@@ -143,10 +143,10 @@ RN UI
 고빈도 logical operation은 아래처럼 합친다.
 
 ```ts
-await engine.invoke("document.applyOps", {
+await engine.invoke('document.applyOps', {
   ops: [
-    { type: "insert", blockId: "a", text: "hello" },
-    { type: "update", blockId: "b", text: "world" },
+    { type: 'insert', blockId: 'a', text: 'hello' },
+    { type: 'update', blockId: 'b', text: 'world' },
   ],
 });
 ```
@@ -245,26 +245,26 @@ export type DocumentSearchOutput = {
 };
 
 export function documentSearch(engine: EngineClient, input: DocumentSearchInput) {
-  return engine.invoke<DocumentSearchOutput>("document.search", input);
+  return engine.invoke<DocumentSearchOutput>('document.search', input);
 }
 ```
 
 RN과 Node는 같은 generated client를 쓴다.
 
 ```ts
-import { createEngine } from "@local-engine/react-native";
-import { documentSearch } from "./generated/commands";
+import { createEngine } from '@local-engine/react-native';
+import { documentSearch } from './generated/commands';
 
 const engine = createEngine();
-await documentSearch(engine, { query: "rust", limit: 20 });
+await documentSearch(engine, { query: 'rust', limit: 20 });
 ```
 
 ```ts
-import { createEngine } from "@local-engine/node";
-import { documentSearch } from "./generated/commands";
+import { createEngine } from '@local-engine/node';
+import { documentSearch } from './generated/commands';
 
 const engine = createEngine();
-await documentSearch(engine, { query: "rust", limit: 20 });
+await documentSearch(engine, { query: 'rust', limit: 20 });
 ```
 
 ## 반드시 조심할 것
@@ -296,10 +296,7 @@ generated `commands.ts`는 `engine.invoke()`만 알아야 한다. RN/Node/Tauri 
 최소 contract:
 
 ```ts
-type EngineInput =
-  | Uint8Array
-  | { type: "file"; uri: string }
-  | { type: "resource"; id: string };
+type EngineInput = Uint8Array | { type: 'file'; uri: string } | { type: 'resource'; id: string };
 ```
 
 ### error model을 먼저 고정한다
@@ -343,13 +340,13 @@ desktop `curl`은 Rust endpoint가 응답하는지만 보여준다. RN, Hermes, 
 
 ## 참고 문서
 
-| 문서 | 내용 |
-| --- | --- |
-| `docs/ios-local-engine-benchmark-notes.md` | Run 1-7 전체 벤치 기록 |
-| `docs/tauri-like-single-invoke-architecture.ko.md` | single `invoke(command, args)` 구조 |
-| `docs/json-command-binary-payload-architecture.ko.md` | binary attachment 설계 |
-| `docs/rn-rust-native-bridge-comparison.ko.md` | Craby/Nitro 공개 수치와 비교 |
-| `docs/rust-owned-contract-package-pattern.ko.md` | 새 패키지화/생성 구조 설계 |
+| 문서                                                  | 내용                                |
+| ----------------------------------------------------- | ----------------------------------- |
+| `docs/ios-local-engine-benchmark-notes.md`            | Run 1-7 전체 벤치 기록              |
+| `docs/tauri-like-single-invoke-architecture.ko.md`    | single `invoke(command, args)` 구조 |
+| `docs/json-command-binary-payload-architecture.ko.md` | binary attachment 설계              |
+| `docs/rn-rust-native-bridge-comparison.ko.md`         | Craby/Nitro 공개 수치와 비교        |
+| `docs/rust-owned-contract-package-pattern.ko.md`      | 새 패키지화/생성 구조 설계          |
 
 ## 최종 판단
 
@@ -363,4 +360,3 @@ Public execution API stays invoke(command, args).
 Binary and file/resource paths are hidden behind args.
 Coarse commands beat fine-grained bridge calls.
 ```
-

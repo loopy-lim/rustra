@@ -62,11 +62,11 @@ serde_json.workspace = true
 
 필요한 crate는 4개뿐이다.
 
-| crate | 역할 |
-|-------|------|
-| `rustra` | Package builder, TypeScript 생성기, JSON Schema 기반 타입 매핑 |
-| `rustra-macros` | `#[command]` 속성 매크로 (rustra가 자동으로 재export) |
-| `serde` + `schemars` | 직렬화/역직렬화 + JSON Schema 생성. 타입에 3개 derive 필요 |
+| crate                | 역할                                                           |
+| -------------------- | -------------------------------------------------------------- |
+| `rustra`             | Package builder, TypeScript 생성기, JSON Schema 기반 타입 매핑 |
+| `rustra-macros`      | `#[command]` 속성 매크로 (rustra가 자동으로 재export)          |
+| `serde` + `schemars` | 직렬화/역직렬화 + JSON Schema 생성. 타입에 3개 derive 필요     |
 
 ---
 
@@ -239,7 +239,10 @@ export type AddNumbersOutput = {
 ```ts
 import type { AddNumbersInput, AddNumbersOutput, EngineClient } from './types.js';
 
-export function addNumbers(engine: EngineClient, input: AddNumbersInput): Promise<AddNumbersOutput> {
+export function addNumbers(
+  engine: EngineClient,
+  input: AddNumbersInput,
+): Promise<AddNumbersOutput> {
   return engine.invoke<AddNumbersOutput>('addNumbers', input);
 }
 ```
@@ -251,7 +254,8 @@ export function addNumbers(engine: EngineClient, input: AddNumbersInput): Promis
 ### contract.ts — 계약 해시
 
 ```ts
-export const GENERATED_CONTRACT_HASH = '5ed9d6dc29fb1b0d437b110a8f48e0cb828cc1e27a562b79049e86975b970aba';
+export const GENERATED_CONTRACT_HASH =
+  '5ed9d6dc29fb1b0d437b110a8f48e0cb828cc1e27a562b79049e86975b970aba';
 ```
 
 - 스키마 전체를 SHA-256으로 해시한 값.
@@ -268,7 +272,10 @@ export const GENERATED_CONTRACT_HASH = '5ed9d6dc29fb1b0d437b110a8f48e0cb828cc1e2
       "outputType": "AddNumbersOutput",
       "inputSchema": {
         "type": "object",
-        "properties": { "a": { "type": "integer", "format": "int64" }, "b": { "type": "integer", "format": "int64" } },
+        "properties": {
+          "a": { "type": "integer", "format": "int64" },
+          "b": { "type": "integer", "format": "int64" }
+        },
         "required": ["a", "b"]
       },
       "outputSchema": {
@@ -379,11 +386,11 @@ const result = await addNumbers(engine, { a: 20, b: 22 });
 
 ### 요약
 
-| 환경 | 어댑터 함수 | transport 인자 |
-|------|------------|----------------|
-| Node | `createNodeEngine(transport)` | `{ invoke(command, args) }` |
-| Bun | `createBunEngine(transport)` | `{ invoke(command, args) }` |
-| Tauri | `createTauriEngine(options)` | `{ invoke: tauriInvoke }` |
+| 환경         | 어댑터 함수                             | transport 인자                        |
+| ------------ | --------------------------------------- | ------------------------------------- |
+| Node         | `createNodeEngine(transport)`           | `{ invoke(command, args) }`           |
+| Bun          | `createBunEngine(transport)`            | `{ invoke(command, args) }`           |
+| Tauri        | `createTauriEngine(options)`            | `{ invoke: tauriInvoke }`             |
 | React Native | `createReactNativeEngine(nativeModule)` | `NativeModule` (`invoke` 메서드 포함) |
 
 모든 어댑터가 `EngineClient`를 반환하므로, 이후 코드는 환경에 상관없이 동일하다.
@@ -421,12 +428,12 @@ npm run test:compat
 
 이 명령어는 다음을 모두 실행한다.
 
-| 스크립트 | 내용 |
-|---------|------|
-| `test:ts:node` | Node로 생성된 클라이언트 타입 검증 |
-| `test:ts:bun` | Bun으로 생성된 클라이언트 타입 검증 |
-| `test:adapters` | 4개 어댑터가 모두 동일한 커맨드를 올바르게 전달하는지 확인 |
-| `test:runtime` | Node, Bun 런타임에서 실제 Rust 프로세스 호출, Tauri 앱 빌드 및 WebView에서 호출 검증 |
+| 스크립트        | 내용                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------ |
+| `test:ts:node`  | Node로 생성된 클라이언트 타입 검증                                                   |
+| `test:ts:bun`   | Bun으로 생성된 클라이언트 타입 검증                                                  |
+| `test:adapters` | 4개 어댑터가 모두 동일한 커맨드를 올바르게 전달하는지 확인                           |
+| `test:runtime`  | Node, Bun 런타임에서 실제 Rust 프로세스 호출, Tauri 앱 빌드 및 WebView에서 호출 검증 |
 
 개별 실행도 가능하다.
 
@@ -542,12 +549,12 @@ fn divide(input: DivideInput) -> Result<DivideOutput> {
 
 에러 코드 종류:
 
-| 에러 코드 | 발생 조건 |
-|----------|----------|
-| `command.not_found` | 존재하지 않는 커맨드 호출 |
-| `command.invalid_args` | 입력 JSON 역직렬화 실패 |
-| `internal` | 내부 오류 (직렬화 실패, I/O 등) |
-| custom (지정한 코드) | `RustraError::custom(code, message)` |
+| 에러 코드              | 발생 조건                            |
+| ---------------------- | ------------------------------------ |
+| `command.not_found`    | 존재하지 않는 커맨드 호출            |
+| `command.invalid_args` | 입력 JSON 역직렬화 실패              |
+| `internal`             | 내부 오류 (직렬화 실패, I/O 등)      |
+| custom (지정한 코드)   | `RustraError::custom(code, message)` |
 
 ### TypeScript 측
 
@@ -560,7 +567,7 @@ try {
   const result = await divide(engine, { a: 10, b: 0 });
 } catch (e) {
   if (e instanceof RustraCommandError) {
-    console.log(e.code);    // "division.by_zero"
+    console.log(e.code); // "division.by_zero"
     console.log(e.message); // "cannot divide by zero"
   }
 }
@@ -574,13 +581,13 @@ Node, Bun, React Native 어댑터는 transport 구현에 따라 에러 형태가
 
 대부분의 Rust 타입이 TypeScript로 올바르게 변환되지만, 현재 다음 타입은 `unknown`으로 폴백된다:
 
-| 미지원 타입 | 이유 |
-|------------|------|
-| `tuple` (`(A, B)`) | `prefixItems` 미처리 |
-| `oneOf` | `anyOf`만 처리 |
-| `allOf` | 교차 타입(intersection) 미처리 |
-| integer enum | string enum만 리터럴 union 변환 |
-| 중첩 `$ref` (다단계) | 1단계까지만 해석 |
+| 미지원 타입          | 이유                            |
+| -------------------- | ------------------------------- |
+| `tuple` (`(A, B)`)   | `prefixItems` 미처리            |
+| `oneOf`              | `anyOf`만 처리                  |
+| `allOf`              | 교차 타입(intersection) 미처리  |
+| integer enum         | string enum만 리터럴 union 변환 |
+| 중첩 `$ref` (다단계) | 1단계까지만 해석                |
 
 이런 타입이 필요하면 `types.ts`를 직접 수정하거나, `#[command(name = "...")]`으로 명시적 이름을 지정하는 방식으로 우회할 수 있다.
 

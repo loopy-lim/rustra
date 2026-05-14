@@ -1,9 +1,9 @@
 pub use rustra_macros::command;
 pub use rustra_macros::register;
 
-use schemars::{JsonSchema, schema_for};
-use serde::{Serialize, de::DeserializeOwned};
-use serde_json::{Value, json};
+use schemars::{schema_for, JsonSchema};
+use serde::{de::DeserializeOwned, Serialize};
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::any::type_name;
 use std::collections::{BTreeMap, BTreeSet};
@@ -13,14 +13,16 @@ use std::path::Path;
 use std::sync::Arc;
 
 pub mod prelude {
-    pub use crate::{GeneratedPackage, Package, PackageBuilder, Result, RustraError, command, register};
+    pub use crate::{
+        command, register, GeneratedPackage, Package, PackageBuilder, Result, RustraError,
+    };
     pub use schemars::JsonSchema;
     pub use serde::{Deserialize, Serialize};
 }
 
 pub mod __private {
     use schemars::JsonSchema;
-    use serde::{Serialize, de::DeserializeOwned};
+    use serde::{de::DeserializeOwned, Serialize};
 
     pub trait CommandInput: DeserializeOwned + JsonSchema + 'static {}
     impl<T: DeserializeOwned + JsonSchema + 'static> CommandInput for T {}
@@ -32,7 +34,7 @@ pub mod __private {
 #[cfg(feature = "tauri")]
 pub mod tauri_support {
     use crate::Package;
-    use serde_json::{Value, json};
+    use serde_json::{json, Value};
     use tauri::State;
 
     pub struct RustraState {
@@ -61,42 +63,85 @@ pub mod tauri_support {
     }
 }
 
+/// Result type alias for rustra operations.
 pub type Result<T> = std::result::Result<T, RustraError>;
 
+/// Error type for all rustra operations.
+///
+/// Use the factory methods to create domain-specific errors with structured error codes.
+/// The `retryable` field indicates whether the caller should retry the operation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RustraError {
     code: &'static str,
     message: String,
+    #[serde(skip_serializing_if = "is_false")]
+    retryable: bool,
+}
+
+fn is_false(v: &bool) -> bool {
+    !v
 }
 
 impl RustraError {
+    /// Command not found error. Code: `command.not_found`.
     pub fn command_not_found(name: impl Into<String>) -> Self {
         let name = name.into();
         Self {
             code: "command.not_found",
             message: format!("command not found: {name}"),
+            retryable: false,
         }
     }
 
+    /// Invalid arguments error. Code: `command.invalid_args`.
     pub fn invalid_args(error: impl fmt::Display) -> Self {
         Self {
             code: "command.invalid_args",
             message: error.to_string(),
+            retryable: false,
         }
     }
 
+    /// Internal error. Code: `internal`.
     pub fn internal(error: impl fmt::Display) -> Self {
         Self {
             code: "internal",
             message: error.to_string(),
+            retryable: false,
         }
     }
 
+    /// Custom error with a user-defined code.
     pub fn custom(code: &'static str, message: impl Into<String>) -> Self {
         Self {
             code,
             message: message.into(),
+            retryable: false,
         }
+    }
+
+    /// Transport/network error. Code: `transport.error`. Retryable.
+    pub fn transport(error: impl fmt::Display) -> Self {
+        Self {
+            code: "transport.error",
+            message: error.to_string(),
+            retryable: true,
+        }
+    }
+
+    /// Timeout error. Code: `transport.timeout`. Retryable.
+    pub fn timeout(error: impl fmt::Display) -> Self {
+        Self {
+            code: "transport.timeout",
+            message: error.to_string(),
+            retryable: true,
+        }
+    }
+
+    /// Builder-style method to mark any error as retryable.
+    pub fn retryable(mut self) -> Self {
+        self.retryable = true;
+        self
     }
 
     pub fn code(&self) -> &'static str {
@@ -105,6 +150,10 @@ impl RustraError {
 
     pub fn message(&self) -> &str {
         &self.message
+    }
+
+    pub fn is_retryable(&self) -> bool {
+        self.retryable
     }
 }
 
@@ -122,17 +171,20 @@ impl From<std::io::Error> for RustraError {
     }
 }
 
+/// A collection of registered commands that can be invoked and generate TypeScript clients.
 #[derive(Clone)]
 pub struct Package {
     id: String,
     commands: Arc<BTreeMap<String, Command>>,
 }
 
+/// Builder for constructing a [`Package`] with registered commands.
 pub struct PackageBuilder {
     id: String,
     commands: BTreeMap<String, Command>,
 }
 
+/// Generated TypeScript output: schema JSON, types, commands, and contract hash.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GeneratedPackage {
     pub schema_json: String,
@@ -280,7 +332,8 @@ impl Package {
     }
 
     fn generate_commands_ts(&self) -> String {
-        let mut type_names = BTreeSet::from(["EngineClient".to_string(), "RustraError".to_string()]);
+        let mut type_names =
+            BTreeSet::from(["EngineClient".to_string(), "RustraError".to_string()]);
         for command in self.commands.values() {
             type_names.insert(command.input_type.clone());
             type_names.insert(command.output_type.clone());
@@ -324,9 +377,7 @@ impl PackageBuilder {
         let (input_schema, input_defs) = schema_value::<I>();
         let (output_schema, output_defs) = schema_value::<O>();
         let mut definitions = input_defs;
-        if let (Value::Object(obj), Value::Object(other)) =
-            (&mut definitions, output_defs)
-        {
+        if let (Value::Object(obj), Value::Object(other)) = (&mut definitions, output_defs) {
             for (key, value) in other {
                 obj.insert(key, value);
             }
@@ -404,7 +455,18 @@ fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String {
 
     match schema.get("type") {
         Some(Value::String(t)) => match t.as_str() {
-            "object" => ts_object_from_schema(schema, definitions),
+            "object" => {
+                if schema.get("properties").is_none()
+                    && schema.get("additionalProperties").is_some()
+                {
+                    let value_type = ts_type_from_schema(
+                        schema.get("additionalProperties").unwrap(),
+                        definitions,
+                    );
+                    return format!("Record<string, {value_type}>");
+                }
+                ts_object_from_schema(schema, definitions)
+            }
             "integer" | "number" => "number".to_string(),
             "string" => {
                 if let Some(enum_values) = schema.get("enum").and_then(Value::as_array) {
@@ -423,6 +485,15 @@ fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String {
             }
             "boolean" => "boolean".to_string(),
             "array" => {
+                if let Some(items) = schema.get("items").and_then(Value::as_array) {
+                    let types: Vec<String> = items
+                        .iter()
+                        .map(|s| ts_type_from_schema(s, definitions))
+                        .collect();
+                    if !types.is_empty() {
+                        return format!("[{}]", types.join(", "));
+                    }
+                }
                 let item_type = schema
                     .get("items")
                     .map(|s| ts_type_from_schema(s, definitions))
@@ -442,11 +513,13 @@ fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String {
                     "boolean" => "boolean".to_string(),
                     "null" => "null".to_string(),
                     "object" => ts_object_from_schema(schema, definitions),
-                    "array" => schema
-                        .get("items")
-                        .map(|s| ts_type_from_schema(s, definitions))
-                        .unwrap_or_else(|| "unknown".to_string())
-                        + "[]",
+                    "array" => {
+                        schema
+                            .get("items")
+                            .map(|s| ts_type_from_schema(s, definitions))
+                            .unwrap_or_else(|| "unknown".to_string())
+                            + "[]"
+                    }
                     _ => "unknown".to_string(),
                 })
                 .collect();

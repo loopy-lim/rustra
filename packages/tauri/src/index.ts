@@ -1,6 +1,7 @@
 export type RustraError = {
   readonly code: string;
   readonly message: string;
+  readonly retryable?: boolean;
 };
 
 export type TauriInvoke = (command: string, args?: unknown) => Promise<unknown> | unknown;
