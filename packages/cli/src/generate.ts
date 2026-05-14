@@ -107,7 +107,8 @@ function tsTypeFromSchema(schema: JsonSchema, definitions: Record<string, JsonSc
           const types = schema.items.map((s) => tsTypeFromSchema(s, definitions));
           return `[${types.join(', ')}]`;
         }
-        const itemType = schema.items ? tsTypeFromSchema(schema.items, definitions) : 'unknown';
+        const itemSchema = Array.isArray(schema.items) ? undefined : schema.items;
+        const itemType = itemSchema ? tsTypeFromSchema(itemSchema, definitions) : 'unknown';
         return `${itemType}[]`;
       }
       case 'null':
@@ -132,8 +133,10 @@ function tsTypeFromSchema(schema: JsonSchema, definitions: Record<string, JsonSc
             return 'null';
           case 'object':
             return tsObjectFromSchema(schema, definitions);
-          case 'array':
-            return schema.items ? `${tsTypeFromSchema(schema.items, definitions)}[]` : 'unknown[]';
+          case 'array': {
+            const arrItem = Array.isArray(schema.items) ? undefined : schema.items;
+            return arrItem ? `${tsTypeFromSchema(arrItem, definitions)}[]` : 'unknown[]';
+          }
           default:
             return 'unknown';
         }
