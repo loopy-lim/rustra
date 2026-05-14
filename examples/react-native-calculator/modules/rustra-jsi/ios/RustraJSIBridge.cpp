@@ -208,18 +208,42 @@ Value RustraHostObject::get(Runtime& rt, const PropNameID& name) {
       });
   }
 
+  if (propName == "invokeRkyvV2") {
+    return Function::createFromHostFunction(
+      rt, name, 1,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1) {
+          throw JSError(rt, "RustraJSI.invokeRkyvV2 requires 1 argument: (payload)");
+        }
+
+        auto [data, size] = extractBytes(rt, args[0]);
+
+        size_t out_len = 0;
+        uint8_t* result = rustra_calculator_invoke_rkyv_v2(data, size, &out_len);
+
+        if (!result) {
+          throw JSError(rt, "RustraJSI: Rust rkyv v2 returned null");
+        }
+
+        auto returnValue = createArrayBuffer(rt, result, out_len);
+        rustra_calculator_free_buffer(result, out_len);
+        return returnValue;
+      });
+  }
+
   return Value::undefined();
 }
 
 std::vector<PropNameID> RustraHostObject::getPropertyNames(Runtime& rt) {
   std::vector<PropNameID> names;
-  names.reserve(8);
+  names.reserve(9);
   names.push_back(PropNameID::forAscii(rt, "invoke"));
   names.push_back(PropNameID::forAscii(rt, "invokeMsgpack"));
   names.push_back(PropNameID::forAscii(rt, "invokeBincode"));
   names.push_back(PropNameID::forAscii(rt, "invokePostcard"));
   names.push_back(PropNameID::forAscii(rt, "invokeRkyv"));
   names.push_back(PropNameID::forAscii(rt, "invokeHybrid"));
+  names.push_back(PropNameID::forAscii(rt, "invokeRkyvV2"));
   names.push_back(PropNameID::forAscii(rt, "invokeRaw"));
   names.push_back(PropNameID::forAscii(rt, "noop"));
   return names;
