@@ -72,11 +72,9 @@ fn package_generates_host_neutral_typescript_client() {
 
     assert!(generated.types_ts.contains("export type AddNumbersInput"));
     assert!(generated.commands_ts.contains("export function addNumbers"));
-    assert!(
-        generated
-            .commands_ts
-            .contains("engine.invoke<AddNumbersOutput>")
-    );
+    assert!(generated
+        .commands_ts
+        .contains("engine.invoke<AddNumbersOutput>"));
     assert!(!generated.commands_ts.contains("EngineRequest"));
     assert!(!generated.commands_ts.contains("Attachment"));
     assert!(!generated.commands_ts.contains("node:"));
