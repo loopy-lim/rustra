@@ -224,9 +224,9 @@ struct Command {
     definitions: Value,
     invoke: Arc<dyn Fn(Value) -> crate::Result<Value> + Send + Sync>,
     /// Fast binary handler: payload[2..] → postcard deserialize → typed handler → postcard serialize
-    rkyv_v2_handler: Option<Arc<dyn Fn(&[u8]) -> crate::Result<Vec<u8>> + Send + Sync>>,
-    rkyv_v2_decode: Arc<dyn Fn(&[u8]) -> crate::Result<Value> + Send + Sync>,
-    rkyv_v2_encode_response: Arc<dyn Fn(&Value) -> Vec<u8> + Send + Sync>,
+    rkyv_v2_handler: Option<BinHandler>,
+    rkyv_v2_decode: DecodeFn,
+    rkyv_v2_encode_response: EncodeFn,
     /// true when this command uses Tier 3 (JSON fallback) wire format.
     rkyv_v2_tier3: bool,
 }
@@ -286,7 +286,7 @@ impl Package {
         let command_id = u16::from_le_bytes([payload[0], payload[1]]);
         let command_name = self
             .resolve_command_id(command_id)
-            .ok_or_else(|| RustraError::command_not_found(&format!("id:{command_id}")))?;
+            .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?;
 
         let command = self
             .commands
@@ -338,9 +338,13 @@ impl Package {
                     "outputSchema": command.output_schema,
                 });
                 // Include definitions if non-empty (for $ref resolution)
+                #[allow(clippy::collapsible_if)]
                 if let Value::Object(defs) = &command.definitions {
                     if !defs.is_empty() {
-                        entry.as_object_mut().unwrap().insert("definitions".into(), command.definitions.clone());
+                        entry
+                            .as_object_mut()
+                            .unwrap()
+                            .insert("definitions".into(), command.definitions.clone());
                     }
                 }
                 entry
@@ -471,24 +475,23 @@ impl PackageBuilder {
         } else {
             rkyv_v2_decoder
         };
-        let rkyv_v2_response_encoder =
-            build_rkyv_v2_response_encoder(&output_schema, is_tier3);
+        let rkyv_v2_response_encoder = build_rkyv_v2_response_encoder(&output_schema, is_tier3);
 
         // Wrap handler in Arc so both JSON and binary paths can use it
         let handler = Arc::new(handler);
 
         // Generate fast postcard-based binary handler that bypasses JSON Value
         let handler_bin = handler.clone();
-        let rkyv_v2_handler: Option<Arc<dyn Fn(&[u8]) -> crate::Result<Vec<u8>> + Send + Sync>> =
+        let rkyv_v2_handler: Option<BinHandler> =
             Some(Arc::new(move |payload: &[u8]| {
                 if payload.len() < 2 {
                     return Err(RustraError::invalid_args("rkyv v2: payload too short"));
                 }
                 let input: I = postcard::from_bytes(&payload[2..])
-                    .map_err(|e| RustraError::invalid_args(&format!("postcard decode: {e}")))?;
+                    .map_err(|e| RustraError::invalid_args(format!("postcard decode: {e}")))?;
                 let output = handler_bin(input)?;
                 let out_bytes = postcard::to_allocvec(&output)
-                    .map_err(|e| RustraError::internal(&format!("postcard encode: {e}")))?;
+                    .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))?;
                 let mut buf = vec![0u8; 8 + out_bytes.len()];
                 buf[0] = 1; // ok = true
                 buf[8..8 + out_bytes.len()].copy_from_slice(&out_bytes);
@@ -543,7 +546,7 @@ impl PackageBuilder {
 ///
 /// Reads bytes after the 2-byte command_id as a UTF-8 JSON string and
 /// deserializes it into a [`serde_json::Value`].
-fn build_tier3_json_decoder() -> Arc<dyn Fn(&[u8]) -> crate::Result<Value> + Send + Sync> {
+fn build_tier3_json_decoder() -> DecodeFn {
     Arc::new(|payload: &[u8]| {
         if payload.len() < 2 {
             return Err(RustraError::invalid_args(
@@ -552,8 +555,9 @@ fn build_tier3_json_decoder() -> Arc<dyn Fn(&[u8]) -> crate::Result<Value> + Sen
         }
         let json_str = std::str::from_utf8(&payload[2..])
             .map_err(|_| RustraError::invalid_args("rkyv v2 tier3: invalid UTF-8"))?;
-        serde_json::from_str(json_str)
-            .map_err(|e| RustraError::invalid_args(&format!("rkyv v2 tier3: JSON parse failed: {e}")))
+        serde_json::from_str(json_str).map_err(|e| {
+            RustraError::invalid_args(format!("rkyv v2 tier3: JSON parse failed: {e}"))
+        })
     })
 }
 
@@ -565,12 +569,13 @@ fn build_tier3_json_decoder() -> Arc<dyn Fn(&[u8]) -> crate::Result<Value> + Sen
 /// Tier 1: 모든 필드가 고정폭 primitive (i64, i32, f64, …)
 /// Tier 2: String 또는 Vec<primitive> 필드 포함
 /// Tier 3: 중첩 구조체, enum, Option<T> 등 — 아직 미지원
+type BinHandler = Arc<dyn Fn(&[u8]) -> crate::Result<Vec<u8>> + Send + Sync>;
+type DecodeFn = Arc<dyn Fn(&[u8]) -> crate::Result<Value> + Send + Sync>;
+type EncodeFn = Arc<dyn Fn(&Value) -> Vec<u8> + Send + Sync>;
+
 fn build_rkyv_v2_decoder(
     input_schema: &Value,
-) -> (
-    Arc<dyn Fn(&[u8]) -> crate::Result<Value> + Send + Sync>,
-    Tier,
-) {
+) -> (DecodeFn, Tier) {
     let props = match input_schema.get("properties").and_then(Value::as_object) {
         Some(p) => p,
         None => {
@@ -668,7 +673,7 @@ fn build_rkyv_v2_decoder(
                     }
                     WireFieldKind::VecI64 => {
                         let elem_size = 8usize;
-                        if field_len % elem_size != 0 {
+                        if !field_len.is_multiple_of(elem_size) {
                             return Err(RustraError::invalid_args(
                                 "rkyv v2: Vec<i64> data length not a multiple of 8",
                             ));
@@ -684,7 +689,7 @@ fn build_rkyv_v2_decoder(
                     }
                     WireFieldKind::VecF64 => {
                         let elem_size = 8usize;
-                        if field_len % elem_size != 0 {
+                        if !field_len.is_multiple_of(elem_size) {
                             return Err(RustraError::invalid_args(
                                 "rkyv v2: Vec<f64> data length not a multiple of 8",
                             ));
@@ -700,7 +705,7 @@ fn build_rkyv_v2_decoder(
                     }
                     WireFieldKind::VecI32 => {
                         let elem_size = 4usize;
-                        if field_len % elem_size != 0 {
+                        if !field_len.is_multiple_of(elem_size) {
                             return Err(RustraError::invalid_args(
                                 "rkyv v2: Vec<i32> data length not a multiple of 4",
                             ));
@@ -755,7 +760,7 @@ fn build_rkyv_v2_decoder(
 fn build_rkyv_v2_response_encoder(
     output_schema: &Value,
     is_tier3: bool,
-) -> Arc<dyn Fn(&Value) -> Vec<u8> + Send + Sync> {
+) -> EncodeFn {
     // Tier 3: encode response as JSON string after ok byte
     if is_tier3 {
         return Arc::new(move |value: &Value| {
@@ -1061,7 +1066,7 @@ fn wire_kind_from_schema(schema: &Value) -> Option<WireFieldKind> {
 }
 
 fn align_up(offset: usize, alignment: usize) -> usize {
-    (offset + alignment - 1) / alignment * alignment
+    offset.div_ceil(alignment) * alignment
 }
 
 /// Check if an output schema requires Tier 3 encoding (JSON fallback).

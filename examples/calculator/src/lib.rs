@@ -1,6 +1,6 @@
 use rustra::prelude::*;
-use serde_json::{Value, json};
-use std::ffi::{CStr, CString, c_char};
+use serde_json::{json, Value};
+use std::ffi::{c_char, CStr, CString};
 
 const MAX_PAYLOAD_BYTES: usize = 1024 * 1024; // 1 MB
 
@@ -288,6 +288,9 @@ fn json_string(value: Value) -> *mut c_char {
         .into_raw()
 }
 
+/// # Safety
+///
+/// Caller must ensure `payload` is valid for `payload_len` bytes and `out_len` is a valid pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_calculator_invoke_bytes(
     payload: *const u8,
@@ -299,8 +302,8 @@ pub unsafe extern "C" fn rustra_calculator_invoke_bytes(
     }
 
     if payload_len > MAX_PAYLOAD_BYTES {
-        let error = format!(r#"{{"ok":false,"error":"payload exceeds size limit"}}"#);
-        return alloc_response(error.into_bytes(), out_len);
+        let error = r#"{"ok":false,"error":"payload exceeds size limit"}"#;
+        return alloc_response(error.as_bytes().to_vec(), out_len);
     }
 
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
@@ -329,6 +332,10 @@ pub unsafe extern "C" fn rustra_calculator_invoke_bytes(
     alloc_response(result_bytes, out_len)
 }
 
+/// # Safety
+///
+/// Caller must ensure `ptr` was previously returned by an invoke function and `len` matches the
+/// original output length. Must not be called more than once for the same pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_calculator_free_buffer(ptr: *mut u8, len: usize) {
     if !ptr.is_null() && len > 0 {
@@ -351,6 +358,10 @@ fn alloc_response(data: Vec<u8>, out_len: *mut usize) -> *mut u8 {
 ///   Response: [ok: u8] [payload...]
 ///     ok=1 success => [value: f64 LE]
 ///     ok=0 error   => [err_len: u16 LE] [err bytes...]
+///
+/// # Safety
+///
+/// Caller must ensure `payload` is valid for `payload_len` bytes and `out_len` is a valid pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_calculator_invoke_raw(
     payload: *const u8,
@@ -398,6 +409,10 @@ pub unsafe extern "C" fn rustra_calculator_invoke_raw(
 /// MessagePack-encoded FFI: same request/response structure as JSON, but msgpack.
 /// Request:  msgpack({ command: String, args: Value })
 /// Response: msgpack({ ok: bool, result: Option<Value>, error: Option<String> })
+///
+/// # Safety
+///
+/// Caller must ensure `payload` is valid for `payload_len` bytes and `out_len` is a valid pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_calculator_invoke_msgpack(
     payload: *const u8,
@@ -455,6 +470,9 @@ struct BincodeResponse {
     error: Option<String>,
 }
 
+/// # Safety
+///
+/// Caller must ensure `payload` is valid for `payload_len` bytes and `out_len` is a valid pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_calculator_invoke_bincode(
     payload: *const u8,
@@ -507,6 +525,10 @@ pub unsafe extern "C" fn rustra_calculator_invoke_bincode(
 }
 
 /// Postcard-encoded FFI (serde-compatible, actively maintained bincode alternative).
+///
+/// # Safety
+///
+/// Caller must ensure `payload` is valid for `payload_len` bytes and `out_len` is a valid pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_calculator_invoke_postcard(
     payload: *const u8,
@@ -570,6 +592,9 @@ struct RkyvResponse {
     error: Option<String>,
 }
 
+/// # Safety
+///
+/// Caller must ensure `payload` is valid for `payload_len` bytes and `out_len` is a valid pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_calculator_invoke_rkyv(
     payload: *const u8,
@@ -622,6 +647,10 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv(
 
 /// Hybrid FFI: postcard-encoded request, rkyv-encoded response.
 /// Best of both worlds — simple TS-side encoding (LEB128), fast Rust-side response (zero-copy rkyv).
+///
+/// # Safety
+///
+/// Caller must ensure `payload` is valid for `payload_len` bytes and `out_len` is a valid pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_calculator_invoke_hybrid(
     payload: *const u8,
@@ -671,6 +700,10 @@ pub unsafe extern "C" fn rustra_calculator_invoke_hybrid(
 }
 
 /// rkyv v2: command_id (u16) based request — generic dispatch via Package::invoke_rkyv_v2()
+///
+/// # Safety
+///
+/// Caller must ensure `payload` is valid for `payload_len` bytes and `out_len` is a valid pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2(
     payload: *const u8,
@@ -692,6 +725,8 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2(
 }
 
 #[cfg(test)]
+#[cfg(test)]
+#[allow(clippy::bool_assert_comparison, clippy::useless_vec)]
 mod tests {
     use super::*;
 
@@ -741,7 +776,7 @@ mod tests {
 
     #[test]
     fn test_invoke_raw_add_numbers() {
-        let mut payload = vec![0u8; 18];
+        let mut payload = vec![0u8; 18]; // need Vec for .as_ptr() + dynamic len
         payload[0] = 0x01; // cmd_id = 1 (addNumbers)
         payload[1] = 0x00;
         payload[2..10].copy_from_slice(&42f64.to_le_bytes());
@@ -795,7 +830,7 @@ mod tests {
     fn test_bincode_wire_bytes() {
         // ── Field-by-field encoding ─────────────────
         let bool_true: bool = true;
-        let b = bincode::serde::encode_to_vec(&bool_true, bincode::config::standard()).unwrap();
+        let b = bincode::serde::encode_to_vec(bool_true, bincode::config::standard()).unwrap();
         println!(
             "bool(true)  hex: {}",
             b.iter()
@@ -805,7 +840,7 @@ mod tests {
         );
 
         let val_100: i64 = 100;
-        let b = bincode::serde::encode_to_vec(&val_100, bincode::config::standard()).unwrap();
+        let b = bincode::serde::encode_to_vec(val_100, bincode::config::standard()).unwrap();
         println!(
             "i64(100)    hex: {}",
             b.iter()
@@ -815,7 +850,7 @@ mod tests {
         );
 
         let val_0: i64 = 0;
-        let b = bincode::serde::encode_to_vec(&val_0, bincode::config::standard()).unwrap();
+        let b = bincode::serde::encode_to_vec(val_0, bincode::config::standard()).unwrap();
         println!(
             "i64(0)      hex: {}",
             b.iter()
@@ -825,7 +860,7 @@ mod tests {
         );
 
         let val_42: i64 = 42;
-        let b = bincode::serde::encode_to_vec(&val_42, bincode::config::standard()).unwrap();
+        let b = bincode::serde::encode_to_vec(val_42, bincode::config::standard()).unwrap();
         println!(
             "i64(42)     hex: {}",
             b.iter()
@@ -835,7 +870,7 @@ mod tests {
         );
 
         let val_58: i64 = 58;
-        let b = bincode::serde::encode_to_vec(&val_58, bincode::config::standard()).unwrap();
+        let b = bincode::serde::encode_to_vec(val_58, bincode::config::standard()).unwrap();
         println!(
             "i64(58)     hex: {}",
             b.iter()
@@ -846,7 +881,7 @@ mod tests {
 
         // Larger values to understand varint scheme
         for v in [127i64, 128, 255, 256, 1000, 10000, -1, -42] {
-            let b = bincode::serde::encode_to_vec(&v, bincode::config::standard()).unwrap();
+            let b = bincode::serde::encode_to_vec(v, bincode::config::standard()).unwrap();
             let hex: Vec<String> = b.iter().map(|x| format!("{:02x}", x)).collect();
             let zz = if v >= 0 { v * 2 } else { (-v) * 2 - 1 };
             println!(
@@ -1188,7 +1223,9 @@ mod tests {
     fn test_rkyv_v2_tier2_string_input() {
         // greet (command_id = 5): input has one String field "name"
         // Wire: [cmd_id: u16 @0][postcard(GreetInput)]
-        let input = GreetInput { name: "World".into() };
+        let input = GreetInput {
+            name: "World".into(),
+        };
         let input_bytes = postcard::to_allocvec(&input).unwrap();
         let mut payload = vec![0u8; 2 + input_bytes.len()];
         payload[0..2].copy_from_slice(&5u16.to_le_bytes()); // command_id = 5 (greet)
@@ -1216,7 +1253,9 @@ mod tests {
     fn test_rkyv_v2_tier2_vec_input() {
         // sum_list (command_id = 6): input has one Vec<i64> field "numbers"
         // Wire: [cmd_id: u16 @0][postcard(SumListInput)]
-        let input = SumListInput { numbers: vec![10, 20, 30, 40] };
+        let input = SumListInput {
+            numbers: vec![10, 20, 30, 40],
+        };
         let input_bytes = postcard::to_allocvec(&input).unwrap();
         let mut payload = vec![0u8; 2 + input_bytes.len()];
         payload[0..2].copy_from_slice(&6u16.to_le_bytes()); // command_id = 6 (sumList)
@@ -1272,7 +1311,11 @@ mod tests {
         // process_item (command_id = 9): now uses postcard (no more JSON fallback)
         // Wire: [cmd_id: u16 @0 LE][postcard(ProcessItemInput)]
         let input = ProcessItemInput {
-            item: Item { active: true, name: "widget".into(), value: 50 },
+            item: Item {
+                active: true,
+                name: "widget".into(),
+                value: 50,
+            },
         };
         let input_bytes = postcard::to_allocvec(&input).unwrap();
         let mut payload = vec![0u8; 2 + input_bytes.len()];
@@ -1305,7 +1348,10 @@ mod tests {
     fn test_rkyv_v2_tier3_create_item() {
         // create_item (command_id = 8): now uses postcard (no more JSON fallback)
         // Wire: [cmd_id: u16 @0 LE][postcard(CreateItemInput)]
-        let input = CreateItemInput { name: "gadget".into(), value: 42 };
+        let input = CreateItemInput {
+            name: "gadget".into(),
+            value: 42,
+        };
         let input_bytes = postcard::to_allocvec(&input).unwrap();
         let mut payload = vec![0u8; 2 + input_bytes.len()];
         payload[0..2].copy_from_slice(&8u16.to_le_bytes()); // command_id = 8 (createItem)
@@ -1380,7 +1426,7 @@ mod tests {
 
         // Tier 1: multiply (cmd 2)
         {
-            let input = MultiplyInput { a: 3.14, b: 2.0 };
+            let input = MultiplyInput { a: 1.5, b: 2.0 };
             let ib = postcard::to_allocvec(&input).unwrap();
             let mut p = vec![0u8; 2 + ib.len()];
             p[0..2].copy_from_slice(&2u16.to_le_bytes());
@@ -1390,7 +1436,7 @@ mod tests {
             let rb = unsafe { std::slice::from_raw_parts(rp, ol) };
             assert_eq!(rb[0], 1);
             let out: MultiplyOutput = postcard::from_bytes(&rb[8..]).unwrap();
-            assert!((out.value - 6.28).abs() < 0.01);
+            assert!((out.value - 3.0).abs() < 0.01);
             unsafe { rustra_calculator_free_buffer(rp, ol) };
         }
 
@@ -1412,7 +1458,9 @@ mod tests {
 
         // Tier 2: greet (cmd 5)
         {
-            let input = GreetInput { name: "Rustra".into() };
+            let input = GreetInput {
+                name: "Rustra".into(),
+            };
             let ib = postcard::to_allocvec(&input).unwrap();
             let mut p = vec![0u8; 2 + ib.len()];
             p[0..2].copy_from_slice(&5u16.to_le_bytes());
@@ -1428,7 +1476,9 @@ mod tests {
 
         // Tier 2: sumList (cmd 6)
         {
-            let input = SumListInput { numbers: vec![1, 2, 3, 4, 5] };
+            let input = SumListInput {
+                numbers: vec![1, 2, 3, 4, 5],
+            };
             let ib = postcard::to_allocvec(&input).unwrap();
             let mut p = vec![0u8; 2 + ib.len()];
             p[0..2].copy_from_slice(&6u16.to_le_bytes());
@@ -1445,7 +1495,10 @@ mod tests {
 
         // Tier 3: createItem (cmd 8) — postcard handles nested structs!
         {
-            let input = CreateItemInput { name: "Widget".into(), value: 42 };
+            let input = CreateItemInput {
+                name: "Widget".into(),
+                value: 42,
+            };
             let ib = postcard::to_allocvec(&input).unwrap();
             let mut p = vec![0u8; 2 + ib.len()];
             p[0..2].copy_from_slice(&8u16.to_le_bytes());
@@ -1464,7 +1517,11 @@ mod tests {
         // Tier 3: processItem (cmd 9)
         {
             let input = ProcessItemInput {
-                item: Item { active: true, name: "Gadget".into(), value: 200 },
+                item: Item {
+                    active: true,
+                    name: "Gadget".into(),
+                    value: 200,
+                },
             };
             let ib = postcard::to_allocvec(&input).unwrap();
             let mut p = vec![0u8; 2 + ib.len()];
