@@ -74,11 +74,9 @@ fn package_generates_host_neutral_typescript_client() {
 
     assert!(generated.types_ts.contains("export type AddNumbersInput"));
     assert!(generated.commands_ts.contains("export function addNumbers"));
-    assert!(
-        generated
-            .commands_ts
-            .contains("engine.invoke<AddNumbersOutput>")
-    );
+    assert!(generated
+        .commands_ts
+        .contains("engine.invoke<AddNumbersOutput>"));
     assert!(!generated.commands_ts.contains("EngineRequest"));
     assert!(!generated.commands_ts.contains("Attachment"));
     assert!(!generated.commands_ts.contains("node:"));
@@ -137,9 +135,7 @@ fn ts_generator_handles_optional_fields() {
         })
     }
 
-    let package = rustra::build("test.optional")
-        .register(optional_cmd)
-        .done();
+    let package = rustra::build("test.optional").register(optional_cmd).done();
     let generated = package.generate_typescript().unwrap();
 
     assert!(
@@ -181,9 +177,7 @@ fn ts_generator_handles_enums() {
         })
     }
 
-    let package = rustra::build("test.enum")
-        .register(enum_cmd)
-        .done();
+    let package = rustra::build("test.enum").register(enum_cmd).done();
     let generated = package.generate_typescript().unwrap();
 
     assert!(
@@ -226,9 +220,7 @@ fn ts_generator_handles_vec_and_optional_struct() {
         })
     }
 
-    let package = rustra::build("test.complex")
-        .register(complex_cmd)
-        .done();
+    let package = rustra::build("test.complex").register(complex_cmd).done();
     let generated = package.generate_typescript().unwrap();
 
     assert!(
@@ -246,7 +238,8 @@ fn ts_generator_handles_vec_and_optional_struct() {
 #[test]
 fn command_macro_rejects_wrong_signature() {
     let try_compile = |source: &str| -> bool {
-        let tmp_dir = std::env::temp_dir().join(format!("rustra-macro-test-{}", std::process::id()));
+        let tmp_dir =
+            std::env::temp_dir().join(format!("rustra-macro-test-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp_dir);
         std::fs::create_dir_all(tmp_dir.join("src")).unwrap();
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -310,7 +303,10 @@ fn command_macro_rejects_wrong_signature() {
          #[command]\n\
          pub fn add(a: i64, b: i64) -> i64 { a + b }\n",
     );
-    assert!(multi_param, "multiple scalar params with bare return should compile");
+    assert!(
+        multi_param,
+        "multiple scalar params with bare return should compile"
+    );
 }
 
 #[test]
@@ -338,18 +334,20 @@ fn ts_generator_handles_hashmap() {
         Ok(MapOutput { result })
     }
 
-    let package = rustra::build("test.map")
-        .register(map_cmd)
-        .done();
+    let package = rustra::build("test.map").register(map_cmd).done();
     let generated = package.generate_typescript().unwrap();
 
     assert!(
-        generated.types_ts.contains("scores: Record<string, number>;"),
+        generated
+            .types_ts
+            .contains("scores: Record<string, number>;"),
         "HashMap<String, i64> should become Record<string, number>, got:\n{}",
         generated.types_ts
     );
     assert!(
-        generated.types_ts.contains("result: Record<string, string>;"),
+        generated
+            .types_ts
+            .contains("result: Record<string, string>;"),
         "HashMap<String, String> should become Record<string, string>, got:\n{}",
         generated.types_ts
     );
@@ -377,9 +375,7 @@ fn ts_generator_handles_tuples() {
         })
     }
 
-    let package = rustra::build("test.tuple")
-        .register(tuple_cmd)
-        .done();
+    let package = rustra::build("test.tuple").register(tuple_cmd).done();
     let generated = package.generate_typescript().unwrap();
 
     assert!(
@@ -388,7 +384,9 @@ fn ts_generator_handles_tuples() {
         generated.types_ts
     );
     assert!(
-        generated.types_ts.contains("triple: [string, number, boolean];"),
+        generated
+            .types_ts
+            .contains("triple: [string, number, boolean];"),
         "tuple (String, i64, bool) should become [string, number, boolean], got:\n{}",
         generated.types_ts
     );
@@ -434,7 +432,9 @@ fn ts_generator_handles_enum_with_data() {
         generated.types_ts
     );
     assert!(
-        generated.types_ts.contains("radius") && generated.types_ts.contains("width") && generated.types_ts.contains("height"),
+        generated.types_ts.contains("radius")
+            && generated.types_ts.contains("width")
+            && generated.types_ts.contains("height"),
         "enum with data should contain variant fields, got:\n{}",
         generated.types_ts
     );
@@ -475,9 +475,7 @@ fn ts_generator_handles_deep_nesting() {
         })
     }
 
-    let package = rustra::build("test.deep")
-        .register(deep_cmd)
-        .done();
+    let package = rustra::build("test.deep").register(deep_cmd).done();
     let generated = package.generate_typescript().unwrap();
 
     assert!(
@@ -501,7 +499,10 @@ fn bridge_type_replaces_four_derives() {
     }
 
     // Verify serialization with camelCase
-    let input = BridgedInput { name: "test".into(), age: Some(25) };
+    let input = BridgedInput {
+        name: "test".into(),
+        age: Some(25),
+    };
     let json = serde_json::to_value(&input).unwrap();
     assert_eq!(json["name"], "test");
     assert_eq!(json["age"], 25);
@@ -524,8 +525,7 @@ fn build_api_registers_scalar_command() {
         a + b
     }
 
-    let pkg = rustra::build!("test.scalar", scalar_add)
-        .done();
+    let pkg = rustra::build!("test.scalar", scalar_add).done();
 
     let result: i64 = pkg.invoke("scalarAdd", json!({ "a": 2, "b": 3 })).unwrap();
     assert_eq!(result, 5);
@@ -542,10 +542,11 @@ fn build_api_scalar_command_with_result() {
         }
     }
 
-    let pkg = rustra::build!("test.scalar", scalar_divide)
-        .done();
+    let pkg = rustra::build!("test.scalar", scalar_divide).done();
 
-    let result: i64 = pkg.invoke("scalarDivide", json!({ "a": 10, "b": 2 })).unwrap();
+    let result: i64 = pkg
+        .invoke("scalarDivide", json!({ "a": 10, "b": 2 }))
+        .unwrap();
     assert_eq!(result, 5);
 
     let err = pkg.invoke::<serde_json::Value, i64>("scalarDivide", json!({ "a": 10, "b": 0 }));
@@ -570,5 +571,8 @@ fn build_api_generates_typescript() {
     assert!(dir.path().join("contract.ts").exists());
 
     let types_ts = fs::read_to_string(dir.path().join("types.ts")).unwrap();
-    assert!(types_ts.contains("GreetInput"), "expected GreetInput type, got:\n{types_ts}");
+    assert!(
+        types_ts.contains("GreetInput"),
+        "expected GreetInput type, got:\n{types_ts}"
+    );
 }

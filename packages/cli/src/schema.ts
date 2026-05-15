@@ -50,7 +50,9 @@ export type JsonSchema = {
   /** 필수 속성 이름 목록 */
   required?: string[];
   /** array 타입의 요소 스키마 */
-  items?: JsonSchema;
+  items?: JsonSchema | JsonSchema[];
+  /** Record 타입의 값 스키마 */
+  additionalProperties?: JsonSchema;
   /** 다른 스키마에 대한 참조 (예: "#/definitions/Foo") */
   $ref?: string;
   /** 유니온 타입의 각 변형 */

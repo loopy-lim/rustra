@@ -36,11 +36,11 @@ React Native is not counted as runtime-passed until an actual native app fixture
 
 Each adapter package has a deliberately small stable range.
 
-| Package | Stable range | Out of scope for this layer |
-| --- | --- | --- |
-| `@rustra/node` | Convert a Node-side async transport into `EngineClient` | Choosing N-API vs subprocess vs HTTP |
-| `@rustra/bun` | Convert a Bun-side async transport into `EngineClient` | Choosing Bun FFI vs subprocess vs HTTP |
-| `@rustra/tauri` | Convert a Tauri `invoke(command, args)` function into `EngineClient` | Tauri plugin registration, ACL/capability generation |
+| Package                | Stable range                                                             | Out of scope for this layer                                          |
+| ---------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| `@rustra/node`         | Convert a Node-side async transport into `EngineClient`                  | Choosing N-API vs subprocess vs HTTP                                 |
+| `@rustra/bun`          | Convert a Bun-side async transport into `EngineClient`                   | Choosing Bun FFI vs subprocess vs HTTP                               |
+| `@rustra/tauri`        | Convert a Tauri `invoke(command, args)` function into `EngineClient`     | Tauri plugin registration, ACL/capability generation                 |
 | `@rustra/react-native` | Convert a native module with `invoke(command, args)` into `EngineClient` | Expo Module, TurboModule, Nitro, Swift/Kotlin implementation details |
 
 The invariant is the same for every host:
@@ -70,11 +70,11 @@ React Native follows the same JavaScript path in `examples/react-native-calculat
 
 These are the non-negotiable gates before calling a host "actually working":
 
-| Host | Pass condition |
-| --- | --- |
-| Node | A Node app calls the generated TypeScript helper, the helper calls `@rustra/node`, and the adapter invokes a Rust process that returns the expected JSON result. |
-| Bun | A Bun app calls the generated TypeScript helper, the helper calls `@rustra/bun`, and the adapter invokes a Rust process that returns the expected JSON result. |
-| Tauri | A Tauri app builds, launches, WebView JavaScript calls the generated `addNumbers` helper through `@rustra/tauri`, and the Rust command handler calls the shared `rustra` package with `Package::invoke`. |
-| React Native | A React Native app launches on simulator/device, JavaScript calls the generated TypeScript helper, the native module calls Rust code, and the UI or probe observes the Rust result. |
+| Host         | Pass condition                                                                                                                                                                                           |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node         | A Node app calls the generated TypeScript helper, the helper calls `@rustra/node`, and the adapter invokes a Rust process that returns the expected JSON result.                                         |
+| Bun          | A Bun app calls the generated TypeScript helper, the helper calls `@rustra/bun`, and the adapter invokes a Rust process that returns the expected JSON result.                                           |
+| Tauri        | A Tauri app builds, launches, WebView JavaScript calls the generated `addNumbers` helper through `@rustra/tauri`, and the Rust command handler calls the shared `rustra` package with `Package::invoke`. |
+| React Native | A React Native app launches on simulator/device, JavaScript calls the generated TypeScript helper, the native module calls Rust code, and the UI or probe observes the Rust result.                      |
 
 Until a host reaches its pass condition, docs and scripts must call it an adapter or bundle check, not a runtime pass.

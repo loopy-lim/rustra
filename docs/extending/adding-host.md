@@ -14,7 +14,10 @@ type EngineClient = {
 
 ```ts
 // examples/calculator/generated/commands.ts
-export function addNumbers(engine: EngineClient, input: AddNumbersInput): Promise<AddNumbersOutput> {
+export function addNumbers(
+  engine: EngineClient,
+  input: AddNumbersInput,
+): Promise<AddNumbersOutput> {
   return engine.invoke<AddNumbersOutput>('addNumbers', input);
 }
 ```
@@ -115,6 +118,7 @@ Rust 쪽에서 TypeScript와 통신하는 방식은 다음 네 가지 중에서 
 **적합한 경우:** React Native, Bun(`bun:ffi`), 임베디드, C/C++ 프로젝트와의 통합
 
 **장점:**
+
 - 언어 바인딩이 자유로움 (Swift, Kotlin, C, Python 등)
 - 함수 호출 수준의 성능
 - 메모리 직접 관리로 오버헤드 최소
@@ -180,11 +184,13 @@ crate-type = ["rlib", "staticlib"] # 정적 라이브러리 (iOS, Android 등)
 **적합한 경우:** Node.js, Bun, CLI 도구, 빠른 프로토타이핑
 
 **장점:**
+
 - 구현이 매우 간단
 - 프로세스 격리로 안전성 보장
 - 언어 독립적 (stdin/stdout만 사용)
 
 **단점:**
+
 - 매 호출 시 프로세스 스폰 오버헤드
 - 프로세스 유지 불가 (stateless)
 
@@ -231,6 +237,7 @@ function invokeRuntime(command: string, args: unknown): unknown {
 **적합한 경우:** Node.js 전용 프로덕션 환경
 
 **장점:**
+
 - Node.js 네이티브 애드온으로서 최고 성능
 - 타입 안전한 Rust ↔ JavaScript 변환
 - 비동기 지원 (`Promise` 자동 생성)
