@@ -1,4 +1,4 @@
-use rustra_calculator_example::{AddNumbersInput, AddNumbersOutput, calculator_package};
+use rustra_calculator_example::{calculator_package, generate_calculator};
 use serde_json::{Value, json};
 use std::io::{Read, Write};
 
@@ -8,12 +8,12 @@ fn main() -> rustra::Result<()> {
     }
 
     let package = calculator_package();
-    let output: AddNumbersOutput = package.invoke("addNumbers", AddNumbersInput { a: 2, b: 3 })?;
+    let result = package.invoke_json("addNumbers", json!({"a": 2, "b": 3}))?;
+    let value = result.as_i64().unwrap_or(0);
 
-    let generated = package.generate_typescript()?;
-    generated.write_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
+    generate_calculator(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
 
-    println!("2 + 3 = {}", output.value);
+    println!("2 + 3 = {}", value);
     Ok(())
 }
 
