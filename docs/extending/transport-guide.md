@@ -33,12 +33,12 @@ export function createNodeEngine(transport: NodeInvokeTransport): NodeEngineClie
 
 ## 2. 현재 구현 현황
 
-| Host | 현재 Transport | Rust 진입점 | 대안 |
-|------|---------------|-------------|------|
-| **Node** | subprocess stdio (`spawnSync`) | `main.rs` → `run_invoke_stdio()` | napi-rs 네이티브 모듈, WASM |
-| **Bun** | subprocess stdio (`spawnSync`) | `main.rs` → `run_invoke_stdio()` | `bun:ffi` (C FFI 직접 호출) |
-| **Tauri** | `rustra_dispatch` 멀티플렉스 (프레임워크 내장) | `tauri_support::register()` (feature: `tauri`) | 없음 |
-| **React Native** | C FFI (`extern "C"`) | `lib.rs` → `rustra_calculator_invoke` | TurboModule, Nitro Modules, JSI |
+| Host             | 현재 Transport                                 | Rust 진입점                                    | 대안                            |
+| ---------------- | ---------------------------------------------- | ---------------------------------------------- | ------------------------------- |
+| **Node**         | subprocess stdio (`spawnSync`)                 | `main.rs` → `run_invoke_stdio()`               | napi-rs 네이티브 모듈, WASM     |
+| **Bun**          | subprocess stdio (`spawnSync`)                 | `main.rs` → `run_invoke_stdio()`               | `bun:ffi` (C FFI 직접 호출)     |
+| **Tauri**        | `rustra_dispatch` 멀티플렉스 (프레임워크 내장) | `tauri_support::register()` (feature: `tauri`) | 없음                            |
+| **React Native** | C FFI (`extern "C"`)                           | `lib.rs` → `rustra_calculator_invoke`          | TurboModule, Nitro Modules, JSI |
 
 ### Node / Bun — subprocess stdio
 
@@ -261,7 +261,7 @@ import { addNumbers } from '../generated/commands.js';
 const lib = dlopen(`target/debug/librustra_calculator_example.${suffix}`, {
   rustra_calculator_invoke: {
     args: [FFIType.cstring],
-    returns: FFIType.ptr,       // FFIType.cstring이 아님 — 수동 메모리 관리 필요
+    returns: FFIType.ptr, // FFIType.cstring이 아님 — 수동 메모리 관리 필요
   },
   rustra_calculator_free_string: {
     args: [FFIType.ptr],
@@ -274,7 +274,7 @@ const engine = createBunEngine({
     const payload = JSON.stringify({ command, args });
     const rawPtr = lib.symbols.rustra_calculator_invoke(payload);
     const rawResponse = new CString(rawPtr);
-    lib.symbols.rustra_calculator_free_string(rawPtr);  // Rust가 CString::from_raw로 해제
+    lib.symbols.rustra_calculator_free_string(rawPtr); // Rust가 CString::from_raw로 해제
 
     const response = JSON.parse(rawResponse) as {
       ok: boolean;
@@ -308,6 +308,7 @@ const rawResponse = lib.symbols.rustra_calculator_invoke(payload);
 ```
 
 장점:
+
 - **프로세스 스폰 오버헤드 제거**: 매 호출마다 프로세스를 생성하지 않음
 - **낮은 레이턴시**: 함수 호출 수준의 성능
 - **메모리 공유**: 프로세스 간 직렬화/역직렬화 불필요
@@ -401,6 +402,7 @@ const rawResponse = native.rustra_invoke(command, argsJson);
 ```
 
 장점:
+
 - **성능**: subprocess 오버헤드 없이 직접 함수 호출
 - **타입 안전성**: napi-rs가 Rust ↔ JavaScript 타입 변환을 처리
 - **비동기 지원**: napi-rs의 `#[napi]`는 자동으로 `Promise` 기반 비동기 함수를 생성 가능
@@ -409,15 +411,16 @@ const rawResponse = native.rustra_invoke(command, argsJson);
 
 ## 6. 정리: Transport 선택 기준
 
-| 기준 | subprocess stdio | C FFI | napi-rs | 프레임워크 내장 |
-|------|-----------------|-------|---------|----------------|
-| **구현 난이도** | 낮음 | 중간 | 중간 | 낮음 (프레임워크 제공) |
-| **성능** | 낮음 (프로세스 스폰) | 높음 | 높음 | 높음 |
-| **호환성** | 범용 | 언어 바인딩 필요 | Node 전용 | 해당 프레임워크 전용 |
-| **디버깅** | 쉬움 (격리됨) | 어려움 (메모리 관리) | 중간 | 중간 |
-| **프로세스 격리** | 있음 | 없음 | 없음 | 없음 |
+| 기준              | subprocess stdio     | C FFI                | napi-rs   | 프레임워크 내장        |
+| ----------------- | -------------------- | -------------------- | --------- | ---------------------- |
+| **구현 난이도**   | 낮음                 | 중간                 | 중간      | 낮음 (프레임워크 제공) |
+| **성능**          | 낮음 (프로세스 스폰) | 높음                 | 높음      | 높음                   |
+| **호환성**        | 범용                 | 언어 바인딩 필요     | Node 전용 | 해당 프레임워크 전용   |
+| **디버깅**        | 쉬움 (격리됨)        | 어려움 (메모리 관리) | 중간      | 중간                   |
+| **프로세스 격리** | 있음                 | 없음                 | 없음      | 없음                   |
 
 **권장사항:**
+
 - **빠른 프로토타이핑**: subprocess stdio로 시작
 - **프로덕션 (Node)**: napi-rs 또는 C FFI
 - **프로덕션 (Bun)**: `bun:ffi`

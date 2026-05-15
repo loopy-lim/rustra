@@ -13,6 +13,7 @@
 ## Task 1: 과거 연구 문서를 docs/research/로 이동
 
 **Files:**
+
 - Move: `docs/rust-local-engine-experiment-handoff.ko.md` → `docs/research/`
 - Move: `docs/rust-owned-contract-package-pattern.ko.md` → `docs/research/`
 - Move: `docs/tauri-like-single-invoke-architecture.ko.md` → `docs/research/`
@@ -59,6 +60,7 @@ Expected: 모두 PASS (문서 이동은 코드에 영향 없음)
 ## Task 2: docs/architecture.md 작성
 
 **Files:**
+
 - Create: `docs/architecture.md`
 
 **Step 1: 아키텍처 문서 작성**
@@ -99,6 +101,7 @@ Expected: 모두 PASS (문서 이동은 코드에 영향 없음)
 ## Task 3: docs/internal/ 작성 (3개 파일)
 
 **Files:**
+
 - Create: `docs/internal/crate-structure.md`
 - Create: `docs/internal/codegen.md`
 - Create: `docs/internal/testing.md`
@@ -109,14 +112,14 @@ Expected: 모두 PASS (문서 이동은 코드에 영향 없음)
 
 1. **각 crate/package의 책임과 공개 API**
 
-   | 크레이트/패키지 | 책임 | 공개 API | 의존성 |
-   |---|---|---|---|
-   | `crates/rustra` | Package authoring, codegen, invoke | `Package`, `PackageBuilder`, `GeneratedPackage`, `command` macro, `RustraError` | rustra-macros, serde, serde_json, schemars, sha2, hex |
-   | `crates/rustra-macros` | `#[command]` proc macro | `command` attribute macro | proc_macro |
-   | `packages/node` | Node → EngineClient | `createNodeEngine(transport)` | 없음 (순수 TS) |
-   | `packages/bun` | Bun → EngineClient | `createBunEngine(transport)` | 없음 |
-   | `packages/tauri` | Tauri → EngineClient | `createTauriEngine({ invoke })` | 없음 |
-   | `packages/react-native` | RN → EngineClient | `createReactNativeEngine(nativeModule)` | 없음 |
+   | 크레이트/패키지         | 책임                               | 공개 API                                                                        | 의존성                                                |
+   | ----------------------- | ---------------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------- |
+   | `crates/rustra`         | Package authoring, codegen, invoke | `Package`, `PackageBuilder`, `GeneratedPackage`, `command` macro, `RustraError` | rustra-macros, serde, serde_json, schemars, sha2, hex |
+   | `crates/rustra-macros`  | `#[command]` proc macro            | `command` attribute macro                                                       | proc_macro                                            |
+   | `packages/node`         | Node → EngineClient                | `createNodeEngine(transport)`                                                   | 없음 (순수 TS)                                        |
+   | `packages/bun`          | Bun → EngineClient                 | `createBunEngine(transport)`                                                    | 없음                                                  |
+   | `packages/tauri`        | Tauri → EngineClient               | `createTauriEngine({ invoke })`                                                 | 없음                                                  |
+   | `packages/react-native` | RN → EngineClient                  | `createReactNativeEngine(nativeModule)`                                         | 없음                                                  |
 
 2. **빌드 의존성 그래프** (ASCII)
    - Cargo workspace: rustra ← rustra-macros, rustra-calculator-example ← rustra
@@ -179,6 +182,7 @@ Expected: 모두 PASS (문서 이동은 코드에 영향 없음)
 ## Task 4: docs/getting-started.md 작성
 
 **Files:**
+
 - Create: `docs/getting-started.md`
 
 **Step 1: 사용자 가이드 작성**
@@ -203,23 +207,25 @@ Expected: 모두 PASS (문서 이동은 코드에 영향 없음)
    - `contract.ts`: contract hash 상수
    - `schema.json`: 전체 JSON Schema
 4. **adapter 선택 가이드**
+
    ```ts
    // Node (subprocess)
-   import { createNodeEngine } from "@rustra/node";
+   import { createNodeEngine } from '@rustra/node';
    const engine = createNodeEngine({ invoke: myTransport });
 
    // Bun (subprocess 또는 FFI)
-   import { createBunEngine } from "@rustra/bun";
+   import { createBunEngine } from '@rustra/bun';
    const engine = createBunEngine({ invoke: myTransport });
 
    // Tauri
-   import { createTauriEngine } from "@rustra/tauri";
+   import { createTauriEngine } from '@rustra/tauri';
    const engine = createTauriEngine({ invoke: window.__TAURI__.core.invoke });
 
    // React Native
-   import { createReactNativeEngine } from "@rustra/react-native";
+   import { createReactNativeEngine } from '@rustra/react-native';
    const engine = createReactNativeEngine(NativeModule);
    ```
+
 5. **실행 및 테스트**
    ```bash
    cargo run -p rustra-calculator-example
@@ -231,6 +237,7 @@ Expected: 모두 PASS (문서 이동은 코드에 영향 없음)
 ## Task 5: docs/extending/ 작성 (2개 파일)
 
 **Files:**
+
 - Create: `docs/extending/transport-guide.md`
 - Create: `docs/extending/adding-host.md`
 
@@ -243,12 +250,12 @@ Expected: 모두 PASS (문서 이동은 코드에 영향 없음)
    - adapter 패키지는 transport를 주입받아 EngineClient로 래핑할 뿐, transport 자체는 구현하지 않음
 2. **현재 구현 현황표**
 
-   | Host | 현재 transport | Rust 진입점 | 대안 |
-   |------|---------------|-------------|------|
-   | Node | subprocess stdio (`spawnSync`) | `main.rs`의 `run_invoke_stdio` | napi-rs, WASM |
-   | Bun | subprocess stdio (`spawnSync`) | `main.rs`의 `run_invoke_stdio` | `bun:ffi` (C FFI) |
-   | Tauri | `window.__TAURI__.core.invoke` | Tauri command handler | - |
-   | React Native | C FFI (`extern "C"`) | `lib.rs`의 `rustra_calculator_invoke` | TurboModule, Nitro |
+   | Host         | 현재 transport                 | Rust 진입점                           | 대안               |
+   | ------------ | ------------------------------ | ------------------------------------- | ------------------ |
+   | Node         | subprocess stdio (`spawnSync`) | `main.rs`의 `run_invoke_stdio`        | napi-rs, WASM      |
+   | Bun          | subprocess stdio (`spawnSync`) | `main.rs`의 `run_invoke_stdio`        | `bun:ffi` (C FFI)  |
+   | Tauri        | `window.__TAURI__.core.invoke` | Tauri command handler                 | -                  |
+   | React Native | C FFI (`extern "C"`)           | `lib.rs`의 `rustra_calculator_invoke` | TurboModule, Nitro |
 
 3. **교체 절차** (일반화)
    - Step 1: Rust 쪽에 새 진입점 추가 (필요시)
@@ -286,6 +293,7 @@ Expected: 모두 PASS (문서 이동은 코드에 영향 없음)
 ## Task 6: 루트 README.md 재작성
 
 **Files:**
+
 - Modify: `README.md`
 
 **Step 1: README 재작성**
@@ -326,6 +334,7 @@ Expected: 모두 PASS (문서 이동은 코드에 영향 없음)
 ## Task 7: crate/package/example README 갱신
 
 **Files:**
+
 - Modify: `crates/rustra/README.md`
 - Modify: `packages/node/README.md`
 - Modify: `packages/bun/README.md`
@@ -342,7 +351,7 @@ Expected: 모두 PASS (문서 이동은 코드에 영향 없음)
 - generate_typescript() 결과물
 - 주의: `command_fn`은 `type_name` 기반 이름 추출 사용 (불안정 가능성)
 
-**Step 2: packages/*/README.md 갱신 (4개)**
+**Step 2: packages/\*/README.md 갱신 (4개)**
 
 각 README에 다음 내용 포함:
 
@@ -358,6 +367,7 @@ Expected: 모두 PASS (문서 이동은 코드에 영향 없음)
 ## Task 8: docs/README.md 작성 (문서 인덱스)
 
 **Files:**
+
 - Modify: `docs/README.md`
 
 **Step 1: 문서 인덱스 작성**
@@ -370,18 +380,21 @@ rustra는 Rust 패키지를 한 번 정의하면, host-neutral TypeScript 클라
 ## 읽기 경로
 
 ### 라이브러리 사용자
+
 1. [아키텍처 개요](architecture.md) — 전체 구조 파악
 2. [시작하기](getting-started.md) — 설치 및 기본 사용법
 3. [Transport 교체 가이드](extending/transport-guide.md) — Bun FFI, Node napi-rs 등
 4. [새 Host 추가 가이드](extending/adding-host.md) — Electron, Deno 등
 
 ### 프로젝트 기여자
+
 1. [아키텍처 개요](architecture.md) — 전체 구조 파악
 2. [Crate 구조](internal/crate-structure.md) — 각 crate/package의 책임
 3. [Codegen](internal/codegen.md) — TypeScript 생성 로직
 4. [테스트 전략](internal/testing.md) — 테스트 계층 구조
 
 ## 전체 문서 목록
+
 ...
 ```
 

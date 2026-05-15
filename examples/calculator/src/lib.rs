@@ -1,6 +1,6 @@
 use rustra::prelude::*;
-use serde_json::{Value, json};
-use std::ffi::{CStr, CString, c_char};
+use serde_json::{json, Value};
+use std::ffi::{c_char, CStr, CString};
 
 const MAX_PAYLOAD_BYTES: usize = 1024 * 1024; // 1 MB
 
@@ -28,6 +28,10 @@ pub fn generate_calculator(output_dir: &str) -> rustra::Result<()> {
     rustra::build!("examples.calculator", add_numbers).generate_to(output_dir)
 }
 
+/// # Safety
+///
+/// `payload` must be a valid pointer to a null-terminated C string containing UTF-8 JSON.
+/// The caller must free the returned pointer with `rustra_calculator_free_string`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_calculator_invoke(payload: *const c_char) -> *mut c_char {
     if payload.is_null() {
@@ -66,6 +70,10 @@ pub unsafe extern "C" fn rustra_calculator_invoke(payload: *const c_char) -> *mu
     }
 }
 
+/// # Safety
+///
+/// `ptr` must be a pointer previously returned by `rustra_calculator_invoke`,
+/// or null. Must not be called more than once for the same pointer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_calculator_free_string(ptr: *mut c_char) {
     if !ptr.is_null() {
@@ -207,7 +215,8 @@ pub unsafe extern "C" fn rustra_calculator_invoke_msgpack(
     let request: serde_json::Value = match rmp_serde::from_slice(bytes) {
         Ok(req) => req,
         Err(e) => {
-            let resp = serde_json::json!({"ok": false, "error": format!("msgpack decode failed: {e}")});
+            let resp =
+                serde_json::json!({"ok": false, "error": format!("msgpack decode failed: {e}")});
             let resp_bytes = rmp_serde::to_vec(&resp).unwrap_or_default();
             return alloc_response(resp_bytes, out_len);
         }
@@ -219,7 +228,10 @@ pub unsafe extern "C" fn rustra_calculator_invoke_msgpack(
         return alloc_response(resp_bytes, out_len);
     };
 
-    let args = request.get("args").cloned().unwrap_or(serde_json::json!({}));
+    let args = request
+        .get("args")
+        .cloned()
+        .unwrap_or(serde_json::json!({}));
 
     let result = match calculator_package().invoke_json(command, args) {
         Ok(result) => serde_json::json!({"ok": true, "result": result}),
@@ -257,24 +269,42 @@ pub unsafe extern "C" fn rustra_calculator_invoke_bincode(
 
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
 
-    let request: BincodeRequest = match bincode::serde::decode_from_slice(bytes, bincode::config::standard()) {
-        Ok((req, _)) => req,
-        Err(e) => {
-            let resp = BincodeResponse { ok: false, value: 0, error: Some(format!("bincode decode failed: {e}")) };
-            let resp_bytes = bincode::serde::encode_to_vec(&resp, bincode::config::standard()).unwrap_or_default();
-            return alloc_response(resp_bytes, out_len);
-        }
-    };
+    let request: BincodeRequest =
+        match bincode::serde::decode_from_slice(bytes, bincode::config::standard()) {
+            Ok((req, _)) => req,
+            Err(e) => {
+                let resp = BincodeResponse {
+                    ok: false,
+                    value: 0,
+                    error: Some(format!("bincode decode failed: {e}")),
+                };
+                let resp_bytes = bincode::serde::encode_to_vec(&resp, bincode::config::standard())
+                    .unwrap_or_default();
+                return alloc_response(resp_bytes, out_len);
+            }
+        };
 
-    let result = match calculator_package().invoke_json(&request.command, serde_json::json!({"a": request.a, "b": request.b})) {
+    let result = match calculator_package().invoke_json(
+        &request.command,
+        serde_json::json!({"a": request.a, "b": request.b}),
+    ) {
         Ok(result) => {
             let value = result.as_i64().unwrap_or(0);
-            BincodeResponse { ok: true, value, error: None }
+            BincodeResponse {
+                ok: true,
+                value,
+                error: None,
+            }
         }
-        Err(error) => BincodeResponse { ok: false, value: 0, error: Some(error.to_string()) },
+        Err(error) => BincodeResponse {
+            ok: false,
+            value: 0,
+            error: Some(error.to_string()),
+        },
     };
 
-    let resp_bytes = bincode::serde::encode_to_vec(&result, bincode::config::standard()).unwrap_or_default();
+    let resp_bytes =
+        bincode::serde::encode_to_vec(&result, bincode::config::standard()).unwrap_or_default();
     alloc_response(resp_bytes, out_len)
 }
 
@@ -294,18 +324,33 @@ pub unsafe extern "C" fn rustra_calculator_invoke_postcard(
     let request: BincodeRequest = match postcard::from_bytes(bytes) {
         Ok(req) => req,
         Err(e) => {
-            let resp = BincodeResponse { ok: false, value: 0, error: Some(format!("postcard decode failed: {e}")) };
+            let resp = BincodeResponse {
+                ok: false,
+                value: 0,
+                error: Some(format!("postcard decode failed: {e}")),
+            };
             let resp_bytes = postcard::to_allocvec(&resp).unwrap_or_default();
             return alloc_response(resp_bytes, out_len);
         }
     };
 
-    let result = match calculator_package().invoke_json(&request.command, serde_json::json!({"a": request.a, "b": request.b})) {
+    let result = match calculator_package().invoke_json(
+        &request.command,
+        serde_json::json!({"a": request.a, "b": request.b}),
+    ) {
         Ok(result) => {
             let value = result.as_i64().unwrap_or(0);
-            BincodeResponse { ok: true, value, error: None }
+            BincodeResponse {
+                ok: true,
+                value,
+                error: None,
+            }
         }
-        Err(error) => BincodeResponse { ok: false, value: 0, error: Some(error.to_string()) },
+        Err(error) => BincodeResponse {
+            ok: false,
+            value: 0,
+            error: Some(error.to_string()),
+        },
     };
 
     let resp_bytes = postcard::to_allocvec(&result).unwrap_or_default();
@@ -342,7 +387,11 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv(
     let archived = match rkyv::access::<ArchivedRkyvRequest, rkyv::rancor::Error>(bytes) {
         Ok(a) => a,
         Err(_) => {
-            let resp = RkyvResponse { ok: false, value: 0, error: Some("rkyv access failed".into()) };
+            let resp = RkyvResponse {
+                ok: false,
+                value: 0,
+                error: Some("rkyv access failed".into()),
+            };
             let resp_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&resp).unwrap_or_default();
             return alloc_response(resp_bytes.to_vec(), out_len);
         }
@@ -352,13 +401,22 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv(
     let a: i64 = archived.a.into();
     let b: i64 = archived.b.into();
 
-    let result = match calculator_package().invoke_json(&command, serde_json::json!({"a": a, "b": b})) {
-        Ok(result) => {
-            let value = result.as_i64().unwrap_or(0);
-            RkyvResponse { ok: true, value, error: None }
-        }
-        Err(error) => RkyvResponse { ok: false, value: 0, error: Some(error.to_string()) },
-    };
+    let result =
+        match calculator_package().invoke_json(&command, serde_json::json!({"a": a, "b": b})) {
+            Ok(result) => {
+                let value = result.as_i64().unwrap_or(0);
+                RkyvResponse {
+                    ok: true,
+                    value,
+                    error: None,
+                }
+            }
+            Err(error) => RkyvResponse {
+                ok: false,
+                value: 0,
+                error: Some(error.to_string()),
+            },
+        };
 
     let resp_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&result).unwrap_or_default();
     alloc_response(resp_bytes.to_vec(), out_len)
@@ -381,18 +439,33 @@ pub unsafe extern "C" fn rustra_calculator_invoke_hybrid(
     let request: BincodeRequest = match postcard::from_bytes(bytes) {
         Ok(req) => req,
         Err(e) => {
-            let resp = RkyvResponse { ok: false, value: 0, error: Some(format!("hybrid decode failed: {e}")) };
+            let resp = RkyvResponse {
+                ok: false,
+                value: 0,
+                error: Some(format!("hybrid decode failed: {e}")),
+            };
             let resp_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&resp).unwrap_or_default();
             return alloc_response(resp_bytes.to_vec(), out_len);
         }
     };
 
-    let result = match calculator_package().invoke_json(&request.command, serde_json::json!({"a": request.a, "b": request.b})) {
+    let result = match calculator_package().invoke_json(
+        &request.command,
+        serde_json::json!({"a": request.a, "b": request.b}),
+    ) {
         Ok(result) => {
             let value = result.as_i64().unwrap_or(0);
-            RkyvResponse { ok: true, value, error: None }
+            RkyvResponse {
+                ok: true,
+                value,
+                error: None,
+            }
         }
-        Err(error) => RkyvResponse { ok: false, value: 0, error: Some(error.to_string()) },
+        Err(error) => RkyvResponse {
+            ok: false,
+            value: 0,
+            error: Some(error.to_string()),
+        },
     };
 
     let resp_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&result).unwrap_or_default();
@@ -456,18 +529,15 @@ mod tests {
         payload[10..18].copy_from_slice(&58f64.to_le_bytes());
 
         let mut out_len: usize = 0;
-        let result_ptr = unsafe {
-            rustra_calculator_invoke_raw(payload.as_ptr(), payload.len(), &mut out_len)
-        };
+        let result_ptr =
+            unsafe { rustra_calculator_invoke_raw(payload.as_ptr(), payload.len(), &mut out_len) };
 
         assert!(!result_ptr.is_null());
         assert_eq!(out_len, 9); // ok(1) + f64(8)
 
         let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
         assert_eq!(result_bytes[0], 0x01); // ok
-        let value = f64::from_le_bytes(
-            result_bytes[1..9].try_into().unwrap(),
-        );
+        let value = f64::from_le_bytes(result_bytes[1..9].try_into().unwrap());
         assert_eq!(value as i64, 100);
 
         unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
@@ -475,7 +545,11 @@ mod tests {
 
     #[test]
     fn test_invoke_bincode_round_trip() {
-        let request = BincodeRequest { command: "addNumbers".to_string(), a: 42, b: 58 };
+        let request = BincodeRequest {
+            command: "addNumbers".to_string(),
+            a: 42,
+            b: 58,
+        };
         let payload = bincode::serde::encode_to_vec(&request, bincode::config::standard()).unwrap();
 
         let mut out_len: usize = 0;
@@ -503,56 +577,146 @@ mod tests {
         // ── Field-by-field encoding ─────────────────
         let bool_true: bool = true;
         let b = bincode::serde::encode_to_vec(&bool_true, bincode::config::standard()).unwrap();
-        println!("bool(true)  hex: {}", b.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+        println!(
+            "bool(true)  hex: {}",
+            b.iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
 
         let val_100: i64 = 100;
         let b = bincode::serde::encode_to_vec(&val_100, bincode::config::standard()).unwrap();
-        println!("i64(100)    hex: {}", b.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+        println!(
+            "i64(100)    hex: {}",
+            b.iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
 
         let val_0: i64 = 0;
         let b = bincode::serde::encode_to_vec(&val_0, bincode::config::standard()).unwrap();
-        println!("i64(0)      hex: {}", b.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+        println!(
+            "i64(0)      hex: {}",
+            b.iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
 
         let val_42: i64 = 42;
         let b = bincode::serde::encode_to_vec(&val_42, bincode::config::standard()).unwrap();
-        println!("i64(42)     hex: {}", b.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+        println!(
+            "i64(42)     hex: {}",
+            b.iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
 
         let val_58: i64 = 58;
         let b = bincode::serde::encode_to_vec(&val_58, bincode::config::standard()).unwrap();
-        println!("i64(58)     hex: {}", b.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+        println!(
+            "i64(58)     hex: {}",
+            b.iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
 
         // Larger values to understand varint scheme
         for v in [127i64, 128, 255, 256, 1000, 10000, -1, -42] {
             let b = bincode::serde::encode_to_vec(&v, bincode::config::standard()).unwrap();
             let hex: Vec<String> = b.iter().map(|x| format!("{:02x}", x)).collect();
             let zz = if v >= 0 { v * 2 } else { (-v) * 2 - 1 };
-            println!("i64({:>6}) zigzag={:>6} → {} bytes: {}", v, zz, b.len(), hex.join(" "));
+            println!(
+                "i64({:>6}) zigzag={:>6} → {} bytes: {}",
+                v,
+                zz,
+                b.len(),
+                hex.join(" ")
+            );
         }
 
         let opt_none: Option<String> = None;
         let b = bincode::serde::encode_to_vec(&opt_none, bincode::config::standard()).unwrap();
-        println!("Opt<Str>None hex: {}", b.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+        println!(
+            "Opt<Str>None hex: {}",
+            b.iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
 
         let opt_some: Option<String> = Some("err".to_string());
         let b = bincode::serde::encode_to_vec(&opt_some, bincode::config::standard()).unwrap();
-        println!("Opt<Str>Some hex: {}", b.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+        println!(
+            "Opt<Str>Some hex: {}",
+            b.iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
 
         let s = "addNumbers".to_string();
         let b = bincode::serde::encode_to_vec(&s, bincode::config::standard()).unwrap();
-        println!("String(\"addNumbers\") hex: {}", b.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+        println!(
+            "String(\"addNumbers\") hex: {}",
+            b.iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
 
         // ── Full structs ────────────────────────────
-        let request = BincodeRequest { command: "addNumbers".to_string(), a: 42, b: 58 };
-        let req_bytes = bincode::serde::encode_to_vec(&request, bincode::config::standard()).unwrap();
-        println!("Request  hex: {}", req_bytes.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+        let request = BincodeRequest {
+            command: "addNumbers".to_string(),
+            a: 42,
+            b: 58,
+        };
+        let req_bytes =
+            bincode::serde::encode_to_vec(&request, bincode::config::standard()).unwrap();
+        println!(
+            "Request  hex: {}",
+            req_bytes
+                .iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
 
-        let response = BincodeResponse { ok: true, value: 100, error: None };
-        let resp_bytes = bincode::serde::encode_to_vec(&response, bincode::config::standard()).unwrap();
-        println!("Response hex: {}", resp_bytes.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+        let response = BincodeResponse {
+            ok: true,
+            value: 100,
+            error: None,
+        };
+        let resp_bytes =
+            bincode::serde::encode_to_vec(&response, bincode::config::standard()).unwrap();
+        println!(
+            "Response hex: {}",
+            resp_bytes
+                .iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
 
-        let err_response = BincodeResponse { ok: false, value: 0, error: Some("test error".to_string()) };
-        let err_bytes = bincode::serde::encode_to_vec(&err_response, bincode::config::standard()).unwrap();
-        println!("ErrorResp hex: {}", err_bytes.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+        let err_response = BincodeResponse {
+            ok: false,
+            value: 0,
+            error: Some("test error".to_string()),
+        };
+        let err_bytes =
+            bincode::serde::encode_to_vec(&err_response, bincode::config::standard()).unwrap();
+        println!(
+            "ErrorResp hex: {}",
+            err_bytes
+                .iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
     }
 
     #[test]
@@ -579,26 +743,73 @@ mod tests {
 
     #[test]
     fn test_postcard_wire_format() {
-        let request = BincodeRequest { command: "addNumbers".to_string(), a: 42, b: 58 };
+        let request = BincodeRequest {
+            command: "addNumbers".to_string(),
+            a: 42,
+            b: 58,
+        };
         let req_bytes = postcard::to_allocvec(&request).unwrap();
-        println!("postcard request hex: {}", req_bytes.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+        println!(
+            "postcard request hex: {}",
+            req_bytes
+                .iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
 
-        let response = BincodeResponse { ok: true, value: 100, error: None };
+        let response = BincodeResponse {
+            ok: true,
+            value: 100,
+            error: None,
+        };
         let resp_bytes = postcard::to_allocvec(&response).unwrap();
-        println!("postcard response hex: {}", resp_bytes.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+        println!(
+            "postcard response hex: {}",
+            resp_bytes
+                .iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
 
-        let err_resp = BincodeResponse { ok: false, value: 0, error: Some("test error".to_string()) };
+        let err_resp = BincodeResponse {
+            ok: false,
+            value: 0,
+            error: Some("test error".to_string()),
+        };
         let err_bytes = postcard::to_allocvec(&err_resp).unwrap();
-        println!("postcard err resp hex: {}", err_bytes.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+        println!(
+            "postcard err resp hex: {}",
+            err_bytes
+                .iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
 
         // Field-by-field
         for v in [0i64, 42, 58, 100, 127, 128, 256] {
             let b = postcard::to_allocvec(&v).unwrap();
-            println!("postcard i64({:>4}) → {} bytes: {}", v, b.len(), b.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+            println!(
+                "postcard i64({:>4}) → {} bytes: {}",
+                v,
+                b.len(),
+                b.iter()
+                    .map(|x| format!("{:02x}", x))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            );
         }
         let opt_none: Option<String> = None;
         let b = postcard::to_allocvec(&opt_none).unwrap();
-        println!("postcard Opt None → {}", b.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+        println!(
+            "postcard Opt None → {}",
+            b.iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
 
         // Round-trip
         let decoded: BincodeRequest = postcard::from_bytes(&req_bytes).unwrap();
@@ -609,18 +820,41 @@ mod tests {
 
     #[test]
     fn test_rkyv_wire_format() {
-        let request = RkyvRequest { command: "addNumbers".to_string(), a: 42, b: 58 };
+        let request = RkyvRequest {
+            command: "addNumbers".to_string(),
+            a: 42,
+            b: 58,
+        };
         let req_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&request).unwrap();
-        println!("rkyv request hex: {}", req_bytes.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+        println!(
+            "rkyv request hex: {}",
+            req_bytes
+                .iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
         println!("rkyv request len: {}", req_bytes.len());
 
-        let response = RkyvResponse { ok: true, value: 100, error: None };
+        let response = RkyvResponse {
+            ok: true,
+            value: 100,
+            error: None,
+        };
         let resp_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&response).unwrap();
-        println!("rkyv response hex: {}", resp_bytes.iter().map(|x| format!("{:02x}", x)).collect::<Vec<_>>().join(" "));
+        println!(
+            "rkyv response hex: {}",
+            resp_bytes
+                .iter()
+                .map(|x| format!("{:02x}", x))
+                .collect::<Vec<_>>()
+                .join(" ")
+        );
         println!("rkyv response len: {}", resp_bytes.len());
 
         // Zero-copy access
-        let archived = rkyv::access::<ArchivedRkyvRequest, rkyv::rancor::Error>(&req_bytes).unwrap();
+        let archived =
+            rkyv::access::<ArchivedRkyvRequest, rkyv::rancor::Error>(&req_bytes).unwrap();
         assert_eq!(archived.command.as_str(), "addNumbers");
         assert_eq!(i64::from(archived.a), 42);
         assert_eq!(i64::from(archived.b), 58);
@@ -628,7 +862,11 @@ mod tests {
 
     #[test]
     fn test_invoke_postcard_round_trip() {
-        let request = BincodeRequest { command: "addNumbers".to_string(), a: 42, b: 58 };
+        let request = BincodeRequest {
+            command: "addNumbers".to_string(),
+            a: 42,
+            b: 58,
+        };
         let payload = postcard::to_allocvec(&request).unwrap();
 
         let mut out_len: usize = 0;
@@ -650,19 +888,23 @@ mod tests {
 
     #[test]
     fn test_invoke_rkyv_round_trip() {
-        let request = RkyvRequest { command: "addNumbers".to_string(), a: 42, b: 58 };
+        let request = RkyvRequest {
+            command: "addNumbers".to_string(),
+            a: 42,
+            b: 58,
+        };
         let payload = rkyv::to_bytes::<rkyv::rancor::Error>(&request).unwrap();
 
         let mut out_len: usize = 0;
-        let result_ptr = unsafe {
-            rustra_calculator_invoke_rkyv(payload.as_ptr(), payload.len(), &mut out_len)
-        };
+        let result_ptr =
+            unsafe { rustra_calculator_invoke_rkyv(payload.as_ptr(), payload.len(), &mut out_len) };
 
         assert!(!result_ptr.is_null());
         assert!(out_len > 0);
 
         let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
-        let archived = rkyv::access::<ArchivedRkyvResponse, rkyv::rancor::Error>(result_bytes).unwrap();
+        let archived =
+            rkyv::access::<ArchivedRkyvResponse, rkyv::rancor::Error>(result_bytes).unwrap();
         assert_eq!(archived.ok, true);
         assert_eq!(i64::from(archived.value), 100);
 
@@ -671,7 +913,11 @@ mod tests {
 
     #[test]
     fn test_invoke_hybrid_round_trip() {
-        let request = BincodeRequest { command: "addNumbers".to_string(), a: 42, b: 58 };
+        let request = BincodeRequest {
+            command: "addNumbers".to_string(),
+            a: 42,
+            b: 58,
+        };
         let payload = postcard::to_allocvec(&request).unwrap();
 
         let mut out_len: usize = 0;
@@ -683,7 +929,8 @@ mod tests {
         assert!(out_len > 0);
 
         let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
-        let archived = rkyv::access::<ArchivedRkyvResponse, rkyv::rancor::Error>(result_bytes).unwrap();
+        let archived =
+            rkyv::access::<ArchivedRkyvResponse, rkyv::rancor::Error>(result_bytes).unwrap();
         assert_eq!(archived.ok, true);
         assert_eq!(i64::from(archived.value), 100);
 

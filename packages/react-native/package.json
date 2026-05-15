@@ -17,7 +17,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "tsc --noEmit"
   },
   "dependencies": {
     "@rustra/types": "^0.1.0"
@@ -30,5 +31,14 @@
     "bridge",
     "react-native",
     "adapter"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/loopy-lim/rustra.git",
+    "directory": "packages/"
+  },
+  "bugs": {
+    "url": "https://github.com/loopy-lim/rustra/issues"
+  },
+  "homepage": "https://github.com/loopy-lim/rustra#readme"
 }

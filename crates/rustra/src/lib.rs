@@ -41,8 +41,8 @@ mod error;
 mod schema;
 
 use schemars::JsonSchema;
-use serde::{Serialize, de::DeserializeOwned};
-use serde_json::{Value, json};
+use serde::{de::DeserializeOwned, Serialize};
+use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
@@ -79,7 +79,9 @@ fn is_ts_primitive(schema: &Value) -> bool {
 /// use rustra::prelude::*;
 /// ```
 pub mod prelude {
-    pub use crate::{GeneratedPackage, Package, PackageBuilder, Result, RustraError, bridge_type, build, command};
+    pub use crate::{
+        bridge_type, build, command, GeneratedPackage, Package, PackageBuilder, Result, RustraError,
+    };
     pub use schemars::JsonSchema;
     pub use serde::{Deserialize, Serialize};
 }
@@ -91,7 +93,7 @@ pub mod prelude {
 /// 컴파일 타임에 검증하기 위해 사용합니다.
 pub mod __private {
     use schemars::JsonSchema;
-    use serde::{Serialize, de::DeserializeOwned};
+    use serde::{de::DeserializeOwned, Serialize};
 
     #[diagnostic::on_unimplemented(
         message = "`{Self}` cannot be used as a command parameter",
@@ -130,7 +132,7 @@ pub mod __private {
 #[cfg(feature = "tauri")]
 pub mod tauri_support {
     use crate::Package;
-    use serde_json::{Value, json};
+    use serde_json::{json, Value};
     use tauri::State;
 
     /// Tauri의 managed state로 보관되는 rustra 패키지입니다.
@@ -451,9 +453,7 @@ impl PackageBuilder {
         let (input_schema, input_defs) = schema_value::<I>();
         let (output_schema, output_defs) = schema_value::<O>();
         let mut definitions = input_defs;
-        if let (Value::Object(obj), Value::Object(other)) =
-            (&mut definitions, output_defs)
-        {
+        if let (Value::Object(obj), Value::Object(other)) = (&mut definitions, output_defs) {
             for (key, value) in other {
                 obj.insert(key, value);
             }

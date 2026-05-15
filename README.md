@@ -63,8 +63,8 @@ fn main() -> Result<()> {
 
 ```ts
 // TypeScript — 모든 플랫폼에서 동일
-import { createNodeEngine } from "@rustra/node";
-import { addNumbers } from "./generated/commands.js";
+import { createNodeEngine } from '@rustra/node';
+import { addNumbers } from './generated/commands.js';
 
 const engine = createNodeEngine({ invoke: myTransport });
 const result = await addNumbers(engine, { a: 20, b: 22 }); // { value: 42 }
@@ -85,6 +85,8 @@ packages/
 
 examples/
   calculator/              기본 예시 (Rust crate + C FFI + stdio + 생성된 TS)
+  crud/                    CRUD 패턴 예시 (create/get/list/update/delete)
+  benchmark/               성능 벤치마크 (페이로드 확장, 처리량 측정)
   tauri-calculator/        Tauri 런타임 예시
   react-native-calculator/ React Native 런타임 예시
 ```
@@ -153,15 +155,17 @@ type RustraError = {
 
 ### 타입 매핑
 
-| Rust | TypeScript |
-|------|-----------|
-| `i64`, `u32`, `f64` | `number` |
-| `String` | `string` |
-| `bool` | `boolean` |
-| `Vec<T>` | `T[]` |
-| `Option<T>` | `T \| null` (필드가 optional이면 `?:`도 추가) |
-| `enum { A, B }` | `'A' \| 'B'` |
-| 구조체 | `{ field: type; ... }` |
+| Rust                 | TypeScript                                    |
+| -------------------- | --------------------------------------------- |
+| `i64`, `u32`, `f64`  | `number`                                      |
+| `String`             | `string`                                      |
+| `bool`               | `boolean`                                     |
+| `Vec<T>`             | `T[]`                                         |
+| `(A, B, C)`          | `[A, B, C]`                                   |
+| `HashMap<String, T>` | `Record<string, T>`                           |
+| `Option<T>`          | `T \| null` (필드가 optional이면 `?:`도 추가) |
+| `enum { A, B }`      | `'A' \| 'B'`                                  |
+| 구조체               | `{ field: type; ... }`                        |
 
 각 어댑터가 `EngineClient`를 구현하므로, 생성된 커맨드 헬퍼는 플랫폼에 관계없이 동일하게 동작한다.
 
@@ -205,13 +209,13 @@ const result = await addNumbers(engine, { a: 20, b: 22 });
 
 모든 어댑터에서 `addNumbers({ a: 42, b: 58 })` 호출 기준 (Apple Silicon, release 빌드).
 
-| 어댑터 | 평균 지연 | 처리량 |
-|--------|----------|--------|
-| Rust (typed) | 209 ns | 5,093,309 ops/s |
-| Swift → Rust FFI | 3.5 µs | 296,710 ops/s |
-| Bun (JS측) | 189 ns | ~5.3M ops/s |
-| Node.js (JS측) | 308 ns | ~3.3M ops/s |
-| React Native (iOS sim) | 52.5 µs | 19,054 ops/s |
+| 어댑터                 | 평균 지연 | 처리량          |
+| ---------------------- | --------- | --------------- |
+| Rust (typed)           | 209 ns    | 5,093,309 ops/s |
+| Swift → Rust FFI       | 3.5 µs    | 296,710 ops/s   |
+| Bun (JS측)             | 189 ns    | ~5.3M ops/s     |
+| Node.js (JS측)         | 308 ns    | ~3.3M ops/s     |
+| React Native (iOS sim) | 52.5 µs   | 19,054 ops/s    |
 
 > 상세 벤치마크, 레이어별 오버헤드 분석, 페이로드 확장성은 [벤치마크 문서](docs/benchmarks.md)를 참고.
 
@@ -220,7 +224,12 @@ const result = await addNumbers(engine, { a: 20, b: 22 });
 Rust:
 
 ```rust
+// 일반 에러
 return Err(RustraError::custom("validation.too_large", "value exceeds limit"));
+
+// 재시도 가능한 에러 (네트워크, 타임아웃)
+return Err(RustraError::transport("connection refused"));
+return Err(RustraError::timeout("request timed out"));
 ```
 
 TypeScript:
@@ -243,19 +252,34 @@ cargo test --workspace
 
 # calculator 예시 빌드 및 TS 생성
 cargo run -p rustra-calculator-example
+
+# CRUD 예시 빌드 및 TS 생성
+cargo run -p rustra-crud-example --bin generate
+
+# TypeScript 린트 / 포맷
+npm run lint
+npm run format:check
+
+# Rust 린트 / 포맷
+cargo clippy --all-targets -- -D warnings
+cargo fmt --all -- --check
+
+# CLI watch 모드 (schema 변경 시 자동 재생성)
+npx rustra generate --watch --schema ./generated/schema.json --output ./src/generated
 ```
 
 ## 문서
 
 전체 문서는 [`docs/`](docs/)에 있다.
 
-| 문서 | 내용 |
-|------|------|
-| [시작하기](docs/getting-started.md) | 설치, 첫 패키지 만들기, 어댑터 선택 |
-| [아키텍처 개요](docs/architecture.md) | 데이터 흐름, EngineClient 계약, transport 분리 |
-| [Transport 교체 가이드](docs/extending/transport-guide.md) | Bun FFI, Node napi-rs 교체 |
-| [새 Host 추가 가이드](docs/extending/adding-host.md) | Electron, Deno 등 새 어댑터 추가 |
-| [전체 문서 목록](docs/README.md) | 사용자 / 기여자별 읽기 경로 |
+| 문서                                                             | 내용                                           |
+| ---------------------------------------------------------------- | ---------------------------------------------- |
+| [시작하기](docs/getting-started.md)                              | 설치, 첫 패키지 만들기, 어댑터 선택            |
+| [아키텍처 개요](docs/architecture.md)                            | 데이터 흐름, EngineClient 계약, transport 분리 |
+| [Transport 교체 가이드](docs/extending/transport-guide.md)       | Bun FFI, Node napi-rs 교체                     |
+| [React Native 설정 가이드](docs/extending/react-native-setup.md) | iOS JSI 모듈 설정, 사용법, 트러블슈팅          |
+| [새 Host 추가 가이드](docs/extending/adding-host.md)             | Electron, Deno 등 새 어댑터 추가               |
+| [전체 문서 목록](docs/README.md)                                 | 사용자 / 기여자별 읽기 경로                    |
 
 ## 기여
 

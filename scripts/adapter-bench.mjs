@@ -178,3 +178,103 @@ for (const t of throughput) {
 
 console.log("│");
 console.log("└─────────────────────────────────────────────────────────┘");
+console.log();
+
+// ── Benchmark: Payload Size Scaling ────────────────────
+
+console.log("┌─ Payload Size Scaling ──────────────────────────────────┐");
+console.log("│");
+
+const payloadSizes = [
+  { label: "1 KB", size: 1024 },
+  { label: "10 KB", size: 10 * 1024 },
+  { label: "100 KB", size: 100 * 1024 },
+  { label: "1 MB", size: 1024 * 1024 },
+];
+
+const payloadResults = [];
+for (const { label, size } of payloadSizes) {
+  const payload = JSON.stringify({
+    data: "x".repeat(Math.max(1, size - 20)),
+  });
+  const actualSize = Buffer.byteLength(payload);
+
+  const { avgNs } = runBench(
+    label,
+    () => JSON.parse(payload),
+    10000,
+  );
+  const throughputMBs = (actualSize / (avgNs / 1e9)) / (1024 * 1024);
+  payloadResults.push({ label, avgNs, actualSize, throughputMBs });
+}
+
+const maxPayloadNs = Math.max(...payloadResults.map((r) => r.avgNs));
+for (const r of payloadResults) {
+  const barLen = Math.max(1, Math.round((r.avgNs / maxPayloadNs) * 35));
+  const barStr = "█".repeat(barLen);
+  const nsStr =
+    r.avgNs >= 1_000_000
+      ? `${(r.avgNs / 1_000_000).toFixed(2)} ms`
+      : r.avgNs >= 1000
+        ? `${(r.avgNs / 1000).toFixed(0)} µs`
+        : `${r.avgNs.toFixed(0)} ns`;
+  console.log(
+    `│  ${r.label.padEnd(8)} ${barStr.padEnd(36)} ${nsStr.padStart(10)}  ${r.throughputMBs.toFixed(1)} MB/s`,
+  );
+}
+
+console.log("│");
+console.log("└─────────────────────────────────────────────────────────┘");
+console.log();
+
+// ── Benchmark: Concurrency ─────────────────────────────
+
+console.log("┌─ Concurrency (Promise.all throughput) ──────────────────┐");
+console.log("│");
+
+async function runConcurrencyBench(label, concurrency, iterations = 5000) {
+  const engine = createMockEngine();
+  const batchCount = Math.ceil(iterations / concurrency);
+
+  // Warm up
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, 100) }, () =>
+      engine.invoke("addNumbers", { a: 1, b: 2 }),
+    ),
+  );
+
+  const start = performance.now();
+  for (let i = 0; i < batchCount; i++) {
+    await Promise.all(
+      Array.from({ length: concurrency }, () =>
+        engine.invoke("addNumbers", { a: i, b: i + 1 }),
+      ),
+    );
+  }
+  const elapsed = performance.now() - start;
+  const totalOps = batchCount * concurrency;
+  const avgNs = (elapsed * 1e6) / totalOps;
+  const opsPerSec = totalOps / (elapsed / 1000);
+
+  return { label, concurrency, avgNs, opsPerSec, totalOps };
+}
+
+const concurrencyLevels = [1, 4, 16, 64];
+const concResults = [];
+
+for (const c of concurrencyLevels) {
+  const result = await runConcurrencyBench(`concurrency=${c}`, c);
+  concResults.push(result);
+}
+
+const maxConcOps = Math.max(...concResults.map((r) => r.opsPerSec));
+for (const r of concResults) {
+  const barLen = Math.max(1, Math.round((r.opsPerSec / maxConcOps) * 35));
+  const barStr = "█".repeat(barLen);
+  console.log(
+    `│  ${r.label.padEnd(18)} ${barStr.padEnd(36)} ${r.opsPerSec.toFixed(0).padStart(12)} ops/s`,
+  );
+}
+
+console.log("│");
+console.log("└─────────────────────────────────────────────────────────┘");
