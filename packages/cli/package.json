@@ -40,7 +40,7 @@
     "test": "tsc -p tsconfig.test.json && node --test dist-test/generate.test.js dist-test/schema-diff.test.js"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
+    "@types/node": "^25.8.0",
     "typescript": "^5.9.0"
   },
   "keywords": [
