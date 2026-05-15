@@ -1,5 +1,5 @@
-import { encode, decode } from "@msgpack/msgpack";
-import type { EngineClient, RustraNative } from "@rustra/types";
+import { encode, decode } from '@msgpack/msgpack';
+import type { EngineClient, RustraNative } from '@rustra/types';
 
 export function createMsgpackEngine(native: RustraNative): EngineClient {
   return {
@@ -14,7 +14,7 @@ export function createMsgpackEngine(native: RustraNative): EngineClient {
         error?: string;
       };
       if (!response.ok) {
-        throw new Error(response.error ?? "Rustra msgpack invoke failed");
+        throw new Error(response.error ?? 'Rustra msgpack invoke failed');
       }
       return Promise.resolve(response.result as T);
     },

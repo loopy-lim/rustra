@@ -4,9 +4,21 @@ import { resolve, dirname } from 'node:path';
 import { watch, readFileSync, readdirSync, statSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import type { PackageSchema } from './schema.js';
-import { generateTypesTs, generateCommandsTs, generateContractTs, generateRkyvCodecsTs, generateRkyvRegistryTs } from './generate.js';
+import {
+  generateTypesTs,
+  generateCommandsTs,
+  generateContractTs,
+  generateRkyvCodecsTs,
+  generateRkyvRegistryTs,
+} from './generate.js';
 
-export { generateTypesTs, generateCommandsTs, generateContractTs, generateRkyvCodecsTs, generateRkyvRegistryTs } from './generate.js';
+export {
+  generateTypesTs,
+  generateCommandsTs,
+  generateContractTs,
+  generateRkyvCodecsTs,
+  generateRkyvRegistryTs,
+} from './generate.js';
 export type { PackageSchema, CommandSchema, JsonSchema } from './schema.js';
 export { diffSchemas, formatDiffResult } from './schema-diff.js';
 export type { BreakingChange, DiffResult } from './schema-diff.js';
@@ -130,7 +142,11 @@ async function generateFromSchema(schemaPath: string, outputPath: string): Promi
   for (const { name, content } of files) {
     const filePath = resolve(outputPath, name);
     let existing: string | null = null;
-    try { existing = await readFile(filePath, 'utf-8'); } catch { /* file doesn't exist */ }
+    try {
+      existing = await readFile(filePath, 'utf-8');
+    } catch {
+      /* file doesn't exist */
+    }
     if (existing === content) {
       written.push(`${name} (unchanged)`);
     } else {

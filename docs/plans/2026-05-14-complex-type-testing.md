@@ -13,6 +13,7 @@
 ### Task 1: Add Map type support (HashMap/BTreeMap → Record<K, V>)
 
 **Files:**
+
 - Modify: `crates/rustra/src/codegen.rs:84-96` (ts_object_from_schema)
 - Test: `crates/rustra/tests/public_authoring_api_tests.rs`
 
@@ -115,6 +116,7 @@ git commit -m "feat(codegen): add HashMap/BTreeMap → Record<string, V> support
 ### Task 2: Add Tuple type support ((A, B, C) → [A, B, C])
 
 **Files:**
+
 - Modify: `crates/rustra/src/codegen.rs:46-52` (array handling in ts_type_from_schema)
 - Test: `crates/rustra/tests/public_authoring_api_tests.rs`
 
@@ -208,6 +210,7 @@ git commit -m "feat(codegen): add tuple type → [T1, T2, T3] support"
 ### Task 3: Add Enum-with-data support (tagged union)
 
 **Files:**
+
 - Modify: `crates/rustra/src/codegen.rs:13-24` (add oneOf handling before anyOf)
 - Test: `crates/rustra/tests/public_authoring_api_tests.rs`
 
@@ -310,6 +313,7 @@ git commit -m "feat(codegen): add enum-with-data → tagged union support via on
 ### Task 4: Add deep nesting tests
 
 **Files:**
+
 - Test: `crates/rustra/tests/public_authoring_api_tests.rs`
 
 **Step 1: Write the test**
