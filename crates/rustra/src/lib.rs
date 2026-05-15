@@ -13,36 +13,28 @@
 //!
 //! ```rust
 //! use rustra::prelude::*;
-//! use serde::{Serialize, Deserialize};
-//! use schemars::JsonSchema;
-//!
-//! #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-//! #[serde(rename_all = "camelCase")]
-//! struct AddNumbersInput { a: i64, b: i64 }
-//!
-//! #[derive(Debug, Serialize, Deserialize, JsonSchema)]
-//! #[serde(rename_all = "camelCase")]
-//! struct AddNumbersOutput { value: i64 }
 //!
 //! #[command]
-//! fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
-//!     Ok(AddNumbersOutput { value: input.a + input.b })
+//! fn add_numbers(a: i64, b: i64) -> i64 {
+//!     a + b
 //! }
 //!
 //! fn main() -> Result<()> {
-//!     let pkg = Package::builder("example.calculator")
-//!         .command_fn(add_numbers)
-//!         .build();
+//!     let pkg = rustra::build!("example.calculator", add_numbers)
+//!         .done();
 //!
-//!     let generated = pkg.generate_typescript()?;
-//!     println!("{}", generated.types_ts);
+//!     let result: i64 = pkg.invoke("addNumbers", serde_json::json!({ "a": 2, "b": 3 }))?;
+//!     println!("Result: {result}");
+//!
+//!     rustra::build!("example.calculator", add_numbers)
+//!         .generate_to("../generated")?;
 //!     Ok(())
 //! }
 //! ```
 
 pub use rustra_macros::bridge_type;
+pub use rustra_macros::build;
 pub use rustra_macros::command;
-pub use rustra_macros::register;
 
 mod codegen;
 mod error;
@@ -58,6 +50,19 @@ use std::sync::Arc;
 
 pub use error::{Result, RustraError};
 
+/// Creates a new [`PackageBuilder`] for the given package ID.
+///
+/// This is the primary entry point for the fluent registration API:
+///
+/// ```rust,ignore
+/// let pkg = rustra::build("examples.calculator")
+///     .register(add_numbers)
+///     .done();
+/// ```
+pub fn build(id: impl Into<String>) -> PackageBuilder {
+    Package::builder(id)
+}
+
 use codegen::{command_function_name, contract_hash, ts_type_from_schema};
 use schema::{command_name_from_handler, schema_value, short_type_name};
 
@@ -67,7 +72,7 @@ use schema::{command_name_from_handler, schema_value, short_type_name};
 /// use rustra::prelude::*;
 /// ```
 pub mod prelude {
-    pub use crate::{GeneratedPackage, Package, PackageBuilder, Result, RustraError, bridge_type, command, register};
+    pub use crate::{GeneratedPackage, Package, PackageBuilder, Result, RustraError, bridge_type, build, command};
     pub use schemars::JsonSchema;
     pub use serde::{Deserialize, Serialize};
 }
@@ -81,9 +86,19 @@ pub mod __private {
     use schemars::JsonSchema;
     use serde::{Serialize, de::DeserializeOwned};
 
+    #[diagnostic::on_unimplemented(
+        message = "`{Self}` cannot be used as a command parameter",
+        label = "command parameters require Serialize + Deserialize + JsonSchema",
+        note = "add `#[rustra::bridge_type]` to `{Self}`"
+    )]
     pub trait CommandInput: DeserializeOwned + JsonSchema + 'static {}
     impl<T: DeserializeOwned + JsonSchema + 'static> CommandInput for T {}
 
+    #[diagnostic::on_unimplemented(
+        message = "`{Self}` cannot be used as a command return type",
+        label = "command return types require Serialize + JsonSchema",
+        note = "add `#[rustra::bridge_type]` to `{Self}`"
+    )]
     pub trait CommandOutput: Serialize + JsonSchema + 'static {}
     impl<T: Serialize + JsonSchema + 'static> CommandOutput for T {}
 }
@@ -383,6 +398,19 @@ impl PackageBuilder {
         self.command(name, handler)
     }
 
+    /// Registers a `#[command]` function by auto-inferring its command name.
+    ///
+    /// This is a shorter alias for [`command_fn`](PackageBuilder::command_fn).
+    pub fn register<I, O, F>(self, handler: F) -> Self
+    where
+        I: DeserializeOwned + JsonSchema + 'static,
+        O: Serialize + JsonSchema + 'static,
+        F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+    {
+        let name = command_name_from_handler::<F>();
+        self.command(name, handler)
+    }
+
     /// 명령을 지정한 이름으로 등록합니다.
     ///
     /// # 패닉
@@ -431,5 +459,24 @@ impl PackageBuilder {
             id: self.id,
             commands: Arc::new(self.commands),
         }
+    }
+
+    /// Builds the package, generates TypeScript, and writes to a directory.
+    ///
+    /// Convenience method that chains [`build`](PackageBuilder::build),
+    /// [`generate_typescript`](Package::generate_typescript), and
+    /// [`write_to_dir`](GeneratedPackage::write_to_dir).
+    pub fn generate_to(self, output_dir: impl AsRef<Path>) -> crate::Result<()> {
+        let package = self.build();
+        let generated = package.generate_typescript()?;
+        generated.write_to_dir(output_dir)
+    }
+
+    /// Builds the package without generating TypeScript.
+    ///
+    /// Returns the [`Package`] for runtime use (e.g. calling
+    /// [`invoke`](Package::invoke)).
+    pub fn done(self) -> Package {
+        self.build()
     }
 }

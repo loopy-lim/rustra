@@ -4,28 +4,28 @@ use std::ffi::{CStr, CString, c_char};
 
 const MAX_PAYLOAD_BYTES: usize = 1024 * 1024; // 1 MB
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[bridge_type]
 pub struct AddNumbersInput {
     pub a: i64,
     pub b: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[bridge_type]
 pub struct AddNumbersOutput {
     pub value: i64,
 }
 
 #[command]
-pub fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
-    Ok(AddNumbersOutput {
-        value: input.a + input.b,
-    })
+pub fn add_numbers(a: i64, b: i64) -> i64 {
+    a + b
 }
 
 pub fn calculator_package() -> Package {
-    register!(Package::builder("examples.calculator"), add_numbers).build()
+    rustra::build!("examples.calculator", add_numbers).done()
+}
+
+pub fn generate_calculator(output_dir: &str) -> rustra::Result<()> {
+    rustra::build!("examples.calculator", add_numbers).generate_to(output_dir)
 }
 
 #[unsafe(no_mangle)]
@@ -268,7 +268,7 @@ pub unsafe extern "C" fn rustra_calculator_invoke_bincode(
 
     let result = match calculator_package().invoke_json(&request.command, serde_json::json!({"a": request.a, "b": request.b})) {
         Ok(result) => {
-            let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
+            let value = result.as_i64().unwrap_or(0);
             BincodeResponse { ok: true, value, error: None }
         }
         Err(error) => BincodeResponse { ok: false, value: 0, error: Some(error.to_string()) },
@@ -302,7 +302,7 @@ pub unsafe extern "C" fn rustra_calculator_invoke_postcard(
 
     let result = match calculator_package().invoke_json(&request.command, serde_json::json!({"a": request.a, "b": request.b})) {
         Ok(result) => {
-            let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
+            let value = result.as_i64().unwrap_or(0);
             BincodeResponse { ok: true, value, error: None }
         }
         Err(error) => BincodeResponse { ok: false, value: 0, error: Some(error.to_string()) },
@@ -354,7 +354,7 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv(
 
     let result = match calculator_package().invoke_json(&command, serde_json::json!({"a": a, "b": b})) {
         Ok(result) => {
-            let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
+            let value = result.as_i64().unwrap_or(0);
             RkyvResponse { ok: true, value, error: None }
         }
         Err(error) => RkyvResponse { ok: false, value: 0, error: Some(error.to_string()) },
@@ -389,7 +389,7 @@ pub unsafe extern "C" fn rustra_calculator_invoke_hybrid(
 
     let result = match calculator_package().invoke_json(&request.command, serde_json::json!({"a": request.a, "b": request.b})) {
         Ok(result) => {
-            let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
+            let value = result.as_i64().unwrap_or(0);
             RkyvResponse { ok: true, value, error: None }
         }
         Err(error) => RkyvResponse { ok: false, value: 0, error: Some(error.to_string()) },
@@ -421,7 +421,7 @@ mod tests {
         let result: serde_json::Value = serde_json::from_str(result_str).unwrap();
 
         assert_eq!(result["ok"], true);
-        assert_eq!(result["result"]["value"], 100);
+        assert_eq!(result["result"], 100);
 
         unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
     }
@@ -572,7 +572,7 @@ mod tests {
         let result: serde_json::Value = rmp_serde::from_slice(result_bytes).unwrap();
 
         assert_eq!(result["ok"], true);
-        assert_eq!(result["result"]["value"], 100);
+        assert_eq!(result["result"], 100);
 
         unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
     }

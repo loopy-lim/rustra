@@ -17,7 +17,7 @@ fn calculator_example_runs_and_generates_client() {
 
     let commands = std::fs::read_to_string("generated/commands.ts").unwrap();
     assert!(commands.contains("export function addNumbers"));
-    assert!(commands.contains("engine.invoke<AddNumbersOutput>('addNumbers'"));
+    assert!(commands.contains("engine.invoke<i64>('addNumbers'"));
     assert!(!commands.contains("EngineRequest"));
     assert!(!commands.contains("Attachment"));
 }

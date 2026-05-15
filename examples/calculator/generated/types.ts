@@ -1,12 +1,10 @@
 export type { EngineClient, RustraError } from '@rustra/types';
 export { RustraCommandError } from '@rustra/types';
 
-export type AddNumbersInput = {
+export type __AddNumbersInput = {
   a: number;
   b: number;
 };
 
-export type AddNumbersOutput = {
-  value: number;
-};
+export type i64 = number;
 

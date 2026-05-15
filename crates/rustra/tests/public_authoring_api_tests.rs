@@ -1,4 +1,6 @@
 use rustra::prelude::*;
+use serde_json::json;
+use std::fs;
 use std::process::Command;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
@@ -23,9 +25,9 @@ fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
 
 #[test]
 fn user_builds_package_without_touching_raw_engine_types() {
-    let package = Package::builder("example.calculator")
-        .command("addNumbers", add_numbers)
-        .build();
+    let package = rustra::build("example.calculator")
+        .register(add_numbers)
+        .done();
 
     let output: AddNumbersOutput = package
         .invoke("addNumbers", AddNumbersInput { a: 20, b: 22 })
@@ -36,9 +38,9 @@ fn user_builds_package_without_touching_raw_engine_types() {
 
 #[test]
 fn user_can_register_command_without_writing_command_name_string() {
-    let package = Package::builder("example.calculator")
-        .command_fn(add_numbers)
-        .build();
+    let package = rustra::build("example.calculator")
+        .register(add_numbers)
+        .done();
 
     let output: AddNumbersOutput = package
         .invoke("addNumbers", AddNumbersInput { a: 8, b: 13 })
@@ -53,7 +55,7 @@ fn user_can_register_command_without_writing_command_name_string() {
 
 #[test]
 fn register_macro_uses_macro_derived_name() {
-    let package = register!(Package::builder("example.calculator"), add_numbers).build();
+    let package = rustra::build!("example.calculator", add_numbers).done();
 
     let output: AddNumbersOutput = package
         .invoke("addNumbers", AddNumbersInput { a: 1, b: 1 })
@@ -64,9 +66,9 @@ fn register_macro_uses_macro_derived_name() {
 
 #[test]
 fn package_generates_host_neutral_typescript_client() {
-    let package = Package::builder("example.calculator")
-        .command("addNumbers", add_numbers)
-        .build();
+    let package = rustra::build("example.calculator")
+        .register(add_numbers)
+        .done();
 
     let generated = package.generate_typescript().unwrap();
 
@@ -85,14 +87,13 @@ fn package_generates_host_neutral_typescript_client() {
 
 #[test]
 fn generated_package_can_be_written_to_a_directory() {
-    let package = Package::builder("example.calculator")
-        .command("addNumbers", add_numbers)
-        .build();
-    let generated = package.generate_typescript().unwrap();
     let output_dir = std::env::temp_dir().join(format!("rustra-generated-{}", std::process::id()));
 
     let _ = std::fs::remove_dir_all(&output_dir);
-    generated.write_to_dir(&output_dir).unwrap();
+    rustra::build("example.calculator")
+        .register(add_numbers)
+        .generate_to(&output_dir)
+        .unwrap();
 
     assert!(output_dir.join("schema.json").exists());
     assert!(output_dir.join("types.ts").exists());
@@ -104,7 +105,7 @@ fn generated_package_can_be_written_to_a_directory() {
 
 #[test]
 fn unknown_command_uses_package_level_error() {
-    let package = Package::builder("example.empty").build();
+    let package = rustra::build("example.empty").done();
     let error = package
         .invoke::<_, AddNumbersOutput>("missing", AddNumbersInput { a: 1, b: 2 })
         .unwrap_err();
@@ -136,9 +137,9 @@ fn ts_generator_handles_optional_fields() {
         })
     }
 
-    let package = Package::builder("test.optional")
-        .command("optionalCmd", optional_cmd)
-        .build();
+    let package = rustra::build("test.optional")
+        .register(optional_cmd)
+        .done();
     let generated = package.generate_typescript().unwrap();
 
     assert!(
@@ -180,9 +181,9 @@ fn ts_generator_handles_enums() {
         })
     }
 
-    let package = Package::builder("test.enum")
-        .command("enumCmd", enum_cmd)
-        .build();
+    let package = rustra::build("test.enum")
+        .register(enum_cmd)
+        .done();
     let generated = package.generate_typescript().unwrap();
 
     assert!(
@@ -225,9 +226,9 @@ fn ts_generator_handles_vec_and_optional_struct() {
         })
     }
 
-    let package = Package::builder("test.complex")
-        .command("complexCmd", complex_cmd)
-        .build();
+    let package = rustra::build("test.complex")
+        .register(complex_cmd)
+        .done();
     let generated = package.generate_typescript().unwrap();
 
     assert!(
@@ -295,14 +296,21 @@ fn command_macro_rejects_wrong_signature() {
     );
     assert!(!no_input, "missing input parameter should fail");
 
-    let wrong_return = try_compile(
+    let bare_return = try_compile(
         "use rustra::prelude::*;\n\
          #[derive(Serialize, Deserialize, JsonSchema)]\n\
          struct In { x: i64 }\n\
          #[command]\n\
-         pub fn bad_return(input: In) -> String { String::new() }\n",
+         pub fn bare_return(input: In) -> String { String::new() }\n",
     );
-    assert!(!wrong_return, "non-Result return should fail");
+    assert!(bare_return, "bare (non-Result) return should now compile");
+
+    let multi_param = try_compile(
+        "use rustra::prelude::*;\n\
+         #[command]\n\
+         pub fn add(a: i64, b: i64) -> i64 { a + b }\n",
+    );
+    assert!(multi_param, "multiple scalar params with bare return should compile");
 }
 
 #[test]
@@ -330,9 +338,9 @@ fn ts_generator_handles_hashmap() {
         Ok(MapOutput { result })
     }
 
-    let package = Package::builder("test.map")
-        .command("mapCmd", map_cmd)
-        .build();
+    let package = rustra::build("test.map")
+        .register(map_cmd)
+        .done();
     let generated = package.generate_typescript().unwrap();
 
     assert!(
@@ -369,9 +377,9 @@ fn ts_generator_handles_tuples() {
         })
     }
 
-    let package = Package::builder("test.tuple")
-        .command("tupleCmd", tuple_cmd)
-        .build();
+    let package = rustra::build("test.tuple")
+        .register(tuple_cmd)
+        .done();
     let generated = package.generate_typescript().unwrap();
 
     assert!(
@@ -415,9 +423,9 @@ fn ts_generator_handles_enum_with_data() {
         Ok(EnumDataOutput { description: desc })
     }
 
-    let package = Package::builder("test.enum_data")
-        .command("enumDataCmd", enum_data_cmd)
-        .build();
+    let package = rustra::build("test.enum_data")
+        .register(enum_data_cmd)
+        .done();
     let generated = package.generate_typescript().unwrap();
 
     assert!(
@@ -467,9 +475,9 @@ fn ts_generator_handles_deep_nesting() {
         })
     }
 
-    let package = Package::builder("test.deep")
-        .command("deepCmd", deep_cmd)
-        .build();
+    let package = rustra::build("test.deep")
+        .register(deep_cmd)
+        .done();
     let generated = package.generate_typescript().unwrap();
 
     assert!(
@@ -507,4 +515,60 @@ fn bridge_type_replaces_four_derives() {
     let schema = schemars::schema_for!(BridgedInput);
     let schema_json = serde_json::to_value(&schema).unwrap();
     assert!(schema_json["$schema"].is_string());
+}
+
+#[test]
+fn build_api_registers_scalar_command() {
+    #[command]
+    fn scalar_add(a: i64, b: i64) -> i64 {
+        a + b
+    }
+
+    let pkg = rustra::build!("test.scalar", scalar_add)
+        .done();
+
+    let result: i64 = pkg.invoke("scalarAdd", json!({ "a": 2, "b": 3 })).unwrap();
+    assert_eq!(result, 5);
+}
+
+#[test]
+fn build_api_scalar_command_with_result() {
+    #[command]
+    fn scalar_divide(a: i64, b: i64) -> Result<i64> {
+        if b == 0 {
+            Err(RustraError::invalid_args("division by zero"))
+        } else {
+            Ok(a / b)
+        }
+    }
+
+    let pkg = rustra::build!("test.scalar", scalar_divide)
+        .done();
+
+    let result: i64 = pkg.invoke("scalarDivide", json!({ "a": 10, "b": 2 })).unwrap();
+    assert_eq!(result, 5);
+
+    let err = pkg.invoke::<serde_json::Value, i64>("scalarDivide", json!({ "a": 10, "b": 0 }));
+    assert!(err.is_err());
+}
+
+#[test]
+fn build_api_generates_typescript() {
+    #[command]
+    fn greet(name: String, greeting: String) -> String {
+        format!("{greeting}, {name}!")
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    rustra::build!("test.greet", greet)
+        .generate_to(dir.path())
+        .unwrap();
+
+    assert!(dir.path().join("types.ts").exists());
+    assert!(dir.path().join("commands.ts").exists());
+    assert!(dir.path().join("schema.json").exists());
+    assert!(dir.path().join("contract.ts").exists());
+
+    let types_ts = fs::read_to_string(dir.path().join("types.ts")).unwrap();
+    assert!(types_ts.contains("GreetInput"), "expected GreetInput type, got:\n{types_ts}");
 }
