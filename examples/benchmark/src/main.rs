@@ -76,12 +76,8 @@ fn process_payload(input: PayloadInput) -> Result<PayloadOutput> {
 }
 
 fn build_benchmark_package() -> rustra::Package {
-    register!(
-        Package::builder("benchmark"),
-        add_numbers,
-        process_payload
-    )
-    .build()
+    rustra::build!("benchmark", add_numbers, process_payload)
+        .done()
 }
 
 fn make_items(n: usize) -> Vec<Item> {
