@@ -119,9 +119,7 @@ export function configure(engine: EngineClient): void {
  */
 export function invoke<T>(command: string, args?: unknown): Promise<T> {
   if (!_engine) {
-    throw new Error(
-      'Rustra not configured. Call configure(engine) first.',
-    );
+    throw new Error('Rustra not configured. Call configure(engine) first.');
   }
   return _engine.invoke<T>(command, args);
 }

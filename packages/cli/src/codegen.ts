@@ -5,12 +5,12 @@
  * 명령 이름을 lowerCamelCase 함수 이름으로 변환합니다.
  */
 
-import type { JsonSchema } from "./schema.js";
+import type { JsonSchema } from './schema.js';
 
 /** `$ref` 문자열에서 타입 이름을 추출합니다. `#/definitions/Foo` → `Foo` */
 export function resolveRef(ref: string): string {
-  if (ref.startsWith("#/definitions/")) return ref.slice("#/definitions/".length);
-  if (ref.startsWith("#/$defs/")) return ref.slice("#/$defs/".length);
+  if (ref.startsWith('#/definitions/')) return ref.slice('#/definitions/'.length);
+  if (ref.startsWith('#/$defs/')) return ref.slice('#/$defs/'.length);
   return ref;
 }
 
@@ -26,41 +26,41 @@ export function tsTypeFromSchema(
   if (schema.$ref) return resolveRef(schema.$ref);
 
   if (schema.anyOf) {
-    return schema.anyOf.map((s) => tsTypeFromSchema(s, definitions)).join(" | ");
+    return schema.anyOf.map((s) => tsTypeFromSchema(s, definitions)).join(' | ');
   }
 
   const type = schema.type;
 
-  if (typeof type === "string") {
+  if (typeof type === 'string') {
     switch (type) {
-      case "object":
+      case 'object':
         if (!schema.properties && schema.additionalProperties) {
           const valueType = tsTypeFromSchema(schema.additionalProperties, definitions);
           return `Record<string, ${valueType}>`;
         }
         return tsObjectFromSchema(schema, definitions);
-      case "integer":
-      case "number":
-        return "number";
-      case "string": {
+      case 'integer':
+      case 'number':
+        return 'number';
+      case 'string': {
         if (schema.enum && schema.enum.length > 0) {
-          return schema.enum.map((v) => `'${v}'`).join(" | ");
+          return schema.enum.map((v) => `'${v}'`).join(' | ');
         }
-        return "string";
+        return 'string';
       }
-      case "boolean":
-        return "boolean";
-      case "array": {
+      case 'boolean':
+        return 'boolean';
+      case 'array': {
         const itemSchema = schema.items;
         const itemType = itemSchema
           ? tsTypeFromSchema(Array.isArray(itemSchema) ? itemSchema[0] : itemSchema, definitions)
-          : "unknown";
+          : 'unknown';
         return `${itemType}[]`;
       }
-      case "null":
-        return "null";
+      case 'null':
+        return 'null';
       default:
-        return "unknown";
+        return 'unknown';
     }
   }
 
@@ -68,30 +68,30 @@ export function tsTypeFromSchema(
     const parts = type
       .map((t) => {
         switch (t) {
-          case "integer":
-          case "number":
-            return "number";
-          case "string":
-            return "string";
-          case "boolean":
-            return "boolean";
-          case "null":
-            return "null";
-          case "object":
+          case 'integer':
+          case 'number':
+            return 'number';
+          case 'string':
+            return 'string';
+          case 'boolean':
+            return 'boolean';
+          case 'null':
+            return 'null';
+          case 'object':
             return tsObjectFromSchema(schema, definitions);
-          case "array":
+          case 'array':
             return schema.items
               ? `${tsTypeFromSchema(Array.isArray(schema.items) ? schema.items[0] : schema.items, definitions)}[]`
-              : "unknown[]";
+              : 'unknown[]';
           default:
-            return "unknown";
+            return 'unknown';
         }
       })
       .filter((v, i, a) => a.indexOf(v) === i);
-    return parts.join(" | ");
+    return parts.join(' | ');
   }
 
-  return "unknown";
+  return 'unknown';
 }
 
 /**
@@ -107,14 +107,14 @@ export function tsObjectFromSchema(
   const required = new Set(schema.required ?? []);
   const properties = schema.properties;
 
-  if (!properties) return "Record<string, unknown>";
+  if (!properties) return 'Record<string, unknown>';
 
   const fields = Object.entries(properties)
     .map(([name, propSchema]) => {
-      const optional = required.has(name) ? "" : "?";
+      const optional = required.has(name) ? '' : '?';
       return `  ${name}${optional}: ${tsTypeFromSchema(propSchema, definitions)};`;
     })
-    .join("\n");
+    .join('\n');
 
   return `{\n${fields}\n}`;
 }
@@ -122,10 +122,7 @@ export function tsObjectFromSchema(
 /**
  * 스키마에서 `definitions` 객체를 추출하여 `out`에 병합합니다.
  */
-export function collectDefinitions(
-  schema: JsonSchema,
-  out: Record<string, JsonSchema>,
-): void {
+export function collectDefinitions(schema: JsonSchema, out: Record<string, JsonSchema>): void {
   if (schema.definitions) {
     for (const [key, value] of Object.entries(schema.definitions)) {
       out[key] = value;
@@ -135,7 +132,7 @@ export function collectDefinitions(
 
 /** 명령 이름을 lowerCamelCase TypeScript 함수 이름으로 변환합니다. */
 export function commandFunctionName(name: string): string {
-  let output = "";
+  let output = '';
   let uppercaseNext = false;
 
   for (const char of name) {
@@ -153,16 +150,12 @@ export function commandFunctionName(name: string): string {
     }
   }
 
-  return output.length > 0 ? output : "command";
+  return output.length > 0 ? output : 'command';
 }
 
 function isAsciiAlphanumeric(char: string): boolean {
   const code = char.charCodeAt(0);
-  return (
-    (code >= 48 && code <= 57) ||
-    (code >= 65 && code <= 90) ||
-    (code >= 97 && code <= 122)
-  );
+  return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
 }
 
 // ── Postcard wire format utilities (emitted into generated code) ──────────

@@ -1,4 +1,4 @@
-import type { EngineClient, RustraNative, RkyvV2Codec } from "@rustra/types";
+import type { EngineClient, RustraNative, RkyvV2Codec } from '@rustra/types';
 
 export type HybridCodec<I, O> = RkyvV2Codec<I, O>;
 
@@ -16,7 +16,7 @@ export function createHybridEngine(
       const resultBytes = native.invokeHybrid(payload);
       const response = codec.decode(resultBytes);
       if (!response.ok) {
-        throw new Error(response.error ?? "Rustra hybrid invoke failed");
+        throw new Error(response.error ?? 'Rustra hybrid invoke failed');
       }
       return Promise.resolve(response.result as T);
     },
@@ -37,7 +37,7 @@ function encodeVarint(value: number): number[] {
 }
 
 function zigzag(n: number): number {
-  return n >= 0 ? n * 2 : (-n) * 2 - 1;
+  return n >= 0 ? n * 2 : -n * 2 - 1;
 }
 
 function encodeVarintString(str: string): number[] {
@@ -52,14 +52,18 @@ function encodeVarintString(str: string): number[] {
 const RESP_OK_OFFSET = 0;
 const RESP_VALUE_OFFSET = 8;
 
-function parseRkyvResponse(buf: ArrayBuffer): { ok: boolean; result?: { value: number }; error?: string } {
-  if (buf.byteLength < 16) return { ok: false, error: "response too short" };
+function parseRkyvResponse(buf: ArrayBuffer): {
+  ok: boolean;
+  result?: { value: number };
+  error?: string;
+} {
+  if (buf.byteLength < 16) return { ok: false, error: 'response too short' };
   const u8 = new Uint8Array(buf);
   const view = new DataView(buf);
 
   const ok = u8[RESP_OK_OFFSET] === 1;
   if (!ok) {
-    return { ok: false, error: "hybrid invoke failed" };
+    return { ok: false, error: 'hybrid invoke failed' };
   }
 
   const lo = view.getInt32(RESP_VALUE_OFFSET, true);
@@ -68,21 +72,20 @@ function parseRkyvResponse(buf: ArrayBuffer): { ok: boolean; result?: { value: n
 
 // ── Codec: postcard encode → rkyv decode ──
 
-export const addNumbersCodec: HybridCodec<
-  { a: number; b: number },
-  { value: number }
-> = {
+export const addNumbersCodec: HybridCodec<{ a: number; b: number }, { value: number }> = {
   commandId: 1,
   encode(args: { a: number; b: number }): ArrayBuffer {
-    const header = encodeVarintString("addNumbers");
+    const header = encodeVarintString('addNumbers');
     const aBytes = encodeVarint(zigzag(args.a));
     const bBytes = encodeVarint(zigzag(args.b));
     const total = header.length + aBytes.length + bBytes.length;
     const buf = new ArrayBuffer(total);
     const u8 = new Uint8Array(buf);
     let off = 0;
-    u8.set(header, off); off += header.length;
-    u8.set(aBytes, off); off += aBytes.length;
+    u8.set(header, off);
+    off += header.length;
+    u8.set(aBytes, off);
+    off += aBytes.length;
     u8.set(bBytes, off);
     return buf;
   },
@@ -91,5 +94,5 @@ export const addNumbersCodec: HybridCodec<
 };
 
 export const hybridRegistry = new Map<string, HybridCodec<any, any>>([
-  ["addNumbers", addNumbersCodec],
+  ['addNumbers', addNumbersCodec],
 ]);

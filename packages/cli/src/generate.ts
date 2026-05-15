@@ -22,7 +22,7 @@ export function generateTypesTs(schema: PackageSchema): string {
     "export type { EngineClient, RustraError } from '@rustra/types';\n" +
     "export { RustraCommandError } from '@rustra/types';\n\n";
 
-  const allDefinitions: Record<string, import("./schema.js").JsonSchema> = {};
+  const allDefinitions: Record<string, import('./schema.js').JsonSchema> = {};
   for (const command of schema.commands) {
     collectDefinitions(command.inputSchema, allDefinitions);
     collectDefinitions(command.outputSchema, allDefinitions);
@@ -90,8 +90,14 @@ export function generateContractTs(schemaJson: string): string {
 
 /** Postcard field types for schema classification. */
 type PostcardFieldKind =
-  | 'zigzag' | 'f64' | 'f32' | 'bool' | 'string'
-  | 'vec_zigzag' | 'vec_f64' | 'vec_bool'
+  | 'zigzag'
+  | 'f64'
+  | 'f32'
+  | 'bool'
+  | 'string'
+  | 'vec_zigzag'
+  | 'vec_f64'
+  | 'vec_bool'
   | 'struct'; // nested struct via $ref
 
 type PostcardField = {
@@ -104,9 +110,7 @@ type PostcardField = {
 /**
  * Classify a single JSON Schema property into its postcard wire encoding kind.
  */
-function classifyPostcardField(
-  schema: import('./schema.js').JsonSchema,
-): PostcardFieldKind | null {
+function classifyPostcardField(schema: import('./schema.js').JsonSchema): PostcardFieldKind | null {
   if (schema.$ref) return 'struct';
   if (schema.type === 'boolean') return 'bool';
   if (schema.type === 'integer') return 'zigzag';
@@ -161,7 +165,9 @@ function collectPostcardFields(
  * Collect all definitions from the schema tree.
  * These come from both command-level definitions and schema-level definitions.
  */
-function collectAllDefinitions(schema: PackageSchema): Record<string, import('./schema.js').JsonSchema> {
+function collectAllDefinitions(
+  schema: PackageSchema,
+): Record<string, import('./schema.js').JsonSchema> {
   const defs: Record<string, import('./schema.js').JsonSchema> = {};
   for (const command of schema.commands) {
     // Command-level definitions (from schemars $ref targets)
@@ -427,7 +433,9 @@ function generatePostcardCodec(
   lines.push(`    const view = new DataView(buf);`);
   lines.push(`    if (u8[0] !== 1) {`);
   lines.push(`      const errLen = view.getUint16(8, true);`);
-  lines.push(`      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';`);
+  lines.push(
+    `      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';`,
+  );
   lines.push(`      return { ok: false, error: err };`);
   lines.push(`    }`);
 
@@ -463,9 +471,7 @@ export function generateRkyvRegistryTs(schema: PackageSchema): string {
     })
     .join(',\n');
 
-  const codecImports = included
-    .map((c) => commandFunctionName(c.name) + 'Codec')
-    .join(', ');
+  const codecImports = included.map((c) => commandFunctionName(c.name) + 'Codec').join(', ');
 
   return (
     `import { ${codecImports} } from './rkyv-codecs';\n\n` +
