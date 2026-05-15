@@ -4,7 +4,7 @@
  * Uses JSON transport via Node-compatible spawnSync + spawned Rust binary.
  */
 import { resolve } from 'node:path';
-import { configure } from '../../../packages/types/src/index.js';
+import { configure } from '@rustra/types';
 
 const BIN = resolve(import.meta.dirname, '../../../target/debug/rustra-calculator-example');
 
