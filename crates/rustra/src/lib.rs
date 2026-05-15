@@ -66,6 +66,13 @@ pub fn build(id: impl Into<String>) -> PackageBuilder {
 use codegen::{command_function_name, contract_hash, ts_type_from_schema};
 use schema::{command_name_from_handler, schema_value, short_type_name};
 
+fn is_ts_primitive(schema: &Value) -> bool {
+    matches!(
+        schema.get("type").and_then(Value::as_str),
+        Some("integer") | Some("number") | Some("string") | Some("boolean")
+    )
+}
+
 /// 자주 사용하는 타입과 매크로를 한 번에 가져올 수 있는 prelude 모듈입니다.
 ///
 /// ```rust
@@ -340,18 +347,22 @@ impl Package {
 
         for command in self.commands.values() {
             if emitted.insert(command.input_type.clone()) {
-                output.push_str(&format!(
-                    "export type {} = {};\n\n",
-                    command.input_type,
-                    ts_type_from_schema(&command.input_schema, &definitions)
-                ));
+                if !is_ts_primitive(&command.input_schema) {
+                    output.push_str(&format!(
+                        "export type {} = {};\n\n",
+                        command.input_type,
+                        ts_type_from_schema(&command.input_schema, &definitions)
+                    ));
+                }
             }
             if emitted.insert(command.output_type.clone()) {
-                output.push_str(&format!(
-                    "export type {} = {};\n\n",
-                    command.output_type,
-                    ts_type_from_schema(&command.output_schema, &definitions)
-                ));
+                if !is_ts_primitive(&command.output_schema) {
+                    output.push_str(&format!(
+                        "export type {} = {};\n\n",
+                        command.output_type,
+                        ts_type_from_schema(&command.output_schema, &definitions)
+                    ));
+                }
             }
         }
 
@@ -361,20 +372,35 @@ impl Package {
     fn generate_commands_ts(&self) -> String {
         let mut type_names = BTreeSet::from(["EngineClient".to_string()]);
         for command in self.commands.values() {
-            type_names.insert(command.input_type.clone());
-            type_names.insert(command.output_type.clone());
+            if !is_ts_primitive(&command.input_schema) {
+                type_names.insert(command.input_type.clone());
+            }
+            if !is_ts_primitive(&command.output_schema) {
+                type_names.insert(command.output_type.clone());
+            }
         }
 
         let imports = type_names.into_iter().collect::<Vec<_>>().join(", ");
         let mut output = format!("import type {{ {imports} }} from './types.js';\n\n");
 
+        let definitions = Value::Object(serde_json::Map::new());
         for (name, command) in self.commands.iter() {
+            let input_ts = if is_ts_primitive(&command.input_schema) {
+                ts_type_from_schema(&command.input_schema, &definitions)
+            } else {
+                command.input_type.clone()
+            };
+            let output_ts = if is_ts_primitive(&command.output_schema) {
+                ts_type_from_schema(&command.output_schema, &definitions)
+            } else {
+                command.output_type.clone()
+            };
             output.push_str(&format!(
                 "export function {}(engine: EngineClient, input: {}): Promise<{}> {{\n  return engine.invoke<{}>('{}', input);\n}}\n\n",
                 command_function_name(name),
-                command.input_type,
-                command.output_type,
-                command.output_type,
+                input_ts,
+                output_ts,
+                output_ts,
                 name,
             ));
         }

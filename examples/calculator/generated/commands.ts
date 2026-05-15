@@ -1,6 +1,6 @@
-import type { EngineClient, __AddNumbersInput, i64 } from './types.js';
+import type { AddNumbersInput, EngineClient } from './types.js';
 
-export function addNumbers(engine: EngineClient, input: __AddNumbersInput): Promise<i64> {
-  return engine.invoke<i64>('addNumbers', input);
+export function addNumbers(engine: EngineClient, input: AddNumbersInput): Promise<number> {
+  return engine.invoke<number>('addNumbers', input);
 }
 
