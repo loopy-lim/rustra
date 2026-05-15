@@ -19,7 +19,7 @@
         "title": "__AddNumbersInput",
         "type": "object"
       },
-      "inputType": "__AddNumbersInput",
+      "inputType": "AddNumbersInput",
       "name": "addNumbers",
       "outputSchema": {
         "format": "int64",
