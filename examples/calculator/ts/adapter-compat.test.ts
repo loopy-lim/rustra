@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { configure } from '../../../packages/types/src/index.js';
+import { configure } from '@rustra/types';
 import { createBunEngine } from '../../../packages/bun/src/index.js';
 import { createNodeEngine } from '../../../packages/node/src/index.js';
 import { createReactNativeEngine } from '../../../packages/react-native/src/index.js';
@@ -24,7 +24,11 @@ function createRecordingTransport() {
   };
 }
 
-async function assertGeneratedCommandWorks(name: string, engine: EngineClient, calls: Invocation[]) {
+async function assertGeneratedCommandWorks(
+  name: string,
+  engine: EngineClient,
+  calls: Invocation[],
+) {
   configure(engine);
   const result = await addNumbers({ a: 20, b: 22 });
 
@@ -68,7 +72,8 @@ test('react native adapter forwards generated commands through JSI native module
   const nativeModule = {
     invoke(payload: ArrayBuffer): ArrayBuffer {
       const { command, args } = JSON.parse(decoder.decode(payload));
-      return encoder.encode(JSON.stringify({ ok: true, result: { value: 42 } })).buffer as ArrayBuffer;
+      return encoder.encode(JSON.stringify({ ok: true, result: { value: 42 } }))
+        .buffer as ArrayBuffer;
     },
   };
   const engine = createReactNativeEngine(nativeModule);

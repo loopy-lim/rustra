@@ -1,20 +1,8 @@
 /**
- * @rustra/react-native — React Native용 rustra 엔진 어댑터
+ * RN용 rustra 엔진 어댑터
  *
- * `@rustra/types`의 글로벌 invoke + RN JSI 전용 엔진을 제공합니다.
- *
- * @example
- * ```ts
- * import { configure } from '@rustra/types';
- * import { createRkyvV2Engine } from '@rustra/react-native';
- * import { rkyvV2Registry } from './generated/rkyv-registry.js';
- *
- * await installRustraJSI();
- * configure(createRkyvV2Engine(getRustraNative(), rkyvV2Registry));
- *
- * // 이후 어디서든
- * const result = await addNumbers({ a: 42, b: 58 });
- * ```
+ * 글로벌 invoke + RN JSI 전용 엔진을 제공합니다.
+ * 설정은 `@rustra/types`의 configure()를 사용합니다.
  */
 
 export type { EngineClient, RustraError, RkyvV2Codec, RkyvV2Native } from '@rustra/types';

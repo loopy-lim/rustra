@@ -5,8 +5,19 @@ import { configure, createNodeEngine } from '../../../packages/node/src/index.js
 import { addNumbers } from '../generated/commands.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const napiPath = resolve(__dirname, '..', '..', '..', '..', 'examples', 'calculator-napi', `calculator-napi.${process.platform}-${process.arch}.node`);
-const native = createRequire(__dirname)(napiPath) as { rustraInvoke: (cmd: string, args: string | undefined) => string };
+const napiPath = resolve(
+  __dirname,
+  '..',
+  '..',
+  '..',
+  '..',
+  'examples',
+  'calculator-napi',
+  `calculator-napi.${process.platform}-${process.arch}.node`,
+);
+const native = createRequire(__dirname)(napiPath) as {
+  rustraInvoke: (cmd: string, args: string | undefined) => string;
+};
 
 const engine = createNodeEngine({
   async invoke(command: string, args?: unknown): Promise<unknown> {

@@ -1,5 +1,5 @@
 import { addNumbers } from '../generated/commands.js';
-import { configure } from '../../../packages/types/src/index.js';
+import { configure } from '@rustra/types';
 import { createTauriEngine } from '../../../packages/tauri/src/index.js';
 
 const calls: Array<{ command: string; args: unknown }> = [];

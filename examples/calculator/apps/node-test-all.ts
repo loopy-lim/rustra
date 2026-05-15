@@ -6,7 +6,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
-import { configure } from '../../../packages/types/src/index.js';
+import { configure } from '@rustra/types';
 
 const BIN = resolve(import.meta.dirname, '../../../target/debug/rustra-calculator-example');
 
