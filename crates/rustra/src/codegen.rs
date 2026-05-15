@@ -23,6 +23,14 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
         return parts.join(" | ");
     }
 
+    if let Some(one_of) = schema.get("oneOf").and_then(Value::as_array) {
+        let parts: Vec<String> = one_of
+            .iter()
+            .map(|s| ts_type_from_schema(s, definitions))
+            .collect();
+        return parts.join(" | ");
+    }
+
     match schema.get("type") {
         Some(Value::String(t)) => match t.as_str() {
             "object" => ts_object_from_schema(schema, definitions),
@@ -44,6 +52,21 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
             }
             "boolean" => "boolean".to_string(),
             "array" => {
+                if let Some(items) = schema.get("items").and_then(Value::as_array) {
+                    let element_types: Vec<String> = items
+                        .iter()
+                        .map(|s| ts_type_from_schema(s, definitions))
+                        .collect();
+                    return format!("[{}]", element_types.join(", "));
+                }
+                let prefix = schema.get("prefixItems").and_then(Value::as_array);
+                if let Some(items) = prefix {
+                    let element_types: Vec<String> = items
+                        .iter()
+                        .map(|s| ts_type_from_schema(s, definitions))
+                        .collect();
+                    return format!("[{}]", element_types.join(", "));
+                }
                 let item_type = schema
                     .get("items")
                     .map(|s| ts_type_from_schema(s, definitions))
@@ -95,6 +118,10 @@ pub(super) fn ts_object_from_schema(schema: &Value, definitions: &Value) -> Stri
         })
         .unwrap_or_default();
     let Some(properties) = schema.get("properties").and_then(Value::as_object) else {
+        if let Some(additional) = schema.get("additionalProperties") {
+            let value_type = ts_type_from_schema(additional, definitions);
+            return format!("Record<string, {value_type}>");
+        }
         return "Record<string, unknown>".to_string();
     };
 
