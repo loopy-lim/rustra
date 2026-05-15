@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { createNodeEngine } from '../../../packages/node/src/index.js';
+import { configure, createNodeEngine } from '../../../packages/node/src/index.js';
 import { addNumbers } from '../generated/commands.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -26,8 +26,9 @@ const engine = createNodeEngine({
     return response.result;
   },
 });
+configure(engine);
 
-const result = await addNumbers(engine, { a: 20, b: 22 });
+const result = await addNumbers({ a: 20, b: 22 });
 
 if (result.value !== 42) {
   throw new Error(`expected 42, got ${result.value}`);

@@ -1,5 +1,5 @@
 import { addNumbers } from '../generated/commands.js';
-import { createReactNativeEngine } from '../../../packages/react-native/src/index.js';
+import { configure, createReactNativeEngine } from '../../../packages/react-native/src/index.js';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -12,7 +12,8 @@ const NativeRustraModule = {
 };
 
 const engine = createReactNativeEngine(NativeRustraModule);
-const result = await addNumbers(engine, { a: 20, b: 22 });
+configure(engine);
+const result = await addNumbers({ a: 20, b: 22 });
 
 if (result.value !== 42) {
   throw new Error(`expected 42, got ${result.value}`);
