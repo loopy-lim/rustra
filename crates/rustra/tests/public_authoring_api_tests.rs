@@ -1,4 +1,6 @@
 use rustra::prelude::*;
+use serde_json::json;
+use std::fs;
 use std::process::Command;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
@@ -23,9 +25,9 @@ fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
 
 #[test]
 fn user_builds_package_without_touching_raw_engine_types() {
-    let package = Package::builder("example.calculator")
-        .command("addNumbers", add_numbers)
-        .build();
+    let package = rustra::build("example.calculator")
+        .register(add_numbers)
+        .done();
 
     let output: AddNumbersOutput = package
         .invoke("addNumbers", AddNumbersInput { a: 20, b: 22 })
@@ -36,9 +38,9 @@ fn user_builds_package_without_touching_raw_engine_types() {
 
 #[test]
 fn user_can_register_command_without_writing_command_name_string() {
-    let package = Package::builder("example.calculator")
-        .command_fn(add_numbers)
-        .build();
+    let package = rustra::build("example.calculator")
+        .register(add_numbers)
+        .done();
 
     let output: AddNumbersOutput = package
         .invoke("addNumbers", AddNumbersInput { a: 8, b: 13 })
@@ -53,7 +55,7 @@ fn user_can_register_command_without_writing_command_name_string() {
 
 #[test]
 fn register_macro_uses_macro_derived_name() {
-    let package = register!(Package::builder("example.calculator"), add_numbers).build();
+    let package = rustra::build!("example.calculator", add_numbers).done();
 
     let output: AddNumbersOutput = package
         .invoke("addNumbers", AddNumbersInput { a: 1, b: 1 })
@@ -64,19 +66,17 @@ fn register_macro_uses_macro_derived_name() {
 
 #[test]
 fn package_generates_host_neutral_typescript_client() {
-    let package = Package::builder("example.calculator")
-        .command("addNumbers", add_numbers)
-        .build();
+    let package = rustra::build("example.calculator")
+        .register(add_numbers)
+        .done();
 
     let generated = package.generate_typescript().unwrap();
 
     assert!(generated.types_ts.contains("export type AddNumbersInput"));
     assert!(generated.commands_ts.contains("export function addNumbers"));
-    assert!(
-        generated
-            .commands_ts
-            .contains("engine.invoke<AddNumbersOutput>")
-    );
+    assert!(generated
+        .commands_ts
+        .contains("engine.invoke<AddNumbersOutput>"));
     assert!(!generated.commands_ts.contains("EngineRequest"));
     assert!(!generated.commands_ts.contains("Attachment"));
     assert!(!generated.commands_ts.contains("node:"));
@@ -85,14 +85,13 @@ fn package_generates_host_neutral_typescript_client() {
 
 #[test]
 fn generated_package_can_be_written_to_a_directory() {
-    let package = Package::builder("example.calculator")
-        .command("addNumbers", add_numbers)
-        .build();
-    let generated = package.generate_typescript().unwrap();
     let output_dir = std::env::temp_dir().join(format!("rustra-generated-{}", std::process::id()));
 
     let _ = std::fs::remove_dir_all(&output_dir);
-    generated.write_to_dir(&output_dir).unwrap();
+    rustra::build("example.calculator")
+        .register(add_numbers)
+        .generate_to(&output_dir)
+        .unwrap();
 
     assert!(output_dir.join("schema.json").exists());
     assert!(output_dir.join("types.ts").exists());
@@ -104,7 +103,7 @@ fn generated_package_can_be_written_to_a_directory() {
 
 #[test]
 fn unknown_command_uses_package_level_error() {
-    let package = Package::builder("example.empty").build();
+    let package = rustra::build("example.empty").done();
     let error = package
         .invoke::<_, AddNumbersOutput>("missing", AddNumbersInput { a: 1, b: 2 })
         .unwrap_err();
@@ -136,9 +135,7 @@ fn ts_generator_handles_optional_fields() {
         })
     }
 
-    let package = Package::builder("test.optional")
-        .command("optionalCmd", optional_cmd)
-        .build();
+    let package = rustra::build("test.optional").register(optional_cmd).done();
     let generated = package.generate_typescript().unwrap();
 
     assert!(
@@ -180,9 +177,7 @@ fn ts_generator_handles_enums() {
         })
     }
 
-    let package = Package::builder("test.enum")
-        .command("enumCmd", enum_cmd)
-        .build();
+    let package = rustra::build("test.enum").register(enum_cmd).done();
     let generated = package.generate_typescript().unwrap();
 
     assert!(
@@ -225,9 +220,7 @@ fn ts_generator_handles_vec_and_optional_struct() {
         })
     }
 
-    let package = Package::builder("test.complex")
-        .command("complexCmd", complex_cmd)
-        .build();
+    let package = rustra::build("test.complex").register(complex_cmd).done();
     let generated = package.generate_typescript().unwrap();
 
     assert!(
@@ -296,12 +289,290 @@ fn command_macro_rejects_wrong_signature() {
     );
     assert!(!no_input, "missing input parameter should fail");
 
-    let wrong_return = try_compile(
+    let bare_return = try_compile(
         "use rustra::prelude::*;\n\
          #[derive(Serialize, Deserialize, JsonSchema)]\n\
          struct In { x: i64 }\n\
          #[command]\n\
-         pub fn bad_return(input: In) -> String { String::new() }\n",
+         pub fn bare_return(input: In) -> String { String::new() }\n",
     );
-    assert!(!wrong_return, "non-Result return should fail");
+    assert!(bare_return, "bare (non-Result) return should now compile");
+
+    let multi_param = try_compile(
+        "use rustra::prelude::*;\n\
+         #[command]\n\
+         pub fn add(a: i64, b: i64) -> i64 { a + b }\n",
+    );
+    assert!(
+        multi_param,
+        "multiple scalar params with bare return should compile"
+    );
+}
+
+#[test]
+fn ts_generator_handles_hashmap() {
+    use std::collections::HashMap;
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct MapInput {
+        scores: HashMap<String, i64>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct MapOutput {
+        result: HashMap<String, String>,
+    }
+
+    #[command]
+    fn map_cmd(input: MapInput) -> Result<MapOutput> {
+        let mut result = HashMap::new();
+        for (k, v) in input.scores {
+            result.insert(k, v.to_string());
+        }
+        Ok(MapOutput { result })
+    }
+
+    let package = rustra::build("test.map").register(map_cmd).done();
+    let generated = package.generate_typescript().unwrap();
+
+    assert!(
+        generated
+            .types_ts
+            .contains("scores: Record<string, number>;"),
+        "HashMap<String, i64> should become Record<string, number>, got:\n{}",
+        generated.types_ts
+    );
+    assert!(
+        generated
+            .types_ts
+            .contains("result: Record<string, string>;"),
+        "HashMap<String, String> should become Record<string, string>, got:\n{}",
+        generated.types_ts
+    );
+}
+
+#[test]
+fn ts_generator_handles_tuples() {
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct TupleInput {
+        pair: (String, i64),
+        triple: (String, i64, bool),
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct TupleOutput {
+        value: (i64, String),
+    }
+
+    #[command]
+    fn tuple_cmd(input: TupleInput) -> Result<TupleOutput> {
+        Ok(TupleOutput {
+            value: (input.pair.1, input.pair.0),
+        })
+    }
+
+    let package = rustra::build("test.tuple").register(tuple_cmd).done();
+    let generated = package.generate_typescript().unwrap();
+
+    assert!(
+        generated.types_ts.contains("pair: [string, number];"),
+        "tuple (String, i64) should become [string, number], got:\n{}",
+        generated.types_ts
+    );
+    assert!(
+        generated
+            .types_ts
+            .contains("triple: [string, number, boolean];"),
+        "tuple (String, i64, bool) should become [string, number, boolean], got:\n{}",
+        generated.types_ts
+    );
+}
+
+#[test]
+fn ts_generator_handles_enum_with_data() {
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    enum Shape {
+        Circle { radius: f64 },
+        Rectangle { width: f64, height: f64 },
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct EnumDataInput {
+        shape: Shape,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct EnumDataOutput {
+        description: String,
+    }
+
+    #[command]
+    fn enum_data_cmd(input: EnumDataInput) -> Result<EnumDataOutput> {
+        let desc = match input.shape {
+            Shape::Circle { radius } => format!("circle(r={radius})"),
+            Shape::Rectangle { width, height } => format!("rect({width}x{height})"),
+        };
+        Ok(EnumDataOutput { description: desc })
+    }
+
+    let package = rustra::build("test.enum_data")
+        .register(enum_data_cmd)
+        .done();
+    let generated = package.generate_typescript().unwrap();
+
+    assert!(
+        generated.types_ts.contains("Circle") && generated.types_ts.contains("Rectangle"),
+        "enum with data should contain variant names, got:\n{}",
+        generated.types_ts
+    );
+    assert!(
+        generated.types_ts.contains("radius")
+            && generated.types_ts.contains("width")
+            && generated.types_ts.contains("height"),
+        "enum with data should contain variant fields, got:\n{}",
+        generated.types_ts
+    );
+}
+
+#[test]
+fn ts_generator_handles_deep_nesting() {
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct Tag {
+        label: String,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct Nested {
+        tags: Vec<Tag>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct DeepInput {
+        matrix: Vec<Vec<i64>>,
+        maybe_items: Option<Vec<Option<Tag>>>,
+        nested: Nested,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct DeepOutput {
+        count: i64,
+    }
+
+    #[command]
+    fn deep_cmd(input: DeepInput) -> Result<DeepOutput> {
+        Ok(DeepOutput {
+            count: input.matrix.iter().map(|r| r.len() as i64).sum(),
+        })
+    }
+
+    let package = rustra::build("test.deep").register(deep_cmd).done();
+    let generated = package.generate_typescript().unwrap();
+
+    assert!(
+        generated.types_ts.contains("matrix: number[][];"),
+        "Vec<Vec<i64>> should become number[][], got:\n{}",
+        generated.types_ts
+    );
+    assert!(
+        generated.types_ts.contains("export type Tag"),
+        "Tag type should be emitted, got:\n{}",
+        generated.types_ts
+    );
+}
+
+#[test]
+fn bridge_type_replaces_four_derives() {
+    #[rustra::bridge_type]
+    struct BridgedInput {
+        pub name: String,
+        pub age: Option<u32>,
+    }
+
+    // Verify serialization with camelCase
+    let input = BridgedInput {
+        name: "test".into(),
+        age: Some(25),
+    };
+    let json = serde_json::to_value(&input).unwrap();
+    assert_eq!(json["name"], "test");
+    assert_eq!(json["age"], 25);
+
+    // Verify round-trip
+    let de: BridgedInput = serde_json::from_value(json).unwrap();
+    assert_eq!(de.name, "test");
+    assert_eq!(de.age, Some(25));
+
+    // Verify JsonSchema works
+    let schema = schemars::schema_for!(BridgedInput);
+    let schema_json = serde_json::to_value(&schema).unwrap();
+    assert!(schema_json["$schema"].is_string());
+}
+
+#[test]
+fn build_api_registers_scalar_command() {
+    #[command]
+    fn scalar_add(a: i64, b: i64) -> i64 {
+        a + b
+    }
+
+    let pkg = rustra::build!("test.scalar", scalar_add).done();
+
+    let result: i64 = pkg.invoke("scalarAdd", json!({ "a": 2, "b": 3 })).unwrap();
+    assert_eq!(result, 5);
+}
+
+#[test]
+fn build_api_scalar_command_with_result() {
+    #[command]
+    fn scalar_divide(a: i64, b: i64) -> Result<i64> {
+        if b == 0 {
+            Err(RustraError::invalid_args("division by zero"))
+        } else {
+            Ok(a / b)
+        }
+    }
+
+    let pkg = rustra::build!("test.scalar", scalar_divide).done();
+
+    let result: i64 = pkg
+        .invoke("scalarDivide", json!({ "a": 10, "b": 2 }))
+        .unwrap();
+    assert_eq!(result, 5);
+
+    let err = pkg.invoke::<serde_json::Value, i64>("scalarDivide", json!({ "a": 10, "b": 0 }));
+    assert!(err.is_err());
+}
+
+#[test]
+fn build_api_generates_typescript() {
+    #[command]
+    fn greet(name: String, greeting: String) -> String {
+        format!("{greeting}, {name}!")
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    rustra::build!("test.greet", greet)
+        .generate_to(dir.path())
+        .unwrap();
+
+    assert!(dir.path().join("types.ts").exists());
+    assert!(dir.path().join("commands.ts").exists());
+    assert!(dir.path().join("schema.json").exists());
+    assert!(dir.path().join("contract.ts").exists());
+
+    let types_ts = fs::read_to_string(dir.path().join("types.ts")).unwrap();
+    assert!(
+        types_ts.contains("GreetInput"),
+        "expected GreetInput type, got:\n{types_ts}"
+    );
 }
