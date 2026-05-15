@@ -1,12 +1,6 @@
 export type { EngineClient, RustraError } from '@rustra/types';
 export { RustraCommandError } from '@rustra/types';
 
-export type Item = {
-  active: boolean;
-  name: string;
-  value: number;
-};
-
 export type AddNumbersInput = {
   a: number;
   b: number;

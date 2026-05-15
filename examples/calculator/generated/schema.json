@@ -81,6 +81,28 @@
     },
     {
       "commandId": 8,
+      "definitions": {
+        "Item": {
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "value": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "active",
+            "name",
+            "value"
+          ],
+          "type": "object"
+        }
+      },
       "inputSchema": {
         "properties": {
           "name": {
@@ -214,6 +236,28 @@
     },
     {
       "commandId": 9,
+      "definitions": {
+        "Item": {
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "value": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "active",
+            "name",
+            "value"
+          ],
+          "type": "object"
+        }
+      },
       "inputSchema": {
         "properties": {
           "item": {

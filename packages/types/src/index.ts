@@ -58,6 +58,22 @@ export type RkyvV2Native = {
   invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
 };
 
+/**
+ * 통합 네이티브 인터페이스 — JSI/FFI 브릿지가 노출하는 모든 메서드.
+ * 각 어댑터는 필요한 메서드만 사용합니다.
+ */
+export type RustraNative = {
+  invoke(payload: ArrayBuffer): ArrayBuffer;
+  invokeMsgpack(payload: ArrayBuffer): ArrayBuffer;
+  invokeBincode(payload: ArrayBuffer): ArrayBuffer;
+  invokePostcard(payload: ArrayBuffer): ArrayBuffer;
+  invokeRkyv(payload: ArrayBuffer): ArrayBuffer;
+  invokeHybrid(payload: ArrayBuffer): ArrayBuffer;
+  invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
+  invokeRaw(payload: ArrayBuffer): ArrayBuffer;
+  noop(payload: ArrayBuffer): ArrayBuffer;
+};
+
 // ── Global invoke (Tauri-like) ──────────────────────────────
 
 let _engine: EngineClient | null = null;

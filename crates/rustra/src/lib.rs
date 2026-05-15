@@ -223,6 +223,8 @@ struct Command {
     output_schema: Value,
     definitions: Value,
     invoke: Arc<dyn Fn(Value) -> crate::Result<Value> + Send + Sync>,
+    /// Fast binary handler: payload[2..] → postcard deserialize → typed handler → postcard serialize
+    rkyv_v2_handler: Option<Arc<dyn Fn(&[u8]) -> crate::Result<Vec<u8>> + Send + Sync>>,
     rkyv_v2_decode: Arc<dyn Fn(&[u8]) -> crate::Result<Value> + Send + Sync>,
     rkyv_v2_encode_response: Arc<dyn Fn(&Value) -> Vec<u8> + Send + Sync>,
     /// true when this command uses Tier 3 (JSON fallback) wire format.
@@ -291,8 +293,12 @@ impl Package {
             .get(command_name)
             .ok_or_else(|| RustraError::command_not_found(command_name))?;
 
-        // Tier 3 commands only need the 2-byte command_id header; the rest is
-        // a JSON string.  Tier 1/2 commands need the full 8-byte fixed header.
+        // Fast path: use typed postcard binary handler (bypasses JSON Value entirely)
+        if let Some(ref handler) = command.rkyv_v2_handler {
+            return handler(payload);
+        }
+
+        // Fallback: legacy JSON-based path for commands without binary handler
         if !command.rkyv_v2_tier3 && payload.len() < 8 {
             return Err(RustraError::invalid_args("rkyv v2: payload too short"));
         }
@@ -323,14 +329,21 @@ impl Package {
             .commands
             .iter()
             .map(|(name, command)| {
-                json!({
+                let mut entry = json!({
                     "name": name,
                     "commandId": command.command_id,
                     "inputType": command.input_type,
                     "outputType": command.output_type,
                     "inputSchema": command.input_schema,
                     "outputSchema": command.output_schema,
-                })
+                });
+                // Include definitions if non-empty (for $ref resolution)
+                if let Value::Object(defs) = &command.definitions {
+                    if !defs.is_empty() {
+                        entry.as_object_mut().unwrap().insert("definitions".into(), command.definitions.clone());
+                    }
+                }
+                entry
             })
             .collect::<Vec<_>>();
 
@@ -460,6 +473,28 @@ impl PackageBuilder {
         };
         let rkyv_v2_response_encoder =
             build_rkyv_v2_response_encoder(&output_schema, is_tier3);
+
+        // Wrap handler in Arc so both JSON and binary paths can use it
+        let handler = Arc::new(handler);
+
+        // Generate fast postcard-based binary handler that bypasses JSON Value
+        let handler_bin = handler.clone();
+        let rkyv_v2_handler: Option<Arc<dyn Fn(&[u8]) -> crate::Result<Vec<u8>> + Send + Sync>> =
+            Some(Arc::new(move |payload: &[u8]| {
+                if payload.len() < 2 {
+                    return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+                }
+                let input: I = postcard::from_bytes(&payload[2..])
+                    .map_err(|e| RustraError::invalid_args(&format!("postcard decode: {e}")))?;
+                let output = handler_bin(input)?;
+                let out_bytes = postcard::to_allocvec(&output)
+                    .map_err(|e| RustraError::internal(&format!("postcard encode: {e}")))?;
+                let mut buf = vec![0u8; 8 + out_bytes.len()];
+                buf[0] = 1; // ok = true
+                buf[8..8 + out_bytes.len()].copy_from_slice(&out_bytes);
+                Ok(buf)
+            }));
+
         let command = Command {
             command_id: self.next_command_id,
             input_type: short_type_name::<I>(),
@@ -473,6 +508,7 @@ impl PackageBuilder {
                 let output = handler(input)?;
                 serde_json::to_value(output).map_err(RustraError::internal)
             }),
+            rkyv_v2_handler,
             rkyv_v2_decode: rkyv_v2_decoder,
             rkyv_v2_encode_response: rkyv_v2_response_encoder,
             rkyv_v2_tier3: is_tier3,
