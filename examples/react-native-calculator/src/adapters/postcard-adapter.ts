@@ -1,17 +1,10 @@
-import type { EngineClient } from "@rustra/types";
+import type { EngineClient, RustraNative, RkyvV2Codec } from "@rustra/types";
 
-export type PostcardNative = {
-  invokePostcard(payload: ArrayBuffer): ArrayBuffer;
-};
-
-export type PostcardCodec<I, O> = {
-  encode(args: I): ArrayBuffer;
-  decode(buf: ArrayBuffer): { ok: boolean; result?: O; error?: string };
-};
+export type PostcardCodec<I, O> = RkyvV2Codec<I, O>;
 
 export function createPostcardEngine(
-  native: PostcardNative,
-  registry: Map<string, PostcardCodec<any, any>>,
+  native: RustraNative,
+  registry: Map<string, RkyvV2Codec<any, any>>,
 ): EngineClient {
   return {
     invoke<T>(command: string, args?: unknown): Promise<T> {
@@ -78,6 +71,7 @@ export const addNumbersCodec: PostcardCodec<
   { a: number; b: number },
   { value: number }
 > = {
+  commandId: 1,
   encode(args: { a: number; b: number }): ArrayBuffer {
     const header = encodeVarintString("addNumbers");
     const aBytes = encodeVarint(zigzag(args.a));

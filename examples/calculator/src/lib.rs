@@ -68,9 +68,9 @@ pub fn is_even(input: IsEvenInput) -> Result<IsEvenOutput> {
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ClampInput {
-    pub value: f64,
-    pub min: f64,
     pub max: f64,
+    pub min: f64,
+    pub value: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
@@ -85,6 +85,9 @@ pub fn clamp(input: ClampInput) -> Result<ClampOutput> {
         value: input.value.clamp(input.min, input.max),
     })
 }
+
+// Note: ClampInput fields are ordered alphabetically (max, min, value) to match
+// schemars JSON Schema output order. Postcard serializes in struct field order.
 
 // ── Tier 2 (String/Vec) 명령 ─────────────────────────────
 
@@ -116,15 +119,15 @@ pub struct SumListInput {
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SumListOutput {
-    pub total: i64,
     pub count: i32,
+    pub total: i64,
 }
 
 #[command]
 pub fn sum_list(input: SumListInput) -> Result<SumListOutput> {
     Ok(SumListOutput {
-        total: input.numbers.iter().sum(),
         count: input.numbers.len() as i32,
+        total: input.numbers.iter().sum(),
     })
 }
 
@@ -152,9 +155,9 @@ pub fn to_upper(input: ToUpperInput) -> Result<ToUpperOutput> {
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Item {
+    pub active: bool,
     pub name: String,
     pub value: i64,
-    pub active: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
@@ -174,9 +177,9 @@ pub struct CreateItemOutput {
 pub fn create_item(input: CreateItemInput) -> Result<CreateItemOutput> {
     Ok(CreateItemOutput {
         item: Item {
+            active: true,
             name: input.name,
             value: input.value,
-            active: true,
         },
     })
 }
@@ -190,20 +193,20 @@ pub struct ProcessItemInput {
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProcessItemOutput {
-    pub item: Item,
     pub doubled: bool,
+    pub item: Item,
 }
 
 #[command]
 pub fn process_item(input: ProcessItemInput) -> Result<ProcessItemOutput> {
     let doubled = input.item.value > 100;
     Ok(ProcessItemOutput {
+        doubled,
         item: Item {
+            active: input.item.active && doubled,
             name: format!("processed_{}", input.item.name),
             value: input.item.value * 2,
-            active: input.item.active && doubled,
         },
-        doubled,
     })
 }
 
@@ -1155,12 +1158,13 @@ mod tests {
 
     #[test]
     fn test_rkyv_v2_generic_dispatch() {
-        // Build request bytes matching the fixed-width layout:
-        // [command_id: u16 @0] [pad 6B] [a: i64 @8] [b: i64 @16] = 24 bytes
-        let mut payload = vec![0u8; 24];
+        // Build request using postcard wire format:
+        // [command_id: u16 @0][postcard(AddNumbersInput)]
+        let input = AddNumbersInput { a: 42, b: 58 };
+        let input_bytes = postcard::to_allocvec(&input).unwrap();
+        let mut payload = vec![0u8; 2 + input_bytes.len()];
         payload[0..2].copy_from_slice(&1u16.to_le_bytes()); // command_id = 1 (addNumbers)
-        payload[8..16].copy_from_slice(&42i64.to_le_bytes()); // a
-        payload[16..24].copy_from_slice(&58i64.to_le_bytes()); // b
+        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
@@ -1172,10 +1176,10 @@ mod tests {
 
         let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
 
-        // New response format: [ok: u8 @0][pad 7B][value: i64 @8]
+        // Response: [ok: u8 @0][pad 7B][postcard(AddNumbersOutput)]
         assert_eq!(result_bytes[0], 1); // ok = true
-        let value = i64::from_le_bytes(result_bytes[8..16].try_into().unwrap());
-        assert_eq!(value, 100);
+        let output: AddNumbersOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
+        assert_eq!(output.value, 100);
 
         unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
     }
@@ -1183,13 +1187,12 @@ mod tests {
     #[test]
     fn test_rkyv_v2_tier2_string_input() {
         // greet (command_id = 5): input has one String field "name"
-        // Wire: [cmd_id: u16 @0][pad 6B][name_len: u32][name_bytes...]
-        let name = "World";
-        let name_bytes = name.as_bytes();
-        let mut payload = vec![0u8; 8 + 4 + name_bytes.len()];
+        // Wire: [cmd_id: u16 @0][postcard(GreetInput)]
+        let input = GreetInput { name: "World".into() };
+        let input_bytes = postcard::to_allocvec(&input).unwrap();
+        let mut payload = vec![0u8; 2 + input_bytes.len()];
         payload[0..2].copy_from_slice(&5u16.to_le_bytes()); // command_id = 5 (greet)
-        payload[8..12].copy_from_slice(&(name_bytes.len() as u32).to_le_bytes());
-        payload[12..12 + name_bytes.len()].copy_from_slice(name_bytes);
+        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
@@ -1202,10 +1205,9 @@ mod tests {
         let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
         assert_eq!(result_bytes[0], 1); // ok = true
 
-        // Response: [ok @0][pad 7B][msg_len: u32 @8][msg_bytes @12...]
-        let msg_len = u32::from_le_bytes(result_bytes[8..12].try_into().unwrap()) as usize;
-        let msg = std::str::from_utf8(&result_bytes[12..12 + msg_len]).unwrap();
-        assert_eq!(msg, "Hello, World!");
+        // Response: [ok @0][pad 7B][postcard(GreetOutput)]
+        let output: GreetOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
+        assert_eq!(output.message, "Hello, World!");
 
         unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
     }
@@ -1213,16 +1215,12 @@ mod tests {
     #[test]
     fn test_rkyv_v2_tier2_vec_input() {
         // sum_list (command_id = 6): input has one Vec<i64> field "numbers"
-        // Wire: [cmd_id: u16 @0][pad 6B][vec_len: u32][i64_le...]
-        let numbers: Vec<i64> = vec![10, 20, 30, 40];
-        let vec_data_len = numbers.len() * 8;
-        let mut payload = vec![0u8; 8 + 4 + vec_data_len];
+        // Wire: [cmd_id: u16 @0][postcard(SumListInput)]
+        let input = SumListInput { numbers: vec![10, 20, 30, 40] };
+        let input_bytes = postcard::to_allocvec(&input).unwrap();
+        let mut payload = vec![0u8; 2 + input_bytes.len()];
         payload[0..2].copy_from_slice(&6u16.to_le_bytes()); // command_id = 6 (sumList)
-        payload[8..12].copy_from_slice(&(vec_data_len as u32).to_le_bytes());
-        for (i, n) in numbers.iter().enumerate() {
-            let off = 12 + i * 8;
-            payload[off..off + 8].copy_from_slice(&n.to_le_bytes());
-        }
+        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
@@ -1234,14 +1232,11 @@ mod tests {
 
         let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
         assert_eq!(result_bytes[0], 1); // ok = true
-        assert!(out_len >= 24, "expected at least 24 bytes, got {out_len}");
 
-        // schemars orders properties alphabetically: "count" (i32) then "total" (i64)
-        // Layout: [ok @0][pad 7B][count: i32 @8][pad 4B][total: i64 @16] = 24 bytes
-        let count = i32::from_le_bytes(result_bytes[8..12].try_into().unwrap());
-        let total = i64::from_le_bytes(result_bytes[16..24].try_into().unwrap());
-        assert_eq!(total, 100);
-        assert_eq!(count, 4);
+        // Response: [ok @0][pad 7B][postcard(SumListOutput)]
+        let output: SumListOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
+        assert_eq!(output.count, 4);
+        assert_eq!(output.total, 100);
 
         unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
     }
@@ -1249,12 +1244,12 @@ mod tests {
     #[test]
     fn test_rkyv_v2_tier2_string_output() {
         // to_upper (command_id = 7): input has String field "s", output has String field "result"
-        let s = "hello";
-        let s_bytes = s.as_bytes();
-        let mut payload = vec![0u8; 8 + 4 + s_bytes.len()];
+        // Wire: [cmd_id: u16 @0][postcard(ToUpperInput)]
+        let input = ToUpperInput { s: "hello".into() };
+        let input_bytes = postcard::to_allocvec(&input).unwrap();
+        let mut payload = vec![0u8; 2 + input_bytes.len()];
         payload[0..2].copy_from_slice(&7u16.to_le_bytes()); // command_id = 7 (toUpper)
-        payload[8..12].copy_from_slice(&(s_bytes.len() as u32).to_le_bytes());
-        payload[12..12 + s_bytes.len()].copy_from_slice(s_bytes);
+        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
@@ -1265,23 +1260,24 @@ mod tests {
         let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
         assert_eq!(result_bytes[0], 1); // ok = true
 
-        // Response: [ok @0][pad 7B][result_len: u32 @8][result_bytes @12...]
-        let result_len = u32::from_le_bytes(result_bytes[8..12].try_into().unwrap()) as usize;
-        let result_str = std::str::from_utf8(&result_bytes[12..12 + result_len]).unwrap();
-        assert_eq!(result_str, "HELLO");
+        // Response: [ok @0][pad 7B][postcard(ToUpperOutput)]
+        let output: ToUpperOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
+        assert_eq!(output.result, "HELLO");
 
         unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
     }
 
     #[test]
     fn test_rkyv_v2_tier3_json_fallback() {
-        // process_item (command_id = 9): input has nested struct Item → Tier 3 JSON fallback
-        // Wire: [cmd_id: u16 @0 LE][json_string @2...]
-        let json_args = r#"{"item":{"name":"widget","value":50,"active":true}}"#;
-        let json_bytes = json_args.as_bytes();
-        let mut payload = vec![0u8; 2 + json_bytes.len()];
+        // process_item (command_id = 9): now uses postcard (no more JSON fallback)
+        // Wire: [cmd_id: u16 @0 LE][postcard(ProcessItemInput)]
+        let input = ProcessItemInput {
+            item: Item { active: true, name: "widget".into(), value: 50 },
+        };
+        let input_bytes = postcard::to_allocvec(&input).unwrap();
+        let mut payload = vec![0u8; 2 + input_bytes.len()];
         payload[0..2].copy_from_slice(&9u16.to_le_bytes()); // command_id = 9 (processItem)
-        payload[2..2 + json_bytes.len()].copy_from_slice(json_bytes);
+        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
@@ -1292,31 +1288,28 @@ mod tests {
         let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
         assert_eq!(result_bytes[0], 1); // ok = true
 
-        // Tier 3 response: [ok=1 @0][pad 3B][json_len: u32 @4 LE][json_bytes @8...]
-        let json_len = u32::from_le_bytes(result_bytes[4..8].try_into().unwrap()) as usize;
-        let json_str = std::str::from_utf8(&result_bytes[8..8 + json_len]).unwrap();
-        let result: serde_json::Value = serde_json::from_str(json_str).unwrap();
+        // Response: [ok=1 @0][pad 7B][postcard(ProcessItemOutput)]
+        let output: ProcessItemOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
 
         // process_item with value=50 → doubled=false (value not > 100)
         // active = input.item.active && doubled = true && false = false
-        assert_eq!(result["item"]["name"], "processed_widget");
-        assert_eq!(result["item"]["value"], 100);
-        assert_eq!(result["item"]["active"], false);
-        assert_eq!(result["doubled"], false);
+        assert_eq!(output.item.name, "processed_widget");
+        assert_eq!(output.item.value, 100);
+        assert_eq!(output.item.active, false);
+        assert_eq!(output.doubled, false);
 
         unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
     }
 
     #[test]
     fn test_rkyv_v2_tier3_create_item() {
-        // create_item (command_id = 8): input has String + i64 (Tier 2 input),
-        // but output has nested struct Item (Tier 3 output).
-        // Since output is Tier 3, this uses the Tier 3 JSON fallback.
-        let json_args = r#"{"name":"gadget","value":42}"#;
-        let json_bytes = json_args.as_bytes();
-        let mut payload = vec![0u8; 2 + json_bytes.len()];
+        // create_item (command_id = 8): now uses postcard (no more JSON fallback)
+        // Wire: [cmd_id: u16 @0 LE][postcard(CreateItemInput)]
+        let input = CreateItemInput { name: "gadget".into(), value: 42 };
+        let input_bytes = postcard::to_allocvec(&input).unwrap();
+        let mut payload = vec![0u8; 2 + input_bytes.len()];
         payload[0..2].copy_from_slice(&8u16.to_le_bytes()); // command_id = 8 (createItem)
-        payload[2..2 + json_bytes.len()].copy_from_slice(json_bytes);
+        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
@@ -1327,16 +1320,165 @@ mod tests {
         let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
         assert_eq!(result_bytes[0], 1); // ok = true
 
-        // Tier 3 response
-        let json_len = u32::from_le_bytes(result_bytes[4..8].try_into().unwrap()) as usize;
-        let json_str = std::str::from_utf8(&result_bytes[8..8 + json_len]).unwrap();
-        let result: serde_json::Value = serde_json::from_str(json_str).unwrap();
+        // Response: [ok=1 @0][pad 7B][postcard(CreateItemOutput)]
+        let output: CreateItemOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
 
-        assert_eq!(result["item"]["name"], "gadget");
-        assert_eq!(result["item"]["value"], 42);
-        assert_eq!(result["item"]["active"], true);
+        assert_eq!(output.item.name, "gadget");
+        assert_eq!(output.item.value, 42);
+        assert_eq!(output.item.active, true);
 
         unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+    }
+
+    #[test]
+    fn test_rkyv_v2_postcard_binary_handler() {
+        // Test the fast postcard binary handler path
+        // Build request: [cmd_id: u16 LE][postcard(AddNumbersInput)]
+        let input = AddNumbersInput { a: 42, b: 58 };
+        let input_bytes = postcard::to_allocvec(&input).unwrap();
+        let mut payload = vec![0u8; 2 + input_bytes.len()];
+        payload[0..2].copy_from_slice(&1u16.to_le_bytes()); // command_id = 1
+        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
+
+        let mut out_len: usize = 0;
+        let result_ptr = unsafe {
+            rustra_calculator_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+        };
+
+        assert!(!result_ptr.is_null());
+        assert!(out_len > 0);
+
+        let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
+        assert_eq!(result_bytes[0], 1); // ok = true
+
+        // Decode postcard response: [ok @0][pad 7B][postcard(AddNumbersOutput) @8...]
+        let output: AddNumbersOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
+        assert_eq!(output.value, 100);
+
+        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+    }
+
+    #[test]
+    fn test_rkyv_v2_postcard_all_tiers() {
+        // Test all 9 commands through the postcard binary handler
+
+        // Tier 1: addNumbers (cmd 1)
+        {
+            let input = AddNumbersInput { a: 10, b: 20 };
+            let ib = postcard::to_allocvec(&input).unwrap();
+            let mut p = vec![0u8; 2 + ib.len()];
+            p[0..2].copy_from_slice(&1u16.to_le_bytes());
+            p[2..].copy_from_slice(&ib);
+            let mut ol: usize = 0;
+            let rp = unsafe { rustra_calculator_invoke_rkyv_v2(p.as_ptr(), p.len(), &mut ol) };
+            let rb = unsafe { std::slice::from_raw_parts(rp, ol) };
+            assert_eq!(rb[0], 1);
+            let out: AddNumbersOutput = postcard::from_bytes(&rb[8..]).unwrap();
+            assert_eq!(out.value, 30);
+            unsafe { rustra_calculator_free_buffer(rp, ol) };
+        }
+
+        // Tier 1: multiply (cmd 2)
+        {
+            let input = MultiplyInput { a: 3.14, b: 2.0 };
+            let ib = postcard::to_allocvec(&input).unwrap();
+            let mut p = vec![0u8; 2 + ib.len()];
+            p[0..2].copy_from_slice(&2u16.to_le_bytes());
+            p[2..].copy_from_slice(&ib);
+            let mut ol: usize = 0;
+            let rp = unsafe { rustra_calculator_invoke_rkyv_v2(p.as_ptr(), p.len(), &mut ol) };
+            let rb = unsafe { std::slice::from_raw_parts(rp, ol) };
+            assert_eq!(rb[0], 1);
+            let out: MultiplyOutput = postcard::from_bytes(&rb[8..]).unwrap();
+            assert!((out.value - 6.28).abs() < 0.01);
+            unsafe { rustra_calculator_free_buffer(rp, ol) };
+        }
+
+        // Tier 1: isEven (cmd 3)
+        {
+            let input = IsEvenInput { n: 42 };
+            let ib = postcard::to_allocvec(&input).unwrap();
+            let mut p = vec![0u8; 2 + ib.len()];
+            p[0..2].copy_from_slice(&3u16.to_le_bytes());
+            p[2..].copy_from_slice(&ib);
+            let mut ol: usize = 0;
+            let rp = unsafe { rustra_calculator_invoke_rkyv_v2(p.as_ptr(), p.len(), &mut ol) };
+            let rb = unsafe { std::slice::from_raw_parts(rp, ol) };
+            assert_eq!(rb[0], 1);
+            let out: IsEvenOutput = postcard::from_bytes(&rb[8..]).unwrap();
+            assert_eq!(out.result, true);
+            unsafe { rustra_calculator_free_buffer(rp, ol) };
+        }
+
+        // Tier 2: greet (cmd 5)
+        {
+            let input = GreetInput { name: "Rustra".into() };
+            let ib = postcard::to_allocvec(&input).unwrap();
+            let mut p = vec![0u8; 2 + ib.len()];
+            p[0..2].copy_from_slice(&5u16.to_le_bytes());
+            p[2..].copy_from_slice(&ib);
+            let mut ol: usize = 0;
+            let rp = unsafe { rustra_calculator_invoke_rkyv_v2(p.as_ptr(), p.len(), &mut ol) };
+            let rb = unsafe { std::slice::from_raw_parts(rp, ol) };
+            assert_eq!(rb[0], 1);
+            let out: GreetOutput = postcard::from_bytes(&rb[8..]).unwrap();
+            assert_eq!(out.message, "Hello, Rustra!");
+            unsafe { rustra_calculator_free_buffer(rp, ol) };
+        }
+
+        // Tier 2: sumList (cmd 6)
+        {
+            let input = SumListInput { numbers: vec![1, 2, 3, 4, 5] };
+            let ib = postcard::to_allocvec(&input).unwrap();
+            let mut p = vec![0u8; 2 + ib.len()];
+            p[0..2].copy_from_slice(&6u16.to_le_bytes());
+            p[2..].copy_from_slice(&ib);
+            let mut ol: usize = 0;
+            let rp = unsafe { rustra_calculator_invoke_rkyv_v2(p.as_ptr(), p.len(), &mut ol) };
+            let rb = unsafe { std::slice::from_raw_parts(rp, ol) };
+            assert_eq!(rb[0], 1);
+            let out: SumListOutput = postcard::from_bytes(&rb[8..]).unwrap();
+            assert_eq!(out.total, 15);
+            assert_eq!(out.count, 5);
+            unsafe { rustra_calculator_free_buffer(rp, ol) };
+        }
+
+        // Tier 3: createItem (cmd 8) — postcard handles nested structs!
+        {
+            let input = CreateItemInput { name: "Widget".into(), value: 42 };
+            let ib = postcard::to_allocvec(&input).unwrap();
+            let mut p = vec![0u8; 2 + ib.len()];
+            p[0..2].copy_from_slice(&8u16.to_le_bytes());
+            p[2..].copy_from_slice(&ib);
+            let mut ol: usize = 0;
+            let rp = unsafe { rustra_calculator_invoke_rkyv_v2(p.as_ptr(), p.len(), &mut ol) };
+            let rb = unsafe { std::slice::from_raw_parts(rp, ol) };
+            assert_eq!(rb[0], 1);
+            let out: CreateItemOutput = postcard::from_bytes(&rb[8..]).unwrap();
+            assert_eq!(out.item.name, "Widget");
+            assert_eq!(out.item.value, 42);
+            assert_eq!(out.item.active, true);
+            unsafe { rustra_calculator_free_buffer(rp, ol) };
+        }
+
+        // Tier 3: processItem (cmd 9)
+        {
+            let input = ProcessItemInput {
+                item: Item { active: true, name: "Gadget".into(), value: 200 },
+            };
+            let ib = postcard::to_allocvec(&input).unwrap();
+            let mut p = vec![0u8; 2 + ib.len()];
+            p[0..2].copy_from_slice(&9u16.to_le_bytes());
+            p[2..].copy_from_slice(&ib);
+            let mut ol: usize = 0;
+            let rp = unsafe { rustra_calculator_invoke_rkyv_v2(p.as_ptr(), p.len(), &mut ol) };
+            let rb = unsafe { std::slice::from_raw_parts(rp, ol) };
+            assert_eq!(rb[0], 1);
+            let out: ProcessItemOutput = postcard::from_bytes(&rb[8..]).unwrap();
+            assert_eq!(out.item.value, 400);
+            assert_eq!(out.doubled, true);
+            unsafe { rustra_calculator_free_buffer(rp, ol) };
+        }
     }
 
     #[test]

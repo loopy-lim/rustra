@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
-import { watch, readFileSync } from 'node:fs';
+import { watch, readFileSync, readdirSync, statSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import type { PackageSchema } from './schema.js';
 import { generateTypesTs, generateCommandsTs, generateContractTs, generateRkyvCodecsTs, generateRkyvRegistryTs } from './generate.js';
 
@@ -63,14 +64,11 @@ interface GenerateOptions {
 }
 
 async function runGenerate(args: string[]): Promise<void> {
+  autoRebuild();
   const { schemaPath, outputPath } = resolvePaths(args);
-  await generateFromSchema(schemaPath, outputPath);
+  const written = await generateFromSchema(schemaPath, outputPath);
   console.log(`Generated TypeScript files in ${outputPath}:`);
-  console.log('  types.ts');
-  console.log('  commands.ts');
-  console.log('  contract.ts');
-  console.log('  rkyv-codecs.ts');
-  console.log('  rkyv-registry.ts');
+  for (const f of written) console.log(`  ${f}`);
 }
 
 function resolvePaths(args: string[]): { schemaPath: string; outputPath: string } {
@@ -115,22 +113,70 @@ async function runWatch(args: string[]): Promise<void> {
   });
 }
 
-async function generateFromSchema(schemaPath: string, outputPath: string): Promise<void> {
+async function generateFromSchema(schemaPath: string, outputPath: string): Promise<string[]> {
   const schemaContent = await readFile(schemaPath, 'utf-8');
   const schema: PackageSchema = parsePackageSchema(JSON.parse(schemaContent));
 
-  const typesTs = generateTypesTs(schema);
-  const commandsTs = generateCommandsTs(schema);
-  const contractTs = generateContractTs(schemaContent);
-  const rkyvCodecsTs = generateRkyvCodecsTs(schema);
-  const rkyvRegistryTs = generateRkyvRegistryTs(schema);
+  const files: { name: string; content: string }[] = [
+    { name: 'types.ts', content: generateTypesTs(schema) },
+    { name: 'commands.ts', content: generateCommandsTs(schema) },
+    { name: 'contract.ts', content: generateContractTs(schemaContent) },
+    { name: 'rkyv-codecs.ts', content: generateRkyvCodecsTs(schema) },
+    { name: 'rkyv-registry.ts', content: generateRkyvRegistryTs(schema) },
+  ];
 
   await mkdir(outputPath, { recursive: true });
-  await writeFile(resolve(outputPath, 'types.ts'), typesTs);
-  await writeFile(resolve(outputPath, 'commands.ts'), commandsTs);
-  await writeFile(resolve(outputPath, 'contract.ts'), contractTs);
-  await writeFile(resolve(outputPath, 'rkyv-codecs.ts'), rkyvCodecsTs);
-  await writeFile(resolve(outputPath, 'rkyv-registry.ts'), rkyvRegistryTs);
+  const written: string[] = [];
+  for (const { name, content } of files) {
+    const filePath = resolve(outputPath, name);
+    let existing: string | null = null;
+    try { existing = await readFile(filePath, 'utf-8'); } catch { /* file doesn't exist */ }
+    if (existing === content) {
+      written.push(`${name} (unchanged)`);
+    } else {
+      await writeFile(filePath, content);
+      written.push(existing !== null ? `${name} (updated)` : name);
+    }
+  }
+  return written;
+}
+
+/**
+ * Auto-rebuild the CLI if source files are newer than dist.
+ * Prevents running a stale binary that generates outdated code.
+ */
+function autoRebuild(): void {
+  try {
+    const cliDir = resolve(dirname(new URL(import.meta.url).pathname), '..');
+    const srcDir = resolve(cliDir, 'src');
+    const distDir = resolve(cliDir, 'dist');
+
+    let newestSrc = 0;
+    let oldestDist = Infinity;
+    const srcFiles = readdirSync(srcDir).filter((f: string) => f.endsWith('.ts'));
+    for (const f of srcFiles) {
+      const stat = statSync(resolve(srcDir, f));
+      if (stat.mtimeMs > newestSrc) newestSrc = stat.mtimeMs;
+    }
+    try {
+      const distFiles = readdirSync(distDir).filter((f: string) => f.endsWith('.js'));
+      for (const f of distFiles) {
+        const stat = statSync(resolve(distDir, f));
+        if (stat.mtimeMs < oldestDist) oldestDist = stat.mtimeMs;
+      }
+    } catch {
+      // dist doesn't exist yet — need build
+      oldestDist = 0;
+    }
+
+    if (newestSrc > oldestDist) {
+      console.log('CLI source is newer than dist — rebuilding...');
+      execSync('npm run build', { cwd: cliDir, stdio: 'pipe' });
+      console.log('CLI rebuilt.');
+    }
+  } catch {
+    // Auto-rebuild is best-effort — don't block generate on failure
+  }
 }
 
 function parseGenerateArgs(args: string[]): GenerateOptions {
