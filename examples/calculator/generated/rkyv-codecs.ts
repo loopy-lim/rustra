@@ -30,7 +30,7 @@ function _pcDecodeVarint(buf: Uint8Array, offset: number): { value: number; byte
 
 function _pcEncodeZigzag(n: number): number {
   // zigzag encode: positive n -> n*2, negative n -> (-n)*2 - 1
-  return n >= 0 ? n * 2 : -n * 2 - 1;
+  return n >= 0 ? n * 2 : (-n) * 2 - 1;
 }
 
 function _pcDecodeZigzag(n: number): number {
@@ -42,10 +42,7 @@ function _pcEncodeZigzagVarint(n: number): Uint8Array {
   return _pcEncodeVarint(_pcEncodeZigzag(n));
 }
 
-function _pcDecodeZigzagVarint(
-  buf: Uint8Array,
-  offset: number,
-): { value: number; bytesRead: number } {
+function _pcDecodeZigzagVarint(buf: Uint8Array, offset: number): { value: number; bytesRead: number } {
   const { value, bytesRead } = _pcDecodeVarint(buf, offset);
   return { value: _pcDecodeZigzag(value), bytesRead };
 }
@@ -103,26 +100,7 @@ function _pcDecodeF32(buf: Uint8Array, offset: number): { value: number; bytesRe
 }
 
 import type { RkyvV2Codec } from '@rustra/types';
-import type {
-  AddNumbersInput,
-  AddNumbersOutput,
-  ClampInput,
-  ClampOutput,
-  CreateItemInput,
-  CreateItemOutput,
-  GreetInput,
-  GreetOutput,
-  IsEvenInput,
-  IsEvenOutput,
-  MultiplyInput,
-  MultiplyOutput,
-  ProcessItemInput,
-  ProcessItemOutput,
-  SumListInput,
-  SumListOutput,
-  ToUpperInput,
-  ToUpperOutput,
-} from './types';
+import type { AddNumbersInput, AddNumbersOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
 
 export const addNumbersCodec: RkyvV2Codec<AddNumbersInput, AddNumbersOutput> = {
   commandId: 1,
@@ -135,7 +113,7 @@ export const addNumbersCodec: RkyvV2Codec<AddNumbersInput, AddNumbersOutput> = {
     parts.push(cmdId);
     parts.push(_pcEncodeZigzagVarint(args.a));
     parts.push(_pcEncodeZigzagVarint(args.b));
-    return _pcConcatUint8Arrays(parts).buffer;
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: AddNumbersOutput; error?: string } {
@@ -144,8 +122,7 @@ export const addNumbersCodec: RkyvV2Codec<AddNumbersInput, AddNumbersOutput> = {
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -172,7 +149,7 @@ export const clampCodec: RkyvV2Codec<ClampInput, ClampOutput> = {
     parts.push(_pcEncodeF64(args.max));
     parts.push(_pcEncodeF64(args.min));
     parts.push(_pcEncodeF64(args.value));
-    return _pcConcatUint8Arrays(parts).buffer;
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: ClampOutput; error?: string } {
@@ -181,8 +158,7 @@ export const clampCodec: RkyvV2Codec<ClampInput, ClampOutput> = {
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -208,7 +184,7 @@ export const createItemCodec: RkyvV2Codec<CreateItemInput, CreateItemOutput> = {
     parts.push(cmdId);
     parts.push(_pcEncodeString(args.name));
     parts.push(_pcEncodeZigzagVarint(args.value));
-    return _pcConcatUint8Arrays(parts).buffer;
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: CreateItemOutput; error?: string } {
@@ -217,8 +193,7 @@ export const createItemCodec: RkyvV2Codec<CreateItemInput, CreateItemOutput> = {
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -256,7 +231,7 @@ export const greetCodec: RkyvV2Codec<GreetInput, GreetOutput> = {
     new DataView(cmdId.buffer).setUint16(0, 5, true);
     parts.push(cmdId);
     parts.push(_pcEncodeString(args.name));
-    return _pcConcatUint8Arrays(parts).buffer;
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: GreetOutput; error?: string } {
@@ -265,8 +240,7 @@ export const greetCodec: RkyvV2Codec<GreetInput, GreetOutput> = {
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -291,7 +265,7 @@ export const isEvenCodec: RkyvV2Codec<IsEvenInput, IsEvenOutput> = {
     new DataView(cmdId.buffer).setUint16(0, 3, true);
     parts.push(cmdId);
     parts.push(_pcEncodeZigzagVarint(args.n));
-    return _pcConcatUint8Arrays(parts).buffer;
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: IsEvenOutput; error?: string } {
@@ -300,8 +274,7 @@ export const isEvenCodec: RkyvV2Codec<IsEvenInput, IsEvenOutput> = {
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -326,7 +299,7 @@ export const multiplyCodec: RkyvV2Codec<MultiplyInput, MultiplyOutput> = {
     parts.push(cmdId);
     parts.push(_pcEncodeF64(args.a));
     parts.push(_pcEncodeF64(args.b));
-    return _pcConcatUint8Arrays(parts).buffer;
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: MultiplyOutput; error?: string } {
@@ -335,8 +308,7 @@ export const multiplyCodec: RkyvV2Codec<MultiplyInput, MultiplyOutput> = {
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -363,7 +335,7 @@ export const processItemCodec: RkyvV2Codec<ProcessItemInput, ProcessItemOutput> 
     parts.push(new Uint8Array([args.item.active ? 1 : 0]));
     parts.push(_pcEncodeString(args.item.name));
     parts.push(_pcEncodeZigzagVarint(args.item.value));
-    return _pcConcatUint8Arrays(parts).buffer;
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: ProcessItemOutput; error?: string } {
@@ -372,8 +344,7 @@ export const processItemCodec: RkyvV2Codec<ProcessItemInput, ProcessItemOutput> 
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -421,7 +392,7 @@ export const sumListCodec: RkyvV2Codec<SumListInput, SumListOutput> = {
         parts.push(_pcEncodeZigzagVarint(_arr[_i]));
       }
     }
-    return _pcConcatUint8Arrays(parts).buffer;
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: SumListOutput; error?: string } {
@@ -430,8 +401,7 @@ export const sumListCodec: RkyvV2Codec<SumListInput, SumListOutput> = {
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -461,7 +431,7 @@ export const toUpperCodec: RkyvV2Codec<ToUpperInput, ToUpperOutput> = {
     new DataView(cmdId.buffer).setUint16(0, 7, true);
     parts.push(cmdId);
     parts.push(_pcEncodeString(args.s));
-    return _pcConcatUint8Arrays(parts).buffer;
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: ToUpperOutput; error?: string } {
@@ -470,8 +440,7 @@ export const toUpperCodec: RkyvV2Codec<ToUpperInput, ToUpperOutput> = {
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -485,3 +454,4 @@ export const toUpperCodec: RkyvV2Codec<ToUpperInput, ToUpperOutput> = {
     return { ok: true, result };
   },
 };
+

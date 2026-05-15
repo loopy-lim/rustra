@@ -1,4 +1,5 @@
 import { addNumbers } from '../generated/commands.js';
+import { configure } from '../../../packages/types/src/index.js';
 import { createTauriEngine } from '../../../packages/tauri/src/index.js';
 
 const calls: Array<{ command: string; args: unknown }> = [];
@@ -9,8 +10,9 @@ const engine = createTauriEngine({
     return { value: 42 };
   },
 });
+configure(engine);
 
-const result = await addNumbers(engine, { a: 20, b: 22 });
+const result = await addNumbers({ a: 20, b: 22 });
 
 if (result.value !== 42) {
   throw new Error(`expected 42, got ${result.value}`);

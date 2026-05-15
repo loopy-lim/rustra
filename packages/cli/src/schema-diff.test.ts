@@ -8,6 +8,7 @@ const baseSchema: PackageSchema = {
   commands: [
     {
       name: 'add',
+      commandId: 1,
       inputType: 'AddInput',
       outputType: 'AddOutput',
       inputSchema: {
@@ -42,6 +43,7 @@ test('detects removed field', () => {
     commands: [
       {
         name: 'add',
+        commandId: 1,
         inputType: 'AddInput',
         outputType: 'AddOutput',
         inputSchema: { type: 'object', properties: { a: { type: 'integer' } }, required: ['a'] },
@@ -63,6 +65,7 @@ test('detects type change', () => {
     commands: [
       {
         name: 'add',
+        commandId: 1,
         inputType: 'AddInput',
         outputType: 'AddOutput',
         inputSchema: {
@@ -88,6 +91,7 @@ test('detects required field added', () => {
     commands: [
       {
         name: 'add',
+        commandId: 1,
         inputType: 'AddInput',
         outputType: 'AddOutput',
         inputSchema: {

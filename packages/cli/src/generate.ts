@@ -24,6 +24,11 @@ export function generateTypesTs(schema: PackageSchema): string {
 
   const allDefinitions: Record<string, import('./schema.js').JsonSchema> = {};
   for (const command of schema.commands) {
+    if (command.definitions) {
+      for (const [key, value] of Object.entries(command.definitions)) {
+        allDefinitions[key] = value;
+      }
+    }
     collectDefinitions(command.inputSchema, allDefinitions);
     collectDefinitions(command.outputSchema, allDefinitions);
   }
@@ -64,7 +69,7 @@ export function generateCommandsTs(schema: PackageSchema): string {
   }
 
   const imports = Array.from(typeNames).sort().join(', ');
-  let output = `import type { ${imports} } from './types';\n`;
+  let output = `import type { ${imports} } from './types.js';\n`;
   output += `import { invoke } from '@rustra/types';\n\n`;
 
   for (const command of schema.commands) {
@@ -381,7 +386,7 @@ export function generateRkyvCodecsTs(schema: PackageSchema): string {
   let output = postcardHelperSource();
 
   output += "import type { RkyvV2Codec } from '@rustra/types';\n";
-  output += `import type { ${allTypes.join(', ')} } from './types';\n\n`;
+  output += `import type { ${allTypes.join(', ')} } from './types.js';\n\n`;
 
   for (const command of schema.commands) {
     output += generatePostcardCodec(command, definitions);
@@ -422,7 +427,7 @@ function generatePostcardCodec(
     lines.push(generateFieldEncodeExpr(field, `args.${field.name}`, definitions, '    '));
   }
 
-  lines.push(`    return _pcConcatUint8Arrays(parts).buffer;`);
+  lines.push(`    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;`);
   lines.push(`  },`);
 
   // ── decode ──
@@ -474,7 +479,7 @@ export function generateRkyvRegistryTs(schema: PackageSchema): string {
   const codecImports = included.map((c) => commandFunctionName(c.name) + 'Codec').join(', ');
 
   return (
-    `import { ${codecImports} } from './rkyv-codecs';\n\n` +
+    `import { ${codecImports} } from './rkyv-codecs.js';\n\n` +
     `export const rkyvV2Registry = new Map<string, import('@rustra/types').RkyvV2Codec<any, any>>([\n` +
     entries +
     `,\n]);\n`
