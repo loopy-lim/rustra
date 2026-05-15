@@ -10,6 +10,7 @@ import type { CommandSchema, PackageSchema } from './schema.js';
 import {
   collectDefinitions,
   commandFunctionName,
+  postcardHelperSource,
   tsTypeFromSchema,
 } from './codegen.js';
 
@@ -63,7 +64,7 @@ export function generateCommandsTs(schema: PackageSchema): string {
   }
 
   const imports = Array.from(typeNames).sort().join(', ');
-  let output = `import type { ${imports} } from './types.js';\n`;
+  let output = `import type { ${imports} } from './types';\n`;
   output += `import { invoke } from '@rustra/types';\n\n`;
 
   for (const command of schema.commands) {
@@ -85,450 +86,363 @@ export function generateContractTs(schemaJson: string): string {
   return `export const GENERATED_CONTRACT_HASH = '${hash}';\n`;
 }
 
-// ── rkyv V2 codec generation ────────────────────────────────
+// ── rkyv V2 codec generation (postcard wire format) ────────────────────
 
-type WireFieldKind =
-  | 'i64' | 'i32' | 'u32' | 'u16' | 'f64' | 'f32' | 'bool'
-  | 'string' | 'vec_i64' | 'vec_f64' | 'vec_i32' | 'vec_u8' | 'vec_bool';
+/** Postcard field types for schema classification. */
+type PostcardFieldKind =
+  | 'zigzag' | 'f64' | 'f32' | 'bool' | 'string'
+  | 'vec_zigzag' | 'vec_f64' | 'vec_bool'
+  | 'struct'; // nested struct via $ref
 
-type WireField = {
+type PostcardField = {
   name: string;
-  offset: number;
-  size: number;
-  kind: WireFieldKind;
+  kind: PostcardFieldKind;
+  /** For struct fields: the resolved type name from $ref */
+  refType?: string;
 };
 
-type VarWireField = {
-  name: string;
-  kind: WireFieldKind;
-};
-
-type WireLayout = {
-  fixedFields: WireField[];
-  varFields: VarWireField[];
-  fixedRegionSize: number;
-  tier: 1 | 2 | 3;
-};
-
-const FIELD_SIZES: Record<string, number> = {
-  i64: 8,
-  i32: 4,
-  u32: 4,
-  u16: 2,
-  f64: 8,
-  f32: 4,
-  bool: 1,
-};
-
-function alignTo(offset: number, alignment: number): number {
-  return Math.ceil(offset / alignment) * alignment;
-}
-
-function isFixedKind(kind: WireFieldKind): boolean {
-  return kind in FIELD_SIZES;
-}
-
-function schemaFieldToWireType(
+/**
+ * Classify a single JSON Schema property into its postcard wire encoding kind.
+ */
+function classifyPostcardField(
   schema: import('./schema.js').JsonSchema,
-): WireFieldKind | null {
+): PostcardFieldKind | null {
+  if (schema.$ref) return 'struct';
   if (schema.type === 'boolean') return 'bool';
-  if (schema.type === 'integer') {
-    if (schema.format === 'int64') return 'i64';
-    return 'i32';
-  }
+  if (schema.type === 'integer') return 'zigzag';
   if (schema.type === 'number') {
-    if (schema.format === 'double') return 'f64';
-    return 'f32';
+    if (schema.format === 'float') return 'f32';
+    return 'f64';
   }
   if (schema.type === 'string') return 'string';
   if (schema.type === 'array' && schema.items && !Array.isArray(schema.items)) {
     const items = schema.items;
-    if (items.type === 'integer') {
-      if (items.format === 'int64' || !items.format) return 'vec_i64';
-      if (items.format === 'int32') return 'vec_i32';
-      return null;
-    }
-    if (items.type === 'number') {
-      if (items.format === 'double' || !items.format) return 'vec_f64';
-      return null;
-    }
+    if (items.type === 'integer') return 'vec_zigzag';
+    if (items.type === 'number') return 'vec_f64';
     if (items.type === 'boolean') return 'vec_bool';
     return null;
   }
   return null;
 }
 
-/** Classify a schema's fields into fixed and variable, computing tier. */
-function classifySchemaFields(
+/**
+ * Collect all fields for a schema in property order (as they appear in the JSON schema).
+ *
+ * Schemars generates properties alphabetically. Postcard encodes in struct definition
+ * order. For the calculator example, this ordering matches because Rust struct fields
+ * happen to be in the same order as alphabetical. If ordering issues arise in the
+ * future, the schema generator needs to preserve definition order.
+ */
+function collectPostcardFields(
   schema: import('./schema.js').JsonSchema,
-  headerSize: number,
-): {
-  fixedFields: WireField[];
-  varFields: VarWireField[];
-  fixedRegionSize: number;
-  tier: 1 | 2 | 3;
-} {
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+): PostcardField[] {
   const props = schema.properties;
-  if (!props) return { fixedFields: [], varFields: [], fixedRegionSize: headerSize, tier: 1 };
-
+  if (!props) return [];
   const required = new Set(schema.required ?? []);
-  const fixedFields: WireField[] = [];
-  const varFields: VarWireField[] = [];
-  let tier: 1 | 2 | 3 = 1;
-  let offset = headerSize;
+  const fields: PostcardField[] = [];
 
   for (const [name, propSchema] of Object.entries(props)) {
-    if (!required.has(name)) {
-      tier = 3;
-      continue;
+    if (!required.has(name)) continue;
+    const kind = classifyPostcardField(propSchema);
+    if (!kind) continue;
+    const field: PostcardField = { name, kind };
+    if (kind === 'struct' && propSchema.$ref) {
+      field.refType = propSchema.$ref.startsWith('#/definitions/')
+        ? propSchema.$ref.slice('#/definitions/'.length)
+        : propSchema.$ref;
     }
-    const kind = schemaFieldToWireType(propSchema);
-    if (!kind) {
-      tier = 3;
-      continue;
+    fields.push(field);
+  }
+  return fields;
+}
+
+/**
+ * Collect all definitions from the schema tree.
+ * These come from both command-level definitions and schema-level definitions.
+ */
+function collectAllDefinitions(schema: PackageSchema): Record<string, import('./schema.js').JsonSchema> {
+  const defs: Record<string, import('./schema.js').JsonSchema> = {};
+  for (const command of schema.commands) {
+    // Command-level definitions (from schemars $ref targets)
+    if (command.definitions) {
+      Object.assign(defs, command.definitions);
     }
-    if (isFixedKind(kind)) {
-      const size = FIELD_SIZES[kind];
-      offset = alignTo(offset, size);
-      fixedFields.push({ name, offset, size, kind });
-      offset += size;
-    } else {
-      if (tier === 1) tier = 2;
-      varFields.push({ name, kind });
+    // Schema-level definitions (nested inside inputSchema/outputSchema)
+    if (command.inputSchema.definitions) {
+      Object.assign(defs, command.inputSchema.definitions);
+    }
+    if (command.outputSchema.definitions) {
+      Object.assign(defs, command.outputSchema.definitions);
     }
   }
-
-  return { fixedFields, varFields, fixedRegionSize: offset, tier };
+  return defs;
 }
 
-function computeWireLayout(command: CommandSchema): WireLayout {
-  return classifySchemaFields(command.inputSchema, 8);
-}
-
-/** Check if a command's output schema is supported (not Tier 3). */
-function isOutputSupported(command: CommandSchema): boolean {
-  const props = command.outputSchema.properties;
-  if (!props) return true;
-  const required = new Set(command.outputSchema.required ?? []);
-  for (const [name, propSchema] of Object.entries(props)) {
-    if (!required.has(name)) return false;
-    const kind = schemaFieldToWireType(propSchema);
-    if (!kind) return false;
-  }
-  return true;
-}
-
-/** Compute the output layout (response side). */
-function computeOutputLayout(command: CommandSchema): {
-  fixedFields: WireField[];
-  varFields: VarWireField[];
-  fixedRegionSize: number;
-} {
-  const result = classifySchemaFields(command.outputSchema, 8);
-  // We only care about fixedFields, varFields, fixedRegionSize here
-  return {
-    fixedFields: result.fixedFields,
-    varFields: result.varFields,
-    fixedRegionSize: result.fixedRegionSize,
-  };
-}
-
-function writeFixedFieldExpr(field: WireField, varExpr: string): string {
-  const o = field.offset;
-  const le = 'true';
+/**
+ * Generate the postcard encode expression for a single field value.
+ * Returns code lines that push Uint8Array parts into a `parts` array.
+ */
+function generateFieldEncodeExpr(
+  field: PostcardField,
+  valueExpr: string,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+  indent: string,
+): string {
   switch (field.kind) {
-    case 'i64':
-      return (
-        `    view.setInt32(${o}, ${varExpr}, ${le});\n` +
-        `    view.setInt32(${o + 4}, ${varExpr} >= 0 ? 0 : -1, ${le});`
-      );
-    case 'i32':
-      return `    view.setInt32(${o}, ${varExpr}, ${le});`;
-    case 'u32':
-      return `    view.setUint32(${o}, ${varExpr}, ${le});`;
-    case 'u16':
-      return `    view.setUint16(${o}, ${varExpr}, ${le});`;
+    case 'zigzag':
+      return `${indent}parts.push(_pcEncodeZigzagVarint(${valueExpr}));`;
     case 'f64':
-      return `    view.setFloat64(${o}, ${varExpr}, ${le});`;
+      return `${indent}parts.push(_pcEncodeF64(${valueExpr}));`;
     case 'f32':
-      return `    view.setFloat32(${o}, ${varExpr}, ${le});`;
+      return `${indent}parts.push(_pcEncodeF32(${valueExpr}));`;
     case 'bool':
-      return `    view.setUint8(${o}, ${varExpr} ? 1 : 0);`;
+      return `${indent}parts.push(new Uint8Array([${valueExpr} ? 1 : 0]));`;
+    case 'string':
+      return `${indent}parts.push(_pcEncodeString(${valueExpr}));`;
+    case 'vec_zigzag':
+      return (
+        `${indent}{\n` +
+        `${indent}  const _arr = ${valueExpr};\n` +
+        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
+        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
+        `${indent}    parts.push(_pcEncodeZigzagVarint(_arr[_i]));\n` +
+        `${indent}  }\n` +
+        `${indent}}`
+      );
+    case 'vec_f64':
+      return (
+        `${indent}{\n` +
+        `${indent}  const _arr = ${valueExpr};\n` +
+        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
+        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
+        `${indent}    parts.push(_pcEncodeF64(_arr[_i]));\n` +
+        `${indent}  }\n` +
+        `${indent}}`
+      );
+    case 'vec_bool':
+      return (
+        `${indent}{\n` +
+        `${indent}  const _arr = ${valueExpr};\n` +
+        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
+        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
+        `${indent}    parts.push(new Uint8Array([_arr[_i] ? 1 : 0]));\n` +
+        `${indent}  }\n` +
+        `${indent}}`
+      );
+    case 'struct': {
+      if (!field.refType) return `${indent}// unknown struct field: ${field.name}`;
+      const structDef = definitions[field.refType];
+      if (!structDef) return `${indent}// missing definition for ${field.refType}`;
+      const subFields = collectPostcardFields(structDef, definitions);
+      const lines: string[] = [];
+      for (const sf of subFields) {
+        lines.push(generateFieldEncodeExpr(sf, `${valueExpr}.${sf.name}`, definitions, indent));
+      }
+      return lines.join('\n');
+    }
     default:
-      return '';
+      return `${indent}// unsupported field kind: ${field.kind}`;
   }
 }
 
-function readFixedFieldExpr(field: WireField, lvalue: string): string {
-  const o = field.offset;
+/**
+ * Generate the postcard decode expression for a single field.
+ * Returns code lines that decode from `u8` starting at `offset`.
+ */
+function generateFieldDecodeExpr(
+  field: PostcardField,
+  lvalue: string,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+  indent: string,
+): string {
   switch (field.kind) {
-    case 'i64':
-      return `    ${lvalue} = view.getInt32(${o}, true);`;
-    case 'i32':
-      return `    ${lvalue} = view.getInt32(${o}, true);`;
-    case 'u32':
-      return `    ${lvalue} = view.getUint32(${o}, true);`;
-    case 'u16':
-      return `    ${lvalue} = view.getUint16(${o}, true);`;
+    case 'zigzag':
+      return (
+        `${indent}{\n` +
+        `${indent}  const _v = _pcDecodeZigzagVarint(u8, offset);\n` +
+        `${indent}  ${lvalue} = _v.value;\n` +
+        `${indent}  offset += _v.bytesRead;\n` +
+        `${indent}}`
+      );
     case 'f64':
-      return `    ${lvalue} = view.getFloat64(${o}, true);`;
+      return (
+        `${indent}{\n` +
+        `${indent}  const _v = _pcDecodeF64(u8, offset);\n` +
+        `${indent}  ${lvalue} = _v.value;\n` +
+        `${indent}  offset += _v.bytesRead;\n` +
+        `${indent}}`
+      );
     case 'f32':
-      return `    ${lvalue} = view.getFloat32(${o}, true);`;
+      return (
+        `${indent}{\n` +
+        `${indent}  const _v = _pcDecodeF32(u8, offset);\n` +
+        `${indent}  ${lvalue} = _v.value;\n` +
+        `${indent}  offset += _v.bytesRead;\n` +
+        `${indent}}`
+      );
     case 'bool':
-      return `    ${lvalue} = u8[${o}] === 1;`;
-    default:
-      return '';
-  }
-}
-
-/** Size expression for a variable-length input field. */
-function varFieldSizeExpr(field: VarWireField): string {
-  const name = field.name;
-  switch (field.kind) {
-    case 'string':
-      return `4 + ${name}Bytes.length`;
-    case 'vec_i64':
-      return `4 + ${name}Len * 8`;
-    case 'vec_f64':
-      return `4 + ${name}Len * 8`;
-    case 'vec_i32':
-      return `4 + ${name}Len * 4`;
-    case 'vec_bool':
-      return `4 + ${name}Len`;
-    case 'vec_u8':
-      return `4 + args.${name}.length`;
-    default:
-      return '0';
-  }
-}
-
-/** Write expression for a variable-length input field. */
-function writeVarFieldExpr(field: VarWireField): string {
-  const name = field.name;
-  switch (field.kind) {
-    case 'string':
       return (
-        `    view.setUint32(cursor, ${name}Bytes.length, true);\n` +
-        `    new Uint8Array(buf, cursor + 4).set(${name}Bytes);\n` +
-        `    cursor += 4 + ${name}Bytes.length;`
+        `${indent}{\n` +
+        `${indent}  ${lvalue} = u8[offset] === 1;\n` +
+        `${indent}  offset += 1;\n` +
+        `${indent}}`
       );
-    case 'vec_i64':
+    case 'string':
       return (
-        `    view.setUint32(cursor, ${name}Len * 8, true);\n` +
-        `    cursor += 4;\n` +
-        `    for (let i = 0; i < ${name}Len; i++) {\n` +
-        `      const v = args.${name}[i];\n` +
-        `      view.setInt32(cursor, v, true);\n` +
-        `      view.setInt32(cursor + 4, v >= 0 ? 0 : -1, true);\n` +
-        `      cursor += 8;\n` +
-        `    }`
+        `${indent}{\n` +
+        `${indent}  const _v = _pcDecodeString(u8, offset);\n` +
+        `${indent}  ${lvalue} = _v.value;\n` +
+        `${indent}  offset += _v.bytesRead;\n` +
+        `${indent}}`
+      );
+    case 'vec_zigzag':
+      return (
+        `${indent}{\n` +
+        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
+        `${indent}  offset += _len.bytesRead;\n` +
+        `${indent}  const _arr: number[] = new Array(_len.value);\n` +
+        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
+        `${indent}    const _v = _pcDecodeZigzagVarint(u8, offset);\n` +
+        `${indent}    _arr[_i] = _v.value;\n` +
+        `${indent}    offset += _v.bytesRead;\n` +
+        `${indent}  }\n` +
+        `${indent}  ${lvalue} = _arr;\n` +
+        `${indent}}`
       );
     case 'vec_f64':
       return (
-        `    view.setUint32(cursor, ${name}Len * 8, true);\n` +
-        `    cursor += 4;\n` +
-        `    for (let i = 0; i < ${name}Len; i++) {\n` +
-        `      view.setFloat64(cursor, args.${name}[i], true);\n` +
-        `      cursor += 8;\n` +
-        `    }`
-      );
-    case 'vec_i32':
-      return (
-        `    view.setUint32(cursor, ${name}Len * 4, true);\n` +
-        `    cursor += 4;\n` +
-        `    for (let i = 0; i < ${name}Len; i++) {\n` +
-        `      view.setInt32(cursor, args.${name}[i], true);\n` +
-        `      cursor += 4;\n` +
-        `    }`
+        `${indent}{\n` +
+        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
+        `${indent}  offset += _len.bytesRead;\n` +
+        `${indent}  const _arr: number[] = new Array(_len.value);\n` +
+        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
+        `${indent}    const _v = _pcDecodeF64(u8, offset);\n` +
+        `${indent}    _arr[_i] = _v.value;\n` +
+        `${indent}    offset += _v.bytesRead;\n` +
+        `${indent}  }\n` +
+        `${indent}  ${lvalue} = _arr;\n` +
+        `${indent}}`
       );
     case 'vec_bool':
       return (
-        `    view.setUint32(cursor, ${name}Len, true);\n` +
-        `    cursor += 4;\n` +
-        `    for (let i = 0; i < ${name}Len; i++) {\n` +
-        `      view.setUint8(cursor, args.${name}[i] ? 1 : 0);\n` +
-        `      cursor += 1;\n` +
-        `    }`
+        `${indent}{\n` +
+        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
+        `${indent}  offset += _len.bytesRead;\n` +
+        `${indent}  const _arr: boolean[] = new Array(_len.value);\n` +
+        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
+        `${indent}    _arr[_i] = u8[offset] === 1;\n` +
+        `${indent}    offset += 1;\n` +
+        `${indent}  }\n` +
+        `${indent}  ${lvalue} = _arr;\n` +
+        `${indent}}`
       );
-    case 'vec_u8':
-      return (
-        `    view.setUint32(cursor, args.${name}.length, true);\n` +
-        `    cursor += 4;\n` +
-        `    for (let i = 0; i < args.${name}.length; i++) {\n` +
-        `      view.setUint8(cursor, args.${name}[i]);\n` +
-        `      cursor += 1;\n` +
-        `    }`
-      );
+    case 'struct': {
+      if (!field.refType) return `${indent}// unknown struct field: ${field.name}`;
+      const structDef = definitions[field.refType];
+      if (!structDef) return `${indent}// missing definition for ${field.refType}`;
+      const subFields = collectPostcardFields(structDef, definitions);
+      const lines: string[] = [];
+      lines.push(`${indent}{`);
+      lines.push(`${indent}  const _obj: any = {};`);
+      for (const sf of subFields) {
+        lines.push(generateFieldDecodeExpr(sf, `_obj.${sf.name}`, definitions, `${indent}  `));
+      }
+      lines.push(`${indent}  ${lvalue} = _obj;`);
+      lines.push(`${indent}}`);
+      return lines.join('\n');
+    }
     default:
-      return '';
-  }
-}
-
-/** Generate decode statements for a variable-length output field. */
-function readVarFieldDecodeExpr(field: VarWireField, lvalue: string): string {
-  switch (field.kind) {
-    case 'string':
-      return (
-        `    {\n` +
-        `      const len = view.getUint32(cursor, true);\n` +
-        `      cursor += 4;\n` +
-        `      ${lvalue} = new TextDecoder().decode(u8.slice(cursor, cursor + len));\n` +
-        `      cursor += len;\n` +
-        `    }`
-      );
-    case 'vec_i64':
-      return (
-        `    {\n` +
-        `      const len = view.getUint32(cursor, true);\n` +
-        `      cursor += 4;\n` +
-        `      const count = len >>> 3;\n` +
-        `      const arr: number[] = new Array(count);\n` +
-        `      for (let i = 0; i < count; i++) {\n` +
-        `        arr[i] = view.getInt32(cursor, true);\n` +
-        `        cursor += 8;\n` +
-        `      }\n` +
-        `      ${lvalue} = arr;\n` +
-        `    }`
-      );
-    case 'vec_f64':
-      return (
-        `    {\n` +
-        `      const len = view.getUint32(cursor, true);\n` +
-        `      cursor += 4;\n` +
-        `      const count = len >>> 3;\n` +
-        `      const arr: number[] = new Array(count);\n` +
-        `      for (let i = 0; i < count; i++) {\n` +
-        `        arr[i] = view.getFloat64(cursor, true);\n` +
-        `        cursor += 8;\n` +
-        `      }\n` +
-        `      ${lvalue} = arr;\n` +
-        `    }`
-      );
-    case 'vec_i32':
-      return (
-        `    {\n` +
-        `      const len = view.getUint32(cursor, true);\n` +
-        `      cursor += 4;\n` +
-        `      const count = len >>> 2;\n` +
-        `      const arr: number[] = new Array(count);\n` +
-        `      for (let i = 0; i < count; i++) {\n` +
-        `        arr[i] = view.getInt32(cursor, true);\n` +
-        `        cursor += 4;\n` +
-        `      }\n` +
-        `      ${lvalue} = arr;\n` +
-        `    }`
-      );
-    case 'vec_bool':
-      return (
-        `    {\n` +
-        `      const len = view.getUint32(cursor, true);\n` +
-        `      cursor += 4;\n` +
-        `      const arr: boolean[] = new Array(len);\n` +
-        `      for (let i = 0; i < len; i++) {\n` +
-        `        arr[i] = u8[cursor] === 1;\n` +
-        `        cursor += 1;\n` +
-        `      }\n` +
-        `      ${lvalue} = arr;\n` +
-        `    }`
-      );
-    case 'vec_u8':
-      return (
-        `    {\n` +
-        `      const len = view.getUint32(cursor, true);\n` +
-        `      cursor += 4;\n` +
-        `      const arr: number[] = new Array(len);\n` +
-        `      for (let i = 0; i < len; i++) {\n` +
-        `        arr[i] = u8[cursor];\n` +
-        `        cursor += 1;\n` +
-        `      }\n` +
-        `      ${lvalue} = arr;\n` +
-        `    }`
-      );
-    default:
-      return '';
+      return `${indent}// unsupported field kind: ${field.kind}`;
   }
 }
 
 /**
  * 패키지 스키마에서 rkyv V2 코덱 파일(`rkyv-codecs.ts`)을 생성합니다.
  *
- * Tier 1: 고정폭 프리미티브 필드만
- * Tier 2: String 또는 Vec<primitive> 필드 포함
- * Tier 3: 중첩 구조체, enum, Option<T> 등 — JSON fallback
+ * 모든 명령은 postcard wire format을 사용합니다:
+ * - Request:  `[cmd_id: u16 LE @0][postcard(Input) @2...]`
+ * - Response: `[ok: u8 @0][pad 7B][postcard(Output) @8...]`
+ * - Error:    `[ok: u8 @0 = 0][pad 7B][error_len: u16 @8 LE][error_bytes @10...]`
  */
 export function generateRkyvCodecsTs(schema: PackageSchema): string {
   const allTypes = schema.commands
     .flatMap((c) => [c.inputType, c.outputType])
     .filter((v, i, a) => a.indexOf(v) === i);
 
-  let output =
-    "import type { RkyvV2Codec } from '@rustra/types';\n" +
-    `import type { ${allTypes.join(', ')} } from './types.js';\n\n`;
+  const definitions = collectAllDefinitions(schema);
+
+  let output = postcardHelperSource();
+
+  output += "import type { RkyvV2Codec } from '@rustra/types';\n";
+  output += `import type { ${allTypes.join(', ')} } from './types';\n\n`;
 
   for (const command of schema.commands) {
-    const layout = computeWireLayout(command);
-    const outputTier3 = !isOutputSupported(command);
-
-    if (layout.tier === 3 || outputTier3) {
-      // Tier 3: JSON fallback codec
-      output += generateTier3Codec(command);
-      continue;
-    }
-
-    const fnName = commandFunctionName(command.name);
-    const inType = command.inputType;
-    const outType = command.outputType;
-
-    output += `export const ${fnName}Codec: RkyvV2Codec<${inType}, ${outType}> = {\n`;
-    output += `  commandId: ${command.commandId},\n`;
-
-    // ── encode ──
-    output += generateEncodeMethod(command, layout);
-
-    // ── decode ──
-    output += generateDecodeMethod(command);
-
-    output += `};\n\n`;
+    output += generatePostcardCodec(command, definitions);
   }
 
   return output;
 }
 
-/** Generate a Tier 3 (JSON fallback) codec for a command. */
-function generateTier3Codec(command: CommandSchema): string {
+/**
+ * Generate a single postcard-based codec for a command.
+ */
+function generatePostcardCodec(
+  command: CommandSchema,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+): string {
   const fnName = commandFunctionName(command.name);
   const inType = command.inputType;
   const outType = command.outputType;
+  const inFields = collectPostcardFields(command.inputSchema, definitions);
+  const outFields = collectPostcardFields(command.outputSchema, definitions);
 
   const lines: string[] = [];
+
   lines.push(`export const ${fnName}Codec: RkyvV2Codec<${inType}, ${outType}> = {`);
   lines.push(`  commandId: ${command.commandId},`);
+
+  // ── encode ──
   lines.push('');
   lines.push(`  encode(args: ${inType}): ArrayBuffer {`);
-  lines.push(`    const json = JSON.stringify(args);`);
-  lines.push(`    const jsonBytes = new TextEncoder().encode(json);`);
-  lines.push(`    const buf = new ArrayBuffer(2 + jsonBytes.length);`);
-  lines.push(`    const view = new DataView(buf);`);
-  lines.push(`    view.setUint16(0, ${command.commandId}, true);`);
-  lines.push(`    new Uint8Array(buf, 2).set(jsonBytes);`);
-  lines.push(`    return buf;`);
+  lines.push(`    // [cmd_id: u16 LE][postcard(${inType})]`);
+  lines.push(`    const parts: Uint8Array[] = [];`);
+  lines.push(`    const cmdId = new Uint8Array(2);`);
+  lines.push(`    new DataView(cmdId.buffer).setUint16(0, ${command.commandId}, true);`);
+  lines.push(`    parts.push(cmdId);`);
+
+  // Encode each input field in postcard format
+  for (const field of inFields) {
+    lines.push(generateFieldEncodeExpr(field, `args.${field.name}`, definitions, '    '));
+  }
+
+  lines.push(`    return _pcConcatUint8Arrays(parts).buffer;`);
   lines.push(`  },`);
+
+  // ── decode ──
   lines.push('');
   lines.push(`  decode(buf: ArrayBuffer): { ok: boolean; result?: ${outType}; error?: string } {`);
   lines.push(`    if (buf.byteLength < 8) return { ok: false, error: 'response too short' };`);
   lines.push(`    const u8 = new Uint8Array(buf);`);
   lines.push(`    const view = new DataView(buf);`);
-  lines.push(`    const ok = u8[0] === 1;`);
-  lines.push(`    if (!ok) {`);
+  lines.push(`    if (u8[0] !== 1) {`);
   lines.push(`      const errLen = view.getUint16(8, true);`);
   lines.push(`      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';`);
   lines.push(`      return { ok: false, error: err };`);
   lines.push(`    }`);
-  lines.push(`    // Tier 3 success: [ok=1 @0][pad 3B][json_len: u32 @4 LE][json_bytes @8...]`);
-  lines.push(`    const jsonLen = view.getUint32(4, true);`);
-  lines.push(`    const jsonStr = new TextDecoder().decode(u8.slice(8, 8 + jsonLen));`);
-  lines.push(`    const result: ${outType} = JSON.parse(jsonStr);`);
-  lines.push(`    return { ok: true, result };`);
+
+  if (outFields.length === 0) {
+    lines.push(`    return { ok: true, result: {} as ${outType} };`);
+  } else {
+    lines.push(`    // Decode postcard from offset 8`);
+    lines.push(`    let offset = 8;`);
+    lines.push(`    const result: ${outType} = {} as any;`);
+    for (const field of outFields) {
+      lines.push(generateFieldDecodeExpr(field, `result.${field.name}`, definitions, '    '));
+    }
+    lines.push(`    return { ok: true, result };`);
+  }
+
   lines.push(`  },`);
   lines.push(`};`);
   lines.push('');
@@ -536,114 +450,10 @@ function generateTier3Codec(command: CommandSchema): string {
   return lines.join('\n') + '\n';
 }
 
-function generateEncodeMethod(command: CommandSchema, layout: WireLayout): string {
-  const lines: string[] = [];
-
-  if (layout.tier === 1 && layout.varFields.length === 0) {
-    // Pure Tier 1: all fixed, known size
-    lines.push(`  encode(args: ${command.inputType}): ArrayBuffer {`);
-    lines.push(`    const buf = new ArrayBuffer(${layout.fixedRegionSize});`);
-    lines.push(`    const view = new DataView(buf);`);
-    lines.push(`    view.setUint16(0, ${command.commandId}, true);`);
-    for (const f of layout.fixedFields) {
-      lines.push(writeFixedFieldExpr(f, `args.${f.name}`));
-    }
-    lines.push(`    return buf;`);
-    lines.push(`  },`);
-    return lines.join('\n') + '\n';
-  }
-
-  // Tier 2: need to compute variable-length portions
-  lines.push(`  encode(args: ${command.inputType}): ArrayBuffer {`);
-
-  // Pre-compute byte array for string fields
-  for (const vf of layout.varFields) {
-    if (vf.kind === 'string') {
-      lines.push(`    const ${vf.name}Bytes = new TextEncoder().encode(args.${vf.name});`);
-    }
-  }
-  // Pre-compute length for vec fields (except vec_u8 which uses .length inline)
-  for (const vf of layout.varFields) {
-    if (vf.kind !== 'string' && vf.kind !== 'vec_u8') {
-      lines.push(`    const ${vf.name}Len = args.${vf.name}.length;`);
-    }
-  }
-
-  // Compute total buffer size: fixed region + sum of var field sizes
-  const fixedSize = layout.fixedRegionSize;
-  const sizeParts = [`${fixedSize}`];
-  for (const vf of layout.varFields) {
-    sizeParts.push(varFieldSizeExpr(vf));
-  }
-  lines.push(`    const buf = new ArrayBuffer(${sizeParts.join(' + ')});`);
-  lines.push(`    const view = new DataView(buf);`);
-  lines.push(`    view.setUint16(0, ${command.commandId}, true);`);
-
-  // Write fixed fields at their computed offsets
-  for (const f of layout.fixedFields) {
-    lines.push(writeFixedFieldExpr(f, `args.${f.name}`));
-  }
-
-  // Write variable fields
-  lines.push(`    let cursor = ${fixedSize};`);
-  for (const vf of layout.varFields) {
-    lines.push(writeVarFieldExpr(vf));
-  }
-
-  lines.push(`    return buf;`);
-  lines.push(`  },`);
-  return lines.join('\n') + '\n';
-}
-
-function generateDecodeMethod(command: CommandSchema): string {
-  const outType = command.outputType;
-  const lines: string[] = [];
-
-  lines.push(`  decode(buf: ArrayBuffer): { ok: boolean; result?: ${outType}; error?: string } {`);
-  lines.push(`    if (buf.byteLength < 8) return { ok: false, error: 'response too short' };`);
-  lines.push(`    const u8 = new Uint8Array(buf);`);
-  lines.push(`    const view = new DataView(buf);`);
-  lines.push(`    const ok = u8[0] === 1;`);
-  lines.push(`    if (!ok) {`);
-  lines.push(`      const errLen = view.getUint16(8, true);`);
-  lines.push(`      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';`);
-  lines.push(`      return { ok: false, error: err };`);
-  lines.push(`    }`);
-
-  // Analyze output fields
-  const outLayout = computeOutputLayout(command);
-
-  if (outLayout.fixedFields.length === 0 && outLayout.varFields.length === 0) {
-    lines.push(`    return { ok: true, result: {} as ${outType} };`);
-  } else {
-    lines.push(`    const result: ${outType} = {} as any;`);
-
-    // Read fixed output fields
-    for (const f of outLayout.fixedFields) {
-      lines.push(readFixedFieldExpr(f, `result.${f.name}`));
-    }
-
-    // Read variable output fields
-    if (outLayout.varFields.length > 0) {
-      lines.push(`    let cursor = ${outLayout.fixedRegionSize};`);
-      for (const vf of outLayout.varFields) {
-        lines.push(readVarFieldDecodeExpr(vf, `result.${vf.name}`));
-      }
-    }
-
-    lines.push(`    return { ok: true, result };`);
-  }
-
-  lines.push(`  },`);
-  return lines.join('\n') + '\n';
-}
-
 /**
  * 패키지 스키마에서 rkyv V2 레지스트리 파일(`rkyv-registry.ts`)을 생성합니다.
- * Tier 1/2/3 모든 명령을 포함합니다.
  */
 export function generateRkyvRegistryTs(schema: PackageSchema): string {
-  // Include all commands (Tier 1, 2, and 3)
   const included = schema.commands;
 
   const entries = included
@@ -658,7 +468,7 @@ export function generateRkyvRegistryTs(schema: PackageSchema): string {
     .join(', ');
 
   return (
-    `import { ${codecImports} } from './rkyv-codecs.js';\n\n` +
+    `import { ${codecImports} } from './rkyv-codecs';\n\n` +
     `export const rkyvV2Registry = new Map<string, import('@rustra/types').RkyvV2Codec<any, any>>([\n` +
     entries +
     `,\n]);\n`

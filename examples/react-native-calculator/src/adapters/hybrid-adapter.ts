@@ -1,17 +1,10 @@
-import type { EngineClient } from "@rustra/types";
+import type { EngineClient, RustraNative, RkyvV2Codec } from "@rustra/types";
 
-export type HybridNative = {
-  invokeHybrid(payload: ArrayBuffer): ArrayBuffer;
-};
-
-export type HybridCodec<I, O> = {
-  encode(args: I): ArrayBuffer;
-  decode(buf: ArrayBuffer): { ok: boolean; result?: O; error?: string };
-};
+export type HybridCodec<I, O> = RkyvV2Codec<I, O>;
 
 export function createHybridEngine(
-  native: HybridNative,
-  registry: Map<string, HybridCodec<any, any>>,
+  native: RustraNative,
+  registry: Map<string, RkyvV2Codec<any, any>>,
 ): EngineClient {
   return {
     invoke<T>(command: string, args?: unknown): Promise<T> {
@@ -55,10 +48,6 @@ function encodeVarintString(str: string): number[] {
 }
 
 // ── rkyv fixed-offset response parsing ──
-// ArchivedRkyvResponse layout:
-//   offset 0: ok (1 byte + 7 padding)
-//   offset 8: value (i64 LE, 8 bytes)
-//   offset 16+: error (Option<String>, 16 bytes for None)
 
 const RESP_OK_OFFSET = 0;
 const RESP_VALUE_OFFSET = 8;
@@ -83,6 +72,7 @@ export const addNumbersCodec: HybridCodec<
   { a: number; b: number },
   { value: number }
 > = {
+  commandId: 1,
   encode(args: { a: number; b: number }): ArrayBuffer {
     const header = encodeVarintString("addNumbers");
     const aBytes = encodeVarint(zigzag(args.a));

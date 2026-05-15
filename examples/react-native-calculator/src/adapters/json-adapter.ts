@@ -1,10 +1,6 @@
-import type { EngineClient } from "@rustra/types";
+import type { EngineClient, RustraNative } from "@rustra/types";
 
-export type JsonNative = {
-  invoke(payload: ArrayBuffer): ArrayBuffer;
-};
-
-export function createJsonEngine(native: JsonNative): EngineClient {
+export function createJsonEngine(native: RustraNative): EngineClient {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 

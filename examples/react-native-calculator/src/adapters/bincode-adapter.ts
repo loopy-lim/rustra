@@ -1,17 +1,10 @@
-import type { EngineClient } from "@rustra/types";
+import type { EngineClient, RustraNative, RkyvV2Codec } from "@rustra/types";
 
-export type BincodeNative = {
-  invokeBincode(payload: ArrayBuffer): ArrayBuffer;
-};
-
-export type BincodeCodec<I, O> = {
-  encode(args: I): ArrayBuffer;
-  decode(buf: ArrayBuffer): { ok: boolean; result?: O; error?: string };
-};
+export type BincodeCodec<I, O> = RkyvV2Codec<I, O>;
 
 export function createBincodeEngine(
-  native: BincodeNative,
-  registry: Map<string, BincodeCodec<any, any>>,
+  native: RustraNative,
+  registry: Map<string, RkyvV2Codec<any, any>>,
 ): EngineClient {
   return {
     invoke<T>(command: string, args?: unknown): Promise<T> {

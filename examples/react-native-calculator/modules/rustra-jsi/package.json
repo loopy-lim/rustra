@@ -2,5 +2,14 @@
   "name": "rustra-jsi",
   "version": "1.0.0",
   "main": "src/index.ts",
-  "private": true
+  "private": true,
+  "scripts": {
+    "android": "expo run:android",
+    "ios": "expo run:ios"
+  },
+  "dependencies": {
+    "expo": "~54.0.34",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
+  }
 }
