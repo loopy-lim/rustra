@@ -10,11 +10,11 @@ Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플�
 
 핵심 구성 요소는 세 가지입니다:
 
-| 구성 요소 | 역할 |
-|-----------|------|
-| `#[command]` | 함수를 브릿지 명령으로 변환하는 속성 매크로 |
-| `#[bridge_type]` | 구조체/열거형에 필요한 derive와 serde 설정을 자동 추가 |
-| `rustra::build!()` | 패키지 빌더를 생성하고 여러 명령을 한 번에 등록 |
+| 구성 요소          | 역할                                                   |
+| ------------------ | ------------------------------------------------------ |
+| `#[command]`       | 함수를 브릿지 명령으로 변환하는 속성 매크로            |
+| `#[bridge_type]`   | 구조체/열거형에 필요한 derive와 serde 설정을 자동 추가 |
+| `rustra::build!()` | 패키지 빌더를 생성하고 여러 명령을 한 번에 등록        |
 
 ---
 
@@ -57,6 +57,7 @@ fn __rustra_add_numbers_handler(__input: AddNumbersInput) -> rustra::Result<i64>
 ```
 
 주요 특징:
+
 - 자동 생성된 Input 구조체에 `#[serde(rename_all = "camelCase")]`가 적용됩니다.
 - 반환값이 bare 타입(`i64`, `String` 등)이면 핸들러가 자동으로 `Ok()`로 래핑합니다.
 - TypeScript에서 `AddNumbersInput` 타입으로 노출됩니다.
@@ -100,11 +101,11 @@ fn find_user(input: UserQuery) -> Result<User> {
 
 세 가지 반환 패턴을 지원합니다:
 
-| 패턴 | Rust 시그니처 | 동작 |
-|------|--------------|------|
-| bare 반환 | `-> i64` | 핸들러가 `Ok()`로 자동 래핑 |
-| Result 반환 | `-> Result<i64>` | Result를 그대로 전달 |
-| unit 반환 | `-> ()` (또는 생략) | `Ok(())`로 래핑 |
+| 패턴        | Rust 시그니처       | 동작                        |
+| ----------- | ------------------- | --------------------------- |
+| bare 반환   | `-> i64`            | 핸들러가 `Ok()`로 자동 래핑 |
+| Result 반환 | `-> Result<i64>`    | Result를 그대로 전달        |
+| unit 반환   | `-> ()` (또는 생략) | `Ok(())`로 래핑             |
 
 ```rust
 // Pattern 1: bare 반환
@@ -133,10 +134,10 @@ fn log_event(event: String) {
 
 함수 이름은 자동으로 lowerCamelCase로 변환됩니다:
 
-| 함수 이름 | 커맨드 이름 |
-|-----------|------------|
-| `add_numbers` | `addNumbers` |
-| `find_user` | `findUser` |
+| 함수 이름              | 커맨드 이름                                 |
+| ---------------------- | ------------------------------------------- |
+| `add_numbers`          | `addNumbers`                                |
+| `find_user`            | `findUser`                                  |
 | `do_something_command` | `doSomething` (`_command` 접미사 자동 제거) |
 
 직접 지정하려면 `name` 속성을 사용합니다:
@@ -204,6 +205,7 @@ struct UserQuery {
 ```
 
 자동 추가되는 항목:
+
 - `#[derive(Debug, Serialize, Deserialize, JsonSchema)]`
 - `#[serde(rename_all = "camelCase")]`
 
@@ -284,11 +286,11 @@ rustra::Package::builder("examples.calculator")
 
 각 `#[command]` 함수에 대해 매크로가 생성하는 것:
 
-| 생성물 | 이름 규칙 | 역할 |
-|--------|----------|------|
-| 메타데이터 상수 | `__RUstra_meta_<fn_name>` | 커맨드 이름을 저장하는 `&str` 상수 |
-| 핸들러 함수 | `__rustra_<fn_name>_handler` | 입력 타입 변환과 Ok() 래핑을 수행하는 래퍼 함수 |
-| trait bound 검증 | `_check_command_bounds` | 입출력 타입이 필요한 trait을 충족하는지 확인 |
+| 생성물           | 이름 규칙                    | 역할                                            |
+| ---------------- | ---------------------------- | ----------------------------------------------- |
+| 메타데이터 상수  | `__RUstra_meta_<fn_name>`    | 커맨드 이름을 저장하는 `&str` 상수              |
+| 핸들러 함수      | `__rustra_<fn_name>_handler` | 입력 타입 변환과 Ok() 래핑을 수행하는 래퍼 함수 |
+| trait bound 검증 | `_check_command_bounds`      | 입출력 타입이 필요한 trait을 충족하는지 확인    |
 
 ---
 
@@ -357,6 +359,7 @@ println!("Result: {}", output.value);
 ```
 
 제네릭 파라미터:
+
 - `I: Serialize` — 입력 타입
 - `O: DeserializeOwned` — 출력 타입
 
@@ -384,11 +387,11 @@ let generated = pkg.generate_typescript()?;
 
 TypeScript 코드 생성 결과를 담는 구조체입니다.
 
-| 필드 | 출력 파일 | 내용 |
-|------|----------|------|
-| `schema_json` | `schema.json` | 전체 명령 스키마 (JSON) |
-| `types_ts` | `types.ts` | TypeScript 타입 정의 |
-| `commands_ts` | `commands.ts` | TypeScript 명령 헬퍼 함수 |
+| 필드            | 출력 파일     | 내용                                |
+| --------------- | ------------- | ----------------------------------- |
+| `schema_json`   | `schema.json` | 전체 명령 스키마 (JSON)             |
+| `types_ts`      | `types.ts`    | TypeScript 타입 정의                |
+| `commands_ts`   | `commands.ts` | TypeScript 명령 헬퍼 함수           |
 | `contract_hash` | `contract.ts` | 스키마 SHA-256 해시 (무결성 검증용) |
 
 ### `.write_to_dir(dir)`
@@ -432,12 +435,12 @@ fn divide(a: i64, b: i64) -> Result<i64> {
 
 ### 에러 코드 분류
 
-| 코드 | 팩토리 메서드 | 의미 |
-|------|-------------|------|
-| `command.not_found` | `RustraError::command_not_found(name)` | 등록되지 않은 명령 호출 |
-| `command.invalid_args` | `RustraError::invalid_args(error)` | 입력 인자 역직렬화 실패 |
-| `internal` | `RustraError::internal(error)` | 내부 오류 (직렬화, I/O 등) |
-| (커스텀) | `RustraError::custom(code, message)` | 사용자 정의 에러 |
+| 코드                   | 팩토리 메서드                          | 의미                       |
+| ---------------------- | -------------------------------------- | -------------------------- |
+| `command.not_found`    | `RustraError::command_not_found(name)` | 등록되지 않은 명령 호출    |
+| `command.invalid_args` | `RustraError::invalid_args(error)`     | 입력 인자 역직렬화 실패    |
+| `internal`             | `RustraError::internal(error)`         | 내부 오류 (직렬화, I/O 등) |
+| (커스텀)               | `RustraError::custom(code, message)`   | 사용자 정의 에러           |
 
 ### 에러 메서드
 
@@ -476,18 +479,18 @@ fn write_output() -> Result<()> {
 
 ### 타입 매핑
 
-| Rust 타입 | TypeScript 타입 |
-|-----------|----------------|
-| `i64`, `i32`, `u32`, `f64` 등 | `number` |
-| `String` | `string` |
-| `bool` | `boolean` |
-| `Option<T>` | `T \| null` (구조체 필드는 `?:` 선택적) |
-| `Vec<T>` | `T[]` |
-| `Vec<Vec<T>>` | `T[][]` (중첩 지원) |
-| `HashMap<String, V>` | `Record<string, V>` |
-| `(A, B, C)` | `[A, B, C]` (튜플) |
-| 단순 `enum` | `'Variant1' \| 'Variant2'` |
-| 데이터를 가진 `enum` | 객체 유니온 타입 |
+| Rust 타입                     | TypeScript 타입                         |
+| ----------------------------- | --------------------------------------- |
+| `i64`, `i32`, `u32`, `f64` 등 | `number`                                |
+| `String`                      | `string`                                |
+| `bool`                        | `boolean`                               |
+| `Option<T>`                   | `T \| null` (구조체 필드는 `?:` 선택적) |
+| `Vec<T>`                      | `T[]`                                   |
+| `Vec<Vec<T>>`                 | `T[][]` (중첩 지원)                     |
+| `HashMap<String, V>`          | `Record<string, V>`                     |
+| `(A, B, C)`                   | `[A, B, C]` (튜플)                      |
+| 단순 `enum`                   | `'Variant1' \| 'Variant2'`              |
+| 데이터를 가진 `enum`          | 객체 유니온 타입                        |
 
 ### 선택적 필드 처리
 
@@ -554,19 +557,19 @@ use rustra::prelude::*;
 
 제공 항목:
 
-| 항목 | 종류 | 용도 |
-|------|------|------|
-| `build` | 함수 | `PackageBuilder` 생성 |
-| `bridge_type` | 속성 매크로 | 구조체/열거형 derive 자동화 |
-| `command` | 속성 매크로 | 함수를 브릿지 명령으로 변환 |
-| `Package` | 구조체 | 등록된 명령 집합 |
-| `PackageBuilder` | 구조체 | 명령 등록 빌더 |
-| `Result<T>` | 타입 별칭 | `std::result::Result<T, RustraError>` |
-| `RustraError` | 구조체 | 에러 타입 |
-| `Serialize` | trait | serde 직렬화 |
-| `Deserialize` | trait | serde 역직렬화 |
-| `JsonSchema` | trait | JSON Schema 생성 |
-| `GeneratedPackage` | 구조체 | TypeScript 생성 결과 |
+| 항목               | 종류        | 용도                                  |
+| ------------------ | ----------- | ------------------------------------- |
+| `build`            | 함수        | `PackageBuilder` 생성                 |
+| `bridge_type`      | 속성 매크로 | 구조체/열거형 derive 자동화           |
+| `command`          | 속성 매크로 | 함수를 브릿지 명령으로 변환           |
+| `Package`          | 구조체      | 등록된 명령 집합                      |
+| `PackageBuilder`   | 구조체      | 명령 등록 빌더                        |
+| `Result<T>`        | 타입 별칭   | `std::result::Result<T, RustraError>` |
+| `RustraError`      | 구조체      | 에러 타입                             |
+| `Serialize`        | trait       | serde 직렬화                          |
+| `Deserialize`      | trait       | serde 역직렬화                        |
+| `JsonSchema`       | trait       | JSON Schema 생성                      |
+| `GeneratedPackage` | 구조체      | TypeScript 생성 결과                  |
 
 ---
 

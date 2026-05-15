@@ -1,4 +1,4 @@
-import type { EngineClient, RustraNative } from "@rustra/types";
+import type { EngineClient, RustraNative } from '@rustra/types';
 
 export function createJsonEngine(native: RustraNative): EngineClient {
   const encoder = new TextEncoder();
@@ -16,7 +16,7 @@ export function createJsonEngine(native: RustraNative): EngineClient {
         error?: string;
       };
       if (!response.ok) {
-        throw new Error(response.error ?? "Rustra invoke failed");
+        throw new Error(response.error ?? 'Rustra invoke failed');
       }
       return Promise.resolve(response.result as T);
     },

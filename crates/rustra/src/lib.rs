@@ -482,21 +482,20 @@ impl PackageBuilder {
 
         // Generate fast postcard-based binary handler that bypasses JSON Value
         let handler_bin = handler.clone();
-        let rkyv_v2_handler: Option<BinHandler> =
-            Some(Arc::new(move |payload: &[u8]| {
-                if payload.len() < 2 {
-                    return Err(RustraError::invalid_args("rkyv v2: payload too short"));
-                }
-                let input: I = postcard::from_bytes(&payload[2..])
-                    .map_err(|e| RustraError::invalid_args(format!("postcard decode: {e}")))?;
-                let output = handler_bin(input)?;
-                let out_bytes = postcard::to_allocvec(&output)
-                    .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))?;
-                let mut buf = vec![0u8; 8 + out_bytes.len()];
-                buf[0] = 1; // ok = true
-                buf[8..8 + out_bytes.len()].copy_from_slice(&out_bytes);
-                Ok(buf)
-            }));
+        let rkyv_v2_handler: Option<BinHandler> = Some(Arc::new(move |payload: &[u8]| {
+            if payload.len() < 2 {
+                return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+            }
+            let input: I = postcard::from_bytes(&payload[2..])
+                .map_err(|e| RustraError::invalid_args(format!("postcard decode: {e}")))?;
+            let output = handler_bin(input)?;
+            let out_bytes = postcard::to_allocvec(&output)
+                .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))?;
+            let mut buf = vec![0u8; 8 + out_bytes.len()];
+            buf[0] = 1; // ok = true
+            buf[8..8 + out_bytes.len()].copy_from_slice(&out_bytes);
+            Ok(buf)
+        }));
 
         let command = Command {
             command_id: self.next_command_id,
@@ -573,9 +572,7 @@ type BinHandler = Arc<dyn Fn(&[u8]) -> crate::Result<Vec<u8>> + Send + Sync>;
 type DecodeFn = Arc<dyn Fn(&[u8]) -> crate::Result<Value> + Send + Sync>;
 type EncodeFn = Arc<dyn Fn(&Value) -> Vec<u8> + Send + Sync>;
 
-fn build_rkyv_v2_decoder(
-    input_schema: &Value,
-) -> (DecodeFn, Tier) {
+fn build_rkyv_v2_decoder(input_schema: &Value) -> (DecodeFn, Tier) {
     let props = match input_schema.get("properties").and_then(Value::as_object) {
         Some(p) => p,
         None => {
@@ -757,10 +754,7 @@ fn build_rkyv_v2_decoder(
 /// ```
 ///
 /// For errors the encoder is not used; `encode_rkyv_v2_error` is called instead.
-fn build_rkyv_v2_response_encoder(
-    output_schema: &Value,
-    is_tier3: bool,
-) -> EncodeFn {
+fn build_rkyv_v2_response_encoder(output_schema: &Value, is_tier3: bool) -> EncodeFn {
     // Tier 3: encode response as JSON string after ok byte
     if is_tier3 {
         return Arc::new(move |value: &Value| {

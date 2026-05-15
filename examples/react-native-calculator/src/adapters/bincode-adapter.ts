@@ -1,4 +1,4 @@
-import type { EngineClient, RustraNative, RkyvV2Codec } from "@rustra/types";
+import type { EngineClient, RustraNative, RkyvV2Codec } from '@rustra/types';
 
 export type BincodeCodec<I, O> = RkyvV2Codec<I, O>;
 
@@ -16,7 +16,7 @@ export function createBincodeEngine(
       const resultBytes = native.invokeBincode(payload);
       const response = codec.decode(resultBytes);
       if (!response.ok) {
-        throw new Error(response.error ?? "Rustra bincode invoke failed");
+        throw new Error(response.error ?? 'Rustra bincode invoke failed');
       }
       return Promise.resolve(response.result as T);
     },
@@ -40,7 +40,7 @@ function encodeVarint(value: number): number[] {
 
 function zigzag(n: number): number {
   // bincode zigzag: n >= 0 → 2n, n < 0 → -2n-1
-  return n >= 0 ? n * 2 : (-n) * 2 - 1;
+  return n >= 0 ? n * 2 : -n * 2 - 1;
 }
 
 function decodeVarint(bytes: Uint8Array, offset: number): [number, number] {
@@ -70,30 +70,29 @@ function encodeVarintString(str: string): number[] {
 
 // ── Codecs (codegen would generate these) ────────────────
 
-export const addNumbersCodec: BincodeCodec<
-  { a: number; b: number },
-  { value: number }
-> = {
+export const addNumbersCodec: BincodeCodec<{ a: number; b: number }, { value: number }> = {
   encode(args: { a: number; b: number }): ArrayBuffer {
-    const header = encodeVarintString("addNumbers");
+    const header = encodeVarintString('addNumbers');
     const aBytes = encodeVarint(zigzag(args.a));
     const bBytes = encodeVarint(zigzag(args.b));
     const total = header.length + aBytes.length + bBytes.length;
     const buf = new ArrayBuffer(total);
     const u8 = new Uint8Array(buf);
     let off = 0;
-    u8.set(header, off); off += header.length;
-    u8.set(aBytes, off); off += aBytes.length;
+    u8.set(header, off);
+    off += header.length;
+    u8.set(aBytes, off);
+    off += aBytes.length;
     u8.set(bBytes, off);
     return buf;
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: { value: number }; error?: string } {
-    if (buf.byteLength < 3) return { ok: false, error: "response too short" };
+    if (buf.byteLength < 3) return { ok: false, error: 'response too short' };
     const u8 = new Uint8Array(buf);
     const ok = u8[0] === 1;
     if (!ok) {
-      return { ok: false, error: "bincode error" };
+      return { ok: false, error: 'bincode error' };
     }
     const [raw, _] = decodeVarint(u8, 1);
     const value = unzigzag(raw);
@@ -102,5 +101,5 @@ export const addNumbersCodec: BincodeCodec<
 };
 
 export const bincodeRegistry = new Map<string, BincodeCodec<any, any>>([
-  ["addNumbers", addNumbersCodec],
+  ['addNumbers', addNumbersCodec],
 ]);

@@ -30,12 +30,14 @@ fn find_user(query: UserQuery) -> Result<User> { ... }
 ```
 
 **Macro behavior for scalar params (Pattern 1-2):**
+
 - Auto-generates `__<PascalCase>Input` struct with `BridgeType` derives
 - Auto-generates `__<PascalCase>Output` struct wrapping return value
 - Wraps original function body into the generated handler
 - Generates metadata constant for registration
 
 **Macro behavior for struct params (Pattern 3):**
+
 - Same as current behavior, passes struct directly
 - Requires param type to implement `BridgeType` traits
 
@@ -52,10 +54,12 @@ enum Status { Active, Inactive, Suspended }
 ```
 
 Auto-adds:
+
 - `Debug + Serialize + Deserialize + JsonSchema` derives
 - `#[serde(rename_all = "camelCase")]` attribute
 
 Override support:
+
 ```rust
 #[derive(BridgeType)]
 #[bridge(rename_all = "snake_case")]
@@ -78,17 +82,21 @@ fn main() -> Result<()> {
 ```
 
 **`rustra::build("package.name")`:**
+
 - Creates a `PackageBuilder` with package name
 
 **`.commands!(fn1, fn2, ...)`:**
+
 - Macro that references each function's metadata constant
 - Auto-registers all commands with correct names and schemas
 
 **`.generate_to("path")?`:**
+
 - Generates TypeScript types, commands, schema, contract
 - Writes all files to the specified directory
 
 **`.package()`:**
+
 - Returns `Package` for runtime use (FFI invocation)
 
 ### 4. Error Messages
@@ -107,6 +115,7 @@ pub trait CommandInput: Serialize + DeserializeOwned + JsonSchema {}
 ### 5. Migration Strategy
 
 No backward compatibility. Direct replacement:
+
 - Remove `register!()` macro → replace with `commands!()`
 - Remove `Package::builder()` → replace with `rustra::build()`
 - Remove `generate_typescript()?.write_to_dir()` → replace with `.generate_to()`
