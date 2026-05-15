@@ -24,9 +24,8 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{
-    Attribute, DeriveInput, Ident, LitStr, Meta,
-    parse::Parse, parse::ParseStream, parse_macro_input, parse_quote, GenericArgument, ItemFn, PathArguments,
-    ReturnType, Token, Type,
+    parse::Parse, parse::ParseStream, parse_macro_input, parse_quote, Attribute, DeriveInput,
+    GenericArgument, Ident, ItemFn, LitStr, Meta, PathArguments, ReturnType, Token, Type,
 };
 
 /// `#[command]` 속성의 파싱 결과입니다.
@@ -93,7 +92,9 @@ fn classify_return(ret: &ReturnType) -> ReturnKind {
 /// Extract parameter names and types from function inputs.
 ///
 /// Returns `None` if any parameter is not a typed parameter (e.g., `self`).
-fn extract_params(inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>) -> Option<Vec<(Ident, TokenStream2)>> {
+fn extract_params(
+    inputs: &syn::punctuated::Punctuated<syn::FnArg, syn::token::Comma>,
+) -> Option<Vec<(Ident, TokenStream2)>> {
     let mut params = Vec::new();
     for arg in inputs {
         match arg {
@@ -217,9 +218,7 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
                 let ty = ty.clone();
                 (ty, quote! { Ok(#fn_name(#param_ident)) })
             }
-            ReturnKind::Unit => {
-                (quote! { () }, quote! { #fn_name(#param_ident); Ok(()) })
-            }
+            ReturnKind::Unit => (quote! { () }, quote! { #fn_name(#param_ident); Ok(()) }),
         };
 
         let expanded = quote! {
@@ -288,9 +287,10 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
                 let ty = ty.clone();
                 (ty, quote! { Ok(#fn_name(#(#param_names),*)) })
             }
-            ReturnKind::Unit => {
-                (quote! { () }, quote! { #fn_name(#(#param_names),*); Ok(()) })
-            }
+            ReturnKind::Unit => (
+                quote! { () },
+                quote! { #fn_name(#(#param_names),*); Ok(()) },
+            ),
         };
 
         let expanded = quote! {
@@ -487,9 +487,11 @@ fn find_rename_all(attrs: &[Attribute]) -> Option<String> {
     for attr in attrs {
         if attr.path().is_ident("serde") {
             if let Meta::List(list) = &attr.meta {
-                let nested: Result<Vec<Meta>, _> = list.parse_args_with(
-                    syn::punctuated::Punctuated::<Meta, Token![,]>::parse_terminated
-                ).map(|p| p.into_iter().collect());
+                let nested: Result<Vec<Meta>, _> = list
+                    .parse_args_with(
+                        syn::punctuated::Punctuated::<Meta, Token![,]>::parse_terminated,
+                    )
+                    .map(|p| p.into_iter().collect());
                 if let Ok(metas) = nested {
                     for meta in metas {
                         if let Meta::NameValue(nv) = meta {
@@ -497,7 +499,8 @@ fn find_rename_all(attrs: &[Attribute]) -> Option<String> {
                                 if let syn::Expr::Lit(syn::ExprLit {
                                     lit: syn::Lit::Str(s),
                                     ..
-                                }) = &nv.value {
+                                }) = &nv.value
+                                {
                                     return Some(s.value());
                                 }
                             }
@@ -515,9 +518,11 @@ fn find_bridge_rename_all(attrs: &[Attribute]) -> Option<String> {
     for attr in attrs {
         if attr.path().is_ident("bridge") {
             if let Meta::List(list) = &attr.meta {
-                let nested: Result<Vec<Meta>, _> = list.parse_args_with(
-                    syn::punctuated::Punctuated::<Meta, Token![,]>::parse_terminated
-                ).map(|p| p.into_iter().collect());
+                let nested: Result<Vec<Meta>, _> = list
+                    .parse_args_with(
+                        syn::punctuated::Punctuated::<Meta, Token![,]>::parse_terminated,
+                    )
+                    .map(|p| p.into_iter().collect());
                 if let Ok(metas) = nested {
                     for meta in metas {
                         if let Meta::NameValue(nv) = meta {
@@ -525,7 +530,8 @@ fn find_bridge_rename_all(attrs: &[Attribute]) -> Option<String> {
                                 if let syn::Expr::Lit(syn::ExprLit {
                                     lit: syn::Lit::Str(s),
                                     ..
-                                }) = &nv.value {
+                                }) = &nv.value
+                                {
                                     return Some(s.value());
                                 }
                             }
@@ -598,9 +604,7 @@ fn snake_to_upper_camel(name: &str) -> String {
             let mut chars = part.chars();
             match chars.next() {
                 None => String::new(),
-                Some(first) => {
-                    first.to_ascii_uppercase().to_string() + chars.as_str()
-                }
+                Some(first) => first.to_ascii_uppercase().to_string() + chars.as_str(),
             }
         })
         .collect()

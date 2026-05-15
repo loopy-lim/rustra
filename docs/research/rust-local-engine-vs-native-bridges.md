@@ -6,14 +6,14 @@ This document compares the proposed local engine architecture against common Rea
 
 ## Options
 
-| Option | Primary shape | Best fit | Main cost |
-| --- | --- | --- | --- |
-| Local Rust Engine | RN starts a small native lifecycle module, then calls Rust over localhost HTTP / JSON-RPC | storage, search, sync, workflow, AI actions, coarse commands | higher per-call latency, lifecycle and local server correctness |
-| Tauri-like Rust Invoke | RN calls one native `invoke` function, then Rust dispatches commands in-process | same Rust-owned command model without HTTP/fetch overhead | one transport bridge plus schema/codegen ownership |
-| Nitro Module | JS talks to C++/native through Nitro-generated bindings | high-frequency native APIs, typed native calls, hot paths | native build complexity and binding surface ownership |
-| Direct JSI | custom C++ JSI host objects/functions | extremely low overhead hot paths | highest maintenance burden and sharpest RN internals dependency |
-| Expo Module | Swift/Kotlin module exposed to JS | platform APIs, small native capability wrappers, Expo compatibility | each feature still needs native API surface design |
-| Craby/codegen bridge | generated native bridge from a Rust/native contract | typed bridge generation, reducing manual glue | generator maturity and contract/build pipeline complexity |
+| Option                 | Primary shape                                                                             | Best fit                                                            | Main cost                                                       |
+| ---------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Local Rust Engine      | RN starts a small native lifecycle module, then calls Rust over localhost HTTP / JSON-RPC | storage, search, sync, workflow, AI actions, coarse commands        | higher per-call latency, lifecycle and local server correctness |
+| Tauri-like Rust Invoke | RN calls one native `invoke` function, then Rust dispatches commands in-process           | same Rust-owned command model without HTTP/fetch overhead           | one transport bridge plus schema/codegen ownership              |
+| Nitro Module           | JS talks to C++/native through Nitro-generated bindings                                   | high-frequency native APIs, typed native calls, hot paths           | native build complexity and binding surface ownership           |
+| Direct JSI             | custom C++ JSI host objects/functions                                                     | extremely low overhead hot paths                                    | highest maintenance burden and sharpest RN internals dependency |
+| Expo Module            | Swift/Kotlin module exposed to JS                                                         | platform APIs, small native capability wrappers, Expo compatibility | each feature still needs native API surface design              |
+| Craby/codegen bridge   | generated native bridge from a Rust/native contract                                       | typed bridge generation, reducing manual glue                       | generator maturity and contract/build pipeline complexity       |
 
 ## Decision Frame
 
@@ -39,29 +39,29 @@ Everything else should be expressed as engine API methods.
 
 ## Qualitative Comparison
 
-| Criterion | Local Rust Engine | Nitro | Direct JSI | Expo Module | Craby/codegen bridge |
-| --- | --- | --- | --- | --- | --- |
-| Per-call overhead | High | Low | Lowest | Medium | Low to medium |
-| Maintenance surface | Low if APIs are coarse | Medium | High | Medium | Medium |
-| RN internals coupling | Low | Medium | High | Low to medium | Depends on generator |
-| Rust core reuse on desktop | High | Medium | Medium | Low to medium | Medium |
-| API testability outside RN | High | Low to medium | Low | Low to medium | Medium |
-| Works well with SQLite ownership | High | Medium | Medium | Medium | Medium |
-| Works well with streaming events | High via HTTP/SSE/WebSocket | Medium | Medium | Medium | Depends |
-| Best for frame-level calls | Poor | Good | Excellent | Poor to medium | Depends |
-| Best for product workflow commands | Good | Good but more bridge work | Possible but overbuilt | Possible but more module work | Good if generator is stable |
+| Criterion                          | Local Rust Engine           | Nitro                     | Direct JSI             | Expo Module                   | Craby/codegen bridge        |
+| ---------------------------------- | --------------------------- | ------------------------- | ---------------------- | ----------------------------- | --------------------------- |
+| Per-call overhead                  | High                        | Low                       | Lowest                 | Medium                        | Low to medium               |
+| Maintenance surface                | Low if APIs are coarse      | Medium                    | High                   | Medium                        | Medium                      |
+| RN internals coupling              | Low                         | Medium                    | High                   | Low to medium                 | Depends on generator        |
+| Rust core reuse on desktop         | High                        | Medium                    | Medium                 | Low to medium                 | Medium                      |
+| API testability outside RN         | High                        | Low to medium             | Low                    | Low to medium                 | Medium                      |
+| Works well with SQLite ownership   | High                        | Medium                    | Medium                 | Medium                        | Medium                      |
+| Works well with streaming events   | High via HTTP/SSE/WebSocket | Medium                    | Medium                 | Medium                        | Depends                     |
+| Best for frame-level calls         | Poor                        | Good                      | Excellent              | Poor to medium                | Depends                     |
+| Best for product workflow commands | Good                        | Good but more bridge work | Possible but overbuilt | Possible but more module work | Good if generator is stable |
 
 Updated transport interpretation:
 
-| Criterion | HTTP Local Engine | Native JSON Invoke | Native Protobuf Invoke |
-| --- | --- | --- | --- |
-| Transport | RN fetch -> localhost TCP -> HTTP -> Rust | RN native module -> Swift FFI -> Rust | RN native module `Uint8Array` -> Swift `Data` -> Rust FFI |
-| API model | server-style command/RPC | same server-style command/RPC | same server-style command/RPC with binary envelope |
-| Native bridge surface | lifecycle only | lifecycle plus one `invoke` | lifecycle plus one `invokeProtobuf` |
-| 1K sequential fine calls | 16.82s | 87.29ms in run 5 | 92.50ms in run 5 |
-| 1K burst fine calls | 1.68s | 33.47ms in run 5 | 48.50ms in run 5 |
-| 100K Rust loop command | about 16-17ms p50 | 0.71ms p50 in run 5 | 0.68ms p50 in run 5 |
-| Best role | external-debuggable coarse local service | main mobile transport candidate | schema/codegen candidate for larger payloads |
+| Criterion                | HTTP Local Engine                         | Native JSON Invoke                    | Native Protobuf Invoke                                    |
+| ------------------------ | ----------------------------------------- | ------------------------------------- | --------------------------------------------------------- |
+| Transport                | RN fetch -> localhost TCP -> HTTP -> Rust | RN native module -> Swift FFI -> Rust | RN native module `Uint8Array` -> Swift `Data` -> Rust FFI |
+| API model                | server-style command/RPC                  | same server-style command/RPC         | same server-style command/RPC with binary envelope        |
+| Native bridge surface    | lifecycle only                            | lifecycle plus one `invoke`           | lifecycle plus one `invokeProtobuf`                       |
+| 1K sequential fine calls | 16.82s                                    | 87.29ms in run 5                      | 92.50ms in run 5                                          |
+| 1K burst fine calls      | 1.68s                                     | 33.47ms in run 5                      | 48.50ms in run 5                                          |
+| 100K Rust loop command   | about 16-17ms p50                         | 0.71ms p50 in run 5                   | 0.68ms p50 in run 5                                       |
+| Best role                | external-debuggable coarse local service  | main mobile transport candidate       | schema/codegen candidate for larger payloads              |
 
 ## Practical Interpretation
 

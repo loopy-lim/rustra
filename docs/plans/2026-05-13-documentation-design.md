@@ -6,10 +6,10 @@ rustra-bridge의 문서를 체계적으로 재편한다. 사용자용(라이브�
 
 ## 독자
 
-| 독자 | 필요한 정보 | 추천 경로 |
-|------|------------|-----------|
+| 독자              | 필요한 정보                              | 추천 경로                   |
+| ----------------- | ---------------------------------------- | --------------------------- |
 | 라이브러리 사용자 | API 사용법, adapter 선택, transport 교체 | Getting Started → Extending |
-| 프로젝트 기여자 | 아키텍처, crate 구조, codegen, 테스트 | Architecture → Internal |
+| 프로젝트 기여자   | 아키텍처, crate 구조, codegen, 테스트    | Architecture → Internal     |
 
 ## 언어
 
@@ -109,12 +109,12 @@ docs/
 
 ## 갱신 대상 기존 파일
 
-| 파일 | 작업 |
-|------|------|
-| 루트 README.md | 한국어 재작성, 현재 구현 기준 |
-| crates/rustra/README.md | 한국어, API 개요 |
-| packages/*/README.md (4개) | 한국어, adapter 역할 명확화 |
-| examples/calculator/README.md | 한국어 |
+| 파일                          | 작업                          |
+| ----------------------------- | ----------------------------- |
+| 루트 README.md                | 한국어 재작성, 현재 구현 기준 |
+| crates/rustra/README.md       | 한국어, API 개요              |
+| packages/\*/README.md (4개)   | 한국어, adapter 역할 명확화   |
+| examples/calculator/README.md | 한국어                        |
 
 ## 작업 분할
 
