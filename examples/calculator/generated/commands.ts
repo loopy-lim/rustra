@@ -1,23 +1,4 @@
-import type {
-  AddNumbersInput,
-  AddNumbersOutput,
-  ClampInput,
-  ClampOutput,
-  CreateItemInput,
-  CreateItemOutput,
-  GreetInput,
-  GreetOutput,
-  IsEvenInput,
-  IsEvenOutput,
-  MultiplyInput,
-  MultiplyOutput,
-  ProcessItemInput,
-  ProcessItemOutput,
-  SumListInput,
-  SumListOutput,
-  ToUpperInput,
-  ToUpperOutput,
-} from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
 import { invoke } from '@rustra/types';
 
 export function addNumbers(input: AddNumbersInput): Promise<AddNumbersOutput> {
@@ -55,3 +36,4 @@ export function sumList(input: SumListInput): Promise<SumListOutput> {
 export function toUpper(input: ToUpperInput): Promise<ToUpperOutput> {
   return invoke<ToUpperOutput>('toUpper', input);
 }
+

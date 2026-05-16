@@ -1,4 +1,5 @@
 use rustra::prelude::*;
+use rustra::ffi::FfiFormat;
 use serde_json::{json, Value};
 use std::ffi::{c_char, CStr, CString};
 
@@ -211,7 +212,7 @@ pub fn process_item(input: ProcessItemInput) -> Result<ProcessItemOutput> {
 }
 
 pub fn calculator_package() -> Package {
-    register!(
+    let pkg = register!(
         Package::builder("examples.calculator"),
         add_numbers,
         multiply,
@@ -223,7 +224,28 @@ pub fn calculator_package() -> Package {
         create_item,
         process_item
     )
-    .build()
+    .build();
+
+    // Auto-register for generic FFI with JSON default (adapters expect JSON through invoke)
+    pkg.register_ffi_with_default(FfiFormat::Json);
+
+    pkg
+}
+
+// ── Library constructor: auto-register on load ──────────────
+// This ensures calculator_package() is called when the static library
+// is loaded, so generic FFI functions (rustra_ffi_invoke, etc.) work
+// without requiring a legacy calculator-specific call first.
+
+#[cfg(target_vendor = "apple")]
+mod apple_init {
+    extern "C" fn rustra_auto_init() {
+        super::calculator_package();
+    }
+
+    #[used]
+    #[cfg_attr(target_vendor = "apple", unsafe(link_section = "__DATA,__mod_init_func"))]
+    static AUTO_INIT: extern "C" fn() = rustra_auto_init;
 }
 
 /// # Safety
