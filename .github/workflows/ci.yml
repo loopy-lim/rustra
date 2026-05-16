@@ -21,7 +21,6 @@ jobs:
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
       - name: Check formatting
         run: cargo fmt --all -- --check
-        continue-on-error: true
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
       - name: Test
@@ -43,7 +42,13 @@ jobs:
         run: npm run lint
       - name: Format check
         run: npm run format:check
-      - name: Type check
+      - name: Type check calculator
         run: npx tsc --noEmit -p examples/calculator/tsconfig.json
-      - name: Test
+      - name: Type check crud
+        run: npx tsc --noEmit -p examples/crud/tsconfig.json
+      - name: Test TypeScript (Node)
         run: npm run test:ts:node
+      - name: Test adapters
+        run: npm run test:adapters
+      - name: Test CLI
+        run: npx vitest run packages/cli/src/

@@ -23,7 +23,7 @@ test('host apps share generated commands and differ only by adapter transport', 
   assert.match(reactNativeMetro, /watchFolders = \[repoRoot\]/);
   assert.match(reactNativeMetro, /nodeModulesPaths/);
 
-  assert.match(tauriMain, /rustra_calculator_example::\{calculator_package/);
+  assert.match(tauriMain, /rustra_calculator_example::calculator_package/);
   assert.match(tauriMain, /tauri_support::register/);
   assert.doesNotMatch(tauriMain, /value:\s*a\s*\+\s*b/);
 });

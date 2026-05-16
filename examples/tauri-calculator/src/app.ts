@@ -19,8 +19,8 @@ const result = await addNumbers(engine, { a: 20, b: 22 });
 const output = document.querySelector('output');
 
 if (output) {
-  output.value = String(result.value);
+  output.value = String(result);
 }
 
-document.body.dataset.result = String(result.value);
-console.log(`tauri runtime result: ${result.value}`);
+document.body.dataset.result = String(result);
+console.log(`tauri runtime result: ${result}`);

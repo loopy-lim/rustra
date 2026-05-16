@@ -11,6 +11,7 @@ tauri-build = { version = "2", features = [] }
 rustra = { path = "../../../crates/rustra", features = ["tauri"] }
 rustra-calculator-example = { path = "../../calculator" }
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 tauri = { version = "2", features = [] }
 
 [features]

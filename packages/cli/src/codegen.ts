@@ -47,8 +47,9 @@ export function tsTypeFromSchema(
       case "boolean":
         return "boolean";
       case "array": {
-        const itemType = schema.items
-          ? tsTypeFromSchema(schema.items, definitions)
+        const itemSchema = schema.items;
+        const itemType = itemSchema
+          ? tsTypeFromSchema(Array.isArray(itemSchema) ? itemSchema[0] : itemSchema, definitions)
           : "unknown";
         return `${itemType}[]`;
       }
@@ -74,10 +75,12 @@ export function tsTypeFromSchema(
             return "null";
           case "object":
             return tsObjectFromSchema(schema, definitions);
-          case "array":
-            return schema.items
-              ? `${tsTypeFromSchema(schema.items, definitions)}[]`
+          case "array": {
+            const itemSchema = schema.items;
+            return itemSchema
+              ? `${tsTypeFromSchema(Array.isArray(itemSchema) ? itemSchema[0] : itemSchema, definitions)}[]`
               : "unknown[]";
+          }
           default:
             return "unknown";
         }

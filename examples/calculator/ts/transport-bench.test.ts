@@ -67,24 +67,29 @@ describe("transport performance", { concurrency: 1 }, () => {
   const binPath = join(ROOT, "target/debug/rustra-calculator-example");
   const napiPath = join(ROOT, `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`);
 
-  it("subprocess: addNumbers returns correct result", () => {
-    const invoke = createSubprocessInvoke();
-    const result = invoke("addNumbers", { a: 20, b: 22 }) as { value: number };
-    assert.equal(result.value, 42);
-  });
+  if (!existsSync(binPath)) {
+    it.skip("subprocess: binary not found, run 'cargo build -p rustra-calculator-example'", () => {});
+    it.skip("subprocess: latency (no binary)", () => {});
+  } else {
+    it("subprocess: addNumbers returns correct result", () => {
+      const invoke = createSubprocessInvoke();
+      const result = invoke("addNumbers", { a: 20, b: 22 }) as number;
+      assert.equal(result, 42);
+    });
 
-  it("subprocess: latency within threshold", () => {
-    const invoke = createSubprocessInvoke();
-    const r = bench("subprocess", () => invoke("addNumbers", { a: 42, b: 58 }));
-    console.log(`    subprocess: avg=${r.avg.toFixed(0)}ns p50=${r.p50.toFixed(0)}ns p99=${r.p99.toFixed(0)}ns`);
-    assert(r.avg < SUBPROCESS_MAX_AVG_US * 1000, `subprocess avg ${r.avg.toFixed(0)}ns exceeds ${SUBPROCESS_MAX_AVG_US}µs threshold`);
-  });
+    it("subprocess: latency within threshold", () => {
+      const invoke = createSubprocessInvoke();
+      const r = bench("subprocess", () => invoke("addNumbers", { a: 42, b: 58 }));
+      console.log(`    subprocess: avg=${r.avg.toFixed(0)}ns p50=${r.p50.toFixed(0)}ns p99=${r.p99.toFixed(0)}ns`);
+      assert(r.avg < SUBPROCESS_MAX_AVG_US * 1000, `subprocess avg ${r.avg.toFixed(0)}ns exceeds ${SUBPROCESS_MAX_AVG_US}µs threshold`);
+    });
+  }
 
   if (existsSync(napiPath)) {
     it("napi-rs: addNumbers returns correct result", () => {
       const invoke = createNapiInvoke();
-      const result = invoke("addNumbers", { a: 20, b: 22 }) as { value: number };
-      assert.equal(result.value, 42);
+      const result = invoke("addNumbers", { a: 20, b: 22 }) as number;
+      assert.equal(result, 42);
     });
 
     it("napi-rs: latency within threshold", () => {
@@ -95,6 +100,7 @@ describe("transport performance", { concurrency: 1 }, () => {
     });
 
     it("napi-rs is faster than subprocess", () => {
+      if (!existsSync(binPath)) return;
       const subprocessInvoke = createSubprocessInvoke();
       const napiInvoke = createNapiInvoke();
 
