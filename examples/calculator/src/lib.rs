@@ -537,10 +537,12 @@ pub unsafe extern "C" fn rustra_calculator_invoke_bincode(
             }
         };
 
-    let result = match rustra::ffi::get_package().expect("package not registered").invoke_json(
-        &request.command,
-        serde_json::json!({"a": request.a, "b": request.b}),
-    ) {
+    let result = match rustra::ffi::get_package()
+        .expect("package not registered")
+        .invoke_json(
+            &request.command,
+            serde_json::json!({"a": request.a, "b": request.b}),
+        ) {
         Ok(result) => {
             let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
             BincodeResponse {
@@ -591,10 +593,12 @@ pub unsafe extern "C" fn rustra_calculator_invoke_postcard(
         }
     };
 
-    let result = match rustra::ffi::get_package().expect("package not registered").invoke_json(
-        &request.command,
-        serde_json::json!({"a": request.a, "b": request.b}),
-    ) {
+    let result = match rustra::ffi::get_package()
+        .expect("package not registered")
+        .invoke_json(
+            &request.command,
+            serde_json::json!({"a": request.a, "b": request.b}),
+        ) {
         Ok(result) => {
             let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
             BincodeResponse {
@@ -661,22 +665,24 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv(
     let a: i64 = archived.a.into();
     let b: i64 = archived.b.into();
 
-    let result =
-        match rustra::ffi::get_package().expect("package not registered").invoke_json(&command, serde_json::json!({"a": a, "b": b})) {
-            Ok(result) => {
-                let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
-                RkyvResponse {
-                    ok: true,
-                    value,
-                    error: None,
-                }
+    let result = match rustra::ffi::get_package()
+        .expect("package not registered")
+        .invoke_json(&command, serde_json::json!({"a": a, "b": b}))
+    {
+        Ok(result) => {
+            let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
+            RkyvResponse {
+                ok: true,
+                value,
+                error: None,
             }
-            Err(error) => RkyvResponse {
-                ok: false,
-                value: 0,
-                error: Some(error.to_string()),
-            },
-        };
+        }
+        Err(error) => RkyvResponse {
+            ok: false,
+            value: 0,
+            error: Some(error.to_string()),
+        },
+    };
 
     let resp_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&result).unwrap_or_default();
     alloc_response(resp_bytes.to_vec(), out_len)
@@ -713,10 +719,12 @@ pub unsafe extern "C" fn rustra_calculator_invoke_hybrid(
         }
     };
 
-    let result = match rustra::ffi::get_package().expect("package not registered").invoke_json(
-        &request.command,
-        serde_json::json!({"a": request.a, "b": request.b}),
-    ) {
+    let result = match rustra::ffi::get_package()
+        .expect("package not registered")
+        .invoke_json(
+            &request.command,
+            serde_json::json!({"a": request.a, "b": request.b}),
+        ) {
         Ok(result) => {
             let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
             RkyvResponse {
