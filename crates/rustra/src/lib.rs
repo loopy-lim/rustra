@@ -45,6 +45,7 @@ pub use rustra_macros::register;
 
 mod codegen;
 mod error;
+pub mod ffi;
 mod schema;
 
 use schemars::JsonSchema;
@@ -67,8 +68,8 @@ use schema::{command_name_from_handler, schema_value, short_type_name};
 /// ```
 pub mod prelude {
     pub use crate::{
-        command, encode_rkyv_v2_error, register, GeneratedPackage, Package, PackageBuilder, Result,
-        RustraError,
+        command, encode_rkyv_v2_error, ffi::FfiFormat, register, GeneratedPackage, Package,
+        PackageBuilder, Result, RustraError,
     };
     pub use schemars::JsonSchema;
     pub use serde::{Deserialize, Serialize};
@@ -153,7 +154,7 @@ pub mod tauri_support {
 /// ```text
 /// Package::builder("my.pkg") → .command_fn(f1) → .command_fn(f2) → .build() → Package
 /// ```
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Package {
     id: String,
     commands: Arc<BTreeMap<String, Command>>,
@@ -229,6 +230,16 @@ struct Command {
     rkyv_v2_encode_response: EncodeFn,
     /// true when this command uses Tier 3 (JSON fallback) wire format.
     rkyv_v2_tier3: bool,
+}
+
+impl std::fmt::Debug for Command {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Command")
+            .field("command_id", &self.command_id)
+            .field("input_type", &self.input_type)
+            .field("output_type", &self.output_type)
+            .finish()
+    }
 }
 
 impl Package {

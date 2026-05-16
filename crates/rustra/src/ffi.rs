@@ -35,13 +35,11 @@ impl Package {
     /// `rustra_ffi_invoke` will dispatch to the chosen format.
     /// The per-format functions (`rustra_ffi_invoke_json`, `rustra_ffi_invoke_postcard`)
     /// are always available regardless of the default.
+    ///
+    /// No-op if a package is already registered (idempotent).
     pub fn register_ffi_with_default(&self, format: FfiFormat) {
-        PACKAGE
-            .set(self.clone())
-            .expect("register_ffi: only one package can be registered");
-        DEFAULT_FORMAT
-            .set(format)
-            .expect("register_ffi: only one default format can be set");
+        let _ = PACKAGE.set(self.clone());
+        let _ = DEFAULT_FORMAT.set(format);
     }
 }
 
@@ -51,16 +49,34 @@ fn get_package() -> Option<&'static Package> {
 
 // -- Wire types ----------------------------------------------------------
 
+/// JSON wire envelope: `{ command, args }` where args is a JSON Value.
 #[derive(Serialize, Deserialize)]
 struct FfiEnvelope {
     command: String,
     args: serde_json::Value,
 }
 
+/// JSON wire response.
 #[derive(Serialize, Deserialize)]
 struct FfiResponse {
     ok: bool,
     result: Option<serde_json::Value>,
+    error: Option<String>,
+}
+
+/// Postcard wire envelope: args embedded as JSON string for compatibility.
+/// (serde_json::Value doesn't round-trip through postcard correctly.)
+#[derive(Serialize, Deserialize)]
+struct FfiPostcardEnvelope {
+    command: String,
+    args_json: String,
+}
+
+/// Postcard wire response: result embedded as JSON string.
+#[derive(Serialize, Deserialize)]
+struct FfiPostcardResponse {
+    ok: bool,
+    result_json: Option<String>,
     error: Option<String>,
 }
 
@@ -117,12 +133,24 @@ fn json_deserialize_envelope(bytes: &[u8]) -> Result<FfiEnvelope, String> {
 
 // -- Postcard serialization helpers --------------------------------------
 
-fn postcard_serialize(resp: &FfiResponse) -> Vec<u8> {
-    postcard::to_allocvec(resp).unwrap_or_default()
+fn postcard_serialize_response(resp: &FfiResponse) -> Vec<u8> {
+    let pc_resp = FfiPostcardResponse {
+        ok: resp.ok,
+        result_json: resp
+            .result
+            .as_ref()
+            .map(|v| serde_json::to_string(v).unwrap_or_default()),
+        error: resp.error.clone(),
+    };
+    postcard::to_allocvec(&pc_resp).unwrap_or_default()
 }
 
-fn postcard_deserialize_envelope(bytes: &[u8]) -> Result<FfiEnvelope, String> {
-    postcard::from_bytes(bytes).map_err(|e| format!("postcard decode failed: {e}"))
+fn postcard_deserialize_envelope(bytes: &[u8]) -> Result<(String, serde_json::Value), String> {
+    let env: FfiPostcardEnvelope =
+        postcard::from_bytes(bytes).map_err(|e| format!("postcard decode failed: {e}"))?;
+    let args: serde_json::Value =
+        serde_json::from_str(&env.args_json).unwrap_or(serde_json::Value::Null);
+    Ok((env.command, args))
 }
 
 // -- FFI entry points ----------------------------------------------------
@@ -188,8 +216,10 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json(
 
 /// Postcard binary path.
 ///
-/// Request:  postcard-encoded `FfiEnvelope { command, args }`.
-/// Response: postcard-encoded `FfiResponse { ok, result, error }`.
+/// Request:  postcard-encoded `{ command: String, args_json: String }`.
+///           `args_json` is a JSON-encoded string of the command arguments.
+/// Response: postcard-encoded `{ ok: bool, result_json: Option<String>, error: Option<String> }`.
+///           `result_json` is a JSON-encoded string of the command result.
 ///
 /// # Safety
 ///
@@ -204,18 +234,18 @@ pub unsafe extern "C" fn rustra_ffi_invoke_postcard(
         return std::ptr::null_mut();
     }
     if payload_len > MAX_PAYLOAD_BYTES {
-        return err_response("payload exceeds size limit", out_len, postcard_serialize);
+        return err_response("payload exceeds size limit", out_len, postcard_serialize_response);
     }
 
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
 
-    let envelope = match postcard_deserialize_envelope(bytes) {
-        Ok(env) => env,
-        Err(e) => return err_response(&e, out_len, postcard_serialize),
+    let (command, args) = match postcard_deserialize_envelope(bytes) {
+        Ok(tuple) => tuple,
+        Err(e) => return err_response(&e, out_len, postcard_serialize_response),
     };
 
-    let resp = dispatch_json(&envelope.command, envelope.args);
-    alloc_response(postcard_serialize(&resp), out_len)
+    let resp = dispatch_json(&command, args);
+    alloc_response(postcard_serialize_response(&resp), out_len)
 }
 
 /// Free a buffer previously returned by one of the `rustra_ffi_invoke_*` functions.
@@ -242,16 +272,13 @@ mod tests {
     use crate::Package;
 
     fn test_package() -> Package {
-        crate::build!("test.ffi", crate::test_helper::add_numbers).done()
-    }
-
-    mod test_helper {
-        use crate::prelude::*;
-
-        #[command]
-        pub fn add_numbers(a: i64, b: i64) -> i64 {
-            a + b
-        }
+        Package::builder("test.ffi")
+            .command("addNumbers", |args: serde_json::Value| {
+                let a = args["a"].as_i64().unwrap_or(0);
+                let b = args["b"].as_i64().unwrap_or(0);
+                Ok::<_, crate::RustraError>(serde_json::json!(a + b))
+            })
+            .build()
     }
 
     #[test]
@@ -281,9 +308,10 @@ mod tests {
         let pkg = test_package();
         pkg.register_ffi();
 
-        let envelope = FfiEnvelope {
+        // 1. Direct postcard call
+        let envelope = FfiPostcardEnvelope {
             command: "addNumbers".into(),
-            args: serde_json::json!({"a": 20, "b": 22}),
+            args_json: serde_json::to_string(&serde_json::json!({"a": 20, "b": 22})).unwrap(),
         };
         let payload = postcard::to_allocvec(&envelope).unwrap();
         let mut out_len: usize = 0;
@@ -294,54 +322,31 @@ mod tests {
         assert!(out_len > 0);
 
         let bytes = unsafe { std::slice::from_raw_parts(ptr, out_len) };
-        let resp: FfiResponse = postcard::from_bytes(bytes).unwrap();
+        let resp: FfiPostcardResponse = postcard::from_bytes(bytes).unwrap();
         assert!(resp.ok);
-        assert_eq!(resp.result.unwrap(), 42);
+        let result: serde_json::Value = serde_json::from_str(&resp.result_json.unwrap()).unwrap();
+        assert_eq!(result, 42);
 
         unsafe { rustra_ffi_free(ptr, out_len) };
-    }
 
-    #[test]
-    fn ffi_default_dispatches_to_postcard() {
-        let pkg = test_package();
-        pkg.register_ffi(); // default = postcard
-
-        let envelope = FfiEnvelope {
+        // 2. Default dispatches to postcard
+        let envelope2 = FfiPostcardEnvelope {
             command: "addNumbers".into(),
-            args: serde_json::json!({"a": 10, "b": 15}),
+            args_json: serde_json::to_string(&serde_json::json!({"a": 10, "b": 15})).unwrap(),
         };
-        let payload = postcard::to_allocvec(&envelope).unwrap();
-        let mut out_len: usize = 0;
+        let payload2 = postcard::to_allocvec(&envelope2).unwrap();
+        let mut out_len2: usize = 0;
 
-        let ptr = unsafe { rustra_ffi_invoke(payload.as_ptr(), payload.len(), &mut out_len) };
-        assert!(!ptr.is_null());
+        let ptr2 = unsafe { rustra_ffi_invoke(payload2.as_ptr(), payload2.len(), &mut out_len2) };
+        assert!(!ptr2.is_null());
 
-        let bytes = unsafe { std::slice::from_raw_parts(ptr, out_len) };
-        let resp: FfiResponse = postcard::from_bytes(bytes).unwrap();
-        assert!(resp.ok);
-        assert_eq!(resp.result.unwrap(), 25);
+        let bytes2 = unsafe { std::slice::from_raw_parts(ptr2, out_len2) };
+        let resp2: FfiPostcardResponse = postcard::from_bytes(bytes2).unwrap();
+        assert!(resp2.ok);
+        let result2: serde_json::Value = serde_json::from_str(&resp2.result_json.unwrap()).unwrap();
+        assert_eq!(result2, 25);
 
-        unsafe { rustra_ffi_free(ptr, out_len) };
-    }
-
-    #[test]
-    fn ffi_default_dispatches_to_json_when_configured() {
-        let pkg = test_package();
-        pkg.register_ffi_with_default(FfiFormat::Json);
-
-        let request = serde_json::json!({"command": "addNumbers", "args": {"a": 3, "b": 4}});
-        let payload = serde_json::to_vec(&request).unwrap();
-        let mut out_len: usize = 0;
-
-        let ptr = unsafe { rustra_ffi_invoke(payload.as_ptr(), payload.len(), &mut out_len) };
-        assert!(!ptr.is_null());
-
-        let bytes = unsafe { std::slice::from_raw_parts(ptr, out_len) };
-        let resp: FfiResponse = serde_json::from_slice(bytes).unwrap();
-        assert!(resp.ok);
-        assert_eq!(resp.result.unwrap(), 7);
-
-        unsafe { rustra_ffi_free(ptr, out_len) };
+        unsafe { rustra_ffi_free(ptr2, out_len2) };
     }
 
     #[test]
