@@ -211,25 +211,31 @@ pub fn process_item(input: ProcessItemInput) -> Result<ProcessItemOutput> {
     })
 }
 
+static CACHED_PACKAGE: std::sync::OnceLock<Package> = std::sync::OnceLock::new();
+
 pub fn calculator_package() -> Package {
-    let pkg = register!(
-        Package::builder("examples.calculator"),
-        add_numbers,
-        multiply,
-        is_even,
-        clamp,
-        greet,
-        sum_list,
-        to_upper,
-        create_item,
-        process_item
-    )
-    .build();
+    CACHED_PACKAGE
+        .get_or_init(|| {
+            let pkg = register!(
+                Package::builder("examples.calculator"),
+                add_numbers,
+                multiply,
+                is_even,
+                clamp,
+                greet,
+                sum_list,
+                to_upper,
+                create_item,
+                process_item
+            )
+            .build();
 
-    // Auto-register for generic FFI with JSON default (adapters expect JSON through invoke)
-    pkg.register_ffi_with_default(FfiFormat::Json);
+            // Auto-register for generic FFI with JSON default
+            pkg.register_ffi_with_default(FfiFormat::Json);
 
-    pkg
+            pkg
+        })
+        .clone()
 }
 
 // ── Library constructor: auto-register on load ──────────────
@@ -287,7 +293,10 @@ pub unsafe extern "C" fn rustra_calculator_invoke(payload: *const c_char) -> *mu
 
     let args = request.get("args").cloned().unwrap_or_else(|| json!({}));
 
-    match calculator_package().invoke_json(command, args) {
+    match rustra::ffi::get_package()
+        .expect("package not registered")
+        .invoke_json(command, args)
+    {
         Ok(result) => json_string(json!({ "ok": true, "result": result })),
         Err(error) => json_string(json!({ "ok": false, "error": error.to_string() })),
     }
@@ -471,7 +480,10 @@ pub unsafe extern "C" fn rustra_calculator_invoke_msgpack(
         .cloned()
         .unwrap_or(serde_json::json!({}));
 
-    let result = match calculator_package().invoke_json(command, args) {
+    let result = match rustra::ffi::get_package()
+        .expect("package not registered")
+        .invoke_json(command, args)
+    {
         Ok(result) => serde_json::json!({"ok": true, "result": result}),
         Err(error) => serde_json::json!({"ok": false, "error": error.to_string()}),
     };
@@ -525,7 +537,7 @@ pub unsafe extern "C" fn rustra_calculator_invoke_bincode(
             }
         };
 
-    let result = match calculator_package().invoke_json(
+    let result = match rustra::ffi::get_package().expect("package not registered").invoke_json(
         &request.command,
         serde_json::json!({"a": request.a, "b": request.b}),
     ) {
@@ -579,7 +591,7 @@ pub unsafe extern "C" fn rustra_calculator_invoke_postcard(
         }
     };
 
-    let result = match calculator_package().invoke_json(
+    let result = match rustra::ffi::get_package().expect("package not registered").invoke_json(
         &request.command,
         serde_json::json!({"a": request.a, "b": request.b}),
     ) {
@@ -650,7 +662,7 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv(
     let b: i64 = archived.b.into();
 
     let result =
-        match calculator_package().invoke_json(&command, serde_json::json!({"a": a, "b": b})) {
+        match rustra::ffi::get_package().expect("package not registered").invoke_json(&command, serde_json::json!({"a": a, "b": b})) {
             Ok(result) => {
                 let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
                 RkyvResponse {
@@ -701,7 +713,7 @@ pub unsafe extern "C" fn rustra_calculator_invoke_hybrid(
         }
     };
 
-    let result = match calculator_package().invoke_json(
+    let result = match rustra::ffi::get_package().expect("package not registered").invoke_json(
         &request.command,
         serde_json::json!({"a": request.a, "b": request.b}),
     ) {
@@ -741,7 +753,10 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2(
 
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
 
-    let resp_bytes = match calculator_package().invoke_rkyv_v2(bytes) {
+    let resp_bytes = match rustra::ffi::get_package()
+        .expect("package not registered")
+        .invoke_rkyv_v2(bytes)
+    {
         Ok(bytes) => bytes,
         Err(error) => rustra::encode_rkyv_v2_error(&error.to_string()),
     };
