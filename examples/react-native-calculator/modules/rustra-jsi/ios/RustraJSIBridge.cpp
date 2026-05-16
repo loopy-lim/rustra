@@ -57,17 +57,23 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
           throw JSError(rt, std::string("RustraJSI: ") + err);
         }
         auto returnValue = createArrayBuffer(rt, result, out_len);
-        rustra_calculator_free_buffer(result, out_len);
+        rustra_ffi_free(result, out_len);
         return returnValue;
       });
     cache_[name] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   };
 
-  makeInvoke("invoke",        rustra_calculator_invoke_bytes,   "Rust returned null");
+  // ── Generic FFI paths (default, json, postcard) ────────────
+  makeInvoke("invoke",        rustra_ffi_invoke,              "Rust returned null");
+  makeInvoke("invokeJson",    rustra_ffi_invoke_json,         "Rust json returned null");
+  makeInvoke("invokePostcardFFI", rustra_ffi_invoke_postcard, "Rust postcard FFI returned null");
+
+  // ── Per-example benchmark paths (legacy) ───────────────────
+  makeInvoke("invokeBytes",   rustra_calculator_invoke_bytes,  "Rust bytes returned null");
   makeInvoke("invokeMsgpack",  rustra_calculator_invoke_msgpack, "Rust msgpack returned null");
   makeInvoke("invokeBincode",  rustra_calculator_invoke_bincode, "Rust bincode returned null");
-  makeInvoke("invokePostcard", rustra_calculator_invoke_postcard,"Rust postcard returned null");
+  makeInvoke("invokeLegacyPostcard", rustra_calculator_invoke_postcard,"Rust postcard returned null");
   makeInvoke("invokeRkyv",     rustra_calculator_invoke_rkyv,    "Rust rkyv returned null");
   makeInvoke("invokeHybrid",   rustra_calculator_invoke_hybrid,  "Rust hybrid returned null");
   makeInvoke("invokeRkyvV2",   rustra_calculator_invoke_rkyv_v2, "Rust rkyv v2 returned null");
