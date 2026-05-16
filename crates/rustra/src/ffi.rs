@@ -43,7 +43,7 @@ impl Package {
     }
 }
 
-fn get_package() -> Option<&'static Package> {
+pub fn get_package() -> Option<&'static Package> {
     PACKAGE.get()
 }
 
