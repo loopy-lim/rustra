@@ -29,6 +29,12 @@ pub type Result<T> = std::result::Result<T, RustraError>;
 pub struct RustraError {
     code: &'static str,
     message: String,
+    #[serde(skip_serializing_if = "is_false")]
+    retryable: bool,
+}
+
+fn is_false(v: &bool) -> bool {
+    !v
 }
 
 impl RustraError {
@@ -38,6 +44,7 @@ impl RustraError {
         Self {
             code: "command.not_found",
             message: format!("command not found: {name}"),
+            retryable: false,
         }
     }
 
@@ -46,6 +53,7 @@ impl RustraError {
         Self {
             code: "command.invalid_args",
             message: error.to_string(),
+            retryable: false,
         }
     }
 
@@ -54,6 +62,7 @@ impl RustraError {
         Self {
             code: "internal",
             message: error.to_string(),
+            retryable: false,
         }
     }
 
@@ -64,6 +73,7 @@ impl RustraError {
         Self {
             code,
             message: message.into(),
+            retryable: false,
         }
     }
 
@@ -75,6 +85,34 @@ impl RustraError {
     /// 에러 메시지를 반환합니다.
     pub fn message(&self) -> &str {
         &self.message
+    }
+
+    /// Transport/network error. Code: `transport.error`. Retryable.
+    pub fn transport(error: impl fmt::Display) -> Self {
+        Self {
+            code: "transport.error",
+            message: error.to_string(),
+            retryable: true,
+        }
+    }
+
+    /// Timeout error. Code: `transport.timeout`. Retryable.
+    pub fn timeout(error: impl fmt::Display) -> Self {
+        Self {
+            code: "transport.timeout",
+            message: error.to_string(),
+            retryable: true,
+        }
+    }
+
+    /// Builder-style method to mark any error as retryable.
+    pub fn retryable(mut self) -> Self {
+        self.retryable = true;
+        self
+    }
+
+    pub fn is_retryable(&self) -> bool {
+        self.retryable
     }
 }
 

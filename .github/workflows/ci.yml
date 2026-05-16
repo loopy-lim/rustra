@@ -37,7 +37,9 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm ci
-      - name: Build
+      - name: Build @rustra/types first
+        run: cd packages/types && npm run build
+      - name: Build all packages
         run: npm run build
       - name: Lint
         run: npm run lint

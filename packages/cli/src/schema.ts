@@ -13,6 +13,8 @@
 export type CommandSchema = {
   /** 명령 이름 (예: "addNumbers") */
   name: string;
+  /** 명령 ID (rkyv V2 바이너리 프로토콜용, 1부터 시작) */
+  commandId: number;
   /** 입력 타입의 짧은 이름 (예: "AddNumbersInput") */
   inputType: string;
   /** 출력 타입의 짧은 이름 (예: "AddNumbersOutput") */
@@ -21,6 +23,8 @@ export type CommandSchema = {
   inputSchema: JsonSchema;
   /** 출력 타입의 JSON Schema */
   outputSchema: JsonSchema;
+  /** 명명된 타입 정의 (schemars가 생성한 $ref 대상) */
+  definitions?: Record<string, JsonSchema>;
 };
 
 /**
@@ -51,7 +55,6 @@ export type JsonSchema = {
   required?: string[];
   /** array 타입의 요소 스키마 */
   items?: JsonSchema | JsonSchema[];
-  /** Record 타입의 값 스키마 */
   additionalProperties?: JsonSchema;
   /** 다른 스키마에 대한 참조 (예: "#/definitions/Foo") */
   $ref?: string;
