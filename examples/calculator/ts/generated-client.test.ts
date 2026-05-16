@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import process from 'node:process';
 import test from 'node:test';
+import { configure } from '@rustra/types';
 import { addNumbers } from '../generated/commands.js';
 import type { EngineClient } from '../generated/types.js';
 
@@ -14,8 +15,9 @@ test('generated command helper calls the host EngineClient invoke contract', asy
       return 42 as T;
     },
   };
+  configure(engine);
 
-  const result = await addNumbers(engine, { a: 20, b: 22 });
+  const result = await addNumbers({ a: 20, b: 22 });
 
   assert.equal(result, 42);
   assert.deepEqual(calls, [

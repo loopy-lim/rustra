@@ -186,13 +186,13 @@ const result = await addNumbers(engine, { a: 20, b: 22 });
 
 모든 어댑터에서 `addNumbers({ a: 42, b: 58 })` 호출 기준 (Apple Silicon, release 빌드).
 
-| 어댑터                 | 평균 지연 | 처리량          |
-| ---------------------- | --------- | --------------- |
-| Rust (typed)           | 209 ns    | 5,093,309 ops/s |
-| Swift → Rust FFI       | 3.5 µs    | 296,710 ops/s   |
-| Bun (JS측)             | 189 ns    | ~5.3M ops/s     |
-| Node.js (JS측)         | 308 ns    | ~3.3M ops/s     |
-| React Native (iOS sim) | 52.5 µs   | 19,054 ops/s    |
+| 어댑터 | 평균 지연 | 처리량 |
+|--------|----------|--------|
+| Rust (typed) | 209 ns | 5,093,309 ops/s |
+| Swift → Rust FFI | 3.5 µs | 296,710 ops/s |
+| Bun (JS측) | 189 ns | ~5.3M ops/s |
+| Node.js (JS측) | 308 ns | ~3.3M ops/s |
+| React Native (iOS sim) | 52.5 µs | 19,054 ops/s |
 
 > 상세 벤치마크, 레이어별 오버헤드 분석, 페이로드 확장성은 [벤치마크 문서](docs/benchmarks.md)를 참고.
 

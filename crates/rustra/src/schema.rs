@@ -20,13 +20,12 @@ where
 /// `std::any::type_name`에서 마지막 세그먼트만 추출합니다.
 ///
 /// 예: `"my_crate::AddNumbersInput"` → `"AddNumbersInput"`
-/// `__` 접두사가 있으면 제거합니다 (매크로에서 생성한 내부 타입).
 pub(super) fn short_type_name<T>() -> String {
-    let name = type_name::<T>()
+    type_name::<T>()
         .rsplit("::")
         .next()
-        .expect("type name has a final segment");
-    name.strip_prefix("__").unwrap_or(name).to_string()
+        .expect("type name has a final segment")
+        .to_string()
 }
 
 /// 핸들러 함수 타입 `F`의 이름에서 커맨드 이름을 추출합니다.

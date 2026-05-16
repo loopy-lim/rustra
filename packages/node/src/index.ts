@@ -1,69 +1,34 @@
 /**
  * @rustra/node — Node.js용 rustra 엔진 어댑터
  *
- * Node.js 환경에서 rustra 명령을 실행할 수 있는 EngineClient 구현체를 제공합니다.
- * napi-rs, node-ffi, IPC 등 다양한 transport와 함께 사용할 수 있습니다.
+ * `@rustra/types`의 글로벌 invoke + Node napi-rs 전용 엔진을 제공합니다.
  *
  * @example
  * ```ts
- * import { createNodeEngine } from '@rustra/node';
- * import { addNumbers } from './generated/commands.js';
+ * import { configure } from '@rustra/types';
+ * import { createRkyvV2Engine } from '@rustra/node';
+ * import { rkyvV2Registry } from './generated/rkyv-registry.js';
  *
- * const engine = createNodeEngine({
- *   invoke: (cmd, args) => myNativeAddon.invoke(cmd, args),
- * });
+ * configure(createRkyvV2Engine(nativeAddon, rkyvV2Registry));
  *
- * const result = await addNumbers(engine, { a: 20, b: 22 }); // { value: 42 }
+ * // 이후 어디서든
+ * const result = await addNumbers({ a: 42, b: 58 });
  * ```
  */
 
-export type { EngineClient, RustraError } from '@rustra/types';
-export { RustraCommandError } from '@rustra/types';
-
+export type { EngineClient, RustraError, RkyvV2Codec, RkyvV2Native } from '@rustra/types';
+export { RustraCommandError, configure, invoke, createRkyvV2Engine } from '@rustra/types';
 import { RustraCommandError } from '@rustra/types';
 
 /**
  * Node.js transport가 구현해야 하는 인터페이스입니다.
- *
- * 실제 Rust 호출 메커니즘(napi-rs, FFI, IPC 등)을 추상화합니다.
- *
- * @example
- * ```ts
- * // napi-rs transport
- * const transport: NodeInvokeTransport = {
- *   invoke(command, args) {
- *     return nativeModule.invoke(command, args);
- *   },
- * };
- * ```
  */
 export type NodeInvokeTransport = {
-  /**
-   * 명령을 transport를 통해 호출합니다.
-   *
-   * @param command - 명령 이름
-   * @param args - 명령 인자 (선택적)
-   * @returns 명령 실행 결과
-   */
   invoke(command: string, args?: unknown): Promise<unknown> | unknown;
 };
 
 /**
- * Node.js transport로 EngineClient를 생성합니다.
- *
- * transport에서 throw된 에러를 자동으로 {@link RustraCommandError}로 래핑합니다.
- * 에러 객체가 `code`와 `message` 속성을 가지면 해당 값을 보존하고,
- * 그렇지 않으면 `code: "unknown"`으로 래핑합니다.
- *
- * @param transport - Node.js transport 구현체
- * @returns EngineClient 인터페이스를 충족하는 엔진
- *
- * @example
- * ```ts
- * const engine = createNodeEngine({
- *   invoke: (cmd, args) => nativeAddon.invoke(cmd, args),
- * });
- * ```
+ * napi-rs 등 JSON transport로 EngineClient을 생성합니다.
  */
 export function createNodeEngine(transport: NodeInvokeTransport) {
   return {

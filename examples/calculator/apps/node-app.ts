@@ -1,14 +1,15 @@
 import { spawnSync } from 'node:child_process';
 import { addNumbers } from '../generated/commands.js';
-import { createNodeEngine } from '../../../packages/node/src/index.js';
+import { configure, createNodeEngine } from '../../../packages/node/src/index.js';
 
 const engine = createNodeEngine({
   invoke(command, args) {
     return invokeCalculatorRuntime(command, args);
   },
 });
+configure(engine);
 
-const result = await addNumbers(engine, { a: 20, b: 22 });
+const result = await addNumbers({ a: 20, b: 22 });
 
 if (result !== 42) {
   throw new Error(`expected 42, got ${result}`);
