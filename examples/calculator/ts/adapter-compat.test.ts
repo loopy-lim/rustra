@@ -18,7 +18,7 @@ function createRecordingTransport() {
     calls,
     async invoke(command: string, args?: unknown) {
       calls.push({ command, args });
-      return { value: 42 };
+      return 42;
     },
   };
 }
@@ -26,7 +26,7 @@ function createRecordingTransport() {
 async function assertGeneratedCommandWorks(name: string, engine: EngineClient, calls: Invocation[]) {
   const result = await addNumbers(engine, { a: 20, b: 22 });
 
-  assert.deepEqual(result, { value: 42 }, `${name} should return transport result`);
+  assert.equal(result, 42, `${name} should return transport result`);
   assert.deepEqual(
     calls,
     [{ command: 'addNumbers', args: { a: 20, b: 22 } }],
@@ -49,7 +49,7 @@ test('tauri adapter routes generated commands through rustra_dispatch', async ()
   const engine = createTauriEngine({ invoke: transport.invoke });
 
   const result = await addNumbers(engine, { a: 20, b: 22 });
-  assert.deepEqual(result, { value: 42 });
+  assert.equal(result, 42);
 
   assert.deepEqual(transport.calls, [
     {
@@ -65,12 +65,12 @@ test('react native adapter forwards generated commands through JSI native module
   const nativeModule = {
     invoke(payload: ArrayBuffer): ArrayBuffer {
       const { command, args } = JSON.parse(decoder.decode(payload));
-      return encoder.encode(JSON.stringify({ ok: true, result: { value: 42 } })).buffer as ArrayBuffer;
+      return encoder.encode(JSON.stringify({ ok: true, result: 42 })).buffer as ArrayBuffer;
     },
   };
   const engine = createReactNativeEngine(nativeModule);
   const result = await addNumbers(engine, { a: 20, b: 22 });
-  assert.deepEqual(result, { value: 42 });
+  assert.equal(result, 42);
 });
 
 test('adapter packages keep host-specific imports out of the shared contract path', async () => {
@@ -84,7 +84,8 @@ test('adapter packages keep host-specific imports out of the shared contract pat
   ]);
 
   const source = adapterSources.join('\n');
+  const codeOnly = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   for (const banned of ['@tauri-apps', 'react-native', '@expo/', 'expo-modules']) {
-    assert.equal(source.includes(banned), false, `adapter source leaked ${banned}`);
+    assert.equal(codeOnly.includes(banned), false, `adapter source leaked ${banned}`);
   }
 });

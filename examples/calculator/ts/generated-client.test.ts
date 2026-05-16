@@ -11,13 +11,13 @@ test('generated command helper calls the host EngineClient invoke contract', asy
   const engine: EngineClient = {
     async invoke<T>(command: string, args?: unknown): Promise<T> {
       calls.push({ command, args });
-      return { value: 42 } as T;
+      return 42 as T;
     },
   };
 
   const result = await addNumbers(engine, { a: 20, b: 22 });
 
-  assert.deepEqual(result, { value: 42 });
+  assert.equal(result, 42);
   assert.deepEqual(calls, [
     {
       command: 'addNumbers',

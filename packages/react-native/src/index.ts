@@ -1,3 +1,5 @@
+import { RustraCommandError } from '@rustra/types';
+
 /**
  * @rustra/react-native — React Native용 rustra 엔진 어댑터
  *
@@ -16,7 +18,7 @@
  * import { addNumbers } from './generated/commands.js';
  *
  * const engine = createReactNativeEngine(RustraCalculatorModule);
- * const result = await addNumbers(engine, { a: 20, b: 22 }); // { value: 42 }
+ * const result = await addNumbers(engine, { a: 20, b: 22 }); // 42
  * ```
  */
 
@@ -80,7 +82,11 @@ export function createReactNativeEngine(
         error?: string;
       };
       if (!response.ok) {
-        throw new Error(response.error ?? 'Rustra invoke failed');
+        const err = new RustraCommandError(
+          response.error ?? 'Rustra invoke failed',
+          response.error ?? 'unknown',
+        );
+        throw err;
       }
       return Promise.resolve(response.result as T);
     },

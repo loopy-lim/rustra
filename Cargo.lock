@@ -2865,6 +2865,7 @@ dependencies = [
  "rustra",
  "rustra-calculator-example",
  "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
 ]

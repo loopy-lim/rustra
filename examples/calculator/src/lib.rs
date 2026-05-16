@@ -4,17 +4,6 @@ use std::ffi::{c_char, CStr, CString};
 
 const MAX_PAYLOAD_BYTES: usize = 1024 * 1024; // 1 MB
 
-#[bridge_type]
-pub struct AddNumbersInput {
-    pub a: i64,
-    pub b: i64,
-}
-
-#[bridge_type]
-pub struct AddNumbersOutput {
-    pub value: i64,
-}
-
 #[command]
 pub fn add_numbers(a: i64, b: i64) -> i64 {
     a + b

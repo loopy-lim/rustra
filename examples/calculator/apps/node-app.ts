@@ -10,11 +10,11 @@ const engine = createNodeEngine({
 
 const result = await addNumbers(engine, { a: 20, b: 22 });
 
-if (result.value !== 42) {
-  throw new Error(`expected 42, got ${result.value}`);
+if (result !== 42) {
+  throw new Error(`expected 42, got ${result}`);
 }
 
-console.log(`node runtime result: ${result.value}`);
+console.log(`node runtime result: ${result}`);
 
 function invokeCalculatorRuntime(command: string, args: unknown): unknown {
   const output = spawnSync('target/debug/rustra-calculator-example', ['invoke'], {
