@@ -1,5 +1,5 @@
-use rustra::prelude::*;
 use rustra::ffi::FfiFormat;
+use rustra::prelude::*;
 use serde_json::{json, Value};
 use std::ffi::{c_char, CStr, CString};
 
@@ -244,7 +244,10 @@ mod apple_init {
     }
 
     #[used]
-    #[cfg_attr(target_vendor = "apple", unsafe(link_section = "__DATA,__mod_init_func"))]
+    #[cfg_attr(
+        target_vendor = "apple",
+        unsafe(link_section = "__DATA,__mod_init_func")
+    )]
     static AUTO_INIT: extern "C" fn() = rustra_auto_init;
 }
 
