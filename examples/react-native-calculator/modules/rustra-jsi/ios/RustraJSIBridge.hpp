@@ -8,6 +8,16 @@
 namespace rustra {
 
 extern "C" {
+  // ── Generic FFI (from rustra::ffi) ──────────────────────
+  uint8_t* rustra_ffi_invoke(
+    const uint8_t* payload, size_t payload_len, size_t* out_len);
+  uint8_t* rustra_ffi_invoke_json(
+    const uint8_t* payload, size_t payload_len, size_t* out_len);
+  uint8_t* rustra_ffi_invoke_postcard(
+    const uint8_t* payload, size_t payload_len, size_t* out_len);
+  void rustra_ffi_free(uint8_t* ptr, size_t len);
+
+  // ── Per-example FFI (benchmark legacy) ──────────────────
   uint8_t* rustra_calculator_invoke_bytes(
     const uint8_t* payload, size_t payload_len, size_t* out_len);
   uint8_t* rustra_calculator_invoke_raw(
