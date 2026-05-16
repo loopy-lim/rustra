@@ -372,6 +372,60 @@ fn main() {
 
 ### React Native
 
+#### rkyv V2 (권장 — postcard 바이너리 + JSI 동기 호출)
+
+JSI 동기 호출과 postcard 바이너리 직렬화를 사용해 JSON 대비 5배 이상 빠른 성능을 제공한다.
+Rust 측에 `register_ffi()`만 추가하면 된다.
+
+**Rust 측 설정:**
+
+```rust
+use rustra::prelude::*;
+use rustra::ffi::FfiFormat;
+use std::sync::OnceLock;
+
+static CACHED_PACKAGE: OnceLock<Package> = OnceLock::new();
+
+pub fn my_package() -> Package {
+    CACHED_PACKAGE.get_or_init(|| {
+        let pkg = register!(Package::builder("my.pkg"), add_numbers, multiply)
+            .build();
+        pkg.register_ffi_with_default(FfiFormat::Json);
+        pkg
+    }).clone()
+}
+
+// iOS: 라이브러리 로드 시 자동 초기화
+#[cfg(target_vendor = "apple")]
+mod apple_init {
+    extern "C" fn rustra_auto_init() { super::my_package(); }
+    #[used]
+    #[cfg_attr(target_vendor = "apple", unsafe(link_section = "__DATA,__mod_init_func"))]
+    static AUTO_INIT: extern "C" fn() = rustra_auto_init;
+}
+```
+
+**TypeScript 측 사용:**
+
+```ts
+import { configure } from '@rustra/types';
+import { createRkyvV2Engine } from '@rustra/react-native';
+import { installRustraJSI, getRustraNative } from './modules/rustra-jsi/src';
+import { rkyvV2Registry } from '../generated/rkyv-registry';
+import { addNumbers } from '../generated/commands';
+
+// 초기화 (앱 시작 시 한 번)
+await installRustraJSI();
+configure(createRkyvV2Engine(getRustraNative(), rkyvV2Registry));
+
+// 사용 (어디서든)
+const result = await addNumbers({ a: 20, b: 22 }); // ~5.8µs
+```
+
+성능: sync 3.8µs / async 5.8µs (JSON 31µs 대비 5.3x 빠름, Nitro 2.1µs 대비 2.8x)
+
+#### JSON (호환성 — Expo async bridge)
+
 ```ts
 import { createReactNativeEngine } from '@rustra/react-native';
 import { addNumbers } from '../generated/commands.js';
@@ -386,12 +440,13 @@ const result = await addNumbers(engine, { a: 20, b: 22 });
 
 ### 요약
 
-| 환경         | 어댑터 함수                             | transport 인자                        |
-| ------------ | --------------------------------------- | ------------------------------------- |
-| Node         | `createNodeEngine(transport)`           | `{ invoke(command, args) }`           |
-| Bun          | `createBunEngine(transport)`            | `{ invoke(command, args) }`           |
-| Tauri        | `createTauriEngine(options)`            | `{ invoke: tauriInvoke }`             |
-| React Native | `createReactNativeEngine(nativeModule)` | `NativeModule` (`invoke` 메서드 포함) |
+| 환경         | 어댑터 함수                             | transport 인자                        | 성능      |
+| ------------ | --------------------------------------- | ------------------------------------- | --------- |
+| Node         | `createNodeEngine(transport)`           | `{ invoke(command, args) }`           | ~24 µs    |
+| Bun          | `createBunEngine(transport)`            | `{ invoke(command, args) }`           | ~27 µs    |
+| Tauri        | `createTauriEngine(options)`            | `{ invoke: tauriInvoke }`             | IPC 종속  |
+| React Native | `createRkyvV2Engine(native, registry)`  | JSI + postcard codecs                 | **~5.8 µs** |
+| React Native | `createReactNativeEngine(nativeModule)` | `NativeModule` (`invoke` 메서드 포함) | ~31 µs    |
 
 모든 어댑터가 `EngineClient`를 반환하므로, 이후 코드는 환경에 상관없이 동일하다.
 
