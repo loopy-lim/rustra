@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { configure } from '@rustra/types';
 import { createBunEngine } from '../../../packages/bun/src/index.js';
 import { createNodeEngine } from '../../../packages/node/src/index.js';
 import { createReactNativeEngine } from '../../../packages/react-native/src/index.js';
@@ -23,8 +24,13 @@ function createRecordingTransport() {
   };
 }
 
-async function assertGeneratedCommandWorks(name: string, engine: EngineClient, calls: Invocation[]) {
-  const result = await addNumbers(engine, { a: 20, b: 22 });
+async function assertGeneratedCommandWorks(
+  name: string,
+  engine: EngineClient,
+  calls: Invocation[],
+) {
+  configure(engine);
+  const result = await addNumbers({ a: 20, b: 22 });
 
   assert.deepEqual(result, { value: 42 }, `${name} should return transport result`);
   assert.deepEqual(
@@ -47,8 +53,9 @@ test('bun adapter forwards generated commands to injected Bun transport', async 
 test('tauri adapter routes generated commands through rustra_dispatch', async () => {
   const transport = createRecordingTransport();
   const engine = createTauriEngine({ invoke: transport.invoke });
+  configure(engine);
 
-  const result = await addNumbers(engine, { a: 20, b: 22 });
+  const result = await addNumbers({ a: 20, b: 22 });
   assert.deepEqual(result, { value: 42 });
 
   assert.deepEqual(transport.calls, [
@@ -65,11 +72,13 @@ test('react native adapter forwards generated commands through JSI native module
   const nativeModule = {
     invoke(payload: ArrayBuffer): ArrayBuffer {
       const { command, args } = JSON.parse(decoder.decode(payload));
-      return encoder.encode(JSON.stringify({ ok: true, result: { value: 42 } })).buffer as ArrayBuffer;
+      return encoder.encode(JSON.stringify({ ok: true, result: { value: 42 } }))
+        .buffer as ArrayBuffer;
     },
   };
   const engine = createReactNativeEngine(nativeModule);
-  const result = await addNumbers(engine, { a: 20, b: 22 });
+  configure(engine);
+  const result = await addNumbers({ a: 20, b: 22 });
   assert.deepEqual(result, { value: 42 });
 });
 

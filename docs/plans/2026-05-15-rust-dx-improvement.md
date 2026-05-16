@@ -13,6 +13,7 @@
 ### Task 1: Add `#[derive(BridgeType)]` macro
 
 **Files:**
+
 - Modify: `crates/rustra-macros/src/lib.rs`
 - Modify: `crates/rustra/src/lib.rs` (prelude, re-export)
 - Test: `crates/rustra/tests/public_authoring_api_tests.rs`
@@ -61,7 +62,7 @@ Expected: FAIL — `BridgeType` not found
 
 Add to `crates/rustra-macros/src/lib.rs`:
 
-```rust
+````rust
 /// Derive macro that combines `Debug + Serialize + Deserialize + JsonSchema`
 /// and adds `#[serde(rename_all = "camelCase")]` automatically.
 ///
@@ -105,7 +106,7 @@ pub fn bridge_type_derive(input: TokenStream) -> TokenStream {
 
     expanded.into()
 }
-```
+````
 
 Note: The approach above re-emits the struct with additional derives. However, proc-macro derives can't add other derives to the same item. We need a different approach — use a helper attribute macro instead, or emit the struct with the derives inline.
 
@@ -183,6 +184,7 @@ pub use rustra_macros::bridge_type;
 ```
 
 Add to prelude:
+
 ```rust
 pub use crate::bridge_type;
 ```
@@ -204,6 +206,7 @@ git commit -m "feat(macros): add #[bridge_type] attribute macro"
 ### Task 2: Enhance `#[command]` macro — scalar params support
 
 **Files:**
+
 - Modify: `crates/rustra-macros/src/lib.rs`
 
 **Step 1: Write the failing test**
@@ -465,6 +468,7 @@ git commit -m "feat(macros): support scalar params in #[command] macro"
 ### Task 3: Add `rustra::build()` API and `.register()` + `.generate_to()`
 
 **Files:**
+
 - Modify: `crates/rustra/src/lib.rs`
 
 **Step 1: Write the failing test**
@@ -567,6 +571,7 @@ git commit -m "feat(api): add build().register().generate_to() chain"
 ### Task 4: Improve error messages with `#[diagnostic::on_unimplemented]`
 
 **Files:**
+
 - Modify: `crates/rustra/src/lib.rs` (`__private` module)
 
 **Step 1: Update `__private` module**
@@ -611,6 +616,7 @@ git commit -m "feat(api): add descriptive error messages for trait bounds"
 ### Task 5: Update existing tests to new API
 
 **Files:**
+
 - Modify: `crates/rustra/tests/public_authoring_api_tests.rs`
 
 **Step 1: Update test file**
@@ -643,6 +649,7 @@ git commit -m "test: update tests to new build().register() API"
 ### Task 6: Update examples to new API
 
 **Files:**
+
 - Modify: `examples/calculator/src/lib.rs` (or equivalent)
 - Modify: `examples/basic.rs` (if exists)
 - Modify: any other example Rust files
@@ -650,6 +657,7 @@ git commit -m "test: update tests to new build().register() API"
 **Step 1: Update calculator example**
 
 Replace:
+
 ```rust
 // Old
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -666,6 +674,7 @@ fn main() -> Result<()> {
 ```
 
 With:
+
 ```rust
 // New
 #[command]
@@ -699,6 +708,7 @@ git commit -m "feat(examples): migrate calculator to new API"
 ### Task 7: Remove deprecated `register!` macro
 
 **Files:**
+
 - Modify: `crates/rustra-macros/src/lib.rs`
 - Modify: `crates/rustra/src/lib.rs` (remove `register` re-export)
 
@@ -707,11 +717,13 @@ git commit -m "feat(examples): migrate calculator to new API"
 Delete the `register` function and `RegisterInput` struct from `crates/rustra-macros/src/lib.rs`.
 
 Remove from `crates/rustra/src/lib.rs`:
+
 ```rust
 pub use rustra_macros::register;
 ```
 
 Remove from prelude:
+
 ```rust
 // Remove `register` from the prelude pub use line
 ```
@@ -738,6 +750,7 @@ git commit -m "chore: remove deprecated register! macro"
 ### Task 8: Update docs and doc comments
 
 **Files:**
+
 - Modify: `crates/rustra/src/lib.rs` (module-level doc)
 - Modify: `crates/rustra-macros/src/lib.rs` (macro doc comments)
 
@@ -745,7 +758,7 @@ git commit -m "chore: remove deprecated register! macro"
 
 Replace the old example in `crates/rustra/src/lib.rs` with:
 
-```rust
+````rust
 //! ## 빠른 예제
 //!
 //! ```rust
@@ -762,7 +775,7 @@ Replace the old example in `crates/rustra/src/lib.rs` with:
 //!         .generate_to("../generated")?
 //! }
 //! ```
-```
+````
 
 **Step 2: Run doc tests**
 

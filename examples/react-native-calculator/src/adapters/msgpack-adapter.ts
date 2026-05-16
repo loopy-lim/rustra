@@ -1,11 +1,7 @@
-import { encode, decode } from "@msgpack/msgpack";
-import type { EngineClient } from "@rustra/types";
+import { encode, decode } from '@msgpack/msgpack';
+import type { EngineClient, RustraNative } from '@rustra/types';
 
-export type MsgpackNative = {
-  invokeMsgpack(payload: ArrayBuffer): ArrayBuffer;
-};
-
-export function createMsgpackEngine(native: MsgpackNative): EngineClient {
+export function createMsgpackEngine(native: RustraNative): EngineClient {
   return {
     invoke<T>(command: string, args?: unknown): Promise<T> {
       const payload = encode({ command, args });
@@ -18,7 +14,7 @@ export function createMsgpackEngine(native: MsgpackNative): EngineClient {
         error?: string;
       };
       if (!response.ok) {
-        throw new Error(response.error ?? "Rustra msgpack invoke failed");
+        throw new Error(response.error ?? 'Rustra msgpack invoke failed');
       }
       return Promise.resolve(response.result as T);
     },

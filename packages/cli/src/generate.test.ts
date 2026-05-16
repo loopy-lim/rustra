@@ -8,6 +8,7 @@ const simpleSchema: PackageSchema = {
   commands: [
     {
       name: 'add',
+      commandId: 1,
       inputType: 'AddInput',
       outputType: 'AddOutput',
       inputSchema: {
@@ -39,6 +40,7 @@ test('generateTypesTs maps tuple types', () => {
     commands: [
       {
         name: 'pair',
+        commandId: 2,
         inputType: 'PairInput',
         outputType: 'PairOutput',
         inputSchema: {
@@ -61,6 +63,7 @@ test('generateTypesTs maps Record types', () => {
     commands: [
       {
         name: 'lookup',
+        commandId: 3,
         inputType: 'LookupInput',
         outputType: 'LookupOutput',
         inputSchema: {
