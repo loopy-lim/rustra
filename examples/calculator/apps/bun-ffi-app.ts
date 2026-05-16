@@ -36,8 +36,8 @@ const engine = createBunEngine({
 
 const result = await addNumbers(engine, { a: 20, b: 22 });
 
-if (result.value !== 42) {
-  throw new Error(`expected 42, got ${result.value}`);
+if (result !== 42) {
+  throw new Error(`expected 42, got ${result}`);
 }
 
-console.log(`bun FFI result: ${result.value}`);
+console.log(`bun FFI result: ${result}`);

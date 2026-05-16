@@ -13,12 +13,12 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
  │                         Rust (작성 시점)                            │
  │                                                                     │
  │  #[command]                                                         │
- │  fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> │
+ │  fn add_numbers(a: i64, b: i64) -> i64                             │
  │                                                                     │
  │         │                                                           │
  │         ▼                                                           │
  │  Package::builder("examples.calculator")                            │
- │      .command_fn(add_numbers)                                       │
+ │      .register(add_numbers)                                         │
  │      .build()                                          Package      │
  │                                                             │       │
  │         ┌───────────────────────────────────────────────────┘       │
@@ -44,7 +44,6 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
  │  ┌──────────────────┐      ┌──────────────────────────────────┐     │
  │  │ EngineClient     │◄─────│ addNumbers(engine, { a, b })     │     │
  │  │ AddNumbersInput  │      └──────────┬───────────────────────┘     │
- │  │ AddNumbersOutput │                 │                             │
  │  └──────────────────┘                 │                             │
  │          ▲                            │ engine.invoke()             │
  │          │                            │                             │
@@ -94,13 +93,13 @@ export type EngineClient = {
 
 ```ts
 // examples/calculator/generated/commands.ts (자동 생성됨)
-import type { AddNumbersInput, AddNumbersOutput, EngineClient } from './types.js';
+import type { AddNumbersInput, EngineClient } from './types.js';
 
 export function addNumbers(
   engine: EngineClient,
   input: AddNumbersInput,
-): Promise<AddNumbersOutput> {
-  return engine.invoke<AddNumbersOutput>('addNumbers', input);
+): Promise<number> {
+  return engine.invoke<number>('addNumbers', input);
 }
 ```
 
@@ -140,7 +139,7 @@ crates/
 | `PackageBuilder`   | `Package::builder(id)`로 생성. `.command_fn(handler)` / `.command(name, handler)`로 command 등록 후 `.build()`                                      |
 | `GeneratedPackage` | `generate_typescript()`의 결과. `schema_json`, `types_ts`, `commands_ts`, `contract_hash` 필드 보유. `write_to_dir()`로 파일 출력                   |
 | `RustraError`      | `Serialize` 구현. `command.not_found`, `command.invalid_args`, `internal` 에러 코드 + `custom(code, message)` 생성자 + `code()`, `message()` getter |
-| `register!`        | `rustra-macros`에서 제공. `register!(Package::builder("id"), fn1, fn2).build()` 형태로 다중 command 일괄 등록                                       |
+| `build!`           | `rustra-macros`에서 제공. `rustra::build!("id", fn1, fn2).done()` 형태로 다중 command 일괄 등록                                                    |
 | `tauri_support`    | `cfg(feature = "tauri")` 활성화 시 제공. `RustraState`, `rustra_dispatch` 단일 Tauri command, `register()` 빌더 주입 함수                           |
 | `__private` 모듈   | `CommandInput`, `CommandOutput` sealed 트레이트. proc macro가 컴파일 타임에 command 타입 제약을 검증하는 데 사용. public API로 노출되지 않음        |
 
@@ -148,27 +147,18 @@ crates/
 
 `#[command]` attribute macro를 제공한다. 적용된 함수에 대해:
 
-1. 함수가 정확히 하나의 입력 파라미터를 가지는지 검증
-2. 반환 타입이 `Result<O>` 형태인지 검증
+1. 함수가 최소 1개의 파라미터를 가지는지 검증
+2. 스칼라 파라미터(2개 이상) 또는 구조체 파라미터(1개) 모드를 자동 감지
 3. `rustra::__private::CommandInput` / `CommandOutput` 트레이트 바운드를 만족하는지 컴파일 타임에 정적 검증
 4. `#[command(name = "customName")]` 속성으로 명시적 command 이름 지정 가능. 생략 시 함수명을 snake_to_lower_camel 변환하여 자동 생성
 
-함수 본문은 그대로 통과시키며 (identity passthrough), 컴파일 타임 타입 체크만 수행한다. 또한 `const __RUstra_meta_{fn_name}: &str = "commandName"` 상수를 생성하여 `register!` 매크로에서 command 이름을 참조할 수 있게 한다.
+함수 본문은 그대로 통과시키며 (identity passthrough), 컴파일 타임 타입 체크만 수행한다. 또한 `const __RUstra_meta_{fn_name}: &str = "commandName"` 상수를 생성하여 `build!` 매크로에서 command 이름을 참조할 수 있게 한다.
 
-`register!` 매크로는 `#[command]`가 생성한 메타 상수를 이용하여 여러 command를 한 번에 등록한다:
-
-```rust
-rustra::register!(Package::builder("my.pkg"), add_numbers, multiply)
-    .build()
-```
-
-위 코드는 다음과 동일하다:
+`build!` 매크로는 `#[command]`가 생성한 메타 상수를 이용하여 여러 command를 한 번에 등록한다:
 
 ```rust
-Package::builder("my.pkg")
-    .command(__RUstra_meta_add_numbers, add_numbers)
-    .command(__RUstra_meta_multiply, multiply)
-    .build()
+rustra::build!("my.pkg", add_numbers, multiply)
+    .done()
 ```
 
 ### TypeScript packages
@@ -214,14 +204,12 @@ examples/
 ```rust
 // examples/calculator/src/lib.rs
 #[command]
-pub fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
-    Ok(AddNumbersOutput { value: input.a + input.b })
+pub fn add_numbers(a: i64, b: i64) -> i64 {
+    a + b
 }
 
 pub fn calculator_package() -> Package {
-    Package::builder("examples.calculator")
-        .command_fn(add_numbers)   // 함수 이름에서 command 이름 자동 추출: "addNumbers"
-        .build()
+    rustra::build!("examples.calculator", add_numbers).done()
 }
 ```
 
@@ -451,10 +439,10 @@ generated.write_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
 
 `#[command]` macro는 함수 시그니처에 대한 컴파일 타임 검증을 수행한다:
 
-1. 입력 파라미터가 정확히 1개인지 확인
+1. 입력 파라미터가 최소 1개인지 확인
 2. 입력 파라미터가 typed parameter인지 확인
-3. 반환 타입이 `Result<O>` 형태인지 확인
+3. 반환 타입이 `Result<O>`, bare value, 또는 `()` 형태인지 확인
 4. 입력 타입이 `CommandInput` (`DeserializeOwned + JsonSchema + 'static`)을 만족하는지 정적 검증
 5. 출력 타입이 `CommandOutput` (`Serialize + JsonSchema + 'static`)을 만족하는지 정적 검증
 
-이 검증은 `__private` 모듈의 sealed 트레이트를 통해 이루어지며, public API로 노출되지 않는다. `#[command]`는 검증 외에도 `const __RUstra_meta_{fn_name}: &str` 상수를 생성하여 command 이름을 저장하며, 이 상수는 `register!` 매크로에서 참조된다.
+이 검증은 `__private` 모듈의 sealed 트레이트를 통해 이루어지며, public API로 노출되지 않는다. `#[command]`는 검증 외에도 `const __RUstra_meta_{fn_name}: &str` 상수를 생성하여 command 이름을 저장하며, 이 상수는 `build!` 매크로에서 참조된다.

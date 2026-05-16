@@ -1,0 +1,13 @@
+{
+  "name": "rustra-calculator",
+  "version": "1.0.0",
+  "description": "React Native Expo module for rustra calculator example",
+  "main": "src/index.ts",
+  "private": true,
+  "author": "loopy-lim",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/loopy-lim/rustra.git"
+  }
+}

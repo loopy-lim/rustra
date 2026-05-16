@@ -37,23 +37,13 @@ npm install @rustra/react-native  # React Native
 ```rust
 use rustra::prelude::*;
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct AddNumbersInput { a: i64, b: i64 }
-
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct AddNumbersOutput { value: i64 }
-
 #[command]
-fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
-    Ok(AddNumbersOutput { value: input.a + input.b })
+fn add_numbers(a: i64, b: i64) -> i64 {
+    a + b
 }
 
 fn main() -> Result<()> {
-    let package = Package::builder("example.calculator")
-        .command_fn(add_numbers)
-        .build();
+    let package = rustra::build!("example.calculator", add_numbers).done();
 
     // TypeScript 클라이언트 생성
     package.generate_typescript()?.write_to_dir("generated")?;
@@ -67,7 +57,7 @@ import { createNodeEngine } from '@rustra/node';
 import { addNumbers } from './generated/commands.js';
 
 const engine = createNodeEngine({ invoke: myTransport });
-const result = await addNumbers(engine, { a: 20, b: 22 }); // { value: 42 }
+const result = await addNumbers(engine, { a: 20, b: 22 }); // 42
 ```
 
 ## 프로젝트 구조
@@ -75,7 +65,7 @@ const result = await addNumbers(engine, { a: 20, b: 22 }); // { value: 42 }
 ```txt
 crates/
   rustra/          Rust 패키지 authoring API (core)
-  rustra-macros/   #[command] proc macro, register! 매크로
+  rustra-macros/   #[command], #[bridge_type] proc macros, build! 매크로
 
 packages/
   node/            Node adapter
@@ -96,42 +86,29 @@ examples/
 ```rust
 use rustra::prelude::*;
 
-// 입출력 구조체는 Serialize, Deserialize, JsonSchema를 파생
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct AddNumbersInput {
-    a: i64,
-    b: i64,
+// 스칼라 파라미터 모드 (간단한 함수)
+#[command]
+fn add_numbers(a: i64, b: i64) -> i64 {
+    a + b
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct AddNumbersOutput {
+// 구조체 파라미터 모드 (복잡한 입력)
+#[bridge_type]
+struct CreateItemInput {
+    name: String,
     value: i64,
 }
 
-// #[command]로 등록
 #[command]
-fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
-    Ok(AddNumbersOutput { value: input.a + input.b })
-}
-
-// 이름을 명시적으로 지정할 수도 있음
-#[command(name = "customName")]
-fn my_function(input: Input) -> Result<Output> { ... }
+fn create_item(input: CreateItemInput) -> Result<Item> { ... }
 ```
 
 패키지를 빌드하고 TypeScript 코드를 생성:
 
 ```rust
 fn main() -> Result<()> {
-    // 개별 등록
-    let package = Package::builder("example.calculator")
-        .command_fn(add_numbers)
-        .build();
-
-    // 또는 register! 매크로로 여러 커맨드를 한 번에 등록
-    let package = rustra::register!(Package::builder("example.calculator"), add_numbers).build();
+    // build! 매크로로 여러 커맨드를 한 번에 등록
+    let package = rustra::build!("example.calculator", add_numbers).done();
 
     package.generate_typescript()?.write_to_dir("generated")?;
     Ok(())
@@ -224,12 +201,17 @@ const result = await addNumbers(engine, { a: 20, b: 22 });
 Rust:
 
 ```rust
-// 일반 에러
-return Err(RustraError::custom("validation.too_large", "value exceeds limit"));
+// 커맨드에서 발생한 에러
+return Err(RustraError::command_not_found("unknownCommand"));
 
-// 재시도 가능한 에러 (네트워크, 타임아웃)
-return Err(RustraError::transport("connection refused"));
-return Err(RustraError::timeout("request timed out"));
+// 잘못된 인자
+return Err(RustraError::invalid_args("expected non-empty name"));
+
+// 내부 에러
+return Err(RustraError::internal("database connection failed"));
+
+// 커스텀 에러
+return Err(RustraError::custom("validation.too_large", "value exceeds limit"));
 ```
 
 TypeScript:
