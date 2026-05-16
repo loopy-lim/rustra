@@ -136,6 +136,8 @@ package.invoke::<SimpleInput, SimpleOutput>("addNumbers", input)
 
 ## React Native 오버헤드 분석
 
+### Expo async bridge (초기 측정)
+
 실제 iOS 시뮬레이터에서 측정한 `addNumbers` 호출의 레이어별 분해:
 
 ```
@@ -147,6 +149,51 @@ Total                                            52.5 µs
 ```
 
 RN에서 대부분의 지연은 Expo NativeModule 비동기 브릿지 통과에서 발생한다. Rust FFI 호출 자체는 3.5 µs로 전체의 ~7%에 불과하다.
+
+### JSI + rkyv V2 postcard (현재)
+
+JSI 동기 호출 + postcard 바이너리 직렬화로 async bridge 오버헤드를 완전히 제거:
+
+```
+Postcard encode (JS)    ▓▓▓▓                      2.4 µs   (63%)
+Rust FFI dispatch       █                          761 ns   (20%)
+Postcard decode (JS)    ██                         1.0 µs   (26%)
+                        ────────────────────────  ──────
+Total (sync)                                       3.8 µs
+
+Promise.resolve wrap                               2.0 µs
+                        ────────────────────────  ──────
+Total (async)                                      5.8 µs
+```
+
+Rust FFI dispatch가 761ns로 JSI noop (2.7µs)보다 빠르다. postcard 바이너리 직렬화 덕분에
+JSON.parse 오버헤드(27.5µs)를 제거했고, JSI 동기 호출로 async bridge 오버헤드(40.2µs)도 제거했다.
+
+#### 어댑터별 비교 (iOS 시뮬레이터, addNumbers, 10K iter)
+
+| 어댑터 | 평균 | p50 | p99 | JSON 대비 |
+|--------|------|-----|-----|-----------|
+| rkyv V2 (postcard + JSI) | **5.8 µs** | **5.2 µs** | **6.5 µs** | 기준 |
+| JSON (JSI sync) | 31.0 µs | 29.8 µs | 63.2 µs | 5.3x 느림 |
+| Nitro (참고용) | 2.1 µs | 2.0 µs | 2.2 µs | — |
+
+rkyv V2는 JSON 대비 **5.3배 빠르며**, Nitro (react-native-nitro-modules) 대비 2.8배 느린 수준이다.
+
+#### Tier별 성능
+
+| Tier | 명령 | rkyv V2 | JSON | rkyv V2 우위 |
+|------|------|---------|------|-------------|
+| 1 (primitive) | addNumbers | 5.8 µs | 31.0 µs | 5.3x |
+| 2 (string/vec) | greet | 16.0 µs | 38.1 µs | 2.4x |
+
+#### rkyv V2 sync 마이크로 벤치마크 (100K iter)
+
+| 단계 | 시간 |
+|------|------|
+| Postcard encode (JS) | 2.4 µs |
+| Rust FFI dispatch | 761 ns |
+| Postcard decode (JS) | 1.0 µs |
+| **전체 (sync)** | **3.8 µs** |
 
 ## JS 어댑터 JSON 성능
 
