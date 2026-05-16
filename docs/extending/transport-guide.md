@@ -261,7 +261,7 @@ import { addNumbers } from '../generated/commands.js';
 const lib = dlopen(`target/debug/librustra_calculator_example.${suffix}`, {
   rustra_calculator_invoke: {
     args: [FFIType.cstring],
-    returns: FFIType.ptr, // FFIType.cstring이 아님 — 수동 메모리 관리 필요
+    returns: FFIType.ptr,       // FFIType.cstring이 아님 — 수동 메모리 관리 필요
   },
   rustra_calculator_free_string: {
     args: [FFIType.ptr],
@@ -274,7 +274,7 @@ const engine = createBunEngine({
     const payload = JSON.stringify({ command, args });
     const rawPtr = lib.symbols.rustra_calculator_invoke(payload);
     const rawResponse = new CString(rawPtr);
-    lib.symbols.rustra_calculator_free_string(rawPtr); // Rust가 CString::from_raw로 해제
+    lib.symbols.rustra_calculator_free_string(rawPtr);  // Rust가 CString::from_raw로 해제
 
     const response = JSON.parse(rawResponse) as {
       ok: boolean;

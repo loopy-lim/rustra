@@ -55,3 +55,4 @@ export type UpdateItemInput = {
 export type UpdateItemOutput = {
   item?: Item | null;
 };
+
