@@ -11,7 +11,10 @@
             "type": "integer"
           }
         },
-        "required": ["name", "value"],
+        "required": [
+          "name",
+          "value"
+        ],
         "title": "CreateItemInput",
         "type": "object"
       },
@@ -23,7 +26,9 @@
             "$ref": "#/definitions/Item"
           }
         },
-        "required": ["item"],
+        "required": [
+          "item"
+        ],
         "title": "CreateItemOutput",
         "type": "object"
       },
@@ -36,7 +41,9 @@
             "type": "string"
           }
         },
-        "required": ["id"],
+        "required": [
+          "id"
+        ],
         "title": "DeleteItemInput",
         "type": "object"
       },
@@ -48,7 +55,9 @@
             "type": "boolean"
           }
         },
-        "required": ["deleted"],
+        "required": [
+          "deleted"
+        ],
         "title": "DeleteItemOutput",
         "type": "object"
       },
@@ -61,7 +70,9 @@
             "type": "string"
           }
         },
-        "required": ["id"],
+        "required": [
+          "id"
+        ],
         "title": "GetItemInput",
         "type": "object"
       },
@@ -90,7 +101,10 @@
         "properties": {
           "minValue": {
             "format": "int64",
-            "type": ["integer", "null"]
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "title": "ListItemsInput",
@@ -107,7 +121,9 @@
             "type": "array"
           }
         },
-        "required": ["items"],
+        "required": [
+          "items"
+        ],
         "title": "ListItemsOutput",
         "type": "object"
       },
@@ -120,14 +136,22 @@
             "type": "string"
           },
           "name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "value": {
             "format": "int64",
-            "type": ["integer", "null"]
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
-        "required": ["id"],
+        "required": [
+          "id"
+        ],
         "title": "UpdateItemInput",
         "type": "object"
       },

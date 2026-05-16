@@ -1,6 +1,7 @@
 {
   "commands": [
     {
+      "commandId": 1,
       "inputSchema": {
         "properties": {
           "a": {
@@ -16,17 +17,348 @@
           "a",
           "b"
         ],
-        "title": "__AddNumbersInput",
+        "title": "AddNumbersInput",
         "type": "object"
       },
       "inputType": "AddNumbersInput",
       "name": "addNumbers",
       "outputSchema": {
-        "format": "int64",
-        "title": "int64",
-        "type": "integer"
+        "properties": {
+          "value": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "AddNumbersOutput",
+        "type": "object"
       },
-      "outputType": "i64"
+      "outputType": "AddNumbersOutput"
+    },
+    {
+      "commandId": 4,
+      "inputSchema": {
+        "properties": {
+          "max": {
+            "format": "double",
+            "type": "number"
+          },
+          "min": {
+            "format": "double",
+            "type": "number"
+          },
+          "value": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "max",
+          "min",
+          "value"
+        ],
+        "title": "ClampInput",
+        "type": "object"
+      },
+      "inputType": "ClampInput",
+      "name": "clamp",
+      "outputSchema": {
+        "properties": {
+          "value": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "ClampOutput",
+        "type": "object"
+      },
+      "outputType": "ClampOutput"
+    },
+    {
+      "commandId": 8,
+      "definitions": {
+        "Item": {
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "value": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "active",
+            "name",
+            "value"
+          ],
+          "type": "object"
+        }
+      },
+      "inputSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "CreateItemInput",
+        "type": "object"
+      },
+      "inputType": "CreateItemInput",
+      "name": "createItem",
+      "outputSchema": {
+        "properties": {
+          "item": {
+            "$ref": "#/definitions/Item"
+          }
+        },
+        "required": [
+          "item"
+        ],
+        "title": "CreateItemOutput",
+        "type": "object"
+      },
+      "outputType": "CreateItemOutput"
+    },
+    {
+      "commandId": 5,
+      "inputSchema": {
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "GreetInput",
+        "type": "object"
+      },
+      "inputType": "GreetInput",
+      "name": "greet",
+      "outputSchema": {
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "GreetOutput",
+        "type": "object"
+      },
+      "outputType": "GreetOutput"
+    },
+    {
+      "commandId": 3,
+      "inputSchema": {
+        "properties": {
+          "n": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "n"
+        ],
+        "title": "IsEvenInput",
+        "type": "object"
+      },
+      "inputType": "IsEvenInput",
+      "name": "isEven",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "IsEvenOutput",
+        "type": "object"
+      },
+      "outputType": "IsEvenOutput"
+    },
+    {
+      "commandId": 2,
+      "inputSchema": {
+        "properties": {
+          "a": {
+            "format": "double",
+            "type": "number"
+          },
+          "b": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "a",
+          "b"
+        ],
+        "title": "MultiplyInput",
+        "type": "object"
+      },
+      "inputType": "MultiplyInput",
+      "name": "multiply",
+      "outputSchema": {
+        "properties": {
+          "value": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "MultiplyOutput",
+        "type": "object"
+      },
+      "outputType": "MultiplyOutput"
+    },
+    {
+      "commandId": 9,
+      "definitions": {
+        "Item": {
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "value": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "active",
+            "name",
+            "value"
+          ],
+          "type": "object"
+        }
+      },
+      "inputSchema": {
+        "properties": {
+          "item": {
+            "$ref": "#/definitions/Item"
+          }
+        },
+        "required": [
+          "item"
+        ],
+        "title": "ProcessItemInput",
+        "type": "object"
+      },
+      "inputType": "ProcessItemInput",
+      "name": "processItem",
+      "outputSchema": {
+        "properties": {
+          "doubled": {
+            "type": "boolean"
+          },
+          "item": {
+            "$ref": "#/definitions/Item"
+          }
+        },
+        "required": [
+          "doubled",
+          "item"
+        ],
+        "title": "ProcessItemOutput",
+        "type": "object"
+      },
+      "outputType": "ProcessItemOutput"
+    },
+    {
+      "commandId": 6,
+      "inputSchema": {
+        "properties": {
+          "numbers": {
+            "items": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "numbers"
+        ],
+        "title": "SumListInput",
+        "type": "object"
+      },
+      "inputType": "SumListInput",
+      "name": "sumList",
+      "outputSchema": {
+        "properties": {
+          "count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "total"
+        ],
+        "title": "SumListOutput",
+        "type": "object"
+      },
+      "outputType": "SumListOutput"
+    },
+    {
+      "commandId": 7,
+      "inputSchema": {
+        "properties": {
+          "s": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "s"
+        ],
+        "title": "ToUpperInput",
+        "type": "object"
+      },
+      "inputType": "ToUpperInput",
+      "name": "toUpper",
+      "outputSchema": {
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "title": "ToUpperOutput",
+        "type": "object"
+      },
+      "outputType": "ToUpperOutput"
     }
   ],
   "packageId": "examples.calculator"

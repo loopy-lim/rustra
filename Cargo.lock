@@ -2794,6 +2794,7 @@ name = "rustra"
 version = "0.1.0"
 dependencies = [
  "hex",
+ "postcard",
  "rustra-macros",
  "schemars 0.8.22",
  "serde",

@@ -27,7 +27,7 @@ test('createNodeEngine wraps RustraError-shaped rejects into RustraCommandError'
   await assert.rejects(
     () => engine.invoke('missing'),
     (err: unknown) => {
-      assert.ok(err instanceof RustraCommandError);
+      if (!(err instanceof RustraCommandError)) return false;
       assert.equal(err.code, 'command.not_found');
       assert.equal(err.message, 'unknown command');
       return true;
@@ -45,7 +45,7 @@ test('createNodeEngine wraps unknown errors into RustraCommandError', async () =
   await assert.rejects(
     () => engine.invoke('cmd'),
     (err: unknown) => {
-      assert.ok(err instanceof RustraCommandError);
+      if (!(err instanceof RustraCommandError)) return false;
       assert.equal(err.code, 'unknown');
       assert.equal(err.message, 'something broke');
       return true;

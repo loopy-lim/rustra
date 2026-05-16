@@ -12,5 +12,3 @@ packages/*/dist/
 .npm-cache/
 *.node
 examples/calculator-napi/node_modules/
-.claude/
-crates/generated/

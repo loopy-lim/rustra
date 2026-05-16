@@ -1,5 +1,5 @@
 import { dlopen, FFIType, suffix, CString } from 'bun:ffi';
-import { createBunEngine } from '../../../packages/bun/src/index.js';
+import { configure, createBunEngine } from '../../../packages/bun/src/index.js';
 import { addNumbers } from '../generated/commands.js';
 
 const lib = dlopen(`target/debug/librustra_calculator_example.${suffix}`, {
@@ -33,8 +33,9 @@ const engine = createBunEngine({
     return response.result;
   },
 });
+configure(engine);
 
-const result = await addNumbers(engine, { a: 20, b: 22 });
+const result = await addNumbers({ a: 20, b: 22 });
 
 if (result !== 42) {
   throw new Error(`expected 42, got ${result}`);

@@ -1,14 +1,15 @@
 import { spawnSync } from 'node:child_process';
 import { addNumbers } from '../generated/commands.js';
-import { createBunEngine } from '../../../packages/bun/src/index.js';
+import { configure, createBunEngine } from '../../../packages/bun/src/index.js';
 
 const engine = createBunEngine({
   invoke(command: string, args?: unknown) {
     return invokeCalculatorRuntime(command, args);
   },
 });
+configure(engine);
 
-const result = await addNumbers(engine, { a: 20, b: 22 });
+const result = await addNumbers({ a: 20, b: 22 });
 
 if (result !== 42) {
   throw new Error(`expected 42, got ${result}`);
