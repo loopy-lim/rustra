@@ -62,11 +62,11 @@ serde_json.workspace = true
 
 필요한 crate는 4개뿐이다.
 
-| crate | 역할 |
-|-------|------|
-| `rustra` | Package builder, TypeScript 생성기, JSON Schema 기반 타입 매핑 |
-| `rustra-macros` | `#[command]`, `#[bridge_type]`, `build!` 매크로 (rustra가 자동으로 재export) |
-| `serde` + `schemars` | 직렬화/역직렬화 + JSON Schema 생성 |
+| crate                | 역할                                                           |
+| -------------------- | -------------------------------------------------------------- |
+| `rustra`             | Package builder, TypeScript 생성기, JSON Schema 기반 타입 매핑 |
+| `rustra-macros`      | `#[command]` 속성 매크로 (rustra가 자동으로 재export)          |
+| `serde` + `schemars` | 직렬화/역직렬화 + JSON Schema 생성. 타입에 3개 derive 필요     |
 
 ---
 
@@ -74,88 +74,51 @@ serde_json.workspace = true
 
 실제 동작하는 `examples/calculator`를 기준으로 단계별로 설명한다.
 
-### 2-1. 커맨드 정의
+### 2-1. Rust 타입 정의
 
-rustra는 두 가지 방식으로 커맨드를 정의할 수 있다.
-
-#### 방식 A: 스칼라 파라미터 (가장 간단)
-
-입출력 구조체를 정의할 필요 없이, 함수 파라미터와 반환값만 작성하면 된다.
+입력과 출력 구조체를 정의한다. 핵심은 **세 개의 derive**와 `#[serde(rename_all = "camelCase")]`다.
 
 ```rust
 use rustra::prelude::*;
 
-#[command]
-fn add_numbers(a: i64, b: i64) -> i64 {
-    a + b
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AddNumbersInput {
+    pub a: i64,
+    pub b: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AddNumbersOutput {
+    pub value: i64,
 }
 ```
 
-`#[command]` 매크로가 자동으로:
-- Input struct를 생성하고 `#[serde(rename_all = "camelCase")]`를 적용
-- 반환값을 `Ok()`로 래핑
-- TypeScript에 `AddNumbersInput` 타입으로 노출
+각 derive의 역할:
 
-#### 방식 B: 커스텀 타입 사용
+- `Serialize` / `Deserialize` — serde 기반 직렬화. JSON으로 주고받으려면 필수.
+- `JsonSchema` — schemars가 JSON Schema를 자동 생성. TypeScript 타입 생성의 근거가 된다.
+- `#[serde(rename_all = "camelCase")]` — Rust의 `snake_case` 필드명을 TypeScript의 `camelCase`로 자동 변환. `a`와 `b`는 변환 대상이 아니지만, `my_field` 같은 필드는 `myField`가 된다.
 
-복잡한 입력이 필요하면 `#[bridge_type]`으로 구조체를 정의한다.
+### 2-2. 커맨드 함수
+
+`#[command]` 매크로를 붙여 함수를 커맨드로 등록한다.
 
 ```rust
-use rustra::prelude::*;
-
-#[bridge_type]
-struct UserQuery {
-    pub name: String,
-    pub age: Option<u32>,
-}
-
-#[bridge_type]
-struct User {
-    pub id: String,
-    pub name: String,
-    pub email: String,
-}
-
 #[command]
-fn find_user(query: UserQuery) -> Result<User> {
-    Ok(User {
-        id: "1".into(),
-        name: query.name,
-        email: format!("{}@example.com", query.name.to_lowercase()),
+pub fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
+    Ok(AddNumbersOutput {
+        value: input.a + input.b,
     })
 }
 ```
 
-`#[bridge_type]`은 `Debug + Serialize + Deserialize + JsonSchema` derive와 `#[serde(rename_all = "camelCase")]`를 하나로 합친 것이다.
+규칙:
 
-### 2-2. 커맨드 함수 규칙
-
-`#[command]` 매크로는 파라미터 개수에 따라 모드를 자동 선택한다.
-
-| 파라미터 수 | 모드 | 설명 |
-|------------|------|------|
-| 0개 | 에러 | 최소 1개 필요 |
-| 1개 | 구조체 모드 | 단일 구조체 타입을 직접 받음 |
-| 2개 이상 | 스칼라 모드 | Input struct를 자동 생성 |
-
-세 가지 반환 패턴을 지원한다:
-
-```rust
-// 1. 스칼라 반환 — 자동 Ok() 래핑
-#[command]
-fn add(a: i64, b: i64) -> i64 { a + b }
-
-// 2. Result 반환 — 에러 처리 가능
-#[command]
-fn divide(a: i64, b: i64) -> Result<i64> {
-    if b == 0 { return Err(RustraError::custom("division.by_zero", "cannot divide by zero")); }
-    Ok(a / b)
-}
-
-// 3. 구조체 파라미터 + Result 반환
-#[command]
-fn find_user(query: UserQuery) -> Result<User> { ... }
-```
+- 입력 파라미터는 **정확히 1개**. 구조체로 받는다.
+- 반환값은 `Result<O>` 형태여야 한다. `rustra::prelude::Result`를 사용.
+- 함수명 `add_numbers`는 자동으로 camelCase 커맨드명 `addNumbers`로 변환된다.
 
 #### 커맨드 이름 직접 지정
 
@@ -163,58 +126,67 @@ fn find_user(query: UserQuery) -> Result<User> { ... }
 
 ```rust
 #[command(name = "customName")]
-fn my_function(input: MyInput) -> Result<MyOutput> {
+pub fn my_function(input: MyInput) -> Result<MyOutput> {
+    // 커맨드명: "customName"
     Ok(MyOutput { /* ... */ })
 }
 ```
 
-### 2-3. 패키지 등록 및 TypeScript 생성
+### 2-3. Package builder
 
-`rustra::build!()` 매크로로 등록과 TypeScript 생성을 한 번에 처리한다.
+여러 커맨드를 하나의 패키지로 묶는다.
+
+#### 개별 등록 방식
 
 ```rust
-fn main() -> Result<()> {
-    // 등록 + TypeScript 생성
-    rustra::build!("examples.calculator", add_numbers)
-        .generate_to("generated")?;
+pub fn calculator_package() -> Package {
+    Package::builder("examples.calculator")
+        .command_fn(add_numbers)
+        .build()
+}
+```
 
+- `Package::builder("examples.calculator")` — 패키지 식별자. 생성된 `schema.json`에 `packageId`로 기록된다.
+- `.command_fn(add_numbers)` — 함수를 커맨드로 등록. 커맨드명은 `#[command]` 매크로의 `name` 속성 또는 함수명에서 자동 추출된다.
+- `.command("customName", handler)` — 이름을 직접 지정할 수도 있다.
+- `.build()` — `Package` 인스턴스 생성.
+
+#### `register!` 매크로로 일괄 등록
+
+여러 커맨드를 한 번에 등록할 때 `register!` 매크로를 사용할 수 있다. `Package::builder()`와 함께 커맨드 함수들을 나열하면 된다.
+
+```rust
+use rustra::prelude::*;
+
+fn main() -> Result<()> {
+    let package = rustra::register!(Package::builder("my.pkg"), add_numbers, multiply)
+        .build();
+
+    // TypeScript 생성
+    package.generate_typescript()?.write_to_dir("generated")?;
     Ok(())
 }
 ```
 
-여러 커맨드를 등록할 때:
+`register!`는 첫 번째 인자로 `PackageBuilder`를 받고, 이후 나열된 함수들을 `.command_fn()`으로 차례대로 등록한다. 각 함수에는 `#[command]` 매크로가 적용되어 있어야 한다.
 
-```rust
-rustra::build!("examples.calculator", add_numbers, multiply, divide)
-    .generate_to("generated")?
-```
-
-런타임에서 커맨드를 호출해야 할 때는 `.done()`으로 `Package`를 얻는다:
-
-```rust
-let pkg = rustra::build!("examples.calculator", add_numbers)
-    .done();
-
-let result: i64 = pkg.invoke("addNumbers", json!({ "a": 2, "b": 3 }))?;
-println!("2 + 3 = {result}");
-```
-
-### 2-4. 전체 예제
+### 2-4. TypeScript 생성
 
 `main.rs`에서 패키지를 빌드하고 TypeScript를 출력한다.
 
 ```rust
-use rustra_calculator_example::add_numbers;
+use rustra_calculator_example::{calculator_package, AddNumbersInput, AddNumbersOutput};
 
 fn main() -> rustra::Result<()> {
-    // 런타임 호출
-    let pkg = rustra::build!("examples.calculator", add_numbers).done();
-    let result: i64 = pkg.invoke("addNumbers", json!({ "a": 2, "b": 3 }))?;
-    println!("2 + 3 = {result}");
+    let package = calculator_package();
+
+    // Rust 내에서 직접 호출도 가능
+    let output: AddNumbersOutput = package.invoke("addNumbers", AddNumbersInput { a: 2, b: 3 })?;
+    println!("2 + 3 = {}", output.value);
 
     // TypeScript 클라이언트 생성
-    rustra::build!("examples.calculator", add_numbers)
-        .generate_to(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
+    let generated = package.generate_typescript()?;
+    generated.write_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
 
     Ok(())
 }
@@ -243,39 +215,47 @@ cargo run -p rustra-calculator-example
 ### types.ts — 타입 정의
 
 ```ts
-export type { EngineClient, RustraError } from '@rustra/types';
-export { RustraCommandError } from '@rustra/types';
+export type EngineClient = {
+  invoke<T>(command: string, args?: unknown): Promise<T>;
+};
 
 export type AddNumbersInput = {
   a: number;
   b: number;
 };
+
+export type AddNumbersOutput = {
+  value: number;
+};
 ```
 
 - `EngineClient` — 모든 호스트 어댑터가 구현해야 하는 공통 인터페이스. `invoke` 하나만 있다.
 - Rust의 `i64`는 TypeScript `number`로 매핑된다.
-- 스칼라 반환 타입은 type alias 없이 직접 `number`로 사용된다.
+- `#[serde(rename_all = "camelCase")]` 덕분에 필드명이 자동으로 camelCase로 변환된다.
 - **이 파일은 어떤 호스트별 의존성도 포함하지 않는다.** `node:`, `bun:`, `@tauri-apps`, `react-native` 같은 import가 없다.
 
 ### commands.ts — 커맨드 헬퍼 함수
 
 ```ts
-import type { AddNumbersInput, EngineClient } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, EngineClient } from './types.js';
 
-export function addNumbers(engine: EngineClient, input: AddNumbersInput): Promise<number> {
-  return engine.invoke<number>('addNumbers', input);
+export function addNumbers(
+  engine: EngineClient,
+  input: AddNumbersInput,
+): Promise<AddNumbersOutput> {
+  return engine.invoke<AddNumbersOutput>('addNumbers', input);
 }
 ```
 
 - 각 `#[command]` 함수마다 TypeScript 함수가 하나씩 생성된다.
 - `engine` 파라미터로 `EngineClient`를 받아 `invoke`를 호출한다.
-- 스칼라 반환은 `Promise<number>`처럼 직접 inline된다.
 - 커맨드명(`addNumbers`), 입력 타입, 출력 타입이 모두 타입 안전하게 연결된다.
 
 ### contract.ts — 계약 해시
 
 ```ts
-export const GENERATED_CONTRACT_HASH = '5ed9d6dc29fb1b0d437b110a8f48e0cb828cc1e27a562b79049e86975b970aba';
+export const GENERATED_CONTRACT_HASH =
+  '5ed9d6dc29fb1b0d437b110a8f48e0cb828cc1e27a562b79049e86975b970aba';
 ```
 
 - 스키마 전체를 SHA-256으로 해시한 값.
@@ -289,15 +269,19 @@ export const GENERATED_CONTRACT_HASH = '5ed9d6dc29fb1b0d437b110a8f48e0cb828cc1e2
     {
       "name": "addNumbers",
       "inputType": "AddNumbersInput",
-      "outputType": "i64",
+      "outputType": "AddNumbersOutput",
       "inputSchema": {
         "type": "object",
-        "properties": { "a": { "type": "integer", "format": "int64" }, "b": { "type": "integer", "format": "int64" } },
+        "properties": {
+          "a": { "type": "integer", "format": "int64" },
+          "b": { "type": "integer", "format": "int64" }
+        },
         "required": ["a", "b"]
       },
       "outputSchema": {
-        "type": "integer",
-        "format": "int64"
+        "type": "object",
+        "properties": { "value": { "type": "integer", "format": "int64" } },
+        "required": ["value"]
       }
     }
   ],
@@ -329,7 +313,7 @@ const engine = createNodeEngine({
 });
 
 const result = await addNumbers(engine, { a: 20, b: 22 });
-console.log(result); // 42
+console.log(result.value); // 42
 ```
 
 `createNodeEngine`은 `{ invoke(command, args) }` 형태의 transport 객체를 받아 `EngineClient`를 반환한다.
@@ -347,7 +331,7 @@ const engine = createBunEngine({
 });
 
 const result = await addNumbers(engine, { a: 20, b: 22 });
-console.log(result); // 42
+console.log(result.value); // 42
 ```
 
 Node 어댑터와 동일한 형태. transport만 Bun 환경에 맞게 구현.
@@ -375,8 +359,7 @@ Rust 쪽에서는 `rustra::tauri_support::register`로 패키지를 Tauri 빌더
 use rustra::tauri_support;
 
 fn main() {
-    let pkg = rustra::build!("my.app", command1, command2).done();
-    let builder = tauri_support::register(pkg, tauri::Builder::default());
+    let builder = tauri_support::register(my_package(), tauri::Builder::default());
     builder.run(tauri::generate_context!()).expect("failed to run");
 }
 ```
@@ -403,11 +386,11 @@ const result = await addNumbers(engine, { a: 20, b: 22 });
 
 ### 요약
 
-| 환경 | 어댑터 함수 | transport 인자 |
-|------|------------|----------------|
-| Node | `createNodeEngine(transport)` | `{ invoke(command, args) }` |
-| Bun | `createBunEngine(transport)` | `{ invoke(command, args) }` |
-| Tauri | `createTauriEngine(options)` | `{ invoke: tauriInvoke }` |
+| 환경         | 어댑터 함수                             | transport 인자                        |
+| ------------ | --------------------------------------- | ------------------------------------- |
+| Node         | `createNodeEngine(transport)`           | `{ invoke(command, args) }`           |
+| Bun          | `createBunEngine(transport)`            | `{ invoke(command, args) }`           |
+| Tauri        | `createTauriEngine(options)`            | `{ invoke: tauriInvoke }`             |
 | React Native | `createReactNativeEngine(nativeModule)` | `NativeModule` (`invoke` 메서드 포함) |
 
 모든 어댑터가 `EngineClient`를 반환하므로, 이후 코드는 환경에 상관없이 동일하다.
@@ -445,12 +428,12 @@ npm run test:compat
 
 이 명령어는 다음을 모두 실행한다.
 
-| 스크립트 | 내용 |
-|---------|------|
-| `test:ts:node` | Node로 생성된 클라이언트 타입 검증 |
-| `test:ts:bun` | Bun으로 생성된 클라이언트 타입 검증 |
-| `test:adapters` | 4개 어댑터가 모두 동일한 커맨드를 올바르게 전달하는지 확인 |
-| `test:runtime` | Node, Bun 런타임에서 실제 Rust 프로세스 호출, Tauri 앱 빌드 및 WebView에서 호출 검증 |
+| 스크립트        | 내용                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------ |
+| `test:ts:node`  | Node로 생성된 클라이언트 타입 검증                                                   |
+| `test:ts:bun`   | Bun으로 생성된 클라이언트 타입 검증                                                  |
+| `test:adapters` | 4개 어댑터가 모두 동일한 커맨드를 올바르게 전달하는지 확인                           |
+| `test:runtime`  | Node, Bun 런타임에서 실제 Rust 프로세스 호출, Tauri 앱 빌드 및 WebView에서 호출 검증 |
 
 개별 실행도 가능하다.
 
@@ -525,8 +508,8 @@ my-app/
 fn main() -> rustra::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     if args.get(1).map(|s| s.as_str()) == Some("generate") {
-        rustra::build!("my.package", add_numbers, multiply)
-            .generate_to("generated")?;
+        let package = my_package();
+        package.generate_typescript()?.write_to_dir("generated")?;
     }
     Ok(())
 }
@@ -556,22 +539,22 @@ git diff --exit-code generated/
 use rustra::prelude::*;
 
 #[command]
-fn divide(a: i64, b: i64) -> Result<i64> {
-    if b == 0 {
+fn divide(input: DivideInput) -> Result<DivideOutput> {
+    if input.b == 0 {
         return Err(RustraError::custom("division.by_zero", "cannot divide by zero"));
     }
-    Ok(a / b)
+    Ok(DivideOutput { value: input.a / input.b })
 }
 ```
 
 에러 코드 종류:
 
-| 에러 코드 | 발생 조건 |
-|----------|----------|
-| `command.not_found` | 존재하지 않는 커맨드 호출 |
-| `command.invalid_args` | 입력 JSON 역직렬화 실패 |
-| `internal` | 내부 오류 (직렬화 실패, I/O 등) |
-| custom (지정한 코드) | `RustraError::custom(code, message)` |
+| 에러 코드              | 발생 조건                            |
+| ---------------------- | ------------------------------------ |
+| `command.not_found`    | 존재하지 않는 커맨드 호출            |
+| `command.invalid_args` | 입력 JSON 역직렬화 실패              |
+| `internal`             | 내부 오류 (직렬화 실패, I/O 등)      |
+| custom (지정한 코드)   | `RustraError::custom(code, message)` |
 
 ### TypeScript 측
 
@@ -584,7 +567,7 @@ try {
   const result = await divide(engine, { a: 10, b: 0 });
 } catch (e) {
   if (e instanceof RustraCommandError) {
-    console.log(e.code);    // "division.by_zero"
+    console.log(e.code); // "division.by_zero"
     console.log(e.message); // "cannot divide by zero"
   }
 }
@@ -598,13 +581,13 @@ Node, Bun, React Native 어댑터는 transport 구현에 따라 에러 형태가
 
 대부분의 Rust 타입이 TypeScript로 올바르게 변환되지만, 현재 다음 타입은 `unknown`으로 폴백된다:
 
-| 미지원 타입 | 이유 |
-|------------|------|
-| `tuple` (`(A, B)`) | `prefixItems` 미처리 |
-| `oneOf` | `anyOf`만 처리 |
-| `allOf` | 교차 타입(intersection) 미처리 |
-| integer enum | string enum만 리터럴 union 변환 |
-| 중첩 `$ref` (다단계) | 1단계까지만 해석 |
+| 미지원 타입          | 이유                            |
+| -------------------- | ------------------------------- |
+| `tuple` (`(A, B)`)   | `prefixItems` 미처리            |
+| `oneOf`              | `anyOf`만 처리                  |
+| `allOf`              | 교차 타입(intersection) 미처리  |
+| integer enum         | string enum만 리터럴 union 변환 |
+| 중첩 `$ref` (다단계) | 1단계까지만 해석                |
 
 이런 타입이 필요하면 `types.ts`를 직접 수정하거나, `#[command(name = "...")]`으로 명시적 이름을 지정하는 방식으로 우회할 수 있다.
 
@@ -613,12 +596,17 @@ Node, Bun, React Native 어댑터는 transport 구현에 따라 에러 형태가
 ## 요약: 전체 흐름
 
 ```
-Rust #[command] 함수 작성
-(스칼라 파라미터 또는 #[bridge_type] 구조체)
+Rust 타입 정의 (Serialize + Deserialize + JsonSchema)
         |
         v
-rustra::build!("id", fn1, fn2, ...)
-    .generate_to("generated")?    ← 등록 + TypeScript 생성
+#[command] 함수 작성 (name 속성으로 커맨드명 직접 지정 가능)
+        |
+        v
+Package::builder("id").command_fn(fn).build()
+또는 register!(Package::builder("id"), fn1, fn2, ...).build()
+        |
+        v
+package.generate_typescript()?.write_to_dir("generated")
         |
         v
 generated/

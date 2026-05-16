@@ -7,6 +7,7 @@ export type RustraNative = {
   invokePostcard(payload: ArrayBuffer): ArrayBuffer;
   invokeRkyv(payload: ArrayBuffer): ArrayBuffer;
   invokeHybrid(payload: ArrayBuffer): ArrayBuffer;
+  invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
   invokeRaw(payload: ArrayBuffer): ArrayBuffer;
   noop(payload: ArrayBuffer): ArrayBuffer;
 };

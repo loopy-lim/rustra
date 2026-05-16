@@ -42,7 +42,7 @@ test('createTauriEngine wraps RustraError-shaped rejects into RustraCommandError
   await assert.rejects(
     () => engine.invoke('cmd'),
     (err: unknown) => {
-      assert.ok(err instanceof RustraCommandError);
+      if (!(err instanceof RustraCommandError)) return false;
       assert.equal(err.code, 'command.invalid_args');
       assert.equal(err.message, 'bad input');
       return true;
@@ -60,7 +60,7 @@ test('createTauriEngine wraps unknown errors into RustraCommandError', async () 
   await assert.rejects(
     () => engine.invoke('cmd'),
     (err: unknown) => {
-      assert.ok(err instanceof RustraCommandError);
+      if (!(err instanceof RustraCommandError)) return false;
       assert.equal(err.code, 'unknown');
       return true;
     },
