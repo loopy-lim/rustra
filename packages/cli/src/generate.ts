@@ -479,7 +479,7 @@ export function generateRkyvRegistryTs(schema: PackageSchema): string {
   const codecImports = included.map((c) => commandFunctionName(c.name) + 'Codec').join(', ');
 
   return (
-    `import { ${codecImports} } from './rkyv-codecs.js';\n\n` +
+    `import { ${codecImports} } from './rkyv-codecs';\n\n` +
     `export const rkyvV2Registry = new Map<string, import('@rustra/types').RkyvV2Codec<any, any>>([\n` +
     entries +
     `,\n]);\n`

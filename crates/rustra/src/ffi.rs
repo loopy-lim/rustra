@@ -124,7 +124,8 @@ fn dispatch_json(command: &str, args: serde_json::Value) -> FfiResponse {
 // -- JSON serialization helpers ------------------------------------------
 
 fn json_serialize(resp: &FfiResponse) -> Vec<u8> {
-    serde_json::to_vec(resp).unwrap_or_else(|_| b"{\"ok\":false,\"error\":\"json encode failed\"}".to_vec())
+    serde_json::to_vec(resp)
+        .unwrap_or_else(|_| b"{\"ok\":false,\"error\":\"json encode failed\"}".to_vec())
 }
 
 fn json_deserialize_envelope(bytes: &[u8]) -> Result<FfiEnvelope, String> {
@@ -173,12 +174,12 @@ pub unsafe extern "C" fn rustra_ffi_invoke(
     }
 
     match DEFAULT_FORMAT.get() {
-        Some(FfiFormat::Postcard) => {
-            unsafe { rustra_ffi_invoke_postcard(payload, payload_len, out_len) }
-        }
-        Some(FfiFormat::Json) | None => {
-            unsafe { rustra_ffi_invoke_json(payload, payload_len, out_len) }
-        }
+        Some(FfiFormat::Postcard) => unsafe {
+            rustra_ffi_invoke_postcard(payload, payload_len, out_len)
+        },
+        Some(FfiFormat::Json) | None => unsafe {
+            rustra_ffi_invoke_json(payload, payload_len, out_len)
+        },
     }
 }
 
@@ -234,7 +235,11 @@ pub unsafe extern "C" fn rustra_ffi_invoke_postcard(
         return std::ptr::null_mut();
     }
     if payload_len > MAX_PAYLOAD_BYTES {
-        return err_response("payload exceeds size limit", out_len, postcard_serialize_response);
+        return err_response(
+            "payload exceeds size limit",
+            out_len,
+            postcard_serialize_response,
+        );
     }
 
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
@@ -316,7 +321,8 @@ mod tests {
         let payload = postcard::to_allocvec(&envelope).unwrap();
         let mut out_len: usize = 0;
 
-        let ptr = unsafe { rustra_ffi_invoke_postcard(payload.as_ptr(), payload.len(), &mut out_len) };
+        let ptr =
+            unsafe { rustra_ffi_invoke_postcard(payload.as_ptr(), payload.len(), &mut out_len) };
 
         assert!(!ptr.is_null());
         assert!(out_len > 0);
