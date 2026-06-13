@@ -355,7 +355,7 @@ function generateFieldDecodeExpr(
       const subFields = collectPostcardFields(structDef, definitions);
       const lines: string[] = [];
       lines.push(`${indent}{`);
-      lines.push(`${indent}  const _obj: any = {};`);
+      lines.push(`${indent}  const _obj: ${field.refType} = {} as ${field.refType};`);
       for (const sf of subFields) {
         lines.push(generateFieldDecodeExpr(sf, `_obj.${sf.name}`, definitions, `${indent}  `));
       }
@@ -383,10 +383,14 @@ export function generateRkyvCodecsTs(schema: PackageSchema): string {
 
   const definitions = collectAllDefinitions(schema);
 
+  // Include definition types (e.g. Item) referenced by struct fields in codecs
+  const definitionTypes = Object.keys(definitions);
+  const importTypes = [...new Set([...allTypes, ...definitionTypes])].sort();
+
   let output = postcardHelperSource();
 
   output += "import type { RkyvV2Codec } from '@rustra/types';\n";
-  output += `import type { ${allTypes.join(', ')} } from './types.js';\n\n`;
+  output += `import type { ${importTypes.join(', ')} } from './types.js';\n\n`;
 
   for (const command of schema.commands) {
     output += generatePostcardCodec(command, definitions);
@@ -449,11 +453,11 @@ function generatePostcardCodec(
   } else {
     lines.push(`    // Decode postcard from offset 8`);
     lines.push(`    let offset = 8;`);
-    lines.push(`    const result: ${outType} = {} as any;`);
+    lines.push(`    const result: Partial<${outType}> = {};`);
     for (const field of outFields) {
       lines.push(generateFieldDecodeExpr(field, `result.${field.name}`, definitions, '    '));
     }
-    lines.push(`    return { ok: true, result };`);
+    lines.push(`    return { ok: true, result: result as ${outType} };`);
   }
 
   lines.push(`  },`);
@@ -479,7 +483,7 @@ export function generateRkyvRegistryTs(schema: PackageSchema): string {
   const codecImports = included.map((c) => commandFunctionName(c.name) + 'Codec').join(', ');
 
   return (
-    `import { ${codecImports} } from './rkyv-codecs';\n\n` +
+    `import { ${codecImports} } from './rkyv-codecs.js';\n\n` +
     `export const rkyvV2Registry = new Map<string, import('@rustra/types').RkyvV2Codec<any, any>>([\n` +
     entries +
     `,\n]);\n`

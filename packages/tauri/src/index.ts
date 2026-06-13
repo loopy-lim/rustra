@@ -22,8 +22,8 @@
  * ```
  */
 
-export type { EngineClient, RustraError } from '@rustra/types';
-export { RustraCommandError } from '@rustra/types';
+export type { EngineClient, RustraError, RkyvV2Codec, RkyvV2Native } from '@rustra/types';
+export { RustraCommandError, configure, invoke, createRkyvV2Engine } from '@rustra/types';
 
 import { RustraCommandError } from '@rustra/types';
 

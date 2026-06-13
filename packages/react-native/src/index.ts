@@ -56,17 +56,16 @@ export type SyncEngineClient = {
 /**
  * 고속 엔진 생성 옵션.
  *
- * - `rkyvV2` 코덱이 있으면 rkyv V2 바이너리 경로 사용 (최고 성능)
- * - 없으면 JSON 동기 경로 사용 (JSI만으로도 충분히 빠름)
+ * rkyv V2 바이너리 경로를 필수로 사용합니다 (최고 성능).
  */
 export type FastEngineOptions = {
-  rkyvV2Codecs?: Map<string, import('@rustra/types').RkyvV2Codec<any, any>>;
+  rkyvV2Codecs: Map<string, import('@rustra/types').RkyvV2Codec<any, any>>;
 };
 
 /**
  * 고속 엔진 — JSI 동기 호출로 Promise 오버헤드 없이 결과를 반환합니다.
  *
- * rkyv V2 코덱이 제공되면 바이너리 경로, 아니면 JSON 경로를 사용합니다.
+ * rkyv V2 바이너리 코덱을 통해 최고 성능의 동기 호출을 제공합니다.
  *
  * @example
  * ```ts
@@ -92,7 +91,7 @@ export type FastEngineOptions = {
  * ```
  */
 export function getRustraNative(): RustraNative {
-  const native = (globalThis as any).__rustraNative;
+  const native = (globalThis as Record<string, unknown>).__rustraNative;
   if (!native) {
     throw new Error(
       'JSI native module not installed. Call installRustraJSI() from your native module first.',
@@ -103,31 +102,7 @@ export function getRustraNative(): RustraNative {
 
 export function createFastEngine(
   native: RustraJSINative,
-  options?: FastEngineOptions,
+  options: FastEngineOptions,
 ): EngineClientType {
-  if (options?.rkyvV2Codecs && options.rkyvV2Codecs.size > 0) {
-    return createRkyvV2Engine(native, options.rkyvV2Codecs);
-  }
-
-  // JSON sync path — no rkyv codecs available
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
-
-  return {
-    invoke<T>(command: string, args?: unknown): Promise<T> {
-      const json = JSON.stringify({ command, args });
-      const payload = encoder.encode(json);
-      const resultBytes = native.invoke(payload.buffer);
-      const resultJson = decoder.decode(resultBytes);
-      const response = JSON.parse(resultJson) as {
-        ok: boolean;
-        result?: T;
-        error?: string;
-      };
-      if (!response.ok) {
-        throw new Error(response.error ?? 'Rustra invoke failed');
-      }
-      return Promise.resolve(response.result as T);
-    },
-  };
+  return createRkyvV2Engine(native, options.rkyvV2Codecs);
 }
