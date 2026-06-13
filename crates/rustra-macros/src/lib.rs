@@ -15,8 +15,8 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{
-    GenericArgument, Ident, ItemFn, LitStr, PathArguments, ReturnType, Token, Type, parse::Parse,
-    parse::ParseStream, parse_macro_input,
+    parse::Parse, parse::ParseStream, parse_macro_input, DeriveInput, GenericArgument, Ident,
+    ItemFn, LitStr, PathArguments, ReturnType, Token, Type,
 };
 
 /// `#[command]` 속성의 파싱 결과입니다.
@@ -268,6 +268,125 @@ fn extract_result_inner(ty: &Type) -> Option<TokenStream2> {
         return None;
     };
     Some(quote! { #inner_ty })
+}
+
+/// struct/enum에 bridge에 필요한 derive와 serde 설정을 자동 추가하는 속성 매크로입니다.
+///
+/// 다음을 자동으로 추가합니다:
+/// - `#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]`
+/// - `#[serde(rename_all = "camelCase")]` (기존 serde rename 속성이 없을 시)
+///
+/// ## 예제
+///
+/// ```rust,ignore
+/// #[bridge_type]
+/// #[derive(Clone)]
+/// struct AddNumbersInput { a: i64, b: i64 }
+/// ```
+#[proc_macro_attribute]
+pub fn bridge_type(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let mut input = parse_macro_input!(item as DeriveInput);
+
+    // Add derive attributes for bridge-required traits
+    input.attrs.push(syn::parse_quote! {
+        #[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+    });
+
+    // Add serde rename_all = "camelCase" only if no serde(rename_all = ...) exists
+    let has_serde_rename = input.attrs.iter().any(|attr| {
+        if !attr.path().is_ident("serde") {
+            return false;
+        }
+        let Ok(nested) = attr.parse_args_with(
+            syn::punctuated::Punctuated::<syn::MetaNameValue, syn::Token![,]>::parse_terminated,
+        ) else {
+            return false;
+        };
+        nested.iter().any(|nv| nv.path.is_ident("rename_all"))
+    });
+
+    if !has_serde_rename {
+        input.attrs.push(syn::parse_quote! {
+            #[serde(rename_all = "camelCase")]
+        });
+    }
+
+    quote! { #input }.into()
+}
+
+/// `build!` 매크로의 파싱 결과입니다.
+///
+/// 형태: `"package.name", <fn_ident>, <fn_ident>, ...`
+struct BuildInput {
+    package_name: LitStr,
+    commands: Vec<Ident>,
+}
+
+impl Parse for BuildInput {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let package_name: LitStr = input.parse()?;
+        let _: Token![,] = input.parse()?;
+
+        let mut commands = Vec::new();
+        loop {
+            if input.is_empty() {
+                break;
+            }
+            let name: Ident = input.parse()?;
+            commands.push(name);
+            if input.parse::<Token![,]>().is_err() {
+                break;
+            }
+        }
+
+        if commands.is_empty() {
+            return Err(syn::Error::new(
+                package_name.span(),
+                "build! requires at least one command function after the package name",
+            ));
+        }
+
+        Ok(BuildInput {
+            package_name,
+            commands,
+        })
+    }
+}
+
+/// `#[command]` 함수들을 간결하게 등록하는 매크로입니다.
+///
+/// `register!(Package::builder("name"), fn1, fn2).build()` 대신
+/// `rustra::build!("name", fn1, fn2).done()`을 사용할 수 있습니다.
+///
+/// ## 예제
+///
+/// ```rust,ignore
+/// pub fn my_package() -> Package {
+///     rustra::build!("com.example.my", add_numbers, multiply).done()
+/// }
+/// ```
+#[proc_macro]
+pub fn build(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as BuildInput);
+
+    let package_name = &input.package_name;
+    let chain: TokenStream2 = input
+        .commands
+        .iter()
+        .map(|fn_name| {
+            let meta_ident = Ident::new(
+                &format!("__RUstra_meta_{}", fn_name),
+                proc_macro2::Span::call_site(),
+            );
+            quote! { .command(#meta_ident, #fn_name) }
+        })
+        .collect();
+
+    let expanded = quote! {
+        rustra::Package::builder(#package_name) #chain
+    };
+
+    expanded.into()
 }
 
 /// snake_case, kebab-case를 lowerCamelCase로 변환합니다.
