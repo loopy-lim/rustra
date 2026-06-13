@@ -30,7 +30,7 @@ function _pcDecodeVarint(buf: Uint8Array, offset: number): { value: number; byte
 
 function _pcEncodeZigzag(n: number): number {
   // zigzag encode: positive n -> n*2, negative n -> (-n)*2 - 1
-  return n >= 0 ? n * 2 : -n * 2 - 1;
+  return n >= 0 ? n * 2 : (-n) * 2 - 1;
 }
 
 function _pcDecodeZigzag(n: number): number {
@@ -42,10 +42,7 @@ function _pcEncodeZigzagVarint(n: number): Uint8Array {
   return _pcEncodeVarint(_pcEncodeZigzag(n));
 }
 
-function _pcDecodeZigzagVarint(
-  buf: Uint8Array,
-  offset: number,
-): { value: number; bytesRead: number } {
+function _pcDecodeZigzagVarint(buf: Uint8Array, offset: number): { value: number; bytesRead: number } {
   const { value, bytesRead } = _pcDecodeVarint(buf, offset);
   return { value: _pcDecodeZigzag(value), bytesRead };
 }
@@ -103,26 +100,7 @@ function _pcDecodeF32(buf: Uint8Array, offset: number): { value: number; bytesRe
 }
 
 import type { RkyvV2Codec } from '@rustra/types';
-import type {
-  AddNumbersInput,
-  AddNumbersOutput,
-  ClampInput,
-  ClampOutput,
-  CreateItemInput,
-  CreateItemOutput,
-  GreetInput,
-  GreetOutput,
-  IsEvenInput,
-  IsEvenOutput,
-  MultiplyInput,
-  MultiplyOutput,
-  ProcessItemInput,
-  ProcessItemOutput,
-  SumListInput,
-  SumListOutput,
-  ToUpperInput,
-  ToUpperOutput,
-} from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, Item, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
 
 export const addNumbersCodec: RkyvV2Codec<AddNumbersInput, AddNumbersOutput> = {
   commandId: 1,
@@ -144,19 +122,18 @@ export const addNumbersCodec: RkyvV2Codec<AddNumbersInput, AddNumbersOutput> = {
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
     let offset = 8;
-    const result: AddNumbersOutput = {} as any;
+    const result: Partial<AddNumbersOutput> = {};
     {
       const _v = _pcDecodeZigzagVarint(u8, offset);
       result.value = _v.value;
       offset += _v.bytesRead;
     }
-    return { ok: true, result };
+    return { ok: true, result: result as AddNumbersOutput };
   },
 };
 
@@ -181,19 +158,18 @@ export const clampCodec: RkyvV2Codec<ClampInput, ClampOutput> = {
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
     let offset = 8;
-    const result: ClampOutput = {} as any;
+    const result: Partial<ClampOutput> = {};
     {
       const _v = _pcDecodeF64(u8, offset);
       result.value = _v.value;
       offset += _v.bytesRead;
     }
-    return { ok: true, result };
+    return { ok: true, result: result as ClampOutput };
   },
 };
 
@@ -217,15 +193,14 @@ export const createItemCodec: RkyvV2Codec<CreateItemInput, CreateItemOutput> = {
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
     let offset = 8;
-    const result: CreateItemOutput = {} as any;
+    const result: Partial<CreateItemOutput> = {};
     {
-      const _obj: any = {};
+      const _obj: Item = {} as Item;
       {
         _obj.active = u8[offset] === 1;
         offset += 1;
@@ -242,7 +217,7 @@ export const createItemCodec: RkyvV2Codec<CreateItemInput, CreateItemOutput> = {
       }
       result.item = _obj;
     }
-    return { ok: true, result };
+    return { ok: true, result: result as CreateItemOutput };
   },
 };
 
@@ -265,19 +240,18 @@ export const greetCodec: RkyvV2Codec<GreetInput, GreetOutput> = {
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
     let offset = 8;
-    const result: GreetOutput = {} as any;
+    const result: Partial<GreetOutput> = {};
     {
       const _v = _pcDecodeString(u8, offset);
       result.message = _v.value;
       offset += _v.bytesRead;
     }
-    return { ok: true, result };
+    return { ok: true, result: result as GreetOutput };
   },
 };
 
@@ -300,18 +274,17 @@ export const isEvenCodec: RkyvV2Codec<IsEvenInput, IsEvenOutput> = {
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
     let offset = 8;
-    const result: IsEvenOutput = {} as any;
+    const result: Partial<IsEvenOutput> = {};
     {
       result.result = u8[offset] === 1;
       offset += 1;
     }
-    return { ok: true, result };
+    return { ok: true, result: result as IsEvenOutput };
   },
 };
 
@@ -335,19 +308,18 @@ export const multiplyCodec: RkyvV2Codec<MultiplyInput, MultiplyOutput> = {
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
     let offset = 8;
-    const result: MultiplyOutput = {} as any;
+    const result: Partial<MultiplyOutput> = {};
     {
       const _v = _pcDecodeF64(u8, offset);
       result.value = _v.value;
       offset += _v.bytesRead;
     }
-    return { ok: true, result };
+    return { ok: true, result: result as MultiplyOutput };
   },
 };
 
@@ -372,19 +344,18 @@ export const processItemCodec: RkyvV2Codec<ProcessItemInput, ProcessItemOutput> 
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
     let offset = 8;
-    const result: ProcessItemOutput = {} as any;
+    const result: Partial<ProcessItemOutput> = {};
     {
       result.doubled = u8[offset] === 1;
       offset += 1;
     }
     {
-      const _obj: any = {};
+      const _obj: Item = {} as Item;
       {
         _obj.active = u8[offset] === 1;
         offset += 1;
@@ -401,7 +372,7 @@ export const processItemCodec: RkyvV2Codec<ProcessItemInput, ProcessItemOutput> 
       }
       result.item = _obj;
     }
-    return { ok: true, result };
+    return { ok: true, result: result as ProcessItemOutput };
   },
 };
 
@@ -430,13 +401,12 @@ export const sumListCodec: RkyvV2Codec<SumListInput, SumListOutput> = {
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
     let offset = 8;
-    const result: SumListOutput = {} as any;
+    const result: Partial<SumListOutput> = {};
     {
       const _v = _pcDecodeZigzagVarint(u8, offset);
       result.count = _v.value;
@@ -447,7 +417,7 @@ export const sumListCodec: RkyvV2Codec<SumListInput, SumListOutput> = {
       result.total = _v.value;
       offset += _v.bytesRead;
     }
-    return { ok: true, result };
+    return { ok: true, result: result as SumListOutput };
   },
 };
 
@@ -470,18 +440,18 @@ export const toUpperCodec: RkyvV2Codec<ToUpperInput, ToUpperOutput> = {
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
     let offset = 8;
-    const result: ToUpperOutput = {} as any;
+    const result: Partial<ToUpperOutput> = {};
     {
       const _v = _pcDecodeString(u8, offset);
       result.result = _v.value;
       offset += _v.bytesRead;
     }
-    return { ok: true, result };
+    return { ok: true, result: result as ToUpperOutput };
   },
 };
+

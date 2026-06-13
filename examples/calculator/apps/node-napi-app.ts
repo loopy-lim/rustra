@@ -41,8 +41,8 @@ configure(engine);
 
 const result = await addNumbers({ a: 20, b: 22 });
 
-if (result !== 42) {
-  throw new Error(`expected 42, got ${result}`);
+if (result.value !== 42) {
+  throw new Error(`expected 42, got ${result.value}`);
 }
 
-console.log(`node napi-rs result: ${result}`);
+console.log(`node napi-rs result: ${result.value}`);

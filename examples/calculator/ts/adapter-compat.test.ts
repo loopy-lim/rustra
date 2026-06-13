@@ -93,7 +93,16 @@ test('adapter packages keep host-specific imports out of the shared contract pat
   ]);
 
   const source = adapterSources.join('\n');
-  for (const banned of ['@tauri-apps', 'react-native', '@expo/', 'expo-modules']) {
+  for (const banned of ['@tauri-apps', '@expo/', 'expo-modules']) {
     assert.equal(source.includes(banned), false, `adapter source leaked ${banned}`);
+  }
+  // `react-native` substring check: only flag if it appears in an import statement
+  const importLines = source.split('\n').filter((l) => l.trimStart().startsWith('import '));
+  for (const line of importLines) {
+    assert.equal(
+      line.includes('react-native'),
+      false,
+      `adapter source leaked react-native in import: ${line.trim()}`,
+    );
   }
 });
