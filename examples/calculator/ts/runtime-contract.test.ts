@@ -18,8 +18,8 @@ test('host apps share generated commands and differ only by adapter transport', 
   assert.match(nodeApp, /createNodeEngine/);
   assert.match(bunApp, /createBunEngine/);
   assert.match(tauriApp, /createTauriEngine/);
-  assert.match(reactNativeApp, /createReactNativeEngine/);
-  assert.match(reactNativeApp, /RustraCalculatorModule/);
+  assert.match(reactNativeApp, /createFastEngine/);
+  assert.match(reactNativeApp, /installRustraJSI/);
   assert.match(reactNativeMetro, /watchFolders = \[repoRoot\]/);
   assert.match(reactNativeMetro, /nodeModulesPaths/);
 
@@ -40,5 +40,5 @@ test('react native runtime fixture exposes a native Rust-backed invoke module', 
   assert.match(swiftModule, /rustra_calculator_invoke/);
   assert.match(swiftModule, /rustra_calculator_free_string/);
   assert.match(calculatorLib, /extern "C" fn rustra_calculator_invoke/);
-  assert.match(calculatorLib, /calculator_package\(\)\.invoke_json/);
+  assert.match(calculatorLib, /get_package\(\).*invoke_json/s);
 });
