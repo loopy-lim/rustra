@@ -1,17 +1,11 @@
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View, ScrollView } from "react-native";
 import { NitroModules } from "react-native-nitro-modules";
+import { configure } from "@rustra/types";
 import { addNumbers } from "../calculator/generated/commands";
-import { createReactNativeEngine } from "../../packages/react-native/src";
-import RustraCalculatorModule from "./modules/rustra-calculator";
-
-type RustraNativeModule = {
-  invoke(command: string, args?: unknown): Promise<unknown>;
-  invokeSync(command: string, args?: unknown): unknown;
-  addSync(a: number, b: number): number;
-};
-
-const nativeModule = RustraCalculatorModule as RustraNativeModule;
+import { createFastEngine } from "../../packages/react-native/src";
+import { rkyvV2Registry } from "../calculator/generated/rkyv-registry";
+import { installRustraJSI, getRustraNative } from "./modules/rustra-jsi/src";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -67,12 +61,24 @@ async function runBenchmarks(): Promise<string[]> {
   const lines: string[] = [];
   const log = (s: string) => lines.push(s);
 
-  const syncEngine = createReactNativeEngine(nativeModule);
-  const asyncEngine = createReactNativeEngine(nativeModule, { mode: "async" });
+  log("Installing JSI...");
+  try {
+    await installRustraJSI();
+  } catch (e: unknown) {
+    log(`JSI install failed: ${e instanceof Error ? e.message : String(e)}`);
+    return lines;
+  }
+
+  const native = getRustraNative();
+  const engine = createFastEngine(native, { rkyvV2Codecs: rkyvV2Registry });
+  configure(engine);
 
   // Load Nitro HybridObject
   const nitroBench = NitroModules.createHybridObject<{
     add(a: number, b: number): number;
+    name: string;
+    equals(other: object): boolean;
+    dispose(): void;
   }>("NitroBench");
 
   log("╔════════════════════════════════════════════════╗");
@@ -91,38 +97,18 @@ async function runBenchmarks(): Promise<string[]> {
   log("└───────────────────────────────────────────────┘");
   log("");
 
-  // 2. Rustra sync
-  log("┌─ Rustra SYNC (Expo + JSON + Rust FFI) ────────┐");
-  const syncResult = await measure("addNumbers (sync)", () =>
-    addNumbers(syncEngine, { a: 42, b: 58 }),
+  // 2. Rustra rkyvV2
+  log("┌─ Rustra rkyvV2 (JSI + postcard + Rust FFI) ───┐");
+  const rustraResult = await measure("addNumbers (rkyvV2)", () =>
+    addNumbers({ a: 42, b: 58 }),
   );
   log(`│  10,000 iterations`);
-  log(`│  avg: ${formatNs(syncResult.avg).padStart(10)}  p50: ${formatNs(syncResult.p50).padStart(10)}  p99: ${formatNs(syncResult.p99).padStart(10)}`);
-  log(`│  ${formatOps(syncResult.ops)} ops/sec`);
+  log(`│  avg: ${formatNs(rustraResult.avg).padStart(10)}  p50: ${formatNs(rustraResult.p50).padStart(10)}  p99: ${formatNs(rustraResult.p99).padStart(10)}`);
+  log(`│  ${formatOps(rustraResult.ops)} ops/sec`);
   log("└───────────────────────────────────────────────┘");
   log("");
 
-  // 3. Rustra async
-  log("┌─ Rustra ASYNC (Expo AsyncFunction) ───────────┐");
-  const asyncResult = await measure("addNumbers (async)", () =>
-    addNumbers(asyncEngine, { a: 42, b: 58 }),
-  );
-  log(`│  10,000 iterations`);
-  log(`│  avg: ${formatNs(asyncResult.avg).padStart(10)}  p50: ${formatNs(asyncResult.p50).padStart(10)}  p99: ${formatNs(asyncResult.p99).padStart(10)}`);
-  log(`│  ${formatOps(asyncResult.ops)} ops/sec`);
-  log("└───────────────────────────────────────────────┘");
-  log("");
-
-  // 4. Expo native baseline
-  log("┌─ Expo Function (Swift only, no Rust) ─────────┐");
-  const rawResult = await measure("addSync (Swift)", () =>
-    Promise.resolve(nativeModule.addSync(42, 58)),
-  );
-  log(`│  avg: ${formatNs(rawResult.avg).padStart(10)}  p50: ${formatNs(rawResult.p50).padStart(10)}`);
-  log("└───────────────────────────────────────────────┘");
-  log("");
-
-  // 5. Head-to-head
+  // 3. Head-to-head
   log("╔════════════════════════════════════════════════╗");
   log("║         Head-to-Head Comparison               ║");
   log("╠════════════════════════════════════════════════╣");
@@ -130,9 +116,7 @@ async function runBenchmarks(): Promise<string[]> {
 
   const allResults = [
     { name: "Nitro (JSI C++)", result: nitroResult },
-    { name: "Expo Function (Swift)", result: rawResult },
-    { name: "Rustra sync", result: syncResult },
-    { name: "Rustra async", result: asyncResult },
+    { name: "Rustra rkyvV2", result: rustraResult },
   ];
 
   const maxAvg = Math.max(...allResults.map((r) => r.result.avg));
@@ -142,9 +126,9 @@ async function runBenchmarks(): Promise<string[]> {
   }
 
   log("│");
-  const rustraVsNitro = syncResult.avg / nitroResult.avg;
-  const overhead = syncResult.avg - nitroResult.avg;
-  log(`│  Rustra sync / Nitro = ${rustraVsNitro.toFixed(1)}x`);
+  const rustraVsNitro = rustraResult.avg / nitroResult.avg;
+  const overhead = rustraResult.avg - nitroResult.avg;
+  log(`│  Rustra rkyvV2 / Nitro = ${rustraVsNitro.toFixed(1)}x`);
   log(`│  Rustra overhead: ${formatNs(overhead)}`);
   log("╚════════════════════════════════════════════════╝");
 

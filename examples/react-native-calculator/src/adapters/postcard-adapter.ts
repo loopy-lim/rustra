@@ -13,7 +13,7 @@ export function createPostcardEngine(
         throw new Error(`Postcard: no codec for "${command}"`);
       }
       const payload = codec.encode(args);
-      const resultBytes = (native as any).invokeLegacyPostcard(payload);
+      const resultBytes = native.invokePostcard(payload);
       const response = codec.decode(resultBytes);
       if (!response.ok) {
         throw new Error(response.error ?? 'Rustra postcard invoke failed');

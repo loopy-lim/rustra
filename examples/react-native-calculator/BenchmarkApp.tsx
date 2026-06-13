@@ -125,6 +125,9 @@ async function runBenchmarks(): Promise<string[]> {
 
   const nitroBench = NitroModules.createHybridObject<{
     add(a: number, b: number): number;
+    name: string;
+    equals(other: object): boolean;
+    dispose(): void;
   }>("NitroBench");
 
   const encoder = new TextEncoder();
