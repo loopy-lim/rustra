@@ -71,6 +71,7 @@ function encodeVarintString(str: string): number[] {
 // ── Codecs (codegen would generate these) ────────────────
 
 export const addNumbersCodec: BincodeCodec<{ a: number; b: number }, { value: number }> = {
+  commandId: 1,
   encode(args: { a: number; b: number }): ArrayBuffer {
     const header = encodeVarintString('addNumbers');
     const aBytes = encodeVarint(zigzag(args.a));
