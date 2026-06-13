@@ -440,13 +440,13 @@ const result = await addNumbers(engine, { a: 20, b: 22 });
 
 ### 요약
 
-| 환경         | 어댑터 함수                             | transport 인자                        | 성능      |
-| ------------ | --------------------------------------- | ------------------------------------- | --------- |
-| Node         | `createNodeEngine(transport)`           | `{ invoke(command, args) }`           | ~24 µs    |
-| Bun          | `createBunEngine(transport)`            | `{ invoke(command, args) }`           | ~27 µs    |
-| Tauri        | `createTauriEngine(options)`            | `{ invoke: tauriInvoke }`             | IPC 종속  |
+| 환경         | 어댑터 함수                             | transport 인자                        | 성능        |
+| ------------ | --------------------------------------- | ------------------------------------- | ----------- |
+| Node         | `createNodeEngine(transport)`           | `{ invoke(command, args) }`           | ~24 µs      |
+| Bun          | `createBunEngine(transport)`            | `{ invoke(command, args) }`           | ~27 µs      |
+| Tauri        | `createTauriEngine(options)`            | `{ invoke: tauriInvoke }`             | IPC 종속    |
 | React Native | `createRkyvV2Engine(native, registry)`  | JSI + postcard codecs                 | **~5.8 µs** |
-| React Native | `createReactNativeEngine(nativeModule)` | `NativeModule` (`invoke` 메서드 포함) | ~31 µs    |
+| React Native | `createReactNativeEngine(nativeModule)` | `NativeModule` (`invoke` 메서드 포함) | ~31 µs      |
 
 모든 어댑터가 `EngineClient`를 반환하므로, 이후 코드는 환경에 상관없이 동일하다.
 
