@@ -54,6 +54,16 @@ async function runDemo(engine: Engine, log: (s: string) => void): Promise<void> 
   await call("rustraRegistryDemo", { op: "unregister" });
   const after = await call("ping", {});
   log(`6) unregister 'ping'     → ping ok=${after.ok} (gone)`);
+
+  // 동적 명령 + Vec<f64> 입력(가변 길이 배열)
+  await call("rustraRegistryDemo", { op: "registerAvg" });
+  const avg = await call("average", { numbers: [10, 20, 30, 40] });
+  log(
+    `7) register 'average' (Vec) → average([10,20,30,40]) = ${avg.ok ? avg.result?.average : avg.error} (count ${avg.ok ? avg.result?.count : "?"})`,
+  );
+  await call("rustraRegistryDemo", { op: "unregisterAvg" });
+  const avgGone = await call("average", { numbers: [] });
+  log(`8) unregister 'average'  → average ok=${avgGone.ok} (gone)`);
   log("");
   log("✅ live mutation — no rebuild/prebuild between steps");
 }

@@ -243,6 +243,30 @@ fn add_numbers_as_multiply(input: AddNumbersInput) -> Result<AddNumbersOutput> {
     })
 }
 
+// ── Vec 입력(가변 길이 배열) 데모 핸들러 ──────────────────
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AverageInput {
+    pub numbers: Vec<f64>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AverageOutput {
+    pub average: f64,
+    pub count: i64,
+}
+
+/// 가변 길이 배열(Vec<f64>)을 받는 핸들러. 런타임 등록 데모용.
+fn average(input: AverageInput) -> Result<AverageOutput> {
+    let count = input.numbers.len() as i64;
+    let sum: f64 = input.numbers.iter().sum();
+    Ok(AverageOutput {
+        average: if count == 0 { 0.0 } else { sum / count as f64 },
+        count,
+    })
+}
+
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RegistryDemoInput {
@@ -270,6 +294,14 @@ pub fn rustra_registry_demo(input: RegistryDemoInput) -> Result<RegistryDemoOutp
         },
         "unregister" => match pkg.unregister("ping") {
             Ok(()) => "unregistered 'ping'".to_string(),
+            Err(e) => format!("unregister failed: {e}"),
+        },
+        "registerAvg" => match pkg.register("average", average) {
+            Ok(()) => "registered 'average' (Vec<f64> input)".to_string(),
+            Err(e) => format!("register failed: {e}"),
+        },
+        "unregisterAvg" => match pkg.unregister("average") {
+            Ok(()) => "unregistered 'average'".to_string(),
             Err(e) => format!("unregister failed: {e}"),
         },
         "replacePing" => match pkg.replace("ping", ping_variant) {
@@ -1757,5 +1789,43 @@ mod tests {
         call("rustraRegistryDemo", serde_json::json!({ "op": "unregister" }));
         let after = call("ping", serde_json::json!({}));
         assert_eq!(after["ok"], false, "ping gone after unregister: {after}");
+    }
+
+    /// Dynamic command with Vec<f64> input, through the RN FFI path.
+    #[test]
+    fn test_runtime_registry_vec_input_through_ffi() {
+        let _ = calculator_package();
+
+        let call = |command: &str, args: serde_json::Value| -> serde_json::Value {
+            let req = serde_json::json!({ "command": command, "args": args });
+            let payload = serde_json::to_vec(&req).unwrap();
+            let mut out_len: usize = 0;
+            let ptr = unsafe {
+                rustra::ffi::rustra_ffi_invoke_json(payload.as_ptr(), payload.len(), &mut out_len)
+            };
+            assert!(!ptr.is_null());
+            let bytes = unsafe { std::slice::from_raw_parts(ptr, out_len) };
+            let resp: serde_json::Value = serde_json::from_slice(bytes).unwrap();
+            unsafe { rustra::ffi::rustra_ffi_free(ptr, out_len) };
+            resp
+        };
+
+        // register the Vec-input command at runtime
+        let r = call("rustraRegistryDemo", serde_json::json!({ "op": "registerAvg" }));
+        assert_eq!(
+            r["result"]["message"],
+            "registered 'average' (Vec<f64> input)"
+        );
+
+        // variable-length array flows through invoke_json
+        let out = call("average", serde_json::json!({ "numbers": [10.0, 20.0, 30.0] }));
+        assert_eq!(out["ok"], true, "average should succeed: {out}");
+        assert_eq!(out["result"]["count"], 3);
+        assert!((out["result"]["average"].as_f64().unwrap() - 20.0).abs() < 1e-9);
+
+        // unregister → gone
+        call("rustraRegistryDemo", serde_json::json!({ "op": "unregisterAvg" }));
+        let after = call("average", serde_json::json!({ "numbers": [] }));
+        assert_eq!(after["ok"], false, "average gone after unregister: {after}");
     }
 }
