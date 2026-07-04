@@ -252,6 +252,75 @@ impl std::fmt::Debug for Command {
     }
 }
 
+/// 타입 지정 핸들러로부터 `Command`를 생성한다.
+///
+/// 빌드 시점(`PackageBuilder::command`)과 런타임 등록(`Package::register`)이
+/// 동일한 생성 로직을 공유하도록 분리한 helper.
+fn build_command<I, O, F>(command_id: u16, handler: F) -> Command
+where
+    I: DeserializeOwned + JsonSchema + 'static,
+    O: Serialize + JsonSchema + 'static,
+    F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+{
+    let (input_schema, input_defs) = schema_value::<I>();
+    let (output_schema, output_defs) = schema_value::<O>();
+    let mut definitions = input_defs;
+    if let (Value::Object(obj), Value::Object(other)) = (&mut definitions, output_defs) {
+        for (key, value) in other {
+            obj.insert(key, value);
+        }
+    }
+    let (rkyv_v2_decoder, input_tier) = build_rkyv_v2_decoder(&input_schema);
+    let output_tier3 = is_output_tier3(&output_schema);
+    let is_tier3 = input_tier == Tier::Tier3 || output_tier3;
+    // If the command uses Tier 3 for either input or output, force the
+    // input decoder to the Tier 3 JSON fallback as well.
+    let rkyv_v2_decoder = if is_tier3 && input_tier != Tier::Tier3 {
+        build_tier3_json_decoder()
+    } else {
+        rkyv_v2_decoder
+    };
+    let rkyv_v2_response_encoder = build_rkyv_v2_response_encoder(&output_schema, is_tier3);
+
+    // Wrap handler in Arc so both JSON and binary paths can use it
+    let handler = Arc::new(handler);
+
+    // Generate fast postcard-based binary handler that bypasses JSON Value
+    let handler_bin = handler.clone();
+    let rkyv_v2_handler: Option<BinHandler> = Some(Arc::new(move |payload: &[u8]| {
+        if payload.len() < 2 {
+            return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+        }
+        let input: I = postcard::from_bytes(&payload[2..])
+            .map_err(|e| RustraError::invalid_args(format!("postcard decode: {e}")))?;
+        let output = handler_bin(input)?;
+        let out_bytes = postcard::to_allocvec(&output)
+            .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))?;
+        let mut buf = vec![0u8; 8 + out_bytes.len()];
+        buf[0] = 1; // ok = true
+        buf[8..8 + out_bytes.len()].copy_from_slice(&out_bytes);
+        Ok(buf)
+    }));
+
+    Command {
+        command_id,
+        input_type: short_type_name::<I>(),
+        output_type: short_type_name::<O>(),
+        input_schema,
+        output_schema,
+        definitions,
+        invoke: Arc::new(move |params| {
+            let input = serde_json::from_value::<I>(params).map_err(RustraError::invalid_args)?;
+            let output = handler(input)?;
+            serde_json::to_value(output).map_err(RustraError::internal)
+        }),
+        rkyv_v2_handler,
+        rkyv_v2_decode: rkyv_v2_decoder,
+        rkyv_v2_encode_response: rkyv_v2_response_encoder,
+        rkyv_v2_tier3: is_tier3,
+    }
+}
+
 impl Package {
     /// 새로운 [`PackageBuilder`]를 생성합니다.
     ///
@@ -478,68 +547,11 @@ impl PackageBuilder {
         O: Serialize + JsonSchema + 'static,
         F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
     {
-        let (input_schema, input_defs) = schema_value::<I>();
-        let (output_schema, output_defs) = schema_value::<O>();
-        let mut definitions = input_defs;
-        if let (Value::Object(obj), Value::Object(other)) = (&mut definitions, output_defs) {
-            for (key, value) in other {
-                obj.insert(key, value);
-            }
-        }
-        let (rkyv_v2_decoder, input_tier) = build_rkyv_v2_decoder(&input_schema);
-        let output_tier3 = is_output_tier3(&output_schema);
-        let is_tier3 = input_tier == Tier::Tier3 || output_tier3;
-        // If the command uses Tier 3 for either input or output, force the
-        // input decoder to the Tier 3 JSON fallback as well.
-        let rkyv_v2_decoder = if is_tier3 && input_tier != Tier::Tier3 {
-            build_tier3_json_decoder()
-        } else {
-            rkyv_v2_decoder
-        };
-        let rkyv_v2_response_encoder = build_rkyv_v2_response_encoder(&output_schema, is_tier3);
-
-        // Wrap handler in Arc so both JSON and binary paths can use it
-        let handler = Arc::new(handler);
-
-        // Generate fast postcard-based binary handler that bypasses JSON Value
-        let handler_bin = handler.clone();
-        let rkyv_v2_handler: Option<BinHandler> = Some(Arc::new(move |payload: &[u8]| {
-            if payload.len() < 2 {
-                return Err(RustraError::invalid_args("rkyv v2: payload too short"));
-            }
-            let input: I = postcard::from_bytes(&payload[2..])
-                .map_err(|e| RustraError::invalid_args(format!("postcard decode: {e}")))?;
-            let output = handler_bin(input)?;
-            let out_bytes = postcard::to_allocvec(&output)
-                .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))?;
-            let mut buf = vec![0u8; 8 + out_bytes.len()];
-            buf[0] = 1; // ok = true
-            buf[8..8 + out_bytes.len()].copy_from_slice(&out_bytes);
-            Ok(buf)
-        }));
-
-        let command = Command {
-            command_id: self.next_command_id,
-            input_type: short_type_name::<I>(),
-            output_type: short_type_name::<O>(),
-            input_schema,
-            output_schema,
-            definitions,
-            invoke: Arc::new(move |params| {
-                let input =
-                    serde_json::from_value::<I>(params).map_err(RustraError::invalid_args)?;
-                let output = handler(input)?;
-                serde_json::to_value(output).map_err(RustraError::internal)
-            }),
-            rkyv_v2_handler,
-            rkyv_v2_decode: rkyv_v2_decoder,
-            rkyv_v2_encode_response: rkyv_v2_response_encoder,
-            rkyv_v2_tier3: is_tier3,
-        };
         let name = name.into();
         if self.commands.contains_key(&name) {
             panic!("duplicate command registration: '{name}'");
         }
+        let command = build_command::<I, O, F>(self.next_command_id, handler);
         self.commands.insert(name, command);
         self.next_command_id += 1;
         self
