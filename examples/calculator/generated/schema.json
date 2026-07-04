@@ -291,6 +291,44 @@
       "outputType": "ProcessItemOutput"
     },
     {
+      "commandId": 10,
+      "inputSchema": {
+        "properties": {
+          "op": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "op"
+        ],
+        "title": "RegistryDemoInput",
+        "type": "object"
+      },
+      "inputType": "RegistryDemoInput",
+      "name": "rustraRegistryDemo",
+      "outputSchema": {
+        "properties": {
+          "frozen": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "frozen",
+          "message",
+          "ok"
+        ],
+        "title": "RegistryDemoOutput",
+        "type": "object"
+      },
+      "outputType": "RegistryDemoOutput"
+    },
+    {
       "commandId": 6,
       "inputSchema": {
         "properties": {

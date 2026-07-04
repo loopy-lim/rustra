@@ -115,7 +115,12 @@ std::vector<PropNameID> RustraHostObject::getPropertyNames(Runtime& rt) {
 
 // ── Install ────────────────────────────────────────────────
 
+// Deterministic package registration (avoids relying on __mod_init_func which
+// can be dead-stripped in debug iOS static-lib builds).
+extern "C" void rustra_calculator_init();
+
 void installRustraJSI(Runtime& rt) {
+  rustra_calculator_init();
   auto hostObject = std::make_shared<RustraHostObject>(rt);
   auto obj = Object::createFromHostObject(rt, hostObject);
   rt.global().setProperty(rt, "__rustraNative", Value(rt, obj));

@@ -69,6 +69,16 @@ export type ProcessItemOutput = {
   item: Item;
 };
 
+export type RegistryDemoInput = {
+  op: string;
+};
+
+export type RegistryDemoOutput = {
+  frozen: boolean;
+  message: string;
+  ok: boolean;
+};
+
 export type SumListInput = {
   numbers: number[];
 };

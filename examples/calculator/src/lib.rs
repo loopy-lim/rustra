@@ -211,6 +211,93 @@ pub fn process_item(input: ProcessItemInput) -> Result<ProcessItemOutput> {
     })
 }
 
+// ── Runtime registry demo (debug-only dynamic mutation) ─────────────
+// `rustraRegistryDemo` 는 빌드 시점에 등록되어 항상 호출 가능하며, 런타임에 live
+// package 를 mutate 한다. RN 이 사용하는 동일 FFI 경로(invoke_json)를 통해 동작하며,
+// mutation 사이에 rebuild 가 필요 없다. release 빌드에서는 frozen 이다.
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PingInput {}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PingOutput {
+    pub pong: bool,
+}
+
+/// 런타임에 등록되는 데모 핸들러. pong=true 반환.
+fn ping(_input: PingInput) -> Result<PingOutput> {
+    Ok(PingOutput { pong: true })
+}
+
+/// `replace` 시연용 variant. pong=false 반환.
+fn ping_variant(_input: PingInput) -> Result<PingOutput> {
+    Ok(PingOutput { pong: false })
+}
+
+/// addNumbers 자리에 끼워넣을 곱하기 핸들러 (동일 I/O 타입).
+fn add_numbers_as_multiply(input: AddNumbersInput) -> Result<AddNumbersOutput> {
+    Ok(AddNumbersOutput {
+        value: input.a * input.b,
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RegistryDemoInput {
+    pub op: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RegistryDemoOutput {
+    pub ok: bool,
+    pub frozen: bool,
+    pub message: String,
+}
+
+/// 런타임 registry 제어 명령. op:
+/// `register` / `unregister` / `replacePing` / `replaceAdd` / `restoreAdd` / `freeze` / `state`.
+#[command]
+pub fn rustra_registry_demo(input: RegistryDemoInput) -> Result<RegistryDemoOutput> {
+    let pkg = rustra::ffi::get_package().expect("package not registered");
+    let frozen = pkg.is_frozen();
+    let message = match input.op.as_str() {
+        "register" => match pkg.register("ping", ping) {
+            Ok(()) => "registered 'ping'".to_string(),
+            Err(e) => format!("register failed: {e}"),
+        },
+        "unregister" => match pkg.unregister("ping") {
+            Ok(()) => "unregistered 'ping'".to_string(),
+            Err(e) => format!("unregister failed: {e}"),
+        },
+        "replacePing" => match pkg.replace("ping", ping_variant) {
+            Ok(()) => "replaced 'ping' -> variant".to_string(),
+            Err(e) => format!("replace failed: {e}"),
+        },
+        "replaceAdd" => match pkg.replace("addNumbers", add_numbers_as_multiply) {
+            Ok(()) => "replaced 'addNumbers' -> multiply".to_string(),
+            Err(e) => format!("replace failed: {e}"),
+        },
+        "restoreAdd" => match pkg.replace("addNumbers", add_numbers) {
+            Ok(()) => "restored 'addNumbers'".to_string(),
+            Err(e) => format!("restore failed: {e}"),
+        },
+        "freeze" => {
+            pkg.freeze();
+            "frozen".to_string()
+        }
+        "state" => format!("frozen={frozen}"),
+        other => format!("unknown op: {other}"),
+    };
+    Ok(RegistryDemoOutput {
+        ok: true,
+        frozen,
+        message,
+    })
+}
+
 static CACHED_PACKAGE: std::sync::OnceLock<Package> = std::sync::OnceLock::new();
 
 pub fn calculator_package() -> Package {
@@ -226,7 +313,8 @@ pub fn calculator_package() -> Package {
                 sum_list,
                 to_upper,
                 create_item,
-                process_item
+                process_item,
+                rustra_registry_demo
             )
             .build();
 
@@ -255,6 +343,14 @@ mod apple_init {
         unsafe(link_section = "__DATA,__mod_init_func")
     )]
     static AUTO_INIT: extern "C" fn() = rustra_auto_init;
+}
+
+/// C 진입점: calculator 패키지를 FFI 용으로 idempotently 등록한다.
+/// iOS debug 빌드에서 `__mod_init_func` constructor 가 dead-strip 되는 것에 대한
+/// 결정론적 대체 수단 (예: JSI install() 에서 호출).
+#[unsafe(no_mangle)]
+pub extern "C" fn rustra_calculator_init() {
+    let _ = calculator_package();
 }
 
 /// # Safety
@@ -1609,5 +1705,57 @@ mod tests {
         assert!(!error_msg.is_empty());
 
         unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+    }
+
+    /// Runtime registry end-to-end through the EXACT FFI path RN uses
+    /// (`rustra_ffi_invoke_json` → `Package::invoke_json`).
+    /// Proves live register / replace / unregister with no rebuild between steps.
+    #[test]
+    fn test_runtime_registry_through_ffi_invoke_json() {
+        let _ = calculator_package(); // ensure global package initialized
+
+        let call = |command: &str, args: serde_json::Value| -> serde_json::Value {
+            let req = serde_json::json!({ "command": command, "args": args });
+            let payload = serde_json::to_vec(&req).unwrap();
+            let mut out_len: usize = 0;
+            let ptr = unsafe {
+                rustra::ffi::rustra_ffi_invoke_json(payload.as_ptr(), payload.len(), &mut out_len)
+            };
+            assert!(!ptr.is_null());
+            let bytes = unsafe { std::slice::from_raw_parts(ptr, out_len) };
+            let resp: serde_json::Value = serde_json::from_slice(bytes).unwrap();
+            unsafe { rustra::ffi::rustra_ffi_free(ptr, out_len) };
+            resp
+        };
+
+        // debug build → not frozen
+        let state = call("rustraRegistryDemo", serde_json::json!({ "op": "state" }));
+        assert_eq!(
+            state["result"]["frozen"], false,
+            "debug build must be mutable: {state}"
+        );
+
+        // 'ping' does not exist yet
+        let before = call("ping", serde_json::json!({}));
+        assert_eq!(before["ok"], false, "ping should not exist yet: {before}");
+
+        // register at runtime (through the RN FFI path)
+        let r = call("rustraRegistryDemo", serde_json::json!({ "op": "register" }));
+        assert_eq!(r["result"]["message"], "registered 'ping'");
+        let ping1 = call("ping", serde_json::json!({}));
+        assert_eq!(ping1["result"]["pong"], true, "registered ping works: {ping1}");
+
+        // replace handler at runtime — same command, different behavior
+        call("rustraRegistryDemo", serde_json::json!({ "op": "replacePing" }));
+        let ping2 = call("ping", serde_json::json!({}));
+        assert_eq!(
+            ping2["result"]["pong"], false,
+            "replaced ping should return pong=false: {ping2}"
+        );
+
+        // unregister at runtime — command disappears
+        call("rustraRegistryDemo", serde_json::json!({ "op": "unregister" }));
+        let after = call("ping", serde_json::json!({}));
+        assert_eq!(after["ok"], false, "ping gone after unregister: {after}");
     }
 }
