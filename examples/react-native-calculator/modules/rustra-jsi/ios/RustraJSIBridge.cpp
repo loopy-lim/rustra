@@ -91,6 +91,26 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
     cache_["noop"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
+
+  // getSchema: live schema query → rustra_ffi_get_schema (정적 + 동적 명령)
+  {
+    extern "C" uint8_t* rustra_ffi_get_schema(size_t* out_len);
+    auto propNameId = PropNameID::forAscii(rt, "getSchema");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 0,
+      [](Runtime& rt, const Value&, const Value*, size_t) -> Value {
+        size_t out_len = 0;
+        uint8_t* data = rustra_ffi_get_schema(&out_len);
+        if (!data) {
+          throw JSError(rt, "RustraJSI: getSchema returned null");
+        }
+        auto returnValue = createArrayBuffer(rt, data, out_len);
+        rustra_ffi_free(data, out_len);
+        return returnValue;
+      });
+    cache_["getSchema"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
 }
 
 Value RustraHostObject::get(Runtime& rt, const PropNameID& name) {
