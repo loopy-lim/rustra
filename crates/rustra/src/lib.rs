@@ -59,7 +59,8 @@ use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, RwLock};
 
 use rkyv_codec::{
     build_rkyv_v2_decoder, build_rkyv_v2_response_encoder, build_tier3_json_decoder,
@@ -164,11 +165,29 @@ pub mod tauri_support {
 /// ```text
 /// Package::builder("my.pkg") → .command_fn(f1) → .command_fn(f2) → .build() → Package
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct Package {
     id: String,
-    commands: Arc<BTreeMap<String, Command>>,
-    id_to_name: Arc<BTreeMap<u16, String>>,
+    state: Arc<RwLock<RegistryState>>,
+    frozen: Arc<AtomicBool>,
+}
+
+/// `Package`의 가변 내부 상태. `Arc<RwLock<_>>`로 보호되어 런타임 mutation을 지원한다.
+struct RegistryState {
+    commands: BTreeMap<String, Command>,
+    id_to_name: BTreeMap<u16, String>,
+    next_command_id: u16,
+}
+
+impl std::fmt::Debug for Package {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let state = self.state.read().unwrap();
+        f.debug_struct("Package")
+            .field("id", &self.id)
+            .field("frozen", &self.frozen.load(Ordering::Relaxed))
+            .field("command_count", &state.commands.len())
+            .finish()
+    }
 }
 
 pub struct PackageBuilder {
@@ -349,16 +368,27 @@ impl Package {
     ///
     /// [`invoke`](Package::invoke)의 비제네릭 버전으로, JSON 기반 라우팅에 사용됩니다.
     pub fn invoke_json(&self, name: &str, params: Value) -> crate::Result<Value> {
-        let command = self
-            .commands
-            .get(name)
-            .ok_or_else(|| RustraError::command_not_found(name))?;
+        // 핸들러 실행 중에는 잠금을 hold 하지 않도록 Command를 clone-out 한다.
+        // (재진입 — 핸들러가 다시 register/unregister 호출 — 시 교착 방지)
+        let command = {
+            let state = self.state.read().unwrap();
+            state
+                .commands
+                .get(name)
+                .ok_or_else(|| RustraError::command_not_found(name))?
+                .clone()
+        };
         (command.invoke)(params)
     }
 
     /// command_id로 명령 이름을 조회합니다.
-    pub fn resolve_command_id(&self, id: u16) -> Option<&str> {
-        self.id_to_name.get(&id).map(|s| s.as_str())
+    pub fn resolve_command_id(&self, id: u16) -> Option<String> {
+        self.state
+            .read()
+            .unwrap()
+            .id_to_name
+            .get(&id)
+            .cloned()
     }
 
     /// rkyv V2 바이너리 페이로드를 받아 명령을 실행합니다.
@@ -374,14 +404,18 @@ impl Package {
             return Err(RustraError::invalid_args("rkyv v2: payload too short"));
         }
         let command_id = u16::from_le_bytes([payload[0], payload[1]]);
-        let command_name = self
-            .resolve_command_id(command_id)
-            .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?;
-
-        let command = self
-            .commands
-            .get(command_name)
-            .ok_or_else(|| RustraError::command_not_found(command_name))?;
+        let command = {
+            let state = self.state.read().unwrap();
+            let command_name = state
+                .id_to_name
+                .get(&command_id)
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?;
+            state
+                .commands
+                .get(command_name)
+                .ok_or_else(|| RustraError::command_not_found(command_name))?
+                .clone()
+        };
 
         // Fast path: use typed postcard binary handler (bypasses JSON Value entirely)
         if let Some(ref handler) = command.rkyv_v2_handler {
@@ -394,17 +428,18 @@ impl Package {
         }
 
         let params = (command.rkyv_v2_decode)(payload)?;
-        let result = self.invoke_json(command_name, params)?;
+        let result = (command.invoke)(params)?;
         Ok((command.rkyv_v2_encode_response)(&result))
     }
 
     /// 등록된 모든 명령에서 TypeScript 클라이언트 코드를 생성합니다.
     pub fn generate_typescript(&self) -> crate::Result<GeneratedPackage> {
-        let schema_json =
-            serde_json::to_string_pretty(&self.schema()).map_err(RustraError::internal)?;
+        let state = self.state.read().unwrap();
+        let schema_json = serde_json::to_string_pretty(&Self::schema(&self.id, &state))
+            .map_err(RustraError::internal)?;
         let contract_hash = contract_hash(&schema_json);
-        let types_ts = self.generate_types_ts();
-        let commands_ts = self.generate_commands_ts();
+        let types_ts = Self::generate_types_ts(&state);
+        let commands_ts = Self::generate_commands_ts(&state);
 
         Ok(GeneratedPackage {
             schema_json,
@@ -414,8 +449,8 @@ impl Package {
         })
     }
 
-    fn schema(&self) -> Value {
-        let commands = self
+    fn schema(id: &str, state: &RegistryState) -> Value {
+        let commands = state
             .commands
             .iter()
             .map(|(name, command)| {
@@ -442,19 +477,19 @@ impl Package {
             .collect::<Vec<_>>();
 
         json!({
-            "packageId": self.id,
+            "packageId": id,
             "commands": commands,
         })
     }
 
-    fn generate_types_ts(&self) -> String {
+    fn generate_types_ts(state: &RegistryState) -> String {
         let mut output = String::from(
             "export type { EngineClient, RustraError } from '@rustra/types';\n\
              export { RustraCommandError } from '@rustra/types';\n\n",
         );
 
         let mut all_definitions = serde_json::Map::new();
-        for command in self.commands.values() {
+        for command in state.commands.values() {
             if let Value::Object(defs) = &command.definitions {
                 for (key, value) in defs {
                     all_definitions.insert(key.clone(), value.clone());
@@ -475,7 +510,7 @@ impl Package {
             }
         }
 
-        for command in self.commands.values() {
+        for command in state.commands.values() {
             if emitted.insert(command.input_type.clone()) {
                 output.push_str(&format!(
                     "export type {} = {};\n\n",
@@ -495,10 +530,10 @@ impl Package {
         output
     }
 
-    fn generate_commands_ts(&self) -> String {
+    fn generate_commands_ts(state: &RegistryState) -> String {
         let mut type_names =
             BTreeSet::from(["EngineClient".to_string(), "RustraError".to_string()]);
-        for command in self.commands.values() {
+        for command in state.commands.values() {
             type_names.insert(command.input_type.clone());
             type_names.insert(command.output_type.clone());
         }
@@ -506,7 +541,7 @@ impl Package {
         let imports = type_names.into_iter().collect::<Vec<_>>().join(", ");
         let mut output = format!("import type {{ {imports} }} from './types.js';\n\n");
 
-        for (name, command) in self.commands.iter() {
+        for (name, command) in state.commands.iter() {
             output.push_str(&format!(
                 "export function {}(engine: EngineClient, input: {}): Promise<{}> {{\n  return engine.invoke<{}>('{}', input);\n}}\n\n",
                 command_function_name(name),
@@ -566,8 +601,12 @@ impl PackageBuilder {
             .collect();
         Package {
             id: self.id,
-            commands: Arc::new(self.commands),
-            id_to_name: Arc::new(id_to_name),
+            state: Arc::new(RwLock::new(RegistryState {
+                commands: self.commands,
+                id_to_name,
+                next_command_id: self.next_command_id,
+            })),
+            frozen: Arc::new(AtomicBool::new(!cfg!(debug_assertions))),
         }
     }
 
