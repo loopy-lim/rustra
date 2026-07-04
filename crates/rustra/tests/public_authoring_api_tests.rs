@@ -605,3 +605,78 @@ fn build_api_generates_typescript() {
         "expected GreetInput type, got:\n{types_ts}"
     );
 }
+
+// ---- Runtime command registry (dev mutable / prod frozen) ----
+
+#[test]
+#[cfg(debug_assertions)]
+fn runtime_register_adds_command_and_generates() {
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct EchoInput {
+        msg: String,
+    }
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct EchoOutput {
+        echoed: String,
+    }
+
+    #[command]
+    fn echo(input: EchoInput) -> Result<EchoOutput> {
+        Ok(EchoOutput {
+            echoed: input.msg,
+        })
+    }
+
+    let pkg = Package::builder("test.runtime").build(); // empty package
+    pkg.register("echo", echo).unwrap();
+
+    let out: EchoOutput = pkg
+        .invoke("echo", EchoInput { msg: "hi".into() })
+        .unwrap();
+    assert_eq!(out, EchoOutput { echoed: "hi".into() });
+
+    // 런타임에 추가된 명령도 codegen 결과에 포함된다.
+    let generated = pkg.generate_typescript().unwrap();
+    assert!(generated.commands_ts.contains("export function echo"));
+    assert!(generated.types_ts.contains("EchoInput"));
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn runtime_register_fn_derives_name() {
+    let pkg = Package::builder("test.register_fn").build();
+    pkg.register_fn(add_numbers).unwrap();
+    let out: AddNumbersOutput = pkg
+        .invoke("addNumbers", AddNumbersInput { a: 5, b: 7 })
+        .unwrap();
+    assert_eq!(out.value, 12);
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn frozen_package_rejects_mutation() {
+    let pkg = Package::builder("test.frozen").build();
+    pkg.register("cmd", add_numbers).unwrap();
+    pkg.freeze();
+
+    assert_eq!(pkg.register("other", add_numbers).unwrap_err().code(), "registry.frozen");
+    assert_eq!(pkg.unregister("cmd").unwrap_err().code(), "registry.frozen");
+    assert_eq!(pkg.replace("cmd", add_numbers).unwrap_err().code(), "registry.frozen");
+
+    // 동결 상태에서도 호출은 정상
+    let out: AddNumbersOutput = pkg.invoke("cmd", AddNumbersInput { a: 40, b: 2 }).unwrap();
+    assert_eq!(out.value, 42);
+}
+
+#[test]
+#[cfg(not(debug_assertions))]
+fn release_build_is_frozen_by_default() {
+    let pkg = Package::builder("test.release_frozen").build();
+    assert!(pkg.is_frozen(), "release build should be frozen by default");
+    assert_eq!(
+        pkg.register("cmd", add_numbers).unwrap_err().code(),
+        "registry.frozen"
+    );
+}
