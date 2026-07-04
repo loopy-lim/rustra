@@ -54,8 +54,8 @@ mod rkyv_codec;
 mod schema;
 
 use schemars::JsonSchema;
-use serde::{de::DeserializeOwned, Serialize};
-use serde_json::{json, Value};
+use serde::{Serialize, de::DeserializeOwned};
+use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
@@ -63,8 +63,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
 use rkyv_codec::{
-    build_rkyv_v2_decoder, build_rkyv_v2_response_encoder, build_tier3_json_decoder,
-    is_output_tier3, BinHandler, DecodeFn, EncodeFn, Tier,
+    BinHandler, DecodeFn, EncodeFn, Tier, build_rkyv_v2_decoder, build_rkyv_v2_response_encoder,
+    build_tier3_json_decoder, is_output_tier3,
 };
 
 pub use error::{Result, RustraError};
@@ -79,8 +79,8 @@ use schema::{command_name_from_handler, schema_value, short_type_name};
 /// ```
 pub mod prelude {
     pub use crate::{
-        bridge_type, build, command, ffi::FfiFormat, register, rkyv_codec::encode_rkyv_v2_error,
-        GeneratedPackage, Package, PackageBuilder, Result, RustraError,
+        GeneratedPackage, Package, PackageBuilder, Result, RustraError, bridge_type, build,
+        command, ffi::FfiFormat, register, rkyv_codec::encode_rkyv_v2_error,
     };
     pub use schemars::JsonSchema;
     pub use serde::{Deserialize, Serialize};
@@ -93,7 +93,7 @@ pub mod prelude {
 /// 컴파일 타임에 검증하기 위해 사용합니다.
 pub mod __private {
     use schemars::JsonSchema;
-    use serde::{de::DeserializeOwned, Serialize};
+    use serde::{Serialize, de::DeserializeOwned};
 
     pub trait CommandInput: DeserializeOwned + JsonSchema + 'static {}
     impl<T: DeserializeOwned + JsonSchema + 'static> CommandInput for T {}
@@ -122,7 +122,7 @@ pub mod __private {
 #[cfg(feature = "tauri")]
 pub mod tauri_support {
     use crate::Package;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use tauri::State;
 
     /// Tauri의 managed state로 보관되는 rustra 패키지입니다.
@@ -383,12 +383,7 @@ impl Package {
 
     /// command_id로 명령 이름을 조회합니다.
     pub fn resolve_command_id(&self, id: u16) -> Option<String> {
-        self.state
-            .read()
-            .unwrap()
-            .id_to_name
-            .get(&id)
-            .cloned()
+        self.state.read().unwrap().id_to_name.get(&id).cloned()
     }
 
     /// rkyv V2 바이너리 페이로드를 받아 명령을 실행합니다.
@@ -815,7 +810,10 @@ mod runtime_registry_tests {
         let id_before = id_of(&pkg, "c1");
         pkg.register("c1", c2).unwrap(); // 같은 이름 → replace, id 유지
         let id_after = id_of(&pkg, "c1");
-        assert_eq!(id_before, id_after, "command_id must stay stable on replace");
+        assert_eq!(
+            id_before, id_after,
+            "command_id must stay stable on replace"
+        );
         let out: TestOut = pkg.invoke("c1", TestIn { _v: 0 }).unwrap();
         assert_eq!(out.v, 2, "replaced handler should be in effect");
     }
@@ -853,14 +851,8 @@ mod runtime_registry_tests {
             pkg.register("c2", c2).unwrap_err().code(),
             "registry.frozen"
         );
-        assert_eq!(
-            pkg.unregister("c1").unwrap_err().code(),
-            "registry.frozen"
-        );
-        assert_eq!(
-            pkg.replace("c1", c2).unwrap_err().code(),
-            "registry.frozen"
-        );
+        assert_eq!(pkg.unregister("c1").unwrap_err().code(), "registry.frozen");
+        assert_eq!(pkg.replace("c1", c2).unwrap_err().code(), "registry.frozen");
 
         // 동결 상태에서도 invoke/generate 는 정상 동작
         let out: TestOut = pkg.invoke("c1", TestIn { _v: 0 }).unwrap();

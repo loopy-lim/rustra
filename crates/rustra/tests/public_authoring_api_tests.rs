@@ -73,9 +73,11 @@ fn package_generates_host_neutral_typescript_client() {
 
     assert!(generated.types_ts.contains("export type AddNumbersInput"));
     assert!(generated.commands_ts.contains("export function addNumbers"));
-    assert!(generated
-        .commands_ts
-        .contains("engine.invoke<AddNumbersOutput>"));
+    assert!(
+        generated
+            .commands_ts
+            .contains("engine.invoke<AddNumbersOutput>")
+    );
     assert!(!generated.commands_ts.contains("EngineRequest"));
     assert!(!generated.commands_ts.contains("Attachment"));
     assert!(!generated.commands_ts.contains("node:"));
@@ -624,18 +626,19 @@ fn runtime_register_adds_command_and_generates() {
 
     #[command]
     fn echo(input: EchoInput) -> Result<EchoOutput> {
-        Ok(EchoOutput {
-            echoed: input.msg,
-        })
+        Ok(EchoOutput { echoed: input.msg })
     }
 
     let pkg = Package::builder("test.runtime").build(); // empty package
     pkg.register("echo", echo).unwrap();
 
-    let out: EchoOutput = pkg
-        .invoke("echo", EchoInput { msg: "hi".into() })
-        .unwrap();
-    assert_eq!(out, EchoOutput { echoed: "hi".into() });
+    let out: EchoOutput = pkg.invoke("echo", EchoInput { msg: "hi".into() }).unwrap();
+    assert_eq!(
+        out,
+        EchoOutput {
+            echoed: "hi".into()
+        }
+    );
 
     // 런타임에 추가된 명령도 codegen 결과에 포함된다.
     let generated = pkg.generate_typescript().unwrap();
@@ -661,9 +664,15 @@ fn frozen_package_rejects_mutation() {
     pkg.register("cmd", add_numbers).unwrap();
     pkg.freeze();
 
-    assert_eq!(pkg.register("other", add_numbers).unwrap_err().code(), "registry.frozen");
+    assert_eq!(
+        pkg.register("other", add_numbers).unwrap_err().code(),
+        "registry.frozen"
+    );
     assert_eq!(pkg.unregister("cmd").unwrap_err().code(), "registry.frozen");
-    assert_eq!(pkg.replace("cmd", add_numbers).unwrap_err().code(), "registry.frozen");
+    assert_eq!(
+        pkg.replace("cmd", add_numbers).unwrap_err().code(),
+        "registry.frozen"
+    );
 
     // 동결 상태에서도 호출은 정상
     let out: AddNumbersOutput = pkg.invoke("cmd", AddNumbersInput { a: 40, b: 2 }).unwrap();

@@ -353,6 +353,57 @@ let builder = rustra::tauri_support::register(package, tauri::Builder::default()
 
 ---
 
+## 런타임 명령 레지스트리 (dev / prod)
+
+`Package` 내부는 가변 레지스트리로, `Arc<RwLock<RegistryState>>` + `Arc<AtomicBool> frozen` 이다.
+
+```rust
+pub struct Package {
+    id: String,
+    state: Arc<RwLock<RegistryState>>,
+    frozen: Arc<AtomicBool>,
+}
+
+struct RegistryState {
+    commands: BTreeMap<String, Command>,
+    id_to_name: BTreeMap<u16, String>,
+    next_command_id: u16, // 단조 증가, retired id 재사용 금지
+}
+```
+
+### dev / prod 분리
+
+`build()` 시 `frozen = !cfg!(debug_assertions)`:
+
+| 빌드 | `frozen` 기본값 | 런타임 mutation |
+|------|----------------|-----------------|
+| debug (`debug_assertions`) | `false` | `register`/`register_fn`/`replace`/`unregister` 허용 |
+| release | `true` | 모두 `Err("registry.frozen")` |
+
+`Package::freeze()` 로 언제든 명시적 봉인 가능(debug에서 prod 동작 시뮬레이션 등). 한 번 동결하면 해제 불가.
+
+### mutation API
+
+| 메서드 | 동작 | 실패 |
+|--------|------|------|
+| `register(name, handler)` | 등록. 같은 이름이면 핸들러 덮어쓰기(기존 `command_id` 유지) | `registry.frozen` / `registry.id_exhausted` |
+| `register_fn(handler)` | 이름 자동 추론 등록 | 위와 동일 |
+| `replace(name, handler)` | 핸들러 교체(`command_id` 유지) | `command.not_found` / `registry.frozen` |
+| `unregister(name)` | 제거(`command_id` retired) | `command.not_found` / `registry.frozen` |
+
+### 동시성
+
+- 읽기(`invoke_json`, `invoke_rkyv_v2`, `generate_typescript`) = 읽기 잠금, mutation = 쓰기 잠금.
+- 핸들러 실행 중에는 잠금을 hold 하지 않는다(`Command`를 clone-out 후 락 해제). 핸들러가 다시 `register`/`unregister`를 호출하는 **재진입 교착**을 방지한다.
+- prod 읽기 fast-path(무경쟁 `RwLock` read ≈ 10ns)는 벤치마크(3.8µs) 대비 무시 가능한 수준이다.
+
+### 동적 명령의 호출 경로
+
+- **정적 등록 명령**(codegen으로 `schema.json`에 `command_id` 노출) → rkyv V2 바이너리 fast-path 유지.
+- **런타임 등록 명령**(schema에 ID 없음) → 이름/JSON 경로(`engine.invoke('name', ...)`)로만 호출. 바이너리 fast-path는 미지원(자연스러운 스코핑).
+
+---
+
 ## 계약 불변식
 
 rustra-bridge는 다음 불변식을 통해 host-neutral 특성을 보장한다:

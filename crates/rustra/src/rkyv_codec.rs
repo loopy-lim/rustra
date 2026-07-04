@@ -3,7 +3,7 @@
 //! JSON Schema를 기반으로 고정폭/가변폭 필드를 분석하여
 //! 바이트 단위로 값을 읽고 쓰는 클로저를 생성합니다.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 

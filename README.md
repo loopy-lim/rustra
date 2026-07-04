@@ -115,6 +115,36 @@ fn main() -> Result<()> {
 }
 ```
 
+## 런타임 명령 레지스트리 (dev / prod)
+
+`Package`는 **debug 빌드**에서 런타임에 명령을 추가/교체/삭제할 수 있다. **release 빌드**에서는
+`build()` 시점에 자동으로 동결(freeze)되어 불변이 된다. 동일한 바이너리를 debug/release로 빌드하는
+것만으로 dev(가변)/prod(불변) 동작이 결정된다.
+
+```rust
+use rustra::prelude::*;
+
+#[command]
+fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> { /* ... */ }
+
+#[command]
+fn double(input: AddNumbersInput) -> Result<AddNumbersOutput> { /* ... */ }
+
+let pkg = rustra::build!("my.pkg", add_numbers).done();
+
+// 아래는 debug 빌드에서만 동작. release 빌드에서는 Err(code: "registry.frozen").
+pkg.register_fn(double)?;            // 런타임 등록 (이름 자동 추론 → "double")
+pkg.register("triple", double)?;     // 이름 지정 등록
+pkg.replace("addNumbers", double)?;  // 핸들러 교체 (command_id 유지)
+pkg.unregister("triple")?;           // 제거
+pkg.freeze();                        // 명시적 봉인 (debug에서 prod 동작 시뮬레이션)
+```
+
+- 동적으로 등록된 명령은 이름 기반 JSON 경로(`engine.invoke('double', ...)`)로 호출된다.
+- `command_id`(`u16`)는 단조 증가하며, `unregister` 시 **재사용되지 않는다**(retired).
+- `Package`의 `clone`은 동일 레지스트리를 공유한다(`Arc` 기반).
+- 제한: `command_id` 공간은 최대 65,534개. 초과 시 `registry.id_exhausted` 에러.
+
 ## TypeScript: 생성된 클라이언트
 
 모든 플랫폼에서 동일한 인터페이스:
