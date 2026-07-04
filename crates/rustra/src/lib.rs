@@ -537,6 +537,14 @@ impl Package {
         Ok(())
     }
 
+    /// 현재 등록된 모든 명령의 라이브 스키마를 반환한다 (정적 + 동적).
+    ///
+    /// 읽기 전용이므로 debug/release 모두에서 사용 가능. `rustra_ffi_get_schema` 의 기반이 된다.
+    pub fn live_schema(&self) -> Value {
+        let state = self.state.read().unwrap();
+        Self::schema(&self.id, &state)
+    }
+
     /// 등록된 모든 명령에서 TypeScript 클라이언트 코드를 생성합니다.
     pub fn generate_typescript(&self) -> crate::Result<GeneratedPackage> {
         let state = self.state.read().unwrap();
@@ -906,5 +914,21 @@ mod runtime_registry_tests {
         let len = u32::from_le_bytes(resp[4..8].try_into().unwrap()) as usize;
         let out: serde_json::Value = serde_json::from_slice(&resp[8..8 + len]).unwrap();
         assert_eq!(out["v"], 7);
+    }
+
+    /// live_schema() 가 동적 명령을 포함하는지 검증.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn live_schema_includes_dynamic_command() {
+        let pkg = empty_pkg();
+        pkg.register("echo", echo).unwrap();
+        let s = pkg.live_schema();
+        let cmds = s["commands"].as_array().unwrap();
+        let echo_entry = cmds
+            .iter()
+            .find(|c| c["name"] == "echo")
+            .expect("echo should be in live schema");
+        assert_eq!(echo_entry["commandId"], 1);
+        assert_eq!(echo_entry["inputSchema"]["properties"]["v"]["type"], "integer");
     }
 }
