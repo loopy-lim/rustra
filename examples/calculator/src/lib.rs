@@ -1,7 +1,7 @@
 use rustra::ffi::FfiFormat;
 use rustra::prelude::*;
-use serde_json::{json, Value};
-use std::ffi::{c_char, CStr, CString};
+use serde_json::{Value, json};
+use std::ffi::{CStr, CString, c_char};
 
 const MAX_PAYLOAD_BYTES: usize = 1024 * 1024; // 1 MB
 
@@ -1772,13 +1772,22 @@ mod tests {
         assert_eq!(before["ok"], false, "ping should not exist yet: {before}");
 
         // register at runtime (through the RN FFI path)
-        let r = call("rustraRegistryDemo", serde_json::json!({ "op": "register" }));
+        let r = call(
+            "rustraRegistryDemo",
+            serde_json::json!({ "op": "register" }),
+        );
         assert_eq!(r["result"]["message"], "registered 'ping'");
         let ping1 = call("ping", serde_json::json!({}));
-        assert_eq!(ping1["result"]["pong"], true, "registered ping works: {ping1}");
+        assert_eq!(
+            ping1["result"]["pong"], true,
+            "registered ping works: {ping1}"
+        );
 
         // replace handler at runtime — same command, different behavior
-        call("rustraRegistryDemo", serde_json::json!({ "op": "replacePing" }));
+        call(
+            "rustraRegistryDemo",
+            serde_json::json!({ "op": "replacePing" }),
+        );
         let ping2 = call("ping", serde_json::json!({}));
         assert_eq!(
             ping2["result"]["pong"], false,
@@ -1786,7 +1795,10 @@ mod tests {
         );
 
         // unregister at runtime — command disappears
-        call("rustraRegistryDemo", serde_json::json!({ "op": "unregister" }));
+        call(
+            "rustraRegistryDemo",
+            serde_json::json!({ "op": "unregister" }),
+        );
         let after = call("ping", serde_json::json!({}));
         assert_eq!(after["ok"], false, "ping gone after unregister: {after}");
     }
@@ -1811,20 +1823,29 @@ mod tests {
         };
 
         // register the Vec-input command at runtime
-        let r = call("rustraRegistryDemo", serde_json::json!({ "op": "registerAvg" }));
+        let r = call(
+            "rustraRegistryDemo",
+            serde_json::json!({ "op": "registerAvg" }),
+        );
         assert_eq!(
             r["result"]["message"],
             "registered 'average' (Vec<f64> input)"
         );
 
         // variable-length array flows through invoke_json
-        let out = call("average", serde_json::json!({ "numbers": [10.0, 20.0, 30.0] }));
+        let out = call(
+            "average",
+            serde_json::json!({ "numbers": [10.0, 20.0, 30.0] }),
+        );
         assert_eq!(out["ok"], true, "average should succeed: {out}");
         assert_eq!(out["result"]["count"], 3);
         assert!((out["result"]["average"].as_f64().unwrap() - 20.0).abs() < 1e-9);
 
         // unregister → gone
-        call("rustraRegistryDemo", serde_json::json!({ "op": "unregisterAvg" }));
+        call(
+            "rustraRegistryDemo",
+            serde_json::json!({ "op": "unregisterAvg" }),
+        );
         let after = call("average", serde_json::json!({ "numbers": [] }));
         assert_eq!(after["ok"], false, "average gone after unregister: {after}");
     }
