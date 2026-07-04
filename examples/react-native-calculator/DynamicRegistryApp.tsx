@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { StyleSheet, Text, View, ScrollView } from "react-native";
 import { installRustraJSI, getRustraNative } from "./modules/rustra-jsi/src";
 import { createJsonEngine } from "./src/adapters/json-adapter";
+import { createRkyvV2Engine, getLiveSchema } from "@rustra/types";
 
 type Engine = ReturnType<typeof createJsonEngine>;
 
@@ -68,6 +69,35 @@ async function runDemo(engine: Engine, log: (s: string) => void): Promise<void> 
   log("✅ live mutation — no rebuild/prebuild between steps");
 }
 
+async function runSingleEngineDemo(
+  native: ReturnType<typeof getRustraNative>,
+  log: (s: string) => void,
+): Promise<void> {
+  // 단일 rkyvV2 엔진: codec registry 가 비어있으므로 동적 명령은 Tier 3 fallback.
+  const jsonEngine = createJsonEngine(native); // control(setup) 용
+  const rkyvEngine = createRkyvV2Engine(native, new Map<string, any>());
+
+  log("╔══════════════════════════════════════════════╗");
+  log("║  Single rkyvV2 engine + live schema (Tier 3) ║");
+  log("╚══════════════════════════════════════════════╝");
+
+  await jsonEngine.invoke("rustraRegistryDemo", { op: "registerAvg" });
+  const schema = getLiveSchema(native);
+  const avg = schema.get("average");
+  log(
+    `live schema → 'average' commandId=${avg?.commandId} (dynamic, no codegen codec)`,
+  );
+  const out = await rkyvEngine.invoke<{ average: number; count: number }>(
+    "average",
+    { numbers: [10, 20, 30, 40] },
+  );
+  log(
+    `rkyvV2 engine.invoke('average') → average=${out.average} count=${out.count} (Tier 3 fallback)`,
+  );
+  await jsonEngine.invoke("rustraRegistryDemo", { op: "unregisterAvg" });
+  log("");
+}
+
 export default function App() {
   const [lines, setLines] = useState<string[]>(["Installing JSI..."]);
 
@@ -83,6 +113,7 @@ export default function App() {
         log("JSI installed. Creating JSON engine...");
         const engine = createJsonEngine(getRustraNative());
         await runDemo(engine, log);
+        await runSingleEngineDemo(getRustraNative(), log);
       } catch (e) {
         log("ERROR: " + (e instanceof Error ? e.message : String(e)));
       }
