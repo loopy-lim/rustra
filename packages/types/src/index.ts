@@ -72,6 +72,8 @@ export type RustraNative = {
   invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
   invokeRaw(payload: ArrayBuffer): ArrayBuffer;
   noop(payload: ArrayBuffer): ArrayBuffer;
+  /** Live schema query (정적 + 동적 명령). JSI/FFI 가 노출하면 사용. */
+  getSchema?(): ArrayBuffer;
 };
 
 // ── Global invoke (Tauri-like) ──────────────────────────────
@@ -124,31 +126,118 @@ export function invoke<T>(command: string, args?: unknown): Promise<T> {
   return _engine.invoke<T>(command, args);
 }
 
+// ── Live schema (정적 + 동적 명령 조회) ──────────────────────
+
+export type LiveSchemaEntry = {
+  commandId: number;
+  inputSchema?: unknown;
+  outputSchema?: unknown;
+};
+
+/** createRkyvV2Engine 이 요구하는 네이티브 인터페이스 (invokeRkyvV2 + live schema). */
+export type RkyvV2SchemaNative = {
+  invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
+  getSchema?(): ArrayBuffer;
+};
+
+/**
+ * 네이티브 getSchema() 로부터 현재 명령 스키마를 조회한다 (정적 + 동적 명령 포함).
+ * 동적 명령의 commandId/타입을 알아내 rkyvV2 Tier 3 fallback 에 사용된다.
+ */
+export function getLiveSchema(
+  native: { getSchema?(): ArrayBuffer },
+): Map<string, LiveSchemaEntry> {
+  if (!native.getSchema) {
+    return new Map();
+  }
+  const bytes = native.getSchema();
+  const json = new TextDecoder().decode(new Uint8Array(bytes));
+  const parsed = JSON.parse(json) as {
+    commands?: Array<{
+      name: string;
+      commandId: number;
+      inputSchema?: unknown;
+      outputSchema?: unknown;
+    }>;
+  };
+  const map = new Map<string, LiveSchemaEntry>();
+  for (const c of parsed.commands ?? []) {
+    map.set(c.name, {
+      commandId: c.commandId,
+      inputSchema: c.inputSchema,
+      outputSchema: c.outputSchema,
+    });
+  }
+  return map;
+}
+
+// ── Tier 3 (JSON-in-binary) wire helpers ────────────────────
+// request:  [command_id: u16 LE @0][json @2]
+// success:  [ok:1 @0][pad 3B][json_len: u32 LE @4][json @8]
+// error:    [ok:0 @0][pad to @8][err_len: u16 LE @8][err @10]
+
+function encodeTier3Request(commandId: number, args: unknown): ArrayBuffer {
+  const json = new TextEncoder().encode(JSON.stringify(args ?? {}));
+  const buf = new Uint8Array(2 + json.length);
+  new DataView(buf.buffer).setUint16(0, commandId, true);
+  buf.set(json, 2);
+  return buf.buffer;
+}
+
+function decodeTier3Response(bytes: ArrayBuffer): {
+  ok: boolean;
+  result?: unknown;
+  error?: string;
+} {
+  const u = new Uint8Array(bytes);
+  if (u[0] === 1) {
+    const len = new DataView(bytes).getUint32(4, true);
+    const json = new TextDecoder().decode(u.slice(8, 8 + len));
+    return { ok: true, result: JSON.parse(json) };
+  }
+  const errLen = new DataView(bytes).getUint16(8, true);
+  const err = new TextDecoder().decode(u.slice(10, 10 + errLen));
+  return { ok: false, error: err };
+}
+
 // ── Shared engine factory ──────────────────────────────────
 
 /**
- * rkyv V2 네이티브 모듈로 EngineClient을 생성합니다.
+ * rkyv V2 네이티브 모듈로 EngineClient을 생성한다.
  *
- * 플랫폼 공통 로직 — 코덱 레지스트리로 명령을 인코딩하고
- * 네이티브 FFI로 전송한 뒤 응답을 디코딩합니다.
+ * 정적 명령은 codegen codec registry 로 fast-path(postcard). registry 에 없는
+ * 동적(런타임 등록) 명령은 live schema 에서 commandId 를 조회해 Tier 3(JSON) 로
+ * fallback 한다. 단일 엔진이 정적 + 동적 모두 처리.
  */
 export function createRkyvV2Engine(
-  native: RkyvV2Native,
+  native: RkyvV2SchemaNative,
   registry: Map<string, RkyvV2Codec<any, any>>,
 ): EngineClient {
   return {
     invoke<T>(command: string, args?: unknown): Promise<T> {
       const codec = registry.get(command);
-      if (!codec) {
-        throw new Error(`RkyvV2: no codec for "${command}"`);
+      if (codec) {
+        const resultBytes = native.invokeRkyvV2(codec.encode(args));
+        const response = codec.decode(resultBytes);
+        if (!response.ok) {
+          throw new Error(response.error ?? 'RkyvV2 invoke failed');
+        }
+        return Promise.resolve(response.result as T);
       }
-      const payload = codec.encode(args);
-      const resultBytes = native.invokeRkyvV2(payload);
-      const response = codec.decode(resultBytes);
-      if (!response.ok) {
-        throw new Error(response.error ?? 'RkyvV2 invoke failed');
+      // 동적 명령 → Tier 3 fallback (live schema 의 commandId 사용)
+      const entry = getLiveSchema(native).get(command);
+      if (!entry) {
+        throw new Error(
+          `RkyvV2: no codec and not in live schema for "${command}"`,
+        );
       }
-      return Promise.resolve(response.result as T);
+      const resp = decodeTier3Response(
+        native.invokeRkyvV2(encodeTier3Request(entry.commandId, args)),
+      );
+      if (!resp.ok) {
+        throw new Error(resp.error ?? 'RkyvV2 (tier3) invoke failed');
+      }
+      return Promise.resolve(resp.result as T);
     },
   };
 }
