@@ -397,10 +397,15 @@ struct RegistryState {
 - 핸들러 실행 중에는 잠금을 hold 하지 않는다(`Command`를 clone-out 후 락 해제). 핸들러가 다시 `register`/`unregister`를 호출하는 **재진입 교착**을 방지한다.
 - prod 읽기 fast-path(무경쟁 `RwLock` read ≈ 10ns)는 벤치마크(3.8µs) 대비 무시 가능한 수준이다.
 
-### 동적 명령의 호출 경로
+### 동적 명령의 호출 경로 (단일 rkyvV2 엔진 + live schema)
 
-- **정적 등록 명령**(codegen으로 `schema.json`에 `command_id` 노출) → rkyv V2 바이너리 fast-path 유지.
-- **런타임 등록 명령**(schema에 ID 없음) → 이름/JSON 경로(`engine.invoke('name', ...)`)로만 호출. 바이너리 fast-path는 미지원(자연스러운 스코핑).
+- **정적 등록 명령**(codegen codec registry에 있음) → rkyv V2 postcard fast-path.
+- **런타임 등록 명령**(registry에 없음) → TS 엔진이 **Tier 3(JSON-in-binary) fallback**: `live schema`에서 `commandId`를 조회해 `[id][JSON]`으로 `invokeRkyvV2` 호출.
+- **단일 `createRkyvV2Engine`** 이 정적(fast) + 동적(Tier 3) 명령을 모두 처리한다. Rust 쪽 `register`는 동적 명령을 `force_tier3=true`로 만들어 postcard fast-handler 대신 Tier 3 JSON 디코더를 쓴다.
+
+**live schema**: `Package::live_schema()` / `rustra_ffi_get_schema()` / JSI `getSchema()` 가 정적+동적 명령 전체 스키마(`{name, commandId, inputSchema, outputSchema}`)를 반환. TS(`getLiveSchema`)가 동적 명령의 id/타입을 조회한다. 읽기 전용 — debug/release 모두.
+
+> 설계 의도: 동적 레지스트리는 **dev(DX) 용도**(느려도 OK). release는 frozen라 동적 명령이 없고, 정적 명령은 fast-path 그대로 → prod 성능 영향 없음.
 
 ---
 

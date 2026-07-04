@@ -929,6 +929,9 @@ mod runtime_registry_tests {
             .find(|c| c["name"] == "echo")
             .expect("echo should be in live schema");
         assert_eq!(echo_entry["commandId"], 1);
-        assert_eq!(echo_entry["inputSchema"]["properties"]["v"]["type"], "integer");
+        assert_eq!(
+            echo_entry["inputSchema"]["properties"]["v"]["type"],
+            "integer"
+        );
     }
 }

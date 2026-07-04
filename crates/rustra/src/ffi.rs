@@ -416,11 +416,13 @@ mod tests {
         let bytes = unsafe { std::slice::from_raw_parts(ptr, out_len) };
         let v: serde_json::Value = serde_json::from_slice(bytes).unwrap();
         assert_eq!(v["packageId"], "test.ffi");
-        assert!(v["commands"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|c| c["name"] == "addNumbers"));
+        assert!(
+            v["commands"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|c| c["name"] == "addNumbers")
+        );
 
         unsafe { rustra_ffi_free(ptr, out_len) };
     }
