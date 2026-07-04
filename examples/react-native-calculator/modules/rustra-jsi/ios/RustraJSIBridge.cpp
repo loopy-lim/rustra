@@ -41,6 +41,9 @@ static std::pair<const uint8_t*, size_t> extractBytes(Runtime& rt, const Value& 
 
 using InvokeFn = uint8_t*(*)(const uint8_t*, size_t, size_t*);
 
+// live schema FFI (from rustra crate)
+extern "C" uint8_t* rustra_ffi_get_schema(size_t* out_len);
+
 RustraHostObject::RustraHostObject(Runtime& rt) {
   auto makeInvoke = [&](const char* name, InvokeFn fn, const char* err) {
     auto propNameId = PropNameID::forAscii(rt, name);
@@ -94,7 +97,6 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
 
   // getSchema: live schema query → rustra_ffi_get_schema (정적 + 동적 명령)
   {
-    extern "C" uint8_t* rustra_ffi_get_schema(size_t* out_len);
     auto propNameId = PropNameID::forAscii(rt, "getSchema");
     auto hostFn = Function::createFromHostFunction(
       rt, propNameId, 0,
