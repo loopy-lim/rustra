@@ -432,6 +432,112 @@ impl Package {
         Ok((command.rkyv_v2_encode_response)(&result))
     }
 
+    /// 런타임 mutation을 영구적으로 비활성화한다.
+    ///
+    /// release 빌드에서는 `build()` 시점에 이미 동결되어 있다. debug 빌드에서
+    /// prod 동작을 시뮬레이션하거나 런타임에 명시적으로 잠그고 싶을 때 사용한다.
+    /// 한 번 동결하면 해제할 수 없다.
+    pub fn freeze(&self) {
+        self.frozen.store(true, Ordering::Release);
+    }
+
+    /// 패키지가 동결되어 런타임 mutation이 불가능한지 여부.
+    pub fn is_frozen(&self) -> bool {
+        self.frozen.load(Ordering::Acquire)
+    }
+
+    fn ensure_mutable(&self) -> crate::Result<()> {
+        if self.is_frozen() {
+            Err(RustraError::custom(
+                "registry.frozen",
+                "package is frozen; runtime mutation disabled",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    /// 런타임에 명령을 등록한다.
+    ///
+    /// 같은 이름이 이미 존재하면 핸들러를 덮어쓴다. 이때 기존 `command_id`가 유지되어
+    /// 바이너리 경로의 기존 호출자가 그대로 동작한다. 동결 상태면 `registry.frozen`,
+    /// `command_id` 공간이 소진되면 `registry.id_exhausted` 에러를 반환한다.
+    pub fn register<I, O, F>(&self, name: &str, handler: F) -> crate::Result<()>
+    where
+        I: DeserializeOwned + JsonSchema + 'static,
+        O: Serialize + JsonSchema + 'static,
+        F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+    {
+        self.ensure_mutable()?;
+        let name = name.to_string();
+        let mut state = self.state.write().unwrap();
+        // 같은 이름이면 기존 command_id 재사용(stable id). 새 이름이면 단조 증가 ID 할당.
+        let command_id = match state.commands.get(&name).map(|c| c.command_id) {
+            Some(existing) => existing,
+            None => {
+                let id = state.next_command_id;
+                // u16::MAX 는 exhausted sentinel 로 예약 (할당 불가).
+                if id == u16::MAX {
+                    return Err(RustraError::custom(
+                        "registry.id_exhausted",
+                        "command_id u16 space exhausted (max 65534 commands)",
+                    ));
+                }
+                state.next_command_id = id + 1;
+                id
+            }
+        };
+        let command = build_command::<I, O, F>(command_id, handler);
+        state.commands.insert(name.clone(), command);
+        state.id_to_name.insert(command_id, name);
+        Ok(())
+    }
+
+    /// `#[command]` 함수를 이름 자동 추론으로 런타임 등록한다.
+    pub fn register_fn<I, O, F>(&self, handler: F) -> crate::Result<()>
+    where
+        I: DeserializeOwned + JsonSchema + 'static,
+        O: Serialize + JsonSchema + 'static,
+        F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+    {
+        let name = command_name_from_handler::<F>();
+        self.register::<I, O, F>(&name, handler)
+    }
+
+    /// 기존 명령의 핸들러를 교체한다. 이름이 없으면 `command.not_found`.
+    /// `command_id`는 유지된다. 동결 상태면 `registry.frozen`.
+    pub fn replace<I, O, F>(&self, name: &str, handler: F) -> crate::Result<()>
+    where
+        I: DeserializeOwned + JsonSchema + 'static,
+        O: Serialize + JsonSchema + 'static,
+        F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+    {
+        self.ensure_mutable()?;
+        let mut state = self.state.write().unwrap();
+        let command_id = state
+            .commands
+            .get(name)
+            .map(|c| c.command_id)
+            .ok_or_else(|| RustraError::command_not_found(name))?;
+        let command = build_command::<I, O, F>(command_id, handler);
+        state.commands.insert(name.to_string(), command);
+        Ok(())
+    }
+
+    /// 명령을 제거한다. `command_id`는 retired 되어 **재사용되지 않는다**.
+    /// 이름이 없으면 `command.not_found`. 동결 상태면 `registry.frozen`.
+    pub fn unregister(&self, name: &str) -> crate::Result<()> {
+        self.ensure_mutable()?;
+        let mut state = self.state.write().unwrap();
+        let removed = state
+            .commands
+            .remove(name)
+            .ok_or_else(|| RustraError::command_not_found(name))?;
+        state.id_to_name.remove(&removed.command_id);
+        // NOTE: next_command_id는 감소시키지 않는다 — retired id는 영원히 재사용 금지.
+        Ok(())
+    }
+
     /// 등록된 모든 명령에서 TypeScript 클라이언트 코드를 생성합니다.
     pub fn generate_typescript(&self) -> crate::Result<GeneratedPackage> {
         let state = self.state.read().unwrap();
@@ -615,5 +721,163 @@ impl PackageBuilder {
     /// `rustra::build!("name", fn1, fn2).done()` 형태에서 사용합니다.
     pub fn done(self) -> Package {
         self.build()
+    }
+}
+
+#[cfg(test)]
+mod runtime_registry_tests {
+    use super::*;
+    use schemars::JsonSchema;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema)]
+    struct TestIn {
+        _v: i64,
+    }
+    #[derive(Debug, Serialize, Deserialize, JsonSchema)]
+    struct TestOut {
+        v: i64,
+    }
+
+    // NOTE: 이 handler들은 #[command] 없이 일반 fn. `register(name, handler)` 는
+    // 이름 추론이 필요 없으므로 매크로 없이도 등록 가능하다. (매크로는 크레이트 내부
+    // 인라인 테스트에선 rustra::__private 경로가 해석되지 않아 사용할 수 없다.)
+    fn c1(_: TestIn) -> Result<TestOut> {
+        Ok(TestOut { v: 1 })
+    }
+    fn c2(_: TestIn) -> Result<TestOut> {
+        Ok(TestOut { v: 2 })
+    }
+    fn c3(_: TestIn) -> Result<TestOut> {
+        Ok(TestOut { v: 3 })
+    }
+
+    fn empty_pkg() -> Package {
+        Package::builder("test.wb").build()
+    }
+
+    fn id_of(pkg: &Package, name: &str) -> u16 {
+        pkg.state
+            .read()
+            .unwrap()
+            .commands
+            .get(name)
+            .unwrap()
+            .command_id
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    fn debug_build_is_mutable_by_default() {
+        let pkg = empty_pkg();
+        assert!(!pkg.is_frozen(), "debug build should be mutable by default");
+        pkg.freeze();
+        assert!(pkg.is_frozen());
+    }
+
+    #[test]
+    #[cfg(not(debug_assertions))]
+    fn release_build_is_frozen_by_default() {
+        let pkg = empty_pkg();
+        assert!(pkg.is_frozen(), "release build should be frozen by default");
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    fn register_assigns_monotonic_ids() {
+        let pkg = empty_pkg();
+        pkg.register("c1", c1).unwrap();
+        pkg.register("c2", c2).unwrap();
+        assert_eq!(id_of(&pkg, "c1"), 1);
+        assert_eq!(id_of(&pkg, "c2"), 2);
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    fn unregistered_id_is_never_reused() {
+        let pkg = empty_pkg();
+        pkg.register("c1", c1).unwrap();
+        pkg.register("c2", c2).unwrap();
+        let id_c2 = id_of(&pkg, "c2");
+        pkg.unregister("c2").unwrap();
+        pkg.register("c3", c3).unwrap();
+        let id_c3 = id_of(&pkg, "c3");
+        assert_ne!(id_c2, id_c3, "retired id must not be reused");
+        assert_eq!(id_c2, 2);
+        assert_eq!(id_c3, 3);
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    fn register_replaces_with_stable_id() {
+        let pkg = empty_pkg();
+        pkg.register("c1", c1).unwrap();
+        let id_before = id_of(&pkg, "c1");
+        pkg.register("c1", c2).unwrap(); // 같은 이름 → replace, id 유지
+        let id_after = id_of(&pkg, "c1");
+        assert_eq!(id_before, id_after, "command_id must stay stable on replace");
+        let out: TestOut = pkg.invoke("c1", TestIn { _v: 0 }).unwrap();
+        assert_eq!(out.v, 2, "replaced handler should be in effect");
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    fn replace_missing_errors_and_unregister_twice_errors() {
+        let pkg = empty_pkg();
+        let err = pkg.replace("nope", c1).unwrap_err();
+        assert_eq!(err.code(), "command.not_found");
+        let err = pkg.unregister("nope").unwrap_err();
+        assert_eq!(err.code(), "command.not_found");
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    fn register_errors_when_id_space_exhausted() {
+        let pkg = empty_pkg();
+        {
+            let mut st = pkg.state.write().unwrap();
+            st.next_command_id = u16::MAX; // exhausted sentinel
+        }
+        let err = pkg.register("c1", c1).unwrap_err();
+        assert_eq!(err.code(), "registry.id_exhausted");
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    fn frozen_blocks_all_mutation_but_invoke_works() {
+        let pkg = empty_pkg();
+        pkg.register("c1", c1).unwrap();
+        pkg.freeze();
+
+        assert_eq!(
+            pkg.register("c2", c2).unwrap_err().code(),
+            "registry.frozen"
+        );
+        assert_eq!(
+            pkg.unregister("c1").unwrap_err().code(),
+            "registry.frozen"
+        );
+        assert_eq!(
+            pkg.replace("c1", c2).unwrap_err().code(),
+            "registry.frozen"
+        );
+
+        // 동결 상태에서도 invoke/generate 는 정상 동작
+        let out: TestOut = pkg.invoke("c1", TestIn { _v: 0 }).unwrap();
+        assert_eq!(out.v, 1);
+        assert!(pkg.generate_typescript().is_ok());
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    fn shared_clone_sees_runtime_mutation() {
+        // Package clone 은 동일 레지스트리를 공유한다 (Arc semantics).
+        let pkg = empty_pkg();
+        let pkg2 = pkg.clone();
+        pkg.register("c1", c1).unwrap();
+        // 다른 clone 에서도 보여야 한다
+        assert_eq!(id_of(&pkg2, "c1"), 1);
+        let out: TestOut = pkg2.invoke("c1", TestIn { _v: 0 }).unwrap();
+        assert_eq!(out.v, 1);
     }
 }
