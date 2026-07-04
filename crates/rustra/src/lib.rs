@@ -275,7 +275,7 @@ impl std::fmt::Debug for Command {
 ///
 /// 빌드 시점(`PackageBuilder::command`)과 런타임 등록(`Package::register`)이
 /// 동일한 생성 로직을 공유하도록 분리한 helper.
-fn build_command<I, O, F>(command_id: u16, handler: F) -> Command
+fn build_command<I, O, F>(command_id: u16, handler: F, force_tier3: bool) -> Command
 where
     I: DeserializeOwned + JsonSchema + 'static,
     O: Serialize + JsonSchema + 'static,
@@ -291,10 +291,9 @@ where
     }
     let (rkyv_v2_decoder, input_tier) = build_rkyv_v2_decoder(&input_schema);
     let output_tier3 = is_output_tier3(&output_schema);
-    let is_tier3 = input_tier == Tier::Tier3 || output_tier3;
-    // If the command uses Tier 3 for either input or output, force the
-    // input decoder to the Tier 3 JSON fallback as well.
-    let rkyv_v2_decoder = if is_tier3 && input_tier != Tier::Tier3 {
+    // force_tier3 (런타임 등록된 동적 명령): TS codec 이 없으므로 JSON-in-binary(Tier 3) 강제.
+    let is_tier3 = force_tier3 || input_tier == Tier::Tier3 || output_tier3;
+    let rkyv_v2_decoder = if force_tier3 || (is_tier3 && input_tier != Tier::Tier3) {
         build_tier3_json_decoder()
     } else {
         rkyv_v2_decoder
@@ -304,22 +303,27 @@ where
     // Wrap handler in Arc so both JSON and binary paths can use it
     let handler = Arc::new(handler);
 
-    // Generate fast postcard-based binary handler that bypasses JSON Value
-    let handler_bin = handler.clone();
-    let rkyv_v2_handler: Option<BinHandler> = Some(Arc::new(move |payload: &[u8]| {
-        if payload.len() < 2 {
-            return Err(RustraError::invalid_args("rkyv v2: payload too short"));
-        }
-        let input: I = postcard::from_bytes(&payload[2..])
-            .map_err(|e| RustraError::invalid_args(format!("postcard decode: {e}")))?;
-        let output = handler_bin(input)?;
-        let out_bytes = postcard::to_allocvec(&output)
-            .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))?;
-        let mut buf = vec![0u8; 8 + out_bytes.len()];
-        buf[0] = 1; // ok = true
-        buf[8..8 + out_bytes.len()].copy_from_slice(&out_bytes);
-        Ok(buf)
-    }));
+    // Generate fast postcard-based binary handler that bypasses JSON Value.
+    // force_tier3 인 경우 postcard fast-path 를 끄고 Tier 3 JSON fallback 로 보낸다.
+    let rkyv_v2_handler: Option<BinHandler> = if force_tier3 {
+        None
+    } else {
+        let handler_bin = handler.clone();
+        Some(Arc::new(move |payload: &[u8]| {
+            if payload.len() < 2 {
+                return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+            }
+            let input: I = postcard::from_bytes(&payload[2..])
+                .map_err(|e| RustraError::invalid_args(format!("postcard decode: {e}")))?;
+            let output = handler_bin(input)?;
+            let out_bytes = postcard::to_allocvec(&output)
+                .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))?;
+            let mut buf = vec![0u8; 8 + out_bytes.len()];
+            buf[0] = 1; // ok = true
+            buf[8..8 + out_bytes.len()].copy_from_slice(&out_bytes);
+            Ok(buf)
+        }))
+    };
 
     Command {
         command_id,
@@ -482,7 +486,7 @@ impl Package {
                 id
             }
         };
-        let command = build_command::<I, O, F>(command_id, handler);
+        let command = build_command::<I, O, F>(command_id, handler, true);
         state.commands.insert(name.clone(), command);
         state.id_to_name.insert(command_id, name);
         Ok(())
@@ -514,7 +518,7 @@ impl Package {
             .get(name)
             .map(|c| c.command_id)
             .ok_or_else(|| RustraError::command_not_found(name))?;
-        let command = build_command::<I, O, F>(command_id, handler);
+        let command = build_command::<I, O, F>(command_id, handler, false);
         state.commands.insert(name.to_string(), command);
         Ok(())
     }
@@ -687,7 +691,7 @@ impl PackageBuilder {
         if self.commands.contains_key(&name) {
             panic!("duplicate command registration: '{name}'");
         }
-        let command = build_command::<I, O, F>(self.next_command_id, handler);
+        let command = build_command::<I, O, F>(self.next_command_id, handler, false);
         self.commands.insert(name, command);
         self.next_command_id += 1;
         self
@@ -745,6 +749,18 @@ mod runtime_registry_tests {
     }
     fn c3(_: TestIn) -> Result<TestOut> {
         Ok(TestOut { v: 3 })
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema)]
+    struct EchoIn {
+        v: i64,
+    }
+    #[derive(Debug, Serialize, Deserialize, JsonSchema)]
+    struct EchoOut {
+        v: i64,
+    }
+    fn echo(input: EchoIn) -> Result<EchoOut> {
+        Ok(EchoOut { v: input.v })
     }
 
     fn empty_pkg() -> Package {
@@ -871,5 +887,24 @@ mod runtime_registry_tests {
         assert_eq!(id_of(&pkg2, "c1"), 1);
         let out: TestOut = pkg2.invoke("c1", TestIn { _v: 0 }).unwrap();
         assert_eq!(out.v, 1);
+    }
+
+    /// 동적(런타임 등록) 명령이 rkyv V2 Tier 3 경로로 호출되는지 검증.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn dynamic_command_invokable_via_rkyv_v2_tier3() {
+        let pkg = empty_pkg();
+        pkg.register("echo", echo).unwrap();
+        // Tier 3 wire: [command_id: u16 LE @0][json @2]
+        let json = br#"{"v":7}"#;
+        let mut payload = vec![0u8; 2 + json.len()];
+        payload[0..2].copy_from_slice(&1u16.to_le_bytes());
+        payload[2..].copy_from_slice(json);
+        let resp = pkg.invoke_rkyv_v2(&payload).unwrap();
+        // success tier3: [ok:1 @0][pad 3B][json_len: u32 LE @4][json @8]
+        assert_eq!(resp[0], 1, "ok flag should be 1");
+        let len = u32::from_le_bytes(resp[4..8].try_into().unwrap()) as usize;
+        let out: serde_json::Value = serde_json::from_slice(&resp[8..8 + len]).unwrap();
+        assert_eq!(out["v"], 7);
     }
 }
