@@ -269,6 +269,24 @@ pub unsafe extern "C" fn rustra_ffi_free(ptr: *mut u8, len: usize) {
     }
 }
 
+/// 현재 등록된 패키지의 라이브 스키마를 JSON 바이트로 반환한다 (정적 + 동적 명령).
+/// 반환 버퍼는 `rustra_ffi_free` 로 해제. 읽기 전용 — debug/release 모두 사용 가능.
+///
+/// # Safety
+///
+/// `out_len` must be a valid write pointer. Caller must free the returned buffer
+/// with `rustra_ffi_free`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_get_schema(out_len: *mut usize) -> *mut u8 {
+    match get_package() {
+        Some(pkg) => {
+            let json = serde_json::to_vec(&pkg.live_schema()).unwrap_or_else(|_| b"{}".to_vec());
+            alloc_response(json, out_len)
+        }
+        None => alloc_response(b"{}".to_vec(), out_len),
+    }
+}
+
 // -- Tests ---------------------------------------------------------------
 
 #[cfg(test)]
@@ -381,6 +399,28 @@ mod tests {
         let resp: FfiResponse = serde_json::from_slice(bytes).unwrap();
         assert!(!resp.ok);
         assert!(resp.error.unwrap().contains("not found"));
+
+        unsafe { rustra_ffi_free(ptr, out_len) };
+    }
+
+    #[test]
+    fn ffi_get_schema_returns_live_schema() {
+        let pkg = test_package();
+        pkg.register_ffi();
+
+        let mut out_len: usize = 0;
+        let ptr = unsafe { rustra_ffi_get_schema(&mut out_len) };
+        assert!(!ptr.is_null());
+        assert!(out_len > 0);
+
+        let bytes = unsafe { std::slice::from_raw_parts(ptr, out_len) };
+        let v: serde_json::Value = serde_json::from_slice(bytes).unwrap();
+        assert_eq!(v["packageId"], "test.ffi");
+        assert!(v["commands"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|c| c["name"] == "addNumbers"));
 
         unsafe { rustra_ffi_free(ptr, out_len) };
     }
