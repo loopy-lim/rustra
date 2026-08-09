@@ -407,6 +407,17 @@ struct RegistryState {
 
 > 설계 의도: 동적 레지스트리는 **dev(DX) 용도**(느려도 OK). release는 frozen라 동적 명령이 없고, 정적 명령은 fast-path 그대로 → prod 성능 영향 없음.
 
+### 동적 명령 경로의 검증/측정 (2026-07-05)
+
+동적 import(Tier 3) + 런타임 레지스트리 경로는 전체 스택에서 별도 검증/측정 인프라로 커버한다.
+
+- **Rust 타입별 와이어 테스트** — `crates/rustra/tests/rkyv_v2_wire.rs`: 정적(postcard) Tier 1/2 + 동적(Tier 3) 경로를 i64/f64/bool/String/Vec/HashMap/tuple/enum-with-data/Option/중첩 타입으로 round-trip 검증 + edge(빈 컬렉션·유니코드·10K payload) + error(잘린 payload·알 수 없는 id·malformed JSON·frozen·unregister 후 호출).
+- **속성 기반 fuzz** — `crates/rustra/tests/rkyv_v2_fuzz.rs` (proptest): 무작위 페이로드 round-trip 보존.
+- **동시성 스모크** — `crates/rustra/tests/rkyv_v2_concurrency.rs`: 다중 스레드 register/invoke/live_schema 혼합 시 패닉/교착 없음.
+- **성능 벤치마크** — `crates/rustra/benches/` (criterion): `tier_compare`(Tier 1/2/3 비교), `dynamic_registry`(register/live_schema/frozen 비용), `type_scaling`(payload 확장성). 동적 명령은 dev-only이므로 `--profile dev`로 측정. 수치는 `docs/benchmarks.md` "동적 명령 (Tier 3)" 섹션.
+- **TS 단위 테스트** — `packages/types/src/index.test.ts`: `createRkyvV2Engine` Tier 3 fallback + `getLiveSchema` (`npm run test:types`).
+- **RN E2E** — `examples/react-native-calculator/DynamicRegistryApp.tsx` 가 4종 타입(Vec/String/Map/Nested) 동적 명령을 단일 rkyvV2 엔진으로 호출 + live schema commandId 표시. 실행 절차는 `docs/plans/2026-07-05-rn-verification-checklist.md`.
+
 ---
 
 ## 계약 불변식

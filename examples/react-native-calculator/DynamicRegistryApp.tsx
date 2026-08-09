@@ -81,21 +81,93 @@ async function runSingleEngineDemo(
   log("║  Single rkyvV2 engine + live schema (Tier 3) ║");
   log("╚══════════════════════════════════════════════╝");
 
-  await jsonEngine.invoke("rustraRegistryDemo", { op: "registerAvg" });
-  const schema = getLiveSchema(native);
-  const avg = schema.get("average");
+  const control = (op: string) =>
+    jsonEngine.invoke("rustraRegistryDemo", { op });
+
+  // 다양한 타입의 동적 명령을 등록하고 단일 rkyvV2 엔진으로(Tier 3 fallback) 호출.
+  // 각 단계에서 live schema 의 commandId/types 를 확인한다.
+
+  // (a) Vec<f64> 입력
+  await control("registerAvg");
+  let schema = getLiveSchema(native);
+  let entry = schema.get("average");
   log(
-    `live schema → 'average' commandId=${avg?.commandId} (dynamic, no codegen codec)`,
+    `[Vec]   live schema 'average' commandId=${entry?.commandId}`,
   );
-  const out = await rkyvEngine.invoke<{ average: number; count: number }>(
-    "average",
-    { numbers: [10, 20, 30, 40] },
-  );
+  {
+    const out = await rkyvEngine.invoke<{ average: number; count: number }>(
+      "average",
+      { numbers: [10, 20, 30, 40] },
+    );
+    log(`  engine.invoke('average') → avg=${out.average} count=${out.count}`);
+  }
+  await control("unregisterAvg");
+
+  // (b) String 입출력
+  await control("registerGreet");
+  schema = getLiveSchema(native);
+  entry = schema.get("greetDyn");
   log(
-    `rkyvV2 engine.invoke('average') → average=${out.average} count=${out.count} (Tier 3 fallback)`,
+    `[String] live schema 'greetDyn' commandId=${entry?.commandId}`,
   );
-  await jsonEngine.invoke("rustraRegistryDemo", { op: "unregisterAvg" });
+  {
+    const out = await rkyvEngine.invoke<{ message: string }>("greetDyn", {
+      name: "rust 🦀",
+    });
+    log(`  engine.invoke('greetDyn') → ${out.message}`);
+  }
+  await control("unregisterGreet");
+
+  // (c) Map<String, i64> 입력
+  await control("registerMap");
+  schema = getLiveSchema(native);
+  entry = schema.get("scoreMap");
+  log(`[Map]   live schema 'scoreMap' commandId=${entry?.commandId}`);
+  {
+    const out = await rkyvEngine.invoke<{ total: number; keys: number }>(
+      "scoreMap",
+      { scores: { a: 10, b: 32 } },
+    );
+    log(`  engine.invoke('scoreMap') → total=${out.total} keys=${out.keys}`);
+  }
+  await control("unregisterMap");
+
+  // (d) 중첩 구조체 + Vec<구조체>
+  await control("registerNested");
+  schema = getLiveSchema(native);
+  entry = schema.get("nestedEcho");
+  log(`[Nested] live schema 'nestedEcho' commandId=${entry?.commandId}`);
+  {
+    const out = await rkyvV2InvokeSafe<{
+      count: number;
+      sum_x: number;
+    }>(rkyvEngine, "nestedEcho", {
+      p: { x: 1, y: 2 },
+      items: [{ x: 10, y: 0 }, { x: 100, y: 0 }],
+    });
+    log(
+      `  engine.invoke('nestedEcho') → ${out.ok ? `count=${out.result.count} sumX=${out.result.sum_x}` : out.error}`,
+    );
+  }
+  await control("unregisterNested");
   log("");
+  log("✅ 4 dynamic command types (Vec/String/Map/Nested) via single rkyvV2 engine (Tier 3)");
+}
+
+// rkyvV2 엔진 호출을 안전하게 래핑(에러도 화면에 표시).
+async function rkyvV2InvokeSafe<T>(
+  engine: ReturnType<typeof createRkyvV2Engine>,
+  command: string,
+  args: unknown,
+): Promise<
+  { ok: true; result: T } | { ok: false; error: string }
+> {
+  try {
+    const result = await engine.invoke<T>(command, args);
+    return { ok: true, result };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 export default function App() {

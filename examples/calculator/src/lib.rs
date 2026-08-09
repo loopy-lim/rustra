@@ -1,7 +1,7 @@
 use rustra::ffi::FfiFormat;
 use rustra::prelude::*;
-use serde_json::{Value, json};
-use std::ffi::{CStr, CString, c_char};
+use serde_json::{json, Value};
+use std::ffi::{c_char, CStr, CString};
 
 const MAX_PAYLOAD_BYTES: usize = 1024 * 1024; // 1 MB
 
@@ -267,6 +267,73 @@ fn average(input: AverageInput) -> Result<AverageOutput> {
     })
 }
 
+// ── 다양한 타입의 동적 명령 데모 핸들러들 (Tier 3 JSON 경로 검증) ──
+
+/// String 입출력 동적 명령.
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GreetDynInput {
+    pub name: String,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GreetDynOutput {
+    pub message: String,
+}
+fn greet_dyn(input: GreetDynInput) -> Result<GreetDynOutput> {
+    Ok(GreetDynOutput {
+        message: format!("hello {}", input.name),
+    })
+}
+
+/// Map(BTreeMap<String, i64>) 입출력 동적 명령.
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScoreMapInput {
+    pub scores: std::collections::BTreeMap<String, i64>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScoreMapOutput {
+    pub total: i64,
+    pub keys: i64,
+}
+fn score_map(input: ScoreMapInput) -> Result<ScoreMapOutput> {
+    Ok(ScoreMapOutput {
+        total: input.scores.values().sum(),
+        keys: input.scores.len() as i64,
+    })
+}
+
+/// 중첩 구조체 + Vec<구조체> 동적 명령.
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct PointInput {
+    pub x: i64,
+    pub y: i64,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NestedEchoInput {
+    pub p: PointInput,
+    pub items: Vec<PointInput>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NestedEchoOutput {
+    pub count: i64,
+    pub sum_x: i64,
+}
+fn nested_echo(input: NestedEchoInput) -> Result<NestedEchoOutput> {
+    let mut sum_x = input.p.x;
+    let mut count = 1i64;
+    for it in &input.items {
+        sum_x += it.x;
+        count += 1;
+    }
+    Ok(NestedEchoOutput { count, sum_x })
+}
+
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RegistryDemoInput {
@@ -302,6 +369,30 @@ pub fn rustra_registry_demo(input: RegistryDemoInput) -> Result<RegistryDemoOutp
         },
         "unregisterAvg" => match pkg.unregister("average") {
             Ok(()) => "unregistered 'average'".to_string(),
+            Err(e) => format!("unregister failed: {e}"),
+        },
+        "registerGreet" => match pkg.register("greetDyn", greet_dyn) {
+            Ok(()) => "registered 'greetDyn' (String)".to_string(),
+            Err(e) => format!("register failed: {e}"),
+        },
+        "unregisterGreet" => match pkg.unregister("greetDyn") {
+            Ok(()) => "unregistered 'greetDyn'".to_string(),
+            Err(e) => format!("unregister failed: {e}"),
+        },
+        "registerMap" => match pkg.register("scoreMap", score_map) {
+            Ok(()) => "registered 'scoreMap' (BTreeMap)".to_string(),
+            Err(e) => format!("register failed: {e}"),
+        },
+        "unregisterMap" => match pkg.unregister("scoreMap") {
+            Ok(()) => "unregistered 'scoreMap'".to_string(),
+            Err(e) => format!("unregister failed: {e}"),
+        },
+        "registerNested" => match pkg.register("nestedEcho", nested_echo) {
+            Ok(()) => "registered 'nestedEcho' (nested struct)".to_string(),
+            Err(e) => format!("register failed: {e}"),
+        },
+        "unregisterNested" => match pkg.unregister("nestedEcho") {
+            Ok(()) => "unregistered 'nestedEcho'".to_string(),
             Err(e) => format!("unregister failed: {e}"),
         },
         "replacePing" => match pkg.replace("ping", ping_variant) {

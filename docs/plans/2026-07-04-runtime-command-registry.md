@@ -883,10 +883,12 @@ git commit -m "style: rustfmt after runtime command registry"
 
 ## Done criteria
 
-- [ ] `Package` supports `register`/`register_fn`/`replace`/`unregister`/`freeze`/`is_frozen`.
-- [ ] debug builds mutable; release builds frozen at `build()`.
-- [ ] `command_id` never reused after `unregister`; u16 exhaustion guarded.
-- [ ] All existing tests pass unchanged (no regressions).
-- [ ] New tests pass in both debug and `--release`.
-- [ ] `cargo clippy -- -D warnings` clean; `cargo fmt --check` clean.
-- [ ] README + architecture docs updated.
+- [x] `Package` supports `register`/`register_fn`/`replace`/`unregister`/`freeze`/`is_frozen`.
+- [x] debug builds mutable; release builds frozen at `build()`.
+- [x] `command_id` never reused after `unregister`; u16 exhaustion guarded.
+      (`runtime_registry_tests` + `tests/rkyv_v2_wire.rs` `unregister_then_invoke_errors`)
+- [x] All existing tests pass unchanged (no regressions).
+- [x] New tests pass in both debug and `--release`.
+- [x] 동시성 스모크 pass (`tests/rkyv_v2_concurrency.rs` — register/invoke/live_schema 혼합, 패닉 없음).
+- [x] `cargo clippy -- -D warnings` clean; `cargo fmt --check` clean.
+- [x] README + architecture docs updated. 성능 수치는 `docs/benchmarks.md` "런타임 레지스트리 비용" 섹션.
