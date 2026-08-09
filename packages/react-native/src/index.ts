@@ -19,6 +19,11 @@ export { RustraCommandError, configure, invoke, createRkyvV2Engine } from '@rust
 export type RustraJSINative = {
   invoke(payload: ArrayBuffer): ArrayBuffer;
   invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
+  /** B1 fast path: JSI 가 노출하는 정적 명령 C++ postcard 코덱. */
+  getSchema?(): ArrayBuffer;
+  hasStaticCodec?(name: string): boolean;
+  invokeTyped?(name: string, args: unknown): unknown;
+  invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
 };
 
 export function createReactNativeEngine(native: { invoke(payload: ArrayBuffer): ArrayBuffer }) {

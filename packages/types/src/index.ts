@@ -22,6 +22,22 @@
 
 export type EngineClient = {
   invoke<T>(command: string, args?: unknown): Promise<T>;
+  /**
+   * 여러 명령을 한 번에 호출한다 (P0-2). 정적 명령만 있으면 단일 JSI/FFI 횡단
+   * (invokeTypedBatch)로 처리하고, 동적 명령이 섞이면 항목별 invoke 로 폴백한다.
+   */
+  invokeBatch?<T>(entries: BatchEntry[]): Promise<T[]>;
+};
+
+/** invokeBatch 의 입력 항목. */
+export type BatchEntry = { command: string; args?: unknown };
+
+/**
+ * createRkyvV2Engine 이 반환하는 구체 엔진. EngineClient 에 더해 invokeBatch(P0-2) 를
+ * 항상 지원한다 — 정적 전용이면 단일 횡단, 동적 혼합이면 항목별 라우팅.
+ */
+export type RkyvV2Engine = EngineClient & {
+  invokeBatch<T>(entries: BatchEntry[]): Promise<T[]>;
 };
 
 export type RustraError = {
@@ -74,6 +90,11 @@ export type RustraNative = {
   noop(payload: ArrayBuffer): ArrayBuffer;
   /** Live schema query (정적 + 동적 명령). JSI/FFI 가 노출하면 사용. */
   getSchema?(): ArrayBuffer;
+  /** B1 (RN JSI): 정적 명령 C++ postcard fast path. JSI 가 노출하면 사용. */
+  hasStaticCodec?(name: string): boolean;
+  invokeTyped?(name: string, args: unknown): unknown;
+  /** P0-2: 정적 명령 N 개를 단일 횡단으로 일괄 처리 (RN JSI). */
+  invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
 };
 
 // ── Global invoke (Tauri-like) ──────────────────────────────
@@ -126,6 +147,30 @@ export function invoke<T>(command: string, args?: unknown): Promise<T> {
   return _engine.invoke<T>(command, args);
 }
 
+/**
+ * 글로벌 엔진으로 여러 명령을 한 번에 호출합니다 (P0-2 invokeBatch).
+ *
+ * 정적 명령만 있으면 단일 네이티브 횡단으로 일괄 처리되어 잦은 호출의 jank 를 줄이고,
+ * 동적 명령이 섞이면 항목별로 자동 라우팅됩니다.
+ *
+ * @example
+ * ```ts
+ * const [a, b] = await invokeBatch([
+ *   { command: 'addNumbers', args: { a: 1, b: 2 } },
+ *   { command: 'multiply', args: { a: 3, b: 4 } },
+ * ]);
+ * ```
+ */
+export function invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
+  if (!_engine) {
+    throw new Error('Rustra not configured. Call configure(engine) first.');
+  }
+  if (!_engine.invokeBatch) {
+    throw new Error('Configured engine does not support invokeBatch.');
+  }
+  return _engine.invokeBatch<T>(entries);
+}
+
 // ── Live schema (정적 + 동적 명령 조회) ──────────────────────
 
 export type LiveSchemaEntry = {
@@ -138,15 +183,18 @@ export type LiveSchemaEntry = {
 export type RkyvV2SchemaNative = {
   invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
   getSchema?(): ArrayBuffer;
+  /** B1 (RN JSI): 정적 명령 C++ postcard fast path. 둘 다 있으면 JS 코덱 대신 사용. */
+  hasStaticCodec?(name: string): boolean;
+  invokeTyped?(name: string, args: unknown): unknown;
+  /** P0-2: 정적 명령 N 개를 단일 횡단으로 일괄 처리 (RN JSI). */
+  invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
 };
 
 /**
  * 네이티브 getSchema() 로부터 현재 명령 스키마를 조회한다 (정적 + 동적 명령 포함).
  * 동적 명령의 commandId/타입을 알아내 rkyvV2 Tier 3 fallback 에 사용된다.
  */
-export function getLiveSchema(
-  native: { getSchema?(): ArrayBuffer },
-): Map<string, LiveSchemaEntry> {
+export function getLiveSchema(native: { getSchema?(): ArrayBuffer }): Map<string, LiveSchemaEntry> {
   if (!native.getSchema) {
     return new Map();
   }
@@ -212,9 +260,20 @@ function decodeTier3Response(bytes: ArrayBuffer): {
 export function createRkyvV2Engine(
   native: RkyvV2SchemaNative,
   registry: Map<string, RkyvV2Codec<any, any>>,
-): EngineClient {
+): RkyvV2Engine {
+  // B1 fast path: 네이티브가 C++ typed 코덱(invokeTyped + hasStaticCodec)을 노출하면
+  // 정적 명령을 C++에서 postcard 인코딩/디코딩한다 (JS codec 왕복 ~3.4µs 제거).
+  const hasTypedPath = !!(native.invokeTyped && native.hasStaticCodec);
+  // P0-2: 단일 횡단 배치가 가능하려면 invokeTypedBatch 도 필요.
+  const hasBatchPath = hasTypedPath && !!native.invokeTypedBatch;
+
   return {
     invoke<T>(command: string, args?: unknown): Promise<T> {
+      // 1순위: C++ fast path (RN JSI). 정적 명령만.
+      if (hasTypedPath && native.hasStaticCodec!(command)) {
+        return Promise.resolve(native.invokeTyped!(command, args) as T);
+      }
+      // 2순위: JS codec (Node/Bun/Tauri 또는 typed 누락 시). 정적 명령.
       const codec = registry.get(command);
       if (codec) {
         const resultBytes = native.invokeRkyvV2(codec.encode(args));
@@ -224,12 +283,10 @@ export function createRkyvV2Engine(
         }
         return Promise.resolve(response.result as T);
       }
-      // 동적 명령 → Tier 3 fallback (live schema 의 commandId 사용)
+      // 3순위: 동적 명령 → Tier 3 fallback (live schema 의 commandId 사용)
       const entry = getLiveSchema(native).get(command);
       if (!entry) {
-        throw new Error(
-          `RkyvV2: no codec and not in live schema for "${command}"`,
-        );
+        throw new Error(`RkyvV2: no codec and not in live schema for "${command}"`);
       }
       const resp = decodeTier3Response(
         native.invokeRkyvV2(encodeTier3Request(entry.commandId, args)),
@@ -238,6 +295,22 @@ export function createRkyvV2Engine(
         throw new Error(resp.error ?? 'RkyvV2 (tier3) invoke failed');
       }
       return Promise.resolve(resp.result as T);
+    },
+
+    invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
+      // 모든 항목이 정적 코덱이면 단일 JSI 횡단(invokeTypedBatch)으로 일괄 처리.
+      if (
+        hasBatchPath &&
+        entries.length > 0 &&
+        entries.every((e) => native.hasStaticCodec!(e.command))
+      ) {
+        const names = entries.map((e) => e.command);
+        const args = entries.map((e) => e.args);
+        const results = native.invokeTypedBatch!(names, args) as T[];
+        return Promise.resolve(results);
+      }
+      // 동적 명령이 섞였거나 배치 미지원 → 항목별 라우팅(typed/Tier3 자동 분기).
+      return Promise.all(entries.map((e) => this.invoke<T>(e.command, e.args)));
     },
   };
 }
