@@ -95,15 +95,7 @@ export function generateContractTs(schemaJson: string): string {
 
 /** Postcard field types for schema classification. */
 type PostcardFieldKind =
-  | 'zigzag'
-  | 'f64'
-  | 'f32'
-  | 'bool'
-  | 'string'
-  | 'vec_zigzag'
-  | 'vec_f64'
-  | 'vec_bool'
-  | 'struct'; // nested struct via $ref
+  'zigzag' | 'f64' | 'f32' | 'bool' | 'string' | 'vec_zigzag' | 'vec_f64' | 'vec_bool' | 'struct'; // nested struct via $ref
 
 type PostcardField = {
   name: string;
@@ -488,4 +480,239 @@ export function generateRkyvRegistryTs(schema: PackageSchema): string {
     entries +
     `,\n]);\n`
   );
+}
+
+// ── C++ codec generation (postcard wire + JSI marshal) ──────────────────
+//
+// TS codec(`rkyv-codecs.ts`)와 동일한 postcard 로직을 C++ 로 방출한다.
+// RN(React Native) JSI 경로가 이 C++ codec 을 사용해 JS↔native 변환을
+// native 스레드에서 수행한다(JS-side codec ~3.4µs 제거).
+// 와이어 포맷·Rust FFI·응답 헤더는 TS 경로와 동일(불변).
+
+/** C++ postcard encode: JSI Object 필드 → Writer. <objExpr>는 jsi::Object. */
+function cppFieldEncodeExpr(
+  field: PostcardField,
+  objExpr: string,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+  indent: string,
+): string {
+  const get = `${objExpr}.getProperty(rt, "${field.name}")`;
+  switch (field.kind) {
+    case 'zigzag':
+      return `${indent}{ auto _v = ${get}.asNumber(); w.push_i64((int64_t)_v); }`;
+    case 'f64':
+      return `${indent}{ auto _v = ${get}.asNumber(); w.push_f64(_v); }`;
+    case 'f32':
+      return `${indent}{ auto _v = ${get}.asNumber(); w.push_f32((float)_v); }`;
+    case 'bool':
+      return `${indent}{ auto _v = ${get}.getBool(); w.push_bool(_v); }`;
+    case 'string':
+      return `${indent}{ auto _v = ${get}.getString(rt).utf8(rt); w.push_string(_v); }`;
+    case 'vec_zigzag':
+      return (
+        `${indent}{ auto _arr = ${get}.asObject(rt).getArray(rt);` +
+        ` auto _n = _arr.length(rt); w.push_uvar(_n);` +
+        ` for (size_t _i = 0; _i < _n; _i++) { auto _e = _arr.getValueAtIndex(rt, _i).asNumber(); w.push_i64((int64_t)_e); } }`
+      );
+    case 'vec_f64':
+      return (
+        `${indent}{ auto _arr = ${get}.asObject(rt).getArray(rt);` +
+        ` auto _n = _arr.length(rt); w.push_uvar(_n);` +
+        ` for (size_t _i = 0; _i < _n; _i++) { auto _e = _arr.getValueAtIndex(rt, _i).asNumber(); w.push_f64(_e); } }`
+      );
+    case 'vec_bool':
+      return (
+        `${indent}{ auto _arr = ${get}.asObject(rt).getArray(rt);` +
+        ` auto _n = _arr.length(rt); w.push_uvar(_n);` +
+        ` for (size_t _i = 0; _i < _n; _i++) { auto _e = _arr.getValueAtIndex(rt, _i).getBool(); w.push_bool(_e); } }`
+      );
+    case 'struct': {
+      if (!field.refType) return `${indent}// unknown struct field: ${field.name}`;
+      const structDef = definitions[field.refType];
+      if (!structDef) return `${indent}// missing definition for ${field.refType}`;
+      const subObj = `${get}.asObject(rt)`;
+      const subFields = collectPostcardFields(structDef, definitions);
+      return subFields.map((sf) => cppFieldEncodeExpr(sf, subObj, definitions, indent)).join('\n');
+    }
+    default:
+      return `${indent}// unsupported field kind: ${field.kind}`;
+  }
+}
+
+/** C++ postcard decode: Reader → JSI Object 필드 setProperty. <objExpr>는 jsi::Object. */
+function cppFieldDecodeExpr(
+  field: PostcardField,
+  objExpr: string,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+  indent: string,
+): string {
+  const setProp = (val: string) => `${indent}${objExpr}.setProperty(rt, "${field.name}", ${val});`;
+  switch (field.kind) {
+    case 'zigzag':
+      return setProp('(double)r.read_i64()');
+    case 'f64':
+      return setProp('r.read_f64()');
+    case 'f32':
+      return setProp('(double)r.read_f32()');
+    case 'bool':
+      return setProp('r.read_bool()');
+    case 'string':
+      return (
+        `${indent}{ auto _s = r.read_string();` +
+        ` ${objExpr}.setProperty(rt, "${field.name}", jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_s.data()), _s.size())); }`
+      );
+    case 'vec_zigzag':
+      return (
+        `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
+        ` for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, (double)r.read_i64()); }` +
+        ` ${objExpr}.setProperty(rt, "${field.name}", _arr); }`
+      );
+    case 'vec_f64':
+      return (
+        `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
+        ` for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, r.read_f64()); }` +
+        ` ${objExpr}.setProperty(rt, "${field.name}", _arr); }`
+      );
+    case 'vec_bool':
+      return (
+        `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
+        ` for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, r.read_bool()); }` +
+        ` ${objExpr}.setProperty(rt, "${field.name}", _arr); }`
+      );
+    case 'struct': {
+      if (!field.refType) return `${indent}// unknown struct field: ${field.name}`;
+      const structDef = definitions[field.refType];
+      if (!structDef) return `${indent}// missing definition for ${field.refType}`;
+      const subFields = collectPostcardFields(structDef, definitions);
+      const lines: string[] = [];
+      lines.push(`${indent}{ auto _obj = jsi::Object(rt);`);
+      for (const sf of subFields) {
+        lines.push(cppFieldDecodeExpr(sf, '_obj', definitions, `${indent}  `));
+      }
+      lines.push(`${indent}  ${objExpr}.setProperty(rt, "${field.name}", _obj); }`);
+      return lines.join('\n');
+    }
+    default:
+      return `${indent}// unsupported field kind: ${field.kind}`;
+  }
+}
+
+/** 명령 하나의 C++ encode 함수: [cmd_id u16 LE][postcard(Input)] 을 Writer 에 기록. */
+function cppEncodeCommand(
+  command: CommandSchema,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+): string {
+  const fnName = commandFunctionName(command.name);
+  const inFields = collectPostcardFields(command.inputSchema, definitions);
+  const id = command.commandId;
+  const lines: string[] = [];
+  lines.push(
+    `static void encode_${fnName}(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {`,
+  );
+  lines.push(`  w.push_u8(${id & 0xff}); w.push_u8(${(id >> 8) & 0xff}); // cmd_id = ${id} LE`);
+  lines.push(`  auto argsObj = args.asObject(rt);`);
+  for (const f of inFields) {
+    lines.push(cppFieldEncodeExpr(f, 'argsObj', definitions, '  '));
+  }
+  lines.push(`}`);
+  return lines.join('\n') + '\n';
+}
+
+/** 명령 하나의 C++ decode 함수: Reader(postcard body) → JSI Object. */
+function cppDecodeCommand(
+  command: CommandSchema,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+): string {
+  const fnName = commandFunctionName(command.name);
+  const outFields = collectPostcardFields(command.outputSchema, definitions);
+  const lines: string[] = [];
+  lines.push(`static jsi::Value decode_${fnName}(jsi::Runtime& rt, rc::Reader& r) {`);
+  lines.push(`  auto resultObj = jsi::Object(rt);`);
+  for (const f of outFields) {
+    lines.push(cppFieldDecodeExpr(f, 'resultObj', definitions, '  '));
+  }
+  lines.push(`  return std::move(resultObj);`);
+  lines.push(`}`);
+  return lines.join('\n') + '\n';
+}
+
+/**
+ * 패키지 스키마에서 C++ codec 헤더(`rustra-generated-codecs.hpp`)를 생성한다.
+ * RN JSI bridge(RustraJSIBridge.cpp)가 include 하여 encode_by_name/decode_by_name 호출.
+ */
+export function generateRkyvCodecsHpp(schema: PackageSchema): string {
+  return (
+    `// AUTO-GENERATED by @rustra/cli — DO NOT EDIT.\n` +
+    `// C++ postcard codec for the RN JSI fast path (B1).\n` +
+    `// 정적 명령: C++ codec 으로 postcard 인코딩/디코딩. 동적 명령은 JS Tier 3 fallback.\n` +
+    `#pragma once\n\n` +
+    `#include <jsi/jsi.h>\n` +
+    `#include <string>\n` +
+    `#include "rustra-codec.hpp"\n\n` +
+    `namespace rustra::generated {\n\n` +
+    `/// 명령 이름으로 postcard 요청 바이트를 인코딩한다(정적 명령만).\n` +
+    `/// 인코딩 성공(정적 명령) 시 true, 미발견(동적 명령) 시 false.\n` +
+    `bool encode_by_name(facebook::jsi::Runtime& rt, const std::string& name,\n` +
+    `                   const facebook::jsi::Value& args,\n` +
+    `                   rustra::codec::Writer& w);\n\n` +
+    `/// 명령 이름으로 postcard 응답 바디를 디코딩한다(정적 명령만).\n` +
+    `/// 미발견 시 JSError throw.\n` +
+    `facebook::jsi::Value decode_by_name(facebook::jsi::Runtime& rt,\n` +
+    `                                   const std::string& name,\n` +
+    `                                   rustra::codec::Reader& r);\n\n` +
+    `/// codegen 시점에 알려진 정적 명령 이름 집합(Tier 3 fallback 분기용).\n` +
+    `bool has_static_codec(const std::string& name);\n\n` +
+    `} // namespace rustra::generated\n`
+  );
+}
+
+/**
+ * 패키지 스키마에서 C++ codec 구현(`rustra-generated-codecs.cpp`)을 생성한다.
+ */
+export function generateRkyvCodecsCpp(schema: PackageSchema): string {
+  const definitions = collectAllDefinitions(schema);
+  const fns = schema.commands.map((c) => commandFunctionName(c.name));
+  const encodeCases = fns
+    .map((fn) => `  if (name == "${fn}") { encode_${fn}(rt, args, w); return true; }`)
+    .join('\n');
+  const decodeCases = fns
+    .map((fn) => `  if (name == "${fn}") return decode_${fn}(rt, r);`)
+    .join('\n');
+  const hasCases = fns.map((fn) => `  if (name == "${fn}") return true;`).join('\n');
+
+  const lines: string[] = [];
+  lines.push(`// AUTO-GENERATED by @rustra/cli — DO NOT EDIT.`);
+  lines.push(`// C++ postcard codec for the RN JSI fast path (B1).`);
+  lines.push(`#include "rustra-generated-codecs.hpp"`);
+  lines.push(`#include <jsi/jsi.h>`);
+  lines.push(`#include <string>`);
+  lines.push(``);
+  lines.push(`using namespace facebook::jsi;`);
+  lines.push(`namespace rc = rustra::codec;`);
+  lines.push(``);
+  for (const command of schema.commands) {
+    lines.push(cppEncodeCommand(command, definitions));
+    lines.push(cppDecodeCommand(command, definitions));
+  }
+  lines.push(`namespace rustra::generated {`);
+  lines.push(``);
+  lines.push(
+    `bool encode_by_name(Runtime& rt, const std::string& name, const Value& args, rc::Writer& w) {`,
+  );
+  lines.push(encodeCases);
+  lines.push(`  return false; // 동적 명령 — JS 가 Tier 3 fallback 처리`);
+  lines.push(`}`);
+  lines.push(``);
+  lines.push(`Value decode_by_name(Runtime& rt, const std::string& name, rc::Reader& r) {`);
+  lines.push(decodeCases);
+  lines.push(`  throw JSError(rt, "rustra: no C++ codec for '" + name + "'");`);
+  lines.push(`}`);
+  lines.push(``);
+  lines.push(`bool has_static_codec(const std::string& name) {`);
+  lines.push(hasCases);
+  lines.push(`  return false;`);
+  lines.push(`}`);
+  lines.push(``);
+  lines.push(`} // namespace rustra::generated`);
+  return lines.join('\n') + '\n';
 }

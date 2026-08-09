@@ -10,6 +10,8 @@ import {
   generateContractTs,
   generateRkyvCodecsTs,
   generateRkyvRegistryTs,
+  generateRkyvCodecsHpp,
+  generateRkyvCodecsCpp,
 } from './generate.js';
 
 export {
@@ -18,6 +20,8 @@ export {
   generateContractTs,
   generateRkyvCodecsTs,
   generateRkyvRegistryTs,
+  generateRkyvCodecsHpp,
+  generateRkyvCodecsCpp,
 } from './generate.js';
 export type { PackageSchema, CommandSchema, JsonSchema } from './schema.js';
 export { diffSchemas, formatDiffResult } from './schema-diff.js';
@@ -53,19 +57,23 @@ function printHelp(): void {
 
 Usage:
   rustra generate --schema <path> --output <dir>
+  rustra generate --schema <path> --output <dir> --cpp-output <dir>
   rustra generate --config <path>
   rustra generate --watch --schema <path> --output <dir>
 
 Options:
-  --schema <path>   Path to schema.json file
-  --output <dir>    Output directory for generated TypeScript files
-  --config <path>   Path to rustra.json config file
-  --watch           Watch schema file for changes and regenerate
-  --help, -h        Show this help message
+  --schema <path>    Path to schema.json file
+  --output <dir>     Output directory for generated TypeScript files
+  --cpp-output <dir> Optional: also emit C++ codec (rustra-generated-codecs.{hpp,cpp})
+                    for the RN JSI fast path (B1) into this directory
+  --config <path>    Path to rustra.json config file
+  --watch            Watch schema file for changes and regenerate
+  --help, -h         Show this help message
 
 Examples:
   rustra generate --schema ./generated/schema.json --output ./src/generated
   rustra generate --watch --config rustra.json
+  rustra generate --schema ./gen/schema.json --output ./src/generated --cpp-output ./ios
 `);
 }
 
@@ -73,17 +81,22 @@ interface GenerateOptions {
   schemaPath?: string;
   outputPath?: string;
   configPath?: string;
+  cppOutputPath?: string;
 }
 
 async function runGenerate(args: string[]): Promise<void> {
   autoRebuild();
-  const { schemaPath, outputPath } = resolvePaths(args);
-  const written = await generateFromSchema(schemaPath, outputPath);
+  const { schemaPath, outputPath, cppOutputPath } = resolvePaths(args);
+  const written = await generateFromSchema(schemaPath, outputPath, cppOutputPath);
   console.log(`Generated TypeScript files in ${outputPath}:`);
   for (const f of written) console.log(`  ${f}`);
 }
 
-function resolvePaths(args: string[]): { schemaPath: string; outputPath: string } {
+function resolvePaths(args: string[]): {
+  schemaPath: string;
+  outputPath: string;
+  cppOutputPath?: string;
+} {
   const options = parseGenerateArgs(args);
 
   let schemaPath: string;
@@ -101,13 +114,17 @@ function resolvePaths(args: string[]): { schemaPath: string; outputPath: string 
     process.exit(1);
   }
 
-  return { schemaPath: resolve(schemaPath), outputPath: resolve(outputPath) };
+  return {
+    schemaPath: resolve(schemaPath),
+    outputPath: resolve(outputPath),
+    cppOutputPath: options.cppOutputPath ? resolve(options.cppOutputPath) : undefined,
+  };
 }
 
 async function runWatch(args: string[]): Promise<void> {
-  const { schemaPath, outputPath } = resolvePaths(args);
+  const { schemaPath, outputPath, cppOutputPath } = resolvePaths(args);
 
-  await generateFromSchema(schemaPath, outputPath);
+  await generateFromSchema(schemaPath, outputPath, cppOutputPath);
   console.log(`\nWatching ${schemaPath} for changes...`);
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -116,7 +133,7 @@ async function runWatch(args: string[]): Promise<void> {
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(async () => {
       try {
-        await generateFromSchema(schemaPath, outputPath);
+        await generateFromSchema(schemaPath, outputPath, cppOutputPath);
         console.log(`[${new Date().toLocaleTimeString()}] Regenerated`);
       } catch (error) {
         console.error(`Regeneration failed: ${error instanceof Error ? error.message : error}`);
@@ -125,7 +142,11 @@ async function runWatch(args: string[]): Promise<void> {
   });
 }
 
-async function generateFromSchema(schemaPath: string, outputPath: string): Promise<string[]> {
+async function generateFromSchema(
+  schemaPath: string,
+  outputPath: string,
+  cppOutputPath?: string,
+): Promise<string[]> {
   const schemaContent = await readFile(schemaPath, 'utf-8');
   const schema: PackageSchema = parsePackageSchema(JSON.parse(schemaContent));
 
@@ -137,10 +158,16 @@ async function generateFromSchema(schemaPath: string, outputPath: string): Promi
     { name: 'rkyv-registry.ts', content: generateRkyvRegistryTs(schema) },
   ];
 
-  await mkdir(outputPath, { recursive: true });
+  if (cppOutputPath) {
+    files.push({ name: 'rustra-generated-codecs.hpp', content: generateRkyvCodecsHpp(schema) });
+    files.push({ name: 'rustra-generated-codecs.cpp', content: generateRkyvCodecsCpp(schema) });
+  }
+
   const written: string[] = [];
+  // TS 출력은 outputPath 로, C++ 출력은 cppOutputPath 로 분리.
   for (const { name, content } of files) {
-    const filePath = resolve(outputPath, name);
+    const targetDir = name.endsWith('.hpp') || name.endsWith('.cpp') ? cppOutputPath! : outputPath;
+    const filePath = resolve(targetDir, name);
     let existing: string | null = null;
     try {
       existing = await readFile(filePath, 'utf-8');
@@ -150,9 +177,13 @@ async function generateFromSchema(schemaPath: string, outputPath: string): Promi
     if (existing === content) {
       written.push(`${name} (unchanged)`);
     } else {
+      await mkdir(dirname(filePath), { recursive: true });
       await writeFile(filePath, content);
       written.push(existing !== null ? `${name} (updated)` : name);
     }
+  }
+  if (cppOutputPath) {
+    await mkdir(cppOutputPath, { recursive: true });
   }
   return written;
 }
@@ -205,6 +236,9 @@ function parseGenerateArgs(args: string[]): GenerateOptions {
         break;
       case '--output':
         options.outputPath = args[++i];
+        break;
+      case '--cpp-output':
+        options.cppOutputPath = args[++i];
         break;
       case '--config':
         options.configPath = args[++i];
