@@ -463,9 +463,14 @@ log(`rkyvV2 engine.invoke('average') → average=${avg.average} count=${avg.coun
 
 ## Done criteria
 
-- [ ] Dynamic commands (runtime `register`) invokable via `invoke_rkyv_v2` (Tier 3 wire) — Rust test.
-- [ ] `Package::live_schema()` + `rustra_ffi_get_schema` work; JSI exposes `getSchema`.
-- [ ] `createRkyvV2Engine` Tier 3 fallback for non-codegen commands — TS unit test.
-- [ ] RN sim: dynamic command called via the single rkyvV2 engine + live schema commandId shown.
-- [ ] Static commands unaffected (fast postcard path); prod (release/frozen) unaffected.
-- [ ] `cargo test --workspace`, `--release -p rustra`, clippy, fmt all clean.
+- [x] Dynamic commands (runtime `register`) invokable via `invoke_rkyv_v2` (Tier 3 wire) — Rust test.
+      (`tests/rkyv_v2_wire.rs` — dynamic_tier3_* 10종 타입 round-trip + fuzz/concurrency)
+- [x] `Package::live_schema()` + `rustra_ffi_get_schema` work; JSI exposes `getSchema`.
+      (`ffi_get_schema_returns_live_schema` + `live_schema_lists_all_dynamic_commands`)
+- [x] `createRkyvV2Engine` Tier 3 fallback for non-codegen commands — TS unit test.
+      (`packages/types/src/index.test.ts` — 8 tests, `npm run test:types`)
+- [x] RN sim: dynamic command called via the single rkyvV2 engine + live schema commandId shown.
+      (`DynamicRegistryApp.tsx` 4종 타입(Vec/String/Map/Nested) + `docs/plans/2026-07-05-rn-verification-checklist.md`)
+- [x] Static commands unaffected (fast postcard path); prod (release/frozen) unaffected.
+      (`cargo test --release -p rustra` — 정적 10종 pass, 동적 cfg'd out)
+- [x] `cargo test --workspace`, `--release -p rustra` clean. 성능: `crates/rustra/benches/` (tier_compare/dynamic_registry/type_scaling) — 수치는 `docs/benchmarks.md` "동적 명령 (Tier 3)" 섹션.

@@ -10,6 +10,8 @@ export type RustraNative = {
   invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
   invokeRaw(payload: ArrayBuffer): ArrayBuffer;
   noop(payload: ArrayBuffer): ArrayBuffer;
+  /** Live schema query (정적 + 동적 명령). C++ JSI 가 노출함. 동적 명령 Tier 3 fallback 에 사용. */
+  getSchema?(): ArrayBuffer;
 };
 
 declare global {

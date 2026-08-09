@@ -195,6 +195,61 @@ rkyv V2는 JSON 대비 **5.3배 빠르며**, Nitro (react-native-nitro-modules) 
 | Postcard decode (JS) | 1.0 µs     |
 | **전체 (sync)**      | **3.8 µs** |
 
+## 동적 명령 (런타임 register, Tier 3) 성능
+
+동적 명령(런타임 `register` 로 등록, rkyv V2 **Tier 3 JSON-in-binary** fallback)의 성능.
+criterion 벤치마크(`crates/rustra/benches/`)로 측정.
+
+> **측정 환경 주의**: 동적 명령은 설계상 **dev-only**(release 빌드는 frozen → `register` 차단).
+> 따라서 본 수치는 **debug(unoptimized) 빌드**에서 측정했다. 정적 postcard 경로도 debug 에선
+> ~5 µs 수준으로 release(209 ns) 대비 ~25배 느리다. 즉 **절대 수치가 아니라 Tier 간 상대 비교**로
+> 읽어야 한다. release 에선 동적 명령 자체가 존재하지 않는다.
+
+### Tier 비교 — 동일 의미(add/echo)를 세 wire 로 (debug)
+
+`cargo bench -p rustra --bench tier_compare --profile dev`
+
+| 경로 | 평균 | 비고 |
+| ---- | ---- | ---- |
+| 정적 Tier 1 (primitive, postcard fast-path) | 5.49 µs | 기준 |
+| 정적 Tier 2 (String, postcard fast-path) | 4.73 µs | Tier 1 보다 약간 빠름(필드 수 차이) |
+| 동적 Tier 3 (런타임 register, JSON) | 7.38 µs | Tier 1 대비 **~1.34x** |
+
+→ 동적 Tier 3 JSON 경로는 정적 postcard 대비 **약 1.3–1.6x** 느리다. JSON 직렬화/파싱 오버헤드.
+
+### 런타임 레지스트리 비용 (debug)
+
+`cargo bench -p rustra --bench dynamic_registry --profile dev`
+
+| 연산 | 평균 | 비고 |
+| ---- | ---- | ---- |
+| `register()` 1회 (스키마 생성 포함) | 26.28 µs | 핫패스 아님(등록 시 1회) |
+| `live_schema()` 조회 (3 명령) | 50.39 µs | 읽기 전용, 디버그/릴리스 모두 |
+| `invoke_rkyv_v2` (mutable 패키지) | 7.71 µs | RwLock read 경로 |
+| `invoke_rkyv_v2` (frozen 패키지) | 7.84 µs | mutable 과 **~2% 차이** (RwLock 영향 미미) |
+
+### 동적 Tier 3 경로 payload scaling (debug)
+
+`cargo bench -p rustra --bench type_scaling --profile dev`
+
+| 항목 수 | 평균 |
+| ------- | ---- |
+| 1 | 24.85 µs |
+| 10 | 80.29 µs |
+| 100 | 630.45 µs |
+| 1000 | 6.50 ms |
+
+→ 데이터 크기에 대해 선형 증가(JSON 직렬화 비용 지배).
+
+### 벤치마크 실행
+
+```bash
+# 동적/Tier 3 경로는 register 로만 도달 → debug 빌드 필수.
+cargo bench -p rustra --bench tier_compare    --profile dev
+cargo bench -p rustra --bench dynamic_registry --profile dev
+cargo bench -p rustra --bench type_scaling    --profile dev
+```
+
 ## JS 어댑터 JSON 성능
 
 | 연산                       | Node.js | Bun     | 비고          |
