@@ -12,3 +12,6 @@ packages/*/dist/
 .npm-cache/
 *.node
 examples/calculator-napi/node_modules/
+
+# Claude Code worktrees (local only)
+.claude/worktrees/
