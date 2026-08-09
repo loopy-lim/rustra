@@ -134,11 +134,13 @@ pub fn delete_item(input: DeleteItemInput) -> Result<DeleteItemOutput> {
 }
 
 pub fn crud_package() -> Package {
-    rustra::build!("examples.crud",
+    rustra::build!(
+        "examples.crud",
         create_item,
         get_item,
         list_items,
         update_item,
         delete_item
-    ).done()
+    )
+    .done()
 }
