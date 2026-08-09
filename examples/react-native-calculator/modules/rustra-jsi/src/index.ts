@@ -12,6 +12,11 @@ export type RustraNative = {
   noop(payload: ArrayBuffer): ArrayBuffer;
   /** Live schema query (정적 + 동적 명령). C++ JSI 가 노출함. 동적 명령 Tier 3 fallback 에 사용. */
   getSchema?(): ArrayBuffer;
+  /** B1 (RN JSI): 정적 명령 전용 C++ postcard fast path. */
+  hasStaticCodec?(name: string): boolean;
+  invokeTyped?(name: string, args: unknown): unknown;
+  /** P0-2: 정적 명령 N 개를 단일 JSI 횡단으로 일괄 처리. */
+  invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
 };
 
 declare global {
@@ -22,25 +27,19 @@ declare global {
 export async function installRustraJSI(): Promise<void> {
   const module = NativeModules.RustraJSI;
   if (!module) {
-    throw new Error(
-      'RustraJSI native module not found. Make sure the native module is linked.',
-    );
+    throw new Error('RustraJSI native module not found. Make sure the native module is linked.');
   }
   await module.install();
 
   if (!globalThis.__rustraNative) {
-    throw new Error(
-      'RustraJSI.install() completed but __rustraNative was not set on globalThis.',
-    );
+    throw new Error('RustraJSI.install() completed but __rustraNative was not set on globalThis.');
   }
 }
 
 export function getRustraNative(): RustraNative {
   const native = globalThis.__rustraNative;
   if (!native) {
-    throw new Error(
-      'RustraJSI native module not installed. Call installRustraJSI() first.',
-    );
+    throw new Error('RustraJSI native module not installed. Call installRustraJSI() first.');
   }
   return native;
 }
