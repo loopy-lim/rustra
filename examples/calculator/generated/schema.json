@@ -1,88 +1,107 @@
 {
+  "packageId": "examples.calculator",
   "commands": [
     {
+      "name": "addNumbers",
       "commandId": 1,
+      "inputType": "AddNumbersInput",
+      "outputType": "AddNumbersOutput",
       "inputSchema": {
+        "title": "AddNumbersInput",
+        "type": "object",
+        "required": ["a", "b"],
         "properties": {
           "a": {
-            "format": "int64",
-            "type": "integer"
+            "type": "integer",
+            "format": "int64"
           },
           "b": {
-            "format": "int64",
-            "type": "integer"
+            "type": "integer",
+            "format": "int64"
           }
-        },
-        "required": [
-          "a",
-          "b"
-        ],
-        "title": "AddNumbersInput",
-        "type": "object"
+        }
       },
-      "inputType": "AddNumbersInput",
-      "name": "addNumbers",
       "outputSchema": {
+        "title": "AddNumbersOutput",
+        "type": "object",
+        "required": ["value"],
         "properties": {
           "value": {
-            "format": "int64",
-            "type": "integer"
+            "type": "integer",
+            "format": "int64"
           }
-        },
-        "required": [
-          "value"
-        ],
-        "title": "AddNumbersOutput",
-        "type": "object"
-      },
-      "outputType": "AddNumbersOutput"
+        }
+      }
     },
     {
+      "name": "clamp",
       "commandId": 4,
+      "inputType": "ClampInput",
+      "outputType": "ClampOutput",
       "inputSchema": {
+        "title": "ClampInput",
+        "type": "object",
+        "required": ["max", "min", "value"],
         "properties": {
           "max": {
-            "format": "double",
-            "type": "number"
+            "type": "number",
+            "format": "double"
           },
           "min": {
-            "format": "double",
-            "type": "number"
+            "type": "number",
+            "format": "double"
           },
           "value": {
-            "format": "double",
-            "type": "number"
+            "type": "number",
+            "format": "double"
           }
-        },
-        "required": [
-          "max",
-          "min",
-          "value"
-        ],
-        "title": "ClampInput",
-        "type": "object"
+        }
       },
-      "inputType": "ClampInput",
-      "name": "clamp",
       "outputSchema": {
+        "title": "ClampOutput",
+        "type": "object",
+        "required": ["value"],
         "properties": {
           "value": {
-            "format": "double",
-            "type": "number"
+            "type": "number",
+            "format": "double"
           }
-        },
-        "required": [
-          "value"
-        ],
-        "title": "ClampOutput",
-        "type": "object"
-      },
-      "outputType": "ClampOutput"
+        }
+      }
     },
     {
+      "name": "createItem",
       "commandId": 8,
+      "inputType": "CreateItemInput",
+      "outputType": "CreateItemOutput",
+      "inputSchema": {
+        "title": "CreateItemInput",
+        "type": "object",
+        "required": ["name", "value"],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "CreateItemOutput",
+        "type": "object",
+        "required": ["item"],
+        "properties": {
+          "item": {
+            "$ref": "#/definitions/Item"
+          }
+        }
+      },
       "definitions": {
         "Item": {
+          "type": "object",
+          "required": ["active", "name", "value"],
           "properties": {
             "active": {
               "type": "boolean"
@@ -91,188 +110,117 @@
               "type": "string"
             },
             "value": {
-              "format": "int64",
-              "type": "integer"
+              "type": "integer",
+              "format": "int64"
             }
-          },
-          "required": [
-            "active",
-            "name",
-            "value"
-          ],
-          "type": "object"
+          }
         }
-      },
-      "inputSchema": {
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "value": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "name",
-          "value"
-        ],
-        "title": "CreateItemInput",
-        "type": "object"
-      },
-      "inputType": "CreateItemInput",
-      "name": "createItem",
-      "outputSchema": {
-        "properties": {
-          "item": {
-            "$ref": "#/definitions/Item"
-          }
-        },
-        "required": [
-          "item"
-        ],
-        "title": "CreateItemOutput",
-        "type": "object"
-      },
-      "outputType": "CreateItemOutput"
+      }
     },
     {
+      "name": "greet",
       "commandId": 5,
+      "inputType": "GreetInput",
+      "outputType": "GreetOutput",
       "inputSchema": {
+        "title": "GreetInput",
+        "type": "object",
+        "required": ["name"],
         "properties": {
           "name": {
             "type": "string"
           }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "GreetInput",
-        "type": "object"
+        }
       },
-      "inputType": "GreetInput",
-      "name": "greet",
       "outputSchema": {
+        "title": "GreetOutput",
+        "type": "object",
+        "required": ["message"],
         "properties": {
           "message": {
             "type": "string"
           }
-        },
-        "required": [
-          "message"
-        ],
-        "title": "GreetOutput",
-        "type": "object"
-      },
-      "outputType": "GreetOutput"
+        }
+      }
     },
     {
+      "name": "isEven",
       "commandId": 3,
+      "inputType": "IsEvenInput",
+      "outputType": "IsEvenOutput",
       "inputSchema": {
+        "title": "IsEvenInput",
+        "type": "object",
+        "required": ["n"],
         "properties": {
           "n": {
-            "format": "int64",
-            "type": "integer"
+            "type": "integer",
+            "format": "int64"
           }
-        },
-        "required": [
-          "n"
-        ],
-        "title": "IsEvenInput",
-        "type": "object"
+        }
       },
-      "inputType": "IsEvenInput",
-      "name": "isEven",
       "outputSchema": {
+        "title": "IsEvenOutput",
+        "type": "object",
+        "required": ["result"],
         "properties": {
           "result": {
             "type": "boolean"
           }
-        },
-        "required": [
-          "result"
-        ],
-        "title": "IsEvenOutput",
-        "type": "object"
-      },
-      "outputType": "IsEvenOutput"
+        }
+      }
     },
     {
+      "name": "multiply",
       "commandId": 2,
+      "inputType": "MultiplyInput",
+      "outputType": "MultiplyOutput",
       "inputSchema": {
+        "title": "MultiplyInput",
+        "type": "object",
+        "required": ["a", "b"],
         "properties": {
           "a": {
-            "format": "double",
-            "type": "number"
+            "type": "number",
+            "format": "double"
           },
           "b": {
-            "format": "double",
-            "type": "number"
+            "type": "number",
+            "format": "double"
           }
-        },
-        "required": [
-          "a",
-          "b"
-        ],
-        "title": "MultiplyInput",
-        "type": "object"
-      },
-      "inputType": "MultiplyInput",
-      "name": "multiply",
-      "outputSchema": {
-        "properties": {
-          "value": {
-            "format": "double",
-            "type": "number"
-          }
-        },
-        "required": [
-          "value"
-        ],
-        "title": "MultiplyOutput",
-        "type": "object"
-      },
-      "outputType": "MultiplyOutput"
-    },
-    {
-      "commandId": 9,
-      "definitions": {
-        "Item": {
-          "properties": {
-            "active": {
-              "type": "boolean"
-            },
-            "name": {
-              "type": "string"
-            },
-            "value": {
-              "format": "int64",
-              "type": "integer"
-            }
-          },
-          "required": [
-            "active",
-            "name",
-            "value"
-          ],
-          "type": "object"
         }
       },
+      "outputSchema": {
+        "title": "MultiplyOutput",
+        "type": "object",
+        "required": ["value"],
+        "properties": {
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      }
+    },
+    {
+      "name": "processItem",
+      "commandId": 9,
+      "inputType": "ProcessItemInput",
+      "outputType": "ProcessItemOutput",
       "inputSchema": {
+        "title": "ProcessItemInput",
+        "type": "object",
+        "required": ["item"],
         "properties": {
           "item": {
             "$ref": "#/definitions/Item"
           }
-        },
-        "required": [
-          "item"
-        ],
-        "title": "ProcessItemInput",
-        "type": "object"
+        }
       },
-      "inputType": "ProcessItemInput",
-      "name": "processItem",
       "outputSchema": {
+        "title": "ProcessItemOutput",
+        "type": "object",
+        "required": ["doubled", "item"],
         "properties": {
           "doubled": {
             "type": "boolean"
@@ -280,124 +228,119 @@
           "item": {
             "$ref": "#/definitions/Item"
           }
-        },
-        "required": [
-          "doubled",
-          "item"
-        ],
-        "title": "ProcessItemOutput",
-        "type": "object"
+        }
       },
-      "outputType": "ProcessItemOutput"
+      "definitions": {
+        "Item": {
+          "type": "object",
+          "required": ["active", "name", "value"],
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "value": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      }
     },
     {
+      "name": "rustraRegistryDemo",
       "commandId": 10,
+      "inputType": "RegistryDemoInput",
+      "outputType": "RegistryDemoOutput",
       "inputSchema": {
+        "title": "RegistryDemoInput",
+        "type": "object",
+        "required": ["op"],
         "properties": {
           "op": {
             "type": "string"
           }
-        },
-        "required": [
-          "op"
-        ],
-        "title": "RegistryDemoInput",
-        "type": "object"
+        }
       },
-      "inputType": "RegistryDemoInput",
-      "name": "rustraRegistryDemo",
       "outputSchema": {
+        "title": "RegistryDemoOutput",
+        "type": "object",
+        "required": ["frozen", "message", "ok"],
         "properties": {
+          "ok": {
+            "type": "boolean"
+          },
           "frozen": {
             "type": "boolean"
           },
           "message": {
             "type": "string"
-          },
-          "ok": {
-            "type": "boolean"
           }
-        },
-        "required": [
-          "frozen",
-          "message",
-          "ok"
-        ],
-        "title": "RegistryDemoOutput",
-        "type": "object"
-      },
-      "outputType": "RegistryDemoOutput"
+        }
+      }
     },
     {
+      "name": "sumList",
       "commandId": 6,
+      "inputType": "SumListInput",
+      "outputType": "SumListOutput",
       "inputSchema": {
+        "title": "SumListInput",
+        "type": "object",
+        "required": ["numbers"],
         "properties": {
           "numbers": {
+            "type": "array",
             "items": {
-              "format": "int64",
-              "type": "integer"
-            },
-            "type": "array"
+              "type": "integer",
+              "format": "int64"
+            }
           }
-        },
-        "required": [
-          "numbers"
-        ],
-        "title": "SumListInput",
-        "type": "object"
+        }
       },
-      "inputType": "SumListInput",
-      "name": "sumList",
       "outputSchema": {
+        "title": "SumListOutput",
+        "type": "object",
+        "required": ["count", "total"],
         "properties": {
           "count": {
-            "format": "int32",
-            "type": "integer"
+            "type": "integer",
+            "format": "int32"
           },
           "total": {
-            "format": "int64",
-            "type": "integer"
+            "type": "integer",
+            "format": "int64"
           }
-        },
-        "required": [
-          "count",
-          "total"
-        ],
-        "title": "SumListOutput",
-        "type": "object"
-      },
-      "outputType": "SumListOutput"
+        }
+      }
     },
     {
+      "name": "toUpper",
       "commandId": 7,
+      "inputType": "ToUpperInput",
+      "outputType": "ToUpperOutput",
       "inputSchema": {
+        "title": "ToUpperInput",
+        "type": "object",
+        "required": ["s"],
         "properties": {
           "s": {
             "type": "string"
           }
-        },
-        "required": [
-          "s"
-        ],
-        "title": "ToUpperInput",
-        "type": "object"
+        }
       },
-      "inputType": "ToUpperInput",
-      "name": "toUpper",
       "outputSchema": {
+        "title": "ToUpperOutput",
+        "type": "object",
+        "required": ["result"],
         "properties": {
           "result": {
             "type": "string"
           }
-        },
-        "required": [
-          "result"
-        ],
-        "title": "ToUpperOutput",
-        "type": "object"
-      },
-      "outputType": "ToUpperOutput"
+        }
+      }
     }
-  ],
-  "packageId": "examples.calculator"
+  ]
 }
