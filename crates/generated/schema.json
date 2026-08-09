@@ -1,6 +1,7 @@
 {
   "commands": [
     {
+      "commandId": 1,
       "inputSchema": {
         "properties": {
           "a": {
@@ -16,17 +17,25 @@
           "a",
           "b"
         ],
-        "title": "__AddNumbersInput",
+        "title": "AddNumbersInput",
         "type": "object"
       },
       "inputType": "AddNumbersInput",
       "name": "addNumbers",
       "outputSchema": {
-        "format": "int64",
-        "title": "int64",
-        "type": "integer"
+        "properties": {
+          "value": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "AddNumbersOutput",
+        "type": "object"
       },
-      "outputType": "i64"
+      "outputType": "AddNumbersOutput"
     }
   ],
   "packageId": "example.calculator"

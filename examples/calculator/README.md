@@ -29,10 +29,15 @@ cargo run -p rustra-calculator-example
 ## 생성된 커맨드 헬퍼
 
 ```ts
-export function addNumbers(engine: EngineClient, input: AddNumbersInput): Promise<AddNumbersOutput> {
-  return engine.invoke<AddNumbersOutput>('addNumbers', input);
+import { invoke } from '@rustra/types';
+
+export function addNumbers(input: AddNumbersInput): Promise<AddNumbersOutput> {
+  return invoke<AddNumbersOutput>('addNumbers', input);
 }
 ```
+
+글로벌 엔진은 `configure()`로 한 번 설정하면 이후 `addNumbers({ a: 42, b: 58 })`처럼
+engine 파라미터 없이 호출할 수 있습니다 (Tauri-like 글로벌 invoke 패턴).
 
 ## 호환성 테스트
 

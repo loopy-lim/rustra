@@ -27,11 +27,11 @@ const simpleSchema: PackageSchema = {
   ],
 };
 
-test('generateTypesTs produces EngineClient and RustraError', () => {
+test('generateTypesTs re-exports EngineClient and RustraError', () => {
   const types = generateTypesTs(simpleSchema);
-  assert.ok(types.includes('export type EngineClient'));
-  assert.ok(types.includes('export type RustraError'));
-  assert.ok(types.includes('readonly retryable?'));
+  assert.ok(types.includes('EngineClient'));
+  assert.ok(types.includes('RustraError'));
+  assert.ok(types.includes("from '@rustra/types'"));
 });
 
 test('generateTypesTs maps tuple types', () => {
@@ -83,7 +83,8 @@ test('generateTypesTs maps Record types', () => {
 test('generateCommandsTs produces command function', () => {
   const commands = generateCommandsTs(simpleSchema);
   assert.ok(commands.includes('export function add('));
-  assert.ok(commands.includes("engine.invoke<AddOutput>('add'"));
+  assert.ok(commands.includes("invoke<AddOutput>('add'"));
+  assert.ok(commands.includes("import { invoke } from '@rustra/types'"));
 });
 
 test('generateContractTs produces hash constant', () => {

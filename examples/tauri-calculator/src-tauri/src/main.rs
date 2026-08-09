@@ -7,7 +7,10 @@ fn main() {
         let output = calculator_package()
             .invoke_json("addNumbers", serde_json::json!({"a": 20, "b": 22}))
             .expect("invoke should succeed");
-        let value = output.as_i64().expect("result should be a number");
+        let value = output
+            .get("value")
+            .and_then(|v| v.as_i64())
+            .expect("result should be a number");
         let _ = fs::write(path, value.to_string());
     }
 

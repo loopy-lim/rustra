@@ -6,3 +6,7 @@ export type AddNumbersInput = {
   b: number;
 };
 
+export type AddNumbersOutput = {
+  value: number;
+};
+
