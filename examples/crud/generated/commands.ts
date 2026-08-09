@@ -1,22 +1,23 @@
-import type { CreateItemInput, CreateItemOutput, DeleteItemInput, DeleteItemOutput, EngineClient, GetItemInput, GetItemOutput, ListItemsInput, ListItemsOutput, RustraError, UpdateItemInput, UpdateItemOutput } from './types.js';
+import type { CreateItemInput, CreateItemOutput, DeleteItemInput, DeleteItemOutput, GetItemInput, GetItemOutput, ListItemsInput, ListItemsOutput, UpdateItemInput, UpdateItemOutput } from './types.js';
+import { invoke } from '@rustra/types';
 
-export function createItem(engine: EngineClient, input: CreateItemInput): Promise<CreateItemOutput> {
-  return engine.invoke<CreateItemOutput>('createItem', input);
+export function createItem(input: CreateItemInput): Promise<CreateItemOutput> {
+  return invoke<CreateItemOutput>('createItem', input);
 }
 
-export function deleteItem(engine: EngineClient, input: DeleteItemInput): Promise<DeleteItemOutput> {
-  return engine.invoke<DeleteItemOutput>('deleteItem', input);
+export function deleteItem(input: DeleteItemInput): Promise<DeleteItemOutput> {
+  return invoke<DeleteItemOutput>('deleteItem', input);
 }
 
-export function getItem(engine: EngineClient, input: GetItemInput): Promise<GetItemOutput> {
-  return engine.invoke<GetItemOutput>('getItem', input);
+export function getItem(input: GetItemInput): Promise<GetItemOutput> {
+  return invoke<GetItemOutput>('getItem', input);
 }
 
-export function listItems(engine: EngineClient, input: ListItemsInput): Promise<ListItemsOutput> {
-  return engine.invoke<ListItemsOutput>('listItems', input);
+export function listItems(input: ListItemsInput): Promise<ListItemsOutput> {
+  return invoke<ListItemsOutput>('listItems', input);
 }
 
-export function updateItem(engine: EngineClient, input: UpdateItemInput): Promise<UpdateItemOutput> {
-  return engine.invoke<UpdateItemOutput>('updateItem', input);
+export function updateItem(input: UpdateItemInput): Promise<UpdateItemOutput> {
+  return invoke<UpdateItemOutput>('updateItem', input);
 }
 

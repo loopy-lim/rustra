@@ -644,19 +644,21 @@ impl Package {
     }
 
     fn generate_commands_ts(state: &RegistryState) -> String {
-        let mut type_names =
-            BTreeSet::from(["EngineClient".to_string(), "RustraError".to_string()]);
+        // Tauri-like 글로벌 invoke 패턴: `configure()`로 설정한 엔진을
+        // `invoke()`가 사용하므로 명령 함수는 engine 파라미터를 받지 않는다.
+        let mut type_names = BTreeSet::new();
         for command in state.commands.values() {
             type_names.insert(command.input_type.clone());
             type_names.insert(command.output_type.clone());
         }
 
         let imports = type_names.into_iter().collect::<Vec<_>>().join(", ");
-        let mut output = format!("import type {{ {imports} }} from './types.js';\n\n");
+        let mut output = format!("import type {{ {imports} }} from './types.js';\n");
+        output.push_str("import { invoke } from '@rustra/types';\n\n");
 
         for (name, command) in state.commands.iter() {
             output.push_str(&format!(
-                "export function {}(engine: EngineClient, input: {}): Promise<{}> {{\n  return engine.invoke<{}>('{}', input);\n}}\n\n",
+                "export function {}(input: {}): Promise<{}> {{\n  return invoke<{}>('{}', input);\n}}\n\n",
                 command_function_name(name),
                 command.input_type,
                 command.output_type,

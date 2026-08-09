@@ -1,3 +1,4 @@
+import { configure } from '@rustra/types';
 import { addNumbers } from '../../calculator/generated/commands.js';
 import { createTauriEngine } from '../../../packages/tauri/src/index.js';
 
@@ -14,8 +15,9 @@ declare global {
 const engine = createTauriEngine({
   invoke: window.__TAURI__.core.invoke,
 });
+configure(engine);
 
-const result = await addNumbers(engine, { a: 20, b: 22 });
+const result = await addNumbers({ a: 20, b: 22 });
 const output = document.querySelector('output');
 
 if (output) {

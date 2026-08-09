@@ -52,9 +52,12 @@ export function tsTypeFromSchema(
         return 'boolean';
       case 'array': {
         const itemSchema = schema.items;
-        const itemType = itemSchema
-          ? tsTypeFromSchema(Array.isArray(itemSchema) ? itemSchema[0] : itemSchema, definitions)
-          : 'unknown';
+        if (Array.isArray(itemSchema)) {
+          // Tuple: items가 스키마 배열이면 [t1, t2, ...] 튜플로 매핑 (Rust codegen과 일치).
+          const elementTypes = itemSchema.map((s) => tsTypeFromSchema(s, definitions));
+          return `[${elementTypes.join(', ')}]`;
+        }
+        const itemType = itemSchema ? tsTypeFromSchema(itemSchema, definitions) : 'unknown';
         return `${itemType}[]`;
       }
       case 'null':
@@ -79,10 +82,14 @@ export function tsTypeFromSchema(
             return 'null';
           case 'object':
             return tsObjectFromSchema(schema, definitions);
-          case 'array':
-            return schema.items
-              ? `${tsTypeFromSchema(Array.isArray(schema.items) ? schema.items[0] : schema.items, definitions)}[]`
-              : 'unknown[]';
+          case 'array': {
+            const items = schema.items;
+            if (Array.isArray(items)) {
+              const elementTypes = items.map((s) => tsTypeFromSchema(s, definitions));
+              return `[${elementTypes.join(', ')}]`;
+            }
+            return items ? `${tsTypeFromSchema(items, definitions)}[]` : 'unknown[]';
+          }
           default:
             return 'unknown';
         }
