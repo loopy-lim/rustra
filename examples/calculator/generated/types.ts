@@ -74,9 +74,9 @@ export type RegistryDemoInput = {
 };
 
 export type RegistryDemoOutput = {
+  ok: boolean;
   frozen: boolean;
   message: string;
-  ok: boolean;
 };
 
 export type SumListInput = {
@@ -95,4 +95,3 @@ export type ToUpperInput = {
 export type ToUpperOutput = {
   result: string;
 };
-

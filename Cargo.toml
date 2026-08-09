@@ -21,8 +21,8 @@ repository = "https://github.com/loopy-lim/hostra"
 rustra-macros = { version = "0.1.0", path = "crates/rustra-macros" }
 rustra = { path = "crates/rustra" }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-schemars = { version = "0.8", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+schemars = { version = "0.8", features = ["derive", "preserve_order"] }
 sha2 = "0.10"
 hex = "0.4"
 postcard = { version = "1", features = ["alloc"] }
