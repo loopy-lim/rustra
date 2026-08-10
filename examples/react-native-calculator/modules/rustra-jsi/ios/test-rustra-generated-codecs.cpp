@@ -7,8 +7,12 @@
 // RN 의 진짜 jsi/jsi.h 대신 아래 test-jsi-shim.hpp 의 최소 shim 을 링크한다.
 // 실제 디바이스 빌드(Xcode + React-Common)는 별도 검증 항목.
 //
-// 빌드/실행:
-//   clang++ -std=c++17 -O2 -Wall -Wextra -I<ios_dir> \
+// 빌드/실행 (간단히):  ./run-cpp-codec-tests.sh
+//
+// 수동 빌드 — test-jsi-shim.hpp 가 facebook::jsi 를 정의하므로, <jsi/jsi.h> 는
+// 빈 stub 으로 치환하고 shim 을 force-include 한다:
+//   mkdir -p /tmp/b/jsi && printf '#pragma once\n' > /tmp/b/jsi/jsi.h
+//   clang++ -std=c++17 -O2 -Wall -Wextra -I<ios_dir> -I/tmp/b -include test-jsi-shim.hpp \
 //     test-rustra-generated-codecs.cpp rustra-generated-codecs.cpp -o /tmp/tgen && /tmp/tgen
 
 #include "test-jsi-shim.hpp"
@@ -161,6 +165,69 @@ int main() {
     std::string msg = obj.getProperty(rt, "message").getString(rt).utf8(rt);
     if (!ok || frozen || msg != "hi") {
       std::printf("FAIL decode rustraRegistryDemo: ok=%d frozen=%d msg=<%s>\n", ok, frozen, msg.c_str());
+      ++g_failures;
+    }
+  }
+
+  // ── shared-fixture cross-check (Task 2.5): Rust↔TS↔C++ 동일 바이트 ──────
+  // examples/calculator/tests/wire_fixtures.rs (Rust) 와
+  // examples/calculator/ts/cross-wire.test.ts (TS) 가 공유하는 canonical hex 를
+  // generated C++ codec 이 동일하게 encode/decode 함을 증명한다. 코너 하나라도
+  // 드리프트하면 세 테스트 중 하나가 실패 → 스키마/코덱 회귀 감지.
+  //
+  // 정적 코덱에 존재하는 addNumbers/greet 만 C++ 교차 검증 가능.
+  // divide·secureCompute 는 동적 명령(C++ static codec 없음 → JS Tier 3 fallback)
+  // 이므로 divide 에러 프레임은 Rust↔TS 교차 증명(cross-wire.test.ts)에 한정.
+
+  // (1) encode addNumbers {a:2,b:3} → [cmd 1 LE][zigzag(2)=04][zigzag(3)=06]
+  //     == Rust/TS ADDNUMBERS_REQUEST "01000406"
+  {
+    Object args(rt);
+    args.setProperty(rt, "a", 2.0);
+    args.setProperty(rt, "b", 3.0);
+    Value argsV(rt, args);
+    rc::Writer w;
+    gen::encode_by_name(rt, "addNumbers", argsV, w);
+    check_bytes(w.take(), {0x01, 0x00, 0x04, 0x06}, "shared-fixture encode addNumbers {2,3}");
+  }
+
+  // (2) encode greet {name:"Lynx"} → [cmd 5 LE][len 4]['L']['y']['n']['x']
+  //     == Rust/TS GREET_REQUEST "0500044c796e78"
+  {
+    Object args(rt);
+    args.setProperty(rt, "name",
+                    String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>("Lynx"), 4));
+    Value argsV(rt, args);
+    rc::Writer w;
+    gen::encode_by_name(rt, "greet", argsV, w);
+    check_bytes(w.take(), {0x05, 0x00, 0x04, 0x4c, 0x79, 0x6e, 0x78},
+                "shared-fixture encode greet {Lynx}");
+  }
+
+  // (3) decode addNumbers 응답 바디 (프레임 [ok:1][7B 0][body] 중 body=0x0a → 5)
+  //     전체 프레임 == Rust/TS ADDNUMBERS_RESPONSE "01000000000000000a"
+  {
+    std::vector<uint8_t> frame = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a};
+    rc::Reader r(frame.data() + 8, frame.size() - 8);  // 8바이트 프레임 헤더 건너뜀
+    Value result = gen::decode_by_name(rt, "addNumbers", r);
+    double v = result.getObject(rt).getProperty(rt, "value").asNumber();
+    if (v != 5.0) {
+      std::printf("FAIL shared-fixture decode addNumbers: got %f, want 5\n", v);
+      ++g_failures;
+    }
+  }
+
+  // (4) decode greet 응답 바디 (body = len 12 + "Hello, Lynx!")
+  //     전체 프레임 == Rust/TS GREET_RESPONSE "01000000000000000c48656c6c6f2c204c796e7821"
+  {
+    std::vector<uint8_t> frame = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                  0x0c, 'H', 'e', 'l', 'l', 'o', ',', ' ',
+                                  'L',  'y', 'n', 'x', '!'};
+    rc::Reader r(frame.data() + 8, frame.size() - 8);
+    Value result = gen::decode_by_name(rt, "greet", r);
+    std::string s = result.getObject(rt).getProperty(rt, "message").getString(rt).utf8(rt);
+    if (s != "Hello, Lynx!") {
+      std::printf("FAIL shared-fixture decode greet: got <%s>, want Hello, Lynx!\n", s.c_str());
       ++g_failures;
     }
   }
