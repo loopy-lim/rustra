@@ -81,6 +81,17 @@ fn invoke_postcard(payload: &[u8]) -> PostcardResponse {
     resp
 }
 
+/// `invoke_json` 처럼 invoke 하지만 버퍼를 해제하지 않고 원본 `(ptr, len)` 을
+/// 반환한다 — F2 free-misuse 가드 테스트에서만 사용. 호출자가 직접 해제해야 한다.
+fn invoke_json_raw(payload: &[u8]) -> (*mut u8, usize) {
+    let mut out_len: usize = 0;
+    let ptr = unsafe {
+        rustra::ffi::rustra_ffi_invoke_json(payload.as_ptr(), payload.len(), &mut out_len)
+    };
+    assert!(!ptr.is_null(), "FFI must return a non-null buffer");
+    (ptr, out_len)
+}
+
 // ── 음수 경로 고정: huge payload (Task 0.5 Step 1) ──────────
 
 #[test]
@@ -185,12 +196,19 @@ fn panic_in_handler_returns_clean_error_not_abort() {
 }
 
 #[test]
-#[ignore = "F2: rustra_ffi_free 가 double-free/wrong-len 을 막지 못함 → UB. \
-            Phase 1 (Task 1.4) 에서 debug_assert 가드 추가 후 본문 채우고 ignore 제거"]
-fn free_wrong_len_is_detected() {
-    // TODO Phase 1 (Task 1.4): 잘못된 len 으로 rustra_ffi_free 호출 시
-    //   가드가 탐지(panic on debug / 안전 무시 on release) 함을 단언.
-    //   현재는 잘못된 len → Box::from_raw size 불일치 → UB.
+fn free_guard_permits_exact_correct_free() {
+    // F2 (regression): debug 가드가 활성화된 상태에서도 *올바른* (ptr,len) 해제는
+    // 정상적으로 동작한다 (abort 없이 테스트가 완료된다 = 증거).
+    //
+    // 잘못된 len / double-free 를 가드가 탐지하는지(Verdict: WrongLen / NotLive)는
+    // ffi.rs::free_guard 의 단위 테스트로 증명한다 — misuse 시 rustra_ffi_free 가
+    // extern "C" nounwind 경계에서 abort 하므로 통합 테스트에서는 잡을 수 없다.
+    test_package().register_ffi();
+    let (ptr, len) = invoke_json_raw(br#"{"command":"addNumbers","args":{"a":1,"b":2}}"#);
+
+    // 올바른 해제 → 가드가 Verdict::Sound 로 분류하고 Box::from_raw 가 정상 수행.
+    // (이 호출이 돌아오면 가드가 정상 경로를 차단하지 않음이 증명된다.)
+    unsafe { rustra::ffi::rustra_ffi_free(ptr, len) };
 }
 
 #[test]
