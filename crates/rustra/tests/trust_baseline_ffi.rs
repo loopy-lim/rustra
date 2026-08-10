@@ -258,9 +258,13 @@ fn contract_hash_null_out_len_returns_null() {
 }
 
 #[test]
-#[ignore = "F8: rustra_ffi_get_schema 가 out_len null 체크 누락 → null deref UB. \
-            Phase 1 (Task 1.6) 에서 null 체크 추가 후 본문 채우고 ignore 제거"]
 fn get_schema_with_null_out_len_is_safe() {
-    // TODO Phase 1 (Task 1.6): out_len=null 로 rustra_ffi_get_schema 호출 시
-    //   null ptr 반환(abort 아님) 단언. 현재는 alloc_response 가 *out_len 에 write → UB.
+    // F8: out_len=null 로 rustra_ffi_get_schema 호출 시 null ptr 를 반환한다 (UB/abort 아님).
+    // 예전엔 alloc_response 가 *out_len 에 write 해 null deref → UB 였다.
+    test_package().register_ffi();
+    let ptr = unsafe { rustra::ffi::rustra_ffi_get_schema(std::ptr::null_mut()) };
+    assert!(
+        ptr.is_null(),
+        "null out_len must yield a null ptr, not dereference it"
+    );
 }
