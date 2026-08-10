@@ -92,6 +92,22 @@ fn invoke_json_raw(payload: &[u8]) -> (*mut u8, usize) {
     (ptr, out_len)
 }
 
+/// `rustra_ffi_contract_hash` 가 반환하는 SHA-256 hex 문자열을 읽고 해제한다.
+fn invoke_contract_hash() -> String {
+    let mut out_len: usize = 0;
+    let ptr = unsafe { rustra::ffi::rustra_ffi_contract_hash(&mut out_len) };
+    assert!(
+        !ptr.is_null(),
+        "contract_hash must return a non-null buffer"
+    );
+    let bytes = unsafe { std::slice::from_raw_parts(ptr, out_len) };
+    let s = std::str::from_utf8(bytes)
+        .expect("contract hash is UTF-8 hex")
+        .to_string();
+    unsafe { rustra::ffi::rustra_ffi_free(ptr, out_len) };
+    s
+}
+
 // ── 음수 경로 고정: huge payload (Task 0.5 Step 1) ──────────
 
 #[test]
@@ -209,6 +225,36 @@ fn free_guard_permits_exact_correct_free() {
     // 올바른 해제 → 가드가 Verdict::Sound 로 분류하고 Box::from_raw 가 정상 수행.
     // (이 호출이 돌아오면 가드가 정상 경로를 차단하지 않음이 증명된다.)
     unsafe { rustra::ffi::rustra_ffi_free(ptr, len) };
+}
+
+#[test]
+fn contract_hash_is_stable_64_hex() {
+    // F5 (native 측): rustra_ffi_contract_hash 가 등록된 스키마의 SHA-256 hex 를
+    // 안정적으로 반환한다. TS 엔진의 contractHash 옵션 검증(TS 단위 테스트)과 짝.
+    test_package().register_ffi();
+    let hash1 = invoke_contract_hash();
+    let hash2 = invoke_contract_hash();
+
+    assert_eq!(
+        hash1.len(),
+        64,
+        "SHA-256 hex must be 64 chars, got: {hash1}"
+    );
+    assert!(
+        hash1.chars().all(|c| c.is_ascii_hexdigit()),
+        "contract hash must be hex, got: {hash1}"
+    );
+    assert_eq!(
+        hash1, hash2,
+        "contract hash must be deterministic for a fixed schema"
+    );
+}
+
+#[test]
+fn contract_hash_null_out_len_returns_null() {
+    // F5 companion: out_len=null → null ptr (F8 스타일 null 가드가 신설 함수에도 적용됨).
+    let ptr = unsafe { rustra::ffi::rustra_ffi_contract_hash(std::ptr::null_mut()) };
+    assert!(ptr.is_null(), "null out_len must yield null ptr, not UB");
 }
 
 #[test]

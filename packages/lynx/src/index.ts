@@ -59,6 +59,11 @@ export type RustraLynxJsonNative = {
  */
 export type FastEngineOptions = {
   rkyvV2Codecs: Map<string, RkyvV2Codec<any, any>>;
+  /**
+   * (F5, opt-in) 빌드 시점 계약 해시. 설정하면 엔진 생성 시 네이티브의
+   * 실시간 해시(getContractHash)와 비교해 불일치 시 즉시 throw 한다.
+   */
+  contractHash?: string;
 };
 
 /**
@@ -79,7 +84,9 @@ export function createFastEngine(
   native: RustraLynxNative,
   options: FastEngineOptions,
 ): EngineClientType {
-  return createRkyvV2Engine(native, options.rkyvV2Codecs);
+  return createRkyvV2Engine(native, options.rkyvV2Codecs, {
+    contractHash: options.contractHash,
+  });
 }
 
 // ── JSON 폴백 엔진 (옵션) ──────────────────────────────────
