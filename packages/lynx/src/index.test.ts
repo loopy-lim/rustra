@@ -94,6 +94,7 @@ test('createLynxEngine throws on error response with default message', async () 
       await engine.invoke('missing');
     },
     (err: Error) => {
+      assert.ok(err instanceof RustraCommandError, 'F4: must be RustraCommandError');
       assert.equal(err.message, 'command not found');
       return true;
     },
