@@ -150,25 +150,23 @@ test('getRustraNative throws when RustraModule is missing', () => {
 
 // ── Trust-test baseline (Phase 0) ───────────────────────────
 
-test('F3 baseline: createLynxEngine sync throw bypasses .catch() (Promise<T> violation)', () => {
-  // EngineClient 계약상 invoke() 실패는 rejected Promise여야 하지만,
-  // 현재 createLynxEngine JSON fallback 은 동기 throw 한다.
+test('F3: createLynxEngine native throw is caught by .catch() (Promise<T> honored)', async () => {
+  // EngineClient 계약상 invoke() 실패는 rejected Promise 여야 한다.
+  // async 전환 후 동기 throw 는 rejected Promise 로 정규화되어 .catch() 에서 잡힌다.
   const engine = createLynxEngine({
     invoke() {
       throw new Error('native boom');
     },
   });
   let caughtByCatch = false;
-  try {
-    engine.invoke('cmd', {}).catch(() => {
-      caughtByCatch = true;
-    });
-  } catch {
-    // 현재 결함: Promise 반환 전 동기 throw → .catch() 체인이 안 붙음.
-  }
+  // async invoke 는 동기 throw 를 rejected Promise 로 정규화한다.
+  // .catch() 체인을 await 해야 rejection handler(microtask) 가 실행된다.
+  await engine.invoke('cmd', {}).catch(() => {
+    caughtByCatch = true;
+  });
   assert.equal(
     caughtByCatch,
-    false,
-    'F3: sync throw bypasses .catch() — Phase 1 async 전환 후 true로 단언 전환',
+    true,
+    'F3: async invoke converts sync throw to rejected Promise — .catch() must catch it',
   );
 });

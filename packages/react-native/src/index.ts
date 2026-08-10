@@ -31,7 +31,7 @@ export function createReactNativeEngine(native: { invoke(payload: ArrayBuffer): 
   const decoder = new TextDecoder();
 
   return {
-    invoke<T>(command: string, args?: unknown): Promise<T> {
+    async invoke<T>(command: string, args?: unknown): Promise<T> {
       const json = JSON.stringify({ command, args });
       const payload = encoder.encode(json);
       const resultBytes = native.invoke(payload.buffer);
@@ -44,7 +44,7 @@ export function createReactNativeEngine(native: { invoke(payload: ArrayBuffer): 
       if (!response.ok) {
         throw new Error(response.error ?? 'Rustra invoke failed');
       }
-      return Promise.resolve(response.result as T);
+      return response.result as T;
     },
   };
 }
