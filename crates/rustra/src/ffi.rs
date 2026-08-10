@@ -456,10 +456,14 @@ pub unsafe extern "C" fn rustra_ffi_free(ptr: *mut u8, len: usize) {
 ///
 /// # Safety
 ///
-/// `out_len` must be a valid write pointer. Caller must free the returned buffer
+/// `out_len` must be a valid, non-null write pointer (a null `out_len` returns a
+/// null pointer rather than dereferencing). Caller must free the returned buffer
 /// with `rustra_ffi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_ffi_get_schema(out_len: *mut usize) -> *mut u8 {
+    if out_len.is_null() {
+        return std::ptr::null_mut();
+    }
     match get_package() {
         Some(pkg) => {
             let json = serde_json::to_vec(&pkg.live_schema()).unwrap_or_else(|_| b"{}".to_vec());
