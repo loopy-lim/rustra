@@ -264,6 +264,12 @@ export type LiveSchemaEntry = {
 export type RkyvV2SchemaNative = {
   invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
   getSchema?(): ArrayBuffer;
+  /**
+   * 네이티브 빌드의 계약 해시(SHA-256 hex)를 반환한다 (F5 opt-in 검증용).
+   * `rustra_ffi_contract_hash` 와 대응. `contractHash` 엔진 옵션이 설정된
+   * 경우에만 호출된다.
+   */
+  getContractHash?(): ArrayBuffer;
   /** B1 (RN JSI): 정적 명령 C++ postcard fast path. 둘 다 있으면 JS 코덱 대신 사용. */
   hasStaticCodec?(name: string): boolean;
   invokeTyped?(name: string, args: unknown): unknown;
@@ -367,10 +373,46 @@ function decodeTier3Response(bytes: ArrayBuffer): {
  * 동적(런타임 등록) 명령은 live schema 에서 commandId 를 조회해 Tier 3(JSON) 로
  * fallback 한다. 단일 엔진이 정적 + 동적 모두 처리.
  */
+/**
+ * `createRkyvV2Engine` 옵션. 모두 opt-in 이며 생략 시 하위 호환 동작을 유지한다.
+ */
+export type RkyvV2EngineOptions = {
+  /**
+   * (F5) 빌드 시점 코드젠이 생성한 계약 해시(`GENERATED_CONTRACT_HASH`).
+   * 설정하면 엔진 생성 시 네이티브의 실시간 해시(`getContractHash`)와 비교해
+   * 불일치면 즉시 throw 한다 — 생성된 클라이언트와 네이티브 바이너리의 스키마
+   * 드리프트를 시작 시점에 잡는다. 미설정 시 검증하지 않는다(기본값).
+   */
+  contractHash?: string;
+};
+
 export function createRkyvV2Engine(
   native: RkyvV2SchemaNative,
   registry: Map<string, RkyvV2Codec<any, any>>,
+  options?: RkyvV2EngineOptions,
 ): RkyvV2Engine {
+  // F5 (opt-in): 계약 해시 검증. 빌드 시점 hash 와 네이티브 실시간 hash 가 다르면
+  // 엔진을 만들지 않고 즉시 실패(fail-fast)한다.
+  if (options?.contractHash !== undefined) {
+    if (typeof native.getContractHash !== 'function') {
+      throw new RustraCommandError(
+        'contract.unenforceable',
+        'contractHash option was set but the native module does not expose ' +
+          'getContractHash(); cannot verify schema drift',
+      );
+    }
+    const hashBytes = new Uint8Array(native.getContractHash());
+    const nativeHash = _utf8Decode(hashBytes, 0, hashBytes.length).trim();
+    if (nativeHash !== options.contractHash) {
+      throw new RustraCommandError(
+        'contract.mismatch',
+        `contract hash mismatch: native="${nativeHash.slice(0, 16)}…" vs ` +
+          `expected="${options.contractHash.slice(0, 16)}…" — generated client ` +
+          `and native binary are out of sync; regenerate the client`,
+      );
+    }
+  }
+
   // B1 fast path: 네이티브가 C++ typed 코덱(invokeTyped + hasStaticCodec)을 노출하면
   // 정적 명령을 C++에서 postcard 인코딩/디코딩한다 (JS codec 왕복 ~3.4µs 제거).
   const hasTypedPath = !!(native.invokeTyped && native.hasStaticCodec);

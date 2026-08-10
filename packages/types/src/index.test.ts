@@ -75,13 +75,20 @@ function schemaBytes(commands: Array<{ name: string; commandId: number }>): Arra
 interface NativeOpts {
   schema?: ArrayBuffer;
   invokeImpl?: (payload: ArrayBuffer) => ArrayBuffer;
+  /** 네이티브가 노출하는 계약 해시(F5). undefined 면 getContractHash 를 노출하지 않는다. */
+  contractHash?: string;
 }
 
 function makeNative(opts: NativeOpts): RkyvV2SchemaNative {
-  return {
+  const native: RkyvV2SchemaNative = {
     getSchema: () => opts.schema ?? schemaBytes([]),
     invokeRkyvV2: (payload) => (opts.invokeImpl ? opts.invokeImpl(payload) : new ArrayBuffer(0)),
   };
+  if (opts.contractHash !== undefined) {
+    native.getContractHash = () =>
+      new TextEncoder().encode(opts.contractHash!).buffer as ArrayBuffer;
+  }
+  return native;
 }
 
 // ── getLiveSchema ──────────────────────────────────────────
@@ -384,12 +391,47 @@ test('invokeBatch without typed-batch native falls back to per-entry', async () 
 
 // ── Trust-test baseline (Phase 0) ───────────────────────────
 
-test('F5 baseline: createRkyvV2Engine performs no contract-hash verification', () => {
-  // 현재: createRkyvV2Engine(native, registry) 시그니처에 hash 인자가 없다.
-  // → 생성된 bundle 의 GENERATED_CONTRACT_HASH 와 네이티브의 실제 hash 가
-  //    달라도 조용히 통과한다 (스키마 드리프트 감지 불가).
-  // Phase 1 에서 hash 옵션(불일치 시 reject)이 추가되면 이 테스트는
-  // "불일치 시 reject" 단언으로 전환된다.
+test('F5: contractHash mismatch throws at engine creation (opt-in enforcement)', () => {
+  // 옵션의 hash 와 네이티브 실시간 hash 가 다르면 엔진 생성 단계에서 즉시 실패한다.
+  const native = makeNative({ contractHash: 'a'.repeat(64) });
+  assert.throws(
+    () => createRkyvV2Engine(native, new Map(), { contractHash: 'b'.repeat(64) }),
+    (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError, 'must be RustraCommandError');
+      assert.equal(
+        (err as RustraCommandError).code,
+        'contract.mismatch',
+        'code must indicate schema drift',
+      );
+      assert.match((err as Error).message, /mismatch/);
+      return true;
+    },
+  );
+});
+
+test('F5: matching contractHash creates the engine successfully', () => {
+  const hash = 'c'.repeat(64);
+  const native = makeNative({ contractHash: hash });
+  const engine = createRkyvV2Engine(native, new Map(), { contractHash: hash });
+  assert.ok(engine, 'matching hash must create the engine');
+  assert.equal(typeof engine.invoke, 'function');
+});
+
+test('F5: contractHash option without native getContractHash throws contract.unenforceable', () => {
+  // 옵션은 설정했으나 네이티브가 getContractHash 를 노출하지 않으면 검증 불가 → 명시적 에러.
+  const native = makeNative({}); // contractHash undefined → getContractHash 미노출
+  assert.throws(
+    () => createRkyvV2Engine(native, new Map(), { contractHash: 'd'.repeat(64) }),
+    (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'contract.unenforceable');
+      return true;
+    },
+  );
+});
+
+test('F5: no contractHash option skips verification (backward compatible)', () => {
+  // 옵션 미설정 시 검증하지 않는다 (기본값, 하위 호환).
   const engine = createRkyvV2Engine(makeNative({}), new Map());
   assert.ok(engine, 'engine created without any contract-hash argument');
   assert.equal(typeof engine.invoke, 'function', 'exposes invoke per EngineClient');

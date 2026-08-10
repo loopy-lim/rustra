@@ -214,7 +214,7 @@ pub(super) fn snake_to_lower_camel(name: &str) -> String {
 /// SHA-256 해시를 hex 문자열로 반환합니다.
 ///
 /// 스키마 무결성 검증을 위한 `contract_hash` 생성에 사용합니다.
-pub(super) fn contract_hash(input: impl AsRef<[u8]>) -> String {
+pub(crate) fn contract_hash(input: impl AsRef<[u8]>) -> String {
     let mut hasher = Sha256::new();
     hasher.update(input.as_ref());
     hex::encode(hasher.finalize())
