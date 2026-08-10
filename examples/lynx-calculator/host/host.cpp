@@ -70,6 +70,19 @@ static std::atomic<int> g_r_posted{0}, g_r_run{0};
 static std::atomic<bool> g_runtime_ready{false};
 static lynx_windowless_renderer_t *g_renderer = nullptr;
 
+// ── event push (Rust/host → ReactLynx) ────────────────────────────────────
+// The host ticker posts TickTask to the BTS runtime via the extension module;
+// TickTask calls the JS listener registered via RustraModule.subscribeTick.
+static lynx_extension_module_t *g_ext_module = nullptr;
+static lynx_vsync_observer_t *g_vsync_observer = nullptr;
+static napi_env_weak g_bts_env = nullptr;
+static napi_ref_weak g_tick_ref = nullptr;
+static std::atomic<int> g_tick_count{0};
+static std::atomic<int> g_ticks_delivered{0};
+static std::atomic<int> g_ticks_acked{0};  // JS confirm: ackTick() calls
+static std::atomic<int> g_results_acked{0};
+static std::atomic<int> g_result_value{-999};  // value JS acked (proves no-fallback)
+
 static uint64_t now_ns() {
   timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -187,6 +200,104 @@ static napi_value_weak InvokeRkyvV2(napi_env_weak env,
   return result;
 }
 
+// ── event push: RustraModule.subscribeTick(cb) ────────────────────────────
+// JS registers a tick listener; we hold it as a strong napi_ref and remember
+// the BTS env so TickTask (posted via lynx_extension_module_post_task_to_runtime)
+// can invoke it on the BTS thread.
+static napi_value_weak SubscribeTick(napi_env_weak env,
+                                     napi_callback_info_weak info) {
+  size_t argc = 1;
+  napi_value_weak args[1] = {nullptr};
+  napi_get_cb_info_weak(env, info, &argc, args, nullptr, nullptr);
+  if (argc < 1) {
+    fprintf(stderr, "[rustra] subscribeTick: no callback arg\n");
+    return nullptr;
+  }
+  if (g_tick_ref) napi_delete_reference_weak(env, g_tick_ref);
+  napi_create_reference_weak(env, args[0], 1, &g_tick_ref);
+  g_bts_env = env;
+  fprintf(stderr, "[rustra] subscribeTick: listener installed (env=%p)\n",
+          (void *)env);
+  return nullptr;
+}
+
+// JS→native ack: the tick listener calls this to confirm receipt. Comparing
+// delivered vs acked proves the JS callback actually executed (criterion 10).
+static napi_value_weak AckTick(napi_env_weak /*env*/,
+                               napi_callback_info_weak /*info*/) {
+  g_ticks_acked.fetch_add(1, std::memory_order_relaxed);
+  return nullptr;
+}
+
+// JS→native ack for the invoke result. The App calls ackResult(out) inside the
+// addNumbers().then() — i.e. ONLY on the success path, with the decoded Rust
+// value. resultAcked=1 val=42 proves the Rust result reached JS without the
+// catch() fallback firing (the fallback never calls ackResult). This is the
+// non-visual, no-fallback proof that complements ok=1/out=9.
+static napi_value_weak AckResult(napi_env_weak env,
+                                 napi_callback_info_weak info) {
+  size_t argc = 1;
+  napi_value_weak args[1] = {nullptr};
+  napi_get_cb_info_weak(env, info, &argc, args, nullptr, nullptr);
+  if (argc >= 1) {
+    int32_t v = -777;
+    napi_get_value_int32_weak(env, args[0], &v);
+    g_result_value.store(v, std::memory_order_relaxed);
+  }
+  g_results_acked.fetch_add(1, std::memory_order_relaxed);
+  return nullptr;
+}
+
+// Runs ON the BTS thread (scheduled by lynx_extension_module_post_task_to_runtime).
+// Calls the registered JS tick listener with an incrementing counter — the
+// Rust/host → ReactLynx event-push path.
+static void TickTask(void * /*user_data*/) {
+  fprintf(stderr, "[rustra] TickTask: ran on bts=%d ref=%d env=%d\n",
+          g_ext_module ? (int)lynx_extension_module_is_running_on_bts_thread(
+                             g_ext_module)
+                       : -1,
+          g_tick_ref ? 1 : 0, g_bts_env ? 1 : 0);
+  if (!g_tick_ref || !g_bts_env) return;
+  napi_value_weak cb = nullptr;
+  napi_get_reference_value_weak(g_bts_env, g_tick_ref, &cb);
+  if (!cb) return;
+  int n = g_tick_count.fetch_add(1, std::memory_order_relaxed) + 1;
+  napi_value_weak global = nullptr, num = nullptr, result = nullptr;
+  napi_get_global_weak(g_bts_env, &global);
+  napi_create_int32_weak(g_bts_env, n, &num);
+  napi_status_weak s =
+      napi_call_function_weak(g_bts_env, global, cb, 1, &num, &result);
+  g_ticks_delivered.fetch_add(1, std::memory_order_relaxed);
+  fprintf(stderr, "[rustra] TickTask: delivered n=%d call_status=%d\n", n,
+          (int)s);
+}
+
+// VSync-driven tick: scheduled via lynx_vsync_observer_request_animation_frame.
+// The VSyncMonitor wakes the BTS per frame, so this callback reaches the runtime
+// even when the view is idle (unlike post_task_to_runtime in this headless host).
+// Fires on the BTS thread; calls the registered JS tick listener.
+static void VsyncTickCb(void * /*user_data*/, int64_t /*ts1*/,
+                        int64_t /*ts2*/) {
+  int on_bts = g_ext_module
+                   ? (int)lynx_extension_module_is_running_on_bts_thread(g_ext_module)
+                   : -1;
+  fprintf(stderr, "[rustra] VsyncTickCb: on_bts=%d ref=%d env=%d\n", on_bts,
+          g_tick_ref ? 1 : 0, g_bts_env ? 1 : 0);
+  if (!g_tick_ref || !g_bts_env) return;
+  napi_value_weak cb = nullptr;
+  napi_get_reference_value_weak(g_bts_env, g_tick_ref, &cb);
+  if (!cb) return;
+  int n = g_tick_count.fetch_add(1, std::memory_order_relaxed) + 1;
+  napi_value_weak global = nullptr, num = nullptr, result = nullptr;
+  napi_get_global_weak(g_bts_env, &global);
+  napi_create_int32_weak(g_bts_env, n, &num);
+  napi_status_weak s =
+      napi_call_function_weak(g_bts_env, global, cb, 1, &num, &result);
+  g_ticks_delivered.fetch_add(1, std::memory_order_relaxed);
+  fprintf(stderr, "[rustra] VsyncTickCb: delivered n=%d status=%d\n", n,
+          (int)s);
+}
+
 static napi_value_weak RustraModuleCreator(napi_env_weak env,
                                            napi_value_weak exports,
                                            const char * /*module_name*/,
@@ -216,6 +327,15 @@ static void InstallRustraNative(napi_env_weak env, napi_value_weak global,
   napi_create_function_weak(env, "invokeRkyvV2", NAPI_AUTO_LENGTH,
                             InvokeRkyvV2, nullptr, &fn);
   napi_set_named_property_weak(env, exports, "invokeRkyvV2", fn);
+  napi_create_function_weak(env, "subscribeTick", NAPI_AUTO_LENGTH,
+                            SubscribeTick, nullptr, &fn);
+  napi_set_named_property_weak(env, exports, "subscribeTick", fn);
+  napi_create_function_weak(env, "ackTick", NAPI_AUTO_LENGTH, AckTick, nullptr,
+                            &fn);
+  napi_set_named_property_weak(env, exports, "ackTick", fn);
+  napi_create_function_weak(env, "ackResult", NAPI_AUTO_LENGTH, AckResult,
+                            nullptr, &fn);
+  napi_set_named_property_weak(env, exports, "ackResult", fn);
 
   // Ensure NativeModules exists. runtime_ready/runtime_attach can fire before
   // the framework installs NativeModules; napi_get_named_property returns
@@ -243,10 +363,14 @@ static void InstallRustraNative(napi_env_weak env, napi_value_weak global,
 
 static void OnExtRuntimeAttach(lynx_extension_module_t * /*self*/,
                                napi_env_weak env,
-                               lynx_vsync_observer_t * /*vso*/) {
+                               lynx_vsync_observer_t *vso) {
   napi_value_weak global = nullptr;
   napi_get_global_weak(env, &global);
   InstallRustraNative(env, global, "runtime_attach");
+  g_vsync_observer = vso;  // captured so the ticker can schedule BTS callbacks
+  g_bts_env = env;
+  fprintf(stderr, "[rustra] runtime_attach: vsync_observer=%p env=%p\n",
+          (void *)vso, (void *)env);
 }
 
 static void OnExtRuntimeReady(lynx_extension_module_t * /*self*/,
@@ -260,6 +384,7 @@ static lynx_extension_module_t *RustraExtCreator(void * /*opaque*/) {
   lynx_extension_module_set_napi_module_creator(m, RustraModuleCreator);
   lynx_extension_module_bind_runtime_attach(m, OnExtRuntimeAttach);
   lynx_extension_module_bind_runtime_ready(m, OnExtRuntimeReady);
+  g_ext_module = m;  // captured so the pump-loop ticker can post tasks to BTS
   fprintf(stderr, "[rustra] extension module created (attach+ready bound)\n");
   return m;
 }
@@ -464,11 +589,17 @@ static int LynxMain(const char *bundle_path, const char *out_raw,
   //    PAST the first present and capture the first frame that has non-zero
   //    pixels — not stop at the empty clear frame.
   const uint64_t deadline = now_ns() + 20000000000ull;  // 20s hard cap
+  // Minimum pump runtime so the event-push ticker (~1 tick/sec, first at +1s)
+  // has time to deliver a few ticks before the content-settle early-exit.
+  const uint64_t min_run_ns = now_ns() + 4000000000ull;  // 4s floor
   int present_count = 0;
   // Once a content frame is seen, keep capturing for a short settle window so
   // async state updates (e.g. a bridged result landing after first paint) are
   // reflected in the dumped frame.
   uint64_t settle_deadline = 0;
+  // rustra event-push ticker: first tick delayed ~1s so JS subscribeTick lands
+  // before the first delivery; then ~1 tick/sec.
+  uint64_t last_tick_ns = now_ns() + 1000000000ull;
   while (now_ns() < deadline) {
     // (a) renderer task channel
     std::vector<QueuedTask> ready;
@@ -493,6 +624,19 @@ static int LynxMain(const char *bundle_path, const char *out_raw,
     //     delivers VSync ticks that drive rasterization.
     pump_fml_message_loop();
 
+    // (c) rustra event-push ticker: every ~1s post a tick to the BTS runtime,
+    //     which calls the JS listener (Rust/host → ReactLynx). The BTS task
+    //     runs asynchronously on the runtime thread.
+    if (g_vsync_observer && now_ns() >= last_tick_ns) {
+      last_tick_ns = now_ns() + 1000000000ull;
+      fprintf(stderr, "[rustra] ticker: request vsync animation frame\n");
+      // Schedule a BTS callback on the next vsync; the VSyncMonitor wakes the
+      // runtime per frame so this reaches JS even when the view is idle.
+      lynx_vsync_observer_request_animation_frame(g_vsync_observer,
+                                                   (uintptr_t)1, VsyncTickCb,
+                                                   nullptr);
+    }
+
     // A new present may have landed. Reset the flag so we can detect the next
     // one. On the first content frame, open a settle window; exit once it
     // elapses (g_pixels keeps the latest presented frame).
@@ -514,7 +658,8 @@ static int LynxMain(const char *bundle_path, const char *out_raw,
         break;
       }
     }
-    if (settle_deadline != 0 && now_ns() >= settle_deadline) {
+    if (settle_deadline != 0 && now_ns() >= settle_deadline &&
+        now_ns() >= min_run_ns) {
       g_presented.store(true, std::memory_order_release);
       fprintf(stderr, "[rustra] settle complete; captured %d presents total.\n",
               present_count);
@@ -535,12 +680,16 @@ static int LynxMain(const char *bundle_path, const char *out_raw,
       of.write((const char *)g_pixels.data(), g_pixels.size());
     fprintf(stderr,
             "[rustra] wrote %s (%ux%u) presented=%d load=%d firstscreen=%d "
-            "rtready=%d error=%d invocations=%d | renderer posted/run=%d/%d "
-            "fml checks/pumped=%ld/%ld\n",
+            "rtready=%d error=%d invocations=%d resultAcked=%d val=%d "
+            "ticks=%d/%d acked=%d | renderer "
+            "posted/run=%d/%d fml checks/pumped=%ld/%ld\n",
             out_raw, w, h, (int)g_presented.load(),
             (int)g_load_success.load(), (int)g_first_screen.load(),
             (int)g_runtime_ready.load(), (int)g_error.load(),
-            g_invoke_count.load(), g_r_posted.load(), g_r_run.load(),
+            g_invoke_count.load(), g_results_acked.load(),
+            g_result_value.load(), g_ticks_delivered.load(),
+            g_tick_count.load(), g_ticks_acked.load(), g_r_posted.load(),
+            g_r_run.load(),
             g_fml_checks.load(), g_fml_pumped.load());
   }
 

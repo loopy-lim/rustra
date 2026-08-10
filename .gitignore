@@ -12,6 +12,9 @@ packages/*/dist/
 .npm-cache/
 *.node
 examples/calculator-napi/node_modules/
+/examples/lynx-calculator/node_modules/
+/examples/lynx-calculator/dist/
+/examples/lynx-calculator/package-lock.json
 
 # Claude Code worktrees (local only)
 .claude/worktrees/
