@@ -12,10 +12,22 @@ import type {
   RkyvV2Codec,
   RkyvV2SchemaNative,
 } from '@rustra/types';
-import { RustraCommandError, configure, invoke, createRkyvV2Engine } from '@rustra/types';
+import {
+  RustraCommandError,
+  configure,
+  invoke,
+  createRkyvV2Engine,
+  parseRustraErrorString,
+} from '@rustra/types';
 
 export type { EngineClient, RustraError, RkyvV2Codec, RkyvV2SchemaNative } from '@rustra/types';
-export { RustraCommandError, configure, invoke, createRkyvV2Engine } from '@rustra/types';
+export {
+  RustraCommandError,
+  configure,
+  invoke,
+  createRkyvV2Engine,
+  parseRustraErrorString,
+} from '@rustra/types';
 
 // ── Lynx Native Module 인터페이스 ───────────────────────────
 
@@ -91,7 +103,7 @@ export function createLynxEngine(native: RustraLynxJsonNative): EngineClientType
         error?: string;
       };
       if (!response.ok) {
-        throw new Error(response.error ?? 'Rustra invoke failed');
+        throw parseRustraErrorString(response.error);
       }
       return response.result as T;
     },

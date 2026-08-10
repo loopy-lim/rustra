@@ -75,18 +75,20 @@ test('F3: native.invoke throw is caught by .catch() (Promise<T> honored)', async
   );
 });
 
-test('F4 baseline: error response rejects with plain Error, not RustraCommandError (code lost)', async () => {
+test('F4: error response rejects with RustraCommandError carrying code', async () => {
   const engine = createReactNativeEngine(
     createMockNative({ ok: false, error: 'command.not_found: unknown' }),
   );
   await assert.rejects(
     async () => engine.invoke('cmd', {}),
     (err: unknown) => {
-      assert.ok(err instanceof Error, 'is an Error');
-      assert.ok(
-        !(err instanceof RustraCommandError),
-        'F4: NOT RustraCommandError (code lost) — Task 1.3에서 RustraCommandError로 전환',
+      assert.ok(err instanceof RustraCommandError, 'must be RustraCommandError (code preserved)');
+      assert.equal(
+        (err as RustraCommandError).code,
+        'command.not_found',
+        'RustaError "code: message" → code parsed',
       );
+      assert.match((err as Error).message, /unknown/);
       return true;
     },
   );

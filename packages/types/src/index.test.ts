@@ -3,7 +3,12 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createRkyvV2Engine, getLiveSchema, RustraCommandError } from './index.js';
+import {
+  createRkyvV2Engine,
+  getLiveSchema,
+  RustraCommandError,
+  parseRustraErrorString,
+} from './index.js';
 import type { RkyvV2SchemaNative, RkyvV2Codec } from './index.js';
 
 // ── wire 헬퍼 (TS 측 Tier 3 wire) ───────────────────────────
@@ -194,7 +199,7 @@ test('engine Tier 3 fallback propagates typed error wire', async () => {
   );
 });
 
-test('engine throws for command absent from registry AND live schema', async () => {
+test('engine throws RustraCommandError for command absent from registry AND live schema (F4)', async () => {
   const native = makeNative({
     schema: schemaBytes([{ name: 'known', commandId: 1 }]),
     invokeImpl: () => tier3Success({}),
@@ -206,10 +211,14 @@ test('engine throws for command absent from registry AND live schema', async () 
     },
     (err: Error) => {
       assert.match(err.message, /no codec and not in live schema/);
-      // F4 baseline: unknown-command 경로는 codec/Tier3 에러와 달리 plain Error.
       assert.ok(
-        !(err instanceof RustraCommandError),
-        'F4: unknown-command uses plain Error — Phase 1에서 RustraCommandError로 전환',
+        err instanceof RustraCommandError,
+        'F4: unknown-command must be RustraCommandError',
+      );
+      assert.equal(
+        (err as RustraCommandError).code,
+        'command.not_found',
+        'code distinguishes unknown-command from handler errors',
       );
       return true;
     },
@@ -384,4 +393,32 @@ test('F5 baseline: createRkyvV2Engine performs no contract-hash verification', (
   const engine = createRkyvV2Engine(makeNative({}), new Map());
   assert.ok(engine, 'engine created without any contract-hash argument');
   assert.equal(typeof engine.invoke, 'function', 'exposes invoke per EngineClient');
+});
+
+// ── parseRustraErrorString (F4 — JSON fallback code/message 파싱) ──
+
+test('parseRustraErrorString splits "code: message" into RustraCommandError', () => {
+  const err = parseRustraErrorString('command.not_found: command not found: add');
+  assert.ok(err instanceof RustraCommandError);
+  assert.equal(err.code, 'command.not_found');
+  // message 자체에 ": " 가 있어도 첫 구분자만 사용한다.
+  assert.equal(err.message, 'command not found: add');
+});
+
+test('parseRustraErrorString handles dotless code (internal)', () => {
+  const err = parseRustraErrorString('internal: serde explode');
+  assert.equal(err.code, 'internal');
+  assert.equal(err.message, 'serde explode');
+});
+
+test('parseRustraErrorString falls back to invoke.failed for non-code strings', () => {
+  // FFI 수준 에러 — code 토큰이 아님(공백 포함 / 구분자 없음).
+  const a = parseRustraErrorString('json decode failed: eof');
+  assert.equal(a.code, 'invoke.failed');
+  assert.equal(a.message, 'json decode failed: eof');
+  const b = parseRustraErrorString('payload exceeds size limit');
+  assert.equal(b.code, 'invoke.failed');
+  const c = parseRustraErrorString(undefined);
+  assert.equal(c.code, 'invoke.failed');
+  assert.equal(c.message, 'Rustra invoke failed');
 });

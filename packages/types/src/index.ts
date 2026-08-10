@@ -55,6 +55,28 @@ export class RustraCommandError extends Error {
   }
 }
 
+/**
+ * Rust `RustraError::Display` 포맷(`"{code}: {message}"`)의 평탄화된 문자열을
+ * [`RustraCommandError`]로 파싱한다. JSON fallback 경로(RN/Lynx)에서 사용 —
+ * rkyv V2 경로(Node/Tauri)는 구조화된 `{code, message}` 객체를 받으므로 불필요.
+ *
+ * `": "` 앞이 dot-notation 코드 토큰(`command.not_found`, `internal`,
+ * `math.divide_by_zero` 등 — 소문자/숫자/`.`/`_` 만)이면 code/message 를 분리하고,
+ * 그렇지 않으면(FFI 수준 에러: `"json decode failed: ..."`, `"payload exceeds size limit"`
+ * 등) `invoke.failed` 코드에 전체 문자열을 message 로 쓴다.
+ */
+export function parseRustraErrorString(error: string | undefined | null): RustraCommandError {
+  const raw = error ?? 'Rustra invoke failed';
+  const idx = raw.indexOf(': ');
+  if (idx > 0) {
+    const code = raw.slice(0, idx);
+    if (/^[a-z][a-z0-9_.]*$/.test(code)) {
+      return new RustraCommandError(code, raw.slice(idx + 2));
+    }
+  }
+  return new RustraCommandError('invoke.failed', raw);
+}
+
 // ── rkyv V2 codec types ────────────────────────────────────
 
 /**
@@ -378,7 +400,10 @@ export function createRkyvV2Engine(
       const entry = getLiveSchema(native).get(command);
       if (!entry) {
         return Promise.reject(
-          new Error(`RkyvV2: no codec and not in live schema for "${command}"`),
+          new RustraCommandError(
+            'command.not_found',
+            `RkyvV2: no codec and not in live schema for "${command}"`,
+          ),
         );
       }
       const resp = decodeTier3Response(
