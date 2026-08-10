@@ -56,6 +56,23 @@ const uint8_t *rustra_calculator_invoke_rkyv_v2(const uint8_t *payload,
 void rustra_calculator_free_buffer(void *ptr, size_t len);
 }
 
+// ── Task 7: native window/surface (AppKit bridge in host_ui.mm) ────────────
+// The windowless software renderer gives us an RGBA buffer per frame; these
+// blit it into a real NSWindow. All calls happen on the main (pump) thread.
+extern "C" {
+void rustra_ui_init(uint32_t pixel_w, uint32_t pixel_h);
+void rustra_ui_blit(const uint8_t *rgba, uint32_t pixel_w, uint32_t pixel_h);
+void rustra_ui_poll_events(void);
+bool rustra_ui_should_close(void);
+bool rustra_ui_dump_layer_png(const char *path);
+void rustra_ui_request_close(void);
+}
+
+#include <csignal>
+// SIGTERM/SIGINT → graceful window close so the pump loop exits cleanly and the
+// post-loop dumps (layer PNG, frame.raw) still run.
+static void on_signal(int) { rustra_ui_request_close(); }
+
 // ── globals: captured frame + sync ────────────────────────────────────────
 static std::mutex g_mtx;
 static std::vector<uint8_t> g_pixels;
@@ -69,6 +86,10 @@ static std::atomic<int> g_invoke_count{0};
 static std::atomic<int> g_r_posted{0}, g_r_run{0};
 static std::atomic<bool> g_runtime_ready{false};
 static lynx_windowless_renderer_t *g_renderer = nullptr;
+
+// Task 7: when true, blit each presented frame into a real NSWindow and keep
+// the window open (until close / deadline) instead of the headless settle-exit.
+static bool g_window_mode = false;
 
 // ── event push (Rust/host → ReactLynx) ────────────────────────────────────
 // The host ticker posts TickTask to the BTS runtime via the extension module;
@@ -588,7 +609,9 @@ static int LynxMain(const char *bundle_path, const char *out_raw,
   //    ~16ms, delivered through the pumped FML loop). So we must keep pumping
   //    PAST the first present and capture the first frame that has non-zero
   //    pixels — not stop at the empty clear frame.
-  const uint64_t deadline = now_ns() + 20000000000ull;  // 20s hard cap
+  const uint64_t deadline =
+      now_ns() + (g_window_mode ? 60000000000ull  // 60s: window stays open for live view
+                                : 20000000000ull);  // 20s headless hard cap
   // Minimum pump runtime so the event-push ticker (~1 tick/sec, first at +1s)
   // has time to deliver a few ticks before the content-settle early-exit.
   const uint64_t min_run_ns = now_ns() + 4000000000ull;  // 4s floor
@@ -642,6 +665,20 @@ static int LynxMain(const char *bundle_path, const char *out_raw,
     // elapses (g_pixels keeps the latest presented frame).
     if (g_presented.exchange(false, std::memory_order_acq_rel)) {
       ++present_count;
+      // Task 7: blit the latest frame into the NSWindow (main thread). The
+      // window is created lazily on first present so it matches the frame size.
+      if (g_window_mode) {
+        std::lock_guard<std::mutex> lk(g_mtx);
+        if (g_row_bytes && g_height) {
+          uint32_t pw = (uint32_t)(g_row_bytes / 4), ph = (uint32_t)g_height;
+          static bool ui_inited = false;
+          if (!ui_inited) {
+            rustra_ui_init(pw, ph);
+            ui_inited = true;
+          }
+          rustra_ui_blit(g_pixels.data(), pw, ph);
+        }
+      }
       if (frame_has_content()) {
         if (settle_deadline == 0) {
           settle_deadline = now_ns() + 800000000ull;  // 800ms settle
@@ -658,14 +695,32 @@ static int LynxMain(const char *bundle_path, const char *out_raw,
         break;
       }
     }
-    if (settle_deadline != 0 && now_ns() >= settle_deadline &&
-        now_ns() >= min_run_ns) {
+    if (!g_window_mode && settle_deadline != 0 &&
+        now_ns() >= settle_deadline && now_ns() >= min_run_ns) {
       g_presented.store(true, std::memory_order_release);
       fprintf(stderr, "[rustra] settle complete; captured %d presents total.\n",
               present_count);
       break;
     }
+    // Task 7: keep the NSWindow live by draining AppKit events without blocking,
+    // and exit when the user closes the window. Coexists with the FML pump.
+    if (g_window_mode) {
+      rustra_ui_poll_events();
+      if (rustra_ui_should_close()) {
+        fprintf(stderr, "[rustra] window closed by user.\n");
+        break;
+      }
+    }
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+
+  // Task 7: dump the window's layer contents (the displayed surface) to a PNG,
+  // so the on-screen content can be verified without cross-process capture.
+  if (g_window_mode) {
+    const char *png = getenv("RUSTRA_LAYER_PNG");
+    if (png && rustra_ui_dump_layer_png(png)) {
+      fprintf(stderr, "[rustra] dumped window layer surface -> %s\n", png);
+    }
   }
 
   // 8. Dump captured frame.
@@ -710,5 +765,8 @@ int main(int argc, char **argv) {
   // whole pipeline on THIS (main) thread so the UIThread's MessageLoop is the
   // one we pump.
   resolve_liblynx_symbols();
+  g_window_mode = (getenv("RUSTRA_WINDOW") != nullptr);
+  signal(SIGTERM, on_signal);
+  signal(SIGINT, on_signal);
   return LynxMain(bundle_path, out_raw, icu_path);
 }
