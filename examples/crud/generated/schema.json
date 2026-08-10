@@ -9,7 +9,10 @@
       "inputSchema": {
         "title": "CreateItemInput",
         "type": "object",
-        "required": ["name", "value"],
+        "required": [
+          "name",
+          "value"
+        ],
         "properties": {
           "name": {
             "type": "string"
@@ -23,7 +26,9 @@
       "outputSchema": {
         "title": "CreateItemOutput",
         "type": "object",
-        "required": ["item"],
+        "required": [
+          "item"
+        ],
         "properties": {
           "item": {
             "$ref": "#/definitions/Item"
@@ -33,7 +38,11 @@
       "definitions": {
         "Item": {
           "type": "object",
-          "required": ["id", "name", "value"],
+          "required": [
+            "id",
+            "name",
+            "value"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -57,7 +66,9 @@
       "inputSchema": {
         "title": "DeleteItemInput",
         "type": "object",
-        "required": ["id"],
+        "required": [
+          "id"
+        ],
         "properties": {
           "id": {
             "type": "string"
@@ -67,7 +78,9 @@
       "outputSchema": {
         "title": "DeleteItemOutput",
         "type": "object",
-        "required": ["deleted"],
+        "required": [
+          "deleted"
+        ],
         "properties": {
           "deleted": {
             "type": "boolean"
@@ -83,7 +96,9 @@
       "inputSchema": {
         "title": "GetItemInput",
         "type": "object",
-        "required": ["id"],
+        "required": [
+          "id"
+        ],
         "properties": {
           "id": {
             "type": "string"
@@ -109,7 +124,11 @@
       "definitions": {
         "Item": {
           "type": "object",
-          "required": ["id", "name", "value"],
+          "required": [
+            "id",
+            "name",
+            "value"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -135,7 +154,10 @@
         "type": "object",
         "properties": {
           "minValue": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64"
           }
         }
@@ -143,7 +165,9 @@
       "outputSchema": {
         "title": "ListItemsOutput",
         "type": "object",
-        "required": ["items"],
+        "required": [
+          "items"
+        ],
         "properties": {
           "items": {
             "type": "array",
@@ -156,7 +180,11 @@
       "definitions": {
         "Item": {
           "type": "object",
-          "required": ["id", "name", "value"],
+          "required": [
+            "id",
+            "name",
+            "value"
+          ],
           "properties": {
             "id": {
               "type": "string"
@@ -180,16 +208,24 @@
       "inputSchema": {
         "title": "UpdateItemInput",
         "type": "object",
-        "required": ["id"],
+        "required": [
+          "id"
+        ],
         "properties": {
           "id": {
             "type": "string"
           },
           "name": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "value": {
-            "type": ["integer", "null"],
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int64"
           }
         }
@@ -213,7 +249,11 @@
       "definitions": {
         "Item": {
           "type": "object",
-          "required": ["id", "name", "value"],
+          "required": [
+            "id",
+            "name",
+            "value"
+          ],
           "properties": {
             "id": {
               "type": "string"
