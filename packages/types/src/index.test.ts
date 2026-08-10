@@ -204,7 +204,15 @@ test('engine throws for command absent from registry AND live schema', async () 
     async () => {
       await engine.invoke('unknown', {});
     },
-    (err: Error) => /no codec and not in live schema/.test(err.message),
+    (err: Error) => {
+      assert.match(err.message, /no codec and not in live schema/);
+      // F4 baseline: unknown-command 경로는 codec/Tier3 에러와 달리 plain Error.
+      assert.ok(
+        !(err instanceof RustraCommandError),
+        'F4: unknown-command uses plain Error — Phase 1에서 RustraCommandError로 전환',
+      );
+      return true;
+    },
   );
 });
 
@@ -363,4 +371,17 @@ test('invokeBatch without typed-batch native falls back to per-entry', async () 
     { command: 'b', args: {} },
   ]);
   assert.deepEqual(out, [{ echo: 'a' }, { echo: 'b' }]);
+});
+
+// ── Trust-test baseline (Phase 0) ───────────────────────────
+
+test('F5 baseline: createRkyvV2Engine performs no contract-hash verification', () => {
+  // 현재: createRkyvV2Engine(native, registry) 시그니처에 hash 인자가 없다.
+  // → 생성된 bundle 의 GENERATED_CONTRACT_HASH 와 네이티브의 실제 hash 가
+  //    달라도 조용히 통과한다 (스키마 드리프트 감지 불가).
+  // Phase 1 에서 hash 옵션(불일치 시 reject)이 추가되면 이 테스트는
+  // "불일치 시 reject" 단언으로 전환된다.
+  const engine = createRkyvV2Engine(makeNative({}), new Map());
+  assert.ok(engine, 'engine created without any contract-hash argument');
+  assert.equal(typeof engine.invoke, 'function', 'exposes invoke per EngineClient');
 });

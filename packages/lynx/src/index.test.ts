@@ -147,3 +147,28 @@ test('getRustraNative throws when RustraModule is missing', () => {
     (err: Error) => /NativeModules\.RustraModule not registered/.test(err.message),
   );
 });
+
+// ── Trust-test baseline (Phase 0) ───────────────────────────
+
+test('F3 baseline: createLynxEngine sync throw bypasses .catch() (Promise<T> violation)', () => {
+  // EngineClient 계약상 invoke() 실패는 rejected Promise여야 하지만,
+  // 현재 createLynxEngine JSON fallback 은 동기 throw 한다.
+  const engine = createLynxEngine({
+    invoke() {
+      throw new Error('native boom');
+    },
+  });
+  let caughtByCatch = false;
+  try {
+    engine.invoke('cmd', {}).catch(() => {
+      caughtByCatch = true;
+    });
+  } catch {
+    // 현재 결함: Promise 반환 전 동기 throw → .catch() 체인이 안 붙음.
+  }
+  assert.equal(
+    caughtByCatch,
+    false,
+    'F3: sync throw bypasses .catch() — Phase 1 async 전환 후 true로 단언 전환',
+  );
+});
