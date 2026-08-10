@@ -99,6 +99,46 @@ fn err_response(msg: &str, out_len: *mut usize, serialize: fn(&FfiResponse) -> V
     alloc_response(serialize(&resp), out_len)
 }
 
+/// 패닉 페이로드에서 사람이 읽을 수 있는 메시지를 추출한다.
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(s) = payload.downcast_ref::<&'static str>() {
+        (*s).to_string()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "<non-string panic payload>".to_string()
+    }
+}
+
+/// FFI 경계에서 패닉을 가두어 에러 응답으로 변환한다.
+///
+/// Rust FFI 규칙: 패닉은 절대 `extern "C"` 경계를 넘어서는 안 된다.
+/// 넘으면 정의되지 않은 동작(UB) 이거나 호스트 프로세스 abort 를 유발한다.
+/// 이 함수는 핸들러/직렬화 중 발생한 패닉을 잡아
+/// `FfiResponse { ok:false, error:"internal: panic — ..." }` 로 정규화한다.
+///
+/// `out_len` 은 호출 전에 non-null 임이 보장되어야 한다 (extern 엔트리에서 선제 검사).
+fn with_panic_guard<F>(
+    out_len: *mut usize,
+    serialize: fn(&FfiResponse) -> Vec<u8>,
+    body: F,
+) -> *mut u8
+where
+    F: FnOnce() -> FfiResponse,
+{
+    // AssertUnwindSafe: body 가 캡처한 값(envelope) 은 패닉 후 다시 사용되지 않으므로
+    // unwind-safety 가 요구되지 않는다 — 응답만 반환한다.
+    let resp = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(body)) {
+        Ok(resp) => resp,
+        Err(payload) => FfiResponse {
+            ok: false,
+            result: None,
+            error: Some(format!("internal: panic — {}", panic_message(&*payload))),
+        },
+    };
+    alloc_response(serialize(&resp), out_len)
+}
+
 fn dispatch_json(command: &str, args: serde_json::Value) -> FfiResponse {
     match get_package() {
         Some(pkg) => match pkg.invoke_json(command, args) {
@@ -211,8 +251,9 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json(
         Err(e) => return err_response(&e, out_len, json_serialize),
     };
 
-    let resp = dispatch_json(&envelope.command, envelope.args);
-    alloc_response(json_serialize(&resp), out_len)
+    let command = envelope.command;
+    let args = envelope.args;
+    with_panic_guard(out_len, json_serialize, || dispatch_json(&command, args))
 }
 
 /// Postcard binary path.
@@ -249,8 +290,9 @@ pub unsafe extern "C" fn rustra_ffi_invoke_postcard(
         Err(e) => return err_response(&e, out_len, postcard_serialize_response),
     };
 
-    let resp = dispatch_json(&command, args);
-    alloc_response(postcard_serialize_response(&resp), out_len)
+    with_panic_guard(out_len, postcard_serialize_response, || {
+        dispatch_json(&command, args)
+    })
 }
 
 /// Free a buffer previously returned by one of the `rustra_ffi_invoke_*` functions.

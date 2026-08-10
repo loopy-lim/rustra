@@ -410,7 +410,8 @@ pub struct RegistryDemoOutput {
 /// `register` / `unregister` / `replacePing` / `replaceAdd` / `restoreAdd` / `freeze` / `state`.
 #[command]
 pub fn rustra_registry_demo(input: RegistryDemoInput) -> Result<RegistryDemoOutput> {
-    let pkg = rustra::ffi::get_package().expect("package not registered");
+    let pkg = rustra::ffi::get_package()
+        .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))?;
     let frozen = pkg.is_frozen();
     let message = match input.op.as_str() {
         "register" => match pkg.register("ping", ping) {
@@ -574,8 +575,8 @@ pub unsafe extern "C" fn rustra_calculator_invoke(payload: *const c_char) -> *mu
     let args = request.get("args").cloned().unwrap_or_else(|| json!({}));
 
     match rustra::ffi::get_package()
-        .expect("package not registered")
-        .invoke_json(command, args)
+        .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
+        .and_then(|pkg| pkg.invoke_json(command, args))
     {
         Ok(result) => json_string(json!({ "ok": true, "result": result })),
         Err(error) => json_string(json!({ "ok": false, "error": error.to_string() })),
@@ -761,8 +762,8 @@ pub unsafe extern "C" fn rustra_calculator_invoke_msgpack(
         .unwrap_or(serde_json::json!({}));
 
     let result = match rustra::ffi::get_package()
-        .expect("package not registered")
-        .invoke_json(command, args)
+        .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
+        .and_then(|pkg| pkg.invoke_json(command, args))
     {
         Ok(result) => serde_json::json!({"ok": true, "result": result}),
         Err(error) => serde_json::json!({"ok": false, "error": error.to_string()}),
@@ -818,11 +819,13 @@ pub unsafe extern "C" fn rustra_calculator_invoke_bincode(
         };
 
     let result = match rustra::ffi::get_package()
-        .expect("package not registered")
-        .invoke_json(
-            &request.command,
-            serde_json::json!({"a": request.a, "b": request.b}),
-        ) {
+        .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
+        .and_then(|pkg| {
+            pkg.invoke_json(
+                &request.command,
+                serde_json::json!({"a": request.a, "b": request.b}),
+            )
+        }) {
         Ok(result) => {
             let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
             BincodeResponse {
@@ -874,11 +877,13 @@ pub unsafe extern "C" fn rustra_calculator_invoke_postcard(
     };
 
     let result = match rustra::ffi::get_package()
-        .expect("package not registered")
-        .invoke_json(
-            &request.command,
-            serde_json::json!({"a": request.a, "b": request.b}),
-        ) {
+        .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
+        .and_then(|pkg| {
+            pkg.invoke_json(
+                &request.command,
+                serde_json::json!({"a": request.a, "b": request.b}),
+            )
+        }) {
         Ok(result) => {
             let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
             BincodeResponse {
@@ -946,8 +951,8 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv(
     let b: i64 = archived.b.into();
 
     let result = match rustra::ffi::get_package()
-        .expect("package not registered")
-        .invoke_json(&command, serde_json::json!({"a": a, "b": b}))
+        .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
+        .and_then(|pkg| pkg.invoke_json(&command, serde_json::json!({"a": a, "b": b})))
     {
         Ok(result) => {
             let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
@@ -1000,11 +1005,13 @@ pub unsafe extern "C" fn rustra_calculator_invoke_hybrid(
     };
 
     let result = match rustra::ffi::get_package()
-        .expect("package not registered")
-        .invoke_json(
-            &request.command,
-            serde_json::json!({"a": request.a, "b": request.b}),
-        ) {
+        .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
+        .and_then(|pkg| {
+            pkg.invoke_json(
+                &request.command,
+                serde_json::json!({"a": request.a, "b": request.b}),
+            )
+        }) {
         Ok(result) => {
             let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
             RkyvResponse {
@@ -1042,8 +1049,8 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2(
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
 
     let resp_bytes = match rustra::ffi::get_package()
-        .expect("package not registered")
-        .invoke_rkyv_v2(bytes)
+        .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
+        .and_then(|pkg| pkg.invoke_rkyv_v2(bytes))
     {
         Ok(bytes) => bytes,
         Err(error) => rustra::encode_rkyv_v2_error(&error),
