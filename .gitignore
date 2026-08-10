@@ -15,3 +15,4 @@ examples/calculator-napi/node_modules/
 
 # Claude Code worktrees (local only)
 .claude/worktrees/
+examples/lynx-calculator/host/HostApp.app/
