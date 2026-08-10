@@ -26,6 +26,12 @@ fn test_package() -> Package {
             let b = args["b"].as_i64().unwrap_or(0);
             Ok::<_, rustra::RustraError>(serde_json::json!(a + b))
         })
+        .command(
+            "panicBoom",
+            |_args: serde_json::Value| -> Result<serde_json::Value, rustra::RustraError> {
+                panic!("boom from handler");
+            },
+        )
         .build()
 }
 
@@ -150,13 +156,32 @@ fn postcard_unknown_command_returns_error_frame() {
 // ── UB/abort 결함 가시화 (Task 0.4 — Phase 1 에서 활성화) ────
 
 #[test]
-#[ignore = "F1: catch_unwind 미구현 — 핸들러 패닉 시 호스트 프로세스 abort. \
-            Phase 1 (Task 1.1) 에서 catch_unwind 추가 후 본문 채우고 ignore 제거"]
 fn panic_in_handler_returns_clean_error_not_abort() {
-    // TODO Phase 1 (Task 1.1): 패닉을 일으키는 핸들러("panicBoom")를 등록하고 invoke →
-    //   - 응답이 ok:false + clean error(panic 원인 포함) 이고
-    //   - 프로세스가 abort 되지 않음(별도 프로세스 증명 포함)
-    //   을 단언. 현재는 패닉이 extern "C" 경계를 넘어 호스트를 죽인다.
+    test_package().register_ffi();
+    // panicBoom 핸들러는 의도적으로 panic!("boom from handler") 을 일으킨다.
+    // catch_unwind 가 없다면 이 패닉은 extern "C" 경계를 넘어 — 정의되지 않은 동작이거나
+    // (panic=abort profile 이면) 테스트 프로세스 자체를 abort 시킨다. 이 테스트가 정상적으로
+    // 끝나 응답을 단언한다는 것 자체가 "abort 되지 않았다"는 증명이다.
+    let request = serde_json::json!({ "command": "panicBoom", "args": {} });
+    let payload = serde_json::to_vec(&request).expect("request encodes");
+
+    let resp = invoke_json(&payload);
+
+    assert_eq!(
+        resp["ok"], false,
+        "handler panic must surface as a clean error response, not abort the process"
+    );
+    let err = resp["error"]
+        .as_str()
+        .expect("panic error must carry a message");
+    assert!(
+        err.contains("panic"),
+        "error must identify a panic, got: {err}"
+    );
+    assert!(
+        err.contains("boom from handler"),
+        "error must carry the panic payload message, got: {err}"
+    );
 }
 
 #[test]
