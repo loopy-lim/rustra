@@ -3,13 +3,13 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createRkyvV2Engine, getLiveSchema } from './index.js';
+import { createRkyvV2Engine, getLiveSchema, RustraCommandError } from './index.js';
 import type { RkyvV2SchemaNative, RkyvV2Codec } from './index.js';
 
 // ── wire 헬퍼 (TS 측 Tier 3 wire) ───────────────────────────
 // request:  [command_id: u16 LE @0][json @2]
 // success:  [ok:1 @0][pad 3B][json_len: u32 LE @4][json @8]
-// error:    [ok:0 @0][pad to @8][err_len: u16 LE @8][err @10]
+// error:    [ok:0 @0][pad to @8][err_len: u16 LE @8][postcard({code,message}) @10]
 
 // ArrayBuffer 를 명시적으로 생성해 SharedArrayBuffer 호환 이슈를 피한다.
 function bytesFromStrings(parts: string[]): ArrayBuffer {
@@ -26,6 +26,20 @@ function bytesFromStrings(parts: string[]): ArrayBuffer {
   return ab;
 }
 
+// postcard length-prefixed UTF-8 string
+function pcString(s: string): Uint8Array {
+  const bytes = new TextEncoder().encode(s);
+  let len = bytes.length;
+  const varint: number[] = [];
+  do {
+    let b = len & 0x7f;
+    len >>>= 7;
+    if (len > 0) b |= 0x80;
+    varint.push(b);
+  } while (len > 0);
+  return new Uint8Array([...varint, ...bytes]);
+}
+
 function tier3Success(value: unknown): ArrayBuffer {
   const json = new TextEncoder().encode(JSON.stringify(value));
   const ab = new ArrayBuffer(8 + json.length);
@@ -36,13 +50,16 @@ function tier3Success(value: unknown): ArrayBuffer {
   return ab;
 }
 
-function tier3Error(msg: string): ArrayBuffer {
-  const err = new TextEncoder().encode(msg);
-  const ab = new ArrayBuffer(10 + err.length);
+function tier3Error(code: string, message: string): ArrayBuffer {
+  const body = pcString(code);
+  const msg = pcString(message);
+  const errLen = body.length + msg.length;
+  const ab = new ArrayBuffer(10 + errLen);
   const view = new Uint8Array(ab);
   view[0] = 0; // error
-  new DataView(ab).setUint16(8, err.length, true);
-  view.set(err, 10);
+  new DataView(ab).setUint16(8, errLen, true);
+  view.set(body, 10);
+  view.set(msg, 10 + body.length);
   return ab;
 }
 
@@ -157,10 +174,10 @@ test('engine Tier 3 fallback decodes string/vec/nested result types', async () =
   assert.deepEqual(n.outer.tags, ['a', 'b']);
 });
 
-test('engine Tier 3 fallback propagates error wire', async () => {
+test('engine Tier 3 fallback propagates typed error wire', async () => {
   const native = makeNative({
     schema: schemaBytes([{ name: 'boom', commandId: 1 }]),
-    invokeImpl: () => tier3Error('handler exploded'),
+    invokeImpl: () => tier3Error('math.divide_by_zero', 'handler exploded'),
   });
   const engine = createRkyvV2Engine(native, new Map());
   // invoke 가 에러 시 동기 throw 하므로 async 래퍼로 rejection 처리.
@@ -168,7 +185,12 @@ test('engine Tier 3 fallback propagates error wire', async () => {
     async () => {
       await engine.invoke('boom', {});
     },
-    (err: Error) => /handler exploded/.test(err.message),
+    (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError, 'must be RustraCommandError');
+      assert.equal((err as RustraCommandError).code, 'math.divide_by_zero');
+      assert.match((err as Error).message, /handler exploded/);
+      return true;
+    },
   );
 });
 

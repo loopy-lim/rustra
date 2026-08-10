@@ -8,6 +8,7 @@ set (CMAKE_CXX_STANDARD 20)
 # Define C++ library and add all sources
 add_library(${PACKAGE_NAME} SHARED
         src/main/cpp/cpp-adapter.cpp
+        ../ios/HybridNitroBench.cpp
 )
 
 # Add Nitrogen specs :)
@@ -17,6 +18,7 @@ include(${CMAKE_SOURCE_DIR}/../nitrogen/generated/android/NitroBench+autolinking
 include_directories(
         "src/main/cpp"
         "../cpp"
+        "../ios"
 )
 
 find_library(LOG_LIB log)

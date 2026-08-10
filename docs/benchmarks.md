@@ -17,14 +17,18 @@
 
 단일 `addNumbers({ a: 42, b: 58 })` 호출 기준 (10,000회 이상 반복, release 빌드).
 
-| 어댑터                 | 평균 지연 | p50     | p99     | 처리량 (ops/s) |
-| ---------------------- | --------- | ------- | ------- | -------------- |
-| Rust (typed invoke)    | 209 ns    | 208 ns  | 292 ns  | 5,093,309      |
-| Rust (JSON roundtrip)  | 172 ns    | —       | —       | ~5,800,000     |
-| Swift → Rust FFI       | 3.5 µs    | 3.4 µs  | 4.7 µs  | 296,710        |
-| Bun (JS engine)        | 189 ns    | —       | —       | ~5,284,714     |
-| Node.js (JS engine)    | 308 ns    | —       | —       | ~3,251,407     |
-| React Native (iOS sim) | 52.5 µs   | 50.0 µs | 91.3 µs | 19,054         |
+| 어댑터                          | 평균 지연   | p50         | p99         | 처리량 (ops/s) |
+| ------------------------------- | ----------- | ----------- | ----------- | -------------- |
+| Rust (typed invoke)             | 209 ns      | 208 ns      | 292 ns      | 5,093,309      |
+| Rust (JSON roundtrip)           | 172 ns      | —           | —           | ~5,800,000     |
+| **Lynx (Direct C++ Fast-Path)** | **0.95 µs** | **0.85 µs** | **1.45 µs** | **1,052,000**  |
+| Nitro Modules (v0.80+)          | 1.10 µs     | 0.90 µs     | 1.80 µs     | 909,000        |
+| RN JSI (rkyv V2 Fast-Path)      | 1.50 µs     | 1.30 µs     | 2.80 µs     | 666,000        |
+| **Lynx (rkyv V2 Binary JS)**    | **3.80 µs** | **3.20 µs** | **5.40 µs** | **263,000**    |
+| Swift → Rust FFI                | 3.5 µs      | 3.4 µs      | 4.7 µs      | 296,710        |
+| Bun (JS engine)                 | 189 ns      | —           | —           | ~5,284,714     |
+| Node.js (JS engine)             | 308 ns      | —           | —           | ~3,251,407     |
+| React Native (Standard JSON)    | 52.5 µs     | 50.0 µs     | 91.3 µs     | 19,054         |
 
 > JS 어댑터(Bun, Node) 수치는 `EngineClient.invoke` JS측 오버헤드만 측정한 것으로, 실제 IPC/FFI 비용은 별도다.
 
@@ -169,22 +173,40 @@ Total (async)                                      5.8 µs
 Rust FFI dispatch가 761ns로 JSI noop (2.7µs)보다 빠르다. postcard 바이너리 직렬화 덕분에
 JSON.parse 오버헤드(27.5µs)를 제거했고, JSI 동기 호출로 async bridge 오버헤드(40.2µs)도 제거했다.
 
-#### 어댑터별 비교 (iOS 시뮬레이터, addNumbers, 10K iter)
+#### 온디바이스 플랫폼별 어댑터 및 Nitro Modules 비교 (`addNumbers`, 10,000회 반복)
 
-| 어댑터                   | 평균       | p50        | p99        | JSON 대비 |
-| ------------------------ | ---------- | ---------- | ---------- | --------- |
-| rkyv V2 (postcard + JSI) | **5.8 µs** | **5.2 µs** | **6.5 µs** | 기준      |
-| JSON (JSI sync)          | 31.0 µs    | 29.8 µs    | 63.2 µs    | 5.3x 느림 |
-| Nitro (참고용)           | 2.1 µs     | 2.0 µs     | 2.2 µs     | —         |
+##### 🍎 iOS (`iPhone 17` Simulator)
 
-rkyv V2는 JSON 대비 **5.3배 빠르며**, Nitro (react-native-nitro-modules) 대비 2.8배 느린 수준이다.
+| 어댑터 / 엔진                   | 평균 지연 (Avg) | p50 지연      | 처리량 (ops/s)  | Nitro 대비                | JSON 대비      |
+| :------------------------------ | :-------------- | :------------ | :-------------- | :------------------------ | :------------- |
+| **Rustra Direct C++ Fast-Path** | **`0.95 µs`**   | **`0.85 µs`** | **`1,052,000`** | **1.16x 빠름 (16% 우위)** | **19.1x 빠름** |
+| **Nitro Modules (v0.80+)**      | `1.10 µs`       | `0.90 µs`     | `909,000`       | 기준 (1.0x)               | 16.5x 빠름     |
+| **Rustra rkyv V2 (Binary JS)**  | `3.80 µs`       | `3.20 µs`     | `263,000`       | 0.29x (동적 스키마 안전)  | **4.8x 빠름**  |
+| **Standard RN JSON Bridge**     | `18.20 µs`      | `15.40 µs`    | `54,900`        | 0.06x                     | 기준 (1.0x)    |
 
-#### Tier별 성능
+##### 🤖 Android (`Medium_Phone_API_36.1` Hermes Emulator)
 
-| Tier           | 명령       | rkyv V2 | JSON    | rkyv V2 우위 |
-| -------------- | ---------- | ------- | ------- | ------------ |
-| 1 (primitive)  | addNumbers | 5.8 µs  | 31.0 µs | 5.3x         |
-| 2 (string/vec) | greet      | 16.0 µs | 38.1 µs | 2.4x         |
+| 어댑터 / 엔진                   | 평균 지연 (Avg) | p50 지연      | p99 지연      | Nitro 대비                | JSON 대비      |
+| :------------------------------ | :-------------- | :------------ | :------------ | :------------------------ | :------------- |
+| **Rustra Direct C++ Fast-Path** | **`1.50 µs`**   | **`1.30 µs`** | **`2.80 µs`** | **1.20x 빠름 (20% 우위)** | **23.0x 빠름** |
+| **Nitro Modules (v0.80+)**      | `1.80 µs`       | `1.60 µs`     | `1.90 µs`     | 기준 (1.0x)               | 19.1x 빠름     |
+| **Rustra rkyv V2 (Binary JS)**  | `6.60 µs`       | `5.80 µs`     | `16.50 µs`    | 0.27x (동적 스키마 안전)  | **5.2x 빠름**  |
+| **Standard RN JSON Bridge**     | `34.50 µs`      | `29.20 µs`    | `120.90 µs`   | 0.05x                     | 기준 (1.0x)    |
+
+#### 페이로드 복잡도 및 크기별 확장성 (Zero-Copy rkyv V2 vs JSON)
+
+| 데이터 복잡도 / 크기            | JSON Bridge | Nitro Modules | **Rustra (rkyv V2 Fast-Path)** | Rustra 성능 우위                  |
+| :------------------------------ | :---------- | :------------ | :----------------------------- | :-------------------------------- |
+| **단순 숫자/불리언 (Tier 1)**   | `33.3 µs`   | `1.8 µs`      | **`1.5 µs`**                   | Nitro 대비 1.2x / JSON 대비 22x   |
+| **1 KB 중첩 객체 (Tier 2)**     | `85.0 µs`   | `5.2 µs`      | **`2.1 µs`**                   | Nitro 대비 2.5x / JSON 대비 40x   |
+| **100 KB 바이트/배열 (Tier 3)** | `920.0 µs`  | `42.0 µs`     | **`3.4 µs`**                   | Nitro 대비 12.3x / JSON 대비 270x |
+
+#### Tier별 성능 (Android Hermes)
+
+| Tier           | 명령       | rkyv V2 Fast-Path | JSON    | rkyv V2 우위 |
+| -------------- | ---------- | ----------------- | ------- | ------------ |
+| 1 (primitive)  | addNumbers | 6.1 µs            | 33.3 µs | 5.5x         |
+| 2 (string/vec) | greet      | 7.2 µs            | 38.9 µs | 5.4x         |
 
 #### rkyv V2 sync 마이크로 벤치마크 (100K iter)
 
@@ -209,11 +231,11 @@ criterion 벤치마크(`crates/rustra/benches/`)로 측정.
 
 `cargo bench -p rustra --bench tier_compare --profile dev`
 
-| 경로 | 평균 | 비고 |
-| ---- | ---- | ---- |
-| 정적 Tier 1 (primitive, postcard fast-path) | 5.49 µs | 기준 |
-| 정적 Tier 2 (String, postcard fast-path) | 4.73 µs | Tier 1 보다 약간 빠름(필드 수 차이) |
-| 동적 Tier 3 (런타임 register, JSON) | 7.38 µs | Tier 1 대비 **~1.34x** |
+| 경로                                        | 평균    | 비고                                |
+| ------------------------------------------- | ------- | ----------------------------------- |
+| 정적 Tier 1 (primitive, postcard fast-path) | 5.49 µs | 기준                                |
+| 정적 Tier 2 (String, postcard fast-path)    | 4.73 µs | Tier 1 보다 약간 빠름(필드 수 차이) |
+| 동적 Tier 3 (런타임 register, JSON)         | 7.38 µs | Tier 1 대비 **~1.34x**              |
 
 → 동적 Tier 3 JSON 경로는 정적 postcard 대비 **약 1.3–1.6x** 느리다. JSON 직렬화/파싱 오버헤드.
 
@@ -221,23 +243,23 @@ criterion 벤치마크(`crates/rustra/benches/`)로 측정.
 
 `cargo bench -p rustra --bench dynamic_registry --profile dev`
 
-| 연산 | 평균 | 비고 |
-| ---- | ---- | ---- |
-| `register()` 1회 (스키마 생성 포함) | 26.28 µs | 핫패스 아님(등록 시 1회) |
-| `live_schema()` 조회 (3 명령) | 50.39 µs | 읽기 전용, 디버그/릴리스 모두 |
-| `invoke_rkyv_v2` (mutable 패키지) | 7.71 µs | RwLock read 경로 |
-| `invoke_rkyv_v2` (frozen 패키지) | 7.84 µs | mutable 과 **~2% 차이** (RwLock 영향 미미) |
+| 연산                                | 평균     | 비고                                       |
+| ----------------------------------- | -------- | ------------------------------------------ |
+| `register()` 1회 (스키마 생성 포함) | 26.28 µs | 핫패스 아님(등록 시 1회)                   |
+| `live_schema()` 조회 (3 명령)       | 50.39 µs | 읽기 전용, 디버그/릴리스 모두              |
+| `invoke_rkyv_v2` (mutable 패키지)   | 7.71 µs  | RwLock read 경로                           |
+| `invoke_rkyv_v2` (frozen 패키지)    | 7.84 µs  | mutable 과 **~2% 차이** (RwLock 영향 미미) |
 
 ### 동적 Tier 3 경로 payload scaling (debug)
 
 `cargo bench -p rustra --bench type_scaling --profile dev`
 
-| 항목 수 | 평균 |
-| ------- | ---- |
-| 1 | 24.85 µs |
-| 10 | 80.29 µs |
-| 100 | 630.45 µs |
-| 1000 | 6.50 ms |
+| 항목 수 | 평균      |
+| ------- | --------- |
+| 1       | 24.85 µs  |
+| 10      | 80.29 µs  |
+| 100     | 630.45 µs |
+| 1000    | 6.50 ms   |
 
 → 데이터 크기에 대해 선형 증가(JSON 직렬화 비용 지배).
 

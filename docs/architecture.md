@@ -53,6 +53,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
  │  │  createBunEngine(transport)                                 │     │
  │  │  createTauriEngine({ invoke })                              │     │
  │  │  createReactNativeEngine(nativeModule)                      │     │
+ │  │  createFastEngine(native, {rkyvV2Codecs})   (Lynx)          │     │
  │  └──────────────────────────────┬─────────────────────────────┘     │
  │                                 │                                   │
  │                                 ▼                                   │
@@ -84,6 +85,7 @@ export type EngineClient = {
 | `packages/bun`          | `createBunEngine(transport)`            | `BunEngineClient`         | `packages/bun/src/index.ts`          |
 | `packages/tauri`        | `createTauriEngine({ invoke })`         | `TauriEngineClient`       | `packages/tauri/src/index.ts`        |
 | `packages/react-native` | `createReactNativeEngine(nativeModule)` | `ReactNativeEngineClient` | `packages/react-native/src/index.ts` |
+| `packages/lynx`         | `createFastEngine(native, opts)`        | `EngineClient`            | `packages/lynx/src/index.ts`         |
 
 모든 반환 타입(`NodeEngineClient`, `BunEngineClient`, `TauriEngineClient`, `ReactNativeEngineClient`)은 구조적으로 `EngineClient`와 동일한 `invoke<T>` 메서드를 제공한다.
 
@@ -95,10 +97,7 @@ export type EngineClient = {
 // examples/calculator/generated/commands.ts (자동 생성됨)
 import type { AddNumbersInput, EngineClient } from './types.js';
 
-export function addNumbers(
-  engine: EngineClient,
-  input: AddNumbersInput,
-): Promise<number> {
+export function addNumbers(engine: EngineClient, input: AddNumbersInput): Promise<number> {
   return engine.invoke<number>('addNumbers', input);
 }
 ```
@@ -139,7 +138,7 @@ crates/
 | `PackageBuilder`   | `Package::builder(id)`로 생성. `.command_fn(handler)` / `.command(name, handler)`로 command 등록 후 `.build()`                                      |
 | `GeneratedPackage` | `generate_typescript()`의 결과. `schema_json`, `types_ts`, `commands_ts`, `contract_hash` 필드 보유. `write_to_dir()`로 파일 출력                   |
 | `RustraError`      | `Serialize` 구현. `command.not_found`, `command.invalid_args`, `internal` 에러 코드 + `custom(code, message)` 생성자 + `code()`, `message()` getter |
-| `build!`           | `rustra-macros`에서 제공. `rustra::build!("id", fn1, fn2).done()` 형태로 다중 command 일괄 등록                                                    |
+| `build!`           | `rustra-macros`에서 제공. `rustra::build!("id", fn1, fn2).done()` 형태로 다중 command 일괄 등록                                                     |
 | `tauri_support`    | `cfg(feature = "tauri")` 활성화 시 제공. `RustraState`, `rustra_dispatch` 단일 Tauri command, `register()` 빌더 주입 함수                           |
 | `__private` 모듈   | `CommandInput`, `CommandOutput` sealed 트레이트. proc macro가 컴파일 타임에 command 타입 제약을 검증하는 데 사용. public API로 노출되지 않음        |
 
@@ -169,6 +168,7 @@ packages/
 ├── bun/            → createBunEngine(transport: BunInvokeTransport): BunEngineClient
 ├── tauri/          → createTauriEngine({ invoke: TauriInvoke }): TauriEngineClient
 └── react-native/   → createReactNativeEngine(nativeModule: ReactNativeRustraModule): ReactNativeEngineClient
+└── lynx/           → createFastEngine(native: RkyvV2SchemaNative, {rkyvV2Codecs}): EngineClient (rkyv V2 fast-path)
 ```
 
 각 adapter 패키지는 서로를 import하지 않으며, host-specific 패키지를 직접 import하지도 않는다. 호출자가 transport 객체를 생성하여 주입하는 방식이다.
@@ -288,6 +288,7 @@ pub fn invoke_json(&self, name: &str, params: Value) -> Result<Value>
  │  - Bun:       transport.invoke(command, args)            │
  │  - Tauri:     invoke('rustra_dispatch', {command, args}) │
  │  - RN:        nativeModule.invoke(command, args)         │
+ │  - Lynx:      NativeModules.RustraModule.invokeRkyvV2(buf)│
  │          │                                               │
  │          ▼                                               │
  │  transport (앱 레벨에서 생성/주입)                        │
@@ -375,21 +376,21 @@ struct RegistryState {
 
 `build()` 시 `frozen = !cfg!(debug_assertions)`:
 
-| 빌드 | `frozen` 기본값 | 런타임 mutation |
-|------|----------------|-----------------|
-| debug (`debug_assertions`) | `false` | `register`/`register_fn`/`replace`/`unregister` 허용 |
-| release | `true` | 모두 `Err("registry.frozen")` |
+| 빌드                       | `frozen` 기본값 | 런타임 mutation                                      |
+| -------------------------- | --------------- | ---------------------------------------------------- |
+| debug (`debug_assertions`) | `false`         | `register`/`register_fn`/`replace`/`unregister` 허용 |
+| release                    | `true`          | 모두 `Err("registry.frozen")`                        |
 
 `Package::freeze()` 로 언제든 명시적 봉인 가능(debug에서 prod 동작 시뮬레이션 등). 한 번 동결하면 해제 불가.
 
 ### mutation API
 
-| 메서드 | 동작 | 실패 |
-|--------|------|------|
+| 메서드                    | 동작                                                        | 실패                                        |
+| ------------------------- | ----------------------------------------------------------- | ------------------------------------------- |
 | `register(name, handler)` | 등록. 같은 이름이면 핸들러 덮어쓰기(기존 `command_id` 유지) | `registry.frozen` / `registry.id_exhausted` |
-| `register_fn(handler)` | 이름 자동 추론 등록 | 위와 동일 |
-| `replace(name, handler)` | 핸들러 교체(`command_id` 유지) | `command.not_found` / `registry.frozen` |
-| `unregister(name)` | 제거(`command_id` retired) | `command.not_found` / `registry.frozen` |
+| `register_fn(handler)`    | 이름 자동 추론 등록                                         | 위와 동일                                   |
+| `replace(name, handler)`  | 핸들러 교체(`command_id` 유지)                              | `command.not_found` / `registry.frozen`     |
+| `unregister(name)`        | 제거(`command_id` retired)                                  | `command.not_found` / `registry.frozen`     |
 
 ### 동시성
 
@@ -426,7 +427,7 @@ rustra-bridge는 다음 불변식을 통해 host-neutral 특성을 보장한다:
 
 1. **생성된 TypeScript는 host-specific import를 금지한다**: `types.ts`, `commands.ts`, `contract.ts`는 `node:`, `bun:`, `@tauri-apps`, `react-native`, `expo-modules` 등 어떤 host-specific 모듈도 import하지 않는다. 유일한 import는 `commands.ts`가 `types.js`를 참조하는 것뿐이다.
 
-2. **adapter 패키지는 서로를 import하지 않는다**: `packages/node`, `packages/bun`, `packages/tauri`, `packages/react-native`는 각각 독립적이며 서로에 대한 의존성이 없다.
+2. **adapter 패키지는 서로를 import하지 않는다**: `packages/node`, `packages/bun`, `packages/tauri`, `packages/react-native`, `packages/lynx`는 각각 독립적이며 서로에 대한 의존성이 없다.
 
 3. **adapter는 host 패키지를 직접 import하지 않는다**: adapter의 소스 코드(`src/index.ts`)는 `node:child_process`, `@tauri-apps/api` 등을 import하지 않는다. 대신 호출자가 transport 객체를 생성하여 주입한다.
 

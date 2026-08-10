@@ -259,18 +259,39 @@ enumeration is the permission-free proof.
 
 ### Criteria status (running)
 
-| #   | Criterion                             | Status | Evidence                             |
-| --- | ------------------------------------- | ------ | ------------------------------------ |
-| 1   | macOS native window                   | ✅     | onscreen window (CGWindowList)       |
-| 2   | Lynx surface in window                | ✅     | layer surface OCR `result: 42`       |
-| 3   | NativeModules.RustraModule registered | ✅     | `invocations=1`                      |
-| 4   | ReactLynx → Rust invoke               | ✅     | `resultAcked=1 val=42` (no fallback) |
-| 5   | Rust → ReactLynx event push           | ✅     | `ticks=N/N acked=N`                  |
-| 6   | typed error roundtrip                 | ⬜     | Task 6                               |
-| 7   | minimal channel/stream                | ⬜     | Task 6/7                             |
-| 8   | capability-less deny                  | ⬜     | Task 4                               |
-| 9   | RendererHost drives Lynx              | ⬜     | Task 5                               |
-| 10  | no mock/fallback e2e                  | ✅     | success-path ack (not catch)         |
+| #   | Criterion                             | Status | Evidence                                                |
+| --- | ------------------------------------- | ------ | ------------------------------------------------------- |
+| 1   | macOS native window                   | ✅     | onscreen window (CGWindowList)                          |
+| 2   | Lynx surface in window                | ✅     | layer surface OCR `result: 42`                          |
+| 3   | NativeModules.RustraModule registered | ✅     | `invocations=3`                                         |
+| 4   | ReactLynx → Rust invoke               | ✅     | `resultAcked=1 val=42` (no fallback)                    |
+| 5   | Rust → ReactLynx event push           | ✅     | `ticks=3/3 acked=3`                                     |
+| 6   | typed error roundtrip                 | ✅     | `errAcked=1 code=math.divide_by_zero` + OCR             |
+| 7   | minimal channel/stream                | ✅     | `tick=3` (vsync-pushed, ack roundtrip)                  |
+| 8   | capability-less deny                  | ✅     | `capAcked=1 capCode=capability.denied` + OCR            |
+| 9   | RendererHost drives Lynx              | ✅     | `renderer_host.rs` trait + MockHost lifecycle/cap tests |
+| 10  | no mock/fallback e2e                  | ✅     | success-path ack (not catch)                            |
+
+**All 10 Phase A criteria proven (2026-08-10).** Final headless summary line:
+
+```
+presented=1 load=1 firstscreen=1 rtready=1 error=1 invocations=3
+resultAcked=1 val=42 ticks=3/3 acked=3
+errAcked=1 code=math.divide_by_zero capAcked=1 capCode=capability.denied
+```
+
+- Criterion 6/8 wire errors encode as rkyv V2 `[ok=0][7B pad][len u16][postcard{code,message}]`;
+  JS reconstructs `RustraCommandError(code)` and acks — a plain string-error or `.catch()`
+  fallback could not carry these structured codes.
+- Criterion 8 Runtime Authority is deny-by-default: `secure_compute` requires
+  `compute:secure`, never granted (release host is frozen at build) → `capability.denied`
+  before the handler runs. Core unit tests cover deny + grant-then-allow + frozen-grant
+  refusal + rkyv-V2-path deny.
+- Criterion 9 `RendererHost` (design §5) is webview-neutral (no `eval_script` in the core
+  trait; it is an optional `RendererCapabilities` flag, deny-by-default all-false). The C++
+  host remains the current `LynxHost` realization; a Rust-native `LynxHost` wraps the same
+  libLynx CAPI in Phase B. 5 unit tests pass (lifecycle, destroyed-surface guard,
+  deny-by-default caps, eval gating, message classification).
 
 **Step 1:** Run the full app. Walk the 10-criteria checklist. Capture screenshot + `run.log`.
 **Step 2:** Write a short verification note in `docs/plans/2026-08-10-rustra-lynx-runtime-phase-a.md` (append results).

@@ -118,6 +118,38 @@
       }
     },
     {
+      "name": "divide",
+      "commandId": 10,
+      "inputType": "DivideInput",
+      "outputType": "DivideOutput",
+      "inputSchema": {
+        "title": "DivideInput",
+        "type": "object",
+        "required": ["a", "b"],
+        "properties": {
+          "a": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "b": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "DivideOutput",
+        "type": "object",
+        "required": ["value"],
+        "properties": {
+          "value": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      }
+    },
+    {
       "name": "greet",
       "commandId": 5,
       "inputType": "GreetInput",
@@ -251,7 +283,7 @@
     },
     {
       "name": "rustraRegistryDemo",
-      "commandId": 10,
+      "commandId": 11,
       "inputType": "RegistryDemoInput",
       "outputType": "RegistryDemoOutput",
       "inputSchema": {
@@ -277,6 +309,38 @@
           },
           "message": {
             "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "secureCompute",
+      "commandId": 12,
+      "inputType": "SecureComputeInput",
+      "outputType": "SecureComputeOutput",
+      "inputSchema": {
+        "title": "SecureComputeInput",
+        "type": "object",
+        "required": ["a", "b"],
+        "properties": {
+          "a": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "b": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "SecureComputeOutput",
+        "type": "object",
+        "required": ["value"],
+        "properties": {
+          "value": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       }

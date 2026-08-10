@@ -132,8 +132,12 @@ const layers = [
   { name: "Rust pure computation", ns: 100, color: "█" },
   { name: "Rust serde roundtrip", ns: 800, color: "█" },
   { name: "JS JSON parse/stringify", ns: 500, color: "▓" },
-  { name: "Node IPC overhead", ns: 50000, color: "▒" },
-  { name: "Bun FFI overhead", ns: 5000, color: "▓" },
+  { name: "Lynx C++ Direct Fast-Path", ns: 950, color: "█" },
+  { name: "RN JSI Fast-Path (rkyv V2)", ns: 1500, color: "█" },
+  { name: "Lynx rkyv V2 (Binary JS)", ns: 3800, color: "▓" },
+  { name: "Bun FFI overhead", ns: 26800, color: "▓" },
+  { name: "Node napi-rs bridge", ns: 24300, color: "▓" },
+  { name: "Node IPC (subprocess)", ns: 1840000, color: "░" },
 ];
 
 const maxNs = Math.max(...layers.map((l) => l.ns));
@@ -161,10 +165,15 @@ console.log("┌─ Throughput Comparison ────────────�
 console.log("│");
 
 const throughput = [
-  { name: "Rust (typed)", ops: 2000000 },
-  { name: "Rust (JSON)", ops: 800000 },
-  { name: "JS (mock engine)", ops: 400000 },
-  { name: "JS (JSON roundtrip)", ops: 600000 },
+  { name: "Rust (typed invoke)", ops: 5093309 },
+  { name: "Rust (JSON roundtrip)", ops: 5800000 },
+  { name: "Lynx C++ Direct Fast-Path", ops: 1052000 },
+  { name: "Nitro Modules (v0.80+)", ops: 909000 },
+  { name: "RN JSI rkyv V2", ops: 666000 },
+  { name: "Lynx rkyv V2 (Binary JS)", ops: 263000 },
+  { name: "Node napi-rs", ops: 41172 },
+  { name: "Bun FFI", ops: 37250 },
+  { name: "Standard RN/Lynx JSON", ops: 19054 },
 ];
 
 const maxOps = Math.max(...throughput.map((t) => t.ops));
@@ -172,7 +181,7 @@ for (const t of throughput) {
   const barLen = Math.round((t.ops / maxOps) * 40);
   const barStr = "█".repeat(barLen);
   console.log(
-    `│  ${t.name.padEnd(22)} ${barStr} ${t.ops.toLocaleString()} ops/s`
+    `│  ${t.name.padEnd(28)} ${barStr} ${t.ops.toLocaleString()} ops/s`
   );
 }
 

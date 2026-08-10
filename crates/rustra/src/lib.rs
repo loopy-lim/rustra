@@ -50,12 +50,13 @@ pub use rkyv_codec::encode_rkyv_v2_error;
 mod codegen;
 mod error;
 pub mod ffi;
+pub mod renderer_host;
 mod rkyv_codec;
 mod schema;
 
 use schemars::JsonSchema;
-use serde::{Serialize, de::DeserializeOwned};
-use serde_json::{Value, json};
+use serde::{de::DeserializeOwned, Serialize};
+use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
@@ -63,8 +64,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
 use rkyv_codec::{
-    BinHandler, DecodeFn, EncodeFn, Tier, build_rkyv_v2_decoder, build_rkyv_v2_response_encoder,
-    build_tier3_json_decoder, is_output_tier3,
+    build_rkyv_v2_decoder, build_rkyv_v2_response_encoder, build_tier3_json_decoder,
+    is_output_tier3, BinHandler, DecodeFn, EncodeFn, Tier,
 };
 
 pub use error::{Result, RustraError};
@@ -79,8 +80,15 @@ use schema::{command_name_from_handler, schema_value, short_type_name};
 /// ```
 pub mod prelude {
     pub use crate::{
-        GeneratedPackage, Package, PackageBuilder, Result, RustraError, bridge_type, build,
-        command, ffi::FfiFormat, register, rkyv_codec::encode_rkyv_v2_error,
+        bridge_type, build, command,
+        ffi::FfiFormat,
+        register,
+        renderer_host::{
+            host_supports_eval, HostMessage, MessageKind, RendererCapabilities, RendererHost, Size,
+            SurfaceOptions,
+        },
+        rkyv_codec::encode_rkyv_v2_error,
+        GeneratedPackage, Package, PackageBuilder, Result, RustraError,
     };
     pub use schemars::JsonSchema;
     pub use serde::{Deserialize, Serialize};
@@ -93,7 +101,7 @@ pub mod prelude {
 /// 컴파일 타임에 검증하기 위해 사용합니다.
 pub mod __private {
     use schemars::JsonSchema;
-    use serde::{Serialize, de::DeserializeOwned};
+    use serde::{de::DeserializeOwned, Serialize};
 
     pub trait CommandInput: DeserializeOwned + JsonSchema + 'static {}
     impl<T: DeserializeOwned + JsonSchema + 'static> CommandInput for T {}
@@ -122,7 +130,7 @@ pub mod __private {
 #[cfg(feature = "tauri")]
 pub mod tauri_support {
     use crate::Package;
-    use serde_json::{Value, json};
+    use serde_json::{json, Value};
     use tauri::State;
 
     /// Tauri의 managed state로 보관되는 rustra 패키지입니다.
@@ -177,6 +185,9 @@ struct RegistryState {
     commands: BTreeMap<String, Command>,
     id_to_name: BTreeMap<u16, String>,
     next_command_id: u16,
+    /// Runtime Authority: 부여된 capability 집합. deny-by-default —
+    /// `required_capability` 가 `Some` 인 명령은 이 집합에 포함될 때만 실행된다.
+    granted_capabilities: BTreeSet<String>,
 }
 
 impl std::fmt::Debug for Package {
@@ -259,6 +270,10 @@ struct Command {
     rkyv_v2_encode_response: EncodeFn,
     /// true when this command uses Tier 3 (JSON fallback) wire format.
     rkyv_v2_tier3: bool,
+    /// Runtime Authority: 이 명령이 요구하는 capability.
+    /// `Some(cap)` 면 `cap` 이 `grant_capability` 로 부여되기 전까지 deny-by-default.
+    /// `None` 이면 항상 허용 (기본 명령).
+    required_capability: Option<&'static str>,
 }
 
 impl std::fmt::Debug for Command {
@@ -341,6 +356,7 @@ where
         rkyv_v2_decode: rkyv_v2_decoder,
         rkyv_v2_encode_response: rkyv_v2_response_encoder,
         rkyv_v2_tier3: is_tier3,
+        required_capability: None,
     }
 }
 
@@ -382,6 +398,9 @@ impl Package {
                 .ok_or_else(|| RustraError::command_not_found(name))?
                 .clone()
         };
+        // Runtime Authority: deny-by-default — capability 가 요구되는데 부여되지
+        // 않았으면 핸들러를 호출하지 않고 capability.denied 를 반환한다.
+        self.capability_satisfied(&command)?;
         (command.invoke)(params)
     }
 
@@ -415,6 +434,11 @@ impl Package {
                 .ok_or_else(|| RustraError::command_not_found(command_name))?
                 .clone()
         };
+        // Runtime Authority: deny-by-default — capability 가 요구되는데 부여되지
+        // 않았으면 바이너리 핸들러(또는 JSON fallback)를 호출하지 않고
+        // capability.denied 를 반환한다. 에러는 rkyv V2 error wire 로 인코딩되어
+        // JS RustraCommandError("capability.denied") 로 재구성된다.
+        self.capability_satisfied(&command)?;
 
         // Fast path: use typed postcard binary handler (bypasses JSON Value entirely)
         if let Some(ref handler) = command.rkyv_v2_handler {
@@ -454,6 +478,47 @@ impl Package {
         } else {
             Ok(())
         }
+    }
+
+    /// Runtime Authority: capability 를 부여한다 (deny-by-default 해제).
+    ///
+    /// `required_capability` 가 `Some(cap)` 인 명령은 `cap` 이 부여되기 전까지
+    /// `capability.denied` 로 거부된다 — 핸들러는 아예 호출되지 않는다. 이 메서드로
+    /// `cap` 을 granted 집합에 추가하면 이후 해당 명령이 허용된다. 동결 상태면
+    /// `registry.frozen`.
+    pub fn grant_capability(&self, cap: &str) -> crate::Result<()> {
+        self.ensure_mutable()?;
+        let mut state = self.state.write().unwrap();
+        state.granted_capabilities.insert(cap.to_string());
+        Ok(())
+    }
+
+    /// `cap` 이 현재 부여되어 있는지 (읽기 전용, 동결 무관).
+    pub fn has_capability(&self, cap: &str) -> bool {
+        self.state
+            .read()
+            .unwrap()
+            .granted_capabilities
+            .contains(cap)
+    }
+
+    /// `command` 가 요구하는 capability 가 현재 부여되어 있는지 검사한다.
+    /// capability 가 `None` 이면 항상 허용.
+    fn capability_satisfied(&self, command: &Command) -> crate::Result<()> {
+        if let Some(required) = command.required_capability {
+            let granted = self
+                .state
+                .read()
+                .unwrap()
+                .granted_capabilities
+                .contains(required);
+            if !granted {
+                return Err(RustraError::capability_denied(format!(
+                    "command requires capability '{required}' which was not granted"
+                )));
+            }
+        }
+        Ok(())
     }
 
     /// 런타임에 명령을 등록한다.
@@ -707,6 +772,24 @@ impl PackageBuilder {
         self
     }
 
+    /// Runtime Authority: 이미 등록된 명령에 capability 요구를 부여한다.
+    ///
+    /// `name` 명령은 `cap` 가 `Package::grant_capability` 로 부여되기 전까지
+    /// deny-by-default 로 실행 거부된다. 빌더 체인에서 `.command(...)` 이후
+    /// `.build()` 이전에 호출한다.
+    ///
+    /// # 패닉
+    ///
+    /// `name` 이 등록되어 있지 않으면 패닉한다.
+    pub fn require_capability(mut self, name: &str, cap: &'static str) -> Self {
+        let command = self
+            .commands
+            .get_mut(name)
+            .unwrap_or_else(|| panic!("require_capability: command '{name}' not registered"));
+        command.required_capability = Some(cap);
+        self
+    }
+
     /// 등록된 모든 명령을 불변 [`Package`]로 빌드합니다.
     pub fn build(self) -> Package {
         let id_to_name: BTreeMap<u16, String> = self
@@ -720,6 +803,7 @@ impl PackageBuilder {
                 commands: self.commands,
                 id_to_name,
                 next_command_id: self.next_command_id,
+                granted_capabilities: BTreeSet::new(),
             })),
             frozen: Arc::new(AtomicBool::new(!cfg!(debug_assertions))),
         }
@@ -934,6 +1018,76 @@ mod runtime_registry_tests {
         assert_eq!(
             echo_entry["inputSchema"]["properties"]["v"]["type"],
             "integer"
+        );
+    }
+
+    /// deny-by-default: capability 가 부여되지 않으면 capability.denied 로 거부.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn capability_required_command_denied_without_grant() {
+        let pkg = Package::builder("test.wb")
+            .command("locked", c1)
+            .require_capability("locked", "compute:secure")
+            .build();
+        // capability 미부여 → 거부. 핸들러(c1) 는 호출되지 않는다.
+        let err = pkg
+            .invoke::<_, TestOut>("locked", TestIn { _v: 0 })
+            .unwrap_err();
+        assert_eq!(err.code(), "capability.denied");
+        assert!(!pkg.has_capability("compute:secure"));
+    }
+
+    /// grant 후에는 동일 명령이 허용된다.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn capability_grant_allows_command() {
+        let pkg = Package::builder("test.wb")
+            .command("locked", c1)
+            .require_capability("locked", "compute:secure")
+            .build();
+        pkg.grant_capability("compute:secure").unwrap();
+        assert!(pkg.has_capability("compute:secure"));
+        let out: TestOut = pkg.invoke("locked", TestIn { _v: 0 }).unwrap();
+        assert_eq!(out.v, 1, "granted capability should allow execution");
+    }
+
+    /// capability 가 없는 일반 명령은 grant 여부와 무관하게 항상 허용.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn non_gated_command_always_allowed() {
+        let pkg = Package::builder("test.wb").command("open", c1).build();
+        let out: TestOut = pkg.invoke("open", TestIn { _v: 0 }).unwrap();
+        assert_eq!(out.v, 1);
+    }
+
+    /// rkyv V2 바이너리 경로에서도 deny-by-default 가 동작한다.
+    #[test]
+    #[cfg(debug_assertions)]
+    fn capability_denied_on_rkyv_v2_path() {
+        let pkg = Package::builder("test.wb")
+            .command("locked", echo) // command_id 1
+            .require_capability("locked", "compute:secure")
+            .build();
+        // locked(EchoIn) 는 Tier 1 (단일 i64) — fast postcard path.
+        // capability 게이트가 디코더보다 먼저 평가되므로 cmd_id 만 있어도 된다.
+        let mut payload = vec![0u8; 2];
+        payload[0..2].copy_from_slice(&1u16.to_le_bytes()); // command_id = 1
+        let err = pkg.invoke_rkyv_v2(&payload).unwrap_err();
+        assert_eq!(err.code(), "capability.denied");
+    }
+
+    /// 동결 상태에서는 grant_capability 도 거부된다 (registry.frozen).
+    #[test]
+    #[cfg(debug_assertions)]
+    fn grant_capability_blocked_when_frozen() {
+        let pkg = Package::builder("test.wb")
+            .command("locked", c1)
+            .require_capability("locked", "compute:secure")
+            .build();
+        pkg.freeze();
+        assert_eq!(
+            pkg.grant_capability("compute:secure").unwrap_err().code(),
+            "registry.frozen"
         );
     }
 }

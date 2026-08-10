@@ -1,4 +1,4 @@
-import { NativeModules } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 
 export type RustraNative = {
   invoke(payload: ArrayBuffer): ArrayBuffer;

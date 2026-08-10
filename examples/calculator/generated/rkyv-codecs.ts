@@ -62,16 +62,76 @@ function _pcConcatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
   return result;
 }
 
+// Pure-JS UTF-8 codec. Lynx's QuickJS runtime has no TextEncoder/TextDecoder
+// globals, so the postcard string helpers must not depend on them.
+function _utf8Encode(s: string): Uint8Array {
+  const out: number[] = [];
+  for (let i = 0; i < s.length; i++) {
+    let c = s.charCodeAt(i);
+    if (c < 0x80) {
+      out.push(c);
+    } else if (c < 0x800) {
+      out.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
+    } else if (c >= 0xd800 && c <= 0xdbff) {
+      // high surrogate → combine with following low surrogate into one codepoint
+      const low = s.charCodeAt(++i);
+      const cp = 0x10000 + ((c - 0xd800) << 10) + (low - 0xdc00);
+      out.push(
+        0xf0 | (cp >> 18),
+        0x80 | ((cp >> 12) & 0x3f),
+        0x80 | ((cp >> 6) & 0x3f),
+        0x80 | (cp & 0x3f),
+      );
+    } else {
+      out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+    }
+  }
+  return new Uint8Array(out);
+}
+
+function _utf8Decode(bytes: Uint8Array, start: number, end: number): string {
+  let s = '';
+  let i = start;
+  while (i < end) {
+    const b = bytes[i];
+    if (b < 0x80) {
+      s += String.fromCharCode(b);
+      i += 1;
+    } else if ((b & 0xe0) === 0xc0) {
+      s += String.fromCharCode(((b & 0x1f) << 6) | (bytes[i + 1] & 0x3f));
+      i += 2;
+    } else if ((b & 0xf0) === 0xe0) {
+      s += String.fromCharCode(
+        ((b & 0x0f) << 12) | ((bytes[i + 1] & 0x3f) << 6) | (bytes[i + 2] & 0x3f),
+      );
+      i += 3;
+    } else if ((b & 0xf8) === 0xf0) {
+      const cp =
+        ((b & 0x07) << 18) |
+        ((bytes[i + 1] & 0x3f) << 12) |
+        ((bytes[i + 2] & 0x3f) << 6) |
+        (bytes[i + 3] & 0x3f);
+      const adj = cp - 0x10000; // encode as UTF-16 surrogate pair
+      s += String.fromCharCode(0xd800 + (adj >> 10), 0xdc00 + (adj & 0x3ff));
+      i += 4;
+    } else {
+      i += 1; // invalid lead byte — skip
+    }
+  }
+  return s;
+}
+
 function _pcEncodeString(s: string): Uint8Array {
-  const bytes = new TextEncoder().encode(s);
+  const bytes = _utf8Encode(s);
   return _pcConcatUint8Arrays([_pcEncodeVarint(bytes.length), bytes]);
 }
 
 function _pcDecodeString(buf: Uint8Array, offset: number): { value: string; bytesRead: number } {
   const len = _pcDecodeVarint(buf, offset);
-  const strBytes = buf.slice(offset + len.bytesRead, offset + len.bytesRead + len.value);
+  const start = offset + len.bytesRead;
+  const end = start + len.value;
   return {
-    value: new TextDecoder().decode(strBytes),
+    value: _utf8Decode(buf, start, end),
     bytesRead: len.bytesRead + len.value,
   };
 }
@@ -102,7 +162,7 @@ function _pcDecodeF32(buf: Uint8Array, offset: number): { value: number; bytesRe
   };
 }
 
-import type { RkyvV2Codec } from '@rustra/types';
+import type { RkyvV2Codec, RustraError } from '@rustra/types';
 import type {
   AddNumbersInput,
   AddNumbersOutput,
@@ -110,6 +170,8 @@ import type {
   ClampOutput,
   CreateItemInput,
   CreateItemOutput,
+  DivideInput,
+  DivideOutput,
   GreetInput,
   GreetOutput,
   IsEvenInput,
@@ -121,6 +183,8 @@ import type {
   ProcessItemOutput,
   RegistryDemoInput,
   RegistryDemoOutput,
+  SecureComputeInput,
+  SecureComputeOutput,
   SumListInput,
   SumListOutput,
   ToUpperInput,
@@ -141,14 +205,20 @@ export const addNumbersCodec: RkyvV2Codec<AddNumbersInput, AddNumbersOutput> = {
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: AddNumbersOutput; error?: string } {
-    if (buf.byteLength < 8) return { ok: false, error: 'response too short' };
+  decode(buf: ArrayBuffer): { ok: boolean; result?: AddNumbersOutput; error?: RustraError } {
+    if (buf.byteLength < 8)
+      return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -178,14 +248,20 @@ export const clampCodec: RkyvV2Codec<ClampInput, ClampOutput> = {
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: ClampOutput; error?: string } {
-    if (buf.byteLength < 8) return { ok: false, error: 'response too short' };
+  decode(buf: ArrayBuffer): { ok: boolean; result?: ClampOutput; error?: RustraError } {
+    if (buf.byteLength < 8)
+      return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -214,14 +290,20 @@ export const createItemCodec: RkyvV2Codec<CreateItemInput, CreateItemOutput> = {
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: CreateItemOutput; error?: string } {
-    if (buf.byteLength < 8) return { ok: false, error: 'response too short' };
+  decode(buf: ArrayBuffer): { ok: boolean; result?: CreateItemOutput; error?: RustraError } {
+    if (buf.byteLength < 8)
+      return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -249,6 +331,48 @@ export const createItemCodec: RkyvV2Codec<CreateItemInput, CreateItemOutput> = {
   },
 };
 
+export const divideCodec: RkyvV2Codec<DivideInput, DivideOutput> = {
+  commandId: 10,
+
+  encode(args: DivideInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(DivideInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 10, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeZigzagVarint(args.a));
+    parts.push(_pcEncodeZigzagVarint(args.b));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: DivideOutput; error?: RustraError } {
+    if (buf.byteLength < 8)
+      return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<DivideOutput> = {};
+    {
+      const _v = _pcDecodeZigzagVarint(u8, offset);
+      result.value = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as DivideOutput };
+  },
+};
+
 export const greetCodec: RkyvV2Codec<GreetInput, GreetOutput> = {
   commandId: 5,
 
@@ -262,14 +386,20 @@ export const greetCodec: RkyvV2Codec<GreetInput, GreetOutput> = {
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: GreetOutput; error?: string } {
-    if (buf.byteLength < 8) return { ok: false, error: 'response too short' };
+  decode(buf: ArrayBuffer): { ok: boolean; result?: GreetOutput; error?: RustraError } {
+    if (buf.byteLength < 8)
+      return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -297,14 +427,20 @@ export const isEvenCodec: RkyvV2Codec<IsEvenInput, IsEvenOutput> = {
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: IsEvenOutput; error?: string } {
-    if (buf.byteLength < 8) return { ok: false, error: 'response too short' };
+  decode(buf: ArrayBuffer): { ok: boolean; result?: IsEvenOutput; error?: RustraError } {
+    if (buf.byteLength < 8)
+      return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -332,14 +468,20 @@ export const multiplyCodec: RkyvV2Codec<MultiplyInput, MultiplyOutput> = {
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: MultiplyOutput; error?: string } {
-    if (buf.byteLength < 8) return { ok: false, error: 'response too short' };
+  decode(buf: ArrayBuffer): { ok: boolean; result?: MultiplyOutput; error?: RustraError } {
+    if (buf.byteLength < 8)
+      return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -369,14 +511,20 @@ export const processItemCodec: RkyvV2Codec<ProcessItemInput, ProcessItemOutput> 
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: ProcessItemOutput; error?: string } {
-    if (buf.byteLength < 8) return { ok: false, error: 'response too short' };
+  decode(buf: ArrayBuffer): { ok: boolean; result?: ProcessItemOutput; error?: RustraError } {
+    if (buf.byteLength < 8)
+      return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -409,26 +557,32 @@ export const processItemCodec: RkyvV2Codec<ProcessItemInput, ProcessItemOutput> 
 };
 
 export const rustraRegistryDemoCodec: RkyvV2Codec<RegistryDemoInput, RegistryDemoOutput> = {
-  commandId: 10,
+  commandId: 11,
 
   encode(args: RegistryDemoInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(RegistryDemoInput)]
     const parts: Uint8Array[] = [];
     const cmdId = new Uint8Array(2);
-    new DataView(cmdId.buffer).setUint16(0, 10, true);
+    new DataView(cmdId.buffer).setUint16(0, 11, true);
     parts.push(cmdId);
     parts.push(_pcEncodeString(args.op));
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: RegistryDemoOutput; error?: string } {
-    if (buf.byteLength < 8) return { ok: false, error: 'response too short' };
+  decode(buf: ArrayBuffer): { ok: boolean; result?: RegistryDemoOutput; error?: RustraError } {
+    if (buf.byteLength < 8)
+      return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -451,6 +605,48 @@ export const rustraRegistryDemoCodec: RkyvV2Codec<RegistryDemoInput, RegistryDem
   },
 };
 
+export const secureComputeCodec: RkyvV2Codec<SecureComputeInput, SecureComputeOutput> = {
+  commandId: 12,
+
+  encode(args: SecureComputeInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(SecureComputeInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 12, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeZigzagVarint(args.a));
+    parts.push(_pcEncodeZigzagVarint(args.b));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: SecureComputeOutput; error?: RustraError } {
+    if (buf.byteLength < 8)
+      return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<SecureComputeOutput> = {};
+    {
+      const _v = _pcDecodeZigzagVarint(u8, offset);
+      result.value = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as SecureComputeOutput };
+  },
+};
+
 export const sumListCodec: RkyvV2Codec<SumListInput, SumListOutput> = {
   commandId: 6,
 
@@ -470,14 +666,20 @@ export const sumListCodec: RkyvV2Codec<SumListInput, SumListOutput> = {
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: SumListOutput; error?: string } {
-    if (buf.byteLength < 8) return { ok: false, error: 'response too short' };
+  decode(buf: ArrayBuffer): { ok: boolean; result?: SumListOutput; error?: RustraError } {
+    if (buf.byteLength < 8)
+      return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8
@@ -510,14 +712,20 @@ export const toUpperCodec: RkyvV2Codec<ToUpperInput, ToUpperOutput> = {
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: ToUpperOutput; error?: string } {
-    if (buf.byteLength < 8) return { ok: false, error: 'response too short' };
+  decode(buf: ArrayBuffer): { ok: boolean; result?: ToUpperOutput; error?: RustraError } {
+    if (buf.byteLength < 8)
+      return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
     const view = new DataView(buf);
     if (u8[0] !== 1) {
       const errLen = view.getUint16(8, true);
-      const err =
-        errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
       return { ok: false, error: err };
     }
     // Decode postcard from offset 8

@@ -12,6 +12,7 @@ Pod::Spec.new do |s|
   s.vendored_libraries = 'rust/lib/librustra_calculator_example.a'
 
   s.source_files = "**/*.{h,mm,hpp,cpp}"
+  s.exclude_files = "**/test-*.{cpp,hpp}"
 
   s.dependency 'React-jsi'
   s.dependency 'React-Core'

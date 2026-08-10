@@ -3,7 +3,7 @@
 //! JSON Schema를 기반으로 고정폭/가변폭 필드를 분석하여
 //! 바이트 단위로 값을 읽고 쓰는 클로저를 생성합니다.
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -334,20 +334,39 @@ pub(crate) fn build_rkyv_v2_response_encoder(output_schema: &Value, is_tier3: bo
     })
 }
 
+/// Typed payload carried inside an rkyv V2 error frame. Postcard-serialised so
+/// the JS codec can decode `{ code, message }` with the same postcard helpers
+/// used for command I/O — the structured `code` (e.g. `command.not_found`,
+/// `math.divide_by_zero`) survives the wire instead of being flattened into a
+/// display string.
+#[derive(serde::Serialize)]
+struct RustraErrorWire<'a> {
+    code: &'a str,
+    message: &'a str,
+}
+
 /// Encodes an rkyv V2 error response.
 ///
 /// Wire format:
 /// ```text
-/// [ok: u8 @0 = 0][pad 7B][error_len: u16 @8][error_bytes...]
+/// [ok: u8 @0 = 0][pad 7B][err_len: u16 @8 LE][postcard({code, message}) @10...]
 /// ```
-pub fn encode_rkyv_v2_error(msg: &str) -> Vec<u8> {
-    let msg_bytes = msg.as_bytes();
-    let msg_len = msg_bytes.len().min(u16::MAX as usize) as u16;
-    let mut buf = vec![0u8; 8 + 2 + msg_len as usize];
+///
+/// The envelope is unchanged from the legacy string-error format; only the
+/// `err_bytes` content changes — it is now a postcard-serialised
+/// `{ code: String, message: String }` so the receiving side can reconstruct a
+/// typed `RustraCommandError(code, message)` rather than a plain `Error`.
+pub fn encode_rkyv_v2_error(error: &RustraError) -> Vec<u8> {
+    let wire = RustraErrorWire {
+        code: error.code(),
+        message: error.message(),
+    };
+    let body = postcard::to_allocvec(&wire).unwrap_or_default();
+    let body_len = body.len().min(u16::MAX as usize) as u16;
+    let mut buf = vec![0u8; 10 + body_len as usize];
     buf[0] = 0; // ok = false
-    buf[8..10].copy_from_slice(&msg_len.to_le_bytes());
-    buf[10..10 + msg_len as usize].copy_from_slice(&msg_bytes[..msg_len as usize]);
-    buf.truncate(10 + msg_len as usize);
+    buf[8..10].copy_from_slice(&body_len.to_le_bytes());
+    buf[10..10 + body_len as usize].copy_from_slice(&body[..body_len as usize]);
     buf
 }
 
