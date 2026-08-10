@@ -9,7 +9,7 @@ import {
   RustraCommandError,
   parseRustraErrorString,
 } from './index.js';
-import type { RkyvV2SchemaNative, RkyvV2Codec } from './index.js';
+import type { RkyvV2SchemaNative, RkyvV2Codec, BatchEntry } from './index.js';
 
 // ── wire 헬퍼 (TS 측 Tier 3 wire) ───────────────────────────
 // request:  [command_id: u16 LE @0][json @2]
@@ -387,6 +387,111 @@ test('invokeBatch without typed-batch native falls back to per-entry', async () 
     { command: 'b', args: {} },
   ]);
   assert.deepEqual(out, [{ echo: 'a' }, { echo: 'b' }]);
+});
+
+// ── Task 3.3: 동시성 / 배치 에러 전파 ──────────────────────
+// echo 코덱 + 제어 가능한 mock native 로 JS codec 경로(경로 2)의 invoke/Batch 를
+// 검증. failTags 에 해당하면 에러 프레임을 반환해 항목별 에러를 흉내낸다.
+//   request  = [cmd 200 LE][tag][msg]
+//   success  = [ok:1][7B 0][tag][msg]
+//   error    = [ok:0][7B 0][code-len][code][msg]
+type EchoOut = { tag: number; msg: string };
+function echoEngine(failTags: Set<number> = new Set()) {
+  const enc = new TextEncoder();
+  const codec: RkyvV2Codec<{ tag: number; msg: string }, EchoOut> = {
+    commandId: 200,
+    encode(args) {
+      const m = enc.encode(args.msg);
+      const u = new Uint8Array(2 + 1 + m.length);
+      u[0] = 0xc8;
+      u[1] = 0x00;
+      u[2] = args.tag & 0xff;
+      u.set(m, 3);
+      return u.buffer;
+    },
+    decode(frame) {
+      const u = new Uint8Array(frame);
+      if (u[0] === 1) {
+        return {
+          ok: true,
+          result: { tag: u[8], msg: new TextDecoder().decode(u.slice(9)) },
+        };
+      }
+      const codeLen = u[8];
+      const code = new TextDecoder().decode(u.slice(9, 9 + codeLen));
+      const message = new TextDecoder().decode(u.slice(9 + codeLen));
+      return { ok: false, error: { code, message } };
+    },
+  };
+  const native = makeNative({
+    invokeImpl(payload) {
+      const req = new Uint8Array(payload);
+      const tag = req[2];
+      if (failTags.has(tag)) {
+        const codeB = enc.encode(`echo.fail.${tag}`);
+        const msgB = enc.encode('boom');
+        const body = [codeB.length, ...codeB, ...msgB];
+        const fr = new Uint8Array(8 + body.length);
+        fr[0] = 0;
+        fr.set(body, 8);
+        return fr.buffer;
+      }
+      const rb = req.slice(2); // [tag][msg]
+      const fr = new Uint8Array(8 + rb.length);
+      fr[0] = 1;
+      fr.set(rb, 8);
+      return fr.buffer;
+    },
+  });
+  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
+    ['echo', codec as unknown as RkyvV2Codec<unknown, unknown>],
+  ]);
+  return createRkyvV2Engine(native, registry);
+}
+
+test('concurrent invokes do not cross-correlate (Task 3.3)', async () => {
+  const engine = echoEngine();
+  const N = 50;
+  const entries = Array.from({ length: N }, (_, i) => ({ tag: i % 256, msg: `m${i}` }));
+  // N 개 invoke 를 동시에 — 코덱/native 가 공유 상태를 쓰면 결과가 섞인다.
+  const results = await Promise.all(entries.map((e) => engine.invoke<EchoOut>('echo', e)));
+  assert.equal(results.length, N);
+  for (let i = 0; i < N; i++) {
+    assert.equal(results[i].tag, i % 256, `entry ${i} tag must match its own input`);
+    assert.equal(results[i].msg, `m${i}`, `entry ${i} msg must match its own input`);
+  }
+});
+
+test('invokeBatch fallback preserves entry order & distinctness (Task 3.3)', async () => {
+  // invokeTypedBatch 미제공 → Promise.all(entries.map(invoke)) 폴백 경로.
+  const engine = echoEngine();
+  const entries: BatchEntry[] = Array.from({ length: 10 }, (_, i) => ({
+    command: 'echo',
+    args: { tag: i, msg: `b${i}` },
+  }));
+  const out = await engine.invokeBatch<EchoOut>(entries);
+  assert.equal(out.length, 10);
+  for (let i = 0; i < 10; i++) {
+    assert.equal(out[i].tag, i, `batch item ${i} tag`);
+    assert.equal(out[i].msg, `b${i}`, `batch item ${i} msg`);
+  }
+});
+
+test('invokeBatch rejects with the failing entry error (Task 3.3)', async () => {
+  // tag 3 이 에러 프레임을 반환 → Promise.all 이 해당 항목에서 reject.
+  const engine = echoEngine(new Set([3]));
+  const entries: BatchEntry[] = [
+    { command: 'echo', args: { tag: 1, msg: 'a' } },
+    { command: 'echo', args: { tag: 3, msg: 'boom' } },
+    { command: 'echo', args: { tag: 5, msg: 'c' } },
+  ];
+  await assert.rejects(
+    engine.invokeBatch(entries),
+    (err: unknown) =>
+      err instanceof RustraCommandError &&
+      (err as RustraCommandError).code === 'echo.fail.3' &&
+      /boom/.test((err as RustraCommandError).message),
+  );
 });
 
 // ── Trust-test baseline (Phase 0) ───────────────────────────
