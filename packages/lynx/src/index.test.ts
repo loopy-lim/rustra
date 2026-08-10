@@ -5,7 +5,12 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createFastEngine, createLynxEngine, getRustraNative } from './index.js';
+import {
+  createFastEngine,
+  createLynxEngine,
+  getRustraNative,
+  RustraCommandError,
+} from './index.js';
 import type { RkyvV2Codec, RkyvV2SchemaNative } from '@rustra/types';
 
 // ── createFastEngine: rkyv V2 fast-path 위임 ────────────────
@@ -38,14 +43,17 @@ test('createFastEngine routes invoke through codec → native.invokeRkyvV2 → c
   assert.equal(new Uint8Array(encodedPayload!)[0], 1, 'codec.encode output is passed to native');
 });
 
-test('createFastEngine throws when codec decodes an error response', async () => {
+test('createFastEngine throws RustraCommandError when codec decodes an error response', async () => {
   const native: RkyvV2SchemaNative = {
     invokeRkyvV2: () => new ArrayBuffer(0),
   };
   const codec: RkyvV2Codec<unknown, unknown> = {
     commandId: 1,
     encode: () => new ArrayBuffer(0),
-    decode: () => ({ ok: false, error: 'native exploded' }),
+    decode: () => ({
+      ok: false,
+      error: { code: 'native.exploded', message: 'native exploded' },
+    }),
   };
   const engine = createFastEngine(native, {
     rkyvV2Codecs: new Map([['boom', codec]]),
@@ -55,7 +63,12 @@ test('createFastEngine throws when codec decodes an error response', async () =>
     async () => {
       await engine.invoke('boom', {});
     },
-    (err: Error) => /native exploded/.test(err.message),
+    (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError, 'must be RustraCommandError');
+      assert.equal((err as RustraCommandError).code, 'native.exploded');
+      assert.match((err as Error).message, /native exploded/);
+      return true;
+    },
   );
 });
 

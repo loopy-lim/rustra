@@ -5,6 +5,7 @@
 #include <string>
 
 using namespace facebook::jsi;
+namespace jsi = facebook::jsi;
 namespace rc = rustra::codec;
 
 static void encode_addNumbers(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {

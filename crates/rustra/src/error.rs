@@ -18,11 +18,13 @@ pub type Result<T> = std::result::Result<T, RustraError>;
 /// |------|-------------|------|
 /// | `command.not_found` | [`command_not_found`] | 등록되지 않은 명령 호출 |
 /// | `command.invalid_args` | [`invalid_args`] | 입력 인자 역직렬화 실패 |
+/// | `capability.denied` | [`capability_denied`] | 필요 capability 미부여 (deny-by-default) |
 /// | `internal` | [`internal`] | 내부 오류 (직렬화, I/O 등) |
 /// | (커스텀) | [`custom`] | 사용자 정의 에러 |
 ///
 /// [`command_not_found`]: RustraError::command_not_found
 /// [`invalid_args`]: RustraError::invalid_args
+/// [`capability_denied`]: RustraError::capability_denied
 /// [`internal`]: RustraError::internal
 /// [`custom`]: RustraError::custom
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -73,6 +75,19 @@ impl RustraError {
         Self {
             code,
             message: message.into(),
+            retryable: false,
+        }
+    }
+
+    /// 명령이 요구하는 capability 가 부여되지 않았을 때의 에러.
+    ///
+    /// Runtime Authority 는 deny-by-default 이다 — capability 가 demanding 명령은
+    /// 해당 capability 가 명시적으로 부여(`Package::grant_capability`)되기 전까지
+    /// 실행되지 않는다. 핸들러는 아예 호출되지 않는다. Code: `capability.denied`.
+    pub fn capability_denied(detail: impl fmt::Display) -> Self {
+        Self {
+            code: "capability.denied",
+            message: detail.to_string(),
             retryable: false,
         }
     }

@@ -381,7 +381,7 @@ export function generateRkyvCodecsTs(schema: PackageSchema): string {
 
   let output = postcardHelperSource();
 
-  output += "import type { RkyvV2Codec } from '@rustra/types';\n";
+  output += "import type { RkyvV2Codec, RustraError } from '@rustra/types';\n";
   output += `import type { ${importTypes.join(', ')} } from './types.js';\n\n`;
 
   for (const command of schema.commands) {
@@ -428,15 +428,23 @@ function generatePostcardCodec(
 
   // ── decode ──
   lines.push('');
-  lines.push(`  decode(buf: ArrayBuffer): { ok: boolean; result?: ${outType}; error?: string } {`);
-  lines.push(`    if (buf.byteLength < 8) return { ok: false, error: 'response too short' };`);
+  lines.push(
+    `  decode(buf: ArrayBuffer): { ok: boolean; result?: ${outType}; error?: RustraError } {`,
+  );
+  lines.push(
+    `    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };`,
+  );
   lines.push(`    const u8 = new Uint8Array(buf);`);
   lines.push(`    const view = new DataView(buf);`);
   lines.push(`    if (u8[0] !== 1) {`);
   lines.push(`      const errLen = view.getUint16(8, true);`);
-  lines.push(
-    `      const err = errLen > 0 ? new TextDecoder().decode(u8.slice(10, 10 + errLen)) : 'invoke failed';`,
-  );
+  lines.push(`      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };`);
+  lines.push(`      if (errLen > 0) {`);
+  lines.push(`        // postcard({ code: String, message: String })`);
+  lines.push(`        const c = _pcDecodeString(u8, 10);`);
+  lines.push(`        const m = _pcDecodeString(u8, 10 + c.bytesRead);`);
+  lines.push(`        err = { code: c.value, message: m.value };`);
+  lines.push(`      }`);
   lines.push(`      return { ok: false, error: err };`);
   lines.push(`    }`);
 

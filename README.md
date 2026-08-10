@@ -1,6 +1,6 @@
 # rustra
 
-Rust에서 명령을 한 번 정의하면, Node / Bun / Tauri / React Native 어디서든 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크.
+Rust에서 명령을 한 번 정의하면, Node / Bun / Tauri / React Native / Lynx 어디서든 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크.
 
 ## 작동 방식
 
@@ -10,7 +10,7 @@ Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플�
 
 - Rust 쪽에서 `#[command]`로 함수를 정의
 - `generate_typescript()` 호출 시 타입 안전한 TS 클라이언트 코드 생성
-- Node, Bun, Tauri, React Native 어댑터가 동일한 `EngineClient` 인터페이스로 라우팅
+- Node, Bun, Tauri, React Native, Lynx 어댑터가 동일한 `EngineClient` 인터페이스로 라우팅
 
 ## 설치
 
@@ -30,6 +30,7 @@ npm install @rustra/node      # Node.js
 npm install @rustra/bun       # Bun
 npm install @rustra/tauri     # Tauri
 npm install @rustra/react-native  # React Native
+npm install @rustra/lynx          # Lynx (ReactLynx)
 ```
 
 ## 빠른 예제
@@ -72,6 +73,7 @@ packages/
   bun/             Bun adapter
   tauri/           Tauri adapter
   react-native/    React Native adapter
+  lynx/            Lynx (ReactLynx) adapter
 
 examples/
   calculator/              기본 예시 (Rust crate + C FFI + stdio + 생성된 TS)
@@ -79,6 +81,7 @@ examples/
   benchmark/               성능 벤치마크 (페이로드 확장, 처리량 측정)
   tauri-calculator/        Tauri 런타임 예시
   react-native-calculator/ React Native 런타임 예시
+  lynx-calculator/         Lynx (ReactLynx) 런타임 예시
 ```
 
 ## Rust: 명령 정의
@@ -208,21 +211,35 @@ const engine = createTauriEngine({ invoke: window.__TAURI__.core.invoke });
 const result = await addNumbers(engine, { a: 20, b: 22 });
 ```
 
-### Node / Bun / React Native
+### Node / Bun / React Native / Lynx
 
-각 패키지(`@rustra/node`, `@rustra/bun`, `@rustra/react-native`)에서 `EngineClient` 구현체를 제공한다. 사용 방식은 Tauri와 동일하다.
+각 패키지(`@rustra/node`, `@rustra/bun`, `@rustra/react-native`, `@rustra/lynx`)에서 `EngineClient` 구현체를 제공한다. 사용 방식은 Tauri와 동일하다.
+
+#### Lynx (ReactLynx)
+
+Lynx는 rkyv V2 바이너리 fast-path를 기본으로 사용한다. Lynx Native Module(`NativeModules.RustraModule`)이 `invokeRkyvV2`를 노출해야 한다.
+
+```ts
+import { createFastEngine, configure, getRustraNative } from '@rustra/lynx';
+import { rkyvV2Registry } from './generated/rkyv-registry.js';
+
+configure(createFastEngine(getRustraNative(), { rkyvV2Codecs: rkyvV2Registry }));
+const result = await addNumbers({ a: 20, b: 22 });
+```
+
+네이티브 모듈 설정(iOS Lynx Module / Android Kotlin)은 [Lynx 설정 가이드](docs/extending/lynx-setup.md)를 참고.
 
 ## 성능
 
 모든 어댑터에서 `addNumbers({ a: 42, b: 58 })` 호출 기준 (Apple Silicon, release 빌드).
 
-| 어댑터 | 평균 지연 | 처리량 |
-|--------|----------|--------|
-| Rust (typed) | 209 ns | 5,093,309 ops/s |
-| Swift → Rust FFI | 3.5 µs | 296,710 ops/s |
-| Bun (JS측) | 189 ns | ~5.3M ops/s |
-| Node.js (JS측) | 308 ns | ~3.3M ops/s |
-| React Native (iOS sim) | 52.5 µs | 19,054 ops/s |
+| 어댑터                 | 평균 지연 | 처리량          |
+| ---------------------- | --------- | --------------- |
+| Rust (typed)           | 209 ns    | 5,093,309 ops/s |
+| Swift → Rust FFI       | 3.5 µs    | 296,710 ops/s   |
+| Bun (JS측)             | 189 ns    | ~5.3M ops/s     |
+| Node.js (JS측)         | 308 ns    | ~3.3M ops/s     |
+| React Native (iOS sim) | 52.5 µs   | 19,054 ops/s    |
 
 > 상세 벤치마크, 레이어별 오버헤드 분석, 페이로드 확장성은 [벤치마크 문서](docs/benchmarks.md)를 참고.
 
@@ -290,6 +307,7 @@ npx rustra generate --watch --schema ./generated/schema.json --output ./src/gene
 | [아키텍처 개요](docs/architecture.md)                            | 데이터 흐름, EngineClient 계약, transport 분리 |
 | [Transport 교체 가이드](docs/extending/transport-guide.md)       | Bun FFI, Node napi-rs 교체                     |
 | [React Native 설정 가이드](docs/extending/react-native-setup.md) | iOS JSI 모듈 설정, 사용법, 트러블슈팅          |
+| [Lynx 설정 가이드](docs/extending/lynx-setup.md)                 | Lynx Native Module(iOS/Android) 설정, 사용법   |
 | [새 Host 추가 가이드](docs/extending/adding-host.md)             | Electron, Deno 등 새 어댑터 추가               |
 | [전체 문서 목록](docs/README.md)                                 | 사용자 / 기여자별 읽기 경로                    |
 

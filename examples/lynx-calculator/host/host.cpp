@@ -25,6 +25,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
+#include <array>
 #include <mutex>
 #include <thread>
 #include <chrono>
@@ -103,6 +104,21 @@ static std::atomic<int> g_ticks_delivered{0};
 static std::atomic<int> g_ticks_acked{0};  // JS confirm: ackTick() calls
 static std::atomic<int> g_results_acked{0};
 static std::atomic<int> g_result_value{-999};  // value JS acked (proves no-fallback)
+// criterion 6 (typed error roundtrip): JS acks the RustraCommandError.code it
+// received from a failing command. errAcked>0 + code="math.divide_by_zero" proves
+// the structured code crossed the rkyv V2 error wire and was reconstructed in JS
+// (a plain string-error or a catch() fallback could not carry this code).
+static std::atomic<int> g_error_acked{0};
+static std::array<char, 64> g_error_code_ack{};
+static std::atomic<int> g_error_code_len{0};
+// criterion 8 (deny-by-default authority): JS acks the capability.denied code
+// it received from invoking a capability-gated command without the capability
+// granted. capAcked>0 + capCode="capability.denied" proves the authority layer
+// refused the handler call (handler never ran) and the typed denial crossed the
+// rkyv V2 error wire back to JS.
+static std::atomic<int> g_cap_acked{0};
+static std::array<char, 64> g_cap_code_ack{};
+static std::atomic<int> g_cap_code_len{0};
 
 static uint64_t now_ns() {
   timespec ts;
@@ -269,6 +285,61 @@ static napi_value_weak AckResult(napi_env_weak env,
   return nullptr;
 }
 
+// JS→native ack for criterion 6 (typed error roundtrip). App.tsx calls
+// ackError(err.code) inside the divide(1,0).catch() — but ONLY after confirming
+// err is a RustraCommandError whose .code === 'math.divide_by_zero'. The host
+// records that code string; errAcked=1 code=math.divide_by_zero in the summary
+// proves the structured code was reconstructed on the JS side (a plain string
+// error or a fallback could never yield this exact code).
+static napi_value_weak AckError(napi_env_weak env, napi_callback_info_weak info) {
+  size_t argc = 1;
+  napi_value_weak args[1] = {nullptr};
+  napi_get_cb_info_weak(env, info, &argc, args, nullptr, nullptr);
+  if (argc >= 1) {
+    char buf[64] = {0};
+    size_t len = 0;
+    napi_get_value_string_utf8_weak(env, args[0], nullptr, 0, &len);
+    if (len >= sizeof(buf)) len = sizeof(buf) - 1;
+    napi_get_value_string_utf8_weak(env, args[0], buf, sizeof(buf), &len);
+    {
+      std::lock_guard<std::mutex> lk(g_mtx);
+      std::memcpy(g_error_code_ack.data(), buf, len);
+      g_error_code_ack[len] = '\0';
+    }
+    g_error_code_len.store((int)len, std::memory_order_relaxed);
+  }
+  g_error_acked.fetch_add(1, std::memory_order_relaxed);
+  return nullptr;
+}
+
+// JS→native ack for criterion 8 (deny-by-default authority). App.tsx calls
+// ackCapability(err.code) inside the secureCompute().catch() — but ONLY after
+// confirming err is a RustraCommandError whose .code === 'capability.denied'.
+// capAcked=1 capCode=capability.denied in the summary proves the Runtime
+// Authority denied the capability-gated command before the handler ran and the
+// structured code round-tripped to JS (the gated handler must NEVER execute).
+static napi_value_weak AckCapability(napi_env_weak env,
+                                     napi_callback_info_weak info) {
+  size_t argc = 1;
+  napi_value_weak args[1] = {nullptr};
+  napi_get_cb_info_weak(env, info, &argc, args, nullptr, nullptr);
+  if (argc >= 1) {
+    char buf[64] = {0};
+    size_t len = 0;
+    napi_get_value_string_utf8_weak(env, args[0], nullptr, 0, &len);
+    if (len >= sizeof(buf)) len = sizeof(buf) - 1;
+    napi_get_value_string_utf8_weak(env, args[0], buf, sizeof(buf), &len);
+    {
+      std::lock_guard<std::mutex> lk(g_mtx);
+      std::memcpy(g_cap_code_ack.data(), buf, len);
+      g_cap_code_ack[len] = '\0';
+    }
+    g_cap_code_len.store((int)len, std::memory_order_relaxed);
+  }
+  g_cap_acked.fetch_add(1, std::memory_order_relaxed);
+  return nullptr;
+}
+
 // Runs ON the BTS thread (scheduled by lynx_extension_module_post_task_to_runtime).
 // Calls the registered JS tick listener with an incrementing counter — the
 // Rust/host → ReactLynx event-push path.
@@ -357,6 +428,12 @@ static void InstallRustraNative(napi_env_weak env, napi_value_weak global,
   napi_create_function_weak(env, "ackResult", NAPI_AUTO_LENGTH, AckResult,
                             nullptr, &fn);
   napi_set_named_property_weak(env, exports, "ackResult", fn);
+  napi_create_function_weak(env, "ackError", NAPI_AUTO_LENGTH, AckError, nullptr,
+                            &fn);
+  napi_set_named_property_weak(env, exports, "ackError", fn);
+  napi_create_function_weak(env, "ackCapability", NAPI_AUTO_LENGTH,
+                            AckCapability, nullptr, &fn);
+  napi_set_named_property_weak(env, exports, "ackCapability", fn);
 
   // Ensure NativeModules exists. runtime_ready/runtime_attach can fire before
   // the framework installs NativeModules; napi_get_named_property returns
@@ -736,15 +813,18 @@ static int LynxMain(const char *bundle_path, const char *out_raw,
     fprintf(stderr,
             "[rustra] wrote %s (%ux%u) presented=%d load=%d firstscreen=%d "
             "rtready=%d error=%d invocations=%d resultAcked=%d val=%d "
-            "ticks=%d/%d acked=%d | renderer "
-            "posted/run=%d/%d fml checks/pumped=%ld/%ld\n",
+            "ticks=%d/%d acked=%d errAcked=%d code=%s capAcked=%d capCode=%s | "
+            "renderer posted/run=%d/%d fml checks/pumped=%ld/%ld\n",
             out_raw, w, h, (int)g_presented.load(),
             (int)g_load_success.load(), (int)g_first_screen.load(),
             (int)g_runtime_ready.load(), (int)g_error.load(),
             g_invoke_count.load(), g_results_acked.load(),
             g_result_value.load(), g_ticks_delivered.load(),
-            g_tick_count.load(), g_ticks_acked.load(), g_r_posted.load(),
-            g_r_run.load(),
+            g_tick_count.load(), g_ticks_acked.load(), g_error_acked.load(),
+            g_error_code_len.load() > 0 ? g_error_code_ack.data() : "(none)",
+            g_cap_acked.load(),
+            g_cap_code_len.load() > 0 ? g_cap_code_ack.data() : "(none)",
+            g_r_posted.load(), g_r_run.load(),
             g_fml_checks.load(), g_fml_pumped.load());
   }
 

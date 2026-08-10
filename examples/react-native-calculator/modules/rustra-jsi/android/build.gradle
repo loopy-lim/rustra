@@ -1,0 +1,66 @@
+buildscript {
+  repositories {
+    google()
+    mavenCentral()
+  }
+  dependencies {
+    classpath "com.android.tools.build:gradle:8.7.2"
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20"
+  }
+}
+
+apply plugin: "com.android.library"
+apply plugin: "kotlin-android"
+
+def getExtOrDefault(name, defaultValue) {
+  return rootProject.ext.has(name) ? rootProject.ext.get(name) : defaultValue
+}
+
+android {
+  namespace "com.rustrajsi"
+  compileSdkVersion getExtOrDefault("compileSdkVersion", 36)
+
+  defaultConfig {
+    minSdkVersion getExtOrDefault("minSdkVersion", 24)
+    targetSdkVersion getExtOrDefault("targetSdkVersion", 36)
+
+    externalNativeBuild {
+      cmake {
+        cppFlags "-std=c++20"
+        arguments "-DANDROID_STL=c++_shared"
+      }
+    }
+    ndk {
+      abiFilters "x86_64", "arm64-v8a"
+    }
+  }
+
+  externalNativeBuild {
+    cmake {
+      path "CMakeLists.txt"
+    }
+  }
+
+  buildFeatures {
+    prefab true
+  }
+
+  packagingOptions {
+    excludes = ["**/libc++_shared.so"]
+  }
+
+  sourceSets {
+    main {
+      java.srcDirs = ["src/main/java"]
+    }
+  }
+}
+
+repositories {
+  google()
+  mavenCentral()
+}
+
+dependencies {
+  implementation "com.facebook.react:react-android"
+}

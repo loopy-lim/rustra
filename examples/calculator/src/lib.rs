@@ -211,6 +211,64 @@ pub fn process_item(input: ProcessItemInput) -> Result<ProcessItemOutput> {
     })
 }
 
+// ── Tier 1 에러 전용 명령 (criterion 6: typed error roundtrip) ────────
+// divide 는 0으로 나눌 때 RustraError::custom("math.divide_by_zero", …) 를
+// 반환한다. rkyv V2 error wire([ok=0][pad][len u16][postcard{code,message}])를
+// 통해 code 가 그대로 건너가 JS 측 RustraCommandError(code, message) 로 복원되는
+// 것을 증명한다.
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DivideInput {
+    pub a: i64,
+    pub b: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DivideOutput {
+    pub value: i64,
+}
+
+#[command]
+pub fn divide(input: DivideInput) -> Result<DivideOutput> {
+    if input.b == 0 {
+        return Err(RustraError::custom(
+            "math.divide_by_zero",
+            "cannot divide by zero",
+        ));
+    }
+    Ok(DivideOutput {
+        value: input.a / input.b,
+    })
+}
+
+// ── Runtime Authority (criterion 8: capability-less deny) ────────────
+// `secureCompute` 는 `compute:secure` capability 를 요구한다 (deny-by-default).
+// capability 가 부여되기 전까지는 capability.denied 로 거부되며 핸들러 본문이
+// 실행되지 않는다. 런타임에 grant_capability("compute:secure") 가 호출되어야
+// 허용된다. release 빌드에서는 frozen 이므로 영구적으로 deny 된다.
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SecureComputeInput {
+    pub a: i64,
+    pub b: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SecureComputeOutput {
+    pub value: i64,
+}
+
+#[command]
+pub fn secure_compute(input: SecureComputeInput) -> Result<SecureComputeOutput> {
+    Ok(SecureComputeOutput {
+        value: input.a * input.b,
+    })
+}
+
 // ── Runtime registry demo (debug-only dynamic mutation) ─────────────
 // `rustraRegistryDemo` 는 빌드 시점에 등록되어 항상 호출 가능하며, 런타임에 live
 // package 를 mutate 한다. RN 이 사용하는 동일 FFI 경로(invoke_json)를 통해 동작하며,
@@ -437,8 +495,11 @@ pub fn calculator_package() -> Package {
                 to_upper,
                 create_item,
                 process_item,
-                rustra_registry_demo
+                divide,
+                rustra_registry_demo,
+                secure_compute
             )
+            .require_capability("secureCompute", "compute:secure")
             .build();
 
             // Auto-register for generic FFI with JSON default
@@ -985,7 +1046,7 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2(
         .invoke_rkyv_v2(bytes)
     {
         Ok(bytes) => bytes,
-        Err(error) => rustra::encode_rkyv_v2_error(&error.to_string()),
+        Err(error) => rustra::encode_rkyv_v2_error(&error),
     };
 
     alloc_response(resp_bytes, out_len)
@@ -1807,7 +1868,8 @@ mod tests {
 
     #[test]
     fn test_rkyv_v2_error_response_encoding() {
-        // Send a payload with an unknown command_id to trigger an error
+        // Send a payload with an unknown command_id to trigger an error.
+        // Error wire: [ok=0 @0][pad 7B][err_len u16 @8][postcard({code,message}) @10]
         let mut payload = vec![0u8; 16];
         payload[0..2].copy_from_slice(&999u16.to_le_bytes()); // unknown command_id
         payload[8..16].copy_from_slice(&0i64.to_le_bytes());
@@ -1821,13 +1883,142 @@ mod tests {
         let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
         assert_eq!(result_bytes[0], 0); // ok = false
 
-        // Verify error message is present
+        // Decode the structured postcard error payload → { code, message }.
         let error_len = u16::from_le_bytes(result_bytes[8..10].try_into().unwrap()) as usize;
         assert!(error_len > 0);
-        let error_msg = std::str::from_utf8(&result_bytes[10..10 + error_len]).unwrap();
-        assert!(!error_msg.is_empty());
+        #[derive(serde::Deserialize)]
+        #[allow(dead_code)]
+        struct WireError {
+            code: String,
+            message: String,
+        }
+        let wire: WireError = postcard::from_bytes(&result_bytes[10..10 + error_len]).unwrap();
+        // Unknown command_id → command_not_found typed error (code preserved).
+        assert_eq!(wire.code, "command.not_found");
+        assert!(!wire.message.is_empty());
 
         unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+    }
+
+    #[test]
+    fn test_rkyv_v2_divide_by_zero_typed_error() {
+        // divide (command_id = 11) with b=0 → RustraError::custom("math.divide_by_zero").
+        // Proves a domain typed error code round-trips through the rkyv V2 error wire.
+        let input = DivideInput { a: 10, b: 0 };
+        let input_bytes = postcard::to_allocvec(&input).unwrap();
+        let mut payload = vec![0u8; 2 + input_bytes.len()];
+        payload[0..2].copy_from_slice(&10u16.to_le_bytes()); // command_id = 10 (divide)
+        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
+
+        let mut out_len: usize = 0;
+        let result_ptr = unsafe {
+            rustra_calculator_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+        };
+
+        assert!(!result_ptr.is_null());
+        let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
+        assert_eq!(result_bytes[0], 0); // ok = false (error)
+
+        let error_len = u16::from_le_bytes(result_bytes[8..10].try_into().unwrap()) as usize;
+        #[derive(serde::Deserialize)]
+        #[allow(dead_code)]
+        struct WireError {
+            code: String,
+            message: String,
+        }
+        let wire: WireError = postcard::from_bytes(&result_bytes[10..10 + error_len]).unwrap();
+        assert_eq!(wire.code, "math.divide_by_zero");
+        assert_eq!(wire.message, "cannot divide by zero");
+
+        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+    }
+
+    #[test]
+    fn test_rkyv_v2_divide_success() {
+        // divide with b!=0 succeeds: [ok=1 @0][pad 7B][postcard(DivideOutput)@8]
+        let input = DivideInput { a: 20, b: 4 };
+        let input_bytes = postcard::to_allocvec(&input).unwrap();
+        let mut payload = vec![0u8; 2 + input_bytes.len()];
+        payload[0..2].copy_from_slice(&10u16.to_le_bytes()); // command_id = 10 (divide)
+        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
+
+        let mut out_len: usize = 0;
+        let result_ptr = unsafe {
+            rustra_calculator_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+        };
+
+        assert!(!result_ptr.is_null());
+        let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
+        assert_eq!(result_bytes[0], 1); // ok = true
+        let output: DivideOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
+        assert_eq!(output.value, 5);
+
+        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+    }
+
+    #[test]
+    fn test_rkyv_v2_capability_deny() {
+        // secureCompute (command_id = 12) requires capability "compute:secure".
+        // In the debug build the package is mutable but the capability is never
+        // granted here → deny-by-default → capability.denied wire error.
+        let input = SecureComputeInput { a: 6, b: 7 };
+        let input_bytes = postcard::to_allocvec(&input).unwrap();
+        let mut payload = vec![0u8; 2 + input_bytes.len()];
+        payload[0..2].copy_from_slice(&12u16.to_le_bytes()); // command_id = 12 (secureCompute)
+        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
+
+        let mut out_len: usize = 0;
+        let result_ptr = unsafe {
+            rustra_calculator_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+        };
+
+        assert!(!result_ptr.is_null());
+        let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
+        assert_eq!(result_bytes[0], 0); // ok = false (denied)
+
+        let error_len = u16::from_le_bytes(result_bytes[8..10].try_into().unwrap()) as usize;
+        #[derive(serde::Deserialize)]
+        #[allow(dead_code)]
+        struct WireError {
+            code: String,
+            message: String,
+        }
+        let wire: WireError = postcard::from_bytes(&result_bytes[10..10 + error_len]).unwrap();
+        assert_eq!(wire.code, "capability.denied");
+
+        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+    }
+
+    #[test]
+    fn test_rkyv_v2_capability_grant_then_allow() {
+        // Grant on a FRESH local package (not the global FFI singleton) so the
+        // deny test (which uses the global, never-granted package) stays
+        // deterministic under parallel test execution.
+        let pkg = register!(Package::builder("test.secure"), secure_compute)
+            .require_capability("secureCompute", "compute:secure")
+            .build();
+        // secure_compute → command_id 1 in this fresh package.
+        assert!(!pkg.has_capability("compute:secure"));
+
+        // Before grant: denied.
+        let mut payload = vec![0u8; 2 + 2];
+        payload[0..2].copy_from_slice(&1u16.to_le_bytes()); // command_id = 1
+        payload[2] = 0b0000_1010; // postcard zigzag varint: 5 → 10
+        payload[3] = 0;
+        let err = pkg.invoke_rkyv_v2(&payload).unwrap_err();
+        assert_eq!(err.code(), "capability.denied");
+
+        // After grant: allowed.
+        pkg.grant_capability("compute:secure").unwrap();
+        let input = SecureComputeInput { a: 6, b: 7 };
+        let input_bytes = postcard::to_allocvec(&input).unwrap();
+        let mut ok_payload = vec![0u8; 2 + input_bytes.len()];
+        ok_payload[0..2].copy_from_slice(&1u16.to_le_bytes());
+        ok_payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
+        let resp = pkg.invoke_rkyv_v2(&ok_payload).unwrap();
+        assert_eq!(resp[0], 1); // ok = true
+        let output: SecureComputeOutput = postcard::from_bytes(&resp[8..]).unwrap();
+        assert_eq!(output.value, 42); // 6 * 7
     }
 
     /// Runtime registry end-to-end through the EXACT FFI path RN uses

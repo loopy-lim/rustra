@@ -1,4 +1,29 @@
-import type { AddNumbersInput, AddNumbersOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
+import type {
+  AddNumbersInput,
+  AddNumbersOutput,
+  ClampInput,
+  ClampOutput,
+  CreateItemInput,
+  CreateItemOutput,
+  DivideInput,
+  DivideOutput,
+  GreetInput,
+  GreetOutput,
+  IsEvenInput,
+  IsEvenOutput,
+  MultiplyInput,
+  MultiplyOutput,
+  ProcessItemInput,
+  ProcessItemOutput,
+  RegistryDemoInput,
+  RegistryDemoOutput,
+  SecureComputeInput,
+  SecureComputeOutput,
+  SumListInput,
+  SumListOutput,
+  ToUpperInput,
+  ToUpperOutput,
+} from './types.js';
 import { invoke } from '@rustra/types';
 
 export function addNumbers(input: AddNumbersInput): Promise<AddNumbersOutput> {
@@ -11,6 +36,10 @@ export function clamp(input: ClampInput): Promise<ClampOutput> {
 
 export function createItem(input: CreateItemInput): Promise<CreateItemOutput> {
   return invoke<CreateItemOutput>('createItem', input);
+}
+
+export function divide(input: DivideInput): Promise<DivideOutput> {
+  return invoke<DivideOutput>('divide', input);
 }
 
 export function greet(input: GreetInput): Promise<GreetOutput> {
@@ -33,6 +62,10 @@ export function rustraRegistryDemo(input: RegistryDemoInput): Promise<RegistryDe
   return invoke<RegistryDemoOutput>('rustraRegistryDemo', input);
 }
 
+export function secureCompute(input: SecureComputeInput): Promise<SecureComputeOutput> {
+  return invoke<SecureComputeOutput>('secureCompute', input);
+}
+
 export function sumList(input: SumListInput): Promise<SumListOutput> {
   return invoke<SumListOutput>('sumList', input);
 }
@@ -40,4 +73,3 @@ export function sumList(input: SumListInput): Promise<SumListOutput> {
 export function toUpper(input: ToUpperInput): Promise<ToUpperOutput> {
   return invoke<ToUpperOutput>('toUpper', input);
 }
-

@@ -698,12 +698,19 @@ fn live_schema_lists_all_dynamic_commands() {
 
 #[test]
 fn encode_rkyv_v2_error_wire_format() {
-    // `[ok: u8 @0=0][pad to @8][err_len: u16 LE @8][err utf8 @10]`
-    let msg = "boom 💥";
-    let buf = rustra::encode_rkyv_v2_error(msg);
+    // `[ok: u8 @0=0][pad to @8][err_len: u16 LE @8][postcard({code,message}) @10]`
+    let error = rustra::RustraError::custom("math.divide_by_zero", "boom 💥");
+    let buf = rustra::encode_rkyv_v2_error(&error);
     assert_eq!(buf[0], 0, "ok flag must be 0 for error");
     let len = u16::from_le_bytes(buf[8..10].try_into().unwrap()) as usize;
-    let err = std::str::from_utf8(&buf[10..10 + len]).unwrap();
-    assert_eq!(err, msg);
     assert_eq!(buf.len(), 10 + len);
+    // postcard of ({ code: String, message: String }) = [varint code_len][code][varint msg_len][msg]
+    #[derive(serde::Deserialize)]
+    struct Wire {
+        code: String,
+        message: String,
+    }
+    let wire: Wire = postcard::from_bytes(&buf[10..10 + len]).unwrap();
+    assert_eq!(wire.code, "math.divide_by_zero");
+    assert_eq!(wire.message, "boom 💥");
 }

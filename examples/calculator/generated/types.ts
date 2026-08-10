@@ -35,6 +35,15 @@ export type CreateItemOutput = {
   item: Item;
 };
 
+export type DivideInput = {
+  a: number;
+  b: number;
+};
+
+export type DivideOutput = {
+  value: number;
+};
+
 export type GreetInput = {
   name: string;
 };
@@ -77,6 +86,15 @@ export type RegistryDemoOutput = {
   ok: boolean;
   frozen: boolean;
   message: string;
+};
+
+export type SecureComputeInput = {
+  a: number;
+  b: number;
+};
+
+export type SecureComputeOutput = {
+  value: number;
 };
 
 export type SumListInput = {

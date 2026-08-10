@@ -64,7 +64,7 @@ export class RustraCommandError extends Error {
 export type RkyvV2Codec<I, O> = {
   commandId: number;
   encode(args: I): ArrayBuffer;
-  decode(buf: ArrayBuffer): { ok: boolean; result?: O; error?: string };
+  decode(buf: ArrayBuffer): { ok: boolean; result?: O; error?: RustraError };
 };
 
 /**
@@ -171,6 +171,65 @@ export function invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
   return _engine.invokeBatch<T>(entries);
 }
 
+// ── Runtime-safe UTF-8 helpers ─────────────────────────────
+// Lynx's QuickJS runtime has no TextEncoder/TextDecoder globals, so the engine
+// must not depend on them. Pure-JS UTF-8 codec (surrogate-pair correct).
+function _utf8Encode(s: string): Uint8Array {
+  const out: number[] = [];
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x80) {
+      out.push(c);
+    } else if (c < 0x800) {
+      out.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
+    } else if (c >= 0xd800 && c <= 0xdbff) {
+      const low = s.charCodeAt(++i);
+      const cp = 0x10000 + ((c - 0xd800) << 10) + (low - 0xdc00);
+      out.push(
+        0xf0 | (cp >> 18),
+        0x80 | ((cp >> 12) & 0x3f),
+        0x80 | ((cp >> 6) & 0x3f),
+        0x80 | (cp & 0x3f),
+      );
+    } else {
+      out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+    }
+  }
+  return new Uint8Array(out);
+}
+
+function _utf8Decode(bytes: Uint8Array, start: number, end: number): string {
+  let s = '';
+  let i = start;
+  while (i < end) {
+    const b = bytes[i];
+    if (b < 0x80) {
+      s += String.fromCharCode(b);
+      i += 1;
+    } else if ((b & 0xe0) === 0xc0) {
+      s += String.fromCharCode(((b & 0x1f) << 6) | (bytes[i + 1] & 0x3f));
+      i += 2;
+    } else if ((b & 0xf0) === 0xe0) {
+      s += String.fromCharCode(
+        ((b & 0x0f) << 12) | ((bytes[i + 1] & 0x3f) << 6) | (bytes[i + 2] & 0x3f),
+      );
+      i += 3;
+    } else if ((b & 0xf8) === 0xf0) {
+      const cp =
+        ((b & 0x07) << 18) |
+        ((bytes[i + 1] & 0x3f) << 12) |
+        ((bytes[i + 2] & 0x3f) << 6) |
+        (bytes[i + 3] & 0x3f);
+      const adj = cp - 0x10000;
+      s += String.fromCharCode(0xd800 + (adj >> 10), 0xdc00 + (adj & 0x3ff));
+      i += 4;
+    } else {
+      i += 1;
+    }
+  }
+  return s;
+}
+
 // ── Live schema (정적 + 동적 명령 조회) ──────────────────────
 
 export type LiveSchemaEntry = {
@@ -199,7 +258,8 @@ export function getLiveSchema(native: { getSchema?(): ArrayBuffer }): Map<string
     return new Map();
   }
   const bytes = native.getSchema();
-  const json = new TextDecoder().decode(new Uint8Array(bytes));
+  const u = new Uint8Array(bytes);
+  const json = _utf8Decode(u, 0, u.length);
   const parsed = JSON.parse(json) as {
     commands?: Array<{
       name: string;
@@ -222,30 +282,58 @@ export function getLiveSchema(native: { getSchema?(): ArrayBuffer }): Map<string
 // ── Tier 3 (JSON-in-binary) wire helpers ────────────────────
 // request:  [command_id: u16 LE @0][json @2]
 // success:  [ok:1 @0][pad 3B][json_len: u32 LE @4][json @8]
-// error:    [ok:0 @0][pad to @8][err_len: u16 LE @8][err @10]
+// error:    [ok:0 @0][pad to @8][err_len: u16 LE @8][postcard({code,message}) @10]
 
 function encodeTier3Request(commandId: number, args: unknown): ArrayBuffer {
-  const json = new TextEncoder().encode(JSON.stringify(args ?? {}));
+  const json = _utf8Encode(JSON.stringify(args ?? {}));
   const buf = new Uint8Array(2 + json.length);
   new DataView(buf.buffer).setUint16(0, commandId, true);
   buf.set(json, 2);
   return buf.buffer;
 }
 
+// postcard varint + length-prefixed string decode, local to the Tier 3 path so
+// this file has no dependency on the generated codec helpers.
+function _tier3DecodeString(u: Uint8Array, offset: number): { value: string; bytesRead: number } {
+  let shift = 0;
+  let bytesRead = 0;
+  let len = 0;
+  while (true) {
+    const b = u[offset + bytesRead];
+    len |= (b & 0x7f) << shift;
+    bytesRead++;
+    if ((b & 0x80) === 0) break;
+    shift += 7;
+    if (bytesRead > 5) throw new Error('varint too long');
+  }
+  len = len >>> 0;
+  const start = offset + bytesRead;
+  return {
+    value: _utf8Decode(u, start, start + len),
+    bytesRead: bytesRead + len,
+  };
+}
+
 function decodeTier3Response(bytes: ArrayBuffer): {
   ok: boolean;
   result?: unknown;
-  error?: string;
+  error?: RustraError;
 } {
   const u = new Uint8Array(bytes);
   if (u[0] === 1) {
     const len = new DataView(bytes).getUint32(4, true);
-    const json = new TextDecoder().decode(u.slice(8, 8 + len));
+    const json = _utf8Decode(u, 8, 8 + len);
     return { ok: true, result: JSON.parse(json) };
   }
   const errLen = new DataView(bytes).getUint16(8, true);
-  const err = new TextDecoder().decode(u.slice(10, 10 + errLen));
-  return { ok: false, error: err };
+  let error: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+  if (errLen > 0) {
+    // postcard({ code: String, message: String })
+    const { value: code, bytesRead: b1 } = _tier3DecodeString(u, 10);
+    const { value: message } = _tier3DecodeString(u, 10 + b1);
+    error = { code, message };
+  }
+  return { ok: false, error };
 }
 
 // ── Shared engine factory ──────────────────────────────────
@@ -279,20 +367,26 @@ export function createRkyvV2Engine(
         const resultBytes = native.invokeRkyvV2(codec.encode(args));
         const response = codec.decode(resultBytes);
         if (!response.ok) {
-          throw new Error(response.error ?? 'RkyvV2 invoke failed');
+          const e = response.error ?? { code: 'invoke.failed', message: 'RkyvV2 invoke failed' };
+          // Reject (do not throw) so the declared Promise<T> contract holds and
+          // callers can use .catch() / await-try-consistently for command errors.
+          return Promise.reject(new RustraCommandError(e.code, e.message));
         }
         return Promise.resolve(response.result as T);
       }
       // 3순위: 동적 명령 → Tier 3 fallback (live schema 의 commandId 사용)
       const entry = getLiveSchema(native).get(command);
       if (!entry) {
-        throw new Error(`RkyvV2: no codec and not in live schema for "${command}"`);
+        return Promise.reject(
+          new Error(`RkyvV2: no codec and not in live schema for "${command}"`),
+        );
       }
       const resp = decodeTier3Response(
         native.invokeRkyvV2(encodeTier3Request(entry.commandId, args)),
       );
       if (!resp.ok) {
-        throw new Error(resp.error ?? 'RkyvV2 (tier3) invoke failed');
+        const e = resp.error ?? { code: 'invoke.failed', message: 'RkyvV2 (tier3) invoke failed' };
+        return Promise.reject(new RustraCommandError(e.code, e.message));
       }
       return Promise.resolve(resp.result as T);
     },
