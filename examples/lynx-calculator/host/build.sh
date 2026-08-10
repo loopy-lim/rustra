@@ -28,10 +28,11 @@ cp "$HERE/Info.plist" "$APP/Contents/Info.plist"
 
 clang++ -std=c++17 -O1 -DUSE_WEAK_SUFFIX_NAPI \
   -I"$SDK/include" \
-  "$HERE/host.cpp" "$STATICLIB" \
+  "$HERE/host.cpp" "$HERE/host_ui.mm" "$STATICLIB" \
   -L"$SDK/lib" -lLynx \
-  -framework Foundation -framework CoreGraphics -framework Metal -framework MetalKit \
+  -framework Cocoa -framework Foundation -framework CoreGraphics -framework Metal -framework MetalKit \
   -framework OpenGL -framework QuartzCore -framework IOKit -framework CoreFoundation \
+  -framework ImageIO \
   -rpath "$SDK/lib" \
   -o "$APP/Contents/MacOS/host"
 
