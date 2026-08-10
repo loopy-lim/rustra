@@ -10,7 +10,7 @@
   "scripts": {
     "build": "npm run -ws build",
     "build:napi": "cd examples/calculator-napi && npm run build:debug",
-    "test:ts:node": "tsc -p examples/calculator/tsconfig.json && tsc -p examples/crud/tsconfig.json && node --test dist-ts/examples/calculator/ts/adapter-compat.test.js dist-ts/examples/calculator/ts/generated-client.test.js dist-ts/examples/crud/ts/*.test.js",
+    "test:ts:node": "tsc -p examples/calculator/tsconfig.json && tsc -p examples/crud/tsconfig.json && node --test dist-ts/examples/calculator/ts/adapter-compat.test.js dist-ts/examples/calculator/ts/cross-wire.test.js dist-ts/examples/calculator/ts/generated-client.test.js dist-ts/examples/crud/ts/*.test.js",
     "test:types": "npm run build -w @rustra/types && node --test packages/types/dist/index.test.js",
     "test:packages": "npm run build && node --test packages/node/dist/index.test.js packages/bun/dist/index.test.js packages/tauri/dist/index.test.js packages/react-native/dist/index.test.js packages/lynx/dist/index.test.js",
     "test:ts:bun": "bun test examples/calculator/ts/*.test.ts",
