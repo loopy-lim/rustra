@@ -40,6 +40,11 @@ extern "C" {
 const uint8_t *rustra_calculator_invoke_rkyv_v2(const uint8_t *payload,
                                                 size_t len, size_t *out_len);
 void rustra_calculator_free_buffer(void *ptr, size_t len);
+// calculator 패키지를 FFI 레지스트리에 idempotent 등록.
+// Apple 은 __mod_init_func constructor 가 자동 등록하지만, Windows(PE)/Android(ELF)
+// 에는 그런 constructor 가 없으므로 lynx_spike_init 시작부에서 명시 호출한다.
+// (rustra_calculator_init 는 여러 번 불러도 안전하다.)
+void rustra_calculator_init(void);
 }
 
 // ── globals ───────────────────────────────────────────────────────────────
@@ -256,6 +261,10 @@ static void OnRuntimeReady(lynx_view_client_t * /*c*/) {
 // ── Lynx init (Tauri setup 단계, 메인 스레드에서 1회 호출) ──────────────────
 extern "C" int lynx_spike_init(void *parent_nsview, const char *bundle_path,
                                const char *icu_path) {
+  // Rust FFI 패키지 등록 — Apple 은 자동 등록되지만 Windows/ELF 는 명시 필요(위 참조).
+  rustra_calculator_init();
+  fprintf(stderr, "[spike] rustra_calculator_init() (explicit, cross-platform)\n");
+
   resolve_liblynx_symbols();
 
   // 1. Bind Lynx UIThread to THIS thread(Tauri 메인 루프 스레드)의 fml::MessageLoop.
