@@ -3153,6 +3153,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustra-lynx-tauri-spike"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "raw-window-handle",
+ "tauri",
+ "tauri-build",
+]
+
+[[package]]
 name = "rustra-macros"
 version = "0.1.0"
 dependencies = [

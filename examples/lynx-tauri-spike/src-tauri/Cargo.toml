@@ -6,11 +6,14 @@ publish = false
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+cc = "1"
 
 [dependencies]
-rustra-calculator-example = { path = "../../calculator" }
 tauri = { version = "2", features = [] }
 raw-window-handle = "0.6"
+# rustra-calculator-example 은 build.rs 가 target/<profile>/librustra_calculator_example.a
+# 로 직접 링크한다(extern "C" 심볼 노출). Cargo dep 로 두면 rlib 만 링크되어 FFI 심볼이
+# 보이지 않으므로 의존하지 않는다.
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
