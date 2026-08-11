@@ -119,12 +119,21 @@ export function createLynxEngine(native: RustraLynxJsonNative): EngineClientType
 
 // ── Native module 접근 ─────────────────────────────────────
 
+// ReactLynx 번들 래퍼(@lynx-js/runtime-wrapper-webpack-plugin)가 클로저 변수로
+// 주입하는 NativeModules. lynx_core.js / 네이티브 런타임은 globalThis.NativeModules
+// 를 설정하지 않는다 — NativeModules 는 번들 외곽 함수의 위치 인자로 주입되며,
+// 번들 내 모든 모듈의 bare 식별자가 이 클로저 변수로 해석된다
+// (@lynx-js/websocket 의 NativeModules.LynxWebSocketModule 과 동일 패턴).
+// 비-Lynx 환경(Node 테스트, 웹)에서는 존재하지 않으므로 typeof 가드가 필요하다.
+declare const NativeModules: Record<string, RustraLynxNative> | undefined;
+
 /**
- * Lynx 글로벌 `NativeModules.RustraModule`에서 네이티브 모듈을 가져온다.
+ * Lynx `NativeModules.RustraModule`에서 네이티브 모듈을 가져온다.
  *
- * Lynx 런타임은 `NativeModules` 글로벌 객체를 제공하며, 각 네이티브 모듈은
- * `[globalConfig register_module:]`(iOS) / Lynx 모듈 설정(Android)으로 등록된다.
- * 등록 전에 호출하면 에러를 던진다.
+ * iOS/Android 공식 SDK 에서는 ReactLynx 번들 래퍼가 주입한 bare 클로저 변수
+ * `NativeModules` 를 읽는다 (lynx_core.js 는 globalThis.NativeModules 를 설정하지
+ * 않는다). 데스크톱 헤드리스 호스트(host.cpp)는 globalThis.NativeModules 로 직접
+ * 주입하므로, 그 경로로 폴백한다.
  *
  * @example
  * ```ts
@@ -133,15 +142,27 @@ export function createLynxEngine(native: RustraLynxJsonNative): EngineClientType
  * ```
  */
 export function getRustraNative(): RustraLynxNative {
+  // 1순위: ReactLynx BTS 클로저 변수 (iOS/Android 공식 SDK).
+  try {
+    if (typeof NativeModules !== 'undefined' && NativeModules) {
+      const native = NativeModules.RustraModule;
+      if (native) return native;
+    }
+  } catch {
+    // NativeModules 접근 중 예외 — 다음 경로로 폴백
+  }
+
+  // 2순위: 데스크톱 헤드리스 호스트(host.cpp) 가 globalThis.NativeModules 로
+  // 직접 주입한 경로. 공식 SDK 에서는 사용되지 않는다 (Node 테스트도 이 경로 사용).
   const nativeModules = (globalThis as Record<string, unknown>).NativeModules as
     Record<string, RustraLynxNative> | undefined;
-  const native = nativeModules?.RustraModule;
-  if (!native) {
+  const fallback = nativeModules?.RustraModule;
+  if (!fallback) {
     throw new Error(
       'Lynx NativeModules.RustraModule not registered. Register the native module via [globalConfig register_module:] (iOS) or your Lynx module setup (Android).',
     );
   }
-  return native;
+  return fallback;
 }
 
 /**

@@ -20,6 +20,7 @@ extern void rustra_calculator_free_buffer(uint8_t *ptr, size_t len);
 }
 
 - (NSData *)invokeRkyvV2:(NSData *)payload {
+  NSLog(@"[spike-ios] rkyv in bytes=%lu", (unsigned long)payload.length);
   size_t out_len = 0;
   const uint8_t *out = rustra_calculator_invoke_rkyv_v2(
       (const uint8_t *)payload.bytes, payload.length, &out_len);
@@ -28,12 +29,14 @@ extern void rustra_calculator_free_buffer(uint8_t *ptr, size_t len);
     if (out != NULL) {
       rustra_calculator_free_buffer((uint8_t *)out, out_len);
     }
+    NSLog(@"[spike-ios] rkyv out NULL/empty");
     return [NSData data];
   }
 
   // Rust 가 할당한 버퍼를 NSData 로 복사한 뒤 Rust 측에서 해제한다.
   NSData *result = [NSData dataWithBytes:out length:out_len];
   rustra_calculator_free_buffer((uint8_t *)out, out_len);
+  NSLog(@"[spike-ios] rkyv out bytes=%lu", (unsigned long)result.length);
   return result;
 }
 

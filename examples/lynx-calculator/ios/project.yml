@@ -1,0 +1,27 @@
+name: RustraLynxApp
+options:
+  bundleIdPrefix: dev.rustra
+  deploymentTarget:
+    ios: '14.0'
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGNING_ALLOWED: NO
+    CODE_SIGN_IDENTITY: ''
+targets:
+  RustraLynxApp:
+    type: application
+    platform: iOS
+    sources:
+      - app
+    resources:
+      - app/Resources/app.lynx.js
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.rustra.lynx-calculator
+        PRODUCT_NAME: RustraLynxApp
+        INFOPLIST_FILE: app/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: '1'
