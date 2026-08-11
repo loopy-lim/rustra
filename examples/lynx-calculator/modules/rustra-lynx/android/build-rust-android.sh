@@ -23,10 +23,13 @@ mkdir -p "$MODULE_DIR/android/rust/lib"
 
 for ABI in $ABIS; do
   echo "==> building $ABI"
+  # cargo-ndk v4: cargo 인자는 trailing positional 로 전달. `--` 뒤에
+  # cargo 바이너리 경로($CARGO_BIN)를 두면 cargo 가 그 파일을 -Zscript 대상으로
+  # 해석하므로, subcommand 키워드(build)만 넘긴다.
   "$CARGO_BIN" ndk \
     --manifest-path "$REPO_ROOT/Cargo.toml" \
     -t "$ABI" \
-    -- $CARGO_BIN build -p rustra-calculator-example --lib $REL_FLAG
+    -- build -p rustra-calculator-example --lib $REL_FLAG
 
   # cargo-ndk 는 target/<abi>/<profile>/librustra_calculator_example.a 로 출력.
   cp "$REPO_ROOT/target/$ABI/$PROFILE/librustra_calculator_example.a" \
