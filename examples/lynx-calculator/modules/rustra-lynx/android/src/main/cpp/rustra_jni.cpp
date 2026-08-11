@@ -9,6 +9,16 @@ extern "C" {
 uint8_t *rustra_calculator_invoke_rkyv_v2(const uint8_t *payload, size_t payload_len,
                                           size_t *out_len);
 void rustra_calculator_free_buffer(uint8_t *ptr, size_t len);
+// calculator 패키지를 FFI 용으로 idempotent 등록.
+// Apple 은 __mod_init_func constructor 가 자동 등록하지만, Android(ELF) 는
+// 그런 constructor 가 없으므로 JNI_OnLoad 에서 명시 호출해야 한다.
+void rustra_calculator_init(void);
+}
+
+// .so 로드 시(System.loadLibrary) 1회 호출 — 패키지 등록을 확정한다.
+extern "C" jint JNI_OnLoad(JavaVM * /*vm*/, void * /*reserved*/) {
+  rustra_calculator_init();
+  return JNI_VERSION_1_6;
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL

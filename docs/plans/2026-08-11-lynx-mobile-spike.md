@@ -220,12 +220,12 @@ git commit -m "feat(mobile): iOS 시뮬레이터 Lynx + rustra rkyv 왕복 스�
 
 ## 완료 조건
 
-- [ ] **iOS (필수):** 시뮬레이터에서 `result: 42` rkyv 왕복 — verify-ios.sh PASS.
-- [ ] **Android (조건부):** 에뮬레이터에서 `result: 42` — 또는 SDK 입수 실패 정직 보고.
-- [ ] 결과 보고서 `docs/plans/2026-08-11-lynx-mobile-spike-result.md` 작성.
-- [ ] design `2026-08-11-tauri-lynx-desktop-design.md` §6/§7 업데이트(모바일 리스크 해소/잔존).
+- [x] **iOS (필수):** 시뮬레이터에서 `result: 42` rkyv 왕복 — verify-ios.sh 7/7 PASS.
+- [x] **Android (조건부 → 입수 성공):** 에뮬레이터에서 rkyv 왕복 — verify-android.sh 7/7 PASS.
+- [x] 결과 보고서 `docs/plans/2026-08-11-lynx-mobile-spike-result.md` 작성.
+- [x] design `2026-08-11-tauri-lynx-desktop-design.md` §6/§7 업데이트(모바일 리스크 해소/잔존).
 
-iOS PASS 시 design §7 Phase 3(iOS) 완료, Phase 2(Android)는 입수 결과에 따라. main push.
+iOS PASS → design §7 Phase 3(iOS) ✅. Android PASS → Phase 2(Android) ✅. main push.
 
 ---
 
@@ -261,3 +261,68 @@ iOS 공식 SDK는 그렇지 않다. `packages/lynx/src/index.ts`의 `getRustraNa
 **회귀 확인:** `test:packages` 24/24, `test:ts:node` 32/32 통과 — getRustraNative 변경 데스크톱/타 패키지 영향 없음.
 
 스크린샷: `/tmp/lynx-ios-result.png` (result: 42, err: math.divide_by_zero, cap: capability.denied 표시).
+
+---
+
+## Phase B 결과 (2026-08-11) — Android PASS ✅
+
+`verify-android.sh` 7/7 PASS. 단일 ReactLynx 번들(`main.lynx.bundle`) + 단일 rustra rkyv 백엔드가
+Android 에뮬레이터(`Medium_Phone_API_36.1`, arm64-v8a)에서 실제 Rust FFI 왕복을 수행했다.
+**iOS(9/52/95 바이트)와 완전 동일한 와이어 포맷** — 동일 Rust staticlib, 동일 rkyv V2 wire.
+
+### Task B1: Lynx Android SDK 입수 — 성공
+
+사전 조사의 "Maven Central `org.lynxsdk.lynx` numFound:0" 은 `search.maven.org` Solr 인덱스의
+맹점이었다. 직접 `repo1.maven.org` 의 `maven-metadata.xml` 로 확인 결과 **공개 배포됨**:
+
+- coords: `org.lynxsdk.lynx:lynx:4.0.1` (+ `lynx-jssdk`, `lynx-trace`, `lynx-service-log`, `lynx-service-http`)
+- 리포지토리: plain `mavenCentral()` (커스텀 리포 불필요)
+- 형태: aar
+
+### Task B2: Android gradle 모듈 + 에뮬 빌드/런 — 성공
+
+**결정적 logcat 증거(spike-android TAG):**
+
+- `spike-android: renderTemplateUrl main.lynx.bundle` — ReactLynx 번들 로드 요청.
+- `spike-android: rkyv in bytes=4 hex=0100282c` — addNumbers 요청 (`[cmd 1 u16 LE][postcard {a,b}]`).
+- `spike-android: rkyv out bytes=9 hex=010000000000000054` — addNumbers 응답 (`ok=01`, `0x54=84`, 즉 40+44). rkyv V2 와이어 포맷 iOS 와 정확 일치.
+- `spike-android: rkyv out bytes=52 hex=...6d6174682e6469766964655f62795f7a65726f...` — divide typed error(`math.divide_by_zero`) 왕복.
+- `spike-android: rkyv out bytes=95 hex=...6361706162696c6974792e64656e696564...` — secureCompute `capability.denied` (deny-by-default authority).
+- "Rustra not configured" 에러 없음 — `NativeModules.RustraModule` 등록 성공.
+
+(인자 a,b 값은 번들이 매 실행 동적으로 생성하므로 런마다 다르지만, 와이어 구조/바이트 카운트는 iOS 와 동일하다.)
+
+### 해결한 핵심 갭 3종 (Android 공식 SDK)
+
+1. **LynxEnv 명시 init (`RustraApplication.onCreate`):**
+   Android 는 `LynxViewBuilder.build()` / `renderTemplateUrl` 이전에
+   `LynxEnv.inst().init(this, null, null, null)` 이 필수(iOS 는 `[LynxEnv sharedInstance]` 로 충분).
+   생략 시 `errCode 102 "LynxEnv has not been prepared successfully"`. → `Application` 서브클래스 + manifest `android:name=".RustraApplication"` 로 해결.
+
+2. **NativeModule API (`com.lynx.jsbridge.*`, NOT `com.lynx.react.bridge.*`):**
+   - 베이스 클래스: `com.lynx.jsbridge.LynxModule`(abstract) — **반드시 상속**, `Context` 생성자 필요(프레임워크가 리플렉션 생성).
+   - 애노테이션: `@LynxMethod`(`com.lynx.jsbridge`) 로 메서드 노출.
+   - JS 식별자 매핑: Kotlin 메서드명 **그대로**(reflection). iOS 의 `+methodLookup` 사전 매핑이 Android 에는 없다.
+   - 타입 매핑: `ArrayBuffer ↔ ByteArray`(`byte[]` → 시그니처 'a').
+   - 등록: per-view `LynxViewBuilder.registerModule("RustraModule", RustraModule::class.java)` (build 전).
+
+3. **Rust 패키지 등록 — ELF 에 `__mod_init_func` 없음 (`JNI_OnLoad` 명시 init):**
+   Rust crate 는 `#[cfg(target_vendor = "apple")] mod apple_init` 으로 Mach-O `__mod_init_func`
+   constructor 가 라이브러리 로드 시 자동으로 `calculator_package()` 를 FFI 레지스트리에 등록한다.
+   **Android(ELF) 에는 이런 constructor 가 없다** → 패키지 레지스트리가 비어 모든 rkyv 호출이
+   `out bytes=52`(`ffi.not_registered` / `package not registered`) 를 반환.
+   → `rustra_jni.cpp` 의 `JNI_OnLoad` 에서 공개 심볼 `rustra_calculator_init()` 를 명시 호출.
+   (`System.loadLibrary` 시 1회). 이후 `out=9`(ok) 로 전환.
+
+### 빌드 스택
+
+AGP 8.7.3, Gradle 8.14.3, Kotlin 2.0.21, compileSdk 35, minSdk 24, ndkVersion `27.1.12297006`,
+CMake 3.22.1, JDK 17(Temurin via sdkman). cargo-ndk v4(`-t` 가 Rust triple 또는 Android ABI 모두 수용).
+ABI `arm64-v8a` → Rust triple `aarch64-linux-android`.
+
+### 회귀 확인
+
+`test:packages` 24/24, `test:ts:node` 32/32 통과 — Phase A 의 `getRustraNative()` 2경로 변경이
+데스크톱/타 패키지에 영향 없음(iOS·Android SDK 양쪽 + Node `globalThis` 경로 모두 지원).
+
+스크린샷: `/tmp/lynx-android-result.png` (RustraLynx 앱 렌더링).
