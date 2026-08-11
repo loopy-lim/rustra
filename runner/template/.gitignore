@@ -1,0 +1,6 @@
+# 빌드 산출물 (템플릿 저장소에 커밋하지 않음).
+backend/target/
+**/node_modules/
+**/dist/
+**/generated/
+**/*.app/

@@ -1,0 +1,22 @@
+{
+  "name": "rustra-template-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "rspeedy dev",
+    "build": "rspeedy build",
+    "preview": "rspeedy preview",
+    "codegen": "echo '▶ codegen: 백엔드 contract 로 generated/ 재생성 — create-runner.sh 또는 README 참조' && echo '(스파이크: cargo run -p rustra-codegen-bin 또는 npm run gen:ts)'"
+  },
+  "dependencies": {
+    "@lynx-js/react": "^0.123.0",
+    "@lynx-js/rspeedy": "^0.16.0",
+    "@rustra/lynx": "file:../../../packages/lynx",
+    "@rustra/types": "file:../../../packages/types",
+    "react": "^18.3.0"
+  },
+  "devDependencies": {
+    "@lynx-js/react-rsbuild-plugin": "^0.18.3"
+  }
+}

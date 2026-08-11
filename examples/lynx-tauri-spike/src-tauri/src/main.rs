@@ -29,17 +29,24 @@ fn main() {
         .setup(|app| {
             let window = app.get_webview_window("main").expect("main window missing");
             let handle = window.window_handle()?;
-            let nsview: *mut c_void = match handle.as_raw() {
-                RawWindowHandle::AppKit(h) => h.ns_view.as_ptr() as *mut c_void,
+            // Lynx SetParent 의 NativeWindow(void*)는 Darwin=NSView*, Windows=HWND.
+            let parent: *mut c_void = match handle.as_raw() {
+                // ns_view.as_ptr() 는 이미 *mut c_void (raw-window-handle 0.6 AppKit).
+                RawWindowHandle::AppKit(h) => h.ns_view.as_ptr(),
+                // hwnd: NonZeroIsize → isize → *mut c_void (HWND).
+                RawWindowHandle::Win32(h) => h.hwnd.get() as *mut c_void,
                 other => {
                     eprintln!(
-                        "[spike] non-AppKit raw handle: {:?} — Lynx SetParent 불가",
+                        "[spike] unsupported raw handle: {:?} — Lynx SetParent 불가",
                         other
                     );
-                    panic!("AppKit NSView required");
+                    panic!("AppKit NSView or Win32 HWND required");
                 }
             };
-            eprintln!("[spike] NSView = {:?} → Lynx SetParent", nsview);
+            eprintln!(
+                "[spike] native window handle = {:?} → Lynx SetParent",
+                parent
+            );
 
             let bundle = std::env::var("LYNX_BUNDLE").unwrap_or_else(|_| {
                 // 기본: spike 예 dist/index.lynx.bundle
@@ -49,7 +56,7 @@ fn main() {
             let bundle_c = CString::new(bundle).expect("bundle path nul");
             let icu_c = env_path("LYNX_ICU", "data/icudtl.dat");
 
-            let rc = unsafe { lynx_spike_init(nsview, bundle_c.as_ptr(), icu_c.as_ptr()) };
+            let rc = unsafe { lynx_spike_init(parent, bundle_c.as_ptr(), icu_c.as_ptr()) };
             eprintln!("[spike] lynx_spike_init rc={}", rc);
             Ok(())
         })

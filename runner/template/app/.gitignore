@@ -1,0 +1,5 @@
+# generated/ — codegen 산출물(Rust 백엔드 #[command] 에서 생성). `npm run codegen` 으로 재생성.
+# 템플릿 저장소엔 커밋하지 않는다(derived). 단, 복사한 프로젝트에서는 커밋 정책은 사용자 선택.
+generated/
+dist/
+node_modules/

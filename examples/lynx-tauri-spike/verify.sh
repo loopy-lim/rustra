@@ -4,7 +4,7 @@
 # 결정적 증거를 grep 한다. 디스플레이 캡처 권한(백그라운드 세션)에 의존하지
 # 않도록 시각 증거 대신 on_first_screen/CSS 파싱/ackResult 로그를 사용한다.
 #
-#   성공 기준 1 — Tauri desktop window 오픈      : NSView … SetParent + init rc=0
+#   성공 기준 1 — Tauri desktop window 오픈      : native handle … SetParent + init rc=0
 #   성공 기준 2 — ReactLynx 뷰 렌더링            : on_first_screen + on_load_success
 #                                                  (CSS 130300 경고 = 뷰 트리 평가됨)
 #   성공 기준 3 — addNumbers rkyv 왕복 결과 42   : invokeRkyvV2 ok=1 + ackResult val=42
@@ -52,8 +52,8 @@ check() {  # check <label> <pattern>
     pass=0
   fi
 }
-check "1: window open (NSView SetParent + init rc=0)" \
-  'NSView = 0x[0-9a-f]+ .* Lynx SetParent'
+check "1: window open (native handle SetParent + init rc=0)" \
+  'native window handle = 0x[0-9a-f]+ .* Lynx SetParent'
 check "1: window open (lynx_spike_init rc=0)" 'lynx_spike_init rc=0'
 check "2: ReactLynx render (on_first_screen)" 'on_first_screen'
 check "2: ReactLynx render (on_load_success)" 'on_load_success'

@@ -130,10 +130,15 @@ declare const NativeModules: Record<string, RustraLynxNative> | undefined;
 /**
  * Lynx `NativeModules.RustraModule`에서 네이티브 모듈을 가져온다.
  *
- * iOS/Android 공식 SDK 에서는 ReactLynx 번들 래퍼가 주입한 bare 클로저 변수
- * `NativeModules` 를 읽는다 (lynx_core.js 는 globalThis.NativeModules 를 설정하지
- * 않는다). 데스크톱 헤드리스 호스트(host.cpp)는 globalThis.NativeModules 로 직접
- * 주입하므로, 그 경로로 폴백한다.
+ * **우선순위:** (1) `globalThis` 경로 — 데스크톱 호스트(host.cpp / lynx_desktop.mm)와
+ * Node 테스트가 `globalThis.NativeModules.RustraModule` / `globalThis.RustraModule` 로
+ * 주입한 객체(invokeRkyvV2 + ackResult 등 full surface). (2) ReactLynx 번들 래퍼가
+ * 주입한 bare 클로저 변수 `NativeModules` — iOS/Android 공식 SDK 전용(모바일 SDK 는
+ * globalThis.NativeModules 를 설정하지 않는다).
+ *
+ * ⚠️ globalThis 를 먼저 봐야 하는 이유: 데스크톱에서 Lynx NAPI 가 클로저
+ * `NativeModules.RustraModule` 을 native-module 프록시(method map 에 invokeRkyvV2 만
+ * 있음)로 채우므로, 클로저를 먼저 읽으면 호스트가 주입한 ackResult 등이 가려진다.
  *
  * @example
  * ```ts
@@ -142,27 +147,33 @@ declare const NativeModules: Record<string, RustraLynxNative> | undefined;
  * ```
  */
 export function getRustraNative(): RustraLynxNative {
-  // 1순위: ReactLynx BTS 클로저 변수 (iOS/Android 공식 SDK).
+  // 1순위: globalThis 경로 — 데스크톱 호스트(host.cpp / lynx_desktop.mm)가
+  //       runtime_attach/ready 에서 주입한 RustraModule(invokeRkyvV2 + ackResult 등
+  //       full surface). Node 테스트도 globalThis.NativeModules 를 주입한다.
+  //       ⚠️ 클로저 NativeModules 를 먼저 읽으면 데스크톱에서 Lynx NAPI 가 만든
+  //       native-module 프록시(method map 에 invokeRkyvV2 만 있고 ackResult 없음)가
+  //       호스트 주입 객체를 가려 버린다 — 반드시 globalThis 를 먼저 본다.
+  const g = globalThis as Record<string, unknown>;
+  const gNativeModules = g.NativeModules as Record<string, RustraLynxNative> | undefined;
+  if (gNativeModules?.RustraModule) return gNativeModules.RustraModule;
+  const gRustra = g.RustraModule as RustraLynxNative | undefined;
+  if (gRustra?.invokeRkyvV2) return gRustra;
+
+  // 2순위: ReactLynx BTS 클로저 변수 (iOS/Android 공식 SDK).
+  //       공식 모바일 SDK 는 globalThis.NativeModules 를 설정하지 않으므로
+  //       (lynx_core.js 동작), 오직 클로저로만 접근 가능하다.
   try {
     if (typeof NativeModules !== 'undefined' && NativeModules) {
       const native = NativeModules.RustraModule;
       if (native) return native;
     }
   } catch {
-    // NativeModules 접근 중 예외 — 다음 경로로 폴백
+    // NativeModules 클로저 접근 예외 — 아래 에러로 진행
   }
 
-  // 2순위: 데스크톱 헤드리스 호스트(host.cpp) 가 globalThis.NativeModules 로
-  // 직접 주입한 경로. 공식 SDK 에서는 사용되지 않는다 (Node 테스트도 이 경로 사용).
-  const nativeModules = (globalThis as Record<string, unknown>).NativeModules as
-    Record<string, RustraLynxNative> | undefined;
-  const fallback = nativeModules?.RustraModule;
-  if (!fallback) {
-    throw new Error(
-      'Lynx NativeModules.RustraModule not registered. Register the native module via [globalConfig register_module:] (iOS) or your Lynx module setup (Android).',
-    );
-  }
-  return fallback;
+  throw new Error(
+    'Lynx NativeModules.RustraModule not registered. Register the native module via [globalConfig register_module:] (iOS) or your Lynx module setup (Android).',
+  );
 }
 
 /**
