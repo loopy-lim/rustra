@@ -1,0 +1,16 @@
+[package]
+name = "rustra-lynx-tauri-spike"
+edition = "2021"
+version = "0.1.0"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+rustra-calculator-example = { path = "../../calculator" }
+tauri = { version = "2", features = [] }
+raw-window-handle = "0.6"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
