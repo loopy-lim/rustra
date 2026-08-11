@@ -106,7 +106,9 @@ rustra staticlib 정상. host.cpp 자산(windowless 경로)도 이전 Phase A에
 
 ### Phase 1 — 스캐폴드
 
-_(Task 1.1/1.2 완료 후 기록)_
+- **Task 1.1 (ReactLynx 프론트):** `examples/lynx-tauri-spike/` 생성. `src/App.tsx` 는 `addNumbers({a:20,b:22})` rkyv 왕복 + `ackResult(out.value)` 만 남긴 단순 버전. `npm run build` → `dist/index.lynx.bundle` (113 KB) 생성 ✓.
+- **Task 1.2 (Tauri crate):** `src-tauri/` 생성. Tauri 2.11 이 `WindowBuilder`(webview 없음)를 unstable 로 막아두었으므로 webview window 를 만들고 그 NSView(contentView) 를 SetParent 타깃으로 확보. `cargo build` ✓. `cargo run` → `[spike] NSView handle = 0x883201e00` ✓ (Phase 2 SetParent 타깃 확정).
+- **참고:** webview 가 contentView 를 차지하므로 Phase 2 에서 Lynx NSView 를 `addSubview` 로 위에 올리거나 webview 를 제거하는 처리가 필요.
 
 ### Phase 2 — Lynx surface 통합 (경로 A)
 
