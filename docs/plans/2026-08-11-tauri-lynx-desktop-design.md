@@ -109,6 +109,6 @@ rustra-bridge는 이미 Rust `#[command]` → TS 클라이언트 자동 생성 �
 - **Phase 2 — Android**: Lynx Android SDK 셸 + rustra rkyv NativeModule(Kotlin). 단일 ReactLynx 번들 재사용. ✅ PASS (`2026-08-11-lynx-mobile-spike-result.md`, verify-android.sh 7/7).
 - **Phase 3 — iOS**: 동일하게 iOS(Obj-C). ✅ PASS (`2026-08-11-lynx-mobile-spike-result.md`, verify-ios.sh 7/7).
 - **Phase 4 — Windows**: Windows libLynx 입수 + Phase 1 경로 포팅. ✅ 입수·분석 완료(`2026-08-12-lynx-windows-phase4.md`): SDK 공개 확보, CAPI 동일, Rust 크로스컴파일 증명, 포팅 3포인트 분석(SetParent HWND / 명시 init / FML PE 크럭스). 런타임 검증은 Windows 머신 필요(정직 연기).
-- **Phase 5 — runner 패키지화**: 4플랫폼 통합 runner 템플릿 + capability trait 세트 → "실제 다른 프로젝트" 적용 가능 형태. (미완.)
+- **Phase 5 — runner 패키지화**: 4플랫폼 통합 runner 템플릿 + capability trait 세트 → "실제 다른 프로젝트" 적용 가능 형태. ✅ 완료(2026-08-12, `2026-08-12-rustra-runner-template-design.md`): `runner/template/` 스캐폴드(app/backend/desktop/mobile-{ios,android}/capabilities), `backend/src/capabilities.rs`(FileCap/NotifyCap trait + CapabilityRegistry + DesktopRegistry std::fs, 단위테스트 3 PASS), `create-runner.sh`(복사+식별자 치환, 동작 검증), 각 플랫폼 `run.sh` 게이트. Rust 백엔드 `cargo check` clean. 플랫폼 셸 코드는 대응 스파이크에서 정제 추출(README 표로 포인터 명시).
 
 각 Phase는 별도 impl plan으로 분리.
