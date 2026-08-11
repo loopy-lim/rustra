@@ -97,8 +97,8 @@ rustra-bridge는 이미 Rust `#[command]` → TS 클라이언트 자동 생성 �
 
 ## 6. 미해결 리스크 (스파이크/차기 페이즈에서 해결)
 
-1. **Tauri↔Lynx surface 임베딩**: 스파이크 경로 A/B로 검증.
-2. **host.cpp desktop C++ API 재작성**: Lynx 3.7 desktop C++ API 형태(NSView vs windowless RGBA) 미확정 → 스파이크 1단계에서 가이드 확인.
+1. ~~**Tauri↔Lynx surface 임베딩**: 스파이크 경로 A/B로 검증.~~ → **✅ 해소(2026-08-11 스파이크).** 경로 A(`LynxView::Builder::SetParent(NSView)`)로 Tauri window 안에 ReactLynx surface 임베딩 성공. 성공 기준 1(window 오픈)·2(뷰 렌더링) PASS. 결과: `docs/plans/2026-08-11-tauri-lynx-desktop-spike-result.md`.
+2. ~~**host.cpp desktop C++ API 재작성**: Lynx desktop C++ API 형태(NSView vs windowless RGBA) 미확정 → 스파이크 1단계에서 가이드 확인.~~ → **✅ 해소.** SDK 4.0 `lynx_view_builder_set_parent(NativeWindow void*)` 정식 진입점 확인(Darwin: NSView\*). windowless RGBA renderer는 headless/offscreen 전용. 성공 기준 3(addNumbers rkyv 왕복 결과 42) PASS 로 host.cpp 의 N-API RustraModule + extension-module BTS 주입 패턴이 데스크톱에서도 그대로 동작함을 확인.
 3. **Windows libLynx 바이너리 입수**: 로컬은 macOS arm64만. Windows prebuilt 입수 경로(다운로드/빌드) 미확정 → macOS 스파이크 통과 후 확인.
 4. **capability NativeModule 모바일 구현**: 패턴은 있으나 capability별(File/Camera/Notify) Android/iOS NativeModule 신규 작성 필요. Tauri plugin은 데스크톱만.
 

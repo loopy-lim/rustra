@@ -1,11 +1,12 @@
-# Tauri × Lynx Desktop Spike — Phase 0 결과 (경로 결정)
+# Tauri × Lynx Desktop Spike — 결과 보고 (Phase 0~4 완료, 경로 A)
 
-- **상태:** Phase 0 완료. **경로 A(SetParent NSView 삽입) 채택.**
+- **상태:** Phase 0~4 완료. **성공 기준 1/2/3/4 전부 PASS. 경로 A(SetParent NSView 삽입) 채택 확정.**
 - **날짜:** 2026-08-11
 - **스파이크 plan:** `docs/plans/2026-08-11-tauri-lynx-desktop-spike.md` (Task 0.4)
 - **design:** `docs/plans/2026-08-11-tauri-lynx-desktop-design.md`
+- **자동 검증:** `examples/lynx-tauri-spike/verify.sh`
 
-> 본 문서는 Phase 0(Task 0.1~~0.4)의 결론을 기록한다. Phase 2~~4의 실행 결과는 본문 하단에 갱신한다.
+> 본 문서는 Phase 0(Task 0.1~~0.4)의 경로 결정과 Phase 1~~4 실행 결과를 함께 기록한다.
 
 ---
 
@@ -110,17 +111,77 @@ rustra staticlib 정상. host.cpp 자산(windowless 경로)도 이전 Phase A에
 - **Task 1.2 (Tauri crate):** `src-tauri/` 생성. Tauri 2.11 이 `WindowBuilder`(webview 없음)를 unstable 로 막아두었으므로 webview window 를 만들고 그 NSView(contentView) 를 SetParent 타깃으로 확보. `cargo build` ✓. `cargo run` → `[spike] NSView handle = 0x883201e00` ✓ (Phase 2 SetParent 타깃 확정).
 - **참고:** webview 가 contentView 를 차지하므로 Phase 2 에서 Lynx NSView 를 `addSubview` 로 위에 올리거나 webview 를 제거하는 처리가 필요.
 
-### Phase 2 — Lynx surface 통합 (경로 A)
+### Phase 2 — Lynx surface 통합 (경로 A) — ✅ PASS
 
-_(성공 기준 1/2 PASS/FAIL 기록)_
+`lynx_desktop.mm` 가 host.cpp 의 env init / bundle 로드 / FML 펌프 / RustraModule BTS 주입 블록을 재사용하고, windowless RGBA renderer 블록을 `lynx_view_builder_set_parent((NativeWindow)nsview)` 로 교체했다. Tauri `setup` 에서 `get_webview_window("main").window_handle()` → `RawWindowHandle::AppKit(h).ns_view` 로 NSView 포인터를 얻어 `lynx_spike_init` 로 전달. FML 펌프는 `app.run` 의 `MainEventsCleared` 에서 매 틱 `lynx_spike_pump()` 로 전진.
 
-### Phase 3 — rustra rkyv 왕복
+**결정적 로그(stderr, `verify.sh` 캡처):**
 
-_(성공 기준 3 PASS/FAIL 기록)_
+```
+[spike] NSView = 0x723699e00 → Lynx SetParent
+[spike] base::UIThread::Init() bound to main thread
+[spike] lynx_spike_init rc=0
+[spike] on_first_screen
+[spike] on_load_success
+[spike] on_runtime_ready
+[spike] runtime_ready : install RustraModule (NativeModules ABSENT->created)
+```
 
-### Phase 4 — 최종
+- **성공 기준 1 (Tauri window 오픈):** ✅ `NSView = 0x… → Lynx SetParent` + `lynx_spike_init rc=0`.
+- **성공 기준 2 (ReactLynx 뷰 렌더링):** ✅ `on_first_screen` + `on_load_success`. CSS `130300` 경고(단위 없는 length)는 calculator 예제와 동일 패턴의 비치명적 warning 이며, 뷰 트리가 실제로 평가·렌더링되었음을 의미한다. (백그라운드 세션 디스플레이 캡처 권한 제약으로 스크린샷 대신 on_first_screen/CSS 파싱을 시각 렌더링 증거로 사용.)
 
-- 성공 기준 1: ☐
-- 성공 기준 2: ☐
-- 성공 기준 3: ☐
-- 성공 기준 4: ☑ (본 문서)
+`error=1` (g_error 플래그)은 위 CSS 130300 warning 이 `on_received_error` 로도 보고되기 때문이며, 치명적 오류가 아니다.
+
+### Phase 3 — rustra rkyv 왕복 — ✅ PASS
+
+RustraModule N-API(`invokeRkyvV2`) + extension-module BTS 주입(host.cpp 재사용)이 동작. ReactLynx `App.tsx` 의 `addNumbers({a:20,b:22}).then(out => ackResult(out.value))` 가 rkyv V2 fast-path 로 Rust `rustra_calculator_invoke_rkyv_v2` 를 호출하고 결과 42 를 다시 JS 로 받아 host `AckResult` N-API 콜백으로 통보.
+
+**결정적 로그:**
+
+```
+[spike] invokeRkyvV2: in=4 out=9 ok=1
+[spike] ackResult val=42
+[spike] ackResult: results_acked=1
+[spike] SUMMARY load=1 firstscreen=1 rtready=1 error=1 invocations=1 resultAcked=1 val=42
+```
+
+- **성공 기준 3 (addNumbers rkyv 왕복 결과 42):** ✅ `invokeRkyvV2 in=4 out=9 ok=1` + `ackResult val=42` + `SUMMARY resultAcked=1 val=42`. (4B 입력 = postcard `addNumbers{20,22}`, 9B 출력 = `[ok:u8][7B pad][postcard Output{42}]`.)
+
+FML 펌프는 Tauri `MainEventsCleared` 통합 형태로 동작(host.cpp 의 `while` 루프를 Tauri 루프로 대체). vsync tick 왕복(Task 3.2 optional)은 본 스파이크 범위에서 생략 — 성공 기준 3 에 필수 아님.
+
+### Phase 4 — 최종 — ✅ PASS
+
+`examples/lynx-tauri-spike/verify.sh` 가 빌드(npm bundle + build-lynx-host.sh) → .app 실행(~10s) → 7개 결정적 패턴 grep 의 자동 검증을 수행한다.
+
+```
+[verify] 4/4 check success criteria
+  [PASS] 1: window open (NSView SetParent + init rc=0)
+  [PASS] 1: window open (lynx_spike_init rc=0)
+  [PASS] 2: ReactLynx render (on_first_screen)
+  [PASS] 2: ReactLynx render (on_load_success)
+  [PASS] 3: rkyv invoke ok
+  [PASS] 3: rkyv result acked 42
+  [PASS] 3: SUMMARY resultAcked=1 val=42
+[verify] PASS: 성공 기준 1/2/3 모두 충족
+```
+
+- 성공 기준 1: ✅ Tauri desktop window 오픈
+- 성공 기준 2: ✅ window 에 ReactLynx 뷰 렌더링
+- 성공 기준 3: ✅ ReactLynx → addNumbers → rkyv → 결과 42 ack 왕복
+- 성공 기준 4: ✅ 경로 A 확정 + 결과 보고서 작성
+
+## host.cpp 재사용/폐기 블록 — 최종 정리
+
+Phase 0 의 표와 동일 결론이 스파이크 실행으로 확정. 핵심: `SetParent` 정식 C++ API 로 임베딩 성공 → **ABI 핵(Mach-O 오프셋)은 FML 펌프 전진에만 국부 재사용**, windowless RGBA blit 는 headless 자산으로 보존. N-API RustraModule + extension-module BTS 주입 패턴은 데스크톱에서도 그대로 동작한다.
+
+## 남은 리스크
+
+- **Windows libLynx 바이너리 입수**: 로컬은 macOS arm64 prebuilt 만. Windows prebuilt 입수/빌드 경로 미확정.
+- **ABI 부채**: FML 펌프의 Mach-O 오프셋(0x3ecc/0x43a4/0x9329bc) 은 SDK 4.0/engine 3.2 에 고정됨. 정식 FML 진입점 헤더 노출 시 제거 가능.
+- **모바일 확장**: Android/iOS Lynx SDK 셸 + rustra rkyv NativeModule(Kotlin/Obj-C) 신규 작성 필요(design §7 Phase 2/3).
+
+## Phase 2(Android)로 가기 위한 전제 조건
+
+1. 단일 ReactLynx 번들(`index.lynx.bundle`) 재사용 — 본 스파이크 번들이 Android 셸에서도 로드 가능해야 함.
+2. rustra rkyv V2 Rust → Kotlin NativeModule FFI(`/data/data/.../librustra.so` + JNI) — 데스크톱 extern "C" 패턴의 Kotlin 대응.
+3. Android Lynx SDK 바이너리 입수.
