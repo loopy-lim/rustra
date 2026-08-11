@@ -6,6 +6,7 @@ members = [
   "examples/crud",
   "examples/calculator-napi",
   "examples/tauri-calculator/src-tauri",
+  "examples/lynx-tauri-spike/src-tauri",
   "examples/benchmark",
 ]
 resolver = "3"

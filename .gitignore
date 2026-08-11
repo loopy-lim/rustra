@@ -15,6 +15,10 @@ examples/calculator-napi/node_modules/
 /examples/lynx-calculator/node_modules/
 /examples/lynx-calculator/dist/
 /examples/lynx-calculator/package-lock.json
+/examples/lynx-tauri-spike/node_modules/
+/examples/lynx-tauri-spike/dist/
+/examples/lynx-tauri-spike/package-lock.json
+/examples/lynx-tauri-spike/src-tauri/gen/
 
 # Claude Code worktrees (local only)
 .claude/worktrees/
