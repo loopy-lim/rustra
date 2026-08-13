@@ -12,6 +12,8 @@
 //
 // USE_WEAK_SUFFIX_NAPI 정의(-D): Lynx N-API 심볼이 *_weak 접미사.
 
+#include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -55,6 +57,10 @@ static std::atomic<bool> g_runtime_ready{false};
 static std::atomic<int> g_invoke_count{0};
 static std::atomic<int> g_results_acked{0};
 static std::atomic<int> g_result_value{-999};
+// invokeRkyvV2 핸들러 본체(진입→리턴) 소요 ns. end-to-end(JS/QuickJS) 와 대조해
+// N-API 경계 + Promise 스케줄링 오버헤드를 분리하는 데 사용.
+static std::vector<double> g_invoke_times_ns;
+static std::mutex g_invoke_times_mtx;
 
 static lynx_view_t *g_view = nullptr;
 static lynx_extension_module_t *g_ext_module = nullptr;
@@ -103,6 +109,7 @@ static bool pump_fml_message_loop() {
 // ── N-API native module: RustraModule.invokeRkyvV2(ArrayBuffer) → ArrayBuffer
 static napi_value_weak InvokeRkyvV2(napi_env_weak env,
                                     napi_callback_info_weak info) {
+  auto t0 = std::chrono::steady_clock::now();
   g_invoke_count.fetch_add(1, std::memory_order_relaxed);
   size_t argc = 1;
   napi_value_weak args[1] = {nullptr};
@@ -123,6 +130,12 @@ static napi_value_weak InvokeRkyvV2(napi_env_weak env,
   napi_create_arraybuffer_weak(env, out_len, &dest, &result);
   std::memcpy(dest, out, out_len);
   rustra_calculator_free_buffer((void *)out, out_len);
+  {
+    auto t1 = std::chrono::steady_clock::now();
+    double ns = std::chrono::duration<double, std::nano>(t1 - t0).count();
+    std::lock_guard<std::mutex> lk(g_invoke_times_mtx);
+    g_invoke_times_ns.push_back(ns);
+  }
   return result;
 }
 
@@ -141,6 +154,25 @@ static napi_value_weak AckResult(napi_env_weak env,
   g_results_acked.fetch_add(1, std::memory_order_relaxed);
   fprintf(stderr, "[spike] ackResult: results_acked=%d\n",
           g_results_acked.load());
+  return nullptr;
+}
+
+// JS→host: 런타임 벤치마크 수치 전달. App.tsx 가 QuickJS end-to-end 측정값
+// (js.avg_us / js.p50_us / js.p99_us ...)을 [bench] 라인으로 로깅한다.
+// host 측 invokeRkyvV2 본체 타이밍과 대조 → N-API 경계+Promise 오버헤드 분리.
+static napi_value_weak BenchResult(napi_env_weak env,
+                                   napi_callback_info_weak info) {
+  size_t argc = 2;
+  napi_value_weak args[2] = {nullptr, nullptr};
+  napi_get_cb_info_weak(env, info, &argc, args, nullptr, nullptr);
+  if (argc >= 2) {
+    char buf[128] = {0};
+    size_t len = 0;
+    napi_get_value_string_utf8_weak(env, args[0], buf, sizeof(buf), &len);
+    double v = 0;
+    napi_get_value_double_weak(env, args[1], &v);
+    fprintf(stderr, "[bench] %s=%.3f\n", buf, v);
+  }
   return nullptr;
 }
 
@@ -167,6 +199,9 @@ static void InstallRustraNative(napi_env_weak env, napi_value_weak global,
   napi_create_function_weak(env, "ackResult", NAPI_AUTO_LENGTH, AckResult,
                             nullptr, &fn);
   napi_set_named_property_weak(env, exports, "ackResult", fn);
+  napi_create_function_weak(env, "benchResult", NAPI_AUTO_LENGTH, BenchResult,
+                            nullptr, &fn);
+  napi_set_named_property_weak(env, exports, "benchResult", fn);
 
   napi_value_weak nm = nullptr;
   napi_get_named_property_weak(env, global, "NativeModules", &nm);
@@ -351,5 +386,29 @@ extern "C" int lynx_spike_summary() {
           (int)g_runtime_ready.load(), (int)g_error.load(),
           g_invoke_count.load(), g_results_acked.load(),
           g_result_value.load());
+
+  // host 측 invokeRkyvV2 핸들러 본체(진입→리턴) 타이밍 — end-to-end(JS) 와 대조.
+  // 이 구간 = N-API 인자 언팩 + Rust FFI + 응답 ArrayBuffer 빌드. JS 측 배치 avg 와의
+  // 차이가 QuickJS↔N-API 경계 + Promise 마이크로태스크 스케줄링 오버헤드.
+  std::vector<double> times;
+  {
+    std::lock_guard<std::mutex> lk(g_invoke_times_mtx);
+    times = g_invoke_times_ns;
+  }
+  if (!times.empty()) {
+    std::sort(times.begin(), times.end());
+    double sum = 0;
+    for (double t : times) sum += t;
+    double avg = sum / static_cast<double>(times.size());
+    auto pct = [&](double q) -> double {
+      size_t idx = static_cast<size_t>((q / 100.0) * times.size());
+      if (idx >= times.size()) idx = times.size() - 1;
+      return times[idx];
+    };
+    fprintf(stderr,
+            "[bench] host.n=%zu host.avg_ns=%.0f host.p50_ns=%.0f "
+            "host.p99_ns=%.0f\n",
+            times.size(), avg, pct(50.0), pct(99.0));
+  }
   return (int)g_results_acked.load();
 }

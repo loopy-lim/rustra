@@ -122,3 +122,5 @@ rustra-bridge는 이미 Rust `#[command]` → TS 클라이언트 자동 생성 �
 **와이어포맷** (Rust 코어, 직렬화+디스패치, 100K 회): **rkyv V2 fast-path 가 JSON 대비 1.86x 빠름** — rkyv V2 **1.30µs / 770K ops/s** vs JSON 2.42µs / 414K ops/s vs postcard 1.66µs. 요청 페이로드는 rkyv V2 **4B** vs JSON **47B**(11.75x 축소). 이것이 §4 fast-path(rkyv V2) 선택의 정량 근거이자 spike 9/52/95 바이트 시퀀스의 실측 확인.
 
 **병목:** napi 전체(15.3µs) 중 Rust 코어(rkyv 1.3µs)는 ~8%, napi 브릿지가 ~92%. 단, Lynx 모바일(JSI/JNI)·Tauri 네이티브는 napi보다 얕은 브릿지 → 코어 비용 비중이 커 rkyv V2 우위가 직접 드러남. 페이로드 11.75x 축소는 벤치마크 머신과 무관하게 독립적 가치(네트워크/IPC/배터리).
+
+**Lynx 런타임(QuickJS) 실측 (2026-08-13 추가):** 데스크톱 스파이크에서 `addNumbers` rkyv V2 왕복 end-to-end 를 실측 — **Lynx(QuickJS) ~50µs/call ≈ Node(V8) 15.3µs 의 ~3.3x**, ops/s ~20K. 차이의 ~86%(~43µs) 는 QuickJS 해석 실행 + Promise 마이크로태스크 + weak-N-API ArrayBuffer 마샬링이지 코어(1.3µs, end-to-end 의 ~2.6%) 가 아니다. host `InvokeRkyvV2` 핸들러 본체만 분리하면 **p50 7.0µs**(3회 6.6/7.0/7.3, 안정), 그 중 Rust 코어 1.3µs(~18%) 와 N-API 래핑 ~5.7µs. 단, (1) QuickJS `performance.now()` 미지원이라 JS 개별 p50/p99 는 배치 avg 만 신뢰, (2) 모바일 JSI/JNI 경로는 본 macOS 머신에서 측정 불가(정직 연기). per-frame 예산 16ms 대비 ~50µs = 0.3%. 상세: `docs/plans/2026-08-13-performance-benchmark.md` §5.
