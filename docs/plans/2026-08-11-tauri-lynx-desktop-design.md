@@ -112,3 +112,13 @@ rustra-bridge는 이미 Rust `#[command]` → TS 클라이언트 자동 생성 �
 - **Phase 5 — runner 패키지화**: 4플랫폼 통합 runner 템플릿 + capability trait 세트 → "실제 다른 프로젝트" 적용 가능 형태. ✅ 완료(2026-08-12, `2026-08-12-rustra-runner-template-design.md`): `runner/template/` 스캐폴드(app/backend/desktop/mobile-{ios,android}/capabilities), `backend/src/capabilities.rs`(FileCap/NotifyCap trait + CapabilityRegistry + DesktopRegistry std::fs, 단위테스트 3 PASS), `create-runner.sh`(복사+식별자 치환, 동작 검증), 각 플랫폼 `run.sh` 게이트. Rust 백엔드 `cargo check` clean. 플랫폼 셸 코드는 대응 스파이크에서 정제 추출(README 표로 포인터 명시).
 
 각 Phase는 별도 impl plan으로 분리.
+
+## 8. 성능 (2026-08-13 측정)
+
+상세: `docs/plans/2026-08-13-performance-benchmark.md`. 환경 Apple M1 Max / rustc 1.95 / Node 22 / Bun 1.3.6.
+
+**전송 계층** (JS↔Rust, JSON 경로): in-process napi/FFI 가 subprocess 대비 **~150–203x 빠름** — Node napi-rs 15.3µs(65K ops/s), Bun FFI 19.0µs(52K ops/s) vs subprocess ~3ms(323 ops/s). 네이티브 UI(Lynx/Tauri)는 항상 in-process 경로.
+
+**와이어포맷** (Rust 코어, 직렬화+디스패치, 100K 회): **rkyv V2 fast-path 가 JSON 대비 1.86x 빠름** — rkyv V2 **1.30µs / 770K ops/s** vs JSON 2.42µs / 414K ops/s vs postcard 1.66µs. 요청 페이로드는 rkyv V2 **4B** vs JSON **47B**(11.75x 축소). 이것이 §4 fast-path(rkyv V2) 선택의 정량 근거이자 spike 9/52/95 바이트 시퀀스의 실측 확인.
+
+**병목:** napi 전체(15.3µs) 중 Rust 코어(rkyv 1.3µs)는 ~8%, napi 브릿지가 ~92%. 단, Lynx 모바일(JSI/JNI)·Tauri 네이티브는 napi보다 얕은 브릿지 → 코어 비용 비중이 커 rkyv V2 우위가 직접 드러남. 페이로드 11.75x 축소는 벤치마크 머신과 무관하게 독립적 가치(네트워크/IPC/배터리).
