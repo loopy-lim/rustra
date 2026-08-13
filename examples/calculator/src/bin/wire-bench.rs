@@ -94,7 +94,8 @@ fn main() {
     println!();
 
     // ── JSON ─────────────────────────────────────────────────────────
-    let json = std::ffi::CString::new(r#"{"command":"addNumbers","args":{"a":42,"b":58}}"#).unwrap();
+    let json =
+        std::ffi::CString::new(r#"{"command":"addNumbers","args":{"a":42,"b":58}}"#).unwrap();
     let json_req_len = json.as_bytes().len();
     let r_json = bench("JSON (invoke)", json_req_len, iters, || {
         let ptr = unsafe { rustra_calculator_invoke(json.as_ptr()) };
@@ -146,12 +147,21 @@ fn main() {
     let results = [r_json, r_pc, r_rkyv];
     let max_avg = results.iter().map(|r| r.avg).fold(0.0_f64, f64::max);
 
-    println!("│  {:<26} {:>6} {:>6} {:>10} {:>10} {:>10} {:>12}", "포맷", "요청", "응답", "avg", "p50", "p99", "ops/s");
+    println!(
+        "│  {:<26} {:>6} {:>6} {:>10} {:>10} {:>10} {:>12}",
+        "포맷", "요청", "응답", "avg", "p50", "p99", "ops/s"
+    );
     println!("│  {}", "─".repeat(88));
     for r in &results {
         println!(
             "│  {:<26} {:>5}B {:>5}B {:>10} {:>10} {:>10} {:>12.0}",
-            r.name, r.req_bytes, r.resp_bytes, fmt_ns(r.avg), fmt_ns(r.p50), fmt_ns(r.p99), r.ops
+            r.name,
+            r.req_bytes,
+            r.resp_bytes,
+            fmt_ns(r.avg),
+            fmt_ns(r.p50),
+            fmt_ns(r.p99),
+            r.ops
         );
     }
     println!("│");

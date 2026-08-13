@@ -17,20 +17,76 @@ export function App() {
   const [result, setResult] = useState<number | null>(null);
 
   useEffect(() => {
-    addNumbers({ a: 20, b: 22 })
-      .then((out) => {
-        setResult(out.value);
-        // 성공 경로에서 Rust 결과값을 host 로 통보 (ack 왕복).
-        // host stderr summary 의 resultAcked=1 val=42 가 rkyv 왕복의 증거.
-        try {
-          (getRustraNative() as { ackResult?: (v: number) => void }).ackResult?.(
-            out.value,
-          );
-        } catch {
-          // ackResult 미지원 — 무시
+    let cancelled = false;
+    const native = getRustraNative() as {
+      ackResult?: (v: number) => void;
+      benchResult?: (label: string, value: number) => void;
+    };
+    // QuickJS end-to-end 측정값을 host 로 중계 → [bench] js.* 라인.
+    const bench = (label: string, value: number) => {
+      try {
+        native.benchResult?.(label, value);
+      } catch {
+        // benchResult 미지원 — 무시
+      }
+    };
+    // performance.now() 가 없는 QuickJS 폴백(Date.now, ms 해상도).
+    const now = () => {
+      const p = (globalThis as { performance?: { now?: () => number } })
+        .performance;
+      return typeof p?.now === 'function' ? p.now() : Date.now();
+    };
+    const hasHiRes =
+      typeof (globalThis as { performance?: { now?: () => number } }).performance
+        ?.now === 'function';
+
+    (async () => {
+      try {
+        // warmup — QuickJS/N-API 경로 안정화.
+        for (let i = 0; i < 50; i++) await addNumbers({ a: 20, b: 22 });
+        if (cancelled) return;
+
+        const N = 500;
+        const times: number[] = [];
+        const tBatch0 = now();
+        for (let i = 0; i < N; i++) {
+          const t0 = now();
+          const out = await addNumbers({ a: 20, b: 22 });
+          times.push(now() - t0);
+          // 첫 호출은 verify.sh 호환성(resultAcked=1 val=42) 유지.
+          if (i === 0) {
+            setResult(out.value);
+            try {
+              native.ackResult?.(out.value);
+            } catch {
+              // ackResult 미지원 — 무시
+            }
+          }
         }
-      })
-      .catch(() => setResult(-1)); // 폴백: -1 (Rust 결과 42 와 구분)
+        if (cancelled) return;
+        const batchMs = now() - tBatch0;
+
+        times.sort((a, b) => a - b);
+        const pct = (q: number) =>
+          times[Math.min(Math.floor((q / 100) * times.length), times.length - 1)];
+        const avg = times.reduce((s, x) => s + x, 0) / times.length;
+        bench('js.n', times.length);
+        bench('js.hires', hasHiRes ? 1 : 0);
+        bench('js.batch_ms_total', Number(batchMs.toFixed(3)));
+        bench('js.avg_us', Number((avg * 1000).toFixed(2)));
+        if (hasHiRes) {
+          // Date.now() 폴백에서는 개별 호출이 0ms 로 떨어져 p50/p99 무의미.
+          bench('js.p50_us', Number((pct(50) * 1000).toFixed(2)));
+          bench('js.p99_us', Number((pct(99) * 1000).toFixed(2)));
+        }
+      } catch {
+        setResult(-1); // 폴백: -1 (Rust 결과 42 와 구분)
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
