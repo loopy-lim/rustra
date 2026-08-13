@@ -113,3 +113,4 @@ export type ToUpperInput = {
 export type ToUpperOutput = {
   result: string;
 };
+
