@@ -6,7 +6,7 @@
 //!
 //! 실행: `cargo bench -p rustra --profile dev -- dynamic_registry`
 
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use rustra::Package;
 
 #[path = "common.rs"]

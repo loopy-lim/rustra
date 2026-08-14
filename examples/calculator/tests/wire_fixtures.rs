@@ -15,7 +15,7 @@
 //! **주의**: 이 hex 들은 TS 측 `cross-wire.test.ts` 와 반드시 일치해야 한다.
 //! 한쪽만 바뀌면 교차 테스트가 실패한다.
 
-use rustra_calculator_example::{AddNumbersInput, DivideInput, GreetInput, calculator_package};
+use rustra_calculator_example::{calculator_package, AddNumbersInput, DivideInput, GreetInput};
 
 fn request_for<I: serde::Serialize>(cmd_id: u16, input: &I) -> Vec<u8> {
     let mut buf = cmd_id.to_le_bytes().to_vec();

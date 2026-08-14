@@ -2,6 +2,7 @@
 name = "rustra-macros"
 description.workspace = true
 repository.workspace = true
+readme = "README.md"
 edition.workspace = true
 license.workspace = true
 version.workspace = true
