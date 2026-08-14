@@ -16,8 +16,8 @@
 
 #![allow(clippy::float_cmp)]
 
-use rustra::Package;
 use rustra::ffi::{rustra_ffi_free, rustra_ffi_invoke_json};
+use rustra::Package;
 use serde_json::Value;
 
 #[path = "../benches/common.rs"]

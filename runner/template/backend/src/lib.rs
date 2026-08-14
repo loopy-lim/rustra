@@ -79,7 +79,9 @@ pub struct NotifyInput {
 pub fn notify(input: NotifyInput) -> Result<()> {
     let cap = capabilities::registry()
         .and_then(|r| r.notify())
-        .ok_or_else(|| RustraError::custom("capability.missing", "notify capability not provided"))?;
+        .ok_or_else(|| {
+            RustraError::custom("capability.missing", "notify capability not provided")
+        })?;
     cap.notify(&input.title, &input.body)
         .map_err(|e| RustraError::custom("notify", e))
 }
@@ -92,7 +94,8 @@ static CACHED_PACKAGE: std::sync::OnceLock<Package> = std::sync::OnceLock::new()
 pub fn template_package() -> Package {
     CACHED_PACKAGE
         .get_or_init(|| {
-            let pkg = register!(Package::builder("template.app"), greet, read_config, notify).build();
+            let pkg =
+                register!(Package::builder("template.app"), greet, read_config, notify).build();
             pkg.register_ffi_with_default(FfiFormat::Json);
             pkg
         })

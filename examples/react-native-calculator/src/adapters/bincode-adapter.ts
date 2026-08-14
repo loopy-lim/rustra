@@ -89,7 +89,8 @@ export const addNumbersCodec: BincodeCodec<{ a: number; b: number }, { value: nu
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: { value: number }; error?: RustraError } {
-    if (buf.byteLength < 3) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    if (buf.byteLength < 3)
+      return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
     const ok = u8[0] === 1;
     if (!ok) {

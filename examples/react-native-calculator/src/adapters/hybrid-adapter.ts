@@ -57,7 +57,8 @@ function parseRkyvResponse(buf: ArrayBuffer): {
   result?: { value: number };
   error?: RustraError;
 } {
-  if (buf.byteLength < 16) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+  if (buf.byteLength < 16)
+    return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
   const u8 = new Uint8Array(buf);
   const view = new DataView(buf);
 
