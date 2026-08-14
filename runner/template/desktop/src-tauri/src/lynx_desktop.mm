@@ -44,6 +44,8 @@ void rustra_template_free_buffer(void *ptr, size_t len);
 // 자동 등록하지만 Windows(PE)/Android(ELF) 에는 그런 constructor 가 없으므로
 // lynx_template_init 시작부에서 명시 호출한다. (여러 번 불러도 안전하다.)
 void rustra_template_init(void);
+// capability 계층 B — 데스크톱 registry(std::fs FileCap + NotifyCap 정직 에러) 주입.
+void rustra_template_register_desktop_registry(void);
 }
 
 // ── globals ───────────────────────────────────────────────────────────────
@@ -254,6 +256,9 @@ extern "C" int lynx_template_init(void *parent_native_window,
   rustra_template_init();
   fprintf(stderr,
           "[template] rustra_template_init() (explicit, cross-platform)\n");
+  // capability registry 주입(Desktop=std::fs). read_config 등 계층 B command 활성화.
+  rustra_template_register_desktop_registry();
+  fprintf(stderr, "[template] desktop capability registry registered\n");
 
   resolve_liblynx_symbols();
 

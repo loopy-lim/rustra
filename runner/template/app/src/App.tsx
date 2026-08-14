@@ -1,13 +1,16 @@
 import { useEffect, useState } from '@lynx-js/react';
 import { configure, createFastEngine, getRustraNative } from '@rustra/lynx';
-import { greet } from '../generated/commands.js';
+import { greet, readConfig } from '../generated/commands.js';
 import { rkyvV2Registry } from '../generated/rkyv-registry.js';
 
 // 템플릿 프론트: greet({ name: "rustra" }) → rkyv V2 fast-path → "Hello, rustra!" 표시.
+// 추가: readConfig() → capability 계층 B(FileCap) 를 통한 플랫폼 파일 읽기 증명.
+//   - Desktop: std::fs (DesktopRegistry — lynx_template_init 가 주입)
+//   - iOS: NSBundle (MobileBridge.read_file — RustraModule +load 가 주입)
+//   - Android: assets (MobileBridge.read_file — RustraModule init 이 주입)
 //
-// generated/ 는 Rust 백엔드(backend/src/lib.rs 의 #[command] greet) 로부터 codegen 한 결과.
+// generated/ 는 Rust 백엔드(backend/src/lib.rs 의 #[command]) 로부터 codegen 한 결과.
 // ▶ 첫 실행 전: `npm run codegen` (또는 create-runner.sh 가 자동 수행).
-//   codegen 이 commands.ts / rkyv-registry.ts / rkyv-codecs.ts / types.ts 를 재생성한다.
 //
 // 각 플랫폼 셸(Desktop host / iOS·Android RustraModule)이 NativeModules.RustraModule
 // (invokeRkyvV2) 를 주입했는지로 엔진 설정이 결정된다. 미등록(빌드 단계/헤드리스)이면
@@ -22,6 +25,8 @@ export function App() {
   // greet({ name: "rustra" }) 의 Rust 결과는 "Hello, rustra!". 초기값 null → 대기와 구분.
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // readConfig() 결과 — config.json 의 내용(플랫폼 파일 읽기). 실패 시 에러 코드 표시.
+  const [config, setConfig] = useState<string | null>(null);
 
   useEffect(() => {
     greet({ name: 'rustra' })
@@ -37,6 +42,11 @@ export function App() {
         }
       })
       .catch((e) => setError(String(e)));
+
+    // capability 계층 B: FileCap.read_file("config.json") via rkyv V2 (동일 와이어).
+    readConfig({})
+      .then((out) => setConfig(out.content))
+      .catch((e) => setConfig(`capability error: ${e instanceof Error ? e.message : String(e)}`));
   }, []);
 
   return (
@@ -70,6 +80,12 @@ export function App() {
         }}
       >
         {message ?? (error ? `error: ${error}` : '—')}
+      </text>
+      <text style={{ color: '#8899aa', fontSize: 18, marginTop: 32 }}>
+        readConfig (FileCap)
+      </text>
+      <text style={{ color: '#ffffff', fontSize: 18, marginTop: 12 }}>
+        {config ?? '—'}
       </text>
     </view>
   );

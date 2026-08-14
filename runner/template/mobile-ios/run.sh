@@ -29,6 +29,8 @@ echo "[ios] device: $DEVICE_ID"
 echo "[ios] 1/5 ReactLynx bundle"
 ( cd "$APP_ROOT/app" && npm run build >/dev/null )
 cp "$APP_ROOT/app/dist/index.lynx.bundle" "$IOS_DIR/app/Resources/app.lynx.js"
+# capability(FileCap) 검증용 config.json — MobileBridge.read_file 이 NSBundle 에서 읽는다.
+cp "$APP_ROOT/app/config.json" "$IOS_DIR/app/Resources/config.json"
 
 # 2. Rust staticlib (aarch64-apple-ios-sim).
 echo "[ios] 2/5 Rust staticlib"
@@ -75,11 +77,18 @@ check "1: bundle loaded (loadTemplate bytes>0)" 'template-ios\] loadTemplate .*b
 check "2: RustraModule registered" 'module: RustraModule registered'
 check "3: rkyv in (greet req)"  'template-ios\] rkyv in bytes=[1-9]'
 check "4: rkyv out (greet res)" 'template-ios\] rkyv out bytes=[1-9]'
+check "5: MobileBridge registered (capability)" 'MobileBridge registered'
+# FileCap 왕복: readConfig 가 NSBundle 의 config.json 을 읽으면 bytes 로그.
+if echo "$LOGS" | grep -q 'bridge read_file.*bytes'; then
+  echo "  [PASS] 6: FileCap roundtrip (bridge read_file bytes)"
+else
+  echo "  [FAIL] 6: FileCap roundtrip (bridge read_file bytes)"; pass=0
+fi
 
 if echo "$LOGS" | grep -q "Rustra not configured"; then
-  echo "  [FAIL] 5: must NOT have 'Rustra not configured'"; pass=0
+  echo "  [FAIL] 7: must NOT have 'Rustra not configured'"; pass=0
 else
-  echo "  [PASS] 5: no 'Rustra not configured' error"
+  echo "  [PASS] 7: no 'Rustra not configured' error"
 fi
 
 echo ""

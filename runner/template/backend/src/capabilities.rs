@@ -161,7 +161,7 @@ fn mobile_bridge() -> Option<&'static MobileBridge> {
     MOBILE_BRIDGE.get()
 }
 
-// ── FFI 심볼 (모바일 셸이 호출) ──────────────────────────────────────────────
+// ── FFI 심볼 (각 셸이 startup 에 호출) ───────────────────────────────────────
 
 /// 모바일 셸(NativeModule startup)이 1회 호출: 플랫폼 콜백 등록 + MobileRegistry 주입.
 ///
@@ -176,6 +176,13 @@ pub unsafe extern "C" fn rustra_template_register_mobile_registry(bridge: *const
     let b = unsafe { *bridge };
     let _ = MOBILE_BRIDGE.set(b);
     set_registry(Box::new(MobileRegistry));
+}
+
+/// 데스크톱 셸(C++/Obj-C host)이 startup 에 1회 호출: DesktopRegistry(std::fs) 주입.
+/// Rust 셸(Tauri setup) 은 `set_registry(Box::new(DesktopRegistry))` 로 직접 주입해도 된다.
+#[unsafe(no_mangle)]
+pub extern "C" fn rustra_template_register_desktop_registry() {
+    set_registry(Box::new(DesktopRegistry));
 }
 
 /// (참고) c_void import 는 향후 bridge opaque 확장용 — ABI 문서가 c_void 를 쓰지 않는 한 미사용.

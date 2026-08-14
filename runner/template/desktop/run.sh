@@ -20,6 +20,9 @@ BIN="$HERE/TemplateApp.app/Contents/MacOS/rustra-template-desktop"
 
 echo "[desktop] 1/4 ReactLynx bundle"
 ( cd "$APP_ROOT/app" && npm run build >/dev/null )
+# capability(FileCap) 검증용 config.json 은 앱 작업 디렉터리 기준 상대경로로 읽힌다
+# (DesktopRegistry=std::fs). host 실행 디렉토리에 배치.
+cp "$APP_ROOT/app/config.json" "$HERE/config.json"
 
 echo "[desktop] 2/4 host build (.app assemble)"
 PROFILE=release "$HERE/build-lynx-host.sh" >/dev/null
@@ -27,10 +30,14 @@ PROFILE=release "$HERE/build-lynx-host.sh" >/dev/null
 echo "[desktop] 3/4 run .app (~10s, capture stderr)"
 pkill -f rustra-template-desktop 2>/dev/null || true
 : > "$LOG"
-LYNX_SDK="$SDK" \
-LYNX_BUNDLE="$APP_ROOT/app/dist/index.lynx.bundle" \
-LYNX_ICU="$SDK/data/icudtl.dat" \
-  "$BIN" >>"$LOG" 2>&1 &
+# DesktopRegistry(std::fs) 가 상대경로 "config.json" 을 읽으므로 cwd=$HERE 로 실행.
+(
+  cd "$HERE"
+  export LYNX_SDK="$SDK"
+  export LYNX_BUNDLE="$APP_ROOT/app/dist/index.lynx.bundle"
+  export LYNX_ICU="$SDK/data/icudtl.dat"
+  exec "$BIN"
+) >>"$LOG" 2>&1 &
 APP_PID=$!
 for _ in $(seq 1 50); do
   sleep 0.2
@@ -44,7 +51,7 @@ echo "[desktop] 4/4 check success criteria"
 pass=1
 check() { if grep -Eq "$2" "$LOG"; then echo "  [PASS] $1"; else echo "  [FAIL] $1  (pat: $2)"; pass=0; fi; }
 
-# 게이트 — 스파이크 7패턴 중 데스크톱 결정적 증거 (greet 왕복).
+# 게이트 — 스파이크 7패턴 중 데스크톱 결정적 증거 (greet 왕복) + capability.
 check "1: window open (native handle SetParent)" \
   'native window handle = 0x[0-9a-f]+ .* Lynx SetParent'
 check "1: window open (rustra init rc=0)" 'lynx_template_init rc=0'
@@ -52,6 +59,15 @@ check "2: ReactLynx render (on_first_screen)" 'on_first_screen'
 check "2: ReactLynx render (on_load_success)" 'on_load_success'
 check "3: rkyv invoke ok" 'invokeRkyvV2: in=[0-9]+ out=[0-9]+ ok=1'
 check "3: greet roundtrip acked (SUMMARY resultAcked>=1)" 'SUMMARY .* resultAcked=[1-9][0-9]*'
+check "4: capability registry (desktop registered)" 'desktop capability registry registered'
+# read_config 호출은 invokeRkyvV2 두 번째(ok=1) 로 나타난다 (greet + readConfig).
+# ok=1 라인이 2회 이상인지 카운트로 검증.
+invoke_ok_count=$(grep -c 'invokeRkyvV2: in=[0-9]* out=[0-9]* ok=1' "$LOG" || true)
+if [[ "$invoke_ok_count" -ge 2 ]]; then
+  echo "  [PASS] 4: FileCap roundtrip (2 invokes ok)"
+else
+  echo "  [FAIL] 4: FileCap roundtrip — invoke ok count=$invoke_ok_count (<2)"; pass=0
+fi
 
 echo ""
 if [[ $pass -eq 1 ]]; then

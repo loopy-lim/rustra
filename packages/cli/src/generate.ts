@@ -46,7 +46,8 @@ export function generateTypesTs(schema: PackageSchema): string {
       emitted.add(command.inputType);
       output += `export type ${command.inputType} = ${tsTypeFromSchema(command.inputSchema, allDefinitions)};\n\n`;
     }
-    if (!emitted.has(command.outputType)) {
+    // unit 출력 타입 `()` 은 TS 타입명으로 쓸 수 없다 — Promise<void> 로 표현.
+    if (command.outputType !== '()' && !emitted.has(command.outputType)) {
       emitted.add(command.outputType);
       output += `export type ${command.outputType} = ${tsTypeFromSchema(command.outputSchema, allDefinitions)};\n\n`;
     }
@@ -67,6 +68,8 @@ export function generateCommandsTs(schema: PackageSchema): string {
     typeNames.add(command.inputType);
     typeNames.add(command.outputType);
   }
+  // unit 타입 `()` (예: Result<()> 반환 command) 은 import 대상이 아니다.
+  typeNames.delete('()');
 
   const imports = Array.from(typeNames).sort().join(', ');
   let output = `import type { ${imports} } from './types.js';\n`;
@@ -74,9 +77,11 @@ export function generateCommandsTs(schema: PackageSchema): string {
 
   for (const command of schema.commands) {
     const fnName = commandFunctionName(command.name);
+    // unit 출력 `()` → Promise<void>.
+    const outType = command.outputType === '()' ? 'void' : command.outputType;
     output +=
-      `export function ${fnName}(input: ${command.inputType}): Promise<${command.outputType}> {\n` +
-      `  return invoke<${command.outputType}>('${command.name}', input);\n` +
+      `export function ${fnName}(input: ${command.inputType}): Promise<${outType}> {\n` +
+      `  return invoke<${outType}>('${command.name}', input);\n` +
       `}\n\n`;
   }
 
@@ -371,6 +376,8 @@ function generateFieldDecodeExpr(
 export function generateRkyvCodecsTs(schema: PackageSchema): string {
   const allTypes = schema.commands
     .flatMap((c) => [c.inputType, c.outputType])
+    // unit 타입 `()` (예: Result<()> 반환 command) 은 import 대상이 아니다.
+    .filter((t) => t !== '()')
     .filter((v, i, a) => a.indexOf(v) === i);
 
   const definitions = collectAllDefinitions(schema);
@@ -400,7 +407,8 @@ function generatePostcardCodec(
 ): string {
   const fnName = commandFunctionName(command.name);
   const inType = command.inputType;
-  const outType = command.outputType;
+  // unit 출력 `()` → void. postcard 와이어 상 unit 은 0바이트(outFields 자연히 빈 배열).
+  const outType = command.outputType === '()' ? 'void' : command.outputType;
   const inFields = collectPostcardFields(command.inputSchema, definitions);
   const outFields = collectPostcardFields(command.outputSchema, definitions);
 

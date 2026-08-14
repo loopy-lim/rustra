@@ -40,16 +40,49 @@ pub fn greet(input: GreetInput) -> Result<GreetOutput> {
     })
 }
 
-// ── capability 사용 예 (주석 해제해서 사용) ─────────────────────────────────
-// #[command]
-// pub fn load_config() -> Result<String> {
-//     use capabilities::{registry, RustraError};
-//     let cap = registry()
-//         .and_then(|r| r.file())
-//         .ok_or_else(|| RustraError::custom("capability.missing", "file capability not provided"))?;
-//     let bytes = cap.read_file("config.json").map_err(|e| RustraError::custom("io", e))?;
-//     Ok(String::from_utf8(bytes).map_err(|e| RustraError::custom("encoding", e.to_string()))?)
-// }
+// ── capability command (계층 B 실사용 예 — 플랫폼이 registry 를 주입해야 동작) ─
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadConfigInput {}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadConfigOutput {
+    pub content: String,
+}
+
+/// 파일 읽기 capability. Desktop=std::fs, iOS=NSBundle, Android=assets.
+/// registry 미주입 시 `capability.missing` (deny-by-default 와 동일 철학).
+#[command]
+pub fn read_config(_input: ReadConfigInput) -> Result<ReadConfigOutput> {
+    let cap = capabilities::registry()
+        .and_then(|r| r.file())
+        .ok_or_else(|| RustraError::custom("capability.missing", "file capability not provided"))?;
+    let bytes = cap
+        .read_file("config.json")
+        .map_err(|e| RustraError::custom("io", e))?;
+    let content =
+        String::from_utf8(bytes).map_err(|e| RustraError::custom("encoding", e.to_string()))?;
+    Ok(ReadConfigOutput { content })
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NotifyInput {
+    pub title: String,
+    pub body: String,
+}
+
+/// 알림 capability. Desktop=셸 plugin, iOS=UNUserNotificationCenter, Android=NotificationManagerCompat.
+#[command]
+pub fn notify(input: NotifyInput) -> Result<()> {
+    let cap = capabilities::registry()
+        .and_then(|r| r.notify())
+        .ok_or_else(|| RustraError::custom("capability.missing", "notify capability not provided"))?;
+    cap.notify(&input.title, &input.body)
+        .map_err(|e| RustraError::custom("notify", e))
+}
 
 // ── 패키지 등록 ─────────────────────────────────────────────────────────────
 
@@ -59,7 +92,7 @@ static CACHED_PACKAGE: std::sync::OnceLock<Package> = std::sync::OnceLock::new()
 pub fn template_package() -> Package {
     CACHED_PACKAGE
         .get_or_init(|| {
-            let pkg = register!(Package::builder("template.app"), greet).build();
+            let pkg = register!(Package::builder("template.app"), greet, read_config, notify).build();
             pkg.register_ffi_with_default(FfiFormat::Json);
             pkg
         })

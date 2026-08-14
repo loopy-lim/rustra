@@ -1,4 +1,4 @@
-import type { EngineClient, RustraNative, RkyvV2Codec } from '@rustra/types';
+import type { EngineClient, RustraNative, RkyvV2Codec, RustraError } from '@rustra/types';
 
 export type HybridCodec<I, O> = RkyvV2Codec<I, O>;
 
@@ -16,7 +16,7 @@ export function createHybridEngine(
       const resultBytes = native.invokeHybrid(payload);
       const response = codec.decode(resultBytes);
       if (!response.ok) {
-        throw new Error(response.error ?? 'Rustra hybrid invoke failed');
+        throw new Error(response.error?.message ?? 'Rustra hybrid invoke failed');
       }
       return Promise.resolve(response.result as T);
     },
@@ -55,15 +55,15 @@ const RESP_VALUE_OFFSET = 8;
 function parseRkyvResponse(buf: ArrayBuffer): {
   ok: boolean;
   result?: { value: number };
-  error?: string;
+  error?: RustraError;
 } {
-  if (buf.byteLength < 16) return { ok: false, error: 'response too short' };
+  if (buf.byteLength < 16) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
   const u8 = new Uint8Array(buf);
   const view = new DataView(buf);
 
   const ok = u8[RESP_OK_OFFSET] === 1;
   if (!ok) {
-    return { ok: false, error: 'hybrid invoke failed' };
+    return { ok: false, error: { code: 'invoke.failed', message: 'hybrid invoke failed' } };
   }
 
   const lo = view.getInt32(RESP_VALUE_OFFSET, true);
