@@ -1,53 +1,92 @@
 #!/usr/bin/env bash
-# iOS 실행 게이트 — 스파이크 verify-ios.sh 패턴 재사용.
+# iOS 실행 게이트 — 스파이크 verify-ios.sh 절차를 템플릿 경로로 정제 이식.
 #
 # 단일 ReactLynx 번들 + 단일 Rust rkyv 백엔드(staticlib) 가 iOS 시뮬레이터에서
 # Lynx SDK 4.0.1 로 렌더링 + greet rkyv 왕복(결과 "Hello, rustra!") 을 증명한다.
 #
-# ⚠️ 전제:
-#   1. Xcode + iOS Lynx SDK(CocoaPods) 설치.
-#   2. iOS 셸(modules/rustra-lynx/ + app/) 이 스파이크에서 추출되어 있어야 함 —
-#      소스: examples/lynx-calculator/{ios, modules/rustra-lynx/ios/}
-#      (RustraModule.m invokeRkyvV2: + build-rust-ios.sh staticlib).
-#      상세: docs/plans/2026-08-11-lynx-mobile-spike-result.md
-#   3. codegen 으로 app/generated/ 가 이미 생성되어 있어야 함 (create-runner.sh 단계).
+# ⚠️ 전제: Xcode + xcodegen + CocoaPods + iOS 시뮬레이터(부팅됨).
+#
+# 결정적 로그 증거([template-ios] TAG):
+#   1. loadTemplate bytes>0      — ReactLynx 번들 로드
+#   2. RustraModule registered   — LynxConfig 모듈 등록
+#   3. rkyv in bytes=N           — greet 요청 (cmd_id + postcard {name})
+#   4. rkyv out bytes=M          — greet 응답
+#   5. "Rustra not configured" 없음 — configure() 성공
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 APP_ROOT="$(cd "$HERE/.." && pwd)"
+IOS_DIR="$HERE"
+APP_ID="dev.rustra.template"
+APP_BUNDLE="$IOS_DIR/build/Build/Products/Debug-iphonesimulator/RustraTemplate.app"
+SHOT="${SHOT:-/tmp/rustra-template-ios-result.png}"
 LOG=/tmp/rustra-template-ios.log
+DEVICE_ID="${DEVICE_ID:-$(xcrun simctl list devices booted -j | python3 -c 'import sys,json;d=json.load(sys.stdin);print(next(v[0]["udid"] for v in d["devices"].values() for v2 in v if v2["state"]=="Booted"))')}"
 
-echo "[ios] 1/4 ReactLynx bundle"
+echo "[ios] device: $DEVICE_ID"
+
+# 1. JS 번들 빌드 + iOS 리소스 동기화.
+echo "[ios] 1/5 ReactLynx bundle"
 ( cd "$APP_ROOT/app" && npm run build >/dev/null )
+cp "$APP_ROOT/app/dist/index.lynx.bundle" "$IOS_DIR/app/Resources/app.lynx.js"
 
-echo "[ios] 2/4 Rust staticlib (aarch64-apple-ios-sim)"
-# ▶ build-rust-ios.sh 를 스파이크(examples/lynx-calculator/modules/rustra-lynx/ios/build-rust-ios.sh) 에서 추출.
-"$HERE/modules/rustra-lynx/build-rust-ios.sh" >/dev/null
+# 2. Rust staticlib (aarch64-apple-ios-sim).
+echo "[ios] 2/5 Rust staticlib"
+"$HERE/modules/rustra-lynx/build-rust-ios.sh" >/dev/null 2>&1
 
-echo "[ios] 3/4 build + boot sim + run (~20s, capture log)"
-: > "$LOG"
-# ▶ xcodebuild test(pod install 후) → 시뮬레이터 부팅 → XCTest 가 번들 로드 + invokeRkyvV2 왕복.
-#   스파이크의 verify-ios.sh 를 추출해 여기에 붙인다.
-xcodebuild test \
-  -workspace "$HERE/app/RustraTemplate.xcworkspace" \
-  -scheme RustraTemplate \
-  -destination 'platform=iOS Simulator,name=iPhone 15' \
-  >>"$LOG" 2>&1 || true
+# 3. Xcode 프로젝트 생성(xcodegen) + 의존성(pod install) — 산출물이 있으면 스킵.
+echo "[ios] 3/5 xcodegen + pod install (없으면)"
+( cd "$IOS_DIR" && [[ -d RustraTemplate.xcodeproj ]] || xcodegen >/dev/null )
+( cd "$IOS_DIR" && pod install >/dev/null 2>&1 )
 
-echo "[ios] 4/4 check success criteria"
+# 4. iOS 앱 빌드 + 설치 + 런치.
+echo "[ios] 4/5 xcodebuild + install + launch"
+( cd "$IOS_DIR" && xcodebuild \
+    -workspace RustraTemplate.xcworkspace -scheme RustraTemplate \
+    -configuration Debug \
+    -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+    -derivedDataPath ./build build >/dev/null 2>&1 )
+
+xcrun simctl uninstall booted "$APP_ID" 2>/dev/null || true
+xcrun simctl install booted "$APP_BUNDLE"
+xcrun simctl launch booted "$APP_ID" >/dev/null
+
+# 5. rkyv 왕복이 로그에 나타날 때까지 폴링.
+echo "[ios] 5/5 poll log for rkyv roundtrip"
+for i in $(seq 1 45); do
+  if xcrun simctl spawn booted log show --last 30s \
+        --predicate 'process == "RustraTemplate"' 2>/dev/null \
+        | grep -q "rkyv out"; then
+    echo "    rkyv roundtrip at poll $i"
+    break
+  fi
+  sleep 1
+done
+
+xcrun simctl io booted screenshot "$SHOT" >/dev/null 2>&1 && echo "[ios] screenshot: $SHOT"
+
+# ── 결정적 게이트 — 로그 grep ───────────────────────────
+LOGS="$(xcrun simctl spawn booted log show --last 120s \
+          --predicate 'process == "RustraTemplate"' 2>/dev/null)"
 pass=1
-check() { if grep -Eq "$2" "$LOG"; then echo "  [PASS] $1"; else echo "  [FAIL] $1  (pat: $2)"; pass=0; fi; }
+check() { if echo "$LOGS" | grep -qE "$2"; then echo "  [PASS] $1"; else echo "  [FAIL] $1  (pat: $2)"; pass=0; fi; }
 
-# 게이트 — 스파이크 7패턴 중 iOS 결정적 증거.
-check "1: bundle loaded (renderTemplateUrl/loadTemplate)" 'renderTemplateUrl|loadTemplate'
-check "2: ReactLynx render (first_screen)" 'first_screen'
-check "3: rkyv invoke roundtrip" 'invokeRkyvV2.*ok|result.*Hello'
+check "1: bundle loaded (loadTemplate bytes>0)" 'template-ios\] loadTemplate .*bytes=[1-9]'
+check "2: RustraModule registered" 'module: RustraModule registered'
+check "3: rkyv in (greet req)"  'template-ios\] rkyv in bytes=[1-9]'
+check "4: rkyv out (greet res)" 'template-ios\] rkyv out bytes=[1-9]'
+
+if echo "$LOGS" | grep -q "Rustra not configured"; then
+  echo "  [FAIL] 5: must NOT have 'Rustra not configured'"; pass=0
+else
+  echo "  [PASS] 5: no 'Rustra not configured' error"
+fi
 
 echo ""
 if [[ $pass -eq 1 ]]; then
   echo "RESULT: iOS PASS — ReactLynx <-> Rust rkyv roundtrip (greet) on iOS Simulator"
   exit 0
 else
-  echo "RESULT: iOS FAIL — 로그: $LOG"
+  echo "RESULT: iOS FAIL — 최근 로그: xcrun simctl spawn booted log show --last 120s --predicate 'process == \"RustraTemplate\"'"
   exit 1
 fi

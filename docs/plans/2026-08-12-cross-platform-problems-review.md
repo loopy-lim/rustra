@@ -66,11 +66,11 @@
 - **완화:** frozen-at-build (빌드 시점 contract 고정) + field-order drift 탐지 테스트(Task 3.5). rkyv V2 wire 는 cmd_id u16 로 명시적.
 - **심각도:** LOW (완화됨). 새 struct 추가 시 generated/ 재생성 필수 (codegen 게이트).
 
-### P6. Android NDK 버전 핀 (잔존, 환경 의존)
+### P6. Android NDK 버전 핀 (해결됨 — 2026-08-14)
 
 - **현상:** JNI staticlib 4아키텍처(aarch64/armv7/x86_64/i686) 빌드가 특정 NDK 버전에 민감. rustup target 과 NDK toolchain 정렬 필요.
 - **현재:** spike 7/7 로 특정 환경에서 동작 증명. 단, "다른 개발자의 NDK" 에서의 재현성은 미검증.
-- **심각도:** MEDIUM. **다음 액션:** template mobile-android/build-rust-android.sh 에 NDK 버전 핀(rustup target 명시 + NDK 경로 검증) 추가 — 추출 시 spike 의 스크립트 기준.
+- **심각도:** LOW (해결됨). runner/template/mobile-android/modules/rustra-lynx/build-rust-android.sh 이 NDK_VERSION 핀(27.1.12297006) + $SDK/ndk/<ver> 결정론 선택 + rustup target 사전 검증을 구현했다. app/build.gradle.kts 도 동일 ndkVersion 핀.
 
 ### P7. Template path 의존성 카피아웃 파손 (문서화됨, 설계적)
 

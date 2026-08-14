@@ -4,3 +4,17 @@ backend/target/
 **/dist/
 **/generated/
 **/*.app/
+# 모바일 빌드 산출물/캐시 (템플릿 셸 빌드).
+mobile-android/.gradle/
+mobile-android/build/
+mobile-android/app/build/
+mobile-android/app/src/main/assets/main.lynx.bundle
+mobile-ios/build/
+mobile-ios/Pods/
+mobile-ios/RustraTemplate.xcodeproj/
+mobile-ios/RustraTemplate.xcworkspace/
+mobile-ios/app/Resources/app.lynx.js
+**/rust/lib/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+app/package-lock.json

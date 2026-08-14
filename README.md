@@ -82,6 +82,11 @@ examples/
   tauri-calculator/        Tauri 런타임 예시
   react-native-calculator/ React Native 런타임 예시
   lynx-calculator/         Lynx (ReactLynx) 런타임 예시
+  lynx-tauri-spike/        Tauri×Lynx 데스크톱 스파이크 (macOS 7/7)
+
+runner/
+  template/                4플랫폼 runner 템플릿 (단일 ReactLynx + Rust 백엔드,
+                           desktop/iOS/Android 셸 포함) — create-runner.sh 로 인스턴스화
 ```
 
 ## Rust: 명령 정의
