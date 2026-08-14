@@ -15,8 +15,8 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::{
-    parse::Parse, parse::ParseStream, parse_macro_input, DeriveInput, GenericArgument, Ident,
-    ItemFn, LitStr, PathArguments, ReturnType, Token, Type,
+    DeriveInput, GenericArgument, Ident, ItemFn, LitStr, PathArguments, ReturnType, Token, Type,
+    parse::Parse, parse::ParseStream, parse_macro_input,
 };
 
 /// `#[command]` 속성의 파싱 결과입니다.

@@ -1,4 +1,4 @@
-import type { EngineClient, RustraNative, RkyvV2Codec } from '@rustra/types';
+import type { EngineClient, RustraNative, RkyvV2Codec, RustraError } from '@rustra/types';
 
 export type PostcardCodec<I, O> = RkyvV2Codec<I, O>;
 
@@ -16,7 +16,7 @@ export function createPostcardEngine(
       const resultBytes = native.invokePostcard(payload);
       const response = codec.decode(resultBytes);
       if (!response.ok) {
-        throw new Error(response.error ?? 'Rustra postcard invoke failed');
+        throw new Error(response.error?.message ?? 'Rustra postcard invoke failed');
       }
       return Promise.resolve(response.result as T);
     },
@@ -85,12 +85,12 @@ export const addNumbersCodec: PostcardCodec<{ a: number; b: number }, { value: n
     return buf;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: { value: number }; error?: string } {
-    if (buf.byteLength < 2) return { ok: false, error: 'response too short' };
+  decode(buf: ArrayBuffer): { ok: boolean; result?: { value: number }; error?: RustraError } {
+    if (buf.byteLength < 2) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
     const ok = u8[0] === 1;
     if (!ok) {
-      return { ok: false, error: 'postcard error' };
+      return { ok: false, error: { code: 'invoke.failed', message: 'postcard error' } };
     }
     const [raw, _] = decodeVarint(u8, 1);
     const value = unzigzag(raw);

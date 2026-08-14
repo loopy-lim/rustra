@@ -53,4 +53,4 @@ jobs:
       - name: Test adapters
         run: npm run test:adapters
       - name: Test CLI
-        run: npx vitest run packages/cli/src/
+        run: npm run test -w @rustra/cli

@@ -7,7 +7,7 @@
 //!    - 0바이트 / 1바이트 (cmd_id 미만) → `invalid_args`
 //!    - 정상 cmd_id + 잘린/쓰레기 postcard 본체 → `invalid_args("postcard decode: …")`
 //!    - 알 수 없는 cmd_id → `command_not_found`
-//!    위 모두 `Err` 반환 — 패닉이 `extern "C"` 경계를 넘는 치명적 상황이 아니다.
+//!      위 모두 `Err` 반환 — 패닉이 `extern "C"` 경계를 넘는 치명적 상황이 아니다.
 //!
 //! 2. `rustra_ffi_invoke_json` (extern "C"):
 //!    - `payload_len == MAX_PAYLOAD_BYTES` (한계) → 처리됨(clean 에러 응답, non-null)
@@ -16,8 +16,8 @@
 
 #![allow(clippy::float_cmp)]
 
-use rustra::ffi::{rustra_ffi_free, rustra_ffi_invoke_json};
 use rustra::Package;
+use rustra::ffi::{rustra_ffi_free, rustra_ffi_invoke_json};
 use serde_json::Value;
 
 #[path = "../benches/common.rs"]

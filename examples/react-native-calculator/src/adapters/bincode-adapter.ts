@@ -1,4 +1,4 @@
-import type { EngineClient, RustraNative, RkyvV2Codec } from '@rustra/types';
+import type { EngineClient, RustraNative, RkyvV2Codec, RustraError } from '@rustra/types';
 
 export type BincodeCodec<I, O> = RkyvV2Codec<I, O>;
 
@@ -16,7 +16,7 @@ export function createBincodeEngine(
       const resultBytes = native.invokeBincode(payload);
       const response = codec.decode(resultBytes);
       if (!response.ok) {
-        throw new Error(response.error ?? 'Rustra bincode invoke failed');
+        throw new Error(response.error?.message ?? 'Rustra bincode invoke failed');
       }
       return Promise.resolve(response.result as T);
     },
@@ -88,12 +88,12 @@ export const addNumbersCodec: BincodeCodec<{ a: number; b: number }, { value: nu
     return buf;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: { value: number }; error?: string } {
-    if (buf.byteLength < 3) return { ok: false, error: 'response too short' };
+  decode(buf: ArrayBuffer): { ok: boolean; result?: { value: number }; error?: RustraError } {
+    if (buf.byteLength < 3) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
     const ok = u8[0] === 1;
     if (!ok) {
-      return { ok: false, error: 'bincode error' };
+      return { ok: false, error: { code: 'invoke.failed', message: 'bincode error' } };
     }
     const [raw, _] = decodeVarint(u8, 1);
     const value = unzigzag(raw);

@@ -25,6 +25,12 @@ private const val TAG = "template-android"
  */
 class RustraModule(context: Context) : LynxModule(context) {
 
+    init {
+        // MobileBridge 플랫폼 콜백 주입(assets 파일 읽기 + 알림) — 모듈 생성 시 1회.
+        // JNI_OnLoad 시점엔 Context 가 없으므로 여기서 AAssetManager 와 함께 넘긴다.
+        installBridge(context.applicationContext, context.assets)
+    }
+
     @LynxMethod
     fun invokeRkyvV2(payload: ByteArray): ByteArray {
         // 결정적 logcat 증거(iOS RustraModule.m NSLog 과 대칭).
@@ -35,6 +41,9 @@ class RustraModule(context: Context) : LynxModule(context) {
     }
 
     private external fun nativeInvokeRkyvV2(payload: ByteArray): ByteArray
+
+    // JNI(rustra_jni.cpp) 의 Java_com_rustra_lynx_RustraModule_installBridge 바인딩.
+    private external fun installBridge(context: android.content.Context, assets: android.content.res.AssetManager)
 
     companion object {
         init {

@@ -77,8 +77,8 @@ fn rkyv_v2_response_body_pins_non_alphabetical_field_order() {
 fn correct_field_order_round_trips_pinned_body() {
     // 같은 바이트를 *올바른* 선언순 struct 로 디코드하면 의도한 값이 나온다.
     let out: DriftOutput = postcard::from_bytes(PINNED_BODY).expect("correct-order decode");
-    assert_eq!(out.ok, true);
-    assert_eq!(out.frozen, true);
+    assert!(out.ok);
+    assert!(out.frozen);
     assert_eq!(out.message, "drift");
 }
 

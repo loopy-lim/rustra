@@ -18,6 +18,7 @@ targets:
       - app
     resources:
       - app/Resources/app.lynx.js
+      - app/Resources/config.json
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.rustra.template

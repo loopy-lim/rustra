@@ -7,7 +7,7 @@
 //!
 //! - request  = `[cmd_id: u16 LE][postcard(Input)]`  ← TS codec.encode 와 동일
 //! - response = `[ok:1][7B reserved][postcard(Output) @8]` (성공)
-//!              `[ok:0][…][err_len: u16 LE @8][postcard{code,message} @10]` (에러)
+//!   `[ok:0][…][err_len: u16 LE @8][postcard{code,message} @10]` (에러)
 //!
 //! encode 알고리즘이 바뀌면 snapshot 단언이 실패 → fixture 를 의도적으로
 //! 갱신해야 한다(스키마/코덱 드리프트 감지).
@@ -15,7 +15,7 @@
 //! **주의**: 이 hex 들은 TS 측 `cross-wire.test.ts` 와 반드시 일치해야 한다.
 //! 한쪽만 바뀌면 교차 테스트가 실패한다.
 
-use rustra_calculator_example::{calculator_package, AddNumbersInput, DivideInput, GreetInput};
+use rustra_calculator_example::{AddNumbersInput, DivideInput, GreetInput, calculator_package};
 
 fn request_for<I: serde::Serialize>(cmd_id: u16, input: &I) -> Vec<u8> {
     let mut buf = cmd_id.to_le_bytes().to_vec();
@@ -43,8 +43,7 @@ const ADDNUMBERS_RESPONSE: &str = "01000000000000000a";
 const GREET_REQUEST: &str = "0500044c796e78";
 const GREET_RESPONSE: &str = "01000000000000000c48656c6c6f2c204c796e7821";
 const DIVIDE_REQUEST: &str = "0a000200";
-const DIVIDE_RESPONSE: &str =
-    "00000000000000002a00136d6174682e6469766964655f62795f7a65726f1563616e6e6f7420646976696465206279207a65726f";
+const DIVIDE_RESPONSE: &str = "00000000000000002a00136d6174682e6469766964655f62795f7a65726f1563616e6e6f7420646976696465206279207a65726f";
 
 #[test]
 fn addnumbers_wire_is_stable() {
