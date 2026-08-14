@@ -1,0 +1,23 @@
+[package]
+name = "rustra-template-desktop"
+edition = "2021"
+version = "0.1.0"
+publish = false
+# ▶ create-runner.sh 가 <app>-desktop 로 치환.
+
+# 독립 워크스페이크 루트 — 템플릿이 rustra-bridge 워크스페이스에 종속되지 않게 (backend 와 동일).
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+cc = "1"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+raw-window-handle = "0.6"
+# rustra-template-backend 은 build.rs 가 backend/target/<profile>/
+# librustra_template_backend.a 로 직접 링크한다(extern "C" 심볼 노출).
+# Cargo dep 로 두면 rlib 만 링크되어 FFI 심볼이 보이지 않으므로 의존하지 않는다.
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]

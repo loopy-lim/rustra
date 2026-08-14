@@ -152,3 +152,8 @@ macOS/iOS/Android 는 본 머신에서, Windows 는 Windows 머신에서.
 **Phase 5 는 "구조 + capability 추상 + instantiation + 게이트" 까지.** 각 플랫폼 빌드의 완전한
 재검증(스파이크 수준)은 템플릿 사용자가 `run.sh` 로 수행한다. 템플릿의 Rust 백엔드는 `cargo check` 로,
 ReactLynx app 은 `npm run build` 로, capability trait 는 단위 테스트로 본 머신 검증한다.
+
+> **갱신(2026-08-14):** §2의 플랫폼 셸 코드(desktop/src-tauri, mobile-{ios,android} 셸)와
+> codegen 실경로화, Mobile capability 브리지(`MobileBridge` FFI), NDK 핀(P6) 이
+> 후속 계획 `2026-08-14-gap-closure-production-ready-design.md` 로 완성되었다.
+> 템플릿은 이제 셸 코드 포함 완전체 — 각 `run.sh` 게이트가 별도 스파이크 없이 동작한다.

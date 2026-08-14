@@ -51,15 +51,40 @@ mapfile -t FILES < <(grep -rIl \
   -e 'rustra_template_' \
   "$OUT_DIR" 2>/dev/null || true)
 
+# Crate import 명(하이픈→언더스코어): bin/generate.rs 가 `rustra_template_backend` 를 use 한다.
+APP_SAFE_US="${APP//-/_}"
+
 for f in "${FILES[@]}"; do
   sed -i.bak \
     -e "s/rustra-template-backend/${APP}-backend/g" \
     -e "s/rustra-template-app/${APP}-app/g" \
     -e "s/template\.app/${PKG_ID}/g" \
+    -e "s/rustra_template_backend/${APP_SAFE_US}_backend/g" \
     -e "s/${PREFIX_OLD}/${PREFIX_NEW}/g" \
     "$f"
   rm -f "${f}.bak"
 done
+
+# 3. rustra path 의존성 재작성 (P7 완화) — 복사본은 repo 밖에 있으므로 상대 path 가 깨진다.
+#    rustra-bridge 워크스페이스의 절대경로로 재작성한다 (published crate 사용 시 버전 핀으로 교체 권장).
+TEMPLATE_ROOT="$(cd "$HERE" && pwd)"
+BRIDGE_ROOT="$(cd "$TEMPLATE_ROOT/../.." && pwd)"
+BACKEND_TOML="$OUT_DIR/backend/Cargo.toml"
+if [[ -f "$BACKEND_TOML" ]]; then
+  sed -i.bak "s|rustra = { path = \"../../../crates/rustra\" }|rustra = { path = \"${BRIDGE_ROOT}/crates/rustra\" }|" "$BACKEND_TOML"
+  rm -f "${BACKEND_TOML}.bak"
+  echo "== rustra path → ${BRIDGE_ROOT}/crates/rustra (절대경로 재작성)"
+fi
+# app/package.json 의 @rustra/lynx, @rustra/types file: 도 repo 밖에서 깨진다 — 절대경로로.
+APP_PKG="$OUT_DIR/app/package.json"
+if [[ -f "$APP_PKG" ]]; then
+  sed -i.bak \
+    -e "s|\"@rustra/lynx\": \"file:../../../packages/lynx\"|\"@rustra/lynx\": \"file:${BRIDGE_ROOT}/packages/lynx\"|" \
+    -e "s|\"@rustra/types\": \"file:../../../packages/types\"|\"@rustra/types\": \"file:${BRIDGE_ROOT}/packages/types\"|" \
+    "$APP_PKG"
+  rm -f "${APP_PKG}.bak"
+  echo "== @rustra/* file: deps → ${BRIDGE_ROOT}/packages/* (절대경로 재작성)"
+fi
 
 echo ""
 echo "== 완료: $OUT_DIR"
@@ -68,6 +93,7 @@ echo "  cd $OUT_DIR"
 echo "  # 1. Rust 백엔드 command 작성/확장 (backend/src/lib.rs #[command])"
 echo "  # 2. codegen 으로 generated/ 재생성 (app/ 안에서):"
 echo "  (cd app && npm install && npm run codegen)"
+echo "     ⚠️ rustra CLI 탐색: RUSTRA_CLI=<bridge>/packages/cli/dist/index.js env 권장"
 echo "  # 3. ReactLynx 번들 빌드:"
 echo "  (cd app && npm run build)"
 echo "  # 4. 플랫폼 실행(각 run.sh):"

@@ -25,7 +25,17 @@ export function App() {
 
   useEffect(() => {
     greet({ name: 'rustra' })
-      .then((out) => setMessage(out.message))
+      .then((out) => {
+        setMessage(out.message);
+        // 데스크톱 호스트의 최종 확인(게이트가 resultAcked 를 grep) — 결과 길이를 전달.
+        // 모바일(ios/Android) RustraModule 은 ackResult 가 없으므로 optional-chaining + try.
+        try {
+          const native = globalThis as unknown as { RustraModule?: { ackResult?: (v: number) => void } };
+          native.RustraModule?.ackResult?.(out.message.length);
+        } catch {
+          // ackResult 미지원 — 무시
+        }
+      })
       .catch((e) => setError(String(e)));
   }, []);
 

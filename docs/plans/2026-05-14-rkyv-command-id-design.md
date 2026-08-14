@@ -1,6 +1,7 @@
 # rkyv Command ID 직렬화 설계
 
-> **상태**: 설계 완료, 구현 대기
+> **상태**: 구현 완료 — `invoke_rkyv_v2`(`crates/rustra/src/lib.rs`, `[cmd_id: u16 LE][postcard]` 와이어)로 시행.
+> 4플랫폼(macOS/iOS/Android/코드 수준 Windows)에서 동일 바이트 시퀀스로 검증 완료. 성능 실측: `docs/plans/2026-08-13-performance-benchmark.md`.
 > **브랜치**: `feat/rkyv-command-id` (worktree: `.claude/worktrees/rkyv-command-id`)
 > **의존**: `ca1c6ce` (multi-format serialization benchmark)
 
@@ -30,7 +31,10 @@ const COMMAND_IDS = {
   // 향후 명령어들은 순차 증가
 } as const;
 
-export function addNumbers(engine: EngineClient, input: AddNumbersInput): Promise<AddNumbersOutput> {
+export function addNumbers(
+  engine: EngineClient,
+  input: AddNumbersInput,
+): Promise<AddNumbersOutput> {
   return engine.invoke<AddNumbersOutput>('addNumbers', input);
   // 내부적으로 command_id = COMMAND_IDS.addNumbers = 1 사용
 }
@@ -52,20 +56,22 @@ struct RkyvRequest {
 ```
 
 **실제 바이트 레이아웃** (rkyv는 필드를 선언 순서 + 정렬로 배치):
+
 - offset 0: `command_id` u16 LE (2 bytes) + 6 bytes 패딩 (i64 정렬)
 - offset 8: `a` i64 LE (8 bytes)
 - offset 16: `b` i64 LE (8 bytes)
 
 총 24 bytes. **TS에서 생성하기 매우 간단**:
+
 ```typescript
 const buf = new ArrayBuffer(24);
 const view = new DataView(buf);
-view.setUint16(0, commandId, true);  // command_id
+view.setUint16(0, commandId, true); // command_id
 // Hermes BigInt 미지원 → setInt32 두 개로 i64 처리
-view.setInt32(8, a, true);           // a low
-view.setInt32(12, 0, true);          // a high
-view.setInt32(16, b, true);          // b low
-view.setInt32(20, 0, true);          // b high
+view.setInt32(8, a, true); // a low
+view.setInt32(12, 0, true); // a high
+view.setInt32(16, b, true); // b low
+view.setInt32(20, 0, true); // b high
 ```
 
 > **주의**: 위 오프셋은 Rust 테스트로 검증해야 함. rkyv의 Archived<u16> 정렬은
@@ -86,11 +92,12 @@ struct RkyvResponse {
 ```
 
 총 32 bytes. TS에서 파싱:
+
 ```typescript
 const u8 = new Uint8Array(buf);
 const view = new DataView(buf);
 const ok = u8[0] === 1;
-const value = view.getInt32(8, true);  // 32비트에 들어가는 값이면 충분
+const value = view.getInt32(8, true); // 32비트에 들어가는 값이면 충분
 ```
 
 ## 아키텍처
@@ -165,6 +172,7 @@ fn test_cmd_request_wire_format() {
 ```
 
 **검증 항목**:
+
 - command_id의 실제 offset (0일 수도, 다를 수도 있음)
 - a, b의 실제 offset
 - 총 바이트 수
@@ -211,6 +219,7 @@ const COMMAND_IDS: Record<string, number> = {
 ```
 
 codec 레지스트리 패턴:
+
 ```typescript
 type RkyvCodec<I, O> = {
   encode(commandId: number, args: I): ArrayBuffer;
@@ -236,15 +245,15 @@ rkyv-v2 (command_id)를 벤치마크에 추가하여 기존 JSON/msgpack/postcar
 
 ## 파일 변경 요약
 
-| 단계 | 파일 | 변경 |
-|------|------|------|
-| 1 | `examples/calculator/src/lib.rs` | CmdRequest 구조체 + wire format 테스트 |
-| 2 | `examples/calculator/src/lib.rs` | `rustra_calculator_invoke_rkyv_v2` FFI |
-| 3 | `modules/rustra-jsi/ios/RustraJSIBridge.hpp` | `invokeRkyvV2` extern 선언 |
-| 3 | `modules/rustra-jsi/ios/RustraJSIBridge.cpp` | `invokeRkyvV2` JSI 메서드 |
-| 4 | `src/adapters/rkyv-v2-adapter.ts` | TS 어댑터 (새 파일) |
-| 4 | `modules/rustra-jsi/src/index.ts` | RustraNative 타입에 invokeRkyvV2 추가 |
-| 6 | `BenchmarkApp.tsx` | rkyv-v2 벤치마크 추가 |
+| 단계 | 파일                                         | 변경                                   |
+| ---- | -------------------------------------------- | -------------------------------------- |
+| 1    | `examples/calculator/src/lib.rs`             | CmdRequest 구조체 + wire format 테스트 |
+| 2    | `examples/calculator/src/lib.rs`             | `rustra_calculator_invoke_rkyv_v2` FFI |
+| 3    | `modules/rustra-jsi/ios/RustraJSIBridge.hpp` | `invokeRkyvV2` extern 선언             |
+| 3    | `modules/rustra-jsi/ios/RustraJSIBridge.cpp` | `invokeRkyvV2` JSI 메서드              |
+| 4    | `src/adapters/rkyv-v2-adapter.ts`            | TS 어댑터 (새 파일)                    |
+| 4    | `modules/rustra-jsi/src/index.ts`            | RustraNative 타입에 invokeRkyvV2 추가  |
+| 6    | `BenchmarkApp.tsx`                           | rkyv-v2 벤치마크 추가                  |
 
 ## 검증된 rkyv Wire Format (참고)
 
