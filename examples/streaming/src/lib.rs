@@ -12,8 +12,8 @@
 //! `startJob` 는 즉시 반환하고 백그라운드 스레드가 이벤트를 채운다
 //! (비동기 offload — invoke 호출자를 블록하지 않는다).
 
-use rustra::prelude::*;
 use rustra::Package;
+use rustra::prelude::*;
 use std::sync::Arc;
 
 #[bridge_type]

@@ -1,6 +1,6 @@
 //! streaming 예제 통합 테스트 — 실제 이벤트 왕복 증명.
 
-use rustra_streaming_example::{event_bus, streaming_package, StartJobInput};
+use rustra_streaming_example::{StartJobInput, event_bus, streaming_package};
 use std::sync::Mutex;
 
 /// 전역 이벤트 버스를 테스트 간 공유하므로 직렬화한다 — 병렬 실행 시 서로의
