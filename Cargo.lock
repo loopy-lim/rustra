@@ -3107,6 +3107,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustra-auth-example"
+version = "0.1.1"
+dependencies = [
+ "hex",
+ "rustra",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "rustra-benchmark"
 version = "0.1.1"
 dependencies = [
@@ -3169,6 +3181,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "rustra-streaming-example"
+version = "0.1.1"
+dependencies = [
+ "rustra",
+ "schemars 0.8.22",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

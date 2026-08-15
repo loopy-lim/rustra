@@ -8,6 +8,8 @@ members = [
   "examples/tauri-calculator/src-tauri",
   "examples/lynx-tauri-spike/src-tauri",
   "examples/benchmark",
+  "examples/streaming",
+  "examples/auth",
 ]
 resolver = "3"
 

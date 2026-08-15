@@ -31,6 +31,8 @@
     "verify:desktop": "bash runner/template/desktop/run.sh",
     "verify:ios": "bash runner/template/mobile-ios/run.sh",
     "verify:android": "bash runner/template/mobile-android/run.sh",
+    "test:app:streaming": "cargo build -p rustra-streaming-example && tsc -p examples/streaming/tsconfig.json && node dist-ts/examples/streaming/apps/node-app.js",
+    "test:app:auth": "cargo build -p rustra-auth-example && tsc -p examples/auth/tsconfig.json && node dist-ts/examples/auth/apps/node-app.js",
     "lint": "eslint packages/*/src/**/*.ts",
     "lint:fix": "eslint packages/*/src/**/*.ts --fix",
     "format": "prettier --write 'packages/*/src/**/*.ts'",

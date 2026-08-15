@@ -1,0 +1,83 @@
+{
+  "packageId": "examples.streaming",
+  "commands": [
+    {
+      "name": "jobStatus",
+      "commandId": 2,
+      "inputType": "JobStatusInput",
+      "outputType": "JobStatusOutput",
+      "inputSchema": {
+        "title": "JobStatusInput",
+        "description": "현재 진행 중인 작업 상태 조회 — 폴링 기반 UI 폴백용.",
+        "type": "object",
+        "required": [
+          "jobId"
+        ],
+        "properties": {
+          "jobId": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "JobStatusOutput",
+        "type": "object",
+        "required": [
+          "droppedEvents",
+          "pendingEvents"
+        ],
+        "properties": {
+          "pendingEvents": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "droppedEvents": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      }
+    },
+    {
+      "name": "startJob",
+      "commandId": 1,
+      "inputType": "StartJobInput",
+      "outputType": "StartJobOutput",
+      "inputSchema": {
+        "title": "StartJobInput",
+        "type": "object",
+        "required": [
+          "jobId",
+          "stepDelayMs",
+          "totalSteps"
+        ],
+        "properties": {
+          "jobId": {
+            "type": "string"
+          },
+          "totalSteps": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "stepDelayMs": {
+            "description": "각 스텝 사이 대기 (ms) — 데모용.",
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "StartJobOutput",
+        "type": "object",
+        "required": [
+          "accepted"
+        ],
+        "properties": {
+          "accepted": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  ]
+}

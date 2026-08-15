@@ -1,0 +1,22 @@
+[package]
+name = "rustra-auth-example"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+rustra.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
+
+[[bin]]
+name = "rustra-auth-generate"
+path = "src/bin/generate.rs"
+
+[[bin]]
+name = "rustra-auth-invoke"
+path = "src/bin/invoke.rs"
