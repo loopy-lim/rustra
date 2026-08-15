@@ -9,8 +9,9 @@
 #   2. `lynx_sdk_windows_x64.zip` 해제 → LYNX_SDK_WIN 환경변수 (lynx.dll/.dll.lib/include 포함 디렉토리).
 #      다운로드: gh release download 4.0.1 --repo lynx-family/lynx --pattern lynx_sdk_windows_x64.zip
 #   3. rustup target add x86_64-pc-windows-msvc
-#   4. 호스트 C++ 의 Windows 포팅(lynx_desktop_win.cpp) 이 완료되어야 함 —
-#      핵심 크럭스: FML 메시지 루프 펌프 심볼 해석(GetProcAddress 정식 해결 시도 → PE 오프셋 fallback).
+#   4. 호스트 C++ Windows 포팅(lynx_desktop_win.cpp) 은 스캐폴드 구현 완료(2026-08-15).
+#      남은 확정: FML 심볼 해석 — dumpbin /exports lynx.dll 로 export 존재 확인 후
+#      kFml*ExportName(정식 경로) 또는 kFml*Offset(PE 오프셋 fallback) 기입.
 #      상세: desktop/WINDOWS.md 및 docs/plans/2026-08-12-lynx-windows-phase4.md "포인트 3".
 #
 # macOS 에선 실행 불가 (MSVC/PE 검증 불가) — 본 스크립트는 Windows 환경 전용.

@@ -1,11 +1,15 @@
 # Windows 포팅 가이드 (desktop 템플릿)
 
-> **상태:** 포팅 계획 완료 · 런타임 검증은 Windows 머신 필요 (정직 연기).
+> **상태:** 스캐폴드 구현 완료(2026-08-15) — `src-tauri/src/lynx_desktop_win.cpp` +
+> `build.rs` Windows 분기 실재. 남은 것: Windows 머신에서 dumpbin 으로 FML 심볼
+> export/오프셋 확정 + 컴파일·런타임 검증 (정직 연기).
 > 근거 조사: `docs/plans/2026-08-12-lynx-windows-phase4.md` · 문제점: P1/P8
 > (`docs/plans/2026-08-12-cross-platform-problems-review.md`).
 
-macOS 셸(`src-tauri/src/lynx_desktop.mm`)을 Windows 로 포팅하는 3포인트와
-검증 절차를 정리한다. `main.rs` 는 이미 Win32 HWND 분기를 포함하므로 수정 불필요.
+macOS 셸(`src-tauri/src/lynx_desktop.mm`)의 Windows 포팅 3포인트와 검증 절차.
+`main.rs` 는 Win32 HWND 분기 포함(수정 불필요), `lynx_desktop_win.cpp` 는
+macOS 버전의 전체 구조(N-API 모듈·extension module·fetcher·init/pump/summary)를
+그대로 옮긴 스캐폴드다.
 
 ## 1. 전제 (Windows 머신)
 
@@ -47,27 +51,18 @@ macOS 는 Mach-O image-base + 하드코딩 오프셋(0x3ecc=IsInit, 0x43a4=RunEx
 3. **windowless fallback (3차, 불확실)** — 펌프 없이 동작하는 경로 탐색.
 
 ```cpp
-// lynx_desktop_win.cpp 에 추가할 해석기 (Windows 전용):
-static void resolve_liblynx_symbols_win() {
-  HMODULE h = GetModuleHandleW(L"lynx.dll");
-  if (!h) { fprintf(stderr, "[template] lynx.dll not loaded\n"); return; }
-  // 1차: 정식 export 조회
-  g_fml_is_init = (FmlIsInitFn)GetProcAddress(h, "<mangled IsInit>");
-  g_fml_run_expired = (FmlRunExpiredFn)GetProcAddress(h, "<mangled RunExpired>");
-  g_ui_thread_init = (UiThreadInitFn)GetProcAddress(h, "<mangled UIThreadInit>");
-  // 2차: 실패 시 image base + PE 오프셋
-  if (!g_fml_run_expired) {
-    uintptr_t base = (uintptr_t)h;
-    g_fml_is_init = (FmlIsInitFn)(base + 0x????);      // dumpbin 으로 추출
-    g_fml_run_expired = (FmlRunExpiredFn)(base + 0x????);
-    g_ui_thread_init = (UiThreadInitFn)(base + 0x????);
-  }
-}
+// lynx_desktop_win.cpp resolve_liblynx_symbols() 에 이미 구현된 구조:
+//   1차 — GetProcAddress 정식 export 조회
+//         (kFmlIsInitExportName 등이 nullptr = 아직 미확정)
+//   2차 — PE image base + 오프셋
+//         (kFmlIsInitOffset 등이 0 = 아직 미확정)
+// Windows 머신에서 dumpbin /exports lynx.dll 결과로 확정한다:
+//   - export 존재 → kFml*ExportName 에 mangled name 기입 (ABI 부채 없음, 최선)
+//   - 미export   → 오프셋 추출 후 kFml*Offset 기입 (macOS 와 동일 ABI 핀)
 ```
 
-`mach-o/dyld.h` include 와 macOS framework 링크는 `#[cfg(target_os)]` 로 분기:
-`lynx_desktop.mm`(Darwin) / `lynx_desktop_win.cpp`(Windows) 를 `build.rs` 에서
-대상별 컴파일한다.
+`build.rs` 는 `CARGO_CFG_TARGET_OS` 로 분기해 `lynx_desktop.mm`(Darwin) /
+`lynx_desktop_win.cpp`(Windows) 를 대상별 컴파일한다 (구현 완료).
 
 ## 3. 빌드 절차 (Windows 머신)
 

@@ -63,7 +63,10 @@
 
 ## 5. 단건 latency 측정
 
-- [ ] `BenchmarkApp` 또는 마이크로벤치로 `addNumbers` 단건 latency 측정. - 기준(변경 전): **~5.8µs avg**. 목표: **Nitro(~2.1µs)급으로 감소**. - JS encode(2.4µs) + decode(1.0µs) 제거 효과가 수치로 나타나는지.
+- [x] `BenchmarkApp` 또는 마이크로벤치로 `addNumbers` 단건 latency 측정. - 기준(변경 전): **~5.8µs avg**. 목표: **Nitro(~2.1µs)급으로 감소**. - JS encode(2.4µs) + decode(1.0µs) 제거 효과가 수치로 나타나는지.
+  > **달성 (2026-08-13, 온디바이스 실측)** — `docs/benchmarks.md` §"온디바이스" 참고:
+  > Rustra Direct C++ Fast-Path iOS **0.95µs** (Nitro 1.10µs 대비 1.16× 우위), Android 1.50µs.
+  > 목표(Nitro급)를 상회 달성 — 본 항목은 수치 근거로 폐쇄.
 - [ ] `invokeBatch` 로 N=100/1000 개 처리 시 단건 대비 **횡단 비용 상쇄** 관찰
       (P0-2 정량). 잦은 호출 프레임의 jank 가 줄어드는지 UI 관점 확인.
 
