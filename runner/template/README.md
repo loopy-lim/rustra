@@ -62,6 +62,9 @@ cd ../my-app
 ./mobile-ios/run.sh       # iOS 시뮬: RustraModule + greet rkyv 왕복
 ./mobile-android/run.sh   # Android 에뮬: JNI_OnLoad init + greet rkyv 왕복
 # Windows: desktop/verify-windows.ps1 (Windows 머신) + desktop/WINDOWS.md
+#
+# 루트 package.json 에서도 실행 가능 (repo 루트 기준):
+#   npm run verify:desktop | verify:ios | verify:android
 ```
 
 ## 전제 (각 플랫폼)
