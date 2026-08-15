@@ -56,8 +56,8 @@ mod rkyv_codec;
 mod schema;
 
 use schemars::JsonSchema;
-use serde::{de::DeserializeOwned, Serialize};
-use serde_json::{json, Value};
+use serde::{Serialize, de::DeserializeOwned};
+use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
@@ -65,8 +65,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
 use rkyv_codec::{
-    build_rkyv_v2_decoder, build_rkyv_v2_response_encoder, build_tier3_json_decoder,
-    is_output_tier3, BinHandler, DecodeFn, EncodeFn, Tier,
+    BinHandler, DecodeFn, EncodeFn, Tier, build_rkyv_v2_decoder, build_rkyv_v2_response_encoder,
+    build_tier3_json_decoder, is_output_tier3,
 };
 
 pub use error::{Result, RustraError};
@@ -81,15 +81,15 @@ use schema::{command_name_from_handler, schema_value, short_type_name};
 /// ```
 pub mod prelude {
     pub use crate::{
-        bridge_type, build, command,
+        GeneratedPackage, Package, PackageBuilder, Result, RustraError, bridge_type, build,
+        command,
         ffi::FfiFormat,
         register,
         renderer_host::{
-            host_supports_eval, HostMessage, MessageKind, RendererCapabilities, RendererHost, Size,
-            SurfaceOptions,
+            HostMessage, MessageKind, RendererCapabilities, RendererHost, Size, SurfaceOptions,
+            host_supports_eval,
         },
         rkyv_codec::encode_rkyv_v2_error,
-        GeneratedPackage, Package, PackageBuilder, Result, RustraError,
     };
     pub use schemars::JsonSchema;
     pub use serde::{Deserialize, Serialize};
@@ -102,7 +102,7 @@ pub mod prelude {
 /// 컴파일 타임에 검증하기 위해 사용합니다.
 pub mod __private {
     use schemars::JsonSchema;
-    use serde::{de::DeserializeOwned, Serialize};
+    use serde::{Serialize, de::DeserializeOwned};
 
     pub trait CommandInput: DeserializeOwned + JsonSchema + 'static {}
     impl<T: DeserializeOwned + JsonSchema + 'static> CommandInput for T {}
@@ -131,7 +131,7 @@ pub mod __private {
 #[cfg(feature = "tauri")]
 pub mod tauri_support {
     use crate::Package;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use tauri::State;
 
     /// Tauri의 managed state로 보관되는 rustra 패키지입니다.

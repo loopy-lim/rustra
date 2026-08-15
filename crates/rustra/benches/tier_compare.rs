@@ -7,7 +7,7 @@
 //! 실행: `cargo bench -p rustra --profile dev -- tier_compare`
 //! (dynamic 경로는 register 로만 도달 → debug 빌드 필수. dynamic 명령은 dev-only 설계.)
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rustra::Package;
 
 #[path = "common.rs"]
