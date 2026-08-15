@@ -19,8 +19,8 @@
 
 use std::fmt;
 
-use crate::error::RustraError;
 use crate::Result;
+use crate::error::RustraError;
 
 /// 픽셀 단위 2D 크기.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
