@@ -3,6 +3,24 @@
 이 프로젝트의 주요 변경사항을 기록합니다. 세부 내역은 git history와
 `docs/plans/`의 계획/결과 문서를 참고하세요.
 
+## Unreleased
+
+### Added
+
+- codegen `Set<T>` 타입 지원 — Rust `BTreeSet`/`HashSet` (`uniqueItems`)이
+  `Set<T>`로 매핑. postcard 코덱 `set_zigzag`/`set_f64`/`set_bool` kind
+  (와이어는 vec와 호환), JSON 경로 Set replacer
+- `RustraCommandError.retryable` — Rust `transport.error`/`transport.timeout`
+  생성 에러의 재시도 가능 여부를 TypeScript에서 조회 가능
+- `createAsyncEngine` (`@rustra/react-native`) — P0-3 async offload 엔진.
+  네이티브 `invokeTypedAsync` 있으면 콜백 큐 경로, 없으면 동기 폴백
+- `rustra init <dir>` CLI — 프로젝트 스캐폴딩 (Cargo + echo 예제 + codegen 스크립트)
+- Windows desktop 스캐폴드 — `lynx_desktop_win.cpp` + `build.rs` 플랫폼 분기
+  (FML 심볼 export/오프셋 확정은 Windows 머신 전제)
+- `bench.yml` — criterion 벤치마크 회귀 감지 CI
+- `release.yml` — changesets npm 자동 발행 + crates.io 수동 발행 잡
+- `verify:desktop`/`verify:ios`/`verify:android` 런타임 게이트 스크립트 (package.json)
+
 ## 0.1.1 (2026-08-14)
 
 npm `@rustra/*` 7종(types/cli/node/bun/tauri/react-native/lynx)과 crates.io
