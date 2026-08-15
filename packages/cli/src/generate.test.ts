@@ -7,6 +7,7 @@ import {
   generateRkyvCodecsCpp,
   generateRkyvCodecsHpp,
 } from './generate.js';
+import { collectDefinitions } from './codegen.js';
 import type { PackageSchema } from './schema.js';
 
 const simpleSchema: PackageSchema = {
@@ -112,6 +113,115 @@ test('generateTypesTs maps Set types (uniqueItems)', () => {
   assert.ok(types.includes('tags: Set<string>'));
   // uniqueItems 없는 배열은 기존대로 배열 타입 유지 (선택적 필드라 ? 접두사)
   assert.ok(types.includes('values?: number[]'));
+});
+
+test('generateTypesTs emits recursive self-referencing types', () => {
+  const nodeSchema: import('./schema.js').JsonSchema = {
+    type: 'object',
+    properties: {
+      name: { type: 'string' },
+      children: { type: 'array', items: { $ref: '#/definitions/TreeNode' } },
+    },
+    required: ['name'],
+    title: 'TreeNode',
+  };
+  const schema: PackageSchema = {
+    packageId: 'test',
+    commands: [
+      {
+        name: 'depth',
+        commandId: 5,
+        inputType: 'DepthInput',
+        outputType: 'DepthOutput',
+        inputSchema: {
+          type: 'object',
+          properties: { root: { $ref: '#/definitions/TreeNode' } },
+          required: ['root'],
+          title: 'DepthInput',
+          definitions: { TreeNode: nodeSchema },
+        },
+        outputSchema: { type: 'object', properties: {}, required: [], title: 'DepthOutput' },
+      },
+    ],
+  };
+  const types = generateTypesTs(schema);
+  assert.ok(types.includes('export type TreeNode = {'));
+  // required 에 없는 children 은 선택적 필드가 된다 (self-reference 유지)
+  assert.ok(types.includes('children?: TreeNode[]'));
+  assert.ok(types.includes('root: TreeNode'));
+});
+
+test('collectDefinitions gathers nested definitions recursively', () => {
+  // 정의가 루트가 아닌 중첩 위치(definitions 내부의 정의가 또 definitions 를 가짐)에
+  // 있어도 재귀적으로 수집한다.
+  const leaf: import('./schema.js').JsonSchema = {
+    type: 'object',
+    properties: { v: { type: 'integer' } },
+    title: 'Leaf',
+  };
+  const schema: import('./schema.js').JsonSchema = {
+    type: 'object',
+    properties: {},
+    definitions: {
+      Middle: {
+        type: 'object',
+        properties: { inner: { $ref: '#/definitions/Leaf' } },
+        definitions: { Leaf: leaf },
+      },
+    },
+  };
+  const out: Record<string, import('./schema.js').JsonSchema> = {};
+  collectDefinitions(schema, out);
+  assert.ok(out['Middle'], 'top-level definition collected');
+  assert.ok(out['Leaf'], 'nested definition inside another definition collected');
+});
+
+test('generateTypesTs maps oneOf with const tags to discriminated unions', () => {
+  const schema: PackageSchema = {
+    packageId: 'test',
+    commands: [
+      {
+        name: 'area',
+        commandId: 6,
+        inputType: 'AreaInput',
+        outputType: 'AreaOutput',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            shape: {
+              oneOf: [
+                {
+                  type: 'object',
+                  properties: {
+                    kind: { const: 'circle' },
+                    radius: { type: 'number' },
+                  },
+                  required: ['kind', 'radius'],
+                },
+                {
+                  type: 'object',
+                  properties: {
+                    kind: { const: 'rectangle' },
+                    width: { type: 'number' },
+                    height: { type: 'number' },
+                  },
+                  required: ['kind', 'width', 'height'],
+                },
+              ],
+            },
+          },
+          required: ['shape'],
+          title: 'AreaInput',
+        },
+        outputSchema: { type: 'object', properties: {}, required: [], title: 'AreaOutput' },
+      },
+    ],
+  };
+  const types = generateTypesTs(schema);
+  // oneOf → union join + const 태그 → 리터럴 판별 필드
+  assert.ok(types.includes("kind: 'circle'"));
+  assert.ok(types.includes("kind: 'rectangle'"));
+  assert.ok(types.includes('|'));
 });
 
 test('generateCommandsTs produces command function', () => {

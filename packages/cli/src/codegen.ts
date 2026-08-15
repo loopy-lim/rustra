@@ -29,6 +29,10 @@ export function tsTypeFromSchema(
     return schema.anyOf.map((s) => tsTypeFromSchema(s, definitions)).join(' | ');
   }
 
+  if (schema.oneOf) {
+    return schema.oneOf.map((s) => tsTypeFromSchema(s, definitions)).join(' | ');
+  }
+
   const type = schema.type;
 
   if (typeof type === 'string') {
@@ -122,21 +126,67 @@ export function tsObjectFromSchema(
   const fields = Object.entries(properties)
     .map(([name, propSchema]) => {
       const optional = required.has(name) ? '' : '?';
-      return `  ${name}${optional}: ${tsTypeFromSchema(propSchema, definitions)};`;
+      // `const` 프로퍼티(판별 유니온 태그 등)는 리터럴 타입으로 매핑 —
+      // `#[serde(tag = "type")]` variant 가 schemars 에서 { type: { const: "A" } } 로
+      // 내보내지므로 `{ type: 'A' }` 판별 필드가 만들어진다.
+      const type = constLiteral(propSchema) ?? tsTypeFromSchema(propSchema, definitions);
+      return `  ${name}${optional}: ${type};`;
     })
     .join('\n');
 
   return `{\n${fields}\n}`;
 }
 
+/** `const` 키를 갖는 스키마의 리터럴 표현 — string/number/boolean만 지원. */
+function constLiteral(schema: JsonSchema): string | null {
+  if (schema.const === undefined) return null;
+  if (typeof schema.const === 'string') return `'${schema.const}'`;
+  if (typeof schema.const === 'number' || typeof schema.const === 'boolean') {
+    return String(schema.const);
+  }
+  return null;
+}
+
 /**
  * 스키마에서 `definitions` 객체를 추출하여 `out`에 병합합니다.
+ *
+ * 최상위 `definitions`뿐 아니라 중첩 위치(command 스키마 내부, 다른 definition
+ * 내부)의 `definitions`도 재귀적으로 수집한다 — schemars는 중첩 타입의 스키마를
+ * 루트 `definitions`에 두지만, 커스텀/기여 스키마에서 내부 배치가 나올 수 있고
+ * 재귀 타입(self-`$ref`) 정의를 누락하면 `types.ts`에 미정의 타입 참조가 남는다.
  */
 export function collectDefinitions(schema: JsonSchema, out: Record<string, JsonSchema>): void {
+  collectDefinitionsInner(schema, out, new Set());
+}
+
+function collectDefinitionsInner(
+  schema: JsonSchema,
+  out: Record<string, JsonSchema>,
+  visited: Set<JsonSchema>,
+): void {
+  if (visited.has(schema)) return;
+  visited.add(schema);
+
   if (schema.definitions) {
     for (const [key, value] of Object.entries(schema.definitions)) {
-      out[key] = value;
+      if (!out[key]) out[key] = value;
+      collectDefinitionsInner(value, out, visited);
     }
+  }
+
+  // 중첩 위치의 definitions / $ref 대상 정의도 따라간다.
+  const subs: JsonSchema[] = [
+    ...(schema.anyOf ?? []),
+    ...(schema.oneOf ?? []),
+    ...(Array.isArray(schema.items) ? schema.items : schema.items ? [schema.items] : []),
+    ...(schema.prefixItems ?? []),
+    ...(schema.properties ? Object.values(schema.properties) : []),
+  ];
+  if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
+    subs.push(schema.additionalProperties);
+  }
+  for (const sub of subs) {
+    collectDefinitionsInner(sub, out, visited);
   }
 }
 

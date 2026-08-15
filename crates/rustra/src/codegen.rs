@@ -146,13 +146,28 @@ pub(super) fn ts_object_from_schema(schema: &Value, definitions: &Value) -> Stri
             };
             format!(
                 "  {name}{optional}: {};",
-                ts_type_from_schema(property_schema, definitions)
+                const_literal(property_schema)
+                    .unwrap_or_else(|| ts_type_from_schema(property_schema, definitions))
             )
         })
         .collect::<Vec<_>>()
         .join("\n");
 
     format!("{{\n{fields}\n}}")
+}
+
+/// `const` 키를 갖는 스키마의 TS 리터럴 표현 — string/number/boolean만 지원.
+///
+/// `#[serde(tag = "type")]` variant 가 schemars 에서 `type: { const: "A" }` 로
+/// 내보내지므로, 이를 `'A'` 리터럴로 매핑해 `{ type: 'A' }` 판별 필드를 만든다.
+fn const_literal(schema: &Value) -> Option<String> {
+    let value = schema.get("const")?;
+    match value {
+        Value::String(s) => Some(format!("'{s}'")),
+        Value::Number(n) => Some(n.to_string()),
+        Value::Bool(b) => Some(b.to_string()),
+        _ => None,
+    }
 }
 
 /// `$ref` 문자열에서 타입 이름을 추출합니다.

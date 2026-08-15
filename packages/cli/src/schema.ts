@@ -55,6 +55,8 @@ export type JsonSchema = {
   required?: string[];
   /** array 타입의 요소 스키마 */
   items?: JsonSchema | JsonSchema[];
+  /** 튜플 각 위치의 요소 스키마 (JSON Schema 2020-12 튜플 표현) */
+  prefixItems?: JsonSchema[];
   /** 배열 요소의 유일성 (Rust `BTreeSet`/`HashSet` → TS `Set<T>`) */
   uniqueItems?: boolean;
   additionalProperties?: JsonSchema;
@@ -62,6 +64,10 @@ export type JsonSchema = {
   $ref?: string;
   /** 유니온 타입의 각 변형 */
   anyOf?: JsonSchema[];
+  /** 유니온 타입의 각 변형 (JSON Schema oneOf — 판별 유니온에 사용) */
+  oneOf?: JsonSchema[];
+  /** 프로퍼티의 상수 값 (판별 유니온의 태그 필드 등) */
+  const?: unknown;
   /** 문자열 enum 값 목록 */
   enum?: string[];
   /** 스키마 제목 */

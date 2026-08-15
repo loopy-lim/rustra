@@ -415,6 +415,150 @@ fn ts_generator_handles_sets() {
 }
 
 #[test]
+fn ts_generator_handles_recursive_types() {
+    /// 재귀 트리 노드 — `Box<TreeNode>` self-reference 가 schemars 에서
+    /// `$ref: "#/definitions/TreeNode"` 로 내보내지는지, 그리고 그 정의가
+    /// generated types.ts 에 누락 없이 emit 되는지 검증한다.
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct TreeNode {
+        name: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        children: Vec<Box<TreeNode>>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct TreeInput {
+        root: Box<TreeNode>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct TreeOutput {
+        depth: i64,
+    }
+
+    #[command]
+    fn tree_depth(input: TreeInput) -> Result<TreeOutput> {
+        fn depth(n: &TreeNode) -> i64 {
+            1 + n.children.iter().map(|c| depth(c)).max().unwrap_or(0)
+        }
+        Ok(TreeOutput {
+            depth: depth(&input.root) - 1,
+        })
+    }
+
+    let package = Package::builder("test.tree").command_fn(tree_depth).build();
+    let generated = package.generate_typescript().unwrap();
+
+    // self-$ref 가 이름으로 풀려 자기 참조 타입이 만들어진다.
+    assert!(
+        generated.types_ts.contains("export type TreeNode = {"),
+        "TreeNode definition should be emitted, got:\n{}",
+        generated.types_ts
+    );
+    assert!(
+        generated.types_ts.contains("children?: TreeNode[]"),
+        "Vec<Box<TreeNode>> should become self-referencing TreeNode[] \
+         (skip_serializing_if 로 선택적 필드), got:\n{}",
+        generated.types_ts
+    );
+
+    // JSON 왕복: 중첩 노드가 $ref 로 직렬화·역직렬화 되는지 (루트 definitions 공유).
+    let tree = TreeNode {
+        name: "root".into(),
+        children: vec![
+            Box::new(TreeNode {
+                name: "a".into(),
+                children: vec![Box::new(TreeNode {
+                    name: "a1".into(),
+                    children: vec![],
+                })],
+            }),
+            Box::new(TreeNode {
+                name: "b".into(),
+                children: vec![],
+            }),
+        ],
+    };
+    let out: TreeOutput = package
+        .invoke(
+            "treeDepth",
+            TreeInput {
+                root: Box::new(tree),
+            },
+        )
+        .unwrap();
+    assert_eq!(out.depth, 2);
+}
+
+#[test]
+fn ts_generator_handles_discriminated_unions() {
+    /// `#[serde(tag = "kind")]` — schemars 는 oneOf + 각 variant 에
+    /// `kind: { const: "..." }` 태그를 내보낸다. codegen 이 이를
+    /// `{ kind: 'circle' }` 판별 필드로 매핑하는지 검증.
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(tag = "kind", rename_all = "camelCase")]
+    enum Shape {
+        Circle { radius: f64 },
+        Rectangle { width: f64, height: f64 },
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct AreaInput {
+        shape: Shape,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct AreaOutput {
+        area: f64,
+    }
+
+    #[command]
+    fn shape_area(input: AreaInput) -> Result<AreaOutput> {
+        let area = match input.shape {
+            Shape::Circle { radius } => std::f64::consts::PI * radius * radius,
+            Shape::Rectangle { width, height } => width * height,
+        };
+        Ok(AreaOutput { area })
+    }
+
+    let package = Package::builder("test.shape")
+        .command_fn(shape_area)
+        .build();
+    let generated = package.generate_typescript().unwrap();
+
+    // 태그 프로퍼티가 리터럴 타입으로 판별 필드가 된다.
+    assert!(
+        generated.types_ts.contains("kind: 'circle';"),
+        "serde tag should map to literal 'circle' discriminator, got:\n{}",
+        generated.types_ts
+    );
+    assert!(
+        generated.types_ts.contains("kind: 'rectangle';"),
+        "serde tag should map to literal 'rectangle' discriminator, got:\n{}",
+        generated.types_ts
+    );
+
+    // JSON 왕복: 태그 기반 역직렬화.
+    let out: AreaOutput = package
+        .invoke(
+            "shapeArea",
+            AreaInput {
+                shape: Shape::Rectangle {
+                    width: 3.0,
+                    height: 4.0,
+                },
+            },
+        )
+        .unwrap();
+    assert!((out.area - 12.0).abs() < 1e-9);
+}
+
+#[test]
 fn ts_generator_handles_tuples() {
     #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
     #[serde(rename_all = "camelCase")]
