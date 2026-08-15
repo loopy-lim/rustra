@@ -13,6 +13,7 @@ import {
   generateRkyvCodecsHpp,
   generateRkyvCodecsCpp,
 } from './generate.js';
+import { diffSchemas, formatDiffResult } from './schema-diff.js';
 
 export {
   generateTypesTs,
@@ -52,9 +53,56 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (args[0] === 'diff') {
+    await runDiff(args.slice(1));
+    return;
+  }
+
   console.error(`Unknown command: ${args[0]}`);
   console.error('Run "rustra --help" for usage information.');
   process.exit(1);
+}
+
+/**
+ * `rustra diff --old a.json --new b.json [--format json]` — 스키마 버전 간
+ * breaking change 검출. breaking 이 있으면 exit 1 (CI 게이트용).
+ */
+async function runDiff(args: string[]): Promise<void> {
+  const getOpt = (name: string): string | undefined => {
+    const i = args.indexOf(`--${name}`);
+    return i >= 0 ? args[i + 1] : undefined;
+  };
+  const oldPath = getOpt('old');
+  const newPath = getOpt('new');
+  const asJson = args.includes('--format') && args[args.indexOf('--format') + 1] === 'json';
+
+  if (!oldPath || !newPath) {
+    console.error(
+      'Error: --old and --new are required. Usage: rustra diff --old v1.json --new v2.json',
+    );
+    process.exit(1);
+  }
+
+  const [oldRaw, newRaw] = await Promise.all([
+    readFile(resolve(oldPath), 'utf-8'),
+    readFile(resolve(newPath), 'utf-8'),
+  ]);
+  const result = diffSchemas(
+    parsePackageSchema(JSON.parse(oldRaw)),
+    parsePackageSchema(JSON.parse(newRaw)),
+  );
+
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(formatDiffResult(result));
+    if (result.compatible.length > 0) {
+      console.log(`Compatible additions (${result.compatible.length}):`);
+      for (const c of result.compatible) console.log(`  + ${c}`);
+    }
+  }
+
+  if (result.breaking.length > 0) process.exit(1);
 }
 
 /**
@@ -172,6 +220,7 @@ Usage:
   rustra generate --config <path>
   rustra generate --watch --schema <path> --output <dir>
   rustra init <dir>
+  rustra diff --old <schema.v1.json> --new <schema.json> [--format json]
 
 Options:
   --schema <path>    Path to schema.json file
@@ -180,12 +229,16 @@ Options:
                     for the RN JSI fast path (B1) into this directory
   --config <path>    Path to rustra.json config file
   --watch            Watch schema file for changes and regenerate
+  --old <path>       (diff) old schema version to compare from
+  --new <path>       (diff) new schema version to compare against
+  --format <fmt>     (diff) 'text' (default) or 'json' (machine-readable DiffResult)
   --help, -h         Show this help message
 
 Examples:
   rustra generate --schema ./generated/schema.json --output ./src/generated
   rustra generate --watch --config rustra.json
   rustra generate --schema ./gen/schema.json --output ./src/generated --cpp-output ./ios
+  rustra diff --old ./generated/schema.v1.json --new ./generated/schema.json
 `);
 }
 
