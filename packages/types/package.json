@@ -1,6 +1,6 @@
 {
   "name": "@rustra/types",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shared types for rustra-bridge",
   "license": "MIT",
   "type": "module",
@@ -11,6 +11,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "files": [
     "dist"
@@ -26,5 +29,14 @@
     "rustra",
     "bridge",
     "types"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loopy-lim/hostra.git",
+    "directory": "packages/types"
+  },
+  "bugs": {
+    "url": "https://github.com/loopy-lim/hostra/issues"
+  },
+  "homepage": "https://github.com/loopy-lim/hostra#readme"
 }

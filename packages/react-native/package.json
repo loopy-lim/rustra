@@ -1,6 +1,6 @@
 {
   "name": "@rustra/react-native",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "React Native adapter for rustra-bridge",
   "license": "MIT",
   "type": "module",
@@ -12,6 +12,9 @@
       "import": "./dist/index.js"
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "dist"
   ],
@@ -21,7 +24,7 @@
     "test": "tsc --noEmit"
   },
   "dependencies": {
-    "@rustra/types": "^0.1.0"
+    "@rustra/types": "^0.1.1"
   },
   "devDependencies": {
     "typescript": "^5.9.0"
@@ -34,11 +37,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/loopy-lim/rustra.git",
-    "directory": "packages/"
+    "url": "git+https://github.com/loopy-lim/hostra.git",
+    "directory": "packages/react-native"
   },
   "bugs": {
-    "url": "https://github.com/loopy-lim/rustra/issues"
+    "url": "https://github.com/loopy-lim/hostra/issues"
   },
-  "homepage": "https://github.com/loopy-lim/rustra#readme"
+  "homepage": "https://github.com/loopy-lim/hostra#readme"
 }
