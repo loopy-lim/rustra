@@ -20,20 +20,21 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 
 ## 전체 문서 목록
 
-| 문서                                                            | 대상   | 내용                                                          |
-| --------------------------------------------------------------- | ------ | ------------------------------------------------------------- |
-| [아키텍처 개요](architecture.md)                                | 전체   | 데이터 흐름, EngineClient 계약, transport 분리 원칙           |
-| [시작하기](getting-started.md)                                  | 사용자 | 설치, 최소 예제, TS 통합, 에러 처리, adapter 선택, 실행       |
-| [Transport 교체 가이드](extending/transport-guide.md)           | 사용자 | Bun FFI, Node napi-rs 교체, 선택 기준                         |
-| [새 Host 추가 가이드](extending/adding-host.md)                 | 사용자 | adapter 만들기, Rust 진입점 선택, 테스트 추가                 |
-| [Crate 및 Package 구조](internal/crate-structure.md)            | 기여자 | 각 crate/package 책임, 빌드 의존성                            |
-| [TypeScript 코드 생성](internal/codegen.md)                     | 기여자 | codegen 파이프라인, 타입 매핑, 제한사항                       |
-| [테스트 구조](internal/testing.md)                              | 기여자 | 테스트 계층, 스크립트 체인, host별 상태                       |
-| [호환성 계약](compatibility-contract.md)                        | 기여자 | EngineClient 안정 계약, runtime acceptance gates              |
-| [벤치마크](benchmarks.md)                                       | 전체   | 어댑터별 성능 비교, 오버헤드 분석, 페이로드 확장성            |
-| [Lynx (LynxJS) 통합 가이드](lynx-integration.md)                | 사용자 | Lynx 듀얼스레드 엔진 연동 아키텍처 및 Native Module 구현      |
-| [Lynx 심층 조사 보고서](research/lynx-architecture-research.md) | 연구   | LynxJS Dual-Thread 아키텍처, PrimJS, FFI (JSI/NAPI/PAPI) 분석 |
-| [기여 가이드](../CONTRIBUTING.md)                               | 기여자 | 개발 환경, 커밋 규칙, 디버깅, 릴리즈                          |
+| 문서                                                            | 대상   | 내용                                                             |
+| --------------------------------------------------------------- | ------ | ---------------------------------------------------------------- |
+| [아키텍처 개요](architecture.md)                                | 전체   | 데이터 흐름, EngineClient 계약, transport 분리 원칙              |
+| [시작하기](getting-started.md)                                  | 사용자 | 설치, 최소 예제, TS 통합, 에러 처리, adapter 선택, 실행          |
+| [Transport 교체 가이드](extending/transport-guide.md)           | 사용자 | Bun FFI, Node napi-rs 교체, 선택 기준                            |
+| [새 Host 추가 가이드](extending/adding-host.md)                 | 사용자 | adapter 만들기, Rust 진입점 선택, 테스트 추가                    |
+| [Crate 및 Package 구조](internal/crate-structure.md)            | 기여자 | 각 crate/package 책임, 빌드 의존성                               |
+| [TypeScript 코드 생성](internal/codegen.md)                     | 기여자 | codegen 파이프라인, 타입 매핑, 제한사항                          |
+| [테스트 구조](internal/testing.md)                              | 기여자 | 테스트 계층, 스크립트 체인, host별 상태                          |
+| [호환성 계약](compatibility-contract.md)                        | 기여자 | EngineClient 안정 계약, runtime acceptance gates                 |
+| [계약 마이그레이션 가이드](migration-guide.md)                  | 전체   | 스키마 breaking change 검출(rustra diff)·해결 레시피·롤아웃 순서 |
+| [벤치마크](benchmarks.md)                                       | 전체   | 어댑터별 성능 비교, 오버헤드 분석, 페이로드 확장성               |
+| [Lynx (LynxJS) 통합 가이드](lynx-integration.md)                | 사용자 | Lynx 듀얼스레드 엔진 연동 아키텍처 및 Native Module 구현         |
+| [Lynx 심층 조사 보고서](research/lynx-architecture-research.md) | 연구   | LynxJS Dual-Thread 아키텍처, PrimJS, FFI (JSI/NAPI/PAPI) 분석    |
+| [기여 가이드](../CONTRIBUTING.md)                               | 기여자 | 개발 환경, 커밋 규칙, 디버깅, 릴리즈                             |
 
 ## 연구 배경
 
