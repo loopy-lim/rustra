@@ -71,7 +71,18 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
                     .get("items")
                     .map(|s| ts_type_from_schema(s, definitions))
                     .unwrap_or_else(|| "unknown".to_string());
-                format!("{item_type}[]")
+                // `uniqueItems: true` (Rust `BTreeSet`/`HashSet`)는 `Set<T>`로 매핑.
+                // 와이어포맷은 배열 직렬화와 동일 — 런타임 변환은 생성된 코덱/호출부
+                // 에서 `[...value]` / `new Set(...)` 로 처리한다.
+                let unique = schema
+                    .get("uniqueItems")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                if unique {
+                    format!("Set<{item_type}>")
+                } else {
+                    format!("{item_type}[]")
+                }
             }
             "null" => "null".to_string(),
             _ => "unknown".to_string(),

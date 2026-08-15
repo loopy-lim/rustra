@@ -359,6 +359,62 @@ fn ts_generator_handles_hashmap() {
 }
 
 #[test]
+fn ts_generator_handles_sets() {
+    use std::collections::BTreeSet;
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct SetInput {
+        tags: BTreeSet<String>,
+        primes: BTreeSet<i64>,
+    }
+
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct SetOutput {
+        unique: BTreeSet<i64>,
+    }
+
+    #[command]
+    fn set_cmd(input: SetInput) -> Result<SetOutput> {
+        let mut unique = input.primes;
+        unique.insert(4);
+        Ok(SetOutput { unique })
+    }
+
+    let package = Package::builder("test.set").command_fn(set_cmd).build();
+    let generated = package.generate_typescript().unwrap();
+
+    assert!(
+        generated.types_ts.contains("tags: Set<string>;"),
+        "BTreeSet<String> should become Set<string>, got:\n{}",
+        generated.types_ts
+    );
+    assert!(
+        generated.types_ts.contains("primes: Set<number>;"),
+        "BTreeSet<i64> should become Set<number>, got:\n{}",
+        generated.types_ts
+    );
+    assert!(
+        generated.types_ts.contains("unique: Set<number>;"),
+        "output BTreeSet<i64> should become Set<number>, got:\n{}",
+        generated.types_ts
+    );
+
+    // JSON 왕복: serde 가 Set 을 배열로 직렬화하므로 invoke 도 정상 동작해야 한다.
+    let out: SetOutput = package
+        .invoke(
+            "setCmd",
+            SetInput {
+                tags: BTreeSet::from(["a".to_string(), "b".to_string()]),
+                primes: BTreeSet::from([2, 3, 5]),
+            },
+        )
+        .unwrap();
+    assert_eq!(out.unique, BTreeSet::from([2, 3, 4, 5]));
+}
+
+#[test]
 fn ts_generator_handles_tuples() {
     #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
     #[serde(rename_all = "camelCase")]

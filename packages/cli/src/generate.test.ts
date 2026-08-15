@@ -86,6 +86,34 @@ test('generateTypesTs maps Record types', () => {
   assert.ok(types.includes('Record<string, number>'));
 });
 
+test('generateTypesTs maps Set types (uniqueItems)', () => {
+  const schema: PackageSchema = {
+    packageId: 'test',
+    commands: [
+      {
+        name: 'tags',
+        commandId: 4,
+        inputType: 'TagsInput',
+        outputType: 'TagsOutput',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            tags: { type: 'array', items: { type: 'string' }, uniqueItems: true },
+            values: { type: 'array', items: { type: 'integer' } },
+          },
+          required: ['tags'],
+          title: 'TagsInput',
+        },
+        outputSchema: { type: 'object', properties: {}, required: [], title: 'TagsOutput' },
+      },
+    ],
+  };
+  const types = generateTypesTs(schema);
+  assert.ok(types.includes('tags: Set<string>'));
+  // uniqueItems 없는 배열은 기존대로 배열 타입 유지 (선택적 필드라 ? 접두사)
+  assert.ok(types.includes('values?: number[]'));
+});
+
 test('generateCommandsTs produces command function', () => {
   const commands = generateCommandsTs(simpleSchema);
   assert.ok(commands.includes('export function add('));
