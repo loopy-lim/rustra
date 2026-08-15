@@ -2,6 +2,7 @@
 
 **Date**: 2026-05-14
 **Status**: Approved
+**진척 갱신**: 2026-08-15 — 항목별 상태는 아래 표 참조.
 
 ---
 
@@ -9,11 +10,11 @@
 
 ### 1-1. GitHub Actions CI/CD
 
-| 워크플로우 | 트리거 | 내용 |
-|---|---|---|
-| `ci.yml` | PR, push to main | Rust 테스트, TS 빌드/테스트, 타입 체크 |
-| `release.yml` | 태그 push | npm 퍼블리싱 + crates.io 배포 |
-| `bench.yml` | main 머지 | 벤치마크 실행 및 리포트 |
+| 워크플로우    | 트리거           | 내용                                   |
+| ------------- | ---------------- | -------------------------------------- |
+| `ci.yml`      | PR, push to main | Rust 테스트, TS 빌드/테스트, 타입 체크 |
+| `release.yml` | 태그 push        | npm 퍼블리싱 + crates.io 배포          |
+| `bench.yml`   | main 머지        | 벤치마크 실행 및 리포트                |
 
 ### 1-2. 코드 품질 도구 (TypeScript)
 
@@ -34,13 +35,13 @@
 
 ### 2-1. 타입 매핑 확장 (`codegen.rs`)
 
-| 타입 | 현재 | 목표 |
-|---|---|---|
-| Tuple | `unknown` | `[A, B, C]` |
-| Map/Record | 미지원 | `Record<string, T>` |
-| Set | 미지원 | `Set<T>` (런타임 변환 포함) |
-| Recursive types | 미지원 | self-referencing 구조 |
-| Discriminated unions | 미지원 | `{ type: "A", ... } \| { type: "B", ... }` |
+| 타입                 | 현재      | 목표                                       |
+| -------------------- | --------- | ------------------------------------------ |
+| Tuple                | `unknown` | `[A, B, C]`                                |
+| Map/Record           | 미지원    | `Record<string, T>`                        |
+| Set                  | 미지원    | `Set<T>` (런타임 변환 포함)                |
+| Recursive types      | 미지원    | self-referencing 구조                      |
+| Discriminated unions | 미지원    | `{ type: "A", ... } \| { type: "B", ... }` |
 
 ### 2-2. React Native 완성
 
@@ -60,11 +61,11 @@
 
 ### 3-1. 예제 확장
 
-| 예제 | 목적 |
-|---|---|
-| CRUD | DB 연동 패턴 (생성/조회/수정/삭제) |
-| Streaming | 이벤트 스트림/프로그레스 패턴 |
-| Auth | 세션/토큰 관리 패턴 |
+| 예제      | 목적                               |
+| --------- | ---------------------------------- |
+| CRUD      | DB 연동 패턴 (생성/조회/수정/삭제) |
+| Streaming | 이벤트 스트림/프로그레스 패턴      |
+| Auth      | 세션/토큰 관리 패턴                |
 
 ### 3-2. 퍼블리싱 워크플로우
 
@@ -105,11 +106,42 @@
 
 ## 우선순위 요약
 
-| Phase | 영역 | 예상 공수 | 의존성 |
-|---|---|---|---|
-| 1 | 기반 인프라 | 2-3일 | 없음 |
-| 2 | 기능 완성도 | 1-2주 | Phase 1 권장 |
-| 3 | DX/사용성 | 1주 | Phase 1 권장 |
-| 4 | 아키텍처/기술부채 | 1주 | Phase 1 권장 |
+| Phase | 영역              | 예상 공수 | 의존성       |
+| ----- | ----------------- | --------- | ------------ |
+| 1     | 기반 인프라       | 2-3일     | 없음         |
+| 2     | 기능 완성도       | 1-2주     | Phase 1 권장 |
+| 3     | DX/사용성         | 1주       | Phase 1 권장 |
+| 4     | 아키텍처/기술부채 | 1주       | Phase 1 권장 |
 
 Phase 1은 독립적으로 진행 가능하며, Phase 2-4는 Phase 1의 CI/린트 인프라가 있으면 더 안정적으로 진행할 수 있습니다.
+
+---
+
+## 진척 상태 (2026-08-15 갱신)
+
+| 항목                                  | 상태      | 비고                                                   |
+| ------------------------------------- | --------- | ------------------------------------------------------ |
+| ci.yml (1-1)                          | ✅ 완료   | fmt/clippy/test + TS 전체 게이트 green                 |
+| release.yml (1-1)                     | ✅ 완료   | 2026-08-15 추가 — changesets npm + crates.io 수동 잡   |
+| bench.yml (1-1)                       | ✅ 완료   | 2026-08-15 추가 — 수동 트리거, 회귀 감지               |
+| ESLint/Prettier/lefthook (1-2, 1-3)   | ✅ 완료   | lefthook이 husky/lint-staged 역할 대체                 |
+| Tuple/Map 타입 (2-1)                  | ✅ 완료   | codegen Map/Tuple 지원                                 |
+| Set / Recursive / Discriminated (2-1) | ❌ 미완료 | codegen 미지원 — 후보 과제                             |
+| RN Android 네이티브 (2-2)             | ✅ 완료   | Lynx 트랙에서 Android JNI 증명 (7/7)                   |
+| 에러 retryable 메타데이터 (2-3)       | ⚠️ 부분   | 필드는 존재하나 전부 false — 실구현 과제               |
+| CRUD 예제 (3-1)                       | ✅ 완료   | examples/crud                                          |
+| Streaming/Auth 예제 (3-1)             | ❌ 미완료 | 후보 과제                                              |
+| Changesets (3-2)                      | ⚠️ 도입됨 | config 존재, changeset 파일 미사용 (0.1.1은 수동 범프) |
+| npm 배포 (3-2)                        | ✅ 완료   | @rustra/* 7종 0.1.1 발행됨 (2026-08-14)                |
+| crates.io 배포 (3-2)                  | ✅ 완료   | rustra / rustra-macros 0.1.1 발행됨 (2026-08-14)       |
+| CLI watch (3-3)                       | ✅ 완료   | `rustra generate --watch`                              |
+| CLI init (3-3)                        | ❌ 미완료 | 후보 과제                                              |
+| 큰 페이로드 벤치마크 (4-2)            | ✅ 완료   | docs/benchmarks.md 페이로드 scaling                    |
+| 메모리 프로파일링 / 동시성 벤치 (4-2) | ❌ 미완료 | 후보 과제                                              |
+| CI 벤치마크 회귀 감지 (4-2)           | ✅ 완료   | bench.yml (2026-08-15)                                 |
+| 스키마 호환성 검사 (4-3)              | ✅ 완료   | schema-diff breaking change 검출                       |
+| 런타임 계약 검증 (4-3)                | ✅ 완료   | contractHash + createValidatedEngine                   |
+| 마이그레이션 가이드 (4-3)             | ❌ 미완료 | 후보 과제                                              |
+
+계획 외 달성: rkyv V2 무직렬화 경로, RN JSI fast path, Lynx 어댑터+4플랫폼 러너
+템플릿, FFI trust hardening, 온디바이스 벤치마크(iOS Direct C++ 0.95µs).

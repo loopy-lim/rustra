@@ -1,6 +1,6 @@
 # 갭 클로저 — runner 템플릿 production-ready (mobile+desktop 동시 지원)
 
-- **상태:** Design + Impl Plan.
+- **상태:** 완료 (2026-08-14, 커밋 `3f6939e6` + `080b75c8`).
 - **날짜:** 2026-08-14
 - **근거 리서치:** `docs/research/2026-08-14-gap-analysis-status.ko.md` (5개 갭 확인).
 - **목표:** 리서치가 확인한 5개 갭을 모두 해소하고, `create-runner.sh` 로 만든 프로젝트가
@@ -232,15 +232,20 @@ in-repo 템플릿 상태로:
 
 ## 완료 기준 (전체)
 
-- [ ] T1: desktop/run.sh 게이트 PASS (macOS)
-- [ ] T2: mobile-ios/run.sh 게이트 PASS (iOS 시뮬)
-- [ ] T3: mobile-android/run.sh 게이트 PASS (Android 에뮬)
-- [ ] T4: app codegen+build 성공, generated/ 5종 생성
-- [ ] T5: backend capability 테스트 전 PASS (MobileRegistry 포함)
-- [ ] T6: build-rust-android.sh NDK 핀 동작, Windows 문서 완비
-- [ ] T7: 문서-실제 일치 (경로 검증)
-- [ ] T8: create-runner.sh 인스턴스가 codegen+build+desktop 게이트 통과
-- [ ] 기존 워크스페이스 회귀 전부 green
+- [x] T1: desktop/run.sh 게이트 PASS (macOS) — 6/6 PASS (SetParent NSView + greet rkyv 왕복 ack)
+- [x] T2: mobile-ios/run.sh 게이트 PASS (iOS 시뮬) — 5/5 PASS (loadTemplate/RustraModule/rkyv in/out)
+- [x] T3: mobile-android/run.sh 게이트 PASS (Android 에뮬) — 5/5 PASS (JNI_OnLoad + rkyv 왕복)
+- [x] T4: app codegen+build 성공, generated/ 5종 생성
+- [x] T5: backend capability 테스트 전 PASS (MobileRegistry 포함) — 테스트 3→6 PASS
+- [x] T6: build-rust-android.sh NDK 핀 동작, Windows 문서 완비
+- [x] T7: 문서-실제 일치 (경로 검증)
+- [x] T8: create-runner.sh 인스턴스가 codegen+build+desktop 게이트 통과 — /tmp 인스턴스 cargo check + codegen + bundle build + desktop 게이트 6/6 PASS
+- [x] 기존 워크스페이스 회귀 전부 green — cargo workspace 146/0 · test:packages 24/24 · test:ts:node 32/32 · clippy clean
+
+> **완료 (2026-08-14, 커밋 `3f6939e6` + `080b75c8`)** — 본 머신 검증 수치는
+> 커밋 메시지에 기록. 설계 대비 구현 차이: 개별 setter(`rustra_template_set_file_read_callback`)
+> 대신 통합 `MobileBridge` + `rustra_template_register_mobile_registry` 단일 FFI로 변경,
+> CLI 직접 호출 대신 `codegen.sh` dual-path 위임.
 
 ## 리스크
 
