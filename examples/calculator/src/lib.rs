@@ -530,6 +530,22 @@ mod apple_init {
     static AUTO_INIT: extern "C" fn() = rustra_auto_init;
 }
 
+/// Linux(ELF) — `.init_array` constructor 로 동일 자동 등록. CI(Linux)에서
+/// FFI 라운드트립 테스트가 `ffi.not_registered` 로 실패하는 것을 막는다.
+/// P2(ELF/PE 생성자 비대칭)의 ELF 측 해소 — Android 셸은 기존대로 명시
+/// `rustra_*_init()` 호출을 유지(검증된 패턴).
+#[cfg(target_os = "linux")]
+mod linux_init {
+    #[used]
+    #[unsafe(link_section = ".init_array")]
+    static AUTO_INIT: extern "C" fn() = {
+        extern "C" fn rustra_auto_init() {
+            crate::calculator_package();
+        }
+        rustra_auto_init
+    };
+}
+
 /// C 진입점: calculator 패키지를 FFI 용으로 idempotently 등록한다.
 /// iOS debug 빌드에서 `__mod_init_func` constructor 가 dead-strip 되는 것에 대한
 /// 결정론적 대체 수단 (예: JSI install() 에서 호출).
