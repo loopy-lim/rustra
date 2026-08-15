@@ -83,6 +83,7 @@ examples/
   react-native-calculator/ React Native 런타임 예시
   lynx-calculator/         Lynx (ReactLynx) 런타임 예시
   lynx-tauri-spike/        Tauri×Lynx 데스크톱 스파이크 (macOS 7/7)
+  calculator-napi/         napi-rs transport 예시 (transport 벤치마크 24.3µs의 소스)
 
 runner/
   template/                4플랫폼 runner 템플릿 (단일 ReactLynx + Rust 백엔드,
