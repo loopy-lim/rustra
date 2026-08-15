@@ -11,6 +11,19 @@ members = [
   "examples/streaming",
   "examples/auth",
 ]
+# bare cargo/clippy/test 가 macOS 전용 크레이트(lynx-tauri-spike: lynx_desktop.mm
+# Objective-C++)를 빌드하지 않게 한다 — Linux CI 는 물론, Lynx SDK 헤더가 없는
+# macOS 환경에서도 bare 명령이 green. 스파이크는 자체 verify.sh 게이트로 검증.
+default-members = [
+  "crates/rustra",
+  "crates/rustra-macros",
+  "examples/calculator",
+  "examples/crud",
+  "examples/calculator-napi",
+  "examples/benchmark",
+  "examples/streaming",
+  "examples/auth",
+]
 resolver = "3"
 
 [workspace.package]

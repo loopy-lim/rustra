@@ -538,9 +538,10 @@ fn current_rss_bytes() -> Option<u64> {
             )
         };
         if kr == 0 {
-            return Some(info.resident_size);
+            Some(info.resident_size)
+        } else {
+            None
         }
-        return None;
     }
     #[cfg(not(target_os = "macos"))]
     None

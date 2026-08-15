@@ -41,7 +41,7 @@ fn run_serve() -> rustra::Result<()> {
         }
         let response = handle(&line)?;
         stdout.write_all(&response)?;
-        stdout.write_all(b"\n");
+        stdout.write_all(b"\n")?;
         stdout.flush().ok();
     }
     Ok(())
