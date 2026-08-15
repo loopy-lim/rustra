@@ -24,7 +24,9 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
       - name: Test
-        run: cargo test --workspace
+        # --workspace 는 default-members 를 무시하고 macOS 전용 크레이트까지 빌드한다.
+        # lynx-tauri-spike 은 자체 verify.sh 게이트(macOS 전제)로 검증.
+        run: cargo test --workspace --exclude rustra-lynx-tauri-spike
 
   typescript:
     runs-on: ubuntu-latest
