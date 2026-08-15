@@ -420,7 +420,7 @@ fn ts_generator_handles_sets() {
 
 #[test]
 fn ts_generator_handles_recursive_types() {
-    /// 재귀 트리 노드 — `Box<TreeNode>` self-reference 가 schemars 에서
+    /// 재귀 트리 노드 — self-reference(`children: Vec<TreeNode>`)가 schemars 에서
     /// `$ref: "#/definitions/TreeNode"` 로 내보내지는지, 그리고 그 정의가
     /// generated types.ts 에 누락 없이 emit 되는지 검증한다.
     #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
@@ -428,7 +428,7 @@ fn ts_generator_handles_recursive_types() {
     struct TreeNode {
         name: String,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
-        children: Vec<Box<TreeNode>>,
+        children: Vec<TreeNode>,
     }
 
     #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
@@ -446,7 +446,7 @@ fn ts_generator_handles_recursive_types() {
     #[command]
     fn tree_depth(input: TreeInput) -> Result<TreeOutput> {
         fn depth(n: &TreeNode) -> i64 {
-            1 + n.children.iter().map(|c| depth(c)).max().unwrap_or(0)
+            1 + n.children.iter().map(depth).max().unwrap_or(0)
         }
         Ok(TreeOutput {
             depth: depth(&input.root) - 1,
@@ -464,7 +464,7 @@ fn ts_generator_handles_recursive_types() {
     );
     assert!(
         generated.types_ts.contains("children?: TreeNode[]"),
-        "Vec<Box<TreeNode>> should become self-referencing TreeNode[] \
+        "Vec<TreeNode> should become self-referencing TreeNode[] \
          (skip_serializing_if 로 선택적 필드), got:\n{}",
         generated.types_ts
     );
@@ -473,17 +473,17 @@ fn ts_generator_handles_recursive_types() {
     let tree = TreeNode {
         name: "root".into(),
         children: vec![
-            Box::new(TreeNode {
+            TreeNode {
                 name: "a".into(),
-                children: vec![Box::new(TreeNode {
+                children: vec![TreeNode {
                     name: "a1".into(),
                     children: vec![],
-                })],
-            }),
-            Box::new(TreeNode {
+                }],
+            },
+            TreeNode {
                 name: "b".into(),
                 children: vec![],
-            }),
+            },
         ],
     };
     let out: TreeOutput = package

@@ -8,6 +8,7 @@ export type AdminStatsInput = {
 export type AdminStatsOutput = {
   sessions: number;
   uptimeMs: number;
+  activeUsers: string[];
 };
 
 export type GrantInput = {

@@ -22,6 +22,7 @@
         "title": "AdminStatsOutput",
         "type": "object",
         "required": [
+          "activeUsers",
           "sessions",
           "uptimeMs"
         ],
@@ -33,6 +34,13 @@
           "uptimeMs": {
             "type": "integer",
             "format": "int64"
+          },
+          "activeUsers": {
+            "description": "활성 세션 사용자명 목록 — admin 가시성 예시.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       }

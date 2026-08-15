@@ -1,6 +1,5 @@
 //! auth 예제 통합 테스트 — capability 게이트 전체 시나리오.
 
-use rustra::prelude::*;
 use rustra_auth_example::*;
 
 #[test]

@@ -57,6 +57,8 @@ pub struct AdminStatsInput {
 pub struct AdminStatsOutput {
     pub sessions: i64,
     pub uptime_ms: i64,
+    /// 활성 세션 사용자명 목록 — admin 가시성 예시.
+    pub active_users: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -152,9 +154,11 @@ pub fn admin_stats(input: AdminStatsInput) -> Result<AdminStatsOutput> {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
+    let active_users = sessions.values().map(|s| s.username.clone()).collect();
     Ok(AdminStatsOutput {
         sessions: sessions.len() as i64,
         uptime_ms: (now - *STARTED_AT) as i64,
+        active_users,
     })
 }
 
