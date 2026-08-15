@@ -1,0 +1,5 @@
+# rustfmt 설정 — 로컬/CI rustfmt 버전 차이로 인한 포맷 진동을 방지한다.
+# 특히 use 그룹 내 대소문자 정렬 규칙이 버전마다 달라 check 게이트가 깨졌다.
+# style_edition 2024 는 정렬 규칙을 고정한다 (rustc 1.85+ 지원).
+style_edition = "2024"
+edition = "2024"

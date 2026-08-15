@@ -4,7 +4,7 @@
 //   lynx_spike_pump()                    — MainEventsCleared 마다 호출 (FML 메시지 루프 전진)
 //   lynx_spike_summary()                 — 검증용 카운터 stderr 출력
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use std::ffi::{c_char, c_int, c_void, CString};
+use std::ffi::{CString, c_char, c_int, c_void};
 use std::process::exit;
 use tauri::{Manager, RunEvent};
 
