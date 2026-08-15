@@ -1,7 +1,7 @@
 use rustra::ffi::FfiFormat;
 use rustra::prelude::*;
-use serde_json::{json, Value};
-use std::ffi::{c_char, CStr, CString};
+use serde_json::{Value, json};
+use std::ffi::{CStr, CString, c_char};
 
 const MAX_PAYLOAD_BYTES: usize = 1024 * 1024; // 1 MB
 
