@@ -1,0 +1,52 @@
+name: Benchmark
+
+# 벤치마크 회귀 감지 (masterplan 4-2). 수동 트리거 + main 머지 후 선택 실행.
+# criterion 결과를 GitHub Steps summary 로 남긴다. 성능 회귀 임계 초과 시
+# (criterion 기본 임계) job 을 실패시켜 가시화한다.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/rustra/**'
+      - 'packages/types/**'
+      - '.github/workflows/bench.yml'
+
+jobs:
+  rust-bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.94.0
+      - uses: Swatinem/rust-cache@v2
+
+      # dev 프로파일 벤치 — dynamic(Tier 3) 경로가 register 로만 도달해
+      # debug 빌드가 필요하다 ( benches/tier_compare.rs 주석 참조 ).
+      - name: Run tier_compare benchmark
+        run: cargo bench -p rustra --profile dev -- tier_compare 2>&1 | tee bench_tier.txt
+
+      - name: Run type_scaling benchmark
+        run: cargo bench -p rustra --profile dev -- type_scaling 2>&1 | tee bench_scaling.txt
+
+      - name: Run dynamic_registry benchmark
+        run: cargo bench -p rustra --profile dev -- dynamic_registry 2>&1 | tee bench_dynamic.txt
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Benchmark results"
+            echo '```'
+            grep -E "time:|change:|Performance has" bench_tier.txt bench_scaling.txt bench_dynamic.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload criterion artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-results
+          path: target/criterion/
+          retention-days: 14
