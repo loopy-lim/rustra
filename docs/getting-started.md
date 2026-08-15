@@ -8,6 +8,19 @@ rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 
 
 ## 1. 설치
 
+### 가장 빠른 시작 — `rustra init`
+
+```bash
+npx @rustra/cli init my-project
+cd my-project
+cargo run            # ./generated 에 schema.json + TS 클라이언트 생성
+npm install && npm run codegen
+```
+
+스캐폴드는 Cargo 크레이트(echo 예제 커맨드 포함) + `generate` bin +
+package.json(codegen 스크립트)를 만든다. 4플랫폼(mobile+desktop) 러너가
+필요하면 모노레포의 `runner/template/create-runner.sh`를 참고한다.
+
 ### 외부 프로젝트에서 사용
 
 ```toml
@@ -632,19 +645,34 @@ Node, Bun, React Native 어댑터는 transport 구현에 따라 에러 형태가
 
 ---
 
-## 8. TypeScript 타입 매핑 한계
+## 8. TypeScript 타입 매핑
 
-대부분의 Rust 타입이 TypeScript로 올바르게 변환되지만, 현재 다음 타입은 `unknown`으로 폴백된다:
+대부분의 Rust 타입이 TypeScript로 올바르게 변환된다:
 
-| 미지원 타입          | 이유                            |
-| -------------------- | ------------------------------- |
-| `tuple` (`(A, B)`)   | `prefixItems` 미처리            |
-| `oneOf`              | `anyOf`만 처리                  |
-| `allOf`              | 교차 타입(intersection) 미처리  |
-| integer enum         | string enum만 리터럴 union 변환 |
-| 중첩 `$ref` (다단계) | 1단계까지만 해석                |
+| Rust 타입                           | TypeScript                      | 비고                                    |
+| ----------------------------------- | ------------------------------- | --------------------------------------- |
+| `String`, `&str`                    | `string`                        |                                         |
+| `i32`/`i64`/`u32`/`f32`/`f64`       | `number`                        |                                         |
+| `bool`                              | `boolean`                       |                                         |
+| `Option<T>`                         | `T \| null` (필드는 선택적 `?`) |                                         |
+| `Vec<T>`                            | `T[]`                           |                                         |
+| `BTreeSet<T>` / `HashSet<T>`        | `Set<T>`                        | `uniqueItems` — JSON 경로는 배열 직렬화 |
+| `(A, B, C)`                         | `[A, B, C]`                     | 튜플                                    |
+| `HashMap<String, T>`                | `Record<string, T>`             |                                         |
+| `enum` (unit variants)              | `'VariantA' \| 'VariantB'`      | string enum 리터럴 union                |
+| 중첩 구조 (`Box<T>`, `Vec<T>` 내부) | 정의 이름 `$ref` 해석           | 재귀 타입(self-reference) 포함          |
+| `anyOf` / `oneOf`                   | `A \| B` (union join)           |                                         |
 
-이런 타입이 필요하면 `types.ts`를 직접 수정하거나, `#[command(name = "...")]`으로 명시적 이름을 지정하는 방식으로 우회할 수 있다.
+남은 한계:
+
+| 미지원 타입       | 이유                            | 우회법                                      |
+| ----------------- | ------------------------------- | ------------------------------------------- |
+| `allOf`           | 교차 타입(intersection) 미처리  | 수동 타입 정의 또는 구조체 평탄화           |
+| integer enum      | string enum만 리터럴 union 변환 | `#[serde(rename)]`으로 문자열 변환          |
+| `oneOf` 판별 필드 | `const` 프로퍼티 미해석         | `#[serde(tag = "type")]` + 수동 판별자 사용 |
+
+postcard fast path(rkyv V2 코덱)는 primitive/Vec/Set/string 필드를 바이너리로
+인코딩하고, 그 외(enum-with-data 등)는 JSON-in-binary 폴백(Tier 3)으로 동작한다.
 
 ---
 

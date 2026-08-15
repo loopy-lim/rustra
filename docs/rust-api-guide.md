@@ -435,12 +435,28 @@ fn divide(a: i64, b: i64) -> Result<i64> {
 
 ### 에러 코드 분류
 
-| 코드                   | 팩토리 메서드                          | 의미                       |
-| ---------------------- | -------------------------------------- | -------------------------- |
-| `command.not_found`    | `RustraError::command_not_found(name)` | 등록되지 않은 명령 호출    |
-| `command.invalid_args` | `RustraError::invalid_args(error)`     | 입력 인자 역직렬화 실패    |
-| `internal`             | `RustraError::internal(error)`         | 내부 오류 (직렬화, I/O 등) |
-| (커스텀)               | `RustraError::custom(code, message)`   | 사용자 정의 에러           |
+| 코드                   | 팩토리 메서드                          | 의미                                    |
+| ---------------------- | -------------------------------------- | --------------------------------------- |
+| `command.not_found`    | `RustraError::command_not_found(name)` | 등록되지 않은 명령 호출                 |
+| `command.invalid_args` | `RustraError::invalid_args(error)`     | 입력 인자 역직렬화 실패                 |
+| `capability.denied`    | `RustraError::capability_denied(d)`    | capability 미부여                       |
+| `transport.error`      | `RustraError::transport(error)`        | transport/네트워크 오류 — **retryable** |
+| `transport.timeout`    | `RustraError::timeout(error)`          | 타임아웃 — **retryable**                |
+| `internal`             | `RustraError::internal(error)`         | 내부 오류 (직렬화, I/O 등)              |
+| (커스텀)               | `RustraError::custom(code, message)`   | 사용자 정의 에러                        |
+
+### 재시도 가능 여부 (retryable)
+
+`transport.error`/`transport.timeout` 생성 에러는 `retryable: true`로 설정된다.
+임의의 에러에 `.retryable()` 빌더를 붙일 수 있고, `is_retryable()`로 조회한다:
+
+```rust
+let err = RustraError::custom("db.locked", "retry later").retryable();
+assert!(err.is_retryable());
+```
+
+TypeScript 측 `RustraCommandError`는 `.retryable` 필드로 같은 값을 노출한다
+(와이어에 플래그가 없는 JSON 경로에서는 `transport.*` 코드 기반으로 추론).
 
 ### 에러 메서드
 
@@ -488,6 +504,7 @@ fn write_output() -> Result<()> {
 | `Vec<T>`                      | `T[]`                                   |
 | `Vec<Vec<T>>`                 | `T[][]` (중첩 지원)                     |
 | `HashMap<String, V>`          | `Record<string, V>`                     |
+| `BTreeSet<T>` / `HashSet<T>`  | `Set<T>` (`uniqueItems` 매핑)           |
 | `(A, B, C)`                   | `[A, B, C]` (튜플)                      |
 | 단순 `enum`                   | `'Variant1' \| 'Variant2'`              |
 | 데이터를 가진 `enum`          | 객체 유니온 타입                        |
