@@ -56,6 +56,11 @@ jobs:
         run: npx tsc --noEmit -p examples/crud/tsconfig.json
       - name: Test TypeScript (Node)
         run: npm run test:ts:node
+      - name: Install react-native example deps
+        # test:adapters 체인의 test:app:react-native 이 예제 의존성(react,
+        # react-native, nitro)을 필요로 한다 — 루트 npm ci 는 예제 node_modules 를
+        # 설치하지 않는다.
+        run: cd examples/react-native-calculator && npm install
       - name: Test adapters
         run: npm run test:adapters
       - name: Test CLI
