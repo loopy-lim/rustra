@@ -1,0 +1,20 @@
+[package]
+name = "rustra-streaming-example"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+rustra.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[[bin]]
+name = "rustra-streaming-generate"
+path = "src/bin/generate.rs"
+
+[[bin]]
+name = "rustra-streaming-invoke"
+path = "src/bin/invoke.rs"

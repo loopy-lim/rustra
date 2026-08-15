@@ -1,0 +1,144 @@
+{
+  "packageId": "examples.auth",
+  "commands": [
+    {
+      "name": "adminStats",
+      "commandId": 4,
+      "inputType": "AdminStatsInput",
+      "outputType": "AdminStatsOutput",
+      "inputSchema": {
+        "title": "AdminStatsInput",
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "AdminStatsOutput",
+        "type": "object",
+        "required": [
+          "sessions",
+          "uptimeMs"
+        ],
+        "properties": {
+          "sessions": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "uptimeMs": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      }
+    },
+    {
+      "name": "grant",
+      "commandId": 3,
+      "inputType": "GrantInput",
+      "outputType": "GrantOutput",
+      "inputSchema": {
+        "title": "GrantInput",
+        "type": "object",
+        "required": [
+          "capability",
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "capability": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "GrantOutput",
+        "type": "object",
+        "required": [
+          "granted"
+        ],
+        "properties": {
+          "granted": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    {
+      "name": "signIn",
+      "commandId": 1,
+      "inputType": "SignInInput",
+      "outputType": "SignInOutput",
+      "inputSchema": {
+        "title": "SignInInput",
+        "type": "object",
+        "required": [
+          "password",
+          "username"
+        ],
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "SignInOutput",
+        "type": "object",
+        "required": [
+          "role",
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "role": {
+            "description": "발급된 세션이 가진 초기 role — \"admin\" 이면 adminStats 요청 가능.",
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "signOut",
+      "commandId": 2,
+      "inputType": "SignOutInput",
+      "outputType": "SignOutOutput",
+      "inputSchema": {
+        "title": "SignOutInput",
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "SignOutOutput",
+        "type": "object",
+        "required": [
+          "signedOut"
+        ],
+        "properties": {
+          "signedOut": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  ]
+}

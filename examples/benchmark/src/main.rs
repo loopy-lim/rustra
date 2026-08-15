@@ -18,6 +18,8 @@ fn main() {
     bench_ts_generation(&package);
     bench_payload_scaling(&package);
     bench_concurrent_invocation(&package);
+    bench_parallel_invocation(&package);
+    bench_memory_usage(&package);
 }
 
 // ── Commands ──────────────────────────────────────────────
@@ -421,6 +423,127 @@ fn bench_concurrent_invocation(package: &rustra::Package) {
 
     // Summary ASCII chart
     print_summary_separator();
+}
+
+/// 실제 병렬 invoke — N 스레드 × iterations. `Package::invoke` 는 내부 레지스트리가
+/// RwLock 공유되므로 읽기 경합이 실측된다 (안전성은 tests/rkyv_v2_concurrency.rs 가
+/// 증명, 여기선 성능만).
+fn bench_parallel_invocation(package: &rustra::Package) {
+    println!("┌─ Throughput (multi-threaded, std::thread::scope) ───────┐");
+
+    for thread_count in [2usize, 4, 8] {
+        let iterations_per_thread = 125_000;
+        let start = Instant::now();
+
+        std::thread::scope(|scope| {
+            for _ in 0..thread_count {
+                scope.spawn(move || {
+                    let input = SimpleInput { a: 42, b: 58 };
+                    for _ in 0..iterations_per_thread {
+                        let _: Result<SimpleOutput> = package.invoke("addNumbers", input.clone());
+                    }
+                });
+            }
+        });
+
+        let elapsed = start.elapsed();
+        let total = (iterations_per_thread * thread_count) as f64;
+        let ops_per_sec = total / elapsed.as_secs_f64();
+        println!(
+            "│  {thread_count} threads × {iterations_per_thread}: {elapsed:.2?} — {}",
+            format_ops(ops_per_sec)
+        );
+    }
+
+    println!("└─────────────────────────────────────────────────────────┘");
+    println!();
+}
+
+/// 메모리 사용량 — invoke 와이어 할당 관점의 근사 측정.
+/// 의존성 없이 /proc 또는 mach API 대신, 할당 크기를 직렬화 결과 크기로 환산하는
+/// Rust 표준만으로 측정한다: payload별 직렬화 버퍼 크기 + invoke 전후 프로세스 RSS.
+fn bench_memory_usage(package: &rustra::Package) {
+    println!("┌─ Memory (wire size + RSS delta) ────────────────────────┐");
+
+    // 1) payload 크기별 직렬화 버퍼 크기 — 와이어 예산.
+    for item_count in [1usize, 10, 100, 1000] {
+        let items: Vec<Item> = (0..item_count)
+            .map(|i| Item {
+                id: i as i64,
+                name: format!("item-{i}"),
+                tags: vec![format!("tag-{i}")],
+                active: true,
+                score: i as f64,
+            })
+            .collect();
+        let input = PayloadInput { items };
+        let json = serde_json::to_vec(&input).expect("serialize");
+        let out: Result<PayloadOutput> = package.invoke("processPayload", input);
+        let _ = out;
+        println!("│  items={item_count:>5}: JSON wire {} bytes", json.len());
+    }
+
+    // 2) 대량 invoke 전후 RSS — macOS/Unix 공통 근사 (rustc std 만 사용).
+    //    RSS 측정이 불가한 플랫폼은 스킵 (정직).
+    if let Some(before) = current_rss_bytes() {
+        let input = SimpleInput { a: 1, b: 2 };
+        for _ in 0..100_000 {
+            let _: Result<SimpleOutput> = package.invoke("addNumbers", input.clone());
+        }
+        if let Some(after) = current_rss_bytes() {
+            println!(
+                "│  RSS after 100k invokes: {before} → {after} bytes (delta {})",
+                after.saturating_sub(before)
+            );
+        }
+    }
+
+    println!("└─────────────────────────────────────────────────────────┘");
+    println!();
+    print_summary_separator();
+}
+
+/// 프로세스 RSS 바이트 — macOS (mach) 우선, 실패 시 None.
+fn current_rss_bytes() -> Option<u64> {
+    #[cfg(target_os = "macos")]
+    {
+        // PAGE_SIZE * resident_page_count via mach_task_basic_info.
+        unsafe extern "C" {
+            fn mach_task_self() -> u32;
+            fn task_info(
+                target_task: u32,
+                flavor: u32,
+                task_info_out: *mut u8,
+                task_info_out_count: *mut u32,
+            ) -> i32;
+        }
+        #[repr(C)]
+        struct TaskBasicInfo {
+            suspend_count: i32,
+            virtual_size: u64,
+            resident_size: u64,
+            user_time: u64,
+            system_time: u64,
+            policy: i32,
+        }
+        const MACH_TASK_BASIC_INFO: u32 = 20;
+        let mut info = unsafe { std::mem::zeroed::<TaskBasicInfo>() };
+        let mut count = (std::mem::size_of::<TaskBasicInfo>() / std::mem::size_of::<u32>()) as u32;
+        let kr = unsafe {
+            task_info(
+                mach_task_self(),
+                MACH_TASK_BASIC_INFO,
+                &mut info as *mut TaskBasicInfo as *mut u8,
+                &mut count,
+            )
+        };
+        if kr == 0 {
+            return Some(info.resident_size);
+        }
+        return None;
+    }
+    #[cfg(not(target_os = "macos"))]
+    None
 }
 
 fn print_summary_separator() {

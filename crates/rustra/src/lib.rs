@@ -49,6 +49,7 @@ pub use rkyv_codec::encode_rkyv_v2_error;
 
 mod codegen;
 mod error;
+pub mod events;
 pub mod ffi;
 pub mod renderer_host;
 mod rkyv_codec;
@@ -178,6 +179,9 @@ pub struct Package {
     id: String,
     state: Arc<RwLock<RegistryState>>,
     frozen: Arc<AtomicBool>,
+    /// Rust → JS 이벤트 푸시 버스. `emit()` 으로 발행, 호스트 어댑터가
+    /// `event_bus()` 를 폴링해 플랫폼 푸시 채널로 전달한다.
+    bus: events::EventBus,
 }
 
 /// `Package`의 가변 내부 상태. `Arc<RwLock<_>>`로 보호되어 런타임 mutation을 지원한다.
@@ -382,6 +386,44 @@ impl Package {
         let params = serde_json::to_value(input).map_err(RustraError::invalid_args)?;
         let result = self.invoke_json(name, params)?;
         serde_json::from_value(result).map_err(RustraError::internal)
+    }
+
+    /// JS 로 푸시할 이벤트를 발행한다.
+    ///
+    /// 커맨드 핸들러 안에서 호출한다. 페이로드는 `Serialize` 가능한 값이면
+    /// 무엇이든 JSON 으로 직렬화된다. 발행된 이벤트는 [`Package::event_bus`]
+    /// 큐에 쌓이고, 호스트 어댑터가 폴링해 플랫폼 푸시 채널(Lynx BTS
+    /// `post_task_to_runtime`, Tauri `emit`, RN `DeviceEventEmitter`)로 전달한다.
+    ///
+    /// ```rust
+    /// # use rustra::prelude::*;
+    /// # #[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+    /// # #[serde(rename_all = "camelCase")]
+    /// # struct ProgressInput { total: i64 }
+    /// # #[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+    /// # #[serde(rename_all = "camelCase")]
+    /// # struct ProgressOutput { done: bool }
+    /// #[command]
+    /// fn start_work(input: ProgressInput) -> Result<ProgressOutput> {
+    ///     let pkg = current_package(); // 어댑터가 주입한 핸들
+    ///     for i in 0..input.total {
+    ///         pkg.emit("progress.tick", serde_json::json!({ "value": i }));
+    ///     }
+    ///     Ok(ProgressOutput { done: true })
+    /// }
+    /// # fn current_package() -> rustra::Package { unimplemented!() }
+    /// ```
+    pub fn emit<E: Serialize>(&self, event: impl Into<String>, payload: E) {
+        let json = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
+        self.bus.emit(event, json);
+    }
+
+    /// 이벤트 버스에 대한 접근자 — 호스트 어댑터 폴링용.
+    ///
+    /// 반환된 [`events::EventBus`]는 `Arc` 공유 클론이므로 어댑터에 저장해
+    /// 자유롭게 폴링(`take_pending_events`)할 수 있다.
+    pub fn event_bus(&self) -> &events::EventBus {
+        &self.bus
     }
 
     /// JSON [`Value`]를 직접 전달하여 명령을 호출합니다.
@@ -806,6 +848,7 @@ impl PackageBuilder {
                 granted_capabilities: BTreeSet::new(),
             })),
             frozen: Arc::new(AtomicBool::new(!cfg!(debug_assertions))),
+            bus: events::EventBus::new(),
         }
     }
 
