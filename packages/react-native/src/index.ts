@@ -130,3 +130,66 @@ export function createFastEngine(
     contractHash: options.contractHash,
   });
 }
+
+// ── P0-3 async offload — invokeAsync ──────────────────────────
+
+/**
+ * P0-3 async offload용 네이티브 인터페이스 확장 (선택 구현).
+ *
+ * 네이티브가 `invokeTypedAsync(name, args, callback)`을 노출하면 전용 worker
+ * 큐(또는 dispatch_async)에서 Rust 를 호출한 뒤 JS 콜백 큐로 직렬화한다 —
+ * 긴 Rust 연산이 JS 스레드를 블록하지 않는다 (jank 방지).
+ *
+ * 네이티브 구현이 없으면 `invokeAsync` 는 동기 `invokeTyped` 로 폴백한다
+ * (기능은 동일, 스레드 오프로드 없음).
+ */
+export type RustraJSIAsyncNative = RustraJSINative & {
+  /** 성공/에러 후 JS 콜백 큐에서 호출될 콜백 등록형 비동기 호출. */
+  invokeTypedAsync?(
+    name: string,
+    args: unknown,
+    onSuccess: (result: unknown) => void,
+    onError: (message: string) => void,
+  ): void;
+};
+
+/**
+ * 비동기 invoke — 무거운 Rust 연산을 JS 스레드에서 오프로드한다.
+ *
+ * - 네이티브 `invokeTypedAsync` 가 있으면: 즉시 반환, 결과는 JS 콜백 큐로 전달.
+ * - 없으면: 동기 fast path(`createFastEngine`)로 폴백 — 마이크로태스크로 래핑해
+ *   API 계약(`Promise<T>`)은 항상 동일하게 유지.
+ *
+ * @example
+ * ```ts
+ * import { createAsyncEngine } from '@rustra/react-native';
+ * const engine = createAsyncEngine(getRustraNative(), { rkyvV2Codecs: registry });
+ * const result = await engine.invoke('heavyCompute', { n: 1_000_000 });
+ * ```
+ */
+export function createAsyncEngine(
+  native: RustraJSIAsyncNative,
+  options: FastEngineOptions,
+): EngineClientType {
+  const syncEngine = createFastEngine(native, options);
+
+  if (typeof native.invokeTypedAsync !== 'function') {
+    // 폴백: 동기 엔진 재사용 (Promise 는 sync 엔진이 이미 반환).
+    return syncEngine;
+  }
+
+  const invokeTypedAsync = native.invokeTypedAsync.bind(native);
+
+  return {
+    invoke<T>(command: string, args?: unknown): Promise<T> {
+      return new Promise<T>((resolve, reject) => {
+        invokeTypedAsync(
+          command,
+          args,
+          (result) => resolve(result as T),
+          (message) => reject(parseRustraErrorString(message)),
+        );
+      });
+    },
+  };
+}

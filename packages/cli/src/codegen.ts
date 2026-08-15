@@ -58,6 +58,9 @@ export function tsTypeFromSchema(
           return `[${elementTypes.join(', ')}]`;
         }
         const itemType = itemSchema ? tsTypeFromSchema(itemSchema, definitions) : 'unknown';
+        // `uniqueItems: true` (Rust `BTreeSet`/`HashSet`)는 `Set<T>`로 매핑.
+        // Rust codegen(ts_type_from_schema)과 동일 규칙.
+        if (schema.uniqueItems) return `Set<${itemType}>`;
         return `${itemType}[]`;
       }
       case 'null':

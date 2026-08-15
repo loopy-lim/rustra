@@ -55,6 +55,8 @@ export type JsonSchema = {
   required?: string[];
   /** array 타입의 요소 스키마 */
   items?: JsonSchema | JsonSchema[];
+  /** 배열 요소의 유일성 (Rust `BTreeSet`/`HashSet` → TS `Set<T>`) */
+  uniqueItems?: boolean;
   additionalProperties?: JsonSchema;
   /** 다른 스키마에 대한 참조 (예: "#/definitions/Foo") */
   $ref?: string;

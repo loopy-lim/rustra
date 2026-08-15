@@ -100,7 +100,18 @@ export function generateContractTs(schemaJson: string): string {
 
 /** Postcard field types for schema classification. */
 type PostcardFieldKind =
-  'zigzag' | 'f64' | 'f32' | 'bool' | 'string' | 'vec_zigzag' | 'vec_f64' | 'vec_bool' | 'struct'; // nested struct via $ref
+  | 'zigzag'
+  | 'f64'
+  | 'f32'
+  | 'bool'
+  | 'string'
+  | 'vec_zigzag'
+  | 'vec_f64'
+  | 'vec_bool'
+  | 'set_zigzag'
+  | 'set_f64'
+  | 'set_bool'
+  | 'struct'; // nested struct via $ref; set_* = Set (wire-compatible with vec)
 
 type PostcardField = {
   name: string;
@@ -123,9 +134,11 @@ function classifyPostcardField(schema: import('./schema.js').JsonSchema): Postca
   if (schema.type === 'string') return 'string';
   if (schema.type === 'array' && schema.items && !Array.isArray(schema.items)) {
     const items = schema.items;
-    if (items.type === 'integer') return 'vec_zigzag';
-    if (items.type === 'number') return 'vec_f64';
-    if (items.type === 'boolean') return 'vec_bool';
+    // `uniqueItems`(Set)도 와이어포맷은 배열과 동일 — 인코딩 시 `[...value]`로
+    // 평탄화, 디코딩 시 `new Set(...)`로 복원 (postcard Vec와 byte 호환).
+    if (items.type === 'integer') return schema.uniqueItems ? 'set_zigzag' : 'vec_zigzag';
+    if (items.type === 'number') return schema.uniqueItems ? 'set_f64' : 'vec_f64';
+    if (items.type === 'boolean') return schema.uniqueItems ? 'set_bool' : 'vec_bool';
     return null;
   }
   return null;
@@ -238,6 +251,36 @@ function generateFieldEncodeExpr(
         `${indent}  }\n` +
         `${indent}}`
       );
+    case 'set_zigzag':
+      return (
+        `${indent}{\n` +
+        `${indent}  const _arr = [...${valueExpr}];\n` +
+        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
+        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
+        `${indent}    parts.push(_pcEncodeZigzagVarint(_arr[_i]));\n` +
+        `${indent}  }\n` +
+        `${indent}}`
+      );
+    case 'set_f64':
+      return (
+        `${indent}{\n` +
+        `${indent}  const _arr = [...${valueExpr}];\n` +
+        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
+        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
+        `${indent}    parts.push(_pcEncodeF64(_arr[_i]));\n` +
+        `${indent}  }\n` +
+        `${indent}}`
+      );
+    case 'set_bool':
+      return (
+        `${indent}{\n` +
+        `${indent}  const _arr = [...${valueExpr}];\n` +
+        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
+        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
+        `${indent}    parts.push(new Uint8Array([_arr[_i] ? 1 : 0]));\n` +
+        `${indent}  }\n` +
+        `${indent}}`
+      );
     case 'struct': {
       if (!field.refType) return `${indent}// unknown struct field: ${field.name}`;
       const structDef = definitions[field.refType];
@@ -343,6 +386,47 @@ function generateFieldDecodeExpr(
         `${indent}    offset += 1;\n` +
         `${indent}  }\n` +
         `${indent}  ${lvalue} = _arr;\n` +
+        `${indent}}`
+      );
+    case 'set_zigzag':
+      return (
+        `${indent}{\n` +
+        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
+        `${indent}  offset += _len.bytesRead;\n` +
+        `${indent}  const _set = new Set<number>();\n` +
+        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
+        `${indent}    const _v = _pcDecodeZigzagVarint(u8, offset);\n` +
+        `${indent}    _set.add(_v.value);\n` +
+        `${indent}    offset += _v.bytesRead;\n` +
+        `${indent}  }\n` +
+        `${indent}  ${lvalue} = _set;\n` +
+        `${indent}}`
+      );
+    case 'set_f64':
+      return (
+        `${indent}{\n` +
+        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
+        `${indent}  offset += _len.bytesRead;\n` +
+        `${indent}  const _set = new Set<number>();\n` +
+        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
+        `${indent}    const _v = _pcDecodeF64(u8, offset);\n` +
+        `${indent}    _set.add(_v.value);\n` +
+        `${indent}    offset += _v.bytesRead;\n` +
+        `${indent}  }\n` +
+        `${indent}  ${lvalue} = _set;\n` +
+        `${indent}}`
+      );
+    case 'set_bool':
+      return (
+        `${indent}{\n` +
+        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
+        `${indent}  offset += _len.bytesRead;\n` +
+        `${indent}  const _set = new Set<boolean>();\n` +
+        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
+        `${indent}    _set.add(u8[offset] === 1);\n` +
+        `${indent}    offset += 1;\n` +
+        `${indent}  }\n` +
+        `${indent}  ${lvalue} = _set;\n` +
         `${indent}}`
       );
     case 'struct': {

@@ -43,15 +43,20 @@ export type RkyvV2Engine = EngineClient & {
 export type RustraError = {
   readonly code: string;
   readonly message: string;
+  /** Rust `RustraError::retryable` — `transport.error`/`transport.timeout` 등에서 true */
+  readonly retryable?: boolean;
 };
 
 export class RustraCommandError extends Error {
   readonly code: string;
+  /** 재시도 가능한 에러인지 — Rust `RustraError::is_retryable` 와이어 값을 그대로 노출 */
+  readonly retryable: boolean;
 
-  constructor(code: string, message: string) {
+  constructor(code: string, message: string, retryable = false) {
     super(message);
     this.name = 'RustraCommandError';
     this.code = code;
+    this.retryable = retryable;
   }
 }
 
@@ -71,10 +76,20 @@ export function parseRustraErrorString(error: string | undefined | null): Rustra
   if (idx > 0) {
     const code = raw.slice(0, idx);
     if (/^[a-z][a-z0-9_.]*$/.test(code)) {
-      return new RustraCommandError(code, raw.slice(idx + 2));
+      return new RustraCommandError(code, raw.slice(idx + 2), isRetryableCode(code));
     }
   }
   return new RustraCommandError('invoke.failed', raw);
+}
+
+/**
+ * 코드 기반 retryable 추론 — Rust `RustraError` 팩토리 관례와 정합.
+ * `transport.error`/`transport.timeout`은 Rust 생성 시점에 `retryable: true`로
+ * 설정되는 유일한 코드군이다 (구조화 와이어에는 retryable 플래그가 없으므로
+ * 코드에서 도출한다).
+ */
+function isRetryableCode(code: string): boolean {
+  return code === 'transport.error' || code === 'transport.timeout';
 }
 
 // ── rkyv V2 codec types ────────────────────────────────────
@@ -313,11 +328,21 @@ export function getLiveSchema(native: { getSchema?(): ArrayBuffer }): Map<string
 // error:    [ok:0 @0][pad to @8][err_len: u16 LE @8][postcard({code,message}) @10]
 
 function encodeTier3Request(commandId: number, args: unknown): ArrayBuffer {
-  const json = _utf8Encode(JSON.stringify(args ?? {}));
+  const json = _utf8Encode(JSON.stringify(args ?? {}, _jsonSetReplacer));
   const buf = new Uint8Array(2 + json.length);
   new DataView(buf.buffer).setUint16(0, commandId, true);
   buf.set(json, 2);
   return buf.buffer;
+}
+
+/**
+ * JSON 경로에서 `Set`을 배열로 직렬화한다 — Rust `BTreeSet`/`HashSet`은
+ * serde JSON 에서 배열로 직렬화되므로 와이어 호환을 맞춘다
+ * (`Map`은 rustra 계약에 없으므로 다루지 않는다).
+ */
+function _jsonSetReplacer(_key: string, value: unknown): unknown {
+  if (value instanceof Set) return [...value];
+  return value;
 }
 
 // postcard varint + length-prefixed string decode, local to the Tier 3 path so
@@ -434,7 +459,9 @@ export function createRkyvV2Engine(
           const e = response.error ?? { code: 'invoke.failed', message: 'RkyvV2 invoke failed' };
           // Reject (do not throw) so the declared Promise<T> contract holds and
           // callers can use .catch() / await-try-consistently for command errors.
-          return Promise.reject(new RustraCommandError(e.code, e.message));
+          return Promise.reject(
+            new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code)),
+          );
         }
         return Promise.resolve(response.result as T);
       }
@@ -453,7 +480,9 @@ export function createRkyvV2Engine(
       );
       if (!resp.ok) {
         const e = resp.error ?? { code: 'invoke.failed', message: 'RkyvV2 (tier3) invoke failed' };
-        return Promise.reject(new RustraCommandError(e.code, e.message));
+        return Promise.reject(
+          new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code)),
+        );
       }
       return Promise.resolve(resp.result as T);
     },

@@ -101,7 +101,9 @@ export function createLynxEngine(native: RustraLynxJsonNative): EngineClientType
 
   return {
     async invoke<T>(command: string, args?: unknown): Promise<T> {
-      const json = JSON.stringify({ command, args });
+      const json = JSON.stringify({ command, args }, (_key, value) =>
+        value instanceof Set ? [...value] : value,
+      );
       const payload = encoder.encode(json);
       const resultBytes = native.invoke(payload.buffer);
       const response = JSON.parse(decoder.decode(resultBytes)) as {
