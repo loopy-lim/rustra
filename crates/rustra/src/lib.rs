@@ -194,13 +194,15 @@ pub mod tauri_support {
     ///
     /// # 페이로드 형태
     ///
-    /// 페이로드는 JSON **문자열** 그대로(`emit_str`) 전달된다 — rustra 이벤트
-    /// 페이로드는 이미 JSON 직렬화된 `String` 이므로 이중 직렬화 없이
-    /// JS 측에서 `JSON.parse` 한 번으로 원본 객체를 복원할 수 있다.
+    /// 페이로드는 JSON **문자열** 그대로(`emit_str`) 웹뷰로 전달된다 — rustra
+    /// 이벤트 페이로드는 이미 JSON 직렬화된 `String` 이므로 이중 직렬화가 없다.
+    /// Tauri 웹뷰 경로는 문자열을 JS 소스에 원시 splice 하므로 **JS `listen`
+    /// 콜백은 이미 파싱된 객체를 받는다** — `JSON.parse` 불필요. Rust 쪽
+    /// `listen` 만 원시 문자열을 본다(헤드리스 테스트가 확인하는 지점).
     ///
     /// # 에러 처리
     ///
-    /// `app.emit` 실패(리스너 없음 포함)는 stderr 에 로그만 남긴다 — 싱크 안에서
+    /// `app.emit` 실패는 stderr 에 로그만 남긴다 — 싱크 안에서
     /// 패닉하거나 프로세스를 죽이지 않는다(이벤트 1건 유실).
     pub fn register_with_events<R: tauri::Runtime>(
         package: Package,
@@ -596,6 +598,11 @@ impl Package {
     /// pkg.emit("tick", serde_json::json!({ "value": 2 }));
     /// assert_eq!(pkg.event_bus().take_pending_events().len(), 1); // 폴링 복귀
     /// ```
+    /// # 동시성
+    ///
+    /// 설정/해제 시점(부트스트랩·종료) 호출을 전제로 한다. 교체 직후 진행 중이던
+    /// `emit` 은 이전 경로(구 싱크 또는 버스)로 전달될 수 있으나, 이벤트별
+    /// 정확히 한 번 전달은 항상 유지된다.
     pub fn set_event_sink(&self, sink: Option<events::EventSink>) {
         *self.events.sink.write().unwrap() = sink;
     }
