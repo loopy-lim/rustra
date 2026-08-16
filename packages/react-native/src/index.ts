@@ -36,6 +36,14 @@ export type RustraJSINative = {
   hasStaticCodec?(name: string): boolean;
   invokeTyped?(name: string, args: unknown): unknown;
   invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
+  /**
+   * Rust → JS 이벤트 푸시(RN JSI EventDispatcher). 콜백 인자는 JSON 문자열 —
+   * `subscribeEvent` 래퍼가 파싱한다.
+   */
+  onEvent?(name: string, callback: (payloadJson: string) => void): void;
+  offEvent?(name: string): void;
+  /** CallInvoker 없는 호스트의 수동 drain 폴백. */
+  drainEvents?(): number;
 };
 
 export function createReactNativeEngine(native: { invoke(payload: ArrayBuffer): ArrayBuffer }) {
@@ -191,5 +199,73 @@ export function createAsyncEngine(
         );
       });
     },
+  };
+}
+
+// ── Event push: subscribeEvent (Rust → JS) ───────────────────
+
+/**
+ * 이벤트 푸시에 필요한 최소 네이티브 표면 — 구조적 타이핑으로 어떤 호스트
+ * 객체도(`RustraNative`, `RustraJSINative`, 테스트 mock) 전달 가능하다.
+ */
+export type RustraEventNative = {
+  onEvent?(name: string, callback: (payloadJson: string) => void): void;
+  offEvent?(name: string): void;
+};
+
+/**
+ * Rust `emit` → JS 콜백 구독. 반환 함수로 구독 해제한다.
+ *
+ * 네이티브 경로(C++ JSI `onEvent`/`offEvent`) 위에서:
+ * - **페이로드 파싱**: C++ 가 JSON 문자열을 JSI 로 그대로 넘기고(경계 횡단
+ *   비용 최소화) 이 래퍼가 `JSON.parse` 1회로 객체를 복원한다. 콜백은 항상
+ *   파싱된 객체를 받는다.
+ * - **스레딩**: Rust `emit` 은 어느 스레드에서든 호출될 수 있다. C++ 이
+ *   이벤트를 큐에 적재하고 JS CallInvoker 로 JS 런타임 스레드에 drain 을
+ *   예약하므로 콜백은 항상 JS 스레드에서 실행된다.
+ * - **전달 계약**: 첫 구독 시 네이티브가 FFI 이벤트 싱크를 설치한다(폴링
+ *   경로 → 푸시 전환). 마지막 구독 해제 시 싱크가 해제되어 폴링 경로로
+ *   복귀한다. JS 콜백이 throw 해도 나머지 이벤트는 유실되지 않는다.
+ *
+ * 네이티브가 `onEvent` 를 노출하지 않으면(구버전 브릿지) 구독이 즉시
+ * 해제되는 no-op 로 동작한다.
+ *
+ * @example
+ * ```ts
+ * import { subscribeEvent } from '@rustra/react-native';
+ *
+ * const unsubscribe = subscribeEvent('progress.tick', (payload) => {
+ *   console.log(payload.step, '/', payload.total); // 파싱된 객체
+ * });
+ * // 나중에
+ * unsubscribe();
+ * ```
+ */
+export function subscribeEvent(
+  native: RustraEventNative,
+  name: string,
+  cb: (payload: unknown) => void,
+): () => void {
+  if (typeof native.onEvent !== 'function') {
+    // 구버전 네이티브 — no-op 구독 해제 함수 반환.
+    return () => {};
+  }
+  native.onEvent(name, (payloadJson) => {
+    // JSON 문자열 → 객체 1회 파싱. 파싱 실패(빈 문자열/손상 페이로드)는
+    // null 로 정규화해 콜백 계약을 지킨다.
+    let payload: unknown = null;
+    if (payloadJson && payloadJson.length > 0) {
+      try {
+        payload = JSON.parse(payloadJson);
+      } catch {
+        payload = null;
+      }
+    }
+    cb(payload);
+  });
+  return () => {
+    if (typeof native.offEvent === 'function') {
+      native.offEvent(name);
+    }
   };
 }

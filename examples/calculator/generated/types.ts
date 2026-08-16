@@ -44,6 +44,15 @@ export type DivideOutput = {
   value: number;
 };
 
+export type EmitDemoInput = {
+  ticks: number;
+  stepDelayMs: number;
+};
+
+export type EmitDemoOutput = {
+  emitted: number;
+};
+
 export type GreetInput = {
   name: string;
 };

@@ -788,6 +788,9 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   lines.push(`#include <string>`);
   lines.push(``);
   lines.push(`using namespace facebook::jsi;`);
+  // 명시적 `jsi::` 한정자(generated codec bodies) 를 위한 별칭 — RN Pods 의
+  // jsi.h 는 `namespace jsi` 를 facebook:: 내부에만 연다.
+  lines.push(`namespace jsi = facebook::jsi;`);
   lines.push(`namespace rc = rustra::codec;`);
   lines.push(``);
   for (const command of schema.commands) {

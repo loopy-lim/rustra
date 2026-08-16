@@ -7,6 +7,7 @@ import { StyleSheet, Text, View, ScrollView } from "react-native";
 import { installRustraJSI, getRustraNative } from "./modules/rustra-jsi/src";
 import { createJsonEngine } from "./src/adapters/json-adapter";
 import { createRkyvV2Engine, getLiveSchema } from "@rustra/types";
+import { subscribeEvent } from "../../packages/react-native/src";
 
 type Engine = ReturnType<typeof createJsonEngine>;
 
@@ -170,6 +171,66 @@ async function rkyvV2InvokeSafe<T>(
   }
 }
 
+// ── Event push demo (Rust → JS) ───────────────────────────
+// subscribeEvent 로 progress.tick / demo.done 를 등록한 뒤 emitDemo 커맨드로
+// Rust 가 발행한 이벤트가 CallInvoker 를 거쳐 JS 콜백으로 도달하는지 관찰한다.
+// 콜백은 파싱된 객체를 받는다(TS 래퍼가 JSON.parse 1회).
+async function runEventPushDemo(
+  native: ReturnType<typeof getRustraNative>,
+  log: (s: string) => void,
+): Promise<void> {
+  const engine = createJsonEngine(native);
+
+  log("╔══════════════════════════════════════════════╗");
+  log("║     Event push (Rust emit → JS callback)      ║");
+  log("╚══════════════════════════════════════════════╝");
+
+  const ticks: number[] = [];
+  let done: number | null = null;
+  let ticksObserved = 0;
+  let doneObserved = false;
+
+  const unsubscribeTick = subscribeEvent(native, "progress.tick", (payload) => {
+    ticksObserved += 1;
+    const p = payload as { step: number; total: number } | null;
+    if (p) {
+      ticks.push(p.step);
+      log(`  ⬇ progress.tick step=${p.step}/${p.total}`);
+    }
+  });
+  const unsubscribeDone = subscribeEvent(native, "demo.done", (payload) => {
+    doneObserved = true;
+    const p = payload as { emitted: number } | null;
+    if (p) {
+      done = p.emitted;
+      log(`  ⬇ demo.done emitted=${p.emitted}`);
+    }
+  });
+
+  try {
+    // ticks=5, 각 스텝 30ms — 순서 관찰용. 커맨드가 반환하기 전에도 이벤트가
+    // 이미 큐를 거쳐 JS 로 스트리밍된다(push 경로).
+    const result = await engine.invoke<{ emitted: number }>("emitDemo", {
+      ticks: 5,
+      stepDelayMs: 30,
+    });
+    log(`emitDemo returned emitted=${result.emitted}`);
+
+    // drain 이 비동기(CallInvoker 예약)이므로 잠깐 대기 후 집계.
+    await new Promise((r) => setTimeout(r, 150));
+  } catch (e) {
+    log(`ERROR: ${e instanceof Error ? e.message : String(e)}`);
+  } finally {
+    unsubscribeTick();
+    unsubscribeDone();
+  }
+
+  log("");
+  log(
+    `✅ ticks observed=${ticksObserved} (${ticks.join(",")}) done=${doneObserved} emitted=${done ?? "?"}`,
+  );
+}
+
 export default function App() {
   const [lines, setLines] = useState<string[]>(["Installing JSI..."]);
 
@@ -186,6 +247,7 @@ export default function App() {
         const engine = createJsonEngine(getRustraNative());
         await runDemo(engine, log);
         await runSingleEngineDemo(getRustraNative(), log);
+        await runEventPushDemo(getRustraNative(), log);
       } catch (e) {
         log("ERROR: " + (e instanceof Error ? e.message : String(e)));
       }

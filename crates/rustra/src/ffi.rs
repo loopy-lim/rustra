@@ -7,10 +7,13 @@
 //! - `rustra_ffi_invoke_json`     — JSON-over-bytes path
 //! - `rustra_ffi_invoke_postcard` — postcard binary path
 //! - `rustra_ffi_free`            — free returned buffers
+//! - `rustra_ffi_event_sink_register`   — C 콜백 이벤트 싱크 설치 (push)
+//! - `rustra_ffi_event_sink_unregister` — 싱크 해제 (폴링 복귀)
 
 use crate::Package;
 use serde::{Deserialize, Serialize};
-use std::sync::OnceLock;
+use std::ffi::{c_char, c_void};
+use std::sync::{Mutex, OnceLock};
 
 static PACKAGE: OnceLock<Package> = OnceLock::new();
 static DEFAULT_FORMAT: OnceLock<FfiFormat> = OnceLock::new();
@@ -40,6 +43,9 @@ impl Package {
     pub fn register_ffi_with_default(&self, format: FfiFormat) {
         let _ = PACKAGE.set(self.clone());
         let _ = DEFAULT_FORMAT.set(format);
+        // rustra_ffi_event_sink_register 가 패키지 등록보다 먼저 호출된 경우의
+        // 지연 설치 — C 싱크가 이미 등록되어 있으면 지금 Rust 싱크로 연결한다.
+        self.install_pending_ffi_event_sink();
     }
 }
 
@@ -502,6 +508,174 @@ pub unsafe extern "C" fn rustra_ffi_contract_hash(out_len: *mut usize) -> *mut u
     alloc_response(hex.into_bytes(), out_len)
 }
 
+// -- Event sink (push delivery) ------------------------------------------
+
+/// C 호스트가 `rustra_ffi_event_sink_register` 로 등록하는 콜백 원형.
+///
+/// `user_data` 는 등록 시 호스트가 넢긴 포인터 그대로, `name`/`payload` 는
+/// NUL 종료 UTF-8 C 문자열(호출 기간에만 유효 — 필요하면 복사).
+///
+/// ABI 는 `extern "C-unwind"` 다 — 콜백이 되감기(unwind)를 일으킬 수 있음을
+/// 명시한다. Rust `catch_unwind` 이 콜백 패닉을 가둬 emit 호출자를 보호하는
+/// 계약([`events::EventSink`] 의 패닉 격리)과 짝을 이룬다. 순수 C 호스트는
+/// 되감기를 일으키지 않으므로 그대로 동작한다.
+pub type FfiEventCallback = unsafe extern "C-unwind" fn(
+    user_data: *mut c_void,
+    name: *const c_char,
+    payload: *const c_char,
+);
+
+/// 등록된 C 콜백 + 호스트 소유 `user_data`. 전역 [`Mutex`] 하나로 보호한다 —
+/// 등록/해제는 부트스트랩·종료 시점에 드물게 일어나므로 락 경합은 무시 가능.
+struct FfiEventSink {
+    callback: FfiEventCallback,
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    user_data: *mut c_void,
+}
+
+impl Clone for FfiEventSink {
+    fn clone(&self) -> Self {
+        Self {
+            callback: self.callback,
+            user_data: self.user_data,
+        }
+    }
+}
+
+/// `FfiEventSink.user_data` 는 호스트 소유 원시 포인터 — Rust 이동/빌림 규칙
+/// 밖이다. 콜백 래퍼에서만 값으로 취급(역참조 없음)하므로 `Send + Sync` 선언이
+/// 안전하다.
+unsafe impl Send for FfiEventSink {}
+unsafe impl Sync for FfiEventSink {}
+
+impl FfiEventSink {
+    /// 저장된 콜백을 C ABI 로 호출한다. 문자열은 NUL 종료로 변환해 전달한다.
+    ///
+    /// 반환 `false` 는 name/payload 에 내부 NUL 이 있어 CString 변환에 실패해
+    /// 이벤트가 소실되었다는 뜻이다(호출자가 로그로 처리).
+    fn invoke(&self, name: &str, payload: &str) -> bool {
+        let Ok(name_c) = std::ffi::CString::new(name) else {
+            return false;
+        };
+        let Ok(payload_c) = std::ffi::CString::new(payload) else {
+            return false;
+        };
+        unsafe { (self.callback)(self.user_data, name_c.as_ptr(), payload_c.as_ptr()) };
+        true
+    }
+}
+
+static FFI_EVENT_SINK: Mutex<Option<FfiEventSink>> = Mutex::new(None);
+
+/// 전역 패키지에 C 콜백 기반 이벤트 싱크를 설치한다.
+///
+/// 설치 이후 `Package::emit` 은 이벤트 버스 적재 대신 즉시
+/// `callback(user_data, name, payload)` 을 호출한다 — 각 인자는 NUL 종료 UTF-8
+/// C 문자열 포인터다. `payload` 는 JSON 직렬화된 문자열 그대로다(파싱은 JS
+/// 어댑터에서 1회).
+///
+/// # 스레드 계약
+///
+/// 콜백은 `emit` 을 호출한 **어느 스레드에서든** 실행될 수 있다. JSI 같은
+/// 런타임 스레드 친화성이 필요한 호스트는 콜백 안에서 자체 큐잉 후 자기
+/// 런타임 스레드(CallInvoker 등)로 마샬링해야 한다.
+///
+/// # 패닉 격리
+///
+/// 패닉은 [`events::EventState::deliver_via_sink`] 의 `catch_unwind` 이 가둔다
+/// — 콜백이 패닉하면 stderr 로그 후 해당 이벤트가 소실되고 `emit` 은 정상
+/// 복귀한다(싱크는 유지).
+///
+/// # Safety
+///
+/// `callback` 은 유효한 함수 포인터여야 한다. `user_data` 는 호스트가 소유하며
+/// [`rustra_ffi_event_sink_unregister`] 전까지(또는 교체 등록 직전까지) 유효해야
+/// 한다. 이미 등록된 싱크가 있으면 조용히 교체한다(구 콜백은 더 이상 호출되지
+/// 않는다 — 구 `user_data` 해제는 호스트 책임).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_event_sink_register(
+    callback: FfiEventCallback,
+    user_data: *mut c_void,
+) {
+    // catch_unwind: 전역 락이 이미 포이즈닝된 경우에도 등록 경로가 UB 를
+    // 만들지 않게 한다(패닉은 stderr 로그만 남긴다).
+    let _ = std::panic::catch_unwind(|| {
+        let new_sink = FfiEventSink {
+            callback,
+            user_data,
+        };
+        let mut guard = match FFI_EVENT_SINK.lock() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        *guard = Some(new_sink.clone());
+        drop(guard);
+
+        // 전역 패키지가 이미 등록되어 있으면 Rust 싱크를 설치한다. 미등록이면
+        // 나중에 register_ffi() 가 호출될 때 install_pending_ffi_event_sink 가
+        // 설치를 이어간다(지연 설치).
+        if let Some(pkg) = PACKAGE.get() {
+            pkg.set_event_sink(Some(rust_event_sink(new_sink)));
+        }
+    });
+}
+
+/// 설치된 C 콜백 싱크를 제거하고 폴링(이벤트 버스) 경로로 되돌린다.
+///
+/// 제거 후 `emit` 은 다시 버스에 적재된다 — `take_pending_events` 폴링 호스트와
+/// 상호 운용된다. 미등록 상태에서 호출해도 안전하다(no-op).
+///
+/// # Safety
+///
+/// 이 함수 자체는 안전하게 호출할 수 있다(unsafe 는 `extern "C"` ABI 선언의
+/// 산물이다). 등록된 콜백의 `user_data` 소유권은 여전히 호스트에게 있다 —
+/// 해제 시점은 호스트가 결정한다.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_event_sink_unregister() {
+    let _ = std::panic::catch_unwind(|| {
+        let mut guard = match FFI_EVENT_SINK.lock() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
+        };
+        *guard = None;
+        if let Some(pkg) = PACKAGE.get() {
+            pkg.set_event_sink(None);
+        }
+    });
+}
+
+/// C 콜백을 [`crate::events::EventSink`] 로 감싼 Rust 클로저를 만든다.
+///
+/// 콜백 스냅샷을 클로저에 캡처한다 — 등록 시점의 (callback, user_data) 쌍이
+/// 그대로 호출되고, 재등록/해제는 `set_event_sink` 교체로 반영된다. emit 시점에
+/// 전역 레지스트리를 다시 읽지 않으므로 재등록 직후 진행 중이던 emit 이 구
+/// 콜백을 호출하는 창이 최소화된다(정확히 한 번 전달은 유지).
+fn rust_event_sink(sink: FfiEventSink) -> crate::events::EventSink {
+    std::sync::Arc::new(move |name: &str, payload: &str| {
+        // name/payload 는 rustra 가 생성한 UTF-8 이므로 내부 NUL 변환 실패는
+        // 사실상 불가 — 실패해도 이벤트 소실 로그만 남기고 패닉하지 않는다.
+        if !sink.invoke(name, payload) {
+            eprintln!("rustra: event name/payload contains interior NUL — event dropped");
+        }
+    })
+}
+
+impl Package {
+    /// (내부용) FFI C 콜백 싱크가 등록되어 있으면 이 패키지에 설치한다.
+    ///
+    /// `register_ffi` 보다 `rustra_ffi_event_sink_register` 가 먼저 호출된 경우
+    /// (패키지 미등록) 지연 설치를 위해 사용된다.
+    fn install_pending_ffi_event_sink(&self) {
+        let pending = match FFI_EVENT_SINK.lock() {
+            Ok(g) => g.clone(),
+            Err(poisoned) => poisoned.into_inner().clone(),
+        };
+        if let Some(sink) = pending {
+            self.set_event_sink(Some(rust_event_sink(sink)));
+        }
+    }
+}
+
 // -- Tests ---------------------------------------------------------------
 
 #[cfg(test)]
@@ -640,5 +814,140 @@ mod tests {
         );
 
         unsafe { rustra_ffi_free(ptr, out_len) };
+    }
+
+    // ── rustra_ffi_event_sink_register / unregister ─────────────
+    //
+    // 전역 PACKAGE / FFI_EVENT_SINK 을 공유하므로 병렬 테스트 간 간섭이 생긴다
+    // (PACKAGE.set 은 첫 등록만 유효 — 이후 테스트의 패키지는 전역에 반영되지
+    // 않는다). 따라서 상태 전이 전체(등록 → emit 수신 → 해제 → 폴링 복귀)를
+    // 하나의 순차 테스트로 완결하고, 전역 락으로 다른 sink 테스트와 상호배제한다.
+
+    /// 전역 PACKAGE 가 이미 등록되어 있으면 그것을, 아니면 지금 등록한다.
+    /// (register_ffi 는 idempotent — 첫 호출이 이긴다.)
+    fn ensure_global_package() -> Package {
+        let pkg = test_package();
+        pkg.register_ffi();
+        PACKAGE.get().expect("package must be registered").clone()
+    }
+
+    /// C 콜백이 (name, payload) 를 그대로 수신하는지 검증한다.
+    unsafe extern "C-unwind" fn record_event_cb(
+        user_data: *mut c_void,
+        name: *const c_char,
+        payload: *const c_char,
+    ) {
+        let seen = unsafe { &*(user_data as *const Mutex<Vec<(String, String)>>) };
+        let name = unsafe { std::ffi::CStr::from_ptr(name) }
+            .to_string_lossy()
+            .into_owned();
+        let payload = unsafe { std::ffi::CStr::from_ptr(payload) }
+            .to_string_lossy()
+            .into_owned();
+        seen.lock().unwrap().push((name, payload));
+    }
+
+    /// sink 테스트 간 상호배제 락 — 등록/해제가 전역 상태를 공유하므로.
+    static SINK_TEST_MUTEX: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn ffi_event_sink_register_receives_emit_and_bypasses_bus() {
+        let _guard = SINK_TEST_MUTEX.lock().unwrap();
+        let pkg = ensure_global_package();
+
+        let seen: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+        unsafe {
+            rustra_ffi_event_sink_register(record_event_cb, &seen as *const _ as *mut c_void)
+        };
+
+        pkg.emit("progress.tick", serde_json::json!({ "value": 42 }));
+
+        let events = seen.lock().unwrap().clone();
+        assert_eq!(events.len(), 1, "C callback must receive the emit");
+        assert_eq!(events[0].0, "progress.tick");
+        let payload: serde_json::Value = serde_json::from_str(&events[0].1).unwrap();
+        assert_eq!(payload["value"], 42);
+        assert!(
+            pkg.event_bus().take_pending_events().is_empty(),
+            "sink installed → bus must stay empty"
+        );
+
+        // 정리 — 이후 테스트가 폴링 경로에서 시작하도록.
+        unsafe { rustra_ffi_event_sink_unregister() };
+    }
+
+    #[test]
+    fn ffi_event_sink_unregister_restores_polling() {
+        let _guard = SINK_TEST_MUTEX.lock().unwrap();
+        let pkg = ensure_global_package();
+
+        let seen: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+        unsafe {
+            rustra_ffi_event_sink_register(record_event_cb, &seen as *const _ as *mut c_void)
+        };
+        pkg.emit("a", serde_json::json!({ "n": 1 }));
+        unsafe { rustra_ffi_event_sink_unregister() };
+
+        pkg.emit("b", serde_json::json!({ "n": 2 }));
+
+        assert_eq!(
+            seen.lock().unwrap().len(),
+            1,
+            "only pre-unregister emit hits the callback"
+        );
+        let polled = pkg.event_bus().take_pending_events();
+        assert_eq!(polled.len(), 1, "post-unregister emit must go to the bus");
+        assert_eq!(polled[0].name, "b");
+    }
+
+    #[test]
+    fn ffi_event_sink_panicking_callback_does_not_break_emit() {
+        let _guard = SINK_TEST_MUTEX.lock().unwrap();
+        let pkg = ensure_global_package();
+
+        unsafe extern "C-unwind" fn panic_cb(
+            _user_data: *mut c_void,
+            _name: *const c_char,
+            _payload: *const c_char,
+        ) {
+            panic!("host callback exploded");
+        }
+        unsafe { rustra_ffi_event_sink_register(panic_cb, std::ptr::null_mut()) };
+
+        // 패닉이 emit 호출자로 전파되지 않아야 한다 (deliver_via_sink 가 격리).
+        pkg.emit("boom", serde_json::json!({ "n": 1 }));
+        pkg.emit("boom", serde_json::json!({ "n": 2 }));
+
+        unsafe { rustra_ffi_event_sink_unregister() };
+    }
+
+    #[test]
+    fn ffi_event_sink_register_before_package_defers_install() {
+        let _guard = SINK_TEST_MUTEX.lock().unwrap();
+        // 등록 순서가 반대인 경우: 싱크 먼저 → 패키지 등록 나중.
+        // register_ffi_with_default 이 지연 설치를 이어받아야 한다.
+        // (전역 PACKAGE 는 다른 테스트가 이미 등록했을 수 있다 — 어느 쪽이든
+        //  지연 설치 경로가 동일하게 검증된다: FFI_EVENT_SINK 상태만 확인.)
+        unsafe { rustra_ffi_event_sink_unregister() }; // 깨끗한 상태에서 시작
+        let seen: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
+        unsafe {
+            rustra_ffi_event_sink_register(record_event_cb, &seen as *const _ as *mut c_void)
+        };
+
+        let pkg = ensure_global_package();
+
+        pkg.emit("late.register", serde_json::json!({ "ok": true }));
+
+        let events = seen.lock().unwrap().clone();
+        assert_eq!(
+            events.len(),
+            1,
+            "deferred install must connect the C sink on register_ffi"
+        );
+        assert_eq!(events[0].0, "late.register");
+
+        unsafe { rustra_ffi_event_sink_unregister() };
+        pkg.emit("after", serde_json::json!({ "n": 3 }));
+        assert_eq!(pkg.event_bus().take_pending_events().len(), 1);
     }
 }

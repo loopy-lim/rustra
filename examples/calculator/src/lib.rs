@@ -269,6 +269,46 @@ pub fn secure_compute(input: SecureComputeInput) -> Result<SecureComputeOutput> 
     })
 }
 
+// ── Event push demo (Rust → JS 싱크 검증) ─────────────────
+// `emitDemo` 는 `Package::emit` 으로 progress.tick N 회 + demo.done 1 회를
+// 발행한다. RN JSI 호스트가 rustra_ffi_event_sink_register 로 C 콜백을
+// 등록했으면 emit 이 즉시 콜백으로 전달된다(푸시 경로). 등록 안 된
+// 호스트에서는 기존대로 이벤트 버스에 쌓인다(폴링 경로) — 하위호환.
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct EmitDemoInput {
+    /// 발행할 progress.tick 이벤트 수.
+    pub ticks: i64,
+    /// 각 스텝 사이 대기 (ms). 데모에서 이벤트 순서를 관찰하기 쉽게.
+    pub step_delay_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct EmitDemoOutput {
+    pub emitted: i64,
+}
+
+#[command]
+pub fn emit_demo(input: EmitDemoInput) -> Result<EmitDemoOutput> {
+    let pkg = rustra::ffi::get_package()
+        .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))?;
+    let ticks = input.ticks.max(0);
+    let delay = input.step_delay_ms.max(0) as u64;
+    for step in 0..ticks {
+        if delay > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(delay));
+        }
+        pkg.emit(
+            "progress.tick",
+            serde_json::json!({ "step": step + 1, "total": ticks }),
+        );
+    }
+    pkg.emit("demo.done", serde_json::json!({ "emitted": ticks + 1 }));
+    Ok(EmitDemoOutput { emitted: ticks + 1 })
+}
+
 // ── Runtime registry demo (debug-only dynamic mutation) ─────────────
 // `rustraRegistryDemo` 는 빌드 시점에 등록되어 항상 호출 가능하며, 런타임에 live
 // package 를 mutate 한다. RN 이 사용하는 동일 FFI 경로(invoke_json)를 통해 동작하며,
@@ -497,6 +537,7 @@ pub fn calculator_package() -> Package {
                 create_item,
                 process_item,
                 divide,
+                emit_demo,
                 rustra_registry_demo,
                 secure_compute
             )
@@ -1981,13 +2022,13 @@ mod tests {
 
     #[test]
     fn test_rkyv_v2_capability_deny() {
-        // secureCompute (command_id = 12) requires capability "compute:secure".
+        // secureCompute (command_id = 13) requires capability "compute:secure".
         // In the debug build the package is mutable but the capability is never
         // granted here → deny-by-default → capability.denied wire error.
         let input = SecureComputeInput { a: 6, b: 7 };
         let input_bytes = postcard::to_allocvec(&input).unwrap();
         let mut payload = vec![0u8; 2 + input_bytes.len()];
-        payload[0..2].copy_from_slice(&12u16.to_le_bytes()); // command_id = 12 (secureCompute)
+        payload[0..2].copy_from_slice(&13u16.to_le_bytes()); // command_id = 13 (secureCompute)
         payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
 
         let mut out_len: usize = 0;

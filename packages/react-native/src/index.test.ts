@@ -93,3 +93,91 @@ test('F4: error response rejects with RustraCommandError carrying code', async (
     },
   );
 });
+
+// ── subscribeEvent (Rust → JS push) ─────────────────────────
+
+import { subscribeEvent } from './index.js';
+import type { RustraEventNative } from './index.js';
+
+type RecordedListener = { name: string; callback: (payloadJson: string) => void };
+
+function createEventNative() {
+  const listeners = new Map<string, (payloadJson: string) => void>();
+  const calls: RecordedListener[] = [];
+  const native = {
+    onEvent(name: string, callback: (payloadJson: string) => void) {
+      calls.push({ name, callback });
+      listeners.set(name, callback);
+    },
+    offEvent(name: string) {
+      listeners.delete(name);
+    },
+  };
+  return {
+    native,
+    listeners,
+    calls,
+    emit(name: string, payloadJson: string) {
+      listeners.get(name)?.(payloadJson);
+    },
+  };
+}
+
+test('subscribeEvent registers a native listener and parses the JSON payload once', () => {
+  const h = createEventNative();
+  const received: unknown[] = [];
+  const payloadJson = JSON.stringify({ step: 1, total: 5 });
+
+  subscribeEvent(h.native, 'progress.tick', (payload) => {
+    received.push(payload);
+  });
+
+  assert.equal(h.calls.length, 1, 'native.onEvent must be called once');
+  assert.equal(h.calls[0].name, 'progress.tick');
+  h.emit('progress.tick', payloadJson);
+
+  assert.deepEqual(received, [{ step: 1, total: 5 }], 'callback receives the parsed object');
+});
+
+test('subscribeEvent unsubscribe removes the native listener', () => {
+  const h = createEventNative();
+
+  const unsubscribe = subscribeEvent(h.native, 'demo.done', () => {});
+  assert.equal(h.listeners.size, 1);
+  unsubscribe();
+
+  assert.equal(h.listeners.size, 0, 'offEvent must remove the listener');
+});
+
+test('subscribeEvent normalizes unparseable payloads to null', () => {
+  const h = createEventNative();
+  const received: unknown[] = [];
+
+  subscribeEvent(h.native, 'bad.json', (payload) => {
+    received.push(payload);
+  });
+  h.emit('bad.json', 'not-json{');
+
+  assert.deepEqual(received, [null], 'broken JSON must arrive as null, not throw');
+});
+
+test('subscribeEvent no-ops when native has no onEvent (legacy bridge)', () => {
+  // 구버전 네이티브 — onEvent/offEvent 미노출. throw 없이 no-op 구독 해제 반환.
+  const legacy: RustraEventNative = {};
+  const unsubscribe = subscribeEvent(legacy, 'any.event', () => {});
+  unsubscribe(); // throw 하지 않아야 한다
+});
+
+test('subscribeEvent coexists with multiple event names', () => {
+  const h = createEventNative();
+  const ticks: unknown[] = [];
+  const dones: unknown[] = [];
+
+  subscribeEvent(h.native, 'progress.tick', (p) => ticks.push(p));
+  subscribeEvent(h.native, 'demo.done', (p) => dones.push(p));
+  h.emit('progress.tick', JSON.stringify({ step: 2 }));
+  h.emit('demo.done', JSON.stringify({ emitted: 6 }));
+
+  assert.deepEqual(ticks, [{ step: 2 }]);
+  assert.deepEqual(dones, [{ emitted: 6 }]);
+});
