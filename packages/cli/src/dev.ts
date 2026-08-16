@@ -15,6 +15,7 @@ import { resolve, dirname, join } from 'node:path';
 export interface DevOptions {
   backendDir: string;
   appDir: string;
+  inspect: boolean;
 }
 
 export function parseDevArgs(args: string[]): DevOptions {
@@ -25,6 +26,7 @@ export function parseDevArgs(args: string[]): DevOptions {
   return {
     backendDir: get('backend') ?? 'backend',
     appDir: get('app') ?? 'app',
+    inspect: args.includes('--inspect'),
   };
 }
 
@@ -146,6 +148,12 @@ export async function runDev(args: string[]): Promise<void> {
     try {
       await runOnce(plan, { rustBin, tsCli });
       console.log(`[dev] ${new Date().toLocaleTimeString()} regenerated`);
+      if (opts.inspect) {
+        // CLI 와 앱 JS 프로세스는 분리되어 있어 in-process 계측은 불가 —
+        // 앱 측에서 @rustra/devtools 로 엔진을 감싸도록 안내한다 (정직한 범위).
+        console.log('[dev:inspect] 앱 프로세스에서 createInstrumentedEngine 로 감싸면');
+        console.log('[dev:inspect] report() 를 콘솔/원격으로 노출할 수 있습니다: @rustra/devtools');
+      }
     } catch (e) {
       console.error(`[dev] regeneration failed: ${e instanceof Error ? e.message : e}`);
     }
