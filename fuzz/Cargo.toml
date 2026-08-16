@@ -1,0 +1,24 @@
+[package]
+name = "rustra-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+# 메인 workspace 비멤버 — cargo-fuzz 전용 프로파일/nightly 를 격리한다.
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+rustra = { path = "../crates/rustra" }
+serde = { version = "1", features = ["derive"] }
+schemars = { version = "0.8", features = ["derive", "preserve_order"] }
+
+[[bin]]
+name = "invoke_rkyv_v2"
+path = "fuzz_targets/invoke_rkyv_v2.rs"
+test = false
+doc = false
+bench = false

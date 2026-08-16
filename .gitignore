@@ -34,3 +34,9 @@ examples/lynx-calculator/host/HostApp.app/
 **/Pods/
 
 /packages/*/dist-test/
+
+# cargo-fuzz 산출물
+fuzz/corpus/
+fuzz/artifacts/
+fuzz/coverage/
+fuzz/target/

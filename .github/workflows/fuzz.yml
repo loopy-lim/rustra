@@ -1,0 +1,32 @@
+name: Fuzz
+
+# rkyv V2 디코드 경로(신뢰 경계) 무작위 입력 검증 — 10분 타임박스 (배경 트랙 B2).
+# cargo-fuzz 는 nightly + 별도 crate (fuzz/, 메인 workspace 비멤버) 로 격리.
+# 크래시 아티팩트는 업로드 후 이슈로 수동 등록한다.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 19 * * 6' # 토요일 KST 새벽 4:23 — 오프피크
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true # 실험 — 크래시 발견도 수확
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - run: cargo install cargo-fuzz --locked
+      - name: Fuzz invoke_rkyv_v2 (10min)
+        run: cd fuzz && cargo fuzz run invoke_rkyv_v2 -- -max_total_time=600 -max_len=1024
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crash-${{ github.run_id }}
+          path: fuzz/artifacts/
+          if-no-files-found: ignore
