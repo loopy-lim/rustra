@@ -58,6 +58,12 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (args[0] === 'dev') {
+    const { runDev } = await import('./dev.js');
+    await runDev(args.slice(1));
+    return;
+  }
+
   console.error(`Unknown command: ${args[0]}`);
   console.error('Run "rustra --help" for usage information.');
   process.exit(1);
@@ -221,6 +227,7 @@ Usage:
   rustra generate --watch --schema <path> --output <dir>
   rustra init <dir>
   rustra diff --old <schema.v1.json> --new <schema.json> [--format json]
+  rustra dev [--backend <dir>] [--app <dir>]
 
 Options:
   --schema <path>    Path to schema.json file
@@ -232,6 +239,8 @@ Options:
   --old <path>       (diff) old schema version to compare from
   --new <path>       (diff) new schema version to compare against
   --format <fmt>     (diff) 'text' (default) or 'json' (machine-readable DiffResult)
+  --backend <dir>    (dev) Rust backend crate dir (default: ./backend)
+  --app <dir>        (dev) App dir containing generated/ (default: ./app)
   --help, -h         Show this help message
 
 Examples:
@@ -239,6 +248,7 @@ Examples:
   rustra generate --watch --config rustra.json
   rustra generate --schema ./gen/schema.json --output ./src/generated --cpp-output ./ios
   rustra diff --old ./generated/schema.v1.json --new ./generated/schema.json
+  rustra dev --backend runner/template/backend --app runner/template/app
 `);
 }
 

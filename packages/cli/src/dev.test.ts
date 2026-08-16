@@ -3,7 +3,7 @@ import test from 'node:test';
 import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseDevArgs, planPipeline, detectDirty } from './dev.js';
+import { parseDevArgs, planPipeline, detectDirty, runOnce } from './dev.js';
 
 test('parseDevArgs parses backend dir and app dir', () => {
   const opts = parseDevArgs(['--backend', './backend', '--app', './app']);
@@ -70,4 +70,16 @@ test('detectDirty: schema newer → not dirty (rust)', () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('runOnce executes dirty stages in order and skips clean ones', async () => {
+  const calls: string[] = [];
+  await runOnce(
+    { rustBin: true, tsCli: false },
+    {
+      rustBin: async () => void calls.push('rust'),
+      tsCli: async () => void calls.push('ts'),
+    },
+  );
+  assert.deepEqual(calls, ['rust']);
 });
