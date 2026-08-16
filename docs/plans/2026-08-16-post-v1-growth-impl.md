@@ -19,13 +19,14 @@
 - **dual-path codegen**: 생성 파일은 두 경로로 나뉜다.
   1. Rust bin (`backend/src/bin/generate.rs`) → `types.ts`/`commands.ts`/`contract.ts`/`schema.json`
   2. TS CLI (`packages/cli`) → `rkyv-codecs.ts`/`rkyv-registry.ts`
-  한쪽만 돌리면 stale → `runner/template/codegen.sh`가 둘 다 순서대로 실행한다.
+     한쪽만 돌리면 stale → `runner/template/codegen.sh`가 둘 다 순서대로 실행한다.
 - **watch의 사각**: `rustra generate --watch`는 schema.json 파일 변경만 감시한다. schema.json은 **Rust bin을 실행해야** 갱신되므로, Rust 소스 수정 → schema.json 재생성 → TS 재생성 순으로 수동 2단계다. `rustra dev`가 이 간극을 메운다.
 - **런타임 레지스트리**: debug 빌드에서 `Package::register/replace/unregister`가 동작(release는 freeze). 본 스프린트에서는 **코드 레벨 검증만** 사용하고 프로세스 무중단 주입은 하지 않는다.
 
 ### Task 1: `rustra dev` 서브커맨드 — Rust 소스 감시 + codegen 파이프라인 재실행
 
 **Files:**
+
 - Create: `packages/cli/src/dev.ts` (신규 모듈)
 - Modify: `packages/cli/src/index.ts` (서브커맨드 분기 + help)
 - Test: `packages/cli/src/dev.test.ts`
@@ -126,6 +127,7 @@ git commit -m "feat(cli): rustra dev 인자 파싱/파이프라인 플래그 —
 ### Task 2: stale 감지 — mtime 비교로 dirty 판정
 
 **Files:**
+
 - Modify: `packages/cli/src/dev.ts`
 - Modify: `packages/cli/src/dev.test.ts`
 
@@ -206,7 +208,10 @@ function newestMtime(dir: string): number {
 }
 
 /** codegen 재실행 판정에 필요한 stale 상태. */
-export function detectDirty(backendDir: string, generatedDir: string): {
+export function detectDirty(
+  backendDir: string,
+  generatedDir: string,
+): {
   rustNewerThanSchema: boolean;
   codecsStaleAgainstSchema: boolean;
 } {
@@ -243,6 +248,7 @@ git commit -m "feat(cli): rustra dev stale 감지 — mtime 기반 dual-path dir
 ### Task 3: 파이프라인 실행기 — cargo 재빌드 감시 루프와 watch 통합
 
 **Files:**
+
 - Modify: `packages/cli/src/dev.ts` (runDev 엔트리)
 - Modify: `packages/cli/src/index.ts` (서브커맨드 분기 + help 텍스트)
 - Test: `packages/cli/src/dev.test.ts` (실행기 계약 테스트만 — 실 루프는 통합 검증)
@@ -292,7 +298,9 @@ import { watch } from 'node:fs';
 function spawnInherit(cmd: string, args: string[], cwd: string): Promise<void> {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(cmd, args, { cwd, stdio: 'inherit' });
-    child.on('exit', (code) => (code === 0 ? resolvePromise() : reject(new Error(`${cmd} exit ${code}`))));
+    child.on('exit', (code) =>
+      code === 0 ? resolvePromise() : reject(new Error(`${cmd} exit ${code}`)),
+    );
     child.on('error', reject);
   });
 }
@@ -303,8 +311,7 @@ export async function runDev(args: string[]): Promise<void> {
   const appDir = resolve(opts.appDir);
   const generatedDir = join(appDir, 'generated');
 
-  const rustBin = () =>
-    spawnInherit('cargo', ['run', '--quiet', '--bin', 'generate'], backendDir);
+  const rustBin = () => spawnInherit('cargo', ['run', '--quiet', '--bin', 'generate'], backendDir);
   const tsCli = async () => {
     // codegen.sh 탐색 정책 재사용: 명시 env > 상위 탐색
     const cli = process.env.RUSTRA_CLI ?? findRepoCli(resolve(appDir));
@@ -312,7 +319,11 @@ export async function runDev(args: string[]): Promise<void> {
       console.error('[dev] rustra CLI 를 찾을 수 없음 — RUSTRA_CLI env 지정 필요');
       return;
     }
-    await spawnInherit('node', [cli, 'generate', '--schema', join(generatedDir, 'schema.json'), '--output', generatedDir], appDir);
+    await spawnInherit(
+      'node',
+      [cli, 'generate', '--schema', join(generatedDir, 'schema.json'), '--output', generatedDir],
+      appDir,
+    );
   };
 
   const tick = async (reason: string) => {
@@ -358,11 +369,11 @@ function findRepoCli(from: string): string | null {
 `packages/cli/src/index.ts`의 `main()`에 `diff` 분기 뒤 추가:
 
 ```ts
-  if (args[0] === 'dev') {
-    const { runDev } = await import('./dev.js');
-    await runDev(args.slice(1));
-    return;
-  }
+if (args[0] === 'dev') {
+  const { runDev } = await import('./dev.js');
+  await runDev(args.slice(1));
+  return;
+}
 ```
 
 `printHelp()`의 Usage/Options/Examples에 추가:
@@ -389,6 +400,7 @@ git commit -m "feat(cli): rustra dev — 소스 감시 + dual-path codegen 자�
 ### Task 4: 통합 검증 — runner 템플릿에서 실재작동 증명
 
 **Files:**
+
 - Modify: `runner/template/README.md` (dev 워크플로 절 추가)
 
 **Step 1: 실동작 스파크테스트**
@@ -428,6 +440,7 @@ git commit -m "docs: runner 템플릿 rustra dev 워크플로"
 ### Task 5: 패키지 스캐폴드 + createMockEngine 코어
 
 **Files:**
+
 - Create: `packages/testing/package.json`, `packages/testing/tsconfig.json`, `packages/testing/src/index.ts`, `packages/testing/src/index.test.ts`
 - Modify: 루트 `package.json` (`test:packages` 스크립트에 `packages/testing/dist/index.test.js` 추가)
 
@@ -461,8 +474,7 @@ test('handler errors become RustraCommandError with custom code', async () => {
   });
   await assert.rejects(
     () => engine.invoke('fail'),
-    (err: unknown) =>
-      err instanceof RustraCommandError && err.code === 'validation.too_large',
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'validation.too_large',
   );
 });
 
@@ -540,9 +552,14 @@ export function createMockEngine(): MockEngine {
   return engine;
 }
 
-function isRustraErrorShape(e: unknown): e is { code: string; message: string; retryable?: boolean } {
+function isRustraErrorShape(
+  e: unknown,
+): e is { code: string; message: string; retryable?: boolean } {
   return (
-    typeof e === 'object' && e !== null && 'code' in e && 'message' in e &&
+    typeof e === 'object' &&
+    e !== null &&
+    'code' in e &&
+    'message' in e &&
     typeof (e as { code: unknown }).code === 'string' &&
     typeof (e as { message: unknown }).message === 'string'
   );
@@ -573,6 +590,7 @@ git commit -m "feat(testing): @rustra/testing createMockEngine — 계약 동일
 ### Task 6: 계약 게이트 — schema.json 대비 생성 코드 정합성 검사
 
 **Files:**
+
 - Create: `packages/testing/src/contract-gate.ts`
 - Modify: `packages/testing/src/index.ts` (export), `packages/testing/src/index.test.ts`
 
@@ -641,6 +659,7 @@ git commit -m "feat(testing): 계약 게이트 — schema.json 대비 클라이�
 ### Task 7: createInstrumentedEngine — 호출 로그/지연/에러 수집 래퍼
 
 **Files:**
+
 - Create: `packages/devtools/package.json`, `packages/devtools/tsconfig.json`, `packages/devtools/tsconfig.test.json`, `packages/devtools/src/index.ts`, `packages/devtools/src/index.test.ts`
 - Modify: 루트 `package.json` (`test:packages`에 devtools 추가)
 
@@ -750,6 +769,7 @@ git commit -m "feat(devtools): @rustra/devtools createInstrumentedEngine — 호
 ### Task 8: `rustra dev --inspect` 연결점
 
 **Files:**
+
 - Modify: `packages/cli/src/dev.ts`
 
 **Step 1: 구현** — `runDev`가 `--inspect` 플래그를 받으면, codegen tick 후 `InstrumentedEngine` 사용을 안내하는 주석과 함께 app 측 `@rustra/devtools` 로드 가이드를 로그로 출력 (JS 프로세스가 CLI와 다르므로 in-process 연결은 불가 — 로그 기반 안내가 정직한 범위):
@@ -783,6 +803,7 @@ git commit -m "feat(cli): rustra dev --inspect — devtools 연결 안내"
 ### Task 9: windows-experiment.yml — SDK 다운로드 + 심볼 덤프 + 빌드 시도
 
 **Files:**
+
 - Create: `.github/workflows/windows-experiment.yml`
 
 **Step 1: 워크플로 작성**
@@ -805,7 +826,7 @@ jobs:
   windows:
     runs-on: windows-latest
     timeout-minutes: 30
-    continue-on-error: true   # 실험 잡 — 메인 CI 를 막지 않는다
+    continue-on-error: true # 실험 잡 — 메인 CI 를 막지 않는다
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.95.0
@@ -871,6 +892,7 @@ git commit -m "ci: windows-experiment — lynx.dll export 덤프 + MSVC 빌드 �
 ### Task 10: fuzz crate + CI 워크플로
 
 **Files:**
+
 - Create: `fuzz/Cargo.toml`, `fuzz/fuzz_targets/invoke_rkyv_v2.rs`, `.gitignore` 항목 (`fuzz/corpus`, `fuzz/artifacts`, `fuzz/target`, `fuzz/Cargo.lock`은 커밋)
 - Create: `.github/workflows/fuzz.yml`
 
@@ -954,13 +976,13 @@ name: Fuzz
 on:
   workflow_dispatch:
   schedule:
-    - cron: '23 19 * * 6'   # 토요일 KST 새벽 — 오프피크
+    - cron: '23 19 * * 6' # 토요일 KST 새벽 — 오프피크
 
 jobs:
   fuzz:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    continue-on-error: true   # 실험 — 크래시 발견도 수확
+    continue-on-error: true # 실험 — 크래시 발견도 수확
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
