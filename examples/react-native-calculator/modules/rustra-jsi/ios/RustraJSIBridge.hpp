@@ -1,9 +1,12 @@
 #pragma once
 
 #include <jsi/jsi.h>
+#include <deque>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 namespace rustra {
 
@@ -16,6 +19,16 @@ extern "C" {
   uint8_t* rustra_ffi_invoke_postcard(
     const uint8_t* payload, size_t payload_len, size_t* out_len);
   void rustra_ffi_free(uint8_t* ptr, size_t len);
+
+  // ── Event sink push delivery (from rustra::ffi) ─────────
+  // C 호스트가 Rust → JS 이벤트 푸시용 콜백을 등록/해제한다.
+  // 콜백은 emit 호출 스레드에서 실행된다 — 호스트가 JS 런타임 스레드로
+  // 마샬링해야 한다 (아래 EventDispatcher).
+  typedef void (*rustra_event_callback_t)(
+    void* user_data, const char* name, const char* payload);
+  void rustra_ffi_event_sink_register(
+    rustra_event_callback_t callback, void* user_data);
+  void rustra_ffi_event_sink_unregister(void);
 
   // ── Per-example FFI (benchmark legacy) ──────────────────
   uint8_t* rustra_calculator_invoke_bytes(
@@ -43,6 +56,54 @@ struct CachedFunction {
   facebook::jsi::Function function;
 };
 
+/// Rust → JS 이벤트 푸시 디스패처.
+///
+/// FFI C 콜백(emitting 스레드)이 (name, payload_json) 을 큐에 적재하면
+/// JS 런타임 스레드의 CallInvoker 가 큐를 drain 해 per-name JS 콜백으로
+/// 전달한다. CallInvoker 가 없는 호스트(유닛 테스트 등)는 `__rustraNative`
+/// 의 `drainEvents()` HostFunction 로 폴링 drain 할 수 있다.
+///
+/// 스레딩 계약:
+/// - `onRustEvent` (FFI 콜백) — 어느 스레드에서든. 뮤텍스로 보호된 큐에
+///   적재만 하고 JS 객체를 건드리지 않는다.
+/// - `drain` — 반드시 JS 런타임 스레드에서. `Function::call` 은 JS 스레드에서만
+///   안전하다 (CallInvoker 콜백 내부 또는 JS 가 drainEvents() 를 호출할 때).
+/// - 큐는 고정 용량(1024) drop-oldest — JS 가 느려도 emit 스레드를 블록하지
+///   않는다 (Rust EventBus 정책과 동일).
+class EventDispatcher : public std::enable_shared_from_this<EventDispatcher> {
+public:
+  /// JS 스레드 마샬링용 CallInvoker 설정. installRustraJSI* 에서 호출된다.
+  void setCallInvoker(std::shared_ptr<void> invoker);
+
+  /// (name, callback) JS 리스너 등록/해제. JS 스레드에서 호출됨
+  /// (HostFunction 경유). 같은 이름에 두 번 등록하면 마지막이 이긴다.
+  void setListener(facebook::jsi::Runtime& rt, const std::string& name,
+                   facebook::jsi::Function callback);
+  void removeListener(const std::string& name);
+
+  /// FFI C 콜백 — emitting 스레드에서 호출된다. 큐 적재 + CallInvoker 로
+  /// drain 예약만 한다.
+  static void onRustEvent(void* user_data, const char* name, const char* payload);
+
+  /// 큐의 모든 이벤트를 JS 리스너로 전달한다. JS 런타임 스레드에서만 호출.
+  void drain(facebook::jsi::Runtime& rt);
+
+  /// 미처리 이벤트 수 (JS 폴링/디버그용).
+  size_t pendingCount();
+
+private:
+  void scheduleDrainLocked();
+
+  std::mutex mutex_;
+  std::deque<std::pair<std::string, std::string>> queue_;
+  size_t capacity_ = 1024;
+  size_t dropped_ = 0;
+  bool drainScheduled_ = false;
+  std::shared_ptr<void> callInvoker_;
+  /// per-name JS 콜백 레지스트리 — drain 에서만 접근(JS 스레드).
+  std::unordered_map<std::string, facebook::jsi::Function> listeners_;
+};
+
 /// Optimized HostObject that caches all JSI functions on first access.
 /// Avoids per-call string comparison and Function::createFromHostFunction allocation.
 class RustraHostObject : public facebook::jsi::HostObject {
@@ -68,5 +129,17 @@ private:
 };
 
 void installRustraJSI(facebook::jsi::Runtime& rt);
+
+/// installRustraJSI + JS 스레드 CallInvoker 주입. iOS(RCTCxxBridge) 와
+/// Android(CallInvokerHolder) 플랫폼 글루가 각자의 방식으로 CallInvoker 를
+/// 얻어 이 진입점으로 넘긴다.
+///
+/// CallInvoker 타입은 `facebook::react::CallInvoker` 이지만 이 헤더는
+/// ReactAndroid/React-callinvoker 헤더에 의존하지 않는다 — 플랫폼 글루가
+/// `void` shared_ptr 로 type-erase 해서 전달하고, .cpp 가 내부에서
+/// static_cast 로 복원한다(단일 정의 지점 유지).
+void installRustraJSIWithInvoker(
+  facebook::jsi::Runtime& rt,
+  std::shared_ptr<void> typeErasedCallInvoker);
 
 } // namespace rustra

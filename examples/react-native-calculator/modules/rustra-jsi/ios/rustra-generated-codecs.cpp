@@ -52,6 +52,32 @@ static jsi::Value decode_createItem(jsi::Runtime& rt, rc::Reader& r) {
   return std::move(resultObj);
 }
 
+static void encode_divide(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(10); w.push_u8(0); // cmd_id = 10 LE
+  auto argsObj = args.asObject(rt);
+  { auto _v = argsObj.getProperty(rt, "a").asNumber(); w.push_i64((int64_t)_v); }
+  { auto _v = argsObj.getProperty(rt, "b").asNumber(); w.push_i64((int64_t)_v); }
+}
+
+static jsi::Value decode_divide(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  resultObj.setProperty(rt, "value", (double)r.read_i64());
+  return std::move(resultObj);
+}
+
+static void encode_emitDemo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(11); w.push_u8(0); // cmd_id = 11 LE
+  auto argsObj = args.asObject(rt);
+  { auto _v = argsObj.getProperty(rt, "ticks").asNumber(); w.push_i64((int64_t)_v); }
+  { auto _v = argsObj.getProperty(rt, "stepDelayMs").asNumber(); w.push_i64((int64_t)_v); }
+}
+
+static jsi::Value decode_emitDemo(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  resultObj.setProperty(rt, "emitted", (double)r.read_i64());
+  return std::move(resultObj);
+}
+
 static void encode_greet(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(5); w.push_u8(0); // cmd_id = 5 LE
   auto argsObj = args.asObject(rt);
@@ -109,7 +135,7 @@ static jsi::Value decode_processItem(jsi::Runtime& rt, rc::Reader& r) {
 }
 
 static void encode_rustraRegistryDemo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
-  w.push_u8(10); w.push_u8(0); // cmd_id = 10 LE
+  w.push_u8(12); w.push_u8(0); // cmd_id = 12 LE
   auto argsObj = args.asObject(rt);
   { auto _v = argsObj.getProperty(rt, "op").getString(rt).utf8(rt); w.push_string(_v); }
 }
@@ -119,6 +145,19 @@ static jsi::Value decode_rustraRegistryDemo(jsi::Runtime& rt, rc::Reader& r) {
   resultObj.setProperty(rt, "ok", r.read_bool());
   resultObj.setProperty(rt, "frozen", r.read_bool());
   { auto _s = r.read_string(); resultObj.setProperty(rt, "message", jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_s.data()), _s.size())); }
+  return std::move(resultObj);
+}
+
+static void encode_secureCompute(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(13); w.push_u8(0); // cmd_id = 13 LE
+  auto argsObj = args.asObject(rt);
+  { auto _v = argsObj.getProperty(rt, "a").asNumber(); w.push_i64((int64_t)_v); }
+  { auto _v = argsObj.getProperty(rt, "b").asNumber(); w.push_i64((int64_t)_v); }
+}
+
+static jsi::Value decode_secureCompute(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  resultObj.setProperty(rt, "value", (double)r.read_i64());
   return std::move(resultObj);
 }
 
@@ -153,11 +192,14 @@ bool encode_by_name(Runtime& rt, const std::string& name, const Value& args, rc:
   if (name == "addNumbers") { encode_addNumbers(rt, args, w); return true; }
   if (name == "clamp") { encode_clamp(rt, args, w); return true; }
   if (name == "createItem") { encode_createItem(rt, args, w); return true; }
+  if (name == "divide") { encode_divide(rt, args, w); return true; }
+  if (name == "emitDemo") { encode_emitDemo(rt, args, w); return true; }
   if (name == "greet") { encode_greet(rt, args, w); return true; }
   if (name == "isEven") { encode_isEven(rt, args, w); return true; }
   if (name == "multiply") { encode_multiply(rt, args, w); return true; }
   if (name == "processItem") { encode_processItem(rt, args, w); return true; }
   if (name == "rustraRegistryDemo") { encode_rustraRegistryDemo(rt, args, w); return true; }
+  if (name == "secureCompute") { encode_secureCompute(rt, args, w); return true; }
   if (name == "sumList") { encode_sumList(rt, args, w); return true; }
   if (name == "toUpper") { encode_toUpper(rt, args, w); return true; }
   return false; // 동적 명령 — JS 가 Tier 3 fallback 처리
@@ -167,11 +209,14 @@ Value decode_by_name(Runtime& rt, const std::string& name, rc::Reader& r) {
   if (name == "addNumbers") return decode_addNumbers(rt, r);
   if (name == "clamp") return decode_clamp(rt, r);
   if (name == "createItem") return decode_createItem(rt, r);
+  if (name == "divide") return decode_divide(rt, r);
+  if (name == "emitDemo") return decode_emitDemo(rt, r);
   if (name == "greet") return decode_greet(rt, r);
   if (name == "isEven") return decode_isEven(rt, r);
   if (name == "multiply") return decode_multiply(rt, r);
   if (name == "processItem") return decode_processItem(rt, r);
   if (name == "rustraRegistryDemo") return decode_rustraRegistryDemo(rt, r);
+  if (name == "secureCompute") return decode_secureCompute(rt, r);
   if (name == "sumList") return decode_sumList(rt, r);
   if (name == "toUpper") return decode_toUpper(rt, r);
   throw JSError(rt, "rustra: no C++ codec for '" + name + "'");
@@ -181,11 +226,14 @@ bool has_static_codec(const std::string& name) {
   if (name == "addNumbers") return true;
   if (name == "clamp") return true;
   if (name == "createItem") return true;
+  if (name == "divide") return true;
+  if (name == "emitDemo") return true;
   if (name == "greet") return true;
   if (name == "isEven") return true;
   if (name == "multiply") return true;
   if (name == "processItem") return true;
   if (name == "rustraRegistryDemo") return true;
+  if (name == "secureCompute") return true;
   if (name == "sumList") return true;
   if (name == "toUpper") return true;
   return false;

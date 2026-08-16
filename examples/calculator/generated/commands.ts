@@ -1,4 +1,4 @@
-import type { AddNumbersInput, AddNumbersOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, SecureComputeInput, SecureComputeOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, SecureComputeInput, SecureComputeOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
 import { invoke } from '@rustra/types';
 
 export function addNumbers(input: AddNumbersInput): Promise<AddNumbersOutput> {
@@ -15,6 +15,10 @@ export function createItem(input: CreateItemInput): Promise<CreateItemOutput> {
 
 export function divide(input: DivideInput): Promise<DivideOutput> {
   return invoke<DivideOutput>('divide', input);
+}
+
+export function emitDemo(input: EmitDemoInput): Promise<EmitDemoOutput> {
+  return invoke<EmitDemoOutput>('emitDemo', input);
 }
 
 export function greet(input: GreetInput): Promise<GreetOutput> {

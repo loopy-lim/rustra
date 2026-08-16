@@ -132,6 +132,21 @@ export type RustraNative = {
   invokeTyped?(name: string, args: unknown): unknown;
   /** P0-2: 정적 명령 N 개를 단일 횡단으로 일괄 처리 (RN JSI). */
   invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
+  /**
+   * Rust → JS 이벤트 푸시 리스너 등록(RN JSI). `payloadJson` 은 **JSON 문자열**로
+   * 전달된다 — TS 래퍼(`@rustra/react-native` `subscribeEvent`)가
+   * `JSON.parse` 1회로 객체로 복원한다. 등록 시점에 C++ 이 FFI 싱크를
+   * 설치하고, 이후 Rust `emit` 은 CallInvoker 로 JS 스레드에 마샬링되어
+   * 콜백을 호출한다.
+   */
+  onEvent?(name: string, callback: (payloadJson: string) => void): void;
+  /** 등록된 이벤트 리스너 제거(RN JSI). 마지막 리스너 제거 시 폴링 경로 복귀. */
+  offEvent?(name: string): void;
+  /**
+   * CallInvoker 없는 호스트의 JS 폴링 drain(RN JSI). 처리된 이벤트 수 반환.
+   * CallInvoker 경로가 켜져 있으면 대개 호출 즉시 0(자동 drain 됨).
+   */
+  drainEvents?(): number;
 };
 
 // ── Global invoke (Tauri-like) ──────────────────────────────

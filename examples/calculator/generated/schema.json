@@ -175,6 +175,45 @@
       }
     },
     {
+      "name": "emitDemo",
+      "commandId": 11,
+      "inputType": "EmitDemoInput",
+      "outputType": "EmitDemoOutput",
+      "inputSchema": {
+        "title": "EmitDemoInput",
+        "type": "object",
+        "required": [
+          "stepDelayMs",
+          "ticks"
+        ],
+        "properties": {
+          "ticks": {
+            "description": "발행할 progress.tick 이벤트 수.",
+            "type": "integer",
+            "format": "int64"
+          },
+          "stepDelayMs": {
+            "description": "각 스텝 사이 대기 (ms). 데모에서 이벤트 순서를 관찰하기 쉽게.",
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "EmitDemoOutput",
+        "type": "object",
+        "required": [
+          "emitted"
+        ],
+        "properties": {
+          "emitted": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      }
+    },
+    {
       "name": "greet",
       "commandId": 5,
       "inputType": "GreetInput",
@@ -330,7 +369,7 @@
     },
     {
       "name": "rustraRegistryDemo",
-      "commandId": 11,
+      "commandId": 12,
       "inputType": "RegistryDemoInput",
       "outputType": "RegistryDemoOutput",
       "inputSchema": {
@@ -368,7 +407,7 @@
     },
     {
       "name": "secureCompute",
-      "commandId": 12,
+      "commandId": 13,
       "inputType": "SecureComputeInput",
       "outputType": "SecureComputeOutput",
       "inputSchema": {
