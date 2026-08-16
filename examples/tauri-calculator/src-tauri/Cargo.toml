@@ -14,5 +14,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "2", features = [] }
 
+[dev-dependencies]
+# event_push.rs 통합 테스트 — headless MockRuntime 검증에 필요.
+schemars = "0.8"
+tauri = { version = "2", features = ["test"] }
+
 [features]
 custom-protocol = ["tauri/custom-protocol"]
