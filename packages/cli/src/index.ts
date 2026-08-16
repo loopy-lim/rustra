@@ -241,6 +241,7 @@ Options:
   --format <fmt>     (diff) 'text' (default) or 'json' (machine-readable DiffResult)
   --backend <dir>    (dev) Rust backend crate dir (default: ./backend)
   --app <dir>        (dev) App dir containing generated/ (default: ./app)
+  --inspect          (dev) codegen tick 후 @rustra/devtools 계측 안내 출력
   --help, -h         Show this help message
 
 Examples:
