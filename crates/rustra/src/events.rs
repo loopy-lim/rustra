@@ -83,10 +83,14 @@ impl EventState {
             return false;
         };
         if let Err(panic) = catch_unwind(AssertUnwindSafe(|| sink(name, payload))) {
+            let panic_msg = panic
+                .downcast_ref::<&str>()
+                .map(|s| (*s).to_string())
+                .or_else(|| panic.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "<non-string panic payload>".to_string());
             eprintln!(
-                "rustra: event sink panicked while delivering '{name}' — event dropped (sink stays installed)"
+                "rustra: event sink panicked while delivering '{name}' ({panic_msg}) — event dropped (sink stays installed)"
             );
-            let _ = panic;
         }
         true
     }
