@@ -7,6 +7,16 @@
 
 ### Added
 
+- `rustra dev` CLI — Rust 소스 감시 + dual-path codegen 자동 재실행
+  (hot codegen). mtime 기반 stale 판정으로 Rust bin/TS CLI 스테이지 선택적 실행,
+  `--inspect` 플래그로 devtools 안내
+- `@rustra/testing` 패키지 — `createMockEngine` (계약 동일 mock 엔진,
+  `.on()` 체이닝 + 호출 기록) + `assertContractCurrent` 계약 게이트
+- `@rustra/devtools` 패키지 — `createInstrumentedEngine` 호출 관측성 래퍼
+  (명령별 count/errors/avgMs + 슬로우 콜 타임라인)
+- `windows-experiment.yml` — lynx.dll export 덤프 + MSVC 빌드 시도 CI (P1 실험)
+- `fuzz.yml` + `fuzz/` — cargo-fuzz `invoke_rkyv_v2` 디코드 경로 무작위 입력
+  검증 (주 1회 10분 타임박스)
 - codegen `Set<T>` 타입 지원 — Rust `BTreeSet`/`HashSet` (`uniqueItems`)이
   `Set<T>`로 매핑. postcard 코덱 `set_zigzag`/`set_f64`/`set_bool` kind
   (와이어는 vec와 호환), JSON 경로 Set replacer

@@ -31,6 +31,8 @@ npm install @rustra/bun       # Bun
 npm install @rustra/tauri     # Tauri
 npm install @rustra/react-native  # React Native
 npm install @rustra/lynx          # Lynx (ReactLynx)
+npm install @rustra/testing       # Mock 엔진 (테스트)
+npm install @rustra/devtools      # 호출 관측성 (개발)
 ```
 
 ## 빠른 예제
@@ -74,6 +76,8 @@ packages/
   tauri/           Tauri adapter
   react-native/    React Native adapter
   lynx/            Lynx (ReactLynx) adapter
+  testing/         Mock 엔진 + 계약 게이트 (createMockEngine)
+  devtools/        호출 관측성 래퍼 (createInstrumentedEngine)
 
 examples/
   calculator/              기본 예시 (Rust crate + C FFI + stdio + 생성된 TS)
@@ -303,6 +307,9 @@ cargo fmt --all -- --check
 
 # CLI watch 모드 (schema 변경 시 자동 재생성)
 npx rustra generate --watch --schema ./generated/schema.json --output ./src/generated
+
+# dev 루프 — Rust 소스 감시 + dual-path codegen 자동 재실행 (hot codegen)
+npx rustra dev --backend ./backend --app ./app
 ```
 
 ## 문서
