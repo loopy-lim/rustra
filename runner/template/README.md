@@ -67,6 +67,27 @@ cd ../my-app
 #   npm run verify:desktop | verify:ios | verify:android
 ```
 
+## 개발 루프 — `rustra dev` (hot codegen)
+
+Rust command 수정 시마다 수동 `npm run codegen` 대신, rustra CLI 의 `dev` 서브커맨드로
+backend 소스를 감시한다. `backend/src` 변경을 감지하면 dual-path codegen
+(Rust bin → schema.json → TS CLI)을 자동 재실행한다:
+
+```sh
+# rustra-bridge 저장소 내부(in-repo) 템플릿 기준:
+RUSTRA_CLI=$PWD/packages/cli/dist/index.js \
+  node packages/cli/dist/index.js dev \
+  --backend runner/template/backend --app runner/template/app
+
+# 이후 backend/src/lib.rs 의 #[command] 수정 → [dev] regenerated 로그와 함께
+# app/generated/ 가 갱신됨. (cd app && npm run build) 로 번들 재빌드.
+```
+
+- codegen 왕복의 stale 판정은 mtime 기반 — schema 보다 rust 소스가 새면 1단계(Rust bin)
+  부터, codec 만 stale 면 2단계(TS CLI)만 실행한다.
+- 실행 중인 앱 프로세스 무중단 핸들러 교체(debug 레지스트리 `register/replace`)는
+  별도 트랙 — `rustra dev` 는 코드 전파(재생성+재빌드)까지 담당한다.
+
 ## 전제 (각 플랫폼)
 
 | 플랫폼  | 요구                                                                                                                                |
