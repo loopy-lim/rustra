@@ -14,7 +14,10 @@ fn main() {
         let _ = fs::write(path, value.to_string());
     }
 
-    let builder = tauri_support::register(calculator_package(), tauri::Builder::default());
+    // register_with_events: register(하위호환) + 이벤트 푸시 배선 — Package::emit 이
+    // 즉시 app.emit("rustra://{name}", payload) 로 전달된다(폴링 불필요).
+    let builder =
+        tauri_support::register_with_events(calculator_package(), tauri::Builder::default());
 
     builder
         .run(tauri::generate_context!())
