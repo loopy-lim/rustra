@@ -1,0 +1,19 @@
+{
+  "packageId": "testing.sample",
+  "commands": [
+    {
+      "name": "addNumbers",
+      "inputType": "AddNumbersInput",
+      "outputType": "number",
+      "inputSchema": { "type": "object" },
+      "outputSchema": { "type": "number" }
+    },
+    {
+      "name": "createItem",
+      "inputType": "CreateItemInput",
+      "outputType": "Item",
+      "inputSchema": { "type": "object" },
+      "outputSchema": { "type": "object" }
+    }
+  ]
+}

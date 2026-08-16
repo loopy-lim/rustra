@@ -33,3 +33,4 @@ examples/lynx-calculator/host/HostApp.app/
 **/ios/build/
 **/Pods/
 
+/packages/*/dist-test/

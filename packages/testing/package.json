@@ -1,0 +1,48 @@
+{
+  "name": "@rustra/testing",
+  "version": "0.1.1",
+  "description": "Testing utilities for rustra-bridge — mock engine and contract gates",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "fixtures"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/index.test.js"
+  },
+  "dependencies": {
+    "@rustra/types": "^0.1.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  },
+  "keywords": [
+    "rustra",
+    "bridge",
+    "testing",
+    "mock"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loopy-lim/hostra.git",
+    "directory": "packages/testing"
+  },
+  "bugs": {
+    "url": "https://github.com/loopy-lim/hostra/issues"
+  },
+  "homepage": "https://github.com/loopy-lim/hostra#readme"
+}
