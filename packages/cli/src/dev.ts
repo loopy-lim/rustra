@@ -7,6 +7,9 @@
  * 를 순서대로 재실행한다 (dual-path — runner/template/codegen.sh 와 동일 계약).
  */
 
+import { readdirSync, statSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+
 export interface DevOptions {
   backendDir: string;
   appDir: string;
@@ -36,5 +39,44 @@ export function planPipeline(dirty: {
     // rust 소스가 새면 schema 재생성 필요 → schema 가 바뀌면 ts cli 재생성 필요
     rustBin: dirty.rustNewerThanSchema,
     tsCli: dirty.rustNewerThanSchema || dirty.codecsStaleAgainstSchema,
+  };
+}
+
+/** dir 트리에서 가장 최신 mtime (재귀, node_modules/target/dist 제외). */
+function newestMtime(dir: string): number {
+  let newest = 0;
+  if (!existsSync(dir)) return 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === 'node_modules' || entry.name === 'target' || entry.name === 'dist') continue;
+    const p = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      newest = Math.max(newest, newestMtime(p));
+    } else {
+      newest = Math.max(newest, statSync(p).mtimeMs);
+    }
+  }
+  return newest;
+}
+
+/** codegen 재실행 판정에 필요한 stale 상태. */
+export function detectDirty(
+  backendDir: string,
+  generatedDir: string,
+): {
+  rustNewerThanSchema: boolean;
+  codecsStaleAgainstSchema: boolean;
+} {
+  const schemaPath = join(generatedDir, 'schema.json');
+  const schemaMtime = existsSync(schemaPath) ? statSync(schemaPath).mtimeMs : 0;
+  const rustNewest = newestMtime(join(backendDir, 'src'));
+  const codecsNewest = Math.max(
+    ...['rkyv-codecs.ts', 'rkyv-registry.ts'].map((f) => {
+      const p = join(generatedDir, f);
+      return existsSync(p) ? statSync(p).mtimeMs : 0;
+    }),
+  );
+  return {
+    rustNewerThanSchema: rustNewest > schemaMtime,
+    codecsStaleAgainstSchema: schemaMtime > codecsNewest,
   };
 }
