@@ -24,3 +24,17 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 postcard = { version = "1", features = ["alloc"] }
 rkyv = { version = "0.8", features = ["bytecheck", "alloc"] }
+
+[profile.dev]
+debug = 1
+incremental = false
+
+[profile.dev.package."*"]
+debug = 0
+
+[profile.test]
+debug = 1
+incremental = false
+
+[profile.test.package."*"]
+debug = 0

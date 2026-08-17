@@ -96,6 +96,20 @@ runner/
                            desktop/iOS/Android 셸 포함) — create-runner.sh 로 인스턴스화
 ```
 
+## 로컬 저장공간 관리
+
+개발 및 테스트 Cargo 프로필은 incremental 캐시와 의존성 debug info를 저장하지 않는다.
+Runner의 backend/desktop/mobile Rust 빌드는 `runner/template/target/` 하나를 공유한다.
+
+```bash
+npm run clean:dry    # deep clean 대상을 삭제하지 않고 크기만 확인
+npm run clean:build  # Rust/Xcode/Android/TS 빌드 산출물 제거, 설치 의존성 유지
+npm run clean:deep   # build 산출물 + node_modules/Pods/로컬 패키지 캐시 제거
+```
+
+정리 명령은 명시된 재생성 가능 경로만 제거한다. `git clean -fdX`는 로컬 모바일
+프로젝트나 설정 파일까지 삭제할 수 있으므로 저장공간 정리 용도로 사용하지 않는다.
+
 ## Rust: 명령 정의
 
 ```rust

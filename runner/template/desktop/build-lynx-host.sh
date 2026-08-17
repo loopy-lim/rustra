@@ -14,6 +14,11 @@ SDK="${LYNX_SDK:-/tmp/lynx-prebuilt/macsdk}"
 APP="$HERE/TemplateApp.app"
 PROFILE="${RUSTRA_PROFILE:-release}"
 BIN_NAME="rustra-template-desktop"
+# backend와 desktop은 독립 Cargo workspace지만 같은 runner 안에서는 의존성
+# 산출물을 공유한다. 생성된 runner도 루트 target 하나만 정리하면 된다.
+RUNNER_TARGET_DIR="${CARGO_TARGET_DIR:-$TEMPLATE_ROOT/target}"
+export CARGO_TARGET_DIR="$RUNNER_TARGET_DIR"
+export RUSTRA_BACKEND_TARGET_DIR="$RUNNER_TARGET_DIR"
 
 echo "[build] 1/3 rustra backend staticlib ($PROFILE)"
 cargo build --release --manifest-path "$TEMPLATE_ROOT/backend/Cargo.toml"
@@ -23,7 +28,7 @@ echo "[build] 2/3 template desktop crate ($PROFILE)"
 
 echo "[build] 3/3 assemble .app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$HERE/src-tauri/target/$PROFILE/$BIN_NAME" "$APP/Contents/MacOS/$BIN_NAME"
+cp "$RUNNER_TARGET_DIR/$PROFILE/$BIN_NAME" "$APP/Contents/MacOS/$BIN_NAME"
 ln -sfn "$SDK/bundles/LynxResources.bundle" "$APP/Contents/Resources/LynxResources.bundle"
 cp "$HERE/src-tauri/Info.plist" "$APP/Contents/Info.plist"
 
