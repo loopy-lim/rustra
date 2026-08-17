@@ -26,10 +26,10 @@ jobs:
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
       # fmt/clippy 는 코드가 OS 무관하게 동일하므로 ubuntu leg 에서만 실행해 CI 시간 절약.
       - name: Check formatting
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: cargo fmt --all -- --check
       - name: Clippy
-        if: matrix.os == 'ubuntu-latest'
+        if: runner.os == 'Linux'
         run: cargo clippy --all-targets -- -D warnings
       # --workspace 테스트는 rustra-tauri-calculator(gtk/webkit 필요, apt step 이 Linux 에서만
       # 설치)까지 빌드하므로 Linux 에서만 전체 워크스페이스를 돌린다. macOS/Windows 는 코어 크레이트만.
