@@ -353,17 +353,25 @@ export type RkyvV2SchemaNative = {
 };
 
 /**
- * 네이티브 getSchema() 로부터 현재 명령 스키마를 조회한다 (정적 + 동적 명령 포함).
- * 동적 명령의 commandId/타입을 알아내 rkyvV2 Tier 3 fallback 에 사용된다.
+ * getSchema() 원본 JSON 의 파싱 결과 — 명령 맵과 (T2) 최상위 schemaVersion.
+ * schemaVersion 은 유한 number 인 경우에만 채운다 (구 네이티브는 필드 자체가
+ * 없다 — 없으면 undefined 로 두고 소비자에서 관례값 1 로 취급한다).
  */
-export function getLiveSchema(native: { getSchema?(): ArrayBuffer }): Map<string, LiveSchemaEntry> {
+type LiveSchemaDocument = {
+  commands: Map<string, LiveSchemaEntry>;
+  schemaVersion?: number;
+};
+
+/** getLiveSchema 의 파싱 내부 — 엔진 생성 시 schemaVersion 까지 읽는다 (T2). */
+function parseLiveSchemaDocument(native: { getSchema?(): ArrayBuffer }): LiveSchemaDocument {
   if (!native.getSchema) {
-    return new Map();
+    return { commands: new Map() };
   }
   const bytes = native.getSchema();
   const u = new Uint8Array(bytes);
   const json = _utf8Decode(u, 0, u.length);
   const parsed = JSON.parse(json) as {
+    schemaVersion?: unknown;
     commands?: Array<{
       name: string;
       commandId: number;
@@ -379,7 +387,19 @@ export function getLiveSchema(native: { getSchema?(): ArrayBuffer }): Map<string
       outputSchema: c.outputSchema,
     });
   }
-  return map;
+  const doc: LiveSchemaDocument = { commands: map };
+  if (typeof parsed.schemaVersion === 'number' && Number.isFinite(parsed.schemaVersion)) {
+    doc.schemaVersion = parsed.schemaVersion;
+  }
+  return doc;
+}
+
+/**
+ * 네이티브 getSchema() 로부터 현재 명령 스키마를 조회한다 (정적 + 동적 명령 포함).
+ * 동적 명령의 commandId/타입을 알아내 rkyvV2 Tier 3 fallback 에 사용된다.
+ */
+export function getLiveSchema(native: { getSchema?(): ArrayBuffer }): Map<string, LiveSchemaEntry> {
+  return parseLiveSchemaDocument(native).commands;
 }
 
 // ── Tier 3 (JSON-in-binary) wire helpers ────────────────────
@@ -469,6 +489,36 @@ export type RkyvV2EngineOptions = {
    * 드리프트를 시작 시점에 잡는다. 미설정 시 검증하지 않는다(기본값).
    */
   contractHash?: string;
+  /**
+   * (T2, OTA) 계약 해시 불일치 시의 정책. 미설정 시 기존대로 throw
+   * (fail-fast). 콜백을 설정하면 throw 대신 호출 후 **degraded 모드**로
+   * 엔진을 계속 생성한다 — 구 JS + 신 네이티브(또는 그 반대) OTA 조합에서
+   * 앱 전체 마비 대신 부분 동작을 택하는 배포 정책에 사용한다.
+   * degraded 모드는 위험하다: 호환되지 않는 명령은 codec/tier3 디코딩에서
+   * 실패할 수 있다. 콜백에서 live schema 를 조회해 공통 명령만 쓰도록
+   * 안내하는 것은 호출자의 책임이다.
+   *
+   * `getContractHash` 미노출 네이티브는 검증 자체가 불가능하므로 이 콜백과
+   * 무관하게 항상 `contract.unenforceable` 로 throw 한다 (native hash 가
+   * 없으면 degraded 모드가 무의미하다).
+   */
+  onContractMismatch?: (info: { nativeHash: string; expectedHash: string }) => void;
+  /**
+   * (T2, OTA) 빌드 시점 스키마 버전 — 코드젠이 생성한 SCHEMA_VERSION.
+   * 설정하면 엔진 생성 시 live schema(getSchema)의 schemaVersion 과 비교해
+   * JS > native 면 onSchemaStale 콜백(또는 console.warn)으로 경고한다.
+   * 구 JS + 신 네이티브가 정상인 조합(신 기능은 못 쓰지만 기존 동작)과
+   * 달리, JS > native 는 "네이티브가 구버전" — OTA 롤백/지연 배포 상황.
+   * fatal 아님: 경고만 한다. 미설정 시 검증하지 않는다.
+   *
+   * 구 네이티브(pre-Task-8)는 schemaVersion 필드 없는 schema JSON 을,
+   * 미등록 패키지는 `{}` 를 반환한다 — live schemaVersion 이 없으면 CLI 의
+   * old-schema 관례대로 **1 로 취급**한다 (이 기능의 대상인 구 바이너리이며
+   * 비교 불가(undefined→NaN) 로 스퓨리어스 경고하지 않게 막는다).
+   */
+  schemaVersion?: number;
+  /** (T2) schemaVersion 검증 결과 JS > native 인 경우의 콜백. 미설정 시 console.warn. */
+  onSchemaStale?: (info: { nativeVersion: number; jsVersion: number }) => void;
 };
 
 /**
@@ -532,9 +582,12 @@ export function createRkyvV2Engine(
   options?: RkyvV2EngineOptions,
 ): RkyvV2Engine {
   // F5 (opt-in): 계약 해시 검증. 빌드 시점 hash 와 네이티브 실시간 hash 가 다르면
-  // 엔진을 만들지 않고 즉시 실패(fail-fast)한다.
+  // 기본적으로 엔진을 만들지 않고 즉시 실패(fail-fast)한다. T2 onContractMismatch
+  // 콜백을 설정하면 불일치 시 throw 대신 콜백 호출 후 degraded 모드로 계속 생성한다.
   if (options?.contractHash !== undefined) {
     if (typeof native.getContractHash !== 'function') {
+      // unenforceable 은 콜백과 무관하게 항상 throw — native hash 가 없으면
+      // degraded 모드가 무의미하다 (검증 가능한 것이 아무것도 없다).
       throw new RustraCommandError(
         'contract.unenforceable',
         'contractHash option was set but the native module does not expose ' +
@@ -544,12 +597,38 @@ export function createRkyvV2Engine(
     const hashBytes = new Uint8Array(native.getContractHash());
     const nativeHash = _utf8Decode(hashBytes, 0, hashBytes.length).trim();
     if (nativeHash !== options.contractHash) {
-      throw new RustraCommandError(
-        'contract.mismatch',
-        `contract hash mismatch: native="${nativeHash.slice(0, 16)}…" vs ` +
-          `expected="${options.contractHash.slice(0, 16)}…" — generated client ` +
-          `and native binary are out of sync; regenerate the client`,
-      );
+      if (!options.onContractMismatch) {
+        throw new RustraCommandError(
+          'contract.mismatch',
+          `contract hash mismatch: native="${nativeHash.slice(0, 16)}…" vs ` +
+            `expected="${options.contractHash.slice(0, 16)}…" — generated client ` +
+            `and native binary are out of sync; regenerate the client`,
+        );
+      }
+      options.onContractMismatch({ nativeHash, expectedHash: options.contractHash });
+    }
+  }
+
+  // T2 (opt-in): schemaVersion staleness 검사. JS > native 면 경고만 한다
+  // (fatal 아님 — OTA 롤백/지연 배포 상황에서도 앱은 동작해야 한다).
+  // getSchema 미노출 구 네이티브는 조용히 건너뛴다 (비교할 것이 없다).
+  if (options?.schemaVersion !== undefined && typeof native.getSchema === 'function') {
+    // 구 네이티브(pre-Task-8)의 schema JSON 에는 schemaVersion 이 없다 —
+    // CLI old-schema 관례대로 1 로 취급한다. 이 기능의 대상이 되는 정확히 그
+    // 구 바이너리를 향한 스퓨리어스 경고를 막는 디폴트다.
+    const nativeVersion = parseLiveSchemaDocument(native).schemaVersion ?? 1;
+    if (options.schemaVersion > nativeVersion) {
+      const info = { nativeVersion, jsVersion: options.schemaVersion };
+      if (options.onSchemaStale) {
+        options.onSchemaStale(info);
+      } else {
+        console.warn(
+          `[rustra] schema stale: JS bundle schemaVersion=${info.jsVersion} > ` +
+            `native schemaVersion=${info.nativeVersion} — native binary is older ` +
+            `than the JS bundle (OTA rollback / delayed rollout); newer commands ` +
+            `may fail until native catches up`,
+        );
+      }
     }
   }
 

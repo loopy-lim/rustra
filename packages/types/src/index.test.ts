@@ -70,8 +70,19 @@ function tier3Error(code: string, message: string): ArrayBuffer {
   return ab;
 }
 
-function schemaBytes(commands: Array<{ name: string; commandId: number }>): ArrayBuffer {
-  return bytesFromStrings([JSON.stringify({ packageId: 't', commands })]);
+/**
+ * 스키마 JSON 바이트. schemaVersion 을 명시하면 최상위 필드로 포함하고,
+ * 생략하면 필드 자체를 없앤다 (T2 테스트: 구 네이티브 pre-Task-8 에뮬레이션).
+ */
+function schemaBytes(
+  commands: Array<{ name: string; commandId: number }>,
+  schemaVersion?: number,
+): ArrayBuffer {
+  const doc: Record<string, unknown> =
+    schemaVersion !== undefined
+      ? { packageId: 't', schemaVersion, commands }
+      : { packageId: 't', commands };
+  return bytesFromStrings([JSON.stringify(doc)]);
 }
 
 interface NativeOpts {
@@ -550,6 +561,154 @@ test('F5: no contractHash option skips verification (backward compatible)', () =
   assert.ok(engine, 'engine created without any contract-hash argument');
   assert.equal(typeof engine.invoke, 'function', 'exposes invoke per EngineClient');
 });
+
+// ── T2 Task 9: onContractMismatch 옵트인 폴백 + schemaVersion stale 경고 ──
+
+test('T2: mismatch + no callback still throws contract.mismatch (regression pin)', () => {
+  // onContractMismatch 미설정 시 기존 fail-fast 동작이 그대로 유지되어야 한다.
+  const native = makeNative({ contractHash: 'a'.repeat(64) });
+  assert.throws(
+    () => createRkyvV2Engine(native, new Map(), { contractHash: 'b'.repeat(64) }),
+    (err: unknown) =>
+      err instanceof RustraCommandError && (err as RustraCommandError).code === 'contract.mismatch',
+  );
+});
+
+test('T2: mismatch + onContractMismatch creates degraded engine, callback sees both hashes', () => {
+  const nativeHash = 'a'.repeat(64);
+  const expectedHash = 'b'.repeat(64);
+  const native = makeNative({ contractHash: nativeHash });
+  const calls: Array<{ nativeHash: string; expectedHash: string }> = [];
+  const engine = createRkyvV2Engine(native, new Map(), {
+    contractHash: expectedHash,
+    onContractMismatch: (info) => calls.push(info),
+  });
+  assert.ok(engine, 'degraded engine must still be created when callback is set');
+  assert.equal(typeof engine.invoke, 'function');
+  assert.equal(calls.length, 1, 'callback must be called exactly once');
+  assert.equal(calls[0]?.nativeHash, nativeHash, 'callback must receive the native hash');
+  assert.equal(calls[0]?.expectedHash, expectedHash, 'callback must receive the expected hash');
+});
+
+test('T2: unenforceable + onContractMismatch still throws (nothing to verify)', () => {
+  // getContractHash 미노출 → native hash 를 알 방법이 없어 degraded 모드가
+  // 무의미하다. 콜백 설정과 무관하게 항상 throw.
+  const native = makeNative({}); // contractHash undefined → getContractHash 미노출
+  assert.throws(
+    () =>
+      createRkyvV2Engine(native, new Map(), {
+        contractHash: 'd'.repeat(64),
+        onContractMismatch: () => {
+          throw new Error('callback must not be invoked for unenforceable');
+        },
+      }),
+    (err: unknown) =>
+      err instanceof RustraCommandError &&
+      (err as RustraCommandError).code === 'contract.unenforceable',
+  );
+});
+
+test('T2: schemaVersion equal → no staleness warning', () => {
+  const native = makeNative({ schema: schemaBytes([{ name: 'add', commandId: 1 }], 3) });
+  const stale = mockSchemaStale();
+  const engine = createRkyvV2Engine(native, new Map(), {
+    schemaVersion: 3,
+    onSchemaStale: stale.cb,
+  });
+  assert.ok(engine);
+  assert.equal(stale.calls.length, 0, 'equal versions must not warn');
+});
+
+test('T2: schemaVersion JS < native → no warning (normal upgrade path)', () => {
+  // 구 JS + 신 네이티브 — 신 기능은 못 써도 기존 동작은 정상인 조합.
+  const native = makeNative({ schema: schemaBytes([{ name: 'add', commandId: 1 }], 5) });
+  const stale = mockSchemaStale();
+  const engine = createRkyvV2Engine(native, new Map(), {
+    schemaVersion: 4,
+    onSchemaStale: stale.cb,
+  });
+  assert.ok(engine);
+  assert.equal(stale.calls.length, 0, 'JS < native must not warn');
+});
+
+test('T2: schemaVersion JS > native → onSchemaStale receives both versions', () => {
+  // 신 JS + 구 네이티브 — OTA 롤백/지연 배포. fatal 아님: 경고만.
+  const native = makeNative({ schema: schemaBytes([{ name: 'add', commandId: 1 }], 2) });
+  const stale = mockSchemaStale();
+  const engine = createRkyvV2Engine(native, new Map(), {
+    schemaVersion: 4,
+    onSchemaStale: stale.cb,
+  });
+  assert.ok(engine, 'staleness must never block engine creation');
+  assert.equal(stale.calls.length, 1);
+  assert.deepEqual(stale.calls[0], { nativeVersion: 2, jsVersion: 4 });
+});
+
+test('T2: schemaVersion JS > native without callback → console.warn fallback', () => {
+  const native = makeNative({ schema: schemaBytes([{ name: 'add', commandId: 1 }], 1) });
+  const warns = mockConsoleWarn();
+  try {
+    const engine = createRkyvV2Engine(native, new Map(), { schemaVersion: 2 });
+    assert.ok(engine);
+    assert.equal(warns.calls.length, 1, 'console.warn fallback must fire exactly once');
+    assert.match(warns.calls[0] ?? '', /schema stale/);
+    assert.match(warns.calls[0] ?? '', /2/);
+    assert.match(warns.calls[0] ?? '', /1/);
+    assert.match(warns.calls[0] ?? '', /native/);
+  } finally {
+    warns.restore();
+  }
+});
+
+test('T2: native schema without schemaVersion field defaults to 1 (old-native pin)', () => {
+  // pre-Task-8 네이티브는 schemaVersion 필드가 없다 — CLI old-schema 관례대로
+  // 1 로 취급. JS=1 이면 경고 없음, JS=2 면 경고.
+  const oldNative = makeNative({ schema: schemaBytes([{ name: 'add', commandId: 1 }]) });
+  const quiet = mockSchemaStale();
+  createRkyvV2Engine(oldNative, new Map(), { schemaVersion: 1, onSchemaStale: quiet.cb });
+  assert.equal(quiet.calls.length, 0, 'JS=1 vs old native (default 1) must not warn');
+
+  const warned = mockSchemaStale();
+  createRkyvV2Engine(oldNative, new Map(), { schemaVersion: 2, onSchemaStale: warned.cb });
+  assert.equal(warned.calls.length, 1, 'JS=2 vs old native (default 1) must warn');
+  assert.deepEqual(warned.calls[0], { nativeVersion: 1, jsVersion: 2 });
+});
+
+test('T2: schemaVersion option + native without getSchema → silent no-op', () => {
+  // getSchema 미노출 구 네이티브 — 비교할 스키마가 없으므로 조용히 건너뛴다.
+  const native = { invokeRkyvV2: () => new ArrayBuffer(0) } as RkyvV2SchemaNative;
+  const stale = mockSchemaStale();
+  const engine = createRkyvV2Engine(native, new Map(), {
+    schemaVersion: 99,
+    onSchemaStale: stale.cb,
+  });
+  assert.ok(engine, 'must not crash when getSchema is absent');
+  assert.equal(stale.calls.length, 0, 'nothing to compare → no warning');
+});
+
+/** onSchemaStale 호출 기록용 마이크로 헬퍼 (T2). */
+function mockSchemaStale(): {
+  calls: Array<{ nativeVersion: number; jsVersion: number }>;
+  cb: (info: { nativeVersion: number; jsVersion: number }) => void;
+} {
+  const calls: Array<{ nativeVersion: number; jsVersion: number }> = [];
+  return { calls, cb: (info) => calls.push(info) };
+}
+
+/** console.warn 교체 헬퍼 — 복원은 반드시 restore() 로 (T2). */
+function mockConsoleWarn(): { calls: string[]; restore(): void } {
+  const original = console.warn;
+  const calls: string[] = [];
+  console.warn = (...args: unknown[]) => {
+    calls.push(args.map(String).join(' '));
+  };
+  return {
+    calls,
+    restore: () => {
+      console.warn = original;
+    },
+  };
+}
 
 // ── parseRustraErrorString (F4 — JSON fallback code/message 파싱) ──
 
