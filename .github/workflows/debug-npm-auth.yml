@@ -11,18 +11,18 @@ jobs:
       - name: Probe npm auth
         run: |
           printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$HOME/.npmrc"
-          echo "=== npm whoami (계정 확인) ==="
+          echo "=== 1. npm whoami ==="
           npm whoami || true
           echo
-          echo "=== npm token list 전체 (토큰 타입/권한 확인) ==="
-          npm token list 2>&1 || true
+          echo "=== 2. 실제 쓰기 테스트: dist-tag 추가/제거 (무해·가역) ==="
+          npm dist-tag add @rustra/types@0.1.1 rustra-auth-probe 2>&1 || true
           echo
-          echo "=== registry GET @rustra/types with token (200=커버됨, 404=토큰 커버 밖) ==="
-          code=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $NPM_TOKEN" \
-            "https://registry.npmjs.org/@rustra%2ftypes")
-          echo "GET @rustra/types → HTTP $code"
-          code2=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $NPM_TOKEN" \
-            "https://registry.npmjs.org/@rustra%2freact-native")
-          echo "GET @rustra/react-native → HTTP $code2"
+          echo "=== 3. dist-tag 확인 후 제거 ==="
+          npm view @rustra/types dist-tags 2>&1 || true
+          npm dist-tag rm @rustra/types rustra-auth-probe 2>&1 || true
+          echo
+          echo "=== 4. 실패 원인 상세 (npm ping + debug 로그) ==="
+          npm dist-tag add @rustra/types@0.1.1 rustra-auth-probe --loglevel=silly 2>&1 | tail -25 || true
+          npm dist-tag rm @rustra/types rustra-auth-probe 2>&1 > /dev/null || true
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
