@@ -13,6 +13,8 @@
 //! - `rustra_ffi_free`            — free returned buffers
 //! - `rustra_ffi_event_sink_register`   — C 콜백 이벤트 싱크 설치 (push)
 //! - `rustra_ffi_event_sink_unregister` — 싱크 해제 (폴링 복귀)
+//! - `rustra_ffi_set_max_payload`  — (T3) 페이로드 크기 한도 동적 변경
+//! - `rustra_ffi_get_max_payload`  — (T3) 현재 페이로드 크기 한도 조회
 
 use crate::Package;
 use serde::{Deserialize, Serialize};
@@ -92,7 +94,20 @@ struct FfiPostcardResponse {
 
 // -- Buffer helpers ------------------------------------------------------
 
-const MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
+/// (T3) 페이로드 크기 한도의 기본값 — 1 MiB. 런타임 값은
+/// [`MAX_PAYLOAD_BYTES`] (atomic) 로, `rustra_ffi_set_max_payload` 로 변경한다.
+const DEFAULT_MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
+
+/// (T3) 페이로드 크기 한도 — 부팅 시 고정이 아니라 호스트가 동적으로 조정한다.
+/// 크기 게이트는 어림잡기 용도이므로 원자성만 필요하고 순서는 요구되지 않는다.
+static MAX_PAYLOAD_BYTES: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(DEFAULT_MAX_PAYLOAD_BYTES);
+
+/// 현재 페이로드 크기 한도 (invoke 경로의 크기 가드가 읽는 단일 지점).
+fn max_payload_bytes() -> usize {
+    MAX_PAYLOAD_BYTES.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 const FFI_MAGIC: u32 = 0x5255_5354; // "RUST" in ASCII
 const FFI_HEADER_SIZE: usize = 8;
 
@@ -436,7 +451,7 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json(
     if payload.is_null() || out_len.is_null() {
         return std::ptr::null_mut();
     }
-    if payload_len > MAX_PAYLOAD_BYTES {
+    if payload_len > max_payload_bytes() {
         return err_response("payload exceeds size limit", out_len, json_serialize);
     }
 
@@ -471,7 +486,7 @@ pub unsafe extern "C" fn rustra_ffi_invoke_postcard(
     if payload.is_null() || out_len.is_null() {
         return std::ptr::null_mut();
     }
-    if payload_len > MAX_PAYLOAD_BYTES {
+    if payload_len > max_payload_bytes() {
         return err_response(
             "payload exceeds size limit",
             out_len,
@@ -624,6 +639,33 @@ pub unsafe extern "C" fn rustra_ffi_cancellation_status(invocation_id: u64) -> u
         crate::cancel::Status::Running => 1,
         crate::cancel::Status::Cancelled => 2,
     }
+}
+
+/// (T3) 페이로드 크기 한도를 동적으로 변경한다. 기본 1 MiB
+/// ([`DEFAULT_MAX_PAYLOAD_BYTES`]). 축소/확대 모두 즉시 이후의
+/// `rustra_ffi_invoke_json` / `rustra_ffi_invoke_postcard` 호출에 반영된다.
+///
+/// `Relaxed` — 크기 게이트는 어림잡기(sanity gate) 용도라 원자성만 필요하고
+/// 다른 메모리와의 순서 관계는 요구되지 않는다. 진행 중인 호출은 이미 읽은
+/// 이전 한도로 검사를 마친 상태일 수 있다 (한도는 새 호출부터 적용).
+///
+/// # Safety
+///
+/// 어떤 값도 안전하다 — 0 으로 설정하면 모든 페이로드가 거부된다.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_set_max_payload(bytes: usize) {
+    MAX_PAYLOAD_BYTES.store(bytes, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// (T3) 현재 페이로드 크기 한도. [`rustra_ffi_set_max_payload`] 로 설정한
+/// 값 또는 기본 1 MiB.
+///
+/// # Safety
+///
+/// 이 함수는 안전하게 호출할 수 있다(unsafe 는 `extern "C"` ABI 선언의 산물).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_get_max_payload() -> usize {
+    max_payload_bytes()
 }
 
 /// Free a buffer previously returned by one of the `rustra_ffi_invoke_*` functions.
