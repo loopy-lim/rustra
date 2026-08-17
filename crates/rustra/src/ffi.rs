@@ -586,12 +586,23 @@ static FFI_EVENT_SINK: Mutex<Option<FfiEventSink>> = Mutex::new(None);
 /// — 콜백이 패닉하면 stderr 로그 후 해당 이벤트가 소실되고 `emit` 은 정상
 /// 복귀한다(싱크는 유지).
 ///
+/// **되감기(unwind) 금지 계약**: C++ 호스트 콜백은 예외를 밖으로 던지면 안
+/// 된다. Rust 패닉은 `catch_unwind` 으로 격리되지만, Rust 프레임을 통과하는
+/// **외국(foreign) 예외**는 Rust 가 잡을 수 없어 정의된 즉시 abort 다
+/// (`"C-unwind"` ABI 하에서 UB 대신 abort 로 보장된 것). C++ 콜백은
+/// `noexcept` 로 표시하거나 최상위 `catch (...)` 로 삼키라.
+///
 /// # Safety
 ///
 /// `callback` 은 유효한 함수 포인터여야 한다. `user_data` 는 호스트가 소유하며
 /// [`rustra_ffi_event_sink_unregister`] 전까지(또는 교체 등록 직전까지) 유효해야
 /// 한다. 이미 등록된 싱크가 있으면 조용히 교체한다(구 콜백은 더 이상 호출되지
 /// 않는다 — 구 `user_data` 해제는 호스트 책임).
+///
+/// **진행 중 emit 창**: 해제/교체가 반환된 직후에도 이미 진행 중이던 `emit`
+/// 이 구 콜백과 구 `user_data` 를 1회 더 호출할 수 있다(delivery 경로가 싱크
+/// `Arc` 를 복제한 뒤 호출하기 때문). `user_data` 를 다른 스레드에서 즉시
+/// 해제하면 안전하지 않다 — 해제는 해당 호출 여부를 동기화한 뒤에 하라.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_ffi_event_sink_register(
     callback: FfiEventCallback,

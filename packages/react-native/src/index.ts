@@ -234,9 +234,13 @@ export type RustraEventNative = {
  * ```ts
  * import { subscribeEvent } from '@rustra/react-native';
  *
- * const unsubscribe = subscribeEvent('progress.tick', (payload) => {
- *   console.log(payload.step, '/', payload.total); // 파싱된 객체
- * });
+ * const unsubscribe = subscribeEvent(
+ *   getRustraNative(), // onEvent/offEvent 를 노출하는 네이티브 객체
+ *   'progress.tick',
+ *   (payload) => {
+ *     console.log(payload.step, '/', payload.total); // 파싱된 객체
+ *   },
+ * );
  * // 나중에
  * unsubscribe();
  * ```
