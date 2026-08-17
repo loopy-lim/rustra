@@ -37,14 +37,21 @@ static REGISTRY: Mutex<BTreeMap<u64, Entry>> = Mutex::new(BTreeMap::new());
 /// 새 invocation을 등록하고 고유 ID를 발급한다.
 pub fn register_invocation() -> u64 {
     let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-    REGISTRY.lock().unwrap().insert(id, Entry::Running);
+    REGISTRY
+        .lock()
+        .expect("cancel registry mutex poisoned")
+        .insert(id, Entry::Running);
     id
 }
 
 /// `Running` → `Cancelled` 전환. 취소 성공 시 true.
 /// 이미 취소됐거나(멱등 no-op) 완료/알 수 없는 ID면 false.
 pub fn cancel_invocation(id: u64) -> bool {
-    match REGISTRY.lock().unwrap().get_mut(&id) {
+    match REGISTRY
+        .lock()
+        .expect("cancel registry mutex poisoned")
+        .get_mut(&id)
+    {
         Some(entry) if matches!(entry, Entry::Running) => {
             *entry = Entry::Cancelled;
             true
@@ -55,12 +62,19 @@ pub fn cancel_invocation(id: u64) -> bool {
 
 /// 호출 완료 — 레지스트리에서 엔트리를 제거한다 (누수 방지).
 pub fn complete_invocation(id: u64) {
-    REGISTRY.lock().unwrap().remove(&id);
+    REGISTRY
+        .lock()
+        .expect("cancel registry mutex poisoned")
+        .remove(&id);
 }
 
 /// 현재 상태 조회. 완료된(제거된) 호출은 `Unknown` 이다.
 pub fn status(id: u64) -> Status {
-    match REGISTRY.lock().unwrap().get(&id) {
+    match REGISTRY
+        .lock()
+        .expect("cancel registry mutex poisoned")
+        .get(&id)
+    {
         Some(Entry::Running) => Status::Running,
         Some(Entry::Cancelled) => Status::Cancelled,
         None => Status::Unknown,
@@ -110,7 +124,7 @@ mod tests {
 
     #[test]
     fn unknown_id_is_unknown_status() {
-        assert_eq!(status(999_999), Status::Unknown);
+        assert_eq!(status(u64::MAX), Status::Unknown);
     }
 
     #[test]

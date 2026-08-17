@@ -20,12 +20,14 @@ pub type Result<T> = std::result::Result<T, RustraError>;
 /// | `command.invalid_args` | [`invalid_args`] | 입력 인자 역직렬화 실패 |
 /// | `capability.denied` | [`capability_denied`] | 필요 capability 미부여 (deny-by-default) |
 /// | `internal` | [`internal`] | 내부 오류 (직렬화, I/O 등) |
+/// | `cancelled` | [`cancelled`] | 호출 취소 (AbortSignal 등) |
 /// | (커스텀) | [`custom`] | 사용자 정의 에러 |
 ///
 /// [`command_not_found`]: RustraError::command_not_found
 /// [`invalid_args`]: RustraError::invalid_args
 /// [`capability_denied`]: RustraError::capability_denied
 /// [`internal`]: RustraError::internal
+/// [`cancelled`]: RustraError::cancelled
 /// [`custom`]: RustraError::custom
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct RustraError {
@@ -120,6 +122,16 @@ impl RustraError {
         }
     }
 
+    /// 호출이 취소됨 — AbortSignal/cancel 로 호출자가 포기한 경우.
+    /// Code: `cancelled`. Retryable (재시도 시 정상 동작 가능).
+    pub fn cancelled(detail: impl fmt::Display) -> Self {
+        Self {
+            code: "cancelled",
+            message: detail.to_string(),
+            retryable: true,
+        }
+    }
+
     /// Builder-style method to mark any error as retryable.
     pub fn retryable(mut self) -> Self {
         self.retryable = true;
@@ -142,5 +154,21 @@ impl std::error::Error for RustraError {}
 impl From<std::io::Error> for RustraError {
     fn from(error: std::io::Error) -> Self {
         Self::internal(error)
+    }
+}
+
+#[cfg(test)]
+mod cancelled_tests {
+    use super::*;
+
+    #[test]
+    fn cancelled_error_is_retryable_with_stable_code() {
+        let e = RustraError::cancelled("aborted by AbortSignal");
+        assert_eq!(e.code(), "cancelled");
+        assert_eq!(e.message(), "aborted by AbortSignal");
+        assert!(
+            e.is_retryable(),
+            "cancelled means the caller gave up on this attempt, not the operation"
+        );
     }
 }
