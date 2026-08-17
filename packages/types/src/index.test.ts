@@ -652,8 +652,10 @@ test('T2: schemaVersion JS > native without callback → console.warn fallback',
     assert.ok(engine);
     assert.equal(warns.calls.length, 1, 'console.warn fallback must fire exactly once');
     assert.match(warns.calls[0] ?? '', /schema stale/);
-    assert.match(warns.calls[0] ?? '', /2/);
-    assert.match(warns.calls[0] ?? '', /1/);
+    // 리뷰 Minor 2: 숫자만 매칭하면 "schemaVersion" 토큰의 우연한 등장과 구분되지
+    // 않는다 — 키=값 쌍 전체로 매칭한다.
+    assert.match(warns.calls[0] ?? '', /schemaVersion=2/);
+    assert.match(warns.calls[0] ?? '', /schemaVersion=1/);
     assert.match(warns.calls[0] ?? '', /native/);
   } finally {
     warns.restore();
@@ -684,6 +686,47 @@ test('T2: schemaVersion option + native without getSchema → silent no-op', () 
   });
   assert.ok(engine, 'must not crash when getSchema is absent');
   assert.equal(stale.calls.length, 0, 'nothing to compare → no warning');
+});
+
+test('T2: garbage getSchema bytes + schemaVersion set → engine created, no throw, no warn', () => {
+  // Task 9 리뷰 Important: staleness 검사가 생성 시점에 스키마를 무방비하게
+  // 파싱해 malformed JSON 이 createRkyvV2Engine 밖으로 새어나갔다. "경고 기능은
+  // 절대 치명적이지 않다" 계약의 위반 — 파싱 실패는 getSchema 미노출과 동일하게
+  // 조용히 건너뛴다 (onSchemaStale 미발생, console.warn 미발생).
+  const garbageNative = makeNative({ schema: bytesFromStrings(['<<<not json at all>>>']) });
+  const stale = mockSchemaStale();
+  const warns = mockConsoleWarn();
+  try {
+    const engine = createRkyvV2Engine(garbageNative, new Map(), {
+      schemaVersion: 2,
+      onSchemaStale: stale.cb,
+    });
+    assert.ok(engine, 'malformed getSchema must never block engine creation');
+    assert.equal(stale.calls.length, 0, 'unparseable schema → nothing to compare');
+    assert.equal(warns.calls.length, 0, 'silent skip — no console.warn either');
+  } finally {
+    warns.restore();
+  }
+});
+
+test('T2: schemaVersion as string in schema JSON → treated as absent, defaults to 1', () => {
+  // Task 9 리뷰 Minor 4: parseLiveSchemaDocument 는 유한 number 인 경우에만
+  // schemaVersion 을 채운다. 문자열 "2" 는 absent 와 같다 — 기본 1 로 취급해
+  // JS=1 이면 경고 없음, JS=2 면 nativeVersion=1 경고.
+  const stringVersionDoc = JSON.stringify({
+    packageId: 't',
+    schemaVersion: '2',
+    commands: [{ name: 'add', commandId: 1 }],
+  });
+  const native = makeNative({ schema: bytesFromStrings([stringVersionDoc]) });
+  const quiet = mockSchemaStale();
+  createRkyvV2Engine(native, new Map(), { schemaVersion: 1, onSchemaStale: quiet.cb });
+  assert.equal(quiet.calls.length, 0, 'JS=1 vs string-version native (default 1) must not warn');
+
+  const warned = mockSchemaStale();
+  createRkyvV2Engine(native, new Map(), { schemaVersion: 2, onSchemaStale: warned.cb });
+  assert.equal(warned.calls.length, 1, 'JS=2 vs string-version native must warn against default 1');
+  assert.deepEqual(warned.calls[0], { nativeVersion: 1, jsVersion: 2 });
 });
 
 /** onSchemaStale 호출 기록용 마이크로 헬퍼 (T2). */

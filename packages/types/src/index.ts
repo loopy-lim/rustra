@@ -616,8 +616,19 @@ export function createRkyvV2Engine(
     // 구 네이티브(pre-Task-8)의 schema JSON 에는 schemaVersion 이 없다 —
     // CLI old-schema 관례대로 1 로 취급한다. 이 기능의 대상이 되는 정확히 그
     // 구 바이너리를 향한 스퓨리어스 경고를 막는 디폴트다.
-    const nativeVersion = parseLiveSchemaDocument(native).schemaVersion ?? 1;
-    if (options.schemaVersion > nativeVersion) {
+    //
+    // 스키마 파싱(getSchema 호출 자체의 실패 포함)은 절대 치명적이지 않다 —
+    // 파싱이 throw 하면 staleness 검사를 조용히 건너뛴다 (getSchema 미노출
+    // 경우와 동일한 취급). 경고 기능이 엔진 생성을 깨뜨리면 "fatal 아님"
+    // 계약 자체가 위반된다. invoke 시점의 tier-3 파싱은 별개 — 그 경로는
+    // reject 로 정규화된다.
+    let nativeVersion: number | undefined;
+    try {
+      nativeVersion = parseLiveSchemaDocument(native).schemaVersion ?? 1;
+    } catch {
+      nativeVersion = undefined;
+    }
+    if (nativeVersion !== undefined && options.schemaVersion > nativeVersion) {
       const info = { nativeVersion, jsVersion: options.schemaVersion };
       if (options.onSchemaStale) {
         options.onSchemaStale(info);
