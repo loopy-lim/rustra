@@ -36,6 +36,13 @@ export type CommandSchema = {
 export type PackageSchema = {
   /** 패키지 식별자 (예: "example.calculator") */
   packageId: string;
+  /**
+   * (T2, OTA) 스키마 협상 버전. `contract.ts` 의 `SCHEMA_VERSION` 으로
+   * 노출되며, JS 클라이언트가 네이티브 live schema 의 버전과 비교해
+   * JS > native stale 조합을 감지하는 데 쓰인다. 구 스키마에는 없어도
+   * 된다 — 그 경우 코드젠은 1 로 취급한다.
+   */
+  schemaVersion?: number;
   /** 패키지에 등록된 모든 명령 스키마 */
   commands: CommandSchema[];
 };

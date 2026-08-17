@@ -90,10 +90,28 @@ export function generateCommandsTs(schema: PackageSchema): string {
 
 /**
  * 스키마 JSON에서 계약 해시 파일(`contract.ts`)을 생성합니다.
+ *
+ * (T2, OTA) 스키마의 `schemaVersion` 을 `SCHEMA_VERSION` 상수로 함께 노출한다 —
+ * Rust 코드젠(`GeneratedPackage::contract_ts`)과 동일한 형식이며, JS 클라이언트가
+ * 네이티브 live schema 의 버전과 비교해 JS > native stale 를 감지하는 데 쓰인다.
+ * 필드가 없는 구 스키마는 1 로 취급한다.
  */
 export function generateContractTs(schemaJson: string): string {
   const hash = createHash('sha256').update(schemaJson).digest('hex');
-  return `export const GENERATED_CONTRACT_HASH = '${hash}';\n`;
+  let schemaVersion = 1;
+  try {
+    const parsed: unknown = JSON.parse(schemaJson);
+    if (parsed !== null && typeof parsed === 'object' && 'schemaVersion' in parsed) {
+      const v = (parsed as { schemaVersion?: unknown }).schemaVersion;
+      if (typeof v === 'number' && Number.isFinite(v)) schemaVersion = v;
+    }
+  } catch {
+    // 스키마 파싱 실패 시에도 해시는 유효 — 버전만 기본값을 유지한다.
+  }
+  return (
+    `export const GENERATED_CONTRACT_HASH = '${hash}';\n` +
+    `export const SCHEMA_VERSION = ${schemaVersion};\n`
+  );
 }
 
 // ── rkyv V2 codec generation (postcard wire format) ────────────────────
