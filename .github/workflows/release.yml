@@ -50,6 +50,13 @@ jobs:
           commit: 'chore: version packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # setup-node 의 registry-url 이 만드는 _temp/.npmrc 를 NPM_CONFIG_USERCONFIG
+          # 로 가리키는데, 그 파일은 ${NODE_AUTH_TOKEN} 환경변수를 참조한다.
+          # changesets 가 $HOME/.npmrc 에 쓰는 NPM_TOKEN 은 USERCONFIG 우선순위에
+          # 밀려 무시된다 — NODE_AUTH_TOKEN 을 명시하지 않으면 publish 가
+          # 무인증 PUT 이 되고, npm 은 스코프 패키지 권한없음을 E404 로 위장해
+          # 돌려준다. changesets/action 정식 조합대로 NODE_AUTH_TOKEN 을 잡는다.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_ENV: production
 
