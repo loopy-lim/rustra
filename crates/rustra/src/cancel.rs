@@ -133,4 +133,53 @@ mod tests {
         complete_invocation(id);
         assert_eq!(status(id), Status::Unknown, "completion removes the entry");
     }
+
+    // ── Task 1 review 에서 이연된 동시성 테스트 ──────────────────
+
+    #[test]
+    fn concurrent_registrations_issue_unique_visible_ids() {
+        let handles: Vec<_> = (0..4)
+            .map(|_| {
+                std::thread::spawn(|| (0..64).map(|_| register_invocation()).collect::<Vec<_>>())
+            })
+            .collect();
+        let mut all = handles
+            .into_iter()
+            .flat_map(|h| h.join().unwrap())
+            .collect::<Vec<_>>();
+        let count = all.len();
+        all.sort();
+        all.dedup();
+        assert_eq!(all.len(), count, "all 256 ids must be unique");
+        // 모두 조회 가능 (제거한 적 없음)
+        for id in &all {
+            assert_eq!(status(*id), Status::Running);
+        }
+    }
+
+    #[test]
+    fn cancel_vs_complete_race_is_always_consistent() {
+        for _ in 0..200 {
+            let id = register_invocation();
+            let a = std::thread::spawn(move || cancel_invocation(id));
+            let b = std::thread::spawn(move || complete_invocation(id));
+            let cancelled = a.join().unwrap();
+            b.join().unwrap();
+            // 어떤 순서로 끝나도 Running 으로 되돌아가는 일은 없다:
+            // - cancel 성공 후 complete 가 아직 실행 전 → Cancelled
+            // - cancel 성공 후 complete 가 이어서 실행(엔트리 제거) → Unknown
+            // - complete 가 먼저 (cancel 실패, 엔트리 제거됨) → Unknown
+            // 셋 중 하나만 가능하며 Running 은 불가능하다.
+            let s = status(id);
+            assert!(
+                s == Status::Cancelled || s == Status::Unknown,
+                "terminal state must be Cancelled or Unknown, never Running (got {s:?})"
+            );
+            if !cancelled {
+                // cancel 이 false 를 반환했다는 건 complete 가 먼저 엔트리를 제거했다는
+                // 뜻 — 이 경로에서는 상태가 반드시 Unknown 이어야 한다.
+                assert_eq!(s, Status::Unknown);
+            }
+        }
+    }
 }
