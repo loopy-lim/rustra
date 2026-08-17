@@ -851,6 +851,8 @@ test('abort mid-flight: shallow path rejects with cancelled (T1)', async () => {
     assert.ok(e instanceof RustraCommandError && e.code === 'cancelled');
     return true;
   });
+  // 얕은 취소는 JS 프라미스만 거부한다 — dispatch 는 이미 동기적으로 일어났다.
+  assert.equal(calls, 1, 'shallow cancel must still have dispatched the native call');
 });
 
 test('typed-path command falls back to shallow cancel even with invokeAsync exposed (T1)', async () => {
@@ -969,7 +971,7 @@ test('late invokeAsync delivery after abort is ignored (T1)', async () => {
   const codec: RkyvV2Codec<unknown, unknown> = {
     commandId: base.commandId,
     encode: base.encode,
-    decode: (frame: ArrayBuffer) => {
+    decode: (_frame: ArrayBuffer) => {
       decodeCalls++;
       throw new Error('decode must not run after abort'); // sentinel
     },
