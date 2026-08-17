@@ -110,6 +110,27 @@ fn sink_is_shared_across_package_clones() {
 }
 
 #[test]
+fn custom_event_capacity_and_dropped_stats_work() {
+    let pkg = Package::builder("test.capacity").event_capacity(4).build();
+
+    assert_eq!(pkg.event_bus().capacity(), 4);
+
+    for i in 0..10 {
+        pkg.emit("item", serde_json::json!({ "i": i }));
+    }
+
+    let (events, dropped) = pkg.event_bus().take_pending_events_with_stats();
+    assert_eq!(events.len(), 4, "queue must hold at most capacity (4)");
+    assert_eq!(dropped, 6, "10 emitted - 4 kept = 6 dropped");
+
+    // Most recent 4 events kept (6, 7, 8, 9)
+    let first_payload: serde_json::Value = serde_json::from_str(&events[0].payload).unwrap();
+    assert_eq!(first_payload["i"], 6);
+    let last_payload: serde_json::Value = serde_json::from_str(&events[3].payload).unwrap();
+    assert_eq!(last_payload["i"], 9);
+}
+
+#[test]
 fn sequential_emits_deliver_in_order() {
     let pkg = Package::builder("test.order").build();
     let seen: Seen = Arc::new(Mutex::new(Vec::new()));

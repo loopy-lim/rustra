@@ -3,11 +3,10 @@ import test from 'node:test';
 import { createReactNativeEngine, RustraCommandError } from './index.js';
 
 const encoder = new TextEncoder();
-const decoder = new TextDecoder();
 
 function createMockNative(returnValue: { ok: boolean; result?: unknown; error?: string }) {
   return {
-    invoke(payload: ArrayBuffer): ArrayBuffer {
+    invoke(_payload: ArrayBuffer): ArrayBuffer {
       return encoder.encode(JSON.stringify(returnValue)).buffer as ArrayBuffer;
     },
   };

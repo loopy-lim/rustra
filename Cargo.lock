@@ -3180,6 +3180,9 @@ version = "0.1.2"
 dependencies = [
  "proc-macro2",
  "quote",
+ "rustra",
+ "schemars 0.8.22",
+ "serde",
  "syn 2.0.117",
 ]
 

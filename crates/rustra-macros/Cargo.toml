@@ -14,3 +14,8 @@ proc-macro = true
 syn = { version = "2", features = ["full"] }
 quote = "1"
 proc-macro2 = "1"
+
+[dev-dependencies]
+rustra = { path = "../rustra" }
+serde = { version = "1", features = ["derive"] }
+schemars = "0.8"

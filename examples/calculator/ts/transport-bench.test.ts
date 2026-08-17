@@ -7,9 +7,17 @@ import { dirname, join, resolve } from "node:path";
 import { existsSync } from "node:fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-// Source: examples/calculator/ts/ → project root
-// Compiled: dist-ts/examples/calculator/ts/ → project root (one more level up)
-const ROOT = resolve(__dirname, "..", "..", "..", "..");
+const findRoot = (startDir: string): string => {
+  let cur = startDir;
+  while (cur !== dirname(cur)) {
+    if (existsSync(join(cur, "Cargo.toml")) && existsSync(join(cur, "package.json"))) {
+      return cur;
+    }
+    cur = dirname(cur);
+  }
+  return resolve(startDir, "..", "..", "..");
+};
+const ROOT = findRoot(__dirname);
 
 const ITERATIONS = 1000;
 const SUBPROCESS_MAX_AVG_US = 10000; // subprocess should be under 10ms
@@ -73,8 +81,8 @@ describe("transport performance", { concurrency: 1 }, () => {
   } else {
     it("subprocess: addNumbers returns correct result", () => {
       const invoke = createSubprocessInvoke();
-      const result = invoke("addNumbers", { a: 20, b: 22 }) as number;
-      assert.equal(result, 42);
+      const result = invoke("addNumbers", { a: 20, b: 22 }) as { value: number };
+      assert.equal(result.value, 42);
     });
 
     it("subprocess: latency within threshold", () => {
@@ -88,8 +96,8 @@ describe("transport performance", { concurrency: 1 }, () => {
   if (existsSync(napiPath)) {
     it("napi-rs: addNumbers returns correct result", () => {
       const invoke = createNapiInvoke();
-      const result = invoke("addNumbers", { a: 20, b: 22 }) as number;
-      assert.equal(result, 42);
+      const result = invoke("addNumbers", { a: 20, b: 22 }) as { value: number };
+      assert.equal(result.value, 42);
     });
 
     it("napi-rs: latency within threshold", () => {

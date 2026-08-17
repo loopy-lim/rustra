@@ -4,11 +4,18 @@
 //!
 //! 직접 이 crate를 사용하지 말고 `rustra` crate를 통해 사용하세요:
 //!
-//! ```rust,ignore
+//! ```rust
 //! use rustra::prelude::*;
 //!
+//! #[bridge_type]
+//! struct AddInput { a: i64, b: i64 }
+//! #[bridge_type]
+//! struct AddOutput { sum: i64 }
+//!
 //! #[command]
-//! fn add_numbers(input: AddInput) -> Result<AddOutput> { ... }
+//! fn add_numbers(input: AddInput) -> Result<AddOutput> {
+//!     Ok(AddOutput { sum: input.a + input.b })
+//! }
 //! ```
 
 use proc_macro::TokenStream;
@@ -73,14 +80,18 @@ impl Parse for CommandAttr {
 ///
 /// ## 예제
 ///
-/// ```rust,ignore
+/// ```rust
+/// use rustra::prelude::*;
+///
+/// #[bridge_type]
+/// struct AddNumbersInput { a: i64, b: i64 }
+/// #[bridge_type]
+/// struct AddNumbersOutput { value: i64 }
+///
 /// #[command]
 /// fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
 ///     Ok(AddNumbersOutput { value: input.a + input.b })
 /// }
-///
-/// #[command(name = "multiply")]
-/// fn mul(input: MulInput) -> Result<MulOutput> { ... }
 /// ```
 #[proc_macro_attribute]
 pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -213,9 +224,20 @@ impl Parse for RegisterInput {
 
 /// Registers `#[command]` functions with a package builder.
 ///
-/// ```ignore
-/// rustra::register!(Package::builder("my.pkg"), add_numbers, multiply)
-///     .build()
+/// ```rust
+/// use rustra::prelude::*;
+///
+/// #[bridge_type]
+/// struct AddInput { a: i64, b: i64 }
+/// #[bridge_type]
+/// struct AddOutput { sum: i64 }
+///
+/// #[command]
+/// fn add_numbers(input: AddInput) -> Result<AddOutput> {
+///     Ok(AddOutput { sum: input.a + input.b })
+/// }
+///
+/// let pkg = rustra::register!(Package::builder("my.pkg"), add_numbers).build();
 /// ```
 #[proc_macro]
 pub fn register(input: TokenStream) -> TokenStream {
@@ -278,7 +300,9 @@ fn extract_result_inner(ty: &Type) -> Option<TokenStream2> {
 ///
 /// ## 예제
 ///
-/// ```rust,ignore
+/// ```rust
+/// use rustra::prelude::*;
+///
 /// #[bridge_type]
 /// #[derive(Clone)]
 /// struct AddNumbersInput { a: i64, b: i64 }
@@ -360,10 +384,20 @@ impl Parse for BuildInput {
 ///
 /// ## 예제
 ///
-/// ```rust,ignore
-/// pub fn my_package() -> Package {
-///     rustra::build!("com.example.my", add_numbers, multiply).done()
+/// ```rust
+/// use rustra::prelude::*;
+///
+/// #[bridge_type]
+/// struct AddInput { a: i64, b: i64 }
+/// #[bridge_type]
+/// struct AddOutput { sum: i64 }
+///
+/// #[command]
+/// fn add_numbers(input: AddInput) -> Result<AddOutput> {
+///     Ok(AddOutput { sum: input.a + input.b })
 /// }
+///
+/// let pkg = rustra::build!("com.example.my", add_numbers).done();
 /// ```
 #[proc_macro]
 pub fn build(input: TokenStream) -> TokenStream {

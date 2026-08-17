@@ -6,17 +6,20 @@ rustra-bridge의 TypeScript 코드 제너레이션 CLI입니다. Rust 백엔드�
 ## 사용법
 
 ```sh
-# 기본
+# 1. 코드 생성 (기본)
 rustra generate --schema ./generated/schema.json --output ./src/generated
 
-# C++ 코덱(RN JSI fast path용) 동시 생성
+# 2. C++ 코덱(RN JSI fast path용) 동시 생성
 rustra generate --schema ./gen/schema.json --output ./src/generated --cpp-output ./ios
 
-# rustra.json 설정 파일 사용
-rustra generate --config rustra.json
+# 3. 개발 모드 (Rust 소스 변경 감시 + 자동 재빌드 및 재생성)
+rustra dev --backend ./backend --app ./app
 
-# 스키마 변경 감시
-rustra generate --watch --schema ./generated/schema.json --output ./src/generated
+# 4. 스키마 버전 간 breaking change 검증 (CI 게이트용)
+rustra diff --old ./schema.v1.json --new ./schema.v2.json
+
+# 5. 새 프로젝트 스캐폴드 초기화
+rustra init --name my-app
 ```
 
 전체 옵션은 `rustra --help`로 확인하세요.
