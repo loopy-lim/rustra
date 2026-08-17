@@ -1190,6 +1190,22 @@ test('T3: over-limit tier-3 dynamic payload rejects before native call', async (
   assert.equal(invokes, 0, 'tier-3 must reject before invokeRkyvV2');
 });
 
+test('T3: within-limit tier-3 dynamic payload dispatches normally (control)', async () => {
+  // tier-2 컨트롤의 미러 — 한도 이내의 동적 명령 페이로드는 기존 tier-3 dispatch
+  // 가 그대로 동작한다 (검사가 정상 경로를 우연히 깨지 않았는지 고정).
+  const native = makeNative({
+    schema: schemaBytes([{ name: 'dyn', commandId: 7 }]),
+    invokeImpl: (payload) => {
+      const id = new DataView(payload).getUint16(0, true);
+      return tier3Success({ echoId: id });
+    },
+  });
+  const engine = createRkyvV2Engine(native, new Map(), { maxPayloadBytes: 32 });
+  // tier3 요청: 2(cmd_id) + JSON 본체('{"v":1}' 6B) = 8B ≤ 32B.
+  const out = await engine.invoke<{ echoId: number }>('dyn', { v: 1 });
+  assert.equal(out.echoId, 7, 'tier-3 control must reach native and round-trip');
+});
+
 test('T3: typed (tier 1) path skips the pre-check — invokeTyped still called', async () => {
   // tier 1 은 raw args 를 C++ 가 받아 인코딩한다 — JS 측에 잴 바이트가 없어
   // 검사를 건너뛴다 (설계 문서화). invokeTyped 는 그대로 호출되어야 한다.
@@ -1221,6 +1237,14 @@ test('T3: over-limit payload on propagate path rejects, invokeAsync never called
   ]);
   const engine = createRkyvV2Engine(native, registry, { maxPayloadBytes: 8 });
   const ac = new AbortController(); // abort 하지 않는 신호 — 전파 경로 유지
+  // catch 경로 정리를 스파이로 직접 증명 — 늦은 abort + invokeCancel 부재로는
+  // "리스너가 아예 등록 안 됐다"는 변이와 구별되지 않는다(vacuous).
+  let removes = 0;
+  const orig = ac.signal.removeEventListener.bind(ac.signal);
+  ac.signal.removeEventListener = (...args: Parameters<typeof orig>) => {
+    removes++;
+    return orig(...args);
+  };
   await assert.rejects(
     engine.invoke<EchoOut>('echo', { tag: 1, msg: 'way over the limit' }, { signal: ac.signal }),
     (e: unknown) => {
@@ -1230,15 +1254,7 @@ test('T3: over-limit payload on propagate path rejects, invokeAsync never called
     },
   );
   assert.equal(asyncCalls, 0, 'invokeAsync must never receive an over-limit payload');
-  // 리스너 누수 없이 정리됐는지 — 늦은 abort 로 invokeCancel 이 불리지 않는다.
-  let cancels = 0;
-  native.invokeCancel = () => {
-    cancels++;
-    return true;
-  };
-  ac.abort();
-  await new Promise<void>((r) => queueMicrotask(() => r()));
-  assert.equal(cancels, 0, 'abort listener must be cleaned up after pre-check rejection');
+  assert.equal(removes, 1, 'catch-path cleanup must call removeEventListener exactly once');
 });
 
 test('T3: payload.too_large message carries both actual and limit byte sizes', async () => {
