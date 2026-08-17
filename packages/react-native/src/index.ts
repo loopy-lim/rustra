@@ -157,27 +157,6 @@ export type RustraJSIAsyncNative = RustraJSINative & {
 };
 
 /**
- * 비동기 invoke — 무거운 Rust 연산을 JS 스레드에서 오프로드한다.
- *
- * - 네이티브 `invokeTypedAsync` 가 있으면: 즉시 반환, 결과는 JS 콜백 큐로 전달.
- * - 없으면: 동기 fast path(`createFastEngine`)로 폴백 — 마이크로태스크로 래핑해
- *   API 계약(`Promise<T>`)은 항상 동일하게 유지.
- * - `options.signal` (T1): abort 시 `cancelled` 로 즉시 거부. 이 엔진의
- *   취소는 **얕은 취소**다 — Rust 핸들러는 끝까지 실행되고 늦은 네이티브
- *   콜백은 무시된다. 폴백(동기 엔진) 경로는 기존 T1 배선을 따른다.
- *
- * @example
- * ```ts
- * import { createAsyncEngine } from '@rustra/react-native';
- * const engine = createAsyncEngine(getRustraNative(), { rkyvV2Codecs: registry });
- * const result = await engine.invoke('heavyCompute', { n: 1_000_000 });
- * // 취소 (T1):
- * const ac = new AbortController();
- * engine.invoke('heavyCompute', { n: 1 }, { signal: ac.signal });
- * ac.abort();
- * ```
- */
-/**
  * 얕은 취소 (T1) — 네이티브 전파가 불가능한 async 엔진 경로. JS 프라미스만
  * 즉시 거부하고 네이티브 콜백의 늦은 resolve/reject 는 무시한다.
  * `@rustra/types` 의 raceAbort 와 동일 계약의 로컬 헬퍼 — RN 패키지의 공개
@@ -205,6 +184,27 @@ function raceAbortShallow<T>(
   });
 }
 
+/**
+ * 비동기 invoke — 무거운 Rust 연산을 JS 스레드에서 오프로드한다.
+ *
+ * - 네이티브 `invokeTypedAsync` 가 있으면: 즉시 반환, 결과는 JS 콜백 큐로 전달.
+ * - 없으면: 동기 fast path(`createFastEngine`)로 폴백 — 마이크로태스크로 래핑해
+ *   API 계약(`Promise<T>`)은 항상 동일하게 유지.
+ * - `options.signal` (T1): abort 시 `cancelled` 로 즉시 거부. 이 엔진의
+ *   취소는 **얕은 취소**다 — Rust 핸들러는 끝까지 실행되고 늦은 네이티브
+ *   콜백은 무시된다. 폴백(동기 엔진) 경로는 기존 T1 배선을 따른다.
+ *
+ * @example
+ * ```ts
+ * import { createAsyncEngine } from '@rustra/react-native';
+ * const engine = createAsyncEngine(getRustraNative(), { rkyvV2Codecs: registry });
+ * const result = await engine.invoke('heavyCompute', { n: 1_000_000 });
+ * // 취소 (T1):
+ * const ac = new AbortController();
+ * engine.invoke('heavyCompute', { n: 1 }, { signal: ac.signal });
+ * ac.abort();
+ * ```
+ */
 export function createAsyncEngine(
   native: RustraJSIAsyncNative,
   options: FastEngineOptions,

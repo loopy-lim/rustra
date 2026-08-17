@@ -897,11 +897,22 @@ test('global invoke forwards options (signal) to engine invoke (T1)', async () =
       return Promise.resolve({ value: 1 } as T);
     },
   };
+  // 센티넬: 이 테스트가 실패로 끝나도 mock 이 글로벌 엔진에 남아 이후
+  // 테스트를 오염시키지 않게 finally 로 원복 — 호출되면 즉시 던진다.
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
   configure(mockEngine as EngineClient);
-  const out = await invoke<{ value: number }>('dyn', { a: 1 }, { signal: ac.signal });
-  assert.equal(out.value, 1);
-  assert.deepEqual(captured.args, { a: 1 }, 'args must pass through unchanged');
-  const opts = captured.options as { signal?: AbortSignal } | undefined;
-  assert.ok(opts, 'options object must be forwarded to engine.invoke');
-  assert.equal(opts?.signal, ac.signal, 'signal identity must pass through untouched');
+  try {
+    const out = await invoke<{ value: number }>('dyn', { a: 1 }, { signal: ac.signal });
+    assert.equal(out.value, 1);
+    assert.deepEqual(captured.args, { a: 1 }, 'args must pass through unchanged');
+    const opts = captured.options as { signal?: AbortSignal } | undefined;
+    assert.ok(opts, 'options object must be forwarded to engine.invoke');
+    assert.equal(opts?.signal, ac.signal, 'signal identity must pass through untouched');
+  } finally {
+    configure(sentinel);
+  }
 });
