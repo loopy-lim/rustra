@@ -644,6 +644,10 @@ pub unsafe extern "C" fn rustra_ffi_cancellation_status(invocation_id: u64) -> u
 /// (T3) 페이로드 크기 한도를 동적으로 변경한다. 기본 1 MiB
 /// ([`DEFAULT_MAX_PAYLOAD_BYTES`]). 축소/확대 모두 즉시 이후의
 /// `rustra_ffi_invoke_json` / `rustra_ffi_invoke_postcard` 호출에 반영된다.
+/// 비동기 변형(`rustra_ffi_invoke_async`/`_json_async`)은 호출자 스레드에서
+/// 페이로드를 먼저 복사한 뒤에야 워커에서 검사한다 — 초과 페이로드도 일단
+/// 복사되므로 일시적으로 메모리가 2배로 존재할 수 있다. 어떤 스레드든 호출할
+/// 수 있고, 동시 set 간 경합은 last-writer-wins 이다.
 ///
 /// `Relaxed` — 크기 게이트는 어림잡기(sanity gate) 용도라 원자성만 필요하고
 /// 다른 메모리와의 순서 관계는 요구되지 않는다. 진행 중인 호출은 이미 읽은

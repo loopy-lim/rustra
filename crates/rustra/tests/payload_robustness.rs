@@ -251,9 +251,13 @@ impl Drop for LimitGuard {
 }
 
 /// 뮤텍스를 잡은 뒤 한도를 기준 상태(1 MiB)로 되돌리고 guard 를 반환한다.
-/// "시작 전 원복"은 이전 테스트가 panic 으로 guard 를 우회한 경우의 보험이다.
+/// "시작 전 원복"은 이전 테스트가 panic 으로 무너진 경우의 보험이다 — panic
+/// unwinding 은 [`LimitGuard`] 의 `Drop` 을 실행해 한도를 원복하지만, 그 panic
+/// 이 뮤텍스를 **독(poison)** 으로 만들기 때문에 이후 `.expect` 로는 락을 잡을
+/// 수 없다. `into_inner` 로 독을 회복해야 이 원복이 다음 테스트에서 실제로
+/// 의미를 갖는다.
 fn limit_guard() -> LimitGuard {
-    let guard = LIMIT_MUTEX.lock().expect("limit test mutex poisoned");
+    let guard = LIMIT_MUTEX.lock().unwrap_or_else(|e| e.into_inner()); // 포이즈닝 회복
     unsafe { rustra_ffi_set_max_payload(1024 * 1024) };
     LimitGuard(guard)
 }
@@ -283,6 +287,19 @@ fn raised_limit_admits_previously_rejected_payload() {
     );
     let resp = unsafe { std::slice::from_raw_parts(ptr, out_len) };
     let text = String::from_utf8_lossy(resp);
+    // 정상 파이프라인 적중을 긍정적으로 고정: 크기 가드가 아니라 **JSON 파싱**
+    // 단계에서 실패한 것이다 (ok=false + decode 에러). 한도 에러 부재만으로는
+    // "다른 이유로 null 아닌 응답" 과 구별되지 않는다.
+    let parsed: Value = serde_json::from_slice(resp).expect("response must be valid JSON");
+    assert_eq!(
+        parsed.get("ok").and_then(|v| v.as_bool()),
+        Some(false),
+        "1.5MB of '{{' must fail as JSON decode, got: {text}"
+    );
+    assert!(
+        text.contains("json decode failed"),
+        "error must come from the normal decode pipeline, got: {text}"
+    );
     assert!(
         !text.contains("size limit"),
         "within raised limit — decode error is fine, limit error is not. got: {text}"
