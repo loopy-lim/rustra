@@ -214,9 +214,9 @@ fn pre_cancelled_invocation_short_circuits_before_handler() {
         );
     } else {
         // 체크포인트가 이미 통과됐다 — 정상 완결이 계약 (add(1,2)=3).
-        assert!(
-            decoded.ok,
-            "post-checkpoint cancel must still deliver the success result: {decoded:?}"
+        assert_eq!(
+            decoded.error, None,
+            "post-checkpoint success must carry no error: {decoded:?}"
         );
         assert_eq!(decoded.result_json.as_deref(), Some(r#"{"value":3}"#));
     }
