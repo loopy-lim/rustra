@@ -4,12 +4,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  configure,
   createRkyvV2Engine,
   getLiveSchema,
+  invoke,
   RustraCommandError,
   parseRustraErrorString,
 } from './index.js';
-import type { RkyvV2SchemaNative, RkyvV2Codec, BatchEntry } from './index.js';
+import type { RkyvV2SchemaNative, RkyvV2Codec, BatchEntry, EngineClient } from './index.js';
 
 // ── wire 헬퍼 (TS 측 Tier 3 wire) ───────────────────────────
 // request:  [command_id: u16 LE @0][json @2]
@@ -880,4 +882,26 @@ test('cancelled code is retryable via RustraCommandError default (T1)', () => {
   const e = parseRustraErrorString('cancelled: invocation cancelled before dispatch');
   assert.equal(e.code, 'cancelled');
   assert.equal(e.retryable, true); // isRetryableCode 미러링 검증
+});
+
+// ── T1 Task 6: 글로벌 invoke 옵션 전달 ──────────────────────
+
+test('global invoke forwards options (signal) to engine invoke (T1)', async () => {
+  // mock 엔진이 세 번째 인자(options)를 그대로 받는지 — signal 객체 동일성으로.
+  const ac = new AbortController();
+  const captured: { args?: unknown; options?: unknown } = {};
+  const mockEngine = {
+    invoke<T>(_command: string, args?: unknown, options?: unknown): Promise<T> {
+      captured.args = args;
+      captured.options = options;
+      return Promise.resolve({ value: 1 } as T);
+    },
+  };
+  configure(mockEngine as EngineClient);
+  const out = await invoke<{ value: number }>('dyn', { a: 1 }, { signal: ac.signal });
+  assert.equal(out.value, 1);
+  assert.deepEqual(captured.args, { a: 1 }, 'args must pass through unchanged');
+  const opts = captured.options as { signal?: AbortSignal } | undefined;
+  assert.ok(opts, 'options object must be forwarded to engine.invoke');
+  assert.equal(opts?.signal, ac.signal, 'signal identity must pass through untouched');
 });

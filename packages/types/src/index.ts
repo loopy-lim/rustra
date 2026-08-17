@@ -214,18 +214,26 @@ export function configure(engine: EngineClient): void {
  *
  * 일반적으로 직접 호출하지 않고, 코드젠이 생성한 명령 함수를 사용합니다.
  *
+ * `options.signal` (T1) 이 abort 되면 엔진의 취소 정책(전파 가능하면
+ * 네이티브 전파, 아니면 얕은 취소)에 따라 프라미스가 즉시 reject 됩니다.
+ *
  * @example
  * ```ts
  * const result = await invoke<AddNumbersOutput>('addNumbers', { a: 42, b: 58 });
  * // 또는:
  * const result = await addNumbers({ a: 42, b: 58 });
+ * // 취소 가능한 호출 (T1):
+ * const ac = new AbortController();
+ * const r = await invoke('addNumbers', { a: 42, b: 58 }, { signal: ac.signal });
  * ```
  */
-export function invoke<T>(command: string, args?: unknown): Promise<T> {
+export function invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
   if (!_engine) {
     throw new Error('Rustra not configured. Call configure(engine) first.');
   }
-  return _engine.invoke<T>(command, args);
+  // 옵션을 엔진에 그대로 전달한다 (T1). 옵션을 이해하지 못하는 구형/서드파티
+  // 엔진은 JS 호출 규약상 추가 인자를 무시한다 — 호출부 파괴 없이 확장된다.
+  return _engine.invoke<T>(command, args, options);
 }
 
 /**
@@ -233,6 +241,10 @@ export function invoke<T>(command: string, args?: unknown): Promise<T> {
  *
  * 정적 명령만 있으면 단일 네이티브 횡단으로 일괄 처리되어 잦은 호출의 jank 를 줄이고,
  * 동적 명령이 섞이면 항목별로 자동 라우팅됩니다.
+ *
+ * TODO(T1): BatchEntry 에 항목별 `options?: InvokeOptions` 를 실어 항목 단위
+ * 취소를 지원한다 — 와이어 타입 확장이라 이번 작업 범위에서는 제외 (YAGNI).
+ * 현재는 배치 전체 취소만 `Promise.all` 폴백 경로의 얕은 취소로 자연히 얻어진다.
  *
  * @example
  * ```ts
