@@ -6,17 +6,22 @@
  * 타임라인(최대 10)을 조회한다. 타이밍은 `Date.now()` 기반 — QuickJS 런타임에
  * `performance.now` 가 없는 환경(Lynx)을 고려한 퍼셉트 단위 관측이다.
  *
+ * inner 엔진이 `invokeBatch` 를 지원하면 래퍼도 전달한다(배치 전체를 1관측으로
+ * 기록 + 각 엔트리 실패 반영). 지원하지 않으면 일반 `invoke` 와 마찬가지로
+ * 생략된다 — 래핑이 배치 기능을 조용히 제거하지 않는다.
+ *
  * @example
  * ```ts
  * import { createInstrumentedEngine } from '@rustra/devtools';
+ * import { configure } from '@rustra/types';
  *
- * const engine = createInstrumentedEngine(createNodeEngine({ invoke }));
- * await addNumbers(engine, { a: 1, b: 2 });
+ * configure(createInstrumentedEngine(createNodeEngine({ invoke })));
+ * await addNumbers({ a: 1, b: 2 });
  * console.table(engine.report().commandStats);
  * ```
  */
 
-import type { EngineClient } from '@rustra/types';
+import type { BatchEntry, EngineClient } from '@rustra/types';
 
 interface CommandStat {
   count: number;
@@ -48,7 +53,7 @@ export function createInstrumentedEngine(inner: EngineClient): InstrumentedEngin
     return s;
   };
 
-  return {
+  const engine: InstrumentedEngine = {
     async invoke<T>(command: string, args?: unknown): Promise<T> {
       const start = Date.now();
       try {
@@ -78,4 +83,28 @@ export function createInstrumentedEngine(inner: EngineClient): InstrumentedEngin
       };
     },
   };
+
+  // inner 가 invokeBatch 를 지원하면 전달 — 래핑으로 배치 기능이 사라지지 않게.
+  if (inner.invokeBatch) {
+    engine.invokeBatch = async <T>(entries: BatchEntry[]): Promise<T[]> => {
+      const start = Date.now();
+      try {
+        return await inner.invokeBatch!<T>(entries);
+      } catch (e) {
+        for (const { command } of entries) statFor(command).errors += 1;
+        throw e;
+      } finally {
+        const ms = Date.now() - start;
+        totalCalls += entries.length;
+        for (const { command } of entries) {
+          const s = statFor(command);
+          s.count += 1;
+          s.totalMs += ms / entries.length;
+        }
+        slowest.push({ command: `batch(${entries.length})`, ms });
+      }
+    };
+  }
+
+  return engine;
 }

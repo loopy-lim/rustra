@@ -8,10 +8,12 @@
  * @example
  * ```ts
  * import { createMockEngine } from '@rustra/testing';
+ * import { configure } from '@rustra/types';
  * import { addNumbers } from './generated/commands.js';
  *
  * const engine = createMockEngine().on('addNumbers', ({a, b}) => a + b);
- * const result = await addNumbers(engine, { a: 20, b: 22 }); // 42
+ * configure(engine); // 글로벌 invoke 에 설치 — 생성 함수는 파라미터 없이 호출
+ * const result = await addNumbers({ a: 20, b: 22 }); // 42
  * ```
  */
 

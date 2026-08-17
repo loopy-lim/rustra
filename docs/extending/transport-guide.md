@@ -224,7 +224,7 @@ npm run test:runtime:node
 npm run test:runtime:bun
 ```
 
-테스트는 `addNumbers(engine, { a: 20, b: 22 })`의 결과가 `42`인지 확인하는 방식으로, transport가 바뀌어도 동일한 결과를 반환하는지 검증합니다.
+테스트는 `configure(engine)` 후 `addNumbers({ a: 20, b: 22 })`의 결과가 `42`인지 확인하는 방식으로, transport가 바뀌어도 동일한 결과를 반환하는지 검증합니다.
 
 ---
 
@@ -257,6 +257,7 @@ cargo build -p rustra-calculator-example
 import { dlopen, FFIType, suffix } from 'bun:ffi';
 import { createBunEngine } from '../../../packages/bun/src/index.js';
 import { addNumbers } from '../generated/commands.js';
+import { configure } from '@rustra/types';
 
 const lib = dlopen(`target/debug/librustra_calculator_example.${suffix}`, {
   rustra_calculator_invoke: {
@@ -290,7 +291,8 @@ const engine = createBunEngine({
   },
 });
 
-const result = await addNumbers(engine, { a: 20, b: 22 });
+configure(engine);
+const result = await addNumbers({ a: 20, b: 22 });
 console.log(`bun FFI result: ${result.value}`); // 42
 ```
 
@@ -383,7 +385,8 @@ const engine = createNodeEngine({
 
 // 동일한 방식으로 사용
 import { addNumbers } from '../generated/commands.js';
-const result = await addNumbers(engine, { a: 20, b: 22 });
+configure(engine);
+const result = await addNumbers({ a: 20, b: 22 });
 console.log(`napi-rs result: ${result.value}`); // 42
 ```
 

@@ -62,7 +62,7 @@ Host examples must use the same command surface:
 - The only host-specific JavaScript difference is which adapter creates the `EngineClient`.
 - The only host-specific native/runtime difference is how that adapter transport reaches Rust.
 
-For the calculator example, the shared path is `addNumbers(engine, { a, b })`. Node, Bun, and Tauri must not keep separate app-local calculator logic that bypasses the generated helper or `rustra` package dispatch.
+For the calculator example, the shared path is `addNumbers({ a, b })` (with the engine installed globally via `configure(engine)`). Node, Bun, and Tauri must not keep separate app-local calculator logic that bypasses the generated helper or `rustra` package dispatch.
 
 React Native follows the same JavaScript path in `examples/react-native-calculator/App.tsx`, but the current fixture intentionally reports `missing-native-module` at runtime until the native module is implemented.
 
