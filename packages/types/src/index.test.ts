@@ -649,15 +649,83 @@ test('abort mid-flight: shallow path rejects with cancelled (T1)', async () => {
   });
 });
 
+test('typed-path command falls back to shallow cancel even with invokeAsync exposed (T1)', async () => {
+  // tier 게이팅: invokeAsync/invokeCancel 이 노출돼 있어도 typed(tier 1)
+  // 명령은 전파 대상이 아니다 — 얕은 취소, invokeCancel 미호출.
+  let cancels = 0;
+  let asyncCalls = 0;
+  let typedCalls = 0;
+  const native = makeTypedNative({
+    hasStaticCodec: () => true,
+    invokeTyped: () => {
+      typedCalls++;
+      return { value: 7 };
+    },
+  });
+  native.invokeAsync = () => {
+    asyncCalls++;
+    return 1;
+  };
+  native.invokeCancel = () => {
+    cancels++;
+    return true;
+  };
+  // registry 에 코덱이 있어도 B1 typed path 가 우선한다.
+  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
+    ['echo', echoCodec() as unknown as RkyvV2Codec<unknown, unknown>],
+  ]);
+  const engine = createRkyvV2Engine(native, registry);
+  const ac = new AbortController();
+  const p = engine.invoke<{ value: number }>('echo', { tag: 1, msg: 'm' }, { signal: ac.signal });
+  ac.abort();
+  await assert.rejects(p, (e: unknown) => {
+    assert.ok(e instanceof RustraCommandError && e.code === 'cancelled');
+    return true;
+  });
+  assert.equal(typedCalls, 1, 'typed path must have been dispatched (shallow cancel)');
+  assert.equal(asyncCalls, 0, 'invokeAsync must not be used for typed-path commands');
+  assert.equal(cancels, 0, 'invokeCancel must not be called on shallow fallback');
+});
+
+test('tier3 dynamic command falls back to shallow cancel even with invokeAsync exposed (T1)', async () => {
+  // tier 게이팅(동적 경로): 레지스트리 코덱이 없는 tier 3 명령도 전파 제외.
+  let cancels = 0;
+  let asyncCalls = 0;
+  const native = makeNative({
+    schema: schemaBytes([{ name: 'dyn', commandId: 3 }]),
+    invokeImpl: () => tier3Success({ v: 1 }),
+  });
+  native.invokeAsync = () => {
+    asyncCalls++;
+    return 1;
+  };
+  native.invokeCancel = () => {
+    cancels++;
+    return true;
+  };
+  const engine = createRkyvV2Engine(native, new Map());
+  const ac = new AbortController();
+  const p = engine.invoke<{ v: number }>('dyn', {}, { signal: ac.signal });
+  ac.abort();
+  await assert.rejects(p, (e: unknown) => {
+    assert.ok(e instanceof RustraCommandError && e.code === 'cancelled');
+    return true;
+  });
+  assert.equal(asyncCalls, 0, 'invokeAsync must not be used for tier3 dynamic commands');
+  assert.equal(cancels, 0, 'invokeCancel must not be called on shallow fallback');
+});
+
 test('abort mid-flight: propagate path calls invokeCancel and rejects (T1)', async () => {
   // JS 코덱 경로 + invokeAsync/invokeCancel 노출 → 전파.
   // invokeAsync 는 id 만 반환하고 콜백을 즉시 부르지 않는다 (abort 가 먼저).
   const native = makeNative({});
   let cancelled = false;
+  let forwardedId = -1;
   native.invokeAsync = (_payload: ArrayBuffer, _cb: (resp: ArrayBuffer) => void) => {
     return 77; // invocation id — 콜백 보류 (실 호스트는 워커 완료 시 호출)
   };
-  native.invokeCancel = (_id: number) => {
+  native.invokeCancel = (id: number) => {
+    forwardedId = id;
     cancelled = true;
     return true;
   };
@@ -675,6 +743,113 @@ test('abort mid-flight: propagate path calls invokeCancel and rejects (T1)', asy
     return true;
   });
   assert.equal(cancelled, true, 'invokeCancel must be called on the propagate path');
+  assert.equal(forwardedId, 77, 'invokeCancel must receive the id invokeAsync returned');
+});
+
+test('late invokeAsync delivery after abort is ignored (T1)', async () => {
+  // 협력적 취소 계약: abort 로 정착된 뒤 도착하는 정상 응답 프레임은 무시된다.
+  // decode 가 실행조차 되지 않음을 sentinel 로 증명 (settled 가드 검증).
+  const native = makeNative({});
+  let cancelledId: number | null = null;
+  let deliver: ((resp: ArrayBuffer) => void) | null = null;
+  native.invokeAsync = (_payload: ArrayBuffer, cb: (resp: ArrayBuffer) => void) => {
+    deliver = cb; // 콜백 보류 — abort 이후 수동 전달
+    return 42;
+  };
+  native.invokeCancel = (id: number) => {
+    cancelledId = id;
+    return true;
+  };
+  const base = echoCodec();
+  let decodeCalls = 0;
+  const codec: RkyvV2Codec<unknown, unknown> = {
+    commandId: base.commandId,
+    encode: base.encode,
+    decode: (frame: ArrayBuffer) => {
+      decodeCalls++;
+      throw new Error('decode must not run after abort'); // sentinel
+    },
+  };
+  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([['echo', codec]]);
+  const engine = createRkyvV2Engine(native, registry);
+  const ac = new AbortController();
+  const p = engine.invoke<EchoOut>('echo', { tag: 1, msg: 'm' }, { signal: ac.signal });
+  ac.abort();
+  await assert.rejects(p, (e: unknown) => {
+    assert.ok(e instanceof RustraCommandError && e.code === 'cancelled');
+    return true;
+  });
+  // abort 이후 유효한 성공 프레임이 늦게 도착해도 무시되어야 한다.
+  const fr = new Uint8Array(10);
+  fr[0] = 1;
+  fr[8] = 1;
+  deliver!(fr.buffer);
+  await new Promise<void>((r) => queueMicrotask(() => r()));
+  assert.equal(cancelledId, 42, 'invokeCancel must have been called with the invocation id');
+  assert.equal(decodeCalls, 0, 'late delivery must not run decode (settled guard)');
+});
+
+test('propagate path settles when codec.decode throws on a malformed frame (T1)', async () => {
+  // 잘못된 프레임으로 decode 가 throw 해도 예외가 네이티브 트램펄린으로
+  // 새어나가 영원히 대기하는 일이 없어야 한다 — reject 로 정착한다.
+  const native = makeNative({});
+  native.invokeAsync = (_payload: ArrayBuffer, cb: (resp: ArrayBuffer) => void) => {
+    queueMicrotask(() => cb(new ArrayBuffer(0))); // decode 가 throw 할 프레임
+    return 1;
+  };
+  native.invokeCancel = () => true;
+  const base = echoCodec();
+  const codec: RkyvV2Codec<unknown, unknown> = {
+    commandId: base.commandId,
+    encode: base.encode,
+    decode: () => {
+      throw new Error('malformed frame');
+    },
+  };
+  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([['echo', codec]]);
+  const engine = createRkyvV2Engine(native, registry);
+  const ac = new AbortController();
+  await assert.rejects(
+    engine.invoke<EchoOut>('echo', { tag: 1, msg: 'm' }, { signal: ac.signal }),
+    (e: unknown) => {
+      assert.ok(e instanceof Error);
+      assert.equal((e as Error).message, 'malformed frame');
+      return true;
+    },
+  );
+});
+
+test('propagate executor cleans up abort listener on synchronous throw (T1)', async () => {
+  // encode 가 동기 throw 하면 프라미스는 그 예외로 reject 되고, signal 의
+  // abort 리스너는 제거되어야 한다 — 늦은 abort 가 invokeCancel 을 부르지 않는다.
+  const native = makeNative({});
+  let cancels = 0;
+  native.invokeAsync = () => 1; // encode 가 먼저 throw 하므로 도달하지 않는다
+  native.invokeCancel = () => {
+    cancels++;
+    return true;
+  };
+  const base = echoCodec();
+  const codec: RkyvV2Codec<unknown, unknown> = {
+    commandId: base.commandId,
+    encode: () => {
+      throw new Error('encode exploded');
+    },
+    decode: base.decode,
+  };
+  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([['echo', codec]]);
+  const engine = createRkyvV2Engine(native, registry);
+  const ac = new AbortController();
+  await assert.rejects(
+    engine.invoke<EchoOut>('echo', { tag: 1, msg: 'm' }, { signal: ac.signal }),
+    (e: unknown) => {
+      assert.ok(e instanceof Error && (e as Error).message === 'encode exploded');
+      return true;
+    },
+  );
+  ac.abort(); // 리스너가 남아 있다면 invokeCancel 이 불릴 것이다
+  await new Promise<void>((r) => queueMicrotask(() => r()));
+  assert.equal(cancels, 0, 'leaked abort listener must not call invokeCancel');
 });
 
 test('propagate path resolves normally when invokeAsync completes first (T1)', async () => {

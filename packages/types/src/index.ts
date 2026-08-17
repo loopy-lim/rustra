@@ -460,6 +460,39 @@ export type RkyvV2EngineOptions = {
 };
 
 /**
+ * tier 2(JS 코덱) 응답 프레임을 결과/에러로 환산한다 — `dispatch` 와 전파
+ * 경로 콜백이 공유하는 유일 경로 (T1 리뷰). `codec.decode` 가 잘못된 프레임으로
+ * throw 하면 그 예외를 reject 값으로 돌린다(비-Error 는 `invoke.failed` 로
+ * 래핑): 전파 경로의 콜백은 네이티브 트램펄린 안에서 실행되므로 예외가
+ * 새어나가면 프라미스가 영원히 정착하지 않는다. 이 함수 자체는 throw 하지 않는다.
+ */
+function tier2Outcome<T>(
+  codec: RkyvV2Codec<unknown, unknown>,
+  frame: ArrayBuffer,
+): { ok: true; value: T } | { ok: false; error: Error } {
+  let response: ReturnType<RkyvV2Codec<unknown, unknown>['decode']>;
+  try {
+    response = codec.decode(frame);
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? err
+          : new RustraCommandError('invoke.failed', `codec decode failed: ${String(err)}`),
+    };
+  }
+  if (!response.ok) {
+    const e = response.error ?? { code: 'invoke.failed', message: 'RkyvV2 invoke failed' };
+    return {
+      ok: false,
+      error: new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code)),
+    };
+  }
+  return { ok: true, value: response.result as T };
+}
+
+/**
  * 얕은 취소 (T1) — 네이티브 전파가 불가능할 때 JS 프라미스만 거부한다.
  * Rust 핸들러는 끝까지 실행되며, 그 결과는 이 프라미스 체인에서 버려진다.
  */
@@ -524,16 +557,11 @@ export function createRkyvV2Engine(
     const codec = registry.get(command);
     if (codec) {
       const resultBytes = native.invokeRkyvV2(codec.encode(args));
-      const response = codec.decode(resultBytes);
-      if (!response.ok) {
-        const e = response.error ?? { code: 'invoke.failed', message: 'RkyvV2 invoke failed' };
-        // Reject (do not throw) so the declared Promise<T> contract holds and
-        // callers can use .catch() / await-try-consistently for command errors.
-        return Promise.reject(
-          new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code)),
-        );
-      }
-      return Promise.resolve(response.result as T);
+      // Reject (do not throw) so the declared Promise<T> contract holds and
+      // callers can use .catch() / await-try-consistently for command errors.
+      const outcome = tier2Outcome<T>(codec, resultBytes);
+      if (!outcome.ok) return Promise.reject(outcome.error);
+      return Promise.resolve(outcome.value);
     }
     // 3순위: 동적 명령 → Tier 3 fallback (live schema 의 commandId 사용)
     const entry = getLiveSchema(native).get(command);
@@ -582,26 +610,36 @@ export function createRkyvV2Engine(
             native.invokeCancel!(invocationId);
             reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
           };
-          // invokeAsync 가 콜백을 동기적으로 부를 수 있으므로 리스너를 먼저 단다.
-          signal.addEventListener('abort', onAbort, { once: true });
-          invocationId = native.invokeAsync!(codec.encode(args), (resp) => {
-            if (settled) return;
+          // encode/invokeAsync 가 동기 throw 해도 abort 리스너가 signal 에
+          // 새어남기지 않도록 try/catch 로 정리한다. catch 에서 reject 할 때
+          // 이미 콜백이 정착했다면 reject 는 no-op 이므로 안전하다.
+          try {
+            // invokeAsync 가 콜백을 동기적으로 부를 수 있으므로 리스너를 먼저 단다.
+            signal.addEventListener('abort', onAbort, { once: true });
+            invocationId = native.invokeAsync!(codec.encode(args), (resp) => {
+              if (settled) return;
+              // settled 를 올리기 전에 환산한다 — tier2Outcome 은 decode 가
+              // throw 해도 (잘못된 프레임) 에러로 환산할 뿐 절대 throw 하지
+              // 않으므로, 이 지점 이후 프라미스는 반드시 정착한다. 예외가
+              // 네이티브 트램펄린으로 새어나가 영원히 대기하는 일이 없다.
+              const outcome = tier2Outcome<T>(codec, resp);
+              settled = true;
+              signal.removeEventListener('abort', onAbort);
+              if (outcome.ok) resolve(outcome.value);
+              else reject(outcome.error);
+            });
+          } catch (err) {
             settled = true;
             signal.removeEventListener('abort', onAbort);
-            // 응답 디코딩/정착은 dispatch 의 tier 2 브랜치와 동일 로직.
-            const response = codec.decode(resp);
-            if (!response.ok) {
-              const e = response.error ?? {
-                code: 'invoke.failed',
-                message: 'RkyvV2 invoke failed',
-              };
-              reject(
-                new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code)),
-              );
-              return;
-            }
-            resolve(response.result as T);
-          });
+            reject(
+              err instanceof Error
+                ? err
+                : new RustraCommandError(
+                    'invoke.failed',
+                    `invoke("${command}") dispatch failed: ${String(err)}`,
+                  ),
+            );
+          }
         });
       }
       // 전파 불가 — 얕은 취소 (JS 프라미스만 거부, Rust 는 끝까지 실행):
