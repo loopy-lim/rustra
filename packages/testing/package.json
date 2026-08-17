@@ -1,6 +1,6 @@
 {
   "name": "@rustra/testing",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Testing utilities for rustra-bridge — mock engine and contract gates",
   "license": "MIT",
   "type": "module",

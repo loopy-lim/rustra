@@ -7,6 +7,34 @@
 
 ### Added
 
+- `Package::set_event_sink` / `rustra::events::EventSink` — Rust → JS 이벤트
+  **푸시** 전달. 싱크를 설치하면 `Package::emit` 이 버스 적재 대신 콜백을
+  즉시 호출한다(폴링 불필요, LLM 토큰 스트리밍 등 저지연 용도). 싱크와
+  버스는 상호 배타적 — 설치 중에는 `take_pending_events` 큐가 비어 있다
+  (이중 수신 방지). `set_event_sink(None)` 으로 즉시 폴링 복귀. 싱크 패닉은
+  `catch_unwind` 로 격리되어 emit 호출자로 전파되지 않는다.
+- `tauri_support::register_with_events(package, builder)` — Tauri 푸시 배선.
+  플러그인 setup 훅에서 `tauri_event_sink` 를 설치해 `Package::emit` 이
+  `app.emit_str("rustra://{sanitized}", payload_json)` 로 전달된다. 기존
+  `register` 는 폴링 경로 유지(하위호환). 채널명 규칙: 이벤트명의
+  영숫자/`-`/`/`/`:`/`_` 외 문자는 `_` 치환(예: `progress.tick` →
+  `rustra://progress_tick`).
+- `tauri_support::tauri_event_sink(app)` / `tauri_support::event_channel(name)` —
+  자체 호스트 setup 흐름에서 싱크를 직접 설치할 때 쓰는 공개 헬퍼(플러그인
+  없이 `app.handle().clone()` 만 있으면 된다).
+- FFI 이벤트 싱크 — `rustra_ffi_event_sink_register(callback, user_data)` /
+  `rustra_event_sink_unregister()`. C 콜백 ABI 는 `extern "C-unwind"`
+  (콜백 패닉이 Rust 쪽 catch_unwind 에서 가두어진다). 패키지 등록 전 싱크
+  등록도 지원(지연 설치).
+- `@rustra/react-native` `subscribeEvent(native, name, cb)` → unsubscribe.
+  RN JSI `onEvent`/`offEvent` 위의 TS 래퍼 — 페이로드는 JSON 문자열로 JSI 를
+  건너고 TS 에서 `JSON.parse` 1회 복원. `RustraNative` 타입에
+  `onEvent`/`offEvent`/`drainEvents` 추가.
+- RN JSI 이벤트 콜백 — iOS `.mm`(RCTCxxBridge jsCallInvoker) / Android
+  JNI(CallInvokerHolderImpl). emitting 스레드는 고정 용량 1024 drop-oldest
+  큐에 적재 + `CallInvoker::invokeAsync(drain)` 예약, drain 이 JS 런타임
+  스레드에서 per-name JS 함수 호출. CallInvoker 없는 호스트는 `drainEvents()`
+  JS 폴링 폴백. RN 리로드 시 stale 리스너 정리.
 - `rustra dev` CLI — Rust 소스 감시 + dual-path codegen 자동 재실행
   (hot codegen). mtime 기반 stale 판정으로 Rust bin/TS CLI 스테이지 선택적 실행,
   `--inspect` 플래그로 devtools 안내
