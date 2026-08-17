@@ -348,7 +348,8 @@ fn postcard_deserialize_envelope(bytes: &[u8]) -> Result<(String, serde_json::Va
 /// 체크포인트는 "cancel 이 먼저였으면 핸들러가 절대 시작하지 않는다"만
 /// 보장한다. 응답 포맷 정합성을 위해 프레임 생성은 `serialize`(`err_response`
 /// 와 동일한 경로)에 맡긴다 — JSON 경로는 `json_serialize`, postcard 경로는
-/// `postcard_serialize_response` 를 넘긴다.
+/// `postcard_serialize_response` 를 넘긴다. `serialize` 는 `invoke_fn` 의
+/// 응답 포맷과 일치해야 한다 (호스트가 두 경로의 프레임을 동일하게 디코딩).
 ///
 /// `complete_invocation` 을 `on_complete` 이전에 호출한다 — 콜백 실행 중
 /// 호스트가 `rustra_ffi_cancellation_status` 로 조회하면 이미 Unknown(0)을
@@ -379,7 +380,9 @@ fn run_worker(
 
 /// `rustra_ffi_invoke` 의 디폴트 포맷 디스패치를 그대로 따르는 직렬화기 —
 /// [`run_worker`] 의 cancelled 프레임이 실제 dispatch 경로와 동일한
-/// 포맷(JSON/postcard)으로 인코딩되도록 한다.
+/// 포맷(JSON/postcard)으로 인코딩되도록 한다. `None => Json` 기본값은
+/// `rustra_ffi_invoke` 의 디스패치와 정확히 미러링되어야 한다 (디폴트
+/// 미설정 시 두 경로가 같은 포맷을 산출).
 fn sync_serialize(resp: &FfiResponse) -> Vec<u8> {
     match DEFAULT_FORMAT.get() {
         Some(FfiFormat::Postcard) => postcard_serialize_response(resp),
@@ -1200,10 +1203,14 @@ mod tests {
         std::ptr::null_mut()
     }
 
-    /// on_complete 로 전달된 버퍼를 Vec 으로 캡처한다.
+    /// on_complete 로 전달된 버퍼를 Vec 으로 캡처한다. null 버퍼로 호출된
+    /// 경우에도 콜백 자체는 발생했음을 플래그로 기록한다.
     static WORKER_FRAME: Mutex<Option<(Vec<u8>, usize)>> = Mutex::new(None);
+    static WORKER_CB_FIRED: std::sync::atomic::AtomicBool =
+        std::sync::atomic::AtomicBool::new(false);
 
     unsafe extern "C" fn capture_frame_cb(_user: *mut c_void, ptr: *mut u8, len: usize) {
+        WORKER_CB_FIRED.store(true, std::sync::atomic::Ordering::SeqCst);
         if ptr.is_null() {
             return;
         }
@@ -1266,6 +1273,7 @@ mod tests {
 
         WORKER_INVOKE_RAN.store(false, std::sync::atomic::Ordering::SeqCst);
         WORKER_FRAME.lock().unwrap().take();
+        WORKER_CB_FIRED.store(false, std::sync::atomic::Ordering::SeqCst);
 
         run_worker(
             id,
@@ -1280,9 +1288,15 @@ mod tests {
             WORKER_INVOKE_RAN.load(std::sync::atomic::Ordering::SeqCst),
             "running invocation must reach the handler"
         );
+        // WORKER_FRAME.is_none() 만으로는 "콜백이 null 버퍼로 호출됨"과
+        // "아예 호출 안 됨"을 구분할 수 없다 — 플래그로 실제 발생을 증명한다.
+        assert!(
+            WORKER_CB_FIRED.load(std::sync::atomic::Ordering::SeqCst),
+            "sentinel returns null → on_complete must still fire (with a null buffer)"
+        );
         assert!(
             WORKER_FRAME.lock().unwrap().is_none(),
-            "sentinel returns null → on_complete still fires with a null buffer"
+            "null buffer must not be captured as a frame"
         );
         assert_eq!(crate::cancel::status(id), crate::cancel::Status::Unknown);
     }

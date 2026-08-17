@@ -21,7 +21,7 @@
 // ── Core types ──────────────────────────────────────────────
 
 export type EngineClient = {
-  invoke<T>(command: string, args?: unknown): Promise<T>;
+  invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T>;
   /**
    * 여러 명령을 한 번에 호출한다 (P0-2). 정적 명령만 있으면 단일 JSI/FFI 횡단
    * (invokeTypedBatch)로 처리하고, 동적 명령이 섞이면 항목별 invoke 로 폴백한다.
@@ -31,6 +31,20 @@ export type EngineClient = {
 
 /** invokeBatch 의 입력 항목. */
 export type BatchEntry = { command: string; args?: unknown };
+
+/**
+ * invoke 추가 옵션 (T1).
+ *
+ * `signal` 이 abort 되면 프라미스를 즉시 reject 한다. 네이티브가
+ * `invokeAsync`/`invokeCancel` 을 노출하면 취소를 전파(전파는 JS 코덱
+ * 경로만; typed/tier3 경로는 얕은 취소)하고, 그렇지 않으면 JS 프라미스만
+ * 거부하는 얕은 취소로 폴백한다 — Rust 핸들러는 끝까지 실행된다.
+ */
+export type InvokeOptions = {
+  /** (T1) AbortSignal — abort 시 Promise 를 즉시 reject 하고, 네이티브가
+   *  invokeAsync/invokeCancel 을 노출하면 취소를 전파한다. */
+  signal?: AbortSignal;
+};
 
 /**
  * createRkyvV2Engine 이 반환하는 구체 엔진. EngineClient 에 더해 invokeBatch(P0-2) 를
@@ -97,11 +111,12 @@ export function parseRustraErrorString(error: string | undefined | null): Rustra
 /**
  * 코드 기반 retryable 추론 — Rust `RustraError` 팩토리 관례와 정합.
  * `transport.error`/`transport.timeout`은 Rust 생성 시점에 `retryable: true`로
- * 설정되는 유일한 코드군이다 (구조화 와이어에는 retryable 플래그가 없으므로
- * 코드에서 도출한다).
+ * 설정되는 코드군이며 (구조화 와이어에는 retryable 플래그가 없으므로 코드에서
+ * 도출한다), `cancelled`도 Rust `RustraError::cancelled` 의 retryable:true 를
+ * 미러링한다 (T1 — JSON fallback 경로의 취소 에러 정합).
  */
 function isRetryableCode(code: string): boolean {
-  return code === 'transport.error' || code === 'transport.timeout';
+  return code === 'transport.error' || code === 'transport.timeout' || code === 'cancelled';
 }
 
 // ── rkyv V2 codec types ────────────────────────────────────
@@ -159,6 +174,8 @@ export type RustraNative = {
    * CallInvoker 경로가 켜져 있으면 대개 호출 즉시 0(자동 drain 됨).
    */
   drainEvents?(): number;
+  /** (T1) 진행 중 async 호출 취소 — invokeAsync 가 반환한 invocation id 를 넘긴다. */
+  invokeCancel?(invocationId: number): boolean;
 };
 
 // ── Global invoke (Tauri-like) ──────────────────────────────
@@ -317,6 +334,10 @@ export type RkyvV2SchemaNative = {
   invokeTyped?(name: string, args: unknown): unknown;
   /** P0-2: 정적 명령 N 개를 단일 횡단으로 일괄 처리 (RN JSI). */
   invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
+  /** (T1) 취소 전파 가능한 비동기 invoke — invocation id 를 반환하고, 결과는 콜백으로. */
+  invokeAsync?(payload: ArrayBuffer, onDone: (response: ArrayBuffer) => void): number;
+  /** (T1) 진행 중 async 호출 취소. */
+  invokeCancel?(invocationId: number): boolean;
 };
 
 /**
@@ -438,6 +459,28 @@ export type RkyvV2EngineOptions = {
   contractHash?: string;
 };
 
+/**
+ * 얕은 취소 (T1) — 네이티브 전파가 불가능할 때 JS 프라미스만 거부한다.
+ * Rust 핸들러는 끝까지 실행되며, 그 결과는 이 프라미스 체인에서 버려진다.
+ */
+function raceAbort<T>(promise: Promise<T>, signal: AbortSignal, command: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () =>
+      reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (v) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(v);
+      },
+      (e) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(e);
+      },
+    );
+  });
+}
+
 export function createRkyvV2Engine(
   native: RkyvV2SchemaNative,
   registry: Map<string, RkyvV2Codec<unknown, unknown>>,
@@ -471,47 +514,98 @@ export function createRkyvV2Engine(
   // P0-2: 단일 횡단 배치가 가능하려면 invokeTypedBatch 도 필요.
   const hasBatchPath = hasTypedPath && !!native.invokeTypedBatch;
 
-  return {
-    invoke<T>(command: string, args?: unknown): Promise<T> {
-      // 1순위: C++ fast path (RN JSI). 정적 명령만.
-      if (hasTypedPath && native.hasStaticCodec!(command)) {
-        return Promise.resolve(native.invokeTyped!(command, args) as T);
-      }
-      // 2순위: JS codec (Node/Bun/Tauri 또는 typed 누락 시). 정적 명령.
-      const codec = registry.get(command);
-      if (codec) {
-        const resultBytes = native.invokeRkyvV2(codec.encode(args));
-        const response = codec.decode(resultBytes);
-        if (!response.ok) {
-          const e = response.error ?? { code: 'invoke.failed', message: 'RkyvV2 invoke failed' };
-          // Reject (do not throw) so the declared Promise<T> contract holds and
-          // callers can use .catch() / await-try-consistently for command errors.
-          return Promise.reject(
-            new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code)),
-          );
-        }
-        return Promise.resolve(response.result as T);
-      }
-      // 3순위: 동적 명령 → Tier 3 fallback (live schema 의 commandId 사용)
-      const entry = getLiveSchema(native).get(command);
-      if (!entry) {
-        return Promise.reject(
-          new RustraCommandError(
-            'command.not_found',
-            `RkyvV2: no codec and not in live schema for "${command}"`,
-          ),
-        );
-      }
-      const resp = decodeTier3Response(
-        native.invokeRkyvV2(encodeTier3Request(entry.commandId, args)),
-      );
-      if (!resp.ok) {
-        const e = resp.error ?? { code: 'invoke.failed', message: 'RkyvV2 (tier3) invoke failed' };
+  // 신호 없는 기본 3-티어 dispatch (T1 리팩터링 — 로직은 기존 그대로).
+  const dispatch = <T>(command: string, args?: unknown): Promise<T> => {
+    // 1순위: C++ fast path (RN JSI). 정적 명령만.
+    if (hasTypedPath && native.hasStaticCodec!(command)) {
+      return Promise.resolve(native.invokeTyped!(command, args) as T);
+    }
+    // 2순위: JS codec (Node/Bun/Tauri 또는 typed 누락 시). 정적 명령.
+    const codec = registry.get(command);
+    if (codec) {
+      const resultBytes = native.invokeRkyvV2(codec.encode(args));
+      const response = codec.decode(resultBytes);
+      if (!response.ok) {
+        const e = response.error ?? { code: 'invoke.failed', message: 'RkyvV2 invoke failed' };
+        // Reject (do not throw) so the declared Promise<T> contract holds and
+        // callers can use .catch() / await-try-consistently for command errors.
         return Promise.reject(
           new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code)),
         );
       }
-      return Promise.resolve(resp.result as T);
+      return Promise.resolve(response.result as T);
+    }
+    // 3순위: 동적 명령 → Tier 3 fallback (live schema 의 commandId 사용)
+    const entry = getLiveSchema(native).get(command);
+    if (!entry) {
+      return Promise.reject(
+        new RustraCommandError(
+          'command.not_found',
+          `RkyvV2: no codec and not in live schema for "${command}"`,
+        ),
+      );
+    }
+    const resp = decodeTier3Response(
+      native.invokeRkyvV2(encodeTier3Request(entry.commandId, args)),
+    );
+    if (!resp.ok) {
+      const e = resp.error ?? { code: 'invoke.failed', message: 'RkyvV2 (tier3) invoke failed' };
+      return Promise.reject(
+        new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code)),
+      );
+    }
+    return Promise.resolve(resp.result as T);
+  };
+
+  return {
+    invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
+      const signal = options?.signal;
+      if (signal?.aborted) {
+        return Promise.reject(
+          new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
+        );
+      }
+      if (!signal) return dispatch<T>(command, args);
+      // 네이티브 전파 경로 (T1): JS 코덱(tier 2) 명령이고 invokeAsync +
+      // invokeCancel 이 모두 노출되면 Rust 측 체크포인트까지 취소가 닿는다.
+      // typed(tier 1)/tier 3 동적 경로는 invokeAsync 가 있어도 얕은 취소로
+      // 폴백한다 (설계 노트: 전파는 JS 코덱 경로만).
+      const codec = registry.get(command);
+      const onTypedPath = hasTypedPath && native.hasStaticCodec!(command);
+      if (!onTypedPath && codec && native.invokeAsync && native.invokeCancel) {
+        return new Promise<T>((resolve, reject) => {
+          let settled = false;
+          let invocationId = -1;
+          const onAbort = () => {
+            if (settled) return;
+            settled = true;
+            native.invokeCancel!(invocationId);
+            reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
+          };
+          // invokeAsync 가 콜백을 동기적으로 부를 수 있으므로 리스너를 먼저 단다.
+          signal.addEventListener('abort', onAbort, { once: true });
+          invocationId = native.invokeAsync!(codec.encode(args), (resp) => {
+            if (settled) return;
+            settled = true;
+            signal.removeEventListener('abort', onAbort);
+            // 응답 디코딩/정착은 dispatch 의 tier 2 브랜치와 동일 로직.
+            const response = codec.decode(resp);
+            if (!response.ok) {
+              const e = response.error ?? {
+                code: 'invoke.failed',
+                message: 'RkyvV2 invoke failed',
+              };
+              reject(
+                new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code)),
+              );
+              return;
+            }
+            resolve(response.result as T);
+          });
+        });
+      }
+      // 전파 불가 — 얕은 취소 (JS 프라미스만 거부, Rust 는 끝까지 실행):
+      return raceAbort(dispatch<T>(command, args), signal, command);
     },
 
     invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {

@@ -396,9 +396,11 @@ test('invokeBatch without typed-batch native falls back to per-entry', async () 
 //   success  = [ok:1][7B 0][tag][msg]
 //   error    = [ok:0][7B 0][code-len][code][msg]
 type EchoOut = { tag: number; msg: string };
-function echoEngine(failTags: Set<number> = new Set()) {
+
+/** echo 코덱 (Task 3.3 / T1 공용). request [cmd 200 LE][tag][msg]. */
+function echoCodec(): RkyvV2Codec<{ tag: number; msg: string }, EchoOut> {
   const enc = new TextEncoder();
-  const codec: RkyvV2Codec<{ tag: number; msg: string }, EchoOut> = {
+  return {
     commandId: 200,
     encode(args) {
       const m = enc.encode(args.msg);
@@ -423,6 +425,11 @@ function echoEngine(failTags: Set<number> = new Set()) {
       return { ok: false, error: { code, message } };
     },
   };
+}
+
+function echoEngine(failTags: Set<number> = new Set()) {
+  const enc = new TextEncoder();
+  const codec = echoCodec();
   const native = makeNative({
     invokeImpl(payload) {
       const req = new Uint8Array(payload);
@@ -581,4 +588,121 @@ test('parseRustraErrorString parses JSON error objects and respects retryable', 
   assert.equal(err.code, 'database.unavailable');
   assert.equal(err.message, 'Connection pool exhausted');
   assert.equal(err.retryable, true);
+});
+
+// ── T1: AbortSignal 배선 ────────────────────────────────────
+
+test('invoke without signal never calls invokeCancel (T1)', async () => {
+  let cancels = 0;
+  const native = makeNative({
+    schema: schemaBytes([{ name: 'dyn', commandId: 1 }]),
+    invokeImpl: () => tier3Success({ value: 1 }),
+  });
+  (native as { invokeCancel?: () => boolean }).invokeCancel = () => {
+    cancels++;
+    return false;
+  };
+  const engine = createRkyvV2Engine(native, new Map());
+  await engine.invoke('dyn', { a: 1 }); // tier3 dynamic path via getSchema
+  assert.equal(cancels, 0);
+});
+
+test('pre-aborted signal rejects immediately without native call (T1)', async () => {
+  let calls = 0;
+  const native = makeNative({
+    schema: schemaBytes([{ name: 'dyn', commandId: 1 }]),
+    invokeImpl: () => {
+      calls++;
+      return tier3Success({});
+    },
+  });
+  const engine = createRkyvV2Engine(native, new Map());
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(engine.invoke('dyn', {}, { signal: ac.signal }), (e: unknown) => {
+    assert.ok(e instanceof RustraCommandError);
+    assert.equal((e as RustraCommandError).code, 'cancelled');
+    assert.equal((e as RustraCommandError).retryable, true);
+    return true;
+  });
+  assert.equal(calls, 0, 'native must not be called');
+});
+
+test('abort mid-flight: shallow path rejects with cancelled (T1)', async () => {
+  // invokeAsync 미노출 → 얕은 취소. native 는 동기 호출로 즉시 응답하지만
+  // abort 가 dispatch 후 프라미스 settle 전에 개입하면 reject 가 이긴다.
+  let calls = 0;
+  const native = makeNative({
+    schema: schemaBytes([{ name: 'dyn', commandId: 1 }]),
+    invokeImpl: () => {
+      calls++;
+      return tier3Success({ ok: true });
+    },
+  });
+  const engine = createRkyvV2Engine(native, new Map());
+  const ac = new AbortController();
+  const p = engine.invoke('dyn', {}, { signal: ac.signal });
+  ac.abort();
+  await assert.rejects(p, (e: unknown) => {
+    assert.ok(e instanceof RustraCommandError && e.code === 'cancelled');
+    return true;
+  });
+});
+
+test('abort mid-flight: propagate path calls invokeCancel and rejects (T1)', async () => {
+  // JS 코덱 경로 + invokeAsync/invokeCancel 노출 → 전파.
+  // invokeAsync 는 id 만 반환하고 콜백을 즉시 부르지 않는다 (abort 가 먼저).
+  const native = makeNative({});
+  let cancelled = false;
+  native.invokeAsync = (_payload: ArrayBuffer, _cb: (resp: ArrayBuffer) => void) => {
+    return 77; // invocation id — 콜백 보류 (실 호스트는 워커 완료 시 호출)
+  };
+  native.invokeCancel = (_id: number) => {
+    cancelled = true;
+    return true;
+  };
+  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
+    ['echo', echoCodec() as unknown as RkyvV2Codec<unknown, unknown>],
+  ]);
+  const engine = createRkyvV2Engine(native, registry);
+  const ac = new AbortController();
+  const p = engine.invoke<EchoOut>('echo', { tag: 1, msg: 'm' }, { signal: ac.signal });
+  ac.abort();
+  await assert.rejects(p, (e: unknown) => {
+    assert.ok(e instanceof RustraCommandError);
+    assert.equal((e as RustraCommandError).code, 'cancelled');
+    assert.equal((e as RustraCommandError).retryable, true);
+    return true;
+  });
+  assert.equal(cancelled, true, 'invokeCancel must be called on the propagate path');
+});
+
+test('propagate path resolves normally when invokeAsync completes first (T1)', async () => {
+  // abort 없이 invokeAsync 콜백이 도착하면 tier2 와 동일하게 resolve.
+  const native = makeNative({});
+  native.invokeAsync = (_payload: ArrayBuffer, cb: (resp: ArrayBuffer) => void) => {
+    // echo 성공 프레임: [ok:1][7B 0][tag][msg]
+    const body = new TextEncoder().encode('late');
+    const fr = new Uint8Array(8 + 1 + body.length);
+    fr[0] = 1;
+    fr[8] = 5;
+    fr.set(body, 9);
+    queueMicrotask(() => cb(fr.buffer));
+    return 1;
+  };
+  native.invokeCancel = () => true; // 전파 경로 진입 조건 (호출되지 않음)
+  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
+    ['echo', echoCodec() as unknown as RkyvV2Codec<unknown, unknown>],
+  ]);
+  const engine = createRkyvV2Engine(native, registry);
+  const ac = new AbortController(); // abort 하지 않는 신호 — 전파 경로 유지
+  const out = await engine.invoke<EchoOut>('echo', { tag: 5, msg: 'late' }, { signal: ac.signal });
+  assert.equal(out.tag, 5);
+  assert.equal(out.msg, 'late');
+});
+
+test('cancelled code is retryable via RustraCommandError default (T1)', () => {
+  const e = parseRustraErrorString('cancelled: invocation cancelled before dispatch');
+  assert.equal(e.code, 'cancelled');
+  assert.equal(e.retryable, true); // isRetryableCode 미러링 검증
 });
