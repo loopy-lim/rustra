@@ -6,6 +6,10 @@
 //! - `rustra_ffi_invoke`          — default path (configurable)
 //! - `rustra_ffi_invoke_json`     — JSON-over-bytes path
 //! - `rustra_ffi_invoke_postcard` — postcard binary path
+//! - `rustra_ffi_invoke_async`         — 백그라운드 스레드 invoke + invocation_id 발급
+//! - `rustra_ffi_invoke_json_async`    — JSON 버전 async invoke + invocation_id 발급
+//! - `rustra_ffi_invoke_cancel`        — 진행 중 호출 취소 (협력적)
+//! - `rustra_ffi_cancellation_status`  — 호출 취소 상태 조회 (0/1/2)
 //! - `rustra_ffi_free`            — free returned buffers
 //! - `rustra_ffi_event_sink_register`   — C 콜백 이벤트 싱크 설치 (push)
 //! - `rustra_ffi_event_sink_unregister` — 싱크 해제 (폴링 복귀)
@@ -438,10 +442,16 @@ pub unsafe extern "C" fn rustra_ffi_invoke_postcard(
 /// Runs the command dispatch on a background worker thread, then calls `on_complete`
 /// with `(user_data, response_ptr, response_len)`. The calling thread returns immediately.
 ///
+/// 호출마다 취소 레지스트리([`crate::cancel`])에 invocation_id 를 발급한다 —
+/// `invocation_id` 가 non-null 이면 그 버퍼로 복사되고, 이 ID 로
+/// [`rustra_ffi_invoke_cancel`] / [`rustra_ffi_cancellation_status`] 를 호출할 수
+/// 있다. null 포인터를 넘기면 ID 발급은 일어나지만 호출자에게 노출되지 않는다.
+///
 /// # Safety
 ///
 /// - `payload` must point to `payload_len` valid bytes (or null if len 0).
 /// - `on_complete` must be a thread-safe C callback function pointer.
+/// - `invocation_id` must be null or a valid u64 write pointer (out-param).
 /// - The caller must free `response_ptr` using `rustra_ffi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_ffi_invoke_async(
@@ -449,7 +459,12 @@ pub unsafe extern "C" fn rustra_ffi_invoke_async(
     payload_len: usize,
     user_data: *mut c_void,
     on_complete: Option<unsafe extern "C" fn(*mut c_void, *mut u8, usize)>,
+    invocation_id: *mut u64,
 ) {
+    let id = crate::cancel::register_invocation();
+    if !invocation_id.is_null() {
+        unsafe { *invocation_id = id };
+    }
     let user_data_raw = user_data as usize;
     let bytes = if payload.is_null() || payload_len == 0 {
         Vec::new()
@@ -460,6 +475,7 @@ pub unsafe extern "C" fn rustra_ffi_invoke_async(
     std::thread::spawn(move || {
         let mut out_len = 0;
         let resp_ptr = unsafe { rustra_ffi_invoke(bytes.as_ptr(), bytes.len(), &mut out_len) };
+        crate::cancel::complete_invocation(id);
         if let Some(cb) = on_complete {
             unsafe {
                 cb(user_data_raw as *mut c_void, resp_ptr, out_len);
@@ -470,10 +486,14 @@ pub unsafe extern "C" fn rustra_ffi_invoke_async(
 
 /// Async JSON FFI invoke entry point.
 ///
+/// [`rustra_ffi_invoke_async`] 와 동일한 계약 — invocation_id 발급/노출 및 취소
+/// 심볼 연동을 포함한다. 디폴트 포맷 디스패치 대신 항상 JSON 경로로 invoke 한다.
+///
 /// # Safety
 ///
 /// - `payload` must point to `payload_len` valid bytes (or null if len 0).
 /// - `on_complete` must be a thread-safe C callback function pointer.
+/// - `invocation_id` must be null or a valid u64 write pointer (out-param).
 /// - The caller must free the response pointer in the callback using `rustra_ffi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_ffi_invoke_json_async(
@@ -481,7 +501,12 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json_async(
     payload_len: usize,
     user_data: *mut c_void,
     on_complete: Option<unsafe extern "C" fn(*mut c_void, *mut u8, usize)>,
+    invocation_id: *mut u64,
 ) {
+    let id = crate::cancel::register_invocation();
+    if !invocation_id.is_null() {
+        unsafe { *invocation_id = id };
+    }
     let user_data_raw = user_data as usize;
     let bytes = if payload.is_null() || payload_len == 0 {
         Vec::new()
@@ -492,12 +517,43 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json_async(
     std::thread::spawn(move || {
         let mut out_len = 0;
         let resp_ptr = unsafe { rustra_ffi_invoke_json(bytes.as_ptr(), bytes.len(), &mut out_len) };
+        crate::cancel::complete_invocation(id);
         if let Some(cb) = on_complete {
             unsafe {
                 cb(user_data_raw as *mut c_void, resp_ptr, out_len);
             }
         }
     });
+}
+
+/// 진행 중인 async 호출을 취소한다 (협력적).
+///
+/// `Running` 상태의 호출만 취소 가능 — 이미 완료/취소된 ID는 false 반환.
+/// 취소는 플래그 전환만 하고 스레드를 강제 종료하지 않는다.
+///
+/// # Safety
+///
+/// `invocation_id` 는 `rustra_ffi_invoke_async` 가 발급한 유효한 ID.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_invoke_cancel(invocation_id: u64) -> bool {
+    crate::cancel::cancel_invocation(invocation_id)
+}
+
+/// 호출의 취소 상태 조회 (핸들러 내부 협력적 중단 폴링용).
+///
+/// 반환값: 0=Unknown(완료/미발급), 1=Running, 2=Cancelled.
+///
+/// # Safety
+///
+/// 이 함수는 안전하게 호출할 수 있다(unsafe 는 `extern "C"` ABI 선언의 산물).
+/// 어떤 u64 값도 정의된 상태 코드로 정규화된다.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_cancellation_status(invocation_id: u64) -> u32 {
+    match crate::cancel::status(invocation_id) {
+        crate::cancel::Status::Unknown => 0,
+        crate::cancel::Status::Running => 1,
+        crate::cancel::Status::Cancelled => 2,
+    }
 }
 
 /// Free a buffer previously returned by one of the `rustra_ffi_invoke_*` functions.
