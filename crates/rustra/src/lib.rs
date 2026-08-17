@@ -111,6 +111,7 @@ pub use rustra_macros::register;
 
 pub use rkyv_codec::encode_rkyv_v2_error;
 
+pub mod cancel;
 mod codegen;
 mod error;
 pub mod events;
