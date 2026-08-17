@@ -14,13 +14,15 @@ jobs:
           echo "=== npm whoami (계정 확인) ==="
           npm whoami || true
           echo
-          echo "=== npm token list (granular 토큰은 여기서 실패 — classic 판별) ==="
-          npm token list 2>&1 | head -6 || true
+          echo "=== npm token list 전체 (토큰 타입/권한 확인) ==="
+          npm token list 2>&1 || true
           echo
-          echo "=== access ls-collaborators @rustra/types (권한 확인) ==="
-          npm access ls-collaborators @rustra/types 2>&1 || true
-          echo
-          echo "=== access ls-collaborators @rustra/devtools (미발행 패키지) ==="
-          npm access ls-collaborators @rustra/devtools 2>&1 || true
+          echo "=== registry GET @rustra/types with token (200=커버됨, 404=토큰 커버 밖) ==="
+          code=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $NPM_TOKEN" \
+            "https://registry.npmjs.org/@rustra%2ftypes")
+          echo "GET @rustra/types → HTTP $code"
+          code2=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $NPM_TOKEN" \
+            "https://registry.npmjs.org/@rustra%2freact-native")
+          echo "GET @rustra/react-native → HTTP $code2"
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
