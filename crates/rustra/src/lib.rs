@@ -399,6 +399,9 @@ struct RegistryState {
     /// Runtime Authority: 부여된 capability 집합. deny-by-default —
     /// `required_capability` 가 `Some` 인 명령은 이 집합에 포함될 때만 실행된다.
     granted_capabilities: BTreeSet<String>,
+    /// (T2, OTA) 스키마 협상 버전. `schema()`/`live_schema()` 와 코드젠이
+    /// 노출한다 — JS > native 인 stale 조합을 감지하는 데 쓰인다.
+    schema_version: u32,
 }
 
 impl std::fmt::Debug for Package {
@@ -421,6 +424,9 @@ pub struct PackageBuilder {
     /// 나머지는 `build()` 시점에 검증·병합한다.
     id_aliases: Vec<(String, u16)>,
     event_capacity: usize,
+    /// (T2, OTA) 스키마 협상 버전 — 빌드 시점 고정값. `build()` 에서
+    /// `RegistryState.schema_version` 로 이동한다.
+    schema_version: u32,
 }
 
 /// TypeScript 코드 생성 결과입니다.
@@ -432,7 +438,7 @@ pub struct PackageBuilder {
 /// | `schema_json` | `schema.json` | 전체 명령 스키마 (JSON) |
 /// | `types_ts` | `types.ts` | TypeScript 타입 정의 |
 /// | `commands_ts` | `commands.ts` | TypeScript 명령 헬퍼 함수 |
-/// | `contract_hash` | `contract.ts` | 스키마 해시 (무결성 검증용) |
+/// | `contract_ts` | `contract.ts` | 계약 해시 + 스키마 버전 (무결성/stale 검증용) |
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GeneratedPackage {
     /// JSON으로 직렬화된 전체 패키지 스키마입니다.
@@ -443,6 +449,10 @@ pub struct GeneratedPackage {
     pub commands_ts: String,
     /// 스키마의 SHA-256 해시입니다.
     pub contract_hash: String,
+    /// `contract.ts` 전체 내용 — `GENERATED_CONTRACT_HASH` 와 (T2, OTA)
+    /// `SCHEMA_VERSION` 상수를 함께 노출한다. JS 클라이언트가 이 값을
+    /// 네이티브의 `schemaVersion` 과 비교해 JS > native stale 를 감지한다.
+    pub contract_ts: String,
 }
 
 impl GeneratedPackage {
@@ -452,20 +462,14 @@ impl GeneratedPackage {
     /// - `schema.json` — 전체 명령 스키마
     /// - `types.ts` — TypeScript 타입 정의
     /// - `commands.ts` — TypeScript 명령 헬퍼 함수
-    /// - `contract.ts` — `GENERATED_CONTRACT_HASH` 상수
+    /// - `contract.ts` — `GENERATED_CONTRACT_HASH`/`SCHEMA_VERSION` 상수
     pub fn write_to_dir(&self, output_dir: impl AsRef<Path>) -> crate::Result<()> {
         let output_dir = output_dir.as_ref();
         fs::create_dir_all(output_dir)?;
         fs::write(output_dir.join("schema.json"), &self.schema_json)?;
         fs::write(output_dir.join("types.ts"), &self.types_ts)?;
         fs::write(output_dir.join("commands.ts"), &self.commands_ts)?;
-        fs::write(
-            output_dir.join("contract.ts"),
-            format!(
-                "export const GENERATED_CONTRACT_HASH = '{}';\n",
-                self.contract_hash
-            ),
-        )?;
+        fs::write(output_dir.join("contract.ts"), &self.contract_ts)?;
         Ok(())
     }
 }
@@ -593,6 +597,7 @@ impl Package {
             next_command_id: 1,
             id_aliases: Vec::new(),
             event_capacity: 1024,
+            schema_version: 1,
         }
     }
 
@@ -931,6 +936,11 @@ impl Package {
         let commands_ts = Self::generate_commands_ts(&state);
 
         Ok(GeneratedPackage {
+            contract_ts: format!(
+                "export const GENERATED_CONTRACT_HASH = '{contract_hash}';\n\
+                 export const SCHEMA_VERSION = {};\n",
+                state.schema_version
+            ),
             schema_json,
             types_ts,
             commands_ts,
@@ -967,6 +977,7 @@ impl Package {
 
         json!({
             "packageId": id,
+            "schemaVersion": state.schema_version,
             "commands": commands,
         })
     }
@@ -1125,6 +1136,9 @@ impl PackageBuilder {
     /// 되면(스키마 성장으로 id 가 밀린 OTA 시나리오), `build()` 가 점유
     /// 명령을 fresh id 로 밀어내고 구 id 를 alias 항목으로 채운다 — 점유
     /// 명령은 신 규칙(삽입)이므로 아무도 그 id 를 알지 못하고, 이동이 안전하다.
+    ///
+    /// 선언 순서 관례: 성장 시나리오(신규 명령 삽입)에서는 alias 를 command
+    /// 등록보다 먼저 선언한다 — 이후 선언 시 선언 시점 검증이 즉시 패닉한다.
     pub fn alias_command_id(mut self, command: &str, legacy_id: u16) -> Self {
         for (existing_cmd, existing_id) in &self.id_aliases {
             if *existing_id != legacy_id {
@@ -1159,6 +1173,14 @@ impl PackageBuilder {
     /// 이벤트 버스 큐의 최대 수용량을 설정합니다 (기본값: 1024).
     pub fn event_capacity(mut self, capacity: usize) -> Self {
         self.event_capacity = capacity.max(1);
+        self
+    }
+
+    /// (T2, OTA) 스키마 버전 — 구 JS 클라이언트의 stale 감지에 사용된다.
+    /// 코드젠이 SCHEMA_VERSION 으로 노출하고, 엔진이 live schema 의 버전과
+    /// 비교해 JS > native 인 경우 경고한다. 기본 1.
+    pub fn schema_version(mut self, version: u32) -> Self {
+        self.schema_version = version;
         self
     }
 
@@ -1217,6 +1239,16 @@ impl PackageBuilder {
         for (name, cmd) in &commands {
             id_to_name.insert(cmd.command_id, name.clone());
         }
+        // (T2 리뷰) tripwire: 최종 병합 뒤 모든 alias 가 자기 명령을 가리키는지
+        // 확인한다. displacement/next_command_id 순서가 다시 깨지면(alias 항목을
+        // 실제 id 삽입이 덮어쓰거나 fresh id 가 alias 와 겹치면) 여기서 즉시
+        // 잡힌다 — 조용한 misrouting 을 빌드 시점 국소 실패로 바꾼다.
+        debug_assert!(
+            self.id_aliases.iter().all(|(command, legacy_id)| {
+                id_to_name.get(legacy_id).is_some_and(|n| n == command)
+            }),
+            "alias merge invariant broken: some legacy id does not resolve to its command"
+        );
         Package {
             id: self.id,
             state: Arc::new(RwLock::new(RegistryState {
@@ -1224,6 +1256,7 @@ impl PackageBuilder {
                 id_to_name,
                 next_command_id,
                 granted_capabilities: BTreeSet::new(),
+                schema_version: self.schema_version,
             })),
             frozen: Arc::new(AtomicBool::new(!cfg!(debug_assertions))),
             events: Arc::new(events::EventState::with_capacity(self.event_capacity)),
