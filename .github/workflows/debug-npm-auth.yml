@@ -1,0 +1,26 @@
+name: Debug npm auth
+
+# NPM_TOKEN 이 어떤 계정으로 인증되는지, @rustra 스코프에 어떤 권한을
+# 갖는지 확인하는 진단용 워크플로우. 토큰 값 자체는 출력하지 않는다.
+on: workflow_dispatch
+
+jobs:
+  whoami:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe npm auth
+        run: |
+          printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$HOME/.npmrc"
+          echo "=== npm whoami (계정 확인) ==="
+          npm whoami || true
+          echo
+          echo "=== npm token list (granular 토큰은 여기서 실패 — classic 판별) ==="
+          npm token list 2>&1 | head -6 || true
+          echo
+          echo "=== access ls-collaborators @rustra/types (권한 확인) ==="
+          npm access ls-collaborators @rustra/types 2>&1 || true
+          echo
+          echo "=== access ls-collaborators @rustra/devtools (미발행 패키지) ==="
+          npm access ls-collaborators @rustra/devtools 2>&1 || true
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
