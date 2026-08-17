@@ -24,6 +24,8 @@ extern "C" {
   // C 호스트가 Rust → JS 이벤트 푸시용 콜백을 등록/해제한다.
   // 콜백은 emit 호출 스레드에서 실행된다 — 호스트가 JS 런타임 스레드로
   // 마샬링해야 한다 (아래 EventDispatcher).
+  // 콜백은 예외를 던지면 안 된다: Rust 프레임을 통과하는 외국 예외은
+  // Rust 가 잡을 수 없어 프로세스 abort 다 ("C-unwind" ABI 계약).
   typedef void (*rustra_event_callback_t)(
     void* user_data, const char* name, const char* payload);
   void rustra_ffi_event_sink_register(

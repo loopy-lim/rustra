@@ -82,6 +82,19 @@ static std::shared_ptr<EventDispatcher> getEventDispatcher() {
 void EventDispatcher::setCallInvoker(std::shared_ptr<void> invoker) {
   std::lock_guard<std::mutex> lock(mutex_);
   callInvoker_ = std::move(invoker);
+  // RN 리로드 대응: install 은 새 Runtime 의 JS 스레드에서 매번 실행되므로
+  // 이전 Runtime 소유의 jsi::Function 리스너를 여기서 비운다(방치 시 UAF).
+  // 큐의 잔여 이벤트도 이전 런타임 대상이므로 함께 폐기한다.
+  // 단, mutex_ 를 잡은 채 FFI unregister 를 호출하면 onRustEvent 가 같은
+  // 락을 잡으려 해 교착할 수 있으므로 해제는 락 밖에서.
+  const bool hadListeners = !listeners_.empty();
+  listeners_.clear();
+  queue_.clear();
+  if (hadListeners) {
+    // 리스너가 있던 상태로 리로드된 경우 싱크를 해제해 둔다 — 새 번들이
+    // setListener 로 다시 등록하면 그때 재설치된다.
+    rustra_ffi_event_sink_unregister();
+  }
 }
 
 void EventDispatcher::setListener(facebook::jsi::Runtime& rt,
