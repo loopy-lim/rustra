@@ -186,6 +186,34 @@ pkg.freeze();                        // 명시적 봉인 (debug에서 prod 동�
 - `Package`의 `clone`은 동일 레지스트리를 공유한다(`Arc` 기반).
 - 제한: `command_id` 공간은 최대 65,534개. 초과 시 `registry.id_exhausted` 에러.
 
+## 호출 취소 (AbortSignal)
+
+JS `invoke(cmd, args, { signal })` 옵션으로 진행 중 호출을 취소한다. 네이티브가
+`invokeAsync`/`invokeCancel`을 노출하면 취소가 Rust 체크포인트까지 전파되고(JS 코덱
+경로), 그렇지 않으면 JS 프라미스만 즉시 거부하는 얕은 취소로 폴백한다. 에러 코드는
+`cancelled`(retryable).
+
+Rust FFI: `rustra_ffi_invoke_cancel(id)` / `rustra_ffi_cancellation_status(id)` —
+`invoke_async`는 `invocation_id` out-param으로 호출별 ID를 발급한다.
+
+## OTA 스키마 호환
+
+JS 번들만 갱신되는 배포(구 JS + 신 네이티브)에서 스키마 드리프트를 흡수한다:
+
+- `PackageBuilder::alias_command_id(name, legacy_id)` — 구 JS 코드젠이 구운
+  command_id를 신 네이티브가 alias로 수용한다 (rkyv V2 와이어에는 이름이 없다).
+- `schema_version(n)` — schema.json의 버전. 코드젠은 `SCHEMA_VERSION`으로 노출.
+- 엔진 옵션 `onContractMismatch` — 계약 해시 불일치 시 throw 대신 degraded 모드로
+  계속(opt-in). `schemaVersion`/`onSchemaStale` — JS > native 조합(OTA 롤백 등)의
+  stale 경고.
+
+## 페이로드 크기 한도
+
+페이로드 상한(기본 1 MiB)을 런타임에 조정한다: `rustra_ffi_set_max_payload(bytes)` /
+`rustra_ffi_get_max_payload()`. JS 엔진 옵션 `maxPayloadBytes`는 인코딩 직후 크기를
+검사해 네이티브 왕복 전 조기 실패시킨다(tier2/tier3/전파 경로; typed 경로는 네이티브
+게이트가 적용된다).
+
 ## TypeScript: 생성된 클라이언트
 
 모든 플랫폼에서 동일한 인터페이스:
@@ -321,6 +349,9 @@ try {
 #  --workspace 는 default-members 를 무시하므로 명시적 exclude 가 필요하다.
 #  CI 도 동일 명령을 쓴다: .github/workflows/ci.yml)
 cargo test --workspace --exclude rustra-lynx-tauri-spike
+
+# CI rust 잡은 ubuntu/macos/windows 3-OS 매트릭스로 돌고, 플랫폼별 cdylib
+# (.so/.dylib/.dll) 산출물을 아티팩트로 업로드한다 (.github/workflows/ci.yml).
 
 # calculator 예시 빌드 및 TS 생성
 cargo run -p rustra-calculator-example
