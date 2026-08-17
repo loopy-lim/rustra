@@ -1,6 +1,6 @@
 {
   "name": "@rustra/devtools",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Devtools for rustra-bridge — instrumented engine with call stats",
   "license": "MIT",
   "type": "module",
