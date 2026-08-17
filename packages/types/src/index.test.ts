@@ -1118,3 +1118,143 @@ test('global invoke forwards options (signal) to engine invoke (T1)', async () =
     configure(sentinel);
   }
 });
+
+// ── T3 Task 11: maxPayloadBytes JS 사전 검사 ────────────────
+// 인코딩 직후/네이티브 호출 전 크기 검사. tier 2(JS codec)·tier 3(동적)·
+// 전파(invokeAsync) 경로에 적용되고 typed(tier 1) 경로는 JS 측 인코딩이
+// 없어 건너뛴다 — 미설정 시 아무 검사도 하지 않는다 (네이티브가 최종 게이트).
+
+test('T3: over-limit tier-2 payload rejects payload.too_large without native call', async () => {
+  let invokes = 0;
+  const native = makeNative({
+    invokeImpl: () => {
+      invokes++;
+      return new ArrayBuffer(0);
+    },
+  });
+  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
+    ['echo', echoCodec() as unknown as RkyvV2Codec<unknown, unknown>],
+  ]);
+  const engine = createRkyvV2Engine(native, registry, { maxPayloadBytes: 8 });
+  // echoCodec 인코딩: 2(cmd) + 1(tag) + msg — 'way over the limit' → 21B > 8B.
+  await assert.rejects(
+    engine.invoke<EchoOut>('echo', { tag: 1, msg: 'way over the limit' }),
+    (e: unknown) => {
+      assert.ok(e instanceof RustraCommandError, 'must be RustraCommandError');
+      assert.equal((e as RustraCommandError).code, 'payload.too_large');
+      assert.equal((e as RustraCommandError).retryable, false, 'deterministic client condition');
+      return true;
+    },
+  );
+  assert.equal(invokes, 0, 'invokeRkyvV2 must NEVER be called for over-limit payloads');
+});
+
+test('T3: within-limit tier-2 payload dispatches normally (control)', async () => {
+  // echoEngine 패턴 재사용 — 한도 이내면 기존 dispatch 가 그대로 동작한다.
+  const native = makeNative({
+    invokeImpl: (payload) => {
+      const req = new Uint8Array(payload);
+      const rb = req.slice(2);
+      const fr = new Uint8Array(8 + rb.length);
+      fr[0] = 1;
+      fr.set(rb, 8);
+      return fr.buffer;
+    },
+  });
+  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
+    ['echo', echoCodec() as unknown as RkyvV2Codec<unknown, unknown>],
+  ]);
+  const engine = createRkyvV2Engine(native, registry, { maxPayloadBytes: 8 });
+  // 'abc' → 2 + 1 + 3 = 6B ≤ 8B.
+  const out = await engine.invoke<EchoOut>('echo', { tag: 2, msg: 'abc' });
+  assert.equal(out.tag, 2);
+  assert.equal(out.msg, 'abc');
+});
+
+test('T3: over-limit tier-3 dynamic payload rejects before native call', async () => {
+  let invokes = 0;
+  const native = makeNative({
+    schema: schemaBytes([{ name: 'dyn', commandId: 1 }]),
+    invokeImpl: () => {
+      invokes++;
+      return tier3Success({});
+    },
+  });
+  const engine = createRkyvV2Engine(native, new Map(), { maxPayloadBytes: 8 });
+  // tier3 요청: 2(cmd_id) + JSON 본체 — 이 인자면 훨씬 8B 를 넘는다.
+  await assert.rejects(engine.invoke('dyn', { padding: '0123456789abcdef' }), (e: unknown) => {
+    assert.ok(e instanceof RustraCommandError);
+    assert.equal((e as RustraCommandError).code, 'payload.too_large');
+    return true;
+  });
+  assert.equal(invokes, 0, 'tier-3 must reject before invokeRkyvV2');
+});
+
+test('T3: typed (tier 1) path skips the pre-check — invokeTyped still called', async () => {
+  // tier 1 은 raw args 를 C++ 가 받아 인코딩한다 — JS 측에 잴 바이트가 없어
+  // 검사를 건너뛴다 (설계 문서화). invokeTyped 는 그대로 호출되어야 한다.
+  let typedCalls = 0;
+  const native = makeTypedNative({
+    hasStaticCodec: () => true,
+    invokeTyped: () => {
+      typedCalls++;
+      return { value: 42 };
+    },
+  });
+  const engine = createRkyvV2Engine(native, new Map(), { maxPayloadBytes: 8 });
+  const out = await engine.invoke<{ value: number }>('add', { big: 'x'.repeat(64) });
+  assert.equal(out.value, 42);
+  assert.equal(typedCalls, 1, 'typed path must NOT be gated by maxPayloadBytes');
+});
+
+test('T3: over-limit payload on propagate path rejects, invokeAsync never called', async () => {
+  // 전파 경로(invokeAsync 배선)도 인코딩 직후 검사 — 네이티브 비동기 왕복 전에.
+  const native = makeNative({});
+  let asyncCalls = 0;
+  native.invokeAsync = () => {
+    asyncCalls++;
+    return 1;
+  };
+  native.invokeCancel = () => true;
+  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
+    ['echo', echoCodec() as unknown as RkyvV2Codec<unknown, unknown>],
+  ]);
+  const engine = createRkyvV2Engine(native, registry, { maxPayloadBytes: 8 });
+  const ac = new AbortController(); // abort 하지 않는 신호 — 전파 경로 유지
+  await assert.rejects(
+    engine.invoke<EchoOut>('echo', { tag: 1, msg: 'way over the limit' }, { signal: ac.signal }),
+    (e: unknown) => {
+      assert.ok(e instanceof RustraCommandError);
+      assert.equal((e as RustraCommandError).code, 'payload.too_large');
+      return true;
+    },
+  );
+  assert.equal(asyncCalls, 0, 'invokeAsync must never receive an over-limit payload');
+  // 리스너 누수 없이 정리됐는지 — 늦은 abort 로 invokeCancel 이 불리지 않는다.
+  let cancels = 0;
+  native.invokeCancel = () => {
+    cancels++;
+    return true;
+  };
+  ac.abort();
+  await new Promise<void>((r) => queueMicrotask(() => r()));
+  assert.equal(cancels, 0, 'abort listener must be cleaned up after pre-check rejection');
+});
+
+test('T3: payload.too_large message carries both actual and limit byte sizes', async () => {
+  const native = makeNative({});
+  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
+    ['echo', echoCodec() as unknown as RkyvV2Codec<unknown, unknown>],
+  ]);
+  const engine = createRkyvV2Engine(native, registry, { maxPayloadBytes: 8 });
+  await assert.rejects(
+    engine.invoke<EchoOut>('echo', { tag: 1, msg: 'way over the limit' }),
+    (e: unknown) => {
+      assert.ok(e instanceof RustraCommandError);
+      // echoCodec('way over the limit') = 2(cmd) + 1(tag) + 18(msg) = 21B.
+      assert.match((e as Error).message, /21B/);
+      assert.match((e as Error).message, /8B/);
+      return true;
+    },
+  );
+});

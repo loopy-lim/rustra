@@ -519,6 +519,14 @@ export type RkyvV2EngineOptions = {
   schemaVersion?: number;
   /** (T2) schemaVersion 검증 결과 JS > native 인 경우의 콜백. 미설정 시 console.warn. */
   onSchemaStale?: (info: { nativeVersion: number; jsVersion: number }) => void;
+  /**
+   * (T3) 요청 페이로드 바이트 한도. 인코딩 직후 검사해 네이티브 왕복 전에
+   * 조기 실패시킨다 — 네이티브 호출을 아끼고 에러에 컨텍스트(인코딩된 크기)
+   * 를 싣는다. typed(C++ fast path) 경로는 JS 측 인코딩이 없어 검사를
+   * 건너뛴다 — 네이티브 한도가 적용된다. 미설정 시 검사하지 않는다
+   * (네이티브의 동적 한도가 최종 게이트).
+   */
+  maxPayloadBytes?: number;
 };
 
 /**
@@ -576,6 +584,25 @@ function raceAbort<T>(promise: Promise<T>, signal: AbortSignal, command: string)
   });
 }
 
+/**
+ * (T3) 인코딩된 페이로드의 크기 사전 검사 — JS 코덱(tier 2)/tier 3 경로가
+ * 네이티브를 호출하기 직전에 공유한다. `limit` 이 undefined 면 검사하지 않는다
+ * (네이티브의 동적 한도가 최종 게이트). 초과 시 `payload.too_large`
+ * (non-retryable — 결정론적 클라이언트 조건) 를 반환하고 호출자는 네이티브
+ * 왕복 없이 즉시 reject 한다.
+ */
+function payloadTooLargeError(
+  encodedBytes: number,
+  limit: number | undefined,
+): RustraCommandError | undefined {
+  if (limit === undefined || encodedBytes <= limit) return undefined;
+  return new RustraCommandError(
+    'payload.too_large',
+    `encoded payload ${encodedBytes}B exceeds maxPayloadBytes ${limit}B`,
+    false,
+  );
+}
+
 export function createRkyvV2Engine(
   native: RkyvV2SchemaNative,
   registry: Map<string, RkyvV2Codec<unknown, unknown>>,
@@ -620,8 +647,9 @@ export function createRkyvV2Engine(
     // 스키마 파싱(getSchema 호출 자체의 실패 포함)은 절대 치명적이지 않다 —
     // 파싱이 throw 하면 staleness 검사를 조용히 건너뛴다 (getSchema 미노출
     // 경우와 동일한 취급). 경고 기능이 엔진 생성을 깨뜨리면 "fatal 아님"
-    // 계약 자체가 위반된다. invoke 시점의 tier-3 파싱은 별개 — 그 경로는
-    // reject 로 정규화된다.
+    // 계약 자체가 위반된다. invoke 시점의 tier-3 스키마 파싱(getLiveSchema)은
+    // 별개의 기존 동작 — malformed 스키마에서 동적 명령 호출 시 JSON.parse 가
+    // dispatch 밖으로 동기 throw 할 수 있다.
     let nativeVersion: number | undefined;
     try {
       nativeVersion = parseLiveSchemaDocument(native).schemaVersion ?? 1;
@@ -648,17 +676,25 @@ export function createRkyvV2Engine(
   const hasTypedPath = !!(native.invokeTyped && native.hasStaticCodec);
   // P0-2: 단일 횡단 배치가 가능하려면 invokeTypedBatch 도 필요.
   const hasBatchPath = hasTypedPath && !!native.invokeTypedBatch;
+  // (T3) JS 사전 크기 검사 — undefined 면 검사하지 않는다 (네이티브 동적 한도가
+  // 최종 게이트). typed(tier 1) 경로는 JS 측 인코딩이 없어 검사 대상이 아니다.
+  const payloadLimit = options?.maxPayloadBytes;
 
   // 신호 없는 기본 3-티어 dispatch (T1 리팩터링 — 로직은 기존 그대로).
   const dispatch = <T>(command: string, args?: unknown): Promise<T> => {
-    // 1순위: C++ fast path (RN JSI). 정적 명령만.
+    // 1순위: C++ fast path (RN JSI). 정적 명령만. JS 측 인코딩이 없어
+    // maxPayloadBytes 검사를 건너뛴다 — 네이티브 한도가 그대로 적용된다.
     if (hasTypedPath && native.hasStaticCodec!(command)) {
       return Promise.resolve(native.invokeTyped!(command, args) as T);
     }
     // 2순위: JS codec (Node/Bun/Tauri 또는 typed 누락 시). 정적 명령.
     const codec = registry.get(command);
     if (codec) {
-      const resultBytes = native.invokeRkyvV2(codec.encode(args));
+      const encoded = codec.encode(args);
+      // (T3) 네이티브 왕복 전에 크기 검사 — 초과면 invokeRkyvV2 를 부르지 않는다.
+      const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
+      if (tooLarge) return Promise.reject(tooLarge);
+      const resultBytes = native.invokeRkyvV2(encoded);
       // Reject (do not throw) so the declared Promise<T> contract holds and
       // callers can use .catch() / await-try-consistently for command errors.
       const outcome = tier2Outcome<T>(codec, resultBytes);
@@ -675,9 +711,11 @@ export function createRkyvV2Engine(
         ),
       );
     }
-    const resp = decodeTier3Response(
-      native.invokeRkyvV2(encodeTier3Request(entry.commandId, args)),
-    );
+    const tier3Request = encodeTier3Request(entry.commandId, args);
+    // (T3) tier 2 와 동일한 사전 검사 — 네이티브 호출 전에 조기 실패.
+    const tooLarge = payloadTooLargeError(tier3Request.byteLength, payloadLimit);
+    if (tooLarge) return Promise.reject(tooLarge);
+    const resp = decodeTier3Response(native.invokeRkyvV2(tier3Request));
     if (!resp.ok) {
       const e = resp.error ?? { code: 'invoke.failed', message: 'RkyvV2 (tier3) invoke failed' };
       return Promise.reject(
@@ -718,7 +756,13 @@ export function createRkyvV2Engine(
           try {
             // invokeAsync 가 콜백을 동기적으로 부를 수 있으므로 리스너를 먼저 단다.
             signal.addEventListener('abort', onAbort, { once: true });
-            invocationId = native.invokeAsync!(codec.encode(args), (resp) => {
+            const encoded = codec.encode(args);
+            // (T3) 전파 경로도 동일한 사전 검사 — 초과면 invokeAsync 를 부르지
+            // 않고 throw 한다. Error 이므로 아래 catch 가 리스너를 정리한 뒤
+            // 그대로 reject 한다 (기존 동기 throw 정리 경로 재사용).
+            const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
+            if (tooLarge) throw tooLarge;
+            invocationId = native.invokeAsync!(encoded, (resp) => {
               if (settled) return;
               // settled 를 올리기 전에 환산한다 — tier2Outcome 은 decode 가
               // throw 해도 (잘못된 프레임) 에러로 환산할 뿐 절대 throw 하지
