@@ -11,7 +11,9 @@ set -eu
 
 MODULE_DIR=$(cd "$(dirname "$0")" && pwd)
 BACKEND_DIR=$(cd "$MODULE_DIR/../../../backend" && pwd)
+TEMPLATE_ROOT=$(cd "$BACKEND_DIR/.." && pwd)
 CARGO_BIN=${CARGO_BIN:-"$HOME/.cargo/bin/cargo"}
+export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-"$TEMPLATE_ROOT/target"}
 
 PROFILE=${RUSTRA_PROFILE:-release}
 REL_FLAG=""
@@ -61,7 +63,7 @@ for ABI in $ABIS; do
     -t "$ABI" \
     -- build --lib $REL_FLAG
 
-  # cargo-ndk 는 backend/target/<abi>/<profile>/librustra_template_backend.a 로 출력.
-  cp "$BACKEND_DIR/target/$ABI/$PROFILE/librustra_template_backend.a" \
+  # 독립 workspace들도 runner 루트 target을 공유한다.
+  cp "$CARGO_TARGET_DIR/$ABI/$PROFILE/librustra_template_backend.a" \
      "$MODULE_DIR/rust/lib/librustra_template_backend-$ABI.a"
 done

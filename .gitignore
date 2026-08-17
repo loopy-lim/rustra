@@ -27,11 +27,19 @@ examples/lynx-calculator/host/HostApp.app/
 
 # Native build outputs / caches (Gradle, Android, Expo, Xcode)
 **/android/build/
-**/android/.cxx/
+**/.cxx/
 **/android/.gradle/
 **/.expo/
 **/ios/build/
 **/Pods/
+**/rust/lib/
+**/src/main/cpp/libs/
+
+# 로컬 네이티브 검증/벤치마크 산출물
+/examples/lynx-calculator/frame.raw
+/examples/lynx-calculator/ios/app/Resources/app.lynx.js
+/examples/lynx-calculator/android/app/src/main/assets/main.lynx.bundle
+/scripts/swift-ffi-bench/benchmark
 
 /packages/*/dist-test/
 

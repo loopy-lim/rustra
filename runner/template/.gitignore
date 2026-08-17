@@ -1,4 +1,5 @@
 # 빌드 산출물 (템플릿 저장소에 커밋하지 않음).
+target/
 backend/target/
 **/node_modules/
 **/dist/
@@ -8,6 +9,7 @@ backend/target/
 mobile-android/.gradle/
 mobile-android/build/
 mobile-android/app/build/
+**/.cxx/
 mobile-android/app/src/main/assets/main.lynx.bundle
 mobile-ios/build/
 mobile-ios/Pods/

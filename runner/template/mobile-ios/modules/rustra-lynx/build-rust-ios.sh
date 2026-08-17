@@ -6,6 +6,7 @@ set -eu
 
 MODULE_DIR=$(cd "$(dirname "$0")" && pwd)
 BACKEND_DIR=$(cd "$MODULE_DIR/../../../backend" && pwd)
+TEMPLATE_ROOT=$(cd "$BACKEND_DIR/.." && pwd)
 TARGET=${RUSTRA_IOS_TARGET:-aarch64-apple-ios-sim}
 CARGO_BIN=${CARGO_BIN:-"$HOME/.cargo/bin/cargo"}
 RUSTUP_BIN=${RUSTUP_BIN:-"$(command -v rustup || echo "$HOME/.cargo/bin/rustup")"}
@@ -15,6 +16,7 @@ if [ -d "$HOME/.rustup" ]; then
   export RUSTUP_HOME=${RUSTUP_HOME:-"$HOME/.rustup"}
 fi
 export CARGO_HOME=${CARGO_HOME:-"$HOME/.cargo"}
+export CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-"$TEMPLATE_ROOT/target"}
 export RUSTUP_TOOLCHAIN=${RUSTUP_TOOLCHAIN:-stable-aarch64-apple-darwin}
 export RUSTC=${RUSTC:-"$("$RUSTUP_BIN" which rustc 2>/dev/null || echo "$HOME/.cargo/bin/rustc")"}
 
@@ -33,5 +35,5 @@ fi
   --target "$TARGET"
 
 mkdir -p "$MODULE_DIR/rust/lib"
-cp "$BACKEND_DIR/target/$TARGET/$PROFILE/librustra_template_backend.a" \
+cp "$CARGO_TARGET_DIR/$TARGET/$PROFILE/librustra_template_backend.a" \
    "$MODULE_DIR/rust/lib/librustra_template_backend.a"

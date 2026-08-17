@@ -2,7 +2,13 @@
 // staticlib + macOS 프레임워크 링크 directive 를 내보낸다.
 // 스파이크 examples/lynx-tauri-spike/src-tauri/build.rs 에서 정제 추출 —
 // staticlib 탐색 대상이 스파이크 crate 가 아닌 템플릿 backend(독립 workspace)로 다르다.
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+fn backend_target_dir(template_root: &Path) -> PathBuf {
+    std::env::var_os("RUSTRA_BACKEND_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| template_root.join("backend").join("target"))
+}
 
 fn main() {
     tauri_build::build();
@@ -21,10 +27,10 @@ fn main() {
         .nth(2)
         .expect("template root")
         .to_path_buf();
-    // 템플릿 backend 는 독립 workspace ([workspace] 빌려주기) 이므로 산출물은
-    // backend/target/<profile>/librustra_template_backend.a. release → debug 순 탐색.
+    // build-lynx-host.sh 경로에서는 backend와 desktop이 runner 루트 target을 공유한다.
+    // cargo를 직접 실행한 경우에는 기존 backend/target 레이아웃으로 폴백한다.
     let static_dir = {
-        let backend_target = template_root.join("backend").join("target");
+        let backend_target = backend_target_dir(&template_root);
         let mut found = None;
         for p in ["release", "debug"] {
             let f = backend_target.join(p).join("librustra_template_backend.a");
@@ -73,6 +79,7 @@ fn main() {
     println!("cargo:rustc-link-arg=-Wl,-rpath,{}/lib", sdk);
 
     println!("cargo:rerun-if-env-changed=LYNX_SDK");
+    println!("cargo:rerun-if-env-changed=RUSTRA_BACKEND_TARGET_DIR");
     println!("cargo:rerun-if-changed=src/lynx_desktop.mm");
 }
 
@@ -107,7 +114,7 @@ fn build_windows() {
         .nth(2)
         .expect("template root")
         .to_path_buf();
-    let backend_target = template_root.join("backend").join("target");
+    let backend_target = backend_target_dir(&template_root);
     let static_dir = ["release", "debug"]
         .iter()
         .find(|p| {
@@ -123,5 +130,6 @@ fn build_windows() {
 
     println!("cargo:rustc-link-lib=user32"); // Win32 HWND API
     println!("cargo:rerun-if-env-changed=LYNX_SDK");
+    println!("cargo:rerun-if-env-changed=RUSTRA_BACKEND_TARGET_DIR");
     println!("cargo:rerun-if-changed=src/lynx_desktop_win.cpp");
 }
