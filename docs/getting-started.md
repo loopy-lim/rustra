@@ -316,6 +316,7 @@ rustra는 4개의 공식 어댑터 패키지를 제공한다.
 
 ```ts
 import { createNodeEngine } from '@rustra/node';
+import { configure } from '@rustra/types';
 import { addNumbers } from '../generated/commands.js';
 
 const engine = createNodeEngine({
@@ -325,7 +326,8 @@ const engine = createNodeEngine({
   },
 });
 
-const result = await addNumbers(engine, { a: 20, b: 22 });
+configure(engine); // 글로벌 invoke 에 엔진 설치 — 생성 함수는 파라미터 없이 호출
+const result = await addNumbers({ a: 20, b: 22 });
 console.log(result.value); // 42
 ```
 
@@ -335,6 +337,7 @@ console.log(result.value); // 42
 
 ```ts
 import { createBunEngine } from '@rustra/bun';
+import { configure } from '@rustra/types';
 import { addNumbers } from '../generated/commands.js';
 
 const engine = createBunEngine({
@@ -343,7 +346,8 @@ const engine = createBunEngine({
   },
 });
 
-const result = await addNumbers(engine, { a: 20, b: 22 });
+configure(engine);
+const result = await addNumbers({ a: 20, b: 22 });
 console.log(result.value); // 42
 ```
 
@@ -353,6 +357,7 @@ Node 어댑터와 동일한 형태. transport만 Bun 환경에 맞게 구현.
 
 ```ts
 import { createTauriEngine } from '@rustra/tauri';
+import { configure } from '@rustra/types';
 import { addNumbers } from '../generated/commands.js';
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 
@@ -360,7 +365,8 @@ const engine = createTauriEngine({
   invoke: tauriInvoke,
 });
 
-const result = await addNumbers(engine, { a: 20, b: 22 });
+configure(engine);
+const result = await addNumbers({ a: 20, b: 22 });
 ```
 
 Tauri 어댑터는 내부적으로 모든 커맨드를 `rustra_dispatch` 단일 엔드포인트로 멀티플렉싱한다. `createTauriEngine`은 각 커맨드 호출을 `invoke('rustra_dispatch', { command, args })` 형태로 래핑한다.
@@ -441,12 +447,14 @@ const result = await addNumbers({ a: 20, b: 22 }); // ~5.8µs
 
 ```ts
 import { createReactNativeEngine } from '@rustra/react-native';
+import { configure } from '@rustra/types';
 import { addNumbers } from '../generated/commands.js';
 import { RustraCalculatorModule } from './native-modules';
 
 const engine = createReactNativeEngine(RustraCalculatorModule);
+configure(engine);
 
-const result = await addNumbers(engine, { a: 20, b: 22 });
+const result = await addNumbers({ a: 20, b: 22 });
 ```
 
 `createReactNativeEngine`은 `NativeModules.RustraCalculator` 같은 네이티브 모듈을 받아 `EngineClient`를 반환한다. 네이티브 모듈은 `invoke(command, args)` 메서드를 노출해야 한다.
@@ -465,7 +473,8 @@ const result = await addNumbers(engine, { a: 20, b: 22 });
 
 ```ts
 // 어댑터만 다르고, 나머지는 모두 같은 코드
-const result = await addNumbers(engine, { a: 20, b: 22 });
+configure(engine); // 각 환경 부트스트랩에서 1회
+const result = await addNumbers({ a: 20, b: 22 });
 ```
 
 ---
@@ -699,5 +708,5 @@ generated/
   schema.json    -- JSON Schema
         |
         v
-TypeScript에서 createXxxEngine(transport) + addNumbers(engine, input) 호출
+TypeScript에서 createXxxEngine(transport) + configure(engine) + addNumbers(input) 호출
 ```

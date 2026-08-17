@@ -10,15 +10,12 @@ type EngineClient = {
 };
 ```
 
-이것이 rustra가 TypeScript 쪽에서 요구하는 전부입니다. 생성된 명령 함수(`addNumbers` 등)는 모두 이 `EngineClient`에 의존합니다:
+이것이 rustra가 TypeScript 쪽에서 요구하는 전부입니다. 생성된 명령 함수(`addNumbers` 등)는 모두 `@rustra/types`의 글로벌 `invoke`를 거치며, 이것이 `configure(engine)`로 설치한 `EngineClient`를 사용합니다:
 
 ```ts
 // examples/calculator/generated/commands.ts
-export function addNumbers(
-  engine: EngineClient,
-  input: AddNumbersInput,
-): Promise<AddNumbersOutput> {
-  return engine.invoke<AddNumbersOutput>('addNumbers', input);
+export function addNumbers(input: AddNumbersInput): Promise<AddNumbersOutput> {
+  return invoke<AddNumbersOutput>('addNumbers', input);
 }
 ```
 
@@ -321,6 +318,7 @@ builder.run(tauri::generate_context!()).expect("failed to run");
 // examples/calculator/apps/<host>-app.ts
 import { addNumbers } from '../generated/commands.js';
 import { createMyHostEngine } from '../../../packages/myhost/src/index.js';
+import { configure } from '@rustra/types';
 
 // transport 구현
 const engine = createMyHostEngine({
@@ -331,7 +329,8 @@ const engine = createMyHostEngine({
 });
 
 // 테스트
-const result = await addNumbers(engine, { a: 20, b: 22 });
+configure(engine);
+const result = await addNumbers({ a: 20, b: 22 });
 
 if (result.value !== 42) {
   throw new Error(`expected 42, got ${result.value}`);
@@ -348,6 +347,7 @@ console.log(`<host> runtime result: ${result.value}`);
 // examples/calculator/apps/<host>-app.ts (모킹 버전)
 import { addNumbers } from '../generated/commands.js';
 import { createMyHostEngine } from '../../../packages/myhost/src/index.js';
+import { configure } from '@rustra/types';
 
 const calls: Array<{ command: string; args: unknown }> = [];
 
@@ -358,7 +358,8 @@ const engine = createMyHostEngine({
   },
 });
 
-const result = await addNumbers(engine, { a: 20, b: 22 });
+configure(engine);
+const result = await addNumbers({ a: 20, b: 22 });
 
 if (result.value !== 42) {
   throw new Error(`expected 42, got ${result.value}`);
@@ -449,6 +450,7 @@ Electron은 Node.js 기반이므로 subprocess stdio로 시작:
 import { spawnSync } from 'node:child_process';
 import { addNumbers } from '../generated/commands.js';
 import { createElectronEngine } from '../../../packages/electron/src/index.js';
+import { configure } from '@rustra/types';
 
 const engine = createElectronEngine({
   invoke(command, args) {
@@ -466,7 +468,8 @@ const engine = createElectronEngine({
   },
 });
 
-const result = await addNumbers(engine, { a: 20, b: 22 });
+configure(engine);
+const result = await addNumbers({ a: 20, b: 22 });
 
 if (result.value !== 42) {
   throw new Error(`expected 42, got ${result.value}`);

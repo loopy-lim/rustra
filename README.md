@@ -48,19 +48,31 @@ fn add_numbers(a: i64, b: i64) -> i64 {
 fn main() -> Result<()> {
     let package = rustra::build!("example.calculator", add_numbers).done();
 
-    // TypeScript 클라이언트 생성
+    // TypeScript 클라이언트 생성 (1단계: types/commands/contract/schema)
     package.generate_typescript()?.write_to_dir("generated")?;
     Ok(())
 }
 ```
 
+바이너리 fast-path(rkyv V2, RN/Lynx)를 쓰려면 **2단계**가 추가로 필요하다 —
+Rust가 만든 `schema.json`을 읽어 TS CLI가 `rkyv-codecs.ts`/`rkyv-registry.ts`를
+생성한다(이 파일들이 없으면 fast-path 클라이언트는 import 에러로 부팅 실패):
+
+```bash
+npx rustra generate --schema ./generated/schema.json --output ./generated
+```
+
+두 단계를 한 번에 실행하려면 `npx rustra dev`(소스 감시 + dual-path 자동 재생성)
+또는 `npx rustra init`이 만들어주는 `npm run codegen` 스크립트를 쓴다.
+
 ```ts
 // TypeScript — 모든 플랫폼에서 동일
-import { createNodeEngine } from '@rustra/node';
+import { createNodeEngine, configure } from '@rustra/node';
 import { addNumbers } from './generated/commands.js';
 
 const engine = createNodeEngine({ invoke: myTransport });
-const result = await addNumbers(engine, { a: 20, b: 22 }); // 42
+configure(engine); // 글로벌 invoke 에 엔진 설치 — 생성 함수는 엔진 파라미터 없이 호출
+const result = await addNumbers({ a: 20, b: 22 }); // 42
 ```
 
 ## 프로젝트 구조
@@ -232,9 +244,11 @@ TypeScript 측:
 
 ```ts
 import { createTauriEngine } from '@rustra/tauri';
+import { configure } from '@rustra/types';
 
 const engine = createTauriEngine({ invoke: window.__TAURI__.core.invoke });
-const result = await addNumbers(engine, { a: 20, b: 22 });
+configure(engine);
+const result = await addNumbers({ a: 20, b: 22 });
 ```
 
 ### Node / Bun / React Native / Lynx
@@ -291,7 +305,7 @@ TypeScript:
 
 ```ts
 try {
-  const result = await addNumbers(engine, { a: 1, b: 2 });
+  const result = await addNumbers({ a: 1, b: 2 });
 } catch (e) {
   if (e instanceof RustraCommandError) {
     console.log(e.code, e.message); // "validation.too_large" "value exceeds limit"
@@ -303,7 +317,10 @@ try {
 
 ```bash
 # Rust 워크스페이스 전체 테스트
-cargo test --workspace
+# (lynx-tauri-spike 은 macOS + Lynx SDK 가 필요한 전용 스파이크 — 제외.
+#  --workspace 는 default-members 를 무시하므로 명시적 exclude 가 필요하다.
+#  CI 도 동일 명령을 쓴다: .github/workflows/ci.yml)
+cargo test --workspace --exclude rustra-lynx-tauri-spike
 
 # calculator 예시 빌드 및 TS 생성
 cargo run -p rustra-calculator-example

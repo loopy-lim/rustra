@@ -71,7 +71,7 @@ cargo test
 
 | 테스트                                                                       | 검증 내용                                                                                                                                          |
 | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `generated command helper calls the host EngineClient invoke contract`       | `addNumbers(engine, input)` 호출 시 engine.invoke에 올바른 command 이름과 args가 전달되는지 확인                                                   |
+| `generated command helper calls the host EngineClient invoke contract`       | `configure(engine)` 후 `addNumbers(input)` 호출 시 글로벌 invoke→engine에 올바른 command 이름과 args가 전달되는지 확인                                                   |
 | `generated client stays host neutral for Node, Bun, Tauri, and React Native` | `commands.ts` + `types.ts`에 `node:`, `bun:`, `@tauri-apps`, `react-native`, `@expo/`, `expo-modules`, `EngineRequest`, `Attachment`가 없는지 확인 |
 
 ### 파일: `examples/calculator/ts/adapter-compat.test.ts`

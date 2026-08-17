@@ -39,3 +39,38 @@ test('slowest list is ordered desc and capped at 10', async () => {
     assert.ok(report.slowest[i - 1].ms >= report.slowest[i].ms);
   }
 });
+
+test('invokeBatch is passed through when inner supports it', async () => {
+  const inner = {
+    ...makeInner(),
+    async invokeBatch<T>(entries: Array<{ command: string; args?: unknown }>): Promise<T[]> {
+      const results: T[] = [];
+      for (const e of entries) {
+        if (e.command === 'fail') throw new Error('batch boom');
+        results.push({ echoed: e.args } as T);
+      }
+      return results;
+    },
+  };
+  const engine = createInstrumentedEngine(inner);
+  const batch = engine.invokeBatch!;
+  const results = await batch<{ echoed: unknown }>([
+    { command: 'addNumbers', args: { a: 1 } },
+    { command: 'greet', args: { name: 'x' } },
+  ]);
+  assert.equal(results.length, 2);
+  const report = engine.report();
+  assert.equal(report.totalCalls, 2);
+  assert.equal(report.commandStats.addNumbers.count, 1);
+  assert.equal(report.commandStats.greet.count, 1);
+
+  // 배치 실패 시 엔트리별 에러 카운트 반영 후 원 에러 전파
+  await assert.rejects(() => batch([{ command: 'addNumbers' }, { command: 'fail' }]), /batch boom/);
+  assert.equal(engine.report().commandStats.fail.errors, 1);
+  assert.equal(engine.report().commandStats.addNumbers.errors, 1);
+});
+
+test('invokeBatch is omitted when inner lacks it', () => {
+  const engine = createInstrumentedEngine(makeInner());
+  assert.equal(engine.invokeBatch, undefined);
+});

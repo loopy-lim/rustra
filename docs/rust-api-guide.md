@@ -535,8 +535,8 @@ fn add_numbers(a: i64, b: i64) -> i64 { a + b }
 ```
 
 ```typescript
-export function addNumbers(engine: EngineClient, input: AddNumbersInput): Promise<number> {
-  return engine.invoke<number>('addNumbers', input);
+export function addNumbers(input: AddNumbersInput): Promise<number> {
+  return invoke<number>('addNumbers', input);
 }
 ```
 
@@ -555,12 +555,15 @@ export type AddNumbersInput = {
 ### 생성된 commands.ts 예시
 
 ```typescript
-import type { EngineClient, AddNumbersInput } from './types.js';
+import { invoke } from '@rustra/types';
+import type { AddNumbersInput } from './types.js';
 
-export function addNumbers(engine: EngineClient, input: AddNumbersInput): Promise<number> {
-  return engine.invoke<number>('addNumbers', input);
+export function addNumbers(input: AddNumbersInput): Promise<number> {
+  return invoke<number>('addNumbers', input);
 }
 ```
+
+(`invoke`는 `configure(engine)`로 설치한 글로벌 엔진을 사용한다)
 
 ---
 

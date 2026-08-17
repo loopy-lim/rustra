@@ -42,10 +42,10 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
  │                                                                     │
  │  generated/types.ts        generated/commands.ts                    │
  │  ┌──────────────────┐      ┌──────────────────────────────────┐     │
- │  │ EngineClient     │◄─────│ addNumbers(engine, { a, b })     │     │
+ │  │ EngineClient     │◄─────│ addNumbers({ a, b })             │     │
  │  │ AddNumbersInput  │      └──────────┬───────────────────────┘     │
  │  └──────────────────┘                 │                             │
- │          ▲                            │ engine.invoke()             │
+ │          ▲                            │ invoke() (글로벌)           │
  │          │                            │                             │
  │  ┌───────┴────────────────────────────┴───────────────────────┐     │
  │  │                    host adapter                             │     │
@@ -91,14 +91,16 @@ export type EngineClient = {
 
 ### command helper 사용 예시
 
-`commands.ts`에 생성된 각 command helper는 `EngineClient`를 첫 번째 인자로 받는다:
+`commands.ts`에 생성된 각 command helper는 엔진을 직접 받지 않는다 —
+`@rustra/types`의 글로벌 `invoke()`를 호출하며, 이것이 `configure(engine)`로
+설치한 엔진을 사용한다 (Tauri-like 글로벌 invoke 패턴):
 
 ```ts
 // examples/calculator/generated/commands.ts (자동 생성됨)
-import type { AddNumbersInput, EngineClient } from './types.js';
+import { invoke } from '@rustra/types';
 
-export function addNumbers(engine: EngineClient, input: AddNumbersInput): Promise<number> {
-  return engine.invoke<number>('addNumbers', input);
+export function addNumbers(input: AddNumbersInput): Promise<AddNumbersOutput> {
+  return invoke<AddNumbersOutput>('addNumbers', input);
 }
 ```
 
@@ -108,9 +110,11 @@ export function addNumbers(engine: EngineClient, input: AddNumbersInput): Promis
 // examples/tauri-calculator/src/app.ts
 import { addNumbers } from '../../calculator/generated/commands.js';
 import { createTauriEngine } from '../../../packages/tauri/src/index.js';
+import { configure } from '@rustra/types';
 
 const engine = createTauriEngine({ invoke: window.__TAURI__.core.invoke });
-const result = await addNumbers(engine, { a: 20, b: 22 });
+configure(engine); // 글로벌 invoke 에 엔진 설치
+const result = await addNumbers({ a: 20, b: 22 });
 ```
 
 ---
@@ -277,10 +281,11 @@ pub fn invoke_json(&self, name: &str, params: Value) -> Result<Value>
 ```
 ┌──────────────────────────────────────────────────────────┐
  │  앱 코드                                                 │
- │  addNumbers(engine, { a: 1, b: 2 })                     │
+ │  addNumbers({ a: 1, b: 2 })                             │
  │          │                                               │
  │          ▼                                               │
- │  engine.invoke<AddNumbersOutput>('addNumbers', input)   │
+ │  invoke<AddNumbersOutput>('addNumbers', input)          │
+ │  (글로벌 — configure(engine) 로 설치된 엔진 사용)        │
  │          │                                               │
  │          ▼                                               │
  │  host adapter (createXxxEngine)                          │
