@@ -1182,6 +1182,20 @@ impl PackageBuilder {
                     self.id_aliases
                 );
             }
+            alias_id_to_name.insert(*legacy_id, command.clone());
+        }
+        // fresh id 와 런타임 register 모두가 alias id 를 할당해 조용히 덮어쓰지
+        // 못하게 next_command_id 를 **모든** alias id 너머로 먼저 밀어둔다.
+        // 이 순서가 핵심이다: alias id 는 구 스키마 기준이라 현재 명령 수보다
+        // 클 수 있다(구 명령이 제거된 경우) — displacement 의 fresh id 를
+        // alias 병합 이후의 next_command_id 로 할당하면 이미 병합된 alias 항목
+        // 위에 정확히 덜어져 silent misrouting 이 된다(리뷰 지적 회귀).
+        if let Some(&max_alias) = alias_id_to_name.keys().next_back() {
+            // u16::MAX 는 exhausted sentinel — alias 가 그 근처면 이후
+            // 런타임 register 는 기존처럼 registry.id_exhausted 로 거부된다.
+            next_command_id = next_command_id.max(max_alias.saturating_add(1));
+        }
+        for (command, legacy_id) in &self.id_aliases {
             // 점유 충돌 해소: legacy_id 가 다른 명령의 실제 id 면 그 명령을
             // fresh id 로 이동. 선언 시점에 등록돼 있던 충돌은 alias_command_id
             // 가 이미 패닉시켰으므로, 여기 오는 전방 선언 케이스만 남는다.
@@ -1197,15 +1211,6 @@ impl PackageBuilder {
                     .expect("occupant verified above")
                     .command_id = fresh;
             }
-            alias_id_to_name.insert(*legacy_id, command.clone());
-        }
-        // 런타임 register 가 alias id 를 할당해 조용히 덮어쓰지 못하게
-        // next_command_id 를 모든 alias id 너머로 밀어둔다. alias id 는 구
-        // 스키마 기준이라 현재 명령 수보다 클 수 있다(구 명령이 제거된 경우).
-        if let Some(&max_alias) = alias_id_to_name.keys().next_back() {
-            // u16::MAX 는 exhausted sentinel — alias 가 그 근처면 이후
-            // 런타임 register 는 기존처럼 registry.id_exhausted 로 거부된다.
-            next_command_id = next_command_id.max(max_alias.saturating_add(1));
         }
 
         let mut id_to_name: BTreeMap<u16, String> = alias_id_to_name;
