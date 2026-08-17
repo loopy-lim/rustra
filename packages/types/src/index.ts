@@ -72,6 +72,18 @@ export class RustraCommandError extends Error {
  */
 export function parseRustraErrorString(error: string | undefined | null): RustraCommandError {
   const raw = error ?? 'Rustra invoke failed';
+  if (raw.startsWith('{') && raw.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(raw) as { code?: unknown; message?: unknown; retryable?: unknown };
+      if (typeof parsed.code === 'string' && typeof parsed.message === 'string') {
+        const retryable =
+          typeof parsed.retryable === 'boolean' ? parsed.retryable : isRetryableCode(parsed.code);
+        return new RustraCommandError(parsed.code, parsed.message, retryable);
+      }
+    } catch {
+      // Fall through to plain text splitting
+    }
+  }
   const idx = raw.indexOf(': ');
   if (idx > 0) {
     const code = raw.slice(0, idx);
@@ -428,7 +440,7 @@ export type RkyvV2EngineOptions = {
 
 export function createRkyvV2Engine(
   native: RkyvV2SchemaNative,
-  registry: Map<string, RkyvV2Codec<any, any>>,
+  registry: Map<string, RkyvV2Codec<unknown, unknown>>,
   options?: RkyvV2EngineOptions,
 ): RkyvV2Engine {
   // F5 (opt-in): 계약 해시 검증. 빌드 시점 hash 와 네이티브 실시간 hash 가 다르면

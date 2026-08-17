@@ -89,15 +89,27 @@ struct FfiPostcardResponse {
 // -- Buffer helpers ------------------------------------------------------
 
 const MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
+const FFI_MAGIC: u32 = 0x5255_5354; // "RUST" in ASCII
+const FFI_HEADER_SIZE: usize = 8;
 
 fn alloc_response(data: Vec<u8>, out_len: *mut usize) -> *mut u8 {
-    let len = data.len();
-    unsafe { *out_len = len };
-    let boxed: Box<[u8]> = data.into_boxed_slice();
-    let ptr = Box::into_raw(boxed) as *mut u8;
+    let payload_len = data.len();
+    unsafe { *out_len = payload_len };
+
+    let total_len = FFI_HEADER_SIZE + payload_len;
+    let mut buf = Vec::with_capacity(total_len);
+    buf.extend_from_slice(&FFI_MAGIC.to_le_bytes());
+    buf.extend_from_slice(&(payload_len as u32).to_le_bytes());
+    buf.extend_from_slice(&data);
+
+    let boxed: Box<[u8]> = buf.into_boxed_slice();
+    let raw_ptr = Box::into_raw(boxed) as *mut u8;
+    let user_ptr = unsafe { raw_ptr.add(FFI_HEADER_SIZE) };
+
     #[cfg(debug_assertions)]
-    free_guard::record(ptr, len);
-    ptr
+    free_guard::record(user_ptr, payload_len);
+
+    user_ptr
 }
 
 /// Debug-only allocation tracker for `rustra_ffi_free` misuse detection (F2).
@@ -421,6 +433,73 @@ pub unsafe extern "C" fn rustra_ffi_invoke_postcard(
     })
 }
 
+/// Async FFI invoke entry point (P0-3 worker thread offload).
+///
+/// Runs the command dispatch on a background worker thread, then calls `on_complete`
+/// with `(user_data, response_ptr, response_len)`. The calling thread returns immediately.
+///
+/// # Safety
+///
+/// - `payload` must point to `payload_len` valid bytes (or null if len 0).
+/// - `on_complete` must be a thread-safe C callback function pointer.
+/// - The caller must free `response_ptr` using `rustra_ffi_free`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_invoke_async(
+    payload: *const u8,
+    payload_len: usize,
+    user_data: *mut c_void,
+    on_complete: Option<unsafe extern "C" fn(*mut c_void, *mut u8, usize)>,
+) {
+    let user_data_raw = user_data as usize;
+    let bytes = if payload.is_null() || payload_len == 0 {
+        Vec::new()
+    } else {
+        unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
+    };
+
+    std::thread::spawn(move || {
+        let mut out_len = 0;
+        let resp_ptr = unsafe { rustra_ffi_invoke(bytes.as_ptr(), bytes.len(), &mut out_len) };
+        if let Some(cb) = on_complete {
+            unsafe {
+                cb(user_data_raw as *mut c_void, resp_ptr, out_len);
+            }
+        }
+    });
+}
+
+/// Async JSON FFI invoke entry point.
+///
+/// # Safety
+///
+/// - `payload` must point to `payload_len` valid bytes (or null if len 0).
+/// - `on_complete` must be a thread-safe C callback function pointer.
+/// - The caller must free the response pointer in the callback using `rustra_ffi_free`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_invoke_json_async(
+    payload: *const u8,
+    payload_len: usize,
+    user_data: *mut c_void,
+    on_complete: Option<unsafe extern "C" fn(*mut c_void, *mut u8, usize)>,
+) {
+    let user_data_raw = user_data as usize;
+    let bytes = if payload.is_null() || payload_len == 0 {
+        Vec::new()
+    } else {
+        unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
+    };
+
+    std::thread::spawn(move || {
+        let mut out_len = 0;
+        let resp_ptr = unsafe { rustra_ffi_invoke_json(bytes.as_ptr(), bytes.len(), &mut out_len) };
+        if let Some(cb) = on_complete {
+            unsafe {
+                cb(user_data_raw as *mut c_void, resp_ptr, out_len);
+            }
+        }
+    });
+}
+
 /// Free a buffer previously returned by one of the `rustra_ffi_invoke_*` functions.
 ///
 /// # Safety
@@ -450,9 +529,25 @@ pub unsafe extern "C" fn rustra_ffi_free(ptr: *mut u8, len: usize) {
                 std::process::abort();
             }
         }
+
         unsafe {
-            let slice = std::slice::from_raw_parts_mut(ptr, len);
-            let _ = Box::from_raw(slice as *mut [u8]);
+            let header_ptr = ptr.sub(FFI_HEADER_SIZE);
+            let magic = u32::from_le_bytes(*(header_ptr as *const [u8; 4]));
+            let alloc_len = u32::from_le_bytes(*(header_ptr.add(4) as *const [u8; 4])) as usize;
+
+            if magic != FFI_MAGIC {
+                eprintln!(
+                    "rustra_ffi_free: invalid magic 0x{magic:08x} at {ptr:p} (double-free or foreign pointer) — rejecting free to prevent UB"
+                );
+                return;
+            }
+
+            // Invalidate magic to prevent double-free
+            std::ptr::write_bytes(header_ptr, 0, 4);
+
+            let total_len = FFI_HEADER_SIZE + alloc_len;
+            let raw_slice = std::slice::from_raw_parts_mut(header_ptr, total_len);
+            let _ = Box::from_raw(raw_slice as *mut [u8]);
         }
     }
 }

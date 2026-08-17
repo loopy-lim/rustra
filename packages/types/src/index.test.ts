@@ -569,3 +569,16 @@ test('parseRustraErrorString falls back to invoke.failed for non-code strings', 
   assert.equal(c.code, 'invoke.failed');
   assert.equal(c.message, 'Rustra invoke failed');
 });
+
+test('parseRustraErrorString parses JSON error objects and respects retryable', () => {
+  const jsonErr = JSON.stringify({
+    code: 'database.unavailable',
+    message: 'Connection pool exhausted',
+    retryable: true,
+  });
+  const err = parseRustraErrorString(jsonErr);
+  assert.ok(err instanceof RustraCommandError);
+  assert.equal(err.code, 'database.unavailable');
+  assert.equal(err.message, 'Connection pool exhausted');
+  assert.equal(err.retryable, true);
+});

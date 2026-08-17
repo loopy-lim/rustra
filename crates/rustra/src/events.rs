@@ -64,10 +64,21 @@ pub(crate) struct EventState {
     pub(crate) sink: RwLock<Option<EventSink>>,
 }
 
+impl Default for EventState {
+    fn default() -> Self {
+        Self::with_capacity(1024)
+    }
+}
+
 impl EventState {
+    #[allow(dead_code)]
     pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    pub(crate) fn with_capacity(capacity: usize) -> Self {
         Self {
-            bus: EventBus::new(),
+            bus: EventBus::with_capacity(capacity),
             sink: RwLock::new(None),
         }
     }
@@ -147,6 +158,13 @@ impl EventBus {
         std::mem::take(&mut state.queue).into_iter().collect()
     }
 
+    /// 큐에 쌓인 이벤트 목록과 누적 드랍 수를 함께 꺼낸다.
+    pub fn take_pending_events_with_stats(&self) -> (Vec<RustraEvent>, u64) {
+        let mut state = self.state.lock().unwrap();
+        let events = std::mem::take(&mut state.queue).into_iter().collect();
+        (events, state.dropped)
+    }
+
     /// 대기 중 이벤트 수.
     pub fn pending_len(&self) -> usize {
         self.state.lock().unwrap().queue.len()
@@ -155,6 +173,11 @@ impl EventBus {
     /// 용량 초과로 버려진 이벤트 누적 수.
     pub fn dropped_count(&self) -> u64 {
         self.state.lock().unwrap().dropped
+    }
+
+    /// 큐의 최대 수용량.
+    pub fn capacity(&self) -> usize {
+        self.capacity
     }
 }
 

@@ -5,19 +5,8 @@
  * 설정은 `@rustra/types`의 configure()를 사용합니다.
  */
 
-import type {
-  EngineClient as EngineClientType,
-  RkyvV2Codec,
-  RkyvV2Native,
-  RustraNative,
-} from '@rustra/types';
-import {
-  RustraCommandError,
-  configure,
-  invoke,
-  createRkyvV2Engine,
-  parseRustraErrorString,
-} from '@rustra/types';
+import type { EngineClient as EngineClientType, RustraNative } from '@rustra/types';
+import { createRkyvV2Engine, parseRustraErrorString } from '@rustra/types';
 
 export type { EngineClient, RustraError, RkyvV2Codec, RkyvV2Native } from '@rustra/types';
 export {
@@ -84,7 +73,7 @@ export type SyncEngineClient = {
  * rkyv V2 바이너리 경로를 필수로 사용합니다 (최고 성능).
  */
 export type FastEngineOptions = {
-  rkyvV2Codecs: Map<string, import('@rustra/types').RkyvV2Codec<any, any>>;
+  rkyvV2Codecs: Map<string, import('@rustra/types').RkyvV2Codec<unknown, unknown>>;
   /**
    * (F5, opt-in) 빌드 시점 계약 해시. 설정하면 엔진 생성 시 네이티브의
    * 실시간 해시(getContractHash)와 비교해 불일치 시 즉시 throw 한다.

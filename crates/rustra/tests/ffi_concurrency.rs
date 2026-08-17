@@ -102,3 +102,44 @@ fn register_ffi_concurrent_is_idempotent_and_safe() {
     // 경쟁 등록 후에도 invoke 가 올바르게 동작한다.
     assert_eq!(invoke_add(40, 2), 42);
 }
+
+#[test]
+fn ffi_invoke_async_offloads_and_calls_back() {
+    use std::ffi::c_void;
+    use std::sync::mpsc::channel;
+
+    concurrency_package().register_ffi();
+
+    let (tx, rx) = channel::<i64>();
+    let tx_box = Box::into_raw(Box::new(tx));
+
+    unsafe extern "C" fn on_done(user_data: *mut c_void, resp_ptr: *mut u8, resp_len: usize) {
+        let tx = unsafe { Box::from_raw(user_data as *mut std::sync::mpsc::Sender<i64>) };
+        let bytes = unsafe { std::slice::from_raw_parts(resp_ptr, resp_len) };
+        let resp: serde_json::Value =
+            serde_json::from_slice(bytes).expect("async response deserializes");
+        unsafe { rustra_ffi_free(resp_ptr, resp_len) };
+        let val = resp["result"].as_i64().unwrap_or(-1);
+        tx.send(val).unwrap();
+    }
+
+    let payload = serde_json::to_vec(&serde_json::json!({
+        "command": "addNumbers",
+        "args": { "a": 100, "b": 23 }
+    }))
+    .unwrap();
+
+    unsafe {
+        rustra::ffi::rustra_ffi_invoke_json_async(
+            payload.as_ptr(),
+            payload.len(),
+            tx_box as *mut c_void,
+            Some(on_done),
+        );
+    }
+
+    let result = rx
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .expect("async callback received");
+    assert_eq!(result, 123, "async offloaded invoke must return 123");
+}

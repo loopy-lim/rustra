@@ -42,13 +42,23 @@ fn main() {
         found.unwrap_or_else(|| backend_target.join("release"))
     };
 
+    let include_dir = format!("{}/include", sdk);
+    let header_check = format!("{}/capi/lynx_env_capi.h", include_dir);
+    if !std::path::Path::new(&header_check).exists() {
+        println!(
+            "cargo:warning=Lynx SDK headers not found at {}; skipping native lynx_desktop compilation",
+            header_check
+        );
+        return;
+    }
+
     // lynx_desktop.mm → liblynx_desktop.a
     cc::Build::new()
         .cpp(true)
         .file("src/lynx_desktop.mm")
         .flag("-std=c++17")
         .flag("-DUSE_WEAK_SUFFIX_NAPI")
-        .include(format!("{}/include", sdk))
+        .include(&include_dir)
         .compile("lynx_desktop");
 
     // Lynx dylib

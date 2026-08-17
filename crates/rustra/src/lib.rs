@@ -40,9 +40,73 @@
 //! }
 //! ```
 
+/// Rust 구조체/열거형에 rustra 브릿지에 필요한 derive 및 serde 설정을 자동 추가합니다.
+///
+/// ```rust
+/// use rustra::prelude::*;
+///
+/// #[bridge_type]
+/// pub struct MyInput {
+///     pub value: i64,
+/// }
+/// ```
 pub use rustra_macros::bridge_type;
+
+/// `#[command]` 함수들을 간결하게 패키지로 빌드하는 매크로입니다.
+///
+/// ```rust
+/// use rustra::prelude::*;
+///
+/// #[bridge_type]
+/// pub struct AddInput { pub a: i64, pub b: i64 }
+/// #[bridge_type]
+/// pub struct AddOutput { pub value: i64 }
+///
+/// #[command]
+/// fn add(input: AddInput) -> Result<AddOutput> {
+///     Ok(AddOutput { value: input.a + input.b })
+/// }
+///
+/// let pkg = rustra::build!("example.calc", add).done();
+/// assert_eq!(pkg.id(), "example.calc");
+/// ```
 pub use rustra_macros::build;
+
+/// 함수를 rustra 명령으로 등록하는 매크로입니다.
+///
+/// ```rust
+/// use rustra::prelude::*;
+///
+/// #[bridge_type]
+/// pub struct GreetInput { pub name: String }
+/// #[bridge_type]
+/// pub struct GreetOutput { pub message: String }
+///
+/// #[command]
+/// fn greet(input: GreetInput) -> Result<GreetOutput> {
+///     Ok(GreetOutput { message: format!("Hello, {}!", input.name) })
+/// }
+/// ```
 pub use rustra_macros::command;
+
+/// 패키지 빌더에 `#[command]` 함수들을 등록하는 매크로입니다.
+///
+/// ```rust
+/// use rustra::prelude::*;
+///
+/// #[bridge_type]
+/// pub struct PingInput { pub msg: String }
+/// #[bridge_type]
+/// pub struct PingOutput { pub reply: String }
+///
+/// #[command]
+/// fn ping(input: PingInput) -> Result<PingOutput> {
+///     Ok(PingOutput { reply: input.msg })
+/// }
+///
+/// let pkg = rustra::register!(Package::builder("example.ping"), ping).build();
+/// assert_eq!(pkg.id(), "example.ping");
+/// ```
 pub use rustra_macros::register;
 
 pub use rkyv_codec::encode_rkyv_v2_error;
@@ -351,6 +415,7 @@ pub struct PackageBuilder {
     id: String,
     commands: BTreeMap<String, Command>,
     next_command_id: u16,
+    event_capacity: usize,
 }
 
 /// TypeScript 코드 생성 결과입니다.
@@ -507,6 +572,11 @@ where
 }
 
 impl Package {
+    /// 패키지의 고유 식별자(ID)를 반환합니다.
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
     /// 새로운 [`PackageBuilder`]를 생성합니다.
     ///
     /// `id`는 패키지를 식별하는 고유 문자열입니다. 역방향 도메인 표기법을 권장합니다
@@ -516,6 +586,7 @@ impl Package {
             id: id.into(),
             commands: BTreeMap::new(),
             next_command_id: 1,
+            event_capacity: 1024,
         }
     }
 
@@ -1022,6 +1093,12 @@ impl PackageBuilder {
         self
     }
 
+    /// 이벤트 버스 큐의 최대 수용량을 설정합니다 (기본값: 1024).
+    pub fn event_capacity(mut self, capacity: usize) -> Self {
+        self.event_capacity = capacity.max(1);
+        self
+    }
+
     /// 등록된 모든 명령을 불변 [`Package`]로 빌드합니다.
     pub fn build(self) -> Package {
         let id_to_name: BTreeMap<u16, String> = self
@@ -1038,7 +1115,7 @@ impl PackageBuilder {
                 granted_capabilities: BTreeSet::new(),
             })),
             frozen: Arc::new(AtomicBool::new(!cfg!(debug_assertions))),
-            events: Arc::new(events::EventState::new()),
+            events: Arc::new(events::EventState::with_capacity(self.event_capacity)),
         }
     }
 
