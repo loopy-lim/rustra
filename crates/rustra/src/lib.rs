@@ -115,10 +115,12 @@ pub mod cancel;
 mod codegen;
 mod error;
 pub mod events;
+mod executor;
 pub mod ffi;
 pub mod renderer_host;
 mod rkyv_codec;
 mod schema;
+pub mod state;
 
 use schemars::JsonSchema;
 use serde::{Serialize, de::DeserializeOwned};
@@ -135,6 +137,7 @@ use rkyv_codec::{
 };
 
 pub use error::{Result, RustraError};
+pub use state::{State, get_state, with_state_context};
 
 use codegen::{command_function_name, contract_hash, ts_type_from_schema};
 use schema::{command_name_from_handler, schema_value, short_type_name};
@@ -146,7 +149,7 @@ use schema::{command_name_from_handler, schema_value, short_type_name};
 /// ```
 pub mod prelude {
     pub use crate::{
-        GeneratedPackage, Package, PackageBuilder, Result, RustraError, bridge_type, build,
+        GeneratedPackage, Package, PackageBuilder, Result, RustraError, State, bridge_type, build,
         command,
         events::EventSink,
         ffi::FfiFormat,
@@ -169,6 +172,8 @@ pub mod prelude {
 pub mod __private {
     use schemars::JsonSchema;
     use serde::{Serialize, de::DeserializeOwned};
+
+    pub use crate::executor::block_on;
 
     pub trait CommandInput: DeserializeOwned + JsonSchema + 'static {}
     impl<T: DeserializeOwned + JsonSchema + 'static> CommandInput for T {}
@@ -389,6 +394,7 @@ pub struct Package {
     /// 설치되어 있으면 즉시 콜백 호출(버스 우회), 아니면 호스트 어댑터가
     /// `event_bus()` 를 폴링해 플랫폼 푸시 채널로 전달한다.
     events: Arc<events::EventState>,
+    states: Arc<state::StateMap>,
 }
 
 /// `Package`의 가변 내부 상태. `Arc<RwLock<_>>`로 보호되어 런타임 mutation을 지원한다.
@@ -427,6 +433,7 @@ pub struct PackageBuilder {
     /// (T2, OTA) 스키마 협상 버전 — 빌드 시점 고정값. `build()` 에서
     /// `RegistryState.schema_version` 로 이동한다.
     schema_version: u32,
+    states: state::StateMap,
 }
 
 /// TypeScript 코드 생성 결과입니다.
@@ -598,7 +605,15 @@ impl Package {
             id_aliases: Vec::new(),
             event_capacity: 1024,
             schema_version: 1,
+            states: state::StateMap::new(),
         }
+    }
+
+    /// 패키지에 등록된 `State<T>` 인스턴스를 조회합니다.
+    pub fn state<T: Send + Sync + 'static>(&self) -> Option<State<T>> {
+        let any_arc = self.states.get(&std::any::TypeId::of::<T>())?.clone();
+        let concrete_arc = any_arc.downcast::<T>().ok()?;
+        Some(State(concrete_arc))
     }
 
     /// 타입이 지정된 명령을 호출합니다.
@@ -715,7 +730,7 @@ impl Package {
         // Runtime Authority: deny-by-default — capability 가 요구되는데 부여되지
         // 않았으면 핸들러를 호출하지 않고 capability.denied 를 반환한다.
         self.capability_satisfied(&command)?;
-        (command.invoke)(params)
+        with_state_context(&self.states, || (command.invoke)(params))
     }
 
     /// command_id로 명령 이름을 조회합니다.
@@ -765,19 +780,21 @@ impl Package {
         // JS RustraCommandError("capability.denied") 로 재구성된다.
         self.capability_satisfied(&command)?;
 
-        // Fast path: use typed postcard binary handler (bypasses JSON Value entirely)
-        if let Some(ref handler) = command.rkyv_v2_handler {
-            return handler(payload);
-        }
+        with_state_context(&self.states, || {
+            // Fast path: use typed postcard binary handler (bypasses JSON Value entirely)
+            if let Some(ref handler) = command.rkyv_v2_handler {
+                return handler(payload);
+            }
 
-        // Fallback: legacy JSON-based path for commands without binary handler
-        if !command.rkyv_v2_tier3 && payload.len() < 8 {
-            return Err(RustraError::invalid_args("rkyv v2: payload too short"));
-        }
+            // Fallback: legacy JSON-based path for commands without binary handler
+            if !command.rkyv_v2_tier3 && payload.len() < 8 {
+                return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+            }
 
-        let params = (command.rkyv_v2_decode)(payload)?;
-        let result = (command.invoke)(params)?;
-        Ok((command.rkyv_v2_encode_response)(&result))
+            let params = (command.rkyv_v2_decode)(payload)?;
+            let result = (command.invoke)(params)?;
+            Ok((command.rkyv_v2_encode_response)(&result))
+        })
     }
 
     /// 런타임 mutation을 영구적으로 비활성화한다.
@@ -903,12 +920,14 @@ impl Package {
     {
         self.ensure_mutable()?;
         let mut state = self.state.write().unwrap();
-        let command_id = state
+        let existing = state
             .commands
             .get(name)
-            .map(|c| c.command_id)
             .ok_or_else(|| RustraError::command_not_found(name))?;
-        let command = build_command::<I, O, F>(command_id, handler, false);
+        let command_id = existing.command_id;
+        let required_capability = existing.required_capability;
+        let mut command = build_command::<I, O, F>(command_id, handler, false);
+        command.required_capability = required_capability;
         state.commands.insert(name.to_string(), command);
         Ok(())
     }
@@ -1013,6 +1032,9 @@ impl Package {
         if let Value::Object(def_map) = &definitions {
             for (name, def_schema) in def_map {
                 if emitted.insert(name.clone()) {
+                    if let Some(desc) = def_schema.get("description").and_then(Value::as_str) {
+                        output.push_str(&format!("/**\n * {}\n */\n", desc.replace('\n', "\n * ")));
+                    }
                     output.push_str(&format!(
                         "export type {name} = {};\n\n",
                         ts_type_from_schema(def_schema, &definitions)
@@ -1022,14 +1044,28 @@ impl Package {
         }
 
         for command in state.commands.values() {
-            if emitted.insert(command.input_type.clone()) {
+            if command.input_type != "()" && emitted.insert(command.input_type.clone()) {
+                if let Some(desc) = command
+                    .input_schema
+                    .get("description")
+                    .and_then(Value::as_str)
+                {
+                    output.push_str(&format!("/**\n * {}\n */\n", desc.replace('\n', "\n * ")));
+                }
                 output.push_str(&format!(
                     "export type {} = {};\n\n",
                     command.input_type,
                     ts_type_from_schema(&command.input_schema, &definitions)
                 ));
             }
-            if emitted.insert(command.output_type.clone()) {
+            if command.output_type != "()" && emitted.insert(command.output_type.clone()) {
+                if let Some(desc) = command
+                    .output_schema
+                    .get("description")
+                    .and_then(Value::as_str)
+                {
+                    output.push_str(&format!("/**\n * {}\n */\n", desc.replace('\n', "\n * ")));
+                }
                 output.push_str(&format!(
                     "export type {} = {};\n\n",
                     command.output_type,
@@ -1046,23 +1082,53 @@ impl Package {
         // `invoke()`가 사용하므로 명령 함수는 engine 파라미터를 받지 않는다.
         let mut type_names = BTreeSet::new();
         for command in state.commands.values() {
-            type_names.insert(command.input_type.clone());
-            type_names.insert(command.output_type.clone());
+            if command.input_type != "()" {
+                type_names.insert(command.input_type.clone());
+            }
+            if command.output_type != "()" {
+                type_names.insert(command.output_type.clone());
+            }
         }
 
         let imports = type_names.into_iter().collect::<Vec<_>>().join(", ");
-        let mut output = format!("import type {{ {imports} }} from './types.js';\n");
-        output.push_str("import { invoke } from '@rustra/types';\n\n");
+        let mut output = String::new();
+        if !imports.is_empty() {
+            output.push_str(&format!("import type {{ {imports} }} from './types.js';\n"));
+        }
+        output.push_str("import { invoke } from '@rustra/types';\n");
+        output.push_str("import type { InvokeOptions } from '@rustra/types';\n\n");
 
         for (name, command) in state.commands.iter() {
-            output.push_str(&format!(
-                "export function {}(input: {}): Promise<{}> {{\n  return invoke<{}>('{}', input);\n}}\n\n",
-                command_function_name(name),
-                command.input_type,
-                command.output_type,
-                command.output_type,
-                name,
-            ));
+            let out_type = if command.output_type == "()" {
+                "void"
+            } else {
+                &command.output_type
+            };
+            if let Some(desc) = command
+                .input_schema
+                .get("description")
+                .and_then(Value::as_str)
+            {
+                output.push_str(&format!("/**\n * {}\n */\n", desc.replace('\n', "\n * ")));
+            }
+            if command.input_type == "()" {
+                output.push_str(&format!(
+                    "export function {}(options?: InvokeOptions): Promise<{}> {{\n  return invoke<{}>('{}', undefined, options);\n}}\n\n",
+                    command_function_name(name),
+                    out_type,
+                    out_type,
+                    name,
+                ));
+            } else {
+                output.push_str(&format!(
+                    "export function {}(input: {}, options?: InvokeOptions): Promise<{}> {{\n  return invoke<{}>('{}', input, options);\n}}\n\n",
+                    command_function_name(name),
+                    command.input_type,
+                    out_type,
+                    out_type,
+                    name,
+                ));
+            }
         }
 
         output
@@ -1195,6 +1261,16 @@ impl PackageBuilder {
         self
     }
 
+    /// 공유 상태를 패키지에 등록합니다.
+    ///
+    /// 등록된 상태는 `State<T>` 파라미터를 받는 `#[command]` 핸들러에
+    /// 자동으로 주입됩니다.
+    pub fn manage<T: Send + Sync + 'static>(mut self, state: T) -> Self {
+        self.states
+            .insert(std::any::TypeId::of::<T>(), Arc::new(state));
+        self
+    }
+
     /// 등록된 모든 명령을 불변 [`Package`]로 빌드합니다.
     pub fn build(self) -> Package {
         let mut commands = self.commands;
@@ -1271,6 +1347,7 @@ impl PackageBuilder {
             })),
             frozen: Arc::new(AtomicBool::new(!cfg!(debug_assertions))),
             events: Arc::new(events::EventState::with_capacity(self.event_capacity)),
+            states: Arc::new(self.states),
         }
     }
 
@@ -1283,6 +1360,7 @@ impl PackageBuilder {
 }
 
 #[cfg(test)]
+#[cfg_attr(not(debug_assertions), allow(dead_code))]
 mod runtime_registry_tests {
     use super::*;
     use schemars::JsonSchema;
