@@ -394,6 +394,8 @@ fn run_worker(
     crate::cancel::complete_invocation(id);
     if let Some(cb) = on_complete {
         unsafe { cb(user_data_raw as *mut c_void, resp_ptr, out_len) };
+    } else if !resp_ptr.is_null() {
+        unsafe { rustra_ffi_free(resp_ptr, out_len) };
     }
 }
 
@@ -689,14 +691,14 @@ pub unsafe extern "C" fn rustra_ffi_get_max_payload() -> usize {
 ///   through this `extern "C"` boundary). Release builds rely on the caller
 ///   safety contract — the guard compiles out.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_ffi_free(ptr: *mut u8, len: usize) {
-    if !ptr.is_null() && len > 0 {
+pub unsafe extern "C" fn rustra_ffi_free(ptr: *mut u8, _len: usize) {
+    if !ptr.is_null() {
         #[cfg(debug_assertions)]
-        match free_guard::check(ptr, len) {
+        match free_guard::check(ptr, _len) {
             free_guard::Verdict::Sound => {}
             verdict => {
                 eprintln!(
-                    "rustra_ffi_free: F2 misuse ({verdict:?}) for (ptr,len)=({ptr:p},{len}) — \
+                    "rustra_ffi_free: F2 misuse ({verdict:?}) for (ptr,len)=({ptr:p},{_len}) — \
                      aborting to avoid UB. Call with the exact (ptr,len) returned by a \
                      rustra_ffi_invoke_* function, exactly once."
                 );
