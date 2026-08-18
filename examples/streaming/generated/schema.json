@@ -1,5 +1,6 @@
 {
   "packageId": "examples.streaming",
+  "schemaVersion": 1,
   "commands": [
     {
       "name": "jobStatus",

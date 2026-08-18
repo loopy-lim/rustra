@@ -180,3 +180,114 @@ test('subscribeEvent coexists with multiple event names', () => {
   assert.deepEqual(ticks, [{ step: 2 }]);
   assert.deepEqual(dones, [{ emitted: 6 }]);
 });
+
+// ── createAsyncEngine (P0-3 + T1 얕은 취소) ─────────────────
+
+import { createAsyncEngine } from './index.js';
+import type { RustraJSIAsyncNative } from './index.js';
+
+/**
+ * invokeTypedAsync mock 네이티브 — 성공 콜백을 보류(defer)했다가 수동 전달한다.
+ * calls 로 네이티브 호출 수를, resolveNow 로 늦은 resolve 를 흉내낸다.
+ */
+function makeAsyncNative() {
+  const state = {
+    calls: 0,
+    delivered: false,
+    resolveNow: () => {},
+    rejectNow: (_msg: string) => {},
+  };
+  const native: RustraJSIAsyncNative = {
+    invoke(_payload: ArrayBuffer): ArrayBuffer {
+      return new ArrayBuffer(0);
+    },
+    invokeRkyvV2(_payload: ArrayBuffer): ArrayBuffer {
+      return new ArrayBuffer(0);
+    },
+    invokeTypedAsync(
+      _name: string,
+      _args: unknown,
+      onSuccess: (result: unknown) => void,
+      onError: (message: string) => void,
+    ) {
+      state.calls++;
+      state.resolveNow = () => {
+        state.delivered = true;
+        onSuccess({ value: 42 });
+      };
+      state.rejectNow = (msg: string) => {
+        state.delivered = true;
+        onError(msg);
+      };
+    },
+  };
+  return { native, state };
+}
+
+test('async engine without signal resolves via invokeTypedAsync (T1 baseline)', async () => {
+  const h = makeAsyncNative();
+  const engine = createAsyncEngine(h.native, { rkyvV2Codecs: new Map() });
+
+  const p = engine.invoke<{ value: number }>('heavy', { n: 1 });
+  h.state.resolveNow(); // 네이티브 콜백 도착
+  const out = await p;
+
+  assert.equal(out.value, 42);
+  assert.equal(h.state.calls, 1, 'invokeTypedAsync must be called exactly once');
+});
+
+test('async engine without signal rejects via invokeTypedAsync error callback (T1 baseline)', async () => {
+  const h = makeAsyncNative();
+  const engine = createAsyncEngine(h.native, { rkyvV2Codecs: new Map() });
+
+  const p = engine.invoke('heavy', { n: 1 });
+  h.state.rejectNow('math.divide_by_zero: nope');
+  await assert.rejects(p, (err: unknown) => {
+    assert.ok(err instanceof RustraCommandError);
+    assert.equal((err as RustraCommandError).code, 'math.divide_by_zero');
+    return true;
+  });
+});
+
+test('pre-aborted signal rejects cancelled without calling invokeTypedAsync (T1)', async () => {
+  const h = makeAsyncNative();
+  const engine = createAsyncEngine(h.native, { rkyvV2Codecs: new Map() });
+
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(engine.invoke('heavy', { n: 1 }, { signal: ac.signal }), (err: unknown) => {
+    assert.ok(err instanceof RustraCommandError, 'must be RustraCommandError');
+    assert.equal((err as RustraCommandError).code, 'cancelled');
+    assert.equal((err as RustraCommandError).retryable, true, 'cancelled is retryable');
+    assert.match((err as Error).message, /heavy/);
+    return true;
+  });
+  assert.equal(h.state.calls, 0, 'native must never be called for a pre-aborted signal');
+});
+
+test('abort mid-flight rejects cancelled; late native resolve is ignored (T1)', async () => {
+  const h = makeAsyncNative();
+  const engine = createAsyncEngine(h.native, { rkyvV2Codecs: new Map() });
+
+  const ac = new AbortController();
+  const p = engine.invoke<{ value: number }>('heavy', { n: 1 }, { signal: ac.signal });
+  assert.equal(h.state.calls, 1, 'native must have been dispatched before abort');
+  ac.abort(); // 진행 중 중단
+
+  await assert.rejects(p, (err: unknown) => {
+    assert.ok(err instanceof RustraCommandError);
+    assert.equal((err as RustraCommandError).code, 'cancelled');
+    return true;
+  });
+
+  // 네이티브 성공 콜백이 abort 이후 늦게 도착 — 이미 정착된 프라미스는 그대로.
+  h.state.resolveNow();
+  await new Promise<void>((r) => queueMicrotask(() => r()));
+  await assert.rejects(
+    p,
+    (err: unknown) =>
+      err instanceof RustraCommandError && (err as RustraCommandError).code === 'cancelled',
+    'promise must stay rejected (late resolve is a no-op)',
+  );
+  assert.equal(h.state.delivered, true, 'native callback did fire — it was just ignored');
+});

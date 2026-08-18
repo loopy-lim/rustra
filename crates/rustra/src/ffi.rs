@@ -6,9 +6,15 @@
 //! - `rustra_ffi_invoke`          — default path (configurable)
 //! - `rustra_ffi_invoke_json`     — JSON-over-bytes path
 //! - `rustra_ffi_invoke_postcard` — postcard binary path
+//! - `rustra_ffi_invoke_async`         — 백그라운드 스레드 invoke + invocation_id 발급
+//! - `rustra_ffi_invoke_json_async`    — JSON 버전 async invoke + invocation_id 발급
+//! - `rustra_ffi_invoke_cancel`        — 진행 중 호출 취소 (협력적)
+//! - `rustra_ffi_cancellation_status`  — 호출 취소 상태 조회 (0/1/2)
 //! - `rustra_ffi_free`            — free returned buffers
 //! - `rustra_ffi_event_sink_register`   — C 콜백 이벤트 싱크 설치 (push)
 //! - `rustra_ffi_event_sink_unregister` — 싱크 해제 (폴링 복귀)
+//! - `rustra_ffi_set_max_payload`  — (T3) 페이로드 크기 한도 동적 변경
+//! - `rustra_ffi_get_max_payload`  — (T3) 현재 페이로드 크기 한도 조회
 
 use crate::Package;
 use serde::{Deserialize, Serialize};
@@ -88,7 +94,20 @@ struct FfiPostcardResponse {
 
 // -- Buffer helpers ------------------------------------------------------
 
-const MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
+/// (T3) 페이로드 크기 한도의 기본값 — 1 MiB. 런타임 값은
+/// [`MAX_PAYLOAD_BYTES`] (atomic) 로, `rustra_ffi_set_max_payload` 로 변경한다.
+const DEFAULT_MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
+
+/// (T3) 페이로드 크기 한도 — 부팅 시 고정이 아니라 호스트가 동적으로 조정한다.
+/// 크기 게이트는 어림잡기 용도이므로 원자성만 필요하고 순서는 요구되지 않는다.
+static MAX_PAYLOAD_BYTES: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(DEFAULT_MAX_PAYLOAD_BYTES);
+
+/// 현재 페이로드 크기 한도 (invoke 경로의 크기 가드가 읽는 단일 지점).
+fn max_payload_bytes() -> usize {
+    MAX_PAYLOAD_BYTES.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 const FFI_MAGIC: u32 = 0x5255_5354; // "RUST" in ASCII
 const FFI_HEADER_SIZE: usize = 8;
 
@@ -332,6 +351,60 @@ fn postcard_deserialize_envelope(bytes: &[u8]) -> Result<(String, serde_json::Va
     Ok((env.command, args))
 }
 
+/// 취소 체크포인트가 통합된 async 워커 dispatch (양쪽 async 엔트리 공용).
+///
+/// [`crate::cancel`] 레지스트리를 dispatch 직전에 조회해 `Cancelled` 상태면
+/// 핸들러(`invoke_fn`)를 실행하지 않고 `cancelled` 에러 프레임을 만들어
+/// `on_complete` 로 전달한다. 협력적 취소 계약:
+///
+/// - **체크포인트 전 취소** — 핸들러 미시작, `cancelled: ...` 에러 응답.
+/// - **체크포인트 통과 후 취소** — 핸들러는 끝까지 실행되고 정상 결과 전달.
+///
+/// 체크포인트는 "cancel 이 먼저였으면 핸들러가 절대 시작하지 않는다"만
+/// 보장한다. 응답 포맷 정합성을 위해 프레임 생성은 `serialize`(`err_response`
+/// 와 동일한 경로)에 맡긴다 — JSON 경로는 `json_serialize`, postcard 경로는
+/// `postcard_serialize_response` 를 넘긴다. `serialize` 는 `invoke_fn` 의
+/// 응답 포맷과 일치해야 한다 (호스트가 두 경로의 프레임을 동일하게 디코딩).
+///
+/// `complete_invocation` 을 `on_complete` 이전에 호출한다 — 콜백 실행 중
+/// 호스트가 `rustra_ffi_cancellation_status` 로 조회하면 이미 Unknown(0)을
+/// 보게 되어 완결 순서가 명확해진다.
+fn run_worker(
+    id: u64,
+    bytes: Vec<u8>,
+    user_data_raw: usize,
+    on_complete: Option<unsafe extern "C" fn(*mut c_void, *mut u8, usize)>,
+    invoke_fn: unsafe extern "C" fn(*const u8, usize, *mut usize) -> *mut u8,
+    serialize: fn(&FfiResponse) -> Vec<u8>,
+) {
+    let mut out_len = 0;
+    let resp_ptr = if crate::cancel::status(id) == crate::cancel::Status::Cancelled {
+        err_response(
+            &crate::RustraError::cancelled("invocation cancelled before dispatch").to_string(),
+            &mut out_len,
+            serialize,
+        )
+    } else {
+        unsafe { invoke_fn(bytes.as_ptr(), bytes.len(), &mut out_len) }
+    };
+    crate::cancel::complete_invocation(id);
+    if let Some(cb) = on_complete {
+        unsafe { cb(user_data_raw as *mut c_void, resp_ptr, out_len) };
+    }
+}
+
+/// `rustra_ffi_invoke` 의 디폴트 포맷 디스패치를 그대로 따르는 직렬화기 —
+/// [`run_worker`] 의 cancelled 프레임이 실제 dispatch 경로와 동일한
+/// 포맷(JSON/postcard)으로 인코딩되도록 한다. `None => Json` 기본값은
+/// `rustra_ffi_invoke` 의 디스패치와 정확히 미러링되어야 한다 (디폴트
+/// 미설정 시 두 경로가 같은 포맷을 산출).
+fn sync_serialize(resp: &FfiResponse) -> Vec<u8> {
+    match DEFAULT_FORMAT.get() {
+        Some(FfiFormat::Postcard) => postcard_serialize_response(resp),
+        Some(FfiFormat::Json) | None => json_serialize(resp),
+    }
+}
+
 // -- FFI entry points ----------------------------------------------------
 
 /// Default path — dispatches to the configured default format.
@@ -378,7 +451,7 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json(
     if payload.is_null() || out_len.is_null() {
         return std::ptr::null_mut();
     }
-    if payload_len > MAX_PAYLOAD_BYTES {
+    if payload_len > max_payload_bytes() {
         return err_response("payload exceeds size limit", out_len, json_serialize);
     }
 
@@ -413,7 +486,7 @@ pub unsafe extern "C" fn rustra_ffi_invoke_postcard(
     if payload.is_null() || out_len.is_null() {
         return std::ptr::null_mut();
     }
-    if payload_len > MAX_PAYLOAD_BYTES {
+    if payload_len > max_payload_bytes() {
         return err_response(
             "payload exceeds size limit",
             out_len,
@@ -438,10 +511,23 @@ pub unsafe extern "C" fn rustra_ffi_invoke_postcard(
 /// Runs the command dispatch on a background worker thread, then calls `on_complete`
 /// with `(user_data, response_ptr, response_len)`. The calling thread returns immediately.
 ///
+/// 호출마다 취소 레지스트리([`crate::cancel`])에 invocation_id 를 발급한다 —
+/// `invocation_id` 가 non-null 이면 그 버퍼로 복사되고, 이 ID 로
+/// [`rustra_ffi_invoke_cancel`] / [`rustra_ffi_cancellation_status`] 를 호출할 수
+/// 있다. null 포인터를 넘기면 ID 발급은 일어나지만 호출자에게 노출되지 않는다.
+///
+/// **dispatch 취소 체크포인트**: 워커가 핸들러를 실행하기 직전에 레지스트리를
+/// 조회한다. cancel 이 체크포인트보다 먼저 도달했으면 핸들러는 시작하지 않고
+/// `cancelled: ...` 에러 프레임이 `on_complete` 로 전달된다 (디폴트 포맷으로
+/// 인코딩 — postcard 등록 시 `FfiPostcardResponse` 프레임). 체크포인트 통과
+/// 후의 cancel 은 결과에 반영되지 않는다 — 핸들러는 끝까지 실행되고 정상
+/// 결과가 전달된다.
+///
 /// # Safety
 ///
 /// - `payload` must point to `payload_len` valid bytes (or null if len 0).
 /// - `on_complete` must be a thread-safe C callback function pointer.
+/// - `invocation_id` must be null or a valid u64 write pointer (out-param).
 /// - The caller must free `response_ptr` using `rustra_ffi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_ffi_invoke_async(
@@ -449,7 +535,12 @@ pub unsafe extern "C" fn rustra_ffi_invoke_async(
     payload_len: usize,
     user_data: *mut c_void,
     on_complete: Option<unsafe extern "C" fn(*mut c_void, *mut u8, usize)>,
+    invocation_id: *mut u64,
 ) {
+    let id = crate::cancel::register_invocation();
+    if !invocation_id.is_null() {
+        unsafe { *invocation_id = id };
+    }
     let user_data_raw = user_data as usize;
     let bytes = if payload.is_null() || payload_len == 0 {
         Vec::new()
@@ -458,22 +549,29 @@ pub unsafe extern "C" fn rustra_ffi_invoke_async(
     };
 
     std::thread::spawn(move || {
-        let mut out_len = 0;
-        let resp_ptr = unsafe { rustra_ffi_invoke(bytes.as_ptr(), bytes.len(), &mut out_len) };
-        if let Some(cb) = on_complete {
-            unsafe {
-                cb(user_data_raw as *mut c_void, resp_ptr, out_len);
-            }
-        }
+        run_worker(
+            id,
+            bytes,
+            user_data_raw,
+            on_complete,
+            rustra_ffi_invoke,
+            sync_serialize,
+        );
     });
 }
 
 /// Async JSON FFI invoke entry point.
 ///
+/// [`rustra_ffi_invoke_async`] 와 동일한 계약 — invocation_id 발급/노출, 취소
+/// 심볼 연동, **dispatch 취소 체크포인트**(cancel 먼저 → 핸들러 미실행,
+/// JSON `cancelled: ...` 에러 프레임이 `on_complete` 로 전달)를 포함한다.
+/// 디폴트 포맷 디스패치 대신 항상 JSON 경로로 invoke 한다.
+///
 /// # Safety
 ///
 /// - `payload` must point to `payload_len` valid bytes (or null if len 0).
 /// - `on_complete` must be a thread-safe C callback function pointer.
+/// - `invocation_id` must be null or a valid u64 write pointer (out-param).
 /// - The caller must free the response pointer in the callback using `rustra_ffi_free`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_ffi_invoke_json_async(
@@ -481,7 +579,12 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json_async(
     payload_len: usize,
     user_data: *mut c_void,
     on_complete: Option<unsafe extern "C" fn(*mut c_void, *mut u8, usize)>,
+    invocation_id: *mut u64,
 ) {
+    let id = crate::cancel::register_invocation();
+    if !invocation_id.is_null() {
+        unsafe { *invocation_id = id };
+    }
     let user_data_raw = user_data as usize;
     let bytes = if payload.is_null() || payload_len == 0 {
         Vec::new()
@@ -490,14 +593,83 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json_async(
     };
 
     std::thread::spawn(move || {
-        let mut out_len = 0;
-        let resp_ptr = unsafe { rustra_ffi_invoke_json(bytes.as_ptr(), bytes.len(), &mut out_len) };
-        if let Some(cb) = on_complete {
-            unsafe {
-                cb(user_data_raw as *mut c_void, resp_ptr, out_len);
-            }
-        }
+        run_worker(
+            id,
+            bytes,
+            user_data_raw,
+            on_complete,
+            rustra_ffi_invoke_json,
+            json_serialize,
+        );
     });
+}
+
+/// 진행 중인 async 호출을 취소한다 (협력적).
+///
+/// `Running` 상태의 호출만 취소 가능 — 이미 완료/취소된 ID는 false 반환.
+/// 취소는 플래그 전환만 하고 스레드를 강제 종료하지 않는다.
+///
+/// 취소는 dispatch 체크포인트에서만 응답에 반영된다 — cancel 이 워커의
+/// 체크포인트보다 먼저면 핸들러는 시작하지 않고 `cancelled` 에러 프레임이
+/// `on_complete` 로 전달된다. 핸들러가 이미 시작했다면 취소는 결과를 바꾸지
+/// 않는다: 실행은 끝까지 진행되고 정상 결과가 전달된다.
+///
+/// # Safety
+///
+/// 이 함수는 안전하게 호출할 수 있다(unsafe 는 `extern "C"` ABI 선언의 산물).
+/// 어떤 u64 값도 안전하다 — 알 수 없거나 이미 완료/취소된 ID 는 false 로
+/// 정규화된다.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_invoke_cancel(invocation_id: u64) -> bool {
+    crate::cancel::cancel_invocation(invocation_id)
+}
+
+/// 호출의 취소 상태 조회 (핸들러 내부 협력적 중단 폴링용).
+///
+/// 반환값: 0=Unknown(완료/미발급), 1=Running, 2=Cancelled.
+///
+/// # Safety
+///
+/// 이 함수는 안전하게 호출할 수 있다(unsafe 는 `extern "C"` ABI 선언의 산물).
+/// 어떤 u64 값도 정의된 상태 코드로 정규화된다.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_cancellation_status(invocation_id: u64) -> u32 {
+    match crate::cancel::status(invocation_id) {
+        crate::cancel::Status::Unknown => 0,
+        crate::cancel::Status::Running => 1,
+        crate::cancel::Status::Cancelled => 2,
+    }
+}
+
+/// (T3) 페이로드 크기 한도를 동적으로 변경한다. 기본 1 MiB
+/// ([`DEFAULT_MAX_PAYLOAD_BYTES`]). 축소/확대 모두 즉시 이후의
+/// `rustra_ffi_invoke_json` / `rustra_ffi_invoke_postcard` 호출에 반영된다.
+/// 비동기 변형(`rustra_ffi_invoke_async`/`_json_async`)은 호출자 스레드에서
+/// 페이로드를 먼저 복사한 뒤에야 워커에서 검사한다 — 초과 페이로드도 일단
+/// 복사되므로 일시적으로 메모리가 2배로 존재할 수 있다. 어떤 스레드든 호출할
+/// 수 있고, 동시 set 간 경합은 last-writer-wins 이다.
+///
+/// `Relaxed` — 크기 게이트는 어림잡기(sanity gate) 용도라 원자성만 필요하고
+/// 다른 메모리와의 순서 관계는 요구되지 않는다. 진행 중인 호출은 이미 읽은
+/// 이전 한도로 검사를 마친 상태일 수 있다 (한도는 새 호출부터 적용).
+///
+/// # Safety
+///
+/// 어떤 값도 안전하다 — 0 으로 설정하면 모든 페이로드가 거부된다.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_set_max_payload(bytes: usize) {
+    MAX_PAYLOAD_BYTES.store(bytes, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// (T3) 현재 페이로드 크기 한도. [`rustra_ffi_set_max_payload`] 로 설정한
+/// 값 또는 기본 1 MiB.
+///
+/// # Safety
+///
+/// 이 함수는 안전하게 호출할 수 있다(unsafe 는 `extern "C"` ABI 선언의 산물).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_get_max_payload() -> usize {
+    max_payload_bytes()
 }
 
 /// Free a buffer previously returned by one of the `rustra_ffi_invoke_*` functions.
@@ -1055,5 +1227,123 @@ mod tests {
         unsafe { rustra_ffi_event_sink_unregister() };
         pkg.emit("after", serde_json::json!({ "n": 3 }));
         assert_eq!(pkg.event_bus().take_pending_events().len(), 1);
+    }
+
+    // ── run_worker 취소 체크포인트 (경합 없는 결정적 검증) ──────
+    //
+    // FFI async 엔트리는 워커 스레드 스케줄링 경합 때문에 "cancel 먼저" 순서를
+    // 강제할 수 없다. 대신 run_worker 를 직접 호출해 레지스트리가 이미
+    // Cancelled 인 경우를 결정적으로 검증한다: invoke_fn 은 절대 실행되지
+    // 않아야 하고, on_complete 로는 cancelled 에러 프레임이 전달되어야 한다.
+
+    /// 더미 invoke_fn — 실행됐다면 플래그를 올린다 (절대 false 여야 함).
+    static WORKER_INVOKE_RAN: std::sync::atomic::AtomicBool =
+        std::sync::atomic::AtomicBool::new(false);
+
+    unsafe extern "C" fn sentinel_invoke(
+        _payload: *const u8,
+        _len: usize,
+        _out_len: *mut usize,
+    ) -> *mut u8 {
+        WORKER_INVOKE_RAN.store(true, std::sync::atomic::Ordering::SeqCst);
+        std::ptr::null_mut()
+    }
+
+    /// on_complete 로 전달된 버퍼를 Vec 으로 캡처한다. null 버퍼로 호출된
+    /// 경우에도 콜백 자체는 발생했음을 플래그로 기록한다.
+    static WORKER_FRAME: Mutex<Option<(Vec<u8>, usize)>> = Mutex::new(None);
+    static WORKER_CB_FIRED: std::sync::atomic::AtomicBool =
+        std::sync::atomic::AtomicBool::new(false);
+
+    unsafe extern "C" fn capture_frame_cb(_user: *mut c_void, ptr: *mut u8, len: usize) {
+        WORKER_CB_FIRED.store(true, std::sync::atomic::Ordering::SeqCst);
+        if ptr.is_null() {
+            return;
+        }
+        let data = unsafe { std::slice::from_raw_parts(ptr, len) }.to_vec();
+        unsafe { rustra_ffi_free(ptr, len) };
+        *WORKER_FRAME.lock().unwrap() = Some((data, len));
+    }
+
+    /// run_worker 테스트 간 상호배제 — 플래그/프레임 셀이 공유 static 이므로
+    /// 병렬 실행 시 서로의 상태를 덮어쓴다 (SINK_TEST_MUTEX 와 같은 패턴).
+    static WORKER_TEST_MUTEX: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn run_worker_pre_cancelled_skips_invoke_and_returns_cancelled_frame() {
+        let _guard = WORKER_TEST_MUTEX.lock().unwrap();
+        let id = crate::cancel::register_invocation();
+        assert!(crate::cancel::cancel_invocation(id));
+
+        WORKER_INVOKE_RAN.store(false, std::sync::atomic::Ordering::SeqCst);
+        WORKER_FRAME.lock().unwrap().take();
+
+        run_worker(
+            id,
+            Vec::new(),
+            0,
+            Some(capture_frame_cb),
+            sentinel_invoke,
+            json_serialize,
+        );
+
+        assert!(
+            !WORKER_INVOKE_RAN.load(std::sync::atomic::Ordering::SeqCst),
+            "pre-cancelled invocation must never start the handler"
+        );
+        let (frame, len) = WORKER_FRAME
+            .lock()
+            .unwrap()
+            .take()
+            .expect("on_complete must deliver the cancelled frame");
+        let resp: FfiResponse = serde_json::from_slice(&frame).unwrap();
+        assert!(!resp.ok);
+        assert_eq!(resp.result, None);
+        assert_eq!(
+            resp.error.as_deref(),
+            Some("cancelled: invocation cancelled before dispatch"),
+            "cancelled frame must carry the stable `cancelled: ` prefix"
+        );
+        assert_eq!(frame.len(), len);
+        assert_eq!(
+            crate::cancel::status(id),
+            crate::cancel::Status::Unknown,
+            "complete_invocation must clear the registry entry"
+        );
+    }
+
+    #[test]
+    fn run_worker_running_invocation_dispatches_normally() {
+        let _guard = WORKER_TEST_MUTEX.lock().unwrap();
+        let id = crate::cancel::register_invocation();
+
+        WORKER_INVOKE_RAN.store(false, std::sync::atomic::Ordering::SeqCst);
+        WORKER_FRAME.lock().unwrap().take();
+        WORKER_CB_FIRED.store(false, std::sync::atomic::Ordering::SeqCst);
+
+        run_worker(
+            id,
+            Vec::new(),
+            0,
+            Some(capture_frame_cb),
+            sentinel_invoke,
+            json_serialize,
+        );
+
+        assert!(
+            WORKER_INVOKE_RAN.load(std::sync::atomic::Ordering::SeqCst),
+            "running invocation must reach the handler"
+        );
+        // WORKER_FRAME.is_none() 만으로는 "콜백이 null 버퍼로 호출됨"과
+        // "아예 호출 안 됨"을 구분할 수 없다 — 플래그로 실제 발생을 증명한다.
+        assert!(
+            WORKER_CB_FIRED.load(std::sync::atomic::Ordering::SeqCst),
+            "sentinel returns null → on_complete must still fire (with a null buffer)"
+        );
+        assert!(
+            WORKER_FRAME.lock().unwrap().is_none(),
+            "null buffer must not be captured as a frame"
+        );
+        assert_eq!(crate::cancel::status(id), crate::cancel::Status::Unknown);
     }
 }

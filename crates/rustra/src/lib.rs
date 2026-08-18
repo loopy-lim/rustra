@@ -111,6 +111,7 @@ pub use rustra_macros::register;
 
 pub use rkyv_codec::encode_rkyv_v2_error;
 
+pub mod cancel;
 mod codegen;
 mod error;
 pub mod events;
@@ -398,6 +399,9 @@ struct RegistryState {
     /// Runtime Authority: 부여된 capability 집합. deny-by-default —
     /// `required_capability` 가 `Some` 인 명령은 이 집합에 포함될 때만 실행된다.
     granted_capabilities: BTreeSet<String>,
+    /// (T2, OTA) 스키마 협상 버전. `schema()`/`live_schema()` 와 코드젠이
+    /// 노출한다 — JS > native 인 stale 조합을 감지하는 데 쓰인다.
+    schema_version: u32,
 }
 
 impl std::fmt::Debug for Package {
@@ -415,7 +419,14 @@ pub struct PackageBuilder {
     id: String,
     commands: BTreeMap<String, Command>,
     next_command_id: u16,
+    /// (T2, OTA) `alias_command_id` 로 선언된 (명령, 구 command_id) 목록.
+    /// 선언 시점에 즉시 검증 가능한 충돌은 그 자리에서 패닉시키고,
+    /// 나머지는 `build()` 시점에 검증·병합한다.
+    id_aliases: Vec<(String, u16)>,
     event_capacity: usize,
+    /// (T2, OTA) 스키마 협상 버전 — 빌드 시점 고정값. `build()` 에서
+    /// `RegistryState.schema_version` 로 이동한다.
+    schema_version: u32,
 }
 
 /// TypeScript 코드 생성 결과입니다.
@@ -427,7 +438,7 @@ pub struct PackageBuilder {
 /// | `schema_json` | `schema.json` | 전체 명령 스키마 (JSON) |
 /// | `types_ts` | `types.ts` | TypeScript 타입 정의 |
 /// | `commands_ts` | `commands.ts` | TypeScript 명령 헬퍼 함수 |
-/// | `contract_hash` | `contract.ts` | 스키마 해시 (무결성 검증용) |
+/// | `contract_ts` | `contract.ts` | 계약 해시 + 스키마 버전 (무결성/stale 검증용) |
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GeneratedPackage {
     /// JSON으로 직렬화된 전체 패키지 스키마입니다.
@@ -438,6 +449,10 @@ pub struct GeneratedPackage {
     pub commands_ts: String,
     /// 스키마의 SHA-256 해시입니다.
     pub contract_hash: String,
+    /// `contract.ts` 전체 내용 — `GENERATED_CONTRACT_HASH` 와 (T2, OTA)
+    /// `SCHEMA_VERSION` 상수를 함께 노출한다. JS 클라이언트가 이 값을
+    /// 네이티브의 `schemaVersion` 과 비교해 JS > native stale 를 감지한다.
+    pub contract_ts: String,
 }
 
 impl GeneratedPackage {
@@ -447,20 +462,14 @@ impl GeneratedPackage {
     /// - `schema.json` — 전체 명령 스키마
     /// - `types.ts` — TypeScript 타입 정의
     /// - `commands.ts` — TypeScript 명령 헬퍼 함수
-    /// - `contract.ts` — `GENERATED_CONTRACT_HASH` 상수
+    /// - `contract.ts` — `GENERATED_CONTRACT_HASH`/`SCHEMA_VERSION` 상수
     pub fn write_to_dir(&self, output_dir: impl AsRef<Path>) -> crate::Result<()> {
         let output_dir = output_dir.as_ref();
         fs::create_dir_all(output_dir)?;
         fs::write(output_dir.join("schema.json"), &self.schema_json)?;
         fs::write(output_dir.join("types.ts"), &self.types_ts)?;
         fs::write(output_dir.join("commands.ts"), &self.commands_ts)?;
-        fs::write(
-            output_dir.join("contract.ts"),
-            format!(
-                "export const GENERATED_CONTRACT_HASH = '{}';\n",
-                self.contract_hash
-            ),
-        )?;
+        fs::write(output_dir.join("contract.ts"), &self.contract_ts)?;
         Ok(())
     }
 }
@@ -586,7 +595,9 @@ impl Package {
             id: id.into(),
             commands: BTreeMap::new(),
             next_command_id: 1,
+            id_aliases: Vec::new(),
             event_capacity: 1024,
+            schema_version: 1,
         }
     }
 
@@ -893,14 +904,16 @@ impl Package {
 
     /// 명령을 제거한다. `command_id`는 retired 되어 **재사용되지 않는다**.
     /// 이름이 없으면 `command.not_found`. 동결 상태면 `registry.frozen`.
+    /// (T2, OTA) 그 명령을 가리키던 alias id 항목도 함께 제거된다.
     pub fn unregister(&self, name: &str) -> crate::Result<()> {
         self.ensure_mutable()?;
         let mut state = self.state.write().unwrap();
-        let removed = state
-            .commands
-            .remove(name)
-            .ok_or_else(|| RustraError::command_not_found(name))?;
-        state.id_to_name.remove(&removed.command_id);
+        if state.commands.remove(name).is_none() {
+            return Err(RustraError::command_not_found(name));
+        }
+        // 실제 id 와 그 명령을 가리키던 alias id 를 모두 정리 — alias 만
+        // 남으면 stale 라우팅 항목이 된다.
+        state.id_to_name.retain(|_, target| target != name);
         // NOTE: next_command_id는 감소시키지 않는다 — retired id는 영원히 재사용 금지.
         Ok(())
     }
@@ -923,6 +936,11 @@ impl Package {
         let commands_ts = Self::generate_commands_ts(&state);
 
         Ok(GeneratedPackage {
+            contract_ts: format!(
+                "export const GENERATED_CONTRACT_HASH = '{contract_hash}';\n\
+                 export const SCHEMA_VERSION = {};\n",
+                state.schema_version
+            ),
             schema_json,
             types_ts,
             commands_ts,
@@ -959,6 +977,7 @@ impl Package {
 
         json!({
             "packageId": id,
+            "schemaVersion": state.schema_version,
             "commands": commands,
         })
     }
@@ -1093,26 +1112,151 @@ impl PackageBuilder {
         self
     }
 
+    /// (T2, OTA) 구 클라이언트의 command_id 를 현재 명령에 alias 로 수용한다.
+    ///
+    /// JS 번들만 OTA 갱신되는 배포에서 **구 JS + 신 네이티브** 조합이 발생한다.
+    /// rkyv V2 와이어에는 command_id 만 있으므로(이름 없음), 신 네이티브가
+    /// 구 코드젠이 구운 id 를 alias 로 수용하는 것이 호환을 유지하는 유일한
+    /// 경로다. alias 는 **부가적 라우팅 항목**이다 — 대상 명령의 실제
+    /// command_id(신 클라이언트 코드젠이 굽는 값)는 그대로 두고, 구 id 가
+    /// `id_to_name` 에서 같은 명령을 가리키게 한다.
+    ///
+    /// 대상 명령은 이 호출 시점에 등록되어 있어도 되고, 이후 `.command()` 로
+    /// 등록될 예정이어도 된다(선언 순서 자유). 검증은 두 시점에 나뉜다:
+    ///
+    /// **선언 시점 즉시 패닉** — (a) 같은 alias id 를 다른 명령에 이미
+    /// 선언함, (b) 같은 명령에 같은 alias id 를 중복 선언함(단순 유지를 위해
+    /// 전부 거부), (c) 대상 명령이 이미 등록된 상태에서 그 id 가 **다른
+    /// 등록된 명령의 실제 command_id** 인 경우 — 이 마지막은 조용한
+    /// 섀도잉(구 id 가 엉뚱한 명령에 디스패치)이므로 그 자리에서 거부한다.
+    ///
+    /// **`build()` 시점 패닉** — (d) 대상 명령이 끝내 등록되지 않음.
+    ///
+    /// 대상이 아직 등록되지 않은 전방 선언에서 그 id 를 다른 명령이 점유하게
+    /// 되면(스키마 성장으로 id 가 밀린 OTA 시나리오), `build()` 가 점유
+    /// 명령을 fresh id 로 밀어내고 구 id 를 alias 항목으로 채운다 — 점유
+    /// 명령은 신 규칙(삽입)이므로 아무도 그 id 를 알지 못하고, 이동이 안전하다.
+    ///
+    /// 선언 순서 관례: 성장 시나리오(신규 명령 삽입)에서는 alias 를 command
+    /// 등록보다 먼저 선언한다 — 이후 선언 시 선언 시점 검증이 즉시 패닉한다.
+    pub fn alias_command_id(mut self, command: &str, legacy_id: u16) -> Self {
+        for (existing_cmd, existing_id) in &self.id_aliases {
+            if *existing_id != legacy_id {
+                continue;
+            }
+            if existing_cmd != command {
+                panic!(
+                    "alias_command_id: legacy id {legacy_id} is already aliased to \
+                     '{existing_cmd}'; cannot also alias it to '{command}'"
+                );
+            }
+            panic!("alias_command_id: duplicate alias id {legacy_id} for command '{command}'");
+        }
+        // 대상이 이미 등록된 상태라면, legacy_id 가 다른 등록된 명령의 실제
+        // command_id 인지 지금 확인할 수 있다 — 확인 가능한 충돌은 조기 패닉.
+        if self.commands.contains_key(command)
+            && let Some((occupant, _)) = self
+                .commands
+                .iter()
+                .find(|(_, cmd)| cmd.command_id == legacy_id)
+            && occupant.as_str() != command
+        {
+            panic!(
+                "alias_command_id: legacy id {legacy_id} is the real command_id of \
+                 '{occupant}'; aliasing it to '{command}' would shadow '{occupant}'"
+            );
+        }
+        self.id_aliases.push((command.to_string(), legacy_id));
+        self
+    }
+
     /// 이벤트 버스 큐의 최대 수용량을 설정합니다 (기본값: 1024).
     pub fn event_capacity(mut self, capacity: usize) -> Self {
         self.event_capacity = capacity.max(1);
         self
     }
 
+    /// (T2, OTA) 스키마 버전 — 구 JS 클라이언트의 stale 감지에 사용된다.
+    /// 코드젠이 SCHEMA_VERSION 으로 노출하고, 엔진이 live schema 의 버전과
+    /// 비교해 JS > native 인 경우 경고한다. 기본 1.
+    pub fn schema_version(mut self, version: u32) -> Self {
+        self.schema_version = version;
+        self
+    }
+
     /// 등록된 모든 명령을 불변 [`Package`]로 빌드합니다.
     pub fn build(self) -> Package {
-        let id_to_name: BTreeMap<u16, String> = self
-            .commands
-            .iter()
-            .map(|(name, cmd)| (cmd.command_id, name.clone()))
-            .collect();
+        let mut commands = self.commands;
+        let mut next_command_id = self.next_command_id;
+
+        // ── (T2, OTA) alias 병합 ────────────────────────────
+        // alias 는 id_to_name 의 부가 라우팅 항목이다 — 대상 명령의 실제
+        // command_id 는 그대로다. 대상 미등록은 패닉(선언 시점 검증은
+        // alias_command_id 참조). 전방 선언된 alias 의 구 id 를 다른 명령이
+        // 실제 id 로 점유 중이면(스키마 성장 시나리오) 점유 명령을 fresh id 로
+        // 이동시킨다 — 조용한 섀도잉은 엉뚱한 명령 실행 버그이므로.
+        let mut alias_id_to_name: BTreeMap<u16, String> = BTreeMap::new();
+        for (command, legacy_id) in &self.id_aliases {
+            if !commands.contains_key(command) {
+                panic!(
+                    "alias_command_id: target command '{command}' is not registered \
+                     (aliases: {:#?})",
+                    self.id_aliases
+                );
+            }
+            alias_id_to_name.insert(*legacy_id, command.clone());
+        }
+        // fresh id 와 런타임 register 모두가 alias id 를 할당해 조용히 덮어쓰지
+        // 못하게 next_command_id 를 **모든** alias id 너머로 먼저 밀어둔다.
+        // 이 순서가 핵심이다: alias id 는 구 스키마 기준이라 현재 명령 수보다
+        // 클 수 있다(구 명령이 제거된 경우) — displacement 의 fresh id 를
+        // alias 병합 이후의 next_command_id 로 할당하면 이미 병합된 alias 항목
+        // 위에 정확히 덜어져 silent misrouting 이 된다(리뷰 지적 회귀).
+        if let Some(&max_alias) = alias_id_to_name.keys().next_back() {
+            // u16::MAX 는 exhausted sentinel — alias 가 그 근처면 이후
+            // 런타임 register 는 기존처럼 registry.id_exhausted 로 거부된다.
+            next_command_id = next_command_id.max(max_alias.saturating_add(1));
+        }
+        for (command, legacy_id) in &self.id_aliases {
+            // 점유 충돌 해소: legacy_id 가 다른 명령의 실제 id 면 그 명령을
+            // fresh id 로 이동. 선언 시점에 등록돼 있던 충돌은 alias_command_id
+            // 가 이미 패닉시켰으므로, 여기 오는 전방 선언 케이스만 남는다.
+            if let Some((occupant, _)) = commands
+                .iter()
+                .find(|(name, cmd)| cmd.command_id == *legacy_id && name.as_str() != command)
+            {
+                let occupant = occupant.clone();
+                let fresh = next_command_id;
+                next_command_id += 1;
+                commands
+                    .get_mut(&occupant)
+                    .expect("occupant verified above")
+                    .command_id = fresh;
+            }
+        }
+
+        let mut id_to_name: BTreeMap<u16, String> = alias_id_to_name;
+        for (name, cmd) in &commands {
+            id_to_name.insert(cmd.command_id, name.clone());
+        }
+        // (T2 리뷰) tripwire: 최종 병합 뒤 모든 alias 가 자기 명령을 가리키는지
+        // 확인한다. displacement/next_command_id 순서가 다시 깨지면(alias 항목을
+        // 실제 id 삽입이 덮어쓰거나 fresh id 가 alias 와 겹치면) 여기서 즉시
+        // 잡힌다 — 조용한 misrouting 을 빌드 시점 국소 실패로 바꾼다.
+        debug_assert!(
+            self.id_aliases.iter().all(|(command, legacy_id)| {
+                id_to_name.get(legacy_id).is_some_and(|n| n == command)
+            }),
+            "alias merge invariant broken: some legacy id does not resolve to its command"
+        );
         Package {
             id: self.id,
             state: Arc::new(RwLock::new(RegistryState {
-                commands: self.commands,
+                commands,
                 id_to_name,
-                next_command_id: self.next_command_id,
+                next_command_id,
                 granted_capabilities: BTreeSet::new(),
+                schema_version: self.schema_version,
             })),
             frozen: Arc::new(AtomicBool::new(!cfg!(debug_assertions))),
             events: Arc::new(events::EventState::with_capacity(self.event_capacity)),

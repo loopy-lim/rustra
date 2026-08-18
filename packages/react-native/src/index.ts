@@ -5,10 +5,16 @@
  * 설정은 `@rustra/types`의 configure()를 사용합니다.
  */
 
-import type { EngineClient as EngineClientType, RustraNative } from '@rustra/types';
-import { createRkyvV2Engine, parseRustraErrorString } from '@rustra/types';
+import type { EngineClient as EngineClientType, InvokeOptions, RustraNative } from '@rustra/types';
+import { createRkyvV2Engine, parseRustraErrorString, RustraCommandError } from '@rustra/types';
 
-export type { EngineClient, RustraError, RkyvV2Codec, RkyvV2Native } from '@rustra/types';
+export type {
+  EngineClient,
+  InvokeOptions,
+  RustraError,
+  RkyvV2Codec,
+  RkyvV2Native,
+} from '@rustra/types';
 export {
   RustraCommandError,
   configure,
@@ -151,17 +157,52 @@ export type RustraJSIAsyncNative = RustraJSINative & {
 };
 
 /**
+ * 얕은 취소 (T1) — 네이티브 전파가 불가능한 async 엔진 경로. JS 프라미스만
+ * 즉시 거부하고 네이티브 콜백의 늦은 resolve/reject 는 무시한다.
+ * `@rustra/types` 의 raceAbort 와 동일 계약의 로컬 헬퍼 — RN 패키지의 공개
+ * API 면을 늘리지 않기 위해 내부에서만 사용한다.
+ */
+function raceAbortShallow<T>(
+  promise: Promise<T>,
+  signal: AbortSignal,
+  command: string,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () =>
+      reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (v) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(v);
+      },
+      (e) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(e);
+      },
+    );
+  });
+}
+
+/**
  * 비동기 invoke — 무거운 Rust 연산을 JS 스레드에서 오프로드한다.
  *
  * - 네이티브 `invokeTypedAsync` 가 있으면: 즉시 반환, 결과는 JS 콜백 큐로 전달.
  * - 없으면: 동기 fast path(`createFastEngine`)로 폴백 — 마이크로태스크로 래핑해
  *   API 계약(`Promise<T>`)은 항상 동일하게 유지.
+ * - `options.signal` (T1): abort 시 `cancelled` 로 즉시 거부. 이 엔진의
+ *   취소는 **얕은 취소**다 — Rust 핸들러는 끝까지 실행되고 늦은 네이티브
+ *   콜백은 무시된다. 폴백(동기 엔진) 경로는 기존 T1 배선을 따른다.
  *
  * @example
  * ```ts
  * import { createAsyncEngine } from '@rustra/react-native';
  * const engine = createAsyncEngine(getRustraNative(), { rkyvV2Codecs: registry });
  * const result = await engine.invoke('heavyCompute', { n: 1_000_000 });
+ * // 취소 (T1):
+ * const ac = new AbortController();
+ * engine.invoke('heavyCompute', { n: 1 }, { signal: ac.signal });
+ * ac.abort();
  * ```
  */
 export function createAsyncEngine(
@@ -172,21 +213,49 @@ export function createAsyncEngine(
 
   if (typeof native.invokeTypedAsync !== 'function') {
     // 폴백: 동기 엔진 재사용 (Promise 는 sync 엔진이 이미 반환).
+    // 동기 엔진(T1) 이 signal 옵션을 이미 처리하므로 여기서 추가 작업 없음.
     return syncEngine;
   }
 
   const invokeTypedAsync = native.invokeTypedAsync.bind(native);
 
   return {
-    invoke<T>(command: string, args?: unknown): Promise<T> {
-      return new Promise<T>((resolve, reject) => {
-        invokeTypedAsync(
-          command,
-          args,
-          (result) => resolve(result as T),
-          (message) => reject(parseRustraErrorString(message)),
+    invoke<T>(command: string, args?: unknown, invokeOptions?: InvokeOptions): Promise<T> {
+      const signal = invokeOptions?.signal;
+      if (signal?.aborted) {
+        // 사전 중단 — 네이티브를 호출하지 않고 즉시 거부한다.
+        return Promise.reject(
+          new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
         );
-      });
+      }
+      if (!signal) {
+        return new Promise<T>((resolve, reject) => {
+          invokeTypedAsync(
+            command,
+            args,
+            (result) => resolve(result as T),
+            (message) => reject(parseRustraErrorString(message)),
+          );
+        });
+      }
+      // 얕은 취소만 가능하다 — RN JSI `invokeTypedAsync` C++ 시그니처가
+      // invocation id 를 노출하지 않아 취소를 전파할 핸들이 없다. Rust 측
+      // 취소 체크포인트(워커 dispatch 전)까지 전파하려면 네이티브가
+      // `rustra_ffi_invoke_async`(invocation_id out-param) +
+      // `rustra_ffi_invoke_cancel` 을 JSI 로 노출해야 한다 — 그때 이 경로를
+      // 전파형으로 교체한다 (설계 노트: 전파는 JS 코덱 경로만).
+      return raceAbortShallow(
+        new Promise<T>((resolve, reject) => {
+          invokeTypedAsync(
+            command,
+            args,
+            (result) => resolve(result as T),
+            (message) => reject(parseRustraErrorString(message)),
+          );
+        }),
+        signal,
+        command,
+      );
     },
   };
 }
