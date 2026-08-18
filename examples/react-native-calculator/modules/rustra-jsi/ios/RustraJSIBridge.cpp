@@ -27,6 +27,7 @@ namespace rc = rustra::codec;
 /// RN reload 로 Runtime 이 교체되면 installRustraJSIWithInvoker 가
 /// 재호출되므로 그 시점에 reset 한다 — 구 Runtime 소유 핸들이
 /// dangling 되지 않게 (아래 Install 절).
+/// 스레드 계약: JS 스레드에서만 접근 — host 함수와 install 모두 JS 스레드에서 실행.
 static std::optional<Function> g_arrayBufferCtor;
 
 static Function& arrayBufferCtor(Runtime& rt) {
@@ -432,6 +433,68 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         return result;
       });
     cache_["invokeTyped"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+
+  // ── P0-3: invokeTypedById(cmdId, args) — id 인덱싱 typed 진입 ──
+  // invokeTyped 와 동일한 흐름(encode→FFI→decode)이지만 문자열 마샬링과
+  // C++ 이름 비교체인 대신 u16 cmd_id switch 디스패치를 쓴다. JS 엔진은
+  // 정적 명령 집합을 엔진 생애 1회 스윕(hasStaticCodec)으로 캐시해 이 진입으로
+  // 호출한다 — JSI 횡단 2→1, 문자열 2→0. 미발견 cmd_id 는 encode_by_id 가
+  // false 를 반환해 JSError 로 명시 실패한다(호출侧 캐시 불변식 위반 노출).
+  {
+    auto propNameId = PropNameID::forAscii(rt, "invokeTypedById");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 2,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 2) {
+          throw JSError(rt, "RustraJSI: invokeTypedById requires (cmdId, args)");
+        }
+        uint16_t cmdId = static_cast<uint16_t>(args[0].asNumber());
+
+        // 1) JS 객체 → postcard 요청 바이트 ([cmd_id u16 LE][postcard(I)])
+        rc::Writer w;
+        if (!gen::encode_by_id(rt, cmdId, args[1], w)) {
+          throw JSError(rt, "RustraJSI: no C++ codec for cmd_id " + std::to_string(cmdId));
+        }
+        auto req = w.take();
+
+        // 2) Rust FFI (rkyv V2 단일 엔진). 응답: [ok][pad 7][postcard(O) @8]
+        size_t out_len = 0;
+        uint8_t* resp = rustra_calculator_invoke_rkyv_v2(req.data(), req.size(), &out_len);
+        if (!resp) {
+          throw JSError(rt, "RustraJSI: invokeRkyvV2 returned null");
+        }
+
+        // 3) 응답 헤더 분기. ok=1 → postcard 바디 디코딩, ok=0 → 에러 메시지.
+        // calculator 심볼의 버퍼는 rustra_calculator_free_buffer 로 해제한다
+        // (invokeTyped 의 free 짝 계약과 동일 — magic 헤더 없는 Box<[u8]>).
+        if (out_len < 1) {
+          rustra_calculator_free_buffer(resp, out_len);
+          throw JSError(rt, "RustraJSI: empty rkyv v2 response");
+        }
+        if (resp[0] == 0) {
+          // 에러 와이어: [ok:0][pad to @8][err_len u16 LE @8][err @10]
+          if (out_len < 10) {
+            rustra_calculator_free_buffer(resp, out_len);
+            throw JSError(rt, "RustraJSI: malformed error response");
+          }
+          std::string errStr = parseRkyvV2ErrorBody(resp, out_len);
+          rustra_calculator_free_buffer(resp, out_len);
+          throw JSError(rt, errStr);
+        }
+
+        // 성공: postcard(O) @8 부터 디코딩.
+        if (out_len < 8) {
+          rustra_calculator_free_buffer(resp, out_len);
+          throw JSError(rt, "RustraJSI: malformed success response");
+        }
+        rc::Reader r(resp + 8, out_len - 8);
+        Value result = gen::decode_by_id(rt, cmdId, r);
+        rustra_calculator_free_buffer(resp, out_len);
+        return result;
+      });
+    cache_["invokeTypedById"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
 

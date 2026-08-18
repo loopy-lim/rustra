@@ -15,6 +15,12 @@ export type RustraNative = {
   /** B1 (RN JSI): 정적 명령 전용 C++ postcard fast path. */
   hasStaticCodec?(name: string): boolean;
   invokeTyped?(name: string, args: unknown): unknown;
+  /**
+   * (P0-3) cmd_id 진입 typed fast path — invokeTyped 의 u16 디스패치 변형.
+   * 문자열 마샬링과 C++ 이름 비교체인을 제거한다 (JSI 횡단 2→1).
+   * 미노출 구 브릿지는 invokeTyped 로 폴백한다.
+   */
+  invokeTypedById?(cmdId: number, args: unknown): unknown;
   /** P0-2: 정적 명령 N 개를 단일 JSI 횡단으로 일괄 처리. */
   invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
   /**
