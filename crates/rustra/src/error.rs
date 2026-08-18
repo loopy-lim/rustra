@@ -19,6 +19,7 @@ pub type Result<T> = std::result::Result<T, RustraError>;
 /// | `command.not_found` | [`command_not_found`] | 등록되지 않은 명령 호출 |
 /// | `command.invalid_args` | [`invalid_args`] | 입력 인자 역직렬화 실패 |
 /// | `capability.denied` | [`capability_denied`] | 필요 capability 미부여 (deny-by-default) |
+/// | `payload.too_large` | [`payload_too_large`] | 페이로드가 동적 크기 한도 초과 |
 /// | `internal` | [`internal`] | 내부 오류 (직렬화, I/O 등) |
 /// | `cancelled` | [`cancelled`] | 호출 취소 (AbortSignal 등) |
 /// | (커스텀) | [`custom`] | 사용자 정의 에러 |
@@ -26,6 +27,7 @@ pub type Result<T> = std::result::Result<T, RustraError>;
 /// [`command_not_found`]: RustraError::command_not_found
 /// [`invalid_args`]: RustraError::invalid_args
 /// [`capability_denied`]: RustraError::capability_denied
+/// [`payload_too_large`]: RustraError::payload_too_large
 /// [`internal`]: RustraError::internal
 /// [`cancelled`]: RustraError::cancelled
 /// [`custom`]: RustraError::custom
@@ -90,6 +92,18 @@ impl RustraError {
         Self {
             code: "capability.denied",
             message: detail.to_string(),
+            retryable: false,
+        }
+    }
+
+    /// 페이로드가 동적 크기 한도(`rustra_ffi_set_max_payload`, 기본 1 MiB)를
+    /// 초과함. JS 사전 검사(`maxPayloadBytes` 엔진 옵션)와 동일한 코드를 쓴다 —
+    /// 경로(typed/JS 코덱/FFI)와 무관하게 같은 원인은 같은 코드로 돌아온다.
+    /// Code: `payload.too_large`. Non-retryable (결정론적 클라이언트 조건).
+    pub fn payload_too_large(len: usize, limit: usize) -> Self {
+        Self {
+            code: "payload.too_large",
+            message: format!("payload {len}B exceeds max payload {limit}B"),
             retryable: false,
         }
     }
@@ -169,6 +183,21 @@ mod cancelled_tests {
         assert!(
             e.is_retryable(),
             "cancelled means the caller gave up on this attempt, not the operation"
+        );
+    }
+
+    #[test]
+    fn payload_too_large_is_non_retryable_with_bytes_context() {
+        let e = RustraError::payload_too_large(1_048_577, 1_048_576);
+        assert_eq!(e.code(), "payload.too_large");
+        // 메시지에 실제/한도 바이트가 모두 실린다 — JS 사전 검사 에러와 동일 형태.
+        assert_eq!(e.message(), "payload 1048577B exceeds max payload 1048576B");
+        assert!(!e.is_retryable(), "deterministic client condition");
+        // Display 는 "code: message" — JS parseRustraErrorString 가 코드 토큰을
+        // 복원하는 형태.
+        assert_eq!(
+            e.to_string(),
+            "payload.too_large: payload 1048577B exceeds max payload 1048576B"
         );
     }
 }

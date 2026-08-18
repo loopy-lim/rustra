@@ -10,6 +10,7 @@
 import type {
   EngineClient as EngineClientType,
   RkyvV2Codec,
+  RkyvV2EngineOptions,
   RkyvV2SchemaNative,
 } from '@rustra/types';
 import { createRkyvV2Engine, parseRustraErrorString } from '@rustra/types';
@@ -50,15 +51,13 @@ export type RustraLynxJsonNative = {
 
 /**
  * 고속 엔진 생성 옵션. rkyv V2 바이너리 경로를 필수로 사용한다 (최고 성능).
+ * 나머지 필드는 core `RkyvV2EngineOptions` 를 그대로 전달한다 — contractHash
+ * 검증(F5), onContractMismatch/schemaVersion/onSchemaStale(OTA, T2),
+ * maxPayloadBytes(T3).
  */
 export type FastEngineOptions = {
   rkyvV2Codecs: Map<string, RkyvV2Codec<unknown, unknown>>;
-  /**
-   * (F5, opt-in) 빌드 시점 계약 해시. 설정하면 엔진 생성 시 네이티브의
-   * 실시간 해시(getContractHash)와 비교해 불일치 시 즉시 throw 한다.
-   */
-  contractHash?: string;
-};
+} & RkyvV2EngineOptions;
 
 /**
  * 고속 엔진 — Lynx Native Module의 `invokeRkyvV2`로 rkyv V2 바이너리 fast-path를 탄다.
@@ -78,9 +77,16 @@ export function createFastEngine(
   native: RustraLynxNative,
   options: FastEngineOptions,
 ): EngineClientType {
-  return createRkyvV2Engine(native, options.rkyvV2Codecs, {
+  // 명시 나열 + satisfies — core 에 옵션이 추가되면 이 객체 리터럴이 누락
+  // 필드/오타를 타입 에러로 드러낸다 (수작업 필터링 누수 방지).
+  const engineOptions = {
     contractHash: options.contractHash,
-  });
+    onContractMismatch: options.onContractMismatch,
+    schemaVersion: options.schemaVersion,
+    onSchemaStale: options.onSchemaStale,
+    maxPayloadBytes: options.maxPayloadBytes,
+  } satisfies RkyvV2EngineOptions;
+  return createRkyvV2Engine(native, options.rkyvV2Codecs, engineOptions);
 }
 
 // ── JSON 폴백 엔진 (옵션) ──────────────────────────────────

@@ -171,3 +171,64 @@ test('F3: createLynxEngine native throw is caught by .catch() (Promise<T> honore
     'F3: async invoke converts sync throw to rejected Promise — .catch() must catch it',
   );
 });
+
+// ── FastEngineOptions → core 옵션 전달 (follow-up 2) ───────
+// 어댑터는 "전달됐는지"만 검증 — core 동작 상세는 @rustra/types 에서 이미 검증됨.
+
+const optionsEncoder = new TextEncoder();
+
+test('createFastEngine forwards maxPayloadBytes to the core pre-check', async () => {
+  // maxPayloadBytes: 8 → 인코딩 후 8B 초과면 payload.too_large 로 네이티브 호출 없이 reject.
+  const native: RkyvV2SchemaNative = {
+    invokeRkyvV2: () => {
+      throw new Error('native must not be called for an over-limit payload');
+    },
+  };
+  const codec: RkyvV2Codec<unknown, unknown> = {
+    commandId: 1,
+    encode: () => new ArrayBuffer(16), // 16B > 8B limit
+    decode: () => ({ ok: true, result: {} }),
+  };
+  const engine = createFastEngine(native, {
+    rkyvV2Codecs: new Map([['big', codec]]),
+    maxPayloadBytes: 8,
+  });
+  await assert.rejects(
+    engine.invoke('big', {}),
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'payload.too_large',
+  );
+});
+
+test('createFastEngine forwards schemaVersion/onSchemaStale (stale warning path)', () => {
+  const stale: unknown[] = [];
+  const native: RkyvV2SchemaNative = {
+    invokeRkyvV2: () => new ArrayBuffer(8),
+    getSchema: () =>
+      optionsEncoder.encode(JSON.stringify({ schemaVersion: 1, commands: [] }))
+        .buffer as ArrayBuffer,
+  };
+  const engine = createFastEngine(native, {
+    rkyvV2Codecs: new Map(),
+    schemaVersion: 4,
+    onSchemaStale: (info) => stale.push(info),
+  });
+  assert.ok(engine, 'engine is created');
+  assert.deepEqual(stale, [{ nativeVersion: 1, jsVersion: 4 }]);
+});
+
+test('createFastEngine forwards onContractMismatch (degraded mode entry)', () => {
+  const mismatches: unknown[] = [];
+  const native: RkyvV2SchemaNative = {
+    invokeRkyvV2: () => new ArrayBuffer(0),
+    getContractHash: () => optionsEncoder.encode('native-hash-AAAA').buffer as ArrayBuffer,
+  };
+  const engine = createFastEngine(native, {
+    rkyvV2Codecs: new Map(),
+    contractHash: 'different-hash-BBBB',
+    onContractMismatch: (info) => mismatches.push(info),
+  });
+  assert.ok(engine, 'degraded mode — engine is created instead of throwing');
+  assert.deepEqual(mismatches, [
+    { nativeHash: 'native-hash-AAAA', expectedHash: 'different-hash-BBBB' },
+  ]);
+});

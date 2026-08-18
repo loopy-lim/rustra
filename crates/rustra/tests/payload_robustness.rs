@@ -17,9 +17,14 @@
 //! 3. (T3) 동적 페이로드 한도 — `rustra_ffi_set/get_max_payload`:
 //!    - 기본값 1 MiB pin + set/get round-trip
 //!    - 상향 → 기존에 거부되던 크기가 승인 (한도 에러 아닌 정상 파이프라인)
-//!    - 하향(1024) → "payload exceeds size limit" 으로 거부
+//!    - 하향(1024) → `payload.too_large` 로 거부 (코드 통일, T3 후속)
 //!    - 한도 변경 테스트는 전부 [`LIMIT_MUTEX`] 로 직렬화 + guard drop 에서
 //!      1 MiB 원복 — 위 (2) 의 1 MiB 가정 테스트와의 병렬 경합을 없앤다.
+//!
+//! 4. (T3 후속) rkyv V2 경로 크기 게이트 — `Package::invoke_rkyv_v2`:
+//!    - over-limit → `payload.too_large` 코드 + 바이트 컨텍스트
+//!    - 한도 하향이 V2 경로에도 즉시 반영
+//!    - ==limit → 게이트 통과 (정상 파이프라인에서 실패)
 
 #![allow(clippy::float_cmp)]
 
@@ -202,9 +207,14 @@ fn ffi_payload_over_limit_is_rejected_with_size_message() {
     let (ok, err) = unsafe { ffi_invoke_json(&payload) };
     assert!(!ok, "over-limit payload must return ok=false");
     let err = err.expect("over-limit payload must carry an error message");
+    // (T3 후속) 코드 통일 — "payload.too_large: payload NB exceeds max payload LB".
     assert!(
-        err.to_lowercase().contains("size limit"),
-        "over-limit error should mention the size limit, got: {err}"
+        err.starts_with("payload.too_large: "),
+        "over-limit error must carry the payload.too_large code prefix, got: {err}"
+    );
+    assert!(
+        err.contains("exceeds max payload"),
+        "over-limit error should mention the limit context, got: {err}"
     );
 }
 
@@ -323,6 +333,91 @@ fn lowered_limit_rejects_with_size_error() {
     );
     let resp = unsafe { std::slice::from_raw_parts(ptr, out_len) };
     let text = String::from_utf8_lossy(resp);
-    assert!(text.contains("payload exceeds size limit"));
+    // (T3 후속) 코드 통일 — 평문 대신 payload.too_large 코드 프리픽스.
+    assert!(text.contains("payload.too_large"));
+    assert!(text.contains("exceeds max payload"));
     unsafe { rustra_ffi_free(ptr, out_len) };
+}
+
+// ── (T3 후속) rkyv V2 경로 크기 게이트 ───────────────────────
+
+/// V2 게이트 테스트 공용 — `robustness_package()` 의 `add` 명령(cmd_id 조회).
+/// 바디는 0xff 로 채운다 — continuation 비트가 켜진 varint 라 postcard 디코드가
+/// 반드시 실패한다 (게이트 통과 후 "정상 파이프라인 실패" 를 만드는 용도).
+fn v2_request(id: u16, body_len: usize) -> Vec<u8> {
+    let mut req = vec![0xffu8; 2 + body_len];
+    req[0..2].copy_from_slice(&id.to_le_bytes());
+    req
+}
+
+#[test]
+fn invoke_rkyv_v2_over_limit_returns_payload_too_large_code() {
+    let _guard = limit_guard();
+    let pkg = robustness_package();
+    let id = common::command_id_of(&pkg, "add");
+    // 기본 1 MiB + 1 바이트 — V2 게이트가 디스패치 전에 거부해야 한다.
+    let req = v2_request(id, 1024 * 1024 - 1);
+    let err = pkg
+        .invoke_rkyv_v2(&req)
+        .expect_err("over-limit V2 payload must error");
+    assert_eq!(err.code(), "payload.too_large");
+    assert_eq!(
+        err.message(),
+        format!(
+            "payload {}B exceeds max payload {}B",
+            req.len(),
+            1024 * 1024
+        )
+    );
+    // rkyv V2 에러 와이어로 인코딩해도 코드가 살아남는다 — JS codec 이 복원하는 형태.
+    let frame = rustra::encode_rkyv_v2_error(&err);
+    assert_eq!(frame[0], 0, "error frame ok flag must be 0");
+}
+
+#[test]
+fn invoke_rkyv_v2_lowered_limit_applies_immediately() {
+    let _guard = limit_guard();
+    let pkg = robustness_package();
+    let id = common::command_id_of(&pkg, "add");
+    unsafe { rustra_ffi_set_max_payload(1024) };
+    // 2048바이트 — 기본 한도에서는 postcard decode 단계까지 갈 크기. 하향
+    // 후에는 V2 게이트가 먼저 거부한다.
+    let req = v2_request(id, 2048);
+    let err = pkg
+        .invoke_rkyv_v2(&req)
+        .expect_err("lowered limit must reject");
+    assert_eq!(
+        err.code(),
+        "payload.too_large",
+        "V2 gate must reflect the dynamic limit immediately"
+    );
+    // 상향하면 같은 크기가 게이트를 통과하고 정상 파이프라인(postcard decode
+    // 실패)으로 간다 — 게이트가 아니라 디코더에서 실패한 것이다.
+    unsafe { rustra_ffi_set_max_payload(4096) };
+    let err2 = pkg
+        .invoke_rkyv_v2(&req)
+        .expect_err("garbage body must still error");
+    assert_ne!(
+        err2.code(),
+        "payload.too_large",
+        "within raised limit the failure must come from the decode pipeline, got: {err2}"
+    );
+}
+
+#[test]
+fn invoke_rkyv_v2_at_limit_passes_gate_into_pipeline() {
+    let _guard = limit_guard();
+    let pkg = robustness_package();
+    let id = common::command_id_of(&pkg, "add");
+    // ==limit — `>` 검사를 통과한다. 본체는 쓰레기 postcard(0xff) 이므로 정상
+    // 파이프라인에서 invalid_args 로 실패한다 (게이트가 아닌 디코더 실패).
+    let req = v2_request(id, 1024 * 1024 - 2);
+    let err = pkg
+        .invoke_rkyv_v2(&req)
+        .expect_err("at-limit garbage body must fail in the pipeline");
+    assert_ne!(
+        err.code(),
+        "payload.too_large",
+        "at-limit payload must not hit the gate, got: {err}"
+    );
 }

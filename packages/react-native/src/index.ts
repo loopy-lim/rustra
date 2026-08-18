@@ -5,7 +5,12 @@
  * 설정은 `@rustra/types`의 configure()를 사용합니다.
  */
 
-import type { EngineClient as EngineClientType, InvokeOptions, RustraNative } from '@rustra/types';
+import type {
+  EngineClient as EngineClientType,
+  InvokeOptions,
+  RkyvV2EngineOptions,
+  RustraNative,
+} from '@rustra/types';
 import { createRkyvV2Engine, parseRustraErrorString, RustraCommandError } from '@rustra/types';
 
 export type {
@@ -28,6 +33,12 @@ export type RustraJSINative = {
   invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
   /** B1 fast path: JSI 가 노출하는 정적 명령 C++ postcard 코덱. */
   getSchema?(): ArrayBuffer;
+  /**
+   * (F5) 네이티브 빌드의 계약 해시(SHA-256 hex) — `contractHash` 엔진 옵션이
+   * 설정된 경우에만 호출된다. core `RkyvV2SchemaNative.getContractHash` 와
+   * 동일 계약 (Lynx 어댑터는 core 타입 상속으로 이미 노출).
+   */
+  getContractHash?(): ArrayBuffer;
   hasStaticCodec?(name: string): boolean;
   invokeTyped?(name: string, args: unknown): unknown;
   invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
@@ -76,16 +87,13 @@ export type SyncEngineClient = {
 /**
  * 고속 엔진 생성 옵션.
  *
- * rkyv V2 바이너리 경로를 필수로 사용합니다 (최고 성능).
+ * rkyv V2 바이너리 경로를 필수로 사용합니다 (최고 성능). 나머지 필드는 core
+ * `RkyvV2EngineOptions` 를 그대로 전달한다 — contractHash 검증(F5),
+ * onContractMismatch/schemaVersion/onSchemaStale(OTA, T2), maxPayloadBytes(T3).
  */
 export type FastEngineOptions = {
   rkyvV2Codecs: Map<string, import('@rustra/types').RkyvV2Codec<unknown, unknown>>;
-  /**
-   * (F5, opt-in) 빌드 시점 계약 해시. 설정하면 엔진 생성 시 네이티브의
-   * 실시간 해시(getContractHash)와 비교해 불일치 시 즉시 throw 한다.
-   */
-  contractHash?: string;
-};
+} & RkyvV2EngineOptions;
 
 /**
  * 고속 엔진 — JSI 동기 호출로 Promise 오버헤드 없이 결과를 반환합니다.
@@ -129,9 +137,16 @@ export function createFastEngine(
   native: RustraJSINative,
   options: FastEngineOptions,
 ): EngineClientType {
-  return createRkyvV2Engine(native, options.rkyvV2Codecs, {
+  // 명시 나열 + satisfies — core 에 옵션이 추가되면 이 객체 리터럴이 누락
+  // 필드/오타를 타입 에러로 드러낸다 (수작업 필터링 누수 방지).
+  const engineOptions = {
     contractHash: options.contractHash,
-  });
+    onContractMismatch: options.onContractMismatch,
+    schemaVersion: options.schemaVersion,
+    onSchemaStale: options.onSchemaStale,
+    maxPayloadBytes: options.maxPayloadBytes,
+  } satisfies RkyvV2EngineOptions;
+  return createRkyvV2Engine(native, options.rkyvV2Codecs, engineOptions);
 }
 
 // ── P0-3 async offload — invokeAsync ──────────────────────────
@@ -147,13 +162,21 @@ export function createFastEngine(
  * (기능은 동일, 스레드 오프로드 없음).
  */
 export type RustraJSIAsyncNative = RustraJSINative & {
-  /** 성공/에러 후 JS 콜백 큐에서 호출될 콜백 등록형 비동기 호출. */
+  /**
+   * 성공/에러 후 JS 콜백 큐에서 호출될 콜백 등록형 비동기 호출.
+   *
+   * 반환값: invocation id (취소 핸들, follow-up 3). 네이티브가 id 를
+   * 노출하면 `invokeCancel(id)` 로 Rust 취소 체크포인트까지 전파된다.
+   * 구형 네이티브가 undefined 를 반환하면 어댑터가 얕은 취소로 폴백한다.
+   */
   invokeTypedAsync?(
     name: string,
     args: unknown,
     onSuccess: (result: unknown) => void,
     onError: (message: string) => void,
-  ): void;
+  ): number | void;
+  /** 진행 중 async 호출 취소 — invokeTypedAsync 가 반환한 id. */
+  invokeCancel?(invocationId: number): boolean;
 };
 
 /**
@@ -187,12 +210,14 @@ function raceAbortShallow<T>(
 /**
  * 비동기 invoke — 무거운 Rust 연산을 JS 스레드에서 오프로드한다.
  *
- * - 네이티브 `invokeTypedAsync` 가 있으면: 즉시 반환, 결과는 JS 콜백 큐로 전달.
+ * - 네이티브 `invokeTypedAsync` 가 있으면: 즉시 반환( invocation id 포함),
+ *   결과는 JS 콜백 큐로 전달.
  * - 없으면: 동기 fast path(`createFastEngine`)로 폴백 — 마이크로태스크로 래핑해
  *   API 계약(`Promise<T>`)은 항상 동일하게 유지.
- * - `options.signal` (T1): abort 시 `cancelled` 로 즉시 거부. 이 엔진의
- *   취소는 **얕은 취소**다 — Rust 핸들러는 끝까지 실행되고 늦은 네이티브
- *   콜백은 무시된다. 폴백(동기 엔진) 경로는 기존 T1 배선을 따른다.
+ * - `options.signal` (T1): abort 시 `cancelled` 로 즉시 거부. 네이티브가
+ *   `invokeCancel` 을 노출하면 id 로 **취소 전파**(Rust 체크포인트까지),
+ *   아니면 얕은 취소(JS 프라미스만 거부, Rust 핸들러는 끝까지 실행)로
+ *   폴백한다. 폴백(동기 엔진) 경로는 기존 T1 배선을 따른다.
  *
  * @example
  * ```ts
@@ -238,12 +263,57 @@ export function createAsyncEngine(
           );
         });
       }
-      // 얕은 취소만 가능하다 — RN JSI `invokeTypedAsync` C++ 시그니처가
-      // invocation id 를 노출하지 않아 취소를 전파할 핸들이 없다. Rust 측
-      // 취소 체크포인트(워커 dispatch 전)까지 전파하려면 네이티브가
-      // `rustra_ffi_invoke_async`(invocation_id out-param) +
-      // `rustra_ffi_invoke_cancel` 을 JSI 로 노출해야 한다 — 그때 이 경로를
-      // 전파형으로 교체한다 (설계 노트: 전파는 JS 코덱 경로만).
+      // 전파 가능 (follow-up 3): 네이티브가 invokeCancel 을 노출하면
+      // invokeTypedAsync 가 반환한 invocation id 로 Rust 취소 체크포인트까지
+      // 취소가 닿는다. 구형 네이티브(void 반환 또는 invokeCancel 미노출)는
+      // 얕은 취소(JS 프라미스만 거부)로 폴백한다.
+      if (typeof native.invokeCancel === 'function') {
+        return new Promise<T>((resolve, reject) => {
+          let settled = false;
+          let invocationId = -1;
+          const onAbort = () => {
+            if (settled) return;
+            settled = true;
+            if (invocationId >= 0) native.invokeCancel!(invocationId);
+            reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
+          };
+          // invokeTypedAsync 가 콜백을 동기적으로 부를 수 있으므로 리스너를
+          // 먼저 단다 — core 전파 경로와 동일한 정리 패턴.
+          signal.addEventListener('abort', onAbort, { once: true });
+          try {
+            const id = invokeTypedAsync(
+              command,
+              args,
+              (result) => {
+                if (settled) return; // 늦은 콜백 무시
+                settled = true;
+                signal.removeEventListener('abort', onAbort);
+                resolve(result as T);
+              },
+              (message) => {
+                if (settled) return;
+                settled = true;
+                signal.removeEventListener('abort', onAbort);
+                reject(parseRustraErrorString(message));
+              },
+            );
+            if (typeof id === 'number') invocationId = id;
+          } catch (err) {
+            settled = true;
+            signal.removeEventListener('abort', onAbort);
+            reject(
+              err instanceof Error
+                ? err
+                : new RustraCommandError(
+                    'invoke.failed',
+                    `invoke("${command}") dispatch failed: ${String(err)}`,
+                  ),
+            );
+          }
+        });
+      }
+      // 얕은 취소 폴백 — 네이티브에 취소 핸들이 없다. Rust 핸들러는 끝까지
+      // 실행되고 늦은 콜백은 무시된다.
       return raceAbortShallow(
         new Promise<T>((resolve, reject) => {
           invokeTypedAsync(
