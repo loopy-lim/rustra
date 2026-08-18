@@ -113,7 +113,7 @@ fn invoke_contract_hash() -> String {
 #[test]
 fn huge_payload_rejected_with_size_limit_error() {
     test_package().register_ffi();
-    // 2 MiB — MAX_PAYLOAD_BYTES(1 MiB) 초과. ffi.rs:203 size guard 가 발동해야 한다.
+    // 2 MiB — MAX_PAYLOAD_BYTES(1 MiB) 초과. ffi.rs size guard 가 발동해야 한다.
     let big = vec![b' '; 2 * 1024 * 1024];
 
     let resp = invoke_json(&big);
@@ -125,9 +125,11 @@ fn huge_payload_rejected_with_size_limit_error() {
     let err = resp["error"]
         .as_str()
         .expect("rejected payload must carry an error message");
+    // (T3 후속) 에러 코드 통일 — 평문 "payload exceeds size limit" 대신
+    // `payload.too_large: payload NB exceeds max payload LB` 형태.
     assert!(
-        err.contains("size limit"),
-        "error must mention the size limit, got: {err}"
+        err.contains("payload.too_large"),
+        "error must carry the payload.too_large code, got: {err}"
     );
 }
 

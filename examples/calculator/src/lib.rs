@@ -3,8 +3,6 @@ use rustra::prelude::*;
 use serde_json::{Value, json};
 use std::ffi::{CStr, CString, c_char};
 
-const MAX_PAYLOAD_BYTES: usize = 1024 * 1024; // 1 MB
-
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AddNumbersInput {
@@ -614,8 +612,11 @@ pub unsafe extern "C" fn rustra_calculator_invoke(payload: *const c_char) -> *mu
         }
     };
 
-    if payload.len() > MAX_PAYLOAD_BYTES {
-        return json_string(json!({ "ok": false, "error": "payload exceeds size limit" }));
+    // (T3 후속) 네이티브 동적 한도와 정렬 — 복제 상수 대신 공개 판독기를 읽는다.
+    // 에러 코드는 `payload.too_large` 로 통일 (JS 사전 검사와 동일 코드).
+    if payload.len() > rustra::ffi::max_payload_bytes() {
+        let e = RustraError::payload_too_large(payload.len(), rustra::ffi::max_payload_bytes());
+        return json_string(json!({ "ok": false, "error": e.to_string() }));
     }
 
     let request = match serde_json::from_str::<Value>(payload) {
@@ -673,9 +674,10 @@ pub unsafe extern "C" fn rustra_calculator_invoke_bytes(
         return std::ptr::null_mut();
     }
 
-    if payload_len > MAX_PAYLOAD_BYTES {
-        let error = r#"{"ok":false,"error":"payload exceeds size limit"}"#;
-        return alloc_response(error.as_bytes().to_vec(), out_len);
+    if payload_len > rustra::ffi::max_payload_bytes() {
+        let e = RustraError::payload_too_large(payload_len, rustra::ffi::max_payload_bytes());
+        let error = format!(r#"{{"ok":false,"error":"{e}"}}"#);
+        return alloc_response(error.into_bytes(), out_len);
     }
 
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };

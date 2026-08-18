@@ -781,6 +781,19 @@ test('parseRustraErrorString falls back to invoke.failed for non-code strings', 
   assert.equal(c.message, 'Rustra invoke failed');
 });
 
+test('parseRustraErrorString restores payload.too_large from unified Rust code (T3 follow-up)', () => {
+  // Rust FFI 게이트가 이제 RustraError::payload_too_large Display 형태를
+  // 반환한다 — JS 사전 검사와 동일 원인이 같은 코드로 복원되어야 한다
+  // (예전 평문 "payload exceeds size limit" → invoke.failed 강등 회귀 방지).
+  const err = parseRustraErrorString(
+    'payload.too_large: payload 1048577B exceeds max payload 1048576B',
+  );
+  assert.ok(err instanceof RustraCommandError);
+  assert.equal(err.code, 'payload.too_large');
+  assert.equal(err.message, 'payload 1048577B exceeds max payload 1048576B');
+  assert.equal(err.retryable, false, 'payload.too_large is deterministic, not retryable');
+});
+
 test('parseRustraErrorString parses JSON error objects and respects retryable', () => {
   const jsonErr = JSON.stringify({
     code: 'database.unavailable',
