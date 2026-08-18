@@ -731,9 +731,20 @@ impl Package {
     ///
     /// Tier 1/2 commands require at least 8 bytes (fixed header).
     /// Tier 3 commands require at least 2 bytes (command_id only, rest is JSON).
+    ///
+    /// (T3 후속) 크기 게이트 — JSON/postcard FFI 경로와 동일한 동적 한도
+    /// ([`ffi::max_payload_bytes`]) 를 초과하면 `payload.too_large` 를 반환한다.
+    /// 소비 크레이트 FFI(calculator/template)와 C++ typed fast path 가 모두
+    /// 이 함수를 통과하므로 여기가 rkyv V2 와이어의 단일 검사 지점이다.
+    /// typed(tier 1) 경로는 JS 인코딩이 없어 JS 사전 검사를 건너뛰므로,
+    /// 이 게이트가 "네이티브 한도가 그대로 적용된다" 계약을 실제로 만족시킨다.
     pub fn invoke_rkyv_v2(&self, payload: &[u8]) -> crate::Result<Vec<u8>> {
         if payload.len() < 2 {
             return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+        }
+        let limit = crate::ffi::max_payload_bytes();
+        if payload.len() > limit {
+            return Err(RustraError::payload_too_large(payload.len(), limit));
         }
         let command_id = u16::from_le_bytes([payload[0], payload[1]]);
         let command = {
