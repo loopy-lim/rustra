@@ -65,25 +65,48 @@ for f in "${FILES[@]}"; do
   rm -f "${f}.bak"
 done
 
-# 3. rustra path 의존성 재작성 (P7 완화) — 복사본은 repo 밖에 있으므로 상대 path 가 깨진다.
-#    rustra-bridge 워크스페이스의 절대경로로 재작성한다 (published crate 사용 시 버전 핀으로 교체 권장).
+# 3. 의존성 재작성.
+#    기본값은 로컬 개발 모드로, 현재 checkout 을 가리킨다.
+#    RUSTRA_PUBLISHED_VERSION=0.1.2 를 지정하면 standalone 모드로 전환해
+#    crates.io/npm 공개 패키지 버전을 사용한다.
 TEMPLATE_ROOT="$(cd "$HERE" && pwd)"
 BRIDGE_ROOT="$(cd "$TEMPLATE_ROOT/../.." && pwd)"
 BACKEND_TOML="$OUT_DIR/backend/Cargo.toml"
+PUBLISHED_VERSION="${RUSTRA_PUBLISHED_VERSION:-}"
 if [[ -f "$BACKEND_TOML" ]]; then
-  sed -i.bak "s|rustra = { path = \"../../../crates/rustra\" }|rustra = { path = \"${BRIDGE_ROOT}/crates/rustra\" }|" "$BACKEND_TOML"
-  rm -f "${BACKEND_TOML}.bak"
-  echo "== rustra path → ${BRIDGE_ROOT}/crates/rustra (절대경로 재작성)"
+  if [[ -n "$PUBLISHED_VERSION" ]]; then
+    sed -i.bak "s|rustra = { path = \"../../../crates/rustra\" }|rustra = \"${PUBLISHED_VERSION}\"|" "$BACKEND_TOML"
+    rm -f "${BACKEND_TOML}.bak"
+    echo "== rustra dependency → crates.io rustra ${PUBLISHED_VERSION}"
+  else
+    sed -i.bak "s|rustra = { path = \"../../../crates/rustra\" }|rustra = { path = \"${BRIDGE_ROOT}/crates/rustra\" }|" "$BACKEND_TOML"
+    rm -f "${BACKEND_TOML}.bak"
+    echo "== rustra path → ${BRIDGE_ROOT}/crates/rustra (local development mode)"
+  fi
 fi
-# app/package.json 의 @rustra/lynx, @rustra/types file: 도 repo 밖에서 깨진다 — 절대경로로.
+# app/package.json 의 @rustra/* file: 의존성도 동일한 모드로 재작성한다.
 APP_PKG="$OUT_DIR/app/package.json"
 if [[ -f "$APP_PKG" ]]; then
-  sed -i.bak \
-    -e "s|\"@rustra/lynx\": \"file:../../../packages/lynx\"|\"@rustra/lynx\": \"file:${BRIDGE_ROOT}/packages/lynx\"|" \
-    -e "s|\"@rustra/types\": \"file:../../../packages/types\"|\"@rustra/types\": \"file:${BRIDGE_ROOT}/packages/types\"|" \
-    "$APP_PKG"
+  if [[ -n "$PUBLISHED_VERSION" ]]; then
+    NPM_VERSION="^${PUBLISHED_VERSION}"
+    sed -i.bak \
+      -e "s|\"@rustra/lynx\": \"file:../../../packages/lynx\"|\"@rustra/lynx\": \"${NPM_VERSION}\"|" \
+      -e "s|\"@rustra/types\": \"file:../../../packages/types\"|\"@rustra/types\": \"${NPM_VERSION}\"|" \
+      -e "s|\"@rustra/cli\": \"file:../../../packages/cli\"|\"@rustra/cli\": \"${NPM_VERSION}\"|" \
+      "$APP_PKG"
+  else
+    sed -i.bak \
+      -e "s|\"@rustra/lynx\": \"file:../../../packages/lynx\"|\"@rustra/lynx\": \"file:${BRIDGE_ROOT}/packages/lynx\"|" \
+      -e "s|\"@rustra/types\": \"file:../../../packages/types\"|\"@rustra/types\": \"file:${BRIDGE_ROOT}/packages/types\"|" \
+      -e "s|\"@rustra/cli\": \"file:../../../packages/cli\"|\"@rustra/cli\": \"file:${BRIDGE_ROOT}/packages/cli\"|" \
+      "$APP_PKG"
+  fi
   rm -f "${APP_PKG}.bak"
-  echo "== @rustra/* file: deps → ${BRIDGE_ROOT}/packages/* (절대경로 재작성)"
+  if [[ -n "$PUBLISHED_VERSION" ]]; then
+    echo "== @rustra/* dependencies → npm ${NPM_VERSION} (standalone mode)"
+  else
+    echo "== @rustra/* file: deps → ${BRIDGE_ROOT}/packages/* (local development mode)"
+  fi
 fi
 
 echo ""
@@ -93,7 +116,12 @@ echo "  cd $OUT_DIR"
 echo "  # 1. Rust 백엔드 command 작성/확장 (backend/src/lib.rs #[command])"
 echo "  # 2. codegen 으로 generated/ 재생성 (app/ 안에서):"
 echo "  (cd app && npm install && npm run codegen)"
-echo "     ⚠️ rustra CLI 탐색: RUSTRA_CLI=<bridge>/packages/cli/dist/index.js env 권장"
+if [[ -n "$PUBLISHED_VERSION" ]]; then
+  echo "     standalone mode: @rustra/cli ${NPM_VERSION} 가 local bin 으로 자동 선택됩니다."
+else
+  echo "     local development mode: checkout 의 packages/cli 를 사용합니다."
+  echo "     외부 독립 프로젝트는 RUSTRA_PUBLISHED_VERSION=0.1.2 로 생성하십시오."
+fi
 echo "  # 3. ReactLynx 번들 빌드:"
 echo "  (cd app && npm run build)"
 echo "  # 4. 플랫폼 실행(각 run.sh):"

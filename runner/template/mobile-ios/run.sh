@@ -21,7 +21,33 @@ APP_ID="dev.rustra.template"
 APP_BUNDLE="$IOS_DIR/build/Build/Products/Debug-iphonesimulator/RustraTemplate.app"
 SHOT="${SHOT:-/tmp/rustra-template-ios-result.png}"
 LOG=/tmp/rustra-template-ios.log
-DEVICE_ID="${DEVICE_ID:-$(xcrun simctl list devices booted -j | python3 -c 'import sys,json;d=json.load(sys.stdin);print(next(v[0]["udid"] for v in d["devices"].values() for v2 in v if v2["state"]=="Booted"))')}"
+LOG_WINDOW="${LOG_WINDOW:-10m}"
+LOG_STREAM_PID=""
+
+cleanup_log_stream() {
+  if [[ -n "$LOG_STREAM_PID" ]]; then
+    kill "$LOG_STREAM_PID" 2>/dev/null || true
+    wait "$LOG_STREAM_PID" 2>/dev/null || true
+  fi
+}
+trap cleanup_log_stream EXIT INT TERM
+
+if [[ -z "${DEVICE_ID:-}" ]]; then
+  if ! command -v xcrun >/dev/null 2>&1; then
+    echo "ERROR: xcrun not found; install Xcode and select its developer directory." >&2
+    exit 1
+  fi
+  booted_devices_json="$(xcrun simctl list devices booted -j 2>/dev/null)" || {
+    echo "ERROR: CoreSimulatorService is unavailable; boot an iOS Simulator and retry." >&2
+    exit 1
+  }
+  DEVICE_ID="$(printf '%s' "$booted_devices_json" | python3 -c \
+    'import sys,json; d=json.load(sys.stdin); print(next((v2["udid"] for v in d["devices"].values() for v2 in v if v2["state"]=="Booted"), ""))')"
+  if [[ -z "$DEVICE_ID" ]]; then
+    echo "ERROR: no booted iOS Simulator found; boot one or set DEVICE_ID explicitly." >&2
+    exit 1
+  fi
+fi
 
 echo "[ios] device: $DEVICE_ID"
 
@@ -49,27 +75,38 @@ echo "[ios] 4/5 xcodebuild + install + launch"
     -destination "platform=iOS Simulator,id=$DEVICE_ID" \
     -derivedDataPath ./build build >/dev/null 2>&1 )
 
-xcrun simctl uninstall booted "$APP_ID" 2>/dev/null || true
-xcrun simctl install booted "$APP_BUNDLE"
-xcrun simctl launch booted "$APP_ID" >/dev/null
+# `log show` 는 Simulator unified log 인덱싱이 늦을 수 있다. 앱 실행 전에
+# stream 을 열어 startup/rkyv 증거를 실시간으로 수집한다.
+: > "$LOG"
+xcrun simctl spawn "$DEVICE_ID" log stream --style compact \
+  --predicate 'process == "RustraTemplate"' >"$LOG" 2>&1 &
+LOG_STREAM_PID=$!
+sleep 1
+
+xcrun simctl uninstall "$DEVICE_ID" "$APP_ID" 2>/dev/null || true
+xcrun simctl install "$DEVICE_ID" "$APP_BUNDLE"
+xcrun simctl launch "$DEVICE_ID" "$APP_ID" >/dev/null
 
 # 5. rkyv 왕복이 로그에 나타날 때까지 폴링.
 echo "[ios] 5/5 poll log for rkyv roundtrip"
 for i in $(seq 1 45); do
-  if xcrun simctl spawn booted log show --last 30s \
-        --predicate 'process == "RustraTemplate"' 2>/dev/null \
-        | grep -q "rkyv out"; then
+  if grep -q "rkyv out" "$LOG" 2>/dev/null; then
     echo "    rkyv roundtrip at poll $i"
     break
   fi
   sleep 1
 done
 
-xcrun simctl io booted screenshot "$SHOT" >/dev/null 2>&1 && echo "[ios] screenshot: $SHOT"
+xcrun simctl io "$DEVICE_ID" screenshot "$SHOT" >/dev/null 2>&1 && echo "[ios] screenshot: $SHOT"
 
 # ── 결정적 게이트 — 로그 grep ───────────────────────────
-LOGS="$(xcrun simctl spawn booted log show --last 120s \
-          --predicate 'process == "RustraTemplate"' 2>/dev/null)"
+LOGS="$(<"$LOG")"
+if [[ -z "$LOGS" ]]; then
+  # Fallback for hosts where log stream is unavailable; the wider window also
+  # covers delayed Simulator log indexing.
+  LOGS="$(xcrun simctl spawn "$DEVICE_ID" log show --last "$LOG_WINDOW" \
+            --predicate 'process == "RustraTemplate"' 2>/dev/null)"
+fi
 pass=1
 check() { if echo "$LOGS" | grep -qE "$2"; then echo "  [PASS] $1"; else echo "  [FAIL] $1  (pat: $2)"; pass=0; fi; }
 
@@ -96,6 +133,6 @@ if [[ $pass -eq 1 ]]; then
   echo "RESULT: iOS PASS — ReactLynx <-> Rust rkyv roundtrip (greet) on iOS Simulator"
   exit 0
 else
-  echo "RESULT: iOS FAIL — 최근 로그: xcrun simctl spawn booted log show --last 120s --predicate 'process == \"RustraTemplate\"'"
+  echo "RESULT: iOS FAIL — 최근 로그: xcrun simctl spawn $DEVICE_ID log show --last $LOG_WINDOW --predicate 'process == \"RustraTemplate\"'"
   exit 1
 fi

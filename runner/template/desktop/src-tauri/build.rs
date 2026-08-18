@@ -45,11 +45,16 @@ fn main() {
     let include_dir = format!("{}/include", sdk);
     let header_check = format!("{}/capi/lynx_env_capi.h", include_dir);
     if !std::path::Path::new(&header_check).exists() {
-        println!(
-            "cargo:warning=Lynx SDK headers not found at {}; skipping native lynx_desktop compilation",
-            header_check
+        panic!(
+            "LYNX_SDK is missing the Lynx C API header at {header_check}; install lynx_sdk_macos_arm64.zip or set LYNX_SDK to its extracted macsdk directory"
         );
-        return;
+    }
+    let lynx_lib = Path::new(&sdk).join("lib").join("libLynx.dylib");
+    if !lynx_lib.exists() {
+        panic!(
+            "LYNX_SDK is missing {}; install the complete macOS Lynx SDK",
+            lynx_lib.display()
+        );
     }
 
     // lynx_desktop.mm → liblynx_desktop.a
@@ -98,6 +103,13 @@ fn main() {
 /// ../WINDOWS.md 참조. FML 심볼 해석 크럭스는 소스 내 주석(포인트 3) 참고.
 fn build_windows() {
     let sdk = std::env::var("LYNX_SDK").expect("LYNX_SDK must point to lynx_sdk_windows_x64");
+    let header = Path::new(&sdk).join("include").join("capi").join("lynx_env_capi.h");
+    if !header.exists() {
+        panic!(
+            "LYNX_SDK is missing {}; install lynx_sdk_windows_x64",
+            header.display()
+        );
+    }
 
     cc::Build::new()
         .cpp(true)

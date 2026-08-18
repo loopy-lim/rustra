@@ -16,7 +16,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 BACKEND="$HERE/backend"
 APP="$HERE/app"
 
-# rustra CLI 위치: 명시 env > rustra-bridge 워크스페이스 내부 탐색.
+# rustra CLI 위치: 명시 env > 생성 프로젝트의 local bin > rustra-bridge 워크스페이스 내부 탐색.
 # in-repo(템플릿 원본) 는 runner/template → rustra-bridge 루트(2단계 상위)에 있다.
 find_repo_cli() {
   local dir="$HERE"
@@ -29,17 +29,20 @@ find_repo_cli() {
   return 1
 }
 if [[ -z "${RUSTRA_CLI:-}" ]]; then
-  RUSTRA_CLI="$(find_repo_cli || true)"
+  if [[ -e "$APP/node_modules/.bin/rustra" ]]; then
+    RUSTRA_CLI="$APP/node_modules/.bin/rustra"
+  else
+    RUSTRA_CLI="$(find_repo_cli || true)"
+  fi
 fi
 
 echo "[codegen] 1/2 Rust bin (types/commands/contract/schema)"
 ( cd "$BACKEND" && cargo run --quiet --bin generate >/dev/null )
 
-if [[ ! -f "$RUSTRA_CLI" ]]; then
-  echo "[codegen] WARN: rustra CLI 를 찾을 수 없음: $RUSTRA_CLI" >&2
-  echo "           rkyv-codecs.ts / rkyv-registry.ts 건너뜀 — RUSTRA_CLI env 로 지정하거나" >&2
-  echo "           npm i -D @rustra/cli 후 'npx rustra generate --schema generated/schema.json --output generated'" >&2
-  exit 0
+if [[ -z "$RUSTRA_CLI" || ! -e "$RUSTRA_CLI" ]]; then
+  echo "[codegen] ERROR: rustra CLI 를 찾을 수 없음" >&2
+  echo "           (cd app && npm install) 후 다시 실행하거나 RUSTRA_CLI=/path/to/rustra 를 지정하십시오." >&2
+  exit 1
 fi
 
 echo "[codegen] 2/2 TS CLI (rkyv-codecs/rkyv-registry)"
