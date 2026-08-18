@@ -97,7 +97,11 @@ describe('transport performance', { concurrency: 1 }, () => {
 
     it('subprocess: latency within threshold', () => {
       const invoke = createSubprocessInvoke();
-      const r = bench('subprocess', () => invoke('addNumbers', { a: 42, b: 58 }), SUBPROCESS_ITERATIONS);
+      const r = bench(
+        'subprocess',
+        () => invoke('addNumbers', { a: 42, b: 58 }),
+        SUBPROCESS_ITERATIONS,
+      );
       console.log(
         `    subprocess: avg=${r.avg.toFixed(0)}ns p50=${r.p50.toFixed(0)}ns p99=${r.p99.toFixed(0)}ns`,
       );
@@ -132,7 +136,11 @@ describe('transport performance', { concurrency: 1 }, () => {
       const subprocessInvoke = createSubprocessInvoke();
       const napiInvoke = createNapiInvoke();
 
-      const subR = bench('subprocess', () => subprocessInvoke('addNumbers', { a: 42, b: 58 }), SUBPROCESS_ITERATIONS);
+      const subR = bench(
+        'subprocess',
+        () => subprocessInvoke('addNumbers', { a: 42, b: 58 }),
+        SUBPROCESS_ITERATIONS,
+      );
       const napiR = bench('napi-rs', () => napiInvoke('addNumbers', { a: 42, b: 58 }));
 
       console.log(

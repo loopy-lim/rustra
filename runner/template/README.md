@@ -102,12 +102,12 @@ RUSTRA_CLI=$PWD/packages/cli/dist/index.js \
 
 ## 전제 (각 플랫폼)
 
-| 플랫폼  | 요구                                                                                                                                |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| macOS   | `LYNX_SDK`(기본 /tmp/lynx-prebuilt/macsdk) — `gh release download 4.0.1 --repo lynx-family/lynx --pattern lynx_sdk_macos_arm64.zip` |
-| iOS     | Xcode + xcodegen + CocoaPods + 시뮬레이터(부팅됨)                                                                                   |
+| 플랫폼  | 요구                                                                                                                                                     |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS   | `LYNX_SDK`(기본 /tmp/lynx-prebuilt/macsdk) — `gh release download 4.0.1 --repo lynx-family/lynx --pattern lynx_sdk_macos_arm64.zip`                      |
+| iOS     | Xcode + xcodegen + CocoaPods + 시뮬레이터(부팅됨)                                                                                                        |
 | Android | Android SDK + NDK 27.1.12297006 핀 + cargo-ndk + rustup android targets + AVD(`AVD` env, 기본 Medium_Phone_API_36.1), 여러 기기 연결 시 `ANDROID_SERIAL` |
-| Windows | MSVC + `LYNX_SDK_WIN` — `desktop/WINDOWS.md` 참조 (FML PE 심볼 = 유일 크럭스)                                                       |
+| Windows | MSVC + `LYNX_SDK_WIN` — `desktop/WINDOWS.md` 참조 (FML PE 심볼 = 유일 크럭스)                                                                            |
 
 rustup android targets: `rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android`
 

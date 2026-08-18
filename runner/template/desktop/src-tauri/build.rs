@@ -103,7 +103,10 @@ fn main() {
 /// ../WINDOWS.md 참조. FML 심볼 해석 크럭스는 소스 내 주석(포인트 3) 참고.
 fn build_windows() {
     let sdk = std::env::var("LYNX_SDK").expect("LYNX_SDK must point to lynx_sdk_windows_x64");
-    let header = Path::new(&sdk).join("include").join("capi").join("lynx_env_capi.h");
+    let header = Path::new(&sdk)
+        .join("include")
+        .join("capi")
+        .join("lynx_env_capi.h");
     if !header.exists() {
         panic!(
             "LYNX_SDK is missing {}; install lynx_sdk_windows_x64",
