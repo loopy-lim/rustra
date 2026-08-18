@@ -453,19 +453,39 @@ function decodeTier3Response(bytes: ArrayBuffer): {
   result?: unknown;
   error?: RustraError;
 } {
+  if (bytes.byteLength < 8) {
+    return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+  }
   const u = new Uint8Array(bytes);
   if (u[0] === 1) {
     const len = new DataView(bytes).getUint32(4, true);
+    if (bytes.byteLength < 8 + len) {
+      return {
+        ok: false,
+        error: { code: 'invoke.too_short', message: 'response payload truncated' },
+      };
+    }
     const json = _utf8Decode(u, 8, 8 + len);
-    return { ok: true, result: JSON.parse(json) };
+    try {
+      return { ok: true, result: JSON.parse(json) };
+    } catch (e) {
+      return { ok: false, error: { code: 'invoke.malformed', message: `invalid json: ${e}` } };
+    }
+  }
+  if (bytes.byteLength < 10) {
+    return { ok: false, error: { code: 'invoke.too_short', message: 'error frame too short' } };
   }
   const errLen = new DataView(bytes).getUint16(8, true);
   let error: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
   if (errLen > 0) {
     // postcard({ code: String, message: String })
-    const { value: code, bytesRead: b1 } = _tier3DecodeString(u, 10);
-    const { value: message } = _tier3DecodeString(u, 10 + b1);
-    error = { code, message };
+    try {
+      const { value: code, bytesRead: b1 } = _tier3DecodeString(u, 10);
+      const { value: message } = _tier3DecodeString(u, 10 + b1);
+      error = { code, message };
+    } catch {
+      // fallback if postcard decoding fails
+    }
   }
   return { ok: false, error };
 }
@@ -683,11 +703,11 @@ export function createRkyvV2Engine(
   const payloadLimit = options?.maxPayloadBytes;
 
   // 신호 없는 기본 3-티어 dispatch (T1 리팩터링 — 로직은 기존 그대로).
-  const dispatch = <T>(command: string, args?: unknown): Promise<T> => {
+  const dispatch = async <T>(command: string, args?: unknown): Promise<T> => {
     // 1순위: C++ fast path (RN JSI). 정적 명령만. JS 측 인코딩이 없어
     // maxPayloadBytes 검사를 건너뛴다 — 네이티브 한도가 그대로 적용된다.
     if (hasTypedPath && native.hasStaticCodec!(command)) {
-      return Promise.resolve(native.invokeTyped!(command, args) as T);
+      return native.invokeTyped!(command, args) as T;
     }
     // 2순위: JS codec (Node/Bun/Tauri 또는 typed 누락 시). 정적 명령.
     const codec = registry.get(command);
@@ -695,36 +715,32 @@ export function createRkyvV2Engine(
       const encoded = codec.encode(args);
       // (T3) 네이티브 왕복 전에 크기 검사 — 초과면 invokeRkyvV2 를 부르지 않는다.
       const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
-      if (tooLarge) return Promise.reject(tooLarge);
+      if (tooLarge) throw tooLarge;
       const resultBytes = native.invokeRkyvV2(encoded);
       // Reject (do not throw) so the declared Promise<T> contract holds and
       // callers can use .catch() / await-try-consistently for command errors.
       const outcome = tier2Outcome<T>(codec, resultBytes);
-      if (!outcome.ok) return Promise.reject(outcome.error);
-      return Promise.resolve(outcome.value);
+      if (!outcome.ok) throw outcome.error;
+      return outcome.value;
     }
     // 3순위: 동적 명령 → Tier 3 fallback (live schema 의 commandId 사용)
     const entry = getLiveSchema(native).get(command);
     if (!entry) {
-      return Promise.reject(
-        new RustraCommandError(
-          'command.not_found',
-          `RkyvV2: no codec and not in live schema for "${command}"`,
-        ),
+      throw new RustraCommandError(
+        'command.not_found',
+        `RkyvV2: no codec and not in live schema for "${command}"`,
       );
     }
     const tier3Request = encodeTier3Request(entry.commandId, args);
     // (T3) tier 2 와 동일한 사전 검사 — 네이티브 호출 전에 조기 실패.
     const tooLarge = payloadTooLargeError(tier3Request.byteLength, payloadLimit);
-    if (tooLarge) return Promise.reject(tooLarge);
+    if (tooLarge) throw tooLarge;
     const resp = decodeTier3Response(native.invokeRkyvV2(tier3Request));
     if (!resp.ok) {
       const e = resp.error ?? { code: 'invoke.failed', message: 'RkyvV2 (tier3) invoke failed' };
-      return Promise.reject(
-        new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code)),
-      );
+      throw new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code));
     }
-    return Promise.resolve(resp.result as T);
+    return resp.result as T;
   };
 
   return {
