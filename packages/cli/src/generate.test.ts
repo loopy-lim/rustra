@@ -235,6 +235,18 @@ test('generateContractTs produces hash constant', () => {
   const contract = generateContractTs('{"test": true}');
   assert.ok(contract.includes('GENERATED_CONTRACT_HASH'));
   assert.ok(contract.includes("'"));
+  // schemaVersion 필드가 없는 구 스키마는 1 로 취급한다.
+  assert.ok(contract.includes('SCHEMA_VERSION = 1;'));
+});
+
+test('generateContractTs exports schemaVersion from the schema', () => {
+  const contract = generateContractTs(
+    '{"packageId": "ota.ver", "schemaVersion": 7, "commands": []}',
+  );
+  assert.ok(contract.includes('GENERATED_CONTRACT_HASH'));
+  assert.ok(contract.includes('SCHEMA_VERSION = 7;'));
+  // Rust 코드젠(GeneratedPackage::contract_ts)과 동일한 형식이어야 한다.
+  assert.ok(contract.endsWith('export const SCHEMA_VERSION = 7;\n'));
 });
 
 // ── C++ codec generation (B1) ──────────────────────────────

@@ -21,9 +21,14 @@ const result = await addNumbers({ a: 42, b: 58 });
 
 - `EngineClient` — `invoke<T>()` (+선택적 `invokeBatch`) 공통 인터페이스
 - `configure()` / `invoke()` — 글로벌 invoke (Tauri-like 단일 진입점)
+- `InvokeOptions.signal` — AbortSignal — abort 시 프라미스 즉시 거부 + 네이티브
+  취소 전파(`invokeAsync`/`invokeCancel` 노출 시), 에러 코드 `cancelled`
 - `RustraCommandError` — 직렬화 가능 에러 + `parseRustraErrorString`
 - rkyv V2 코덱 — Rust `invoke_rkyv_v2` 왕복용 pure-JS 인코더/디코더
 - `contractHash` 검증 — 빌드 시 계약과 런타임 계약 일치 확인
+- `RkyvV2EngineOptions` — 엔진 옵션: `onContractMismatch`(해시 불일치 시
+  degraded 모드 opt-in), `schemaVersion`/`onSchemaStale`(JS > native stale 경고),
+  `maxPayloadBytes`(인코딩 직후 페이로드 크기 사전 검사)
 
 ## 관련 문서
 

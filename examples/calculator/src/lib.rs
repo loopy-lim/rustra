@@ -1122,8 +1122,17 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2(
 mod tests {
     use super::*;
 
+    /// Windows(PE) 에는 Apple(`__mod_init_func`)/Linux(`.init_array`) 와 달리
+    /// 라이브러리 constructor 가 없어 테스트 바이너리에서 FFI 전역 등록이
+    /// 누락된다. FFI 경유 테스트는 이 헬퍼로 결정론적으로 등록한다 —
+    /// macOS/Linux 는 constructor 가 이미 등록했으므로 idempotent no-op.
+    fn ensure_registered() {
+        let _ = calculator_package();
+    }
+
     #[test]
     fn test_invoke_bytes_round_trip() {
+        ensure_registered();
         let input = r#"{"command":"addNumbers","args":{"a":42,"b":58}}"#;
         let payload = input.as_bytes();
         let mut out_len: usize = 0;
@@ -1191,6 +1200,7 @@ mod tests {
 
     #[test]
     fn test_invoke_bincode_round_trip() {
+        ensure_registered();
         let request = BincodeRequest {
             command: "addNumbers".to_string(),
             a: 42,
@@ -1367,6 +1377,7 @@ mod tests {
 
     #[test]
     fn test_invoke_msgpack_round_trip() {
+        ensure_registered();
         let request = serde_json::json!({"command": "addNumbers", "args": {"a": 42, "b": 58}});
         let payload = rmp_serde::to_vec(&request).unwrap();
 
@@ -1508,6 +1519,7 @@ mod tests {
 
     #[test]
     fn test_invoke_postcard_round_trip() {
+        ensure_registered();
         let request = BincodeRequest {
             command: "addNumbers".to_string(),
             a: 42,
@@ -1534,6 +1546,7 @@ mod tests {
 
     #[test]
     fn test_invoke_rkyv_round_trip() {
+        ensure_registered();
         let request = RkyvRequest {
             command: "addNumbers".to_string(),
             a: 42,
@@ -1559,6 +1572,7 @@ mod tests {
 
     #[test]
     fn test_invoke_hybrid_round_trip() {
+        ensure_registered();
         let request = BincodeRequest {
             command: "addNumbers".to_string(),
             a: 42,
@@ -1585,6 +1599,7 @@ mod tests {
 
     #[test]
     fn test_rkyv_v2_generic_dispatch() {
+        ensure_registered();
         // Build request using postcard wire format:
         // [command_id: u16 @0][postcard(AddNumbersInput)]
         let input = AddNumbersInput { a: 42, b: 58 };
@@ -1613,6 +1628,7 @@ mod tests {
 
     #[test]
     fn test_rkyv_v2_tier2_string_input() {
+        ensure_registered();
         // greet (command_id = 5): input has one String field "name"
         // Wire: [cmd_id: u16 @0][postcard(GreetInput)]
         let input = GreetInput {
@@ -1643,6 +1659,7 @@ mod tests {
 
     #[test]
     fn test_rkyv_v2_tier2_vec_input() {
+        ensure_registered();
         // sum_list (command_id = 6): input has one Vec<i64> field "numbers"
         // Wire: [cmd_id: u16 @0][postcard(SumListInput)]
         let input = SumListInput {
@@ -1674,6 +1691,7 @@ mod tests {
 
     #[test]
     fn test_rkyv_v2_tier2_string_output() {
+        ensure_registered();
         // to_upper (command_id = 7): input has String field "s", output has String field "result"
         // Wire: [cmd_id: u16 @0][postcard(ToUpperInput)]
         let input = ToUpperInput { s: "hello".into() };
@@ -1700,6 +1718,7 @@ mod tests {
 
     #[test]
     fn test_rkyv_v2_tier3_json_fallback() {
+        ensure_registered();
         // process_item (command_id = 9): now uses postcard (no more JSON fallback)
         // Wire: [cmd_id: u16 @0 LE][postcard(ProcessItemInput)]
         let input = ProcessItemInput {
@@ -1738,6 +1757,7 @@ mod tests {
 
     #[test]
     fn test_rkyv_v2_tier3_create_item() {
+        ensure_registered();
         // create_item (command_id = 8): now uses postcard (no more JSON fallback)
         // Wire: [cmd_id: u16 @0 LE][postcard(CreateItemInput)]
         let input = CreateItemInput {
@@ -1770,6 +1790,7 @@ mod tests {
 
     #[test]
     fn test_rkyv_v2_postcard_binary_handler() {
+        ensure_registered();
         // Test the fast postcard binary handler path
         // Build request: [cmd_id: u16 LE][postcard(AddNumbersInput)]
         let input = AddNumbersInput { a: 42, b: 58 };
@@ -1798,6 +1819,7 @@ mod tests {
 
     #[test]
     fn test_rkyv_v2_postcard_all_tiers() {
+        ensure_registered();
         // Test all 9 commands through the postcard binary handler
 
         // Tier 1: addNumbers (cmd 1)
@@ -1932,6 +1954,7 @@ mod tests {
 
     #[test]
     fn test_rkyv_v2_error_response_encoding() {
+        ensure_registered();
         // Send a payload with an unknown command_id to trigger an error.
         // Error wire: [ok=0 @0][pad 7B][err_len u16 @8][postcard({code,message}) @10]
         let mut payload = vec![0u8; 16];
@@ -1966,6 +1989,7 @@ mod tests {
 
     #[test]
     fn test_rkyv_v2_divide_by_zero_typed_error() {
+        ensure_registered();
         // divide (command_id = 11) with b=0 → RustraError::custom("math.divide_by_zero").
         // Proves a domain typed error code round-trips through the rkyv V2 error wire.
         let input = DivideInput { a: 10, b: 0 };
@@ -1999,6 +2023,7 @@ mod tests {
 
     #[test]
     fn test_rkyv_v2_divide_success() {
+        ensure_registered();
         // divide with b!=0 succeeds: [ok=1 @0][pad 7B][postcard(DivideOutput)@8]
         let input = DivideInput { a: 20, b: 4 };
         let input_bytes = postcard::to_allocvec(&input).unwrap();
@@ -2022,6 +2047,7 @@ mod tests {
 
     #[test]
     fn test_rkyv_v2_capability_deny() {
+        ensure_registered();
         // secureCompute (command_id = 13) requires capability "compute:secure".
         // In the debug build the package is mutable but the capability is never
         // granted here → deny-by-default → capability.denied wire error.

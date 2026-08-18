@@ -129,14 +129,20 @@ fn ffi_invoke_async_offloads_and_calls_back() {
     }))
     .unwrap();
 
+    let mut invocation_id: u64 = 0;
     unsafe {
         rustra::ffi::rustra_ffi_invoke_json_async(
             payload.as_ptr(),
             payload.len(),
             tx_box as *mut c_void,
             Some(on_done),
+            &mut invocation_id,
         );
     }
+    assert!(
+        invocation_id > 0,
+        "async invoke must issue an invocation id"
+    );
 
     let result = rx
         .recv_timeout(std::time::Duration::from_secs(2))

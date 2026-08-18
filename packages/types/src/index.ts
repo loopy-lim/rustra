@@ -21,7 +21,7 @@
 // ── Core types ──────────────────────────────────────────────
 
 export type EngineClient = {
-  invoke<T>(command: string, args?: unknown): Promise<T>;
+  invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T>;
   /**
    * 여러 명령을 한 번에 호출한다 (P0-2). 정적 명령만 있으면 단일 JSI/FFI 횡단
    * (invokeTypedBatch)로 처리하고, 동적 명령이 섞이면 항목별 invoke 로 폴백한다.
@@ -31,6 +31,20 @@ export type EngineClient = {
 
 /** invokeBatch 의 입력 항목. */
 export type BatchEntry = { command: string; args?: unknown };
+
+/**
+ * invoke 추가 옵션 (T1).
+ *
+ * `signal` 이 abort 되면 프라미스를 즉시 reject 한다. 네이티브가
+ * `invokeAsync`/`invokeCancel` 을 노출하면 취소를 전파(전파는 JS 코덱
+ * 경로만; typed/tier3 경로는 얕은 취소)하고, 그렇지 않으면 JS 프라미스만
+ * 거부하는 얕은 취소로 폴백한다 — Rust 핸들러는 끝까지 실행된다.
+ */
+export type InvokeOptions = {
+  /** (T1) AbortSignal — abort 시 Promise 를 즉시 reject 하고, 네이티브가
+   *  invokeAsync/invokeCancel 을 노출하면 취소를 전파한다. */
+  signal?: AbortSignal;
+};
 
 /**
  * createRkyvV2Engine 이 반환하는 구체 엔진. EngineClient 에 더해 invokeBatch(P0-2) 를
@@ -97,11 +111,12 @@ export function parseRustraErrorString(error: string | undefined | null): Rustra
 /**
  * 코드 기반 retryable 추론 — Rust `RustraError` 팩토리 관례와 정합.
  * `transport.error`/`transport.timeout`은 Rust 생성 시점에 `retryable: true`로
- * 설정되는 유일한 코드군이다 (구조화 와이어에는 retryable 플래그가 없으므로
- * 코드에서 도출한다).
+ * 설정되는 코드군이며 (구조화 와이어에는 retryable 플래그가 없으므로 코드에서
+ * 도출한다), `cancelled`도 Rust `RustraError::cancelled` 의 retryable:true 를
+ * 미러링한다 (T1 — JSON fallback 경로의 취소 에러 정합).
  */
 function isRetryableCode(code: string): boolean {
-  return code === 'transport.error' || code === 'transport.timeout';
+  return code === 'transport.error' || code === 'transport.timeout' || code === 'cancelled';
 }
 
 // ── rkyv V2 codec types ────────────────────────────────────
@@ -159,6 +174,8 @@ export type RustraNative = {
    * CallInvoker 경로가 켜져 있으면 대개 호출 즉시 0(자동 drain 됨).
    */
   drainEvents?(): number;
+  /** (T1) 진행 중 async 호출 취소 — invokeAsync 가 반환한 invocation id 를 넘긴다. */
+  invokeCancel?(invocationId: number): boolean;
 };
 
 // ── Global invoke (Tauri-like) ──────────────────────────────
@@ -197,18 +214,26 @@ export function configure(engine: EngineClient): void {
  *
  * 일반적으로 직접 호출하지 않고, 코드젠이 생성한 명령 함수를 사용합니다.
  *
+ * `options.signal` (T1) 이 abort 되면 엔진의 취소 정책(전파 가능하면
+ * 네이티브 전파, 아니면 얕은 취소)에 따라 프라미스가 즉시 reject 됩니다.
+ *
  * @example
  * ```ts
  * const result = await invoke<AddNumbersOutput>('addNumbers', { a: 42, b: 58 });
  * // 또는:
  * const result = await addNumbers({ a: 42, b: 58 });
+ * // 취소 가능한 호출 (T1):
+ * const ac = new AbortController();
+ * const r = await invoke('addNumbers', { a: 42, b: 58 }, { signal: ac.signal });
  * ```
  */
-export function invoke<T>(command: string, args?: unknown): Promise<T> {
+export function invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
   if (!_engine) {
     throw new Error('Rustra not configured. Call configure(engine) first.');
   }
-  return _engine.invoke<T>(command, args);
+  // 옵션을 엔진에 그대로 전달한다 (T1). 옵션을 이해하지 못하는 구형/서드파티
+  // 엔진은 JS 호출 규약상 추가 인자를 무시한다 — 호출부 파괴 없이 확장된다.
+  return _engine.invoke<T>(command, args, options);
 }
 
 /**
@@ -216,6 +241,10 @@ export function invoke<T>(command: string, args?: unknown): Promise<T> {
  *
  * 정적 명령만 있으면 단일 네이티브 횡단으로 일괄 처리되어 잦은 호출의 jank 를 줄이고,
  * 동적 명령이 섞이면 항목별로 자동 라우팅됩니다.
+ *
+ * TODO(T1): BatchEntry 에 항목별 `options?: InvokeOptions` 를 실어 항목 단위
+ * 취소를 지원한다 — 와이어 타입 확장이라 이번 작업 범위에서는 제외 (YAGNI).
+ * 현재는 배치 전체 취소만 `Promise.all` 폴백 경로의 얕은 취소로 자연히 얻어진다.
  *
  * @example
  * ```ts
@@ -317,20 +346,32 @@ export type RkyvV2SchemaNative = {
   invokeTyped?(name: string, args: unknown): unknown;
   /** P0-2: 정적 명령 N 개를 단일 횡단으로 일괄 처리 (RN JSI). */
   invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
+  /** (T1) 취소 전파 가능한 비동기 invoke — invocation id 를 반환하고, 결과는 콜백으로. */
+  invokeAsync?(payload: ArrayBuffer, onDone: (response: ArrayBuffer) => void): number;
+  /** (T1) 진행 중 async 호출 취소. */
+  invokeCancel?(invocationId: number): boolean;
 };
 
 /**
- * 네이티브 getSchema() 로부터 현재 명령 스키마를 조회한다 (정적 + 동적 명령 포함).
- * 동적 명령의 commandId/타입을 알아내 rkyvV2 Tier 3 fallback 에 사용된다.
+ * getSchema() 원본 JSON 의 파싱 결과 — 명령 맵과 (T2) 최상위 schemaVersion.
+ * schemaVersion 은 유한 number 인 경우에만 채운다 (구 네이티브는 필드 자체가
+ * 없다 — 없으면 undefined 로 두고 소비자에서 관례값 1 로 취급한다).
  */
-export function getLiveSchema(native: { getSchema?(): ArrayBuffer }): Map<string, LiveSchemaEntry> {
+type LiveSchemaDocument = {
+  commands: Map<string, LiveSchemaEntry>;
+  schemaVersion?: number;
+};
+
+/** getLiveSchema 의 파싱 내부 — 엔진 생성 시 schemaVersion 까지 읽는다 (T2). */
+function parseLiveSchemaDocument(native: { getSchema?(): ArrayBuffer }): LiveSchemaDocument {
   if (!native.getSchema) {
-    return new Map();
+    return { commands: new Map() };
   }
   const bytes = native.getSchema();
   const u = new Uint8Array(bytes);
   const json = _utf8Decode(u, 0, u.length);
   const parsed = JSON.parse(json) as {
+    schemaVersion?: unknown;
     commands?: Array<{
       name: string;
       commandId: number;
@@ -346,7 +387,19 @@ export function getLiveSchema(native: { getSchema?(): ArrayBuffer }): Map<string
       outputSchema: c.outputSchema,
     });
   }
-  return map;
+  const doc: LiveSchemaDocument = { commands: map };
+  if (typeof parsed.schemaVersion === 'number' && Number.isFinite(parsed.schemaVersion)) {
+    doc.schemaVersion = parsed.schemaVersion;
+  }
+  return doc;
+}
+
+/**
+ * 네이티브 getSchema() 로부터 현재 명령 스키마를 조회한다 (정적 + 동적 명령 포함).
+ * 동적 명령의 commandId/타입을 알아내 rkyvV2 Tier 3 fallback 에 사용된다.
+ */
+export function getLiveSchema(native: { getSchema?(): ArrayBuffer }): Map<string, LiveSchemaEntry> {
+  return parseLiveSchemaDocument(native).commands;
 }
 
 // ── Tier 3 (JSON-in-binary) wire helpers ────────────────────
@@ -436,7 +489,120 @@ export type RkyvV2EngineOptions = {
    * 드리프트를 시작 시점에 잡는다. 미설정 시 검증하지 않는다(기본값).
    */
   contractHash?: string;
+  /**
+   * (T2, OTA) 계약 해시 불일치 시의 정책. 미설정 시 기존대로 throw
+   * (fail-fast). 콜백을 설정하면 throw 대신 호출 후 **degraded 모드**로
+   * 엔진을 계속 생성한다 — 구 JS + 신 네이티브(또는 그 반대) OTA 조합에서
+   * 앱 전체 마비 대신 부분 동작을 택하는 배포 정책에 사용한다.
+   * degraded 모드는 위험하다: 호환되지 않는 명령은 codec/tier3 디코딩에서
+   * 실패할 수 있다. 콜백에서 live schema 를 조회해 공통 명령만 쓰도록
+   * 안내하는 것은 호출자의 책임이다.
+   *
+   * `getContractHash` 미노출 네이티브는 검증 자체가 불가능하므로 이 콜백과
+   * 무관하게 항상 `contract.unenforceable` 로 throw 한다 (native hash 가
+   * 없으면 degraded 모드가 무의미하다).
+   */
+  onContractMismatch?: (info: { nativeHash: string; expectedHash: string }) => void;
+  /**
+   * (T2, OTA) 빌드 시점 스키마 버전 — 코드젠이 생성한 SCHEMA_VERSION.
+   * 설정하면 엔진 생성 시 live schema(getSchema)의 schemaVersion 과 비교해
+   * JS > native 면 onSchemaStale 콜백(또는 console.warn)으로 경고한다.
+   * 구 JS + 신 네이티브가 정상인 조합(신 기능은 못 쓰지만 기존 동작)과
+   * 달리, JS > native 는 "네이티브가 구버전" — OTA 롤백/지연 배포 상황.
+   * fatal 아님: 경고만 한다. 미설정 시 검증하지 않는다.
+   *
+   * 구 네이티브(pre-Task-8)는 schemaVersion 필드 없는 schema JSON 을,
+   * 미등록 패키지는 `{}` 를 반환한다 — live schemaVersion 이 없으면 CLI 의
+   * old-schema 관례대로 **1 로 취급**한다 (이 기능의 대상인 구 바이너리이며
+   * 비교 불가(undefined→NaN) 로 스퓨리어스 경고하지 않게 막는다).
+   */
+  schemaVersion?: number;
+  /** (T2) schemaVersion 검증 결과 JS > native 인 경우의 콜백. 미설정 시 console.warn. */
+  onSchemaStale?: (info: { nativeVersion: number; jsVersion: number }) => void;
+  /**
+   * (T3) 요청 페이로드 바이트 한도. 인코딩 직후 검사해 네이티브 왕복 전에
+   * 조기 실패시킨다 — 네이티브 호출을 아끼고 에러에 컨텍스트(인코딩된 크기)
+   * 를 싣는다. typed(C++ fast path) 경로는 JS 측 인코딩이 없어 검사를
+   * 건너뛴다 — 네이티브 한도가 적용된다. 미설정 시 검사하지 않는다
+   * (네이티브의 동적 한도가 최종 게이트). 값은 양의 정수여야 한다 —
+   * 0/음수는 모든 페이로드를 거부한다 (전문가 노브, 클램핑 없음).
+   */
+  maxPayloadBytes?: number;
 };
+
+/**
+ * tier 2(JS 코덱) 응답 프레임을 결과/에러로 환산한다 — `dispatch` 와 전파
+ * 경로 콜백이 공유하는 유일 경로 (T1 리뷰). `codec.decode` 가 잘못된 프레임으로
+ * throw 하면 그 예외를 reject 값으로 돌린다(비-Error 는 `invoke.failed` 로
+ * 래핑): 전파 경로의 콜백은 네이티브 트램펄린 안에서 실행되므로 예외가
+ * 새어나가면 프라미스가 영원히 정착하지 않는다. 이 함수 자체는 throw 하지 않는다.
+ */
+function tier2Outcome<T>(
+  codec: RkyvV2Codec<unknown, unknown>,
+  frame: ArrayBuffer,
+): { ok: true; value: T } | { ok: false; error: Error } {
+  let response: ReturnType<RkyvV2Codec<unknown, unknown>['decode']>;
+  try {
+    response = codec.decode(frame);
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? err
+          : new RustraCommandError('invoke.failed', `codec decode failed: ${String(err)}`),
+    };
+  }
+  if (!response.ok) {
+    const e = response.error ?? { code: 'invoke.failed', message: 'RkyvV2 invoke failed' };
+    return {
+      ok: false,
+      error: new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code)),
+    };
+  }
+  return { ok: true, value: response.result as T };
+}
+
+/**
+ * 얕은 취소 (T1) — 네이티브 전파가 불가능할 때 JS 프라미스만 거부한다.
+ * Rust 핸들러는 끝까지 실행되며, 그 결과는 이 프라미스 체인에서 버려진다.
+ */
+function raceAbort<T>(promise: Promise<T>, signal: AbortSignal, command: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () =>
+      reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (v) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(v);
+      },
+      (e) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(e);
+      },
+    );
+  });
+}
+
+/**
+ * (T3) 인코딩된 페이로드의 크기 사전 검사 — JS 코덱(tier 2)/tier 3 경로가
+ * 네이티브를 호출하기 직전에 공유한다. `limit` 이 undefined 면 검사하지 않는다
+ * (네이티브의 동적 한도가 최종 게이트). 초과 시 `payload.too_large`
+ * (non-retryable — 결정론적 클라이언트 조건) 를 반환하고 호출자는 네이티브
+ * 왕복 없이 즉시 reject 한다.
+ */
+function payloadTooLargeError(
+  encodedBytes: number,
+  limit: number | undefined,
+): RustraCommandError | undefined {
+  if (limit === undefined || encodedBytes <= limit) return undefined;
+  return new RustraCommandError(
+    'payload.too_large',
+    `encoded payload ${encodedBytes}B exceeds maxPayloadBytes ${limit}B`,
+    false,
+  );
+}
 
 export function createRkyvV2Engine(
   native: RkyvV2SchemaNative,
@@ -444,9 +610,12 @@ export function createRkyvV2Engine(
   options?: RkyvV2EngineOptions,
 ): RkyvV2Engine {
   // F5 (opt-in): 계약 해시 검증. 빌드 시점 hash 와 네이티브 실시간 hash 가 다르면
-  // 엔진을 만들지 않고 즉시 실패(fail-fast)한다.
+  // 기본적으로 엔진을 만들지 않고 즉시 실패(fail-fast)한다. T2 onContractMismatch
+  // 콜백을 설정하면 불일치 시 throw 대신 콜백 호출 후 degraded 모드로 계속 생성한다.
   if (options?.contractHash !== undefined) {
     if (typeof native.getContractHash !== 'function') {
+      // unenforceable 은 콜백과 무관하게 항상 throw — native hash 가 없으면
+      // degraded 모드가 무의미하다 (검증 가능한 것이 아무것도 없다).
       throw new RustraCommandError(
         'contract.unenforceable',
         'contractHash option was set but the native module does not expose ' +
@@ -456,12 +625,50 @@ export function createRkyvV2Engine(
     const hashBytes = new Uint8Array(native.getContractHash());
     const nativeHash = _utf8Decode(hashBytes, 0, hashBytes.length).trim();
     if (nativeHash !== options.contractHash) {
-      throw new RustraCommandError(
-        'contract.mismatch',
-        `contract hash mismatch: native="${nativeHash.slice(0, 16)}…" vs ` +
-          `expected="${options.contractHash.slice(0, 16)}…" — generated client ` +
-          `and native binary are out of sync; regenerate the client`,
-      );
+      if (!options.onContractMismatch) {
+        throw new RustraCommandError(
+          'contract.mismatch',
+          `contract hash mismatch: native="${nativeHash.slice(0, 16)}…" vs ` +
+            `expected="${options.contractHash.slice(0, 16)}…" — generated client ` +
+            `and native binary are out of sync; regenerate the client`,
+        );
+      }
+      options.onContractMismatch({ nativeHash, expectedHash: options.contractHash });
+    }
+  }
+
+  // T2 (opt-in): schemaVersion staleness 검사. JS > native 면 경고만 한다
+  // (fatal 아님 — OTA 롤백/지연 배포 상황에서도 앱은 동작해야 한다).
+  // getSchema 미노출 구 네이티브는 조용히 건너뛴다 (비교할 것이 없다).
+  if (options?.schemaVersion !== undefined && typeof native.getSchema === 'function') {
+    // 구 네이티브(pre-Task-8)의 schema JSON 에는 schemaVersion 이 없다 —
+    // CLI old-schema 관례대로 1 로 취급한다. 이 기능의 대상이 되는 정확히 그
+    // 구 바이너리를 향한 스퓨리어스 경고를 막는 디폴트다.
+    //
+    // 스키마 파싱(getSchema 호출 자체의 실패 포함)은 절대 치명적이지 않다 —
+    // 파싱이 throw 하면 staleness 검사를 조용히 건너뛴다 (getSchema 미노출
+    // 경우와 동일한 취급). 경고 기능이 엔진 생성을 깨뜨리면 "fatal 아님"
+    // 계약 자체가 위반된다. invoke 시점의 tier-3 스키마 파싱(getLiveSchema)은
+    // 별개의 기존 동작 — malformed 스키마에서 동적 명령 호출 시 JSON.parse 가
+    // dispatch 밖으로 동기 throw 할 수 있다.
+    let nativeVersion: number | undefined;
+    try {
+      nativeVersion = parseLiveSchemaDocument(native).schemaVersion ?? 1;
+    } catch {
+      nativeVersion = undefined;
+    }
+    if (nativeVersion !== undefined && options.schemaVersion > nativeVersion) {
+      const info = { nativeVersion, jsVersion: options.schemaVersion };
+      if (options.onSchemaStale) {
+        options.onSchemaStale(info);
+      } else {
+        console.warn(
+          `[rustra] schema stale: JS bundle schemaVersion=${info.jsVersion} > ` +
+            `native schemaVersion=${info.nativeVersion} — native binary is older ` +
+            `than the JS bundle (OTA rollback / delayed rollout); newer commands ` +
+            `may fail until native catches up`,
+        );
+      }
     }
   }
 
@@ -470,48 +677,120 @@ export function createRkyvV2Engine(
   const hasTypedPath = !!(native.invokeTyped && native.hasStaticCodec);
   // P0-2: 단일 횡단 배치가 가능하려면 invokeTypedBatch 도 필요.
   const hasBatchPath = hasTypedPath && !!native.invokeTypedBatch;
+  // (T3) JS 사전 크기 검사 — undefined 면 검사하지 않는다 (네이티브 동적 한도가
+  // 최종 게이트). typed(tier 1) 경로는 JS 측 인코딩이 없어 검사 대상이 아니다.
+  const payloadLimit = options?.maxPayloadBytes;
+
+  // 신호 없는 기본 3-티어 dispatch (T1 리팩터링 — 로직은 기존 그대로).
+  const dispatch = <T>(command: string, args?: unknown): Promise<T> => {
+    // 1순위: C++ fast path (RN JSI). 정적 명령만. JS 측 인코딩이 없어
+    // maxPayloadBytes 검사를 건너뛴다 — 네이티브 한도가 그대로 적용된다.
+    if (hasTypedPath && native.hasStaticCodec!(command)) {
+      return Promise.resolve(native.invokeTyped!(command, args) as T);
+    }
+    // 2순위: JS codec (Node/Bun/Tauri 또는 typed 누락 시). 정적 명령.
+    const codec = registry.get(command);
+    if (codec) {
+      const encoded = codec.encode(args);
+      // (T3) 네이티브 왕복 전에 크기 검사 — 초과면 invokeRkyvV2 를 부르지 않는다.
+      const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
+      if (tooLarge) return Promise.reject(tooLarge);
+      const resultBytes = native.invokeRkyvV2(encoded);
+      // Reject (do not throw) so the declared Promise<T> contract holds and
+      // callers can use .catch() / await-try-consistently for command errors.
+      const outcome = tier2Outcome<T>(codec, resultBytes);
+      if (!outcome.ok) return Promise.reject(outcome.error);
+      return Promise.resolve(outcome.value);
+    }
+    // 3순위: 동적 명령 → Tier 3 fallback (live schema 의 commandId 사용)
+    const entry = getLiveSchema(native).get(command);
+    if (!entry) {
+      return Promise.reject(
+        new RustraCommandError(
+          'command.not_found',
+          `RkyvV2: no codec and not in live schema for "${command}"`,
+        ),
+      );
+    }
+    const tier3Request = encodeTier3Request(entry.commandId, args);
+    // (T3) tier 2 와 동일한 사전 검사 — 네이티브 호출 전에 조기 실패.
+    const tooLarge = payloadTooLargeError(tier3Request.byteLength, payloadLimit);
+    if (tooLarge) return Promise.reject(tooLarge);
+    const resp = decodeTier3Response(native.invokeRkyvV2(tier3Request));
+    if (!resp.ok) {
+      const e = resp.error ?? { code: 'invoke.failed', message: 'RkyvV2 (tier3) invoke failed' };
+      return Promise.reject(
+        new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code)),
+      );
+    }
+    return Promise.resolve(resp.result as T);
+  };
 
   return {
-    invoke<T>(command: string, args?: unknown): Promise<T> {
-      // 1순위: C++ fast path (RN JSI). 정적 명령만.
-      if (hasTypedPath && native.hasStaticCodec!(command)) {
-        return Promise.resolve(native.invokeTyped!(command, args) as T);
+    invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
+      const signal = options?.signal;
+      if (signal?.aborted) {
+        return Promise.reject(
+          new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
+        );
       }
-      // 2순위: JS codec (Node/Bun/Tauri 또는 typed 누락 시). 정적 명령.
+      if (!signal) return dispatch<T>(command, args);
+      // 네이티브 전파 경로 (T1): JS 코덱(tier 2) 명령이고 invokeAsync +
+      // invokeCancel 이 모두 노출되면 Rust 측 체크포인트까지 취소가 닿는다.
+      // typed(tier 1)/tier 3 동적 경로는 invokeAsync 가 있어도 얕은 취소로
+      // 폴백한다 (설계 노트: 전파는 JS 코덱 경로만).
       const codec = registry.get(command);
-      if (codec) {
-        const resultBytes = native.invokeRkyvV2(codec.encode(args));
-        const response = codec.decode(resultBytes);
-        if (!response.ok) {
-          const e = response.error ?? { code: 'invoke.failed', message: 'RkyvV2 invoke failed' };
-          // Reject (do not throw) so the declared Promise<T> contract holds and
-          // callers can use .catch() / await-try-consistently for command errors.
-          return Promise.reject(
-            new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code)),
-          );
-        }
-        return Promise.resolve(response.result as T);
+      const onTypedPath = hasTypedPath && native.hasStaticCodec!(command);
+      if (!onTypedPath && codec && native.invokeAsync && native.invokeCancel) {
+        return new Promise<T>((resolve, reject) => {
+          let settled = false;
+          let invocationId = -1;
+          const onAbort = () => {
+            if (settled) return;
+            settled = true;
+            native.invokeCancel!(invocationId);
+            reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
+          };
+          // encode/invokeAsync 가 동기 throw 해도 abort 리스너가 signal 에
+          // 새어남기지 않도록 try/catch 로 정리한다. catch 에서 reject 할 때
+          // 이미 콜백이 정착했다면 reject 는 no-op 이므로 안전하다.
+          try {
+            // invokeAsync 가 콜백을 동기적으로 부를 수 있으므로 리스너를 먼저 단다.
+            signal.addEventListener('abort', onAbort, { once: true });
+            const encoded = codec.encode(args);
+            // (T3) 전파 경로도 동일한 사전 검사 — 초과면 invokeAsync 를 부르지
+            // 않고 throw 한다. Error 이므로 아래 catch 가 리스너를 정리한 뒤
+            // 그대로 reject 한다 (기존 동기 throw 정리 경로 재사용).
+            const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
+            if (tooLarge) throw tooLarge;
+            invocationId = native.invokeAsync!(encoded, (resp) => {
+              if (settled) return;
+              // settled 를 올리기 전에 환산한다 — tier2Outcome 은 decode 가
+              // throw 해도 (잘못된 프레임) 에러로 환산할 뿐 절대 throw 하지
+              // 않으므로, 이 지점 이후 프라미스는 반드시 정착한다. 예외가
+              // 네이티브 트램펄린으로 새어나가 영원히 대기하는 일이 없다.
+              const outcome = tier2Outcome<T>(codec, resp);
+              settled = true;
+              signal.removeEventListener('abort', onAbort);
+              if (outcome.ok) resolve(outcome.value);
+              else reject(outcome.error);
+            });
+          } catch (err) {
+            settled = true;
+            signal.removeEventListener('abort', onAbort);
+            reject(
+              err instanceof Error
+                ? err
+                : new RustraCommandError(
+                    'invoke.failed',
+                    `invoke("${command}") dispatch failed: ${String(err)}`,
+                  ),
+            );
+          }
+        });
       }
-      // 3순위: 동적 명령 → Tier 3 fallback (live schema 의 commandId 사용)
-      const entry = getLiveSchema(native).get(command);
-      if (!entry) {
-        return Promise.reject(
-          new RustraCommandError(
-            'command.not_found',
-            `RkyvV2: no codec and not in live schema for "${command}"`,
-          ),
-        );
-      }
-      const resp = decodeTier3Response(
-        native.invokeRkyvV2(encodeTier3Request(entry.commandId, args)),
-      );
-      if (!resp.ok) {
-        const e = resp.error ?? { code: 'invoke.failed', message: 'RkyvV2 (tier3) invoke failed' };
-        return Promise.reject(
-          new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code)),
-        );
-      }
-      return Promise.resolve(resp.result as T);
+      // 전파 불가 — 얕은 취소 (JS 프라미스만 거부, Rust 는 끝까지 실행):
+      return raceAbort(dispatch<T>(command, args), signal, command);
     },
 
     invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
