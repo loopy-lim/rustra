@@ -4,6 +4,7 @@
 //! `register`(동적)는 debug 빌드에서만 동작.
 
 #![allow(clippy::float_cmp)]
+#![cfg_attr(not(debug_assertions), allow(dead_code))]
 
 use proptest::prelude::*;
 use rustra::Package;
