@@ -41,6 +41,12 @@ export type RustraJSINative = {
   getContractHash?(): ArrayBuffer;
   hasStaticCodec?(name: string): boolean;
   invokeTyped?(name: string, args: unknown): unknown;
+  /**
+   * (P0-3) cmd_id 진입 typed fast path — `invokeTyped` 의 u16 디스패치 변형.
+   * 문자열 마샬링과 C++ 이름 비교체인을 제거한다 (JSI 횡단 2→1, 문자열 2→0).
+   * 미노출 구 네이티브는 이름 기반 `invokeTyped` 로 폴백한다.
+   */
+  invokeTypedById?(cmdId: number, args: unknown): unknown;
   invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
   /**
    * Rust → JS 이벤트 푸시(RN JSI EventDispatcher). 콜백 인자는 JSON 문자열 —

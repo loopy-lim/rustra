@@ -239,6 +239,70 @@ int main() {
     if (gen::has_static_codec("dynamicCmd")) { std::printf("FAIL has_static_codec(dynamicCmd) should be false\n"); ++g_failures; }
   }
 
+  // ── encode_by_id / decode_by_id (P0-3: u16 디스패치) ──
+  // by_name 과 동일한 per-command 함수를 재사용하므로 바이트/값이 완전히
+  // 동일해야 한다 — switch 케이스가 잘못 매핑되면 즉시 드러난다.
+
+  // (1) encode_by_id(addNumbers=1) — by_name 과 byte-exact
+  {
+    Object args(rt);
+    args.setProperty(rt, "a", 42.0);
+    args.setProperty(rt, "b", 58.0);
+    Value argsV(rt, args);
+    rc::Writer w;
+    bool ok = gen::encode_by_id(rt, 1, argsV, w);
+    if (!ok) { std::printf("FAIL encode_by_id(1) returned false\n"); ++g_failures; }
+    check_bytes(w.take(), {0x01, 0x00, 0x54, 0x74}, "encode_by_id addNumbers {42,58}");
+  }
+
+  // (2) encode_by_id(greet=5) — 다른 케이스도 정확히 매핑되는지
+  {
+    Object args(rt);
+    args.setProperty(rt, "name", String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>("hi"), 2));
+    Value argsV(rt, args);
+    rc::Writer w;
+    bool ok = gen::encode_by_id(rt, 5, argsV, w);
+    if (!ok) { std::printf("FAIL encode_by_id(5) returned false\n"); ++g_failures; }
+    check_bytes(w.take(), {0x05, 0x00, 0x02, 0x68, 0x69}, "encode_by_id greet {hi}");
+  }
+
+  // (3) decode_by_id(addNumbers=1) round-trip — value=100 → {value:100}
+  {
+    uint8_t body[] = {0xC8, 0x01}; // postcard varint 100
+    rc::Reader r(body, 2);
+    Value result = gen::decode_by_id(rt, 1, r);
+    double v = result.getObject(rt).getProperty(rt, "value").asNumber();
+    if (v != 100.0) { std::printf("FAIL decode_by_id(1) value: got %f, want 100\n", v); ++g_failures; }
+  }
+
+  // (4) decode_by_id(greet=5) round-trip — "yo"
+  {
+    uint8_t body[] = {0x02, 0x79, 0x6F};
+    rc::Reader r(body, 3);
+    Value result = gen::decode_by_id(rt, 5, r);
+    std::string s = result.getObject(rt).getProperty(rt, "message").getString(rt).utf8(rt);
+    if (s != "yo") { std::printf("FAIL decode_by_id(5) message: got <%s>, want yo\n", s.c_str()); ++g_failures; }
+  }
+
+  // (5) 존재하지 않는 cmd_id — encode 는 false, decode 는 throw
+  {
+    Object args(rt);
+    Value argsV(rt, args);
+    rc::Writer w;
+    if (gen::encode_by_id(rt, 9999, argsV, w)) {
+      std::printf("FAIL encode_by_id(9999) should return false\n"); ++g_failures;
+    }
+    uint8_t body[] = {0x00};
+    rc::Reader r(body, 1);
+    bool threw = false;
+    try {
+      gen::decode_by_id(rt, 9999, r);
+    } catch (const JSError&) {
+      threw = true;
+    }
+    if (!threw) { std::printf("FAIL decode_by_id(9999) should throw JSError\n"); ++g_failures; }
+  }
+
   if (g_failures == 0) {
     std::printf("OK: all generated-codec tests passed\n");
     return 0;
