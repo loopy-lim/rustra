@@ -183,8 +183,70 @@ test('subscribeEvent coexists with multiple event names', () => {
 
 // ── createAsyncEngine (P0-3 + T1 얕은 취소) ─────────────────
 
-import { createAsyncEngine } from './index.js';
-import type { RustraJSIAsyncNative } from './index.js';
+import { createAsyncEngine, createFastEngine } from './index.js';
+import type { RustraJSIAsyncNative, RustraJSINative } from './index.js';
+
+// ── FastEngineOptions → core 옵션 전달 (follow-up 2) ───────
+// 어댑터는 "전달됐는지"만 검증 — core 동작 상세는 @rustra/types 에서 이미 검증됨.
+
+test('createFastEngine forwards maxPayloadBytes to the core pre-check', async () => {
+  // maxPayloadBytes: 8 → 인코딩 후 8B 초과면 payload.too_large 로 네이티브 호출 없이 reject.
+  const native: RustraJSINative = {
+    invoke: () => new ArrayBuffer(0),
+    invokeRkyvV2: () => {
+      throw new Error('native must not be called for an over-limit payload');
+    },
+  };
+  const codec = {
+    commandId: 1,
+    encode: () => new ArrayBuffer(16), // 16B > 8B limit
+    decode: () => ({ ok: true, result: {} }),
+  };
+  const engine = createFastEngine(native, {
+    rkyvV2Codecs: new Map([['big', codec]]),
+    maxPayloadBytes: 8,
+  });
+  await assert.rejects(
+    engine.invoke('big', {}),
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'payload.too_large',
+  );
+});
+
+test('createFastEngine forwards schemaVersion/onSchemaStale (stale warning path)', () => {
+  const stale: unknown[] = [];
+  const native: RustraJSINative = {
+    invoke: () => new ArrayBuffer(0),
+    invokeRkyvV2: () => new ArrayBuffer(8),
+    getSchema: () =>
+      encoder.encode(JSON.stringify({ schemaVersion: 1, commands: [] })).buffer as ArrayBuffer,
+  };
+  const engine = createFastEngine(native, {
+    rkyvV2Codecs: new Map(),
+    schemaVersion: 4,
+    onSchemaStale: (info) => stale.push(info),
+  });
+  // 엔진 생성 시점에 staleness 검사가 돈다 — 옵션이 core 에 닿았으면 기록돼 있다.
+  assert.ok(engine, 'engine is created');
+  assert.deepEqual(stale, [{ nativeVersion: 1, jsVersion: 4 }]);
+});
+
+test('createFastEngine forwards onContractMismatch (degraded mode entry)', () => {
+  const mismatches: unknown[] = [];
+  const native: RustraJSINative = {
+    invoke: () => new ArrayBuffer(0),
+    invokeRkyvV2: () => new ArrayBuffer(0),
+    getContractHash: () => encoder.encode('native-hash-AAAA').buffer as ArrayBuffer,
+  };
+  const engine = createFastEngine(native, {
+    rkyvV2Codecs: new Map(),
+    contractHash: 'different-hash-BBBB',
+    onContractMismatch: (info) => mismatches.push(info),
+  });
+  assert.ok(engine, 'degraded mode — engine is created instead of throwing');
+  assert.deepEqual(mismatches, [
+    { nativeHash: 'native-hash-AAAA', expectedHash: 'different-hash-BBBB' },
+  ]);
+});
 
 /**
  * invokeTypedAsync mock 네이티브 — 성공 콜백을 보류(defer)했다가 수동 전달한다.
@@ -290,4 +352,123 @@ test('abort mid-flight rejects cancelled; late native resolve is ignored (T1)', 
     'promise must stay rejected (late resolve is a no-op)',
   );
   assert.equal(h.state.delivered, true, 'native callback did fire — it was just ignored');
+});
+
+// ── follow-up 3: invokeTypedAsync id 노출 + 전파형 취소 ────
+
+function makePropagatingAsyncNative() {
+  const state = {
+    lastId: -1,
+    cancels: [] as number[],
+    resolveNow: (_result: unknown) => {},
+    rejectNow: (_msg: string) => {},
+  };
+  const native: RustraJSIAsyncNative = {
+    invoke(_payload: ArrayBuffer): ArrayBuffer {
+      return new ArrayBuffer(0);
+    },
+    invokeRkyvV2(_payload: ArrayBuffer): ArrayBuffer {
+      return new ArrayBuffer(0);
+    },
+    invokeTypedAsync(
+      _name: string,
+      _args: unknown,
+      onSuccess: (result: unknown) => void,
+      onError: (message: string) => void,
+    ): number {
+      state.lastId = 7; // 신형 네이티브 — id 반환
+      state.resolveNow = (result) => onSuccess(result);
+      state.rejectNow = (msg) => onError(msg);
+      return state.lastId;
+    },
+    invokeCancel(invocationId: number): boolean {
+      state.cancels.push(invocationId);
+      return true;
+    },
+  };
+  return { native, state };
+}
+
+test('abort mid-flight propagates: invokeCancel(id) is called (follow-up 3)', async () => {
+  const h = makePropagatingAsyncNative();
+  const engine = createAsyncEngine(h.native, { rkyvV2Codecs: new Map() });
+
+  const ac = new AbortController();
+  const p = engine.invoke('heavy', { n: 1 }, { signal: ac.signal });
+  assert.equal(h.state.lastId, 7, 'native issued an invocation id');
+  ac.abort();
+
+  await assert.rejects(p, (err: unknown) => {
+    assert.ok(err instanceof RustraCommandError);
+    assert.equal((err as RustraCommandError).code, 'cancelled');
+    return true;
+  });
+  assert.deepEqual(
+    h.state.cancels,
+    [7],
+    'abort must propagate the invocation id to native.invokeCancel',
+  );
+
+  // 늦은 네이티브 성공 콜백 — 이미 정착된 프라미스는 그대로.
+  h.state.resolveNow({ value: 42 });
+  await new Promise<void>((r) => queueMicrotask(() => r()));
+  await assert.rejects(
+    p,
+    (err: unknown) =>
+      err instanceof RustraCommandError && (err as RustraCommandError).code === 'cancelled',
+    'promise must stay rejected (late resolve is a no-op)',
+  );
+});
+
+test('abort mid-flight propagates and late native error is ignored (follow-up 3)', async () => {
+  const h = makePropagatingAsyncNative();
+  const engine = createAsyncEngine(h.native, { rkyvV2Codecs: new Map() });
+
+  const ac = new AbortController();
+  const p = engine.invoke('heavy', { n: 1 }, { signal: ac.signal });
+  ac.abort();
+  h.state.rejectNow('internal: late failure');
+
+  await assert.rejects(p, (err: unknown) => {
+    assert.ok(err instanceof RustraCommandError);
+    assert.equal((err as RustraCommandError).code, 'cancelled', 'abort wins over the late error');
+    return true;
+  });
+});
+
+test('signal path without invokeCancel falls back to shallow cancel (follow-up 3)', async () => {
+  // 구형 네이티브 — invokeCancel 미노출 (void 반환). 얕은 취소로 폴백해야 한다.
+  const h = makeAsyncNative();
+  let cancelCalls = 0;
+  const native: RustraJSIAsyncNative = {
+    ...h.native,
+    invokeCancel: (_id: number) => {
+      cancelCalls++;
+      return false;
+    },
+  };
+  delete (native as { invokeCancel?: unknown }).invokeCancel; // 미노출 시뮬레이션
+  const engine = createAsyncEngine(native, { rkyvV2Codecs: new Map() });
+
+  const ac = new AbortController();
+  const p = engine.invoke('heavy', { n: 1 }, { signal: ac.signal });
+  ac.abort();
+
+  await assert.rejects(p, (err: unknown) => {
+    assert.ok(err instanceof RustraCommandError);
+    assert.equal((err as RustraCommandError).code, 'cancelled');
+    return true;
+  });
+  assert.equal(cancelCalls, 0, 'no invokeCancel call in the shallow fallback');
+});
+
+test('new native without abort resolves normally through the id path (follow-up 3)', async () => {
+  const h = makePropagatingAsyncNative();
+  const engine = createAsyncEngine(h.native, { rkyvV2Codecs: new Map() });
+
+  const p = engine.invoke<{ value: number }>('heavy', { n: 1 });
+  h.state.resolveNow({ value: 42 });
+  const out = await p;
+  assert.equal(out.value, 42);
+  assert.deepEqual(h.state.cancels, [], 'no cancel without an abort');
 });

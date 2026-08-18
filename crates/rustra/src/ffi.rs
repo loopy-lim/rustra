@@ -104,7 +104,11 @@ static MAX_PAYLOAD_BYTES: std::sync::atomic::AtomicUsize =
     std::sync::atomic::AtomicUsize::new(DEFAULT_MAX_PAYLOAD_BYTES);
 
 /// 현재 페이로드 크기 한도 (invoke 경로의 크기 가드가 읽는 단일 지점).
-fn max_payload_bytes() -> usize {
+///
+/// (T3 후속) 공개 판독기 — `Package::invoke_rkyv_v2` 등 FFI 엔트리가 직접
+/// 노출하지 않는 경로(rkyv V2 와이어)도 동일한 동적 한도를 읽어 게이트한다.
+/// `rustra_ffi_get_max_payload` FFI 심볼과 같은 값을 반환한다.
+pub fn max_payload_bytes() -> usize {
     MAX_PAYLOAD_BYTES.load(std::sync::atomic::Ordering::Relaxed)
 }
 
@@ -452,7 +456,8 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json(
         return std::ptr::null_mut();
     }
     if payload_len > max_payload_bytes() {
-        return err_response("payload exceeds size limit", out_len, json_serialize);
+        let e = crate::RustraError::payload_too_large(payload_len, max_payload_bytes());
+        return err_response(&e.to_string(), out_len, json_serialize);
     }
 
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
@@ -487,11 +492,8 @@ pub unsafe extern "C" fn rustra_ffi_invoke_postcard(
         return std::ptr::null_mut();
     }
     if payload_len > max_payload_bytes() {
-        return err_response(
-            "payload exceeds size limit",
-            out_len,
-            postcard_serialize_response,
-        );
+        let e = crate::RustraError::payload_too_large(payload_len, max_payload_bytes());
+        return err_response(&e.to_string(), out_len, postcard_serialize_response);
     }
 
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };

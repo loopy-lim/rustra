@@ -368,32 +368,35 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         }
 
         // 3) 응답 헤더 분기. ok=1 → postcard 바디 디코딩, ok=0 → 에러 메시지.
+        // free 짝 수정(follow-up 3): calculator 심볼의 버퍼는 magic 헤더 없는
+        // Box<[u8]> 이다 — rustra_ffi_free 의 ptr-8 역산은 잘못된 레이아웃을
+        // 재구성하므로 rustra_calculator_free_buffer 로 해제해야 한다.
         if (out_len < 1) {
-          rustra_ffi_free(resp, out_len);
+          rustra_calculator_free_buffer(resp, out_len);
           throw JSError(rt, "RustraJSI: empty rkyv v2 response");
         }
         if (resp[0] == 0) {
           // 에러 와이어: [ok:0][pad to @8][err_len u16 LE @8][err @10]
           if (out_len < 10) {
-            rustra_ffi_free(resp, out_len);
+            rustra_calculator_free_buffer(resp, out_len);
             throw JSError(rt, "RustraJSI: malformed error response");
           }
           uint16_t errLen = (uint16_t)resp[8] | ((uint16_t)resp[9] << 8);
           size_t avail = out_len > 10 ? out_len - 10 : 0;
           std::string err(reinterpret_cast<const char*>(resp + 10),
                            errLen <= avail ? errLen : avail);
-          rustra_ffi_free(resp, out_len);
+          rustra_calculator_free_buffer(resp, out_len);
           throw JSError(rt, err);
         }
 
         // 성공: postcard(O) @8 부터 디코딩.
         if (out_len < 8) {
-          rustra_ffi_free(resp, out_len);
+          rustra_calculator_free_buffer(resp, out_len);
           throw JSError(rt, "RustraJSI: malformed success response");
         }
         rc::Reader r(resp + 8, out_len - 8);
         Value result = gen::decode_by_name(rt, name, r);
-        rustra_ffi_free(resp, out_len);
+        rustra_calculator_free_buffer(resp, out_len);
         return result;
       });
     cache_["invokeTyped"] = std::make_unique<CachedFunction>(
@@ -440,33 +443,176 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
 
           // 응답 분기: ok=1 → decode, ok=0 → 에러 throw (fail-fast)
           if (out_len < 1) {
-            rustra_ffi_free(resp, out_len);
+            rustra_calculator_free_buffer(resp, out_len);
             throw JSError(rt, "RustraJSI: empty rkyv v2 response (batch)");
           }
           if (resp[0] == 0) {
             if (out_len < 10) {
-              rustra_ffi_free(resp, out_len);
+              rustra_calculator_free_buffer(resp, out_len);
               throw JSError(rt, "RustraJSI: malformed error response (batch)");
             }
             uint16_t errLen = (uint16_t)resp[8] | ((uint16_t)resp[9] << 8);
             size_t avail = out_len > 10 ? out_len - 10 : 0;
             std::string err(reinterpret_cast<const char*>(resp + 10),
                              errLen <= avail ? errLen : avail);
-            rustra_ffi_free(resp, out_len);
+            rustra_calculator_free_buffer(resp, out_len);
             throw JSError(rt, err);
           }
           if (out_len < 8) {
-            rustra_ffi_free(resp, out_len);
+            rustra_calculator_free_buffer(resp, out_len);
             throw JSError(rt, "RustraJSI: malformed success response (batch)");
           }
           rc::Reader r(resp + 8, out_len - 8);
           Value decoded = gen::decode_by_name(rt, name, r);
-          rustra_ffi_free(resp, out_len);
+          rustra_calculator_free_buffer(resp, out_len);
           results.setValueAtIndex(rt, i, decoded);
         }
         return results;
       });
     cache_["invokeTypedBatch"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+
+  // ── follow-up 3: invokeTypedAsync + invokeCancel ────────────
+  // invokeTypedAsync(name, args, onSuccess, onError) → invocation id (number).
+  // 결과는 CallInvoker 로 JS 스레드에 마샬링된다. id 로 invokeCancel(id) 호출 시
+  // Rust 취소 체크포인트(워커 dispatch 전)까지 전파된다. 구형 계약(void 반환)
+  // 호환은 JS 어댑터가 처리한다.
+
+  {
+    // on_complete C 콜백 컨텍스트 — 힙에 두고 user_data 로 전달. 콜백 1회 실행
+    // 후 자기 자신을 해제한다(정확히 1회).
+    struct AsyncCallContext {
+      std::string commandName;
+      facebook::jsi::Function onSuccess;
+      facebook::jsi::Function onError;
+      std::shared_ptr<void> callInvoker; // type-erased CallInvoker (or null)
+      std::mutex mutex;                  // 아직 marshalling 중인지 가드
+      bool done = false;                 // 정확히 1회 딜리버리
+    };
+
+    auto propNameId = PropNameID::forAscii(rt, "invokeTypedAsync");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 4,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 4) {
+          throw JSError(rt, "RustraJSI: invokeTypedAsync requires (name, args, onSuccess, onError)");
+        }
+        std::string name = args[0].asString(rt).utf8(rt);
+        if (!args[2].isObject() || !args[2].asObject(rt).isFunction(rt) ||
+            !args[3].isObject() || !args[3].asObject(rt).isFunction(rt)) {
+          throw JSError(rt, "RustraJSI: invokeTypedAsync callbacks must be functions");
+        }
+
+        // CallInvoker — EventDispatcher 의 전역 디스패처에서 빌려온다.
+        std::shared_ptr<void> invoker = getEventDispatcher()->currentCallInvoker();
+
+        if (!invoker) {
+          throw JSError(rt,
+            "RustraJSI: invokeTypedAsync requires a CallInvoker — "
+            "install via installRustraJSIWithInvoker");
+        }
+
+        auto* ctx = new AsyncCallContext{
+          name,
+          args[2].asObject(rt).getFunction(rt),
+          args[3].asObject(rt).getFunction(rt),
+          std::move(invoker),
+          {},
+          false,
+        };
+
+        // 1) JS 객체 → postcard 요청 바이트 (invokeTyped 와 동일한 인코딩).
+        rc::Writer w;
+        if (!gen::encode_by_name(rt, name, args[1], w)) {
+          delete ctx;
+          throw JSError(rt, "RustraJSI: no C++ codec for '" + name + "'");
+        }
+        auto req = w.take();
+
+        // 2) 비동기 FFI — id 를 동기 반환한다 (취소 핸들).
+        uint64_t invocationId = 0;
+        rustra_calculator_invoke_rkyv_v2_async(
+          req.data(), req.size(), ctx,
+          [](void* user_data, uint8_t* resp, size_t resp_len) {
+            // Rust 워커 스레드에서 실행 — JS 객체를 건드리지 않고, 결과를
+            // 소유한 뒤 CallInvoker 로 JS 스레드에 마샬링한다.
+            auto* ctx = static_cast<AsyncCallContext*>(user_data);
+            std::vector<uint8_t> frame;
+            if (resp && resp_len > 0) {
+              frame.assign(resp, resp + resp_len);
+              rustra_calculator_free_buffer(resp, resp_len);
+            }
+            std::shared_ptr<void> invoker;
+            {
+              std::lock_guard<std::mutex> lock(ctx->mutex);
+              invoker = ctx->callInvoker;
+            }
+            auto* nativeInvoker =
+              static_cast<facebook::react::CallInvoker*>(invoker.get());
+            auto* rawCtx = ctx;
+            nativeInvoker->invokeAsync([rawCtx, frame = std::move(frame)](facebook::jsi::Runtime& rt) {
+              std::unique_ptr<AsyncCallContext> owned(rawCtx); // 1회 실행 후 해제
+              std::lock_guard<std::mutex> lock(owned->mutex);
+              if (owned->done) return;
+              owned->done = true;
+              const std::string& name = owned->commandName;
+              const size_t out_len = frame.size();
+              const uint8_t* resp = frame.data();
+              if (out_len < 1) {
+                owned->onError.call(rt, "RustraJSI: empty rkyv v2 async response");
+                return;
+              }
+              if (resp[0] == 0) {
+                // 에러 와이어: [ok:0][pad][err_len u16 @8][postcard{code,message} @10]
+                if (out_len < 10) {
+                  owned->onError.call(rt, "RustraJSI: malformed async error response");
+                  return;
+                }
+                // postcard {code, message} → "code: message" 문자열 (RustraError
+                // Display 형태) — JS parseRustraErrorString 가 코드를 복원한다.
+                rc::Reader r(resp + 10, out_len - 10);
+                std::string code = r.read_string();
+                std::string message = r.read_string();
+                owned->onError.call(rt, code + ": " + message);
+                return;
+              }
+              if (out_len < 8) {
+                owned->onError.call(rt, "RustraJSI: malformed async success response");
+                return;
+              }
+              try {
+                rc::Reader r(resp + 8, out_len - 8);
+                Value result = gen::decode_by_name(rt, name, r);
+                owned->onSuccess.call(rt, std::move(result));
+              } catch (const facebook::jsi::JSError& e) {
+                // 디코딩 실패는 에러 콜백으로 정규화 — 콜백 누락 방지.
+                owned->onError.call(rt, e.getMessage());
+              }
+            });
+          },
+          &invocationId);
+
+        // JS 는 동기적으로 id 를 받는다 — abort 전파에 쓸 취소 핸들.
+        return Value(static_cast<double>(invocationId));
+      });
+    cache_["invokeTypedAsync"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+
+  // invokeCancel(id) → boolean — 진행 중 async 호출의 협력적 취소.
+  {
+    auto propNameId = PropNameID::forAscii(rt, "invokeCancel");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 1,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1) {
+          throw JSError(rt, "RustraJSI: invokeCancel requires (invocationId)");
+        }
+        uint64_t id = static_cast<uint64_t>(args[0].asNumber());
+        return Value(rustra_ffi_invoke_cancel(id));
+      });
+    cache_["invokeCancel"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
 }

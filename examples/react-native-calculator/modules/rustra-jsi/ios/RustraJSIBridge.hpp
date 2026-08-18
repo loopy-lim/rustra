@@ -49,6 +49,21 @@ extern "C" {
     const uint8_t* payload, size_t payload_len, size_t* out_len);
   uint8_t* rustra_calculator_invoke_rkyv_v2(
     const uint8_t* payload, size_t payload_len, size_t* out_len);
+
+  // ── Cancellation (from rustra::ffi) ─────────────────────
+  // invocation_id 로 진행 중 async 호출을 협력적 취소한다.
+  bool rustra_ffi_invoke_cancel(uint64_t invocation_id);
+
+  // ── rkyv V2 async (follow-up 3) ──────────────────────────
+  // `rustra_calculator_invoke_rkyv_v2` 의 async 변형 — invocation_id 발급 +
+  // cancel 체크포인트 포함. 응답 버퍼는 on_complete 콜백 안에서
+  // rustra_calculator_free_buffer 로 해제해야 한다.
+  typedef void (*rustra_calculator_async_callback_t)(
+    void* user_data, uint8_t* resp, size_t resp_len);
+  void rustra_calculator_invoke_rkyv_v2_async(
+    const uint8_t* payload, size_t payload_len, void* user_data,
+    rustra_calculator_async_callback_t on_complete, uint64_t* invocation_id);
+
   void rustra_calculator_free_buffer(uint8_t* ptr, size_t len);
 }
 
@@ -76,6 +91,13 @@ class EventDispatcher : public std::enable_shared_from_this<EventDispatcher> {
 public:
   /// JS 스레드 마샬링용 CallInvoker 설정. installRustraJSI* 에서 호출된다.
   void setCallInvoker(std::shared_ptr<void> invoker);
+
+  /// 현재 설치된 type-erased CallInvoker (없으면 nullptr).
+  /// `invokeTypedAsync` 가 결과를 JS 스레드로 마샬링할 때 빌려간다.
+  std::shared_ptr<void> currentCallInvoker() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return callInvoker_;
+  }
 
   /// (name, callback) JS 리스너 등록/해제. JS 스레드에서 호출됨
   /// (HostFunction 경유). 같은 이름에 두 번 등록하면 마지막이 이긴다.
