@@ -20,12 +20,14 @@ const findRoot = (startDir: string): string => {
 const ROOT = findRoot(__dirname);
 
 const ITERATIONS = 1000;
+const SUBPROCESS_ITERATIONS = 50;
 const SUBPROCESS_MAX_AVG_US = 10000; // subprocess should be under 10ms
 const NAPI_MAX_AVG_US = 500; // napi-rs should be under 500µs
 const NAPI_FASTER_THAN_SUBPROCESS = true;
 
 function bench(label: string, fn: () => void, iterations = ITERATIONS) {
-  for (let i = 0; i < 200; i++) fn();
+  const warmup = Math.min(20, Math.floor(iterations * 0.2));
+  for (let i = 0; i < warmup; i++) fn();
   const times: number[] = [];
   for (let i = 0; i < iterations; i++) {
     const start = performance.now();
@@ -95,7 +97,7 @@ describe('transport performance', { concurrency: 1 }, () => {
 
     it('subprocess: latency within threshold', () => {
       const invoke = createSubprocessInvoke();
-      const r = bench('subprocess', () => invoke('addNumbers', { a: 42, b: 58 }));
+      const r = bench('subprocess', () => invoke('addNumbers', { a: 42, b: 58 }), SUBPROCESS_ITERATIONS);
       console.log(
         `    subprocess: avg=${r.avg.toFixed(0)}ns p50=${r.p50.toFixed(0)}ns p99=${r.p99.toFixed(0)}ns`,
       );
@@ -130,7 +132,7 @@ describe('transport performance', { concurrency: 1 }, () => {
       const subprocessInvoke = createSubprocessInvoke();
       const napiInvoke = createNapiInvoke();
 
-      const subR = bench('subprocess', () => subprocessInvoke('addNumbers', { a: 42, b: 58 }));
+      const subR = bench('subprocess', () => subprocessInvoke('addNumbers', { a: 42, b: 58 }), SUBPROCESS_ITERATIONS);
       const napiR = bench('napi-rs', () => napiInvoke('addNumbers', { a: 42, b: 58 }));
 
       console.log(

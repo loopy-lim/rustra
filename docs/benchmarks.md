@@ -13,6 +13,76 @@
 | React Native   | 0.81.5 + Expo 54             |
 | iOS 시뮬레이터 | iPhone 17                    |
 
+## 2026-08-18 현재 버전 재측정 (`0.1.2`)
+
+아래 수치는 이번 checkout에서 benchmark를 순차 실행한 재측정 결과다. Rust 코어
+수치는 Apple Silicon macOS에서 측정했으며, N-API는 release native addon을 사용했다.
+기존 온디바이스 iOS/Android 표와 직접 합산하지 않고 현재 기준선으로 사용한다.
+
+### Rust release wire benchmark
+
+`cargo run -p rustra-calculator-example --bin wire-bench --release`
+
+| 경로 | 요청 | 응답 | 평균 | p50 | p99 | 처리량 |
+| ---- | ---: | ---: | ---: | ---: | ---: | ---: |
+| JSON `invoke` | 47 B | 34 B | 2.43 µs | 2.38 µs | 2.75 µs | 411,082 ops/s |
+| postcard `invoke_postcard` | 13 B | 4 B | 1.70 µs | 1.62 µs | 1.88 µs | 587,120 ops/s |
+| rkyv V2 `invoke_rkyv_v2` | 4 B | 10 B | **1.34 µs** | **1.29 µs** | **1.50 µs** | **743,821 ops/s** |
+
+→ 현재 Rust 코어에서 rkyv V2는 JSON보다 약 1.8배, postcard보다 약 1.3배 빠르며,
+요청 wire는 JSON 대비 약 11.8배 작다.
+
+### Node.js release N-API transport
+
+`cd examples/calculator-napi && npm run build`, 이후 `npm run bench`
+
+| transport | 평균 | p50 | p99 | 처리량 |
+| --------- | ---: | ---: | ---: | ---: |
+| Node.js subprocess | 5.99 ms | 5.68 ms | 10.82 ms | 167 ops/s |
+| Node N-API | **2.9 µs** | **2.7 µs** | **5.2 µs** | **349,062 ops/s** |
+
+→ 동일 실행에서 N-API가 subprocess보다 약 2,092배 빠르다. 고정 47 B payload의
+샘플 수를 100~10,000회로 바꿔도 2.7~2.8 µs로 측정되어 benchmark 안정성도 확인했다.
+
+### React Native iOS Release micro-benchmark
+
+실제 iPhone 17 Simulator Release 실행에서 `BenchmarkApp`을 100K sync iteration,
+10K async iteration으로 측정했다.
+
+| 경로 | 평균 | p50 | p99 |
+| ---- | ---: | ---: | ---: |
+| rkyv V2 encode | 2.1 µs | 1.7 µs | - |
+| rkyv V2 JSI call | 8.3 µs | 8.1 µs | - |
+| rkyv V2 decode | 675 ns | 625 ns | - |
+| rkyv V2 full sync | **11.2 µs** | **10.6 µs** | - |
+| JSON full sync | 26.1 µs | 25.5 µs | - |
+| Nitro async | 1.9 µs | 1.7 µs | 2.1 µs |
+| rkyv V2 async | **5.4 µs** | **5.2 µs** | **6.5 µs** |
+| JSON async | 27.2 µs | 26.5 µs | 34.5 µs |
+
+→ 이 실행에서 rkyv V2는 JSON 대비 full sync 약 2.3배, async 약 5.0배 빠르다.
+Nitro보다는 느리지만, Rustra의 정적 codec 및 rkyv V2 경로가 실제 RN JSI 환경에서
+동작하면서 측정된 값이다.
+
+### Rust Criterion debug Tier 3 기준선
+
+동적 registry는 release에서 mutation이 차단되는 설계이므로 `--profile dev`로
+측정했다. 각 benchmark는 0.5초 warm-up, 2초 measurement로 순차 실행했다.
+
+| 경로 | 평균 |
+| ---- | ---: |
+| 정적 Tier 1 postcard | 6.15 µs |
+| 정적 Tier 2 postcard | 5.47 µs |
+| 동적 Tier 3 JSON-in-binary | 8.86 µs |
+| `register()` 1회 | 26.92 µs |
+| `live_schema()` 3 commands | 52.43 µs |
+| mutable invoke | 8.76 µs |
+| frozen invoke | 8.74 µs |
+
+payload scaling은 1/10/100/1000 items에서 각각 31.29 µs, 131.23 µs, 590.12 µs,
+5.78 ms였다. 동적 Tier 3은 payload가 커질수록 JSON 처리 비용이 지배적이므로,
+대형 payload에는 정적 codec Tier 1/2 또는 별도 binary codec을 우선 사용해야 한다.
+
 ## 어댑터별 성능 비교
 
 단일 `addNumbers({ a: 42, b: 58 })` 호출 기준 (10,000회 이상 반복, release 빌드).
@@ -233,9 +303,9 @@ criterion 벤치마크(`crates/rustra/benches/`)로 측정.
 
 | 경로                                        | 평균    | 비고                                |
 | ------------------------------------------- | ------- | ----------------------------------- |
-| 정적 Tier 1 (primitive, postcard fast-path) | 5.49 µs | 기준                                |
-| 정적 Tier 2 (String, postcard fast-path)    | 4.73 µs | Tier 1 보다 약간 빠름(필드 수 차이) |
-| 동적 Tier 3 (런타임 register, JSON)         | 7.38 µs | Tier 1 대비 **~1.34x**              |
+| 정적 Tier 1 (primitive, postcard fast-path) | 6.15 µs | 현재 재측정 기준                    |
+| 정적 Tier 2 (String, postcard fast-path)    | 5.47 µs | 현재 재측정 기준                    |
+| 동적 Tier 3 (런타임 register, JSON)         | 8.86 µs | Tier 1 대비 **~1.44x**              |
 
 → 동적 Tier 3 JSON 경로는 정적 postcard 대비 **약 1.3–1.6x** 느리다. JSON 직렬화/파싱 오버헤드.
 
@@ -245,10 +315,10 @@ criterion 벤치마크(`crates/rustra/benches/`)로 측정.
 
 | 연산                                | 평균     | 비고                                       |
 | ----------------------------------- | -------- | ------------------------------------------ |
-| `register()` 1회 (스키마 생성 포함) | 26.28 µs | 핫패스 아님(등록 시 1회)                   |
-| `live_schema()` 조회 (3 명령)       | 50.39 µs | 읽기 전용, 디버그/릴리스 모두              |
-| `invoke_rkyv_v2` (mutable 패키지)   | 7.71 µs  | RwLock read 경로                           |
-| `invoke_rkyv_v2` (frozen 패키지)    | 7.84 µs  | mutable 과 **~2% 차이** (RwLock 영향 미미) |
+| `register()` 1회 (스키마 생성 포함) | 26.92 µs | 핫패스 아님(등록 시 1회)                   |
+| `live_schema()` 조회 (3 명령)       | 52.43 µs | 읽기 전용, 디버그/릴리스 모두              |
+| `invoke_rkyv_v2` (mutable 패키지)   | 8.76 µs  | RwLock read 경로                           |
+| `invoke_rkyv_v2` (frozen 패키지)    | 8.74 µs  | mutable 과 **차이 0.2% 미만**             |
 
 ### 동적 Tier 3 경로 payload scaling (debug)
 
@@ -256,10 +326,10 @@ criterion 벤치마크(`crates/rustra/benches/`)로 측정.
 
 | 항목 수 | 평균      |
 | ------- | --------- |
-| 1       | 24.85 µs  |
-| 10      | 80.29 µs  |
-| 100     | 630.45 µs |
-| 1000    | 6.50 ms   |
+| 1       | 31.29 µs  |
+| 10      | 131.23 µs |
+| 100     | 590.12 µs |
+| 1000    | 5.78 ms   |
 
 → 데이터 크기에 대해 선형 증가(JSON 직렬화 비용 지배).
 
@@ -276,12 +346,12 @@ cargo bench -p rustra --bench type_scaling    --profile dev
 
 | 연산                       | Node.js | Bun     | 비고          |
 | -------------------------- | ------- | ------- | ------------- |
-| JSON.parse (simple)        | 269 ns  | 127 ns  | Bun 2.1x 빠름 |
-| JSON.stringify (simple)    | 93 ns   | 61 ns   | Bun 1.5x 빠름 |
-| JSON.parse (100 items)     | 34.3 µs | 23.8 µs | Bun 1.4x 빠름 |
-| JSON.stringify (100 items) | 54.0 µs | 33.6 µs | Bun 1.6x 빠름 |
-| EngineClient.invoke        | 308 ns  | 189 ns  | Bun 1.6x 빠름 |
-| Object spread copy         | 22 ns   | 19 ns   | 비슷          |
+| JSON.parse (simple)        | 223 ns  | 127 ns  | Bun 수치는 기존 기록 |
+| JSON.stringify (simple)    | 93 ns   | 61 ns   | Bun 수치는 기존 기록 |
+| JSON.parse (100 items)     | 33.2 µs | 23.8 µs | Bun 수치는 기존 기록 |
+| JSON.stringify (100 items) | 52.4 µs | 33.6 µs | Bun 수치는 기존 기록 |
+| EngineClient.invoke        | 299 ns  | 189 ns   | Bun 수치는 기존 기록 |
+| Object spread copy         | 14 ns   | 19 ns   | Bun 수치는 기존 기록 |
 
 ## 벤치마크 실행 방법
 
