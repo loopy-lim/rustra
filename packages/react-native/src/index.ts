@@ -373,6 +373,11 @@ export type RustraEventNative = {
  * unsubscribe();
  * ```
  */
+const nativeListeners = new WeakMap<
+  RustraEventNative,
+  Map<string, Set<(payload: unknown) => void>>
+>();
+
 export function subscribeEvent(
   native: RustraEventNative,
   name: string,
@@ -382,22 +387,51 @@ export function subscribeEvent(
     // 구버전 네이티브 — no-op 구독 해제 함수 반환.
     return () => {};
   }
-  native.onEvent(name, (payloadJson) => {
-    // JSON 문자열 → 객체 1회 파싱. 파싱 실패(빈 문자열/손상 페이로드)는
-    // null 로 정규화해 콜백 계약을 지킨다.
-    let payload: unknown = null;
-    if (payloadJson && payloadJson.length > 0) {
-      try {
-        payload = JSON.parse(payloadJson);
-      } catch {
-        payload = null;
+
+  let eventMap = nativeListeners.get(native);
+  if (!eventMap) {
+    eventMap = new Map();
+    nativeListeners.set(native, eventMap);
+  }
+
+  let listeners = eventMap.get(name);
+  if (!listeners) {
+    listeners = new Set();
+    eventMap.set(name, listeners);
+
+    native.onEvent(name, (payloadJson) => {
+      let payload: unknown = null;
+      if (payloadJson && payloadJson.length > 0) {
+        try {
+          payload = JSON.parse(payloadJson);
+        } catch {
+          payload = null;
+        }
       }
-    }
-    cb(payload);
-  });
+      const current = eventMap?.get(name);
+      if (current) {
+        for (const listener of current) {
+          try {
+            listener(payload);
+          } catch (err) {
+            console.error(`Rustra: event listener for "${name}" threw:`, err);
+          }
+        }
+      }
+    });
+  }
+
+  listeners.add(cb);
+
   return () => {
-    if (typeof native.offEvent === 'function') {
-      native.offEvent(name);
+    const current = eventMap?.get(name);
+    if (!current) return;
+    current.delete(cb);
+    if (current.size === 0) {
+      eventMap?.delete(name);
+      if (typeof native.offEvent === 'function') {
+        native.offEvent(name);
+      }
     }
   };
 }
