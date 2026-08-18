@@ -1,7 +1,11 @@
 name: Release
 
 on:
-  push:
+  # Release는 main push와 독립적으로 즉시 실행하지 않는다. CI 전체 workflow가
+  # 성공한 동일 commit에서만 실행해, build/test/lint/audit 결과를 선행 게이트로 삼는다.
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -13,6 +17,7 @@ jobs:
   # CI가 green인 경우에만 발행을 시도한다 (CI 실패 시 release 스킵).
   release:
     name: Changesets Publish (npm)
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -23,6 +28,8 @@ jobs:
         with:
           # changesets가 버전 커밋/PR을 만들 수 있도록 전체 히스토리 필요
           fetch-depth: 0
+          # workflow_run에서는 CI가 실제로 검증한 commit을 checkout한다.
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -31,6 +38,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Production dependency audit
+        run: npm run audit:prod
 
       # ci.yml 과 동일 — npm run build -ws 는 의존성 순서를 보장하지 않으므로
       # @rustra/types 를 먼저 빌드한다 (다른 패키지가 dist 타입을 import 함).

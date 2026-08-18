@@ -76,6 +76,8 @@ jobs:
         run: npm run lint
       - name: Format check
         run: npm run format:check
+      - name: Production dependency audit
+        run: npm run audit:prod
       - name: Type check calculator
         run: npx tsc --noEmit -p examples/calculator/tsconfig.json
       - name: Type check crud
