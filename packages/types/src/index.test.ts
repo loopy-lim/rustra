@@ -284,6 +284,7 @@ function makeTypedNative(
     invokeTyped?: (name: string, args: unknown) => unknown;
     invokeTypedBatch?: (names: string[], args: unknown[]) => unknown[];
     invokeTypedById?: (cmdId: number, args: unknown) => unknown;
+    invokeTypedBatchById?: (cmdIds: number[], args: unknown[]) => unknown[];
   },
 ): RkyvV2SchemaNative {
   const base = makeNative(opts);
@@ -292,6 +293,7 @@ function makeTypedNative(
   if (opts.invokeTyped) typed.invokeTyped = opts.invokeTyped;
   if (opts.invokeTypedBatch) typed.invokeTypedBatch = opts.invokeTypedBatch;
   if (opts.invokeTypedById) typed.invokeTypedById = opts.invokeTypedById;
+  if (opts.invokeTypedBatchById) typed.invokeTypedBatchById = opts.invokeTypedBatchById;
   return typed;
 }
 
@@ -625,6 +627,85 @@ test('invokeBatch without typed-batch native falls back to per-entry', async () 
     { command: 'b', args: {} },
   ]);
   assert.deepEqual(out, [{ echo: 'a' }, { echo: 'b' }]);
+});
+
+// ── createRkyvV2Engine: P0-2 byId 배치 (invokeTypedBatchById) ──
+
+test('invokeBatch uses invokeTypedBatchById with cmd_id array when available (P0-2 byId)', async () => {
+  // byId 배치 진입: 모든 항목이 정적 캐시에 있으면 이름 배열 대신 cmd_id 배열로
+  // 단일 횡단 — 문자열 마샬링 N 회 제거. 결과는 순서 보존.
+  const batchByIdCalls: number[][] = [];
+  let nameBatchCalls = 0;
+  const native = makeTypedNative({
+    hasStaticCodec: (name) => name === 'add' || name === 'mul',
+    invokeTyped: () => ({ value: 0 }),
+    invokeTypedBatch: () => {
+      nameBatchCalls++;
+      return [];
+    },
+    invokeTypedBatchById: (ids) => {
+      batchByIdCalls.push([...ids]);
+      // staticRegistry('add','mul') → cmdId 1, 2 — id 순서대로 결과 반환.
+      return ids.map((id) => ({ value: id * 10 }));
+    },
+  });
+  const engine = createRkyvV2Engine(native, staticRegistry('add', 'mul'));
+  const out = await engine.invokeBatch<Array<{ value: number }>>([
+    { command: 'add', args: { a: 1, b: 2 } }, // cmdId 1
+    { command: 'mul', args: { a: 2, b: 3 } }, // cmdId 2
+    { command: 'add', args: { a: 0, b: 0 } }, // cmdId 1 (중복 포함)
+  ]);
+  assert.equal(batchByIdCalls.length, 1, 'invokeTypedBatchById must be called exactly once');
+  assert.deepEqual(
+    batchByIdCalls[0],
+    [1, 2, 1],
+    'cmd_id array must follow entry order (duplicates preserved)',
+  );
+  assert.equal(nameBatchCalls, 0, 'name-based invokeTypedBatch must not run on byId path');
+  assert.deepEqual(out, [{ value: 10 }, { value: 20 }, { value: 10 }], 'order preserved');
+});
+
+test('invokeBatch falls back to name-based invokeTypedBatch without invokeTypedBatchById (P0-2 byId)', async () => {
+  // 호환 계약: 구 네이티브는 byId 배치 미노출 — 기존 이름 기반 경로 유지.
+  let nameBatchCalls = 0;
+  const native = makeTypedNative({
+    hasStaticCodec: () => true,
+    invokeTyped: () => ({ value: 0 }), // hasTypedPath 충족용
+    invokeTypedBatch: (names) => {
+      nameBatchCalls++;
+      return names.map((n) => ({ echo: n }));
+    },
+  });
+  const engine = createRkyvV2Engine(native, staticRegistry('a', 'b'));
+  const out = await engine.invokeBatch<Array<{ echo: string }>>([
+    { command: 'a', args: {} },
+    { command: 'b', args: {} },
+  ]);
+  assert.equal(nameBatchCalls, 1, 'name-based invokeTypedBatch must remain the fallback');
+  assert.deepEqual(out, [{ echo: 'a' }, { echo: 'b' }]);
+});
+
+test('invokeBatch skips invokeTypedBatchById when a cache-miss (dynamic) entry is mixed (P0-2 byId)', async () => {
+  // 캐시 미스 항목(동적 명령)이 섞이면 byId 배열을 조립할 수 없다 —
+  // 기존 폴백 경로(항목별 invoke)로 라우팅되고 byId/이름 배치 모두 미사용.
+  const native = makeTypedNative({
+    schema: schemaBytes([{ name: 'dyn', commandId: 9 }]),
+    invokeImpl: () => tier3Success({ v: 9 }),
+    hasStaticCodec: (name) => name === 'add',
+    invokeTyped: () => ({ value: 42 }),
+    invokeTypedBatch: () => {
+      throw new Error('invokeTypedBatch must not run for mixed batches');
+    },
+    invokeTypedBatchById: () => {
+      throw new Error('invokeTypedBatchById must not run for mixed batches');
+    },
+  });
+  const engine = createRkyvV2Engine(native, staticRegistry('add'));
+  const out = await engine.invokeBatch<Array<{ value: number } | { v: number }>>([
+    { command: 'add', args: {} }, // 정적 → invokeTyped
+    { command: 'dyn', args: {} }, // 동적(캐시 미스) → Tier 3
+  ]);
+  assert.deepEqual(out, [{ value: 42 }, { v: 9 }]);
 });
 
 // ── Task 3.3: 동시성 / 배치 에러 전파 ──────────────────────
