@@ -29,6 +29,8 @@ export { diffSchemas, formatDiffResult } from './schema-diff.js';
 export type { BreakingChange, DiffResult } from './schema-diff.js';
 export { createValidatedEngine } from './validate-engine.js';
 export type { EngineClient as ValidateEngineClient, ValidateOptions } from './validate-engine.js';
+export { rustraPlugin } from './vite.js';
+export type { RustraVitePluginOptions } from './vite.js';
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -260,7 +262,7 @@ interface GenerateOptions {
   cppOutputPath?: string;
 }
 
-async function runGenerate(args: string[]): Promise<void> {
+export async function runGenerate(args: string[]): Promise<void> {
   autoRebuild();
   const { schemaPath, outputPath, cppOutputPath } = resolvePaths(args);
   const written = await generateFromSchema(schemaPath, outputPath, cppOutputPath);
