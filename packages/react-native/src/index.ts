@@ -49,6 +49,12 @@ export type RustraJSINative = {
   invokeTypedById?(cmdId: number, args: unknown): unknown;
   invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
   /**
+   * (P0-2 byId) cmd_id 배열 배치 진입 — `invokeTypedBatch` 의 id 인덱싱 변형.
+   * 배치 경로의 문자열 마샬링 N 회를 제거한다. 미노출 구 네이티브는
+   * 이름 기반 `invokeTypedBatch` 로 폴백한다.
+   */
+  invokeTypedBatchById?(cmdIds: number[], args: unknown[]): unknown[];
+  /**
    * Rust → JS 이벤트 푸시(RN JSI EventDispatcher). 콜백 인자는 JSON 문자열 —
    * `subscribeEvent` 래퍼가 파싱한다.
    */
