@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 #include <jsi/jsi.h>
+#include <optional>
 
 // CallInvoker 는 순수 C++ 헤더(ReactCommon/callinvoker)다 — iOS/Android 모두
 // 동일 경로로 제공된다. 플랫폼 글루(.mm / jni.cpp) 가 invoker 를 얻어
@@ -21,10 +22,22 @@ namespace rc = rustra::codec;
 
 // ── ArrayBuffer helpers ────────────────────────────────────
 
+/// ArrayBuffer 생성자 캐시 — 첫 호출 시 1회 조회, 이후 재사용.
+/// jsi::Function 은 move-only 이므로 optional 에 move 저장한다.
+/// RN reload 로 Runtime 이 교체되면 installRustraJSIWithInvoker 가
+/// 재호출되므로 그 시점에 reset 한다 — 구 Runtime 소유 핸들이
+/// dangling 되지 않게 (아래 Install 절).
+static std::optional<Function> g_arrayBufferCtor;
+
+static Function& arrayBufferCtor(Runtime& rt) {
+  if (!g_arrayBufferCtor) {
+    g_arrayBufferCtor = rt.global().getPropertyAsFunction(rt, "ArrayBuffer");
+  }
+  return *g_arrayBufferCtor;
+}
+
 static Value createArrayBuffer(Runtime& rt, const uint8_t* data, size_t size) {
-  Function arrayBufferCtor = rt.global()
-    .getPropertyAsFunction(rt, "ArrayBuffer");
-  Object ab = arrayBufferCtor.callAsConstructor(rt, static_cast<double>(size))
+  Object ab = arrayBufferCtor(rt).callAsConstructor(rt, static_cast<double>(size))
     .getObject(rt);
   ArrayBuffer buf = ab.getArrayBuffer(rt);
   std::memcpy(buf.data(rt), data, size);
@@ -680,6 +693,9 @@ extern "C" void rustra_calculator_init();
 void installRustraJSIWithInvoker(Runtime& rt,
                                   std::shared_ptr<void> typeErasedCallInvoker) {
   rustra_calculator_init();
+  // RN reload 로 새 Runtime 이 설치되는 시점 — 캐시된 Function 핸들은
+  // 구 Runtime 힙을 참조하므로 여기서 반드시 비운다.
+  g_arrayBufferCtor.reset();
   auto dispatcher = getEventDispatcher();
   dispatcher->setCallInvoker(std::move(typeErasedCallInvoker));
 
