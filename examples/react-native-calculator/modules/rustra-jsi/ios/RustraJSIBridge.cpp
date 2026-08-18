@@ -50,6 +50,24 @@ static std::pair<const uint8_t*, size_t> extractBytes(Runtime& rt, const Value& 
   throw JSError(rt, "RustraJSI: expected ArrayBuffer or TypedArray");
 }
 
+// ── rkyv V2 에러 와이어 파싱 ────────────────────────────────
+// 에러 프레임: [ok:0][pad to @8][err_len u16 LE @8][postcard{code,message} @10]
+// postcard 파싱 실패 시 원시 바이트로 폴백한다(계약: 실패해도 throw 아님).
+// malformed(out_len < 10) 검사는 호출부에서 이미 완료했음을 전제로 한다.
+static std::string parseRkyvV2ErrorBody(const uint8_t* resp, size_t out_len) {
+  uint16_t errLen = (uint16_t)resp[8] | ((uint16_t)resp[9] << 8);
+  size_t avail = out_len > 10 ? out_len - 10 : 0;
+  size_t bodyLen = errLen <= avail ? errLen : avail;
+  try {
+    rc::Reader errReader(resp + 10, bodyLen);
+    std::string code = errReader.read_string();
+    std::string message = errReader.read_string();
+    return code + ": " + message;
+  } catch (...) {
+    return std::string(reinterpret_cast<const char*>(resp + 10), bodyLen);
+  }
+}
+
 // ── EventDispatcher: Rust → JS push delivery ───────────────
 //
 // 스레드 마샬링 설계:
@@ -385,18 +403,7 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
             rustra_calculator_free_buffer(resp, out_len);
             throw JSError(rt, "RustraJSI: malformed error response");
           }
-          uint16_t errLen = (uint16_t)resp[8] | ((uint16_t)resp[9] << 8);
-          size_t avail = out_len > 10 ? out_len - 10 : 0;
-          size_t bodyLen = errLen <= avail ? errLen : avail;
-          std::string errStr;
-          try {
-            rc::Reader errReader(resp + 10, bodyLen);
-            std::string code = errReader.read_string();
-            std::string message = errReader.read_string();
-            errStr = code + ": " + message;
-          } catch (...) {
-            errStr = std::string(reinterpret_cast<const char*>(resp + 10), bodyLen);
-          }
+          std::string errStr = parseRkyvV2ErrorBody(resp, out_len);
           rustra_calculator_free_buffer(resp, out_len);
           throw JSError(rt, errStr);
         }
@@ -463,18 +470,7 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
               rustra_calculator_free_buffer(resp, out_len);
               throw JSError(rt, "RustraJSI: malformed error response (batch)");
             }
-            uint16_t errLen = (uint16_t)resp[8] | ((uint16_t)resp[9] << 8);
-            size_t avail = out_len > 10 ? out_len - 10 : 0;
-            size_t bodyLen = errLen <= avail ? errLen : avail;
-            std::string errStr;
-            try {
-              rc::Reader errReader(resp + 10, bodyLen);
-              std::string code = errReader.read_string();
-              std::string message = errReader.read_string();
-              errStr = code + ": " + message;
-            } catch (...) {
-              errStr = std::string(reinterpret_cast<const char*>(resp + 10), bodyLen);
-            }
+            std::string errStr = parseRkyvV2ErrorBody(resp, out_len);
             rustra_calculator_free_buffer(resp, out_len);
             throw JSError(rt, errStr);
           }
@@ -590,11 +586,9 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
                   return;
                 }
                 // postcard {code, message} → "code: message" 문자열 (RustraError
-                // Display 형태) — JS parseRustraErrorString 가 코드를 복원한다.
-                rc::Reader r(resp + 10, out_len - 10);
-                std::string code = r.read_string();
-                std::string message = r.read_string();
-                owned->onError.call(rt, code + ": " + message);
+                // Display 형태) — JS parseRustraErrorString 가 코드를 복구한다.
+                // 파싱 실패 시 원시 바이트 폴백(onError 누락 없음).
+                owned->onError.call(rt, parseRkyvV2ErrorBody(resp, out_len));
                 return;
               }
               if (out_len < 8) {
