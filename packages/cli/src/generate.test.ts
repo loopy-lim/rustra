@@ -229,6 +229,56 @@ test('generateCommandsTs produces command function', () => {
   assert.ok(commands.includes('export function add('));
   assert.ok(commands.includes("invoke<AddOutput>('add'"));
   assert.ok(commands.includes("import { invoke } from '@rustra/types'"));
+  assert.ok(commands.includes("import type { InvokeOptions } from '@rustra/types'"));
+});
+
+test('generateCommandsTs handles void input and JSDoc description', () => {
+  const schema: PackageSchema = {
+    packageId: 'test.pkg',
+    commands: [
+      {
+        name: 'ping',
+        commandId: 1,
+        inputType: '()',
+        outputType: '()',
+        inputSchema: { description: 'Pings the server' },
+        outputSchema: {},
+      },
+    ],
+  };
+
+  const commands = generateCommandsTs(schema);
+  assert.ok(commands.includes('/**\n * Pings the server\n */'));
+  assert.ok(commands.includes('export function ping(options?: InvokeOptions): Promise<void>'));
+  assert.ok(commands.includes("invoke<void>('ping', undefined, options)"));
+});
+
+test('generateTypesTs emits JSDoc comments from schema description', () => {
+  const schema: PackageSchema = {
+    packageId: 'test.pkg',
+    commands: [
+      {
+        name: 'getItem',
+        commandId: 1,
+        inputType: 'GetItemInput',
+        outputType: 'GetItemOutput',
+        inputSchema: {
+          type: 'object',
+          description: 'Input for getting item',
+          properties: {
+            id: { type: 'string', description: 'Unique identifier' },
+          },
+        },
+        outputSchema: {
+          type: 'object',
+        },
+      },
+    ],
+  };
+
+  const types = generateTypesTs(schema);
+  assert.ok(types.includes('/**\n * Input for getting item\n */'));
+  assert.ok(types.includes('/** Unique identifier */'));
 });
 
 test('generateContractTs produces hash constant', () => {

@@ -144,11 +144,16 @@ pub(super) fn ts_object_from_schema(schema: &Value, definitions: &Value) -> Stri
             } else {
                 "?"
             };
-            format!(
+            let mut field_str = String::new();
+            if let Some(desc) = property_schema.get("description").and_then(Value::as_str) {
+                field_str.push_str(&format!("  /** {} */\n", desc.replace('\n', " ")));
+            }
+            field_str.push_str(&format!(
                 "  {name}{optional}: {};",
                 const_literal(property_schema)
                     .unwrap_or_else(|| ts_type_from_schema(property_schema, definitions))
-            )
+            ));
+            field_str
         })
         .collect::<Vec<_>>()
         .join("\n");
