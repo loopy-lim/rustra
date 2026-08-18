@@ -183,8 +183,70 @@ test('subscribeEvent coexists with multiple event names', () => {
 
 // ── createAsyncEngine (P0-3 + T1 얕은 취소) ─────────────────
 
-import { createAsyncEngine } from './index.js';
-import type { RustraJSIAsyncNative } from './index.js';
+import { createAsyncEngine, createFastEngine } from './index.js';
+import type { RustraJSIAsyncNative, RustraJSINative } from './index.js';
+
+// ── FastEngineOptions → core 옵션 전달 (follow-up 2) ───────
+// 어댑터는 "전달됐는지"만 검증 — core 동작 상세는 @rustra/types 에서 이미 검증됨.
+
+test('createFastEngine forwards maxPayloadBytes to the core pre-check', async () => {
+  // maxPayloadBytes: 8 → 인코딩 후 8B 초과면 payload.too_large 로 네이티브 호출 없이 reject.
+  const native: RustraJSINative = {
+    invoke: () => new ArrayBuffer(0),
+    invokeRkyvV2: () => {
+      throw new Error('native must not be called for an over-limit payload');
+    },
+  };
+  const codec = {
+    commandId: 1,
+    encode: () => new ArrayBuffer(16), // 16B > 8B limit
+    decode: () => ({ ok: true, result: {} }),
+  };
+  const engine = createFastEngine(native, {
+    rkyvV2Codecs: new Map([['big', codec]]),
+    maxPayloadBytes: 8,
+  });
+  await assert.rejects(
+    engine.invoke('big', {}),
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'payload.too_large',
+  );
+});
+
+test('createFastEngine forwards schemaVersion/onSchemaStale (stale warning path)', () => {
+  const stale: unknown[] = [];
+  const native: RustraJSINative = {
+    invoke: () => new ArrayBuffer(0),
+    invokeRkyvV2: () => new ArrayBuffer(8),
+    getSchema: () =>
+      encoder.encode(JSON.stringify({ schemaVersion: 1, commands: [] })).buffer as ArrayBuffer,
+  };
+  const engine = createFastEngine(native, {
+    rkyvV2Codecs: new Map(),
+    schemaVersion: 4,
+    onSchemaStale: (info) => stale.push(info),
+  });
+  // 엔진 생성 시점에 staleness 검사가 돈다 — 옵션이 core 에 닿았으면 기록돼 있다.
+  assert.ok(engine, 'engine is created');
+  assert.deepEqual(stale, [{ nativeVersion: 1, jsVersion: 4 }]);
+});
+
+test('createFastEngine forwards onContractMismatch (degraded mode entry)', () => {
+  const mismatches: unknown[] = [];
+  const native: RustraJSINative = {
+    invoke: () => new ArrayBuffer(0),
+    invokeRkyvV2: () => new ArrayBuffer(0),
+    getContractHash: () => encoder.encode('native-hash-AAAA').buffer as ArrayBuffer,
+  };
+  const engine = createFastEngine(native, {
+    rkyvV2Codecs: new Map(),
+    contractHash: 'different-hash-BBBB',
+    onContractMismatch: (info) => mismatches.push(info),
+  });
+  assert.ok(engine, 'degraded mode — engine is created instead of throwing');
+  assert.deepEqual(mismatches, [
+    { nativeHash: 'native-hash-AAAA', expectedHash: 'different-hash-BBBB' },
+  ]);
+});
 
 /**
  * invokeTypedAsync mock 네이티브 — 성공 콜백을 보류(defer)했다가 수동 전달한다.

@@ -5,7 +5,12 @@
  * 설정은 `@rustra/types`의 configure()를 사용합니다.
  */
 
-import type { EngineClient as EngineClientType, InvokeOptions, RustraNative } from '@rustra/types';
+import type {
+  EngineClient as EngineClientType,
+  InvokeOptions,
+  RkyvV2EngineOptions,
+  RustraNative,
+} from '@rustra/types';
 import { createRkyvV2Engine, parseRustraErrorString, RustraCommandError } from '@rustra/types';
 
 export type {
@@ -28,6 +33,12 @@ export type RustraJSINative = {
   invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
   /** B1 fast path: JSI 가 노출하는 정적 명령 C++ postcard 코덱. */
   getSchema?(): ArrayBuffer;
+  /**
+   * (F5) 네이티브 빌드의 계약 해시(SHA-256 hex) — `contractHash` 엔진 옵션이
+   * 설정된 경우에만 호출된다. core `RkyvV2SchemaNative.getContractHash` 와
+   * 동일 계약 (Lynx 어댑터는 core 타입 상속으로 이미 노출).
+   */
+  getContractHash?(): ArrayBuffer;
   hasStaticCodec?(name: string): boolean;
   invokeTyped?(name: string, args: unknown): unknown;
   invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
@@ -76,16 +87,13 @@ export type SyncEngineClient = {
 /**
  * 고속 엔진 생성 옵션.
  *
- * rkyv V2 바이너리 경로를 필수로 사용합니다 (최고 성능).
+ * rkyv V2 바이너리 경로를 필수로 사용합니다 (최고 성능). 나머지 필드는 core
+ * `RkyvV2EngineOptions` 를 그대로 전달한다 — contractHash 검증(F5),
+ * onContractMismatch/schemaVersion/onSchemaStale(OTA, T2), maxPayloadBytes(T3).
  */
 export type FastEngineOptions = {
   rkyvV2Codecs: Map<string, import('@rustra/types').RkyvV2Codec<unknown, unknown>>;
-  /**
-   * (F5, opt-in) 빌드 시점 계약 해시. 설정하면 엔진 생성 시 네이티브의
-   * 실시간 해시(getContractHash)와 비교해 불일치 시 즉시 throw 한다.
-   */
-  contractHash?: string;
-};
+} & RkyvV2EngineOptions;
 
 /**
  * 고속 엔진 — JSI 동기 호출로 Promise 오버헤드 없이 결과를 반환합니다.
@@ -129,9 +137,16 @@ export function createFastEngine(
   native: RustraJSINative,
   options: FastEngineOptions,
 ): EngineClientType {
-  return createRkyvV2Engine(native, options.rkyvV2Codecs, {
+  // 명시 나열 + satisfies — core 에 옵션이 추가되면 이 객체 리터럴이 누락
+  // 필드/오타를 타입 에러로 드러낸다 (수작업 필터링 누수 방지).
+  const engineOptions = {
     contractHash: options.contractHash,
-  });
+    onContractMismatch: options.onContractMismatch,
+    schemaVersion: options.schemaVersion,
+    onSchemaStale: options.onSchemaStale,
+    maxPayloadBytes: options.maxPayloadBytes,
+  } satisfies RkyvV2EngineOptions;
+  return createRkyvV2Engine(native, options.rkyvV2Codecs, engineOptions);
 }
 
 // ── P0-3 async offload — invokeAsync ──────────────────────────
