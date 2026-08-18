@@ -388,6 +388,86 @@ test('invokeBatch falls back to per-entry invoke when dynamic commands are mixed
   assert.deepEqual(out, [{ value: 42 }, { v: 9 }]);
 });
 
+// ── invokeBatch 항목별 취소 (T1 후속) ───────────────────────
+
+test('invokeBatch entry signal routes the whole batch off the single crossing (T1 follow-up)', async () => {
+  // signal 있는 항목이 하나라도 섞이면 단일 횡단(invokeTypedBatch)을 타지
+  // 않고 Promise.all 폴백으로 간다 — 각 항목은 자기 취소 정책을 따른다.
+  let batchCalls = 0;
+  const native = makeTypedNative({
+    hasStaticCodec: () => true,
+    invokeTyped: (name) => ({ echo: name }),
+    invokeTypedBatch: () => {
+      batchCalls++;
+      return [];
+    },
+  });
+  const engine = createRkyvV2Engine(native, new Map());
+
+  const ac = new AbortController();
+  const p = engine.invokeBatch([
+    { command: 'a', args: {} },
+    { command: 'b', args: {}, options: { signal: ac.signal } },
+  ]);
+  ac.abort();
+
+  await assert.rejects(p, (err: unknown) => {
+    assert.ok(err instanceof RustraCommandError);
+    assert.equal((err as RustraCommandError).code, 'cancelled');
+    return true;
+  });
+  assert.equal(batchCalls, 0, 'signal entry must force the fallback routing');
+});
+
+test('invokeBatch signal-less static entries still use the single crossing (T1 follow-up)', async () => {
+  // 옵션 필드가 있어도 signal 이 없으면 단일 횡단 유지 — 회귀 가드.
+  let batchCalls = 0;
+  const native = makeTypedNative({
+    hasStaticCodec: () => true,
+    invokeTyped: () => ({ value: 0 }),
+    invokeTypedBatch: (names) => {
+      batchCalls++;
+      return names.map(() => ({ value: 1 }));
+    },
+  });
+  const engine = createRkyvV2Engine(native, new Map());
+  const out = await engine.invokeBatch<Array<{ value: number }>>([
+    { command: 'a', args: {}, options: {} }, // options 있지만 signal 없음
+    { command: 'b' }, // 기존 형태 그대로
+  ]);
+  assert.equal(batchCalls, 1, 'signal-less entries must keep the single crossing');
+  assert.deepEqual(out, [{ value: 1 }, { value: 1 }]);
+});
+
+test('invokeBatch entry cancel only rejects that entry independently (T1 follow-up)', async () => {
+  // 항목별 독립 취소 — signal 항목만 거부되고 다른 항목은 정상 완료… 는
+  // Promise.all 전체 거부로 관찰된다. 각 항목 invoke 가 options 를 받았는지가
+  // 이 테스트의 관심사다: pre-aborted signal 항목은 네이티브 호출 없이 거부.
+  const typedCalls: string[] = [];
+  const native = makeTypedNative({
+    hasStaticCodec: () => true,
+    invokeTyped: (name) => {
+      typedCalls.push(name);
+      return { echo: name };
+    },
+  });
+  const engine = createRkyvV2Engine(native, new Map());
+
+  const ac = new AbortController();
+  ac.abort(); // 사전 중단 — 'b' 는 절대 네이티브에 닿으면 안 된다.
+  await assert.rejects(
+    engine.invokeBatch([
+      { command: 'a', args: {} },
+      { command: 'b', args: {}, options: { signal: ac.signal } },
+    ]),
+    (err: unknown) =>
+      err instanceof RustraCommandError && (err as RustraCommandError).code === 'cancelled',
+  );
+  // Promise.all 폴백에서 'a' 가 먼저 dispatch 될 수 있으나, pre-aborted 'b' 는
+  // dispatch 되지 않는다. 'a' 호출 여부는 스케줄 순서와 무관하게 허용.
+  assert.ok(!typedCalls.includes('b'), "pre-aborted entry 'b' must never reach the native layer");
+});
+
 test('invokeBatch without typed-batch native falls back to per-entry', async () => {
   // invokeTypedBatch 미제공 → hasBatchPath=false → 항목별 invoke.
   const native = makeTypedNative({

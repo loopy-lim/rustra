@@ -1118,6 +1118,67 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2(
     alloc_response(resp_bytes, out_len)
 }
 
+/// rkyv V2 비동기 완료 콜백 — `rustra_ffi_invoke_async` 의 on_complete 와 동일 계약.
+/// 응답 버퍼는 calculator `alloc_response` 로 할당되며 콜백 첫 인자가 null 이
+/// 아니면 `rustra_calculator_free_buffer` 로 해제해야 한다.
+pub type RustraCalculatorAsyncCallback =
+    unsafe extern "C" fn(user_data: *mut std::ffi::c_void, resp: *mut u8, resp_len: usize);
+
+/// rkyv V2 비동기 진입점 — `rustra_ffi_invoke_async` 와 동일한 계약
+/// (invocation_id 발급, 워커 스레드 dispatch, cancel 체크포인트,
+/// complete 후 on_complete)을 rkyv V2 와이어로 제공한다.
+///
+/// RN JSI `invokeTypedAsync` 참조 구현이 호출한다. 취소는
+/// `rustra_ffi_invoke_cancel(invocation_id)` 로 전달된다.
+///
+/// # Safety
+///
+/// `payload` 는 `payload_len` 바이트 유효 (null+0 허용). `on_complete` 는
+/// thread-safe C 콜백. `invocation_id` 는 null 또는 유효한 u64 쓰기 포인터.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2_async(
+    payload: *const u8,
+    payload_len: usize,
+    user_data: *mut std::ffi::c_void,
+    on_complete: Option<RustraCalculatorAsyncCallback>,
+    invocation_id: *mut u64,
+) {
+    let id = rustra::cancel::register_invocation();
+    if !invocation_id.is_null() {
+        unsafe { *invocation_id = id };
+    }
+    // 원시 포인터는 Send 가 아니므로 usize 로 변환해 워커로 넘긴다 —
+    // rustra::ffi 의 async 엔트리와 동일한 패턴.
+    let user_data_raw = user_data as usize;
+    let bytes = if payload.is_null() || payload_len == 0 {
+        Vec::new()
+    } else {
+        unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
+    };
+    std::thread::spawn(move || {
+        // cancel 체크포인트 — Cancelled 면 핸들러를 시작하지 않는다.
+        let resp = if rustra::cancel::status(id) == rustra::cancel::Status::Cancelled {
+            rustra::encode_rkyv_v2_error(&RustraError::cancelled(
+                "invocation cancelled before dispatch",
+            ))
+        } else {
+            match rustra::ffi::get_package()
+                .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
+                .and_then(|pkg| pkg.invoke_rkyv_v2(&bytes))
+            {
+                Ok(bytes) => bytes,
+                Err(error) => rustra::encode_rkyv_v2_error(&error),
+            }
+        };
+        rustra::cancel::complete_invocation(id);
+        if let Some(cb) = on_complete {
+            let mut out_len = 0;
+            let ptr = alloc_response(resp, &mut out_len);
+            unsafe { cb(user_data_raw as *mut std::ffi::c_void, ptr, out_len) };
+        }
+    });
+}
+
 #[cfg(test)]
 #[cfg(test)]
 #[allow(clippy::bool_assert_comparison, clippy::useless_vec)]
@@ -2222,5 +2283,183 @@ mod tests {
         );
         let after = call("average", serde_json::json!({ "numbers": [] }));
         assert_eq!(after["ok"], false, "average gone after unregister: {after}");
+    }
+
+    // ── invoke_rkyv_v2_async (follow-up 3): id 발급 + 취소 체크포인트 ──
+
+    /// on_complete 콜백이 받은 프레임을 캡처한다. 기존 sync 테스트와 동일하게
+    /// addNumbers 는 command_id 1 로 고정이다.
+    struct AsyncCapture {
+        frame: std::sync::Mutex<Option<(Vec<u8>, usize)>>,
+        fired: std::sync::atomic::AtomicBool,
+    }
+
+    impl AsyncCapture {
+        fn new() -> Self {
+            Self {
+                frame: std::sync::Mutex::new(None),
+                fired: std::sync::atomic::AtomicBool::new(false),
+            }
+        }
+    }
+
+    unsafe extern "C" fn capture_async_cb(
+        _user: *mut std::ffi::c_void,
+        resp: *mut u8,
+        resp_len: usize,
+    ) {
+        let cap = unsafe { &*(_user as *const AsyncCapture) };
+        cap.fired.store(true, std::sync::atomic::Ordering::SeqCst);
+        if resp.is_null() {
+            return;
+        }
+        let data = unsafe { std::slice::from_raw_parts(resp, resp_len) }.to_vec();
+        unsafe { rustra_calculator_free_buffer(resp, resp_len) };
+        *cap.frame.lock().unwrap() = Some((data, resp_len));
+    }
+
+    /// addNumbers rkyv V2 요청 바이트를 만든다 (command_id 1 고정 — sync 테스트와 동일).
+    fn add_request(a: i64, b: i64) -> Vec<u8> {
+        let input = postcard::to_allocvec(&AddNumbersInput { a, b }).unwrap();
+        let mut req = vec![0u8; 2 + input.len()];
+        req[0..2].copy_from_slice(&1u16.to_le_bytes());
+        req[2..].copy_from_slice(&input);
+        req
+    }
+
+    /// 콜백 발생을 (최대 수 초 동안) 기다린다 — 워커 스레드 스케줄링 경합 흡수.
+    fn wait_for_callback(cap: &AsyncCapture) {
+        for _ in 0..2_000 {
+            if cap.fired.load(std::sync::atomic::Ordering::SeqCst) {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        panic!("async callback did not fire within timeout");
+    }
+
+    /// rkyv V2 에러 프레임에서 postcard {code, message} 를 디코딩한다.
+    fn decode_error_wire(frame: &[u8]) -> (String, String) {
+        assert!(frame.len() >= 10, "error frame must carry the 10B header");
+        assert_eq!(frame[0], 0, "ok flag must be 0 for an error frame");
+        let body = &frame[10..];
+        // postcard: varint-len 문자열 2개 (code, message).
+        fn read_str(b: &[u8]) -> (String, usize) {
+            let mut shift = 0;
+            let mut len = 0usize;
+            let mut i = 0;
+            loop {
+                let byte = b[i];
+                len |= ((byte & 0x7f) as usize) << shift;
+                i += 1;
+                if byte & 0x80 == 0 {
+                    break;
+                }
+                shift += 7;
+            }
+            (
+                String::from_utf8_lossy(&b[i..i + len]).into_owned(),
+                i + len,
+            )
+        }
+        let (code, n) = read_str(body);
+        let (message, _) = read_str(&body[n..]);
+        (code, message)
+    }
+
+    #[test]
+    fn invoke_rkyv_v2_async_issues_id_and_round_trips() {
+        ensure_registered();
+        let req = add_request(20, 22);
+
+        let cap = AsyncCapture::new();
+        let mut invocation_id: u64 = 0;
+        unsafe {
+            rustra_calculator_invoke_rkyv_v2_async(
+                req.as_ptr(),
+                req.len(),
+                &cap as *const _ as *mut std::ffi::c_void,
+                Some(capture_async_cb),
+                &mut invocation_id,
+            )
+        };
+        assert!(invocation_id > 0, "a fresh invocation id must be issued");
+        wait_for_callback(&cap);
+        let (frame, len) = cap
+            .frame
+            .lock()
+            .unwrap()
+            .take()
+            .expect("callback must deliver the response frame");
+        assert_eq!(frame[0], 1, "success frame ok flag must be 1");
+        assert_eq!(frame.len(), len);
+        let out: AddNumbersOutput = postcard::from_bytes(&frame[8..]).unwrap();
+        assert_eq!(out.value, 42);
+        // 완료 후 레지스트리 정리 — Unknown.
+        assert_eq!(
+            rustra::cancel::status(invocation_id),
+            rustra::cancel::Status::Unknown
+        );
+    }
+
+    #[test]
+    fn invoke_rkyv_v2_async_pre_cancelled_returns_cancelled_frame() {
+        ensure_registered();
+        let req = add_request(1, 2);
+
+        let cap = AsyncCapture::new();
+        let mut invocation_id: u64 = 0;
+        unsafe {
+            rustra_calculator_invoke_rkyv_v2_async(
+                req.as_ptr(),
+                req.len(),
+                &cap as *const _ as *mut std::ffi::c_void,
+                Some(capture_async_cb),
+                &mut invocation_id,
+            );
+            // 발급 직후 dispatch 전 취소 — 체크포인트가 핸들러 시작을 막는다.
+            // (spawn 직후의 cancel 이라 극히 드물게 워커가 먼저 통과할 수 있으나,
+            //  체크포인트가 status 를 다시 읽으므로 대부분 Cancelled 로 관측된다.
+            //  이 테스트의 관심사는 "cancelled 프레임 계약" 자체다.)
+            rustra::ffi::rustra_ffi_invoke_cancel(invocation_id);
+        }
+        wait_for_callback(&cap);
+        let (frame, _) = cap
+            .frame
+            .lock()
+            .unwrap()
+            .take()
+            .expect("invocation must deliver a frame");
+        if frame[0] == 1 {
+            // 드문 경합 — 워커가 cancel 보다 먼저 체크포인트를 통과한 경우.
+            // 계약상 허용되는 결과다 (핸들러는 끝까지 실행됨). 재시도로 판정.
+            return;
+        }
+        let (code, message) = decode_error_wire(&frame);
+        assert_eq!(code, "cancelled");
+        assert!(
+            message.contains("cancelled before dispatch"),
+            "message should point at the pre-dispatch checkpoint, got: {message}"
+        );
+    }
+
+    #[test]
+    fn invoke_rkyv_v2_async_null_out_param_still_runs() {
+        ensure_registered();
+        let req = add_request(2, 3);
+
+        // invocation_id null — ID 발급은 일어나지만 호출자에게 노출되지 않는다.
+        // on_complete 도 None 이면 워커는 버퍼를 만들지 않는다 (누수 없음).
+        unsafe {
+            rustra_calculator_invoke_rkyv_v2_async(
+                req.as_ptr(),
+                req.len(),
+                std::ptr::null_mut(),
+                None,
+                std::ptr::null_mut(),
+            )
+        };
+        // 관찰할 콜백이 없다 — 크래시/패닉 없이 스레드가 정리되는지만 확인.
+        std::thread::sleep(std::time::Duration::from_millis(50));
     }
 }

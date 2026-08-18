@@ -29,8 +29,8 @@ export type EngineClient = {
   invokeBatch?<T>(entries: BatchEntry[]): Promise<T[]>;
 };
 
-/** invokeBatch 의 입력 항목. */
-export type BatchEntry = { command: string; args?: unknown };
+/** invokeBatch 의 입력 항목. `options.signal` 은 항목 단위 취소로 전달된다. */
+export type BatchEntry = { command: string; args?: unknown; options?: InvokeOptions };
 
 /**
  * invoke 추가 옵션 (T1).
@@ -242,9 +242,10 @@ export function invoke<T>(command: string, args?: unknown, options?: InvokeOptio
  * 정적 명령만 있으면 단일 네이티브 횡단으로 일괄 처리되어 잦은 호출의 jank 를 줄이고,
  * 동적 명령이 섞이면 항목별로 자동 라우팅됩니다.
  *
- * TODO(T1): BatchEntry 에 항목별 `options?: InvokeOptions` 를 실어 항목 단위
- * 취소를 지원한다 — 와이어 타입 확장이라 이번 작업 범위에서는 제외 (YAGNI).
- * 현재는 배치 전체 취소만 `Promise.all` 폴백 경로의 얕은 취소로 자연히 얻어진다.
+ * 항목별 취소 (T1 후속): 각 항목의 `options.signal` 이 항목 단위 invoke 로
+ * 전달된다 — 해당 항목은 각자 전파(JS 코덱+invokeAsync+invokeCancel 충족 시)
+ * 또는 얕은 취소로 동작한다. signal 있는 항목이 하나라도 섞이면 전체가
+ * Promise.all 폴백으로 라우팅된다(단일 횡단 경로는 취소를 지원하지 않는다).
  *
  * @example
  * ```ts
@@ -794,19 +795,23 @@ export function createRkyvV2Engine(
     },
 
     invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
-      // 모든 항목이 정적 코덱이면 단일 JSI 횡단(invokeTypedBatch)으로 일괄 처리.
+      // 모든 항목이 정적 코덱이고 signal 이 없어야 단일 JSI 횡단
+      // (invokeTypedBatch) 으로 일괄 처리 — 이 경로는 취소를 지원하지 않는다.
       if (
         hasBatchPath &&
         entries.length > 0 &&
-        entries.every((e) => native.hasStaticCodec!(e.command))
+        entries.every((e) => native.hasStaticCodec!(e.command)) &&
+        entries.every((e) => !e.options?.signal)
       ) {
         const names = entries.map((e) => e.command);
         const args = entries.map((e) => e.args);
         const results = native.invokeTypedBatch!(names, args) as T[];
         return Promise.resolve(results);
       }
-      // 동적 명령이 섞였거나 배치 미지원 → 항목별 라우팅(typed/Tier3 자동 분기).
-      return Promise.all(entries.map((e) => this.invoke<T>(e.command, e.args)));
+      // 동적 명령/시그널 항목이 섞였거나 배치 미지원 → 항목별 라우팅.
+      // 항목의 options(signal) 를 그대로 실어 보내 항목 단위 취소가 각자의
+      // 취소 정책(전파/얕은)을 따르게 한다 (T1 후속).
+      return Promise.all(entries.map((e) => this.invoke<T>(e.command, e.args, e.options)));
     },
   };
 }
