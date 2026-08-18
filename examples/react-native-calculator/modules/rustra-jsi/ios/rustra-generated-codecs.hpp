@@ -21,6 +21,18 @@ facebook::jsi::Value decode_by_name(facebook::jsi::Runtime& rt,
                                    const std::string& name,
                                    rustra::codec::Reader& r);
 
+/// cmd_id(u16)로 postcard 요청 바이트를 인코딩한다(정적 명령만).
+/// invokeTypedById 진입(P0-3) — 문자열 마샬링/이름 비교체인 없이 u16 디스패치.
+/// 인코딩 성공(정적 cmd_id) 시 true, 미발견 시 false.
+bool encode_by_id(facebook::jsi::Runtime& rt, uint16_t cmd_id,
+                  const facebook::jsi::Value& args,
+                  rustra::codec::Writer& w);
+
+/// cmd_id(u16)로 postcard 응답 바디를 디코딩한다(정적 명령만).
+/// 미발견 시 JSError throw.
+facebook::jsi::Value decode_by_id(facebook::jsi::Runtime& rt, uint16_t cmd_id,
+                                 rustra::codec::Reader& r);
+
 /// codegen 시점에 알려진 정적 명령 이름 집합(Tier 3 fallback 분기용).
 bool has_static_codec(const std::string& name);
 

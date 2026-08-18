@@ -64,6 +64,35 @@
 Nitro보다는 느리지만, Rustra의 정적 codec 및 rkyv V2 경로가 실제 RN JSI 환경에서
 동작하면서 측정된 값이다.
 
+### 2026-08-18 JSI fast path 최적화 후 재측정 (feat/perf-close-nitro-gap)
+
+JSI 브리지 부대비용 최적화 4종을 적용한 뒤 동일 BenchmarkApp으로 재측정했다:
+
+1. **JSI 함수 평탄화** — 설치 시점에 24개 호스트 함수를 일반 JS 객체 프로퍼티로
+   박아 HostObject get의 엔트리당 `PropNameID::compare` 선형 스캔(호출당 최대 24회
+   가상 호출)을 제거
+2. **ArrayBuffer 생성자 캐시** — 응답 경로의 매호출 `global.ArrayBuffer` 조회 제거
+3. **`invokeTypedById` cmd_id 진입** — 정적 명령 디스패치의 JSI 횡단 2회
+   (`hasStaticCodec` + `invokeTyped`)를 1회로, 문자열 마샬링 2회를 0회로 축소.
+   엔진은 정적 명령 집합을 registry 1회 스윕으로 캐시
+4. **`invokeTypedBatchById`** — 배치 경로의 항목별 이름 마샬링 제거
+
+| 경로               | 이전 (0.1.2) | 최적화 후 | 개선          |
+| ------------------ | -----------: | --------: | ------------- |
+| rkyv V2 JSI call   |       8.3 µs |   ~2.4 µs | 약 3.5x       |
+| rkyv V2 full sync  |      11.2 µs |   ~5.2 µs | 약 2.2x       |
+| rkyv V2 async      |       5.4 µs |   ~2.4 µs | 약 2.25x      |
+| Nitro async (기준) |       1.9 µs |    1.9 µs | —             |
+| rkyvV2 / Nitro     |         2.8x |     ~1.3x | 격차 79% 축소 |
+
+→ 동일 실행 상대 비교 기준(시뮬레이터 측정 편차 감안). Nitro와의 잔여 격차는
+Rust 코어 왕복(이름 기반 범용 RPC 경로 물리 하한 ~1.3µs)과 typed 응답의 JS 객체
+구성이 주성분이다. 다음 단계: FFI caller-buffer 변형으로 malloc/memcpy 제거(별도
+플랜), 코드젠 positional facade(P2)로 정적 명령을 Nitro 동등 이하로.
+
+> Android는 동일 `RustraJSIBridge.cpp`를 공유하므로 본 최적화가 자동 적용되지만,
+> 이번 측정은 iOS 시뮬레이터 기준이다 — Android 에뮬레이터/실기기 재검증 대기.
+
 ### Rust Criterion debug Tier 3 기준선
 
 동적 registry는 release에서 mutation이 차단되는 설계이므로 `--profile dev`로

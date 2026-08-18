@@ -157,8 +157,20 @@ export type RustraNative = {
   /** B1 (RN JSI): 정적 명령 C++ postcard fast path. JSI 가 노출하면 사용. */
   hasStaticCodec?(name: string): boolean;
   invokeTyped?(name: string, args: unknown): unknown;
+  /**
+   * (P0-3) cmd_id 진입 typed fast path — `invokeTyped` 의 u16 디스패치 변형.
+   * 문자열 마샬링과 C++ 이름 비교체인을 제거한다 (JSI 횡단 2→1, 문자열 2→0).
+   * 미노출 구 네이티브는 이름 기반 `invokeTyped` 로 폴백한다.
+   */
+  invokeTypedById?(cmdId: number, args: unknown): unknown;
   /** P0-2: 정적 명령 N 개를 단일 횡단으로 일괄 처리 (RN JSI). */
   invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
+  /**
+   * P0-2 byId 변형 — `invokeTypedBatch` 의 cmd_id 배열 진입. 배치 경로에서도
+   * 문자열 마샬링 N 회를 제거한다. 미노출 구 네이티브는 이름 기반
+   * `invokeTypedBatch` 로 폴백한다.
+   */
+  invokeTypedBatchById?(cmdIds: number[], args: unknown[]): unknown[];
   /**
    * Rust → JS 이벤트 푸시 리스너 등록(RN JSI). `payloadJson` 은 **JSON 문자열**로
    * 전달된다 — TS 래퍼(`@rustra/react-native` `subscribeEvent`)가
@@ -345,8 +357,21 @@ export type RkyvV2SchemaNative = {
   /** B1 (RN JSI): 정적 명령 C++ postcard fast path. 둘 다 있으면 JS 코덱 대신 사용. */
   hasStaticCodec?(name: string): boolean;
   invokeTyped?(name: string, args: unknown): unknown;
+  /**
+   * (P0-3) cmd_id 진입 typed fast path — `invokeTyped` 의 id 인덱싱 변형.
+   * 문자열 마샬링과 C++ 이름 비교체인을 u16 디스패치로 대체한다
+   * (JSI 횡단 2→1, 문자열 2→0). 미노출 구 네이티브는 이름 기반
+   * `invokeTyped` 로 폴백한다.
+   */
+  invokeTypedById?(cmdId: number, args: unknown): unknown;
   /** P0-2: 정적 명령 N 개를 단일 횡단으로 일괄 처리 (RN JSI). */
   invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
+  /**
+   * P0-2 byId 변형 — `invokeTypedBatch` 의 cmd_id 배열 진입. 배치 경로에서도
+   * 문자열 마샬링 N 회를 제거한다. 미노출 구 네이티브는 이름 기반
+   * `invokeTypedBatch` 로 폴백한다.
+   */
+  invokeTypedBatchById?(cmdIds: number[], args: unknown[]): unknown[];
   /** (T1) 취소 전파 가능한 비동기 invoke — invocation id 를 반환하고, 결과는 콜백으로. */
   invokeAsync?(payload: ArrayBuffer, onDone: (response: ArrayBuffer) => void): number;
   /** (T1) 진행 중 async 호출 취소. */
@@ -696,18 +721,47 @@ export function createRkyvV2Engine(
   // B1 fast path: 네이티브가 C++ typed 코덱(invokeTyped + hasStaticCodec)을 노출하면
   // 정적 명령을 C++에서 postcard 인코딩/디코딩한다 (JS codec 왕복 ~3.4µs 제거).
   const hasTypedPath = !!(native.invokeTyped && native.hasStaticCodec);
+  // P0-3: byId 진입(invokeTypedById)이 가능한지 — 가능하면 dispatch 1순위가
+  // JSI 1회 횡단 + u16 디스패치로 바뀐다. 미노출이면 이름 기반 invokeTyped 유지.
+  const hasByIdPath = hasTypedPath && typeof native.invokeTypedById === 'function';
   // P0-2: 단일 횡단 배치가 가능하려면 invokeTypedBatch 도 필요.
   const hasBatchPath = hasTypedPath && !!native.invokeTypedBatch;
+  // P0-2 byId: 배치 진입의 cmd_id 배열 변형 — 문자열 마샬링 N 회 제거.
+  const hasBatchByIdPath = hasBatchPath && typeof native.invokeTypedBatchById === 'function';
   // (T3) JS 사전 크기 검사 — undefined 면 검사하지 않는다 (네이티브 동적 한도가
   // 최종 게이트). typed(tier 1) 경로는 JS 측 인코딩이 없어 검사 대상이 아니다.
   const payloadLimit = options?.maxPayloadBytes;
+
+  // 정적 명령 집합 JS 캐시 (P0-3) — hasStaticCodec JSI 호출을 호출당 1회에서
+  // 엔진 생애 1회 스윕으로 축소한다. 불변식: 코드젠 시점 정적 명령은 항상
+  // registry 에 있다 (registry 도 코드젠 산출물). registry 에 없는 이름은
+  // 동적 명령 → Tier 3 경로. 스윕은 registry 를 기준으로 하므로 C++ 코덱만
+  // 있고 registry 에 빠진 정적 명령(불변식 위반)도 자연스럽게 Tier 3 로 간다.
+  // 스윕 도중 예외 시 부분 맵 재사용 — 미스윕 항목은 registry 안 이름이므로
+  // Tier 2(JS codec)로 라우팅된다. Tier 3는 registry 밖 동적 명령 전용 경로다.
+  let staticCommandIds: Map<string, number> | null = null;
+  const ensureStaticIds = (): Map<string, number> | null => {
+    if (staticCommandIds !== null || !hasTypedPath) return staticCommandIds;
+    staticCommandIds = new Map();
+    for (const [name, codec] of registry) {
+      if (native.hasStaticCodec!(name)) staticCommandIds.set(name, codec.commandId);
+    }
+    return staticCommandIds;
+  };
 
   // 신호 없는 기본 3-티어 dispatch (T1 리팩터링 — 로직은 기존 그대로).
   const dispatch = async <T>(command: string, args?: unknown): Promise<T> => {
     // 1순위: C++ fast path (RN JSI). 정적 명령만. JS 측 인코딩이 없어
     // maxPayloadBytes 검사를 건너뛴다 — 네이티브 한도가 그대로 적용된다.
-    if (hasTypedPath && native.hasStaticCodec!(command)) {
-      return native.invokeTyped!(command, args) as T;
+    // byId 진입이 가능하면 JSI 1회 + u16 디스패치 (P0-3).
+    if (hasTypedPath) {
+      const cmdId = ensureStaticIds()?.get(command);
+      if (cmdId !== undefined) {
+        if (hasByIdPath) {
+          return native.invokeTypedById!(cmdId, args) as T;
+        }
+        return native.invokeTyped!(command, args) as T;
+      }
     }
     // 2순위: JS codec (Node/Bun/Tauri 또는 typed 누락 시). 정적 명령.
     const codec = registry.get(command);
@@ -757,7 +811,8 @@ export function createRkyvV2Engine(
       // typed(tier 1)/tier 3 동적 경로는 invokeAsync 가 있어도 얕은 취소로
       // 폴백한다 (설계 노트: 전파는 JS 코덱 경로만).
       const codec = registry.get(command);
-      const onTypedPath = hasTypedPath && native.hasStaticCodec!(command);
+      // P0-3: hasStaticCodec JSI 호출 대신 엔진 생애 1회 스윕 캐시 조회.
+      const onTypedPath = hasTypedPath && ensureStaticIds()?.has(command) === true;
       if (!onTypedPath && codec && native.invokeAsync && native.invokeCancel) {
         return new Promise<T>((resolve, reject) => {
           let settled = false;
@@ -811,16 +866,27 @@ export function createRkyvV2Engine(
     },
 
     invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
-      // 모든 항목이 정적 코덱이고 signal 이 없어야 단일 JSI 횡단
-      // (invokeTypedBatch) 으로 일괄 처리 — 이 경로는 취소를 지원하지 않는다.
+      // 모든 항목이 정적 코덱이고 signal 이 없어야 단일 JSI 횡단으로 일괄 처리
+      // — 이 경로는 취소를 지원하지 않는다. 단일 횡단 진입은 2단계: byId 배치
+      // (invokeTypedBatchById) 가 우선, 미노출이면 이름 기반 invokeTypedBatch
+      // (아래 분기 참조). 정적 여부/id 조사는 캐시 조회로 한다 (P0-3:
+      // hasStaticCodec JSI 호출 N 회 → 엔진 생애 1회 스윕).
+      const staticIds = hasBatchPath && entries.length > 0 ? ensureStaticIds() : null;
       if (
-        hasBatchPath &&
-        entries.length > 0 &&
-        entries.every((e) => native.hasStaticCodec!(e.command)) &&
+        staticIds &&
+        entries.every((e) => staticIds.has(e.command)) &&
         entries.every((e) => !e.options?.signal)
       ) {
-        const names = entries.map((e) => e.command);
         const args = entries.map((e) => e.args);
+        // byId 진입(P0-2 후속): 네이티브가 cmd_id 배열 배치를 노출하면 문자열
+        // 배열 마샬링 없이 id 로 단일 횡단. 모든 항목의 id 가 캐시에 있는 위의
+        // every 검사가 이미 조립 가능성을 보장한다.
+        if (hasBatchByIdPath) {
+          const ids = entries.map((e) => staticIds.get(e.command)!);
+          const results = native.invokeTypedBatchById!(ids, args) as T[];
+          return Promise.resolve(results);
+        }
+        const names = entries.map((e) => e.command);
         const results = native.invokeTypedBatch!(names, args) as T[];
         return Promise.resolve(results);
       }

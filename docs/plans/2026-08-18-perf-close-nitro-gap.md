@@ -9,11 +9,13 @@
 **Tech Stack:** C++17 (JSI), TypeScript (@rustra/types, @rustra/cli codegen), 기존 테스트 인프라(node --test, run-cpp-codec-tests.sh, cargo test)
 
 **성공 기준 (측정 방법 Task 7):**
+
 - `native.invokeRkyvV2(preEncoded)` JSI 호 홉: 8.3µs → 3µs 이하 (측정 환경 편차 고려 상대 비교)
 - typed async(`addNumbers(INPUT)`): 5.4µs → 3µs 이하
 - 기존 테스트 전부 통과 (`npm run test:packages`, `run-cpp-codec-tests.sh`, `cargo test -p rustra`)
 
 **핵심 제약 (반드시 지킬 것):**
+
 - `examples/.../generated/` 는 코드젠 산출물 — 직접 수정 금지, `codegen` 재실행으로 갱신 (memory: codegen-dual-path-regen)
 - 커밋 후 lefthook prettier가 재스테이징 없이 포맷하므로 커밋 직후 `git add <files> && git commit --amend --no-edit` 습관화 (memory: lefthook-prettier-amend)
 - C++ 코덱 바이트는 Rust postcard와 byte-exact해야 함 (run-cpp-codec-tests.sh가 검증)
@@ -26,6 +28,7 @@
 **배경:** 현재 `invokeTyped`/`invokeTypedBatch`/`invokeTypedAsync` 3곳에 동일한 에러 와이어 파싱이 인라인 복제되어 있어 Task 3(생성자 캐시)과 Task 4에서 3곳을 동시에 수정해야 한다. 먼저 하나의 `static` 헬퍼로 통합해 이후 태스크의 수정 지점을 1곳으로 만든다.
 
 **Files:**
+
 - Modify: `examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSIBridge.cpp` (invokeTyped 에러 분기 ~line 382-402, batch ~line 461-479, async ~line 586-599)
 
 **Step 1: 헬퍼 작성 (리팩터링이므로 테스트는 기존 것 사용)**
@@ -77,9 +80,11 @@ Run: `cd examples/react-native-calculator/modules/rustra-jsi/ios && ./run-cpp-co
 Expected: `OK: all C++ codec tests passed` (브리지는 본 스크립트가 컴파일하지 않으므로, 컴파일 확인은 Task 6의 통합 빌드에서 함 — 여기서는 논리 리뷰만)
 
 실제 컴파일 확인이 필요하면 Xcode 없이 syntax-check만:
+
 ```bash
 clang++ -std=c++17 -fsyntax-only -I examples/react-native-calculator/modules/rustra-jsi/ios examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSIBridge.cpp 2>&1 | head -5
 ```
+
 (단, jsi.h/ReactCommon 헤더가 없어 실패할 수 있음 — 그 경우 Task 6에서 통합 검증. 이때는 논리 리뷰로 대체하고 커밋하지 않고 Task 2로 진행)
 
 **Step 3: Commit**
@@ -97,6 +102,7 @@ git add -u && git commit --amend --no-edit  # lefthook prettier 반영 (C++는 �
 **배경:** `RustraHostObject::get`이 22개 엔트리를 `PropNameID::compare`로 선형 스캔한다(호출당 가상 호출 최대 22회). Nitro 방식대로 설치 시점에 일반 `jsi::Object`에 프로퍼티로 박아두면 이후 조회는 순수 JS 프로퍼티 로드가 된다. **기대 효과 −1~2µs/호출.**
 
 **Files:**
+
 - Modify: `examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSIBridge.cpp` (`RustraHostObject::get`/`getPropertyNames` ~line 640-658, `installRustraJSIWithInvoker` ~line 666-674)
 - Modify: `examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSIBridge.hpp`
 - Test: 기존 `packages/react-native/src/index.test.ts` + 새 유닛 테스트 없음 (JSI 동작은 시뮬레이터 벤치로 검증)
@@ -138,7 +144,7 @@ void installRustraJSIWithInvoker(Runtime& rt,
 
 **Step 2: Android 경로 확인**
 
-Android `rustra_jni.cpp`(runner template)가 `installRustraJSI`를 직접 호출하는지 확인한다. `grep -rn "installRustraJSI" runner/ examples/react-native-calculator/modules/*/android 2>/dev/null` — 호출부가 installRustraJSI* 만 쓰면 이 변경으로 자동 적용된다(단일 정의).
+Android `rustra_jni.cpp`(runner template)가 `installRustraJSI`를 직접 호출하는지 확인한다. `grep -rn "installRustraJSI" runner/ examples/react-native-calculator/modules/*/android 2>/dev/null` — 호출부가 installRustraJSI\* 만 쓰면 이 변경으로 자동 적용된다(단일 정의).
 
 **Step 3: 빌드/테스트 검증은 Task 6에서 통합 실행** (시뮬레이터 빌드 필요). 여기서는 헤더 의존 관계 리뷰만.
 
@@ -156,6 +162,7 @@ git commit -m "perf(jsi): 네이티브 함수를 HostObject 스캔 대신 평평
 **배경:** `createArrayBuffer`가 매 호출 `rt.global().getPropertyAsFunction(rt, "ArrayBuffer")` + `callAsConstructor`로 ArrayBuffer를 만든다(모든 invokeRkyvV2/invoke/invokeTyped 응답 경로). 생성자 1회 캐시 + 미리 만든 ArrayBuffer 재활용으로 제거한다.
 
 **Files:**
+
 - Modify: `examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSIBridge.cpp` (createArrayBuffer ~line 24-32)
 
 **Step 1: 생성자 캐시 구현**
@@ -199,6 +206,7 @@ resetRustraJsiCache();
 ```
 
 헬퍼:
+
 ```cpp
 static void resetRustraJsiCache() {
   cachedArrayBufferCtorReset();
@@ -225,6 +233,7 @@ git commit -m "perf(jsi): ArrayBuffer 생성자 캐시로 응답 경로 글로�
 **배경:** 현재 typed dispatch가 JSI 2회 횡단(`hasStaticCodec` + `invokeTyped`) + 문자열 마샬링 2회 + C++ 13개 이름 비교 2회를 수반한다. (a) 엔진이 정적 명령 집합을 `Set`으로 캐시해 `hasStaticCodec` JSI 호출을 제거, (b) C++ `invokeTypedById(cmd_id, args)`를 추가해 문자열→비교체인을 u16 인덱싱으로 대체. **JSI 횡단 2→1, 문자열 2→0. 기대 효과 −1~1.5µs.**
 
 **Files:**
+
 - Modify: `packages/types/src/index.ts` (createRkyvV2Engine dispatch ~line 696-744)
 - Modify: `examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSIBridge.cpp` (invokeTyped 옆에 invokeTypedById 추가)
 - Modify: `examples/react-native-calculator/modules/rustra-jsi/src/index.ts` (RustraNative 타입에 추가)
@@ -249,11 +258,23 @@ test('typed dispatch uses invokeTypedById when available', () => {
       return name === 'addNumbers';
     },
   });
-  const registry = new Map([['addNumbers', { commandId: 1, encode: () => new ArrayBuffer(4), decode: () => ({ ok: true, result: { value: 3 } }) }]]);
+  const registry = new Map([
+    [
+      'addNumbers',
+      {
+        commandId: 1,
+        encode: () => new ArrayBuffer(4),
+        decode: () => ({ ok: true, result: { value: 3 } }),
+      },
+    ],
+  ]);
   const engine = createRkyvV2Engine(native as any, registry as any);
   const result = engine.invoke('addNumbers', { a: 1, b: 2 });
   assert.ok(calls.some((c) => c.startsWith('byId:')));
-  assert.ok(!calls.some((c) => c.startsWith('has:')), 'hasStaticCodec JSI 호출이 없어야 함(캐시 사용)');
+  assert.ok(
+    !calls.some((c) => c.startsWith('has:')),
+    'hasStaticCodec JSI 호출이 없어야 함(캐시 사용)',
+  );
 });
 ```
 
@@ -269,32 +290,32 @@ Expected: FAIL (invokeTypedById 미사용)
 `createRkyvV2Engine` 내부:
 
 ```ts
-  // 정적 명령 집합의 JS 캐시 — hasStaticCodec JSI 호출을 호출당 1회에서
-  // 엔진 생애 1회 스윕으로 축소한다. (첫 dispatch 때 채운다.)
-  let staticCommandIds: Map<string, number> | null = null;
-  const ensureStaticIds = () => {
-    if (staticCommandIds || !hasTypedPath) return staticCommandIds;
-    staticCommandIds = new Map();
-    for (const [name, codec] of registry) {
-      if (native.hasStaticCodec!(name)) staticCommandIds.set(name, codec.commandId);
-    }
-    return staticCommandIds;
-  };
+// 정적 명령 집합의 JS 캐시 — hasStaticCodec JSI 호출을 호출당 1회에서
+// 엔진 생애 1회 스윕으로 축소한다. (첫 dispatch 때 채운다.)
+let staticCommandIds: Map<string, number> | null = null;
+const ensureStaticIds = () => {
+  if (staticCommandIds || !hasTypedPath) return staticCommandIds;
+  staticCommandIds = new Map();
+  for (const [name, codec] of registry) {
+    if (native.hasStaticCodec!(name)) staticCommandIds.set(name, codec.commandId);
+  }
+  return staticCommandIds;
+};
 
-  const dispatch = async <T>(command: string, args?: unknown): Promise<T> => {
-    // 1순위: C++ fast path. byId 진입이 가능하면 JSI 1회 + u16 인덱싱.
-    if (hasTypedPath) {
-      const ids = ensureStaticIds();
-      if (ids && ids.has(command)) {
-        const cmdId = ids.get(command)!;
-        if (typeof native.invokeTypedById === 'function') {
-          return native.invokeTypedById(cmdId, args) as T;
-        }
-        return native.invokeTyped!(command, args) as T;
+const dispatch = async <T>(command: string, args?: unknown): Promise<T> => {
+  // 1순위: C++ fast path. byId 진입이 가능하면 JSI 1회 + u16 인덱싱.
+  if (hasTypedPath) {
+    const ids = ensureStaticIds();
+    if (ids && ids.has(command)) {
+      const cmdId = ids.get(command)!;
+      if (typeof native.invokeTypedById === 'function') {
+        return native.invokeTypedById(cmdId, args) as T;
       }
+      return native.invokeTyped!(command, args) as T;
     }
-    // ... (2순위/3순위는 기존 그대로)
-  };
+  }
+  // ... (2순위/3순위는 기존 그대로)
+};
 ```
 
 ⚠️ 동적 명령(`registry`에 없는 이름)은 `ensureStaticIds` 미스 → 기존 Tier 3 경로. 이때 `registry` 미등록 + C++ 코덱 존재(코드젠 시점 정적)인 경우는? — `registry`가 코드젠 산출물이므로 정적 명령은 항상 registry에 있다(불변식). 문서화 주석로 명시.
@@ -375,8 +396,11 @@ lines.push(`                        rustra::codec::Reader& r);\n\n`);
 
 ```ts
 const encodeCases = schema.commands
-    .map((c) => `  case ${c.commandId}: encode_${commandFunctionName(c.name)}(rt, args, w); return true;`)
-    .join('\n');
+  .map(
+    (c) =>
+      `  case ${c.commandId}: encode_${commandFunctionName(c.name)}(rt, args, w); return true;`,
+  )
+  .join('\n');
 // switch (cmd_id) { ... default: return false; }
 ```
 
@@ -434,6 +458,7 @@ git commit -m "perf(engine): cmd_id 진입점 invokeTypedById + 정적 명령 �
 **배경:** 배치도 동일하게 이름 배열 마샬링 대신 id 배열로. Task 4 완료 후 진행.
 
 **Files:**
+
 - Modify: `packages/types/src/index.ts` (invokeBatch ~line 813-831)
 - Modify: `examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSIBridge.cpp` (invokeTypedBatch 옆)
 - Test: `packages/types/src/index.test.ts`
@@ -441,7 +466,12 @@ git commit -m "perf(engine): cmd_id 진입점 invokeTypedById + 정적 명령 �
 동일 패턴(invokeTypedBatchById(ids, args))이므로 상세는 Task 4와 동일 — 실행 시 Task 4의 완성 코드를 참조해 대응시킨다. 배치 dispatch:
 
 ```ts
-if (hasBatchPath && entries.length > 0 && entries.every((e) => staticIds?.has(e.command)) && entries.every((e) => !e.options?.signal)) {
+if (
+  hasBatchPath &&
+  entries.length > 0 &&
+  entries.every((e) => staticIds?.has(e.command)) &&
+  entries.every((e) => !e.options?.signal)
+) {
   const ids = entries.map((e) => staticIds!.get(e.command)!);
   const results = native.invokeTypedBatchById!(ids, args) as T[];
   return Promise.resolve(results);
@@ -466,6 +496,7 @@ cd .. && npx expo run:ios  # BenchmarkApp 교체 필요하면 교체 후
 **Step 2: 벤치마크 실행 (BenchmarkApp.tsx)**
 
 BenchmarkApp의 기존 벤치 실행. 확인 지표:
+
 - `rkyvV2 JSI call` (native.invokeRkyvV2 프리인코딩 홉): 8.3µs → ≤3µs 목표
 - `rkyvV2 full sync` 11.2µs → ≤5µs
 - `rkyvV2 async` 5.4µs → ≤3µs
@@ -494,17 +525,18 @@ Expected: 전부 PASS
 
 ## 실행 순서 요약
 
-| Task | 내용 | 커밋 유형 |
-|---|---|---|
-| 1 | 에러 파싱 헬퍼 추출 | refactor |
-| 2 | JSI 함수 평탄화 (사전 확인: `grep -rn "installRustraJSI" runner/`) | perf |
-| 3 | ArrayBuffer 생성자 캐시 | perf |
-| 4 | invokeTypedById + JS 캐시 | perf |
-| 5 | batch byId (선택) | perf |
-| 6 | 통합 검증 + 문서 | docs |
-| 7 | (후속) FFI caller-buffer | 별도 플랜 |
+| Task | 내용                                                               | 커밋 유형 |
+| ---- | ------------------------------------------------------------------ | --------- |
+| 1    | 에러 파싱 헬퍼 추출                                                | refactor  |
+| 2    | JSI 함수 평탄화 (사전 확인: `grep -rn "installRustraJSI" runner/`) | perf      |
+| 3    | ArrayBuffer 생성자 캐시                                            | perf      |
+| 4    | invokeTypedById + JS 캐시                                          | perf      |
+| 5    | batch byId (선택)                                                  | perf      |
+| 6    | 통합 검증 + 문서                                                   | docs      |
+| 7    | (후속) FFI caller-buffer                                           | 별도 플랜 |
 
 **리스크 노트:**
+
 - Task 2의 평탄화는 RN reload 시 재설치 계약(installRustraJSI가 매 reload 호출됨)에 의존 — 기존 동작과 동일하므로 안전.
 - Task 3의 static Function 캐시는 reload 시 dangling 위험 → resetRustraJsiCache로 방어 (플랜에 명시).
 - Task 4의 `ensureStaticIds`는 registry와 C++ 코덱 사이 불변식(정적 명령 ⊆ registry)에 의존 — 주석 명시.

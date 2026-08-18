@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstring>
 #include <jsi/jsi.h>
+#include <optional>
 
 // CallInvoker 는 순수 C++ 헤더(ReactCommon/callinvoker)다 — iOS/Android 모두
 // 동일 경로로 제공된다. 플랫폼 글루(.mm / jni.cpp) 가 invoker 를 얻어
@@ -21,10 +22,23 @@ namespace rc = rustra::codec;
 
 // ── ArrayBuffer helpers ────────────────────────────────────
 
+/// ArrayBuffer 생성자 캐시 — 첫 호출 시 1회 조회, 이후 재사용.
+/// jsi::Function 은 move-only 이므로 optional 에 move 저장한다.
+/// RN reload 로 Runtime 이 교체되면 installRustraJSIWithInvoker 가
+/// 재호출되므로 그 시점에 reset 한다 — 구 Runtime 소유 핸들이
+/// dangling 되지 않게 (아래 Install 절).
+/// 스레드 계약: JS 스레드에서만 접근 — host 함수와 install 모두 JS 스레드에서 실행.
+static std::optional<Function> g_arrayBufferCtor;
+
+static Function& arrayBufferCtor(Runtime& rt) {
+  if (!g_arrayBufferCtor) {
+    g_arrayBufferCtor = rt.global().getPropertyAsFunction(rt, "ArrayBuffer");
+  }
+  return *g_arrayBufferCtor;
+}
+
 static Value createArrayBuffer(Runtime& rt, const uint8_t* data, size_t size) {
-  Function arrayBufferCtor = rt.global()
-    .getPropertyAsFunction(rt, "ArrayBuffer");
-  Object ab = arrayBufferCtor.callAsConstructor(rt, static_cast<double>(size))
+  Object ab = arrayBufferCtor(rt).callAsConstructor(rt, static_cast<double>(size))
     .getObject(rt);
   ArrayBuffer buf = ab.getArrayBuffer(rt);
   std::memcpy(buf.data(rt), data, size);
@@ -48,6 +62,75 @@ static std::pair<const uint8_t*, size_t> extractBytes(Runtime& rt, const Value& 
   }
 
   throw JSError(rt, "RustraJSI: expected ArrayBuffer or TypedArray");
+}
+
+// ── rkyv V2 에러 와이어 파싱 ────────────────────────────────
+// 에러 프레임: [ok:0][pad to @8][err_len u16 LE @8][postcard{code,message} @10]
+// postcard 파싱 실패 시 원시 바이트로 폴백한다(계약: 실패해도 throw 아님).
+// malformed(out_len < 10) 검사는 호출부에서 이미 완료했음을 전제로 한다.
+static std::string parseRkyvV2ErrorBody(const uint8_t* resp, size_t out_len) {
+  uint16_t errLen = (uint16_t)resp[8] | ((uint16_t)resp[9] << 8);
+  size_t avail = out_len > 10 ? out_len - 10 : 0;
+  size_t bodyLen = errLen <= avail ? errLen : avail;
+  try {
+    rc::Reader errReader(resp + 10, bodyLen);
+    std::string code = errReader.read_string();
+    std::string message = errReader.read_string();
+    return code + ": " + message;
+  } catch (...) {
+    return std::string(reinterpret_cast<const char*>(resp + 10), bodyLen);
+  }
+}
+
+// ── typed invoke 공통 tail ──────────────────────────────────
+// invokeTyped / invokeTypedById / invokeTypedBatch(ById) 의 FFI 이후 꼬리:
+// dispatch → 헤더 분기(null / empty / ok=0 에러 / malformed) → (성공 시)
+// decoder → free. encode/decode 진입(by name / by id)만 호출부에서 다르다.
+// decoder 는 성공 응답 바디(Reader)를 JS Value 로 변환한다.
+// 에러면 JSError throw — 기존 세 경로의 메시지 텍스트를 그대로 보존한다:
+//   - tailSuffix: malformed 계열(empty/error/success) 접미 — 단건 "", 배치 " (batch)".
+//   - batchItemName: 이름 기반 배치 루프의 항목 이름. FFI null 접미
+//     " (batch item <name>)" 조립에만 쓴다(에러 시 1회 조립 — hot path 비용 0).
+//     nullptr 면 null 접미로 tailSuffix 를 쓴다(단건/byId 배치).
+// free 짝 계약: 이 버퍼는 calculator 심볼의 응답 레이아웃 — alloc_response 가
+// 만든 magic 헤더 없는 Box<[u8]> 이다. rustra_ffi_free 는 ptr-8 에서 FFI magic
+// 헤더를 역산해 해제하므로 이 레이아웃에 대면 잘못된 해제를 한다(실제 버그였음,
+// follow-up 3에서 수정). 반드시 rustra_calculator_free_buffer 로 해제할 것.
+template <typename Decode>
+static Value typedInvokeTail(Runtime& rt, const std::vector<uint8_t>& req,
+                             const char* tailSuffix, Decode decode,
+                             const std::string* batchItemName = nullptr) {
+  size_t out_len = 0;
+  uint8_t* resp = rustra_calculator_invoke_rkyv_v2(req.data(), req.size(), &out_len);
+  if (!resp) {
+    std::string nullSuffix(tailSuffix);
+    if (batchItemName) nullSuffix = " (batch item " + *batchItemName + ")";
+    throw JSError(rt, "RustraJSI: invokeRkyvV2 returned null" + nullSuffix);
+  }
+  if (out_len < 1) {
+    rustra_calculator_free_buffer(resp, out_len);
+    throw JSError(rt, std::string("RustraJSI: empty rkyv v2 response") + tailSuffix);
+  }
+  if (resp[0] == 0) {
+    // 에러 와이어: [ok:0][pad to @8][err_len u16 LE @8][err @10]
+    if (out_len < 10) {
+      rustra_calculator_free_buffer(resp, out_len);
+      throw JSError(rt, std::string("RustraJSI: malformed error response") + tailSuffix);
+    }
+    std::string errStr = parseRkyvV2ErrorBody(resp, out_len);
+    rustra_calculator_free_buffer(resp, out_len);
+    throw JSError(rt, errStr);
+  }
+
+  // 성공: postcard(O) @8 부터 디코딩.
+  if (out_len < 8) {
+    rustra_calculator_free_buffer(resp, out_len);
+    throw JSError(rt, std::string("RustraJSI: malformed success response") + tailSuffix);
+  }
+  rc::Reader r(resp + 8, out_len - 8);
+  Value result = decode(r);
+  rustra_calculator_free_buffer(resp, out_len);
+  return result;
 }
 
 // ── EventDispatcher: Rust → JS push delivery ───────────────
@@ -364,54 +447,47 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         }
         auto req = w.take();
 
-        // 2) Rust FFI (rkyv V2 단일 엔진). 응답: [ok][pad 7][postcard(O) @8]
-        size_t out_len = 0;
-        uint8_t* resp = rustra_calculator_invoke_rkyv_v2(req.data(), req.size(), &out_len);
-        if (!resp) {
-          throw JSError(rt, "RustraJSI: invokeRkyvV2 returned null");
-        }
-
-        // 3) 응답 헤더 분기. ok=1 → postcard 바디 디코딩, ok=0 → 에러 메시지.
-        // free 짝 수정(follow-up 3): calculator 심볼의 버퍼는 magic 헤더 없는
-        // Box<[u8]> 이다 — rustra_ffi_free 의 ptr-8 역산은 잘못된 레이아웃을
-        // 재구성하므로 rustra_calculator_free_buffer 로 해제해야 한다.
-        if (out_len < 1) {
-          rustra_calculator_free_buffer(resp, out_len);
-          throw JSError(rt, "RustraJSI: empty rkyv v2 response");
-        }
-        if (resp[0] == 0) {
-          // 에러 와이어: [ok:0][pad to @8][err_len u16 LE @8][err @10]
-          if (out_len < 10) {
-            rustra_calculator_free_buffer(resp, out_len);
-            throw JSError(rt, "RustraJSI: malformed error response");
-          }
-          uint16_t errLen = (uint16_t)resp[8] | ((uint16_t)resp[9] << 8);
-          size_t avail = out_len > 10 ? out_len - 10 : 0;
-          size_t bodyLen = errLen <= avail ? errLen : avail;
-          std::string errStr;
-          try {
-            rc::Reader errReader(resp + 10, bodyLen);
-            std::string code = errReader.read_string();
-            std::string message = errReader.read_string();
-            errStr = code + ": " + message;
-          } catch (...) {
-            errStr = std::string(reinterpret_cast<const char*>(resp + 10), bodyLen);
-          }
-          rustra_calculator_free_buffer(resp, out_len);
-          throw JSError(rt, errStr);
-        }
-
-        // 성공: postcard(O) @8 부터 디코딩.
-        if (out_len < 8) {
-          rustra_calculator_free_buffer(resp, out_len);
-          throw JSError(rt, "RustraJSI: malformed success response");
-        }
-        rc::Reader r(resp + 8, out_len - 8);
-        Value result = gen::decode_by_name(rt, name, r);
-        rustra_calculator_free_buffer(resp, out_len);
-        return result;
+        // 2) Rust FFI (rkyv V2 단일 엔진) + 응답 tail — 공통 헬퍼로
+        //    (typedInvokeTail 주석의 free 짝 계약: rustra_calculator_free_buffer).
+        //    decoder 만 이름 기반 decode_by_name.
+        return typedInvokeTail(rt, req, "", [&rt, &name](rc::Reader& r) {
+          return gen::decode_by_name(rt, name, r);
+        });
       });
     cache_["invokeTyped"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+
+  // ── P0-3: invokeTypedById(cmdId, args) — id 인덱싱 typed 진입 ──
+  // invokeTyped 와 동일한 흐름(encode→FFI→decode)이지만 문자열 마샬링과
+  // C++ 이름 비교체인 대신 u16 cmd_id switch 디스패치를 쓴다. JS 엔진은
+  // 정적 명령 집합을 엔진 생애 1회 스윕(hasStaticCodec)으로 캐시해 이 진입으로
+  // 호출한다 — JSI 횡단 2→1, 문자열 2→0. 미발견 cmd_id 는 encode_by_id 가
+  // false 를 반환해 JSError 로 명시 실패한다(호출侧 캐시 불변식 위반 노출).
+  {
+    auto propNameId = PropNameID::forAscii(rt, "invokeTypedById");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 2,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 2) {
+          throw JSError(rt, "RustraJSI: invokeTypedById requires (cmdId, args)");
+        }
+        uint16_t cmdId = static_cast<uint16_t>(args[0].asNumber());
+
+        // 1) JS 객체 → postcard 요청 바이트 ([cmd_id u16 LE][postcard(I)])
+        rc::Writer w;
+        if (!gen::encode_by_id(rt, cmdId, args[1], w)) {
+          throw JSError(rt, "RustraJSI: no C++ codec for cmd_id " + std::to_string(cmdId));
+        }
+        auto req = w.take();
+
+        // 2) Rust FFI + 응답 tail — invokeTyped 와 동일하지만 decoder 만
+        //    u16 디스패치 decode_by_id (free 짝: rustra_calculator_free_buffer).
+        return typedInvokeTail(rt, req, "", [&rt, cmdId](rc::Reader& r) {
+          return gen::decode_by_id(rt, cmdId, r);
+        });
+      });
+    cache_["invokeTypedById"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
 
@@ -446,50 +522,69 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
           }
           auto req = w.take();
 
-          // FFI
-          size_t out_len = 0;
-          uint8_t* resp = rustra_calculator_invoke_rkyv_v2(req.data(), req.size(), &out_len);
-          if (!resp) {
-            throw JSError(rt, "RustraJSI: invokeRkyvV2 returned null (batch item " + name + ")");
-          }
-
-          // 응답 분기: ok=1 → decode, ok=0 → 에러 throw (fail-fast)
-          if (out_len < 1) {
-            rustra_calculator_free_buffer(resp, out_len);
-            throw JSError(rt, "RustraJSI: empty rkyv v2 response (batch)");
-          }
-          if (resp[0] == 0) {
-            if (out_len < 10) {
-              rustra_calculator_free_buffer(resp, out_len);
-              throw JSError(rt, "RustraJSI: malformed error response (batch)");
-            }
-            uint16_t errLen = (uint16_t)resp[8] | ((uint16_t)resp[9] << 8);
-            size_t avail = out_len > 10 ? out_len - 10 : 0;
-            size_t bodyLen = errLen <= avail ? errLen : avail;
-            std::string errStr;
-            try {
-              rc::Reader errReader(resp + 10, bodyLen);
-              std::string code = errReader.read_string();
-              std::string message = errReader.read_string();
-              errStr = code + ": " + message;
-            } catch (...) {
-              errStr = std::string(reinterpret_cast<const char*>(resp + 10), bodyLen);
-            }
-            rustra_calculator_free_buffer(resp, out_len);
-            throw JSError(rt, errStr);
-          }
-          if (out_len < 8) {
-            rustra_calculator_free_buffer(resp, out_len);
-            throw JSError(rt, "RustraJSI: malformed success response (batch)");
-          }
-          rc::Reader r(resp + 8, out_len - 8);
-          Value decoded = gen::decode_by_name(rt, name, r);
-          rustra_calculator_free_buffer(resp, out_len);
+          // FFI + 응답 tail — 공통 헬퍼 (fail-fast: 첫 에러에서 throw).
+          // 접미 계약 유지: null → " (batch item <name>)", malformed → " (batch)".
+          Value decoded = typedInvokeTail(rt, req, " (batch)",
+                                          [&rt, &name](rc::Reader& r) {
+                                            return gen::decode_by_name(rt, name, r);
+                                          },
+                                          &name);
           results.setValueAtIndex(rt, i, decoded);
         }
         return results;
       });
     cache_["invokeTypedBatch"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+
+  // ── P0-2 byId: invokeTypedBatchById(cmdIds, args) — id 인덱싱 배치 진입 ──
+  // invokeTypedBatch 와 동일 계약(단일 횡단, fail-fast, 결과 Array 순서 보존)이지만
+  // encode/decode 를 이름 대신 u16 cmd_id 로 디스패치한다 — 항목당 문자열
+  // 마샬링 2회(name 인자 + 응답 decode_by_name)를 제거한다. JS 엔진은 정적
+  // 명령 id 캐시(P0-3 ensureStaticIds)에서 id 배열을 조립해 이 진입으로 호출한다.
+  // 미발견 cmd_id 는 encode_by_id 가 false 를 반환해 JSError 로 명시 실패한다.
+  {
+    auto propNameId = PropNameID::forAscii(rt, "invokeTypedBatchById");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 2,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 2) {
+          throw JSError(rt, "RustraJSI: invokeTypedBatchById requires (cmdIds, args)");
+        }
+        Array ids = args[0].asObject(rt).getArray(rt);
+        Array inputs = args[1].asObject(rt).getArray(rt);
+        size_t n = ids.length(rt);
+        if (inputs.length(rt) != n) {
+          throw JSError(rt, "RustraJSI: invokeTypedBatchById cmdIds/args length mismatch");
+        }
+
+        Array results(rt, n);
+        for (size_t i = 0; i < n; i++) {
+          uint16_t cmdId =
+            static_cast<uint16_t>(ids.getValueAtIndex(rt, i).asNumber());
+          const Value& oneArgs = inputs.getValueAtIndex(rt, i);
+
+          // encode by id (정적 cmd_id 필수)
+          rc::Writer w;
+          if (!gen::encode_by_id(rt, cmdId, oneArgs, w)) {
+            throw JSError(rt,
+              "RustraJSI: batch item has no C++ codec for cmd_id " + std::to_string(cmdId));
+          }
+          auto req = w.take();
+
+          // FFI + 응답 tail — 공통 헬퍼 (fail-fast: 첫 에러에서 throw).
+          // 접미는 이름 기반 배치와 동일하게 유지한다: null → " (batch)",
+          // malformed → " (batch)". 항목 이름을 알 수 없는 byId 경로의
+          // null 접미는 이름 조립 없이 배치 접미를 그대로 쓴다.
+          Value decoded = typedInvokeTail(rt, req, " (batch)",
+                                          [&rt, cmdId](rc::Reader& r) {
+                                            return gen::decode_by_id(rt, cmdId, r);
+                                          });
+          results.setValueAtIndex(rt, i, decoded);
+        }
+        return results;
+      });
+    cache_["invokeTypedBatchById"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
 
@@ -590,11 +685,9 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
                   return;
                 }
                 // postcard {code, message} → "code: message" 문자열 (RustraError
-                // Display 형태) — JS parseRustraErrorString 가 코드를 복원한다.
-                rc::Reader r(resp + 10, out_len - 10);
-                std::string code = r.read_string();
-                std::string message = r.read_string();
-                owned->onError.call(rt, code + ": " + message);
+                // Display 형태) — JS parseRustraErrorString 가 코드를 복구한다.
+                // 파싱 실패 시 원시 바이트 폴백(onError 누락 없음).
+                owned->onError.call(rt, parseRkyvV2ErrorBody(resp, out_len));
                 return;
               }
               if (out_len < 8) {
@@ -657,6 +750,26 @@ std::vector<PropNameID> RustraHostObject::getPropertyNames(Runtime& rt) {
   return names;
 }
 
+std::vector<PropNameID> RustraHostObject::propertyNames(Runtime& rt) {
+  // getPropertyNames 와 동일 로직의 non-virtual 버전 — 설치 평탄화 전용.
+  return getPropertyNames(rt);
+}
+
+Function RustraHostObject::getFunction(Runtime& rt, const PropNameID& name) {
+  // get 과 동일 스캔이지만 Value 가 아닌 Function 반환. 이 jsi 버전의
+  // Function 은 move-only(Pointer 계열, 복사 생성자 삭제)라 Object::getFunction
+  // 의 const& 오버로드가 runtime.cloneObject 로 새 핸들을 만들어 준다 —
+  // 같은 Runtime 힙의 동일 JS 함수 객체를 참조하므로 사실상의 복사다.
+  for (auto& [key, cached] : cache_) {
+    if (PropNameID::compare(rt, name, cached->propNameId)) {
+      return cached->function.getFunction(rt);
+    }
+  }
+  // 설치 경로는 propertyNames 로 얻은 이름만 전달하므로 도달하지 않는다.
+  // 그래도 침묵 대신 명시적 실패로 — 평탄화 누락을 조기에 노출한다.
+  throw JSError(rt, "RustraJSI: getFunction — unknown property");
+}
+
 // ── Install ────────────────────────────────────────────────
 
 // Deterministic package registration (avoids relying on __mod_init_func which
@@ -666,11 +779,28 @@ extern "C" void rustra_calculator_init();
 void installRustraJSIWithInvoker(Runtime& rt,
                                   std::shared_ptr<void> typeErasedCallInvoker) {
   rustra_calculator_init();
+  // RN reload 로 새 Runtime 이 설치되는 시점 — 캐시된 Function 핸들은
+  // 구 Runtime 힙을 참조하므로 여기서 반드시 비운다.
+  g_arrayBufferCtor.reset();
   auto dispatcher = getEventDispatcher();
   dispatcher->setCallInvoker(std::move(typeErasedCallInvoker));
+
+  // 평탄화(Nitro 방식): 모든 호스트 함수를 일반 JS 객체의 프로퍼티로 설치
+  // 시점에 박는다. 이후 native.invokeRkyvV2(...) 조회가 HostObject get 콜백
+  // (엔트리당 compare 가상 호출, 최대 22회) 대신 엔진의 인라인 프로퍼티
+  // 로드가 된다. 동작 불변: 프로퍼티 목록과 각 함수는 기존과 동일하며,
+  // unknown 프로퍼티 조회는 HostObject 의 undefined 반환과 마찬가지로
+  // JS undefined 로 귀결된다.
+  // RustraHostObject 는 함수 팩토리로만 사용 — get/getPropertyNames
+  // 오버라이드는 다른 설치 경로 호환용 안전 폴백으로 유지된다.
   auto hostObject = std::make_shared<RustraHostObject>(rt);
-  auto obj = Object::createFromHostObject(rt, hostObject);
-  rt.global().setProperty(rt, "__rustraNative", Value(rt, obj));
+  Object obj(rt);
+  for (auto& propName : hostObject->propertyNames(rt)) {
+    // setProperty(PropNameID, T&&) 오버로드 — Function 은 Object 파생이라
+    // detail::toValue 가 Value(rt, function) 로 변환한다.
+    obj.setProperty(rt, propName, hostObject->getFunction(rt, propName));
+  }
+  rt.global().setProperty(rt, "__rustraNative", std::move(obj));
 }
 
 void installRustraJSI(Runtime& rt) {
