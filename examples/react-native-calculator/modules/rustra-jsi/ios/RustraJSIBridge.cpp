@@ -92,6 +92,10 @@ static std::string parseRkyvV2ErrorBody(const uint8_t* resp, size_t out_len) {
 //   - batchItemName: 이름 기반 배치 루프의 항목 이름. FFI null 접미
 //     " (batch item <name>)" 조립에만 쓴다(에러 시 1회 조립 — hot path 비용 0).
 //     nullptr 면 null 접미로 tailSuffix 를 쓴다(단건/byId 배치).
+// free 짝 계약: 이 버퍼는 calculator 심볼의 응답 레이아웃 — alloc_response 가
+// 만든 magic 헤더 없는 Box<[u8]> 이다. rustra_ffi_free 는 ptr-8 에서 FFI magic
+// 헤더를 역산해 해제하므로 이 레이아웃에 대면 잘못된 해제를 한다(실제 버그였음,
+// follow-up 3에서 수정). 반드시 rustra_calculator_free_buffer 로 해제할 것.
 template <typename Decode>
 static Value typedInvokeTail(Runtime& rt, const std::vector<uint8_t>& req,
                              const char* tailSuffix, Decode decode,

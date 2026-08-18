@@ -737,7 +737,8 @@ export function createRkyvV2Engine(
   // registry 에 있다 (registry 도 코드젠 산출물). registry 에 없는 이름은
   // 동적 명령 → Tier 3 경로. 스윕은 registry 를 기준으로 하므로 C++ 코덱만
   // 있고 registry 에 빠진 정적 명령(불변식 위반)도 자연스럽게 Tier 3 로 간다.
-  // 스윕 도중 예외 시 부분 맵 재사용 — 미스윕 항목은 Tier 3로 우아하게 강등.
+  // 스윕 도중 예외 시 부분 맵 재사용 — 미스윕 항목은 registry 안 이름이므로
+  // Tier 2(JS codec)로 라우팅된다. Tier 3는 registry 밖 동적 명령 전용 경로다.
   let staticCommandIds: Map<string, number> | null = null;
   const ensureStaticIds = (): Map<string, number> | null => {
     if (staticCommandIds !== null || !hasTypedPath) return staticCommandIds;
