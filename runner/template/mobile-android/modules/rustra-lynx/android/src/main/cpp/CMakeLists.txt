@@ -31,8 +31,10 @@ add_library(rustrabackend STATIC IMPORTED)
 set_target_properties(rustrabackend PROPERTIES IMPORTED_LOCATION "${RUST_LIB}")
 
 find_library(log-lib log)
+find_library(android-lib android)
 
 target_link_libraries(rustra_lynx
   rustrabackend
   ${log-lib}
+  ${android-lib}
 )

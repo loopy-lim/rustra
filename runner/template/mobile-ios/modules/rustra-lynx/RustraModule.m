@@ -6,6 +6,7 @@ extern uint8_t *rustra_template_invoke_rkyv_v2(const uint8_t *payload,
                                                size_t payload_len,
                                                size_t *out_len);
 extern void rustra_template_free_buffer(uint8_t *ptr, size_t len);
+extern void rustra_template_init(void);
 
 // ── MobileBridge ABI (backend/src/capabilities.rs 계약) ────────────────────
 // 필드 순서 고정: read_file / notify / free.
@@ -90,7 +91,12 @@ static const rustra_bridge_t RUSTRA_IOS_BRIDGE = {
 @implementation RustraModule
 
 + (void)load {
-  // .so/.framework 로드 직후 — rkyv 패키지 등록 + MobileBridge 플랫폼 콜백 주입.
+  // .so/.framework 로드 직후 — Apple staticlib에서도 패키지 등록을 명시적으로 수행한다.
+  // __mod_init_func에 기대지 않아 iOS/ld 버전과 무관하게 invoke 대상이 준비된다.
+  rustra_template_init();
+  NSLog(@"[template-ios] rustra_template_init complete");
+
+  // MobileBridge 플랫폼 콜백 주입.
   rustra_template_register_mobile_registry(&RUSTRA_IOS_BRIDGE);
   NSLog(@"[template-ios] MobileBridge registered (file+notify)");
 }
