@@ -32,6 +32,10 @@
     "./validate-engine": {
       "types": "./dist/validate-engine.d.ts",
       "import": "./dist/validate-engine.js"
+    },
+    "./vite": {
+      "types": "./dist/vite.d.ts",
+      "import": "./dist/vite.js"
     }
   },
   "files": [
@@ -40,7 +44,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
-    "test": "tsc -p tsconfig.test.json && node --test dist-test/generate.test.js dist-test/schema-diff.test.js dist-test/dev.test.js"
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/generate.test.js dist-test/schema-diff.test.js dist-test/dev.test.js dist-test/vite.test.js"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
