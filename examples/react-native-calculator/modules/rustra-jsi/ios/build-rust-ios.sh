@@ -20,13 +20,31 @@ else
   REL_FLAG=""
 fi
 
-"$CARGO_BIN" build \
-  --manifest-path "$REPO_ROOT/Cargo.toml" \
-  -p rustra-calculator-example \
-  --lib \
-  $REL_FLAG \
-  --target "$TARGET"
-
 mkdir -p "$MODULE_DIR/ios/rust/lib"
-cp "$REPO_ROOT/target/$TARGET/$PROFILE/librustra_calculator_example.a" \
-  "$MODULE_DIR/ios/rust/lib/librustra_calculator_example.a"
+
+build_target() {
+  target="$1"
+  "$CARGO_BIN" build \
+    --manifest-path "$REPO_ROOT/Cargo.toml" \
+    -p rustra-calculator-example \
+    --lib \
+    $REL_FLAG \
+    --target "$target"
+}
+
+if [ -n "${RUSTRA_IOS_TARGET+set}" ]; then
+  # A caller may request a device or a single simulator architecture.
+  build_target "$TARGET"
+  cp "$REPO_ROOT/target/$TARGET/$PROFILE/librustra_calculator_example.a" \
+    "$MODULE_DIR/ios/rust/lib/librustra_calculator_example.a"
+else
+  # Xcode Release simulator builds ARCHS=arm64 x86_64 by default. Produce a
+  # universal simulator archive so Intel and Apple Silicon simulator links
+  # both work; device builds remain explicitly selectable above.
+  build_target aarch64-apple-ios-sim
+  build_target x86_64-apple-ios
+  lipo -create \
+    "$REPO_ROOT/target/aarch64-apple-ios-sim/$PROFILE/librustra_calculator_example.a" \
+    "$REPO_ROOT/target/x86_64-apple-ios/$PROFILE/librustra_calculator_example.a" \
+    -output "$MODULE_DIR/ios/rust/lib/librustra_calculator_example.a"
+fi
