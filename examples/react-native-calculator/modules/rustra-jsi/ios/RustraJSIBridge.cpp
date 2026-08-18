@@ -226,6 +226,10 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
   makeInvoke("invokeBytes",   rustra_calculator_invoke_bytes,  "Rust bytes returned null");
   makeInvoke("invokeMsgpack",  rustra_calculator_invoke_msgpack, "Rust msgpack returned null");
   makeInvoke("invokeBincode",  rustra_calculator_invoke_bincode, "Rust bincode returned null");
+  // Keep the public JS adapter name aligned with RustraNative. This is the
+  // calculator's legacy postcard envelope (command + a + b), while
+  // invokePostcardFFI above is the generic framework envelope.
+  makeInvoke("invokePostcard", rustra_calculator_invoke_postcard, "Rust postcard returned null");
   makeInvoke("invokeLegacyPostcard", rustra_calculator_invoke_postcard,"Rust postcard returned null");
   makeInvoke("invokeRkyv",     rustra_calculator_invoke_rkyv,    "Rust rkyv returned null");
   makeInvoke("invokeHybrid",   rustra_calculator_invoke_hybrid,  "Rust hybrid returned null");
@@ -383,10 +387,18 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
           }
           uint16_t errLen = (uint16_t)resp[8] | ((uint16_t)resp[9] << 8);
           size_t avail = out_len > 10 ? out_len - 10 : 0;
-          std::string err(reinterpret_cast<const char*>(resp + 10),
-                           errLen <= avail ? errLen : avail);
+          size_t bodyLen = errLen <= avail ? errLen : avail;
+          std::string errStr;
+          try {
+            rc::Reader errReader(resp + 10, bodyLen);
+            std::string code = errReader.read_string();
+            std::string message = errReader.read_string();
+            errStr = code + ": " + message;
+          } catch (...) {
+            errStr = std::string(reinterpret_cast<const char*>(resp + 10), bodyLen);
+          }
           rustra_calculator_free_buffer(resp, out_len);
-          throw JSError(rt, err);
+          throw JSError(rt, errStr);
         }
 
         // 성공: postcard(O) @8 부터 디코딩.
@@ -453,10 +465,18 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
             }
             uint16_t errLen = (uint16_t)resp[8] | ((uint16_t)resp[9] << 8);
             size_t avail = out_len > 10 ? out_len - 10 : 0;
-            std::string err(reinterpret_cast<const char*>(resp + 10),
-                             errLen <= avail ? errLen : avail);
+            size_t bodyLen = errLen <= avail ? errLen : avail;
+            std::string errStr;
+            try {
+              rc::Reader errReader(resp + 10, bodyLen);
+              std::string code = errReader.read_string();
+              std::string message = errReader.read_string();
+              errStr = code + ": " + message;
+            } catch (...) {
+              errStr = std::string(reinterpret_cast<const char*>(resp + 10), bodyLen);
+            }
             rustra_calculator_free_buffer(resp, out_len);
-            throw JSError(rt, err);
+            throw JSError(rt, errStr);
           }
           if (out_len < 8) {
             rustra_calculator_free_buffer(resp, out_len);
