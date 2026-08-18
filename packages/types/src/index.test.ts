@@ -258,12 +258,33 @@ test('engine throws when native has no getSchema and command not in registry', a
 
 // ── createRkyvV2Engine: B1 (C++ invokeTyped fast path) ──────
 
+/**
+ * 정적 명령 이름들로 최소 registry 를 만든다 (P0-3). 정적-id 캐시 스윕은
+ * registry 를 기준으로 돌므로 typed 경로를 타는 테스트는 대상 이름들이
+ * registry 에 있어야 한다 — 실제 앱에서 registry 는 코드젠 산출물로
+ * 정적 명령을 전부 담고 있는 것과 동일한 형태다.
+ */
+function staticRegistry(...names: string[]): Map<string, RkyvV2Codec<unknown, unknown>> {
+  return new Map(
+    names.map((name, i) => [
+      name,
+      {
+        commandId: i + 1,
+        encode: () => new ArrayBuffer(2),
+        decode: () => ({ ok: true, result: {} }),
+      },
+    ]),
+  );
+}
+
 /** makeNative 결과에 typed 코덱 메서드를 붙인 네이티브를 만든다. */
 function makeTypedNative(
   opts: NativeOpts & {
     hasStaticCodec?: (name: string) => boolean;
     invokeTyped?: (name: string, args: unknown) => unknown;
     invokeTypedBatch?: (names: string[], args: unknown[]) => unknown[];
+    invokeTypedById?: (cmdId: number, args: unknown) => unknown;
+    invokeTypedBatchById?: (cmdIds: number[], args: unknown[]) => unknown[];
   },
 ): RkyvV2SchemaNative {
   const base = makeNative(opts);
@@ -271,6 +292,8 @@ function makeTypedNative(
   if (opts.hasStaticCodec) typed.hasStaticCodec = opts.hasStaticCodec;
   if (opts.invokeTyped) typed.invokeTyped = opts.invokeTyped;
   if (opts.invokeTypedBatch) typed.invokeTypedBatch = opts.invokeTypedBatch;
+  if (opts.invokeTypedById) typed.invokeTypedById = opts.invokeTypedById;
+  if (opts.invokeTypedBatchById) typed.invokeTypedBatchById = opts.invokeTypedBatchById;
   return typed;
 }
 
@@ -323,12 +346,136 @@ test('engine propagates invokeTyped errors (B1, Rust handler failure)', async ()
       throw new Error('rust handler exploded');
     },
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createRkyvV2Engine(native, staticRegistry('add'));
   await assert.rejects(
     async () => {
       await engine.invoke('add', {});
     },
     (err: Error) => /rust handler exploded/.test(err.message),
+  );
+});
+
+// ── createRkyvV2Engine: byId 진입 + 정적 명령 집합 JS 캐시 (P0-#3) ──
+
+test('typed dispatch uses invokeTypedById when available (P0-3)', async () => {
+  const calls: string[] = [];
+  const native = makeTypedNative({
+    hasStaticCodec: (name) => {
+      calls.push(`has:${name}`);
+      return name === 'addNumbers';
+    },
+    invokeTyped: (name) => {
+      calls.push(`typed:${name}`);
+      return { value: 0 };
+    },
+    invokeTypedById: (id) => {
+      calls.push(`byId:${id}`);
+      return { value: 3 };
+    },
+  });
+  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
+    [
+      'addNumbers',
+      {
+        commandId: 1,
+        encode: () => new ArrayBuffer(4),
+        decode: () => ({ ok: true, result: { value: 0 } }),
+      },
+    ],
+  ]);
+  const engine = createRkyvV2Engine(native, registry);
+
+  // 1) 결과가 byId 경로 값
+  const out = await engine.invoke<{ value: number }>('addNumbers', { a: 1, b: 2 });
+  assert.equal(out.value, 3, 'result must come from the byId entry point');
+  // 2) byId:1 호출
+  assert.ok(calls.includes('byId:1'), 'invokeTypedById must be called with the registry cmdId');
+  // 3) invokeTypedFallback 미사용
+  assert.ok(!calls.some((c) => c.startsWith('typed:')), 'name-based invokeTyped must not run');
+  // 4) 두 번째 invoke — 캐시로 hasStaticCodec 재호출 없음
+  await engine.invoke<{ value: number }>('addNumbers', { a: 2, b: 3 });
+  const hasCount = calls.filter((c) => c.startsWith('has:')).length;
+  assert.equal(
+    hasCount,
+    1,
+    `hasStaticCodec must run once for the initial sweep (registry size 1), got ${hasCount}`,
+  );
+});
+
+test('typed dispatch falls back to name-based invokeTyped without invokeTypedById (P0-3)', async () => {
+  // 호환 계약: 구 네이티브는 invokeTypedById 미노출 — 기존 이름 기반 경로 유지.
+  const calls: string[] = [];
+  const native = makeTypedNative({
+    hasStaticCodec: (name) => {
+      calls.push(`has:${name}`);
+      return true;
+    },
+    invokeTyped: (name) => {
+      calls.push(`typed:${name}`);
+      return { value: 42 };
+    },
+  });
+  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
+    [
+      'addNumbers',
+      {
+        commandId: 1,
+        encode: () => new ArrayBuffer(4),
+        decode: () => ({ ok: true, result: { value: 0 } }),
+      },
+    ],
+  ]);
+  const engine = createRkyvV2Engine(native, registry);
+  const out = await engine.invoke<{ value: number }>('addNumbers', { a: 1, b: 2 });
+  assert.equal(out.value, 42, 'fallback must resolve via name-based invokeTyped');
+  assert.ok(calls.includes('typed:addNumbers'), 'invokeTyped must be called on fallback');
+  // 캐시는 여전히 적용 — 두 번째 호출엔 hasStaticCodec 재호출 없음.
+  await engine.invoke<{ value: number }>('addNumbers', { a: 2, b: 3 });
+  assert.equal(calls.filter((c) => c.startsWith('has:')).length, 1);
+});
+
+test('dynamic command skips the static-id cache and stays on Tier 3 (P0-3)', async () => {
+  // hasStaticCodec 이 false 인 이름(동적 명령)은 캐시 스윕에서 제외되고,
+  // 이후 invoke 마다 재조사 없이 Tier 3 경로로 간다 — 캐시 미스가 안정적이어야
+  // 매 호출 hasStaticCodec 을 되묻는 회귀가 없다.
+  const calls: string[] = [];
+  const native = makeTypedNative({
+    schema: schemaBytes([{ name: 'dyn', commandId: 7 }]),
+    invokeImpl: () => tier3Success({ v: 7 }),
+    hasStaticCodec: (name) => {
+      calls.push(`has:${name}`);
+      return name === 'addNumbers';
+    },
+    invokeTyped: () => {
+      throw new Error('invokeTyped must not be called for dynamic commands');
+    },
+    invokeTypedById: () => {
+      throw new Error('invokeTypedById must not be called for dynamic commands');
+    },
+  });
+  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
+    [
+      'addNumbers',
+      {
+        commandId: 1,
+        encode: () => new ArrayBuffer(4),
+        decode: () => ({ ok: true, result: { value: 0 } }),
+      },
+    ],
+  ]);
+  const engine = createRkyvV2Engine(native, registry);
+  const out = await engine.invoke<{ v: number }>('dyn', {});
+  assert.equal(out.v, 7, 'dynamic command must resolve via Tier 3');
+  await engine.invoke<{ v: number }>('dyn', {});
+  // 스윕은 registry 키만 조사한다 — registry 에 없는 'dyn' 은 아예 프로브되지
+  // 않는다(불변식: 정적 명령은 항상 registry 에 있다). 매 호출 hasStaticCodec
+  // 을 되묻는 회귀가 없다는 것이 이 테스트의 핵심.
+  const dynSweeps = calls.filter((c) => c === 'has:dyn').length;
+  assert.equal(dynSweeps, 0, 'dynamic command must never be probed — not in the registry');
+  assert.equal(
+    calls.filter((c) => c === 'has:addNumbers').length,
+    1,
+    'initial sweep probes each registry entry exactly once',
   );
 });
 
@@ -349,7 +496,7 @@ test('invokeBatch uses single invokeTypedBatch when all entries are static (P0-2
       return names.map((n) => ({ value: n === 'add' ? 3 : 6 }));
     },
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createRkyvV2Engine(native, staticRegistry('add', 'mul'));
   const out = await engine.invokeBatch<Array<{ value: number }>>([
     { command: 'add', args: { a: 1, b: 2 } },
     { command: 'mul', args: { a: 2, b: 3 } },
@@ -379,7 +526,7 @@ test('invokeBatch falls back to per-entry invoke when dynamic commands are mixed
       return [];
     },
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createRkyvV2Engine(native, staticRegistry('add'));
   const out = await engine.invokeBatch<Array<{ value: number } | { v: number }>>([
     { command: 'add', args: {} }, // 정적 → invokeTyped
     { command: 'dyn', args: {} }, // 동적 → Tier 3
@@ -402,7 +549,7 @@ test('invokeBatch entry signal routes the whole batch off the single crossing (T
       return [];
     },
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createRkyvV2Engine(native, staticRegistry('a', 'b'));
 
   const ac = new AbortController();
   const p = engine.invokeBatch([
@@ -430,7 +577,7 @@ test('invokeBatch signal-less static entries still use the single crossing (T1 f
       return names.map(() => ({ value: 1 }));
     },
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createRkyvV2Engine(native, staticRegistry('a', 'b'));
   const out = await engine.invokeBatch<Array<{ value: number }>>([
     { command: 'a', args: {}, options: {} }, // options 있지만 signal 없음
     { command: 'b' }, // 기존 형태 그대로
@@ -451,7 +598,7 @@ test('invokeBatch entry cancel only rejects that entry independently (T1 follow-
       return { echo: name };
     },
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createRkyvV2Engine(native, staticRegistry('a', 'b'));
 
   const ac = new AbortController();
   ac.abort(); // 사전 중단 — 'b' 는 절대 네이티브에 닿으면 안 된다.
@@ -474,12 +621,91 @@ test('invokeBatch without typed-batch native falls back to per-entry', async () 
     hasStaticCodec: () => true,
     invokeTyped: (name) => ({ echo: name }),
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createRkyvV2Engine(native, staticRegistry('a', 'b'));
   const out = await engine.invokeBatch<Array<{ echo: string }>>([
     { command: 'a', args: {} },
     { command: 'b', args: {} },
   ]);
   assert.deepEqual(out, [{ echo: 'a' }, { echo: 'b' }]);
+});
+
+// ── createRkyvV2Engine: P0-2 byId 배치 (invokeTypedBatchById) ──
+
+test('invokeBatch uses invokeTypedBatchById with cmd_id array when available (P0-2 byId)', async () => {
+  // byId 배치 진입: 모든 항목이 정적 캐시에 있으면 이름 배열 대신 cmd_id 배열로
+  // 단일 횡단 — 문자열 마샬링 N 회 제거. 결과는 순서 보존.
+  const batchByIdCalls: number[][] = [];
+  let nameBatchCalls = 0;
+  const native = makeTypedNative({
+    hasStaticCodec: (name) => name === 'add' || name === 'mul',
+    invokeTyped: () => ({ value: 0 }),
+    invokeTypedBatch: () => {
+      nameBatchCalls++;
+      return [];
+    },
+    invokeTypedBatchById: (ids) => {
+      batchByIdCalls.push([...ids]);
+      // staticRegistry('add','mul') → cmdId 1, 2 — id 순서대로 결과 반환.
+      return ids.map((id) => ({ value: id * 10 }));
+    },
+  });
+  const engine = createRkyvV2Engine(native, staticRegistry('add', 'mul'));
+  const out = await engine.invokeBatch<Array<{ value: number }>>([
+    { command: 'add', args: { a: 1, b: 2 } }, // cmdId 1
+    { command: 'mul', args: { a: 2, b: 3 } }, // cmdId 2
+    { command: 'add', args: { a: 0, b: 0 } }, // cmdId 1 (중복 포함)
+  ]);
+  assert.equal(batchByIdCalls.length, 1, 'invokeTypedBatchById must be called exactly once');
+  assert.deepEqual(
+    batchByIdCalls[0],
+    [1, 2, 1],
+    'cmd_id array must follow entry order (duplicates preserved)',
+  );
+  assert.equal(nameBatchCalls, 0, 'name-based invokeTypedBatch must not run on byId path');
+  assert.deepEqual(out, [{ value: 10 }, { value: 20 }, { value: 10 }], 'order preserved');
+});
+
+test('invokeBatch falls back to name-based invokeTypedBatch without invokeTypedBatchById (P0-2 byId)', async () => {
+  // 호환 계약: 구 네이티브는 byId 배치 미노출 — 기존 이름 기반 경로 유지.
+  let nameBatchCalls = 0;
+  const native = makeTypedNative({
+    hasStaticCodec: () => true,
+    invokeTyped: () => ({ value: 0 }), // hasTypedPath 충족용
+    invokeTypedBatch: (names) => {
+      nameBatchCalls++;
+      return names.map((n) => ({ echo: n }));
+    },
+  });
+  const engine = createRkyvV2Engine(native, staticRegistry('a', 'b'));
+  const out = await engine.invokeBatch<Array<{ echo: string }>>([
+    { command: 'a', args: {} },
+    { command: 'b', args: {} },
+  ]);
+  assert.equal(nameBatchCalls, 1, 'name-based invokeTypedBatch must remain the fallback');
+  assert.deepEqual(out, [{ echo: 'a' }, { echo: 'b' }]);
+});
+
+test('invokeBatch skips invokeTypedBatchById when a cache-miss (dynamic) entry is mixed (P0-2 byId)', async () => {
+  // 캐시 미스 항목(동적 명령)이 섞이면 byId 배열을 조립할 수 없다 —
+  // 기존 폴백 경로(항목별 invoke)로 라우팅되고 byId/이름 배치 모두 미사용.
+  const native = makeTypedNative({
+    schema: schemaBytes([{ name: 'dyn', commandId: 9 }]),
+    invokeImpl: () => tier3Success({ v: 9 }),
+    hasStaticCodec: (name) => name === 'add',
+    invokeTyped: () => ({ value: 42 }),
+    invokeTypedBatch: () => {
+      throw new Error('invokeTypedBatch must not run for mixed batches');
+    },
+    invokeTypedBatchById: () => {
+      throw new Error('invokeTypedBatchById must not run for mixed batches');
+    },
+  });
+  const engine = createRkyvV2Engine(native, staticRegistry('add'));
+  const out = await engine.invokeBatch<Array<{ value: number } | { v: number }>>([
+    { command: 'add', args: {} }, // 정적 → invokeTyped
+    { command: 'dyn', args: {} }, // 동적(캐시 미스) → Tier 3
+  ]);
+  assert.deepEqual(out, [{ value: 42 }, { v: 9 }]);
 });
 
 // ── Task 3.3: 동시성 / 배치 에러 전파 ──────────────────────
@@ -1312,7 +1538,7 @@ test('T3: typed (tier 1) path skips the pre-check — invokeTyped still called',
       return { value: 42 };
     },
   });
-  const engine = createRkyvV2Engine(native, new Map(), { maxPayloadBytes: 8 });
+  const engine = createRkyvV2Engine(native, staticRegistry('add'), { maxPayloadBytes: 8 });
   const out = await engine.invoke<{ value: number }>('add', { big: 'x'.repeat(64) });
   assert.equal(out.value, 42);
   assert.equal(typedCalls, 1, 'typed path must NOT be gated by maxPayloadBytes');
