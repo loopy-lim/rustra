@@ -651,6 +651,26 @@ std::vector<PropNameID> RustraHostObject::getPropertyNames(Runtime& rt) {
   return names;
 }
 
+std::vector<PropNameID> RustraHostObject::propertyNames(Runtime& rt) {
+  // getPropertyNames 와 동일 로직의 non-virtual 버전 — 설치 평탄화 전용.
+  return getPropertyNames(rt);
+}
+
+Function RustraHostObject::getFunction(Runtime& rt, const PropNameID& name) {
+  // get 과 동일 스캔이지만 Value 가 아닌 Function 반환. 이 jsi 버전의
+  // Function 은 move-only(Pointer 계열, 복사 생성자 삭제)라 Object::getFunction
+  // 의 const& 오버로드가 runtime.cloneObject 로 새 핸들을 만들어 준다 —
+  // 같은 Runtime 힙의 동일 JS 함수 객체를 참조하므로 사실상의 복사다.
+  for (auto& [key, cached] : cache_) {
+    if (PropNameID::compare(rt, name, cached->propNameId)) {
+      return cached->function.getFunction(rt);
+    }
+  }
+  // 설치 경로는 propertyNames 로 얻은 이름만 전달하므로 도달하지 않는다.
+  // 그래도 침묵 대신 명시적 실패로 — 평탄화 누락을 조기에 노출한다.
+  throw JSError(rt, "RustraJSI: getFunction — unknown property");
+}
+
 // ── Install ────────────────────────────────────────────────
 
 // Deterministic package registration (avoids relying on __mod_init_func which
@@ -662,9 +682,23 @@ void installRustraJSIWithInvoker(Runtime& rt,
   rustra_calculator_init();
   auto dispatcher = getEventDispatcher();
   dispatcher->setCallInvoker(std::move(typeErasedCallInvoker));
+
+  // 평탄화(Nitro 방식): 모든 호스트 함수를 일반 JS 객체의 프로퍼티로 설치
+  // 시점에 박는다. 이후 native.invokeRkyvV2(...) 조회가 HostObject get 콜백
+  // (엔트리당 compare 가상 호출, 최대 22회) 대신 엔진의 인라인 프로퍼티
+  // 로드가 된다. 동작 불변: 프로퍼티 목록과 각 함수는 기존과 동일하며,
+  // unknown 프로퍼티 조회는 HostObject 의 undefined 반환과 마찬가지로
+  // JS undefined 로 귀결된다.
+  // RustraHostObject 는 함수 팩토리로만 사용 — get/getPropertyNames
+  // 오버라이드는 다른 설치 경로 호환용 안전 폴백으로 유지된다.
   auto hostObject = std::make_shared<RustraHostObject>(rt);
-  auto obj = Object::createFromHostObject(rt, hostObject);
-  rt.global().setProperty(rt, "__rustraNative", Value(rt, obj));
+  Object obj(rt);
+  for (auto& propName : hostObject->propertyNames(rt)) {
+    // setProperty(PropNameID, T&&) 오버로드 — Function 은 Object 파생이라
+    // detail::toValue 가 Value(rt, function) 로 변환한다.
+    obj.setProperty(rt, propName, hostObject->getFunction(rt, propName));
+  }
+  rt.global().setProperty(rt, "__rustraNative", std::move(obj));
 }
 
 void installRustraJSI(Runtime& rt) {
