@@ -130,7 +130,12 @@ export function tsObjectFromSchema(
       // `#[serde(tag = "type")]` variant 가 schemars 에서 { type: { const: "A" } } 로
       // 내보내지므로 `{ type: 'A' }` 판별 필드가 만들어진다.
       const type = constLiteral(propSchema) ?? tsTypeFromSchema(propSchema, definitions);
-      return `  ${name}${optional}: ${type};`;
+      let fieldStr = '';
+      if (typeof propSchema.description === 'string') {
+        fieldStr += `  /** ${propSchema.description.replace(/\n/g, ' ')} */\n`;
+      }
+      fieldStr += `  ${name}${optional}: ${type};`;
+      return fieldStr;
     })
     .join('\n');
 

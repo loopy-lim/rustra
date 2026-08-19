@@ -7,6 +7,7 @@
 //! `register`(동적 명령)는 debug 빌드에서만 동작(release=frozen). 정적 테스트는 양쪽 모두.
 
 #![allow(clippy::float_cmp)]
+#![cfg_attr(not(debug_assertions), allow(dead_code, unused_imports))]
 
 use rustra::Package;
 use schemars::JsonSchema;

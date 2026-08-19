@@ -17,14 +17,27 @@
  * ```
  */
 
-import type { EngineClient } from '@rustra/types';
+import type { EngineClient, InvokeOptions } from '@rustra/types';
 import { RustraCommandError } from '@rustra/types';
 
-type Handler = (args: never) => unknown;
+type Handler = (args: unknown) => unknown;
+
+export type CommandFunction<I = unknown, O = unknown> =
+  | ((input: I, options?: InvokeOptions) => Promise<O>)
+  | ((options?: InvokeOptions) => Promise<O>);
 
 export interface MockEngine extends EngineClient {
   /** command 핸들러을 등록하고 엔진 자신을 반환 (체이닝). args 타입은 자유. */
   on<A = unknown>(command: string, handler: (args: A) => unknown): MockEngine;
+  /**
+   * 생성된 명령 함수를 직접 전달하여 타입 안전하게 mock 핸들러를 등록합니다.
+   *
+   * @example
+   * ```ts
+   * const engine = createMockEngine().mock(addNumbers, ({ a, b }) => ({ value: a + b }));
+   * ```
+   */
+  mock<I, O>(commandFn: CommandFunction<I, O>, handler: (args: I) => O | Promise<O>): MockEngine;
   /** 지금까지의 invoke 기록 (command, args) — 호출 순서 검증용. */
   calls(): Array<{ command: string; args: unknown }>;
 }
@@ -36,6 +49,11 @@ export function createMockEngine(): MockEngine {
     on(command, handler) {
       handlers.set(command, handler as Handler);
       return engine;
+    },
+    mock(commandFn, handler) {
+      const name = commandFn.name;
+      if (!name) throw new Error('Command function must have a name');
+      return engine.on(name, handler as (args: unknown) => unknown);
     },
     calls: () => [...log],
     async invoke<T>(command: string, args?: unknown): Promise<T> {

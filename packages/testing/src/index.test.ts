@@ -11,6 +11,16 @@ test('mock engine invokes registered handler', async () => {
   assert.equal(result, 42);
 });
 
+test('type-safe mock method registers command by function reference', async () => {
+  async function computeSum(input: { a: number; b: number }): Promise<{ sum: number }> {
+    return { sum: input.a + input.b };
+  }
+
+  const engine = createMockEngine().mock(computeSum, ({ a, b }) => ({ sum: a + b }));
+  const result = await engine.invoke<{ sum: number }>('computeSum', { a: 10, b: 25 });
+  assert.deepEqual(result, { sum: 35 });
+});
+
 test('unknown command rejects with RustraCommandError command.not_found', async () => {
   const engine = createMockEngine();
   await assert.rejects(

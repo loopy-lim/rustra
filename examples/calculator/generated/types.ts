@@ -45,7 +45,9 @@ export type DivideOutput = {
 };
 
 export type EmitDemoInput = {
+  /** 발행할 progress.tick 이벤트 수. */
   ticks: number;
+  /** 각 스텝 사이 대기 (ms). 데모에서 이벤트 순서를 관찰하기 쉽게. */
   stepDelayMs: number;
 };
 

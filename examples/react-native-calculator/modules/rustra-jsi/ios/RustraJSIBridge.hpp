@@ -146,6 +146,20 @@ public:
   std::vector<facebook::jsi::PropNameID> getPropertyNames(
     facebook::jsi::Runtime& rt) override;
 
+  /// 설치 평탄화용: 캐시된 함수 이름 목록 (getPropertyNames 와 동일 로직,
+  /// non-virtual). installRustraJSIWithInvoker 가 일반 Object 에 함수들을
+  /// 프로퍼티로 박을 때 열거에 사용한다.
+  std::vector<facebook::jsi::PropNameID> propertyNames(
+    facebook::jsi::Runtime& rt);
+
+  /// 설치 평탄화용: 이름으로 캐시된 Function 반환 (get 과 동일 스캔 로직,
+  /// Value 래핑 대신 Function 자체 — cloneObject 로 같은 JS 함수를 참조하는
+  /// 새 핸들). 못 찾으면 throw — 설치 경로는 propertyNames 로 얻은 이름만
+  /// 쓰므로 정상적으로는 도달 안 함.
+  facebook::jsi::Function getFunction(
+    facebook::jsi::Runtime& rt,
+    const facebook::jsi::PropNameID& name);
+
 private:
   /// Cache of function name → {PropNameID, Function}.
   /// Populated lazily on first property access for each name.
