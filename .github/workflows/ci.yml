@@ -7,6 +7,18 @@ on:
     branches: [main]
 
 jobs:
+  # cargo audit — 취약점(vulnerabilities)이면 실패. unmaintained/unsound 경고는
+  # 현재 gtk-rs/atk(tauri Linux 경유), atomic-polyfill(crossbeam 경유), bincode 등
+  # transitive 한 경로뿐이라 warning 게이트는 걸지 않는다 (RUSTSEC 경고 목록은
+  # docs/security-audit.md 참조).
+  rust-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
   rust:
     strategy:
       fail-fast: false
@@ -56,7 +68,7 @@ jobs:
 
   typescript:
     runs-on: ubuntu-latest
-    needs: rust
+    needs: [rust, rust-audit]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
