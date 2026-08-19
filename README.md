@@ -297,6 +297,19 @@ const result = await addNumbers({ a: 20, b: 22 });
 
 네이티브 모듈 설정(iOS Lynx Module / Android Kotlin)은 [Lynx 설정 가이드](docs/extending/lynx-setup.md)를 참고.
 
+### 플랫폼 지원 매트릭스
+
+| 플랫폼                      | 상태             | 비고                                                                                                                                                                       |
+| --------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Node / Bun                  | Stable           | subprocess·N-API·FFI 전 경로 CI 검증                                                                                                                                       |
+| Tauri (macOS/Linux)         | Stable           | 폴링 + 이벤트 푸시(`register_with_events`)                                                                                                                                 |
+| React Native iOS            | Stable           | JSI Tier 1~3 왕복 실기 검증, Release 빌드 CI                                                                                                                               |
+| React Native Android        | Stable           | Release APK 빌드 CI (Gradle→Rust 자동 빌드)                                                                                                                                |
+| Lynx (iOS/Android/macOS)    | Stable           | 런타임 왕복 실기 검증 (runner 템플릿)                                                                                                                                      |
+| **Windows 데스크톱 (Lynx)** | **Experimental** | FML PE 심볼 해석 미구현 — 빌드 스캐폴드만 존재. `windows-experiment.yml` 이 lynx.dll export 덤프/MSVC 빌드를 실험 진행(논게이트). 런타임 검증 완료 전 production 사용 불가 |
+
+Windows 지원을 제외한 모든 플랫폼은 `npm run test:compat`·CI 네이티브 빌드 잡이 게이트한다.
+
 ## 성능
 
 모든 어댑터에서 `addNumbers({ a: 42, b: 58 })` 호출 기준 (Apple Silicon, release 빌드).
