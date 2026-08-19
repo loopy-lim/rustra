@@ -1,6 +1,6 @@
 {
   "name": "@rustra/cli",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "CLI for rustra-bridge TypeScript code generation",
   "license": "MIT",
   "type": "module",
@@ -58,11 +58,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/loopy-lim/hostra.git",
+    "url": "git+https://github.com/loopy-lim/rustra.git",
     "directory": "packages/cli"
   },
   "bugs": {
-    "url": "https://github.com/loopy-lim/hostra/issues"
+    "url": "https://github.com/loopy-lim/rustra/issues"
   },
-  "homepage": "https://github.com/loopy-lim/hostra#readme"
+  "homepage": "https://github.com/loopy-lim/rustra#readme"
 }

@@ -38,8 +38,8 @@ crates.io canary 는 지원하지 않는다 (버전 삭제 불가) — Rust 는 
 ## 3단계 — stable 발행
 
 1. Version Packages PR 머지 → release.yml 자동 실행 (npm 10종)
-2. crates 수동 잡: Actions → Release → cargo-publish 는 `workflow_dispatch` 전용이므로
-   **이 문서의 예외 경로**로만 실행 (rustra-macros → 30s 대기 → rustra 순서)
+2. crates 수동 잡: Actions → Release → Run workflow는 `main`의 동일 SHA에 대해
+   CI 성공을 다시 확인한 뒤 rustra-macros → 인덱스 반영 대기 → rustra 순서로 발행
 
 ```bash
 # 로컬 검증 후 수동 발행 (crates 는 되돌릴 수 없어 2단 게이트)

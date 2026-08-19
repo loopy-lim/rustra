@@ -41,5 +41,5 @@ import { generateTypesTs, generateCommandsTs, diffSchemas } from '@rustra/cli';
 
 ## 관련 문서
 
-- [rustra-bridge](https://github.com/loopy-lim/hostra#readme)
+- [rustra-bridge](https://github.com/loopy-lim/rustra#readme)
 - `docs/getting-started.md` — 전체 파이프라인 (Rust `generate_typescript` → CLI)
