@@ -40,7 +40,7 @@ function generateDeepNestedGraph(itemCount = 100) {
         productId: `prod_cat_${i % 50}`,
         title: `Enterprise High-Performance Module Spec #${i}`,
         sku: `SKU-RUSTRA-2026-NESTED-${i}`,
-        tags: ["rust", "rkyv-v2", "fast-path", "zero-copy", "lynx-js", "nested"],
+        tags: ["rust", "rkyv-v2", "fast-path", "zero-copy", "js-bridge", "nested"],
         price: {
           amount: 149.99 + (i % 20) * 10,
           currency: "USD",
@@ -68,7 +68,7 @@ function generateDeepNestedGraph(itemCount = 100) {
           reviewId: `rev_${i}_2`,
           author: "user_b",
           rating: 5,
-          comment: "Tested with 10,000 nested items and zero UI frame drop on Lynx.",
+          comment: "Tested with 10,000 nested items and zero UI frame drop.",
           helpfulVotes: 128,
         },
       ],
@@ -78,7 +78,7 @@ function generateDeepNestedGraph(itemCount = 100) {
       event: `AUDIT_LOG_EVENT_${i}`,
       metadata: {
         ip: `192.168.1.${i}`,
-        userAgent: "RustraEngine/2.0 LynxNative/3.6",
+        userAgent: "RustraEngine/2.0 NativeBridge/1.0",
         signature: `sig_ed25519_hash_block_${i}_validated`,
       },
     })),
