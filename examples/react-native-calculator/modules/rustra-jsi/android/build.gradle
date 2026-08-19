@@ -56,6 +56,31 @@ android {
   }
 }
 
+// Rust 정적 라이브러리를 Gradle 빌드에 연결한다. iOS podspec의 prepare_command 와
+// 대칭 — Android 는 이 훅이 없으면 libs/<ABI>/ 아래 .a 가 미리 있어야 해서 클린
+// 체크아웃에서 CMake 구성이 실패한다. inputs/outputs 캐싱으로 Rust 소스가 바뀔 때만
+// cargo 가 재실행된다 (profile 은 buildType 에 따라 debug/release).
+def rustLibsDir = file("src/main/cpp/libs")
+def rustSourceRoot = file("../../../../..") // 저장소 루트 (examples/calculator Rust crate)
+tasks.register("buildRustAndroid") {
+  inputs.dir("${rustSourceRoot}/examples/calculator/src")
+  inputs.file("${rustSourceRoot}/examples/calculator/Cargo.toml")
+  inputs.file("${rustSourceRoot}/Cargo.lock")
+  inputs.property("profile", gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") } ? "release" : "dev")
+  outputs.dir(rustLibsDir)
+  outputs.cacheIf { true }
+  doLast {
+    def isRelease = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
+    def profile = isRelease ? "release" : "dev"
+    exec {
+      workingDir projectDir
+      environment "RUSTRA_PROFILE", profile == "dev" ? "debug" : "release"
+      commandLine "sh", "build-rust-android.sh"
+    }
+  }
+}
+preBuild.dependsOn "buildRustAndroid"
+
 repositories {
   google()
   mavenCentral()

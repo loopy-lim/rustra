@@ -2,6 +2,14 @@
   "name": "nitro-bench",
   "version": "0.0.1",
   "description": "nitro-bench",
+  "codegenConfig": {
+    "name": "NitroBenchSpec",
+    "type": "modules",
+    "jsSrcsDir": "./src",
+    "android": {
+      "javaPackageName": "com.margelo.nitro.nitrobench"
+    }
+  },
   "main": "lib/index",
   "module": "lib/index",
   "types": "lib/index.d.ts",
