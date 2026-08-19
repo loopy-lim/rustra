@@ -267,7 +267,10 @@ fn command_macro_rejects_wrong_signature() {
                 [dependencies]\nrustra = {{ path = \"{}/crates/rustra\" }}\n\
                 serde = {{ version = \"1\", features = [\"derive\"] }}\n\
                 schemars = {{ version = \"0.8\", features = [\"derive\"] }}\n",
-                workspace_dir.display()
+                // Windows 경로의 백슬래시는 TOML 기본 문자열에서 이스케이프로
+                // 해석돼 매니페스트가 깨진다 — forward-slash 로 정규화 (cargo 는
+                // Windows 에서도 슬래시 경로를 받아들인다).
+                workspace_dir.display().to_string().replace('\\', "/")
             ),
         )
         .unwrap();
