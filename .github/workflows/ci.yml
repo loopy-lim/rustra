@@ -49,6 +49,12 @@ jobs:
       - name: Test (Linux — full workspace)
         if: runner.os == 'Linux'
         run: cargo test --workspace --exclude rustra-lynx-tauri-spike
+      # Release 프로파일 테스트 — debug 빌드에서만 나타나지 않는 최적화/릴리즈
+      # 전용 경로(#[cfg(debug_assertions)] 등) 회귀를 잡는다 (감사 지적: CI가
+      # production 게이트보다 약함).
+      - name: Test release (Linux — core crates)
+        if: runner.os == 'Linux'
+        run: cargo test --release -p rustra -p rustra-calculator-example
       - name: Test (macOS/Windows — core crates)
         if: runner.os != 'Linux'
         shell: bash
@@ -71,6 +77,8 @@ jobs:
     needs: [rust, rust-audit]
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -105,3 +113,93 @@ jobs:
         run: npm run test:adapters
       - name: Test CLI
         run: npm run test -w @rustra/cli
+      - name: Full compatibility matrix (test:compat)
+        # test:compat — ts:node/ts:bun/adapters/runtime 전체 체인. test:ts:bun 과
+        # test:runtime:* 이 rustra-calculator-example 바이너리를 요구해 Rust
+        # 툴체인이 필요하다 (rust 잡과 별도 캐시 재사용).
+        run: npm run test:compat
+
+  # RN 예제 네이티브 Release 빌드 — 감사에서 Android Release 실패가 P0 로
+  # 지적됐다. Gradle 훅이 Rust 부터 빌드하므로 cargo-ndk + NDK 만 세팅하면
+  # 클린 러너에서 assembleRelease 가 재현된다 (Phase 1 수정 검증).
+  rn-android:
+    runs-on: ubuntu-latest
+    needs: rust
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: aarch64-linux-android, x86_64-linux-android
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - name: Install NDK 27.1.12297006
+        run: sdkmanager "ndk;27.1.12297006" "platforms;android-36" "build-tools;36.0.0"
+      - name: Export NDK_HOME for build-rust-android.sh
+        run: echo "NDK_HOME=$ANDROID_HOME/ndk/27.1.12297006" >> "$GITHUB_ENV"
+      - name: Install example deps
+        run: cd examples/react-native-calculator && npm install
+      - name: Build Release APK
+        run: cd examples/react-native-calculator/android && ./gradlew assembleRelease -x lint
+      - name: Verify APK contains rustrajsi native lib
+        run: |
+          unzip -l examples/react-native-calculator/android/app/build/outputs/apk/release/app-release.apk | grep -E "lib/(arm64-v8a|x86_64)/librustrajsi\.so"
+
+  # RN iOS Release 프레임워크 빌드 — podspec prepare_command 이 Rust 를
+  # 빌드한다. iOS 시뮬레이터 런타임 실행은 로컬 verify 게이트가 담당.
+  rn-ios:
+    runs-on: macos-latest
+    needs: rust
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: aarch64-apple-ios-sim, x86_64-apple-ios
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install example deps
+        run: cd examples/react-native-calculator && npm install
+      - name: Build iOS Release (simulator, no codesign)
+        run: |
+          cd examples/react-native-calculator/ios
+          pod install --project-directory=.
+          xcodebuild -workspace reactnativecalculator.xcworkspace -scheme reactnativecalculator -configuration Release -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build 2>&1 | tail -5
+
+  # 소비자 설치 smoke — npm pack 산물을 빈 디렉터리에 설치해 배포물이
+  # 스스로 동작하는지 검증 (감사: '소비자 설치 후 smoke test' 없음).
+  consumer-smoke:
+    runs-on: ubuntu-latest
+    needs: typescript
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Build all packages
+        run: npm run build
+      - name: Install packed packages as a consumer
+        run: |
+          mkdir -p /tmp/consumer && cd /tmp/consumer
+          npm init -y > /dev/null
+          npm pkg set type=module
+          npm install --no-save "$GITHUB_WORKSPACE/packages/types" "$GITHUB_WORKSPACE/packages/node"
+      - name: Smoke — installed packages load (ESM)
+        run: |
+          cd /tmp/consumer
+          node --input-type=module -e "
+            import * as types from '@rustra/types';
+            import * as node from '@rustra/node';
+            console.log('consumer install ok:', Object.keys(types).length, 'types exports,', Object.keys(node).length, 'node exports');
+          "

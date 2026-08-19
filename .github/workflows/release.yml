@@ -3,11 +3,12 @@ name: Release
 on:
   # Release는 main push와 독립적으로 즉시 실행하지 않는다. CI 전체 workflow가
   # 성공한 동일 commit에서만 실행해, build/test/lint/audit 결과를 선행 게이트로 삼는다.
+  # workflow_dispatch 는 허용하지 않는다 — 수동 실행이 CI 게이트를 우회할 수
+  # 있어서 (감사 지적). 재시도가 필요하면 CI 를 재실행하면 release 가 재표 triggered 된다.
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
-  workflow_dispatch:
 
 concurrency:
   group: release-${{ github.ref }}
@@ -15,9 +16,10 @@ concurrency:
 
 jobs:
   # CI가 green인 경우에만 발행을 시도한다 (CI 실패 시 release 스킵).
+  # workflow_dispatch 우회를 제거해 이 조건은 workflow_run success 로만 만족한다.
   release:
     name: Changesets Publish (npm)
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
