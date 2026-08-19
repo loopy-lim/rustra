@@ -3,12 +3,13 @@ name: Release
 on:
   # Release는 main push와 독립적으로 즉시 실행하지 않는다. CI 전체 workflow가
   # 성공한 동일 commit에서만 실행해, build/test/lint/audit 결과를 선행 게이트로 삼는다.
-  # workflow_dispatch 는 허용하지 않는다 — 수동 실행이 CI 게이트를 우회할 수
-  # 있어서 (감사 지적). 재시도가 필요하면 CI 를 재실행하면 release 가 재표 triggered 된다.
+  # npm 발행은 workflow_run 전용이다. crates.io는 삭제/덮어쓰기가 불가능하므로
+  # main의 동일 SHA에서 CI 성공을 재확인하는 별도 수동 잡으로만 발행한다.
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: release-${{ github.ref }}
@@ -72,18 +73,43 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_ENV: production
 
-  # crates.io 발행은 수동 트리거 전용 (rustra-macros → rustra 순서 필수).
+  # crates.io 발행은 main 수동 트리거 전용 (rustra-macros → rustra 순서 필수).
+  # 실행 직전 동일 SHA의 CI 성공을 확인하므로 workflow_dispatch가 게이트를 우회하지 않는다.
   cargo-publish:
     name: Publish crates (manual)
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - name: Require green CI for this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          conclusion="$(gh run list --commit "$GITHUB_SHA" --workflow CI --limit 1 --json conclusion --jq '.[0].conclusion')"
+          test "$conclusion" = "success"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Validate publishable crates
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy -p rustra -p rustra-macros --all-targets -- -D warnings
+          cargo test -p rustra -p rustra-macros --release
+          cargo publish -p rustra-macros --dry-run --locked
       - name: Publish rustra-macros first (path dependency)
-        run: cargo publish -p rustra-macros --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish -p rustra-macros --locked
       - name: Wait for crates.io index propagation
-        run: sleep 30
+        run: |
+          for attempt in {1..12}; do
+            cargo info rustra-macros@0.1.3 >/dev/null 2>&1 && exit 0
+            sleep 10
+          done
+          exit 1
+      - name: Verify rustra package
+        run: cargo publish -p rustra --dry-run --locked
       - name: Publish rustra
-        run: cargo publish -p rustra --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish -p rustra --locked

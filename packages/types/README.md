@@ -32,5 +32,5 @@ const result = await addNumbers({ a: 42, b: 58 });
 
 ## 관련 문서
 
-- [rustra-bridge](https://github.com/loopy-lim/hostra#readme)
+- [rustra-bridge](https://github.com/loopy-lim/rustra#readme)
 - `docs/architecture.md`, `docs/compatibility-contract.md`

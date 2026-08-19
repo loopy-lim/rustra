@@ -1,6 +1,6 @@
 {
   "name": "@rustra/devtools",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Devtools for rustra-bridge — instrumented engine with call stats",
   "license": "MIT",
   "type": "module",
@@ -24,7 +24,7 @@
     "test": "tsc -p tsconfig.test.json && node --test dist-test/index.test.js"
   },
   "dependencies": {
-    "@rustra/types": "^0.1.1"
+    "@rustra/types": "^0.1.3"
   },
   "devDependencies": {
     "typescript": "^5.9.0"
@@ -37,11 +37,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/loopy-lim/hostra.git",
+    "url": "git+https://github.com/loopy-lim/rustra.git",
     "directory": "packages/devtools"
   },
   "bugs": {
-    "url": "https://github.com/loopy-lim/hostra/issues"
+    "url": "https://github.com/loopy-lim/rustra/issues"
   },
-  "homepage": "https://github.com/loopy-lim/hostra#readme"
+  "homepage": "https://github.com/loopy-lim/rustra#readme"
 }

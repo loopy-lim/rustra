@@ -57,9 +57,9 @@ jobs:
       # Release 프로파일 테스트 — debug 빌드에서만 나타나지 않는 최적화/릴리즈
       # 전용 경로(#[cfg(debug_assertions)] 등) 회귀를 잡는다 (감사 지적: CI가
       # production 게이트보다 약함).
-      - name: Test release (Linux — core crates)
+      - name: Test release (Linux — full workspace)
         if: runner.os == 'Linux'
-        run: cargo test --release -p rustra -p rustra-calculator-example
+        run: cargo test --workspace --exclude rustra-lynx-tauri-spike --release
       - name: Test (macOS/Windows — core crates)
         if: runner.os != 'Linux'
         shell: bash
@@ -214,7 +214,7 @@ jobs:
           pod install --project-directory=.
           xcodebuild -workspace reactnativecalculator.xcworkspace -scheme reactnativecalculator -configuration Release -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build 2>&1 | tail -5
 
-  # 소비자 설치 smoke — npm pack 산물을 빈 디렉터리에 설치해 배포물이
+  # 소비자 설치 smoke — 실제 npm tarball을 빈 디렉터리에 설치해 배포물이
   # 스스로 동작하는지 검증 (감사: '소비자 설치 후 smoke test' 없음).
   consumer-smoke:
     runs-on: ubuntu-latest
@@ -230,10 +230,13 @@ jobs:
         run: npm run build
       - name: Install packed packages as a consumer
         run: |
+          mkdir -p /tmp/rustra-pack
+          npm pack --workspace @rustra/types --pack-destination /tmp/rustra-pack
+          npm pack --workspace @rustra/node --pack-destination /tmp/rustra-pack
           mkdir -p /tmp/consumer && cd /tmp/consumer
           npm init -y > /dev/null
           npm pkg set type=module
-          npm install --no-save "$GITHUB_WORKSPACE/packages/types" "$GITHUB_WORKSPACE/packages/node"
+          npm install --no-save /tmp/rustra-pack/rustra-types-*.tgz /tmp/rustra-pack/rustra-node-*.tgz
       - name: Smoke — installed packages load (ESM)
         run: |
           cd /tmp/consumer
