@@ -5,6 +5,8 @@
 
 ## Unreleased
 
+## 0.1.3 (2026-08-19)
+
 ### Added
 
 - `Package::set_event_sink` / `rustra::events::EventSink` — Rust → JS 이벤트
