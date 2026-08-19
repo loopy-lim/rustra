@@ -637,8 +637,8 @@ impl Package {
     /// - [`Package::set_event_sink`] 로 싱크가 설치되어 있으면 **즉시 콜백 호출**.
     ///   이때 이벤트 버스에는 쌓이지 않는다(푸시+폴링 이중 수신 방지).
     /// - 싱크가 없으면 기존대로 [`Package::event_bus`] 큐에 쌓이고, 호스트
-    ///   어댑터가 폴링해 플랫폼 푸시 채널(Lynx BTS `post_task_to_runtime`,
-    ///   Tauri `emit`, RN `DeviceEventEmitter`)로 전달한다.
+    ///   어댑터가 폴링해 플랫폼 푸시 채널(Tauri `emit`, RN `DeviceEventEmitter`)
+    ///   로 전달한다.
     ///
     /// ```rust
     /// # use rustra::prelude::*;

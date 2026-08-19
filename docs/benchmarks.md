@@ -116,18 +116,16 @@ payload scaling은 1/10/100/1000 items에서 각각 31.29 µs, 131.23 µs, 590.1
 
 단일 `addNumbers({ a: 42, b: 58 })` 호출 기준 (10,000회 이상 반복, release 빌드).
 
-| 어댑터                          | 평균 지연   | p50         | p99         | 처리량 (ops/s) |
-| ------------------------------- | ----------- | ----------- | ----------- | -------------- |
-| Rust (typed invoke)             | 209 ns      | 208 ns      | 292 ns      | 5,093,309      |
-| Rust (JSON roundtrip)           | 172 ns      | —           | —           | ~5,800,000     |
-| **Lynx (Direct C++ Fast-Path)** | **0.95 µs** | **0.85 µs** | **1.45 µs** | **1,052,000**  |
-| Nitro Modules (v0.80+)          | 1.10 µs     | 0.90 µs     | 1.80 µs     | 909,000        |
-| RN JSI (rkyv V2 Fast-Path)      | 1.50 µs     | 1.30 µs     | 2.80 µs     | 666,000        |
-| **Lynx (rkyv V2 Binary JS)**    | **3.80 µs** | **3.20 µs** | **5.40 µs** | **263,000**    |
-| Swift → Rust FFI                | 3.5 µs      | 3.4 µs      | 4.7 µs      | 296,710        |
-| Bun (JS engine)                 | 189 ns      | —           | —           | ~5,284,714     |
-| Node.js (JS engine)             | 308 ns      | —           | —           | ~3,251,407     |
-| React Native (Standard JSON)    | 52.5 µs     | 50.0 µs     | 91.3 µs     | 19,054         |
+| 어댑터                       | 평균 지연 | p50     | p99     | 처리량 (ops/s) |
+| ---------------------------- | --------- | ------- | ------- | -------------- |
+| Rust (typed invoke)          | 209 ns    | 208 ns  | 292 ns  | 5,093,309      |
+| Rust (JSON roundtrip)        | 172 ns    | —       | —       | ~5,800,000     |
+| Nitro Modules (v0.80+)       | 1.10 µs   | 0.90 µs | 1.80 µs | 909,000        |
+| RN JSI (rkyv V2 Fast-Path)   | 1.50 µs   | 1.30 µs | 2.80 µs | 666,000        |
+| Swift → Rust FFI             | 3.5 µs    | 3.4 µs  | 4.7 µs  | 296,710        |
+| Bun (JS engine)              | 189 ns    | —       | —       | ~5,284,714     |
+| Node.js (JS engine)          | 308 ns    | —       | —       | ~3,251,407     |
+| React Native (Standard JSON) | 52.5 µs   | 50.0 µs | 91.3 µs | 19,054         |
 
 > JS 어댑터(Bun, Node) 수치는 `EngineClient.invoke` JS측 오버헤드만 측정한 것으로, 실제 IPC/FFI 비용은 별도다.
 

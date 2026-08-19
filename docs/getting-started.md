@@ -18,8 +18,7 @@ npm install && npm run codegen
 ```
 
 스캐폴드는 Cargo 크레이트(echo 예제 커맨드 포함) + `generate` bin +
-package.json(codegen 스크립트)를 만든다. 4플랫폼(mobile+desktop) 러너가
-필요하면 모노레포의 `runner/template/create-runner.sh`를 참고한다.
+package.json(codegen 스크립트)를 만든다.
 
 ### 외부 프로젝트에서 사용
 
