@@ -13,6 +13,11 @@ jobs:
   # docs/security-audit.md 참조).
   rust-audit:
     runs-on: ubuntu-latest
+    permissions:
+      # audit-check 액션이 결과를 check-run 으로 게시한다 (없으면 임은 통과하지만
+      # "Resource not accessible by integration" 경고가 남는다).
+      checks: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: rustsec/audit-check@v2.0.0
