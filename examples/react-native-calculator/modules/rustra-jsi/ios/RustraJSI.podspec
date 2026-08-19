@@ -3,7 +3,7 @@ Pod::Spec.new do |s|
   s.version        = '1.0.0'
   s.summary        = 'Rustra JSI Bridge for React Native'
   s.author         = ''
-  s.homepage       = 'https://github.com/loopy-lim/hostra'
+  s.homepage       = 'https://github.com/loopy-lim/rustra'
   s.platforms      = { :ios => '15.1' }
   s.source         = { git: '' }
   s.static_framework = true
