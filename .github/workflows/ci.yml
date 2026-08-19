@@ -153,6 +153,14 @@ jobs:
         run: echo "NDK_HOME=$ANDROID_HOME/ndk/27.1.12297006" >> "$GITHUB_ENV"
       - name: Install example deps
         run: cd examples/react-native-calculator && npm install
+      # App.tsx 가 @rustra/types 를 import 하고 metro.config.js 가 상위 루트의
+      # node_modules 를 resolver 경로에 포함한다 (watchFolders: repoRoot) — 루트
+      # 워크스페이스 의존성 설치와 @rustra/types 빌드가 선행돼야 JS 번들링이
+      # 해석된다.
+      - name: Install root deps and build @rustra/types
+        run: |
+          npm ci
+          cd packages/types && npm run build
       # android/ 는 Expo prebuild 산물로 gitignore 되어 있다 (ios/ 도 동일).
       # 클린 체크아웃에서 재현하려면 prebuild 로 네이티브 프로젝트를 생성한다.
       # rustra-jsi 모듈은 react-native.config.js 로 autolink 되고 settings.gradle
@@ -181,13 +189,22 @@ jobs:
           node-version: 22
       - name: Install example deps
         run: cd examples/react-native-calculator && npm install
+      # App.tsx 가 @rustra/types 를 import 하고 metro.config.js 가 상위 루트의
+      # node_modules 를 resolver 경로에 포함한다 — 루트 워크스페이스 의존성과
+      # @rustra/types 빌드가 필요하다 (rn-android 와 동일).
+      - name: Install root deps and build @rustra/types
+        run: |
+          npm ci
+          cd packages/types && npm run build
       # ios/ 도 android/ 와 마찬가지로 Expo prebuild 산물 (gitignore). prebuild 는
       # 기존 네이티브 파일의 수동 패치(settings.gradle include, podspec 연결)를
       # 유지한다 — 로컬 검증으로 byte-identical 보존 확인.
       - name: Expo prebuild (generate native ios project)
         run: cd examples/react-native-calculator && npx expo prebuild --platform ios --no-install
       - name: Build iOS Release (simulator, no codesign)
+        # pipefail — tail 파이프가 xcodebuild 실패 exit code 를 삼키지 않게.
         run: |
+          set -o pipefail
           cd examples/react-native-calculator/ios
           pod install --project-directory=.
           xcodebuild -workspace reactnativecalculator.xcworkspace -scheme reactnativecalculator -configuration Release -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build 2>&1 | tail -5
