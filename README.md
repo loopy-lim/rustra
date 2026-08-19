@@ -1,6 +1,6 @@
 # rustra
 
-Rust에서 명령을 한 번 정의하면, Node / Bun / Tauri / React Native / Lynx 어디서든 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크.
+Rust에서 명령을 한 번 정의하면, Node / Bun / Tauri / React Native 어디서든 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크.
 
 ## 작동 방식
 
@@ -10,7 +10,7 @@ Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플�
 
 - Rust 쪽에서 `#[command]`로 함수를 정의
 - `generate_typescript()` 호출 시 타입 안전한 TS 클라이언트 코드 생성
-- Node, Bun, Tauri, React Native, Lynx 어댑터가 동일한 `EngineClient` 인터페이스로 라우팅
+- Node, Bun, Tauri, React Native 어댑터가 동일한 `EngineClient` 인터페이스로 라우팅
 
 ## 설치
 
@@ -30,7 +30,6 @@ npm install @rustra/node      # Node.js
 npm install @rustra/bun       # Bun
 npm install @rustra/tauri     # Tauri
 npm install @rustra/react-native  # React Native
-npm install @rustra/lynx          # Lynx (ReactLynx)
 npm install @rustra/testing       # Mock 엔진 (테스트)
 npm install @rustra/devtools      # 호출 관측성 (개발)
 ```
@@ -54,7 +53,7 @@ fn main() -> Result<()> {
 }
 ```
 
-바이너리 fast-path(rkyv V2, RN/Lynx)를 쓰려면 **2단계**가 추가로 필요하다 —
+바이너리 fast-path(rkyv V2, RN)를 쓰려면 **2단계**가 추가로 필요하다 —
 Rust가 만든 `schema.json`을 읽어 TS CLI가 `rkyv-codecs.ts`/`rkyv-registry.ts`를
 생성한다(이 파일들이 없으면 fast-path 클라이언트는 import 에러로 부팅 실패):
 
@@ -87,7 +86,6 @@ packages/
   bun/             Bun adapter
   tauri/           Tauri adapter
   react-native/    React Native adapter
-  lynx/            Lynx (ReactLynx) adapter
   testing/         Mock 엔진 + 계약 게이트 (createMockEngine)
   devtools/        호출 관측성 래퍼 (createInstrumentedEngine)
 
@@ -97,21 +95,14 @@ examples/
   benchmark/               성능 벤치마크 (페이로드 확장, 처리량 측정)
   tauri-calculator/        Tauri 런타임 예시
   react-native-calculator/ React Native 런타임 예시
-  lynx-calculator/         Lynx (ReactLynx) 런타임 예시
-  lynx-tauri-spike/        Tauri×Lynx 데스크톱 스파이크 (macOS 7/7)
   calculator-napi/         napi-rs transport 예시 (transport 벤치마크 24.3µs의 소스)
   streaming/               이벤트 스트리밍 예시 (Package::emit + 폴링 어댑터)
   auth/                    세션/capability 게이트 예시 (deny-by-default)
-
-runner/
-  template/                4플랫폼 runner 템플릿 (단일 ReactLynx + Rust 백엔드,
-                           desktop/iOS/Android 셸 포함) — create-runner.sh 로 인스턴스화
 ```
 
 ## 로컬 저장공간 관리
 
 개발 및 테스트 Cargo 프로필은 incremental 캐시와 의존성 debug info를 저장하지 않는다.
-Runner의 backend/desktop/mobile Rust 빌드는 `runner/template/target/` 하나를 공유한다.
 
 ```bash
 npm run clean:dry    # deep clean 대상을 삭제하지 않고 크기만 확인
@@ -279,36 +270,34 @@ configure(engine);
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
-### Node / Bun / React Native / Lynx
+### Node / Bun / React Native
 
-각 패키지(`@rustra/node`, `@rustra/bun`, `@rustra/react-native`, `@rustra/lynx`)에서 `EngineClient` 구현체를 제공한다. 사용 방식은 Tauri와 동일하다.
+각 패키지(`@rustra/node`, `@rustra/bun`, `@rustra/react-native`)에서 `EngineClient` 구현체를 제공한다. 사용 방식은 Tauri와 동일하다.
 
-#### Lynx (ReactLynx)
+#### React Native
 
-Lynx는 rkyv V2 바이너리 fast-path를 기본으로 사용한다. Lynx Native Module(`NativeModules.RustraModule`)이 `invokeRkyvV2`를 노출해야 한다.
+React Native는 rkyv V2 바이너리 fast-path를 기본으로 사용한다. JSI 네이티브 모듈이 `invokeRkyvV2`를 노출해야 한다.
 
 ```ts
-import { createFastEngine, configure, getRustraNative } from '@rustra/lynx';
+import { createFastEngine, configure, getRustraNative } from '@rustra/react-native';
 import { rkyvV2Registry } from './generated/rkyv-registry.js';
 
 configure(createFastEngine(getRustraNative(), { rkyvV2Codecs: rkyvV2Registry }));
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
-네이티브 모듈 설정(iOS Lynx Module / Android Kotlin)은 [Lynx 설정 가이드](docs/extending/lynx-setup.md)를 참고.
+네이티브 모듈 설정(iOS JSI / Android C++)은 [React Native 설정 가이드](docs/extending/react-native-setup.md)를 참고.
 
 ### 플랫폼 지원 매트릭스
 
-| 플랫폼                      | 상태             | 비고                                                                                                                                                                       |
-| --------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Node / Bun                  | Stable           | subprocess·N-API·FFI 전 경로 CI 검증                                                                                                                                       |
-| Tauri (macOS/Linux)         | Stable           | 폴링 + 이벤트 푸시(`register_with_events`)                                                                                                                                 |
-| React Native iOS            | Stable           | JSI Tier 1~3 왕복 실기 검증, Release 빌드 CI                                                                                                                               |
-| React Native Android        | Stable           | Release APK 빌드 CI (Gradle→Rust 자동 빌드)                                                                                                                                |
-| Lynx (iOS/Android/macOS)    | Stable           | 런타임 왕복 실기 검증 (runner 템플릿)                                                                                                                                      |
-| **Windows 데스크톱 (Lynx)** | **Experimental** | FML PE 심볼 해석 미구현 — 빌드 스캐폴드만 존재. `windows-experiment.yml` 이 lynx.dll export 덤프/MSVC 빌드를 실험 진행(논게이트). 런타임 검증 완료 전 production 사용 불가 |
+| 플랫폼               | 상태   | 비고                                         |
+| -------------------- | ------ | -------------------------------------------- |
+| Node / Bun           | Stable | subprocess·N-API·FFI 전 경로 CI 검증         |
+| Tauri (macOS/Linux)  | Stable | 폴링 + 이벤트 푸시(`register_with_events`)   |
+| React Native iOS     | Stable | JSI Tier 1~3 왕복 실기 검증, Release 빌드 CI |
+| React Native Android | Stable | Release APK 빌드 CI (Gradle→Rust 자동 빌드)  |
 
-Windows 지원을 제외한 모든 플랫폼은 `npm run test:compat`·CI 네이티브 빌드 잡이 게이트한다.
+모든 플랫폼은 `npm run test:compat`·CI 네이티브 빌드 잡이 게이트한다.
 
 ## 성능
 
@@ -358,10 +347,9 @@ try {
 
 ```bash
 # Rust 워크스페이스 전체 테스트
-# (lynx-tauri-spike 은 macOS + Lynx SDK 가 필요한 전용 스파이크 — 제외.
-#  --workspace 는 default-members 를 무시하므로 명시적 exclude 가 필요하다.
-#  CI 도 동일 명령을 쓴다: .github/workflows/ci.yml)
-cargo test --workspace --exclude rustra-lynx-tauri-spike
+# (--workspace 는 default-members 를 무시하므로 macOS 전용 tauri-calculator 까지
+#  빌드된다. CI 도 동일 명령을 쓴다: .github/workflows/ci.yml)
+cargo test --workspace
 
 # CI rust 잡은 ubuntu/macos/windows 3-OS 매트릭스로 돌고, 플랫폼별 cdylib
 # (.so/.dylib/.dll) 산출물을 아티팩트로 업로드한다 (.github/workflows/ci.yml).
@@ -397,7 +385,6 @@ npx rustra dev --backend ./backend --app ./app
 | [아키텍처 개요](docs/architecture.md)                            | 데이터 흐름, EngineClient 계약, transport 분리 |
 | [Transport 교체 가이드](docs/extending/transport-guide.md)       | Bun FFI, Node napi-rs 교체                     |
 | [React Native 설정 가이드](docs/extending/react-native-setup.md) | iOS JSI 모듈 설정, 사용법, 트러블슈팅          |
-| [Lynx 설정 가이드](docs/extending/lynx-setup.md)                 | Lynx Native Module(iOS/Android) 설정, 사용법   |
 | [새 Host 추가 가이드](docs/extending/adding-host.md)             | Electron, Deno 등 새 어댑터 추가               |
 | [전체 문서 목록](docs/README.md)                                 | 사용자 / 기여자별 읽기 경로                    |
 

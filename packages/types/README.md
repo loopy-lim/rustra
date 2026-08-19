@@ -1,7 +1,7 @@
 # @rustra/types
 
 rustra-bridge의 핵심 타입 패키지입니다. 모든 플랫폼 어댑터(Node, Bun, Tauri,
-React Native, Lynx)가 공유하는 `EngineClient` 인터페이스, 에러 타입, rkyv V2
+React Native)가 공유하는 `EngineClient` 인터페이스, 에러 타입, rkyv V2
 코덱, Tauri-like 글로벌 invoke를 제공합니다.
 
 ## 공개 API 개요

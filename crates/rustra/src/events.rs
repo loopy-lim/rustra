@@ -4,8 +4,8 @@
 //! 경로는 두 가지다:
 //!
 //! 1. **폴링** — 이벤트가 [`EventBus`] 큐에 쌓이고, 호스트가
-//!    `take_pending_events()` 로 주기적으로 꺼내 자기 플랫폼의 푸시 채널(Lynx BTS
-//!    `post_task_to_runtime`, Tauri `emit`, RN `DeviceEventEmitter`)로 전달한다.
+//!    `take_pending_events()` 로 주기적으로 꺼내 자기 플랫폼의 푸시 채널(Tauri
+//!    `emit`, RN `DeviceEventEmitter`)로 전달한다.
 //! 2. **푸시** — [`Package::set_event_sink`] 로 [`EventSink`] 콜백을 등록하면
 //!    `emit` 이 즉시 콜백을 호출한다. 폴링 루프가 없어도 되고 지연도 없다
 //!    (LLM 토큰 스트리밍처럼 낮은 지연이 중요한 용도).

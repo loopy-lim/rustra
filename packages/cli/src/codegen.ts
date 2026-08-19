@@ -298,8 +298,8 @@ function _pcConcatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
   return result;
 }
 
-// Pure-JS UTF-8 codec. Lynx's QuickJS runtime has no TextEncoder/TextDecoder
-// globals, so the postcard string helpers must not depend on them.
+// Pure-JS UTF-8 codec. 임베디드 JS 런타임(예: Hermes)에는 TextEncoder/TextDecoder
+// 글로벌이 없을 수 있으므로 postcard 문자열 헬퍼는 이에 의존하지 않는다.
 function _utf8Encode(s: string): Uint8Array {
   const out: number[] = [];
   for (let i = 0; i < s.length; i++) {

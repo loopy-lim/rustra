@@ -36,7 +36,7 @@ export type RustraJSINative = {
   /**
    * (F5) 네이티브 빌드의 계약 해시(SHA-256 hex) — `contractHash` 엔진 옵션이
    * 설정된 경우에만 호출된다. core `RkyvV2SchemaNative.getContractHash` 와
-   * 동일 계약 (Lynx 어댑터는 core 타입 상속으로 이미 노출).
+   * 동일 계약.
    */
   getContractHash?(): ArrayBuffer;
   hasStaticCodec?(name: string): boolean;
