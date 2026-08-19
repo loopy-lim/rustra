@@ -20,8 +20,19 @@ RUNNER_TARGET_DIR="${CARGO_TARGET_DIR:-$TEMPLATE_ROOT/target}"
 export CARGO_TARGET_DIR="$RUNNER_TARGET_DIR"
 export RUSTRA_BACKEND_TARGET_DIR="$RUNNER_TARGET_DIR"
 
+if [[ ! -f "$SDK/include/capi/lynx_env_capi.h" ]]; then
+  echo "ERROR: Lynx SDK header not found: $SDK/include/capi/lynx_env_capi.h" >&2
+  echo "       install lynx_sdk_macos_arm64.zip or set LYNX_SDK to its macsdk directory" >&2
+  exit 1
+fi
+
+BACKEND_PROFILE_FLAG=()
+if [[ "$PROFILE" == "release" ]]; then
+  BACKEND_PROFILE_FLAG+=(--release)
+fi
+
 echo "[build] 1/3 rustra backend staticlib ($PROFILE)"
-cargo build --release --manifest-path "$TEMPLATE_ROOT/backend/Cargo.toml"
+cargo build --manifest-path "$TEMPLATE_ROOT/backend/Cargo.toml" "${BACKEND_PROFILE_FLAG[@]}"
 
 echo "[build] 2/3 template desktop crate ($PROFILE)"
 ( cd "$HERE/src-tauri" && LYNX_SDK="$SDK" cargo build $( [[ "$PROFILE" == "release" ]] && echo --release ) )
@@ -31,6 +42,9 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$RUNNER_TARGET_DIR/$PROFILE/$BIN_NAME" "$APP/Contents/MacOS/$BIN_NAME"
 ln -sfn "$SDK/bundles/LynxResources.bundle" "$APP/Contents/Resources/LynxResources.bundle"
 cp "$HERE/src-tauri/Info.plist" "$APP/Contents/Info.plist"
+# LaunchServices on current macOS requires the legacy bundle type marker for
+# hand-assembled .app bundles to be launchable via `open`.
+printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 echo "[build] OK -> $APP/Contents/MacOS/$BIN_NAME"
 echo "[run]   LYNX_BUNDLE=$TEMPLATE_ROOT/app/dist/index.lynx.bundle LYNX_ICU=$SDK/data/icudtl.dat \\"

@@ -11,9 +11,9 @@
     "build": "npm run build -w @rustra/types && npm run -ws build",
     "build:napi": "cd examples/calculator-napi && npm run build:debug",
     "test": "npm run test:types && npm run test:ts:node && npm run test:packages && npm run test -w @rustra/cli",
-    "test:ts:node": "tsc -p examples/calculator/tsconfig.json && tsc -p examples/crud/tsconfig.json && node --test dist-ts/examples/calculator/ts/adapter-compat.test.js dist-ts/examples/calculator/ts/cross-wire.test.js dist-ts/examples/calculator/ts/payload-robustness.test.js dist-ts/examples/calculator/ts/field-order-drift.test.js dist-ts/examples/calculator/ts/generated-client.test.js dist-ts/examples/crud/ts/*.test.js",
+    "test:ts:node": "tsc -p examples/calculator/tsconfig.json && tsc -p examples/crud/tsconfig.json && node --test dist-ts/examples/calculator/ts/adapter-compat.test.js dist-ts/examples/calculator/ts/cross-wire.test.js dist-ts/examples/calculator/ts/payload-robustness.test.js dist-ts/examples/calculator/ts/field-order-drift.test.js dist-ts/examples/calculator/ts/generated-client.test.js dist-ts/examples/calculator/ts/runtime-contract.test.js dist-ts/examples/calculator/ts/transport-bench.test.js dist-ts/examples/crud/ts/*.test.js",
     "test:types": "npm run build -w @rustra/types && node --test packages/types/dist/index.test.js",
-    "test:packages": "npm run build && node --test packages/node/dist/index.test.js packages/bun/dist/index.test.js packages/tauri/dist/index.test.js packages/react-native/dist/index.test.js packages/lynx/dist/index.test.js packages/testing/dist/index.test.js packages/devtools/dist/index.test.js",
+    "test:packages": "npm run build && node --test packages/node/dist/index.test.js packages/bun/dist/index.test.js packages/tauri/dist/index.test.js packages/react-native/dist/index.test.js packages/lynx/dist/index.test.js packages/testing/dist/index.test.js packages/devtools/dist/index.test.js packages/react/dist/index.test.js",
     "test:ts:bun": "cargo build -p rustra-calculator-example -q && bun test examples/calculator/ts/*.test.ts",
     "test:runtime:node": "cargo build -p rustra-calculator-example && tsc -p examples/calculator/tsconfig.json && node dist-ts/examples/calculator/apps/node-app.js",
     "test:runtime:bun": "cargo build -p rustra-calculator-example && bun examples/calculator/apps/bun-app.ts",
@@ -47,6 +47,7 @@
     "changeset": "changeset",
     "version": "changeset version",
     "release": "npm run build && changeset publish",
+    "audit:prod": "npm audit --omit=dev",
     "prepare": "lefthook install"
   },
   "devDependencies": {
@@ -54,8 +55,12 @@
     "@eslint/js": "^10.0.1",
     "@evilmartians/lefthook": "^2.1.6",
     "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "eslint": "^10.3.0",
     "prettier": "^3.8.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "typescript": "^5.9.0",
     "typescript-eslint": "^8.59.3"
   }

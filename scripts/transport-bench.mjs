@@ -206,37 +206,38 @@ console.log(`│`);
 console.log("└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘");
 console.log("");
 
-// ── 2) Payload scaling ───────────────────────────────────
+// ── 2) Measurement stability ─────────────────────────────
 
-console.log("┌─ 2) Payload Size Scaling (processPayload) ────────────────────────┐");
+console.log("┌─ 2) Measurement Stability (fixed addNumbers payload) ─────────────┐");
 console.log(`│`);
 
-// Only test native transports (not subprocess — too slow for large payloads)
+// Only test native transports (not subprocess — too slow for repeated samples).
+// The calculator N-API fixture exposes addNumbers, not processPayload. Keep this
+// section honest: it checks sample-count stability, while payload scaling is
+// measured by the Rust Criterion type_scaling benchmark.
 const nativeTransport = transports.find(t => t.name !== `${runtime} subprocess`) || transports[0];
 
-const sizes = [1, 10, 100, 1000, 5000];
-const scalingResults = [];
+const sampleCounts = [100, 500, 2000, 5000, 10000];
+const stabilityResults = [];
 
-for (const size of sizes) {
+for (const iterations of sampleCounts) {
   const args = { a: 42, b: 58 };
-  // Build a payload of roughly `size` field count by repeating calls
-  const iters = size <= 10 ? 5000 : size <= 100 ? 2000 : 500;
-  const r = bench(nativeTransport, "addNumbers", args, iters);
+  const r = bench(nativeTransport, "addNumbers", args, iterations);
   const jsonSize = JSON.stringify({ command: "addNumbers", args }).length;
-  scalingResults.push({ size: iters, avg: r.avg, jsonSize });
+  stabilityResults.push({ iterations, avg: r.avg, jsonSize });
 }
 
-console.log(`│  ${nativeTransport.name} (addNumbers at various iteration counts)`);
+console.log(`│  ${nativeTransport.name} (fixed 47-byte addNumbers request)`);
 console.log(`│`);
 console.log(`│  ${"Iters".padEnd(8)} ${"JSON".padStart(8)} ${"Avg".padStart(12)}  ${"Chart".padEnd(35)}`);
 console.log(`│  ${"─".repeat(8)} ${"─".repeat(8)} ${"─".repeat(12)}  ${"─".repeat(35)}`);
 
-const maxScalingAvg = Math.max(...scalingResults.map(r => r.avg));
-for (const r of scalingResults) {
-  const sizeStr = `${r.size}`.padEnd(8);
+const maxStabilityAvg = Math.max(...stabilityResults.map(r => r.avg));
+for (const r of stabilityResults) {
+  const sizeStr = `${r.iterations}`.padEnd(8);
   const jsonStr = `${r.jsonSize}`.padStart(8);
   const avgStr = fmtNs(r.avg).padStart(12);
-  console.log(`│  ${sizeStr} ${jsonStr} ${avgStr}  ${bar(r.avg, maxScalingAvg, 25)}`);
+  console.log(`│  ${sizeStr} ${jsonStr} ${avgStr}  ${bar(r.avg, maxStabilityAvg, 25)}`);
 }
 
 console.log(`│`);

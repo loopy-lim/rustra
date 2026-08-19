@@ -78,6 +78,7 @@ fn alias_conflicting_with_real_command_id_fails_loudly_at_declaration() {
 /// (T2 리뷰) `unregister` 가 그 명령을 가리키던 alias 항목도 정리하는지 검증.
 /// alias 만 남으면 stale 라우팅 항목이 되어 제거된 명령이 계속 디스패치된다.
 #[test]
+#[cfg(debug_assertions)]
 fn unregister_removes_alias_entries_too() {
     let pkg = Package::builder("ota.unreg")
         .alias_command_id("add", 1) // 구 클라이언트 호환 — add 의 실제 id 는 2

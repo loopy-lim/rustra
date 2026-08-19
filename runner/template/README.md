@@ -67,6 +67,18 @@ cd ../my-app
 #   npm run verify:desktop | verify:ios | verify:android
 ```
 
+`create-runner.sh`의 기본 모드는 현재 rustra-bridge checkout을 가리키는 로컬 개발 모드다.
+독립 저장소로 복사해 공개 버전을 사용할 때는 Rust/npm 버전을 명시한다.
+
+```sh
+RUSTRA_PUBLISHED_VERSION=0.1.2 \
+  ./runner/template/create-runner.sh my-app com.example.myapp
+```
+
+이 모드에서는 backend가 crates.io의 `rustra`를, app이 npm의 `@rustra/lynx`,
+`@rustra/types`, `@rustra/cli`를 사용한다. 생성된 프로젝트에서는 `app/package-lock.json`을
+커밋해 애플리케이션 설치를 재현 가능하게 고정한다.
+
 ## 개발 루프 — `rustra dev` (hot codegen)
 
 Rust command 수정 시마다 수동 `npm run codegen` 대신, rustra CLI 의 `dev` 서브커맨드로
@@ -90,12 +102,12 @@ RUSTRA_CLI=$PWD/packages/cli/dist/index.js \
 
 ## 전제 (각 플랫폼)
 
-| 플랫폼  | 요구                                                                                                                                |
-| ------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| macOS   | `LYNX_SDK`(기본 /tmp/lynx-prebuilt/macsdk) — `gh release download 4.0.1 --repo lynx-family/lynx --pattern lynx_sdk_macos_arm64.zip` |
-| iOS     | Xcode + xcodegen + CocoaPods + 시뮬레이터(부팅됨)                                                                                   |
-| Android | Android SDK + NDK 27.1.12297006 핀 + cargo-ndk + rustup android targets + AVD(`AVD` env, 기본 Medium_Phone_API_36.1)                |
-| Windows | MSVC + `LYNX_SDK_WIN` — `desktop/WINDOWS.md` 참조 (FML PE 심볼 = 유일 크럭스)                                                       |
+| 플랫폼  | 요구                                                                                                                                                     |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS   | `LYNX_SDK`(기본 /tmp/lynx-prebuilt/macsdk) — `gh release download 4.0.1 --repo lynx-family/lynx --pattern lynx_sdk_macos_arm64.zip`                      |
+| iOS     | Xcode + xcodegen + CocoaPods + 시뮬레이터(부팅됨)                                                                                                        |
+| Android | Android SDK + NDK 27.1.12297006 핀 + cargo-ndk + rustup android targets + AVD(`AVD` env, 기본 Medium_Phone_API_36.1), 여러 기기 연결 시 `ANDROID_SERIAL` |
+| Windows | MSVC + `LYNX_SDK_WIN` — `desktop/WINDOWS.md` 참조 (FML PE 심볼 = 유일 크럭스)                                                                            |
 
 rustup android targets: `rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android`
 
@@ -118,8 +130,9 @@ greet 예시: `greet({name:"rustra"})` → `GreetOutput{message:"Hello, rustra!"
 2. **TS CLI** (`rustra generate --schema generated/schema.json --output generated`):
    `rkyv-codecs.ts` / `rkyv-registry.ts`
 
-in-repo 템플릿은 `packages/cli/dist` 를 자동 탐색한다. 외부 복사본은 `RUSTRA_CLI` env
-또는 `npm i -D @rustra/cli` 사용 (`create-runner.sh` 안내 참조).
+템플릿은 먼저 `app/node_modules/.bin/rustra`를 찾고, 없으면 in-repo의 `packages/cli/dist`를
+탐색한다. 외부 복사본에서 CLI를 찾지 못하면 codegen은 codecs를 건너뛰지 않고 실패한다.
+standalone 모드는 `@rustra/cli`를 자동 설치 대상으로 포함한다.
 
 ## 플랫폼 셸 소스
 

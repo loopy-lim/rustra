@@ -38,17 +38,26 @@ export function generateTypesTs(schema: PackageSchema): string {
   for (const [name, defSchema] of Object.entries(allDefinitions)) {
     if (emitted.has(name)) continue;
     emitted.add(name);
+    if (typeof defSchema.description === 'string') {
+      output += `/**\n * ${defSchema.description.replace(/\n/g, '\n * ')}\n */\n`;
+    }
     output += `export type ${name} = ${tsTypeFromSchema(defSchema, allDefinitions)};\n\n`;
   }
 
   for (const command of schema.commands) {
-    if (!emitted.has(command.inputType)) {
+    if (command.inputType !== '()' && !emitted.has(command.inputType)) {
       emitted.add(command.inputType);
+      if (typeof command.inputSchema.description === 'string') {
+        output += `/**\n * ${command.inputSchema.description.replace(/\n/g, '\n * ')}\n */\n`;
+      }
       output += `export type ${command.inputType} = ${tsTypeFromSchema(command.inputSchema, allDefinitions)};\n\n`;
     }
     // unit 출력 타입 `()` 은 TS 타입명으로 쓸 수 없다 — Promise<void> 로 표현.
     if (command.outputType !== '()' && !emitted.has(command.outputType)) {
       emitted.add(command.outputType);
+      if (typeof command.outputSchema.description === 'string') {
+        output += `/**\n * ${command.outputSchema.description.replace(/\n/g, '\n * ')}\n */\n`;
+      }
       output += `export type ${command.outputType} = ${tsTypeFromSchema(command.outputSchema, allDefinitions)};\n\n`;
     }
   }
@@ -65,24 +74,36 @@ export function generateTypesTs(schema: PackageSchema): string {
 export function generateCommandsTs(schema: PackageSchema): string {
   const typeNames = new Set<string>();
   for (const command of schema.commands) {
-    typeNames.add(command.inputType);
-    typeNames.add(command.outputType);
+    if (command.inputType !== '()') typeNames.add(command.inputType);
+    if (command.outputType !== '()') typeNames.add(command.outputType);
   }
-  // unit 타입 `()` (예: Result<()> 반환 command) 은 import 대상이 아니다.
-  typeNames.delete('()');
 
   const imports = Array.from(typeNames).sort().join(', ');
-  let output = `import type { ${imports} } from './types.js';\n`;
-  output += `import { invoke } from '@rustra/types';\n\n`;
+  let output = '';
+  if (imports.length > 0) {
+    output += `import type { ${imports} } from './types.js';\n`;
+  }
+  output += `import { invoke } from '@rustra/types';\n`;
+  output += `import type { InvokeOptions } from '@rustra/types';\n\n`;
 
   for (const command of schema.commands) {
     const fnName = commandFunctionName(command.name);
     // unit 출력 `()` → Promise<void>.
     const outType = command.outputType === '()' ? 'void' : command.outputType;
-    output +=
-      `export function ${fnName}(input: ${command.inputType}): Promise<${outType}> {\n` +
-      `  return invoke<${outType}>('${command.name}', input);\n` +
-      `}\n\n`;
+    if (typeof command.inputSchema?.description === 'string') {
+      output += `/**\n * ${command.inputSchema.description.replace(/\n/g, '\n * ')}\n */\n`;
+    }
+    if (command.inputType === '()') {
+      output +=
+        `export function ${fnName}(options?: InvokeOptions): Promise<${outType}> {\n` +
+        `  return invoke<${outType}>('${command.name}', undefined, options);\n` +
+        `}\n\n`;
+    } else {
+      output +=
+        `export function ${fnName}(input: ${command.inputType}, options?: InvokeOptions): Promise<${outType}> {\n` +
+        `  return invoke<${outType}>('${command.name}', input, options);\n` +
+        `}\n\n`;
+    }
   }
 
   return output;
@@ -778,6 +799,16 @@ export function generateRkyvCodecsHpp(_schema: PackageSchema): string {
     `facebook::jsi::Value decode_by_name(facebook::jsi::Runtime& rt,\n` +
     `                                   const std::string& name,\n` +
     `                                   rustra::codec::Reader& r);\n\n` +
+    `/// cmd_id(u16)로 postcard 요청 바이트를 인코딩한다(정적 명령만).\n` +
+    `/// invokeTypedById 진입(P0-3) — 문자열 마샬링/이름 비교체인 없이 u16 디스패치.\n` +
+    `/// 인코딩 성공(정적 cmd_id) 시 true, 미발견 시 false.\n` +
+    `bool encode_by_id(facebook::jsi::Runtime& rt, uint16_t cmd_id,\n` +
+    `                  const facebook::jsi::Value& args,\n` +
+    `                  rustra::codec::Writer& w);\n\n` +
+    `/// cmd_id(u16)로 postcard 응답 바디를 디코딩한다(정적 명령만).\n` +
+    `/// 미발견 시 JSError throw.\n` +
+    `facebook::jsi::Value decode_by_id(facebook::jsi::Runtime& rt, uint16_t cmd_id,\n` +
+    `                                 rustra::codec::Reader& r);\n\n` +
     `/// codegen 시점에 알려진 정적 명령 이름 집합(Tier 3 fallback 분기용).\n` +
     `bool has_static_codec(const std::string& name);\n\n` +
     `} // namespace rustra::generated\n`
@@ -789,14 +820,31 @@ export function generateRkyvCodecsHpp(_schema: PackageSchema): string {
  */
 export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   const definitions = collectAllDefinitions(schema);
-  const fns = schema.commands.map((c) => commandFunctionName(c.name));
-  const encodeCases = fns
-    .map((fn) => `  if (name == "${fn}") { encode_${fn}(rt, args, w); return true; }`)
+  const encodeCases = schema.commands
+    .map((c) => {
+      const fn = commandFunctionName(c.name);
+      return `  if (name == "${c.name}") { encode_${fn}(rt, args, w); return true; }`;
+    })
     .join('\n');
-  const decodeCases = fns
-    .map((fn) => `  if (name == "${fn}") return decode_${fn}(rt, r);`)
+  const decodeCases = schema.commands
+    .map((c) => {
+      const fn = commandFunctionName(c.name);
+      return `  if (name == "${c.name}") return decode_${fn}(rt, r);`;
+    })
     .join('\n');
-  const hasCases = fns.map((fn) => `  if (name == "${fn}") return true;`).join('\n');
+  const hasCases = schema.commands.map((c) => `  if (name == "${c.name}") return true;`).join('\n');
+  // by_id 디스패치 (P0-3) — switch 문으로 u16 cmd_id 를 직접 분기한다.
+  // 이름 비교체인(encode_by_name)과 동일한 per-command 함수를 재사용하므로
+  // 바이트 출력은 항상 동일하다.
+  const encodeIdCases = schema.commands
+    .map(
+      (c) =>
+        `    case ${c.commandId}: encode_${commandFunctionName(c.name)}(rt, args, w); return true;`,
+    )
+    .join('\n');
+  const decodeIdCases = schema.commands
+    .map((c) => `    case ${c.commandId}: return decode_${commandFunctionName(c.name)}(rt, r);`)
+    .join('\n');
 
   const lines: string[] = [];
   lines.push(`// AUTO-GENERATED by @rustra/cli — DO NOT EDIT.`);
@@ -827,6 +875,22 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   lines.push(`Value decode_by_name(Runtime& rt, const std::string& name, rc::Reader& r) {`);
   lines.push(decodeCases);
   lines.push(`  throw JSError(rt, "rustra: no C++ codec for '" + name + "'");`);
+  lines.push(`}`);
+  lines.push(``);
+  lines.push(`bool encode_by_id(Runtime& rt, uint16_t cmd_id, const Value& args, rc::Writer& w) {`);
+  lines.push(`  switch (cmd_id) {`);
+  lines.push(encodeIdCases);
+  lines.push(`    default: return false; // 동적/알 수 없는 cmd_id — JS 가 Tier 3 fallback 처리`);
+  lines.push(`  }`);
+  lines.push(`}`);
+  lines.push(``);
+  lines.push(`Value decode_by_id(Runtime& rt, uint16_t cmd_id, rc::Reader& r) {`);
+  lines.push(`  switch (cmd_id) {`);
+  lines.push(decodeIdCases);
+  lines.push(
+    `    default: throw JSError(rt, "rustra: no C++ codec for cmd_id " + std::to_string(cmd_id));`,
+  );
+  lines.push(`  }`);
   lines.push(`}`);
   lines.push(``);
   lines.push(`bool has_static_codec(const std::string& name) {`);

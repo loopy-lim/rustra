@@ -267,7 +267,10 @@ fn command_macro_rejects_wrong_signature() {
                 [dependencies]\nrustra = {{ path = \"{}/crates/rustra\" }}\n\
                 serde = {{ version = \"1\", features = [\"derive\"] }}\n\
                 schemars = {{ version = \"0.8\", features = [\"derive\"] }}\n",
-                workspace_dir.display()
+                // Windows 경로의 백슬래시는 TOML 기본 문자열에서 이스케이프로
+                // 해석돼 매니페스트가 깨진다 — forward-slash 로 정규화 (cargo 는
+                // Windows 에서도 슬래시 경로를 받아들인다).
+                workspace_dir.display().to_string().replace('\\', "/")
             ),
         )
         .unwrap();
@@ -294,12 +297,19 @@ fn command_macro_rejects_wrong_signature() {
     );
     assert!(valid, "valid signature should compile");
 
-    let no_input = try_compile(
+    let zero_args = try_compile(
         "use rustra::prelude::*;\n\
          #[command]\n\
-         pub fn no_args() -> Result<()> { loop {} }\n",
+         pub fn no_args() -> Result<()> { Ok(()) }\n",
     );
-    assert!(!no_input, "missing input parameter should fail");
+    assert!(zero_args, "zero args command should compile");
+
+    let async_cmd = try_compile(
+        "use rustra::prelude::*;\n\
+         #[command]\n\
+         pub async fn async_cmd() -> Result<()> { Ok(()) }\n",
+    );
+    assert!(async_cmd, "async fn command should compile");
 
     let bare_return = try_compile(
         "use rustra::prelude::*;\n\
@@ -893,4 +903,197 @@ fn release_build_is_frozen_by_default() {
         pkg.register("cmd", add_numbers).unwrap_err().code(),
         "registry.frozen"
     );
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn replace_preserves_required_capability() {
+    let pkg = Package::builder("test.cap_replace")
+        .command("secret", add_numbers)
+        .require_capability("secret", "admin:access")
+        .build();
+
+    // Denied before grant
+    assert_eq!(
+        pkg.invoke::<_, AddNumbersOutput>("secret", AddNumbersInput { a: 1, b: 2 })
+            .unwrap_err()
+            .code(),
+        "capability.denied"
+    );
+
+    // Replace the handler with another function
+    fn add_numbers_alt(input: AddNumbersInput) -> Result<AddNumbersOutput> {
+        Ok(AddNumbersOutput {
+            value: input.a + input.b + 10,
+        })
+    }
+    pkg.replace("secret", add_numbers_alt).unwrap();
+
+    // Still denied because required_capability must be preserved
+    assert_eq!(
+        pkg.invoke::<_, AddNumbersOutput>("secret", AddNumbersInput { a: 1, b: 2 })
+            .unwrap_err()
+            .code(),
+        "capability.denied"
+    );
+
+    // After grant, invokes replaced handler
+    pkg.grant_capability("admin:access").unwrap();
+    let out: AddNumbersOutput = pkg
+        .invoke("secret", AddNumbersInput { a: 1, b: 2 })
+        .unwrap();
+    assert_eq!(out.value, 13);
+}
+
+#[test]
+fn ts_generator_handles_unit_output_type() {
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    #[serde(rename_all = "camelCase")]
+    struct VoidInput {
+        action: String,
+    }
+
+    #[command]
+    fn do_action(_input: VoidInput) -> Result<()> {
+        Ok(())
+    }
+
+    let pkg = Package::builder("test.void").command_fn(do_action).build();
+    let generated = pkg.generate_typescript().unwrap();
+
+    // Should NOT contain invalid "export type () = null"
+    assert!(
+        !generated.types_ts.contains("export type ()"),
+        "types.ts should not define type () = ...: got\n{}",
+        generated.types_ts
+    );
+    // Should NOT import ()
+    assert!(
+        !generated.commands_ts.contains("()"),
+        "commands.ts should not import or reference () type: got\n{}",
+        generated.commands_ts
+    );
+    // Should generate Promise<void>
+    assert!(
+        generated.commands_ts.contains(
+            "export function doAction(input: VoidInput, options?: InvokeOptions): Promise<void>"
+        ),
+        "commands.ts should map unit to Promise<void>: got\n{}",
+        generated.commands_ts
+    );
+}
+
+#[test]
+fn ffi_free_handles_zero_byte_allocation() {
+    let mut out_len = 0;
+    // contract_hash when not set returns empty string (0-byte payload)
+    let ptr = unsafe { rustra::ffi::rustra_ffi_contract_hash(&mut out_len) };
+    assert!(!ptr.is_null());
+    assert_eq!(out_len, 0);
+    // rustra_ffi_free must safely free 0-byte allocation without leaking or crashing
+    unsafe { rustra::ffi::rustra_ffi_free(ptr, out_len) };
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+struct StatusOutput {
+    online: bool,
+    counter: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+struct EchoOutput {
+    msg: String,
+}
+
+struct AppConfig {
+    app_name: String,
+    multiplier: i64,
+}
+
+#[command]
+fn ping_server() -> Result<StatusOutput> {
+    Ok(StatusOutput {
+        online: true,
+        counter: 42,
+    })
+}
+
+#[command]
+async fn async_ping() -> Result<StatusOutput> {
+    Ok(StatusOutput {
+        online: true,
+        counter: 100,
+    })
+}
+
+#[command]
+fn get_with_state(input: AddNumbersInput, config: State<AppConfig>) -> Result<AddNumbersOutput> {
+    Ok(AddNumbersOutput {
+        value: (input.a + input.b) * config.multiplier,
+    })
+}
+
+#[command]
+async fn async_with_state(config: State<AppConfig>) -> Result<EchoOutput> {
+    Ok(EchoOutput {
+        msg: config.app_name.clone(),
+    })
+}
+
+#[test]
+fn zero_arg_and_async_command_execution() {
+    let pkg = Package::builder("test.dx")
+        .command_fn(ping_server)
+        .command_fn(async_ping)
+        .build();
+
+    let res: StatusOutput = pkg.invoke("pingServer", ()).unwrap();
+    assert!(res.online);
+    assert_eq!(res.counter, 42);
+
+    let res_async: StatusOutput = pkg.invoke("asyncPing", ()).unwrap();
+    assert!(res_async.online);
+    assert_eq!(res_async.counter, 100);
+
+    let generated = pkg.generate_typescript().unwrap();
+    assert!(
+        generated
+            .commands_ts
+            .contains("export function pingServer(options?: InvokeOptions): Promise<StatusOutput>")
+    );
+    assert!(
+        generated
+            .commands_ts
+            .contains("export function asyncPing(options?: InvokeOptions): Promise<StatusOutput>")
+    );
+}
+
+#[test]
+fn state_dependency_injection_works() {
+    let config = AppConfig {
+        app_name: "RustraBridgeApp".to_string(),
+        multiplier: 10,
+    };
+
+    let pkg = Package::builder("test.dx.state")
+        .manage(config)
+        .command_fn(get_with_state)
+        .command_fn(async_with_state)
+        .build();
+
+    // Verify State getter
+    let state = pkg
+        .state::<AppConfig>()
+        .expect("State<AppConfig> must exist");
+    assert_eq!(state.app_name, "RustraBridgeApp");
+
+    // Invoke sync command with State
+    let res: AddNumbersOutput = pkg
+        .invoke("getWithState", AddNumbersInput { a: 2, b: 3 })
+        .unwrap();
+    assert_eq!(res.value, 50);
+
+    // Invoke async command with State and 0 data args
+    let res_echo: EchoOutput = pkg.invoke("asyncWithState", ()).unwrap();
+    assert_eq!(res_echo.msg, "RustraBridgeApp");
 }

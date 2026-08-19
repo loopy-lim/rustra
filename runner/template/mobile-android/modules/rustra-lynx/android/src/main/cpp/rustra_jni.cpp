@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
 #include <android/log.h>
@@ -29,7 +30,7 @@ typedef struct rustra_bridge {
                     size_t body_len);
   void (*free)(uint8_t *ptr, size_t len);
 } rustra_bridge_t;
-extern void rustra_template_register_mobile_registry(const rustra_bridge_t *bridge);
+extern "C" void rustra_template_register_mobile_registry(const rustra_bridge_t *bridge);
 
 // ── 플랫폼 콜백 상태 ────────────────────────────────────────────────────────
 // JavaVM 은 JNI_OnLoad 에 캐시; Context/AAssetManager 는 RustraModule.kt 가
@@ -84,24 +85,46 @@ static uint8_t *read_file_cb(const uint8_t *path_ptr, size_t path_len, size_t *o
                                      "(Ljava/lang/String;)Ljava/io/FileInputStream;");
     jstring jpath = env->NewStringUTF(path.c_str());
     jobject fis = mid ? env->CallObjectMethod(g_context_global, mid, jpath) : nullptr;
+    // openFileInput throws FileNotFoundException for a missing private file.
+    // The callback is invoked immediately before Rust continues into JNI, so
+    // leaving this pending would make the next JNI call abort under CheckJNI.
+    if (env->ExceptionCheck()) {
+      env->ExceptionClear();
+      fis = nullptr;
+    }
     if (fis) {
       jclass fis_cls = env->GetObjectClass(fis);
       jmethodID read_all = env->GetMethodID(
           fis_cls, "readAllBytes", "()()[B");
-      jbyteArray arr = static_cast<jbyteArray>(env->CallObjectMethod(fis, read_all));
-      env->DeleteLocalRef(fis);
+      jbyteArray arr = read_all
+                           ? static_cast<jbyteArray>(env->CallObjectMethod(fis, read_all))
+                           : nullptr;
+      if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        arr = nullptr;
+      }
       if (arr) {
         jsize len = env->GetArrayLength(arr);
         uint8_t *buf = static_cast<uint8_t *>(malloc(static_cast<size_t>(len)));
         env->GetByteArrayRegion(arr, 0, len, reinterpret_cast<jbyte *>(buf));
         *out_len = static_cast<size_t>(len);
         LOGI("bridge read_file(%s): %d bytes (filesDir)", path.c_str(), (int)len);
+        env->DeleteLocalRef(arr);
+        env->DeleteLocalRef(fis);
+        if (fis_cls) env->DeleteLocalRef(fis_cls);
+        if (jpath) env->DeleteLocalRef(jpath);
+        if (ctx_cls) env->DeleteLocalRef(ctx_cls);
         if (attached) g_vm->DetachCurrentThread();
         return buf;
       }
+      if (arr) env->DeleteLocalRef(arr);
+      env->DeleteLocalRef(fis);
+      if (fis_cls) env->DeleteLocalRef(fis_cls);
     } else {
       LOGI("bridge read_file(%s): not found (assets/filesDir)", path.c_str());
     }
+    if (jpath) env->DeleteLocalRef(jpath);
+    if (ctx_cls) env->DeleteLocalRef(ctx_cls);
   }
   if (attached) g_vm->DetachCurrentThread();
   return nullptr;
@@ -194,6 +217,15 @@ Java_com_rustra_lynx_RustraModule_nativeInvokeRkyvV2(JNIEnv *env, jobject /*thiz
 
   // 입력 버퍼는 복사본만 썼으므로 변경사항 없이 해제(JNI_ABORT).
   env->ReleaseByteArrayElements(payload, in_bytes, JNI_ABORT);
+
+  // A platform callback must not leak a Java exception across the Rust FFI
+  // boundary. Keep the native entrypoint safe even if a future callback path
+  // forgets to clear one.
+  if (env->ExceptionCheck()) {
+    env->ExceptionClear();
+    out = nullptr;
+    out_len = 0;
+  }
 
   if (out == nullptr || out_len == 0) {
     if (out != nullptr) {

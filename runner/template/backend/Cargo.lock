@@ -417,7 +417,7 @@ dependencies = [
 
 [[package]]
 name = "rustra"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "hex",
  "postcard",
@@ -430,7 +430,7 @@ dependencies = [
 
 [[package]]
 name = "rustra-macros"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "proc-macro2",
  "quote",

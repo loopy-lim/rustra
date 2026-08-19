@@ -4,6 +4,7 @@
 //! 발생하지 않음을 확인한다. `register`(동적)는 debug 빌드에서만 동작.
 
 #![allow(clippy::float_cmp)]
+#![cfg_attr(not(debug_assertions), allow(unused_imports))]
 
 use rustra::Package;
 use std::sync::Arc;

@@ -229,6 +229,56 @@ test('generateCommandsTs produces command function', () => {
   assert.ok(commands.includes('export function add('));
   assert.ok(commands.includes("invoke<AddOutput>('add'"));
   assert.ok(commands.includes("import { invoke } from '@rustra/types'"));
+  assert.ok(commands.includes("import type { InvokeOptions } from '@rustra/types'"));
+});
+
+test('generateCommandsTs handles void input and JSDoc description', () => {
+  const schema: PackageSchema = {
+    packageId: 'test.pkg',
+    commands: [
+      {
+        name: 'ping',
+        commandId: 1,
+        inputType: '()',
+        outputType: '()',
+        inputSchema: { description: 'Pings the server' },
+        outputSchema: {},
+      },
+    ],
+  };
+
+  const commands = generateCommandsTs(schema);
+  assert.ok(commands.includes('/**\n * Pings the server\n */'));
+  assert.ok(commands.includes('export function ping(options?: InvokeOptions): Promise<void>'));
+  assert.ok(commands.includes("invoke<void>('ping', undefined, options)"));
+});
+
+test('generateTypesTs emits JSDoc comments from schema description', () => {
+  const schema: PackageSchema = {
+    packageId: 'test.pkg',
+    commands: [
+      {
+        name: 'getItem',
+        commandId: 1,
+        inputType: 'GetItemInput',
+        outputType: 'GetItemOutput',
+        inputSchema: {
+          type: 'object',
+          description: 'Input for getting item',
+          properties: {
+            id: { type: 'string', description: 'Unique identifier' },
+          },
+        },
+        outputSchema: {
+          type: 'object',
+        },
+      },
+    ],
+  };
+
+  const types = generateTypesTs(schema);
+  assert.ok(types.includes('/**\n * Input for getting item\n */'));
+  assert.ok(types.includes('/** Unique identifier */'));
 });
 
 test('generateContractTs produces hash constant', () => {
@@ -332,6 +382,10 @@ test('generateRkyvCodecsHpp declares dispatch API', () => {
   assert.ok(hpp.includes('Value decode_by_name('));
   assert.ok(hpp.includes('bool has_static_codec('));
   assert.ok(hpp.includes('#include "rustra-codec.hpp"'));
+  // P0-3: by_id 진입(invokeTypedById)용 선언도 방출한다.
+  assert.ok(hpp.includes('bool encode_by_id('));
+  assert.ok(hpp.includes('Value decode_by_id('));
+  assert.ok(hpp.includes('uint16_t cmd_id'));
 });
 
 test('generateRkyvCodecsCpp emits per-command encode/decode + dispatch', () => {
@@ -352,6 +406,25 @@ test('generateRkyvCodecsCpp emits per-command encode/decode + dispatch', () => {
   // cmd_id LE 바이트가 encode 본문에 직접 방출 (createItem=8 → 0x08, 0x00)
   assert.ok(cpp.includes('w.push_u8(8); w.push_u8(0);'));
   assert.ok(cpp.includes('w.push_u8(6); w.push_u8(0);'));
+});
+
+test('generateRkyvCodecsCpp emits by_id switch dispatch (P0-3)', () => {
+  const cpp = generateRkyvCodecsCpp(cppSchema);
+
+  // switch 기반 by_id 디스패치 — per-command 함수를 cmd_id 케이스로 재사용
+  assert.ok(
+    cpp.includes(
+      'bool encode_by_id(Runtime& rt, uint16_t cmd_id, const Value& args, rc::Writer& w)',
+    ),
+  );
+  assert.ok(cpp.includes('Value decode_by_id(Runtime& rt, uint16_t cmd_id, rc::Reader& r)'));
+  assert.ok(cpp.includes('case 8: encode_createItem(rt, args, w); return true;'));
+  assert.ok(cpp.includes('case 6: encode_sumList(rt, args, w); return true;'));
+  assert.ok(cpp.includes('case 8: return decode_createItem(rt, r);'));
+  assert.ok(cpp.includes('case 6: return decode_sumList(rt, r);'));
+  // 미발견 분기: encode 는 false, decode 는 throw (by_name 과 동일 계약)
+  assert.ok(cpp.includes('default: return false; // 동적/알 수 없는 cmd_id'));
+  assert.ok(cpp.includes('std::to_string(cmd_id)'));
 });
 
 test('generateRkyvCodecsCpp maps each postcard field kind to the right push/read', () => {

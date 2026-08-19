@@ -222,6 +222,44 @@ Value decode_by_name(Runtime& rt, const std::string& name, rc::Reader& r) {
   throw JSError(rt, "rustra: no C++ codec for '" + name + "'");
 }
 
+bool encode_by_id(Runtime& rt, uint16_t cmd_id, const Value& args, rc::Writer& w) {
+  switch (cmd_id) {
+    case 1: encode_addNumbers(rt, args, w); return true;
+    case 4: encode_clamp(rt, args, w); return true;
+    case 8: encode_createItem(rt, args, w); return true;
+    case 10: encode_divide(rt, args, w); return true;
+    case 11: encode_emitDemo(rt, args, w); return true;
+    case 5: encode_greet(rt, args, w); return true;
+    case 3: encode_isEven(rt, args, w); return true;
+    case 2: encode_multiply(rt, args, w); return true;
+    case 9: encode_processItem(rt, args, w); return true;
+    case 12: encode_rustraRegistryDemo(rt, args, w); return true;
+    case 13: encode_secureCompute(rt, args, w); return true;
+    case 6: encode_sumList(rt, args, w); return true;
+    case 7: encode_toUpper(rt, args, w); return true;
+    default: return false; // 동적/알 수 없는 cmd_id — JS 가 Tier 3 fallback 처리
+  }
+}
+
+Value decode_by_id(Runtime& rt, uint16_t cmd_id, rc::Reader& r) {
+  switch (cmd_id) {
+    case 1: return decode_addNumbers(rt, r);
+    case 4: return decode_clamp(rt, r);
+    case 8: return decode_createItem(rt, r);
+    case 10: return decode_divide(rt, r);
+    case 11: return decode_emitDemo(rt, r);
+    case 5: return decode_greet(rt, r);
+    case 3: return decode_isEven(rt, r);
+    case 2: return decode_multiply(rt, r);
+    case 9: return decode_processItem(rt, r);
+    case 12: return decode_rustraRegistryDemo(rt, r);
+    case 13: return decode_secureCompute(rt, r);
+    case 6: return decode_sumList(rt, r);
+    case 7: return decode_toUpper(rt, r);
+    default: throw JSError(rt, "rustra: no C++ codec for cmd_id " + std::to_string(cmd_id));
+  }
+}
+
 bool has_static_codec(const std::string& name) {
   if (name == "addNumbers") return true;
   if (name == "clamp") return true;

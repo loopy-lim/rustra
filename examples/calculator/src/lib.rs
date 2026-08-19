@@ -1180,7 +1180,6 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2_async(
 }
 
 #[cfg(test)]
-#[cfg(test)]
 #[allow(clippy::bool_assert_comparison, clippy::useless_vec)]
 mod tests {
     use super::*;
@@ -2143,6 +2142,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(debug_assertions)]
     fn test_rkyv_v2_capability_grant_then_allow() {
         // Grant on a FRESH local package (not the global FFI singleton) so the
         // deny test (which uses the global, never-granted package) stays
@@ -2178,6 +2178,7 @@ mod tests {
     /// (`rustra_ffi_invoke_json` → `Package::invoke_json`).
     /// Proves live register / replace / unregister with no rebuild between steps.
     #[test]
+    #[cfg(debug_assertions)]
     fn test_runtime_registry_through_ffi_invoke_json() {
         let _ = calculator_package(); // ensure global package initialized
 
@@ -2240,6 +2241,7 @@ mod tests {
 
     /// Dynamic command with Vec<f64> input, through the RN FFI path.
     #[test]
+    #[cfg(debug_assertions)]
     fn test_runtime_registry_vec_input_through_ffi() {
         let _ = calculator_package();
 
