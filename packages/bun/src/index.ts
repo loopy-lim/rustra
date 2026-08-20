@@ -24,7 +24,7 @@ export type {
   InvokeOptions,
 } from '@rustra/types';
 export { RustraCommandError, configure, invoke, createRkyvV2Engine } from '@rustra/types';
-import { RustraCommandError, type InvokeOptions } from '@rustra/types';
+import { parseRustraErrorString, RustraCommandError, type InvokeOptions } from '@rustra/types';
 
 /**
  * Bun transport가 구현해야 하는 인터페이스입니다.
@@ -62,6 +62,12 @@ export function createBunEngine(transport: BunInvokeTransport) {
         if (typeof e === 'object' && e !== null && 'code' in e && 'message' in e) {
           const err = e as { code: string; message: string };
           throw new RustraCommandError(err.code, err.message);
+        }
+        // Rust 와이어 에러 — reason 이 RustraError JSON 또는 "code: message"
+        // Display 문자열인 경우 parseRustraErrorString 이 code/retryable 을
+        // 복원한다. @rustra/node 와 동일 파이프라인(unknown 래핑 방지).
+        if (e instanceof Error) {
+          throw parseRustraErrorString(e.message);
         }
         throw new RustraCommandError('unknown', String(e));
       }
