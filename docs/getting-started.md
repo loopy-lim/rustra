@@ -24,7 +24,7 @@ package.json(codegen 스크립트)를 만든다.
 
 ```toml
 [dependencies]
-rustra = "0.1"
+rustra = "0.2"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```

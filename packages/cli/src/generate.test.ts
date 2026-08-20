@@ -11,7 +11,7 @@ import {
   generatePositionalFacadeTs,
 } from './generate.js';
 import { collectDefinitions } from './codegen.js';
-import { parsePackageSchema } from './index.js';
+import { parsePackageSchema, templateVersions } from './index.js';
 import type { PackageSchema } from './schema.js';
 
 const simpleSchema: PackageSchema = {
@@ -710,4 +710,14 @@ test('parsePackageSchema rejects hostile identifiers', () => {
     () => parsePackageSchema({ ...base, commands: [{ ...base.commands[0], name: 'bad name!' }] }),
     /identifier|Invalid schema/,
   );
+});
+
+test('templateVersions derives template pins from CLI version (single source)', () => {
+  // init 템플릿의 버전 핀이 CLI 자체 버전에서 파생되는지 — 과거 ^0.1.3 고정으로
+  // 0.2.0 사용자가 구버전(포스트카드 silent-drop 수정 이전)을 설치하던 사고 방지.
+  assert.deepEqual(templateVersions('0.2.0'), { cargoMinor: '0.2', npmCaret: '^0.2.0' });
+  assert.deepEqual(templateVersions('0.10.3'), { cargoMinor: '0.10', npmCaret: '^0.10.3' });
+  // cargo 는 minor 범위(세부 버전 상관없이 호환), npm 은 caret 정확 버전
+  assert.equal(templateVersions('0.2.0').cargoMinor, '0.2');
+  assert.ok(templateVersions('0.2.0').npmCaret.startsWith('^'));
 });
