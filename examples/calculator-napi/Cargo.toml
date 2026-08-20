@@ -9,6 +9,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
+rustra.workspace = true
 rustra-calculator-example = { path = "../calculator" }
 napi = { version = "2", default-features = false, features = ["napi4"] }
 napi-derive = "2"
