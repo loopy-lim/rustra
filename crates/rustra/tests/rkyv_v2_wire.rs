@@ -95,6 +95,39 @@ struct OptIn {
 struct OptOut {
     has_value: bool,
 }
+
+// 정적 postcard 경로의 Option 왕복 — JS 코드젠 option_* 코덱과 동일 와이어.
+// (과거 결함: JS 코덱이 Option 필드를 무음 삭제 — 여기가 Rust 측 계약 고정점)
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct StaticOptIn {
+    id: String,
+    name: Option<String>,
+    value: Option<i64>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct StaticOptOut {
+    item: Option<StaticItem>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq, Clone)]
+#[serde(rename_all = "camelCase")]
+struct StaticItem {
+    id: String,
+    name: String,
+    value: i64,
+}
+fn static_opt_cmd(input: StaticOptIn) -> rustra::Result<StaticOptOut> {
+    let item = match (input.name, input.value) {
+        (Some(name), Some(value)) => Some(StaticItem {
+            id: input.id,
+            name,
+            value,
+        }),
+        _ => None,
+    };
+    Ok(StaticOptOut { item })
+}
 fn opt_cmd(input: OptIn) -> rustra::Result<OptOut> {
     Ok(OptOut {
         has_value: input.maybe.is_some(),
@@ -270,6 +303,54 @@ fn static_tier1_negative_and_large_i64() {
         let out: common::AddOutput = static_invoke(&pkg, "add", &common::AddInput { a: v, b: 0 });
         assert_eq!(out.value, v, "i64 round-trip failed for {v}");
     }
+}
+
+// 정적 postcard Option 왕복 — Some/None 전 조합 + Option<Struct> 응답.
+#[test]
+fn static_postcard_option_round_trip() {
+    let pkg = Package::builder("wire.static.opt")
+        .command("staticOpt", static_opt_cmd)
+        .build();
+    // Some/Some → Some(item)
+    let out: StaticOptOut = static_invoke(
+        &pkg,
+        "staticOpt",
+        &StaticOptIn {
+            id: "x1".into(),
+            name: Some("W".into()),
+            value: Some(42),
+        },
+    );
+    assert_eq!(
+        out.item,
+        Some(StaticItem {
+            id: "x1".into(),
+            name: "W".into(),
+            value: 42
+        })
+    );
+    // None value → None item
+    let out: StaticOptOut = static_invoke(
+        &pkg,
+        "staticOpt",
+        &StaticOptIn {
+            id: "x2".into(),
+            name: Some("W".into()),
+            value: None,
+        },
+    );
+    assert_eq!(out.item, None);
+    // 둘 다 None → None item
+    let out: StaticOptOut = static_invoke(
+        &pkg,
+        "staticOpt",
+        &StaticOptIn {
+            id: "x3".into(),
+            name: None,
+            value: None,
+        },
+    );
+    assert_eq!(out.item, None);
 }
 
 // ════════════════════════════════════════════════════════════

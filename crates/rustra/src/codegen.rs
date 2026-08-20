@@ -15,6 +15,15 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
         return resolve_ref(r#ref);
     }
 
+    // allOf → intersection `A & B` (TS CLI codegen 과 동일 규칙).
+    if let Some(all_of) = schema.get("allOf").and_then(Value::as_array) {
+        let parts: Vec<String> = all_of
+            .iter()
+            .map(|s| ts_type_from_schema(s, definitions))
+            .collect();
+        return parts.join(" & ");
+    }
+
     if let Some(any_of) = schema.get("anyOf").and_then(Value::as_array) {
         let parts: Vec<String> = any_of
             .iter()
@@ -34,7 +43,23 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
     match schema.get("type") {
         Some(Value::String(t)) => match t.as_str() {
             "object" => ts_object_from_schema(schema, definitions),
-            "integer" | "number" => "number".to_string(),
+            "integer" => {
+                // integer enum → `1 | 2 | 3` 리터럴 union (TS CLI codegen 과 일치).
+                if let Some(enum_values) = schema.get("enum").and_then(Value::as_array) {
+                    let variants: Vec<String> = enum_values
+                        .iter()
+                        .filter_map(|v| match v {
+                            Value::Number(n) => Some(n.to_string()),
+                            _ => None,
+                        })
+                        .collect();
+                    if !variants.is_empty() {
+                        return variants.join(" | ");
+                    }
+                }
+                "number".to_string()
+            }
+            "number" => "number".to_string(),
             "string" => {
                 if let Some(enum_values) = schema.get("enum").and_then(Value::as_array) {
                     let variants: Vec<String> = enum_values
