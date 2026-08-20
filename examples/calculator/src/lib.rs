@@ -1178,21 +1178,50 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2_async(
         unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
     };
     std::thread::spawn(move || {
-        // cancel 체크포인트 — Cancelled 면 핸들러를 시작하지 않는다.
-        let resp = if rustra::cancel::status(id) == rustra::cancel::Status::Cancelled {
-            rustra::encode_rkyv_v2_error(&RustraError::cancelled(
-                "invocation cancelled before dispatch",
-            ))
-        } else {
-            match rustra::ffi::get_package()
-                .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
-                .and_then(|pkg| pkg.invoke_rkyv_v2(&bytes))
-            {
-                Ok(bytes) => bytes,
-                Err(error) => rustra::encode_rkyv_v2_error(&error),
+        // 완료 보장 — 어떤 경로(패닉 포함)로 스레드가 끝나도 레지스트리 정리와
+        // on_complete 1회 발화가 구조적으로 보장된다. JS 프라미스 hang 방지.
+        // Drop guard 하나가 유일한 complete 경로다 (이중 완료 경로 비추).
+        struct EnsureComplete(u64);
+        impl Drop for EnsureComplete {
+            fn drop(&mut self) {
+                rustra::cancel::complete_invocation(self.0);
             }
+        }
+        let _ensure = EnsureComplete(id);
+        // panic guard — 워커 클로저 전체를 감싼다. dispatch 자체는 코어
+        // `Package::invoke_rkyv_v2` 가 핸들러 패닉을 internal 로 정규화하지만,
+        // 체크포인트/패키지 조회 등 나머지 경로에서 패닉이 새어나오면
+        // complete_invocation 없이 스레드가 죽어 레지스트리가 누수되고
+        // on_complete 가 영원히 발화하지 않는다(JS 프라미스 hang).
+        // 정규화 결과는 sync 진입점과 동일한 internal 에러 프레임이다.
+        let resp = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            // cancel 체크포인트 — Cancelled 면 핸들러를 시작하지 않는다.
+            if rustra::cancel::status(id) == rustra::cancel::Status::Cancelled {
+                rustra::encode_rkyv_v2_error(&RustraError::cancelled(
+                    "invocation cancelled before dispatch",
+                ))
+            } else {
+                match rustra::ffi::get_package()
+                    .ok_or_else(|| {
+                        RustraError::custom("ffi.not_registered", "package not registered")
+                    })
+                    .and_then(|pkg| pkg.invoke_rkyv_v2(&bytes))
+                {
+                    Ok(bytes) => bytes,
+                    Err(error) => rustra::encode_rkyv_v2_error(&error),
+                }
+            }
+        })) {
+            Ok(resp) => resp,
+            Err(panic) => rustra::encode_rkyv_v2_error(&RustraError::internal(format!(
+                "panic in async handler: {}",
+                panic_message(&panic)
+            ))),
         };
-        rustra::cancel::complete_invocation(id);
+        // 완료→콜백 순서 계약(코어 `run_worker` 와 동일): complete_invocation 이
+        // on_complete 이전에 실행되어야 한다 — 콜백 실행 중 호스트가 상태를
+        // 조회하면 이미 Unknown 이다. guard 를 명시적으로 풀어 순서를 유지한다.
+        drop(_ensure);
         if let Some(cb) = on_complete {
             let mut out_len = 0;
             let ptr = alloc_response(resp, &mut out_len);

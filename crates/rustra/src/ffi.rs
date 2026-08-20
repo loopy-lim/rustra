@@ -373,6 +373,13 @@ fn postcard_deserialize_envelope(bytes: &[u8]) -> Result<(String, serde_json::Va
 /// `complete_invocation` 을 `on_complete` 이전에 호출한다 — 콜백 실행 중
 /// 호스트가 `rustra_ffi_cancellation_status` 로 조회하면 이미 Unknown(0)을
 /// 보게 되어 완결 순서가 명확해진다.
+///
+/// 완료는 Drop guard 로 구조적으로 보장된다 — 워커가 잔여 패닉(예: 취소
+/// 레지스트리 락 포이즈닝 시 `status`/`complete_invocation` 의 expect)으로
+/// 끝나도 엔트리 정리가 누락되지 않는다. 핸들러 패닉 자체는 `invoke_fn` 이
+/// 가리키는 sync 진입점들의 `with_panic_guard` 가 에러 프레임으로 정규화한다
+/// (unwind 없이 복귀). guard 의 drop 을 콜백 직전에 명시해 완료→콜백 순서를
+/// 유지한다 — 호스트 콜백이 경계를 위반해도 complete 는 이미 실행된 상태다.
 fn run_worker(
     id: u64,
     bytes: Vec<u8>,
@@ -381,6 +388,13 @@ fn run_worker(
     invoke_fn: unsafe extern "C" fn(*const u8, usize, *mut usize) -> *mut u8,
     serialize: fn(&FfiResponse) -> Vec<u8>,
 ) {
+    struct EnsureComplete(u64);
+    impl Drop for EnsureComplete {
+        fn drop(&mut self) {
+            crate::cancel::complete_invocation(self.0);
+        }
+    }
+    let _ensure = EnsureComplete(id);
     let mut out_len = 0;
     let resp_ptr = if crate::cancel::status(id) == crate::cancel::Status::Cancelled {
         err_response(
@@ -391,7 +405,9 @@ fn run_worker(
     } else {
         unsafe { invoke_fn(bytes.as_ptr(), bytes.len(), &mut out_len) }
     };
-    crate::cancel::complete_invocation(id);
+    // 완료→콜백 순서 계약: guard 를 여기서 명시적으로 풀어 complete_invocation
+    // 이 on_complete 이전에 실행됨을 보장한다.
+    drop(_ensure);
     if let Some(cb) = on_complete {
         unsafe { cb(user_data_raw as *mut c_void, resp_ptr, out_len) };
     } else if !resp_ptr.is_null() {
