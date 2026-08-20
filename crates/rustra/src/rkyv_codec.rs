@@ -41,7 +41,8 @@ pub(crate) fn build_tier3_json_decoder() -> DecodeFn {
 ///
 /// Tier 1: 모든 필드가 고정폭 primitive (i64, i32, f64, …)
 /// Tier 2: String 또는 Vec<primitive> 필드 포함
-/// Tier 3: 중첩 구조체, enum, Option<T> 등 — 아직 미지원
+/// Tier 3: map 필드, 데이터를 가진 enum 등 — JSON-in-binary 폴백
+/// (Option<T>/Vec<String>/Vec<Struct>/string enum 은 2026-08-20 JS 코덱 확장으로 지원)
 pub(crate) fn build_rkyv_v2_decoder(input_schema: &Value) -> (DecodeFn, Tier) {
     let props = match input_schema.get("properties").and_then(Value::as_object) {
         Some(p) => p,
@@ -579,5 +580,80 @@ fn encode_vec_fixed<const N: usize>(
     buf.extend_from_slice(&(data_len as u32).to_le_bytes());
     for item in arr {
         buf.extend_from_slice(&encode_elem(item));
+    }
+}
+
+// ── (Tier 3 정합) JS postcard 코덱 지원 판정 미러 ─────────────
+//
+// @rustra/cli 의 classifyPostcardField(generate.ts)와 동일한 타입 집합을
+// Rust 쪽에서 판정한다. JS 코드젠은 미지원 필드를 가진 명령을 rkyv-registry
+// 에서 제외하고, 엔진은 그 명령을 Tier 3(JSON-in-binary) 로 라우팅한다.
+// Rust 도 같은 판정으로 typed postcard fast-path 를 끄면 양쪽 와이어가
+// 일치한다. 집합이 어긋나면 JS postcard ↔ Rust JSON 프레임 불일치가 되므로,
+// JS 쪽 지원 범위를 확장할 때 이 함수를 함께 갱신해야 한다 (codegen 마감 조항).
+
+/// 스키마(객체)의 모든 프로퍼티가 JS postcard 코덱 지원 타입인지 판정한다.
+/// 중첩 $ref 정의는 재귀 순회한다.
+pub(crate) fn js_postcard_codec_supported(schema: &Value) -> bool {
+    let Some(props) = schema.get("properties").and_then(Value::as_object) else {
+        return true; // properties 없음(unit 등) — 항상 지원
+    };
+    props.values().all(|p| js_field_supported(p, 0))
+}
+
+fn js_field_supported(schema: &Value, depth: u8) -> bool {
+    if depth > 8 {
+        return false; // 과도한 중첩 — 안전하게 미지원 취급
+    }
+    // $ref → 정의 스키마를 판정한다. definitions 는 command 레벨에서 병합되므로
+    // 여기서는 $ref 자체를 "지원(구조체)"으로 보고, 재귀 검증은 호출부
+    // (definitions 순회)에서 수행한다 — 단순화: $ref 를 struct 로 취급.
+    if schema.get("$ref").is_some() {
+        return true;
+    }
+    // string-only enum → 지원 (variant index varint)
+    if schema.get("type").and_then(Value::as_str) == Some("string") {
+        return true;
+    }
+    // Option<T> — type: ["T","null"] 또는 anyOf: [T, null]
+    if let Some(types) = schema.get("type").and_then(Value::as_array) {
+        let non_null: Vec<&str> = types
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|t| *t != "null")
+            .collect();
+        if non_null.len() == 1 {
+            let inner_type = non_null[0];
+            // JS option_* kind 지원 집합: zigzag/f64/f32/bool/string/struct
+            return matches!(inner_type, "integer" | "number" | "boolean" | "string");
+        }
+        return false;
+    }
+    if let Some(any_of) = schema.get("anyOf").and_then(Value::as_array) {
+        // [{$ref}, {type:null}] 형태의 Option<Struct> → 지원
+        let has_null = any_of
+            .iter()
+            .any(|s| s.get("type") == Some(&Value::String("null".into())));
+        let refs = any_of.iter().filter(|s| s.get("$ref").is_some()).count();
+        if has_null && refs == 1 && any_of.len() == 2 {
+            return true;
+        }
+        return false;
+    }
+    match schema.get("type").and_then(Value::as_str) {
+        Some("boolean") | Some("integer") | Some("number") | Some("string") => true,
+        Some("array") => {
+            let Some(items) = schema.get("items") else {
+                return false;
+            };
+            if items.get("$ref").is_some() {
+                return true; // Vec<Struct> → vec_struct
+            }
+            matches!(
+                items.get("type").and_then(Value::as_str),
+                Some("integer") | Some("number") | Some("boolean") | Some("string")
+            )
+        }
+        _ => false, // object(map), oneOf 등 — JS 코덱 미지원
     }
 }

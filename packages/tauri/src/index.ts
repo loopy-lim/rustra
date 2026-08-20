@@ -22,10 +22,16 @@
  * ```
  */
 
-export type { EngineClient, RustraError, RkyvV2Codec, RkyvV2Native } from '@rustra/types';
+export type {
+  EngineClient,
+  RustraError,
+  RkyvV2Codec,
+  RkyvV2Native,
+  InvokeOptions,
+} from '@rustra/types';
 export { RustraCommandError, configure, invoke, createRkyvV2Engine } from '@rustra/types';
 
-import { RustraCommandError } from '@rustra/types';
+import { RustraCommandError, type InvokeOptions } from '@rustra/types';
 
 /**
  * Tauri의 IPC invoke 함수 타입입니다.
@@ -57,7 +63,22 @@ export type TauriInvoke = (command: string, args?: unknown) => Promise<unknown> 
  */
 export function createTauriEngine(options: { invoke: TauriInvoke }) {
   return {
-    async invoke<T>(command: string, args?: unknown): Promise<T> {
+    async invoke<T>(command: string, args?: unknown, invokeOptions?: InvokeOptions): Promise<T> {
+      // (의미론 마감) Tauri IPC 경로는 취소 전파 불가 — signal 을 조용히 무시하지
+      // 않고 명시적으로 거부한다. 호환성 매트릭스(docs/compatibility-matrix.md) 참고.
+      if (invokeOptions?.signal) {
+        if (invokeOptions.signal.aborted) {
+          throw new RustraCommandError(
+            'cancelled',
+            `invoke("${command}") aborted before dispatch`,
+            true,
+          );
+        }
+        throw new RustraCommandError(
+          'cancel.unsupported',
+          `invoke("${command}"): the Tauri IPC transport does not support AbortSignal`,
+        );
+      }
       try {
         return (await options.invoke('rustra_dispatch', { command, args: args ?? {} })) as T;
       } catch (e: unknown) {

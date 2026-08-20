@@ -234,22 +234,30 @@ export const GENERATED_CONTRACT_HASH = '<sha256-hex>';
 
 JSON Schema → TypeScript 변환에서 다음 타입은 **`unknown`** 으로 폴백된다.
 
-| 미지원 타입                 | 이유                                                                                 |
-| --------------------------- | ------------------------------------------------------------------------------------ |
-| `allOf`                     | 교차 타입(intersection) 미처리                                                       |
-| integer enum                | string enum만 리터럴 union으로 변환, integer enum은 미처리                           |
-| `oneOf` 판별 필드 (`const`) | `const` 프로퍼티를 읽어 `{ type: 'A' }` 판별 유니온을 만들지 않음 — 수동 타이핑 필요 |
+| 미지원 타입   | 이유                                                                       |
+| ------------- | -------------------------------------------------------------------------- |
+| map (객체 키) | `additionalProperties` postcard 코덱 미지원 — 해당 명령은 Tier 3 폴백 제외 |
+
+**postcard 코덱(rkyv-codecs.ts/C++) 지원 정책**: 미지원 필드를 가진 명령은 부분 코덱을
+만들지 않고 레지스트리에서 **제외**된다(WARN 로그 출력). 엔진은 그 명령을 Tier 3
+(JSON-in-binary) 폴백으로 라우팅한다 — 과거 "미지원 필드 무음 삭제로 와이어 깨짐"
+결함의 재발을 구조적으로 봉쇄한다.
 
 ### 이미 지원되는 타입 (이전에는 미지원)
 
-| 타입            | 지원 방식                                                                                                                                   |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Set`           | `"array"` + `"uniqueItems": true` → `Set<T>` (2026-08-15). postcard 코덱 `set_*` kind (와이어는 vec 호환), JSON 경로 replacer로 배열 직렬화 |
-| `tuple`         | `items` 배열 / `prefixItems` → `[A, B, C]`                                                                                                  |
-| `oneOf` (Rust)  | `anyOf`와 동일하게 `A \| B` union 생성 (TS CLI는 보강 중)                                                                                   |
-| `$ref`          | `#/definitions/X`, `#/$defs/X` → 타입 이름 추출                                                                                             |
-| `anyOf`         | 각 스키마에 재귀 호출 후 `A \| B` union 생성                                                                                                |
-| string `enum`   | `'Value1' \| 'Value2'` 문자열 리터럴 union                                                                                                  |
-| `null`          | `null` 타입                                                                                                                                 |
-| type 배열 union | `["string", "null"]` → `string \| null`                                                                                                     |
-| optional 필드   | `required`에 없으면 `?` + `\| null` (schemars가 `anyOf`로 표현)                                                                             |
+| 타입                                     | 지원 방식                                                                                                                                   |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Set`                                    | `"array"` + `"uniqueItems": true` → `Set<T>` (2026-08-15). postcard 코덱 `set_*` kind (와이어는 vec 호환), JSON 경로 replacer로 배열 직렬화 |
+| `tuple`                                  | `items` 배열 / `prefixItems` → `[A, B, C]`                                                                                                  |
+| `oneOf` (Rust)                           | `anyOf`와 동일하게 `A \| B` union 생성 (TS CLI는 보강 중)                                                                                   |
+| `$ref`                                   | `#/definitions/X`, `#/$defs/X` → 타입 이름 추출                                                                                             |
+| `anyOf`                                  | 각 스키마에 재귀 호출 후 `A \| B` union 생성                                                                                                |
+| string `enum`                            | `'Value1' \| 'Value2'` 문자열 리터럴 union. postcard 코덱은 variant index varint로 인코딩 (`enum_str` kind)                                 |
+| `null`                                   | `null` 타입                                                                                                                                 |
+| type 배열 union                          | `["string", "null"]` → `string \| null`                                                                                                     |
+| optional 필드                            | `required`에 없으면 `?` + `\| null` (schemars가 `anyOf`로 표현)                                                                             |
+| `allOf`                                  | `A & B` 교차 타입 (2026-08-20, Rust bin + TS CLI 양쪽)                                                                                      |
+| integer enum                             | `1 \| 2 \| 3` 숫자 리터럴 union (2026-08-20, Rust bin + TS CLI 양쪽)                                                                        |
+| `Option<T>` (postcard)                   | 태그 바이트(0/1) + 값 — `option_zigzag/f64/f32/bool/string/struct` kind (2026-08-20)                                                        |
+| `Vec<String>` / `Vec<Struct>` (postcard) | varint 길이 + 요소 — `vec_string`/`vec_struct` kind (2026-08-20)                                                                            |
+| `oneOf` 판별 필드 (`const`)              | `const_literal`/`constLiteral`로 `{ type: 'A' }` 판별 유니온 생성                                                                           |

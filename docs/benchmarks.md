@@ -87,8 +87,20 @@ JSI 브리지 부대비용 최적화 4종을 적용한 뒤 동일 BenchmarkApp�
 
 → 동일 실행 상대 비교 기준(시뮬레이터 측정 편차 감안). Nitro와의 잔여 격차는
 Rust 코어 왕복(이름 기반 범용 RPC 경로 물리 하한 ~1.3µs)과 typed 응답의 JS 객체
-구성이 주성분이다. 다음 단계: FFI caller-buffer 변형으로 malloc/memcpy 제거(별도
-플랜), 코드젠 positional facade(P2)로 정적 명령을 Nitro 동등 이하로.
+구성이 주성분이다.
+
+**성능 후속 구현 완료 (2026-08-20):**
+
+- **FFI caller-buffer 변형** — `rustra_ffi_invoke_json_into`: Rust가 응답을
+  할당하지 않고 caller 버퍼에 직접 기록한다 (size-probe → 쓰기 2단계 프로토콜,
+  버퍼 부족 시 `usize::MAX` 재시도 신호). malloc→복사→caller memcpy의 3중 복사
+  제거. 호스트 어댑터(RN JSI/Napi)에 아직 배선 전 — 어댑터 측 채택 시 측정치를
+  이 표에 추가한다.
+- **positional facade (P2)** — `rustra generate --positional`이
+  `positional-facade.ts`를 생성한다: 정적 명령(≤3개 primitive 필드)을
+  `addNumbers(a, b)` positional 시그니처로 노출하고 JSI `invokeTyped`에 직접
+  연결한다 — 인자 객체/인코딩 경로를 건너뛴다. 미지원 명령은 기존
+  commands.ts(Tier 3 폴백 포함)로 공존.
 
 > Android는 동일 `RustraJSIBridge.cpp`를 공유하므로 본 최적화가 자동 적용되지만,
 > 이번 측정은 iOS 시뮬레이터 기준이다 — Android 에뮬레이터/실기기 재검증 대기.

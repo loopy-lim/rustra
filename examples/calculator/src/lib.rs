@@ -612,7 +612,7 @@ pub unsafe extern "C" fn rustra_calculator_invoke(payload: *const c_char) -> *mu
         }
     };
 
-    // (T3 후속) 네이티브 동적 한도와 정렬 — 복제 상수 대신 공개 판독기를 읽는다.
+    // 네이티브 동적 한도와 정렬(구현 완료) — 복제 상수 대신 공개 판독기를 읽는다.
     // 에러 코드는 `payload.too_large` 로 통일 (JS 사전 검사와 동일 코드).
     if payload.len() > rustra::ffi::max_payload_bytes() {
         let e = RustraError::payload_too_large(payload.len(), rustra::ffi::max_payload_bytes());

@@ -52,3 +52,40 @@ test('createNodeEngine wraps unknown errors into RustraCommandError', async () =
     },
   );
 });
+
+// ── createNodeProcessTransport — subprocess stdio 프로토콜 ──
+
+import { createNodeProcessTransport } from './index.js';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+// 저장소 루트 기준 절대경로 — 테스트는 packages/node/dist 에서 실행된다.
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+
+test(
+  'createNodeProcessTransport invokes a real Rust runtime over stdio',
+  { timeout: 30_000 },
+  async () => {
+    // calculator 예제 바이너리가 stdio JSON 프로토콜로 응답하는지 실제 검증.
+    const transport = createNodeProcessTransport({
+      command: resolve(repoRoot, 'target/debug/rustra-calculator-example'),
+      args: ['invoke'],
+    });
+    const result = (await transport.invoke('addNumbers', { a: 20, b: 22 })) as {
+      value: number;
+    };
+    assert.equal(result.value, 42);
+    transport.dispose();
+  },
+);
+
+test('createNodeProcessTransport surfaces spawn failures as transport.error', async () => {
+  const transport = createNodeProcessTransport({
+    command: './definitely-not-a-real-binary',
+  });
+  await assert.rejects(transport.invoke('addNumbers', {}) as Promise<unknown>, (err: unknown) => {
+    if (!(err instanceof RustraCommandError)) return false;
+    assert.equal(err.code, 'transport.error');
+    return true;
+  });
+});

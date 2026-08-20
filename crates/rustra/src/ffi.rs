@@ -105,7 +105,7 @@ static MAX_PAYLOAD_BYTES: std::sync::atomic::AtomicUsize =
 
 /// 현재 페이로드 크기 한도 (invoke 경로의 크기 가드가 읽는 단일 지점).
 ///
-/// (T3 후속) 공개 판독기 — `Package::invoke_rkyv_v2` 등 FFI 엔트리가 직접
+/// 공개 판독기(구현 완료) — `Package::invoke_rkyv_v2` 등 FFI 엔트리가 직접
 /// 노출하지 않는 경로(rkyv V2 와이어)도 동일한 동적 한도를 읽어 게이트한다.
 /// `rustra_ffi_get_max_payload` FFI 심볼과 같은 값을 반환한다.
 pub fn max_payload_bytes() -> usize {
@@ -472,6 +472,81 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json(
     let command = envelope.command;
     let args = envelope.args;
     with_panic_guard(out_len, json_serialize, || dispatch_json(&command, args))
+}
+
+/// (성능 후속) caller-buffer JSON 변형 — 응답의 3중 복사 제거.
+///
+/// `buf` 가 null 이면 필요한 응답 크기를 `out_len` 에 쓰고 0 을 반환한다
+/// (size-probe). `buf` 가 non-null 이면 응답을 `buf` 에 직접 기록하고 기록한
+/// 바이트 수를 `out_len` 에 쓴다 — Rust 는 응답을 할당하지 않고 caller 가
+/// 소유한 버퍼에 한 번만 쓴다 (malloc→복사→caller memcpy 사이클 제거).
+///
+/// 버퍼가 부족하면(`capacity` < 필요 크기) `out_len` 에 필요 크기를 쓰고
+/// -1(`usize::MAX`)을 반환한다 — caller 가 다시 size-probe 하도록.
+///
+/// # Safety
+///
+/// `payload` must point to at least `payload_len` readable bytes.
+/// `buf`, when non-null, must point to at least `capacity` writable bytes.
+/// `out_len` must be a valid write pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_invoke_json_into(
+    payload: *const u8,
+    payload_len: usize,
+    buf: *mut u8,
+    capacity: usize,
+    out_len: *mut usize,
+) -> usize {
+    if payload.is_null() || out_len.is_null() {
+        unsafe { *out_len = 0 };
+        return usize::MAX;
+    }
+    // size-probe: 임시 할당을 피하기 위해 실제 직렬화 결과 크기가 필요하다.
+    // dispatch 를 한 번 실행하고 결과를 직접 caller 버퍼(또는 임시 Vec)에 쓴다.
+    let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
+    let response: Vec<u8> = if payload_len > max_payload_bytes() {
+        let e = crate::RustraError::payload_too_large(payload_len, max_payload_bytes());
+        json_serialize(&err_frame(&e.to_string()))
+    } else {
+        match json_deserialize_envelope(bytes) {
+            Ok(env) => {
+                // 패닉 가드는 기존 경로와 동일 — dispatch_json 이 패닉하면
+                // 에러 프레임으로 변환한다.
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    dispatch_json(&env.command, env.args)
+                }));
+                match result {
+                    Ok(resp) => json_serialize(&resp),
+                    Err(panic) => {
+                        let msg = panic_message(panic.as_ref());
+                        json_serialize(&err_frame(&format!("panic in handler: {msg}")))
+                    }
+                }
+            }
+            Err(e) => json_serialize(&err_frame(&e)),
+        }
+    };
+
+    let needed = response.len();
+    unsafe { *out_len = needed };
+    if buf.is_null() {
+        return 0; // size-probe 완료
+    }
+    if capacity < needed {
+        return usize::MAX; // 버퍼 부족 — 다시 probe 하라
+    }
+    unsafe { std::ptr::copy_nonoverlapping(response.as_ptr(), buf, needed) };
+    needed
+}
+
+/// 에러 응답 프레임 직렬화 공용 헬퍼 — `err_response` 는 FFI 버퍼 할당 경로라
+/// caller-buffer 에서는 이 헬퍼로 대체한다.
+fn err_frame(msg: &str) -> FfiResponse {
+    FfiResponse {
+        ok: false,
+        result: None,
+        error: Some(msg.to_string()),
+    }
 }
 
 /// Postcard binary path.

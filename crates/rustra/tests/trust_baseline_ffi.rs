@@ -4,12 +4,11 @@
 //!
 //! 1. **음수 경로 고정 (실행 가능)** — huge payload / zero-length / postcard 에러 프레임.
 //!    `rustra::ffi` 의 extern "C" 엔트리를 거쳐 실제 응답을 JSON/postcard 로 파싱해
-//!    현재 거동을 단언한다. Phase 1에서 결함을 수정하면 일부 단언이 전환된다.
+//!    현재 거동을 단언한다.
 //!
-//! 2. **UB/abort 결함 가시화 (`#[ignore]`)** — F1(패닉 abort), F2(double-free/wrong-len UB),
-//!    F8(get_schema null out_len deref UB)는 실행 시 프로세스를 죽이므로 일반 `#[test]`로
-//!    잡을 수 없다. 명시적 `#[ignore]` + TODO 본문으로 "알고 있는 깨진 것"으로 표시하고,
-//!    Phase 1에서 구현과 동시에 본문을 채운 뒤 ignore를 제거한다.
+//! 2. **UB/abort 결함 방어 (실행 가능)** — F1(패닉 abort catch_unwind), F2(free 가드),
+//!    F8(get_schema null out_len 가드)는 Phase 1 에서 구현·수정되어 현재는 모두
+//!    활성 테스트로 전환된 상태다 (과거 `#[ignore]` + TODO 패턴에서 이관).
 //!
 //! 모든 테스트는 같은 패키지("trust.baseline")를 `register_ffi` 한다 — `register_ffi`는
 //! `OnceLock` 기반 idempotent 이므로 병렬 실행에서도 안전하다.
@@ -125,7 +124,7 @@ fn huge_payload_rejected_with_size_limit_error() {
     let err = resp["error"]
         .as_str()
         .expect("rejected payload must carry an error message");
-    // (T3 후속) 에러 코드 통일 — 평문 "payload exceeds size limit" 대신
+    // 에러 코드 통일(완료) — 평문 "payload exceeds size limit" 대신
     // `payload.too_large: payload NB exceeds max payload LB` 형태.
     assert!(
         err.contains("payload.too_large"),
@@ -268,5 +267,108 @@ fn get_schema_with_null_out_len_is_safe() {
     assert!(
         ptr.is_null(),
         "null out_len must yield a null ptr, not dereference it"
+    );
+}
+
+// ── (성능 후속) caller-buffer FFI — 3중 복사 제거 경로 ────────
+
+/// `rustra_ffi_invoke_json_into` size-probe → 쓰기 2단계 프로토콜 검증.
+#[test]
+fn caller_buffer_json_invoke_probe_then_write() {
+    use rustra::ffi::rustra_ffi_invoke_json_into;
+
+    test_package().register_ffi();
+    let request = serde_json::to_vec(&serde_json::json!({
+        "command": "addNumbers", "args": { "a": 20, "b": 22 }
+    }))
+    .expect("request encodes");
+
+    // 1) size-probe: buf=null → 필요 크기 반환
+    let mut needed: usize = 0;
+    let probe = unsafe {
+        rustra_ffi_invoke_json_into(
+            request.as_ptr(),
+            request.len(),
+            std::ptr::null_mut(),
+            0,
+            &mut needed,
+        )
+    };
+    assert_eq!(probe, 0, "probe must return 0 with buf=null");
+    assert!(needed > 0, "probe must report needed size");
+
+    // 2) 정확한 크기 버퍼로 쓰기 — 응답이 caller 버퍼에 직접 기록된다
+    let mut buf = vec![0u8; needed];
+    let mut written: usize = 0;
+    let n = unsafe {
+        rustra_ffi_invoke_json_into(
+            request.as_ptr(),
+            request.len(),
+            buf.as_mut_ptr(),
+            buf.len(),
+            &mut written,
+        )
+    };
+    assert_eq!(n, needed, "write must return the written byte count");
+    let resp: serde_json::Value =
+        serde_json::from_slice(&buf).expect("caller buffer holds JSON response");
+    assert_eq!(resp["ok"], true);
+    assert_eq!(resp["result"], 42);
+    // Rust 가 할당한 버퍼가 없다 — 해제할 것이 없다 (3중 복사 제거의 증명).
+
+    // 3) 부족한 버퍼 → usize::MAX 로 재시도 신호
+    let mut small = vec![0u8; needed - 1];
+    let mut out2: usize = 0;
+    let short = unsafe {
+        rustra_ffi_invoke_json_into(
+            request.as_ptr(),
+            request.len(),
+            small.as_mut_ptr(),
+            small.len(),
+            &mut out2,
+        )
+    };
+    assert_eq!(short, usize::MAX, "insufficient buffer must signal retry");
+    assert_eq!(out2, needed, "needed size must be reported on retry signal");
+}
+
+/// 패닉 핸들러도 caller-buffer 경로에서 clean 에러 프레임으로 나온다.
+#[test]
+fn caller_buffer_json_invoke_panics_cleanly() {
+    use rustra::ffi::rustra_ffi_invoke_json_into;
+
+    test_package().register_ffi();
+    let request = serde_json::to_vec(&serde_json::json!({
+        "command": "panicBoom", "args": {}
+    }))
+    .expect("request encodes");
+
+    let mut needed: usize = 0;
+    unsafe {
+        rustra_ffi_invoke_json_into(
+            request.as_ptr(),
+            request.len(),
+            std::ptr::null_mut(),
+            0,
+            &mut needed,
+        )
+    };
+    let mut buf = vec![0u8; needed];
+    let n = unsafe {
+        rustra_ffi_invoke_json_into(
+            request.as_ptr(),
+            request.len(),
+            buf.as_mut_ptr(),
+            buf.len(),
+            &mut needed,
+        )
+    };
+    assert!(n != usize::MAX, "panic must not signal buffer-retry");
+    let resp: serde_json::Value = serde_json::from_slice(&buf).expect("panic yields a frame");
+    assert_eq!(resp["ok"], false);
+    assert!(
+        resp["error"].as_str().unwrap_or_default().contains("panic"),
+        "error must mention panic, got: {}",
+        resp["error"]
     );
 }
