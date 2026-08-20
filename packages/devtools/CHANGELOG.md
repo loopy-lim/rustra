@@ -1,5 +1,17 @@
 # @rustra/devtools
 
+## 0.2.0
+
+### Minor Changes
+
+- ecbe69c: Lynx support removed: `@rustra/lynx` is deprecated on npm and the Lynx examples/runner template are deleted from the repo. rustra now targets Node, Bun, Tauri, and React Native. The rkyv V2 binary fast-path is unaffected (shared with the React Native JSI adapter).
+
+### Patch Changes
+
+- Updated dependencies [ecbe69c]
+- Updated dependencies [5935b0a]
+  - @rustra/types@0.2.0
+
 ## 0.1.3
 
 ### Patch Changes
