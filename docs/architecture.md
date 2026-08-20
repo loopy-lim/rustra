@@ -53,7 +53,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
  │  │  createBunEngine(transport)                                 │     │
  │  │  createTauriEngine({ invoke })                              │     │
  │  │  createReactNativeEngine(nativeModule)                      │     │
- │  │  createFastEngine(native, {rkyvV2Codecs})   (Lynx)          │     │
+ │  │  createFastEngine(native, {rkyvV2Codecs})   (React Native)  │     │
  │  └──────────────────────────────┬─────────────────────────────┘     │
  │                                 │                                   │
  │                                 ▼                                   │
@@ -85,7 +85,7 @@ export type EngineClient = {
 | `packages/bun`          | `createBunEngine(transport)`            | `BunEngineClient`         | `packages/bun/src/index.ts`          |
 | `packages/tauri`        | `createTauriEngine({ invoke })`         | `TauriEngineClient`       | `packages/tauri/src/index.ts`        |
 | `packages/react-native` | `createReactNativeEngine(nativeModule)` | `ReactNativeEngineClient` | `packages/react-native/src/index.ts` |
-| `packages/lynx`         | `createFastEngine(native, opts)`        | `EngineClient`            | `packages/lynx/src/index.ts`         |
+| `packages/react-native` | `createFastEngine(native, opts)`        | `EngineClient`            | `packages/react-native/src/index.ts` |
 
 모든 반환 타입(`NodeEngineClient`, `BunEngineClient`, `TauriEngineClient`, `ReactNativeEngineClient`)은 구조적으로 `EngineClient`와 동일한 `invoke<T>` 메서드를 제공한다.
 
@@ -172,7 +172,7 @@ packages/
 ├── bun/            → createBunEngine(transport: BunInvokeTransport): BunEngineClient
 ├── tauri/          → createTauriEngine({ invoke: TauriInvoke }): TauriEngineClient
 └── react-native/   → createReactNativeEngine(nativeModule: ReactNativeRustraModule): ReactNativeEngineClient
-└── lynx/           → createFastEngine(native: RkyvV2SchemaNative, {rkyvV2Codecs}): EngineClient (rkyv V2 fast-path)
+└── react-native/   → createFastEngine(native: RkyvV2SchemaNative, {rkyvV2Codecs}): EngineClient (rkyv V2 fast-path)
 ```
 
 각 adapter 패키지는 서로를 import하지 않으며, host-specific 패키지를 직접 import하지도 않는다. 호출자가 transport 객체를 생성하여 주입하는 방식이다.
@@ -293,7 +293,7 @@ pub fn invoke_json(&self, name: &str, params: Value) -> Result<Value>
  │  - Bun:       transport.invoke(command, args)            │
  │  - Tauri:     invoke('rustra_dispatch', {command, args}) │
  │  - RN:        nativeModule.invoke(command, args)         │
- │  - Lynx:      NativeModules.RustraModule.invokeRkyvV2(buf)│
+ │  - RN fast:   native.invokeRkyvV2(buf) (rkyv V2 fast-path)│
  │          │                                               │
  │          ▼                                               │
  │  transport (앱 레벨에서 생성/주입)                        │
@@ -432,7 +432,7 @@ rustra-bridge는 다음 불변식을 통해 host-neutral 특성을 보장한다:
 
 1. **생성된 TypeScript는 host-specific import를 금지한다**: `types.ts`, `commands.ts`, `contract.ts`는 `node:`, `bun:`, `@tauri-apps`, `react-native`, `expo-modules` 등 어떤 host-specific 모듈도 import하지 않는다. 유일한 import는 `commands.ts`가 `types.js`를 참조하는 것뿐이다.
 
-2. **adapter 패키지는 서로를 import하지 않는다**: `packages/node`, `packages/bun`, `packages/tauri`, `packages/react-native`, `packages/lynx`는 각각 독립적이며 서로에 대한 의존성이 없다.
+2. **adapter 패키지는 서로를 import하지 않는다**: `packages/node`, `packages/bun`, `packages/tauri`, `packages/react-native`는 각각 독립적이며 서로에 대한 의존성이 없다.
 
 3. **adapter는 host 패키지를 직접 import하지 않는다**: adapter의 소스 코드(`src/index.ts`)는 `node:child_process`, `@tauri-apps/api` 등을 import하지 않는다. 대신 호출자가 transport 객체를 생성하여 주입한다.
 

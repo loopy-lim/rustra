@@ -36,7 +36,6 @@ packages/<host>/README.md       ← 사용법 문서
 packages/node/src/index.ts
 packages/bun/src/index.ts
 packages/react-native/src/index.ts
-packages/lynx/src/index.ts
 packages/tauri/src/index.ts
 ```
 
@@ -292,9 +291,6 @@ builder.run(tauri::generate_context!()).expect("failed to run");
 │
 ├─ React Native인가요?
 │   └─ C FFI → Expo Modules Core로 래핑
-│
-├─ Lynx (ReactLynx)인가요?
-│   └─ C FFI → Lynx Native Module (<LynxModule> / @LynxMethod), rkyv V2 fast-path
 │
 ├─ Tauri인가요?
 │   └─ 프레임워크 내장 invoke

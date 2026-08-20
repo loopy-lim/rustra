@@ -76,7 +76,7 @@ export class RustraCommandError extends Error {
 
 /**
  * Rust `RustraError::Display` 포맷(`"{code}: {message}"`)의 평탄화된 문자열을
- * [`RustraCommandError`]로 파싱한다. JSON fallback 경로(RN/Lynx)에서 사용 —
+ * [`RustraCommandError`]로 파싱한다. JSON fallback 경로(네이티브 모듈)에서 사용 —
  * rkyv V2 경로(Node/Tauri)는 구조화된 `{code, message}` 객체를 받으므로 불필요.
  *
  * `": "` 앞이 dot-notation 코드 토큰(`command.not_found`, `internal`,
@@ -278,8 +278,8 @@ export function invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
 }
 
 // ── Runtime-safe UTF-8 helpers ─────────────────────────────
-// Lynx's QuickJS runtime has no TextEncoder/TextDecoder globals, so the engine
-// must not depend on them. Pure-JS UTF-8 codec (surrogate-pair correct).
+// 임베디드 JS 런타임(예: Hermes)에는 TextEncoder/TextDecoder 글로벌이 없을 수
+// 있으므로 엔진은 이에 의존하지 않는다. Pure-JS UTF-8 코덱 (surrogate-pair 정확).
 function _utf8Encode(s: string): Uint8Array {
   const out: number[] = [];
   for (let i = 0; i < s.length; i++) {

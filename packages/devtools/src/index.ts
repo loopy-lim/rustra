@@ -3,8 +3,8 @@
  *
  * `createInstrumentedEngine` 은 어떤 `EngineClient` 든 감싸 호출 수/에러 수/누적
  * 지연을 기록한다. `report()` 로 명령별 통계(count/errors/avgMs)와 슬로우 콜
- * 타임라인(최대 10)을 조회한다. 타이밍은 `Date.now()` 기반 — QuickJS 런타임에
- * `performance.now` 가 없는 환경(Lynx)을 고려한 퍼셉트 단위 관측이다.
+ * 타임라인(최대 10)을 조회한다. 타이밍은 `Date.now()` 기반 — `performance.now`
+ * 글로벌이 없는 임베디드 JS 런타임을 고려한 퍼셉트 단위 관측이다.
  *
  * inner 엔진이 `invokeBatch` 를 지원하면 래퍼도 전달한다(배치 전체를 1관측으로
  * 기록 + 각 엔트리 실패 반영). 지원하지 않으면 일반 `invoke` 와 마찬가지로

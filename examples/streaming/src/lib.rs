@@ -5,8 +5,6 @@
 //! 플랫폼 푸시 채널로 전달한다:
 //!
 //! - Node (본 예제의 `apps/node-app`): `setInterval` 폴링 → `EventEmitter`
-//! - Lynx 데스크톱/모바일: BTS `post_task_to_runtime` → `__rustraDeliver`
-//!   (스파이크에서 검증된 vsync 패턴 — docs/plans/2026-08-10 참조)
 //! - Tauri: 폴링 → `app.emit()`
 //!
 //! `startJob` 는 즉시 반환하고 백그라운드 스레드가 이벤트를 채운다
