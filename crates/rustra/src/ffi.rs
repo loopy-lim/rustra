@@ -261,7 +261,7 @@ fn err_response(msg: &str, out_len: *mut usize, serialize: fn(&FfiResponse) -> V
 }
 
 /// 패닉 페이로드에서 사람이 읽을 수 있는 메시지를 추출한다.
-fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
+pub(crate) fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
     if let Some(s) = payload.downcast_ref::<&'static str>() {
         (*s).to_string()
     } else if let Some(s) = payload.downcast_ref::<String>() {

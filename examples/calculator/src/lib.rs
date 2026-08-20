@@ -1107,15 +1107,37 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2(
 
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
 
-    let resp_bytes = match rustra::ffi::get_package()
-        .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
-        .and_then(|pkg| pkg.invoke_rkyv_v2(bytes))
-    {
-        Ok(bytes) => bytes,
-        Err(error) => rustra::encode_rkyv_v2_error(&error),
+    // panic guard — extern "C"(nounwind) 경계 직전의 최후 방어. 코어
+    // `Package::invoke_rkyv_v2` 가 핸들러 패닉을 internal 로 정규화하지만,
+    // 이 진입점 자체(패키지 조회 등) 에서 패닉이 새어나오면 호스트(RN) 프로세스가
+    // abort 된다. JSON/postcard FFI 의 `rustra::ffi::with_panic_guard` 와 동일한
+    // 계약으로 rkyv V2 에러 프레임(ok=0) 으로 변환한다.
+    let resp_bytes = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        rustra::ffi::get_package()
+            .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
+            .and_then(|pkg| pkg.invoke_rkyv_v2(bytes))
+    })) {
+        Ok(Ok(bytes)) => bytes,
+        Ok(Err(error)) => rustra::encode_rkyv_v2_error(&error),
+        Err(panic) => rustra::encode_rkyv_v2_error(&RustraError::internal(format!(
+            "panic in handler: {}",
+            panic_message(&panic)
+        ))),
     };
 
     alloc_response(resp_bytes, out_len)
+}
+
+/// panic payload 에서 메시지 추출 — 코어 `rustra::ffi::panic_message` 와 동일 구현
+/// (비공개라 여기 복제). 문자열이 아닌 payload 도 안전하게 처리한다.
+fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
+    if let Some(s) = panic.downcast_ref::<&'static str>() {
+        (*s).to_string()
+    } else if let Some(s) = panic.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "<non-string panic payload>".to_string()
+    }
 }
 
 /// rkyv V2 비동기 완료 콜백 — `rustra_ffi_invoke_async` 의 on_complete 와 동일 계약.

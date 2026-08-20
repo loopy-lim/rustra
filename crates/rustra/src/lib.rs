@@ -790,21 +790,36 @@ impl Package {
         // JS RustraCommandError("capability.denied") 로 재구성된다.
         self.capability_satisfied(&command)?;
 
-        with_state_context(&self.states, || {
-            // Fast path: use typed postcard binary handler (bypasses JSON Value entirely)
-            if let Some(ref handler) = command.rkyv_v2_handler {
-                return handler(payload);
-            }
+        // panic guard — 이 디스패치는 FFI 진입점(extern "C", nounwind) 에서 직접
+        // 호출된다. 핸들러 패닉이 그대로 unwinding 하면 경계에서 프로세스 abort 다
+        // (RN 호스트 크래시). JSON/postcard FFI 의 `ffi::with_panic_guard` 와 동일한
+        // 계약으로, 패닉을 `internal` 에러로 정규화해 rkyv V2 에러 프레임으로 반환한다.
+        // AssertUnwindSafe: 클로저가 캡처한 값(command/payload) 은 패닉 후 다시
+        // 사용되지 않는다 — 결과만 반환한다.
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            with_state_context(&self.states, || {
+                // Fast path: use typed postcard binary handler (bypasses JSON Value entirely)
+                if let Some(ref handler) = command.rkyv_v2_handler {
+                    return handler(payload);
+                }
 
-            // Fallback: legacy JSON-based path for commands without binary handler
-            if !command.rkyv_v2_tier3 && payload.len() < 8 {
-                return Err(RustraError::invalid_args("rkyv v2: payload too short"));
-            }
+                // Fallback: legacy JSON-based path for commands without binary handler
+                if !command.rkyv_v2_tier3 && payload.len() < 8 {
+                    return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+                }
 
-            let params = (command.rkyv_v2_decode)(payload)?;
-            let result = (command.invoke)(params)?;
-            Ok((command.rkyv_v2_encode_response)(&result))
-        })
+                let params = (command.rkyv_v2_decode)(payload)?;
+                let result = (command.invoke)(params)?;
+                Ok((command.rkyv_v2_encode_response)(&result))
+            })
+        }));
+        match outcome {
+            Ok(result) => result,
+            Err(panic) => Err(RustraError::internal(format!(
+                "panic in handler: {}",
+                crate::ffi::panic_message(&panic)
+            ))),
+        }
     }
 
     /// 런타임 mutation을 영구적으로 비활성화한다.
