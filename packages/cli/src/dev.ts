@@ -4,7 +4,7 @@
  * 기존 `rustra generate --watch` 는 schema.json 변경만 감시하는데 schema.json 은
  * Rust bin 을 실행해야 갱신된다. `rustra dev` 는 backend/src 변경을 감지해
  * (1) Rust bin → types/commands/contract/schema, (2) TS CLI → rkyv-codecs/registry
- * 를 순서대로 재실행한다 (dual-path — runner/template/codegen.sh 와 동일 계약).
+ * 를 순서대로 재실행한다 (dual-path codegen).
  */
 
 import { readdirSync, statSync, existsSync } from 'node:fs';

@@ -12,18 +12,9 @@ packages/*/dist/
 .npm-cache/
 *.node
 examples/calculator-napi/node_modules/
-/examples/lynx-calculator/node_modules/
-/examples/lynx-calculator/dist/
-/examples/lynx-calculator/package-lock.json
-/examples/lynx-tauri-spike/node_modules/
-/examples/lynx-tauri-spike/dist/
-/examples/lynx-tauri-spike/package-lock.json
-/examples/lynx-tauri-spike/src-tauri/gen/
-/examples/lynx-tauri-spike/SpikeApp.app/
 
 # Claude Code worktrees (local only)
 .claude/worktrees/
-examples/lynx-calculator/host/HostApp.app/
 
 # Native build outputs / caches (Gradle, Android, Expo, Xcode)
 **/android/build/
@@ -36,9 +27,6 @@ examples/lynx-calculator/host/HostApp.app/
 **/src/main/cpp/libs/
 
 # 로컬 네이티브 검증/벤치마크 산출물
-/examples/lynx-calculator/frame.raw
-/examples/lynx-calculator/ios/app/Resources/app.lynx.js
-/examples/lynx-calculator/android/app/src/main/assets/main.lynx.bundle
 /scripts/swift-ffi-bench/benchmark
 
 /packages/*/dist-test/

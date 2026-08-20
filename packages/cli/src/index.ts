@@ -251,7 +251,7 @@ Examples:
   rustra generate --watch --config rustra.json
   rustra generate --schema ./gen/schema.json --output ./src/generated --cpp-output ./ios
   rustra diff --old ./generated/schema.v1.json --new ./generated/schema.json
-  rustra dev --backend runner/template/backend --app runner/template/app
+  rustra dev --backend ./backend --app ./app
 `);
 }
 

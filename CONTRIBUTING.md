@@ -19,12 +19,11 @@ rustra에 기여하는 방법을 정리한다.
 git clone <repo-url> && cd rustra-bridge
 
 # Rust 빌드 확인
-# (lynx-tauri-spike 은 macOS + Lynx SDK 가 필요한 전용 스파이크 — 제외.
-#  --workspace 는 default-members 를 무시하므로 명시적 exclude 가 필요하다)
-cargo build --workspace --exclude rustra-lynx-tauri-spike
+# (--workspace 는 default-members 를 무시하므로 macOS 전용 tauri-calculator 까지 빌드된다)
+cargo build --workspace
 
 # 전체 테스트 실행
-cargo test --workspace --exclude rustra-lynx-tauri-spike
+cargo test --workspace
 npm run test:compat
 ```
 
@@ -55,7 +54,7 @@ Rust 코드를 변경하면:
 
 ```bash
 # Rust 테스트
-cargo test --workspace --exclude rustra-lynx-tauri-spike
+cargo test --workspace
 
 # 생성된 TS 갱신 (calculator 예시)
 cargo run -p rustra-calculator-example
@@ -115,7 +114,7 @@ npm run test:compat   ← 전체 통합 (PR 필수)
 ### Rust 테스트
 
 ```bash
-cargo test --workspace --exclude rustra-lynx-tauri-spike
+cargo test --workspace
 ```
 
 ### TypeScript 테스트
@@ -238,7 +237,7 @@ Tauri 앱이 `rustra_dispatch`에서 에러를 반환할 때:
 
 ### 릴리즈 체크리스트
 
-1. `cargo test --workspace --exclude rustra-lynx-tauri-spike` 통과
+1. `cargo test --workspace` 통과
 2. `npm run test:compat` 통과
 3. `Cargo.toml` 버전 갱신
 4. CHANGELOG 갱신 (있다면)

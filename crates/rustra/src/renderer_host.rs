@@ -9,13 +9,12 @@
 //! - **deny-by-default** — [`RendererCapabilities::default()`] 는 모든 optional
 //!   capability 를 `false` 로 둔다 (Runtime Authority 의 명령 deny-by-default 와
 //!   같은 철학). 각 renderer 가 명시적으로 opt-in 해야 켜진다.
-//! - **Tauri 를 모른다** — surface 연산만 있다. Tauri/Wry/Lynx/미래 renderer 모두
+//! - **host-neutral** — surface 연산만 있다. Tauri/Wry/미래 renderer 모두
 //!   동일 trait 의 구현체일 뿐이다.
 //!
-//! Phase A 에서 실제 `LynxHost` 구현체는 C++ host (`examples/lynx-calculator/host/`)
-//! 이다 — libLynx CAPI 로 `create_surface → load → send_message → destroy` 를
-//! 수행한다. Rust-native `LynxHost` (CAPI 를 wrap) 는 Phase B 에서 같은 trait 을
-//! 채운다.
+//! 구현체는 각 플랫폼 셸이 제공한다 — 예: 임베디드 renderer C++ host 가 C API 로
+//! `create_surface → load → send_message → destroy` 를 수행하고, Rust wrapper 가
+//! 같은 trait 을 채운다.
 
 use std::fmt;
 
@@ -57,15 +56,15 @@ impl Default for SurfaceOptions {
 ///
 /// **deny-by-default:** [`Default`] 구현은 모든 필드를 `false` 로 둔다. webview 가
 /// 아닌 present-only renderer (순수 RGBA blit) 는 아무것도 켜지 않은 채로 시작하며,
-/// BTS JS eval 이 가능한 Lynx 같은 renderer 만 `evaluate_script` 를 opt-in 한다.
+/// JS eval 이 가능한 renderer 만 `evaluate_script` 를 opt-in 한다.
 /// core 는 이 플래그 집합으로만 renderer 의 성격을 판단한다.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RendererCapabilities {
-    /// renderer 의 JS/BTS 런타임에 문자열을 eval 할 수 있는지.
-    /// Lynx: `true` (runtime_ready 훅에서 BTS JS eval 가능).
+    /// renderer 의 JS 런타임에 문자열을 eval 할 수 있는지.
+    /// JS 런타임을 가진 renderer: `true`.
     /// present-only renderer: `false`.
     pub evaluate_script: bool,
-    /// URL navigation 지원 여부 (기본 `false`; Lynx 는 navigate 하지 않는다).
+    /// URL navigation 지원 여부 (기본 `false`; present-only renderer 는 navigate 하지 않는다).
     pub navigation: bool,
     /// 쿠키 저장소 접근 여부 (기본 `false`).
     pub cookies: bool,
@@ -109,15 +108,15 @@ impl HostMessage {
 /// renderer-neutral host 추상 (design §5).
 ///
 /// 각 renderer 는 associated type 으로 자기만의 surface/bundle 타입을 가져온다.
-/// `LynxHost` — `Surface = LynxSurface`, `Bundle = LynxBundle` (libLynx CAPI).
-/// `WryHost` — `Surface = ...`, `Bundle = WebUrl` (back-compat webview 경로).
+/// 임베디드 renderer host — `Surface = 네이티브 뷰 핸들`, `Bundle = 바이트` (C API).
+/// webview host — `Surface = ...`, `Bundle = WebUrl` (back-compat webview 경로).
 ///
 /// core 는 이 trait 의 메서드 시그니처(=`surface 연산`)만 알며, webview 특정
 /// 개념(`eval_script` 등)은 [`RendererCapabilities`] 의 optional 플래그로 만난다.
 pub trait RendererHost: Send + 'static {
-    /// renderer 가 다루는 surface 핸들 (예: Lynx view, NSView+layer, webview).
+    /// renderer 가 다루는 surface 핸들 (예: 네이티브 뷰, NSView+layer, webview).
     type Surface;
-    /// load 할 수 있는 bundle/자원 (예: `.lynx.bundle` 바이트, URL).
+    /// load 할 수 있는 bundle/자원 (예: 번들 바이트, URL).
     type Bundle;
 
     /// 주어진 옵션으로 새 surface 를 만든다.
@@ -169,8 +168,8 @@ impl fmt::Display for MessageKind {
 /// surface 가 이미 destroy 된 뒤의 연산을 시도했을 때의 에러.
 ///
 /// 모든 `RendererHost` 구현체가 동일한 code(`renderer.surface_destroyed`)를 쓰도록
-/// 하는 shared helper. 현재는 mock 테스트만 호출하지만, Rust-native `LynxHost` 구현
-/// 시에도 같은 에러를 낸다.
+/// 하는 shared helper. 현재는 mock 테스트만 호출하지만, 모든 Rust-native host
+/// 구현도 같은 에러를 낸다.
 #[allow(dead_code)]
 pub(crate) fn surface_destroyed(op: &str) -> RustraError {
     RustraError::custom(
@@ -316,7 +315,7 @@ mod tests {
             scale: 2.0,
         };
         let surface = host.create_surface(opts).unwrap();
-        host.load(&surface, MockBundle(b"LYNX-BUNDLE".to_vec()))
+        host.load(&surface, MockBundle(b"TEST-BUNDLE".to_vec()))
             .unwrap();
         host.send_message(
             &surface,
@@ -413,14 +412,14 @@ mod tests {
             !host_supports_eval(&present_only),
             "present-only renderer must NOT be asked to eval JS"
         );
-        // Lynx-like renderer: BTS JS eval 가능 → evaluate_script = true.
-        let lynx_like = MockHost::new(RendererCapabilities {
+        // JS-capable renderer: 런타임 eval 가능 → evaluate_script = true.
+        let js_capable = MockHost::new(RendererCapabilities {
             evaluate_script: true,
             ..Default::default()
         });
         assert!(
-            host_supports_eval(&lynx_like),
-            "Lynx-like renderer (runtime_ready BTS eval) must report eval support"
+            host_supports_eval(&js_capable),
+            "JS-capable renderer must report eval support"
         );
     }
 

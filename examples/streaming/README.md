@@ -51,8 +51,6 @@ const events = package.eventBus().takePendingEvents();
 
 ## 다른 플랫폼 적용
 
-- **Lynx**: BTS `post_task_to_runtime` + `__rustraDeliver` (스파이크 검증 패턴,
-  `docs/plans/2026-08-10-rustra-lynx-runtime-design.md` §이벤트 푸시)
 - **Tauri**: 폴링 타이머 → `app.emit()`
 - **RN**: 폴링 → `DeviceEventEmitter`
 

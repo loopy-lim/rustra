@@ -50,16 +50,15 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
       # --workspace 테스트는 rustra-tauri-calculator(gtk/webkit 필요, apt step 이 Linux 에서만
       # 설치)까지 빌드하므로 Linux 에서만 전체 워크스페이스를 돌린다. macOS/Windows 는 코어 크레이트만.
-      # lynx-tauri-spike 은 자체 verify.sh 게이트(macOS 전제)로 검증.
       - name: Test (Linux — full workspace)
         if: runner.os == 'Linux'
-        run: cargo test --workspace --exclude rustra-lynx-tauri-spike
+        run: cargo test --workspace
       # Release 프로파일 테스트 — debug 빌드에서만 나타나지 않는 최적화/릴리즈
       # 전용 경로(#[cfg(debug_assertions)] 등) 회귀를 잡는다 (감사 지적: CI가
       # production 게이트보다 약함).
       - name: Test release (Linux — full workspace)
         if: runner.os == 'Linux'
-        run: cargo test --workspace --exclude rustra-lynx-tauri-spike --release
+        run: cargo test --workspace --release
       - name: Test (macOS/Windows — core crates)
         if: runner.os != 'Linux'
         shell: bash
