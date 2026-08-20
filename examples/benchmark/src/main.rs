@@ -543,7 +543,19 @@ fn current_rss_bytes() -> Option<u64> {
             None
         }
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
+    {
+        // /proc/self/statm 의 두 번째 필드가 RSS 페이지 수 — 페이지 크기를 곱해 바이트로.
+        // statm [0]=VSS [1]=RSS [2]=shared … (proc(5) 참고).
+        let Ok(statm) = std::fs::read_to_string("/proc/self/statm") else {
+            return None;
+        };
+        let fields: Vec<&str> = statm.split_whitespace().collect();
+        let rss_pages: u64 = fields.get(1)?.parse().ok()?;
+        let page_size = 4096u64; // 대부분의 Linux 페이지 크기 — sysconf 없이 고정.
+        Some(rss_pages * page_size)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     None
 }
 
