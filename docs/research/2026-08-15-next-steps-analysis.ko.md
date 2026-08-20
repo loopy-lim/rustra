@@ -3,7 +3,7 @@ date: 2026-08-15T22:27:32+09:00
 researcher: claude (loopy 세션)
 git_commit: f187c2774ce2f9e286492ba627e27a4b5910bd00
 branch: main
-repository: rustra-bridge (remote: loopy-lim/hostra)
+repository: rustra-bridge (remote: loopy-lim/rustra)
 topic: '다음 작업 후보 도출 — 갭 클로저 이후 상태, 발행(publish) 준비도, 미완료 항목 전수 조사'
 tags: [research, codebase, publish, npm, crates-io, windows, masterplan, next-steps]
 status: complete
@@ -16,7 +16,7 @@ last_updated_by: claude
 **날짜**: 2026-08-15T22:27:32+09:00
 **Git Commit**: f187c277
 **Branch**: main
-**Repository**: rustra-bridge (remote: loopy-lim/hostra)
+**Repository**: rustra-bridge (remote: loopy-lim/rustra)
 
 ## 연구 질문
 
@@ -31,9 +31,9 @@ last_updated_by: claude
   cargo 146/0 · test:packages 24/24 · test:ts:node 32/32). 유일 잔존: **계획 문서의 완료
   기준 9개 체크박스가 미체크**이고 impl/결과 기록 문서가 없다.
 - **발행(publish) 준비가 진행 중**: 미커밋 변경 8개 package.json(버전 0.1.1, repository URL
-  rustra→hostra, publishConfig.access public, directory 필드 수정). git remote가 이미
-  `loopy-lim/hostra` — 저장소 이름 변경이 반영 중. 단 **npm 패키지명은 여전히 @rustra/***
-  로 불일치. 발행 전 필수: cli/types README, dist 빌드(dist는 gitignore), crates.io 이름
+  수정, publishConfig.access public, directory 필드 수정).
+  (2026-08-20 갱신: hostra 개명은 철회되어 `loopy-lim/rustra` 유지, npm 스코프도 `@rustra/*` 유지)
+  발행 전 필수: cli/types README, dist 빌드(dist는 gitignore), crates.io 이름
   선점 확인, examples 우발 발행 방지.
 - **기술적 하드 블로커는 Windows P1(FML PE 심볼) 하나뿐**이고 이는 Windows 머신 의존.
   본 머신에서 가능한 작업은 풍부: 발행 파이프라인, 문서 부채, invokeAsync 구현(설계만
@@ -65,7 +65,7 @@ Task 1~7 결과물 전부 실재 확인:
 ### 2. 발행(publish) 준비 상태
 
 **미커밋 변경** (8개 package.json): 버전 0.1.0→0.1.1, repository URL
-`loopy-lim/rustra` → `loopy-lim/hostra` (+ directory 필드 `"packages/"` → 정확한 하위경로로
+(과거 일시적 hostra 개명은 철회 — 현재 `loopy-lim/rustra`) 및 directory 필드 `"packages/"` → 정확한 하위경로로
 수정, types에는 신규 추가), `@rustra/*` 7개에 `publishConfig.access: public`, 내부 의존
 `@rustra/types ^0.1.1`. 루트는 `private: true` 유지.
 
@@ -77,7 +77,7 @@ Task 1~7 결과물 전부 실재 확인:
 - **README 부재**: `packages/cli`(bin `rustra` + 5개 export 보유), `packages/types`.
 - changesets 도입됨(`.changeset/config.json`, access public, baseBranch main) — 단
   changeset 파일 0개, 0.1.1은 수동 범프.
-- **이름 불일치**: 패키지는 `@rustra/*`, 저장소는 hostra. 스코프 재결정 필요.
+- (해소됨) 이름 불일치 — hostra 개명 철회로 `@rustra/*` 스코프와 저장소명 rustra 가 일치.
 
 **crates.io (crates/rustra, crates/rustra-macros)**:
 
@@ -92,7 +92,7 @@ Task 1~7 결과물 전부 실재 확인:
 **CI/인프라**: `.github/workflows/`에 ci.yml 단 하나. release.yml·bench.yml 부재
 (masterplan 잔여). CHANGELOG.md 부재. LICENSE MIT.
 
-**저장소 정체**: `git remote -v` = `loopy-lim/hostra` (gh repo view는 아직 rustra 응답 —
+**저장소 정체**: `loopy-lim/rustra` (과거 일시적 hostra 개명은 철회 —
 이름 변경 전환 중으로 보임).
 
 ### 3. 미완료 항목 카탈로그 (08-15 기준 최종)
@@ -113,7 +113,7 @@ Task 1~7 결과물 전부 실재 확인:
 ### 트랙 A — 발행(publish) 파이프라인 [미커밋 변경의 자연스러운 연장선, 최고 우선]
 
 1. 미커밋 package.json 8개 커밋.
-2. `@rustra/*` vs `@hostra/*` 스코프 결정 (현재 불일치).
+2. (해소됨) 스코프는 `@rustra/*` 로 확정 — hostra 개명 철회.
 3. `packages/cli/README.md`, `packages/types/README.md` 작성.
 4. crates.io `rustra` 이름 선점 확인 + `cargo publish --dry-run`.
 5. examples 6개 workspace 멤버에 `publish = false` (우발 발행 방지).
@@ -166,7 +166,7 @@ Task 1~7 결과물 전부 실재 확인:
 
 ## 미해결 질문
 
-- npm 스코프: `@rustra/*` 유지 vs `@hostra/*` 전환 (패키지명 변경은 breaking).
+- npm 스코프: `@rustra/*` 유지 확정 (hostra 전환은 철회됨).
 - crates.io `rustra` 이름 가용성 (조회 필요).
 - RN 트랙 폐기 여부 — B1 체크리스트 24항목의 운명.
 - 런타임 verify 스크립트의 CI 통합 방식 (시뮬레이터/에뮬레이터 CI 실행 가능성).
