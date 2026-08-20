@@ -1,5 +1,8 @@
 # 미구현 항목 전수 마감(Unimplemented Closure) 구현 계획
 
+> **상태: 구현 완료 (2026-08-20)** — 브랜치 `feat/unimplemented-closure`, 커밋 8개.
+> 검증: cargo 235 pass / npm 전 suite green / clippy·prettier clean. 발행 대기 changeset 1건.
+
 ## 개요
 
 전수조사(26건)로 확인된 미구현/결함을 8개 워크스트림 → 6개 Phase로 마감한다. 최우선은 2개 HIGH 결함(코드젠 무음 필드 삭제, rust-api-guide 허위 서술)이며, 이후 온보딩 완결(Node transport/매트릭스/레퍼런스 앱), 취소·의미론 완성, 고아 추상 정리, 성능 후속, Tier 3 바이너리 확장 순서다.
