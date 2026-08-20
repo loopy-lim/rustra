@@ -1497,6 +1497,7 @@ mod runtime_registry_tests {
     // abort 다. 관용 처리로 과거 패닉 이후에도 앱이 invoke 가능해야 한다.
 
     #[test]
+    #[cfg(debug_assertions)]
     fn poisoned_registry_lock_still_serves_invokes() {
         let pkg = empty_pkg();
         pkg.register("c1", c1).unwrap();
@@ -1511,6 +1512,24 @@ mod runtime_registry_tests {
         let id = id_of(&pkg, "c1");
         assert_eq!(pkg.resolve_command_id(id).as_deref(), Some("c1"));
         assert!(pkg.live_schema()["commands"].as_array().is_some());
+    }
+
+    /// release 빌드 동등 검증 — `build()` 산출 패키지는 동결 상태지만 포이즈닝
+    /// 관용 자체는 동작해야 한다. 등록은 불가(동결)하므로 빌더로 명령을 넣은
+    /// 뒤(build 시점엔 미동결) 포이즈닝 후 invoke 가능성만 확인한다.
+    /// (인라인 테스트에선 build! 매크로를 못 쓴다 — 위 NOTE 참조.)
+    #[test]
+    #[cfg(not(debug_assertions))]
+    fn poisoned_registry_lock_still_serves_invokes_release() {
+        let pkg = Package::builder("test.poison.release")
+            .command("c1", c1)
+            .build();
+        let _ = std::panic::catch_unwind(|| {
+            let _guard = pkg.state.write().unwrap();
+            panic!("intentional poison");
+        });
+        let out: TestOut = pkg.invoke("c1", TestIn { _v: 0 }).unwrap();
+        assert_eq!(out.v, 1);
     }
 
     #[test]
