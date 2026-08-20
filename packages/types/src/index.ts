@@ -372,9 +372,18 @@ export type RkyvV2SchemaNative = {
    * `invokeTypedBatch` 로 폴백한다.
    */
   invokeTypedBatchById?(cmdIds: number[], args: unknown[]): unknown[];
-  /** (T1) 취소 전파 가능한 비동기 invoke — invocation id 를 반환하고, 결과는 콜백으로. */
+  /**
+   * (T1) 취소 전파 가능한 비동기 invoke — invocation id 를 반환하고, 결과는 콜백으로.
+   *
+   * **호스트 구현 계약**: payload 는 `invokeRkyvV2` 와 동일한 rkyv V2 요청
+   * 프레임(정적 postcard 또는 Tier 3 JSON-in-binary)이고, 응답도 동일한 응답
+   * 프레임을 `onDone` 으로 전달한다. 반환된 invocation id 로 `invokeCancel` 을
+   * 호출하면 Rust 측 취소 체크포인트까지 전파된다. 이 모듈(native adapter)을
+   * 구현하는 호스트는 워커/비동기 스레드에서 invoke 를 실행하고, 취소 시
+   * `cancelled` 에러 프레임을 콜백해야 한다.
+   */
   invokeAsync?(payload: ArrayBuffer, onDone: (response: ArrayBuffer) => void): number;
-  /** (T1) 진행 중 async 호출 취소. */
+  /** (T1) 진행 중 async 호출 취소 — `invokeAsync` 가 반환한 invocation id 를 넘긴다. */
   invokeCancel?(invocationId: number): boolean;
 };
 

@@ -276,6 +276,7 @@ using InvokeFn = uint8_t*(*)(const uint8_t*, size_t, size_t*);
 
 // live schema FFI (from rustra crate)
 extern "C" uint8_t* rustra_ffi_get_schema(size_t* out_len);
+extern "C" uint8_t* rustra_ffi_contract_hash(size_t* out_len);
 
 RustraHostObject::RustraHostObject(Runtime& rt) {
   auto makeInvoke = [&](const char* name, InvokeFn fn, const char* err) {
@@ -348,6 +349,27 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         return returnValue;
       });
     cache_["getSchema"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+
+  // getContractHash: (F5) native 빌드 계약 해시 → rustra_ffi_contract_hash.
+  // 엔진 옵션 contractHash 설정 시 JS 가 생성된 GENERATED_CONTRACT_HASH 와
+  // 비교해 스키마 드리프트(contract.mismatch)를 검증한다.
+  {
+    auto propNameId = PropNameID::forAscii(rt, "getContractHash");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 0,
+      [](Runtime& rt, const Value&, const Value*, size_t) -> Value {
+        size_t out_len = 0;
+        uint8_t* data = rustra_ffi_contract_hash(&out_len);
+        if (!data) {
+          throw JSError(rt, "RustraJSI: getContractHash returned null");
+        }
+        auto returnValue = createArrayBuffer(rt, data, out_len);
+        rustra_ffi_free(data, out_len);
+        return returnValue;
+      });
+    cache_["getContractHash"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
 

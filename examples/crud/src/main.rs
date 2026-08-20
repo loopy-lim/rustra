@@ -15,7 +15,11 @@ fn main() -> rustra::Result<()> {
 
     let package = crud_package();
     let result = package.invoke_json("listItems", json!({}))?;
-    let count = result.get("items").and_then(Value::as_array).map(Vec::len).unwrap_or(0);
+    let count = result
+        .get("items")
+        .and_then(Value::as_array)
+        .map(Vec::len)
+        .unwrap_or(0);
     println!("crud: {count} item(s)");
     Ok(())
 }

@@ -5,14 +5,14 @@
 
 ## 매트릭스
 
-| 기능 | Node (`createNodeEngine`) | Bun (`createBunEngine`) | Tauri (`createTauriEngine`) | RN (`createReactNativeEngine`) | RN (`createRkyvV2Engine`) |
-| --- | --- | --- | --- | --- | --- |
-| `options.signal` (사전 abort) | ✅ 즉시 `cancelled` | ✅ 즉시 `cancelled` | ✅ 즉시 `cancelled` | ✅ 즉시 `cancelled` | ✅ 즉시 `cancelled` |
-| `options.signal` (진행 중 취소) | ❌ `cancel.unsupported` throw | ❌ `cancel.unsupported` throw | ❌ `cancel.unsupported` throw | ⚠️ 얕은 취소 (JS 프라미스만 거부) | ✅ **전파** — 네이티브가 `invokeAsync`/`invokeCancel` 노출 시 Rust 체크포인트까지 |
-| `invokeBatch` | ❌ throw (`Configured engine does not support invokeBatch.`) | ❌ throw | ❌ throw | ❌ throw | ✅ 정적 명령 단일 횡단 (`invokeTypedBatch[ById]`), signal 항목 포함 시 항목별 라우팅 |
-| 배치 항목별 취소 | — | — | — | — | ⚠️ 단일 횡단 배치는 취소 미지원 — signal 항목이 있으면 자동으로 항목별 `invoke`(전파) 경로로 라우팅 |
-| 이벤트 (`subscribeEvent`/`onEvent`) | ❌ 미지원 | ❌ 미지원 | ⚠️ Rust 측 `register_with_events` 지원, JS 패키지 구독 API 없음 | ❌ | ✅ `subscribeEvent`/`drainEvents` (CallInvoker 자동 drain) |
-| rkyv V2 바이너리 (`createRkyvV2Engine`) | ✅ (napi/FFI 네이티브 필요) | ✅ (FFI 네이티브 필요) | ✅ (`rustra_dispatch` 바이너리 경로) | — | ✅ JSI |
+| 기능                                    | Node (`createNodeEngine`)                                    | Bun (`createBunEngine`)       | Tauri (`createTauriEngine`)                                     | RN (`createReactNativeEngine`)    | RN (`createRkyvV2Engine`)                                                                           |
+| --------------------------------------- | ------------------------------------------------------------ | ----------------------------- | --------------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `options.signal` (사전 abort)           | ✅ 즉시 `cancelled`                                          | ✅ 즉시 `cancelled`           | ✅ 즉시 `cancelled`                                             | ✅ 즉시 `cancelled`               | ✅ 즉시 `cancelled`                                                                                 |
+| `options.signal` (진행 중 취소)         | ❌ `cancel.unsupported` throw                                | ❌ `cancel.unsupported` throw | ❌ `cancel.unsupported` throw                                   | ⚠️ 얕은 취소 (JS 프라미스만 거부) | ✅ **전파** — 네이티브가 `invokeAsync`/`invokeCancel` 노출 시 Rust 체크포인트까지                   |
+| `invokeBatch`                           | ❌ throw (`Configured engine does not support invokeBatch.`) | ❌ throw                      | ❌ throw                                                        | ❌ throw                          | ✅ 정적 명령 단일 횡단 (`invokeTypedBatch[ById]`), signal 항목 포함 시 항목별 라우팅                |
+| 배치 항목별 취소                        | —                                                            | —                             | —                                                               | —                                 | ⚠️ 단일 횡단 배치는 취소 미지원 — signal 항목이 있으면 자동으로 항목별 `invoke`(전파) 경로로 라우팅 |
+| 이벤트 (`subscribeEvent`/`onEvent`)     | ❌ 미지원                                                    | ❌ 미지원                     | ⚠️ Rust 측 `register_with_events` 지원, JS 패키지 구독 API 없음 | ❌                                | ✅ `subscribeEvent`/`drainEvents` (CallInvoker 자동 drain)                                          |
+| rkyv V2 바이너리 (`createRkyvV2Engine`) | ✅ (napi/FFI 네이티브 필요)                                  | ✅ (FFI 네이티브 필요)        | ✅ (`rustra_dispatch` 바이너리 경로)                            | —                                 | ✅ JSI                                                                                              |
 
 ## 시그널 시맨틱 상세
 

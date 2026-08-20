@@ -4,12 +4,11 @@
 //!
 //! 1. **음수 경로 고정 (실행 가능)** — huge payload / zero-length / postcard 에러 프레임.
 //!    `rustra::ffi` 의 extern "C" 엔트리를 거쳐 실제 응답을 JSON/postcard 로 파싱해
-//!    현재 거동을 단언한다. Phase 1에서 결함을 수정하면 일부 단언이 전환된다.
+//!    현재 거동을 단언한다.
 //!
-//! 2. **UB/abort 결함 가시화 (`#[ignore]`)** — F1(패닉 abort), F2(double-free/wrong-len UB),
-//!    F8(get_schema null out_len deref UB)는 실행 시 프로세스를 죽이므로 일반 `#[test]`로
-//!    잡을 수 없다. 명시적 `#[ignore]` + TODO 본문으로 "알고 있는 깨진 것"으로 표시하고,
-//!    Phase 1에서 구현과 동시에 본문을 채운 뒤 ignore를 제거한다.
+//! 2. **UB/abort 결함 방어 (실행 가능)** — F1(패닉 abort catch_unwind), F2(free 가드),
+//!    F8(get_schema null out_len 가드)는 Phase 1 에서 구현·수정되어 현재는 모두
+//!    활성 테스트로 전환된 상태다 (과거 `#[ignore]` + TODO 패턴에서 이관).
 //!
 //! 모든 테스트는 같은 패키지("trust.baseline")를 `register_ffi` 한다 — `register_ffi`는
 //! `OnceLock` 기반 idempotent 이므로 병렬 실행에서도 안전하다.
@@ -125,7 +124,7 @@ fn huge_payload_rejected_with_size_limit_error() {
     let err = resp["error"]
         .as_str()
         .expect("rejected payload must carry an error message");
-    // (T3 후속) 에러 코드 통일 — 평문 "payload exceeds size limit" 대신
+    // 에러 코드 통일(완료) — 평문 "payload exceeds size limit" 대신
     // `payload.too_large: payload NB exceeds max payload LB` 형태.
     assert!(
         err.contains("payload.too_large"),

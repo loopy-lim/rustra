@@ -747,7 +747,7 @@ impl Package {
     /// Tier 1/2 commands require at least 8 bytes (fixed header).
     /// Tier 3 commands require at least 2 bytes (command_id only, rest is JSON).
     ///
-    /// (T3 후속) 크기 게이트 — JSON/postcard FFI 경로와 동일한 동적 한도
+    /// 크기 게이트(구현 완료) — JSON/postcard FFI 경로와 동일한 동적 한도
     /// ([`ffi::max_payload_bytes`]) 를 초과하면 `payload.too_large` 를 반환한다.
     /// 소비 크레이트 FFI(calculator/template)와 C++ typed fast path 가 모두
     /// 이 함수를 통과하므로 여기가 rkyv V2 와이어의 단일 검사 지점이다.

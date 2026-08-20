@@ -21,7 +21,15 @@ import { App } from './App.js';
 import { listItems, createItem } from '../../crud/generated/commands.js';
 
 // 컴파일 산출 위치(dist/examples/reference-app/src)에서 저장소 루트까지 6단계.
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..', '..');
+const repoRoot = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  '..',
+  '..',
+  '..',
+  '..',
+);
 
 export function makeEngine(): EngineClient {
   const transport = createNodeProcessTransport({

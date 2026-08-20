@@ -105,7 +105,7 @@ static MAX_PAYLOAD_BYTES: std::sync::atomic::AtomicUsize =
 
 /// 현재 페이로드 크기 한도 (invoke 경로의 크기 가드가 읽는 단일 지점).
 ///
-/// (T3 후속) 공개 판독기 — `Package::invoke_rkyv_v2` 등 FFI 엔트리가 직접
+/// 공개 판독기(구현 완료) — `Package::invoke_rkyv_v2` 등 FFI 엔트리가 직접
 /// 노출하지 않는 경로(rkyv V2 와이어)도 동일한 동적 한도를 읽어 게이트한다.
 /// `rustra_ffi_get_max_payload` FFI 심볼과 같은 값을 반환한다.
 pub fn max_payload_bytes() -> usize {
