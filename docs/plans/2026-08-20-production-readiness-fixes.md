@@ -28,6 +28,7 @@
 ### Task 1: RN 브릿지 makeInvoke deleter 테이블 (메모리 누수 + OOB 읽기 수정)
 
 **Files:**
+
 - Modify: `examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSIBridge.cpp:282-321`
 - Test: `examples/react-native-calculator/modules/rustra-jsi/ios/run-cpp-codec-tests.sh`에 컴파일만 확인(브릿지 전체는 shim 부족 — 컴파일 게이트로 검증)
 
@@ -139,6 +140,7 @@ git commit --amend --no-edit  # lefthook prettier 재스테이징 (필요 시)
 ### Task 2: calculator rkyv V2 sync 진입점 panic guard
 
 **Files:**
+
 - Modify: `examples/calculator/src/lib.rs:1099-1119` (`rustra_calculator_invoke_rkyv_v2`)
 - Test: `examples/calculator/tests/`에 신규 파일
 
@@ -382,7 +384,7 @@ fn handler_panic_is_contained_as_internal_error() {
 **Step 6: 전체 게이트 실행**
 
 ```bash
-cargo test -p rustra -p rustra-calculator-example 2>&1 | grep -E "test result" 
+cargo test -p rustra -p rustra-calculator-example 2>&1 | grep -E "test result"
 # 기대: 전부 ok
 cargo test -p rustra --test rkyv_v2_panic 2>&1 | tail -3
 # 기대: 1 passed
@@ -402,6 +404,7 @@ git commit -m "fix(ffi): rkyv V2 디스패치 패닉 가드 — 핸들러 패닉
 ### Task 3: async 워커 panic guard + cancel 레지스트리 누수 방지
 
 **Files:**
+
 - Modify: `examples/calculator/src/lib.rs:1139-1179` (`rustra_calculator_invoke_rkyv_v2_async`)
 - Test: `examples/calculator/tests/rkyv_v2_panic_guard.rs` (Task 2 파일에 추가)
 
@@ -542,6 +545,7 @@ git commit -m "fix(ffi): async 워커 패닉 가드 + 취소 레지스트리 완
 ### Task 4: JSI extractBytes 클램프 (OOB 읽기 방어)
 
 **Files:**
+
 - Modify: `examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSIBridge.cpp:48-65`
 
 **Step 1: 클램프 구현**
@@ -590,6 +594,7 @@ git commit -m "fix(rn): extractBytes TypedArray 클램프 — duck-typed byteOff
 ### Task 5: InvokeOptions timeout 옵션 (JS hang 탈출)
 
 **Files:**
+
 - Modify: `packages/types/src/index.ts` (InvokeOptions + createRkyvV2Engine + 타임아웃 레이스)
 - Test: `packages/types/src/index.test.ts`에 추가
 
@@ -617,7 +622,10 @@ test('invoke rejects with transport.timeout when engine never settles', async ()
 test('invoke timeout races with late success — late result ignored, no unhandled rejection', async () => {
   let resolveLate!: (v: unknown) => void;
   const slow: EngineClient = {
-    invoke: () => new Promise((res) => { resolveLate = res; }),
+    invoke: () =>
+      new Promise((res) => {
+        resolveLate = res;
+      }),
   };
   await assert.rejects(
     invokeWithTimeout(slow, 'x', undefined, { timeoutMs: 30 }),
@@ -677,11 +685,13 @@ export async function invokeWithTimeout<T>(
       p,
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
-          reject(new RustraCommandError(
-            'transport.timeout',
-            `invoke("${command}") timed out after ${ms}ms`,
-            true,
-          ));
+          reject(
+            new RustraCommandError(
+              'transport.timeout',
+              `invoke("${command}") timed out after ${ms}ms`,
+              true,
+            ),
+          );
         }, ms);
       }),
     ]);
@@ -714,11 +724,13 @@ export async function invokeWithTimeout<T>(
       p,
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
-          reject(new RustraCommandError(
-            'transport.timeout',
-            `invoke("${command}") timed out after ${ms}ms`,
-            true,
-          ));
+          reject(
+            new RustraCommandError(
+              'transport.timeout',
+              `invoke("${command}") timed out after ${ms}ms`,
+              true,
+            ),
+          );
         }, ms);
       }),
     ]);
@@ -733,9 +745,9 @@ export async function invokeWithTimeout<T>(
 
 ```ts
 // 기존:
-  return _engine.invoke<T>(command, args, options);
+return _engine.invoke<T>(command, args, options);
 // 변경:
-  return invokeWithTimeout(_engine, command, args, options) as Promise<T>;
+return invokeWithTimeout(_engine, command, args, options) as Promise<T>;
 ```
 
 타입 정합에 유의(`invokeWithTimeout` 제네릭). `invokeBatch`(271행)에도 동일 적용.
@@ -761,6 +773,7 @@ git commit -m "feat(types): InvokeOptions.timeoutMs — transport.timeout(retrya
 ### Task 6: 코드젠 식별자 화이트리스트
 
 **Files:**
+
 - Modify: `packages/cli/src/index.ts:486-510` (`parsePackageSchema`)
 - Test: `packages/cli/src/generate.test.ts`에 추가
 
@@ -777,9 +790,12 @@ test('parsePackageSchema rejects hostile identifiers', () => {
     schemaVersion: 1,
     commands: [
       {
-        name: 'addNumbers', commandId: 1,
-        inputType: 'AddInput', outputType: 'AddOutput',
-        inputSchema: { type: 'object' }, outputSchema: { type: 'object' },
+        name: 'addNumbers',
+        commandId: 1,
+        inputType: 'AddInput',
+        outputType: 'AddOutput',
+        inputSchema: { type: 'object' },
+        outputSchema: { type: 'object' },
       },
     ],
   };
@@ -795,10 +811,11 @@ test('parsePackageSchema rejects hostile identifiers', () => {
   }
   // 정의 키(definitions)도 검증 대상
   assert.throws(
-    () => parsePackageSchema({
-      ...base,
-      commands: [{ ...base.commands[0], definitions: { 'bad key!': { type: 'object' } } }],
-    }),
+    () =>
+      parsePackageSchema({
+        ...base,
+        commands: [{ ...base.commands[0], definitions: { 'bad key!': { type: 'object' } } }],
+      }),
     /identifier/,
   );
 });
@@ -822,7 +839,9 @@ const TS_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
 function assertIdentifier(value: string, where: string): void {
   if (!TS_IDENTIFIER.test(value)) {
-    throw new Error(`Invalid schema: ${where} must be a plain identifier, got: ${JSON.stringify(value)}`);
+    throw new Error(
+      `Invalid schema: ${where} must be a plain identifier, got: ${JSON.stringify(value)}`,
+    );
   }
 }
 ```
@@ -830,14 +849,14 @@ function assertIdentifier(value: string, where: string): void {
 `parsePackageSchema` 루프에 삽입 (기존 검사 뒤):
 
 ```ts
-    assertIdentifier(cmd.name, `commands[${i}].name`);
-    if (cmd.inputType !== '()') assertIdentifier(cmd.inputType, `commands[${i}].inputType`);
-    if (cmd.outputType !== '()') assertIdentifier(cmd.outputType, `commands[${i}].outputType`);
-    if (cmd.definitions) {
-      for (const key of Object.keys(cmd.definitions)) {
-        assertIdentifier(key, `commands[${i}].definitions key`);
-      }
-    }
+assertIdentifier(cmd.name, `commands[${i}].name`);
+if (cmd.inputType !== '()') assertIdentifier(cmd.inputType, `commands[${i}].inputType`);
+if (cmd.outputType !== '()') assertIdentifier(cmd.outputType, `commands[${i}].outputType`);
+if (cmd.definitions) {
+  for (const key of Object.keys(cmd.definitions)) {
+    assertIdentifier(key, `commands[${i}].definitions key`);
+  }
+}
 ```
 
 `parsePackageSchema`를 export 목록(29-30행 부근)에 추가. 또한 생성 코드에 삽입되는 `command.name` 문자열 리터럴(generate.ts:104 `'${command.name}'`)은 홑따옴표 이스케이프 처리: `command.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")` — 식별자 검사를 통과하면 불필요하므로 생략 가능(화이트리스트가 더 강함).
@@ -862,6 +881,7 @@ git commit -m "fix(cli): 스키마 식별자 화이트리스트 — 생성 TS �
 ### Task 7: 버전 드리프트 수정 — 단일 소스 주입
 
 **Files:**
+
 - Modify: `packages/cli/src/index.ts:130-145, 190-210` (init 템플릿)
 - Modify: `README.md:21,246`, `docs/getting-started.md:27`
 - Modify: `package.json` (루트 version), `examples/reference-app/package.json`
@@ -953,6 +973,7 @@ git commit -m "fix(version): init 템플릿 버전 단일 소스 주입 + 문서
 ### Task 8: napi 에러 코드 보존
 
 **Files:**
+
 - Modify: `examples/calculator-napi/src/lib.rs:5-20`
 - Test: `examples/calculator/ts/transport-bench.test.ts` 옆에 신규 (또는 payload-robustness.test.ts에 추가)
 
@@ -962,7 +983,10 @@ git commit -m "fix(version): init 템플릿 버전 단일 소스 주입 + 문서
 
 ```ts
 test('napi: typed error code crosses the wire (capability.denied)', async () => {
-  const napiPath = join(ROOT, `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`);
+  const napiPath = join(
+    ROOT,
+    `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`,
+  );
   if (!existsSync(napiPath)) return; // 바이너리 없으면 스킵 (CI: build:napi 사전 빌드)
   const native = createRequire(import.meta.url)(napiPath) as {
     rustraInvoke: (cmd: string, args: string | undefined) => string;
@@ -988,24 +1012,28 @@ Run: `npm run build:napi && npx tsc -p examples/calculator/tsconfig.json && node
 Expected: FAIL — 현재 `e.to_string()`은 `"command.not_found: ..."`(Display)라 **통과할 수도 있다**. Display가 이미 `code: message` 형식이므로(자체 파서 `parseRustraErrorString`이 이 형식을 파싱) **이 수정의 실제 가치는 retryable 보존**이다. 테스트를 retryable로 조준 변경:
 
 ```ts
-      // JSON 와이어 형식이면 code+retryable 모두 보존된다
-      assert.match(msg, /\{.*"code"\s*:\s*"command\.not_found"/);
+// JSON 와이어 형식이면 code+retryable 모두 보존된다
+assert.match(msg, /\{.*"code"\s*:\s*"command\.not_found"/);
 ```
 
 즉 napi가 `Error::from_reason(serde_json::to_string(&e))`(RustraError는 Serialize 유도됨 — error.rs:34)로 JSON 문자열을 심으면, JS `parseRustraErrorString`(types/index.ts:88)이 code/message/retryable을 복원한다. **현재는 to_string()이라 plain `"command.not_found: ..."`만 가므로 retryable=true(재시도 가능 에러의 경우)가 유실된다.** command.not_found는 retryable=false라 이 테스트는 통과할 수 있으니, retryable=true 케이스를 유도하려면 payload.too_large(대형 args)를 쓴다:
 
 ```ts
-  // payload.too_large는 retryable=false지만 코드 보존 검증엔 충분.
-  // retryable=true 케이스는 transport.timeout이 napi 경로에 없어 단순화:
-  // 핵심은 code 필드가 JSON으로 구조 보존되는지다.
-  assert.throws(
-    () => native.rustraInvoke('addNumbers', JSON.stringify({ a: 1, b: 2, pad: 'x'.repeat(2 * 1024 * 1024) })),
-    (e: unknown) => {
-      const msg = e instanceof Error ? e.message : String(e);
-      assert.match(msg, /"code"\s*:\s*"payload\.too_large"/, `code not preserved: ${msg}`);
-      return true;
-    },
-  );
+// payload.too_large는 retryable=false지만 코드 보존 검증엔 충분.
+// retryable=true 케이스는 transport.timeout이 napi 경로에 없어 단순화:
+// 핵심은 code 필드가 JSON으로 구조 보존되는지다.
+assert.throws(
+  () =>
+    native.rustraInvoke(
+      'addNumbers',
+      JSON.stringify({ a: 1, b: 2, pad: 'x'.repeat(2 * 1024 * 1024) }),
+    ),
+  (e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    assert.match(msg, /"code"\s*:\s*"payload\.too_large"/, `code not preserved: ${msg}`);
+    return true;
+  },
+);
 ```
 
 (`max_payload_bytes` 기본 1MiB — napi 엔트리에서 게이트하는지 확인, 안 하면 JS 측 사전 검사만 있으므로 이 테스트 명령을 invalid_json 경로로 조정. 구현 Step 3에서 napi에 크기 게이트가 없으면 args 파싱 실패 `invalid_args`를 코드로 검증하는 것으로 대체 — 핵심은 JSON 구조 보존.)
@@ -1066,6 +1094,7 @@ git commit -m "fix(napi): RustraError JSON 와이어 보존 — code/retryable�
 ### Task 9: transport-bench 플래키 테스트 안정화
 
 **Files:**
+
 - Modify: `examples/calculator/ts/transport-bench.test.ts:110-124, 24-26`
 
 **Step 1: 실패 재현 확보 (기록)**
@@ -1092,15 +1121,21 @@ const NAPI_MAX_P50_US = 500;
 `bench()` 헬퍼(28행)는 이미 p50을 반환한다. 단건 임계 어설션 교체 (110-124행):
 
 ```ts
-    it('subprocess: latency within threshold (p50-based)', () => {
-      const invoke = createSubprocessInvoke();
-      const r = bench('subprocess', () => invoke('addNumbers', { a: 42, b: 58 }), SUBPROCESS_ITERATIONS);
-      console.log(`    subprocess: avg=${r.avg.toFixed(0)}ns p50=${r.p50.toFixed(0)}ns p99=${r.p99.toFixed(0)}ns`);
-      assert(
-        r.p50 < SUBPROCESS_MAX_P50_US * 1000,
-        `subprocess p50 ${r.p50.toFixed(0)}ns exceeds ${SUBPROCESS_MAX_P50_US}µs threshold`,
-      );
-    });
+it('subprocess: latency within threshold (p50-based)', () => {
+  const invoke = createSubprocessInvoke();
+  const r = bench(
+    'subprocess',
+    () => invoke('addNumbers', { a: 42, b: 58 }),
+    SUBPROCESS_ITERATIONS,
+  );
+  console.log(
+    `    subprocess: avg=${r.avg.toFixed(0)}ns p50=${r.p50.toFixed(0)}ns p99=${r.p99.toFixed(0)}ns`,
+  );
+  assert(
+    r.p50 < SUBPROCESS_MAX_P50_US * 1000,
+    `subprocess p50 ${r.p50.toFixed(0)}ns exceeds ${SUBPROCESS_MAX_P50_US}µs threshold`,
+  );
+});
 ```
 
 napi 임계(137-147행)도 같은 방식으로 p50 교체. `napi-rs is faster than subprocess`(149-171행) 비교 어설션은 유지 — 이 비교는 절대 임계가 아니라 상대 비교라 안정적이다.
@@ -1127,6 +1162,7 @@ git commit -m "test: transport-bench 임계 p50 기반 전환 — CI 러너 부�
 ### Task 10: 커버리지 도입 (cargo llvm-cov + c8)
 
 **Files:**
+
 - Create: `.github/workflows/coverage.yml`
 - Modify: `package.json` (script), 루트 `Cargo.toml` 불필요 (llvm-cov는 커맨드라인 플래그)
 
@@ -1229,6 +1265,7 @@ git commit -m "ci: 커버리지 가시화 — cargo llvm-cov + c8, advisory Step
 ### Task 11: fuzz 운영 강화 (시드 corpus 커밋 + postcard 타깃)
 
 **Files:**
+
 - Create: `fuzz/fuzz_targets/invoke_postcard.rs`
 - Modify: `.github/workflows/fuzz.yml`, `.gitignore:35`
 - Create: `fuzz/corpus/invoke_rkyv_v2/*.bin` (시드), `fuzz/corpus/invoke_postcard/*.bin`
@@ -1287,29 +1324,29 @@ fuzz/corpus/**/slow_units/
 **Step 3: fuzz.yml 확장**
 
 ```yaml
-      - name: Fuzz invoke_rkyv_v2 (10min)
-        run: cd fuzz && cargo fuzz run invoke_rkyv_v2 corpus/invoke_rkyv_v2 -- -max_total_time=480 -max_len=1024
-      - name: Fuzz invoke_postcard (5min)
-        run: cd fuzz && cargo fuzz run invoke_postcard corpus/invoke_postcard -- -max_total_time=240 -max_len=1024
-      - name: Upload crash artifacts
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fuzz-crash-${{ github.run_id }}
-          path: fuzz/artifacts/
-          if-no-files-found: ignore
-      - name: Open issue on crash
-        if: failure()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `fuzz: crash in scheduled run (${context.runId})`,
-              body: `아티팩트: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-              labels: ['fuzz', 'bug'],
-            });
+- name: Fuzz invoke_rkyv_v2 (10min)
+  run: cd fuzz && cargo fuzz run invoke_rkyv_v2 corpus/invoke_rkyv_v2 -- -max_total_time=480 -max_len=1024
+- name: Fuzz invoke_postcard (5min)
+  run: cd fuzz && cargo fuzz run invoke_postcard corpus/invoke_postcard -- -max_total_time=240 -max_len=1024
+- name: Upload crash artifacts
+  if: failure()
+  uses: actions/upload-artifact@v4
+  with:
+    name: fuzz-crash-${{ github.run_id }}
+    path: fuzz/artifacts/
+    if-no-files-found: ignore
+- name: Open issue on crash
+  if: failure()
+  uses: actions/github-script@v7
+  with:
+    script: |
+      await github.rest.issues.create({
+        owner: context.repo.owner,
+        repo: context.repo.repo,
+        title: `fuzz: crash in scheduled run (${context.runId})`,
+        body: `아티팩트: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+        labels: ['fuzz', 'bug'],
+      });
 ```
 
 `continue-on-error: true`는 유지하되(실험 성격), 이슈 자동 등록으로 드리프트 방지. `permissions: issues: write` 잡 레벨 추가 필요.
@@ -1333,6 +1370,7 @@ git commit -m "ci(fuzz): postcard FFI 타깃 + 시드 corpus 커밋 + 크래시 
 ### Task 12: crates.io 메타데이터 + npm 패키지 위생
 
 **Files:**
+
 - Modify: `Cargo.toml` (workspace.package), `crates/rustra/Cargo.toml`, `crates/rustra-macros/Cargo.toml`
 - Modify: `packages/*/package.json` (sideEffects, engines), `packages/types/tsconfig.json`, `packages/react/tsconfig.json`
 - Modify: `packages/types/package.json`, `packages/react/package.json` (test 파일 dist 제외 방식)
@@ -1443,15 +1481,15 @@ cd packages/react && npm pack --dry-run 2>&1 | grep -c "test" ; cd ../..
 
 ```md
 ---
-"@rustra/types": patch
-"@rustra/react": patch
-"@rustra/node": patch
-"@rustra/cli": patch
-"@rustra/bun": patch
-"@rustra/tauri": patch
-"@rustra/react-native": patch
-"@rustra/testing": patch
-"@rustra/devtools": patch
+'@rustra/types': patch
+'@rustra/react': patch
+'@rustra/node': patch
+'@rustra/cli': patch
+'@rustra/bun': patch
+'@rustra/tauri': patch
+'@rustra/react-native': patch
+'@rustra/testing': patch
+'@rustra/devtools': patch
 ---
 
 chore: 패키지 메타데이터 위생 — sideEffects/engines 선언, 발행 dist에서 테스트 파일 제외
@@ -1519,6 +1557,7 @@ context 이름은 실제 CI 잡의 체크 런 이름과 정확히 일치해야 �
 
 ```md
 ## 브랜치 보호
+
 main 은 required checks(rust-audit/rust 3OS/typescript/rn-android/rn-ios/consumer-smoke)로 보호된다. 새 CI 잡 추가 시 context 목록에도 추가한다.
 ```
 
@@ -1551,9 +1590,9 @@ npm run audit:prod
 
 ```md
 ---
-"@rustra/types": minor
-"@rustra/node": patch
-"@rustra/cli": patch
+'@rustra/types': minor
+'@rustra/node': patch
+'@rustra/cli': patch
 ---
 
 feat: InvokeOptions.timeoutMs — transport.timeout(retryable) 타임아웃 레이스. hang(네이티브 무응답)의 JS 측 탈출구. 스키마 식별자 화이트리스트로 생성 코드 주입 방어. napi 경로 에러 code/retryable JSON 보존.
@@ -1576,22 +1615,22 @@ git log --oneline -10
 
 ## 검증 체크리스트 (완료 정의)
 
-| 항목 | 검증 명령 | 기대 |
-|---|---|---|
-| 누수 수정 | grep makeInvoke 4-인수 | 12 심볼 전부 deleter 매칭 |
-| panic guard | `cargo test -p rustra --test rkyv_v2_panic` | 1 passed |
-| async 완료 보장 | panic_guard 테스트 async 항목 | on_complete 1회 + registry 정리 |
-| JSI 클램프 | grep byteOffset 클램프 | 존재 |
-| timeout | types 테스트 신규 2건 | transport.timeout + retryable |
-| 식별자 화이트리스트 | CLI 테스트 | hostile 거부 |
-| 버전 | grep "0.1" 문서/템플릿 | 0 히트 |
-| napi 코드 | payload-robustness 신규 | `"code":` JSON 매치 |
-| 플래키 | transport-bench 10회 | 0 실패 |
-| 커버리지 | coverage.yml dispatch | Step summary 생성 |
-| fuzz | cargo fuzz 30s 스모크 | crash 없음 |
-| 메타데이터 | cargo publish --dry-run | 경고 소멸 |
-| 브랜치 보호 | gh api protection | 200 |
-| 전체 게이트 | npm run test + cargo test | 전부 green |
+| 항목                | 검증 명령                                   | 기대                            |
+| ------------------- | ------------------------------------------- | ------------------------------- |
+| 누수 수정           | grep makeInvoke 4-인수                      | 12 심볼 전부 deleter 매칭       |
+| panic guard         | `cargo test -p rustra --test rkyv_v2_panic` | 1 passed                        |
+| async 완료 보장     | panic_guard 테스트 async 항목               | on_complete 1회 + registry 정리 |
+| JSI 클램프          | grep byteOffset 클램프                      | 존재                            |
+| timeout             | types 테스트 신규 2건                       | transport.timeout + retryable   |
+| 식별자 화이트리스트 | CLI 테스트                                  | hostile 거부                    |
+| 버전                | grep "0.1" 문서/템플릿                      | 0 히트                          |
+| napi 코드           | payload-robustness 신규                     | `"code":` JSON 매치             |
+| 플래키              | transport-bench 10회                        | 0 실패                          |
+| 커버리지            | coverage.yml dispatch                       | Step summary 생성               |
+| fuzz                | cargo fuzz 30s 스모크                       | crash 없음                      |
+| 메타데이터          | cargo publish --dry-run                     | 경고 소멸                       |
+| 브랜치 보호         | gh api protection                           | 200                             |
+| 전체 게이트         | npm run test + cargo test                   | 전부 green                      |
 
 ## Task 의존 관계
 
