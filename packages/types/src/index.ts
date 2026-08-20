@@ -304,8 +304,9 @@ export async function invokeWithTimeout<T>(
  * 전달된다 — 해당 항목은 각자 전파(JS 코덱+invokeAsync+invokeCancel 충족 시)
  * 또는 얕은 취소로 동작한다. signal 있는 항목이 하나라도 섞이면 전체가
  * Promise.all 폴백으로 라우팅된다(단일 횡단 경로는 취소를 지원하지 않는다).
- * 항목별 `timeoutMs` 는 배치에서 아직 소비되지 않는다(배치 타임아웃은 후속
- * 과제) — 단일 invoke 의 `timeoutMs` 만 타임아웃 레이스를 탄다.
+ * 항목별 `timeoutMs` 중 최솟값이 배치 전체의 타임아웃 레이스로 적용된다 —
+ * 만료 시 `transport.timeout`(retryable) 으로 reject 한다(단일 invoke 의
+ * `invokeWithTimeout` 과 동일 의미론, 지각 응답 흡수 포함).
  *
  * @example
  * ```ts
@@ -322,7 +323,41 @@ export function invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
   if (!_engine.invokeBatch) {
     throw new Error('Configured engine does not support invokeBatch.');
   }
-  return _engine.invokeBatch<T>(entries);
+  // 배치 타임아웃 — 항목 timeoutMs 의 최솟값으로 배치 전체에 레이스를 건다.
+  // 배치는 단일 프라미스로 settle 되므로 항목별 레이스보다 최솟값이 정확하다.
+  const batchTimeout = entries.reduce<number | undefined>((min, entry) => {
+    const ms = entry.options?.timeoutMs;
+    if (ms === undefined) return min;
+    return min === undefined || ms < min ? ms : min;
+  }, undefined);
+  if (batchTimeout === undefined) {
+    return _engine.invokeBatch<T>(entries);
+  }
+  const stripped = entries.map((entry) =>
+    entry.options?.timeoutMs === undefined
+      ? entry
+      : { ...entry, options: { ...entry.options, timeoutMs: undefined } },
+  );
+  const p = Promise.resolve(_engine.invokeBatch<T>(stripped));
+  // 지각 reject 흡수 — invokeWithTimeout 과 동일 계약.
+  void p.catch(() => {});
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    p,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(
+          new RustraCommandError(
+            'transport.timeout',
+            `invokeBatch(${entries.length} entries) timed out after ${batchTimeout}ms`,
+            true,
+          ),
+        );
+      }, batchTimeout);
+    }),
+  ]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
 }
 
 // ── Runtime-safe UTF-8 helpers ─────────────────────────────

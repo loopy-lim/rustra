@@ -8,6 +8,7 @@ import {
   createRkyvV2Engine,
   getLiveSchema,
   invoke,
+  invokeBatch,
   invokeWithTimeout,
   RustraCommandError,
   parseRustraErrorString,
@@ -1731,6 +1732,56 @@ test('global invoke applies timeoutMs from options', async () => {
       invoke('slow', undefined, { timeoutMs: 30 }),
       (err: unknown) => (err as RustraCommandError).code === 'transport.timeout',
     );
+  } finally {
+    configure(sentinel);
+  }
+});
+
+test('global invokeBatch applies batch timeout from min entry timeoutMs', async () => {
+  // 항목 timeoutMs 의 최솟값(30ms)이 배치 전체의 타임아웃 레이스로 적용된다 —
+  // hanging 배치 엔진도 transport.timeout 으로 탈출. 센티넬 패턴으로 글로벌 원복.
+  const hanging = {
+    invoke: () => new Promise(() => {}),
+    invokeBatch: (_entries: BatchEntry[]) => new Promise<never>(() => {}),
+  } as unknown as EngineClient;
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  configure(hanging);
+  try {
+    await assert.rejects(
+      invokeBatch([
+        { command: 'a', options: { timeoutMs: 30 } },
+        { command: 'b', options: { timeoutMs: 500 } },
+      ]),
+      (err: unknown) => {
+        assert.ok(err instanceof RustraCommandError);
+        assert.equal(err.code, 'transport.timeout');
+        assert.equal(err.retryable, true);
+        return true;
+      },
+    );
+  } finally {
+    configure(sentinel);
+  }
+});
+
+test('global invokeBatch without timeoutMs passes through unchanged', async () => {
+  const ok = {
+    invoke: () => new Promise(() => {}),
+    invokeBatch: async (_entries: BatchEntry[]) => [1, 2],
+  } as unknown as EngineClient;
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  configure(ok);
+  try {
+    const out = await invokeBatch<number[]>([{ command: 'a' }, { command: 'b' }]);
+    assert.deepEqual(out, [1, 2]);
   } finally {
     configure(sentinel);
   }
