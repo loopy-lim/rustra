@@ -56,8 +56,26 @@ static std::pair<const uint8_t*, size_t> extractBytes(Runtime& rt, const Value& 
   auto bufferProp = obj.getProperty(rt, "buffer");
   if (bufferProp.isObject() && bufferProp.asObject(rt).isArrayBuffer(rt)) {
     auto buf = bufferProp.asObject(rt).getArrayBuffer(rt);
-    auto byteOffset = static_cast<size_t>(obj.getProperty(rt, "byteOffset").asNumber());
-    auto byteLength = static_cast<size_t>(obj.getProperty(rt, "byteLength").asNumber());
+    // 클램프 — JS 가 건네는 byteOffset/byteLength 는 임의 값일 수 있다
+    // (duck-typed 객체 통과). buf 범위 밖이면 네이티브 힙 OOB 읽기가 되므로
+    // 명시적 에러로 거부한다. NaN/음수도 여기서 걸러진다.
+    auto offsetProp = obj.getProperty(rt, "byteOffset");
+    auto lengthProp = obj.getProperty(rt, "byteLength");
+    if (!offsetProp.isNumber() || !lengthProp.isNumber()) {
+      throw JSError(rt, "RustraJSI: byteOffset/byteLength must be numbers");
+    }
+    double offsetNum = offsetProp.asNumber();
+    double lengthNum = lengthProp.asNumber();
+    if (!(offsetNum >= 0.0) || !(lengthNum >= 0.0)) { // NaN 도 거부
+      throw JSError(rt, "RustraJSI: invalid byteOffset/byteLength (negative or NaN)");
+    }
+    size_t bufSize = buf.size(rt);
+    if (offsetNum > static_cast<double>(bufSize) ||
+        lengthNum > static_cast<double>(bufSize) - offsetNum) {
+      throw JSError(rt, "RustraJSI: byteOffset/byteLength out of buffer bounds");
+    }
+    auto byteOffset = static_cast<size_t>(offsetNum);
+    auto byteLength = static_cast<size_t>(lengthNum);
     return {buf.data(rt) + byteOffset, byteLength};
   }
 
