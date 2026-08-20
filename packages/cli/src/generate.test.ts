@@ -712,6 +712,165 @@ test('parsePackageSchema rejects hostile identifiers', () => {
   );
 });
 
+// ── 잔여 주입 벡터 차단 (중첩 definitions/속성명/이스케이프) ─────
+
+/** 식별자 검증 테스트 공용 최소 스키마 — parsePackageSchema 화이트리스트 대상. */
+const hostileBase = {
+  packageId: 'ok.pkg',
+  schemaVersion: 1,
+  commands: [
+    {
+      name: 'addNumbers',
+      commandId: 1,
+      inputType: 'AddInput',
+      outputType: 'AddOutput',
+      inputSchema: { type: 'object' },
+      outputSchema: { type: 'object' },
+    },
+  ],
+};
+
+test('parsePackageSchema rejects hostile nested definitions keys', () => {
+  // collectDefinitionsInner 는 inputSchema/outputSchema 내부와 중첩 definitions
+  // 까지 재귀 수집해 `export type ${name}` 으로 방출한다 — 최상위 cmd.definitions
+  // 외의 모든 definitions 키도 식별자여야 한다.
+  assert.throws(
+    () =>
+      parsePackageSchema({
+        ...hostileBase,
+        commands: [
+          {
+            ...hostileBase.commands[0],
+            inputSchema: {
+              type: 'object',
+              definitions: { 'bad; evil()': { type: 'object' } },
+            },
+          },
+        ],
+      }),
+    /identifier|Invalid schema/,
+  );
+  // definition 내부의 definitions(재귀 위치)도 동일하게 검증된다.
+  assert.throws(
+    () =>
+      parsePackageSchema({
+        ...hostileBase,
+        commands: [
+          {
+            ...hostileBase.commands[0],
+            outputSchema: {
+              type: 'object',
+              definitions: {
+                Middle: { type: 'object', definitions: { 'bad key!': { type: 'object' } } },
+              },
+            },
+          },
+        ],
+      }),
+    /identifier|Invalid schema/,
+  );
+});
+
+test('parsePackageSchema rejects hostile property names and $ref targets', () => {
+  // 속성명은 생성 TS/C++ 에 따옴표 없이 삽입된다(codegen.ts `${name}:`,
+  // rkyv 코덱 `args.${name}`, C++ `getProperty(rt, "${name}")`) — 식별자만 허용.
+  assert.throws(
+    () =>
+      parsePackageSchema({
+        ...hostileBase,
+        commands: [
+          {
+            ...hostileBase.commands[0],
+            inputSchema: {
+              type: 'object',
+              properties: { 'a; evil()': { type: 'integer' } },
+            },
+          },
+        ],
+      }),
+    /identifier|Invalid schema/,
+  );
+  // $ref 대상 타입명도 타입 위치에 그대로 방출된다(resolveRef → 식별자).
+  assert.throws(
+    () =>
+      parsePackageSchema({
+        ...hostileBase,
+        commands: [
+          {
+            ...hostileBase.commands[0],
+            inputSchema: {
+              type: 'object',
+              properties: { ok: { $ref: '#/definitions/Foo; evil()' } },
+            },
+          },
+        ],
+      }),
+    /identifier|Invalid schema/,
+  );
+});
+
+test('generated code escapes hostile descriptions (JSDoc breakout)', () => {
+  // description 은 정당하게 자유 문자열이므로 파싱 거부가 아니라 방출 시점
+  // 이스케이프로 방어한다 — `*/` 로 주석을 깨고 코드 위치로 나오는 것을 차단.
+  const schema: PackageSchema = {
+    packageId: 'hostile.jsdoc',
+    commands: [
+      {
+        name: 'boom',
+        commandId: 1,
+        inputType: 'BoomInput',
+        outputType: 'BoomOutput',
+        inputSchema: {
+          type: 'object',
+          description: 'breaks */ const evil = 1; /* out',
+          properties: { id: { type: 'string', description: 'field */ evil() //' } },
+        },
+        outputSchema: { type: 'object' },
+      },
+    ],
+  };
+  const types = generateTypesTs(schema);
+  // 탈출 전 원본 `*/` + 페이로드 패턴이 코드 위치에 남으면 안 된다.
+  assert.ok(!types.includes('*/ const evil = 1'), 'description broke out of JSDoc');
+  // 이스케이프 후에는 페이로드가 주석 안에 남아있어야 한다.
+  assert.ok(types.includes('*\\/ const evil = 1'), 'payload must stay inside escaped JSDoc');
+  assert.ok(types.includes('field *\\/'), 'field description must be escaped too');
+  const commands = generateCommandsTs(schema);
+  assert.ok(!commands.includes('*/ const evil = 1'), 'command JSDoc broke out');
+  assert.ok(commands.includes('*\\/ const evil = 1'));
+});
+
+test('generated code escapes hostile enum/const string literals', () => {
+  // enum/const 값은 정당하게 자유 문자열 — 작은따옴표 리터럴 방출 시 이스케이프.
+  const schema: PackageSchema = {
+    packageId: 'hostile.literal',
+    commands: [
+      {
+        name: 'pick',
+        commandId: 1,
+        inputType: 'PickInput',
+        outputType: 'PickOutput',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            mode: { type: 'string', enum: ["ok', evil() //"] },
+            kind: { const: "tag', evil() //" },
+          },
+          required: ['mode', 'kind'],
+          title: 'PickInput',
+        },
+        outputSchema: { type: 'object', properties: {}, required: [], title: 'PickOutput' },
+      },
+    ],
+  };
+  const types = generateTypesTs(schema);
+  // 탈출 전: `'ok'` 가 닫히며 evil() 이 코드 위치로 나온다.
+  assert.ok(!types.includes("'ok', evil()"), 'enum value broke out of string literal');
+  assert.ok(types.includes("'ok\\', evil() //'"), 'enum value must stay inside escaped literal');
+  assert.ok(!types.includes("'tag', evil()"), 'const value broke out of string literal');
+  assert.ok(types.includes("'tag\\', evil() //'"), 'const value must stay inside escaped literal');
+});
+
 test('templateVersions derives template pins from CLI version (single source)', () => {
   // init 템플릿의 버전 핀이 CLI 자체 버전에서 파생되는지 — 과거 ^0.1.3 고정으로
   // 0.2.0 사용자가 구버전(포스트카드 silent-drop 수정 이전)을 설치하던 사고 방지.

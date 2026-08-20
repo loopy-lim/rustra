@@ -10,6 +10,7 @@ import type { CommandSchema, PackageSchema } from './schema.js';
 import {
   collectDefinitions,
   commandFunctionName,
+  escapeJsDoc,
   postcardHelperSource,
   tsTypeFromSchema,
 } from './codegen.js';
@@ -39,7 +40,7 @@ export function generateTypesTs(schema: PackageSchema): string {
     if (emitted.has(name)) continue;
     emitted.add(name);
     if (typeof defSchema.description === 'string') {
-      output += `/**\n * ${defSchema.description.replace(/\n/g, '\n * ')}\n */\n`;
+      output += `/**\n * ${escapeJsDoc(defSchema.description).replace(/\n/g, '\n * ')}\n */\n`;
     }
     output += `export type ${name} = ${tsTypeFromSchema(defSchema, allDefinitions)};\n\n`;
   }
@@ -48,7 +49,7 @@ export function generateTypesTs(schema: PackageSchema): string {
     if (command.inputType !== '()' && !emitted.has(command.inputType)) {
       emitted.add(command.inputType);
       if (typeof command.inputSchema.description === 'string') {
-        output += `/**\n * ${command.inputSchema.description.replace(/\n/g, '\n * ')}\n */\n`;
+        output += `/**\n * ${escapeJsDoc(command.inputSchema.description).replace(/\n/g, '\n * ')}\n */\n`;
       }
       output += `export type ${command.inputType} = ${tsTypeFromSchema(command.inputSchema, allDefinitions)};\n\n`;
     }
@@ -56,7 +57,7 @@ export function generateTypesTs(schema: PackageSchema): string {
     if (command.outputType !== '()' && !emitted.has(command.outputType)) {
       emitted.add(command.outputType);
       if (typeof command.outputSchema.description === 'string') {
-        output += `/**\n * ${command.outputSchema.description.replace(/\n/g, '\n * ')}\n */\n`;
+        output += `/**\n * ${escapeJsDoc(command.outputSchema.description).replace(/\n/g, '\n * ')}\n */\n`;
       }
       output += `export type ${command.outputType} = ${tsTypeFromSchema(command.outputSchema, allDefinitions)};\n\n`;
     }
@@ -91,7 +92,7 @@ export function generateCommandsTs(schema: PackageSchema): string {
     // unit 출력 `()` → Promise<void>.
     const outType = command.outputType === '()' ? 'void' : command.outputType;
     if (typeof command.inputSchema?.description === 'string') {
-      output += `/**\n * ${command.inputSchema.description.replace(/\n/g, '\n * ')}\n */\n`;
+      output += `/**\n * ${escapeJsDoc(command.inputSchema.description).replace(/\n/g, '\n * ')}\n */\n`;
     }
     if (command.inputType === '()') {
       output +=

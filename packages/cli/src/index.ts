@@ -69,6 +69,73 @@ function assertIdentifier(value: string, where: string): void {
   }
 }
 
+/**
+ * 스키마 트리 전체의 식별자 화이트리스트 — 코드젠이 식별자 위치(따옴표 없이
+ * 방출하는 이름)에 삽입하는 모든 키를 검증한다:
+ * - `definitions` 키(최상위 cmd.definitions 외에 inputSchema/outputSchema 내부,
+ *   다른 definition 내부의 중첩 definitions 포함 — collectDefinitionsInner 가
+ *   재귀 수집해 `export type ${name}` 으로 방출)
+ * - `properties` 키(생성 TS 멤버 `${name}:`, rkyv 코덱 `args.${name}`,
+ *   C++ `getProperty(rt, "${name}")` — 모두 무인용 방출)
+ * - `$ref` 대상 타입명(resolveRef 로 벗겨 타입 위치에 방출)
+ *
+ * schemars/serde 는 Rust 필드명(식별자)만 내보내므로 정상 스키마는 영향 없다.
+ * description/enum 값 등 자유 문자열은 여기서 거부하지 않는다 — 방출 시점
+ * 이스케이프(codegen.ts escapeJsDoc/escapeStringLiteral)로 방어한다.
+ */
+function assertSchemaIdentifiers(
+  schema: unknown,
+  where: string,
+  visited: Set<unknown> = new Set(),
+): void {
+  if (typeof schema !== 'object' || schema === null || visited.has(schema)) return;
+  visited.add(schema);
+  const node = schema as {
+    definitions?: Record<string, unknown>;
+    properties?: Record<string, unknown>;
+    $ref?: unknown;
+    [key: string]: unknown;
+  };
+  if (typeof node.$ref === 'string') {
+    const target = node.$ref.replace(/^#\/(definitions\/|\$defs\/)/, '');
+    assertIdentifier(target, `${where} $ref target`);
+  }
+  if (node.definitions) {
+    for (const key of Object.keys(node.definitions)) {
+      assertIdentifier(key, `${where} definitions key`);
+      assertSchemaIdentifiers(node.definitions[key], `${where}.${key}`, visited);
+    }
+  }
+  if (node.properties) {
+    for (const key of Object.keys(node.properties)) {
+      assertIdentifier(key, `${where} property name`);
+      assertSchemaIdentifiers(node.properties[key], `${where}.${key}`, visited);
+    }
+  }
+  // collectDefinitionsInner 의 순회와 동일한 하위 스키마 위치을 따라간다.
+  for (const arrayKey of ['anyOf', 'oneOf', 'allOf', 'prefixItems'] as const) {
+    const arr = node[arrayKey];
+    if (Array.isArray(arr)) {
+      for (let i = 0; i < arr.length; i++) {
+        assertSchemaIdentifiers(arr[i], `${where}.${arrayKey}[${i}]`, visited);
+      }
+    }
+  }
+  const items = node.items;
+  if (Array.isArray(items)) {
+    items.forEach((s, i) => assertSchemaIdentifiers(s, `${where}.items[${i}]`, visited));
+  } else if (items) {
+    assertSchemaIdentifiers(items, `${where}.items`, visited);
+  }
+  if (
+    node.additionalProperties &&
+    typeof node.additionalProperties === 'object' &&
+    !Array.isArray(node.additionalProperties)
+  ) {
+    assertSchemaIdentifiers(node.additionalProperties, `${where}.additionalProperties`, visited);
+  }
+}
+
 /** import 로 main() 이 실행되지 않도록 진입점 판별 — 테스트가 ./index.js 를
  * import 해도 CLI 가 실행되지 않는다. bin 스크립트(node dist/index.js)와
  * `node src/index.ts` 직접 실행 양쪽 모두 진입점으로 취급한다. */
@@ -566,6 +633,15 @@ function parsePackageSchema(value: unknown): PackageSchema {
     if (cmd.definitions) {
       for (const key of Object.keys(cmd.definitions)) {
         assertIdentifier(key, `commands[${i}].definitions key`);
+      }
+    }
+    // 중첩 definitions 키 / 속성명 / $ref 대상도 재귀 검증 — collectDefinitionsInner
+    // 가 수집하는 모든 정의와 tsObjectFromSchema 가 무인용 방출하는 모든 필드명.
+    assertSchemaIdentifiers(cmd.inputSchema, `commands[${i}].inputSchema`);
+    assertSchemaIdentifiers(cmd.outputSchema, `commands[${i}].outputSchema`);
+    if (cmd.definitions) {
+      for (const [key, def] of Object.entries(cmd.definitions)) {
+        assertSchemaIdentifiers(def, `commands[${i}].definitions.${key}`);
       }
     }
   }
