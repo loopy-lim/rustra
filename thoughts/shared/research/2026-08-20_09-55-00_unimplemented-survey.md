@@ -4,7 +4,7 @@ researcher: loopy-lim
 git_commit: d9215a4e7f463088bddb92b6a0d4027cccabc162
 branch: main
 repository: loopy-lim/rustra
-topic: "구현되지 않은 부분 전수조사 (미구현 마커 + 문서-코드 갭 + 공개 API 갭)"
+topic: '구현되지 않은 부분 전수조사 (미구현 마커 + 문서-코드 갭 + 공개 API 갭)'
 tags: [research, codebase, unimplemented, codegen, rkyv-v2, api-docs, onboarding]
 status: complete
 last_updated: 2026-08-20
@@ -53,13 +53,13 @@ last_updated_by: loopy-lim
 
 #### 1-2. rust-api-guide.md 26% 허위 (실제 cargo check로 검증)
 
-| # | 문서 주장 | 실제 동작 | 비고 |
-|---|---|---|---|
-| A1 | 스칼라 멀티파라미터 `fn add(a: i64, b: i64)` 자동 래핑 (§2-1, 사용 예 9곳) | `#[command] supports at most one input data parameter` 컴파일 에러 | 신규 사용자 첫 예제부터 실패 |
-| A2 | bare 반환 `-> i64` / unit 반환 생략 (§2-3) | `must return Result<O>` 에러 | 3가지 반환 패턴 중 2개 허위 |
-| A3 | `#[bridge(rename_all = "...")]` 오버라이드 (§3) | attr 인자 무시 → `cannot find attribute 'bridge'` | `crates/rustra-macros/src/lib.rs:387` `_attr` 폐기 |
-| A4 | `.generate_to(dir)` / `PackageBuilder::register` / `rustra::build()` 함수 (§4-5) | 전부 부재. 실제: `generate_typescript()?.write_to_dir()`, `command_fn()`, `build!` **매크로** | 문서 부록 예제(:596-627) 컴파일 불가 |
-| A5 | 0-파라미터 커맨드 컴파일 에러 (§2-5, 역방향) | 실제로 `fn ping() -> Result<()>` 정상 | 문서가 실제보다 제한적 |
+| #   | 문서 주장                                                                        | 실제 동작                                                                                     | 비고                                               |
+| --- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| A1  | 스칼라 멀티파라미터 `fn add(a: i64, b: i64)` 자동 래핑 (§2-1, 사용 예 9곳)       | `#[command] supports at most one input data parameter` 컴파일 에러                            | 신규 사용자 첫 예제부터 실패                       |
+| A2  | bare 반환 `-> i64` / unit 반환 생략 (§2-3)                                       | `must return Result<O>` 에러                                                                  | 3가지 반환 패턴 중 2개 허위                        |
+| A3  | `#[bridge(rename_all = "...")]` 오버라이드 (§3)                                  | attr 인자 무시 → `cannot find attribute 'bridge'`                                             | `crates/rustra-macros/src/lib.rs:387` `_attr` 폐기 |
+| A4  | `.generate_to(dir)` / `PackageBuilder::register` / `rustra::build()` 함수 (§4-5) | 전부 부재. 실제: `generate_typescript()?.write_to_dir()`, `command_fn()`, `build!` **매크로** | 문서 부록 예제(:596-627) 컴파일 불가               |
+| A5  | 0-파라미터 커맨드 컴파일 에러 (§2-5, 역방향)                                     | 실제로 `fn ping() -> Result<()>` 정상                                                         | 문서가 실제보다 제한적                             |
 
 - 역방향(구현됐으나 문서 누락): `emit`/`set_event_sink` 이벤트 버스, FFI 전체, `grant_capability`, `alias_command_id`, `schema_version`, freeze, `tauri_support`
 - 완료 조건: 가이드를 현재 매크로 시그니처에 맞게 재작성. (A1/A2는 매크로 확장 구현이 아니라 문서 수정이 정답 — 매크로는 의도적으로 단일 입력만 허용)
@@ -71,14 +71,14 @@ last_updated_by: loopy-lim
 
 ### 3. 부분 구현 (동작하나 범위 제한)
 
-| 항목 | 위치 | 내용 | 규모 |
-|---|---|---|---|
-| 취소 전파 JS 코덱 한정 | `packages/types/src/index.ts:809-813` (`!onTypedPath &&`) | typed(tier 1)/tier 3는 얕은 취소. 전제(invokeTypedAsync id 노출+invokeCancel)는 follow-up 3 완료 → 조건 완화만으로 확장 가능 | S |
-| tier-3 getLiveSchema | `packages/types/src/index.ts:392-395` | getSchema 미노출 시 빈 Map 조용 반환 → 명시 throw 필요 | S |
-| invokeTypedBatch 취소 | `RustraJSIBridge.cpp` (동기 루프) | 폴백 경로만 취소 지원, 배치는 취소 지점 없음 | M |
-| rkyv V2 Rust Tier 3 | `crates/rustra/src/rkyv_codec.rs:44` | 중첩 구조체/enum/Option 미지원 → JSON 문자열 폴백 (T1/T2 완전) | M~L |
-| RSS 측정 macOS 한정 | `examples/benchmark/src/main.rs:546-547` | `#[cfg(not(macos))] None`. Linux `/proc/self/statm`, Windows `GetProcessMemoryInfo` 필요 | S |
-| Node transport 부재 | `packages/node/src/index.ts` (33줄, transport 주입만) | getting-started가 `invokeCalculatorRuntime` 사용자 구현으로 남김 — "5분 온보딩" 끊김. `createNodeProcessTransport` 필요 | M |
+| 항목                   | 위치                                                      | 내용                                                                                                                         | 규모 |
+| ---------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---- |
+| 취소 전파 JS 코덱 한정 | `packages/types/src/index.ts:809-813` (`!onTypedPath &&`) | typed(tier 1)/tier 3는 얕은 취소. 전제(invokeTypedAsync id 노출+invokeCancel)는 follow-up 3 완료 → 조건 완화만으로 확장 가능 | S    |
+| tier-3 getLiveSchema   | `packages/types/src/index.ts:392-395`                     | getSchema 미노출 시 빈 Map 조용 반환 → 명시 throw 필요                                                                       | S    |
+| invokeTypedBatch 취소  | `RustraJSIBridge.cpp` (동기 루프)                         | 폴백 경로만 취소 지원, 배치는 취소 지점 없음                                                                                 | M    |
+| rkyv V2 Rust Tier 3    | `crates/rustra/src/rkyv_codec.rs:44`                      | 중첩 구조체/enum/Option 미지원 → JSON 문자열 폴백 (T1/T2 완전)                                                               | M~L  |
+| RSS 측정 macOS 한정    | `examples/benchmark/src/main.rs:546-547`                  | `#[cfg(not(macos))] None`. Linux `/proc/self/statm`, Windows `GetProcessMemoryInfo` 필요                                     | S    |
+| Node transport 부재    | `packages/node/src/index.ts` (33줄, transport 주입만)     | getting-started가 `invokeCalculatorRuntime` 사용자 구현으로 남김 — "5분 온보딩" 끊김. `createNodeProcessTransport` 필요      | M    |
 
 ### 4. DX/문서 정합성
 

@@ -31,7 +31,10 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 | [테스트 구조](internal/testing.md)                    | 기여자 | 테스트 계층, 스크립트 체인, host별 상태                          |
 | [호환성 계약](compatibility-contract.md)              | 기여자 | EngineClient 안정 계약, runtime acceptance gates                 |
 | [계약 마이그레이션 가이드](migration-guide.md)        | 전체   | 스키마 breaking change 검출(rustra diff)·해결 레시피·롤아웃 순서 |
+| [Rust API 가이드](rust-api-guide.md)                  | 사용자 | `#[command]`/`#[bridge_type]`/`build!` 매크로, Package/Builder API |
 | [벤치마크](benchmarks.md)                             | 전체   | 어댑터별 성능 비교, 오버헤드 분석, 페이로드 확장성               |
+| [보안 감사](security-audit.md)                        | 기여자 | lockfile 취약점/경고 상태, 해소 이력                             |
+| [릴리즈 절차](release-procedure.md)                   | 기여자 | changeset 발행 절차, 버전 관리                                  |
 | [기여 가이드](../CONTRIBUTING.md)                     | 기여자 | 개발 환경, 커밋 규칙, 디버깅, 릴리즈                             |
 
 ## 연구 배경

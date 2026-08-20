@@ -14,9 +14,10 @@
 | Lockfile | 취약점 | 경고 |
 |---|---|---|
 | 루트 (`Cargo.lock`) | 0 | 20 (아래 표) |
-| `runner/template/backend/Cargo.lock` | 0 | 1 (atomic-polyfill) |
-| `runner/template/desktop/src-tauri/Cargo.lock` | 0 | 17 (gtk-rs 계열) |
 | `fuzz/Cargo.lock` | 0 | 1 (atomic-polyfill) |
+
+(과거 `runner/template/backend`·`runner/template/desktop` lockfile 감사 항목은
+runner/ 가 Lynx 제거로 삭제되어 제거됨 — 2026-08-20.)
 
 ## 해소 이력 (2026-08-19)
 
@@ -27,9 +28,8 @@
 | crossbeam-epoch | 0.9.18 | 0.9.20 | 2026-0204 (포인터 역참조) |
 | plist | 1.9.0 | 1.10.0 | (quick-xml 상승의 전제) |
 
-rkyv 직접 의존은 `examples/calculator`(RN 네이티브 경로)와 `runner/template/backend`
-뿐이며 `crates/rustra` 코어는 rkyv crate에 의존하지 않는다 (serde_json 기반 수동
-rkyv V2 와이어 구현).
+rkyv 직접 의존은 `examples/calculator`(RN 네이티브 경로)뿐이며 `crates/rustra`
+코어는 rkyv crate에 의존하지 않는다 (serde_json 기반 수동 rkyv V2 와이어 구현).
 
 ## 남아있는 경고 (unmaintained/unsound)와 경로
 

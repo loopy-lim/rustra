@@ -28,9 +28,9 @@ npm run test:compat
 
 - Adapter contract checks: generated commands call injected Tauri and React Native transports without importing host packages.
 - Runtime checks: Node and Bun execute the Rust calculator binary, and the Tauri example builds a real app then launches it long enough for WebView JavaScript to call a Rust command through `window.__TAURI__.core.invoke`. The Tauri command handler calls the shared `rustra` calculator package through `Package::invoke`, not a separate hand-written calculator path.
-- React Native app checks: the Expo fixture typechecks against the same generated command helper and `@rustra/react-native` adapter, but remains below runtime-pass until `NativeModules.RustraCalculator` exists on simulator/device.
+- React Native app checks: the RN fixture typechecks against the same generated command helper and `@rustra/react-native` adapter. The native module (`rustra-jsi`) is implemented and verified — real-device JSI invoke measured at ~0.95µs and the Release build is covered in CI.
 
-React Native is not counted as runtime-passed until an actual native app fixture runs on a simulator or device and calls a Rust-backed native module.
+React Native passed its runtime gate: the native JSI module exists, real-device invocations were verified, and CI builds the Release app. See `docs/benchmarks.md` for the measured fast-path numbers.
 
 ## Stable Adapter Boundaries
 
@@ -64,7 +64,7 @@ Host examples must use the same command surface:
 
 For the calculator example, the shared path is `addNumbers({ a, b })` (with the engine installed globally via `configure(engine)`). Node, Bun, and Tauri must not keep separate app-local calculator logic that bypasses the generated helper or `rustra` package dispatch.
 
-React Native follows the same JavaScript path in `examples/react-native-calculator/App.tsx`, but the current fixture intentionally reports `missing-native-module` at runtime until the native module is implemented.
+React Native follows the same JavaScript path in `examples/react-native-calculator/App.tsx`, dispatching through the native `rustra-jsi` module (C++ JSI bridge + generated postcard codecs).
 
 ## Runtime Acceptance Gates
 

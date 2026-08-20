@@ -81,6 +81,25 @@ module.exports = config;
 
 ## Usage
 
+### C++ codec generation (`--cpp-output`)
+
+The JSI fast path (B1) uses C++ postcard codecs compiled into the native module,
+which removes the ~3.4µs JS-side codec round trip. Generate them alongside the
+TS codecs:
+
+```sh
+rustra generate \
+  --schema ./generated/schema.json \
+  --output ./src/generated \
+  --cpp-output ./ios
+```
+
+This emits `rustra-generated-codecs.{hpp,cpp}` into `./ios` — commit them next
+to `RustraJSIBridge.cpp` and add the `.cpp` to the Xcode/Podspec and Gradle
+sources. iOS and Android share the same C++ source. Commands whose fields the
+postcard codec does not support are excluded from the C++ dispatch and fall
+back to the JS Tier 3 (JSON-in-binary) path automatically.
+
 ### TypeScript side
 
 ```typescript

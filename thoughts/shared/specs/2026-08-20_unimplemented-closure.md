@@ -22,6 +22,7 @@ priority: high
 ## 성공 기준 (워크스트림별)
 
 ### WS1 — 코드젠 정확성 (HIGH)
+
 - [ ] `Option<T>`/`Vec<String>`/`Vec<Struct>`/enum 필드를 가진 명령이 더 이상 "부분 코덱"을 생성하지 않는다: 라운드트립 불가 명령은 레지스트리에서 제외되고 생성 시 `WARN` 로그가 나가며, 엔진 Tier 3 JSON 폴백이 처리한다 (crud 예제의 getItem/listItems/updateItem이 폴백으로 올바른 데이터 반환)
 - [ ] 생성물 round-trip 스모크 테스트가 CI에 추가된다 — 예제 스키마 전체에 대해 "코덱 등록 명령은 인코딩→디코딩 round-trip 성공"을 검증
 - [ ] `allOf`(intersection → `A & B`)와 integer enum(`1 | 2 | 3`)이 코드젠에서 지원된다 (Rust bin + TS CLI 양쪽, dual-path 일치)
@@ -31,6 +32,7 @@ priority: high
 - [ ] `docs/internal/codegen.md` 제한사항 표가 갱신된다 (allOf/integer enum 해소, 낡은 oneOf/const 행 정정)
 
 ### WS2 — API 문서 정합성 (HIGH)
+
 - [ ] `docs/rust-api-guide.md`의 모든 코드 예제가 실제 컴파일된다 — 스칼라 멀티파라미터/bare 반환/`#[bridge(rename_all)]`/`generate_to`/`register`/`build()` 함수 서술을 실제 API(`단일 Input 구조체`, `Result<O>` 강제, `generate_typescript()?.write_to_dir()`, `build!` 매크로)로 재작성. 구현됐으나 누락된 API(이벤트 버스, FFI, capability, freeze, tauri)를 부록에 추가
 - [ ] `docs/compatibility-contract.md`의 RN 서술이 현행화된다 (RN JSI 네이티브 모듈 구현·검증 완료 사실 반영)
 - [ ] `docs/security-audit.md`에서 삭제된 `runner/` 경로 참조가 제거된다
@@ -39,16 +41,19 @@ priority: high
 - [ ] `--cpp-output`이 `docs/extending/react-native-setup.md`와 getting-started에 문서화된다
 
 ### WS3 — 온보딩/DX 완결
+
 - [ ] `@rustra/node`에 `createNodeProcessTransport`(napi 또는 subprocess)가 제공되고, getting-started의 Node 퀵스타트가 사용자 구현 없이 복붙 가능한 완결 코드가 된다
 - [ ] 호환성 매트릭스 문서가 추가된다 — signal/취소/invokeBatch/이벤트 × 어댑터(node/bun/tauri/RN) 표. 조용한 드롭(node/bun의 signal 무시)은 가능하면 loud error로 전환하고, 전환 시 매트릭스에 반영
 - [ ] `@rustra/react` 훅(useCommand/useMutation/useEvent/RustraProvider)을 사용하는 레퍼런스 앱 예제가 추가된다 (CRUD + 이벤트)
 
 ### WS4 — 취소/의미론 완성
+
 - [ ] 취소 전파가 typed(tier 1)/tier 3 경로까지 확장된다 (`!onTypedPath` 조건 완화, 3-tier × 취소 매트릭스 테스트)
 - [ ] tier-3 `getLiveSchema`가 `getSchema` 미노출 네이티브에서 빈 Map 대신 명시적 에러를 던진다
 - [ ] `invokeTypedBatch`의 항목별 취소 지원 또는 명시적 "미지원 throw" 계약이 문서화·테스트된다
 
 ### WS5 — 고아 추상/잔여물 정리
+
 - [ ] `contractHash` 검증이 RN에서 동작한다 — `RustraJSIBridge.cpp`에 `getContractHash` 배선 + 옵션 전달 (iOS/Android 공유 cpp)
 - [ ] `RendererHost` trait 존속 결정이 문서화된다 — 공개 API라 제거하지 않되, 사용처(host 통합 지점)와 Lynx 제거 배경을 모듈 독에 기록하고 `#[allow(dead_code)]`/낡은 모듈 독을 정리
 - [ ] `invokeAsync(payload, onDone): number` 옵셔널 메서드가 구현(JSI 배선)되거나 "호스트 구현 계약"으로 문서화된다
@@ -56,14 +61,17 @@ priority: high
 - [ ] `docs/plans/2026-08-10-rn-b1-verification.md` 23항목 체크리스트가 CI/벤치마크 대체 근거와 함께 폐쇄 처리된다
 
 ### WS6 — 플랫폼/검증 보강
+
 - [ ] benchmark RSS 측정이 Linux(`/proc/self/statm`)에서도 동작한다 (Windows는 cfg 스텁 + 문서)
 - [ ] Android JSI fastpath 재검증이 "측정 대기" 상태로 벤치마크 문서에 명시된다(기기 의존 — 측정 자체는 범위 밖)
 
 ### WS7 — 성능 후속 (의도적 유예였으나 목표상 구현)
+
 - [ ] FFI caller-buffer fastpath: Rust malloc→복사→JS memcpy 3중 복사를 제거하는 caller-buffer FFI 변형이 구현되어 벤치마크에 반영된다 (`docs/benchmarks.md` Task 7 참조)
 - [ ] 코드젠 positional facade(P2): 정적 명령이 `__rustraNative.xxx(a, b)` positional 시그니처로 JSI 직접 호출하도록 생성된다
 
 ### WS8 — rkyv Rust Tier 3 바이너리 확장
+
 - [ ] Rust 디코더 Tier 3가 중첩 구조체/enum/`Option<T>`의 바이너리(postcard) 와이어를 지원한다 — 기존 JSON 폴백은 유지(스키마 미지원 시), 지원 범위 확장만
 
 ## 범위 제한

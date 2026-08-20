@@ -442,6 +442,17 @@ const result = await addNumbers({ a: 20, b: 22 }); // ~5.8µs
 
 성능: sync 3.8µs / async 5.8µs (JSON 31µs 대비 5.3x 빠름, Nitro 2.1µs 대비 2.8x)
 
+**C++ 코덱 코드젠 (`--cpp-output`, 헤드라인 성능):** JS 측 코덱 왕복(~3.4µs)까지
+제거하려면 코드젠 시 C++ 코덱을 함께 생성해 네이티브 모듈에 컴파일한다:
+
+```sh
+rustra generate --schema ./generated/schema.json --output ./src/generated --cpp-output ./ios
+```
+
+`rustra-generated-codecs.{hpp,cpp}`가 `./ios`에 생성된다 — 이 파일을
+`RustraJSIBridge.cpp` 옆에 두고 Xcode/Podspec·Gradle 소스에 추가한다.
+자세한 설정은 [React Native 셋업 가이드](extending/react-native-setup.md) 참고.
+
 #### JSON (호환성 — Expo async bridge)
 
 ```ts

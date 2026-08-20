@@ -22,113 +22,82 @@ Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플�
 
 함수를 rustra-bridge 명령으로 변환하는 속성 매크로입니다. `#[command]` 또는 `#[command(name = "customName")]` 형태로 사용합니다.
 
-### 2-1. 스칼라 파라미터 모드 (2개 이상 파라미터)
+### 2-1. 구조체 파라미터 모드 (유일한 입력 형태)
 
-파라미터가 2개 이상이면 매크로가 자동으로 Input 구조체를 생성합니다.
+`#[command]` 함수는 **정확히 하나의 Input 구조체 파라미터**를 받아야 합니다. 스칼라
+멀티파라미터(`fn add(a: i64, b: i64)`)는 지원하지 않습니다 — 컴파일 에러가 납니다:
+
+```text
+#[command] supports at most one input data parameter
+```
+
+여러 값이 필요하면 Input 구조체를 정의합니다:
 
 ```rust
 use rustra::prelude::*;
 
-#[command]
-fn add_numbers(a: i64, b: i64) -> i64 {
-    a + b
-}
-```
-
-매크로가 내부적으로 생성하는 코드:
-
-```rust
-// 원본 함수 그대로 유지
-fn add_numbers(a: i64, b: i64) -> i64 { a + b }
-
-// 자동 생성된 Input 구조체
-#[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
-#[serde(rename_all = "camelCase")]
+#[bridge_type]
 struct AddNumbersInput {
     pub a: i64,
     pub b: i64,
 }
 
-// 자동 생성된 핸들러 (Ok() 래핑 포함)
-fn __rustra_add_numbers_handler(__input: AddNumbersInput) -> rustra::Result<i64> {
-    let AddNumbersInput { a, b } = __input;
-    Ok(add_numbers(a, b))
-}
-```
-
-주요 특징:
-
-- 자동 생성된 Input 구조체에 `#[serde(rename_all = "camelCase")]`가 적용됩니다.
-- 반환값이 bare 타입(`i64`, `String` 등)이면 핸들러가 자동으로 `Ok()`로 래핑합니다.
-- TypeScript에서 `AddNumbersInput` 타입으로 노출됩니다.
-
-### 2-2. 구조체 파라미터 모드 (1개 파라미터)
-
-파라미터가 1개이면 직접 정의한 구조체를 입력 타입으로 사용합니다.
-
-```rust
-#[command]
-fn find_user(input: UserQuery) -> Result<User> {
-    // ...
-}
-```
-
-이 모드에서는 Input 구조체를 자동 생성하지 않고, 개발자가 직접 정의한 타입을 그대로 사용합니다. `#[bridge_type]`과 함께 사용하면 보일러플레이트를 최소화할 수 있습니다.
-
-```rust
 #[bridge_type]
-struct UserQuery {
-    pub name: String,
-    pub age: Option<u32>,
-}
-
-#[bridge_type]
-struct User {
-    pub id: String,
-    pub display_name: String,
+struct AddNumbersOutput {
+    pub value: i64,
 }
 
 #[command]
-fn find_user(input: UserQuery) -> Result<User> {
-    Ok(User {
-        id: "123".into(),
-        display_name: input.name,
+fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
+    Ok(AddNumbersOutput {
+        value: input.a + input.b,
     })
 }
 ```
 
-### 2-3. 반환 타입
+`#[bridge_type]`은 `Serialize`/`Deserialize`/`JsonSchema` derive와
+`#[serde(rename_all = "camelCase")]`를 자동 추가하므로 TypeScript 쪽에는
+`{ a: number, b: number }`로 노출됩니다.
 
-세 가지 반환 패턴을 지원합니다:
+### 2-2. 0-파라미터 커맨드
 
-| 패턴        | Rust 시그니처       | 동작                        |
-| ----------- | ------------------- | --------------------------- |
-| bare 반환   | `-> i64`            | 핸들러가 `Ok()`로 자동 래핑 |
-| Result 반환 | `-> Result<i64>`    | Result를 그대로 전달        |
-| unit 반환   | `-> ()` (또는 생략) | `Ok(())`로 래핑             |
+입력이 필요 없는 명령은 `()` 입력으로 정의합니다:
 
 ```rust
-// Pattern 1: bare 반환
 #[command]
-fn add(a: i64, b: i64) -> i64 {
-    a + b
-}
-
-// Pattern 2: Result 반환
-#[command]
-fn divide(a: i64, b: i64) -> Result<i64> {
-    if b == 0 {
-        return Err(RustraError::invalid_args("division by zero"));
-    }
-    Ok(a / b)
-}
-
-// Pattern 3: unit 반환
-#[command]
-fn log_event(event: String) {
-    println!("event: {event}");
+fn ping() -> Result<()> {
+    Ok(())
 }
 ```
+
+`()` 입력은 TypeScript에서 파라미터 없는 함수로 생성됩니다
+(`invoke('ping', undefined)`).
+
+### 2-3. 반환 타입
+
+반환은 **반드시 `Result<O>`** 여야 합니다. bare 반환(`-> i64`)과 unit 반환 생략은
+컴파일 에러입니다:
+
+```text
+#[command] function must have an explicit return type Result<O>
+```
+
+```rust
+// ✅ 올바른 반환
+#[command]
+fn divide(input: DivisionInput) -> Result<DivisionOutput> {
+    if input.divisor == 0 {
+        return Err(RustraError::invalid_args("division by zero"));
+    }
+    Ok(DivisionOutput {
+        quotient: input.dividend / input.divisor,
+        remainder: input.dividend % input.divisor,
+    })
+}
+```
+
+값이 없는 명령은 `Result<()>`를 사용합니다. 출력 `()`는 TypeScript에서
+`Promise<void>`로 생성됩니다.
 
 ### 2-4. 커맨드 이름 규칙
 
@@ -144,8 +113,9 @@ fn log_event(event: String) {
 
 ```rust
 #[command(name = "calc.add")]
-fn add_numbers(a: i64, b: i64) -> i64 {
-    a + b
+fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
+    // 커맨드 이름이 "addNumbers" 대신 "calc.add" 로 등록된다
+    Ok(AddNumbersOutput { value: input.a + input.b })
 }
 ```
 
@@ -153,13 +123,11 @@ fn add_numbers(a: i64, b: i64) -> i64 {
 
 `#[command]` 매크로는 컴파일 타임에 다음을 검증합니다:
 
-**파라미터 개수 검증** — 파라미터가 0개이면 컴파일 에러가 발생합니다:
+**파라미터 개수 검증** — 데이터 파라미터는 최대 1개입니다. 2개 이상이면 컴파일
+에러가 발생합니다 (0개는 `()` 입력으로 허용 — §2-2 참고):
 
-```rust,compile_fail
-#[command]
-fn no_args() -> Result<()> { // 에러: 최소 하나의 파라미터 필요
-    Ok(())
-}
+```text
+#[command] supports at most one input data parameter
 ```
 
 **trait bound 검증** — 입출력 타입이 필요한 trait을 충족하는지 확인합니다:
@@ -211,25 +179,18 @@ struct UserQuery {
 
 ### 오버라이드
 
-`#[bridge(rename_all = "...")]`로 기본 `camelCase`를 변경할 수 있습니다:
+`#[bridge_type]`은 항상 `#[serde(rename_all = "camelCase")]`를 추가합니다.
+다른 명명 규칙이 필요하면 `#[bridge_type]` 없이 derive를 직접 붙입니다:
 
 ```rust
-#[bridge_type]
-#[bridge(rename_all = "snake_case")]
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 struct RawQuery {
     pub field_name: String, // JSON에서 "field_name"으로 유지
 }
 ```
 
-이미 `#[serde(rename_all = "...")]`가 있으면 그 값을 우선합니다:
-
-```rust
-#[bridge_type]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-struct Constants {
-    pub max_value: i64, // JSON에서 "MAX_VALUE"로 직렬화
-}
-```
+(`#[bridge(rename_all = "...")]` 형태의 오버라이드 속성은 존재하지 않습니다.)
 
 ### 열거형에도 사용 가능
 
@@ -266,13 +227,11 @@ enum Shape {
 ### 기본 사용법
 
 ```rust
-// 등록 + TypeScript 생성
-rustra::build!("examples.calculator", add_numbers, multiply)
-    .generate_to("generated")?;
+// 등록 + 빌드
+let pkg = rustra::build!("examples.calculator", add_numbers, multiply).done();
 
-// 런타임 전용 Package
-let pkg = rustra::build!("examples.calculator", add_numbers)
-    .done();
+// TypeScript 생성은 Package 의 generate_typescript 에서
+pkg.generate_typescript()?.write_to_dir("generated")?;
 ```
 
 ### 매크로 내부 동작
@@ -296,52 +255,53 @@ rustra::Package::builder("examples.calculator")
 
 ## 5. PackageBuilder 메서드
 
-`PackageBuilder`는 명령을 점진적으로 등록하는 빌더입니다. `Package::builder(id)` 또는 `rustra::build(id)`로 생성합니다.
+`PackageBuilder`는 명령을 점진적으로 등록하는 빌더입니다. `Package::builder(id)`로 생성합니다 (또는 `rustra::build!` 매크로가 내부적으로 호출).
 
-### `.register(handler)` / `.command_fn(handler)`
+### `.command_fn(handler)`
 
-`#[command]` 함수를 이름 자동 추론으로 등록합니다. 두 메서드는 동일한 동작을 수행합니다.
+`#[command]` 함수를 이름 자동 추론으로 등록합니다. 함수 이름에서 `_command` 접미사를
+제거한 뒤 lowerCamelCase로 변환하여 커맨드 이름으로 사용합니다.
 
 ```rust
-let pkg = rustra::build("example.calculator")
-    .register(add_numbers)
-    .done();
+use rustra::register;
+
+let pkg = register!(Package::builder("example.calculator"), add_numbers).build();
 ```
 
-함수 이름에서 `_command` 접미사를 제거한 뒤 lowerCamelCase로 변환하여 커맨드 이름으로 사용합니다.
+`register!` 매크로가 `#[command]` 함수를 `.command_fn()` 으로 연결해 줍니다.
 
 ### `.command(name, handler)`
 
 이름을 직접 지정하여 등록합니다.
 
 ```rust
-let pkg = rustra::build("example.calculator")
-    .command("calc.add", __rustra_add_numbers_handler)
-    .done();
+let pkg = Package::builder("example.calculator")
+    .command("addNumbers", my_handler)
+    .build();
 ```
 
 같은 이름의 명령이 이미 등록되어 있으면 패닉이 발생합니다.
 
-### `.done()` / `.build()`
+### 기타 빌더 메서드
 
-등록된 모든 명령을 불변 `Package`로 빌드합니다. `.done()`은 `.build()`의 별칭입니다.
+| 메서드                                        | 역할                                                       |
+| --------------------------------------------- | ---------------------------------------------------------- |
+| `.require_capability(name, cap)`              | 명령에 capability 요구 부여 (deny-by-default Runtime Authority) |
+| `.alias_command_id(command, legacy_id)`       | 구 cmd_id 별칭 등록 (하위호환 디스패치)                    |
+| `.event_capacity(capacity)`                   | 이벤트 버스 링 버퍼 용량 설정                              |
+| `.schema_version(version)`                    | (T2, OTA) 스키마 협상 버전 명시                            |
+| `.manage(state)`                              | 공유 상태(`Package::state::<T>()`로 접근) 등록             |
+
+### `.build()` / `.done()`
+
+등록된 모든 명령을 불변 `Package`로 빌드합니다. `.done()`은 `.build()`의 별칭입니다
+(`rustra::build!` 확장 결과는 `.done()`으로 마무리).
 
 ```rust
-let pkg = rustra::build("example.calculator")
-    .register(add_numbers)
-    .done();
+let pkg = Package::builder("example.calculator")
+    .command_fn(my_handler)
+    .build();
 ```
-
-### `.generate_to(dir)`
-
-빌드 + TypeScript 생성 + 파일 저장을 한 번에 수행하는 편의 메서드입니다.
-
-```rust
-rustra::build!("examples.calculator", add_numbers)
-    .generate_to("../generated")?;
-```
-
-내부적으로 `.build()` → `.generate_typescript()` → `.write_to_dir()`을 순차적으로 호출합니다.
 
 ---
 
@@ -595,32 +555,104 @@ use rustra::prelude::*;
 
 ## 부록: 전체 예제
 
+### 고급 API 요약 (문서 본문에서 다루지 않은 공개 API)
+
+**이벤트 버스** — Rust → JS 이벤트 푸시:
+
+```rust
+// 이벤트 발행 (드랍 가능 — 링 버퍼)
+pkg.emit("item.created", serde_json::json!({ "id": "x1" }));
+
+// 네이티브 싱크 연결 (RN JSI 드레인 등)
+pkg.set_event_sink(Some(sink));
+let bus = pkg.event_bus(); // EventBus 직접 접근
+```
+
+**Runtime Authority (capability)** — deny-by-default 권한:
+
+```rust
+// 빌더에서 요구 지정
+Package::builder("app.secure")
+    .command("secureCompute", handler)
+    .require_capability("secureCompute", "app.admin")
+    .build();
+
+// 런타임 부여 — 부여 전까지 capability.denied
+pkg.grant_capability("app.admin")?;
+```
+
+**FFI (C ABI)** — 네이티브 모듈/프로세스 경유 호출 (`rustra::ffi`):
+
+- `rustra_ffi_register` / `rustra_ffi_invoke_json` / `rustra_ffi_invoke_postcard`
+- `rustra_ffi_invoke_async` / `rustra_ffi_invoke_cancel` — 체크포인트 취소 전파
+- `rustra_ffi_set_max_payload` / `rustra_ffi_contract_hash` / `rustra_ffi_schema_json`
+
+**동결(freeze)** — 런타임 mutation 잠금:
+
+```rust
+pkg.freeze();          // 이후 register/unregister 는 registry.frozen 에러
+assert!(pkg.is_frozen());
+```
+
+**Tauri 지원** (`tauri` feature) — `rustra::tauri_support`:
+
+- `tauri_support::register(app, pkg)` — invoke 핸들러 등록
+- `tauri_support::register_with_events(...)` — 이벤트 푸시 포함
+- `tauri_support::rustra_dispatch(...)` — 커맨드 디스패치
+
+**스키마/버전** — `pkg.schema()` (전체 스키마 JSON), `pkg.live_schema()`
+(동적 명령 포함), `.schema_version(v)` 빌더 (T2/OTA 협상).
+
 ### 계산기 예제
 
 ```rust
 use rustra::prelude::*;
 
-#[command]
-fn add_numbers(a: i64, b: i64) -> i64 {
-    a + b
+#[bridge_type]
+struct AddNumbersInput {
+    pub a: i64,
+    pub b: i64,
+}
+
+#[bridge_type]
+struct AddNumbersOutput {
+    pub value: i64,
+}
+
+#[bridge_type]
+struct MultiplyInput {
+    pub a: f64,
+    pub b: f64,
+}
+
+#[bridge_type]
+struct MultiplyOutput {
+    pub value: f64,
 }
 
 #[command]
-fn multiply(a: i64, b: i64) -> i64 {
-    a * b
+fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
+    Ok(AddNumbersOutput {
+        value: input.a + input.b,
+    })
+}
+
+#[command]
+fn multiply(input: MultiplyInput) -> Result<MultiplyOutput> {
+    Ok(MultiplyOutput {
+        value: input.a * input.b,
+    })
 }
 
 fn main() -> Result<()> {
     // 런타임 사용
-    let pkg = rustra::build!("example.calculator", add_numbers, multiply)
-        .done();
+    let pkg = rustra::build!("example.calculator", add_numbers, multiply).done();
 
-    let sum: i64 = pkg.invoke("addNumbers", serde_json::json!({ "a": 2, "b": 3 }))?;
-    println!("2 + 3 = {sum}");
+    let sum: AddNumbersOutput = pkg.invoke("addNumbers", AddNumbersInput { a: 2, b: 3 })?;
+    println!("2 + 3 = {}", sum.value);
 
     // TypeScript 생성
-    rustra::build!("example.calculator", add_numbers, multiply)
-        .generate_to("generated")?;
+    pkg.generate_typescript()?.write_to_dir("generated")?;
 
     Ok(())
 }
