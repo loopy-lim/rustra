@@ -44,6 +44,12 @@ export type InvokeOptions = {
   /** (T1) AbortSignal — abort 시 Promise 를 즉시 reject 하고, 네이티브가
    *  invokeAsync/invokeCancel 을 노출하면 취소를 전파한다. */
   signal?: AbortSignal;
+  /**
+   * (프로덕션 준비) 호출별 타임아웃(ms). 만료 시 `transport.timeout`
+   * (retryable)으로 reject 한다. 네이티브가 응답하지 않는 hang(워커 패닉,
+   * FFI 데드락 등)의 유일한 JS 측 탈출구다. 지각 응답은 무시된다.
+   */
+  timeoutMs?: number;
 };
 
 /**
@@ -245,7 +251,47 @@ export function invoke<T>(command: string, args?: unknown, options?: InvokeOptio
   }
   // 옵션을 엔진에 그대로 전달한다 (T1). 옵션을 이해하지 못하는 구형/서드파티
   // 엔진은 JS 호출 규약상 추가 인자를 무시한다 — 호출부 파괴 없이 확장된다.
-  return _engine.invoke<T>(command, args, options);
+  // timeoutMs 는 글로벌 레이스(invokeWithTimeout)로 여기서 소비한다.
+  return invokeWithTimeout(_engine, command, args, options);
+}
+
+/**
+ * 엔진 호출에 타임아웃 레이스를 건다. `options.timeoutMs` 가 없으면 엔진
+ * 호출을 그대로 반환한다(오버헤드 0). 타임아웃은 settle 경쟁이며 지각 응답은
+ * 무시된다 — 엔진이 나중에 reject 해도 unhandled rejection 이 되지 않도록
+ * 뒤늦은 프라미스를 no-op catch 로 흡수한다.
+ */
+export async function invokeWithTimeout<T>(
+  engine: EngineClient,
+  command: string,
+  args?: unknown,
+  options?: InvokeOptions,
+): Promise<T> {
+  const p = Promise.resolve(engine.invoke<T>(command, args, options));
+  const ms = options?.timeoutMs;
+  if (ms === undefined) return p;
+  // 원본 프라미스의 지각 reject 흡수 — race 에서 진 뒤에도 reject 되면
+  // unhandled rejection 이 되므로 no-op catch 로 처리 표시만 남긴다.
+  void p.catch(() => {});
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      p,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(
+            new RustraCommandError(
+              'transport.timeout',
+              `invoke("${command}") timed out after ${ms}ms`,
+              true,
+            ),
+          );
+        }, ms);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
 
 /**
@@ -258,6 +304,8 @@ export function invoke<T>(command: string, args?: unknown, options?: InvokeOptio
  * 전달된다 — 해당 항목은 각자 전파(JS 코덱+invokeAsync+invokeCancel 충족 시)
  * 또는 얕은 취소로 동작한다. signal 있는 항목이 하나라도 섞이면 전체가
  * Promise.all 폴백으로 라우팅된다(단일 횡단 경로는 취소를 지원하지 않는다).
+ * 항목별 `timeoutMs` 는 배치에서 아직 소비되지 않는다(배치 타임아웃은 후속
+ * 과제) — 단일 invoke 의 `timeoutMs` 만 타임아웃 레이스를 탄다.
  *
  * @example
  * ```ts
