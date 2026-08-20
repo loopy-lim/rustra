@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
-import { watch, readFileSync, readdirSync, statSync } from 'node:fs';
+import { watch, readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import type { PackageSchema } from './schema.js';
 import {
   generateTypesTs,
@@ -33,6 +34,31 @@ export { createValidatedEngine } from './validate-engine.js';
 export type { EngineClient as ValidateEngineClient, ValidateOptions } from './validate-engine.js';
 export { rustraPlugin } from './vite.js';
 export type { RustraVitePluginOptions } from './vite.js';
+export { parsePackageSchema };
+
+/** TS 식별자로 안전한 문자열만 허용 — 생성 코드에 그대로 삽입되는 이름의
+ * 주입 방어. $ 허용은 JS 식별자 규격 준수. */
+const TS_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+function assertIdentifier(value: string, where: string): void {
+  if (!TS_IDENTIFIER.test(value)) {
+    throw new Error(
+      `Invalid schema: ${where} must be a plain identifier, got: ${JSON.stringify(value)}`,
+    );
+  }
+}
+
+/** import 로 main() 이 실행되지 않도록 진입점 판별 — 테스트가 ./index.js 를
+ * import 해도 CLI 가 실행되지 않는다. bin 스크립트(node dist/index.js)와
+ * `node src/index.ts` 직접 실행 양쪽 모두 진입점으로 취급한다. */
+function isCliEntry(): boolean {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(resolve(process.argv[1])) === fileURLToPath(import.meta.url);
+  } catch {
+    return false;
+  }
+}
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -505,11 +531,28 @@ function parsePackageSchema(value: unknown): PackageSchema {
     if (typeof cmd.inputSchema !== 'object' || typeof cmd.outputSchema !== 'object') {
       throw new Error(`Invalid schema: commands[${i}] must have inputSchema and outputSchema`);
     }
+    // 식별자 화이트리스트 — name/inputType/outputType/definitions 키는 생성 TS 에
+    // 그대로 삽입되므로 변조 schema.json 통한 코드 주입을 차단한다.
+    // '()' 은 unit 타입 센티넬(generate.ts 의 `command.inputType !== '()'` 와 동일).
+    assertIdentifier(cmd.name, `commands[${i}].name`);
+    if (cmd.inputType !== '()') {
+      assertIdentifier(cmd.inputType, `commands[${i}].inputType`);
+    }
+    if (cmd.outputType !== '()') {
+      assertIdentifier(cmd.outputType, `commands[${i}].outputType`);
+    }
+    if (cmd.definitions) {
+      for (const key of Object.keys(cmd.definitions)) {
+        assertIdentifier(key, `commands[${i}].definitions key`);
+      }
+    }
   }
   return value as PackageSchema;
 }
 
-main().catch((error) => {
-  console.error('Error:', error instanceof Error ? error.message : error);
-  process.exit(1);
-});
+if (isCliEntry()) {
+  main().catch((error) => {
+    console.error('Error:', error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
+}

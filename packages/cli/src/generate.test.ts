@@ -11,6 +11,7 @@ import {
   generatePositionalFacadeTs,
 } from './generate.js';
 import { collectDefinitions } from './codegen.js';
+import { parsePackageSchema } from './index.js';
 import type { PackageSchema } from './schema.js';
 
 const simpleSchema: PackageSchema = {
@@ -666,5 +667,47 @@ test('generatePositionalFacadeTs uses positional params for ≤3 primitive field
   assert.ok(
     facade.includes('export function add(a: number, b: number,'),
     'simple 2-field command must be positional',
+  );
+});
+
+// ── 스키마 식별자 화이트리스트 (생성 TS 코드 주입 방어) ─────
+
+test('parsePackageSchema rejects hostile identifiers', () => {
+  const base = {
+    packageId: 'ok.pkg',
+    schemaVersion: 1,
+    commands: [
+      {
+        name: 'addNumbers',
+        commandId: 1,
+        inputType: 'AddInput',
+        outputType: 'AddOutput',
+        inputSchema: { type: 'object' },
+        outputSchema: { type: 'object' },
+      },
+    ],
+  };
+  // 정상 통과
+  parsePackageSchema(base);
+  // 악의적 타입명 — 생성 TS 에 그대로 삽입되는 식별자
+  for (const bad of ['Evil { $ }', 'X; import("fs")', 'A\\n}; //', '']) {
+    assert.throws(
+      () => parsePackageSchema({ ...base, commands: [{ ...base.commands[0], inputType: bad }] }),
+      /identifier|Invalid schema/,
+    );
+  }
+  // 정의(definitions) 키도 검증 대상
+  assert.throws(
+    () =>
+      parsePackageSchema({
+        ...base,
+        commands: [{ ...base.commands[0], definitions: { 'bad key!': { type: 'object' } } }],
+      }),
+    /identifier|Invalid schema/,
+  );
+  // command.name 도 식별자성 이름(생성 함수명/문자열 리터럴에 삽입)
+  assert.throws(
+    () => parsePackageSchema({ ...base, commands: [{ ...base.commands[0], name: 'bad name!' }] }),
+    /identifier|Invalid schema/,
   );
 });
