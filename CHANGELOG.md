@@ -83,7 +83,7 @@ npm `@rustra/*` 7종(types/cli/node/bun/tauri/react-native/lynx)과 crates.io
 
 ### Changed
 
-- 저장소 URL을 `loopy-lim/rustra` → `loopy-lim/hostra`로 정리
+- 저장소 URL을 `loopy-lim/rustra` → `loopy-lim/hostra`로 정리 (2026-08-20 `loopy-lim/rustra`로 환원 — hostra 개명 철회)
 
 ## 0.1.0 (2026-05-13)
 

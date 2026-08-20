@@ -16,9 +16,15 @@
  * ```
  */
 
-export type { EngineClient, RustraError, RkyvV2Codec, RkyvV2Native } from '@rustra/types';
+export type {
+  EngineClient,
+  RustraError,
+  RkyvV2Codec,
+  RkyvV2Native,
+  InvokeOptions,
+} from '@rustra/types';
 export { RustraCommandError, configure, invoke, createRkyvV2Engine } from '@rustra/types';
-import { RustraCommandError } from '@rustra/types';
+import { RustraCommandError, type InvokeOptions } from '@rustra/types';
 
 /**
  * Bun transport가 구현해야 하는 인터페이스입니다.
@@ -32,7 +38,24 @@ export type BunInvokeTransport = {
  */
 export function createBunEngine(transport: BunInvokeTransport) {
   return {
-    async invoke<T>(command: string, args?: unknown): Promise<T> {
+    async invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
+      // (의미론 마감) signal 을 조용히 무시하지 않는다 — 이 엔진은 취소를
+      // 전파할 수 없는 JSON transport 위에서 동작하므로, 요청 시점에 명시적으로
+      // 거부한다. 호환성 매트릭스(docs/compatibility-matrix.md) 참고.
+      if (options?.signal) {
+        if (options.signal.aborted) {
+          throw new RustraCommandError(
+            'cancelled',
+            `invoke("${command}") aborted before dispatch`,
+            true,
+          );
+        }
+        throw new RustraCommandError(
+          'cancel.unsupported',
+          `invoke("${command}"): this JSON transport does not support AbortSignal — ` +
+            `use createRkyvV2Engine with a native module that exposes invokeAsync/invokeCancel`,
+        );
+      }
       try {
         return (await transport.invoke(command, args)) as T;
       } catch (e: unknown) {

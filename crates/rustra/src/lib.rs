@@ -133,7 +133,7 @@ use std::sync::{Arc, RwLock};
 
 use rkyv_codec::{
     BinHandler, DecodeFn, EncodeFn, Tier, build_rkyv_v2_decoder, build_rkyv_v2_response_encoder,
-    build_tier3_json_decoder, is_output_tier3,
+    build_tier3_json_decoder, is_output_tier3, js_postcard_codec_supported,
 };
 
 pub use error::{Result, RustraError};
@@ -545,9 +545,19 @@ where
     // Wrap handler in Arc so both JSON and binary paths can use it
     let handler = Arc::new(handler);
 
+    // (Tier 3 정합) JS 코드젠(@rustra/cli)이 postcard 코덱을 생성하는 타입 집합과
+    // 정합한다 — JS 쪽에서 미지원으로 레지스트리에서 제외된 명령(map 필드 등)은
+    // 엔진이 Tier 3(JSON-in-binary) 로 라우팅한다. Rust 가 typed postcard 핸들러를
+    // 그대로 켜두면 와이어가 어긋난다(JS 는 JSON 바이트를 보내고 Rust 는 postcard
+    // 로 디코딩을 시도). 따라서 JS 코덱 지원 판정을 미러해 미지원 명령의
+    // fast-path 를 끄고 JSON 경류(rkyv_v2_decode/encode_response — is_tier3 면
+    // JSON-in-binary 프레임)로 통일한다.
+    let js_codec_supported =
+        js_postcard_codec_supported(&input_schema) && js_postcard_codec_supported(&output_schema);
+
     // Generate fast postcard-based binary handler that bypasses JSON Value.
     // force_tier3 인 경우 postcard fast-path 를 끄고 Tier 3 JSON fallback 로 보낸다.
-    let rkyv_v2_handler: Option<BinHandler> = if force_tier3 {
+    let rkyv_v2_handler: Option<BinHandler> = if force_tier3 || !js_codec_supported {
         None
     } else {
         let handler_bin = handler.clone();
@@ -747,7 +757,7 @@ impl Package {
     /// Tier 1/2 commands require at least 8 bytes (fixed header).
     /// Tier 3 commands require at least 2 bytes (command_id only, rest is JSON).
     ///
-    /// (T3 후속) 크기 게이트 — JSON/postcard FFI 경로와 동일한 동적 한도
+    /// 크기 게이트(구현 완료) — JSON/postcard FFI 경로와 동일한 동적 한도
     /// ([`ffi::max_payload_bytes`]) 를 초과하면 `payload.too_large` 를 반환한다.
     /// 소비 크레이트 FFI(calculator/template)와 C++ typed fast path 가 모두
     /// 이 함수를 통과하므로 여기가 rkyv V2 와이어의 단일 검사 지점이다.

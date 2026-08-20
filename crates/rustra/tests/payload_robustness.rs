@@ -17,11 +17,11 @@
 //! 3. (T3) 동적 페이로드 한도 — `rustra_ffi_set/get_max_payload`:
 //!    - 기본값 1 MiB pin + set/get round-trip
 //!    - 상향 → 기존에 거부되던 크기가 승인 (한도 에러 아닌 정상 파이프라인)
-//!    - 하향(1024) → `payload.too_large` 로 거부 (코드 통일, T3 후속)
+//!    - 하향(1024) → `payload.too_large` 로 거부 (코드 통일 — 완료)
 //!    - 한도 변경 테스트는 전부 [`LIMIT_MUTEX`] 로 직렬화 + guard drop 에서
 //!      1 MiB 원복 — 위 (2) 의 1 MiB 가정 테스트와의 병렬 경합을 없앤다.
 //!
-//! 4. (T3 후속) rkyv V2 경로 크기 게이트 — `Package::invoke_rkyv_v2`:
+//! 4. rkyv V2 경로 크기 게이트 — `Package::invoke_rkyv_v2`:
 //!    - over-limit → `payload.too_large` 코드 + 바이트 컨텍스트
 //!    - 한도 하향이 V2 경로에도 즉시 반영
 //!    - ==limit → 게이트 통과 (정상 파이프라인에서 실패)
@@ -207,7 +207,7 @@ fn ffi_payload_over_limit_is_rejected_with_size_message() {
     let (ok, err) = unsafe { ffi_invoke_json(&payload) };
     assert!(!ok, "over-limit payload must return ok=false");
     let err = err.expect("over-limit payload must carry an error message");
-    // (T3 후속) 코드 통일 — "payload.too_large: payload NB exceeds max payload LB".
+    // 코드 통일 — "payload.too_large: payload NB exceeds max payload LB".
     assert!(
         err.starts_with("payload.too_large: "),
         "over-limit error must carry the payload.too_large code prefix, got: {err}"
@@ -333,13 +333,13 @@ fn lowered_limit_rejects_with_size_error() {
     );
     let resp = unsafe { std::slice::from_raw_parts(ptr, out_len) };
     let text = String::from_utf8_lossy(resp);
-    // (T3 후속) 코드 통일 — 평문 대신 payload.too_large 코드 프리픽스.
+    // 코드 통일 — 평문 대신 payload.too_large 코드 프리픽스.
     assert!(text.contains("payload.too_large"));
     assert!(text.contains("exceeds max payload"));
     unsafe { rustra_ffi_free(ptr, out_len) };
 }
 
-// ── (T3 후속) rkyv V2 경로 크기 게이트 ───────────────────────
+// ── rkyv V2 경로 크기 게이트 ───────────────────────
 
 /// V2 게이트 테스트 공용 — `robustness_package()` 의 `add` 명령(cmd_id 조회).
 /// 바디는 0xff 로 채운다 — continuation 비트가 켜진 varint 라 postcard 디코드가

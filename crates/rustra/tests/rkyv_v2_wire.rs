@@ -95,6 +95,39 @@ struct OptIn {
 struct OptOut {
     has_value: bool,
 }
+
+// 정적 postcard 경로의 Option 왕복 — JS 코드젠 option_* 코덱과 동일 와이어.
+// (과거 결함: JS 코덱이 Option 필드를 무음 삭제 — 여기가 Rust 측 계약 고정점)
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct StaticOptIn {
+    id: String,
+    name: Option<String>,
+    value: Option<i64>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct StaticOptOut {
+    item: Option<StaticItem>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq, Clone)]
+#[serde(rename_all = "camelCase")]
+struct StaticItem {
+    id: String,
+    name: String,
+    value: i64,
+}
+fn static_opt_cmd(input: StaticOptIn) -> rustra::Result<StaticOptOut> {
+    let item = match (input.name, input.value) {
+        (Some(name), Some(value)) => Some(StaticItem {
+            id: input.id,
+            name,
+            value,
+        }),
+        _ => None,
+    };
+    Ok(StaticOptOut { item })
+}
 fn opt_cmd(input: OptIn) -> rustra::Result<OptOut> {
     Ok(OptOut {
         has_value: input.maybe.is_some(),
@@ -270,6 +303,54 @@ fn static_tier1_negative_and_large_i64() {
         let out: common::AddOutput = static_invoke(&pkg, "add", &common::AddInput { a: v, b: 0 });
         assert_eq!(out.value, v, "i64 round-trip failed for {v}");
     }
+}
+
+// 정적 postcard Option 왕복 — Some/None 전 조합 + Option<Struct> 응답.
+#[test]
+fn static_postcard_option_round_trip() {
+    let pkg = Package::builder("wire.static.opt")
+        .command("staticOpt", static_opt_cmd)
+        .build();
+    // Some/Some → Some(item)
+    let out: StaticOptOut = static_invoke(
+        &pkg,
+        "staticOpt",
+        &StaticOptIn {
+            id: "x1".into(),
+            name: Some("W".into()),
+            value: Some(42),
+        },
+    );
+    assert_eq!(
+        out.item,
+        Some(StaticItem {
+            id: "x1".into(),
+            name: "W".into(),
+            value: 42
+        })
+    );
+    // None value → None item
+    let out: StaticOptOut = static_invoke(
+        &pkg,
+        "staticOpt",
+        &StaticOptIn {
+            id: "x2".into(),
+            name: Some("W".into()),
+            value: None,
+        },
+    );
+    assert_eq!(out.item, None);
+    // 둘 다 None → None item
+    let out: StaticOptOut = static_invoke(
+        &pkg,
+        "staticOpt",
+        &StaticOptIn {
+            id: "x3".into(),
+            name: None,
+            value: None,
+        },
+    );
+    assert_eq!(out.item, None);
 }
 
 // ════════════════════════════════════════════════════════════
@@ -714,4 +795,76 @@ fn encode_rkyv_v2_error_wire_format() {
     let wire: Wire = postcard::from_bytes(&buf[10..10 + len]).unwrap();
     assert_eq!(wire.code, "math.divide_by_zero");
     assert_eq!(wire.message, "boom 💥");
+}
+
+// ── (Tier 3 정합) JS 코덱 미지원 명령의 와이어 통일 ──────────
+//
+// map 필드(BTreeMap)를 가진 정적 명령은 JS 코드젠이 rkyv-registry 에서 제외하고
+// 엔진이 Tier 3(JSON-in-binary) 로 라우팅한다. Rust 도 같은 판정(js_postcard_codec_supported
+// 미러)으로 typed postcard fast-path 를 끄므로, map 명령은 요청/응답 모두
+// JSON-in-binary 프레임으로 통신해야 한다 — 양쪽 와이어 정합의 직접 증명.
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct JsUnsupportedIn {
+    scores: BTreeMap<String, i64>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct JsUnsupportedOut {
+    total: i64,
+}
+fn js_unsupported_cmd(input: JsUnsupportedIn) -> rustra::Result<JsUnsupportedOut> {
+    Ok(JsUnsupportedOut {
+        total: input.scores.values().sum(),
+    })
+}
+
+#[test]
+fn map_command_uses_tier3_json_wire_not_postcard() {
+    let pkg = Package::builder("wire.t3align.map")
+        .command("mapTotal", js_unsupported_cmd)
+        .build();
+
+    // Tier 3 요청 프레임: [cmd_id u16 LE][json utf8]
+    let req = common::tier3_request(1, r#"{"scores":{"a":10,"b":32}}"#);
+    let resp = pkg.invoke_rkyv_v2(&req).expect("tier3 invoke must succeed");
+
+    // 응답도 Tier 3 프레임이어야 한다: [ok:1][pad3][json_len u32 LE @4][json @8]
+    assert_eq!(resp[0], 1, "ok");
+    let json_len = u32::from_le_bytes(resp[4..8].try_into().unwrap()) as usize;
+    let json: Value =
+        serde_json::from_slice(&resp[8..8 + json_len]).expect("tier3 response body is JSON");
+    assert_eq!(json["total"], 42);
+    // postcard 프레임이었다면 @8 이 postcard(total i64 zigzag) = [0x54] 단 1바이트.
+    assert!(
+        json_len > 1,
+        "response must be JSON-in-binary, not postcard"
+    );
+}
+
+#[test]
+fn supported_types_keep_postcard_fast_path() {
+    // Option/Vec<String>/Vec<Struct>/enum 은 이제 JS 코덱 지원 — fast-path 유지.
+    // (static_opt_cmd 는 Option 필드 — postcard 왕복이 유지되는지 재확인)
+    let pkg = Package::builder("wire.t3align.keep")
+        .command("staticOpt", static_opt_cmd)
+        .build();
+    let out: StaticOptOut = static_invoke(
+        &pkg,
+        "staticOpt",
+        &StaticOptIn {
+            id: "z".into(),
+            name: Some("N".into()),
+            value: Some(9),
+        },
+    );
+    assert_eq!(
+        out.item,
+        Some(StaticItem {
+            id: "z".into(),
+            name: "N".into(),
+            value: 9
+        })
+    );
 }

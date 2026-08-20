@@ -284,7 +284,37 @@ export const getItemCodec: RkyvV2Codec<GetItemInput, GetItemOutput> = {
       }
       return { ok: false, error: err };
     }
-    return { ok: true, result: {} as GetItemOutput };
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<GetItemOutput> = {};
+    {
+      const _tag = u8[offset];
+      offset += 1;
+      if (_tag === 0) {
+        result.item = null;
+      } else {
+        {
+          const _obj: Item = {} as Item;
+          {
+            const _v = _pcDecodeString(u8, offset);
+            _obj.id = _v.value;
+            offset += _v.bytesRead;
+          }
+          {
+            const _v = _pcDecodeString(u8, offset);
+            _obj.name = _v.value;
+            offset += _v.bytesRead;
+          }
+          {
+            const _v = _pcDecodeZigzagVarint(u8, offset);
+            _obj.value = _v.value;
+            offset += _v.bytesRead;
+          }
+          result.item = _obj;
+        }
+      }
+    }
+    return { ok: true, result: result as GetItemOutput };
   },
 };
 
@@ -297,6 +327,15 @@ export const listItemsCodec: RkyvV2Codec<ListItemsInput, ListItemsOutput> = {
     const cmdId = new Uint8Array(2);
     new DataView(cmdId.buffer).setUint16(0, 3, true);
     parts.push(cmdId);
+    {
+      const _opt = args.minValue;
+      if (_opt === null || _opt === undefined) {
+        parts.push(new Uint8Array([0]));
+      } else {
+        parts.push(new Uint8Array([1]));
+        parts.push(_pcEncodeZigzagVarint(_opt));
+      }
+    }
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
@@ -315,7 +354,35 @@ export const listItemsCodec: RkyvV2Codec<ListItemsInput, ListItemsOutput> = {
       }
       return { ok: false, error: err };
     }
-    return { ok: true, result: {} as ListItemsOutput };
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<ListItemsOutput> = {};
+    {
+      const _len = _pcDecodeVarint(u8, offset);
+      offset += _len.bytesRead;
+      const _arr: Item[] = new Array(_len.value);
+      for (let _i = 0; _i < _len.value; _i++) {
+        const _obj: Item = {} as Item;
+        {
+          const _v = _pcDecodeString(u8, offset);
+          _obj.id = _v.value;
+          offset += _v.bytesRead;
+        }
+        {
+          const _v = _pcDecodeString(u8, offset);
+          _obj.name = _v.value;
+          offset += _v.bytesRead;
+        }
+        {
+          const _v = _pcDecodeZigzagVarint(u8, offset);
+          _obj.value = _v.value;
+          offset += _v.bytesRead;
+        }
+        _arr[_i] = _obj;
+      }
+      result.items = _arr;
+    }
+    return { ok: true, result: result as ListItemsOutput };
   },
 };
 
@@ -329,6 +396,24 @@ export const updateItemCodec: RkyvV2Codec<UpdateItemInput, UpdateItemOutput> = {
     new DataView(cmdId.buffer).setUint16(0, 4, true);
     parts.push(cmdId);
     parts.push(_pcEncodeString(args.id));
+    {
+      const _opt = args.name;
+      if (_opt === null || _opt === undefined) {
+        parts.push(new Uint8Array([0]));
+      } else {
+        parts.push(new Uint8Array([1]));
+        parts.push(_pcEncodeString(_opt));
+      }
+    }
+    {
+      const _opt = args.value;
+      if (_opt === null || _opt === undefined) {
+        parts.push(new Uint8Array([0]));
+      } else {
+        parts.push(new Uint8Array([1]));
+        parts.push(_pcEncodeZigzagVarint(_opt));
+      }
+    }
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
@@ -347,7 +432,37 @@ export const updateItemCodec: RkyvV2Codec<UpdateItemInput, UpdateItemOutput> = {
       }
       return { ok: false, error: err };
     }
-    return { ok: true, result: {} as UpdateItemOutput };
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<UpdateItemOutput> = {};
+    {
+      const _tag = u8[offset];
+      offset += 1;
+      if (_tag === 0) {
+        result.item = null;
+      } else {
+        {
+          const _obj: Item = {} as Item;
+          {
+            const _v = _pcDecodeString(u8, offset);
+            _obj.id = _v.value;
+            offset += _v.bytesRead;
+          }
+          {
+            const _v = _pcDecodeString(u8, offset);
+            _obj.name = _v.value;
+            offset += _v.bytesRead;
+          }
+          {
+            const _v = _pcDecodeZigzagVarint(u8, offset);
+            _obj.value = _v.value;
+            offset += _v.bytesRead;
+          }
+          result.item = _obj;
+        }
+      }
+    }
+    return { ok: true, result: result as UpdateItemOutput };
   },
 };
 

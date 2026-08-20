@@ -313,24 +313,43 @@ rustra는 4개의 공식 어댑터 패키지를 제공한다.
 
 ### Node
 
+**빠른 시작 — 내장 subprocess transport (복붙 가능):**
+
 ```ts
-import { createNodeEngine } from '@rustra/node';
+import { createNodeEngine, createNodeProcessTransport } from '@rustra/node';
 import { configure } from '@rustra/types';
 import { addNumbers } from '../generated/commands.js';
 
-const engine = createNodeEngine({
-  invoke(command, args) {
-    // Rust 런타임 프로세스를 호출하는 등의 transport 구현
-    return invokeCalculatorRuntime(command, args);
-  },
+// Rust 실행 파일의 `invoke` stdio 프로토콜로 통하는 transport —
+// cargo build 후 binary 경로만 지정하면 바로 동작한다.
+const transport = createNodeProcessTransport({
+  command: 'target/release/my-app', // cargo 빌드 산출물
+  args: ['invoke'], // Rust main 이 `invoke` 서브커맨드를 받는 경우 (기본값)
 });
 
-configure(engine); // 글로벌 invoke 에 엔진 설치 — 생성 함수는 파라미터 없이 호출
+configure(createNodeEngine(transport));
 const result = await addNumbers({ a: 20, b: 22 });
 console.log(result.value); // 42
 ```
 
-`createNodeEngine`은 `{ invoke(command, args) }` 형태의 transport 객체를 받아 `EngineClient`를 반환한다.
+전제: Rust 진입점이 stdio JSON 프로토콜(`{command, args}` → `{ok, result}`)을
+구현해야 한다 — calculator 예제의 `run_invoke_stdio`(examples/calculator/src/main.rs)가
+표준 템플릿이다.
+
+**커스텀 transport (napi-rs 등):**
+
+```ts
+import { createNodeEngine } from '@rustra/node';
+
+const engine = createNodeEngine({
+  invoke(command, args) {
+    // napi 애드온 직접 호출 등 자체 transport
+    return nativeAddon.invoke(command, JSON.stringify(args));
+  },
+});
+```
+
+`createNodeEngine`은 `{ invoke(command, args) }` 형태의 transport 객체를 받아 `EngineClient`를 반환한다. `createNodeProcessTransport`도 같은 형태이며 `dispose()`로 정리할 수 있다.
 
 ### Bun
 
@@ -441,6 +460,17 @@ const result = await addNumbers({ a: 20, b: 22 }); // ~5.8µs
 ```
 
 성능: sync 3.8µs / async 5.8µs (JSON 31µs 대비 5.3x 빠름, Nitro 2.1µs 대비 2.8x)
+
+**C++ 코덱 코드젠 (`--cpp-output`, 헤드라인 성능):** JS 측 코덱 왕복(~3.4µs)까지
+제거하려면 코드젠 시 C++ 코덱을 함께 생성해 네이티브 모듈에 컴파일한다:
+
+```sh
+rustra generate --schema ./generated/schema.json --output ./src/generated --cpp-output ./ios
+```
+
+`rustra-generated-codecs.{hpp,cpp}`가 `./ios`에 생성된다 — 이 파일을
+`RustraJSIBridge.cpp` 옆에 두고 Xcode/Podspec·Gradle 소스에 추가한다.
+자세한 설정은 [React Native 셋업 가이드](extending/react-native-setup.md) 참고.
 
 #### JSON (호환성 — Expo async bridge)
 

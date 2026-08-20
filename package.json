@@ -34,6 +34,7 @@
     "clean:dry": "bash scripts/clean-local.sh --deep --dry-run",
     "test:app:streaming": "cargo build -p rustra-streaming-example && tsc -p examples/streaming/tsconfig.json && node dist-ts/examples/streaming/apps/node-app.js",
     "test:app:auth": "cargo build -p rustra-auth-example && tsc -p examples/auth/tsconfig.json && node dist-ts/examples/auth/apps/node-app.js",
+    "test:app:reference": "cargo build -p rustra-crud-example && tsc -p examples/reference-app/tsconfig.json && node examples/reference-app/dist/examples/reference-app/src/main.js",
     "lint": "eslint packages/*/src/**/*.ts",
     "lint:fix": "eslint packages/*/src/**/*.ts --fix",
     "format": "prettier --write 'packages/*/src/**/*.ts'",

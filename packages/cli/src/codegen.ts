@@ -25,6 +25,11 @@ export function tsTypeFromSchema(
 ): string {
   if (schema.$ref) return resolveRef(schema.$ref);
 
+  // allOf → intersection `A & B` (schemars 미출력이지만 JSON Schema 표준 결합).
+  if (schema.allOf) {
+    return schema.allOf.map((s) => tsTypeFromSchema(s, definitions)).join(' & ');
+  }
+
   if (schema.anyOf) {
     return schema.anyOf.map((s) => tsTypeFromSchema(s, definitions)).join(' | ');
   }
@@ -43,7 +48,13 @@ export function tsTypeFromSchema(
           return `Record<string, ${valueType}>`;
         }
         return tsObjectFromSchema(schema, definitions);
-      case 'integer':
+      case 'integer': {
+        // integer enum → `1 | 2 | 3` 리터럴 union (Rust codegen.ts_type_from_schema와 일치).
+        if (schema.enum && schema.enum.length > 0) {
+          return schema.enum.map((v) => String(v)).join(' | ');
+        }
+        return 'number';
+      }
       case 'number':
         return 'number';
       case 'string': {

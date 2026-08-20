@@ -12,6 +12,15 @@
 //! - **host-neutral** — surface 연산만 있다. Tauri/Wry/미래 renderer 모두
 //!   동일 trait 의 구현체일 뿐이다.
 //!
+//! ## 현재 상태 (2026-08-20, Lynx 제거 직후)
+//!
+//! 이 trait 은 **공개 API로 유지된다** — 임베디드 renderer 를 포함하는 호스트
+//! 통합 지점(예: 미래의 Tauri 렌더 호스트, 커스텀 네이티브 셸)이 구현할
+//! 인터페이스다. 참고: 과거 Lynx 트랙의 구현체가 유일한 소비자였으나 Lynx
+//! 지원 제거(PR #16)로 in-repo 구현체가 사라졌고, 현재 `#[cfg(test)]` 의
+//! MockHost 가 유일한 구현이다. 새 renderer 표면을 추가할 때 이 trait 을
+//! 구현해 prelude 로 재수출된 계약을 그대로 쓰면 된다.
+//!
 //! 구현체는 각 플랫폼 셸이 제공한다 — 예: 임베디드 renderer C++ host 가 C API 로
 //! `create_surface → load → send_message → destroy` 를 수행하고, Rust wrapper 가
 //! 같은 trait 을 채운다.

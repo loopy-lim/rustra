@@ -73,10 +73,12 @@ export type JsonSchema = {
   anyOf?: JsonSchema[];
   /** 유니온 타입의 각 변형 (JSON Schema oneOf — 판별 유니온에 사용) */
   oneOf?: JsonSchema[];
+  /** 교차 타입의 각 구성 (JSON Schema allOf → TS `A & B`) */
+  allOf?: JsonSchema[];
   /** 프로퍼티의 상수 값 (판별 유니온의 태그 필드 등) */
   const?: unknown;
-  /** 문자열 enum 값 목록 */
-  enum?: string[];
+  /** enum 값 목록 — string 또는 integer 리터럴 */
+  enum?: (string | number)[];
   /** 스키마 제목 */
   title?: string;
   /** 값 형식 (예: "int64", "date-time") */

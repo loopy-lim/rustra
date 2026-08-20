@@ -6,6 +6,9 @@ import {
   generateContractTs,
   generateRkyvCodecsCpp,
   generateRkyvCodecsHpp,
+  generateRkyvCodecsTs,
+  generateRkyvRegistryTs,
+  generatePositionalFacadeTs,
 } from './generate.js';
 import { collectDefinitions } from './codegen.js';
 import type { PackageSchema } from './schema.js';
@@ -451,4 +454,217 @@ test('generateRkyvCodecsCpp is pure C++ (no TS leakage)', () => {
   assert.ok(!cpp.includes('DataView'));
   assert.ok(!cpp.includes('TextEncoder'));
   assert.ok(!cpp.includes('from ./'));
+});
+
+// ── Option/Vec<String>/Vec<Struct>/enum 코덱 지원 + 미지원 제외 정책 ─────
+
+const richSchema: PackageSchema = {
+  packageId: 'test.rich',
+  commands: [
+    {
+      name: 'updateItem',
+      commandId: 4,
+      inputType: 'UpdateItemInput',
+      outputType: 'UpdateItemOutput',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: ['string', 'null'] },
+          value: { type: ['integer', 'null'] },
+        },
+        required: ['id'],
+        title: 'UpdateItemInput',
+      },
+      outputSchema: {
+        type: 'object',
+        properties: { item: { anyOf: [{ $ref: '#/definitions/Item' }, { type: 'null' }] } },
+        title: 'UpdateItemOutput',
+        definitions: {
+          Item: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+              value: { type: 'integer' },
+            },
+            required: ['id', 'name', 'value'],
+            title: 'Item',
+          },
+        },
+      },
+    },
+    {
+      name: 'listItems',
+      commandId: 5,
+      inputType: 'ListInput',
+      outputType: 'ListOutput',
+      inputSchema: {
+        type: 'object',
+        properties: { tags: { type: 'array', items: { type: 'string' } } },
+        required: ['tags'],
+        title: 'ListInput',
+      },
+      outputSchema: {
+        type: 'object',
+        properties: { items: { type: 'array', items: { $ref: '#/definitions/Item2' } } },
+        required: ['items'],
+        title: 'ListOutput',
+        definitions: {
+          Item2: {
+            type: 'object',
+            properties: { id: { type: 'string' } },
+            required: ['id'],
+            title: 'Item2',
+          },
+        },
+      },
+    },
+    {
+      name: 'sortBy',
+      commandId: 6,
+      inputType: 'SortInput',
+      outputType: 'SortOutput',
+      inputSchema: {
+        type: 'object',
+        properties: { order: { type: 'string', enum: ['asc', 'desc'] } },
+        required: ['order'],
+        title: 'SortInput',
+      },
+      outputSchema: {
+        type: 'object',
+        properties: { done: { type: 'boolean' } },
+        required: ['done'],
+        title: 'SortOutput',
+      },
+    },
+    {
+      name: 'unsupportedMap',
+      commandId: 7,
+      inputType: 'MapInput',
+      outputType: 'MapOutput',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          scores: { type: 'object', additionalProperties: { type: 'integer' } },
+        },
+        required: ['scores'],
+        title: 'MapInput',
+      },
+      outputSchema: {
+        type: 'object',
+        properties: { total: { type: 'integer' } },
+        required: ['total'],
+        title: 'MapOutput',
+      },
+    },
+  ],
+};
+
+test('generateTypesTs maps allOf to intersection and integer enum to literal union', () => {
+  const schema: PackageSchema = {
+    packageId: 'test.allof',
+    commands: [
+      {
+        name: 'merge',
+        commandId: 1,
+        inputType: 'MergeInput',
+        outputType: 'MergeOutput',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            both: { allOf: [{ $ref: '#/definitions/A' }, { $ref: '#/definitions/B' }] },
+            level: { type: 'integer', enum: [1, 2, 3] },
+          },
+          required: ['both', 'level'],
+          title: 'MergeInput',
+          definitions: {
+            A: { type: 'object', properties: { a: { type: 'integer' } }, required: ['a'] },
+            B: { type: 'object', properties: { b: { type: 'string' } }, required: ['b'] },
+          },
+        },
+        outputSchema: {
+          type: 'object',
+          properties: { ok: { type: 'boolean' } },
+          required: ['ok'],
+          title: 'MergeOutput',
+        },
+      },
+    ],
+  };
+  const types = generateTypesTs(schema);
+  assert.ok(
+    types.includes('both: A & B;'),
+    `allOf must map to intersection, got: ${types.slice(0, 400)}`,
+  );
+  assert.ok(types.includes('level: 1 | 2 | 3;'), 'integer enum must map to literal union');
+});
+
+test('generateRkyvCodecsTs encodes Option fields (no silent drop)', () => {
+  const codecs = generateRkyvCodecsTs(richSchema);
+  const update = codecs.split('updateItemCodec')[1];
+  assert.ok(update.includes('args.name'), 'Option<string> name must be encoded');
+  assert.ok(update.includes('args.value'), 'Option<i64> value must be encoded');
+  // Option 태그 바이트(0/1) 분기 생성 확인
+  assert.ok(update.includes('new Uint8Array([0])'));
+  assert.ok(update.includes('new Uint8Array([1])'));
+});
+
+test('generateRkyvCodecsTs encodes Vec<String> and Vec<Struct>', () => {
+  const codecs = generateRkyvCodecsTs(richSchema);
+  const list = codecs.split('listItemsCodec')[1].split('export const')[0];
+  assert.ok(list.includes('args.tags'), 'Vec<String> tags must be encoded');
+  assert.ok(
+    list.includes('_pcEncodeString(_arr[_i])'),
+    'Vec<String> elements must be string-encoded',
+  );
+  assert.ok(list.includes('result.items'), 'Vec<Struct> items must be decoded');
+});
+
+test('generateRkyvCodecsTs encodes string enums as variant index', () => {
+  const codecs = generateRkyvCodecsTs(richSchema);
+  const sort = codecs.split('sortByCodec')[1].split('export const')[0];
+  assert.ok(sort.includes('["asc","desc"]'), 'enum variants must be embedded');
+  assert.ok(sort.includes('_variants.indexOf'), 'enum index lookup must be generated');
+});
+
+test('generateRkyvRegistryTs excludes unsupported commands with a header note', () => {
+  const registry = generateRkyvRegistryTs(richSchema);
+  assert.ok(registry.includes("['updateItem'"), 'Option commands must be included');
+  assert.ok(registry.includes("['sortBy'"), 'enum commands must be included');
+  assert.ok(registry.includes("['listItems'"), 'Vec<Struct> commands must be included');
+  assert.ok(!registry.includes("['unsupportedMap'"), 'map commands must be excluded');
+  assert.ok(registry.includes('Tier 3 fallback'), 'exclusion note must be present');
+});
+
+test('generateRkyvCodecsCpp excludes unsupported commands from has_static_codec', () => {
+  const cpp = generateRkyvCodecsCpp(richSchema);
+  assert.ok(cpp.includes('if (name == "updateItem") { encode_updateItem'));
+  assert.ok(
+    !cpp.includes('unsupportedMap'),
+    'unsupported map command must not appear in C++ codec',
+  );
+});
+
+// ── positional facade (P2) ──────────────────────────────────
+
+test('generatePositionalFacadeTs emits positional signatures for simple commands', () => {
+  const facade = generatePositionalFacadeTs(richSchema);
+  // updateItem — Option 필드지만 pass-through 가능(단일 input 객체) 확인
+  assert.ok(facade.includes('installRustraPositional'), 'installer must be exported');
+  assert.ok(facade.includes('PositionalNative'), 'native type must be exported');
+  // sortBy (enum, 단일 필드) → positional
+  const sort = facade.split('export function sortBy')[1]?.split('export function')[0] ?? '';
+  assert.ok(sort.includes('order: string'), 'enum field must map to string param');
+  assert.ok(sort.includes("'sortBy'"), 'command name must be passed');
+  // unsupportedMap 은 제외
+  assert.ok(!facade.includes('unsupportedMap'), 'unsupported commands must be excluded');
+});
+
+test('generatePositionalFacadeTs uses positional params for ≤3 primitive fields', () => {
+  const facade = generatePositionalFacadeTs(simpleSchema);
+  assert.ok(
+    facade.includes('export function add(a: number, b: number,'),
+    'simple 2-field command must be positional',
+  );
 });

@@ -119,10 +119,20 @@ test('getLiveSchema parses commands into a name→entry map', () => {
   assert.equal(map.size, 2);
 });
 
-test('getLiveSchema returns empty map when getSchema missing', () => {
+test('getLiveSchema throws schema.unavailable when getSchema missing', () => {
+  // (의미론 마감) getSchema 미노출은 "빈 스키마"가 아니라 조회 불능 —
+  // 조용한 빈 Map 대신 명시적 에러.
   const native = { invokeRkyvV2: () => new ArrayBuffer(0) } as RkyvV2SchemaNative;
-  const map = getLiveSchema(native);
-  assert.equal(map.size, 0);
+  assert.throws(
+    () => getLiveSchema(native),
+    (e: unknown) => e instanceof RustraCommandError && e.code === 'schema.unavailable',
+  );
+  // 엔진의 tier-3 디스패치는 이를 흡수해 기존 command.not_found 계약 유지.
+  const engine = createRkyvV2Engine(native, new Map());
+  return assert.rejects(
+    engine.invoke('dynCmd', {}),
+    (e: unknown) => e instanceof RustraCommandError && e.code === 'command.not_found',
+  );
 });
 
 // ── createRkyvV2Engine: 정적 codec fast-path ────────────────
@@ -1212,17 +1222,20 @@ test('typed-path command falls back to shallow cancel even with invokeAsync expo
   assert.equal(cancels, 0, 'invokeCancel must not be called on shallow fallback');
 });
 
-test('tier3 dynamic command falls back to shallow cancel even with invokeAsync exposed (T1)', async () => {
-  // tier 게이팅(동적 경로): 레지스트리 코덱이 없는 tier 3 명령도 전파 제외.
+test('tier3 dynamic command propagates cancel via invokeAsync (semantic closure)', async () => {
+  // (의미론 마감) 코덱 없는 동적(tier 3) 명령도 invokeAsync+invokeCancel 노출 시
+  // live schema 의 commandId 로 Tier 3 프레임을 invokeAsync 에 실어 전파한다.
   let cancels = 0;
   let asyncCalls = 0;
+  let forwardedPayload: ArrayBuffer | undefined;
   const native = makeNative({
     schema: schemaBytes([{ name: 'dyn', commandId: 3 }]),
     invokeImpl: () => tier3Success({ v: 1 }),
   });
-  native.invokeAsync = () => {
+  native.invokeAsync = (payload: ArrayBuffer, _cb: (resp: ArrayBuffer) => void) => {
     asyncCalls++;
-    return 1;
+    forwardedPayload = payload;
+    return 11;
   };
   native.invokeCancel = () => {
     cancels++;
@@ -1230,14 +1243,18 @@ test('tier3 dynamic command falls back to shallow cancel even with invokeAsync e
   };
   const engine = createRkyvV2Engine(native, new Map());
   const ac = new AbortController();
-  const p = engine.invoke<{ v: number }>('dyn', {}, { signal: ac.signal });
+  const p = engine.invoke<{ v: number }>('dyn', { x: 1 }, { signal: ac.signal });
   ac.abort();
   await assert.rejects(p, (e: unknown) => {
     assert.ok(e instanceof RustraCommandError && e.code === 'cancelled');
     return true;
   });
-  assert.equal(asyncCalls, 0, 'invokeAsync must not be used for tier3 dynamic commands');
-  assert.equal(cancels, 0, 'invokeCancel must not be called on shallow fallback');
+  assert.equal(asyncCalls, 1, 'invokeAsync must carry the tier3 request for dynamic commands');
+  assert.ok(forwardedPayload !== undefined && forwardedPayload.byteLength >= 2, 'tier3 frame sent');
+  // cmd_id = 3 (u16 LE) 프리앰블 검증
+  const u8 = new Uint8Array(forwardedPayload!);
+  assert.equal(u8[0] | (u8[1] << 8), 3, 'tier3 frame must carry live-schema commandId');
+  assert.equal(cancels, 1, 'invokeCancel must reach the Rust checkpoint');
 });
 
 test('abort mid-flight: propagate path calls invokeCancel and rejects (T1)', async () => {
@@ -1594,4 +1611,62 @@ test('T3: payload.too_large message carries both actual and limit byte sizes', a
       return true;
     },
   );
+});
+
+// ── (의미론 마감) 3-tier × 취소 전파 매트릭스 ────────────────
+
+test('typed(tier 1) command propagates cancel via invokeAsync when codec is absent', async () => {
+  // typed 캐시에 있는 명령이더라도 registry 코덱이 없으면(JS 코드젠 제외 등)
+  // Tier 3 프레임 + invokeAsync 로 전파 — 과거 얕은 취소 폴백을 확장.
+  let cancels = 0;
+  let asyncCalls = 0;
+  let forwarded: ArrayBuffer | undefined;
+  const native = makeTypedNative({
+    schema: schemaBytes([{ name: 'typedCmd', commandId: 7 }]),
+    invokeImpl: () => tier3Success({ ok: true }),
+    hasStaticCodec: (name) => name === 'typedCmd',
+    invokeTyped: () => ({ ok: true }),
+  });
+  native.invokeAsync = (payload: ArrayBuffer, _cb: (resp: ArrayBuffer) => void) => {
+    asyncCalls++;
+    forwarded = payload;
+    return 21;
+  };
+  native.invokeCancel = () => {
+    cancels++;
+    return true;
+  };
+  const engine = createRkyvV2Engine(native, new Map());
+  const ac = new AbortController();
+  const p = engine.invoke<{ ok: boolean }>('typedCmd', {}, { signal: ac.signal });
+  ac.abort();
+  await assert.rejects(p, (e: unknown) => {
+    assert.ok(e instanceof RustraCommandError && e.code === 'cancelled');
+    return true;
+  });
+  assert.equal(asyncCalls, 1);
+  const u8 = forwarded ? new Uint8Array(forwarded) : new Uint8Array(0);
+  assert.equal(u8[0] | (u8[1] << 8), 7, 'typed-cache commandId must ride the tier3 frame');
+  assert.equal(cancels, 1);
+});
+
+test('dynamic command without live schema keeps shallow cancel (no commandId source)', async () => {
+  // getSchema 미노출 + 코덱 없음 → commandId 를 알 수 없어 전파 불가 — 얕은 취소 유지.
+  let asyncCalls = 0;
+  const native = makeNative({ invokeImpl: () => tier3Success({ v: 1 }) });
+  native.getSchema = undefined;
+  native.invokeAsync = () => {
+    asyncCalls++;
+    return 1;
+  };
+  native.invokeCancel = () => true;
+  const engine = createRkyvV2Engine(native, new Map());
+  const ac = new AbortController();
+  const p = engine.invoke<{ v: number }>('ghost', {}, { signal: ac.signal });
+  ac.abort();
+  await assert.rejects(p, (e: unknown) => {
+    assert.ok(e instanceof RustraCommandError && e.code === 'cancelled');
+    return true;
+  });
+  assert.equal(asyncCalls, 0, 'no commandId source → invokeAsync must not be used');
 });

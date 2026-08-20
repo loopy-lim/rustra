@@ -8,6 +8,7 @@ export type AdminStatsInput = {
 export type AdminStatsOutput = {
   sessions: number;
   uptimeMs: number;
+  /** 활성 세션 사용자명 목록 — admin 가시성 예시. */
   activeUsers: string[];
 };
 
@@ -27,6 +28,7 @@ export type SignInInput = {
 
 export type SignInOutput = {
   token: string;
+  /** 발급된 세션이 가진 초기 role — "admin" 이면 adminStats 요청 가능. */
   role: string;
 };
 
