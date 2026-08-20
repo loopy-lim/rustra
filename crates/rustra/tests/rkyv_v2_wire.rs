@@ -796,3 +796,75 @@ fn encode_rkyv_v2_error_wire_format() {
     assert_eq!(wire.code, "math.divide_by_zero");
     assert_eq!(wire.message, "boom 💥");
 }
+
+// ── (Tier 3 정합) JS 코덱 미지원 명령의 와이어 통일 ──────────
+//
+// map 필드(BTreeMap)를 가진 정적 명령은 JS 코드젠이 rkyv-registry 에서 제외하고
+// 엔진이 Tier 3(JSON-in-binary) 로 라우팅한다. Rust 도 같은 판정(js_postcard_codec_supported
+// 미러)으로 typed postcard fast-path 를 끄므로, map 명령은 요청/응답 모두
+// JSON-in-binary 프레임으로 통신해야 한다 — 양쪽 와이어 정합의 직접 증명.
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct JsUnsupportedIn {
+    scores: BTreeMap<String, i64>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct JsUnsupportedOut {
+    total: i64,
+}
+fn js_unsupported_cmd(input: JsUnsupportedIn) -> rustra::Result<JsUnsupportedOut> {
+    Ok(JsUnsupportedOut {
+        total: input.scores.values().sum(),
+    })
+}
+
+#[test]
+fn map_command_uses_tier3_json_wire_not_postcard() {
+    let pkg = Package::builder("wire.t3align.map")
+        .command("mapTotal", js_unsupported_cmd)
+        .build();
+
+    // Tier 3 요청 프레임: [cmd_id u16 LE][json utf8]
+    let req = common::tier3_request(1, r#"{"scores":{"a":10,"b":32}}"#);
+    let resp = pkg.invoke_rkyv_v2(&req).expect("tier3 invoke must succeed");
+
+    // 응답도 Tier 3 프레임이어야 한다: [ok:1][pad3][json_len u32 LE @4][json @8]
+    assert_eq!(resp[0], 1, "ok");
+    let json_len = u32::from_le_bytes(resp[4..8].try_into().unwrap()) as usize;
+    let json: Value =
+        serde_json::from_slice(&resp[8..8 + json_len]).expect("tier3 response body is JSON");
+    assert_eq!(json["total"], 42);
+    // postcard 프레임이었다면 @8 이 postcard(total i64 zigzag) = [0x54] 단 1바이트.
+    assert!(
+        json_len > 1,
+        "response must be JSON-in-binary, not postcard"
+    );
+}
+
+#[test]
+fn supported_types_keep_postcard_fast_path() {
+    // Option/Vec<String>/Vec<Struct>/enum 은 이제 JS 코덱 지원 — fast-path 유지.
+    // (static_opt_cmd 는 Option 필드 — postcard 왕복이 유지되는지 재확인)
+    let pkg = Package::builder("wire.t3align.keep")
+        .command("staticOpt", static_opt_cmd)
+        .build();
+    let out: StaticOptOut = static_invoke(
+        &pkg,
+        "staticOpt",
+        &StaticOptIn {
+            id: "z".into(),
+            name: Some("N".into()),
+            value: Some(9),
+        },
+    );
+    assert_eq!(
+        out.item,
+        Some(StaticItem {
+            id: "z".into(),
+            name: "N".into(),
+            value: 9
+        })
+    );
+}

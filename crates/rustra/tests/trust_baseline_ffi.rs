@@ -286,7 +286,13 @@ fn caller_buffer_json_invoke_probe_then_write() {
     // 1) size-probe: buf=null → 필요 크기 반환
     let mut needed: usize = 0;
     let probe = unsafe {
-        rustra_ffi_invoke_json_into(request.as_ptr(), request.len(), std::ptr::null_mut(), 0, &mut needed)
+        rustra_ffi_invoke_json_into(
+            request.as_ptr(),
+            request.len(),
+            std::ptr::null_mut(),
+            0,
+            &mut needed,
+        )
     };
     assert_eq!(probe, 0, "probe must return 0 with buf=null");
     assert!(needed > 0, "probe must report needed size");
@@ -295,10 +301,17 @@ fn caller_buffer_json_invoke_probe_then_write() {
     let mut buf = vec![0u8; needed];
     let mut written: usize = 0;
     let n = unsafe {
-        rustra_ffi_invoke_json_into(request.as_ptr(), request.len(), buf.as_mut_ptr(), buf.len(), &mut written)
+        rustra_ffi_invoke_json_into(
+            request.as_ptr(),
+            request.len(),
+            buf.as_mut_ptr(),
+            buf.len(),
+            &mut written,
+        )
     };
     assert_eq!(n, needed, "write must return the written byte count");
-    let resp: serde_json::Value = serde_json::from_slice(&buf).expect("caller buffer holds JSON response");
+    let resp: serde_json::Value =
+        serde_json::from_slice(&buf).expect("caller buffer holds JSON response");
     assert_eq!(resp["ok"], true);
     assert_eq!(resp["result"], 42);
     // Rust 가 할당한 버퍼가 없다 — 해제할 것이 없다 (3중 복사 제거의 증명).
@@ -307,7 +320,13 @@ fn caller_buffer_json_invoke_probe_then_write() {
     let mut small = vec![0u8; needed - 1];
     let mut out2: usize = 0;
     let short = unsafe {
-        rustra_ffi_invoke_json_into(request.as_ptr(), request.len(), small.as_mut_ptr(), small.len(), &mut out2)
+        rustra_ffi_invoke_json_into(
+            request.as_ptr(),
+            request.len(),
+            small.as_mut_ptr(),
+            small.len(),
+            &mut out2,
+        )
     };
     assert_eq!(short, usize::MAX, "insufficient buffer must signal retry");
     assert_eq!(out2, needed, "needed size must be reported on retry signal");
@@ -326,11 +345,23 @@ fn caller_buffer_json_invoke_panics_cleanly() {
 
     let mut needed: usize = 0;
     unsafe {
-        rustra_ffi_invoke_json_into(request.as_ptr(), request.len(), std::ptr::null_mut(), 0, &mut needed)
+        rustra_ffi_invoke_json_into(
+            request.as_ptr(),
+            request.len(),
+            std::ptr::null_mut(),
+            0,
+            &mut needed,
+        )
     };
     let mut buf = vec![0u8; needed];
     let n = unsafe {
-        rustra_ffi_invoke_json_into(request.as_ptr(), request.len(), buf.as_mut_ptr(), buf.len(), &mut needed)
+        rustra_ffi_invoke_json_into(
+            request.as_ptr(),
+            request.len(),
+            buf.as_mut_ptr(),
+            buf.len(),
+            &mut needed,
+        )
     };
     assert!(n != usize::MAX, "panic must not signal buffer-retry");
     let resp: serde_json::Value = serde_json::from_slice(&buf).expect("panic yields a frame");
