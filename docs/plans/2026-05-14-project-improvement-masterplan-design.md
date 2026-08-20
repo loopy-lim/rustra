@@ -119,30 +119,30 @@ Phase 1은 독립적으로 진행 가능하며, Phase 2-4는 Phase 1의 CI/린�
 
 ## 진척 상태 (2026-08-15 갱신)
 
-| 항목                                  | 상태      | 비고                                                            |
-| ------------------------------------- | --------- | --------------------------------------------------------------- |
-| ci.yml (1-1)                          | ✅ 완료   | fmt/clippy/test + TS 전체 게이트 green                          |
-| release.yml (1-1)                     | ✅ 완료   | 2026-08-15 추가 — changesets npm + crates.io 수동 잡            |
-| bench.yml (1-1)                       | ✅ 완료   | 2026-08-15 추가 — 수동 트리거, 회귀 감지                        |
-| ESLint/Prettier/lefthook (1-2, 1-3)   | ✅ 완료   | lefthook이 husky/lint-staged 역할 대체                          |
-| Tuple/Map 타입 (2-1)                  | ✅ 완료   | codegen Map/Tuple 지원                                          |
-| Set 타입 (2-1)                        | ✅ 완료   | 2026-08-15 `Set<T>` + postcard set_* kind (f48537ff)            |
-| Recursive / Discriminated (2-1)       | ✅ 완료   | const 판별 필드 + allOf/integer enum (2026-08-20 코드젠 마감)  |
+| 항목                                  | 상태      | 비고                                                               |
+| ------------------------------------- | --------- | ------------------------------------------------------------------ |
+| ci.yml (1-1)                          | ✅ 완료   | fmt/clippy/test + TS 전체 게이트 green                             |
+| release.yml (1-1)                     | ✅ 완료   | 2026-08-15 추가 — changesets npm + crates.io 수동 잡               |
+| bench.yml (1-1)                       | ✅ 완료   | 2026-08-15 추가 — 수동 트리거, 회귀 감지                           |
+| ESLint/Prettier/lefthook (1-2, 1-3)   | ✅ 완료   | lefthook이 husky/lint-staged 역할 대체                             |
+| Tuple/Map 타입 (2-1)                  | ✅ 완료   | codegen Map/Tuple 지원                                             |
+| Set 타입 (2-1)                        | ✅ 완료   | 2026-08-15 `Set<T>` + postcard set\_\* kind (f48537ff)             |
+| Recursive / Discriminated (2-1)       | ✅ 완료   | const 판별 필드 + allOf/integer enum (2026-08-20 코드젠 마감)      |
 | RN Android 네이티브 (2-2)             | ✅ 완료   | Lynx 트랙에서 Android JNI 증명 (7/7) — runner/ 는 Lynx 제거로 삭제 |
-| 에러 retryable 메타데이터 (2-3)       | ✅ 완료   | transport.*/timeout retryable + TS `.retryable` 노출 (f48537ff) |
-| CRUD 예제 (3-1)                       | ✅ 완료   | examples/crud                                                   |
-| Streaming/Auth 예제 (3-1)             | ✅ 완료   | examples/streaming, examples/auth (발행된 패턴 예제)            |
-| Changesets (3-2)                      | ⚠️ 도입됨 | config 존재, 0.1.2/0.1.3은 changeset 범프로 발행                |
-| npm 배포 (3-2)                        | ✅ 완료   | @rustra/* 10종 0.1.3 발행                                       |
-| crates.io 배포 (3-2)                  | ✅ 완료   | rustra / rustra-macros 0.1.3 발행                               |
-| CLI watch (3-3)                       | ✅ 완료   | `rustra generate --watch`                                       |
-| CLI init (3-3)                        | ✅ 완료   | `rustra init <dir>` 스캐폴딩 (f48537ff)                         |
-| 큰 페이로드 벤치마크 (4-2)            | ✅ 완료   | docs/benchmarks.md 페이로드 scaling                             |
-| 메모리 프로파일링 / 동시성 벤치 (4-2) | ❌ 미완료 | 후보 과제                                                       |
-| CI 벤치마크 회귀 감지 (4-2)           | ✅ 완료   | bench.yml (2026-08-15)                                          |
-| 스키마 호환성 검사 (4-3)              | ✅ 완료   | schema-diff breaking change 검출                                |
-| 런타임 계약 검증 (4-3)                | ✅ 완료   | contractHash + createValidatedEngine                            |
-| 마이그레이션 가이드 (4-3)             | ✅ 완료   | docs/migration-guide.md                                         |
+| 에러 retryable 메타데이터 (2-3)       | ✅ 완료   | transport.\*/timeout retryable + TS `.retryable` 노출 (f48537ff)   |
+| CRUD 예제 (3-1)                       | ✅ 완료   | examples/crud                                                      |
+| Streaming/Auth 예제 (3-1)             | ✅ 완료   | examples/streaming, examples/auth (발행된 패턴 예제)               |
+| Changesets (3-2)                      | ⚠️ 도입됨 | config 존재, 0.1.2/0.1.3은 changeset 범프로 발행                   |
+| npm 배포 (3-2)                        | ✅ 완료   | @rustra/\* 10종 0.1.3 발행                                         |
+| crates.io 배포 (3-2)                  | ✅ 완료   | rustra / rustra-macros 0.1.3 발행                                  |
+| CLI watch (3-3)                       | ✅ 완료   | `rustra generate --watch`                                          |
+| CLI init (3-3)                        | ✅ 완료   | `rustra init <dir>` 스캐폴딩 (f48537ff)                            |
+| 큰 페이로드 벤치마크 (4-2)            | ✅ 완료   | docs/benchmarks.md 페이로드 scaling                                |
+| 메모리 프로파일링 / 동시성 벤치 (4-2) | ❌ 미완료 | 후보 과제                                                          |
+| CI 벤치마크 회귀 감지 (4-2)           | ✅ 완료   | bench.yml (2026-08-15)                                             |
+| 스키마 호환성 검사 (4-3)              | ✅ 완료   | schema-diff breaking change 검출                                   |
+| 런타임 계약 검증 (4-3)                | ✅ 완료   | contractHash + createValidatedEngine                               |
+| 마이그레이션 가이드 (4-3)             | ✅ 완료   | docs/migration-guide.md                                            |
 
 계획 외 달성: rkyv V2 무직렬화 경로, RN JSI fast path, FFI trust hardening,
 온디바이스 벤치마크(iOS Direct C++ 0.95µs). (Lynx 어댑터+4플랫폼 러너 템플릿은

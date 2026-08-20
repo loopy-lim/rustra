@@ -284,13 +284,13 @@ let pkg = Package::builder("example.calculator")
 
 ### 기타 빌더 메서드
 
-| 메서드                                        | 역할                                                       |
-| --------------------------------------------- | ---------------------------------------------------------- |
-| `.require_capability(name, cap)`              | 명령에 capability 요구 부여 (deny-by-default Runtime Authority) |
-| `.alias_command_id(command, legacy_id)`       | 구 cmd_id 별칭 등록 (하위호환 디스패치)                    |
-| `.event_capacity(capacity)`                   | 이벤트 버스 링 버퍼 용량 설정                              |
-| `.schema_version(version)`                    | (T2, OTA) 스키마 협상 버전 명시                            |
-| `.manage(state)`                              | 공유 상태(`Package::state::<T>()`로 접근) 등록             |
+| 메서드                                  | 역할                                                            |
+| --------------------------------------- | --------------------------------------------------------------- |
+| `.require_capability(name, cap)`        | 명령에 capability 요구 부여 (deny-by-default Runtime Authority) |
+| `.alias_command_id(command, legacy_id)` | 구 cmd_id 별칭 등록 (하위호환 디스패치)                         |
+| `.event_capacity(capacity)`             | 이벤트 버스 링 버퍼 용량 설정                                   |
+| `.schema_version(version)`              | (T2, OTA) 스키마 협상 버전 명시                                 |
+| `.manage(state)`                        | 공유 상태(`Package::state::<T>()`로 접근) 등록                  |
 
 ### `.build()` / `.done()`
 

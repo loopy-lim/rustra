@@ -391,7 +391,15 @@ type LiveSchemaDocument = {
 /** getLiveSchema 의 파싱 내부 — 엔진 생성 시 schemaVersion 까지 읽는다 (T2). */
 function parseLiveSchemaDocument(native: { getSchema?(): ArrayBuffer }): LiveSchemaDocument {
   if (!native.getSchema) {
-    return { commands: new Map() };
+    // (의미론 마감) 네이티브가 getSchema 를 노출하지 않으면 live schema 자체를
+    // 얻을 수 없다 — 빈 Map 을 돌려주면 Tier 3 동적 명령이 command.not_found 로
+    // 오해받는다. 스키마 조회가 실제로 필요한 호출자가 즉시 실패하도록 명시적
+    // 에러를 던진다 (엔진 생성 시 schemaVersion 협상은 선택적이라 try/catch 로
+    // 이미 흡수된다).
+    throw new RustraCommandError(
+      'schema.unavailable',
+      'native module does not expose getSchema(); live schema is unavailable',
+    );
   }
   const bytes = native.getSchema();
   const u = new Uint8Array(bytes);
@@ -423,9 +431,27 @@ function parseLiveSchemaDocument(native: { getSchema?(): ArrayBuffer }): LiveSch
 /**
  * 네이티브 getSchema() 로부터 현재 명령 스키마를 조회한다 (정적 + 동적 명령 포함).
  * 동적 명령의 commandId/타입을 알아내 rkyvV2 Tier 3 fallback 에 사용된다.
+ * getSchema 미노출 네이티브에서는 schema.unavailable 에러를 던진다.
  */
 export function getLiveSchema(native: { getSchema?(): ArrayBuffer }): Map<string, LiveSchemaEntry> {
   return parseLiveSchemaDocument(native).commands;
+}
+
+/**
+ * live schema 에서 단일 명령 항목을 찾는다 — 스키마 접근이 불가(getSchema 미노출)
+ * 이면 undefined 를 반환해 호출자가 자체 폴백(얕은 취소/command.not_found)을
+ * 택하도록 한다. 전체 스키마 파싱 실패와 "명령이 정말 없는 경우"를 구분하기
+ * 위한 좁은 헬퍼.
+ */
+function lookupLiveSchemaEntry(
+  native: { getSchema?(): ArrayBuffer },
+  command: string,
+): LiveSchemaEntry | undefined {
+  try {
+    return getLiveSchema(native).get(command);
+  } catch {
+    return undefined;
+  }
 }
 
 // ── Tier 3 (JSON-in-binary) wire helpers ────────────────────
@@ -777,8 +803,10 @@ export function createRkyvV2Engine(
       if (!outcome.ok) throw outcome.error;
       return outcome.value;
     }
-    // 3순위: 동적 명령 → Tier 3 fallback (live schema 의 commandId 사용)
-    const entry = getLiveSchema(native).get(command);
+    // 3순위: 동적 명령 → Tier 3 fallback (live schema 의 commandId 사용).
+    // getSchema 미노출 네이티브에서 lookupLiveSchemaEntry 는 undefined 를
+    // 돌려주므로 기존 command.not_found 계약이 그대로 유지된다.
+    const entry = lookupLiveSchemaEntry(native, command);
     if (!entry) {
       throw new RustraCommandError(
         'command.not_found',
@@ -861,16 +889,74 @@ export function createRkyvV2Engine(
           }
         });
       }
+      // (의미론 마감) typed(tier 1)/tier 3 경로 전파 확장 — 코덱이 없어도
+      // invokeAsync + invokeCancel 이 노출되면 Rust 취소 체크포인트까지 전파한다.
+      // 인코딩: typed 캐시에 commandId 가 있으면 Tier 3(JSON-in-binary) 프레임으로
+      // invokeRkyvV2 와 동일한 와이어를 invokeAsync 로 보낸다. commandId 를 모르면
+      // (live schema 미노출) 얕은 취소로 폴백한다.
+      if (!codec && native.invokeAsync && native.invokeCancel) {
+        const cmdId = hasTypedPath ? ensureStaticIds()?.get(command) : undefined;
+        const entry =
+          cmdId !== undefined ? { commandId: cmdId } : lookupLiveSchemaEntry(native, command);
+        if (entry) {
+          return new Promise<T>((resolve, reject) => {
+            let settled = false;
+            let invocationId = -1;
+            const onAbort = () => {
+              if (settled) return;
+              settled = true;
+              native.invokeCancel!(invocationId);
+              reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
+            };
+            try {
+              signal.addEventListener('abort', onAbort, { once: true });
+              const encoded = encodeTier3Request(entry.commandId, args);
+              const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
+              if (tooLarge) throw tooLarge;
+              invocationId = native.invokeAsync!(encoded, (resp) => {
+                if (settled) return;
+                settled = true;
+                signal.removeEventListener('abort', onAbort);
+                const outcome = decodeTier3Response(resp);
+                if (outcome.ok) resolve(outcome.result as T);
+                else {
+                  const e =
+                    outcome.error ??
+                    ({ code: 'invoke.failed', message: 'RkyvV2 (tier3) invoke failed' } as const);
+                  reject(
+                    new RustraCommandError(e.code, e.message, e.retryable ?? false),
+                  );
+                }
+              });
+            } catch (err) {
+              settled = true;
+              signal.removeEventListener('abort', onAbort);
+              reject(
+                err instanceof Error
+                  ? err
+                  : new RustraCommandError(
+                      'invoke.failed',
+                      `invoke("${command}") dispatch failed: ${String(err)}`,
+                    ),
+              );
+            }
+          });
+        }
+      }
       // 전파 불가 — 얕은 취소 (JS 프라미스만 거부, Rust 는 끝까지 실행):
       return raceAbort(dispatch<T>(command, args), signal, command);
     },
 
     invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
-      // 모든 항목이 정적 코덱이고 signal 이 없어야 단일 JSI 횡단으로 일괄 처리
-      // — 이 경로는 취소를 지원하지 않는다. 단일 횡단 진입은 2단계: byId 배치
-      // (invokeTypedBatchById) 가 우선, 미노출이면 이름 기반 invokeTypedBatch
-      // (아래 분기 참조). 정적 여부/id 조사는 캐시 조회로 한다 (P0-3:
-      // hasStaticCodec JSI 호출 N 회 → 엔진 생애 1회 스윕).
+      // 계약: 단일 JSI 횡단 배치(invokeTypedBatch[ById])는 취소를 지원하지
+      // 않는다 — signal 이 붙은 항목이 하나라도 있으면 자동으로 항목별
+      // invoke 경로(각자의 전파/얕은 취소 정책)로 라우팅된다. 배치 자체의
+      // 항목별 취소 지원은 명시적 미지원 계약 (followup-3 유예 유지).
+      //
+      // 모든 항목이 정적 코덱이고 signal 이 없어야 단일 JSI 횡단으로 일괄 처리.
+      // 단일 횡단 진입은 2단계: byId 배치(invokeTypedBatchById) 가 우선, 미노출이면
+      // 이름 기반 invokeTypedBatch(아래 분기 참조). 정적 여부/id 조사는 캐시
+      // 조회로 한다 (P0-3: hasStaticCodec JSI 호출 N 회 → 엔진 생애 1회 스윕).
       const staticIds = hasBatchPath && entries.length > 0 ? ensureStaticIds() : null;
       if (
         staticIds &&
