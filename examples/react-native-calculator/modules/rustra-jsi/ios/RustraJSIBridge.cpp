@@ -274,16 +274,27 @@ static_assert(sizeof(EventDispatcher) > 0, "EventDispatcher must be complete");
 
 using InvokeFn = uint8_t*(*)(const uint8_t*, size_t, size_t*);
 
+// free 짝 계약: 응답 버퍼는 할당한 쪽의 전용 free 함수로만 해제한다.
+//   - rustra_ffi_* 심볼(rustra crate): alloc_response 가 ptr-8 에 8바이트
+//     magic 헤더를 붙인 레이아웃 → rustra_ffi_free 가 헤더를 역산해 해제.
+//   - rustra_calculator_* 심볼(example crate): magic 헤더 없는 Box<[u8]> →
+//     rustra_calculator_free_buffer.
+// calculator 응답을 rustra_ffi_free 로 해제하면 ptr-8 언더리드(8B OOB read)
+// 후 magic 불일치로 해제가 거절되어 호출당 누수가 난다(실제 버그였음).
+// typedInvokeTail 주석(위)과 동일한 계약 — makeInvoke 는 심볼별로 짝을
+// 명시적으로 받아 등록 시점에 매칭한다.
+using FreeFn = void(*)(uint8_t*, size_t);
+
 // live schema FFI (from rustra crate)
 extern "C" uint8_t* rustra_ffi_get_schema(size_t* out_len);
 extern "C" uint8_t* rustra_ffi_contract_hash(size_t* out_len);
 
 RustraHostObject::RustraHostObject(Runtime& rt) {
-  auto makeInvoke = [&](const char* name, InvokeFn fn, const char* err) {
+  auto makeInvoke = [&](const char* name, InvokeFn fn, FreeFn freeFn, const char* err) {
     auto propNameId = PropNameID::forAscii(rt, name);
     auto hostFn = Function::createFromHostFunction(
       rt, propNameId, 1,
-      [fn, err](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+      [fn, freeFn, err](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
         if (count < 1) {
           throw JSError(rt, std::string("RustraJSI: requires 1 argument — ") + err);
         }
@@ -294,31 +305,33 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
           throw JSError(rt, std::string("RustraJSI: ") + err);
         }
         auto returnValue = createArrayBuffer(rt, result, out_len);
-        rustra_ffi_free(result, out_len);
+        freeFn(result, out_len);
         return returnValue;
       });
     cache_[name] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   };
 
-  // ── Generic FFI paths (default, json, postcard) ────────────
-  makeInvoke("invoke",        rustra_ffi_invoke,              "Rust returned null");
-  makeInvoke("invokeJson",    rustra_ffi_invoke_json,         "Rust json returned null");
-  makeInvoke("invokePostcardFFI", rustra_ffi_invoke_postcard, "Rust postcard FFI returned null");
+  // ── Generic FFI paths (default, json, postcard) — magic 헤더 레이아웃이므로
+  //    rustra_ffi_free 로 해제 짝. ─────────────────────────────
+  makeInvoke("invoke",        rustra_ffi_invoke,              rustra_ffi_free, "Rust returned null");
+  makeInvoke("invokeJson",    rustra_ffi_invoke_json,         rustra_ffi_free, "Rust json returned null");
+  makeInvoke("invokePostcardFFI", rustra_ffi_invoke_postcard, rustra_ffi_free, "Rust postcard FFI returned null");
 
-  // ── Per-example benchmark paths (legacy) ───────────────────
-  makeInvoke("invokeBytes",   rustra_calculator_invoke_bytes,  "Rust bytes returned null");
-  makeInvoke("invokeMsgpack",  rustra_calculator_invoke_msgpack, "Rust msgpack returned null");
-  makeInvoke("invokeBincode",  rustra_calculator_invoke_bincode, "Rust bincode returned null");
+  // ── Per-example benchmark paths (legacy) — calculator 응답(magic 헤더 없는
+  //    Box<[u8]>)이므로 rustra_calculator_free_buffer 로 해제 짝. ──
+  makeInvoke("invokeBytes",   rustra_calculator_invoke_bytes,  rustra_calculator_free_buffer, "Rust bytes returned null");
+  makeInvoke("invokeMsgpack",  rustra_calculator_invoke_msgpack, rustra_calculator_free_buffer, "Rust msgpack returned null");
+  makeInvoke("invokeBincode",  rustra_calculator_invoke_bincode, rustra_calculator_free_buffer, "Rust bincode returned null");
   // Keep the public JS adapter name aligned with RustraNative. This is the
   // calculator's legacy postcard envelope (command + a + b), while
   // invokePostcardFFI above is the generic framework envelope.
-  makeInvoke("invokePostcard", rustra_calculator_invoke_postcard, "Rust postcard returned null");
-  makeInvoke("invokeLegacyPostcard", rustra_calculator_invoke_postcard,"Rust postcard returned null");
-  makeInvoke("invokeRkyv",     rustra_calculator_invoke_rkyv,    "Rust rkyv returned null");
-  makeInvoke("invokeHybrid",   rustra_calculator_invoke_hybrid,  "Rust hybrid returned null");
-  makeInvoke("invokeRkyvV2",   rustra_calculator_invoke_rkyv_v2, "Rust rkyv v2 returned null");
-  makeInvoke("invokeRaw",      rustra_calculator_invoke_raw,     "Rust invoke_raw returned null");
+  makeInvoke("invokePostcard", rustra_calculator_invoke_postcard, rustra_calculator_free_buffer, "Rust postcard returned null");
+  makeInvoke("invokeLegacyPostcard", rustra_calculator_invoke_postcard, rustra_calculator_free_buffer, "Rust postcard returned null");
+  makeInvoke("invokeRkyv",     rustra_calculator_invoke_rkyv,    rustra_calculator_free_buffer, "Rust rkyv returned null");
+  makeInvoke("invokeHybrid",   rustra_calculator_invoke_hybrid,  rustra_calculator_free_buffer, "Rust hybrid returned null");
+  makeInvoke("invokeRkyvV2",   rustra_calculator_invoke_rkyv_v2, rustra_calculator_free_buffer, "Rust rkyv v2 returned null");
+  makeInvoke("invokeRaw",      rustra_calculator_invoke_raw,     rustra_calculator_free_buffer, "Rust invoke_raw returned null");
 
   // noop: returns input bytes unchanged
   {
