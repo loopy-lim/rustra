@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
-import { watch, readFileSync, readdirSync, statSync } from 'node:fs';
+import { watch, readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import type { PackageSchema } from './schema.js';
 import {
   generateTypesTs,
@@ -33,6 +35,118 @@ export { createValidatedEngine } from './validate-engine.js';
 export type { EngineClient as ValidateEngineClient, ValidateOptions } from './validate-engine.js';
 export { rustraPlugin } from './vite.js';
 export type { RustraVitePluginOptions } from './vite.js';
+export { parsePackageSchema };
+
+/** dist 레이아웃: dist/index.js 와 package.json 이 같은 레벨(packages/cli)이다.
+ * bin/main 모두 ./dist/index.js 이므로 require('../package.json') = packages/cli/package.json.
+ * 읽기에 실패하면 조용히 넘기지 않고 즉시 throw — 잘못된 버전의 템플릿을
+ * 생성하는 것보다 init 이 크게 실패하는 편이 낫다. */
+const cliVersion: string = (
+  createRequire(import.meta.url)('../package.json') as { version: string }
+).version;
+
+/** init 템플릿의 버전 핀은 CLI 자체 버전에서 파생한다 — 워크스페이스 범프가
+ * 템플릿에 자동 전파되도록(과거 ^0.1.3 고정으로 0.2.0 사용자가 구버전을
+ * 설치하던 사고 방지). cargo 는 minor 범위(cargo 관례상 캐럿 불필요), npm 은
+ * caret 정확 버전. */
+export function templateVersions(cliVersion: string): {
+  cargoMinor: string;
+  npmCaret: string;
+} {
+  const minor = cliVersion.split('.').slice(0, 2).join('.');
+  return { cargoMinor: minor, npmCaret: `^${cliVersion}` };
+}
+
+/** TS 식별자로 안전한 문자열만 허용 — 생성 코드에 그대로 삽입되는 이름의
+ * 주입 방어. $ 허용은 JS 식별자 규격 준수. */
+const TS_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+function assertIdentifier(value: string, where: string): void {
+  if (!TS_IDENTIFIER.test(value)) {
+    throw new Error(
+      `Invalid schema: ${where} must be a plain identifier, got: ${JSON.stringify(value)}`,
+    );
+  }
+}
+
+/**
+ * 스키마 트리 전체의 식별자 화이트리스트 — 코드젠이 식별자 위치(따옴표 없이
+ * 방출하는 이름)에 삽입하는 모든 키를 검증한다:
+ * - `definitions` 키(최상위 cmd.definitions 외에 inputSchema/outputSchema 내부,
+ *   다른 definition 내부의 중첩 definitions 포함 — collectDefinitionsInner 가
+ *   재귀 수집해 `export type ${name}` 으로 방출)
+ * - `properties` 키(생성 TS 멤버 `${name}:`, rkyv 코덱 `args.${name}`,
+ *   C++ `getProperty(rt, "${name}")` — 모두 무인용 방출)
+ * - `$ref` 대상 타입명(resolveRef 로 벗겨 타입 위치에 방출)
+ *
+ * schemars/serde 는 Rust 필드명(식별자)만 내보내므로 정상 스키마는 영향 없다.
+ * description/enum 값 등 자유 문자열은 여기서 거부하지 않는다 — 방출 시점
+ * 이스케이프(codegen.ts escapeJsDoc/escapeStringLiteral)로 방어한다.
+ */
+function assertSchemaIdentifiers(
+  schema: unknown,
+  where: string,
+  visited: Set<unknown> = new Set(),
+): void {
+  if (typeof schema !== 'object' || schema === null || visited.has(schema)) return;
+  visited.add(schema);
+  const node = schema as {
+    definitions?: Record<string, unknown>;
+    properties?: Record<string, unknown>;
+    $ref?: unknown;
+    [key: string]: unknown;
+  };
+  if (typeof node.$ref === 'string') {
+    const target = node.$ref.replace(/^#\/(definitions\/|\$defs\/)/, '');
+    assertIdentifier(target, `${where} $ref target`);
+  }
+  if (node.definitions) {
+    for (const key of Object.keys(node.definitions)) {
+      assertIdentifier(key, `${where} definitions key`);
+      assertSchemaIdentifiers(node.definitions[key], `${where}.${key}`, visited);
+    }
+  }
+  if (node.properties) {
+    for (const key of Object.keys(node.properties)) {
+      assertIdentifier(key, `${where} property name`);
+      assertSchemaIdentifiers(node.properties[key], `${where}.${key}`, visited);
+    }
+  }
+  // collectDefinitionsInner 의 순회와 동일한 하위 스키마 위치을 따라간다.
+  for (const arrayKey of ['anyOf', 'oneOf', 'allOf', 'prefixItems'] as const) {
+    const arr = node[arrayKey];
+    if (Array.isArray(arr)) {
+      for (let i = 0; i < arr.length; i++) {
+        assertSchemaIdentifiers(arr[i], `${where}.${arrayKey}[${i}]`, visited);
+      }
+    }
+  }
+  const items = node.items;
+  if (Array.isArray(items)) {
+    items.forEach((s, i) => assertSchemaIdentifiers(s, `${where}.items[${i}]`, visited));
+  } else if (items) {
+    assertSchemaIdentifiers(items, `${where}.items`, visited);
+  }
+  if (
+    node.additionalProperties &&
+    typeof node.additionalProperties === 'object' &&
+    !Array.isArray(node.additionalProperties)
+  ) {
+    assertSchemaIdentifiers(node.additionalProperties, `${where}.additionalProperties`, visited);
+  }
+}
+
+/** import 로 main() 이 실행되지 않도록 진입점 판별 — 테스트가 ./index.js 를
+ * import 해도 CLI 가 실행되지 않는다. bin 스크립트(node dist/index.js)와
+ * `node src/index.ts` 직접 실행 양쪽 모두 진입점으로 취급한다. */
+function isCliEntry(): boolean {
+  if (!process.argv[1]) return false;
+  try {
+    return realpathSync(resolve(process.argv[1])) === fileURLToPath(import.meta.url);
+  } catch {
+    return false;
+  }
+}
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -129,6 +243,7 @@ async function runInit(args: string[]): Promise<void> {
     process.exit(1);
   }
   const root = resolve(dir);
+  const v = templateVersions(cliVersion);
 
   const cargoToml = `# Generated by rustra init — adjust name/edition as needed.
 [package]
@@ -139,8 +254,8 @@ publish = false
 default-run = "rustra-app"
 
 [dependencies]
-rustra = "0.1"
-rustra-macros = "0.1"
+rustra = "${v.cargoMinor}"
+rustra-macros = "${v.cargoMinor}"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 schemars = "0.8"
@@ -194,8 +309,8 @@ fn main() {
     "codegen": "cargo run --bin generate && rustra generate --schema generated/schema.json --output src/generated"
   },
   "devDependencies": {
-    "@rustra/cli": "^0.1.3",
-    "@rustra/types": "^0.1.3"
+    "@rustra/cli": "${v.npmCaret}",
+    "@rustra/types": "${v.npmCaret}"
   }
 }
 `;
@@ -505,11 +620,37 @@ function parsePackageSchema(value: unknown): PackageSchema {
     if (typeof cmd.inputSchema !== 'object' || typeof cmd.outputSchema !== 'object') {
       throw new Error(`Invalid schema: commands[${i}] must have inputSchema and outputSchema`);
     }
+    // 식별자 화이트리스트 — name/inputType/outputType/definitions 키는 생성 TS 에
+    // 그대로 삽입되므로 변조 schema.json 통한 코드 주입을 차단한다.
+    // '()' 은 unit 타입 센티넬(generate.ts 의 `command.inputType !== '()'` 와 동일).
+    assertIdentifier(cmd.name, `commands[${i}].name`);
+    if (cmd.inputType !== '()') {
+      assertIdentifier(cmd.inputType, `commands[${i}].inputType`);
+    }
+    if (cmd.outputType !== '()') {
+      assertIdentifier(cmd.outputType, `commands[${i}].outputType`);
+    }
+    if (cmd.definitions) {
+      for (const key of Object.keys(cmd.definitions)) {
+        assertIdentifier(key, `commands[${i}].definitions key`);
+      }
+    }
+    // 중첩 definitions 키 / 속성명 / $ref 대상도 재귀 검증 — collectDefinitionsInner
+    // 가 수집하는 모든 정의와 tsObjectFromSchema 가 무인용 방출하는 모든 필드명.
+    assertSchemaIdentifiers(cmd.inputSchema, `commands[${i}].inputSchema`);
+    assertSchemaIdentifiers(cmd.outputSchema, `commands[${i}].outputSchema`);
+    if (cmd.definitions) {
+      for (const [key, def] of Object.entries(cmd.definitions)) {
+        assertSchemaIdentifiers(def, `commands[${i}].definitions.${key}`);
+      }
+    }
   }
   return value as PackageSchema;
 }
 
-main().catch((error) => {
-  console.error('Error:', error instanceof Error ? error.message : error);
-  process.exit(1);
-});
+if (isCliEntry()) {
+  main().catch((error) => {
+    console.error('Error:', error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
+}

@@ -18,7 +18,7 @@ Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플�
 
 ```toml
 [dependencies]
-rustra = "0.1"
+rustra = "0.2"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -98,6 +98,7 @@ examples/
   calculator-napi/         napi-rs transport 예시 (transport 벤치마크 24.3µs의 소스)
   streaming/               이벤트 스트리밍 예시 (Package::emit + 폴링 어댑터)
   auth/                    세션/capability 게이트 예시 (deny-by-default)
+  reference-app/           @rustra/react 훅 레퍼런스 앱 (useCommand/useMutation/useEvent)
 ```
 
 ## 로컬 저장공간 관리
@@ -243,7 +244,7 @@ type RustraError = {
 `tauri` feature를 활성화:
 
 ```toml
-rustra = { version = "0.1", features = ["tauri"] }
+rustra = { version = "0.2", features = ["tauri"] }
 ```
 
 Rust 측:

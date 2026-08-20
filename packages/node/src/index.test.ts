@@ -53,6 +53,48 @@ test('createNodeEngine wraps unknown errors into RustraCommandError', async () =
   );
 });
 
+// ── napi 와이어 에러 — Error.message 의 RustraError JSON/Display 복원 ──
+
+test('createNodeEngine parses RustraError JSON message from napi Error', async () => {
+  // napi transport 는 Rust 의 RustraError 를 Error.reason(JSON 직렬화)로 던진다.
+  // engine 은 이를 파싱해 code/retryable 을 보존해야 한다(unknown 래핑 금지).
+  const engine = createNodeEngine({
+    async invoke() {
+      throw new Error('{"code":"command.not_found","message":"command not found: nope"}');
+    },
+  });
+
+  await assert.rejects(
+    () => engine.invoke('nope'),
+    (err: unknown) => {
+      if (!(err instanceof RustraCommandError)) return false;
+      assert.equal(err.code, 'command.not_found');
+      assert.equal(err.message, 'command not found: nope');
+      assert.equal(err.retryable, false);
+      return true;
+    },
+  );
+});
+
+test('createNodeEngine parses Display-style "code: message" Error message', async () => {
+  // Display 평탄화("code: message") 경로도 동일하게 code 를 복원한다.
+  const engine = createNodeEngine({
+    async invoke() {
+      throw new Error('command.not_found: nope');
+    },
+  });
+
+  await assert.rejects(
+    () => engine.invoke('nope'),
+    (err: unknown) => {
+      if (!(err instanceof RustraCommandError)) return false;
+      assert.equal(err.code, 'command.not_found');
+      assert.equal(err.message, 'nope');
+      return true;
+    },
+  );
+});
+
 // ── createNodeProcessTransport — subprocess stdio 프로토콜 ──
 
 import { createNodeProcessTransport } from './index.js';
