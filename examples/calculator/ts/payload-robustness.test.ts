@@ -13,9 +13,25 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { existsSync } from 'node:fs';
 import { addNumbersCodec, divideCodec } from '../generated/rkyv-codecs.js';
 import { rkyvV2Registry } from '../generated/rkyv-registry.js';
 import { createRkyvV2Engine, RustraCommandError } from '@rustra/types';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+// dist-ts/examples/calculator/ts → 저장소 루트 — transport-bench.test.ts 와 동일한
+// 루트 탐색(Cargo.toml+package.json 이 함께 있는 디렉터리).
+const ROOT = (() => {
+  let cur = __dirname;
+  while (cur !== dirname(cur)) {
+    if (existsSync(join(cur, 'Cargo.toml')) && existsSync(join(cur, 'package.json'))) return cur;
+    cur = dirname(cur);
+  }
+  return join(__dirname, '..', '..', '..');
+})();
 
 // divide-by-zero error 프레임 (Rust wire_fixtures.rs / cross-wire.test.ts 와 동일).
 const DIVIDE_RESPONSE =
@@ -111,6 +127,30 @@ test('engine: empty response → reject RustraCommandError(invoke.too_short)', a
     (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
       assert.equal(err.code, 'invoke.too_short');
+      return true;
+    },
+  );
+});
+
+// ── napi 와이어 — RustraError 가 평탄화(Display)되지 않고 구조로 건너는지 ──
+
+test('napi: error crosses the wire as structured JSON (code preserved)', () => {
+  const napiPath = join(
+    ROOT,
+    `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`,
+  );
+  if (!existsSync(napiPath)) {
+    return; // 바이너리 없으면 스킵 — CI 는 build:napi 사전 빌드 후 실행
+  }
+  const native = createRequire(__dirname)(napiPath) as {
+    rustraInvoke: (cmd: string, args: string | undefined) => string;
+  };
+  assert.throws(
+    () => native.rustraInvoke('definitelyNotACommand', JSON.stringify({})),
+    (e: unknown) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      // code 가 JSON 구조로 보존되는지 — plain "code: msg" Display 는 retryable 유실
+      assert.match(msg, /"code"\s*:\s*"command\.not_found"/, `code not structured: ${msg}`);
       return true;
     },
   );

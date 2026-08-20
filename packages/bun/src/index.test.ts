@@ -52,3 +52,43 @@ test('createBunEngine wraps unknown errors into RustraCommandError', async () =>
     },
   );
 });
+
+// ── Rust 와이어 에러 — Error.message 의 RustraError JSON/Display 복원 ──
+
+test('createBunEngine parses RustraError JSON message from wire Error', async () => {
+  // Rust 가 RustraError 를 JSON 직렬화해 Error 로 던지는 경우 code/retryable 을
+  // 보존한다(unknown 래핑 금지 — @rustra/node 와 동일 파이프라인).
+  const engine = createBunEngine({
+    async invoke() {
+      throw new Error('{"code":"command.not_found","message":"command not found: nope"}');
+    },
+  });
+
+  await assert.rejects(
+    () => engine.invoke('nope'),
+    (err: unknown) => {
+      if (!(err instanceof RustraCommandError)) return false;
+      assert.equal(err.code, 'command.not_found');
+      assert.equal(err.retryable, false);
+      return true;
+    },
+  );
+});
+
+test('createBunEngine parses Display-style "code: message" Error message', async () => {
+  const engine = createBunEngine({
+    async invoke() {
+      throw new Error('command.not_found: nope');
+    },
+  });
+
+  await assert.rejects(
+    () => engine.invoke('nope'),
+    (err: unknown) => {
+      if (!(err instanceof RustraCommandError)) return false;
+      assert.equal(err.code, 'command.not_found');
+      assert.equal(err.message, 'nope');
+      return true;
+    },
+  );
+});

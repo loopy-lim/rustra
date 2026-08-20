@@ -1,0 +1,49 @@
+name: Coverage
+
+# advisory — 게이트가 아니라 가시화. 수치가 안정되면(2-3주) PR 리포트/임계 도입을
+# 검토한다. Rust 는 cargo-llvm-cov, TS 는 c8(npm run build 산출 dist 에서 측정,
+# 소스맵으로 src/ 에 리맵 — 별도 --all/include 패턴 불필요).
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cargo-llvm-cov --locked
+      - name: Rust coverage (rustra + macros)
+        run: |
+          cargo llvm-cov -p rustra -p rustra-macros --summary-only 2>&1 | tee cov.txt | tail -15 >> "$GITHUB_STEP_SUMMARY"
+          cargo llvm-cov -p rustra -p rustra-macros --lcov --output-path lcov.info
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-lcov
+          path: lcov.info
+
+  typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: TS coverage (c8)
+        run: |
+          npm run coverage:ts 2>&1 | tee cov-ts.txt | tail -20 >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ts-lcov
+          path: coverage/lcov.info

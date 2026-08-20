@@ -8,6 +8,8 @@ import {
   createRkyvV2Engine,
   getLiveSchema,
   invoke,
+  invokeBatch,
+  invokeWithTimeout,
   RustraCommandError,
   parseRustraErrorString,
 } from './index.js';
@@ -1669,4 +1671,118 @@ test('dynamic command without live schema keeps shallow cancel (no commandId sou
     return true;
   });
   assert.equal(asyncCalls, 0, 'no commandId source → invokeAsync must not be used');
+});
+
+// ── InvokeOptions.timeoutMs — transport.timeout 타임아웃 레이스 ──
+// 네이티브가 응답하지 않는 hang(워커 패닉, FFI 데드락)의 JS 측 유일한 탈출구.
+// Rust RustraError::timeout(retryable)과 같은 코드/재시도 의미론.
+
+test('invoke with timeoutMs rejects transport.timeout when engine never settles', async () => {
+  const hanging: EngineClient = { invoke: () => new Promise(() => {}) };
+  await assert.rejects(
+    invokeWithTimeout(hanging, 'addNumbers', { a: 1 }, { timeoutMs: 50 }),
+    (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.timeout');
+      assert.equal((err as RustraCommandError).retryable, true);
+      return true;
+    },
+  );
+});
+
+test('timeout race ignores late result without unhandled rejection', async () => {
+  let resolveLate!: (v: unknown) => void;
+  const slow: EngineClient = {
+    invoke: () =>
+      new Promise((res) => {
+        resolveLate = res as (v: unknown) => void;
+      }),
+  };
+  await assert.rejects(
+    invokeWithTimeout(slow, 'x', undefined, { timeoutMs: 30 }),
+    /transport\.timeout|timed out/,
+  );
+  resolveLate(1); // 지각 도착 — 흡수되어야 함
+  await new Promise((r) => setTimeout(r, 20)); // unhandled rejection 이 여기서 터지면 테스트 프로세스가 죽는다
+});
+
+test('invokeWithTimeout without timeoutMs passes through directly', async () => {
+  const ok: EngineClient = {
+    invoke<T>(_command: string, _args?: unknown, _options?: unknown): Promise<T> {
+      return Promise.resolve(42 as unknown as T);
+    },
+  };
+  assert.equal(await invokeWithTimeout(ok, 'x', undefined, {}), 42);
+  assert.equal(await invokeWithTimeout(ok, 'x', undefined, undefined), 42);
+});
+
+test('global invoke applies timeoutMs from options', async () => {
+  // 기존 글로벌 invoke 옵션 전달 테스트(T1)와 동일한 센티넬 패턴 — 이 테스트가
+  // 실패로 끝나도 hanging 엔진이 글로벌에 남아 이후 테스트를 오염시키지 않게
+  // finally 로 원복한다.
+  const hanging: EngineClient = { invoke: () => new Promise(() => {}) };
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  configure(hanging);
+  try {
+    await assert.rejects(
+      invoke('slow', undefined, { timeoutMs: 30 }),
+      (err: unknown) => (err as RustraCommandError).code === 'transport.timeout',
+    );
+  } finally {
+    configure(sentinel);
+  }
+});
+
+test('global invokeBatch applies batch timeout from min entry timeoutMs', async () => {
+  // 항목 timeoutMs 의 최솟값(30ms)이 배치 전체의 타임아웃 레이스로 적용된다 —
+  // hanging 배치 엔진도 transport.timeout 으로 탈출. 센티넬 패턴으로 글로벌 원복.
+  const hanging = {
+    invoke: () => new Promise(() => {}),
+    invokeBatch: (_entries: BatchEntry[]) => new Promise<never>(() => {}),
+  } as unknown as EngineClient;
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  configure(hanging);
+  try {
+    await assert.rejects(
+      invokeBatch([
+        { command: 'a', options: { timeoutMs: 30 } },
+        { command: 'b', options: { timeoutMs: 500 } },
+      ]),
+      (err: unknown) => {
+        assert.ok(err instanceof RustraCommandError);
+        assert.equal(err.code, 'transport.timeout');
+        assert.equal(err.retryable, true);
+        return true;
+      },
+    );
+  } finally {
+    configure(sentinel);
+  }
+});
+
+test('global invokeBatch without timeoutMs passes through unchanged', async () => {
+  const ok = {
+    invoke: () => new Promise(() => {}),
+    invokeBatch: async (_entries: BatchEntry[]) => [1, 2],
+  } as unknown as EngineClient;
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  configure(ok);
+  try {
+    const out = await invokeBatch<number[]>([{ command: 'a' }, { command: 'b' }]);
+    assert.deepEqual(out, [1, 2]);
+  } finally {
+    configure(sentinel);
+  }
 });

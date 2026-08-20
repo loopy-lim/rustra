@@ -89,7 +89,12 @@ impl EventState {
     /// 죽이지 않는다. 패닉 여부와 무관하게 싱크가 존재했으면 버스를 우회한다:
     /// "sink 있으면 bus 건너뛰기" 계약을 상태 의존적으로 흔들지 않기 위해.
     pub(crate) fn deliver_via_sink(&self, name: &str, payload: &str) -> bool {
-        let sink = self.sink.read().unwrap().clone();
+        // 포이즈닝 관용 — 싱크 옵션 자체는 구조적으로 유효하다(ffi.rs 와 동일).
+        let sink = self
+            .sink
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
         let Some(sink) = sink else {
             return false;
         };
@@ -144,7 +149,11 @@ impl EventBus {
             payload: payload_json.into(),
             seq,
         };
-        let mut state = self.state.lock().unwrap();
+        // 포이즈닝 관용 — 큐(VecDeque)+카운터는 구조적으로 유효하다.
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if state.queue.len() >= self.capacity {
             state.queue.pop_front();
             state.dropped += 1;
@@ -154,25 +163,38 @@ impl EventBus {
 
     /// 큐에 쌓인 이벤트를 전부 꺼낸다(소비). 호스트 폴링 루프에서 호출.
     pub fn take_pending_events(&self) -> Vec<RustraEvent> {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         std::mem::take(&mut state.queue).into_iter().collect()
     }
 
     /// 큐에 쌓인 이벤트 목록과 누적 드랍 수를 함께 꺼낸다.
     pub fn take_pending_events_with_stats(&self) -> (Vec<RustraEvent>, u64) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let events = std::mem::take(&mut state.queue).into_iter().collect();
         (events, state.dropped)
     }
 
     /// 대기 중 이벤트 수.
     pub fn pending_len(&self) -> usize {
-        self.state.lock().unwrap().queue.len()
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .queue
+            .len()
     }
 
     /// 용량 초과로 버려진 이벤트 누적 수.
     pub fn dropped_count(&self) -> u64 {
-        self.state.lock().unwrap().dropped
+        self.state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .dropped
     }
 
     /// 큐의 최대 수용량.

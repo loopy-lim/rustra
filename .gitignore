@@ -31,6 +31,9 @@ examples/calculator-napi/node_modules/
 
 /packages/*/dist-test/
 
+# c8 커버리지 산출물 (coverage:ts)
+/coverage/
+
 # cargo-fuzz 산출물
 fuzz/corpus/
 fuzz/artifacts/

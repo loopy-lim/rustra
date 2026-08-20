@@ -1,6 +1,6 @@
 {
   "name": "@rustra/example-reference-app",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,9 +8,9 @@
     "smoke": "tsc -p tsconfig.json && node dist/app.js"
   },
   "dependencies": {
-    "@rustra/react": "^0.1.3",
-    "@rustra/types": "^0.1.3",
-    "@rustra/node": "^0.1.3",
+    "@rustra/react": "^0.2.0",
+    "@rustra/types": "^0.2.0",
+    "@rustra/node": "^0.2.0",
     "react": "^19.0.0"
   },
   "devDependencies": {

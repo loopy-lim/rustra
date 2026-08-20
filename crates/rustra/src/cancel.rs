@@ -32,6 +32,12 @@ enum Entry {
 }
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+/// 포이즈닝 관용: 워커가 락을 잡은 채 패닉하면 이 뮤텍스는 포이즈닝되지만,
+/// 내부 `BTreeMap` 은 구조적으로 유효하다(중간 상태 corruption 없음 —
+/// 포이즈닝은 "락 보유 중 패닉 발생" 신호일 뿐). `.expect()` 로 전파하면
+/// 이후 모든 호출이 패닉하고, FFI 경계에서는 프로세스 abort 다. ffi.rs 의
+/// 이벤트 싱크 뮤텍스와 같은 `into_inner()` 관용으로 과거 패닉 이후에도
+/// 취소/조회가 계속 동작하게 한다.
 static REGISTRY: Mutex<BTreeMap<u64, Entry>> = Mutex::new(BTreeMap::new());
 
 /// 새 invocation을 등록하고 고유 ID를 발급한다.
@@ -39,7 +45,7 @@ pub fn register_invocation() -> u64 {
     let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
     REGISTRY
         .lock()
-        .expect("cancel registry mutex poisoned")
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
         .insert(id, Entry::Running);
     id
 }
@@ -49,7 +55,7 @@ pub fn register_invocation() -> u64 {
 pub fn cancel_invocation(id: u64) -> bool {
     match REGISTRY
         .lock()
-        .expect("cancel registry mutex poisoned")
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
         .get_mut(&id)
     {
         Some(entry) if matches!(entry, Entry::Running) => {
@@ -64,7 +70,7 @@ pub fn cancel_invocation(id: u64) -> bool {
 pub fn complete_invocation(id: u64) {
     REGISTRY
         .lock()
-        .expect("cancel registry mutex poisoned")
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
         .remove(&id);
 }
 
@@ -72,7 +78,7 @@ pub fn complete_invocation(id: u64) {
 pub fn status(id: u64) -> Status {
     match REGISTRY
         .lock()
-        .expect("cancel registry mutex poisoned")
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
         .get(&id)
     {
         Some(Entry::Running) => Status::Running,
@@ -132,6 +138,29 @@ mod tests {
         let id = register_invocation();
         complete_invocation(id);
         assert_eq!(status(id), Status::Unknown, "completion removes the entry");
+    }
+
+    // ── 레지스트리 락 포이즈닝 관용 ───────────────────────────
+    // 워커가 락을 잡은 채 패닉해도(포이즈닝) 이후 API 가 abort 대신 정상
+    // 동작하는지. in-crate 테스트라 private static(REGISTRY) 으로 직접 포이즈닝.
+
+    #[test]
+    fn poisoned_registry_still_serves_invocations() {
+        let id = register_invocation();
+        // 의도적 포이즈닝 — 락을 잡은 채 패닉
+        let _ = std::panic::catch_unwind(|| {
+            let _guard = REGISTRY.lock().unwrap();
+            panic!("intentional poison");
+        });
+        // 관용 처리 후: status/cancel/complete 가 패닉하지 않고 동작한다
+        assert_eq!(status(id), Status::Running);
+        assert!(cancel_invocation(id));
+        assert_eq!(status(id), Status::Cancelled);
+        complete_invocation(id);
+        assert_eq!(status(id), Status::Unknown);
+        // 신규 등록·조회도 정상
+        let fresh = register_invocation();
+        assert_eq!(status(fresh), Status::Running);
     }
 
     // ── Task 1 review 에서 이연된 동시성 테스트 ──────────────────

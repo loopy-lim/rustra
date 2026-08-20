@@ -417,6 +417,8 @@ assert!(err.is_retryable());
 
 TypeScript 측 `RustraCommandError`는 `.retryable` 필드로 같은 값을 노출한다
 (와이어에 플래그가 없는 JSON 경로에서는 `transport.*` 코드 기반으로 추론).
+JS 측 `invoke`의 `options.timeoutMs`는 만료 시 이 `transport.timeout`(retryable)로
+거부한다 — 네이티브 hang의 JS 측 탈출구.
 
 ### 에러 메서드
 

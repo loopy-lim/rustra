@@ -7,6 +7,10 @@
   "publishConfig": {
     "access": "public"
   },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
   "bin": {
     "rustra": "./dist/index.js"
   },
@@ -39,12 +43,44 @@
     }
   },
   "files": [
-    "dist"
+    "dist/codegen.d.ts",
+    "dist/codegen.d.ts.map",
+    "dist/codegen.js",
+    "dist/codegen.js.map",
+    "dist/dev.d.ts",
+    "dist/dev.d.ts.map",
+    "dist/dev.js",
+    "dist/dev.js.map",
+    "dist/generate.d.ts",
+    "dist/generate.d.ts.map",
+    "dist/generate.js",
+    "dist/generate.js.map",
+    "dist/index.d.ts",
+    "dist/index.d.ts.map",
+    "dist/index.js",
+    "dist/index.js.map",
+    "dist/schema-diff.d.ts",
+    "dist/schema-diff.d.ts.map",
+    "dist/schema-diff.js",
+    "dist/schema-diff.js.map",
+    "dist/schema.d.ts",
+    "dist/schema.d.ts.map",
+    "dist/schema.js",
+    "dist/schema.js.map",
+    "dist/validate-engine.d.ts",
+    "dist/validate-engine.d.ts.map",
+    "dist/validate-engine.js",
+    "dist/validate-engine.js.map",
+    "dist/vite.d.ts",
+    "dist/vite.d.ts.map",
+    "dist/vite.js",
+    "dist/vite.js.map"
   ],
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
-    "test": "tsc -p tsconfig.test.json && node --test dist-test/generate.test.js dist-test/schema-diff.test.js dist-test/dev.test.js dist-test/vite.test.js"
+    "test": "tsc -p tsconfig.test.json && node --test dist-test/generate.test.js dist-test/schema-diff.test.js dist-test/dev.test.js dist-test/vite.test.js",
+    "test:compile": "tsc -p tsconfig.test.json"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

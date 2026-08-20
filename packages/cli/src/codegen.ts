@@ -15,6 +15,24 @@ export function resolveRef(ref: string): string {
 }
 
 /**
+ * JSDoc 주석 탈출 — description 등 자유 문자열이 `*\/`(닫는 주석)으로
+ * 주석을 깨고 코드 위치로 나오는 것을 막는다(공급망 주입 방어).
+ * description 은 정당하게 자유 문자열이므로 파싱 거부가 아니라 방출
+ * 시점 이스케이프로 방어한다.
+ */
+export function escapeJsDoc(text: string): string {
+  return text.replace(/\*\//g, '*\\/');
+}
+
+/**
+ * 작은따옴표 문자열 리터럴 탈출 — enum/const 값 등 자유 문자열이 `'` 나
+ * 개행으로 리터럴을 깨고 나오는 것을 막는다(공급망 주입 방어).
+ */
+export function escapeStringLiteral(text: string): string {
+  return text.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+}
+
+/**
  * JSON Schema를 TypeScript 타입 표현식 문자열로 변환합니다.
  *
  * `$ref`, `anyOf`, `object`, `array`, 원시 타입 등을 재귀적으로 처리합니다.
@@ -59,7 +77,7 @@ export function tsTypeFromSchema(
         return 'number';
       case 'string': {
         if (schema.enum && schema.enum.length > 0) {
-          return schema.enum.map((v) => `'${v}'`).join(' | ');
+          return schema.enum.map((v) => `'${escapeStringLiteral(String(v))}'`).join(' | ');
         }
         return 'string';
       }
@@ -143,7 +161,7 @@ export function tsObjectFromSchema(
       const type = constLiteral(propSchema) ?? tsTypeFromSchema(propSchema, definitions);
       let fieldStr = '';
       if (typeof propSchema.description === 'string') {
-        fieldStr += `  /** ${propSchema.description.replace(/\n/g, ' ')} */\n`;
+        fieldStr += `  /** ${escapeJsDoc(propSchema.description).replace(/\n/g, ' ')} */\n`;
       }
       fieldStr += `  ${name}${optional}: ${type};`;
       return fieldStr;
@@ -156,7 +174,7 @@ export function tsObjectFromSchema(
 /** `const` 키를 갖는 스키마의 리터럴 표현 — string/number/boolean만 지원. */
 function constLiteral(schema: JsonSchema): string | null {
   if (schema.const === undefined) return null;
-  if (typeof schema.const === 'string') return `'${schema.const}'`;
+  if (typeof schema.const === 'string') return `'${escapeStringLiteral(schema.const)}'`;
   if (typeof schema.const === 'number' || typeof schema.const === 'boolean') {
     return String(schema.const);
   }
