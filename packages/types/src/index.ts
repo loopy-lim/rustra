@@ -923,9 +923,7 @@ export function createRkyvV2Engine(
                   const e =
                     outcome.error ??
                     ({ code: 'invoke.failed', message: 'RkyvV2 (tier3) invoke failed' } as const);
-                  reject(
-                    new RustraCommandError(e.code, e.message, e.retryable ?? false),
-                  );
+                  reject(new RustraCommandError(e.code, e.message, e.retryable ?? false));
                 }
               });
             } catch (err) {
