@@ -388,6 +388,11 @@ pub mod tauri_support {
 #[derive(Clone)]
 pub struct Package {
     id: String,
+    /// 명령 레지스트리. 포이즈닝 관용: writer 가 임계구역 안에서 패닉하면
+    /// RwLock 이 포이즈닝되지만 내부 BTreeMap 은 구조적으로 유효하다.
+    /// `.unwrap()` 이면 이후 모든 invoke 가 패닉하고, FFI 진입점(extern "C")
+    /// 경계에서는 프로세스 abort 다 — ffi.rs 이벤트 싱크와 같은
+    /// `into_inner()` 관용으로 과거 패닉 이후에도 invoke 가 동작하게 한다.
     state: Arc<RwLock<RegistryState>>,
     frozen: Arc<AtomicBool>,
     /// Rust → JS 이벤트 푸시 상태(버스 + 싱크). `emit()` 으로 발행, 싱크가
@@ -412,7 +417,10 @@ struct RegistryState {
 
 impl std::fmt::Debug for Package {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let state = self.state.read().unwrap();
+        let state = self
+            .state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         f.debug_struct("Package")
             .field("id", &self.id)
             .field("frozen", &self.frozen.load(Ordering::Relaxed))
@@ -711,7 +719,11 @@ impl Package {
     /// `emit` 은 이전 경로(구 싱크 또는 버스)로 전달될 수 있으나, 이벤트별
     /// 정확히 한 번 전달은 항상 유지된다.
     pub fn set_event_sink(&self, sink: Option<events::EventSink>) {
-        *self.events.sink.write().unwrap() = sink;
+        *self
+            .events
+            .sink
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = sink;
     }
 
     /// 이벤트 버스에 대한 접근자 — 호스트 어댑터 폴링용.
@@ -730,7 +742,10 @@ impl Package {
         // 핸들러 실행 중에는 잠금을 hold 하지 않도록 Command를 clone-out 한다.
         // (재진입 — 핸들러가 다시 register/unregister 호출 — 시 교착 방지)
         let command = {
-            let state = self.state.read().unwrap();
+            let state = self
+                .state
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             state
                 .commands
                 .get(name)
@@ -745,7 +760,12 @@ impl Package {
 
     /// command_id로 명령 이름을 조회합니다.
     pub fn resolve_command_id(&self, id: u16) -> Option<String> {
-        self.state.read().unwrap().id_to_name.get(&id).cloned()
+        self.state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .id_to_name
+            .get(&id)
+            .cloned()
     }
 
     /// rkyv V2 바이너리 페이로드를 받아 명령을 실행합니다.
@@ -773,7 +793,10 @@ impl Package {
         }
         let command_id = u16::from_le_bytes([payload[0], payload[1]]);
         let command = {
-            let state = self.state.read().unwrap();
+            let state = self
+                .state
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             let command_name = state
                 .id_to_name
                 .get(&command_id)
@@ -855,7 +878,10 @@ impl Package {
     /// `registry.frozen`.
     pub fn grant_capability(&self, cap: &str) -> crate::Result<()> {
         self.ensure_mutable()?;
-        let mut state = self.state.write().unwrap();
+        let mut state = self
+            .state
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         state.granted_capabilities.insert(cap.to_string());
         Ok(())
     }
@@ -864,7 +890,7 @@ impl Package {
     pub fn has_capability(&self, cap: &str) -> bool {
         self.state
             .read()
-            .unwrap()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .granted_capabilities
             .contains(cap)
     }
@@ -876,7 +902,7 @@ impl Package {
             let granted = self
                 .state
                 .read()
-                .unwrap()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .granted_capabilities
                 .contains(required);
             if !granted {
@@ -901,7 +927,10 @@ impl Package {
     {
         self.ensure_mutable()?;
         let name = name.to_string();
-        let mut state = self.state.write().unwrap();
+        let mut state = self
+            .state
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         // 같은 이름이면 기존 command_id 재사용(stable id). 새 이름이면 단조 증가 ID 할당.
         let command_id = match state.commands.get(&name).map(|c| c.command_id) {
             Some(existing) => existing,
@@ -944,7 +973,10 @@ impl Package {
         F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
     {
         self.ensure_mutable()?;
-        let mut state = self.state.write().unwrap();
+        let mut state = self
+            .state
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let existing = state
             .commands
             .get(name)
@@ -962,7 +994,10 @@ impl Package {
     /// (T2, OTA) 그 명령을 가리키던 alias id 항목도 함께 제거된다.
     pub fn unregister(&self, name: &str) -> crate::Result<()> {
         self.ensure_mutable()?;
-        let mut state = self.state.write().unwrap();
+        let mut state = self
+            .state
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if state.commands.remove(name).is_none() {
             return Err(RustraError::command_not_found(name));
         }
@@ -977,13 +1012,19 @@ impl Package {
     ///
     /// 읽기 전용이므로 debug/release 모두에서 사용 가능. `rustra_ffi_get_schema` 의 기반이 된다.
     pub fn live_schema(&self) -> Value {
-        let state = self.state.read().unwrap();
+        let state = self
+            .state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         Self::schema(&self.id, &state)
     }
 
     /// 등록된 모든 명령에서 TypeScript 클라이언트 코드를 생성합니다.
     pub fn generate_typescript(&self) -> crate::Result<GeneratedPackage> {
-        let state = self.state.read().unwrap();
+        let state = self
+            .state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let schema_json = serde_json::to_string_pretty(&Self::schema(&self.id, &state))
             .map_err(RustraError::internal)?;
         let contract_hash = contract_hash(&schema_json);
@@ -1432,7 +1473,7 @@ mod runtime_registry_tests {
     fn id_of(pkg: &Package, name: &str) -> u16 {
         pkg.state
             .read()
-            .unwrap()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
             .commands
             .get(name)
             .unwrap()
@@ -1446,6 +1487,30 @@ mod runtime_registry_tests {
         assert!(!pkg.is_frozen(), "debug build should be mutable by default");
         pkg.freeze();
         assert!(pkg.is_frozen());
+    }
+
+    // ── 레지스트리 RwLock 포이즈닝 관용 ───────────────────────
+    // 레지스트리 writer 가 임계구역 안에서 패닉하면 RwLock 이 포이즈닝된다.
+    // 포이즈닝은 "락을 잡은 채 패닉이 일어났다" 신호일 뿐 — BTreeMap 자체는
+    // 구조적으로 유효하다(중간 상태 corruption 없음). .unwrap() 이면 이후
+    // 모든 invoke 가 패닉하는데, FFI 진입점(extern "C") 경계에서는 프로세스
+    // abort 다. 관용 처리로 과거 패닉 이후에도 앱이 invoke 가능해야 한다.
+
+    #[test]
+    fn poisoned_registry_lock_still_serves_invokes() {
+        let pkg = empty_pkg();
+        pkg.register("c1", c1).unwrap();
+        // 의도적 포이즈닝 — write guard 를 잡은 채 패닉
+        let _ = std::panic::catch_unwind(|| {
+            let _guard = pkg.state.write().unwrap();
+            panic!("intentional poison");
+        });
+        // 관용 처리 후: invoke/조회가 패닉하지 않고 정상 동작한다
+        let out: TestOut = pkg.invoke("c1", TestIn { _v: 0 }).unwrap();
+        assert_eq!(out.v, 1);
+        let id = id_of(&pkg, "c1");
+        assert_eq!(pkg.resolve_command_id(id).as_deref(), Some("c1"));
+        assert!(pkg.live_schema()["commands"].as_array().is_some());
     }
 
     #[test]
