@@ -12,9 +12,11 @@ import {
   generateRkyvRegistryTs,
   generateRkyvCodecsHpp,
   generateRkyvCodecsCpp,
+  generatePositionalFacadeTs,
 } from './generate.js';
 import { diffSchemas, formatDiffResult } from './schema-diff.js';
 
+export { generatePositionalFacadeTs };
 export {
   generateTypesTs,
   generateCommandsTs,
@@ -236,6 +238,7 @@ Options:
   --output <dir>     Output directory for generated TypeScript files
   --cpp-output <dir> Optional: also emit C++ codec (rustra-generated-codecs.{hpp,cpp})
                     for the RN JSI fast path (B1) into this directory
+  --positional       Also emit positional-facade.ts (P2) — direct invokeTyped wrappers
   --config <path>    Path to rustra.json config file
   --watch            Watch schema file for changes and regenerate
   --old <path>       (diff) old schema version to compare from
@@ -260,12 +263,14 @@ interface GenerateOptions {
   outputPath?: string;
   configPath?: string;
   cppOutputPath?: string;
+  /** (P2) positional-facade.ts 추가 생성 — RN JSI invokeTyped 직접 호출 래퍼. */
+  positional?: boolean;
 }
 
 export async function runGenerate(args: string[]): Promise<void> {
   autoRebuild();
-  const { schemaPath, outputPath, cppOutputPath } = resolvePaths(args);
-  const written = await generateFromSchema(schemaPath, outputPath, cppOutputPath);
+  const { schemaPath, outputPath, cppOutputPath, positional } = resolvePaths(args);
+  const written = await generateFromSchema(schemaPath, outputPath, cppOutputPath, positional);
   console.log(`Generated TypeScript files in ${outputPath}:`);
   for (const f of written) console.log(`  ${f}`);
 }
@@ -274,6 +279,7 @@ function resolvePaths(args: string[]): {
   schemaPath: string;
   outputPath: string;
   cppOutputPath?: string;
+  positional?: boolean;
 } {
   const options = parseGenerateArgs(args);
 
@@ -296,6 +302,7 @@ function resolvePaths(args: string[]): {
     schemaPath: resolve(schemaPath),
     outputPath: resolve(outputPath),
     cppOutputPath: options.cppOutputPath ? resolve(options.cppOutputPath) : undefined,
+    positional: options.positional,
   };
 }
 
@@ -324,6 +331,7 @@ async function generateFromSchema(
   schemaPath: string,
   outputPath: string,
   cppOutputPath?: string,
+  positional = false,
 ): Promise<string[]> {
   const schemaContent = await readFile(schemaPath, 'utf-8');
   const schema: PackageSchema = parsePackageSchema(JSON.parse(schemaContent));
@@ -357,6 +365,10 @@ async function generateFromSchema(
     { name: 'rkyv-codecs.ts', content: generateRkyvCodecsTs(schema) },
     { name: 'rkyv-registry.ts', content: generateRkyvRegistryTs(schema) },
   ];
+
+  if (positional) {
+    files.push({ name: 'positional-facade.ts', content: generatePositionalFacadeTs(schema) });
+  }
 
   if (cppOutputPath) {
     files.push({ name: 'rustra-generated-codecs.hpp', content: generateRkyvCodecsHpp(schema) });
@@ -442,6 +454,9 @@ function parseGenerateArgs(args: string[]): GenerateOptions {
         break;
       case '--config':
         options.configPath = args[++i];
+        break;
+      case '--positional':
+        options.positional = true;
         break;
     }
   }

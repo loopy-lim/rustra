@@ -8,6 +8,7 @@ import {
   generateRkyvCodecsHpp,
   generateRkyvCodecsTs,
   generateRkyvRegistryTs,
+  generatePositionalFacadeTs,
 } from './generate.js';
 import { collectDefinitions } from './codegen.js';
 import type { PackageSchema } from './schema.js';
@@ -642,5 +643,28 @@ test('generateRkyvCodecsCpp excludes unsupported commands from has_static_codec'
   assert.ok(
     !cpp.includes('unsupportedMap'),
     'unsupported map command must not appear in C++ codec',
+  );
+});
+
+// ── positional facade (P2) ──────────────────────────────────
+
+test('generatePositionalFacadeTs emits positional signatures for simple commands', () => {
+  const facade = generatePositionalFacadeTs(richSchema);
+  // updateItem — Option 필드지만 pass-through 가능(단일 input 객체) 확인
+  assert.ok(facade.includes('installRustraPositional'), 'installer must be exported');
+  assert.ok(facade.includes('PositionalNative'), 'native type must be exported');
+  // sortBy (enum, 단일 필드) → positional
+  const sort = facade.split('export function sortBy')[1]?.split('export function')[0] ?? '';
+  assert.ok(sort.includes('order: string'), 'enum field must map to string param');
+  assert.ok(sort.includes("'sortBy'"), 'command name must be passed');
+  // unsupportedMap 은 제외
+  assert.ok(!facade.includes('unsupportedMap'), 'unsupported commands must be excluded');
+});
+
+test('generatePositionalFacadeTs uses positional params for ≤3 primitive fields', () => {
+  const facade = generatePositionalFacadeTs(simpleSchema);
+  assert.ok(
+    facade.includes('export function add(a: number, b: number,'),
+    'simple 2-field command must be positional',
   );
 });
