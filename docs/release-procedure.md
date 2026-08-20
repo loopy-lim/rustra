@@ -49,6 +49,40 @@ sleep 30
 cargo publish -p rustra
 ```
 
+## 3.5단계 — main 브랜치 보호 (사용자 승인 필요)
+
+- 필수 체크: `rust-audit`, `rust (ubuntu-latest, stable)`, `rust (macos-latest, stable)`,
+  `rust (windows-latest, stable)`, `typescript`, `rn-android`, `rn-ios`, `consumer-smoke`.
+- 설정은 GitHub 저장소 설정에서 수동으로 수행(권한 필요).
+- 참고 API:
+  ```bash
+  gh api repos/loopy-lim/rustra/branches/main/protection
+  gh api -X PUT repos/loopy-lim/rustra/branches/main/protection --input - <<'EOF'
+  {
+    "required_status_checks": {
+      "strict": true,
+      "contexts": [
+        "rust-audit",
+        "rust (ubuntu-latest, stable)",
+        "rust (macos-latest, stable)",
+        "rust (windows-latest, stable)",
+        "typescript",
+        "rn-android",
+        "rn-ios",
+        "consumer-smoke"
+      ]
+    },
+    "enforce_admins": false,
+    "required_pull_request_reviews": {
+      "require_code_owner_reviews": false
+    },
+    "restrictions": null,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  }
+  EOF
+  ```
+
 ## 4단계 — rollback
 
 - **npm**: `npm dist-tag add @rustra/node@0.1.2 latest` — dist-tag 되돌리기로 즉시

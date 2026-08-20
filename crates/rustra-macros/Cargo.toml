@@ -2,6 +2,11 @@
 name = "rustra-macros"
 description.workspace = true
 repository.workspace = true
+# documentation 미상속 — proc-macro 은 docs.rs 문서 페이지가 없다
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+rust-version.workspace = true
 readme = "README.md"
 edition.workspace = true
 license.workspace = true

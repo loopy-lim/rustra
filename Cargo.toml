@@ -31,6 +31,12 @@ license = "MIT"
 version = "0.2.0"
 description = "Rust → TypeScript bridge framework with auto-generated type-safe clients"
 repository = "https://github.com/loopy-lim/rustra"
+homepage = "https://github.com/loopy-lim/rustra"
+documentation = "https://docs.rs/rustra"
+keywords = ["typescript", "bridge", "codegen", "ffi", "react-native"]
+categories = ["api-bindings", "development-tools::ffi"]
+# edition 2024 (1.85) + `u64::is_multiple_of` (1.87) 요구 최소 — MSRV 계약화
+rust-version = "1.87"
 
 [workspace.dependencies]
 rustra-macros = { version = "0.2.0", path = "crates/rustra-macros" }
