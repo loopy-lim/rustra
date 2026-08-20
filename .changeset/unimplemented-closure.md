@@ -5,7 +5,6 @@
 '@rustra/bun': minor
 '@rustra/tauri': minor
 '@rustra/react-native': minor
-'rustra': minor
 ---
 
 #### Codegen correctness (fix)

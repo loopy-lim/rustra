@@ -15,6 +15,7 @@
 Add `rustra_calculator_invoke_bytes` and `rustra_calculator_free_buffer` alongside the existing string-based FFI. These are the entry points the C++ bridge will call.
 
 **Files:**
+
 - Modify: `examples/calculator/src/lib.rs`
 
 **Step 1: Write the failing test**
@@ -160,6 +161,7 @@ git commit -m "feat(calculator): add byte-buffer FFI entry points for JSI bridge
 Create the new native module that will replace the Expo Module. This module installs a JSI HostObject globally accessible as `globalThis.__rustraNative`.
 
 **Files:**
+
 - Create: `examples/react-native-calculator/modules/rustra-jsi/package.json`
 - Create: `examples/react-native-calculator/modules/rustra-jsi/react-native.config.js`
 - Create: `examples/react-native-calculator/modules/rustra-jsi/src/index.ts`
@@ -168,6 +170,7 @@ Create the new native module that will replace the Expo Module. This module inst
 **Step 1: Create package.json**
 
 `examples/react-native-calculator/modules/rustra-jsi/package.json`:
+
 ```json
 {
   "name": "rustra-jsi",
@@ -180,6 +183,7 @@ Create the new native module that will replace the Expo Module. This module inst
 **Step 2: Create react-native.config.js**
 
 `examples/react-native-calculator/modules/rustra-jsi/react-native.config.js`:
+
 ```js
 module.exports = {
   dependency: {
@@ -195,6 +199,7 @@ module.exports = {
 **Step 3: Create src/index.ts**
 
 `examples/react-native-calculator/modules/rustra-jsi/src/index.ts`:
+
 ```typescript
 /**
  * Type declaration for the JSI-installed native bridge.
@@ -214,7 +219,7 @@ export function getRustraNative(): RustraNative {
   if (!native) {
     throw new Error(
       'RustraJSI native module not installed. ' +
-      'Make sure the native module is linked and the app is rebuilt.',
+        'Make sure the native module is linked and the app is rebuilt.',
     );
   }
   return native;
@@ -224,6 +229,7 @@ export function getRustraNative(): RustraNative {
 **Step 4: Create tsconfig.json**
 
 `examples/react-native-calculator/modules/rustra-jsi/tsconfig.json`:
+
 ```json
 {
   "compilerOptions": {
@@ -252,6 +258,7 @@ git commit -m "feat(rn): scaffold JSI native module package structure"
 This is the core of the implementation. The C++ HostObject receives ArrayBuffer from JS, passes raw bytes to Rust FFI, and returns the result as ArrayBuffer. The ObjC++ wrapper registers this as a React Native module.
 
 **Files:**
+
 - Create: `examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSIBridge.hpp`
 - Create: `examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSIBridge.cpp`
 - Create: `examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSIModule.mm`
@@ -259,6 +266,7 @@ This is the core of the implementation. The C++ HostObject receives ArrayBuffer 
 **Step 1: Create C++ header**
 
 `examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSIBridge.hpp`:
+
 ```cpp
 #pragma once
 
@@ -298,6 +306,7 @@ void installRustraJSI(facebook::jsi::Runtime& rt);
 **Step 2: Create C++ implementation**
 
 `examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSIBridge.cpp`:
+
 ```cpp
 #include "RustraJSIBridge.hpp"
 #include <cstring>
@@ -383,6 +392,7 @@ void installRustraJSI(Runtime& rt) {
 **Step 3: Create ObjC++ module wrapper**
 
 `examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSIModule.mm`:
+
 ```objc
 #import <React/RCTBridgeModule.h>
 #import <React/RCTBridge+Private.h>
@@ -428,12 +438,14 @@ git commit -m "feat(rn): add C++ JSI HostObject and ObjC++ module registration"
 Wire up the build system so CocoaPods compiles the C++ bridge and links it with the Rust static library.
 
 **Files:**
+
 - Create: `examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSI.podspec`
 - Create: `examples/react-native-calculator/modules/rustra-jsi/ios/build-rust-ios.sh`
 
 **Step 1: Create podspec**
 
 `examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSI.podspec`:
+
 ```ruby
 Pod::Spec.new do |s|
   s.name           = 'RustraJSI'
@@ -466,6 +478,7 @@ end
 **Step 2: Create build script**
 
 `examples/react-native-calculator/modules/rustra-jsi/ios/build-rust-ios.sh`:
+
 ```sh
 #!/bin/sh
 set -eu
@@ -512,6 +525,7 @@ git commit -m "feat(rn): add CocoaPods podspec and Rust iOS build script for JSI
 Replace the Expo Module adapter with a JSI byte-buffer engine. The engine takes a JSI native module reference and uses `TextEncoder`/`TextDecoder` to convert JSON to/from `Uint8Array` bytes.
 
 **Files:**
+
 - Modify: `packages/react-native/src/index.ts`
 
 **Step 1: Rewrite the adapter**
@@ -527,9 +541,7 @@ export type ReactNativeEngineClient = {
   invoke<T>(command: string, args?: unknown): Promise<T>;
 };
 
-export function createReactNativeEngine(
-  native: RustraJSINative,
-): ReactNativeEngineClient {
+export function createReactNativeEngine(native: RustraJSINative): ReactNativeEngineClient {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
 
@@ -572,6 +584,7 @@ git commit -m "feat(rn): rewrite react-native adapter for byte-buffer JSI engine
 Wire up the example app to use the new JSI module instead of the Expo Module. Update the benchmark to compare JSI bridge vs Nitro.
 
 **Files:**
+
 - Modify: `examples/react-native-calculator/package.json`
 - Modify: `examples/react-native-calculator/BenchmarkApp.tsx`
 - Modify: `examples/react-native-calculator/index.ts` (if exists and needs changes)
@@ -581,6 +594,7 @@ Wire up the example app to use the new JSI module instead of the Expo Module. Up
 Remove `rustra-calculator` (Expo module) and add `rustra-jsi`:
 
 In `examples/react-native-calculator/package.json`, change dependencies:
+
 ```diff
 - "rustra-calculator": "file:./modules/rustra-calculator"
 + "rustra-jsi": "file:./modules/rustra-jsi"
@@ -593,18 +607,18 @@ Keep `nitro-bench` for comparison.
 Replace `examples/react-native-calculator/BenchmarkApp.tsx`:
 
 ```tsx
-import { useEffect, useState } from "react";
-import { StyleSheet, Text, View, ScrollView } from "react-native";
-import { NitroModules } from "react-native-nitro-modules";
-import { addNumbers } from "../calculator/generated/commands";
-import { createReactNativeEngine } from "../../packages/react-native/src";
-import { getRustraNative } from "./modules/rustra-jsi/src";
+import { useEffect, useState } from 'react';
+import { StyleSheet, Text, View, ScrollView } from 'react-native';
+import { NitroModules } from 'react-native-nitro-modules';
+import { addNumbers } from '../calculator/generated/commands';
+import { createReactNativeEngine } from '../../packages/react-native/src';
+import { getRustraNative } from './modules/rustra-jsi/src';
 
 // ── Helpers ──────────────────────────────────────────────
 
 function bar(value: number, max: number, width = 25): string {
   const filled = Math.max(1, Math.round((value / max) * width));
-  return "█".repeat(filled) + "░".repeat(width - filled);
+  return '█'.repeat(filled) + '░'.repeat(width - filled);
 }
 
 function formatNs(ns: number): string {
@@ -614,7 +628,7 @@ function formatNs(ns: number): string {
 }
 
 function formatOps(n: number): string {
-  return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
 
 type BenchResult = {
@@ -660,44 +674,48 @@ async function runBenchmarks(): Promise<string[]> {
   // Load Nitro HybridObject
   const nitroBench = NitroModules.createHybridObject<{
     add(a: number, b: number): number;
-  }>("NitroBench");
+  }>('NitroBench');
 
-  log("╔════════════════════════════════════════════════╗");
-  log("║    Rustra JSI vs Nitro (iOS Simulator)        ║");
-  log("╚════════════════════════════════════════════════╝");
-  log("");
+  log('╔════════════════════════════════════════════════╗');
+  log('║    Rustra JSI vs Nitro (iOS Simulator)        ║');
+  log('╚════════════════════════════════════════════════╝');
+  log('');
 
   // 1. Nitro (JSI C++ direct)
-  log("┌─ Nitro Modules (JSI C++ HybridObject) ────────┐");
-  const nitroResult = await measure("NitroBench.add", () =>
+  log('┌─ Nitro Modules (JSI C++ HybridObject) ────────┐');
+  const nitroResult = await measure('NitroBench.add', () =>
     Promise.resolve(nitroBench.add(42, 58)),
   );
   log(`│  10,000 iterations`);
-  log(`│  avg: ${formatNs(nitroResult.avg).padStart(10)}  p50: ${formatNs(nitroResult.p50).padStart(10)}  p99: ${formatNs(nitroResult.p99).padStart(10)}`);
+  log(
+    `│  avg: ${formatNs(nitroResult.avg).padStart(10)}  p50: ${formatNs(nitroResult.p50).padStart(10)}  p99: ${formatNs(nitroResult.p99).padStart(10)}`,
+  );
   log(`│  ${formatOps(nitroResult.ops)} ops/sec`);
-  log("└───────────────────────────────────────────────┘");
-  log("");
+  log('└───────────────────────────────────────────────┘');
+  log('');
 
   // 2. Rustra JSI
-  log("┌─ Rustra JSI (byte buffer + Rust FFI) ─────────┐");
-  const rustraResult = await measure("addNumbers (JSI)", () =>
+  log('┌─ Rustra JSI (byte buffer + Rust FFI) ─────────┐');
+  const rustraResult = await measure('addNumbers (JSI)', () =>
     addNumbers(engine, { a: 42, b: 58 }),
   );
   log(`│  10,000 iterations`);
-  log(`│  avg: ${formatNs(rustraResult.avg).padStart(10)}  p50: ${formatNs(rustraResult.p50).padStart(10)}  p99: ${formatNs(rustraResult.p99).padStart(10)}`);
+  log(
+    `│  avg: ${formatNs(rustraResult.avg).padStart(10)}  p50: ${formatNs(rustraResult.p50).padStart(10)}  p99: ${formatNs(rustraResult.p99).padStart(10)}`,
+  );
   log(`│  ${formatOps(rustraResult.ops)} ops/sec`);
-  log("└───────────────────────────────────────────────┘");
-  log("");
+  log('└───────────────────────────────────────────────┘');
+  log('');
 
   // 3. Head-to-head
-  log("╔════════════════════════════════════════════════╗");
-  log("║         Head-to-Head Comparison               ║");
-  log("╠════════════════════════════════════════════════╣");
-  log("│");
+  log('╔════════════════════════════════════════════════╗');
+  log('║         Head-to-Head Comparison               ║');
+  log('╠════════════════════════════════════════════════╣');
+  log('│');
 
   const allResults = [
-    { name: "Nitro (JSI C++)", result: nitroResult },
-    { name: "Rustra JSI", result: rustraResult },
+    { name: 'Nitro (JSI C++)', result: nitroResult },
+    { name: 'Rustra JSI', result: rustraResult },
   ];
 
   const maxAvg = Math.max(...allResults.map((r) => r.result.avg));
@@ -706,12 +724,12 @@ async function runBenchmarks(): Promise<string[]> {
     log(`│  ${r.name.padEnd(24)} ${b} ${formatNs(r.result.avg)}`);
   }
 
-  log("│");
+  log('│');
   const ratio = rustraResult.avg / nitroResult.avg;
   const overhead = rustraResult.avg - nitroResult.avg;
   log(`│  Rustra JSI / Nitro = ${ratio.toFixed(1)}x`);
   log(`│  Rustra overhead: ${formatNs(overhead)}`);
-  log("╚════════════════════════════════════════════════╝");
+  log('╚════════════════════════════════════════════════╝');
 
   return lines;
 }
@@ -719,10 +737,12 @@ async function runBenchmarks(): Promise<string[]> {
 // ── UI ───────────────────────────────────────────────────
 
 export default function App() {
-  const [output, setOutput] = useState<string[]>(["Running benchmarks..."]);
+  const [output, setOutput] = useState<string[]>(['Running benchmarks...']);
 
   useEffect(() => {
-    runBenchmarks().then(setOutput).catch((e) => setOutput([String(e)]));
+    runBenchmarks()
+      .then(setOutput)
+      .catch((e) => setOutput([String(e)]));
   }, []);
 
   return (
@@ -741,7 +761,7 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1a1a2e",
+    backgroundColor: '#1a1a2e',
     padding: 16,
     paddingTop: 60,
   },
@@ -749,9 +769,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   text: {
-    fontFamily: "Courier",
+    fontFamily: 'Courier',
     fontSize: 11,
-    color: "#e0e0e0",
+    color: '#e0e0e0',
     lineHeight: 16,
   },
 });
@@ -762,8 +782,8 @@ const styles = StyleSheet.create({
 Check and update `examples/react-native-calculator/index.ts` — it should register the benchmark app:
 
 ```ts
-import { registerRootComponent } from "expo";
-import App from "./BenchmarkApp";
+import { registerRootComponent } from 'expo';
+import App from './BenchmarkApp';
 
 registerRootComponent(App);
 ```
@@ -784,6 +804,7 @@ git commit -m "feat(rn): update example app to use JSI bridge instead of Expo Mo
 Delete the Expo Module that is being replaced by the JSI bridge.
 
 **Files:**
+
 - Delete: `examples/react-native-calculator/modules/rustra-calculator/` (entire directory)
 
 **Step 1: Remove the Expo module directory**
@@ -829,6 +850,7 @@ Expected: App builds and launches in simulator
 **Step 5: Run benchmarks**
 
 The app auto-runs benchmarks on launch. Compare the results:
+
 - **Before (Expo):** ~52.5µs
 - **Target (JSI):** ~8-12µs
 - **Nitro reference:** ~5-7µs
@@ -844,6 +866,7 @@ If benchmarks show improvement, no additional commit needed. If issues arise, de
 The Podfile may need adjustments to properly link the JSI module without the Expo autolinking for the removed module.
 
 **Files:**
+
 - May modify: `examples/react-native-calculator/ios/Podfile`
 
 **Step 1: After `pod install`, check for errors**
@@ -870,14 +893,14 @@ git commit -m "chore(rn): update Podfile for JSI module"
 
 ## Task Summary
 
-| # | Task | Key Files |
-|---|------|-----------|
-| 1 | Rust byte-buffer FFI | `examples/calculator/src/lib.rs` |
-| 2 | JSI module scaffold | `modules/rustra-jsi/{package.json,react-native.config.js,src/}` |
-| 3 | C++ JSI bridge + ObjC++ | `modules/rustra-jsi/ios/{Bridge.hpp,Bridge.cpp,Module.mm}` |
-| 4 | Podspec + build script | `modules/rustra-jsi/ios/{RustraJSI.podspec,build-rust-ios.sh}` |
-| 5 | Rewrite RN adapter | `packages/react-native/src/index.ts` |
-| 6 | Update example app | `{BenchmarkApp.tsx,package.json,index.ts}` |
-| 7 | Remove Expo Module | Delete `modules/rustra-calculator/` |
-| 8 | Build & verify | `cargo build`, `pod install`, `expo run:ios` |
-| 9 | Fix Podfile if needed | `ios/Podfile` |
+| #   | Task                    | Key Files                                                       |
+| --- | ----------------------- | --------------------------------------------------------------- |
+| 1   | Rust byte-buffer FFI    | `examples/calculator/src/lib.rs`                                |
+| 2   | JSI module scaffold     | `modules/rustra-jsi/{package.json,react-native.config.js,src/}` |
+| 3   | C++ JSI bridge + ObjC++ | `modules/rustra-jsi/ios/{Bridge.hpp,Bridge.cpp,Module.mm}`      |
+| 4   | Podspec + build script  | `modules/rustra-jsi/ios/{RustraJSI.podspec,build-rust-ios.sh}`  |
+| 5   | Rewrite RN adapter      | `packages/react-native/src/index.ts`                            |
+| 6   | Update example app      | `{BenchmarkApp.tsx,package.json,index.ts}`                      |
+| 7   | Remove Expo Module      | Delete `modules/rustra-calculator/`                             |
+| 8   | Build & verify          | `cargo build`, `pod install`, `expo run:ios`                    |
+| 9   | Fix Podfile if needed   | `ios/Podfile`                                                   |

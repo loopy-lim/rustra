@@ -69,7 +69,7 @@ Task 1~7 결과물 전부 실재 확인:
 수정, types에는 신규 추가), `@rustra/*` 7개에 `publishConfig.access: public`, 내부 의존
 `@rustra/types ^0.1.1`. 루트는 `private: true` 유지.
 
-*_npm (packages/_ 7종)**:
+\*_npm (packages/_ 7종)\*\*:
 
 - 공통: files `["dist"]`, main/types/exports 구비, `type: module`, build=tsc.
 - `dist`는 gitignore → **발행 전 `npm run build` 필수** (`release` 스크립트가
