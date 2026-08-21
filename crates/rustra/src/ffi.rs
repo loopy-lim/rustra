@@ -415,6 +415,69 @@ fn run_worker(
     }
 }
 
+// ── async 워커 풀 (백프레셔 포함) ────────────────────────────
+//
+// 호출당 `std::thread::spawn` 은 burst 시 스레드 폭증(fd 고갈, 스케줄 지연)을
+// 일으킨다. 이 풀은 고정 크기 워커 + bounded 채널로 대체한다 — 큐가 가득 차면
+// 즉시 `invoke.backpressure` 에러 프레임으로 거부해 호출자(JsPromise)가 hang
+// 없이 실패한다.
+
+/// 워커 수 — RN/임베디드 호스트의 과도한 스레드 생성을 막는 고정 상수.
+/// 코어 수 기반 스케일링은 호스트 런타임과 조율이 필요해 과잉 — 2로 시작해
+/// 필요 시 노출한다.
+const ASYNC_POOL_SIZE: usize = 2;
+/// 큐 깊이 — 이 이상의 백로그는 backpressure 로 즉시 거부한다.
+const ASYNC_QUEUE_DEPTH: usize = 256;
+
+type AsyncJob = (
+    u64,
+    Vec<u8>,
+    usize,
+    Option<unsafe extern "C" fn(*mut c_void, *mut u8, usize)>,
+    unsafe extern "C" fn(*const u8, usize, *mut usize) -> *mut u8,
+    fn(&FfiResponse) -> Vec<u8>,
+);
+
+fn async_pool() -> &'static Mutex<std::sync::mpsc::SyncSender<AsyncJob>> {
+    static POOL: OnceLock<Mutex<std::sync::mpsc::SyncSender<AsyncJob>>> = OnceLock::new();
+    POOL.get_or_init(|| {
+        let (tx, rx) = std::sync::mpsc::sync_channel::<AsyncJob>(ASYNC_QUEUE_DEPTH);
+        // 수신자를 Arc 로 공유해 각 워커가 lock-recv 로 잡는다 — Mutex 가 잠기는
+        // 동안 다른 워커는 대기하지만 recv 자체가 블로킹이라 실제 경합은 짧다.
+        let rx = std::sync::Arc::new(Mutex::new(rx));
+        for _ in 0..ASYNC_POOL_SIZE {
+            let rx = std::sync::Arc::clone(&rx);
+            std::thread::spawn(move || {
+                loop {
+                    let job = {
+                        let guard = rx.lock().unwrap_or_else(|p| p.into_inner());
+                        guard.recv()
+                    };
+                    match job {
+                        Ok((id, bytes, user_data_raw, on_complete, invoke_fn, serialize)) => {
+                            run_worker(id, bytes, user_data_raw, on_complete, invoke_fn, serialize);
+                        }
+                        Err(_) => break, // 송신자 전원 해제(프로세스 종료) — 워커 종료
+                    }
+                }
+            });
+        }
+        Mutex::new(tx)
+    })
+}
+
+/// 풀에 작업을 제출한다 — 큐가 가득 차면 Err(백프레셔). 호출자는
+/// `invoke.backpressure` 프레임으로 정규화한다.
+fn async_pool_submit(job: AsyncJob) -> Result<(), AsyncJob> {
+    let tx = async_pool()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    tx.try_send(job).map_err(|e| match e {
+        std::sync::mpsc::TrySendError::Full(job) => job,
+        std::sync::mpsc::TrySendError::Disconnected(job) => job,
+    })
+}
+
 /// `rustra_ffi_invoke` 의 디폴트 포맷 디스패치를 그대로 따르는 직렬화기 —
 /// [`run_worker`] 의 cancelled 프레임이 실제 dispatch 경로와 동일한
 /// 포맷(JSON/postcard)으로 인코딩되도록 한다. `None => Json` 기본값은
@@ -739,28 +802,24 @@ pub unsafe extern "C" fn rustra_ffi_invoke_async(
         unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
     };
 
-    // spawn 실패는 패닉이라 nounwind FFI 경계를 넘으면 abort 다 — 잡아서
-    // on_complete 에러 프레임으로 정규화한다(sync 경로의 with_panic_guard 가
-    // 커버하지 못하는 유일한 구멍).
-    let spawned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        std::thread::spawn(move || {
-            run_worker(
-                id,
-                bytes,
-                user_data_raw,
-                on_complete,
-                rustra_ffi_invoke,
-                sync_serialize,
-            );
-        });
-    }));
-    if let Err(panic) = spawned {
+    // 고정 워커 풀로 제출(백프레셔 포함) — 호출당 thread::spawn 의 스레드 폭증을
+    // 방지한다. 큐가 가득 차면 즉시 backpressure 프레임으로 거부한다(hang 없음).
+    if async_pool_submit((
+        id,
+        bytes,
+        user_data_raw,
+        on_complete,
+        rustra_ffi_invoke,
+        sync_serialize,
+    ))
+    .is_err()
+    {
         deliver_spawn_failure(
             id,
             user_data_raw,
             on_complete,
             sync_serialize,
-            &panic_frame_message(&*panic),
+            "invoke.backpressure: async worker queue is full — retry after drain",
         );
     }
 }
@@ -809,25 +868,22 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json_async(
         unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
     };
 
-    let spawned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        std::thread::spawn(move || {
-            run_worker(
-                id,
-                bytes,
-                user_data_raw,
-                on_complete,
-                rustra_ffi_invoke_json,
-                json_serialize,
-            );
-        });
-    }));
-    if let Err(panic) = spawned {
+    if async_pool_submit((
+        id,
+        bytes,
+        user_data_raw,
+        on_complete,
+        rustra_ffi_invoke_json,
+        json_serialize,
+    ))
+    .is_err()
+    {
         deliver_spawn_failure(
             id,
             user_data_raw,
             on_complete,
             json_serialize,
-            &panic_frame_message(&*panic),
+            "invoke.backpressure: async worker queue is full — retry after drain",
         );
     }
 }
@@ -1124,25 +1180,22 @@ pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2_async(
         unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
     };
 
-    let spawned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        std::thread::spawn(move || {
-            run_worker(
-                id,
-                bytes,
-                user_data_raw,
-                on_complete,
-                rustra_ffi_invoke_rkyv_v2,
-                rkyv_error_bytes,
-            );
-        });
-    }));
-    if let Err(panic) = spawned {
+    if async_pool_submit((
+        id,
+        bytes,
+        user_data_raw,
+        on_complete,
+        rustra_ffi_invoke_rkyv_v2,
+        rkyv_error_bytes,
+    ))
+    .is_err()
+    {
         deliver_spawn_failure(
             id,
             user_data_raw,
             on_complete,
             rkyv_error_bytes,
-            &panic_frame_message(&*panic),
+            "invoke.backpressure: async worker queue is full — retry after drain",
         );
     }
 }

@@ -880,3 +880,36 @@ test('templateVersions derives template pins from CLI version (single source)', 
   assert.equal(templateVersions('0.2.0').cargoMinor, '0.2');
   assert.ok(templateVersions('0.2.0').npmCaret.startsWith('^'));
 });
+
+test('generateEventsTs emits payload types, name union, and subscribe helper', async () => {
+  const { generateEventsTs } = await import('./generate.js');
+  const schema = {
+    packageId: 'example.stream',
+    commands: [],
+    events: [
+      {
+        name: 'progress.tick',
+        payload: {
+          type: 'object',
+          required: ['value'],
+          properties: { value: { type: 'integer', format: 'int64' } },
+        },
+      },
+    ],
+  } as Parameters<typeof generateEventsTs>[0];
+
+  const out = generateEventsTs(schema);
+  assert.ok(out.includes("export type RustraEventName = 'progress.tick'"));
+  assert.ok(out.includes("  'progress.tick': {"));
+  assert.ok(out.includes('value: number;'));
+  assert.ok(out.includes('export function onRustraEvent'));
+  assert.ok(out.includes('export type SubscribeFn'));
+});
+
+test('generateEventsTs returns empty string without events (backcompat)', async () => {
+  const { generateEventsTs } = await import('./generate.js');
+  const schema = { packageId: 'example.plain', commands: [] } as Parameters<
+    typeof generateEventsTs
+  >[0];
+  assert.equal(generateEventsTs(schema), '');
+});

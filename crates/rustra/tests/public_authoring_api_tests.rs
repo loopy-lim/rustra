@@ -1148,3 +1148,49 @@ fn state_dependency_injection_works() {
     let res_echo: EchoOutput = pkg.invoke("asyncWithState", ()).unwrap();
     assert_eq!(res_echo.msg, "RustraBridgeApp");
 }
+
+// ── (이벤트 계약) PackageBuilder::event 선언 → schema.json events 섹션 ──
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct ProgressPayload {
+    value: i64,
+}
+
+#[test]
+fn event_contract_appears_in_schema_json() {
+    let package = Package::builder("example.stream")
+        .event::<ProgressPayload>("progress.tick")
+        .build();
+
+    let schema = package.live_schema();
+    let events = schema["events"].as_array().expect("events section present");
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["name"], "progress.tick");
+    assert!(
+        events[0]["payload"]["properties"]["value"].is_object(),
+        "payload schema is exposed: {}",
+        events[0]["payload"]
+    );
+}
+
+#[test]
+fn schema_without_events_has_no_section() {
+    // 하위호환 — event 선언이 없으면 events 키 자체가 없다.
+    let package = Package::builder("example.plain").build();
+    let schema = package.live_schema();
+    assert!(schema.get("events").is_none());
+}
+
+#[test]
+fn event_contract_flows_to_generate_typescript_schema() {
+    let package = Package::builder("example.stream")
+        .event::<ProgressPayload>("progress.tick")
+        .build();
+    let generated = package.generate_typescript().unwrap();
+    assert!(
+        generated.schema_json.contains("\"events\""),
+        "generate_typescript schema includes events section"
+    );
+    assert!(generated.schema_json.contains("progress.tick"));
+}

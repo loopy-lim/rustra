@@ -16,6 +16,73 @@ import {
 } from './codegen.js';
 
 /**
+ * (이벤트 계약) 스키마의 `events` 섹션에서 `events.ts` 를 생성한다 —
+ * 이벤트 페이로드 타입 + 이름 리터럴 유니언 + 구독 헬퍼.
+ *
+ * 커맨드와 동일한 "한 번 정의하면 어디서든 타입 안전" 계약을 이벤트에
+ * 적용한다: Rust `PackageBuilder::event::<E>("name")` 선언이 여기 페이로드
+ * 타입으로 내려온다. 구독 헬퍼는 플랫폼별 구독 함수를 주입받는 형태다
+ * (RN `subscribeEvent` / Tauri `@rustra/tauri` 의 `subscribeEvent`).
+ *
+ * 스키마에 events 섹션이 없으면 빈 문자열을 반환한다(파일 미생성).
+ */
+export function generateEventsTs(schema: PackageSchema): string {
+  const events = schema.events ?? [];
+  if (events.length === 0) return '';
+
+  // 이벤트 페이로드 정의 수집 ($ref 대상) — 전체를 하나의 definitions 맵으로.
+  const allDefinitions: Record<string, import('./schema.js').JsonSchema> = {};
+  for (const ev of events) {
+    if (ev.definitions) {
+      for (const [key, value] of Object.entries(ev.definitions)) {
+        allDefinitions[key] = value;
+      }
+    }
+    collectDefinitions(ev.payload, allDefinitions);
+  }
+
+  let output = '';
+
+  // 페이로드 타입 정의 — 커맨드 타입과 동일한 전략.
+  const emitted = new Set<string>();
+  for (const [name, defSchema] of Object.entries(allDefinitions)) {
+    if (emitted.has(name)) continue;
+    emitted.add(name);
+    output += `export type ${name} = ${tsTypeFromSchema(defSchema, allDefinitions)};\n\n`;
+  }
+
+  // 이벤트 이름 유니언 + 페이로드 매핑.
+  const names = events.map((e) => `'${e.name}'`).join(' | ');
+  output += `/** 선언된 rustra 이벤트 이름 (Rust \`PackageBuilder::event\`). */\n`;
+  output += `export type RustraEventName = ${names};\n\n`;
+  output += `/** 이벤트 이름 → 페이로드 타입 매핑. */\n`;
+  output += `export type RustraEventPayloads = {\n`;
+  for (const ev of events) {
+    const payloadType = tsTypeFromSchema(ev.payload, allDefinitions);
+    output += `  '${ev.name}': ${payloadType};\n`;
+  }
+  output += `};\n\n`;
+
+  // 구독 헬퍼 — 플랫폼 구독 함수(콜백 해지를 반환)를 주입받아 이름/페이로드를
+  // 타입으로 연결한다. RN 의 subscribeEvent 는 (name, cb) → unsubscribe 다.
+  output += `/** 플랫폼 구독 함수 — RN \`subscribeEvent\` / Tauri 래퍼 등. */\n`;
+  output += `export type SubscribeFn = <N extends RustraEventName>(\n`;
+  output += `  name: N,\n`;
+  output += `  callback: (payload: RustraEventPayloads[N]) => void,\n`;
+  output += `) => (() => void) | Promise<() => void>;\n\n`;
+  output += `/** 타입 안전 이벤트 구독 — 페이로드가 자동으로 좁혀진다. */\n`;
+  output += `export function onRustraEvent<N extends RustraEventName>(\n`;
+  output += `  subscribe: SubscribeFn,\n`;
+  output += `  name: N,\n`;
+  output += `  callback: (payload: RustraEventPayloads[N]) => void,\n`;
+  output += `): (() => void) | Promise<() => void> {\n`;
+  output += `  return subscribe(name, callback as (payload: RustraEventPayloads[N]) => void);\n`;
+  output += `}\n`;
+
+  return output;
+}
+
+/**
  * 패키지 스키마에서 TypeScript 타입 정의 파일(`types.ts`)을 생성합니다.
  */
 export function generateTypesTs(schema: PackageSchema): string {
