@@ -1401,20 +1401,30 @@ export function generatePositionalFacadeTs(schema: PackageSchema): string {
   }
   output += `import type { InvokeOptions } from '@rustra/types';\n\n`;
   output +=
-    `/** JSI 네이티브 모듈의 최소 인터페이스 — invokeTyped 노출 호스트만 사용 가능. */\n` +
+    `/** JSI 네이티브 모듈의 최소 인터페이스 — invokeTypedById 노출 호스트 권장. */\n` +
     `export type PositionalNative = {\n` +
     `  invokeTyped(name: string, args: unknown): unknown;\n` +
+    `  /** (P0-3) cmd_id 진입 — 문자열 마샬링을 건너뛴다. 미노출이면 이름 기반으로 폴백. */\n` +
+    `  invokeTypedById?(cmdId: number, args: unknown): unknown;\n` +
     `};\n\n` +
     `let _native: PositionalNative | null = null;\n\n` +
     `/** 앱 시작 시 JSI 네이티브를 주입한다 (installRustraJSI 이후). */\n` +
     `export function installRustraPositional(native: PositionalNative): void {\n` +
     `  _native = native;\n` +
     `}\n\n` +
-    `function call<T>(name: string, args: unknown): Promise<T> {\n` +
+    `function requireNative(): PositionalNative {\n` +
     `  if (!_native) {\n` +
-    `    return Promise.reject(new Error('positional facade not installed — call installRustraPositional(native) first'));\n` +
+    `    throw new Error('positional facade not installed — call installRustraPositional(native) first');\n` +
     `  }\n` +
-    `  return Promise.resolve(_native.invokeTyped(name, args) as T);\n` +
+    `  return _native;\n` +
+    `}\n\n` +
+    `/** byId 진입(우선) — 미노출 구 네이티브는 이름 기반 invokeTyped 로 폴백. */\n` +
+    `function call<T>(cmdId: number, name: string, args: unknown): T {\n` +
+    `  const native = requireNative();\n` +
+    `  if (native.invokeTypedById) {\n` +
+    `    return native.invokeTypedById(cmdId, args) as T;\n` +
+    `  }\n` +
+    `  return native.invokeTyped(name, args) as T;\n` +
     `}\n\n`;
 
   for (const command of supported) {
@@ -1425,6 +1435,7 @@ export function generatePositionalFacadeTs(schema: PackageSchema): string {
     const simple = fields.every(
       (f) => !f.kind.startsWith('option_') && f.kind !== 'struct' && f.kind !== 'vec_struct',
     );
+    const cmdId = command.commandId ?? 0;
     if (fields.length <= 3 && simple) {
       const params = fields
         .map((f) => `${f.name}: ${tsFieldType(f, command.inputType)}`)
@@ -1432,14 +1443,16 @@ export function generatePositionalFacadeTs(schema: PackageSchema): string {
       const argObject =
         fields.length === 0 ? 'undefined' : `{ ${fields.map((f) => `${f.name}`).join(', ')} }`;
       output +=
-        `export function ${fnName}(${params ? params + ', ' : ''}_options?: InvokeOptions): Promise<${outType}> {\n` +
-        `  return call<${outType}>('${command.name}', ${argObject});\n` +
+        `export function ${fnName}(${params ? params + ', ' : ''}options?: InvokeOptions): Promise<${outType}> {\n` +
+        `  void options;\n` +
+        `  return Promise.resolve(call<${outType}>(${cmdId}, '${command.name}', ${argObject}));\n` +
         `}\n\n`;
     } else {
       const inType = command.inputType;
       output +=
-        `export function ${fnName}(input: ${inType}, _options?: InvokeOptions): Promise<${outType}> {\n` +
-        `  return call<${outType}>('${command.name}', input);\n` +
+        `export function ${fnName}(input: ${inType}, options?: InvokeOptions): Promise<${outType}> {\n` +
+        `  void options;\n` +
+        `  return Promise.resolve(call<${outType}>(${cmdId}, '${command.name}', input));\n` +
         `}\n\n`;
     }
   }

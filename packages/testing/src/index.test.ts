@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { createMockEngine, assertContractCurrent } from './index.js';
+import { createMockEngine, assertContractCurrent, expectContractCurrent } from './index.js';
 import { RustraCommandError } from '@rustra/types';
 
 test('mock engine invokes registered handler', async () => {
@@ -52,9 +52,41 @@ test('mock engine records calls for ordering assertions', async () => {
   await engine.invoke('a', { x: 1 });
   await engine.invoke('b');
   assert.deepEqual(engine.calls(), [
-    { command: 'a', args: { x: 1 } },
-    { command: 'b', args: undefined },
+    { command: 'a', args: { x: 1 }, options: undefined },
+    { command: 'b', args: undefined, options: undefined },
   ]);
+});
+
+test('mock engine records options and rejects pre-aborted signals', async () => {
+  const engine = createMockEngine();
+  engine.on('a', () => 1);
+  const ac = new AbortController();
+  await engine.invoke('a', undefined, { signal: ac.signal, timeoutMs: 100 });
+  // signal/timeoutMs 가 기록된다 — "signal 로 호출했는지" 검증 가능.
+  const last = engine.calls().at(-1);
+  assert.equal(last?.options?.timeoutMs, 100);
+  assert.equal(last?.options?.signal, ac.signal);
+
+  // pre-aborted — 전 어댑터 공통 정책(cancelled, retryable).
+  ac.abort();
+  await assert.rejects(
+    () => engine.invoke('a', undefined, { signal: ac.signal }),
+    (err: unknown) =>
+      err instanceof RustraCommandError && err.code === 'cancelled' && err.retryable === true,
+  );
+
+  // reset 이 기록을 비운다.
+  engine.reset();
+  assert.deepEqual(engine.calls(), []);
+});
+
+test('mock engine supports invokeBatch routing per entry', async () => {
+  const engine = createMockEngine();
+  engine.on('a', () => 1).on('b', () => 2);
+  const batch = engine.invokeBatch!;
+  const results = await batch([{ command: 'a', args: { x: 1 } }, { command: 'b' }]);
+  assert.deepEqual(results, [1, 2]);
+  assert.equal(engine.calls().length, 2);
 });
 
 test('assertContractCurrent passes when commands match', () => {
@@ -71,4 +103,18 @@ test('assertContractCurrent detects drift both ways', () => {
   const result = assertContractCurrent(schema, ['addNumbers', 'staleCommand']);
   assert.deepEqual(result.missingInSchema, ['staleCommand']);
   assert.deepEqual(result.missingInClient, []);
+});
+
+test('expectContractCurrent throws with human-readable drift message', () => {
+  const schema = { commands: [{ name: 'addNumbers' }, { name: 'extra' }] };
+  // 드리프트: extra 는 클라이언트에 없고, ghost 는 스키마에 없다.
+  assert.throws(
+    () => expectContractCurrent(schema, ['addNumbers', 'ghost']),
+    (err: unknown) => {
+      const msg = err instanceof Error ? err.message : '';
+      return msg.includes('extra') && msg.includes('ghost') && msg.includes('drift');
+    },
+  );
+  // 정합이면 조용히 통과.
+  expectContractCurrent({ commands: [{ name: 'addNumbers' }] }, ['addNumbers']);
 });

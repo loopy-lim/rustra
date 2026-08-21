@@ -125,6 +125,65 @@ function isRetryableCode(code: string): boolean {
   return code === 'transport.error' || code === 'transport.timeout' || code === 'cancelled';
 }
 
+/**
+ * rustra 에러 코드의 중앙 레지스트리 — Rust `RustraError`(crates/rustra/src/error.rs)
+ * 와 JS 어댑터가 발행하는 전체 코드 집합. 과거엔 각 소스에 문자열 리터럴로
+ * 흩어져 있어 `err.code === 'transport.timeout'` 오타가 컴파일 타임에 안 잡혔다.
+ * 상수를 쓰면 자동완성+타입 체크가 둘 다 동작한다:
+ *
+ * ```ts
+ * import { RustraErrorCode } from '@rustra/types';
+ * if (err.code === RustraErrorCode.TransportTimeout) { retry(); }
+ * ```
+ *
+ * 새 코드 추가 시 여기와 Rust error.rs 를 함께 갱신한다(단일 소스 관례).
+ */
+export const RustraErrorCode = {
+  /** 명령을 레지스트리에서 찾을 수 없음. */
+  CommandNotFound: 'command.not_found',
+  /** 인자 역직렬화/검증 실패. */
+  CommandInvalidArgs: 'command.invalid_args',
+  /** capability 미부여로 거부됨 (deny-by-default). */
+  CapabilityDenied: 'capability.denied',
+  /** 페이로드가 크기 한도(기본 1MiB)를 초과. */
+  PayloadTooLarge: 'payload.too_large',
+  /** transport 계열 일시 오류 — retryable. */
+  TransportError: 'transport.error',
+  /** 타임아웃 레이스 만료 — retryable. */
+  TransportTimeout: 'transport.timeout',
+  /** 사전/협력적 취소 — retryable. */
+  Cancelled: 'cancelled',
+  /** Rust 내부 오류(패닉 정규화 포함). */
+  Internal: 'internal',
+  /** 동결 레지스트리의 구조 mutation 거부. */
+  RegistryFrozen: 'registry.frozen',
+  /** command_id 공간 고갈. */
+  RegistryIdExhausted: 'registry.id_exhausted',
+  /** FFI 전역 패키지 미등록. */
+  FfiNotRegistered: 'ffi.not_registered',
+  /** invoke 일반 실패(JS 폴백 기본 코드). */
+  InvokeFailed: 'invoke.failed',
+  /** 와이어 프레임 파싱 실패. */
+  InvokeMalformed: 'invoke.malformed',
+  /** 페이로드가 헤더보다 짧음. */
+  InvokeTooShort: 'invoke.too_short',
+  /** 스키마 조회 실패. */
+  SchemaUnavailable: 'schema.unavailable',
+  /** 계약 해시 불일치(JS>native stale). */
+  ContractMismatch: 'contract.mismatch',
+  /** 계약 해시 검증 불가(네이티브 미지원). */
+  ContractUnenforceable: 'contract.unenforceable',
+  /** 분류 불가 오류. */
+  Unknown: 'unknown',
+} as const;
+
+export type RustraErrorCodeValue = (typeof RustraErrorCode)[keyof typeof RustraErrorCode];
+
+/** 값이 알려진 rustra 에러 코드인지 검사 (타입 가드). */
+export function isRustraErrorCode(code: string): code is RustraErrorCodeValue {
+  return Object.values(RustraErrorCode).includes(code as RustraErrorCodeValue);
+}
+
 // ── rkyv V2 codec types ────────────────────────────────────
 
 /**
@@ -385,28 +444,54 @@ export function invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
 // ── Runtime-safe UTF-8 helpers ─────────────────────────────
 // 임베디드 JS 런타임(예: Hermes)에는 TextEncoder/TextDecoder 글로벌이 없을 수
 // 있으므로 엔진은 이에 의존하지 않는다. Pure-JS UTF-8 코덱 (surrogate-pair 정확).
+//
+// 폴백 계층: TextEncoder 가 있으면 네이티브 구현을 쓰고(대형 문자열에서 수 배
+// 빠름), 없을 때만 사전 크기 추정 Writer 로 pure-JS 폴백을 돌린다. 과거 폴백은
+// number[] 에 push 후 마지막에 Uint8Array 로 재복사해 할당이 2배였다.
+const _hasTextEncoder = typeof TextEncoder !== 'undefined';
+const _textEncoder = _hasTextEncoder ? new TextEncoder() : undefined;
+
 function _utf8Encode(s: string): Uint8Array {
-  const out: number[] = [];
+  if (_textEncoder) {
+    return _textEncoder.encode(s);
+  }
+  // 폴백: ASCII 가 많은 실제 페이로드에서 s.length 상한으로 1회 할당하고
+  // 커서를 옮겨 쓴다. 멀티바이트 확장이 커서를 넘기면 1회 재할당한다(희박).
+  const out = new Uint8Array(s.length);
+  let cursor = 0;
+  const ensure = (needed: number) => {
+    if (cursor + needed <= out.length) return;
+    const grown = new Uint8Array(Math.max(out.length * 2, cursor + needed));
+    grown.set(out.subarray(0, cursor));
+    outRef[0] = grown;
+  };
+  // ensure 가 배열을 스왑할 수 있어 참조로 유지한다.
+  const outRef: [Uint8Array] = [out];
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);
     if (c < 0x80) {
-      out.push(c);
+      ensure(1);
+      outRef[0][cursor++] = c;
     } else if (c < 0x800) {
-      out.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
+      ensure(2);
+      outRef[0][cursor++] = 0xc0 | (c >> 6);
+      outRef[0][cursor++] = 0x80 | (c & 0x3f);
     } else if (c >= 0xd800 && c <= 0xdbff) {
       const low = s.charCodeAt(++i);
       const cp = 0x10000 + ((c - 0xd800) << 10) + (low - 0xdc00);
-      out.push(
-        0xf0 | (cp >> 18),
-        0x80 | ((cp >> 12) & 0x3f),
-        0x80 | ((cp >> 6) & 0x3f),
-        0x80 | (cp & 0x3f),
-      );
+      ensure(4);
+      outRef[0][cursor++] = 0xf0 | (cp >> 18);
+      outRef[0][cursor++] = 0x80 | ((cp >> 12) & 0x3f);
+      outRef[0][cursor++] = 0x80 | ((cp >> 6) & 0x3f);
+      outRef[0][cursor++] = 0x80 | (cp & 0x3f);
     } else {
-      out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+      ensure(3);
+      outRef[0][cursor++] = 0xe0 | (c >> 12);
+      outRef[0][cursor++] = 0x80 | ((c >> 6) & 0x3f);
+      outRef[0][cursor++] = 0x80 | (c & 0x3f);
     }
   }
-  return new Uint8Array(out);
+  return outRef[0].subarray(0, cursor);
 }
 
 function _utf8Decode(bytes: Uint8Array, start: number, end: number): string {
