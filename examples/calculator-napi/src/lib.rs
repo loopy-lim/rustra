@@ -27,3 +27,25 @@ pub fn rustra_invoke(command: String, args_json: Option<String>) -> Result<Strin
     serde_json::to_string(&json!({ "ok": true, "result": result }))
         .map_err(|e| Error::from_reason(format!("json encode: {e}")))
 }
+
+/// Buffer 반환 변형 — String 왕복의 이중 할당(napi가 UTF-16 문자열로 복사)을
+/// 피한다. transport-bench 측정에서 napi 브릿지 오버헤드의 대부분이 이 복사라
+/// 대형 응답(스키마, 배열) 경로에서 유의미하다. 프레임 형식은 rustra_invoke 와
+/// 동일한 JSON — JS 측에서 Buffer.toString()/직접 파싱 어느 쪽이든 소비 가능.
+#[napi]
+pub fn rustra_invoke_buffer(command: String, args_json: Option<String>) -> Result<Buffer> {
+    let args_value = match args_json {
+        Some(ref s) => {
+            serde_json::from_str(s).map_err(|e| Error::from_reason(format!("invalid args: {e}")))?
+        }
+        None => json!({}),
+    };
+
+    let result = rustra_calculator_example::calculator_package()
+        .invoke_json(&command, args_value)
+        .map_err(napi_error)?;
+
+    let frame = serde_json::to_vec(&json!({ "ok": true, "result": result }))
+        .map_err(|e| Error::from_reason(format!("json encode: {e}")))?;
+    Ok(Buffer::from(frame))
+}

@@ -13,6 +13,21 @@
 | React Native   | 0.81.5 + Expo 54             |
 | iOS 시뮬레이터 | iPhone 17                    |
 
+## 2026-08-21 콜드스타트·할당 수 측정 추가 (`0.2.0`)
+
+`rustra-benchmark` 에 global_allocator 카운팅(할당/해제 원자 카운터)과
+콜드스타트 구분이 추가됐다. 이 시점의 debug 프로필 기준선:
+
+| 지표                            | 값                            |
+| ------------------------------- | ----------------------------- |
+| 최초 invoke (tier 해결 포함)    | ~57 µs                        |
+| steady-state 평균 (1000회)      | ~6.6 µs (콜드스타트의 ~1/8.6) |
+| `invoke_json` 호출당 힙 할당    | 9 allocs / 9 deallocs         |
+| `invoke_rkyv_v2` 호출당 힙 할당 | 4 allocs / 4 deallocs         |
+
+할당 수는 나노초보다 안정적인 비교 지표다 — caller-buffer/Arc 같은 복사 제거
+최적화의 효과를 "할당 감소"로 검증한다(rkyv V2 경로가 JSON 대비 할당 수 절반).
+
 ## 2026-08-18 현재 버전 재측정 (`0.1.2`)
 
 아래 수치는 이번 checkout에서 benchmark를 순차 실행한 재측정 결과다. Rust 코어
@@ -143,32 +158,41 @@ payload scaling은 1/10/100/1000 items에서 각각 31.29 µs, 131.23 µs, 590.1
 
 ## Transport별 End-to-End 성능
 
-단일 `addNumbers({ a: 42, b: 58 })` 호출 기준 (10,000회 반복, debug 빌드). Rust 실행 + JSON 직렬화 + transport 오버헤드를 모두 포함한 실제 측정값.
+단일 `addNumbers({ a: 42, b: 58 })` 호출 기준 (10,000회 반복). Rust 실행 + JSON 직렬화 + transport 오버헤드를 모두 포함한 실제 측정값.
 
-| Transport                  | 평균 지연   | p50         | p99         | 처리량 (ops/s) |
-| -------------------------- | ----------- | ----------- | ----------- | -------------- |
-| Node.js subprocess (stdio) | 1.84 ms     | 1.77 ms     | 2.41 ms     | ~542           |
-| **Node.js napi-rs**        | **24.3 µs** | **24.0 µs** | **26.5 µs** | **~41,172**    |
-| Bun subprocess (stdio)     | 1.69 ms     | 1.62 ms     | 2.24 ms     | ~593           |
-| **Bun FFI**                | **26.8 µs** | **26.3 µs** | **33.6 µs** | **~37,250**    |
+> **측정 세션 주의** — 아래 debug 프로필 표와 위 "Node.js release N-API
+> transport"(release 애드온, 2.9 µs)는 **다른 세션/프로필**이다. debug 네이티브
+> 라이브러리는 최적화가 꺼져 있어 브릿지 비용이 크게 부풀고, release 재측정에서
+> napi 경로는 ~2.9 µs 로 좁혀진다. 세션 간 비교는 하지 말 것.
+
+| Transport                   | 평균 지연   | p50         | p99         | 처리량 (ops/s) |
+| --------------------------- | ----------- | ----------- | ----------- | -------------- |
+| Node.js subprocess (stdio)  | 1.84 ms     | 1.77 ms     | 2.41 ms     | ~542           |
+| **Node.js napi-rs (debug)** | **24.3 µs** | **24.0 µs** | **26.5 µs** | **~41,172**    |
+| Bun subprocess (stdio)      | 1.69 ms     | 1.62 ms     | 2.24 ms     | ~593           |
+| **Bun FFI (debug)**         | **26.8 µs** | **26.3 µs** | **33.6 µs** | **~37,250**    |
 
 ### Transport 오버헤드 분석
 
 ```
-Node.js napi-rs:
+Node.js napi-rs (debug 프로필 — release 에서는 브릿지 비용이 ~2.9 µs 로 축소):
   Rust core + serde     █                              ~200 ns   (0.8%)
   JS JSON ser/de        █                              ~459 ns   (1.9%)
   napi-rs bridge        ████████████████████████████  ~23.8 µs  (97.9%)
   Total                 █████████████████████████████  ~24.3 µs
 
-Bun FFI:
+Bun FFI (debug):
   Rust core + serde     █                              ~200 ns   (0.7%)
   JS JSON ser/de        █                              ~203 ns   (0.8%)
   Bun FFI bridge        ████████████████████████████  ~26.6 µs  (99.2%)
   Total                 █████████████████████████████  ~26.8 µs
 ```
 
-napi-rs와 Bun FFI는 subprocess 대비 각각 **76x**, **63x** 빠르다. 대부분의 지연은 FFI/napi 브릿지 레이어에서 발생하며, Rust core와 JSON 처리는 전체의 1-3%에 불과하다.
+napi-rs와 Bun FFI는 subprocess 대비 각각 **76x**, **63x** 빠르다(debug 기준).
+대부분의 지연은 FFI/napi 브릿지 레이어에서 발생하며, Rust core와 JSON 처리는
+전체의 1-3%에 불과하다. release 프로필에서 브릿지 비용 자체가 축소된다(위
+N-API release 표 참조). `rustraInvokeBuffer`(Buffer 반환 변형)가 String
+왕복의 UTF-16 이중 복사를 제거해 대형 응답에서 이 브릿지 비용을 추가로 줄인다.
 
 ### 벤치마크 실행
 

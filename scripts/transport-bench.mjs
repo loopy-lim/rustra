@@ -115,16 +115,24 @@ function bench(transport, command, args, iterations = 10000) {
   }
   times.sort((a, b) => a - b);
 
-  const avg = times.reduce((s, t) => s + t, 0) / times.length;
+  // 트림드 평균(상하 5%) — 서브프로세스 스폰 지연 등 아웃라이어가 raw avg 를
+  // 오염시키는 것을 방지한다. stddev 는 분산의 신뢰 근거로 함께 보고한다.
+  const trim = Math.floor(times.length * 0.05);
+  const trimmed = times.slice(trim, times.length - trim);
+  const avg = trimmed.reduce((s, t) => s + t, 0) / trimmed.length;
+  const variance = trimmed.reduce((s, t) => s + (t - avg) ** 2, 0) / trimmed.length;
+  const stddev = Math.sqrt(variance);
   const p50 = percentile(times, 50);
   const p99 = percentile(times, 99);
   const ops = 1_000_000_000 / avg;
 
-  return { name: transport.name, avg, p50, p99, ops, iterations };
+  return { name: transport.name, avg, stddev, p50, p99, ops, iterations };
 }
 
 function printBenchResult(r) {
-  console.log(`  ${r.name.padEnd(24)} ${fmtNs(r.avg).padStart(12)} ${fmtNs(r.p50).padStart(12)} ${fmtNs(r.p99).padStart(12)} ${fmtOps(r.ops).padStart(14)}`);
+  console.log(
+    `  ${r.name.padEnd(24)} ${fmtNs(r.avg).padStart(12)} ±${fmtNs(r.stddev).padStart(10)} ${fmtNs(r.p50).padStart(12)} ${fmtNs(r.p99).padStart(12)} ${fmtOps(r.ops).padStart(14)}`,
+  );
 }
 
 // ── Detect available transports ──────────────────────────
@@ -176,7 +184,7 @@ if (transports.length === 0) {
 
 console.log("┌─ 1) Transport Comparison (addNumbers, 10,000 iterations) ───────┐");
 console.log(`│`);
-console.log(`│  ${"Transport".padEnd(24)} ${"Avg".padStart(12)} ${"p50".padStart(12)} ${"p99".padStart(12)} ${"ops/s".padStart(14)}`);
+console.log(`│  ${"Transport".padEnd(24)} ${"Avg*".padStart(12)} ${"±σ".padStart(12)} ${"p50".padStart(12)} ${"p99".padStart(12)} ${"ops/s".padStart(14)}`);
 console.log(`│  ${"─".repeat(24)} ${"─".repeat(12)} ${"─".repeat(12)} ${"─".repeat(12)} ${"─".repeat(14)}`);
 
 const simpleResults = [];

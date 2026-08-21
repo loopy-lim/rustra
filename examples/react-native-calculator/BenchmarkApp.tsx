@@ -310,11 +310,11 @@ async function runBenchmarks(): Promise<string[]> {
 
   configure(rkyvV2Engine);
   const greetRkyvV2 = await measure("greet rkyvV2", () => greet({ name: "World" }));
-  log(`│  rkyvV2   avg: ${formatNs(greetRkyvV2.avg).padStart(10)}  p50: ${formatNs(greetRkyvV2.p50)}`);
+  log(`│  rkyvV2   avg: ${formatNs(greetRkyvV2.avg).padStart(10)}  p50: ${formatNs(greetRkyvV2.p50)}  p99: ${formatNs(greetRkyvV2.p99)}`);
 
   configure(jsonEngine);
   const greetJson = await measure("greet JSON", () => greet({ name: "World" }));
-  log(`│  JSON     avg: ${formatNs(greetJson.avg).padStart(10)}  p50: ${formatNs(greetJson.p50)}`);
+  log(`│  JSON     avg: ${formatNs(greetJson.avg).padStart(10)}  p50: ${formatNs(greetJson.p50)}  p99: ${formatNs(greetJson.p99)}`);
 
   log("╚════════════════════════════════════════════════╝");
   log("");

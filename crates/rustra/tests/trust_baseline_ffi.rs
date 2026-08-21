@@ -513,3 +513,83 @@ fn panic_message_format_is_uniform_across_paths() {
         "caller-buffer path panic prefix must match the alloc path, got: {into_err}"
     );
 }
+
+/// rkyv V2 caller-buffer(`rustra_ffi_invoke_rkyv_v2_into`)의 probe → write
+/// 프로토콜 검증 — JSON 변형과 동일한 계약(필요 크기 보고, 직접 기록, 부족 시
+/// 재probe 신호, 핸들러 1회 실행).
+#[test]
+fn caller_buffer_rkyv_v2_probe_then_write() {
+    use rustra::ffi::rustra_ffi_invoke_rkyv_v2_into;
+
+    test_package().register_ffi();
+
+    // countUp 을 rkyv V2 프레임으로 — tier 판정을 위해 postcard 입력이 아닌
+    // Tier 3 JSON-in-binary 프레임으로 호출한다(command_id + JSON).
+    // countUp 의 command_id 를 live_schema 에서 조회.
+    let pkg = test_package();
+    let schema = pkg.live_schema();
+    let id = schema["commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "countUp")
+        .unwrap()["commandId"]
+        .as_u64()
+        .unwrap() as u16;
+
+    let mut req: Vec<u8> = Vec::new();
+    req.extend_from_slice(&id.to_le_bytes());
+    req.extend_from_slice(br#"{}"#);
+
+    // countUp 은 serde_json::Value 핸들러라 rkyv V2 typed fast path 가 postcard
+    // 디코드에 실패한다 — 에러 프레임(ok=0)도 유효한 응답이므로 여기선 프로토콜
+    // (probe 크기 보고/직접 기록/재probe 신호)만 검증한다. 핸들러 1회 실행은
+    // JSON caller-buffer 테스트(caller_buffer_probe_executes_handler_exactly_once)가
+    // 고정한다.
+    let mut needed: usize = 0;
+    let probe = unsafe {
+        rustra_ffi_invoke_rkyv_v2_into(
+            req.as_ptr(),
+            req.len(),
+            std::ptr::null_mut(),
+            0,
+            &mut needed,
+        )
+    };
+    assert_eq!(probe, 0, "rkyv v2 probe must return 0");
+    assert!(needed >= 10, "rkyv v2 frame must have 10-byte header");
+
+    // write — caller 버퍼에 직접 기록된다.
+    let mut buf = vec![0u8; needed];
+    let n = unsafe {
+        rustra_ffi_invoke_rkyv_v2_into(
+            req.as_ptr(),
+            req.len(),
+            buf.as_mut_ptr(),
+            buf.len(),
+            &mut needed,
+        )
+    };
+    assert_eq!(n, needed, "write returns byte count");
+    assert!(
+        buf[0] == 1 || buf[0] == 0,
+        "rkyv v2 ok flag byte, got {}",
+        buf[0]
+    );
+
+    // 3) 부족한 버퍼 → 재probe 신호
+    let mut small = vec![0u8; needed.saturating_sub(1)];
+    let mut out2: usize = 0;
+    let short = unsafe {
+        rustra_ffi_invoke_rkyv_v2_into(
+            req.as_ptr(),
+            req.len(),
+            small.as_mut_ptr(),
+            small.len(),
+            &mut out2,
+        )
+    };
+    if needed > 0 {
+        assert_eq!(short, usize::MAX, "insufficient buffer signals retry");
+    }
+}
