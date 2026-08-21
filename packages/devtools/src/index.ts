@@ -21,7 +21,7 @@
  * ```
  */
 
-import type { BatchEntry, EngineClient } from '@rustra/types';
+import type { BatchEntry, EngineClient, InvokeOptions } from '@rustra/types';
 
 interface CommandStat {
   count: number;
@@ -54,10 +54,12 @@ export function createInstrumentedEngine(inner: EngineClient): InstrumentedEngin
   };
 
   const engine: InstrumentedEngine = {
-    async invoke<T>(command: string, args?: unknown): Promise<T> {
+    async invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
       const start = Date.now();
       try {
-        return await inner.invoke<T>(command, args);
+        // options(signal/timeoutMs)를 inner 엔진에 그대로 전달한다 — 관측 래핑이
+        // 취소/타임아웃 기능을 조용히 제거하지 않는다.
+        return await inner.invoke<T>(command, args, options);
       } catch (e) {
         statFor(command).errors += 1;
         throw e;

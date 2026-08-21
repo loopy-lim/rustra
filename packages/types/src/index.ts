@@ -228,6 +228,28 @@ export function configure(engine: EngineClient): void {
 }
 
 /**
+ * 코드젠이 생성한 명령 함수에서 실제 명령 이름을 추출한다.
+ *
+ * 코드젠 산출물은 함수에 `commandId` 문자열 프로퍼티를 심는다
+ * (`addNumbers.commandId === 'addNumbers'`). minifier 가 함수 이름을 바꿔도
+ * (esbuild/terser mangling) 이 프로퍼티는 문자열 리터럴이라 그대로 살아있어
+ * `commandFn.name` 의존(`Function.prototype.name` — 프로덕션 번들에서 `a1` 로
+ * 뭉개질 수 있음)보다 안전하다. 수동으로 만든 함수에는 `.name` 이 폴백으로 쓰인다.
+ */
+export function resolveCommandId(commandFn: (...args: never[]) => unknown): string {
+  const withId = commandFn as { commandId?: unknown };
+  if (typeof withId.commandId === 'string' && withId.commandId.length > 0) {
+    return withId.commandId;
+  }
+  if (typeof commandFn.name === 'string' && commandFn.name.length > 0) {
+    return commandFn.name;
+  }
+  throw new Error(
+    'Command function must have a commandId or name property (use generated commands or pass a named function)',
+  );
+}
+
+/**
  * 글로벌 엔진으로 명령을 호출합니다.
  *
  * 일반적으로 직접 호출하지 않고, 코드젠이 생성한 명령 함수를 사용합니다.

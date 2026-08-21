@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { InvokeOptions } from '@rustra/types';
+import { resolveCommandId } from '@rustra/types';
 import { useRustraEngine } from './context.js';
 
 export type CommandFn<I, O> = (input: I, options?: InvokeOptions) => Promise<O>;
@@ -28,7 +29,9 @@ export function useCommand<I, O>(
   const [error, setError] = useState<Error | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
-  const commandName = commandFn.name;
+  // minify-안전 식별: 코드젠이 심은 commandId 를 우선한다 (Function.name 은
+  // 프로덕션 번들러 mangling 으로 바뀔 수 있다).
+  const commandName = resolveCommandId(commandFn);
 
   const execute = useCallback(async (): Promise<O | undefined> => {
     if (abortControllerRef.current) {

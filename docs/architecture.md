@@ -13,7 +13,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
  │                         Rust (작성 시점)                            │
  │                                                                     │
  │  #[command]                                                         │
- │  fn add_numbers(a: i64, b: i64) -> i64                             │
+ │  fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput>│
  │                                                                     │
  │         │                                                           │
  │         ▼                                                           │
@@ -207,9 +207,15 @@ examples/
 
 ```rust
 // examples/calculator/src/lib.rs
+#[bridge_type]
+pub struct AddNumbersInput { a: i64, b: i64 }
+
+#[bridge_type]
+pub struct AddNumbersOutput { value: i64 }
+
 #[command]
-pub fn add_numbers(a: i64, b: i64) -> i64 {
-    a + b
+pub fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
+    Ok(AddNumbersOutput { value: input.a + input.b })
 }
 
 pub fn calculator_package() -> Package {

@@ -28,31 +28,51 @@ use syn::{
 
 /// `#[command]` 속성의 파싱 결과입니다.
 ///
-/// `#[command]` 또는 `#[command(name = "customName")]` 형태를 지원합니다.
+/// `#[command]`, `#[command(name = "customName")]`,
+/// `#[command(capability = "compute:secure")]` 형태를 지원합니다.
 struct CommandAttr {
     /// 명시적으로 지정한 명령 이름. 없으면 함수 이름에서 자동 추론합니다.
     name: Option<String>,
+    /// 이 명령이 요구하는 capability. `require_capability` 문자열 결합을 대체한다.
+    capability: Option<String>,
 }
 
 /// `#[command]` 속성의 입력을 파싱합니다.
 ///
-/// 빈 입력(`#[command]`)이면 `name: None`, `#[command(name = "foo")]`면 `name: Some("foo")`입니다.
+/// 빈 입력(`#[command]`)이면 둘 다 `None`. `name = "foo"` / `capability = "cap"` 키를
+/// 쉼표로 구분해 받는다. 알 수 없는 키는 지원 목록을 안내하는 에러가 된다.
 impl Parse for CommandAttr {
     fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut attr = CommandAttr {
+            name: None,
+            capability: None,
+        };
         if input.is_empty() {
-            return Ok(CommandAttr { name: None });
+            return Ok(attr);
         }
 
-        let key: Ident = input.parse()?;
-        if key != "name" {
-            return Err(syn::Error::new(key.span(), "expected `name`"));
+        loop {
+            let key: Ident = input.parse()?;
+            if key == "name" {
+                let _: Token![=] = input.parse()?;
+                let name: LitStr = input.parse()?;
+                attr.name = Some(name.value());
+            } else if key == "capability" {
+                let _: Token![=] = input.parse()?;
+                let cap: LitStr = input.parse()?;
+                attr.capability = Some(cap.value());
+            } else {
+                return Err(syn::Error::new(
+                    key.span(),
+                    "unsupported `#[command]` key; supported keys: `name`, `capability`",
+                ));
+            }
+            if input.parse::<Token![,]>().is_err() {
+                break;
+            }
         }
-        let _: Token![=] = input.parse()?;
-        let name: LitStr = input.parse()?;
 
-        Ok(CommandAttr {
-            name: Some(name.value()),
-        })
+        Ok(attr)
     }
 }
 
@@ -184,6 +204,24 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         &format!("__RUstra_doc_{}", fn_name),
         proc_macro2::Span::call_site(),
     );
+    // capability 속성이 있으면 메타 상수에 싣는다. register!/build! 가 이를 읽어
+    // require_capability 로 연결한다 — 문자열 이름 재결합(오타 시 런타임 패닉) 대신
+    // 매크로 시점에 같은 심벌에서 파생된다.
+    let capability_ident = Ident::new(
+        &format!("__RUstra_cap_{}", fn_name),
+        proc_macro2::Span::call_site(),
+    );
+    let capability_const: TokenStream2 = if let Some(cap) = &attr.capability {
+        quote! {
+            #[allow(non_upper_case_globals, dead_code)]
+            const #capability_ident: Option<&str> = Some(#cap);
+        }
+    } else {
+        quote! {
+            #[allow(non_upper_case_globals, dead_code)]
+            const #capability_ident: Option<&str> = None;
+        }
+    };
 
     // Prepare state bindings and call args
     let mut state_bindings = Vec::new();
@@ -229,6 +267,8 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
             #(#state_bindings)*
             #inner_invocation
         }
+
+        #capability_const
 
         #[allow(non_upper_case_globals, dead_code)]
         const #meta_ident: &str = #command_name;
@@ -337,7 +377,16 @@ pub fn register(input: TokenStream) -> TokenStream {
                 &format!("__RUstra_meta_{}", fn_name),
                 proc_macro2::Span::call_site(),
             );
-            quote! { .command(#meta_ident, #fn_name) }
+            let cap_ident = Ident::new(
+                &format!("__RUstra_cap_{}", fn_name),
+                proc_macro2::Span::call_site(),
+            );
+            // capability 메타가 Some이면 .require_capability 로 이어 붙인다. 상수가
+            // Option<&str> 이므로 if let 체인으로 분기 — None이면 .command 만.
+            quote! {
+                .command(#meta_ident, #fn_name)
+                .require_capability_if(#meta_ident, #cap_ident)
+            }
         })
         .collect();
 
@@ -488,7 +537,14 @@ pub fn build(input: TokenStream) -> TokenStream {
                 &format!("__RUstra_meta_{}", fn_name),
                 proc_macro2::Span::call_site(),
             );
-            quote! { .command(#meta_ident, #fn_name) }
+            let cap_ident = Ident::new(
+                &format!("__RUstra_cap_{}", fn_name),
+                proc_macro2::Span::call_site(),
+            );
+            quote! {
+                .command(#meta_ident, #fn_name)
+                .require_capability_if(#meta_ident, #cap_ident)
+            }
         })
         .collect();
 

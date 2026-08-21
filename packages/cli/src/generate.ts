@@ -98,12 +98,12 @@ export function generateCommandsTs(schema: PackageSchema): string {
       output +=
         `export function ${fnName}(options?: InvokeOptions): Promise<${outType}> {\n` +
         `  return invoke<${outType}>('${command.name}', undefined, options);\n` +
-        `}\n\n`;
+        `}\n${fnName}.commandId = '${command.name}';\n\n`;
     } else {
       output +=
         `export function ${fnName}(input: ${command.inputType}, options?: InvokeOptions): Promise<${outType}> {\n` +
         `  return invoke<${outType}>('${command.name}', input, options);\n` +
-        `}\n\n`;
+        `}\n${fnName}.commandId = '${command.name}';\n\n`;
     }
   }
 

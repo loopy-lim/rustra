@@ -40,21 +40,16 @@ export type NodeInvokeTransport = {
 export function createNodeEngine(transport: NodeInvokeTransport) {
   return {
     async invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
-      // (의미론 마감) signal 을 조용히 무시하지 않는다 — 이 엔진은 취소를
-      // 전파할 수 없는 JSON transport 위에서 동작하므로, 요청 시점에 명시적으로
-      // 거부한다. 호환성 매트릭스(docs/compatibility-matrix.md) 참고.
-      if (options?.signal) {
-        if (options.signal.aborted) {
-          throw new RustraCommandError(
-            'cancelled',
-            `invoke("${command}") aborted before dispatch`,
-            true,
-          );
-        }
+      // signal 정책(전 어댑터 공통): abort 된 signal 만 cancelled 로 거부하고,
+      // 미abort signal 은 정상 실행한다. 이 엔진은 취소를 전파할 수 없는 JSON
+      // transport 위에서 동작하므로 실행 중 abort 는 결과를 무시할 뿐이다(얕은
+      // 취소). useCommand 처럼 항상 signal 을 전달하는 호출부와의 호환을 위해
+      // signal 존재 자체를 에러로 삼지 않는다 — 매트릭스(docs/compatibility-matrix.md) 참고.
+      if (options?.signal?.aborted) {
         throw new RustraCommandError(
-          'cancel.unsupported',
-          `invoke("${command}"): this JSON transport does not support AbortSignal — ` +
-            `use createRkyvV2Engine with a native module that exposes invokeAsync/invokeCancel`,
+          'cancelled',
+          `invoke("${command}") aborted before dispatch`,
+          true,
         );
       }
       try {
@@ -124,8 +119,6 @@ export function createNodeProcessTransport(
 ): NodeProcessTransport {
   const argv = options.args ?? ['invoke'];
   let child: ChildProcessWithoutNullStreams | null = null;
-  // 직전 응답 후 남은 stdout 버퍼 — invokeRespawn 이 한 번에 다 읹는다.
-  let pending = '';
   // invoke 직후 프로세스가 응답하고 종료하는 프로토콜이므로, 매 호출마다
   // fresh 프로세스에서 요청을 쓰고 응답을 모두 읽는다(respawn-on-invoke).
   const invokeOnce = (command: string, args?: unknown): Promise<unknown> => {
@@ -186,7 +179,6 @@ export function createNodeProcessTransport(
 
   return {
     invoke(command: string, args?: unknown) {
-      pending = '';
       return invokeOnce(command, args);
     },
     dispose() {
@@ -194,7 +186,6 @@ export function createNodeProcessTransport(
         child.kill();
       }
       child = null;
-      pending = '';
     },
     get pid() {
       return child?.pid ?? null;
