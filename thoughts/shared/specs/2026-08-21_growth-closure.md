@@ -1,7 +1,7 @@
 ---
 date: 2026-08-21
 author: loopy-lim
-status: draft
+status: complete
 type: feature
 priority: high
 ---
