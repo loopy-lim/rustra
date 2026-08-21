@@ -2,6 +2,44 @@ use rustra::prelude::*;
 use serde_json::Value;
 use std::time::Instant;
 
+// ── (측정 인프라) 할당 카운팅 global_allocator ───────────────
+// 호출당 malloc 횟수를 잰다 — caller-buffer/Arc 같은 복사 제거 최적화의 효과를
+// 나노초가 아니라 "할당 수"로 검증하는 지표다. System allocator 위에 원자
+// 카운터만 얹는다(오버헤드는 측정 대상 밖으로 간주 — 델타 비교용).
+
+mod alloc_counter {
+    use std::alloc::{GlobalAlloc, Layout, System};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    pub static ALLOCS: AtomicUsize = AtomicUsize::new(0);
+    pub static DEALLOCS: AtomicUsize = AtomicUsize::new(0);
+
+    pub struct Counting;
+
+    unsafe impl GlobalAlloc for Counting {
+        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+            ALLOCS.fetch_add(1, Ordering::Relaxed);
+            unsafe { System.alloc(layout) }
+        }
+        unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+            DEALLOCS.fetch_add(1, Ordering::Relaxed);
+            unsafe { System.dealloc(ptr, layout) }
+        }
+    }
+}
+
+#[global_allocator]
+static GLOBAL: alloc_counter::Counting = alloc_counter::Counting;
+
+fn alloc_delta<R>(f: impl FnOnce() -> R) -> (R, usize, usize) {
+    let a0 = alloc_counter::ALLOCS.load(std::sync::atomic::Ordering::Relaxed);
+    let d0 = alloc_counter::DEALLOCS.load(std::sync::atomic::Ordering::Relaxed);
+    let out = f();
+    let allocs = alloc_counter::ALLOCS.load(std::sync::atomic::Ordering::Relaxed) - a0;
+    let deallocs = alloc_counter::DEALLOCS.load(std::sync::atomic::Ordering::Relaxed) - d0;
+    (out, allocs, deallocs)
+}
+
 fn main() {
     println!("╔══════════════════════════════════════════════════════════╗");
     println!("║           rustra-bridge Performance Benchmark           ║");
@@ -10,6 +48,7 @@ fn main() {
 
     let package = build_benchmark_package();
 
+    bench_cold_start(&package);
     bench_package_creation();
     bench_command_invocation(&package);
     bench_serialization();
@@ -20,6 +59,80 @@ fn main() {
     bench_concurrent_invocation(&package);
     bench_parallel_invocation(&package);
     bench_memory_usage(&package);
+    bench_allocations_per_invoke(&package);
+}
+
+/// 콜드스타트 — 최초 invoke 의 tier 해결 비용. 이후 호출과의 차이가 코드젠
+/// 캐시/디코더 구축의 1회 비용이다.
+fn bench_cold_start(package: &Package) {
+    println!("┌─ Cold Start (first invoke vs steady-state) ──┐");
+    let cold = Instant::now();
+    let _ = package.invoke_json("addNumbers", serde_json::json!({ "a": 1, "b": 2 }));
+    let cold_ns = cold.elapsed().as_nanos();
+
+    // steady-state 평균
+    let warm_start = Instant::now();
+    for _ in 0..1000 {
+        let _ = package.invoke_json("addNumbers", serde_json::json!({ "a": 1, "b": 2 }));
+    }
+    let warm_avg_ns = warm_start.elapsed().as_nanos() / 1000;
+    println!(
+        "│  first invoke: {:>10} ns   steady avg: {:>8} ns   ratio: {:.1}x",
+        cold_ns,
+        warm_avg_ns,
+        cold_ns as f64 / warm_avg_ns as f64
+    );
+    println!("└───────────────────────────────────────────────┘\n");
+}
+
+/// 호출당 할당 수 — invoke_json / invoke_rkyv_v2 경로의 힙 압력.
+fn bench_allocations_per_invoke(package: &Package) {
+    println!("┌─ Heap Allocations per Invoke ────────────────┐");
+
+    // 워밍업(스키마/디코더 초기화를 할당 카운트에서 분리).
+    for _ in 0..100 {
+        let _ = package.invoke_json("addNumbers", serde_json::json!({ "a": 1, "b": 2 }));
+    }
+
+    let (_, json_allocs, json_deallocs) = alloc_delta(|| {
+        for _ in 0..1000 {
+            let _ = package.invoke_json("addNumbers", serde_json::json!({ "a": 1, "b": 2 }));
+        }
+    });
+    println!(
+        "│  invoke_json  (1000 calls): {:>6} allocs ({:>3}/call), {:>6} deallocs",
+        json_allocs,
+        json_allocs / 1000,
+        json_deallocs
+    );
+
+    // rkyv V2 typed 프레임: command_id(u16) + postcard(SimpleInput).
+    let mut v2_req: Vec<u8> = Vec::new();
+    let schema = package.live_schema();
+    let id = schema["commands"]
+        .as_array()
+        .and_then(|cmds| {
+            cmds.iter()
+                .find(|c| c["name"] == "addNumbers")
+                .and_then(|c| c["commandId"].as_u64())
+        })
+        .unwrap_or(1) as u16;
+    v2_req.extend_from_slice(&id.to_le_bytes());
+    let input = SimpleInput { a: 1, b: 2 };
+    v2_req.extend_from_slice(&postcard::to_allocvec(&input).unwrap_or_default());
+
+    let (_, v2_allocs, v2_deallocs) = alloc_delta(|| {
+        for _ in 0..1000 {
+            let _ = package.invoke_rkyv_v2(&v2_req);
+        }
+    });
+    println!(
+        "│  invoke_rkyv_v2 (1000 calls): {:>6} allocs ({:>3}/call), {:>6} deallocs",
+        v2_allocs,
+        v2_allocs / 1000,
+        v2_deallocs
+    );
+    println!("└───────────────────────────────────────────────┘\n");
 }
 
 // ── Commands ──────────────────────────────────────────────

@@ -3122,6 +3122,7 @@ dependencies = [
 name = "rustra-benchmark"
 version = "0.2.0"
 dependencies = [
+ "postcard",
  "rustra",
  "rustra-macros",
  "schemars 0.8.22",

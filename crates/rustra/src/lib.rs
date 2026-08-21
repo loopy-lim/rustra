@@ -407,6 +407,11 @@ struct RegistryState {
     commands: BTreeMap<String, Command>,
     id_to_name: BTreeMap<u16, String>,
     next_command_id: u16,
+    /// (성능) command_id → 핸들러 직접 캐시 — `invoke_rkyv_v2` 의 핫패스가
+    /// `id_to_name` → `commands` 이중 조회 + Arc 클론을 거치지 않게 한다.
+    /// 등록/교체/해제 시점에 함께 유지된다(불변식: 값은 항상 `commands` 의
+    /// 동일 명령과 같은 Arc 를 가리킨다).
+    id_to_command: BTreeMap<u16, Command>,
     /// Runtime Authority: 부여된 capability 집합. deny-by-default —
     /// `required_capability` 가 `Some` 인 명령은 이 집합에 포함될 때만 실행된다.
     granted_capabilities: BTreeSet<String>,
@@ -490,14 +495,18 @@ impl GeneratedPackage {
 }
 
 /// 단일 명령의 메타데이터와 핸들러입니다.
+///
+/// 스키마 필드(`input_schema`/`output_schema`/`definitions`)는 `Arc<Value>` 다 —
+/// `invoke` 경로의 재진입 방지 clone-out이 매 호출마다 serde_json 트리 전체를
+/// deep copy 하는 것을 포인터 복사로 만든다(스키마는 등록 후 불변이므로 안전).
 #[derive(Clone)]
 struct Command {
     command_id: u16,
     input_type: String,
     output_type: String,
-    input_schema: Value,
-    output_schema: Value,
-    definitions: Value,
+    input_schema: Arc<Value>,
+    output_schema: Arc<Value>,
+    definitions: Arc<Value>,
     invoke: Arc<dyn Fn(Value) -> crate::Result<Value> + Send + Sync>,
     /// Fast binary handler: payload[2..] → postcard deserialize → typed handler → postcard serialize
     rkyv_v2_handler: Option<BinHandler>,
@@ -589,9 +598,9 @@ where
         command_id,
         input_type: short_type_name::<I>(),
         output_type: short_type_name::<O>(),
-        input_schema,
-        output_schema,
-        definitions,
+        input_schema: Arc::new(input_schema),
+        output_schema: Arc::new(output_schema),
+        definitions: Arc::new(definitions),
         invoke: Arc::new(move |params| {
             let input = serde_json::from_value::<I>(params).map_err(RustraError::invalid_args)?;
             let output = handler(input)?;
@@ -802,14 +811,12 @@ impl Package {
                 .state
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            let command_name = state
-                .id_to_name
-                .get(&command_id)
-                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?;
+            // 단일 조회 — 과거 id_to_name → commands 이중 조회 + Arc 클론을
+            // id_to_command 직접 캐시로 대체했다(등록/교체/해제 시 함께 유지됨).
             state
-                .commands
-                .get(command_name)
-                .ok_or_else(|| RustraError::command_not_found(command_name))?
+                .id_to_command
+                .get(&command_id)
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
                 .clone()
         };
         // Runtime Authority: deny-by-default — capability 가 요구되는데 부여되지
@@ -956,6 +963,7 @@ impl Package {
             }
         };
         let command = build_command::<I, O, F>(command_id, handler, true);
+        state.id_to_command.insert(command_id, command.clone());
         state.commands.insert(name.clone(), command);
         state.id_to_name.insert(command_id, name);
         Ok(())
@@ -993,6 +1001,7 @@ impl Package {
         let required_capability = existing.required_capability;
         let mut command = build_command::<I, O, F>(command_id, handler, false);
         command.required_capability = required_capability;
+        state.id_to_command.insert(command_id, command.clone());
         state.commands.insert(name.to_string(), command);
         Ok(())
     }
@@ -1011,7 +1020,16 @@ impl Package {
         }
         // 실제 id 와 그 명령을 가리키던 alias id 를 모두 정리 — alias 만
         // 남으면 stale 라우팅 항목이 된다.
+        let removed_ids: Vec<u16> = state
+            .id_to_name
+            .iter()
+            .filter(|(_, target)| target.as_str() == name)
+            .map(|(id, _)| *id)
+            .collect();
         state.id_to_name.retain(|_, target| target != name);
+        for id in removed_ids {
+            state.id_to_command.remove(&id);
+        }
         // NOTE: next_command_id는 감소시키지 않는다 — retired id는 영원히 재사용 금지.
         Ok(())
     }
@@ -1062,17 +1080,17 @@ impl Package {
                     "commandId": command.command_id,
                     "inputType": command.input_type,
                     "outputType": command.output_type,
-                    "inputSchema": command.input_schema,
-                    "outputSchema": command.output_schema,
+                    "inputSchema": &*command.input_schema,
+                    "outputSchema": &*command.output_schema,
                 });
                 // Include definitions if non-empty (for $ref resolution)
                 #[allow(clippy::collapsible_if)]
-                if let Value::Object(defs) = &command.definitions {
+                if let Value::Object(defs) = &*command.definitions {
                     if !defs.is_empty() {
                         entry
                             .as_object_mut()
                             .unwrap()
-                            .insert("definitions".into(), command.definitions.clone());
+                            .insert("definitions".into(), (*command.definitions).clone());
                     }
                 }
                 entry
@@ -1094,7 +1112,7 @@ impl Package {
 
         let mut all_definitions = serde_json::Map::new();
         for command in state.commands.values() {
-            if let Value::Object(defs) = &command.definitions {
+            if let Value::Object(defs) = &*command.definitions {
                 for (key, value) in defs {
                     all_definitions.insert(key.clone(), value.clone());
                 }
@@ -1422,6 +1440,18 @@ impl PackageBuilder {
         for (name, cmd) in &commands {
             id_to_name.insert(cmd.command_id, name.clone());
         }
+        // (성능) id → Command 직접 캐시 — alias id 포함 전체 id_to_name 키와
+        // 정확히 같은 라우팅을 제공한다(lookup 일관성: id_to_name 이 가리키는
+        // 모든 id 는 여기서도 같은 명령을 찾는다).
+        let id_to_command: BTreeMap<u16, Command> = id_to_name
+            .iter()
+            .map(|(id, name)| {
+                let cmd = commands
+                    .get(name)
+                    .unwrap_or_else(|| panic!("build(): id {id} → '{name}' not in commands"));
+                (*id, cmd.clone())
+            })
+            .collect();
         // (T2 리뷰) tripwire: 최종 병합 뒤 모든 alias 가 자기 명령을 가리키는지
         // 확인한다. displacement/next_command_id 순서가 다시 깨지면(alias 항목을
         // 실제 id 삽입이 덮어쓰거나 fresh id 가 alias 와 겹치면) 여기서 즉시
@@ -1437,6 +1467,7 @@ impl PackageBuilder {
             state: Arc::new(RwLock::new(RegistryState {
                 commands,
                 id_to_name,
+                id_to_command,
                 next_command_id,
                 granted_capabilities: BTreeSet::new(),
                 schema_version: self.schema_version,
