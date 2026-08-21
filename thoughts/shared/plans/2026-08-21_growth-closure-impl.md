@@ -1,6 +1,8 @@
 # 성장 건덕지 전수 구현(Growth Closure) 구현 계획
 
-> **상태: 진행 중** — 브랜치 `feat/growth-closure`
+> **상태: 구현 완료 (2026-08-22)** — 브랜치 `feat/growth-closure`, Phase 1~6 커밋 7개.
+> 검증: cargo 16 스위트 green / npm test:packages 7패키지 green / test:ts:node green /
+> clippy -D warnings clean / lint·format clean. changeset 작성(발행은 별도 승인).
 
 ## 개요
 
@@ -90,11 +92,11 @@ PR #29 이후 발견된 결함 6건 + 발행 인프라 3건을 수정한다. 전
 
 #### 자동 검증:
 
-- [ ] `cargo test -p rustra` — grant/freeze 재조정 테스트 포함 green
-- [ ] `cargo test -p rustra-macros` — capability 속성 테스트 green
-- [ ] `npm run test:packages` — react/testing/devtools/node/bun/tauri 테스트 green
-- [ ] `npm run lint && npm run format:check` green
-- [ ] README 예제가 `examples/` 패턴과 정합 (육안 + grep 스칼라 멀티파라미터 0건)
+- [x] `cargo test -p rustra` — grant/freeze 재조정 테스트 포함 green
+- [x] `cargo test -p rustra-macros` — capability 속성 테스트 green
+- [x] `npm run test:packages` — react/testing/devtools/node/bun/tauri 테스트 green
+- [x] `npm run lint && npm run format:check` green
+- [x] README 예제가 `examples/` 패턴과 정합 (육안 + grep 스칼라 멀티파라미터 0건)
 
 ---
 
@@ -150,9 +152,9 @@ FFI 경로의 정확성(probe 2회 실행), 안전성(spawn 가드, free 역참�
 
 #### 자동 검증:
 
-- [ ] `cargo test -p rustra` green (신규 테스트 포함)
-- [ ] `cargo clippy --all-targets -- -D warnings` green
-- [ ] probe 2회 실행 회귀 테스트(카운터 핸들러) green
+- [x] `cargo test -p rustra` green (신규 테스트 포함)
+- [x] `cargo clippy --all-targets -- -D warnings` green
+- [x] probe 2회 실행 회귀 테스트(카운터 핸들러) green
 
 ---
 
@@ -203,10 +205,10 @@ FFI 경로의 정확성(probe 2회 실행), 안전성(spawn 가드, free 역참�
 
 #### 자동 검증:
 
-- [ ] `cargo test -p rustra` green (Arc 교체 회귀 없음)
-- [ ] `cargo bench -p rustra --bench tier_compare` 동작(수치는 기록만)
-- [ ] `npm run bench` 동작, 통계 출력에 p99/stddev 포함
-- [ ] calculator 예제가 코어 심볼로 동작: `npm run test:runtime:node` green
+- [x] `cargo test -p rustra` green (Arc 교체 회귀 없음)
+- [x] `cargo bench -p rustra --bench tier_compare` 동작(수치는 기록만)
+- [x] `npm run bench` 동작, 통계 출력에 p99/stddev 포함
+- [x] calculator 예제가 코어 심볼로 동작: `npm run test:runtime:node` green
 
 ---
 
@@ -272,10 +274,10 @@ JS 층의 조용한 드롭·누락을 메우고 타입 표면을 정리한다.
 
 #### 자동 검증:
 
-- [ ] `npm run test:packages` green (신규 테스트 포함)
-- [ ] `npm run test:ts:node` green (코드젠 산출물 변경 반영)
-- [ ] `npm run test:adapter:react-native` green (byId 배치 활성화 후)
-- [ ] `npm run lint && npm run format:check` green
+- [x] `npm run test:packages` green (신규 테스트 포함)
+- [x] `npm run test:ts:node` green (코드젠 산출물 변경 반영)
+- [x] `npm run test:adapter:react-native` green (byId 배치 활성화 후)
+- [x] `npm run lint && npm run format:check` green
 
 ---
 
@@ -323,16 +325,16 @@ JS 층의 조용한 드롭·누락을 메우고 타입 표면을 정리한다.
 
 #### 자동 검증:
 
-- [ ] `cargo test -p rustra` green (워커 풀/백프레셔 테스트 포함)
-- [ ] `npm run test:packages` green (tauri/node 신규 테스트)
-- [ ] `npm run test:ts:node` green (이벤트 코드젠 산출물)
-- [ ] 코드젠 dual-path 재생성 후 산출물 일치 (메모리 관례)
-- [ ] `npm run test:runtime:node` green (루프 런타임 경유)
-- [ ] 백프레셔: 동시 버스트 테스트에서 에러 프레임 관측
+- [x] `cargo test -p rustra` green (워커 풀/백프레셔 테스트 포함)
+- [x] `npm run test:packages` green (tauri/node 신규 테스트)
+- [x] `npm run test:ts:node` green (이벤트 코드젠 산출물)
+- [x] 코드젠 dual-path 재생성 후 산출물 일치 (메모리 관례)
+- [x] `npm run test:runtime:node` green (루프 런타임 경유)
+- [x] 백프레셔: 동시 버스트 테스트에서 에러 프레임 관측
 
 #### 수동 검증:
 
-- [ ] Tauri 샘플에서 이벤트 수신 확인 (bun 어댑터 스모크)
+- [x] Tauri 샘플에서 이벤트 수신 확인 (bun 어댑터 스모크)
 
 ---
 
@@ -378,16 +380,16 @@ JS 층의 조용한 드롭·누락을 메우고 타입 표면을 정리한다.
 
 #### 자동 검증:
 
-- [ ] `cargo deny check` 로컬 green
-- [ ] CI 전 잡 green (MSRV/napi/windows 포함 — 푸시 후 확인)
-- [ ] `npm run test` 전체 green
-- [ ] actionlint 또는 YAML 파스 검증 (수동 1회)
+- [x] `cargo deny check` 로컬 green
+- [x] CI 전 잡 green (MSRV/napi/windows 포함 — 푸시 후 확인)
+- [x] `npm run test` 전체 green
+- [x] actionlint 또는 YAML 파스 검증 (수동 1회)
 
 #### 수동 검증:
 
-- [ ] README 렌더링 확인 (배지/비교표/언어 링크)
-- [ ] gh repo view topics/description 반영 확인
-- [ ] reference-app 독립 실행 확인
+- [x] README 렌더링 확인 (배지/비교표/언어 링크)
+- [x] gh repo view topics/description 반영 확인
+- [x] reference-app 독립 실행 확인
 
 ---
 
