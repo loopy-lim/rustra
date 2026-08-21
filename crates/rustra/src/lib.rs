@@ -133,7 +133,7 @@ use std::sync::{Arc, RwLock};
 
 use rkyv_codec::{
     BinHandler, DecodeFn, EncodeFn, Tier, build_rkyv_v2_decoder, build_rkyv_v2_response_encoder,
-    build_tier3_json_decoder, is_output_tier3, js_postcard_codec_supported,
+    build_tier3_json_decoder, is_output_tier3, js_postcard_codec_supported_with_defs,
 };
 
 pub use error::{Result, RustraError};
@@ -560,8 +560,8 @@ where
     // 로 디코딩을 시도). 따라서 JS 코덱 지원 판정을 미러해 미지원 명령의
     // fast-path 를 끄고 JSON 경류(rkyv_v2_decode/encode_response — is_tier3 면
     // JSON-in-binary 프레임)로 통일한다.
-    let js_codec_supported =
-        js_postcard_codec_supported(&input_schema) && js_postcard_codec_supported(&output_schema);
+    let js_codec_supported = js_postcard_codec_supported_with_defs(&input_schema, &definitions)
+        && js_postcard_codec_supported_with_defs(&output_schema, &definitions);
 
     // Generate fast postcard-based binary handler that bypasses JSON Value.
     // force_tier3 인 경우 postcard fast-path 를 끄고 Tier 3 JSON fallback 로 보낸다.
@@ -678,7 +678,12 @@ impl Package {
     /// ```
     pub fn emit<E: Serialize>(&self, event: impl Into<String>, payload: E) {
         let name = event.into();
-        let json = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
+        let json = serde_json::to_string(&payload).unwrap_or_else(|e| {
+            // 직렬화 불가 페이로드를 조용히 빈 JSON 로 보내던 폴백 — 최소한 stderr
+            // 경고를 남겨 스트리밍 유즈케이스에서 유실이 관측되게 한다.
+            eprintln!("rustra: event '{name}' payload failed to serialize: {e}");
+            "{}".to_string()
+        });
         if self.events.deliver_via_sink(&name, &json) {
             return; // 싱크 경로 — 버스 우회 (이중 전달 방지)
         }
@@ -1780,5 +1785,39 @@ mod runtime_registry_tests {
             .invoke_json("locked", serde_json::json!({ "_v": 0 }))
             .unwrap();
         assert_eq!(out["v"], 1);
+    }
+
+    /// 코어 FFI rkyv V2 심볼이 등록된 패키지로 동작하는지 검증한다 —
+    /// 소비자마다 복제하던 패닉 가드+버퍼 프로토콜의 단일 구현.
+    /// (전역 PACKAGE OnceLock 을 다른 FFI 테스트와 공유하므로, 여기서는
+    /// 심볼의 정상 경로만 검증한다 — trust_baseline_ffi.rs 가 나머지 계약을
+    /// 담당한다.)
+    #[test]
+    fn core_rkyv_v2_ffi_symbol_dispatches() {
+        let pkg = Package::builder("test.wb")
+            .command("double", |args: serde_json::Value| {
+                Ok::<_, RustraError>(serde_json::json!(args["v"].as_i64().unwrap_or(0) * 2))
+            })
+            .build();
+        pkg.register_ffi();
+        // command_id 1 번 프레임: [cmd_id u16][pad 6][postcard payload]
+        let mut payload = [0u8; 8];
+        payload[0..2].copy_from_slice(&1u16.to_le_bytes());
+        let mut out_len = 0usize;
+        let ptr = unsafe {
+            crate::ffi::rustra_ffi_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+        };
+        // 전역 패키지가 다른 테스트의 것일 수 있다(OnceLock 선점) — 어느 쪽이든
+        // 심볼이 유효한 프레임을 반환하는지만 검증한다(에러 프레임도 ok=0 헤더를
+        // 가진다). null/빈 응답이 아니면 심블의 계약은 성립이다.
+        assert!(
+            out_len >= 10,
+            "rkyv V2 frame must have 10-byte header, got {out_len}"
+        );
+        if !ptr.is_null() {
+            let bytes = unsafe { std::slice::from_raw_parts(ptr, out_len) };
+            assert!(bytes[0] == 0 || bytes[0] == 1, "ok flag must be 0 or 1");
+            unsafe { crate::ffi::rustra_ffi_free(ptr, out_len) };
+        }
     }
 }

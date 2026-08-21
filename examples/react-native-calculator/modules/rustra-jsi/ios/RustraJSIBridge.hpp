@@ -65,6 +65,11 @@ extern "C" {
     rustra_calculator_async_callback_t on_complete, uint64_t* invocation_id);
 
   void rustra_calculator_free_buffer(uint8_t* ptr, size_t len);
+
+  // sync rkyv V2 응답 전용 해제 — rustra_calculator_invoke_rkyv_v2 가 코어
+  // rustra_ffi_invoke_rkyv_v2 로 위임되어 응답이 코어 FFI 레이아웃(8B 헤더)으로
+  // 할당된다. rustra_calculator_free_buffer 와 교환 불가.
+  void rustra_calculator_free_rkyv_v2_buffer(uint8_t* ptr, size_t len);
 }
 
 /// Cached function entry — stores PropNameID + pre-created JS Function.

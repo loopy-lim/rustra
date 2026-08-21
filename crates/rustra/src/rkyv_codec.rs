@@ -358,11 +358,23 @@ struct RustraErrorWire<'a> {
 /// `{ code: String, message: String }` so the receiving side can reconstruct a
 /// typed `RustraCommandError(code, message)` rather than a plain `Error`.
 pub fn encode_rkyv_v2_error(error: &RustraError) -> Vec<u8> {
+    let message = error.message();
     let wire = RustraErrorWire {
         code: error.code(),
-        message: error.message(),
+        message,
     };
-    let body = postcard::to_allocvec(&wire).unwrap_or_default();
+    let mut body = postcard::to_allocvec(&wire).unwrap_or_default();
+    // u16::MAX 잘림 표시 — 대형 validation 에러가 경고 없이 유실되면 디버깅이
+    // 곤란해진다. 잘림이 예상되는 경우 애초에 접두 512바이트 + 마커로 재구성해
+    // 와이어 프레임 안에서 잘림이 표시되게 한다(정상 경로는 그대로 둔다).
+    if body.len() > u16::MAX as usize {
+        let truncated = format!("{}…(truncated)", &message[..message.len().min(512)]);
+        let wire = RustraErrorWire {
+            code: error.code(),
+            message: truncated.as_str(),
+        };
+        body = postcard::to_allocvec(&wire).unwrap_or_default();
+    }
     let body_len = body.len().min(u16::MAX as usize) as u16;
     let mut buf = vec![0u8; 10 + body_len as usize];
     buf[0] = 0; // ok = false
@@ -593,7 +605,10 @@ fn encode_vec_fixed<const N: usize>(
 // JS 쪽 지원 범위를 확장할 때 이 함수를 함께 갱신해야 한다 (codegen 마감 조항).
 
 /// 스키마(객체)의 모든 프로퍼티가 JS postcard 코덱 지원 타입인지 판정한다.
-/// 중첩 $ref 정의는 재귀 순회한다.
+/// 중첩 $ref 정의는 재귀 순회한다. definitions 없는 레거시 호출부용 — 신규
+/// 코드는 definitions 를 따라가는 [`js_postcard_codec_supported_with_defs`] 를
+/// 쓴다($ref 가 미지원 타입을 가리키는 경우까지 검증).
+#[allow(dead_code)]
 pub(crate) fn js_postcard_codec_supported(schema: &Value) -> bool {
     let Some(props) = schema.get("properties").and_then(Value::as_object) else {
         return true; // properties 없음(unit 등) — 항상 지원
@@ -601,15 +616,104 @@ pub(crate) fn js_postcard_codec_supported(schema: &Value) -> bool {
     props.values().all(|p| js_field_supported(p, 0))
 }
 
+/// definitions 를 받는 확장 판정 — `$ref` 를 실제 정의 스키마까지 따라간다.
+///
+/// 과거 판정은 `$ref` 를 무조건 지원(struct)으로 취급했다(주석이 "단순화"라고
+/// 자백). `$ref` 가 map/oneOf 같은 미지원 타입을 가리키면 Rust 는 typed
+/// fast-path 를 켜고 JS 는 다른 인코딩을 써서 런타임 디코딩이 깨진다 — 여기서
+/// 정의를 따라가 재검증해 그 조합을 Tier 3 로 밀어낸다.
+pub(crate) fn js_postcard_codec_supported_with_defs(schema: &Value, definitions: &Value) -> bool {
+    let defs = definitions.as_object();
+    let Some(props) = schema.get("properties").and_then(Value::as_object) else {
+        return true;
+    };
+    props
+        .values()
+        .all(|p| js_field_supported_with_defs(p, defs, 0))
+}
+
+fn resolve_ref<'a>(
+    schema: &'a Value,
+    defs: Option<&'a serde_json::Map<String, Value>>,
+) -> &'a Value {
+    let Some(name) = schema.get("$ref").and_then(Value::as_str) else {
+        return schema;
+    };
+    // JSON Schema $ref 형태 "#/definitions/Name"(또는 $defs) 에서 마지막 세그먼트로
+    // 조회한다. 못 찾으면 원본을 그대로 반환 — 판정은 이어서 안전하게 실패한다.
+    let key = name.rsplit('/').next().unwrap_or(name);
+    defs.and_then(|d| d.get(key)).unwrap_or(schema)
+}
+
+fn js_field_supported_with_defs(
+    schema: &Value,
+    defs: Option<&serde_json::Map<String, Value>>,
+    depth: u8,
+) -> bool {
+    if depth > 8 {
+        return false; // 과도한 중첩(순환 $ref 포함) — 안전하게 미지원 취급
+    }
+    // $ref → 정의 스키마를 따라가 판정한다. 정의를 못 찾으면 원본 스키마로
+    // 폴백해 아래 규칙이 그대로 적용된다(과거 동작과 동일하게 안전 실패).
+    if schema.get("$ref").is_some() {
+        let resolved = resolve_ref(schema, defs);
+        if !std::ptr::eq(resolved, schema) {
+            return js_field_supported_with_defs(resolved, defs, depth + 1);
+        }
+        return true; // 정의 미발견 — 기존 "struct 로 취급" 동작 유지
+    }
+    // anyOf 의 [{$ref}, null] 형태(Option<Struct>)도 정의를 따라간다.
+    if let Some(any_of) = schema.get("anyOf").and_then(Value::as_array) {
+        let has_null = any_of
+            .iter()
+            .any(|s| s.get("type") == Some(&Value::String("null".into())));
+        let ref_schemas: Vec<&Value> = any_of.iter().filter(|s| s.get("$ref").is_some()).collect();
+        if has_null && ref_schemas.len() == 1 && any_of.len() == 2 {
+            let resolved = resolve_ref(ref_schemas[0], defs);
+            if !std::ptr::eq(resolved, ref_schemas[0]) {
+                return js_field_supported_with_defs(resolved, defs, depth + 1);
+            }
+            return true;
+        }
+        return false;
+    }
+    // 배열 items 의 $ref(Vec<Struct>)도 정의를 따라간다.
+    if schema.get("type").and_then(Value::as_str) == Some("array") {
+        if let Some(items) = schema.get("items") {
+            if items.get("$ref").is_some() {
+                let resolved = resolve_ref(items, defs);
+                if !std::ptr::eq(resolved, items) {
+                    return js_field_supported_with_defs(resolved, defs, depth + 1);
+                }
+                return true;
+            }
+            return matches!(
+                items.get("type").and_then(Value::as_str),
+                Some("integer") | Some("number") | Some("boolean") | Some("string")
+            );
+        }
+        return false;
+    }
+    // object(struct) — 프로퍼티 전체를 재귀 판정한다. $ref 해결로 도달한
+    // 중첩 구조체가 여기서 false 폴백에 걸려 Tier 3 로 잘못 밀려지는 일을 막는다.
+    // additionalProperties 가 있으면 map 이므로 미지원.
+    if schema.get("type").and_then(Value::as_str) == Some("object") {
+        if schema.get("additionalProperties").is_some() {
+            return false;
+        }
+        let Some(props) = schema.get("properties").and_then(Value::as_object) else {
+            return true; // 빈 객체
+        };
+        return props
+            .values()
+            .all(|p| js_field_supported_with_defs(p, defs, depth + 1));
+    }
+    js_field_supported(schema, depth)
+}
+
 fn js_field_supported(schema: &Value, depth: u8) -> bool {
     if depth > 8 {
         return false; // 과도한 중첩 — 안전하게 미지원 취급
-    }
-    // $ref → 정의 스키마를 판정한다. definitions 는 command 레벨에서 병합되므로
-    // 여기서는 $ref 자체를 "지원(구조체)"으로 보고, 재귀 검증은 호출부
-    // (definitions 순회)에서 수행한다 — 단순화: $ref 를 struct 로 취급.
-    if schema.get("$ref").is_some() {
-        return true;
     }
     // string-only enum → 지원 (variant index varint)
     if schema.get("type").and_then(Value::as_str) == Some("string") {

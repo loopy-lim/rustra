@@ -1090,7 +1090,16 @@ pub unsafe extern "C" fn rustra_calculator_invoke_hybrid(
     alloc_response(resp_bytes.to_vec(), out_len)
 }
 
-/// rkyv v2: command_id (u16) based request — generic dispatch via Package::invoke_rkyv_v2()
+/// rkyv v2: command_id (u16) based request — 코어 `rustra_ffi_invoke_rkyv_v2`
+/// 심볼로 위임한다 (과거 이 파일에 복제되어 있던 패닉 가드+버퍼 프로토콜의
+/// 단일 구현). 심볼명만 calculator 네임스페이스로 재노출해 기존 C++/JSI 호스트
+/// 바인딩을 유지한다.
+///
+/// 주의: 이 경로의 반환 버퍼는 **코어 FFI 할당 레이아웃**(8바이트 헤더)을
+/// 따르므로 해제도 코어 `rustra_ffi_free`로 해야 한다. 기존 JSON/바이너리
+/// 경로(`rustra_calculator_invoke_bytes` 등)의 버퍼는 예제 자체
+/// `alloc_response` 레이아웃이라 `rustra_calculator_free_buffer` 를 쓴다 —
+/// 두 해제 심볼은 서로 교환할 수 없다.
 ///
 /// # Safety
 ///
@@ -1101,31 +1110,20 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2(
     payload_len: usize,
     out_len: *mut usize,
 ) -> *mut u8 {
-    if payload.is_null() || out_len.is_null() {
-        return std::ptr::null_mut();
-    }
+    unsafe { rustra::ffi::rustra_ffi_invoke_rkyv_v2(payload, payload_len, out_len) }
+}
 
-    let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
-
-    // panic guard — extern "C"(nounwind) 경계 직전의 최후 방어. 코어
-    // `Package::invoke_rkyv_v2` 가 핸들러 패닉을 internal 로 정규화하지만,
-    // 이 진입점 자체(패키지 조회 등) 에서 패닉이 새어나오면 호스트(RN) 프로세스가
-    // abort 된다. JSON/postcard FFI 의 `rustra::ffi::with_panic_guard` 와 동일한
-    // 계약으로 rkyv V2 에러 프레임(ok=0) 으로 변환한다.
-    let resp_bytes = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        rustra::ffi::get_package()
-            .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
-            .and_then(|pkg| pkg.invoke_rkyv_v2(bytes))
-    })) {
-        Ok(Ok(bytes)) => bytes,
-        Ok(Err(error)) => rustra::encode_rkyv_v2_error(&error),
-        Err(panic) => rustra::encode_rkyv_v2_error(&RustraError::internal(format!(
-            "panic in handler: {}",
-            panic_message(&panic)
-        ))),
-    };
-
-    alloc_response(resp_bytes, out_len)
+/// `rustra_calculator_invoke_rkyv_v2` 응답 버퍼 해제 — 코어 `rustra_ffi_free`
+/// 로 위임한다(할당이 코어 레이아웃이므로). JSI 호스트가 기존
+/// `rustra_calculator_free_buffer` 이름으로 바인딩하고 있어 재노출 심볼만
+/// 제공한다.
+///
+/// # Safety
+///
+/// `ptr`/`len` must be the exact pair returned by `rustra_calculator_invoke_rkyv_v2`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_calculator_free_rkyv_v2_buffer(ptr: *mut u8, len: usize) {
+    unsafe { rustra::ffi::rustra_ffi_free(ptr, len) };
 }
 
 /// panic payload 에서 메시지 추출 — 코어 `rustra::ffi::panic_message` 와 동일 구현
@@ -1736,7 +1734,7 @@ mod tests {
         let output: AddNumbersOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
         assert_eq!(output.value, 100);
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -1767,7 +1765,7 @@ mod tests {
         let output: GreetOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
         assert_eq!(output.message, "Hello, World!");
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -1799,7 +1797,7 @@ mod tests {
         assert_eq!(output.count, 4);
         assert_eq!(output.total, 100);
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -1826,7 +1824,7 @@ mod tests {
         let output: ToUpperOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
         assert_eq!(output.result, "HELLO");
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -1865,7 +1863,7 @@ mod tests {
         assert_eq!(output.item.active, false);
         assert_eq!(output.doubled, false);
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -1898,7 +1896,7 @@ mod tests {
         assert_eq!(output.item.value, 42);
         assert_eq!(output.item.active, true);
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -1927,7 +1925,7 @@ mod tests {
         let output: AddNumbersOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
         assert_eq!(output.value, 100);
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -1948,7 +1946,7 @@ mod tests {
             assert_eq!(rb[0], 1);
             let out: AddNumbersOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert_eq!(out.value, 30);
-            unsafe { rustra_calculator_free_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
         }
 
         // Tier 1: multiply (cmd 2)
@@ -1964,7 +1962,7 @@ mod tests {
             assert_eq!(rb[0], 1);
             let out: MultiplyOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert!((out.value - 3.0).abs() < 0.01);
-            unsafe { rustra_calculator_free_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
         }
 
         // Tier 1: isEven (cmd 3)
@@ -1980,7 +1978,7 @@ mod tests {
             assert_eq!(rb[0], 1);
             let out: IsEvenOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert_eq!(out.result, true);
-            unsafe { rustra_calculator_free_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
         }
 
         // Tier 2: greet (cmd 5)
@@ -1998,7 +1996,7 @@ mod tests {
             assert_eq!(rb[0], 1);
             let out: GreetOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert_eq!(out.message, "Hello, Rustra!");
-            unsafe { rustra_calculator_free_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
         }
 
         // Tier 2: sumList (cmd 6)
@@ -2017,7 +2015,7 @@ mod tests {
             let out: SumListOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert_eq!(out.total, 15);
             assert_eq!(out.count, 5);
-            unsafe { rustra_calculator_free_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
         }
 
         // Tier 3: createItem (cmd 8) — postcard handles nested structs!
@@ -2038,7 +2036,7 @@ mod tests {
             assert_eq!(out.item.name, "Widget");
             assert_eq!(out.item.value, 42);
             assert_eq!(out.item.active, true);
-            unsafe { rustra_calculator_free_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
         }
 
         // Tier 3: processItem (cmd 9)
@@ -2061,7 +2059,7 @@ mod tests {
             let out: ProcessItemOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert_eq!(out.item.value, 400);
             assert_eq!(out.doubled, true);
-            unsafe { rustra_calculator_free_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
         }
     }
 
@@ -2097,7 +2095,7 @@ mod tests {
         assert_eq!(wire.code, "command.not_found");
         assert!(!wire.message.is_empty());
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -2131,7 +2129,7 @@ mod tests {
         assert_eq!(wire.code, "math.divide_by_zero");
         assert_eq!(wire.message, "cannot divide by zero");
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -2155,7 +2153,7 @@ mod tests {
         let output: DivideOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
         assert_eq!(output.value, 5);
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -2189,7 +2187,7 @@ mod tests {
         let wire: WireError = postcard::from_bytes(&result_bytes[10..10 + error_len]).unwrap();
         assert_eq!(wire.code, "capability.denied");
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
