@@ -48,7 +48,8 @@
     "version": "changeset version",
     "release": "npm run build && changeset publish",
     "audit:prod": "npm audit --omit=dev",
-    "prepare": "lefthook install"
+    "prepare": "lefthook install",
+    "docs:api": "typedoc"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
@@ -63,6 +64,7 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "^5.9.0",
-    "typescript-eslint": "^8.59.3"
+    "typescript-eslint": "^8.59.3",
+    "typedoc": "^0.28.0"
   }
 }

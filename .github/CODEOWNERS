@@ -1,0 +1,19 @@
+# CODEOWNERS — 리뷰 자동 요청 규칙.
+# 1인 프로젝트 현재는 문서적 역할(누가 어떤 영역을 아는가)이지만, 구조가
+# 고정되어 있어 기여자가 생겼을 때 바로 활성화된다.
+
+# 기본 소유자
+* @loopy-lim
+
+# Rust 코어 — FFI 경계는 별도 표시(가장 안전 민감)
+/crates/rustra/src/ffi.rs @loopy-lim
+/crates/rustra/ @loopy-lim
+/crates/rustra-macros/ @loopy-lim
+
+# 코드젠 — Rust bin 과 TS CLI 양쪽이 항상 함께 바뀌어야 한다(dual-path)
+/packages/cli/ @loopy-lim
+/crates/rustra/src/codegen.rs @loopy-lim
+
+# 발행 인프라 — 실수 방지
+/.github/workflows/release.yml @loopy-lim
+/.changeset/ @loopy-lim

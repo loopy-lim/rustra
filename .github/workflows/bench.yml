@@ -11,6 +11,9 @@ on:
     paths:
       - 'crates/rustra/**'
       - 'packages/types/**'
+      - 'packages/cli/**'
+      - 'examples/react-native-calculator/modules/**'
+      - 'examples/calculator/**'
       - '.github/workflows/bench.yml'
 
 jobs:
@@ -21,6 +24,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.95.0
       - uses: Swatinem/rust-cache@v2
+      # 직전 성공 벤치의 criterion baseline 복원 — 없으면 change: 이 첫 측정
+      # 기준(no baseline)이 되어 회귀 감지가 무의미해진다. retention(14일)
+      # 내 아티팩트만 유효하다.
+      - name: Restore previous baseline
+        continue-on-error: true
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: bench.yml
+          branch: main
+          name: criterion-results
+          path: target/criterion
 
       # dev 프로파일 벤치 — dynamic(Tier 3) 경로가 register 로만 도달해
       # debug 빌드가 필요하다 ( benches/tier_compare.rs 주석 참조 ).

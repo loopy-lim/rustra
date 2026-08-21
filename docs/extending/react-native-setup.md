@@ -2,17 +2,19 @@
 
 ## Overview
 
-rustra-bridge supports React Native via a native module (Expo Module) that bridges Rust through JSI. This guide covers setting up the iOS transport with a static Rust library.
+rustra-bridge supports React Native via a native module that bridges Rust through JSI. This guide covers setting up the iOS and Android transports with a static Rust library.
 
-> **Status:** iOS is supported. Android (Kotlin/JNI) is not yet implemented.
+> **Status:** iOS and Android are both supported — they share the same C++ JSI
+> bridge source (`RustraJSIBridge.cpp`). Android Release APK builds run in CI
+> (`rn-android` job, Gradle hook builds Rust via cargo-ndk automatically).
 
 ## Architecture
 
 ```
 TypeScript (your app)
   → ReactNativeEngineClient
-    → Expo Module (Swift/JSI)
-      → Rust FFI (static lib)
+    → Native module (JSI, shared C++)
+      → Rust FFI (static lib per platform)
 ```
 
 ## iOS Setup
@@ -124,7 +126,65 @@ type ReactNativeEngineClient = {
 
 ## Android Setup
 
-Android support requires a Kotlin module with JNI bindings to the Rust library. This is on the roadmap but not yet implemented.
+Android shares the same C++ JSI bridge as iOS — the module wiring is the
+only platform-specific part.
+
+### 1. Build the Rust static libraries (per ABI)
+
+The module's `build-rust-android.sh` cross-compiles your crate for both
+device ABIs with a pinned NDK. The Gradle hook invokes it automatically, or
+you can run it directly:
+
+```sh
+cd modules/rustra-jsi/android
+NDK_HOME=$ANDROID_HOME/ndk/27.1.12297006 ./build-rust-android.sh
+```
+
+The script:
+
+- Compiles your crate as a static library for `aarch64-linux-android` and
+  `x86_64-linux-android` (pinned NDK — the API level is set there)
+- Copies `lib<crate_name>.a` into `android/src/main/jniLibs/…`
+
+### 2. Gradle + CMake wiring
+
+`android/build.gradle` of the module:
+
+```gradle
+android {
+  externalNativeBuild {
+    cmake { path "CMakeLists.txt" }
+  }
+  // Rust 빌드 훅 — Gradle sync 시 build-rust-android.sh 가 실행된다.
+  sourceSets {
+    main {
+      jniLibs.srcDirs = ['src/main/jniLibs']
+    }
+  }
+}
+tasks.preBuild {
+  dependsOn "buildRust"
+}
+```
+
+`CMakeLists.txt` compiles the shared C++ bridge (`RustraJSIBridge.cpp`,
+generated codecs) into `librustrajsi.so` and links the Rust static libs.
+
+### 3. JNI entry point
+
+`rustra-jsi-jni.cpp` installs the same JSI host object on load — the JS side
+(`createReactNativeEngine(NativeModules.RustraJSI)`) is identical to iOS.
+
+### Verify
+
+The repo example runs a full Release build in CI:
+
+```sh
+cd examples/react-native-calculator
+npx expo prebuild --platform android --no-install
+cd android && ./gradlew assembleRelease -x lint
+unzip -l app/build/outputs/apk/release/app-release.apk | grep librustrajsi
+```
 
 ## Troubleshooting
 

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "packages/types/src/index.ts",
+    "packages/node/src/index.ts",
+    "packages/bun/src/index.ts",
+    "packages/tauri/src/index.ts",
+    "packages/react-native/src/index.ts",
+    "packages/react/src/index.ts",
+    "packages/testing/src/index.ts",
+    "packages/devtools/src/index.ts"
+  ],
+  "out": "docs/api",
+  "name": "@rustra API Reference",
+  "includeVersion": true,
+  "readme": "none",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "categorizeByGroup": true,
+  "sort": ["source-order"],
+  "entryPointStrategy": "resolve",
+  "gitRevision": "main",
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "esModuleInterop": true,
+    "strict": true,
+    "skipLibCheck": true
+  }
+}
