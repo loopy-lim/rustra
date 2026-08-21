@@ -192,3 +192,156 @@ export function createNodeProcessTransport(
     },
   };
 }
+
+// ── createNodeLoopTransport — persistent 프로세스 + NDJSON 라인 프레이밍 ──
+//
+// lazy-respawn(`createNodeProcessTransport`)은 호출마다 프로세스를 재시작해
+// 부팅/초기화 비용을 매 invoke 에 지불한다. 이 transport 는 루프형 stdio
+// 런타임(examples/calculator 의 `loop-stdio` bin 참고)과 짝을 이뤄 프로세스를
+// 띄워 두고 요청 id 로 응답을 상관한다 — 호출당 비용이 파이프 왕복으로
+// 수렴한다. stderr 의 로그 라인은 stdout 프레임 파싱을 오염시키지 않는다
+// (별도 스트림). Rust 가 요청 순서대로 응답하므로 id 큐로 FIFO 상관이면
+// 충분하다.
+
+type LoopResponseFrame = {
+  id: number;
+  ok: boolean;
+  result?: unknown;
+  error?: string;
+  events?: Array<{ name: string; payload: unknown }>;
+};
+
+export type NodeLoopTransport = NodeInvokeTransport & {
+  /** 대기 중인 Rust → JS 이벤트를 drain 한다 (루프 런타임 `__drainEvents`). */
+  drainEvents(): Promise<Array<{ name: string; payload: unknown }>>;
+  /** 프로세스를 종료한다. 이후 invoke 는 새 프로세스를 띄운다. */
+  dispose(): void;
+  /** 현재 프로세스 PID — 미실행 중이면 null. */
+  readonly pid: number | null;
+};
+
+/**
+ * 루프형 stdio 런타임으로 통하는 persistent transport 를 생성한다.
+ *
+ * Rust 측은 표준 프로토콜(한 줄 JSON 요청 → 한 줄 JSON 응답, `id` 상관)을
+ * 구현해야 한다 — `examples/calculator/src/bin/loop-stdio.rs` 가 참조 구현이다.
+ *
+ * @example
+ * ```ts
+ * import { createNodeLoopTransport } from '@rustra/node';
+ * const transport = createNodeLoopTransport({
+ *   command: 'target/release/my-app',
+ *   args: [], // 루프 런타임은 보통 서브커맨드 없이 실행된다
+ * });
+ * const engine = createNodeEngine(transport);
+ * ```
+ */
+export function createNodeLoopTransport(options: {
+  command: string;
+  args?: string[];
+  spawnOptions?: Parameters<typeof spawn>[2];
+}): NodeLoopTransport {
+  let child: ChildProcessWithoutNullStreams | null = null;
+  // 응답 대기열 — Rust 가 요청 순서대로 응답하므로 FIFO 로 상관한다. 동시
+  // invoke 도 라인 프레이밍이 순서를 보존한다.
+  const pending: Array<{
+    resolve: (v: unknown) => void;
+    reject: (e: RustraCommandError) => void;
+  }> = [];
+  let nextId = 1;
+  let stdoutBuffer = '';
+
+  const ensureProcess = (): ChildProcessWithoutNullStreams => {
+    if (child && child.exitCode === null) {
+      return child;
+    }
+    const proc = spawn(options.command, options.args ?? [], options.spawnOptions ?? {});
+    child = proc as ChildProcessWithoutNullStreams;
+    if (!proc.stdout || !proc.stderr) {
+      // stdio 파이프 구성은 spawnOptions 로 바뀔 수 없다(기본 파이프) — 방어적 검사.
+      child = null;
+      throw new RustraCommandError('transport.error', 'stdio unavailable', true);
+    }
+    proc.stdout.on('data', (chunk: Buffer) => {
+      stdoutBuffer += chunk.toString('utf8');
+      // NDJSON — 완결된 라인만 프레임으로 파싱한다(부분 라인은 버퍼 유지).
+      let newline: number;
+      while ((newline = stdoutBuffer.indexOf('\n')) >= 0) {
+        const line = stdoutBuffer.slice(0, newline).trim();
+        stdoutBuffer = stdoutBuffer.slice(newline + 1);
+        if (!line) continue;
+        let frame: LoopResponseFrame;
+        try {
+          frame = JSON.parse(line) as LoopResponseFrame;
+        } catch {
+          // 로그/기타 출력이 섞인 경우 — 해당 라인은 건너뛴다(프레임이 아니면
+          // 대기열 소비 없이 무시해도 id 상관이 어긋나지 않는다).
+          continue;
+        }
+        const waiter = pending.shift();
+        if (!waiter) continue;
+        if (frame.ok) {
+          waiter.resolve(frame.result);
+        } else {
+          waiter.reject(parseRustraErrorString(frame.error ?? 'invoke failed'));
+        }
+      }
+    });
+    proc.stderr.on('data', (chunk: Buffer) => {
+      // 진단 로그 — 프레임 스트림이 아니므로 무시한다(필요시 사용자가 직접
+      // spawnOptions.stdio 파이핑으로 수집).
+      void chunk;
+    });
+    proc.on('exit', () => {
+      // 프로세스 종료 시 대기 중 호출을 모두 거부 — JS 프라미스 hang 방지.
+      const err = new RustraCommandError(
+        'transport.error',
+        'runtime process exited before responding',
+        true,
+      );
+      for (const w of pending.splice(0)) w.reject(err);
+    });
+    return child;
+  };
+
+  const writeRequest = (payload: Record<string, unknown>): Promise<unknown> => {
+    return new Promise((resolve, reject) => {
+      let proc: ChildProcessWithoutNullStreams;
+      try {
+        proc = ensureProcess();
+      } catch (e) {
+        reject(new RustraCommandError('transport.error', `spawn failed: ${String(e)}`, true));
+        return;
+      }
+      const id = nextId++;
+      pending.push({ resolve, reject });
+      const line = JSON.stringify({ id, ...payload }) + '\n';
+      proc.stdin.write(line, (err) => {
+        if (err) {
+          pending.pop();
+          reject(new RustraCommandError('transport.error', `write failed: ${String(err)}`, true));
+        }
+      });
+    });
+  };
+
+  return {
+    invoke(command: string, args?: unknown) {
+      return writeRequest({ command, args: args ?? {} });
+    },
+    async drainEvents() {
+      const result = await writeRequest({ command: '__drainEvents', args: {} });
+      return (result as Array<{ name: string; payload: unknown }>) ?? [];
+    },
+    dispose() {
+      if (child && child.exitCode === null) {
+        child.stdin.end();
+        child.kill();
+      }
+      child = null;
+    },
+    get pid() {
+      return child?.pid ?? null;
+    },
+  };
+}

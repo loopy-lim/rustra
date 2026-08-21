@@ -9,6 +9,7 @@ import type { PackageSchema } from './schema.js';
 import {
   generateTypesTs,
   generateCommandsTs,
+  generateEventsTs,
   generateContractTs,
   generateRkyvCodecsTs,
   generateRkyvRegistryTs,
@@ -22,6 +23,7 @@ export { generatePositionalFacadeTs };
 export {
   generateTypesTs,
   generateCommandsTs,
+  generateEventsTs,
   generateContractTs,
   generateRkyvCodecsTs,
   generateRkyvRegistryTs,
@@ -480,6 +482,13 @@ async function generateFromSchema(
     { name: 'rkyv-codecs.ts', content: generateRkyvCodecsTs(schema) },
     { name: 'rkyv-registry.ts', content: generateRkyvRegistryTs(schema) },
   ];
+
+  // (이벤트 계약) 선언된 이벤트가 있을 때만 events.ts 를 만든다 — 없으면
+  // 산출물 목록이 기존과 동일(하위호환).
+  const eventsTs = generateEventsTs(schema);
+  if (eventsTs) {
+    files.push({ name: 'events.ts', content: eventsTs });
+  }
 
   if (positional) {
     files.push({ name: 'positional-facade.ts', content: generatePositionalFacadeTs(schema) });

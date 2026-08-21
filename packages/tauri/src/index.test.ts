@@ -107,3 +107,31 @@ test('createTauriEngine parses Display-style "code: message" Error message', asy
     },
   );
 });
+
+test('rustraEventChannel sanitizes and prefixes like Rust event_channel', async () => {
+  const { rustraEventChannel } = await import('./index.js');
+  assert.equal(rustraEventChannel('progress.tick'), 'rustra://progress_tick');
+  assert.equal(rustraEventChannel('llm.stream-token'), 'rustra://llm_stream-token');
+  assert.equal(rustraEventChannel('a b/c'), 'rustra://a_b/c');
+});
+
+test('subscribeEvent parses JSON payloads and falls back to raw string', async () => {
+  const { subscribeEvent } = await import('./index.js');
+  let captured: { channel: string } | null = null;
+  let fire: ((payload: string) => void) | null = null;
+  const fakeListen = async (channel: string, handler: (e: { payload: string }) => void) => {
+    captured = { channel };
+    fire = (payload: string) => handler({ payload });
+    return () => {};
+  };
+
+  const seen: unknown[] = [];
+  await subscribeEvent<typeof seen>(fakeListen, 'tick', (p) => seen.push(p));
+
+  assert.equal(captured!.channel, 'rustra://tick');
+  fire!('{"value":42}');
+  assert.deepEqual(seen, [{ value: 42 }]);
+  // 비 JSON 페이로드는 원본 문자열로 전달(조용한 드롭 방지).
+  fire!('not-json');
+  assert.equal(seen[1], 'not-json');
+});
