@@ -874,10 +874,13 @@ impl Package {
     ///
     /// `required_capability` 가 `Some(cap)` 인 명령은 `cap` 이 부여되기 전까지
     /// `capability.denied` 로 거부된다 — 핸들러는 아예 호출되지 않는다. 이 메서드로
-    /// `cap` 을 granted 집합에 추가하면 이후 해당 명령이 허용된다. 동결 상태면
-    /// `registry.frozen`.
+    /// `cap` 을 granted 집합에 추가하면 이후 해당 명령이 허용된다.
+    ///
+    /// 동결(freeze)은 레지스트리 **구조** mutation(register/unregister/replace)에만
+    /// 적용된다 — grant는 런타임 권한 부여이므로 동결과 무관하게 허용한다. 그렇지
+    /// 않으면 release 빌드(`build()` 시점 동결)에서 권한을 부여할 방법이 없어
+    /// deny-by-default 가 deny-forever 가 된다.
     pub fn grant_capability(&self, cap: &str) -> crate::Result<()> {
-        self.ensure_mutable()?;
         let mut state = self
             .state
             .write()
@@ -1179,19 +1182,23 @@ impl Package {
             }
             if command.input_type == "()" {
                 output.push_str(&format!(
-                    "export function {}(options?: InvokeOptions): Promise<{}> {{\n  return invoke<{}>('{}', undefined, options);\n}}\n\n",
+                    "export function {}(options?: InvokeOptions): Promise<{}> {{\n  return invoke<{}>('{}', undefined, options);\n}}\n{}.commandId = '{}';\n\n",
                     command_function_name(name),
                     out_type,
                     out_type,
                     name,
+                    command_function_name(name),
+                    name,
                 ));
             } else {
                 output.push_str(&format!(
-                    "export function {}(input: {}, options?: InvokeOptions): Promise<{}> {{\n  return invoke<{}>('{}', input, options);\n}}\n\n",
+                    "export function {}(input: {}, options?: InvokeOptions): Promise<{}> {{\n  return invoke<{}>('{}', input, options);\n}}\n{}.commandId = '{}';\n\n",
                     command_function_name(name),
                     command.input_type,
                     out_type,
                     out_type,
+                    name,
+                    command_function_name(name),
                     name,
                 ));
             }
@@ -1252,6 +1259,24 @@ impl PackageBuilder {
             .get_mut(name)
             .unwrap_or_else(|| panic!("require_capability: command '{name}' not registered"));
         command.required_capability = Some(cap);
+        self
+    }
+
+    /// `#[command(capability = "...")]` 메타 상수를 받아 조건부 require 로 이어
+    /// 붙인다 — `register!`/`build!` 매크로가 사용한다.
+    ///
+    /// `cap: Option<&'static str>` 이 `Some` 이면 [`require_capability`](Self::require_capability)
+    /// 와 동일하게 동작하고, `None` 이면 아무 일도 하지 않는다(메타 상수는 매크로가
+    /// 항상 생성하므로 capability 없는 명령도 그대로 통과한다). 문자열 이름 재결합을
+    /// 매크로가 파생한 심벌 쌍으로 대체해, 오타가 났다면 **컴파일** 에러로 드러난다.
+    pub fn require_capability_if(mut self, name: &str, cap: Option<&'static str>) -> Self {
+        if let Some(cap) = cap {
+            let command = self
+                .commands
+                .get_mut(name)
+                .unwrap_or_else(|| panic!("require_capability: command '{name}' not registered"));
+            command.required_capability = Some(cap);
+        }
         self
     }
 
@@ -1728,18 +1753,32 @@ mod runtime_registry_tests {
         assert_eq!(err.code(), "capability.denied");
     }
 
-    /// 동결 상태에서는 grant_capability 도 거부된다 (registry.frozen).
+    /// 동결 상태에서는 레지스트리 mutation(register)은 거부되지만 grant_capability 는
+    /// 허용된다 — grant는 구조 변경이 아닌 런타임 권한 부여이며, release 빌드(동결
+    /// 시작)에서 권한을 부여할 유일한 경로다.
     #[test]
     #[cfg(debug_assertions)]
-    fn grant_capability_blocked_when_frozen() {
+    fn grant_capability_allowed_when_frozen_but_register_blocked() {
         let pkg = Package::builder("test.wb")
             .command("locked", c1)
             .require_capability("locked", "compute:secure")
             .build();
         pkg.freeze();
+
+        // 구조 mutation은 동결로 차단된다.
         assert_eq!(
-            pkg.grant_capability("compute:secure").unwrap_err().code(),
+            pkg.register("new_cmd", c2).unwrap_err().code(),
             "registry.frozen"
         );
+
+        // grant는 동결과 무관하게 동작한다.
+        pkg.grant_capability("compute:secure").unwrap();
+        assert!(pkg.has_capability("compute:secure"));
+
+        // 부여된 뒤에는 해당 명령이 실제로 호출된다.
+        let out = pkg
+            .invoke_json("locked", serde_json::json!({ "_v": 0 }))
+            .unwrap();
+        assert_eq!(out["v"], 1);
     }
 }

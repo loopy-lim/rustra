@@ -72,6 +72,9 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_ENV: production
+          # npm provenance — id-token: write 권한(위 선언)으로 Sigstore 출처 증명을
+          # tarball에 첨부한다. 발견된 패키지의 공급망 신뢰성 직결.
+          NPM_CONFIG_PROVENANCE: true
 
   # crates.io 발행은 main 수동 트리거 전용 (rustra-macros → rustra 순서 필수).
   # 실행 직전 동일 SHA의 CI 성공을 확인하므로 workflow_dispatch가 게이트를 우회하지 않는다.
@@ -104,8 +107,12 @@ jobs:
         run: cargo publish -p rustra-macros --locked
       - name: Wait for crates.io index propagation
         run: |
+          # 워크스페이스 버전을 동적으로 읽는다 — 하드코딩하면 버전 범프마다 이
+          # 루프가 옛 버전을 확인해 즉시 탈출(대기 no-op)하고 dry-run이 깨진다.
+          VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "rustra-macros") | .version')"
+          echo "waiting for rustra-macros@${VERSION} on crates.io index"
           for attempt in {1..12}; do
-            cargo info rustra-macros@0.1.3 >/dev/null 2>&1 && exit 0
+            cargo info "rustra-macros@${VERSION}" >/dev/null 2>&1 && exit 0
             sleep 10
           done
           exit 1

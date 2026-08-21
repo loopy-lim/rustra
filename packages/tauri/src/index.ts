@@ -64,19 +64,15 @@ export type TauriInvoke = (command: string, args?: unknown) => Promise<unknown> 
 export function createTauriEngine(options: { invoke: TauriInvoke }) {
   return {
     async invoke<T>(command: string, args?: unknown, invokeOptions?: InvokeOptions): Promise<T> {
-      // (의미론 마감) Tauri IPC 경로는 취소 전파 불가 — signal 을 조용히 무시하지
-      // 않고 명시적으로 거부한다. 호환성 매트릭스(docs/compatibility-matrix.md) 참고.
-      if (invokeOptions?.signal) {
-        if (invokeOptions.signal.aborted) {
-          throw new RustraCommandError(
-            'cancelled',
-            `invoke("${command}") aborted before dispatch`,
-            true,
-          );
-        }
+      // signal 정책(전 어댑터 공통): abort 된 signal 만 cancelled 로 거부하고,
+      // 미abort signal 은 정상 실행한다(얕은 취소 — Tauri IPC 는 취소 전파 불가).
+      // useCommand 처럼 항상 signal 을 전달하는 호출부와의 호환을 위해 signal 존재
+      // 자체를 에러로 삼지 않는다 — 매트릭스(docs/compatibility-matrix.md) 참고.
+      if (invokeOptions?.signal?.aborted) {
         throw new RustraCommandError(
-          'cancel.unsupported',
-          `invoke("${command}"): the Tauri IPC transport does not support AbortSignal`,
+          'cancelled',
+          `invoke("${command}") aborted before dispatch`,
+          true,
         );
       }
       try {

@@ -39,21 +39,15 @@ export type BunInvokeTransport = {
 export function createBunEngine(transport: BunInvokeTransport) {
   return {
     async invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
-      // (의미론 마감) signal 을 조용히 무시하지 않는다 — 이 엔진은 취소를
-      // 전파할 수 없는 JSON transport 위에서 동작하므로, 요청 시점에 명시적으로
-      // 거부한다. 호환성 매트릭스(docs/compatibility-matrix.md) 참고.
-      if (options?.signal) {
-        if (options.signal.aborted) {
-          throw new RustraCommandError(
-            'cancelled',
-            `invoke("${command}") aborted before dispatch`,
-            true,
-          );
-        }
+      // signal 정책(전 어댑터 공통): abort 된 signal 만 cancelled 로 거부하고,
+      // 미abort signal 은 정상 실행한다(얕은 취소 — 실행 중 abort 는 결과를 무시할
+      // 뿐). useCommand 처럼 항상 signal 을 전달하는 호출부와의 호환을 위해 signal
+      // 존재 자체를 에러로 삼지 않는다 — 매트릭스(docs/compatibility-matrix.md) 참고.
+      if (options?.signal?.aborted) {
         throw new RustraCommandError(
-          'cancel.unsupported',
-          `invoke("${command}"): this JSON transport does not support AbortSignal — ` +
-            `use createRkyvV2Engine with a native module that exposes invokeAsync/invokeCancel`,
+          'cancelled',
+          `invoke("${command}") aborted before dispatch`,
+          true,
         );
       }
       try {

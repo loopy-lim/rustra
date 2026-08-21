@@ -39,9 +39,15 @@ npm install @rustra/devtools      # 호출 관측성 (개발)
 ```rust
 use rustra::prelude::*;
 
+// #[command] 는 단일 Input 구조체를 받고 Result<Output> 를 반환한다.
+#[bridge_type]
+struct AddNumbersInput { a: i64, b: i64 }
+#[bridge_type]
+struct AddNumbersOutput { sum: i64 }
+
 #[command]
-fn add_numbers(a: i64, b: i64) -> i64 {
-    a + b
+fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
+    Ok(AddNumbersOutput { sum: input.a + input.b })
 }
 
 fn main() -> Result<()> {
@@ -119,21 +125,32 @@ npm run clean:deep   # build 산출물 + node_modules/Pods/로컬 패키지 캐�
 ```rust
 use rustra::prelude::*;
 
-// 스칼라 파라미터 모드 (간단한 함수)
-#[command]
-fn add_numbers(a: i64, b: i64) -> i64 {
-    a + b
-}
-
-// 구조체 파라미터 모드 (복잡한 입력)
+// 모든 #[command] 는 단일 Input 구조체(또는 인자 없음)를 받고 Result<O> 를 반환한다.
 #[bridge_type]
-struct CreateItemInput {
-    name: String,
-    value: i64,
+struct AddNumbersInput {
+    a: i64,
+    b: i64,
+}
+
+#[bridge_type]
+struct AddNumbersOutput {
+    sum: i64,
 }
 
 #[command]
-fn create_item(input: CreateItemInput) -> Result<Item> { ... }
+fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
+    Ok(AddNumbersOutput { sum: input.a + input.b })
+}
+
+// 인자가 없는 명령도 가능하다
+#[command]
+fn ping() -> Result<String> {
+    Ok("pong".to_string())
+}
+
+// capability 게이트가 필요한 명령은 속성 하나로 (grant 전까지 deny-by-default)
+#[command(capability = "compute:secure")]
+fn locked_add(input: AddNumbersInput) -> Result<AddNumbersOutput> { ... }
 ```
 
 패키지를 빌드하고 TypeScript 코드를 생성:

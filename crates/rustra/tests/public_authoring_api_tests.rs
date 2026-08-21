@@ -22,6 +22,15 @@ fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
     })
 }
 
+/// `#[command(capability = "...")]` 속성 — require_capability 문자열 결합 없이
+/// 매크로 시점에 권한을 심는다 (register!/build! 가 require_capability_if 로 연결).
+#[command(capability = "compute:secure")]
+fn locked_add(input: AddNumbersInput) -> Result<AddNumbersOutput> {
+    Ok(AddNumbersOutput {
+        value: input.a + input.b + 1000,
+    })
+}
+
 #[test]
 fn user_builds_package_without_touching_raw_engine_types() {
     let package = Package::builder("example.calculator")
@@ -61,6 +70,48 @@ fn register_macro_uses_macro_derived_name() {
         .unwrap();
 
     assert_eq!(output, AddNumbersOutput { value: 2 });
+}
+
+#[test]
+fn command_capability_attribute_enforces_deny_by_default() {
+    // register! 가 #[command(capability)] 메타를 읽어 require_capability_if 로
+    // 연결하는지 — grant 전 deny, grant 후 허용.
+    let package = register!(Package::builder("example.calculator"), locked_add).build();
+
+    // grant 전에는 deny-by-default.
+    assert_eq!(
+        package
+            .invoke::<_, AddNumbersOutput>("lockedAdd", AddNumbersInput { a: 1, b: 1 })
+            .unwrap_err()
+            .code(),
+        "capability.denied"
+    );
+
+    // grant 후에는 핸들러가 실행된다.
+    package.grant_capability("compute:secure").unwrap();
+    let out: AddNumbersOutput = package
+        .invoke("lockedAdd", AddNumbersInput { a: 1, b: 1 })
+        .unwrap();
+    assert_eq!(out.value, 1002);
+}
+
+#[test]
+fn build_macro_also_applies_capability_attribute() {
+    // build! 경로도 동일하게 연결된다.
+    let package = build!("example.calculator", locked_add).done();
+
+    assert_eq!(
+        package
+            .invoke::<_, AddNumbersOutput>("lockedAdd", AddNumbersInput { a: 2, b: 2 })
+            .unwrap_err()
+            .code(),
+        "capability.denied"
+    );
+    package.grant_capability("compute:secure").unwrap();
+    let out: AddNumbersOutput = package
+        .invoke("lockedAdd", AddNumbersInput { a: 2, b: 2 })
+        .unwrap();
+    assert_eq!(out.value, 1004);
 }
 
 #[test]

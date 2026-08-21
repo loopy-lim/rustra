@@ -18,13 +18,15 @@
  */
 
 import type { EngineClient, InvokeOptions } from '@rustra/types';
-import { RustraCommandError } from '@rustra/types';
+import { RustraCommandError, resolveCommandId } from '@rustra/types';
 
 type Handler = (args: unknown) => unknown;
 
 export type CommandFunction<I = unknown, O = unknown> =
   | ((input: I, options?: InvokeOptions) => Promise<O>)
-  | ((options?: InvokeOptions) => Promise<O>);
+  | (((options?: InvokeOptions) => Promise<O>) &
+      // 코드젠 산출물이 함수에 심는 minify-안전 식별자 (addNumbers.commandId).
+      { commandId?: unknown });
 
 export interface MockEngine extends EngineClient {
   /** command 핸들러을 등록하고 엔진 자신을 반환 (체이닝). args 타입은 자유. */
@@ -51,8 +53,8 @@ export function createMockEngine(): MockEngine {
       return engine;
     },
     mock(commandFn, handler) {
-      const name = commandFn.name;
-      if (!name) throw new Error('Command function must have a name');
+      // minify-안전 식별: 코드젠이 심은 commandId 를 우선한다.
+      const name = resolveCommandId(commandFn);
       return engine.on(name, handler as (args: unknown) => unknown);
     },
     calls: () => [...log],
