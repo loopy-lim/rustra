@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # 주간 취약점 스캔 — 커밋이 없는 기간에 공개된 신규 RUSTSEC 도 감지한다.
+  # push/PR 트리거와 달리 이 스케줄은 rust-audit 잡만 실행된다(다른 잡은
+  # github.event_name 조건으로 스킵).
+  schedule:
+    - cron: '23 4 * * 1'
 
 jobs:
   # cargo audit — 취약점(vulnerabilities)이면 실패. unmaintained/unsound 경고는
@@ -24,7 +29,18 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+  # cargo-deny — 라이선스/밴/출처 검증. MIT 발행물의 법적 위생.
+  # rustsec/audit-check 와 별개: 이 잡은 라이선스 호환성과 wildcard/알 수 없는
+  # 출처를 게이트한다.
+  rust-deny:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
   rust:
+    if: github.event_name != 'schedule'
     strategy:
       fail-fast: false
       matrix:
@@ -76,7 +92,48 @@ jobs:
             target/release/rustra_calculator_example.dll
           if-no-files-found: ignore
 
+  # MSRV(1.87) 계약 검증 — Cargo.toml rust-version 선언이 실제로 빌드되는지.
+  # 1.95.0 상위 툴체인만 쓰면 MSRV를 깨는 의존성/코드가 머지돼도 CI가 green이다.
+  rust-msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.87.0
+      - uses: Swatinem/rust-cache@v2
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+      - name: Check core crates build on MSRV
+        run: cargo check -p rustra -p rustra-macros
+      - name: Test core crate on MSRV
+        run: cargo test -p rustra --lib
+
+  # napi transport 경로(test:runtime:node-napi) — 어떤 CI 잡에서도 실행되지
+  # 않아 무검증 방치였다. debug 애드온 빌드 + 런타임 스모크로 게이트한다.
+  napi:
+    runs-on: ubuntu-latest
+    needs: rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Build calculator example
+        run: cargo build -p rustra-calculator-example
+      - name: Build napi addon (debug)
+        run: npm run build:napi
+      - name: Type check calculator
+        run: npx tsc -p examples/calculator/tsconfig.json
+      - name: napi runtime smoke
+        run: npm run test:runtime:node-napi
+
   typescript:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     needs: [rust, rust-audit]
     steps:
@@ -230,17 +287,32 @@ jobs:
       - name: Install packed packages as a consumer
         run: |
           mkdir -p /tmp/rustra-pack
-          npm pack --workspace @rustra/types --pack-destination /tmp/rustra-pack
-          npm pack --workspace @rustra/node --pack-destination /tmp/rustra-pack
+          for pkg in types node bun tauri react-native react testing devtools cli; do
+            npm pack --workspace @rustra/$pkg --pack-destination /tmp/rustra-pack
+          done
           mkdir -p /tmp/consumer && cd /tmp/consumer
           npm init -y > /dev/null
           npm pkg set type=module
-          npm install --no-save /tmp/rustra-pack/rustra-types-*.tgz /tmp/rustra-pack/rustra-node-*.tgz
+          npm install --no-save /tmp/rustra-pack/rustra-*.tgz
       - name: Smoke — installed packages load (ESM)
         run: |
           cd /tmp/consumer
           node --input-type=module -e "
             import * as types from '@rustra/types';
             import * as node from '@rustra/node';
-            console.log('consumer install ok:', Object.keys(types).length, 'types exports,', Object.keys(node).length, 'node exports');
+            import * as bun from '@rustra/bun';
+            import * as tauri from '@rustra/tauri';
+            import * as rn from '@rustra/react-native';
+            import * as react from '@rustra/react';
+            import * as testing from '@rustra/testing';
+            import * as devtools from '@rustra/devtools';
+            console.log('consumer install ok:',
+              Object.keys(types).length, Object.keys(node).length,
+              Object.keys(bun).length, Object.keys(tauri).length,
+              Object.keys(rn).length, Object.keys(react).length,
+              Object.keys(testing).length, Object.keys(devtools).length, 'exports');
           "
+      - name: Smoke — CLI bin runs from tarball
+        run: |
+          cd /tmp/consumer
+          npx rustra --help | head -3

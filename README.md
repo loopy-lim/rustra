@@ -1,6 +1,16 @@
 # rustra
 
+[![CI](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml/badge.svg)](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@rustra/types)](https://www.npmjs.com/package/@rustra/types)
+[![crates.io](https://img.shields.io/crates/v/rustra.svg)](https://crates.io/crates/rustra)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Rust에서 명령을 한 번 정의하면, Node / Bun / Tauri / React Native 어디서든 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크.
+
+> **English** — Define commands once in Rust, get type-safe TypeScript clients
+> for Node, Bun, Tauri, and React Native. Single Rust core, four host surfaces,
+> zero-copy binary wire (rkyv V2). Quick start: `cargo add rustra` +
+> `npx rustra init`. Full docs (Korean) below.
 
 ## 작동 방식
 
@@ -11,6 +21,50 @@ Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플�
 - Rust 쪽에서 `#[command]`로 함수를 정의
 - `generate_typescript()` 호출 시 타입 안전한 TS 클라이언트 코드 생성
 - Node, Bun, Tauri, React Native 어댑터가 동일한 `EngineClient` 인터페이스로 라우팅
+
+## 왜 rustra인가 (비교)
+
+단일 Rust 코어를 여러 JS 호스트에 잇는 도구는 각자 다른 지점을 타협한다:
+
+|                               | **rustra**                        | napi-rs           | Nitro Modules | Tauri commands | tauri-specta |
+| ----------------------------- | --------------------------------- | ----------------- | ------------- | -------------- | ------------ |
+| 단일 Rust 코어 × 멀티 호스트  | ✅ Node/Bun/Tauri/RN              | Node (+ Electron) | RN 중심       | Tauri 전용     | Tauri 전용   |
+| 타입 안전 코드젠 (양방향)     | ✅ 커맨드+이벤트                  | 수동 d.ts         | ✅            | ❌ (수동)      | ✅           |
+| 바이너리 zero-copy 와이어     | ✅ rkyv V2 (JSON 대비 11.8× 작음) | JSON/Buffer       | JSI 객체      | JSON IPC       | JSON IPC     |
+| 계약 게이트 (breaking change) | ✅ `rustra diff` + contract hash  | ❌                | ❌            | ❌             | 부분         |
+| 취소/타임아웃/배치 시맨틱     | ✅ 매트릭스로 문서화              | 직접 구현         | 직접 구현     | ❌             | ❌           |
+
+rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)를 하나의 계약으로
+소유**한다. 개별 경로의 마이크로 최적화보다 "한 번 정의하면 어디서든 같은
+시맨틱"이 이 프로젝트가 사는 지점이다.
+
+## 로드맵
+
+- [x] 4호스트 어댑터 (Node/Bun/Tauri/RN iOS+Android) — 0.1
+- [x] rkyv V2 바이너리 fast-path + 취소/타임아웃/배치 — 0.1~0.2
+- [x] 이벤트 계약 코드젠 (`PackageBuilder::event`) — 0.2.x
+- [x] persistent 루프 런타임 + Node loop transport — 0.2.x
+- [ ] async 커맨드 핸들러 (워커 풀은 완료, 핸들러 trait 비동기화는 진행 중)
+- [ ] Windows 런타임 검증 (CI 확장 단계)
+- [ ] 프리빌트 바이너리 배포 (npx 설치 시 cargo 불필요)
+
+## FAQ
+
+**Q. Rust 툴체인이 꼭 필요한가요?**
+지금은 네(네이티브 라이브러리를 로컬 빌드). 프리빌트 배포는 로드맵에 있다.
+JS만으로 시작하려면 `@rustra/testing`의 mock 엔진으로 UI를 먼저 만들 수 있다.
+
+**Q. JSON 경로도 지원하나요?**
+예. rkyv V2는 fast-path일 뿐, 모든 명령은 JSON 폴백으로도 동작한다(Tier 3).
+바이너리 이식이 어려운 환경도 계약은 같다.
+
+**Q. 기존 napi-rs/Tauri 앱에 점진적으로 붙일 수 있나요?**
+예. 어댑터는 transport만 교체한다 — `createNodeEngine(transport)`에 기존
+invoke 함수를 넘기면 그 명령만 rustra 계약으로 들어온다.
+
+**Q. 스키마가 깨지면 어떻게 되나요?**
+`rustra diff`가 breaking change를 CI에서 잡고, 계약 해시(contract hash)가
+JS/네이티브 조합의 drift를 런타임에 감지한다.
 
 ## 설치
 

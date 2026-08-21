@@ -1,0 +1,51 @@
+# cargo-deny 설정 — 라이선스/밴/출처/중복 검증.
+# CI: cargo deny check (ci.yml 의 rust-deny 잡).
+
+[graph]
+# dev-dependencies 는 발행물에 포함되지 않으므로 라이선스 검사에서 제외.
+all-features = true
+
+# ── 라이선스 허용 목록 ────────────────────────────────────────
+# rustra 는 MIT 발행물이다 — 호환되는 허용 라이선스만 의존할 수 있다.
+[licenses]
+version = 2
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Unicode-3.0",
+  "Unicode-DFS-2016",
+  "Zlib",
+  "CC0-1.0",
+  "MPL-2.0",
+  "CDLA-Permissive-2.0",
+  "0BSD",
+]
+# 미확정(confidence 낮음) 라이선스는 경고로만 — SPDX 표현이 드문 크레이트 대응.
+confidence-threshold = 0.8
+
+# ── 보안 어드바이저리 ─────────────────────────────────────────
+[advisories]
+version = 2
+# 취약점(vulnerabilities)은 실패. unmaintained/unsound 경고는
+# docs/security-audit.md 의 transitive 목록과 정합 — yanked 는 경고.
+yanked = "warn"
+unmaintained = "warn"
+
+# ── 크레이트 출처 ─────────────────────────────────────────────
+[bans]
+# 중복 버전은 경고로만 — 빌드 그래프의 현실적 중복(gtk 계열)을 게이트하지 않는다.
+multiple-versions = "warn"
+# wildcard 의존성("=" 없는 *)은 실수 방지로 거부.
+wildcards = "deny"
+highlight = "all"
+
+# ── 출처 검증 ─────────────────────────────────────────────────
+[sources]
+# 알려진 레지스트리 외 출처 차단.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

@@ -21,6 +21,10 @@ jobs:
         with:
           workspaces: fuzz
       - run: cargo install cargo-fuzz --locked
+      # 시드 corpus(git 추적, 대표 100개)를 먼저 재생 — 주간 실행이 매번 0시드로
+      # 시작하던 것을 개선한다. 발견한 새 커버리지는 아티팩트로 남는다.
+      - name: Replay seed corpus
+        run: cd fuzz && cargo fuzz run invoke_rkyv_v2 fuzz/seeds/ -- -runs=0
       - name: Fuzz invoke_rkyv_v2 (10min)
         run: cd fuzz && cargo fuzz run invoke_rkyv_v2 -- -max_total_time=600 -max_len=1024
       - name: Upload crash artifacts
