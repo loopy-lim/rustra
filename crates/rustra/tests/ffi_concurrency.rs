@@ -149,3 +149,106 @@ fn ffi_invoke_async_offloads_and_calls_back() {
         .expect("async callback received");
     assert_eq!(result, 123, "async offloaded invoke must return 123");
 }
+
+/// async 엔트리의 사전 페이로드 게이트 — 크기 초과 페이로드가 복사 없이
+/// 즉시(payload.too_large) on_complete 로 거부되는지 검증한다. 과거엔 복사 후
+/// 워커에서 검사해 초과분도 일단 메모리에 2배로 존재했다.
+#[test]
+fn ffi_invoke_async_rejects_oversized_payload_before_copy() {
+    use std::ffi::c_void;
+    use std::sync::mpsc::channel;
+
+    use rustra::ffi::rustra_ffi_set_max_payload;
+
+    concurrency_package().register_ffi();
+    unsafe { rustra_ffi_set_max_payload(64) };
+
+    let (tx, rx) = channel::<String>();
+    let tx_box = Box::into_raw(Box::new(tx));
+
+    unsafe extern "C" fn on_done(user_data: *mut c_void, resp_ptr: *mut u8, resp_len: usize) {
+        let tx = unsafe { Box::from_raw(user_data as *mut std::sync::mpsc::Sender<String>) };
+        let bytes = unsafe { std::slice::from_raw_parts(resp_ptr, resp_len) };
+        let resp: serde_json::Value =
+            serde_json::from_slice(bytes).expect("oversize async response deserializes");
+        unsafe { rustra_ffi_free(resp_ptr, resp_len) };
+        tx.send(resp["error"].as_str().unwrap_or_default().to_string())
+            .unwrap();
+    }
+
+    let mut big = String::from(r#"{"command":"addNumbers","args":{"pad":""#);
+    big.push_str(&"x".repeat(1024));
+    big.push_str("}}");
+    let payload = big.into_bytes();
+
+    let mut invocation_id: u64 = 0;
+    unsafe {
+        rustra::ffi::rustra_ffi_invoke_json_async(
+            payload.as_ptr(),
+            payload.len(),
+            tx_box as *mut c_void,
+            Some(on_done),
+            &mut invocation_id,
+        );
+    }
+
+    let err = rx
+        .recv_timeout(std::time::Duration::from_secs(2))
+        .expect("oversize async must still call on_complete (not hang)");
+    assert!(
+        err.contains("payload"),
+        "error must be the payload gate, got: {err}"
+    );
+
+    // 원복 — 다른 테스트가 기본 한도를 기대한다.
+    unsafe { rustra_ffi_set_max_payload(1024 * 1024) };
+}
+
+/// 기본 디스패치(`rustra_ffi_invoke`)가 DEFAULT_FORMAT(Postcard) 을 따르는지
+/// 검증한다 — postcard 엔벌로프 `{command, args_json}` 으로 요청해 ok 프레임과
+/// 결과를 postcard 미러로 복원한다. 과거 테스트는 전부 포맷별 진입점
+/// (`rustra_ffi_invoke_json`/`_postcard`)만 검증해 기본 경로가 커버되지 않았다.
+#[test]
+fn default_dispatch_follows_postcard_default_format() {
+    use rustra::ffi::rustra_ffi_invoke;
+
+    concurrency_package().register_ffi();
+
+    // postcard 엔벨로프 미러 — 코어 FfiPostcardEnvelope 과 같은 필드 순서.
+    #[derive(serde::Serialize)]
+    struct Envelope<'a> {
+        command: &'a str,
+        args_json: &'a str,
+    }
+    #[derive(serde::Deserialize)]
+    #[allow(dead_code)]
+    struct Response {
+        ok: bool,
+        result_json: Option<String>,
+        error: Option<String>,
+    }
+
+    let envelope = Envelope {
+        command: "addNumbers",
+        args_json: r#"{"a":5,"b":6}"#,
+    };
+    let payload = postcard::to_allocvec(&envelope).expect("postcard envelope encodes");
+
+    let mut out_len: usize = 0;
+    let ptr = unsafe { rustra_ffi_invoke(payload.as_ptr(), payload.len(), &mut out_len) };
+    assert!(
+        !ptr.is_null() && out_len > 0,
+        "default dispatch must respond"
+    );
+    let bytes = unsafe { std::slice::from_raw_parts(ptr, out_len) };
+    let resp: Response = postcard::from_bytes(bytes).expect("default (postcard) frame decodes");
+    assert!(
+        resp.ok,
+        "default dispatch must succeed, error: {:?}",
+        resp.error
+    );
+    let result: serde_json::Value =
+        serde_json::from_str(&resp.result_json.expect("result_json present")).unwrap();
+    assert_eq!(result, serde_json::json!(11));
+    unsafe { rustra::ffi::rustra_ffi_free(ptr, out_len) };
+}

@@ -5,52 +5,65 @@ import type { InvokeOptions } from '@rustra/types';
 export function addNumbers(input: AddNumbersInput, options?: InvokeOptions): Promise<AddNumbersOutput> {
   return invoke<AddNumbersOutput>('addNumbers', input, options);
 }
+addNumbers.commandId = 'addNumbers';
 
 export function clamp(input: ClampInput, options?: InvokeOptions): Promise<ClampOutput> {
   return invoke<ClampOutput>('clamp', input, options);
 }
+clamp.commandId = 'clamp';
 
 export function createItem(input: CreateItemInput, options?: InvokeOptions): Promise<CreateItemOutput> {
   return invoke<CreateItemOutput>('createItem', input, options);
 }
+createItem.commandId = 'createItem';
 
 export function divide(input: DivideInput, options?: InvokeOptions): Promise<DivideOutput> {
   return invoke<DivideOutput>('divide', input, options);
 }
+divide.commandId = 'divide';
 
 export function emitDemo(input: EmitDemoInput, options?: InvokeOptions): Promise<EmitDemoOutput> {
   return invoke<EmitDemoOutput>('emitDemo', input, options);
 }
+emitDemo.commandId = 'emitDemo';
 
 export function greet(input: GreetInput, options?: InvokeOptions): Promise<GreetOutput> {
   return invoke<GreetOutput>('greet', input, options);
 }
+greet.commandId = 'greet';
 
 export function isEven(input: IsEvenInput, options?: InvokeOptions): Promise<IsEvenOutput> {
   return invoke<IsEvenOutput>('isEven', input, options);
 }
+isEven.commandId = 'isEven';
 
 export function multiply(input: MultiplyInput, options?: InvokeOptions): Promise<MultiplyOutput> {
   return invoke<MultiplyOutput>('multiply', input, options);
 }
+multiply.commandId = 'multiply';
 
 export function processItem(input: ProcessItemInput, options?: InvokeOptions): Promise<ProcessItemOutput> {
   return invoke<ProcessItemOutput>('processItem', input, options);
 }
+processItem.commandId = 'processItem';
 
 export function rustraRegistryDemo(input: RegistryDemoInput, options?: InvokeOptions): Promise<RegistryDemoOutput> {
   return invoke<RegistryDemoOutput>('rustraRegistryDemo', input, options);
 }
+rustraRegistryDemo.commandId = 'rustraRegistryDemo';
 
 export function secureCompute(input: SecureComputeInput, options?: InvokeOptions): Promise<SecureComputeOutput> {
   return invoke<SecureComputeOutput>('secureCompute', input, options);
 }
+secureCompute.commandId = 'secureCompute';
 
 export function sumList(input: SumListInput, options?: InvokeOptions): Promise<SumListOutput> {
   return invoke<SumListOutput>('sumList', input, options);
 }
+sumList.commandId = 'sumList';
 
 export function toUpper(input: ToUpperInput, options?: InvokeOptions): Promise<ToUpperOutput> {
   return invoke<ToUpperOutput>('toUpper', input, options);
 }
+toUpper.commandId = 'toUpper';
 

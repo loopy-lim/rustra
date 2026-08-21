@@ -11,8 +11,11 @@
 //! (JS 프라미스 hang 방지), (2) 취소 레지스트리 엔트리가 정리됨(Unknown).
 //! 패닉 유도가 불가능하므로 정상 경로 계약 고정이 곧 구조 보장의 기준선이다.
 //!
-//! 응답 버퍼는 calculator `alloc_response`(magic 헤더 없음) 로 할당되므로
-//! 반드시 `rustra_calculator_free_buffer` 로 해제한다.
+//! 응답 버퍼는 (rkyv V2 sync 경로가 코어 `rustra_ffi_invoke_rkyv_v2` 로 위임된
+//! 이후) 코어 FFI 할당 레이아웃을 따른다 — 반드시
+//! `rustra_calculator_free_rkyv_v2_buffer`(코어 `rustra_ffi_free` 위임)로
+//! 해제한다. async 경로는 여전히 calculator 자체 `alloc_response` 레이아웃이므로
+//! `rustra_calculator_free_buffer` 를 쓴다.
 
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -27,6 +30,7 @@ unsafe extern "C" {
         payload_len: usize,
         out_len: *mut usize,
     ) -> *mut u8;
+    fn rustra_calculator_free_rkyv_v2_buffer(ptr: *mut u8, len: usize);
     fn rustra_calculator_free_buffer(ptr: *mut u8, len: usize);
     fn rustra_calculator_invoke_rkyv_v2_async(
         payload: *const u8,
@@ -68,7 +72,7 @@ fn invoke_rkyv_v2(payload: &[u8]) -> Vec<u8> {
         "FFI must return a response buffer, not null"
     );
     let out = unsafe { std::slice::from_raw_parts(ptr, out_len) }.to_vec();
-    unsafe { rustra_calculator_free_buffer(ptr, out_len) };
+    unsafe { rustra_calculator_free_rkyv_v2_buffer(ptr, out_len) };
     out
 }
 

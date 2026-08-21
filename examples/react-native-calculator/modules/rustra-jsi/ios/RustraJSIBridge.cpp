@@ -110,10 +110,10 @@ static std::string parseRkyvV2ErrorBody(const uint8_t* resp, size_t out_len) {
 //   - batchItemName: 이름 기반 배치 루프의 항목 이름. FFI null 접미
 //     " (batch item <name>)" 조립에만 쓴다(에러 시 1회 조립 — hot path 비용 0).
 //     nullptr 면 null 접미로 tailSuffix 를 쓴다(단건/byId 배치).
-// free 짝 계약: 이 버퍼는 calculator 심볼의 응답 레이아웃 — alloc_response 가
-// 만든 magic 헤더 없는 Box<[u8]> 이다. rustra_ffi_free 는 ptr-8 에서 FFI magic
-// 헤더를 역산해 해제하므로 이 레이아웃에 대면 잘못된 해제를 한다(실제 버그였음,
-// follow-up 3에서 수정). 반드시 rustra_calculator_free_buffer 로 해제할 것.
+// free 짝 계약: sync rkyv V2 응답은 이제 코어 rustra_ffi_invoke_rkyv_v2 가 할당한다
+// (코어 FFI 레이아웃 — 8B magic/len 헤더). 반드시 rustra_calculator_free_rkyv_v2_buffer
+// (코어 rustra_ffi_free 위임)로 해제할 것. async 콜백의 버퍼는 여전히 calculator
+// alloc_response 레이아웃이라 rustra_calculator_free_buffer 를 쓴다.
 template <typename Decode>
 static Value typedInvokeTail(Runtime& rt, const std::vector<uint8_t>& req,
                              const char* tailSuffix, Decode decode,
@@ -126,28 +126,28 @@ static Value typedInvokeTail(Runtime& rt, const std::vector<uint8_t>& req,
     throw JSError(rt, "RustraJSI: invokeRkyvV2 returned null" + nullSuffix);
   }
   if (out_len < 1) {
-    rustra_calculator_free_buffer(resp, out_len);
+    rustra_calculator_free_rkyv_v2_buffer(resp, out_len);
     throw JSError(rt, std::string("RustraJSI: empty rkyv v2 response") + tailSuffix);
   }
   if (resp[0] == 0) {
     // 에러 와이어: [ok:0][pad to @8][err_len u16 LE @8][err @10]
     if (out_len < 10) {
-      rustra_calculator_free_buffer(resp, out_len);
+      rustra_calculator_free_rkyv_v2_buffer(resp, out_len);
       throw JSError(rt, std::string("RustraJSI: malformed error response") + tailSuffix);
     }
     std::string errStr = parseRkyvV2ErrorBody(resp, out_len);
-    rustra_calculator_free_buffer(resp, out_len);
+    rustra_calculator_free_rkyv_v2_buffer(resp, out_len);
     throw JSError(rt, errStr);
   }
 
   // 성공: postcard(O) @8 부터 디코딩.
   if (out_len < 8) {
-    rustra_calculator_free_buffer(resp, out_len);
+    rustra_calculator_free_rkyv_v2_buffer(resp, out_len);
     throw JSError(rt, std::string("RustraJSI: malformed success response") + tailSuffix);
   }
   rc::Reader r(resp + 8, out_len - 8);
   Value result = decode(r);
-  rustra_calculator_free_buffer(resp, out_len);
+  rustra_calculator_free_rkyv_v2_buffer(resp, out_len);
   return result;
 }
 
