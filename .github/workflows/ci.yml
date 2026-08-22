@@ -92,13 +92,14 @@ jobs:
             target/release/rustra_calculator_example.dll
           if-no-files-found: ignore
 
-  # MSRV(1.87) 계약 검증 — Cargo.toml rust-version 선언이 실제로 빌드되는지.
+  # MSRV(1.88) 계약 검증 — Cargo.toml rust-version 선언이 실제로 빌드되는지.
   # 1.95.0 상위 툴체인만 쓰면 MSRV를 깨는 의존성/코드가 머지돼도 CI가 green이다.
+  # (1.87 에는 let-chains stabilized 가 없다 — rustra-macros 가 1.88 이상을 요구.)
   rust-msrv:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.87.0
+      - uses: dtolnay/rust-toolchain@1.88.0
       - uses: Swatinem/rust-cache@v2
       - name: Install system dependencies
         run: |
