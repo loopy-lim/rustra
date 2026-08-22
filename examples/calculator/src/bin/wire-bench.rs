@@ -12,7 +12,8 @@
 //! 실행: cargo run -p rustra-calculator-example --bin wire-bench --release
 
 use rustra_calculator_example::{
-    AddNumbersInput, rustra_calculator_free_buffer, rustra_calculator_free_string,
+    AddNumbersInput, rustra_calculator_free_buffer, rustra_calculator_free_rkyv_v2_buffer,
+    rustra_calculator_free_string,
     rustra_calculator_init, rustra_calculator_invoke, rustra_calculator_invoke_postcard,
     rustra_calculator_invoke_rkyv_v2,
 };
@@ -139,7 +140,8 @@ fn main() {
         let ptr =
             unsafe { rustra_calculator_invoke_rkyv_v2(rkyv.as_ptr(), rkyv.len(), &mut rkyv_out) };
         let n = rkyv_out;
-        unsafe { rustra_calculator_free_buffer(ptr, rkyv_out) };
+        // rkyv V2 응답은 코어 FFI 레이아웃(8B 헤더) — 위임 후 전용 free 심볼 필수.
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(ptr, rkyv_out) };
         n
     });
 
