@@ -64,7 +64,7 @@
 - [x] `npm run lint && npm run format:check` — clean
 - [x] `loop-stdio` 수동 스모크 — 3요청 NDJSON 왕복 + drainEvents 확인
 - [x] examples 4종 generated 재생성 (Rust bin dual-path, commandId 주입 확인)
-- [ ] CI 전 잡 green (푸시 후 확인 — MSRV/napi/deny/miri·fuzz 야간은 스케줄)
+- [x] CI 전 잡 green — 12/12 (rust 3OS·msrv·deny·audit·napi·typescript·consumer-smoke·rn-ios·rn-android) — miri·fuzz 야간은 스케줄 대기
 
 ## Checklist
 
