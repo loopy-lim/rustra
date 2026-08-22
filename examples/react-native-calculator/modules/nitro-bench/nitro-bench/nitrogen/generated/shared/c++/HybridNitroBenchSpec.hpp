@@ -13,9 +13,12 @@
 #error NitroModules cannot be found! Are you sure you installed NitroModules properly?
 #endif
 
+// Forward declaration of `PairPayload` to properly resolve imports.
+namespace margelo::nitro::nitrobench { struct PairPayload; }
 
-
-
+#include <string>
+#include <NitroModules/ArrayBuffer.hpp>
+#include "PairPayload.hpp"
 
 namespace margelo::nitro::nitrobench {
 
@@ -50,6 +53,9 @@ namespace margelo::nitro::nitrobench {
       // Methods
       virtual double add(double a, double b) = 0;
       virtual double echo(double value) = 0;
+      virtual std::string echoString(const std::string& value) = 0;
+      virtual std::shared_ptr<ArrayBuffer> echoBuffer(const std::shared_ptr<ArrayBuffer>& value) = 0;
+      virtual PairPayload echoPair(const PairPayload& value) = 0;
 
     protected:
       // Hybrid Setup

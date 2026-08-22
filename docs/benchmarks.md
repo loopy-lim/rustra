@@ -352,17 +352,31 @@ Fast-Path"로 **이름만 교체**된 것이었다 (커밋 d888fc86). 이후 Lyn
 이 비교가 **하지 않는** 것 (즉, 위 비교만으로 "full 지원 상태"를 체크했다고
 말할 수 없다):
 
-- Nitro의 다른 타입 경로(string, 객체/AnyMap, 배열, ArrayBuffer, bigint,
-  Date, Promise 네이티브, 콜백/Function 인자)의 지연 — 전부 미측정.
-  Nitro는 타입별로 변환기 비용이 다르고, rustra는 postcard 코덱으로
-  균일하게 직렬화하므로 페이로드 형태에 따른 교차점이 달라진다.
-- 페이로드 크기 확장 비교(Nitro는 객체 그래프 복사, rustra는 바이너리
-  직렬화 — 큰 페이로드에서 곡선이 교차할 수 있으나 미측정).
-- 기능 패리티 — 아래 매트릭스 참고. 지연 비교가 기능 지원을 대신하지 않는다.
+- ~~Nitro의 다른 타입 경로(string, 객체, ArrayBuffer)의 지연 — 전부 미측정~~
+  → **2026-08-22 측정 완료**: nitro-bench에 `echoString`/`echoBuffer`/
+  `echoPair`(구조체) variant를 추가하고 BenchmarkApp "Payload shapes"
+  블록에서 rustra greet/sizeOf/createItem과 같은 measure 루프로 왕복
+  측정했다. Nitro의 구조체 경로는 프로퍼티별 분해 마셜링(직렬화 아님)으로
+  동작한다 — nitrogen 생성 코드(`PairPayload.hpp`의 toJSI/fromJSI)가 그
+  증거다.
 
-페이로드 확장 비교를 추가하려면 nitro-bench에 string/ArrayBuffer/객체
-variant 메서드를 추가하고 BenchmarkApp에 대응 측정을 넣으면 된다(인프라가
-이미 갖춰져 있어 신규 모듈 불필요).
+  | 페이로드 (10K iter)                       | Nitro avg | Nitro p50 | rustra(rkyvV2) avg  | rustra p50 | rustra/Nitro |
+  | ----------------------------------------- | --------- | --------- | ------------------- | ---------- | ------------ |
+  | string (23B `"benchmark-string-payload"`) | 2.2 µs    | 2.0 µs    | 7.1 µs (greet)      | 6.7 µs     | 3.2x         |
+  | bytes (64B Vec\<u8\>)                     | 4.1 µs    | 3.6 µs    | 18.8 µs (sizeOf)    | 18.1 µs    | 4.6x         |
+  | struct {name,value}                       | 3.7 µs    | 3.5 µs    | 7.4 µs (createItem) | 7.1 µs     | 2.0x         |
+
+  환경: iPhone 17 시뮬레이터(aarch64-apple-ios-sim, Apple Silicon 호스트),
+  2026-08-22. 해석: Nitro는 타입별 JSI 변환기(구조체는 프로퍼티 분해)를
+  통과하는 반면 rustra는 모든 페이로드가 postcard 직렬화 왕복을 지난다 —
+  특히 bytes 64B에서 JS `Array.from` 변환 비용이 더해져 격차가 가장 크다
+  (4.6x). 구조체는 필드 수가 적어 2.0x로 가장 근접하다. 스칼라
+  addNumbers(1.3x)와 종합하면 "페이로드가 커질수록 직렬화 기반 RPC의
+  상대 비용이 커진다"는 계약상의 트레이드오프를 수치로 확인했다.
+
+- bigint/Date/Promise 네이티브/콜백(Function 인자) 경로는 여전히 미측정.
+- 페이로드 크기 확장(64B 초과) 비교 — 향후 과제.
+- 기능 패리티 — 아래 매트릭스 참고. 지연 비교가 기능 지원을 대신하지 않는다.
 
 ### 기능 패리티 매트릭스: rustra vs Nitro Modules
 
@@ -373,23 +387,23 @@ RPC 계약"으로 설계 목표가 다르다. 같은 문제만 겹친다(RN에�
 
 #### 타입 시스템
 
-| 타입                   | Nitro 0.35.6                                   | rustra (postcard/rkyv V2 fast path)                                    | rustra 폴백(Tier 3 JSON) |
-| ---------------------- | ---------------------------------------------- | ---------------------------------------------------------------------- | ------------------------ |
-| 정수/실수 프리미티브   | ✅ int/float/double + **bigint(Int64/UInt64)** | ✅ f64/f32/zigzag 정수 — **bigint ❌**                                 | ✅ (serde JSON)          |
-| string                 | ✅                                             | ✅                                                                     | ✅                       |
-| bool / unit(void)      | ✅                                             | ✅                                                                     | ✅                       |
-| 배열 Vec<T>            | ✅ Vector                                      | ✅ vec\_\*(정수/f64/bool/string/struct)                                | ✅                       |
-| Set                    | — (Vector로)                                   | ✅ set\_\*                                                             | ✅                       |
-| 튜플                   | ✅ Tuple                                       | ⚠️ 구조체로 표현(위치 필드)                                            | ✅                       |
-| 맵 Record<string,T>    | ✅ AnyMap/UnorderedMap                         | ⚠️ 구조체로만(동적 키 맵은 fast path 밖)                               | ✅                       |
-| Option<T>              | ✅                                             | ✅ option\_\*                                                          | ✅                       |
-| enum(union variant)    | ✅ Variant                                     | ⚠️ **string enum만**(정수 enum은 코드젠 TS 리터럴로 지원, wire는 별도) | ✅                       |
-| 구조체(중첩 포함)      | ✅ (객체)                                      | ✅ $ref 재귀 — 미지원 필드 있으면 폴백                                 | ✅                       |
-| Date                   | ✅                                             | ❌ (없음 — chrono는 Rust측 전용)                                       | ❌                       |
-| ArrayBuffer/TypedArray | ✅ (+ createNativeArrayBuffer)                 | ❌ 인자 타입으로 없음(내부 wire로만 사용)                              | ❌                       |
-| Promise<T> (네이티브)  | ✅                                             | ⚠️ JS 래핑(async 엔진 레벨, 코어는 동기)                               | 동일                     |
-| 콜백/함수 인자         | ✅ Function                                    | ❌                                                                     | ❌                       |
-| 하이브리드 객체 참조   | ✅ NativeState/HybridObject/dispose            | ❌ (RPC 모델 — 객체 참조 없음)                                         | ❌                       |
+| 타입                   | Nitro 0.35.6                                   | rustra (postcard/rkyv V2 fast path)                                                                                                                 | rustra 폴백(Tier 3 JSON) |
+| ---------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| 정수/실수 프리미티브   | ✅ int/float/double + **bigint(Int64/UInt64)** | ✅ f64/f32/zigzag 정수 + **uvar(u8–u64) plain varint** — bigint 표면은 ❌(number, 2^53 한계)                                                        | ✅ (serde JSON)          |
+| string                 | ✅                                             | ✅                                                                                                                                                  | ✅                       |
+| bool / unit(void)      | ✅                                             | ✅                                                                                                                                                  | ✅                       |
+| 배열 Vec<T>            | ✅ Vector                                      | ✅ vec\_\*(정수 부호별/f64/bool/string/struct) + **Vec<u8>=bytes(len+raw)**                                                                         | ✅                       |
+| Set                    | — (Vector로)                                   | ✅ set\_\* (부호별)                                                                                                                                 | ✅                       |
+| 튜플                   | ✅ Tuple                                       | ✅ **tuple(무접두 나열)** — 2026-08-22 fast-path 승격                                                                                               | ✅                       |
+| 맵 Record<string,T>    | ✅ AnyMap/UnorderedMap                         | ✅ **map\_\*(원시값 맵 count+(k,v)\*)** — 2026-08-22 승격. struct-값 맵은 폴백                                                                      | ✅                       |
+| Option<T>              | ✅                                             | ✅ option\_\* (+option_uvar/option_bytes)                                                                                                           | ✅                       |
+| enum(union variant)    | ✅ Variant                                     | ⚠️ string enum ✅, **data enum(oneOf)은 폴백 확정** — schemars oneOf 가 unit variant 를 앞으로 재배치해 postcard 선언순 index 복원 불가(probe 실증) | ✅                       |
+| 구조체(중첩 포함)      | ✅ (객체)                                      | ✅ $ref 재귀 — 미지원 필드 있으면 폴백                                                                                                              | ✅                       |
+| Date                   | ✅                                             | ✅ chrono DateTime — postcard 는 ISO string 그대로(string kind로 자연 지원, probe 실증)                                                             | ✅                       |
+| ArrayBuffer/TypedArray | ✅ (+ createNativeArrayBuffer)                 | ✅ **Vec<u8> bytes** — TS 표면 number[], C++ 는 ArrayBuffer/배열 양쪽 수용                                                                          | ✅                       |
+| Promise<T> (네이티브)  | ✅                                             | ⚠️ JS 래핑(async 엔진 레벨, 코어는 동기)                                                                                                            | 동일                     |
+| 콜백/함수 인자         | ✅ Function                                    | ❌                                                                                                                                                  | ❌                       |
+| 하이브리드 객체 참조   | ✅ NativeState/HybridObject/dispose            | ❌ (RPC 모델 — 객체 참조 없음)                                                                                                                      | ❌                       |
 
 #### 런타임/플랫폼
 
@@ -423,9 +437,12 @@ RPC 계약"으로 설계 목표가 다르다. 같은 문제만 겹친다(RN에�
 
 매트릭스에서 rustra가 ❌인 타입은 "지원 안 됨"이 아니라 **3부류**다:
 
-1. **fast-path 확장 대상** (로드맵 1단계) — bigint, 동적 맵, 튜플, payload
-   enum, ArrayBuffer 인자, Date. wire 포맷과 코드젠의 대칭 확장으로 해결되고,
-   그 전까지는 Tier 3 JSON 폴백이 동일 계약으로 처리한다.
+1. **fast-path 확장** (2026-08-22 1단계 완료) — 동적 맵(원시값), 튜플,
+   Vec<u8>/ArrayBuffer, u8–u64 plain varint, chrono Date(ISO string)를
+   3면(TS·Rust·C++) 코드젱에 구현하고 PINNED hex 와이어 게이트로 고정했다.
+   남은 것: **bigint TS 표면**(현재 number — 2^53 정밀도 한계 문서화됨)과
+   **data enum**(oneOf 순서 비결정성으로 Tier 3 폴백 확정 — postcard
+   variant index는 Rust 선언순이나 schemars 가 재배치).
 2. **채널/리소스로 재정의** (로드맵 2단계) — 콜백과 객체 참조. Nitro처럼
    JS-first 객체 브릿지를 만드는 게 아니라, Tauri v2의 `ipc::Channel<T>`(콜백
    을 직렬화 가능한 채널 핸들로)·`Resource`(객체를 Rust-소유 핸들 id로 노출,

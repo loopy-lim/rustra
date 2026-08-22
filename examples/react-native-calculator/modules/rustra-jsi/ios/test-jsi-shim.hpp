@@ -116,6 +116,11 @@ public:
   Value getProperty(Runtime& rt, const char* name) const {
     return getProperty(rt, std::string(name));
   }
+  // 실 RN jsi 계약과 동일한 String 오버로드 — map 코덱이 std::string →
+  // jsi::String 변환 후 접근한다.
+  Value getProperty(Runtime& rt, const String& name) const {
+    return getProperty(rt, name.utf8(rt));
+  }
 
   void setProperty(Runtime&, const std::string& name, Value v) {
     data_->props[name] = std::move(v);
@@ -143,13 +148,9 @@ public:
   // bytes 코덱 테스트용 — 정의는 클래스 외부(ArrayBuffer 정의 뒤).
   inline class ArrayBuffer getArrayBuffer(Runtime&) const;
 
-  // 키 열거(정렬되지 않음) — map 코덱이 정렬하므로 순서는 무관.
-  std::vector<std::string> getPropertyNames(Runtime&) const {
-    std::vector<std::string> names;
-    names.reserve(data_->props.size());
-    for (const auto& kv : data_->props) names.push_back(kv.first);
-    return names;
-  }
+  // 키 열거 — 실 RN jsi::Object::getPropertyNames 는 jsi::Array 를 반환한다.
+  // 동일 계약으로 맞춘다(생성 코드는 색인 루프로 접근).
+  Array getPropertyNames(Runtime& rt) const;
 
   std::shared_ptr<detail::ObjectData> data_;
   // JS 에서 Array 는 Object 의 일종. Value(Array) → asObject → getArray 경로 지원용.
@@ -178,6 +179,18 @@ public:
 
 inline void Object::setProperty(Runtime& rt, const std::string& name, const Array& a) {
   setProperty(rt, name, Value(a));
+}
+inline Array Object::getPropertyNames(Runtime& rt) const {
+  Array out(rt, data_->props.size());
+  size_t i = 0;
+  for (const auto& kv : data_->props) {
+    // 키 자체를 문자열 값으로 — 실 RN 과 동일하게 이름 배열을 반환.
+    String name = String::createFromUtf8(
+        rt, reinterpret_cast<const uint8_t*>(kv.first.data()), kv.first.size());
+    Value v; v.kind_ = Value::Kind::String; v.str_ = name;
+    out.setValueAtIndex(rt, i++, std::move(v));
+  }
+  return out;
 }
 inline void Object::setProperty(Runtime& rt, const char* name, const Array& a) {
   setProperty(rt, std::string(name), a);
