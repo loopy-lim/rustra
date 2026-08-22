@@ -170,7 +170,7 @@ function _pcDecodeF32(buf: Uint8Array, offset: number): { value: number; bytesRe
 }
 
 import type { RkyvV2Codec, RustraError } from '@rustra/types';
-import type { AddNumbersInput, AddNumbersOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, Item, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, ChannelDemoInput, ChannelDemoOutput, ChannelHandle, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, Item, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandle, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
 
 export const addNumbersCodec: RkyvV2Codec<AddNumbersInput, AddNumbersOutput> = {
   commandId: 1,
@@ -608,6 +608,189 @@ export const processItemCodec: RkyvV2Codec<ProcessItemInput, ProcessItemOutput> 
       result.item = _obj;
     }
     return { ok: true, result: result as ProcessItemOutput };
+  },
+};
+
+export const resourceCloseCodec: RkyvV2Codec<ResourceCloseInput, ResourceCloseOutput> = {
+  commandId: 22,
+
+  encode(args: ResourceCloseInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(ResourceCloseInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 22, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeVarint(args.handle));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: ResourceCloseOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<ResourceCloseOutput> = {};
+    {
+      result.closed = u8[offset] === 1;
+      offset += 1;
+    }
+    return { ok: true, result: result as ResourceCloseOutput };
+  },
+};
+
+export const resourceOpenCodec: RkyvV2Codec<ResourceOpenInput, ResourceHandleOutput> = {
+  commandId: 19,
+
+  encode(args: ResourceOpenInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(ResourceOpenInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 19, true);
+    parts.push(cmdId);
+    {
+      const _map = args.initial;
+      const _keys = Object.keys(_map).sort();
+      parts.push(_pcEncodeVarint(_keys.length));
+      for (const _k of _keys) {
+        const _v = _map[_k];
+        parts.push(_pcEncodeString(_k));
+        parts.push(_pcEncodeString(_v));
+      }
+    }
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: ResourceHandleOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<ResourceHandleOutput> = {};
+    {
+      const _v = _pcDecodeVarint(u8, offset);
+      result.handle = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as ResourceHandleOutput };
+  },
+};
+
+export const resourceReadCodec: RkyvV2Codec<ResourceReadInput, ResourceReadOutput> = {
+  commandId: 20,
+
+  encode(args: ResourceReadInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(ResourceReadInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 20, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeVarint(args.handle));
+    parts.push(_pcEncodeString(args.key));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: ResourceReadOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<ResourceReadOutput> = {};
+    {
+      result.found = u8[offset] === 1;
+      offset += 1;
+    }
+    {
+      const _tag = u8[offset];
+      offset += 1;
+      if (_tag === 0) {
+        result.value = null;
+      } else {
+        {
+          const _v = _pcDecodeString(u8, offset);
+          result.value = _v.value;
+          offset += _v.bytesRead;
+        }
+      }
+    }
+    return { ok: true, result: result as ResourceReadOutput };
+  },
+};
+
+export const resourceWriteCodec: RkyvV2Codec<ResourceWriteInput, ResourceWriteOutput> = {
+  commandId: 21,
+
+  encode(args: ResourceWriteInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(ResourceWriteInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 21, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeVarint(args.handle));
+    parts.push(_pcEncodeString(args.key));
+    parts.push(_pcEncodeString(args.value));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: ResourceWriteOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<ResourceWriteOutput> = {};
+    {
+      const _v = _pcDecodeZigzagVarint(u8, offset);
+      result.entries = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as ResourceWriteOutput };
   },
 };
 

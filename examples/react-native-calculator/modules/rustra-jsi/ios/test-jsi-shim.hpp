@@ -41,11 +41,20 @@ struct ArrayData;
 
 class Value {
 public:
-  enum class Kind { Undefined, Number, Bool, String, Object, Array };
+  enum class Kind { Undefined, Null, Number, Bool, String, Object, Array };
 
   Value() : kind_(Kind::Undefined) {}
   Value(double n) : kind_(Kind::Number), num_(n) {}
   Value(bool b) : kind_(Kind::Bool), bool_(b) {}
+
+  /// 실제 jsi::Value::null() 정적 팩토리 미러 — 생성 코드의 Option<T> 디코드
+  /// (태그 0 → null) emit 이 호출한다. kind Null 을 별도로 둔다.
+  static Value null() {
+    Value v;
+    v.kind_ = Kind::Null;
+    return v;
+  }
+  bool isNull() const { return kind_ == Kind::Null; }
 
   Value(Runtime&, double n) : kind_(Kind::Number), num_(n) {}
   Value(Runtime&, bool b) : kind_(Kind::Bool), bool_(b) {}

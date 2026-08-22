@@ -210,6 +210,58 @@ static jsi::Value decode_processItem(jsi::Runtime& rt, rc::Reader& r) {
   return std::move(resultObj);
 }
 
+static void encode_resourceClose(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(22); w.push_u8(0); // cmd_id = 22 LE
+  auto argsObj = args.asObject(rt);
+  { auto _v = argsObj.getProperty(rt, "handle").asNumber(); w.push_uvar((uint64_t)(int64_t)_v); }
+}
+
+static jsi::Value decode_resourceClose(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  resultObj.setProperty(rt, "closed", r.read_bool());
+  return std::move(resultObj);
+}
+
+static void encode_resourceOpen(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(19); w.push_u8(0); // cmd_id = 19 LE
+  auto argsObj = args.asObject(rt);
+  { auto _o = argsObj.getProperty(rt, "initial").asObject(rt); std::vector<std::pair<std::string, jsi::Value>> _entries; auto _names = _o.getPropertyNames(rt); for (size_t _j = 0; _j < _names.length(rt); _j++) { auto _k = _names.getValueAtIndex(rt, _j).getString(rt).utf8(rt); _entries.push_back({std::move(_k), _o.getProperty(rt, jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_k.data()), _k.size()))}); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_string(_e.getString(rt).utf8(rt)); } }
+}
+
+static jsi::Value decode_resourceOpen(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  resultObj.setProperty(rt, "handle", (double)r.read_uvar());
+  return std::move(resultObj);
+}
+
+static void encode_resourceRead(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(20); w.push_u8(0); // cmd_id = 20 LE
+  auto argsObj = args.asObject(rt);
+  { auto _v = argsObj.getProperty(rt, "handle").asNumber(); w.push_uvar((uint64_t)(int64_t)_v); }
+  { auto _v = argsObj.getProperty(rt, "key").getString(rt).utf8(rt); w.push_string(_v); }
+}
+
+static jsi::Value decode_resourceRead(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  resultObj.setProperty(rt, "found", r.read_bool());
+  { auto _tag = r.read_u8(); if (_tag == 0) { resultObj.setProperty(rt, "value", jsi::Value::null()); } else { { auto _s = r.read_string(); resultObj.setProperty(rt, "value", jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_s.data()), _s.size())); } } }
+  return std::move(resultObj);
+}
+
+static void encode_resourceWrite(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(21); w.push_u8(0); // cmd_id = 21 LE
+  auto argsObj = args.asObject(rt);
+  { auto _v = argsObj.getProperty(rt, "handle").asNumber(); w.push_uvar((uint64_t)(int64_t)_v); }
+  { auto _v = argsObj.getProperty(rt, "key").getString(rt).utf8(rt); w.push_string(_v); }
+  { auto _v = argsObj.getProperty(rt, "value").getString(rt).utf8(rt); w.push_string(_v); }
+}
+
+static jsi::Value decode_resourceWrite(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  resultObj.setProperty(rt, "entries", (double)r.read_i64());
+  return std::move(resultObj);
+}
+
 static void encode_rustraRegistryDemo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(12); w.push_u8(0); // cmd_id = 12 LE
   auto argsObj = args.asObject(rt);
@@ -339,6 +391,10 @@ bool encode_by_name(Runtime& rt, const std::string& name, const Value& args, rc:
   if (name == "isEven") { encode_isEven(rt, args, w); return true; }
   if (name == "multiply") { encode_multiply(rt, args, w); return true; }
   if (name == "processItem") { encode_processItem(rt, args, w); return true; }
+  if (name == "resourceClose") { encode_resourceClose(rt, args, w); return true; }
+  if (name == "resourceOpen") { encode_resourceOpen(rt, args, w); return true; }
+  if (name == "resourceRead") { encode_resourceRead(rt, args, w); return true; }
+  if (name == "resourceWrite") { encode_resourceWrite(rt, args, w); return true; }
   if (name == "rustraRegistryDemo") { encode_rustraRegistryDemo(rt, args, w); return true; }
   if (name == "scoreTotal") { encode_scoreTotal(rt, args, w); return true; }
   if (name == "secureCompute") { encode_secureCompute(rt, args, w); return true; }
@@ -360,6 +416,10 @@ Value decode_by_name(Runtime& rt, const std::string& name, rc::Reader& r) {
   if (name == "isEven") return decode_isEven(rt, r);
   if (name == "multiply") return decode_multiply(rt, r);
   if (name == "processItem") return decode_processItem(rt, r);
+  if (name == "resourceClose") return decode_resourceClose(rt, r);
+  if (name == "resourceOpen") return decode_resourceOpen(rt, r);
+  if (name == "resourceRead") return decode_resourceRead(rt, r);
+  if (name == "resourceWrite") return decode_resourceWrite(rt, r);
   if (name == "rustraRegistryDemo") return decode_rustraRegistryDemo(rt, r);
   if (name == "scoreTotal") return decode_scoreTotal(rt, r);
   if (name == "secureCompute") return decode_secureCompute(rt, r);
@@ -382,6 +442,10 @@ bool encode_by_id(Runtime& rt, uint16_t cmd_id, const Value& args, rc::Writer& w
     case 3: encode_isEven(rt, args, w); return true;
     case 2: encode_multiply(rt, args, w); return true;
     case 9: encode_processItem(rt, args, w); return true;
+    case 22: encode_resourceClose(rt, args, w); return true;
+    case 19: encode_resourceOpen(rt, args, w); return true;
+    case 20: encode_resourceRead(rt, args, w); return true;
+    case 21: encode_resourceWrite(rt, args, w); return true;
     case 12: encode_rustraRegistryDemo(rt, args, w); return true;
     case 15: encode_scoreTotal(rt, args, w); return true;
     case 13: encode_secureCompute(rt, args, w); return true;
@@ -405,6 +469,10 @@ Value decode_by_id(Runtime& rt, uint16_t cmd_id, rc::Reader& r) {
     case 3: return decode_isEven(rt, r);
     case 2: return decode_multiply(rt, r);
     case 9: return decode_processItem(rt, r);
+    case 22: return decode_resourceClose(rt, r);
+    case 19: return decode_resourceOpen(rt, r);
+    case 20: return decode_resourceRead(rt, r);
+    case 21: return decode_resourceWrite(rt, r);
     case 12: return decode_rustraRegistryDemo(rt, r);
     case 15: return decode_scoreTotal(rt, r);
     case 13: return decode_secureCompute(rt, r);
@@ -427,6 +495,10 @@ bool has_static_codec(const std::string& name) {
   if (name == "isEven") return true;
   if (name == "multiply") return true;
   if (name == "processItem") return true;
+  if (name == "resourceClose") return true;
+  if (name == "resourceOpen") return true;
+  if (name == "resourceRead") return true;
+  if (name == "resourceWrite") return true;
   if (name == "rustraRegistryDemo") return true;
   if (name == "scoreTotal") return true;
   if (name == "secureCompute") return true;

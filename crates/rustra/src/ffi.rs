@@ -1441,6 +1441,102 @@ impl Package {
     }
 }
 
+// ── 채널 FFI (타입 패리티 2단계 — Tauri ipc::Channel 모델) ──────────────
+// 호스트(C++ JSI 등)가 채널 핸들을 발급/해제하고, Rust 커맨드 핸들러가
+// `rustra_ffi_channel_send` 로 호출 귀속 역방향 스트림을 흘린다.
+// 이벤트 싱크(브로드캐스트)와 달리 채널은 유니캐스트 회신이다 —
+// crates/rustra/src/channels.rs 의 계약 문서 참고.
+
+/// 호스트 채널 수신 콜백 — `rustra_ffi_channel_create` 로 등록한다.
+///
+/// `handle` 는 발급 시 부여된 채널 번호(호스트가 핸들별 JS 콜백을 찾는 키),
+/// `payload` 는 NUL 종결 C 문자열(JSON — 이벤트 싱크와 동일 인코딩).
+/// 채널은 C-unwind 가 아니라 C ABI 다: `channels::ChannelHost::send` 가
+/// 콜백 패닉을 잡아 무시하므로 호스트 콜백은 unwind 하지 않아도 된다.
+pub type FfiChannelCallback =
+    unsafe extern "C" fn(user_data: *mut c_void, handle: u32, payload: *const c_char);
+
+/// FFI 채널 콜백 래퍼 — `FfiEventSink` 와 동일하게 호스트 소유 원시
+/// 포인터를 값으로만 옮긴다(역참조 없음 → `Send + Sync` 선언 안전).
+struct FfiChannelSink {
+    callback: FfiChannelCallback,
+    handle: u32,
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    user_data: *mut c_void,
+}
+
+unsafe impl Send for FfiChannelSink {}
+unsafe impl Sync for FfiChannelSink {}
+
+impl FfiChannelSink {
+    fn invoke(&self, payload: &str) {
+        let Ok(payload_c) = std::ffi::CString::new(payload) else {
+            return; // 내부 NUL — 이벤트 싱크와 동일하게 소실(로그 없음, 채널은 유니캐스트)
+        };
+        unsafe { (self.callback)(self.user_data, self.handle, payload_c.as_ptr()) };
+    }
+}
+
+/// 호스트 채널을 등록하고 새 핸들(≥1, 단조 증가)을 반환한다.
+///
+/// 커맨드 인자 `ChannelHandle(u32)` 로 이 값을 JS 에서 전달한다. 콜백의
+/// 두 번째 인자로 이 핸들이 다시 전달되므로 호스트는 핸들→JS 콜백
+/// 룩업만 하면 된다.
+///
+/// # Safety
+///
+/// `callback` 은 유효한 함수 포인터, `user_data` 는 호스트 소유(해제 책임은
+/// 호스트에 있다 — `rustra_ffi_channel_drop` 이 user_data 를 건드리지
+/// 않는다). 반환된 핸들은 `rustra_ffi_channel_drop` 전까지 유효하다.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_channel_create(
+    callback: FfiChannelCallback,
+    user_data: *mut c_void,
+) -> u32 {
+    // 두 단계: 핸들 선발급 → 핸들을 캡처한 콜백 등록. register_channel 이
+    // 핸들을 반환하므로 sink 생성 시점에 번호가 필요하다(선발급 후 insert).
+    let host = crate::channels::host();
+    let handle = host.reserve_handle();
+    let sink = std::sync::Arc::new(FfiChannelSink {
+        callback,
+        handle,
+        user_data,
+    });
+    let sender: crate::channels::ChannelSender =
+        std::sync::Arc::new(move |payload: &str| sink.invoke(payload));
+    host.register_channel_with_handle(handle, sender);
+    handle
+}
+
+/// 채널로 JSON 페이로드를 흘린다. 핸들이 유효하면 1(도달), 만료/미등록이면 0.
+///
+/// # Safety
+///
+/// `payload` 는 NUL 종결 문자열. 이 함수 자체는 안전하다(조용한 bool 반환).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_channel_send(handle: u32, payload: *const c_char) -> i32 {
+    let payload = if payload.is_null() {
+        String::new()
+    } else {
+        // Safety: caller guarantees NUL-terminated readable string.
+        unsafe { std::ffi::CStr::from_ptr(payload) }
+            .to_string_lossy()
+            .into_owned()
+    };
+    i32::from(crate::channels::host().send(handle, &payload))
+}
+
+/// 채널을 해제한다(호출 완료/취소 시). 성공 해제면 1, 없으면 0. 이후
+/// 동일 핸들 send 는 0 — 핸들 번호는 재사용되지 않는다.
+///
+/// # Safety
+///
+/// 이 함수 자체는 안전하다.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_channel_drop(handle: u32) -> i32 {
+    i32::from(crate::channels::host().drop_channel(handle))
+}
+
 // -- Tests ---------------------------------------------------------------
 
 #[cfg(test)]
@@ -1456,6 +1552,53 @@ mod tests {
                 Ok::<_, crate::RustraError>(serde_json::json!(a + b))
             })
             .build()
+    }
+
+    /// 채널 FFI 왕복 — C ABI 콜백으로 등록한 핸들에 send 가 도달하고,
+    /// drop 후에는 0(stale) 을 반환한다. 핸들 공간은 전역이므로 각 테스트가
+    /// 서로 독립된 핸들을 쓴다(단조 증가 보장). 콜백 두 번째 인자(handle)로
+    /// 발급 번호가 그대로 회신되는 것도 함께 검증한다.
+    #[test]
+    fn ffi_channel_round_trip() {
+        use std::sync::Mutex;
+        use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
+
+        static HITS: AtomicUsize = AtomicUsize::new(0);
+        static SEEN: Mutex<Vec<(u32, String)>> = Mutex::new(Vec::new());
+        static GOT_HANDLE: AtomicU32 = AtomicU32::new(0);
+
+        unsafe extern "C" fn cb(_ud: *mut c_void, handle: u32, payload: *const c_char) {
+            HITS.fetch_add(1, Ordering::Relaxed);
+            GOT_HANDLE.store(handle, Ordering::Relaxed);
+            let s = unsafe { std::ffi::CStr::from_ptr(payload) }
+                .to_string_lossy()
+                .into_owned();
+            SEEN.lock().unwrap().push((handle, s));
+        }
+
+        let handle = unsafe { rustra_ffi_channel_create(cb, std::ptr::null_mut()) };
+        assert!(handle >= 1, "핸들은 1부터 단조 증가");
+
+        let sent = unsafe {
+            let c = std::ffi::CString::new(r#"{"step":1,"of":2}"#).unwrap();
+            rustra_ffi_channel_send(handle, c.as_ptr())
+        };
+        assert_eq!(sent, 1);
+        assert_eq!(HITS.load(Ordering::Relaxed), 1);
+        // 콜백 회신 handle == 발급 handle — 호스트가 핸들→JS 콜백 룩업의 키.
+        assert_eq!(GOT_HANDLE.load(Ordering::Relaxed), handle);
+        assert_eq!(SEEN.lock().unwrap()[0].1, r#"{"step":1,"of":2}"#);
+
+        // drop 후 stale send 는 0 — 콜백 미도달.
+        assert_eq!(unsafe { rustra_ffi_channel_drop(handle) }, 1);
+        let stale = unsafe {
+            let c = std::ffi::CString::new("x").unwrap();
+            rustra_ffi_channel_send(handle, c.as_ptr())
+        };
+        assert_eq!(stale, 0);
+        assert_eq!(HITS.load(Ordering::Relaxed), 1, "stale send 는 콜백 미도달");
+        // double drop 은 0.
+        assert_eq!(unsafe { rustra_ffi_channel_drop(handle) }, 0);
     }
 
     #[test]

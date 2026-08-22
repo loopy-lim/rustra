@@ -5,6 +5,7 @@ import { configure } from "@rustra/types";
 import {
   addNumbers, greet, sumList, toUpper, isEven,
   createItem, processItem, multiply, clamp, sizeOf,
+  channelDemo, resourceOpen, resourceRead, resourceWrite, resourceClose,
 } from "../calculator/generated/commands";
 // ── Benchmark internals (not part of user-facing API) ───────
 import { installRustraJSI, getRustraNative } from "./modules/rustra-jsi/src";
@@ -388,6 +389,59 @@ async function runBenchmarks(): Promise<string[]> {
   log(`│  obj  rustra/Nitro = ${(rustraPair.avg / nitroPair.avg).toFixed(2)}x`);
   log("╚════════════════════════════════════════════════╝");
   log("");
+
+  // ── 채널/리소스 E2E (타입 패리티 2단계 — Tauri v2 모델) ──────────
+  // 채널: createChannel(cb) → 커맨드 인자 channel 로 핸들 전달 → Rust 가
+  // 역방향 스트림 → JS 콜백 도달 순서 검증 → dropChannel.
+  // 리소스: resource_open → read/write(정수 핸들만) → close → close 후
+  // typed 에러(resource.not_found) 확인.
+  try {
+    log("╔════════════════════════════════════════════════╗");
+    log("║  Channels & Resources (Tauri v2 model)        ║");
+    log("╠════════════════════════════════════════════════╣");
+    const native = getRustraNative();
+    if (native?.createChannel) {
+      const received: string[] = [];
+      const handle = native.createChannel((payloadJson: string) => {
+        received.push(payloadJson);
+      });
+      const chOut = await channelDemo({ channel: handle, ticks: 3 });
+      // 채널은 동기 send 다 — 커맨드 반환 시점에 이미 drain 됐을 수 있고,
+      // CallInvoker 배선이면 비동기 drain 이다. 최대 1초 기다린다.
+      for (let i = 0; i < 100 && received.length < 3; i++) {
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      log(`│  channel handle=${handle} sent=${chOut.sent} dropped=${chOut.droppedSends}`);
+      log(`│  channel received ${received.length} payloads`);
+      const first = JSON.parse(received[0] ?? "{}") as { step?: number };
+      const last = JSON.parse(received[received.length - 1] ?? "{}") as { step?: number };
+      log(`│  channel order: first.step=${first.step ?? "?"} last.step=${last.step ?? "?"}`);
+      const dropped = native.dropChannel?.(handle) ?? false;
+      log(`│  channel dropped=${dropped}`);
+    } else {
+      log("│  (createChannel 미지원 호스트 — 스킵)");
+    }
+
+    const opened = await resourceOpen({ initial: { seed: "1" } });
+    const readSeed = await resourceRead({ handle: opened.handle, key: "seed" });
+    const wrote = await resourceWrite({ handle: opened.handle, key: "extra", value: "42" });
+    const readExtra = await resourceRead({ handle: opened.handle, key: "extra" });
+    const closed = await resourceClose({ handle: opened.handle });
+    log(`│  resource handle=${opened.handle} read(seed)=${readSeed.value} entries=${wrote.entries}`);
+    log(`│  resource read(extra)=${readExtra.value} closed=${closed.closed}`);
+    try {
+      await resourceRead({ handle: opened.handle, key: "seed" });
+      log("│  resource post-close: ❌ 에러 없음(계약 위반)");
+    } catch (e) {
+      log(`│  resource post-close: ${(e as Error).message.includes("resource.not_found") ? "✓ resource.not_found" : "❌ " + (e as Error).message}`);
+    }
+    log("╚════════════════════════════════════════════════╝");
+    log("");
+  } catch (e) {
+    log(`│  channel/resource block failed: ${(e as Error).message}`);
+    log("╚════════════════════════════════════════════════╝");
+    log("");
+  }
 
   // ══════════════════════════════════════════════════════
   // Summary

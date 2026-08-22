@@ -44,6 +44,15 @@ export type RustraNative = {
   offEvent?(name: string): void;
   /** CallInvoker 없는 호스트의 수동 drain 폴백. 처리된 이벤트 수 반환. */
   drainEvents?(): number;
+  /**
+   * 채널 발급(타입 패리티 2단계 — Tauri ipc::Channel 모델). JS 콜백에
+   * u32 핸들을 배선해 반환한다 — 커맨드 인자 channel(ChannelHandle =
+   * number) 로 전달하면 Rust 가 그 핸들로 역방향 페이로드를 흘린다.
+   * 호출 완료/취소 시 dropChannel(handle) 로 해제한다(핸들 재사용 없음).
+   */
+  createChannel?(callback: (payloadJson: string) => void): number;
+  /** 채널 해제. 성공 true — 이후 동일 핸들 send 는 조용히 만료된다. */
+  dropChannel?(handle: number): boolean;
 };
 
 declare global {

@@ -633,7 +633,12 @@ pub fn calculator_package() -> Package {
                 size_of,
                 score_total,
                 span,
-                gauge
+                gauge,
+                channel_demo,
+                resource_open,
+                resource_read,
+                resource_write,
+                resource_close
             )
             .require_capability("secureCompute", "compute:secure")
             .build();
@@ -1324,10 +1329,250 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2_async(
     });
 }
 
+// ── 채널/리소스 커맨드 (2026-08-23 타입 패리티 2단계) ──────────────
+// Tauri v2 ipc::Channel·Resource 모델의 rustra 계약 버전. wire 에는 정수
+// 핸들(u32)만 실린다 — 콜백이나 객체 참조를 직렬화하지 않는다.
+//
+// - channel_demo: 커맨드 인자로 받은 ChannelHandle 로 역방향 스트림을
+//   흘린다(호출 귀속 회신 — 이벤트 emit 과 달리 단일 호출자에게만).
+// - resource_open/read/close: Rust-소유 KvResource 핸들. JS 는 정수 id
+//   로만 참조하고 소유권은 Rust 테이블에 있다(방향: Rust→TS 코드젠).
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelDemoInput {
+    /// 호스트가 발급한 채널 핸들 — JS 콜백이 이 번호에 배선돼 있다.
+    pub channel: rustra::channels::ChannelHandle,
+    pub ticks: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelDemoOutput {
+    pub sent: i32,
+    /// 만료된 핸들로의 send 시도 수(stale 무시 계약의 가시화).
+    pub dropped_sends: i32,
+}
+
+#[command]
+pub fn channel_demo(input: ChannelDemoInput) -> Result<ChannelDemoOutput> {
+    let mut sent = 0;
+    let mut dropped = 0;
+    for step in 0..input.ticks.max(0) {
+        let payload = serde_json::json!({ "step": step + 1, "of": input.ticks });
+        if input.channel.send(&payload.to_string()) {
+            sent += 1;
+        } else {
+            dropped += 1;
+        }
+    }
+    Ok(ChannelDemoOutput {
+        sent,
+        dropped_sends: dropped,
+    })
+}
+
+/// Rust-소유 키-값 저장소 리소스 — resource_open 이 발급하고 read/write/close
+/// 가 핸들로 접근한다. JS 표면은 { handle: number } 뿐이다.
+/// Tauri Resource 와 동일하게 상태는 Mutex 안에 있다(핸들 접근은 &self).
+pub struct KvResource {
+    entries: std::sync::Mutex<std::collections::BTreeMap<String, String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceOpenInput {
+    pub initial: std::collections::BTreeMap<String, String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceHandleOutput {
+    pub handle: rustra::channels::ResourceHandle,
+}
+
+#[command]
+pub fn resource_open(input: ResourceOpenInput) -> Result<ResourceHandleOutput> {
+    let handle = rustra::channels::host().register_resource(std::sync::Arc::new(KvResource {
+        entries: std::sync::Mutex::new(input.initial),
+    }));
+    Ok(ResourceHandleOutput {
+        handle: rustra::channels::ResourceHandle(handle),
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceReadInput {
+    pub handle: rustra::channels::ResourceHandle,
+    pub key: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceReadOutput {
+    pub found: bool,
+    pub value: Option<String>,
+}
+
+#[command]
+pub fn resource_read(input: ResourceReadInput) -> Result<ResourceReadOutput> {
+    let res = input
+        .handle
+        .get::<KvResource>()
+        .ok_or_else(|| RustraError::custom("resource.not_found", "unknown or closed handle"))?;
+    let entries = res.entries.lock().unwrap_or_else(|p| p.into_inner());
+    let value = entries.get(&input.key).cloned();
+    Ok(ResourceReadOutput {
+        found: value.is_some(),
+        value,
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceWriteInput {
+    pub handle: rustra::channels::ResourceHandle,
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceWriteOutput {
+    pub entries: usize,
+}
+
+#[command]
+pub fn resource_write(input: ResourceWriteInput) -> Result<ResourceWriteOutput> {
+    let res = input
+        .handle
+        .get::<KvResource>()
+        .ok_or_else(|| RustraError::custom("resource.not_found", "unknown or closed handle"))?;
+    let mut entries = res.entries.lock().unwrap_or_else(|p| p.into_inner());
+    entries.insert(input.key, input.value);
+    let entries = entries.len();
+    Ok(ResourceWriteOutput { entries })
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceCloseInput {
+    pub handle: rustra::channels::ResourceHandle,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceCloseOutput {
+    pub closed: bool,
+}
+
+#[command]
+pub fn resource_close(input: ResourceCloseInput) -> Result<ResourceCloseOutput> {
+    Ok(ResourceCloseOutput {
+        closed: rustra::channels::host().drop_resource(input.handle.0),
+    })
+}
+
 #[cfg(test)]
 #[allow(clippy::bool_assert_comparison, clippy::useless_vec)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// 채널 왕복: 커맨드 인자로 받은 핸들로 흘린 페이로드가 호스트 콜백에
+    /// 순서대로 도달한다(Tauri ipc::Channel 방향 — 네이티브→JS 스트림).
+    #[test]
+    fn channel_demo_streams_to_caller_channel() {
+        let hits = Arc::new(AtomicUsize::new(0));
+        let seen = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+        let (h2, s2) = (hits.clone(), seen.clone());
+        let handle_num = rustra::channels::host().register_channel(Arc::new(move |p| {
+            h2.fetch_add(1, Ordering::Relaxed);
+            s2.lock().unwrap().push(p.to_string());
+        }));
+
+        let out = channel_demo(ChannelDemoInput {
+            channel: rustra::channels::ChannelHandle(handle_num),
+            ticks: 3,
+        })
+        .unwrap();
+        assert_eq!(out.sent, 3);
+        assert_eq!(out.dropped_sends, 0);
+        assert_eq!(hits.load(Ordering::Relaxed), 3);
+        let got = seen.lock().unwrap().clone();
+        assert_eq!(got[0], r#"{"step":1,"of":3}"#);
+        assert_eq!(got[2], r#"{"step":3,"of":3}"#);
+
+        // 호출 종료(호스트 측 drop) 후 stale send 는 false — 핸들 재사용 없음.
+        assert!(rustra::channels::host().drop_channel(handle_num));
+    }
+
+    /// 채널 만료: 핸들이 이미 drop 된 상태에서의 호출은 dropped_sends 로
+    /// 가시화된다(조용한 무시 계약).
+    #[test]
+    fn channel_demo_counts_stale_sends() {
+        let handle_num = rustra::channels::host().register_channel(Arc::new(|_| {}));
+        assert!(rustra::channels::host().drop_channel(handle_num));
+        let out = channel_demo(ChannelDemoInput {
+            channel: rustra::channels::ChannelHandle(handle_num),
+            ticks: 2,
+        })
+        .unwrap();
+        assert_eq!(out.sent, 0);
+        assert_eq!(out.dropped_sends, 2);
+    }
+
+    /// 리소스 라이프사이클: open → write → read → close → close 후 not_found.
+    /// JS 표면은 정수 핸들뿐이고 소유권은 Rust 테이블에 있다.
+    #[test]
+    fn resource_kv_lifecycle() {
+        let mut initial = std::collections::BTreeMap::new();
+        initial.insert("seed".to_string(), "1".to_string());
+        let opened = resource_open(ResourceOpenInput { initial }).unwrap();
+        let handle = opened.handle;
+
+        let read = resource_read(ResourceReadInput {
+            handle,
+            key: "seed".into(),
+        })
+        .unwrap();
+        assert!(read.found);
+        assert_eq!(read.value.as_deref(), Some("1"));
+
+        let wrote = resource_write(ResourceWriteInput {
+            handle,
+            key: "extra".into(),
+            value: "42".into(),
+        })
+        .unwrap();
+        assert_eq!(wrote.entries, 2);
+
+        let read2 = resource_read(ResourceReadInput {
+            handle,
+            key: "extra".into(),
+        })
+        .unwrap();
+        assert_eq!(read2.value.as_deref(), Some("42"));
+
+        let closed = resource_close(ResourceCloseInput { handle }).unwrap();
+        assert!(closed.closed);
+
+        // close 후 접근은 typed 에러 — 이미 drop 된 리소스는 없다.
+        let err = resource_read(ResourceReadInput {
+            handle,
+            key: "seed".into(),
+        })
+        .unwrap_err();
+        assert_eq!(err.code(), "resource.not_found");
+        // double close 는 false(멱등).
+        assert!(
+            !resource_close(ResourceCloseInput { handle })
+                .unwrap()
+                .closed
+        );
+    }
 
     /// Windows(PE) 에는 Apple(`__mod_init_func`)/Linux(`.init_array`) 와 달리
     /// 라이브러리 constructor 가 없어 테스트 바이너리에서 FFI 전역 등록이
