@@ -1,0 +1,10 @@
+{
+  "version": 0,
+  "bundler": "metro",
+  "fileMetadata": {
+    "ios": {
+      "bundle": "_expo/static/js/ios/index-5a191062963b1c725545b4b09af3b649.hbc",
+      "assets": []
+    }
+  }
+}

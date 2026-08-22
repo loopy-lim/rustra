@@ -119,6 +119,19 @@ static jsi::Value decode_emitDemo(jsi::Runtime& rt, rc::Reader& r) {
   return std::move(resultObj);
 }
 
+static void encode_gauge(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(17); w.push_u8(0); // cmd_id = 17 LE
+  auto argsObj = args.asObject(rt);
+  { auto _v = argsObj.getProperty(rt, "limit").asNumber(); w.push_uvar((uint64_t)(int64_t)_v); }
+  { auto _v = argsObj.getProperty(rt, "offset").asNumber(); w.push_uvar((uint64_t)(int64_t)_v); }
+}
+
+static jsi::Value decode_gauge(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  resultObj.setProperty(rt, "next", (double)r.read_uvar());
+  return std::move(resultObj);
+}
+
 static void encode_greet(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(5); w.push_u8(0); // cmd_id = 5 LE
   auto argsObj = args.asObject(rt);
@@ -218,6 +231,19 @@ static jsi::Value decode_rustraRegistryDemo(jsi::Runtime& rt, rc::Reader& r) {
   return std::move(resultObj);
 }
 
+static void encode_scoreTotal(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(15); w.push_u8(0); // cmd_id = 15 LE
+  auto argsObj = args.asObject(rt);
+  { auto _o = argsObj.getProperty(rt, "scores").asObject(rt); std::vector<std::pair<std::string, jsi::Value>> _entries; auto _names = _o.getPropertyNames(rt); for (const auto& _name : _names) { auto _k = _name; _entries.push_back({std::move(_k), _o.getProperty(rt, _name)}); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_i64((int64_t)_e.asNumber()); } }
+}
+
+static jsi::Value decode_scoreTotal(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  resultObj.setProperty(rt, "count", (double)r.read_uvar());
+  resultObj.setProperty(rt, "total", (double)r.read_i64());
+  return std::move(resultObj);
+}
+
 static void encode_secureCompute(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(13); w.push_u8(0); // cmd_id = 13 LE
   auto argsObj = args.asObject(rt);
@@ -236,6 +262,35 @@ static void encode_pos_secureCompute(jsi::Runtime& rt, const jsi::Value* argv, s
 static jsi::Value decode_secureCompute(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
   resultObj.setProperty(rt, "value", (double)r.read_i64());
+  return std::move(resultObj);
+}
+
+static void encode_sizeOf(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(14); w.push_u8(0); // cmd_id = 14 LE
+  auto argsObj = args.asObject(rt);
+  { auto _v = argsObj.getProperty(rt, "data"); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_u8((uint8_t)(int64_t)_arr.getValueAtIndex(rt, _i).asNumber()); } else { auto _ab = _o.getArrayBuffer(rt); auto _d = _ab.data(rt); auto _n = _ab.length(rt); w.push_uvar(_n); w.push_bytes((const uint8_t*)_d, _n); } }
+}
+
+static jsi::Value decode_sizeOf(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  resultObj.setProperty(rt, "checksum", (double)r.read_uvar());
+  resultObj.setProperty(rt, "len", (double)r.read_uvar());
+  return std::move(resultObj);
+}
+
+static void encode_span(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(16); w.push_u8(0); // cmd_id = 16 LE
+  auto argsObj = args.asObject(rt);
+  { auto _arr = argsObj.getProperty(rt, "pair").asObject(rt).getArray(rt);
+    { auto _v = _arr.getValueAtIndex(rt, 0).getString(rt).utf8(rt); w.push_string(_v); }
+    { auto _v = _arr.getValueAtIndex(rt, 1).asNumber(); w.push_i64((int64_t)_v); }
+  }
+}
+
+static jsi::Value decode_span(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  { auto _s = r.read_string(); resultObj.setProperty(rt, "first", jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_s.data()), _s.size())); }
+  resultObj.setProperty(rt, "second", (double)r.read_i64());
   return std::move(resultObj);
 }
 
@@ -279,12 +334,16 @@ bool encode_by_name(Runtime& rt, const std::string& name, const Value& args, rc:
   if (name == "createItem") { encode_createItem(rt, args, w); return true; }
   if (name == "divide") { encode_divide(rt, args, w); return true; }
   if (name == "emitDemo") { encode_emitDemo(rt, args, w); return true; }
+  if (name == "gauge") { encode_gauge(rt, args, w); return true; }
   if (name == "greet") { encode_greet(rt, args, w); return true; }
   if (name == "isEven") { encode_isEven(rt, args, w); return true; }
   if (name == "multiply") { encode_multiply(rt, args, w); return true; }
   if (name == "processItem") { encode_processItem(rt, args, w); return true; }
   if (name == "rustraRegistryDemo") { encode_rustraRegistryDemo(rt, args, w); return true; }
+  if (name == "scoreTotal") { encode_scoreTotal(rt, args, w); return true; }
   if (name == "secureCompute") { encode_secureCompute(rt, args, w); return true; }
+  if (name == "sizeOf") { encode_sizeOf(rt, args, w); return true; }
+  if (name == "span") { encode_span(rt, args, w); return true; }
   if (name == "sumList") { encode_sumList(rt, args, w); return true; }
   if (name == "toUpper") { encode_toUpper(rt, args, w); return true; }
   return false; // 동적 명령 — JS 가 Tier 3 fallback 처리
@@ -296,12 +355,16 @@ Value decode_by_name(Runtime& rt, const std::string& name, rc::Reader& r) {
   if (name == "createItem") return decode_createItem(rt, r);
   if (name == "divide") return decode_divide(rt, r);
   if (name == "emitDemo") return decode_emitDemo(rt, r);
+  if (name == "gauge") return decode_gauge(rt, r);
   if (name == "greet") return decode_greet(rt, r);
   if (name == "isEven") return decode_isEven(rt, r);
   if (name == "multiply") return decode_multiply(rt, r);
   if (name == "processItem") return decode_processItem(rt, r);
   if (name == "rustraRegistryDemo") return decode_rustraRegistryDemo(rt, r);
+  if (name == "scoreTotal") return decode_scoreTotal(rt, r);
   if (name == "secureCompute") return decode_secureCompute(rt, r);
+  if (name == "sizeOf") return decode_sizeOf(rt, r);
+  if (name == "span") return decode_span(rt, r);
   if (name == "sumList") return decode_sumList(rt, r);
   if (name == "toUpper") return decode_toUpper(rt, r);
   throw JSError(rt, "rustra: no C++ codec for '" + name + "'");
@@ -314,12 +377,16 @@ bool encode_by_id(Runtime& rt, uint16_t cmd_id, const Value& args, rc::Writer& w
     case 8: encode_createItem(rt, args, w); return true;
     case 10: encode_divide(rt, args, w); return true;
     case 11: encode_emitDemo(rt, args, w); return true;
+    case 17: encode_gauge(rt, args, w); return true;
     case 5: encode_greet(rt, args, w); return true;
     case 3: encode_isEven(rt, args, w); return true;
     case 2: encode_multiply(rt, args, w); return true;
     case 9: encode_processItem(rt, args, w); return true;
     case 12: encode_rustraRegistryDemo(rt, args, w); return true;
+    case 15: encode_scoreTotal(rt, args, w); return true;
     case 13: encode_secureCompute(rt, args, w); return true;
+    case 14: encode_sizeOf(rt, args, w); return true;
+    case 16: encode_span(rt, args, w); return true;
     case 6: encode_sumList(rt, args, w); return true;
     case 7: encode_toUpper(rt, args, w); return true;
     default: return false; // 동적/알 수 없는 cmd_id — JS 가 Tier 3 fallback 처리
@@ -333,12 +400,16 @@ Value decode_by_id(Runtime& rt, uint16_t cmd_id, rc::Reader& r) {
     case 8: return decode_createItem(rt, r);
     case 10: return decode_divide(rt, r);
     case 11: return decode_emitDemo(rt, r);
+    case 17: return decode_gauge(rt, r);
     case 5: return decode_greet(rt, r);
     case 3: return decode_isEven(rt, r);
     case 2: return decode_multiply(rt, r);
     case 9: return decode_processItem(rt, r);
     case 12: return decode_rustraRegistryDemo(rt, r);
+    case 15: return decode_scoreTotal(rt, r);
     case 13: return decode_secureCompute(rt, r);
+    case 14: return decode_sizeOf(rt, r);
+    case 16: return decode_span(rt, r);
     case 6: return decode_sumList(rt, r);
     case 7: return decode_toUpper(rt, r);
     default: throw JSError(rt, "rustra: no C++ codec for cmd_id " + std::to_string(cmd_id));
@@ -351,12 +422,16 @@ bool has_static_codec(const std::string& name) {
   if (name == "createItem") return true;
   if (name == "divide") return true;
   if (name == "emitDemo") return true;
+  if (name == "gauge") return true;
   if (name == "greet") return true;
   if (name == "isEven") return true;
   if (name == "multiply") return true;
   if (name == "processItem") return true;
   if (name == "rustraRegistryDemo") return true;
+  if (name == "scoreTotal") return true;
   if (name == "secureCompute") return true;
+  if (name == "sizeOf") return true;
+  if (name == "span") return true;
   if (name == "sumList") return true;
   if (name == "toUpper") return true;
   return false;

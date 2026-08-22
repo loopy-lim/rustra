@@ -797,12 +797,14 @@ fn encode_rkyv_v2_error_wire_format() {
     assert_eq!(wire.message, "boom 💥");
 }
 
-// ── (Tier 3 정합) JS 코덱 미지원 명령의 와이어 통일 ──────────
+// ── (계약 갱신) map 명령의 fast-path 승격 ──────────────────
 //
-// map 필드(BTreeMap)를 가진 정적 명령은 JS 코드젠이 rkyv-registry 에서 제외하고
-// 엔진이 Tier 3(JSON-in-binary) 로 라우팅한다. Rust 도 같은 판정(js_postcard_codec_supported
-// 미러)으로 typed postcard fast-path 를 끄므로, map 명령은 요청/응답 모두
-// JSON-in-binary 프레임으로 통신해야 한다 — 양쪽 와이어 정합의 직접 증명.
+// 2026-08-22 타입 확장으로 HashMap<String, 원시값> 필드는 JS/Rust 양쪽 postcard
+// 코덱이 지원한다(count varint + (key,value)*; probe: {a:1,b:2} ->
+// [2, 1,98,4, 1,97,2]). 과거 map 은 Tier 3(JSON-in-binary) 강제였다 — 이제
+// postcard fast-path 로 승격됐고, 이 테스트가 그 와이어를 고정한다.
+// (여전히 미지원인 data enum(oneOf)의 Tier 3 라우팅은
+// oneof_command_uses_tier3_json_wire 로 검증한다.)
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -821,22 +823,60 @@ fn js_unsupported_cmd(input: JsUnsupportedIn) -> rustra::Result<JsUnsupportedOut
 }
 
 #[test]
-fn map_command_uses_tier3_json_wire_not_postcard() {
+fn map_command_uses_postcard_fast_path() {
     let pkg = Package::builder("wire.t3align.map")
         .command("mapTotal", js_unsupported_cmd)
         .build();
 
-    // Tier 3 요청 프레임: [cmd_id u16 LE][json utf8]
-    let req = common::tier3_request(1, r#"{"scores":{"a":10,"b":32}}"#);
-    let resp = pkg.invoke_rkyv_v2(&req).expect("tier3 invoke must succeed");
+    // postcard fast-path 요청: [cmd_id u16 LE][postcard({scores: {a:10,b:32}})]
+    let input = JsUnsupportedIn {
+        scores: BTreeMap::from([("a".into(), 10), ("b".into(), 32)]),
+    };
+    let req = common::postcard_request(1, &input);
+    let resp = pkg
+        .invoke_rkyv_v2(&req)
+        .expect("postcard invoke must succeed");
 
-    // 응답도 Tier 3 프레임이어야 한다: [ok:1][pad3][json_len u32 LE @4][json @8]
+    // postcard 응답: [ok:1][pad 7B][postcard(total i64)] — @8 이 zigzag(42)=84 1바이트.
     assert_eq!(resp[0], 1, "ok");
+    let out: JsUnsupportedOut = common::decode_postcard_response(&resp);
+    assert_eq!(out.total, 42);
+    assert_eq!(resp.len(), 9, "postcard frame: 8B header + 1B zigzag(42)");
+}
+
+// data enum(oneOf) — 여전히 Tier 3. schemars oneOf 는 unit variant 를 앞으로
+// 재배치해(probe 실증) postcard 선언순 variant index 를 스키마로 복원할 수
+// 없으므로, 양쪽 모두 JSON-in-binary 로만 계약이 성립한다.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct OneOfIn {
+    status: Status,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct OneOfOut {
+    label: String,
+}
+fn oneof_cmd(input: OneOfIn) -> rustra::Result<OneOfOut> {
+    let label = match input.status {
+        Status::Active { level } => format!("active:{level}"),
+        Status::Idle => "idle".to_string(),
+    };
+    Ok(OneOfOut { label })
+}
+
+#[test]
+fn oneof_command_uses_tier3_json_wire() {
+    let pkg = Package::builder("wire.t3align.oneof")
+        .command("oneofLabel", oneof_cmd)
+        .build();
+
+    let req = common::tier3_request(1, r#"{"status":{"active":{"level":7}}}"#);
+    let resp = pkg.invoke_rkyv_v2(&req).expect("tier3 invoke must succeed");
+    let json = common::decode_tier3_response(&resp);
+    assert_eq!(json["label"], "active:7");
+    // 응답이 JSON-in-binary 프레임이어야 한다(postcard 가 아니라).
     let json_len = u32::from_le_bytes(resp[4..8].try_into().unwrap()) as usize;
-    let json: Value =
-        serde_json::from_slice(&resp[8..8 + json_len]).expect("tier3 response body is JSON");
-    assert_eq!(json["total"], 42);
-    // postcard 프레임이었다면 @8 이 postcard(total i64 zigzag) = [0x54] 단 1바이트.
     assert!(
         json_len > 1,
         "response must be JSON-in-binary, not postcard"

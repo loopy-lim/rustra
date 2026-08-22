@@ -456,10 +456,13 @@ await installRustraJSI();
 configure(createRkyvV2Engine(getRustraNative(), rkyvV2Registry));
 
 // 사용 (어디서든)
-const result = await addNumbers({ a: 20, b: 22 }); // ~5.8µs
+const result = await addNumbers({ a: 20, b: 22 }); // JSI fast path
 ```
 
-성능: sync 3.8µs / async 5.8µs (JSON 31µs 대비 5.3x 빠름, Nitro 2.1µs 대비 2.8x)
+성능: full sync ~5.2µs / async ~2.4µs (JSON async 27µs 대비, Nitro async 1.9µs 대비 ~1.3x
+— 단일 프리미티브 호출 기준. 비교 범위와 기능 패리티 매트릭스는
+[벤치마크 문서](benchmarks.md) §"Nitro Modules 비교" 참고)
+— 2026-08-18 BenchmarkApp 기록, 측정 내역은 [벤치마크 문서](benchmarks.md) 참고
 
 **C++ 코덱 코드젠 (`--cpp-output`, 헤드라인 성능):** JS 측 코덱 왕복(~3.4µs)까지
 제거하려면 코드젠 시 C++ 코덱을 함께 생성해 네이티브 모듈에 컴파일한다:
@@ -490,13 +493,17 @@ const result = await addNumbers({ a: 20, b: 22 });
 
 ### 요약
 
-| 환경         | 어댑터 함수                             | transport 인자                        | 성능        |
-| ------------ | --------------------------------------- | ------------------------------------- | ----------- |
-| Node         | `createNodeEngine(transport)`           | `{ invoke(command, args) }`           | ~24 µs      |
-| Bun          | `createBunEngine(transport)`            | `{ invoke(command, args) }`           | ~27 µs      |
-| Tauri        | `createTauriEngine(options)`            | `{ invoke: tauriInvoke }`             | IPC 종속    |
-| React Native | `createRkyvV2Engine(native, registry)`  | JSI + postcard codecs                 | **~5.8 µs** |
-| React Native | `createReactNativeEngine(nativeModule)` | `NativeModule` (`invoke` 메서드 포함) | ~31 µs      |
+| 환경         | 어댑터 함수                             | transport 인자                        | 성능 (release)                        |
+| ------------ | --------------------------------------- | ------------------------------------- | ------------------------------------- |
+| Node         | `createNodeEngine(transport)`           | `{ invoke(command, args) }`           | ~1.5 µs (napi) / ~3.4 ms (subprocess) |
+| Bun          | `createBunEngine(transport)`            | `{ invoke(command, args) }`           | ~2.1 µs (FFI) / ~3.1 ms (subprocess)  |
+| Tauri        | `createTauriEngine(options)`            | `{ invoke: tauriInvoke }`             | IPC 종속                              |
+| React Native | `createRkyvV2Engine(native, registry)`  | JSI + postcard codecs                 | **sync ~5.2 µs**                      |
+| React Native | `createReactNativeEngine(nativeModule)` | `NativeModule` (`invoke` 메서드 포함) | ~52 µs (Expo async bridge)            |
+
+> Node/Bun의 ~24/27µs는 debug 네이티브 라이브러리를 로드했을 때 값이다 —
+> release 빌드에서는 µs 단위 미만으로 좁혀진다. 측정 세션별 수치는
+> [벤치마크 문서](benchmarks.md) 참고 (2026-08-22 재측정).
 
 모든 어댑터가 `EngineClient`를 반환하므로, 이후 코드는 환경에 상관없이 동일하다.
 

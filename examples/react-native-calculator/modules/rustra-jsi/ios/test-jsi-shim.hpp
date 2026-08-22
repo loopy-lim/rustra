@@ -97,6 +97,8 @@ struct ArrayData {
 };
 } // namespace detail
 
+class ArrayBuffer; // forward — Object::getArrayBuffer 반환형(정의는 아래)
+
 class Object {
 public:
   Object(Runtime&) : data_(std::make_shared<detail::ObjectData>()) {}
@@ -138,6 +140,17 @@ public:
   void setProperty(Runtime& rt, const char* name, const Object& o) { setProperty(rt, std::string(name), o); }
   void setProperty(Runtime& rt, const char* name, const Array& a);
 
+  // bytes 코덱 테스트용 — 정의는 클래스 외부(ArrayBuffer 정의 뒤).
+  inline class ArrayBuffer getArrayBuffer(Runtime&) const;
+
+  // 키 열거(정렬되지 않음) — map 코덱이 정렬하므로 순서는 무관.
+  std::vector<std::string> getPropertyNames(Runtime&) const {
+    std::vector<std::string> names;
+    names.reserve(data_->props.size());
+    for (const auto& kv : data_->props) names.push_back(kv.first);
+    return names;
+  }
+
   std::shared_ptr<detail::ObjectData> data_;
   // JS 에서 Array 는 Object 의 일종. Value(Array) → asObject → getArray 경로 지원용.
   std::shared_ptr<detail::ArrayData> arr_;
@@ -155,6 +168,10 @@ public:
   void setValueAtIndex(Runtime&, size_t i, Value v) { data_->items[i] = std::move(v); }
   void setValueAtIndex(Runtime& rt, size_t i, double n) { setValueAtIndex(rt, i, Value(n)); }
   void setValueAtIndex(Runtime& rt, size_t i, bool b) { setValueAtIndex(rt, i, Value(b)); }
+  void setValueAtIndex(Runtime& rt, size_t i, const String& s) {
+    Value v; v.kind_ = Value::Kind::String; v.str_ = s;
+    setValueAtIndex(rt, i, std::move(v));
+  }
 
   std::shared_ptr<detail::ArrayData> data_;
 };
@@ -172,6 +189,22 @@ inline Array Object::getArray(Runtime&) const {
 }
 
 inline Value::Value(const Object& o) : kind_(Kind::Object), obj_(o.data_), arr_(o.arr_) {}
+
+/// ArrayBuffer 최소 구현 — bytes(Vec<u8>) 코덱의 JS 표면. 실 RN 런타임은
+/// jsi::ArrayBuffer 를 제공한다(동일 data(rt)/length(rt) 계약).
+class ArrayBuffer {
+public:
+  ArrayBuffer() = default;
+  explicit ArrayBuffer(Runtime&, size_t n) : bytes_(n) {}
+  uint8_t* data(Runtime&) { return bytes_.data(); }
+  const uint8_t* data(Runtime&) const { return bytes_.data(); }
+  size_t length(Runtime&) const { return bytes_.size(); }
+
+private:
+  std::vector<uint8_t> bytes_;
+};
+
+inline ArrayBuffer Object::getArrayBuffer(Runtime&) const { return ArrayBuffer(); }
 inline Value::Value(const Array& a) : kind_(Kind::Array), arr_(a.data_) {}
 inline Value::Value(Runtime&, const Object& o) : kind_(Kind::Object), obj_(o.data_), arr_(o.arr_) {}
 inline Value::Value(Runtime&, const Array& a) : kind_(Kind::Array), arr_(a.data_) {}

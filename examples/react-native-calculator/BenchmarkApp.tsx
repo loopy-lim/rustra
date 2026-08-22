@@ -242,6 +242,27 @@ async function runBenchmarks(): Promise<string[]> {
   });
   log(`│  full sync avg: ${formatNs(fullSyncBench.avg).padStart(10)}  p50: ${formatNs(fullSyncBench.p50)}`);
 
+  // (Tier 1/2) 최적화 경로 측정 — positional 진입(invokeTypedPos)은 인자 객체
+  // 생성/JS 코덱 encode 를 통째로 건너뛴다. cmd_id 는 codec.commandId(=1).
+  if (typeof native.invokeTypedPos === "function") {
+    const posBench = measureSync("rkyvV2 pos", () => {
+      return (native as { invokeTypedPos(id: number, a: number, b: number): unknown })
+        .invokeTypedPos(codec.commandId, INPUT.a, INPUT.b);
+    });
+    log(`│  pos full avg: ${formatNs(posBench.avg).padStart(10)}  p50: ${formatNs(posBench.p50)}`);
+    // 주성분 분해 — full sync 대비 절감 = (encode+객체생성) 비용.
+    const saved = fullSyncBench.avg - posBench.avg;
+    log(`│  pos saves avg: ${formatNs(Math.max(0, saved)).padStart(9)} (encode+obj-alloc 제거)`);
+  }
+  // byId 경로(객체 인자 유지, 코어 caller-buffer受益) — Tier 1 _into 효과 격리.
+  if (typeof native.invokeTypedById === "function") {
+    const byIdBench = measureSync("rkyvV2 byId", () => {
+      return (native as { invokeTypedById(id: number, args: unknown): unknown })
+        .invokeTypedById(codec.commandId, INPUT);
+    });
+    log(`│  byId full avg: ${formatNs(byIdBench.avg).padStart(9)}  p50: ${formatNs(byIdBench.p50)}`);
+  }
+
   // 5. JSON encode
   const jsonEncodeBench = measureSync("JSON encode", () => {
     JSON.stringify({ command: "addNumbers", args: INPUT });
