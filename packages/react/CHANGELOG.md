@@ -1,5 +1,14 @@
 # @rustra/react
 
+## 0.2.1
+
+### Patch Changes
+
+- f77c2b8: chore(meta): npm 패키지 메타데이터 위생 정리 — sideEffects/engines 및 배포 산출물에서 테스트 파일 제외
+- Updated dependencies [f77c2b8]
+- Updated dependencies [f77c2b8]
+  - @rustra/types@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes
