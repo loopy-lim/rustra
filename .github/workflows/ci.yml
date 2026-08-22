@@ -128,6 +128,10 @@ jobs:
       # npm ci 는 예제 node_modules 을 설치하지 않는다(rn-android 와 동일 함정).
       - name: Install napi example deps
         run: cd examples/calculator-napi && npm install
+      # calculator tsconfig 이 @rustra/types dist 타입을 import 한다 — 빌드 선행
+      # (typescript 잡과 동일 순서 관례).
+      - name: Build @rustra/types first
+        run: cd packages/types && npm run build
       - name: Build calculator example
         run: cargo build -p rustra-calculator-example
       - name: Build napi addon (debug)
