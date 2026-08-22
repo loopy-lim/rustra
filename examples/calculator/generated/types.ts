@@ -1,11 +1,23 @@
 export type { EngineClient, RustraError } from '@rustra/types';
 export { RustraCommandError } from '@rustra/types';
 
+/**
+ * 커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.
+ * 
+ * 코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).
+ */
+export type ChannelHandle = number;
+
 export type Item = {
   active: boolean;
   name: string;
   value: number;
 };
+
+/**
+ * 커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.
+ */
+export type ResourceHandle = number;
 
 export type AddNumbersInput = {
   a: number;
@@ -14,6 +26,18 @@ export type AddNumbersInput = {
 
 export type AddNumbersOutput = {
   value: number;
+};
+
+export type ChannelDemoInput = {
+  /** 호스트가 발급한 채널 핸들 — JS 콜백이 이 번호에 배선돼 있다. */
+  channel: ChannelHandle;
+  ticks: number;
+};
+
+export type ChannelDemoOutput = {
+  sent: number;
+  /** 만료된 핸들로의 send 시도 수(stale 무시 계약의 가시화). */
+  droppedSends: number;
 };
 
 export type ClampInput = {
@@ -96,6 +120,42 @@ export type ProcessItemInput = {
 export type ProcessItemOutput = {
   doubled: boolean;
   item: Item;
+};
+
+export type ResourceCloseInput = {
+  handle: ResourceHandle;
+};
+
+export type ResourceCloseOutput = {
+  closed: boolean;
+};
+
+export type ResourceOpenInput = {
+  initial: Record<string, string>;
+};
+
+export type ResourceHandleOutput = {
+  handle: ResourceHandle;
+};
+
+export type ResourceReadInput = {
+  handle: ResourceHandle;
+  key: string;
+};
+
+export type ResourceReadOutput = {
+  found: boolean;
+  value?: string | null;
+};
+
+export type ResourceWriteInput = {
+  handle: ResourceHandle;
+  key: string;
+  value: string;
+};
+
+export type ResourceWriteOutput = {
+  entries: number;
 };
 
 export type RegistryDemoInput = {

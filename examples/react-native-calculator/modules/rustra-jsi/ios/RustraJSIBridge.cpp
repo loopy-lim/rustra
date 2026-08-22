@@ -319,6 +319,130 @@ size_t EventDispatcher::pendingCount() {
 // (클래스 정의는 헤더에 있으므로 여기는 static_assert 로 계약 문서화)
 static_assert(sizeof(EventDispatcher) > 0, "EventDispatcher must be complete");
 
+// ── ChannelDispatcher: 채널 핸들별 유니캐스트 회신 (타입 패리티 2단계) ──
+//
+// EventDispatcher 와 동일한 마샬링 구조다 — FFI 콜백(send 스레드)은 큐에
+// 적재만, JS 스레드 drain 이 callbacks_[handle] 호출. 차이점:
+// - 콜백 레지스트리 키가 이벤트 이름(브로드캐스트)이 아니라 핸들(유니캐스트).
+// - reset() 시 Rust 채널도 함께 drop — 채널은 호출 귀속이라 리로드된
+//   런타임의 핸들은 무의미하다(이벤트 리스너와 달리 재등록되지 않는다).
+
+static std::shared_ptr<ChannelDispatcher> g_channelDispatcher = nullptr;
+static std::mutex g_channelDispatcherMutex;
+
+static std::shared_ptr<ChannelDispatcher> getChannelDispatcher() {
+  std::lock_guard<std::mutex> lock(g_channelDispatcherMutex);
+  if (!g_channelDispatcher) {
+    g_channelDispatcher = std::make_shared<ChannelDispatcher>();
+  }
+  return g_channelDispatcher;
+}
+
+void ChannelDispatcher::setCallInvoker(std::shared_ptr<void> invoker) {
+  // mutex_ 없이 콜백 맵 정리(레지스트리는 JS 스레드 전용) 후 락 내부에서
+  // invoker 교체·채널 drop. drop 이 FFI 를 호출하므로 reset() 은 락 밖 실행.
+  std::vector<uint32_t> toDrop;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    callInvoker_ = std::move(invoker);
+    for (auto& [h, _cb] : callbacks_) toDrop.push_back(h);
+    callbacks_.clear();
+    queue_.clear();
+    drainScheduled_ = false;
+  }
+  // 리로드 대응: 귀속 채널 전부를 Rust 쪽에서도 drop(락 밖 — FFI 재진입 방지).
+  for (uint32_t h : toDrop) {
+    rustra_ffi_channel_drop(h);
+  }
+}
+
+uint32_t ChannelDispatcher::create(facebook::jsi::Runtime& rt,
+                                    facebook::jsi::Function callback) {
+  // JS 스레드에서만 호출됨(HostFunction 경유). FFI 가 핸들을 선발급하고
+  // 콜백이 그 핸들을 캡처해 회신하므로, 여기선 JS 콜백만 핸들 키로 등록.
+  (void)rt;
+  uint32_t handle = rustra_ffi_channel_create(&ChannelDispatcher::onChannelPayload, this);
+  if (handle == 0) return 0; // 발급 실패 sentinel — 사실상 도달하지 않는다.
+  callbacks_.insert_or_assign(handle, std::move(callback));
+  return handle;
+}
+
+bool ChannelDispatcher::drop(uint32_t handle) {
+  // JS 스레드 호출. Rust 채널 해제 후 콜백 제거. 해제 후 drain 에 이미
+  // 적재된 해당 핸들 페이로드는 콜백 부재로 무시된다(유니캐스트 만료).
+  int dropped = rustra_ffi_channel_drop(handle);
+  callbacks_.erase(handle);
+  return dropped == 1;
+}
+
+void ChannelDispatcher::onChannelPayload(void* user_data, uint32_t handle,
+                                          const char* payload) {
+  // send 스레드에서 호출 — JS 객체 미접근, 큐 적재 + drain 예약만.
+  auto* self = static_cast<ChannelDispatcher*>(user_data);
+  if (!self || !payload) return;
+
+  std::lock_guard<std::mutex> lock(self->mutex_);
+  if (self->queue_.size() >= self->capacity_) {
+    self->queue_.pop_front(); // drop-oldest — JS 가 느려도 send 스레드 비블록
+  }
+  // payload 는 NUL 종결 C 문자열 — FfiChannelSink 가 CString 으로 만들어
+  // 전달했으므로 여기서 복사해 소유한다(콜백 반환 후 무효).
+  self->queue_.emplace_back(handle, std::string(payload));
+  self->scheduleDrainLocked();
+}
+
+void ChannelDispatcher::drain(facebook::jsi::Runtime& rt) {
+  // JS 런타임 스레드에서만 호출(CallInvoker 콜백 또는 폴링).
+  std::deque<std::pair<uint32_t, std::string>> items;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    drainScheduled_ = false;
+    items.swap(queue_);
+  }
+  for (auto& [handle, payload] : items) {
+    auto it = callbacks_.find(handle);
+    if (it == callbacks_.end()) continue; // 만료 채널 — 조용히 무시
+    try {
+      // 페이로드는 JSON 문자열 그대로 JS 로 — 파싱은 TS 래퍼에서 1회.
+      it->second.call(rt, facebook::jsi::String::createFromUtf8(rt, payload));
+    } catch (const std::exception&) {
+      // JS 콜백 예외는 무시 — 이벤트 drain 과 동일 정책(호출자 보호).
+    }
+  }
+}
+
+void ChannelDispatcher::scheduleDrainLocked() {
+  if (drainScheduled_ || !callInvoker_) return;
+  drainScheduled_ = true;
+
+  auto self = shared_from_this();
+  std::shared_ptr<void> invoker = callInvoker_;
+  auto weak = std::weak_ptr<ChannelDispatcher>(self);
+#if defined(__APPLE__) || defined(__ANDROID__)
+  auto* nativeInvoker = static_cast<facebook::react::CallInvoker*>(invoker.get());
+  nativeInvoker->invokeAsync([weak](facebook::jsi::Runtime& rt) {
+    if (auto dispatcher = weak.lock()) {
+      dispatcher->drain(rt);
+    }
+  });
+#endif
+}
+
+void ChannelDispatcher::reset() {
+  // 리로드 대응 전체 폐기 — JS 콜백 맵·큐 클리어 후 Rust 채널 drop(락 밖).
+  std::vector<uint32_t> toDrop;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto& [h, _cb] : callbacks_) toDrop.push_back(h);
+    callbacks_.clear();
+    queue_.clear();
+    drainScheduled_ = false;
+  }
+  for (uint32_t h : toDrop) {
+    rustra_ffi_channel_drop(h);
+  }
+}
+
 // ── HostObject with cached functions ───────────────────────
 
 using InvokeFn = uint8_t*(*)(const uint8_t*, size_t, size_t*);
@@ -491,6 +615,43 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         return Value(static_cast<double>(before));
       });
     cache_["drainEvents"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+
+  // ── Channel: createChannel(cb) / dropChannel(handle) (타입 패리티 2단계) ──
+  // createChannel 은 JS 콜백에 u32 핸들을 발급해 되돌려준다 — JS 는 이 값을
+  // 커맨드 인자 channel(ChannelHandle = number) 로 그대로 전달한다.
+  // Rust 가 channel.send 하면 onChannelPayload → (드레인) → 등록한 cb(payload).
+  // 호출 완료/취소 시 dropChannel(handle) — 이후 send 는 조용히 만료(false).
+  {
+    auto dispatcher = getChannelDispatcher();
+    auto propNameId = PropNameID::forAscii(rt, "createChannel");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 1,
+      [dispatcher](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1 || !args[0].isObject() || !args[0].asObject(rt).isFunction(rt)) {
+          throw JSError(rt, "RustraJSI: createChannel requires (callback)");
+        }
+        Function cb = args[0].asObject(rt).getFunction(rt);
+        uint32_t handle = dispatcher->create(rt, std::move(cb));
+        return Value(static_cast<double>(handle));
+      });
+    cache_["createChannel"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+  {
+    auto dispatcher = getChannelDispatcher();
+    auto propNameId = PropNameID::forAscii(rt, "dropChannel");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 1,
+      [dispatcher](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1) {
+          throw JSError(rt, "RustraJSI: dropChannel requires (handle)");
+        }
+        uint32_t handle = static_cast<uint32_t>(args[0].asNumber());
+        return Value(dispatcher->drop(handle) ? true : false);
+      });
+    cache_["dropChannel"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
 
@@ -901,7 +1062,10 @@ void installRustraJSIWithInvoker(Runtime& rt,
   // 구 Runtime 힙을 참조하므로 여기서 반드시 비운다.
   g_arrayBufferCtor.reset();
   auto dispatcher = getEventDispatcher();
-  dispatcher->setCallInvoker(std::move(typeErasedCallInvoker));
+  dispatcher->setCallInvoker(typeErasedCallInvoker);
+  // 채널 디스패처도 동일 CallInvoker 공유(2단계) — reset 내부에서 이전
+  // 런타임 귀속 채널을 Rust 쪽까지 폐기한다.
+  getChannelDispatcher()->setCallInvoker(std::move(typeErasedCallInvoker));
 
   // 평탄화(Nitro 방식): 모든 호스트 함수를 일반 JS 객체의 프로퍼티로 설치
   // 시점에 박는다. 이후 native.invokeRkyvV2(...) 조회가 HostObject get 콜백

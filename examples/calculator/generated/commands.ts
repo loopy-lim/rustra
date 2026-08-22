@@ -1,4 +1,4 @@
-import type { AddNumbersInput, AddNumbersOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
 import { invoke } from '@rustra/types';
 import type { InvokeOptions } from '@rustra/types';
 
@@ -6,6 +6,11 @@ export function addNumbers(input: AddNumbersInput, options?: InvokeOptions): Pro
   return invoke<AddNumbersOutput>('addNumbers', input, options);
 }
 addNumbers.commandId = 'addNumbers';
+
+export function channelDemo(input: ChannelDemoInput, options?: InvokeOptions): Promise<ChannelDemoOutput> {
+  return invoke<ChannelDemoOutput>('channelDemo', input, options);
+}
+channelDemo.commandId = 'channelDemo';
 
 export function clamp(input: ClampInput, options?: InvokeOptions): Promise<ClampOutput> {
   return invoke<ClampOutput>('clamp', input, options);
@@ -51,6 +56,26 @@ export function processItem(input: ProcessItemInput, options?: InvokeOptions): P
   return invoke<ProcessItemOutput>('processItem', input, options);
 }
 processItem.commandId = 'processItem';
+
+export function resourceClose(input: ResourceCloseInput, options?: InvokeOptions): Promise<ResourceCloseOutput> {
+  return invoke<ResourceCloseOutput>('resourceClose', input, options);
+}
+resourceClose.commandId = 'resourceClose';
+
+export function resourceOpen(input: ResourceOpenInput, options?: InvokeOptions): Promise<ResourceHandleOutput> {
+  return invoke<ResourceHandleOutput>('resourceOpen', input, options);
+}
+resourceOpen.commandId = 'resourceOpen';
+
+export function resourceRead(input: ResourceReadInput, options?: InvokeOptions): Promise<ResourceReadOutput> {
+  return invoke<ResourceReadOutput>('resourceRead', input, options);
+}
+resourceRead.commandId = 'resourceRead';
+
+export function resourceWrite(input: ResourceWriteInput, options?: InvokeOptions): Promise<ResourceWriteOutput> {
+  return invoke<ResourceWriteOutput>('resourceWrite', input, options);
+}
+resourceWrite.commandId = 'resourceWrite';
 
 export function rustraRegistryDemo(input: RegistryDemoInput, options?: InvokeOptions): Promise<RegistryDemoOutput> {
   return invoke<RegistryDemoOutput>('rustraRegistryDemo', input, options);

@@ -49,10 +49,13 @@ rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)�
       bytes(ArrayBuffer 표면), chrono Date(ISO string), Set<unsigned> —
       3면(TS·Rust·C++) 코드젠 + PINNED hex 와이어 게이트. 잔여: bigint TS
       표면(number 유지, 2^53 한계), data enum(oneOf 순서 비결정 → Tier 3 확정)
-- [ ] 타입 패리티 2단계 — 채널/리소스 (Tauri v2 `ipc::Channel`·`Resource`
-      모델): 콜백을 직렬화 가능한 채널 핸들로, 객체 참조를 Rust-소유 리소스
-      핸들 + 코드젠 메서드로 — Nitro의 TS-first 객체 브릿지가 아니라
-      Rust-first 계약 안에서 소유권을 유지하는 방식
+- [x] 타입 패리티 2단계 — 채널/리소스 (Tauri v2 `ipc::Channel`·`Resource`
+      모델, 2026-08-23): 콜백을 직렬화 가능한 채널 핸들(u32, 호출 귀속
+      유니캐스트 회신)로, 객체 참조를 Rust-소유 리소스 핸들(`channels.rs`
+      `ChannelHost` 테이블, 코드젠 커맨드로 read/write/close)로. wire는
+      정수 핸들뿐이라 계약 게이트·양방향 코드젠·멀티호스트 일관성 유지.
+      RN JSI `createChannel(cb)`/`dropChannel(h)` 배선 + Rust FFI
+      `rustra_ffi_channel_{create,send,drop}` — 시뮬레이터 E2E 검증 완료
 - [ ] async 커맨드 핸들러 (워커 풀은 완료, 핸들러 trait 비동기화는 진행 중)
 - [ ] Windows 런타임 검증 (CI 확장 단계)
 - [ ] 프리빌트 바이너리 배포 (npx 설치 시 cargo 불필요)

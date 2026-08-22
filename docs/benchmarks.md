@@ -387,23 +387,23 @@ RPC 계약"으로 설계 목표가 다르다. 같은 문제만 겹친다(RN에�
 
 #### 타입 시스템
 
-| 타입                   | Nitro 0.35.6                                   | rustra (postcard/rkyv V2 fast path)                                                                                                                 | rustra 폴백(Tier 3 JSON) |
-| ---------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| 정수/실수 프리미티브   | ✅ int/float/double + **bigint(Int64/UInt64)** | ✅ f64/f32/zigzag 정수 + **uvar(u8–u64) plain varint** — bigint 표면은 ❌(number, 2^53 한계)                                                        | ✅ (serde JSON)          |
-| string                 | ✅                                             | ✅                                                                                                                                                  | ✅                       |
-| bool / unit(void)      | ✅                                             | ✅                                                                                                                                                  | ✅                       |
-| 배열 Vec<T>            | ✅ Vector                                      | ✅ vec\_\*(정수 부호별/f64/bool/string/struct) + **Vec<u8>=bytes(len+raw)**                                                                         | ✅                       |
-| Set                    | — (Vector로)                                   | ✅ set\_\* (부호별)                                                                                                                                 | ✅                       |
-| 튜플                   | ✅ Tuple                                       | ✅ **tuple(무접두 나열)** — 2026-08-22 fast-path 승격                                                                                               | ✅                       |
-| 맵 Record<string,T>    | ✅ AnyMap/UnorderedMap                         | ✅ **map\_\*(원시값 맵 count+(k,v)\*)** — 2026-08-22 승격. struct-값 맵은 폴백                                                                      | ✅                       |
-| Option<T>              | ✅                                             | ✅ option\_\* (+option_uvar/option_bytes)                                                                                                           | ✅                       |
-| enum(union variant)    | ✅ Variant                                     | ⚠️ string enum ✅, **data enum(oneOf)은 폴백 확정** — schemars oneOf 가 unit variant 를 앞으로 재배치해 postcard 선언순 index 복원 불가(probe 실증) | ✅                       |
-| 구조체(중첩 포함)      | ✅ (객체)                                      | ✅ $ref 재귀 — 미지원 필드 있으면 폴백                                                                                                              | ✅                       |
-| Date                   | ✅                                             | ✅ chrono DateTime — postcard 는 ISO string 그대로(string kind로 자연 지원, probe 실증)                                                             | ✅                       |
-| ArrayBuffer/TypedArray | ✅ (+ createNativeArrayBuffer)                 | ✅ **Vec<u8> bytes** — TS 표면 number[], C++ 는 ArrayBuffer/배열 양쪽 수용                                                                          | ✅                       |
-| Promise<T> (네이티브)  | ✅                                             | ⚠️ JS 래핑(async 엔진 레벨, 코어는 동기)                                                                                                            | 동일                     |
-| 콜백/함수 인자         | ✅ Function                                    | ❌                                                                                                                                                  | ❌                       |
-| 하이브리드 객체 참조   | ✅ NativeState/HybridObject/dispose            | ❌ (RPC 모델 — 객체 참조 없음)                                                                                                                      | ❌                       |
+| 타입                   | Nitro 0.35.6                                   | rustra (postcard/rkyv V2 fast path)                                                                                                                       | rustra 폴백(Tier 3 JSON) |
+| ---------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| 정수/실수 프리미티브   | ✅ int/float/double + **bigint(Int64/UInt64)** | ✅ f64/f32/zigzag 정수 + **uvar(u8–u64) plain varint** — bigint 표면은 ❌(number, 2^53 한계)                                                              | ✅ (serde JSON)          |
+| string                 | ✅                                             | ✅                                                                                                                                                        | ✅                       |
+| bool / unit(void)      | ✅                                             | ✅                                                                                                                                                        | ✅                       |
+| 배열 Vec<T>            | ✅ Vector                                      | ✅ vec\_\*(정수 부호별/f64/bool/string/struct) + **Vec<u8>=bytes(len+raw)**                                                                               | ✅                       |
+| Set                    | — (Vector로)                                   | ✅ set\_\* (부호별)                                                                                                                                       | ✅                       |
+| 튜플                   | ✅ Tuple                                       | ✅ **tuple(무접두 나열)** — 2026-08-22 fast-path 승격                                                                                                     | ✅                       |
+| 맵 Record<string,T>    | ✅ AnyMap/UnorderedMap                         | ✅ **map\_\*(원시값 맵 count+(k,v)\*)** — 2026-08-22 승격. struct-값 맵은 폴백                                                                            | ✅                       |
+| Option<T>              | ✅                                             | ✅ option\_\* (+option_uvar/option_bytes)                                                                                                                 | ✅                       |
+| enum(union variant)    | ✅ Variant                                     | ⚠️ string enum ✅, **data enum(oneOf)은 폴백 확정** — schemars oneOf 가 unit variant 를 앞으로 재배치해 postcard 선언순 index 복원 불가(probe 실증)       | ✅                       |
+| 구조체(중첩 포함)      | ✅ (객체)                                      | ✅ $ref 재귀 — 미지원 필드 있으면 폴백                                                                                                                    | ✅                       |
+| Date                   | ✅                                             | ✅ chrono DateTime — postcard 는 ISO string 그대로(string kind로 자연 지원, probe 실증)                                                                   | ✅                       |
+| ArrayBuffer/TypedArray | ✅ (+ createNativeArrayBuffer)                 | ✅ **Vec<u8> bytes** — TS 표면 number[], C++ 는 ArrayBuffer/배열 양쪽 수용                                                                                | ✅                       |
+| Promise<T> (네이티브)  | ✅                                             | ⚠️ JS 래핑(async 엔진 레벨, 코어는 동기)                                                                                                                  | 동일                     |
+| 콜백/함수 인자         | ✅ Function                                    | ✅ **채널 핸들**(Tauri `ipc::Channel` 모델, 2026-08-23) — u32 핸들 인자, 호출 귀속 유니캐스트 회신, RN JSI `createChannel`/`dropChannel`                  | 동일                     |
+| 하이브리드 객체 참조   | ✅ NativeState/HybridObject/dispose            | ✅ **리소스 핸들**(Tauri `Resource` 모델, 2026-08-23) — Rust-소유 테이블(`channels::ChannelHost`), JS 는 정수 id 로만 참조, close 후 `resource.not_found` | 동일                     |
 
 #### 런타임/플랫폼
 
@@ -443,13 +443,21 @@ RPC 계약"으로 설계 목표가 다르다. 같은 문제만 겹친다(RN에�
    남은 것: **bigint TS 표면**(현재 number — 2^53 정밀도 한계 문서화됨)과
    **data enum**(oneOf 순서 비결정성으로 Tier 3 폴백 확정 — postcard
    variant index는 Rust 선언순이나 schemars 가 재배치).
-2. **채널/리소스로 재정의** (로드맵 2단계) — 콜백과 객체 참조. Nitro처럼
-   JS-first 객체 브릿지를 만드는 게 아니라, Tauri v2의 `ipc::Channel<T>`(콜백
-   을 직렬화 가능한 채널 핸들로)·`Resource`(객체를 Rust-소유 핸들 id로 노출,
-   메서드는 코드젠) 모델을 rustra 계약 안으로 가져오는 방향. wire에 실리는
-   것은 정수 핸들이므로 계약 게이트·양방향 코드젠·멀티호스트 일관성이 그대로
-   유지된다 — 코드젠 방향이 반대(Nitro는 TS→네이티브, rustra는 Rust→TS)라는
-   차이도 이 방향에서는 그대로 살아있다.
+2. **채널/리소스로 재정의** (2026-08-23 2단계 완료) — 콜백과 객체 참조.
+   Nitro처럼 JS-first 객체 브릿지를 만드는 게 아니라, Tauri v2의
+   `ipc::Channel<T>`(콜백을 직렬화 가능한 채널 핸들로)·`Resource`(객체를
+   Rust-소유 핸들 id로 노출, 메서드는 코드젠) 모델을 rustra 계약 안으로
+   가져왔다. 구현: 코어 `channels.rs`(전역 `ChannelHost` 테이블 — u32 단조
+   핸들, 재사용 없음, stale send 는 조용한 false), FFI
+   `rustra_ffi_channel_{create,send,drop}`(콜백이 자기 핸들을 회신),
+   RN JSI `createChannel(cb)`/`dropChannel(h)` + `ChannelDispatcher`
+   (EventDispatcher 와 동일한 큐+CallInvoker 마샬링), calculator 예제
+   `channelDemo`/`resourceOpen/Read/Write/Close`(KvResource, Mutex 상태).
+   wire에 실리는 것은 정수 핸들이므로 계약 게이트·양방향 코드젠·멀티호스트
+   일관성이 그대로 유지된다 — 코드젠 방향이 반대(Nitro는 TS→네이티브,
+   rustra는 Rust→TS)라는 차이도 이 방향에서는 그대로 살아있다. 시뮬레이터
+   E2E: 채널 3페이로드 순서 보존 + drop, 리소스 open→read→write→close 후
+   `resource.not_found`.
 3. **범위 밖 확정** — HybridView(UI 네이티브 뷰). 로직 레이어 전용이라는
    프로젝트 정의와 충돌하며, 계약으로 직렬화되지 않는 표면이다.
 
