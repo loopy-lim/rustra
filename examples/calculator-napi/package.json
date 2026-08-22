@@ -6,7 +6,7 @@
     "binaryName": "calculator-napi"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^3"
+    "@napi-rs/cli": "^3.8.6"
   },
   "scripts": {
     "build": "napi build --platform --release",
