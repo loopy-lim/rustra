@@ -13,9 +13,8 @@
 
 use rustra_calculator_example::{
     AddNumbersInput, rustra_calculator_free_buffer, rustra_calculator_free_rkyv_v2_buffer,
-    rustra_calculator_free_string,
-    rustra_calculator_init, rustra_calculator_invoke, rustra_calculator_invoke_postcard,
-    rustra_calculator_invoke_rkyv_v2,
+    rustra_calculator_free_string, rustra_calculator_init, rustra_calculator_invoke,
+    rustra_calculator_invoke_postcard, rustra_calculator_invoke_rkyv_v2,
 };
 use serde::{Deserialize, Serialize};
 

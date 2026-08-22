@@ -36,4 +36,13 @@ facebook::jsi::Value decode_by_id(facebook::jsi::Runtime& rt, uint16_t cmd_id,
 /// codegen 시점에 알려진 정적 명령 이름 집합(Tier 3 fallback 분기용).
 bool has_static_codec(const std::string& name);
 
+/// (Tier 1) positional 인자 직접 인코딩 가능한 cmd_id 여부.
+bool has_pos_codec(uint16_t cmd_id);
+
+/// (Tier 1) 개별 Value 인자 → postcard 바이트 (invokeTypedPos 진입).
+/// argc 일치는 호출부(RustraJSIBridge)가 검증한다. 미발견 시 JSError.
+void encode_pos_by_id(facebook::jsi::Runtime& rt, uint16_t cmd_id,
+                      const facebook::jsi::Value* argv, size_t argc,
+                      rustra::codec::Writer& w);
+
 } // namespace rustra::generated

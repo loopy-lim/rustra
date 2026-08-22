@@ -1285,6 +1285,62 @@ function cppEncodeCommand(
   return lines.join('\n') + '\n';
 }
 
+/**
+ * (Tier 1) positional C++ encode 변형 — JS 인자 객체/프로퍼티 조회 없이
+ * HostFunction 의 개별 Value 인자에서 직접 Writer 에 기록한다.
+ * 조건: 필드가 3개 이하 + 스칼라(zigzag/f64/f32/bool/string/enum_str)만 —
+ * 배열/구조체 인자는 여전히 객체 경유가 자연스럽다.
+ * 산출 바이트는 encode_${fnName} 과 항상 동일(와이어 불변).
+ */
+function cppEncodePosCommand(
+  command: CommandSchema,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+): string | null {
+  const fnName = commandFunctionName(command.name);
+  const { fields } = collectPostcardFields(command.inputSchema, definitions);
+  const positionalKinds = new Set(['zigzag', 'f64', 'f32', 'bool', 'string', 'enum_str']);
+  if (fields.length === 0 || fields.length > 3) return null;
+  if (!fields.every((f) => positionalKinds.has(f.kind))) return null;
+
+  const id = command.commandId;
+  const lines: string[] = [];
+  lines.push(
+    `// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 ${fields.length}회 제거.`,
+  );
+  lines.push(
+    `static void encode_pos_${fnName}(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {`,
+  );
+  lines.push(
+    `  w.push_u8(${id & 0xff}); w.push_u8(${(id >> 8) & 0xff}); // cmd_id = ${id} LE`,
+  );
+  lines.push(`  (void)argc;`);
+  fields.forEach((f, i) => {
+    const v = `argv[${i}]`;
+    switch (f.kind) {
+      case 'zigzag':
+        lines.push(`  w.push_i64((int64_t)${v}.asNumber());`);
+        break;
+      case 'f64':
+      case 'f32':
+        lines.push(`  w.push_f64(${v}.asNumber());`);
+        break;
+      case 'bool':
+        lines.push(`  w.push_bool(${v}.asBool());`);
+        break;
+      case 'string':
+      case 'enum_str':
+        lines.push(
+          `  { auto _s = ${v}.asString(rt).utf8(rt); w.push_string(_s); }`,
+        );
+        break;
+      default:
+        break;
+    }
+  });
+  lines.push(`}`);
+  return lines.join('\n') + '\n';
+}
+
 /** 명령 하나의 C++ decode 함수: Reader(postcard body) → JSI Object. */
 function cppDecodeCommand(
   command: CommandSchema,
@@ -1339,6 +1395,13 @@ export function generateRkyvCodecsHpp(_schema: PackageSchema): string {
     `                                 rustra::codec::Reader& r);\n\n` +
     `/// codegen 시점에 알려진 정적 명령 이름 집합(Tier 3 fallback 분기용).\n` +
     `bool has_static_codec(const std::string& name);\n\n` +
+    `/// (Tier 1) positional 인자 직접 인코딩 가능한 cmd_id 여부.\n` +
+    `bool has_pos_codec(uint16_t cmd_id);\n\n` +
+    `/// (Tier 1) 개별 Value 인자 → postcard 바이트 (invokeTypedPos 진입).\n` +
+    `/// argc 일치는 호출부(RustraJSIBridge)가 검증한다. 미발견 시 JSError.\n` +
+    `void encode_pos_by_id(facebook::jsi::Runtime& rt, uint16_t cmd_id,\n` +
+    `                      const facebook::jsi::Value* argv, size_t argc,\n` +
+    `                      rustra::codec::Writer& w);\n\n` +
     `} // namespace rustra::generated\n`
   );
 }
@@ -1392,6 +1455,8 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   lines.push(``);
   for (const command of supported) {
     lines.push(cppEncodeCommand(command, definitions));
+    const pos = cppEncodePosCommand(command, definitions);
+    if (pos) lines.push(pos);
     lines.push(cppDecodeCommand(command, definitions));
   }
   lines.push(`namespace rustra::generated {`);
@@ -1429,6 +1494,47 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   lines.push(`  return false;`);
   lines.push(`}`);
   lines.push(``);
+  // (Tier 1) positional encode dispatch — invokeTypedPos(cmdId, a, b, …) 진입이
+  // cmd_id 로 직접 분기. 조건 미충족(필드 4+/배열 등) 명령은 목록에 없다 —
+  // JS 엔진이 invokeTypedById 로 폴백한다.
+  const posCommands = supported
+    .map((c) => ({ cmd: c, code: cppEncodePosCommand(c, definitions) }))
+    .filter((x): x is { cmd: CommandSchema; code: string } => x.code !== null);
+  if (posCommands.length > 0) {
+    lines.push(
+      `/// (Tier 1) positional 인자를 직접 인코딩 가능한 cmd_id 집합 — JS 폴백 판별용.`,
+    );
+    lines.push(`bool has_pos_codec(uint16_t cmd_id) {`);
+    lines.push(
+      posCommands
+        .map((x) => `  if (cmd_id == ${x.cmd.commandId}) return true;`)
+        .join('\n'),
+    );
+    lines.push(`  return false;`);
+    lines.push(`}`);
+    lines.push(``);
+    lines.push(
+      `/// (Tier 1) 개별 Value 인자 → postcard 바이트. argc 는 호출부가 검증했다.`,
+    );
+    lines.push(
+      `void encode_pos_by_id(jsi::Runtime& rt, uint16_t cmd_id, const jsi::Value* argv, size_t argc, rc::Writer& w) {`,
+    );
+    lines.push(`  switch (cmd_id) {`);
+    lines.push(
+      posCommands
+        .map(
+          (x) =>
+            `    case ${x.cmd.commandId}: encode_pos_${commandFunctionName(x.cmd.name)}(rt, argv, argc, w); return;`,
+        )
+        .join('\n'),
+    );
+    lines.push(
+      `    default: throw JSError(rt, "rustra: no positional codec for cmd_id " + std::to_string(cmd_id));`,
+    );
+    lines.push(`  }`);
+    lines.push(`}`);
+    lines.push(``);
+  }
   lines.push(`} // namespace rustra::generated`);
   return lines.join('\n') + '\n';
 }
@@ -1468,11 +1574,13 @@ export function generatePositionalFacadeTs(schema: PackageSchema): string {
   }
   output += `import type { InvokeOptions } from '@rustra/types';\n\n`;
   output +=
-    `/** JSI 네이티브 모듈의 최소 인터페이스 — invokeTypedById 노출 호스트 권장. */\n` +
+    `/** JSI 네이티브 모듈의 최소 인터페이스 — invokeTypedPos 노출 호스트 권장. */\n` +
     `export type PositionalNative = {\n` +
     `  invokeTyped(name: string, args: unknown): unknown;\n` +
     `  /** (P0-3) cmd_id 진입 — 문자열 마샬링을 건너뛴다. 미노출이면 이름 기반으로 폴백. */\n` +
     `  invokeTypedById?(cmdId: number, args: unknown): unknown;\n` +
+    `  /** (Tier 1) positional 진입 — JS 인자 객체 생성/프로퍼티 조회를 통째로 건너뛴다. */\n` +
+    `  invokeTypedPos?(cmdId: number, ...fields: unknown[]): unknown;\n` +
     `};\n\n` +
     `let _native: PositionalNative | null = null;\n\n` +
     `/** 앱 시작 시 JSI 네이티브를 주입한다 (installRustraJSI 이후). */\n` +
@@ -1492,6 +1600,17 @@ export function generatePositionalFacadeTs(schema: PackageSchema): string {
     `    return native.invokeTypedById(cmdId, args) as T;\n` +
     `  }\n` +
     `  return native.invokeTyped(name, args) as T;\n` +
+    `}\n\n` +
+    `/** (Tier 1) positional 진입 — 개별 인자를 그대로 넘긴다(객체 생성 0). */\n` +
+    `function callPos<T>(cmdId: number, ...fields: unknown[]): T {\n` +
+    `  const native = requireNative();\n` +
+    `  if (native.invokeTypedPos) {\n` +
+    `    return native.invokeTypedPos(cmdId, ...fields) as T;\n` +
+    `  }\n` +
+    `  // 구 네이티브 폴백: 필드 순서는 스키마 프로퍼티 순(생성 시점 필드 리스트)과 동일.\n` +
+    `  throw new Error(\n` +
+    `    'positional entry unavailable — update the native module (invokeTypedPos)',\n` +
+    `  );\n` +
     `}\n\n`;
 
   for (const command of supported) {
@@ -1499,20 +1618,25 @@ export function generatePositionalFacadeTs(schema: PackageSchema): string {
     const outType = command.outputType === '()' ? 'void' : command.outputType;
     const { fields } = collectPostcardFields(command.inputSchema, definitions);
     // 0..3개 필드 → positional; 4+ 또는 nested/option 조합은 객체 인자.
-    const simple = fields.every(
-      (f) => !f.kind.startsWith('option_') && f.kind !== 'struct' && f.kind !== 'vec_struct',
-    );
+    const positionalKinds = new Set(['zigzag', 'f64', 'f32', 'bool', 'string', 'enum_str']);
+    const simple = fields.every((f) => positionalKinds.has(f.kind));
     const cmdId = command.commandId ?? 0;
-    if (fields.length <= 3 && simple) {
+    if (fields.length > 0 && fields.length <= 3 && simple) {
+      // (Tier 1) 순수 스칼라 필드는 invokeTypedPos 로 — 인자 객체 생성 0.
       const params = fields
         .map((f) => `${f.name}: ${tsFieldType(f, command.inputType)}`)
         .join(', ');
-      const argObject =
-        fields.length === 0 ? 'undefined' : `{ ${fields.map((f) => `${f.name}`).join(', ')} }`;
+      const argList = fields.map((f) => `${f.name}`).join(', ');
       output +=
-        `export function ${fnName}(${params ? params + ', ' : ''}options?: InvokeOptions): Promise<${outType}> {\n` +
+        `export function ${fnName}(${params}, options?: InvokeOptions): Promise<${outType}> {\n` +
         `  void options;\n` +
-        `  return Promise.resolve(call<${outType}>(${cmdId}, '${command.name}', ${argObject}));\n` +
+        `  return Promise.resolve(callPos<${outType}>(${cmdId}, ${argList}));\n` +
+        `}\n\n`;
+    } else if (fields.length === 0) {
+      output +=
+        `export function ${fnName}(options?: InvokeOptions): Promise<${outType}> {\n` +
+        `  void options;\n` +
+        `  return Promise.resolve(call<${outType}>(${cmdId}, '${command.name}', undefined));\n` +
         `}\n\n`;
     } else {
       const inType = command.inputType;
