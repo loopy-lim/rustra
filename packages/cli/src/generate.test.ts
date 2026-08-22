@@ -654,10 +654,11 @@ test('generatePositionalFacadeTs emits positional signatures for simple commands
   // updateItem — Option 필드지만 pass-through 가능(단일 input 객체) 확인
   assert.ok(facade.includes('installRustraPositional'), 'installer must be exported');
   assert.ok(facade.includes('PositionalNative'), 'native type must be exported');
-  // sortBy (enum, 단일 필드) → positional
+  // sortBy (enum, 단일 필드) → positional — Tier 1 부턴 callPos(cmdId, …) 로
+  // 이름 문자열 대신 cmd_id 가 전달된다.
   const sort = facade.split('export function sortBy')[1]?.split('export function')[0] ?? '';
   assert.ok(sort.includes('order: string'), 'enum field must map to string param');
-  assert.ok(sort.includes("'sortBy'"), 'command name must be passed');
+  assert.ok(sort.includes('callPos<'), 'positional entry (invokeTypedPos) must be used');
   // unsupportedMap 은 제외
   assert.ok(!facade.includes('unsupportedMap'), 'unsupported commands must be excluded');
 });

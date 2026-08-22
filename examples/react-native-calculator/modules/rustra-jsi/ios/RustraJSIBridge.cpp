@@ -110,44 +110,75 @@ static std::string parseRkyvV2ErrorBody(const uint8_t* resp, size_t out_len) {
 //   - batchItemName: 이름 기반 배치 루프의 항목 이름. FFI null 접미
 //     " (batch item <name>)" 조립에만 쓴다(에러 시 1회 조립 — hot path 비용 0).
 //     nullptr 면 null 접미로 tailSuffix 를 쓴다(단건/byId 배치).
-// free 짝 계약: sync rkyv V2 응답은 이제 코어 rustra_ffi_invoke_rkyv_v2 가 할당한다
-// (코어 FFI 레이아웃 — 8B magic/len 헤더). 반드시 rustra_calculator_free_rkyv_v2_buffer
-// (코어 rustra_ffi_free 위임)로 해제할 것. async 콜백의 버퍼는 여전히 calculator
-// alloc_response 레이아웃이라 rustra_calculator_free_buffer 를 쓴다.
+// free 짝 계약: (Tier 1) typedInvokeTail 은 caller-buffer 변형
+// (rustra_ffi_invoke_rkyv_v2_into) 을 쓴다 — Rust 가 응답을 할당하지 않고
+// 스택 버퍼에 직접 기록하므로 free 짝이 필요 없다(malloc→memcpy→free 제거).
+// probe→write 2단계 사이 핸들러는 코어 probe 캐시로 정확히 1회 실행된다.
+// 스택 버퍼가 부족한 대형 응답만 기존 alloc 경로(rustra_calculator_invoke_rkyv_v2 +
+// free_rkyv_v2_buffer)로 폴백한다.
 template <typename Decode>
 static Value typedInvokeTail(Runtime& rt, const std::vector<uint8_t>& req,
                              const char* tailSuffix, Decode decode,
                              const std::string* batchItemName = nullptr) {
+  // (Tier 1) 고정 스택 버퍼 — 대부분의 응답(숫자/작은 객체)이 여기에 들어온다.
+  // 부족하면 아래 폴백 경로가 처리하므로 안전하다.
+  constexpr size_t kStackCap = 512;
+  uint8_t stackBuf[kStackCap];
   size_t out_len = 0;
-  uint8_t* resp = rustra_calculator_invoke_rkyv_v2(req.data(), req.size(), &out_len);
+  const uint8_t* resp = nullptr;
+  bool heapResp = false;
+
+  // 1단계: size-probe(buf=null) — 필요 크기만 얻는다(핸들러 실행 포함, 코어
+  // thread_local 캐시에 저장 — 다음 write 단계는 dispatch 없이 같은 바이트).
+  size_t needed = 0;
+  size_t probe = rustra_ffi_invoke_rkyv_v2_into(
+    req.data(), req.size(), nullptr, 0, &needed);
+  (void)probe; // probe 단계 반환값은 항상 0
+  if (needed > 0 && needed <= kStackCap) {
+    // 2단계: 스택 버퍼에 직접 기록 — 코어 캐시 히트로 핸들러 재실행 없음.
+    size_t n = rustra_ffi_invoke_rkyv_v2_into(
+      req.data(), req.size(), stackBuf, kStackCap, &out_len);
+    if (n != SIZE_MAX && n > 0) {
+      resp = stackBuf;
+    }
+  }
+  if (!resp && needed > kStackCap) {
+    // 스택 버퍼 부족 — alloc 경로로 폴백(대형 응답). 이 경로는 probe 캐시를
+    // 소진했으므로 dispatch 가 1회 더 실행될 수 있다(비멱등 핸들러의 큰 응답).
+    // 대형 응답에서 1회 추가 실행은 alloc 절약과의 트레이드오프다 — 향후
+    // 재사용 힙 버퍼로 제거 가능(별도 최적화).
+    resp = rustra_calculator_invoke_rkyv_v2(req.data(), req.size(), &out_len);
+    heapResp = true;
+  }
   if (!resp) {
     std::string nullSuffix(tailSuffix);
     if (batchItemName) nullSuffix = " (batch item " + *batchItemName + ")";
     throw JSError(rt, "RustraJSI: invokeRkyvV2 returned null" + nullSuffix);
   }
   if (out_len < 1) {
-    rustra_calculator_free_rkyv_v2_buffer(resp, out_len);
+    if (heapResp) rustra_calculator_free_rkyv_v2_buffer(const_cast<uint8_t*>(resp), out_len);
     throw JSError(rt, std::string("RustraJSI: empty rkyv v2 response") + tailSuffix);
   }
   if (resp[0] == 0) {
     // 에러 와이어: [ok:0][pad to @8][err_len u16 LE @8][err @10]
     if (out_len < 10) {
-      rustra_calculator_free_rkyv_v2_buffer(resp, out_len);
+      if (heapResp) rustra_calculator_free_rkyv_v2_buffer(const_cast<uint8_t*>(resp), out_len);
       throw JSError(rt, std::string("RustraJSI: malformed error response") + tailSuffix);
     }
     std::string errStr = parseRkyvV2ErrorBody(resp, out_len);
-    rustra_calculator_free_rkyv_v2_buffer(resp, out_len);
+    if (heapResp) rustra_calculator_free_rkyv_v2_buffer(const_cast<uint8_t*>(resp), out_len);
     throw JSError(rt, errStr);
   }
 
   // 성공: postcard(O) @8 부터 디코딩.
   if (out_len < 8) {
-    rustra_calculator_free_rkyv_v2_buffer(resp, out_len);
+    if (heapResp) rustra_calculator_free_rkyv_v2_buffer(const_cast<uint8_t*>(resp), out_len);
     throw JSError(rt, std::string("RustraJSI: malformed success response") + tailSuffix);
   }
   rc::Reader r(resp + 8, out_len - 8);
   Value result = decode(r);
-  rustra_calculator_free_rkyv_v2_buffer(resp, out_len);
+  // 스택 버퍼 경로는 free 불필요(할당 자체가 없다). 대형 응답 폴백만 해제.
+  if (heapResp) rustra_calculator_free_rkyv_v2_buffer(const_cast<uint8_t*>(resp), out_len);
   return result;
 }
 
@@ -541,6 +572,37 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         });
       });
     cache_["invokeTypedById"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+
+  // ── (Tier 1) invokeTypedPos(cmdId, a, b, …) — positional 인자 직접 진입 ──
+  // JS 측 인자 객체 리터럴 {a, b} 생성과 C++ asObject/getProperty 순회를 모두
+  // 건너뛴다 — HostFunction 스택의 Value 배열에서 postcard 바이트로 직렬화.
+  // encode_pos_by_id 는 스칼라(≤3필드) 명령만 커버한다: 미지원 cmd_id 는
+  // JSError 로 명시 실패하고 JS 엔진은 invokeTypedById 로 폴백한다.
+  // argc 는 JS 코드젠(positional facade)이 시그니처로 보장하지만 런타임
+  // 가드도 둔다(수동 호출 방어).
+  {
+    auto propNameId = PropNameID::forAscii(rt, "invokeTypedPos");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 4,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1) {
+          throw JSError(rt, "RustraJSI: invokeTypedPos requires (cmdId, ...fields)");
+        }
+        uint16_t cmdId = static_cast<uint16_t>(args[0].asNumber());
+        const Value* argv = count > 1 ? args + 1 : nullptr;
+        size_t argc = count > 1 ? count - 1 : 0;
+
+        rc::Writer w;
+        gen::encode_pos_by_id(rt, cmdId, argv, argc, w); // 미지원 시 throw
+        auto req = w.take();
+
+        return typedInvokeTail(rt, req, "", [&rt, cmdId](rc::Reader& r) {
+          return gen::decode_by_id(rt, cmdId, r);
+        });
+      });
+    cache_["invokeTypedPos"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
 

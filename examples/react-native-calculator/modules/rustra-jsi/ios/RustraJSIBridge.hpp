@@ -70,6 +70,14 @@ extern "C" {
   // rustra_ffi_invoke_rkyv_v2 로 위임되어 응답이 코어 FFI 레이아웃(8B 헤더)으로
   // 할당된다. rustra_calculator_free_buffer 와 교환 불가.
   void rustra_calculator_free_rkyv_v2_buffer(uint8_t* ptr, size_t len);
+
+  // ── (Tier 1) rkyv V2 caller-buffer — malloc→memcpy→free 사이클 제거 ──
+  // buf=null → size-probe(0 반환, 필요 크기는 *out_len). buf≠null → 직접 기록,
+  // 반환값은 기록한 바이트 수. capacity 부족 시 SIZE_MAX 반환(재probe 신호).
+  // probe→write 2단계 사이 핸들러는 코어 probe 캐시로 1회만 실행된다.
+  size_t rustra_ffi_invoke_rkyv_v2_into(
+    const uint8_t* payload, size_t payload_len,
+    uint8_t* buf, size_t capacity, size_t* out_len);
 }
 
 /// Cached function entry — stores PropNameID + pre-created JS Function.

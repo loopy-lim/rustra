@@ -15,6 +15,14 @@ static void encode_addNumbers(jsi::Runtime& rt, const jsi::Value& args, rc::Writ
   { auto _v = argsObj.getProperty(rt, "b").asNumber(); w.push_i64((int64_t)_v); }
 }
 
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
+static void encode_pos_addNumbers(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  w.push_u8(1); w.push_u8(0); // cmd_id = 1 LE
+  (void)argc;
+  w.push_i64((int64_t)argv[0].asNumber());
+  w.push_i64((int64_t)argv[1].asNumber());
+}
+
 static jsi::Value decode_addNumbers(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
   resultObj.setProperty(rt, "value", (double)r.read_i64());
@@ -29,6 +37,15 @@ static void encode_clamp(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w
   { auto _v = argsObj.getProperty(rt, "value").asNumber(); w.push_f64(_v); }
 }
 
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 3회 제거.
+static void encode_pos_clamp(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  w.push_u8(4); w.push_u8(0); // cmd_id = 4 LE
+  (void)argc;
+  w.push_f64(argv[0].asNumber());
+  w.push_f64(argv[1].asNumber());
+  w.push_f64(argv[2].asNumber());
+}
+
 static jsi::Value decode_clamp(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
   resultObj.setProperty(rt, "value", r.read_f64());
@@ -40,6 +57,14 @@ static void encode_createItem(jsi::Runtime& rt, const jsi::Value& args, rc::Writ
   auto argsObj = args.asObject(rt);
   { auto _v = argsObj.getProperty(rt, "name").getString(rt).utf8(rt); w.push_string(_v); }
   { auto _v = argsObj.getProperty(rt, "value").asNumber(); w.push_i64((int64_t)_v); }
+}
+
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
+static void encode_pos_createItem(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  w.push_u8(8); w.push_u8(0); // cmd_id = 8 LE
+  (void)argc;
+  { auto _s = argv[0].asString(rt).utf8(rt); w.push_string(_s); }
+  w.push_i64((int64_t)argv[1].asNumber());
 }
 
 static jsi::Value decode_createItem(jsi::Runtime& rt, rc::Reader& r) {
@@ -59,6 +84,14 @@ static void encode_divide(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& 
   { auto _v = argsObj.getProperty(rt, "b").asNumber(); w.push_i64((int64_t)_v); }
 }
 
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
+static void encode_pos_divide(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  w.push_u8(10); w.push_u8(0); // cmd_id = 10 LE
+  (void)argc;
+  w.push_i64((int64_t)argv[0].asNumber());
+  w.push_i64((int64_t)argv[1].asNumber());
+}
+
 static jsi::Value decode_divide(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
   resultObj.setProperty(rt, "value", (double)r.read_i64());
@@ -70,6 +103,14 @@ static void encode_emitDemo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer
   auto argsObj = args.asObject(rt);
   { auto _v = argsObj.getProperty(rt, "ticks").asNumber(); w.push_i64((int64_t)_v); }
   { auto _v = argsObj.getProperty(rt, "stepDelayMs").asNumber(); w.push_i64((int64_t)_v); }
+}
+
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
+static void encode_pos_emitDemo(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  w.push_u8(11); w.push_u8(0); // cmd_id = 11 LE
+  (void)argc;
+  w.push_i64((int64_t)argv[0].asNumber());
+  w.push_i64((int64_t)argv[1].asNumber());
 }
 
 static jsi::Value decode_emitDemo(jsi::Runtime& rt, rc::Reader& r) {
@@ -84,6 +125,13 @@ static void encode_greet(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w
   { auto _v = argsObj.getProperty(rt, "name").getString(rt).utf8(rt); w.push_string(_v); }
 }
 
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
+static void encode_pos_greet(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  w.push_u8(5); w.push_u8(0); // cmd_id = 5 LE
+  (void)argc;
+  { auto _s = argv[0].asString(rt).utf8(rt); w.push_string(_s); }
+}
+
 static jsi::Value decode_greet(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
   { auto _s = r.read_string(); resultObj.setProperty(rt, "message", jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_s.data()), _s.size())); }
@@ -94,6 +142,13 @@ static void encode_isEven(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& 
   w.push_u8(3); w.push_u8(0); // cmd_id = 3 LE
   auto argsObj = args.asObject(rt);
   { auto _v = argsObj.getProperty(rt, "n").asNumber(); w.push_i64((int64_t)_v); }
+}
+
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
+static void encode_pos_isEven(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  w.push_u8(3); w.push_u8(0); // cmd_id = 3 LE
+  (void)argc;
+  w.push_i64((int64_t)argv[0].asNumber());
 }
 
 static jsi::Value decode_isEven(jsi::Runtime& rt, rc::Reader& r) {
@@ -107,6 +162,14 @@ static void encode_multiply(jsi::Runtime& rt, const jsi::Value& args, rc::Writer
   auto argsObj = args.asObject(rt);
   { auto _v = argsObj.getProperty(rt, "a").asNumber(); w.push_f64(_v); }
   { auto _v = argsObj.getProperty(rt, "b").asNumber(); w.push_f64(_v); }
+}
+
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
+static void encode_pos_multiply(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  w.push_u8(2); w.push_u8(0); // cmd_id = 2 LE
+  (void)argc;
+  w.push_f64(argv[0].asNumber());
+  w.push_f64(argv[1].asNumber());
 }
 
 static jsi::Value decode_multiply(jsi::Runtime& rt, rc::Reader& r) {
@@ -140,6 +203,13 @@ static void encode_rustraRegistryDemo(jsi::Runtime& rt, const jsi::Value& args, 
   { auto _v = argsObj.getProperty(rt, "op").getString(rt).utf8(rt); w.push_string(_v); }
 }
 
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
+static void encode_pos_rustraRegistryDemo(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  w.push_u8(12); w.push_u8(0); // cmd_id = 12 LE
+  (void)argc;
+  { auto _s = argv[0].asString(rt).utf8(rt); w.push_string(_s); }
+}
+
 static jsi::Value decode_rustraRegistryDemo(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
   resultObj.setProperty(rt, "ok", r.read_bool());
@@ -153,6 +223,14 @@ static void encode_secureCompute(jsi::Runtime& rt, const jsi::Value& args, rc::W
   auto argsObj = args.asObject(rt);
   { auto _v = argsObj.getProperty(rt, "a").asNumber(); w.push_i64((int64_t)_v); }
   { auto _v = argsObj.getProperty(rt, "b").asNumber(); w.push_i64((int64_t)_v); }
+}
+
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
+static void encode_pos_secureCompute(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  w.push_u8(13); w.push_u8(0); // cmd_id = 13 LE
+  (void)argc;
+  w.push_i64((int64_t)argv[0].asNumber());
+  w.push_i64((int64_t)argv[1].asNumber());
 }
 
 static jsi::Value decode_secureCompute(jsi::Runtime& rt, rc::Reader& r) {
@@ -178,6 +256,13 @@ static void encode_toUpper(jsi::Runtime& rt, const jsi::Value& args, rc::Writer&
   w.push_u8(7); w.push_u8(0); // cmd_id = 7 LE
   auto argsObj = args.asObject(rt);
   { auto _v = argsObj.getProperty(rt, "s").getString(rt).utf8(rt); w.push_string(_v); }
+}
+
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
+static void encode_pos_toUpper(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  w.push_u8(7); w.push_u8(0); // cmd_id = 7 LE
+  (void)argc;
+  { auto _s = argv[0].asString(rt).utf8(rt); w.push_string(_s); }
 }
 
 static jsi::Value decode_toUpper(jsi::Runtime& rt, rc::Reader& r) {
@@ -275,6 +360,40 @@ bool has_static_codec(const std::string& name) {
   if (name == "sumList") return true;
   if (name == "toUpper") return true;
   return false;
+}
+
+/// (Tier 1) positional 인자를 직접 인코딩 가능한 cmd_id 집합 — JS 폴백 판별용.
+bool has_pos_codec(uint16_t cmd_id) {
+  if (cmd_id == 1) return true;
+  if (cmd_id == 4) return true;
+  if (cmd_id == 8) return true;
+  if (cmd_id == 10) return true;
+  if (cmd_id == 11) return true;
+  if (cmd_id == 5) return true;
+  if (cmd_id == 3) return true;
+  if (cmd_id == 2) return true;
+  if (cmd_id == 12) return true;
+  if (cmd_id == 13) return true;
+  if (cmd_id == 7) return true;
+  return false;
+}
+
+/// (Tier 1) 개별 Value 인자 → postcard 바이트. argc 는 호출부가 검증했다.
+void encode_pos_by_id(jsi::Runtime& rt, uint16_t cmd_id, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  switch (cmd_id) {
+    case 1: encode_pos_addNumbers(rt, argv, argc, w); return;
+    case 4: encode_pos_clamp(rt, argv, argc, w); return;
+    case 8: encode_pos_createItem(rt, argv, argc, w); return;
+    case 10: encode_pos_divide(rt, argv, argc, w); return;
+    case 11: encode_pos_emitDemo(rt, argv, argc, w); return;
+    case 5: encode_pos_greet(rt, argv, argc, w); return;
+    case 3: encode_pos_isEven(rt, argv, argc, w); return;
+    case 2: encode_pos_multiply(rt, argv, argc, w); return;
+    case 12: encode_pos_rustraRegistryDemo(rt, argv, argc, w); return;
+    case 13: encode_pos_secureCompute(rt, argv, argc, w); return;
+    case 7: encode_pos_toUpper(rt, argv, argc, w); return;
+    default: throw JSError(rt, "rustra: no positional codec for cmd_id " + std::to_string(cmd_id));
+  }
 }
 
 } // namespace rustra::generated
