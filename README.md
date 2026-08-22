@@ -44,6 +44,12 @@ rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)�
 - [x] rkyv V2 바이너리 fast-path + 취소/타임아웃/배치 — 0.1~0.2
 - [x] 이벤트 계약 코드젠 (`PackageBuilder::event`) — 0.2.x
 - [x] persistent 루프 런타임 + Node loop transport — 0.2.x
+- [ ] 타입 패리티 1단계 — fast path 타입 확장: bigint(i64/u64), 동적 맵
+      `HashMap<String,T>`, 튜플, payload 있는 enum, ArrayBuffer 인자, Date
+- [ ] 타입 패리티 2단계 — 채널/리소스 (Tauri v2 `ipc::Channel`·`Resource`
+      모델): 콜백을 직렬화 가능한 채널 핸들로, 객체 참조를 Rust-소유 리소스
+      핸들 + 코드젠 메서드로 — Nitro의 TS-first 객체 브릿지가 아니라
+      Rust-first 계약 안에서 소유권을 유지하는 방식
 - [ ] async 커맨드 핸들러 (워커 풀은 완료, 핸들러 trait 비동기화는 진행 중)
 - [ ] Windows 런타임 검증 (CI 확장 단계)
 - [ ] 프리빌트 바이너리 배포 (npx 설치 시 cargo 불필요)
@@ -155,7 +161,7 @@ examples/
   benchmark/               성능 벤치마크 (페이로드 확장, 처리량 측정)
   tauri-calculator/        Tauri 런타임 예시
   react-native-calculator/ React Native 런타임 예시
-  calculator-napi/         napi-rs transport 예시 (transport 벤치마크 24.3µs의 소스)
+  calculator-napi/         napi-rs transport 예시 (release transport 벤치마크의 소스)
   streaming/               이벤트 스트리밍 예시 (Package::emit + 폴링 어댑터)
   auth/                    세션/capability 게이트 예시 (deny-by-default)
   reference-app/           @rustra/react 훅 레퍼런스 앱 (useCommand/useMutation/useEvent)
@@ -375,13 +381,20 @@ const result = await addNumbers({ a: 20, b: 22 });
 
 모든 어댑터에서 `addNumbers({ a: 42, b: 58 })` 호출 기준 (Apple Silicon, release 빌드).
 
-| 어댑터                 | 평균 지연 | 처리량          |
-| ---------------------- | --------- | --------------- |
-| Rust (typed)           | 209 ns    | 5,093,309 ops/s |
-| Swift → Rust FFI       | 3.5 µs    | 296,710 ops/s   |
-| Bun (JS측)             | 189 ns    | ~5.3M ops/s     |
-| Node.js (JS측)         | 308 ns    | ~3.3M ops/s     |
-| React Native (iOS sim) | 52.5 µs   | 19,054 ops/s    |
+| 어댑터                 | 평균 지연  | 처리량          |
+| ---------------------- | ---------- | --------------- |
+| Rust (typed)           | 341–347 ns | 2,913,359 ops/s |
+| Bun (JS측)             | 189 ns     | ~5.3M ops/s     |
+| Node.js (JS측)         | 297–299 ns | ~3.35M ops/s    |
+| Swift → Rust FFI       | 1.2 µs     | 853,614 ops/s   |
+| Node napi-rs (release) | 1.5 µs     | 654,817 ops/s   |
+| Bun FFI (release)      | 2.1 µs     | 471,640+ ops/s  |
+
+> React Native(JSI rkyv V2) full sync ~5.2 µs, Nitro async 대비 ~1.3x(단일
+> 프리미티브 호출 기준 — 비교의 범위와 기능 패리티 매트릭스는
+> [벤치마크 문서](docs/benchmarks.md) §"Nitro Modules 비교" 참고) —
+> 상세 벤치마크, 레이어별 오버헤드 분석, 페이로드 확장성은
+> [벤치마크 문서](docs/benchmarks.md) 참고 (2026-08-22 재측정).
 
 > 상세 벤치마크, 레이어별 오버헤드 분석, 페이로드 확장성은 [벤치마크 문서](docs/benchmarks.md)를 참고.
 

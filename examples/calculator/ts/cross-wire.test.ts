@@ -89,3 +89,61 @@ test('cross-wire frame layout: error has ok=0, err_len u16 LE @8, body @10', () 
   const errLen = view.getUint16(8, true);
   assert.equal(errLen + 10, u.length, 'err_len must exactly span the postcard body');
 });
+
+// ── 2026-08-22 타입 확장: bytes/map/tuple/uvar 교차 와이어 ──────
+// Rust wire_fixtures.rs 신규 4종과 짝. probe 계약: u32/u64 plain varint,
+// map count+(k,v)*, tuple 무접두, Vec<u8> len+raw.
+
+import { gaugeCodec, scoreTotalCodec, sizeOfCodec, spanCodec } from '../generated/rkyv-codecs.js';
+
+const SIZEOF_REQUEST = '0e0004010203fa';
+const SIZEOF_RESPONSE = '0100000000000000800204';
+const SCORETOTAL_RESPONSE = '01000000000000000254';
+const SPAN_REQUEST = '100002686909';
+const SPAN_RESPONSE = '010000000000000002686909';
+const GAUGE_REQUEST = '1100ac02f0a204';
+const GAUGE_RESPONSE = '01000000000000009ca504';
+
+// sizeOf — Vec<u8> len+raw (u32 출력 plain varint)
+test('cross-wire sizeOf: TS encode → Rust request / Rust response → TS decode', () => {
+  const req = sizeOfCodec.encode({ data: [1, 2, 3, 250] });
+  assert.equal(bytesToHex(req), SIZEOF_REQUEST, 'bytes: len varint + raw');
+  const r = sizeOfCodec.decode(hexToBytes(SIZEOF_RESPONSE));
+  assert.equal(r.ok, true);
+  assert.equal(r.result?.checksum, 256, '1+2+3+250 = 256');
+  assert.equal(r.result?.len, 4);
+});
+
+// scoreTotal — map count+(k,v)*. 요청은 해시 순서가 비결정적이라 hex 고정
+// 불가(Rust 측 동일) — 엔트리 수/길이 구조 검증 + 응답 round-trip.
+test('cross-wire scoreTotal: map structure + response round-trip', () => {
+  const req = scoreTotalCodec.encode({ scores: { a: 10, b: 32 } });
+  const u = new Uint8Array(req);
+  assert.equal(u[0], 0x0f, 'cmd_id LSB (14)');
+  assert.equal(u[1], 0x00, 'cmd_id MSB');
+  assert.equal(u[2], 2, 'entry count = 2');
+  assert.equal(u.length, 9, 'count(1) + 2 * (1+1 key + zigzag val)');
+  const r = scoreTotalCodec.decode(hexToBytes(SCORETOTAL_RESPONSE));
+  assert.equal(r.ok, true);
+  assert.equal(r.result?.total, 42);
+  assert.equal(r.result?.count, 2);
+});
+
+// span — tuple 무접두 나열 ("hi", -5) → [2,104,105, 9]
+test('cross-wire span: tuple prefix-free concatenation', () => {
+  const req = spanCodec.encode({ pair: ['hi', -5] });
+  assert.equal(bytesToHex(req), SPAN_REQUEST, 'tuple: elements in order, no length prefix');
+  const r = spanCodec.decode(hexToBytes(SPAN_RESPONSE));
+  assert.equal(r.ok, true);
+  assert.equal(r.result?.first, 'hi');
+  assert.equal(r.result?.second, -5);
+});
+
+// gauge — u64/u32 plain varint (과거 zigzag 인코딩 버그의 회귀 방지)
+test('cross-wire gauge: unsigned fields use plain varint, not zigzag', () => {
+  const req = gaugeCodec.encode({ limit: 300, offset: 70000 });
+  assert.equal(bytesToHex(req), GAUGE_REQUEST, '300 → ac02, 70000 → f0a204 (plain)');
+  const r = gaugeCodec.decode(hexToBytes(GAUGE_RESPONSE));
+  assert.equal(r.ok, true);
+  assert.equal(r.result?.next, 70300, '300 + 70000');
+});

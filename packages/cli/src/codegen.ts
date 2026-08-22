@@ -269,41 +269,51 @@ export function postcardHelperSource(): string {
   return `// ── postcard wire format helpers ─────────────────────────────
 
 function _pcEncodeVarint(n: number): Uint8Array {
-  n = n >>> 0; // ensure unsigned 32-bit
-  if (n < 0x80) return new Uint8Array([n]);
+  // 정수만 허용 — u32 최대(4,294,967,295)는 Number 로 정확히 표현된다.
+  // u64 는 2^53 까지 정확 (JS Number 한계; 그 이상은 정밀도 손실 — 계약 문서 참조).
+  n = Math.floor(n);
+  if (n < 0) throw new Error('varint must be non-negative: ' + n);
+  if (n === 0) return new Uint8Array([0]);
   const bytes: number[] = [];
   while (n > 0) {
-    let b = n & 0x7f;
-    n >>>= 7;
-    if (n > 0) b |= 0x80;
+    let b = n % 128;
+    n = Math.floor(n / 128);
+    if (n > 0) b += 128;
     bytes.push(b);
   }
   return new Uint8Array(bytes);
 }
 
 function _pcDecodeVarint(buf: Uint8Array, offset: number): { value: number; bytesRead: number } {
+  // Number 산술로 2^53 까지 정확히 디코딩 (비트 시프트는 32비트 절단됨).
+  // u64 varint 최대 길이 10바이트 — 과거 5바이트 한계는 u32 전용이었다.
   let value = 0;
-  let shift = 0;
+  let multiplier = 1;
   let bytesRead = 0;
   while (true) {
     const b = buf[offset + bytesRead];
-    value |= (b & 0x7f) << shift;
+    value += (b & 0x7f) * multiplier;
     bytesRead++;
     if ((b & 0x80) === 0) break;
-    shift += 7;
-    if (bytesRead > 5) throw new Error('varint too long');
+    multiplier *= 128;
+    if (bytesRead > 10) throw new Error('varint too long');
   }
-  return { value: value >>> 0, bytesRead };
+  return { value, bytesRead };
 }
 
 function _pcEncodeZigzag(n: number): number {
-  // zigzag encode: positive n -> n*2, negative n -> (-n)*2 - 1
-  return n >= 0 ? n * 2 : (-n) * 2 - 1;
+  // zigzag encode: positive n -> n*2, negative n -> (-n)*2 - 1.
+  // Number 산술 — |n| ≤ 2^31 범위 i64 는 32비트 비트연산보다 정확하다
+  // (비트연산은 부호 있는 32비트로 절단됨).
+  return n >= 0 ? n * 2 : -n * 2 - 1;
 }
 
 function _pcDecodeZigzag(n: number): number {
-  // zigzag decode: (n >>> 1) ^ -(n & 1)
-  return (n >>> 1) ^ -(n & 1);
+  // zigzag decode: (n >>> 1) ^ -(n & 1). 음수는 -(Math.floor(n / 2) + 1) —
+  // (n-1)/2 가 아니라 내림 나눗셈이어야 한다(dec(9) = -5, not -4).
+  const negative = n % 2 === 1;
+  const magnitude = Math.floor(n / 2);
+  return negative ? -magnitude - 1 : magnitude;
 }
 
 function _pcEncodeZigzagVarint(n: number): Uint8Array {

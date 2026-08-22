@@ -161,6 +161,15 @@ public:
     return s;
   }
 
+  /// 현재 커서(읽지 않은 첫 바이트). Vec<u8> 등 원시 복사用.
+  const uint8_t* cur() const { return data + pos; }
+
+  /// n 바이트 건너뛰기 — cur() 로 복사한 뒤 호출.
+  void skip(size_t n) {
+    require(n);
+    pos += n;
+  }
+
 private:
   void require(size_t n) const {
     if (pos + n > len) throw std::runtime_error("postcard read past end");

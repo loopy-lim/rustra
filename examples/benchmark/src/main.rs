@@ -49,17 +49,18 @@ fn main() {
     let package = build_benchmark_package();
 
     bench_cold_start(&package);
-    bench_package_creation();
-    bench_command_invocation(&package);
+    let creation_avg_ns = bench_package_creation();
+    let invoke_avg_ns = bench_command_invocation(&package);
     bench_serialization();
     bench_deserialization();
     bench_json_roundtrip(&package);
-    bench_ts_generation(&package);
+    let ts_avg_ns = bench_ts_generation(&package);
     bench_payload_scaling(&package);
     bench_concurrent_invocation(&package);
     bench_parallel_invocation(&package);
     bench_memory_usage(&package);
     bench_allocations_per_invoke(&package);
+    print_summary_chart(creation_avg_ns, invoke_avg_ns, ts_avg_ns);
 }
 
 /// 콜드스타트 — 최초 invoke 의 tier 해결 비용. 이후 호출과의 차이가 코드젠
@@ -205,7 +206,7 @@ fn make_items(n: usize) -> Vec<Item> {
 
 // ── Micro-benchmarks ──────────────────────────────────────
 
-fn bench_package_creation() {
+fn bench_package_creation() -> f64 {
     println!("┌─ Package Creation ─────────────────────────────────────┐");
     let iterations = 10_000;
     let mut times = Vec::with_capacity(iterations);
@@ -224,9 +225,10 @@ fn bench_package_creation() {
     println!("│  avg: {avg_ns:>8.0} ns | p50: {p50:>8.0} ns | p99: {p99:>8.0} ns");
     println!("└─────────────────────────────────────────────────────────┘");
     println!();
+    avg_ns
 }
 
-fn bench_command_invocation(package: &rustra::Package) {
+fn bench_command_invocation(package: &rustra::Package) -> f64 {
     println!("┌─ Command Invocation (addNumbers) ──────────────────────┐");
     let iterations = 100_000;
     let input = SimpleInput { a: 42, b: 58 };
@@ -251,6 +253,7 @@ fn bench_command_invocation(package: &rustra::Package) {
     println!("│  avg: {avg_ns:>8.0} ns | p50: {p50:>8.0} ns | p99: {p99:>8.0} ns");
     println!("└─────────────────────────────────────────────────────────┘");
     println!();
+    avg_ns
 }
 
 fn bench_serialization() {
@@ -419,7 +422,7 @@ fn bench_json_roundtrip(package: &rustra::Package) {
     println!();
 }
 
-fn bench_ts_generation(package: &rustra::Package) {
+fn bench_ts_generation(package: &rustra::Package) -> f64 {
     println!("┌─ TypeScript Code Generation ───────────────────────────┐");
 
     let iterations = 1_000;
@@ -447,6 +450,7 @@ fn bench_ts_generation(package: &rustra::Package) {
     println!("│  commands.ts:  {commands_size:>6} bytes");
     println!("└─────────────────────────────────────────────────────────┘");
     println!();
+    avg_ns
 }
 
 fn bench_payload_scaling(package: &rustra::Package) {
@@ -533,9 +537,6 @@ fn bench_concurrent_invocation(package: &rustra::Package) {
 
     println!("└─────────────────────────────────────────────────────────┘");
     println!();
-
-    // Summary ASCII chart
-    print_summary_separator();
 }
 
 /// 실제 병렬 invoke — N 스레드 × iterations. `Package::invoke` 는 내부 레지스트리가
@@ -613,7 +614,6 @@ fn bench_memory_usage(package: &rustra::Package) {
 
     println!("└─────────────────────────────────────────────────────────┘");
     println!();
-    print_summary_separator();
 }
 
 /// 프로세스 RSS 바이트 — macOS (mach) 우선, 실패 시 None.
@@ -672,29 +672,32 @@ fn current_rss_bytes() -> Option<u64> {
     None
 }
 
-fn print_summary_separator() {
+/// 요약 차트 — 하드코딩된 구간 주석(~100µs 등) 대신 이번 실행의 실측 평균을
+/// 그대로 프린트한다. 스크립트가 낡은 수치를 재생해 문서와 어긋나는 일을
+/// 원천 차단한다(트랜스포트 계층 비교는 transport-bench/wire-bench 담당).
+fn print_summary_chart(creation_avg_ns: f64, invoke_avg_ns: f64, ts_avg_ns: f64) {
+    let fmt = |ns: f64| {
+        if ns >= 1_000.0 {
+            format!("{:.1} µs", ns / 1_000.0)
+        } else {
+            format!("{:.0} ns", ns)
+        }
+    };
     println!("╔══════════════════════════════════════════════════════════╗");
-    println!("║                    Summary Chart                        ║");
+    println!("║                    Summary (measured)                   ║");
     println!("╠══════════════════════════════════════════════════════════╣");
-    println!("║                                                          ║");
-    println!("║  Rust Core Performance (per operation):                  ║");
-    println!("║  ┌──────────────────────────────────────────────────┐   ║");
-    println!("║  │  Package creation     ~100 µs                     │   ║");
-    println!("║  │  Command invocation   ~1 µs  (typed)              │   ║");
-    println!("║  │  JSON roundtrip       ~1-2 µs (simple payload)    │   ║");
-    println!("║  │  TS generation        ~5-10 µs                     │   ║");
-    println!("║  │  Ser/de (100 items)   ~5-20 µs                     │   ║");
-    println!("║  └──────────────────────────────────────────────────┘   ║");
-    println!("║                                                          ║");
-    println!("║  Bridge Overhead Layers:                                 ║");
-    println!("║  ┌────────────────────────────────────────────────┐     ║");
-    println!("║  │  Pure Rust        ██                             │     ║");
-    println!("║  │  + serde JSON     ████                           │     ║");
-    println!("║  │  + TS Generation  ██████                         │     ║");
-    println!("║  │  + Node IPC       ██████████████                 │     ║");
-    println!("║  │  + Bun FFI        ████████                       │     ║");
-    println!("║  └────────────────────────────────────────────────┘     ║");
-    println!("║                                                          ║");
+    println!(
+        "║  Package creation     {:>10}                            ║",
+        fmt(creation_avg_ns)
+    );
+    println!(
+        "║  Command invocation   {:>10}  (typed)                   ║",
+        fmt(invoke_avg_ns)
+    );
+    println!(
+        "║  TS generation        {:>10}                            ║",
+        fmt(ts_avg_ns)
+    );
     println!("╚══════════════════════════════════════════════════════════╝");
 }
 

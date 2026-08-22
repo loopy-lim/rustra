@@ -107,6 +107,103 @@ int main() {
     check_bytes(w.take(), {0x06, 0x00, 0x02, 0x14, 0x28}, "encode sumList {[10,20]}");
   }
 
+  // ── 2026-08-22 타입 확장: bytes/map/tuple/uvar ─────────────────
+  // Rust wire_fixtures.rs · TS cross-wire.test.ts 와 동일 PINNED hex.
+
+  // encode sizeOf {data:[1,2,3,250]} → [cmd 14 LE][len 4][1,2,3,fa]
+  {
+    Object args(rt);
+    Array arr(rt, 4);
+    arr.setValueAtIndex(rt, 0, 1.0);
+    arr.setValueAtIndex(rt, 1, 2.0);
+    arr.setValueAtIndex(rt, 2, 3.0);
+    arr.setValueAtIndex(rt, 3, 250.0);
+    args.setProperty(rt, "data", arr);
+    Value argsV(rt, args);
+    rc::Writer w;
+    gen::encode_by_name(rt, "sizeOf", argsV, w);
+    check_bytes(w.take(), {0x0E, 0x00, 0x04, 0x01, 0x02, 0x03, 0xFA}, "encode sizeOf {[1,2,3,250]}");
+  }
+
+  // encode scoreTotal {scores:{a:10,b:32}} → [cmd 15][count 2][sorted a,b]
+  // map 인코더는 키를 정렬한다(BTreeMap 정합).
+  {
+    Object args(rt);
+    Object scores(rt);
+    scores.setProperty(rt, "b", 32.0);
+    scores.setProperty(rt, "a", 10.0); // 삽입 순서와 무관하게 a,b 정렬
+    args.setProperty(rt, "scores", scores);
+    Value argsV(rt, args);
+    rc::Writer w;
+    gen::encode_by_name(rt, "scoreTotal", argsV, w);
+    // count=2 | "a"(1,97) zigzag(10)=0x14 | "b"(1,98) zigzag(32)=0x40
+    check_bytes(w.take(), {0x0F, 0x00, 0x02, 0x01, 0x61, 0x14, 0x01, 0x62, 0x40},
+                "encode scoreTotal {a:10,b:32} sorted");
+  }
+
+  // encode span {pair:["hi",-5]} → [cmd 16][str "hi"][zigzag(-5)=9] — tuple 무접두
+  {
+    Object args(rt);
+    Array pair(rt, 2);
+    pair.setValueAtIndex(rt, 0, String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>("hi"), 2));
+    pair.setValueAtIndex(rt, 1, -5.0);
+    args.setProperty(rt, "pair", pair);
+    Value argsV(rt, args);
+    rc::Writer w;
+    gen::encode_by_name(rt, "span", argsV, w);
+    check_bytes(w.take(), {0x10, 0x00, 0x02, 0x68, 0x69, 0x09}, "encode span {['hi',-5]}");
+  }
+
+  // encode gauge {limit:300, offset:70000} → [cmd 17][ac 02][f0 a2 04] — plain varint
+  {
+    Object args(rt);
+    args.setProperty(rt, "limit", 300.0);
+    args.setProperty(rt, "offset", 70000.0);
+    Value argsV(rt, args);
+    rc::Writer w;
+    gen::encode_by_name(rt, "gauge", argsV, w);
+    check_bytes(w.take(), {0x11, 0x00, 0xAC, 0x02, 0xF0, 0xA2, 0x04}, "encode gauge {300,70000}");
+  }
+
+  // decode scoreTotal response body postcard(count=2,total=42) → 구조 검증
+  {
+    uint8_t body[] = {0x02, 0x54}; // uvar(2), zigzag(42)
+    rc::Reader r(body, 2);
+    Value result = gen::decode_by_name(rt, "scoreTotal", r);
+    Object obj = result.getObject(rt);
+    if (obj.getProperty(rt, "count").asNumber() != 2.0) {
+      std::printf("FAIL decode scoreTotal count\n"); ++g_failures;
+    }
+    if (obj.getProperty(rt, "total").asNumber() != 42.0) {
+      std::printf("FAIL decode scoreTotal total\n"); ++g_failures;
+    }
+  }
+
+  // decode span response body postcard(first="hi",second=-5) → tuple 재조립
+  {
+    uint8_t body[] = {0x02, 0x68, 0x69, 0x09};
+    rc::Reader r(body, 4);
+    Value result = gen::decode_by_name(rt, "span", r);
+    Object obj = result.getObject(rt);
+    if (obj.getProperty(rt, "first").getString(rt).utf8(rt) != "hi") {
+      std::printf("FAIL decode span first\n"); ++g_failures;
+    }
+    if (obj.getProperty(rt, "second").asNumber() != -5.0) {
+      std::printf("FAIL decode span second (zigzag)\n"); ++g_failures;
+    }
+  }
+
+  // decode gauge response body postcard(next=70300) → uvar 정밀도
+  {
+    uint8_t body[] = {0x9C, 0xA5, 0x04}; // uvar(70300)
+    rc::Reader r(body, 3);
+    Value result = gen::decode_by_name(rt, "gauge", r);
+    Object obj = result.getObject(rt);
+    if (obj.getProperty(rt, "next").asNumber() != 70300.0) {
+      std::printf("FAIL decode gauge next (uvar)\n"); ++g_failures;
+    }
+  }
+
   // ── decode addNumbers response body postcard(value=100) → {value:100} ──
   {
     // value=100 → postcard varint 0xC8,0x01

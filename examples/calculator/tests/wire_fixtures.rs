@@ -15,7 +15,10 @@
 //! **주의**: 이 hex 들은 TS 측 `cross-wire.test.ts` 와 반드시 일치해야 한다.
 //! 한쪽만 바뀌면 교차 테스트가 실패한다.
 
-use rustra_calculator_example::{AddNumbersInput, DivideInput, GreetInput, calculator_package};
+use rustra_calculator_example::{
+    AddNumbersInput, DivideInput, GaugeInput, GreetInput, ScoreTotalInput, SizeOfInput, SpanInput,
+    calculator_package,
+};
 
 fn request_for<I: serde::Serialize>(cmd_id: u16, input: &I) -> Vec<u8> {
     let mut buf = cmd_id.to_le_bytes().to_vec();
@@ -80,4 +83,79 @@ fn divide_error_wire_is_stable() {
     assert_eq!(r[0], 0, "error frame must have ok=0");
     let err_len = u16::from_le_bytes([r[8], r[9]]);
     assert_eq!(err_len as usize + 10, r.len(), "err_len must span the body");
+}
+
+// ── 2026-08-22 타입 확장: bytes/map/tuple/uvar 와이어 고정 ──────
+// probe 실측 계약: u32/u64 plain varint, map count+(k,v)*, tuple 무접두,
+// Vec<u8> len+raw. TS cross-wire.test.ts 신규 블록과 짝이다.
+
+const SIZEOF_REQUEST: &str = "0e0004010203fa";
+const SIZEOF_RESPONSE: &str = "0100000000000000800204";
+// HashMap 은 postcard 직렬화 순서가 비결정적(해시 시드) — 요청 hex 는
+// 고정하지 않고(정렬된 a,b 순서면 "0f0002016114016240"), 응답만 고정한다.
+// TS 인코더는 키를 정렬해 결정론적으로 인코딩하고 Rust 디코더는 순서독립
+// 이므로 round-trip 계약은 성립한다.
+const SCORETOTAL_RESPONSE: &str = "01000000000000000254";
+const SPAN_REQUEST: &str = "100002686909";
+const SPAN_RESPONSE: &str = "010000000000000002686909";
+const GAUGE_REQUEST: &str = "1100ac02f0a204";
+const GAUGE_RESPONSE: &str = "01000000000000009ca504";
+
+#[test]
+fn size_of_wire_is_stable() {
+    let pkg = calculator_package();
+    let req = request_for(
+        14,
+        &SizeOfInput {
+            data: vec![1, 2, 3, 250],
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), SIZEOF_REQUEST);
+    assert_eq!(hexlify(&resp), SIZEOF_RESPONSE);
+}
+
+#[test]
+fn score_total_wire_is_stable() {
+    let pkg = calculator_package();
+    let req = request_for(
+        15,
+        &ScoreTotalInput {
+            scores: std::collections::HashMap::from([("a".into(), 10i64), ("b".into(), 32i64)]),
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&resp), SCORETOTAL_RESPONSE);
+    // 요청 구조 검증: [cmd 2B][count=2][2 엔트리] — count 바이트(@2) 고정.
+    assert_eq!(req[0..3].to_vec(), vec![0x0f, 0x00, 0x02]);
+    assert_eq!(req.len(), 9, "count(1) + 2 * (1+1 key + zigzag val)");
+}
+
+#[test]
+fn span_wire_is_stable() {
+    let pkg = calculator_package();
+    let req = request_for(
+        16,
+        &SpanInput {
+            pair: ("hi".into(), -5),
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), SPAN_REQUEST);
+    assert_eq!(hexlify(&resp), SPAN_RESPONSE);
+}
+
+#[test]
+fn gauge_wire_is_stable() {
+    let pkg = calculator_package();
+    let req = request_for(
+        17,
+        &GaugeInput {
+            limit: 300,
+            offset: 70000,
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), GAUGE_REQUEST);
+    assert_eq!(hexlify(&resp), GAUGE_RESPONSE);
 }

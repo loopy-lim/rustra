@@ -55,6 +55,15 @@ export type EmitDemoOutput = {
   emitted: number;
 };
 
+export type GaugeInput = {
+  limit: number;
+  offset: number;
+};
+
+export type GaugeOutput = {
+  next: number;
+};
+
 export type GreetInput = {
   name: string;
 };
@@ -99,6 +108,15 @@ export type RegistryDemoOutput = {
   message: string;
 };
 
+export type ScoreTotalInput = {
+  scores: Record<string, number>;
+};
+
+export type ScoreTotalOutput = {
+  count: number;
+  total: number;
+};
+
 export type SecureComputeInput = {
   a: number;
   b: number;
@@ -106,6 +124,24 @@ export type SecureComputeInput = {
 
 export type SecureComputeOutput = {
   value: number;
+};
+
+export type SizeOfInput = {
+  data: number[];
+};
+
+export type SizeOfOutput = {
+  checksum: number;
+  len: number;
+};
+
+export type SpanInput = {
+  pair: [string, number];
+};
+
+export type SpanOutput = {
+  first: string;
+  second: number;
 };
 
 export type SumListInput = {

@@ -21,6 +21,12 @@ export type RustraNative = {
    * 미노출 구 브릿지는 invokeTyped 로 폴백한다.
    */
   invokeTypedById?(cmdId: number, args: unknown): unknown;
+  /**
+   * (Tier 1) positional 진입 — 개별 인자를 직접 받아 JS 인자 객체 생성과
+   * 프로퍼티 조회 없이 postcard 로 인코딩한다(스칼라 ≤3필드 명령만).
+   * 미노출 구 브릿지는 invokeTypedById 로 폴백한다.
+   */
+  invokeTypedPos?(cmdId: number, ...fields: unknown[]): unknown;
   /** P0-2: 정적 명령 N 개를 단일 JSI 횡단으로 일괄 처리. */
   invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
   /**

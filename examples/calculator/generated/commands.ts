@@ -1,4 +1,4 @@
-import type { AddNumbersInput, AddNumbersOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, SecureComputeInput, SecureComputeOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
 import { invoke } from '@rustra/types';
 import type { InvokeOptions } from '@rustra/types';
 
@@ -27,6 +27,11 @@ export function emitDemo(input: EmitDemoInput, options?: InvokeOptions): Promise
 }
 emitDemo.commandId = 'emitDemo';
 
+export function gauge(input: GaugeInput, options?: InvokeOptions): Promise<GaugeOutput> {
+  return invoke<GaugeOutput>('gauge', input, options);
+}
+gauge.commandId = 'gauge';
+
 export function greet(input: GreetInput, options?: InvokeOptions): Promise<GreetOutput> {
   return invoke<GreetOutput>('greet', input, options);
 }
@@ -52,10 +57,25 @@ export function rustraRegistryDemo(input: RegistryDemoInput, options?: InvokeOpt
 }
 rustraRegistryDemo.commandId = 'rustraRegistryDemo';
 
+export function scoreTotal(input: ScoreTotalInput, options?: InvokeOptions): Promise<ScoreTotalOutput> {
+  return invoke<ScoreTotalOutput>('scoreTotal', input, options);
+}
+scoreTotal.commandId = 'scoreTotal';
+
 export function secureCompute(input: SecureComputeInput, options?: InvokeOptions): Promise<SecureComputeOutput> {
   return invoke<SecureComputeOutput>('secureCompute', input, options);
 }
 secureCompute.commandId = 'secureCompute';
+
+export function sizeOf(input: SizeOfInput, options?: InvokeOptions): Promise<SizeOfOutput> {
+  return invoke<SizeOfOutput>('sizeOf', input, options);
+}
+sizeOf.commandId = 'sizeOf';
+
+export function span(input: SpanInput, options?: InvokeOptions): Promise<SpanOutput> {
+  return invoke<SpanOutput>('span', input, options);
+}
+span.commandId = 'span';
 
 export function sumList(input: SumListInput, options?: InvokeOptions): Promise<SumListOutput> {
   return invoke<SumListOutput>('sumList', input, options);

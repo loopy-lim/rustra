@@ -156,13 +156,15 @@ let jsonOnly = measure(label: "JSON roundtrip only", iterations: 100_000) {
     _ = parsed
 }
 
-let overhead = bridgeResult.avg - ffiResult.avg
-let rustCore = ffiResult.avg - jsonOnly.avg
-
+// 측정 기반 분해 — Swift JSONSerialization(NSDictionary) 왕복이 Codable 보다
+// 훨씬 비싸므로, FFI+Rust 코어 층은 FFI invoke 측정치 그대로 보고한다
+// (JSON 왕복 층과 독립 측정이라 차감 분해가 아니라 측정값 나열이 정확).
+// 과거 산식은 차감에 `+ ffiResult.avg * 0.3` 인위 보정이 섞여 음수
+// 레이어(-2952ns)를 출력했다.
 let layers: [(String, Double, String)] = [
-    ("JSON serialize/deserialize", jsonOnly.avg, "▓"),
-    ("Swift ↔ Rust FFI overhead", max(rustCore, 0), "▒"),
-    ("Rust command execution", ffiResult.avg - jsonOnly.avg - max(rustCore, 0) + ffiResult.avg * 0.3, "█"),
+    ("Swift JSON roundtrip only", jsonOnly.avg, "▓"),
+    ("Swift ↔ Rust FFI + Rust core", ffiResult.avg, "▒"),
+    ("Bridge total (serialize+FFI+parse)", bridgeResult.avg, "█"),
 ]
 
 let maxLayer = layers.map(\.1).max()!

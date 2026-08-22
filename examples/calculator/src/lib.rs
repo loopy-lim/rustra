@@ -307,7 +307,99 @@ pub fn emit_demo(input: EmitDemoInput) -> Result<EmitDemoOutput> {
     Ok(EmitDemoOutput { emitted: ticks + 1 })
 }
 
-// ── Runtime registry demo (debug-only dynamic mutation) ─────────────
+// ── 확장 타입 명령 (2026-08-22 fast-path 타입 확장) ────────────────
+// postcard 코덱의 uvar(u32/u64), 동적 맵, 튜플, Vec<u8> 와이어를
+// TS 코드젠·C++ JSI 코드젠·Rust 엔진 3면에서 고정한다.
+// probe 실측 계약:
+// - u32=70000 → [240,162,4] plain varint (zigzag 아님)
+// - map{a:1,b:2} → [2, 1,98,4, 1,97,2] count+(key,value)*
+// - tuple("hi",-5) → [2,104,105,9] 무접두 나열
+// - vec![1,2,3] u8 → [3,1,2,3] len+raw
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SizeOfInput {
+    pub data: Vec<u8>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SizeOfOutput {
+    pub checksum: u32,
+    pub len: u32,
+}
+
+/// Vec<u8>(postcard bytes) 입력 + u32 출력 — plain varint 와이어 고정.
+#[command]
+pub fn size_of(input: SizeOfInput) -> Result<SizeOfOutput> {
+    let checksum = input.data.iter().map(|b| *b as u32).sum::<u32>();
+    Ok(SizeOfOutput {
+        checksum,
+        len: input.data.len() as u32,
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScoreTotalInput {
+    pub scores: std::collections::HashMap<String, i64>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScoreTotalOutput {
+    pub count: u32,
+    pub total: i64,
+}
+
+/// HashMap<String, i64>(동적 맵) — count + (key,value)* 와이어 고정.
+#[command]
+pub fn score_total(input: ScoreTotalInput) -> Result<ScoreTotalOutput> {
+    Ok(ScoreTotalOutput {
+        count: input.scores.len() as u32,
+        total: input.scores.values().sum(),
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SpanInput {
+    pub pair: (String, i64),
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SpanOutput {
+    pub first: String,
+    pub second: i64,
+}
+
+/// (String, i64) 튜플 — 무접두 나열 와이어 고정.
+#[command]
+pub fn span(input: SpanInput) -> Result<SpanOutput> {
+    Ok(SpanOutput {
+        first: input.pair.0,
+        second: input.pair.1,
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GaugeInput {
+    pub limit: u64,
+    pub offset: u32,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GaugeOutput {
+    pub next: u64,
+}
+
+/// u64/u32 필드 — plain varint(uvar) 와이어 고정(과거 zigzag 버그 수정 증명).
+#[command]
+pub fn gauge(input: GaugeInput) -> Result<GaugeOutput> {
+    Ok(GaugeOutput {
+        next: input.limit + input.offset as u64,
+    })
+}
+
 // `rustraRegistryDemo` 는 빌드 시점에 등록되어 항상 호출 가능하며, 런타임에 live
 // package 를 mutate 한다. RN 이 사용하는 동일 FFI 경로(invoke_json)를 통해 동작하며,
 // mutation 사이에 rebuild 가 필요 없다. release 빌드에서는 frozen 이다.
@@ -537,7 +629,11 @@ pub fn calculator_package() -> Package {
                 divide,
                 emit_demo,
                 rustra_registry_demo,
-                secure_compute
+                secure_compute,
+                size_of,
+                score_total,
+                span,
+                gauge
             )
             .require_capability("secureCompute", "compute:secure")
             .build();
