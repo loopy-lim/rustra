@@ -128,6 +128,12 @@ jobs:
         run: cd examples/calculator-napi && npm install
       - name: Build napi addon (debug)
         run: npm run build:napi
+      # 산출 진단 — linux 에서 napi CLI 가 .node 를 어디에 두는지(두지 않는지) 로그로 확정.
+      - name: Verify addon artifact
+        run: |
+          ls -la examples/calculator-napi/ | grep -E "\.node|\.so" || echo "NO BINARY in example dir"
+          find target/debug -name "*.so" -newer Cargo.toml 2>/dev/null | head -3 || true
+          test -f examples/calculator-napi/calculator-napi.linux-x64.node
       - name: Install root dependencies
         run: npm ci
       - name: Build @rustra/types first
