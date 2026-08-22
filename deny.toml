@@ -33,7 +33,7 @@ version = 2
 # 취약점(vulnerabilities)은 실패. unmaintained/unsound 경고는
 # docs/security-audit.md 의 transitive 목록과 정합 — yanked 는 경고.
 yanked = "warn"
-unmaintained = "warn"
+unmaintained = "all"
 
 # ── 크레이트 출처 ─────────────────────────────────────────────
 [bans]

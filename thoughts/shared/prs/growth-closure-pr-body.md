@@ -8,14 +8,14 @@
 
 ### 결함 수리 6건 (조사에서 신규 발견)
 
-| # | 결함 | 수정 |
-|---|------|------|
-| 1 | release 빌드에서 `grant_capability`가 영원히 불가능 (freeze가 grant까지 차단 — Runtime Authority가 prod에서 죽어 있음) | freeze는 레지스트리 **구조** mutation(register/unregister/replace)에만 적용, 권한 부여는 동결 무관 허용 + `#[command(capability = "...")]` 매크로 속성 추가(문자열 재결합 제거) |
-| 2 | README/architecture 퀵스타트가 컴파일 안 됨 (`add_numbers(a, b) -> i64` — 파라미터 2개 + Result 위반) | 실제 매크로 계약(단일 Input + `Result<O>`)으로 전면 수정 |
-| 3 | `useCommand`/`useMutation`/`mock()`이 `Function.name` 의존 — minify에서 파손 | 코드젠이 `fn.commandId` 심음 + `resolveCommandId()` 헬퍼 (4예제 generated 재생성 포함) |
-| 4 | useCommand×Node/Bun 조합이 첫 호출부터 `cancel.unsupported` throw | signal 정책 통일: abort 시에만 `cancelled`, 미abort 정상 실행(얕은 취소) — 매트릭스 갱신 |
-| 5 | devtools instrumented 엔진이 options(signal/timeoutMs)를 조용히 탈락 | `invoke(command, args, options)` 시그니처 + 전달 |
-| 6 | release.yml이 `0.1.3` 하드코딩 — 0.2.0 발행 시 대기 루프 no-op | `cargo metadata` 동적 파싱 + `NPM_CONFIG_PROVENANCE` |
+| #   | 결함                                                                                                                   | 수정                                                                                                                                                                            |
+| --- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | release 빌드에서 `grant_capability`가 영원히 불가능 (freeze가 grant까지 차단 — Runtime Authority가 prod에서 죽어 있음) | freeze는 레지스트리 **구조** mutation(register/unregister/replace)에만 적용, 권한 부여는 동결 무관 허용 + `#[command(capability = "...")]` 매크로 속성 추가(문자열 재결합 제거) |
+| 2   | README/architecture 퀵스타트가 컴파일 안 됨 (`add_numbers(a, b) -> i64` — 파라미터 2개 + Result 위반)                  | 실제 매크로 계약(단일 Input + `Result<O>`)으로 전면 수정                                                                                                                        |
+| 3   | `useCommand`/`useMutation`/`mock()`이 `Function.name` 의존 — minify에서 파손                                           | 코드젠이 `fn.commandId` 심음 + `resolveCommandId()` 헬퍼 (4예제 generated 재생성 포함)                                                                                          |
+| 4   | useCommand×Node/Bun 조합이 첫 호출부터 `cancel.unsupported` throw                                                      | signal 정책 통일: abort 시에만 `cancelled`, 미abort 정상 실행(얕은 취소) — 매트릭스 갱신                                                                                        |
+| 5   | devtools instrumented 엔진이 options(signal/timeoutMs)를 조용히 탈락                                                   | `invoke(command, args, options)` 시그니처 + 전달                                                                                                                                |
+| 6   | release.yml이 `0.1.3` 하드코딩 — 0.2.0 발행 시 대기 루프 no-op                                                         | `cargo metadata` 동적 파싱 + `NPM_CONFIG_PROVENANCE`                                                                                                                            |
 
 ### 이벤트 스토리 완결 ("한 번 정의하면 어디서든"의 절반 공백 해소)
 
