@@ -44,8 +44,11 @@ rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)�
 - [x] rkyv V2 바이너리 fast-path + 취소/타임아웃/배치 — 0.1~0.2
 - [x] 이벤트 계약 코드젠 (`PackageBuilder::event`) — 0.2.x
 - [x] persistent 루프 런타임 + Node loop transport — 0.2.x
-- [ ] 타입 패리티 1단계 — fast path 타입 확장: bigint(i64/u64), 동적 맵
-      `HashMap<String,T>`, 튜플, payload 있는 enum, ArrayBuffer 인자, Date
+- [x] 타입 패리티 1단계 — fast path 타입 확장 (2026-08-22): u8–u64 plain
+      varint, 동적 맵 `HashMap<String,T>`(원시값), 튜플(무접두), `Vec<u8>`
+      bytes(ArrayBuffer 표면), chrono Date(ISO string), Set<unsigned> —
+      3면(TS·Rust·C++) 코드젠 + PINNED hex 와이어 게이트. 잔여: bigint TS
+      표면(number 유지, 2^53 한계), data enum(oneOf 순서 비결정 → Tier 3 확정)
 - [ ] 타입 패리티 2단계 — 채널/리소스 (Tauri v2 `ipc::Channel`·`Resource`
       모델): 콜백을 직렬화 가능한 채널 핸들로, 객체 참조를 Rust-소유 리소스
       핸들 + 코드젠 메서드로 — Nitro의 TS-first 객체 브릿지가 아니라

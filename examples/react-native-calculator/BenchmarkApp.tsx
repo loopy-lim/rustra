@@ -4,7 +4,7 @@ import { NitroModules } from "react-native-nitro-modules";
 import { configure } from "@rustra/types";
 import {
   addNumbers, greet, sumList, toUpper, isEven,
-  createItem, processItem, multiply, clamp,
+  createItem, processItem, multiply, clamp, sizeOf,
 } from "../calculator/generated/commands";
 // ── Benchmark internals (not part of user-facing API) ───────
 import { installRustraJSI, getRustraNative } from "./modules/rustra-jsi/src";
@@ -128,6 +128,10 @@ async function runBenchmarks(): Promise<string[]> {
     name: string;
     equals(other: object): boolean;
     dispose(): void;
+    // ── 페이로드 형태 비교(2026-08-22): string/ArrayBuffer/구조체 ──
+    echoString(value: string): string;
+    echoBuffer(value: ArrayBuffer): ArrayBuffer;
+    echoPair(value: { name: string; value: number }): { name: string; value: number };
   }>("NitroBench");
 
   const encoder = new TextEncoder();
@@ -337,6 +341,51 @@ async function runBenchmarks(): Promise<string[]> {
   const greetJson = await measure("greet JSON", () => greet({ name: "World" }));
   log(`│  JSON     avg: ${formatNs(greetJson.avg).padStart(10)}  p50: ${formatNs(greetJson.p50)}  p99: ${formatNs(greetJson.p99)}`);
 
+  log("╚════════════════════════════════════════════════╝");
+  log("");
+
+  // ── 페이로드 형태 비교(2026-08-22) ──────────────────
+  // Nitro(프로퍼티 분해 마셜링) vs rustra rkyvV2(postcard 직렬화)를
+  // string/bytes/struct 세 형태로 같은 조건에서 왕복 측정한다.
+  log("╔════════════════════════════════════════════════╗");
+  log("║  Payload shapes: Nitro vs rkyvV2 (10K iter)   ║");
+  log("╠════════════════════════════════════════════════╣");
+
+  // string — Nitro echoString vs rustra greet(유사 왕복)
+  const nitroStr = await measure("nitro str", () =>
+    Promise.resolve(nitroBench.echoString("benchmark-string-payload")),
+  );
+  log(`│  str Nitro  avg: ${formatNs(nitroStr.avg).padStart(10)}  p50: ${formatNs(nitroStr.p50)}`);
+
+  configure(rkyvV2Engine);
+  const rustraStr = await measure("rustra str", () => greet({ name: "benchmark-string-payload" }));
+  log(`│  str rustra avg: ${formatNs(rustraStr.avg).padStart(10)}  p50: ${formatNs(rustraStr.p50)}`);
+
+  // bytes(64B) — Nitro echoBuffer vs rustra sizeOf(Vec<u8> 왕복)
+  const buf = new Uint8Array(64);
+  for (let i = 0; i < 64; i++) buf[i] = i & 0xff;
+  const ab = buf.buffer as ArrayBuffer;
+  const nitroBuf = await measure("nitro buf", () =>
+    Promise.resolve(nitroBench.echoBuffer(ab)),
+  );
+  log(`│  buf Nitro  avg: ${formatNs(nitroBuf.avg).padStart(10)}  p50: ${formatNs(nitroBuf.p50)}`);
+
+  const rustraBuf = await measure("rustra buf", () => sizeOf({ data: Array.from(buf) }));
+  log(`│  buf rustra avg: ${formatNs(rustraBuf.avg).padStart(10)}  p50: ${formatNs(rustraBuf.p50)}`);
+
+  // struct — Nitro echoPair(프로퍼티 분해) vs rustra createItem(postcard)
+  const nitroPair = await measure("nitro pair", () =>
+    Promise.resolve(nitroBench.echoPair({ name: "widget", value: 42 })),
+  );
+  log(`│  obj Nitro  avg: ${formatNs(nitroPair.avg).padStart(10)}  p50: ${formatNs(nitroPair.p50)}`);
+
+  const rustraPair = await measure("rustra pair", () => createItem({ name: "widget", value: 42 }));
+  log(`│  obj rustra avg: ${formatNs(rustraPair.avg).padStart(10)}  p50: ${formatNs(rustraPair.p50)}`);
+
+  log("│");
+  log(`│  str  rustra/Nitro = ${(rustraStr.avg / nitroStr.avg).toFixed(2)}x`);
+  log(`│  buf  rustra/Nitro = ${(rustraBuf.avg / nitroBuf.avg).toFixed(2)}x`);
+  log(`│  obj  rustra/Nitro = ${(rustraPair.avg / nitroPair.avg).toFixed(2)}x`);
   log("╚════════════════════════════════════════════════╝");
   log("");
 

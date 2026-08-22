@@ -1420,8 +1420,8 @@ function cppEncodeWithGetter(
         `${indent}{ auto _o = ${get}.asObject(rt);` +
         ` std::vector<std::pair<std::string, jsi::Value>> _entries;` +
         ` auto _names = _o.getPropertyNames(rt);` +
-        ` for (const auto& _name : _names) { auto _k = _name;` +
-        ` _entries.push_back({std::move(_k), _o.getProperty(rt, _name)}); }` +
+        ` for (size_t _j = 0; _j < _names.length(rt); _j++) { auto _k = _names.getValueAtIndex(rt, _j).getString(rt).utf8(rt);` +
+        ` _entries.push_back({std::move(_k), _o.getProperty(rt, jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_k.data()), _k.size()))}); }` +
         ` std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; });` +
         ` w.push_uvar(_entries.size());` +
         ` for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; ${pushVal} } }`
