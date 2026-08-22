@@ -124,6 +124,10 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm ci
+      # @napi-rs/cli 는 examples/calculator-napi 의 devDependency 다 — 루트
+      # npm ci 는 예제 node_modules 을 설치하지 않는다(rn-android 와 동일 함정).
+      - name: Install napi example deps
+        run: cd examples/calculator-napi && npm install
       - name: Build calculator example
         run: cargo build -p rustra-calculator-example
       - name: Build napi addon (debug)
