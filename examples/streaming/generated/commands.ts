@@ -8,8 +8,10 @@ import type { InvokeOptions } from '@rustra/types';
 export function jobStatus(input: JobStatusInput, options?: InvokeOptions): Promise<JobStatusOutput> {
   return invoke<JobStatusOutput>('jobStatus', input, options);
 }
+jobStatus.commandId = 'jobStatus';
 
 export function startJob(input: StartJobInput, options?: InvokeOptions): Promise<StartJobOutput> {
   return invoke<StartJobOutput>('startJob', input, options);
 }
+startJob.commandId = 'startJob';
 
