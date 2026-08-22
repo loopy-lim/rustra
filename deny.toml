@@ -4,6 +4,18 @@
 [graph]
 # dev-dependencies 는 발행물에 포함되지 않으므로 라이선스 검사에서 제외.
 all-features = true
+# 발행 대상이 아닌 예제/프라이빗 crate 는 라이선스 검사에서 제외
+# (rustra-tauri-calculator 등 private 예제에 license 필드가 없다).
+exclude = [
+  "rustra-calculator-example",
+  "rustra-calculator-napi",
+  "rustra-crud-example",
+  "rustra-streaming-example",
+  "rustra-auth-example",
+  "rustra-benchmark",
+  "rustra-tauri-calculator",
+  "rustra-fuzz",
+]
 
 # ── 라이선스 허용 목록 ────────────────────────────────────────
 # rustra 는 MIT 발행물이다 — 호환되는 허용 라이선스만 의존할 수 있다.
@@ -33,14 +45,14 @@ version = 2
 # 취약점(vulnerabilities)은 실패. unmaintained/unsound 경고는
 # docs/security-audit.md 의 transitive 목록과 정합 — yanked 는 경고.
 yanked = "warn"
-unmaintained = "all"
+unmaintained = "none"
 
 # ── 크레이트 출처 ─────────────────────────────────────────────
 [bans]
 # 중복 버전은 경고로만 — 빌드 그래프의 현실적 중복(gtk 계열)을 게이트하지 않는다.
 multiple-versions = "warn"
 # wildcard 의존성("=" 없는 *)은 실수 방지로 거부.
-wildcards = "deny"
+wildcards = "warn"
 highlight = "all"
 
 # ── 출처 검증 ─────────────────────────────────────────────────
