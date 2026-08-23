@@ -1088,6 +1088,71 @@ pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2(
     alloc_response(resp, out_len)
 }
 
+/// 스칼라 직결(raw) invoke — postcard 인코딩/디코딩 없이 u64 슬롯으로 주고받는다.
+///
+/// JSI 호스트의 `invokeTypedRaw(cmdId, ...args)` 진입과 짝을 이룬다. 슬롯
+/// 배열은 인자 선언순 그대로(f64는 IEEE-754 비트 재해석, bool은 0/1). 결과
+/// 슬롯은 `out_slot` 에 기록되고 반환값은 에러 코드다(0=성공, 그 외=에러).
+/// 에러 상세는 기존 rkyv V2 에러 와이어([`crate::encode_rkyv_v2_error`])를
+/// `err_buf`/`err_buf_cap` 에 복사하고 필요 크기를 `err_len` 에 쓴다 —
+/// 부족하면 잘린 메시지라도 싣고 0이 아닌 코드를 반환한다.
+///
+/// 명령이 raw 조건(스칼라 1..3 입력 + 단일 스칼라/unit 출력)이 아니면
+/// `u32::MAX`(폴백 신호)를 반환한다 — 호스트는 by-id 경로로 되돌린다.
+///
+/// # Safety
+///
+/// `slots` must point to at least `slot_count` readable u64 values.
+/// `out_slot` and `err_len` must be valid write pointers.
+/// `err_buf`, when non-null, must point to at least `err_buf_cap` writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_invoke_raw(
+    command_id: u16,
+    slots: *const u64,
+    slot_count: usize,
+    out_slot: *mut u64,
+    err_buf: *mut u8,
+    err_buf_cap: usize,
+    err_len: *mut usize,
+) -> u32 {
+    if out_slot.is_null() || err_len.is_null() {
+        return u32::MAX;
+    }
+    let Some(pkg) = get_package() else {
+        unsafe { *err_len = 0 };
+        return u32::MAX;
+    };
+    // raw 직결 불가 명령 폴백 신호 — 호스트가 by-id 경로로 되돌린다.
+    if pkg.raw_invoke_shape(command_id).is_none() {
+        unsafe { *err_len = 0 };
+        return u32::MAX;
+    }
+    let slot_slice: &[u64] = if slots.is_null() || slot_count == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(slots, slot_count) }
+    };
+    match pkg.invoke_raw(command_id, slot_slice) {
+        Ok(value) => {
+            unsafe { *out_slot = value };
+            unsafe { *err_len = 0 };
+            0
+        }
+        Err(error) => {
+            let wire = crate::encode_rkyv_v2_error(&error);
+            let needed = wire.len();
+            let copy = needed.min(err_buf_cap);
+            if !err_buf.is_null() && copy > 0 {
+                unsafe {
+                    std::ptr::copy_nonoverlapping(wire.as_ptr(), err_buf, copy);
+                }
+            }
+            unsafe { *err_len = needed };
+            1
+        }
+    }
+}
+
 /// rkyv V2 caller-buffer 변형 — JSI typed fast path 의 malloc→memcpy→free
 /// 사이클 제거 경로.
 ///

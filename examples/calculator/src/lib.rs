@@ -1422,6 +1422,37 @@ pub unsafe extern "C" fn rustra_calculator_free_rkyv_v2_buffer(ptr: *mut u8, len
     unsafe { rustra::ffi::rustra_ffi_free(ptr, len) };
 }
 
+/// 코어 `rustra_ffi_invoke_raw` 의 calculator 네임스페이스 재노출 — JSI
+/// `invokeTypedRaw` (Tier 0 스칼라 직결) 진입과 짝을 이룬다. 계약은 코어
+/// doc 주석 참조(0=성공, 1=에러, UINT32_MAX=raw 불가 폴백 신호).
+///
+/// # Safety
+///
+/// `slots` must be valid for `slot_count` u64 reads; `out_slot`/`err_len` valid
+/// write pointers; `err_buf` valid for `err_buf_cap` bytes when non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_calculator_invoke_typed_raw(
+    command_id: u16,
+    slots: *const u64,
+    slot_count: usize,
+    out_slot: *mut u64,
+    err_buf: *mut u8,
+    err_buf_cap: usize,
+    err_len: *mut usize,
+) -> u32 {
+    unsafe {
+        rustra::ffi::rustra_ffi_invoke_raw(
+            command_id,
+            slots,
+            slot_count,
+            out_slot,
+            err_buf,
+            err_buf_cap,
+            err_len,
+        )
+    }
+}
+
 /// rkyv V2 비동기 완료 콜백 — `rustra_ffi_invoke_async` 의 on_complete 와 동일 계약.
 /// 응답 버퍼는 코어 FFI 레이아웃으로 할당되며 콜백 첫 인자가 null 이 아니면
 /// `rustra_calculator_free_rkyv_v2_buffer` 로 해제해야 한다.

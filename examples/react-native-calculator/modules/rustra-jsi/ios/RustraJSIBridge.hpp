@@ -91,6 +91,16 @@ extern "C" {
   size_t rustra_ffi_invoke_rkyv_v2_into(
     const uint8_t* payload, size_t payload_len,
     uint8_t* buf, size_t capacity, size_t* out_len);
+
+  // ── (Tier 0) 스칼라 직결 raw invoke — postcard 인코딩/디코딩 전부 제거 ──
+  // 인자를 u64 슬롯(f64는 IEEE-754 비트, bool은 0/1)으로 직접 전달한다.
+  // 반환: 0=성공(*out_slot 에 결과 슬롯), 1=핸들러 에러(에러 와이어를 err_buf
+  // 에 복사, *err_len 에 필요 크기), UINT32_MAX=raw 불가 명령(호스트 폴백 신호).
+  uint32_t rustra_ffi_invoke_raw(
+    uint16_t command_id,
+    const uint64_t* slots, size_t slot_count,
+    uint64_t* out_slot,
+    uint8_t* err_buf, size_t err_buf_cap, size_t* err_len);
 }
 
 /// Cached function entry — stores PropNameID + pre-created JS Function.

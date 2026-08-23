@@ -133,9 +133,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 
 use rkyv_codec::{
-    BinHandler, BinIntoHandler, DecodeFn, DirectResponse, EncodeFn, Tier, build_rkyv_v2_decoder,
-    build_rkyv_v2_response_encoder, build_tier3_json_decoder, is_output_tier3,
-    js_postcard_codec_supported_with_defs,
+    BinHandler, BinIntoHandler, DecodeFn, DirectResponse, EncodeFn, RawHandler, Tier,
+    build_rkyv_v2_decoder, build_rkyv_v2_response_encoder, build_tier3_json_decoder,
+    is_output_tier3, js_postcard_codec_supported_with_defs,
 };
 
 pub use error::{Result, RustraError};
@@ -542,6 +542,16 @@ struct Command {
     rkyv_v2_handler: Option<BinHandler>,
     /// caller-buffer fast handler: 작은 응답을 호스트 메모리에 직접 직렬화한다.
     rkyv_v2_into_handler: Option<BinIntoHandler>,
+    /// 스칼라 직결 raw 핸들러 — 인자/결과를 u64 슬롯으로 주고받는다.
+    /// postcard 왕복이 없다(정의는 `build_command_raw` 참조).
+    raw_handler: Option<RawHandler>,
+    /// raw 직결의 입력 필드 종류 — 호스트가 같은 순서로 비트를 해석한다.
+    raw_input_kinds: Vec<crate::rkyv_codec::RawFieldKind>,
+    /// raw 직결의 출력 필드 종류(현재 단일 스칼라 또는 unit 만 지원).
+    /// 현재 코어 소비자는 없으나 호스트 디코딩 계약 문서로 남긴다 — JSI
+    /// decode_by_id 와 짝을 이루는 슬롯 해석 종류다(향후 C++ 코드젠 사용).
+    #[allow(dead_code)]
+    raw_output_kind: Option<crate::rkyv_codec::RawFieldKind>,
     rkyv_v2_decode: DecodeFn,
     rkyv_v2_encode_response: EncodeFn,
     /// true when this command uses Tier 3 (JSON fallback) wire format.
@@ -671,6 +681,13 @@ where
         }))
     };
 
+    // ── 스칼라 직결 raw 핸들러 ──
+    // 조건: 입력이 스칼라 1..3개 + 출력이 단일 스칼라(또는 unit)인 정적 명령.
+    // postcard 왕복 없이 u64 슬롯으로 직접 주고받는다. 필드 종류는 스키마의
+    // 프로퍼티 선언순(fieldOrder=declaration 계약)에서 읽는다.
+    let (raw_handler, raw_input_kinds, raw_output_kind) =
+        build_raw_handler(&input_schema, &output_schema, &handler, force_tier3);
+
     Command {
         command_id,
         input_type: short_type_name::<I>(),
@@ -685,11 +702,223 @@ where
         }),
         rkyv_v2_handler,
         rkyv_v2_into_handler,
+        raw_handler,
+        raw_input_kinds,
+        raw_output_kind,
         rkyv_v2_decode: rkyv_v2_decoder,
         rkyv_v2_encode_response: rkyv_v2_response_encoder,
         rkyv_v2_tier3: is_tier3,
         required_capability: None,
     }
+}
+
+/// 입력/출력 스키마에서 raw 직결 가능성을 판정하고 핸들러를 조립한다.
+/// 슬롯 ↔ 타입 변환은 JSON Value 경유로 수행한다(I/O 타입이 제네릭이라
+/// 개별 스칼라 타입에 특화할 수 없기 때문) — postcard 왕복 대비 Value 1회
+/// 변환만 남는다. 스키마 필드명으로 객체를 조립하므로 선언순 계약을 그대로
+/// 따른다.
+fn build_raw_handler<I, O, F>(
+    input_schema: &Value,
+    output_schema: &Value,
+    handler: &Arc<F>,
+    force_tier3: bool,
+) -> (
+    Option<RawHandler>,
+    Vec<crate::rkyv_codec::RawFieldKind>,
+    Option<crate::rkyv_codec::RawFieldKind>,
+)
+where
+    I: DeserializeOwned + 'static,
+    O: Serialize + 'static,
+    F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+{
+    use crate::rkyv_codec::RawFieldKind;
+
+    if force_tier3 {
+        return (None, Vec::new(), None);
+    }
+    // 입력: object 프로퍼티 1..3개 전부 스칼라.
+    let Some(props) = input_schema.get("properties").and_then(Value::as_object) else {
+        return (None, Vec::new(), None);
+    };
+    if props.is_empty() || props.len() > 3 {
+        return (None, Vec::new(), None);
+    }
+    let mut input_kinds = Vec::with_capacity(props.len());
+    let mut field_names = Vec::with_capacity(props.len());
+    for (name, schema) in props {
+        let Some(kind_str) = schema.get("type").and_then(Value::as_str) else {
+            return (None, Vec::new(), None);
+        };
+        // integer 형식 정보로 zigzag/uvar 를 가린다 — postcard 는 signed 는
+        // zigzag, unsigned 는 plain varint. format 미지정 signed 정수는 zigzag.
+        let kind = match kind_str {
+            "integer" => {
+                let format = schema.get("format").and_then(Value::as_str).unwrap_or("");
+                match format {
+                    "uint8" | "uint16" | "uint32" | "uint64" => RawFieldKind::Uvar,
+                    _ => RawFieldKind::Zigzag,
+                }
+            }
+            "number" => RawFieldKind::F64,
+            "boolean" => RawFieldKind::Bool,
+            _ => return (None, Vec::new(), None),
+        };
+        // f32 판별: number + format "float"(schemars 관례).
+        if kind == RawFieldKind::F64
+            && schema.get("format").and_then(Value::as_str) == Some("float")
+        {
+            input_kinds.push(RawFieldKind::F32);
+        } else {
+            input_kinds.push(kind);
+        }
+        field_names.push(name.clone());
+    }
+
+    // 출력: 단일 스칼라 프로퍼티(또는 빈 객체=unit).
+    let out_props = output_schema
+        .get("properties")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let (output_kind, output_name) = if out_props.is_empty() {
+        (None, None)
+    } else if out_props.len() == 1 {
+        let (name, schema) = out_props.iter().next().expect("len==1");
+        let Some(kind_str) = schema.get("type").and_then(Value::as_str) else {
+            return (None, Vec::new(), None);
+        };
+        let kind = match kind_str {
+            "integer" => {
+                let format = schema.get("format").and_then(Value::as_str).unwrap_or("");
+                match format {
+                    "uint8" | "uint16" | "uint32" | "uint64" => RawFieldKind::Uvar,
+                    _ => RawFieldKind::Zigzag,
+                }
+            }
+            "number" => RawFieldKind::F64,
+            "boolean" => RawFieldKind::Bool,
+            _ => return (None, Vec::new(), None),
+        };
+        (Some(kind), Some(name.clone()))
+    } else {
+        return (None, Vec::new(), None);
+    };
+
+    // postcard 출력은 필드명을 와이어에 싣지 않는다(선언순 값 나열) —
+    // 출력 필드 이름은 디코딩에 불필요하다.
+    let _out_name: Option<String> = output_name;
+    let kinds_snapshot = input_kinds.clone();
+    let output_kind_snapshot = output_kind;
+    let handler = Arc::clone(handler);
+    // postcard 입력 바디 프리픽스 — 각 필드의 와이어 인코딩은 슬롯 값에서
+    // 결정론적으로 조립된다(선언순). Vec 할당을 피하기 위해 고정 32B 버퍼:
+    // 스칼라 3개면 최대 8+8+10(과잉 여유)에 충분하다. 부족(이론상 i64
+    // varint 10B×3)해도 안전하다 — 초과분은 없다(3×10=30<32).
+    let raw: RawHandler = Arc::new(move |slots: &[u64]| {
+        if slots.len() != kinds_snapshot.len() {
+            return Err(RustraError::invalid_args(format!(
+                "raw invoke: expected {} slots, got {}",
+                kinds_snapshot.len(),
+                slots.len()
+            )));
+        }
+        // 1) 슬롯 → postcard 입력 바디(필드 와이어와 동일한 인코딩).
+        let mut body = [0u8; 32];
+        let mut w = 0usize;
+        let push_varint = |buf: &mut [u8; 32], w: &mut usize, mut v: u64| {
+            loop {
+                let b = (v & 0x7f) as u8;
+                v >>= 7;
+                if v == 0 {
+                    buf[*w] = b;
+                    *w += 1;
+                    break;
+                }
+                buf[*w] = b | 0x80;
+                *w += 1;
+            }
+        };
+        for (i, kind) in kinds_snapshot.iter().enumerate() {
+            match kind {
+                RawFieldKind::Zigzag => {
+                    let v = slots[i] as i64;
+                    let zig = ((v << 1) ^ (v >> 63)) as u64;
+                    push_varint(&mut body, &mut w, zig);
+                }
+                RawFieldKind::Uvar => push_varint(&mut body, &mut w, slots[i]),
+                RawFieldKind::F64 => {
+                    body[w..w + 8].copy_from_slice(&slots[i].to_le_bytes());
+                    w += 8;
+                }
+                RawFieldKind::F32 => {
+                    // f32 정밀도로 반올림한 뒤 4바이트 LE — postcard f32 와이어.
+                    let f = crate::rkyv_codec::f64_from_u64(slots[i]) as f32;
+                    body[w..w + 4].copy_from_slice(&f.to_le_bytes());
+                    w += 4;
+                }
+                RawFieldKind::Bool => {
+                    body[w] = u8::from(slots[i] != 0);
+                    w += 1;
+                }
+            }
+        }
+        // 2) postcard 디코딩 — 기존 rkyv V2 경로와 동일한 저비용 디코더.
+        let input: I = postcard::from_bytes(&body[..w])
+            .map_err(|e| RustraError::invalid_args(format!("raw invoke decode: {e}")))?;
+        let output = handler(input)?;
+        // 3) 출력 — 단일 스칼라 필드를 postcard 로 1회 직렬화해 슬롯으로 복원.
+        //    Value 경유 없이 serialized_size + to_slice 로 프리픽스 버퍼에.
+        let Some(out_kind) = output_kind_snapshot else {
+            return Ok(0); // unit 출력
+        };
+        let mut out_buf = [0u8; 16];
+        let encoded = postcard::to_slice(&output, &mut out_buf)
+            .map_err(|e| RustraError::internal(format!("raw invoke encode: {e}")))?;
+        if encoded.is_empty() {
+            return Err(RustraError::internal("raw invoke: empty output wire"));
+        }
+        // 필드 와이어: [필드명 varint][값] — 단일 필드 구조체는 postcard 가
+        // 필드명 없이 값만 나열한다(struct 는 필드 순서대로 값만). 따라서
+        // encoded[0..] = 값 그 자체다.
+        let mut r: &[u8] = encoded;
+        let read_varint = |bytes: &mut &[u8]| -> u64 {
+            let mut v = 0u64;
+            let mut shift = 0;
+            loop {
+                let b = bytes[0];
+                *bytes = &bytes[1..];
+                v |= ((b & 0x7f) as u64) << shift;
+                if b & 0x80 == 0 {
+                    break;
+                }
+                shift += 7;
+            }
+            v
+        };
+        let slot = match out_kind {
+            RawFieldKind::Zigzag => {
+                let zig = read_varint(&mut r);
+                let v = ((zig >> 1) as i64) ^ -((zig & 1) as i64);
+                v as u64
+            }
+            RawFieldKind::Uvar => read_varint(&mut r),
+            RawFieldKind::F64 => {
+                let mut bits = [0u8; 8];
+                bits.copy_from_slice(&r[..8]);
+                u64::from_le_bytes(bits)
+            }
+            RawFieldKind::F32 => {
+                let mut b4 = [0u8; 4];
+                b4.copy_from_slice(&r[..4]);
+                let f = f32::from_le_bytes(b4);
+                crate::rkyv_codec::u64_from_f64(f as f64)
+            }
+            RawFieldKind::Bool => u64::from(r[0] != 0),
+        };
+        Ok(slot)
+    });
+    (Some(raw), input_kinds, output_kind)
 }
 
 impl Package {
@@ -928,6 +1157,81 @@ impl Package {
                 .clone()
         };
         self.invoke_rkyv_v2_command(command.as_ref(), payload)
+    }
+
+    /// 스칼라 직결(raw) invoke — postcard 왕복 없이 u64 슬롯으로 주고받는다.
+    /// 대상 명령이 raw 직결 조건(스칼라 1..3 입력 + 단일 스칼라/unit 출력)을
+    /// 만족하지 않으면 `command.invalid_args` 를 반환해 호출자(호스트 JSI)가
+    /// by-id 경로로 폴백하게 한다. 와이어 포맷은 존재하지 않는다(계약이 슬롯
+    /// 배열 자체) — 코덱 게이트 대상 아니다.
+    pub fn invoke_raw(&self, command_id: u16, slots: &[u64]) -> crate::Result<u64> {
+        // 양쪽 가지 모두 Arc 클론으로 통일 — 핸들러 실행은 잠금 밖에서.
+        let command = if self.is_frozen() {
+            self.frozen_registry
+                .get()
+                .and_then(|registry| registry.id_to_command.get(command_id as usize))
+                .and_then(Option::as_ref)
+                .cloned()
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
+        } else {
+            let state = self
+                .state
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state
+                .id_to_command
+                .get(&command_id)
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
+                .clone()
+        };
+        let Some(raw) = command.raw_handler.as_ref() else {
+            return Err(RustraError::invalid_args(format!(
+                "raw invoke: command id:{command_id} has no raw handler"
+            )));
+        };
+        self.capability_satisfied(command.as_ref())?;
+        // 핸들러 패닉 가드 — 다른 invoke 경로와 동일 계약(internal 정규화).
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| raw(slots)));
+        match outcome {
+            Ok(result) => result,
+            Err(panic) => Err(RustraError::internal(format!(
+                "panic in handler: {}",
+                crate::ffi::panic_message(&panic)
+            ))),
+        }
+    }
+
+    /// raw 직결 가능 여부 — 호스트가 스키마 없이 폴백 여부를 미리 판정한다.
+    /// 입력 슬롯 종류를 함께 돌려준다(호스트가 같은 순서로 비트를 해석).
+    /// 잠금 수명에서 벗어나도록 소유 복사본을 반환한다(호출 빈도가 낮다 —
+    /// 호스트는 엔진 구성 시 1회 스윕한다).
+    pub fn raw_invoke_shape(
+        &self,
+        command_id: u16,
+    ) -> Option<Vec<crate::rkyv_codec::RawFieldKind>> {
+        let (has_raw, kinds) = if self.is_frozen() {
+            let command = self
+                .frozen_registry
+                .get()?
+                .id_to_command
+                .get(command_id as usize)
+                .and_then(Option::as_ref)?;
+            (
+                command.raw_handler.is_some(),
+                command.raw_input_kinds.clone(),
+            )
+        } else {
+            let state = self
+                .state
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let command = state.id_to_command.get(&command_id)?;
+            (
+                command.raw_handler.is_some(),
+                command.raw_input_kinds.clone(),
+            )
+        };
+        if has_raw { Some(kinds) } else { None }
     }
 
     #[inline]
@@ -2105,5 +2409,104 @@ mod runtime_registry_tests {
             assert!(bytes[0] == 0 || bytes[0] == 1, "ok flag must be 0 or 1");
             unsafe { crate::ffi::rustra_ffi_free(ptr, out_len) };
         }
+    }
+}
+
+#[cfg(test)]
+mod raw_invoke_tests {
+    use super::*;
+
+    #[derive(serde::Deserialize, schemars::JsonSchema)]
+    #[allow(dead_code)]
+    struct AddIn {
+        a: i64,
+        b: i64,
+    }
+    #[derive(serde::Serialize, schemars::JsonSchema)]
+    #[allow(dead_code)]
+    struct AddOut {
+        value: i64,
+    }
+
+    fn add(input: AddIn) -> Result<AddOut> {
+        Ok(AddOut {
+            value: input.a + input.b,
+        })
+    }
+
+    #[derive(serde::Deserialize, schemars::JsonSchema)]
+    #[allow(dead_code)]
+    struct FIn {
+        a: f64,
+    }
+    #[derive(serde::Serialize, schemars::JsonSchema)]
+    #[allow(dead_code)]
+    struct FOut {
+        value: f64,
+    }
+
+    fn dbl(input: FIn) -> Result<FOut> {
+        Ok(FOut {
+            value: input.a * 2.0,
+        })
+    }
+
+    #[derive(serde::Deserialize, schemars::JsonSchema)]
+    #[allow(dead_code)]
+    struct SIn {
+        name: String,
+    }
+    #[derive(serde::Serialize, schemars::JsonSchema)]
+    #[allow(dead_code)]
+    struct SOut {
+        len: u32,
+    }
+
+    fn slen(input: SIn) -> Result<SOut> {
+        Ok(SOut {
+            len: input.name.len() as u32,
+        })
+    }
+
+    #[test]
+    fn raw_invoke_adds_scalars_without_postcard() {
+        let pkg = Package::builder("test.raw").command_fn(add).build();
+        assert!(
+            pkg.raw_invoke_shape(1).is_some(),
+            "add must be raw-eligible"
+        );
+        assert_eq!(pkg.invoke_raw(1, &[42, 58]).unwrap(), 100);
+        // 부정수 경계 — i64 비트 그대로.
+        assert_eq!(
+            pkg.invoke_raw(1, &[(-5i64) as u64, 3]).unwrap(),
+            (-2i64) as u64
+        );
+    }
+
+    #[test]
+    fn raw_invoke_f64_bit_roundtrip() {
+        let pkg = Package::builder("test.rawf64").command_fn(dbl).build();
+        let bits = crate::rkyv_codec::u64_from_f64(3.5f64);
+        let result = pkg.invoke_raw(1, &[bits]).expect("raw invoke f64");
+        assert_eq!(crate::rkyv_codec::f64_from_u64(result), 7.0);
+    }
+
+    #[test]
+    fn raw_invoke_rejects_arity_mismatch() {
+        let pkg = Package::builder("test.raw2").command_fn(add).build();
+        let err = pkg.invoke_raw(1, &[1]).expect_err("must reject 1 slot");
+        assert!(err.to_string().contains("expected 2 slots"));
+    }
+
+    #[test]
+    fn raw_invoke_rejects_ineligible_command() {
+        // 문자열 필드 명령은 raw 조건 위반 — 폴백 신호(invalid_args).
+        let pkg = Package::builder("test.rawstr").command_fn(slen).build();
+        assert!(
+            pkg.raw_invoke_shape(1).is_none(),
+            "string command must not be raw-eligible"
+        );
+        let err = pkg.invoke_raw(1, &[0]).expect_err("must reject");
+        assert!(err.to_string().contains("no raw handler"));
     }
 }

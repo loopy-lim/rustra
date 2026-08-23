@@ -819,6 +819,77 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
 
+  // ── (Tier 0) invokeTypedRaw(cmdId, ...scalarArgs) — 스칼라 직결 ──
+  // postcard 왕복(인코딩~디코딩)이 전혀 없다: JS 인자를 u64 슬롯으로 조립해
+  // rustra_ffi_invoke_raw 를 부르고 결과 슬롯을 그대로 JS number 로 감싼다.
+  // 코어가 UINT32_MAX 를 돌려주면(비대상 명령) 특수 값 RUSTRA_RAW_FALLBACK
+  // (NaN 페이로드)을 반환해 JS 엔진이 invokeTypedById 로 폴백하게 한다.
+  // 에러(1)는 기존 rkyv V2 에러 와이어를 파싱해 JSError 로 정규화한다.
+  {
+    auto propNameId = PropNameID::forAscii(rt, "invokeTypedRaw");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 4,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1) {
+          throw JSError(rt, "RustraJSI: invokeTypedRaw requires (cmdId, ...args)");
+        }
+        uint16_t cmdId = requireU16(rt, args[0], "command id");
+        size_t slotCount = count - 1;
+        // 스택 슬롯 — 아리티 최대 3 + 여유. 힙 할당 없음.
+        uint64_t slots[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+        if (slotCount > 8) {
+          throw JSError(rt, "RustraJSI: invokeTypedRaw supports up to 8 scalar args");
+        }
+        for (size_t i = 0; i < slotCount; i++) {
+          const Value& v = args[i + 1];
+          if (!v.isNumber()) {
+            throw JSError(rt, "RustraJSI: invokeTypedRaw scalar args must be numbers");
+          }
+          double d = v.asNumber();
+          if (!std::isfinite(d) || std::trunc(d) != d) {
+            // 비정수는 f64 비트로 전달한다 — 코어가 필드 종류로 해석한다.
+            std::memcpy(&slots[i], &d, sizeof(double));
+          } else {
+            // 정수는 값 그대로 — zigzag/uvar/bool 모두 값 시맨틱.
+            // ±2^53 정수만 정확하다(JS number 계약과 동일).
+            int64_t iv = static_cast<int64_t>(d);
+            uint64_t uv;
+            std::memcpy(&uv, &iv, sizeof(uint64_t));
+            // 부호 비트 보존: 음수는 2의 보수 비트를 그대로.
+            slots[i] = d < 0 ? uv : static_cast<uint64_t>(d);
+          }
+        }
+        uint64_t outSlot = 0;
+        uint8_t errBuf[256];
+        size_t errLen = 0;
+        uint32_t code = rustra_ffi_invoke_raw(
+          cmdId, slots, slotCount, &outSlot, errBuf, sizeof(errBuf), &errLen);
+        if (code == UINT32_MAX) {
+          // 폴백 신호 — 특수 NaN 페이로드. JS 엔진은 Number.isNaN 으로 감별해
+          // invokeTypedById 로 되돌린다(엔진 코드의 판별 주석 참조).
+          uint64_t fallbackBits = 0x7ff8000000000001ULL;
+          double fallback;
+          std::memcpy(&fallback, &fallbackBits, sizeof(double));
+          return Value(fallback);
+        }
+        if (code != 0) {
+          // 에러 와이어([ok:0][pad][err_len u16 @8][postcard @10]) 파싱 —
+          // typedInvokeTail 과 동일한 parseRkyvV2ErrorBody 재사용.
+          if (errLen >= 10) {
+            throw JSError(rt, parseRkyvV2ErrorBody(errBuf, errLen));
+          }
+          throw JSError(rt, "RustraJSI: invokeTypedRaw failed");
+        }
+        // 결과 슬롯 → JS number. i64 는 2의 보수 비트 → double 변환으로
+        // 정확히 ±2^53 범위에서 값 복원(JS number 계약).
+        int64_t signedSlot;
+        std::memcpy(&signedSlot, &outSlot, sizeof(int64_t));
+        return Value(static_cast<double>(signedSlot));
+      });
+    cache_["invokeTypedRaw"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+
   // ── (Tier 1) invokeTypedPos(cmdId, a, b, …) — positional 인자 직접 진입 ──
   // JS 측 인자 객체 리터럴 {a, b} 생성과 C++ asObject/getProperty 순회를 모두
   // 건너뛴다 — HostFunction 스택의 Value 배열에서 postcard 바이트로 직렬화.
