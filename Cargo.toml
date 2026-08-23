@@ -28,7 +28,7 @@ resolver = "3"
 [workspace.package]
 edition = "2024"
 license = "MIT"
-version = "0.2.0"
+version = "0.3.0"
 description = "Rust → TypeScript bridge framework with auto-generated type-safe clients"
 repository = "https://github.com/loopy-lim/rustra"
 homepage = "https://github.com/loopy-lim/rustra"
@@ -39,8 +39,8 @@ categories = ["api-bindings", "development-tools::ffi"]
 rust-version = "1.88"
 
 [workspace.dependencies]
-rustra-macros = { version = "0.2.0", path = "crates/rustra-macros" }
-rustra = { version = "0.2.0", path = "crates/rustra" }
+rustra-macros = { version = "0.3.0", path = "crates/rustra-macros" }
+rustra = { version = "0.3.0", path = "crates/rustra" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 schemars = { version = "0.8", features = ["derive", "preserve_order"] }

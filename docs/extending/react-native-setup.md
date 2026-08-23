@@ -181,7 +181,7 @@ The repo example runs a full Release build in CI:
 
 ```sh
 cd examples/react-native-calculator
-npx expo prebuild --platform android --no-install
+bunx expo prebuild --platform android --no-install
 cd android && ./gradlew assembleRelease -x lint
 unzip -l app/build/outputs/apk/release/app-release.apk | grep librustrajsi
 ```
@@ -205,5 +205,5 @@ Ensure `watchFolders` in `metro.config.js` points to the monorepo root.
 Verify the Expo module is properly linked:
 
 1. Check `expo-module.config.json` references the correct Swift class
-2. Run `npx expo-modules-core` to regenerate module providers
+2. Run `bunx expo-modules-core` to regenerate module providers
 3. Clean build: `cd ios && pod deintegrate && pod install`

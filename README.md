@@ -10,7 +10,7 @@ Rust에서 명령을 한 번 정의하면, Node / Bun / Tauri / React Native 어
 > **English** — Define commands once in Rust, get type-safe TypeScript clients
 > for Node, Bun, Tauri, and React Native. Single Rust core, four host surfaces,
 > zero-copy binary wire (rkyv V2). Quick start: `cargo add rustra` +
-> `npx rustra init`. Full docs (Korean) below.
+> `bunx @rustra/cli init`. Full docs (Korean) below.
 
 ## 작동 방식
 
@@ -92,12 +92,12 @@ schemars = { version = "0.8", features = ["derive"] }
 ### TypeScript 어댑터 (필요한 환경만)
 
 ```bash
-npm install @rustra/node      # Node.js
-npm install @rustra/bun       # Bun
-npm install @rustra/tauri     # Tauri
-npm install @rustra/react-native  # React Native
-npm install @rustra/testing       # Mock 엔진 (테스트)
-npm install @rustra/devtools      # 호출 관측성 (개발)
+bun add @rustra/node      # Node.js
+bun add @rustra/bun       # Bun
+bun add @rustra/tauri     # Tauri
+bun add @rustra/react-native  # React Native
+bun add @rustra/testing       # Mock 엔진 (테스트)
+bun add @rustra/devtools      # 호출 관측성 (개발)
 ```
 
 ## 빠른 예제
@@ -130,11 +130,11 @@ Rust가 만든 `schema.json`을 읽어 TS CLI가 `rkyv-codecs.ts`/`rkyv-registry
 생성한다(이 파일들이 없으면 fast-path 클라이언트는 import 에러로 부팅 실패):
 
 ```bash
-npx rustra generate --schema ./generated/schema.json --output ./generated
+bunx @rustra/cli generate --schema ./generated/schema.json --output ./generated
 ```
 
-두 단계를 한 번에 실행하려면 `npx rustra dev`(소스 감시 + dual-path 자동 재생성)
-또는 `npx rustra init`이 만들어주는 `npm run codegen` 스크립트를 쓴다.
+두 단계를 한 번에 실행하려면 `bunx @rustra/cli dev`(소스 감시 + dual-path 자동 재생성)
+또는 `bunx @rustra/cli init`이 만들어주는 `bun run codegen` 스크립트를 쓴다.
 
 ```ts
 // TypeScript — 모든 플랫폼에서 동일
@@ -178,9 +178,9 @@ examples/
 개발 및 테스트 Cargo 프로필은 incremental 캐시와 의존성 debug info를 저장하지 않는다.
 
 ```bash
-npm run clean:dry    # deep clean 대상을 삭제하지 않고 크기만 확인
-npm run clean:build  # Rust/Xcode/Android/TS 빌드 산출물 제거, 설치 의존성 유지
-npm run clean:deep   # build 산출물 + node_modules/Pods/로컬 패키지 캐시 제거
+bun run clean:dry    # deep clean 대상을 삭제하지 않고 크기만 확인
+bun run clean:build  # Rust/Xcode/Android/TS 빌드 산출물 제거, 설치 의존성 유지
+bun run clean:deep   # build 산출물 + node_modules/Pods/로컬 패키지 캐시 제거
 ```
 
 정리 명령은 명시된 재생성 가능 경로만 제거한다. `git clean -fdX`는 로컬 모바일
@@ -381,7 +381,7 @@ const result = await addNumbers({ a: 20, b: 22 });
 | React Native iOS     | Stable | JSI Tier 1~3 왕복 실기 검증, Release 빌드 CI |
 | React Native Android | Stable | Release APK 빌드 CI (Gradle→Rust 자동 빌드)  |
 
-모든 플랫폼은 `npm run test:compat`·CI 네이티브 빌드 잡이 게이트한다.
+모든 플랫폼은 `bun run test:compat`·CI 네이티브 빌드 잡이 게이트한다.
 
 ## 성능
 
@@ -396,11 +396,12 @@ const result = await addNumbers({ a: 20, b: 22 });
 | Node napi-rs (release) | 1.5 µs     | 654,817 ops/s   |
 | Bun FFI (release)      | 2.1 µs     | 471,640+ ops/s  |
 
-> React Native(JSI rkyv V2) full sync ~5.2 µs, Nitro async 대비 ~1.3x(단일
-> 프리미티브 호출 기준 — 비교의 범위와 기능 패리티 매트릭스는
+> React Native(JSI rkyv V2)는 동일 객체 연산의 Nitro 대비 3회 중앙값
+> 1.17–1.24x(add 1.2068x, string 1.2384x, bytes 1.1656x, pair 1.2162x).
+> 비교의 범위와 기능 패리티 매트릭스는
 > [벤치마크 문서](docs/benchmarks.md) §"Nitro Modules 비교" 참고) —
 > 상세 벤치마크, 레이어별 오버헤드 분석, 페이로드 확장성은
-> [벤치마크 문서](docs/benchmarks.md) 참고 (2026-08-22 재측정).
+> [벤치마크 문서](docs/benchmarks.md) 참고 (2026-08-23 iOS Release 재측정).
 
 > 상세 벤치마크, 레이어별 오버헤드 분석, 페이로드 확장성은 [벤치마크 문서](docs/benchmarks.md)를 참고.
 
@@ -452,18 +453,18 @@ cargo run -p rustra-calculator-example
 cargo run -p rustra-crud-example --bin generate
 
 # TypeScript 린트 / 포맷
-npm run lint
-npm run format:check
+bun run lint
+bun run format:check
 
 # Rust 린트 / 포맷
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 
 # CLI watch 모드 (schema 변경 시 자동 재생성)
-npx rustra generate --watch --schema ./generated/schema.json --output ./src/generated
+bunx @rustra/cli generate --watch --schema ./generated/schema.json --output ./src/generated
 
 # dev 루프 — Rust 소스 감시 + dual-path codegen 자동 재실행 (hot codegen)
-npx rustra dev --backend ./backend --app ./app
+bunx @rustra/cli dev --backend ./backend --app ./app
 ```
 
 ## 문서

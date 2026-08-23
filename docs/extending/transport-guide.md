@@ -217,11 +217,11 @@ const engine = createNodeEngine({
 
 ```bash
 # 모든 adapter 호환성 테스트 실행
-npm run test:compat
+bun run test:compat
 
 # 특정 런타임 테스트
-npm run test:runtime:node
-npm run test:runtime:bun
+bun run test:runtime:node
+bun run test:runtime:bun
 ```
 
 테스트는 `configure(engine)` 후 `addNumbers({ a: 20, b: 22 })`의 결과가 `42`인지 확인하는 방식으로, transport가 바뀌어도 동일한 결과를 반환하는지 검증합니다.
@@ -262,7 +262,7 @@ import { configure } from '@rustra/types';
 const lib = dlopen(`target/debug/librustra_calculator_example.${suffix}`, {
   rustra_calculator_invoke: {
     args: [FFIType.cstring],
-    returns: FFIType.ptr,       // FFIType.cstring이 아님 — 수동 메모리 관리 필요
+    returns: FFIType.ptr, // FFIType.cstring이 아님 — 수동 메모리 관리 필요
   },
   rustra_calculator_free_string: {
     args: [FFIType.ptr],
@@ -275,7 +275,7 @@ const engine = createBunEngine({
     const payload = JSON.stringify({ command, args });
     const rawPtr = lib.symbols.rustra_calculator_invoke(payload);
     const rawResponse = new CString(rawPtr);
-    lib.symbols.rustra_calculator_free_string(rawPtr);  // Rust가 CString::from_raw로 해제
+    lib.symbols.rustra_calculator_free_string(rawPtr); // Rust가 CString::from_raw로 해제
 
     const response = JSON.parse(rawResponse) as {
       ok: boolean;

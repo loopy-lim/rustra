@@ -7,7 +7,7 @@ Rust 백엔드 없이 생성된 TypeScript 클라이언트를 구동하는 mock 
 ## 설치
 
 ```bash
-npm install -D @rustra/testing
+bun add -d @rustra/testing
 ```
 
 ## createMockEngine

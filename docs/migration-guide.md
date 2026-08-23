@@ -103,7 +103,7 @@ fn new_name(input: NewInput) -> Result<NewOutput> { /* ... */ }
 
 1. Rust 백엔드 배포 — **추가 전용(additive) 변경**이면 기존 클라이언트와 호환된다.
    (`rustra diff`가 breaking 0을 보고하는 상태)
-2. TS 클라이언트 재생성 (`npm run codegen`) 후 배포.
+2. TS 클라이언트 재생성 (`bun run codegen`) 후 배포.
 
 **breaking 변경이 불가피할 때 (역방향 불가 — 항상 신규 클라이언트 먼저):**
 

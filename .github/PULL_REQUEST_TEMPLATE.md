@@ -9,9 +9,9 @@ from a tracked workstream (thoughts/shared/…). -->
 
 - [ ] `cargo test -p rustra -p rustra-macros`
 - [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `npm run test:packages`
-- [ ] `npm run test:ts:node` (codegen output changes)
-- [ ] `npm run test:compat` (transport/runtime changes)
+- [ ] `bun run test:packages`
+- [ ] `bun run test:ts:node` (codegen output changes)
+- [ ] `bun run test:compat` (transport/runtime changes)
 - [ ] Regenerated `examples/*/generated/` via **both** paths (Rust bin + TS CLI)
 
 ## Checklist
