@@ -1,8 +1,7 @@
 import ExpoModulesCore
 import Foundation
 
-@objc(RustraCalculatorModule)
-public class RustraCalculatorModule: ExpoModule {
+public class RustraCalculatorModule: Module {
   private func encodePayload(command: String, args: Any) -> String? {
     guard JSONSerialization.isValidJSONObject(args),
           let data = try? JSONSerialization.data(

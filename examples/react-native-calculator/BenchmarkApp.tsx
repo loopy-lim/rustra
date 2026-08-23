@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, View, ScrollView } from 'react-native';
 import { NitroModules } from 'react-native-nitro-modules';
-import type { NitroBench } from './modules/nitro-bench/nitro-bench/src';
+import type { NitroBench } from 'nitro-bench';
 import { configure } from '@rustra/types';
 import {
   addNumbers,
@@ -25,9 +25,7 @@ import {
 } from '../calculator/generated/commands';
 // ── Benchmark internals (not part of user-facing API) ───────
 import { installRustraJSI, getRustraNative } from 'rustra-jsi';
-import RustraCalculator, {
-  invokeCommand as invokeFfiCommand,
-} from './modules/rustra-calculator/src';
+import RustraCalculator, { invokeCommand as invokeFfiCommand } from 'rustra-calculator';
 import { createBincodeEngine, bincodeRegistry } from './src/adapters/bincode-adapter';
 import { createJsonEngine } from './src/adapters/json-adapter';
 import { createMsgpackEngine } from './src/adapters/msgpack-adapter';
@@ -572,14 +570,11 @@ async function runBenchmarks(): Promise<string[]> {
     operation: string,
     nitro: () => Promise<unknown>,
     rustra: () => Promise<unknown>,
-    ffi?: () => Promise<unknown>,
   ) => {
-    const cases: InterleavedCase[] = [
+    return measureInterleaved([
       { key: 'nitro', label: `nitro ${operation}`, run: nitro },
       { key: 'rustra', label: `rustra ${operation}`, run: rustra },
-    ];
-    if (ffiSuiteAvailable && ffi) cases.push({ key: 'ffi', label: `ffi ${operation}`, run: ffi });
-    return measureInterleaved(cases);
+    ]);
   };
 
   configure(rkyvV2Engine);
@@ -587,39 +582,139 @@ async function runBenchmarks(): Promise<string[]> {
     'add',
     () => Promise.resolve(nitroBench.benchAdd(INPUT)),
     () => benchAdd(INPUT),
-    () => invokeFfiCommand('benchAdd', INPUT),
   );
   const stringResults = await measureEquivalent(
     'string',
     () => Promise.resolve(nitroBench.echoString(stringPayload)),
     () => benchEchoString(stringPayload),
-    () => invokeFfiCommand('benchEchoString', stringPayload),
   );
   const bytesResults = await measureEquivalent(
     'bytes64',
     () => Promise.resolve(normalizeBytes(nitroBench.echoBytes(bytesPayload))),
     async () => normalizeBytes(await benchEchoBytes(bytesPayload)),
-    () => invokeFfiCommand('benchEchoBytes', bytesPayload),
   );
   const pairResults = await measureEquivalent(
     'pair',
     () => Promise.resolve(nitroBench.echoPair(pairPayload)),
     () => benchEchoPair(pairPayload),
-    () => invokeFfiCommand('benchEchoPair', pairPayload),
   );
+
+  // FFI is an order of magnitude slower and schedules through Swift/Promise.
+  // Mixing it into the sub-4us Nitro/rustra lane changes their GC/microtask
+  // environment. Keep an independent, still-interleaved Nitro/FFI lane so
+  // both comparisons remain equivalent without cross-contaminating the fast
+  // bridge gate.
+  const measureFfiEquivalent = (
+    operation: string,
+    nitro: () => Promise<unknown>,
+    ffi: () => Promise<unknown>,
+  ) =>
+    measureInterleaved([
+      { key: 'nitro', label: `nitro ${operation} (FFI lane)`, run: nitro },
+      { key: 'ffi', label: `ffi ${operation}`, run: ffi },
+    ]);
+
+  const ffiAddResults = ffiSuiteAvailable
+    ? await measureFfiEquivalent(
+        'add',
+        () => Promise.resolve(nitroBench.benchAdd(INPUT)),
+        () => invokeFfiCommand('benchAdd', INPUT),
+      )
+    : undefined;
+  const ffiStringResults = ffiSuiteAvailable
+    ? await measureFfiEquivalent(
+        'string',
+        () => Promise.resolve(nitroBench.echoString(stringPayload)),
+        () => invokeFfiCommand('benchEchoString', stringPayload),
+      )
+    : undefined;
+  const ffiBytesResults = ffiSuiteAvailable
+    ? await measureFfiEquivalent(
+        'bytes64',
+        () => Promise.resolve(normalizeBytes(nitroBench.echoBytes(bytesPayload))),
+        () => invokeFfiCommand('benchEchoBytes', bytesPayload),
+      )
+    : undefined;
+  const ffiPairResults = ffiSuiteAvailable
+    ? await measureFfiEquivalent(
+        'pair',
+        () => Promise.resolve(nitroBench.echoPair(pairPayload)),
+        () => invokeFfiCommand('benchEchoPair', pairPayload),
+      )
+    : undefined;
 
   const nitroAdd = addResults.nitro;
   const rustraAdd = addResults.rustra;
-  const ffiAsyncResult = addResults.ffi;
+  const ffiAsyncResult = ffiAddResults?.ffi;
+  const ffiNitroAdd = ffiAddResults?.nitro;
   const nitroStr = stringResults.nitro;
   const rustraStr = stringResults.rustra;
-  const ffiStr = stringResults.ffi;
+  const ffiStr = ffiStringResults?.ffi;
+  const ffiNitroStr = ffiStringResults?.nitro;
   const nitroBuf = bytesResults.nitro;
   const rustraBuf = bytesResults.rustra;
-  const ffiBuf = bytesResults.ffi;
+  const ffiBuf = ffiBytesResults?.ffi;
+  const ffiNitroBuf = ffiBytesResults?.nitro;
   const nitroPair = pairResults.nitro;
   const rustraPair = pairResults.rustra;
-  const ffiPair = pairResults.ffi;
+  const ffiPair = ffiPairResults?.ffi;
+  const ffiNitroPair = ffiPairResults?.nitro;
+
+  // 공개 generated helper와 그 helper가 최종 선택한 native route를 같은
+  // 호출 단위로 교차 측정한다. 이 값은 Nitro 비교 ratio가 아니라 남은 비용을
+  // JS routing과 native codec/FFI로 나누기 위한 진단 lower bound다.
+  let generatedRouteDiagnostics:
+    | Record<string, { native: BenchResult; generated: BenchResult; generatedToNative: number }>
+    | undefined;
+  if (native.invokeTypedRaw && native.invokeTypedPos && native.invokeTypedById) {
+    const routeCases = async (
+      operation: string,
+      direct: () => Promise<unknown>,
+      generated: () => Promise<unknown>,
+    ) => {
+      const measured = await measureInterleaved([
+        { key: 'native', label: `${operation} native route`, run: direct },
+        { key: 'generated', label: `${operation} generated helper`, run: generated },
+      ]);
+      return {
+        native: measured.native,
+        generated: measured.generated,
+        generatedToNative: measured.generated.avg / measured.native.avg,
+      };
+    };
+    generatedRouteDiagnostics = {
+      add: await routeCases(
+        'add',
+        () => Promise.resolve(native.invokeTypedRaw!(23, 42, 58)),
+        () => benchAdd(INPUT),
+      ),
+      string: await routeCases(
+        'string',
+        () => Promise.resolve(native.invokeTypedPos!(24, stringPayload.value)),
+        () => benchEchoString(stringPayload),
+      ),
+      bytes64: await routeCases(
+        'bytes64',
+        () => Promise.resolve(native.invokeTypedById!(25, bytesPayload)),
+        () => benchEchoBytes(bytesPayload),
+      ),
+      pair: await routeCases(
+        'pair',
+        () => Promise.resolve(native.invokeTypedPos!(26, pairPayload.name, pairPayload.value)),
+        () => benchEchoPair(pairPayload),
+      ),
+    };
+    for (const [operation, result] of Object.entries(generatedRouteDiagnostics)) {
+      console.log(
+        `RUSTRA_ROUTE_OP_JSON=${JSON.stringify({
+          operation,
+          nativeAvgNs: result.native.avg,
+          generatedAvgNs: result.generated.avg,
+          generatedToNative: result.generatedToNative,
+        })}`,
+      );
+    }
+  }
 
   const logResult = (prefix: string, result: BenchResult) =>
     log(
@@ -645,12 +740,22 @@ async function runBenchmarks(): Promise<string[]> {
   log(`│  str  rustra/Nitro = ${(rustraStr.avg / nitroStr.avg).toFixed(2)}x`);
   log(`│  buf  rustra/Nitro = ${(rustraBuf.avg / nitroBuf.avg).toFixed(2)}x`);
   log(`│  obj  rustra/Nitro = ${(rustraPair.avg / nitroPair.avg).toFixed(2)}x`);
-  if (ffiSuiteAvailable && ffiAsyncResult && ffiStr && ffiBuf && ffiPair) {
+  if (
+    ffiSuiteAvailable &&
+    ffiAsyncResult &&
+    ffiStr &&
+    ffiBuf &&
+    ffiPair &&
+    ffiNitroAdd &&
+    ffiNitroStr &&
+    ffiNitroBuf &&
+    ffiNitroPair
+  ) {
     log('│');
-    log(`│  add  FFI/Nitro    = ${(ffiAsyncResult.avg / nitroAdd.avg).toFixed(2)}x`);
-    log(`│  str  FFI/Nitro    = ${(ffiStr.avg / nitroStr.avg).toFixed(2)}x`);
-    log(`│  buf  FFI/Nitro    = ${(ffiBuf.avg / nitroBuf.avg).toFixed(2)}x`);
-    log(`│  obj  FFI/Nitro    = ${(ffiPair.avg / nitroPair.avg).toFixed(2)}x`);
+    log(`│  add  FFI/Nitro    = ${(ffiAsyncResult.avg / ffiNitroAdd.avg).toFixed(2)}x`);
+    log(`│  str  FFI/Nitro    = ${(ffiStr.avg / ffiNitroStr.avg).toFixed(2)}x`);
+    log(`│  buf  FFI/Nitro    = ${(ffiBuf.avg / ffiNitroBuf.avg).toFixed(2)}x`);
+    log(`│  obj  FFI/Nitro    = ${(ffiPair.avg / ffiNitroPair.avg).toFixed(2)}x`);
   }
   log('╚════════════════════════════════════════════════╝');
   log('');
@@ -669,7 +774,7 @@ async function runBenchmarks(): Promise<string[]> {
     warmupIterations: 500,
     order: 'rotating-interleaved',
     correctness: { equivalentOutputs, checkedBeforeTiming: true },
-    rawLowerBound: { nitroAdd: nitroRaw },
+    rawLowerBound: { nitroAdd: nitroRaw, generatedRoutes: generatedRouteDiagnostics },
     equivalent: {
       add: { nitro: nitroAdd, rustra: rustraAdd, ratio: rustraAdd.avg / nitroAdd.avg },
       string: { nitro: nitroStr, rustra: rustraStr, ratio: rustraStr.avg / nitroStr.avg },
@@ -681,6 +786,14 @@ async function runBenchmarks(): Promise<string[]> {
         ? {
             available: ffiSuiteAvailable,
             syncScalarLowerBound: ffiSyncResult,
+            nitroReference: ffiSuiteAvailable
+              ? {
+                  add: ffiNitroAdd,
+                  string: ffiNitroStr,
+                  bytes64: ffiNitroBuf,
+                  pair: ffiNitroPair,
+                }
+              : undefined,
             equivalent: ffiSuiteAvailable
               ? {
                   add: ffiAsyncResult,
@@ -713,6 +826,30 @@ async function runBenchmarks(): Promise<string[]> {
       rawLowerBound: equivalentBenchmarkReceipt.rawLowerBound,
     })}`,
   );
+  for (const [operation, result] of Object.entries(equivalentBenchmarkReceipt.equivalent)) {
+    const ffiResult =
+      equivalentBenchmarkReceipt.ffi.available && equivalentBenchmarkReceipt.ffi.equivalent
+        ? equivalentBenchmarkReceipt.ffi.equivalent[
+            operation as keyof typeof equivalentBenchmarkReceipt.ffi.equivalent
+          ]
+        : undefined;
+    const ffiNitroResult =
+      equivalentBenchmarkReceipt.ffi.available && equivalentBenchmarkReceipt.ffi.nitroReference
+        ? equivalentBenchmarkReceipt.ffi.nitroReference[
+            operation as keyof typeof equivalentBenchmarkReceipt.ffi.nitroReference
+          ]
+        : undefined;
+    console.log(
+      `RUSTRA_BENCH_OP_JSON=${JSON.stringify({
+        operation,
+        nitroAvgNs: result.nitro.avg,
+        rustraAvgNs: result.rustra.avg,
+        ffiAvgNs: ffiResult?.avg,
+        rustraToNitro: result.ratio,
+        ffiToNitro: ffiResult && ffiNitroResult ? ffiResult.avg / ffiNitroResult.avg : undefined,
+      })}`,
+    );
+  }
   for (const [operation, result] of Object.entries(equivalentBenchmarkReceipt.equivalent)) {
     console.log(`RUSTRA_NITRO_OP_JSON=${JSON.stringify({ operation, ...result })}`);
   }

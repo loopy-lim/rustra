@@ -2,8 +2,11 @@ import { registerRootComponent } from 'expo';
 
 import BenchmarkApp from './BenchmarkApp';
 import DynamicRegistryApp from './DynamicRegistryApp';
+import ReloadStressApp from './ReloadStressApp';
 
-const App = process.env.EXPO_PUBLIC_RUSTRA_DEMO === 'dynamic' ? DynamicRegistryApp : BenchmarkApp;
+const demo = process.env.EXPO_PUBLIC_RUSTRA_DEMO;
+const App =
+  demo === 'dynamic' ? DynamicRegistryApp : demo === 'reload' ? ReloadStressApp : BenchmarkApp;
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
 // It also ensures that whether you load the app in Expo Go or in a native build,
