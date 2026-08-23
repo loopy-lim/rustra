@@ -13,7 +13,6 @@ rustra.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-bincode = { version = "2", features = ["serde"] }
 rmp-serde = "1"
-postcard = { version = "1", features = ["alloc"] }
+postcard.workspace = true
 rkyv = { version = "0.8", features = ["bytecheck", "alloc"] }
