@@ -1,8 +1,12 @@
 // 1 command(s) excluded — unsupported postcard field types (Tier 3 fallback): channelDemo
-import { addNumbersCodec, clampCodec, createItemCodec, divideCodec, emitDemoCodec, gaugeCodec, greetCodec, isEvenCodec, multiplyCodec, processItemCodec, resourceCloseCodec, resourceOpenCodec, resourceReadCodec, resourceWriteCodec, rustraRegistryDemoCodec, scoreTotalCodec, secureComputeCodec, sizeOfCodec, spanCodec, sumListCodec, toUpperCodec } from './rkyv-codecs.js';
+import { addNumbersCodec, benchAddCodec, benchEchoBytesCodec, benchEchoPairCodec, benchEchoStringCodec, clampCodec, createItemCodec, divideCodec, emitDemoCodec, gaugeCodec, greetCodec, isEvenCodec, multiplyCodec, processItemCodec, resourceCloseCodec, resourceOpenCodec, resourceReadCodec, resourceWriteCodec, rustraRegistryDemoCodec, scoreTotalCodec, secureComputeCodec, sizeOfCodec, spanCodec, sumListCodec, toUpperCodec } from './rkyv-codecs.js';
 
 export const rkyvV2Registry = new Map<string, import('@rustra/types').RkyvV2Codec<any, any>>([
   ['addNumbers', addNumbersCodec],
+  ['benchAdd', benchAddCodec],
+  ['benchEchoBytes', benchEchoBytesCodec],
+  ['benchEchoPair', benchEchoPairCodec],
+  ['benchEchoString', benchEchoStringCodec],
   ['clamp', clampCodec],
   ['createItem', createItemCodec],
   ['divide', divideCodec],

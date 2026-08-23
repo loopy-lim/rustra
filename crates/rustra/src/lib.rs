@@ -1210,7 +1210,7 @@ impl Package {
         if !imports.is_empty() {
             output.push_str(&format!("import type {{ {imports} }} from './types.js';\n"));
         }
-        output.push_str("import { invoke } from '@rustra/types';\n");
+        output.push_str("import { invokeGenerated } from '@rustra/types';\n");
         output.push_str("import type { InvokeOptions } from '@rustra/types';\n\n");
 
         for (name, command) in state.commands.iter() {
@@ -1228,21 +1228,23 @@ impl Package {
             }
             if command.input_type == "()" {
                 output.push_str(&format!(
-                    "export function {}(options?: InvokeOptions): Promise<{}> {{\n  return invoke<{}>('{}', undefined, options);\n}}\n{}.commandId = '{}';\n\n",
+                    "export function {}(options?: InvokeOptions): Promise<{}> {{\n  return invokeGenerated<{}>({}, '{}', undefined, options);\n}}\n{}.commandId = '{}';\n\n",
                     command_function_name(name),
                     out_type,
                     out_type,
+                    command.command_id,
                     name,
                     command_function_name(name),
                     name,
                 ));
             } else {
                 output.push_str(&format!(
-                    "export function {}(input: {}, options?: InvokeOptions): Promise<{}> {{\n  return invoke<{}>('{}', input, options);\n}}\n{}.commandId = '{}';\n\n",
+                    "export function {}(input: {}, options?: InvokeOptions): Promise<{}> {{\n  return invokeGenerated<{}>({}, '{}', input, options);\n}}\n{}.commandId = '{}';\n\n",
                     command_function_name(name),
                     command.input_type,
                     out_type,
                     out_type,
+                    command.command_id,
                     name,
                     command_function_name(name),
                     name,

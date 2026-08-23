@@ -338,6 +338,64 @@ pub fn size_of(input: SizeOfInput) -> Result<SizeOfOutput> {
     })
 }
 
+// ── Framework comparison fixtures ────────────────────────────────
+// Nitro Modules 비교 전용 명령. 양쪽 구현이 같은 JS 객체 모양, 같은 연산,
+// 같은 반환 모양을 사용하도록 제품 예제 명령(greet/sizeOf/createItem)과 분리한다.
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BenchAddInput {
+    pub a: f64,
+    pub b: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BenchAddOutput {
+    pub value: f64,
+}
+
+#[command]
+pub fn bench_add(input: BenchAddInput) -> Result<BenchAddOutput> {
+    Ok(BenchAddOutput {
+        value: input.a + input.b,
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BenchStringPayload {
+    pub value: String,
+}
+
+#[command]
+pub fn bench_echo_string(input: BenchStringPayload) -> Result<BenchStringPayload> {
+    Ok(input)
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BenchBytesPayload {
+    pub data: Vec<u8>,
+}
+
+#[command]
+pub fn bench_echo_bytes(input: BenchBytesPayload) -> Result<BenchBytesPayload> {
+    Ok(input)
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BenchPairPayload {
+    pub name: String,
+    pub value: f64,
+}
+
+#[command]
+pub fn bench_echo_pair(input: BenchPairPayload) -> Result<BenchPairPayload> {
+    Ok(input)
+}
+
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ScoreTotalInput {
@@ -638,7 +696,11 @@ pub fn calculator_package() -> Package {
                 resource_open,
                 resource_read,
                 resource_write,
-                resource_close
+                resource_close,
+                bench_add,
+                bench_echo_string,
+                bench_echo_bytes,
+                bench_echo_pair
             )
             .require_capability("secureCompute", "compute:secure")
             .build();
@@ -692,6 +754,13 @@ mod linux_init {
 #[unsafe(no_mangle)]
 pub extern "C" fn rustra_calculator_init() {
     let _ = calculator_package();
+}
+
+/// 벤치마크용 최소 C ABI lower bound. 브리지/직렬화 비용은 포함하지 않으며
+/// `addNumbers`의 산술 연산과 동일한 값만 계산한다.
+#[unsafe(no_mangle)]
+pub extern "C" fn rustra_calculator_add_direct(a: i64, b: i64) -> i64 {
+    a + b
 }
 
 /// # Safety

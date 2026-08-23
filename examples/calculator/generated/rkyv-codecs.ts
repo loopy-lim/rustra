@@ -170,7 +170,7 @@ function _pcDecodeF32(buf: Uint8Array, offset: number): { value: number; bytesRe
 }
 
 import type { RkyvV2Codec, RustraError } from '@rustra/types';
-import type { AddNumbersInput, AddNumbersOutput, ChannelDemoInput, ChannelDemoOutput, ChannelHandle, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, Item, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandle, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ChannelHandle, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, Item, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandle, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
 
 export const addNumbersCodec: RkyvV2Codec<AddNumbersInput, AddNumbersOutput> = {
   commandId: 1,
@@ -210,6 +210,178 @@ export const addNumbersCodec: RkyvV2Codec<AddNumbersInput, AddNumbersOutput> = {
       offset += _v.bytesRead;
     }
     return { ok: true, result: result as AddNumbersOutput };
+  },
+};
+
+export const benchAddCodec: RkyvV2Codec<BenchAddInput, BenchAddOutput> = {
+  commandId: 23,
+
+  encode(args: BenchAddInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(BenchAddInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 23, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeF64(args.a));
+    parts.push(_pcEncodeF64(args.b));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: BenchAddOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<BenchAddOutput> = {};
+    {
+      const _v = _pcDecodeF64(u8, offset);
+      result.value = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as BenchAddOutput };
+  },
+};
+
+export const benchEchoBytesCodec: RkyvV2Codec<BenchBytesPayload, BenchBytesPayload> = {
+  commandId: 25,
+
+  encode(args: BenchBytesPayload): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(BenchBytesPayload)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 25, true);
+    parts.push(cmdId);
+    {
+      const _b = args.data;
+      parts.push(_pcEncodeVarint(_b.length));
+      parts.push(typeof _b === 'string' ? _utf8Encode(_b) : new Uint8Array(_b));
+    }
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: BenchBytesPayload; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<BenchBytesPayload> = {};
+    {
+      const _len = _pcDecodeVarint(u8, offset);
+      offset += _len.bytesRead;
+      result.data = u8.slice(offset, offset + _len.value);
+      offset += _len.value;
+    }
+    return { ok: true, result: result as BenchBytesPayload };
+  },
+};
+
+export const benchEchoPairCodec: RkyvV2Codec<BenchPairPayload, BenchPairPayload> = {
+  commandId: 26,
+
+  encode(args: BenchPairPayload): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(BenchPairPayload)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 26, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeString(args.name));
+    parts.push(_pcEncodeF64(args.value));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: BenchPairPayload; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<BenchPairPayload> = {};
+    {
+      const _v = _pcDecodeString(u8, offset);
+      result.name = _v.value;
+      offset += _v.bytesRead;
+    }
+    {
+      const _v = _pcDecodeF64(u8, offset);
+      result.value = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as BenchPairPayload };
+  },
+};
+
+export const benchEchoStringCodec: RkyvV2Codec<BenchStringPayload, BenchStringPayload> = {
+  commandId: 24,
+
+  encode(args: BenchStringPayload): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(BenchStringPayload)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 24, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeString(args.value));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: BenchStringPayload; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<BenchStringPayload> = {};
+    {
+      const _v = _pcDecodeString(u8, offset);
+      result.value = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as BenchStringPayload };
   },
 };
 

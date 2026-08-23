@@ -92,6 +92,18 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
                         .collect();
                     return format!("[{}]", element_types.join(", "));
                 }
+                // Vec<u8>의 공개 표면은 JSON(number[])과 바이너리(Uint8Array)
+                // 어댑터를 모두 정직하게 표현한다. TS CLI 코드젠과 동일 규칙.
+                if schema
+                    .get("items")
+                    .and_then(Value::as_object)
+                    .is_some_and(|items| {
+                        items.get("type").and_then(Value::as_str) == Some("integer")
+                            && items.get("format").and_then(Value::as_str) == Some("uint8")
+                    })
+                {
+                    return "Uint8Array | number[]".to_string();
+                }
                 let item_type = schema
                     .get("items")
                     .map(|s| ts_type_from_schema(s, definitions))

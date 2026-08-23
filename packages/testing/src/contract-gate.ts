@@ -52,6 +52,6 @@ export function expectContractCurrent(
       `  commands in the client but missing from schema.json: ${missingInSchema.join(', ')}`,
     );
   }
-  lines.push('  → regenerate the client (npx rustra generate) or update schema.json.');
+  lines.push('  → regenerate the client (bunx @rustra/cli generate) or update schema.json.');
   throw new Error(lines.join('\n'));
 }

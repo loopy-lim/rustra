@@ -40,6 +40,153 @@
       }
     },
     {
+      "name": "benchAdd",
+      "commandId": 23,
+      "inputType": "BenchAddInput",
+      "outputType": "BenchAddOutput",
+      "inputSchema": {
+        "title": "BenchAddInput",
+        "type": "object",
+        "required": [
+          "a",
+          "b"
+        ],
+        "properties": {
+          "a": {
+            "type": "number",
+            "format": "double"
+          },
+          "b": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "BenchAddOutput",
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      }
+    },
+    {
+      "name": "benchEchoBytes",
+      "commandId": 25,
+      "inputType": "BenchBytesPayload",
+      "outputType": "BenchBytesPayload",
+      "inputSchema": {
+        "title": "BenchBytesPayload",
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "BenchBytesPayload",
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "benchEchoPair",
+      "commandId": 26,
+      "inputType": "BenchPairPayload",
+      "outputType": "BenchPairPayload",
+      "inputSchema": {
+        "title": "BenchPairPayload",
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "BenchPairPayload",
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      }
+    },
+    {
+      "name": "benchEchoString",
+      "commandId": 24,
+      "inputType": "BenchStringPayload",
+      "outputType": "BenchStringPayload",
+      "inputSchema": {
+        "title": "BenchStringPayload",
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "BenchStringPayload",
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
       "name": "channelDemo",
       "commandId": 18,
       "inputType": "ChannelDemoInput",
