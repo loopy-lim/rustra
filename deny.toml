@@ -42,8 +42,8 @@ confidence-threshold = 0.8
 # ── 보안 어드바이저리 ─────────────────────────────────────────
 [advisories]
 version = 2
-# 취약점(vulnerabilities)은 실패. unmaintained/unsound 경고는
-# docs/security-audit.md 의 transitive 목록과 정합 — yanked 는 경고.
+# 중복 advisory 판정은 scripts/audit-rust.sh 가 --deny warnings 와 정확한 Tauri
+# 업스트림 예외 목록으로 담당한다. cargo-deny 는 여기서 라이선스/밴/출처에 집중한다.
 yanked = "warn"
 unmaintained = "none"
 

@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 45
     continue-on-error: true # 실험 트랙 — 발견은 수확, 실패는 게이트 아님
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: miri
