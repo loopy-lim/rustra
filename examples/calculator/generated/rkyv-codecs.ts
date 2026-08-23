@@ -302,8 +302,9 @@ export const benchEchoBytesCodec: RkyvV2Codec<BenchBytesPayload, BenchBytesPaylo
     parts.push(cmdId);
     {
       const _b = args.data;
-      parts.push(_pcEncodeVarint(_b.length));
-      parts.push(typeof _b === 'string' ? _utf8Encode(_b) : new Uint8Array(_b));
+      const _u = _b instanceof Uint8Array ? _b : new Uint8Array(_b);
+      parts.push(_pcEncodeVarint(_u.length));
+      parts.push(_u);
     }
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
@@ -1471,8 +1472,9 @@ export const sizeOfCodec: RkyvV2Codec<SizeOfInput, SizeOfOutput> = {
     parts.push(cmdId);
     {
       const _b = args.data;
-      parts.push(_pcEncodeVarint(_b.length));
-      parts.push(typeof _b === 'string' ? _utf8Encode(_b) : new Uint8Array(_b));
+      const _u = _b instanceof Uint8Array ? _b : new Uint8Array(_b);
+      parts.push(_pcEncodeVarint(_u.length));
+      parts.push(_u);
     }
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },

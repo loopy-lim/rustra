@@ -115,6 +115,7 @@ private:
 namespace detail {
 struct ObjectData {
   std::unordered_map<std::string, Value> props;
+  std::shared_ptr<std::vector<uint8_t>> bytes;
 };
 struct ArrayData {
   std::vector<Value> items;
@@ -127,8 +128,10 @@ class Object {
 public:
   Object(Runtime&) : data_(std::make_shared<detail::ObjectData>()) {}
   Object() : data_(std::make_shared<detail::ObjectData>()) {}
+  Object(Runtime&, const ArrayBuffer& buffer);
 
   bool isArray(Runtime&) const { return static_cast<bool>(arr_); }
+  bool isArrayBuffer(Runtime&) const { return static_cast<bool>(data_->bytes); }
   class Array getArray(Runtime&) const;
 
   Value getProperty(Runtime&, const std::string& name) const {
@@ -251,17 +254,28 @@ inline Value::Value(const Object& o) : kind_(Kind::Object), obj_(o.data_), arr_(
 /// jsi::ArrayBuffer 를 제공한다(동일 data(rt)/length(rt) 계약).
 class ArrayBuffer {
 public:
-  ArrayBuffer() = default;
-  explicit ArrayBuffer(Runtime&, size_t n) : bytes_(n) {}
-  uint8_t* data(Runtime&) { return bytes_.data(); }
-  const uint8_t* data(Runtime&) const { return bytes_.data(); }
-  size_t length(Runtime&) const { return bytes_.size(); }
+  ArrayBuffer() : bytes_(std::make_shared<std::vector<uint8_t>>()) {}
+  explicit ArrayBuffer(Runtime&, size_t n)
+      : bytes_(std::make_shared<std::vector<uint8_t>>(n)) {}
+  uint8_t* data(Runtime&) { return bytes_->data(); }
+  const uint8_t* data(Runtime&) const { return bytes_->data(); }
+  size_t length(Runtime&) const { return bytes_->size(); }
+  size_t size(Runtime&) const { return bytes_->size(); }
 
 private:
-  std::vector<uint8_t> bytes_;
+  explicit ArrayBuffer(std::shared_ptr<std::vector<uint8_t>> bytes)
+      : bytes_(std::move(bytes)) {}
+  std::shared_ptr<std::vector<uint8_t>> bytes_;
+  friend class Object;
 };
 
-inline ArrayBuffer Object::getArrayBuffer(Runtime&) const { return ArrayBuffer(); }
+inline Object::Object(Runtime&, const ArrayBuffer& buffer)
+    : data_(std::make_shared<detail::ObjectData>()) {
+  data_->bytes = buffer.bytes_;
+}
+inline ArrayBuffer Object::getArrayBuffer(Runtime&) const {
+  return data_->bytes ? ArrayBuffer(data_->bytes) : ArrayBuffer();
+}
 inline Value::Value(const Array& a) : kind_(Kind::Array), arr_(a.data_) {}
 inline Value::Value(Runtime&, const Object& o) : kind_(Kind::Object), obj_(o.data_), arr_(o.arr_) {}
 inline Value::Value(Runtime&, const Array& a) : kind_(Kind::Array), arr_(a.data_) {}

@@ -111,6 +111,7 @@ pub use rustra_macros::register;
 
 pub use rkyv_codec::encode_rkyv_v2_error;
 
+pub mod byte_buffer;
 pub mod cancel;
 pub mod channels;
 mod codegen;
@@ -144,6 +145,28 @@ pub use state::{State, get_state, with_state_context};
 use codegen::{command_function_name, contract_hash, ts_type_from_schema};
 use schema::{command_name_from_handler, schema_value, short_type_name};
 
+/// Input boundary for a command whose entire payload is one contiguous byte
+/// buffer. Implementations must create an owned Rust value; the native host's
+/// borrowed pointer is never retained after the synchronous call returns.
+pub trait BufferCommandInput: DeserializeOwned + JsonSchema + 'static {
+    fn from_buffer(bytes: Vec<u8>) -> Self;
+}
+
+/// Output boundary paired with [`BufferCommandInput`]. Returning the owned
+/// vector lets the FFI transfer that allocation without a postcard frame copy.
+pub trait BufferCommandOutput: Serialize + JsonSchema + 'static {
+    fn into_buffer(self) -> Vec<u8>;
+}
+
+fn postcard_uvar_len(mut value: usize) -> usize {
+    let mut len = 1;
+    while value >= 0x80 {
+        value >>= 7;
+        len += 1;
+    }
+    len
+}
+
 /// 자주 사용하는 타입과 매크로를 한 번에 가져올 수 있는 prelude 모듈입니다.
 ///
 /// ```rust
@@ -151,8 +174,8 @@ use schema::{command_name_from_handler, schema_value, short_type_name};
 /// ```
 pub mod prelude {
     pub use crate::{
-        GeneratedPackage, Package, PackageBuilder, Result, RustraError, State, bridge_type, build,
-        command,
+        BufferCommandInput, BufferCommandOutput, GeneratedPackage, Package, PackageBuilder, Result,
+        RustraError, State, bridge_type, build, command,
         events::EventSink,
         ffi::FfiFormat,
         register,
@@ -545,6 +568,9 @@ struct Command {
     /// 스칼라 직결 raw 핸들러 — 인자/결과를 u64 슬롯으로 주고받는다.
     /// postcard 왕복이 없다(정의는 `build_command_raw` 참조).
     raw_handler: Option<RawHandler>,
+    /// 단일 byte field 입출력 직결 핸들러. 입력은 호출 안에서 소유 Vec로
+    /// 복사되고 출력 Vec는 FFI가 소유권을 넘겨받으므로 postcard frame이 없다.
+    buffer_handler: Option<BufferHandler>,
     /// raw 직결의 입력 필드 종류 — 호스트가 같은 순서로 비트를 해석한다.
     raw_input_kinds: Vec<crate::rkyv_codec::RawFieldKind>,
     /// raw 직결의 출력 필드 종류(현재 단일 스칼라 또는 unit 만 지원).
@@ -561,6 +587,8 @@ struct Command {
     /// `None` 이면 항상 허용 (기본 명령).
     required_capability: Option<&'static str>,
 }
+
+type BufferHandler = Arc<dyn Fn(&[u8]) -> crate::Result<Vec<u8>> + Send + Sync>;
 
 impl std::fmt::Debug for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -703,6 +731,7 @@ where
         rkyv_v2_handler,
         rkyv_v2_into_handler,
         raw_handler,
+        buffer_handler: None,
         raw_input_kinds,
         raw_output_kind,
         rkyv_v2_decode: rkyv_v2_decoder,
@@ -966,6 +995,30 @@ fn generated_field_names(input_schema: &Value) -> Option<Vec<String>> {
         fields.push(name.clone());
     }
     Some(fields)
+}
+
+fn generated_byte_field_name(input_schema: &Value) -> Option<String> {
+    let properties = input_schema.get("properties")?.as_object()?;
+    if properties.len() != 1 {
+        return None;
+    }
+    let (name, schema) = properties.iter().next()?;
+    let required = input_schema.get("required")?.as_array()?;
+    if required.len() != 1 || required[0].as_str() != Some(name) {
+        return None;
+    }
+    let is_bytes = schema.get("type").and_then(Value::as_str) == Some("array")
+        && schema
+            .get("items")
+            .and_then(|items| items.get("type"))
+            .and_then(Value::as_str)
+            == Some("integer")
+        && schema
+            .get("items")
+            .and_then(|items| items.get("format"))
+            .and_then(Value::as_str)
+            == Some("uint8");
+    is_bytes.then(|| name.clone())
 }
 
 impl Package {
@@ -1246,6 +1299,74 @@ impl Package {
                 crate::ffi::panic_message(&panic)
             ))),
         }
+    }
+
+    /// Invoke a schema-proven single-byte-field command without constructing a
+    /// postcard request/response frame. The borrowed input is copied into an
+    /// owned Rust value before user code runs and is never retained.
+    pub fn invoke_buffer(&self, command_id: u16, bytes: &[u8]) -> crate::Result<Vec<u8>> {
+        let wire_size = 2usize
+            .saturating_add(postcard_uvar_len(bytes.len()))
+            .saturating_add(bytes.len());
+        let limit = crate::ffi::max_payload_bytes();
+        if wire_size > limit {
+            return Err(RustraError::payload_too_large(wire_size, limit));
+        }
+        let command = if self.is_frozen() {
+            self.frozen_registry
+                .get()
+                .and_then(|registry| registry.id_to_command.get(command_id as usize))
+                .and_then(Option::as_ref)
+                .cloned()
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
+        } else {
+            let state = self
+                .state
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state
+                .id_to_command
+                .get(&command_id)
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
+                .clone()
+        };
+        let Some(handler) = command.buffer_handler.as_ref() else {
+            return Err(RustraError::invalid_args(format!(
+                "buffer invoke: command id:{command_id} has no buffer handler"
+            )));
+        };
+        self.capability_satisfied(command.as_ref())?;
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            with_state_context(&self.states, || handler(bytes))
+        }));
+        match outcome {
+            Ok(result) => result,
+            Err(panic) => Err(RustraError::internal(format!(
+                "panic in handler: {}",
+                crate::ffi::panic_message(&panic)
+            ))),
+        }
+    }
+
+    /// Whether a command owns the direct byte-buffer handler required by a
+    /// native host capability handshake.
+    pub fn has_buffer_handler(&self, command_id: u16) -> bool {
+        if self.is_frozen() {
+            return self
+                .frozen_registry
+                .get()
+                .and_then(|registry| registry.id_to_command.get(command_id as usize))
+                .and_then(Option::as_ref)
+                .is_some_and(|command| command.buffer_handler.is_some());
+        }
+        let state = self
+            .state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state
+            .id_to_command
+            .get(&command_id)
+            .is_some_and(|command| command.buffer_handler.is_some())
     }
 
     /// raw 직결 가능 여부 — 호스트가 스키마 없이 폴백 여부를 미리 판정한다.
@@ -1750,7 +1871,9 @@ impl Package {
         let mut generated_helpers = BTreeSet::new();
         generated_helpers.insert("invokeGenerated".to_string());
         for command in state.commands.values() {
-            if let Some(fields) = generated_field_names(&command.input_schema) {
+            if generated_byte_field_name(&command.input_schema).is_some() {
+                generated_helpers.insert("invokeGeneratedBytes".to_string());
+            } else if let Some(fields) = generated_field_names(&command.input_schema) {
                 generated_helpers.insert(format!("invokeGeneratedFields{}", fields.len()));
             }
         }
@@ -1781,6 +1904,21 @@ impl Package {
                     out_type,
                     command.command_id,
                     name,
+                    command_function_name(name),
+                    name,
+                ));
+            } else if let Some(field) = generated_byte_field_name(&command.input_schema) {
+                let literal = serde_json::to_string(&field)
+                    .expect("JSON string serialization for a property name cannot fail");
+                output.push_str(&format!(
+                    "export function {}(input: {}, options?: InvokeOptions): Promise<{}> {{\n  return invokeGeneratedBytes<{}>({}, '{}', input, input[{}], options);\n}}\n{}.commandId = '{}';\n\n",
+                    command_function_name(name),
+                    command.input_type,
+                    out_type,
+                    out_type,
+                    command.command_id,
+                    name,
+                    literal,
                     command_function_name(name),
                     name,
                 ));
@@ -1860,6 +1998,53 @@ impl PackageBuilder {
         self.commands.insert(name, command);
         self.next_command_id += 1;
         self
+    }
+
+    /// Register a command with both the normal wire contract and a direct
+    /// single-byte-field native path. This is intentionally explicit: only
+    /// types implementing the ownership conversion traits can cross this ABI.
+    pub fn buffer_command<I, O, F>(mut self, name: impl Into<String>, handler: F) -> Self
+    where
+        I: BufferCommandInput,
+        O: BufferCommandOutput,
+        F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+    {
+        let name = name.into();
+        if self.commands.contains_key(&name) {
+            panic!("duplicate command registration: '{name}'");
+        }
+        let handler = Arc::new(handler);
+        let normal_handler = Arc::clone(&handler);
+        let mut command = build_command::<I, O, _>(
+            self.next_command_id,
+            move |input| normal_handler(input),
+            false,
+        );
+        if generated_byte_field_name(&command.input_schema).is_none()
+            || generated_byte_field_name(&command.output_schema).is_none()
+        {
+            panic!(
+                "buffer command '{name}' requires input and output schemas with exactly one required Vec<u8> field"
+            );
+        }
+        command.buffer_handler = Some(Arc::new(move |bytes| {
+            let input = I::from_buffer(bytes.to_vec());
+            handler(input).map(BufferCommandOutput::into_buffer)
+        }));
+        self.commands.insert(name, command);
+        self.next_command_id += 1;
+        self
+    }
+
+    /// Name-inferred variant of [`PackageBuilder::buffer_command`].
+    pub fn buffer_command_fn<I, O, F>(self, handler: F) -> Self
+    where
+        I: BufferCommandInput,
+        O: BufferCommandOutput,
+        F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+    {
+        let name = command_name_from_handler::<F>();
+        self.buffer_command(name, handler)
     }
 
     /// Runtime Authority: 이미 등록된 명령에 capability 요구를 부여한다.
@@ -2588,5 +2773,110 @@ mod raw_invoke_tests {
         );
         let err = pkg.invoke_raw(1, &[0]).expect_err("must reject");
         assert!(err.to_string().contains("no raw handler"));
+    }
+}
+
+#[cfg(test)]
+mod buffer_invoke_tests {
+    use super::*;
+
+    #[derive(serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+    struct Bytes {
+        #[serde(with = "crate::byte_buffer")]
+        #[schemars(with = "Vec<u8>")]
+        data: Vec<u8>,
+    }
+
+    impl BufferCommandInput for Bytes {
+        fn from_buffer(data: Vec<u8>) -> Self {
+            Self { data }
+        }
+    }
+
+    impl BufferCommandOutput for Bytes {
+        fn into_buffer(self) -> Vec<u8> {
+            self.data
+        }
+    }
+
+    fn echo(input: Bytes) -> Result<Bytes> {
+        Ok(input)
+    }
+
+    #[test]
+    fn buffer_command_moves_owned_output_without_postcard_frame() {
+        let package = Package::builder("test.buffer")
+            .buffer_command_fn(echo)
+            .build();
+        assert!(package.has_buffer_handler(1));
+        assert_eq!(
+            package.invoke_buffer(1, &[0, 1, 127, 128, 255]).unwrap(),
+            [0, 1, 127, 128, 255]
+        );
+        assert!(package.invoke_buffer(1, &[]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn normal_command_does_not_claim_the_buffer_capability() {
+        let package = Package::builder("test.buffer-fallback")
+            .command_fn(echo)
+            .build();
+        assert!(!package.has_buffer_handler(1));
+        assert_eq!(
+            package.invoke_buffer(1, &[1]).unwrap_err().code(),
+            "command.invalid_args"
+        );
+    }
+
+    #[derive(serde::Deserialize, JsonSchema)]
+    struct InvalidBufferInput {
+        data: Vec<u8>,
+        tag: u8,
+    }
+
+    impl BufferCommandInput for InvalidBufferInput {
+        fn from_buffer(data: Vec<u8>) -> Self {
+            Self { data, tag: 0 }
+        }
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "requires input and output schemas with exactly one required Vec<u8> field"
+    )]
+    fn buffer_command_rejects_non_single_field_schemas() {
+        let _ = Package::builder("test.invalid-buffer")
+            .buffer_command("invalid", |input: InvalidBufferInput| {
+                let _ = input.tag;
+                Ok(Bytes { data: input.data })
+            })
+            .build();
+    }
+
+    #[derive(serde::Deserialize, serde::Serialize, JsonSchema)]
+    struct OptionalBytes {
+        data: Option<Vec<u8>>,
+    }
+
+    impl BufferCommandInput for OptionalBytes {
+        fn from_buffer(data: Vec<u8>) -> Self {
+            Self { data: Some(data) }
+        }
+    }
+
+    impl BufferCommandOutput for OptionalBytes {
+        fn into_buffer(self) -> Vec<u8> {
+            self.data.unwrap_or_default()
+        }
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "requires input and output schemas with exactly one required Vec<u8> field"
+    )]
+    fn buffer_command_rejects_optional_byte_fields() {
+        let _ = Package::builder("test.optional-buffer")
+            .buffer_command("optional", |input: OptionalBytes| Ok(input))
+            .build();
     }
 }

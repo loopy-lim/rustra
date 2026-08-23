@@ -154,6 +154,10 @@ export function generateCommandsTs(schema: PackageSchema): string {
   }
   const generatedHelpers = new Set<string>(['invokeGenerated']);
   for (const command of schema.commands) {
+    if (bufferCommandField(command, definitions)) {
+      generatedHelpers.add('invokeGeneratedBytes');
+      continue;
+    }
     const fields = generatedFieldRoute(command, definitions);
     if (fields) generatedHelpers.add(`invokeGeneratedFields${fields.length}`);
   }
@@ -173,6 +177,14 @@ export function generateCommandsTs(schema: PackageSchema): string {
         `  return invokeGenerated<${outType}>(${command.commandId}, '${command.name}', undefined, options);\n` +
         `}\n${fnName}.commandId = '${command.name}';\n\n`;
     } else {
+      const bufferField = bufferCommandField(command, definitions);
+      if (bufferField) {
+        output +=
+          `export function ${fnName}(input: ${command.inputType}, options?: InvokeOptions): Promise<${outType}> {\n` +
+          `  return invokeGeneratedBytes<${outType}>(${command.commandId}, '${command.name}', input, input[${JSON.stringify(bufferField.name)}], options);\n` +
+          `}\n${fnName}.commandId = '${command.name}';\n\n`;
+        continue;
+      }
       const fields = generatedFieldRoute(command, definitions);
       if (fields) {
         const fieldArgs = fields.map((field) => `input[${JSON.stringify(field.name)}]`).join(', ');
@@ -633,8 +645,9 @@ function generateFieldEncodeExpr(
       return (
         `${indent}{\n` +
         `${indent}  const _b = ${valueExpr};\n` +
-        `${indent}  parts.push(_pcEncodeVarint(_b.length));\n` +
-        `${indent}  parts.push(typeof _b === 'string' ? _utf8Encode(_b) : new Uint8Array(_b));\n` +
+        `${indent}  const _u = _b instanceof Uint8Array ? _b : new Uint8Array(_b);\n` +
+        `${indent}  parts.push(_pcEncodeVarint(_u.length));\n` +
+        `${indent}  parts.push(_u);\n` +
         `${indent}}`
       );
     }
@@ -1488,14 +1501,16 @@ function cppEncodeWithGetter(
     case 'string':
       return `${indent}{ auto _v = ${get}.getString(rt).utf8(rt); w.push_string(_v); }`;
     case 'bytes': {
-      // Vec<u8> — len varint + raw bytes. JS 표면은 ArrayBuffer 우선, 폴백으로
-      // number 배열(스키마 number[] 표면과 호환).
+      // Vec<u8> — len varint + raw bytes. ArrayBuffer/Uint8Array 는 backing
+      // buffer의 view 범위를 검증해 한 덩어리로 복사하고, number[]만 원소별
+      // u8 검증을 유지한다. dedicated buffer capability가 없는 구 native
+      // fallback도 동일한 공개 입력 계약을 지켜야 한다.
       return (
         `${indent}{ const auto& _v = ${get}; auto _o = _v.asObject(rt);` +
         ` if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt);` +
         ` w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "${field.name}[]"); }` +
-        ` else { auto _ab = _o.getArrayBuffer(rt); auto _d = _ab.data(rt); auto _n = _ab.length(rt);` +
-        ` w.push_uvar(_n); w.push_bytes((const uint8_t*)_d, _n); } }`
+        ` else { auto _span = rustra_bytes(rt, _v, "${field.name}");` +
+        ` w.push_uvar(_span.size); w.push_bytes(_span.data, _span.size); } }`
       );
     }
     case 'vec_zigzag':
@@ -1658,12 +1673,11 @@ function cppFieldDecodeExpr(
         ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }`
       );
     case 'bytes': {
-      // Vec<u8> → JS number[] (TS 생성 타입 표면과 정합). 튜플/맵과 동일한
-      // setValueAtIndex 조합으로 방출한다.
+      // Vec<u8> → JS-owned ArrayBuffer. Reader/FFI 응답 수명과 JS 결과를
+      // 분리하는 단 한 번의 memcpy이며 number[] 원소별 JSI 쓰기를 제거한다.
       return (
-        `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
-        ` auto _bytes = r.read_bytes_view((size_t)_n); for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, (double)_bytes.data[_i]); }` +
-        ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`
+        `${indent}{ auto _n = r.read_uvar(); auto _bytes = r.read_bytes_view((size_t)_n);` +
+        ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), rustra::generated::make_array_buffer(rt, _bytes.data, _bytes.size)); }`
       );
     }
     case 'vec_zigzag':
@@ -1873,6 +1887,47 @@ function generatedFieldRoute(
   return fields;
 }
 
+/** Dedicated native path is intentionally narrow: exactly one `Vec<u8>` field. */
+function bufferCommandField(
+  command: CommandSchema,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+): PostcardField | null {
+  const fields = generatedFieldRoute(command, definitions);
+  if (fields?.length !== 1 || fields[0].kind !== 'bytes') return null;
+  const properties = command.inputSchema.properties;
+  const required = command.inputSchema.required;
+  if (
+    !properties ||
+    Object.keys(properties).length !== 1 ||
+    !Array.isArray(required) ||
+    required.length !== 1 ||
+    required[0] !== fields[0].name
+  ) {
+    return null;
+  }
+  return fields[0];
+}
+
+/** Direct raw-byte ABI requires one byte field on both sides of the command. */
+function bufferCommandResultField(
+  command: CommandSchema,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+): PostcardField | null {
+  if (!bufferCommandField(command, definitions)) return null;
+  const { fields } = collectPostcardFields(command.outputSchema, definitions);
+  const properties = command.outputSchema.properties;
+  const required = command.outputSchema.required;
+  return fields.length === 1 &&
+    fields[0].kind === 'bytes' &&
+    properties &&
+    Object.keys(properties).length === 1 &&
+    Array.isArray(required) &&
+    required.length === 1 &&
+    required[0] === fields[0].name
+    ? fields[0]
+    : null;
+}
+
 type RawCommandShape = {
   inputFields: PostcardField[];
   outputField?: PostcardField;
@@ -1989,6 +2044,8 @@ export function generateRkyvCodecsHpp(_schema: PackageSchema): string {
     `// C++ postcard codec for the RN JSI fast path (B1).\n` +
     `// 정적 명령: C++ codec 으로 postcard 인코딩/디코딩. 동적 명령은 JS Tier 3 fallback.\n` +
     `#pragma once\n\n` +
+    `#include <cstddef>\n` +
+    `#include <cstdint>\n` +
     `#include <jsi/jsi.h>\n` +
     `#include <string>\n` +
     `#include "rustra-codec.hpp"\n\n` +
@@ -1998,6 +2055,9 @@ export function generateRkyvCodecsHpp(_schema: PackageSchema): string {
     `/// Runtime 과 함께, 아직 Runtime API가 유효한 시점에 폐기된다.\n` +
     `const facebook::jsi::PropNameID& cachedProp(facebook::jsi::Runtime& rt,\n` +
     `                                           const char* name);\n\n` +
+    `/// 응답 byte span을 새 JS-owned ArrayBuffer로 복사한다. 브릿지 호스트 구현.\n` +
+    `facebook::jsi::Value make_array_buffer(facebook::jsi::Runtime& rt,\n` +
+    `                                      const uint8_t* data, size_t size);\n\n` +
     `/// 명령 이름으로 postcard 요청 바이트를 인코딩한다(정적 명령만).\n` +
     `/// 인코딩 성공(정적 명령) 시 true, 미발견(동적 명령) 시 false.\n` +
     `bool encode_by_name(facebook::jsi::Runtime& rt, const std::string& name,\n` +
@@ -2024,6 +2084,15 @@ export function generateRkyvCodecsHpp(_schema: PackageSchema): string {
     `bool has_static_codec_id(uint16_t cmd_id);\n\n` +
     `/// (Tier 1) positional 인자 직접 인코딩 가능한 cmd_id 여부.\n` +
     `bool has_pos_codec(uint16_t cmd_id);\n\n` +
+    `/// 입력과 출력이 각각 정확히 하나의 Vec<u8> 필드인 cmd_id 여부.\n` +
+    `bool has_buffer_codec(uint16_t cmd_id);\n\n` +
+    `/// direct Rust byte 결과를 생성된 공개 출력 객체로 복원한다.\n` +
+    `facebook::jsi::Value decode_buffer_result_by_id(facebook::jsi::Runtime& rt,\n` +
+    `                                                uint16_t cmd_id,\n` +
+    `                                                facebook::jsi::Value buffer);\n\n` +
+    `/// 빌린 byte span을 즉시 postcard Writer로 복사한다.\n` +
+    `void encode_buffer_by_id(uint16_t cmd_id, const uint8_t* data, size_t size,\n` +
+    `                         rustra::codec::Writer& w);\n\n` +
     `/// (Tier 1) 개별 Value 인자 → postcard 바이트 (invokeTypedPos 진입).\n` +
     `/// argc 일치는 호출부(RustraJSIBridge)가 검증한다. 미발견 시 JSError.\n` +
     `void encode_pos_by_id(facebook::jsi::Runtime& rt, uint16_t cmd_id,\n` +
@@ -2079,6 +2148,14 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   const posCommands = supported
     .map((c) => ({ cmd: c, code: cppEncodePosCommand(c, definitions) }))
     .filter((x): x is { cmd: CommandSchema; code: string } => x.code !== null);
+  const bufferInputCommands = supported.filter((command) =>
+    bufferCommandField(command, definitions),
+  );
+  const bufferCommands = supported
+    .map((cmd) => ({ cmd, output: bufferCommandResultField(cmd, definitions) }))
+    .filter(
+      (entry): entry is { cmd: CommandSchema; output: PostcardField } => entry.output !== null,
+    );
   const rawCommands = supported
     .map((cmd) => ({ cmd, shape: rawCommandShape(cmd, definitions) }))
     .filter(
@@ -2094,6 +2171,7 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   lines.push(`#include <jsi/jsi.h>`);
   lines.push(`#include <limits>`);
   lines.push(`#include <memory>`);
+  lines.push(`#include <stdexcept>`);
   lines.push(`#include <string>`);
   lines.push(`#include <unordered_map>`);
   lines.push(``);
@@ -2204,6 +2282,54 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   );
   lines.push(`  return byte;`);
   lines.push(`}`);
+  lines.push(`struct RustraByteSpan { const uint8_t* data; size_t size; };`);
+  lines.push(
+    `[[maybe_unused]] static RustraByteSpan rustra_bytes(jsi::Runtime& rt, const jsi::Value& value, const char* field) {`,
+  );
+  lines.push(`  if (!value.isObject())`);
+  lines.push(
+    `    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a one-byte TypedArray, ArrayBuffer, or number[]");`,
+  );
+  lines.push(`  auto object = value.asObject(rt);`);
+  lines.push(`  if (object.isArrayBuffer(rt)) {`);
+  lines.push(`    auto buffer = object.getArrayBuffer(rt);`);
+  lines.push(`    auto size = buffer.length(rt);`);
+  lines.push(`    auto* data = buffer.data(rt);`);
+  lines.push(`    if (size > 0 && data == nullptr)`);
+  lines.push(
+    `      throw jsi::JSError(rt, std::string("rustra: '") + field + "' has detached ArrayBuffer storage");`,
+  );
+  lines.push(`    return {data, size};`);
+  lines.push(`  }`);
+  lines.push(`  auto bytesPerElement = object.getProperty(rt, "BYTES_PER_ELEMENT");`);
+  lines.push(`  auto bufferValue = object.getProperty(rt, "buffer");`);
+  lines.push(`  auto offsetValue = object.getProperty(rt, "byteOffset");`);
+  lines.push(`  auto lengthValue = object.getProperty(rt, "byteLength");`);
+  lines.push(
+    `  if (!bytesPerElement.isNumber() || bytesPerElement.asNumber() != 1.0 || !bufferValue.isObject() || !bufferValue.asObject(rt).isArrayBuffer(rt) || !offsetValue.isNumber() || !lengthValue.isNumber())`,
+  );
+  lines.push(
+    `    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a one-byte TypedArray or ArrayBuffer");`,
+  );
+  lines.push(`  auto buffer = bufferValue.asObject(rt).getArrayBuffer(rt);`);
+  lines.push(`  auto bufferSize = buffer.length(rt);`);
+  lines.push(`  double offsetNumber = offsetValue.asNumber();`);
+  lines.push(`  double lengthNumber = lengthValue.asNumber();`);
+  lines.push(
+    `  if (!std::isfinite(offsetNumber) || !std::isfinite(lengthNumber) || std::trunc(offsetNumber) != offsetNumber || std::trunc(lengthNumber) != lengthNumber || offsetNumber < 0.0 || lengthNumber < 0.0 || offsetNumber > static_cast<double>(bufferSize) || lengthNumber > static_cast<double>(bufferSize) - offsetNumber)`,
+  );
+  lines.push(
+    `    throw jsi::JSError(rt, std::string("rustra: '") + field + "' view is outside its ArrayBuffer");`,
+  );
+  lines.push(`  auto offset = static_cast<size_t>(offsetNumber);`);
+  lines.push(`  auto size = static_cast<size_t>(lengthNumber);`);
+  lines.push(`  auto* data = buffer.data(rt);`);
+  lines.push(`  if (bufferSize > 0 && data == nullptr)`);
+  lines.push(
+    `    throw jsi::JSError(rt, std::string("rustra: '") + field + "' has detached TypedArray storage");`,
+  );
+  lines.push(`  return {size == 0 ? data : data + offset, size};`);
+  lines.push(`}`);
   lines.push(
     `[[maybe_unused]] static float rustra_f32(jsi::Runtime& rt, const jsi::Value& value, const char* field) {`,
   );
@@ -2291,6 +2417,52 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   );
   lines.push(
     `    default: throw JSError(rt, "rustra: no positional codec for cmd_id " + std::to_string(cmd_id));`,
+  );
+  lines.push(`  }`);
+  lines.push(`}`);
+  lines.push(``);
+  lines.push(`bool has_buffer_codec(uint16_t cmd_id) {`);
+  lines.push(`  switch (cmd_id) {`);
+  lines.push(bufferCommands.map(({ cmd }) => `    case ${cmd.commandId}: return true;`).join('\n'));
+  lines.push(`    default: return false;`);
+  lines.push(`  }`);
+  lines.push(`}`);
+  lines.push(``);
+  lines.push(
+    `void encode_buffer_by_id(uint16_t cmd_id, const uint8_t* data, size_t size, rc::Writer& w) {`,
+  );
+  lines.push(
+    `  if (size > 0 && data == nullptr) throw std::invalid_argument("rustra: null byte buffer");`,
+  );
+  lines.push(`  switch (cmd_id) {`);
+  for (const cmd of bufferInputCommands) {
+    lines.push(`    case ${cmd.commandId}:`);
+    lines.push(
+      `      w.push_u8(${cmd.commandId & 0xff}); w.push_u8(${(cmd.commandId >> 8) & 0xff});`,
+    );
+    lines.push(`      w.push_uvar(size);`);
+    lines.push(`      if (size > 0) w.push_bytes(data, size);`);
+    lines.push(`      return;`);
+  }
+  lines.push(
+    `    default: throw std::invalid_argument("rustra: no buffer codec for cmd_id " + std::to_string(cmd_id));`,
+  );
+  lines.push(`  }`);
+  lines.push(`}`);
+  lines.push(``);
+  lines.push(`Value decode_buffer_result_by_id(Runtime& rt, uint16_t cmd_id, Value buffer) {`);
+  lines.push(`  switch (cmd_id) {`);
+  for (const { cmd, output } of bufferCommands) {
+    lines.push(`    case ${cmd.commandId}: {`);
+    lines.push(`      auto result = Object(rt);`);
+    lines.push(
+      `      result.setProperty(rt, cachedProp(rt, "${output.name}"), std::move(buffer));`,
+    );
+    lines.push(`      return result;`);
+    lines.push(`    }`);
+  }
+  lines.push(
+    `    default: throw JSError(rt, "rustra: no buffer result codec for cmd_id " + std::to_string(cmd_id));`,
   );
   lines.push(`  }`);
   lines.push(`}`);
@@ -2531,7 +2703,7 @@ function tsFieldType(field: PostcardField, _ownerType: string): string {
     case 'uvar':
       return 'number';
     case 'bytes':
-      return 'Uint8Array';
+      return 'Uint8Array | ArrayBuffer';
     case 'vec_uvar':
       return 'number[]';
     case 'map_zigzag':

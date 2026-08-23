@@ -21,7 +21,7 @@ export type RustraNative = {
    * 미노출 구 브릿지는 invokeTyped 로 폴백한다.
    */
   invokeTypedById?(cmdId: number, args: unknown): unknown;
-  /** bit 0 = typed, bit 1 = positional, bit 2 = raw scalar. */
+  /** bit 0 = typed, bit 1 = positional, bit 2 = raw scalar, bit 3 = byte buffer. */
   getCodecCapabilities?(cmdId: number): number;
   /** Tier 0 scalar entry; returns the generated public output shape. */
   invokeTypedRaw?(cmdId: number, ...fields: unknown[]): unknown;
@@ -31,6 +31,8 @@ export type RustraNative = {
    * 미노출 구 브릿지는 invokeTypedById 로 폴백한다.
    */
   invokeTypedPos?(cmdId: number, ...fields: unknown[]): unknown;
+  /** Single Vec<u8> fast path; input is borrowed only during the synchronous call. */
+  invokeTypedBuffer?(cmdId: number, value: Uint8Array | ArrayBuffer): unknown;
   /** P0-2: 정적 명령 N 개를 단일 JSI 횡단으로 일괄 처리. */
   invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
   /**

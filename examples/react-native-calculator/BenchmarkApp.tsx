@@ -130,6 +130,7 @@ type InterleavedCase = {
 async function measureInterleaved(
   cases: InterleavedCase[],
   iterations = 10_000,
+  warmupIterations = 500,
 ): Promise<Record<string, BenchResult>> {
   const samples = new Map(cases.map((entry) => [entry.key, [] as number[]]));
   const runRound = async (round: number, record: boolean) => {
@@ -142,7 +143,7 @@ async function measureInterleaved(
     }
   };
 
-  for (let round = 0; round < 500; round += 1) await runRound(round, false);
+  for (let round = 0; round < warmupIterations; round += 1) await runRound(round, false);
   for (let round = 0; round < iterations; round += 1) await runRound(round, true);
 
   return Object.fromEntries(
@@ -503,8 +504,29 @@ async function runBenchmarks(): Promise<string[]> {
 
   const stringPayload = { value: 'benchmark-string-payload' };
   const bytesPayload = { data: Array.from({ length: 64 }, (_, i) => i & 0xff) };
-  const normalizeBytes = (value: { data: ArrayLike<number> }) => ({
-    data: Array.from(value.data),
+  const byteBufferPayload = {
+    data: Uint8Array.from(bytesPayload.data).buffer,
+  };
+  const makeByteBufferPayload = (size: number) => {
+    const data = new Uint8Array(size);
+    for (let index = 0; index < size; index += 1) data[index] = index & 0xff;
+    return { data: data.buffer };
+  };
+  const asByteView = (data: ArrayBuffer | ArrayBufferView | ArrayLike<number>) =>
+    data instanceof ArrayBuffer
+      ? new Uint8Array(data)
+      : ArrayBuffer.isView(data)
+        ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+        : Uint8Array.from(data);
+  const byteViewsEqual = (left: Uint8Array, right: Uint8Array) => {
+    if (left.byteLength !== right.byteLength) return false;
+    for (let index = 0; index < left.byteLength; index += 1) {
+      if (left[index] !== right[index]) return false;
+    }
+    return true;
+  };
+  const normalizeBytes = (value: { data: ArrayBuffer | ArrayBufferView | ArrayLike<number> }) => ({
+    data: Array.from(asByteView(value.data)),
   });
   const pairPayload = { name: 'widget', value: 42 };
 
@@ -515,8 +537,8 @@ async function runBenchmarks(): Promise<string[]> {
   const rustraAddValue = await benchAdd(INPUT);
   const nitroStringValue = nitroBench.echoString(stringPayload);
   const rustraStringValue = await benchEchoString(stringPayload);
-  const nitroBytesValue = normalizeBytes(nitroBench.echoBytes(bytesPayload));
-  const rustraBytesValue = normalizeBytes(await benchEchoBytes(bytesPayload));
+  const nitroBytesValue = normalizeBytes(nitroBench.echoBuffer(byteBufferPayload));
+  const rustraBytesValue = normalizeBytes(await benchEchoBytes(byteBufferPayload));
   const nitroPairValue = nitroBench.echoPair(pairPayload);
   const rustraPairValue = await benchEchoPair(pairPayload);
 
@@ -570,11 +592,17 @@ async function runBenchmarks(): Promise<string[]> {
     operation: string,
     nitro: () => Promise<unknown>,
     rustra: () => Promise<unknown>,
+    iterations = 10_000,
+    warmupIterations = 500,
   ) => {
-    return measureInterleaved([
-      { key: 'nitro', label: `nitro ${operation}`, run: nitro },
-      { key: 'rustra', label: `rustra ${operation}`, run: rustra },
-    ]);
+    return measureInterleaved(
+      [
+        { key: 'nitro', label: `nitro ${operation}`, run: nitro },
+        { key: 'rustra', label: `rustra ${operation}`, run: rustra },
+      ],
+      iterations,
+      warmupIterations,
+    );
   };
 
   configure(rkyvV2Engine);
@@ -589,9 +617,9 @@ async function runBenchmarks(): Promise<string[]> {
     () => benchEchoString(stringPayload),
   );
   const bytesResults = await measureEquivalent(
-    'bytes64',
-    () => Promise.resolve(normalizeBytes(nitroBench.echoBytes(bytesPayload))),
-    async () => normalizeBytes(await benchEchoBytes(bytesPayload)),
+    'buffer64',
+    () => Promise.resolve(nitroBench.echoBuffer(byteBufferPayload)),
+    () => benchEchoBytes(byteBufferPayload),
   );
   const pairResults = await measureEquivalent(
     'pair',
@@ -659,6 +687,24 @@ async function runBenchmarks(): Promise<string[]> {
   const rustraPair = pairResults.rustra;
   const ffiPair = ffiPairResults?.ffi;
   const ffiNitroPair = ffiPairResults?.nitro;
+  const byteSizeResults: Record<
+    string,
+    {
+      sizeBytes: number;
+      iterations: number;
+      nitro: BenchResult;
+      rustra: BenchResult;
+      ratio: number;
+    }
+  > = {
+    bytes64: {
+      sizeBytes: 64,
+      iterations: 10_000,
+      nitro: nitroBuf,
+      rustra: rustraBuf,
+      ratio: rustraBuf.avg / nitroBuf.avg,
+    },
+  };
 
   // 공개 generated helper와 그 helper가 최종 선택한 native route를 같은
   // 호출 단위로 교차 측정한다. 이 값은 Nitro 비교 ratio가 아니라 남은 비용을
@@ -666,7 +712,12 @@ async function runBenchmarks(): Promise<string[]> {
   let generatedRouteDiagnostics:
     | Record<string, { native: BenchResult; generated: BenchResult; generatedToNative: number }>
     | undefined;
-  if (native.invokeTypedRaw && native.invokeTypedPos && native.invokeTypedById) {
+  if (
+    native.invokeTypedRaw &&
+    native.invokeTypedPos &&
+    native.invokeTypedById &&
+    native.invokeTypedBuffer
+  ) {
     const routeCases = async (
       operation: string,
       direct: () => Promise<unknown>,
@@ -694,9 +745,9 @@ async function runBenchmarks(): Promise<string[]> {
         () => benchEchoString(stringPayload),
       ),
       bytes64: await routeCases(
-        'bytes64',
-        () => Promise.resolve(native.invokeTypedById!(25, bytesPayload)),
-        () => benchEchoBytes(bytesPayload),
+        'buffer64',
+        () => Promise.resolve(native.invokeTypedBuffer!(25, byteBufferPayload.data)),
+        () => benchEchoBytes(byteBufferPayload),
       ),
       pair: await routeCases(
         'pair',
@@ -714,6 +765,48 @@ async function runBenchmarks(): Promise<string[]> {
         })}`,
       );
     }
+  }
+
+  // Copy cost changes with payload size. Keep total moved bytes bounded while
+  // proving the same fresh-output ownership contract at 64 KiB and 1 MiB.
+  for (const byteCase of [
+    { key: 'bytes64KiB', sizeBytes: 64 * 1024, iterations: 500, warmupIterations: 50 },
+    // cmd_id(2 B) + postcard uvar length(3 B) + data = exactly the default
+    // 1 MiB request limit. A full 1 MiB data buffer correctly fails closed.
+    { key: 'bytes1MiBWire', sizeBytes: 1024 * 1024 - 5, iterations: 50, warmupIterations: 5 },
+  ]) {
+    const payload = makeByteBufferPayload(byteCase.sizeBytes);
+    const nitroValue = nitroBench.echoBuffer(payload);
+    const rustraValue = await benchEchoBytes(payload);
+    if (!byteViewsEqual(asByteView(nitroValue.data), asByteView(rustraValue.data))) {
+      throw new Error(`${byteCase.key} Nitro/rustra outputs differ before timing`);
+    }
+    const measured = await measureEquivalent(
+      byteCase.key,
+      () => Promise.resolve(nitroBench.echoBuffer(payload)),
+      () => benchEchoBytes(payload),
+      byteCase.iterations,
+      byteCase.warmupIterations,
+    );
+    byteSizeResults[byteCase.key] = {
+      sizeBytes: byteCase.sizeBytes,
+      iterations: byteCase.iterations,
+      nitro: measured.nitro,
+      rustra: measured.rustra,
+      ratio: measured.rustra.avg / measured.nitro.avg,
+    };
+  }
+  for (const [operation, result] of Object.entries(byteSizeResults)) {
+    console.log(
+      `RUSTRA_BYTES_OP_JSON=${JSON.stringify({
+        operation,
+        sizeBytes: result.sizeBytes,
+        iterations: result.iterations,
+        nitroAvgNs: result.nitro.avg,
+        rustraAvgNs: result.rustra.avg,
+        rustraToNitro: result.ratio,
+      })}`,
+    );
   }
 
   const logResult = (prefix: string, result: BenchResult) =>
@@ -761,7 +854,7 @@ async function runBenchmarks(): Promise<string[]> {
   log('');
 
   const equivalentBenchmarkReceipt = {
-    schemaVersion: 2,
+    schemaVersion: 4,
     generatedAt: new Date().toISOString(),
     platform: Platform.OS,
     platformVersion: String(Platform.Version),
@@ -781,6 +874,7 @@ async function runBenchmarks(): Promise<string[]> {
       bytes64: { nitro: nitroBuf, rustra: rustraBuf, ratio: rustraBuf.avg / nitroBuf.avg },
       pair: { nitro: nitroPair, rustra: rustraPair, ratio: rustraPair.avg / nitroPair.avg },
     },
+    byteSizes: byteSizeResults,
     ffi:
       Platform.OS === 'ios'
         ? {
@@ -805,8 +899,12 @@ async function runBenchmarks(): Promise<string[]> {
           }
         : { available: false, reason: 'iOS-only Swift Expo module' },
   };
+  const bytes64KiBReceipt = equivalentBenchmarkReceipt.byteSizes.bytes64KiB;
+  const bytes1MiBWireReceipt = equivalentBenchmarkReceipt.byteSizes.bytes1MiBWire;
   lines.unshift(
     `RESULT equivalent=${equivalentOutputs ? '✓' : '✗'} ffi=${Platform.OS === 'ios' ? (ffiSuiteAvailable ? '✓' : '✗') : 'skipped'} add=${equivalentBenchmarkReceipt.equivalent.add.ratio.toFixed(4)}x str=${equivalentBenchmarkReceipt.equivalent.string.ratio.toFixed(4)}x buf=${equivalentBenchmarkReceipt.equivalent.bytes64.ratio.toFixed(4)}x obj=${equivalentBenchmarkReceipt.equivalent.pair.ratio.toFixed(4)}x`,
+    `BYTES 64KiB nitro=${bytes64KiBReceipt.nitro.avg.toFixed(3)}ns rustra=${bytes64KiBReceipt.rustra.avg.toFixed(3)}ns ratio=${bytes64KiBReceipt.ratio.toFixed(4)}x`,
+    `BYTES 1MiB-wire nitro=${bytes1MiBWireReceipt.nitro.avg.toFixed(3)}ns rustra=${bytes1MiBWireReceipt.rustra.avg.toFixed(3)}ns ratio=${bytes1MiBWireReceipt.ratio.toFixed(4)}x`,
     '',
   );
   console.log(`RUSTRA_NITRO_JSON=${JSON.stringify(equivalentBenchmarkReceipt)}`);

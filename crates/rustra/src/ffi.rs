@@ -141,9 +141,22 @@ fn alloc_response(data: Vec<u8>, out_len: *mut usize) -> *mut u8 {
     let user_ptr = unsafe { raw_ptr.add(FFI_HEADER_SIZE) };
 
     #[cfg(debug_assertions)]
-    free_guard::record(user_ptr, payload_len);
+    free_guard::record(user_ptr, payload_len, free_guard::AllocationKind::Header);
 
     user_ptr
+}
+
+/// Transfer an existing byte vector without copying it into the legacy FFI
+/// header allocation. The paired `rustra_ffi_free_owned_bytes` reconstructs
+/// this exact boxed slice from the returned pointer and length.
+fn alloc_owned_bytes(data: Vec<u8>, out_len: *mut usize) -> *mut u8 {
+    let boxed = data.into_boxed_slice();
+    let len = boxed.len();
+    unsafe { *out_len = len };
+    let ptr = Box::into_raw(boxed) as *mut u8;
+    #[cfg(debug_assertions)]
+    free_guard::record(ptr, len, free_guard::AllocationKind::Owned);
+    ptr
 }
 
 /// Debug-only allocation tracker for `rustra_ffi_free` misuse detection (F2).
@@ -169,6 +182,12 @@ mod free_guard {
     use std::collections::HashSet;
     use std::sync::{Mutex, OnceLock};
 
+    #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+    pub(super) enum AllocationKind {
+        Header,
+        Owned,
+    }
+
     /// Classification of a `rustra_ffi_free` request against the live set.
     #[derive(Debug, PartialEq, Eq)]
     pub(super) enum Verdict {
@@ -176,19 +195,21 @@ mod free_guard {
         Sound,
         /// `ptr` is live but under a different length (wrong-len free → UB).
         WrongLen,
+        /// The pointer/length pair belongs to the other Rustra allocator.
+        WrongAllocator,
         /// `ptr` is not live at all (double-free or foreign pointer → UB).
         NotLive,
     }
 
-    fn live() -> &'static Mutex<HashSet<(usize, usize)>> {
-        static LIVE: OnceLock<Mutex<HashSet<(usize, usize)>>> = OnceLock::new();
+    fn live() -> &'static Mutex<HashSet<(usize, usize, AllocationKind)>> {
+        static LIVE: OnceLock<Mutex<HashSet<(usize, usize, AllocationKind)>>> = OnceLock::new();
         LIVE.get_or_init(|| Mutex::new(HashSet::new()))
     }
 
     /// Record a freshly handed-out allocation.
-    pub(super) fn record(ptr: *mut u8, len: usize) {
+    pub(super) fn record(ptr: *mut u8, len: usize, kind: AllocationKind) {
         let mut set = live().lock().expect("free_guard mutex poisoned");
-        set.insert((ptr as usize, len));
+        set.insert((ptr as usize, len, kind));
     }
 
     /// Classify a free request; on [`Verdict::Sound`] the entry is removed.
@@ -196,12 +217,17 @@ mod free_guard {
     /// Pure classification — never panics, so it is safe to call from inside the
     /// `extern "C"` boundary (which cannot unwind). The caller decides how to
     /// react to a misuse verdict.
-    pub(super) fn check(ptr: *mut u8, len: usize) -> Verdict {
-        let key = (ptr as usize, len);
+    pub(super) fn check(ptr: *mut u8, len: usize, kind: AllocationKind) -> Verdict {
+        let key = (ptr as usize, len, kind);
         let mut set = live().lock().expect("free_guard mutex poisoned");
         if set.remove(&key) {
             Verdict::Sound
-        } else if set.iter().any(|(p, _)| *p == ptr as usize) {
+        } else if set
+            .iter()
+            .any(|(p, entry_len, _)| *p == ptr as usize && *entry_len == len)
+        {
+            Verdict::WrongAllocator
+        } else if set.iter().any(|(p, _, _)| *p == ptr as usize) {
             Verdict::WrongLen
         } else {
             Verdict::NotLive
@@ -213,7 +239,7 @@ mod free_guard {
         //! Verdict logic is exercised here (no extern boundary, no abort).
         //! Each test uses a unique synthetic pointer value so the shared global
         //! live set never collides across parallel tests.
-        use super::{Verdict, check, record};
+        use super::{AllocationKind, Verdict, check, record};
 
         // 고유 synthetic 포인터 — dereference 되지 않고 key 로만 사용.
         const fn p(n: usize) -> *mut u8 {
@@ -222,30 +248,30 @@ mod free_guard {
 
         #[test]
         fn exact_match_is_sound_and_removes_entry() {
-            record(p(0x10), 16);
-            assert_eq!(check(p(0x10), 16), Verdict::Sound);
+            record(p(0x10), 16, AllocationKind::Header);
+            assert_eq!(check(p(0x10), 16, AllocationKind::Header), Verdict::Sound);
             // 이미 제거됨 → 같은 요청은 이제 NotLive.
-            assert_eq!(check(p(0x10), 16), Verdict::NotLive);
+            assert_eq!(check(p(0x10), 16, AllocationKind::Header), Verdict::NotLive);
         }
 
         #[test]
         fn same_ptr_different_len_is_wrong_len() {
-            record(p(0x20), 32);
+            record(p(0x20), 32, AllocationKind::Header);
             assert_eq!(
-                check(p(0x20), 33),
+                check(p(0x20), 33, AllocationKind::Header),
                 Verdict::WrongLen,
                 "ptr live under len=32 must classify len=33 as WrongLen"
             );
             // 정리: 올바른 len 으로 Sound 제거.
-            assert_eq!(check(p(0x20), 32), Verdict::Sound);
+            assert_eq!(check(p(0x20), 32, AllocationKind::Header), Verdict::Sound);
         }
 
         #[test]
         fn second_free_is_not_live() {
-            record(p(0x30), 8);
-            assert_eq!(check(p(0x30), 8), Verdict::Sound);
+            record(p(0x30), 8, AllocationKind::Owned);
+            assert_eq!(check(p(0x30), 8, AllocationKind::Owned), Verdict::Sound);
             assert_eq!(
-                check(p(0x30), 8),
+                check(p(0x30), 8, AllocationKind::Owned),
                 Verdict::NotLive,
                 "double-free must classify as NotLive"
             );
@@ -254,10 +280,20 @@ mod free_guard {
         #[test]
         fn unknown_ptr_is_not_live() {
             assert_eq!(
-                check(p(0x99), 64),
+                check(p(0x99), 64, AllocationKind::Header),
                 Verdict::NotLive,
                 "foreign pointer never recorded must be NotLive"
             );
+        }
+
+        #[test]
+        fn exact_pair_from_other_allocator_is_rejected_without_removing_it() {
+            record(p(0x40), 64, AllocationKind::Owned);
+            assert_eq!(
+                check(p(0x40), 64, AllocationKind::Header),
+                Verdict::WrongAllocator
+            );
+            assert_eq!(check(p(0x40), 64, AllocationKind::Owned), Verdict::Sound);
         }
     }
 }
@@ -1018,7 +1054,7 @@ pub unsafe extern "C" fn rustra_ffi_get_max_payload() -> usize {
 pub unsafe extern "C" fn rustra_ffi_free(ptr: *mut u8, _len: usize) {
     if !ptr.is_null() {
         #[cfg(debug_assertions)]
-        match free_guard::check(ptr, _len) {
+        match free_guard::check(ptr, _len, free_guard::AllocationKind::Header) {
             free_guard::Verdict::Sound => {}
             verdict => {
                 eprintln!(
@@ -1050,6 +1086,33 @@ pub unsafe extern "C" fn rustra_ffi_free(ptr: *mut u8, _len: usize) {
             let _ = Box::from_raw(raw_slice as *mut [u8]);
         }
     }
+}
+
+/// Free the exact pointer/length pair returned by `rustra_ffi_invoke_buffer`.
+/// This allocation has no hidden header and is deliberately not interchangeable
+/// with [`rustra_ffi_free`].
+///
+/// # Safety
+///
+/// `ptr` and `len` must be the exact pair returned by
+/// `rustra_ffi_invoke_buffer`, exactly once.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_free_owned_bytes(ptr: *mut u8, len: usize) {
+    if ptr.is_null() {
+        return;
+    }
+    #[cfg(debug_assertions)]
+    match free_guard::check(ptr, len, free_guard::AllocationKind::Owned) {
+        free_guard::Verdict::Sound => {}
+        verdict => {
+            eprintln!(
+                "rustra_ffi_free_owned_bytes: F2 misuse ({verdict:?}) for (ptr,len)=({ptr:p},{len})"
+            );
+            std::process::abort();
+        }
+    }
+    let raw_slice = std::ptr::slice_from_raw_parts_mut(ptr, len);
+    let _ = unsafe { Box::from_raw(raw_slice) };
 }
 
 /// rkyv V2 바이너리 와이어 진입점 — command_id(u16) 기반 dispatch.
@@ -1086,6 +1149,54 @@ pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2(
         Err(error) => crate::encode_rkyv_v2_error(&error),
     };
     alloc_response(resp, out_len)
+}
+
+/// Direct single-byte-field invocation. Success transfers the handler's owned
+/// output vector without a postcard response frame; errors transfer a UTF-8
+/// `RustraError` display string. Return value: 0 success, 1 command error,
+/// `u32::MAX` invalid ABI arguments.
+///
+/// # Safety
+///
+/// - `payload` must be readable for `payload_len` bytes, or null when len is 0.
+/// - `out_ptr` and `out_len` must be valid writable pointers.
+/// - the returned pair must be freed with `rustra_ffi_free_owned_bytes`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_invoke_buffer(
+    command_id: u16,
+    payload: *const u8,
+    payload_len: usize,
+    out_ptr: *mut *mut u8,
+    out_len: *mut usize,
+) -> u32 {
+    if out_ptr.is_null() || out_len.is_null() || (payload.is_null() && payload_len != 0) {
+        return u32::MAX;
+    }
+    unsafe {
+        *out_ptr = std::ptr::null_mut();
+        *out_len = 0;
+    }
+    let bytes = if payload_len == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(payload, payload_len) }
+    };
+    let result = get_package()
+        .ok_or_else(|| crate::RustraError::custom("ffi.not_registered", "package not registered"))
+        .and_then(|package| package.invoke_buffer(command_id, bytes));
+    let (status, output) = match result {
+        Ok(output) => (0, output),
+        Err(error) => (1, error.to_string().into_bytes()),
+    };
+    let ptr = alloc_owned_bytes(output, out_len);
+    unsafe { *out_ptr = ptr };
+    status
+}
+
+/// Return 1 when the registered package owns a direct handler for `command_id`.
+#[unsafe(no_mangle)]
+pub extern "C" fn rustra_ffi_has_buffer(command_id: u16) -> u32 {
+    u32::from(get_package().is_some_and(|package| package.has_buffer_handler(command_id)))
 }
 
 /// 스칼라 직결(raw) invoke — postcard 인코딩/디코딩 없이 u64 슬롯으로 주고받는다.

@@ -1,5 +1,5 @@
 import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
-import { invokeGenerated, invokeGeneratedFields1, invokeGeneratedFields2, invokeGeneratedFields3 } from '@rustra/types';
+import { invokeGenerated, invokeGeneratedBytes, invokeGeneratedFields1, invokeGeneratedFields2, invokeGeneratedFields3 } from '@rustra/types';
 import type { InvokeOptions } from '@rustra/types';
 
 export function addNumbers(input: AddNumbersInput, options?: InvokeOptions): Promise<AddNumbersOutput> {
@@ -13,7 +13,7 @@ export function benchAdd(input: BenchAddInput, options?: InvokeOptions): Promise
 benchAdd.commandId = 'benchAdd';
 
 export function benchEchoBytes(input: BenchBytesPayload, options?: InvokeOptions): Promise<BenchBytesPayload> {
-  return invokeGeneratedFields1<BenchBytesPayload>(25, 'benchEchoBytes', input, input["data"], options);
+  return invokeGeneratedBytes<BenchBytesPayload>(25, 'benchEchoBytes', input, input["data"], options);
 }
 benchEchoBytes.commandId = 'benchEchoBytes';
 
@@ -113,7 +113,7 @@ export function secureCompute(input: SecureComputeInput, options?: InvokeOptions
 secureCompute.commandId = 'secureCompute';
 
 export function sizeOf(input: SizeOfInput, options?: InvokeOptions): Promise<SizeOfOutput> {
-  return invokeGeneratedFields1<SizeOfOutput>(14, 'sizeOf', input, input["data"], options);
+  return invokeGeneratedBytes<SizeOfOutput>(14, 'sizeOf', input, input["data"], options);
 }
 sizeOf.commandId = 'sizeOf';
 

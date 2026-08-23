@@ -6,6 +6,7 @@
 #include <cstring>
 #include <jsi/jsi.h>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -55,27 +56,60 @@ static uint64_t requireSafeU64(Runtime& rt, const Value& value, const char* labe
 
 // ── ArrayBuffer helpers ────────────────────────────────────
 
-/// ArrayBuffer 생성자 캐시 — 첫 호출 시 1회 조회, 이후 재사용.
-/// jsi::Function 은 move-only 이므로 optional 에 move 저장한다.
-/// RN reload 로 Runtime 이 교체되면 installRustraJSIWithInvoker 가
-/// 재호출되므로 그 시점에 reset 한다 — 구 Runtime 소유 핸들이
-/// dangling 되지 않게 (아래 Install 절).
-/// 스레드 계약: JS 스레드에서만 접근 — host 함수와 install 모두 JS 스레드에서 실행.
-static std::optional<Function> g_arrayBufferCtor;
-
-static Function& arrayBufferCtor(Runtime& rt) {
-  if (!g_arrayBufferCtor) {
-    g_arrayBufferCtor = rt.global().getPropertyAsFunction(rt, "ArrayBuffer");
-  }
-  return *g_arrayBufferCtor;
-}
-
 static Value createArrayBuffer(Runtime& rt, const uint8_t* data, size_t size) {
-  Object ab = arrayBufferCtor(rt).callAsConstructor(rt, static_cast<double>(size))
+  // Function/PropNameID handles may never outlive their owning Runtime. A
+  // process-global constructor cache corrupted Hermes during RN reload when a
+  // later install destroyed the old Runtime's Function handle. This generic
+  // copy path is not the direct byte-buffer hot path, so resolve the
+  // constructor from the current Runtime instead of retaining a cross-runtime
+  // JSI handle.
+  Function ctor = rt.global().getPropertyAsFunction(rt, "ArrayBuffer");
+  Object ab = ctor.callAsConstructor(rt, static_cast<double>(size))
     .getObject(rt);
   ArrayBuffer buf = ab.getArrayBuffer(rt);
-  std::memcpy(buf.data(rt), data, size);
+  if (size > 0) {
+    if (data == nullptr || buf.data(rt) == nullptr) {
+      throw JSError(rt, "RustraJSI: detached or null ArrayBuffer storage");
+    }
+    std::memcpy(buf.data(rt), data, size);
+  }
   return ab;
+}
+
+Value generated::make_array_buffer(Runtime& rt, const uint8_t* data, size_t size) {
+  return createArrayBuffer(rt, data, size);
+}
+
+/// Owns the exact `(ptr, len)` transferred by `rustra_ffi_invoke_buffer`.
+/// Hermes keeps the shared MutableBuffer alive for the lifetime of the JS
+/// ArrayBuffer, so the Rust allocation is exposed without another bulk copy.
+/// The finalizer stores no Runtime/JSI handles and is safe to run after reload.
+class RustOwnedMutableBuffer final : public MutableBuffer {
+public:
+  RustOwnedMutableBuffer(uint8_t* data, size_t size) : data_(data), size_(size) {}
+
+  ~RustOwnedMutableBuffer() override {
+    if (data_ != nullptr) rustra_ffi_free_owned_bytes(data_, size_);
+  }
+
+  size_t size() const override { return size_; }
+  uint8_t* data() override { return data_; }
+
+private:
+  uint8_t* data_;
+  size_t size_;
+};
+
+static Value createOwnedArrayBuffer(Runtime& rt, uint8_t* data, size_t size) {
+  std::shared_ptr<RustOwnedMutableBuffer> owner;
+  try {
+    owner = std::make_shared<RustOwnedMutableBuffer>(data, size);
+  } catch (...) {
+    rustra_ffi_free_owned_bytes(data, size);
+    throw;
+  }
+  ArrayBuffer buffer(rt, std::move(owner));
+  return Value(rt, buffer);
 }
 
 static std::pair<const uint8_t*, size_t> extractBytes(Runtime& rt, const Value& value) {
@@ -83,6 +117,9 @@ static std::pair<const uint8_t*, size_t> extractBytes(Runtime& rt, const Value& 
 
   if (obj.isArrayBuffer(rt)) {
     auto buf = obj.getArrayBuffer(rt);
+    if (buf.size(rt) > 0 && buf.data(rt) == nullptr) {
+      throw JSError(rt, "RustraJSI: detached ArrayBuffer");
+    }
     return {buf.data(rt), buf.size(rt)};
   }
 
@@ -107,10 +144,26 @@ static std::pair<const uint8_t*, size_t> extractBytes(Runtime& rt, const Value& 
     }
     auto byteOffset = static_cast<size_t>(offsetNum);
     auto byteLength = static_cast<size_t>(lengthNum);
-    return {buf.data(rt) + byteOffset, byteLength};
+    auto* data = buf.data(rt);
+    if (bufSize > 0 && data == nullptr) {
+      throw JSError(rt, "RustraJSI: detached TypedArray buffer");
+    }
+    return {byteLength == 0 ? data : data + byteOffset, byteLength};
   }
 
   throw JSError(rt, "RustraJSI: expected ArrayBuffer or TypedArray");
+}
+
+static std::pair<const uint8_t*, size_t> extractByteBuffer(
+    Runtime& rt, const Value& value) {
+  auto obj = value.asObject(rt);
+  if (!obj.isArrayBuffer(rt)) {
+    auto bytesPerElement = obj.getProperty(rt, "BYTES_PER_ELEMENT");
+    if (!bytesPerElement.isNumber() || bytesPerElement.asNumber() != 1.0) {
+      throw JSError(rt, "RustraJSI: expected Uint8Array or ArrayBuffer");
+    }
+  }
+  return extractBytes(rt, value);
 }
 
 // ── rkyv V2 에러 와이어 파싱 ────────────────────────────────
@@ -760,7 +813,7 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
   }
 
   // getCodecCapabilities(cmdId): 엔진 구성 시 한 번 캐시할 정적 라우팅 마스크.
-  // bit0=typed, bit1=positional, bit2=raw. raw 는 생성 메타데이터와 실제
+  // bit0=typed, bit1=positional, bit2=raw, bit3=single byte buffer. raw 는 생성 메타데이터와 실제
   // Rust registry handler를 함께 확인해 오래된/동적 registry 드리프트에서
   // 잘못 광고하지 않는다.
   {
@@ -776,9 +829,44 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         if (gen::has_static_codec_id(cmdId)) capabilities |= 1u;
         if (gen::has_pos_codec(cmdId)) capabilities |= 2u;
         if (gen::has_raw_codec(cmdId) && rustra_ffi_has_raw(cmdId) != 0) capabilities |= 4u;
+        if (gen::has_buffer_codec(cmdId) && rustra_ffi_has_buffer(cmdId) != 0) capabilities |= 8u;
         return Value(static_cast<double>(capabilities));
       });
     cache_["getCodecCapabilities"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+
+  // ── (Tier 0.5) invokeTypedBuffer(cmdId, Uint8Array|ArrayBuffer) ─────
+  // 입력 메모리는 이 동기 HostFunction 안에서만 빌린다. Rust는 user handler
+  // 실행 전에 소유 Vec로 1회 복사하므로 JS GC/reload 뒤 입력 포인터를 보관하지
+  // 않는다. handler의 출력 Vec는 postcard frame/추가 copy 없이 JSI
+  // MutableBuffer에 넘기며, JS ArrayBuffer GC 시 정확한 ptr/len으로 해제한다.
+  {
+    auto propNameId = PropNameID::forAscii(rt, "invokeTypedBuffer");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 2,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count != 2) {
+          throw JSError(rt, "RustraJSI: invokeTypedBuffer requires (cmdId, bytes)");
+        }
+        uint16_t cmdId = requireU16(rt, args[0], "command id");
+        auto [data, size] = extractByteBuffer(rt, args[1]);
+        uint8_t* output = nullptr;
+        size_t outputSize = 0;
+        uint32_t status = rustra_ffi_invoke_buffer(
+          cmdId, data, size, &output, &outputSize);
+        if (status == UINT32_MAX || output == nullptr) {
+          throw JSError(rt, "RustraJSI: direct buffer ABI failed");
+        }
+        if (status != 0) {
+          std::string error(reinterpret_cast<const char*>(output), outputSize);
+          rustra_ffi_free_owned_bytes(output, outputSize);
+          throw JSError(rt, error.empty() ? "buffer invoke failed" : error);
+        }
+        Value buffer = createOwnedArrayBuffer(rt, output, outputSize);
+        return gen::decode_buffer_result_by_id(rt, cmdId, std::move(buffer));
+      });
+    cache_["invokeTypedBuffer"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
 
@@ -1228,12 +1316,6 @@ void installRustraJSIWithInvoker(Runtime& rt,
   // 다음 install을 안전망으로 사용한다.
   invalidateRustraJSI();
   rustra_calculator_init();
-  // RN reload 로 새 Runtime 이 설치되는 시점 — 캐시된 Function 핸들은
-  // 구 Runtime 힙을 참조하므로 여기서 반드시 비운다. decode 코덱의
-  // PropNameID 캐시는 Runtime global NativeState가 소유하므로 구 Runtime
-  // 파괴 과정에서 먼저 해제된다. 여기서 늦게 clear하면 이미 죽은 Runtime을
-  // 통해 PropNameID를 파괴해 SIGSEGV가 날 수 있다.
-  g_arrayBufferCtor.reset();
   auto dispatcher = getEventDispatcher();
   dispatcher->setCallInvoker(typeErasedCallInvoker);
   // 채널 디스패처도 동일 CallInvoker 공유(2단계) — reset 내부에서 이전

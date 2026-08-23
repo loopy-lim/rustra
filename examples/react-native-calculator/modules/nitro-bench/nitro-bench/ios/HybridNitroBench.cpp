@@ -20,6 +20,11 @@ BytesPayload HybridNitroBench::echoBytes(const BytesPayload& value) {
   return value;
 }
 
+BufferPayload HybridNitroBench::echoBuffer(const BufferPayload& value) {
+  // Match Rustra's ownership boundary: the returned buffer owns a fresh copy.
+  return BufferPayload(margelo::nitro::ArrayBuffer::copy(value.data));
+}
+
 PairPayload HybridNitroBench::echoPair(const PairPayload& value) {
   return value;
 }

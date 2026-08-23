@@ -257,13 +257,19 @@ export type RustraNative = {
   invokeTypedById?(cmdId: number, args: unknown): unknown;
   /**
    * Generated command capability mask keyed by numeric command id.
-   * bit 0 = typed, bit 1 = positional, bit 2 = raw scalar.
+   * bit 0 = typed, bit 1 = positional, bit 2 = raw scalar,
+   * bit 3 = a single schema-proven byte buffer.
    */
   getCodecCapabilities?(cmdId: number): number;
   /** Tier 0: scalar fields and scalar/unit output without postcard conversion. */
   invokeTypedRaw?(cmdId: number, ...fields: unknown[]): unknown;
   /** Tier 1: one to three generated scalar/string fields without object reads. */
   invokeTypedPos?(cmdId: number, ...fields: unknown[]): unknown;
+  /**
+   * Tier 0.5: one schema-proven `Vec<u8>` field. Native code only borrows the
+   * input for this synchronous call and returns a JS-owned result.
+   */
+  invokeTypedBuffer?(cmdId: number, value: Uint8Array | ArrayBuffer): unknown;
   /** P0-2: 정적 명령 N 개를 단일 횡단으로 일괄 처리 (RN JSI). */
   invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
   /**
@@ -296,10 +302,25 @@ export type RustraNative = {
 const invokeByIdSync = Symbol('rustra.invokeByIdSync');
 const invokeGeneratedFieldsSync = Symbol('rustra.invokeGeneratedFieldsSync');
 const resolveGeneratedFieldsSync = Symbol('rustra.resolveGeneratedFieldsSync');
+const invokeGeneratedBytesSync = Symbol('rustra.invokeGeneratedBytesSync');
+const resolveGeneratedBytesSync = Symbol('rustra.resolveGeneratedBytesSync');
 
 const CODEC_TYPED = 1 << 0;
 const CODEC_POSITIONAL = 1 << 1;
 const CODEC_RAW = 1 << 2;
+const CODEC_BUFFER = 1 << 3;
+
+function isNativeByteBuffer(value: unknown): value is Uint8Array | ArrayBuffer {
+  if (typeof ArrayBuffer === 'undefined' || typeof value !== 'object' || value === null) {
+    return false;
+  }
+  if (value instanceof ArrayBuffer) return true;
+  // `ArrayBuffer.isView` works across realms. Restrict views to one-byte
+  // elements so Int16Array/DataView cannot silently change the byte contract.
+  return (
+    ArrayBuffer.isView(value) && (value as { BYTES_PER_ELEMENT?: unknown }).BYTES_PER_ELEMENT === 1
+  );
+}
 
 type GeneratedFieldsRoute = (
   args: unknown,
@@ -312,6 +333,13 @@ type CachedGeneratedFieldsRoute = {
   command: string;
   fieldCount: 1 | 2 | 3;
   invoke: GeneratedFieldsRoute;
+};
+
+type GeneratedBytesRoute = (args: unknown, value: unknown) => unknown;
+
+type CachedGeneratedBytesRoute = {
+  command: string;
+  invoke: GeneratedBytesRoute;
 };
 
 type InternalEngineClient = EngineClient & {
@@ -330,10 +358,18 @@ type InternalEngineClient = EngineClient & {
     command: string,
     fieldCount: 1 | 2 | 3,
   ): GeneratedFieldsRoute | undefined;
+  [invokeGeneratedBytesSync]?<T>(
+    commandId: number,
+    command: string,
+    args: unknown,
+    value: unknown,
+  ): T;
+  [resolveGeneratedBytesSync]?(commandId: number, command: string): GeneratedBytesRoute | undefined;
 };
 
 let _engine: InternalEngineClient | null = null;
 let _generatedFieldsRoutes: Array<CachedGeneratedFieldsRoute | null | undefined> = [];
+let _generatedBytesRoutes: Array<CachedGeneratedBytesRoute | null | undefined> = [];
 
 /**
  * 글로벌 엔진을 설정합니다. 앱 시작 시 한 번만 호출합니다.
@@ -361,6 +397,7 @@ let _generatedFieldsRoutes: Array<CachedGeneratedFieldsRoute | null | undefined>
 export function configure(engine: EngineClient): void {
   _engine = engine;
   _generatedFieldsRoutes = [];
+  _generatedBytesRoutes = [];
 }
 
 /**
@@ -457,6 +494,55 @@ function resolveCachedGeneratedFieldsRoute(
   const cached = invoke ? { command, fieldCount, invoke } : null;
   _generatedFieldsRoutes[commandId] = cached;
   return cached;
+}
+
+function resolveCachedGeneratedBytesRoute(
+  engine: InternalEngineClient,
+  commandId: number,
+  command: string,
+): CachedGeneratedBytesRoute | null {
+  const invoke = engine[resolveGeneratedBytesSync]?.(commandId, command);
+  const cached = invoke ? { command, invoke } : null;
+  _generatedBytesRoutes[commandId] = cached;
+  return cached;
+}
+
+/**
+ * Generated-client helper for an input with exactly one schema-proven
+ * `Vec<u8>` field. `number[]` remains supported through the regular generated
+ * field route; only ArrayBuffer and one-byte typed views use the native buffer
+ * entry point.
+ */
+export function invokeGeneratedBytes<T>(
+  commandId: number,
+  command: string,
+  args: unknown,
+  value: Uint8Array | ArrayBuffer | number[],
+  options?: InvokeOptions,
+): Promise<T> {
+  if (!_engine) throw new Error('Rustra not configured. Call configure(engine) first.');
+  if (options === undefined) {
+    let route = _generatedBytesRoutes[commandId];
+    if (route === undefined) {
+      route = resolveCachedGeneratedBytesRoute(_engine, commandId, command);
+    }
+    if (route && route.command === command) {
+      try {
+        return Promise.resolve(route.invoke(args, value) as T);
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+    const syncInvoke = _engine[invokeGeneratedBytesSync];
+    if (syncInvoke) {
+      try {
+        return Promise.resolve(syncInvoke<T>(commandId, command, args, value));
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+  }
+  return invokeGeneratedFields1<T>(commandId, command, args, value, options);
 }
 
 /** Generated-client helper for a schema-proven one-field input. */
@@ -840,12 +926,14 @@ export type RkyvV2SchemaNative = {
    * `invokeTyped` 로 폴백한다.
    */
   invokeTypedById?(cmdId: number, args: unknown): unknown;
-  /** bit 0 = typed, bit 1 = positional, bit 2 = raw scalar. */
+  /** bit 0 = typed, bit 1 = positional, bit 2 = raw scalar, bit 3 = byte buffer. */
   getCodecCapabilities?(cmdId: number): number;
   /** Tier 0 scalar entry. Successful results retain the generated public shape. */
   invokeTypedRaw?(cmdId: number, ...fields: unknown[]): unknown;
   /** Tier 1 positional entry for one to three flat generated fields. */
   invokeTypedPos?(cmdId: number, ...fields: unknown[]): unknown;
+  /** Synchronous single-`Vec<u8>` entry; input is borrowed only for the call. */
+  invokeTypedBuffer?(cmdId: number, value: Uint8Array | ArrayBuffer): unknown;
   /** P0-2: 정적 명령 N 개를 단일 횡단으로 일괄 처리 (RN JSI). */
   invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
   /**
@@ -1251,6 +1339,7 @@ export function createRkyvV2Engine(
   const hasByIdPath = hasTypedPath && typeof native.invokeTypedById === 'function';
   const hasRawPath = hasCapabilityPath && typeof native.invokeTypedRaw === 'function';
   const hasPositionalPath = hasCapabilityPath && typeof native.invokeTypedPos === 'function';
+  const hasBufferPath = hasCapabilityPath && typeof native.invokeTypedBuffer === 'function';
   // P0-2: 단일 횡단 배치가 가능하려면 invokeTypedBatch 도 필요.
   const hasBatchPath = hasTypedPath && !!native.invokeTypedBatch;
   // P0-2 byId: 배치 진입의 cmd_id 배열 변형 — 문자열 마샬링 N 회 제거.
@@ -1471,6 +1560,22 @@ export function createRkyvV2Engine(
     return fallback;
   };
 
+  const resolveGeneratedBytesRoute = (
+    commandId: number,
+    command: string,
+  ): GeneratedBytesRoute | undefined => {
+    if (staticCommandNamesById?.[commandId] !== command) return undefined;
+    const capabilities = staticCommandCapabilitiesById?.[commandId] ?? 0;
+    const fallback = resolveGeneratedFieldsRoute(commandId, command, 1);
+    if (!hasBufferPath || (capabilities & CODEC_BUFFER) === 0) return fallback;
+    return (args, value) =>
+      isNativeByteBuffer(value)
+        ? native.invokeTypedBuffer!(commandId, value)
+        : fallback
+          ? fallback(args, value)
+          : dispatchById(commandId, command, args);
+  };
+
   // Capability routing is immutable for one engine/native runtime. Resolve it
   // once at construction so generated calls do not pay an ensure function and
   // two Map lookups on every invocation.
@@ -1509,6 +1614,25 @@ export function createRkyvV2Engine(
       fieldCount: 1 | 2 | 3,
     ): GeneratedFieldsRoute | undefined {
       return resolveGeneratedFieldsRoute(commandId, command, fieldCount);
+    },
+
+    [invokeGeneratedBytesSync]<T>(
+      commandId: number,
+      command: string,
+      args: unknown,
+      value: unknown,
+    ): T {
+      const route = resolveGeneratedBytesRoute(commandId, command);
+      return route
+        ? (route(args, value) as T)
+        : dispatchGeneratedFields<T>(commandId, command, args, 1, value);
+    },
+
+    [resolveGeneratedBytesSync](
+      commandId: number,
+      command: string,
+    ): GeneratedBytesRoute | undefined {
+      return resolveGeneratedBytesRoute(commandId, command);
     },
 
     invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {

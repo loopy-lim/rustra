@@ -119,7 +119,7 @@ test('generateTypesTs maps Set types (uniqueItems)', () => {
   assert.ok(types.includes('values?: number[]'));
 });
 
-test('generateTypesTs exposes both byte-array runtime representations', () => {
+test('generateTypesTs exposes all byte-buffer runtime representations', () => {
   const schema: PackageSchema = {
     packageId: 'test.bytes',
     commands: [
@@ -142,16 +142,60 @@ test('generateTypesTs exposes both byte-array runtime representations', () => {
     ],
   };
   const types = generateTypesTs(schema);
-  assert.ok(types.includes('data: Uint8Array | number[]'));
+  assert.ok(types.includes('data: Uint8Array | ArrayBuffer | number[]'));
   const commands = generateCommandsTs(schema);
   assert.ok(
-    commands.includes('invokeGeneratedFields1<BytesOutput>(1, \'echoBytes\', input, input["data"]'),
+    commands.includes('invokeGeneratedBytes<BytesOutput>(1, \'echoBytes\', input, input["data"]'),
   );
+  const hpp = generateRkyvCodecsHpp(schema);
+  assert.ok(hpp.includes('bool has_buffer_codec(uint16_t cmd_id)'));
+  assert.ok(hpp.includes('void encode_buffer_by_id(uint16_t cmd_id'));
+  assert.ok(hpp.includes('decode_buffer_result_by_id'));
   const cpp = generateRkyvCodecsCpp(schema);
+  assert.ok(cpp.includes('w.push_uvar(size)'));
+  assert.ok(cpp.includes('if (size > 0) w.push_bytes(data, size)'));
   assert.ok(cpp.includes('static void encode_pos_echoBytes'));
   assert.ok(cpp.includes('const auto& _v = argv[0]'));
   assert.ok(cpp.includes('w.append_uninitialized(_n)'));
+  assert.ok(cpp.includes('static RustraByteSpan rustra_bytes'));
+  assert.ok(cpp.includes('BYTES_PER_ELEMENT'));
+  assert.ok(cpp.includes('view is outside its ArrayBuffer'));
+  assert.ok(cpp.includes('Value decode_buffer_result_by_id'));
+  assert.ok(cpp.includes('std::move(buffer)'));
   assert.ok(cpp.includes('r.read_bytes_view((size_t)_n)'));
+});
+
+test('direct byte capability fails closed for optional or extra-required fields', () => {
+  const schema: PackageSchema = {
+    packageId: 'test.bytes.optional',
+    commands: [
+      {
+        name: 'maybeEchoBytes',
+        commandId: 1,
+        inputType: 'BytesInput',
+        outputType: 'BytesOutput',
+        inputSchema: {
+          type: 'object',
+          properties: { data: { type: 'array', items: { type: 'integer', format: 'uint8' } } },
+          required: [],
+        },
+        outputSchema: {
+          type: 'object',
+          properties: { data: { type: 'array', items: { type: 'integer', format: 'uint8' } } },
+          required: ['data', 'ghost'],
+        },
+      },
+    ],
+  };
+
+  const commands = generateCommandsTs(schema);
+  assert.ok(!commands.includes('invokeGeneratedBytes'));
+  const cpp = generateRkyvCodecsCpp(schema);
+  const bufferCapability = cpp.slice(
+    cpp.indexOf('bool has_buffer_codec'),
+    cpp.indexOf('void encode_buffer_by_id'),
+  );
+  assert.ok(!bufferCapability.includes('case 1: return true;'));
 });
 
 test('generateTypesTs emits recursive self-referencing types', () => {

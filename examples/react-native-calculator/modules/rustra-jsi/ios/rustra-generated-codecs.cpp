@@ -6,6 +6,7 @@
 #include <jsi/jsi.h>
 #include <limits>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 
@@ -84,6 +85,38 @@ namespace rustra { namespace generated {
     throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be an integer in 0..255");
   return byte;
 }
+struct RustraByteSpan { const uint8_t* data; size_t size; };
+[[maybe_unused]] static RustraByteSpan rustra_bytes(jsi::Runtime& rt, const jsi::Value& value, const char* field) {
+  if (!value.isObject())
+    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a one-byte TypedArray, ArrayBuffer, or number[]");
+  auto object = value.asObject(rt);
+  if (object.isArrayBuffer(rt)) {
+    auto buffer = object.getArrayBuffer(rt);
+    auto size = buffer.length(rt);
+    auto* data = buffer.data(rt);
+    if (size > 0 && data == nullptr)
+      throw jsi::JSError(rt, std::string("rustra: '") + field + "' has detached ArrayBuffer storage");
+    return {data, size};
+  }
+  auto bytesPerElement = object.getProperty(rt, "BYTES_PER_ELEMENT");
+  auto bufferValue = object.getProperty(rt, "buffer");
+  auto offsetValue = object.getProperty(rt, "byteOffset");
+  auto lengthValue = object.getProperty(rt, "byteLength");
+  if (!bytesPerElement.isNumber() || bytesPerElement.asNumber() != 1.0 || !bufferValue.isObject() || !bufferValue.asObject(rt).isArrayBuffer(rt) || !offsetValue.isNumber() || !lengthValue.isNumber())
+    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a one-byte TypedArray or ArrayBuffer");
+  auto buffer = bufferValue.asObject(rt).getArrayBuffer(rt);
+  auto bufferSize = buffer.length(rt);
+  double offsetNumber = offsetValue.asNumber();
+  double lengthNumber = lengthValue.asNumber();
+  if (!std::isfinite(offsetNumber) || !std::isfinite(lengthNumber) || std::trunc(offsetNumber) != offsetNumber || std::trunc(lengthNumber) != lengthNumber || offsetNumber < 0.0 || lengthNumber < 0.0 || offsetNumber > static_cast<double>(bufferSize) || lengthNumber > static_cast<double>(bufferSize) - offsetNumber)
+    throw jsi::JSError(rt, std::string("rustra: '") + field + "' view is outside its ArrayBuffer");
+  auto offset = static_cast<size_t>(offsetNumber);
+  auto size = static_cast<size_t>(lengthNumber);
+  auto* data = buffer.data(rt);
+  if (bufferSize > 0 && data == nullptr)
+    throw jsi::JSError(rt, std::string("rustra: '") + field + "' has detached TypedArray storage");
+  return {size == 0 ? data : data + offset, size};
+}
 [[maybe_unused]] static float rustra_f32(jsi::Runtime& rt, const jsi::Value& value, const char* field) {
   double number = rustra_f64(rt, value, field);
   if (number < -std::numeric_limits<float>::max() || number > std::numeric_limits<float>::max())
@@ -136,19 +169,19 @@ static jsi::Value decode_benchAdd(jsi::Runtime& rt, rc::Reader& r) {
 static void encode_benchEchoBytes(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(25); w.push_u8(0); // cmd_id = 25 LE
   auto argsObj = args.asObject(rt);
-  { const auto& _v = argsObj.getProperty(rt, "data"); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _ab = _o.getArrayBuffer(rt); auto _d = _ab.data(rt); auto _n = _ab.length(rt); w.push_uvar(_n); w.push_bytes((const uint8_t*)_d, _n); } }
+  { const auto& _v = argsObj.getProperty(rt, "data"); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _span = rustra_bytes(rt, _v, "data"); w.push_uvar(_span.size); w.push_bytes(_span.data, _span.size); } }
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
 static void encode_pos_benchEchoBytes(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
   if (argc != 1) throw jsi::JSError(rt, "rustra: benchEchoBytes expects 1 positional argument(s), got " + std::to_string(argc));
   w.push_u8(25); w.push_u8(0); // cmd_id = 25 LE
-  { const auto& _v = argv[0]; auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _ab = _o.getArrayBuffer(rt); auto _d = _ab.data(rt); auto _n = _ab.length(rt); w.push_uvar(_n); w.push_bytes((const uint8_t*)_d, _n); } }
+  { const auto& _v = argv[0]; auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _span = rustra_bytes(rt, _v, "data"); w.push_uvar(_span.size); w.push_bytes(_span.data, _span.size); } }
 }
 
 static jsi::Value decode_benchEchoBytes(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  { auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); auto _bytes = r.read_bytes_view((size_t)_n); for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, (double)_bytes.data[_i]); } resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "data"), _arr); }
+  { auto _n = r.read_uvar(); auto _bytes = r.read_bytes_view((size_t)_n); resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "data"), rustra::generated::make_array_buffer(rt, _bytes.data, _bytes.size)); }
   return std::move(resultObj);
 }
 
@@ -538,14 +571,14 @@ static jsi::Value decode_secureCompute(jsi::Runtime& rt, rc::Reader& r) {
 static void encode_sizeOf(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(14); w.push_u8(0); // cmd_id = 14 LE
   auto argsObj = args.asObject(rt);
-  { const auto& _v = argsObj.getProperty(rt, "data"); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _ab = _o.getArrayBuffer(rt); auto _d = _ab.data(rt); auto _n = _ab.length(rt); w.push_uvar(_n); w.push_bytes((const uint8_t*)_d, _n); } }
+  { const auto& _v = argsObj.getProperty(rt, "data"); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _span = rustra_bytes(rt, _v, "data"); w.push_uvar(_span.size); w.push_bytes(_span.data, _span.size); } }
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
 static void encode_pos_sizeOf(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
   if (argc != 1) throw jsi::JSError(rt, "rustra: sizeOf expects 1 positional argument(s), got " + std::to_string(argc));
   w.push_u8(14); w.push_u8(0); // cmd_id = 14 LE
-  { const auto& _v = argv[0]; auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _ab = _o.getArrayBuffer(rt); auto _d = _ab.data(rt); auto _n = _ab.length(rt); w.push_uvar(_n); w.push_bytes((const uint8_t*)_d, _n); } }
+  { const auto& _v = argv[0]; auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _span = rustra_bytes(rt, _v, "data"); w.push_uvar(_span.size); w.push_bytes(_span.data, _span.size); } }
 }
 
 static jsi::Value decode_sizeOf(jsi::Runtime& rt, rc::Reader& r) {
@@ -842,6 +875,41 @@ void encode_pos_by_id(jsi::Runtime& rt, uint16_t cmd_id, const jsi::Value* argv,
     case 14: encode_pos_sizeOf(rt, argv, argc, w); return;
     case 7: encode_pos_toUpper(rt, argv, argc, w); return;
     default: throw JSError(rt, "rustra: no positional codec for cmd_id " + std::to_string(cmd_id));
+  }
+}
+
+bool has_buffer_codec(uint16_t cmd_id) {
+  switch (cmd_id) {
+    case 25: return true;
+    default: return false;
+  }
+}
+
+void encode_buffer_by_id(uint16_t cmd_id, const uint8_t* data, size_t size, rc::Writer& w) {
+  if (size > 0 && data == nullptr) throw std::invalid_argument("rustra: null byte buffer");
+  switch (cmd_id) {
+    case 25:
+      w.push_u8(25); w.push_u8(0);
+      w.push_uvar(size);
+      if (size > 0) w.push_bytes(data, size);
+      return;
+    case 14:
+      w.push_u8(14); w.push_u8(0);
+      w.push_uvar(size);
+      if (size > 0) w.push_bytes(data, size);
+      return;
+    default: throw std::invalid_argument("rustra: no buffer codec for cmd_id " + std::to_string(cmd_id));
+  }
+}
+
+Value decode_buffer_result_by_id(Runtime& rt, uint16_t cmd_id, Value buffer) {
+  switch (cmd_id) {
+    case 25: {
+      auto result = Object(rt);
+      result.setProperty(rt, cachedProp(rt, "data"), std::move(buffer));
+      return result;
+    }
+    default: throw JSError(rt, "rustra: no buffer result codec for cmd_id " + std::to_string(cmd_id));
   }
 }
 

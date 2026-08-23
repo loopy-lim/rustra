@@ -30,6 +30,14 @@ namespace rc = rustra::codec;
 
 static int g_failures = 0;
 
+namespace rustra::generated {
+Value make_array_buffer(Runtime& rt, const uint8_t* data, size_t size) {
+  ArrayBuffer buffer(rt, size);
+  if (size > 0) std::memcpy(buffer.data(rt), data, size);
+  return Value(rt, Object(rt, buffer));
+}
+} // namespace rustra::generated
+
 static void check_bytes(const std::vector<uint8_t>& actual,
                         const std::vector<uint8_t>& expected,
                         const char* msg) {
@@ -156,6 +164,95 @@ int main() {
     rc::Writer w;
     gen::encode_by_name(rt, "sizeOf", argsV, w);
     check_bytes(w.take(), {0x0E, 0x00, 0x04, 0x01, 0x02, 0x03, 0xFA}, "encode sizeOf {[1,2,3,250]}");
+  }
+
+  // Dedicated buffer encoder borrows one contiguous span and emits identical
+  // postcard bytes without JSI array/property iteration.
+  {
+    uint8_t data[] = {1, 2, 3, 250};
+    rc::Writer w;
+    if (gen::has_buffer_codec(14) || !gen::has_buffer_codec(25) ||
+        gen::has_buffer_codec(23)) {
+      std::printf("FAIL buffer capability set\n");
+      ++g_failures;
+    }
+    gen::encode_buffer_by_id(14, data, sizeof(data), w);
+    check_bytes(w.take(), {0x0E, 0x00, 0x04, 0x01, 0x02, 0x03, 0xFA},
+                "encode_buffer_by_id sizeOf");
+
+    rc::Writer empty;
+    gen::encode_buffer_by_id(25, nullptr, 0, empty);
+    check_bytes(empty.take(), {0x19, 0x00, 0x00}, "encode_buffer_by_id empty");
+
+    bool threw = false;
+    try {
+      rc::Writer unknown;
+      gen::encode_buffer_by_id(9999, data, sizeof(data), unknown);
+    } catch (const std::invalid_argument&) {
+      threw = true;
+    }
+    if (!threw) { std::printf("FAIL unknown buffer codec must throw\n"); ++g_failures; }
+  }
+
+  // The generic/by-id fallback must preserve Uint8Array view bounds when an
+  // older native bridge does not expose the dedicated buffer capability.
+  {
+    ArrayBuffer backing(rt, 6);
+    uint8_t raw[] = {99, 1, 2, 3, 250, 88};
+    std::memcpy(backing.data(rt), raw, sizeof(raw));
+    Object view(rt);
+    view.setProperty(rt, "buffer", Object(rt, backing));
+    view.setProperty(rt, "byteOffset", 1.0);
+    view.setProperty(rt, "byteLength", 4.0);
+    view.setProperty(rt, "BYTES_PER_ELEMENT", 1.0);
+    Object args(rt);
+    args.setProperty(rt, "data", view);
+    rc::Writer w;
+    if (!gen::encode_by_id(rt, 14, Value(rt, args), w)) {
+      std::printf("FAIL encode_by_id(sizeOf Uint8Array view) returned false\n");
+      ++g_failures;
+    }
+    check_bytes(w.take(), {0x0E, 0x00, 0x04, 0x01, 0x02, 0x03, 0xFA},
+                "encode sizeOf partial Uint8Array view");
+
+    view.setProperty(rt, "byteOffset", 5.0);
+    view.setProperty(rt, "byteLength", 2.0);
+    bool threw = false;
+    try {
+      rc::Writer outOfBounds;
+      gen::encode_by_id(rt, 14, Value(rt, args), outOfBounds);
+    } catch (const JSError&) {
+      threw = true;
+    }
+    if (!threw) {
+      std::printf("FAIL out-of-bounds Uint8Array view must throw\n");
+      ++g_failures;
+    }
+  }
+
+  // Bytes outputs are returned as a JS-owned ArrayBuffer, not per-byte number[].
+  {
+    uint8_t body[] = {0x04, 0x01, 0x02, 0x03, 0xFA};
+    rc::Reader r(body, sizeof(body));
+    Value result = gen::decode_by_id(rt, 25, r);
+    Object bytesObject = result.getObject(rt).getProperty(rt, "data").getObject(rt);
+    if (!bytesObject.isArrayBuffer(rt)) {
+      std::printf("FAIL decode bytes must return ArrayBuffer\n");
+      ++g_failures;
+    } else {
+      ArrayBuffer buffer = bytesObject.getArrayBuffer(rt);
+      std::vector<uint8_t> actual(buffer.data(rt), buffer.data(rt) + buffer.length(rt));
+      check_bytes(actual, {1, 2, 3, 250}, "decode bytes ArrayBuffer");
+    }
+
+    uint8_t directBody[] = {1, 2, 3, 250};
+    Value directBufferValue = gen::make_array_buffer(rt, directBody, sizeof(directBody));
+    Value direct = gen::decode_buffer_result_by_id(rt, 25, std::move(directBufferValue));
+    Object directBytes = direct.getObject(rt).getProperty(rt, "data").getObject(rt);
+    ArrayBuffer directBuffer = directBytes.getArrayBuffer(rt);
+    std::vector<uint8_t> directActual(
+        directBuffer.data(rt), directBuffer.data(rt) + directBuffer.length(rt));
+    check_bytes(directActual, {1, 2, 3, 250}, "decode direct buffer result");
   }
 
   // encode scoreTotal {scores:{a:10,b:32}} → [cmd 15][count 2][sorted a,b]

@@ -3,6 +3,8 @@
 // 정적 명령: C++ codec 으로 postcard 인코딩/디코딩. 동적 명령은 JS Tier 3 fallback.
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <jsi/jsi.h>
 #include <string>
 #include "rustra-codec.hpp"
@@ -14,6 +16,10 @@ namespace rustra::generated {
 /// Runtime 과 함께, 아직 Runtime API가 유효한 시점에 폐기된다.
 const facebook::jsi::PropNameID& cachedProp(facebook::jsi::Runtime& rt,
                                            const char* name);
+
+/// 응답 byte span을 새 JS-owned ArrayBuffer로 복사한다. 브릿지 호스트 구현.
+facebook::jsi::Value make_array_buffer(facebook::jsi::Runtime& rt,
+                                      const uint8_t* data, size_t size);
 
 /// 명령 이름으로 postcard 요청 바이트를 인코딩한다(정적 명령만).
 /// 인코딩 성공(정적 명령) 시 true, 미발견(동적 명령) 시 false.
@@ -47,6 +53,18 @@ bool has_static_codec_id(uint16_t cmd_id);
 
 /// (Tier 1) positional 인자 직접 인코딩 가능한 cmd_id 여부.
 bool has_pos_codec(uint16_t cmd_id);
+
+/// 입력과 출력이 각각 정확히 하나의 Vec<u8> 필드인 cmd_id 여부.
+bool has_buffer_codec(uint16_t cmd_id);
+
+/// direct Rust byte 결과를 생성된 공개 출력 객체로 복원한다.
+facebook::jsi::Value decode_buffer_result_by_id(facebook::jsi::Runtime& rt,
+                                                uint16_t cmd_id,
+                                                facebook::jsi::Value buffer);
+
+/// 빌린 byte span을 즉시 postcard Writer로 복사한다.
+void encode_buffer_by_id(uint16_t cmd_id, const uint8_t* data, size_t size,
+                         rustra::codec::Writer& w);
 
 /// (Tier 1) 개별 Value 인자 → postcard 바이트 (invokeTypedPos 진입).
 /// argc 일치는 호출부(RustraJSIBridge)가 검증한다. 미발견 시 JSError.

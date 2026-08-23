@@ -20,6 +20,11 @@ extern "C" {
   uint8_t* rustra_ffi_invoke_postcard(
     const uint8_t* payload, size_t payload_len, size_t* out_len);
   void rustra_ffi_free(uint8_t* ptr, size_t len);
+  uint32_t rustra_ffi_invoke_buffer(
+    uint16_t command_id, const uint8_t* payload, size_t payload_len,
+    uint8_t** out_ptr, size_t* out_len);
+  uint32_t rustra_ffi_has_buffer(uint16_t command_id);
+  void rustra_ffi_free_owned_bytes(uint8_t* ptr, size_t len);
 
   // ── Event sink push delivery (from rustra::ffi) ─────────
   // C 호스트가 Rust → JS 이벤트 푸시용 콜백을 등록/해제한다.

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { configure } from '@rustra/types';
-import { createAsyncEngine } from '../../packages/react-native/src';
+import { createAsyncEngine, createFastEngine } from '../../packages/react-native/src';
+import { benchEchoBytes } from '../calculator/generated/commands';
 import { rkyvV2Registry } from '../calculator/generated/rkyv-registry';
 import { getRustraNative, installRustraJSI } from 'rustra-jsi';
 
@@ -39,6 +40,32 @@ export default function ReloadStressApp() {
           throw new Error(`sync probe returned ${JSON.stringify(syncResult)}`);
         }
 
+        // Keep one Rust-owned external ArrayBuffer reachable from the old
+        // Runtime until reload destroys it. Its finalizer must free the exact
+        // Rust allocation without retaining or touching the superseded JSI
+        // Runtime. Debug allocator guards turn a double/wrong free into a loud
+        // process failure instead of allowing silent corruption.
+        configure(createFastEngine(native, { rkyvV2Codecs: rkyvV2Registry }));
+        const byteInput = new Uint8Array(64 * 1024);
+        byteInput[0] = 17;
+        byteInput[byteInput.length - 1] = 239;
+        const byteResult = await benchEchoBytes({ data: byteInput });
+        if (!(byteResult.data instanceof ArrayBuffer)) {
+          throw new Error('direct byte probe did not return an ArrayBuffer');
+        }
+        const byteOutput = new Uint8Array(byteResult.data);
+        if (
+          byteOutput.length !== byteInput.length ||
+          byteOutput[0] !== 17 ||
+          byteOutput[byteOutput.length - 1] !== 239
+        ) {
+          throw new Error('direct byte probe returned different bytes');
+        }
+        (
+          globalThis as typeof globalThis & { __rustraReloadOwnedBuffer?: ArrayBuffer }
+        ).__rustraReloadOwnedBuffer = byteResult.data;
+        log(`BUFFER_READY token=${token} bytes=${byteOutput.length}`);
+
         const engine = createAsyncEngine(native, { rkyvV2Codecs: rkyvV2Registry });
         configure(engine);
         if (active) setStatus(`READY ${token}`);
@@ -49,7 +76,7 @@ export default function ReloadStressApp() {
         // JS callbacks after module invalidation/re-installation.
         log(`PENDING token=${token}`);
         void engine
-          .invoke<{ emitted: number }>('emitDemo', { ticks: 100, stepDelayMs: 10 })
+          .invoke<{ emitted: number }>('emitDemo', { ticks: 6_000, stepDelayMs: 10 })
           .then((result) => log(`ASYNC_COMPLETED token=${token} emitted=${result.emitted}`))
           .catch((error: unknown) =>
             log(

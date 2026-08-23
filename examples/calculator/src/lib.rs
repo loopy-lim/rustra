@@ -376,7 +376,21 @@ pub fn bench_echo_string(input: BenchStringPayload) -> Result<BenchStringPayload
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct BenchBytesPayload {
+    #[serde(with = "rustra::byte_buffer")]
+    #[schemars(with = "Vec<u8>")]
     pub data: Vec<u8>,
+}
+
+impl rustra::BufferCommandInput for BenchBytesPayload {
+    fn from_buffer(data: Vec<u8>) -> Self {
+        Self { data }
+    }
+}
+
+impl rustra::BufferCommandOutput for BenchBytesPayload {
+    fn into_buffer(self) -> Vec<u8> {
+        self.data
+    }
 }
 
 #[command]
@@ -698,10 +712,10 @@ pub fn calculator_package() -> Package {
                 resource_write,
                 resource_close,
                 bench_add,
-                bench_echo_string,
-                bench_echo_bytes,
-                bench_echo_pair
+                bench_echo_string
             )
+            .buffer_command_fn(bench_echo_bytes)
+            .command_fn(bench_echo_pair)
             .require_capability("secureCompute", "compute:secure")
             .build();
 
@@ -1788,6 +1802,81 @@ mod tests {
         let result_str = std::str::from_utf8(result_bytes).unwrap();
         assert!(result_str.contains(r#""ok":false"#));
         unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+    }
+
+    #[test]
+    fn test_direct_buffer_ffi_transfers_owned_output() {
+        ensure_registered();
+        let input = [0, 1, 127, 128, 255];
+        let mut output = std::ptr::null_mut();
+        let mut output_len = 0usize;
+        let status = unsafe {
+            rustra::ffi::rustra_ffi_invoke_buffer(
+                25,
+                input.as_ptr(),
+                input.len(),
+                &mut output,
+                &mut output_len,
+            )
+        };
+        assert_eq!(status, 0);
+        assert!(!output.is_null());
+        assert_eq!(
+            unsafe { std::slice::from_raw_parts(output, output_len) },
+            input
+        );
+        unsafe { rustra::ffi::rustra_ffi_free_owned_bytes(output, output_len) };
+
+        let mut empty_output = std::ptr::null_mut();
+        let mut empty_output_len = usize::MAX;
+        let empty_status = unsafe {
+            rustra::ffi::rustra_ffi_invoke_buffer(
+                25,
+                std::ptr::null(),
+                0,
+                &mut empty_output,
+                &mut empty_output_len,
+            )
+        };
+        assert_eq!(empty_status, 0);
+        assert_eq!(empty_output_len, 0);
+        assert!(!empty_output.is_null());
+        unsafe { rustra::ffi::rustra_ffi_free_owned_bytes(empty_output, empty_output_len) };
+
+        let full_mebibyte = vec![0u8; 1024 * 1024];
+        let mut error_output = std::ptr::null_mut();
+        let mut error_len = 0usize;
+        let over_limit_status = unsafe {
+            rustra::ffi::rustra_ffi_invoke_buffer(
+                25,
+                full_mebibyte.as_ptr(),
+                full_mebibyte.len(),
+                &mut error_output,
+                &mut error_len,
+            )
+        };
+        assert_eq!(over_limit_status, 1);
+        let error = unsafe { std::slice::from_raw_parts(error_output, error_len) };
+        assert!(
+            std::str::from_utf8(error)
+                .unwrap()
+                .contains("payload.too_large")
+        );
+        unsafe { rustra::ffi::rustra_ffi_free_owned_bytes(error_output, error_len) };
+
+        let invalid_status = unsafe {
+            rustra::ffi::rustra_ffi_invoke_buffer(
+                25,
+                input.as_ptr(),
+                input.len(),
+                std::ptr::null_mut(),
+                &mut output_len,
+            )
+        };
+        assert_eq!(invalid_status, u32::MAX);
+
+        assert_eq!(rustra::ffi::rustra_ffi_has_buffer(25), 1);
+        assert_eq!(rustra::ffi::rustra_ffi_has_buffer(14), 0);
     }
 
     #[test]
