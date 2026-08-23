@@ -248,7 +248,8 @@ jobs:
       # rustra-jsi 모듈은 react-native.config.js 로 autolink 되고 settings.gradle
       # include 가 예제 android 디렉터리에 대해 동작한다.
       - name: Expo prebuild (generate native android project)
-        run: bunx --cwd examples/react-native-calculator expo prebuild --platform android --no-install
+        working-directory: examples/react-native-calculator
+        run: bunx expo prebuild --platform android --no-install
       - name: Build Release APK
         run: cd examples/react-native-calculator/android && ./gradlew assembleRelease -x lint
       - name: Verify APK contains rustrajsi native lib
@@ -285,7 +286,8 @@ jobs:
       # 기존 네이티브 파일의 수동 패치(settings.gradle include, podspec 연결)를
       # 유지한다 — 로컬 검증으로 byte-identical 보존 확인.
       - name: Expo prebuild (generate native ios project)
-        run: bunx --cwd examples/react-native-calculator expo prebuild --platform ios --no-install
+        working-directory: examples/react-native-calculator
+        run: bunx expo prebuild --platform ios --no-install
       - name: Build iOS Release (simulator, no codesign)
         # pipefail — tail 파이프가 xcodebuild 실패 exit code 를 삼키지 않게.
         run: |
