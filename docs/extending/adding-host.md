@@ -386,9 +386,9 @@ console.log(`<host> adapter test passed`);
   "scripts": {
     "test:adapter:tauri": "bun examples/calculator/apps/tauri-app.ts",
     "test:adapter:react-native": "bun examples/calculator/apps/react-native-app.ts",
-    "test:adapters": "npm run test:adapter:tauri && npm run test:adapter:react-native && npm run test:adapter:myhost",
-    "test:runtime": "npm run test:runtime:node && npm run test:runtime:bun && npm run test:runtime:myhost",
-    "test:compat": "npm run test:ts:node && npm run test:ts:bun && npm run test:adapters && npm run test:runtime"
+    "test:adapters": "bun run test:adapter:tauri && bun run test:adapter:react-native && bun run test:adapter:myhost",
+    "test:runtime": "bun run test:runtime:node && bun run test:runtime:bun && bun run test:runtime:myhost",
+    "test:compat": "bun run test:ts:node && bun run test:ts:bun && bun run test:adapters && bun run test:runtime"
   }
 }
 ```
@@ -397,11 +397,11 @@ console.log(`<host> adapter test passed`);
 
 ```bash
 # 전체 호환성 테스트
-npm run test:compat
+bun run test:compat
 
 # 개별 테스트
-npm run test:adapter:myhost       # adapter 모킹 테스트
-npm run test:runtime:myhost       # 실제 Rust 런타임 테스트
+bun run test:adapter:myhost       # adapter 모킹 테스트
+bun run test:runtime:myhost       # 실제 Rust 런타임 테스트
 ```
 
 ---

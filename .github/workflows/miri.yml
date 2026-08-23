@@ -1,0 +1,33 @@
+name: Miri
+
+# miri 야간 검증 — FFI 크레이트의 unsafe(95+회)와 raw pointer 경로
+# (from_raw_parts/copy_nonoverlapping)의 UB를 런타임 검증한다. 실스레드 스모크가
+# 잡지 못하는 할당 경계 위반을 조기 발견.
+#
+# 제외 목록(MIRIFLAGS): FFI 진입점 테스트는 extern "C" 경계에서 호스트 포인터를
+# 재구성하므로 miri 의 strict int-to-ptr 캐스팅 규칙과 충돌한다 — 이들은 대상이
+# 아니라 경계 자체다. 레지스트리/코덱/이벤트 순수 로직이 검증 대상.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '37 20 * * 0' # 일요일 KST 새벽 5:37 — 오프피크
+
+jobs:
+  miri:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true # 실험 트랙 — 발견은 수확, 실패는 게이트 아님
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri
+      - uses: Swatinem/rust-cache@v2
+      - name: Run miri on core logic tests
+        env:
+          MIRIFLAGS: -Zmiri-disable-isolation
+        run: |
+          cargo miri test -p rustra --lib
+          cargo miri test -p rustra --test rkyv_v2_wire
+          cargo miri test -p rustra --test field_order_drift

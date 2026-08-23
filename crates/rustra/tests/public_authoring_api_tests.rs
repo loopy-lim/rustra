@@ -22,6 +22,15 @@ fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
     })
 }
 
+/// `#[command(capability = "...")]` 속성 — require_capability 문자열 결합 없이
+/// 매크로 시점에 권한을 심는다 (register!/build! 가 require_capability_if 로 연결).
+#[command(capability = "compute:secure")]
+fn locked_add(input: AddNumbersInput) -> Result<AddNumbersOutput> {
+    Ok(AddNumbersOutput {
+        value: input.a + input.b + 1000,
+    })
+}
+
 #[test]
 fn user_builds_package_without_touching_raw_engine_types() {
     let package = Package::builder("example.calculator")
@@ -64,6 +73,48 @@ fn register_macro_uses_macro_derived_name() {
 }
 
 #[test]
+fn command_capability_attribute_enforces_deny_by_default() {
+    // register! 가 #[command(capability)] 메타를 읽어 require_capability_if 로
+    // 연결하는지 — grant 전 deny, grant 후 허용.
+    let package = register!(Package::builder("example.calculator"), locked_add).build();
+
+    // grant 전에는 deny-by-default.
+    assert_eq!(
+        package
+            .invoke::<_, AddNumbersOutput>("lockedAdd", AddNumbersInput { a: 1, b: 1 })
+            .unwrap_err()
+            .code(),
+        "capability.denied"
+    );
+
+    // grant 후에는 핸들러가 실행된다.
+    package.grant_capability("compute:secure").unwrap();
+    let out: AddNumbersOutput = package
+        .invoke("lockedAdd", AddNumbersInput { a: 1, b: 1 })
+        .unwrap();
+    assert_eq!(out.value, 1002);
+}
+
+#[test]
+fn build_macro_also_applies_capability_attribute() {
+    // build! 경로도 동일하게 연결된다.
+    let package = build!("example.calculator", locked_add).done();
+
+    assert_eq!(
+        package
+            .invoke::<_, AddNumbersOutput>("lockedAdd", AddNumbersInput { a: 2, b: 2 })
+            .unwrap_err()
+            .code(),
+        "capability.denied"
+    );
+    package.grant_capability("compute:secure").unwrap();
+    let out: AddNumbersOutput = package
+        .invoke("lockedAdd", AddNumbersInput { a: 2, b: 2 })
+        .unwrap();
+    assert_eq!(out.value, 1004);
+}
+
+#[test]
 fn package_generates_host_neutral_typescript_client() {
     let package = Package::builder("example.calculator")
         .command_fn(add_numbers)
@@ -76,12 +127,12 @@ fn package_generates_host_neutral_typescript_client() {
     assert!(
         generated
             .commands_ts
-            .contains("invoke<AddNumbersOutput>('addNumbers'")
+            .contains("invokeGenerated<AddNumbersOutput>(1, 'addNumbers'")
     );
     assert!(
         generated
             .commands_ts
-            .contains("import { invoke } from '@rustra/types'")
+            .contains("import { invokeGenerated } from '@rustra/types'")
     );
     assert!(!generated.commands_ts.contains("EngineRequest"));
     assert!(!generated.commands_ts.contains("Attachment"));
@@ -426,6 +477,30 @@ fn ts_generator_handles_sets() {
         )
         .unwrap();
     assert_eq!(out.unique, BTreeSet::from([2, 3, 4, 5]));
+}
+
+#[test]
+fn ts_generator_exposes_both_vec_u8_runtime_representations() {
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    struct BytesPayload {
+        data: Vec<u8>,
+    }
+
+    #[command]
+    fn echo_bytes(input: BytesPayload) -> Result<BytesPayload> {
+        Ok(input)
+    }
+
+    let generated = Package::builder("test.bytes")
+        .command_fn(echo_bytes)
+        .build()
+        .generate_typescript()
+        .unwrap();
+    assert!(
+        generated.types_ts.contains("data: Uint8Array | number[];"),
+        "Vec<u8> must describe JSON and binary host representations, got:\n{}",
+        generated.types_ts
+    );
 }
 
 #[test]
@@ -1096,4 +1171,50 @@ fn state_dependency_injection_works() {
     // Invoke async command with State and 0 data args
     let res_echo: EchoOutput = pkg.invoke("asyncWithState", ()).unwrap();
     assert_eq!(res_echo.msg, "RustraBridgeApp");
+}
+
+// ── (이벤트 계약) PackageBuilder::event 선언 → schema.json events 섹션 ──
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct ProgressPayload {
+    value: i64,
+}
+
+#[test]
+fn event_contract_appears_in_schema_json() {
+    let package = Package::builder("example.stream")
+        .event::<ProgressPayload>("progress.tick")
+        .build();
+
+    let schema = package.live_schema();
+    let events = schema["events"].as_array().expect("events section present");
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["name"], "progress.tick");
+    assert!(
+        events[0]["payload"]["properties"]["value"].is_object(),
+        "payload schema is exposed: {}",
+        events[0]["payload"]
+    );
+}
+
+#[test]
+fn schema_without_events_has_no_section() {
+    // 하위호환 — event 선언이 없으면 events 키 자체가 없다.
+    let package = Package::builder("example.plain").build();
+    let schema = package.live_schema();
+    assert!(schema.get("events").is_none());
+}
+
+#[test]
+fn event_contract_flows_to_generate_typescript_schema() {
+    let package = Package::builder("example.stream")
+        .event::<ProgressPayload>("progress.tick")
+        .build();
+    let generated = package.generate_typescript().unwrap();
+    assert!(
+        generated.schema_json.contains("\"events\""),
+        "generate_typescript schema includes events section"
+    );
+    assert!(generated.schema_json.contains("progress.tick"));
 }

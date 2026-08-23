@@ -489,11 +489,14 @@ export type Example = {
 
 ### 스칼라 반환 타입
 
-반환값이 원시 타입(`i64`, `String`, `bool`)이면 TypeScript에서 별도 type alias 없이 직접 inline됩니다:
+반환값이 원시 타입(`i64`, `String`, `bool`)이면 TypeScript에서 별도 type alias 없이 직접 inline됩니다. 입력도 마찬가지로 단일 구조체 + `Result<O>` 계약을 지킵니다:
 
 ```rust
+#[bridge_type]
+struct AddNumbersInput { a: i64, b: i64 }
+
 #[command]
-fn add_numbers(a: i64, b: i64) -> i64 { a + b }
+fn add_numbers(input: AddNumbersInput) -> Result<i64> { Ok(input.a + input.b) }
 ```
 
 ```typescript

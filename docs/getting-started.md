@@ -11,10 +11,10 @@ rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 
 ### 가장 빠른 시작 — `rustra init`
 
 ```bash
-npx @rustra/cli init my-project
+bunx @rustra/cli init my-project
 cd my-project
 cargo run            # ./generated 에 schema.json + TS 클라이언트 생성
-npm install && npm run codegen
+bun install && bun run codegen
 ```
 
 스캐폴드는 Cargo 크레이트(echo 예제 커맨드 포함) + `generate` bin +
@@ -32,10 +32,10 @@ schemars = { version = "0.8", features = ["derive"] }
 TypeScript 어댑터는 사용할 환경만 설치하면 된다:
 
 ```bash
-npm install @rustra/node      # Node.js
-npm install @rustra/bun       # Bun
-npm install @rustra/tauri     # Tauri
-npm install @rustra/react-native  # React Native
+bun add @rustra/node      # Node.js
+bun add @rustra/bun       # Bun
+bun add @rustra/tauri     # Tauri
+bun add @rustra/react-native  # React Native
 ```
 
 ### 모노레포 / workspace에서 사용
@@ -456,10 +456,13 @@ await installRustraJSI();
 configure(createRkyvV2Engine(getRustraNative(), rkyvV2Registry));
 
 // 사용 (어디서든)
-const result = await addNumbers({ a: 20, b: 22 }); // ~5.8µs
+const result = await addNumbers({ a: 20, b: 22 }); // JSI fast path
 ```
 
-성능: sync 3.8µs / async 5.8µs (JSON 31µs 대비 5.3x 빠름, Nitro 2.1µs 대비 2.8x)
+성능: 동일 공개 객체 연산의 Nitro 대비 3회 중앙값 1.17–1.24x
+(add 1.2068x, string 1.2384x, bytes 1.1656x, pair 1.2162x).
+2026-08-23 iOS Release 측정이며 비교 범위와 기능 패리티 매트릭스는
+[벤치마크 문서](benchmarks.md) §"Nitro Modules 비교" 참고.
 
 **C++ 코덱 코드젠 (`--cpp-output`, 헤드라인 성능):** JS 측 코덱 왕복(~3.4µs)까지
 제거하려면 코드젠 시 C++ 코덱을 함께 생성해 네이티브 모듈에 컴파일한다:
@@ -490,13 +493,17 @@ const result = await addNumbers({ a: 20, b: 22 });
 
 ### 요약
 
-| 환경         | 어댑터 함수                             | transport 인자                        | 성능        |
-| ------------ | --------------------------------------- | ------------------------------------- | ----------- |
-| Node         | `createNodeEngine(transport)`           | `{ invoke(command, args) }`           | ~24 µs      |
-| Bun          | `createBunEngine(transport)`            | `{ invoke(command, args) }`           | ~27 µs      |
-| Tauri        | `createTauriEngine(options)`            | `{ invoke: tauriInvoke }`             | IPC 종속    |
-| React Native | `createRkyvV2Engine(native, registry)`  | JSI + postcard codecs                 | **~5.8 µs** |
-| React Native | `createReactNativeEngine(nativeModule)` | `NativeModule` (`invoke` 메서드 포함) | ~31 µs      |
+| 환경         | 어댑터 함수                             | transport 인자                        | 성능 (release)                         |
+| ------------ | --------------------------------------- | ------------------------------------- | -------------------------------------- |
+| Node         | `createNodeEngine(transport)`           | `{ invoke(command, args) }`           | ~1.5 µs (napi) / ~3.4 ms (subprocess)  |
+| Bun          | `createBunEngine(transport)`            | `{ invoke(command, args) }`           | ~2.1 µs (FFI) / ~3.1 ms (subprocess)   |
+| Tauri        | `createTauriEngine(options)`            | `{ invoke: tauriInvoke }`             | IPC 종속                               |
+| React Native | `createRkyvV2Engine(native, registry)`  | JSI + postcard codecs                 | typed sync ~0.6 µs; Nitro의 1.17–1.24x |
+| React Native | `createReactNativeEngine(nativeModule)` | `NativeModule` (`invoke` 메서드 포함) | ~52 µs (Expo async bridge)             |
+
+> Node/Bun의 ~24/27µs는 debug 네이티브 라이브러리를 로드했을 때 값이다 —
+> release 빌드에서는 µs 단위 미만으로 좁혀진다. 측정 세션별 수치는
+> [벤치마크 문서](benchmarks.md) 참고 (2026-08-23 RN 재측정).
 
 모든 어댑터가 `EngineClient`를 반환하므로, 이후 코드는 환경에 상관없이 동일하다.
 
@@ -529,7 +536,7 @@ cargo run -p rustra-calculator-example
 ### 전체 호환성 테스트
 
 ```bash
-npm run test:compat
+bun run test:compat
 ```
 
 이 명령어는 다음을 모두 실행한다.
@@ -545,13 +552,13 @@ npm run test:compat
 
 ```bash
 # 어댑터만 테스트
-npm run test:adapters
+bun run test:adapters
 
 # Node 런타임만 테스트 (Rust 빌드 포함)
-npm run test:runtime:node
+bun run test:runtime:node
 
 # Tauri 런타임만 테스트
-npm run test:runtime:tauri
+bun run test:runtime:tauri
 ```
 
 ---
@@ -602,8 +609,8 @@ my-app/
   "scripts": {
     "build:rust": "cargo build -p my-package && cargo run -p my-package -- generate",
     "build:ts": "tsc",
-    "build": "npm run build:rust && npm run build:ts",
-    "dev": "npm run build:rust && tsc --watch"
+    "build": "bun run build:rust && bun run build:ts",
+    "dev": "bun run build:rust && tsc --watch"
   }
 }
 ```

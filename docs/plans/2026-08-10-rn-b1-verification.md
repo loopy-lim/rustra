@@ -73,6 +73,12 @@
   > **달성 (2026-08-13, 온디바이스 실측)** — `docs/benchmarks.md` §"온디바이스" 참고:
   > Rustra Direct C++ Fast-Path iOS **0.95µs** (Nitro 1.10µs 대비 1.16× 우위), Android 1.50µs.
   > 목표(Nitro급)를 상회 달성 — 본 항목은 수치 근거로 폐쇄.
+  >
+  > **정정 (2026-08-22)** — 위 0.95µs/1.50µs는 2026-08-11 Lynx 측정 표가
+  > "Rustra Direct C++ Fast-Path"로 개명된 것으로, 이 경로의 측정 코드가 레포에
+  > 없어 근거가 확보되지 않는다(계보: d888fc86). 해당 표는 benchmarks.md에서
+  > 삭제됐고, 근거 있는 RN 실측은 BenchmarkApp 기록(JSI 최적화 후 sync ~5.2µs,
+  > Nitro async 대비 ~1.3x)로 대체했다.
 - [x] `invokeBatch` 로 N=100/1000 개 처리 시 단건 대비 **횡단 비용 상쇄** 관찰
       (P0-2 정량). 잦은 호출 프레임의 jank 가 줄어드는지 UI 관점 확인.
 

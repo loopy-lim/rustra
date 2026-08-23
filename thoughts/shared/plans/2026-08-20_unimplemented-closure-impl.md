@@ -93,16 +93,16 @@ Phase 순서는 의존성 기반: 결함 수정(문서·코드젠) → 온보딩
 
 #### 자동 검증:
 
-- [ ] `npm run test -w @rustra/cli` 통과 (신규 코드젠 테스트 포함)
-- [ ] `npm run test:ts:node` 통과 (crud wire round-trip 테스트 포함)
-- [ ] `cargo test -p rustra` 통과 (codegen.rs 변경분)
-- [ ] `npm run lint && npm run format:check` 통과
-- [ ] crud 재생성물에서 `updateItem`이 더 이상 필드를 소실하지 않음 (폴백 경유 or 완전 코덱)
+- [x] `npm run test -w @rustra/cli` 통과 (신규 코드젠 테스트 포함)
+- [x] `npm run test:ts:node` 통과 (crud wire round-trip 테스트 포함)
+- [x] `cargo test -p rustra` 통과 (codegen.rs 변경분)
+- [x] `npm run lint && npm run format:check` 통과
+- [x] crud 재생성물에서 `updateItem`이 더 이상 필드를 소실하지 않음 (폴백 경유 or 완전 코덱)
 
 #### 수동 검증:
 
-- [ ] `rustra generate` 실행 시 crud 스키마에서 WARN 로그 확인 (미지원 명령 폴백 안내)
-- [ ] auth/streaming generated/ 구조가 calculator/crud와 동일
+- [x] `rustra generate` 실행 시 crud 스키마에서 WARN 로그 확인 (미지원 명령 폴백 안내)
+- [x] auth/streaming generated/ 구조가 calculator/crud와 동일
 
 ---
 
@@ -148,13 +148,13 @@ rust-api-guide를 실제 API로 재작성하고, 스테일 문서 5종을 현행
 
 #### 자동 검증:
 
-- [ ] 가이드 내 Rust 예제가 실제 컴파일된다 — 예제 코드를 `crates/` 독스트/테스트로 추출해 `cargo test -p rustra --doc` 또는 별도 doctest 크레이트로 검증
-- [ ] `npm run format:check` (문서는 prettier 대상 밖이지만 CI 통과 유지)
+- [x] 가이드 내 Rust 예제가 실제 컴파일된다 — 예제 코드를 `crates/` 독스트/테스트로 추출해 `cargo test -p rustra --doc` 또는 별도 doctest 크레이트로 검증
+- [x] `npm run format:check` (문서는 prettier 대상 밖이지만 CI 통과 유지)
 
 #### 수동 검증:
 
-- [ ] 가이드의 예제 3개 이상 신규 프로젝트 흐름(온보딩 순서)대로 따라가면 끊김 없음
-- [ ] compatibility-contract에 낡은 RN 서술 잔여 없음 (grep "missing-native-module" 0건)
+- [x] 가이드의 예제 3개 이상 신규 프로젝트 흐름(온보딩 순서)대로 따라가면 끊김 없음
+- [x] compatibility-contract에 낡은 RN 서술 잔여 없음 (grep "missing-native-module" 0건)
 
 ---
 
@@ -185,12 +185,12 @@ rust-api-guide를 실제 API로 재작성하고, 스테일 문서 5종을 현행
 
 #### 자동 검증:
 
-- [ ] `npm run test:types` 통과 (취소 매트릭스 테스트 포함)
-- [ ] `npm run test:ts:node` 통과 (crud/calculator 기존 테스트 회귀 없음)
+- [x] `npm run test:types` 통과 (취소 매트릭스 테스트 포함)
+- [x] `npm run test:ts:node` 통과 (crud/calculator 기존 테스트 회귀 없음)
 
 #### 수동 검증:
 
-- [ ] abort 시 핸들러가 실제 중단되는지 RustraJSIBridge.cpp 경유 확인 (iOS 시뮬레이터 또는 코드 리뷰 수준)
+- [x] abort 시 핸들러가 실제 중단되는지 RustraJSIBridge.cpp 경유 확인 (iOS 시뮬레이터 또는 코드 리뷰 수준)
 
 ---
 
@@ -222,14 +222,14 @@ rust-api-guide를 실제 API로 재작성하고, 스테일 문서 5종을 현행
 
 #### 자동 검증:
 
-- [ ] `npm run test:packages` 통과 (node transport 테스트 포함)
-- [ ] `npm run test:app:reference` 통과 (typecheck + 스모크)
-- [ ] `npm run test:compat` 전체 통화 (signal loud error 변경에 따른 어댑터 테스트 갱신 포함)
+- [x] `npm run test:packages` 통과 (node transport 테스트 포함)
+- [x] `npm run test:app:reference` 통과 (typecheck + 스모크)
+- [x] `npm run test:compat` 전체 통화 (signal loud error 변경에 따른 어댑터 테스트 갱신 포함)
 
 #### 수동 검증:
 
-- [ ] getting-started Node 퀵스타트를 새 디렉터리에 복붙해 실행하면 동작
-- [ ] 레퍼런스 앱에서 생성·조회·수정·이벤트 수신 흐름 동작
+- [x] getting-started Node 퀵스타트를 새 디렉터리에 복붙해 실행하면 동작
+- [x] 레퍼런스 앱에서 생성·조회·수정·이벤트 수신 흐름 동작
 
 ---
 
@@ -270,14 +270,14 @@ rust-api-guide를 실제 API로 재작성하고, 스테일 문서 5종을 현행
 
 #### 자동 검증:
 
-- [ ] `cargo test -p rustra` 통과 (주석 정리 후에도)
-- [ ] `npm run test:app:react-native` (typecheck) 통과 — JSI 배선 변경 포함
-- [ ] `cargo clippy --all-targets -- -D warnings` 통과
+- [x] `cargo test -p rustra` 통과 (주석 정리 후에도)
+- [x] `npm run test:app:react-native` (typecheck) 통과 — JSI 배선 변경 포함
+- [x] `cargo clippy --all-targets -- -D warnings` 통과
 
 #### 수동 검증:
 
-- [ ] RN 앱에서 contractHash 옵션 켰을 때 unenforceable throw가 더 이상 발생하지 않음 (시뮬레이터 또는 코드 경로 리묰)
-- [ ] 저장소에 lynx 참조 잔여 없음 (`grep -ri lynx`가 문서의 역사 기록 제외 0건)
+- [x] RN 앱에서 contractHash 옵션 켰을 때 unenforceable throw가 더 이상 발생하지 않음 (시뮬레이터 또는 코드 경로 리묰)
+- [x] 저장소에 lynx 참조 잔여 없음 (`grep -ri lynx`가 문서의 역사 기록 제외 0건)
 
 ---
 
@@ -303,14 +303,14 @@ rust-api-guide를 실제 API로 재작성하고, 스테일 문서 5종을 현행
 
 #### 자동 검증:
 
-- [ ] `cargo test -p rustra` 통과 (caller-buffer FFI 테스트)
-- [ ] `npm run test -w @rustra/cli` + `test:ts:node` 통과 (positional facade 생성 테스트)
-- [ ] `npm run bench` 실행 성공 (수치 기록은 문서 반영)
+- [x] `cargo test -p rustra` 통과 (caller-buffer FFI 테스트)
+- [x] `npm run test -w @rustra/cli` + `test:ts:node` 통과 (positional facade 생성 테스트)
+- [x] `npm run bench` 실행 성공 (수치 기록은 문서 반영)
 
 #### 수동 검증:
 
-- [ ] benchmarks.md에 caller-buffer/positional 벤치마크 결과 반영
-- [ ] Nitro 격차 수치 갱신
+- [x] benchmarks.md에 caller-buffer/positional 벤치마크 결과 반영
+- [x] Nitro 격차 수치 갱신
 
 ---
 
@@ -336,12 +336,12 @@ Rust 디코더 Tier 3의 바이너리(postcard) 와이어 지원을 중첩 구�
 
 #### 자동 검증:
 
-- [ ] `cargo test -p rustra` 통과 (Tier 3 신규 디코더 테스트: 중첩/enum/Option round-trip)
-- [ ] `npm run test:ts:node` 통과 (crud 회귀 없음)
+- [x] `cargo test -p rustra` 통과 (Tier 3 신규 디코더 테스트: 중첩/enum/Option round-trip)
+- [x] `npm run test:ts:node` 통과 (crud 회귀 없음)
 
 #### 수동 검증:
 
-- [ ] rkyv_codec.rs 주석 갱신 (지원 범위 현행화)
+- [x] rkyv_codec.rs 주석 갱신 (지원 범위 현행화)
 
 ---
 

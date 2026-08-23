@@ -8,8 +8,10 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 
 1. [아키텍처 개요](architecture.md) — 전체 구조와 핵심 개념 파악
 2. [시작하기](getting-started.md) — 설치 및 첫 패키지 만들기
-3. [Transport 교체 가이드](extending/transport-guide.md) — Bun FFI, Node napi-rs 등 transport 교체
-4. [새 Host 추가 가이드](extending/adding-host.md) — Electron, Deno 등 새 host adapter 추가
+3. [Rust API 가이드](rust-api-guide.md) — 매크로/Builder 전체 레퍼런스
+4. [React Native 셋업](extending/react-native-setup.md) — JSI 네이티브 모듈 연결 (iOS/Android)
+5. [Transport 교체 가이드](extending/transport-guide.md) — Bun FFI, Node napi-rs 등 transport 교체
+6. [새 Host 추가 가이드](extending/adding-host.md) — Electron, Deno 등 새 host adapter 추가
 
 ### 프로젝트 기여자
 
@@ -25,6 +27,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 | [아키텍처 개요](architecture.md)                      | 전체   | 데이터 흐름, EngineClient 계약, transport 분리 원칙                |
 | [시작하기](getting-started.md)                        | 사용자 | 설치, 최소 예제, TS 통합, 에러 처리, adapter 선택, 실행            |
 | [Transport 교체 가이드](extending/transport-guide.md) | 사용자 | Bun FFI, Node napi-rs 교체, 선택 기준                              |
+| [React Native 셋업](extending/react-native-setup.md)  | 사용자 | JSI 네이티브 모듈, iOS/Android 빌드, BenchmarkApp                  |
 | [새 Host 추가 가이드](extending/adding-host.md)       | 사용자 | adapter 만들기, Rust 진입점 선택, 테스트 추가                      |
 | [Crate 및 Package 구조](internal/crate-structure.md)  | 기여자 | 각 crate/package 책임, 빌드 의존성                                 |
 | [TypeScript 코드 생성](internal/codegen.md)           | 기여자 | codegen 파이프라인, 타입 매핑, 제한사항                            |
@@ -36,6 +39,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 | [벤치마크](benchmarks.md)                             | 전체   | 어댑터별 성능 비교, 오버헤드 분석, 페이로드 확장성                 |
 | [보안 감사](security-audit.md)                        | 기여자 | lockfile 취약점/경고 상태, 해소 이력                               |
 | [릴리즈 절차](release-procedure.md)                   | 기여자 | changeset 발행 절차, 버전 관리                                     |
+| [보안 정책](../.github/SECURITY.md)                   | 전체   | 취약점 신고 채널, 지원 버전, 스코프                                |
 | [기여 가이드](../CONTRIBUTING.md)                     | 기여자 | 개발 환경, 커밋 규칙, 디버깅, 릴리즈                               |
 
 ## 연구 배경

@@ -1,6 +1,6 @@
 # 테스트 구조 및 실행 가이드
 
-프로젝트 기여자를 위한 내부 문서. 테스트 계층 구조, 파일별 역할, npm 스크립트 체인, 실행 명령어를 정리한다.
+프로젝트 기여자를 위한 내부 문서. 테스트 계층 구조, 파일별 역할, Bun 스크립트 체인, 실행 명령어를 정리한다.
 
 ---
 
@@ -71,7 +71,7 @@ cargo test
 
 | 테스트                                                                       | 검증 내용                                                                                                                                          |
 | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `generated command helper calls the host EngineClient invoke contract`       | `configure(engine)` 후 `addNumbers(input)` 호출 시 글로벌 invoke→engine에 올바른 command 이름과 args가 전달되는지 확인                                                   |
+| `generated command helper calls the host EngineClient invoke contract`       | `configure(engine)` 후 `addNumbers(input)` 호출 시 글로벌 invoke→engine에 올바른 command 이름과 args가 전달되는지 확인                             |
 | `generated client stays host neutral for Node, Bun, Tauri, and React Native` | `commands.ts` + `types.ts`에 `node:`, `bun:`, `@tauri-apps`, `react-native`, `@expo/`, `expo-modules`, `EngineRequest`, `Attachment`가 없는지 확인 |
 
 ### 파일: `examples/calculator/ts/adapter-compat.test.ts`
@@ -101,15 +101,15 @@ cargo test
 
 ```bash
 # Node.js 테스트 러너
-npm run test:ts:node
+bun run test:ts:node
 
 # Bun 테스트 러너
-npm run test:ts:bun
+bun run test:ts:bun
 ```
 
 ---
 
-## npm 스크립트 체인
+## Bun 스크립트 체인
 
 `package.json`에 정의된 테스트 스크립트 체인:
 
@@ -120,8 +120,8 @@ test:runtime:node   → cargo build + tsc + node node-app.js
 test:runtime:bun    → cargo build + bun bun-app.ts
 test:adapter:tauri  → bun tauri-app.ts
 test:adapter:react-native → bun react-native-app.ts
-test:app:react-native → cd react-native-calculator && npm run typecheck
-test:runtime:tauri  → cd tauri-calculator && npm run build && npm run smoke
+test:app:react-native → cd react-native-calculator && bun run typecheck
+test:runtime:tauri  → cd tauri-calculator && bun run build && bun run smoke
 test:adapters       → test:adapter:tauri + test:adapter:react-native + test:app:react-native
 test:runtime        → test:runtime:node + test:runtime:bun + test:runtime:tauri
 test:compat         → test:adapters + test:runtime
@@ -132,8 +132,8 @@ test:compat         → test:adapters + test:runtime
 `test:runtime:tauri`는 다음 순서로 동작한다:
 
 1. `cargo build` — Rust 백엔드 빌드 (rustra `tauri` feature 활성화)
-2. `npm run build` — Tauri 앱 빌드 (바이너리 생성)
-3. `npm run smoke` — 앱 실행 → WebView에서 JS 호출(`rustra_dispatch`) → 결과 확인 → 종료
+2. `bun run build` — Tauri 앱 빌드 (바이너리 생성)
+3. `bun run smoke` — 앱 실행 → WebView에서 JS 호출(`rustra_dispatch`) → 결과 확인 → 종료
 
 실제 Tauri 런타임에서 `createTauriEngine` → `addNumbers` → `rustra_dispatch` → Rust `invoke_json` 경로를 종단 간 검증한다.
 
@@ -162,33 +162,33 @@ test:compat         → test:adapters + test:runtime
 cargo test
 
 # TS 테스트 (Node.js)
-npm run test:ts:node
+bun run test:ts:node
 
 # TS 테스트 (Bun)
-npm run test:ts:bun
+bun run test:ts:bun
 
 # 전체 호환성 테스트
-npm run test:compat
+bun run test:compat
 ```
 
 ### 개별 계층 실행
 
 ```bash
 # Adapter 테스트만
-npm run test:adapters
+bun run test:adapters
 
 # Runtime 테스트만
-npm run test:runtime
+bun run test:runtime
 
 # 특정 host 런타임
-npm run test:runtime:node
-npm run test:runtime:bun
-npm run test:runtime:tauri
+bun run test:runtime:node
+bun run test:runtime:bun
+bun run test:runtime:tauri
 
 # 특정 adapter
-npm run test:adapter:tauri
-npm run test:adapter:react-native
-npm run test:app:react-native
+bun run test:adapter:tauri
+bun run test:adapter:react-native
+bun run test:app:react-native
 ```
 
 ### 생성된 클라이언트 재생성

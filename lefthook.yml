@@ -3,10 +3,10 @@ pre-commit:
   commands:
     eslint:
       glob: 'packages/*/src/**/*.ts'
-      run: npx eslint --fix {staged_files}
+      run: bunx eslint --fix {staged_files}
     prettier:
       glob: '*.{ts,js,json,yml,md}'
-      run: npx prettier --write {staged_files}
+      run: bunx prettier --write {staged_files}
     rustfmt:
       glob: '*.rs'
       run: rustfmt -- {staged_files}

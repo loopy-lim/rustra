@@ -5,6 +5,47 @@
 
 ## Unreleased
 
+## 0.2.0 (2026-08-20)
+
+### Removed
+
+- **Lynx 지원 제거** (PR #16, breaking) — `@rustra/lynx` npm 디프리케이트,
+  Lynx 예제/runner 템플릿 삭제. rustra는 Node/Bun/Tauri/React Native 4표면에
+  집중한다. rkyv V2 바이너리 fast-path는 RN JSI 어댑터와 공유라 영향 없음.
+
+### Added
+
+- **코드젠 정확성 마감** (PR #17): rkyv postcard 코덱이 미지원 필드를 무음
+  삭제하던 결함 수정 — `Option<T>`/`Vec<String>`/`Vec<Struct>`/string enum이
+  정확히 인코딩된다(바이트 정합 round-trip 검증). 진짜 미지원 타입은 생성 시
+  `WARN`과 함께 레지스트리에서 제외되어 Tier 3 JSON 폴백으로 라우팅(부분 코덱
+  선점 제거). `allOf` intersection, integer enum 리터럴 유니언 지원(dual-path).
+- **`InvokeOptions.timeoutMs`** (PR #29) — `transport.timeout`(retryable)
+  타임아웃 레이스. 네이티브 무응답(hang)의 JS 측 탈출구. 스키마 식별자
+  화이트리스트로 생성 코드 주입 방어, napi 경로 에러 code/retryable JSON 보존.
+- Node/Bun 엔진의 signal 정책 완결(PR #29 문서 고정 → 0.2.x 초반 확정):
+  abort된 signal만 `cancelled`, 미abort는 정상 실행(아래 Changed 참조).
+
+### Changed
+
+- **`useCommand`/`useMutation`/`mock()` minify-안전 식별** — 코드젠이 명령
+  함수에 `commandId` 프로퍼티를 심고, `resolveCommandId()` 헬퍼가 이를 우선
+  읽는다. 번들러 mangling으로 `Function.name`이 바뀌어도 `command.not_found`가
+  발생하지 않는다.
+- **JSON 엔진(Node/Bun/Tauri) signal 정책 통일** — 미abort signal을 넘겨도
+  더 이상 `cancel.unsupported`로 즉시 거부하지 않는다(얕은 취소). abort된
+  signal의 `cancelled` 거부는 유지. `useCommand` 조합이 첫 호출부터 실패하던
+  결함 해소.
+- **devtools instrumented 엔진이 options 보존** — 관측 래핑이
+  signal/timeoutMs를 조용히 버리지 않는다.
+- **release 빌드에서 `grant_capability` 동작** — freeze는 레지스트리 구조
+  mutation(register/unregister/replace)에만 적용되고, 런타임 권한 부여는
+  동결과 무관하게 허용된다(deny-by-default가 deny-forever가 되던 결함).
+- **`#[command(capability = "...")]` 속성** — 문자열 이름 재결합
+  (`require_capability("name", cap)`) 없이 매크로 시점에 권한 지정.
+
+세부 내역은 패키지별 CHANGELOG(`packages/*/CHANGELOG.md`) 참조.
+
 ## 0.1.3 (2026-08-19)
 
 ### Added

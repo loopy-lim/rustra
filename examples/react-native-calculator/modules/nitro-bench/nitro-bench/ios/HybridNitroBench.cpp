@@ -1,12 +1,26 @@
 #include "HybridNitroBench.hpp"
 
+// ArrayBuffer 은 spec 헤더(HybridNitroBenchSpec.hpp)가 이미 include 한다.
+
 namespace margelo::nitro::nitrobench {
 
 double HybridNitroBench::add(double a, double b) {
   return a + b;
 }
 
-double HybridNitroBench::echo(double value) {
+AddResult HybridNitroBench::benchAdd(const AddPayload& value) {
+  return AddResult(value.a + value.b);
+}
+
+StringPayload HybridNitroBench::echoString(const StringPayload& value) {
+  return value;
+}
+
+BytesPayload HybridNitroBench::echoBytes(const BytesPayload& value) {
+  return value;
+}
+
+PairPayload HybridNitroBench::echoPair(const PairPayload& value) {
   return value;
 }
 

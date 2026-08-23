@@ -19,7 +19,7 @@ streaming/
 
 ```bash
 cargo build -p rustra-streaming-example
-npx tsc -p examples/streaming/tsconfig.json
+bunx tsc -p examples/streaming/tsconfig.json
 node dist-ts/examples/streaming/apps/node-app.js
 ```
 

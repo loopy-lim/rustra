@@ -10,13 +10,13 @@ rustra 패키지를 Tauri 2 데스크톱 애플리케이션에 통합하는 예�
 
 ```bash
 # 프로덕션 빌드
-npm run build
+bun run build
 
 # 프론트엔드만 빌드
-npm run build:frontend
+bun run build:frontend
 
 # 런타임 스모크 테스트
-npm run smoke
+bun run smoke
 ```
 
 ## 예시가 보여주는 것
@@ -27,12 +27,12 @@ npm run smoke
 
 ## 핵심 파일
 
-| 파일 | 설명 |
-|------|------|
+| 파일                    | 설명                                          |
+| ----------------------- | --------------------------------------------- |
 | `src-tauri/src/main.rs` | Tauri 빌더에 rustra 패키지 등록 + 프로브 모드 |
-| `src-tauri/Cargo.toml` | `rustra` crate `tauri` feature 활성화 |
-| `src/app.ts` | 프론트엔드에서 `createTauriEngine` 사용 |
-| `runtime-smoke.mjs` | 자동화 런타임 스모크 테스트 |
+| `src-tauri/Cargo.toml`  | `rustra` crate `tauri` feature 활성화         |
+| `src/app.ts`            | 프론트엔드에서 `createTauriEngine` 사용       |
+| `runtime-smoke.mjs`     | 자동화 런타임 스모크 테스트                   |
 
 ## Rust 측 설정
 
@@ -57,5 +57,5 @@ const engine = createTauriEngine({
 ## 사전 요구사항
 
 - Rust 툴체인
-- Tauri CLI 2.0+ (`npm install -g @tauri-apps/cli`)
+- Tauri CLI 2.0+ (`bun add -g @tauri-apps/cli`)
 - `rustra-calculator-example` 패키지 (같은 워크스페이스 내)

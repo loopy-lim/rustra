@@ -1,6 +1,16 @@
 # rustra
 
+[![CI](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml/badge.svg)](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@rustra/types)](https://www.npmjs.com/package/@rustra/types)
+[![crates.io](https://img.shields.io/crates/v/rustra.svg)](https://crates.io/crates/rustra)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Rust에서 명령을 한 번 정의하면, Node / Bun / Tauri / React Native 어디서든 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크.
+
+> **English** — Define commands once in Rust, get type-safe TypeScript clients
+> for Node, Bun, Tauri, and React Native. Single Rust core, four host surfaces,
+> zero-copy binary wire (rkyv V2). Quick start: `cargo add rustra` +
+> `bunx @rustra/cli init`. Full docs (Korean) below.
 
 ## 작동 방식
 
@@ -11,6 +21,62 @@ Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플�
 - Rust 쪽에서 `#[command]`로 함수를 정의
 - `generate_typescript()` 호출 시 타입 안전한 TS 클라이언트 코드 생성
 - Node, Bun, Tauri, React Native 어댑터가 동일한 `EngineClient` 인터페이스로 라우팅
+
+## 왜 rustra인가 (비교)
+
+단일 Rust 코어를 여러 JS 호스트에 잇는 도구는 각자 다른 지점을 타협한다:
+
+|                               | **rustra**                        | napi-rs           | Nitro Modules | Tauri commands | tauri-specta |
+| ----------------------------- | --------------------------------- | ----------------- | ------------- | -------------- | ------------ |
+| 단일 Rust 코어 × 멀티 호스트  | ✅ Node/Bun/Tauri/RN              | Node (+ Electron) | RN 중심       | Tauri 전용     | Tauri 전용   |
+| 타입 안전 코드젠 (양방향)     | ✅ 커맨드+이벤트                  | 수동 d.ts         | ✅            | ❌ (수동)      | ✅           |
+| 바이너리 zero-copy 와이어     | ✅ rkyv V2 (JSON 대비 11.8× 작음) | JSON/Buffer       | JSI 객체      | JSON IPC       | JSON IPC     |
+| 계약 게이트 (breaking change) | ✅ `rustra diff` + contract hash  | ❌                | ❌            | ❌             | 부분         |
+| 취소/타임아웃/배치 시맨틱     | ✅ 매트릭스로 문서화              | 직접 구현         | 직접 구현     | ❌             | ❌           |
+
+rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)를 하나의 계약으로
+소유**한다. 개별 경로의 마이크로 최적화보다 "한 번 정의하면 어디서든 같은
+시맨틱"이 이 프로젝트가 사는 지점이다.
+
+## 로드맵
+
+- [x] 4호스트 어댑터 (Node/Bun/Tauri/RN iOS+Android) — 0.1
+- [x] rkyv V2 바이너리 fast-path + 취소/타임아웃/배치 — 0.1~0.2
+- [x] 이벤트 계약 코드젠 (`PackageBuilder::event`) — 0.2.x
+- [x] persistent 루프 런타임 + Node loop transport — 0.2.x
+- [x] 타입 패리티 1단계 — fast path 타입 확장 (2026-08-22): u8–u64 plain
+      varint, 동적 맵 `HashMap<String,T>`(원시값), 튜플(무접두), `Vec<u8>`
+      bytes(ArrayBuffer 표면), chrono Date(ISO string), Set<unsigned> —
+      3면(TS·Rust·C++) 코드젠 + PINNED hex 와이어 게이트. 잔여: bigint TS
+      표면(number 유지, 2^53 한계), data enum(oneOf 순서 비결정 → Tier 3 확정)
+- [x] 타입 패리티 2단계 — 채널/리소스 (Tauri v2 `ipc::Channel`·`Resource`
+      모델, 2026-08-23): 콜백을 직렬화 가능한 채널 핸들(u32, 호출 귀속
+      유니캐스트 회신)로, 객체 참조를 Rust-소유 리소스 핸들(`channels.rs`
+      `ChannelHost` 테이블, 코드젠 커맨드로 read/write/close)로. wire는
+      정수 핸들뿐이라 계약 게이트·양방향 코드젠·멀티호스트 일관성 유지.
+      RN JSI `createChannel(cb)`/`dropChannel(h)` 배선 + Rust FFI
+      `rustra_ffi_channel_{create,send,drop}` — 시뮬레이터 E2E 검증 완료
+- [ ] async 커맨드 핸들러 (워커 풀은 완료, 핸들러 trait 비동기화는 진행 중)
+- [ ] Windows 런타임 검증 (CI 확장 단계)
+- [ ] 프리빌트 바이너리 배포 (npx 설치 시 cargo 불필요)
+
+## FAQ
+
+**Q. Rust 툴체인이 꼭 필요한가요?**
+지금은 네(네이티브 라이브러리를 로컬 빌드). 프리빌트 배포는 로드맵에 있다.
+JS만으로 시작하려면 `@rustra/testing`의 mock 엔진으로 UI를 먼저 만들 수 있다.
+
+**Q. JSON 경로도 지원하나요?**
+예. rkyv V2는 fast-path일 뿐, 모든 명령은 JSON 폴백으로도 동작한다(Tier 3).
+바이너리 이식이 어려운 환경도 계약은 같다.
+
+**Q. 기존 napi-rs/Tauri 앱에 점진적으로 붙일 수 있나요?**
+예. 어댑터는 transport만 교체한다 — `createNodeEngine(transport)`에 기존
+invoke 함수를 넘기면 그 명령만 rustra 계약으로 들어온다.
+
+**Q. 스키마가 깨지면 어떻게 되나요?**
+`rustra diff`가 breaking change를 CI에서 잡고, 계약 해시(contract hash)가
+JS/네이티브 조합의 drift를 런타임에 감지한다.
 
 ## 설치
 
@@ -26,12 +92,12 @@ schemars = { version = "0.8", features = ["derive"] }
 ### TypeScript 어댑터 (필요한 환경만)
 
 ```bash
-npm install @rustra/node      # Node.js
-npm install @rustra/bun       # Bun
-npm install @rustra/tauri     # Tauri
-npm install @rustra/react-native  # React Native
-npm install @rustra/testing       # Mock 엔진 (테스트)
-npm install @rustra/devtools      # 호출 관측성 (개발)
+bun add @rustra/node      # Node.js
+bun add @rustra/bun       # Bun
+bun add @rustra/tauri     # Tauri
+bun add @rustra/react-native  # React Native
+bun add @rustra/testing       # Mock 엔진 (테스트)
+bun add @rustra/devtools      # 호출 관측성 (개발)
 ```
 
 ## 빠른 예제
@@ -39,9 +105,15 @@ npm install @rustra/devtools      # 호출 관측성 (개발)
 ```rust
 use rustra::prelude::*;
 
+// #[command] 는 단일 Input 구조체를 받고 Result<Output> 를 반환한다.
+#[bridge_type]
+struct AddNumbersInput { a: i64, b: i64 }
+#[bridge_type]
+struct AddNumbersOutput { sum: i64 }
+
 #[command]
-fn add_numbers(a: i64, b: i64) -> i64 {
-    a + b
+fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
+    Ok(AddNumbersOutput { sum: input.a + input.b })
 }
 
 fn main() -> Result<()> {
@@ -58,11 +130,11 @@ Rust가 만든 `schema.json`을 읽어 TS CLI가 `rkyv-codecs.ts`/`rkyv-registry
 생성한다(이 파일들이 없으면 fast-path 클라이언트는 import 에러로 부팅 실패):
 
 ```bash
-npx rustra generate --schema ./generated/schema.json --output ./generated
+bunx @rustra/cli generate --schema ./generated/schema.json --output ./generated
 ```
 
-두 단계를 한 번에 실행하려면 `npx rustra dev`(소스 감시 + dual-path 자동 재생성)
-또는 `npx rustra init`이 만들어주는 `npm run codegen` 스크립트를 쓴다.
+두 단계를 한 번에 실행하려면 `bunx @rustra/cli dev`(소스 감시 + dual-path 자동 재생성)
+또는 `bunx @rustra/cli init`이 만들어주는 `bun run codegen` 스크립트를 쓴다.
 
 ```ts
 // TypeScript — 모든 플랫폼에서 동일
@@ -95,7 +167,7 @@ examples/
   benchmark/               성능 벤치마크 (페이로드 확장, 처리량 측정)
   tauri-calculator/        Tauri 런타임 예시
   react-native-calculator/ React Native 런타임 예시
-  calculator-napi/         napi-rs transport 예시 (transport 벤치마크 24.3µs의 소스)
+  calculator-napi/         napi-rs transport 예시 (release transport 벤치마크의 소스)
   streaming/               이벤트 스트리밍 예시 (Package::emit + 폴링 어댑터)
   auth/                    세션/capability 게이트 예시 (deny-by-default)
   reference-app/           @rustra/react 훅 레퍼런스 앱 (useCommand/useMutation/useEvent)
@@ -106,9 +178,9 @@ examples/
 개발 및 테스트 Cargo 프로필은 incremental 캐시와 의존성 debug info를 저장하지 않는다.
 
 ```bash
-npm run clean:dry    # deep clean 대상을 삭제하지 않고 크기만 확인
-npm run clean:build  # Rust/Xcode/Android/TS 빌드 산출물 제거, 설치 의존성 유지
-npm run clean:deep   # build 산출물 + node_modules/Pods/로컬 패키지 캐시 제거
+bun run clean:dry    # deep clean 대상을 삭제하지 않고 크기만 확인
+bun run clean:build  # Rust/Xcode/Android/TS 빌드 산출물 제거, 설치 의존성 유지
+bun run clean:deep   # build 산출물 + node_modules/Pods/로컬 패키지 캐시 제거
 ```
 
 정리 명령은 명시된 재생성 가능 경로만 제거한다. `git clean -fdX`는 로컬 모바일
@@ -119,21 +191,32 @@ npm run clean:deep   # build 산출물 + node_modules/Pods/로컬 패키지 캐�
 ```rust
 use rustra::prelude::*;
 
-// 스칼라 파라미터 모드 (간단한 함수)
-#[command]
-fn add_numbers(a: i64, b: i64) -> i64 {
-    a + b
-}
-
-// 구조체 파라미터 모드 (복잡한 입력)
+// 모든 #[command] 는 단일 Input 구조체(또는 인자 없음)를 받고 Result<O> 를 반환한다.
 #[bridge_type]
-struct CreateItemInput {
-    name: String,
-    value: i64,
+struct AddNumbersInput {
+    a: i64,
+    b: i64,
+}
+
+#[bridge_type]
+struct AddNumbersOutput {
+    sum: i64,
 }
 
 #[command]
-fn create_item(input: CreateItemInput) -> Result<Item> { ... }
+fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
+    Ok(AddNumbersOutput { sum: input.a + input.b })
+}
+
+// 인자가 없는 명령도 가능하다
+#[command]
+fn ping() -> Result<String> {
+    Ok("pong".to_string())
+}
+
+// capability 게이트가 필요한 명령은 속성 하나로 (grant 전까지 deny-by-default)
+#[command(capability = "compute:secure")]
+fn locked_add(input: AddNumbersInput) -> Result<AddNumbersOutput> { ... }
 ```
 
 패키지를 빌드하고 TypeScript 코드를 생성:
@@ -298,19 +381,27 @@ const result = await addNumbers({ a: 20, b: 22 });
 | React Native iOS     | Stable | JSI Tier 1~3 왕복 실기 검증, Release 빌드 CI |
 | React Native Android | Stable | Release APK 빌드 CI (Gradle→Rust 자동 빌드)  |
 
-모든 플랫폼은 `npm run test:compat`·CI 네이티브 빌드 잡이 게이트한다.
+모든 플랫폼은 `bun run test:compat`·CI 네이티브 빌드 잡이 게이트한다.
 
 ## 성능
 
 모든 어댑터에서 `addNumbers({ a: 42, b: 58 })` 호출 기준 (Apple Silicon, release 빌드).
 
-| 어댑터                 | 평균 지연 | 처리량          |
-| ---------------------- | --------- | --------------- |
-| Rust (typed)           | 209 ns    | 5,093,309 ops/s |
-| Swift → Rust FFI       | 3.5 µs    | 296,710 ops/s   |
-| Bun (JS측)             | 189 ns    | ~5.3M ops/s     |
-| Node.js (JS측)         | 308 ns    | ~3.3M ops/s     |
-| React Native (iOS sim) | 52.5 µs   | 19,054 ops/s    |
+| 어댑터                 | 평균 지연  | 처리량          |
+| ---------------------- | ---------- | --------------- |
+| Rust (typed)           | 341–347 ns | 2,913,359 ops/s |
+| Bun (JS측)             | 189 ns     | ~5.3M ops/s     |
+| Node.js (JS측)         | 297–299 ns | ~3.35M ops/s    |
+| Swift → Rust FFI       | 1.2 µs     | 853,614 ops/s   |
+| Node napi-rs (release) | 1.5 µs     | 654,817 ops/s   |
+| Bun FFI (release)      | 2.1 µs     | 471,640+ ops/s  |
+
+> React Native(JSI rkyv V2)는 동일 객체 연산의 Nitro 대비 3회 중앙값
+> 1.17–1.24x(add 1.2068x, string 1.2384x, bytes 1.1656x, pair 1.2162x).
+> 비교의 범위와 기능 패리티 매트릭스는
+> [벤치마크 문서](docs/benchmarks.md) §"Nitro Modules 비교" 참고) —
+> 상세 벤치마크, 레이어별 오버헤드 분석, 페이로드 확장성은
+> [벤치마크 문서](docs/benchmarks.md) 참고 (2026-08-23 iOS Release 재측정).
 
 > 상세 벤치마크, 레이어별 오버헤드 분석, 페이로드 확장성은 [벤치마크 문서](docs/benchmarks.md)를 참고.
 
@@ -362,18 +453,18 @@ cargo run -p rustra-calculator-example
 cargo run -p rustra-crud-example --bin generate
 
 # TypeScript 린트 / 포맷
-npm run lint
-npm run format:check
+bun run lint
+bun run format:check
 
 # Rust 린트 / 포맷
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 
 # CLI watch 모드 (schema 변경 시 자동 재생성)
-npx rustra generate --watch --schema ./generated/schema.json --output ./src/generated
+bunx @rustra/cli generate --watch --schema ./generated/schema.json --output ./src/generated
 
 # dev 루프 — Rust 소스 감시 + dual-path codegen 자동 재실행 (hot codegen)
-npx rustra dev --backend ./backend --app ./app
+bunx @rustra/cli dev --backend ./backend --app ./app
 ```
 
 ## 문서

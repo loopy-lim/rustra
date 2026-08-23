@@ -2,6 +2,44 @@ use rustra::prelude::*;
 use serde_json::Value;
 use std::time::Instant;
 
+// ── (측정 인프라) 할당 카운팅 global_allocator ───────────────
+// 호출당 malloc 횟수를 잰다 — caller-buffer/Arc 같은 복사 제거 최적화의 효과를
+// 나노초가 아니라 "할당 수"로 검증하는 지표다. System allocator 위에 원자
+// 카운터만 얹는다(오버헤드는 측정 대상 밖으로 간주 — 델타 비교용).
+
+mod alloc_counter {
+    use std::alloc::{GlobalAlloc, Layout, System};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    pub static ALLOCS: AtomicUsize = AtomicUsize::new(0);
+    pub static DEALLOCS: AtomicUsize = AtomicUsize::new(0);
+
+    pub struct Counting;
+
+    unsafe impl GlobalAlloc for Counting {
+        unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+            ALLOCS.fetch_add(1, Ordering::Relaxed);
+            unsafe { System.alloc(layout) }
+        }
+        unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+            DEALLOCS.fetch_add(1, Ordering::Relaxed);
+            unsafe { System.dealloc(ptr, layout) }
+        }
+    }
+}
+
+#[global_allocator]
+static GLOBAL: alloc_counter::Counting = alloc_counter::Counting;
+
+fn alloc_delta<R>(f: impl FnOnce() -> R) -> (R, usize, usize) {
+    let a0 = alloc_counter::ALLOCS.load(std::sync::atomic::Ordering::Relaxed);
+    let d0 = alloc_counter::DEALLOCS.load(std::sync::atomic::Ordering::Relaxed);
+    let out = f();
+    let allocs = alloc_counter::ALLOCS.load(std::sync::atomic::Ordering::Relaxed) - a0;
+    let deallocs = alloc_counter::DEALLOCS.load(std::sync::atomic::Ordering::Relaxed) - d0;
+    (out, allocs, deallocs)
+}
+
 fn main() {
     println!("╔══════════════════════════════════════════════════════════╗");
     println!("║           rustra-bridge Performance Benchmark           ║");
@@ -10,16 +48,92 @@ fn main() {
 
     let package = build_benchmark_package();
 
-    bench_package_creation();
-    bench_command_invocation(&package);
+    bench_cold_start(&package);
+    let creation_avg_ns = bench_package_creation();
+    let invoke_avg_ns = bench_command_invocation(&package);
     bench_serialization();
     bench_deserialization();
     bench_json_roundtrip(&package);
-    bench_ts_generation(&package);
+    let ts_avg_ns = bench_ts_generation(&package);
     bench_payload_scaling(&package);
     bench_concurrent_invocation(&package);
     bench_parallel_invocation(&package);
     bench_memory_usage(&package);
+    bench_allocations_per_invoke(&package);
+    print_summary_chart(creation_avg_ns, invoke_avg_ns, ts_avg_ns);
+}
+
+/// 콜드스타트 — 최초 invoke 의 tier 해결 비용. 이후 호출과의 차이가 코드젠
+/// 캐시/디코더 구축의 1회 비용이다.
+fn bench_cold_start(package: &Package) {
+    println!("┌─ Cold Start (first invoke vs steady-state) ──┐");
+    let cold = Instant::now();
+    let _ = package.invoke_json("addNumbers", serde_json::json!({ "a": 1, "b": 2 }));
+    let cold_ns = cold.elapsed().as_nanos();
+
+    // steady-state 평균
+    let warm_start = Instant::now();
+    for _ in 0..1000 {
+        let _ = package.invoke_json("addNumbers", serde_json::json!({ "a": 1, "b": 2 }));
+    }
+    let warm_avg_ns = warm_start.elapsed().as_nanos() / 1000;
+    println!(
+        "│  first invoke: {:>10} ns   steady avg: {:>8} ns   ratio: {:.1}x",
+        cold_ns,
+        warm_avg_ns,
+        cold_ns as f64 / warm_avg_ns as f64
+    );
+    println!("└───────────────────────────────────────────────┘\n");
+}
+
+/// 호출당 할당 수 — invoke_json / invoke_rkyv_v2 경로의 힙 압력.
+fn bench_allocations_per_invoke(package: &Package) {
+    println!("┌─ Heap Allocations per Invoke ────────────────┐");
+
+    // 워밍업(스키마/디코더 초기화를 할당 카운트에서 분리).
+    for _ in 0..100 {
+        let _ = package.invoke_json("addNumbers", serde_json::json!({ "a": 1, "b": 2 }));
+    }
+
+    let (_, json_allocs, json_deallocs) = alloc_delta(|| {
+        for _ in 0..1000 {
+            let _ = package.invoke_json("addNumbers", serde_json::json!({ "a": 1, "b": 2 }));
+        }
+    });
+    println!(
+        "│  invoke_json  (1000 calls): {:>6} allocs ({:>3}/call), {:>6} deallocs",
+        json_allocs,
+        json_allocs / 1000,
+        json_deallocs
+    );
+
+    // rkyv V2 typed 프레임: command_id(u16) + postcard(SimpleInput).
+    let mut v2_req: Vec<u8> = Vec::new();
+    let schema = package.live_schema();
+    let id = schema["commands"]
+        .as_array()
+        .and_then(|cmds| {
+            cmds.iter()
+                .find(|c| c["name"] == "addNumbers")
+                .and_then(|c| c["commandId"].as_u64())
+        })
+        .unwrap_or(1) as u16;
+    v2_req.extend_from_slice(&id.to_le_bytes());
+    let input = SimpleInput { a: 1, b: 2 };
+    v2_req.extend_from_slice(&postcard::to_allocvec(&input).unwrap_or_default());
+
+    let (_, v2_allocs, v2_deallocs) = alloc_delta(|| {
+        for _ in 0..1000 {
+            let _ = package.invoke_rkyv_v2(&v2_req);
+        }
+    });
+    println!(
+        "│  invoke_rkyv_v2 (1000 calls): {:>6} allocs ({:>3}/call), {:>6} deallocs",
+        v2_allocs,
+        v2_allocs / 1000,
+        v2_deallocs
+    );
+    println!("└───────────────────────────────────────────────┘\n");
 }
 
 // ── Commands ──────────────────────────────────────────────
@@ -92,7 +206,7 @@ fn make_items(n: usize) -> Vec<Item> {
 
 // ── Micro-benchmarks ──────────────────────────────────────
 
-fn bench_package_creation() {
+fn bench_package_creation() -> f64 {
     println!("┌─ Package Creation ─────────────────────────────────────┐");
     let iterations = 10_000;
     let mut times = Vec::with_capacity(iterations);
@@ -111,9 +225,10 @@ fn bench_package_creation() {
     println!("│  avg: {avg_ns:>8.0} ns | p50: {p50:>8.0} ns | p99: {p99:>8.0} ns");
     println!("└─────────────────────────────────────────────────────────┘");
     println!();
+    avg_ns
 }
 
-fn bench_command_invocation(package: &rustra::Package) {
+fn bench_command_invocation(package: &rustra::Package) -> f64 {
     println!("┌─ Command Invocation (addNumbers) ──────────────────────┐");
     let iterations = 100_000;
     let input = SimpleInput { a: 42, b: 58 };
@@ -138,6 +253,7 @@ fn bench_command_invocation(package: &rustra::Package) {
     println!("│  avg: {avg_ns:>8.0} ns | p50: {p50:>8.0} ns | p99: {p99:>8.0} ns");
     println!("└─────────────────────────────────────────────────────────┘");
     println!();
+    avg_ns
 }
 
 fn bench_serialization() {
@@ -306,7 +422,7 @@ fn bench_json_roundtrip(package: &rustra::Package) {
     println!();
 }
 
-fn bench_ts_generation(package: &rustra::Package) {
+fn bench_ts_generation(package: &rustra::Package) -> f64 {
     println!("┌─ TypeScript Code Generation ───────────────────────────┐");
 
     let iterations = 1_000;
@@ -334,6 +450,7 @@ fn bench_ts_generation(package: &rustra::Package) {
     println!("│  commands.ts:  {commands_size:>6} bytes");
     println!("└─────────────────────────────────────────────────────────┘");
     println!();
+    avg_ns
 }
 
 fn bench_payload_scaling(package: &rustra::Package) {
@@ -420,9 +537,6 @@ fn bench_concurrent_invocation(package: &rustra::Package) {
 
     println!("└─────────────────────────────────────────────────────────┘");
     println!();
-
-    // Summary ASCII chart
-    print_summary_separator();
 }
 
 /// 실제 병렬 invoke — N 스레드 × iterations. `Package::invoke` 는 내부 레지스트리가
@@ -500,7 +614,6 @@ fn bench_memory_usage(package: &rustra::Package) {
 
     println!("└─────────────────────────────────────────────────────────┘");
     println!();
-    print_summary_separator();
 }
 
 /// 프로세스 RSS 바이트 — macOS (mach) 우선, 실패 시 None.
@@ -559,29 +672,32 @@ fn current_rss_bytes() -> Option<u64> {
     None
 }
 
-fn print_summary_separator() {
+/// 요약 차트 — 하드코딩된 구간 주석(~100µs 등) 대신 이번 실행의 실측 평균을
+/// 그대로 프린트한다. 스크립트가 낡은 수치를 재생해 문서와 어긋나는 일을
+/// 원천 차단한다(트랜스포트 계층 비교는 transport-bench/wire-bench 담당).
+fn print_summary_chart(creation_avg_ns: f64, invoke_avg_ns: f64, ts_avg_ns: f64) {
+    let fmt = |ns: f64| {
+        if ns >= 1_000.0 {
+            format!("{:.1} µs", ns / 1_000.0)
+        } else {
+            format!("{:.0} ns", ns)
+        }
+    };
     println!("╔══════════════════════════════════════════════════════════╗");
-    println!("║                    Summary Chart                        ║");
+    println!("║                    Summary (measured)                   ║");
     println!("╠══════════════════════════════════════════════════════════╣");
-    println!("║                                                          ║");
-    println!("║  Rust Core Performance (per operation):                  ║");
-    println!("║  ┌──────────────────────────────────────────────────┐   ║");
-    println!("║  │  Package creation     ~100 µs                     │   ║");
-    println!("║  │  Command invocation   ~1 µs  (typed)              │   ║");
-    println!("║  │  JSON roundtrip       ~1-2 µs (simple payload)    │   ║");
-    println!("║  │  TS generation        ~5-10 µs                     │   ║");
-    println!("║  │  Ser/de (100 items)   ~5-20 µs                     │   ║");
-    println!("║  └──────────────────────────────────────────────────┘   ║");
-    println!("║                                                          ║");
-    println!("║  Bridge Overhead Layers:                                 ║");
-    println!("║  ┌────────────────────────────────────────────────┐     ║");
-    println!("║  │  Pure Rust        ██                             │     ║");
-    println!("║  │  + serde JSON     ████                           │     ║");
-    println!("║  │  + TS Generation  ██████                         │     ║");
-    println!("║  │  + Node IPC       ██████████████                 │     ║");
-    println!("║  │  + Bun FFI        ████████                       │     ║");
-    println!("║  └────────────────────────────────────────────────┘     ║");
-    println!("║                                                          ║");
+    println!(
+        "║  Package creation     {:>10}                            ║",
+        fmt(creation_avg_ns)
+    );
+    println!(
+        "║  Command invocation   {:>10}  (typed)                   ║",
+        fmt(invoke_avg_ns)
+    );
+    println!(
+        "║  TS generation        {:>10}                            ║",
+        fmt(ts_avg_ns)
+    );
     println!("╚══════════════════════════════════════════════════════════╝");
 }
 

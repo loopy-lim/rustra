@@ -3091,7 +3091,7 @@ dependencies = [
 
 [[package]]
 name = "rustra"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "criterion",
  "hex",
@@ -3108,7 +3108,7 @@ dependencies = [
 
 [[package]]
 name = "rustra-auth-example"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "hex",
  "rustra",
@@ -3120,8 +3120,9 @@ dependencies = [
 
 [[package]]
 name = "rustra-benchmark"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
+ "postcard",
  "rustra",
  "rustra-macros",
  "schemars 0.8.22",
@@ -3131,7 +3132,7 @@ dependencies = [
 
 [[package]]
 name = "rustra-calculator-example"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "bincode",
  "postcard",
@@ -3145,7 +3146,7 @@ dependencies = [
 
 [[package]]
 name = "rustra-calculator-napi"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "napi",
  "napi-build",
@@ -3157,7 +3158,7 @@ dependencies = [
 
 [[package]]
 name = "rustra-crud-example"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "rustra",
  "schemars 0.8.22",
@@ -3167,7 +3168,7 @@ dependencies = [
 
 [[package]]
 name = "rustra-macros"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3179,7 +3180,7 @@ dependencies = [
 
 [[package]]
 name = "rustra-streaming-example"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "rustra",
  "schemars 0.8.22",

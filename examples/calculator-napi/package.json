@@ -2,11 +2,12 @@
   "name": "rustra-calculator-napi",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "bun@1.4.0",
   "napi": {
     "binaryName": "calculator-napi"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^3"
+    "@napi-rs/cli": "^3.8.6"
   },
   "scripts": {
     "build": "napi build --platform --release",

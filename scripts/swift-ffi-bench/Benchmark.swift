@@ -1,200 +1,245 @@
 import Foundation
 
-// Rust FFI declarations — mirrors rustra_calculator_example lib.rs
+// All rows execute addNumbers(42, 58) = 100. The primitive ABI row is a lower
+// bound only; the remaining rows compare rustra transport/allocation layers.
+@_silgen_name("rustra_calculator_add_direct")
+func rustra_calculator_add_direct(_ a: Int64, _ b: Int64) -> Int64
+
 @_silgen_name("rustra_calculator_invoke")
 func rustra_calculator_invoke(_ payload: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
 
 @_silgen_name("rustra_calculator_free_string")
 func rustra_calculator_free_string(_ ptr: UnsafeMutablePointer<CChar>?)
 
-// ── Helpers ──────────────────────────────────────────────
+@_silgen_name("rustra_ffi_invoke_rkyv_v2")
+func rustra_ffi_invoke_rkyv_v2(
+    _ payload: UnsafePointer<UInt8>?,
+    _ payloadLen: UInt,
+    _ outLen: UnsafeMutablePointer<UInt>?
+) -> UnsafeMutablePointer<UInt8>?
 
-func bar(_ value: Double, _ max: Double, width: Int = 40) -> String {
-    let filled = Int(round(value / max * Double(width)))
-    let f = Swift.max(filled, 1)
-    return String(repeating: "█", count: f) + String(repeating: "░", count: width - f)
+@_silgen_name("rustra_ffi_invoke_rkyv_v2_into")
+func rustra_ffi_invoke_rkyv_v2_into(
+    _ payload: UnsafePointer<UInt8>?,
+    _ payloadLen: UInt,
+    _ buffer: UnsafeMutablePointer<UInt8>?,
+    _ capacity: UInt,
+    _ outLen: UnsafeMutablePointer<UInt>?
+) -> UInt
+
+@_silgen_name("rustra_ffi_free")
+func rustra_ffi_free(_ ptr: UnsafeMutablePointer<UInt8>?, _ len: UInt)
+
+struct BenchResult {
+    let label: String
+    let avg: Double
+    let p50: Double
+    let p99: Double
+
+    var opsPerSecond: Double { 1_000_000_000 / avg }
+}
+
+let iterations = Int(ProcessInfo.processInfo.environment["RUSTRA_BENCH_ITERATIONS"] ?? "100000")!
+let warmup = Int(ProcessInfo.processInfo.environment["RUSTRA_BENCH_WARMUP"] ?? "1000")!
+let jsonOnly = CommandLine.arguments.contains("--json")
+
+func measure(_ label: String, _ block: () -> Void) -> BenchResult {
+    for _ in 0..<warmup { block() }
+    var times: [Double] = []
+    times.reserveCapacity(iterations)
+    for _ in 0..<iterations {
+        let start = DispatchTime.now().uptimeNanoseconds
+        block()
+        times.append(Double(DispatchTime.now().uptimeNanoseconds - start))
+    }
+    times.sort()
+    return BenchResult(
+        label: label,
+        avg: times.reduce(0, +) / Double(times.count),
+        p50: times[Int(Double(times.count - 1) * 0.50)],
+        p99: times[Int(Double(times.count - 1) * 0.99)]
+    )
 }
 
 func formatNanos(_ ns: Double) -> String {
     if ns >= 1_000_000 { return String(format: "%.2f ms", ns / 1_000_000) }
-    if ns >= 1_000 { return String(format: "%.1f µs", ns / 1_000) }
+    if ns >= 1_000 { return String(format: "%.2f µs", ns / 1_000) }
     return String(format: "%.0f ns", ns)
 }
 
-func pad(_ s: String, _ len: Int) -> String {
-    s.padding(toLength: len, withPad: " ", startingAt: 0)
+func decodeZigzag(_ bytes: ArraySlice<UInt8>) -> Int64 {
+    var value: UInt64 = 0
+    var shift: UInt64 = 0
+    for byte in bytes {
+        value |= UInt64(byte & 0x7f) << shift
+        if byte & 0x80 == 0 { break }
+        shift += 7
+    }
+    return Int64(value >> 1) ^ -Int64(value & 1)
 }
 
-func formatNumber(_ n: Double) -> String {
-    let s = String(format: "%.0f", n)
-    var result = ""
-    let chars = Array(s)
-    for (i, c) in chars.enumerated() {
-        if i > 0 && (chars.count - i) % 3 == 0 { result += "," }
-        result.append(c)
+let jsonRequest = "{\"command\":\"addNumbers\",\"args\":{\"a\":42,\"b\":58}}"
+// [command_id=1 LE][postcard zigzag(42)][postcard zigzag(58)]
+let rkyvRequest: [UInt8] = [0x01, 0x00, 0x54, 0x74]
+
+func legacyJSONCall() {
+    jsonRequest.withCString { request in
+        let response = rustra_calculator_invoke(request)
+        precondition(response != nil)
+        rustra_calculator_free_string(response)
     }
-    return result
 }
 
-func measure(label: String, iterations: Int = 100_000, _ block: () -> Void) -> (avg: Double, p50: Double, p99: Double) {
-    // Warm up
-    for _ in 0..<1000 { block() }
-
-    var times: [Double] = []
-    times.reserveCapacity(iterations)
-    for _ in 0..<iterations {
-        let start = DispatchTime.now()
-        block()
-        let elapsed = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds)
-        times.append(elapsed)
+func rkyvAllocCall() {
+    rkyvRequest.withUnsafeBytes { raw in
+        var outLen: UInt = 0
+        let response = rustra_ffi_invoke_rkyv_v2(
+            raw.bindMemory(to: UInt8.self).baseAddress,
+            UInt(raw.count),
+            &outLen
+        )
+        precondition(response != nil && outLen >= 9)
+        rustra_ffi_free(response, outLen)
     }
-    times.sort()
-
-    let avg = times.reduce(0, +) / Double(times.count)
-    let p50 = times[Int(Double(times.count - 1) * 0.50)]
-    let p99 = times[Int(Double(times.count - 1) * 0.99)]
-
-    return (avg, p50, p99)
 }
 
-// ── Main ─────────────────────────────────────────────────
-
-print("╔══════════════════════════════════════════════════════════╗")
-print("║        rustra-bridge RN Layer Benchmark (Swift FFI)     ║")
-print("╚══════════════════════════════════════════════════════════╝")
-print()
-
-// ── 1. FFI Call Overhead ─────────────────────────────────
-
-print("┌─ FFI Call (Swift → Rust C FFI) ────────────────────────┐")
-
-let simplePayload = "{\"command\":\"addNumbers\",\"args\":{\"a\":42,\"b\":58}}"
-
-let ffiResult = measure(label: "FFI invoke") {
-    let result = simplePayload.withCString { ptr in
-        let response = rustra_calculator_invoke(ptr)
-        defer { rustra_calculator_free_string(response) }
-        return String(cString: response!)
-    }
-    _ = result
-}
-
-print("│  100,000 iterations")
-print("│  avg: \(formatNanos(ffiResult.avg))  p50: \(formatNanos(ffiResult.p50))  p99: \(formatNanos(ffiResult.p99))")
-print("└─────────────────────────────────────────────────────────┘")
-print()
-
-// ── 2. Full Bridge (Swift: JSON → FFI → parse) ───────────
-
-print("┌─ Full Bridge (serialize → FFI → deserialize) ─────────┐")
-
-let bridgeResult = measure(label: "Full bridge") {
-    let payload: [String: Any] = ["command": "addNumbers", "args": ["a": 42, "b": 58]]
-    let jsonData = try! JSONSerialization.data(withJSONObject: payload)
-    let jsonString = String(data: jsonData, encoding: .utf8)!
-
-    let resultStr = jsonString.withCString { ptr in
-        let response = rustra_calculator_invoke(ptr)
-        defer { rustra_calculator_free_string(response) }
-        return String(cString: response!)
-    }
-
-    let resultData = resultStr.data(using: .utf8)!
-    let parsed = try! JSONSerialization.jsonObject(with: resultData) as! [String: Any]
-    _ = parsed
-}
-
-print("│  100,000 iterations")
-print("│  avg: \(formatNanos(bridgeResult.avg))  p50: \(formatNanos(bridgeResult.p50))  p99: \(formatNanos(bridgeResult.p99))")
-print("└─────────────────────────────────────────────────────────┘")
-print()
-
-// ── 3. Payload Size Scaling via FFI ──────────────────────
-
-print("┌─ Payload Scaling (FFI) ───────────────────────────────┐")
-
-let sizes = [1, 10, 50, 100]
-var scalingResults: [(count: Int, avg: Double, jsonBytes: Int)] = []
-
-for count in sizes {
-    let items = (0..<count).map { i -> [String: Any] in
-        return ["id": i, "name": "item-\(i)", "tags": ["a", "b"], "active": true, "score": Double(i) * 1.5]
-    }
-    let payload: [String: Any] = ["command": "processPayload", "args": ["items": items]]
-    let jsonData = try! JSONSerialization.data(withJSONObject: payload)
-    let jsonString = String(data: jsonData, encoding: .utf8)!
-
-    let result = measure(label: "\(count) items", iterations: 10_000) {
-        let _ = jsonString.withCString { ptr in
-            let response = rustra_calculator_invoke(ptr)
-            rustra_calculator_free_string(response)
+var reusable = [UInt8](repeating: 0, count: 64)
+func rkyvIntoCall(probe: Bool) {
+    rkyvRequest.withUnsafeBytes { requestRaw in
+        reusable.withUnsafeMutableBytes { outputRaw in
+            let request = requestRaw.bindMemory(to: UInt8.self)
+            let output = outputRaw.bindMemory(to: UInt8.self)
+            var outLen: UInt = 0
+            if probe {
+                let result = rustra_ffi_invoke_rkyv_v2_into(
+                    request.baseAddress,
+                    UInt(request.count),
+                    nil,
+                    0,
+                    &outLen
+                )
+                precondition(result == 0 && outLen <= UInt(output.count))
+            }
+            let written = rustra_ffi_invoke_rkyv_v2_into(
+                request.baseAddress,
+                UInt(request.count),
+                output.baseAddress,
+                UInt(output.count),
+                &outLen
+            )
+            precondition(written != UInt.max && written == outLen)
         }
     }
-    scalingResults.append((count, result.avg, jsonData.count))
 }
 
-let maxAvg = scalingResults.map(\.avg).max()!
+// Matches RustraJSIBridge.cpp: try the common small response in one call,
+// then retry with the exact required capacity only when the stack-sized buffer
+// is too small. The Rust FFI caches that oversized response, so the handler is
+// still executed exactly once.
+var stackFirstBuffer = [UInt8](repeating: 0, count: 512)
+func rkyvStackFirstCall() {
+    rkyvRequest.withUnsafeBytes { requestRaw in
+        let request = requestRaw.bindMemory(to: UInt8.self)
+        var outLen: UInt = 0
+        let written = stackFirstBuffer.withUnsafeMutableBytes { outputRaw in
+            let output = outputRaw.bindMemory(to: UInt8.self)
+            return rustra_ffi_invoke_rkyv_v2_into(
+                request.baseAddress,
+                UInt(request.count),
+                output.baseAddress,
+                UInt(output.count),
+                &outLen
+            )
+        }
 
-print("│  \(pad("Items", 8)) \(pad("JSON bytes", 10)) \(pad("Avg", 10))  ")
-print("│  \(pad("─────", 8)) \(pad("─────────", 10)) \(pad("────────", 10))  ")
-for r in scalingResults {
-    let b = bar(r.avg, maxAvg, width: 30)
-    print("│  \(pad(String(r.count), 8)) \(pad(String(r.jsonBytes), 10)) \(pad(formatNanos(r.avg), 10))  \(b)")
+        guard written == UInt.max else {
+            precondition(written == outLen)
+            return
+        }
+
+        var exactBuffer = [UInt8](repeating: 0, count: Int(outLen))
+        let retried = exactBuffer.withUnsafeMutableBytes { outputRaw in
+            let output = outputRaw.bindMemory(to: UInt8.self)
+            return rustra_ffi_invoke_rkyv_v2_into(
+                request.baseAddress,
+                UInt(request.count),
+                output.baseAddress,
+                UInt(output.count),
+                &outLen
+            )
+        }
+        precondition(retried != UInt.max && retried == outLen)
+    }
 }
-print("└─────────────────────────────────────────────────────────┘")
-print()
 
-// ── 4. Comparison: pure JSON vs full FFI ──────────────────
+// Correctness gate before timing.
+precondition(rustra_calculator_add_direct(42, 58) == 100)
+let legacyResponse = jsonRequest.withCString { request -> String in
+    let response = rustra_calculator_invoke(request)!
+    defer { rustra_calculator_free_string(response) }
+    return String(cString: response)
+}
+precondition(legacyResponse.contains("\"value\":100"))
+rkyvIntoCall(probe: true)
+precondition(reusable[0] == 1 && decodeZigzag(reusable[8...]) == 100)
+rkyvStackFirstCall()
+precondition(stackFirstBuffer[0] == 1 && decodeZigzag(stackFirstBuffer[8...]) == 100)
 
-print("┌─ Overhead Breakdown (per call) ────────────────────────┐")
-
-let jsonOnly = measure(label: "JSON roundtrip only", iterations: 100_000) {
+let direct = measure("primitive C ABI lower bound") {
+    precondition(rustra_calculator_add_direct(42, 58) == 100)
+}
+let legacy = measure("legacy JSON CString alloc/free") { legacyJSONCall() }
+let rkyvAlloc = measure("rkyv V2 alloc/free") { rkyvAllocCall() }
+let rkyvInto = measure("rkyv V2 caller buffer (reused)") { rkyvIntoCall(probe: false) }
+let rkyvProbeInto = measure("rkyv V2 probe + caller buffer") { rkyvIntoCall(probe: true) }
+let rkyvStackFirst = measure("rkyv V2 stack-first caller buffer (actual JSI protocol)") {
+    rkyvStackFirstCall()
+}
+let fullJSON = measure("Swift JSON encode + FFI + decode") {
     let payload: [String: Any] = ["command": "addNumbers", "args": ["a": 42, "b": 58]]
     let data = try! JSONSerialization.data(withJSONObject: payload)
-    let str = String(data: data, encoding: .utf8)!
-    let parsed = try! JSONSerialization.jsonObject(with: str.data(using: .utf8)!)
-    _ = parsed
+    let request = String(data: data, encoding: .utf8)!
+    let response = request.withCString { pointer -> String in
+        let result = rustra_calculator_invoke(pointer)!
+        defer { rustra_calculator_free_string(result) }
+        return String(cString: result)
+    }
+    let parsed = try! JSONSerialization.jsonObject(with: Data(response.utf8)) as! [String: Any]
+    precondition(parsed["ok"] as? Bool == true)
 }
 
-let overhead = bridgeResult.avg - ffiResult.avg
-let rustCore = ffiResult.avg - jsonOnly.avg
-
-let layers: [(String, Double, String)] = [
-    ("JSON serialize/deserialize", jsonOnly.avg, "▓"),
-    ("Swift ↔ Rust FFI overhead", max(rustCore, 0), "▒"),
-    ("Rust command execution", ffiResult.avg - jsonOnly.avg - max(rustCore, 0) + ffiResult.avg * 0.3, "█"),
+let results = [direct, legacy, rkyvAlloc, rkyvInto, rkyvProbeInto, rkyvStackFirst, fullJSON]
+let report: [String: Any] = [
+    "schemaVersion": 1,
+    "benchmark": "swift-rust-ffi-addNumbers",
+    "timestamp": ISO8601DateFormatter().string(from: Date()),
+    "iterations": iterations,
+    "warmup": warmup,
+    "request": ["command": "addNumbers", "a": 42, "b": 58, "expected": 100],
+    "results": results.map { result in
+        [
+            "label": result.label,
+            "avgNs": result.avg,
+            "p50Ns": result.p50,
+            "p99Ns": result.p99,
+            "opsPerSecond": result.opsPerSecond,
+        ]
+    },
 ]
+let reportData = try! JSONSerialization.data(withJSONObject: report, options: [.sortedKeys])
+let reportJSON = String(data: reportData, encoding: .utf8)!
 
-let maxLayer = layers.map(\.1).max()!
-for (name, ns, ch) in layers {
-    let b = String(repeating: ch, count: max(1, Int(ns / maxLayer * 35)))
-    print("│  \(name.padding(toLength: 30, withPad: " ", startingAt: 0)) \(b.padding(toLength: 35, withPad: " ", startingAt: 0)) \(formatNanos(ns))")
+if jsonOnly {
+    print(reportJSON)
+} else {
+    print("rustra Swift ↔ Rust FFI ladder")
+    print("same command: addNumbers(42, 58) = 100; \(iterations) iterations, \(warmup) warmup")
+    print(String(repeating: "-", count: 92))
+    for result in results {
+        let name = result.label.padding(toLength: 38, withPad: " ", startingAt: 0)
+        print("\(name) avg \(formatNanos(result.avg))  p50 \(formatNanos(result.p50))  p99 \(formatNanos(result.p99))")
+    }
+    print(String(repeating: "-", count: 92))
+    print("The primitive row is a lower bound, not a framework-to-framework comparison.")
+    print("RUSTRA_BENCH_JSON=\(reportJSON)")
 }
-
-print("│")
-print("│  Total bridge latency: \(formatNanos(bridgeResult.avg))")
-print("└─────────────────────────────────────────────────────────┘")
-print()
-
-// ── 5. Throughput ────────────────────────────────────────
-
-print("┌─ Throughput (FFI, single-threaded) ───────────────────┐")
-let throughputIters = 500_000
-let start = DispatchTime.now()
-for _ in 0..<throughputIters {
-    let response = simplePayload.withCString { ptr in rustra_calculator_invoke(ptr) }
-    rustra_calculator_free_string(response)
-}
-let elapsed = Double(DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds)
-let opsPerSec = Double(throughputIters) / (elapsed / 1_000_000_000)
-
-print("│  \(throughputIters) iterations in \(formatNanos(elapsed))")
-let formatted = formatNumber(opsPerSec)
-print("│  \(formatted) ops/sec")
-
-let barW = 50
-let filled = Int(min(1.0, opsPerSec / 10_000_000.0) * Double(barW))
-let tb = String(repeating: "█", count: filled) + String(repeating: "░", count: barW - filled)
-print("│  [\(tb)]")
-print("│  0                                               10M ops/s")
-print("└─────────────────────────────────────────────────────────┘")

@@ -45,6 +45,24 @@ export type PackageSchema = {
   schemaVersion?: number;
   /** 패키지에 등록된 모든 명령 스키마 */
   commands: CommandSchema[];
+  /**
+   * (이벤트 계약) Rust `PackageBuilder::event::<E>("name")` 으로 선언된
+   * 이벤트 — 이름/페이로드 스키마. `events.ts`(타입 + 구독 헬퍼) 생성에
+   * 쓰인다. 선언이 없으면 섹션 자체가 없다(하위호환).
+   */
+  events?: EventSchema[];
+};
+
+/**
+ * 선언된 이벤트 계약 — Rust `PackageBuilder::event` 의 schema.json 표현.
+ */
+export type EventSchema = {
+  /** 이벤트 이름 (예: "progress.tick") */
+  name: string;
+  /** 페이로드 타입의 JSON Schema */
+  payload: JsonSchema;
+  /** 페이로드 타입의 명명된 정의 ($ref 대상) */
+  definitions?: Record<string, JsonSchema>;
 };
 
 /**

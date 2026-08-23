@@ -112,6 +112,7 @@ pub use rustra_macros::register;
 pub use rkyv_codec::encode_rkyv_v2_error;
 
 pub mod cancel;
+pub mod channels;
 mod codegen;
 mod error;
 pub mod events;
@@ -133,7 +134,7 @@ use std::sync::{Arc, RwLock};
 
 use rkyv_codec::{
     BinHandler, DecodeFn, EncodeFn, Tier, build_rkyv_v2_decoder, build_rkyv_v2_response_encoder,
-    build_tier3_json_decoder, is_output_tier3, js_postcard_codec_supported,
+    build_tier3_json_decoder, is_output_tier3, js_postcard_codec_supported_with_defs,
 };
 
 pub use error::{Result, RustraError};
@@ -399,6 +400,9 @@ pub struct Package {
     /// 설치되어 있으면 즉시 콜백 호출(버스 우회), 아니면 호스트 어댑터가
     /// `event_bus()` 를 폴링해 플랫폼 푸시 채널로 전달한다.
     events: Arc<events::EventState>,
+    /// (이벤트 계약) 선언된 이벤트 이름 → 페이로드 스키마 — schema.json 의
+    /// `events` 섹션 소스. build 시점에 빌더에서 복사되어 불변이 된다.
+    event_contracts: BTreeMap<String, Value>,
     states: Arc<state::StateMap>,
 }
 
@@ -407,6 +411,11 @@ struct RegistryState {
     commands: BTreeMap<String, Command>,
     id_to_name: BTreeMap<u16, String>,
     next_command_id: u16,
+    /// (성능) command_id → 핸들러 직접 캐시 — `invoke_rkyv_v2` 의 핫패스가
+    /// `id_to_name` → `commands` 이중 조회 + Arc 클론을 거치지 않게 한다.
+    /// 등록/교체/해제 시점에 함께 유지된다(불변식: 값은 항상 `commands` 의
+    /// 동일 명령과 같은 Arc 를 가리킨다).
+    id_to_command: BTreeMap<u16, Command>,
     /// Runtime Authority: 부여된 capability 집합. deny-by-default —
     /// `required_capability` 가 `Some` 인 명령은 이 집합에 포함될 때만 실행된다.
     granted_capabilities: BTreeSet<String>,
@@ -438,6 +447,9 @@ pub struct PackageBuilder {
     /// 나머지는 `build()` 시점에 검증·병합한다.
     id_aliases: Vec<(String, u16)>,
     event_capacity: usize,
+    /// (이벤트 계약) 선언된 이벤트 이름 → 페이로드 스키마. schema.json 의
+    /// `events` 섹션과 TS 코드젠의 이벤트 타입으로 노출된다.
+    events: BTreeMap<String, Value>,
     /// (T2, OTA) 스키마 협상 버전 — 빌드 시점 고정값. `build()` 에서
     /// `RegistryState.schema_version` 로 이동한다.
     schema_version: u32,
@@ -490,14 +502,18 @@ impl GeneratedPackage {
 }
 
 /// 단일 명령의 메타데이터와 핸들러입니다.
+///
+/// 스키마 필드(`input_schema`/`output_schema`/`definitions`)는 `Arc<Value>` 다 —
+/// `invoke` 경로의 재진입 방지 clone-out이 매 호출마다 serde_json 트리 전체를
+/// deep copy 하는 것을 포인터 복사로 만든다(스키마는 등록 후 불변이므로 안전).
 #[derive(Clone)]
 struct Command {
     command_id: u16,
     input_type: String,
     output_type: String,
-    input_schema: Value,
-    output_schema: Value,
-    definitions: Value,
+    input_schema: Arc<Value>,
+    output_schema: Arc<Value>,
+    definitions: Arc<Value>,
     invoke: Arc<dyn Fn(Value) -> crate::Result<Value> + Send + Sync>,
     /// Fast binary handler: payload[2..] → postcard deserialize → typed handler → postcard serialize
     rkyv_v2_handler: Option<BinHandler>,
@@ -560,8 +576,8 @@ where
     // 로 디코딩을 시도). 따라서 JS 코덱 지원 판정을 미러해 미지원 명령의
     // fast-path 를 끄고 JSON 경류(rkyv_v2_decode/encode_response — is_tier3 면
     // JSON-in-binary 프레임)로 통일한다.
-    let js_codec_supported =
-        js_postcard_codec_supported(&input_schema) && js_postcard_codec_supported(&output_schema);
+    let js_codec_supported = js_postcard_codec_supported_with_defs(&input_schema, &definitions)
+        && js_postcard_codec_supported_with_defs(&output_schema, &definitions);
 
     // Generate fast postcard-based binary handler that bypasses JSON Value.
     // force_tier3 인 경우 postcard fast-path 를 끄고 Tier 3 JSON fallback 로 보낸다.
@@ -589,9 +605,9 @@ where
         command_id,
         input_type: short_type_name::<I>(),
         output_type: short_type_name::<O>(),
-        input_schema,
-        output_schema,
-        definitions,
+        input_schema: Arc::new(input_schema),
+        output_schema: Arc::new(output_schema),
+        definitions: Arc::new(definitions),
         invoke: Arc::new(move |params| {
             let input = serde_json::from_value::<I>(params).map_err(RustraError::invalid_args)?;
             let output = handler(input)?;
@@ -622,6 +638,7 @@ impl Package {
             next_command_id: 1,
             id_aliases: Vec::new(),
             event_capacity: 1024,
+            events: BTreeMap::new(),
             schema_version: 1,
             states: state::StateMap::new(),
         }
@@ -678,7 +695,12 @@ impl Package {
     /// ```
     pub fn emit<E: Serialize>(&self, event: impl Into<String>, payload: E) {
         let name = event.into();
-        let json = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
+        let json = serde_json::to_string(&payload).unwrap_or_else(|e| {
+            // 직렬화 불가 페이로드를 조용히 빈 JSON 로 보내던 폴백 — 최소한 stderr
+            // 경고를 남겨 스트리밍 유즈케이스에서 유실이 관측되게 한다.
+            eprintln!("rustra: event '{name}' payload failed to serialize: {e}");
+            "{}".to_string()
+        });
         if self.events.deliver_via_sink(&name, &json) {
             return; // 싱크 경로 — 버스 우회 (이중 전달 방지)
         }
@@ -797,14 +819,12 @@ impl Package {
                 .state
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            let command_name = state
-                .id_to_name
-                .get(&command_id)
-                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?;
+            // 단일 조회 — 과거 id_to_name → commands 이중 조회 + Arc 클론을
+            // id_to_command 직접 캐시로 대체했다(등록/교체/해제 시 함께 유지됨).
             state
-                .commands
-                .get(command_name)
-                .ok_or_else(|| RustraError::command_not_found(command_name))?
+                .id_to_command
+                .get(&command_id)
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
                 .clone()
         };
         // Runtime Authority: deny-by-default — capability 가 요구되는데 부여되지
@@ -874,10 +894,13 @@ impl Package {
     ///
     /// `required_capability` 가 `Some(cap)` 인 명령은 `cap` 이 부여되기 전까지
     /// `capability.denied` 로 거부된다 — 핸들러는 아예 호출되지 않는다. 이 메서드로
-    /// `cap` 을 granted 집합에 추가하면 이후 해당 명령이 허용된다. 동결 상태면
-    /// `registry.frozen`.
+    /// `cap` 을 granted 집합에 추가하면 이후 해당 명령이 허용된다.
+    ///
+    /// 동결(freeze)은 레지스트리 **구조** mutation(register/unregister/replace)에만
+    /// 적용된다 — grant는 런타임 권한 부여이므로 동결과 무관하게 허용한다. 그렇지
+    /// 않으면 release 빌드(`build()` 시점 동결)에서 권한을 부여할 방법이 없어
+    /// deny-by-default 가 deny-forever 가 된다.
     pub fn grant_capability(&self, cap: &str) -> crate::Result<()> {
-        self.ensure_mutable()?;
         let mut state = self
             .state
             .write()
@@ -948,6 +971,7 @@ impl Package {
             }
         };
         let command = build_command::<I, O, F>(command_id, handler, true);
+        state.id_to_command.insert(command_id, command.clone());
         state.commands.insert(name.clone(), command);
         state.id_to_name.insert(command_id, name);
         Ok(())
@@ -985,6 +1009,7 @@ impl Package {
         let required_capability = existing.required_capability;
         let mut command = build_command::<I, O, F>(command_id, handler, false);
         command.required_capability = required_capability;
+        state.id_to_command.insert(command_id, command.clone());
         state.commands.insert(name.to_string(), command);
         Ok(())
     }
@@ -1003,7 +1028,16 @@ impl Package {
         }
         // 실제 id 와 그 명령을 가리키던 alias id 를 모두 정리 — alias 만
         // 남으면 stale 라우팅 항목이 된다.
+        let removed_ids: Vec<u16> = state
+            .id_to_name
+            .iter()
+            .filter(|(_, target)| target.as_str() == name)
+            .map(|(id, _)| *id)
+            .collect();
         state.id_to_name.retain(|_, target| target != name);
+        for id in removed_ids {
+            state.id_to_command.remove(&id);
+        }
         // NOTE: next_command_id는 감소시키지 않는다 — retired id는 영원히 재사용 금지.
         Ok(())
     }
@@ -1016,7 +1050,7 @@ impl Package {
             .state
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        Self::schema(&self.id, &state)
+        Self::schema(&self.id, &state, &self.event_contracts)
     }
 
     /// 등록된 모든 명령에서 TypeScript 클라이언트 코드를 생성합니다.
@@ -1025,8 +1059,9 @@ impl Package {
             .state
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let schema_json = serde_json::to_string_pretty(&Self::schema(&self.id, &state))
-            .map_err(RustraError::internal)?;
+        let schema_json =
+            serde_json::to_string_pretty(&Self::schema(&self.id, &state, &self.event_contracts))
+                .map_err(RustraError::internal)?;
         let contract_hash = contract_hash(&schema_json);
         let types_ts = Self::generate_types_ts(&state);
         let commands_ts = Self::generate_commands_ts(&state);
@@ -1044,7 +1079,7 @@ impl Package {
         })
     }
 
-    fn schema(id: &str, state: &RegistryState) -> Value {
+    fn schema(id: &str, state: &RegistryState, event_contracts: &BTreeMap<String, Value>) -> Value {
         let commands = state
             .commands
             .iter()
@@ -1054,28 +1089,42 @@ impl Package {
                     "commandId": command.command_id,
                     "inputType": command.input_type,
                     "outputType": command.output_type,
-                    "inputSchema": command.input_schema,
-                    "outputSchema": command.output_schema,
+                    "inputSchema": &*command.input_schema,
+                    "outputSchema": &*command.output_schema,
                 });
                 // Include definitions if non-empty (for $ref resolution)
                 #[allow(clippy::collapsible_if)]
-                if let Value::Object(defs) = &command.definitions {
+                if let Value::Object(defs) = &*command.definitions {
                     if !defs.is_empty() {
                         entry
                             .as_object_mut()
                             .unwrap()
-                            .insert("definitions".into(), command.definitions.clone());
+                            .insert("definitions".into(), (*command.definitions).clone());
                     }
                 }
                 entry
             })
             .collect::<Vec<_>>();
 
-        json!({
+        // (이벤트 계약) 선언된 이벤트가 있을 때만 events 섹션을 만든다 — 없으면
+        // 기존 schema.json 형태와 바이트 단위로 동일(하위호환).
+        let mut root = json!({
             "packageId": id,
             "schemaVersion": state.schema_version,
             "commands": commands,
-        })
+        });
+        if !event_contracts.is_empty() {
+            let events: Vec<Value> = event_contracts
+                .iter()
+                .map(|(name, contract)| {
+                    json!({ "name": name, "payload": &contract["payload"], "definitions": &contract["definitions"] })
+                })
+                .collect();
+            root.as_object_mut()
+                .expect("root is an object")
+                .insert("events".into(), json!(events));
+        }
+        root
     }
 
     fn generate_types_ts(state: &RegistryState) -> String {
@@ -1086,7 +1135,7 @@ impl Package {
 
         let mut all_definitions = serde_json::Map::new();
         for command in state.commands.values() {
-            if let Value::Object(defs) = &command.definitions {
+            if let Value::Object(defs) = &*command.definitions {
                 for (key, value) in defs {
                     all_definitions.insert(key.clone(), value.clone());
                 }
@@ -1161,7 +1210,7 @@ impl Package {
         if !imports.is_empty() {
             output.push_str(&format!("import type {{ {imports} }} from './types.js';\n"));
         }
-        output.push_str("import { invoke } from '@rustra/types';\n");
+        output.push_str("import { invokeGenerated } from '@rustra/types';\n");
         output.push_str("import type { InvokeOptions } from '@rustra/types';\n\n");
 
         for (name, command) in state.commands.iter() {
@@ -1179,19 +1228,25 @@ impl Package {
             }
             if command.input_type == "()" {
                 output.push_str(&format!(
-                    "export function {}(options?: InvokeOptions): Promise<{}> {{\n  return invoke<{}>('{}', undefined, options);\n}}\n\n",
+                    "export function {}(options?: InvokeOptions): Promise<{}> {{\n  return invokeGenerated<{}>({}, '{}', undefined, options);\n}}\n{}.commandId = '{}';\n\n",
                     command_function_name(name),
                     out_type,
                     out_type,
+                    command.command_id,
+                    name,
+                    command_function_name(name),
                     name,
                 ));
             } else {
                 output.push_str(&format!(
-                    "export function {}(input: {}, options?: InvokeOptions): Promise<{}> {{\n  return invoke<{}>('{}', input, options);\n}}\n\n",
+                    "export function {}(input: {}, options?: InvokeOptions): Promise<{}> {{\n  return invokeGenerated<{}>({}, '{}', input, options);\n}}\n{}.commandId = '{}';\n\n",
                     command_function_name(name),
                     command.input_type,
                     out_type,
                     out_type,
+                    command.command_id,
+                    name,
+                    command_function_name(name),
                     name,
                 ));
             }
@@ -1252,6 +1307,24 @@ impl PackageBuilder {
             .get_mut(name)
             .unwrap_or_else(|| panic!("require_capability: command '{name}' not registered"));
         command.required_capability = Some(cap);
+        self
+    }
+
+    /// `#[command(capability = "...")]` 메타 상수를 받아 조건부 require 로 이어
+    /// 붙인다 — `register!`/`build!` 매크로가 사용한다.
+    ///
+    /// `cap: Option<&'static str>` 이 `Some` 이면 [`require_capability`](Self::require_capability)
+    /// 와 동일하게 동작하고, `None` 이면 아무 일도 하지 않는다(메타 상수는 매크로가
+    /// 항상 생성하므로 capability 없는 명령도 그대로 통과한다). 문자열 이름 재결합을
+    /// 매크로가 파생한 심벌 쌍으로 대체해, 오타가 났다면 **컴파일** 에러로 드러난다.
+    pub fn require_capability_if(mut self, name: &str, cap: Option<&'static str>) -> Self {
+        if let Some(cap) = cap {
+            let command = self
+                .commands
+                .get_mut(name)
+                .unwrap_or_else(|| panic!("require_capability: command '{name}' not registered"));
+            command.required_capability = Some(cap);
+        }
         self
     }
 
@@ -1316,6 +1389,35 @@ impl PackageBuilder {
     /// 이벤트 버스 큐의 최대 수용량을 설정합니다 (기본값: 1024).
     pub fn event_capacity(mut self, capacity: usize) -> Self {
         self.event_capacity = capacity.max(1);
+        self
+    }
+
+    /// (이벤트 계약) `Package::emit` 으로 발행될 이벤트를 타입과 함께 선언한다.
+    ///
+    /// 선언된 이벤트는 schema.json 의 최상위 `events` 섹션에 이름/페이로드
+    /// 스키마로 기록되고, TS 코드젠(@rustra/cli)이 이벤트 타입과 구독 헬퍼를
+    /// 생성한다 — 커맨드와 동일한 "한 번 정의하면 어디서든 타입 안전" 계약을
+    /// 이벤트에도 적용하는 진입점이다. 선언하지 않은 이벤트도 emit 은 가능하다
+    /// (하위호환) — 코드젠 산출물에 타입이 없을 뿐이다.
+    ///
+    /// ```rust
+    /// # use rustra::prelude::*;
+    /// # #[derive(Debug, Serialize, Deserialize, JsonSchema)]
+    /// # #[serde(rename_all = "camelCase")]
+    /// # struct ProgressPayload { pub value: i64 }
+    /// let pkg = Package::builder("example.stream")
+    ///     .event::<ProgressPayload>("progress.tick")
+    ///     .build();
+    /// // emit("progress.tick", ProgressPayload { value: 1 }) 의 페이로드 타입이
+    /// // schema.json/TS 코드젠에 노출된다.
+    /// # let _ = pkg;
+    /// ```
+    pub fn event<E: JsonSchema>(mut self, name: &str) -> Self {
+        let (schema, defs) = schema_value::<E>();
+        self.events.insert(
+            name.to_string(),
+            json!({ "payload": schema, "definitions": defs }),
+        );
         self
     }
 
@@ -1392,6 +1494,18 @@ impl PackageBuilder {
         for (name, cmd) in &commands {
             id_to_name.insert(cmd.command_id, name.clone());
         }
+        // (성능) id → Command 직접 캐시 — alias id 포함 전체 id_to_name 키와
+        // 정확히 같은 라우팅을 제공한다(lookup 일관성: id_to_name 이 가리키는
+        // 모든 id 는 여기서도 같은 명령을 찾는다).
+        let id_to_command: BTreeMap<u16, Command> = id_to_name
+            .iter()
+            .map(|(id, name)| {
+                let cmd = commands
+                    .get(name)
+                    .unwrap_or_else(|| panic!("build(): id {id} → '{name}' not in commands"));
+                (*id, cmd.clone())
+            })
+            .collect();
         // (T2 리뷰) tripwire: 최종 병합 뒤 모든 alias 가 자기 명령을 가리키는지
         // 확인한다. displacement/next_command_id 순서가 다시 깨지면(alias 항목을
         // 실제 id 삽입이 덮어쓰거나 fresh id 가 alias 와 겹치면) 여기서 즉시
@@ -1407,12 +1521,14 @@ impl PackageBuilder {
             state: Arc::new(RwLock::new(RegistryState {
                 commands,
                 id_to_name,
+                id_to_command,
                 next_command_id,
                 granted_capabilities: BTreeSet::new(),
                 schema_version: self.schema_version,
             })),
             frozen: Arc::new(AtomicBool::new(!cfg!(debug_assertions))),
             events: Arc::new(events::EventState::with_capacity(self.event_capacity)),
+            event_contracts: self.events,
             states: Arc::new(self.states),
         }
     }
@@ -1728,18 +1844,66 @@ mod runtime_registry_tests {
         assert_eq!(err.code(), "capability.denied");
     }
 
-    /// 동결 상태에서는 grant_capability 도 거부된다 (registry.frozen).
+    /// 동결 상태에서는 레지스트리 mutation(register)은 거부되지만 grant_capability 는
+    /// 허용된다 — grant는 구조 변경이 아닌 런타임 권한 부여이며, release 빌드(동결
+    /// 시작)에서 권한을 부여할 유일한 경로다.
     #[test]
     #[cfg(debug_assertions)]
-    fn grant_capability_blocked_when_frozen() {
+    fn grant_capability_allowed_when_frozen_but_register_blocked() {
         let pkg = Package::builder("test.wb")
             .command("locked", c1)
             .require_capability("locked", "compute:secure")
             .build();
         pkg.freeze();
+
+        // 구조 mutation은 동결로 차단된다.
         assert_eq!(
-            pkg.grant_capability("compute:secure").unwrap_err().code(),
+            pkg.register("new_cmd", c2).unwrap_err().code(),
             "registry.frozen"
         );
+
+        // grant는 동결과 무관하게 동작한다.
+        pkg.grant_capability("compute:secure").unwrap();
+        assert!(pkg.has_capability("compute:secure"));
+
+        // 부여된 뒤에는 해당 명령이 실제로 호출된다.
+        let out = pkg
+            .invoke_json("locked", serde_json::json!({ "_v": 0 }))
+            .unwrap();
+        assert_eq!(out["v"], 1);
+    }
+
+    /// 코어 FFI rkyv V2 심볼이 등록된 패키지로 동작하는지 검증한다 —
+    /// 소비자마다 복제하던 패닉 가드+버퍼 프로토콜의 단일 구현.
+    /// (전역 PACKAGE OnceLock 을 다른 FFI 테스트와 공유하므로, 여기서는
+    /// 심볼의 정상 경로만 검증한다 — trust_baseline_ffi.rs 가 나머지 계약을
+    /// 담당한다.)
+    #[test]
+    fn core_rkyv_v2_ffi_symbol_dispatches() {
+        let pkg = Package::builder("test.wb")
+            .command("double", |args: serde_json::Value| {
+                Ok::<_, RustraError>(serde_json::json!(args["v"].as_i64().unwrap_or(0) * 2))
+            })
+            .build();
+        pkg.register_ffi();
+        // command_id 1 번 프레임: [cmd_id u16][pad 6][postcard payload]
+        let mut payload = [0u8; 8];
+        payload[0..2].copy_from_slice(&1u16.to_le_bytes());
+        let mut out_len = 0usize;
+        let ptr = unsafe {
+            crate::ffi::rustra_ffi_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+        };
+        // 전역 패키지가 다른 테스트의 것일 수 있다(OnceLock 선점) — 어느 쪽이든
+        // 심볼이 유효한 프레임을 반환하는지만 검증한다(에러 프레임도 ok=0 헤더를
+        // 가진다). null/빈 응답이 아니면 심블의 계약은 성립이다.
+        assert!(
+            out_len >= 10,
+            "rkyv V2 frame must have 10-byte header, got {out_len}"
+        );
+        if !ptr.is_null() {
+            let bytes = unsafe { std::slice::from_raw_parts(ptr, out_len) };
+            assert!(bytes[0] == 0 || bytes[0] == 1, "ok flag must be 0 or 1");
+            unsafe { crate::ffi::rustra_ffi_free(ptr, out_len) };
+        }
     }
 }

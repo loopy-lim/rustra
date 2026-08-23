@@ -294,7 +294,7 @@ where
         Err(payload) => FfiResponse {
             ok: false,
             result: None,
-            error: Some(format!("internal: panic — {}", panic_message(&*payload))),
+            error: Some(panic_frame_message(&*payload)),
         },
     };
     alloc_response(serialize(&resp), out_len)
@@ -415,6 +415,69 @@ fn run_worker(
     }
 }
 
+// ── async 워커 풀 (백프레셔 포함) ────────────────────────────
+//
+// 호출당 `std::thread::spawn` 은 burst 시 스레드 폭증(fd 고갈, 스케줄 지연)을
+// 일으킨다. 이 풀은 고정 크기 워커 + bounded 채널로 대체한다 — 큐가 가득 차면
+// 즉시 `invoke.backpressure` 에러 프레임으로 거부해 호출자(JsPromise)가 hang
+// 없이 실패한다.
+
+/// 워커 수 — RN/임베디드 호스트의 과도한 스레드 생성을 막는 고정 상수.
+/// 코어 수 기반 스케일링은 호스트 런타임과 조율이 필요해 과잉 — 2로 시작해
+/// 필요 시 노출한다.
+const ASYNC_POOL_SIZE: usize = 2;
+/// 큐 깊이 — 이 이상의 백로그는 backpressure 로 즉시 거부한다.
+const ASYNC_QUEUE_DEPTH: usize = 256;
+
+type AsyncJob = (
+    u64,
+    Vec<u8>,
+    usize,
+    Option<unsafe extern "C" fn(*mut c_void, *mut u8, usize)>,
+    unsafe extern "C" fn(*const u8, usize, *mut usize) -> *mut u8,
+    fn(&FfiResponse) -> Vec<u8>,
+);
+
+fn async_pool() -> &'static Mutex<std::sync::mpsc::SyncSender<AsyncJob>> {
+    static POOL: OnceLock<Mutex<std::sync::mpsc::SyncSender<AsyncJob>>> = OnceLock::new();
+    POOL.get_or_init(|| {
+        let (tx, rx) = std::sync::mpsc::sync_channel::<AsyncJob>(ASYNC_QUEUE_DEPTH);
+        // 수신자를 Arc 로 공유해 각 워커가 lock-recv 로 잡는다 — Mutex 가 잠기는
+        // 동안 다른 워커는 대기하지만 recv 자체가 블로킹이라 실제 경합은 짧다.
+        let rx = std::sync::Arc::new(Mutex::new(rx));
+        for _ in 0..ASYNC_POOL_SIZE {
+            let rx = std::sync::Arc::clone(&rx);
+            std::thread::spawn(move || {
+                loop {
+                    let job = {
+                        let guard = rx.lock().unwrap_or_else(|p| p.into_inner());
+                        guard.recv()
+                    };
+                    match job {
+                        Ok((id, bytes, user_data_raw, on_complete, invoke_fn, serialize)) => {
+                            run_worker(id, bytes, user_data_raw, on_complete, invoke_fn, serialize);
+                        }
+                        Err(_) => break, // 송신자 전원 해제(프로세스 종료) — 워커 종료
+                    }
+                }
+            });
+        }
+        Mutex::new(tx)
+    })
+}
+
+/// 풀에 작업을 제출한다 — 큐가 가득 차면 Err(백프레셔). 호출자는
+/// `invoke.backpressure` 프레임으로 정규화한다.
+fn async_pool_submit(job: AsyncJob) -> Result<(), AsyncJob> {
+    let tx = async_pool()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    tx.try_send(job).map_err(|e| match e {
+        std::sync::mpsc::TrySendError::Full(job) => job,
+        std::sync::mpsc::TrySendError::Disconnected(job) => job,
+    })
+}
+
 /// `rustra_ffi_invoke` 의 디폴트 포맷 디스패치를 그대로 따르는 직렬화기 —
 /// [`run_worker`] 의 cancelled 프레임이 실제 dispatch 경로와 동일한
 /// 포맷(JSON/postcard)으로 인코딩되도록 한다. `None => Json` 기본값은
@@ -513,46 +576,66 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json_into(
     capacity: usize,
     out_len: *mut usize,
 ) -> usize {
-    if payload.is_null() || out_len.is_null() {
+    if out_len.is_null() {
+        return usize::MAX;
+    }
+    if payload.is_null() {
         unsafe { *out_len = 0 };
         return usize::MAX;
     }
     // size-probe: 임시 할당을 피하기 위해 실제 직렬화 결과 크기가 필요하다.
     // dispatch 를 한 번 실행하고 결과를 직접 caller 버퍼(또는 임시 Vec)에 쓴다.
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
-    let response: Vec<u8> = if payload_len > max_payload_bytes() {
-        let e = crate::RustraError::payload_too_large(payload_len, max_payload_bytes());
-        json_serialize(&err_frame(&e.to_string()))
-    } else {
-        match json_deserialize_envelope(bytes) {
-            Ok(env) => {
-                // 패닉 가드는 기존 경로와 동일 — dispatch_json 이 패닉하면
-                // 에러 프레임으로 변환한다.
-                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    dispatch_json(&env.command, env.args)
-                }));
-                match result {
-                    Ok(resp) => json_serialize(&resp),
-                    Err(panic) => {
-                        let msg = panic_message(panic.as_ref());
-                        json_serialize(&err_frame(&format!("panic in handler: {msg}")))
-                    }
-                }
-            }
-            Err(e) => json_serialize(&err_frame(&e)),
-        }
+
+    if buf.is_null() {
+        // probe 단계 — 결과를 키와 함께 캐시해 이어지는 write 단계가 dispatch 를
+        // 재실행하지 않게 한다(비멱등 핸들러의 사이드 이펙트 2회 방지).
+        let resp = dispatch_into_bytes(bytes);
+        unsafe { *out_len = resp.len() };
+        json_probe_cache_store(bytes, resp);
+        return 0;
+    }
+
+    // write 단계 — 같은 payload 의 probe 결과가 있으면 재사용(핸들러 1회
+    // 실행 보장), 없으면(호출자가 probe 없이 바로 write) dispatch 를 실행한다.
+    let response = match json_probe_cache_take(bytes) {
+        Some(cached) => cached,
+        None => dispatch_into_bytes(bytes),
     };
 
     let needed = response.len();
     unsafe { *out_len = needed };
-    if buf.is_null() {
-        return 0; // size-probe 완료
-    }
     if capacity < needed {
+        // 호출자가 작은 버퍼로 재시도해도 probe 결과를 잃지 않는다. 다음 write가
+        // 같은 응답을 소비하므로 비멱등 핸들러는 여전히 정확히 1회만 실행된다.
+        json_probe_cache_store(bytes, response);
         return usize::MAX; // 버퍼 부족 — 다시 probe 하라
     }
     unsafe { std::ptr::copy_nonoverlapping(response.as_ptr(), buf, needed) };
     needed
+}
+
+/// caller-buffer 경로의 dispatch — payload 검사/디코딩/패닉 가드를
+/// `rustra_ffi_invoke_json` 과 동일하게 수행하고 응답 바이트를 반환한다.
+fn dispatch_into_bytes(bytes: &[u8]) -> Vec<u8> {
+    if bytes.len() > max_payload_bytes() {
+        let e = crate::RustraError::payload_too_large(bytes.len(), max_payload_bytes());
+        return json_serialize(&err_frame(&e.to_string()));
+    }
+    match json_deserialize_envelope(bytes) {
+        Ok(env) => {
+            // 패닉 가드는 기존 경로와 동일(`with_panic_guard` 와 같은 메시지
+            // 포맷) — dispatch_json 이 패닉하면 에러 프레임으로 변환한다.
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                dispatch_json(&env.command, env.args)
+            }));
+            match result {
+                Ok(resp) => json_serialize(&resp),
+                Err(panic) => json_serialize(&err_frame(&panic_frame_message(panic.as_ref()))),
+            }
+        }
+        Err(e) => json_serialize(&err_frame(&e)),
+    }
 }
 
 /// 에러 응답 프레임 직렬화 공용 헬퍼 — `err_response` 는 FFI 버퍼 할당 경로라
@@ -563,6 +646,75 @@ fn err_frame(msg: &str) -> FfiResponse {
         result: None,
         error: Some(msg.to_string()),
     }
+}
+
+/// 패닉을 단일 포맷의 에러 프레임 메시지로 정규화한다 — `with_panic_guard` 와
+/// caller-buffer 경로가 공유한다. 호스트 측 파서가 prefix 로 분류하므로 포맷이
+/// 경로별로 갈라지면 안 된다 (과거 "internal: panic — …" / "panic in handler: …"
+/// 두 종류가 공존했다).
+fn panic_frame_message(payload: &(dyn std::any::Any + Send)) -> String {
+    format!("internal: panic — {}", panic_message(payload))
+}
+
+/// caller-buffer size-probe 결과의 1회 실행 캐시.
+///
+/// probe(buf=null) → write(buf) 2단계 프로토콜에서 각 단계가 dispatch 를
+/// 재실행하면 비멱등 핸들러(카운터 증가, 결제)의 사이드 이펙트가 2번 발생한다.
+/// probe 가 직렬화한 응답을 여기 보관하면 이어지는 write 호출이 dispatch 없이
+/// 같은 바이트를 caller 버퍼에 복사한다. 단일 호출 흐름(probe 직후 write)을
+/// 전제로 마지막 1건만 보관한다 — probe 후 다른 명령을 probe 하면 이전 캐시는
+/// 덮어써진다(잘못된 응답 재사용 없음).
+///
+/// 보관된 probe 결과를 꺼낸다(소비). 해시가 아니라 요청 바이트 전체를 비교해
+/// 충돌로 다른 명령의 응답이 전달될 가능성을 없앤다. JSON/rkyv V2 슬롯도
+/// 분리해 한 API의 probe가 다른 API의 캐시를 덮어쓰지 않는다.
+struct ProbeCacheEntry {
+    request: Vec<u8>,
+    response: Vec<u8>,
+}
+
+fn probe_cache_take(
+    cache: &'static std::thread::LocalKey<std::cell::RefCell<Option<ProbeCacheEntry>>>,
+    payload: &[u8],
+) -> Option<Vec<u8>> {
+    cache.with(|slot| {
+        let entry = slot.borrow_mut().take()?;
+        (entry.request == payload).then_some(entry.response)
+    })
+}
+
+fn probe_cache_store(
+    cache: &'static std::thread::LocalKey<std::cell::RefCell<Option<ProbeCacheEntry>>>,
+    payload: &[u8],
+    response: Vec<u8>,
+) {
+    cache.with(|slot| {
+        *slot.borrow_mut() = Some(ProbeCacheEntry {
+            request: payload.to_vec(),
+            response,
+        });
+    });
+}
+
+fn json_probe_cache_take(payload: &[u8]) -> Option<Vec<u8>> {
+    probe_cache_take(&JSON_PROBE_CACHE, payload)
+}
+
+fn json_probe_cache_store(payload: &[u8], response: Vec<u8>) {
+    probe_cache_store(&JSON_PROBE_CACHE, payload, response);
+}
+
+fn rkyv_probe_cache_take(payload: &[u8]) -> Option<Vec<u8>> {
+    probe_cache_take(&RKYV_V2_PROBE_CACHE, payload)
+}
+
+fn rkyv_probe_cache_store(payload: &[u8], response: Vec<u8>) {
+    probe_cache_store(&RKYV_V2_PROBE_CACHE, payload, response);
+}
+
+thread_local! {
+    static JSON_PROBE_CACHE: std::cell::RefCell<Option<ProbeCacheEntry>> = const { std::cell::RefCell::new(None) };
+    static RKYV_V2_PROBE_CACHE: std::cell::RefCell<Option<ProbeCacheEntry>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Postcard binary path.
@@ -637,22 +789,45 @@ pub unsafe extern "C" fn rustra_ffi_invoke_async(
         unsafe { *invocation_id = id };
     }
     let user_data_raw = user_data as usize;
+    // 크기 게이트를 복사 전에 검사한다 — 초과 페이로드를 일단 복사해 메모리가
+    // 일시적으로 2배가 되던 동작(주석이 스스로 인정하던 문제)을 제거한다.
+    if payload_len > max_payload_bytes() {
+        let e = crate::RustraError::payload_too_large(payload_len, max_payload_bytes());
+        deliver_spawn_failure(
+            id,
+            user_data_raw,
+            on_complete,
+            sync_serialize,
+            &e.to_string(),
+        );
+        return;
+    }
     let bytes = if payload.is_null() || payload_len == 0 {
         Vec::new()
     } else {
         unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
     };
 
-    std::thread::spawn(move || {
-        run_worker(
+    // 고정 워커 풀로 제출(백프레셔 포함) — 호출당 thread::spawn 의 스레드 폭증을
+    // 방지한다. 큐가 가득 차면 즉시 backpressure 프레임으로 거부한다(hang 없음).
+    if async_pool_submit((
+        id,
+        bytes,
+        user_data_raw,
+        on_complete,
+        rustra_ffi_invoke,
+        sync_serialize,
+    ))
+    .is_err()
+    {
+        deliver_spawn_failure(
             id,
-            bytes,
             user_data_raw,
             on_complete,
-            rustra_ffi_invoke,
             sync_serialize,
+            "invoke.backpressure: async worker queue is full — retry after drain",
         );
-    });
+    }
 }
 
 /// Async JSON FFI invoke entry point.
@@ -681,22 +856,64 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json_async(
         unsafe { *invocation_id = id };
     }
     let user_data_raw = user_data as usize;
+    // 크기 게이트를 복사 전에 검사한다(위 async 엔트리와 동일).
+    if payload_len > max_payload_bytes() {
+        let e = crate::RustraError::payload_too_large(payload_len, max_payload_bytes());
+        deliver_spawn_failure(
+            id,
+            user_data_raw,
+            on_complete,
+            json_serialize,
+            &e.to_string(),
+        );
+        return;
+    }
     let bytes = if payload.is_null() || payload_len == 0 {
         Vec::new()
     } else {
         unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
     };
 
-    std::thread::spawn(move || {
-        run_worker(
+    if async_pool_submit((
+        id,
+        bytes,
+        user_data_raw,
+        on_complete,
+        rustra_ffi_invoke_json,
+        json_serialize,
+    ))
+    .is_err()
+    {
+        deliver_spawn_failure(
             id,
-            bytes,
             user_data_raw,
             on_complete,
-            rustra_ffi_invoke_json,
             json_serialize,
+            "invoke.backpressure: async worker queue is full — retry after drain",
         );
-    });
+    }
+}
+
+/// async 엔트리에서 워커 spawn 에 실패했을 때 완료를 에러 프레임으로 전달한다.
+///
+/// `run_worker` 의 완료 경로(complete_invocation → on_complete)를 동일하게
+/// 밟는다 — 호출자의 콜백 계약(정확히 1회 호출, 버퍼는 rustra_ffi_free 로
+/// 해제)이 유지되고 레지스트리 엔트리도 정리된다.
+fn deliver_spawn_failure(
+    id: u64,
+    user_data_raw: usize,
+    on_complete: Option<unsafe extern "C" fn(*mut c_void, *mut u8, usize)>,
+    serialize: fn(&FfiResponse) -> Vec<u8>,
+    message: &str,
+) {
+    let frame = err_frame(message);
+    let bytes = serialize(&frame);
+    let mut out_len = bytes.len();
+    let ptr = alloc_response(bytes, &mut out_len);
+    crate::cancel::complete_invocation(id);
+    if let Some(cb) = on_complete {
+        unsafe { cb(user_data_raw as *mut c_void, ptr, out_len) };
+    }
 }
 
 /// 진행 중인 async 호출을 취소한다 (협력적).
@@ -819,8 +1036,191 @@ pub unsafe extern "C" fn rustra_ffi_free(ptr: *mut u8, _len: usize) {
     }
 }
 
-/// 현재 등록된 패키지의 라이브 스키마를 JSON 바이트로 반환한다 (정적 + 동적 명령).
-/// 반환 버퍼는 `rustra_ffi_free` 로 해제. 읽기 전용 — debug/release 모두 사용 가능.
+/// rkyv V2 바이너리 와이어 진입점 — command_id(u16) 기반 dispatch.
+///
+/// 소비자마다 패닉 가드+버퍼 프로토콜을 복제해 구현하던 것(examples/calculator 의
+/// `rustra_calculator_invoke_rkyv_v2` 등)을 코어가 대신 제공한다. 응답은
+/// [`crate::encode_rkyv_v2_error`] 와 동일한 와이어(성공 시 ok=1 + postcard body).
+/// 패닉은 `with_panic_guard` 계약대로 internal 에러 프레임으로 정규화된다.
+///
+/// # Safety
+///
+/// `payload` must point to at least `payload_len` readable bytes.
+/// `out_len` must be a valid write pointer.
+/// Caller must free the returned buffer with `rustra_ffi_free`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2(
+    payload: *const u8,
+    payload_len: usize,
+    out_len: *mut usize,
+) -> *mut u8 {
+    if payload.is_null() || out_len.is_null() {
+        return std::ptr::null_mut();
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
+    let resp = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        get_package()
+            .ok_or_else(|| {
+                crate::RustraError::custom("ffi.not_registered", "package not registered")
+            })
+            .and_then(|pkg| pkg.invoke_rkyv_v2(bytes))
+    })) {
+        Ok(Ok(bytes)) => bytes,
+        Ok(Err(error)) => crate::encode_rkyv_v2_error(&error),
+        Err(panic) => {
+            crate::encode_rkyv_v2_error(&crate::RustraError::internal(panic_frame_message(&*panic)))
+        }
+    };
+    alloc_response(resp, out_len)
+}
+
+/// rkyv V2 caller-buffer 변형 — JSI typed fast path 의 malloc→memcpy→free
+/// 사이클 제거 경로.
+///
+/// `buf` 가 null 이면 필요한 응답 크기를 `out_len` 에 쓰고 0을 반환한다
+/// (size-probe). `buf` 가 non-null 이면 응답을 `buf` 에 직접 기록하고 기록한
+/// 바이트 수를 반환한다 — Rust 는 코어 FFI 레이아웃 버퍼를 할당하지 않는다.
+/// 버퍼가 부족하면 `usize::MAX` 를 반환한다(재probe 신호).
+///
+/// probe → write 사이의 핸들러 1회 실행 보장은 JSON caller-buffer
+/// ([`rustra_ffi_invoke_json_into`]) 와 동일한 probe 캐시를 공유하지 않는다 —
+/// rkyv V2 와이어는 payload 가 바이너리 프레임이라 JSON 캐시 키와 다르다.
+/// 대신 동일한 thread-local 슬롯(rkyv V2 전용)로 probe 결과를 재사용한다.
+///
+/// # Safety
+///
+/// `payload` must point to at least `payload_len` readable bytes.
+/// `buf`, when non-null, must point to at least `capacity` writable bytes.
+/// `out_len` must be a valid write pointer.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2_into(
+    payload: *const u8,
+    payload_len: usize,
+    buf: *mut u8,
+    capacity: usize,
+    out_len: *mut usize,
+) -> usize {
+    if out_len.is_null() {
+        return usize::MAX;
+    }
+    if payload.is_null() {
+        unsafe { *out_len = 0 };
+        return usize::MAX;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
+
+    if buf.is_null() {
+        let resp = rkyv_v2_dispatch_bytes(bytes);
+        unsafe { *out_len = resp.len() };
+        rkyv_probe_cache_store(bytes, resp);
+        return 0;
+    }
+
+    let response = match rkyv_probe_cache_take(bytes) {
+        Some(cached) => cached,
+        None => rkyv_v2_dispatch_bytes(bytes),
+    };
+
+    let needed = response.len();
+    unsafe { *out_len = needed };
+    if capacity < needed {
+        rkyv_probe_cache_store(bytes, response);
+        return usize::MAX; // 버퍼 부족 — 재probe 신호
+    }
+    unsafe { std::ptr::copy_nonoverlapping(response.as_ptr(), buf, needed) };
+    needed
+}
+
+/// rkyv V2 caller-buffer 경로의 dispatch — 패닉 가드 포함, 응답 바이트 반환.
+fn rkyv_v2_dispatch_bytes(bytes: &[u8]) -> Vec<u8> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        get_package()
+            .ok_or_else(|| {
+                crate::RustraError::custom("ffi.not_registered", "package not registered")
+            })
+            .and_then(|pkg| pkg.invoke_rkyv_v2(bytes))
+    })) {
+        Ok(Ok(bytes)) => bytes,
+        Ok(Err(error)) => crate::encode_rkyv_v2_error(&error),
+        Err(panic) => {
+            crate::encode_rkyv_v2_error(&crate::RustraError::internal(panic_frame_message(&*panic)))
+        }
+    }
+}
+
+/// rkyv V2 비동기 진입점 — [`rustra_ffi_invoke_async`] 와 동일한 계약
+/// (invocation_id 발급, 워커 스레드 dispatch, cancel 체크포인트, complete 후
+/// on_complete 1회)을 rkyv V2 와이어로 제공한다.
+///
+/// # Safety
+///
+/// - `payload` must point to `payload_len` valid bytes (or null if len 0).
+/// - `on_complete` must be a thread-safe C callback function pointer.
+/// - `invocation_id` must be null or a valid u64 write pointer (out-param).
+/// - The caller must free `response_ptr` using `rustra_ffi_free`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2_async(
+    payload: *const u8,
+    payload_len: usize,
+    user_data: *mut c_void,
+    on_complete: Option<unsafe extern "C" fn(*mut c_void, *mut u8, usize)>,
+    invocation_id: *mut u64,
+) {
+    let id = crate::cancel::register_invocation();
+    if !invocation_id.is_null() {
+        unsafe { *invocation_id = id };
+    }
+    let user_data_raw = user_data as usize;
+    if payload_len > max_payload_bytes() {
+        let e = crate::RustraError::payload_too_large(payload_len, max_payload_bytes());
+        deliver_spawn_failure(
+            id,
+            user_data_raw,
+            on_complete,
+            rkyv_error_bytes,
+            &e.to_string(),
+        );
+        return;
+    }
+    let bytes = if payload.is_null() || payload_len == 0 {
+        Vec::new()
+    } else {
+        unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
+    };
+
+    if async_pool_submit((
+        id,
+        bytes,
+        user_data_raw,
+        on_complete,
+        rustra_ffi_invoke_rkyv_v2,
+        rkyv_error_bytes,
+    ))
+    .is_err()
+    {
+        deliver_spawn_failure(
+            id,
+            user_data_raw,
+            on_complete,
+            rkyv_error_bytes,
+            "invoke.backpressure: async worker queue is full — retry after drain",
+        );
+    }
+}
+
+/// rkyv V2 에러를 postcard 가 아닌 코어 에러 인코더로 감싸는 serialize 어댑터 —
+/// `run_worker`/`deliver_spawn_failure` 는 `fn(&FfiResponse) -> Vec<u8>` 를
+/// 기대하지만 rkyv V2 경로는 RustraError 를 직접 인코딩한다. 에러 문자열을
+/// FfiResponse.error 에 실으면 수신측(JSON 파서)이 아니라 rkyv V2 디코더가
+/// 읽는다 — run_worker 는 `invoke_fn` 이 반환한 버퍼를 그대로 on_complete 로
+/// 전달하므로 이 어댑터는 에러 프레임만 만들면 된다.
+fn rkyv_error_bytes(resp: &FfiResponse) -> Vec<u8> {
+    let error = crate::RustraError::custom(
+        "invoke.failed",
+        resp.error.as_deref().unwrap_or("invoke failed"),
+    );
+    crate::encode_rkyv_v2_error(&error)
+}
 ///
 /// # Safety
 ///
@@ -1049,6 +1449,102 @@ impl Package {
     }
 }
 
+// ── 채널 FFI (타입 패리티 2단계 — Tauri ipc::Channel 모델) ──────────────
+// 호스트(C++ JSI 등)가 채널 핸들을 발급/해제하고, Rust 커맨드 핸들러가
+// `rustra_ffi_channel_send` 로 호출 귀속 역방향 스트림을 흘린다.
+// 이벤트 싱크(브로드캐스트)와 달리 채널은 유니캐스트 회신이다 —
+// crates/rustra/src/channels.rs 의 계약 문서 참고.
+
+/// 호스트 채널 수신 콜백 — `rustra_ffi_channel_create` 로 등록한다.
+///
+/// `handle` 는 발급 시 부여된 채널 번호(호스트가 핸들별 JS 콜백을 찾는 키),
+/// `payload` 는 NUL 종결 C 문자열(JSON — 이벤트 싱크와 동일 인코딩).
+/// 채널은 C-unwind 가 아니라 C ABI 다: `channels::ChannelHost::send` 가
+/// 콜백 패닉을 잡아 무시하므로 호스트 콜백은 unwind 하지 않아도 된다.
+pub type FfiChannelCallback =
+    unsafe extern "C" fn(user_data: *mut c_void, handle: u32, payload: *const c_char);
+
+/// FFI 채널 콜백 래퍼 — `FfiEventSink` 와 동일하게 호스트 소유 원시
+/// 포인터를 값으로만 옮긴다(역참조 없음 → `Send + Sync` 선언 안전).
+struct FfiChannelSink {
+    callback: FfiChannelCallback,
+    handle: u32,
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    user_data: *mut c_void,
+}
+
+unsafe impl Send for FfiChannelSink {}
+unsafe impl Sync for FfiChannelSink {}
+
+impl FfiChannelSink {
+    fn invoke(&self, payload: &str) {
+        let Ok(payload_c) = std::ffi::CString::new(payload) else {
+            return; // 내부 NUL — 이벤트 싱크와 동일하게 소실(로그 없음, 채널은 유니캐스트)
+        };
+        unsafe { (self.callback)(self.user_data, self.handle, payload_c.as_ptr()) };
+    }
+}
+
+/// 호스트 채널을 등록하고 새 핸들(≥1, 단조 증가)을 반환한다.
+///
+/// 커맨드 인자 `ChannelHandle(u32)` 로 이 값을 JS 에서 전달한다. 콜백의
+/// 두 번째 인자로 이 핸들이 다시 전달되므로 호스트는 핸들→JS 콜백
+/// 룩업만 하면 된다.
+///
+/// # Safety
+///
+/// `callback` 은 유효한 함수 포인터, `user_data` 는 호스트 소유(해제 책임은
+/// 호스트에 있다 — `rustra_ffi_channel_drop` 이 user_data 를 건드리지
+/// 않는다). 반환된 핸들은 `rustra_ffi_channel_drop` 전까지 유효하다.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_channel_create(
+    callback: FfiChannelCallback,
+    user_data: *mut c_void,
+) -> u32 {
+    // 두 단계: 핸들 선발급 → 핸들을 캡처한 콜백 등록. register_channel 이
+    // 핸들을 반환하므로 sink 생성 시점에 번호가 필요하다(선발급 후 insert).
+    let host = crate::channels::host();
+    let handle = host.reserve_handle();
+    let sink = std::sync::Arc::new(FfiChannelSink {
+        callback,
+        handle,
+        user_data,
+    });
+    let sender: crate::channels::ChannelSender =
+        std::sync::Arc::new(move |payload: &str| sink.invoke(payload));
+    host.register_channel_with_handle(handle, sender);
+    handle
+}
+
+/// 채널로 JSON 페이로드를 흘린다. 핸들이 유효하면 1(도달), 만료/미등록이면 0.
+///
+/// # Safety
+///
+/// `payload` 는 NUL 종결 문자열. 이 함수 자체는 안전하다(조용한 bool 반환).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_channel_send(handle: u32, payload: *const c_char) -> i32 {
+    let payload = if payload.is_null() {
+        String::new()
+    } else {
+        // Safety: caller guarantees NUL-terminated readable string.
+        unsafe { std::ffi::CStr::from_ptr(payload) }
+            .to_string_lossy()
+            .into_owned()
+    };
+    i32::from(crate::channels::host().send(handle, &payload))
+}
+
+/// 채널을 해제한다(호출 완료/취소 시). 성공 해제면 1, 없으면 0. 이후
+/// 동일 핸들 send 는 0 — 핸들 번호는 재사용되지 않는다.
+///
+/// # Safety
+///
+/// 이 함수 자체는 안전하다.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_channel_drop(handle: u32) -> i32 {
+    i32::from(crate::channels::host().drop_channel(handle))
+}
+
 // -- Tests ---------------------------------------------------------------
 
 #[cfg(test)]
@@ -1064,6 +1560,53 @@ mod tests {
                 Ok::<_, crate::RustraError>(serde_json::json!(a + b))
             })
             .build()
+    }
+
+    /// 채널 FFI 왕복 — C ABI 콜백으로 등록한 핸들에 send 가 도달하고,
+    /// drop 후에는 0(stale) 을 반환한다. 핸들 공간은 전역이므로 각 테스트가
+    /// 서로 독립된 핸들을 쓴다(단조 증가 보장). 콜백 두 번째 인자(handle)로
+    /// 발급 번호가 그대로 회신되는 것도 함께 검증한다.
+    #[test]
+    fn ffi_channel_round_trip() {
+        use std::sync::Mutex;
+        use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
+
+        static HITS: AtomicUsize = AtomicUsize::new(0);
+        static SEEN: Mutex<Vec<(u32, String)>> = Mutex::new(Vec::new());
+        static GOT_HANDLE: AtomicU32 = AtomicU32::new(0);
+
+        unsafe extern "C" fn cb(_ud: *mut c_void, handle: u32, payload: *const c_char) {
+            HITS.fetch_add(1, Ordering::Relaxed);
+            GOT_HANDLE.store(handle, Ordering::Relaxed);
+            let s = unsafe { std::ffi::CStr::from_ptr(payload) }
+                .to_string_lossy()
+                .into_owned();
+            SEEN.lock().unwrap().push((handle, s));
+        }
+
+        let handle = unsafe { rustra_ffi_channel_create(cb, std::ptr::null_mut()) };
+        assert!(handle >= 1, "핸들은 1부터 단조 증가");
+
+        let sent = unsafe {
+            let c = std::ffi::CString::new(r#"{"step":1,"of":2}"#).unwrap();
+            rustra_ffi_channel_send(handle, c.as_ptr())
+        };
+        assert_eq!(sent, 1);
+        assert_eq!(HITS.load(Ordering::Relaxed), 1);
+        // 콜백 회신 handle == 발급 handle — 호스트가 핸들→JS 콜백 룩업의 키.
+        assert_eq!(GOT_HANDLE.load(Ordering::Relaxed), handle);
+        assert_eq!(SEEN.lock().unwrap()[0].1, r#"{"step":1,"of":2}"#);
+
+        // drop 후 stale send 는 0 — 콜백 미도달.
+        assert_eq!(unsafe { rustra_ffi_channel_drop(handle) }, 1);
+        let stale = unsafe {
+            let c = std::ffi::CString::new("x").unwrap();
+            rustra_ffi_channel_send(handle, c.as_ptr())
+        };
+        assert_eq!(stale, 0);
+        assert_eq!(HITS.load(Ordering::Relaxed), 1, "stale send 는 콜백 미도달");
+        // double drop 은 0.
+        assert_eq!(unsafe { rustra_ffi_channel_drop(handle) }, 0);
     }
 
     #[test]

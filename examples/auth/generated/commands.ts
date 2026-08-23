@@ -1,20 +1,24 @@
 import type { AdminStatsInput, AdminStatsOutput, GrantInput, GrantOutput, SignInInput, SignInOutput, SignOutInput, SignOutOutput } from './types.js';
-import { invoke } from '@rustra/types';
+import { invokeGenerated } from '@rustra/types';
 import type { InvokeOptions } from '@rustra/types';
 
 export function adminStats(input: AdminStatsInput, options?: InvokeOptions): Promise<AdminStatsOutput> {
-  return invoke<AdminStatsOutput>('adminStats', input, options);
+  return invokeGenerated<AdminStatsOutput>(4, 'adminStats', input, options);
 }
+adminStats.commandId = 'adminStats';
 
 export function grant(input: GrantInput, options?: InvokeOptions): Promise<GrantOutput> {
-  return invoke<GrantOutput>('grant', input, options);
+  return invokeGenerated<GrantOutput>(3, 'grant', input, options);
 }
+grant.commandId = 'grant';
 
 export function signIn(input: SignInInput, options?: InvokeOptions): Promise<SignInOutput> {
-  return invoke<SignInOutput>('signIn', input, options);
+  return invokeGenerated<SignInOutput>(1, 'signIn', input, options);
 }
+signIn.commandId = 'signIn';
 
 export function signOut(input: SignOutInput, options?: InvokeOptions): Promise<SignOutOutput> {
-  return invoke<SignOutOutput>('signOut', input, options);
+  return invokeGenerated<SignOutOutput>(2, 'signOut', input, options);
 }
+signOut.commandId = 'signOut';
 

@@ -10,10 +10,10 @@ rustra 패키지를 Node.js 네이티브 애드온(napi-rs)으로 래핑하는 �
 
 ```bash
 # 디버그 빌드
-npm run build:debug
+bun run build:debug
 
 # 릴리스 빌드
-npm run build
+bun run build
 ```
 
 ## 예시가 보여주는 것
@@ -24,11 +24,11 @@ npm run build
 
 ## 핵심 파일
 
-| 파일 | 설명 |
-|------|------|
+| 파일         | 설명                                           |
+| ------------ | ---------------------------------------------- |
 | `src/lib.rs` | `#[napi]` 속성으로 `rustra_invoke` 함수를 노출 |
-| `build.rs` | napi-rs 빌드 설정 |
-| `Cargo.toml` | `cdylib` 크레이트 타입, napi 의존성 |
+| `build.rs`   | napi-rs 빌드 설정                              |
+| `Cargo.toml` | `cdylib` 크레이트 타입, napi 의존성            |
 
 ## 생성된 함수
 
@@ -42,5 +42,5 @@ const result = rustraInvoke('addNumbers', JSON.stringify({ a: 20, b: 22 }));
 ## 사전 요구사항
 
 - Rust 툴체인
-- `@napi-rs/cli` (npm 스크립트로 자동 설치됨)
+- `@napi-rs/cli` (Bun 스크립트로 자동 설치됨)
 - `rustra-calculator-example` 패키지 (같은 워크스페이스 내)

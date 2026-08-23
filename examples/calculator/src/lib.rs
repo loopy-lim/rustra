@@ -307,7 +307,157 @@ pub fn emit_demo(input: EmitDemoInput) -> Result<EmitDemoOutput> {
     Ok(EmitDemoOutput { emitted: ticks + 1 })
 }
 
-// ── Runtime registry demo (debug-only dynamic mutation) ─────────────
+// ── 확장 타입 명령 (2026-08-22 fast-path 타입 확장) ────────────────
+// postcard 코덱의 uvar(u32/u64), 동적 맵, 튜플, Vec<u8> 와이어를
+// TS 코드젠·C++ JSI 코드젠·Rust 엔진 3면에서 고정한다.
+// probe 실측 계약:
+// - u32=70000 → [240,162,4] plain varint (zigzag 아님)
+// - map{a:1,b:2} → [2, 1,98,4, 1,97,2] count+(key,value)*
+// - tuple("hi",-5) → [2,104,105,9] 무접두 나열
+// - vec![1,2,3] u8 → [3,1,2,3] len+raw
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SizeOfInput {
+    pub data: Vec<u8>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SizeOfOutput {
+    pub checksum: u32,
+    pub len: u32,
+}
+
+/// Vec<u8>(postcard bytes) 입력 + u32 출력 — plain varint 와이어 고정.
+#[command]
+pub fn size_of(input: SizeOfInput) -> Result<SizeOfOutput> {
+    let checksum = input.data.iter().map(|b| *b as u32).sum::<u32>();
+    Ok(SizeOfOutput {
+        checksum,
+        len: input.data.len() as u32,
+    })
+}
+
+// ── Framework comparison fixtures ────────────────────────────────
+// Nitro Modules 비교 전용 명령. 양쪽 구현이 같은 JS 객체 모양, 같은 연산,
+// 같은 반환 모양을 사용하도록 제품 예제 명령(greet/sizeOf/createItem)과 분리한다.
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BenchAddInput {
+    pub a: f64,
+    pub b: f64,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BenchAddOutput {
+    pub value: f64,
+}
+
+#[command]
+pub fn bench_add(input: BenchAddInput) -> Result<BenchAddOutput> {
+    Ok(BenchAddOutput {
+        value: input.a + input.b,
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BenchStringPayload {
+    pub value: String,
+}
+
+#[command]
+pub fn bench_echo_string(input: BenchStringPayload) -> Result<BenchStringPayload> {
+    Ok(input)
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BenchBytesPayload {
+    pub data: Vec<u8>,
+}
+
+#[command]
+pub fn bench_echo_bytes(input: BenchBytesPayload) -> Result<BenchBytesPayload> {
+    Ok(input)
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct BenchPairPayload {
+    pub name: String,
+    pub value: f64,
+}
+
+#[command]
+pub fn bench_echo_pair(input: BenchPairPayload) -> Result<BenchPairPayload> {
+    Ok(input)
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScoreTotalInput {
+    pub scores: std::collections::HashMap<String, i64>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScoreTotalOutput {
+    pub count: u32,
+    pub total: i64,
+}
+
+/// HashMap<String, i64>(동적 맵) — count + (key,value)* 와이어 고정.
+#[command]
+pub fn score_total(input: ScoreTotalInput) -> Result<ScoreTotalOutput> {
+    Ok(ScoreTotalOutput {
+        count: input.scores.len() as u32,
+        total: input.scores.values().sum(),
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SpanInput {
+    pub pair: (String, i64),
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SpanOutput {
+    pub first: String,
+    pub second: i64,
+}
+
+/// (String, i64) 튜플 — 무접두 나열 와이어 고정.
+#[command]
+pub fn span(input: SpanInput) -> Result<SpanOutput> {
+    Ok(SpanOutput {
+        first: input.pair.0,
+        second: input.pair.1,
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GaugeInput {
+    pub limit: u64,
+    pub offset: u32,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GaugeOutput {
+    pub next: u64,
+}
+
+/// u64/u32 필드 — plain varint(uvar) 와이어 고정(과거 zigzag 버그 수정 증명).
+#[command]
+pub fn gauge(input: GaugeInput) -> Result<GaugeOutput> {
+    Ok(GaugeOutput {
+        next: input.limit + input.offset as u64,
+    })
+}
+
 // `rustraRegistryDemo` 는 빌드 시점에 등록되어 항상 호출 가능하며, 런타임에 live
 // package 를 mutate 한다. RN 이 사용하는 동일 FFI 경로(invoke_json)를 통해 동작하며,
 // mutation 사이에 rebuild 가 필요 없다. release 빌드에서는 frozen 이다.
@@ -537,7 +687,20 @@ pub fn calculator_package() -> Package {
                 divide,
                 emit_demo,
                 rustra_registry_demo,
-                secure_compute
+                secure_compute,
+                size_of,
+                score_total,
+                span,
+                gauge,
+                channel_demo,
+                resource_open,
+                resource_read,
+                resource_write,
+                resource_close,
+                bench_add,
+                bench_echo_string,
+                bench_echo_bytes,
+                bench_echo_pair
             )
             .require_capability("secureCompute", "compute:secure")
             .build();
@@ -591,6 +754,13 @@ mod linux_init {
 #[unsafe(no_mangle)]
 pub extern "C" fn rustra_calculator_init() {
     let _ = calculator_package();
+}
+
+/// 벤치마크용 최소 C ABI lower bound. 브리지/직렬화 비용은 포함하지 않으며
+/// `addNumbers`의 산술 연산과 동일한 값만 계산한다.
+#[unsafe(no_mangle)]
+pub extern "C" fn rustra_calculator_add_direct(a: i64, b: i64) -> i64 {
+    a + b
 }
 
 /// # Safety
@@ -1090,7 +1260,16 @@ pub unsafe extern "C" fn rustra_calculator_invoke_hybrid(
     alloc_response(resp_bytes.to_vec(), out_len)
 }
 
-/// rkyv v2: command_id (u16) based request — generic dispatch via Package::invoke_rkyv_v2()
+/// rkyv v2: command_id (u16) based request — 코어 `rustra_ffi_invoke_rkyv_v2`
+/// 심볼로 위임한다 (과거 이 파일에 복제되어 있던 패닉 가드+버퍼 프로토콜의
+/// 단일 구현). 심볼명만 calculator 네임스페이스로 재노출해 기존 C++/JSI 호스트
+/// 바인딩을 유지한다.
+///
+/// 주의: 이 경로의 반환 버퍼는 **코어 FFI 할당 레이아웃**(8바이트 헤더)을
+/// 따르므로 해제도 코어 `rustra_ffi_free`로 해야 한다. 기존 JSON/바이너리
+/// 경로(`rustra_calculator_invoke_bytes` 등)의 버퍼는 예제 자체
+/// `alloc_response` 레이아웃이라 `rustra_calculator_free_buffer` 를 쓴다 —
+/// 두 해제 심볼은 서로 교환할 수 없다.
 ///
 /// # Safety
 ///
@@ -1101,31 +1280,20 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2(
     payload_len: usize,
     out_len: *mut usize,
 ) -> *mut u8 {
-    if payload.is_null() || out_len.is_null() {
-        return std::ptr::null_mut();
-    }
+    unsafe { rustra::ffi::rustra_ffi_invoke_rkyv_v2(payload, payload_len, out_len) }
+}
 
-    let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
-
-    // panic guard — extern "C"(nounwind) 경계 직전의 최후 방어. 코어
-    // `Package::invoke_rkyv_v2` 가 핸들러 패닉을 internal 로 정규화하지만,
-    // 이 진입점 자체(패키지 조회 등) 에서 패닉이 새어나오면 호스트(RN) 프로세스가
-    // abort 된다. JSON/postcard FFI 의 `rustra::ffi::with_panic_guard` 와 동일한
-    // 계약으로 rkyv V2 에러 프레임(ok=0) 으로 변환한다.
-    let resp_bytes = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        rustra::ffi::get_package()
-            .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
-            .and_then(|pkg| pkg.invoke_rkyv_v2(bytes))
-    })) {
-        Ok(Ok(bytes)) => bytes,
-        Ok(Err(error)) => rustra::encode_rkyv_v2_error(&error),
-        Err(panic) => rustra::encode_rkyv_v2_error(&RustraError::internal(format!(
-            "panic in handler: {}",
-            panic_message(&panic)
-        ))),
-    };
-
-    alloc_response(resp_bytes, out_len)
+/// `rustra_calculator_invoke_rkyv_v2` 응답 버퍼 해제 — 코어 `rustra_ffi_free`
+/// 로 위임한다(할당이 코어 레이아웃이므로). JSI 호스트가 기존
+/// `rustra_calculator_free_buffer` 이름으로 바인딩하고 있어 재노출 심볼만
+/// 제공한다.
+///
+/// # Safety
+///
+/// `ptr`/`len` must be the exact pair returned by `rustra_calculator_invoke_rkyv_v2`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_calculator_free_rkyv_v2_buffer(ptr: *mut u8, len: usize) {
+    unsafe { rustra::ffi::rustra_ffi_free(ptr, len) };
 }
 
 /// panic payload 에서 메시지 추출 — 코어 `rustra::ffi::panic_message` 와 동일 구현
@@ -1230,10 +1398,250 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2_async(
     });
 }
 
+// ── 채널/리소스 커맨드 (2026-08-23 타입 패리티 2단계) ──────────────
+// Tauri v2 ipc::Channel·Resource 모델의 rustra 계약 버전. wire 에는 정수
+// 핸들(u32)만 실린다 — 콜백이나 객체 참조를 직렬화하지 않는다.
+//
+// - channel_demo: 커맨드 인자로 받은 ChannelHandle 로 역방향 스트림을
+//   흘린다(호출 귀속 회신 — 이벤트 emit 과 달리 단일 호출자에게만).
+// - resource_open/read/close: Rust-소유 KvResource 핸들. JS 는 정수 id
+//   로만 참조하고 소유권은 Rust 테이블에 있다(방향: Rust→TS 코드젠).
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelDemoInput {
+    /// 호스트가 발급한 채널 핸들 — JS 콜백이 이 번호에 배선돼 있다.
+    pub channel: rustra::channels::ChannelHandle,
+    pub ticks: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelDemoOutput {
+    pub sent: i32,
+    /// 만료된 핸들로의 send 시도 수(stale 무시 계약의 가시화).
+    pub dropped_sends: i32,
+}
+
+#[command]
+pub fn channel_demo(input: ChannelDemoInput) -> Result<ChannelDemoOutput> {
+    let mut sent = 0;
+    let mut dropped = 0;
+    for step in 0..input.ticks.max(0) {
+        let payload = serde_json::json!({ "step": step + 1, "of": input.ticks });
+        if input.channel.send(&payload.to_string()) {
+            sent += 1;
+        } else {
+            dropped += 1;
+        }
+    }
+    Ok(ChannelDemoOutput {
+        sent,
+        dropped_sends: dropped,
+    })
+}
+
+/// Rust-소유 키-값 저장소 리소스 — resource_open 이 발급하고 read/write/close
+/// 가 핸들로 접근한다. JS 표면은 { handle: number } 뿐이다.
+/// Tauri Resource 와 동일하게 상태는 Mutex 안에 있다(핸들 접근은 &self).
+pub struct KvResource {
+    entries: std::sync::Mutex<std::collections::BTreeMap<String, String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceOpenInput {
+    pub initial: std::collections::BTreeMap<String, String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceHandleOutput {
+    pub handle: rustra::channels::ResourceHandle,
+}
+
+#[command]
+pub fn resource_open(input: ResourceOpenInput) -> Result<ResourceHandleOutput> {
+    let handle = rustra::channels::host().register_resource(std::sync::Arc::new(KvResource {
+        entries: std::sync::Mutex::new(input.initial),
+    }));
+    Ok(ResourceHandleOutput {
+        handle: rustra::channels::ResourceHandle(handle),
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceReadInput {
+    pub handle: rustra::channels::ResourceHandle,
+    pub key: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceReadOutput {
+    pub found: bool,
+    pub value: Option<String>,
+}
+
+#[command]
+pub fn resource_read(input: ResourceReadInput) -> Result<ResourceReadOutput> {
+    let res = input
+        .handle
+        .get::<KvResource>()
+        .ok_or_else(|| RustraError::custom("resource.not_found", "unknown or closed handle"))?;
+    let entries = res.entries.lock().unwrap_or_else(|p| p.into_inner());
+    let value = entries.get(&input.key).cloned();
+    Ok(ResourceReadOutput {
+        found: value.is_some(),
+        value,
+    })
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceWriteInput {
+    pub handle: rustra::channels::ResourceHandle,
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceWriteOutput {
+    pub entries: usize,
+}
+
+#[command]
+pub fn resource_write(input: ResourceWriteInput) -> Result<ResourceWriteOutput> {
+    let res = input
+        .handle
+        .get::<KvResource>()
+        .ok_or_else(|| RustraError::custom("resource.not_found", "unknown or closed handle"))?;
+    let mut entries = res.entries.lock().unwrap_or_else(|p| p.into_inner());
+    entries.insert(input.key, input.value);
+    let entries = entries.len();
+    Ok(ResourceWriteOutput { entries })
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceCloseInput {
+    pub handle: rustra::channels::ResourceHandle,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceCloseOutput {
+    pub closed: bool,
+}
+
+#[command]
+pub fn resource_close(input: ResourceCloseInput) -> Result<ResourceCloseOutput> {
+    Ok(ResourceCloseOutput {
+        closed: rustra::channels::host().drop_resource(input.handle.0),
+    })
+}
+
 #[cfg(test)]
 #[allow(clippy::bool_assert_comparison, clippy::useless_vec)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// 채널 왕복: 커맨드 인자로 받은 핸들로 흘린 페이로드가 호스트 콜백에
+    /// 순서대로 도달한다(Tauri ipc::Channel 방향 — 네이티브→JS 스트림).
+    #[test]
+    fn channel_demo_streams_to_caller_channel() {
+        let hits = Arc::new(AtomicUsize::new(0));
+        let seen = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+        let (h2, s2) = (hits.clone(), seen.clone());
+        let handle_num = rustra::channels::host().register_channel(Arc::new(move |p| {
+            h2.fetch_add(1, Ordering::Relaxed);
+            s2.lock().unwrap().push(p.to_string());
+        }));
+
+        let out = channel_demo(ChannelDemoInput {
+            channel: rustra::channels::ChannelHandle(handle_num),
+            ticks: 3,
+        })
+        .unwrap();
+        assert_eq!(out.sent, 3);
+        assert_eq!(out.dropped_sends, 0);
+        assert_eq!(hits.load(Ordering::Relaxed), 3);
+        let got = seen.lock().unwrap().clone();
+        assert_eq!(got[0], r#"{"step":1,"of":3}"#);
+        assert_eq!(got[2], r#"{"step":3,"of":3}"#);
+
+        // 호출 종료(호스트 측 drop) 후 stale send 는 false — 핸들 재사용 없음.
+        assert!(rustra::channels::host().drop_channel(handle_num));
+    }
+
+    /// 채널 만료: 핸들이 이미 drop 된 상태에서의 호출은 dropped_sends 로
+    /// 가시화된다(조용한 무시 계약).
+    #[test]
+    fn channel_demo_counts_stale_sends() {
+        let handle_num = rustra::channels::host().register_channel(Arc::new(|_| {}));
+        assert!(rustra::channels::host().drop_channel(handle_num));
+        let out = channel_demo(ChannelDemoInput {
+            channel: rustra::channels::ChannelHandle(handle_num),
+            ticks: 2,
+        })
+        .unwrap();
+        assert_eq!(out.sent, 0);
+        assert_eq!(out.dropped_sends, 2);
+    }
+
+    /// 리소스 라이프사이클: open → write → read → close → close 후 not_found.
+    /// JS 표면은 정수 핸들뿐이고 소유권은 Rust 테이블에 있다.
+    #[test]
+    fn resource_kv_lifecycle() {
+        let mut initial = std::collections::BTreeMap::new();
+        initial.insert("seed".to_string(), "1".to_string());
+        let opened = resource_open(ResourceOpenInput { initial }).unwrap();
+        let handle = opened.handle;
+
+        let read = resource_read(ResourceReadInput {
+            handle,
+            key: "seed".into(),
+        })
+        .unwrap();
+        assert!(read.found);
+        assert_eq!(read.value.as_deref(), Some("1"));
+
+        let wrote = resource_write(ResourceWriteInput {
+            handle,
+            key: "extra".into(),
+            value: "42".into(),
+        })
+        .unwrap();
+        assert_eq!(wrote.entries, 2);
+
+        let read2 = resource_read(ResourceReadInput {
+            handle,
+            key: "extra".into(),
+        })
+        .unwrap();
+        assert_eq!(read2.value.as_deref(), Some("42"));
+
+        let closed = resource_close(ResourceCloseInput { handle }).unwrap();
+        assert!(closed.closed);
+
+        // close 후 접근은 typed 에러 — 이미 drop 된 리소스는 없다.
+        let err = resource_read(ResourceReadInput {
+            handle,
+            key: "seed".into(),
+        })
+        .unwrap_err();
+        assert_eq!(err.code(), "resource.not_found");
+        // double close 는 false(멱등).
+        assert!(
+            !resource_close(ResourceCloseInput { handle })
+                .unwrap()
+                .closed
+        );
+    }
 
     /// Windows(PE) 에는 Apple(`__mod_init_func`)/Linux(`.init_array`) 와 달리
     /// 라이브러리 constructor 가 없어 테스트 바이너리에서 FFI 전역 등록이
@@ -1736,7 +2144,7 @@ mod tests {
         let output: AddNumbersOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
         assert_eq!(output.value, 100);
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -1767,7 +2175,7 @@ mod tests {
         let output: GreetOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
         assert_eq!(output.message, "Hello, World!");
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -1799,7 +2207,7 @@ mod tests {
         assert_eq!(output.count, 4);
         assert_eq!(output.total, 100);
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -1826,7 +2234,7 @@ mod tests {
         let output: ToUpperOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
         assert_eq!(output.result, "HELLO");
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -1865,7 +2273,7 @@ mod tests {
         assert_eq!(output.item.active, false);
         assert_eq!(output.doubled, false);
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -1898,7 +2306,7 @@ mod tests {
         assert_eq!(output.item.value, 42);
         assert_eq!(output.item.active, true);
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -1927,7 +2335,7 @@ mod tests {
         let output: AddNumbersOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
         assert_eq!(output.value, 100);
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -1948,7 +2356,7 @@ mod tests {
             assert_eq!(rb[0], 1);
             let out: AddNumbersOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert_eq!(out.value, 30);
-            unsafe { rustra_calculator_free_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
         }
 
         // Tier 1: multiply (cmd 2)
@@ -1964,7 +2372,7 @@ mod tests {
             assert_eq!(rb[0], 1);
             let out: MultiplyOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert!((out.value - 3.0).abs() < 0.01);
-            unsafe { rustra_calculator_free_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
         }
 
         // Tier 1: isEven (cmd 3)
@@ -1980,7 +2388,7 @@ mod tests {
             assert_eq!(rb[0], 1);
             let out: IsEvenOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert_eq!(out.result, true);
-            unsafe { rustra_calculator_free_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
         }
 
         // Tier 2: greet (cmd 5)
@@ -1998,7 +2406,7 @@ mod tests {
             assert_eq!(rb[0], 1);
             let out: GreetOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert_eq!(out.message, "Hello, Rustra!");
-            unsafe { rustra_calculator_free_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
         }
 
         // Tier 2: sumList (cmd 6)
@@ -2017,7 +2425,7 @@ mod tests {
             let out: SumListOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert_eq!(out.total, 15);
             assert_eq!(out.count, 5);
-            unsafe { rustra_calculator_free_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
         }
 
         // Tier 3: createItem (cmd 8) — postcard handles nested structs!
@@ -2038,7 +2446,7 @@ mod tests {
             assert_eq!(out.item.name, "Widget");
             assert_eq!(out.item.value, 42);
             assert_eq!(out.item.active, true);
-            unsafe { rustra_calculator_free_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
         }
 
         // Tier 3: processItem (cmd 9)
@@ -2061,7 +2469,7 @@ mod tests {
             let out: ProcessItemOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert_eq!(out.item.value, 400);
             assert_eq!(out.doubled, true);
-            unsafe { rustra_calculator_free_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
         }
     }
 
@@ -2097,7 +2505,7 @@ mod tests {
         assert_eq!(wire.code, "command.not_found");
         assert!(!wire.message.is_empty());
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -2131,7 +2539,7 @@ mod tests {
         assert_eq!(wire.code, "math.divide_by_zero");
         assert_eq!(wire.message, "cannot divide by zero");
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -2155,7 +2563,7 @@ mod tests {
         let output: DivideOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
         assert_eq!(output.value, 5);
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -2189,7 +2597,7 @@ mod tests {
         let wire: WireError = postcard::from_bytes(&result_bytes[10..10 + error_len]).unwrap();
         assert_eq!(wire.code, "capability.denied");
 
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
     }
 
     #[test]

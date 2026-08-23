@@ -99,7 +99,7 @@ test('createNodeEngine parses Display-style "code: message" Error message', asyn
 
 import { createNodeProcessTransport } from './index.js';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, join } from 'node:path';
 
 // 저장소 루트 기준 절대경로 — 테스트는 packages/node/dist 에서 실행된다.
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -130,4 +130,35 @@ test('createNodeProcessTransport surfaces spawn failures as transport.error', as
     assert.equal(err.code, 'transport.error');
     return true;
   });
+});
+
+test('createNodeLoopTransport keeps a persistent process and correlates by id', async () => {
+  const { createNodeLoopTransport } = await import('./index.js');
+  const bin = join(repoRoot, 'target', 'debug', 'loop-stdio');
+  const transport = createNodeLoopTransport({ command: bin, args: [] });
+  try {
+    // 첫 invoke 후 프로세스가 살아 있다(lazy spawn).
+    const a = (await transport.invoke('addNumbers', { a: 20, b: 22 })) as { value: number };
+    const pid1 = transport.pid;
+    assert.ok(pid1, 'process spawned lazily on first invoke');
+
+    // 이후 호출이 같은 프로세스에서 처리된다(persistent 증명).
+    const b = (await transport.invoke('greet', { name: 'loop' })) as { message: string };
+    assert.equal(a.value, 42);
+    assert.equal(b.message, 'Hello, loop!');
+    assert.equal(transport.pid, pid1, 'process is reused, not respawned');
+
+    // 이벤트 drain (특수 명령 경유).
+    const events = await transport.drainEvents();
+    assert.deepEqual(events, []);
+
+    // 존재하지 않는 명령 — id 상관 에러 전파.
+    await assert.rejects(
+      () => transport.invoke('nope') as Promise<unknown>,
+      (err: unknown) => err instanceof RustraCommandError && err.code === 'command.not_found',
+    );
+  } finally {
+    transport.dispose();
+    assert.equal(transport.pid, null);
+  }
 });

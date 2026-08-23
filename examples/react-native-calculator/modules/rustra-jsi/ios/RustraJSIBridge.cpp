@@ -4,6 +4,7 @@
 #include <cstring>
 #include <jsi/jsi.h>
 #include <optional>
+#include <vector>
 
 // CallInvoker 는 순수 C++ 헤더(ReactCommon/callinvoker)다 — iOS/Android 모두
 // 동일 경로로 제공된다. 플랫폼 글루(.mm / jni.cpp) 가 invoker 를 얻어
@@ -110,44 +111,65 @@ static std::string parseRkyvV2ErrorBody(const uint8_t* resp, size_t out_len) {
 //   - batchItemName: 이름 기반 배치 루프의 항목 이름. FFI null 접미
 //     " (batch item <name>)" 조립에만 쓴다(에러 시 1회 조립 — hot path 비용 0).
 //     nullptr 면 null 접미로 tailSuffix 를 쓴다(단건/byId 배치).
-// free 짝 계약: 이 버퍼는 calculator 심볼의 응답 레이아웃 — alloc_response 가
-// 만든 magic 헤더 없는 Box<[u8]> 이다. rustra_ffi_free 는 ptr-8 에서 FFI magic
-// 헤더를 역산해 해제하므로 이 레이아웃에 대면 잘못된 해제를 한다(실제 버그였음,
-// follow-up 3에서 수정). 반드시 rustra_calculator_free_buffer 로 해제할 것.
+// free 짝 계약: (Tier 1) typedInvokeTail 은 caller-buffer 변형
+// (rustra_ffi_invoke_rkyv_v2_into) 을 쓴다 — Rust 가 응답을 할당하지 않고
+// caller 소유 버퍼에 직접 기록하므로 free 짝이 필요 없다. 먼저 512B 스택
+// 버퍼로 바로 dispatch+write하고, 부족한 경우에만 코어가 캐시한 같은 응답을
+// 정확한 크기의 vector로 재시도한다. 작은 응답은 FFI 1회, 큰 응답도 핸들러는
+// 정확히 1회만 실행된다.
 template <typename Decode>
-static Value typedInvokeTail(Runtime& rt, const std::vector<uint8_t>& req,
+static Value typedInvokeTail(Runtime& rt, const uint8_t* reqData, size_t reqSize,
                              const char* tailSuffix, Decode decode,
                              const std::string* batchItemName = nullptr) {
+  // (Tier 1) 고정 스택 버퍼 — 대부분의 응답(숫자/작은 객체)이 여기에 들어온다.
+  // 부족하면 아래 폴백 경로가 처리하므로 안전하다.
+  constexpr size_t kStackCap = 512;
+  uint8_t stackBuf[kStackCap];
   size_t out_len = 0;
-  uint8_t* resp = rustra_calculator_invoke_rkyv_v2(req.data(), req.size(), &out_len);
+  const uint8_t* resp = nullptr;
+  std::vector<uint8_t> largeBuf;
+
+  // 1단계: 스택 버퍼로 바로 dispatch+write. 대부분의 응답은 여기서 끝나
+  // size-probe를 위한 두 번째 FFI 횡단과 thread_local 캐시 왕복이 없다.
+  size_t n = rustra_ffi_invoke_rkyv_v2_into(
+    reqData, reqSize, stackBuf, kStackCap, &out_len);
+  if (n != SIZE_MAX && n > 0) {
+    resp = stackBuf;
+  }
+
+  // 버퍼가 부족하면 코어가 out_len에 필요 크기를 쓰고 동일 응답을 캐시한다.
+  // 정확한 크기로 한 번만 재시도하므로 비멱등 핸들러는 재실행되지 않는다.
+  if (!resp && n == SIZE_MAX && out_len > kStackCap) {
+    largeBuf.resize(out_len);
+    n = rustra_ffi_invoke_rkyv_v2_into(
+      reqData, reqSize, largeBuf.data(), largeBuf.size(), &out_len);
+    if (n != SIZE_MAX && n > 0) {
+      resp = largeBuf.data();
+    }
+  }
   if (!resp) {
     std::string nullSuffix(tailSuffix);
     if (batchItemName) nullSuffix = " (batch item " + *batchItemName + ")";
     throw JSError(rt, "RustraJSI: invokeRkyvV2 returned null" + nullSuffix);
   }
   if (out_len < 1) {
-    rustra_calculator_free_buffer(resp, out_len);
     throw JSError(rt, std::string("RustraJSI: empty rkyv v2 response") + tailSuffix);
   }
   if (resp[0] == 0) {
     // 에러 와이어: [ok:0][pad to @8][err_len u16 LE @8][err @10]
     if (out_len < 10) {
-      rustra_calculator_free_buffer(resp, out_len);
       throw JSError(rt, std::string("RustraJSI: malformed error response") + tailSuffix);
     }
     std::string errStr = parseRkyvV2ErrorBody(resp, out_len);
-    rustra_calculator_free_buffer(resp, out_len);
     throw JSError(rt, errStr);
   }
 
   // 성공: postcard(O) @8 부터 디코딩.
   if (out_len < 8) {
-    rustra_calculator_free_buffer(resp, out_len);
     throw JSError(rt, std::string("RustraJSI: malformed success response") + tailSuffix);
   }
   rc::Reader r(resp + 8, out_len - 8);
   Value result = decode(r);
-  rustra_calculator_free_buffer(resp, out_len);
   return result;
 }
 
@@ -288,6 +310,130 @@ size_t EventDispatcher::pendingCount() {
 // (클래스 정의는 헤더에 있으므로 여기는 static_assert 로 계약 문서화)
 static_assert(sizeof(EventDispatcher) > 0, "EventDispatcher must be complete");
 
+// ── ChannelDispatcher: 채널 핸들별 유니캐스트 회신 (타입 패리티 2단계) ──
+//
+// EventDispatcher 와 동일한 마샬링 구조다 — FFI 콜백(send 스레드)은 큐에
+// 적재만, JS 스레드 drain 이 callbacks_[handle] 호출. 차이점:
+// - 콜백 레지스트리 키가 이벤트 이름(브로드캐스트)이 아니라 핸들(유니캐스트).
+// - reset() 시 Rust 채널도 함께 drop — 채널은 호출 귀속이라 리로드된
+//   런타임의 핸들은 무의미하다(이벤트 리스너와 달리 재등록되지 않는다).
+
+static std::shared_ptr<ChannelDispatcher> g_channelDispatcher = nullptr;
+static std::mutex g_channelDispatcherMutex;
+
+static std::shared_ptr<ChannelDispatcher> getChannelDispatcher() {
+  std::lock_guard<std::mutex> lock(g_channelDispatcherMutex);
+  if (!g_channelDispatcher) {
+    g_channelDispatcher = std::make_shared<ChannelDispatcher>();
+  }
+  return g_channelDispatcher;
+}
+
+void ChannelDispatcher::setCallInvoker(std::shared_ptr<void> invoker) {
+  // mutex_ 없이 콜백 맵 정리(레지스트리는 JS 스레드 전용) 후 락 내부에서
+  // invoker 교체·채널 drop. drop 이 FFI 를 호출하므로 reset() 은 락 밖 실행.
+  std::vector<uint32_t> toDrop;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    callInvoker_ = std::move(invoker);
+    for (auto& [h, _cb] : callbacks_) toDrop.push_back(h);
+    callbacks_.clear();
+    queue_.clear();
+    drainScheduled_ = false;
+  }
+  // 리로드 대응: 귀속 채널 전부를 Rust 쪽에서도 drop(락 밖 — FFI 재진입 방지).
+  for (uint32_t h : toDrop) {
+    rustra_ffi_channel_drop(h);
+  }
+}
+
+uint32_t ChannelDispatcher::create(facebook::jsi::Runtime& rt,
+                                    facebook::jsi::Function callback) {
+  // JS 스레드에서만 호출됨(HostFunction 경유). FFI 가 핸들을 선발급하고
+  // 콜백이 그 핸들을 캡처해 회신하므로, 여기선 JS 콜백만 핸들 키로 등록.
+  (void)rt;
+  uint32_t handle = rustra_ffi_channel_create(&ChannelDispatcher::onChannelPayload, this);
+  if (handle == 0) return 0; // 발급 실패 sentinel — 사실상 도달하지 않는다.
+  callbacks_.insert_or_assign(handle, std::move(callback));
+  return handle;
+}
+
+bool ChannelDispatcher::drop(uint32_t handle) {
+  // JS 스레드 호출. Rust 채널 해제 후 콜백 제거. 해제 후 drain 에 이미
+  // 적재된 해당 핸들 페이로드는 콜백 부재로 무시된다(유니캐스트 만료).
+  int dropped = rustra_ffi_channel_drop(handle);
+  callbacks_.erase(handle);
+  return dropped == 1;
+}
+
+void ChannelDispatcher::onChannelPayload(void* user_data, uint32_t handle,
+                                          const char* payload) {
+  // send 스레드에서 호출 — JS 객체 미접근, 큐 적재 + drain 예약만.
+  auto* self = static_cast<ChannelDispatcher*>(user_data);
+  if (!self || !payload) return;
+
+  std::lock_guard<std::mutex> lock(self->mutex_);
+  if (self->queue_.size() >= self->capacity_) {
+    self->queue_.pop_front(); // drop-oldest — JS 가 느려도 send 스레드 비블록
+  }
+  // payload 는 NUL 종결 C 문자열 — FfiChannelSink 가 CString 으로 만들어
+  // 전달했으므로 여기서 복사해 소유한다(콜백 반환 후 무효).
+  self->queue_.emplace_back(handle, std::string(payload));
+  self->scheduleDrainLocked();
+}
+
+void ChannelDispatcher::drain(facebook::jsi::Runtime& rt) {
+  // JS 런타임 스레드에서만 호출(CallInvoker 콜백 또는 폴링).
+  std::deque<std::pair<uint32_t, std::string>> items;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    drainScheduled_ = false;
+    items.swap(queue_);
+  }
+  for (auto& [handle, payload] : items) {
+    auto it = callbacks_.find(handle);
+    if (it == callbacks_.end()) continue; // 만료 채널 — 조용히 무시
+    try {
+      // 페이로드는 JSON 문자열 그대로 JS 로 — 파싱은 TS 래퍼에서 1회.
+      it->second.call(rt, facebook::jsi::String::createFromUtf8(rt, payload));
+    } catch (const std::exception&) {
+      // JS 콜백 예외는 무시 — 이벤트 drain 과 동일 정책(호출자 보호).
+    }
+  }
+}
+
+void ChannelDispatcher::scheduleDrainLocked() {
+  if (drainScheduled_ || !callInvoker_) return;
+  drainScheduled_ = true;
+
+  auto self = shared_from_this();
+  std::shared_ptr<void> invoker = callInvoker_;
+  auto weak = std::weak_ptr<ChannelDispatcher>(self);
+#if defined(__APPLE__) || defined(__ANDROID__)
+  auto* nativeInvoker = static_cast<facebook::react::CallInvoker*>(invoker.get());
+  nativeInvoker->invokeAsync([weak](facebook::jsi::Runtime& rt) {
+    if (auto dispatcher = weak.lock()) {
+      dispatcher->drain(rt);
+    }
+  });
+#endif
+}
+
+void ChannelDispatcher::reset() {
+  // 리로드 대응 전체 폐기 — JS 콜백 맵·큐 클리어 후 Rust 채널 drop(락 밖).
+  std::vector<uint32_t> toDrop;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto& [h, _cb] : callbacks_) toDrop.push_back(h);
+    callbacks_.clear();
+    queue_.clear();
+    drainScheduled_ = false;
+  }
+  for (uint32_t h : toDrop) {
+    rustra_ffi_channel_drop(h);
+  }
+}
+
 // ── HostObject with cached functions ───────────────────────
 
 using InvokeFn = uint8_t*(*)(const uint8_t*, size_t, size_t*);
@@ -348,7 +494,10 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
   makeInvoke("invokeLegacyPostcard", rustra_calculator_invoke_postcard, rustra_calculator_free_buffer, "Rust postcard returned null");
   makeInvoke("invokeRkyv",     rustra_calculator_invoke_rkyv,    rustra_calculator_free_buffer, "Rust rkyv returned null");
   makeInvoke("invokeHybrid",   rustra_calculator_invoke_hybrid,  rustra_calculator_free_buffer, "Rust hybrid returned null");
-  makeInvoke("invokeRkyvV2",   rustra_calculator_invoke_rkyv_v2, rustra_calculator_free_buffer, "Rust rkyv v2 returned null");
+  // rkyv V2 는 코어 rustra_ffi_invoke_rkyv_v2 로 위임된 뒤라 응답이 코어 FFI
+  // 레이아웃(8B magic 헤더)이다 — 전용 free 짝 필수(Phase 2 위임 시 누락돼
+  // ArrayBuffer 경로에서 double-free/unallocated-free 크래시를 일으켰다).
+  makeInvoke("invokeRkyvV2",   rustra_calculator_invoke_rkyv_v2, rustra_calculator_free_rkyv_v2_buffer, "Rust rkyv v2 returned null");
   makeInvoke("invokeRaw",      rustra_calculator_invoke_raw,     rustra_calculator_free_buffer, "Rust invoke_raw returned null");
 
   // noop: returns input bytes unchanged
@@ -460,6 +609,43 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
 
+  // ── Channel: createChannel(cb) / dropChannel(handle) (타입 패리티 2단계) ──
+  // createChannel 은 JS 콜백에 u32 핸들을 발급해 되돌려준다 — JS 는 이 값을
+  // 커맨드 인자 channel(ChannelHandle = number) 로 그대로 전달한다.
+  // Rust 가 channel.send 하면 onChannelPayload → (드레인) → 등록한 cb(payload).
+  // 호출 완료/취소 시 dropChannel(handle) — 이후 send 는 조용히 만료(false).
+  {
+    auto dispatcher = getChannelDispatcher();
+    auto propNameId = PropNameID::forAscii(rt, "createChannel");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 1,
+      [dispatcher](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1 || !args[0].isObject() || !args[0].asObject(rt).isFunction(rt)) {
+          throw JSError(rt, "RustraJSI: createChannel requires (callback)");
+        }
+        Function cb = args[0].asObject(rt).getFunction(rt);
+        uint32_t handle = dispatcher->create(rt, std::move(cb));
+        return Value(static_cast<double>(handle));
+      });
+    cache_["createChannel"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+  {
+    auto dispatcher = getChannelDispatcher();
+    auto propNameId = PropNameID::forAscii(rt, "dropChannel");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 1,
+      [dispatcher](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1) {
+          throw JSError(rt, "RustraJSI: dropChannel requires (handle)");
+        }
+        uint32_t handle = static_cast<uint32_t>(args[0].asNumber());
+        return Value(dispatcher->drop(handle) ? true : false);
+      });
+    cache_["dropChannel"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+
   // ── B1 fast path: 정적 명령을 C++ postcard 코덱으로 인코딩/디코딩 ──
   // JS 측 codec.encode/decode(~3.4µs)를 C++로 옮겨 JS↔바이트 왕복을 제거.
   // 동적 명령은 hasStaticCodec() == false → JS가 Tier 3 JSON fallback.
@@ -498,12 +684,10 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         if (!gen::encode_by_name(rt, name, args[1], w)) {
           throw JSError(rt, "RustraJSI: no C++ codec for '" + name + "'");
         }
-        auto req = w.take();
-
         // 2) Rust FFI (rkyv V2 단일 엔진) + 응답 tail — 공통 헬퍼로
         //    (typedInvokeTail 주석의 free 짝 계약: rustra_calculator_free_buffer).
         //    decoder 만 이름 기반 decode_by_name.
-        return typedInvokeTail(rt, req, "", [&rt, &name](rc::Reader& r) {
+        return typedInvokeTail(rt, w.data(), w.size(), "", [&rt, &name](rc::Reader& r) {
           return gen::decode_by_name(rt, name, r);
         });
       });
@@ -532,15 +716,42 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         if (!gen::encode_by_id(rt, cmdId, args[1], w)) {
           throw JSError(rt, "RustraJSI: no C++ codec for cmd_id " + std::to_string(cmdId));
         }
-        auto req = w.take();
-
         // 2) Rust FFI + 응답 tail — invokeTyped 와 동일하지만 decoder 만
         //    u16 디스패치 decode_by_id (free 짝: rustra_calculator_free_buffer).
-        return typedInvokeTail(rt, req, "", [&rt, cmdId](rc::Reader& r) {
+        return typedInvokeTail(rt, w.data(), w.size(), "", [&rt, cmdId](rc::Reader& r) {
           return gen::decode_by_id(rt, cmdId, r);
         });
       });
     cache_["invokeTypedById"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+
+  // ── (Tier 1) invokeTypedPos(cmdId, a, b, …) — positional 인자 직접 진입 ──
+  // JS 측 인자 객체 리터럴 {a, b} 생성과 C++ asObject/getProperty 순회를 모두
+  // 건너뛴다 — HostFunction 스택의 Value 배열에서 postcard 바이트로 직렬화.
+  // encode_pos_by_id 는 스칼라(≤3필드) 명령만 커버한다: 미지원 cmd_id 는
+  // JSError 로 명시 실패하고 JS 엔진은 invokeTypedById 로 폴백한다.
+  // argc 는 JS 코드젠(positional facade)이 시그니처로 보장하지만 런타임
+  // 가드도 둔다(수동 호출 방어).
+  {
+    auto propNameId = PropNameID::forAscii(rt, "invokeTypedPos");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 4,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1) {
+          throw JSError(rt, "RustraJSI: invokeTypedPos requires (cmdId, ...fields)");
+        }
+        uint16_t cmdId = static_cast<uint16_t>(args[0].asNumber());
+        const Value* argv = count > 1 ? args + 1 : nullptr;
+        size_t argc = count > 1 ? count - 1 : 0;
+
+        rc::Writer w;
+        gen::encode_pos_by_id(rt, cmdId, argv, argc, w); // 미지원 시 throw
+        return typedInvokeTail(rt, w.data(), w.size(), "", [&rt, cmdId](rc::Reader& r) {
+          return gen::decode_by_id(rt, cmdId, r);
+        });
+      });
+    cache_["invokeTypedPos"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
 
@@ -573,11 +784,9 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
           if (!gen::encode_by_name(rt, name, oneArgs, w)) {
             throw JSError(rt, "RustraJSI: batch item has no C++ codec for '" + name + "'");
           }
-          auto req = w.take();
-
           // FFI + 응답 tail — 공통 헬퍼 (fail-fast: 첫 에러에서 throw).
           // 접미 계약 유지: null → " (batch item <name>)", malformed → " (batch)".
-          Value decoded = typedInvokeTail(rt, req, " (batch)",
+          Value decoded = typedInvokeTail(rt, w.data(), w.size(), " (batch)",
                                           [&rt, &name](rc::Reader& r) {
                                             return gen::decode_by_name(rt, name, r);
                                           },
@@ -623,13 +832,11 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
             throw JSError(rt,
               "RustraJSI: batch item has no C++ codec for cmd_id " + std::to_string(cmdId));
           }
-          auto req = w.take();
-
           // FFI + 응답 tail — 공통 헬퍼 (fail-fast: 첫 에러에서 throw).
           // 접미는 이름 기반 배치와 동일하게 유지한다: null → " (batch)",
           // malformed → " (batch)". 항목 이름을 알 수 없는 byId 경로의
           // null 접미는 이름 조립 없이 배치 접미를 그대로 쓴다.
-          Value decoded = typedInvokeTail(rt, req, " (batch)",
+          Value decoded = typedInvokeTail(rt, w.data(), w.size(), " (batch)",
                                           [&rt, cmdId](rc::Reader& r) {
                                             return gen::decode_by_id(rt, cmdId, r);
                                           });
@@ -836,7 +1043,10 @@ void installRustraJSIWithInvoker(Runtime& rt,
   // 구 Runtime 힙을 참조하므로 여기서 반드시 비운다.
   g_arrayBufferCtor.reset();
   auto dispatcher = getEventDispatcher();
-  dispatcher->setCallInvoker(std::move(typeErasedCallInvoker));
+  dispatcher->setCallInvoker(typeErasedCallInvoker);
+  // 채널 디스패처도 동일 CallInvoker 공유(2단계) — reset 내부에서 이전
+  // 런타임 귀속 채널을 Rust 쪽까지 폐기한다.
+  getChannelDispatcher()->setCallInvoker(std::move(typeErasedCallInvoker));
 
   // 평탄화(Nitro 방식): 모든 호스트 함수를 일반 JS 객체의 프로퍼티로 설치
   // 시점에 박는다. 이후 native.invokeRkyvV2(...) 조회가 HostObject get 콜백
