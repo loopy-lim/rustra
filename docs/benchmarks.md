@@ -287,6 +287,32 @@ pair 1.3954x였다. Nitro 대비 초과 격차(`ratio - 1`)는 각각 약 33%, 2
 > Android는 같은 `RustraJSIBridge.cpp`를 공유하지만 이번 숫자는 iOS
 > 시뮬레이터 기준이다. Android 에뮬레이터/실기기 수치는 별도 검증이 필요하다.
 
+### React Native direct byte-buffer 비교 (2026-08-24)
+
+`Uint8Array`/`ArrayBuffer` 입력을 전용 JSI 진입점으로 빌리고, Rust 출력
+allocation을 JSI `MutableBuffer`로 이전해 응답 `memcpy`를 제거했다. Nitro와
+Rustra 모두 fresh-output 계약을 지키며 echo 한 번당 bulk copy는 한 번이다.
+각 실행은 timing 전에 결과 바이트 동등성을 검증했고, Nitro/Rustra 순서를
+호출 단위로 교차했다.
+
+| Release 실행 | 64 KiB Nitro | 64 KiB Rustra |       비율 | 1 MiB-wire Nitro | 1 MiB-wire Rustra |       비율 |
+| ------------ | -----------: | ------------: | ---------: | ---------------: | ----------------: | ---------: |
+| 1            |     8.640 us |      8.760 us |     1.014x |        94.483 us |         95.112 us |     1.007x |
+| 2            |     9.388 us |      9.016 us |     0.960x |       102.912 us |         89.966 us |     0.874x |
+| 3            |     9.883 us |      8.889 us |     0.899x |        94.748 us |         94.740 us |     1.000x |
+| **중앙값**   | **9.388 us** |  **8.889 us** | **0.947x** |    **94.748 us** |     **94.740 us** | **1.000x** |
+
+64 KiB는 warm-up 50회 + 500회, 1 MiB-wire는 warm-up 5회 + 50회다.
+1 MiB-wire의 데이터 길이는 기본 wire limit에서 command id와 postcard 길이
+5바이트를 뺀 1,048,571바이트다. 전체 1 MiB 데이터는 의도대로
+`payload.too_large`다.
+
+출력 소유권 이전 전 중앙값은 64 KiB 24.174 us(2.344x Nitro), 1 MiB-wire
+169.315 us(3.644x Nitro)였다. 위 표는 TurboModule 큐에서 Hermes를 직접
+수정하던 설치 경로를 JS Runtime 스레드로 옮긴 뒤의 최종 재측정이다. 새
+수치는 iPhone 17 Simulator, iOS 26.2, Hermes, React Native 0.81.5 + Expo 54
+Release의 로컬 영수증이며 실기기나 Android 성능 주장이 아니다.
+
 ### Expo async bridge 분해 (2026-08-18 초기 기록)
 
 실제 iOS 시뮬레이터에서 측정한 `addNumbers` 호출의 레이어별 분해:

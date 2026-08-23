@@ -282,11 +282,50 @@ let pkg = Package::builder("example.calculator")
 
 같은 이름의 명령이 이미 등록되어 있으면 패닉이 발생합니다.
 
+### `.buffer_command_fn(handler)` / `.buffer_command(name, handler)`
+
+입력과 출력이 각각 하나의 필수 `Vec<u8>` 필드인 명령에 React Native의
+`Uint8Array`/`ArrayBuffer` 전용 소유권 경로를 명시적으로 등록합니다. 일반
+postcard/JSON 명령 계약도 함께 유지되므로 다른 호스트와 구 네이티브는 기존
+경로로 동작합니다.
+
+```rust
+#[derive(Serialize, Deserialize, JsonSchema)]
+struct Bytes {
+    #[serde(with = "rustra::byte_buffer")]
+    #[schemars(with = "Vec<u8>")]
+    data: Vec<u8>,
+}
+
+impl BufferCommandInput for Bytes {
+    fn from_buffer(data: Vec<u8>) -> Self { Self { data } }
+}
+
+impl BufferCommandOutput for Bytes {
+    fn into_buffer(self) -> Vec<u8> { self.data }
+}
+
+#[command]
+fn echo_bytes(input: Bytes) -> Result<Bytes> { Ok(input) }
+
+let pkg = Package::builder("example.bytes")
+    .buffer_command_fn(echo_bytes)
+    .build();
+```
+
+스키마가 정확히 하나의 필수 `uint8` 배열 필드가 아니면 빌드 단계에서 패닉해
+직접 ABI를 잘못 광고하지 않습니다. 입력 JS 메모리는 동기 호출 동안만 빌리고,
+Rust 출력 allocation은 JSI `ArrayBuffer`가 수명 종료 시 해제합니다. 자세한
+계약은 [direct byte-buffer 설계](plans/2026-08-24-rn-byte-buffer-native-path.md)를
+참고합니다.
+
 ### 기타 빌더 메서드
 
 | 메서드                                  | 역할                                                            |
 | --------------------------------------- | --------------------------------------------------------------- |
 | `.require_capability(name, cap)`        | 명령에 capability 요구 부여 (deny-by-default Runtime Authority) |
+| `.buffer_command_fn(handler)`           | 이름 추론 단일 `Vec<u8>` 직접 경로 등록                         |
+| `.buffer_command(name, handler)`        | 명시 이름 단일 `Vec<u8>` 직접 경로 등록                         |
 | `.alias_command_id(command, legacy_id)` | 구 cmd_id 별칭 등록 (하위호환 디스패치)                         |
 | `.event_capacity(capacity)`             | 이벤트 버스 링 버퍼 용량 설정                                   |
 | `.schema_version(version)`              | (T2, OTA) 스키마 협상 버전 명시                                 |

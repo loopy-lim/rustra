@@ -361,7 +361,7 @@ const result = await addNumbers({ a: 20, b: 22 });
 
 #### React Native
 
-React Native는 rkyv V2 바이너리 fast-path를 기본으로 사용한다. JSI 네이티브 모듈이 `invokeRkyvV2`를 노출해야 한다.
+React Native는 rkyv V2 바이너리 fast-path를 기본으로 사용한다. JSI 네이티브 모듈이 `invokeRkyvV2`를 노출해야 한다. 입력과 출력이 각각 하나의 필수 `Vec<u8>` 필드인 명령은 명시적 Rust 등록 시 `Uint8Array`/`ArrayBuffer` 전용 네이티브 경로도 사용할 수 있다.
 
 ```ts
 import { createFastEngine, configure, getRustraNative } from '@rustra/react-native';
@@ -375,12 +375,12 @@ const result = await addNumbers({ a: 20, b: 22 });
 
 ### 플랫폼 지원 매트릭스
 
-| 플랫폼               | 현재 증거 수준         | 비고                                                       |
-| -------------------- | ---------------------- | ---------------------------------------------------------- |
-| Node / Bun           | Runtime verified       | subprocess·N-API·Bun FFI 로컬 runtime + 어댑터 CI          |
-| Tauri (macOS/Linux)  | Build + smoke verified | Rust IPC smoke; 실제 WebView 사용자 흐름은 별도 E2E 필요   |
-| React Native iOS     | Build verified         | C++ codec/link 검증; 최신 소스의 설치·launch 영수증은 필요 |
-| React Native Android | Release APK verified   | arm64/x86_64 `.so` 포함; emulator/physical launch는 미검증 |
+| 플랫폼               | 현재 증거 수준             | 비고                                                            |
+| -------------------- | -------------------------- | --------------------------------------------------------------- |
+| Node / Bun           | Runtime verified           | subprocess·N-API·Bun FFI 로컬 runtime + 어댑터 CI               |
+| Tauri (macOS/Linux)  | Build + smoke verified     | Rust IPC smoke; 실제 WebView 사용자 흐름은 별도 E2E 필요        |
+| React Native iOS     | Simulator runtime verified | Release build·설치·launch·reload·Nitro 비교; 실기기 증거는 별도 |
+| React Native Android | Release APK verified       | arm64/x86_64 `.so` 포함; emulator/physical launch는 미검증      |
 
 `bun run test:compat`는 JS 계약과 지원되는 로컬 runtime을 검증하고, CI 네이티브
 잡은 빌드·링크를 검증한다. 이 둘을 실제 기기 설치·화면 렌더 증거와 동일시하지 않는다.
@@ -398,10 +398,11 @@ const result = await addNumbers({ a: 20, b: 22 });
 | Node napi-rs (release) | 1.5 µs     | 654,817 ops/s   |
 | Bun FFI (release)      | 1.7 µs     | ~580,000 ops/s  |
 
-> 기록된 React Native(JSI rkyv V2) Release 측정은 동일 객체 연산의 Nitro 대비 3회 중앙값
-> 1.17–1.24x(add 1.2068x, string 1.2384x, bytes 1.1656x, pair 1.2162x).
-> 이후 벤치 러너는 Nitro/Rustra/FFI를 호출 단위로 순환 측정하도록 강화됐으므로,
-> 위 과거 headline은 최신 앱 runtime 영수증으로 재확인하기 전까지 목표 기준선이다.
+> 2026-08-24 iPhone 17 Simulator Release 측정에서 일반 객체 연산은 Nitro 대비
+> 3회 중앙값 add 1.034x, string 1.019x, pair 1.059x였다. 전용 byte 경로는
+> JS Runtime 스레드 설치 안전성 수정 후 64 KiB 0.947x, exact 1 MiB-wire
+> 1.000x였다. 이는 시뮬레이터 영수증이며
+> iOS/Android 실기기 성능 주장이 아니다.
 > 비교의 범위와 기능 패리티 매트릭스는
 > [벤치마크 문서](docs/benchmarks.md) §"Nitro Modules 비교" 참고) —
 > 상세 벤치마크, 레이어별 오버헤드 분석, 페이로드 확장성은

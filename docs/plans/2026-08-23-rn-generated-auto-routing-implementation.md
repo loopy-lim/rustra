@@ -3,7 +3,8 @@
 ## Phase 0: lock correctness evidence
 
 - [x] Reproduce and fix the Runtime-invalid `PropNameID` cache crash.
-- [x] Run same-process React Native reload stress after a Release rebuild.
+- [x] Run same-process React Native reload stress with the Debug allocator guard,
+      then rebuild Release for performance.
 - [x] Record a normalized three-run Nitro/Rustra/Swift FFI baseline.
 - [x] Keep React Doctor at 100/100.
 
@@ -24,15 +25,17 @@
 
 ## Phase 2: optimize bytes and collections
 
-- [ ] Define ownership for `ArrayBuffer`, `Uint8Array` views, and caller-owned
-      response buffers.
-- [ ] Add a generated direct-byte capability only for schema-proven byte fields.
-- [ ] Preserve `maxPayloadBytes`, typed errors, offsets, and non-zero-length views.
-- [ ] Measure 64 B, 64 KiB, and 1 MiB inputs before enabling the route by default.
+- [x] Define ownership for `ArrayBuffer`, `Uint8Array` views, and Rust-owned
+      response buffers transferred to a JSI `MutableBuffer` finalizer.
+- [x] Add a generated direct-byte capability only for exact single-required-field
+      input/output schemas plus an explicitly registered Rust buffer handler.
+- [x] Preserve the dynamic wire-size limit, typed errors, empty buffers, view
+      offsets, detached-storage rejection, and one-byte-view restriction.
+- [x] Measure 64 B, 64 KiB, and exact 1 MiB-wire inputs before enabling the route.
 - [x] Apply the representation-preserving interim path: positional `Vec<u8>`,
       one Writer reservation, one output bounds check, and explicit u8 validation.
-- [x] Re-measure the 64 B `number[]` path. Median is 1.133x Nitro, so the 1.08x
-      typed-buffer target remains open and is not claimed complete.
+- [x] Re-measure the dedicated typed-buffer path. Final three-run ratios from
+      median times are 0.947x Nitro at 64 KiB and 1.000x at exact 1 MiB wire.
 
 ## Phase 3: make the fast path operationally boring
 
@@ -40,7 +43,9 @@
       plugin/codegen path.
 - [ ] Add a Bun-based doctor command for Bun version, generated/native contract,
       Pod/autolinking, native symbols, and Release mode.
-- [ ] Keep the repository and RN example free of pnpm/npm/yarn execution paths.
+- [x] Keep active repository and RN example execution paths on Bun 1.4. Registry
+      names, Dependabot's `npm` ecosystem key, changelogs, and historical plans
+      remain factual references rather than executable package-manager paths.
 - [ ] Add reload stress and normalized performance receipts to the release gate.
 - [x] Make `bun run ios`/`bun run android` rebuild their Rust static library before
       invoking Expo so stale FFI symbols cannot survive an app rebuild.
@@ -54,14 +59,15 @@
 | Native codecs        | C++ codec compile/round-trip suite                 |
 | Rust core            | Cargo tests and clippy/fmt checks                  |
 | React quality        | React Doctor 100/100                               |
-| RN runtime           | iOS Release simulator reload and correctness smoke |
+| RN runtime           | iOS Debug reload stress plus Release runtime smoke |
 | Performance          | Three-run normalized interleaved median            |
 | Release claim        | Physical iOS and Android receipts                  |
 
-Current evidence: Types 86/86, CLI generator 45/45, Rust public authoring 35/35,
-C++ codec suites pass, iOS Release build/install/runtime pass, output equivalence
-passes in all final performance runs, and React Doctor is 100/100. Full workspace
-tests, fmt, and clippy are rerun before commit.
+Current evidence: focused Types, CLI generator, Rust buffer/FFI, and C++ codec
+suites pass. A direct-buffer/pending-async reload probe passed 30/30 after moving
+native installation from the TurboModule queue to the JS Runtime thread. iOS
+Release build/install/runtime and three-run byte output equivalence also pass.
+Full workspace tests, fmt, clippy, and React Doctor are rerun before commit.
 
 ## Stop conditions
 

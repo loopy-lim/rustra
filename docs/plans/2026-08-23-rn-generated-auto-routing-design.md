@@ -1,7 +1,6 @@
 # RN generated API automatic transport routing
 
-Status: implemented through Phase 1 plus the safe `number[]` byte-path reduction
-on 2026-08-24; direct typed-buffer ownership remains a follow-up
+Status: implemented through the direct typed-buffer ownership path on 2026-08-24
 
 ## Context
 
@@ -91,19 +90,33 @@ become `undefined`. A raw fallback marker is never exposed to users.
   Runtime.
 - A same-process reload stress test is a release gate for native routing changes.
 
-### Tier 2 byte path
+### Tier 0.5 byte path
 
-Bytes and collections are not forced through the scalar route. The implemented
-safe reduction forwards a schema-proven `Vec<u8>` field positionally, reserves
-its Writer span once, validates and writes each byte into that span, and decodes
-through one bounds-checked byte view. It preserves the existing `number[]`
-surface and error semantics.
+Bytes and collections are not forced through the scalar route. A command is
+eligible only when generated input and output schemas each contain exactly one
+required `Vec<u8>` field and Rust explicitly registers it with
+`buffer_command`/`buffer_command_fn`. The native capability is advertised only
+when both conditions hold.
 
-The larger follow-up uses `ArrayBuffer`/typed-array input and explicit
-caller-owned response buffers so the engine can avoid per-element JSI
-conversion. It remains separate because it changes representation, buffer
-ownership, view offsets, and size-limit behavior. The current `number[]` result
-must not be presented as having reached the typed-buffer target.
+`Uint8Array` (including non-zero-offset subviews) and `ArrayBuffer` use the
+direct entry. The JSI host borrows the input only for the synchronous call;
+Rust immediately creates the owned value required by the command boundary. On
+success, the handler's output allocation moves into a JSI `MutableBuffer` and
+is released exactly once by its finalizer. No `Runtime`, `Value`, or
+`PropNameID` is retained by that finalizer, so collection after a React Native
+reload is safe. Errors are copied to a typed JS error and freed immediately.
+
+`number[]`, options-bearing calls, old native modules, missing capabilities,
+and id/name mismatches keep the existing generated fallback. The fallback also
+accepts one-byte typed views and preserves their offsets. Detached storage,
+multi-byte views, non-integral/out-of-range bytes, malformed view bounds, and
+payloads beyond the dynamic wire limit fail closed.
+
+For an echo operation, Nitro performs one copy into a fresh `ArrayBuffer`.
+Rustra performs one copy from the borrowed JS input into the owned Rust vector,
+then transfers that vector to JSI without an output copy. The externally
+visible fresh-output contract is therefore equivalent while both paths move the
+bulk bytes once.
 
 ## Acceptance gates
 
@@ -131,10 +144,29 @@ pre-timing output equivalence checks across Nitro, Rustra, and Swift FFI.
 | pair      |              1.059x |                10.310x | pass                     |
 | bytes64   |              1.133x |                 2.182x | follow-up; 1.08x not met |
 
-The generated-helper/native-route diagnostic median is 1.073x for add, 1.057x
-for string, 1.053x for pair, and 1.015x for bytes64. This isolates the remaining
-byte gap below the generated JS router: a typed-buffer representation and
-ownership path is required for the next material reduction.
+The generated-helper/native-route diagnostic median was 1.073x for add, 1.057x
+for string, 1.053x for pair, and 1.015x for bytes64. This isolated the remaining
+byte gap below the generated JS router and motivated the typed-buffer ownership
+path measured next.
+
+### Typed-buffer follow-up evidence
+
+The same iPhone 17 Simulator, iOS 26.2, Hermes, and Release build was run three
+times after transferring Rust output ownership directly to JSI. Each run first
+checked byte-for-byte output equality. The 64 KiB case used 50 warmups and 500
+timed calls; the exact 1 MiB-wire case used 5 warmups and 50 timed calls. Its
+data length is 1,048,571 bytes because command id and postcard length consume
+the remaining five bytes of the default 1 MiB wire limit.
+
+| Payload    | Nitro avg median | Rustra avg median | Ratio from medians | Paired ratio range |
+| ---------- | ---------------: | ----------------: | -----------------: | -----------------: |
+| 64 KiB     |         9.388 us |          8.889 us |             0.947x |      0.899x-1.014x |
+| 1 MiB wire |        94.748 us |         94.740 us |             1.000x |      0.874x-1.007x |
+
+Before the ownership transfer, the corresponding median ratios were 2.344x and
+3.644x. The final rerun after moving JSI installation onto the JS Runtime thread
+measured Rustra at 8.889 us for 64 KiB and 94.740 us for 1 MiB wire. These are simulator receipts, not
+physical-device or Android performance claims.
 
 ## Versioning
 
