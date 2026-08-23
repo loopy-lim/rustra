@@ -1002,7 +1002,11 @@ pub unsafe extern "C" fn rustra_calculator_invoke_msgpack(
     alloc_response(resp_bytes, out_len)
 }
 
-/// Bincode-encoded FFI using typed structs (bincode can't handle serde_json::Value).
+/// Bincode v2 `standard()` 호환 FFI using typed structs.
+///
+/// `bincode` crate 자체는 더 이상 유지보수되지 않으므로, 이 벤치마크 경로가 실제로
+/// 사용하는 String/i64/bool/Option<String> 와이어만 작고 명시적인 코덱으로 유지한다.
+/// JS 어댑터와 기존 바이트 계약은 그대로이며 중단된 런타임 의존성은 제거된다.
 #[derive(Serialize, Deserialize)]
 struct BincodeRequest {
     command: String,
@@ -1015,6 +1019,131 @@ struct BincodeResponse {
     ok: bool,
     value: i64,
     error: Option<String>,
+}
+
+fn bincode_v2_encode_varint(value: u64, output: &mut Vec<u8>) {
+    if value < 251 {
+        output.push(value as u8);
+    } else if u16::try_from(value).is_ok() {
+        output.push(251);
+        output.extend_from_slice(&(value as u16).to_le_bytes());
+    } else if u32::try_from(value).is_ok() {
+        output.push(252);
+        output.extend_from_slice(&(value as u32).to_le_bytes());
+    } else {
+        output.push(253);
+        output.extend_from_slice(&value.to_le_bytes());
+    }
+}
+
+fn bincode_v2_decode_varint(bytes: &[u8], offset: &mut usize) -> std::result::Result<u64, String> {
+    let marker = *bytes
+        .get(*offset)
+        .ok_or_else(|| "truncated varint".to_string())?;
+    *offset += 1;
+
+    let width = match marker {
+        0..=250 => return Ok(u64::from(marker)),
+        251 => 2,
+        252 => 4,
+        253 => 8,
+        _ => return Err(format!("unsupported integer marker {marker}")),
+    };
+    let end = offset
+        .checked_add(width)
+        .filter(|end| *end <= bytes.len())
+        .ok_or_else(|| "truncated integer".to_string())?;
+    let mut raw = [0u8; 8];
+    raw[..width].copy_from_slice(&bytes[*offset..end]);
+    *offset = end;
+    Ok(u64::from_le_bytes(raw))
+}
+
+fn bincode_v2_encode_i64(value: i64, output: &mut Vec<u8>) {
+    let zigzag = ((value as u64) << 1) ^ ((value >> 63) as u64);
+    bincode_v2_encode_varint(zigzag, output);
+}
+
+fn bincode_v2_decode_i64(bytes: &[u8], offset: &mut usize) -> std::result::Result<i64, String> {
+    let zigzag = bincode_v2_decode_varint(bytes, offset)?;
+    Ok(((zigzag >> 1) as i64) ^ -((zigzag & 1) as i64))
+}
+
+fn bincode_v2_encode_string(value: &str, output: &mut Vec<u8>) {
+    bincode_v2_encode_varint(value.len() as u64, output);
+    output.extend_from_slice(value.as_bytes());
+}
+
+fn bincode_v2_decode_string(
+    bytes: &[u8],
+    offset: &mut usize,
+) -> std::result::Result<String, String> {
+    let length = usize::try_from(bincode_v2_decode_varint(bytes, offset)?)
+        .map_err(|_| "string length exceeds this platform".to_string())?;
+    let end = offset
+        .checked_add(length)
+        .filter(|end| *end <= bytes.len())
+        .ok_or_else(|| "truncated string".to_string())?;
+    let value = std::str::from_utf8(&bytes[*offset..end])
+        .map_err(|error| format!("invalid UTF-8 string: {error}"))?
+        .to_owned();
+    *offset = end;
+    Ok(value)
+}
+
+#[cfg(test)]
+fn bincode_v2_encode_request(request: &BincodeRequest) -> Vec<u8> {
+    let mut output = Vec::with_capacity(request.command.len() + 18);
+    bincode_v2_encode_string(&request.command, &mut output);
+    bincode_v2_encode_i64(request.a, &mut output);
+    bincode_v2_encode_i64(request.b, &mut output);
+    output
+}
+
+fn bincode_v2_decode_request(bytes: &[u8]) -> std::result::Result<BincodeRequest, String> {
+    let mut offset = 0;
+    Ok(BincodeRequest {
+        command: bincode_v2_decode_string(bytes, &mut offset)?,
+        a: bincode_v2_decode_i64(bytes, &mut offset)?,
+        b: bincode_v2_decode_i64(bytes, &mut offset)?,
+    })
+}
+
+fn bincode_v2_encode_response(response: &BincodeResponse) -> Vec<u8> {
+    let mut output = Vec::with_capacity(response.error.as_ref().map_or(3, |error| error.len() + 5));
+    output.push(u8::from(response.ok));
+    bincode_v2_encode_i64(response.value, &mut output);
+    match &response.error {
+        Some(error) => {
+            output.push(1);
+            bincode_v2_encode_string(error, &mut output);
+        }
+        None => output.push(0),
+    }
+    output
+}
+
+#[cfg(test)]
+fn bincode_v2_decode_response(bytes: &[u8]) -> std::result::Result<BincodeResponse, String> {
+    let mut offset = 0;
+    let ok = match bytes.get(offset).copied() {
+        Some(0) => false,
+        Some(1) => true,
+        Some(value) => return Err(format!("invalid bool marker {value}")),
+        None => return Err("truncated bool".to_string()),
+    };
+    offset += 1;
+    let value = bincode_v2_decode_i64(bytes, &mut offset)?;
+    let error = match bytes.get(offset).copied() {
+        Some(0) => None,
+        Some(1) => {
+            offset += 1;
+            Some(bincode_v2_decode_string(bytes, &mut offset)?)
+        }
+        Some(value) => return Err(format!("invalid option marker {value}")),
+        None => return Err("truncated option".to_string()),
+    };
+    Ok(BincodeResponse { ok, value, error })
 }
 
 /// # Safety
@@ -1032,20 +1161,18 @@ pub unsafe extern "C" fn rustra_calculator_invoke_bincode(
 
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
 
-    let request: BincodeRequest =
-        match bincode::serde::decode_from_slice(bytes, bincode::config::standard()) {
-            Ok((req, _)) => req,
-            Err(e) => {
-                let resp = BincodeResponse {
-                    ok: false,
-                    value: 0,
-                    error: Some(format!("bincode decode failed: {e}")),
-                };
-                let resp_bytes = bincode::serde::encode_to_vec(&resp, bincode::config::standard())
-                    .unwrap_or_default();
-                return alloc_response(resp_bytes, out_len);
-            }
-        };
+    let request = match bincode_v2_decode_request(bytes) {
+        Ok(request) => request,
+        Err(error) => {
+            let resp = BincodeResponse {
+                ok: false,
+                value: 0,
+                error: Some(format!("bincode v2 decode failed: {error}")),
+            };
+            let resp_bytes = bincode_v2_encode_response(&resp);
+            return alloc_response(resp_bytes, out_len);
+        }
+    };
 
     let result = match rustra::ffi::get_package()
         .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
@@ -1070,8 +1197,7 @@ pub unsafe extern "C" fn rustra_calculator_invoke_bincode(
         },
     };
 
-    let resp_bytes =
-        bincode::serde::encode_to_vec(&result, bincode::config::standard()).unwrap_or_default();
+    let resp_bytes = bincode_v2_encode_response(&result);
     alloc_response(resp_bytes, out_len)
 }
 
@@ -1727,7 +1853,7 @@ mod tests {
             a: 42,
             b: 58,
         };
-        let payload = bincode::serde::encode_to_vec(&request, bincode::config::standard()).unwrap();
+        let payload = bincode_v2_encode_request(&request);
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
@@ -1738,10 +1864,7 @@ mod tests {
         assert!(out_len > 0);
 
         let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
-        let result: BincodeResponse =
-            bincode::serde::decode_from_slice(result_bytes, bincode::config::standard())
-                .unwrap()
-                .0;
+        let result = bincode_v2_decode_response(result_bytes).unwrap();
 
         assert_eq!(result.ok, true);
         assert_eq!(result.value, 100);
@@ -1751,149 +1874,48 @@ mod tests {
 
     #[test]
     fn test_bincode_wire_bytes() {
-        // ── Field-by-field encoding ─────────────────
-        let bool_true: bool = true;
-        let b = bincode::serde::encode_to_vec(bool_true, bincode::config::standard()).unwrap();
-        println!(
-            "bool(true)  hex: {}",
-            b.iter()
-                .map(|x| format!("{:02x}", x))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-
-        let val_100: i64 = 100;
-        let b = bincode::serde::encode_to_vec(val_100, bincode::config::standard()).unwrap();
-        println!(
-            "i64(100)    hex: {}",
-            b.iter()
-                .map(|x| format!("{:02x}", x))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-
-        let val_0: i64 = 0;
-        let b = bincode::serde::encode_to_vec(val_0, bincode::config::standard()).unwrap();
-        println!(
-            "i64(0)      hex: {}",
-            b.iter()
-                .map(|x| format!("{:02x}", x))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-
-        let val_42: i64 = 42;
-        let b = bincode::serde::encode_to_vec(val_42, bincode::config::standard()).unwrap();
-        println!(
-            "i64(42)     hex: {}",
-            b.iter()
-                .map(|x| format!("{:02x}", x))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-
-        let val_58: i64 = 58;
-        let b = bincode::serde::encode_to_vec(val_58, bincode::config::standard()).unwrap();
-        println!(
-            "i64(58)     hex: {}",
-            b.iter()
-                .map(|x| format!("{:02x}", x))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-
-        // Larger values to understand varint scheme
-        for v in [127i64, 128, 255, 256, 1000, 10000, -1, -42] {
-            let b = bincode::serde::encode_to_vec(v, bincode::config::standard()).unwrap();
-            let hex: Vec<String> = b.iter().map(|x| format!("{:02x}", x)).collect();
-            let zz = if v >= 0 { v * 2 } else { (-v) * 2 - 1 };
-            println!(
-                "i64({:>6}) zigzag={:>6} → {} bytes: {}",
-                v,
-                zz,
-                b.len(),
-                hex.join(" ")
-            );
-        }
-
-        let opt_none: Option<String> = None;
-        let b = bincode::serde::encode_to_vec(&opt_none, bincode::config::standard()).unwrap();
-        println!(
-            "Opt<Str>None hex: {}",
-            b.iter()
-                .map(|x| format!("{:02x}", x))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-
-        let opt_some: Option<String> = Some("err".to_string());
-        let b = bincode::serde::encode_to_vec(&opt_some, bincode::config::standard()).unwrap();
-        println!(
-            "Opt<Str>Some hex: {}",
-            b.iter()
-                .map(|x| format!("{:02x}", x))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-
-        let s = "addNumbers".to_string();
-        let b = bincode::serde::encode_to_vec(&s, bincode::config::standard()).unwrap();
-        println!(
-            "String(\"addNumbers\") hex: {}",
-            b.iter()
-                .map(|x| format!("{:02x}", x))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-
-        // ── Full structs ────────────────────────────
         let request = BincodeRequest {
             command: "addNumbers".to_string(),
             a: 42,
             b: 58,
         };
-        let req_bytes =
-            bincode::serde::encode_to_vec(&request, bincode::config::standard()).unwrap();
-        println!(
-            "Request  hex: {}",
-            req_bytes
-                .iter()
-                .map(|x| format!("{:02x}", x))
-                .collect::<Vec<_>>()
-                .join(" ")
+        let req_bytes = bincode_v2_encode_request(&request);
+        assert_eq!(
+            req_bytes,
+            [
+                &[10],
+                b"addNumbers".as_slice(),
+                &[84, 116], // zigzag(42), zigzag(58)
+            ]
+            .concat()
         );
+        let decoded = bincode_v2_decode_request(&req_bytes).unwrap();
+        assert_eq!(decoded.command, "addNumbers");
+        assert_eq!((decoded.a, decoded.b), (42, 58));
 
         let response = BincodeResponse {
             ok: true,
             value: 100,
             error: None,
         };
-        let resp_bytes =
-            bincode::serde::encode_to_vec(&response, bincode::config::standard()).unwrap();
-        println!(
-            "Response hex: {}",
-            resp_bytes
-                .iter()
-                .map(|x| format!("{:02x}", x))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
+        let resp_bytes = bincode_v2_encode_response(&response);
+        assert_eq!(resp_bytes, [1, 200, 0]);
+        let decoded = bincode_v2_decode_response(&resp_bytes).unwrap();
+        assert!(decoded.ok);
+        assert_eq!(decoded.value, 100);
+        assert_eq!(decoded.error, None);
 
         let err_response = BincodeResponse {
             ok: false,
             value: 0,
             error: Some("test error".to_string()),
         };
-        let err_bytes =
-            bincode::serde::encode_to_vec(&err_response, bincode::config::standard()).unwrap();
-        println!(
-            "ErrorResp hex: {}",
-            err_bytes
-                .iter()
-                .map(|x| format!("{:02x}", x))
-                .collect::<Vec<_>>()
-                .join(" ")
+        let err_bytes = bincode_v2_encode_response(&err_response);
+        assert_eq!(
+            err_bytes,
+            [&[0, 0, 1, 10], b"test error".as_slice()].concat()
         );
+        assert!(bincode_v2_decode_request(&req_bytes[..req_bytes.len() - 1]).is_err());
     }
 
     #[test]
