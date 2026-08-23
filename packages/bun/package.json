@@ -17,6 +17,7 @@
     "access": "public"
   },
   "files": [
+    "LICENSE",
     "dist/index.d.ts",
     "dist/index.d.ts.map",
     "dist/index.js",
@@ -25,7 +26,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist dist-test",
-    "test": "tsc -p tsconfig.test.json && node --test dist-test/index.test.js",
+    "test": "bun test src/index.test.ts",
     "test:compile": "tsc -p tsconfig.test.json"
   },
   "dependencies": {

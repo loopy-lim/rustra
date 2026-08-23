@@ -20,6 +20,20 @@ class Runtime {};
 class Object;
 class Array;
 
+// PropNameID — 실 RN jsi 계약의 최소 표면. 생성 코덱의 cachedProp 캐시가
+// 쓴다. shim 에서는 이름 문자열을 그대로 들고 있다(비교/조회는 이름 기반).
+class PropNameID {
+public:
+  static PropNameID forAscii(Runtime&, const std::string& name) {
+    return PropNameID{name};
+  }
+  const std::string& utf8(Runtime&) const { return name_; }
+
+private:
+  std::string name_;
+  explicit PropNameID(std::string name) : name_(std::move(name)) {}
+};
+
 class String {
 public:
   String() = default;
@@ -67,6 +81,7 @@ public:
 
   Kind kind() const { return kind_; }
   bool isObject() const { return kind_ == Kind::Object; }
+  bool isNumber() const { return kind_ == Kind::Number; }
   bool isUndefined() const { return kind_ == Kind::Undefined; }
 
   double asNumber() const {
@@ -100,6 +115,7 @@ private:
 namespace detail {
 struct ObjectData {
   std::unordered_map<std::string, Value> props;
+  std::shared_ptr<std::vector<uint8_t>> bytes;
 };
 struct ArrayData {
   std::vector<Value> items;
@@ -112,11 +128,13 @@ class Object {
 public:
   Object(Runtime&) : data_(std::make_shared<detail::ObjectData>()) {}
   Object() : data_(std::make_shared<detail::ObjectData>()) {}
+  Object(Runtime&, const ArrayBuffer& buffer);
 
   bool isArray(Runtime&) const { return static_cast<bool>(arr_); }
+  bool isArrayBuffer(Runtime&) const { return static_cast<bool>(data_->bytes); }
   class Array getArray(Runtime&) const;
 
-  Value getProperty(Runtime& rt, const std::string& name) const {
+  Value getProperty(Runtime&, const std::string& name) const {
     auto it = data_->props.find(name);
     if (it == data_->props.end()) return Value();
     return it->second;
@@ -153,6 +171,23 @@ public:
   void setProperty(Runtime& rt, const char* name, const String& s) { setProperty(rt, std::string(name), s); }
   void setProperty(Runtime& rt, const char* name, const Object& o) { setProperty(rt, std::string(name), o); }
   void setProperty(Runtime& rt, const char* name, const Array& a);
+  // PropNameID 오버로드 — cachedProp 경로(생성 코덱 decode 핫패스).
+  void setProperty(Runtime& rt, const PropNameID& pid, Value v) {
+    setProperty(rt, pid.utf8(rt), std::move(v));
+  }
+  void setProperty(Runtime& rt, const PropNameID& pid, double n) {
+    setProperty(rt, pid.utf8(rt), n);
+  }
+  void setProperty(Runtime& rt, const PropNameID& pid, bool b) {
+    setProperty(rt, pid.utf8(rt), b);
+  }
+  void setProperty(Runtime& rt, const PropNameID& pid, const String& s) {
+    setProperty(rt, pid.utf8(rt), s);
+  }
+  void setProperty(Runtime& rt, const PropNameID& pid, const Object& o) {
+    setProperty(rt, pid.utf8(rt), o);
+  }
+  void setProperty(Runtime& rt, const PropNameID& pid, const Array& a);
 
   // bytes 코덱 테스트용 — 정의는 클래스 외부(ArrayBuffer 정의 뒤).
   inline class ArrayBuffer getArrayBuffer(Runtime&) const;
@@ -204,6 +239,9 @@ inline Array Object::getPropertyNames(Runtime& rt) const {
 inline void Object::setProperty(Runtime& rt, const char* name, const Array& a) {
   setProperty(rt, std::string(name), a);
 }
+inline void Object::setProperty(Runtime& rt, const PropNameID& pid, const Array& a) {
+  setProperty(rt, pid.utf8(rt), a);
+}
 inline Array Object::getArray(Runtime&) const {
   Array a;
   a.data_ = arr_;
@@ -216,17 +254,28 @@ inline Value::Value(const Object& o) : kind_(Kind::Object), obj_(o.data_), arr_(
 /// jsi::ArrayBuffer 를 제공한다(동일 data(rt)/length(rt) 계약).
 class ArrayBuffer {
 public:
-  ArrayBuffer() = default;
-  explicit ArrayBuffer(Runtime&, size_t n) : bytes_(n) {}
-  uint8_t* data(Runtime&) { return bytes_.data(); }
-  const uint8_t* data(Runtime&) const { return bytes_.data(); }
-  size_t length(Runtime&) const { return bytes_.size(); }
+  ArrayBuffer() : bytes_(std::make_shared<std::vector<uint8_t>>()) {}
+  explicit ArrayBuffer(Runtime&, size_t n)
+      : bytes_(std::make_shared<std::vector<uint8_t>>(n)) {}
+  uint8_t* data(Runtime&) { return bytes_->data(); }
+  const uint8_t* data(Runtime&) const { return bytes_->data(); }
+  size_t length(Runtime&) const { return bytes_->size(); }
+  size_t size(Runtime&) const { return bytes_->size(); }
 
 private:
-  std::vector<uint8_t> bytes_;
+  explicit ArrayBuffer(std::shared_ptr<std::vector<uint8_t>> bytes)
+      : bytes_(std::move(bytes)) {}
+  std::shared_ptr<std::vector<uint8_t>> bytes_;
+  friend class Object;
 };
 
-inline ArrayBuffer Object::getArrayBuffer(Runtime&) const { return ArrayBuffer(); }
+inline Object::Object(Runtime&, const ArrayBuffer& buffer)
+    : data_(std::make_shared<detail::ObjectData>()) {
+  data_->bytes = buffer.bytes_;
+}
+inline ArrayBuffer Object::getArrayBuffer(Runtime&) const {
+  return data_->bytes ? ArrayBuffer(data_->bytes) : ArrayBuffer();
+}
 inline Value::Value(const Array& a) : kind_(Kind::Array), arr_(a.data_) {}
 inline Value::Value(Runtime&, const Object& o) : kind_(Kind::Object), obj_(o.data_), arr_(o.arr_) {}
 inline Value::Value(Runtime&, const Array& a) : kind_(Kind::Array), arr_(a.data_) {}

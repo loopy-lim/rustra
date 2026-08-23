@@ -103,8 +103,12 @@ import { dirname, resolve, join } from 'node:path';
 
 // 저장소 루트 기준 절대경로 — 테스트는 packages/node/dist 에서 실행된다.
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+// Bun 1.4 coverage instrumentation currently makes node:child_process spawn fail
+// with EBADF. The normal Bun suite still runs these real-process tests; only the
+// coverage-only pass skips them until the upstream runner issue is fixed.
+const processTest = process.env.RUSTRA_BUN_COVERAGE === '1' ? test.skip : test;
 
-test(
+processTest(
   'createNodeProcessTransport invokes a real Rust runtime over stdio',
   { timeout: 30_000 },
   async () => {
@@ -121,7 +125,7 @@ test(
   },
 );
 
-test('createNodeProcessTransport surfaces spawn failures as transport.error', async () => {
+processTest('createNodeProcessTransport surfaces spawn failures as transport.error', async () => {
   const transport = createNodeProcessTransport({
     command: './definitely-not-a-real-binary',
   });
@@ -132,7 +136,7 @@ test('createNodeProcessTransport surfaces spawn failures as transport.error', as
   });
 });
 
-test('createNodeLoopTransport keeps a persistent process and correlates by id', async () => {
+processTest('createNodeLoopTransport keeps a persistent process and correlates by id', async () => {
   const { createNodeLoopTransport } = await import('./index.js');
   const bin = join(repoRoot, 'target', 'debug', 'loop-stdio');
   const transport = createNodeLoopTransport({ command: bin, args: [] });
@@ -148,9 +152,19 @@ test('createNodeLoopTransport keeps a persistent process and correlates by id', 
     assert.equal(b.message, 'Hello, loop!');
     assert.equal(transport.pid, pid1, 'process is reused, not respawned');
 
-    // 이벤트 drain (특수 명령 경유).
+    // 이벤트 drain (특수 명령 경유) — 실제 비어 있지 않은 top-level `events`
+    // 프레임을 읽어 result와 혼동하지 않는지 검증한다.
+    const emitted = (await transport.invoke('emitDemo', {
+      ticks: 2,
+      stepDelayMs: 0,
+    })) as { emitted: number };
+    assert.equal(emitted.emitted, 3);
     const events = await transport.drainEvents();
-    assert.deepEqual(events, []);
+    assert.deepEqual(events, [
+      { name: 'progress.tick', payload: { step: 1, total: 2 } },
+      { name: 'progress.tick', payload: { step: 2, total: 2 } },
+      { name: 'demo.done', payload: { emitted: 3 } },
+    ]);
 
     // 존재하지 않는 명령 — id 상관 에러 전파.
     await assert.rejects(

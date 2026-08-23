@@ -21,6 +21,8 @@ namespace margelo::nitro::nitrobench { struct AddPayload; }
 namespace margelo::nitro::nitrobench { struct StringPayload; }
 // Forward declaration of `BytesPayload` to properly resolve imports.
 namespace margelo::nitro::nitrobench { struct BytesPayload; }
+// Forward declaration of `BufferPayload` to properly resolve imports.
+namespace margelo::nitro::nitrobench { struct BufferPayload; }
 // Forward declaration of `PairPayload` to properly resolve imports.
 namespace margelo::nitro::nitrobench { struct PairPayload; }
 
@@ -28,6 +30,7 @@ namespace margelo::nitro::nitrobench { struct PairPayload; }
 #include "AddPayload.hpp"
 #include "StringPayload.hpp"
 #include "BytesPayload.hpp"
+#include "BufferPayload.hpp"
 #include "PairPayload.hpp"
 
 namespace margelo::nitro::nitrobench {
@@ -65,6 +68,7 @@ namespace margelo::nitro::nitrobench {
       virtual AddResult benchAdd(const AddPayload& value) = 0;
       virtual StringPayload echoString(const StringPayload& value) = 0;
       virtual BytesPayload echoBytes(const BytesPayload& value) = 0;
+      virtual BufferPayload echoBuffer(const BufferPayload& value) = 0;
       virtual PairPayload echoPair(const PairPayload& value) = 0;
 
     protected:

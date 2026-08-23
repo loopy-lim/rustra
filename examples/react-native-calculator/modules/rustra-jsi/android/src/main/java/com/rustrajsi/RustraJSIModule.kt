@@ -16,6 +16,11 @@ class RustraJSIModule(reactContext: ReactApplicationContext) :
 
   override fun getName(): String = "RustraJSI"
 
+  override fun invalidate() {
+    nativeInvalidate()
+    super.invalidate()
+  }
+
   @ReactMethod
   fun install(promise: Promise) {
     val jsContextPointer = reactApplicationContext.javaScriptContextHolder?.get()
@@ -41,4 +46,6 @@ class RustraJSIModule(reactContext: ReactApplicationContext) :
     jsContextNativePointer: Long,
     jsCallInvokerHolder: com.facebook.react.turbomodule.core.interfaces.CallInvokerHolder?
   ): Boolean
+
+  private external fun nativeInvalidate()
 }

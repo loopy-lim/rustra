@@ -38,7 +38,7 @@ export type BenchAddOutput = {
 };
 
 export type BenchBytesPayload = {
-  data: Uint8Array | number[];
+  data: Uint8Array | ArrayBuffer | number[];
 };
 
 export type BenchPairPayload = {
@@ -209,7 +209,7 @@ export type SecureComputeOutput = {
 };
 
 export type SizeOfInput = {
-  data: Uint8Array | number[];
+  data: Uint8Array | ArrayBuffer | number[];
 };
 
 export type SizeOfOutput = {

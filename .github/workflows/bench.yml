@@ -6,6 +6,12 @@ name: Benchmark
 
 on:
   workflow_dispatch:
+    inputs:
+      bootstrap_baseline:
+        description: 'Create the first platform baseline without comparing a previous run'
+        required: false
+        default: false
+        type: boolean
   push:
     branches: [main]
     paths:
@@ -24,6 +30,9 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.95.0
       - uses: Swatinem/rust-cache@v2
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
       # 직전 성공 벤치의 criterion baseline 복원 — 없으면 change: 이 첫 측정
       # 기준(no baseline)이 되어 회귀 감지가 무의미해진다. retention(14일)
       # 내 아티팩트만 유효하다.
@@ -36,16 +45,30 @@ jobs:
           name: criterion-results
           path: target/criterion
 
+      - name: Require a real previous baseline
+        if: github.event_name != 'workflow_dispatch' || inputs.bootstrap_baseline != true
+        run: |
+          if ! find target/criterion -path '*/base/estimates.json' -print -quit | grep -q .; then
+            echo 'No previous Criterion baseline was restored.' >&2
+            echo 'Run workflow_dispatch once with bootstrap_baseline=true, then rerun normally.' >&2
+            exit 1
+          fi
+
       # dev 프로파일 벤치 — dynamic(Tier 3) 경로가 register 로만 도달해
       # debug 빌드가 필요하다 ( benches/tier_compare.rs 주석 참조 ).
       - name: Run tier_compare benchmark
-        run: cargo bench -p rustra --profile dev -- tier_compare 2>&1 | tee bench_tier.txt
+        run: cargo bench -p rustra --profile dev --bench tier_compare 2>&1 | tee bench_tier.txt
 
       - name: Run type_scaling benchmark
-        run: cargo bench -p rustra --profile dev -- type_scaling 2>&1 | tee bench_scaling.txt
+        run: cargo bench -p rustra --profile dev --bench type_scaling 2>&1 | tee bench_scaling.txt
 
       - name: Run dynamic_registry benchmark
-        run: cargo bench -p rustra --profile dev -- dynamic_registry 2>&1 | tee bench_dynamic.txt
+        run: cargo bench -p rustra --profile dev --bench dynamic_registry 2>&1 | tee bench_dynamic.txt
+
+      - name: Enforce 10% regression budget
+        id: gate
+        if: github.event_name != 'workflow_dispatch' || inputs.bootstrap_baseline != true
+        run: bun scripts/check-criterion-regression.mjs --max-regression 0.10
 
       - name: Summary
         if: always()
@@ -58,9 +81,13 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload criterion artifacts
+        # 게이트를 통과한 결과만 새 baseline이 된다. 회귀가 포함된 결과를
+        # 업로드하면 다음 실행이 오염된 base와 비교해 회귀가 고착된다
+        # (첫 실패 +10% → 다음 실패 또 +10% 누적 우회). 실패 결과는 별도
+        # 아티팩트명으로 보존해 원인 분석은 가능하게 한다.
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: criterion-results
+          name: criterion-results${{ steps.gate.outcome == 'failure' && '-rejected' || '' }}
           path: target/criterion/
           retention-days: 14

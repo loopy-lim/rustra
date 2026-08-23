@@ -10,6 +10,8 @@ export interface NitroBench extends HybridObject<{
   benchAdd(value: AddPayload): AddResult
   echoString(value: StringPayload): StringPayload
   echoBytes(value: BytesPayload): BytesPayload
+  /** Contiguous byte-buffer comparison lane for Rustra's native buffer path. */
+  echoBuffer(value: BufferPayload): BufferPayload
   echoPair(value: PairPayload): PairPayload
 }
 
@@ -28,6 +30,10 @@ export interface StringPayload {
 
 export interface BytesPayload {
   data: number[]
+}
+
+export interface BufferPayload {
+  data: ArrayBuffer
 }
 
 export interface PairPayload {

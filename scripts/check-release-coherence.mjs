@@ -10,6 +10,17 @@ const types = readJson('packages/types/package.json');
 const cargoMinor = workspaceVersion.split('.').slice(0, 2).join('.');
 const expectedTypesRange = `^${types.version}`;
 const failures = [];
+const publishedPackages = [
+  'bun',
+  'cli',
+  'devtools',
+  'node',
+  'react-native',
+  'react',
+  'tauri',
+  'testing',
+  'types',
+];
 
 if (cli.rustraTemplate?.cargoMinor !== cargoMinor) {
   failures.push(
@@ -22,7 +33,7 @@ if (cli.dependencies?.['@rustra/types'] !== expectedTypesRange) {
   );
 }
 
-for (const name of ['bun', 'devtools', 'node', 'react-native', 'react', 'tauri', 'testing']) {
+for (const name of publishedPackages.filter((name) => !['cli', 'types'].includes(name))) {
   const manifest = readJson(`packages/${name}/package.json`);
   if (manifest.dependencies?.['@rustra/types'] !== expectedTypesRange) {
     failures.push(
@@ -32,18 +43,20 @@ for (const name of ['bun', 'devtools', 'node', 'react-native', 'react', 'tauri',
 }
 
 const lock = readFileSync('bun.lock', 'utf8');
-for (const name of [
-  'bun',
-  'cli',
-  'devtools',
-  'node',
-  'react-native',
-  'react',
-  'tauri',
-  'testing',
-  'types',
-]) {
+const rootLicense = readFileSync('LICENSE', 'utf8');
+for (const name of publishedPackages) {
   const manifest = readJson(`packages/${name}/package.json`);
+  if (!manifest.files?.includes('LICENSE')) {
+    failures.push(`${manifest.name} package files omit LICENSE`);
+  }
+  try {
+    const packageLicense = readFileSync(`packages/${name}/LICENSE`, 'utf8');
+    if (packageLicense !== rootLicense) {
+      failures.push(`${manifest.name} LICENSE differs from root LICENSE`);
+    }
+  } catch {
+    failures.push(`${manifest.name} LICENSE is missing`);
+  }
   const workspacePath = `packages/${name}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const block = lock.match(
     new RegExp(`"${workspacePath}"\\s*:\\s*\\{([\\s\\S]*?)\\n    \\},`),

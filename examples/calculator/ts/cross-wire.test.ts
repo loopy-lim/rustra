@@ -45,6 +45,43 @@ test('cross-wire addNumbers: TS codec.encode → Rust request wire', () => {
   assert.equal(bytesToHex(req), ADDNUMBERS_REQUEST, 'TS encode must match Rust request hex');
 });
 
+test('encodeInto is byte-identical to encode across representative commands', () => {
+  // 재사용 버퍼 직접 기록 경로(encodeInto)는 encode 와 완전히 같은 와이어를
+  // 내야 한다 — 커맨드별 최근 버퍼 1개 재사용이 dispatch 핫패스에 들어가므로
+  // 패리티가 깨지면 즉시 잡아야 한다. 부정수/멀티바이트 varint/문자열/배열로
+  // 경계를 두루 친다.
+  const cases: Array<
+    [
+      string,
+      unknown,
+      { encode(a: never): ArrayBuffer; encodeInto?(a: never, r?: Uint8Array): Uint8Array },
+    ]
+  > = [
+    ['addNumbers', { a: 2, b: 3 }, addNumbersCodec],
+    ['addNumbers neg', { a: -5, b: 100000 }, addNumbersCodec],
+    ['greet', { name: '루스트 🎉' }, greetCodec],
+    ['divide', { a: 7, b: 2 }, divideCodec],
+  ];
+  for (const [label, args, codec] of cases) {
+    const fromEncode = new Uint8Array(codec.encode(args as never));
+    const firstInto = codec.encodeInto!(args as never);
+    const againInto = codec.encodeInto!(args as never, firstInto);
+    for (const [variant, bytes] of [
+      ['fresh', firstInto],
+      ['reuse', againInto],
+    ] as const) {
+      assert.equal(
+        bytes.length,
+        fromEncode.length,
+        `${label} (${variant}): encodeInto length must match encode`,
+      );
+      for (let i = 0; i < fromEncode.length; i++) {
+        assert.equal(bytes[i], fromEncode[i], `${label} (${variant}) byte ${i}`);
+      }
+    }
+  }
+});
+
 // ── greet (Tier2 String) ────────────────────────────────────
 
 test('cross-wire greet: Rust response → TS codec.decode', () => {

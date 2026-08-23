@@ -42,10 +42,10 @@ function percentile(sorted, pct) {
 
 // ── Transport implementations ────────────────────────────
 
-function createSubprocessTransport() {
-  const binPath = join(ROOT, 'target/debug/rustra-calculator-example');
+function createSubprocessTransport(binPath) {
+  const profile = binPath.includes('/release/') ? 'release' : 'debug';
   return {
-    name: `${runtime} subprocess`,
+    name: `${runtime} subprocess (${profile})`,
     invoke(command, args) {
       const output = spawnSync(binPath, ['invoke'], {
         input: JSON.stringify({ command, args }),
@@ -94,7 +94,10 @@ function createBunFfiTransport() {
     invoke(command, args) {
       const payload = Buffer.from(JSON.stringify({ command, args }) + '\0');
       const rawPtr = lib.symbols.rustra_calculator_invoke(payload);
-      const rawResponse = new CString(rawPtr);
+      if (!rawPtr) throw new Error('Bun FFI returned a null response pointer');
+      // CString는 native pointer view라 free 뒤 lazy coercion하면 use-after-free가
+      // 된다. 호스트 소유 문자열로 먼저 복사한 다음 Rust 버퍼를 해제한다.
+      const rawResponse = new CString(rawPtr).toString();
       lib.symbols.rustra_calculator_free_string(rawPtr);
       const response = JSON.parse(rawResponse);
       if (!response.ok) throw new Error(response.error);
@@ -136,6 +139,113 @@ function createNapiTransport() {
       const response = JSON.parse(rawResponse);
       if (!response.ok) throw new Error(response.error);
       return response.result;
+    },
+  };
+}
+
+// ── rkyv V2 direct transports (postcard 왕복 — JSON/UTF-16 없음) ──
+//
+// 코어 FFI(rustra_ffi_invoke_rkyv_v2, wire-bench 61.5ns)를 버퍼 직결로 태운다.
+// napi는 rustraInvokeRkyvV2 바인딩, Bun은 dlopen 심볼 직접 바인딩. JS 코덱
+// 인코딩은 bench harness에서 고정 프레임을 재사용해 측정한다(코덱 자체 비용은
+// adapter-bench/JS codec 벤치가 담당) — 여기선 transport 비용만 격리한다.
+
+function zigzagVarint(n) {
+  const v = n >= 0 ? n * 2 : -n * 2 - 1;
+  const bytes = [];
+  let x = v;
+  do {
+    bytes.push((x % 128) | 0x80);
+    x = Math.floor(x / 128);
+  } while (x > 0);
+  bytes[bytes.length - 1] &= 0x7f;
+  return bytes;
+}
+
+function decodeRkyvV2Result(frame) {
+  // [ok:1][pad3][len u32 LE @4][postcard body @8]
+  if (frame[0] !== 1) throw new Error('rkyv V2 bench: error frame');
+  let v = 0;
+  let shift = 0;
+  let i = 8;
+  for (;;) {
+    const b = frame[i++];
+    v |= (b & 0x7f) << shift;
+    if (!(b & 0x80)) break;
+    shift += 7;
+  }
+  return (v >>> 1) ^ -(v & 1);
+}
+
+function createNapiRkyvTransport() {
+  const napiPath = join(
+    ROOT,
+    `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`,
+  );
+  const native = createRequire(__dirname)(napiPath);
+  if (typeof native.rustraInvokeRkyvV2 !== 'function') {
+    throw new Error('napi addon predates rustraInvokeRkyvV2 — rebuild with napi build');
+  }
+  // addNumbers(cmd_id=1) 고정 프레임 — { a: 42, b: 58 }의 postcard 인코딩.
+  const frame = Buffer.from([1, 0, ...zigzagVarint(42), ...zigzagVarint(58)]);
+  return {
+    name: 'Node napi rkyv V2',
+    invoke(command, args) {
+      void command;
+      void args;
+      const resp = native.rustraInvokeRkyvV2(frame);
+      return decodeRkyvV2Result(resp);
+    },
+  };
+}
+
+function createBunRkyvTransport() {
+  // createBunFfiTransport 와 동일한 release-우선 탐색을 공유한다. bun:ffi 는
+  // 이 스크립트가 Bun 으로 실행될 때만 존재한다(호출부가 isBun 으로 게이트).
+  // eslint-disable-next-line import/no-extraneous-dependencies
+  const { dlopen, FFIType, suffix, toArrayBuffer } = Bun
+    ? require('bun:ffi')
+    : { dlopen: undefined, FFIType: undefined, suffix: undefined, toArrayBuffer: undefined };
+  const candidates = [
+    { dir: 'release', label: '' },
+    { dir: 'debug', label: ' (debug)' },
+  ];
+  const found = candidates
+    .map((c) => ({
+      ...c,
+      path: join(ROOT, `target/${c.dir}/librustra_calculator_example.${suffix}`),
+    }))
+    .find((c) => existsSync(c.path));
+  if (!found) throw new Error('no librustra_calculator_example dylib');
+  const lib = dlopen(found.path, {
+    rustra_calculator_invoke_rkyv_v2: {
+      args: [FFIType.ptr, FFIType.usize, FFIType.ptr],
+      returns: FFIType.ptr,
+    },
+    rustra_calculator_free_rkyv_v2_buffer: {
+      args: [FFIType.ptr, FFIType.usize],
+      returns: FFIType.void,
+    },
+  });
+  const frame = Buffer.from([1, 0, ...zigzagVarint(42), ...zigzagVarint(58)]);
+  const outLen = new BigUint64Array(1);
+  return {
+    name: `Bun FFI rkyv V2${found.label}`,
+    invoke(command, args) {
+      void command;
+      void args;
+      const ptr = lib.symbols.rustra_calculator_invoke_rkyv_v2(
+        frame,
+        BigInt(frame.byteLength),
+        outLen,
+      );
+      if (ptr === 0) throw new Error('Bun FFI rkyv V2 returned null');
+      const len = Number(outLen[0]);
+      // toArrayBuffer 는 Rust 메모리를 참조하는 뷰고 new Uint8Array(뷰) 도
+      // 버퍼를 공유한다 — free 전에 값 복사로 materialize 해야 한다.
+      const copied = Array.from(new Uint8Array(toArrayBuffer(ptr, 0, len)));
+      lib.symbols.rustra_calculator_free_rkyv_v2_buffer(ptr, BigInt(len));
+      return decodeRkyvV2Result(copied);
     },
   };
 }
@@ -184,7 +294,7 @@ const binCandidates = ['release', 'debug']
   .filter((p) => existsSync(p));
 const binPath = binCandidates[0];
 if (existsSync(binPath)) {
-  transports.push(createSubprocessTransport());
+  transports.push(createSubprocessTransport(binPath));
 }
 
 // Bun FFI
@@ -193,6 +303,11 @@ if (isBun) {
     transports.push(createBunFfiTransport());
   } catch (e) {
     console.log(`  (Bun FFI unavailable: ${e.message})`);
+  }
+  try {
+    transports.push(createBunRkyvTransport());
+  } catch (e) {
+    console.log(`  (Bun FFI rkyv V2 unavailable: ${e.message})`);
   }
 }
 
@@ -212,6 +327,11 @@ if (!isBun) {
     }
   } catch (e) {
     console.log(`  (napi-rs unavailable: ${e.message})`);
+  }
+  try {
+    transports.push(createNapiRkyvTransport());
+  } catch (e) {
+    console.log(`  (napi rkyv V2 unavailable: ${e.message})`);
   }
 }
 
@@ -285,7 +405,7 @@ console.log(`│`);
 // The calculator N-API fixture exposes addNumbers, not processPayload. Keep this
 // section honest: it checks sample-count stability, while payload scaling is
 // measured by the Rust Criterion type_scaling benchmark.
-const nativeTransport = transports.find((t) => t.name !== `${runtime} subprocess`) || transports[0];
+const nativeTransport = transports.find((t) => !t.name.includes('subprocess')) || transports[0];
 
 const sampleCounts = [100, 500, 2000, 5000, 10000];
 const stabilityResults = [];
@@ -401,10 +521,14 @@ if (!isBun) {
     if (typeof native.rustraInvokeBuffer === 'function') {
       console.log('┌─ 4) Response Size Scaling — String vs Buffer (napi) ──┐');
       console.log(`│`);
-      // live_schema 는 응답이 수 KB — 대형 응답의 실제 소비 형태에 가장 가깝다.
+      const largeString = 'rustra'.repeat(1366); // 약 8 KiB 실제 echo 응답
       const cases = [
         { label: 'addNumbers (34 B)', command: 'addNumbers', args: { a: 42, b: 58 } },
-        { label: 'liveSchema (~2.4 KB)', command: 'liveSchema', args: undefined },
+        {
+          label: 'echoString (~8 KiB)',
+          command: 'benchEchoString',
+          args: { value: largeString },
+        },
       ];
       console.log(
         `│  ${'Case'.padEnd(22)} ${'String'.padStart(12)} ${'Buffer'.padStart(12)} ${'우위'.padStart(8)}`,

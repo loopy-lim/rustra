@@ -92,11 +92,9 @@ export function createMockEngine(): MockEngine {
     },
     async invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
       // 배치는 항목별 invoke 로 라우팅한다(각 항목의 옵션 정책이 그대로 적용되도록).
-      const results: T[] = [];
-      for (const { command, args, options } of entries) {
-        results.push(await engine.invoke<T>(command, args, options));
-      }
-      return results;
+      return Promise.all(
+        entries.map(({ command, args, options }) => engine.invoke<T>(command, args, options)),
+      );
     },
   };
   return engine;

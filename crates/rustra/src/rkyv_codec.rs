@@ -10,6 +10,59 @@ use std::sync::Arc;
 use crate::{Result, RustraError};
 
 pub(crate) type BinHandler = Arc<dyn Fn(&[u8]) -> Result<Vec<u8>> + Send + Sync>;
+/// 스칼라 직결(raw) 핸들러 — postcard 인코딩/디코딩을 완전히 건너뛴다.
+/// 인자는 64비트 슬롯(f64는 비트 재해석, 정수는 값 그대로)로 전달되고
+/// 결과도 동일하게 64비트 하나로 돌아온다. 필드 종류는 `RawFieldKind`
+/// 시퀀스가 정의한다(호스트와 코어가 같은 순서로 비트를 해석한다).
+pub(crate) type RawHandler = Arc<dyn Fn(&[u64]) -> Result<u64> + Send + Sync>;
+
+/// raw 직결이 다루는 스칼라 필드 종류 — JS/C++/Rust 3면이 공유한다.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RawFieldKind {
+    /// 지그재그 부호 정수(i8–i64) — 슬롯에 값 그대로.
+    Zigzag,
+    /// 플레인 varint 무부호(u8–u64) — 슬롯에 값 그대로.
+    Uvar,
+    /// f64 — 슬롯에 IEEE-754 비트.
+    F64,
+    /// f32 — 정밀도 손실 없이 f64로 전달(호스트가 이미 double 로 받는다).
+    F32,
+    /// bool — 0/1.
+    Bool,
+}
+
+impl RawFieldKind {
+    /// 스키마 표현(코드젠/라이브 스키마와 동일 문자열).
+    pub fn from_schema_kind(kind: &str) -> Option<Self> {
+        match kind {
+            "zigzag" => Some(Self::Zigzag),
+            "uvar" => Some(Self::Uvar),
+            "f64" => Some(Self::F64),
+            "f32" => Some(Self::F32),
+            "bool" => Some(Self::Bool),
+            _ => None,
+        }
+    }
+}
+
+/// u64 슬롯 ↔ f64 비트 재해석 — raw 직결의 기본 변환기.
+pub fn u64_from_f64(value: f64) -> u64 {
+    value.to_bits()
+}
+
+pub fn f64_from_u64(bits: u64) -> f64 {
+    f64::from_bits(bits)
+}
+
+pub(crate) type BinIntoHandler =
+    Arc<dyn Fn(&[u8], &mut [u8]) -> Result<DirectResponse> + Send + Sync>;
+
+/// caller-buffer dispatch 결과. 작은 응답은 호스트 버퍼에 직접 기록하고, 용량이
+/// 부족한 응답만 한 번 할당해 probe cache로 넘긴다(핸들러 재실행 방지).
+pub(crate) enum DirectResponse {
+    Written(usize),
+    Buffered(Vec<u8>),
+}
 pub(crate) type DecodeFn = Arc<dyn Fn(&[u8]) -> Result<Value> + Send + Sync>;
 pub(crate) type EncodeFn = Arc<dyn Fn(&Value) -> Vec<u8> + Send + Sync>;
 
@@ -652,6 +705,15 @@ fn js_field_supported_with_defs(
 ) -> bool {
     if depth > 8 {
         return false; // 과도한 중첩(순환 $ref 포함) — 안전하게 미지원 취급
+    }
+    // schemars의 tuple newtype는 single-entry allOf + $ref다. serde/postcard는
+    // 내부 값만 직렬화하므로 이 한 겹은 투명하게 벗길 수 있다. 둘 이상의
+    // allOf(intersection)는 와이어 순서를 증명할 수 없어 계속 미지원이다.
+    if let Some(all_of) = schema.get("allOf").and_then(Value::as_array) {
+        if all_of.len() == 1 {
+            return js_field_supported_with_defs(&all_of[0], defs, depth + 1);
+        }
+        return false;
     }
     // $ref → 정의 스키마를 따라가 판정한다. 정의를 못 찾으면 원본 스키마로
     // 폴백해 아래 규칙이 그대로 적용된다(과거 동작과 동일하게 안전 실패).

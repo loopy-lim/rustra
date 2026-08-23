@@ -15,11 +15,9 @@ Pod::Spec.new do |s|
   s.platforms    = { :ios => '15.1' }
   s.source_files = '**/*.{h,m,mm,swift,hpp,cpp}'
 
-  s.vendored_libraries = 'rust/lib/librustra_calculator_example.a'
-  s.pod_target_xcconfig = {
-    'OTHER_LDFLAGS' => '-force_load $(PODS_TARGET_SRCROOT)/rust/lib/librustra_calculator_example.a',
-    'HEADER_SEARCH_PATHS' => '"$(PODS_TARGET_SRCROOT)/ios"',
-  }
-
   s.dependency 'ExpoModulesCore'
+  # RustraJSI owns and force-loads the single Rust static archive. Depending on
+  # that pod keeps the Swift FFI comparison on the exact same Rust build while
+  # avoiding duplicate symbols from linking the archive twice.
+  s.dependency 'RustraJSI'
 end

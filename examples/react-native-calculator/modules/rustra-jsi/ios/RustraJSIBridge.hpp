@@ -20,6 +20,11 @@ extern "C" {
   uint8_t* rustra_ffi_invoke_postcard(
     const uint8_t* payload, size_t payload_len, size_t* out_len);
   void rustra_ffi_free(uint8_t* ptr, size_t len);
+  uint32_t rustra_ffi_invoke_buffer(
+    uint16_t command_id, const uint8_t* payload, size_t payload_len,
+    uint8_t** out_ptr, size_t* out_len);
+  uint32_t rustra_ffi_has_buffer(uint16_t command_id);
+  void rustra_ffi_free_owned_bytes(uint8_t* ptr, size_t len);
 
   // ── Event sink push delivery (from rustra::ffi) ─────────
   // C 호스트가 Rust → JS 이벤트 푸시용 콜백을 등록/해제한다.
@@ -70,7 +75,7 @@ extern "C" {
   // ── rkyv V2 async (follow-up 3) ──────────────────────────
   // `rustra_calculator_invoke_rkyv_v2` 의 async 변형 — invocation_id 발급 +
   // cancel 체크포인트 포함. 응답 버퍼는 on_complete 콜백 안에서
-  // rustra_calculator_free_buffer 로 해제해야 한다.
+  // rustra_calculator_free_rkyv_v2_buffer 로 해제해야 한다.
   typedef void (*rustra_calculator_async_callback_t)(
     void* user_data, uint8_t* resp, size_t resp_len);
   void rustra_calculator_invoke_rkyv_v2_async(
@@ -91,6 +96,19 @@ extern "C" {
   size_t rustra_ffi_invoke_rkyv_v2_into(
     const uint8_t* payload, size_t payload_len,
     uint8_t* buf, size_t capacity, size_t* out_len);
+
+  // ── (Tier 0) 스칼라 직결 raw invoke — postcard 인코딩/디코딩 전부 제거 ──
+  // 인자를 u64 슬롯(f64는 IEEE-754 비트, bool은 0/1)으로 직접 전달한다.
+  // 반환: 0=성공(*out_slot 에 결과 슬롯), 1=핸들러 에러(에러 와이어를 err_buf
+  // 에 복사, *err_len 에 필요 크기), UINT32_MAX=raw 불가 명령(호스트 폴백 신호).
+  uint32_t rustra_ffi_invoke_raw(
+    uint16_t command_id,
+    const uint64_t* slots, size_t slot_count,
+    uint64_t* out_slot,
+    uint8_t* err_buf, size_t err_buf_cap, size_t* err_len);
+
+  // 등록된 Rust 패키지가 해당 cmd_id 의 raw handler 를 실제로 보유하면 1.
+  uint8_t rustra_ffi_has_raw(uint16_t command_id);
 }
 
 /// Cached function entry — stores PropNameID + pre-created JS Function.
@@ -235,6 +253,10 @@ private:
 };
 
 void installRustraJSI(facebook::jsi::Runtime& rt);
+
+/// Runtime teardown/reload 직전에 pending async 콜백을 취소하고 구 Runtime
+/// 소유 JSI Function 핸들을 JS 스레드에서 폐기한다.
+void invalidateRustraJSI();
 
 /// installRustraJSI + JS 스레드 CallInvoker 주입. iOS(RCTCxxBridge) 와
 /// Android(CallInvokerHolder) 플랫폼 글루가 각자의 방식으로 CallInvoker 를

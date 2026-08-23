@@ -5,7 +5,7 @@
 ## 실행
 
 ```bash
-cargo run -p rustra-calculator-example
+cargo run -p rustra-calculator-example --bin rustra-calculator-example
 ```
 
 ## 예시가 보여주는 것
@@ -15,7 +15,7 @@ cargo run -p rustra-calculator-example
 3. **로컬 invoke** — `package.invoke("addNumbers", ...)`로 타입 안전한 호출
 4. **TypeScript 생성** — `package.generate_typescript()` → `generated.write_to_dir(...)`로 파일 출력
 5. **FFI 엔트리포인트** — `rustra_calculator_invoke` / `rustra_calculator_free_string` C ABI 제공
-6. **stdio 브릿지** — `cargo run -p rustra-calculator-example -- invoke`로 stdin/stdout JSON 통신
+6. **stdio 브릿지** — `cargo run -p rustra-calculator-example --bin rustra-calculator-example -- invoke`로 stdin/stdout JSON 통신
 
 ## 생성되는 파일
 

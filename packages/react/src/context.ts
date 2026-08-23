@@ -6,7 +6,8 @@ const RustraContext = createContext<EngineClient | null>(null);
 
 export interface RustraProviderProps {
   engine: EngineClient;
-  children: ReactNode;
+  /** Optional to match React's createElement/conditional-composition ergonomics. */
+  children?: ReactNode;
 }
 
 /**

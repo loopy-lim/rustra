@@ -11,10 +11,11 @@ rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 
 ### 가장 빠른 시작 — `rustra init`
 
 ```bash
-bunx @rustra/cli init my-project
+bunx --bun @rustra/cli@0.3.0 init my-project
 cd my-project
-cargo run            # ./generated 에 schema.json + TS 클라이언트 생성
-bun install && bun run codegen
+bun install
+bun run codegen      # schema.json + 완전한 TS/C++ 클라이언트 생성
+cargo run            # 생성된 echo 커맨드를 실제 호출
 ```
 
 스캐폴드는 Cargo 크레이트(echo 예제 커맨드 포함) + `generate` bin +
@@ -24,7 +25,7 @@ package.json(codegen 스크립트)를 만든다.
 
 ```toml
 [dependencies]
-rustra = "0.2"
+rustra = "0.3"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -207,7 +208,7 @@ fn main() -> rustra::Result<()> {
 실행:
 
 ```bash
-cargo run -p rustra-calculator-example
+cargo run -p rustra-calculator-example --bin rustra-calculator-example
 ```
 
 출력:
@@ -459,9 +460,10 @@ configure(createRkyvV2Engine(getRustraNative(), rkyvV2Registry));
 const result = await addNumbers({ a: 20, b: 22 }); // JSI fast path
 ```
 
-성능: 동일 공개 객체 연산의 Nitro 대비 3회 중앙값 1.17–1.24x
+기록된 이전 Release 성능은 동일 공개 객체 연산의 Nitro 대비 3회 중앙값 1.17–1.24x
 (add 1.2068x, string 1.2384x, bytes 1.1656x, pair 1.2162x).
-2026-08-23 iOS Release 측정이며 비교 범위와 기능 패리티 매트릭스는
+2026-08-23 iOS Release 측정이며, 최신 러너는 Nitro/Rustra/FFI 순환 측정으로
+강화되어 재실행 영수증이 필요하다. 비교 범위와 기능 패리티 매트릭스는
 [벤치마크 문서](benchmarks.md) §"Nitro Modules 비교" 참고.
 
 **C++ 코덱 코드젠 (`--cpp-output`, 헤드라인 성능):** JS 측 코덱 왕복(~3.4µs)까지
@@ -493,16 +495,16 @@ const result = await addNumbers({ a: 20, b: 22 });
 
 ### 요약
 
-| 환경         | 어댑터 함수                             | transport 인자                        | 성능 (release)                         |
-| ------------ | --------------------------------------- | ------------------------------------- | -------------------------------------- |
-| Node         | `createNodeEngine(transport)`           | `{ invoke(command, args) }`           | ~1.5 µs (napi) / ~3.4 ms (subprocess)  |
-| Bun          | `createBunEngine(transport)`            | `{ invoke(command, args) }`           | ~2.1 µs (FFI) / ~3.1 ms (subprocess)   |
-| Tauri        | `createTauriEngine(options)`            | `{ invoke: tauriInvoke }`             | IPC 종속                               |
-| React Native | `createRkyvV2Engine(native, registry)`  | JSI + postcard codecs                 | typed sync ~0.6 µs; Nitro의 1.17–1.24x |
-| React Native | `createReactNativeEngine(nativeModule)` | `NativeModule` (`invoke` 메서드 포함) | ~52 µs (Expo async bridge)             |
+| 환경         | 어댑터 함수                             | transport 인자                        | 성능 (release)                        |
+| ------------ | --------------------------------------- | ------------------------------------- | ------------------------------------- |
+| Node         | `createNodeEngine(transport)`           | `{ invoke(command, args) }`           | ~1.5 µs (napi) / ~3.4 ms (historical) |
+| Bun          | `createBunEngine(transport)`            | `{ invoke(command, args) }`           | ~1.7 µs (FFI) / ~5.7 ms (2026-08-23)  |
+| Tauri        | `createTauriEngine(options)`            | `{ invoke: tauriInvoke }`             | IPC 종속                              |
+| React Native | `createRkyvV2Engine(native, registry)`  | JSI + postcard codecs                 | 이전 iOS Release 기록; 최신 실행 필요 |
+| React Native | `createReactNativeEngine(nativeModule)` | `NativeModule` (`invoke` 메서드 포함) | ~52 µs (Expo async bridge)            |
 
 > Node/Bun의 ~24/27µs는 debug 네이티브 라이브러리를 로드했을 때 값이다 —
-> release 빌드에서는 µs 단위 미만으로 좁혀진다. 측정 세션별 수치는
+> release 빌드에서는 single-digit µs 범위로 좁혀진다. 측정 세션별 수치는
 > [벤치마크 문서](benchmarks.md) 참고 (2026-08-23 RN 재측정).
 
 모든 어댑터가 `EngineClient`를 반환하므로, 이후 코드는 환경에 상관없이 동일하다.
@@ -528,7 +530,7 @@ cargo test --workspace
 ### TypeScript 생성 확인
 
 ```bash
-cargo run -p rustra-calculator-example
+cargo run -p rustra-calculator-example --bin rustra-calculator-example
 ```
 
 `generated/` 디렉토리에 TypeScript 파일이 생성되었는지 확인한다.
@@ -697,7 +699,7 @@ Node, Bun, React Native 어댑터는 transport 구현에 따라 에러 형태가
 | Rust 타입                           | TypeScript                      | 비고                                    |
 | ----------------------------------- | ------------------------------- | --------------------------------------- |
 | `String`, `&str`                    | `string`                        |                                         |
-| `i32`/`i64`/`u32`/`f32`/`f64`       | `number`                        |                                         |
+| `i32`/`i64`/`u32`/`f32`/`f64`       | `number`                        | 64비트 정수는 JS safe integer 범위 권장 |
 | `bool`                              | `boolean`                       |                                         |
 | `Option<T>`                         | `T \| null` (필드는 선택적 `?`) |                                         |
 | `Vec<T>`                            | `T[]`                           |                                         |
@@ -708,16 +710,15 @@ Node, Bun, React Native 어댑터는 transport 구현에 따라 에러 형태가
 | 중첩 구조 (`Box<T>`, `Vec<T>` 내부) | 정의 이름 `$ref` 해석           | 재귀 타입(self-reference) 포함          |
 | `anyOf` / `oneOf`                   | `A \| B` (union join)           |                                         |
 
-남은 한계:
+`allOf`는 `A & B`, integer enum은 숫자 리터럴 union, `oneOf`+`const`는 판별
+union으로 생성된다. postcard fast path(rkyv V2 코덱)는 primitive,
+Vec/Set/tuple, 원시값 map, string enum, 중첩 구조체, 그리고 single-entry
+`allOf` newtype 핸들을 지원한다. 선언순을 스키마의
+`fieldOrder: "declaration"`로 보증할 수 없는 레거시 스키마는 코드젠이 경고한다.
 
-| 미지원 타입       | 이유                            | 우회법                                      |
-| ----------------- | ------------------------------- | ------------------------------------------- |
-| `allOf`           | 교차 타입(intersection) 미처리  | 수동 타입 정의 또는 구조체 평탄화           |
-| integer enum      | string enum만 리터럴 union 변환 | `#[serde(rename)]`으로 문자열 변환          |
-| `oneOf` 판별 필드 | `const` 프로퍼티 미해석         | `#[serde(tag = "type")]` + 수동 판별자 사용 |
-
-postcard fast path(rkyv V2 코덱)는 primitive/Vec/Set/string 필드를 바이너리로
-인코딩하고, 그 외(enum-with-data 등)는 JSON-in-binary 폴백(Tier 3)으로 동작한다.
+현재 data enum(`oneOf`의 payload variant), 구조체 값 map, collection/enum을
+감싼 일부 `Option<T>` 조합은 정확한 와이어 순서를 스키마만으로 증명할 수 없어
+명령 전체가 JSON-in-binary(Tier 3)로 자동 폴백한다. 필드는 조용히 삭제되지 않는다.
 
 ---
 

@@ -31,7 +31,6 @@ unsafe extern "C" {
         out_len: *mut usize,
     ) -> *mut u8;
     fn rustra_calculator_free_rkyv_v2_buffer(ptr: *mut u8, len: usize);
-    fn rustra_calculator_free_buffer(ptr: *mut u8, len: usize);
     fn rustra_calculator_invoke_rkyv_v2_async(
         payload: *const u8,
         payload_len: usize,
@@ -107,7 +106,7 @@ unsafe extern "C" fn async_test_cb(_ud: *mut c_void, resp: *mut u8, len: usize) 
     if !resp.is_null() && len > 0 {
         let first = unsafe { *resp }; // ok flag
         ASYNC_OK.store(first == 1, Ordering::SeqCst);
-        unsafe { rustra_calculator_free_buffer(resp, len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(resp, len) };
     }
     ASYNC_DONE.store(true, Ordering::SeqCst);
 }
@@ -167,4 +166,101 @@ fn async_invoke_completes_exactly_once_and_cleans_registry() {
         );
         thread::sleep(Duration::from_millis(5));
     }
+}
+
+// ── Tier 0 스칼라 직결(raw invoke) E2E — FFI 계약 그대로 ──
+
+/// addNumbers(1) raw 직결: 슬롯 [42, 58] → 100. postcard 왕복 없음.
+#[test]
+fn raw_invoke_add_numbers_via_ffi() {
+    rustra_calculator_example::calculator_package();
+    let slots: [u64; 2] = [42, 58];
+    let mut out_slot: u64 = 0;
+    let mut err_buf = [0u8; 256];
+    let mut err_len: usize = 0;
+    let code = unsafe {
+        rustra_calculator_example::rustra_calculator_invoke_typed_raw(
+            1,
+            slots.as_ptr(),
+            2,
+            &mut out_slot,
+            err_buf.as_mut_ptr(),
+            err_buf.len(),
+            &mut err_len,
+        )
+    };
+    assert_eq!(code, 0, "raw invoke must succeed");
+    assert_eq!(out_slot as i64, 100);
+    assert_eq!(err_len, 0);
+}
+
+/// 문자열 명령(greet=5)은 raw 불가 — UINT32_MAX 폴백 신호.
+#[test]
+fn raw_invoke_string_command_signals_fallback() {
+    rustra_calculator_example::calculator_package();
+    let slots: [u64; 1] = [0];
+    let mut out_slot: u64 = 0;
+    let mut err_len: usize = 0;
+    let code = unsafe {
+        rustra_calculator_example::rustra_calculator_invoke_typed_raw(
+            5,
+            slots.as_ptr(),
+            1,
+            &mut out_slot,
+            std::ptr::null_mut(),
+            0,
+            &mut err_len,
+        )
+    };
+    assert_eq!(code, u32::MAX, "string command must signal fallback");
+}
+
+/// 에러 경로: divide(10) by zero — code=1, 에러 와이어가 err_buf 에 싣힌다.
+#[test]
+fn raw_invoke_error_path_returns_wire() {
+    rustra_calculator_example::calculator_package();
+    // divide 입력은 i64 2개 — {a, b}
+    let slots: [u64; 2] = [7, 0];
+    let mut out_slot: u64 = 0;
+    let mut err_buf = [0u8; 256];
+    let mut err_len: usize = 0;
+    let code = unsafe {
+        rustra_calculator_example::rustra_calculator_invoke_typed_raw(
+            10,
+            slots.as_ptr(),
+            2,
+            &mut out_slot,
+            err_buf.as_mut_ptr(),
+            err_buf.len(),
+            &mut err_len,
+        )
+    };
+    assert_eq!(code, 1, "divide-by-zero must be an error");
+    assert!(err_len > 10, "error wire must be present, got {err_len}");
+    // 와이어 앞부분 검증: ok=0 프레임.
+    assert_eq!(err_buf[0], 0);
+}
+
+/// f64 비트 왕복: benchAdd(23)은 f64 2개 입력 → f64 출력.
+#[test]
+fn raw_invoke_f64_bit_roundtrip() {
+    rustra_calculator_example::calculator_package();
+    let a = 3.5f64;
+    let b = 2.25f64;
+    let slots: [u64; 2] = [a.to_bits(), b.to_bits()];
+    let mut out_slot: u64 = 0;
+    let mut err_len: usize = 0;
+    let code = unsafe {
+        rustra_calculator_example::rustra_calculator_invoke_typed_raw(
+            23,
+            slots.as_ptr(),
+            2,
+            &mut out_slot,
+            std::ptr::null_mut(),
+            0,
+            &mut err_len,
+        )
+    };
+    assert_eq!(code, 0);
+    assert_eq!(f64::from_bits(out_slot), a + b);
 }

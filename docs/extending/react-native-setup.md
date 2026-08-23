@@ -4,9 +4,11 @@
 
 rustra-bridge supports React Native via a native module that bridges Rust through JSI. This guide covers setting up the iOS and Android transports with a static Rust library.
 
-> **Status:** iOS and Android are both supported — they share the same C++ JSI
-> bridge source (`RustraJSIBridge.cpp`). Android Release APK builds run in CI
-> (`rn-android` job, Gradle hook builds Rust via cargo-ndk automatically).
+> **Status:** the repository calculator proves the shared C++ bridge builds on
+> iOS and Android, and its Android Release APK contains arm64/x86_64 native
+> libraries. `@rustra/react-native` is a JS adapter, not a prebuilt native
+> module. Consumers must adapt the reference module to their own Rust crate and
+> symbols. Build/link proof is not the same as install/launch/runtime proof.
 
 ## Architecture
 
@@ -21,7 +23,9 @@ TypeScript (your app)
 
 ### 1. Build the Rust static library
 
-Each native module needs a build script that cross-compiles your Rust crate for the iOS target:
+Each native module needs a build script that cross-compiles your Rust crate for the iOS target.
+The command below uses the calculator reference script; a different crate must parameterize
+the crate and library names rather than copy them unchanged:
 
 ```sh
 # From your module directory
@@ -44,30 +48,26 @@ s.pod_target_xcconfig = {
 }
 ```
 
-### 3. Create the Expo Module
+### 3. Create the Expo JSI Module
 
 `expo-module.config.json`:
 
 ```json
 {
   "platforms": ["ios"],
-  "ios": { "modules": ["RustraCalculatorModule"] }
+  "ios": { "modules": ["RustraJSIModule"] }
 }
 ```
 
-The Swift module calls Rust FFI directly:
+The production fast path is installed by the Objective-C++ JSI Expo module. The
+example's separate Swift `RustraCalculatorModule` is a benchmark-only direct FFI
+comparator:
 
-```swift
-@objc(RustraCalculatorModule)
-public class RustraCalculatorModule: ExpoModule {
-  public func definition() -> ModuleDefinition {
-    Name("RustraCalculator")
-    AsyncFunction("invokeRaw") { (payload: String, promise: Promise) in
-      let resultPtr = rustra_calculator_invoke(payload)
-      // ... handle result, free with rustra_calculator_free_string
-    }
-  }
-}
+```objc
+AsyncFunction(@"install") {
+  // Obtain the React Native runtime + CallInvoker and call rustra::install(...).
+  // See examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSIModule.mm.
+};
 ```
 
 ### 4. Metro config for monorepo
@@ -90,7 +90,7 @@ which removes the ~3.4µs JS-side codec round trip. Generate them alongside the
 TS codecs:
 
 ```sh
-rustra generate \
+bunx --bun rustra generate \
   --schema ./generated/schema.json \
   --output ./src/generated \
   --cpp-output ./ios
@@ -105,13 +105,14 @@ back to the JS Tier 3 (JSON-in-binary) path automatically.
 ### TypeScript side
 
 ```typescript
-import { NativeModules } from 'react-native';
-import { createReactNativeEngine } from '@rustra/react-native';
+import { configure, createFastEngine, getRustraNative } from '@rustra/react-native';
+import { installRustraJSI } from 'your-rustra-native-module';
+import { rkyvV2Registry } from './generated/rkyv-registry.js';
 
-const engine = createReactNativeEngine(NativeModules.RustraCalculator);
+await installRustraJSI();
+configure(createFastEngine(getRustraNative(), { rkyvV2Codecs: rkyvV2Registry }));
 
-// Invoke commands
-const result = await engine.invoke<AddNumbersOutput>('addNumbers', { a: 1, b: 2 });
+const result = await addNumbers({ a: 1, b: 2 });
 ```
 
 ### Types
@@ -120,7 +121,7 @@ The engine client is type-safe:
 
 ```typescript
 type ReactNativeEngineClient = {
-  invoke<T>(command: string, args?: unknown): Promise<T>;
+  invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T>;
 };
 ```
 
@@ -173,15 +174,17 @@ generated codecs) into `librustrajsi.so` and links the Rust static libs.
 ### 3. JNI entry point
 
 `rustra-jsi-jni.cpp` installs the same JSI host object on load — the JS side
-(`createReactNativeEngine(NativeModules.RustraJSI)`) is identical to iOS.
+(`installRustraJSI()` followed by `createFastEngine(getRustraNative(), ...)`)
+is identical to iOS.
 
 ### Verify
 
-The repo example runs a full Release build in CI:
+The repo example runs a full Release build in CI. This proves build/link and
+APK packaging, not emulator installation or rendered command output:
 
 ```sh
 cd examples/react-native-calculator
-bunx expo prebuild --platform android --no-install
+bunx --bun expo prebuild --platform android --no-install
 cd android && ./gradlew assembleRelease -x lint
 unzip -l app/build/outputs/apk/release/app-release.apk | grep librustrajsi
 ```
@@ -205,5 +208,5 @@ Ensure `watchFolders` in `metro.config.js` points to the monorepo root.
 Verify the Expo module is properly linked:
 
 1. Check `expo-module.config.json` references the correct Swift class
-2. Run `bunx expo-modules-core` to regenerate module providers
+2. Run `bunx --bun expo-modules-core` to regenerate module providers
 3. Clean build: `cd ios && pod deintegrate && pod install`

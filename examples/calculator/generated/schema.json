@@ -1,6 +1,7 @@
 {
   "packageId": "examples.calculator",
   "schemaVersion": 1,
+  "fieldOrder": "declaration",
   "commands": [
     {
       "name": "addNumbers",

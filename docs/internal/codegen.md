@@ -232,11 +232,10 @@ export const GENERATED_CONTRACT_HASH = '<sha256-hex>';
 
 ## 6. 현재 제한사항
 
-JSON Schema → TypeScript 변환에서 다음 타입은 **`unknown`** 으로 폴백된다.
-
-| 미지원 타입   | 이유                                                                       |
-| ------------- | -------------------------------------------------------------------------- |
-| map (객체 키) | `additionalProperties` postcard 코덱 미지원 — 해당 명령은 Tier 3 폴백 제외 |
+JSON Schema → TypeScript 변환은 rustra가 내보내는 object/array/union/intersection,
+literal enum, map/set/tuple/$ref 재귀 표면을 지원한다. JSON Schema의 조건부
+키워드(`if`/`then`/`else`)나 `patternProperties`처럼 Rust 타입 계약에서 생성하지
+않는 임의 스키마는 안전하게 `unknown`으로 폴백한다.
 
 **postcard 코덱(rkyv-codecs.ts/C++) 지원 정책**: 미지원 필드를 가진 명령은 부분 코덱을
 만들지 않고 레지스트리에서 **제외**된다(WARN 로그 출력). 엔진은 그 명령을 Tier 3
@@ -261,3 +260,9 @@ JSON Schema → TypeScript 변환에서 다음 타입은 **`unknown`** 으로 �
 | `Option<T>` (postcard)                   | 태그 바이트(0/1) + 값 — `option_zigzag/f64/f32/bool/string/struct` kind (2026-08-20)                                                        |
 | `Vec<String>` / `Vec<Struct>` (postcard) | varint 길이 + 요소 — `vec_string`/`vec_struct` kind (2026-08-20)                                                                            |
 | `oneOf` 판별 필드 (`const`)              | `const_literal`/`constLiteral`로 `{ type: 'A' }` 판별 유니온 생성                                                                           |
+| single-entry `allOf` newtype (postcard)  | `ChannelHandle(u32)` 같은 투명 newtype의 내부 `$ref`를 따라가 동일 scalar wire로 생성                                                       |
+
+fast path에서 남은 Tier 3 대상은 payload data enum(`oneOf` 선언순을 스키마가
+보존하지 않음), 구조체/배열 값을 가진 map, collection/enum을 감싼 일부
+`Option<T>` 조합이다. 이 경우 명령 전체를 제외하고 한 번의 actionable WARN을
+출력하며 JSON-in-binary 경로로 라우팅한다.

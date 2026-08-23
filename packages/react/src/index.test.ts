@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
+import { readFileSync } from 'node:fs';
 import { RustraProvider, useRustraEngine, useCommand, useMutation, useEvent } from './index.js';
 import type { EngineClient } from '@rustra/types';
 import type { UseCommandResult } from './useCommand.js';
@@ -27,7 +28,7 @@ test('RustraProvider supplies engine to useRustraEngine', () => {
     return createElement('div', null, 'test');
   }
 
-  renderToString(createElement(RustraProvider, { engine, children: createElement(TestComponent) }));
+  renderToString(createElement(RustraProvider, { engine }, createElement(TestComponent)));
 
   assert.equal(capturedEngine, engine);
 });
@@ -46,12 +47,42 @@ test('useCommand hook contract and properties', () => {
   }
 
   const engine = createTestEngine({ dummyCmd: { res: 10 } });
-  renderToString(createElement(RustraProvider, { engine, children: createElement(TestComponent) }));
+  renderToString(createElement(RustraProvider, { engine }, createElement(TestComponent)));
 
   const result = hookResult.current;
   assert.ok(result);
   assert.equal(result.loading, false);
   assert.equal(typeof result.refetch, 'function');
+});
+
+test('useCommand stabilizes value-equal inline input (no re-request loop)', () => {
+  // 회귀 가드: input 의존성을 참조 동등성으로 판정하면 인라인 객체 리터럴
+  // (`useCommand(cmd, { a: 1 })`)이 렌더마다 새 참조라 execute 가 재생성되고
+  // effect 가 재실행되어 상태 갱신→재렌더의 무한 재요청 루프가 발생한다.
+  // 이 렌더러 없는 환경(bun, DOM 없음)에선 실행 기반 재현이 불가능하므로
+  // 소스 계약으로 고정한다: (1) 키는 값 동등성, (2) invoke 는 원본 input,
+  // (3) useCallback 의존성은 안정화된 참조.
+  const source = readFileSync(new URL('./useCommand.ts', import.meta.url), 'utf8');
+  assert.match(
+    source,
+    /JSON\.stringify\(input\)/,
+    'input key must use value equality (serialized), not reference equality',
+  );
+  assert.match(
+    source,
+    /engine\.invoke<O>\(commandName,\s*stableInput/,
+    'invoke must receive the stabilized input value',
+  );
+  assert.match(
+    source,
+    /\[engine,\s*commandName,\s*stableInput\]/,
+    'execute deps must use the stabilized reference',
+  );
+  assert.doesNotMatch(
+    source,
+    /\[engine,\s*commandName,\s*input\]/,
+    'raw input in deps re-creates execute every render for inline objects (infinite loop)',
+  );
 });
 
 test('useMutation hook contract and execution', async () => {
@@ -69,7 +100,7 @@ test('useMutation hook contract and execution', async () => {
     return createElement('div', null, 'mutation');
   }
 
-  renderToString(createElement(RustraProvider, { engine, children: createElement(TestComponent) }));
+  renderToString(createElement(RustraProvider, { engine }, createElement(TestComponent)));
 
   const result = mutationResult.current;
   assert.ok(result);

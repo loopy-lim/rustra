@@ -1,4 +1,5 @@
 import type { EngineClient, RustraNative, RkyvV2Codec, RustraError } from '@rustra/types';
+import { decodeUtf8, encodeUtf8 } from '../utf8';
 
 export type BincodeCodec<I, O> = RkyvV2Codec<I, O>;
 
@@ -76,7 +77,7 @@ function unzigzag(n: bigint): number {
 }
 
 function encodeVarintString(str: string): number[] {
-  const utf8 = new TextEncoder().encode(str);
+  const utf8 = encodeUtf8(str);
   return [...encodeVarint(BigInt(utf8.length)), ...utf8];
 }
 
@@ -119,7 +120,7 @@ export const addNumbersCodec: BincodeCodec<{ a: number; b: number }, { value: nu
       if (!Number.isSafeInteger(length) || messageOffset + length > u8.length) {
         throw new RangeError('truncated bincode error message');
       }
-      const message = new TextDecoder().decode(u8.subarray(messageOffset, messageOffset + length));
+      const message = decodeUtf8(u8.subarray(messageOffset, messageOffset + length));
       return { ok: false, error: { code: 'invoke.failed', message } };
     } catch (error) {
       return {

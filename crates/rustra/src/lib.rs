@@ -111,6 +111,7 @@ pub use rustra_macros::register;
 
 pub use rkyv_codec::encode_rkyv_v2_error;
 
+pub mod byte_buffer;
 pub mod cancel;
 pub mod channels;
 mod codegen;
@@ -130,11 +131,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 
 use rkyv_codec::{
-    BinHandler, DecodeFn, EncodeFn, Tier, build_rkyv_v2_decoder, build_rkyv_v2_response_encoder,
-    build_tier3_json_decoder, is_output_tier3, js_postcard_codec_supported_with_defs,
+    BinHandler, BinIntoHandler, DecodeFn, DirectResponse, EncodeFn, RawHandler, Tier,
+    build_rkyv_v2_decoder, build_rkyv_v2_response_encoder, build_tier3_json_decoder,
+    is_output_tier3, js_postcard_codec_supported_with_defs,
 };
 
 pub use error::{Result, RustraError};
@@ -143,6 +145,28 @@ pub use state::{State, get_state, with_state_context};
 use codegen::{command_function_name, contract_hash, ts_type_from_schema};
 use schema::{command_name_from_handler, schema_value, short_type_name};
 
+/// Input boundary for a command whose entire payload is one contiguous byte
+/// buffer. Implementations must create an owned Rust value; the native host's
+/// borrowed pointer is never retained after the synchronous call returns.
+pub trait BufferCommandInput: DeserializeOwned + JsonSchema + 'static {
+    fn from_buffer(bytes: Vec<u8>) -> Self;
+}
+
+/// Output boundary paired with [`BufferCommandInput`]. Returning the owned
+/// vector lets the FFI transfer that allocation without a postcard frame copy.
+pub trait BufferCommandOutput: Serialize + JsonSchema + 'static {
+    fn into_buffer(self) -> Vec<u8>;
+}
+
+fn postcard_uvar_len(mut value: usize) -> usize {
+    let mut len = 1;
+    while value >= 0x80 {
+        value >>= 7;
+        len += 1;
+    }
+    len
+}
+
 /// 자주 사용하는 타입과 매크로를 한 번에 가져올 수 있는 prelude 모듈입니다.
 ///
 /// ```rust
@@ -150,8 +174,8 @@ use schema::{command_name_from_handler, schema_value, short_type_name};
 /// ```
 pub mod prelude {
     pub use crate::{
-        GeneratedPackage, Package, PackageBuilder, Result, RustraError, State, bridge_type, build,
-        command,
+        BufferCommandInput, BufferCommandOutput, GeneratedPackage, Package, PackageBuilder, Result,
+        RustraError, State, bridge_type, build, command,
         events::EventSink,
         ffi::FfiFormat,
         register,
@@ -396,6 +420,9 @@ pub struct Package {
     /// `into_inner()` 관용으로 과거 패닉 이후에도 invoke 가 동작하게 한다.
     state: Arc<RwLock<RegistryState>>,
     frozen: Arc<AtomicBool>,
+    /// freeze된 제품 경로의 lock-free 명령 스냅샷. snapshot을 먼저 채운 뒤
+    /// `frozen=true`를 Release publish하므로 invoke가 부분 상태를 볼 수 없다.
+    frozen_registry: Arc<OnceLock<FrozenRegistry>>,
     /// Rust → JS 이벤트 푸시 상태(버스 + 싱크). `emit()` 으로 발행, 싱크가
     /// 설치되어 있으면 즉시 콜백 호출(버스 우회), 아니면 호스트 어댑터가
     /// `event_bus()` 를 폴링해 플랫폼 푸시 채널로 전달한다.
@@ -408,20 +435,39 @@ pub struct Package {
 
 /// `Package`의 가변 내부 상태. `Arc<RwLock<_>>`로 보호되어 런타임 mutation을 지원한다.
 struct RegistryState {
-    commands: BTreeMap<String, Command>,
+    commands: BTreeMap<String, Arc<Command>>,
     id_to_name: BTreeMap<u16, String>,
     next_command_id: u16,
     /// (성능) command_id → 핸들러 직접 캐시 — `invoke_rkyv_v2` 의 핫패스가
     /// `id_to_name` → `commands` 이중 조회 + Arc 클론을 거치지 않게 한다.
     /// 등록/교체/해제 시점에 함께 유지된다(불변식: 값은 항상 `commands` 의
     /// 동일 명령과 같은 Arc 를 가리킨다).
-    id_to_command: BTreeMap<u16, Command>,
+    id_to_command: BTreeMap<u16, Arc<Command>>,
     /// Runtime Authority: 부여된 capability 집합. deny-by-default —
     /// `required_capability` 가 `Some` 인 명령은 이 집합에 포함될 때만 실행된다.
     granted_capabilities: BTreeSet<String>,
     /// (T2, OTA) 스키마 협상 버전. `schema()`/`live_schema()` 와 코드젠이
     /// 노출한다 — JS > native 인 stale 조합을 감지하는 데 쓰인다.
     schema_version: u32,
+}
+
+struct FrozenRegistry {
+    commands: BTreeMap<String, Arc<Command>>,
+    id_to_command: Vec<Option<Arc<Command>>>,
+}
+
+impl FrozenRegistry {
+    fn from_state(state: &RegistryState) -> Self {
+        let max_id = state.id_to_command.keys().next_back().copied().unwrap_or(0) as usize;
+        let mut id_to_command = vec![None; max_id + 1];
+        for (&id, command) in &state.id_to_command {
+            id_to_command[id as usize] = Some(Arc::clone(command));
+        }
+        Self {
+            commands: state.commands.clone(),
+            id_to_command,
+        }
+    }
 }
 
 impl std::fmt::Debug for Package {
@@ -517,6 +563,21 @@ struct Command {
     invoke: Arc<dyn Fn(Value) -> crate::Result<Value> + Send + Sync>,
     /// Fast binary handler: payload[2..] → postcard deserialize → typed handler → postcard serialize
     rkyv_v2_handler: Option<BinHandler>,
+    /// caller-buffer fast handler: 작은 응답을 호스트 메모리에 직접 직렬화한다.
+    rkyv_v2_into_handler: Option<BinIntoHandler>,
+    /// 스칼라 직결 raw 핸들러 — 인자/결과를 u64 슬롯으로 주고받는다.
+    /// postcard 왕복이 없다(정의는 `build_command_raw` 참조).
+    raw_handler: Option<RawHandler>,
+    /// 단일 byte field 입출력 직결 핸들러. 입력은 호출 안에서 소유 Vec로
+    /// 복사되고 출력 Vec는 FFI가 소유권을 넘겨받으므로 postcard frame이 없다.
+    buffer_handler: Option<BufferHandler>,
+    /// raw 직결의 입력 필드 종류 — 호스트가 같은 순서로 비트를 해석한다.
+    raw_input_kinds: Vec<crate::rkyv_codec::RawFieldKind>,
+    /// raw 직결의 출력 필드 종류(현재 단일 스칼라 또는 unit 만 지원).
+    /// 현재 코어 소비자는 없으나 호스트 디코딩 계약 문서로 남긴다 — JSI
+    /// decode_by_id 와 짝을 이루는 슬롯 해석 종류다(향후 C++ 코드젠 사용).
+    #[allow(dead_code)]
+    raw_output_kind: Option<crate::rkyv_codec::RawFieldKind>,
     rkyv_v2_decode: DecodeFn,
     rkyv_v2_encode_response: EncodeFn,
     /// true when this command uses Tier 3 (JSON fallback) wire format.
@@ -526,6 +587,8 @@ struct Command {
     /// `None` 이면 항상 허용 (기본 명령).
     required_capability: Option<&'static str>,
 }
+
+type BufferHandler = Arc<dyn Fn(&[u8]) -> crate::Result<Vec<u8>> + Send + Sync>;
 
 impl std::fmt::Debug for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -592,14 +655,66 @@ where
             let input: I = postcard::from_bytes(&payload[2..])
                 .map_err(|e| RustraError::invalid_args(format!("postcard decode: {e}")))?;
             let output = handler_bin(input)?;
-            let out_bytes = postcard::to_allocvec(&output)
+            // 응답 body 임시 Vec + frame Vec의 2회 할당/복사를 피한다. 정확한
+            // postcard 크기로 최종 frame을 한 번만 할당하고 그 뒤에 바로
+            // 직렬화한다. 병렬 JSI 호출에서 allocator lock 경합도 절반이 된다.
+            let encoded_len = postcard::experimental::serialized_size(&output)
                 .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))?;
-            let mut buf = vec![0u8; 8 + out_bytes.len()];
+            let mut buf = Vec::with_capacity(8 + encoded_len);
+            buf.resize(8, 0);
             buf[0] = 1; // ok = true
-            buf[8..8 + out_bytes.len()].copy_from_slice(&out_bytes);
-            Ok(buf)
+            postcard::to_extend(&output, buf)
+                .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))
         }))
     };
+
+    let rkyv_v2_into_handler: Option<BinIntoHandler> = if force_tier3 || !js_codec_supported {
+        None
+    } else {
+        let handler_into = handler.clone();
+        Some(Arc::new(move |payload: &[u8], target: &mut [u8]| {
+            if payload.len() < 2 {
+                return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+            }
+            let input: I = postcard::from_bytes(&payload[2..])
+                .map_err(|e| RustraError::invalid_args(format!("postcard decode: {e}")))?;
+            let output = handler_into(input)?;
+
+            // Try-first: caller 버퍼에 바로 직렬화를 시도한다. 대부분의 응답은
+            // 여기서 한 번의 패스로 끝난다 — 이전의 serialized_size 선행 패스
+            // (크기 계산 + 실직렬화 = 2패스)를 없앤다. postcard의 Slice flavor
+            // 는 부족하면 SerializeBufferFull 로 실패하고 &output 은 소모되지
+            // 않으므로(1.1.3 flavors.rs — 부분 기록은 있으나 폴백이 전체 재기록)
+            // 폴백에서 to_extend 로 온전히 다시 쓴다.
+            if target.len() > 8 {
+                target[..8].fill(0);
+                target[0] = 1;
+                match postcard::to_slice(&output, &mut target[8..]) {
+                    Ok(written) => {
+                        return Ok(DirectResponse::Written(8 + written.len()));
+                    }
+                    Err(postcard::Error::SerializeBufferFull) => {}
+                    Err(e) => return Err(RustraError::internal(format!("postcard encode: {e}"))),
+                }
+            }
+
+            // 큰 응답은 현재 output을 정확히 한 번 직렬화해 캐시에 넘긴다.
+            // 핸들러를 재실행하지 않으므로 비멱등 command도 안전하다.
+            let mut response = Vec::with_capacity(64);
+            response.resize(8, 0);
+            response[0] = 1;
+            let response = postcard::to_extend(&output, response)
+                .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))?;
+            Ok(DirectResponse::Buffered(response))
+        }))
+    };
+
+    // ── 스칼라 직결 raw 핸들러 ──
+    // 조건: 입력이 스칼라 1..3개 + 출력이 단일 스칼라(또는 unit)인 정적 명령.
+    // postcard 왕복 없이 u64 슬롯으로 직접 주고받는다. 필드 종류는 스키마의
+    // 프로퍼티 선언순(fieldOrder=declaration 계약)에서 읽는다.
+    let (raw_handler, raw_input_kinds, raw_output_kind) =
+        build_raw_handler(&input_schema, &output_schema, &handler, force_tier3);
 
     Command {
         command_id,
@@ -614,11 +729,296 @@ where
             serde_json::to_value(output).map_err(RustraError::internal)
         }),
         rkyv_v2_handler,
+        rkyv_v2_into_handler,
+        raw_handler,
+        buffer_handler: None,
+        raw_input_kinds,
+        raw_output_kind,
         rkyv_v2_decode: rkyv_v2_decoder,
         rkyv_v2_encode_response: rkyv_v2_response_encoder,
         rkyv_v2_tier3: is_tier3,
         required_capability: None,
     }
+}
+
+/// 입력/출력 스키마에서 raw 직결 가능성을 판정하고 핸들러를 조립한다.
+/// 슬롯 ↔ 타입 변환은 JSON Value 경유로 수행한다(I/O 타입이 제네릭이라
+/// 개별 스칼라 타입에 특화할 수 없기 때문) — postcard 왕복 대비 Value 1회
+/// 변환만 남는다. 스키마 필드명으로 객체를 조립하므로 선언순 계약을 그대로
+/// 따른다.
+fn build_raw_handler<I, O, F>(
+    input_schema: &Value,
+    output_schema: &Value,
+    handler: &Arc<F>,
+    force_tier3: bool,
+) -> (
+    Option<RawHandler>,
+    Vec<crate::rkyv_codec::RawFieldKind>,
+    Option<crate::rkyv_codec::RawFieldKind>,
+)
+where
+    I: DeserializeOwned + 'static,
+    O: Serialize + 'static,
+    F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+{
+    use crate::rkyv_codec::RawFieldKind;
+
+    if force_tier3 {
+        return (None, Vec::new(), None);
+    }
+    // 입력: object 프로퍼티 1..3개 전부 스칼라.
+    let Some(props) = input_schema.get("properties").and_then(Value::as_object) else {
+        return (None, Vec::new(), None);
+    };
+    if props.is_empty() || props.len() > 3 {
+        return (None, Vec::new(), None);
+    }
+    let mut input_kinds = Vec::with_capacity(props.len());
+    let mut field_names = Vec::with_capacity(props.len());
+    for (name, schema) in props {
+        let Some(kind_str) = schema.get("type").and_then(Value::as_str) else {
+            return (None, Vec::new(), None);
+        };
+        // integer 형식 정보로 zigzag/uvar 를 가린다 — postcard 는 signed 는
+        // zigzag, unsigned 는 plain varint. format 미지정 signed 정수는 zigzag.
+        let kind = match kind_str {
+            "integer" => {
+                let format = schema.get("format").and_then(Value::as_str).unwrap_or("");
+                match format {
+                    "uint8" | "uint16" | "uint32" | "uint64" => RawFieldKind::Uvar,
+                    _ => RawFieldKind::Zigzag,
+                }
+            }
+            "number" => RawFieldKind::F64,
+            "boolean" => RawFieldKind::Bool,
+            _ => return (None, Vec::new(), None),
+        };
+        // f32 판별: number + format "float"(schemars 관례).
+        if kind == RawFieldKind::F64
+            && schema.get("format").and_then(Value::as_str) == Some("float")
+        {
+            input_kinds.push(RawFieldKind::F32);
+        } else {
+            input_kinds.push(kind);
+        }
+        field_names.push(name.clone());
+    }
+
+    // 출력: 단일 스칼라 프로퍼티(또는 빈 객체=unit).
+    let out_props = output_schema
+        .get("properties")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    let (output_kind, output_name) = if out_props.is_empty() {
+        (None, None)
+    } else if out_props.len() == 1 {
+        let (name, schema) = out_props.iter().next().expect("len==1");
+        let Some(kind_str) = schema.get("type").and_then(Value::as_str) else {
+            return (None, Vec::new(), None);
+        };
+        let kind = match kind_str {
+            "integer" => {
+                let format = schema.get("format").and_then(Value::as_str).unwrap_or("");
+                match format {
+                    "uint8" | "uint16" | "uint32" | "uint64" => RawFieldKind::Uvar,
+                    _ => RawFieldKind::Zigzag,
+                }
+            }
+            "number" => RawFieldKind::F64,
+            "boolean" => RawFieldKind::Bool,
+            _ => return (None, Vec::new(), None),
+        };
+        (Some(kind), Some(name.clone()))
+    } else {
+        return (None, Vec::new(), None);
+    };
+
+    // postcard 출력은 필드명을 와이어에 싣지 않는다(선언순 값 나열) —
+    // 출력 필드 이름은 디코딩에 불필요하다.
+    let _out_name: Option<String> = output_name;
+    let kinds_snapshot = input_kinds.clone();
+    let output_kind_snapshot = output_kind;
+    let handler = Arc::clone(handler);
+    // postcard 입력 바디 프리픽스 — 각 필드의 와이어 인코딩은 슬롯 값에서
+    // 결정론적으로 조립된다(선언순). Vec 할당을 피하기 위해 고정 32B 버퍼:
+    // 스칼라 3개면 최대 8+8+10(과잉 여유)에 충분하다. 부족(이론상 i64
+    // varint 10B×3)해도 안전하다 — 초과분은 없다(3×10=30<32).
+    let raw: RawHandler = Arc::new(move |slots: &[u64]| {
+        if slots.len() != kinds_snapshot.len() {
+            return Err(RustraError::invalid_args(format!(
+                "raw invoke: expected {} slots, got {}",
+                kinds_snapshot.len(),
+                slots.len()
+            )));
+        }
+        // 1) 슬롯 → postcard 입력 바디(필드 와이어와 동일한 인코딩).
+        let mut body = [0u8; 32];
+        let mut w = 0usize;
+        let push_varint = |buf: &mut [u8; 32], w: &mut usize, mut v: u64| {
+            loop {
+                let b = (v & 0x7f) as u8;
+                v >>= 7;
+                if v == 0 {
+                    buf[*w] = b;
+                    *w += 1;
+                    break;
+                }
+                buf[*w] = b | 0x80;
+                *w += 1;
+            }
+        };
+        for (i, kind) in kinds_snapshot.iter().enumerate() {
+            match kind {
+                RawFieldKind::Zigzag => {
+                    let v = slots[i] as i64;
+                    let zig = ((v << 1) ^ (v >> 63)) as u64;
+                    push_varint(&mut body, &mut w, zig);
+                }
+                RawFieldKind::Uvar => push_varint(&mut body, &mut w, slots[i]),
+                RawFieldKind::F64 => {
+                    body[w..w + 8].copy_from_slice(&slots[i].to_le_bytes());
+                    w += 8;
+                }
+                RawFieldKind::F32 => {
+                    // f32 정밀도로 반올림한 뒤 4바이트 LE — postcard f32 와이어.
+                    let f = crate::rkyv_codec::f64_from_u64(slots[i]) as f32;
+                    body[w..w + 4].copy_from_slice(&f.to_le_bytes());
+                    w += 4;
+                }
+                RawFieldKind::Bool => {
+                    body[w] = u8::from(slots[i] != 0);
+                    w += 1;
+                }
+            }
+        }
+        // 2) postcard 디코딩 — 기존 rkyv V2 경로와 동일한 저비용 디코더.
+        let input: I = postcard::from_bytes(&body[..w])
+            .map_err(|e| RustraError::invalid_args(format!("raw invoke decode: {e}")))?;
+        let output = handler(input)?;
+        // 3) 출력 — 단일 스칼라 필드를 postcard 로 1회 직렬화해 슬롯으로 복원.
+        //    Value 경유 없이 serialized_size + to_slice 로 프리픽스 버퍼에.
+        let Some(out_kind) = output_kind_snapshot else {
+            return Ok(0); // unit 출력
+        };
+        let mut out_buf = [0u8; 16];
+        let encoded = postcard::to_slice(&output, &mut out_buf)
+            .map_err(|e| RustraError::internal(format!("raw invoke encode: {e}")))?;
+        if encoded.is_empty() {
+            return Err(RustraError::internal("raw invoke: empty output wire"));
+        }
+        // 필드 와이어: [필드명 varint][값] — 단일 필드 구조체는 postcard 가
+        // 필드명 없이 값만 나열한다(struct 는 필드 순서대로 값만). 따라서
+        // encoded[0..] = 값 그 자체다.
+        let mut r: &[u8] = encoded;
+        let read_varint = |bytes: &mut &[u8]| -> u64 {
+            let mut v = 0u64;
+            let mut shift = 0;
+            loop {
+                let b = bytes[0];
+                *bytes = &bytes[1..];
+                v |= ((b & 0x7f) as u64) << shift;
+                if b & 0x80 == 0 {
+                    break;
+                }
+                shift += 7;
+            }
+            v
+        };
+        let slot = match out_kind {
+            RawFieldKind::Zigzag => {
+                let zig = read_varint(&mut r);
+                let v = ((zig >> 1) as i64) ^ -((zig & 1) as i64);
+                v as u64
+            }
+            RawFieldKind::Uvar => read_varint(&mut r),
+            RawFieldKind::F64 => {
+                let mut bits = [0u8; 8];
+                bits.copy_from_slice(&r[..8]);
+                u64::from_le_bytes(bits)
+            }
+            RawFieldKind::F32 => {
+                let mut b4 = [0u8; 4];
+                b4.copy_from_slice(&r[..4]);
+                let f = f32::from_le_bytes(b4);
+                crate::rkyv_codec::u64_from_f64(f as f64)
+            }
+            RawFieldKind::Bool => u64::from(r[0] != 0),
+        };
+        Ok(slot)
+    });
+    (Some(raw), input_kinds, output_kind)
+}
+
+/// Existing object-input generated commands can forward one to three required
+/// scalar fields, plus the byte-buffer special case, without changing their
+/// public signature. Keep this predicate deliberately narrower than the binary
+/// codec: nested/optional/general collection inputs stay on `invokeGenerated`.
+fn generated_field_names(input_schema: &Value) -> Option<Vec<String>> {
+    let properties = input_schema.get("properties")?.as_object()?;
+    if properties.is_empty() || properties.len() > 3 {
+        return None;
+    }
+    let required = input_schema
+        .get("required")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .collect::<BTreeSet<_>>()
+        })
+        .unwrap_or_default();
+    let mut fields = Vec::with_capacity(properties.len());
+    for (name, schema) in properties {
+        if !required.contains(name.as_str()) {
+            return None;
+        }
+        let scalar = matches!(
+            schema.get("type").and_then(Value::as_str),
+            Some("integer" | "number" | "boolean" | "string")
+        );
+        let byte_buffer = schema.get("type").and_then(Value::as_str) == Some("array")
+            && schema
+                .get("items")
+                .and_then(|items| items.get("type"))
+                .and_then(Value::as_str)
+                == Some("integer")
+            && schema
+                .get("items")
+                .and_then(|items| items.get("format"))
+                .and_then(Value::as_str)
+                == Some("uint8");
+        if !scalar && !byte_buffer {
+            return None;
+        }
+        fields.push(name.clone());
+    }
+    Some(fields)
+}
+
+fn generated_byte_field_name(input_schema: &Value) -> Option<String> {
+    let properties = input_schema.get("properties")?.as_object()?;
+    if properties.len() != 1 {
+        return None;
+    }
+    let (name, schema) = properties.iter().next()?;
+    let required = input_schema.get("required")?.as_array()?;
+    if required.len() != 1 || required[0].as_str() != Some(name) {
+        return None;
+    }
+    let is_bytes = schema.get("type").and_then(Value::as_str) == Some("array")
+        && schema
+            .get("items")
+            .and_then(|items| items.get("type"))
+            .and_then(Value::as_str)
+            == Some("integer")
+        && schema
+            .get("items")
+            .and_then(|items| items.get("format"))
+            .and_then(Value::as_str)
+            == Some("uint8");
+    is_bytes.then(|| name.clone())
 }
 
 impl Package {
@@ -761,8 +1161,20 @@ impl Package {
     ///
     /// [`invoke`](Package::invoke)의 비제네릭 버전으로, JSON 기반 라우팅에 사용됩니다.
     pub fn invoke_json(&self, name: &str, params: Value) -> crate::Result<Value> {
-        // 핸들러 실행 중에는 잠금을 hold 하지 않도록 Command를 clone-out 한다.
-        // (재진입 — 핸들러가 다시 register/unregister 호출 — 시 교착 방지)
+        if self.is_frozen() {
+            // 제품 경로는 immutable snapshot 안의 Command를 직접 빌린다. 매 호출
+            // Arc clone/drop은 같은 refcount cache line을 모든 CPU가 갱신하게 해
+            // 병렬 처리량을 역확장시키므로 frozen hot path에서는 피한다.
+            let command = self
+                .frozen_registry
+                .get()
+                .and_then(|registry| registry.commands.get(name))
+                .ok_or_else(|| RustraError::command_not_found(name))?;
+            return self.invoke_json_command(command, params);
+        }
+
+        // 개발용 mutable 경로는 핸들러 실행 중 잠금을 hold하지 않도록
+        // Command를 clone-out한다(재진입 register/unregister 교착 방지).
         let command = {
             let state = self
                 .state
@@ -774,9 +1186,14 @@ impl Package {
                 .ok_or_else(|| RustraError::command_not_found(name))?
                 .clone()
         };
+        self.invoke_json_command(command.as_ref(), params)
+    }
+
+    #[inline]
+    fn invoke_json_command(&self, command: &Command, params: Value) -> crate::Result<Value> {
         // Runtime Authority: deny-by-default — capability 가 요구되는데 부여되지
         // 않았으면 핸들러를 호출하지 않고 capability.denied 를 반환한다.
-        self.capability_satisfied(&command)?;
+        self.capability_satisfied(command)?;
         with_state_context(&self.states, || (command.invoke)(params))
     }
 
@@ -814,6 +1231,18 @@ impl Package {
             return Err(RustraError::payload_too_large(payload.len(), limit));
         }
         let command_id = u16::from_le_bytes([payload[0], payload[1]]);
+        if self.is_frozen() {
+            let command = self
+                .frozen_registry
+                .get()
+                .and_then(|registry| registry.id_to_command.get(command_id as usize))
+                .and_then(Option::as_ref)
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?;
+            return self.invoke_rkyv_v2_command(command, payload);
+        }
+
+        // Mutable dev registry: clone out before running user code so registry
+        // mutation from inside a handler cannot deadlock on the read lock.
         let command = {
             let state = self
                 .state
@@ -827,11 +1256,159 @@ impl Package {
                 .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
                 .clone()
         };
+        self.invoke_rkyv_v2_command(command.as_ref(), payload)
+    }
+
+    /// 스칼라 직결(raw) invoke — postcard 왕복 없이 u64 슬롯으로 주고받는다.
+    /// 대상 명령이 raw 직결 조건(스칼라 1..3 입력 + 단일 스칼라/unit 출력)을
+    /// 만족하지 않으면 `command.invalid_args` 를 반환해 호출자(호스트 JSI)가
+    /// by-id 경로로 폴백하게 한다. 와이어 포맷은 존재하지 않는다(계약이 슬롯
+    /// 배열 자체) — 코덱 게이트 대상 아니다.
+    pub fn invoke_raw(&self, command_id: u16, slots: &[u64]) -> crate::Result<u64> {
+        // 양쪽 가지 모두 Arc 클론으로 통일 — 핸들러 실행은 잠금 밖에서.
+        let command = if self.is_frozen() {
+            self.frozen_registry
+                .get()
+                .and_then(|registry| registry.id_to_command.get(command_id as usize))
+                .and_then(Option::as_ref)
+                .cloned()
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
+        } else {
+            let state = self
+                .state
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state
+                .id_to_command
+                .get(&command_id)
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
+                .clone()
+        };
+        let Some(raw) = command.raw_handler.as_ref() else {
+            return Err(RustraError::invalid_args(format!(
+                "raw invoke: command id:{command_id} has no raw handler"
+            )));
+        };
+        self.capability_satisfied(command.as_ref())?;
+        // 핸들러 패닉 가드 — 다른 invoke 경로와 동일 계약(internal 정규화).
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| raw(slots)));
+        match outcome {
+            Ok(result) => result,
+            Err(panic) => Err(RustraError::internal(format!(
+                "panic in handler: {}",
+                crate::ffi::panic_message(&panic)
+            ))),
+        }
+    }
+
+    /// Invoke a schema-proven single-byte-field command without constructing a
+    /// postcard request/response frame. The borrowed input is copied into an
+    /// owned Rust value before user code runs and is never retained.
+    pub fn invoke_buffer(&self, command_id: u16, bytes: &[u8]) -> crate::Result<Vec<u8>> {
+        let wire_size = 2usize
+            .saturating_add(postcard_uvar_len(bytes.len()))
+            .saturating_add(bytes.len());
+        let limit = crate::ffi::max_payload_bytes();
+        if wire_size > limit {
+            return Err(RustraError::payload_too_large(wire_size, limit));
+        }
+        let command = if self.is_frozen() {
+            self.frozen_registry
+                .get()
+                .and_then(|registry| registry.id_to_command.get(command_id as usize))
+                .and_then(Option::as_ref)
+                .cloned()
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
+        } else {
+            let state = self
+                .state
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state
+                .id_to_command
+                .get(&command_id)
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
+                .clone()
+        };
+        let Some(handler) = command.buffer_handler.as_ref() else {
+            return Err(RustraError::invalid_args(format!(
+                "buffer invoke: command id:{command_id} has no buffer handler"
+            )));
+        };
+        self.capability_satisfied(command.as_ref())?;
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            with_state_context(&self.states, || handler(bytes))
+        }));
+        match outcome {
+            Ok(result) => result,
+            Err(panic) => Err(RustraError::internal(format!(
+                "panic in handler: {}",
+                crate::ffi::panic_message(&panic)
+            ))),
+        }
+    }
+
+    /// Whether a command owns the direct byte-buffer handler required by a
+    /// native host capability handshake.
+    pub fn has_buffer_handler(&self, command_id: u16) -> bool {
+        if self.is_frozen() {
+            return self
+                .frozen_registry
+                .get()
+                .and_then(|registry| registry.id_to_command.get(command_id as usize))
+                .and_then(Option::as_ref)
+                .is_some_and(|command| command.buffer_handler.is_some());
+        }
+        let state = self
+            .state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state
+            .id_to_command
+            .get(&command_id)
+            .is_some_and(|command| command.buffer_handler.is_some())
+    }
+
+    /// raw 직결 가능 여부 — 호스트가 스키마 없이 폴백 여부를 미리 판정한다.
+    /// 입력 슬롯 종류를 함께 돌려준다(호스트가 같은 순서로 비트를 해석).
+    /// 잠금 수명에서 벗어나도록 소유 복사본을 반환한다(호출 빈도가 낮다 —
+    /// 호스트는 엔진 구성 시 1회 스윕한다).
+    pub fn raw_invoke_shape(
+        &self,
+        command_id: u16,
+    ) -> Option<Vec<crate::rkyv_codec::RawFieldKind>> {
+        let (has_raw, kinds) = if self.is_frozen() {
+            let command = self
+                .frozen_registry
+                .get()?
+                .id_to_command
+                .get(command_id as usize)
+                .and_then(Option::as_ref)?;
+            (
+                command.raw_handler.is_some(),
+                command.raw_input_kinds.clone(),
+            )
+        } else {
+            let state = self
+                .state
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let command = state.id_to_command.get(&command_id)?;
+            (
+                command.raw_handler.is_some(),
+                command.raw_input_kinds.clone(),
+            )
+        };
+        if has_raw { Some(kinds) } else { None }
+    }
+
+    #[inline]
+    fn invoke_rkyv_v2_command(&self, command: &Command, payload: &[u8]) -> crate::Result<Vec<u8>> {
         // Runtime Authority: deny-by-default — capability 가 요구되는데 부여되지
         // 않았으면 바이너리 핸들러(또는 JSON fallback)를 호출하지 않고
         // capability.denied 를 반환한다. 에러는 rkyv V2 error wire 로 인코딩되어
         // JS RustraCommandError("capability.denied") 로 재구성된다.
-        self.capability_satisfied(&command)?;
+        self.capability_satisfied(command)?;
 
         // panic guard — 이 디스패치는 FFI 진입점(extern "C", nounwind) 에서 직접
         // 호출된다. 핸들러 패닉이 그대로 unwinding 하면 경계에서 프로세스 abort 다
@@ -865,12 +1442,84 @@ impl Package {
         }
     }
 
+    /// rkyv V2 caller-buffer 경로. 정적 postcard command는 호스트가 제공한
+    /// slice에 직접 응답을 기록해 Rust heap allocation과 memcpy를 없앤다.
+    pub(crate) fn invoke_rkyv_v2_into(
+        &self,
+        payload: &[u8],
+        target: &mut [u8],
+    ) -> crate::Result<DirectResponse> {
+        if payload.len() < 2 {
+            return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+        }
+        let limit = crate::ffi::max_payload_bytes();
+        if payload.len() > limit {
+            return Err(RustraError::payload_too_large(payload.len(), limit));
+        }
+        let command_id = u16::from_le_bytes([payload[0], payload[1]]);
+
+        if self.is_frozen() {
+            let command = self
+                .frozen_registry
+                .get()
+                .and_then(|registry| registry.id_to_command.get(command_id as usize))
+                .and_then(Option::as_ref)
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?;
+            return self.invoke_rkyv_v2_into_command(command, payload, target);
+        }
+
+        let command = {
+            let state = self
+                .state
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state
+                .id_to_command
+                .get(&command_id)
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
+                .clone()
+        };
+        self.invoke_rkyv_v2_into_command(command.as_ref(), payload, target)
+    }
+
+    fn invoke_rkyv_v2_into_command(
+        &self,
+        command: &Command,
+        payload: &[u8],
+        target: &mut [u8],
+    ) -> crate::Result<DirectResponse> {
+        let Some(handler) = command.rkyv_v2_into_handler.as_ref() else {
+            return self
+                .invoke_rkyv_v2_command(command, payload)
+                .map(DirectResponse::Buffered);
+        };
+        self.capability_satisfied(command)?;
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            with_state_context(&self.states, || handler(payload, target))
+        }));
+        match outcome {
+            Ok(result) => result,
+            Err(panic) => Err(RustraError::internal(format!(
+                "panic in handler: {}",
+                crate::ffi::panic_message(&panic)
+            ))),
+        }
+    }
+
     /// 런타임 mutation을 영구적으로 비활성화한다.
     ///
     /// release 빌드에서는 `build()` 시점에 이미 동결되어 있다. debug 빌드에서
     /// prod 동작을 시뮬레이션하거나 런타임에 명시적으로 잠그고 싶을 때 사용한다.
     /// 한 번 동결하면 해제할 수 없다.
     pub fn freeze(&self) {
+        // registry writer와 직렬화한 뒤 frozen을 publish한다. mutation 쪽도
+        // writer를 얻은 뒤 다시 검사하므로, ensure_mutable → lock 사이에
+        // freeze가 끼어든 뒤 명령이 등록되는 TOCTOU가 없다.
+        let state = self
+            .state
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _ = self.frozen_registry.set(FrozenRegistry::from_state(&state));
         self.frozen.store(true, Ordering::Release);
     }
 
@@ -954,6 +1603,7 @@ impl Package {
             .state
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.ensure_mutable()?;
         // 같은 이름이면 기존 command_id 재사용(stable id). 새 이름이면 단조 증가 ID 할당.
         let command_id = match state.commands.get(&name).map(|c| c.command_id) {
             Some(existing) => existing,
@@ -970,8 +1620,8 @@ impl Package {
                 id
             }
         };
-        let command = build_command::<I, O, F>(command_id, handler, true);
-        state.id_to_command.insert(command_id, command.clone());
+        let command = Arc::new(build_command::<I, O, F>(command_id, handler, true));
+        state.id_to_command.insert(command_id, Arc::clone(&command));
         state.commands.insert(name.clone(), command);
         state.id_to_name.insert(command_id, name);
         Ok(())
@@ -1001,6 +1651,7 @@ impl Package {
             .state
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.ensure_mutable()?;
         let existing = state
             .commands
             .get(name)
@@ -1009,7 +1660,8 @@ impl Package {
         let required_capability = existing.required_capability;
         let mut command = build_command::<I, O, F>(command_id, handler, false);
         command.required_capability = required_capability;
-        state.id_to_command.insert(command_id, command.clone());
+        let command = Arc::new(command);
+        state.id_to_command.insert(command_id, Arc::clone(&command));
         state.commands.insert(name.to_string(), command);
         Ok(())
     }
@@ -1023,6 +1675,7 @@ impl Package {
             .state
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.ensure_mutable()?;
         if state.commands.remove(name).is_none() {
             return Err(RustraError::command_not_found(name));
         }
@@ -1111,6 +1764,11 @@ impl Package {
         let mut root = json!({
             "packageId": id,
             "schemaVersion": state.schema_version,
+            // rustra enables schemars/serde_json `preserve_order`, so object
+            // properties are emitted in the same declaration order postcard
+            // uses on the wire. Consumers can distinguish this guaranteed
+            // contract from legacy or third-party schema files.
+            "fieldOrder": "declaration",
             "commands": commands,
         });
         if !event_contracts.is_empty() {
@@ -1210,7 +1868,19 @@ impl Package {
         if !imports.is_empty() {
             output.push_str(&format!("import type {{ {imports} }} from './types.js';\n"));
         }
-        output.push_str("import { invokeGenerated } from '@rustra/types';\n");
+        let mut generated_helpers = BTreeSet::new();
+        generated_helpers.insert("invokeGenerated".to_string());
+        for command in state.commands.values() {
+            if generated_byte_field_name(&command.input_schema).is_some() {
+                generated_helpers.insert("invokeGeneratedBytes".to_string());
+            } else if let Some(fields) = generated_field_names(&command.input_schema) {
+                generated_helpers.insert(format!("invokeGeneratedFields{}", fields.len()));
+            }
+        }
+        output.push_str(&format!(
+            "import {{ {} }} from '@rustra/types';\n",
+            generated_helpers.into_iter().collect::<Vec<_>>().join(", ")
+        ));
         output.push_str("import type { InvokeOptions } from '@rustra/types';\n\n");
 
         for (name, command) in state.commands.iter() {
@@ -1234,6 +1904,44 @@ impl Package {
                     out_type,
                     command.command_id,
                     name,
+                    command_function_name(name),
+                    name,
+                ));
+            } else if let Some(field) = generated_byte_field_name(&command.input_schema) {
+                let literal = serde_json::to_string(&field)
+                    .expect("JSON string serialization for a property name cannot fail");
+                output.push_str(&format!(
+                    "export function {}(input: {}, options?: InvokeOptions): Promise<{}> {{\n  return invokeGeneratedBytes<{}>({}, '{}', input, input[{}], options);\n}}\n{}.commandId = '{}';\n\n",
+                    command_function_name(name),
+                    command.input_type,
+                    out_type,
+                    out_type,
+                    command.command_id,
+                    name,
+                    literal,
+                    command_function_name(name),
+                    name,
+                ));
+            } else if let Some(fields) = generated_field_names(&command.input_schema) {
+                let field_args = fields
+                    .iter()
+                    .map(|field| {
+                        let literal = serde_json::to_string(field)
+                            .expect("JSON string serialization for a property name cannot fail");
+                        format!("input[{literal}]")
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                output.push_str(&format!(
+                    "export function {}(input: {}, options?: InvokeOptions): Promise<{}> {{\n  return invokeGeneratedFields{}<{}>({}, '{}', input, {}, options);\n}}\n{}.commandId = '{}';\n\n",
+                    command_function_name(name),
+                    command.input_type,
+                    out_type,
+                    fields.len(),
+                    out_type,
+                    command.command_id,
+                    name,
+                    field_args,
                     command_function_name(name),
                     name,
                 ));
@@ -1290,6 +1998,53 @@ impl PackageBuilder {
         self.commands.insert(name, command);
         self.next_command_id += 1;
         self
+    }
+
+    /// Register a command with both the normal wire contract and a direct
+    /// single-byte-field native path. This is intentionally explicit: only
+    /// types implementing the ownership conversion traits can cross this ABI.
+    pub fn buffer_command<I, O, F>(mut self, name: impl Into<String>, handler: F) -> Self
+    where
+        I: BufferCommandInput,
+        O: BufferCommandOutput,
+        F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+    {
+        let name = name.into();
+        if self.commands.contains_key(&name) {
+            panic!("duplicate command registration: '{name}'");
+        }
+        let handler = Arc::new(handler);
+        let normal_handler = Arc::clone(&handler);
+        let mut command = build_command::<I, O, _>(
+            self.next_command_id,
+            move |input| normal_handler(input),
+            false,
+        );
+        if generated_byte_field_name(&command.input_schema).is_none()
+            || generated_byte_field_name(&command.output_schema).is_none()
+        {
+            panic!(
+                "buffer command '{name}' requires input and output schemas with exactly one required Vec<u8> field"
+            );
+        }
+        command.buffer_handler = Some(Arc::new(move |bytes| {
+            let input = I::from_buffer(bytes.to_vec());
+            handler(input).map(BufferCommandOutput::into_buffer)
+        }));
+        self.commands.insert(name, command);
+        self.next_command_id += 1;
+        self
+    }
+
+    /// Name-inferred variant of [`PackageBuilder::buffer_command`].
+    pub fn buffer_command_fn<I, O, F>(self, handler: F) -> Self
+    where
+        I: BufferCommandInput,
+        O: BufferCommandOutput,
+        F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+    {
+        let name = command_name_from_handler::<F>();
+        self.buffer_command(name, handler)
     }
 
     /// Runtime Authority: 이미 등록된 명령에 capability 요구를 부여한다.
@@ -1497,13 +2252,20 @@ impl PackageBuilder {
         // (성능) id → Command 직접 캐시 — alias id 포함 전체 id_to_name 키와
         // 정확히 같은 라우팅을 제공한다(lookup 일관성: id_to_name 이 가리키는
         // 모든 id 는 여기서도 같은 명령을 찾는다).
-        let id_to_command: BTreeMap<u16, Command> = id_to_name
+        // 빌더의 owned Command를 한 번만 Arc로 감싼다. 이후 JSON/rkyv invoke의
+        // clone-out은 String/schema/handler를 각각 복제하지 않고 Arc refcount
+        // 1회만 증가한다.
+        let commands: BTreeMap<String, Arc<Command>> = commands
+            .into_iter()
+            .map(|(name, command)| (name, Arc::new(command)))
+            .collect();
+        let id_to_command: BTreeMap<u16, Arc<Command>> = id_to_name
             .iter()
             .map(|(id, name)| {
                 let cmd = commands
                     .get(name)
                     .unwrap_or_else(|| panic!("build(): id {id} → '{name}' not in commands"));
-                (*id, cmd.clone())
+                (*id, Arc::clone(cmd))
             })
             .collect();
         // (T2 리뷰) tripwire: 최종 병합 뒤 모든 alias 가 자기 명령을 가리키는지
@@ -1516,17 +2278,24 @@ impl PackageBuilder {
             }),
             "alias merge invariant broken: some legacy id does not resolve to its command"
         );
+        let state = RegistryState {
+            commands,
+            id_to_name,
+            id_to_command,
+            next_command_id,
+            granted_capabilities: BTreeSet::new(),
+            schema_version: self.schema_version,
+        };
+        let frozen_registry = OnceLock::new();
+        let frozen = !cfg!(debug_assertions);
+        if frozen {
+            let _ = frozen_registry.set(FrozenRegistry::from_state(&state));
+        }
         Package {
             id: self.id,
-            state: Arc::new(RwLock::new(RegistryState {
-                commands,
-                id_to_name,
-                id_to_command,
-                next_command_id,
-                granted_capabilities: BTreeSet::new(),
-                schema_version: self.schema_version,
-            })),
-            frozen: Arc::new(AtomicBool::new(!cfg!(debug_assertions))),
+            state: Arc::new(RwLock::new(state)),
+            frozen: Arc::new(AtomicBool::new(frozen)),
+            frozen_registry: Arc::new(frozen_registry),
             events: Arc::new(events::EventState::with_capacity(self.event_capacity)),
             event_contracts: self.events,
             states: Arc::new(self.states),
@@ -1905,5 +2674,209 @@ mod runtime_registry_tests {
             assert!(bytes[0] == 0 || bytes[0] == 1, "ok flag must be 0 or 1");
             unsafe { crate::ffi::rustra_ffi_free(ptr, out_len) };
         }
+    }
+}
+
+#[cfg(test)]
+mod raw_invoke_tests {
+    use super::*;
+
+    #[derive(serde::Deserialize, schemars::JsonSchema)]
+    #[allow(dead_code)]
+    struct AddIn {
+        a: i64,
+        b: i64,
+    }
+    #[derive(serde::Serialize, schemars::JsonSchema)]
+    #[allow(dead_code)]
+    struct AddOut {
+        value: i64,
+    }
+
+    fn add(input: AddIn) -> Result<AddOut> {
+        Ok(AddOut {
+            value: input.a + input.b,
+        })
+    }
+
+    #[derive(serde::Deserialize, schemars::JsonSchema)]
+    #[allow(dead_code)]
+    struct FIn {
+        a: f64,
+    }
+    #[derive(serde::Serialize, schemars::JsonSchema)]
+    #[allow(dead_code)]
+    struct FOut {
+        value: f64,
+    }
+
+    fn dbl(input: FIn) -> Result<FOut> {
+        Ok(FOut {
+            value: input.a * 2.0,
+        })
+    }
+
+    #[derive(serde::Deserialize, schemars::JsonSchema)]
+    #[allow(dead_code)]
+    struct SIn {
+        name: String,
+    }
+    #[derive(serde::Serialize, schemars::JsonSchema)]
+    #[allow(dead_code)]
+    struct SOut {
+        len: u32,
+    }
+
+    fn slen(input: SIn) -> Result<SOut> {
+        Ok(SOut {
+            len: input.name.len() as u32,
+        })
+    }
+
+    #[test]
+    fn raw_invoke_adds_scalars_without_postcard() {
+        let pkg = Package::builder("test.raw").command_fn(add).build();
+        assert!(
+            pkg.raw_invoke_shape(1).is_some(),
+            "add must be raw-eligible"
+        );
+        assert_eq!(pkg.invoke_raw(1, &[42, 58]).unwrap(), 100);
+        // 부정수 경계 — i64 비트 그대로.
+        assert_eq!(
+            pkg.invoke_raw(1, &[(-5i64) as u64, 3]).unwrap(),
+            (-2i64) as u64
+        );
+    }
+
+    #[test]
+    fn raw_invoke_f64_bit_roundtrip() {
+        let pkg = Package::builder("test.rawf64").command_fn(dbl).build();
+        let bits = crate::rkyv_codec::u64_from_f64(3.5f64);
+        let result = pkg.invoke_raw(1, &[bits]).expect("raw invoke f64");
+        assert_eq!(crate::rkyv_codec::f64_from_u64(result), 7.0);
+    }
+
+    #[test]
+    fn raw_invoke_rejects_arity_mismatch() {
+        let pkg = Package::builder("test.raw2").command_fn(add).build();
+        let err = pkg.invoke_raw(1, &[1]).expect_err("must reject 1 slot");
+        assert!(err.to_string().contains("expected 2 slots"));
+    }
+
+    #[test]
+    fn raw_invoke_rejects_ineligible_command() {
+        // 문자열 필드 명령은 raw 조건 위반 — 폴백 신호(invalid_args).
+        let pkg = Package::builder("test.rawstr").command_fn(slen).build();
+        assert!(
+            pkg.raw_invoke_shape(1).is_none(),
+            "string command must not be raw-eligible"
+        );
+        let err = pkg.invoke_raw(1, &[0]).expect_err("must reject");
+        assert!(err.to_string().contains("no raw handler"));
+    }
+}
+
+#[cfg(test)]
+mod buffer_invoke_tests {
+    use super::*;
+
+    #[derive(serde::Deserialize, serde::Serialize, schemars::JsonSchema)]
+    struct Bytes {
+        #[serde(with = "crate::byte_buffer")]
+        #[schemars(with = "Vec<u8>")]
+        data: Vec<u8>,
+    }
+
+    impl BufferCommandInput for Bytes {
+        fn from_buffer(data: Vec<u8>) -> Self {
+            Self { data }
+        }
+    }
+
+    impl BufferCommandOutput for Bytes {
+        fn into_buffer(self) -> Vec<u8> {
+            self.data
+        }
+    }
+
+    fn echo(input: Bytes) -> Result<Bytes> {
+        Ok(input)
+    }
+
+    #[test]
+    fn buffer_command_moves_owned_output_without_postcard_frame() {
+        let package = Package::builder("test.buffer")
+            .buffer_command_fn(echo)
+            .build();
+        assert!(package.has_buffer_handler(1));
+        assert_eq!(
+            package.invoke_buffer(1, &[0, 1, 127, 128, 255]).unwrap(),
+            [0, 1, 127, 128, 255]
+        );
+        assert!(package.invoke_buffer(1, &[]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn normal_command_does_not_claim_the_buffer_capability() {
+        let package = Package::builder("test.buffer-fallback")
+            .command_fn(echo)
+            .build();
+        assert!(!package.has_buffer_handler(1));
+        assert_eq!(
+            package.invoke_buffer(1, &[1]).unwrap_err().code(),
+            "command.invalid_args"
+        );
+    }
+
+    #[derive(serde::Deserialize, JsonSchema)]
+    struct InvalidBufferInput {
+        data: Vec<u8>,
+        tag: u8,
+    }
+
+    impl BufferCommandInput for InvalidBufferInput {
+        fn from_buffer(data: Vec<u8>) -> Self {
+            Self { data, tag: 0 }
+        }
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "requires input and output schemas with exactly one required Vec<u8> field"
+    )]
+    fn buffer_command_rejects_non_single_field_schemas() {
+        let _ = Package::builder("test.invalid-buffer")
+            .buffer_command("invalid", |input: InvalidBufferInput| {
+                let _ = input.tag;
+                Ok(Bytes { data: input.data })
+            })
+            .build();
+    }
+
+    #[derive(serde::Deserialize, serde::Serialize, JsonSchema)]
+    struct OptionalBytes {
+        data: Option<Vec<u8>>,
+    }
+
+    impl BufferCommandInput for OptionalBytes {
+        fn from_buffer(data: Vec<u8>) -> Self {
+            Self { data: Some(data) }
+        }
+    }
+
+    impl BufferCommandOutput for OptionalBytes {
+        fn into_buffer(self) -> Vec<u8> {
+            self.data.unwrap_or_default()
+        }
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "requires input and output schemas with exactly one required Vec<u8> field"
+    )]
+    fn buffer_command_rejects_optional_byte_fields() {
+        let _ = Package::builder("test.optional-buffer")
+            .buffer_command("optional", |input: OptionalBytes| Ok(input))
+            .build();
     }
 }
