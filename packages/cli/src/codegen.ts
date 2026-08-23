@@ -110,34 +110,40 @@ export function tsTypeFromSchema(
   }
 
   if (Array.isArray(type)) {
-    const parts = type
-      .map((t) => {
-        switch (t) {
-          case 'integer':
-          case 'number':
-            return 'number';
-          case 'string':
-            return 'string';
-          case 'boolean':
-            return 'boolean';
-          case 'null':
-            return 'null';
-          case 'object':
-            return tsObjectFromSchema(schema, definitions);
-          case 'array': {
-            const items = schema.items;
-            if (Array.isArray(items)) {
-              const elementTypes = items.map((s) => tsTypeFromSchema(s, definitions));
-              return `[${elementTypes.join(', ')}]`;
-            }
-            return items ? `${tsTypeFromSchema(items, definitions)}[]` : 'unknown[]';
+    const parts = new Set<string>();
+    for (const member of type) {
+      switch (member) {
+        case 'integer':
+        case 'number':
+          parts.add('number');
+          break;
+        case 'string':
+          parts.add('string');
+          break;
+        case 'boolean':
+          parts.add('boolean');
+          break;
+        case 'null':
+          parts.add('null');
+          break;
+        case 'object':
+          parts.add(tsObjectFromSchema(schema, definitions));
+          break;
+        case 'array': {
+          const items = schema.items;
+          if (Array.isArray(items)) {
+            const elementTypes = items.map((s) => tsTypeFromSchema(s, definitions));
+            parts.add(`[${elementTypes.join(', ')}]`);
+          } else {
+            parts.add(items ? `${tsTypeFromSchema(items, definitions)}[]` : 'unknown[]');
           }
-          default:
-            return 'unknown';
+          break;
         }
-      })
-      .filter((v, i, a) => a.indexOf(v) === i);
-    return parts.join(' | ');
+        default:
+          parts.add('unknown');
+      }
+    }
+    return [...parts].join(' | ');
   }
 
   return 'unknown';
@@ -273,6 +279,11 @@ function isAsciiAlphanumeric(char: string): boolean {
  */
 export function postcardHelperSource(): string {
   return `// ── postcard wire format helpers ─────────────────────────────
+
+// encodeInto 의 f32/f64 기록용 모듈 스크립트 버퍼 — 호출당 할당 없이 재사용.
+const _dvScratchBuf = new ArrayBuffer(8);
+const _dvScratch = new DataView(_dvScratchBuf);
+const _dvScratchU8 = new Uint8Array(_dvScratchBuf);
 
 function _pcEncodeVarint(n: number): Uint8Array {
   // 정수만 허용 — u32 최대(4,294,967,295)는 Number 로 정확히 표현된다.

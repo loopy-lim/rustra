@@ -460,8 +460,9 @@ test('generateRkyvCodecsCpp emits by_id switch dispatch (P0-3)', () => {
 test('generateRkyvCodecsCpp maps each postcard field kind to the right push/read', () => {
   const cpp = generateRkyvCodecsCpp(cppSchema);
 
-  // integer → push_i64 / read_i64
-  assert.ok(cpp.includes('w.push_i64((int64_t)_v);'));
+  // integer → safe-integer 검증 후 push_i64 / read_i64
+  assert.ok(cpp.includes('w.push_i64(rustra_i64(rt,'));
+  assert.ok(cpp.includes('must be a safe integer'));
   assert.ok(cpp.includes('(double)r.read_i64()'));
   // string → push_string / createFromUtf8
   assert.ok(cpp.includes('w.push_string(_v);'));
@@ -688,7 +689,15 @@ test('generateRkyvCodecsTs encodes primitive-valued dynamic maps deterministical
 });
 
 test('generateRkyvRegistryTs excludes unsupported commands with a header note', () => {
-  const registry = generateRkyvRegistryTs(richSchema);
+  const warnings: string[] = [];
+  const originalWarn = console.warn;
+  console.warn = (message?: unknown) => warnings.push(String(message));
+  let registry: string;
+  try {
+    registry = generateRkyvRegistryTs(richSchema);
+  } finally {
+    console.warn = originalWarn;
+  }
   assert.ok(registry.includes("['updateItem'"), 'Option commands must be included');
   assert.ok(registry.includes("['sortBy'"), 'enum commands must be included');
   assert.ok(registry.includes("['listItems'"), 'Vec<Struct> commands must be included');
@@ -698,6 +707,43 @@ test('generateRkyvRegistryTs excludes unsupported commands with a header note', 
     'nested collection map commands must be excluded',
   );
   assert.ok(registry.includes('Tier 3 fallback'), 'exclusion note must be present');
+  assert.equal(warnings.length, 1, 'unsupported commands must emit one actionable warning');
+  assert.match(warnings[0], /unsupportedNestedMap/);
+});
+
+test('single-entry allOf newtype handles stay on the postcard fast path', () => {
+  const schema: PackageSchema = {
+    packageId: 'handles',
+    fieldOrder: 'declaration',
+    commands: [
+      {
+        name: 'sendChannel',
+        commandId: 1,
+        inputType: 'SendChannelInput',
+        outputType: 'SendChannelOutput',
+        inputSchema: {
+          type: 'object',
+          required: ['channel'],
+          properties: {
+            channel: { allOf: [{ $ref: '#/definitions/ChannelHandle' }] },
+          },
+        },
+        outputSchema: {
+          type: 'object',
+          required: ['sent'],
+          properties: { sent: { type: 'boolean' } },
+        },
+        definitions: {
+          ChannelHandle: { type: 'integer', format: 'uint32', minimum: 0 },
+        },
+      },
+    ],
+  };
+
+  const registry = generateRkyvRegistryTs(schema);
+  const codecs = generateRkyvCodecsTs(schema);
+  assert.match(registry, /\['sendChannel', sendChannelCodec\]/);
+  assert.match(codecs, /_pcEncodeVarint\(args\.channel\)/);
 });
 
 test('generateRkyvCodecsCpp excludes unsupported commands from has_static_codec', () => {
@@ -708,6 +754,52 @@ test('generateRkyvCodecsCpp excludes unsupported commands from has_static_codec'
     !cpp.includes('unsupportedNestedMap'),
     'unsupported nested map command must not appear in C++ codec',
   );
+});
+
+test('generateRkyvCodecsCpp positional codecs enforce arity and preserve enum wire', () => {
+  const cpp = generateRkyvCodecsCpp(richSchema);
+  const sort = cpp.split('static void encode_pos_sortBy')[1]?.split('static ')[0] ?? '';
+  assert.ok(sort.includes('if (argc != 1)'), 'positional codec must reject missing/extra argv');
+  assert.ok(sort.includes('const char* _variants[] = {"asc","desc"}'));
+  assert.ok(sort.includes('w.push_uvar((uint32_t)_idx)'), 'enum must encode variant index');
+  assert.ok(!sort.includes('w.push_string(_s)'), 'enum must not use string postcard wire');
+});
+
+test('generateRkyvCodecsCpp positional f32 uses four-byte postcard wire', () => {
+  const schema: PackageSchema = {
+    packageId: 'test.f32',
+    commands: [
+      {
+        name: 'scaleFloat',
+        commandId: 19,
+        inputType: 'ScaleFloatInput',
+        outputType: 'ScaleFloatOutput',
+        inputSchema: {
+          type: 'object',
+          properties: { value: { type: 'number', format: 'float' } },
+          required: ['value'],
+        },
+        outputSchema: {
+          type: 'object',
+          properties: { value: { type: 'number', format: 'float' } },
+          required: ['value'],
+        },
+      },
+    ],
+  };
+  const cpp = generateRkyvCodecsCpp(schema);
+  const positional = cpp.split('static void encode_pos_scaleFloat')[1]?.split('static ')[0] ?? '';
+  assert.ok(positional.includes('w.push_f32(rustra_f32(rt, argv[0], "value"))'));
+  assert.ok(!positional.includes('w.push_f64'));
+});
+
+test('generateRkyvCodecsCpp validates numeric inputs before native casts', () => {
+  const cpp = generateRkyvCodecsCpp(cppSchema);
+  assert.ok(cpp.includes('std::isfinite(number)'));
+  assert.ok(cpp.includes('std::trunc(number) != number'));
+  assert.ok(cpp.includes('number < 0.0 || number > maxSafe'));
+  assert.ok(cpp.includes('number > 255'));
+  assert.ok(!cpp.includes('(int64_t)_v'));
 });
 
 // ── positional facade (P2) ──────────────────────────────────
@@ -731,6 +823,36 @@ test('generatePositionalFacadeTs uses positional params for ≤3 primitive field
   assert.ok(
     facade.includes('export function add(a: number, b: number,'),
     'simple 2-field command must be positional',
+  );
+});
+
+test('facade callPos command set exactly matches C++ positional codec set', () => {
+  // 회귀 가드: facade와 C++ 코드젠의 positional kind 세트가 어긋나면
+  // facade가 callPos 로 노출한 명령이 C++ encode_pos_by_id 에 없어
+  // 런타임 JSError("no positional codec for cmd_id")로 즉시 실패한다.
+  // 두 생성기가 같은 커맨드 집합에 대해 내리는 판정을 전수 비교한다.
+  const cpp = generateRkyvCodecsCpp(richSchema);
+  const facade = generatePositionalFacadeTs(richSchema);
+
+  const cppCases = new Set([...cpp.matchAll(/case (\d+): encode_pos_/g)].map((m) => Number(m[1])));
+  const facadeCalls = new Set(
+    [...facade.matchAll(/callPos<[^>]*>\((\d+),/g)].map((m) => Number(m[1])),
+  );
+
+  assert.ok(cppCases.size > 0, 'fixture must contain positional codecs');
+  assert.ok(facadeCalls.size > 0, 'fixture must contain callPos entries');
+
+  const missingInCpp = [...facadeCalls].filter((id) => !cppCases.has(id));
+  const missingInFacade = [...cppCases].filter((id) => !facadeCalls.has(id));
+  assert.deepEqual(
+    missingInCpp,
+    [],
+    `facade exposes callPos for cmd ids with no C++ codec: ${missingInCpp.join(', ')}`,
+  );
+  assert.deepEqual(
+    missingInFacade,
+    [],
+    `C++ has positional codecs the facade never uses: ${missingInFacade.join(', ')}`,
   );
 });
 
@@ -773,6 +895,20 @@ test('parsePackageSchema rejects hostile identifiers', () => {
   assert.throws(
     () => parsePackageSchema({ ...base, commands: [{ ...base.commands[0], name: 'bad name!' }] }),
     /identifier|Invalid schema/,
+  );
+});
+
+test('parsePackageSchema accepts the declaration-order marker and rejects unknown values', () => {
+  const base = {
+    packageId: 'ok.pkg',
+    schemaVersion: 1,
+    fieldOrder: 'declaration',
+    commands: [],
+  };
+  assert.equal(parsePackageSchema(base).fieldOrder, 'declaration');
+  assert.throws(
+    () => parsePackageSchema({ ...base, fieldOrder: 'alphabetical' }),
+    /fieldOrder.*declaration/,
   );
 });
 

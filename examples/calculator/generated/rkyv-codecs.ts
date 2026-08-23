@@ -1,5 +1,10 @@
 // ── postcard wire format helpers ─────────────────────────────
 
+// encodeInto 의 f32/f64 기록용 모듈 스크립트 버퍼 — 호출당 할당 없이 재사용.
+const _dvScratchBuf = new ArrayBuffer(8);
+const _dvScratch = new DataView(_dvScratchBuf);
+const _dvScratchU8 = new Uint8Array(_dvScratchBuf);
+
 function _pcEncodeVarint(n: number): Uint8Array {
   // 정수만 허용 — u32 최대(4,294,967,295)는 Number 로 정확히 표현된다.
   // u64 는 2^53 까지 정확 (JS Number 한계; 그 이상은 정밀도 손실 — 계약 문서 참조).
@@ -186,6 +191,22 @@ export const addNumbersCodec: RkyvV2Codec<AddNumbersInput, AddNumbersOutput> = {
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
+  encodeInto(args: AddNumbersInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 1; out[w++] = 0;
+    { const _z = args.a >= 0 ? args.a * 2 : -args.a * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    { const _z = args.b >= 0 ? args.b * 2 : -args.b * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
   decode(buf: ArrayBuffer): { ok: boolean; result?: AddNumbersOutput; error?: RustraError } {
     if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
@@ -225,6 +246,22 @@ export const benchAddCodec: RkyvV2Codec<BenchAddInput, BenchAddOutput> = {
     parts.push(_pcEncodeF64(args.a));
     parts.push(_pcEncodeF64(args.b));
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: BenchAddInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 23; out[w++] = 0;
+    { ensure(8); _dvScratch.setFloat64(0, args.a, true); for (let _i = 0; _i < 8; _i++) out[w++] = _dvScratchU8[_i]; }
+    { ensure(8); _dvScratch.setFloat64(0, args.b, true); for (let _i = 0; _i < 8; _i++) out[w++] = _dvScratchU8[_i]; }
+    return out.subarray(0, w);
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: BenchAddOutput; error?: RustraError } {
@@ -271,6 +308,21 @@ export const benchEchoBytesCodec: RkyvV2Codec<BenchBytesPayload, BenchBytesPaylo
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
+  encodeInto(args: BenchBytesPayload, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 25; out[w++] = 0;
+    { const _b = args.data; const _u = typeof _b === 'string' ? _utf8Encode(_b) : _b instanceof Uint8Array ? _b : new Uint8Array(_b); ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }
+    return out.subarray(0, w);
+  },
+
   decode(buf: ArrayBuffer): { ok: boolean; result?: BenchBytesPayload; error?: RustraError } {
     if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
@@ -311,6 +363,22 @@ export const benchEchoPairCodec: RkyvV2Codec<BenchPairPayload, BenchPairPayload>
     parts.push(_pcEncodeString(args.name));
     parts.push(_pcEncodeF64(args.value));
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: BenchPairPayload, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 26; out[w++] = 0;
+    { const _s = args.name; const _u = _utf8Encode(_s); ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }
+    { ensure(8); _dvScratch.setFloat64(0, args.value, true); for (let _i = 0; _i < 8; _i++) out[w++] = _dvScratchU8[_i]; }
+    return out.subarray(0, w);
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: BenchPairPayload; error?: RustraError } {
@@ -358,6 +426,21 @@ export const benchEchoStringCodec: RkyvV2Codec<BenchStringPayload, BenchStringPa
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
+  encodeInto(args: BenchStringPayload, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 24; out[w++] = 0;
+    { const _s = args.value; const _u = _utf8Encode(_s); ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }
+    return out.subarray(0, w);
+  },
+
   decode(buf: ArrayBuffer): { ok: boolean; result?: BenchStringPayload; error?: RustraError } {
     if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
@@ -385,6 +468,68 @@ export const benchEchoStringCodec: RkyvV2Codec<BenchStringPayload, BenchStringPa
   },
 };
 
+export const channelDemoCodec: RkyvV2Codec<ChannelDemoInput, ChannelDemoOutput> = {
+  commandId: 18,
+
+  encode(args: ChannelDemoInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(ChannelDemoInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 18, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeVarint(args.channel));
+    parts.push(_pcEncodeZigzagVarint(args.ticks));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: ChannelDemoInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 18; out[w++] = 0;
+    { let _v = args.channel; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    { const _z = args.ticks >= 0 ? args.ticks * 2 : -args.ticks * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: ChannelDemoOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<ChannelDemoOutput> = {};
+    {
+      const _v = _pcDecodeZigzagVarint(u8, offset);
+      result.sent = _v.value;
+      offset += _v.bytesRead;
+    }
+    {
+      const _v = _pcDecodeZigzagVarint(u8, offset);
+      result.droppedSends = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as ChannelDemoOutput };
+  },
+};
+
 export const clampCodec: RkyvV2Codec<ClampInput, ClampOutput> = {
   commandId: 4,
 
@@ -398,6 +543,23 @@ export const clampCodec: RkyvV2Codec<ClampInput, ClampOutput> = {
     parts.push(_pcEncodeF64(args.min));
     parts.push(_pcEncodeF64(args.value));
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: ClampInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 4; out[w++] = 0;
+    { ensure(8); _dvScratch.setFloat64(0, args.max, true); for (let _i = 0; _i < 8; _i++) out[w++] = _dvScratchU8[_i]; }
+    { ensure(8); _dvScratch.setFloat64(0, args.min, true); for (let _i = 0; _i < 8; _i++) out[w++] = _dvScratchU8[_i]; }
+    { ensure(8); _dvScratch.setFloat64(0, args.value, true); for (let _i = 0; _i < 8; _i++) out[w++] = _dvScratchU8[_i]; }
+    return out.subarray(0, w);
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: ClampOutput; error?: RustraError } {
@@ -439,6 +601,22 @@ export const createItemCodec: RkyvV2Codec<CreateItemInput, CreateItemOutput> = {
     parts.push(_pcEncodeString(args.name));
     parts.push(_pcEncodeZigzagVarint(args.value));
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: CreateItemInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 8; out[w++] = 0;
+    { const _s = args.name; const _u = _utf8Encode(_s); ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }
+    { const _z = args.value >= 0 ? args.value * 2 : -args.value * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: CreateItemOutput; error?: RustraError } {
@@ -495,6 +673,22 @@ export const divideCodec: RkyvV2Codec<DivideInput, DivideOutput> = {
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
+  encodeInto(args: DivideInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 10; out[w++] = 0;
+    { const _z = args.a >= 0 ? args.a * 2 : -args.a * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    { const _z = args.b >= 0 ? args.b * 2 : -args.b * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
   decode(buf: ArrayBuffer): { ok: boolean; result?: DivideOutput; error?: RustraError } {
     if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
@@ -534,6 +728,22 @@ export const emitDemoCodec: RkyvV2Codec<EmitDemoInput, EmitDemoOutput> = {
     parts.push(_pcEncodeZigzagVarint(args.ticks));
     parts.push(_pcEncodeZigzagVarint(args.stepDelayMs));
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: EmitDemoInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 11; out[w++] = 0;
+    { const _z = args.ticks >= 0 ? args.ticks * 2 : -args.ticks * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    { const _z = args.stepDelayMs >= 0 ? args.stepDelayMs * 2 : -args.stepDelayMs * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: EmitDemoOutput; error?: RustraError } {
@@ -577,6 +787,22 @@ export const gaugeCodec: RkyvV2Codec<GaugeInput, GaugeOutput> = {
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
+  encodeInto(args: GaugeInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 17; out[w++] = 0;
+    { let _v = args.limit; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    { let _v = args.offset; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
   decode(buf: ArrayBuffer): { ok: boolean; result?: GaugeOutput; error?: RustraError } {
     if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
@@ -615,6 +841,21 @@ export const greetCodec: RkyvV2Codec<GreetInput, GreetOutput> = {
     parts.push(cmdId);
     parts.push(_pcEncodeString(args.name));
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: GreetInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 5; out[w++] = 0;
+    { const _s = args.name; const _u = _utf8Encode(_s); ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }
+    return out.subarray(0, w);
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: GreetOutput; error?: RustraError } {
@@ -657,6 +898,21 @@ export const isEvenCodec: RkyvV2Codec<IsEvenInput, IsEvenOutput> = {
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
+  encodeInto(args: IsEvenInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 3; out[w++] = 0;
+    { const _z = args.n >= 0 ? args.n * 2 : -args.n * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
   decode(buf: ArrayBuffer): { ok: boolean; result?: IsEvenOutput; error?: RustraError } {
     if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
@@ -695,6 +951,22 @@ export const multiplyCodec: RkyvV2Codec<MultiplyInput, MultiplyOutput> = {
     parts.push(_pcEncodeF64(args.a));
     parts.push(_pcEncodeF64(args.b));
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: MultiplyInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 2; out[w++] = 0;
+    { ensure(8); _dvScratch.setFloat64(0, args.a, true); for (let _i = 0; _i < 8; _i++) out[w++] = _dvScratchU8[_i]; }
+    { ensure(8); _dvScratch.setFloat64(0, args.b, true); for (let _i = 0; _i < 8; _i++) out[w++] = _dvScratchU8[_i]; }
+    return out.subarray(0, w);
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: MultiplyOutput; error?: RustraError } {
@@ -796,6 +1068,21 @@ export const resourceCloseCodec: RkyvV2Codec<ResourceCloseInput, ResourceCloseOu
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
+  encodeInto(args: ResourceCloseInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 22; out[w++] = 0;
+    { let _v = args.handle; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
   decode(buf: ArrayBuffer): { ok: boolean; result?: ResourceCloseOutput; error?: RustraError } {
     if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
@@ -885,6 +1172,22 @@ export const resourceReadCodec: RkyvV2Codec<ResourceReadInput, ResourceReadOutpu
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
+  encodeInto(args: ResourceReadInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 20; out[w++] = 0;
+    { let _v = args.handle; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    { const _s = args.key; const _u = _utf8Encode(_s); ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }
+    return out.subarray(0, w);
+  },
+
   decode(buf: ArrayBuffer): { ok: boolean; result?: ResourceReadOutput; error?: RustraError } {
     if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
@@ -939,6 +1242,23 @@ export const resourceWriteCodec: RkyvV2Codec<ResourceWriteInput, ResourceWriteOu
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
+  encodeInto(args: ResourceWriteInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 21; out[w++] = 0;
+    { let _v = args.handle; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    { const _s = args.key; const _u = _utf8Encode(_s); ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }
+    { const _s = args.value; const _u = _utf8Encode(_s); ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }
+    return out.subarray(0, w);
+  },
+
   decode(buf: ArrayBuffer): { ok: boolean; result?: ResourceWriteOutput; error?: RustraError } {
     if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
@@ -977,6 +1297,21 @@ export const rustraRegistryDemoCodec: RkyvV2Codec<RegistryDemoInput, RegistryDem
     parts.push(cmdId);
     parts.push(_pcEncodeString(args.op));
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: RegistryDemoInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 12; out[w++] = 0;
+    { const _s = args.op; const _u = _utf8Encode(_s); ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }
+    return out.subarray(0, w);
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: RegistryDemoOutput; error?: RustraError } {
@@ -1082,6 +1417,22 @@ export const secureComputeCodec: RkyvV2Codec<SecureComputeInput, SecureComputeOu
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
+  encodeInto(args: SecureComputeInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 13; out[w++] = 0;
+    { const _z = args.a >= 0 ? args.a * 2 : -args.a * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    { const _z = args.b >= 0 ? args.b * 2 : -args.b * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
   decode(buf: ArrayBuffer): { ok: boolean; result?: SecureComputeOutput; error?: RustraError } {
     if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
@@ -1124,6 +1475,21 @@ export const sizeOfCodec: RkyvV2Codec<SizeOfInput, SizeOfOutput> = {
       parts.push(typeof _b === 'string' ? _utf8Encode(_b) : new Uint8Array(_b));
     }
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: SizeOfInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 14; out[w++] = 0;
+    { const _b = args.data; const _u = typeof _b === 'string' ? _utf8Encode(_b) : _b instanceof Uint8Array ? _b : new Uint8Array(_b); ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }
+    return out.subarray(0, w);
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: SizeOfOutput; error?: RustraError } {
@@ -1225,6 +1591,21 @@ export const sumListCodec: RkyvV2Codec<SumListInput, SumListOutput> = {
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
+  encodeInto(args: SumListInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 6; out[w++] = 0;
+    { const _arr = args.numbers; let _v = _arr.length; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; for (let _i = 0; _i < _arr.length; _i++) { const _z = _arr[_i] >= 0 ? _arr[_i] * 2 : -_arr[_i] * 2 - 1; let _x = _z; do { ensure(1); out[w++] = (_x % 128) | 0x80; _x = Math.floor(_x / 128); } while (_x > 0); out[w - 1] &= 0x7f; } }
+    return out.subarray(0, w);
+  },
+
   decode(buf: ArrayBuffer): { ok: boolean; result?: SumListOutput; error?: RustraError } {
     if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     const u8 = new Uint8Array(buf);
@@ -1268,6 +1649,21 @@ export const toUpperCodec: RkyvV2Codec<ToUpperInput, ToUpperOutput> = {
     parts.push(cmdId);
     parts.push(_pcEncodeString(args.s));
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: ToUpperInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 7; out[w++] = 0;
+    { const _s = args.s; const _u = _utf8Encode(_s); ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }
+    return out.subarray(0, w);
   },
 
   decode(buf: ArrayBuffer): { ok: boolean; result?: ToUpperOutput; error?: RustraError } {

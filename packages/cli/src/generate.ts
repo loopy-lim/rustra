@@ -269,6 +269,12 @@ function classifyPostcardField(
   depth = 0,
 ): PostcardFieldKind | null {
   if (depth > 8) return null; // 과도한 중첩(순환 $ref 포함) — Rust 게이트와 동일 한계
+  // schemars는 tuple newtype(`struct Handle(u32)`)를 single-entry allOf +
+  // $ref로 표현한다. serde/postcard 표면은 내부 값 하나뿐이므로 해당 스키마를
+  // 투명하게 벗겨야 ChannelHandle/ResourceHandle도 fast path를 사용할 수 있다.
+  if (Array.isArray(schema.allOf) && schema.allOf.length === 1) {
+    return classifyPostcardField(schema.allOf[0], definitions, depth + 1);
+  }
   // string-only enum — postcard는 variant index varint로 직렬화한다.
   if (schema.type === 'string' && Array.isArray(schema.enum) && schema.enum.length > 0) {
     const allStrings = schema.enum.every((v) => typeof v === 'string');
@@ -512,6 +518,82 @@ function collectAllDefinitions(
  * Generate the postcard encode expression for a single field value.
  * Returns code lines that push Uint8Array parts into a `parts` array.
  */
+/** encodeInto 가 다루는 필드 kind — 단일 패스 직접 기록이 자연스러운 것들.
+ * PostcardField 유니언에 실제 존재하는 kind 만 포함한다(없는 kind 를 넣으면
+ * 코드젠이 영원히 그 경로를 켜지 않는 것처럼 보인다). */
+const ENC_INTO_KINDS = new Set([
+  'zigzag',
+  'uvar',
+  'f64',
+  'f32',
+  'bool',
+  'string',
+  'bytes',
+  'vec_zigzag',
+  'vec_uvar',
+]);
+
+/**
+ * encodeInto 용 필드 기록식 — parts 배열 없이 out/w 커서에 직접 쓴다.
+ * generateFieldEncodeExpr 와 완전히 동일한 와이어 바이트를 낸다.
+ */
+function generateFieldEncodeIntoExpr(
+  field: PostcardField,
+  valueExpr: string,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+  indent: string,
+): string {
+  void definitions;
+  const writeVarint = (target: string) =>
+    `${indent}{ let _v = ${target}; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }`;
+  const writeZigzag = (target: string) =>
+    `${indent}{ const _z = ${target} >= 0 ? ${target} * 2 : -${target} * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }`;
+  switch (field.kind) {
+    case 'zigzag':
+      return writeZigzag(valueExpr);
+    case 'uvar':
+      return writeVarint(valueExpr);
+    case 'f64':
+      return (
+        `${indent}{ ensure(8); _dvScratch.setFloat64(0, ${valueExpr}, true); ` +
+        `for (let _i = 0; _i < 8; _i++) out[w++] = _dvScratchU8[_i]; }`
+      );
+    case 'f32':
+      return (
+        `${indent}{ ensure(4); _dvScratch.setFloat32(0, ${valueExpr}, true); ` +
+        `for (let _i = 0; _i < 4; _i++) out[w++] = _dvScratchU8[_i]; }`
+      );
+    case 'bool':
+      return `${indent}{ ensure(1); out[w++] = ${valueExpr} ? 1 : 0; }`;
+    case 'string':
+      return (
+        `${indent}{ const _s = ${valueExpr}; const _u = _utf8Encode(_s); ` +
+        `ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }`
+      );
+    case 'bytes':
+      return (
+        `${indent}{ const _b = ${valueExpr}; const _u = typeof _b === 'string' ? _utf8Encode(_b) : _b instanceof Uint8Array ? _b : new Uint8Array(_b); ` +
+        `ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }`
+      );
+    case 'vec_zigzag':
+      return (
+        `${indent}{ const _arr = ${valueExpr}; ` +
+        `let _v = _arr.length; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; ` +
+        `for (let _i = 0; _i < _arr.length; _i++) { const _z = _arr[_i] >= 0 ? _arr[_i] * 2 : -_arr[_i] * 2 - 1; let _x = _z; do { ensure(1); out[w++] = (_x % 128) | 0x80; _x = Math.floor(_x / 128); } while (_x > 0); out[w - 1] &= 0x7f; } }`
+      );
+    case 'vec_uvar':
+      return (
+        `${indent}{ const _arr = ${valueExpr}; ` +
+        `let _v = _arr.length; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; ` +
+        `for (let _i = 0; _i < _arr.length; _i++) { let _x = _arr[_i]; do { ensure(1); out[w++] = (_x % 128) | 0x80; _x = Math.floor(_x / 128); } while (_x > 0); out[w - 1] &= 0x7f; } }`
+      );
+    default:
+      // 나머지 vec_* 는 원소 종류별 루프가 필요해 여기서 다루지 않는다 —
+      // ENC_INTO_KINDS 체크가 encodeInto 자체를 스킵하게 한다.
+      return `${indent}/* unsupported kind: ${field.kind} */`;
+  }
+}
+
 function generateFieldEncodeExpr(
   field: PostcardField,
   valueExpr: string,
@@ -1109,11 +1191,12 @@ function generateFieldDecodeExpr(
  * 선점하는 과거 결함(필드 무음 소실)을 구조적으로 봉쇄한다.
  */
 export function generateRkyvCodecsTs(schema: PackageSchema): string {
-  const allTypes = schema.commands
-    .flatMap((c) => [c.inputType, c.outputType])
+  const allTypes = new Set<string>();
+  for (const command of schema.commands) {
     // unit 타입 `()` (예: Result<()> 반환 command) 은 import 대상이 아니다.
-    .filter((t) => t !== '()')
-    .filter((v, i, a) => a.indexOf(v) === i);
+    if (command.inputType !== '()') allTypes.add(command.inputType);
+    if (command.outputType !== '()') allTypes.add(command.outputType);
+  }
 
   const definitions = collectAllDefinitions(schema);
 
@@ -1178,6 +1261,31 @@ function generatePostcardCodec(
   lines.push(`    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;`);
   lines.push(`  },`);
 
+  // ── encodeInto (재사용 버퍼 직접 기록 — 대형 페이로드 할당 회피) ──
+  // encode 의 parts 조립과 동일한 필드 순서로 계산된 크기만큼 재사용 버퍼에
+  // 직접 쓴다. 반환 subarray(0..len)를 호출자가 다음 호출의 reuse 로 재전달한다.
+  if (inFields.every((f) => ENC_INTO_KINDS.has(f.kind))) {
+    lines.push('');
+    lines.push(`  encodeInto(args: ${inType}, reuse?: Uint8Array): Uint8Array {`);
+    lines.push(`    let out = reuse ?? new Uint8Array(64);`);
+    lines.push(`    let w = 0;`);
+    lines.push(`    const ensure = (need: number) => {`);
+    lines.push(`      if (w + need <= out.length) return;`);
+    lines.push(`      const grown = new Uint8Array(Math.max(out.length * 2, w + need));`);
+    lines.push(`      grown.set(out.subarray(0, w));`);
+    lines.push(`      out = grown;`);
+    lines.push(`    };`);
+    lines.push(`    ensure(2);`);
+    lines.push(
+      `    out[w++] = ${command.commandId & 0xff}; out[w++] = ${(command.commandId >> 8) & 0xff};`,
+    );
+    for (const field of inFields) {
+      lines.push(generateFieldEncodeIntoExpr(field, `args.${field.name}`, definitions, '    '));
+    }
+    lines.push(`    return out.subarray(0, w);`);
+    lines.push(`  },`);
+  }
+
   // ── decode ──
   lines.push('');
   lines.push(
@@ -1232,6 +1340,9 @@ function collectNestedUnsupported(
   /** 스키마(또는 items)에서 $ref 문자열을 추출. */
   const refOf = (s: import('./schema.js').JsonSchema): string | undefined => {
     if (s.$ref) return s.$ref;
+    if (Array.isArray(s.allOf) && s.allOf.length === 1 && s.allOf[0]?.$ref) {
+      return s.allOf[0].$ref;
+    }
     const items = s.items;
     if (items && !Array.isArray(items) && items.$ref) return items.$ref;
     return undefined;
@@ -1350,13 +1461,13 @@ function cppEncodeWithGetter(
 ): string {
   switch (field.kind) {
     case 'zigzag':
-      return `${indent}{ auto _v = ${get}.asNumber(); w.push_i64((int64_t)_v); }`;
+      return `${indent}w.push_i64(rustra_i64(rt, ${get}, "${field.name}"));`;
     case 'uvar':
-      return `${indent}{ auto _v = ${get}.asNumber(); w.push_uvar((uint64_t)(int64_t)_v); }`;
+      return `${indent}w.push_uvar(rustra_u64(rt, ${get}, "${field.name}"));`;
     case 'f64':
-      return `${indent}{ auto _v = ${get}.asNumber(); w.push_f64(_v); }`;
+      return `${indent}w.push_f64(rustra_f64(rt, ${get}, "${field.name}"));`;
     case 'f32':
-      return `${indent}{ auto _v = ${get}.asNumber(); w.push_f32((float)_v); }`;
+      return `${indent}w.push_f32(rustra_f32(rt, ${get}, "${field.name}"));`;
     case 'bool':
       return `${indent}{ auto _v = ${get}.getBool(); w.push_bool(_v); }`;
     case 'string':
@@ -1367,7 +1478,7 @@ function cppEncodeWithGetter(
       return (
         `${indent}{ auto _v = ${get}; auto _o = _v.asObject(rt);` +
         ` if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt);` +
-        ` w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_u8((uint8_t)(int64_t)_arr.getValueAtIndex(rt, _i).asNumber()); }` +
+        ` w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_u8(rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "${field.name}[]")); }` +
         ` else { auto _ab = _o.getArrayBuffer(rt); auto _d = _ab.data(rt); auto _n = _ab.length(rt);` +
         ` w.push_uvar(_n); w.push_bytes((const uint8_t*)_d, _n); } }`
       );
@@ -1376,13 +1487,13 @@ function cppEncodeWithGetter(
       return (
         `${indent}{ auto _arr = ${get}.asObject(rt).getArray(rt);` +
         ` auto _n = _arr.length(rt); w.push_uvar(_n);` +
-        ` for (size_t _i = 0; _i < _n; _i++) { auto _e = _arr.getValueAtIndex(rt, _i).asNumber(); w.push_i64((int64_t)_e); } }`
+        ` for (size_t _i = 0; _i < _n; _i++) w.push_i64(rustra_i64(rt, _arr.getValueAtIndex(rt, _i), "${field.name}[]")); }`
       );
     case 'vec_f64':
       return (
         `${indent}{ auto _arr = ${get}.asObject(rt).getArray(rt);` +
         ` auto _n = _arr.length(rt); w.push_uvar(_n);` +
-        ` for (size_t _i = 0; _i < _n; _i++) { auto _e = _arr.getValueAtIndex(rt, _i).asNumber(); w.push_f64(_e); } }`
+        ` for (size_t _i = 0; _i < _n; _i++) w.push_f64(rustra_f64(rt, _arr.getValueAtIndex(rt, _i), "${field.name}[]")); }`
       );
     case 'vec_bool':
       return (
@@ -1411,11 +1522,11 @@ function cppEncodeWithGetter(
     case 'map_string': {
       const pushVal =
         field.kind === 'map_zigzag'
-          ? 'w.push_i64((int64_t)_e.asNumber());'
+          ? `w.push_i64(rustra_i64(rt, _e, "${field.name}{}"));`
           : field.kind === 'map_uvar'
-            ? 'w.push_uvar((uint64_t)(int64_t)_e.asNumber());'
+            ? `w.push_uvar(rustra_u64(rt, _e, "${field.name}{}"));`
             : field.kind === 'map_f64'
-              ? 'w.push_f64(_e.asNumber());'
+              ? `w.push_f64(rustra_f64(rt, _e, "${field.name}{}"));`
               : field.kind === 'map_bool'
                 ? 'w.push_bool(_e.getBool());'
                 : 'w.push_string(_e.getString(rt).utf8(rt));';
@@ -1488,10 +1599,10 @@ function cppEncodeWithGetter(
     }
     case 'enum_str': {
       const variants = field.enumVariants ?? [];
-      const variantsJs = JSON.stringify(variants);
+      const variantsCpp = `{${variants.map((variant) => JSON.stringify(variant)).join(',')}}`;
       return (
         `${indent}{ auto _s = ${get}.getString(rt).utf8(rt);` +
-        ` const char* _variants[] = ${variantsJs};` +
+        ` const char* _variants[] = ${variantsCpp};` +
         ` int _idx = -1;` +
         ` for (int _i = 0; _i < ${variants.length}; _i++) { if (_s == _variants[_i]) { _idx = _i; break; } }` +
         ` if (_idx < 0) throw jsi::JSError(rt, "invalid enum value for ${field.name}");` +
@@ -1510,7 +1621,11 @@ function cppFieldDecodeExpr(
   definitions: Record<string, import('./schema.js').JsonSchema>,
   indent: string,
 ): string {
-  const setProp = (val: string) => `${indent}${objExpr}.setProperty(rt, "${field.name}", ${val});`;
+  // 정적 필드명은 cachedProp 으로 setProperty 한다 — 호출당 이름 변환 제거.
+  // (스키마 식별자는 하이픈/공백 등을 이미 화이트리스트로 걸러 C++ 문자열
+  // 리터럴로 안전하다.)
+  const setProp = (val: string) =>
+    `${indent}${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), ${val});`;
   switch (field.kind) {
     case 'zigzag':
       return setProp('(double)r.read_i64()');
@@ -1525,7 +1640,7 @@ function cppFieldDecodeExpr(
     case 'string':
       return (
         `${indent}{ auto _s = r.read_string_view();` +
-        ` ${objExpr}.setProperty(rt, "${field.name}", jsi::String::createFromUtf8(rt, _s.data, _s.size)); }`
+        ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }`
       );
     case 'bytes': {
       // Vec<u8> → JS number[] (TS 생성 타입 표면과 정합). 튜플/맵과 동일한
@@ -1533,32 +1648,32 @@ function cppFieldDecodeExpr(
       return (
         `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
         ` for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, (double)r.read_u8()); }` +
-        ` ${objExpr}.setProperty(rt, "${field.name}", _arr); }`
+        ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`
       );
     }
     case 'vec_zigzag':
       return (
         `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
         ` for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, (double)r.read_i64()); }` +
-        ` ${objExpr}.setProperty(rt, "${field.name}", _arr); }`
+        ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`
       );
     case 'vec_f64':
       return (
         `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
         ` for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, r.read_f64()); }` +
-        ` ${objExpr}.setProperty(rt, "${field.name}", _arr); }`
+        ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`
       );
     case 'vec_uvar':
       return (
         `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
         ` for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, (double)r.read_uvar()); }` +
-        ` ${objExpr}.setProperty(rt, "${field.name}", _arr); }`
+        ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`
       );
     case 'vec_bool':
       return (
         `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
         ` for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, r.read_bool()); }` +
-        ` ${objExpr}.setProperty(rt, "${field.name}", _arr); }`
+        ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`
       );
     case 'struct': {
       if (!field.refType) return `${indent}// unknown struct field: ${field.name}`;
@@ -1570,7 +1685,9 @@ function cppFieldDecodeExpr(
       for (const sf of subFields) {
         lines.push(cppFieldDecodeExpr(sf, '_obj', definitions, `${indent}  `));
       }
-      lines.push(`${indent}  ${objExpr}.setProperty(rt, "${field.name}", _obj); }`);
+      lines.push(
+        `${indent}  ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _obj); }`,
+      );
       return lines.join('\n');
     }
     case 'vec_string':
@@ -1578,7 +1695,7 @@ function cppFieldDecodeExpr(
         `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
         ` for (size_t _i = 0; _i < _n; _i++) { auto _s = r.read_string_view();` +
         ` _arr.setValueAtIndex(rt, _i, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }` +
-        ` ${objExpr}.setProperty(rt, "${field.name}", _arr); }`
+        ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`
       );
     case 'map_zigzag':
     case 'map_uvar':
@@ -1600,7 +1717,7 @@ function cppFieldDecodeExpr(
         ` for (size_t _i = 0; _i < _n; _i++) { auto _ks = r.read_string_view();` +
         ` auto _k = jsi::String::createFromUtf8(rt, _ks.data, _ks.size);` +
         ` ${readVal} }` +
-        ` ${objExpr}.setProperty(rt, "${field.name}", std::move(_map)); }`
+        ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), std::move(_map)); }`
       );
     }
     case 'tuple': {
@@ -1618,7 +1735,9 @@ function cppFieldDecodeExpr(
           ).replace(`_arr_tmp_${i}.setProperty(rt, "${i}"`, `_arr.setValueAtIndex(rt, ${i}`),
         );
       });
-      lines.push(`${indent}  ${objExpr}.setProperty(rt, "${field.name}", _arr); }`);
+      lines.push(
+        `${indent}  ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`,
+      );
       return lines.join('\n');
     }
     case 'vec_struct': {
@@ -1633,7 +1752,9 @@ function cppFieldDecodeExpr(
         lines.push(cppFieldDecodeExpr(sf, '_obj', definitions, `${indent}    `));
       }
       lines.push(`${indent}    _arr.setValueAtIndex(rt, _i, std::move(_obj)); }`);
-      lines.push(`${indent}  ${objExpr}.setProperty(rt, "${field.name}", _arr); }`);
+      lines.push(
+        `${indent}  ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`,
+      );
       return lines.join('\n');
     }
     case 'option_zigzag':
@@ -1662,21 +1783,21 @@ function cppFieldDecodeExpr(
       if (innerKind === 'struct') {
         return (
           `${indent}{ auto _tag = r.read_u8();` +
-          ` if (_tag == 0) { ${objExpr}.setProperty(rt, "${field.name}", jsi::Value::null()); }` +
+          ` if (_tag == 0) { ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), jsi::Value::null()); }` +
           ` else { ${cppFieldDecodeExpr(innerField, objExpr, definitions, '')} } }`
         );
       }
       const inner = cppFieldDecodeExpr(innerField, objExpr, definitions, '');
       // struct 외 inner(setProperty 한 줄) — 태그 분기 안에 넣는다.
-      return `${indent}{ auto _tag = r.read_u8(); if (_tag == 0) { ${objExpr}.setProperty(rt, "${field.name}", jsi::Value::null()); } else { ${inner} } }`;
+      return `${indent}{ auto _tag = r.read_u8(); if (_tag == 0) { ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), jsi::Value::null()); } else { ${inner} } }`;
     }
     case 'enum_str': {
       const variants = field.enumVariants ?? [];
-      const variantsJs = JSON.stringify(variants);
+      const variantsCpp = `{${variants.map((variant) => JSON.stringify(variant)).join(',')}}`;
       return (
-        `${indent}{ auto _idx = r.read_uvar(); const char* _variants[] = ${variantsJs};` +
+        `${indent}{ auto _idx = r.read_uvar(); const char* _variants[] = ${variantsCpp};` +
         ` if (_idx >= ${variants.length}) throw jsi::JSError(rt, "invalid enum index for ${field.name}");` +
-        ` ${objExpr}.setProperty(rt, "${field.name}", jsi::String::createFromAscii(rt, _variants[_idx])); }`
+        ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), jsi::String::createFromAscii(rt, _variants[_idx])); }`
       );
     }
     default:
@@ -1706,9 +1827,25 @@ function cppEncodeCommand(
 }
 
 /**
+ * (Tier 1) positional fast path가 다루는 스칼라 kind 집합.
+ * facade(generatePositionalFacadeTs)와 C++ 코드젠(cppEncodePosCommand)이
+ * 반드시 같은 집합을 써야 한다 — 어느 한쪽에만 포함된 kind는 facade가
+ * callPos 로 노출한 명령을 C++ 이 인코딩하지 못해 런타임 JSError 가 난다.
+ */
+const POSITIONAL_SCALAR_KINDS = [
+  'zigzag',
+  'uvar',
+  'f64',
+  'f32',
+  'bool',
+  'string',
+  'enum_str',
+] as const;
+
+/**
  * (Tier 1) positional C++ encode 변형 — JS 인자 객체/프로퍼티 조회 없이
  * HostFunction 의 개별 Value 인자에서 직접 Writer 에 기록한다.
- * 조건: 필드가 3개 이하 + 스칼라(zigzag/f64/f32/bool/string/enum_str)만 —
+ * 조건: 필드가 3개 이하 + 스칼라(POSITIONAL_SCALAR_KINDS)만 —
  * 배열/구조체 인자는 여전히 객체 경유가 자연스럽다.
  * 산출 바이트는 encode_${fnName} 과 항상 동일(와이어 불변).
  */
@@ -1718,7 +1855,7 @@ function cppEncodePosCommand(
 ): string | null {
   const fnName = commandFunctionName(command.name);
   const { fields } = collectPostcardFields(command.inputSchema, definitions);
-  const positionalKinds = new Set(['zigzag', 'f64', 'f32', 'bool', 'string', 'enum_str']);
+  const positionalKinds = new Set<string>(POSITIONAL_SCALAR_KINDS);
   if (fields.length === 0 || fields.length > 3) return null;
   if (!fields.every((f) => positionalKinds.has(f.kind))) return null;
 
@@ -1730,25 +1867,39 @@ function cppEncodePosCommand(
   lines.push(
     `static void encode_pos_${fnName}(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {`,
   );
+  lines.push(
+    `  if (argc != ${fields.length}) throw jsi::JSError(rt, "rustra: ${command.name} expects ${fields.length} positional argument(s), got " + std::to_string(argc));`,
+  );
   lines.push(`  w.push_u8(${id & 0xff}); w.push_u8(${(id >> 8) & 0xff}); // cmd_id = ${id} LE`);
-  lines.push(`  (void)argc;`);
   fields.forEach((f, i) => {
     const v = `argv[${i}]`;
     switch (f.kind) {
       case 'zigzag':
-        lines.push(`  w.push_i64((int64_t)${v}.asNumber());`);
+        lines.push(`  w.push_i64(rustra_i64(rt, ${v}, "${f.name}"));`);
+        break;
+      case 'uvar':
+        lines.push(`  w.push_uvar(rustra_u64(rt, ${v}, "${f.name}"));`);
         break;
       case 'f64':
+        lines.push(`  w.push_f64(rustra_f64(rt, ${v}, "${f.name}"));`);
+        break;
       case 'f32':
-        lines.push(`  w.push_f64(${v}.asNumber());`);
+        lines.push(`  w.push_f32(rustra_f32(rt, ${v}, "${f.name}"));`);
         break;
       case 'bool':
         lines.push(`  w.push_bool(${v}.asBool());`);
         break;
       case 'string':
-      case 'enum_str':
         lines.push(`  { auto _s = ${v}.asString(rt).utf8(rt); w.push_string(_s); }`);
         break;
+      case 'enum_str': {
+        const variants = f.enumVariants ?? [];
+        const variantsCpp = `{${variants.map((variant) => JSON.stringify(variant)).join(',')}}`;
+        lines.push(
+          `  { auto _s = ${v}.asString(rt).utf8(rt); const char* _variants[] = ${variantsCpp}; int _idx = -1; for (int _i = 0; _i < ${variants.length}; _i++) { if (_s == _variants[_i]) { _idx = _i; break; } } if (_idx < 0) throw jsi::JSError(rt, "invalid enum value for ${f.name}"); w.push_uvar((uint32_t)_idx); }`,
+        );
+        break;
+      }
       default:
         break;
     }
@@ -1860,14 +2011,94 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   lines.push(`// AUTO-GENERATED by @rustra/cli — DO NOT EDIT.`);
   lines.push(`// C++ postcard codec for the RN JSI fast path (B1).`);
   lines.push(`#include "rustra-generated-codecs.hpp"`);
+  lines.push(`#include <cmath>`);
   lines.push(`#include <jsi/jsi.h>`);
+  lines.push(`#include <limits>`);
   lines.push(`#include <string>`);
+  lines.push(`#include <unordered_map>`);
   lines.push(``);
   lines.push(`using namespace facebook::jsi;`);
   // 명시적 `jsi::` 한정자(generated codec bodies) 를 위한 별칭 — RN Pods 의
   // jsi.h 는 `namespace jsi` 를 facebook:: 내부에만 연다.
   lines.push(`namespace jsi = facebook::jsi;`);
   lines.push(`namespace rc = rustra::codec;`);
+  lines.push(``);
+  // 정적 필드명 PropNameID 캐시 — jsi::Object::setProperty(문자열) 는 호출마다
+  // Hermes 내부에서 이름 변환을 수행할 수 있다. decode 핫패스의 프로퍼티 이름은
+  // 컴파일 타임 상수이므로 변환을 최초 1회로 고정한다. RN reload 로 새 Runtime 이
+  // 오면 기존 캐시의 PropNameID 는 무효다 — rustraResetPropNameCache() 가
+  // install 시점(신규 Runtime 보장)에 이를 비운다.
+  lines.push(`namespace rustra { namespace generated {`);
+  lines.push(`  static std::unordered_map<std::string, jsi::PropNameID>& propNameCache() {`);
+  lines.push(`    static std::unordered_map<std::string, jsi::PropNameID> cache;`);
+  lines.push(`    return cache;`);
+  lines.push(`  }`);
+  lines.push(`  static const jsi::PropNameID& cachedProp(jsi::Runtime& rt, const char* name) {`);
+  lines.push(`    auto& cache = propNameCache();`);
+  lines.push(`    auto it = cache.find(name);`);
+  lines.push(`    if (it == cache.end()) {`);
+  lines.push(`      it = cache.emplace(name, jsi::PropNameID::forAscii(rt, name)).first;`);
+  lines.push(`    }`);
+  lines.push(`    return it->second;`);
+  lines.push(`  }`);
+  lines.push(`  static void resetPropNameCache() { propNameCache().clear(); }`);
+  lines.push(`}}`);
+  lines.push(``);
+  lines.push(
+    `[[maybe_unused]] static double rustra_f64(jsi::Runtime& rt, const jsi::Value& value, const char* field) {`,
+  );
+  lines.push(
+    `  if (!value.isNumber()) throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a number");`,
+  );
+  lines.push(`  double number = value.asNumber();`);
+  lines.push(
+    `  if (!std::isfinite(number)) throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be finite");`,
+  );
+  lines.push(`  return number;`);
+  lines.push(`}`);
+  lines.push(
+    `[[maybe_unused]] static int64_t rustra_i64(jsi::Runtime& rt, const jsi::Value& value, const char* field) {`,
+  );
+  lines.push(`  double number = rustra_f64(rt, value, field);`);
+  lines.push(`  constexpr double maxSafe = 9007199254740991.0;`);
+  lines.push(`  if (std::trunc(number) != number || number < -maxSafe || number > maxSafe)`);
+  lines.push(
+    `    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a safe integer");`,
+  );
+  lines.push(`  return static_cast<int64_t>(number);`);
+  lines.push(`}`);
+  lines.push(
+    `[[maybe_unused]] static uint64_t rustra_u64(jsi::Runtime& rt, const jsi::Value& value, const char* field) {`,
+  );
+  lines.push(`  double number = rustra_f64(rt, value, field);`);
+  lines.push(`  constexpr double maxSafe = 9007199254740991.0;`);
+  lines.push(`  if (std::trunc(number) != number || number < 0.0 || number > maxSafe)`);
+  lines.push(
+    `    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a non-negative safe integer");`,
+  );
+  lines.push(`  return static_cast<uint64_t>(number);`);
+  lines.push(`}`);
+  lines.push(
+    `[[maybe_unused]] static uint8_t rustra_u8(jsi::Runtime& rt, const jsi::Value& value, const char* field) {`,
+  );
+  lines.push(`  uint64_t number = rustra_u64(rt, value, field);`);
+  lines.push(
+    `  if (number > 255) throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be in 0..255");`,
+  );
+  lines.push(`  return static_cast<uint8_t>(number);`);
+  lines.push(`}`);
+  lines.push(
+    `[[maybe_unused]] static float rustra_f32(jsi::Runtime& rt, const jsi::Value& value, const char* field) {`,
+  );
+  lines.push(`  double number = rustra_f64(rt, value, field);`);
+  lines.push(
+    `  if (number < -std::numeric_limits<float>::max() || number > std::numeric_limits<float>::max())`,
+  );
+  lines.push(
+    `    throw jsi::JSError(rt, std::string("rustra: '") + field + "' is outside the f32 range");`,
+  );
+  lines.push(`  return static_cast<float>(number);`);
+  lines.push(`}`);
   lines.push(``);
   for (const command of supported) {
     lines.push(cppEncodeCommand(command, definitions));
@@ -1925,7 +2156,9 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
     lines.push(`  return false;`);
     lines.push(`}`);
     lines.push(``);
-    lines.push(`/// (Tier 1) 개별 Value 인자 → postcard 바이트. argc 는 호출부가 검증했다.`);
+    lines.push(
+      `/// (Tier 1) 개별 Value 인자 → postcard 바이트. 명령별 코덱이 argc를 정확히 검증한다.`,
+    );
     lines.push(
       `void encode_pos_by_id(jsi::Runtime& rt, uint16_t cmd_id, const jsi::Value* argv, size_t argc, rc::Writer& w) {`,
     );
@@ -1975,12 +2208,15 @@ export function generatePositionalFacadeTs(schema: PackageSchema): string {
     `// 정적 명령을 positional 시그니처로 노출해 JSI invokeTyped 를 직접 호출한다.\n` +
     `// 미지원 명령은 이 파일에 없다 — commands.ts 의 global invoke(Tier 3 폴백 포함) 사용.\n\n`;
 
-  const typeImports = [
-    ...new Set(supported.flatMap((c) => [c.inputType, c.outputType].filter((t) => t !== '()'))),
-  ].sort();
+  const typeImports = new Set<string>();
+  for (const command of supported) {
+    if (command.inputType !== '()') typeImports.add(command.inputType);
+    if (command.outputType !== '()') typeImports.add(command.outputType);
+  }
+  const sortedTypeImports = [...typeImports].sort();
 
-  if (typeImports.length > 0) {
-    output += `import type { ${typeImports.join(', ')} } from './types.js';\n`;
+  if (sortedTypeImports.length > 0) {
+    output += `import type { ${sortedTypeImports.join(', ')} } from './types.js';\n`;
   }
   output += `import type { InvokeOptions } from '@rustra/types';\n\n`;
   output +=
@@ -2028,7 +2264,9 @@ export function generatePositionalFacadeTs(schema: PackageSchema): string {
     const outType = command.outputType === '()' ? 'void' : command.outputType;
     const { fields } = collectPostcardFields(command.inputSchema, definitions);
     // 0..3개 필드 → positional; 4+ 또는 nested/option 조합은 객체 인자.
-    const positionalKinds = new Set(['zigzag', 'f64', 'f32', 'bool', 'string', 'enum_str']);
+    // POSITIONAL_SCALAR_KINDS는 cppEncodePosCommand와 공유 — 한쪽만 바뀌면
+    // facade의 callPos 명령에 C++ 코덱이 없어 런타임 JSError가 난다.
+    const positionalKinds = new Set<string>(POSITIONAL_SCALAR_KINDS);
     const simple = fields.every((f) => positionalKinds.has(f.kind));
     const cmdId = command.commandId ?? 0;
     if (fields.length > 0 && fields.length <= 3 && simple) {
@@ -2057,7 +2295,7 @@ export function generatePositionalFacadeTs(schema: PackageSchema): string {
         `}\n\n`;
     }
   }
-  return output;
+  return `${output.trimEnd()}\n`;
 }
 
 /** 필드의 TS 타입 표현 — input 타입 이름 기반 단순 매핑. */

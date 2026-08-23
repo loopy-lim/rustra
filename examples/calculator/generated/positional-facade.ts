@@ -2,7 +2,7 @@
 // 정적 명령을 positional 시그니처로 노출해 JSI invokeTyped 를 직접 호출한다.
 // 미지원 명령은 이 파일에 없다 — commands.ts 의 global invoke(Tier 3 폴백 포함) 사용.
 
-import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
 import type { InvokeOptions } from '@rustra/types';
 
 /** JSI 네이티브 모듈의 최소 인터페이스 — invokeTypedPos 노출 호스트 권장. */
@@ -74,6 +74,11 @@ export function benchEchoString(value: string, options?: InvokeOptions): Promise
   return Promise.resolve(callPos<BenchStringPayload>(24, value));
 }
 
+export function channelDemo(channel: number, ticks: number, options?: InvokeOptions): Promise<ChannelDemoOutput> {
+  void options;
+  return Promise.resolve(callPos<ChannelDemoOutput>(18, channel, ticks));
+}
+
 export function clamp(max: number, min: number, value: number, options?: InvokeOptions): Promise<ClampOutput> {
   void options;
   return Promise.resolve(callPos<ClampOutput>(4, max, min, value));
@@ -94,9 +99,9 @@ export function emitDemo(ticks: number, stepDelayMs: number, options?: InvokeOpt
   return Promise.resolve(callPos<EmitDemoOutput>(11, ticks, stepDelayMs));
 }
 
-export function gauge(input: GaugeInput, options?: InvokeOptions): Promise<GaugeOutput> {
+export function gauge(limit: number, offset: number, options?: InvokeOptions): Promise<GaugeOutput> {
   void options;
-  return Promise.resolve(call<GaugeOutput>(17, 'gauge', input));
+  return Promise.resolve(callPos<GaugeOutput>(17, limit, offset));
 }
 
 export function greet(name: string, options?: InvokeOptions): Promise<GreetOutput> {
@@ -119,9 +124,9 @@ export function processItem(input: ProcessItemInput, options?: InvokeOptions): P
   return Promise.resolve(call<ProcessItemOutput>(9, 'processItem', input));
 }
 
-export function resourceClose(input: ResourceCloseInput, options?: InvokeOptions): Promise<ResourceCloseOutput> {
+export function resourceClose(handle: number, options?: InvokeOptions): Promise<ResourceCloseOutput> {
   void options;
-  return Promise.resolve(call<ResourceCloseOutput>(22, 'resourceClose', input));
+  return Promise.resolve(callPos<ResourceCloseOutput>(22, handle));
 }
 
 export function resourceOpen(input: ResourceOpenInput, options?: InvokeOptions): Promise<ResourceHandleOutput> {
@@ -129,14 +134,14 @@ export function resourceOpen(input: ResourceOpenInput, options?: InvokeOptions):
   return Promise.resolve(call<ResourceHandleOutput>(19, 'resourceOpen', input));
 }
 
-export function resourceRead(input: ResourceReadInput, options?: InvokeOptions): Promise<ResourceReadOutput> {
+export function resourceRead(handle: number, key: string, options?: InvokeOptions): Promise<ResourceReadOutput> {
   void options;
-  return Promise.resolve(call<ResourceReadOutput>(20, 'resourceRead', input));
+  return Promise.resolve(callPos<ResourceReadOutput>(20, handle, key));
 }
 
-export function resourceWrite(input: ResourceWriteInput, options?: InvokeOptions): Promise<ResourceWriteOutput> {
+export function resourceWrite(handle: number, key: string, value: string, options?: InvokeOptions): Promise<ResourceWriteOutput> {
   void options;
-  return Promise.resolve(call<ResourceWriteOutput>(21, 'resourceWrite', input));
+  return Promise.resolve(callPos<ResourceWriteOutput>(21, handle, key, value));
 }
 
 export function rustraRegistryDemo(op: string, options?: InvokeOptions): Promise<RegistryDemoOutput> {

@@ -11,14 +11,11 @@ const linkedModule = requireOptionalNativeModule<RustraCalculatorType>('RustraCa
 
 const RustraCalculator: RustraCalculatorType = linkedModule
   ? linkedModule
-  : new Proxy(
-      {} as RustraCalculatorType,
-      {
-        get() {
-          throw new Error(LINKING_ERROR);
-        },
+  : new Proxy({} as RustraCalculatorType, {
+      get() {
+        throw new Error(LINKING_ERROR);
       },
-    );
+    });
 
 type InvokeResult = {
   ok: boolean;
@@ -34,10 +31,7 @@ export type RustraCalculatorType = {
 
 export default RustraCalculator as RustraCalculatorType;
 
-export async function invokeCommand(
-  command: string,
-  args?: unknown,
-): Promise<unknown> {
+export async function invokeCommand(command: string, args?: unknown): Promise<unknown> {
   const payload = JSON.stringify({ command, args });
   const raw = await RustraCalculator.invokeRaw(payload);
   const response: InvokeResult = JSON.parse(raw);

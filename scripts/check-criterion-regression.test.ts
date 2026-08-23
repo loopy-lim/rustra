@@ -3,10 +3,7 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import {
-  checkCriterionRegression,
-  parseRegressionArgs,
-} from './check-criterion-regression.mjs';
+import { checkCriterionRegression, parseRegressionArgs } from './check-criterion-regression.mjs';
 
 type TestLogger = {
   logs: string[];

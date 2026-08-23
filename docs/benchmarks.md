@@ -1,8 +1,9 @@
 # 벤치마크
 
 모든 측정은 Apple Silicon (M-series) 환경에서 수행했다. 달리 표기하지 않은
-수치는 **2026-08-22 재측정 값**이며, React Native 섹션은 2026-08-23 Release
-재측정으로 갱신했다. 과거 세션 측정은 날짜를 명시했다.
+수치는 각 표에 적힌 날짜의 영수증이다. Bun FFI는 2026-08-23 Bun 1.4.0에서
+다시 측정했고, React Native headline은 같은 날짜의 이전 Release 실행 기록이다.
+측정 코드가 바뀐 뒤에는 과거 숫자를 현재 checkout의 실행 증거로 간주하지 않는다.
 
 ## 테스트 환경
 
@@ -15,7 +16,7 @@
 | React Native   | 0.81.5 + Expo 54             |
 | iOS 시뮬레이터 | iPhone 17                    |
 
-## 2026-08-22 전체 재측정 (`0.2.0`)
+## 2026-08-22 전체 재측정 (`0.3.0` 준비 checkout)
 
 이번 checkout에서 모든 인레포 벤치마크를 재실행해 문서 수치를 일신했다.
 2026-08-18 세션의 wire/napi/코어 표는 이 값으로 대체됐다.
@@ -45,25 +46,35 @@ xychart-beta
 
 `node scripts/transport-bench.mjs` (release 네이티브 애드온)
 
-| transport           |       평균 |         처리량 |
-| ------------------- | ---------: | -------------: |
-| Node N-API (String) | **1.5 µs** |  654,817 ops/s |
-| Node N-API (Buffer) |     2.0 µs | ~500,000 ops/s |
-| Node.js subprocess  |    3.40 ms |     ~294 ops/s |
+| transport           |        평균 |           처리량 |
+| ------------------- | ----------: | ---------------: |
+| Node N-API rkyv V2  | **~0.6 µs** | ~1,600,000 ops/s |
+| Node N-API (String) |      1.5 µs |    654,817 ops/s |
+| Node N-API (Buffer) |      2.0 µs |   ~500,000 ops/s |
+| Node.js subprocess  |     3.40 ms |       ~294 ops/s |
 
 → 동일 실행에서 N-API가 subprocess보다 약 2,270배 빠르다. `rustraInvokeBuffer`
 (Buffer 반환 변형)는 String 왕복의 UTF-16 이중 복사를 제거하지만, 이 크기
 (47 B 요청)에서는 오히려 Buffer 래핑 비용이 커져 2.0 µs로 측정됐다 — 대형
-응답에서 이점이 있다(변형이 없으면 String이 빠른 구간).
+응답에서 이점이 있다(변형이 없으면 String이 빠른 구간). `rustraInvokeRkyvV2`
+(2026-08-23 추가)는 postcard 프레임을 Buffer 직결로 왕복한다 — 조용한
+머신 실측 596ns(시스템 로드 평균 8+에서는 2.8µs까지 부풀므로 세션 조건을
+기재할 것). napi ABI의 진입+Buffer 고정비(~530ns)가 하한을 만든다.
 
 ### Bun FFI transport
 
 `bun scripts/transport-bench.mjs`
 
-| 프로필            |       평균 |                처리량 |
-| ----------------- | ---------: | --------------------: |
-| Bun FFI (release) | **2.1 µs** | 471,640–481,815 ops/s |
-| Bun subprocess    |    3.06 ms |            ~327 ops/s |
+| 프로필                    |        평균 |           처리량 |
+| ------------------------- | ----------: | ---------------: |
+| Bun FFI rkyv V2 (release) | **~0.5 µs** | ~1,890,000 ops/s |
+| Bun FFI JSON (release)    |      1.7 µs |   ~580,000 ops/s |
+| Bun subprocess            |     5.73 ms |       ~175 ops/s |
+
+> rkyv V2 직결 경로(2026-08-23 추가)는 코어 `rustra_ffi_invoke_rkyv_v2`를
+> 버퍼 직결로 호출한다 — JSON/UTF-16 왕복 없이 postcard 프레임만 오간다.
+> 응답의 toArrayBuffer 뷰는 Rust 메모리를 참조하므로 free 전에 값 복사로
+> materialize 한다(2차 복사 필수).
 
 > **프로필 주의** — debug 네이티브 라이브러리를 로드하면 Bun FFI는
 > **15.5 µs**로 측정된다(최적화가 꺼진 빌드). 벤치마크는 release dylib을
@@ -74,20 +85,23 @@ xychart-beta
 
 `cd scripts/swift-ffi-bench && make` (release dylib 링크)
 
-| 경로                                  |       평균 |         처리량 |
-| ------------------------------------- | ---------: | -------------: |
-| FFI invoke (Swift → Rust C FFI)       | **1.2 µs** |  853,614 ops/s |
-| Full bridge (serialize → FFI → parse) |     6.6 µs | ~151,000 ops/s |
+| 경로                                   |       평균 |         처리량 |
+| -------------------------------------- | ---------: | -------------: |
+| legacy JSON CString FFI (Swift → Rust) | **1.2 µs** |  853,614 ops/s |
+| Full bridge (serialize → FFI → parse)  |     6.6 µs | ~151,000 ops/s |
+
+이 Swift 표는 macOS dylib과 Foundation JSON을 쓰는 C ABI 레이어 분해다. Hermes,
+JSI, Nitro 비용을 포함하지 않으므로 RN/Nitro headline과 직접 비율을 계산하지 않는다.
 
 ```mermaid
 xychart-beta
     title "어댑터별 평균 지연 (2026-08-22, 로그 스케일 아님)"
     x-axis ["Rust typed", "Bun JS", "Node JS", "Swift FFI", "Node napi", "Bun FFI"]
     y-axis "평균 지연 (µs)" 0 --> 3
-    bar [0.34, 0.19, 0.31, 1.2, 1.5, 2.1]
+    bar [0.34, 0.19, 0.31, 1.2, 1.5, 1.7]
 ```
 
-## 2026-08-21 콜드스타트·할당 수 측정 추가 (`0.2.0`)
+## 2026-08-21 콜드스타트·할당 수 측정 추가 (`0.3.0` 준비 checkout)
 
 `rustra-benchmark` 에 global_allocator 카운팅(할당/해제 원자 카운터)과
 콜드스타트 구분이 추가됐다. 2026-08-22 재측정 기준:
@@ -149,7 +163,9 @@ package.invoke::<SimpleInput, SimpleOutput>("addNumbers", input)
 ## Rust Criterion debug Tier 3 기준선
 
 동적 registry는 release에서 mutation이 차단되는 설계이므로 `--profile dev`로
-측정했다. 각 benchmark는 0.5초 warm-up, 2초 measurement로 순차 실행했다.
+측정했다. benchmark 코드는 sample size만 지정하며 Criterion 기본 warm-up/
+measurement 시간을 사용한다. tier 비교는 서로 다른 대표 타입과 연산이므로,
+6.55x를 wire 포맷 하나만의 차이로 해석하지 않는다.
 
 | 경로                       | 평균 (2026-08-22) |
 | -------------------------- | ----------------: |
@@ -171,15 +187,15 @@ payload scaling은 1/10/100/1000 items에서 각각 12.33 µs, 64.39 µs,
 단일 `addNumbers({ a: 42, b: 58 })` 호출 기준 (10,000회 이상 반복, release 빌드,
 2026-08-22).
 
-| 어댑터                 |          평균 지연 |  처리량 (ops/s) |
-| ---------------------- | -----------------: | --------------: |
-| Rust (typed invoke)    |         341–347 ns |       2,913,359 |
-| Rust (JSON roundtrip)  |            ~287 ns |      ~3,480,000 |
-| Bun (JS engine)        | 189 ns (기존 기록) |      ~5,284,714 |
-| Node.js (JS engine)    |         297–299 ns |      ~3,350,000 |
-| Swift → Rust FFI       |             1.2 µs |         853,614 |
-| Node napi-rs (release) |             1.5 µs |         654,817 |
-| Bun FFI (release)      |             2.1 µs | 471,640–481,815 |
+| 어댑터                 |          평균 지연 | 처리량 (ops/s) |
+| ---------------------- | -----------------: | -------------: |
+| Rust (typed invoke)    |         341–347 ns |      2,913,359 |
+| Rust (JSON roundtrip)  |            ~287 ns |     ~3,480,000 |
+| Bun (JS engine)        | 189 ns (기존 기록) |     ~5,284,714 |
+| Node.js (JS engine)    |         297–299 ns |     ~3,350,000 |
+| Swift → Rust FFI       |             1.2 µs |        853,614 |
+| Node napi-rs (release) |             1.5 µs |        654,817 |
+| Bun FFI (release)      |             1.7 µs |       ~580,000 |
 
 > JS 어댑터(Bun, Node) 수치는 `EngineClient.invoke` JS측 오버헤드만 측정한 것으로, 실제 IPC/FFI 비용은 별도다.
 > Nitro Modules 및 RN 온디바이스 비교 표는 아래 "측정 근거 정리" 참고.
@@ -189,12 +205,12 @@ payload scaling은 1/10/100/1000 items에서 각각 12.33 µs, 64.39 µs,
 단일 `addNumbers({ a: 42, b: 58 })` 호출 기준. Rust 실행 + 직렬화 + transport
 오버헤드를 모두 포함한 실제 측정값 (2026-08-22, release).
 
-| Transport                  | 평균 지연  |   처리량 (ops/s) |
-| -------------------------- | ---------- | ---------------: |
-| **Node napi-rs (release)** | **1.5 µs** |          654,817 |
-| **Bun FFI (release)**      | **2.1 µs** | ~471,640–481,815 |
-| Node.js subprocess (stdio) | 3.40 ms    |             ~294 |
-| Bun subprocess (stdio)     | 3.06 ms    |             ~327 |
+| Transport                  | 평균 지연  | 처리량 (ops/s) |
+| -------------------------- | ---------- | -------------: |
+| **Node napi-rs (release)** | **1.5 µs** |        654,817 |
+| **Bun FFI (release)**      | **1.7 µs** |       ~580,000 |
+| Node.js subprocess (stdio) | 3.40 ms    |           ~294 |
+| Bun subprocess (stdio)     | 5.73 ms    |           ~175 |
 
 ### Transport 오버헤드 분석
 
@@ -203,10 +219,15 @@ Node napi-rs (release, 2026-08-22):
   Rust core + serde     ~0.13 µs   (8.7%)  ← wire-bench JSON 실측
   napi 브릿지 + JS      ~1.37 µs   (91.3%) ← napi 총지연 1.5µs − 코어
 
-Bun FFI (release, 2026-08-22):
-  Rust core + serde     ~0.13 µs   (6.2%)
-  Bun FFI 브릿지 + JS   ~1.97 µs   (93.8%) ← FFI 총지연 2.1µs − 코어
+Bun FFI (release, 2026-08-23):
+  Rust core + JSON serde ~1.1 µs
+  JS JSON ser/de         ~0.16 µs
+  Bun FFI 브릿지         ~0.42 µs
+  총 실측                 ~1.7 µs
 ```
+
+분해는 같은 JSON invoke 경로의 `wire-bench` 값을 빼서 계산한다. rkyv V2
+~0.13µs를 JSON transport의 core 비용으로 대입하지 않는다.
 
 debug 프로필에서는 이 브릿지 비용이 크게 부풀어난다 — napi ~24.3 µs, Bun FFI
 ~15.5 µs (2026-08-18 debug 세션 기록). release 측정만 비교 기준으로 삼을 것.
@@ -240,6 +261,12 @@ iPhone 17 Simulator(iOS 26.2), Hermes, React Native 0.81.5 + Expo 54의 Release
 | 2            |     1.1828x |     1.2384x |     1.1656x |     1.2162x |     ✅      |
 | 3            |     1.2223x |     1.2308x |     1.1748x |     1.2504x |     ✅      |
 | **중앙값**   | **1.2068x** | **1.2384x** | **1.1656x** | **1.2162x** |   **✅**    |
+
+이 표는 순차 측정 러너의 이전 기록이다. 최신 러너는 정답을 timing 전에 검증하고,
+Nitro/Rustra/Swift FFI를 호출 단위로 `ABC → BCA → CAB` 순환 측정하며 avg,
+stddev, min/max, p50/p95/p99, 100개 batch mean과 JSON receipt를 출력한다.
+Debug 빌드에서는 성능 측정을 중단한다. 최신 소스의 Release runtime을 다시
+실행하기 전에는 위 비율을 새 성능 결과로 승격하지 않는다.
 
 최적화 전 같은 벤치의 중앙값은 add 1.3076x, string 1.3167x, bytes 1.1693x,
 pair 1.3954x였다. Nitro 대비 초과 격차(`ratio - 1`)는 각각 약 33%, 25%, 2%,
@@ -317,8 +344,9 @@ Fast-Path"로 **이름만 교체**된 것이었다 (커밋 d888fc86). 이후 Lyn
 
 ### 현재 비교의 깊이 (BenchmarkApp + nitro-bench 모듈)
 
-레포 안의 Nitro 비교 장치는 실재하고 공정하다. 같은 프로세스, 같은 측정
-루프(warmup 500회 + 10K iteration, avg/p50/p99)로 양쪽을 잰다:
+레포 안의 Nitro 비교 장치는 실제 HybridObject와 동일 shape 명령을 사용한다.
+같은 프로세스에서 warmup 500회 + 10K iteration을 호출 단위 순환 순서로 재며,
+avg/stddev/min/max/p50/p95/p99를 구조화 receipt로 남긴다:
 
 - **대상**: `nitro-bench` 네이티브 모듈(`modules/nitro-bench/`) — nitrogen
   코드젠으로 만든 실제 HybridObject. C++ 구현은 `add(a, b) = a + b`,
@@ -512,7 +540,7 @@ bun scripts/adapter-bench.mjs
 # Swift FFI 벤치마크 (macOS, release dylib 필요)
 cd scripts/swift-ffi-bench && make
 
-# React Native 벤치마크 (iOS 시뮬레이터 필요)
-# examples/react-native-calculator/BenchmarkApp.tsx를 App.tsx로 교체 후
-bunx expo run:ios
+# React Native 벤치마크 (iOS 시뮬레이터, Release 강제)
+cd examples/react-native-calculator
+bunx --bun expo run:ios --configuration Release
 ```
