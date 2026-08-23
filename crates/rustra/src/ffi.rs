@@ -21,8 +21,15 @@ use serde::{Deserialize, Serialize};
 use std::ffi::{c_char, c_void};
 use std::sync::{Mutex, OnceLock};
 
-static PACKAGE: OnceLock<Package> = OnceLock::new();
-static DEFAULT_FORMAT: OnceLock<FfiFormat> = OnceLock::new();
+struct FfiContext {
+    package: Package,
+    default_format: FfiFormat,
+}
+
+// 패키지와 기본 wire format은 하나의 불변 컨텍스트로 원자적으로 등록한다.
+// 별도 OnceLock 두 개는 동시 최초 등록에서 A의 package와 B의 format이 섞일
+// 수 있었다.
+static FFI_CONTEXT: OnceLock<FfiContext> = OnceLock::new();
 
 /// Supported FFI serialization formats.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -47,16 +54,20 @@ impl Package {
     ///
     /// No-op if a package is already registered (idempotent).
     pub fn register_ffi_with_default(&self, format: FfiFormat) {
-        let _ = PACKAGE.set(self.clone());
-        let _ = DEFAULT_FORMAT.set(format);
+        let _ = FFI_CONTEXT.set(FfiContext {
+            package: self.clone(),
+            default_format: format,
+        });
         // rustra_ffi_event_sink_register 가 패키지 등록보다 먼저 호출된 경우의
         // 지연 설치 — C 싱크가 이미 등록되어 있으면 지금 Rust 싱크로 연결한다.
-        self.install_pending_ffi_event_sink();
+        if let Some(context) = FFI_CONTEXT.get() {
+            context.package.install_pending_ffi_event_sink();
+        }
     }
 }
 
 pub fn get_package() -> Option<&'static Package> {
-    PACKAGE.get()
+    FFI_CONTEXT.get().map(|context| &context.package)
 }
 
 // -- Wire types ----------------------------------------------------------
@@ -484,7 +495,7 @@ fn async_pool_submit(job: AsyncJob) -> Result<(), AsyncJob> {
 /// `rustra_ffi_invoke` 의 디스패치와 정확히 미러링되어야 한다 (디폴트
 /// 미설정 시 두 경로가 같은 포맷을 산출).
 fn sync_serialize(resp: &FfiResponse) -> Vec<u8> {
-    match DEFAULT_FORMAT.get() {
+    match FFI_CONTEXT.get().map(|context| context.default_format) {
         Some(FfiFormat::Postcard) => postcard_serialize_response(resp),
         Some(FfiFormat::Json) | None => json_serialize(resp),
     }
@@ -509,7 +520,7 @@ pub unsafe extern "C" fn rustra_ffi_invoke(
         return std::ptr::null_mut();
     }
 
-    match DEFAULT_FORMAT.get() {
+    match FFI_CONTEXT.get().map(|context| context.default_format) {
         Some(FfiFormat::Postcard) => unsafe {
             rustra_ffi_invoke_postcard(payload, payload_len, out_len)
         },
@@ -913,6 +924,11 @@ fn deliver_spawn_failure(
     crate::cancel::complete_invocation(id);
     if let Some(cb) = on_complete {
         unsafe { cb(user_data_raw as *mut c_void, ptr, out_len) };
+    } else if !ptr.is_null() {
+        // 콜백이 없으면 소유권을 넘길 대상이 없다. 성공 워커의 null-callback
+        // 경로와 동일하게 즉시 해제해 payload-too-large/backpressure 반복 시
+        // 응답 버퍼가 누적되지 않게 한다.
+        unsafe { rustra_ffi_free(ptr, out_len) };
     }
 }
 
@@ -1058,18 +1074,16 @@ pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2(
         return std::ptr::null_mut();
     }
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
-    let resp = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        get_package()
-            .ok_or_else(|| {
-                crate::RustraError::custom("ffi.not_registered", "package not registered")
-            })
-            .and_then(|pkg| pkg.invoke_rkyv_v2(bytes))
-    })) {
-        Ok(Ok(bytes)) => bytes,
-        Ok(Err(error)) => crate::encode_rkyv_v2_error(&error),
-        Err(panic) => {
-            crate::encode_rkyv_v2_error(&crate::RustraError::internal(panic_frame_message(&*panic)))
-        }
+    // 패닉 가드는 한 겹이다 — 코어 invoke_rkyv_v2_command 가 핸들러 패닉을
+    // internal 에러로 정규화한다. 이전의 바깥 catch_unwind 은 같은 패닉을
+    // 두 번 가두며 unwind 테이블 세팅 비용만 핫패스에 남겼다. 레지스트리
+    // 조회(BTreeMap get)와 슬라이스 생성은 패닉 불가능한 코어 제어 코드다.
+    let resp = match get_package()
+        .ok_or_else(|| crate::RustraError::custom("ffi.not_registered", "package not registered"))
+        .and_then(|pkg| pkg.invoke_rkyv_v2(bytes))
+    {
+        Ok(bytes) => bytes,
+        Err(error) => crate::encode_rkyv_v2_error(&error),
     };
     alloc_response(resp, out_len)
 }
@@ -1116,19 +1130,50 @@ pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2_into(
         return 0;
     }
 
-    let response = match rkyv_probe_cache_take(bytes) {
-        Some(cached) => cached,
-        None => rkyv_v2_dispatch_bytes(bytes),
+    if let Some(response) = rkyv_probe_cache_take(bytes) {
+        let needed = response.len();
+        unsafe { *out_len = needed };
+        if capacity < needed {
+            rkyv_probe_cache_store(bytes, response);
+            return usize::MAX;
+        }
+        unsafe { std::ptr::copy_nonoverlapping(response.as_ptr(), buf, needed) };
+        return needed;
+    }
+
+    let target = unsafe { std::slice::from_raw_parts_mut(buf, capacity) };
+    let direct = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        get_package()
+            .ok_or_else(|| {
+                crate::RustraError::custom("ffi.not_registered", "package not registered")
+            })
+            .and_then(|pkg| pkg.invoke_rkyv_v2_into(bytes, target))
+    })) {
+        Ok(Ok(response)) => response,
+        Ok(Err(error)) => {
+            crate::rkyv_codec::DirectResponse::Buffered(crate::encode_rkyv_v2_error(&error))
+        }
+        Err(panic) => crate::rkyv_codec::DirectResponse::Buffered(crate::encode_rkyv_v2_error(
+            &crate::RustraError::internal(panic_frame_message(&*panic)),
+        )),
     };
 
-    let needed = response.len();
-    unsafe { *out_len = needed };
-    if capacity < needed {
-        rkyv_probe_cache_store(bytes, response);
-        return usize::MAX; // 버퍼 부족 — 재probe 신호
+    match direct {
+        crate::rkyv_codec::DirectResponse::Written(written) => {
+            unsafe { *out_len = written };
+            written
+        }
+        crate::rkyv_codec::DirectResponse::Buffered(response) => {
+            let needed = response.len();
+            unsafe { *out_len = needed };
+            if capacity < needed {
+                rkyv_probe_cache_store(bytes, response);
+                return usize::MAX;
+            }
+            unsafe { std::ptr::copy_nonoverlapping(response.as_ptr(), buf, needed) };
+            needed
+        }
     }
-    unsafe { std::ptr::copy_nonoverlapping(response.as_ptr(), buf, needed) };
-    needed
 }
 
 /// rkyv V2 caller-buffer 경로의 dispatch — 패닉 가드 포함, 응답 바이트 반환.
@@ -1215,10 +1260,27 @@ pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2_async(
 /// 읽는다 — run_worker 는 `invoke_fn` 이 반환한 버퍼를 그대로 on_complete 로
 /// 전달하므로 이 어댑터는 에러 프레임만 만들면 된다.
 fn rkyv_error_bytes(resp: &FfiResponse) -> Vec<u8> {
-    let error = crate::RustraError::custom(
-        "invoke.failed",
-        resp.error.as_deref().unwrap_or("invoke failed"),
-    );
+    let raw = resp.error.as_deref().unwrap_or("invoke failed");
+    let (code, message) = raw
+        .split_once(": ")
+        .map_or(("invoke.failed", raw), |(code, message)| (code, message));
+    // FFI Display 문자열을 rkyv typed error로 다시 만들 때 안정 코드와
+    // retryable 기본 의미를 보존한다. 임의 사용자 코드는 &'static str 계약상
+    // 재구성할 수 없으므로 invoke.failed로 안전하게 폴백한다.
+    let error = match code {
+        "cancelled" => crate::RustraError::cancelled(message),
+        "transport.error" => crate::RustraError::transport(message),
+        "transport.timeout" => crate::RustraError::timeout(message),
+        "command.not_found" => crate::RustraError::custom("command.not_found", message),
+        "command.invalid_args" => crate::RustraError::custom("command.invalid_args", message),
+        "capability.denied" => crate::RustraError::custom("capability.denied", message),
+        "payload.too_large" => crate::RustraError::custom("payload.too_large", message),
+        "internal" => crate::RustraError::internal(message),
+        "invoke.backpressure" => {
+            crate::RustraError::custom("invoke.backpressure", message).retryable()
+        }
+        _ => crate::RustraError::custom("invoke.failed", raw),
+    };
     crate::encode_rkyv_v2_error(&error)
 }
 ///
@@ -1287,43 +1349,104 @@ pub type FfiEventCallback = unsafe extern "C-unwind" fn(
     payload: *const c_char,
 );
 
-/// 등록된 C 콜백 + 호스트 소유 `user_data`. 전역 [`Mutex`] 하나로 보호한다 —
-/// 등록/해제는 부트스트랩·종료 시점에 드물게 일어나므로 락 경합은 무시 가능.
-struct FfiEventSink {
+/// 등록된 C 콜백 + 호스트 소유 `user_data`와 quiescence 상태.
+struct FfiEventSinkInner {
     callback: FfiEventCallback,
     #[allow(clippy::trivially_copy_pass_by_ref)]
     user_data: *mut c_void,
+    activity: Mutex<FfiEventActivity>,
+    quiescent: std::sync::Condvar,
 }
 
-impl Clone for FfiEventSink {
-    fn clone(&self) -> Self {
-        Self {
-            callback: self.callback,
-            user_data: self.user_data,
+#[derive(Default)]
+struct FfiEventActivity {
+    enabled: bool,
+    active_calls: usize,
+}
+
+#[derive(Clone)]
+struct FfiEventSink(std::sync::Arc<FfiEventSinkInner>);
+
+/// `FfiEventSinkInner.user_data` 는 호스트 소유 원시 포인터 — Rust 이동/빌림 규칙
+/// 밖이다. 콜백 래퍼에서만 값으로 취급(역참조 없음)하므로 `Send + Sync` 선언이
+/// 안전하다.
+unsafe impl Send for FfiEventSinkInner {}
+unsafe impl Sync for FfiEventSinkInner {}
+
+struct FfiEventCallGuard<'a>(&'a FfiEventSinkInner);
+
+impl Drop for FfiEventCallGuard<'_> {
+    fn drop(&mut self) {
+        let mut activity = self
+            .0
+            .activity
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        activity.active_calls = activity.active_calls.saturating_sub(1);
+        if activity.active_calls == 0 {
+            self.0.quiescent.notify_all();
         }
     }
 }
 
-/// `FfiEventSink.user_data` 는 호스트 소유 원시 포인터 — Rust 이동/빌림 규칙
-/// 밖이다. 콜백 래퍼에서만 값으로 취급(역참조 없음)하므로 `Send + Sync` 선언이
-/// 안전하다.
-unsafe impl Send for FfiEventSink {}
-unsafe impl Sync for FfiEventSink {}
-
 impl FfiEventSink {
+    fn new(callback: FfiEventCallback, user_data: *mut c_void) -> Self {
+        Self(std::sync::Arc::new(FfiEventSinkInner {
+            callback,
+            user_data,
+            activity: Mutex::new(FfiEventActivity {
+                enabled: true,
+                active_calls: 0,
+            }),
+            quiescent: std::sync::Condvar::new(),
+        }))
+    }
+
     /// 저장된 콜백을 C ABI 로 호출한다. 문자열은 NUL 종료로 변환해 전달한다.
     ///
     /// 반환 `false` 는 name/payload 에 내부 NUL 이 있어 CString 변환에 실패해
-    /// 이벤트가 소실되었다는 뜻이다(호출자가 로그로 처리).
+    /// 이벤트가 소실되었다는 뜻이다(호출자가 로그로 처리). 해제 경합으로
+    /// 콜백을 실행하지 못한 stale snapshot 의 경우 `true` 를 반환하는데, 이는
+    /// "콘텐츠 문제로 소실"과 구분되며 상위 버스-우회 계약(싱크가 설치되어
+    /// 있었으므로 폴링 버스로도 전달하지 않음)에는 그대로 부합한다.
     fn invoke(&self, name: &str, payload: &str) -> bool {
+        {
+            let mut activity = self
+                .0
+                .activity
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if !activity.enabled {
+                return true; // 해제와 경합한 stale EventSink snapshot — 조용히 폐기
+            }
+            activity.active_calls += 1;
+        }
+        let _active = FfiEventCallGuard(&self.0);
         let Ok(name_c) = std::ffi::CString::new(name) else {
             return false;
         };
         let Ok(payload_c) = std::ffi::CString::new(payload) else {
             return false;
         };
-        unsafe { (self.callback)(self.user_data, name_c.as_ptr(), payload_c.as_ptr()) };
+        unsafe { (self.0.callback)(self.0.user_data, name_c.as_ptr(), payload_c.as_ptr()) };
         true
+    }
+
+    /// 새 호출을 차단하고 이미 시작한 콜백이 모두 반환할 때까지 기다린다.
+    fn deactivate_and_wait(&self) {
+        let mut activity = self
+            .0
+            .activity
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        activity.enabled = false;
+        while activity.active_calls != 0 {
+            activity = self
+                .0
+                .quiescent
+                .wait(activity)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
     }
 }
 
@@ -1361,10 +1484,10 @@ static FFI_EVENT_SINK: Mutex<Option<FfiEventSink>> = Mutex::new(None);
 /// 한다. 이미 등록된 싱크가 있으면 조용히 교체한다(구 콜백은 더 이상 호출되지
 /// 않는다 — 구 `user_data` 해제는 호스트 책임).
 ///
-/// **진행 중 emit 창**: 해제/교체가 반환된 직후에도 이미 진행 중이던 `emit`
-/// 이 구 콜백과 구 `user_data` 를 1회 더 호출할 수 있다(delivery 경로가 싱크
-/// `Arc` 를 복제한 뒤 호출하기 때문). `user_data` 를 다른 스레드에서 즉시
-/// 해제하면 안전하지 않다 — 해제는 해당 호출 여부를 동기화한 뒤에 하라.
+/// 해제/교체 등록은 진행 중인 콜백이 모두 반환할 때까지 기다린다. 함수가
+/// 반환되면 구 `user_data`는 더 이상 호출되지 않으므로 호스트가 안전하게
+/// 해제할 수 있다. 콜백 자신 안에서 동기 unregister/register를 호출하면 자기
+/// 완료를 기다리는 교착이므로 금지한다.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_ffi_event_sink_register(
     callback: FfiEventCallback,
@@ -1373,22 +1496,22 @@ pub unsafe extern "C" fn rustra_ffi_event_sink_register(
     // catch_unwind: 전역 락이 이미 포이즈닝된 경우에도 등록 경로가 UB 를
     // 만들지 않게 한다(패닉은 stderr 로그만 남긴다).
     let _ = std::panic::catch_unwind(|| {
-        let new_sink = FfiEventSink {
-            callback,
-            user_data,
-        };
+        let new_sink = FfiEventSink::new(callback, user_data);
         let mut guard = match FFI_EVENT_SINK.lock() {
             Ok(g) => g,
             Err(poisoned) => poisoned.into_inner(),
         };
-        *guard = Some(new_sink.clone());
-        drop(guard);
+        let previous = guard.replace(new_sink.clone());
 
         // 전역 패키지가 이미 등록되어 있으면 Rust 싱크를 설치한다. 미등록이면
         // 나중에 register_ffi() 가 호출될 때 install_pending_ffi_event_sink 가
         // 설치를 이어간다(지연 설치).
-        if let Some(pkg) = PACKAGE.get() {
+        if let Some(pkg) = get_package() {
             pkg.set_event_sink(Some(rust_event_sink(new_sink)));
+        }
+        drop(guard);
+        if let Some(previous) = previous {
+            previous.deactivate_and_wait();
         }
     });
 }
@@ -1410,9 +1533,13 @@ pub unsafe extern "C" fn rustra_ffi_event_sink_unregister() {
             Ok(g) => g,
             Err(poisoned) => poisoned.into_inner(),
         };
-        *guard = None;
-        if let Some(pkg) = PACKAGE.get() {
+        let previous = guard.take();
+        if let Some(pkg) = get_package() {
             pkg.set_event_sink(None);
+        }
+        drop(guard);
+        if let Some(previous) = previous {
+            previous.deactivate_and_wait();
         }
     });
 }
@@ -1439,12 +1566,15 @@ impl Package {
     /// `register_ffi` 보다 `rustra_ffi_event_sink_register` 가 먼저 호출된 경우
     /// (패키지 미등록) 지연 설치를 위해 사용된다.
     fn install_pending_ffi_event_sink(&self) {
-        let pending = match FFI_EVENT_SINK.lock() {
-            Ok(g) => g.clone(),
-            Err(poisoned) => poisoned.into_inner().clone(),
+        // 전역 registry lock을 유지한 채 Package sink를 갱신해 unregister가
+        // pending snapshot 이후 끼어들어 stale sink를 다시 설치하는 TOCTOU를
+        // 막는다. emit 경로는 이 전역 lock을 읽지 않는다.
+        let guard = match FFI_EVENT_SINK.lock() {
+            Ok(g) => g,
+            Err(poisoned) => poisoned.into_inner(),
         };
-        if let Some(sink) = pending {
-            self.set_event_sink(Some(rust_event_sink(sink)));
+        if let Some(sink) = guard.as_ref() {
+            self.set_event_sink(Some(rust_event_sink(sink.clone())));
         }
     }
 }
@@ -1464,26 +1594,91 @@ impl Package {
 pub type FfiChannelCallback =
     unsafe extern "C" fn(user_data: *mut c_void, handle: u32, payload: *const c_char);
 
-/// FFI 채널 콜백 래퍼 — `FfiEventSink` 와 동일하게 호스트 소유 원시
-/// 포인터를 값으로만 옮긴다(역참조 없음 → `Send + Sync` 선언 안전).
-struct FfiChannelSink {
+/// FFI 채널 콜백 래퍼 — `FfiEventSink` 와 동일한 quiescence 계약으로
+/// drop 반환 뒤에는 host `user_data`를 참조하는 콜백이 남지 않게 한다.
+struct FfiChannelSinkInner {
     callback: FfiChannelCallback,
     handle: u32,
     #[allow(clippy::trivially_copy_pass_by_ref)]
     user_data: *mut c_void,
+    activity: Mutex<FfiEventActivity>,
+    quiescent: std::sync::Condvar,
 }
 
-unsafe impl Send for FfiChannelSink {}
-unsafe impl Sync for FfiChannelSink {}
+#[derive(Clone)]
+struct FfiChannelSink(std::sync::Arc<FfiChannelSinkInner>);
+
+unsafe impl Send for FfiChannelSinkInner {}
+unsafe impl Sync for FfiChannelSinkInner {}
+
+struct FfiChannelCallGuard<'a>(&'a FfiChannelSinkInner);
+
+impl Drop for FfiChannelCallGuard<'_> {
+    fn drop(&mut self) {
+        let mut activity = self
+            .0
+            .activity
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        activity.active_calls = activity.active_calls.saturating_sub(1);
+        if activity.active_calls == 0 {
+            self.0.quiescent.notify_all();
+        }
+    }
+}
 
 impl FfiChannelSink {
+    fn new(callback: FfiChannelCallback, handle: u32, user_data: *mut c_void) -> Self {
+        Self(std::sync::Arc::new(FfiChannelSinkInner {
+            callback,
+            handle,
+            user_data,
+            activity: Mutex::new(FfiEventActivity {
+                enabled: true,
+                active_calls: 0,
+            }),
+            quiescent: std::sync::Condvar::new(),
+        }))
+    }
+
     fn invoke(&self, payload: &str) {
+        {
+            let mut activity = self
+                .0
+                .activity
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if !activity.enabled {
+                return;
+            }
+            activity.active_calls += 1;
+        }
+        let _active = FfiChannelCallGuard(&self.0);
         let Ok(payload_c) = std::ffi::CString::new(payload) else {
             return; // 내부 NUL — 이벤트 싱크와 동일하게 소실(로그 없음, 채널은 유니캐스트)
         };
-        unsafe { (self.callback)(self.user_data, self.handle, payload_c.as_ptr()) };
+        unsafe { (self.0.callback)(self.0.user_data, self.0.handle, payload_c.as_ptr()) };
+    }
+
+    fn deactivate_and_wait(&self) {
+        let mut activity = self
+            .0
+            .activity
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        activity.enabled = false;
+        while activity.active_calls != 0 {
+            activity = self
+                .0
+                .quiescent
+                .wait(activity)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
     }
 }
+
+static FFI_CHANNEL_SINKS: Mutex<std::collections::BTreeMap<u32, FfiChannelSink>> =
+    Mutex::new(std::collections::BTreeMap::new());
 
 /// 호스트 채널을 등록하고 새 핸들(≥1, 단조 증가)을 반환한다.
 ///
@@ -1493,9 +1688,10 @@ impl FfiChannelSink {
 ///
 /// # Safety
 ///
-/// `callback` 은 유효한 함수 포인터, `user_data` 는 호스트 소유(해제 책임은
-/// 호스트에 있다 — `rustra_ffi_channel_drop` 이 user_data 를 건드리지
-/// 않는다). 반환된 핸들은 `rustra_ffi_channel_drop` 전까지 유효하다.
+/// `callback` 은 유효한 함수 포인터, `user_data` 는 호스트 소유다. 반환된
+/// 핸들은 `rustra_ffi_channel_drop` 전까지 유효하며, drop은 이미 시작한 콜백이
+/// 모두 반환할 때까지 기다린다. drop 반환 뒤 host가 `user_data`를 해제해도
+/// 안전하다. 콜백 안에서 자기 핸들을 동기 drop하면 교착하므로 금지한다.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_ffi_channel_create(
     callback: FfiChannelCallback,
@@ -1505,11 +1701,14 @@ pub unsafe extern "C" fn rustra_ffi_channel_create(
     // 핸들을 반환하므로 sink 생성 시점에 번호가 필요하다(선발급 후 insert).
     let host = crate::channels::host();
     let handle = host.reserve_handle();
-    let sink = std::sync::Arc::new(FfiChannelSink {
-        callback,
-        handle,
-        user_data,
-    });
+    if handle == 0 {
+        return 0;
+    }
+    let sink = FfiChannelSink::new(callback, handle, user_data);
+    FFI_CHANNEL_SINKS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(handle, sink.clone());
     let sender: crate::channels::ChannelSender =
         std::sync::Arc::new(move |payload: &str| sink.invoke(payload));
     host.register_channel_with_handle(handle, sender);
@@ -1542,7 +1741,15 @@ pub unsafe extern "C" fn rustra_ffi_channel_send(handle: u32, payload: *const c_
 /// 이 함수 자체는 안전하다.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_ffi_channel_drop(handle: u32) -> i32 {
-    i32::from(crate::channels::host().drop_channel(handle))
+    let host_removed = crate::channels::host().drop_channel(handle);
+    let sink = FFI_CHANNEL_SINKS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .remove(&handle);
+    if let Some(sink) = sink.as_ref() {
+        sink.deactivate_and_wait();
+    }
+    i32::from(host_removed || sink.is_some())
 }
 
 // -- Tests ---------------------------------------------------------------
@@ -1607,6 +1814,63 @@ mod tests {
         assert_eq!(HITS.load(Ordering::Relaxed), 1, "stale send 는 콜백 미도달");
         // double drop 은 0.
         assert_eq!(unsafe { rustra_ffi_channel_drop(handle) }, 0);
+    }
+
+    struct SlowChannelCallback {
+        entered: std::sync::Barrier,
+        release: std::sync::Barrier,
+    }
+
+    unsafe extern "C" fn slow_channel_cb(
+        user_data: *mut c_void,
+        _handle: u32,
+        _payload: *const c_char,
+    ) {
+        let state = unsafe { &*(user_data as *const SlowChannelCallback) };
+        state.entered.wait();
+        state.release.wait();
+    }
+
+    #[test]
+    fn ffi_channel_drop_waits_until_user_data_is_quiescent() {
+        let state = std::sync::Arc::new(SlowChannelCallback {
+            entered: std::sync::Barrier::new(2),
+            release: std::sync::Barrier::new(2),
+        });
+        let handle = unsafe {
+            rustra_ffi_channel_create(
+                slow_channel_cb,
+                std::sync::Arc::as_ptr(&state) as *mut c_void,
+            )
+        };
+        let send = std::thread::spawn(move || unsafe {
+            let payload = std::ffi::CString::new("slow").unwrap();
+            rustra_ffi_channel_send(handle, payload.as_ptr())
+        });
+        state.entered.wait();
+
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let dropper = std::thread::spawn(move || {
+            let dropped = unsafe { rustra_ffi_channel_drop(handle) };
+            done_tx.send(dropped).unwrap();
+        });
+        assert!(
+            done_rx
+                .recv_timeout(std::time::Duration::from_millis(25))
+                .is_err(),
+            "drop must wait while callback still owns user_data",
+        );
+
+        state.release.wait();
+        assert_eq!(
+            done_rx
+                .recv_timeout(std::time::Duration::from_secs(1))
+                .expect("drop must finish after callback returns"),
+            1,
+        );
+        assert_eq!(send.join().unwrap(), 1);
+        dropper.join().unwrap();
+        drop(state);
     }
 
     #[test]
@@ -1734,17 +1998,17 @@ mod tests {
 
     // ── rustra_ffi_event_sink_register / unregister ─────────────
     //
-    // 전역 PACKAGE / FFI_EVENT_SINK 을 공유하므로 병렬 테스트 간 간섭이 생긴다
-    // (PACKAGE.set 은 첫 등록만 유효 — 이후 테스트의 패키지는 전역에 반영되지
+    // 전역 FFI_CONTEXT / FFI_EVENT_SINK 을 공유하므로 병렬 테스트 간 간섭이 생긴다
+    // (FFI_CONTEXT.set 은 첫 등록만 유효 — 이후 테스트의 패키지는 전역에 반영되지
     // 않는다). 따라서 상태 전이 전체(등록 → emit 수신 → 해제 → 폴링 복귀)를
     // 하나의 순차 테스트로 완결하고, 전역 락으로 다른 sink 테스트와 상호배제한다.
 
-    /// 전역 PACKAGE 가 이미 등록되어 있으면 그것을, 아니면 지금 등록한다.
+    /// 전역 FFI_CONTEXT 가 이미 등록되어 있으면 그것을, 아니면 지금 등록한다.
     /// (register_ffi 는 idempotent — 첫 호출이 이긴다.)
     fn ensure_global_package() -> Package {
         let pkg = test_package();
         pkg.register_ffi();
-        PACKAGE.get().expect("package must be registered").clone()
+        get_package().expect("package must be registered").clone()
     }
 
     /// C 콜백이 (name, payload) 를 그대로 수신하는지 검증한다.
@@ -1761,6 +2025,21 @@ mod tests {
             .to_string_lossy()
             .into_owned();
         seen.lock().unwrap().push((name, payload));
+    }
+
+    struct SlowEventCallback {
+        entered: std::sync::Barrier,
+        release: std::sync::Barrier,
+    }
+
+    unsafe extern "C-unwind" fn slow_event_cb(
+        user_data: *mut c_void,
+        _name: *const c_char,
+        _payload: *const c_char,
+    ) {
+        let state = unsafe { &*(user_data as *const SlowEventCallback) };
+        state.entered.wait();
+        state.release.wait();
     }
 
     /// sink 테스트 간 상호배제 락 — 등록/해제가 전역 상태를 공유하므로.
@@ -1817,6 +2096,47 @@ mod tests {
     }
 
     #[test]
+    fn ffi_event_sink_unregister_waits_until_user_data_is_quiescent() {
+        let _guard = SINK_TEST_MUTEX.lock().unwrap();
+        let pkg = ensure_global_package();
+        let state = std::sync::Arc::new(SlowEventCallback {
+            entered: std::sync::Barrier::new(2),
+            release: std::sync::Barrier::new(2),
+        });
+        unsafe {
+            rustra_ffi_event_sink_register(
+                slow_event_cb,
+                std::sync::Arc::as_ptr(&state) as *mut c_void,
+            )
+        };
+
+        let emit_pkg = pkg.clone();
+        let emit = std::thread::spawn(move || emit_pkg.emit("slow", serde_json::json!({})));
+        state.entered.wait();
+
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let unregister = std::thread::spawn(move || {
+            unsafe { rustra_ffi_event_sink_unregister() };
+            done_tx.send(()).unwrap();
+        });
+        assert!(
+            done_rx
+                .recv_timeout(std::time::Duration::from_millis(25))
+                .is_err(),
+            "unregister must not return while callback still owns user_data",
+        );
+
+        state.release.wait();
+        done_rx
+            .recv_timeout(std::time::Duration::from_secs(1))
+            .expect("unregister must finish after callback returns");
+        emit.join().unwrap();
+        unregister.join().unwrap();
+        // unregister 반환 뒤 Arc를 즉시 drop해도 더 이상 callback이 없다.
+        drop(state);
+    }
+
+    #[test]
     fn ffi_event_sink_panicking_callback_does_not_break_emit() {
         let _guard = SINK_TEST_MUTEX.lock().unwrap();
         let pkg = ensure_global_package();
@@ -1842,7 +2162,7 @@ mod tests {
         let _guard = SINK_TEST_MUTEX.lock().unwrap();
         // 등록 순서가 반대인 경우: 싱크 먼저 → 패키지 등록 나중.
         // register_ffi_with_default 이 지연 설치를 이어받아야 한다.
-        // (전역 PACKAGE 는 다른 테스트가 이미 등록했을 수 있다 — 어느 쪽이든
+        // (전역 FFI_CONTEXT 는 다른 테스트가 이미 등록했을 수 있다 — 어느 쪽이든
         //  지연 설치 경로가 동일하게 검증된다: FFI_EVENT_SINK 상태만 확인.)
         unsafe { rustra_ffi_event_sink_unregister() }; // 깨끗한 상태에서 시작
         let seen: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());

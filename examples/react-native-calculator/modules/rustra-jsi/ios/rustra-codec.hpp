@@ -121,7 +121,10 @@ public:
 
 private:
   static constexpr size_t kInlineCapacity = 128;
-  std::array<uint8_t, kInlineCapacity> inline_buf_{};
+  // inline_buf_ 는 의도적으로 미초기화다 — 모든 읽기 경로(data()/take())가
+  // size_ 미만만 다루고 push_* 는 항상 쓸 위치부터 기록한다. 128B zero-init
+  // 매 호출 memset 은 positional 요청(대부분 ≤32B)의 핫패스에서 순수 낭비다.
+  std::array<uint8_t, kInlineCapacity> inline_buf_;
   std::vector<uint8_t> heap_buf_;
   size_t size_ = 0;
   bool using_heap_ = false;

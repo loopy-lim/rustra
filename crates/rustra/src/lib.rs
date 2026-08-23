@@ -130,11 +130,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, OnceLock, RwLock};
 
 use rkyv_codec::{
-    BinHandler, DecodeFn, EncodeFn, Tier, build_rkyv_v2_decoder, build_rkyv_v2_response_encoder,
-    build_tier3_json_decoder, is_output_tier3, js_postcard_codec_supported_with_defs,
+    BinHandler, BinIntoHandler, DecodeFn, DirectResponse, EncodeFn, Tier, build_rkyv_v2_decoder,
+    build_rkyv_v2_response_encoder, build_tier3_json_decoder, is_output_tier3,
+    js_postcard_codec_supported_with_defs,
 };
 
 pub use error::{Result, RustraError};
@@ -396,6 +397,9 @@ pub struct Package {
     /// `into_inner()` 관용으로 과거 패닉 이후에도 invoke 가 동작하게 한다.
     state: Arc<RwLock<RegistryState>>,
     frozen: Arc<AtomicBool>,
+    /// freeze된 제품 경로의 lock-free 명령 스냅샷. snapshot을 먼저 채운 뒤
+    /// `frozen=true`를 Release publish하므로 invoke가 부분 상태를 볼 수 없다.
+    frozen_registry: Arc<OnceLock<FrozenRegistry>>,
     /// Rust → JS 이벤트 푸시 상태(버스 + 싱크). `emit()` 으로 발행, 싱크가
     /// 설치되어 있으면 즉시 콜백 호출(버스 우회), 아니면 호스트 어댑터가
     /// `event_bus()` 를 폴링해 플랫폼 푸시 채널로 전달한다.
@@ -408,20 +412,39 @@ pub struct Package {
 
 /// `Package`의 가변 내부 상태. `Arc<RwLock<_>>`로 보호되어 런타임 mutation을 지원한다.
 struct RegistryState {
-    commands: BTreeMap<String, Command>,
+    commands: BTreeMap<String, Arc<Command>>,
     id_to_name: BTreeMap<u16, String>,
     next_command_id: u16,
     /// (성능) command_id → 핸들러 직접 캐시 — `invoke_rkyv_v2` 의 핫패스가
     /// `id_to_name` → `commands` 이중 조회 + Arc 클론을 거치지 않게 한다.
     /// 등록/교체/해제 시점에 함께 유지된다(불변식: 값은 항상 `commands` 의
     /// 동일 명령과 같은 Arc 를 가리킨다).
-    id_to_command: BTreeMap<u16, Command>,
+    id_to_command: BTreeMap<u16, Arc<Command>>,
     /// Runtime Authority: 부여된 capability 집합. deny-by-default —
     /// `required_capability` 가 `Some` 인 명령은 이 집합에 포함될 때만 실행된다.
     granted_capabilities: BTreeSet<String>,
     /// (T2, OTA) 스키마 협상 버전. `schema()`/`live_schema()` 와 코드젠이
     /// 노출한다 — JS > native 인 stale 조합을 감지하는 데 쓰인다.
     schema_version: u32,
+}
+
+struct FrozenRegistry {
+    commands: BTreeMap<String, Arc<Command>>,
+    id_to_command: Vec<Option<Arc<Command>>>,
+}
+
+impl FrozenRegistry {
+    fn from_state(state: &RegistryState) -> Self {
+        let max_id = state.id_to_command.keys().next_back().copied().unwrap_or(0) as usize;
+        let mut id_to_command = vec![None; max_id + 1];
+        for (&id, command) in &state.id_to_command {
+            id_to_command[id as usize] = Some(Arc::clone(command));
+        }
+        Self {
+            commands: state.commands.clone(),
+            id_to_command,
+        }
+    }
 }
 
 impl std::fmt::Debug for Package {
@@ -517,6 +540,8 @@ struct Command {
     invoke: Arc<dyn Fn(Value) -> crate::Result<Value> + Send + Sync>,
     /// Fast binary handler: payload[2..] → postcard deserialize → typed handler → postcard serialize
     rkyv_v2_handler: Option<BinHandler>,
+    /// caller-buffer fast handler: 작은 응답을 호스트 메모리에 직접 직렬화한다.
+    rkyv_v2_into_handler: Option<BinIntoHandler>,
     rkyv_v2_decode: DecodeFn,
     rkyv_v2_encode_response: EncodeFn,
     /// true when this command uses Tier 3 (JSON fallback) wire format.
@@ -592,12 +617,57 @@ where
             let input: I = postcard::from_bytes(&payload[2..])
                 .map_err(|e| RustraError::invalid_args(format!("postcard decode: {e}")))?;
             let output = handler_bin(input)?;
-            let out_bytes = postcard::to_allocvec(&output)
+            // 응답 body 임시 Vec + frame Vec의 2회 할당/복사를 피한다. 정확한
+            // postcard 크기로 최종 frame을 한 번만 할당하고 그 뒤에 바로
+            // 직렬화한다. 병렬 JSI 호출에서 allocator lock 경합도 절반이 된다.
+            let encoded_len = postcard::experimental::serialized_size(&output)
                 .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))?;
-            let mut buf = vec![0u8; 8 + out_bytes.len()];
+            let mut buf = Vec::with_capacity(8 + encoded_len);
+            buf.resize(8, 0);
             buf[0] = 1; // ok = true
-            buf[8..8 + out_bytes.len()].copy_from_slice(&out_bytes);
-            Ok(buf)
+            postcard::to_extend(&output, buf)
+                .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))
+        }))
+    };
+
+    let rkyv_v2_into_handler: Option<BinIntoHandler> = if force_tier3 || !js_codec_supported {
+        None
+    } else {
+        let handler_into = handler.clone();
+        Some(Arc::new(move |payload: &[u8], target: &mut [u8]| {
+            if payload.len() < 2 {
+                return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+            }
+            let input: I = postcard::from_bytes(&payload[2..])
+                .map_err(|e| RustraError::invalid_args(format!("postcard decode: {e}")))?;
+            let output = handler_into(input)?;
+
+            // Try-first: caller 버퍼에 바로 직렬화를 시도한다. 대부분의 응답은
+            // 여기서 한 번의 패스로 끝난다 — 이전의 serialized_size 선행 패스
+            // (크기 계산 + 실직렬화 = 2패스)를 없앤다. postcard의 Slice flavor
+            // 는 부족하면 SerializeBufferFull 로 실패하고 &output 은 소모되지
+            // 않으므로(1.1.3 flavors.rs — 부분 기록은 있으나 폴백이 전체 재기록)
+            // 폴백에서 to_extend 로 온전히 다시 쓴다.
+            if target.len() > 8 {
+                target[..8].fill(0);
+                target[0] = 1;
+                match postcard::to_slice(&output, &mut target[8..]) {
+                    Ok(written) => {
+                        return Ok(DirectResponse::Written(8 + written.len()));
+                    }
+                    Err(postcard::Error::SerializeBufferFull) => {}
+                    Err(e) => return Err(RustraError::internal(format!("postcard encode: {e}"))),
+                }
+            }
+
+            // 큰 응답은 현재 output을 정확히 한 번 직렬화해 캐시에 넘긴다.
+            // 핸들러를 재실행하지 않으므로 비멱등 command도 안전하다.
+            let mut response = Vec::with_capacity(64);
+            response.resize(8, 0);
+            response[0] = 1;
+            let response = postcard::to_extend(&output, response)
+                .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))?;
+            Ok(DirectResponse::Buffered(response))
         }))
     };
 
@@ -614,6 +684,7 @@ where
             serde_json::to_value(output).map_err(RustraError::internal)
         }),
         rkyv_v2_handler,
+        rkyv_v2_into_handler,
         rkyv_v2_decode: rkyv_v2_decoder,
         rkyv_v2_encode_response: rkyv_v2_response_encoder,
         rkyv_v2_tier3: is_tier3,
@@ -761,8 +832,20 @@ impl Package {
     ///
     /// [`invoke`](Package::invoke)의 비제네릭 버전으로, JSON 기반 라우팅에 사용됩니다.
     pub fn invoke_json(&self, name: &str, params: Value) -> crate::Result<Value> {
-        // 핸들러 실행 중에는 잠금을 hold 하지 않도록 Command를 clone-out 한다.
-        // (재진입 — 핸들러가 다시 register/unregister 호출 — 시 교착 방지)
+        if self.is_frozen() {
+            // 제품 경로는 immutable snapshot 안의 Command를 직접 빌린다. 매 호출
+            // Arc clone/drop은 같은 refcount cache line을 모든 CPU가 갱신하게 해
+            // 병렬 처리량을 역확장시키므로 frozen hot path에서는 피한다.
+            let command = self
+                .frozen_registry
+                .get()
+                .and_then(|registry| registry.commands.get(name))
+                .ok_or_else(|| RustraError::command_not_found(name))?;
+            return self.invoke_json_command(command, params);
+        }
+
+        // 개발용 mutable 경로는 핸들러 실행 중 잠금을 hold하지 않도록
+        // Command를 clone-out한다(재진입 register/unregister 교착 방지).
         let command = {
             let state = self
                 .state
@@ -774,9 +857,14 @@ impl Package {
                 .ok_or_else(|| RustraError::command_not_found(name))?
                 .clone()
         };
+        self.invoke_json_command(command.as_ref(), params)
+    }
+
+    #[inline]
+    fn invoke_json_command(&self, command: &Command, params: Value) -> crate::Result<Value> {
         // Runtime Authority: deny-by-default — capability 가 요구되는데 부여되지
         // 않았으면 핸들러를 호출하지 않고 capability.denied 를 반환한다.
-        self.capability_satisfied(&command)?;
+        self.capability_satisfied(command)?;
         with_state_context(&self.states, || (command.invoke)(params))
     }
 
@@ -814,6 +902,18 @@ impl Package {
             return Err(RustraError::payload_too_large(payload.len(), limit));
         }
         let command_id = u16::from_le_bytes([payload[0], payload[1]]);
+        if self.is_frozen() {
+            let command = self
+                .frozen_registry
+                .get()
+                .and_then(|registry| registry.id_to_command.get(command_id as usize))
+                .and_then(Option::as_ref)
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?;
+            return self.invoke_rkyv_v2_command(command, payload);
+        }
+
+        // Mutable dev registry: clone out before running user code so registry
+        // mutation from inside a handler cannot deadlock on the read lock.
         let command = {
             let state = self
                 .state
@@ -827,11 +927,16 @@ impl Package {
                 .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
                 .clone()
         };
+        self.invoke_rkyv_v2_command(command.as_ref(), payload)
+    }
+
+    #[inline]
+    fn invoke_rkyv_v2_command(&self, command: &Command, payload: &[u8]) -> crate::Result<Vec<u8>> {
         // Runtime Authority: deny-by-default — capability 가 요구되는데 부여되지
         // 않았으면 바이너리 핸들러(또는 JSON fallback)를 호출하지 않고
         // capability.denied 를 반환한다. 에러는 rkyv V2 error wire 로 인코딩되어
         // JS RustraCommandError("capability.denied") 로 재구성된다.
-        self.capability_satisfied(&command)?;
+        self.capability_satisfied(command)?;
 
         // panic guard — 이 디스패치는 FFI 진입점(extern "C", nounwind) 에서 직접
         // 호출된다. 핸들러 패닉이 그대로 unwinding 하면 경계에서 프로세스 abort 다
@@ -865,12 +970,84 @@ impl Package {
         }
     }
 
+    /// rkyv V2 caller-buffer 경로. 정적 postcard command는 호스트가 제공한
+    /// slice에 직접 응답을 기록해 Rust heap allocation과 memcpy를 없앤다.
+    pub(crate) fn invoke_rkyv_v2_into(
+        &self,
+        payload: &[u8],
+        target: &mut [u8],
+    ) -> crate::Result<DirectResponse> {
+        if payload.len() < 2 {
+            return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+        }
+        let limit = crate::ffi::max_payload_bytes();
+        if payload.len() > limit {
+            return Err(RustraError::payload_too_large(payload.len(), limit));
+        }
+        let command_id = u16::from_le_bytes([payload[0], payload[1]]);
+
+        if self.is_frozen() {
+            let command = self
+                .frozen_registry
+                .get()
+                .and_then(|registry| registry.id_to_command.get(command_id as usize))
+                .and_then(Option::as_ref)
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?;
+            return self.invoke_rkyv_v2_into_command(command, payload, target);
+        }
+
+        let command = {
+            let state = self
+                .state
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            state
+                .id_to_command
+                .get(&command_id)
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
+                .clone()
+        };
+        self.invoke_rkyv_v2_into_command(command.as_ref(), payload, target)
+    }
+
+    fn invoke_rkyv_v2_into_command(
+        &self,
+        command: &Command,
+        payload: &[u8],
+        target: &mut [u8],
+    ) -> crate::Result<DirectResponse> {
+        let Some(handler) = command.rkyv_v2_into_handler.as_ref() else {
+            return self
+                .invoke_rkyv_v2_command(command, payload)
+                .map(DirectResponse::Buffered);
+        };
+        self.capability_satisfied(command)?;
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            with_state_context(&self.states, || handler(payload, target))
+        }));
+        match outcome {
+            Ok(result) => result,
+            Err(panic) => Err(RustraError::internal(format!(
+                "panic in handler: {}",
+                crate::ffi::panic_message(&panic)
+            ))),
+        }
+    }
+
     /// 런타임 mutation을 영구적으로 비활성화한다.
     ///
     /// release 빌드에서는 `build()` 시점에 이미 동결되어 있다. debug 빌드에서
     /// prod 동작을 시뮬레이션하거나 런타임에 명시적으로 잠그고 싶을 때 사용한다.
     /// 한 번 동결하면 해제할 수 없다.
     pub fn freeze(&self) {
+        // registry writer와 직렬화한 뒤 frozen을 publish한다. mutation 쪽도
+        // writer를 얻은 뒤 다시 검사하므로, ensure_mutable → lock 사이에
+        // freeze가 끼어든 뒤 명령이 등록되는 TOCTOU가 없다.
+        let state = self
+            .state
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _ = self.frozen_registry.set(FrozenRegistry::from_state(&state));
         self.frozen.store(true, Ordering::Release);
     }
 
@@ -954,6 +1131,7 @@ impl Package {
             .state
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.ensure_mutable()?;
         // 같은 이름이면 기존 command_id 재사용(stable id). 새 이름이면 단조 증가 ID 할당.
         let command_id = match state.commands.get(&name).map(|c| c.command_id) {
             Some(existing) => existing,
@@ -970,8 +1148,8 @@ impl Package {
                 id
             }
         };
-        let command = build_command::<I, O, F>(command_id, handler, true);
-        state.id_to_command.insert(command_id, command.clone());
+        let command = Arc::new(build_command::<I, O, F>(command_id, handler, true));
+        state.id_to_command.insert(command_id, Arc::clone(&command));
         state.commands.insert(name.clone(), command);
         state.id_to_name.insert(command_id, name);
         Ok(())
@@ -1001,6 +1179,7 @@ impl Package {
             .state
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.ensure_mutable()?;
         let existing = state
             .commands
             .get(name)
@@ -1009,7 +1188,8 @@ impl Package {
         let required_capability = existing.required_capability;
         let mut command = build_command::<I, O, F>(command_id, handler, false);
         command.required_capability = required_capability;
-        state.id_to_command.insert(command_id, command.clone());
+        let command = Arc::new(command);
+        state.id_to_command.insert(command_id, Arc::clone(&command));
         state.commands.insert(name.to_string(), command);
         Ok(())
     }
@@ -1023,6 +1203,7 @@ impl Package {
             .state
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.ensure_mutable()?;
         if state.commands.remove(name).is_none() {
             return Err(RustraError::command_not_found(name));
         }
@@ -1111,6 +1292,11 @@ impl Package {
         let mut root = json!({
             "packageId": id,
             "schemaVersion": state.schema_version,
+            // rustra enables schemars/serde_json `preserve_order`, so object
+            // properties are emitted in the same declaration order postcard
+            // uses on the wire. Consumers can distinguish this guaranteed
+            // contract from legacy or third-party schema files.
+            "fieldOrder": "declaration",
             "commands": commands,
         });
         if !event_contracts.is_empty() {
@@ -1497,13 +1683,20 @@ impl PackageBuilder {
         // (성능) id → Command 직접 캐시 — alias id 포함 전체 id_to_name 키와
         // 정확히 같은 라우팅을 제공한다(lookup 일관성: id_to_name 이 가리키는
         // 모든 id 는 여기서도 같은 명령을 찾는다).
-        let id_to_command: BTreeMap<u16, Command> = id_to_name
+        // 빌더의 owned Command를 한 번만 Arc로 감싼다. 이후 JSON/rkyv invoke의
+        // clone-out은 String/schema/handler를 각각 복제하지 않고 Arc refcount
+        // 1회만 증가한다.
+        let commands: BTreeMap<String, Arc<Command>> = commands
+            .into_iter()
+            .map(|(name, command)| (name, Arc::new(command)))
+            .collect();
+        let id_to_command: BTreeMap<u16, Arc<Command>> = id_to_name
             .iter()
             .map(|(id, name)| {
                 let cmd = commands
                     .get(name)
                     .unwrap_or_else(|| panic!("build(): id {id} → '{name}' not in commands"));
-                (*id, cmd.clone())
+                (*id, Arc::clone(cmd))
             })
             .collect();
         // (T2 리뷰) tripwire: 최종 병합 뒤 모든 alias 가 자기 명령을 가리키는지
@@ -1516,17 +1709,24 @@ impl PackageBuilder {
             }),
             "alias merge invariant broken: some legacy id does not resolve to its command"
         );
+        let state = RegistryState {
+            commands,
+            id_to_name,
+            id_to_command,
+            next_command_id,
+            granted_capabilities: BTreeSet::new(),
+            schema_version: self.schema_version,
+        };
+        let frozen_registry = OnceLock::new();
+        let frozen = !cfg!(debug_assertions);
+        if frozen {
+            let _ = frozen_registry.set(FrozenRegistry::from_state(&state));
+        }
         Package {
             id: self.id,
-            state: Arc::new(RwLock::new(RegistryState {
-                commands,
-                id_to_name,
-                id_to_command,
-                next_command_id,
-                granted_capabilities: BTreeSet::new(),
-                schema_version: self.schema_version,
-            })),
-            frozen: Arc::new(AtomicBool::new(!cfg!(debug_assertions))),
+            state: Arc::new(RwLock::new(state)),
+            frozen: Arc::new(AtomicBool::new(frozen)),
+            frozen_registry: Arc::new(frozen_registry),
             events: Arc::new(events::EventState::with_capacity(self.event_capacity)),
             event_contracts: self.events,
             states: Arc::new(self.states),
