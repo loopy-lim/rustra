@@ -12,7 +12,13 @@ import type {
   RkyvV2SchemaNative,
   RustraNative,
 } from '@rustra/types';
-import { createRkyvV2Engine, parseRustraErrorString, RustraCommandError } from '@rustra/types';
+import {
+  createRkyvV2Engine,
+  invokeWithTimeout,
+  parseRustraErrorString,
+  RustraCommandError,
+} from '@rustra/types';
+import { decodeUtf8, encodeUtf8, exactArrayBuffer } from './utf8.js';
 
 export type {
   EngineClient,
@@ -49,24 +55,37 @@ export type RustraJSINative = RkyvV2SchemaNative & {
 };
 
 export function createReactNativeEngine(native: { invoke(payload: ArrayBuffer): ArrayBuffer }) {
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
+  const transport: EngineClientType = {
+    invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
+      if (options?.signal?.aborted) {
+        return Promise.reject(
+          new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
+        );
+      }
+      try {
+        const json = JSON.stringify({ command, args });
+        const payload = exactArrayBuffer(encodeUtf8(json));
+        const resultBytes = native.invoke(payload);
+        const resultJson = decodeUtf8(resultBytes);
+        const response = JSON.parse(resultJson) as {
+          ok: boolean;
+          result?: T;
+          error?: string;
+        };
+        if (!response.ok) {
+          return Promise.reject(parseRustraErrorString(response.error));
+        }
+        const result = Promise.resolve(response.result as T);
+        return options?.signal ? raceAbortShallow(result, options.signal, command) : result;
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    },
+  };
 
   return {
-    async invoke<T>(command: string, args?: unknown): Promise<T> {
-      const json = JSON.stringify({ command, args });
-      const payload = encoder.encode(json);
-      const resultBytes = native.invoke(payload.buffer);
-      const resultJson = decoder.decode(resultBytes);
-      const response = JSON.parse(resultJson) as {
-        ok: boolean;
-        result?: T;
-        error?: string;
-      };
-      if (!response.ok) {
-        throw parseRustraErrorString(response.error);
-      }
-      return response.result as T;
+    invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
+      return invokeWithTimeout(transport, command, args, options);
     },
   };
 }
@@ -240,7 +259,7 @@ export function createAsyncEngine(
 
   const invokeTypedAsync = native.invokeTypedAsync.bind(native);
 
-  return {
+  const transport: EngineClientType = {
     invoke<T>(command: string, args?: unknown, invokeOptions?: InvokeOptions): Promise<T> {
       const signal = invokeOptions?.signal;
       if (signal?.aborted) {
@@ -324,6 +343,12 @@ export function createAsyncEngine(
       );
     },
   };
+
+  return {
+    invoke<T>(command: string, args?: unknown, invokeOptions?: InvokeOptions): Promise<T> {
+      return invokeWithTimeout(transport, command, args, invokeOptions);
+    },
+  };
 }
 
 // ── Event push: subscribeEvent (Rust → JS) ───────────────────
@@ -351,8 +376,9 @@ export type RustraEventNative = {
  *   경로 → 푸시 전환). 마지막 구독 해제 시 싱크가 해제되어 폴링 경로로
  *   복귀한다. JS 콜백이 throw 해도 나머지 이벤트는 유실되지 않는다.
  *
- * 네이티브가 `onEvent` 를 노출하지 않으면(구버전 브릿지) 구독이 즉시
- * 해제되는 no-op 로 동작한다.
+ * 네이티브가 `onEvent` 를 노출하지 않으면 기본적으로 `event.unavailable`을
+ * 던진다. 조용한 이벤트 유실이 필요한 레거시 앱만 `allowMissingNative: true`를
+ * 명시해 no-op 폴백을 선택할 수 있다.
  *
  * @example
  * ```ts
@@ -378,10 +404,14 @@ export function subscribeEvent(
   native: RustraEventNative,
   name: string,
   cb: (payload: unknown) => void,
+  options: { allowMissingNative?: boolean } = {},
 ): () => void {
   if (typeof native.onEvent !== 'function') {
-    // 구버전 네이티브 — no-op 구독 해제 함수 반환.
-    return () => {};
+    if (options.allowMissingNative) return () => {};
+    throw new RustraCommandError(
+      'event.unavailable',
+      'native module does not expose onEvent(); event subscription is unavailable',
+    );
   }
 
   let eventMap = nativeListeners.get(native);

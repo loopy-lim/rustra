@@ -3,6 +3,15 @@ import Foundation
 
 @objc(RustraCalculatorModule)
 public class RustraCalculatorModule: ExpoModule {
+  private func encodePayload(command: String, args: Any) -> String? {
+    guard JSONSerialization.isValidJSONObject(args),
+          let data = try? JSONSerialization.data(
+            withJSONObject: ["command": command, "args": args]
+          )
+    else { return nil }
+    return String(data: data, encoding: .utf8)
+  }
+
   public func definition() -> ModuleDefinition {
     Name("RustraCalculator")
 
@@ -18,7 +27,17 @@ public class RustraCalculatorModule: ExpoModule {
     }
 
     Function("addSync") { (a: Double, b: Double) -> Double in
-      let payload = "{\"command\":\"addNumbers\",\"args\":{\"a\":\(Int64(a)),\"b\":\(Int64(b))}}"
+      let int64LowerBound = -9_223_372_036_854_775_808.0
+      let int64UpperBound = 9_223_372_036_854_775_808.0
+      guard a.isFinite, b.isFinite,
+            a.rounded(.towardZero) == a, b.rounded(.towardZero) == b,
+            a >= int64LowerBound, a < int64UpperBound,
+            b >= int64LowerBound, b < int64UpperBound,
+            let payload = self.encodePayload(
+              command: "addNumbers",
+              args: ["a": Int64(a), "b": Int64(b)]
+            )
+      else { return 0 }
       let resultPtr = rustra_calculator_invoke(payload)
       guard let ptr = resultPtr else { return 0 }
       defer { rustra_calculator_free_string(ptr) }
@@ -26,14 +45,18 @@ public class RustraCalculatorModule: ExpoModule {
       guard let data = resultStr.data(using: .utf8),
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let ok = json["ok"] as? Bool, ok,
-            let value = json["result"] as? Int64
+            let result = json["result"] as? [String: Any],
+            let value = result["value"] as? NSNumber
       else { return 0 }
-      return Double(value)
+      return value.doubleValue
     }
 
     Function("invokeSync") { (command: String, argsJson: String?) -> String in
-      let args = argsJson ?? "{}"
-      let payload = "{\"command\":\"\(command)\",\"args\":\(args)}"
+      let argsData = (argsJson ?? "{}").data(using: .utf8)
+      guard let argsData,
+            let args = try? JSONSerialization.jsonObject(with: argsData),
+            let payload = self.encodePayload(command: command, args: args)
+      else { return "{\"ok\":false,\"error\":\"invalid arguments JSON\"}" }
       let resultPtr = rustra_calculator_invoke(payload)
       guard let ptr = resultPtr else { return "{\"ok\":false,\"error\":\"invoke returned nil\"}" }
       defer { rustra_calculator_free_string(ptr) }

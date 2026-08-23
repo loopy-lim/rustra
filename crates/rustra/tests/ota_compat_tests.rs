@@ -168,6 +168,11 @@ fn live_schema_carries_schema_version() {
         Some(1),
         "default schemaVersion must be 1"
     );
+    assert_eq!(
+        schema.get("fieldOrder").and_then(|v| v.as_str()),
+        Some("declaration"),
+        "current schemas must guarantee postcard declaration order"
+    );
 }
 
 #[test]

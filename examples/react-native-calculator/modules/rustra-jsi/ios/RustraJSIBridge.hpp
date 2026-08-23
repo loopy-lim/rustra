@@ -70,7 +70,7 @@ extern "C" {
   // ── rkyv V2 async (follow-up 3) ──────────────────────────
   // `rustra_calculator_invoke_rkyv_v2` 의 async 변형 — invocation_id 발급 +
   // cancel 체크포인트 포함. 응답 버퍼는 on_complete 콜백 안에서
-  // rustra_calculator_free_buffer 로 해제해야 한다.
+  // rustra_calculator_free_rkyv_v2_buffer 로 해제해야 한다.
   typedef void (*rustra_calculator_async_callback_t)(
     void* user_data, uint8_t* resp, size_t resp_len);
   void rustra_calculator_invoke_rkyv_v2_async(
@@ -235,6 +235,10 @@ private:
 };
 
 void installRustraJSI(facebook::jsi::Runtime& rt);
+
+/// Runtime teardown/reload 직전에 pending async 콜백을 취소하고 구 Runtime
+/// 소유 JSI Function 핸들을 JS 스레드에서 폐기한다.
+void invalidateRustraJSI();
 
 /// installRustraJSI + JS 스레드 CallInvoker 주입. iOS(RCTCxxBridge) 와
 /// Android(CallInvokerHolder) 플랫폼 글루가 각자의 방식으로 CallInvoker 를

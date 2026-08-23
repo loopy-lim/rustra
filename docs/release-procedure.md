@@ -11,7 +11,7 @@
 ## 1단계 — changeset 확정
 
 ```bash
-npx changeset status   # 대상 패키지/범프 확인
+bunx changeset status   # 대상 패키지/범프 확인
 ```
 
 - `.changeset/*.md` 가 main 에 있으면 release.yml 이 "Version Packages" PR 을 만든다
@@ -20,24 +20,24 @@ npx changeset status   # 대상 패키지/범프 확인
 ## 2단계 — canary (사전 검증)
 
 ```bash
-npm run build
-npx changeset version --snapshot canary
-npx changeset publish --tag canary
+bun run build
+bunx changeset version --snapshot canary
+bunx changeset publish --tag canary
 ```
 
 소비자 검증:
 
 ```bash
-mkdir /tmp/canary-check && cd /tmp/canary-check && npm init -y
-npm install @rustra/node@canary @rustra/types@canary
-node --input-type=module -e "import * as n from '@rustra/node'; console.log(Object.keys(n))"
+mkdir /tmp/canary-check && cd /tmp/canary-check && bun init -y
+bun add @rustra/node@canary @rustra/types@canary
+bun -e "import * as n from '@rustra/node'; console.log(Object.keys(n))"
 ```
 
 crates.io canary 는 지원하지 않는다 (버전 삭제 불가) — Rust 는 stable 만 발행한다.
 
 ## 3단계 — stable 발행
 
-1. Version Packages PR 머지 → release.yml 자동 실행 (npm 10종)
+1. Version Packages PR 머지 → release.yml 자동 실행 (npm 9종)
 2. crates 수동 잡: Actions → Release → Run workflow는 `main`의 동일 SHA에 대해
    CI 성공을 다시 확인한 뒤 rustra-macros → 인덱스 반영 대기 → rustra 순서로 발행
 
@@ -83,14 +83,15 @@ cargo publish -p rustra
 
 ## 4단계 — rollback
 
-- **npm**: `npm dist-tag add @rustra/node@0.1.2 latest` — dist-tag 되돌리기로 즉시
+- **npm registry**: Bun에는 dist-tag 변경 명령이 없으므로 이 관리 작업만
+  `bunx --bun npm dist-tag add @rustra/node@<previous> latest`로 실행한다 — dist-tag 되돌리기로 즉시
   rollback (패키지 자체는 삭제하지 않는다). 전 패키지 동일 적용.
-- **crates.io**: 불가 (버전 영구). `cargo update --precise 0.1.2` 를 사용자 안내로 대체.
-- **깃**: 버전 커밋 revert → 재발행은 0.1.x → 0.1.(x+1) 로만 가능 (같은 버전 재발행 불가).
+- **crates.io**: 불가 (버전 영구). `cargo update --precise <previous>`를 사용자 안내로 대체.
+- **깃**: 버전 커밋 revert 후 반드시 다음 patch 버전으로 재발행한다(같은 버전 재발행 불가).
 
 ## 발행 후 확인
 
 ```bash
-npm view @rustra/node versions --json | tail -5
+bun info @rustra/node | tail -20
 cargo search rustra --limit 3
 ```

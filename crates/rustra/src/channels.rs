@@ -30,7 +30,7 @@
 //! 수 없다.
 
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 /// 호스트가 구현하는 채널 수신端 — `channel_send` 호출 시 실행된다.
@@ -46,7 +46,11 @@ pub type ChannelSender = Arc<dyn Fn(&str) + Send + Sync>;
 /// 셋업 시 [`set_channel_sender`] 로 JS 콜백 배선을, Tauri 호스트는
 /// `Channel` 객체의 send 클로저를 등록한다.
 pub struct ChannelHost {
-    next_handle: AtomicU32,
+    // u32 wire handle의 다음 값을 u64에 보관한다. AtomicU32::fetch_add는
+    // u32::MAX 이후 0으로 되감겨 invalid sentinel/stale handle을 재사용한다.
+    // u64 카운터는 u32 공간 소진을 별도 상태로 표현해 0을 exhaustion sentinel로
+    // 반환할 수 있다.
+    next_handle: AtomicU64,
     channels: Mutex<BTreeMap<u32, ChannelSender>>,
     resources: Mutex<BTreeMap<u32, Arc<dyn std::any::Any + Send + Sync>>>,
 }
@@ -54,7 +58,7 @@ pub struct ChannelHost {
 impl Default for ChannelHost {
     fn default() -> Self {
         Self {
-            next_handle: AtomicU32::new(1),
+            next_handle: AtomicU64::new(1),
             channels: Mutex::new(BTreeMap::new()),
             resources: Mutex::new(BTreeMap::new()),
         }
@@ -66,7 +70,10 @@ impl ChannelHost {
     ///
     /// 핸들은 1부터 단조 증가한다(0 은 invalid sentinel).
     pub fn register_channel(&self, sender: ChannelSender) -> u32 {
-        let handle = self.next_handle.fetch_add(1, Ordering::Relaxed);
+        let handle = self.reserve_handle();
+        if handle == 0 {
+            return 0;
+        }
         // 포이즈닝 관용 — 채널 테이블 자체는 구조적으로 유효하다(ffi.rs 와 동일).
         self.channels
             .lock()
@@ -81,11 +88,15 @@ impl ChannelHost {
     /// reserve 후 [`register_channel_with_handle`] 로 마저 등록한다. 등록 전
     /// send 는 테이블에 없으므로 `false`(stale 과 동일 취급).
     pub fn reserve_handle(&self) -> u32 {
-        self.next_handle.fetch_add(1, Ordering::Relaxed)
+        let raw = self.next_handle.fetch_add(1, Ordering::Relaxed);
+        u32::try_from(raw).unwrap_or(0)
     }
 
     /// [`reserve_handle`] 으로 선점한 핸들에 sender 를 등록한다.
     pub fn register_channel_with_handle(&self, handle: u32, sender: ChannelSender) {
+        if handle == 0 {
+            return;
+        }
         self.channels
             .lock()
             .unwrap_or_else(|p| p.into_inner())
@@ -121,7 +132,10 @@ impl ChannelHost {
 
     /// Rust-소유 리소스를 등록하고 핸들을 발급한다.
     pub fn register_resource(&self, resource: Arc<dyn std::any::Any + Send + Sync>) -> u32 {
-        let handle = self.next_handle.fetch_add(1, Ordering::Relaxed);
+        let handle = self.reserve_handle();
+        if handle == 0 {
+            return 0;
+        }
         self.resources
             .lock()
             .unwrap_or_else(|p| p.into_inner())
@@ -252,6 +266,21 @@ mod tests {
         assert!(h.drop_channel(a));
         let b = h.register_channel(Arc::new(|_| {}));
         assert_ne!(a, b, "핸들은 단조 증가 — 재사용 금지");
+    }
+
+    #[test]
+    fn exhausted_handle_space_returns_zero_without_reusing_a_live_handle() {
+        let h = ChannelHost {
+            next_handle: AtomicU64::new(u64::from(u32::MAX)),
+            channels: Mutex::new(BTreeMap::new()),
+            resources: Mutex::new(BTreeMap::new()),
+        };
+        let last = h.register_channel(Arc::new(|_| {}));
+        assert_eq!(last, u32::MAX);
+        assert_eq!(h.register_channel(Arc::new(|_| {})), 0);
+        assert_eq!(h.register_resource(Arc::new("not inserted")), 0);
+        assert_eq!(h.counts(), (1, 0));
+        assert!(h.send(last, "still live"));
     }
 
     #[test]

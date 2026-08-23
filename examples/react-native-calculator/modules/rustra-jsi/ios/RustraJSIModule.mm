@@ -14,6 +14,12 @@
 
 RCT_EXPORT_MODULE(RustraJSI)
 
+- (void)invalidate {
+  // RCTBridge가 Runtime을 폐기하기 전에 JSI Function과 pending async invoke를
+  // 정리한다. 늦게 도착한 Rust callback은 generation guard가 폐기한다.
+  rustra::invalidateRustraJSI();
+}
+
 RCT_REMAP_METHOD(install,
                   installWithResolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject) {

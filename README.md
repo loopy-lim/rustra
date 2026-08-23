@@ -9,7 +9,7 @@ Rust에서 명령을 한 번 정의하면, Node / Bun / Tauri / React Native 어
 
 > **English** — Define commands once in Rust, get type-safe TypeScript clients
 > for Node, Bun, Tauri, and React Native. Single Rust core, four host surfaces,
-> zero-copy binary wire (rkyv V2). Quick start: `cargo add rustra` +
+> compact caller-buffer optimized binary wire (rkyv V2). Quick start: `cargo add rustra` +
 > `bunx @rustra/cli init`. Full docs (Korean) below.
 
 ## 작동 방식
@@ -30,7 +30,7 @@ Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플�
 | ----------------------------- | --------------------------------- | ----------------- | ------------- | -------------- | ------------ |
 | 단일 Rust 코어 × 멀티 호스트  | ✅ Node/Bun/Tauri/RN              | Node (+ Electron) | RN 중심       | Tauri 전용     | Tauri 전용   |
 | 타입 안전 코드젠 (양방향)     | ✅ 커맨드+이벤트                  | 수동 d.ts         | ✅            | ❌ (수동)      | ✅           |
-| 바이너리 zero-copy 와이어     | ✅ rkyv V2 (JSON 대비 11.8× 작음) | JSON/Buffer       | JSI 객체      | JSON IPC       | JSON IPC     |
+| compact 바이너리 와이어       | ✅ rkyv V2 (JSON 대비 11.8× 작음) | JSON/Buffer       | JSI 객체      | JSON IPC       | JSON IPC     |
 | 계약 게이트 (breaking change) | ✅ `rustra diff` + contract hash  | ❌                | ❌            | ❌             | 부분         |
 | 취소/타임아웃/배치 시맨틱     | ✅ 매트릭스로 문서화              | 직접 구현         | 직접 구현     | ❌             | ❌           |
 
@@ -56,9 +56,10 @@ rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)�
       정수 핸들뿐이라 계약 게이트·양방향 코드젠·멀티호스트 일관성 유지.
       RN JSI `createChannel(cb)`/`dropChannel(h)` 배선 + Rust FFI
       `rustra_ffi_channel_{create,send,drop}` — 시뮬레이터 E2E 검증 완료
-- [ ] async 커맨드 핸들러 (워커 풀은 완료, 핸들러 trait 비동기화는 진행 중)
-- [ ] Windows 런타임 검증 (CI 확장 단계)
-- [ ] 프리빌트 바이너리 배포 (npx 설치 시 cargo 불필요)
+- [x] async 커맨드 핸들러 — `#[command] async fn`, waker 기반 실행기,
+      bounded FFI 워커 풀/백프레셔/취소 게이트
+- [x] Windows 코어 런타임 검증 — CI의 Windows MSVC 테스트 + release DLL 산출
+- [ ] 프리빌트 바이너리 배포 (bunx 설치 시 cargo 불필요)
 
 ## FAQ
 
@@ -84,7 +85,7 @@ JS/네이티브 조합의 drift를 런타임에 감지한다.
 
 ```toml
 [dependencies]
-rustra = "0.2"
+rustra = "0.3"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -327,7 +328,7 @@ type RustraError = {
 `tauri` feature를 활성화:
 
 ```toml
-rustra = { version = "0.2", features = ["tauri"] }
+rustra = { version = "0.3", features = ["tauri"] }
 ```
 
 Rust 측:
@@ -374,14 +375,15 @@ const result = await addNumbers({ a: 20, b: 22 });
 
 ### 플랫폼 지원 매트릭스
 
-| 플랫폼               | 상태   | 비고                                         |
-| -------------------- | ------ | -------------------------------------------- |
-| Node / Bun           | Stable | subprocess·N-API·FFI 전 경로 CI 검증         |
-| Tauri (macOS/Linux)  | Stable | 폴링 + 이벤트 푸시(`register_with_events`)   |
-| React Native iOS     | Stable | JSI Tier 1~3 왕복 실기 검증, Release 빌드 CI |
-| React Native Android | Stable | Release APK 빌드 CI (Gradle→Rust 자동 빌드)  |
+| 플랫폼               | 현재 증거 수준         | 비고                                                       |
+| -------------------- | ---------------------- | ---------------------------------------------------------- |
+| Node / Bun           | Runtime verified       | subprocess·N-API·Bun FFI 로컬 runtime + 어댑터 CI          |
+| Tauri (macOS/Linux)  | Build + smoke verified | Rust IPC smoke; 실제 WebView 사용자 흐름은 별도 E2E 필요   |
+| React Native iOS     | Build verified         | C++ codec/link 검증; 최신 소스의 설치·launch 영수증은 필요 |
+| React Native Android | Release APK verified   | arm64/x86_64 `.so` 포함; emulator/physical launch는 미검증 |
 
-모든 플랫폼은 `bun run test:compat`·CI 네이티브 빌드 잡이 게이트한다.
+`bun run test:compat`는 JS 계약과 지원되는 로컬 runtime을 검증하고, CI 네이티브
+잡은 빌드·링크를 검증한다. 이 둘을 실제 기기 설치·화면 렌더 증거와 동일시하지 않는다.
 
 ## 성능
 
@@ -394,10 +396,12 @@ const result = await addNumbers({ a: 20, b: 22 });
 | Node.js (JS측)         | 297–299 ns | ~3.35M ops/s    |
 | Swift → Rust FFI       | 1.2 µs     | 853,614 ops/s   |
 | Node napi-rs (release) | 1.5 µs     | 654,817 ops/s   |
-| Bun FFI (release)      | 2.1 µs     | 471,640+ ops/s  |
+| Bun FFI (release)      | 1.7 µs     | ~580,000 ops/s  |
 
-> React Native(JSI rkyv V2)는 동일 객체 연산의 Nitro 대비 3회 중앙값
+> 기록된 React Native(JSI rkyv V2) Release 측정은 동일 객체 연산의 Nitro 대비 3회 중앙값
 > 1.17–1.24x(add 1.2068x, string 1.2384x, bytes 1.1656x, pair 1.2162x).
+> 이후 벤치 러너는 Nitro/Rustra/FFI를 호출 단위로 순환 측정하도록 강화됐으므로,
+> 위 과거 headline은 최신 앱 runtime 영수증으로 재확인하기 전까지 목표 기준선이다.
 > 비교의 범위와 기능 패리티 매트릭스는
 > [벤치마크 문서](docs/benchmarks.md) §"Nitro Modules 비교" 참고) —
 > 상세 벤치마크, 레이어별 오버헤드 분석, 페이로드 확장성은
@@ -447,7 +451,7 @@ cargo test --workspace
 # (.so/.dylib/.dll) 산출물을 아티팩트로 업로드한다 (.github/workflows/ci.yml).
 
 # calculator 예시 빌드 및 TS 생성
-cargo run -p rustra-calculator-example
+cargo run -p rustra-calculator-example --bin rustra-calculator-example
 
 # CRUD 예시 빌드 및 TS 생성
 cargo run -p rustra-crud-example --bin generate

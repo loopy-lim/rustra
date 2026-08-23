@@ -43,6 +43,12 @@ export type PackageSchema = {
    * 된다 — 그 경우 코드젠은 1 로 취급한다.
    */
   schemaVersion?: number;
+  /**
+   * Binary object fields follow the Rust declaration order. Current rustra
+   * schema emitters always include this marker; it is optional for legacy
+   * and third-party schema files.
+   */
+  fieldOrder?: 'declaration';
   /** 패키지에 등록된 모든 명령 스키마 */
   commands: CommandSchema[];
   /**

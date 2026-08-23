@@ -1,0 +1,17 @@
+{
+  "ignore": {
+    "overrides": [
+      {
+        "files": [
+          "examples/auth/generated/contract.ts",
+          "examples/auth/generated/rkyv-codecs.ts",
+          "examples/auth/generated/rkyv-registry.ts",
+          "examples/streaming/generated/contract.ts",
+          "examples/streaming/generated/rkyv-codecs.ts",
+          "examples/streaming/generated/rkyv-registry.ts"
+        ],
+        "rules": ["deslop/unused-file"]
+      }
+    ]
+  }
+}

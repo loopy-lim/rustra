@@ -14,7 +14,8 @@ type Item = { id: string; name: string; value: number };
 
 /** 조회 — useCommand: 마운트 시 자동 실행, input 변경 시 재실행. */
 function ItemList({ minValue }: { minValue?: number }) {
-  const { data, loading, error } = useCommand(listItems, { minValue });
+  const query = React.useMemo(() => ({ minValue }), [minValue]);
+  const { data, loading, error } = useCommand(listItems, query);
   if (loading) return <p>불러오는 중…</p>;
   if (error) return <p>에러: {error.message}</p>;
   const items = data?.items ?? [];
@@ -31,24 +32,23 @@ function ItemList({ minValue }: { minValue?: number }) {
 
 /** 생성/수정/삭제 — useMutation: 수동 실행 + pending 상태. */
 function ItemActions({ onDone }: { onDone: () => void }) {
-  const create = useMutation(createItem);
-  const update = useMutation(updateItem);
-  const remove = useMutation(deleteItem);
+  const mutationOptions = React.useMemo(() => ({ onSuccess: onDone }), [onDone]);
+  const create = useMutation(createItem, mutationOptions);
+  const update = useMutation(updateItem, mutationOptions);
+  const remove = useMutation(deleteItem, mutationOptions);
 
   return (
     <div>
-      <button disabled={create.loading} onClick={() => create.mutateAsync({ name: 'New', value: 1 }).then(onDone)}>
+      <button disabled={create.loading} onClick={() => create.mutate({ name: 'New', value: 1 })}>
         생성
       </button>
       <button
         disabled={update.loading}
-        onClick={() =>
-          update.mutateAsync({ id: 'first', name: 'Renamed', value: null }).then(onDone)
-        }
+        onClick={() => update.mutate({ id: 'first', name: 'Renamed', value: null })}
       >
         수정
       </button>
-      <button disabled={remove.loading} onClick={() => remove.mutateAsync({ id: 'first' }).then(onDone)}>
+      <button disabled={remove.loading} onClick={() => remove.mutate({ id: 'first' })}>
         삭제
       </button>
     </div>

@@ -6,7 +6,7 @@ Rust 패키지를 한 번 정의하면, React Native / Node / Bun / Tauri 등 �
 
 ```toml
 [dependencies]
-rustra = "0.1"
+rustra = "0.3"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -72,37 +72,37 @@ fn main() -> Result<()> {
 
 ### Package / PackageBuilder
 
-| 메서드 | 설명 |
-|---|---|
-| `Package::builder(id)` | `PackageBuilder` 생성 |
-| `builder.command_fn(handler)` | `#[command]` 함수 등록. 이름은 `type_name` 기반으로 자동 추출 |
-| `builder.command(name, handler)` | 이름을 명시적으로 지정하여 핸들러 등록 |
-| `builder.build()` | `Package` 생성 |
-| `register!(builder, fn1, fn2, ...)` | 여러 `#[command]` 함수를 한 번에 등록하는 매크로 |
+| 메서드                              | 설명                                                          |
+| ----------------------------------- | ------------------------------------------------------------- |
+| `Package::builder(id)`              | `PackageBuilder` 생성                                         |
+| `builder.command_fn(handler)`       | `#[command]` 함수 등록. 이름은 `type_name` 기반으로 자동 추출 |
+| `builder.command(name, handler)`    | 이름을 명시적으로 지정하여 핸들러 등록                        |
+| `builder.build()`                   | `Package` 생성                                                |
+| `register!(builder, fn1, fn2, ...)` | 여러 `#[command]` 함수를 한 번에 등록하는 매크로              |
 
 ### RustraError
 
-| 메서드 | 설명 |
-|---|---|
-| `RustraError::custom(msg)` | 커스텀 메시지로 에러 생성 |
-| `error.code()` | 에러 코드 반환 |
-| `error.message()` | 에러 메시지 반환 |
+| 메서드                           | 설명                                      |
+| -------------------------------- | ----------------------------------------- |
+| `RustraError::custom(code, msg)` | 안정적인 코드와 메시지로 커스텀 에러 생성 |
+| `error.code()`                   | 에러 코드 반환                            |
+| `error.message()`                | 에러 메시지 반환                          |
 
 `RustraError`는 `Serialize`를 구현하므로 TypeScript 측으로 직렬화되어 전달된다.
 
 ### invoke
 
-| 메서드 | 설명 |
-|---|---|
+| 메서드                                | 설명                                   |
+| ------------------------------------- | -------------------------------------- |
 | `package.invoke::<I, O>(name, input)` | 타입 안전한 호출. 직렬화/역직렬화 포함 |
-| `package.invoke_json(name, params)` | `serde_json::Value` 기반 호출 |
+| `package.invoke_json(name, params)`   | `serde_json::Value` 기반 호출          |
 
 ### TypeScript 생성
 
-| 메서드 | 설명 |
-|---|---|
-| `package.generate_typescript()` | `GeneratedPackage` 반환 |
-| `generated.write_to_dir(path)` | `schema.json`, `types.ts`, `commands.ts`, `contract.ts` 파일 출력 |
+| 메서드                          | 설명                                                              |
+| ------------------------------- | ----------------------------------------------------------------- |
+| `package.generate_typescript()` | `GeneratedPackage` 반환                                           |
+| `generated.write_to_dir(path)`  | `schema.json`, `types.ts`, `commands.ts`, `contract.ts` 파일 출력 |
 
 ### 생성 결과물
 
@@ -118,10 +118,19 @@ fn main() -> Result<()> {
 생성된 커맨드 헬퍼 예시:
 
 ```ts
-export function addNumbers(engine: EngineClient, input: AddNumbersInput): Promise<AddNumbersOutput> {
-  return engine.invoke<AddNumbersOutput>('addNumbers', input);
+import { invokeGenerated, type InvokeOptions } from '@rustra/types';
+
+export function addNumbers(
+  input: AddNumbersInput,
+  options?: InvokeOptions,
+): Promise<AddNumbersOutput> {
+  return invokeGenerated<AddNumbersOutput>(1, 'addNumbers', input, options);
 }
 ```
+
+앱 시작 시 `configure(engine)`를 한 번 호출한 뒤 생성 함수에는 입력과 선택적
+취소/타임아웃 옵션만 전달한다. 숫자 command id를 지원하는 엔진은 자동으로
+고속 경로를 사용하고, 구형 엔진은 이름 기반 invoke로 안전하게 폴백한다.
 
 ## 주의사항
 
@@ -142,7 +151,7 @@ pub use serde::{Deserialize, Serialize};
 
 ```toml
 [dependencies]
-rustra = { version = "0.1", features = ["tauri"] }
+rustra = { version = "0.3", features = ["tauri"] }
 ```
 
 ```rust

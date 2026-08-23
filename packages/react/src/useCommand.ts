@@ -37,6 +37,17 @@ export function useCommand<I, O>(
   // 프로덕션 번들러 mangling 으로 바뀔 수 있다).
   const commandName = resolveCommandId(commandFn);
 
+  // input 의 실행 키 — 값 동등성(직렬화)으로 판정한다. 인라인 객체 리터럴
+  // (`useCommand(cmd, { a: 1 })`)은 렌더마다 새 참조라 참조 동등성을 쓰면
+  // execute 재생성 → effect 재실행 → 상태 갱신 → 재렌더의 무한 루프가
+  // 발생한다. invoke 에는 항상 원본 input 을 그대로 넘긴다.
+  const inputKey = input === undefined ? undefined : JSON.stringify(input);
+  const stableInputRef = useRef<{ key: string | undefined; value: I } | null>(null);
+  if (stableInputRef.current === null || stableInputRef.current.key !== inputKey) {
+    stableInputRef.current = { key: inputKey, value: input as I };
+  }
+  const stableInput = stableInputRef.current.value;
+
   const execute = useCallback(async (): Promise<O | undefined> => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -50,21 +61,23 @@ export function useCommand<I, O>(
     setError(null);
 
     try {
-      const res = await engine.invoke<O>(commandName, input, { signal: ac.signal });
+      const res = await engine.invoke<O>(commandName, stableInput, { signal: ac.signal });
       if (!ac.signal.aborted && isCurrent()) {
         setData(res);
-        setLoading(false);
       }
       return res;
     } catch (err: unknown) {
       if (!ac.signal.aborted && isCurrent()) {
         const parsedError = err instanceof Error ? err : new Error(String(err));
         setError(parsedError);
-        setLoading(false);
       }
       return undefined;
+    } finally {
+      // Always execute the state transition in finally. A stale/aborted request
+      // preserves the current generation's loading state instead of clearing it.
+      setLoading((current) => (!ac.signal.aborted && isCurrent() ? false : current));
     }
-  }, [engine, commandName, JSON.stringify(input)]);
+  }, [engine, commandName, stableInput]);
 
   useEffect(() => {
     if (options?.enabled === false) {

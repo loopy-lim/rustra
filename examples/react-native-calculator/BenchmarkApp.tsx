@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, View, ScrollView } from 'react-native';
 import { NitroModules } from 'react-native-nitro-modules';
-import type { NitroBench } from 'nitro-bench';
+import type { NitroBench } from './modules/nitro-bench/nitro-bench/src';
 import { configure } from '@rustra/types';
 import {
   addNumbers,
@@ -25,6 +25,9 @@ import {
 } from '../calculator/generated/commands';
 // ── Benchmark internals (not part of user-facing API) ───────
 import { installRustraJSI, getRustraNative } from 'rustra-jsi';
+import RustraCalculator, {
+  invokeCommand as invokeFfiCommand,
+} from './modules/rustra-calculator/src';
 import { createBincodeEngine, bincodeRegistry } from './src/adapters/bincode-adapter';
 import { createJsonEngine } from './src/adapters/json-adapter';
 import { createMsgpackEngine } from './src/adapters/msgpack-adapter';
@@ -32,6 +35,7 @@ import { createPostcardEngine, postcardRegistry } from './src/adapters/postcard-
 import { createRkyvEngine } from './src/adapters/rkyv-adapter';
 import { createHybridEngine, hybridRegistry } from './src/adapters/hybrid-adapter';
 import { createRkyvV2Engine, rkyvV2Registry } from './src/adapters/rkyv-v2-adapter';
+import { decodeUtf8, encodeUtf8, exactArrayBuffer } from './src/utf8';
 // ── End benchmark internals ─────────────────────────────────
 
 // ── Helpers ──────────────────────────────────────────────
@@ -50,10 +54,41 @@ function formatNs(ns: number): string {
 type BenchResult = {
   label: string;
   avg: number;
+  stddev: number;
+  min: number;
   p50: number;
+  p95: number;
   p99: number;
+  max: number;
   ops: number;
+  batchMeans: number[];
 };
+
+function summarize(label: string, samples: number[]): BenchResult {
+  const times = [...samples].sort((a, b) => a - b);
+  const avg = times.reduce((sum, time) => sum + time, 0) / times.length;
+  const variance = times.reduce((sum, time) => sum + (time - avg) ** 2, 0) / times.length;
+  const at = (percentile: number) =>
+    times[Math.min(Math.floor(times.length * percentile), times.length - 1)];
+  const batchSize = Math.max(1, Math.ceil(samples.length / 100));
+  const batchMeans: number[] = [];
+  for (let start = 0; start < samples.length; start += batchSize) {
+    const batch = samples.slice(start, start + batchSize);
+    batchMeans.push(batch.reduce((sum, time) => sum + time, 0) / batch.length);
+  }
+  return {
+    label,
+    avg,
+    stddev: Math.sqrt(variance),
+    min: times[0],
+    p50: at(0.5),
+    p95: at(0.95),
+    p99: at(0.99),
+    max: times[times.length - 1],
+    ops: 1_000_000_000 / avg,
+    batchMeans,
+  };
+}
 
 function measureSync(label: string, fn: () => void, iterations = 100_000): BenchResult {
   // warmup
@@ -65,14 +100,7 @@ function measureSync(label: string, fn: () => void, iterations = 100_000): Bench
     fn();
     times.push((performance.now() - start) * 1_000_000);
   }
-  times.sort((a, b) => a - b);
-
-  const avg = times.reduce((s, t) => s + t, 0) / times.length;
-  const p50 = times[Math.floor(times.length * 0.5)];
-  const p99 = times[Math.floor(times.length * 0.99)];
-  const ops = 1_000_000_000 / avg;
-
-  return { label, avg, p50, p99, ops };
+  return summarize(label, times);
 }
 
 async function measure(
@@ -88,14 +116,40 @@ async function measure(
     await fn();
     times.push((performance.now() - start) * 1_000_000);
   }
-  times.sort((a, b) => a - b);
+  return summarize(label, times);
+}
 
-  const avg = times.reduce((s, t) => s + t, 0) / times.length;
-  const p50 = times[Math.floor(times.length * 0.5)];
-  const p99 = times[Math.floor(times.length * 0.99)];
-  const ops = 1_000_000_000 / avg;
+type InterleavedCase = {
+  key: string;
+  label: string;
+  run: () => Promise<unknown>;
+};
 
-  return { label, avg, p50, p99, ops };
+/**
+ * 비교 대상을 호출 단위로 순환한다: ABC → BCA → CAB. 항상 한 구현을 먼저
+ * 재는 순서 편향과 장시간 연속 측정의 thermal/GC drift를 모든 대상에 나눈다.
+ */
+async function measureInterleaved(
+  cases: InterleavedCase[],
+  iterations = 10_000,
+): Promise<Record<string, BenchResult>> {
+  const samples = new Map(cases.map((entry) => [entry.key, [] as number[]]));
+  const runRound = async (round: number, record: boolean) => {
+    const startIndex = round % cases.length;
+    for (let offset = 0; offset < cases.length; offset += 1) {
+      const entry = cases[(startIndex + offset) % cases.length];
+      const start = performance.now();
+      await entry.run();
+      if (record) samples.get(entry.key)!.push((performance.now() - start) * 1_000_000);
+    }
+  };
+
+  for (let round = 0; round < 500; round += 1) await runRound(round, false);
+  for (let round = 0; round < iterations; round += 1) await runRound(round, true);
+
+  return Object.fromEntries(
+    cases.map((entry) => [entry.key, summarize(entry.label, samples.get(entry.key)!)]),
+  );
 }
 
 // ── Benchmark Runner ─────────────────────────────────────
@@ -103,6 +157,12 @@ async function measure(
 async function runBenchmarks(): Promise<string[]> {
   const lines: string[] = [];
   const log = (s: string) => lines.push(s);
+
+  if (__DEV__) {
+    log('Benchmark disabled in Debug: performance receipts require a Release build.');
+    log('Run: bunx --bun expo run:ios --configuration Release');
+    return lines;
+  }
 
   log('Installing JSI...');
   try {
@@ -138,7 +198,6 @@ async function runBenchmarks(): Promise<string[]> {
 
   const nitroBench = NitroModules.createHybridObject<NitroBench>('NitroBench');
 
-  const encoder = new TextEncoder();
   const INPUT = { a: 42, b: 58 };
 
   // ══════════════════════════════════════════════════════
@@ -308,16 +367,17 @@ async function runBenchmarks(): Promise<string[]> {
   );
 
   // 6. JSON JSI call
-  const jsonPayload = encoder.encode(JSON.stringify({ command: 'addNumbers', args: INPUT }));
-  const jsonJsiBench = measureSync('JSON JSI', () => native.invoke(jsonPayload.buffer));
+  const jsonPayload = encodeUtf8(JSON.stringify({ command: 'addNumbers', args: INPUT }));
+  const jsonPayloadBuffer = exactArrayBuffer(jsonPayload);
+  const jsonJsiBench = measureSync('JSON JSI', () => native.invoke(jsonPayloadBuffer));
   log(
     `│  JSON JSI avg: ${formatNs(jsonJsiBench.avg).padStart(10)}  p50: ${formatNs(jsonJsiBench.p50)}`,
   );
 
   // 7. JSON decode
-  const jsonResponse = native.invoke(jsonPayload.buffer);
+  const jsonResponse = native.invoke(jsonPayloadBuffer);
   const jsonDecodeBench = measureSync('JSON decode', () => {
-    const s = new TextDecoder().decode(jsonResponse);
+    const s = decodeUtf8(jsonResponse);
     JSON.parse(s);
   });
   log(
@@ -326,9 +386,9 @@ async function runBenchmarks(): Promise<string[]> {
 
   const jsonFullSync = measureSync('JSON full sync', () => {
     const json = JSON.stringify({ command: 'addNumbers', args: INPUT });
-    const p = encoder.encode(json);
-    const r = native.invoke(p.buffer);
-    const s = new TextDecoder().decode(r);
+    const p = exactArrayBuffer(encodeUtf8(json));
+    const r = native.invoke(p);
+    const s = decodeUtf8(r);
     JSON.parse(s);
   });
   log(
@@ -352,10 +412,10 @@ async function runBenchmarks(): Promise<string[]> {
     `│  NitroRaw avg: ${formatNs(nitroResult.avg).padStart(10)}  p50: ${formatNs(nitroResult.p50)}  (no ratio)`,
   );
 
-  const noopPayload = encoder.encode('{"command":"addNumbers","args":{"a":42,"b":58}}');
-  const noopResult = await measure('JSI noop', () =>
-    Promise.resolve(native.noop(noopPayload.buffer)),
+  const noopPayload = exactArrayBuffer(
+    encodeUtf8('{"command":"addNumbers","args":{"a":42,"b":58}}'),
   );
+  const noopResult = await measure('JSI noop', () => Promise.resolve(native.noop(noopPayload)));
   log(
     `│  JSInoop  avg: ${formatNs(noopResult.avg).padStart(10)}  p50: ${formatNs(noopResult.p50)}  p99: ${formatNs(noopResult.p99)}`,
   );
@@ -372,6 +432,43 @@ async function runBenchmarks(): Promise<string[]> {
   log(
     `│  rkyvV2   avg: ${formatNs(rkyvV2Result.avg).padStart(10)}  p50: ${formatNs(rkyvV2Result.p50)}  p99: ${formatNs(rkyvV2Result.p99)}`,
   );
+
+  let ffiSyncResult: BenchResult | undefined;
+  let ffiAsyncValue: { value: number } | undefined;
+  if (Platform.OS === 'ios') {
+    try {
+      const syncValue = RustraCalculator.addSync(42, 58);
+      if (syncValue !== 100) {
+        throw new Error(`Swift FFI addSync expected 100, got ${syncValue}`);
+      }
+      ffiSyncResult = measureSync(
+        'Swift FFI sync',
+        () => {
+          RustraCalculator.addSync(42, 58);
+        },
+        10_000,
+      );
+
+      const asyncValue = await invokeFfiCommand('benchAdd', INPUT);
+      if (
+        typeof asyncValue !== 'object' ||
+        asyncValue === null ||
+        !('value' in asyncValue) ||
+        asyncValue.value !== 100
+      ) {
+        throw new Error('Swift FFI invokeRaw returned an invalid benchAdd result');
+      }
+      ffiAsyncValue = asyncValue as { value: number };
+      log(
+        `│  FFI sync avg: ${formatNs(ffiSyncResult.avg).padStart(10)}  p50: ${formatNs(ffiSyncResult.p50)}  (scalar lower bound; no ratio)`,
+      );
+      log('│  FFI async: included in the interleaved equivalent-op suite below');
+    } catch (error: unknown) {
+      log(`│  Swift FFI unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  } else {
+    log('│  Swift FFI skipped: iOS-only comparison module');
+  }
 
   log('╚════════════════════════════════════════════════╝');
   log('');
@@ -397,66 +494,24 @@ async function runBenchmarks(): Promise<string[]> {
   log('');
 
   // ── 동등 조건 페이로드 비교 ──────────────────────────
-  // 같은 JS 객체 모양, 같은 echo/add 연산, 같은 반환 모양을 같은 measure 함수로
+  // 같은 JS 객체 모양, 같은 echo/add 연산, 같은 반환 모양을 호출 단위 순환
   // 측정한다. Nitro 원시 add(a,b)는 별도 lower bound일 뿐 ratio에 쓰지 않는다.
   log('╔════════════════════════════════════════════════╗');
-  log('║  Equivalent ops: Nitro vs rkyvV2 (10K)       ║');
+  log('║  Equivalent ops: Nitro/rkyvV2/FFI (10K)      ║');
   log('╠════════════════════════════════════════════════╣');
 
   const nitroRaw = await measure('nitro raw add', () => Promise.resolve(nitroBench.add(42, 58)));
   log(`│  raw Nitro add(a,b) lower bound: ${formatNs(nitroRaw.avg).padStart(10)}`);
 
-  const nitroAdd = await measure('nitro add', () => Promise.resolve(nitroBench.benchAdd(INPUT)));
-  configure(rkyvV2Engine);
-  const rustraAdd = await measure('rustra add', () => benchAdd(INPUT));
-  log(`│  add Nitro  avg: ${formatNs(nitroAdd.avg).padStart(10)}  p50: ${formatNs(nitroAdd.p50)}`);
-  log(
-    `│  add rustra avg: ${formatNs(rustraAdd.avg).padStart(10)}  p50: ${formatNs(rustraAdd.p50)}`,
-  );
-
   const stringPayload = { value: 'benchmark-string-payload' };
-  const nitroStr = await measure('nitro str', () =>
-    Promise.resolve(nitroBench.echoString(stringPayload)),
-  );
-  log(`│  str Nitro  avg: ${formatNs(nitroStr.avg).padStart(10)}  p50: ${formatNs(nitroStr.p50)}`);
-
-  configure(rkyvV2Engine);
-  const rustraStr = await measure('rustra str', () => benchEchoString(stringPayload));
-  log(
-    `│  str rustra avg: ${formatNs(rustraStr.avg).padStart(10)}  p50: ${formatNs(rustraStr.p50)}`,
-  );
-
   const bytesPayload = { data: Array.from({ length: 64 }, (_, i) => i & 0xff) };
   const normalizeBytes = (value: { data: ArrayLike<number> }) => ({
     data: Array.from(value.data),
   });
-  const nitroBuf = await measure('nitro buf', () =>
-    Promise.resolve(normalizeBytes(nitroBench.echoBytes(bytesPayload))),
-  );
-  log(`│  buf Nitro  avg: ${formatNs(nitroBuf.avg).padStart(10)}  p50: ${formatNs(nitroBuf.p50)}`);
-
-  const rustraBuf = await measure('rustra buf', async () =>
-    normalizeBytes(await benchEchoBytes(bytesPayload)),
-  );
-  log(
-    `│  buf rustra avg: ${formatNs(rustraBuf.avg).padStart(10)}  p50: ${formatNs(rustraBuf.p50)}`,
-  );
-
   const pairPayload = { name: 'widget', value: 42 };
-  const nitroPair = await measure('nitro pair', () =>
-    Promise.resolve(nitroBench.echoPair(pairPayload)),
-  );
-  log(
-    `│  obj Nitro  avg: ${formatNs(nitroPair.avg).padStart(10)}  p50: ${formatNs(nitroPair.p50)}`,
-  );
 
-  const rustraPair = await measure('rustra pair', () => benchEchoPair(pairPayload));
-  log(
-    `│  obj rustra avg: ${formatNs(rustraPair.avg).padStart(10)}  p50: ${formatNs(rustraPair.p50)}`,
-  );
-
-  // 벤치마크 수치보다 먼저 두 구현이 같은 값을 반환하는지 확인한다. 결과 모양이
-  // 다르면 ratio를 출력하지 않아 서로 다른 작업을 비교하는 실수를 막는다.
+  // 수치보다 먼저 정답과 공개 결과 shape를 확인한다. 하나라도 다르면 timing을
+  // 시작하지 않아 서로 다른 작업의 ratio가 로그에 남지 않는다.
   const nitroAddValue = nitroBench.benchAdd(INPUT);
   configure(rkyvV2Engine);
   const rustraAddValue = await benchAdd(INPUT);
@@ -466,7 +521,32 @@ async function runBenchmarks(): Promise<string[]> {
   const rustraBytesValue = normalizeBytes(await benchEchoBytes(bytesPayload));
   const nitroPairValue = nitroBench.echoPair(pairPayload);
   const rustraPairValue = await benchEchoPair(pairPayload);
-  const equivalentOutputs =
+
+  let ffiStringValue: { value: string } | undefined;
+  let ffiBytesValue: { data: number[] } | undefined;
+  let ffiPairValue: { name: string; value: number } | undefined;
+  let ffiSuiteAvailable = Platform.OS === 'ios' && ffiAsyncValue !== undefined;
+  if (ffiSuiteAvailable) {
+    try {
+      ffiStringValue = (await invokeFfiCommand('benchEchoString', stringPayload)) as {
+        value: string;
+      };
+      ffiBytesValue = normalizeBytes(
+        (await invokeFfiCommand('benchEchoBytes', bytesPayload)) as { data: ArrayLike<number> },
+      );
+      ffiPairValue = (await invokeFfiCommand('benchEchoPair', pairPayload)) as {
+        name: string;
+        value: number;
+      };
+    } catch (error: unknown) {
+      ffiSuiteAvailable = false;
+      log(
+        `│  Swift FFI correctness failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  const rustraNitroOutputsEquivalent =
     nitroAddValue.value === rustraAddValue.value &&
     nitroStringValue.value === rustraStringValue.value &&
     Array.isArray(nitroBytesValue.data) &&
@@ -474,27 +554,121 @@ async function runBenchmarks(): Promise<string[]> {
     JSON.stringify(nitroBytesValue.data) === JSON.stringify(rustraBytesValue.data) &&
     nitroPairValue.name === rustraPairValue.name &&
     nitroPairValue.value === rustraPairValue.value;
+  const ffiOutputsEquivalent =
+    Platform.OS !== 'ios' ||
+    (ffiSuiteAvailable &&
+      ffiAsyncValue?.value === rustraAddValue.value &&
+      ffiStringValue?.value === rustraStringValue.value &&
+      JSON.stringify(ffiBytesValue?.data) === JSON.stringify(rustraBytesValue.data) &&
+      ffiPairValue?.name === rustraPairValue.name &&
+      ffiPairValue?.value === rustraPairValue.value);
+  const equivalentOutputs = rustraNitroOutputsEquivalent && ffiOutputsEquivalent;
   if (!equivalentOutputs) {
-    throw new Error('Nitro/rustra equivalent benchmark returned different outputs');
+    throw new Error('Nitro/rustra/FFI equivalent benchmark returned different outputs');
   }
-  log('│  equivalent outputs: ✓');
+  log('│  equivalent outputs checked before timing: ✓');
+
+  const measureEquivalent = async (
+    operation: string,
+    nitro: () => Promise<unknown>,
+    rustra: () => Promise<unknown>,
+    ffi?: () => Promise<unknown>,
+  ) => {
+    const cases: InterleavedCase[] = [
+      { key: 'nitro', label: `nitro ${operation}`, run: nitro },
+      { key: 'rustra', label: `rustra ${operation}`, run: rustra },
+    ];
+    if (ffiSuiteAvailable && ffi) cases.push({ key: 'ffi', label: `ffi ${operation}`, run: ffi });
+    return measureInterleaved(cases);
+  };
+
+  configure(rkyvV2Engine);
+  const addResults = await measureEquivalent(
+    'add',
+    () => Promise.resolve(nitroBench.benchAdd(INPUT)),
+    () => benchAdd(INPUT),
+    () => invokeFfiCommand('benchAdd', INPUT),
+  );
+  const stringResults = await measureEquivalent(
+    'string',
+    () => Promise.resolve(nitroBench.echoString(stringPayload)),
+    () => benchEchoString(stringPayload),
+    () => invokeFfiCommand('benchEchoString', stringPayload),
+  );
+  const bytesResults = await measureEquivalent(
+    'bytes64',
+    () => Promise.resolve(normalizeBytes(nitroBench.echoBytes(bytesPayload))),
+    async () => normalizeBytes(await benchEchoBytes(bytesPayload)),
+    () => invokeFfiCommand('benchEchoBytes', bytesPayload),
+  );
+  const pairResults = await measureEquivalent(
+    'pair',
+    () => Promise.resolve(nitroBench.echoPair(pairPayload)),
+    () => benchEchoPair(pairPayload),
+    () => invokeFfiCommand('benchEchoPair', pairPayload),
+  );
+
+  const nitroAdd = addResults.nitro;
+  const rustraAdd = addResults.rustra;
+  const ffiAsyncResult = addResults.ffi;
+  const nitroStr = stringResults.nitro;
+  const rustraStr = stringResults.rustra;
+  const ffiStr = stringResults.ffi;
+  const nitroBuf = bytesResults.nitro;
+  const rustraBuf = bytesResults.rustra;
+  const ffiBuf = bytesResults.ffi;
+  const nitroPair = pairResults.nitro;
+  const rustraPair = pairResults.rustra;
+  const ffiPair = pairResults.ffi;
+
+  const logResult = (prefix: string, result: BenchResult) =>
+    log(
+      `│  ${prefix.padEnd(11)} avg ${formatNs(result.avg).padStart(9)}  p50 ${formatNs(result.p50).padStart(9)}  p95 ${formatNs(result.p95).padStart(9)}  p99 ${formatNs(result.p99).padStart(9)}`,
+    );
+  logResult('add Nitro', nitroAdd);
+  logResult('add rustra', rustraAdd);
+  logResult('str Nitro', nitroStr);
+  logResult('str rustra', rustraStr);
+  logResult('buf Nitro', nitroBuf);
+  logResult('buf rustra', rustraBuf);
+  logResult('obj Nitro', nitroPair);
+  logResult('obj rustra', rustraPair);
+  if (ffiSuiteAvailable && ffiAsyncResult && ffiStr && ffiBuf && ffiPair) {
+    logResult('add FFI', ffiAsyncResult);
+    logResult('str FFI', ffiStr);
+    logResult('buf FFI', ffiBuf);
+    logResult('obj FFI', ffiPair);
+  }
 
   log('│');
   log(`│  add  rustra/Nitro = ${(rustraAdd.avg / nitroAdd.avg).toFixed(2)}x`);
   log(`│  str  rustra/Nitro = ${(rustraStr.avg / nitroStr.avg).toFixed(2)}x`);
   log(`│  buf  rustra/Nitro = ${(rustraBuf.avg / nitroBuf.avg).toFixed(2)}x`);
   log(`│  obj  rustra/Nitro = ${(rustraPair.avg / nitroPair.avg).toFixed(2)}x`);
+  if (ffiSuiteAvailable && ffiAsyncResult && ffiStr && ffiBuf && ffiPair) {
+    log('│');
+    log(`│  add  FFI/Nitro    = ${(ffiAsyncResult.avg / nitroAdd.avg).toFixed(2)}x`);
+    log(`│  str  FFI/Nitro    = ${(ffiStr.avg / nitroStr.avg).toFixed(2)}x`);
+    log(`│  buf  FFI/Nitro    = ${(ffiBuf.avg / nitroBuf.avg).toFixed(2)}x`);
+    log(`│  obj  FFI/Nitro    = ${(ffiPair.avg / nitroPair.avg).toFixed(2)}x`);
+  }
   log('╚════════════════════════════════════════════════╝');
   log('');
 
   const equivalentBenchmarkReceipt = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: new Date().toISOString(),
     platform: Platform.OS,
     platformVersion: String(Platform.Version),
+    buildMode: 'release',
+    jsEngine:
+      typeof (globalThis as Record<string, unknown>).HermesInternal === 'object'
+        ? 'hermes'
+        : 'unknown',
     iterations: 10_000,
     warmupIterations: 500,
-    correctness: { equivalentOutputs },
+    order: 'rotating-interleaved',
+    correctness: { equivalentOutputs, checkedBeforeTiming: true },
     rawLowerBound: { nitroAdd: nitroRaw },
     equivalent: {
       add: { nitro: nitroAdd, rustra: rustraAdd, ratio: rustraAdd.avg / nitroAdd.avg },
@@ -502,18 +676,37 @@ async function runBenchmarks(): Promise<string[]> {
       bytes64: { nitro: nitroBuf, rustra: rustraBuf, ratio: rustraBuf.avg / nitroBuf.avg },
       pair: { nitro: nitroPair, rustra: rustraPair, ratio: rustraPair.avg / nitroPair.avg },
     },
+    ffi:
+      Platform.OS === 'ios'
+        ? {
+            available: ffiSuiteAvailable,
+            syncScalarLowerBound: ffiSyncResult,
+            equivalent: ffiSuiteAvailable
+              ? {
+                  add: ffiAsyncResult,
+                  string: ffiStr,
+                  bytes64: ffiBuf,
+                  pair: ffiPair,
+                }
+              : undefined,
+          }
+        : { available: false, reason: 'iOS-only Swift Expo module' },
   };
   lines.unshift(
-    `RESULT equivalent=${equivalentOutputs ? '✓' : '✗'} add=${equivalentBenchmarkReceipt.equivalent.add.ratio.toFixed(4)}x str=${equivalentBenchmarkReceipt.equivalent.string.ratio.toFixed(4)}x buf=${equivalentBenchmarkReceipt.equivalent.bytes64.ratio.toFixed(4)}x obj=${equivalentBenchmarkReceipt.equivalent.pair.ratio.toFixed(4)}x`,
+    `RESULT equivalent=${equivalentOutputs ? '✓' : '✗'} ffi=${Platform.OS === 'ios' ? (ffiSuiteAvailable ? '✓' : '✗') : 'skipped'} add=${equivalentBenchmarkReceipt.equivalent.add.ratio.toFixed(4)}x str=${equivalentBenchmarkReceipt.equivalent.string.ratio.toFixed(4)}x buf=${equivalentBenchmarkReceipt.equivalent.bytes64.ratio.toFixed(4)}x obj=${equivalentBenchmarkReceipt.equivalent.pair.ratio.toFixed(4)}x`,
     '',
   );
   console.log(`RUSTRA_NITRO_JSON=${JSON.stringify(equivalentBenchmarkReceipt)}`);
+  console.log(`RUSTRA_FFI_JSON=${JSON.stringify(equivalentBenchmarkReceipt.ffi)}`);
   console.log(
     `RUSTRA_NITRO_META_JSON=${JSON.stringify({
       schemaVersion: equivalentBenchmarkReceipt.schemaVersion,
       generatedAt: equivalentBenchmarkReceipt.generatedAt,
       platform: equivalentBenchmarkReceipt.platform,
       platformVersion: equivalentBenchmarkReceipt.platformVersion,
+      buildMode: equivalentBenchmarkReceipt.buildMode,
+      jsEngine: equivalentBenchmarkReceipt.jsEngine,
+      order: equivalentBenchmarkReceipt.order,
       iterations: equivalentBenchmarkReceipt.iterations,
       warmupIterations: equivalentBenchmarkReceipt.warmupIterations,
       correctness: equivalentBenchmarkReceipt.correctness,
@@ -603,6 +796,9 @@ async function runBenchmarks(): Promise<string[]> {
   log('│  Async overhead (Promise.resolve):');
   log(`│    rkyvV2 async/sync = ${(rkyvV2Result.avg / fullSyncBench.avg).toFixed(1)}x`);
   log(`│    JSON async/sync   = ${(jsonResult.avg / jsonFullSync.avg).toFixed(1)}x`);
+  if (ffiSyncResult && ffiAsyncResult) {
+    log(`│    Swift FFI async/sync = ${(ffiAsyncResult.avg / ffiSyncResult.avg).toFixed(1)}x`);
+  }
   log('│');
   log(`│  rkyvV2 vs JSON (sync) = ${(jsonFullSync.avg / fullSyncBench.avg).toFixed(1)}x faster`);
   log(`│  rkyvV2 vs JSON (async)= ${(jsonResult.avg / rkyvV2Result.avg).toFixed(1)}x faster`);

@@ -31,7 +31,6 @@ unsafe extern "C" {
         out_len: *mut usize,
     ) -> *mut u8;
     fn rustra_calculator_free_rkyv_v2_buffer(ptr: *mut u8, len: usize);
-    fn rustra_calculator_free_buffer(ptr: *mut u8, len: usize);
     fn rustra_calculator_invoke_rkyv_v2_async(
         payload: *const u8,
         payload_len: usize,
@@ -107,7 +106,7 @@ unsafe extern "C" fn async_test_cb(_ud: *mut c_void, resp: *mut u8, len: usize) 
     if !resp.is_null() && len > 0 {
         let first = unsafe { *resp }; // ok flag
         ASYNC_OK.store(first == 1, Ordering::SeqCst);
-        unsafe { rustra_calculator_free_buffer(resp, len) };
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(resp, len) };
     }
     ASYNC_DONE.store(true, Ordering::SeqCst);
 }

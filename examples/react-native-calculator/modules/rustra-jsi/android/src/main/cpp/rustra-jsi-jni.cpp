@@ -72,3 +72,11 @@ Java_com_rustrajsi_RustraJSIModule_nativeInstall(
     return JNI_FALSE;
   }
 }
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_rustrajsi_RustraJSIModule_nativeInvalidate(
+    JNIEnv*,
+    jobject
+) {
+  rustra::invalidateRustraJSI();
+}

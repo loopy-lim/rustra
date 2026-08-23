@@ -368,7 +368,7 @@ if (JSON.stringify(calls) !== JSON.stringify([{ command: 'addNumbers', args: { a
 console.log(`<host> adapter test passed`);
 ```
 
-### package.json에 npm script 추가
+### package.json에 Bun script 추가
 
 ```json
 {

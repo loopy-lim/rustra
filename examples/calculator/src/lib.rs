@@ -85,8 +85,8 @@ pub fn clamp(input: ClampInput) -> Result<ClampOutput> {
     })
 }
 
-// Note: ClampInput fields are ordered alphabetically (max, min, value) to match
-// schemars JSON Schema output order. Postcard serializes in struct field order.
+// This declaration order is part of the postcard wire contract. rustra's
+// schema emitter preserves it and records `fieldOrder: "declaration"`.
 
 // ── Tier 2 (String/Vec) 명령 ─────────────────────────────
 
@@ -1422,21 +1422,9 @@ pub unsafe extern "C" fn rustra_calculator_free_rkyv_v2_buffer(ptr: *mut u8, len
     unsafe { rustra::ffi::rustra_ffi_free(ptr, len) };
 }
 
-/// panic payload 에서 메시지 추출 — 코어 `rustra::ffi::panic_message` 와 동일 구현
-/// (비공개라 여기 복제). 문자열이 아닌 payload 도 안전하게 처리한다.
-fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
-    if let Some(s) = panic.downcast_ref::<&'static str>() {
-        (*s).to_string()
-    } else if let Some(s) = panic.downcast_ref::<String>() {
-        s.clone()
-    } else {
-        "<non-string panic payload>".to_string()
-    }
-}
-
 /// rkyv V2 비동기 완료 콜백 — `rustra_ffi_invoke_async` 의 on_complete 와 동일 계약.
-/// 응답 버퍼는 calculator `alloc_response` 로 할당되며 콜백 첫 인자가 null 이
-/// 아니면 `rustra_calculator_free_buffer` 로 해제해야 한다.
+/// 응답 버퍼는 코어 FFI 레이아웃으로 할당되며 콜백 첫 인자가 null 이 아니면
+/// `rustra_calculator_free_rkyv_v2_buffer` 로 해제해야 한다.
 pub type RustraCalculatorAsyncCallback =
     unsafe extern "C" fn(user_data: *mut std::ffi::c_void, resp: *mut u8, resp_len: usize);
 
@@ -1459,69 +1447,18 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2_async(
     on_complete: Option<RustraCalculatorAsyncCallback>,
     invocation_id: *mut u64,
 ) {
-    let id = rustra::cancel::register_invocation();
-    if !invocation_id.is_null() {
-        unsafe { *invocation_id = id };
-    }
-    // 원시 포인터는 Send 가 아니므로 usize 로 변환해 워커로 넘긴다 —
-    // rustra::ffi 의 async 엔트리와 동일한 패턴.
-    let user_data_raw = user_data as usize;
-    let bytes = if payload.is_null() || payload_len == 0 {
-        Vec::new()
-    } else {
-        unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
+    // 코어의 고정 2-worker/256-depth bounded pool을 그대로 사용한다. 예제에서
+    // 호출마다 thread::spawn 하던 구현은 burst 시 스레드 폭증과 메모리 고갈을
+    // 일으켰고, payload 크기 게이트도 복사 뒤에 적용됐다.
+    unsafe {
+        rustra::ffi::rustra_ffi_invoke_rkyv_v2_async(
+            payload,
+            payload_len,
+            user_data,
+            on_complete,
+            invocation_id,
+        )
     };
-    std::thread::spawn(move || {
-        // 완료 보장 — 어떤 경로(패닉 포함)로 스레드가 끝나도 레지스트리 정리와
-        // on_complete 1회 발화가 구조적으로 보장된다. JS 프라미스 hang 방지.
-        // Drop guard 하나가 유일한 complete 경로다 (이중 완료 경로 비추).
-        struct EnsureComplete(u64);
-        impl Drop for EnsureComplete {
-            fn drop(&mut self) {
-                rustra::cancel::complete_invocation(self.0);
-            }
-        }
-        let _ensure = EnsureComplete(id);
-        // panic guard — 워커 클로저 전체를 감싼다. dispatch 자체는 코어
-        // `Package::invoke_rkyv_v2` 가 핸들러 패닉을 internal 로 정규화하지만,
-        // 체크포인트/패키지 조회 등 나머지 경로에서 패닉이 새어나오면
-        // complete_invocation 없이 스레드가 죽어 레지스트리가 누수되고
-        // on_complete 가 영원히 발화하지 않는다(JS 프라미스 hang).
-        // 정규화 결과는 sync 진입점과 동일한 internal 에러 프레임이다.
-        let resp = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            // cancel 체크포인트 — Cancelled 면 핸들러를 시작하지 않는다.
-            if rustra::cancel::status(id) == rustra::cancel::Status::Cancelled {
-                rustra::encode_rkyv_v2_error(&RustraError::cancelled(
-                    "invocation cancelled before dispatch",
-                ))
-            } else {
-                match rustra::ffi::get_package()
-                    .ok_or_else(|| {
-                        RustraError::custom("ffi.not_registered", "package not registered")
-                    })
-                    .and_then(|pkg| pkg.invoke_rkyv_v2(&bytes))
-                {
-                    Ok(bytes) => bytes,
-                    Err(error) => rustra::encode_rkyv_v2_error(&error),
-                }
-            }
-        })) {
-            Ok(resp) => resp,
-            Err(panic) => rustra::encode_rkyv_v2_error(&RustraError::internal(format!(
-                "panic in async handler: {}",
-                panic_message(&panic)
-            ))),
-        };
-        // 완료→콜백 순서 계약(코어 `run_worker` 와 동일): complete_invocation 이
-        // on_complete 이전에 실행되어야 한다 — 콜백 실행 중 호스트가 상태를
-        // 조회하면 이미 Unknown 이다. guard 를 명시적으로 풀어 순서를 유지한다.
-        drop(_ensure);
-        if let Some(cb) = on_complete {
-            let mut out_len = 0;
-            let ptr = alloc_response(resp, &mut out_len);
-            unsafe { cb(user_data_raw as *mut std::ffi::c_void, ptr, out_len) };
-        }
-    });
 }
 
 // ── 채널/리소스 커맨드 (2026-08-23 타입 패리티 2단계) ──────────────
@@ -2792,13 +2729,18 @@ mod tests {
         resp_len: usize,
     ) {
         let cap = unsafe { &*(_user as *const AsyncCapture) };
-        cap.fired.store(true, std::sync::atomic::Ordering::SeqCst);
         if resp.is_null() {
+            cap.fired.store(true, std::sync::atomic::Ordering::Release);
             return;
         }
         let data = unsafe { std::slice::from_raw_parts(resp, resp_len) }.to_vec();
-        unsafe { rustra_calculator_free_buffer(resp, resp_len) };
+        // rkyv V2 async delegates to the core allocator, so the matching core
+        // free wrapper is mandatory. The legacy calculator free has a different
+        // allocation layout and intentionally aborts on this pointer.
+        unsafe { rustra_calculator_free_rkyv_v2_buffer(resp, resp_len) };
         *cap.frame.lock().unwrap() = Some((data, resp_len));
+        // Publish completion only after the captured frame is visible.
+        cap.fired.store(true, std::sync::atomic::Ordering::Release);
     }
 
     /// addNumbers rkyv V2 요청 바이트를 만든다 (command_id 1 고정 — sync 테스트와 동일).
@@ -2813,7 +2755,7 @@ mod tests {
     /// 콜백 발생을 (최대 수 초 동안) 기다린다 — 워커 스레드 스케줄링 경합 흡수.
     fn wait_for_callback(cap: &AsyncCapture) {
         for _ in 0..2_000 {
-            if cap.fired.load(std::sync::atomic::Ordering::SeqCst) {
+            if cap.fired.load(std::sync::atomic::Ordering::Acquire) {
                 return;
             }
             std::thread::sleep(std::time::Duration::from_millis(1));

@@ -6,9 +6,24 @@ const decoder = new TextDecoder();
 
 const NativeRustraModule = {
   invoke(payload: ArrayBuffer): ArrayBuffer {
-    const { command, args } = JSON.parse(decoder.decode(payload));
-    return encoder.encode(JSON.stringify({ ok: true, result: { value: 42 } }))
-      .buffer as ArrayBuffer;
+    const decoded: unknown = JSON.parse(decoder.decode(payload));
+    if (
+      typeof decoded !== 'object' ||
+      decoded === null ||
+      !('command' in decoded) ||
+      decoded.command !== 'addNumbers' ||
+      !('args' in decoded) ||
+      typeof decoded.args !== 'object' ||
+      decoded.args === null ||
+      !('a' in decoded.args) ||
+      !('b' in decoded.args) ||
+      typeof decoded.args.a !== 'number' ||
+      typeof decoded.args.b !== 'number'
+    ) {
+      throw new TypeError('expected addNumbers with numeric a and b arguments');
+    }
+    const value = decoded.args.a + decoded.args.b;
+    return encoder.encode(JSON.stringify({ ok: true, result: { value } })).buffer as ArrayBuffer;
   },
 };
 

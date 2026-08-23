@@ -187,6 +187,46 @@ test('engine falls back to Tier 3 for non-codegen dynamic commands', async () =>
   assert.equal(json, JSON.stringify({ v: 7 }));
 });
 
+test('Hermes UTF-8 fallback preserves long Korean and emoji payloads', async () => {
+  // 현재 테스트 파일은 index.js를 이미 import했으므로 query가 붙은 별도 모듈
+  // 인스턴스를 로드해 TextEncoder가 없는 Hermes 초기화 시점을 재현한다.
+  const schema = schemaBytes([{ name: 'echoUnicode', commandId: 77 }]);
+  const response = tier3Success({ ok: true });
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'TextEncoder');
+  Object.defineProperty(globalThis, 'TextEncoder', {
+    configurable: true,
+    writable: true,
+    value: undefined,
+  });
+  try {
+    const moduleUrl = new URL('./index.js?hermes-utf8-fallback', import.meta.url).href;
+    const fallback = (await import(moduleUrl)) as typeof import('./index.js');
+    let captured: Uint8Array | undefined;
+    const native: RkyvV2SchemaNative = {
+      getSchema: () => schema,
+      invokeRkyvV2(payload) {
+        captured = new Uint8Array(payload).slice();
+        return response;
+      },
+    };
+    const input = {
+      text: `${'한글'.repeat(64)}🙂🚀${'경계'.repeat(65)}`,
+    };
+    await fallback.createRkyvV2Engine(native, new Map()).invoke('echoUnicode', input);
+
+    assert.ok(captured, 'Tier 3 request must reach the native boundary');
+    assert.equal(new DataView(captured.buffer).getUint16(0, true), 77);
+    assert.deepEqual(
+      captured.subarray(2),
+      new Uint8Array(Buffer.from(JSON.stringify(input), 'utf8')),
+      'pure-JS fallback bytes must exactly match WHATWG UTF-8 output',
+    );
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'TextEncoder', descriptor);
+    else Reflect.deleteProperty(globalThis, 'TextEncoder');
+  }
+});
+
 test('engine Tier 3 fallback decodes string/vec/nested result types', async () => {
   const native = makeNative({
     schema: schemaBytes([
@@ -210,6 +250,32 @@ test('engine Tier 3 fallback decodes string/vec/nested result types', async () =
   const n = await engine.invoke<{ outer: { inner: { v: number }; tags: string[] } }>('nested', {});
   assert.equal(n.outer.inner.v, 99);
   assert.deepEqual(n.outer.tags, ['a', 'b']);
+});
+
+test('engine caches live schema on the dynamic hot path and supports explicit refresh', async () => {
+  let calls = 0;
+  let schema = schemaBytes([{ name: 'dynamicEcho', commandId: 31 }]);
+  const native: RkyvV2SchemaNative = {
+    getSchema() {
+      calls += 1;
+      return schema;
+    },
+    invokeRkyvV2: () => tier3Success({ value: 42 }),
+  };
+  const engine = createRkyvV2Engine(native, new Map());
+  await engine.invoke('dynamicEcho', { value: 1 });
+  await engine.invoke('dynamicEcho', { value: 2 });
+  assert.equal(calls, 1, 'cached dynamic command must not parse live schema per invoke');
+
+  schema = schemaBytes([
+    { name: 'dynamicEcho', commandId: 31 },
+    { name: 'registeredLater', commandId: 32 },
+  ]);
+  const refreshed = engine.refreshLiveSchema();
+  assert.equal(refreshed.get('registeredLater')?.commandId, 32);
+  assert.equal(calls, 2);
+  await engine.invoke('registeredLater', {});
+  assert.equal(calls, 2, 'refreshed entry must immediately use the cache');
 });
 
 test('engine Tier 3 fallback propagates typed error wire', async () => {

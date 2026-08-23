@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import type { InvokeOptions } from '@rustra/types';
 import { resolveCommandId } from '@rustra/types';
 import { useRustraEngine } from './context.js';
@@ -32,28 +32,46 @@ export function useMutation<I = void, O = unknown>(
   // 프로덕션 번들러 mangling 으로 바뀔 수 있다).
   const commandName = resolveCommandId(commandFn);
   const optionsRef = useRef(options);
-  optionsRef.current = options;
+  const latestCallRef = useRef(0);
+  const pendingCallsRef = useRef(0);
+  const generationRef = useRef(0);
+
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   const mutateAsync = useCallback(
     async (input: I, invokeOptions?: InvokeOptions): Promise<O> => {
+      const generation = generationRef.current;
+      const callId = ++latestCallRef.current;
+      pendingCallsRef.current += 1;
       setLoading(true);
       setError(null);
 
+      let result: O;
       try {
-        const res = await engine.invoke<O>(commandName, input, invokeOptions);
-        setData(res);
-        setLoading(false);
-        optionsRef.current?.onSuccess?.(res, input);
-        optionsRef.current?.onSettled?.(res, null, input);
-        return res;
+        result = await engine.invoke<O>(commandName, input, invokeOptions);
       } catch (err: unknown) {
         const parsedError = err instanceof Error ? err : new Error(String(err));
-        setError(parsedError);
-        setLoading(false);
+        if (generationRef.current === generation && latestCallRef.current === callId) {
+          setError(parsedError);
+        }
         optionsRef.current?.onError?.(parsedError, input);
         optionsRef.current?.onSettled?.(undefined, parsedError, input);
         throw parsedError;
+      } finally {
+        if (generationRef.current === generation) {
+          pendingCallsRef.current = Math.max(0, pendingCallsRef.current - 1);
+          setLoading(pendingCallsRef.current > 0);
+        }
       }
+
+      if (generationRef.current === generation && latestCallRef.current === callId) {
+        setData(result);
+      }
+      optionsRef.current?.onSuccess?.(result, input);
+      optionsRef.current?.onSettled?.(result, null, input);
+      return result;
     },
     [engine, commandName],
   );
@@ -68,6 +86,8 @@ export function useMutation<I = void, O = unknown>(
   );
 
   const reset = useCallback(() => {
+    generationRef.current += 1;
+    pendingCallsRef.current = 0;
     setData(undefined);
     setError(null);
     setLoading(false);

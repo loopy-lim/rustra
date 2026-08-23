@@ -1,4 +1,5 @@
-import { NativeModules, Platform } from 'react-native';
+import { requireOptionalNativeModule } from 'expo-modules-core';
+import { Platform } from 'react-native';
 
 const LINKING_ERROR =
   `The package 'rustra-calculator' doesn't seem to be linked. Make sure:\n\n` +
@@ -6,10 +7,12 @@ const LINKING_ERROR =
   '- You rebuilt the app after installing the package\n' +
   '- You are not using Expo Go\n';
 
-const RustraCalculator = NativeModules.RustraCalculator
-  ? NativeModules.RustraCalculator
+const linkedModule = requireOptionalNativeModule<RustraCalculatorType>('RustraCalculator');
+
+const RustraCalculator: RustraCalculatorType = linkedModule
+  ? linkedModule
   : new Proxy(
-      {},
+      {} as RustraCalculatorType,
       {
         get() {
           throw new Error(LINKING_ERROR);

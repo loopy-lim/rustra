@@ -501,22 +501,24 @@ async function generateFromSchema(
   // 선언 순서 가정이 깨질 가능성이 있다(과거 schemars 비-preserve_order 산출물).
   // 단순 우연 정렬(calculator 의 a,b 같은 짧은 세트)은 흔하므로, 스키마 전체에서
   // 정렬 징후가 반복될 때(≥3개 명령) 한 번만 요약 경고를 낸다.
-  let sortedFieldSuspects = 0;
-  for (const command of schema.commands) {
-    for (const s of [command.inputSchema, command.outputSchema]) {
-      const names = Object.keys(s.properties ?? {});
-      const sorted = [...names].sort();
-      if (names.length > 1 && JSON.stringify(names) === JSON.stringify(sorted)) {
-        sortedFieldSuspects++;
+  if (schema.fieldOrder !== 'declaration') {
+    let sortedFieldSuspects = 0;
+    for (const command of schema.commands) {
+      for (const s of [command.inputSchema, command.outputSchema]) {
+        const names = Object.keys(s.properties ?? {});
+        const sorted = [...names].sort();
+        if (names.length > 1 && JSON.stringify(names) === JSON.stringify(sorted)) {
+          sortedFieldSuspects++;
+        }
       }
     }
-  }
-  if (sortedFieldSuspects >= 3) {
-    console.warn(
-      `[rustra] WARN: ${sortedFieldSuspects} field sets appear alphabetically sorted; ` +
-        `postcard encodes in Rust declaration order — verify the schema was generated with ` +
-        `schemars/serde preserve_order enabled, or wire bytes may drift.`,
-    );
+    if (sortedFieldSuspects >= 3) {
+      console.warn(
+        `[rustra] WARN: ${sortedFieldSuspects} field sets appear alphabetically sorted and ` +
+          `the schema has no fieldOrder=declaration guarantee; postcard encodes in Rust ` +
+          `declaration order — regenerate with current rustra or verify field order manually.`,
+      );
+    }
   }
 
   const files: { name: string; content: string }[] = [
@@ -661,6 +663,9 @@ function parsePackageSchema(value: unknown): PackageSchema {
   }
   if (!Array.isArray(obj.commands)) {
     throw new Error('Invalid schema: missing or invalid "commands" array');
+  }
+  if (obj.fieldOrder !== undefined && obj.fieldOrder !== 'declaration') {
+    throw new Error('Invalid schema: "fieldOrder" must be "declaration" when provided');
   }
   for (let i = 0; i < obj.commands.length; i++) {
     const cmd = obj.commands[i] as Record<string, unknown>;
