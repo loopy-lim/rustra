@@ -127,12 +127,12 @@ fn package_generates_host_neutral_typescript_client() {
     assert!(
         generated
             .commands_ts
-            .contains("invoke<AddNumbersOutput>('addNumbers'")
+            .contains("invokeGenerated<AddNumbersOutput>(1, 'addNumbers'")
     );
     assert!(
         generated
             .commands_ts
-            .contains("import { invoke } from '@rustra/types'")
+            .contains("import { invokeGenerated } from '@rustra/types'")
     );
     assert!(!generated.commands_ts.contains("EngineRequest"));
     assert!(!generated.commands_ts.contains("Attachment"));
@@ -477,6 +477,30 @@ fn ts_generator_handles_sets() {
         )
         .unwrap();
     assert_eq!(out.unique, BTreeSet::from([2, 3, 4, 5]));
+}
+
+#[test]
+fn ts_generator_exposes_both_vec_u8_runtime_representations() {
+    #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+    struct BytesPayload {
+        data: Vec<u8>,
+    }
+
+    #[command]
+    fn echo_bytes(input: BytesPayload) -> Result<BytesPayload> {
+        Ok(input)
+    }
+
+    let generated = Package::builder("test.bytes")
+        .command_fn(echo_bytes)
+        .build()
+        .generate_typescript()
+        .unwrap();
+    assert!(
+        generated.types_ts.contains("data: Uint8Array | number[];"),
+        "Vec<u8> must describe JSON and binary host representations, got:\n{}",
+        generated.types_ts
+    );
 }
 
 #[test]

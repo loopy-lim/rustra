@@ -90,6 +90,12 @@ export function tsTypeFromSchema(
           const elementTypes = itemSchema.map((s) => tsTypeFromSchema(s, definitions));
           return `[${elementTypes.join(', ')}]`;
         }
+        // Vec<u8>는 JSON 어댑터에서 number[], 바이너리 코덱에서 Uint8Array로
+        // 돌아올 수 있다. 공개 타입이 한 경로만 약속하면 다른 정상 경로가 거짓
+        // 타입이 되므로 두 런타임 표현을 명시한다.
+        if (itemSchema?.type === 'integer' && itemSchema.format === 'uint8') {
+          return 'Uint8Array | number[]';
+        }
         const itemType = itemSchema ? tsTypeFromSchema(itemSchema, definitions) : 'unknown';
         // `uniqueItems: true` (Rust `BTreeSet`/`HashSet`)는 `Set<T>`로 매핑.
         // Rust codegen(ts_type_from_schema)과 동일 규칙.

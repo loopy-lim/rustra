@@ -151,7 +151,7 @@ export function generateCommandsTs(schema: PackageSchema): string {
   if (imports.length > 0) {
     output += `import type { ${imports} } from './types.js';\n`;
   }
-  output += `import { invoke } from '@rustra/types';\n`;
+  output += `import { invokeGenerated } from '@rustra/types';\n`;
   output += `import type { InvokeOptions } from '@rustra/types';\n\n`;
 
   for (const command of schema.commands) {
@@ -164,12 +164,12 @@ export function generateCommandsTs(schema: PackageSchema): string {
     if (command.inputType === '()') {
       output +=
         `export function ${fnName}(options?: InvokeOptions): Promise<${outType}> {\n` +
-        `  return invoke<${outType}>('${command.name}', undefined, options);\n` +
+        `  return invokeGenerated<${outType}>(${command.commandId}, '${command.name}', undefined, options);\n` +
         `}\n${fnName}.commandId = '${command.name}';\n\n`;
     } else {
       output +=
         `export function ${fnName}(input: ${command.inputType}, options?: InvokeOptions): Promise<${outType}> {\n` +
-        `  return invoke<${outType}>('${command.name}', input, options);\n` +
+        `  return invokeGenerated<${outType}>(${command.commandId}, '${command.name}', input, options);\n` +
         `}\n${fnName}.commandId = '${command.name}';\n\n`;
     }
   }
@@ -345,6 +345,9 @@ function classifyPostcardField(
       // 정의라면 vec_string 이어야 한다(무조건 vec_struct 는 와이어 붕괴).
       const resolved = definitions[refTypeName(items.$ref)];
       if (!resolved) return 'vec_struct';
+      if (resolved.type === 'object' && resolved.properties && !resolved.additionalProperties) {
+        return 'vec_struct';
+      }
       const inner = classifyPostcardField(resolved, definitions, depth + 1);
       return inner === 'struct' ? 'vec_struct' : inner === 'string' ? 'vec_string' : null;
     }
@@ -1521,8 +1524,8 @@ function cppFieldDecodeExpr(
       return setProp('r.read_bool()');
     case 'string':
       return (
-        `${indent}{ auto _s = r.read_string();` +
-        ` ${objExpr}.setProperty(rt, "${field.name}", jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_s.data()), _s.size())); }`
+        `${indent}{ auto _s = r.read_string_view();` +
+        ` ${objExpr}.setProperty(rt, "${field.name}", jsi::String::createFromUtf8(rt, _s.data, _s.size)); }`
       );
     case 'bytes': {
       // Vec<u8> → JS number[] (TS 생성 타입 표면과 정합). 튜플/맵과 동일한
@@ -1573,8 +1576,8 @@ function cppFieldDecodeExpr(
     case 'vec_string':
       return (
         `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
-        ` for (size_t _i = 0; _i < _n; _i++) { auto _s = r.read_string();` +
-        ` _arr.setValueAtIndex(rt, _i, jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_s.data()), _s.size())); }` +
+        ` for (size_t _i = 0; _i < _n; _i++) { auto _s = r.read_string_view();` +
+        ` _arr.setValueAtIndex(rt, _i, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }` +
         ` ${objExpr}.setProperty(rt, "${field.name}", _arr); }`
       );
     case 'map_zigzag':
@@ -1591,11 +1594,11 @@ function cppFieldDecodeExpr(
               ? '_map.setProperty(rt, _k, r.read_f64());'
               : field.kind === 'map_bool'
                 ? '_map.setProperty(rt, _k, r.read_bool());'
-                : '{ auto _vs = r.read_string(); _map.setProperty(rt, _k, jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_vs.data()), _vs.size())); }';
+                : '{ auto _vs = r.read_string_view(); _map.setProperty(rt, _k, jsi::String::createFromUtf8(rt, _vs.data, _vs.size)); }';
       return (
         `${indent}{ auto _n = r.read_uvar(); auto _map = jsi::Object(rt);` +
-        ` for (size_t _i = 0; _i < _n; _i++) { auto _ks = r.read_string();` +
-        ` auto _k = jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_ks.data()), _ks.size());` +
+        ` for (size_t _i = 0; _i < _n; _i++) { auto _ks = r.read_string_view();` +
+        ` auto _k = jsi::String::createFromUtf8(rt, _ks.data, _ks.size);` +
         ` ${readVal} }` +
         ` ${objExpr}.setProperty(rt, "${field.name}", std::move(_map)); }`
       );

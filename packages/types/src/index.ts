@@ -23,6 +23,17 @@
 export type EngineClient = {
   invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T>;
   /**
+   * 코드젠이 이미 알고 있는 숫자 command id를 전달하는 빠른 경로.
+   * `command`도 함께 받아 엔진이 id/name 정합성을 검증하고, 미지원 또는
+   * 불일치 시 안전하게 이름 기반 invoke로 폴백할 수 있게 한다.
+   */
+  invokeById?<T>(
+    commandId: number,
+    command: string,
+    args?: unknown,
+    options?: InvokeOptions,
+  ): Promise<T>;
+  /**
    * 여러 명령을 한 번에 호출한다 (P0-2). 정적 명령만 있으면 단일 JSI/FFI 횡단
    * (invokeTypedBatch)로 처리하고, 동적 명령이 섞이면 항목별 invoke 로 폴백한다.
    */
@@ -57,6 +68,12 @@ export type InvokeOptions = {
  * 항상 지원한다 — 정적 전용이면 단일 횡단, 동적 혼합이면 항목별 라우팅.
  */
 export type RkyvV2Engine = EngineClient & {
+  invokeById<T>(
+    commandId: number,
+    command: string,
+    args?: unknown,
+    options?: InvokeOptions,
+  ): Promise<T>;
   invokeBatch<T>(entries: BatchEntry[]): Promise<T[]>;
 };
 
@@ -257,7 +274,13 @@ export type RustraNative = {
 
 // ── Global invoke (Tauri-like) ──────────────────────────────
 
-let _engine: EngineClient | null = null;
+const invokeByIdSync = Symbol('rustra.invokeByIdSync');
+
+type InternalEngineClient = EngineClient & {
+  [invokeByIdSync]?<T>(commandId: number, command: string, args?: unknown): T;
+};
+
+let _engine: InternalEngineClient | null = null;
 
 /**
  * 글로벌 엔진을 설정합니다. 앱 시작 시 한 번만 호출합니다.
@@ -337,42 +360,119 @@ export function invoke<T>(command: string, args?: unknown, options?: InvokeOptio
 }
 
 /**
+ * 생성된 명령 클라이언트 전용 빠른 경로.
+ *
+ * 숫자 id를 지원하는 엔진은 문자열 Map 조회를 생략한다. 서드파티/구 엔진은
+ * 기존 `invoke`로 폴백하므로 생성 코드의 이식성은 유지된다. 엔진은 id와 이름이
+ * 현재 registry에서 일치할 때만 숫자 경로를 사용해야 한다.
+ */
+export function invokeGenerated<T>(
+  commandId: number,
+  command: string,
+  args?: unknown,
+  options?: InvokeOptions,
+): Promise<T> {
+  if (!_engine) {
+    throw new Error('Rustra not configured. Call configure(engine) first.');
+  }
+  // createRkyvV2Engine의 동기 transport는 여기서 바로 한 번만 Promise로
+  // 승격한다. 공개 EngineClient 계약과 옵션 의미는 그대로 두면서
+  // invokeByIdWithTimeout → engine.invokeById → dispatchPromiseById가
+  // 같은 Promise를 반복 정규화하던 hot-path 래퍼를 건너뛴다.
+  const syncInvoke = _engine[invokeByIdSync];
+  if (options === undefined && syncInvoke) {
+    try {
+      return Promise.resolve(syncInvoke<T>(commandId, command, args));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+  if (!_engine.invokeById) {
+    return invokeWithTimeout(_engine, command, args, options);
+  }
+  return invokeByIdWithTimeout(_engine, commandId, command, args, options);
+}
+
+/**
  * 엔진 호출에 타임아웃 레이스를 건다. `options.timeoutMs` 가 없으면 엔진
  * 호출을 그대로 반환한다(오버헤드 0). 타임아웃은 settle 경쟁이며 지각 응답은
  * 무시된다 — 엔진이 나중에 reject 해도 unhandled rejection 이 되지 않도록
  * 뒤늦은 프라미스를 no-op catch 로 흡수한다.
  */
-export async function invokeWithTimeout<T>(
+export function invokeWithTimeout<T>(
   engine: EngineClient,
   command: string,
   args?: unknown,
   options?: InvokeOptions,
 ): Promise<T> {
-  const p = Promise.resolve(engine.invoke<T>(command, args, options));
+  let p: Promise<T>;
+  try {
+    // Promise.resolve(existingPromise)는 동일 객체를 반환한다. timeout이 없는
+    // hot path에서 async 함수가 만들던 추가 Promise/microtask 층을 없애면서,
+    // 잘못 구현된 서드파티 엔진의 동기 값도 기존처럼 Promise로 정규화한다.
+    p = Promise.resolve(engine.invoke<T>(command, args, options));
+  } catch (error) {
+    // 기존 async 함수 계약: 엔진의 동기 throw도 호출부에는 rejected Promise로 보인다.
+    return Promise.reject(error);
+  }
   const ms = options?.timeoutMs;
   if (ms === undefined) return p;
   // 원본 프라미스의 지각 reject 흡수 — race 에서 진 뒤에도 reject 되면
   // unhandled rejection 이 되므로 no-op catch 로 처리 표시만 남긴다.
   void p.catch(() => {});
   let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      p,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => {
-          reject(
-            new RustraCommandError(
-              'transport.timeout',
-              `invoke("${command}") timed out after ${ms}ms`,
-              true,
-            ),
-          );
-        }, ms);
-      }),
-    ]);
-  } finally {
+  return Promise.race([
+    p,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(
+          new RustraCommandError(
+            'transport.timeout',
+            `invoke("${command}") timed out after ${ms}ms`,
+            true,
+          ),
+        );
+      }, ms);
+    }),
+  ]).finally(() => {
     if (timer !== undefined) clearTimeout(timer);
+  });
+}
+
+/** invokeGenerated의 id 경로에 invoke와 동일한 timeout/throw 계약을 적용한다. */
+function invokeByIdWithTimeout<T>(
+  engine: EngineClient,
+  commandId: number,
+  command: string,
+  args?: unknown,
+  options?: InvokeOptions,
+): Promise<T> {
+  let p: Promise<T>;
+  try {
+    p = Promise.resolve(engine.invokeById!<T>(commandId, command, args, options));
+  } catch (error) {
+    return Promise.reject(error);
   }
+  const ms = options?.timeoutMs;
+  if (ms === undefined) return p;
+  void p.catch(() => {});
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    p,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reject(
+          new RustraCommandError(
+            'transport.timeout',
+            `invoke("${command}") timed out after ${ms}ms`,
+            true,
+          ),
+        );
+      }, ms);
+    }),
+  ]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
 }
 
 /**
@@ -965,17 +1065,27 @@ export function createRkyvV2Engine(
   // 스윕 도중 예외 시 부분 맵 재사용 — 미스윕 항목은 registry 안 이름이므로
   // Tier 2(JS codec)로 라우팅된다. Tier 3는 registry 밖 동적 명령 전용 경로다.
   let staticCommandIds: Map<string, number> | null = null;
+  let staticCommandNamesById: Map<number, string> | null = null;
   const ensureStaticIds = (): Map<string, number> | null => {
     if (staticCommandIds !== null || !hasTypedPath) return staticCommandIds;
     staticCommandIds = new Map();
+    staticCommandNamesById = new Map();
     for (const [name, codec] of registry) {
-      if (native.hasStaticCodec!(name)) staticCommandIds.set(name, codec.commandId);
+      if (native.hasStaticCodec!(name)) {
+        staticCommandIds.set(name, codec.commandId);
+        staticCommandNamesById.set(codec.commandId, name);
+      }
     }
     return staticCommandIds;
   };
 
+  const isVerifiedStaticId = (commandId: number, command: string): boolean => {
+    ensureStaticIds();
+    return staticCommandNamesById?.get(commandId) === command;
+  };
+
   // 신호 없는 기본 3-티어 dispatch (T1 리팩터링 — 로직은 기존 그대로).
-  const dispatch = async <T>(command: string, args?: unknown): Promise<T> => {
+  const dispatch = <T>(command: string, args?: unknown): T => {
     // 1순위: C++ fast path (RN JSI). 정적 명령만. JS 측 인코딩이 없어
     // maxPayloadBytes 검사를 건너뛴다 — 네이티브 한도가 그대로 적용된다.
     // byId 진입이 가능하면 JSI 1회 + u16 디스패치 (P0-3).
@@ -1024,7 +1134,42 @@ export function createRkyvV2Engine(
     return resp.result as T;
   };
 
+  // 공개 EngineClient는 항상 Promise를 반환하지만 RN JSI/Node/Bun의 기본
+  // dispatch는 동기다. 단 한 번만 Promise로 승격해 async dispatch가 만들던
+  // 불필요한 Promise/microtask를 제거하고, 동기 throw는 rejected Promise로
+  // 바꿔 기존 호출 계약을 유지한다.
+  const dispatchPromise = <T>(command: string, args?: unknown): Promise<T> => {
+    try {
+      return Promise.resolve(dispatch<T>(command, args));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  };
+
+  const dispatchById = <T>(commandId: number, command: string, args?: unknown): T => {
+    if (hasByIdPath && isVerifiedStaticId(commandId, command)) {
+      return native.invokeTypedById!(commandId, args) as T;
+    }
+    return dispatch<T>(command, args);
+  };
+
+  const dispatchPromiseById = <T>(
+    commandId: number,
+    command: string,
+    args?: unknown,
+  ): Promise<T> => {
+    try {
+      return Promise.resolve(dispatchById<T>(commandId, command, args));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  };
+
   return {
+    [invokeByIdSync]<T>(commandId: number, command: string, args?: unknown): T {
+      return dispatchById<T>(commandId, command, args);
+    },
+
     invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
       const signal = options?.signal;
       if (signal?.aborted) {
@@ -1032,7 +1177,7 @@ export function createRkyvV2Engine(
           new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
         );
       }
-      if (!signal) return dispatch<T>(command, args);
+      if (!signal) return dispatchPromise<T>(command, args);
       // 네이티브 전파 경로 (T1): JS 코덱(tier 2) 명령이고 invokeAsync +
       // invokeCancel 이 모두 노출되면 Rust 측 체크포인트까지 취소가 닿는다.
       // typed(tier 1)/tier 3 동적 경로는 invokeAsync 가 있어도 얕은 취소로
@@ -1141,7 +1286,29 @@ export function createRkyvV2Engine(
         }
       }
       // 전파 불가 — 얕은 취소 (JS 프라미스만 거부, Rust 는 끝까지 실행):
-      return raceAbort(dispatch<T>(command, args), signal, command);
+      return raceAbort(dispatchPromise<T>(command, args), signal, command);
+    },
+
+    invokeById<T>(
+      commandId: number,
+      command: string,
+      args?: unknown,
+      options?: InvokeOptions,
+    ): Promise<T> {
+      const signal = options?.signal;
+      if (signal?.aborted) {
+        return Promise.reject(
+          new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
+        );
+      }
+      if (!signal) return dispatchPromiseById<T>(commandId, command, args);
+      // 검증된 typed-by-id 명령은 기존 invoke의 typed 경로와 동일하게 얕은
+      // 취소를 적용한다. 검증 실패/구 네이티브는 기존 이름 경로가 취소 전파
+      // 가능 여부를 판단하도록 위임한다.
+      if (hasByIdPath && isVerifiedStaticId(commandId, command)) {
+        return raceAbort(dispatchPromiseById<T>(commandId, command, args), signal, command);
+      }
+      return this.invoke<T>(command, args, options);
     },
 
     invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
@@ -1178,5 +1345,5 @@ export function createRkyvV2Engine(
       // 취소 정책(전파/얕은)을 따르게 한다 (T1 후속).
       return Promise.all(entries.map((e) => this.invoke<T>(e.command, e.args, e.options)));
     },
-  };
+  } as RkyvV2Engine & InternalEngineClient;
 }

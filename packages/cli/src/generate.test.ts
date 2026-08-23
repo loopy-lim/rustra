@@ -11,7 +11,7 @@ import {
   generatePositionalFacadeTs,
 } from './generate.js';
 import { collectDefinitions } from './codegen.js';
-import { parsePackageSchema, templateVersions } from './index.js';
+import { parsePackageSchema, renderInitProjectFiles, templateVersions } from './index.js';
 import type { PackageSchema } from './schema.js';
 
 const simpleSchema: PackageSchema = {
@@ -117,6 +117,32 @@ test('generateTypesTs maps Set types (uniqueItems)', () => {
   assert.ok(types.includes('tags: Set<string>'));
   // uniqueItems 없는 배열은 기존대로 배열 타입 유지 (선택적 필드라 ? 접두사)
   assert.ok(types.includes('values?: number[]'));
+});
+
+test('generateTypesTs exposes both byte-array runtime representations', () => {
+  const schema: PackageSchema = {
+    packageId: 'test.bytes',
+    commands: [
+      {
+        name: 'echoBytes',
+        commandId: 1,
+        inputType: 'BytesInput',
+        outputType: 'BytesOutput',
+        inputSchema: {
+          type: 'object',
+          properties: { data: { type: 'array', items: { type: 'integer', format: 'uint8' } } },
+          required: ['data'],
+        },
+        outputSchema: {
+          type: 'object',
+          properties: { data: { type: 'array', items: { type: 'integer', format: 'uint8' } } },
+          required: ['data'],
+        },
+      },
+    ],
+  };
+  const types = generateTypesTs(schema);
+  assert.ok(types.includes('data: Uint8Array | number[]'));
 });
 
 test('generateTypesTs emits recursive self-referencing types', () => {
@@ -231,8 +257,8 @@ test('generateTypesTs maps oneOf with const tags to discriminated unions', () =>
 test('generateCommandsTs produces command function', () => {
   const commands = generateCommandsTs(simpleSchema);
   assert.ok(commands.includes('export function add('));
-  assert.ok(commands.includes("invoke<AddOutput>('add'"));
-  assert.ok(commands.includes("import { invoke } from '@rustra/types'"));
+  assert.ok(commands.includes("invokeGenerated<AddOutput>(1, 'add'"));
+  assert.ok(commands.includes("import { invokeGenerated } from '@rustra/types'"));
   assert.ok(commands.includes("import type { InvokeOptions } from '@rustra/types'"));
 });
 
@@ -254,7 +280,7 @@ test('generateCommandsTs handles void input and JSDoc description', () => {
   const commands = generateCommandsTs(schema);
   assert.ok(commands.includes('/**\n * Pings the server\n */'));
   assert.ok(commands.includes('export function ping(options?: InvokeOptions): Promise<void>'));
-  assert.ok(commands.includes("invoke<void>('ping', undefined, options)"));
+  assert.ok(commands.includes("invokeGenerated<void>(1, 'ping', undefined, options)"));
 });
 
 test('generateTypesTs emits JSDoc comments from schema description', () => {
@@ -540,7 +566,7 @@ const richSchema: PackageSchema = {
       },
     },
     {
-      name: 'unsupportedMap',
+      name: 'mapScores',
       commandId: 7,
       inputType: 'MapInput',
       outputType: 'MapOutput',
@@ -557,6 +583,29 @@ const richSchema: PackageSchema = {
         properties: { total: { type: 'integer' } },
         required: ['total'],
         title: 'MapOutput',
+      },
+    },
+    {
+      name: 'unsupportedNestedMap',
+      commandId: 8,
+      inputType: 'NestedMapInput',
+      outputType: 'NestedMapOutput',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          groups: {
+            type: 'object',
+            additionalProperties: { type: 'array', items: { type: 'string' } },
+          },
+        },
+        required: ['groups'],
+        title: 'NestedMapInput',
+      },
+      outputSchema: {
+        type: 'object',
+        properties: { count: { type: 'integer' } },
+        required: ['count'],
+        title: 'NestedMapOutput',
       },
     },
   ],
@@ -629,21 +678,35 @@ test('generateRkyvCodecsTs encodes string enums as variant index', () => {
   assert.ok(sort.includes('_variants.indexOf'), 'enum index lookup must be generated');
 });
 
+test('generateRkyvCodecsTs encodes primitive-valued dynamic maps deterministically', () => {
+  const codecs = generateRkyvCodecsTs(richSchema);
+  const map = codecs.split('mapScoresCodec')[1].split('export const')[0];
+  assert.ok(map.includes('const _map = args.scores'));
+  assert.ok(map.includes('Object.keys(_map).sort()'));
+  assert.ok(map.includes('_pcEncodeString(_k)'));
+  assert.ok(map.includes('result.total'));
+});
+
 test('generateRkyvRegistryTs excludes unsupported commands with a header note', () => {
   const registry = generateRkyvRegistryTs(richSchema);
   assert.ok(registry.includes("['updateItem'"), 'Option commands must be included');
   assert.ok(registry.includes("['sortBy'"), 'enum commands must be included');
   assert.ok(registry.includes("['listItems'"), 'Vec<Struct> commands must be included');
-  assert.ok(!registry.includes("['unsupportedMap'"), 'map commands must be excluded');
+  assert.ok(registry.includes("['mapScores'"), 'primitive-valued map commands must be included');
+  assert.ok(
+    !registry.includes("['unsupportedNestedMap'"),
+    'nested collection map commands must be excluded',
+  );
   assert.ok(registry.includes('Tier 3 fallback'), 'exclusion note must be present');
 });
 
 test('generateRkyvCodecsCpp excludes unsupported commands from has_static_codec', () => {
   const cpp = generateRkyvCodecsCpp(richSchema);
   assert.ok(cpp.includes('if (name == "updateItem") { encode_updateItem'));
+  assert.ok(cpp.includes('if (name == "mapScores") { encode_mapScores'));
   assert.ok(
-    !cpp.includes('unsupportedMap'),
-    'unsupported map command must not appear in C++ codec',
+    !cpp.includes('unsupportedNestedMap'),
+    'unsupported nested map command must not appear in C++ codec',
   );
 });
 
@@ -659,8 +722,8 @@ test('generatePositionalFacadeTs emits positional signatures for simple commands
   const sort = facade.split('export function sortBy')[1]?.split('export function')[0] ?? '';
   assert.ok(sort.includes('order: string'), 'enum field must map to string param');
   assert.ok(sort.includes('callPos<'), 'positional entry (invokeTypedPos) must be used');
-  // unsupportedMap 은 제외
-  assert.ok(!facade.includes('unsupportedMap'), 'unsupported commands must be excluded');
+  // 중첩 collection map 은 제외
+  assert.ok(!facade.includes('unsupportedNestedMap'), 'unsupported commands must be excluded');
 });
 
 test('generatePositionalFacadeTs uses positional params for ≤3 primitive fields', () => {
@@ -872,14 +935,29 @@ test('generated code escapes hostile enum/const string literals', () => {
   assert.ok(types.includes("'tag\\', evil() //'"), 'const value must stay inside escaped literal');
 });
 
-test('templateVersions derives template pins from CLI version (single source)', () => {
-  // init 템플릿의 버전 핀이 CLI 자체 버전에서 파생되는지 — 과거 ^0.1.3 고정으로
-  // 0.2.0 사용자가 구버전(포스트카드 silent-drop 수정 이전)을 설치하던 사고 방지.
-  assert.deepEqual(templateVersions('0.2.0'), { cargoMinor: '0.2', npmCaret: '^0.2.0' });
-  assert.deepEqual(templateVersions('0.10.3'), { cargoMinor: '0.10', npmCaret: '^0.10.3' });
-  // cargo 는 minor 범위(세부 버전 상관없이 호환), npm 은 caret 정확 버전
-  assert.equal(templateVersions('0.2.0').cargoMinor, '0.2');
-  assert.ok(templateVersions('0.2.0').npmCaret.startsWith('^'));
+test('templateVersions keeps CLI, types, and crates versions independent', () => {
+  // @rustra/types는 CLI와 독립 버전이다. CLI 버전에서 추측하면 존재하지 않는
+  // 패키지를 scaffold에 기록할 수 있으므로 실제 dependency 범위를 보존한다.
+  assert.deepEqual(templateVersions('0.3.0', '^0.3.1', '0.3'), {
+    cargoMinor: '0.3',
+    npmCliCaret: '^0.3.0',
+    npmTypesRange: '^0.3.1',
+  });
+});
+
+test('init scaffold has a real shared package and executable codegen bin', () => {
+  const files = renderInitProjectFiles(templateVersions('0.3.0', '^0.3.1', '0.3'));
+  assert.match(files.cargoToml, /rustra = "0\.3"/);
+  assert.match(files.packageJson, /"@rustra\/cli": "\^0\.3\.0"/);
+  assert.match(files.packageJson, /"@rustra\/types": "\^0\.3\.1"/);
+  assert.match(files.packageJson, /"packageManager": "bun@1\.4\.0"/);
+  assert.match(files.libRs, /pub fn package\(\) -> Package/);
+  assert.match(files.generateRs, /rustra_app::package\(\)\.generate_typescript\(\)/);
+  assert.doesNotMatch(files.generateRs, /see src\/main\.rs/);
+  assert.deepEqual(JSON.parse(files.rustraJson), {
+    schema: './generated/schema.json',
+    output: './src/generated',
+  });
 });
 
 test('generateEventsTs emits payload types, name union, and subscribe helper', async () => {

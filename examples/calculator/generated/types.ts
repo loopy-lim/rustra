@@ -28,6 +28,28 @@ export type AddNumbersOutput = {
   value: number;
 };
 
+export type BenchAddInput = {
+  a: number;
+  b: number;
+};
+
+export type BenchAddOutput = {
+  value: number;
+};
+
+export type BenchBytesPayload = {
+  data: Uint8Array | number[];
+};
+
+export type BenchPairPayload = {
+  name: string;
+  value: number;
+};
+
+export type BenchStringPayload = {
+  value: string;
+};
+
 export type ChannelDemoInput = {
   /** 호스트가 발급한 채널 핸들 — JS 콜백이 이 번호에 배선돼 있다. */
   channel: ChannelHandle;
@@ -187,7 +209,7 @@ export type SecureComputeOutput = {
 };
 
 export type SizeOfInput = {
-  data: number[];
+  data: Uint8Array | number[];
 };
 
 export type SizeOfOutput = {
