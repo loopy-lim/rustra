@@ -41,12 +41,20 @@ export function useCommand<I, O>(
   // (`useCommand(cmd, { a: 1 })`)은 렌더마다 새 참조라 참조 동등성을 쓰면
   // execute 재생성 → effect 재실행 → 상태 갱신 → 재렌더의 무한 루프가
   // 발생한다. invoke 에는 항상 원본 input 을 그대로 넘긴다.
+  //
+  // 구현: render 중 ref.current 를 쓰지 않는다(React 19 동시성 금지 —
+  // react-doctor/no-ref-current-in-render). useState 의 "이전 값과 같으면
+  // 같은 참조 반환" 관례로 안정화한다: 키가 직전과 같으면 직전 state 를
+  // 그대로 돌려받고, 다르면 setState 로 커밋 시점에 갱신한다.
   const inputKey = input === undefined ? undefined : JSON.stringify(input);
-  const stableInputRef = useRef<{ key: string | undefined; value: I } | null>(null);
-  if (stableInputRef.current === null || stableInputRef.current.key !== inputKey) {
-    stableInputRef.current = { key: inputKey, value: input as I };
+  const [stableInputBox, setStableInputBox] = useState<{
+    key: string | undefined;
+    value: I;
+  }>(() => ({ key: inputKey, value: input as I }));
+  if (stableInputBox.key !== inputKey) {
+    setStableInputBox({ key: inputKey, value: input as I });
   }
-  const stableInput = stableInputRef.current.value;
+  const stableInput = stableInputBox.key === inputKey ? stableInputBox.value : input;
 
   const execute = useCallback(async (): Promise<O | undefined> => {
     if (abortControllerRef.current) {

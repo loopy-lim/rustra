@@ -8,9 +8,12 @@
           "examples/auth/generated/rkyv-registry.ts",
           "examples/streaming/generated/contract.ts",
           "examples/streaming/generated/rkyv-codecs.ts",
-          "examples/streaming/generated/rkyv-registry.ts"
+          "examples/streaming/generated/rkyv-registry.ts",
+          "examples/react-native-calculator/modules/rustra-jsi/src/index.ts"
         ],
-        "rules": ["deslop/unused-file"]
+        "rules": [
+          "deslop/unused-file"
+        ]
       }
     ]
   }

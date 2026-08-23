@@ -9,6 +9,15 @@
 
 namespace rustra::generated {
 
+/// 정적 필드명 PropNameID 캐시 조회(decode 핫패스 — 호출당 이름 변환 제거).
+/// 정의는 rustra-generated-codecs.cpp 에 있다. RN reload 로 Runtime 이
+/// 교체되면 installRustraJSIWithInvoker 가 resetPropNameCache() 로 비운다.
+const facebook::jsi::PropNameID& cachedProp(facebook::jsi::Runtime& rt,
+                                           const char* name);
+
+/// PropNameID 캐시 전체 해제 — 새 Runtime install 시점에 호출한다.
+void resetPropNameCache();
+
 /// 명령 이름으로 postcard 요청 바이트를 인코딩한다(정적 명령만).
 /// 인코딩 성공(정적 명령) 시 true, 미발견(동적 명령) 시 false.
 bool encode_by_name(facebook::jsi::Runtime& rt, const std::string& name,

@@ -12,11 +12,11 @@ namespace jsi = facebook::jsi;
 namespace rc = rustra::codec;
 
 namespace rustra { namespace generated {
-  static std::unordered_map<std::string, jsi::PropNameID>& propNameCache() {
+  std::unordered_map<std::string, jsi::PropNameID>& propNameCache() {
     static std::unordered_map<std::string, jsi::PropNameID> cache;
     return cache;
   }
-  static const jsi::PropNameID& cachedProp(jsi::Runtime& rt, const char* name) {
+  const jsi::PropNameID& cachedProp(jsi::Runtime& rt, const char* name) {
     auto& cache = propNameCache();
     auto it = cache.find(name);
     if (it == cache.end()) {
@@ -24,7 +24,7 @@ namespace rustra { namespace generated {
     }
     return it->second;
   }
-  static void resetPropNameCache() { propNameCache().clear(); }
+  void resetPropNameCache() { propNameCache().clear(); }
 }}
 
 [[maybe_unused]] static double rustra_f64(jsi::Runtime& rt, const jsi::Value& value, const char* field) {

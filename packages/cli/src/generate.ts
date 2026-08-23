@@ -1940,6 +1940,13 @@ export function generateRkyvCodecsHpp(_schema: PackageSchema): string {
     `#include <string>\n` +
     `#include "rustra-codec.hpp"\n\n` +
     `namespace rustra::generated {\n\n` +
+    `/// 정적 필드명 PropNameID 캐시 조회(decode 핫패스 — 호출당 이름 변환 제거).\n` +
+    `/// 정의는 rustra-generated-codecs.cpp 에 있다. RN reload 로 Runtime 이\n` +
+    `/// 교체되면 installRustraJSIWithInvoker 가 resetPropNameCache() 로 비운다.\n` +
+    `const facebook::jsi::PropNameID& cachedProp(facebook::jsi::Runtime& rt,\n` +
+    `                                           const char* name);\n\n` +
+    `/// PropNameID 캐시 전체 해제 — 새 Runtime install 시점에 호출한다.\n` +
+    `void resetPropNameCache();\n\n` +
     `/// 명령 이름으로 postcard 요청 바이트를 인코딩한다(정적 명령만).\n` +
     `/// 인코딩 성공(정적 명령) 시 true, 미발견(동적 명령) 시 false.\n` +
     `bool encode_by_name(facebook::jsi::Runtime& rt, const std::string& name,\n` +
@@ -2029,11 +2036,11 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   // 오면 기존 캐시의 PropNameID 는 무효다 — rustraResetPropNameCache() 가
   // install 시점(신규 Runtime 보장)에 이를 비운다.
   lines.push(`namespace rustra { namespace generated {`);
-  lines.push(`  static std::unordered_map<std::string, jsi::PropNameID>& propNameCache() {`);
+  lines.push(`  std::unordered_map<std::string, jsi::PropNameID>& propNameCache() {`);
   lines.push(`    static std::unordered_map<std::string, jsi::PropNameID> cache;`);
   lines.push(`    return cache;`);
   lines.push(`  }`);
-  lines.push(`  static const jsi::PropNameID& cachedProp(jsi::Runtime& rt, const char* name) {`);
+  lines.push(`  const jsi::PropNameID& cachedProp(jsi::Runtime& rt, const char* name) {`);
   lines.push(`    auto& cache = propNameCache();`);
   lines.push(`    auto it = cache.find(name);`);
   lines.push(`    if (it == cache.end()) {`);
@@ -2041,7 +2048,7 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   lines.push(`    }`);
   lines.push(`    return it->second;`);
   lines.push(`  }`);
-  lines.push(`  static void resetPropNameCache() { propNameCache().clear(); }`);
+  lines.push(`  void resetPropNameCache() { propNameCache().clear(); }`);
   lines.push(`}}`);
   lines.push(``);
   lines.push(
