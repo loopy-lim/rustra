@@ -15,8 +15,11 @@
 
 #pragma once
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -28,12 +31,38 @@ namespace rustra::codec {
 /// postcard 바이트를 순차적으로 누적하는 라이터.
 class Writer {
 public:
-  std::vector<uint8_t> buf;
+  Writer() = default;
+
+  const uint8_t* data() const {
+    return using_heap_ ? heap_buf_.data() : inline_buf_.data();
+  }
+
+  size_t size() const { return size_; }
 
   /// 누적된 바이트를 반환(이동).
-  std::vector<uint8_t> take() { return std::move(buf); }
+  /// 비동기 호출처럼 Writer 수명 밖에서 바이트를 보관할 때만 사용한다.
+  std::vector<uint8_t> take() {
+    std::vector<uint8_t> result;
+    if (using_heap_) {
+      result = std::move(heap_buf_);
+      heap_buf_.clear();
+      using_heap_ = false;
+    } else {
+      result.assign(inline_buf_.begin(), inline_buf_.begin() + size_);
+    }
+    size_ = 0;
+    return result;
+  }
 
-  void push_u8(uint8_t v) { buf.push_back(v); }
+  void push_u8(uint8_t v) {
+    ensure_capacity(1);
+    if (using_heap_) {
+      heap_buf_.push_back(v);
+    } else {
+      inline_buf_[size_] = v;
+    }
+    ++size_;
+  }
 
   /// 부호 없는 varint(LEB128). 길이/카운트용.
   void push_uvar(uint64_t n) {
@@ -41,7 +70,7 @@ public:
       uint8_t b = static_cast<uint8_t>(n & 0x7f);
       n >>= 7;
       if (n != 0) b |= 0x80;
-      buf.push_back(b);
+      push_u8(b);
     } while (n != 0);
   }
 
@@ -55,31 +84,67 @@ public:
   void push_f64(double v) {
     uint64_t bits;
     std::memcpy(&bits, &v, sizeof(bits));
-    for (int i = 0; i < 8; ++i) buf.push_back(static_cast<uint8_t>(bits >> (8 * i)));
+    uint8_t bytes[8];
+    for (int i = 0; i < 8; ++i) bytes[i] = static_cast<uint8_t>(bits >> (8 * i));
+    push_bytes(bytes, sizeof(bytes));
   }
 
   /// f32 little-endian 고정폭.
   void push_f32(float v) {
     uint32_t bits;
     std::memcpy(&bits, &v, sizeof(bits));
-    for (int i = 0; i < 4; ++i) buf.push_back(static_cast<uint8_t>(bits >> (8 * i)));
+    uint8_t bytes[4];
+    for (int i = 0; i < 4; ++i) bytes[i] = static_cast<uint8_t>(bits >> (8 * i));
+    push_bytes(bytes, sizeof(bytes));
   }
 
   /// bool → 1바이트(0/1).
-  void push_bool(bool v) { buf.push_back(v ? 1 : 0); }
+  void push_bool(bool v) { push_u8(v ? 1 : 0); }
 
   /// UTF-8 문자열: varint 길이 + 바이트.
   void push_string(const std::string& s) {
     push_uvar(s.size());
-    buf.insert(buf.end(), s.begin(), s.end());
+    push_bytes(reinterpret_cast<const uint8_t*>(s.data()), s.size());
   }
 
   /// raw 바이트(길이 접두사 없음). 필요 시 호출측에서 길이 처리.
   void push_bytes(const uint8_t* data, size_t len) {
-    buf.insert(buf.end(), data, data + len);
+    if (len == 0) return;
+    ensure_capacity(len);
+    if (using_heap_) {
+      heap_buf_.insert(heap_buf_.end(), data, data + len);
+    } else {
+      std::memcpy(inline_buf_.data() + size_, data, len);
+    }
+    size_ += len;
   }
 
 private:
+  static constexpr size_t kInlineCapacity = 128;
+  std::array<uint8_t, kInlineCapacity> inline_buf_{};
+  std::vector<uint8_t> heap_buf_;
+  size_t size_ = 0;
+  bool using_heap_ = false;
+
+  void ensure_capacity(size_t additional) {
+    if (additional > std::numeric_limits<size_t>::max() - size_) {
+      throw std::length_error("postcard writer size overflows");
+    }
+    const size_t needed = size_ + additional;
+    if (!using_heap_ && needed <= kInlineCapacity) return;
+
+    if (!using_heap_) {
+      heap_buf_.reserve(std::max(kInlineCapacity * 2, needed));
+      heap_buf_.insert(heap_buf_.end(), inline_buf_.begin(), inline_buf_.begin() + size_);
+      using_heap_ = true;
+      return;
+    }
+
+    if (needed > heap_buf_.capacity()) {
+      heap_buf_.reserve(std::max(heap_buf_.capacity() * 2, needed));
+    }
+  }
+
   /// i64 → uint64 zigzag. (n << 1) ^ (n >> 63), 산술 시프트.
   static uint64_t zigzag_encode(int64_t v) {
     return (static_cast<uint64_t>(v) << 1) ^ static_cast<uint64_t>(v >> 63);
@@ -91,6 +156,11 @@ private:
 /// postcard 바이트에서 순차적으로 읽는 리더. 초과 읽기 시 runtime_error.
 class Reader {
 public:
+  struct StringView {
+    const uint8_t* data;
+    size_t size;
+  };
+
   const uint8_t* data;
   size_t len;
   size_t pos;
@@ -153,12 +223,29 @@ public:
   }
 
   /// UTF-8 문자열: varint 길이 + 바이트.
-  std::string read_string() {
+  StringView read_string_view() {
     uint64_t n = read_uvar();
-    if (n > (uint64_t)(len - pos)) throw std::runtime_error("postcard string length overflows");
-    std::string s(reinterpret_cast<const char*>(data + pos), static_cast<size_t>(n));
-    pos += static_cast<size_t>(n);
-    return s;
+    if (n > static_cast<uint64_t>(len - pos)) {
+      throw std::runtime_error("postcard string length overflows");
+    }
+    StringView view{data + pos, static_cast<size_t>(n)};
+    pos += view.size;
+    return view;
+  }
+
+  /// 소유 문자열이 필요한 에러 처리 등 비-hot 경로용.
+  std::string read_string() {
+    const auto view = read_string_view();
+    return std::string(reinterpret_cast<const char*>(view.data), view.size);
+  }
+
+  /// 현재 커서(읽지 않은 첫 바이트). Vec<u8> 등 원시 복사用.
+  const uint8_t* cur() const { return data + pos; }
+
+  /// n 바이트 건너뛰기 — cur() 로 복사한 뒤 호출.
+  void skip(size_t n) {
+    require(n);
+    pos += n;
   }
 
 private:

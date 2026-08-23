@@ -4,7 +4,7 @@
 // 벤치마크나 rkyv-registry 의존성 없이 JSON 경로(createJsonEngine)만 사용한다.
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View, ScrollView } from "react-native";
-import { installRustraJSI, getRustraNative } from "./modules/rustra-jsi/src";
+import { installRustraJSI, getRustraNative } from "rustra-jsi";
 import { createJsonEngine } from "./src/adapters/json-adapter";
 import { createRkyvV2Engine, getLiveSchema } from "@rustra/types";
 import { subscribeEvent } from "../../packages/react-native/src";
@@ -257,11 +257,7 @@ export default function App() {
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scroll}>
-        {lines.map((line, i) => (
-          <Text key={i} style={styles.text}>
-            {line}
-          </Text>
-        ))}
+        <Text style={styles.text}>{lines.join("\n")}</Text>
       </ScrollView>
     </View>
   );

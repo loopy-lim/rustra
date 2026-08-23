@@ -41,11 +41,20 @@ struct ArrayData;
 
 class Value {
 public:
-  enum class Kind { Undefined, Number, Bool, String, Object, Array };
+  enum class Kind { Undefined, Null, Number, Bool, String, Object, Array };
 
   Value() : kind_(Kind::Undefined) {}
   Value(double n) : kind_(Kind::Number), num_(n) {}
   Value(bool b) : kind_(Kind::Bool), bool_(b) {}
+
+  /// 실제 jsi::Value::null() 정적 팩토리 미러 — 생성 코드의 Option<T> 디코드
+  /// (태그 0 → null) emit 이 호출한다. kind Null 을 별도로 둔다.
+  static Value null() {
+    Value v;
+    v.kind_ = Kind::Null;
+    return v;
+  }
+  bool isNull() const { return kind_ == Kind::Null; }
 
   Value(Runtime&, double n) : kind_(Kind::Number), num_(n) {}
   Value(Runtime&, bool b) : kind_(Kind::Bool), bool_(b) {}
@@ -97,6 +106,8 @@ struct ArrayData {
 };
 } // namespace detail
 
+class ArrayBuffer; // forward — Object::getArrayBuffer 반환형(정의는 아래)
+
 class Object {
 public:
   Object(Runtime&) : data_(std::make_shared<detail::ObjectData>()) {}
@@ -113,6 +124,11 @@ public:
   // 생성된 코덱은 PropertyName 가 아닌 문자열 이름으로 접근한다.
   Value getProperty(Runtime& rt, const char* name) const {
     return getProperty(rt, std::string(name));
+  }
+  // 실 RN jsi 계약과 동일한 String 오버로드 — map 코덱이 std::string →
+  // jsi::String 변환 후 접근한다.
+  Value getProperty(Runtime& rt, const String& name) const {
+    return getProperty(rt, name.utf8(rt));
   }
 
   void setProperty(Runtime&, const std::string& name, Value v) {
@@ -138,6 +154,13 @@ public:
   void setProperty(Runtime& rt, const char* name, const Object& o) { setProperty(rt, std::string(name), o); }
   void setProperty(Runtime& rt, const char* name, const Array& a);
 
+  // bytes 코덱 테스트용 — 정의는 클래스 외부(ArrayBuffer 정의 뒤).
+  inline class ArrayBuffer getArrayBuffer(Runtime&) const;
+
+  // 키 열거 — 실 RN jsi::Object::getPropertyNames 는 jsi::Array 를 반환한다.
+  // 동일 계약으로 맞춘다(생성 코드는 색인 루프로 접근).
+  Array getPropertyNames(Runtime& rt) const;
+
   std::shared_ptr<detail::ObjectData> data_;
   // JS 에서 Array 는 Object 의 일종. Value(Array) → asObject → getArray 경로 지원용.
   std::shared_ptr<detail::ArrayData> arr_;
@@ -155,12 +178,28 @@ public:
   void setValueAtIndex(Runtime&, size_t i, Value v) { data_->items[i] = std::move(v); }
   void setValueAtIndex(Runtime& rt, size_t i, double n) { setValueAtIndex(rt, i, Value(n)); }
   void setValueAtIndex(Runtime& rt, size_t i, bool b) { setValueAtIndex(rt, i, Value(b)); }
+  void setValueAtIndex(Runtime& rt, size_t i, const String& s) {
+    Value v; v.kind_ = Value::Kind::String; v.str_ = s;
+    setValueAtIndex(rt, i, std::move(v));
+  }
 
   std::shared_ptr<detail::ArrayData> data_;
 };
 
 inline void Object::setProperty(Runtime& rt, const std::string& name, const Array& a) {
   setProperty(rt, name, Value(a));
+}
+inline Array Object::getPropertyNames(Runtime& rt) const {
+  Array out(rt, data_->props.size());
+  size_t i = 0;
+  for (const auto& kv : data_->props) {
+    // 키 자체를 문자열 값으로 — 실 RN 과 동일하게 이름 배열을 반환.
+    String name = String::createFromUtf8(
+        rt, reinterpret_cast<const uint8_t*>(kv.first.data()), kv.first.size());
+    Value v; v.kind_ = Value::Kind::String; v.str_ = name;
+    out.setValueAtIndex(rt, i++, std::move(v));
+  }
+  return out;
 }
 inline void Object::setProperty(Runtime& rt, const char* name, const Array& a) {
   setProperty(rt, std::string(name), a);
@@ -172,6 +211,22 @@ inline Array Object::getArray(Runtime&) const {
 }
 
 inline Value::Value(const Object& o) : kind_(Kind::Object), obj_(o.data_), arr_(o.arr_) {}
+
+/// ArrayBuffer 최소 구현 — bytes(Vec<u8>) 코덱의 JS 표면. 실 RN 런타임은
+/// jsi::ArrayBuffer 를 제공한다(동일 data(rt)/length(rt) 계약).
+class ArrayBuffer {
+public:
+  ArrayBuffer() = default;
+  explicit ArrayBuffer(Runtime&, size_t n) : bytes_(n) {}
+  uint8_t* data(Runtime&) { return bytes_.data(); }
+  const uint8_t* data(Runtime&) const { return bytes_.data(); }
+  size_t length(Runtime&) const { return bytes_.size(); }
+
+private:
+  std::vector<uint8_t> bytes_;
+};
+
+inline ArrayBuffer Object::getArrayBuffer(Runtime&) const { return ArrayBuffer(); }
 inline Value::Value(const Array& a) : kind_(Kind::Array), arr_(a.data_) {}
 inline Value::Value(Runtime&, const Object& o) : kind_(Kind::Object), obj_(o.data_), arr_(o.arr_) {}
 inline Value::Value(Runtime&, const Array& a) : kind_(Kind::Array), arr_(a.data_) {}

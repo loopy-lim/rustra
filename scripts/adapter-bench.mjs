@@ -122,68 +122,12 @@ console.log("└─────────────────────�
 console.log();
 
 // ── Bridge Overhead Comparison Chart ─────────────────────
-
-console.log("┌─ Estimated End-to-End Latency (simple call) ───────────┐");
-console.log("│");
-console.log("│  Layer breakdown (estimated, based on benchmarks):");
-console.log("│");
-
-const layers = [
-  { name: "Rust pure computation", ns: 100, color: "█" },
-  { name: "Rust serde roundtrip", ns: 800, color: "█" },
-  { name: "JS JSON parse/stringify", ns: 500, color: "▓" },
-  { name: "RN JSI Fast-Path (rkyv V2)", ns: 1500, color: "█" },
-  { name: "Bun FFI overhead", ns: 26800, color: "▓" },
-  { name: "Node napi-rs bridge", ns: 24300, color: "▓" },
-  { name: "Node IPC (subprocess)", ns: 1840000, color: "░" },
-];
-
-const maxNs = Math.max(...layers.map((l) => l.ns));
-for (const layer of layers) {
-  const barLen = Math.max(1, Math.round((layer.ns / maxNs) * 35));
-  const barStr = layer.color.repeat(barLen);
-  const nsStr =
-    layer.ns >= 1_000_000
-      ? `${(layer.ns / 1_000_000).toFixed(1)} ms`
-      : layer.ns >= 1000
-        ? `${(layer.ns / 1000).toFixed(0)} µs`
-        : `${layer.ns} ns`;
-  console.log(
-    `│  ${layer.name.padEnd(28)} ${barStr.padEnd(35)} ${nsStr}`
-  );
-}
-
-console.log("│");
-console.log("└─────────────────────────────────────────────────────────┘");
-console.log();
-
-// ── Throughput Chart ─────────────────────────────────────
-
-console.log("┌─ Throughput Comparison ─────────────────────────────────┐");
-console.log("│");
-
-const throughput = [
-  { name: "Rust (typed invoke)", ops: 5093309 },
-  { name: "Rust (JSON roundtrip)", ops: 5800000 },
-  { name: "Nitro Modules (v0.80+)", ops: 909000 },
-  { name: "RN JSI rkyv V2", ops: 666000 },
-  { name: "Node napi-rs", ops: 41172 },
-  { name: "Bun FFI", ops: 37250 },
-  { name: "Standard RN JSON", ops: 19054 },
-];
-
-const maxOps = Math.max(...throughput.map((t) => t.ops));
-for (const t of throughput) {
-  const barLen = Math.round((t.ops / maxOps) * 40);
-  const barStr = "█".repeat(barLen);
-  console.log(
-    `│  ${t.name.padEnd(28)} ${barStr} ${t.ops.toLocaleString()} ops/s`
-  );
-}
-
-console.log("│");
-console.log("└─────────────────────────────────────────────────────────┘");
-console.log();
+//
+// 과거 이 섹션은 낡은 세션의 수치(레이어 24.3µs, napi 41,172 ops/s 등)를
+// 소스에 하드코딩해 "벤치마크"라는 이름으로 재생 출력했다. 실측과 어긋나는
+// 구값을 스크립트가 뱉는 것 자체가 성능 문서 부정합의 근원이라 제거했다.
+// 실측 트랜스포트 비교는 scripts/transport-bench.mjs 가, 코어 와이어 비용은
+// wire-bench 가 담당한다.
 
 // ── Benchmark: Payload Size Scaling ────────────────────
 

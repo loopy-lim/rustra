@@ -9,6 +9,7 @@ import type {
   EngineClient as EngineClientType,
   InvokeOptions,
   RkyvV2EngineOptions,
+  RkyvV2SchemaNative,
   RustraNative,
 } from '@rustra/types';
 import { createRkyvV2Engine, parseRustraErrorString, RustraCommandError } from '@rustra/types';
@@ -19,6 +20,7 @@ export type {
   RustraError,
   RkyvV2Codec,
   RkyvV2Native,
+  RkyvV2SchemaNative,
 } from '@rustra/types';
 export {
   RustraCommandError,
@@ -28,32 +30,14 @@ export {
   parseRustraErrorString,
 } from '@rustra/types';
 
-export type RustraJSINative = {
+/**
+ * RN JSI 네이티브 표면 — 코어 `RkyvV2SchemaNative` 를 그대로 상속하고 RN 전용
+ * 메서드만 추가 선언한다. 과거엔 동일 메서드를 3곳(types의 RkyvV2SchemaNative,
+ * RustraNative, 여기)에서 수동 미러링해 신규 옵션마다 세 곳을 동기화했었다 —
+ * 이제 단일 소스(types)를 재사용한다.
+ */
+export type RustraJSINative = RkyvV2SchemaNative & {
   invoke(payload: ArrayBuffer): ArrayBuffer;
-  invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
-  /** B1 fast path: JSI 가 노출하는 정적 명령 C++ postcard 코덱. */
-  getSchema?(): ArrayBuffer;
-  /**
-   * (F5) 네이티브 빌드의 계약 해시(SHA-256 hex) — `contractHash` 엔진 옵션이
-   * 설정된 경우에만 호출된다. core `RkyvV2SchemaNative.getContractHash` 와
-   * 동일 계약.
-   */
-  getContractHash?(): ArrayBuffer;
-  hasStaticCodec?(name: string): boolean;
-  invokeTyped?(name: string, args: unknown): unknown;
-  /**
-   * (P0-3) cmd_id 진입 typed fast path — `invokeTyped` 의 u16 디스패치 변형.
-   * 문자열 마샬링과 C++ 이름 비교체인을 제거한다 (JSI 횡단 2→1, 문자열 2→0).
-   * 미노출 구 네이티브는 이름 기반 `invokeTyped` 로 폴백한다.
-   */
-  invokeTypedById?(cmdId: number, args: unknown): unknown;
-  invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
-  /**
-   * (P0-2 byId) cmd_id 배열 배치 진입 — `invokeTypedBatch` 의 id 인덱싱 변형.
-   * 배치 경로의 문자열 마샬링 N 회를 제거한다. 미노출 구 네이티브는
-   * 이름 기반 `invokeTypedBatch` 로 폴백한다.
-   */
-  invokeTypedBatchById?(cmdIds: number[], args: unknown[]): unknown[];
   /**
    * Rust → JS 이벤트 푸시(RN JSI EventDispatcher). 콜백 인자는 JSON 문자열 —
    * `subscribeEvent` 래퍼가 파싱한다.

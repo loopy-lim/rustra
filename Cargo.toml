@@ -28,19 +28,19 @@ resolver = "3"
 [workspace.package]
 edition = "2024"
 license = "MIT"
-version = "0.2.0"
+version = "0.3.0"
 description = "Rust → TypeScript bridge framework with auto-generated type-safe clients"
 repository = "https://github.com/loopy-lim/rustra"
 homepage = "https://github.com/loopy-lim/rustra"
 documentation = "https://docs.rs/rustra"
 keywords = ["typescript", "bridge", "codegen", "ffi", "react-native"]
 categories = ["api-bindings", "development-tools::ffi"]
-# edition 2024 (1.85) + `u64::is_multiple_of` (1.87) 요구 최소 — MSRV 계약화
-rust-version = "1.87"
+# edition 2024 (1.85) + let-chains (1.88, rustra-macros 에서 사용) 요구 최소 — MSRV 계약화
+rust-version = "1.88"
 
 [workspace.dependencies]
-rustra-macros = { version = "0.2.0", path = "crates/rustra-macros" }
-rustra = { version = "0.2.0", path = "crates/rustra" }
+rustra-macros = { version = "0.3.0", path = "crates/rustra-macros" }
+rustra = { version = "0.3.0", path = "crates/rustra" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 schemars = { version = "0.8", features = ["derive", "preserve_order"] }

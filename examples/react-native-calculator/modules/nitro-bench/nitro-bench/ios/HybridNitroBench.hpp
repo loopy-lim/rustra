@@ -9,7 +9,10 @@ public:
   HybridNitroBench(): HybridObject(TAG) {}
 
   double add(double a, double b) override;
-  double echo(double value) override;
+  AddResult benchAdd(const AddPayload& value) override;
+  StringPayload echoString(const StringPayload& value) override;
+  BytesPayload echoBytes(const BytesPayload& value) override;
+  PairPayload echoPair(const PairPayload& value) override;
 };
 
 } // namespace margelo::nitro::nitrobench

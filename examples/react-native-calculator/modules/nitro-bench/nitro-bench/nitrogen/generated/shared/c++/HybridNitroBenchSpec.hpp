@@ -13,9 +13,22 @@
 #error NitroModules cannot be found! Are you sure you installed NitroModules properly?
 #endif
 
+// Forward declaration of `AddResult` to properly resolve imports.
+namespace margelo::nitro::nitrobench { struct AddResult; }
+// Forward declaration of `AddPayload` to properly resolve imports.
+namespace margelo::nitro::nitrobench { struct AddPayload; }
+// Forward declaration of `StringPayload` to properly resolve imports.
+namespace margelo::nitro::nitrobench { struct StringPayload; }
+// Forward declaration of `BytesPayload` to properly resolve imports.
+namespace margelo::nitro::nitrobench { struct BytesPayload; }
+// Forward declaration of `PairPayload` to properly resolve imports.
+namespace margelo::nitro::nitrobench { struct PairPayload; }
 
-
-
+#include "AddResult.hpp"
+#include "AddPayload.hpp"
+#include "StringPayload.hpp"
+#include "BytesPayload.hpp"
+#include "PairPayload.hpp"
 
 namespace margelo::nitro::nitrobench {
 
@@ -49,7 +62,10 @@ namespace margelo::nitro::nitrobench {
     public:
       // Methods
       virtual double add(double a, double b) = 0;
-      virtual double echo(double value) = 0;
+      virtual AddResult benchAdd(const AddPayload& value) = 0;
+      virtual StringPayload echoString(const StringPayload& value) = 0;
+      virtual BytesPayload echoBytes(const BytesPayload& value) = 0;
+      virtual PairPayload echoPair(const PairPayload& value) = 0;
 
     protected:
       // Hybrid Setup

@@ -40,6 +40,208 @@
       }
     },
     {
+      "name": "benchAdd",
+      "commandId": 23,
+      "inputType": "BenchAddInput",
+      "outputType": "BenchAddOutput",
+      "inputSchema": {
+        "title": "BenchAddInput",
+        "type": "object",
+        "required": [
+          "a",
+          "b"
+        ],
+        "properties": {
+          "a": {
+            "type": "number",
+            "format": "double"
+          },
+          "b": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "BenchAddOutput",
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      }
+    },
+    {
+      "name": "benchEchoBytes",
+      "commandId": 25,
+      "inputType": "BenchBytesPayload",
+      "outputType": "BenchBytesPayload",
+      "inputSchema": {
+        "title": "BenchBytesPayload",
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "BenchBytesPayload",
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "benchEchoPair",
+      "commandId": 26,
+      "inputType": "BenchPairPayload",
+      "outputType": "BenchPairPayload",
+      "inputSchema": {
+        "title": "BenchPairPayload",
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "BenchPairPayload",
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      }
+    },
+    {
+      "name": "benchEchoString",
+      "commandId": 24,
+      "inputType": "BenchStringPayload",
+      "outputType": "BenchStringPayload",
+      "inputSchema": {
+        "title": "BenchStringPayload",
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "BenchStringPayload",
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "channelDemo",
+      "commandId": 18,
+      "inputType": "ChannelDemoInput",
+      "outputType": "ChannelDemoOutput",
+      "inputSchema": {
+        "title": "ChannelDemoInput",
+        "type": "object",
+        "required": [
+          "channel",
+          "ticks"
+        ],
+        "properties": {
+          "channel": {
+            "description": "호스트가 발급한 채널 핸들 — JS 콜백이 이 번호에 배선돼 있다.",
+            "allOf": [
+              {
+                "$ref": "#/definitions/ChannelHandle"
+              }
+            ]
+          },
+          "ticks": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ChannelDemoOutput",
+        "type": "object",
+        "required": [
+          "droppedSends",
+          "sent"
+        ],
+        "properties": {
+          "sent": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "droppedSends": {
+            "description": "만료된 핸들로의 send 시도 수(stale 무시 계약의 가시화).",
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "definitions": {
+        "ChannelHandle": {
+          "description": "커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
       "name": "clamp",
       "commandId": 4,
       "inputType": "ClampInput",
@@ -215,6 +417,46 @@
       }
     },
     {
+      "name": "gauge",
+      "commandId": 17,
+      "inputType": "GaugeInput",
+      "outputType": "GaugeOutput",
+      "inputSchema": {
+        "title": "GaugeInput",
+        "type": "object",
+        "required": [
+          "limit",
+          "offset"
+        ],
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "offset": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "GaugeOutput",
+        "type": "object",
+        "required": [
+          "next"
+        ],
+        "properties": {
+          "next": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      }
+    },
+    {
       "name": "greet",
       "commandId": 5,
       "inputType": "GreetInput",
@@ -369,6 +611,181 @@
       }
     },
     {
+      "name": "resourceClose",
+      "commandId": 22,
+      "inputType": "ResourceCloseInput",
+      "outputType": "ResourceCloseOutput",
+      "inputSchema": {
+        "title": "ResourceCloseInput",
+        "type": "object",
+        "required": [
+          "handle"
+        ],
+        "properties": {
+          "handle": {
+            "$ref": "#/definitions/ResourceHandle"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ResourceCloseOutput",
+        "type": "object",
+        "required": [
+          "closed"
+        ],
+        "properties": {
+          "closed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "definitions": {
+        "ResourceHandle": {
+          "description": "커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
+      "name": "resourceOpen",
+      "commandId": 19,
+      "inputType": "ResourceOpenInput",
+      "outputType": "ResourceHandleOutput",
+      "inputSchema": {
+        "title": "ResourceOpenInput",
+        "type": "object",
+        "required": [
+          "initial"
+        ],
+        "properties": {
+          "initial": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ResourceHandleOutput",
+        "type": "object",
+        "required": [
+          "handle"
+        ],
+        "properties": {
+          "handle": {
+            "$ref": "#/definitions/ResourceHandle"
+          }
+        }
+      },
+      "definitions": {
+        "ResourceHandle": {
+          "description": "커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
+      "name": "resourceRead",
+      "commandId": 20,
+      "inputType": "ResourceReadInput",
+      "outputType": "ResourceReadOutput",
+      "inputSchema": {
+        "title": "ResourceReadInput",
+        "type": "object",
+        "required": [
+          "handle",
+          "key"
+        ],
+        "properties": {
+          "handle": {
+            "$ref": "#/definitions/ResourceHandle"
+          },
+          "key": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ResourceReadOutput",
+        "type": "object",
+        "required": [
+          "found"
+        ],
+        "properties": {
+          "found": {
+            "type": "boolean"
+          },
+          "value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "definitions": {
+        "ResourceHandle": {
+          "description": "커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
+      "name": "resourceWrite",
+      "commandId": 21,
+      "inputType": "ResourceWriteInput",
+      "outputType": "ResourceWriteOutput",
+      "inputSchema": {
+        "title": "ResourceWriteInput",
+        "type": "object",
+        "required": [
+          "handle",
+          "key",
+          "value"
+        ],
+        "properties": {
+          "handle": {
+            "$ref": "#/definitions/ResourceHandle"
+          },
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ResourceWriteOutput",
+        "type": "object",
+        "required": [
+          "entries"
+        ],
+        "properties": {
+          "entries": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        }
+      },
+      "definitions": {
+        "ResourceHandle": {
+          "description": "커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
       "name": "rustraRegistryDemo",
       "commandId": 12,
       "inputType": "RegistryDemoInput",
@@ -407,6 +824,47 @@
       }
     },
     {
+      "name": "scoreTotal",
+      "commandId": 15,
+      "inputType": "ScoreTotalInput",
+      "outputType": "ScoreTotalOutput",
+      "inputSchema": {
+        "title": "ScoreTotalInput",
+        "type": "object",
+        "required": [
+          "scores"
+        ],
+        "properties": {
+          "scores": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ScoreTotalOutput",
+        "type": "object",
+        "required": [
+          "count",
+          "total"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      }
+    },
+    {
       "name": "secureCompute",
       "commandId": 13,
       "inputType": "SecureComputeInput",
@@ -437,6 +895,95 @@
         ],
         "properties": {
           "value": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      }
+    },
+    {
+      "name": "sizeOf",
+      "commandId": 14,
+      "inputType": "SizeOfInput",
+      "outputType": "SizeOfOutput",
+      "inputSchema": {
+        "title": "SizeOfInput",
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "SizeOfOutput",
+        "type": "object",
+        "required": [
+          "checksum",
+          "len"
+        ],
+        "properties": {
+          "checksum": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          },
+          "len": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          }
+        }
+      }
+    },
+    {
+      "name": "span",
+      "commandId": 16,
+      "inputType": "SpanInput",
+      "outputType": "SpanOutput",
+      "inputSchema": {
+        "title": "SpanInput",
+        "type": "object",
+        "required": [
+          "pair"
+        ],
+        "properties": {
+          "pair": {
+            "type": "array",
+            "items": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer",
+                "format": "int64"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "SpanOutput",
+        "type": "object",
+        "required": [
+          "first",
+          "second"
+        ],
+        "properties": {
+          "first": {
+            "type": "string"
+          },
+          "second": {
             "type": "integer",
             "format": "int64"
           }

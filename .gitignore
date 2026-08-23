@@ -7,9 +7,11 @@ packages/*/dist/
 /examples/tauri-calculator/dist/packages/
 *.tsbuildinfo
 /node_modules/
+**/node_modules/
 /examples/react-native-calculator/node_modules/
 .DS_Store
 .npm-cache/
+.pnpm-store/
 *.node
 examples/calculator-napi/node_modules/
 
@@ -25,6 +27,8 @@ examples/calculator-napi/node_modules/
 **/Pods/
 **/rust/lib/
 **/src/main/cpp/libs/
+/examples/react-native-calculator/ios-expo-dist/
+/examples/react-native-calculator/.watchman-cookie-*
 
 # 로컬 네이티브 검증/벤치마크 산출물
 /scripts/swift-ffi-bench/benchmark
@@ -39,3 +43,4 @@ fuzz/corpus/
 fuzz/artifacts/
 fuzz/coverage/
 fuzz/target/
+docs/api/

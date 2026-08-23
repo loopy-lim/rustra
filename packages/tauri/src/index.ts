@@ -64,19 +64,15 @@ export type TauriInvoke = (command: string, args?: unknown) => Promise<unknown> 
 export function createTauriEngine(options: { invoke: TauriInvoke }) {
   return {
     async invoke<T>(command: string, args?: unknown, invokeOptions?: InvokeOptions): Promise<T> {
-      // (의미론 마감) Tauri IPC 경로는 취소 전파 불가 — signal 을 조용히 무시하지
-      // 않고 명시적으로 거부한다. 호환성 매트릭스(docs/compatibility-matrix.md) 참고.
-      if (invokeOptions?.signal) {
-        if (invokeOptions.signal.aborted) {
-          throw new RustraCommandError(
-            'cancelled',
-            `invoke("${command}") aborted before dispatch`,
-            true,
-          );
-        }
+      // signal 정책(전 어댑터 공통): abort 된 signal 만 cancelled 로 거부하고,
+      // 미abort signal 은 정상 실행한다(얕은 취소 — Tauri IPC 는 취소 전파 불가).
+      // useCommand 처럼 항상 signal 을 전달하는 호출부와의 호환을 위해 signal 존재
+      // 자체를 에러로 삼지 않는다 — 매트릭스(docs/compatibility-matrix.md) 참고.
+      if (invokeOptions?.signal?.aborted) {
         throw new RustraCommandError(
-          'cancel.unsupported',
-          `invoke("${command}"): the Tauri IPC transport does not support AbortSignal`,
+          'cancelled',
+          `invoke("${command}") aborted before dispatch`,
+          true,
         );
       }
       try {
@@ -96,4 +92,58 @@ export function createTauriEngine(options: { invoke: TauriInvoke }) {
       }
     },
   };
+}
+
+// ── 이벤트 구독 (Rust → JS push) ──────────────────────────
+// Rust 측 `tauri_support::register_with_events` 가 `Package::emit` 을
+// `app.emit("rustra://{sanitized}", payload_json)` 로 전달한다 — 이 섹션은 그
+// 채널을 JS 에서 구독하는 래퍼다. 과거엔 Rust 푸시만 있고 JS 구독 API 가 없어
+// 사용자가 채널 규약을 문서에서 해석해 직접 listen 배선해야 했다.
+
+/** Tauri `listen` 함수 타입 — `window.__TAURI__.event.listen` 을 전달한다. */
+export type TauriListen = (
+  event: string,
+  handler: (event: { payload: string }) => void,
+) => Promise<() => void>;
+
+/** rustra 이벤트명 → Tauri 채널명 (`rustra://{sanitized}`, Rust `event_channel` 과 동일 규칙). */
+export function rustraEventChannel(name: string): string {
+  const sanitized = name
+    .split('')
+    .map((c) => (/[A-Za-z0-9/_:-]/.test(c) ? c : '_'))
+    .join('');
+  return `rustra://${sanitized}`;
+}
+
+/**
+ * rustra 이벤트를 구독한다 — Rust `Package::emit` 의 페이로드(JSON 문자열)를
+ * 파싱해 콜백에 전달한다.
+ *
+ * @example
+ * ```ts
+ * const unsubscribe = subscribeEvent(
+ *   window.__TAURI__.event.listen,
+ *   'progress.tick',
+ *   (payload) => console.log(payload),
+ * );
+ * // 정리 시: unsubscribe()
+ * ```
+ *
+ * @returns unsubscribe 함수 (Tauri listen 이 반환하는 unlisten 그대로).
+ */
+export async function subscribeEvent<T = unknown>(
+  listen: TauriListen,
+  name: string,
+  callback: (payload: T) => void,
+): Promise<() => void> {
+  const unlisten = await listen(rustraEventChannel(name), (event) => {
+    // payload 는 Rust 가 JSON 직렬화한 문자열이다 — 파싱해 타입 값으로 전달.
+    try {
+      callback(JSON.parse(event.payload) as T);
+    } catch {
+      // 파싱 실패 시 원본 문자열이라도 전달한다(조용한 드롭 방지).
+      callback(event.payload as unknown as T);
+    }
+  });
+  return unlisten;
 }

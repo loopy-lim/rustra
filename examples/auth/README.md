@@ -19,7 +19,7 @@ auth/
 
 ```bash
 cargo build -p rustra-auth-example
-npx tsc -p examples/auth/tsconfig.json
+bunx tsc -p examples/auth/tsconfig.json
 node dist-ts/examples/auth/apps/node-app.js
 ```
 

@@ -9,6 +9,7 @@ import {
   getLiveSchema,
   invoke,
   invokeBatch,
+  invokeGenerated,
   invokeWithTimeout,
   RustraCommandError,
   parseRustraErrorString,
@@ -412,6 +413,56 @@ test('typed dispatch uses invokeTypedById when available (P0-3)', async () => {
     1,
     `hasStaticCodec must run once for the initial sweep (registry size 1), got ${hasCount}`,
   );
+});
+
+test('generated dispatch uses its verified numeric id without name dispatch', async () => {
+  const calls: string[] = [];
+  const native = makeTypedNative({
+    hasStaticCodec: () => true,
+    invokeTyped: (name) => {
+      calls.push(`typed:${name}`);
+      return { value: 0 };
+    },
+    invokeTypedById: (id) => {
+      calls.push(`byId:${id}`);
+      return { value: 42 };
+    },
+  });
+  const engine = createRkyvV2Engine(native, staticRegistry('addNumbers'));
+
+  const out = await engine.invokeById<{ value: number }>(1, 'addNumbers', { a: 20, b: 22 });
+
+  assert.equal(out.value, 42);
+  assert.deepEqual(
+    calls.filter((call) => call.startsWith('byId:')),
+    ['byId:1'],
+  );
+  assert.ok(!calls.some((call) => call.startsWith('typed:')));
+});
+
+test('generated dispatch safely re-resolves the registered id when id and name disagree', async () => {
+  const calls: string[] = [];
+  const native = makeTypedNative({
+    hasStaticCodec: () => true,
+    invokeTyped: (name) => {
+      calls.push(`typed:${name}`);
+      return { value: 7 };
+    },
+    invokeTypedById: (id) => {
+      calls.push(`byId:${id}`);
+      return { value: 99 };
+    },
+  });
+  const engine = createRkyvV2Engine(native, staticRegistry('addNumbers'));
+
+  const out = await engine.invokeById<{ value: number }>(99, 'addNumbers', {});
+
+  assert.equal(out.value, 99);
+  assert.deepEqual(
+    calls.filter((call) => call.startsWith('byId:')),
+    ['byId:1'],
+  );
+  assert.ok(!calls.some((call) => call === 'byId:99'));
 });
 
 test('typed dispatch falls back to name-based invokeTyped without invokeTypedById (P0-3)', async () => {
@@ -1459,6 +1510,89 @@ test('global invoke forwards options (signal) to engine invoke (T1)', async () =
   }
 });
 
+test('global invokeGenerated forwards the generated id to capable engines', async () => {
+  const captured: { id?: number; command?: string; args?: unknown } = {};
+  const mockEngine: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('name fallback must not run');
+    },
+    invokeById<T>(commandId: number, command: string, args?: unknown): Promise<T> {
+      captured.id = commandId;
+      captured.command = command;
+      captured.args = args;
+      return Promise.resolve({ value: 42 } as T);
+    },
+  };
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  };
+  configure(mockEngine);
+  try {
+    const out = await invokeGenerated<{ value: number }>(23, 'benchAdd', { a: 20, b: 22 });
+    assert.equal(out.value, 42);
+    assert.deepEqual(captured, { id: 23, command: 'benchAdd', args: { a: 20, b: 22 } });
+  } finally {
+    configure(sentinel);
+  }
+});
+
+test('global invokeGenerated uses one-Promise sync route for rustra engines', async () => {
+  const native = makeTypedNative({
+    hasStaticCodec: () => true,
+    invokeTyped: () => {
+      throw new Error('name dispatch must not run');
+    },
+    invokeTypedById: (id) => ({ value: id }),
+  });
+  const engine = createRkyvV2Engine(native, staticRegistry('benchAdd'));
+  const publicInvokeById = engine.invokeById;
+  engine.invokeById = () => {
+    throw new Error('public Promise wrapper must be bypassed without options');
+  };
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  };
+  configure(engine);
+  try {
+    const pending = invokeGenerated<{ value: number }>(1, 'benchAdd', { a: 20, b: 22 });
+    assert.ok(pending instanceof Promise, 'public generated command must still return a Promise');
+    assert.deepEqual(await pending, { value: 1 });
+
+    engine.invokeById = publicInvokeById;
+    const withOptions = await invokeGenerated<{ value: number }>(1, 'benchAdd', {}, {});
+    assert.deepEqual(withOptions, { value: 1 }, 'options path must retain public invokeById logic');
+  } finally {
+    configure(sentinel);
+  }
+});
+
+test('global invokeGenerated falls back to invoke for legacy engines', async () => {
+  let called = '';
+  const legacy: EngineClient = {
+    invoke<T>(command: string): Promise<T> {
+      called = command;
+      return Promise.resolve({ value: 3 } as T);
+    },
+  };
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  };
+  configure(legacy);
+  try {
+    const out = await invokeGenerated<{ value: number }>(1, 'addNumbers', {});
+    assert.equal(out.value, 3);
+    assert.equal(called, 'addNumbers');
+  } finally {
+    configure(sentinel);
+  }
+});
+
 // ── T3 Task 11: maxPayloadBytes JS 사전 검사 ────────────────
 // 인코딩 직후/네이티브 호출 전 크기 검사. tier 2(JS codec)·tier 3(동적)·
 // 전파(invokeAsync) 경로에 적용되고 typed(tier 1) 경로는 JS 측 인코딩이
@@ -1714,6 +1848,33 @@ test('invokeWithTimeout without timeoutMs passes through directly', async () => 
   };
   assert.equal(await invokeWithTimeout(ok, 'x', undefined, {}), 42);
   assert.equal(await invokeWithTimeout(ok, 'x', undefined, undefined), 42);
+});
+
+test('invokeWithTimeout without timeout preserves the engine Promise identity', async () => {
+  const original = Promise.resolve(42);
+  const ok: EngineClient = {
+    invoke<T>(): Promise<T> {
+      return original as Promise<T>;
+    },
+  };
+  const returned = invokeWithTimeout(ok, 'x');
+  assert.equal(returned, original, 'hot path must not add another Promise/microtask layer');
+  assert.equal(await returned, 42);
+});
+
+test('invokeWithTimeout converts a synchronous engine throw into a rejected Promise', async () => {
+  const broken: EngineClient = {
+    invoke(): Promise<never> {
+      throw new RustraCommandError('invoke.failed', 'sync failure');
+    },
+  };
+  const returned = invokeWithTimeout(broken, 'x');
+  assert.ok(returned instanceof Promise, 'public invoke contract must remain Promise-based');
+  await assert.rejects(returned, (error: unknown) => {
+    assert.ok(error instanceof RustraCommandError);
+    assert.equal(error.code, 'invoke.failed');
+    return true;
+  });
 });
 
 test('global invoke applies timeoutMs from options', async () => {

@@ -21,10 +21,10 @@ Current verification:
 
 ```bash
 cargo test --workspace
-npm run test:compat
+bun run test:compat
 ```
 
-`npm run test:compat` includes two different classes of checks:
+`bun run test:compat` includes two different classes of checks:
 
 - Adapter contract checks: generated commands call injected Tauri and React Native transports without importing host packages.
 - Runtime checks: Node and Bun execute the Rust calculator binary, and the Tauri example builds a real app then launches it long enough for WebView JavaScript to call a Rust command through `window.__TAURI__.core.invoke`. The Tauri command handler calls the shared `rustra` calculator package through `Package::invoke`, not a separate hand-written calculator path.

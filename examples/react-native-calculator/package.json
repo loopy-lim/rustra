@@ -1,12 +1,21 @@
 {
   "name": "react-native-calculator",
   "version": "1.0.0",
+  "packageManager": "bun@1.4.0",
   "main": "index.ts",
+  "workspaces": [
+    "modules/nitro-bench/nitro-bench",
+    "modules/rustra-calculator",
+    "modules/rustra-jsi"
+  ],
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "demo:dynamic": "EXPO_PUBLIC_RUSTRA_DEMO=dynamic expo start",
+    "bench:serialization": "bun serialization-bench.mjs",
+    "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -14,11 +23,11 @@
     "expo": "~54.0.33",
     "expo-status-bar": "~3.0.9",
     "msgpackr": "^2.0.1",
-    "nitro-bench": "file:./modules/nitro-bench/nitro-bench",
+    "nitro-bench": "workspace:*",
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-nitro-modules": "^0.35.6",
-    "rustra-jsi": "file:./modules/rustra-jsi"
+    "rustra-jsi": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
