@@ -93,8 +93,7 @@ describe('transport performance', { concurrency: 1 }, () => {
   // 과 벤치 스크립트(bun run bench / bench:bun)가 담당하므로, bun test 안에서는
   // 스킵한다. Bun 전역은 bun test/bun run 에만 존재하고 node --test 에는 없다.
   const bunGlobal = (globalThis as Record<string, unknown>).Bun as
-    | { spawnSync?: unknown }
-    | undefined;
+    { spawnSync?: unknown } | undefined;
   const runningUnderBunTest = bunGlobal !== undefined && typeof bunGlobal.spawnSync === 'function';
 
   if (runningUnderBunTest) {

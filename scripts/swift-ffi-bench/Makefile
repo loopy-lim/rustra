@@ -6,13 +6,18 @@
 RUST_LIB := rustra_calculator_example
 LIB_DIR  := ../../target/release
 
-.PHONY: all benchmark clean
+.PHONY: all build benchmark benchmark-json clean
 
 all: benchmark
 
-benchmark: Benchmark.swift
+build: Benchmark.swift
 	swiftc -O Benchmark.swift -L$(LIB_DIR) -l$(RUST_LIB) -o benchmark
+
+benchmark: build
 	./benchmark
+
+benchmark-json: build
+	./benchmark --json
 
 clean:
 	rm -f benchmark

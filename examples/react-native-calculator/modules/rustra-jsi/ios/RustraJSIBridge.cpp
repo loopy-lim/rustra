@@ -4,6 +4,7 @@
 #include <cstring>
 #include <jsi/jsi.h>
 #include <optional>
+#include <vector>
 
 // CallInvoker 는 순수 C++ 헤더(ReactCommon/callinvoker)다 — iOS/Android 모두
 // 동일 경로로 제공된다. 플랫폼 글루(.mm / jni.cpp) 가 invoker 를 얻어
@@ -112,12 +113,12 @@ static std::string parseRkyvV2ErrorBody(const uint8_t* resp, size_t out_len) {
 //     nullptr 면 null 접미로 tailSuffix 를 쓴다(단건/byId 배치).
 // free 짝 계약: (Tier 1) typedInvokeTail 은 caller-buffer 변형
 // (rustra_ffi_invoke_rkyv_v2_into) 을 쓴다 — Rust 가 응답을 할당하지 않고
-// 스택 버퍼에 직접 기록하므로 free 짝이 필요 없다(malloc→memcpy→free 제거).
-// probe→write 2단계 사이 핸들러는 코어 probe 캐시로 정확히 1회 실행된다.
-// 스택 버퍼가 부족한 대형 응답만 기존 alloc 경로(rustra_calculator_invoke_rkyv_v2 +
-// free_rkyv_v2_buffer)로 폴백한다.
+// caller 소유 버퍼에 직접 기록하므로 free 짝이 필요 없다. 먼저 512B 스택
+// 버퍼로 바로 dispatch+write하고, 부족한 경우에만 코어가 캐시한 같은 응답을
+// 정확한 크기의 vector로 재시도한다. 작은 응답은 FFI 1회, 큰 응답도 핸들러는
+// 정확히 1회만 실행된다.
 template <typename Decode>
-static Value typedInvokeTail(Runtime& rt, const std::vector<uint8_t>& req,
+static Value typedInvokeTail(Runtime& rt, const uint8_t* reqData, size_t reqSize,
                              const char* tailSuffix, Decode decode,
                              const std::string* batchItemName = nullptr) {
   // (Tier 1) 고정 스택 버퍼 — 대부분의 응답(숫자/작은 객체)이 여기에 들어온다.
@@ -126,29 +127,25 @@ static Value typedInvokeTail(Runtime& rt, const std::vector<uint8_t>& req,
   uint8_t stackBuf[kStackCap];
   size_t out_len = 0;
   const uint8_t* resp = nullptr;
-  bool heapResp = false;
+  std::vector<uint8_t> largeBuf;
 
-  // 1단계: size-probe(buf=null) — 필요 크기만 얻는다(핸들러 실행 포함, 코어
-  // thread_local 캐시에 저장 — 다음 write 단계는 dispatch 없이 같은 바이트).
-  size_t needed = 0;
-  size_t probe = rustra_ffi_invoke_rkyv_v2_into(
-    req.data(), req.size(), nullptr, 0, &needed);
-  (void)probe; // probe 단계 반환값은 항상 0
-  if (needed > 0 && needed <= kStackCap) {
-    // 2단계: 스택 버퍼에 직접 기록 — 코어 캐시 히트로 핸들러 재실행 없음.
-    size_t n = rustra_ffi_invoke_rkyv_v2_into(
-      req.data(), req.size(), stackBuf, kStackCap, &out_len);
-    if (n != SIZE_MAX && n > 0) {
-      resp = stackBuf;
-    }
+  // 1단계: 스택 버퍼로 바로 dispatch+write. 대부분의 응답은 여기서 끝나
+  // size-probe를 위한 두 번째 FFI 횡단과 thread_local 캐시 왕복이 없다.
+  size_t n = rustra_ffi_invoke_rkyv_v2_into(
+    reqData, reqSize, stackBuf, kStackCap, &out_len);
+  if (n != SIZE_MAX && n > 0) {
+    resp = stackBuf;
   }
-  if (!resp && needed > kStackCap) {
-    // 스택 버퍼 부족 — alloc 경로로 폴백(대형 응답). 이 경로는 probe 캐시를
-    // 소진했으므로 dispatch 가 1회 더 실행될 수 있다(비멱등 핸들러의 큰 응답).
-    // 대형 응답에서 1회 추가 실행은 alloc 절약과의 트레이드오프다 — 향후
-    // 재사용 힙 버퍼로 제거 가능(별도 최적화).
-    resp = rustra_calculator_invoke_rkyv_v2(req.data(), req.size(), &out_len);
-    heapResp = true;
+
+  // 버퍼가 부족하면 코어가 out_len에 필요 크기를 쓰고 동일 응답을 캐시한다.
+  // 정확한 크기로 한 번만 재시도하므로 비멱등 핸들러는 재실행되지 않는다.
+  if (!resp && n == SIZE_MAX && out_len > kStackCap) {
+    largeBuf.resize(out_len);
+    n = rustra_ffi_invoke_rkyv_v2_into(
+      reqData, reqSize, largeBuf.data(), largeBuf.size(), &out_len);
+    if (n != SIZE_MAX && n > 0) {
+      resp = largeBuf.data();
+    }
   }
   if (!resp) {
     std::string nullSuffix(tailSuffix);
@@ -156,29 +153,23 @@ static Value typedInvokeTail(Runtime& rt, const std::vector<uint8_t>& req,
     throw JSError(rt, "RustraJSI: invokeRkyvV2 returned null" + nullSuffix);
   }
   if (out_len < 1) {
-    if (heapResp) rustra_calculator_free_rkyv_v2_buffer(const_cast<uint8_t*>(resp), out_len);
     throw JSError(rt, std::string("RustraJSI: empty rkyv v2 response") + tailSuffix);
   }
   if (resp[0] == 0) {
     // 에러 와이어: [ok:0][pad to @8][err_len u16 LE @8][err @10]
     if (out_len < 10) {
-      if (heapResp) rustra_calculator_free_rkyv_v2_buffer(const_cast<uint8_t*>(resp), out_len);
       throw JSError(rt, std::string("RustraJSI: malformed error response") + tailSuffix);
     }
     std::string errStr = parseRkyvV2ErrorBody(resp, out_len);
-    if (heapResp) rustra_calculator_free_rkyv_v2_buffer(const_cast<uint8_t*>(resp), out_len);
     throw JSError(rt, errStr);
   }
 
   // 성공: postcard(O) @8 부터 디코딩.
   if (out_len < 8) {
-    if (heapResp) rustra_calculator_free_rkyv_v2_buffer(const_cast<uint8_t*>(resp), out_len);
     throw JSError(rt, std::string("RustraJSI: malformed success response") + tailSuffix);
   }
   rc::Reader r(resp + 8, out_len - 8);
   Value result = decode(r);
-  // 스택 버퍼 경로는 free 불필요(할당 자체가 없다). 대형 응답 폴백만 해제.
-  if (heapResp) rustra_calculator_free_rkyv_v2_buffer(const_cast<uint8_t*>(resp), out_len);
   return result;
 }
 
@@ -693,12 +684,10 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         if (!gen::encode_by_name(rt, name, args[1], w)) {
           throw JSError(rt, "RustraJSI: no C++ codec for '" + name + "'");
         }
-        auto req = w.take();
-
         // 2) Rust FFI (rkyv V2 단일 엔진) + 응답 tail — 공통 헬퍼로
         //    (typedInvokeTail 주석의 free 짝 계약: rustra_calculator_free_buffer).
         //    decoder 만 이름 기반 decode_by_name.
-        return typedInvokeTail(rt, req, "", [&rt, &name](rc::Reader& r) {
+        return typedInvokeTail(rt, w.data(), w.size(), "", [&rt, &name](rc::Reader& r) {
           return gen::decode_by_name(rt, name, r);
         });
       });
@@ -727,11 +716,9 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         if (!gen::encode_by_id(rt, cmdId, args[1], w)) {
           throw JSError(rt, "RustraJSI: no C++ codec for cmd_id " + std::to_string(cmdId));
         }
-        auto req = w.take();
-
         // 2) Rust FFI + 응답 tail — invokeTyped 와 동일하지만 decoder 만
         //    u16 디스패치 decode_by_id (free 짝: rustra_calculator_free_buffer).
-        return typedInvokeTail(rt, req, "", [&rt, cmdId](rc::Reader& r) {
+        return typedInvokeTail(rt, w.data(), w.size(), "", [&rt, cmdId](rc::Reader& r) {
           return gen::decode_by_id(rt, cmdId, r);
         });
       });
@@ -760,9 +747,7 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
 
         rc::Writer w;
         gen::encode_pos_by_id(rt, cmdId, argv, argc, w); // 미지원 시 throw
-        auto req = w.take();
-
-        return typedInvokeTail(rt, req, "", [&rt, cmdId](rc::Reader& r) {
+        return typedInvokeTail(rt, w.data(), w.size(), "", [&rt, cmdId](rc::Reader& r) {
           return gen::decode_by_id(rt, cmdId, r);
         });
       });
@@ -799,11 +784,9 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
           if (!gen::encode_by_name(rt, name, oneArgs, w)) {
             throw JSError(rt, "RustraJSI: batch item has no C++ codec for '" + name + "'");
           }
-          auto req = w.take();
-
           // FFI + 응답 tail — 공통 헬퍼 (fail-fast: 첫 에러에서 throw).
           // 접미 계약 유지: null → " (batch item <name>)", malformed → " (batch)".
-          Value decoded = typedInvokeTail(rt, req, " (batch)",
+          Value decoded = typedInvokeTail(rt, w.data(), w.size(), " (batch)",
                                           [&rt, &name](rc::Reader& r) {
                                             return gen::decode_by_name(rt, name, r);
                                           },
@@ -849,13 +832,11 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
             throw JSError(rt,
               "RustraJSI: batch item has no C++ codec for cmd_id " + std::to_string(cmdId));
           }
-          auto req = w.take();
-
           // FFI + 응답 tail — 공통 헬퍼 (fail-fast: 첫 에러에서 throw).
           // 접미는 이름 기반 배치와 동일하게 유지한다: null → " (batch)",
           // malformed → " (batch)". 항목 이름을 알 수 없는 byId 경로의
           // null 접미는 이름 조립 없이 배치 접미를 그대로 쓴다.
-          Value decoded = typedInvokeTail(rt, req, " (batch)",
+          Value decoded = typedInvokeTail(rt, w.data(), w.size(), " (batch)",
                                           [&rt, cmdId](rc::Reader& r) {
                                             return gen::decode_by_id(rt, cmdId, r);
                                           });

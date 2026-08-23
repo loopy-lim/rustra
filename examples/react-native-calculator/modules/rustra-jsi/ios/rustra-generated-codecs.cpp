@@ -29,6 +29,80 @@ static jsi::Value decode_addNumbers(jsi::Runtime& rt, rc::Reader& r) {
   return std::move(resultObj);
 }
 
+static void encode_benchAdd(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(23); w.push_u8(0); // cmd_id = 23 LE
+  auto argsObj = args.asObject(rt);
+  { auto _v = argsObj.getProperty(rt, "a").asNumber(); w.push_f64(_v); }
+  { auto _v = argsObj.getProperty(rt, "b").asNumber(); w.push_f64(_v); }
+}
+
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
+static void encode_pos_benchAdd(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  w.push_u8(23); w.push_u8(0); // cmd_id = 23 LE
+  (void)argc;
+  w.push_f64(argv[0].asNumber());
+  w.push_f64(argv[1].asNumber());
+}
+
+static jsi::Value decode_benchAdd(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  resultObj.setProperty(rt, "value", r.read_f64());
+  return std::move(resultObj);
+}
+
+static void encode_benchEchoBytes(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(25); w.push_u8(0); // cmd_id = 25 LE
+  auto argsObj = args.asObject(rt);
+  { auto _v = argsObj.getProperty(rt, "data"); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_u8((uint8_t)(int64_t)_arr.getValueAtIndex(rt, _i).asNumber()); } else { auto _ab = _o.getArrayBuffer(rt); auto _d = _ab.data(rt); auto _n = _ab.length(rt); w.push_uvar(_n); w.push_bytes((const uint8_t*)_d, _n); } }
+}
+
+static jsi::Value decode_benchEchoBytes(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  { auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, (double)r.read_u8()); } resultObj.setProperty(rt, "data", _arr); }
+  return std::move(resultObj);
+}
+
+static void encode_benchEchoPair(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(26); w.push_u8(0); // cmd_id = 26 LE
+  auto argsObj = args.asObject(rt);
+  { auto _v = argsObj.getProperty(rt, "name").getString(rt).utf8(rt); w.push_string(_v); }
+  { auto _v = argsObj.getProperty(rt, "value").asNumber(); w.push_f64(_v); }
+}
+
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
+static void encode_pos_benchEchoPair(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  w.push_u8(26); w.push_u8(0); // cmd_id = 26 LE
+  (void)argc;
+  { auto _s = argv[0].asString(rt).utf8(rt); w.push_string(_s); }
+  w.push_f64(argv[1].asNumber());
+}
+
+static jsi::Value decode_benchEchoPair(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, "name", jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  resultObj.setProperty(rt, "value", r.read_f64());
+  return std::move(resultObj);
+}
+
+static void encode_benchEchoString(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(24); w.push_u8(0); // cmd_id = 24 LE
+  auto argsObj = args.asObject(rt);
+  { auto _v = argsObj.getProperty(rt, "value").getString(rt).utf8(rt); w.push_string(_v); }
+}
+
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
+static void encode_pos_benchEchoString(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  w.push_u8(24); w.push_u8(0); // cmd_id = 24 LE
+  (void)argc;
+  { auto _s = argv[0].asString(rt).utf8(rt); w.push_string(_s); }
+}
+
+static jsi::Value decode_benchEchoString(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, "value", jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  return std::move(resultObj);
+}
+
 static void encode_clamp(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(4); w.push_u8(0); // cmd_id = 4 LE
   auto argsObj = args.asObject(rt);
@@ -71,7 +145,7 @@ static jsi::Value decode_createItem(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
   { auto _obj = jsi::Object(rt);
     _obj.setProperty(rt, "active", r.read_bool());
-    { auto _s = r.read_string(); _obj.setProperty(rt, "name", jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_s.data()), _s.size())); }
+    { auto _s = r.read_string_view(); _obj.setProperty(rt, "name", jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
     _obj.setProperty(rt, "value", (double)r.read_i64());
     resultObj.setProperty(rt, "item", _obj); }
   return std::move(resultObj);
@@ -147,7 +221,7 @@ static void encode_pos_greet(jsi::Runtime& rt, const jsi::Value* argv, size_t ar
 
 static jsi::Value decode_greet(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  { auto _s = r.read_string(); resultObj.setProperty(rt, "message", jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_s.data()), _s.size())); }
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, "message", jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   return std::move(resultObj);
 }
 
@@ -204,7 +278,7 @@ static jsi::Value decode_processItem(jsi::Runtime& rt, rc::Reader& r) {
   resultObj.setProperty(rt, "doubled", r.read_bool());
   { auto _obj = jsi::Object(rt);
     _obj.setProperty(rt, "active", r.read_bool());
-    { auto _s = r.read_string(); _obj.setProperty(rt, "name", jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_s.data()), _s.size())); }
+    { auto _s = r.read_string_view(); _obj.setProperty(rt, "name", jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
     _obj.setProperty(rt, "value", (double)r.read_i64());
     resultObj.setProperty(rt, "item", _obj); }
   return std::move(resultObj);
@@ -244,7 +318,7 @@ static void encode_resourceRead(jsi::Runtime& rt, const jsi::Value& args, rc::Wr
 static jsi::Value decode_resourceRead(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
   resultObj.setProperty(rt, "found", r.read_bool());
-  { auto _tag = r.read_u8(); if (_tag == 0) { resultObj.setProperty(rt, "value", jsi::Value::null()); } else { { auto _s = r.read_string(); resultObj.setProperty(rt, "value", jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_s.data()), _s.size())); } } }
+  { auto _tag = r.read_u8(); if (_tag == 0) { resultObj.setProperty(rt, "value", jsi::Value::null()); } else { { auto _s = r.read_string_view(); resultObj.setProperty(rt, "value", jsi::String::createFromUtf8(rt, _s.data, _s.size)); } } }
   return std::move(resultObj);
 }
 
@@ -279,7 +353,7 @@ static jsi::Value decode_rustraRegistryDemo(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
   resultObj.setProperty(rt, "ok", r.read_bool());
   resultObj.setProperty(rt, "frozen", r.read_bool());
-  { auto _s = r.read_string(); resultObj.setProperty(rt, "message", jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_s.data()), _s.size())); }
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, "message", jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   return std::move(resultObj);
 }
 
@@ -341,7 +415,7 @@ static void encode_span(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w)
 
 static jsi::Value decode_span(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  { auto _s = r.read_string(); resultObj.setProperty(rt, "first", jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_s.data()), _s.size())); }
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, "first", jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   resultObj.setProperty(rt, "second", (double)r.read_i64());
   return std::move(resultObj);
 }
@@ -374,7 +448,7 @@ static void encode_pos_toUpper(jsi::Runtime& rt, const jsi::Value* argv, size_t 
 
 static jsi::Value decode_toUpper(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  { auto _s = r.read_string(); resultObj.setProperty(rt, "result", jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_s.data()), _s.size())); }
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, "result", jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   return std::move(resultObj);
 }
 
@@ -382,6 +456,10 @@ namespace rustra::generated {
 
 bool encode_by_name(Runtime& rt, const std::string& name, const Value& args, rc::Writer& w) {
   if (name == "addNumbers") { encode_addNumbers(rt, args, w); return true; }
+  if (name == "benchAdd") { encode_benchAdd(rt, args, w); return true; }
+  if (name == "benchEchoBytes") { encode_benchEchoBytes(rt, args, w); return true; }
+  if (name == "benchEchoPair") { encode_benchEchoPair(rt, args, w); return true; }
+  if (name == "benchEchoString") { encode_benchEchoString(rt, args, w); return true; }
   if (name == "clamp") { encode_clamp(rt, args, w); return true; }
   if (name == "createItem") { encode_createItem(rt, args, w); return true; }
   if (name == "divide") { encode_divide(rt, args, w); return true; }
@@ -407,6 +485,10 @@ bool encode_by_name(Runtime& rt, const std::string& name, const Value& args, rc:
 
 Value decode_by_name(Runtime& rt, const std::string& name, rc::Reader& r) {
   if (name == "addNumbers") return decode_addNumbers(rt, r);
+  if (name == "benchAdd") return decode_benchAdd(rt, r);
+  if (name == "benchEchoBytes") return decode_benchEchoBytes(rt, r);
+  if (name == "benchEchoPair") return decode_benchEchoPair(rt, r);
+  if (name == "benchEchoString") return decode_benchEchoString(rt, r);
   if (name == "clamp") return decode_clamp(rt, r);
   if (name == "createItem") return decode_createItem(rt, r);
   if (name == "divide") return decode_divide(rt, r);
@@ -433,6 +515,10 @@ Value decode_by_name(Runtime& rt, const std::string& name, rc::Reader& r) {
 bool encode_by_id(Runtime& rt, uint16_t cmd_id, const Value& args, rc::Writer& w) {
   switch (cmd_id) {
     case 1: encode_addNumbers(rt, args, w); return true;
+    case 23: encode_benchAdd(rt, args, w); return true;
+    case 25: encode_benchEchoBytes(rt, args, w); return true;
+    case 26: encode_benchEchoPair(rt, args, w); return true;
+    case 24: encode_benchEchoString(rt, args, w); return true;
     case 4: encode_clamp(rt, args, w); return true;
     case 8: encode_createItem(rt, args, w); return true;
     case 10: encode_divide(rt, args, w); return true;
@@ -460,6 +546,10 @@ bool encode_by_id(Runtime& rt, uint16_t cmd_id, const Value& args, rc::Writer& w
 Value decode_by_id(Runtime& rt, uint16_t cmd_id, rc::Reader& r) {
   switch (cmd_id) {
     case 1: return decode_addNumbers(rt, r);
+    case 23: return decode_benchAdd(rt, r);
+    case 25: return decode_benchEchoBytes(rt, r);
+    case 26: return decode_benchEchoPair(rt, r);
+    case 24: return decode_benchEchoString(rt, r);
     case 4: return decode_clamp(rt, r);
     case 8: return decode_createItem(rt, r);
     case 10: return decode_divide(rt, r);
@@ -486,6 +576,10 @@ Value decode_by_id(Runtime& rt, uint16_t cmd_id, rc::Reader& r) {
 
 bool has_static_codec(const std::string& name) {
   if (name == "addNumbers") return true;
+  if (name == "benchAdd") return true;
+  if (name == "benchEchoBytes") return true;
+  if (name == "benchEchoPair") return true;
+  if (name == "benchEchoString") return true;
   if (name == "clamp") return true;
   if (name == "createItem") return true;
   if (name == "divide") return true;
@@ -512,6 +606,9 @@ bool has_static_codec(const std::string& name) {
 /// (Tier 1) positional 인자를 직접 인코딩 가능한 cmd_id 집합 — JS 폴백 판별용.
 bool has_pos_codec(uint16_t cmd_id) {
   if (cmd_id == 1) return true;
+  if (cmd_id == 23) return true;
+  if (cmd_id == 26) return true;
+  if (cmd_id == 24) return true;
   if (cmd_id == 4) return true;
   if (cmd_id == 8) return true;
   if (cmd_id == 10) return true;
@@ -529,6 +626,9 @@ bool has_pos_codec(uint16_t cmd_id) {
 void encode_pos_by_id(jsi::Runtime& rt, uint16_t cmd_id, const jsi::Value* argv, size_t argc, rc::Writer& w) {
   switch (cmd_id) {
     case 1: encode_pos_addNumbers(rt, argv, argc, w); return;
+    case 23: encode_pos_benchAdd(rt, argv, argc, w); return;
+    case 26: encode_pos_benchEchoPair(rt, argv, argc, w); return;
+    case 24: encode_pos_benchEchoString(rt, argv, argc, w); return;
     case 4: encode_pos_clamp(rt, argv, argc, w); return;
     case 8: encode_pos_createItem(rt, argv, argc, w); return;
     case 10: encode_pos_divide(rt, argv, argc, w); return;

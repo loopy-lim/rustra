@@ -1,1 +1,1 @@
-export { NitroBench } from "./specs/NitroBench.nitro";
+export type { NitroBench } from './specs/NitroBench.nitro'

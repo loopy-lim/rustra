@@ -37,12 +37,35 @@ fn test_package() -> Package {
                 PROBE_COUNTER.load(std::sync::atomic::Ordering::SeqCst)
             ))
         })
+        .command("largeCounted", large_counted)
         .build()
 }
 
 /// probe 1회 실행 테스트용 전역 카운터 — PACKAGE OnceLock 이 테스트 간 공유되므로
 /// 카운터도 패키지에 붙여 함께 공유한다(각 테스트는 자기 측정 전후 델타로 판정).
 static PROBE_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static LARGE_PROBE_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+#[derive(Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct LargeCountedInput {
+    len: u32,
+}
+
+#[derive(Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct LargeCountedOutput {
+    count: u64,
+    value: String,
+}
+
+fn large_counted(input: LargeCountedInput) -> rustra::Result<LargeCountedOutput> {
+    let count = LARGE_PROBE_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+    Ok(LargeCountedOutput {
+        count: count as u64,
+        value: "x".repeat(input.len as usize),
+    })
+}
 
 // ── wire mirror structs (private FfiResponse 들을 바깥에서 파싱) ──
 // postcard 는 필드 순서 기반 직렬화이므로, 동일한 필드 순서를 가진 미러 구조체로
@@ -280,6 +303,31 @@ fn get_schema_with_null_out_len_is_safe() {
     );
 }
 
+#[test]
+fn caller_buffer_null_out_len_is_safe() {
+    let payload = [1u8, 0, 0];
+    let json = unsafe {
+        rustra::ffi::rustra_ffi_invoke_json_into(
+            payload.as_ptr(),
+            payload.len(),
+            std::ptr::null_mut(),
+            0,
+            std::ptr::null_mut(),
+        )
+    };
+    let rkyv = unsafe {
+        rustra::ffi::rustra_ffi_invoke_rkyv_v2_into(
+            payload.as_ptr(),
+            payload.len(),
+            std::ptr::null_mut(),
+            0,
+            std::ptr::null_mut(),
+        )
+    };
+    assert_eq!(json, usize::MAX);
+    assert_eq!(rkyv, usize::MAX);
+}
+
 // ── (성능 후속) caller-buffer FFI — 3중 복사 제거 경로 ────────
 
 /// `rustra_ffi_invoke_json_into` size-probe → 쓰기 2단계 프로토콜 검증.
@@ -423,7 +471,25 @@ fn caller_buffer_probe_executes_handler_exactly_once() {
         "probe must run the handler exactly once"
     );
 
-    // 2) write — 같은 payload → 캐시 재사용으로 핸들러 미실행
+    // 2) 부족한 버퍼 — 캐시를 보존하고 핸들러를 재실행하지 않는다.
+    let mut small = vec![0u8; needed - 1];
+    let short = unsafe {
+        rustra_ffi_invoke_json_into(
+            request.as_ptr(),
+            request.len(),
+            small.as_mut_ptr(),
+            small.len(),
+            &mut needed,
+        )
+    };
+    assert_eq!(short, usize::MAX);
+    assert_eq!(
+        PROBE_COUNTER.load(std::sync::atomic::Ordering::SeqCst) - before,
+        1,
+        "short write must retain the probe response without re-running the handler"
+    );
+
+    // 3) 정확한 크기로 재시도 — 같은 캐시를 소비하고 핸들러는 여전히 1회다.
     let mut buf = vec![0u8; needed];
     let n = unsafe {
         rustra_ffi_invoke_json_into(
@@ -438,10 +504,10 @@ fn caller_buffer_probe_executes_handler_exactly_once() {
     assert_eq!(
         PROBE_COUNTER.load(std::sync::atomic::Ordering::SeqCst) - before,
         1,
-        "write phase must reuse the probe result, not re-run the handler"
+        "successful write must consume the probe result without re-running the handler"
     );
 
-    // 3) 캐시 소비 후 동일 payload 재호출(write-only)은 다시 실행된다 — probe
+    // 4) 캐시 소비 후 동일 payload 재호출(write-only)은 다시 실행된다 — probe
     // 없이 들어온 호출은 신선해야 한다.
     let mut buf2 = vec![0u8; needed + 64];
     unsafe {
@@ -592,4 +658,87 @@ fn caller_buffer_rkyv_v2_probe_then_write() {
     if needed > 0 {
         assert_eq!(short, usize::MAX, "insufficient buffer signals retry");
     }
+}
+
+/// RN JSI의 512B 스택 버퍼를 넘는 응답도 probe → short write → 정확한 write
+/// 전체에서 핸들러가 1회만 실행된다. 과거 어댑터가 큰 응답에서 alloc API로
+/// 폴백해 비멱등 명령을 두 번 실행하던 회귀를 코어 프로토콜 수준에서 고정한다.
+#[test]
+fn caller_buffer_rkyv_v2_large_response_executes_exactly_once() {
+    use rustra::ffi::rustra_ffi_invoke_rkyv_v2_into;
+
+    test_package().register_ffi();
+    let schema = test_package().live_schema();
+    let id = schema["commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "largeCounted")
+        .unwrap()["commandId"]
+        .as_u64()
+        .unwrap() as u16;
+
+    let input = LargeCountedInput { len: 2048 };
+    let input_bytes = postcard::to_allocvec(&input).unwrap();
+    let mut request = id.to_le_bytes().to_vec();
+    request.extend_from_slice(&input_bytes);
+    let before = LARGE_PROBE_COUNTER.load(std::sync::atomic::Ordering::SeqCst);
+
+    let mut needed = 0usize;
+    let probe = unsafe {
+        rustra_ffi_invoke_rkyv_v2_into(
+            request.as_ptr(),
+            request.len(),
+            std::ptr::null_mut(),
+            0,
+            &mut needed,
+        )
+    };
+    assert_eq!(probe, 0);
+    assert!(
+        needed > 512,
+        "fixture must exercise the JSI large-response path"
+    );
+    assert_eq!(
+        LARGE_PROBE_COUNTER.load(std::sync::atomic::Ordering::SeqCst) - before,
+        1
+    );
+
+    let mut small = vec![0u8; 512];
+    let short = unsafe {
+        rustra_ffi_invoke_rkyv_v2_into(
+            request.as_ptr(),
+            request.len(),
+            small.as_mut_ptr(),
+            small.len(),
+            &mut needed,
+        )
+    };
+    assert_eq!(short, usize::MAX);
+    assert_eq!(
+        LARGE_PROBE_COUNTER.load(std::sync::atomic::Ordering::SeqCst) - before,
+        1,
+        "short write must not consume the cached response"
+    );
+
+    let mut response = vec![0u8; needed];
+    let written = unsafe {
+        rustra_ffi_invoke_rkyv_v2_into(
+            request.as_ptr(),
+            request.len(),
+            response.as_mut_ptr(),
+            response.len(),
+            &mut needed,
+        )
+    };
+    assert_eq!(written, needed);
+    assert_eq!(response[0], 1);
+    let output: LargeCountedOutput = postcard::from_bytes(&response[8..]).unwrap();
+    assert_eq!(output.value.len(), 2048);
+    assert_eq!(output.count, (before + 1) as u64);
+    assert_eq!(
+        LARGE_PROBE_COUNTER.load(std::sync::atomic::Ordering::SeqCst) - before,
+        1,
+        "probe and final write must execute the large handler exactly once"
+    );
 }
