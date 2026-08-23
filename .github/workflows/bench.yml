@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.95.0
       - uses: Swatinem/rust-cache@v2
       # 직전 성공 벤치의 criterion baseline 복원 — 없으면 change: 이 첫 측정
@@ -29,7 +29,7 @@ jobs:
       # 내 아티팩트만 유효하다.
       - name: Restore previous baseline
         continue-on-error: true
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: bench.yml
           branch: main
@@ -59,7 +59,7 @@ jobs:
 
       - name: Upload criterion artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: criterion-results
           path: target/criterion/
