@@ -29,7 +29,7 @@ jobs:
       # 내 아티팩트만 유효하다.
       - name: Restore previous baseline
         continue-on-error: true
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@v23
         with:
           workflow: bench.yml
           branch: main
