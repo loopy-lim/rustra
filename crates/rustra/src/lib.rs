@@ -449,6 +449,11 @@ struct RegistryState {
     /// (T2, OTA) 스키마 협상 버전. `schema()`/`live_schema()` 와 코드젠이
     /// 노출한다 — JS > native 인 stale 조합을 감지하는 데 쓰인다.
     schema_version: u32,
+    /// 명령 구조가 바뀌지 않은 동안 재사용하는 라이브 스키마 스냅샷.
+    /// `live_schema()`의 반환값은 소유 `Value`라 clone은 필요하지만, 매 조회마다
+    /// JSON 객체와 정의 트리를 다시 조립하는 비용은 피한다. 구조 mutation은
+    /// write lock 안에서 반드시 이 값을 무효화한다.
+    live_schema_cache: Option<Value>,
 }
 
 struct FrozenRegistry {
@@ -1624,6 +1629,7 @@ impl Package {
         state.id_to_command.insert(command_id, Arc::clone(&command));
         state.commands.insert(name.clone(), command);
         state.id_to_name.insert(command_id, name);
+        state.live_schema_cache = None;
         Ok(())
     }
 
@@ -1663,6 +1669,7 @@ impl Package {
         let command = Arc::new(command);
         state.id_to_command.insert(command_id, Arc::clone(&command));
         state.commands.insert(name.to_string(), command);
+        state.live_schema_cache = None;
         Ok(())
     }
 
@@ -1691,6 +1698,7 @@ impl Package {
         for id in removed_ids {
             state.id_to_command.remove(&id);
         }
+        state.live_schema_cache = None;
         // NOTE: next_command_id는 감소시키지 않는다 — retired id는 영원히 재사용 금지.
         Ok(())
     }
@@ -1699,11 +1707,29 @@ impl Package {
     ///
     /// 읽기 전용이므로 debug/release 모두에서 사용 가능. `rustra_ffi_get_schema` 의 기반이 된다.
     pub fn live_schema(&self) -> Value {
-        let state = self
+        {
+            let state = self
+                .state
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if let Some(schema) = &state.live_schema_cache {
+                return schema.clone();
+            }
+        }
+
+        // register/replace/unregister와 같은 write lock으로 직렬화한다. read lock을
+        // 놓은 사이 다른 reader가 먼저 채웠다면 그 값을 재사용하고, writer가
+        // 구조를 바꿨다면 최신 state로 한 번만 다시 만든다.
+        let mut state = self
             .state
-            .read()
+            .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        Self::schema(&self.id, &state, &self.event_contracts)
+        if let Some(schema) = &state.live_schema_cache {
+            return schema.clone();
+        }
+        let schema = Self::schema(&self.id, &state, &self.event_contracts);
+        state.live_schema_cache = Some(schema.clone());
+        schema
     }
 
     /// 등록된 모든 명령에서 TypeScript 클라이언트 코드를 생성합니다.
@@ -2285,6 +2311,7 @@ impl PackageBuilder {
             next_command_id,
             granted_capabilities: BTreeSet::new(),
             schema_version: self.schema_version,
+            live_schema_cache: None,
         };
         let frozen_registry = OnceLock::new();
         let frozen = !cfg!(debug_assertions);
@@ -2544,6 +2571,8 @@ mod runtime_registry_tests {
     #[cfg(debug_assertions)]
     fn live_schema_includes_dynamic_command() {
         let pkg = empty_pkg();
+        // 빈 레지스트리 조회로 캐시를 먼저 채운 뒤 등록해도 최신 스키마여야 한다.
+        assert!(pkg.live_schema()["commands"].as_array().unwrap().is_empty());
         pkg.register("echo", echo).unwrap();
         let s = pkg.live_schema();
         let cmds = s["commands"].as_array().unwrap();
@@ -2556,6 +2585,27 @@ mod runtime_registry_tests {
             echo_entry["inputSchema"]["properties"]["v"]["type"],
             "integer"
         );
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    fn live_schema_cache_tracks_replace_and_unregister() {
+        let pkg = empty_pkg();
+        pkg.register("echo", echo).unwrap();
+        let before = pkg.live_schema();
+        // 동일 상태의 반복 조회는 같은 공개 값을 반환한다.
+        assert_eq!(pkg.live_schema(), before);
+
+        pkg.replace("echo", c1).unwrap();
+        let replaced = pkg.live_schema();
+        assert_ne!(
+            replaced["commands"][0]["inputSchema"],
+            before["commands"][0]["inputSchema"]
+        );
+        assert_eq!(replaced["commands"][0]["commandId"], 1);
+
+        pkg.unregister("echo").unwrap();
+        assert!(pkg.live_schema()["commands"].as_array().unwrap().is_empty());
     }
 
     /// deny-by-default: capability 가 부여되지 않으면 capability.denied 로 거부.
