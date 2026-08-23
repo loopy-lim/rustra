@@ -322,6 +322,10 @@ jobs:
           mkdir -p /tmp/consumer && cd /tmp/consumer
           bun init -y > /dev/null
           bun pm pkg set type=module
+          for rustra_types_tgz in /tmp/rustra-pack/rustra-types-*.tgz; do
+            bun pm pkg set "overrides.@rustra/types=file:$rustra_types_tgz"
+            break
+          done
           bun add --no-save /tmp/rustra-pack/rustra-*.tgz
       - name: Smoke — installed packages load (ESM)
         run: |
@@ -350,7 +354,15 @@ jobs:
           cd /tmp/consumer
           bunx --bun rustra init /tmp/rustra-init
           cd /tmp/rustra-init
-          bun add --no-save /tmp/rustra-pack/rustra-types-*.tgz /tmp/rustra-pack/rustra-cli-*.tgz
+          for rustra_types_tgz in /tmp/rustra-pack/rustra-types-*.tgz; do
+            bun pm pkg set "overrides.@rustra/types=file:$rustra_types_tgz"
+            break
+          done
+          for rustra_cli_tgz in /tmp/rustra-pack/rustra-cli-*.tgz; do
+            bun pm pkg set "overrides.@rustra/cli=file:$rustra_cli_tgz"
+            break
+          done
+          bun install
           sed -i "s#rustra = \"[0-9.]*\"#rustra = { path = \"$GITHUB_WORKSPACE/crates/rustra\" }#" Cargo.toml
           sed -i "s#rustra-macros = \"[0-9.]*\"#rustra-macros = { path = \"$GITHUB_WORKSPACE/crates/rustra-macros\" }#" Cargo.toml
           bun run codegen
