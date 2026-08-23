@@ -3,7 +3,9 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { configure, createNodeEngine } from '../../../packages/node/src/index.js';
+import { createRkyvV2Engine } from '../../../packages/types/src/index.js';
 import { addNumbers } from '../generated/commands.js';
+import { rkyvV2Registry } from '../generated/rkyv-registry.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // napi CLI의 산출명은 플랫폼별로 다르다: macOS 는 `darwin-arm64`(ABI 접미사
@@ -21,6 +23,7 @@ if (!napiFile) {
 const native = createRequire(__dirname)(resolve(napiDir, napiFile)) as {
   rustraInvoke: (cmd: string, args: string | undefined) => string;
   rustraInvokeBuffer: (cmd: string, args: string | string | undefined) => Buffer;
+  rustraInvokeRkyvV2: (payload: Buffer) => Buffer;
 };
 
 const engine = createNodeEngine({
@@ -50,6 +53,25 @@ if (!buffered.ok || buffered.result.value !== 5) {
   throw new Error('rustraInvokeBuffer round-trip failed');
 }
 
+// rkyv V2 스모크 — napi Buffer 직결(postcard 왕복, JSON/UTF-16 없음).
+// RkyvV2Native 계약(payload: ArrayBuffer)에 맞추기 위해 버퍼를 복사한다.
+// 코어 실측 JSON 1.11µs → rkyv V2 61.5ns(18x), napi 고정비 제외 순수 격차.
+const rkyvNative = {
+  invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer {
+    const resp = native.rustraInvokeRkyvV2(Buffer.from(payload));
+    // Buffer.buffer는 슬라이스 오프셋/SharedArrayBuffer를 가질 수 있다 —
+    // 정확한 크기의 ArrayBuffer 사본으로 정규화한다.
+    const out = new ArrayBuffer(resp.byteLength);
+    new Uint8Array(out).set(resp);
+    return out;
+  },
+};
+const rkyvEngine = createRkyvV2Engine(rkyvNative, rkyvV2Registry);
+const rkyvResult = await rkyvEngine.invoke<{ value: number }>('addNumbers', { a: 40, b: 2 });
+if (rkyvResult.value !== 42) {
+  throw new Error(`rkyv V2 napi round-trip failed: got ${JSON.stringify(rkyvResult)}`);
+}
+
 const result = await addNumbers({ a: 20, b: 22 });
 
 if (result.value !== 42) {
@@ -57,3 +79,4 @@ if (result.value !== 42) {
 }
 
 console.log(`node napi-rs result: ${result.value}`);
+console.log(`node napi-rs rkyv V2 result: ${rkyvResult.value}`);
