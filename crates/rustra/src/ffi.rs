@@ -576,7 +576,10 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json_into(
     capacity: usize,
     out_len: *mut usize,
 ) -> usize {
-    if payload.is_null() || out_len.is_null() {
+    if out_len.is_null() {
+        return usize::MAX;
+    }
+    if payload.is_null() {
         unsafe { *out_len = 0 };
         return usize::MAX;
     }
@@ -584,27 +587,28 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json_into(
     // dispatch 를 한 번 실행하고 결과를 직접 caller 버퍼(또는 임시 Vec)에 쓴다.
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
 
-    let response: Vec<u8> = if buf.is_null() {
+    if buf.is_null() {
         // probe 단계 — 결과를 키와 함께 캐시해 이어지는 write 단계가 dispatch 를
         // 재실행하지 않게 한다(비멱등 핸들러의 사이드 이펙트 2회 방지).
         let resp = dispatch_into_bytes(bytes);
-        probe_cache_store_keyed(bytes, resp.clone());
-        resp
-    } else {
-        // write 단계 — 같은 payload 의 probe 결과가 있으면 재사용(핸들러 1회
-        // 실행 보장), 없으면(호출자가 probe 없이 바로 write) dispatch 를 실행한다.
-        match probe_cache_take(bytes) {
-            Some(cached) => cached,
-            None => dispatch_into_bytes(bytes),
-        }
+        unsafe { *out_len = resp.len() };
+        json_probe_cache_store(bytes, resp);
+        return 0;
+    }
+
+    // write 단계 — 같은 payload 의 probe 결과가 있으면 재사용(핸들러 1회
+    // 실행 보장), 없으면(호출자가 probe 없이 바로 write) dispatch 를 실행한다.
+    let response = match json_probe_cache_take(bytes) {
+        Some(cached) => cached,
+        None => dispatch_into_bytes(bytes),
     };
 
     let needed = response.len();
     unsafe { *out_len = needed };
-    if buf.is_null() {
-        return 0; // size-probe 완료
-    }
     if capacity < needed {
+        // 호출자가 작은 버퍼로 재시도해도 probe 결과를 잃지 않는다. 다음 write가
+        // 같은 응답을 소비하므로 비멱등 핸들러는 여전히 정확히 1회만 실행된다.
+        json_probe_cache_store(bytes, response);
         return usize::MAX; // 버퍼 부족 — 다시 probe 하라
     }
     unsafe { std::ptr::copy_nonoverlapping(response.as_ptr(), buf, needed) };
@@ -661,54 +665,56 @@ fn panic_frame_message(payload: &(dyn std::any::Any + Send)) -> String {
 /// 전제로 마지막 1건만 보관한다 — probe 후 다른 명령을 probe 하면 이전 캐시는
 /// 덮어써진다(잘못된 응답 재사용 없음).
 ///
-/// 보관된 probe 결과를 꺼낸다(소비). write 단계가 호출하며, 꺼낸 뒤 캐시는
-/// 비워 다음 probe 주기를 명확히 한다. 같은 payload 로 시작하는 호출만 캐시를
-/// 신뢰한다 — payload 가 다르면 무효(no-cache)로 폴백해 잘못된 응답 전달을
-/// 원천 차단한다.
-fn probe_cache_take(payload: &[u8]) -> Option<Vec<u8>> {
-    PROBE_CACHE.with(|c| {
-        let mut slot = c.borrow_mut();
-        let bytes = slot.take()?;
-        // 캐시된 응답이 이 payload 의 probe 결과인지 — 요청 payload 접두사가
-        // 응답에 포함되지 않으므로 payload 해시를 키로 함께 보관한다.
-        let (key, bytes) = bytes_split_key(bytes)?;
-        if key == probe_key(payload) {
-            Some(bytes)
-        } else {
-            None
-        }
+/// 보관된 probe 결과를 꺼낸다(소비). 해시가 아니라 요청 바이트 전체를 비교해
+/// 충돌로 다른 명령의 응답이 전달될 가능성을 없앤다. JSON/rkyv V2 슬롯도
+/// 분리해 한 API의 probe가 다른 API의 캐시를 덮어쓰지 않는다.
+struct ProbeCacheEntry {
+    request: Vec<u8>,
+    response: Vec<u8>,
+}
+
+fn probe_cache_take(
+    cache: &'static std::thread::LocalKey<std::cell::RefCell<Option<ProbeCacheEntry>>>,
+    payload: &[u8],
+) -> Option<Vec<u8>> {
+    cache.with(|slot| {
+        let entry = slot.borrow_mut().take()?;
+        (entry.request == payload).then_some(entry.response)
     })
 }
 
-/// probe 캐시 슬롯에 (key, bytes)를 함께 넣는다 — key 는 요청 payload 의
-/// 64bit 해시(fnv-1a, 외부 크레이트 없이)다.
-fn probe_cache_store_keyed(payload: &[u8], mut bytes: Vec<u8>) {
-    let mut keyed = probe_key(payload).to_le_bytes().to_vec();
-    keyed.append(&mut bytes);
-    PROBE_CACHE.with(|c| *c.borrow_mut() = Some(keyed));
+fn probe_cache_store(
+    cache: &'static std::thread::LocalKey<std::cell::RefCell<Option<ProbeCacheEntry>>>,
+    payload: &[u8],
+    response: Vec<u8>,
+) {
+    cache.with(|slot| {
+        *slot.borrow_mut() = Some(ProbeCacheEntry {
+            request: payload.to_vec(),
+            response,
+        });
+    });
 }
 
-fn probe_key(payload: &[u8]) -> u64 {
-    // FNV-1a 64bit — 충돌 시 최악은 잘못된 응답 1회가 아니라 캐시 무효화
-    // (key 불일치 폴백) 또는 동일 payload 재실행이다. 안전 방향으로만 실패한다.
-    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
-    for &b in payload {
-        hash ^= b as u64;
-        hash = hash.wrapping_mul(0x100_0000_01b3);
-    }
-    hash
+fn json_probe_cache_take(payload: &[u8]) -> Option<Vec<u8>> {
+    probe_cache_take(&JSON_PROBE_CACHE, payload)
 }
 
-fn bytes_split_key(bytes: Vec<u8>) -> Option<(u64, Vec<u8>)> {
-    if bytes.len() < 8 {
-        return None;
-    }
-    let key = u64::from_le_bytes(bytes[0..8].try_into().ok()?);
-    Some((key, bytes[8..].to_vec()))
+fn json_probe_cache_store(payload: &[u8], response: Vec<u8>) {
+    probe_cache_store(&JSON_PROBE_CACHE, payload, response);
+}
+
+fn rkyv_probe_cache_take(payload: &[u8]) -> Option<Vec<u8>> {
+    probe_cache_take(&RKYV_V2_PROBE_CACHE, payload)
+}
+
+fn rkyv_probe_cache_store(payload: &[u8], response: Vec<u8>) {
+    probe_cache_store(&RKYV_V2_PROBE_CACHE, payload, response);
 }
 
 thread_local! {
-    static PROBE_CACHE: std::cell::RefCell<Option<Vec<u8>>> = const { std::cell::RefCell::new(None) };
+    static JSON_PROBE_CACHE: std::cell::RefCell<Option<ProbeCacheEntry>> = const { std::cell::RefCell::new(None) };
+    static RKYV_V2_PROBE_CACHE: std::cell::RefCell<Option<ProbeCacheEntry>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Postcard binary path.
@@ -1094,29 +1100,31 @@ pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2_into(
     capacity: usize,
     out_len: *mut usize,
 ) -> usize {
-    if payload.is_null() || out_len.is_null() {
+    if out_len.is_null() {
+        return usize::MAX;
+    }
+    if payload.is_null() {
         unsafe { *out_len = 0 };
         return usize::MAX;
     }
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
 
-    let response: Vec<u8> = if buf.is_null() {
+    if buf.is_null() {
         let resp = rkyv_v2_dispatch_bytes(bytes);
-        probe_cache_store_keyed(bytes, resp.clone());
-        resp
-    } else {
-        match probe_cache_take(bytes) {
-            Some(cached) => cached,
-            None => rkyv_v2_dispatch_bytes(bytes),
-        }
+        unsafe { *out_len = resp.len() };
+        rkyv_probe_cache_store(bytes, resp);
+        return 0;
+    }
+
+    let response = match rkyv_probe_cache_take(bytes) {
+        Some(cached) => cached,
+        None => rkyv_v2_dispatch_bytes(bytes),
     };
 
     let needed = response.len();
     unsafe { *out_len = needed };
-    if buf.is_null() {
-        return 0; // size-probe 완료
-    }
     if capacity < needed {
+        rkyv_probe_cache_store(bytes, response);
         return usize::MAX; // 버퍼 부족 — 재probe 신호
     }
     unsafe { std::ptr::copy_nonoverlapping(response.as_ptr(), buf, needed) };

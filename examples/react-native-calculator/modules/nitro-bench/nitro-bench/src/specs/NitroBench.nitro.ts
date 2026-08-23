@@ -4,17 +4,32 @@ export interface NitroBench extends HybridObject<{
   ios: 'c++'
   android: 'c++'
 }> {
+  /** Nitro의 원시 인자 lower bound. rustra command와 직접 ratio를 내지 않는다. */
   add(a: number, b: number): number
-  echo(value: number): number
-  /** Tier 2 — string 마셜링(왕복) */
-  echoString(value: string): string
-  /** bytes — ArrayBuffer 마셜링(왕복). rustra bytes(Vec<u8>) 경로와 대응. */
-  echoBuffer(value: ArrayBuffer): ArrayBuffer
-  /** 객체 변형 — Nitro 가 구조체를 어떻게 넘기는지(원시 필드 분해 vs 직렬화) */
+  /** 아래 네 메서드는 rustra bench* 명령과 입출력 모양·연산이 같다. */
+  benchAdd(value: AddPayload): AddResult
+  echoString(value: StringPayload): StringPayload
+  echoBytes(value: BytesPayload): BytesPayload
   echoPair(value: PairPayload): PairPayload
 }
 
-/** 벤치용 단순 구조체 — rustra createItem 계열과 대응하는 형태. */
+export interface AddPayload {
+  a: number
+  b: number
+}
+
+export interface AddResult {
+  value: number
+}
+
+export interface StringPayload {
+  value: string
+}
+
+export interface BytesPayload {
+  data: number[]
+}
+
 export interface PairPayload {
   name: string
   value: number

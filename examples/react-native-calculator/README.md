@@ -20,25 +20,25 @@ react-native-calculator/
 
 ## 테스트하는 커맨드
 
-| Tier | 커맨드 | 타입 |
-|------|--------|------|
+| Tier   | 커맨드                                      | 타입              |
+| ------ | ------------------------------------------- | ----------------- |
 | Tier 1 | `addNumbers`, `multiply`, `isEven`, `clamp` | 고정폭 프리미티브 |
-| Tier 2 | `greet`, `sumList`, `toUpper` | 문자열, Vec |
-| Tier 3 | `createItem`, `processItem` | 중첩 구조체 |
+| Tier 2 | `greet`, `sumList`, `toUpper`               | 문자열, Vec       |
+| Tier 3 | `createItem`, `processItem`                 | 중첩 구조체       |
 
 ## 실행
 
 ```bash
 # 의존성 설치
-npm install
+bun install
 
 # iOS 빌드 (Rust + Expo)
 cd modules/rustra-calculator/ios && ./build-rust-ios.sh
 cd ../../..
-npx expo run:ios
+bunx expo run:ios
 
 # 타입체크만
-npm run typecheck
+bun run typecheck
 ```
 
 ## 예시가 보여주는 것
@@ -51,12 +51,12 @@ npm run typecheck
 
 ## 핵심 파일
 
-| 파일 | 설명 |
-|------|------|
-| `App.tsx` | 벤치마크 UI 및 실행 로직 |
-| `modules/rustra-calculator/ios/RustraCalculatorModule.swift` | Swift → Rust FFI 브릿지 |
-| `modules/rustra-calculator/ios/build-rust-ios.sh` | iOS용 Rust 크로스 컴파일 |
-| `modules/rustra-jsi/` | 저수준 JSI 인터페이스 |
+| 파일                                                         | 설명                     |
+| ------------------------------------------------------------ | ------------------------ |
+| `App.tsx`                                                    | 벤치마크 UI 및 실행 로직 |
+| `modules/rustra-calculator/ios/RustraCalculatorModule.swift` | Swift → Rust FFI 브릿지  |
+| `modules/rustra-calculator/ios/build-rust-ios.sh`            | iOS용 Rust 크로스 컴파일 |
+| `modules/rustra-jsi/`                                        | 저수준 JSI 인터페이스    |
 
 ## 사전 요구사항
 

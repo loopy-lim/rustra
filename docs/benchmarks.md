@@ -1,7 +1,8 @@
 # 벤치마크
 
 모든 측정은 Apple Silicon (M-series) 환경에서 수행했다. 달리 표기하지 않은
-수치는 **2026-08-22 재측정 값**이다. 과거 세션 측정은 날짜를 명시했다.
+수치는 **2026-08-22 재측정 값**이며, React Native 섹션은 2026-08-23 Release
+재측정으로 갱신했다. 과거 세션 측정은 날짜를 명시했다.
 
 ## 테스트 환경
 
@@ -10,7 +11,7 @@
 | OS             | macOS (Darwin 25.3.0, arm64) |
 | Rust           | stable, aarch64-apple-darwin |
 | Node.js        | v22.21.1                     |
-| Bun            | 1.3.6                        |
+| Bun            | 1.4.0                        |
 | React Native   | 0.81.5 + Expo 54             |
 | iOS 시뮬레이터 | iPhone 17                    |
 
@@ -220,60 +221,44 @@ node scripts/transport-bench.mjs
 bun scripts/transport-bench.mjs
 
 # Transport 성능 회귀 테스트
-npm run test:runtime:node-napi
+bun run test:runtime:node-napi
 ```
 
 ## React Native 성능
 
-### React Native iOS Release micro-benchmark (2026-08-18 기록)
+### React Native iOS Release 동등 연산 비교 (2026-08-23)
 
-실제 iPhone 17 Simulator Release 실행에서 `BenchmarkApp`을 100K sync iteration,
-10K async iteration으로 측정했다. 이 표는 당시 앱 화면 기록값이며 2026-08-22에
-인레포 재측증은 하지 않았다(재측정 시 이 표를 대체).
+iPhone 17 Simulator(iOS 26.2), Hermes, React Native 0.81.5 + Expo 54의 Release
+앱에서 측정했다. 각 연산은 warm-up 500회 + 10,000회이며 Nitro와 rustra가
+같은 JS 입력 모양, 같은 연산, 같은 출력 모양을 사용한다. bytes 정규화도 양쪽
+측정 구간 안에 포함한다. `nitroBench.add(a, b)` 원시 호출은 lower bound로만
+기록하고 비율에는 사용하지 않는다.
 
-| 경로              |        평균 |         p50 |
-| ----------------- | ----------: | ----------: |
-| rkyv V2 encode    |      2.1 µs |      1.7 µs |
-| rkyv V2 JSI call  |      8.3 µs |      8.1 µs |
-| rkyv V2 decode    |      675 ns |      625 ns |
-| rkyv V2 full sync | **11.2 µs** | **10.6 µs** |
-| JSON full sync    |     26.1 µs |     25.5 µs |
-| Nitro async       |      1.9 µs |      1.7 µs |
-| rkyv V2 async     |  **5.4 µs** |  **5.2 µs** |
-| JSON async        |     27.2 µs |     26.5 µs |
+| Release 실행 |    add 객체 | string 객체 |   bytes 64B |   pair 객체 | 출력 동등성 |
+| ------------ | ----------: | ----------: | ----------: | ----------: | :---------: |
+| 1            |     1.2068x |     1.2440x |     1.1486x |     1.1969x |     ✅      |
+| 2            |     1.1828x |     1.2384x |     1.1656x |     1.2162x |     ✅      |
+| 3            |     1.2223x |     1.2308x |     1.1748x |     1.2504x |     ✅      |
+| **중앙값**   | **1.2068x** | **1.2384x** | **1.1656x** | **1.2162x** |   **✅**    |
 
-→ 이 실행에서 rkyv V2는 JSON 대비 full sync 약 2.3배, async 약 5.0배 빠르다.
-Nitro 비교가 어느 깊이까지 유효한지는 아래
-§"Nitro Modules 비교 — 무엇을 측정하고 무엇을 측정하지 않는가" 참고.
+최적화 전 같은 벤치의 중앙값은 add 1.3076x, string 1.3167x, bytes 1.1693x,
+pair 1.3954x였다. Nitro 대비 초과 격차(`ratio - 1`)는 각각 약 33%, 25%, 2%,
+45% 줄었다.
 
-#### JSI fast path 최적화 후 (feat/perf-close-nitro-gap, 2026-08-18 기록)
+대표적인 동기 분해 범위는 typed by-id 전체 591–620ns, positional 전체
+487–504ns, JS codec 전체 약 3.1µs, JSON 전체 24.1–24.5µs였다. 이번 개선은
+다음을 합친 결과다.
 
-JSI 브리지 부대비용 최적화 4종(함수 평탄화/ctor캐시/`invokeTypedById`
-진입/배치 byId)을 적용한 뒤 동일 BenchmarkApp으로 재측정한 상대 개선:
+- 512B caller stack buffer에 Rust 응답을 직접 기록하고 큰 응답만 정확한 크기로
+  재시도한다. 재시도해도 핸들러는 한 번만 실행된다.
+- C++ 요청 writer는 128B inline 저장소를 사용하고 f32/f64를 한 번에 기록한다.
+- 문자열 응답은 중간 `std::string` 복사 없이 `StringView`에서 JSI 문자열로 만든다.
+- 생성 명령은 검증된 숫자 command id를 사용하며, 옵션 없는 동기 transport는
+  공개 Promise를 정확히 한 번만 생성한다. 취소/타임아웃 옵션 경로는 기존 계약을
+  그대로 사용한다.
 
-| 경로               | 이전 (0.1.2) | 최적화 후 | 개선          |
-| ------------------ | -----------: | --------: | ------------- |
-| rkyv V2 JSI call   |       8.3 µs |   ~2.4 µs | 약 3.5x       |
-| rkyv V2 full sync  |      11.2 µs |   ~5.2 µs | 약 2.2x       |
-| rkyv V2 async      |       5.4 µs |   ~2.4 µs | 약 2.25x      |
-| Nitro async (기준) |       1.9 µs |    1.9 µs | —             |
-| rkyvV2 / Nitro     |         2.8x |     ~1.3x | 격차 79% 축소 |
-
-**성능 후속 구현 완료 (2026-08-20):**
-
-- **FFI caller-buffer 변형** — `rustra_ffi_invoke_json_into`: Rust가 응답을
-  할당하지 않고 caller 버퍼에 직접 기록한다 (size-probe → 쓰기 2단계 프로토콜,
-  버퍼 부족 시 `usize::MAX` 재시도 신호). malloc→복사→caller memcpy의 3중 복사
-  제거. 호스트 어댑터(RN JSI/Napi)에 아직 배선 전 — 어댑터 측 채택 시 측정치를
-  이 표에 추가한다.
-- **positional facade (P2)** — `rustra generate --positional`이
-  `positional-facade.ts`를 생성한다: 정적 명령(≤3개 primitive 필드)을
-  `addNumbers(a, b)` positional 시그니처로 노출하고 JSI `invokeTyped`에 직접
-  연결한다 — 인자 객체/인코딩 경로를 건너뛴다. 미지원 명령은 기존
-  commands.ts(Tier 3 폴백 포함)로 공존.
-
-> Android는 동일 `RustraJSIBridge.cpp`를 공유하므로 본 최적화가 자동 적용되지만,
-> 이번 측정은 iOS 시뮬레이터 기준이다 — Android 에뮬레이터/실기기 재검증 대기.
+> Android는 같은 `RustraJSIBridge.cpp`를 공유하지만 이번 숫자는 iOS
+> 시뮬레이터 기준이다. Android 에뮬레이터/실기기 수치는 별도 검증이 필요하다.
 
 ### Expo async bridge 분해 (2026-08-18 초기 기록)
 
@@ -332,7 +317,7 @@ Fast-Path"로 **이름만 교체**된 것이었다 (커밋 d888fc86). 이후 Lyn
 
 ### 현재 비교의 깊이 (BenchmarkApp + nitro-bench 모듈)
 
-레포 안의 Nitro 비교 장치는 실재하고 공정하다 — 같은 프로세스, 같은 측정
+레포 안의 Nitro 비교 장치는 실재하고 공정하다. 같은 프로세스, 같은 측정
 루프(warmup 500회 + 10K iteration, avg/p50/p99)로 양쪽을 잰다:
 
 - **대상**: `nitro-bench` 네이티브 모듈(`modules/nitro-bench/`) — nitrogen
@@ -340,39 +325,22 @@ Fast-Path"로 **이름만 교체**된 것이었다 (커밋 d888fc86). 이후 Lyn
   `echo(v) = v` (`ios/HybridNitroBench.cpp`).
 - **버전**: `react-native-nitro-modules` **0.35.6** (설치된 것). 과거 유령
   표의 "v0.80+" 라벨은 Nitro 버전이 아니라 RN 버전을 가리킨 것으로 보인다.
-- **측정 경로**: `nitroBench.add(42, 58)` — Nitro의 가장 빠른 경로인
-  **double 프리미티브 직접 변환**(`JSIConverter<double>`)을 통과한다.
-  rkyvV2 측정(`addNumbers({a:42,b:58})`)과 같은 값, 같은 measure 함수.
+- **비율 측정 경로**: `benchAdd({a,b})`, `echoString({value})`,
+  `echoBytes({data})`, `echoPair({name,value})`를 양쪽에 동일하게 구현했다.
+  원시 `nitroBench.add(42, 58)`는 하한선이며 비율에서 제외한다.
 
 즉 이 비교가 확실하게 답하는 질문은 하나다:
 
-> **"단일 스칼라 인자 호출의 엔드투엔드 지연이 Nitro급인가?"** — 답: async
-> 기준 격차 ~1.3x (Nitro 1.9µs vs rkyvV2 최적화 후 ~2.4µs, 2026-08-18 기록).
+> **"동일한 공개 객체 API의 엔드투엔드 지연이 Nitro급인가?"** — 답: 3회
+> 중앙값 기준 rustra/Nitro 1.17–1.24x(2026-08-23 Release 측정)다.
 
 이 비교가 **하지 않는** 것 (즉, 위 비교만으로 "full 지원 상태"를 체크했다고
 말할 수 없다):
 
-- ~~Nitro의 다른 타입 경로(string, 객체, ArrayBuffer)의 지연 — 전부 미측정~~
-  → **2026-08-22 측정 완료**: nitro-bench에 `echoString`/`echoBuffer`/
-  `echoPair`(구조체) variant를 추가하고 BenchmarkApp "Payload shapes"
-  블록에서 rustra greet/sizeOf/createItem과 같은 measure 루프로 왕복
-  측정했다. Nitro의 구조체 경로는 프로퍼티별 분해 마셜링(직렬화 아님)으로
-  동작한다 — nitrogen 생성 코드(`PairPayload.hpp`의 toJSI/fromJSI)가 그
-  증거다.
-
-  | 페이로드 (10K iter)                       | Nitro avg | Nitro p50 | rustra(rkyvV2) avg  | rustra p50 | rustra/Nitro |
-  | ----------------------------------------- | --------- | --------- | ------------------- | ---------- | ------------ |
-  | string (23B `"benchmark-string-payload"`) | 2.2 µs    | 2.0 µs    | 7.1 µs (greet)      | 6.7 µs     | 3.2x         |
-  | bytes (64B Vec\<u8\>)                     | 4.1 µs    | 3.6 µs    | 18.8 µs (sizeOf)    | 18.1 µs    | 4.6x         |
-  | struct {name,value}                       | 3.7 µs    | 3.5 µs    | 7.4 µs (createItem) | 7.1 µs     | 2.0x         |
-
-  환경: iPhone 17 시뮬레이터(aarch64-apple-ios-sim, Apple Silicon 호스트),
-  2026-08-22. 해석: Nitro는 타입별 JSI 변환기(구조체는 프로퍼티 분해)를
-  통과하는 반면 rustra는 모든 페이로드가 postcard 직렬화 왕복을 지난다 —
-  특히 bytes 64B에서 JS `Array.from` 변환 비용이 더해져 격차가 가장 크다
-  (4.6x). 구조체는 필드 수가 적어 2.0x로 가장 근접하다. 스칼라
-  addNumbers(1.3x)와 종합하면 "페이로드가 커질수록 직렬화 기반 RPC의
-  상대 비용이 커진다"는 계약상의 트레이드오프를 수치로 확인했다.
+- string/bytes/pair 비교는 **2026-08-23 동등 연산으로 재측정 완료**했다.
+  3회 중앙값은 string 1.2384x, bytes 1.1656x, pair 1.2162x다. 이전의
+  greet/sizeOf/createItem 비교는 연산과 출력 모양이 달라 공정한 비율이 아니었으므로
+  위 동등 연산 표로 대체했다.
 
 - bigint/Date/Promise 네이티브/콜백(Function 인자) 경로는 여전히 미측정.
 - 페이로드 크기 확장(64B 초과) 비교 — 향후 과제.
@@ -546,5 +514,5 @@ cd scripts/swift-ffi-bench && make
 
 # React Native 벤치마크 (iOS 시뮬레이터 필요)
 # examples/react-native-calculator/BenchmarkApp.tsx를 App.tsx로 교체 후
-npx expo run:ios
+bunx expo run:ios
 ```
