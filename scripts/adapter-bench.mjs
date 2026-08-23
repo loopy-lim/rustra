@@ -2,19 +2,19 @@
 // rustra-bridge adapter benchmark: Node vs Bun
 // Measures end-to-end bridge overhead from JavaScript side
 
-import { execSync, spawnSync } from "child_process";
-import { readFileSync } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
+import { execSync, spawnSync } from 'child_process';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(__dirname, "..");
+const ROOT = join(__dirname, '..');
 
 // ── Helpers ──────────────────────────────────────────────
 
 function bar(value, max, width = 40) {
   const filled = Math.round((value / max) * width);
-  return "█".repeat(filled) + "░".repeat(width - filled);
+  return '█'.repeat(filled) + '░'.repeat(width - filled);
 }
 
 function runBench(label, fn, iterations = 50000) {
@@ -33,66 +33,64 @@ function runBench(label, fn, iterations = 50000) {
 
 function printResult(r) {
   console.log(
-    `  ${r.label.padEnd(30)} ${r.avgNs.toFixed(0).padStart(8)} ns/op  ${r.opsPerSec.toFixed(0).padStart(12)} ops/s`
+    `  ${r.label.padEnd(30)} ${r.avgNs.toFixed(0).padStart(8)} ns/op  ${r.opsPerSec.toFixed(0).padStart(12)} ops/s`,
   );
 }
 
 // ── Check runtime ────────────────────────────────────────
 
-const isBun = typeof Bun !== "undefined";
-const runtime = isBun ? "Bun" : "Node.js";
+const isBun = typeof Bun !== 'undefined';
+const runtime = isBun ? 'Bun' : 'Node.js';
 const version = isBun ? Bun.version : process.version;
 
-console.log("┌─ Adapter Benchmark ─────────────────────────────────────┐");
+console.log('┌─ Adapter Benchmark ─────────────────────────────────────┐');
 console.log(`│  Runtime: ${runtime} ${version}`);
-console.log(`│  Date:    ${new Date().toISOString().split("T")[0]}`);
-console.log("└─────────────────────────────────────────────────────────┘");
+console.log(`│  Date:    ${new Date().toISOString().split('T')[0]}`);
+console.log('└─────────────────────────────────────────────────────────┘');
 console.log();
 
 // ── Benchmark: Pure JSON ─────────────────────────────────
 
-console.log("┌─ JSON Parse + Stringify ────────────────────────────────┐");
+console.log('┌─ JSON Parse + Stringify ────────────────────────────────┐');
 
 const simplePayload = JSON.stringify({ a: 42, b: 58 });
 const mediumPayload = JSON.stringify({
   items: Array.from({ length: 100 }, (_, i) => ({
     id: i,
     name: `item-${i}`,
-    tags: ["a", "b"],
+    tags: ['a', 'b'],
     active: true,
     score: i * 1.5,
   })),
 });
 
 const results = [
-  runBench("JSON.parse (simple)", () => JSON.parse(simplePayload)),
-  runBench("JSON.parse (100 items)", () => JSON.parse(mediumPayload)),
-  runBench("JSON.stringify (simple)", () => JSON.stringify({ a: 42, b: 58 })),
-  runBench(
-    "JSON.stringify (100 items)",
-    () => JSON.stringify(JSON.parse(mediumPayload))
-  ),
+  runBench('JSON.parse (simple)', () => JSON.parse(simplePayload)),
+  runBench('JSON.parse (100 items)', () => JSON.parse(mediumPayload)),
+  runBench('JSON.stringify (simple)', () => JSON.stringify({ a: 42, b: 58 })),
+  runBench('JSON.stringify (100 items)', () => JSON.stringify(JSON.parse(mediumPayload))),
 ];
 
 for (const r of results) printResult(r);
 
-console.log("└─────────────────────────────────────────────────────────┘");
+console.log('└─────────────────────────────────────────────────────────┘');
 console.log();
 
 // ── Benchmark: EngineClient Simulation ───────────────────
 
-console.log("┌─ EngineClient Overhead ─────────────────────────────────┐");
+console.log('┌─ EngineClient Overhead ─────────────────────────────────┐');
 
 // Simulate the adapter pattern
 function createMockEngine() {
   return {
     async invoke(command, args) {
       // Simulates what each adapter does internally
-      const input = JSON.parse(JSON.stringify(args || {}));
+      const serialized = JSON.stringify(args || {});
+      const input = JSON.parse(serialized);
       // The actual Rust call would happen here via IPC/FFI
       // We measure just the JS-side overhead
       switch (command) {
-        case "addNumbers":
+        case 'addNumbers':
           return { value: input.a + input.b };
         default:
           throw new Error(`Unknown command: ${command}`);
@@ -104,21 +102,19 @@ function createMockEngine() {
 const engine = createMockEngine();
 
 const adapterResults = [
-  runBench("EngineClient.invoke (sync path)", () =>
-    engine.invoke("addNumbers", { a: 42, b: 58 })
-  ),
-  runBench("JSON roundtrip (no engine)", () => {
+  runBench('EngineClient.invoke (sync path)', () => engine.invoke('addNumbers', { a: 42, b: 58 })),
+  runBench('JSON roundtrip (no engine)', () => {
     const s = JSON.stringify({ a: 42, b: 58 });
     JSON.parse(s);
   }),
-  runBench("Object spread copy", () => ({
+  runBench('Object spread copy', () => ({
     ...{ a: 42, b: 58 },
   })),
 ];
 
 for (const r of adapterResults) printResult(r);
 
-console.log("└─────────────────────────────────────────────────────────┘");
+console.log('└─────────────────────────────────────────────────────────┘');
 console.log();
 
 // ── Bridge Overhead Comparison Chart ─────────────────────
@@ -131,36 +127,32 @@ console.log();
 
 // ── Benchmark: Payload Size Scaling ────────────────────
 
-console.log("┌─ Payload Size Scaling ──────────────────────────────────┐");
-console.log("│");
+console.log('┌─ Payload Size Scaling ──────────────────────────────────┐');
+console.log('│');
 
 const payloadSizes = [
-  { label: "1 KB", size: 1024 },
-  { label: "10 KB", size: 10 * 1024 },
-  { label: "100 KB", size: 100 * 1024 },
-  { label: "1 MB", size: 1024 * 1024 },
+  { label: '1 KB', size: 1024 },
+  { label: '10 KB', size: 10 * 1024 },
+  { label: '100 KB', size: 100 * 1024 },
+  { label: '1 MB', size: 1024 * 1024 },
 ];
 
 const payloadResults = [];
 for (const { label, size } of payloadSizes) {
   const payload = JSON.stringify({
-    data: "x".repeat(Math.max(1, size - 20)),
+    data: 'x'.repeat(Math.max(1, size - 20)),
   });
   const actualSize = Buffer.byteLength(payload);
 
-  const { avgNs } = runBench(
-    label,
-    () => JSON.parse(payload),
-    10000,
-  );
-  const throughputMBs = (actualSize / (avgNs / 1e9)) / (1024 * 1024);
+  const { avgNs } = runBench(label, () => JSON.parse(payload), 10000);
+  const throughputMBs = actualSize / (avgNs / 1e9) / (1024 * 1024);
   payloadResults.push({ label, avgNs, actualSize, throughputMBs });
 }
 
 const maxPayloadNs = Math.max(...payloadResults.map((r) => r.avgNs));
 for (const r of payloadResults) {
   const barLen = Math.max(1, Math.round((r.avgNs / maxPayloadNs) * 35));
-  const barStr = "█".repeat(barLen);
+  const barStr = '█'.repeat(barLen);
   const nsStr =
     r.avgNs >= 1_000_000
       ? `${(r.avgNs / 1_000_000).toFixed(2)} ms`
@@ -172,14 +164,14 @@ for (const r of payloadResults) {
   );
 }
 
-console.log("│");
-console.log("└─────────────────────────────────────────────────────────┘");
+console.log('│');
+console.log('└─────────────────────────────────────────────────────────┘');
 console.log();
 
 // ── Benchmark: Concurrency ─────────────────────────────
 
-console.log("┌─ Concurrency (Promise.all throughput) ──────────────────┐");
-console.log("│");
+console.log('┌─ Concurrency (Promise.all throughput) ──────────────────┐');
+console.log('│');
 
 async function runConcurrencyBench(label, concurrency, iterations = 5000) {
   const engine = createMockEngine();
@@ -188,16 +180,14 @@ async function runConcurrencyBench(label, concurrency, iterations = 5000) {
   // Warm up
   await Promise.all(
     Array.from({ length: Math.min(concurrency, 100) }, () =>
-      engine.invoke("addNumbers", { a: 1, b: 2 }),
+      engine.invoke('addNumbers', { a: 1, b: 2 }),
     ),
   );
 
   const start = performance.now();
   for (let i = 0; i < batchCount; i++) {
     await Promise.all(
-      Array.from({ length: concurrency }, () =>
-        engine.invoke("addNumbers", { a: i, b: i + 1 }),
-      ),
+      Array.from({ length: concurrency }, () => engine.invoke('addNumbers', { a: i, b: i + 1 })),
     );
   }
   const elapsed = performance.now() - start;
@@ -219,11 +209,11 @@ for (const c of concurrencyLevels) {
 const maxConcOps = Math.max(...concResults.map((r) => r.opsPerSec));
 for (const r of concResults) {
   const barLen = Math.max(1, Math.round((r.opsPerSec / maxConcOps) * 35));
-  const barStr = "█".repeat(barLen);
+  const barStr = '█'.repeat(barLen);
   console.log(
     `│  ${r.label.padEnd(18)} ${barStr.padEnd(36)} ${r.opsPerSec.toFixed(0).padStart(12)} ops/s`,
   );
 }
 
-console.log("│");
-console.log("└─────────────────────────────────────────────────────────┘");
+console.log('│');
+console.log('└─────────────────────────────────────────────────────────┘');

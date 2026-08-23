@@ -10,16 +10,21 @@
   ],
   "scripts": {
     "start": "expo start",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
+    "android": "bun run rust:android && expo run:android",
+    "ios": "bun run rust:ios && expo run:ios",
     "web": "expo start --web",
     "demo:dynamic": "EXPO_PUBLIC_RUSTRA_DEMO=dynamic expo start",
+    "demo:reload": "EXPO_PUBLIC_RUSTRA_DEMO=reload expo start --dev-client",
     "bench:serialization": "bun serialization-bench.mjs",
+    "rust:android": "sh modules/rustra-jsi/android/build-rust-android.sh",
+    "rust:ios": "sh modules/rustra-jsi/ios/build-rust-ios.sh",
     "test": "bun test",
+    "test:cpp-codec": "bash modules/rustra-jsi/ios/run-cpp-codec-tests.sh",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@msgpack/msgpack": "^3.1.3",
+    "@rustra/types": "file:../../packages/types",
     "expo": "~54.0.33",
     "expo-status-bar": "~3.0.9",
     "msgpackr": "^2.0.1",
@@ -27,6 +32,7 @@
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-nitro-modules": "^0.35.6",
+    "rustra-calculator": "workspace:*",
     "rustra-jsi": "workspace:*"
   },
   "devDependencies": {

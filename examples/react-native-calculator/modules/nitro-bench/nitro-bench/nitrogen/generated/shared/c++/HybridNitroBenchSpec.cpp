@@ -18,6 +18,7 @@ namespace margelo::nitro::nitrobench {
       prototype.registerHybridMethod("benchAdd", &HybridNitroBenchSpec::benchAdd);
       prototype.registerHybridMethod("echoString", &HybridNitroBenchSpec::echoString);
       prototype.registerHybridMethod("echoBytes", &HybridNitroBenchSpec::echoBytes);
+      prototype.registerHybridMethod("echoBuffer", &HybridNitroBenchSpec::echoBuffer);
       prototype.registerHybridMethod("echoPair", &HybridNitroBenchSpec::echoPair);
     });
   }

@@ -64,13 +64,49 @@ test('invokeBatch is passed through when inner supports it', async () => {
   assert.equal(report.commandStats.addNumbers.count, 1);
   assert.equal(report.commandStats.greet.count, 1);
 
-  // 배치 실패 시 엔트리별 에러 카운트 반영 후 원 에러 전파
+  // 배치 실패 원인은 개별 엔트리로 추측하지 않고 batch-level에만 기록한다.
   await assert.rejects(() => batch([{ command: 'addNumbers' }, { command: 'fail' }]), /batch boom/);
-  assert.equal(engine.report().commandStats.fail.errors, 1);
-  assert.equal(engine.report().commandStats.addNumbers.errors, 1);
+  assert.equal(engine.report().batchStats.errors, 1);
+  assert.equal(engine.report().batchStats.count, 2);
+  assert.equal(engine.report().batchStats.entries, 4);
+  assert.equal(engine.report().commandStats.fail.errors, 0);
+  assert.equal(engine.report().commandStats.addNumbers.errors, 0);
 });
 
 test('invokeBatch is omitted when inner lacks it', () => {
   const engine = createInstrumentedEngine(makeInner());
   assert.equal(engine.invokeBatch, undefined);
+});
+
+test('invokeById is passed through without losing id, name, args, or options', async () => {
+  const seen: unknown[] = [];
+  const inner = {
+    ...makeInner(),
+    async invokeById<T>(
+      commandId: number,
+      command: string,
+      args?: unknown,
+      options?: unknown,
+    ): Promise<T> {
+      seen.push(commandId, command, args, options);
+      return { value: 42 } as T;
+    },
+  };
+  const engine = createInstrumentedEngine(inner);
+  const options = { timeoutMs: 50 };
+  const result = await engine.invokeById!<{ value: number }>(
+    7,
+    'addNumbers',
+    { a: 20, b: 22 },
+    options,
+  );
+
+  assert.deepEqual(result, { value: 42 });
+  assert.deepEqual(seen, [7, 'addNumbers', { a: 20, b: 22 }, options]);
+  assert.equal(engine.report().commandStats.addNumbers.count, 1);
+});
+
+test('invokeById is omitted when inner lacks it', () => {
+  const engine = createInstrumentedEngine(makeInner());
+  assert.equal(engine.invokeById, undefined);
 });

@@ -1,4 +1,5 @@
-import { NativeModules, Platform } from 'react-native';
+import { requireOptionalNativeModule } from 'expo-modules-core';
+import { Platform } from 'react-native';
 
 const LINKING_ERROR =
   `The package 'rustra-calculator' doesn't seem to be linked. Make sure:\n\n` +
@@ -6,16 +7,15 @@ const LINKING_ERROR =
   '- You rebuilt the app after installing the package\n' +
   '- You are not using Expo Go\n';
 
-const RustraCalculator = NativeModules.RustraCalculator
-  ? NativeModules.RustraCalculator
-  : new Proxy(
-      {},
-      {
-        get() {
-          throw new Error(LINKING_ERROR);
-        },
+const linkedModule = requireOptionalNativeModule<RustraCalculatorType>('RustraCalculator');
+
+const RustraCalculator: RustraCalculatorType = linkedModule
+  ? linkedModule
+  : new Proxy({} as RustraCalculatorType, {
+      get() {
+        throw new Error(LINKING_ERROR);
       },
-    );
+    });
 
 type InvokeResult = {
   ok: boolean;
@@ -31,10 +31,7 @@ export type RustraCalculatorType = {
 
 export default RustraCalculator as RustraCalculatorType;
 
-export async function invokeCommand(
-  command: string,
-  args?: unknown,
-): Promise<unknown> {
+export async function invokeCommand(command: string, args?: unknown): Promise<unknown> {
   const payload = JSON.stringify({ command, args });
   const raw = await RustraCalculator.invokeRaw(payload);
   const response: InvokeResult = JSON.parse(raw);

@@ -12,6 +12,7 @@ public:
   AddResult benchAdd(const AddPayload& value) override;
   StringPayload echoString(const StringPayload& value) override;
   BytesPayload echoBytes(const BytesPayload& value) override;
+  BufferPayload echoBuffer(const BufferPayload& value) override;
   PairPayload echoPair(const PairPayload& value) override;
 };
 

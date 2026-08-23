@@ -47,6 +47,16 @@ fn main() {
     println!();
 
     let package = build_benchmark_package();
+    package.register_ffi();
+
+    if std::env::args().any(|arg| arg == "--hot-path-only") {
+        bench_cold_start(&package);
+        bench_command_invocation(&package);
+        bench_concurrent_invocation(&package);
+        bench_parallel_invocation(&package);
+        bench_allocations_per_invoke(&package);
+        return;
+    }
 
     bench_cold_start(&package);
     let creation_avg_ns = bench_package_creation();
@@ -68,13 +78,21 @@ fn main() {
 fn bench_cold_start(package: &Package) {
     println!("┌─ Cold Start (first invoke vs steady-state) ──┐");
     let cold = Instant::now();
-    let _ = package.invoke_json("addNumbers", serde_json::json!({ "a": 1, "b": 2 }));
+    std::hint::black_box(
+        package
+            .invoke_json("addNumbers", serde_json::json!({ "a": 1, "b": 2 }))
+            .expect("cold benchmark command must succeed"),
+    );
     let cold_ns = cold.elapsed().as_nanos();
 
     // steady-state 평균
     let warm_start = Instant::now();
     for _ in 0..1000 {
-        let _ = package.invoke_json("addNumbers", serde_json::json!({ "a": 1, "b": 2 }));
+        std::hint::black_box(
+            package
+                .invoke_json("addNumbers", serde_json::json!({ "a": 1, "b": 2 }))
+                .expect("warm benchmark command must succeed"),
+        );
     }
     let warm_avg_ns = warm_start.elapsed().as_nanos() / 1000;
     println!(
@@ -92,12 +110,20 @@ fn bench_allocations_per_invoke(package: &Package) {
 
     // 워밍업(스키마/디코더 초기화를 할당 카운트에서 분리).
     for _ in 0..100 {
-        let _ = package.invoke_json("addNumbers", serde_json::json!({ "a": 1, "b": 2 }));
+        std::hint::black_box(
+            package
+                .invoke_json("addNumbers", serde_json::json!({ "a": 1, "b": 2 }))
+                .expect("allocation warmup command must succeed"),
+        );
     }
 
     let (_, json_allocs, json_deallocs) = alloc_delta(|| {
         for _ in 0..1000 {
-            let _ = package.invoke_json("addNumbers", serde_json::json!({ "a": 1, "b": 2 }));
+            std::hint::black_box(
+                package
+                    .invoke_json("addNumbers", serde_json::json!({ "a": 1, "b": 2 }))
+                    .expect("allocation benchmark command must succeed"),
+            );
         }
     });
     println!(
@@ -108,7 +134,52 @@ fn bench_allocations_per_invoke(package: &Package) {
     );
 
     // rkyv V2 typed 프레임: command_id(u16) + postcard(SimpleInput).
-    let mut v2_req: Vec<u8> = Vec::new();
+    let v2_req = add_numbers_v2_request(package, 1, 2);
+
+    let (_, v2_allocs, v2_deallocs) = alloc_delta(|| {
+        for _ in 0..1000 {
+            std::hint::black_box(
+                package
+                    .invoke_rkyv_v2(&v2_req)
+                    .expect("rkyv allocation benchmark command must succeed"),
+            );
+        }
+    });
+    println!(
+        "│  invoke_rkyv_v2 (1000 calls): {:>6} allocs ({:>3}/call), {:>6} deallocs",
+        v2_allocs,
+        v2_allocs / 1000,
+        v2_deallocs
+    );
+
+    let mut caller_buffer = [0u8; 512];
+    let (_, into_allocs, into_deallocs) = alloc_delta(|| {
+        for _ in 0..1000 {
+            let mut out_len = 0usize;
+            let written = unsafe {
+                rustra::ffi::rustra_ffi_invoke_rkyv_v2_into(
+                    v2_req.as_ptr(),
+                    v2_req.len(),
+                    caller_buffer.as_mut_ptr(),
+                    caller_buffer.len(),
+                    &mut out_len,
+                )
+            };
+            assert_eq!(written, out_len);
+            std::hint::black_box(&caller_buffer[..written]);
+        }
+    });
+    println!(
+        "│  caller-buffer (1000 calls): {:>6} allocs ({:>3}/call), {:>6} deallocs",
+        into_allocs,
+        into_allocs / 1000,
+        into_deallocs
+    );
+    println!("└───────────────────────────────────────────────┘\n");
+}
+
+fn add_numbers_v2_request(package: &Package, a: i64, b: i64) -> Vec<u8> {
+    let mut request = Vec::new();
     let schema = package.live_schema();
     let id = schema["commands"]
         .as_array()
@@ -118,22 +189,9 @@ fn bench_allocations_per_invoke(package: &Package) {
                 .and_then(|c| c["commandId"].as_u64())
         })
         .unwrap_or(1) as u16;
-    v2_req.extend_from_slice(&id.to_le_bytes());
-    let input = SimpleInput { a: 1, b: 2 };
-    v2_req.extend_from_slice(&postcard::to_allocvec(&input).unwrap_or_default());
-
-    let (_, v2_allocs, v2_deallocs) = alloc_delta(|| {
-        for _ in 0..1000 {
-            let _ = package.invoke_rkyv_v2(&v2_req);
-        }
-    });
-    println!(
-        "│  invoke_rkyv_v2 (1000 calls): {:>6} allocs ({:>3}/call), {:>6} deallocs",
-        v2_allocs,
-        v2_allocs / 1000,
-        v2_deallocs
-    );
-    println!("└───────────────────────────────────────────────┘\n");
+    request.extend_from_slice(&id.to_le_bytes());
+    request.extend_from_slice(&postcard::to_allocvec(&SimpleInput { a, b }).unwrap_or_default());
+    request
 }
 
 // ── Commands ──────────────────────────────────────────────
@@ -365,13 +423,15 @@ fn bench_deserialization() {
 fn bench_json_roundtrip(package: &rustra::Package) {
     println!("┌─ JSON Roundtrip (invoke_json) ─────────────────────────┐");
 
-    let cases: Vec<(&str, Value)> = vec![
+    let cases: Vec<(&str, &str, Value)> = vec![
         (
             "Simple (2 fields)",
+            "addNumbers",
             serde_json::to_value(SimpleInput { a: 42, b: 58 }).unwrap(),
         ),
         (
             "10 items",
+            "processPayload",
             serde_json::to_value(PayloadInput {
                 items: make_items(10),
             })
@@ -379,6 +439,7 @@ fn bench_json_roundtrip(package: &rustra::Package) {
         ),
         (
             "100 items",
+            "processPayload",
             serde_json::to_value(PayloadInput {
                 items: make_items(100),
             })
@@ -386,6 +447,7 @@ fn bench_json_roundtrip(package: &rustra::Package) {
         ),
         (
             "1000 items",
+            "processPayload",
             serde_json::to_value(PayloadInput {
                 items: make_items(1000),
             })
@@ -396,11 +458,15 @@ fn bench_json_roundtrip(package: &rustra::Package) {
     let iterations = 50_000;
     let mut results: Vec<(&str, f64)> = Vec::new();
 
-    for (label, value) in &cases {
+    for (label, command, value) in &cases {
         let mut times = Vec::new();
         for _ in 0..iterations {
             let start = Instant::now();
-            let _ = package.invoke_json("addNumbers", value.clone());
+            std::hint::black_box(
+                package
+                    .invoke_json(command, value.clone())
+                    .expect("JSON roundtrip benchmark command must succeed"),
+            );
             times.push(start.elapsed().as_nanos() as f64);
         }
         let avg = times.iter().sum::<f64>() / times.len() as f64;
@@ -470,7 +536,11 @@ fn bench_payload_scaling(package: &rustra::Package) {
         let mut times = Vec::new();
         for _ in 0..iterations {
             let start = Instant::now();
-            let _ = package.invoke_json("processPayload", json.clone());
+            std::hint::black_box(
+                package
+                    .invoke_json("processPayload", json.clone())
+                    .expect("payload scaling benchmark command must succeed"),
+            );
             times.push(start.elapsed().as_nanos() as f64);
         }
         let avg = times.iter().sum::<f64>() / times.len() as f64;
@@ -539,11 +609,13 @@ fn bench_concurrent_invocation(package: &rustra::Package) {
     println!();
 }
 
-/// 실제 병렬 invoke — N 스레드 × iterations. `Package::invoke` 는 내부 레지스트리가
-/// RwLock 공유되므로 읽기 경합이 실측된다 (안전성은 tests/rkyv_v2_concurrency.rs 가
-/// 증명, 여기선 성능만).
+/// 실제 병렬 invoke — N 스레드 × iterations. 일반 typed(JSON Value) 경로와 RN
+/// JSI가 쓰는 rkyv V2 binary 경로를 함께 측정한다. 안전성은
+/// tests/rkyv_v2_concurrency.rs가 증명하고 여기서는 확장성만 본다.
 fn bench_parallel_invocation(package: &rustra::Package) {
     println!("┌─ Throughput (multi-threaded, std::thread::scope) ───────┐");
+
+    let v2_request = add_numbers_v2_request(package, 42, 58);
 
     for thread_count in [2usize, 4, 8] {
         let iterations_per_thread = 125_000;
@@ -564,7 +636,59 @@ fn bench_parallel_invocation(package: &rustra::Package) {
         let total = (iterations_per_thread * thread_count) as f64;
         let ops_per_sec = total / elapsed.as_secs_f64();
         println!(
-            "│  {thread_count} threads × {iterations_per_thread}: {elapsed:.2?} — {}",
+            "│  typed {thread_count}t × {iterations_per_thread}: {elapsed:.2?} — {}",
+            format_ops(ops_per_sec)
+        );
+
+        let start = Instant::now();
+        std::thread::scope(|scope| {
+            for _ in 0..thread_count {
+                let request = &v2_request;
+                scope.spawn(move || {
+                    for _ in 0..iterations_per_thread {
+                        std::hint::black_box(
+                            package
+                                .invoke_rkyv_v2(request)
+                                .expect("parallel rkyv V2 command must succeed"),
+                        );
+                    }
+                });
+            }
+        });
+        let elapsed = start.elapsed();
+        let ops_per_sec = total / elapsed.as_secs_f64();
+        println!(
+            "│  rkyvV2 {thread_count}t × {iterations_per_thread}: {elapsed:.2?} — {}",
+            format_ops(ops_per_sec)
+        );
+
+        let start = Instant::now();
+        std::thread::scope(|scope| {
+            for _ in 0..thread_count {
+                let request = &v2_request;
+                scope.spawn(move || {
+                    let mut caller_buffer = [0u8; 512];
+                    for _ in 0..iterations_per_thread {
+                        let mut out_len = 0usize;
+                        let written = unsafe {
+                            rustra::ffi::rustra_ffi_invoke_rkyv_v2_into(
+                                request.as_ptr(),
+                                request.len(),
+                                caller_buffer.as_mut_ptr(),
+                                caller_buffer.len(),
+                                &mut out_len,
+                            )
+                        };
+                        assert_eq!(written, out_len);
+                        std::hint::black_box(&caller_buffer[..written]);
+                    }
+                });
+            }
+        });
+        let elapsed = start.elapsed();
+        let ops_per_sec = total / elapsed.as_secs_f64();
+        println!(
+            "│  caller {thread_count}t × {iterations_per_thread}: {elapsed:.2?} — {}",
             format_ops(ops_per_sec)
         );
     }

@@ -1,0 +1,21 @@
+{
+  "ignore": {
+    "overrides": [
+      {
+        "files": [
+          "examples/auth/generated/contract.ts",
+          "examples/auth/generated/rkyv-codecs.ts",
+          "examples/auth/generated/rkyv-registry.ts",
+          "examples/streaming/generated/contract.ts",
+          "examples/streaming/generated/rkyv-codecs.ts",
+          "examples/streaming/generated/rkyv-registry.ts",
+          "examples/react-native-calculator/modules/nitro-bench/nitro-bench/src/index.ts",
+          "examples/react-native-calculator/modules/nitro-bench/nitro-bench/src/specs/NitroBench.nitro.ts",
+          "examples/react-native-calculator/modules/rustra-calculator/src/index.ts",
+          "examples/react-native-calculator/modules/rustra-jsi/src/index.ts"
+        ],
+        "rules": ["deslop/unused-file"]
+      }
+    ]
+  }
+}

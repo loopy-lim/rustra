@@ -57,7 +57,7 @@ Rust 코드를 변경하면:
 cargo test --workspace
 
 # 생성된 TS 갱신 (calculator 예시)
-cargo run -p rustra-calculator-example
+cargo run -p rustra-calculator-example --bin rustra-calculator-example
 
 # 전체 호환성 테스트
 bun run test:compat
@@ -175,7 +175,8 @@ bun run test:runtime:tauri
 
 1. `schema.json` 확인 — schemars가 생성한 JSON Schema가 의도한 대로인지 검사
 2. `types.ts` 확인 — JSON Schema → TS 타입 매핑 규칙은 [codegen 문서](docs/internal/codegen.md) 참조
-3. 미지원 타입(`tuple`, `oneOf`, `allOf`, integer enum, 중첩 `$ref`)은 `unknown`으로 폴백됨
+3. rustra가 생성하지 않는 조건부 JSON Schema는 `unknown`, postcard가 와이어
+   순서를 증명할 수 없는 data enum/중첩 collection은 명령 단위 Tier 3로 폴백됨
 
 ### Contract hash 불일치
 
@@ -183,7 +184,7 @@ bun run test:runtime:tauri
 
 ```bash
 # 재생성
-cargo run -p rustra-calculator-example
+cargo run -p rustra-calculator-example --bin rustra-calculator-example
 
 # diff로 확인
 git diff generated/contract.ts

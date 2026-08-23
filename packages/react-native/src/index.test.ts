@@ -4,6 +4,27 @@ import { createReactNativeEngine, RustraCommandError } from './index.js';
 
 const encoder = new TextEncoder();
 
+test('Hermes fallback encodes and decodes Korean and emoji without WHATWG globals', async () => {
+  const encoderDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'TextEncoder');
+  const decoderDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'TextDecoder');
+  Object.defineProperty(globalThis, 'TextEncoder', { configurable: true, value: undefined });
+  Object.defineProperty(globalThis, 'TextDecoder', { configurable: true, value: undefined });
+  try {
+    const moduleUrl = new URL(`./utf8.ts?hermes=${Date.now()}`, import.meta.url).href;
+    const utf8 = (await import(moduleUrl)) as typeof import('./utf8.js');
+    const input = '안녕하세요 Rustra 🚀';
+    const bytes = utf8.encodeUtf8(input);
+    assert.equal(utf8.decodeUtf8(bytes), input);
+    assert.deepEqual([...bytes], [...encoder.encode(input)]);
+    assert.equal(utf8.exactArrayBuffer(bytes).byteLength, bytes.byteLength);
+  } finally {
+    if (encoderDescriptor) Object.defineProperty(globalThis, 'TextEncoder', encoderDescriptor);
+    else Reflect.deleteProperty(globalThis, 'TextEncoder');
+    if (decoderDescriptor) Object.defineProperty(globalThis, 'TextDecoder', decoderDescriptor);
+    else Reflect.deleteProperty(globalThis, 'TextDecoder');
+  }
+});
+
 function createMockNative(returnValue: { ok: boolean; result?: unknown; error?: string }) {
   return {
     invoke(_payload: ArrayBuffer): ArrayBuffer {
@@ -46,6 +67,28 @@ test('includes default error message when error is missing', async () => {
       return true;
     },
   );
+});
+
+test('JSON adapter rejects a pre-aborted call without crossing native', async () => {
+  let calls = 0;
+  const engine = createReactNativeEngine({
+    invoke() {
+      calls++;
+      return encoder.encode('{"ok":true,"result":1}').buffer as ArrayBuffer;
+    },
+  });
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(
+    engine.invoke('cancelled', undefined, { signal: ac.signal }),
+    (error: unknown) => error instanceof RustraCommandError && error.code === 'cancelled',
+  );
+  assert.equal(calls, 0);
+});
+
+test('JSON adapter honors timeoutMs through the common timeout contract', async () => {
+  const engine = createReactNativeEngine(createMockNative({ ok: true, result: 42 }));
+  assert.equal(await engine.invoke('fast', undefined, { timeoutMs: 100 }), 42);
 });
 
 // ── Trust-test baselines (Phase 0) ──────────────────────────
@@ -160,10 +203,19 @@ test('subscribeEvent normalizes unparseable payloads to null', () => {
   assert.deepEqual(received, [null], 'broken JSON must arrive as null, not throw');
 });
 
-test('subscribeEvent no-ops when native has no onEvent (legacy bridge)', () => {
-  // 구버전 네이티브 — onEvent/offEvent 미노출. throw 없이 no-op 구독 해제 반환.
+test('subscribeEvent fails loudly when native has no event capability', () => {
   const legacy: RustraEventNative = {};
-  const unsubscribe = subscribeEvent(legacy, 'any.event', () => {});
+  assert.throws(
+    () => subscribeEvent(legacy, 'any.event', () => {}),
+    (error: unknown) => error instanceof RustraCommandError && error.code === 'event.unavailable',
+  );
+});
+
+test('subscribeEvent allows an explicit legacy no-op fallback', () => {
+  const legacy: RustraEventNative = {};
+  const unsubscribe = subscribeEvent(legacy, 'any.event', () => {}, {
+    allowMissingNative: true,
+  });
   unsubscribe(); // throw 하지 않아야 한다
 });
 
@@ -471,4 +523,20 @@ test('new native without abort resolves normally through the id path (follow-up 
   const out = await p;
   assert.equal(out.value, 42);
   assert.deepEqual(h.state.cancels, [], 'no cancel without an abort');
+});
+
+test('async engine applies timeoutMs and ignores a late native callback', async () => {
+  const h = makeAsyncNative();
+  const engine = createAsyncEngine(h.native, { rkyvV2Codecs: new Map() });
+  const promise = engine.invoke('slow', undefined, { timeoutMs: 10 });
+  await assert.rejects(
+    promise,
+    (error: unknown) => error instanceof RustraCommandError && error.code === 'transport.timeout',
+  );
+  h.state.resolveNow();
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
+  await assert.rejects(
+    promise,
+    (error: unknown) => error instanceof RustraCommandError && error.code === 'transport.timeout',
+  );
 });

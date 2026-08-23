@@ -9,7 +9,9 @@ import {
   getLiveSchema,
   invoke,
   invokeBatch,
+  invokeGeneratedBytes,
   invokeGenerated,
+  invokeGeneratedFields2,
   invokeWithTimeout,
   RustraCommandError,
   parseRustraErrorString,
@@ -187,6 +189,46 @@ test('engine falls back to Tier 3 for non-codegen dynamic commands', async () =>
   assert.equal(json, JSON.stringify({ v: 7 }));
 });
 
+test('Hermes UTF-8 fallback preserves long Korean and emoji payloads', async () => {
+  // 현재 테스트 파일은 index.js를 이미 import했으므로 query가 붙은 별도 모듈
+  // 인스턴스를 로드해 TextEncoder가 없는 Hermes 초기화 시점을 재현한다.
+  const schema = schemaBytes([{ name: 'echoUnicode', commandId: 77 }]);
+  const response = tier3Success({ ok: true });
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'TextEncoder');
+  Object.defineProperty(globalThis, 'TextEncoder', {
+    configurable: true,
+    writable: true,
+    value: undefined,
+  });
+  try {
+    const moduleUrl = new URL('./index.js?hermes-utf8-fallback', import.meta.url).href;
+    const fallback = (await import(moduleUrl)) as typeof import('./index.js');
+    let captured: Uint8Array | undefined;
+    const native: RkyvV2SchemaNative = {
+      getSchema: () => schema,
+      invokeRkyvV2(payload) {
+        captured = new Uint8Array(payload).slice();
+        return response;
+      },
+    };
+    const input = {
+      text: `${'한글'.repeat(64)}🙂🚀${'경계'.repeat(65)}`,
+    };
+    await fallback.createRkyvV2Engine(native, new Map()).invoke('echoUnicode', input);
+
+    assert.ok(captured, 'Tier 3 request must reach the native boundary');
+    assert.equal(new DataView(captured.buffer).getUint16(0, true), 77);
+    assert.deepEqual(
+      captured.subarray(2),
+      new Uint8Array(Buffer.from(JSON.stringify(input), 'utf8')),
+      'pure-JS fallback bytes must exactly match WHATWG UTF-8 output',
+    );
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'TextEncoder', descriptor);
+    else Reflect.deleteProperty(globalThis, 'TextEncoder');
+  }
+});
+
 test('engine Tier 3 fallback decodes string/vec/nested result types', async () => {
   const native = makeNative({
     schema: schemaBytes([
@@ -210,6 +252,32 @@ test('engine Tier 3 fallback decodes string/vec/nested result types', async () =
   const n = await engine.invoke<{ outer: { inner: { v: number }; tags: string[] } }>('nested', {});
   assert.equal(n.outer.inner.v, 99);
   assert.deepEqual(n.outer.tags, ['a', 'b']);
+});
+
+test('engine caches live schema on the dynamic hot path and supports explicit refresh', async () => {
+  let calls = 0;
+  let schema = schemaBytes([{ name: 'dynamicEcho', commandId: 31 }]);
+  const native: RkyvV2SchemaNative = {
+    getSchema() {
+      calls += 1;
+      return schema;
+    },
+    invokeRkyvV2: () => tier3Success({ value: 42 }),
+  };
+  const engine = createRkyvV2Engine(native, new Map());
+  await engine.invoke('dynamicEcho', { value: 1 });
+  await engine.invoke('dynamicEcho', { value: 2 });
+  assert.equal(calls, 1, 'cached dynamic command must not parse live schema per invoke');
+
+  schema = schemaBytes([
+    { name: 'dynamicEcho', commandId: 31 },
+    { name: 'registeredLater', commandId: 32 },
+  ]);
+  const refreshed = engine.refreshLiveSchema();
+  assert.equal(refreshed.get('registeredLater')?.commandId, 32);
+  assert.equal(calls, 2);
+  await engine.invoke('registeredLater', {});
+  assert.equal(calls, 2, 'refreshed entry must immediately use the cache');
 });
 
 test('engine Tier 3 fallback propagates typed error wire', async () => {
@@ -298,6 +366,10 @@ function makeTypedNative(
     invokeTypedBatch?: (names: string[], args: unknown[]) => unknown[];
     invokeTypedById?: (cmdId: number, args: unknown) => unknown;
     invokeTypedBatchById?: (cmdIds: number[], args: unknown[]) => unknown[];
+    getCodecCapabilities?: (cmdId: number) => number;
+    invokeTypedRaw?: (cmdId: number, ...fields: unknown[]) => unknown;
+    invokeTypedPos?: (cmdId: number, ...fields: unknown[]) => unknown;
+    invokeTypedBuffer?: (cmdId: number, value: Uint8Array | ArrayBuffer) => unknown;
   },
 ): RkyvV2SchemaNative {
   const base = makeNative(opts);
@@ -307,6 +379,10 @@ function makeTypedNative(
   if (opts.invokeTypedBatch) typed.invokeTypedBatch = opts.invokeTypedBatch;
   if (opts.invokeTypedById) typed.invokeTypedById = opts.invokeTypedById;
   if (opts.invokeTypedBatchById) typed.invokeTypedBatchById = opts.invokeTypedBatchById;
+  if (opts.getCodecCapabilities) typed.getCodecCapabilities = opts.getCodecCapabilities;
+  if (opts.invokeTypedRaw) typed.invokeTypedRaw = opts.invokeTypedRaw;
+  if (opts.invokeTypedPos) typed.invokeTypedPos = opts.invokeTypedPos;
+  if (opts.invokeTypedBuffer) typed.invokeTypedBuffer = opts.invokeTypedBuffer;
   return typed;
 }
 
@@ -463,6 +539,237 @@ test('generated dispatch safely re-resolves the registered id when id and name d
     ['byId:1'],
   );
   assert.ok(!calls.some((call) => call === 'byId:99'));
+});
+
+test('generated field dispatch selects raw before positional and preserves output shape', async () => {
+  const calls: string[] = [];
+  const native = makeTypedNative({
+    getCodecCapabilities: (id) => {
+      calls.push(`cap:${id}`);
+      return 1 | 2 | 4;
+    },
+    invokeTypedById: () => {
+      calls.push('byId');
+      return { value: -1 };
+    },
+    invokeTypedRaw: (id, ...fields) => {
+      calls.push(`raw:${id}:${fields.join(',')}`);
+      return { value: Number(fields[0]) + Number(fields[1]) };
+    },
+    invokeTypedPos: () => {
+      calls.push('pos');
+      return { value: -2 };
+    },
+  });
+  const engine = createRkyvV2Engine(native, staticRegistry('addNumbers'));
+  configure(engine);
+
+  const input = { a: 20, b: 22 };
+  const out = await invokeGeneratedFields2<{ value: number }>(
+    1,
+    'addNumbers',
+    input,
+    input.a,
+    input.b,
+  );
+
+  assert.deepEqual(out, { value: 42 });
+  assert.deepEqual(calls, ['cap:1', 'raw:1:20,22']);
+});
+
+test('generated field dispatch falls from raw marker to positional', async () => {
+  const calls: string[] = [];
+  const native = makeTypedNative({
+    getCodecCapabilities: () => 1 | 2 | 4,
+    invokeTypedById: () => ({ value: -1 }),
+    invokeTypedRaw: () => {
+      calls.push('raw');
+      return Number.NaN;
+    },
+    invokeTypedPos: (_id, ...fields) => {
+      calls.push('pos');
+      return { value: Number(fields[0]) + Number(fields[1]) };
+    },
+  });
+  configure(createRkyvV2Engine(native, staticRegistry('addNumbers')));
+
+  const out = await invokeGeneratedFields2<{ value: number }>(
+    1,
+    'addNumbers',
+    { a: 20, b: 22 },
+    20,
+    22,
+  );
+
+  assert.deepEqual(out, { value: 42 });
+  assert.deepEqual(calls, ['raw', 'pos']);
+});
+
+test('generated field dispatch keeps old-native by-id fallback', async () => {
+  const calls: string[] = [];
+  const native = makeTypedNative({
+    hasStaticCodec: () => true,
+    invokeTyped: () => ({ value: -1 }),
+    invokeTypedById: (id, args) => {
+      calls.push(`byId:${id}`);
+      const input = args as { a: number; b: number };
+      return { value: input.a + input.b };
+    },
+  });
+  configure(createRkyvV2Engine(native, staticRegistry('addNumbers')));
+
+  const out = await invokeGeneratedFields2<{ value: number }>(
+    1,
+    'addNumbers',
+    { a: 20, b: 22 },
+    20,
+    22,
+  );
+
+  assert.deepEqual(out, { value: 42 });
+  assert.deepEqual(calls, ['byId:1']);
+});
+
+test('generated field dispatch uses the established option path', async () => {
+  const calls: string[] = [];
+  const native = makeTypedNative({
+    getCodecCapabilities: () => 1 | 2 | 4,
+    invokeTypedById: () => {
+      calls.push('byId');
+      return { value: 42 };
+    },
+    invokeTypedRaw: () => {
+      calls.push('raw');
+      return { value: 42 };
+    },
+    invokeTypedPos: () => {
+      calls.push('pos');
+      return { value: 42 };
+    },
+  });
+  configure(createRkyvV2Engine(native, staticRegistry('addNumbers')));
+
+  const out = await invokeGeneratedFields2<{ value: number }>(
+    1,
+    'addNumbers',
+    { a: 20, b: 22 },
+    20,
+    22,
+    { timeoutMs: 100 },
+  );
+
+  assert.deepEqual(out, { value: 42 });
+  assert.deepEqual(calls, ['byId']);
+});
+
+test('generated bytes dispatch selects the dedicated native path for ArrayBuffer views', async () => {
+  const calls: string[] = [];
+  const source = new Uint8Array([9, 1, 2, 3, 8]);
+  const view = source.subarray(1, 4);
+  const native = makeTypedNative({
+    getCodecCapabilities: () => 1 | 2 | 8,
+    invokeTypedById: () => {
+      calls.push('byId');
+      return { data: [] };
+    },
+    invokeTypedPos: () => {
+      calls.push('pos');
+      return { data: [] };
+    },
+    invokeTypedBuffer: (id, value) => {
+      calls.push(`buffer:${id}`);
+      assert.equal(value, view, 'the native host must receive the original subarray view');
+      return { data: new Uint8Array([1, 2, 3]).buffer };
+    },
+  });
+  configure(createRkyvV2Engine(native, staticRegistry('echoBytes')));
+
+  const out = await invokeGeneratedBytes<{ data: ArrayBuffer }>(
+    1,
+    'echoBytes',
+    { data: view },
+    view,
+  );
+
+  assert.deepEqual([...new Uint8Array(out.data)], [1, 2, 3]);
+  assert.deepEqual(calls, ['buffer:1']);
+});
+
+test('generated bytes dispatch accepts ArrayBuffer including an empty buffer', async () => {
+  const seen: number[] = [];
+  const native = makeTypedNative({
+    getCodecCapabilities: () => 1 | 8,
+    invokeTypedById: () => ({ data: [] }),
+    invokeTypedBuffer: (_id, value) => {
+      seen.push(value.byteLength);
+      return { data: new ArrayBuffer(0) };
+    },
+  });
+  configure(createRkyvV2Engine(native, staticRegistry('echoBytes')));
+
+  await invokeGeneratedBytes(1, 'echoBytes', { data: new ArrayBuffer(0) }, new ArrayBuffer(0));
+
+  assert.deepEqual(seen, [0]);
+});
+
+test('generated bytes keeps number arrays and missing buffer methods on compatible fallbacks', async () => {
+  const calls: string[] = [];
+  const native = makeTypedNative({
+    getCodecCapabilities: () => 1 | 2 | 8,
+    invokeTypedById: () => {
+      calls.push('byId');
+      return { data: [] };
+    },
+    invokeTypedPos: (_id, value) => {
+      calls.push(`pos:${Array.isArray(value) ? 'array' : 'buffer'}`);
+      return { data: value };
+    },
+  });
+  configure(createRkyvV2Engine(native, staticRegistry('echoBytes')));
+
+  await invokeGeneratedBytes(1, 'echoBytes', { data: [1, 2] }, [1, 2]);
+  await invokeGeneratedBytes(1, 'echoBytes', { data: new Uint8Array([3]) }, new Uint8Array([3]));
+
+  assert.deepEqual(calls, ['pos:array', 'pos:buffer']);
+});
+
+test('generated bytes bypasses the new route for options and mismatched ids', async () => {
+  const calls: string[] = [];
+  const native = makeTypedNative({
+    getCodecCapabilities: () => 1 | 8,
+    invokeTypedById: (id) => {
+      calls.push(`byId:${id}`);
+      return { data: new ArrayBuffer(0) };
+    },
+    invokeTypedBuffer: () => {
+      calls.push('buffer');
+      return { data: new ArrayBuffer(0) };
+    },
+  });
+  configure(createRkyvV2Engine(native, staticRegistry('echoBytes')));
+
+  await invokeGeneratedBytes(1, 'echoBytes', { data: new ArrayBuffer(0) }, new ArrayBuffer(0), {
+    timeoutMs: 100,
+  });
+  await invokeGeneratedBytes(99, 'echoBytes', { data: new ArrayBuffer(0) }, new ArrayBuffer(0));
+
+  assert.deepEqual(calls, ['byId:1', 'byId:1']);
+});
+
+test('generated bytes converts native synchronous errors to rejected promises', async () => {
+  const native = makeTypedNative({
+    getCodecCapabilities: () => 1 | 8,
+    invokeTypedById: () => ({ data: [] }),
+    invokeTypedBuffer: () => {
+      throw new Error('detached byte buffer');
+    },
+  });
+  configure(createRkyvV2Engine(native, staticRegistry('echoBytes')));
+
+  await assert.rejects(
+    invokeGeneratedBytes(1, 'echoBytes', { data: new Uint8Array(0) }, new Uint8Array(0)),
+    /detached byte buffer/,
+  );
 });
 
 test('typed dispatch falls back to name-based invokeTyped without invokeTypedById (P0-3)', async () => {

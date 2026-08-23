@@ -9,7 +9,8 @@ RUSTUP_BIN=${RUSTUP_BIN:-"$(dirname "$CARGO_BIN")/rustup"}
 RUST_HOME=$(cd "$(dirname "$RUSTUP_BIN")/../.." && pwd)
 export CARGO_HOME=${CARGO_HOME:-"$RUST_HOME/.cargo"}
 export RUSTUP_HOME=${RUSTUP_HOME:-"$RUST_HOME/.rustup"}
-export RUSTUP_TOOLCHAIN=${RUSTUP_TOOLCHAIN:-stable-aarch64-apple-darwin}
+# Respect the toolchain selected by rustup, CI, or the caller. Forcing `stable`
+# here makes `cargo` ignore targets installed on a pinned CI toolchain.
 export RUSTC=${RUSTC:-"$("$RUSTUP_BIN" which rustc)"}
 
 # RUSTRA_PROFILE=release (default, frozen) | debug (debug_assertions ON → mutable registry)

@@ -200,8 +200,9 @@ export function createNodeProcessTransport(
 // 런타임(examples/calculator 의 `loop-stdio` bin 참고)과 짝을 이뤄 프로세스를
 // 띄워 두고 요청 id 로 응답을 상관한다 — 호출당 비용이 파이프 왕복으로
 // 수렴한다. stderr 의 로그 라인은 stdout 프레임 파싱을 오염시키지 않는다
-// (별도 스트림). Rust 가 요청 순서대로 응답하므로 id 큐로 FIFO 상관이면
-// 충분하다.
+// (별도 스트림). 응답 순서를 전제로 하지 않고 wire 의 id 자체로 상관한다.
+// 현재 참조 런타임은 순차 처리하지만, 비동기 핸들러/worker 도입 뒤에도 같은
+// transport 계약을 유지하고 write 실패가 다른 동시 호출을 제거하지 않게 한다.
 
 type LoopResponseFrame = {
   id: number;
@@ -242,12 +243,13 @@ export function createNodeLoopTransport(options: {
   spawnOptions?: Parameters<typeof spawn>[2];
 }): NodeLoopTransport {
   let child: ChildProcessWithoutNullStreams | null = null;
-  // 응답 대기열 — Rust 가 요청 순서대로 응답하므로 FIFO 로 상관한다. 동시
-  // invoke 도 라인 프레이밍이 순서를 보존한다.
-  const pending: Array<{
-    resolve: (v: unknown) => void;
-    reject: (e: RustraCommandError) => void;
-  }> = [];
+  const pending = new Map<
+    number,
+    {
+      resolve: (frame: LoopResponseFrame) => void;
+      reject: (e: RustraCommandError) => void;
+    }
+  >();
   let nextId = 1;
   let stdoutBuffer = '';
 
@@ -278,10 +280,11 @@ export function createNodeLoopTransport(options: {
           // 대기열 소비 없이 무시해도 id 상관이 어긋나지 않는다).
           continue;
         }
-        const waiter = pending.shift();
+        const waiter = pending.get(frame.id);
         if (!waiter) continue;
+        pending.delete(frame.id);
         if (frame.ok) {
-          waiter.resolve(frame.result);
+          waiter.resolve(frame);
         } else {
           waiter.reject(parseRustraErrorString(frame.error ?? 'invoke failed'));
         }
@@ -299,12 +302,13 @@ export function createNodeLoopTransport(options: {
         'runtime process exited before responding',
         true,
       );
-      for (const w of pending.splice(0)) w.reject(err);
+      for (const w of pending.values()) w.reject(err);
+      pending.clear();
     });
     return child;
   };
 
-  const writeRequest = (payload: Record<string, unknown>): Promise<unknown> => {
+  const writeRequest = (payload: Record<string, unknown>): Promise<LoopResponseFrame> => {
     return new Promise((resolve, reject) => {
       let proc: ChildProcessWithoutNullStreams;
       try {
@@ -314,11 +318,11 @@ export function createNodeLoopTransport(options: {
         return;
       }
       const id = nextId++;
-      pending.push({ resolve, reject });
+      pending.set(id, { resolve, reject });
       const line = JSON.stringify({ id, ...payload }) + '\n';
       proc.stdin.write(line, (err) => {
         if (err) {
-          pending.pop();
+          pending.delete(id);
           reject(new RustraCommandError('transport.error', `write failed: ${String(err)}`, true));
         }
       });
@@ -327,11 +331,11 @@ export function createNodeLoopTransport(options: {
 
   return {
     invoke(command: string, args?: unknown) {
-      return writeRequest({ command, args: args ?? {} });
+      return writeRequest({ command, args: args ?? {} }).then((frame) => frame.result);
     },
     async drainEvents() {
-      const result = await writeRequest({ command: '__drainEvents', args: {} });
-      return (result as Array<{ name: string; payload: unknown }>) ?? [];
+      const frame = await writeRequest({ command: '__drainEvents', args: {} });
+      return frame.events ?? [];
     },
     dispose() {
       if (child && child.exitCode === null) {

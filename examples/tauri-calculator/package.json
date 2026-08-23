@@ -7,7 +7,7 @@
   "scripts": {
     "build": "bun run build:frontend && tauri build",
     "build:frontend": "tsc -p tsconfig.json",
-    "smoke": "node runtime-smoke.mjs"
+    "smoke": "bun runtime-smoke.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",

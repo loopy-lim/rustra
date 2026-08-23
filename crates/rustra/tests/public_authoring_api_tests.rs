@@ -127,13 +127,10 @@ fn package_generates_host_neutral_typescript_client() {
     assert!(
         generated
             .commands_ts
-            .contains("invokeGenerated<AddNumbersOutput>(1, 'addNumbers'")
+            .contains("invokeGeneratedFields2<AddNumbersOutput>(1, 'addNumbers', input")
     );
-    assert!(
-        generated
-            .commands_ts
-            .contains("import { invokeGenerated } from '@rustra/types'")
-    );
+    assert!(generated.commands_ts.contains("invokeGeneratedFields2"));
+    assert!(generated.commands_ts.contains("input[\"a\"], input[\"b\"]"));
     assert!(!generated.commands_ts.contains("EngineRequest"));
     assert!(!generated.commands_ts.contains("Attachment"));
     assert!(!generated.commands_ts.contains("node:"));
@@ -497,9 +494,18 @@ fn ts_generator_exposes_both_vec_u8_runtime_representations() {
         .generate_typescript()
         .unwrap();
     assert!(
-        generated.types_ts.contains("data: Uint8Array | number[];"),
-        "Vec<u8> must describe JSON and binary host representations, got:\n{}",
+        generated
+            .types_ts
+            .contains("data: Uint8Array | ArrayBuffer | number[];"),
+        "Vec<u8> must describe JSON and native byte-buffer representations, got:\n{}",
         generated.types_ts
+    );
+    assert!(
+        generated
+            .commands_ts
+            .contains("invokeGeneratedBytes<BytesPayload>"),
+        "single Vec<u8> commands must use the dedicated generated helper, got:\n{}",
+        generated.commands_ts
     );
 }
 

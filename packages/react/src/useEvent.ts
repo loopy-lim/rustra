@@ -20,7 +20,10 @@ export function useEvent<T = unknown>(
   subscribe?: SubscribeFn<T>,
 ): void {
   const callbackRef = useRef(callback);
-  callbackRef.current = callback;
+
+  useEffect(() => {
+    callbackRef.current = callback;
+  }, [callback]);
 
   useEffect(() => {
     if (!subscribe) return;

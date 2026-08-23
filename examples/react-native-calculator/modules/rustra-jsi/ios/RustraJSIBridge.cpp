@@ -1,8 +1,12 @@
 #include "RustraJSIBridge.hpp"
 #include "rustra-generated-codecs.hpp"
+#include <atomic>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <jsi/jsi.h>
+#include <limits>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -21,29 +25,91 @@ using namespace facebook::jsi;
 namespace gen = rustra::generated;
 namespace rc = rustra::codec;
 
-// ── ArrayBuffer helpers ────────────────────────────────────
-
-/// ArrayBuffer 생성자 캐시 — 첫 호출 시 1회 조회, 이후 재사용.
-/// jsi::Function 은 move-only 이므로 optional 에 move 저장한다.
-/// RN reload 로 Runtime 이 교체되면 installRustraJSIWithInvoker 가
-/// 재호출되므로 그 시점에 reset 한다 — 구 Runtime 소유 핸들이
-/// dangling 되지 않게 (아래 Install 절).
-/// 스레드 계약: JS 스레드에서만 접근 — host 함수와 install 모두 JS 스레드에서 실행.
-static std::optional<Function> g_arrayBufferCtor;
-
-static Function& arrayBufferCtor(Runtime& rt) {
-  if (!g_arrayBufferCtor) {
-    g_arrayBufferCtor = rt.global().getPropertyAsFunction(rt, "ArrayBuffer");
+static double requireInteger(Runtime& rt, const Value& value, double max,
+                             const char* label) {
+  if (!value.isNumber()) {
+    throw JSError(rt, std::string("RustraJSI: ") + label + " must be a number");
   }
-  return *g_arrayBufferCtor;
+  double number = value.asNumber();
+  if (!std::isfinite(number) || number < 0.0 || number > max ||
+      std::trunc(number) != number) {
+    throw JSError(rt, std::string("RustraJSI: ") + label +
+      " must be a finite non-negative integer in range");
+  }
+  return number;
 }
 
+static uint32_t requireU32(Runtime& rt, const Value& value, const char* label) {
+  return static_cast<uint32_t>(requireInteger(
+    rt, value, static_cast<double>(std::numeric_limits<uint32_t>::max()), label));
+}
+
+static uint16_t requireU16(Runtime& rt, const Value& value, const char* label) {
+  return static_cast<uint16_t>(requireInteger(
+    rt, value, static_cast<double>(std::numeric_limits<uint16_t>::max()), label));
+}
+
+static uint64_t requireSafeU64(Runtime& rt, const Value& value, const char* label) {
+  constexpr double kMaxSafeInteger = 9007199254740991.0;
+  return static_cast<uint64_t>(requireInteger(rt, value, kMaxSafeInteger, label));
+}
+
+// ── ArrayBuffer helpers ────────────────────────────────────
+
 static Value createArrayBuffer(Runtime& rt, const uint8_t* data, size_t size) {
-  Object ab = arrayBufferCtor(rt).callAsConstructor(rt, static_cast<double>(size))
+  // Function/PropNameID handles may never outlive their owning Runtime. A
+  // process-global constructor cache corrupted Hermes during RN reload when a
+  // later install destroyed the old Runtime's Function handle. This generic
+  // copy path is not the direct byte-buffer hot path, so resolve the
+  // constructor from the current Runtime instead of retaining a cross-runtime
+  // JSI handle.
+  Function ctor = rt.global().getPropertyAsFunction(rt, "ArrayBuffer");
+  Object ab = ctor.callAsConstructor(rt, static_cast<double>(size))
     .getObject(rt);
   ArrayBuffer buf = ab.getArrayBuffer(rt);
-  std::memcpy(buf.data(rt), data, size);
+  if (size > 0) {
+    if (data == nullptr || buf.data(rt) == nullptr) {
+      throw JSError(rt, "RustraJSI: detached or null ArrayBuffer storage");
+    }
+    std::memcpy(buf.data(rt), data, size);
+  }
   return ab;
+}
+
+Value generated::make_array_buffer(Runtime& rt, const uint8_t* data, size_t size) {
+  return createArrayBuffer(rt, data, size);
+}
+
+/// Owns the exact `(ptr, len)` transferred by `rustra_ffi_invoke_buffer`.
+/// Hermes keeps the shared MutableBuffer alive for the lifetime of the JS
+/// ArrayBuffer, so the Rust allocation is exposed without another bulk copy.
+/// The finalizer stores no Runtime/JSI handles and is safe to run after reload.
+class RustOwnedMutableBuffer final : public MutableBuffer {
+public:
+  RustOwnedMutableBuffer(uint8_t* data, size_t size) : data_(data), size_(size) {}
+
+  ~RustOwnedMutableBuffer() override {
+    if (data_ != nullptr) rustra_ffi_free_owned_bytes(data_, size_);
+  }
+
+  size_t size() const override { return size_; }
+  uint8_t* data() override { return data_; }
+
+private:
+  uint8_t* data_;
+  size_t size_;
+};
+
+static Value createOwnedArrayBuffer(Runtime& rt, uint8_t* data, size_t size) {
+  std::shared_ptr<RustOwnedMutableBuffer> owner;
+  try {
+    owner = std::make_shared<RustOwnedMutableBuffer>(data, size);
+  } catch (...) {
+    rustra_ffi_free_owned_bytes(data, size);
+    throw;
+  }
+  ArrayBuffer buffer(rt, std::move(owner));
+  return Value(rt, buffer);
 }
 
 static std::pair<const uint8_t*, size_t> extractBytes(Runtime& rt, const Value& value) {
@@ -51,6 +117,9 @@ static std::pair<const uint8_t*, size_t> extractBytes(Runtime& rt, const Value& 
 
   if (obj.isArrayBuffer(rt)) {
     auto buf = obj.getArrayBuffer(rt);
+    if (buf.size(rt) > 0 && buf.data(rt) == nullptr) {
+      throw JSError(rt, "RustraJSI: detached ArrayBuffer");
+    }
     return {buf.data(rt), buf.size(rt)};
   }
 
@@ -67,20 +136,34 @@ static std::pair<const uint8_t*, size_t> extractBytes(Runtime& rt, const Value& 
     }
     double offsetNum = offsetProp.asNumber();
     double lengthNum = lengthProp.asNumber();
-    if (!(offsetNum >= 0.0) || !(lengthNum >= 0.0)) { // NaN 도 거부
-      throw JSError(rt, "RustraJSI: invalid byteOffset/byteLength (negative or NaN)");
-    }
     size_t bufSize = buf.size(rt);
-    if (offsetNum > static_cast<double>(bufSize) ||
-        lengthNum > static_cast<double>(bufSize) - offsetNum) {
+    offsetNum = requireInteger(rt, offsetProp, static_cast<double>(bufSize), "byteOffset");
+    lengthNum = requireInteger(rt, lengthProp, static_cast<double>(bufSize), "byteLength");
+    if (lengthNum > static_cast<double>(bufSize) - offsetNum) {
       throw JSError(rt, "RustraJSI: byteOffset/byteLength out of buffer bounds");
     }
     auto byteOffset = static_cast<size_t>(offsetNum);
     auto byteLength = static_cast<size_t>(lengthNum);
-    return {buf.data(rt) + byteOffset, byteLength};
+    auto* data = buf.data(rt);
+    if (bufSize > 0 && data == nullptr) {
+      throw JSError(rt, "RustraJSI: detached TypedArray buffer");
+    }
+    return {byteLength == 0 ? data : data + byteOffset, byteLength};
   }
 
   throw JSError(rt, "RustraJSI: expected ArrayBuffer or TypedArray");
+}
+
+static std::pair<const uint8_t*, size_t> extractByteBuffer(
+    Runtime& rt, const Value& value) {
+  auto obj = value.asObject(rt);
+  if (!obj.isArrayBuffer(rt)) {
+    auto bytesPerElement = obj.getProperty(rt, "BYTES_PER_ELEMENT");
+    if (!bytesPerElement.isNumber() || bytesPerElement.asNumber() != 1.0) {
+      throw JSError(rt, "RustraJSI: expected Uint8Array or ArrayBuffer");
+    }
+  }
+  return extractBytes(rt, value);
 }
 
 // ── rkyv V2 에러 와이어 파싱 ────────────────────────────────
@@ -203,16 +286,20 @@ static std::shared_ptr<EventDispatcher> getEventDispatcher() {
 }
 
 void EventDispatcher::setCallInvoker(std::shared_ptr<void> invoker) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  callInvoker_ = std::move(invoker);
   // RN 리로드 대응: install 은 새 Runtime 의 JS 스레드에서 매번 실행되므로
   // 이전 Runtime 소유의 jsi::Function 리스너를 여기서 비운다(방치 시 UAF).
   // 큐의 잔여 이벤트도 이전 런타임 대상이므로 함께 폐기한다.
-  // 단, mutex_ 를 잡은 채 FFI unregister 를 호출하면 onRustEvent 가 같은
-  // 락을 잡으려 해 교착할 수 있으므로 해제는 락 밖에서.
-  const bool hadListeners = !listeners_.empty();
-  listeners_.clear();
-  queue_.clear();
+  bool hadListeners = false;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    callInvoker_ = std::move(invoker);
+    hadListeners = !listeners_.empty();
+    listeners_.clear();
+    queue_.clear();
+    drainScheduled_ = false;
+  }
+  // mutex_ 를 잡은 채 FFI unregister 를 호출하면 emit 중 onRustEvent 가 같은
+  // 락을 기다리는 동안 교착할 수 있으므로 반드시 락 밖에서 해제한다.
   if (hadListeners) {
     // 리스너가 있던 상태로 리로드된 경우 싱크를 해제해 둔다 — 새 번들이
     // setListener 로 다시 등록하면 그때 재설치된다.
@@ -434,6 +521,62 @@ void ChannelDispatcher::reset() {
   }
 }
 
+// ── Async invocation lifetime / Runtime reload safety ─────────────────
+// Async callback은 Rust worker에서 도착하지만 JSI Function은 생성한 Runtime의
+// JS 스레드에서만 호출/폐기해야 한다. shared context registry를 두어 플랫폼
+// module invalidate 또는 다음 install 시 pending id를 취소하고 Function을
+// 먼저 JS 스레드에서 reset한다. 늦은 native callback은 shared context만
+// 정리하고 구 Runtime을 절대 건드리지 않는다.
+struct AsyncCallContext {
+  std::string commandName;
+  std::optional<facebook::jsi::Function> onSuccess;
+  std::optional<facebook::jsi::Function> onError;
+  std::shared_ptr<void> callInvoker;
+  std::mutex mutex;
+  bool valid = true;
+  uint64_t generation = 0;
+  uint64_t invocationId = 0;
+};
+
+static std::atomic<uint64_t> g_runtimeGeneration{0};
+static std::mutex g_asyncContextsMutex;
+static std::unordered_map<AsyncCallContext*, std::shared_ptr<AsyncCallContext>>
+  g_asyncContexts;
+
+static void registerAsyncContext(const std::shared_ptr<AsyncCallContext>& ctx) {
+  std::lock_guard<std::mutex> lock(g_asyncContextsMutex);
+  g_asyncContexts.insert_or_assign(ctx.get(), ctx);
+}
+
+static void unregisterAsyncContext(const std::shared_ptr<AsyncCallContext>& ctx) {
+  std::lock_guard<std::mutex> lock(g_asyncContextsMutex);
+  g_asyncContexts.erase(ctx.get());
+}
+
+void invalidateRustraJSI() {
+  g_runtimeGeneration.fetch_add(1, std::memory_order_acq_rel);
+  std::vector<uint64_t> pendingIds;
+  {
+    // registry lock이 context 수명을 고정한다. Function reset은 플랫폼이
+    // 보장한 JS thread의 invalidate/install 경로에서만 실행된다.
+    std::lock_guard<std::mutex> registryLock(g_asyncContextsMutex);
+    pendingIds.reserve(g_asyncContexts.size());
+    for (auto& [_, ctx] : g_asyncContexts) {
+      std::lock_guard<std::mutex> contextLock(ctx->mutex);
+      ctx->valid = false;
+      if (ctx->invocationId != 0) pendingIds.push_back(ctx->invocationId);
+      ctx->onSuccess.reset();
+      ctx->onError.reset();
+      ctx->callInvoker.reset();
+    }
+    // native callback의 heap-held shared_ptr가 완료까지 context를 살린다.
+    g_asyncContexts.clear();
+  }
+  for (uint64_t id : pendingIds) {
+    rustra_ffi_invoke_cancel(id);
+  }
+}
+
 // ── HostObject with cached functions ───────────────────────
 
 using InvokeFn = uint8_t*(*)(const uint8_t*, size_t, size_t*);
@@ -504,8 +647,11 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
   {
     auto propNameId = PropNameID::forAscii(rt, "noop");
     auto hostFn = Function::createFromHostFunction(
-      rt, propNameId, 0,
-      [](Runtime& rt, const Value&, const Value* args, size_t) -> Value {
+      rt, propNameId, 1,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count != 1) {
+          throw JSError(rt, "RustraJSI: noop requires exactly one ArrayBuffer");
+        }
         auto [data, size] = extractBytes(rt, args[0]);
         return createArrayBuffer(rt, data, size);
       });
@@ -639,7 +785,7 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         if (count < 1) {
           throw JSError(rt, "RustraJSI: dropChannel requires (handle)");
         }
-        uint32_t handle = static_cast<uint32_t>(args[0].asNumber());
+        uint32_t handle = requireU32(rt, args[0], "channel handle");
         return Value(dispatcher->drop(handle) ? true : false);
       });
     cache_["dropChannel"] = std::make_unique<CachedFunction>(
@@ -663,6 +809,64 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         return Value(rt, gen::has_static_codec(name));
       });
     cache_["hasStaticCodec"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+
+  // getCodecCapabilities(cmdId): 엔진 구성 시 한 번 캐시할 정적 라우팅 마스크.
+  // bit0=typed, bit1=positional, bit2=raw, bit3=single byte buffer. raw 는 생성 메타데이터와 실제
+  // Rust registry handler를 함께 확인해 오래된/동적 registry 드리프트에서
+  // 잘못 광고하지 않는다.
+  {
+    auto propNameId = PropNameID::forAscii(rt, "getCodecCapabilities");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 1,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1) {
+          throw JSError(rt, "RustraJSI: getCodecCapabilities requires (cmdId)");
+        }
+        uint16_t cmdId = requireU16(rt, args[0], "command id");
+        uint32_t capabilities = 0;
+        if (gen::has_static_codec_id(cmdId)) capabilities |= 1u;
+        if (gen::has_pos_codec(cmdId)) capabilities |= 2u;
+        if (gen::has_raw_codec(cmdId) && rustra_ffi_has_raw(cmdId) != 0) capabilities |= 4u;
+        if (gen::has_buffer_codec(cmdId) && rustra_ffi_has_buffer(cmdId) != 0) capabilities |= 8u;
+        return Value(static_cast<double>(capabilities));
+      });
+    cache_["getCodecCapabilities"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+
+  // ── (Tier 0.5) invokeTypedBuffer(cmdId, Uint8Array|ArrayBuffer) ─────
+  // 입력 메모리는 이 동기 HostFunction 안에서만 빌린다. Rust는 user handler
+  // 실행 전에 소유 Vec로 1회 복사하므로 JS GC/reload 뒤 입력 포인터를 보관하지
+  // 않는다. handler의 출력 Vec는 postcard frame/추가 copy 없이 JSI
+  // MutableBuffer에 넘기며, JS ArrayBuffer GC 시 정확한 ptr/len으로 해제한다.
+  {
+    auto propNameId = PropNameID::forAscii(rt, "invokeTypedBuffer");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 2,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count != 2) {
+          throw JSError(rt, "RustraJSI: invokeTypedBuffer requires (cmdId, bytes)");
+        }
+        uint16_t cmdId = requireU16(rt, args[0], "command id");
+        auto [data, size] = extractByteBuffer(rt, args[1]);
+        uint8_t* output = nullptr;
+        size_t outputSize = 0;
+        uint32_t status = rustra_ffi_invoke_buffer(
+          cmdId, data, size, &output, &outputSize);
+        if (status == UINT32_MAX || output == nullptr) {
+          throw JSError(rt, "RustraJSI: direct buffer ABI failed");
+        }
+        if (status != 0) {
+          std::string error(reinterpret_cast<const char*>(output), outputSize);
+          rustra_ffi_free_owned_bytes(output, outputSize);
+          throw JSError(rt, error.empty() ? "buffer invoke failed" : error);
+        }
+        Value buffer = createOwnedArrayBuffer(rt, output, outputSize);
+        return gen::decode_buffer_result_by_id(rt, cmdId, std::move(buffer));
+      });
+    cache_["invokeTypedBuffer"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
 
@@ -709,7 +913,7 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         if (count < 2) {
           throw JSError(rt, "RustraJSI: invokeTypedById requires (cmdId, args)");
         }
-        uint16_t cmdId = static_cast<uint16_t>(args[0].asNumber());
+        uint16_t cmdId = requireU16(rt, args[0], "command id");
 
         // 1) JS 객체 → postcard 요청 바이트 ([cmd_id u16 LE][postcard(I)])
         rc::Writer w;
@@ -723,6 +927,60 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         });
       });
     cache_["invokeTypedById"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+
+  // ── (Tier 0) invokeTypedRaw(cmdId, ...scalarArgs) — 스칼라 직결 ──
+  // postcard 왕복(인코딩~디코딩)이 전혀 없다: JS 인자를 u64 슬롯으로 조립해
+  // rustra_ffi_invoke_raw 를 부르고 결과 슬롯을 그대로 JS number 로 감싼다.
+  // 코어가 UINT32_MAX 를 돌려주면(비대상 명령) 특수 값 RUSTRA_RAW_FALLBACK
+  // (NaN 페이로드)을 반환해 JS 엔진이 invokeTypedById 로 폴백하게 한다.
+  // 에러(1)는 기존 rkyv V2 에러 와이어를 파싱해 JSError 로 정규화한다.
+  {
+    auto propNameId = PropNameID::forAscii(rt, "invokeTypedRaw");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 4,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1) {
+          throw JSError(rt, "RustraJSI: invokeTypedRaw requires (cmdId, ...args)");
+        }
+        uint16_t cmdId = requireU16(rt, args[0], "command id");
+        size_t slotCount = count - 1;
+        // 스택 슬롯 — 아리티 최대 3 + 여유. 힙 할당 없음.
+        uint64_t slots[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+        if (slotCount > 8) {
+          throw JSError(rt, "RustraJSI: invokeTypedRaw supports up to 8 scalar args");
+        }
+        // 명령 스키마가 각 슬롯 종류를 결정한다. 값이 정수처럼 보이더라도 f64
+        // 필드면 IEEE-754 비트로 보내야 하므로 런타임 값 휴리스틱을 쓰지 않는다.
+        gen::encode_raw_slots(rt, cmdId, args + 1, slotCount, slots);
+        uint64_t outSlot = 0;
+        uint8_t errBuf[256];
+        size_t errLen = 0;
+        uint32_t code = rustra_ffi_invoke_raw(
+          cmdId, slots, slotCount, &outSlot, errBuf, sizeof(errBuf), &errLen);
+        if (code == UINT32_MAX) {
+          // 폴백 신호 — 특수 NaN 페이로드. JS 엔진은 Number.isNaN 으로 감별해
+          // invokeTypedById 로 되돌린다(엔진 코드의 판별 주석 참조).
+          uint64_t fallbackBits = 0x7ff8000000000001ULL;
+          double fallback;
+          std::memcpy(&fallback, &fallbackBits, sizeof(double));
+          return Value(fallback);
+        }
+        if (code != 0) {
+          // 에러 와이어([ok:0][pad][err_len u16 @8][postcard @10]) 파싱 —
+          // typedInvokeTail 과 동일한 parseRkyvV2ErrorBody 재사용.
+          if (errLen >= 10) {
+            throw JSError(rt, parseRkyvV2ErrorBody(errBuf, errLen));
+          }
+          throw JSError(rt, "RustraJSI: invokeTypedRaw failed");
+        }
+        // 결과 슬롯 → 생성된 공개 output shape. 필드 종류별 비트 해석(f64,
+        // bool, signed/unsigned)과 단일 프로퍼티 이름은 코드젠 메타데이터가
+        // 복원한다. raw lower-bound primitive가 공개 API로 새지 않는다.
+        return gen::decode_raw_result(rt, cmdId, outSlot);
+      });
+    cache_["invokeTypedRaw"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
 
@@ -741,7 +999,7 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         if (count < 1) {
           throw JSError(rt, "RustraJSI: invokeTypedPos requires (cmdId, ...fields)");
         }
-        uint16_t cmdId = static_cast<uint16_t>(args[0].asNumber());
+        uint16_t cmdId = requireU16(rt, args[0], "command id");
         const Value* argv = count > 1 ? args + 1 : nullptr;
         size_t argc = count > 1 ? count - 1 : 0;
 
@@ -822,8 +1080,7 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
 
         Array results(rt, n);
         for (size_t i = 0; i < n; i++) {
-          uint16_t cmdId =
-            static_cast<uint16_t>(ids.getValueAtIndex(rt, i).asNumber());
+          uint16_t cmdId = requireU16(rt, ids.getValueAtIndex(rt, i), "batch command id");
           const Value& oneArgs = inputs.getValueAtIndex(rt, i);
 
           // encode by id (정적 cmd_id 필수)
@@ -855,22 +1112,11 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
   // 호환은 JS 어댑터가 처리한다.
 
   {
-    // on_complete C 콜백 컨텍스트 — 힙에 두고 user_data 로 전달. 콜백 1회 실행
-    // 후 자기 자신을 해제한다(정확히 1회).
-    struct AsyncCallContext {
-      std::string commandName;
-      facebook::jsi::Function onSuccess;
-      facebook::jsi::Function onError;
-      std::shared_ptr<void> callInvoker; // type-erased CallInvoker (or null)
-      std::mutex mutex;                  // 아직 marshalling 중인지 가드
-      bool done = false;                 // 정확히 1회 딜리버리
-    };
-
     auto propNameId = PropNameID::forAscii(rt, "invokeTypedAsync");
     auto hostFn = Function::createFromHostFunction(
       rt, propNameId, 4,
       [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
-        if (count < 4) {
+        if (count != 4) {
           throw JSError(rt, "RustraJSI: invokeTypedAsync requires (name, args, onSuccess, onError)");
         }
         std::string name = args[0].asString(rt).utf8(rt);
@@ -888,83 +1134,110 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
             "install via installRustraJSIWithInvoker");
         }
 
-        auto* ctx = new AsyncCallContext{
-          name,
-          args[2].asObject(rt).getFunction(rt),
-          args[3].asObject(rt).getFunction(rt),
-          std::move(invoker),
-          {},
-          false,
-        };
-
         // 1) JS 객체 → postcard 요청 바이트 (invokeTyped 와 동일한 인코딩).
         rc::Writer w;
         if (!gen::encode_by_name(rt, name, args[1], w)) {
-          delete ctx;
           throw JSError(rt, "RustraJSI: no C++ codec for '" + name + "'");
         }
         auto req = w.take();
 
+        auto ctx = std::make_shared<AsyncCallContext>();
+        ctx->commandName = name;
+        ctx->onSuccess.emplace(args[2].asObject(rt).getFunction(rt));
+        ctx->onError.emplace(args[3].asObject(rt).getFunction(rt));
+        ctx->callInvoker = std::move(invoker);
+        ctx->generation = g_runtimeGeneration.load(std::memory_order_acquire);
+        registerAsyncContext(ctx);
+        // C ABI user_data는 shared_ptr holder를 소유한다. 동기 오류 콜백과
+        // install/invalidate 경합에서도 context 수명이 보장된다.
+        auto* holder = new std::shared_ptr<AsyncCallContext>(ctx);
+
         // 2) 비동기 FFI — id 를 동기 반환한다 (취소 핸들).
         uint64_t invocationId = 0;
         rustra_calculator_invoke_rkyv_v2_async(
-          req.data(), req.size(), ctx,
+          req.data(), req.size(), holder,
           [](void* user_data, uint8_t* resp, size_t resp_len) {
             // Rust 워커 스레드에서 실행 — JS 객체를 건드리지 않고, 결과를
             // 소유한 뒤 CallInvoker 로 JS 스레드에 마샬링한다.
-            auto* ctx = static_cast<AsyncCallContext*>(user_data);
+            std::unique_ptr<std::shared_ptr<AsyncCallContext>> holder(
+              static_cast<std::shared_ptr<AsyncCallContext>*>(user_data));
+            std::shared_ptr<AsyncCallContext> ctx = *holder;
             std::vector<uint8_t> frame;
             if (resp && resp_len > 0) {
               frame.assign(resp, resp + resp_len);
-              rustra_calculator_free_buffer(resp, resp_len);
+              rustra_calculator_free_rkyv_v2_buffer(resp, resp_len);
             }
             std::shared_ptr<void> invoker;
+            bool valid = false;
             {
               std::lock_guard<std::mutex> lock(ctx->mutex);
               invoker = ctx->callInvoker;
+              valid = ctx->valid &&
+                ctx->generation == g_runtimeGeneration.load(std::memory_order_acquire);
+            }
+            if (!valid || !invoker) {
+              unregisterAsyncContext(ctx);
+              return; // invalidate가 JSI Function을 이미 JS thread에서 reset함
             }
             auto* nativeInvoker =
               static_cast<facebook::react::CallInvoker*>(invoker.get());
-            auto* rawCtx = ctx;
-            nativeInvoker->invokeAsync([rawCtx, frame = std::move(frame)](facebook::jsi::Runtime& rt) {
-              std::unique_ptr<AsyncCallContext> owned(rawCtx); // 1회 실행 후 해제
-              std::lock_guard<std::mutex> lock(owned->mutex);
-              if (owned->done) return;
-              owned->done = true;
-              const std::string& name = owned->commandName;
+            nativeInvoker->invokeAsync([ctx, frame = std::move(frame)](facebook::jsi::Runtime& rt) {
+              std::optional<facebook::jsi::Function> onSuccess;
+              std::optional<facebook::jsi::Function> onError;
+              std::string name;
+              bool deliver = false;
+              {
+                std::lock_guard<std::mutex> lock(ctx->mutex);
+                if (ctx->valid &&
+                    ctx->generation == g_runtimeGeneration.load(std::memory_order_acquire)) {
+                  ctx->valid = false;
+                  name = ctx->commandName;
+                  onSuccess = std::move(ctx->onSuccess);
+                  onError = std::move(ctx->onError);
+                  ctx->callInvoker.reset();
+                  deliver = true;
+                }
+              }
+              unregisterAsyncContext(ctx);
+              if (!deliver || !onSuccess || !onError) return;
               const size_t out_len = frame.size();
               const uint8_t* resp = frame.data();
               if (out_len < 1) {
-                owned->onError.call(rt, "RustraJSI: empty rkyv v2 async response");
+                onError->call(rt, "RustraJSI: empty rkyv v2 async response");
                 return;
               }
               if (resp[0] == 0) {
                 // 에러 와이어: [ok:0][pad][err_len u16 @8][postcard{code,message} @10]
                 if (out_len < 10) {
-                  owned->onError.call(rt, "RustraJSI: malformed async error response");
+                  onError->call(rt, "RustraJSI: malformed async error response");
                   return;
                 }
                 // postcard {code, message} → "code: message" 문자열 (RustraError
                 // Display 형태) — JS parseRustraErrorString 가 코드를 복구한다.
                 // 파싱 실패 시 원시 바이트 폴백(onError 누락 없음).
-                owned->onError.call(rt, parseRkyvV2ErrorBody(resp, out_len));
+                onError->call(rt, parseRkyvV2ErrorBody(resp, out_len));
                 return;
               }
               if (out_len < 8) {
-                owned->onError.call(rt, "RustraJSI: malformed async success response");
+                onError->call(rt, "RustraJSI: malformed async success response");
                 return;
               }
               try {
                 rc::Reader r(resp + 8, out_len - 8);
                 Value result = gen::decode_by_name(rt, name, r);
-                owned->onSuccess.call(rt, std::move(result));
+                onSuccess->call(rt, std::move(result));
               } catch (const facebook::jsi::JSError& e) {
                 // 디코딩 실패는 에러 콜백으로 정규화 — 콜백 누락 방지.
-                owned->onError.call(rt, e.getMessage());
+                onError->call(rt, e.getMessage());
               }
             });
           },
           &invocationId);
+
+        {
+          std::lock_guard<std::mutex> lock(ctx->mutex);
+          ctx->invocationId = invocationId;
+        }
 
         // JS 는 동기적으로 id 를 받는다 — abort 전파에 쓸 취소 핸들.
         return Value(static_cast<double>(invocationId));
@@ -982,7 +1255,7 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         if (count < 1) {
           throw JSError(rt, "RustraJSI: invokeCancel requires (invocationId)");
         }
-        uint64_t id = static_cast<uint64_t>(args[0].asNumber());
+        uint64_t id = requireSafeU64(rt, args[0], "invocation id");
         return Value(rustra_ffi_invoke_cancel(id));
       });
     cache_["invokeCancel"] = std::make_unique<CachedFunction>(
@@ -1038,10 +1311,11 @@ extern "C" void rustra_calculator_init();
 
 void installRustraJSIWithInvoker(Runtime& rt,
                                   std::shared_ptr<void> typeErasedCallInvoker) {
+  // 같은 프로세스의 Fast Refresh/bridge reload에서 구 Runtime 소유 async
+  // callback을 먼저 무효화한다. 플랫폼 invalidate가 호출되지 않은 호스트도
+  // 다음 install을 안전망으로 사용한다.
+  invalidateRustraJSI();
   rustra_calculator_init();
-  // RN reload 로 새 Runtime 이 설치되는 시점 — 캐시된 Function 핸들은
-  // 구 Runtime 힙을 참조하므로 여기서 반드시 비운다.
-  g_arrayBufferCtor.reset();
   auto dispatcher = getEventDispatcher();
   dispatcher->setCallInvoker(typeErasedCallInvoker);
   // 채널 디스패처도 동일 CallInvoker 공유(2단계) — reset 내부에서 이전
