@@ -228,7 +228,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - name: Install NDK 27.1.12297006
         run: sdkmanager "ndk;27.1.12297006" "platforms;android-36" "build-tools;36.0.0"
       - name: Export NDK_HOME for build-rust-android.sh
