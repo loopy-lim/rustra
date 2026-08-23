@@ -18,7 +18,7 @@ crud 예제를 먼저 빌드해야 한다(아래 실행 참고).
 
 ```bash
 # 저장소 루트에서
-npm run test:app:reference
+bun run test:app:reference
 # 또는 직접:
 cargo build -p rustra-crud-example && \
   tsc -p examples/reference-app/tsconfig.json && \

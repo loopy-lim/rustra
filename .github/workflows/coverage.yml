@@ -1,7 +1,7 @@
 name: Coverage
 
 # advisory — 게이트가 아니라 가시화. 수치가 안정되면(2-3주) PR 리포트/임계 도입을
-# 검토한다. Rust 는 cargo-llvm-cov, TS 는 c8(npm run build 산출 dist 에서 측정,
+# 검토한다. Rust 는 cargo-llvm-cov, TS 는 c8(Bun build 산출 dist 에서 측정,
 # 소스맵으로 src/ 에 리맵 — 별도 --all/include 패턴 불필요).
 on:
   workflow_dispatch:
@@ -37,12 +37,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - run: bun install --frozen-lockfile
+      - run: bun run build
       - name: TS coverage (c8)
         run: |
-          npm run coverage:ts 2>&1 | tee cov-ts.txt | tail -20 >> "$GITHUB_STEP_SUMMARY"
+          bun run coverage:ts 2>&1 | tee cov-ts.txt | tail -20 >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
           name: ts-lcov

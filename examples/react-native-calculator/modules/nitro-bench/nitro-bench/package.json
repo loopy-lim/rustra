@@ -116,6 +116,7 @@
     "semi": false
   },
   "dependencies": {
+    "@babel/runtime": "^7.29.2",
     "expo": "~54.0.34",
     "react": "19.1.0",
     "react-native": "0.81.5"

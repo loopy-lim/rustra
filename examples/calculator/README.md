@@ -44,5 +44,5 @@ engine 파라미터 없이 호출할 수 있습니다 (Tauri-like 글로벌 invo
 Node와 Bun에서 생성된 TypeScript 클라이언트를 검증합니다:
 
 ```bash
-npm run test:compat
+bun run test:compat
 ```

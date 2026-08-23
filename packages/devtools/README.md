@@ -6,7 +6,7 @@ rustra 호출 관측성 엔진 래퍼. 어떤 `EngineClient`든 감싸 호출 �
 ## 설치
 
 ```bash
-npm install @rustra/devtools
+bun add @rustra/devtools
 ```
 
 ## createInstrumentedEngine

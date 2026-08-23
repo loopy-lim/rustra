@@ -121,25 +121,28 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
       # rust-cache 를 쓰지 않는다 — 캐시 복원된 target/ 에서 cargo 가 "Finished
       # (up to date)" 로 링크 산출 복사를 스킵하면 .node 가 누락된다(캐시는
       # .node 최종 산출을 저장하지 않는다). 잡이 1분대라 캐시 이득이 작다.
       - name: Install napi example deps
-        run: cd examples/calculator-napi && npm install
+        run: bun install --cwd examples/calculator-napi --frozen-lockfile
       - name: Build napi addon (debug)
-        run: npm run build:napi
+        run: bun run build:napi
       # 산출 확인 — linux 산출명은 ABI 접미사 포함(linux-x64-gnu). 앱이 두 형태를
       # 순서대로 시도하므로 여기선 대략 존재만 단언.
       - name: Verify addon artifact
         run: ls examples/calculator-napi/*.node
       - name: Install root dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
       - name: Build @rustra/types first
-        run: cd packages/types && npm run build
+        run: bun run --cwd packages/types build
       - name: Build calculator example binary
         run: cargo build -p rustra-calculator-example
       - name: Type check calculator
-        run: npx tsc -p examples/calculator/tsconfig.json
+        run: bunx tsc -p examples/calculator/tsconfig.json
       - name: napi runtime smoke
         run: node dist-ts/examples/calculator/apps/node-napi-app.js
 
@@ -163,39 +166,43 @@ jobs:
       - name: Install bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.0
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
       - name: Build @rustra/types first
-        run: cd packages/types && npm run build
+        run: bun run --cwd packages/types build
       - name: Build all packages
-        run: npm run build
+        run: bun run build
+      - name: Release version coherence
+        run: bun run test:release-coherence
       - name: Lint
-        run: npm run lint
+        run: bun run lint
       - name: Format check
-        run: npm run format:check
+        run: bun run format:check
       - name: Production dependency audit
-        run: npm run audit:prod
+        run: bun run audit:prod
       - name: Type check calculator
-        run: npx tsc --noEmit -p examples/calculator/tsconfig.json
+        run: bunx tsc --noEmit -p examples/calculator/tsconfig.json
       - name: Type check crud
-        run: npx tsc --noEmit -p examples/crud/tsconfig.json
+        run: bunx tsc --noEmit -p examples/crud/tsconfig.json
       - name: Test TypeScript (Node)
-        run: npm run test:ts:node
+        run: bun run test:ts:node
       - name: Install react-native example deps
         # test:adapters 체인의 test:app:react-native 이 예제 의존성(react,
-        # react-native, nitro)을 필요로 한다 — 루트 npm ci 는 예제 node_modules 를
+        # react-native, nitro)을 필요로 한다 — 루트 workspace와 별도 앱 node_modules 를
         # 설치하지 않는다.
-        run: cd examples/react-native-calculator && npm install
+        run: bun install --cwd examples/react-native-calculator --frozen-lockfile
+      - name: Install Tauri example deps
+        run: bun install --cwd examples/tauri-calculator --frozen-lockfile
       - name: Test adapters
-        run: npm run test:adapters
+        run: bun run test:adapters
       - name: Test CLI
-        run: npm run test -w @rustra/cli
+        run: bun run --cwd packages/cli test
       - name: Full compatibility matrix (test:compat)
         # test:compat — ts:node/ts:bun/adapters/runtime 전체 체인. test:ts:bun 과
         # test:runtime:* 이 rustra-calculator-example 바이너리를 요구해 Rust
         # 툴체인이 필요하다 (rust 잡과 별도 캐시 재사용).
-        run: npm run test:compat
+        run: bun run test:compat
 
   # RN 예제 네이티브 Release 빌드 — 감사에서 Android Release 실패가 P0 로
   # 지적됐다. Gradle 훅이 Rust 부터 빌드하므로 cargo-ndk + NDK 만 세팅하면
@@ -209,6 +216,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
       - uses: dtolnay/rust-toolchain@1.95.0
         with:
           targets: aarch64-linux-android, x86_64-linux-android
@@ -224,21 +234,21 @@ jobs:
       - name: Export NDK_HOME for build-rust-android.sh
         run: echo "NDK_HOME=$ANDROID_HOME/ndk/27.1.12297006" >> "$GITHUB_ENV"
       - name: Install example deps
-        run: cd examples/react-native-calculator && npm install
+        run: bun install --cwd examples/react-native-calculator --frozen-lockfile
       # App.tsx 가 @rustra/types 를 import 하고 metro.config.js 가 상위 루트의
       # node_modules 를 resolver 경로에 포함한다 (watchFolders: repoRoot) — 루트
       # 워크스페이스 의존성 설치와 @rustra/types 빌드가 선행돼야 JS 번들링이
       # 해석된다.
       - name: Install root deps and build @rustra/types
         run: |
-          npm ci
-          cd packages/types && npm run build
+          bun install --frozen-lockfile
+          bun run --cwd packages/types build
       # android/ 는 Expo prebuild 산물로 gitignore 되어 있다 (ios/ 도 동일).
       # 클린 체크아웃에서 재현하려면 prebuild 로 네이티브 프로젝트를 생성한다.
       # rustra-jsi 모듈은 react-native.config.js 로 autolink 되고 settings.gradle
       # include 가 예제 android 디렉터리에 대해 동작한다.
       - name: Expo prebuild (generate native android project)
-        run: cd examples/react-native-calculator && npx expo prebuild --platform android --no-install
+        run: bunx --cwd examples/react-native-calculator expo prebuild --platform android --no-install
       - name: Build Release APK
         run: cd examples/react-native-calculator/android && ./gradlew assembleRelease -x lint
       - name: Verify APK contains rustrajsi native lib
@@ -259,20 +269,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
       - name: Install example deps
-        run: cd examples/react-native-calculator && npm install
+        run: bun install --cwd examples/react-native-calculator --frozen-lockfile
       # App.tsx 가 @rustra/types 를 import 하고 metro.config.js 가 상위 루트의
       # node_modules 를 resolver 경로에 포함한다 — 루트 워크스페이스 의존성과
       # @rustra/types 빌드가 필요하다 (rn-android 와 동일).
       - name: Install root deps and build @rustra/types
         run: |
-          npm ci
-          cd packages/types && npm run build
+          bun install --frozen-lockfile
+          bun run --cwd packages/types build
       # ios/ 도 android/ 와 마찬가지로 Expo prebuild 산물 (gitignore). prebuild 는
       # 기존 네이티브 파일의 수동 패치(settings.gradle include, podspec 연결)를
       # 유지한다 — 로컬 검증으로 byte-identical 보존 확인.
       - name: Expo prebuild (generate native ios project)
-        run: cd examples/react-native-calculator && npx expo prebuild --platform ios --no-install
+        run: bunx --cwd examples/react-native-calculator expo prebuild --platform ios --no-install
       - name: Build iOS Release (simulator, no codesign)
         # pipefail — tail 파이프가 xcodebuild 실패 exit code 를 삼키지 않게.
         run: |
@@ -291,20 +304,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
       - name: Build all packages
-        run: npm run build
+        run: bun run build
       - name: Install packed packages as a consumer
         run: |
           mkdir -p /tmp/rustra-pack
           for pkg in types node bun tauri react-native react testing devtools cli; do
-            npm pack --workspace @rustra/$pkg --pack-destination /tmp/rustra-pack
+            (cd "packages/$pkg" && bun pm pack --destination /tmp/rustra-pack)
           done
           mkdir -p /tmp/consumer && cd /tmp/consumer
-          npm init -y > /dev/null
-          npm pkg set type=module
-          npm install --no-save /tmp/rustra-pack/rustra-*.tgz
+          bun init -y > /dev/null
+          bun pm pkg set type=module
+          bun add --no-save /tmp/rustra-pack/rustra-*.tgz
       - name: Smoke — installed packages load (ESM)
         run: |
           cd /tmp/consumer
@@ -326,4 +342,16 @@ jobs:
       - name: Smoke — CLI bin runs from tarball
         run: |
           cd /tmp/consumer
-          npx rustra --help | head -3
+          bunx --bun rustra --help | head -3
+      - name: Smoke — CLI init generates and runs a clean project
+        run: |
+          cd /tmp/consumer
+          bunx --bun rustra init /tmp/rustra-init
+          cd /tmp/rustra-init
+          bun add --no-save /tmp/rustra-pack/rustra-types-*.tgz /tmp/rustra-pack/rustra-cli-*.tgz
+          sed -i "s#rustra = \"[0-9.]*\"#rustra = { path = \"$GITHUB_WORKSPACE/crates/rustra\" }#" Cargo.toml
+          sed -i "s#rustra-macros = \"[0-9.]*\"#rustra-macros = { path = \"$GITHUB_WORKSPACE/crates/rustra-macros\" }#" Cargo.toml
+          bun run codegen
+          test -f generated/schema.json
+          test -f src/generated/rkyv-codecs.ts
+          cargo run | grep "hello from rustra"

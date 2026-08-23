@@ -24,7 +24,7 @@ cargo build --workspace
 
 # 전체 테스트 실행
 cargo test --workspace
-npm run test:compat
+bun run test:compat
 ```
 
 ---
@@ -60,17 +60,17 @@ cargo test --workspace
 cargo run -p rustra-calculator-example
 
 # 전체 호환성 테스트
-npm run test:compat
+bun run test:compat
 ```
 
 TypeScript 패키지를 변경하면:
 
 ```bash
 # 어댑터 테스트
-npm run test:adapters
+bun run test:adapters
 
 # 런타임 테스트
-npm run test:runtime
+bun run test:runtime
 ```
 
 ### 3. 커밋
@@ -91,7 +91,7 @@ refactor: extract command name resolution into shared function
 
 - PR 제목은 70자 이내로 변경을 요약
 - PR 본문에 **무엇을** 변경했는지, **왜** 필요한지 설명
-- `npm run test:compat`가 통과하는지 확인
+- `bun run test:compat`가 통과하는지 확인
 
 ---
 
@@ -102,13 +102,13 @@ refactor: extract command name resolution into shared function
 ```
 cargo test          ← Rust 단위 테스트 (필수)
     ↓
-npm run test:ts:node  ← TS 타입 검증 (필수)
+bun run test:ts:node  ← TS 타입 검증 (필수)
     ↓
-npm run test:adapters ← 어댑터 동작 검증 (필수)
+bun run test:adapters ← 어댑터 동작 검증 (필수)
     ↓
-npm run test:runtime  ← 실제 Rust↔TS 실행 (필수)
+bun run test:runtime  ← 실제 Rust↔TS 실행 (필수)
     ↓
-npm run test:compat   ← 전체 통합 (PR 필수)
+bun run test:compat   ← 전체 통합 (PR 필수)
 ```
 
 ### Rust 테스트
@@ -121,15 +121,15 @@ cargo test --workspace
 
 ```bash
 # 전체
-npm run test:compat
+bun run test:compat
 
 # 개별
-npm run test:ts:node
-npm run test:ts:bun
-npm run test:adapters
-npm run test:runtime:node
-npm run test:runtime:bun
-npm run test:runtime:tauri
+bun run test:ts:node
+bun run test:ts:bun
+bun run test:adapters
+bun run test:runtime:node
+bun run test:runtime:bun
+bun run test:runtime:tauri
 ```
 
 ### 테스트 파일 위치
@@ -199,8 +199,8 @@ git diff generated/contract.ts
 
 ```bash
 # 특정 어댑터만 실행
-npm run test:adapter:tauri
-npm run test:adapter:react-native
+bun run test:adapter:tauri
+bun run test:adapter:react-native
 
 # 모킹 transport로 로깅
 const engine = createNodeEngine({
@@ -238,7 +238,7 @@ Tauri 앱이 `rustra_dispatch`에서 에러를 반환할 때:
 ### 릴리즈 체크리스트
 
 1. `cargo test --workspace` 통과
-2. `npm run test:compat` 통과
+2. `bun run test:compat` 통과
 3. `Cargo.toml` 버전 갱신
 4. CHANGELOG 갱신 (있다면)
 5. git tag 및 push

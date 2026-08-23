@@ -427,7 +427,7 @@ struct RegistryState {
 - **속성 기반 fuzz** — `crates/rustra/tests/rkyv_v2_fuzz.rs` (proptest): 무작위 페이로드 round-trip 보존.
 - **동시성 스모크** — `crates/rustra/tests/rkyv_v2_concurrency.rs`: 다중 스레드 register/invoke/live_schema 혼합 시 패닉/교착 없음.
 - **성능 벤치마크** — `crates/rustra/benches/` (criterion): `tier_compare`(Tier 1/2/3 비교), `dynamic_registry`(register/live_schema/frozen 비용), `type_scaling`(payload 확장성). 동적 명령은 dev-only이므로 `--profile dev`로 측정. 수치는 `docs/benchmarks.md` "동적 명령 (Tier 3)" 섹션.
-- **TS 단위 테스트** — `packages/types/src/index.test.ts`: `createRkyvV2Engine` Tier 3 fallback + `getLiveSchema` (`npm run test:types`).
+- **TS 단위 테스트** — `packages/types/src/index.test.ts`: `createRkyvV2Engine` Tier 3 fallback + `getLiveSchema` (`bun run test:types`).
 - **RN E2E** — `examples/react-native-calculator/DynamicRegistryApp.tsx` 가 4종 타입(Vec/String/Map/Nested) 동적 명령을 단일 rkyvV2 엔진으로 호출 + live schema commandId 표시. 실행 절차는 `docs/plans/2026-07-05-rn-verification-checklist.md`.
 
 ---

@@ -5,7 +5,7 @@
  * 시나리오(signIn → grant → adminStats → signOut → denied)가 성립한다.
  *
  * 실행: cargo build -p rustra-auth-example && \
- *       npx tsc -p examples/auth/tsconfig.json && \
+ *       bunx tsc -p examples/auth/tsconfig.json && \
  *       node dist-ts/examples/auth/apps/node-app.js
  */
 import { spawn } from 'node:child_process';
