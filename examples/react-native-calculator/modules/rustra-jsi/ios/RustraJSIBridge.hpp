@@ -101,6 +101,9 @@ extern "C" {
     const uint64_t* slots, size_t slot_count,
     uint64_t* out_slot,
     uint8_t* err_buf, size_t err_buf_cap, size_t* err_len);
+
+  // 등록된 Rust 패키지가 해당 cmd_id 의 raw handler 를 실제로 보유하면 1.
+  uint8_t rustra_ffi_has_raw(uint16_t command_id);
 }
 
 /// Cached function entry — stores PropNameID + pre-created JS Function.

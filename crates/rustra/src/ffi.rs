@@ -1153,6 +1153,18 @@ pub unsafe extern "C" fn rustra_ffi_invoke_raw(
     }
 }
 
+/// Returns 1 when the registered package has a raw scalar handler for the
+/// numeric command id, otherwise 0. Hosts combine this runtime fact with their
+/// generated codec metadata before advertising Tier 0 to JavaScript.
+#[unsafe(no_mangle)]
+pub extern "C" fn rustra_ffi_has_raw(command_id: u16) -> u8 {
+    u8::from(
+        get_package()
+            .and_then(|pkg| pkg.raw_invoke_shape(command_id))
+            .is_some(),
+    )
+}
+
 /// rkyv V2 caller-buffer 변형 — JSI typed fast path 의 malloc→memcpy→free
 /// 사이클 제거 경로.
 ///

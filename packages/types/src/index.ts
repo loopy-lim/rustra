@@ -255,6 +255,15 @@ export type RustraNative = {
    * 미노출 구 네이티브는 이름 기반 `invokeTyped` 로 폴백한다.
    */
   invokeTypedById?(cmdId: number, args: unknown): unknown;
+  /**
+   * Generated command capability mask keyed by numeric command id.
+   * bit 0 = typed, bit 1 = positional, bit 2 = raw scalar.
+   */
+  getCodecCapabilities?(cmdId: number): number;
+  /** Tier 0: scalar fields and scalar/unit output without postcard conversion. */
+  invokeTypedRaw?(cmdId: number, ...fields: unknown[]): unknown;
+  /** Tier 1: one to three generated scalar/string fields without object reads. */
+  invokeTypedPos?(cmdId: number, ...fields: unknown[]): unknown;
   /** P0-2: 정적 명령 N 개를 단일 횡단으로 일괄 처리 (RN JSI). */
   invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
   /**
@@ -285,12 +294,46 @@ export type RustraNative = {
 // ── Global invoke (Tauri-like) ──────────────────────────────
 
 const invokeByIdSync = Symbol('rustra.invokeByIdSync');
+const invokeGeneratedFieldsSync = Symbol('rustra.invokeGeneratedFieldsSync');
+const resolveGeneratedFieldsSync = Symbol('rustra.resolveGeneratedFieldsSync');
+
+const CODEC_TYPED = 1 << 0;
+const CODEC_POSITIONAL = 1 << 1;
+const CODEC_RAW = 1 << 2;
+
+type GeneratedFieldsRoute = (
+  args: unknown,
+  field0: unknown,
+  field1?: unknown,
+  field2?: unknown,
+) => unknown;
+
+type CachedGeneratedFieldsRoute = {
+  command: string;
+  fieldCount: 1 | 2 | 3;
+  invoke: GeneratedFieldsRoute;
+};
 
 type InternalEngineClient = EngineClient & {
   [invokeByIdSync]?<T>(commandId: number, command: string, args?: unknown): T;
+  [invokeGeneratedFieldsSync]?<T>(
+    commandId: number,
+    command: string,
+    args: unknown,
+    fieldCount: 1 | 2 | 3,
+    field0: unknown,
+    field1?: unknown,
+    field2?: unknown,
+  ): T;
+  [resolveGeneratedFieldsSync]?(
+    commandId: number,
+    command: string,
+    fieldCount: 1 | 2 | 3,
+  ): GeneratedFieldsRoute | undefined;
 };
 
 let _engine: InternalEngineClient | null = null;
+let _generatedFieldsRoutes: Array<CachedGeneratedFieldsRoute | null | undefined> = [];
 
 /**
  * 글로벌 엔진을 설정합니다. 앱 시작 시 한 번만 호출합니다.
@@ -317,6 +360,7 @@ let _engine: InternalEngineClient | null = null;
  */
 export function configure(engine: EngineClient): void {
   _engine = engine;
+  _generatedFieldsRoutes = [];
 }
 
 /**
@@ -401,6 +445,122 @@ export function invokeGenerated<T>(
     return invokeWithTimeout(_engine, command, args, options);
   }
   return invokeByIdWithTimeout(_engine, commandId, command, args, options);
+}
+
+function resolveCachedGeneratedFieldsRoute(
+  engine: InternalEngineClient,
+  commandId: number,
+  command: string,
+  fieldCount: 1 | 2 | 3,
+): CachedGeneratedFieldsRoute | null {
+  const invoke = engine[resolveGeneratedFieldsSync]?.(commandId, command, fieldCount);
+  const cached = invoke ? { command, fieldCount, invoke } : null;
+  _generatedFieldsRoutes[commandId] = cached;
+  return cached;
+}
+
+/** Generated-client helper for a schema-proven one-field input. */
+export function invokeGeneratedFields1<T>(
+  commandId: number,
+  command: string,
+  args: unknown,
+  field0: unknown,
+  options?: InvokeOptions,
+): Promise<T> {
+  if (!_engine) throw new Error('Rustra not configured. Call configure(engine) first.');
+  if (options === undefined) {
+    let route = _generatedFieldsRoutes[commandId];
+    if (route === undefined) {
+      route = resolveCachedGeneratedFieldsRoute(_engine, commandId, command, 1);
+    }
+    if (route && route.command === command && route.fieldCount === 1) {
+      try {
+        return Promise.resolve(route.invoke(args, field0) as T);
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+  }
+  const syncInvoke = _engine[invokeGeneratedFieldsSync];
+  if (options === undefined && syncInvoke) {
+    try {
+      return Promise.resolve(
+        syncInvoke<T>(commandId, command, args, 1, field0, undefined, undefined),
+      );
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+  return invokeGenerated<T>(commandId, command, args, options);
+}
+
+/** Generated-client helper for a schema-proven two-field input. */
+export function invokeGeneratedFields2<T>(
+  commandId: number,
+  command: string,
+  args: unknown,
+  field0: unknown,
+  field1: unknown,
+  options?: InvokeOptions,
+): Promise<T> {
+  if (!_engine) throw new Error('Rustra not configured. Call configure(engine) first.');
+  if (options === undefined) {
+    let route = _generatedFieldsRoutes[commandId];
+    if (route === undefined) {
+      route = resolveCachedGeneratedFieldsRoute(_engine, commandId, command, 2);
+    }
+    if (route && route.command === command && route.fieldCount === 2) {
+      try {
+        return Promise.resolve(route.invoke(args, field0, field1) as T);
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+  }
+  const syncInvoke = _engine[invokeGeneratedFieldsSync];
+  if (options === undefined && syncInvoke) {
+    try {
+      return Promise.resolve(syncInvoke<T>(commandId, command, args, 2, field0, field1, undefined));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+  return invokeGenerated<T>(commandId, command, args, options);
+}
+
+/** Generated-client helper for a schema-proven three-field input. */
+export function invokeGeneratedFields3<T>(
+  commandId: number,
+  command: string,
+  args: unknown,
+  field0: unknown,
+  field1: unknown,
+  field2: unknown,
+  options?: InvokeOptions,
+): Promise<T> {
+  if (!_engine) throw new Error('Rustra not configured. Call configure(engine) first.');
+  if (options === undefined) {
+    let route = _generatedFieldsRoutes[commandId];
+    if (route === undefined) {
+      route = resolveCachedGeneratedFieldsRoute(_engine, commandId, command, 3);
+    }
+    if (route && route.command === command && route.fieldCount === 3) {
+      try {
+        return Promise.resolve(route.invoke(args, field0, field1, field2) as T);
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+  }
+  const syncInvoke = _engine[invokeGeneratedFieldsSync];
+  if (options === undefined && syncInvoke) {
+    try {
+      return Promise.resolve(syncInvoke<T>(commandId, command, args, 3, field0, field1, field2));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+  return invokeGenerated<T>(commandId, command, args, options);
 }
 
 /**
@@ -680,6 +840,12 @@ export type RkyvV2SchemaNative = {
    * `invokeTyped` 로 폴백한다.
    */
   invokeTypedById?(cmdId: number, args: unknown): unknown;
+  /** bit 0 = typed, bit 1 = positional, bit 2 = raw scalar. */
+  getCodecCapabilities?(cmdId: number): number;
+  /** Tier 0 scalar entry. Successful results retain the generated public shape. */
+  invokeTypedRaw?(cmdId: number, ...fields: unknown[]): unknown;
+  /** Tier 1 positional entry for one to three flat generated fields. */
+  invokeTypedPos?(cmdId: number, ...fields: unknown[]): unknown;
   /** P0-2: 정적 명령 N 개를 단일 횡단으로 일괄 처리 (RN JSI). */
   invokeTypedBatch?(names: string[], args: unknown[]): unknown[];
   /**
@@ -1075,10 +1241,16 @@ export function createRkyvV2Engine(
 
   // B1 fast path: 네이티브가 C++ typed 코덱(invokeTyped + hasStaticCodec)을 노출하면
   // 정적 명령을 C++에서 postcard 인코딩/디코딩한다 (JS codec 왕복 ~3.4µs 제거).
-  const hasTypedPath = !!(native.invokeTyped && native.hasStaticCodec);
+  const hasLegacyTypedPath = !!(native.invokeTyped && native.hasStaticCodec);
+  const hasCapabilityPath =
+    typeof native.getCodecCapabilities === 'function' &&
+    typeof native.invokeTypedById === 'function';
+  const hasTypedPath = hasLegacyTypedPath || hasCapabilityPath;
   // P0-3: byId 진입(invokeTypedById)이 가능한지 — 가능하면 dispatch 1순위가
   // JSI 1회 횡단 + u16 디스패치로 바뀐다. 미노출이면 이름 기반 invokeTyped 유지.
   const hasByIdPath = hasTypedPath && typeof native.invokeTypedById === 'function';
+  const hasRawPath = hasCapabilityPath && typeof native.invokeTypedRaw === 'function';
+  const hasPositionalPath = hasCapabilityPath && typeof native.invokeTypedPos === 'function';
   // P0-2: 단일 횡단 배치가 가능하려면 invokeTypedBatch 도 필요.
   const hasBatchPath = hasTypedPath && !!native.invokeTypedBatch;
   // P0-2 byId: 배치 진입의 cmd_id 배열 변형 — 문자열 마샬링 N 회 제거.
@@ -1095,23 +1267,30 @@ export function createRkyvV2Engine(
   // 스윕 도중 예외 시 부분 맵 재사용 — 미스윕 항목은 registry 안 이름이므로
   // Tier 2(JS codec)로 라우팅된다. Tier 3는 registry 밖 동적 명령 전용 경로다.
   let staticCommandIds: Map<string, number> | null = null;
-  let staticCommandNamesById: Map<number, string> | null = null;
+  let staticCommandNamesById: Array<string | undefined> | null = null;
+  let staticCommandCapabilitiesById: number[] | null = null;
   const ensureStaticIds = (): Map<string, number> | null => {
     if (staticCommandIds !== null || !hasTypedPath) return staticCommandIds;
     staticCommandIds = new Map();
-    staticCommandNamesById = new Map();
+    staticCommandNamesById = [];
+    staticCommandCapabilitiesById = [];
     for (const [name, codec] of registry) {
-      if (native.hasStaticCodec!(name)) {
+      const capabilities = hasCapabilityPath
+        ? native.getCodecCapabilities!(codec.commandId)
+        : native.hasStaticCodec!(name)
+          ? CODEC_TYPED
+          : 0;
+      if ((capabilities & CODEC_TYPED) !== 0) {
         staticCommandIds.set(name, codec.commandId);
-        staticCommandNamesById.set(codec.commandId, name);
+        staticCommandNamesById[codec.commandId] = name;
+        staticCommandCapabilitiesById[codec.commandId] = capabilities;
       }
     }
     return staticCommandIds;
   };
 
   const isVerifiedStaticId = (commandId: number, command: string): boolean => {
-    ensureStaticIds();
-    return staticCommandNamesById?.get(commandId) === command;
+    return staticCommandNamesById?.[commandId] === command;
   };
 
   // 신호 없는 기본 3-티어 dispatch (T1 리팩터링 — 로직은 기존 그대로).
@@ -1203,6 +1382,42 @@ export function createRkyvV2Engine(
     return dispatch<T>(command, args);
   };
 
+  const dispatchGeneratedFields = <T>(
+    commandId: number,
+    command: string,
+    args: unknown,
+    fieldCount: 1 | 2 | 3,
+    field0: unknown,
+    field1?: unknown,
+    field2?: unknown,
+  ): T => {
+    if (isVerifiedStaticId(commandId, command)) {
+      const capabilities = staticCommandCapabilitiesById?.[commandId] ?? 0;
+      if (hasRawPath && (capabilities & CODEC_RAW) !== 0) {
+        const result =
+          fieldCount === 1
+            ? native.invokeTypedRaw!(commandId, field0)
+            : fieldCount === 2
+              ? native.invokeTypedRaw!(commandId, field0, field1)
+              : native.invokeTypedRaw!(commandId, field0, field1, field2);
+        // New hosts return the declared output shape. NaN is the defensive
+        // fallback marker used when the Rust registry cannot service raw even
+        // though generated metadata advertised it.
+        if (!(typeof result === 'number' && Number.isNaN(result))) return result as T;
+      }
+      if (hasPositionalPath && (capabilities & CODEC_POSITIONAL) !== 0) {
+        return (
+          fieldCount === 1
+            ? native.invokeTypedPos!(commandId, field0)
+            : fieldCount === 2
+              ? native.invokeTypedPos!(commandId, field0, field1)
+              : native.invokeTypedPos!(commandId, field0, field1, field2)
+        ) as T;
+      }
+    }
+    return dispatchById<T>(commandId, command, args);
+  };
+
   const dispatchPromiseById = <T>(
     commandId: number,
     command: string,
@@ -1215,11 +1430,85 @@ export function createRkyvV2Engine(
     }
   };
 
+  const resolveGeneratedFieldsRoute = (
+    commandId: number,
+    command: string,
+    fieldCount: 1 | 2 | 3,
+  ): GeneratedFieldsRoute | undefined => {
+    if (staticCommandNamesById?.[commandId] !== command) return undefined;
+    const capabilities = staticCommandCapabilitiesById?.[commandId] ?? 0;
+
+    let fallback: GeneratedFieldsRoute | undefined;
+    if (hasPositionalPath && (capabilities & CODEC_POSITIONAL) !== 0) {
+      fallback =
+        fieldCount === 1
+          ? (_args, field0) => native.invokeTypedPos!(commandId, field0)
+          : fieldCount === 2
+            ? (_args, field0, field1) => native.invokeTypedPos!(commandId, field0, field1)
+            : (_args, field0, field1, field2) =>
+                native.invokeTypedPos!(commandId, field0, field1, field2);
+    } else if (hasByIdPath) {
+      fallback = (args) => native.invokeTypedById!(commandId, args);
+    }
+
+    if (hasRawPath && (capabilities & CODEC_RAW) !== 0) {
+      const raw: GeneratedFieldsRoute =
+        fieldCount === 1
+          ? (_args, field0) => native.invokeTypedRaw!(commandId, field0)
+          : fieldCount === 2
+            ? (_args, field0, field1) => native.invokeTypedRaw!(commandId, field0, field1)
+            : (_args, field0, field1, field2) =>
+                native.invokeTypedRaw!(commandId, field0, field1, field2);
+      if (!fallback) return raw;
+      const rawFallback = fallback;
+      return (args, field0, field1, field2) => {
+        const result = raw(args, field0, field1, field2);
+        return typeof result === 'number' && Number.isNaN(result)
+          ? rawFallback(args, field0, field1, field2)
+          : result;
+      };
+    }
+    return fallback;
+  };
+
+  // Capability routing is immutable for one engine/native runtime. Resolve it
+  // once at construction so generated calls do not pay an ensure function and
+  // two Map lookups on every invocation.
+  ensureStaticIds();
+
   return {
     refreshLiveSchema,
 
     [invokeByIdSync]<T>(commandId: number, command: string, args?: unknown): T {
       return dispatchById<T>(commandId, command, args);
+    },
+
+    [invokeGeneratedFieldsSync]<T>(
+      commandId: number,
+      command: string,
+      args: unknown,
+      fieldCount: 1 | 2 | 3,
+      field0: unknown,
+      field1?: unknown,
+      field2?: unknown,
+    ): T {
+      return dispatchGeneratedFields<T>(
+        commandId,
+        command,
+        args,
+        fieldCount,
+        field0,
+        field1,
+        field2,
+      );
+    },
+
+    [resolveGeneratedFieldsSync](
+      commandId: number,
+      command: string,
+      fieldCount: 1 | 2 | 3,
+    ): GeneratedFieldsRoute | undefined {
+      return resolveGeneratedFieldsRoute(commandId, command, fieldCount);
     },
 
     invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {

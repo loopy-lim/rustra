@@ -2,8 +2,10 @@
 // C++ postcard codec for the RN JSI fast path (B1).
 #include "rustra-generated-codecs.hpp"
 #include <cmath>
+#include <cstring>
 #include <jsi/jsi.h>
 #include <limits>
+#include <memory>
 #include <string>
 #include <unordered_map>
 
@@ -12,19 +14,44 @@ namespace jsi = facebook::jsi;
 namespace rc = rustra::codec;
 
 namespace rustra { namespace generated {
-  std::unordered_map<std::string, jsi::PropNameID>& propNameCache() {
-    static std::unordered_map<std::string, jsi::PropNameID> cache;
+#ifdef RUSTRA_TEST_JSI_SHIM
+  using RuntimePropNameCache = std::unordered_map<std::string, jsi::PropNameID>;
+  std::shared_ptr<RuntimePropNameCache> runtimePropNameCache(jsi::Runtime&) {
+    static auto cache = std::make_shared<RuntimePropNameCache>();
     return cache;
   }
+#else
+  class RuntimePropNameCache final : public jsi::NativeState {
+  public:
+    std::unordered_map<std::string, jsi::PropNameID> values;
+  };
+  std::shared_ptr<RuntimePropNameCache> runtimePropNameCache(jsi::Runtime& rt) {
+    static std::unordered_map<jsi::Runtime*, std::weak_ptr<RuntimePropNameCache>> caches;
+    auto found = caches.find(&rt);
+    if (found != caches.end()) {
+      if (auto cache = found->second.lock()) return cache;
+    }
+    auto cache = std::make_shared<RuntimePropNameCache>();
+    jsi::Object holder(rt);
+    holder.setNativeState(rt, cache);
+    rt.global().setProperty(rt, "__rustraPropNameCache", std::move(holder));
+    caches[&rt] = cache;
+    return cache;
+  }
+#endif
   const jsi::PropNameID& cachedProp(jsi::Runtime& rt, const char* name) {
-    auto& cache = propNameCache();
-    auto it = cache.find(name);
-    if (it == cache.end()) {
-      it = cache.emplace(name, jsi::PropNameID::forAscii(rt, name)).first;
+    auto cache = runtimePropNameCache(rt);
+#ifdef RUSTRA_TEST_JSI_SHIM
+    auto& values = *cache;
+#else
+    auto& values = cache->values;
+#endif
+    auto it = values.find(name);
+    if (it == values.end()) {
+      it = values.emplace(name, jsi::PropNameID::forAscii(rt, name)).first;
     }
     return it->second;
   }
-  void resetPropNameCache() { propNameCache().clear(); }
 }}
 
 [[maybe_unused]] static double rustra_f64(jsi::Runtime& rt, const jsi::Value& value, const char* field) {
@@ -48,9 +75,14 @@ namespace rustra { namespace generated {
   return static_cast<uint64_t>(number);
 }
 [[maybe_unused]] static uint8_t rustra_u8(jsi::Runtime& rt, const jsi::Value& value, const char* field) {
-  uint64_t number = rustra_u64(rt, value, field);
-  if (number > 255) throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be in 0..255");
-  return static_cast<uint8_t>(number);
+  if (!value.isNumber()) throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a number");
+  double number = value.asNumber();
+  if (!(number >= 0.0 && number <= 255.0))
+    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be an integer in 0..255");
+  uint8_t byte = static_cast<uint8_t>(number);
+  if (static_cast<double>(byte) != number)
+    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be an integer in 0..255");
+  return byte;
 }
 [[maybe_unused]] static float rustra_f32(jsi::Runtime& rt, const jsi::Value& value, const char* field) {
   double number = rustra_f64(rt, value, field);
@@ -104,12 +136,19 @@ static jsi::Value decode_benchAdd(jsi::Runtime& rt, rc::Reader& r) {
 static void encode_benchEchoBytes(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(25); w.push_u8(0); // cmd_id = 25 LE
   auto argsObj = args.asObject(rt);
-  { auto _v = argsObj.getProperty(rt, "data"); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_u8(rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]")); } else { auto _ab = _o.getArrayBuffer(rt); auto _d = _ab.data(rt); auto _n = _ab.length(rt); w.push_uvar(_n); w.push_bytes((const uint8_t*)_d, _n); } }
+  { const auto& _v = argsObj.getProperty(rt, "data"); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _ab = _o.getArrayBuffer(rt); auto _d = _ab.data(rt); auto _n = _ab.length(rt); w.push_uvar(_n); w.push_bytes((const uint8_t*)_d, _n); } }
+}
+
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
+static void encode_pos_benchEchoBytes(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  if (argc != 1) throw jsi::JSError(rt, "rustra: benchEchoBytes expects 1 positional argument(s), got " + std::to_string(argc));
+  w.push_u8(25); w.push_u8(0); // cmd_id = 25 LE
+  { const auto& _v = argv[0]; auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _ab = _o.getArrayBuffer(rt); auto _d = _ab.data(rt); auto _n = _ab.length(rt); w.push_uvar(_n); w.push_bytes((const uint8_t*)_d, _n); } }
 }
 
 static jsi::Value decode_benchEchoBytes(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  { auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, (double)r.read_u8()); } resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "data"), _arr); }
+  { auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); auto _bytes = r.read_bytes_view((size_t)_n); for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, (double)_bytes.data[_i]); } resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "data"), _arr); }
   return std::move(resultObj);
 }
 
@@ -499,7 +538,14 @@ static jsi::Value decode_secureCompute(jsi::Runtime& rt, rc::Reader& r) {
 static void encode_sizeOf(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(14); w.push_u8(0); // cmd_id = 14 LE
   auto argsObj = args.asObject(rt);
-  { auto _v = argsObj.getProperty(rt, "data"); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_u8(rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]")); } else { auto _ab = _o.getArrayBuffer(rt); auto _d = _ab.data(rt); auto _n = _ab.length(rt); w.push_uvar(_n); w.push_bytes((const uint8_t*)_d, _n); } }
+  { const auto& _v = argsObj.getProperty(rt, "data"); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _ab = _o.getArrayBuffer(rt); auto _d = _ab.data(rt); auto _n = _ab.length(rt); w.push_uvar(_n); w.push_bytes((const uint8_t*)_d, _n); } }
+}
+
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
+static void encode_pos_sizeOf(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  if (argc != 1) throw jsi::JSError(rt, "rustra: sizeOf expects 1 positional argument(s), got " + std::to_string(argc));
+  w.push_u8(14); w.push_u8(0); // cmd_id = 14 LE
+  { const auto& _v = argv[0]; auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _ab = _o.getArrayBuffer(rt); auto _d = _ab.data(rt); auto _n = _ab.length(rt); w.push_uvar(_n); w.push_bytes((const uint8_t*)_d, _n); } }
 }
 
 static jsi::Value decode_sizeOf(jsi::Runtime& rt, rc::Reader& r) {
@@ -713,10 +759,43 @@ bool has_static_codec(const std::string& name) {
   return false;
 }
 
+bool has_static_codec_id(uint16_t cmd_id) {
+  switch (cmd_id) {
+    case 1: return true;
+    case 23: return true;
+    case 25: return true;
+    case 26: return true;
+    case 24: return true;
+    case 18: return true;
+    case 4: return true;
+    case 8: return true;
+    case 10: return true;
+    case 11: return true;
+    case 17: return true;
+    case 5: return true;
+    case 3: return true;
+    case 2: return true;
+    case 9: return true;
+    case 22: return true;
+    case 19: return true;
+    case 20: return true;
+    case 21: return true;
+    case 12: return true;
+    case 15: return true;
+    case 13: return true;
+    case 14: return true;
+    case 16: return true;
+    case 6: return true;
+    case 7: return true;
+    default: return false;
+  }
+}
+
 /// (Tier 1) positional 인자를 직접 인코딩 가능한 cmd_id 집합 — JS 폴백 판별용.
 bool has_pos_codec(uint16_t cmd_id) {
   if (cmd_id == 1) return true;
   if (cmd_id == 23) return true;
+  if (cmd_id == 25) return true;
   if (cmd_id == 26) return true;
   if (cmd_id == 24) return true;
   if (cmd_id == 18) return true;
@@ -733,6 +812,7 @@ bool has_pos_codec(uint16_t cmd_id) {
   if (cmd_id == 21) return true;
   if (cmd_id == 12) return true;
   if (cmd_id == 13) return true;
+  if (cmd_id == 14) return true;
   if (cmd_id == 7) return true;
   return false;
 }
@@ -742,6 +822,7 @@ void encode_pos_by_id(jsi::Runtime& rt, uint16_t cmd_id, const jsi::Value* argv,
   switch (cmd_id) {
     case 1: encode_pos_addNumbers(rt, argv, argc, w); return;
     case 23: encode_pos_benchAdd(rt, argv, argc, w); return;
+    case 25: encode_pos_benchEchoBytes(rt, argv, argc, w); return;
     case 26: encode_pos_benchEchoPair(rt, argv, argc, w); return;
     case 24: encode_pos_benchEchoString(rt, argv, argc, w); return;
     case 18: encode_pos_channelDemo(rt, argv, argc, w); return;
@@ -758,8 +839,153 @@ void encode_pos_by_id(jsi::Runtime& rt, uint16_t cmd_id, const jsi::Value* argv,
     case 21: encode_pos_resourceWrite(rt, argv, argc, w); return;
     case 12: encode_pos_rustraRegistryDemo(rt, argv, argc, w); return;
     case 13: encode_pos_secureCompute(rt, argv, argc, w); return;
+    case 14: encode_pos_sizeOf(rt, argv, argc, w); return;
     case 7: encode_pos_toUpper(rt, argv, argc, w); return;
     default: throw JSError(rt, "rustra: no positional codec for cmd_id " + std::to_string(cmd_id));
+  }
+}
+
+bool has_raw_codec(uint16_t cmd_id) {
+  switch (cmd_id) {
+    case 1: return true;
+    case 23: return true;
+    case 4: return true;
+    case 10: return true;
+    case 11: return true;
+    case 17: return true;
+    case 3: return true;
+    case 2: return true;
+    case 22: return true;
+    case 13: return true;
+    default: return false;
+  }
+}
+
+void encode_raw_slots(Runtime& rt, uint16_t cmd_id, const Value* argv, size_t argc, uint64_t* slots) {
+  switch (cmd_id) {
+    case 1: {
+      if (argc != 2) throw JSError(rt, "rustra: addNumbers expects 2 raw argument(s), got " + std::to_string(argc));
+      { int64_t value = rustra_i64(rt, argv[0], "a"); std::memcpy(&slots[0], &value, sizeof(value)); }
+      { int64_t value = rustra_i64(rt, argv[1], "b"); std::memcpy(&slots[1], &value, sizeof(value)); }
+      return;
+    }
+    case 23: {
+      if (argc != 2) throw JSError(rt, "rustra: benchAdd expects 2 raw argument(s), got " + std::to_string(argc));
+      { double value = rustra_f64(rt, argv[0], "a"); std::memcpy(&slots[0], &value, sizeof(value)); }
+      { double value = rustra_f64(rt, argv[1], "b"); std::memcpy(&slots[1], &value, sizeof(value)); }
+      return;
+    }
+    case 4: {
+      if (argc != 3) throw JSError(rt, "rustra: clamp expects 3 raw argument(s), got " + std::to_string(argc));
+      { double value = rustra_f64(rt, argv[0], "max"); std::memcpy(&slots[0], &value, sizeof(value)); }
+      { double value = rustra_f64(rt, argv[1], "min"); std::memcpy(&slots[1], &value, sizeof(value)); }
+      { double value = rustra_f64(rt, argv[2], "value"); std::memcpy(&slots[2], &value, sizeof(value)); }
+      return;
+    }
+    case 10: {
+      if (argc != 2) throw JSError(rt, "rustra: divide expects 2 raw argument(s), got " + std::to_string(argc));
+      { int64_t value = rustra_i64(rt, argv[0], "a"); std::memcpy(&slots[0], &value, sizeof(value)); }
+      { int64_t value = rustra_i64(rt, argv[1], "b"); std::memcpy(&slots[1], &value, sizeof(value)); }
+      return;
+    }
+    case 11: {
+      if (argc != 2) throw JSError(rt, "rustra: emitDemo expects 2 raw argument(s), got " + std::to_string(argc));
+      { int64_t value = rustra_i64(rt, argv[0], "ticks"); std::memcpy(&slots[0], &value, sizeof(value)); }
+      { int64_t value = rustra_i64(rt, argv[1], "stepDelayMs"); std::memcpy(&slots[1], &value, sizeof(value)); }
+      return;
+    }
+    case 17: {
+      if (argc != 2) throw JSError(rt, "rustra: gauge expects 2 raw argument(s), got " + std::to_string(argc));
+      slots[0] = rustra_u64(rt, argv[0], "limit");
+      slots[1] = rustra_u64(rt, argv[1], "offset");
+      return;
+    }
+    case 3: {
+      if (argc != 1) throw JSError(rt, "rustra: isEven expects 1 raw argument(s), got " + std::to_string(argc));
+      { int64_t value = rustra_i64(rt, argv[0], "n"); std::memcpy(&slots[0], &value, sizeof(value)); }
+      return;
+    }
+    case 2: {
+      if (argc != 2) throw JSError(rt, "rustra: multiply expects 2 raw argument(s), got " + std::to_string(argc));
+      { double value = rustra_f64(rt, argv[0], "a"); std::memcpy(&slots[0], &value, sizeof(value)); }
+      { double value = rustra_f64(rt, argv[1], "b"); std::memcpy(&slots[1], &value, sizeof(value)); }
+      return;
+    }
+    case 22: {
+      if (argc != 1) throw JSError(rt, "rustra: resourceClose expects 1 raw argument(s), got " + std::to_string(argc));
+      slots[0] = rustra_u64(rt, argv[0], "handle");
+      return;
+    }
+    case 13: {
+      if (argc != 2) throw JSError(rt, "rustra: secureCompute expects 2 raw argument(s), got " + std::to_string(argc));
+      { int64_t value = rustra_i64(rt, argv[0], "a"); std::memcpy(&slots[0], &value, sizeof(value)); }
+      { int64_t value = rustra_i64(rt, argv[1], "b"); std::memcpy(&slots[1], &value, sizeof(value)); }
+      return;
+    }
+    default: throw JSError(rt, "rustra: no raw input codec for cmd_id " + std::to_string(cmd_id));
+  }
+}
+
+Value decode_raw_result(Runtime& rt, uint16_t cmd_id, uint64_t slot) {
+  switch (cmd_id) {
+    case 1: {
+      Object result(rt);
+      int64_t value; std::memcpy(&value, &slot, sizeof(value));
+      result.setProperty(rt, cachedProp(rt, "value"), static_cast<double>(value));
+      return std::move(result);
+    }
+    case 23: {
+      Object result(rt);
+      double value; std::memcpy(&value, &slot, sizeof(value));
+      result.setProperty(rt, cachedProp(rt, "value"), value);
+      return std::move(result);
+    }
+    case 4: {
+      Object result(rt);
+      double value; std::memcpy(&value, &slot, sizeof(value));
+      result.setProperty(rt, cachedProp(rt, "value"), value);
+      return std::move(result);
+    }
+    case 10: {
+      Object result(rt);
+      int64_t value; std::memcpy(&value, &slot, sizeof(value));
+      result.setProperty(rt, cachedProp(rt, "value"), static_cast<double>(value));
+      return std::move(result);
+    }
+    case 11: {
+      Object result(rt);
+      int64_t value; std::memcpy(&value, &slot, sizeof(value));
+      result.setProperty(rt, cachedProp(rt, "emitted"), static_cast<double>(value));
+      return std::move(result);
+    }
+    case 17: {
+      Object result(rt);
+      result.setProperty(rt, cachedProp(rt, "next"), static_cast<double>(slot));
+      return std::move(result);
+    }
+    case 3: {
+      Object result(rt);
+      result.setProperty(rt, cachedProp(rt, "result"), slot != 0);
+      return std::move(result);
+    }
+    case 2: {
+      Object result(rt);
+      double value; std::memcpy(&value, &slot, sizeof(value));
+      result.setProperty(rt, cachedProp(rt, "value"), value);
+      return std::move(result);
+    }
+    case 22: {
+      Object result(rt);
+      result.setProperty(rt, cachedProp(rt, "closed"), slot != 0);
+      return std::move(result);
+    }
+    case 13: {
+      Object result(rt);
+      int64_t value; std::memcpy(&value, &slot, sizeof(value));
+      result.setProperty(rt, cachedProp(rt, "value"), static_cast<double>(value));
+      return std::move(result);
+    }
+    default: throw JSError(rt, "rustra: no raw result codec for cmd_id " + std::to_string(cmd_id));
   }
 }
 

@@ -119,6 +119,23 @@ public:
     size_ += len;
   }
 
+  /// 연속 바이트를 호출자가 직접 채울 공간을 한 번에 확보한다. Vec<u8>를
+  /// JSI Array에서 옮길 때 원소마다 ensure_capacity/분기하지 않도록 한다.
+  uint8_t* append_uninitialized(size_t len) {
+    if (len == 0) return nullptr;
+    ensure_capacity(len);
+    uint8_t* out;
+    if (using_heap_) {
+      const size_t start = heap_buf_.size();
+      heap_buf_.resize(start + len);
+      out = heap_buf_.data() + start;
+    } else {
+      out = inline_buf_.data() + size_;
+    }
+    size_ += len;
+    return out;
+  }
+
 private:
   static constexpr size_t kInlineCapacity = 128;
   // inline_buf_ 는 의도적으로 미초기화다 — 모든 읽기 경로(data()/take())가
@@ -249,6 +266,14 @@ public:
   void skip(size_t n) {
     require(n);
     pos += n;
+  }
+
+  /// n바이트를 한 번만 bounds-check하고 뷰로 반환한다.
+  StringView read_bytes_view(size_t n) {
+    require(n);
+    StringView view{data + pos, n};
+    pos += n;
+    return view;
   }
 
 private:

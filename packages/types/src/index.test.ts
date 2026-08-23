@@ -10,6 +10,7 @@ import {
   invoke,
   invokeBatch,
   invokeGenerated,
+  invokeGeneratedFields2,
   invokeWithTimeout,
   RustraCommandError,
   parseRustraErrorString,
@@ -364,6 +365,9 @@ function makeTypedNative(
     invokeTypedBatch?: (names: string[], args: unknown[]) => unknown[];
     invokeTypedById?: (cmdId: number, args: unknown) => unknown;
     invokeTypedBatchById?: (cmdIds: number[], args: unknown[]) => unknown[];
+    getCodecCapabilities?: (cmdId: number) => number;
+    invokeTypedRaw?: (cmdId: number, ...fields: unknown[]) => unknown;
+    invokeTypedPos?: (cmdId: number, ...fields: unknown[]) => unknown;
   },
 ): RkyvV2SchemaNative {
   const base = makeNative(opts);
@@ -373,6 +377,9 @@ function makeTypedNative(
   if (opts.invokeTypedBatch) typed.invokeTypedBatch = opts.invokeTypedBatch;
   if (opts.invokeTypedById) typed.invokeTypedById = opts.invokeTypedById;
   if (opts.invokeTypedBatchById) typed.invokeTypedBatchById = opts.invokeTypedBatchById;
+  if (opts.getCodecCapabilities) typed.getCodecCapabilities = opts.getCodecCapabilities;
+  if (opts.invokeTypedRaw) typed.invokeTypedRaw = opts.invokeTypedRaw;
+  if (opts.invokeTypedPos) typed.invokeTypedPos = opts.invokeTypedPos;
   return typed;
 }
 
@@ -529,6 +536,127 @@ test('generated dispatch safely re-resolves the registered id when id and name d
     ['byId:1'],
   );
   assert.ok(!calls.some((call) => call === 'byId:99'));
+});
+
+test('generated field dispatch selects raw before positional and preserves output shape', async () => {
+  const calls: string[] = [];
+  const native = makeTypedNative({
+    getCodecCapabilities: (id) => {
+      calls.push(`cap:${id}`);
+      return 1 | 2 | 4;
+    },
+    invokeTypedById: () => {
+      calls.push('byId');
+      return { value: -1 };
+    },
+    invokeTypedRaw: (id, ...fields) => {
+      calls.push(`raw:${id}:${fields.join(',')}`);
+      return { value: Number(fields[0]) + Number(fields[1]) };
+    },
+    invokeTypedPos: () => {
+      calls.push('pos');
+      return { value: -2 };
+    },
+  });
+  const engine = createRkyvV2Engine(native, staticRegistry('addNumbers'));
+  configure(engine);
+
+  const input = { a: 20, b: 22 };
+  const out = await invokeGeneratedFields2<{ value: number }>(
+    1,
+    'addNumbers',
+    input,
+    input.a,
+    input.b,
+  );
+
+  assert.deepEqual(out, { value: 42 });
+  assert.deepEqual(calls, ['cap:1', 'raw:1:20,22']);
+});
+
+test('generated field dispatch falls from raw marker to positional', async () => {
+  const calls: string[] = [];
+  const native = makeTypedNative({
+    getCodecCapabilities: () => 1 | 2 | 4,
+    invokeTypedById: () => ({ value: -1 }),
+    invokeTypedRaw: () => {
+      calls.push('raw');
+      return Number.NaN;
+    },
+    invokeTypedPos: (_id, ...fields) => {
+      calls.push('pos');
+      return { value: Number(fields[0]) + Number(fields[1]) };
+    },
+  });
+  configure(createRkyvV2Engine(native, staticRegistry('addNumbers')));
+
+  const out = await invokeGeneratedFields2<{ value: number }>(
+    1,
+    'addNumbers',
+    { a: 20, b: 22 },
+    20,
+    22,
+  );
+
+  assert.deepEqual(out, { value: 42 });
+  assert.deepEqual(calls, ['raw', 'pos']);
+});
+
+test('generated field dispatch keeps old-native by-id fallback', async () => {
+  const calls: string[] = [];
+  const native = makeTypedNative({
+    hasStaticCodec: () => true,
+    invokeTyped: () => ({ value: -1 }),
+    invokeTypedById: (id, args) => {
+      calls.push(`byId:${id}`);
+      const input = args as { a: number; b: number };
+      return { value: input.a + input.b };
+    },
+  });
+  configure(createRkyvV2Engine(native, staticRegistry('addNumbers')));
+
+  const out = await invokeGeneratedFields2<{ value: number }>(
+    1,
+    'addNumbers',
+    { a: 20, b: 22 },
+    20,
+    22,
+  );
+
+  assert.deepEqual(out, { value: 42 });
+  assert.deepEqual(calls, ['byId:1']);
+});
+
+test('generated field dispatch uses the established option path', async () => {
+  const calls: string[] = [];
+  const native = makeTypedNative({
+    getCodecCapabilities: () => 1 | 2 | 4,
+    invokeTypedById: () => {
+      calls.push('byId');
+      return { value: 42 };
+    },
+    invokeTypedRaw: () => {
+      calls.push('raw');
+      return { value: 42 };
+    },
+    invokeTypedPos: () => {
+      calls.push('pos');
+      return { value: 42 };
+    },
+  });
+  configure(createRkyvV2Engine(native, staticRegistry('addNumbers')));
+
+  const out = await invokeGeneratedFields2<{ value: number }>(
+    1,
+    'addNumbers',
+    { a: 20, b: 22 },
+    20,
+    22,
+    { timeoutMs: 100 },
+  );
+
+  assert.deepEqual(out, { value: 42 });
+  assert.deepEqual(calls, ['byId']);
 });
 
 test('typed dispatch falls back to name-based invokeTyped without invokeTypedById (P0-3)', async () => {

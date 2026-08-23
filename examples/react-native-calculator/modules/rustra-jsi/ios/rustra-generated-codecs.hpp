@@ -10,13 +10,10 @@
 namespace rustra::generated {
 
 /// 정적 필드명 PropNameID 캐시 조회(decode 핫패스 — 호출당 이름 변환 제거).
-/// 정의는 rustra-generated-codecs.cpp 에 있다. RN reload 로 Runtime 이
-/// 교체되면 installRustraJSIWithInvoker 가 resetPropNameCache() 로 비운다.
+/// 캐시는 Runtime global 의 NativeState 가 소유하므로 RN reload 때 이전
+/// Runtime 과 함께, 아직 Runtime API가 유효한 시점에 폐기된다.
 const facebook::jsi::PropNameID& cachedProp(facebook::jsi::Runtime& rt,
                                            const char* name);
-
-/// PropNameID 캐시 전체 해제 — 새 Runtime install 시점에 호출한다.
-void resetPropNameCache();
 
 /// 명령 이름으로 postcard 요청 바이트를 인코딩한다(정적 명령만).
 /// 인코딩 성공(정적 명령) 시 true, 미발견(동적 명령) 시 false.
@@ -45,6 +42,9 @@ facebook::jsi::Value decode_by_id(facebook::jsi::Runtime& rt, uint16_t cmd_id,
 /// codegen 시점에 알려진 정적 명령 이름 집합(Tier 3 fallback 분기용).
 bool has_static_codec(const std::string& name);
 
+/// codegen 시점에 알려진 정적 명령 id 집합(capability 협상용).
+bool has_static_codec_id(uint16_t cmd_id);
+
 /// (Tier 1) positional 인자 직접 인코딩 가능한 cmd_id 여부.
 bool has_pos_codec(uint16_t cmd_id);
 
@@ -53,5 +53,17 @@ bool has_pos_codec(uint16_t cmd_id);
 void encode_pos_by_id(facebook::jsi::Runtime& rt, uint16_t cmd_id,
                       const facebook::jsi::Value* argv, size_t argc,
                       rustra::codec::Writer& w);
+
+/// (Tier 0) raw scalar 결과를 생성된 공개 출력 shape로 복원 가능한 id.
+bool has_raw_codec(uint16_t cmd_id);
+
+/// (Tier 0) 개별 JSI 필드를 스키마 종류에 맞는 u64 슬롯으로 변환.
+void encode_raw_slots(facebook::jsi::Runtime& rt, uint16_t cmd_id,
+                      const facebook::jsi::Value* argv, size_t argc,
+                      uint64_t* slots);
+
+/// (Tier 0) Rust raw u64 결과 슬롯을 공개 JSI 출력 shape로 복원.
+facebook::jsi::Value decode_raw_result(facebook::jsi::Runtime& rt,
+                                       uint16_t cmd_id, uint64_t slot);
 
 } // namespace rustra::generated

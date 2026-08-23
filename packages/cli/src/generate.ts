@@ -140,6 +140,7 @@ export function generateTypesTs(schema: PackageSchema): string {
  * 이후 `addNumbers({ a: 42 })`로 engine 파라미터 없이 호출 가능합니다.
  */
 export function generateCommandsTs(schema: PackageSchema): string {
+  const definitions = collectAllDefinitions(schema);
   const typeNames = new Set<string>();
   for (const command of schema.commands) {
     if (command.inputType !== '()') typeNames.add(command.inputType);
@@ -151,7 +152,12 @@ export function generateCommandsTs(schema: PackageSchema): string {
   if (imports.length > 0) {
     output += `import type { ${imports} } from './types.js';\n`;
   }
-  output += `import { invokeGenerated } from '@rustra/types';\n`;
+  const generatedHelpers = new Set<string>(['invokeGenerated']);
+  for (const command of schema.commands) {
+    const fields = generatedFieldRoute(command, definitions);
+    if (fields) generatedHelpers.add(`invokeGeneratedFields${fields.length}`);
+  }
+  output += `import { ${[...generatedHelpers].sort().join(', ')} } from '@rustra/types';\n`;
   output += `import type { InvokeOptions } from '@rustra/types';\n\n`;
 
   for (const command of schema.commands) {
@@ -167,6 +173,15 @@ export function generateCommandsTs(schema: PackageSchema): string {
         `  return invokeGenerated<${outType}>(${command.commandId}, '${command.name}', undefined, options);\n` +
         `}\n${fnName}.commandId = '${command.name}';\n\n`;
     } else {
+      const fields = generatedFieldRoute(command, definitions);
+      if (fields) {
+        const fieldArgs = fields.map((field) => `input[${JSON.stringify(field.name)}]`).join(', ');
+        output +=
+          `export function ${fnName}(input: ${command.inputType}, options?: InvokeOptions): Promise<${outType}> {\n` +
+          `  return invokeGeneratedFields${fields.length}<${outType}>(${command.commandId}, '${command.name}', input, ${fieldArgs}, options);\n` +
+          `}\n${fnName}.commandId = '${command.name}';\n\n`;
+        continue;
+      }
       output +=
         `export function ${fnName}(input: ${command.inputType}, options?: InvokeOptions): Promise<${outType}> {\n` +
         `  return invokeGenerated<${outType}>(${command.commandId}, '${command.name}', input, options);\n` +
@@ -1476,9 +1491,9 @@ function cppEncodeWithGetter(
       // Vec<u8> — len varint + raw bytes. JS 표면은 ArrayBuffer 우선, 폴백으로
       // number 배열(스키마 number[] 표면과 호환).
       return (
-        `${indent}{ auto _v = ${get}; auto _o = _v.asObject(rt);` +
+        `${indent}{ const auto& _v = ${get}; auto _o = _v.asObject(rt);` +
         ` if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt);` +
-        ` w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_u8(rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "${field.name}[]")); }` +
+        ` w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "${field.name}[]"); }` +
         ` else { auto _ab = _o.getArrayBuffer(rt); auto _d = _ab.data(rt); auto _n = _ab.length(rt);` +
         ` w.push_uvar(_n); w.push_bytes((const uint8_t*)_d, _n); } }`
       );
@@ -1647,7 +1662,7 @@ function cppFieldDecodeExpr(
       // setValueAtIndex 조합으로 방출한다.
       return (
         `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
-        ` for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, (double)r.read_u8()); }` +
+        ` auto _bytes = r.read_bytes_view((size_t)_n); for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, (double)_bytes.data[_i]); }` +
         ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`
       );
     }
@@ -1840,7 +1855,44 @@ const POSITIONAL_SCALAR_KINDS = [
   'bool',
   'string',
   'enum_str',
+  'bytes',
 ] as const;
+
+const RAW_SCALAR_KINDS = ['zigzag', 'uvar', 'f64', 'f32', 'bool'] as const;
+
+/** Existing object-input commands that can safely forward one to three fields. */
+function generatedFieldRoute(
+  command: CommandSchema,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+): PostcardField[] | null {
+  if (command.inputType === '()') return null;
+  const { fields } = collectPostcardFields(command.inputSchema, definitions);
+  const positionalKinds = new Set<string>(POSITIONAL_SCALAR_KINDS);
+  if (fields.length === 0 || fields.length > 3) return null;
+  if (!fields.every((field) => positionalKinds.has(field.kind))) return null;
+  return fields;
+}
+
+type RawCommandShape = {
+  inputFields: PostcardField[];
+  outputField?: PostcardField;
+};
+
+/** Mirrors the Rust raw-handler eligibility contract for generated metadata. */
+function rawCommandShape(
+  command: CommandSchema,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+): RawCommandShape | null {
+  const inputFields = generatedFieldRoute(command, definitions);
+  if (!inputFields) return null;
+  const rawKinds = new Set<string>(RAW_SCALAR_KINDS);
+  if (!inputFields.every((field) => rawKinds.has(field.kind))) return null;
+  const { fields: outputFields } = collectPostcardFields(command.outputSchema, definitions);
+  if (outputFields.length > 1) return null;
+  if (outputFields.length === 0 && command.outputType !== '()') return null;
+  if (outputFields.length === 1 && !rawKinds.has(outputFields[0].kind)) return null;
+  return { inputFields, outputField: outputFields[0] };
+}
 
 /**
  * (Tier 1) positional C++ encode 변형 — JS 인자 객체/프로퍼티 조회 없이
@@ -1854,10 +1906,8 @@ function cppEncodePosCommand(
   definitions: Record<string, import('./schema.js').JsonSchema>,
 ): string | null {
   const fnName = commandFunctionName(command.name);
-  const { fields } = collectPostcardFields(command.inputSchema, definitions);
-  const positionalKinds = new Set<string>(POSITIONAL_SCALAR_KINDS);
-  if (fields.length === 0 || fields.length > 3) return null;
-  if (!fields.every((f) => positionalKinds.has(f.kind))) return null;
+  const fields = generatedFieldRoute(command, definitions);
+  if (!fields) return null;
 
   const id = command.commandId;
   const lines: string[] = [];
@@ -1900,6 +1950,9 @@ function cppEncodePosCommand(
         );
         break;
       }
+      case 'bytes':
+        lines.push(cppEncodeWithGetter(f, v, definitions, '  '));
+        break;
       default:
         break;
     }
@@ -1941,12 +1994,10 @@ export function generateRkyvCodecsHpp(_schema: PackageSchema): string {
     `#include "rustra-codec.hpp"\n\n` +
     `namespace rustra::generated {\n\n` +
     `/// 정적 필드명 PropNameID 캐시 조회(decode 핫패스 — 호출당 이름 변환 제거).\n` +
-    `/// 정의는 rustra-generated-codecs.cpp 에 있다. RN reload 로 Runtime 이\n` +
-    `/// 교체되면 installRustraJSIWithInvoker 가 resetPropNameCache() 로 비운다.\n` +
+    `/// 캐시는 Runtime global 의 NativeState 가 소유하므로 RN reload 때 이전\n` +
+    `/// Runtime 과 함께, 아직 Runtime API가 유효한 시점에 폐기된다.\n` +
     `const facebook::jsi::PropNameID& cachedProp(facebook::jsi::Runtime& rt,\n` +
     `                                           const char* name);\n\n` +
-    `/// PropNameID 캐시 전체 해제 — 새 Runtime install 시점에 호출한다.\n` +
-    `void resetPropNameCache();\n\n` +
     `/// 명령 이름으로 postcard 요청 바이트를 인코딩한다(정적 명령만).\n` +
     `/// 인코딩 성공(정적 명령) 시 true, 미발견(동적 명령) 시 false.\n` +
     `bool encode_by_name(facebook::jsi::Runtime& rt, const std::string& name,\n` +
@@ -1969,6 +2020,8 @@ export function generateRkyvCodecsHpp(_schema: PackageSchema): string {
     `                                 rustra::codec::Reader& r);\n\n` +
     `/// codegen 시점에 알려진 정적 명령 이름 집합(Tier 3 fallback 분기용).\n` +
     `bool has_static_codec(const std::string& name);\n\n` +
+    `/// codegen 시점에 알려진 정적 명령 id 집합(capability 협상용).\n` +
+    `bool has_static_codec_id(uint16_t cmd_id);\n\n` +
     `/// (Tier 1) positional 인자 직접 인코딩 가능한 cmd_id 여부.\n` +
     `bool has_pos_codec(uint16_t cmd_id);\n\n` +
     `/// (Tier 1) 개별 Value 인자 → postcard 바이트 (invokeTypedPos 진입).\n` +
@@ -1976,6 +2029,15 @@ export function generateRkyvCodecsHpp(_schema: PackageSchema): string {
     `void encode_pos_by_id(facebook::jsi::Runtime& rt, uint16_t cmd_id,\n` +
     `                      const facebook::jsi::Value* argv, size_t argc,\n` +
     `                      rustra::codec::Writer& w);\n\n` +
+    `/// (Tier 0) raw scalar 결과를 생성된 공개 출력 shape로 복원 가능한 id.\n` +
+    `bool has_raw_codec(uint16_t cmd_id);\n\n` +
+    `/// (Tier 0) 개별 JSI 필드를 스키마 종류에 맞는 u64 슬롯으로 변환.\n` +
+    `void encode_raw_slots(facebook::jsi::Runtime& rt, uint16_t cmd_id,\n` +
+    `                      const facebook::jsi::Value* argv, size_t argc,\n` +
+    `                      uint64_t* slots);\n\n` +
+    `/// (Tier 0) Rust raw u64 결과 슬롯을 공개 JSI 출력 shape로 복원.\n` +
+    `facebook::jsi::Value decode_raw_result(facebook::jsi::Runtime& rt,\n` +
+    `                                       uint16_t cmd_id, uint64_t slot);\n\n` +
     `} // namespace rustra::generated\n`
   );
 }
@@ -2013,14 +2075,25 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   const decodeIdCases = supported
     .map((c) => `    case ${c.commandId}: return decode_${commandFunctionName(c.name)}(rt, r);`)
     .join('\n');
+  const staticIdCases = supported.map((c) => `    case ${c.commandId}: return true;`).join('\n');
+  const posCommands = supported
+    .map((c) => ({ cmd: c, code: cppEncodePosCommand(c, definitions) }))
+    .filter((x): x is { cmd: CommandSchema; code: string } => x.code !== null);
+  const rawCommands = supported
+    .map((cmd) => ({ cmd, shape: rawCommandShape(cmd, definitions) }))
+    .filter(
+      (entry): entry is { cmd: CommandSchema; shape: RawCommandShape } => entry.shape !== null,
+    );
 
   const lines: string[] = [];
   lines.push(`// AUTO-GENERATED by @rustra/cli — DO NOT EDIT.`);
   lines.push(`// C++ postcard codec for the RN JSI fast path (B1).`);
   lines.push(`#include "rustra-generated-codecs.hpp"`);
   lines.push(`#include <cmath>`);
+  lines.push(`#include <cstring>`);
   lines.push(`#include <jsi/jsi.h>`);
   lines.push(`#include <limits>`);
+  lines.push(`#include <memory>`);
   lines.push(`#include <string>`);
   lines.push(`#include <unordered_map>`);
   lines.push(``);
@@ -2032,23 +2105,51 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   lines.push(``);
   // 정적 필드명 PropNameID 캐시 — jsi::Object::setProperty(문자열) 는 호출마다
   // Hermes 내부에서 이름 변환을 수행할 수 있다. decode 핫패스의 프로퍼티 이름은
-  // 컴파일 타임 상수이므로 변환을 최초 1회로 고정한다. RN reload 로 새 Runtime 이
-  // 오면 기존 캐시의 PropNameID 는 무효다 — rustraResetPropNameCache() 가
-  // install 시점(신규 Runtime 보장)에 이를 비운다.
+  // 컴파일 타임 상수이므로 변환을 최초 1회로 고정한다. 캐시를 일반 process static
+  // 값으로 소유하면 RN reload 뒤 이미 파괴된 Runtime 을 통해 PropNameID 소멸자가
+  // 실행돼 SIGSEGV가 난다. 실제 JSI에서는 Runtime global NativeState가 소유하고,
+  // static map은 weak_ptr만 보관해 Runtime 수명에 캐시 수명을 결박한다.
   lines.push(`namespace rustra { namespace generated {`);
-  lines.push(`  std::unordered_map<std::string, jsi::PropNameID>& propNameCache() {`);
-  lines.push(`    static std::unordered_map<std::string, jsi::PropNameID> cache;`);
+  lines.push(`#ifdef RUSTRA_TEST_JSI_SHIM`);
+  lines.push(`  using RuntimePropNameCache = std::unordered_map<std::string, jsi::PropNameID>;`);
+  lines.push(`  std::shared_ptr<RuntimePropNameCache> runtimePropNameCache(jsi::Runtime&) {`);
+  lines.push(`    static auto cache = std::make_shared<RuntimePropNameCache>();`);
   lines.push(`    return cache;`);
   lines.push(`  }`);
+  lines.push(`#else`);
+  lines.push(`  class RuntimePropNameCache final : public jsi::NativeState {`);
+  lines.push(`  public:`);
+  lines.push(`    std::unordered_map<std::string, jsi::PropNameID> values;`);
+  lines.push(`  };`);
+  lines.push(`  std::shared_ptr<RuntimePropNameCache> runtimePropNameCache(jsi::Runtime& rt) {`);
+  lines.push(
+    `    static std::unordered_map<jsi::Runtime*, std::weak_ptr<RuntimePropNameCache>> caches;`,
+  );
+  lines.push(`    auto found = caches.find(&rt);`);
+  lines.push(`    if (found != caches.end()) {`);
+  lines.push(`      if (auto cache = found->second.lock()) return cache;`);
+  lines.push(`    }`);
+  lines.push(`    auto cache = std::make_shared<RuntimePropNameCache>();`);
+  lines.push(`    jsi::Object holder(rt);`);
+  lines.push(`    holder.setNativeState(rt, cache);`);
+  lines.push(`    rt.global().setProperty(rt, "__rustraPropNameCache", std::move(holder));`);
+  lines.push(`    caches[&rt] = cache;`);
+  lines.push(`    return cache;`);
+  lines.push(`  }`);
+  lines.push(`#endif`);
   lines.push(`  const jsi::PropNameID& cachedProp(jsi::Runtime& rt, const char* name) {`);
-  lines.push(`    auto& cache = propNameCache();`);
-  lines.push(`    auto it = cache.find(name);`);
-  lines.push(`    if (it == cache.end()) {`);
-  lines.push(`      it = cache.emplace(name, jsi::PropNameID::forAscii(rt, name)).first;`);
+  lines.push(`    auto cache = runtimePropNameCache(rt);`);
+  lines.push(`#ifdef RUSTRA_TEST_JSI_SHIM`);
+  lines.push(`    auto& values = *cache;`);
+  lines.push(`#else`);
+  lines.push(`    auto& values = cache->values;`);
+  lines.push(`#endif`);
+  lines.push(`    auto it = values.find(name);`);
+  lines.push(`    if (it == values.end()) {`);
+  lines.push(`      it = values.emplace(name, jsi::PropNameID::forAscii(rt, name)).first;`);
   lines.push(`    }`);
   lines.push(`    return it->second;`);
   lines.push(`  }`);
-  lines.push(`  void resetPropNameCache() { propNameCache().clear(); }`);
   lines.push(`}}`);
   lines.push(``);
   lines.push(
@@ -2088,11 +2189,20 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   lines.push(
     `[[maybe_unused]] static uint8_t rustra_u8(jsi::Runtime& rt, const jsi::Value& value, const char* field) {`,
   );
-  lines.push(`  uint64_t number = rustra_u64(rt, value, field);`);
   lines.push(
-    `  if (number > 255) throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be in 0..255");`,
+    `  if (!value.isNumber()) throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a number");`,
   );
-  lines.push(`  return static_cast<uint8_t>(number);`);
+  lines.push(`  double number = value.asNumber();`);
+  lines.push(`  if (!(number >= 0.0 && number <= 255.0))`);
+  lines.push(
+    `    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be an integer in 0..255");`,
+  );
+  lines.push(`  uint8_t byte = static_cast<uint8_t>(number);`);
+  lines.push(`  if (static_cast<double>(byte) != number)`);
+  lines.push(
+    `    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be an integer in 0..255");`,
+  );
+  lines.push(`  return byte;`);
   lines.push(`}`);
   lines.push(
     `[[maybe_unused]] static float rustra_f32(jsi::Runtime& rt, const jsi::Value& value, const char* field) {`,
@@ -2148,43 +2258,127 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   lines.push(`  return false;`);
   lines.push(`}`);
   lines.push(``);
+  lines.push(`bool has_static_codec_id(uint16_t cmd_id) {`);
+  lines.push(`  switch (cmd_id) {`);
+  lines.push(staticIdCases);
+  lines.push(`    default: return false;`);
+  lines.push(`  }`);
+  lines.push(`}`);
+  lines.push(``);
   // (Tier 1) positional encode dispatch — invokeTypedPos(cmdId, a, b, …) 진입이
   // cmd_id 로 직접 분기. 조건 미충족(필드 4+/배열 등) 명령은 목록에 없다 —
   // JS 엔진이 invokeTypedById 로 폴백한다.
-  const posCommands = supported
-    .map((c) => ({ cmd: c, code: cppEncodePosCommand(c, definitions) }))
-    .filter((x): x is { cmd: CommandSchema; code: string } => x.code !== null);
-  if (posCommands.length > 0) {
-    lines.push(`/// (Tier 1) positional 인자를 직접 인코딩 가능한 cmd_id 집합 — JS 폴백 판별용.`);
-    lines.push(`bool has_pos_codec(uint16_t cmd_id) {`);
+  lines.push(`/// (Tier 1) positional 인자를 직접 인코딩 가능한 cmd_id 집합 — JS 폴백 판별용.`);
+  lines.push(`bool has_pos_codec(uint16_t cmd_id) {`);
+  lines.push(posCommands.map((x) => `  if (cmd_id == ${x.cmd.commandId}) return true;`).join('\n'));
+  lines.push(`  return false;`);
+  lines.push(`}`);
+  lines.push(``);
+  lines.push(
+    `/// (Tier 1) 개별 Value 인자 → postcard 바이트. 명령별 코덱이 argc를 정확히 검증한다.`,
+  );
+  lines.push(
+    `void encode_pos_by_id(jsi::Runtime& rt, uint16_t cmd_id, const jsi::Value* argv, size_t argc, rc::Writer& w) {`,
+  );
+  lines.push(`  switch (cmd_id) {`);
+  lines.push(
+    posCommands
+      .map(
+        (x) =>
+          `    case ${x.cmd.commandId}: encode_pos_${commandFunctionName(x.cmd.name)}(rt, argv, argc, w); return;`,
+      )
+      .join('\n'),
+  );
+  lines.push(
+    `    default: throw JSError(rt, "rustra: no positional codec for cmd_id " + std::to_string(cmd_id));`,
+  );
+  lines.push(`  }`);
+  lines.push(`}`);
+  lines.push(``);
+  lines.push(`bool has_raw_codec(uint16_t cmd_id) {`);
+  lines.push(`  switch (cmd_id) {`);
+  lines.push(rawCommands.map(({ cmd }) => `    case ${cmd.commandId}: return true;`).join('\n'));
+  lines.push(`    default: return false;`);
+  lines.push(`  }`);
+  lines.push(`}`);
+  lines.push(``);
+  lines.push(
+    `void encode_raw_slots(Runtime& rt, uint16_t cmd_id, const Value* argv, size_t argc, uint64_t* slots) {`,
+  );
+  lines.push(`  switch (cmd_id) {`);
+  for (const { cmd, shape } of rawCommands) {
+    lines.push(`    case ${cmd.commandId}: {`);
     lines.push(
-      posCommands.map((x) => `  if (cmd_id == ${x.cmd.commandId}) return true;`).join('\n'),
+      `      if (argc != ${shape.inputFields.length}) throw JSError(rt, "rustra: ${cmd.name} expects ${shape.inputFields.length} raw argument(s), got " + std::to_string(argc));`,
     );
-    lines.push(`  return false;`);
-    lines.push(`}`);
-    lines.push(``);
-    lines.push(
-      `/// (Tier 1) 개별 Value 인자 → postcard 바이트. 명령별 코덱이 argc를 정확히 검증한다.`,
-    );
-    lines.push(
-      `void encode_pos_by_id(jsi::Runtime& rt, uint16_t cmd_id, const jsi::Value* argv, size_t argc, rc::Writer& w) {`,
-    );
-    lines.push(`  switch (cmd_id) {`);
-    lines.push(
-      posCommands
-        .map(
-          (x) =>
-            `    case ${x.cmd.commandId}: encode_pos_${commandFunctionName(x.cmd.name)}(rt, argv, argc, w); return;`,
-        )
-        .join('\n'),
-    );
-    lines.push(
-      `    default: throw JSError(rt, "rustra: no positional codec for cmd_id " + std::to_string(cmd_id));`,
-    );
-    lines.push(`  }`);
-    lines.push(`}`);
-    lines.push(``);
+    shape.inputFields.forEach((field, index) => {
+      if (field.kind === 'zigzag') {
+        lines.push(
+          `      { int64_t value = rustra_i64(rt, argv[${index}], ${JSON.stringify(field.name)}); std::memcpy(&slots[${index}], &value, sizeof(value)); }`,
+        );
+      } else if (field.kind === 'uvar') {
+        lines.push(
+          `      slots[${index}] = rustra_u64(rt, argv[${index}], ${JSON.stringify(field.name)});`,
+        );
+      } else if (field.kind === 'f64') {
+        lines.push(
+          `      { double value = rustra_f64(rt, argv[${index}], ${JSON.stringify(field.name)}); std::memcpy(&slots[${index}], &value, sizeof(value)); }`,
+        );
+      } else if (field.kind === 'f32') {
+        lines.push(
+          `      { double value = static_cast<double>(rustra_f32(rt, argv[${index}], ${JSON.stringify(field.name)})); std::memcpy(&slots[${index}], &value, sizeof(value)); }`,
+        );
+      } else {
+        lines.push(`      slots[${index}] = argv[${index}].getBool() ? 1u : 0u;`);
+      }
+    });
+    lines.push(`      return;`);
+    lines.push(`    }`);
   }
+  lines.push(
+    `    default: throw JSError(rt, "rustra: no raw input codec for cmd_id " + std::to_string(cmd_id));`,
+  );
+  lines.push(`  }`);
+  lines.push(`}`);
+  lines.push(``);
+  lines.push(`Value decode_raw_result(Runtime& rt, uint16_t cmd_id, uint64_t slot) {`);
+  lines.push(`  switch (cmd_id) {`);
+  for (const { cmd, shape } of rawCommands) {
+    lines.push(`    case ${cmd.commandId}: {`);
+    if (!shape.outputField) {
+      lines.push(`      return Value::undefined();`);
+    } else {
+      const field = shape.outputField;
+      lines.push(`      Object result(rt);`);
+      if (field.kind === 'zigzag') {
+        lines.push(`      int64_t value; std::memcpy(&value, &slot, sizeof(value));`);
+        lines.push(
+          `      result.setProperty(rt, cachedProp(rt, ${JSON.stringify(field.name)}), static_cast<double>(value));`,
+        );
+      } else if (field.kind === 'uvar') {
+        lines.push(
+          `      result.setProperty(rt, cachedProp(rt, ${JSON.stringify(field.name)}), static_cast<double>(slot));`,
+        );
+      } else if (field.kind === 'f64' || field.kind === 'f32') {
+        lines.push(`      double value; std::memcpy(&value, &slot, sizeof(value));`);
+        lines.push(
+          `      result.setProperty(rt, cachedProp(rt, ${JSON.stringify(field.name)}), value);`,
+        );
+      } else {
+        lines.push(
+          `      result.setProperty(rt, cachedProp(rt, ${JSON.stringify(field.name)}), slot != 0);`,
+        );
+      }
+      lines.push(`      return std::move(result);`);
+    }
+    lines.push(`    }`);
+  }
+  lines.push(
+    `    default: throw JSError(rt, "rustra: no raw result codec for cmd_id " + std::to_string(cmd_id));`,
+  );
+  lines.push(`  }`);
+  lines.push(`}`);
+  lines.push(``);
   lines.push(`} // namespace rustra::generated`);
   return lines.join('\n') + '\n';
 }

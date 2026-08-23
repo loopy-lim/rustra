@@ -759,6 +759,29 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
 
+  // getCodecCapabilities(cmdId): 엔진 구성 시 한 번 캐시할 정적 라우팅 마스크.
+  // bit0=typed, bit1=positional, bit2=raw. raw 는 생성 메타데이터와 실제
+  // Rust registry handler를 함께 확인해 오래된/동적 registry 드리프트에서
+  // 잘못 광고하지 않는다.
+  {
+    auto propNameId = PropNameID::forAscii(rt, "getCodecCapabilities");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 1,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1) {
+          throw JSError(rt, "RustraJSI: getCodecCapabilities requires (cmdId)");
+        }
+        uint16_t cmdId = requireU16(rt, args[0], "command id");
+        uint32_t capabilities = 0;
+        if (gen::has_static_codec_id(cmdId)) capabilities |= 1u;
+        if (gen::has_pos_codec(cmdId)) capabilities |= 2u;
+        if (gen::has_raw_codec(cmdId) && rustra_ffi_has_raw(cmdId) != 0) capabilities |= 4u;
+        return Value(static_cast<double>(capabilities));
+      });
+    cache_["getCodecCapabilities"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+
   // invokeTyped(name, args): 정적 명령 전용 postcard fast path.
   // 흐름: encode_by_name → invoke_rkyv_v2 FFI → decode_by_name.
   // Rust 에러면 JSError throw, 성공이면 디코딩된 JS 객체 반환.
@@ -840,25 +863,9 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         if (slotCount > 8) {
           throw JSError(rt, "RustraJSI: invokeTypedRaw supports up to 8 scalar args");
         }
-        for (size_t i = 0; i < slotCount; i++) {
-          const Value& v = args[i + 1];
-          if (!v.isNumber()) {
-            throw JSError(rt, "RustraJSI: invokeTypedRaw scalar args must be numbers");
-          }
-          double d = v.asNumber();
-          if (!std::isfinite(d) || std::trunc(d) != d) {
-            // 비정수는 f64 비트로 전달한다 — 코어가 필드 종류로 해석한다.
-            std::memcpy(&slots[i], &d, sizeof(double));
-          } else {
-            // 정수는 값 그대로 — zigzag/uvar/bool 모두 값 시맨틱.
-            // ±2^53 정수만 정확하다(JS number 계약과 동일).
-            int64_t iv = static_cast<int64_t>(d);
-            uint64_t uv;
-            std::memcpy(&uv, &iv, sizeof(uint64_t));
-            // 부호 비트 보존: 음수는 2의 보수 비트를 그대로.
-            slots[i] = d < 0 ? uv : static_cast<uint64_t>(d);
-          }
-        }
+        // 명령 스키마가 각 슬롯 종류를 결정한다. 값이 정수처럼 보이더라도 f64
+        // 필드면 IEEE-754 비트로 보내야 하므로 런타임 값 휴리스틱을 쓰지 않는다.
+        gen::encode_raw_slots(rt, cmdId, args + 1, slotCount, slots);
         uint64_t outSlot = 0;
         uint8_t errBuf[256];
         size_t errLen = 0;
@@ -880,11 +887,10 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
           }
           throw JSError(rt, "RustraJSI: invokeTypedRaw failed");
         }
-        // 결과 슬롯 → JS number. i64 는 2의 보수 비트 → double 변환으로
-        // 정확히 ±2^53 범위에서 값 복원(JS number 계약).
-        int64_t signedSlot;
-        std::memcpy(&signedSlot, &outSlot, sizeof(int64_t));
-        return Value(static_cast<double>(signedSlot));
+        // 결과 슬롯 → 생성된 공개 output shape. 필드 종류별 비트 해석(f64,
+        // bool, signed/unsigned)과 단일 프로퍼티 이름은 코드젠 메타데이터가
+        // 복원한다. raw lower-bound primitive가 공개 API로 새지 않는다.
+        return gen::decode_raw_result(rt, cmdId, outSlot);
       });
     cache_["invokeTypedRaw"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
@@ -1224,9 +1230,10 @@ void installRustraJSIWithInvoker(Runtime& rt,
   rustra_calculator_init();
   // RN reload 로 새 Runtime 이 설치되는 시점 — 캐시된 Function 핸들은
   // 구 Runtime 힙을 참조하므로 여기서 반드시 비운다. decode 코덱의
-  // PropNameID 캐시도 같은 이유로 비운다(이름은 Runtime 귀속 심볼이다).
+  // PropNameID 캐시는 Runtime global NativeState가 소유하므로 구 Runtime
+  // 파괴 과정에서 먼저 해제된다. 여기서 늦게 clear하면 이미 죽은 Runtime을
+  // 통해 PropNameID를 파괴해 SIGSEGV가 날 수 있다.
   g_arrayBufferCtor.reset();
-  rustra::generated::resetPropNameCache();
   auto dispatcher = getEventDispatcher();
   dispatcher->setCallInvoker(typeErasedCallInvoker);
   // 채널 디스패처도 동일 CallInvoker 공유(2단계) — reset 내부에서 이전

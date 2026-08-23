@@ -59,9 +59,9 @@ export function benchAdd(a: number, b: number, options?: InvokeOptions): Promise
   return Promise.resolve(callPos<BenchAddOutput>(23, a, b));
 }
 
-export function benchEchoBytes(input: BenchBytesPayload, options?: InvokeOptions): Promise<BenchBytesPayload> {
+export function benchEchoBytes(data: Uint8Array, options?: InvokeOptions): Promise<BenchBytesPayload> {
   void options;
-  return Promise.resolve(call<BenchBytesPayload>(25, 'benchEchoBytes', input));
+  return Promise.resolve(callPos<BenchBytesPayload>(25, data));
 }
 
 export function benchEchoPair(name: string, value: number, options?: InvokeOptions): Promise<BenchPairPayload> {
@@ -159,9 +159,9 @@ export function secureCompute(a: number, b: number, options?: InvokeOptions): Pr
   return Promise.resolve(callPos<SecureComputeOutput>(13, a, b));
 }
 
-export function sizeOf(input: SizeOfInput, options?: InvokeOptions): Promise<SizeOfOutput> {
+export function sizeOf(data: Uint8Array, options?: InvokeOptions): Promise<SizeOfOutput> {
   void options;
-  return Promise.resolve(call<SizeOfOutput>(14, 'sizeOf', input));
+  return Promise.resolve(callPos<SizeOfOutput>(14, data));
 }
 
 export function span(input: SpanInput, options?: InvokeOptions): Promise<SpanOutput> {

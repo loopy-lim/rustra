@@ -20,6 +20,7 @@
 #include "rustra-generated-codecs.hpp"
 
 #include <cstdio>
+#include <cstring>
 #include <vector>
 #include <string>
 
@@ -44,6 +45,38 @@ static void check_bytes(const std::vector<uint8_t>& actual,
 
 int main() {
   Runtime rt;
+
+  // ── Tier 0 raw 슬롯은 런타임 값 모양이 아니라 스키마 종류로 인코딩 ──
+  // benchAdd 의 42/58은 정수처럼 보이지만 f64 필드이므로 IEEE-754 비트여야 한다.
+  {
+    Value args[] = {Value(42.0), Value(58.0)};
+    uint64_t slots[] = {0, 0};
+    gen::encode_raw_slots(rt, 23, args, 2, slots);
+    double a = 0;
+    double b = 0;
+    std::memcpy(&a, &slots[0], sizeof(a));
+    std::memcpy(&b, &slots[1], sizeof(b));
+    if (a != 42.0 || b != 58.0) {
+      std::printf("FAIL raw benchAdd input slots: a=%f b=%f\n", a, b);
+      ++g_failures;
+    }
+
+    double sum = 100.0;
+    uint64_t sumSlot = 0;
+    std::memcpy(&sumSlot, &sum, sizeof(sum));
+    Value result = gen::decode_raw_result(rt, 23, sumSlot);
+    if (result.getObject(rt).getProperty(rt, "value").asNumber() != 100.0) {
+      std::printf("FAIL raw benchAdd output shape\n");
+      ++g_failures;
+    }
+  }
+
+  // Raw eligibility is narrower than positional: string/pair/bytes stay off it.
+  if (!gen::has_raw_codec(1) || !gen::has_raw_codec(23) || gen::has_raw_codec(24) ||
+      gen::has_raw_codec(25) || gen::has_raw_codec(26)) {
+    std::printf("FAIL raw capability set\n");
+    ++g_failures;
+  }
 
   // ── encode addNumbers {a:42, b:58} → [cmd_id 1 LE][postcard(42,58)] ──
   {

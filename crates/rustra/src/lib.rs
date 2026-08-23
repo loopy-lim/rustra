@@ -921,6 +921,53 @@ where
     (Some(raw), input_kinds, output_kind)
 }
 
+/// Existing object-input generated commands can forward one to three required
+/// scalar fields, plus the byte-buffer special case, without changing their
+/// public signature. Keep this predicate deliberately narrower than the binary
+/// codec: nested/optional/general collection inputs stay on `invokeGenerated`.
+fn generated_field_names(input_schema: &Value) -> Option<Vec<String>> {
+    let properties = input_schema.get("properties")?.as_object()?;
+    if properties.is_empty() || properties.len() > 3 {
+        return None;
+    }
+    let required = input_schema
+        .get("required")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .collect::<BTreeSet<_>>()
+        })
+        .unwrap_or_default();
+    let mut fields = Vec::with_capacity(properties.len());
+    for (name, schema) in properties {
+        if !required.contains(name.as_str()) {
+            return None;
+        }
+        let scalar = matches!(
+            schema.get("type").and_then(Value::as_str),
+            Some("integer" | "number" | "boolean" | "string")
+        );
+        let byte_buffer = schema.get("type").and_then(Value::as_str) == Some("array")
+            && schema
+                .get("items")
+                .and_then(|items| items.get("type"))
+                .and_then(Value::as_str)
+                == Some("integer")
+            && schema
+                .get("items")
+                .and_then(|items| items.get("format"))
+                .and_then(Value::as_str)
+                == Some("uint8");
+        if !scalar && !byte_buffer {
+            return None;
+        }
+        fields.push(name.clone());
+    }
+    Some(fields)
+}
+
 impl Package {
     /// 패키지의 고유 식별자(ID)를 반환합니다.
     pub fn id(&self) -> &str {
@@ -1700,7 +1747,17 @@ impl Package {
         if !imports.is_empty() {
             output.push_str(&format!("import type {{ {imports} }} from './types.js';\n"));
         }
-        output.push_str("import { invokeGenerated } from '@rustra/types';\n");
+        let mut generated_helpers = BTreeSet::new();
+        generated_helpers.insert("invokeGenerated".to_string());
+        for command in state.commands.values() {
+            if let Some(fields) = generated_field_names(&command.input_schema) {
+                generated_helpers.insert(format!("invokeGeneratedFields{}", fields.len()));
+            }
+        }
+        output.push_str(&format!(
+            "import {{ {} }} from '@rustra/types';\n",
+            generated_helpers.into_iter().collect::<Vec<_>>().join(", ")
+        ));
         output.push_str("import type { InvokeOptions } from '@rustra/types';\n\n");
 
         for (name, command) in state.commands.iter() {
@@ -1724,6 +1781,29 @@ impl Package {
                     out_type,
                     command.command_id,
                     name,
+                    command_function_name(name),
+                    name,
+                ));
+            } else if let Some(fields) = generated_field_names(&command.input_schema) {
+                let field_args = fields
+                    .iter()
+                    .map(|field| {
+                        let literal = serde_json::to_string(field)
+                            .expect("JSON string serialization for a property name cannot fail");
+                        format!("input[{literal}]")
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                output.push_str(&format!(
+                    "export function {}(input: {}, options?: InvokeOptions): Promise<{}> {{\n  return invokeGeneratedFields{}<{}>({}, '{}', input, {}, options);\n}}\n{}.commandId = '{}';\n\n",
+                    command_function_name(name),
+                    command.input_type,
+                    out_type,
+                    fields.len(),
+                    out_type,
+                    command.command_id,
+                    name,
+                    field_args,
                     command_function_name(name),
                     name,
                 ));

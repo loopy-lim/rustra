@@ -19,7 +19,7 @@ mkdir -p "$STUB_DIR"
 printf '#pragma once\n// stub: facebook::jsi 는 test-jsi-shim.hpp (force-included) 가 제공.\n' \
   > "$STUB_DIR/jsi.h"
 
-COMMON_FLAGS=(-std=c++17 -O2 -Wall -Wextra -I"$IOS_DIR" -I"$BUILD_DIR" -include test-jsi-shim.hpp)
+COMMON_FLAGS=(-std=c++17 -O2 -Wall -Wextra -DRUSTRA_TEST_JSI_SHIM=1 -I"$IOS_DIR" -I"$BUILD_DIR" -include test-jsi-shim.hpp)
 FAIL=0
 
 run_one() {

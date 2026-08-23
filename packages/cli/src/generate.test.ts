@@ -143,6 +143,15 @@ test('generateTypesTs exposes both byte-array runtime representations', () => {
   };
   const types = generateTypesTs(schema);
   assert.ok(types.includes('data: Uint8Array | number[]'));
+  const commands = generateCommandsTs(schema);
+  assert.ok(
+    commands.includes('invokeGeneratedFields1<BytesOutput>(1, \'echoBytes\', input, input["data"]'),
+  );
+  const cpp = generateRkyvCodecsCpp(schema);
+  assert.ok(cpp.includes('static void encode_pos_echoBytes'));
+  assert.ok(cpp.includes('const auto& _v = argv[0]'));
+  assert.ok(cpp.includes('w.append_uninitialized(_n)'));
+  assert.ok(cpp.includes('r.read_bytes_view((size_t)_n)'));
 });
 
 test('generateTypesTs emits recursive self-referencing types', () => {
@@ -257,9 +266,16 @@ test('generateTypesTs maps oneOf with const tags to discriminated unions', () =>
 test('generateCommandsTs produces command function', () => {
   const commands = generateCommandsTs(simpleSchema);
   assert.ok(commands.includes('export function add('));
-  assert.ok(commands.includes("invokeGenerated<AddOutput>(1, 'add'"));
-  assert.ok(commands.includes("import { invokeGenerated } from '@rustra/types'"));
+  assert.ok(commands.includes("invokeGeneratedFields2<AddOutput>(1, 'add', input"));
+  assert.ok(commands.includes('input["a"], input["b"], options'));
+  assert.ok(commands.includes('invokeGeneratedFields2'));
   assert.ok(commands.includes("import type { InvokeOptions } from '@rustra/types'"));
+});
+
+test('generateCommandsTs keeps complex inputs on the generic route', () => {
+  const commands = generateCommandsTs(cppSchema);
+  const sumList = commands.split('export function sumList')[1] ?? '';
+  assert.ok(sumList.includes("invokeGenerated<SumListOutput>(6, 'sumList', input, options)"));
 });
 
 test('generateCommandsTs handles void input and JSDoc description', () => {
@@ -411,6 +427,10 @@ test('generateRkyvCodecsHpp declares dispatch API', () => {
   assert.ok(hpp.includes('bool encode_by_name('));
   assert.ok(hpp.includes('Value decode_by_name('));
   assert.ok(hpp.includes('bool has_static_codec('));
+  assert.ok(hpp.includes('bool has_static_codec_id('));
+  assert.ok(hpp.includes('bool has_raw_codec('));
+  assert.ok(hpp.includes('void encode_raw_slots('));
+  assert.ok(hpp.includes('Value decode_raw_result('));
   assert.ok(hpp.includes('#include "rustra-codec.hpp"'));
   // P0-3: by_id 진입(invokeTypedById)용 선언도 방출한다.
   assert.ok(hpp.includes('bool encode_by_id('));
@@ -438,6 +458,18 @@ test('generateRkyvCodecsCpp emits per-command encode/decode + dispatch', () => {
   assert.ok(cpp.includes('w.push_u8(6); w.push_u8(0);'));
 });
 
+test('generateRkyvCodecsCpp binds PropNameID cache lifetime to its JSI Runtime', () => {
+  const hpp = generateRkyvCodecsHpp(cppSchema);
+  const cpp = generateRkyvCodecsCpp(cppSchema);
+
+  assert.ok(cpp.includes('class RuntimePropNameCache final : public jsi::NativeState'));
+  assert.ok(cpp.includes('std::weak_ptr<RuntimePropNameCache>'));
+  assert.ok(cpp.includes('holder.setNativeState(rt, cache)'));
+  assert.ok(cpp.includes('rt.global().setProperty(rt, "__rustraPropNameCache"'));
+  assert.ok(!cpp.includes('void resetPropNameCache()'));
+  assert.ok(!hpp.includes('void resetPropNameCache()'));
+});
+
 test('generateRkyvCodecsCpp emits by_id switch dispatch (P0-3)', () => {
   const cpp = generateRkyvCodecsCpp(cppSchema);
 
@@ -455,6 +487,18 @@ test('generateRkyvCodecsCpp emits by_id switch dispatch (P0-3)', () => {
   // 미발견 분기: encode 는 false, decode 는 throw (by_name 과 동일 계약)
   assert.ok(cpp.includes('default: return false; // 동적/알 수 없는 cmd_id'));
   assert.ok(cpp.includes('std::to_string(cmd_id)'));
+});
+
+test('generateRkyvCodecsCpp emits raw capability and public result-shape restoration', () => {
+  const cpp = generateRkyvCodecsCpp(simpleSchema);
+  assert.ok(cpp.includes('bool has_raw_codec(uint16_t cmd_id)'));
+  assert.ok(cpp.includes('case 1: return true;'));
+  assert.ok(cpp.includes('void encode_raw_slots(Runtime& rt, uint16_t cmd_id'));
+  assert.ok(cpp.includes('int64_t value = rustra_i64(rt, argv[0], "a")'));
+  assert.ok(cpp.includes('Value decode_raw_result(Runtime& rt, uint16_t cmd_id, uint64_t slot)'));
+  assert.ok(cpp.includes('int64_t value; std::memcpy(&value, &slot, sizeof(value));'));
+  assert.ok(cpp.includes('cachedProp(rt, "value")'));
+  assert.ok(cpp.includes('return std::move(result);'));
 });
 
 test('generateRkyvCodecsCpp maps each postcard field kind to the right push/read', () => {
@@ -798,7 +842,8 @@ test('generateRkyvCodecsCpp validates numeric inputs before native casts', () =>
   assert.ok(cpp.includes('std::isfinite(number)'));
   assert.ok(cpp.includes('std::trunc(number) != number'));
   assert.ok(cpp.includes('number < 0.0 || number > maxSafe'));
-  assert.ok(cpp.includes('number > 255'));
+  assert.ok(cpp.includes('number >= 0.0 && number <= 255.0'));
+  assert.ok(cpp.includes('must be an integer in 0..255'));
   assert.ok(!cpp.includes('(int64_t)_v'));
 });
 

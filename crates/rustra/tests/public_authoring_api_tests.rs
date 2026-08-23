@@ -127,13 +127,10 @@ fn package_generates_host_neutral_typescript_client() {
     assert!(
         generated
             .commands_ts
-            .contains("invokeGenerated<AddNumbersOutput>(1, 'addNumbers'")
+            .contains("invokeGeneratedFields2<AddNumbersOutput>(1, 'addNumbers', input")
     );
-    assert!(
-        generated
-            .commands_ts
-            .contains("import { invokeGenerated } from '@rustra/types'")
-    );
+    assert!(generated.commands_ts.contains("invokeGeneratedFields2"));
+    assert!(generated.commands_ts.contains("input[\"a\"], input[\"b\"]"));
     assert!(!generated.commands_ts.contains("EngineRequest"));
     assert!(!generated.commands_ts.contains("Attachment"));
     assert!(!generated.commands_ts.contains("node:"));
