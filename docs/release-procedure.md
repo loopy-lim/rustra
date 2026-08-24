@@ -10,6 +10,16 @@
 
 ## 1단계 — changeset 확정
 
+공개 `@rustra/*` 9종과 `rustra`/`rustra-macros`는 하나의 release line입니다.
+한 패키지에 변경이 생겨도 Changesets `fixed` 그룹이 npm 9종을 모두 같은 버전으로
+올리고, Cargo workspace도 그 정확한 버전과 minor line을 맞춰야 합니다.
+`bun run test:release-coherence`가 패키지 버전, 내부 의존성, CLI scaffold의 Cargo
+minor, fixed group 누락을 실패로 처리합니다.
+
+소비자에게 breaking DX 변경이 생긴 minor 릴리스는 버전 PR에
+`docs/migrations/<from>-to-<to>.md`를 포함하고 README에서 연결합니다. 자동
+전환이 불가능한 host 설정, 성능 escape hatch, 롤백 절차를 반드시 적습니다.
+
 ```bash
 bunx changeset status   # 대상 패키지/범프 확인
 ```

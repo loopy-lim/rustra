@@ -29,9 +29,24 @@ export type {
   RkyvV2Native,
   InvokeOptions,
 } from '@rustra/types';
-export { RustraCommandError, configure, invoke, createRkyvV2Engine } from '@rustra/types';
+export {
+  RustraCommandError,
+  configure,
+  configureLazy,
+  ensureConfigured,
+  invoke,
+  createRkyvV2Engine,
+} from '@rustra/types';
 
-import { parseRustraErrorString, RustraCommandError, type InvokeOptions } from '@rustra/types';
+import {
+  configureLazy,
+  ensureConfigured,
+  parseRustraErrorString,
+  RustraErrorCode,
+  RustraCommandError,
+  type EngineClient,
+  type InvokeOptions,
+} from '@rustra/types';
 
 /**
  * Tauri의 IPC invoke 함수 타입입니다.
@@ -44,6 +59,38 @@ import { parseRustraErrorString, RustraCommandError, type InvokeOptions } from '
  * ```
  */
 export type TauriInvoke = (command: string, args?: unknown) => Promise<unknown> | unknown;
+
+export type TauriListen = (
+  event: string,
+  handler: (event: { payload: string }) => void,
+) => Promise<() => void>;
+
+type TauriGlobal = {
+  __TAURI__?: {
+    core?: { invoke?: TauriInvoke };
+    event?: { listen?: TauriListen };
+  };
+};
+
+function tauriGlobal(): TauriGlobal {
+  return globalThis as TauriGlobal;
+}
+
+function requireTauriInvoke(): TauriInvoke {
+  const core = tauriGlobal().__TAURI__?.core;
+  if (typeof core?.invoke !== 'function') {
+    throw new RustraCommandError(
+      RustraErrorCode.TransportUnavailable,
+      'Tauri IPC was not found. Enable app.withGlobalTauri, or pass { invoke } to createTauriEngine().',
+    );
+  }
+  return core.invoke.bind(core);
+}
+
+export type TauriEngineOptions = {
+  /** Omit when Tauri `app.withGlobalTauri` is enabled. */
+  invoke?: TauriInvoke;
+};
 
 /**
  * Tauri IPC로 EngineClient를 생성합니다.
@@ -61,7 +108,8 @@ export type TauriInvoke = (command: string, args?: unknown) => Promise<unknown> 
  * });
  * ```
  */
-export function createTauriEngine(options: { invoke: TauriInvoke }) {
+export function createTauriEngine(options: TauriEngineOptions = {}) {
+  const tauriInvoke = options.invoke ?? requireTauriInvoke();
   return {
     async invoke<T>(command: string, args?: unknown, invokeOptions?: InvokeOptions): Promise<T> {
       // signal 정책(전 어댑터 공통): abort 된 signal 만 cancelled 로 거부하고,
@@ -76,7 +124,7 @@ export function createTauriEngine(options: { invoke: TauriInvoke }) {
         );
       }
       try {
-        return (await options.invoke('rustra_dispatch', { command, args: args ?? {} })) as T;
+        return (await tauriInvoke('rustra_dispatch', { command, args: args ?? {} })) as T;
       } catch (e: unknown) {
         if (typeof e === 'object' && e !== null && 'code' in e && 'message' in e) {
           const err = e as { code: string; message: string };
@@ -94,17 +142,33 @@ export function createTauriEngine(options: { invoke: TauriInvoke }) {
   };
 }
 
+export type TauriBootstrap = {
+  /** Resolves after the lazily discovered Tauri engine is ready. */
+  ready(): Promise<EngineClient>;
+};
+
+/** Registers lazy global-Tauri setup for generated platform entrypoints. */
+export function createTauriBootstrap(options: TauriEngineOptions = {}): TauriBootstrap {
+  configureLazy(() => createTauriEngine(options));
+  return { ready: ensureConfigured };
+}
+
 // ── 이벤트 구독 (Rust → JS push) ──────────────────────────
 // Rust 측 `tauri_support::register_with_events` 가 `Package::emit` 을
 // `app.emit("rustra://{sanitized}", payload_json)` 로 전달한다 — 이 섹션은 그
 // 채널을 JS 에서 구독하는 래퍼다. 과거엔 Rust 푸시만 있고 JS 구독 API 가 없어
 // 사용자가 채널 규약을 문서에서 해석해 직접 listen 배선해야 했다.
 
-/** Tauri `listen` 함수 타입 — `window.__TAURI__.event.listen` 을 전달한다. */
-export type TauriListen = (
-  event: string,
-  handler: (event: { payload: string }) => void,
-) => Promise<() => void>;
+function requireTauriListen(): TauriListen {
+  const events = tauriGlobal().__TAURI__?.event;
+  if (typeof events?.listen !== 'function') {
+    throw new RustraCommandError(
+      RustraErrorCode.TransportUnavailable,
+      'Tauri event.listen was not found. Enable app.withGlobalTauri, or pass a listen function.',
+    );
+  }
+  return events.listen.bind(events);
+}
 
 /** rustra 이벤트명 → Tauri 채널명 (`rustra://{sanitized}`, Rust `event_channel` 과 동일 규칙). */
 export function rustraEventChannel(name: string): string {
@@ -146,4 +210,13 @@ export async function subscribeEvent<T = unknown>(
     }
   });
   return unlisten;
+}
+
+/** Tauri global event API를 자동 감지하는 zero-config 구독 래퍼. */
+export function subscribeTauriEvent<T = unknown>(
+  name: string,
+  callback: (payload: T) => void,
+  listen: TauriListen = requireTauriListen(),
+): Promise<() => void> {
+  return subscribeEvent(listen, name, callback);
 }

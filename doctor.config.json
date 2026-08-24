@@ -11,10 +11,39 @@
           "examples/streaming/generated/rkyv-registry.ts",
           "examples/react-native-calculator/modules/nitro-bench/nitro-bench/src/index.ts",
           "examples/react-native-calculator/modules/nitro-bench/nitro-bench/src/specs/NitroBench.nitro.ts",
+          "examples/react-native-bare-calculator/modules/rustra-bridge/src/index.ts",
           "examples/react-native-calculator/modules/rustra-calculator/src/index.ts",
           "examples/react-native-calculator/modules/rustra-jsi/src/index.ts"
         ],
         "rules": ["deslop/unused-file"]
+      },
+      {
+        "files": [
+          "examples/react-native-bare-calculator/generated/commands.ts",
+          "examples/react-native-bare-calculator/generated/react-native.ts",
+          "examples/react-native-calculator/generated/commands.ts",
+          "examples/react-native-calculator/generated/react-native.ts"
+        ],
+        "rules": ["deslop/unused-export"]
+      },
+      {
+        "files": [
+          "generated/positional-facade.ts",
+          "examples/react-native-bare-calculator/generated/positional-facade.ts",
+          "examples/react-native-calculator/generated/positional-facade.ts"
+        ],
+        "rules": ["deslop/unused-file"]
+      },
+      {
+        "files": [
+          "examples/calculator/apps/performance-stats.ts",
+          "examples/tauri-calculator/src/benchmark.ts"
+        ],
+        "rules": ["react-doctor/async-await-in-loop"]
+      },
+      {
+        "files": ["examples/tauri-calculator/benchmark.mjs"],
+        "rules": ["react-doctor/local-rpc-native-bridge-risk"]
       }
     ]
   }

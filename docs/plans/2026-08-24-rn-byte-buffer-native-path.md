@@ -108,15 +108,16 @@ Environment: iPhone 17 Simulator, iOS 26.2, Hermes, React Native 0.81.5,
 Expo 54, Release build, rotating Nitro/Rustra order, and pre-timing byte equality
 checks. The table reports the median of three run-level average times.
 
-| Payload    | Warmup / timed | Nitro median | Rustra median | Rustra/Nitro |
-| ---------- | -------------: | -----------: | ------------: | -----------: |
-| 64 KiB     |       50 / 500 |     9.388 us |      8.889 us |       0.947x |
-| 1 MiB wire |         5 / 50 |    94.748 us |     94.740 us |       1.000x |
+| Payload    | Warmup / timed | Nitro median | Rustra median | Paired ratio median |
+| ---------- | -------------: | -----------: | ------------: | ------------------: |
+| 64 KiB     |       50 / 500 |     9.256 us |      8.644 us |              0.934x |
+| 1 MiB wire |       20 / 200 |    87.979 us |     89.836 us |              1.013x |
 
 Before the external-output ownership transfer, Rustra measured 24.174 us and
 169.315 us respectively, or 2.344x and 3.644x Nitro. The final rerun after the
 JS-thread installation fix still shows parity for these payloads; it is not an
-iOS-device or Android claim.
+iOS-device or Android claim. One 64 KiB run had a transient Nitro-only slowdown,
+while Rustra remained within 8.456–8.792 us across all three runs.
 
 ## Release gates
 

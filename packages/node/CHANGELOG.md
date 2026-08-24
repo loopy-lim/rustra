@@ -1,5 +1,17 @@
 # @rustra/node
 
+## 0.4.0
+
+### Minor Changes
+
+- Node, Bun, Tauri, React Native와 Expo의 생성 진입점이 lazy zero-config bootstrap을
+  소유하며, 전용 byte-buffer 경로와 모든 Rustra 패키지의 0.4 lockstep release를 제공합니다.
+
+### Patch Changes
+
+- Updated dependencies
+  - @rustra/types@0.4.0
+
 ## 0.3.0
 
 ### Minor Changes

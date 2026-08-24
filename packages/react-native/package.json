@@ -1,6 +1,6 @@
 {
   "name": "@rustra/react-native",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "React Native adapter for rustra-bridge",
   "license": "MIT",
   "type": "module",
@@ -18,6 +18,7 @@
   },
   "files": [
     "LICENSE",
+    "native/**/*",
     "dist/index.d.ts",
     "dist/index.d.ts.map",
     "dist/index.js",
@@ -34,7 +35,7 @@
     "test:compile": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
-    "@rustra/types": "^0.3.1"
+    "@rustra/types": "^0.4.0"
   },
   "devDependencies": {
     "typescript": "^5.9.0"
@@ -45,6 +46,14 @@
     "react-native",
     "adapter"
   ],
+  "peerDependencies": {
+    "react-native": ">=0.76"
+  },
+  "peerDependenciesMeta": {
+    "react-native": {
+      "optional": true
+    }
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/loopy-lim/rustra.git",

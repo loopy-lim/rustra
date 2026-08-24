@@ -15,6 +15,18 @@ import {
   tsTypeFromSchema,
 } from './codegen.js';
 
+function generatedJsDoc(description: string): string {
+  const body = escapeJsDoc(description)
+    .split('\n')
+    .map((line) => (line.length > 0 ? ` * ${line}` : ' *'))
+    .join('\n');
+  return `/**\n${body}\n */\n`;
+}
+
+function finishGeneratedText(output: string): string {
+  return `${output.trimEnd()}\n`;
+}
+
 /**
  * (이벤트 계약) 스키마의 `events` 섹션에서 `events.ts` 를 생성한다 —
  * 이벤트 페이로드 타입 + 이름 리터럴 유니언 + 구독 헬퍼.
@@ -107,7 +119,7 @@ export function generateTypesTs(schema: PackageSchema): string {
     if (emitted.has(name)) continue;
     emitted.add(name);
     if (typeof defSchema.description === 'string') {
-      output += `/**\n * ${escapeJsDoc(defSchema.description).replace(/\n/g, '\n * ')}\n */\n`;
+      output += generatedJsDoc(defSchema.description);
     }
     output += `export type ${name} = ${tsTypeFromSchema(defSchema, allDefinitions)};\n\n`;
   }
@@ -116,7 +128,7 @@ export function generateTypesTs(schema: PackageSchema): string {
     if (command.inputType !== '()' && !emitted.has(command.inputType)) {
       emitted.add(command.inputType);
       if (typeof command.inputSchema.description === 'string') {
-        output += `/**\n * ${escapeJsDoc(command.inputSchema.description).replace(/\n/g, '\n * ')}\n */\n`;
+        output += generatedJsDoc(command.inputSchema.description);
       }
       output += `export type ${command.inputType} = ${tsTypeFromSchema(command.inputSchema, allDefinitions)};\n\n`;
     }
@@ -124,13 +136,13 @@ export function generateTypesTs(schema: PackageSchema): string {
     if (command.outputType !== '()' && !emitted.has(command.outputType)) {
       emitted.add(command.outputType);
       if (typeof command.outputSchema.description === 'string') {
-        output += `/**\n * ${escapeJsDoc(command.outputSchema.description).replace(/\n/g, '\n * ')}\n */\n`;
+        output += generatedJsDoc(command.outputSchema.description);
       }
       output += `export type ${command.outputType} = ${tsTypeFromSchema(command.outputSchema, allDefinitions)};\n\n`;
     }
   }
 
-  return output;
+  return finishGeneratedText(output);
 }
 
 /**
@@ -159,7 +171,11 @@ export function generateCommandsTs(schema: PackageSchema): string {
       continue;
     }
     const fields = generatedFieldRoute(command, definitions);
-    if (fields) generatedHelpers.add(`invokeGeneratedFields${fields.length}`);
+    if (fields) {
+      generatedHelpers.add(
+        fields.length === 2 ? 'createGeneratedFields2' : `invokeGeneratedFields${fields.length}`,
+      );
+    }
   }
   output += `import { ${[...generatedHelpers].sort().join(', ')} } from '@rustra/types';\n`;
   output += `import type { InvokeOptions } from '@rustra/types';\n\n`;
@@ -169,7 +185,7 @@ export function generateCommandsTs(schema: PackageSchema): string {
     // unit 출력 `()` → Promise<void>.
     const outType = command.outputType === '()' ? 'void' : command.outputType;
     if (typeof command.inputSchema?.description === 'string') {
-      output += `/**\n * ${escapeJsDoc(command.inputSchema.description).replace(/\n/g, '\n * ')}\n */\n`;
+      output += generatedJsDoc(command.inputSchema.description);
     }
     if (command.inputType === '()') {
       output +=
@@ -187,6 +203,13 @@ export function generateCommandsTs(schema: PackageSchema): string {
       }
       const fields = generatedFieldRoute(command, definitions);
       if (fields) {
+        if (fields.length === 2) {
+          const fieldKeys = fields.map((field) => JSON.stringify(field.name)).join(', ');
+          output +=
+            `export const ${fnName} = createGeneratedFields2<${command.inputType}, ${outType}>` +
+            `(${command.commandId}, '${command.name}', ${fieldKeys}, '${fnName}');\n\n`;
+          continue;
+        }
         const fieldArgs = fields.map((field) => `input[${JSON.stringify(field.name)}]`).join(', ');
         output +=
           `export function ${fnName}(input: ${command.inputType}, options?: InvokeOptions): Promise<${outType}> {\n` +
@@ -201,7 +224,7 @@ export function generateCommandsTs(schema: PackageSchema): string {
     }
   }
 
-  return output;
+  return finishGeneratedText(output);
 }
 
 /**
@@ -1242,7 +1265,7 @@ export function generateRkyvCodecsTs(schema: PackageSchema): string {
     if (codec !== null) output += codec;
   }
 
-  return output;
+  return finishGeneratedText(output);
 }
 
 /**

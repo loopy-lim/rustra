@@ -1,7 +1,27 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createBunEngine } from './index.js';
-import { RustraCommandError } from '@rustra/types';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { suffix } from 'bun:ffi';
+import { createBunBootstrap, createBunEngine } from './index.js';
+import { RustraCommandError, type RkyvV2Codec } from '@rustra/types';
+
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const addNumbersCodec: RkyvV2Codec<{ a: number; b: number }, { value: number }> = {
+  commandId: 1,
+  encode({ a, b }) {
+    const zigzag = (value: number) => value * 2;
+    return Uint8Array.from([1, 0, zigzag(a), zigzag(b)]).buffer;
+  },
+  decode(buffer) {
+    const bytes = new Uint8Array(buffer);
+    if (bytes[0] !== 1) return { ok: false, error: { code: 'invoke.failed', message: 'failed' } };
+    return { ok: true, result: { value: bytes[8]! / 2 } };
+  },
+};
+const testRegistry = new Map<string, RkyvV2Codec<unknown, unknown>>([
+  ['addNumbers', addNumbersCodec as RkyvV2Codec<unknown, unknown>],
+]);
 
 test('createBunEngine routes invoke to transport', async () => {
   const calls: Array<{ command: string; args: unknown }> = [];
@@ -91,4 +111,36 @@ test('createBunEngine parses Display-style "code: message" Error message', async
       return true;
     },
   );
+});
+
+test('createBunBootstrap loads the stable Rustra ABI without transport boilerplate', async () => {
+  const bootstrap = createBunBootstrap({
+    libraryCandidates: [
+      resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`),
+      resolve(repoRoot, `target/debug/librustra_calculator_example.${suffix}`),
+    ],
+    rkyvV2Codecs: testRegistry,
+  });
+  try {
+    const engine = await bootstrap.ready();
+    const result = await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
+    assert.equal(result.value, 42);
+  } finally {
+    bootstrap.dispose();
+  }
+});
+
+test('createBunBootstrap gives an actionable library override hint', async () => {
+  const previous = process.env.RUSTRA_BUN_LIBRARY;
+  delete process.env.RUSTRA_BUN_LIBRARY;
+  const bootstrap = createBunBootstrap({
+    libraryCandidates: ['./missing-rustra-library'],
+    rkyvV2Codecs: new Map(),
+  });
+  try {
+    await assert.rejects(bootstrap.ready(), /RUSTRA_BUN_LIBRARY/);
+  } finally {
+    if (previous === undefined) delete process.env.RUSTRA_BUN_LIBRARY;
+    else process.env.RUSTRA_BUN_LIBRARY = previous;
+  }
 });

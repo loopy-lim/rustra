@@ -109,6 +109,50 @@ pub use rustra_macros::command;
 /// ```
 pub use rustra_macros::register;
 
+/// Exposes the stable mobile initialization symbol expected by Rustra's
+/// React Native bridge.
+///
+/// Call this once in the Rust crate that owns the package registration:
+///
+/// ```rust,ignore
+/// fn app_package() -> rustra::Package { /* register commands */ }
+/// rustra::mobile_entry!(app_package);
+/// ```
+///
+/// React Native autolinking then calls `rustra_mobile_init` on both iOS and
+/// Android. Apple targets also receive a load-time constructor as a fallback.
+/// The package function should be idempotent (normally backed by `OnceLock`).
+#[macro_export]
+macro_rules! mobile_entry {
+    ($package:path $(,)?) => {
+        #[unsafe(no_mangle)]
+        pub extern "C" fn rustra_mobile_init() {
+            let _ = $package();
+        }
+
+        #[cfg(target_vendor = "apple")]
+        mod __rustra_mobile_auto_init {
+            extern "C" fn initialize() {
+                super::rustra_mobile_init();
+            }
+
+            #[used]
+            #[unsafe(link_section = "__DATA,__mod_init_func")]
+            static INITIALIZE: extern "C" fn() = initialize;
+        }
+    };
+}
+
+/// Host-neutral name for [`mobile_entry!`]. Use this when the same crate is
+/// loaded by Bun FFI, React Native, or another native host. The exported ABI
+/// remains `rustra_mobile_init` so existing native loaders stay compatible.
+#[macro_export]
+macro_rules! native_entry {
+    ($package:path $(,)?) => {
+        $crate::mobile_entry!($package);
+    };
+}
+
 pub use rkyv_codec::encode_rkyv_v2_error;
 
 pub mod byte_buffer;
@@ -959,7 +1003,29 @@ where
 /// scalar fields, plus the byte-buffer special case, without changing their
 /// public signature. Keep this predicate deliberately narrower than the binary
 /// codec: nested/optional/general collection inputs stay on `invokeGenerated`.
-fn generated_field_names(input_schema: &Value) -> Option<Vec<String>> {
+fn resolve_generated_field_schema<'a>(schema: &'a Value, definitions: &'a Value) -> &'a Value {
+    let mut current = schema;
+    // Bound resolution so malformed or cyclic third-party schemas fail closed.
+    for _ in 0..16 {
+        if let Some(reference) = current.get("$ref").and_then(Value::as_str)
+            && let Some(name) = reference.strip_prefix("#/definitions/")
+            && let Some(resolved) = definitions.get(name)
+        {
+            current = resolved;
+            continue;
+        }
+        if let Some(parts) = current.get("allOf").and_then(Value::as_array)
+            && parts.len() == 1
+        {
+            current = &parts[0];
+            continue;
+        }
+        break;
+    }
+    current
+}
+
+fn generated_field_names(input_schema: &Value, definitions: &Value) -> Option<Vec<String>> {
     let properties = input_schema.get("properties")?.as_object()?;
     if properties.is_empty() || properties.len() > 3 {
         return None;
@@ -979,6 +1045,7 @@ fn generated_field_names(input_schema: &Value) -> Option<Vec<String>> {
         if !required.contains(name.as_str()) {
             return None;
         }
+        let schema = resolve_generated_field_schema(schema, definitions);
         let scalar = matches!(
             schema.get("type").and_then(Value::as_str),
             Some("integer" | "number" | "boolean" | "string")
@@ -1899,8 +1966,14 @@ impl Package {
         for command in state.commands.values() {
             if generated_byte_field_name(&command.input_schema).is_some() {
                 generated_helpers.insert("invokeGeneratedBytes".to_string());
-            } else if let Some(fields) = generated_field_names(&command.input_schema) {
-                generated_helpers.insert(format!("invokeGeneratedFields{}", fields.len()));
+            } else if let Some(fields) =
+                generated_field_names(&command.input_schema, &command.definitions)
+            {
+                generated_helpers.insert(if fields.len() == 2 {
+                    "createGeneratedFields2".to_string()
+                } else {
+                    format!("invokeGeneratedFields{}", fields.len())
+                });
             }
         }
         output.push_str(&format!(
@@ -1948,7 +2021,30 @@ impl Package {
                     command_function_name(name),
                     name,
                 ));
-            } else if let Some(fields) = generated_field_names(&command.input_schema) {
+            } else if let Some(fields) =
+                generated_field_names(&command.input_schema, &command.definitions)
+            {
+                if fields.len() == 2 {
+                    let field_keys = fields
+                        .iter()
+                        .map(|field| {
+                            serde_json::to_string(field)
+                                .expect("JSON string serialization for a property name cannot fail")
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    output.push_str(&format!(
+                        "export const {} = createGeneratedFields2<{}, {}>({}, '{}', {}, '{}');\n\n",
+                        command_function_name(name),
+                        command.input_type,
+                        out_type,
+                        command.command_id,
+                        name,
+                        field_keys,
+                        command_function_name(name),
+                    ));
+                    continue;
+                }
                 let field_args = fields
                     .iter()
                     .map(|field| {

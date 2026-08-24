@@ -34,19 +34,26 @@
 - [x] Measure 64 B, 64 KiB, and exact 1 MiB-wire inputs before enabling the route.
 - [x] Apply the representation-preserving interim path: positional `Vec<u8>`,
       one Writer reservation, one output bounds check, and explicit u8 validation.
-- [x] Re-measure the dedicated typed-buffer path. Final three-run ratios from
-      median times are 0.947x Nitro at 64 KiB and 1.000x at exact 1 MiB wire.
+- [x] Re-measure the dedicated typed-buffer path. Final three-run paired-ratio
+      medians are 0.934x Nitro at 64 KiB and 1.013x at exact 1 MiB wire.
 
 ## Phase 3: make the fast path operationally boring
 
-- [ ] Move native installation and generated-codec wiring into the Expo config
-      plugin/codegen path.
-- [ ] Add a Bun-based doctor command for Bun version, generated/native contract,
+- [x] Move native installation and generated-codec wiring into the codegen path:
+      one `rustra.json` emits a lazy `react-native.ts` entry, while Expo module
+      config owns Pod autolinking without a manual Podfile declaration.
+- [x] Add a Bun-based doctor command for Bun version, generated/native contract,
       Pod/autolinking, native symbols, and Release mode.
 - [x] Keep active repository and RN example execution paths on Bun 1.4. Registry
       names, Dependabot's `npm` ecosystem key, changelogs, and historical plans
       remain factual references rather than executable package-manager paths.
-- [ ] Add reload stress and normalized performance receipts to the release gate.
+- [x] Export a Release-only benchmark receipt atomically from the iOS app and
+      extract it with Bun while rejecting stale, Debug, incorrect, FFI-missing,
+      or confidence-incomplete runs.
+- [x] Add paired-batch log-ratio 95% intervals, 200 timed exact-1MiB iterations,
+      and generated-helper/native-route bottleneck classification.
+- [ ] Add the simulator-dependent receipt runner to a release gate with a
+      provisioned macOS simulator destination.
 - [x] Make `bun run ios`/`bun run android` rebuild their Rust static library before
       invoking Expo so stale FFI symbols cannot survive an app rebuild.
 
@@ -65,9 +72,11 @@
 
 Current evidence: focused Types, CLI generator, Rust buffer/FFI, and C++ codec
 suites pass. A direct-buffer/pending-async reload probe passed 30/30 after moving
-native installation from the TurboModule queue to the JS Runtime thread. iOS
-Release build/install/runtime and three-run byte output equivalence also pass.
-Full workspace tests, fmt, clippy, and React Doctor are rerun before commit.
+native installation from the TurboModule queue to the JS Runtime thread. The
+latest iOS Release build/install plus three automatically extracted receipts pass
+correctness, FFI, paired-CI, and byte ownership gates. Three-run Rustra/Nitro
+medians are add 1.0297x, string 1.0229x, bytes64 0.9219x, pair 1.0656x,
+64KiB 0.9555x, and exact-1MiB-wire 1.0075x. React Doctor is 100/100.
 
 ## Stop conditions
 

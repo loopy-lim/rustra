@@ -9,5 +9,10 @@
     "skipLibCheck": true
   },
   "include": ["generated/**/*.ts", "ts/**/*.ts", "apps/**/*.ts", "../../packages/**/*.ts"],
-  "exclude": ["apps/bun-ffi-app.ts"]
+  "exclude": [
+    "apps/bun-ffi-app.ts",
+    "apps/bun-performance.ts",
+    "generated/bun.ts",
+    "generated/react-native.ts"
+  ]
 }

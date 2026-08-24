@@ -16,8 +16,10 @@ fn calculator_example_runs_and_generates_client() {
     assert!(stdout.contains("2 + 3 = 5"));
 
     let commands = std::fs::read_to_string("generated/commands.ts").unwrap();
-    assert!(commands.contains("export function addNumbers"));
-    assert!(commands.contains("invokeGeneratedFields2<AddNumbersOutput>(1, 'addNumbers', input"));
+    assert!(commands.contains("export const addNumbers = createGeneratedFields2"));
+    assert!(commands.contains("createGeneratedFields2<AddNumbersInput, AddNumbersOutput>"));
+    assert!(commands.contains("createGeneratedFields2<ChannelDemoInput, ChannelDemoOutput>"));
+    assert!(commands.contains("createGeneratedFields2<ResourceReadInput, ResourceReadOutput>"));
     assert!(!commands.contains("EngineRequest"));
     assert!(!commands.contains("Attachment"));
 }

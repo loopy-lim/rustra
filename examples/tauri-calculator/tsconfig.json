@@ -8,9 +8,10 @@
     "outDir": "dist",
     "skipLibCheck": true
   },
-  "include": [
-    "src/**/*.ts",
-    "../calculator/generated/**/*.ts",
-    "../../packages/tauri/src/**/*.ts"
+  "include": ["src/**/*.ts", "../calculator/generated/**/*.ts", "../../packages/tauri/src/**/*.ts"],
+  "exclude": [
+    "../calculator/generated/bun.ts",
+    "../calculator/generated/node.ts",
+    "../calculator/generated/react-native.ts"
   ]
 }

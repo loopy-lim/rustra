@@ -10,7 +10,7 @@ Rust에서 명령을 한 번 정의하면, Node / Bun / Tauri / React Native 어
 > **English** — Define commands once in Rust, get type-safe TypeScript clients
 > for Node, Bun, Tauri, and React Native. Single Rust core, four host surfaces,
 > compact caller-buffer optimized binary wire (rkyv V2). Quick start: `cargo add rustra` +
-> `bunx @rustra/cli init`. Full docs (Korean) below.
+> `bunx --bun @rustra/cli init`. Full docs (Korean) below.
 
 ## 작동 방식
 
@@ -85,7 +85,7 @@ JS/네이티브 조합의 drift를 런타임에 감지한다.
 
 ```toml
 [dependencies]
-rustra = "0.3"
+rustra = "0.4"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -137,15 +137,161 @@ bunx @rustra/cli generate --schema ./generated/schema.json --output ./generated
 두 단계를 한 번에 실행하려면 `bunx @rustra/cli dev`(소스 감시 + dual-path 자동 재생성)
 또는 `bunx @rustra/cli init`이 만들어주는 `bun run codegen` 스크립트를 쓴다.
 
-```ts
-// TypeScript — 모든 플랫폼에서 동일
-import { createNodeEngine, configure } from '@rustra/node';
-import { addNumbers } from './generated/commands.js';
+### React Native: Expo와 bare RN 공통 설정
 
-const engine = createNodeEngine({ invoke: myTransport });
-configure(engine); // 글로벌 invoke 에 엔진 설치 — 생성 함수는 엔진 파라미터 없이 호출
-const result = await addNumbers({ a: 20, b: 22 }); // 42
+React Native는 앱 네이티브 프로젝트를 직접 수정하지 않는다. Rust crate에 정적
+라이브러리 출력과 mobile entry를 선언하고, 앱의 `rustra.json`에 `reactNative`를
+켜면 생성기가 충돌 격리된 로컬 패키지를 만든다.
+
+```toml
+[lib]
+crate-type = ["rlib", "staticlib"]
 ```
+
+```rust
+rustra::native_entry!(my_package);
+```
+
+```json
+{
+  "schema": "./generated/schema.json",
+  "output": "./generated",
+  "reactNative": {}
+}
+```
+
+```bash
+bun add @rustra/react-native @rustra/types@0.4.0
+bun add -d @rustra/cli
+bunx --bun @rustra/cli generate --config rustra.json
+bun install
+```
+
+```ts
+import { addNumbers } from './generated/react-native';
+
+const result = await addNumbers({ a: 20, b: 22 });
+```
+
+첫 호출이 JSI 설치, contract 검증, fast engine 설정을 한 번만 수행한다. 생성된
+`@rustra/generated-react-native` 패키지가 iOS Podspec과 Android Gradle/CMake를
+소유하므로 Expo development build와 bare React Native 모두 표준 autolinking을
+사용한다. Expo Go는 네이티브 JSI 모듈을 로드할 수 없다. Cargo workspace가
+모호한 경우에만 `reactNative.rustManifest`를 app crate의 `Cargo.toml`로 지정한다.
+
+Node, Bun, Tauri도 같은 생성 진입점 규칙을 쓴다. 필요한 host를 빈 객체로 켜면 Cargo
+metadata와 표준 host API를 추론한다.
+
+```json
+{
+  "schema": "./generated/schema.json",
+  "output": "./generated",
+  "node": {},
+  "bun": {},
+  "tauri": {}
+}
+```
+
+```ts
+import { addNumbers } from './generated/node.js'; // Bun은 bun.js, Tauri는 tauri.js
+
+const result = await addNumbers({ a: 20, b: 22 });
+```
+
+수동 `configure()`는 다중 런타임, custom N-API, global Tauri 비활성화처럼 자동
+추론을 의도적으로 벗어나는 경우에만 사용한다.
+
+## 실사용 예시
+
+생성된 host 진입점이 연결을 소유하므로 제품 코드에는 transport 설정이 남지 않는다.
+아래 코드는 모두 같은 Rust `addNumbers` 명령을 호출한다.
+
+### Node 배치 작업
+
+```ts
+import { addNumbers, rustra } from './generated/node.js';
+
+try {
+  const [a, b] = process.argv.slice(2).map(Number);
+  const { value } = await addNumbers({ a, b });
+  console.log(value);
+} finally {
+  rustra.dispose();
+}
+```
+
+기본 생성 경로는 설치가 단순한 one-shot 프로세스라 저빈도 CLI와 배치에 적합하다.
+요청이 계속 들어오는 서버에서는 `createNodeLoopTransport`를, 마이크로초 단위 호출이
+필요하면 N-API rkyv V2를 선택한다. 실제 코드는
+[`node-app.ts`](examples/calculator/apps/node-app.ts), 성능별 선택은
+[`node-performance.ts`](examples/calculator/apps/node-performance.ts)에 있다.
+
+### Bun HTTP 서비스
+
+```ts
+import { addNumbers, rustra } from './generated/bun.js';
+
+const server = Bun.serve({
+  async fetch(request) {
+    const input = (await request.json()) as { a: number; b: number };
+    return Response.json(await addNumbers(input));
+  },
+});
+process.on('SIGTERM', () => {
+  rustra.dispose();
+  server.stop();
+});
+```
+
+이 경로는 생성된 stable C ABI와 rkyv V2 codec을 바로 사용한다. 별도 `dlopen`, pointer
+해제, contract 검증 코드는 앱에 필요 없다. 실행 가능한 최소 예제는
+[`bun-ffi-app.ts`](examples/calculator/apps/bun-ffi-app.ts)다.
+
+### Tauri 화면과 이벤트
+
+```ts
+import { addNumbers, subscribeEvent } from './generated/tauri.js';
+
+await subscribeEvent<{ value: number }>('calc.tick', ({ value }) => renderTick(value));
+button.addEventListener('click', async () => {
+  const { value } = await addNumbers({ a: 20, b: 22 });
+  output.value = String(value);
+});
+```
+
+`withGlobalTauri`와 Rust 측 `register_with_events` 이후에는 프런트엔드 설정이 없다.
+[`tauri-calculator`](examples/tauri-calculator/)는 실제 WebView IPC 빌드, 실행, 성능
+영수증까지 포함한다.
+
+### Expo development build와 bare React Native
+
+```tsx
+import { useState } from 'react';
+import { Button, Text, View } from 'react-native';
+import { addNumbers } from './generated/react-native';
+
+export function Calculator() {
+  const [value, setValue] = useState<number>();
+  return (
+    <View>
+      <Button
+        title="Run Rust"
+        onPress={() => void addNumbers({ a: 20, b: 22 }).then((result) => setValue(result.value))}
+      />
+      <Text>{value ?? 'Ready'}</Text>
+    </View>
+  );
+}
+```
+
+Expo API를 사용하지 않는 동일한 autolink 패키지이므로 앱 코드는 두 환경에서 같다.
+전체 화면 예제는 [`Expo App.tsx`](examples/react-native-calculator/App.tsx)와
+[`bare RN App.tsx`](examples/react-native-bare-calculator/App.tsx)를 참고한다. Expo Go는
+네이티브 JSI 코드를 포함하지 못하므로 지원하지 않는다.
+
+0.3.1에서 올리는 경우에는 npm과 Rust 버전을 함께 맞춰야 한다. 호스트별 수동
+경계와 before/after는 [0.3에서 0.4로 마이그레이션](docs/migrations/0.3-to-0.4.md)을
+따른다.
 
 ## 프로젝트 구조
 
@@ -328,7 +474,7 @@ type RustraError = {
 `tauri` feature를 활성화:
 
 ```toml
-rustra = { version = "0.3", features = ["tauri"] }
+rustra = { version = "0.4", features = ["tauri"] }
 ```
 
 Rust 측:
@@ -347,27 +493,29 @@ fn main() {
 TypeScript 측:
 
 ```ts
-import { createTauriEngine } from '@rustra/tauri';
-import { configure } from '@rustra/types';
+import { addNumbers, subscribeEvent } from './generated/tauri.js';
 
-const engine = createTauriEngine({ invoke: window.__TAURI__.core.invoke });
-configure(engine);
+await subscribeEvent('progress.tick', console.log);
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
+Tauri 설정의 `app.withGlobalTauri`를 켜면 생성 진입점이 IPC와 event API를 lazy
+감지한다. 기존 `createTauriEngine({ invoke })`는 global API를 쓰지 않는 앱의
+escape hatch다.
+
 ### Node / Bun / React Native
 
-각 패키지(`@rustra/node`, `@rustra/bun`, `@rustra/react-native`)에서 `EngineClient` 구현체를 제공한다. 사용 방식은 Tauri와 동일하다.
+Node는 Cargo binary, Bun은 stable C ABI cdylib, React Native는 autolinked JSI를
+각각 생성 진입점에서 lazy 연결한다. 배포 레이아웃만 다른 경우 Node는
+`RUSTRA_NODE_BINARY`, Bun은 `RUSTRA_BUN_LIBRARY`로 경로를 덮어쓴다.
 
 #### React Native
 
 React Native는 rkyv V2 바이너리 fast-path를 기본으로 사용한다. JSI 네이티브 모듈이 `invokeRkyvV2`를 노출해야 한다. 입력과 출력이 각각 하나의 필수 `Vec<u8>` 필드인 명령은 명시적 Rust 등록 시 `Uint8Array`/`ArrayBuffer` 전용 네이티브 경로도 사용할 수 있다.
 
 ```ts
-import { createFastEngine, configure, getRustraNative } from '@rustra/react-native';
-import { rkyvV2Registry } from './generated/rkyv-registry.js';
+import { addNumbers } from './generated/react-native.js';
 
-configure(createFastEngine(getRustraNative(), { rkyvV2Codecs: rkyvV2Registry }));
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
@@ -378,7 +526,8 @@ const result = await addNumbers({ a: 20, b: 22 });
 | 플랫폼               | 현재 증거 수준             | 비고                                                            |
 | -------------------- | -------------------------- | --------------------------------------------------------------- |
 | Node / Bun           | Runtime verified           | subprocess·N-API·Bun FFI 로컬 runtime + 어댑터 CI               |
-| Tauri (macOS/Linux)  | Build + smoke verified     | Rust IPC smoke; 실제 WebView 사용자 흐름은 별도 E2E 필요        |
+| Tauri (macOS)        | WebView runtime verified   | Release WebView `rustra_dispatch` 정확성·성능 영수증            |
+| Tauri (Linux)        | Build + smoke verified     | 실제 WebView 사용자 흐름은 별도 E2E 필요                        |
 | React Native iOS     | Simulator runtime verified | Release build·설치·launch·reload·Nitro 비교; 실기기 증거는 별도 |
 | React Native Android | Release APK verified       | arm64/x86_64 `.so` 포함; emulator/physical launch는 미검증      |
 
@@ -387,28 +536,34 @@ const result = await addNumbers({ a: 20, b: 22 });
 
 ## 성능
 
-모든 어댑터에서 `addNumbers({ a: 42, b: 58 })` 호출 기준 (Apple Silicon, release 빌드).
+`addNumbers({ a: 20, b: 22 })`를 생성된 API 또는 문서화된 고성능 경로로 호출한
+end-to-end Release 실측이다. 2026-08-24 Apple Silicon에서 정확성을 먼저 확인하고
+warm-up 뒤 3회 반복했다.
 
-| 어댑터                 | 평균 지연  | 처리량          |
-| ---------------------- | ---------- | --------------- |
-| Rust (typed)           | 341–347 ns | 2,913,359 ops/s |
-| Bun (JS측)             | 189 ns     | ~5.3M ops/s     |
-| Node.js (JS측)         | 297–299 ns | ~3.35M ops/s    |
-| Swift → Rust FFI       | 1.2 µs     | 853,614 ops/s   |
-| Node napi-rs (release) | 1.5 µs     | 654,817 ops/s   |
-| Bun FFI (release)      | 1.7 µs     | ~580,000 ops/s  |
+| 실제 사용자 경로                | 평균 지연 |       p50 |        처리량 | 권장 용도        |
+| ------------------------------- | --------: | --------: | ------------: | ---------------- |
+| Node 생성 one-shot              |   2.76 ms |   2.76 ms |     363 ops/s | CLI, 저빈도 배치 |
+| Node persistent loop            |  16.86 µs |  16.67 µs |  59,301 ops/s | 일반 서버        |
+| Node N-API rkyv V2 escape hatch |   1.26 µs |   1.17 µs | 793,185 ops/s | 고빈도 hot path  |
+| Bun 생성 FFI rkyv V2            |   2.27 µs |   2.21 µs | 439,961 ops/s | 서비스, CLI      |
+| Tauri 생성 WebView IPC          | 279.04 µs | 300.00 µs |   3,584 ops/s | 데스크톱 UI 명령 |
+| RN 생성 JSI, iOS Simulator      |         — |   2.71 µs |             — | 모바일 hot path  |
+
+평균과 처리량은 OS 스케줄링 꼬리값을 줄인 양끝 5% trimmed mean이다. Tauri는
+WKWebView 타이머 정밀도 때문에 20호출 배치의 호출당 값을 사용했다. RN 행은
+최종 Release receipt의 Rustra add p50이며, 다른 행과 다른 iOS Simulator 환경이다.
+bare RN과 Android는 동일한 생성 bridge를 빌드하지만 별도 런타임 성능 영수증이 없어
+숫자를 추정하지 않았다. 전체 호스트는 `bun run bench:hosts`, RN은 아래 receipt 명령으로
+재현한다.
 
 > 2026-08-24 iPhone 17 Simulator Release 측정에서 일반 객체 연산은 Nitro 대비
-> 3회 중앙값 add 1.034x, string 1.019x, pair 1.059x였다. 전용 byte 경로는
-> JS Runtime 스레드 설치 안전성 수정 후 64 KiB 0.947x, exact 1 MiB-wire
-> 1.000x였다. 이는 시뮬레이터 영수증이며
+> 3회 중앙값 add 1.0418x, string 1.0281x, pair 1.0535x였고 64B byte는
+> 0.9543x였다. 전용 byte 경로는 64 KiB 0.9338x, exact 1 MiB-wire
+> 1.0129x였다. 각 실행은 paired 95% CI가 포함된 JSON receipt로 자동 추출했다.
+> 이는 시뮬레이터 영수증이며
 > iOS/Android 실기기 성능 주장이 아니다.
-> 비교의 범위와 기능 패리티 매트릭스는
-> [벤치마크 문서](docs/benchmarks.md) §"Nitro Modules 비교" 참고) —
-> 상세 벤치마크, 레이어별 오버헤드 분석, 페이로드 확장성은
-> [벤치마크 문서](docs/benchmarks.md) 참고 (2026-08-23 iOS Release 재측정).
-
-> 상세 벤치마크, 레이어별 오버헤드 분석, 페이로드 확장성은 [벤치마크 문서](docs/benchmarks.md)를 참고.
+> 비교의 범위, 기능 패리티, 레이어별 오버헤드와 페이로드 확장성은
+> [벤치마크 문서](docs/benchmarks.md)를 참고한다.
 
 ## 에러 처리
 

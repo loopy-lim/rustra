@@ -1,0 +1,33 @@
+{
+  "name": "rustra-bare-rn-calculator",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.0",
+  "main": "index.ts",
+  "workspaces": [
+    "modules/rustra-bridge"
+  ],
+  "scripts": {
+    "codegen": "cargo run --manifest-path ../../Cargo.toml -p rustra-calculator-example --bin rustra-calculator-example && bun ../../packages/cli/src/index.ts generate --config rustra.json",
+    "test:autolink": "bun scripts/check-autolink.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@rustra/generated-react-native": "workspace:*",
+    "@rustra/react-native": "file:../../packages/react-native",
+    "@rustra/types": "file:../../packages/types",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
+  },
+  "devDependencies": {
+    "@react-native-community/cli": "20.2.0",
+    "@react-native-community/cli-platform-android": "20.2.0",
+    "@react-native-community/cli-platform-ios": "20.2.0",
+    "@types/react": "~19.1.0",
+    "typescript": "~5.9.2"
+  },
+  "overrides": {
+    "@rustra/types": "file:../../packages/types"
+  }
+}

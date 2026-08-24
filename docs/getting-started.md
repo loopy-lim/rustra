@@ -11,7 +11,7 @@ rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 
 ### 가장 빠른 시작 — `rustra init`
 
 ```bash
-bunx --bun @rustra/cli@0.3.0 init my-project
+bunx --bun @rustra/cli@0.4.0 init my-project
 cd my-project
 bun install
 bun run codegen      # schema.json + 완전한 TS/C++ 클라이언트 생성
@@ -25,7 +25,7 @@ package.json(codegen 스크립트)를 만든다.
 
 ```toml
 [dependencies]
-rustra = "0.3"
+rustra = "0.4"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -308,34 +308,30 @@ export const GENERATED_CONTRACT_HASH =
 
 ## 4. 어댑터 선택 가이드
 
-생성된 TypeScript 코드는 호스트에 종속되지 않는다. 실제 환경에서는 어댑터를 통해 `EngineClient`를 생성해서 `commands.ts`의 함수에 넘겨주면 된다.
+생성된 TypeScript 계약은 호스트에 종속되지 않는다. 일반 앱은 플랫폼 진입점이
+`EngineClient`를 lazy 설치하므로 엔진을 직접 만들거나 `configure()`하지 않는다.
 
 rustra는 4개의 공식 어댑터 패키지를 제공한다.
 
 ### Node
 
-**빠른 시작 — 내장 subprocess transport (복붙 가능):**
+`rustra.json`에 빈 Node 블록을 추가한다.
 
-```ts
-import { createNodeEngine, createNodeProcessTransport } from '@rustra/node';
-import { configure } from '@rustra/types';
-import { addNumbers } from '../generated/commands.js';
-
-// Rust 실행 파일의 `invoke` stdio 프로토콜로 통하는 transport —
-// cargo build 후 binary 경로만 지정하면 바로 동작한다.
-const transport = createNodeProcessTransport({
-  command: 'target/release/my-app', // cargo 빌드 산출물
-  args: ['invoke'], // Rust main 이 `invoke` 서브커맨드를 받는 경우 (기본값)
-});
-
-configure(createNodeEngine(transport));
-const result = await addNumbers({ a: 20, b: 22 });
-console.log(result.value); // 42
+```json
+{ "schema": "./generated/schema.json", "output": "./generated", "node": {} }
 ```
 
-전제: Rust 진입점이 stdio JSON 프로토콜(`{command, args}` → `{ok, result}`)을
-구현해야 한다 — calculator 예제의 `run_invoke_stdio`(examples/calculator/src/main.rs)가
-표준 템플릿이다.
+```ts
+import { addNumbers } from '../generated/node.js';
+
+const result = await addNumbers({ a: 20, b: 22 });
+```
+
+코드젠은 Cargo metadata의 기본 binary와 target directory를 고정한다. Release를
+먼저 사용하고 Debug로 폴백하며, transpile 뒤에는 현재 작업 디렉터리의 부모에서 같은
+Cargo target을 찾는다. 배포 디렉터리가 다르면 `RUSTRA_NODE_BINARY`를 지정한다.
+표준 runtime은 `{command, args}` → `{ok, result}` one-shot stdio protocol을 구현해야
+한다. calculator의 `run_invoke_stdio`가 참조 구현이다.
 
 **커스텀 transport (napi-rs 등):**
 
@@ -350,41 +346,36 @@ const engine = createNodeEngine({
 });
 ```
 
-`createNodeEngine`은 `{ invoke(command, args) }` 형태의 transport 객체를 받아 `EngineClient`를 반환한다. `createNodeProcessTransport`도 같은 형태이며 `dispose()`로 정리할 수 있다.
+`createNodeEngine`, `createNodeProcessTransport`, `createNodeLoopTransport`는 custom
+N-API와 다중 runtime을 위한 명시적 escape hatch다.
 
 ### Bun
 
-```ts
-import { createBunEngine } from '@rustra/bun';
-import { configure } from '@rustra/types';
-import { addNumbers } from '../generated/commands.js';
+Rust library는 `crate-type = ["rlib", "cdylib"]`과
+`rustra::native_entry!(app_package)`를 선언한다. 설정에는 빈 Bun 블록만 둔다.
 
-const engine = createBunEngine({
-  invoke(command, args) {
-    return invokeCalculatorRuntime(command, args);
-  },
-});
-
-configure(engine);
-const result = await addNumbers({ a: 20, b: 22 });
-console.log(result.value); // 42
+```json
+{ "schema": "./generated/schema.json", "output": "./generated", "bun": {} }
 ```
 
-Node 어댑터와 동일한 형태. transport만 Bun 환경에 맞게 구현.
+```ts
+import { addNumbers } from '../generated/bun.js';
+
+const result = await addNumbers({ a: 20, b: 22 });
+```
+
+생성 진입점은 Release/Debug cdylib 후보를 실제 ABI 심볼까지 검사하고 Bun FFI의 stable
+C ABI를 rkyv V2 engine에 연결한다. Rust 응답은 JS 소유 `ArrayBuffer`로 복사한 뒤
+정확한 pointer/length로 해제한다. 다른 배포 레이아웃은 `RUSTRA_BUN_LIBRARY`로 지정한다.
 
 ### Tauri
 
+Tauri의 `app.withGlobalTauri`를 켜고 설정에 `"tauri": {}`를 추가한다.
+
 ```ts
-import { createTauriEngine } from '@rustra/tauri';
-import { configure } from '@rustra/types';
-import { addNumbers } from '../generated/commands.js';
-import { invoke as tauriInvoke } from '@tauri-apps/api/core';
+import { addNumbers, subscribeEvent } from '../generated/tauri.js';
 
-const engine = createTauriEngine({
-  invoke: tauriInvoke,
-});
-
-configure(engine);
+await subscribeEvent('progress.tick', console.log);
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
@@ -412,96 +403,98 @@ fn main() {
 
 #### rkyv V2 (권장 — postcard 바이너리 + JSI 동기 호출)
 
-JSI 동기 호출과 postcard 바이너리 직렬화를 사용해 JSON 대비 5배 이상 빠른 성능을 제공한다.
-Rust 측에 `register_ffi()`만 추가하면 된다.
+JSI 동기 호출과 postcard 바이너리 직렬화를 사용한다. Rust 측에는 앱 package와
+native entry를 한 번 선언한다.
 
 **Rust 측 설정:**
 
 ```rust
 use rustra::prelude::*;
-use rustra::ffi::FfiFormat;
-use std::sync::OnceLock;
-
-static CACHED_PACKAGE: OnceLock<Package> = OnceLock::new();
 
 pub fn my_package() -> Package {
-    CACHED_PACKAGE.get_or_init(|| {
-        let pkg = register!(Package::builder("my.pkg"), add_numbers, multiply)
-            .build();
-        pkg.register_ffi_with_default(FfiFormat::Json);
-        pkg
-    }).clone()
+    register!(Package::builder("my.pkg"), add_numbers, multiply).build()
 }
 
-// iOS: 라이브러리 로드 시 자동 초기화
-#[cfg(target_vendor = "apple")]
-mod apple_init {
-    extern "C" fn rustra_auto_init() { super::my_package(); }
-    #[used]
-    #[cfg_attr(target_vendor = "apple", unsafe(link_section = "__DATA,__mod_init_func"))]
-    static AUTO_INIT: extern "C" fn() = rustra_auto_init;
+rustra::native_entry!(my_package);
+```
+
+`Cargo.toml`의 `[lib]`에는 `crate-type = ["rlib", "staticlib"]`를 둔다.
+
+**단일 설정:**
+
+```json
+{
+  "schema": "./generated/schema.json",
+  "output": "./generated",
+  "positional": true,
+  "reactNative": {}
 }
+```
+
+```bash
+bunx --bun @rustra/cli generate --config rustra.json
 ```
 
 **TypeScript 측 사용:**
 
 ```ts
-import { configure } from '@rustra/types';
-import { createRkyvV2Engine } from '@rustra/react-native';
-import { installRustraJSI, getRustraNative } from './modules/rustra-jsi/src';
-import { rkyvV2Registry } from '../generated/rkyv-registry';
-import { addNumbers } from '../generated/commands';
+import { addNumbers } from '../generated/react-native';
 
-// 초기화 (앱 시작 시 한 번)
-await installRustraJSI();
-configure(createRkyvV2Engine(getRustraNative(), rkyvV2Registry));
-
-// 사용 (어디서든)
 const result = await addNumbers({ a: 20, b: 22 }); // JSI fast path
 ```
 
-기록된 이전 Release 성능은 동일 공개 객체 연산의 Nitro 대비 3회 중앙값 1.17–1.24x
-(add 1.2068x, string 1.2384x, bytes 1.1656x, pair 1.2162x).
-2026-08-23 iOS Release 측정이며, 최신 러너는 Nitro/Rustra/FFI 순환 측정으로
-강화되어 재실행 영수증이 필요하다. 비교 범위와 기능 패리티 매트릭스는
+생성된 진입점이 첫 호출에서 JSI 설치, contract hash/schema version 검증,
+`rkyvV2Registry` 고속 엔진 설정을 동시 호출에도 한 번만 수행한다. 실패한 설치는 다음
+호출에서 재시도하고, 앱이 명시적으로 `configure()`한 엔진은 늦게 끝난 설치가 덮어쓰지
+않는다. 생성기는 Cargo package/library를 추론하고 앱 전용
+`@rustra/generated-react-native` package에 Podspec, Gradle/CMake/JNI와 공유 C++
+bridge를 만든다. Expo development build와 bare RN 모두 표준 autolinking을 쓰며,
+앱 코드에는 install/configure 보일러플레이트가 남지 않는다. Expo Go는 지원하지 않는다.
+
+2026-08-24 Release 성능은 동일 공개 객체 연산의 Nitro 대비 3회 중앙값
+add 1.0297x, string 1.0229x, bytes 0.9219x, pair 1.0656x다. 최신 러너는
+Nitro/Rustra/FFI 순환 측정, paired 95% CI, 생성 helper/native 경로 진단을
+포함하며 Bun 명령으로 JSON receipt를 자동 추출한다. 비교 범위와 기능 패리티 매트릭스는
 [벤치마크 문서](benchmarks.md) §"Nitro Modules 비교" 참고.
 
-**C++ 코덱 코드젠 (`--cpp-output`, 헤드라인 성능):** JS 측 코덱 왕복(~3.4µs)까지
-제거하려면 코드젠 시 C++ 코덱을 함께 생성해 네이티브 모듈에 컴파일한다:
-
-```sh
-rustra generate --schema ./generated/schema.json --output ./src/generated --cpp-output ./ios
-```
-
-`rustra-generated-codecs.{hpp,cpp}`가 `./ios`에 생성된다 — 이 파일을
-`RustraJSIBridge.cpp` 옆에 두고 Xcode/Podspec·Gradle 소스에 추가한다.
+**C++ 코덱 코드젠:** `reactNative`가 활성화되면
+`rustra-generated-codecs.{hpp,cpp}`도 generated package 내부에 자동 배치되고
+iOS와 Android build에 포함된다. Xcode/Podspec/Gradle에 파일을 수동 추가하지 않는다.
 자세한 설정은 [React Native 셋업 가이드](extending/react-native-setup.md) 참고.
 
-#### JSON (호환성 — Expo async bridge)
+저장소의 React Native calculator 예시는 `bun run doctor`로 Bun 1.4, Rust schema와
+TypeScript/native codec 동기화, Expo/Pod 연결, Rust iOS target, static archive 최신성,
+필수 `extern "C"` 심볼, 설치된 Release receipt를 읽기 전용으로 검사한다. 실패마다
+`bun run codegen`, `cd ios && pod install`, `bun run rust:ios`, Release 재빌드 중 어느
+층을 복구해야 하는지 구체적으로 안내하므로 네이티브 문제를 TypeScript 문제로 오인하지
+않게 한다. CI용 구조화 결과는 `bun run doctor -- --json`으로 얻을 수 있다.
+
+#### JSON (저수준 transport 호환성)
 
 ```ts
 import { createReactNativeEngine } from '@rustra/react-native';
 import { configure } from '@rustra/types';
 import { addNumbers } from '../generated/commands.js';
-import { RustraCalculatorModule } from './native-modules';
+import { customNativeTransport } from './native-transport';
 
-const engine = createReactNativeEngine(RustraCalculatorModule);
+const engine = createReactNativeEngine(customNativeTransport);
 configure(engine);
 
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
-`createReactNativeEngine`은 `NativeModules.RustraCalculator` 같은 네이티브 모듈을 받아 `EngineClient`를 반환한다. 네이티브 모듈은 `invoke(command, args)` 메서드를 노출해야 한다.
+이 경로는 custom transport를 직접 소유할 때만 사용한다. 일반 앱은 generated
+`react-native.ts`의 caller-buffer fast path를 사용한다.
 
 ### 요약
 
-| 환경         | 어댑터 함수                             | transport 인자                        | 성능 (release)                        |
-| ------------ | --------------------------------------- | ------------------------------------- | ------------------------------------- |
-| Node         | `createNodeEngine(transport)`           | `{ invoke(command, args) }`           | ~1.5 µs (napi) / ~3.4 ms (historical) |
-| Bun          | `createBunEngine(transport)`            | `{ invoke(command, args) }`           | ~1.7 µs (FFI) / ~5.7 ms (2026-08-23)  |
-| Tauri        | `createTauriEngine(options)`            | `{ invoke: tauriInvoke }`             | IPC 종속                              |
-| React Native | `createRkyvV2Engine(native, registry)`  | JSI + postcard codecs                 | 이전 iOS Release 기록; 최신 실행 필요 |
-| React Native | `createReactNativeEngine(nativeModule)` | `NativeModule` (`invoke` 메서드 포함) | ~52 µs (Expo async bridge)            |
+| 환경         | 기본 생성 진입점                     | 자동 연결                           | 성능 (release)                      |
+| ------------ | ------------------------------------ | ----------------------------------- | ----------------------------------- |
+| Node         | `generated/node.ts`                  | Cargo binary + stdio                | ~3.4 ms historical; N-API는 ~1.5 µs |
+| Bun          | `generated/bun.ts`                   | Cargo cdylib + stable FFI + rkyv V2 | ~1.7 µs FFI                         |
+| Tauri        | `generated/tauri.ts`                 | global invoke/event                 | IPC 종속                            |
+| React Native | generated `react-native.ts`          | autolinked JSI + postcard codecs    | Nitro 근접; 최신 receipt 확인       |
+| React Native | `createReactNativeEngine(transport)` | custom JSON transport               | transport 구현 종속                 |
 
 > Node/Bun의 ~24/27µs는 debug 네이티브 라이브러리를 로드했을 때 값이다 —
 > release 빌드에서는 single-digit µs 범위로 좁혀진다. 측정 세션별 수치는
@@ -510,8 +503,7 @@ const result = await addNumbers({ a: 20, b: 22 });
 모든 어댑터가 `EngineClient`를 반환하므로, 이후 코드는 환경에 상관없이 동일하다.
 
 ```ts
-// 어댑터만 다르고, 나머지는 모두 같은 코드
-configure(engine); // 각 환경 부트스트랩에서 1회
+// 플랫폼 진입점 import가 bootstrap을 소유한다.
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 

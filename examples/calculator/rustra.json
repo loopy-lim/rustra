@@ -1,0 +1,7 @@
+{
+  "schema": "./generated/schema.json",
+  "output": "./generated",
+  "node": {},
+  "bun": {},
+  "tauri": {}
+}

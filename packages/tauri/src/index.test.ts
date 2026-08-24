@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createTauriEngine } from './index.js';
+import { createTauriBootstrap, createTauriEngine, subscribeTauriEvent } from './index.js';
 import { RustraCommandError } from '@rustra/types';
 
 test('createTauriEngine routes invoke through rustra_dispatch', async () => {
@@ -30,6 +30,46 @@ test('createTauriEngine normalizes undefined args to empty object', async () => 
 
   await engine.invoke('noArgs');
   assert.deepEqual(calls, [{ command: 'rustra_dispatch', args: { command: 'noArgs', args: {} } }]);
+});
+
+test('createTauriEngine discovers the Tauri global without manual transport wiring', async () => {
+  const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
+  const previous = root.__TAURI__;
+  const calls: Array<{ command: string; args: unknown }> = [];
+  root.__TAURI__ = {
+    core: {
+      async invoke(command: string, args: unknown) {
+        calls.push({ command, args });
+        return { value: 42 };
+      },
+    },
+  };
+  try {
+    const result = await createTauriEngine().invoke<{ value: number }>('addNumbers', {
+      a: 20,
+      b: 22,
+    });
+    assert.deepEqual(result, { value: 42 });
+    assert.equal(calls[0]?.command, 'rustra_dispatch');
+  } finally {
+    root.__TAURI__ = previous;
+  }
+});
+
+test('createTauriBootstrap delays global discovery until the first command', async () => {
+  const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
+  const previous = root.__TAURI__;
+  delete root.__TAURI__;
+  const bootstrap = createTauriBootstrap();
+  root.__TAURI__ = {
+    core: { invoke: async () => ({ ready: true }) },
+  };
+  try {
+    const engine = await bootstrap.ready();
+    assert.deepEqual(await engine.invoke('ping'), { ready: true });
+  } finally {
+    root.__TAURI__ = previous;
+  }
 });
 
 test('createTauriEngine wraps RustraError-shaped rejects into RustraCommandError', async () => {
@@ -134,4 +174,29 @@ test('subscribeEvent parses JSON payloads and falls back to raw string', async (
   // 비 JSON 페이로드는 원본 문자열로 전달(조용한 드롭 방지).
   fire!('not-json');
   assert.equal(seen[1], 'not-json');
+});
+
+test('subscribeTauriEvent discovers the global listen API', async () => {
+  const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
+  const previous = root.__TAURI__;
+  let channel = '';
+  root.__TAURI__ = {
+    event: {
+      async listen(name: string, handler: (event: { payload: string }) => void) {
+        channel = name;
+        handler({ payload: '{"value":42}' });
+        return () => {};
+      },
+    },
+  };
+  try {
+    let payload: unknown;
+    await subscribeTauriEvent('calc.tick', (value) => {
+      payload = value;
+    });
+    assert.equal(channel, 'rustra://calc_tick');
+    assert.deepEqual(payload, { value: 42 });
+  } finally {
+    root.__TAURI__ = previous;
+  }
 });

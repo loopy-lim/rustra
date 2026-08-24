@@ -5,6 +5,8 @@ packages/*/dist/
 /examples/calculator/dist-ts/
 /examples/tauri-calculator/dist/examples/
 /examples/tauri-calculator/dist/packages/
+/examples/tauri-calculator/dist/app.js
+/examples/tauri-calculator/bench-dist/benchmark.js
 *.tsbuildinfo
 /node_modules/
 **/node_modules/
@@ -20,6 +22,7 @@ examples/calculator-napi/node_modules/
 
 # Native build outputs / caches (Gradle, Android, Expo, Xcode)
 **/android/build/
+**/build/target/
 **/.cxx/
 **/android/.gradle/
 **/.expo/

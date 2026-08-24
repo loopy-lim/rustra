@@ -153,14 +153,15 @@ rustra::register!(Package::builder("pkg"), add_numbers, multiply)
 
 ## TypeScript Package 구조
 
-`packages/` 아래 4개 adapter 패키지. 모두 순수 TypeScript이며 외부 의존성이 없다.
+`packages/` 아래 adapter 패키지. React Native 패키지는 TypeScript 어댑터와 생성기에
+재사용되는 iOS/Android/C++ native source를 함께 배포한다.
 
-| 패키지 경로                          | 팩토리 함수                             | 클라이언트 타입           | 전송 계층                 |
-| ------------------------------------ | --------------------------------------- | ------------------------- | ------------------------- |
-| `packages/node/src/index.ts`         | `createNodeEngine(transport)`           | `NodeEngineClient`        | `NodeInvokeTransport`     |
-| `packages/bun/src/index.ts`          | `createBunEngine(transport)`            | `BunEngineClient`         | `BunInvokeTransport`      |
-| `packages/tauri/src/index.ts`        | `createTauriEngine({ invoke })`         | `TauriEngineClient`       | `TauriInvoke`             |
-| `packages/react-native/src/index.ts` | `createReactNativeEngine(nativeModule)` | `ReactNativeEngineClient` | `ReactNativeRustraModule` |
+| 패키지 경로                          | 팩토리 함수                            | 클라이언트 타입     | 전송 계층               |
+| ------------------------------------ | -------------------------------------- | ------------------- | ----------------------- |
+| `packages/node/src/index.ts`         | `createNodeEngine(transport)`          | `NodeEngineClient`  | `NodeInvokeTransport`   |
+| `packages/bun/src/index.ts`          | `createBunEngine(transport)`           | `BunEngineClient`   | `BunInvokeTransport`    |
+| `packages/tauri/src/index.ts`        | `createTauriEngine({ invoke })`        | `TauriEngineClient` | `TauriInvoke`           |
+| `packages/react-native/src/index.ts` | generated bootstrap / low-level engine | `EngineClient`      | JSI + caller-buffer FFI |
 
 모든 클라이언트는 `EngineClient` 인터페이스(`invoke<T>(command, args?)`)를 구현한다. Tauri adapter만 내부적으로 `rustra_dispatch`로 명령을 래핑하고, 나머지는 transport의 `invoke`를 직접 호출한다.
 

@@ -10,20 +10,33 @@
   ],
   "scripts": {
     "start": "expo start",
-    "android": "bun run rust:android && expo run:android",
-    "ios": "bun run rust:ios && expo run:ios",
+    "android": "bun run build:fingerprint && bun run rust:android && expo run:android",
+    "ios": "bun run build:fingerprint && bun run rust:ios && expo run:ios",
+    "build:fingerprint": "bun scripts/generate-build-fingerprint.mjs",
+    "codegen": "cargo run --manifest-path ../../Cargo.toml -p rustra-calculator-example --bin rustra-calculator-example && bun ../../packages/cli/src/index.ts generate --config rustra.json && bun run build:fingerprint",
+    "doctor": "bun scripts/doctor.mjs",
+    "check": "bun run doctor && bun run typecheck && bun run test && bun run test:cpp-codec",
     "web": "expo start --web",
     "demo:dynamic": "EXPO_PUBLIC_RUSTRA_DEMO=dynamic expo start",
     "demo:reload": "EXPO_PUBLIC_RUSTRA_DEMO=reload expo start --dev-client",
+    "test:reload:ios": "bun scripts/reload-stress.mjs",
     "bench:serialization": "bun serialization-bench.mjs",
+    "bench:ios:receipt": "bun scripts/extract-benchmark-receipt.mjs",
     "rust:android": "sh modules/rustra-jsi/android/build-rust-android.sh",
     "rust:ios": "sh modules/rustra-jsi/ios/build-rust-ios.sh",
     "test": "bun test",
     "test:cpp-codec": "bash modules/rustra-jsi/ios/run-cpp-codec-tests.sh",
+    "verify:native:android": "cd android && NODE_ENV=test ./gradlew :app:assembleDebug --no-daemon",
+    "verify:native:ios": "xcodebuild -workspace ios/reactnativecalculator.xcworkspace -scheme reactnativecalculator -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath ios/build/rustra-derived-data CODE_SIGNING_ALLOWED=NO build",
+    "verify:native:ios:release": "xcodebuild -workspace ios/reactnativecalculator.xcworkspace -scheme reactnativecalculator -configuration Release -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath ios/build/rustra-release-derived-data CODE_SIGNING_ALLOWED=NO build",
+    "install:ios:release": "xcrun simctl install booted ios/build/rustra-release-derived-data/Build/Products/Release-iphonesimulator/reactnativecalculator.app",
+    "install:ios:debug": "xcrun simctl install booted ios/build/rustra-derived-data/Build/Products/Debug-iphonesimulator/reactnativecalculator.app",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@msgpack/msgpack": "^3.1.3",
+    "@rustra/generated-react-native": "workspace:*",
+    "@rustra/react-native": "file:../../packages/react-native",
     "@rustra/types": "file:../../packages/types",
     "expo": "~54.0.33",
     "expo-status-bar": "~3.0.9",
@@ -32,12 +45,17 @@
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-nitro-modules": "^0.35.6",
-    "rustra-calculator": "workspace:*",
-    "rustra-jsi": "workspace:*"
+    "rustra-calculator": "workspace:*"
   },
   "devDependencies": {
+    "@react-native-community/cli": "20.2.0",
+    "@react-native-community/cli-platform-android": "20.2.0",
+    "@react-native-community/cli-platform-ios": "20.2.0",
     "@types/react": "~19.1.0",
     "typescript": "~5.9.2"
+  },
+  "overrides": {
+    "@rustra/types": "file:../../packages/types"
   },
   "private": true
 }

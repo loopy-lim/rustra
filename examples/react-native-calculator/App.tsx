@@ -1,19 +1,6 @@
 import { useState } from 'react';
 import { Button, StyleSheet, Text, View } from 'react-native';
-import { configure } from '@rustra/types';
-import { addNumbers } from '../calculator/generated/commands';
-import { rkyvV2Registry } from '../calculator/generated/rkyv-registry';
-import { createFastEngine } from '../../packages/react-native/src';
-import { getRustraNative, installRustraJSI } from 'rustra-jsi';
-
-let engineSetup: Promise<void> | undefined;
-
-function ensureEngine(): Promise<void> {
-  engineSetup ??= installRustraJSI().then(() => {
-    configure(createFastEngine(getRustraNative(), { rkyvV2Codecs: rkyvV2Registry }));
-  });
-  return engineSetup;
-}
+import { addNumbers } from './generated/react-native';
 
 /** Minimal user-facing setup; the default app entry uses BenchmarkApp. */
 export default function App() {
@@ -23,7 +10,6 @@ export default function App() {
   async function calculate() {
     setLoading(true);
     try {
-      await ensureEngine();
       const result = await addNumbers({ a: 42, b: 58 });
       setStatus(`42 + 58 = ${result.value}`);
     } catch (error: unknown) {

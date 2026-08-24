@@ -21,10 +21,32 @@ export type {
   RustraError,
   RkyvV2Codec,
   RkyvV2Native,
+  RkyvV2EngineOptions,
   InvokeOptions,
 } from '@rustra/types';
-export { RustraCommandError, configure, invoke, createRkyvV2Engine } from '@rustra/types';
-import { parseRustraErrorString, RustraCommandError, type InvokeOptions } from '@rustra/types';
+export {
+  RustraCommandError,
+  configure,
+  configureLazy,
+  ensureConfigured,
+  invoke,
+  createRkyvV2Engine,
+} from '@rustra/types';
+import {
+  configureLazy,
+  createRkyvV2Engine,
+  ensureConfigured,
+  parseRustraErrorString,
+  RustraErrorCode,
+  RustraCommandError,
+  type EngineClient,
+  type InvokeOptions,
+  type RkyvV2Codec,
+  type RkyvV2EngineOptions,
+} from '@rustra/types';
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import type { Pointer } from 'bun:ffi';
 
 /**
  * Bun transport가 구현해야 하는 인터페이스입니다.
@@ -65,6 +87,160 @@ export function createBunEngine(transport: BunInvokeTransport) {
         }
         throw new RustraCommandError('unknown', String(e));
       }
+    },
+  };
+}
+
+export type BunFfiEngineOptions = Omit<RkyvV2EngineOptions, 'rkyvV2Codecs'> & {
+  rkyvV2Codecs: Map<string, RkyvV2Codec<unknown, unknown>>;
+  /** Explicit cdylib. `RUSTRA_BUN_LIBRARY` has higher priority. */
+  library?: string;
+  /** Codegen-provided release/debug candidates used when no override is set. */
+  libraryCandidates?: readonly string[];
+  /** Cargo cdylib target used for bounded ancestor discovery after bundling. */
+  libraryName?: string;
+};
+
+export type BunFfiRuntime = {
+  engine: EngineClient;
+  library: string;
+  close(): void;
+};
+
+function bunLibraryCandidates(options: BunFfiEngineOptions): string[] {
+  const explicit = process.env.RUSTRA_BUN_LIBRARY ?? options.library;
+  if (explicit) return [explicit];
+  const candidates = [...(options.libraryCandidates ?? [])];
+  if (options.libraryName) {
+    const extension =
+      process.platform === 'darwin' ? 'dylib' : process.platform === 'win32' ? 'dll' : 'so';
+    const prefix = process.platform === 'win32' ? '' : 'lib';
+    const filename = `${prefix}${options.libraryName}.${extension}`;
+    let current = resolve(process.cwd());
+    while (true) {
+      candidates.push(resolve(current, 'target', 'release', filename));
+      candidates.push(resolve(current, 'target', 'debug', filename));
+      const parent = dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+  }
+  return [...new Set(candidates)].filter((candidate) => existsSync(candidate));
+}
+
+/** Loads Rustra's stable C ABI directly through Bun FFI. */
+export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<BunFfiRuntime> {
+  const { dlopen, FFIType, toArrayBuffer } = await import('bun:ffi');
+  const definitions = {
+    rustra_mobile_init: { args: [], returns: FFIType.void },
+    rustra_ffi_invoke_rkyv_v2: {
+      args: [FFIType.ptr, FFIType.u64, FFIType.ptr],
+      returns: FFIType.ptr,
+    },
+    rustra_ffi_free: {
+      args: [FFIType.ptr, FFIType.u64],
+      returns: FFIType.void,
+    },
+    rustra_ffi_get_schema: {
+      args: [FFIType.ptr],
+      returns: FFIType.ptr,
+    },
+    rustra_ffi_contract_hash: {
+      args: [FFIType.ptr],
+      returns: FFIType.ptr,
+    },
+  } as const;
+  const open = (library: string) => dlopen(library, definitions);
+  let handle: ReturnType<typeof open> | undefined;
+  let library = '';
+  const failures: string[] = [];
+  for (const candidate of bunLibraryCandidates(options)) {
+    try {
+      const loaded = open(candidate);
+      loaded.symbols.rustra_mobile_init();
+      handle = loaded;
+      library = candidate;
+      break;
+    } catch (error) {
+      failures.push(`${candidate}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  if (!handle) {
+    const detail = failures.length > 0 ? ` Tried ${failures.join('; ')}` : '';
+    throw new RustraCommandError(
+      RustraErrorCode.TransportUnavailable,
+      `No compatible Rustra Bun cdylib was found. Build the inferred Cargo library, or set RUSTRA_BUN_LIBRARY to its absolute path.${detail}`,
+    );
+  }
+  const outLength = new BigUint64Array(1);
+  const copyOwned = (pointer: Pointer | bigint | null): ArrayBuffer => {
+    if (pointer === null || Number(pointer) === 0) {
+      throw new RustraCommandError('invoke.failed', 'Bun FFI returned a null response pointer');
+    }
+    const length = Number(outLength[0]);
+    try {
+      const borrowed = toArrayBuffer(pointer, 0, length);
+      const owned = new ArrayBuffer(length);
+      new Uint8Array(owned).set(new Uint8Array(borrowed));
+      return owned;
+    } finally {
+      handle.symbols.rustra_ffi_free(pointer, BigInt(length));
+    }
+  };
+  const native = {
+    invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer {
+      const request = new Uint8Array(payload);
+      outLength[0] = 0n;
+      const pointer = handle.symbols.rustra_ffi_invoke_rkyv_v2(
+        request,
+        BigInt(request.byteLength),
+        outLength,
+      );
+      return copyOwned(pointer);
+    },
+    getSchema(): ArrayBuffer {
+      outLength[0] = 0n;
+      return copyOwned(handle.symbols.rustra_ffi_get_schema(outLength));
+    },
+    getContractHash(): ArrayBuffer {
+      outLength[0] = 0n;
+      return copyOwned(handle.symbols.rustra_ffi_contract_hash(outLength));
+    },
+  };
+  const {
+    rkyvV2Codecs,
+    library: _library,
+    libraryCandidates: _candidates,
+    libraryName: _libraryName,
+    ...engineOptions
+  } = options;
+  void _library;
+  void _candidates;
+  void _libraryName;
+  return {
+    engine: createRkyvV2Engine(native, rkyvV2Codecs, engineOptions),
+    library,
+    close: () => handle.close(),
+  };
+}
+
+export type BunBootstrap = {
+  ready(): Promise<EngineClient>;
+  dispose(): void;
+};
+
+/** Registers lazy, collision-safe Bun FFI setup for generated entrypoints. */
+export function createBunBootstrap(options: BunFfiEngineOptions): BunBootstrap {
+  let runtime: BunFfiRuntime | undefined;
+  configureLazy(async () => {
+    runtime = await createBunFfiEngine(options);
+    return runtime.engine;
+  });
+  return {
+    ready: ensureConfigured,
+    dispose() {
+      runtime?.close();
+      runtime = undefined;
     },
   };
 }

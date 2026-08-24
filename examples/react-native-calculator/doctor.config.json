@@ -1,0 +1,10 @@
+{
+  "ignore": {
+    "overrides": [
+      {
+        "files": ["generated/positional-facade.ts"],
+        "rules": ["deslop/unused-file"]
+      }
+    ]
+  }
+}

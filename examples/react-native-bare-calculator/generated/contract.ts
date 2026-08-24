@@ -1,0 +1,2 @@
+export const GENERATED_CONTRACT_HASH = '0096085b797b53294c5cfb821611c1d7baea9761e04d63faadf0e773fbd6bbc5';
+export const SCHEMA_VERSION = 1;

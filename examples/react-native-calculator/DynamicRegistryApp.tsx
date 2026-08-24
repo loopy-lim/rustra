@@ -4,10 +4,11 @@
 // 벤치마크나 rkyv-registry 의존성 없이 JSON 경로(createJsonEngine)만 사용한다.
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View, ScrollView } from "react-native";
-import { installRustraJSI, getRustraNative } from "rustra-jsi";
+import { installRustraJSI, getRustraNative } from '@rustra/generated-react-native';
 import { createJsonEngine } from "./src/adapters/json-adapter";
 import { createRkyvV2Engine, getLiveSchema } from "@rustra/types";
 import { subscribeEvent } from "../../packages/react-native/src";
+import { GENERATED_CONTRACT_HASH, SCHEMA_VERSION } from "../calculator/generated/contract";
 
 type Engine = ReturnType<typeof createJsonEngine>;
 
@@ -76,7 +77,10 @@ async function runSingleEngineDemo(
 ): Promise<void> {
   // 단일 rkyvV2 엔진: codec registry 가 비어있으므로 동적 명령은 Tier 3 fallback.
   const jsonEngine = createJsonEngine(native); // control(setup) 용
-  const rkyvEngine = createRkyvV2Engine(native, new Map<string, any>());
+  const rkyvEngine = createRkyvV2Engine(native, new Map<string, any>(), {
+    contractHash: GENERATED_CONTRACT_HASH,
+    schemaVersion: SCHEMA_VERSION,
+  });
 
   log("╔══════════════════════════════════════════════╗");
   log("║  Single rkyvV2 engine + live schema (Tier 3) ║");

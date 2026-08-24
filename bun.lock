@@ -22,17 +22,18 @@
     },
     "packages/bun": {
       "name": "@rustra/bun",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
-        "@rustra/types": "^0.3.1",
+        "@rustra/types": "^0.4.0",
       },
       "devDependencies": {
+        "@types/bun": "^1.4.0",
         "typescript": "^5.9.0",
       },
     },
     "packages/cli": {
       "name": "@rustra/cli",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "bin": {
         "rustra": "./dist/index.js",
       },
@@ -46,7 +47,7 @@
     },
     "packages/devtools": {
       "name": "@rustra/devtools",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
         "@rustra/types": "^0.3.1",
       },
@@ -56,7 +57,7 @@
     },
     "packages/node": {
       "name": "@rustra/node",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
         "@rustra/types": "^0.3.1",
       },
@@ -66,7 +67,7 @@
     },
     "packages/react": {
       "name": "@rustra/react",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
         "@rustra/types": "^0.3.1",
       },
@@ -81,17 +82,23 @@
     },
     "packages/react-native": {
       "name": "@rustra/react-native",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
-        "@rustra/types": "^0.3.1",
+        "@rustra/types": "^0.4.0",
       },
       "devDependencies": {
         "typescript": "^5.9.0",
       },
+      "peerDependencies": {
+        "react-native": ">=0.76",
+      },
+      "optionalPeers": [
+        "react-native",
+      ],
     },
     "packages/tauri": {
       "name": "@rustra/tauri",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
         "@rustra/types": "^0.3.1",
       },
@@ -101,7 +108,7 @@
     },
     "packages/testing": {
       "name": "@rustra/testing",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "dependencies": {
         "@rustra/types": "^0.3.1",
       },
@@ -111,7 +118,7 @@
     },
     "packages/types": {
       "name": "@rustra/types",
-      "version": "0.3.1",
+      "version": "0.4.0",
       "devDependencies": {
         "typescript": "^5.9.0",
       },
@@ -224,6 +231,8 @@
 
     "@shikijs/vscode-textmate": ["@shikijs/vscode-textmate@10.0.2", "", {}, "sha512-83yeghZ2xxin3Nj8z1NMd/NCuca+gsYXswywDy5bHvwlWL8tpTQmzGeUuHd9FC3E/SBEMvzJRwWEOz5gGes9Qg=="],
 
+    "@types/bun": ["@types/bun@1.4.0", "", { "dependencies": { "bun-types": "1.4.0" } }, "sha512-K+lZULY23vRgK/CfTjFIV+tyifaNdSMlPh9j+6mQ/cLfpOznLyAuzgV/JQysyECpkBQLVMSyvjlr2fBUSA9wFQ=="],
+
     "@types/esrecurse": ["@types/esrecurse@4.3.1", "", {}, "sha512-xJBAbDifo5hpffDBuHl0Y8ywswbiAp/Wi7Y/GtAgSlZyIABppyurxVueOPE8LUQOxdlgi6Zqce7uoEpqNTeiUw=="],
 
     "@types/estree": ["@types/estree@1.0.9", "", {}, "sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg=="],
@@ -281,6 +290,8 @@
     "brace-expansion": ["brace-expansion@5.0.9", "", { "dependencies": { "balanced-match": "^4.0.2" } }, "sha512-ScQ4IuvIEF1TMlP7Zt+vjJ//9zlPb2SDcxWxM3bk8s6t6GGdJ7KO1dCcTidOPJKePW30LE/2cT7wCyPho9/Wxg=="],
 
     "braces": ["braces@3.0.3", "", { "dependencies": { "fill-range": "^7.1.1" } }, "sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA=="],
+
+    "bun-types": ["bun-types@1.4.0", "", { "dependencies": { "@types/node": "*" } }, "sha512-iIKw23BspnQQYd3prITOBxeUsxBHnwzX6YJfGMuNOZzeNcMmVqzIIVGRm1l69ogaPQmb4wB6BN8mA5bE9YuC5Q=="],
 
     "chardet": ["chardet@2.2.0", "", {}, "sha512-rddelWYNPRrXq6PtNEN2S3f6t9ILzvqaN5pVgi4kqt9jHQaXIial9PznB5iSPVlQSLNaaH22ItWz3EJtQ10+OA=="],
 

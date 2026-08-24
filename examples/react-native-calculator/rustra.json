@@ -1,0 +1,10 @@
+{
+  "schema": "../calculator/generated/schema.json",
+  "output": "./generated",
+  "positional": true,
+  "reactNative": {
+    "moduleDir": "./modules/rustra-jsi",
+    "rustManifest": "../calculator/Cargo.toml",
+    "legacyBenchmarks": true
+  }
+}

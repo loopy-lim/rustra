@@ -11,6 +11,9 @@
 set -euo pipefail
 
 IOS_DIR="$(cd "$(dirname "$0")" && pwd)"
+MODULE_DIR="$(cd "$IOS_DIR/.." && pwd)"
+ADAPTER_CPP="$(cd "$MODULE_DIR/../../../../packages/react-native/native/cpp" && pwd)"
+GENERATED_DIR="$MODULE_DIR/generated"
 BUILD_DIR="${TMPDIR:-/tmp}/rustra-cpp-codec-build"
 STUB_DIR="$BUILD_DIR/jsi"
 CXX="${CXX:-clang++}"
@@ -19,7 +22,7 @@ mkdir -p "$STUB_DIR"
 printf '#pragma once\n// stub: facebook::jsi 는 test-jsi-shim.hpp (force-included) 가 제공.\n' \
   > "$STUB_DIR/jsi.h"
 
-COMMON_FLAGS=(-std=c++17 -O2 -Wall -Wextra -DRUSTRA_TEST_JSI_SHIM=1 -I"$IOS_DIR" -I"$BUILD_DIR" -include test-jsi-shim.hpp)
+COMMON_FLAGS=(-std=c++17 -O2 -Wall -Wextra -DRUSTRA_TEST_JSI_SHIM=1 -I"$IOS_DIR" -I"$ADAPTER_CPP" -I"$GENERATED_DIR" -I"$BUILD_DIR" -include test-jsi-shim.hpp)
 FAIL=0
 
 run_one() {
@@ -32,7 +35,7 @@ run_one() {
 }
 
 # (A) 생성된 codec 교차 테스트 — Task 2.5 의 본체. fixture hex 교차 검증 포함.
-run_one tgen "$IOS_DIR/test-rustra-generated-codecs.cpp" "$IOS_DIR/rustra-generated-codecs.cpp"
+run_one tgen "$IOS_DIR/test-rustra-generated-codecs.cpp" "$GENERATED_DIR/rustra-generated-codecs.cpp"
 
 # (B) 저수준 Writer/Reader 단위 테스트 (rustra-codec.hpp, 헤더-only).
 run_one tcodec "$IOS_DIR/test-rustra-codec.cpp"

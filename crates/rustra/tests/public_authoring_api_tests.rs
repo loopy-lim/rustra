@@ -31,6 +31,17 @@ fn locked_add(input: AddNumbersInput) -> Result<AddNumbersOutput> {
     })
 }
 
+fn mobile_package() -> Package {
+    Package::builder("example.mobile").build()
+}
+
+rustra::native_entry!(mobile_package);
+
+#[test]
+fn native_entry_exposes_the_stable_native_initialization_contract() {
+    rustra_mobile_init();
+}
+
 #[test]
 fn user_builds_package_without_touching_raw_engine_types() {
     let package = Package::builder("example.calculator")
@@ -57,7 +68,11 @@ fn user_can_register_command_without_writing_command_name_string() {
     assert_eq!(output, AddNumbersOutput { value: 21 });
 
     let generated = package.generate_typescript().unwrap();
-    assert!(generated.commands_ts.contains("export function addNumbers"));
+    assert!(
+        generated
+            .commands_ts
+            .contains("export const addNumbers = createGeneratedFields2")
+    );
     assert!(generated.commands_ts.contains("'addNumbers'"));
 }
 
@@ -123,14 +138,21 @@ fn package_generates_host_neutral_typescript_client() {
     let generated = package.generate_typescript().unwrap();
 
     assert!(generated.types_ts.contains("export type AddNumbersInput"));
-    assert!(generated.commands_ts.contains("export function addNumbers"));
     assert!(
         generated
             .commands_ts
-            .contains("invokeGeneratedFields2<AddNumbersOutput>(1, 'addNumbers', input")
+            .contains("export const addNumbers = createGeneratedFields2")
     );
-    assert!(generated.commands_ts.contains("invokeGeneratedFields2"));
-    assert!(generated.commands_ts.contains("input[\"a\"], input[\"b\"]"));
+    assert!(
+        generated
+            .commands_ts
+            .contains("createGeneratedFields2<AddNumbersInput, AddNumbersOutput>")
+    );
+    assert!(
+        generated
+            .commands_ts
+            .contains("(1, 'addNumbers', \"a\", \"b\", 'addNumbers')")
+    );
     assert!(!generated.commands_ts.contains("EngineRequest"));
     assert!(!generated.commands_ts.contains("Attachment"));
     assert!(!generated.commands_ts.contains("node:"));

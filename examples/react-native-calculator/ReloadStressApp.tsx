@@ -3,8 +3,9 @@ import { StyleSheet, Text, View } from 'react-native';
 import { configure } from '@rustra/types';
 import { createAsyncEngine, createFastEngine } from '../../packages/react-native/src';
 import { benchEchoBytes } from '../calculator/generated/commands';
+import { GENERATED_CONTRACT_HASH, SCHEMA_VERSION } from '../calculator/generated/contract';
 import { rkyvV2Registry } from '../calculator/generated/rkyv-registry';
-import { getRustraNative, installRustraJSI } from 'rustra-jsi';
+import { getRustraNative, installRustraJSI } from '@rustra/generated-react-native';
 
 const LOG_PREFIX = '[RustraReloadStress]';
 
@@ -45,7 +46,12 @@ export default function ReloadStressApp() {
         // Rust allocation without retaining or touching the superseded JSI
         // Runtime. Debug allocator guards turn a double/wrong free into a loud
         // process failure instead of allowing silent corruption.
-        configure(createFastEngine(native, { rkyvV2Codecs: rkyvV2Registry }));
+        const engineOptions = {
+          rkyvV2Codecs: rkyvV2Registry,
+          contractHash: GENERATED_CONTRACT_HASH,
+          schemaVersion: SCHEMA_VERSION,
+        };
+        configure(createFastEngine(native, engineOptions));
         const byteInput = new Uint8Array(64 * 1024);
         byteInput[0] = 17;
         byteInput[byteInput.length - 1] = 239;
@@ -66,7 +72,7 @@ export default function ReloadStressApp() {
         ).__rustraReloadOwnedBuffer = byteResult.data;
         log(`BUFFER_READY token=${token} bytes=${byteOutput.length}`);
 
-        const engine = createAsyncEngine(native, { rkyvV2Codecs: rkyvV2Registry });
+        const engine = createAsyncEngine(native, engineOptions);
         configure(engine);
         if (active) setStatus(`READY ${token}`);
         log(`READY token=${token} value=100`);

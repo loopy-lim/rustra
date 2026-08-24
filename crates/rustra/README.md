@@ -6,7 +6,7 @@ Rust 패키지를 한 번 정의하면, React Native / Node / Bun / Tauri 등 �
 
 ```toml
 [dependencies]
-rustra = "0.3"
+rustra = "0.4"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -151,7 +151,7 @@ pub use serde::{Deserialize, Serialize};
 
 ```toml
 [dependencies]
-rustra = { version = "0.3", features = ["tauri"] }
+rustra = { version = "0.4", features = ["tauri"] }
 ```
 
 ```rust
