@@ -191,6 +191,12 @@ jobs:
         # react-native, nitro)을 필요로 하므로 루트 workspace와 별도로 앱
         # node_modules를 설치한다.
         run: bun install --cwd examples/react-native-calculator --frozen-lockfile
+      - name: Verify bare React Native zero-config fixture
+        run: |
+          bun install --cwd examples/react-native-bare-calculator --frozen-lockfile
+          bun run --cwd examples/react-native-bare-calculator codegen
+          bun run --cwd examples/react-native-bare-calculator typecheck
+          bun run --cwd examples/react-native-bare-calculator test:autolink
       - name: Install Tauri example deps
         run: bun install --cwd examples/tauri-calculator --frozen-lockfile
       - name: Test adapters
@@ -246,10 +252,12 @@ jobs:
         run: |
           bun install --frozen-lockfile
           bun run --cwd packages/types build
+      - name: Regenerate the autolinked Rustra module
+        run: bun run --cwd examples/react-native-calculator codegen
       # android/ 는 Expo prebuild 산물로 gitignore 되어 있다 (ios/ 도 동일).
       # 클린 체크아웃에서 재현하려면 prebuild 로 네이티브 프로젝트를 생성한다.
-      # rustra-jsi 모듈은 react-native.config.js 로 autolink 되고 settings.gradle
-      # include 가 예제 android 디렉터리에 대해 동작한다.
+      # 생성된 @rustra/generated-react-native 모듈은 react-native.config.js 만으로
+      # autolink 된다. 클린 네이티브 프로젝트에 수동 Gradle 패치는 없다.
       - name: Expo prebuild (generate native android project)
         working-directory: examples/react-native-calculator
         run: bunx expo prebuild --platform android --no-install
@@ -257,9 +265,9 @@ jobs:
         env:
           NODE_ENV: production
         run: cd examples/react-native-calculator/android && ./gradlew assembleRelease -x lint
-      - name: Verify APK contains rustrajsi native lib
+      - name: Verify APK contains the uniquely named Rustra native lib
         run: |
-          unzip -l examples/react-native-calculator/android/app/build/outputs/apk/release/app-release.apk | grep -E "lib/(arm64-v8a|x86_64)/librustrajsi\.so"
+          unzip -l examples/react-native-calculator/android/app/build/outputs/apk/release/app-release.apk | grep -E "lib/(arm64-v8a|x86_64)/librustra_bridge\.so"
 
   # RN iOS Release 프레임워크 빌드 — podspec prepare_command 이 Rust 를
   # 빌드한다. iOS 시뮬레이터 런타임 실행은 로컬 verify 게이트가 담당.
@@ -287,9 +295,10 @@ jobs:
         run: |
           bun install --frozen-lockfile
           bun run --cwd packages/types build
-      # ios/ 도 android/ 와 마찬가지로 Expo prebuild 산물 (gitignore). prebuild 는
-      # 기존 네이티브 파일의 수동 패치(settings.gradle include, podspec 연결)를
-      # 유지한다 — 로컬 검증으로 byte-identical 보존 확인.
+      - name: Regenerate the autolinked Rustra module
+        run: bun run --cwd examples/react-native-calculator codegen
+      # ios/ 도 android/ 와 마찬가지로 Expo prebuild 산물 (gitignore). 생성 모듈의
+      # podspec은 CocoaPods autolinking만 사용하며 Podfile 수동 패치는 필요 없다.
       - name: Expo prebuild (generate native ios project)
         working-directory: examples/react-native-calculator
         run: bunx expo prebuild --platform ios --no-install
@@ -318,6 +327,13 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Build all packages
         run: bun run build
+      - name: Verify React Native files are present in packed artifacts
+        run: |
+          mkdir -p /tmp/rustra-pack-check
+          bun pm pack --cwd packages/cli --destination /tmp/rustra-pack-check
+          bun pm pack --cwd packages/react-native --destination /tmp/rustra-pack-check
+          tar -tf /tmp/rustra-pack-check/rustra-cli-*.tgz | grep 'package/dist/react-native.js'
+          tar -tf /tmp/rustra-pack-check/rustra-react-native-*.tgz | grep 'package/native/cpp/RustraJSIBridge.cpp'
       - name: Install packed packages as a consumer
         run: |
           mkdir -p /tmp/rustra-pack

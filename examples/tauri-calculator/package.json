@@ -6,11 +6,21 @@
   "type": "module",
   "scripts": {
     "build": "bun run build:frontend && tauri build",
-    "build:frontend": "tsc -p tsconfig.json",
+    "build:frontend": "bun run typecheck && bun build ./src/app.ts --outdir ./dist --target browser",
+    "build:benchmark": "bun run typecheck && bun build ./src/benchmark.ts --outfile ./bench-dist/benchmark.js --target browser && tauri build --config src-tauri/tauri.bench.conf.json",
+    "bench": "bun run build:benchmark && bun benchmark.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "smoke": "bun runtime-smoke.mjs"
+  },
+  "dependencies": {
+    "@rustra/tauri": "file:../../packages/tauri",
+    "@rustra/types": "file:../../packages/types"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",
     "typescript": "^5.9.0"
+  },
+  "overrides": {
+    "@rustra/types": "file:../../packages/types"
   }
 }

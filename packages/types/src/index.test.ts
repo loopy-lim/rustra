@@ -5,8 +5,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   configure,
+  configureLazy,
+  createGeneratedFields2,
   createRkyvV2Engine,
   getLiveSchema,
+  ensureConfigured,
   invoke,
   invokeBatch,
   invokeGeneratedBytes,
@@ -17,6 +20,90 @@ import {
   parseRustraErrorString,
 } from './index.js';
 import type { RkyvV2SchemaNative, RkyvV2Codec, BatchEntry, EngineClient } from './index.js';
+
+test('lazy configuration lets the first generated command initialize Rustra once', async () => {
+  let initializations = 0;
+  let calls = 0;
+  configureLazy(async () => {
+    initializations++;
+    await Promise.resolve();
+    return {
+      async invoke<T>(_command: string, args?: unknown): Promise<T> {
+        calls++;
+        const input = args as { a: number; b: number };
+        return { value: input.a + input.b } as T;
+      },
+    };
+  });
+  const addNumbers = createGeneratedFields2<{ a: number; b: number }, { value: number }>(
+    1,
+    'addNumbers',
+    'a',
+    'b',
+  );
+
+  const [left, right] = await Promise.all([
+    addNumbers({ a: 20, b: 22 }),
+    addNumbers({ a: 40, b: 2 }),
+  ]);
+
+  assert.deepEqual(left, { value: 42 });
+  assert.deepEqual(right, { value: 42 });
+  assert.equal(initializations, 1, 'concurrent first calls must share native installation');
+  assert.equal(calls, 2);
+  assert.equal(await ensureConfigured(), await ensureConfigured());
+});
+
+test('lazy configuration retries after install failure and explicit configure wins a late install', async () => {
+  let attempts = 0;
+  configureLazy(async () => {
+    attempts++;
+    if (attempts === 1) throw new Error('native install failed');
+    return { invoke: async <T>() => 'retried' as T };
+  });
+  await assert.rejects(invoke('retry'), /native install failed/);
+  assert.equal(await invoke('retry'), 'retried');
+  assert.equal(attempts, 2);
+
+  let finishLate: ((engine: EngineClient) => void) | undefined;
+  configureLazy(
+    () =>
+      new Promise<EngineClient>((resolve) => {
+        finishLate = resolve;
+      }),
+  );
+  const pending = invoke<string>('race');
+  await Promise.resolve();
+  configure({ invoke: async <T>() => 'explicit' as T });
+  finishLate?.({ invoke: async <T>() => 'late' as T });
+  assert.equal(await pending, 'explicit');
+});
+
+test('a newer lazy configuration wins an older initializer that finishes late', async () => {
+  let finishOld!: (engine: EngineClient) => void;
+  const oldEngine: EngineClient = { invoke: async <T>() => 'old' as T };
+  const newEngine: EngineClient = { invoke: async <T>() => 'new' as T };
+
+  configureLazy(() => new Promise<EngineClient>((resolve) => (finishOld = resolve)));
+  const waiting = ensureConfigured();
+  await Promise.resolve();
+  configureLazy(() => newEngine);
+  finishOld(oldEngine);
+
+  assert.equal(await waiting, newEngine);
+  assert.equal(await ensureConfigured(), newEngine);
+});
+
+test('duplicate package copies share one runtime configuration without singleton splits', async () => {
+  const duplicateUrl = new URL(`./index.ts?duplicate=${Date.now()}`, import.meta.url).href;
+  const duplicate = (await import(duplicateUrl)) as typeof import('./index.js');
+
+  duplicate.configure({ invoke: async <T>() => 'from-duplicate' as T });
+  assert.equal(await invoke('shared'), 'from-duplicate');
+
+  configure({ invoke: async <T>() => 'from-primary' as T });
+  assert.equal(await duplicate.invoke('shared'), 'from-primary');
+});
 
 // ── wire 헬퍼 (TS 측 Tier 3 wire) ───────────────────────────
 // request:  [command_id: u16 LE @0][json @2]
@@ -659,6 +746,89 @@ test('generated field dispatch uses the established option path', async () => {
   );
 
   assert.deepEqual(out, { value: 42 });
+  assert.deepEqual(calls, ['byId']);
+});
+
+test('generated two-field command caches the native route and preserves metadata', async () => {
+  const calls: string[] = [];
+  const native = makeTypedNative({
+    getCodecCapabilities: (id) => {
+      calls.push(`cap:${id}`);
+      return 1 | 2 | 4;
+    },
+    invokeTypedById: () => ({ value: -1 }),
+    invokeTypedRaw: (id, ...fields) => {
+      calls.push(`raw:${id}`);
+      return { value: Number(fields[0]) + Number(fields[1]) };
+    },
+  });
+  const addNumbers = createGeneratedFields2<{ a: number; b: number }, { value: number }>(
+    1,
+    'addNumbers',
+    'a',
+    'b',
+    'addNumbers',
+  );
+  configure(createRkyvV2Engine(native, staticRegistry('addNumbers')));
+
+  assert.deepEqual(await addNumbers({ a: 20, b: 22 }), { value: 42 });
+  assert.deepEqual(await addNumbers({ a: 1, b: 2 }), { value: 3 });
+  assert.equal(addNumbers.commandId, 'addNumbers');
+  assert.equal(addNumbers.name, 'addNumbers');
+  assert.deepEqual(calls, ['cap:1', 'raw:1', 'raw:1']);
+});
+
+test('generated two-field command invalidates its route after configure', async () => {
+  const addNumbers = createGeneratedFields2<{ a: number; b: number }, { value: number }>(
+    1,
+    'addNumbers',
+    'a',
+    'b',
+  );
+  const engineForOffset = (offset: number) =>
+    createRkyvV2Engine(
+      makeTypedNative({
+        getCodecCapabilities: () => 1 | 2 | 4,
+        invokeTypedById: () => ({ value: -1 }),
+        invokeTypedRaw: (_id, ...fields) => ({
+          value: Number(fields[0]) + Number(fields[1]) + offset,
+        }),
+      }),
+      staticRegistry('addNumbers'),
+    );
+
+  configure(engineForOffset(0));
+  assert.deepEqual(await addNumbers({ a: 20, b: 22 }), { value: 42 });
+  configure(engineForOffset(100));
+  assert.deepEqual(await addNumbers({ a: 20, b: 22 }), { value: 142 });
+});
+
+test('generated two-field command keeps options on the established path', async () => {
+  const calls: string[] = [];
+  const addNumbers = createGeneratedFields2<{ a: number; b: number }, { value: number }>(
+    1,
+    'addNumbers',
+    'a',
+    'b',
+  );
+  configure(
+    createRkyvV2Engine(
+      makeTypedNative({
+        getCodecCapabilities: () => 1 | 2 | 4,
+        invokeTypedById: () => {
+          calls.push('byId');
+          return { value: 42 };
+        },
+        invokeTypedRaw: () => {
+          calls.push('raw');
+          return { value: 42 };
+        },
+      }),
+      staticRegistry('addNumbers'),
+    ),
+  );
+
+  assert.deepEqual(await addNumbers({ a: 20, b: 22 }, { timeoutMs: 100 }), { value: 42 });
   assert.deepEqual(calls, ['byId']);
 });
 

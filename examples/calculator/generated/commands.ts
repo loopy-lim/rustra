@@ -1,61 +1,37 @@
 import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
-import { invokeGenerated, invokeGeneratedBytes, invokeGeneratedFields1, invokeGeneratedFields2, invokeGeneratedFields3 } from '@rustra/types';
+import { createGeneratedFields2, invokeGenerated, invokeGeneratedBytes, invokeGeneratedFields1, invokeGeneratedFields3 } from '@rustra/types';
 import type { InvokeOptions } from '@rustra/types';
 
-export function addNumbers(input: AddNumbersInput, options?: InvokeOptions): Promise<AddNumbersOutput> {
-  return invokeGeneratedFields2<AddNumbersOutput>(1, 'addNumbers', input, input["a"], input["b"], options);
-}
-addNumbers.commandId = 'addNumbers';
+export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutput>(1, 'addNumbers', "a", "b", 'addNumbers');
 
-export function benchAdd(input: BenchAddInput, options?: InvokeOptions): Promise<BenchAddOutput> {
-  return invokeGeneratedFields2<BenchAddOutput>(23, 'benchAdd', input, input["a"], input["b"], options);
-}
-benchAdd.commandId = 'benchAdd';
+export const benchAdd = createGeneratedFields2<BenchAddInput, BenchAddOutput>(23, 'benchAdd', "a", "b", 'benchAdd');
 
 export function benchEchoBytes(input: BenchBytesPayload, options?: InvokeOptions): Promise<BenchBytesPayload> {
   return invokeGeneratedBytes<BenchBytesPayload>(25, 'benchEchoBytes', input, input["data"], options);
 }
 benchEchoBytes.commandId = 'benchEchoBytes';
 
-export function benchEchoPair(input: BenchPairPayload, options?: InvokeOptions): Promise<BenchPairPayload> {
-  return invokeGeneratedFields2<BenchPairPayload>(26, 'benchEchoPair', input, input["name"], input["value"], options);
-}
-benchEchoPair.commandId = 'benchEchoPair';
+export const benchEchoPair = createGeneratedFields2<BenchPairPayload, BenchPairPayload>(26, 'benchEchoPair', "name", "value", 'benchEchoPair');
 
 export function benchEchoString(input: BenchStringPayload, options?: InvokeOptions): Promise<BenchStringPayload> {
   return invokeGeneratedFields1<BenchStringPayload>(24, 'benchEchoString', input, input["value"], options);
 }
 benchEchoString.commandId = 'benchEchoString';
 
-export function channelDemo(input: ChannelDemoInput, options?: InvokeOptions): Promise<ChannelDemoOutput> {
-  return invokeGenerated<ChannelDemoOutput>(18, 'channelDemo', input, options);
-}
-channelDemo.commandId = 'channelDemo';
+export const channelDemo = createGeneratedFields2<ChannelDemoInput, ChannelDemoOutput>(18, 'channelDemo', "channel", "ticks", 'channelDemo');
 
 export function clamp(input: ClampInput, options?: InvokeOptions): Promise<ClampOutput> {
   return invokeGeneratedFields3<ClampOutput>(4, 'clamp', input, input["max"], input["min"], input["value"], options);
 }
 clamp.commandId = 'clamp';
 
-export function createItem(input: CreateItemInput, options?: InvokeOptions): Promise<CreateItemOutput> {
-  return invokeGeneratedFields2<CreateItemOutput>(8, 'createItem', input, input["name"], input["value"], options);
-}
-createItem.commandId = 'createItem';
+export const createItem = createGeneratedFields2<CreateItemInput, CreateItemOutput>(8, 'createItem', "name", "value", 'createItem');
 
-export function divide(input: DivideInput, options?: InvokeOptions): Promise<DivideOutput> {
-  return invokeGeneratedFields2<DivideOutput>(10, 'divide', input, input["a"], input["b"], options);
-}
-divide.commandId = 'divide';
+export const divide = createGeneratedFields2<DivideInput, DivideOutput>(10, 'divide', "a", "b", 'divide');
 
-export function emitDemo(input: EmitDemoInput, options?: InvokeOptions): Promise<EmitDemoOutput> {
-  return invokeGeneratedFields2<EmitDemoOutput>(11, 'emitDemo', input, input["ticks"], input["stepDelayMs"], options);
-}
-emitDemo.commandId = 'emitDemo';
+export const emitDemo = createGeneratedFields2<EmitDemoInput, EmitDemoOutput>(11, 'emitDemo', "ticks", "stepDelayMs", 'emitDemo');
 
-export function gauge(input: GaugeInput, options?: InvokeOptions): Promise<GaugeOutput> {
-  return invokeGeneratedFields2<GaugeOutput>(17, 'gauge', input, input["limit"], input["offset"], options);
-}
-gauge.commandId = 'gauge';
+export const gauge = createGeneratedFields2<GaugeInput, GaugeOutput>(17, 'gauge', "limit", "offset", 'gauge');
 
 export function greet(input: GreetInput, options?: InvokeOptions): Promise<GreetOutput> {
   return invokeGeneratedFields1<GreetOutput>(5, 'greet', input, input["name"], options);
@@ -67,10 +43,7 @@ export function isEven(input: IsEvenInput, options?: InvokeOptions): Promise<IsE
 }
 isEven.commandId = 'isEven';
 
-export function multiply(input: MultiplyInput, options?: InvokeOptions): Promise<MultiplyOutput> {
-  return invokeGeneratedFields2<MultiplyOutput>(2, 'multiply', input, input["a"], input["b"], options);
-}
-multiply.commandId = 'multiply';
+export const multiply = createGeneratedFields2<MultiplyInput, MultiplyOutput>(2, 'multiply', "a", "b", 'multiply');
 
 export function processItem(input: ProcessItemInput, options?: InvokeOptions): Promise<ProcessItemOutput> {
   return invokeGenerated<ProcessItemOutput>(9, 'processItem', input, options);
@@ -78,7 +51,7 @@ export function processItem(input: ProcessItemInput, options?: InvokeOptions): P
 processItem.commandId = 'processItem';
 
 export function resourceClose(input: ResourceCloseInput, options?: InvokeOptions): Promise<ResourceCloseOutput> {
-  return invokeGenerated<ResourceCloseOutput>(22, 'resourceClose', input, options);
+  return invokeGeneratedFields1<ResourceCloseOutput>(22, 'resourceClose', input, input["handle"], options);
 }
 resourceClose.commandId = 'resourceClose';
 
@@ -87,13 +60,10 @@ export function resourceOpen(input: ResourceOpenInput, options?: InvokeOptions):
 }
 resourceOpen.commandId = 'resourceOpen';
 
-export function resourceRead(input: ResourceReadInput, options?: InvokeOptions): Promise<ResourceReadOutput> {
-  return invokeGenerated<ResourceReadOutput>(20, 'resourceRead', input, options);
-}
-resourceRead.commandId = 'resourceRead';
+export const resourceRead = createGeneratedFields2<ResourceReadInput, ResourceReadOutput>(20, 'resourceRead', "handle", "key", 'resourceRead');
 
 export function resourceWrite(input: ResourceWriteInput, options?: InvokeOptions): Promise<ResourceWriteOutput> {
-  return invokeGenerated<ResourceWriteOutput>(21, 'resourceWrite', input, options);
+  return invokeGeneratedFields3<ResourceWriteOutput>(21, 'resourceWrite', input, input["handle"], input["key"], input["value"], options);
 }
 resourceWrite.commandId = 'resourceWrite';
 
@@ -107,10 +77,7 @@ export function scoreTotal(input: ScoreTotalInput, options?: InvokeOptions): Pro
 }
 scoreTotal.commandId = 'scoreTotal';
 
-export function secureCompute(input: SecureComputeInput, options?: InvokeOptions): Promise<SecureComputeOutput> {
-  return invokeGeneratedFields2<SecureComputeOutput>(13, 'secureCompute', input, input["a"], input["b"], options);
-}
-secureCompute.commandId = 'secureCompute';
+export const secureCompute = createGeneratedFields2<SecureComputeInput, SecureComputeOutput>(13, 'secureCompute', "a", "b", 'secureCompute');
 
 export function sizeOf(input: SizeOfInput, options?: InvokeOptions): Promise<SizeOfOutput> {
   return invokeGeneratedBytes<SizeOfOutput>(14, 'sizeOf', input, input["data"], options);

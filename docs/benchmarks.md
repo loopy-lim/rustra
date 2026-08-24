@@ -16,6 +16,54 @@
 | React Native   | 0.81.5 + Expo 54             |
 | iOS 시뮬레이터 | iPhone 17                    |
 
+## 2026-08-24 실제 host API 성능 (`0.4.0` merge candidate)
+
+기존 adapter-only 숫자는 transport 비용이 빠져 실제 사용자가 보는 지연과 달랐다.
+이번 측정은 생성된 진입점 또는 문서화된 production escape hatch를 실제 runtime에서
+호출한다. 모든 경로는 `42` 결과를 timing 전후에 검증하고 warm-up 뒤 3회 반복했다.
+
+```bash
+bun run bench:hosts -- --output /tmp/rustra-host-matrix.json
+```
+
+환경은 macOS arm64, Bun 1.4.0, Node v22.21.1, Rust release다.
+원본 수치는
+[`2026-08-24-host-matrix.json`](benchmark-receipts/2026-08-24-host-matrix.json)에
+보존했다.
+
+| 경로                            | warm-up | 반복            |       평균 |        p50 |        p95 |        p99 |   ops/s |
+| ------------------------------- | ------: | --------------- | ---------: | ---------: | ---------: | ---------: | ------: |
+| Node generated one-shot         |      10 | 200 × 3         |   2.758 ms |   2.760 ms |   3.119 ms |   3.295 ms |     363 |
+| Node persistent loop            |     100 | 2,000 × 3       |  16.863 µs |  16.666 µs |  26.917 µs |  44.084 µs |  59,301 |
+| Node N-API rkyv V2              |     500 | 10,000 × 3      |   1.261 µs |   1.167 µs |   2.125 µs |   4.292 µs | 793,185 |
+| Bun generated FFI rkyv V2       |     500 | 10,000 × 3      |   2.273 µs |   2.208 µs |   3.917 µs |   6.292 µs | 439,961 |
+| Tauri generated WebView IPC     |     100 | 1,000 × 3       | 279.044 µs | 300.000 µs | 350.000 µs | 550.000 µs |   3,584 |
+| RN generated JSI, iOS Simulator |     500 | 10,000 × 1 확인 |          — |   2.750 µs |          — |          — |       — |
+
+모든 평균과 throughput은 OS 스케줄링 꼬리값을 줄이기 위해 양끝 5%를 제외한
+trimmed mean으로 계산했다. Tauri는 WKWebView의 약 1ms 타이머 정밀도를 피하기 위해
+20호출 batch의 호출당 지연으로 percentile을 계산했다. RN 행은 같은 날 최종
+fingerprint Release receipt의 Rustra add p50이며
+Node/Bun/Tauri와 실행 환경이 다르므로 직접 순위를 매기지 않는다.
+
+이 표의 설계 결론은 다음과 같다.
+
+- Node zero-config one-shot은 CLI·저빈도 배치용이다. 서버 hot path는 persistent
+  loop로 약 164배, N-API rkyv V2로 약 2,188배 평균 지연을 줄였다.
+- Bun의 기본 generated 경로 자체가 stable C ABI rkyv V2라 별도 고성능 설정이 없다.
+- Tauri UI command는 WebView IPC가 지배한다. 수백 µs는 사용자 상호작용에는 충분하지만
+  프레임별 대량 호출은 Rust 측 batch command 하나로 합쳐야 한다.
+- Expo development build와 bare RN은 같은 generated JSI/autolinking package를 쓴다.
+  다만 bare RN·Android 실제 runtime receipt는 아직 없으므로 iOS Simulator 숫자를
+  이식해 주장하지 않는다.
+
+실행 가능한 제품 코드는
+[`examples/calculator/apps`](../examples/calculator/apps/),
+[`examples/tauri-calculator`](../examples/tauri-calculator/),
+[`examples/react-native-calculator/App.tsx`](../examples/react-native-calculator/App.tsx),
+[`examples/react-native-bare-calculator/App.tsx`](../examples/react-native-bare-calculator/App.tsx)에
+있다.
+
 ## 2026-08-22 전체 재측정 (`0.3.0` 준비 checkout)
 
 이번 checkout에서 모든 인레포 벤치마크를 재실행해 문서 수치를 일신했다.
@@ -247,30 +295,47 @@ bun run test:runtime:node-napi
 
 ## React Native 성능
 
-### React Native iOS Release 동등 연산 비교 (2026-08-23)
+### React Native iOS Release 동등 연산 비교 (2026-08-24)
 
 iPhone 17 Simulator(iOS 26.2), Hermes, React Native 0.81.5 + Expo 54의 Release
-앱에서 측정했다. 각 연산은 warm-up 500회 + 10,000회이며 Nitro와 rustra가
+앱에서 측정했다. 각 연산은 warm-up 500회 + 10,000회이며 Nitro와 Rustra가
 같은 JS 입력 모양, 같은 연산, 같은 출력 모양을 사용한다. bytes 정규화도 양쪽
 측정 구간 안에 포함한다. `nitroBench.add(a, b)` 원시 호출은 lower bound로만
 기록하고 비율에는 사용하지 않는다.
 
 | Release 실행 |    add 객체 | string 객체 |   bytes 64B |   pair 객체 | 출력 동등성 |
 | ------------ | ----------: | ----------: | ----------: | ----------: | :---------: |
-| 1            |     1.2068x |     1.2440x |     1.1486x |     1.1969x |     ✅      |
-| 2            |     1.1828x |     1.2384x |     1.1656x |     1.2162x |     ✅      |
-| 3            |     1.2223x |     1.2308x |     1.1748x |     1.2504x |     ✅      |
-| **중앙값**   | **1.2068x** | **1.2384x** | **1.1656x** | **1.2162x** |   **✅**    |
+| 1            |     1.0474x |     1.0693x |     0.9543x |     1.0512x |     ✅      |
+| 2            |     1.0255x |     1.0253x |     0.9249x |     1.0933x |     ✅      |
+| 3            |     1.0418x |     1.0281x |     0.9817x |     1.0535x |     ✅      |
+| **중앙값**   | **1.0418x** | **1.0281x** | **0.9543x** | **1.0535x** |   **✅**    |
 
-이 표는 순차 측정 러너의 이전 기록이다. 최신 러너는 정답을 timing 전에 검증하고,
-Nitro/Rustra/Swift FFI를 호출 단위로 `ABC → BCA → CAB` 순환 측정하며 avg,
-stddev, min/max, p50/p95/p99, 100개 batch mean과 JSON receipt를 출력한다.
-Debug 빌드에서는 성능 측정을 중단한다. 최신 소스의 Release runtime을 다시
-실행하기 전에는 위 비율을 새 성능 결과로 승격하지 않는다.
+0.4 merge candidate의 최종 build fingerprint
+`eb14a45517032caa6adbfb1b366da70ef1adcb69633e09eac07fd831f37a90b1`도 같은
+Release gate를 통과했다. 최신 archive를 다시 링크·설치한 단일 확인 실행의 paired
+ratio는 add 1.0435x, string 1.0194x, bytes64 0.9580x, pair 1.0511x,
+64 KiB 0.9687x, 1 MiB-wire 0.9727x였다. 단일 실행은 위 3회 중앙값을 대표
+성능값으로 대체하지 않으며, 배포 후보와 측정 앱의 지문, 정답, CI gate가
+일치한다는 최종 확인 증거다.
 
-최적화 전 같은 벤치의 중앙값은 add 1.3076x, string 1.3167x, bytes 1.1693x,
-pair 1.3954x였다. Nitro 대비 초과 격차(`ratio - 1`)는 각각 약 33%, 25%, 2%,
-45% 줄었다.
+정답을 timing 전에 검증하고 Nitro/Rustra/Swift FFI를 호출 단위로
+`ABC → BCA → CAB` 순환 측정한다. 각 receipt에는 100개 paired batch의
+log-ratio t 95% CI와 생성 helper/native route 자동 진단이 포함된다. 설치된
+Release 앱의 receipt는 화면 캡처 없이 다음 명령으로 추출한다.
+
+```bash
+bun run --cwd examples/react-native-calculator bench:ios:receipt -- \
+  --output /tmp/rustra-rn-receipt.json
+```
+
+추출기는 build mode, correctness, FFI 가용성, CI 필드, 생성 시각과 앱 컨테이너
+파일 갱신을 검증한다. Debug 빌드와 이전 실행의 stale receipt는 실패한다.
+
+2필드 생성 명령을 엔진 세대별 native route에 미리 결합한 뒤 실제 사용자 비교
+add 중앙값은 Nitro보다 4.18% 느린 수준이다. 생성 함수 자체와 같은 native
+route의 진단에서는 약 5~12%의 JS 함수/필드 추출 경계가 남는다.
+이를 더 줄이려면 현재 Promise 기반 공개 API와 별도의 sync 전용 API 경계를
+설계해야 하므로 자동 라우팅 최적화에는 포함하지 않았다.
 
 대표적인 동기 분해 범위는 typed by-id 전체 591–620ns, positional 전체
 487–504ns, JS codec 전체 약 3.1µs, JSON 전체 24.1–24.5µs였다. 이번 개선은
@@ -297,12 +362,16 @@ Rustra 모두 fresh-output 계약을 지키며 echo 한 번당 bulk copy는 한 
 
 | Release 실행 | 64 KiB Nitro | 64 KiB Rustra |       비율 | 1 MiB-wire Nitro | 1 MiB-wire Rustra |       비율 |
 | ------------ | -----------: | ------------: | ---------: | ---------------: | ----------------: | ---------: |
-| 1            |     8.640 us |      8.760 us |     1.014x |        94.483 us |         95.112 us |     1.007x |
-| 2            |     9.388 us |      9.016 us |     0.960x |       102.912 us |         89.966 us |     0.874x |
-| 3            |     9.883 us |      8.889 us |     0.899x |        94.748 us |         94.740 us |     1.000x |
-| **중앙값**   | **9.388 us** |  **8.889 us** | **0.947x** |    **94.748 us** |     **94.740 us** | **1.000x** |
+| 1            |     8.540 us |      8.456 us |     0.990x |        87.979 us |         89.923 us |     1.022x |
+| 2            |    12.815 us |      8.792 us |     0.686x |        84.797 us |         85.894 us |     1.013x |
+| 3            |     9.256 us |      8.644 us |     0.934x |        88.909 us |         89.836 us |     1.010x |
+| **중앙값**   | **9.256 us** |  **8.644 us** | **0.934x** |    **87.979 us** |     **89.836 us** | **1.013x** |
 
-64 KiB는 warm-up 50회 + 500회, 1 MiB-wire는 warm-up 5회 + 50회다.
+비율 중앙값은 호출 단위 paired ratio의 세 실행 중앙값이므로 독립적인 시간
+중앙값의 단순 나눗셈과 다를 수 있다. 두 번째 64 KiB 실행은 Nitro lane만 일시적으로
+느려진 이상치였지만 Rustra는 세 실행 모두 8.456–8.792 us였다. 따라서 단일 실행값이
+아니라 세 실행 paired ratio 중앙값을 대표값으로 쓴다. 64 KiB는 warm-up 50회 + 500회,
+1 MiB-wire는 분산을 줄이기 위해 warm-up 20회 + 200회로 측정한다.
 1 MiB-wire의 데이터 길이는 기본 wire limit에서 command id와 postcard 길이
 5바이트를 뺀 1,048,571바이트다. 전체 1 MiB 데이터는 의도대로
 `payload.too_large`다.
@@ -327,6 +396,23 @@ Total                                            52.5 µs
 
 RN에서 대부분의 지연은 Expo NativeModule 비동기 브릿지 통과에서 발생한다. Rust
 FFI 호출 자체는 당시 3.5 µs(현재 재측정 1.2 µs)로 전체의 ~7%에 불과하다.
+
+2026-08-24 최신 Release receipt의 같은 입력/출력 3회 중앙값도 이 결론을
+유지한다. 아래 FFI는 raw C ABI 단독 시간이 아니라 Swift Expo async 모듈 전체다.
+
+| 동등 연산 | Nitro reference | Swift FFI async | FFI/Nitro |
+| --------- | --------------: | --------------: | --------: |
+| add       |        2.882 us |       30.474 us |   10.575x |
+| string    |        2.965 us |       30.858 us |   10.526x |
+| bytes64   |       19.086 us |       38.710 us |    2.027x |
+| pair      |        2.998 us |       30.621 us |   10.421x |
+
+Swift sync scalar lower bound도 12.459 us였으므로 초고빈도 명령의 기본 경로는
+Expo async FFI가 아니라 direct JSI여야 한다. FFI는 호환/제어 경로로 남기고,
+큰 작업을 한 번에 넘겨 브릿지 비용을 상각할 때 사용한다.
+
+0.4 최종 fingerprint의 단일 확인 실행도 FFI/Nitro가 add 11.1423x, string
+10.8161x, bytes64 2.1113x, pair 10.9772x로 같은 결론을 유지했다.
 
 ### JSI + rkyv V2 postcard (2026-08-18 기록)
 
@@ -377,7 +463,7 @@ avg/stddev/min/max/p50/p95/p99를 구조화 receipt로 남긴다:
 - **대상**: `nitro-bench` 네이티브 모듈(`modules/nitro-bench/`) — nitrogen
   코드젠으로 만든 실제 HybridObject. C++ 구현은 `add(a, b) = a + b`,
   `echo(v) = v` (`ios/HybridNitroBench.cpp`).
-- **버전**: `react-native-nitro-modules` **0.35.6** (설치된 것). 과거 유령
+- **버전**: `react-native-nitro-modules` **0.35.10** (설치된 것). 과거 유령
   표의 "v0.80+" 라벨은 Nitro 버전이 아니라 RN 버전을 가리킨 것으로 보인다.
 - **비율 측정 경로**: `benchAdd({a,b})`, `echoString({value})`,
   `echoBytes({data})`, `echoPair({name,value})`를 양쪽에 동일하게 구현했다.
@@ -386,30 +472,32 @@ avg/stddev/min/max/p50/p95/p99를 구조화 receipt로 남긴다:
 즉 이 비교가 확실하게 답하는 질문은 하나다:
 
 > **"동일한 공개 객체 API의 엔드투엔드 지연이 Nitro급인가?"** — 답: 3회
-> 중앙값 기준 rustra/Nitro 1.17–1.24x(2026-08-23 Release 측정)다.
+> 중앙값 기준 Rustra/Nitro add 1.0418x, string 1.0281x, bytes 0.9543x,
+> pair 1.0535x(2026-08-24 Release 측정)다.
 
 이 비교가 **하지 않는** 것 (즉, 위 비교만으로 "full 지원 상태"를 체크했다고
 말할 수 없다):
 
-- string/bytes/pair 비교는 **2026-08-23 동등 연산으로 재측정 완료**했다.
-  3회 중앙값은 string 1.2384x, bytes 1.1656x, pair 1.2162x다. 이전의
+- string/bytes/pair 비교는 **2026-08-24 동등 연산으로 재측정 완료**했다.
+  3회 중앙값은 string 1.0281x, bytes 0.9543x, pair 1.0535x다. 이전의
   greet/sizeOf/createItem 비교는 연산과 출력 모양이 달라 공정한 비율이 아니었으므로
   위 동등 연산 표로 대체했다.
 
 - bigint/Date/Promise 네이티브/콜백(Function 인자) 경로는 여전히 미측정.
-- 페이로드 크기 확장(64B 초과) 비교 — 향후 과제.
+- 페이로드 크기는 64B, 64KiB, exact 1MiB-wire까지 측정했다. 더 큰 기본 입력은
+  `payload.too_large` 계약으로 거부한다.
 - 기능 패리티 — 아래 매트릭스 참고. 지연 비교가 기능 지원을 대신하지 않는다.
 
 ### 기능 패리티 매트릭스: rustra vs Nitro Modules
 
 Nitro는 "JS ↔ 네이티브 객체 브릿지", rustra는 "단일 Rust 코어 × 멀티호스트
 RPC 계약"으로 설계 목표가 다르다. 같은 문제만 겹친다(RN에서 Rust/C++ 로직
-부르기). 아래는 설치된 Nitro 0.35.6의 실제 타입 표면(`cpp/jsi/JSIConverter*`)
+부르기). 아래는 설치된 Nitro 0.35.10의 실제 타입 표면(`cpp/jsi/JSIConverter*`)
 과 rustra 코드젠/코덱 표면 기준.
 
 #### 타입 시스템
 
-| 타입                   | Nitro 0.35.6                                   | rustra (postcard/rkyv V2 fast path)                                                                                                                       | rustra 폴백(Tier 3 JSON) |
+| 타입                   | Nitro 0.35.10                                  | rustra (postcard/rkyv V2 fast path)                                                                                                                       | rustra 폴백(Tier 3 JSON) |
 | ---------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
 | 정수/실수 프리미티브   | ✅ int/float/double + **bigint(Int64/UInt64)** | ✅ f64/f32/zigzag 정수 + **uvar(u8–u64) plain varint** — bigint 표면은 ❌(number, 2^53 한계)                                                              | ✅ (serde JSON)          |
 | string                 | ✅                                             | ✅                                                                                                                                                        | ✅                       |

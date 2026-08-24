@@ -1,53 +1,101 @@
 # @rustra/react-native
 
-React Native 네이티브 모듈을 공통 `EngineClient` 인터페이스로 변환하는 어댑터입니다.
+Rustra의 React Native JSI 어댑터와 생성 모듈용 공유 네이티브 소스입니다. Expo와
+bare React Native에서 같은 generated entry와 표준 autolinking 경로를 사용합니다.
 
-## JSON 호환 엔진
+## 권장 사용
 
-```ts
-type ReactNativeRustraModule = {
-  invoke(payload: ArrayBuffer): ArrayBuffer;
-};
+Rust crate는 정적 라이브러리와 mobile entry를 노출합니다.
 
-type ReactNativeEngineClient = {
-  invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T>;
-};
-
-function createReactNativeEngine(nativeModule: ReactNativeRustraModule): ReactNativeEngineClient;
+```toml
+[lib]
+crate-type = ["rlib", "staticlib"]
 ```
 
-## 사용 예시
+```rust
+pub fn package() -> rustra::Package {
+    // commands...
+}
 
-```ts
-import { configure, createReactNativeEngine } from '@rustra/react-native';
-import { installRustraJSI } from 'your-rustra-native-module';
-
-await installRustraJSI();
-const native = globalThis.__rustraNative;
-configure(createReactNativeEngine(native));
+rustra::native_entry!(package);
 ```
 
-JSON은 UTF-8 `ArrayBuffer` 요청/응답을 사용하며 Hermes에 `TextEncoder`/
-`TextDecoder`가 없어도 동작한다. 취소와 `timeoutMs`는 공통 `EngineClient`
-계약을 따른다.
+앱의 `rustra.json`에서 React Native 생성을 켭니다.
 
-## rkyv V2 고속 엔진
-
-```ts
-import { configure, createFastEngine, getRustraNative } from '@rustra/react-native';
-import { rkyvV2Registry } from './generated/rkyv-registry.js';
-
-configure(createFastEngine(getRustraNative(), { rkyvV2Codecs: rkyvV2Registry }));
+```json
+{
+  "schema": "./generated/schema.json",
+  "output": "./generated",
+  "reactNative": {}
+}
 ```
 
-## 주의사항
+```bash
+bun add @rustra/react-native @rustra/types@0.4.0
+bun add -d @rustra/cli
+bunx --bun @rustra/cli generate --config rustra.json
+bun install
+```
 
-이 npm 패키지는 JavaScript 어댑터이며 네이티브 JSI 바이너리를 포함하지 않는다.
-앱은 자신의 Rust 패키지를 연결한 iOS/Android 네이티브 모듈을 제공하고 앱 시작
-시 설치해야 한다. 저장소의 `examples/react-native-calculator/modules/rustra-jsi`
-는 동작하는 참조 구현이지만 아직 범용 prebuilt npm 모듈은 아니다.
+생성기는 다음을 자동으로 처리합니다.
 
-따라서 `bun add @rustra/react-native`만으로 네이티브 호출이 활성화되지는 않는다.
-현재 검증된 설정과 빌드 흐름은 저장소의 React Native calculator README를 따른다.
-어댑터 자체는 `react-native`, Expo, Nitro Modules를 직접 import하지 않으므로
-생성 커맨드와 엔진 계약은 특정 RN 네이티브 구현에 종속되지 않는다.
+- `modules/rustra-bridge`에 앱 전용 `@rustra/generated-react-native` 패키지 생성
+- 앱 `package.json`에 충돌을 확인한 뒤 Bun workspace dependency 연결
+- iOS Podspec, Android Gradle/CMake/JNI, 공유 C++ JSI bridge 생성
+- Cargo metadata에서 package와 static library 이름 추론
+- TypeScript/C++ codec과 lazy bootstrap 생성
+
+앱에서는 생성 명령만 import합니다.
+
+```ts
+import { addNumbers } from './generated/react-native';
+
+const result = await addNumbers({ a: 20, b: 22 });
+```
+
+첫 호출이 JSI 설치, contract hash/schema version 검증, fast engine 설정을
+concurrency-safe하게 한 번만 수행합니다. 별도의 `installRustraJSI()`,
+`createFastEngine()`, `configure()` 호출은 필요하지 않습니다.
+
+## Expo와 bare React Native
+
+- bare RN: `bunx --bun react-native config`로 양 플랫폼 autolinking을 확인하고,
+  iOS는 `cd ios && pod install` 후 앱을 다시 빌드합니다.
+- Expo: development build 또는 `expo run:*`을 사용합니다. Expo Go는 JSI 네이티브
+  코드를 로드할 수 없습니다.
+- 두 환경 모두 Podfile, `settings.gradle`, `MainApplication`, CMake를 직접 수정하지
+  않습니다.
+
+`reactNative: {}`는 가장 가까운 `Cargo.toml`이 단일 staticlib crate를 가리킬 때
+완전 자동입니다. monorepo workspace가 모호하면 app crate를 지정합니다.
+
+```json
+{
+  "reactNative": {
+    "rustManifest": "../native/Cargo.toml"
+  }
+}
+```
+
+그래도 여러 staticlib가 남을 때만 `rustPackage`가 필요합니다. `moduleDir`,
+`rustLibrary`, `cppOutput`은 특별한 레이아웃에서만 override합니다.
+
+## 충돌 방지
+
+생성 모듈은 의도적으로 고정된 전용 이름을 사용합니다.
+
+- JavaScript package: `@rustra/generated-react-native`
+- React Native module: `RustraBridge`
+- Android namespace: `dev.rustra.bridge`
+- native shared library: `rustra_bridge`
+
+생성기는 같은 dependency가 다른 위치를 가리키면 덮어쓰지 않고 중단합니다. 앱마다
+로컬 생성 패키지를 하나만 두어 다른 Expo/Nitro/Turbo 모듈과 이름과 build target이
+겹치지 않게 합니다.
+
+## 저수준 API
+
+직접 transport를 제어해야 할 때만 `createReactNativeEngine`, `createFastEngine`,
+`getRustraNative`를 사용합니다. JSON 경로는 Hermes의 `TextEncoder`/
+`TextDecoder` 유무와 관계없이 exact `ArrayBuffer`로 동작하고, fast path는 generated
+postcard codec과 caller-buffer FFI를 사용합니다.

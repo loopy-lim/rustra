@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createNodeEngine } from './index.js';
+import { createNodeBootstrap, createNodeEngine } from './index.js';
 import { RustraCommandError } from '@rustra/types';
 
 test('createNodeEngine routes invoke to transport', async () => {
@@ -124,6 +124,31 @@ processTest(
     transport.dispose();
   },
 );
+
+processTest('createNodeBootstrap owns lazy configure and Cargo runtime discovery', async () => {
+  const bootstrap = createNodeBootstrap({
+    commandCandidates: [resolve(repoRoot, 'target/debug/rustra-calculator-example')],
+  });
+  try {
+    const engine = await bootstrap.ready();
+    const result = await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
+    assert.equal(result.value, 42);
+  } finally {
+    bootstrap.dispose();
+  }
+});
+
+test('createNodeBootstrap reports the exact runtime override when discovery fails', async () => {
+  const previous = process.env.RUSTRA_NODE_BINARY;
+  delete process.env.RUSTRA_NODE_BINARY;
+  const bootstrap = createNodeBootstrap({ commandCandidates: ['./missing-rustra-runtime'] });
+  try {
+    await assert.rejects(bootstrap.ready(), /RUSTRA_NODE_BINARY/);
+  } finally {
+    if (previous === undefined) delete process.env.RUSTRA_NODE_BINARY;
+    else process.env.RUSTRA_NODE_BINARY = previous;
+  }
+});
 
 processTest('createNodeProcessTransport surfaces spawn failures as transport.error', async () => {
   const transport = createNodeProcessTransport({

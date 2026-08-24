@@ -158,17 +158,20 @@ timed calls; the exact 1 MiB-wire case used 5 warmups and 50 timed calls. Its
 data length is 1,048,571 bytes because command id and postcard length consume
 the remaining five bytes of the default 1 MiB wire limit.
 
-| Payload    | Nitro avg median | Rustra avg median | Ratio from medians | Paired ratio range |
-| ---------- | ---------------: | ----------------: | -----------------: | -----------------: |
-| 64 KiB     |         9.388 us |          8.889 us |             0.947x |      0.899x-1.014x |
-| 1 MiB wire |        94.748 us |         94.740 us |             1.000x |      0.874x-1.007x |
+| Payload    | Nitro avg median | Rustra avg median | Paired ratio median | Paired 95% CI envelope |
+| ---------- | ---------------: | ----------------: | ------------------: | ---------------------: |
+| 64 KiB     |         9.256 us |          8.644 us |              0.934x |          0.633x-1.018x |
+| 1 MiB wire |        87.979 us |         89.836 us |              1.013x |          0.989x-1.043x |
 
 Before the ownership transfer, the corresponding median ratios were 2.344x and
 3.644x. The final rerun after moving JSI installation onto the JS Runtime thread
-measured Rustra at 8.889 us for 64 KiB and 94.740 us for 1 MiB wire. These are simulator receipts, not
-physical-device or Android performance claims.
+measured Rustra at 8.644 us for 64 KiB and 89.836 us for 1 MiB wire. The wide
+64 KiB envelope includes one transient Nitro-only slowdown; Rustra itself stayed
+within 8.456–8.792 us. These are simulator receipts, not physical-device or
+Android performance claims.
 
 ## Versioning
 
-`@rustra/types` remains at version `0.3.1` for this work. The change is additive
-and old native hosts fall back to their existing route.
+This release moves every public `@rustra/*` package and both Rust crates to
+`0.4.0`. Future releases use one Changesets fixed group, so all public packages
+advance together even when only one package owns the source change.

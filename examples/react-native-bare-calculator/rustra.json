@@ -1,0 +1,8 @@
+{
+  "schema": "../calculator/generated/schema.json",
+  "output": "./generated",
+  "positional": true,
+  "reactNative": {
+    "rustManifest": "../calculator/Cargo.toml"
+  }
+}

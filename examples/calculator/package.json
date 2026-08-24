@@ -1,0 +1,18 @@
+{
+  "name": "@rustra/example-calculator",
+  "private": true,
+  "packageManager": "bun@1.4.0",
+  "type": "module",
+  "scripts": {
+    "codegen": "cargo run --bin rustra-calculator-example && bun ../../packages/cli/src/index.ts generate --config rustra.json"
+  },
+  "dependencies": {
+    "@rustra/bun": "file:../../packages/bun",
+    "@rustra/node": "file:../../packages/node",
+    "@rustra/tauri": "file:../../packages/tauri",
+    "@rustra/types": "file:../../packages/types"
+  },
+  "overrides": {
+    "@rustra/types": "file:../../packages/types"
+  }
+}

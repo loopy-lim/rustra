@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-24T08:50:42.056Z",
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "bun": "1.4.0",
+    "node": "v22.21.1"
+  },
+  "runtimeEvidence": [
+    "Node v22.21.1",
+    "Bun 1.4.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+  ],
+  "correctness": true,
+  "results": [
+    {
+      "name": "node-generated-one-shot",
+      "correctness": true,
+      "warmup": 10,
+      "iterations": 200,
+      "repeats": 3,
+      "normalization": "trimmed-mean-5pct",
+      "averageNs": 2758485.2777777812,
+      "p50Ns": 2760209.0000000317,
+      "p95Ns": 3119291.999999973,
+      "p99Ns": 3294666.0000000065,
+      "throughputOpsPerSecond": 362.5177948405053
+    },
+    {
+      "name": "node-persistent-loop",
+      "correctness": true,
+      "warmup": 100,
+      "iterations": 2000,
+      "repeats": 3,
+      "normalization": "trimmed-mean-5pct",
+      "averageNs": 16863.163888889336,
+      "p50Ns": 16665.999999986525,
+      "p95Ns": 26917.000000139524,
+      "p99Ns": 44084.0000001117,
+      "throughputOpsPerSecond": 59300.852828624396
+    },
+    {
+      "name": "node-napi-rkyv-v2",
+      "correctness": true,
+      "warmup": 500,
+      "iterations": 10000,
+      "repeats": 3,
+      "normalization": "trimmed-mean-5pct",
+      "averageNs": 1260.7405555563084,
+      "p50Ns": 1166.9999998957792,
+      "p95Ns": 2124.999999978172,
+      "p99Ns": 4291.999999850304,
+      "throughputOpsPerSecond": 793184.6053439161
+    },
+    {
+      "name": "bun-generated-ffi-rkyv-v2",
+      "correctness": true,
+      "warmup": 500,
+      "iterations": 10000,
+      "repeats": 3,
+      "normalization": "trimmed-mean-5pct",
+      "averageNs": 2272.930000000181,
+      "p50Ns": 2207.999999995991,
+      "p95Ns": 3917.0000000012806,
+      "p99Ns": 6291.999999994858,
+      "throughputOpsPerSecond": 439960.75550057436
+    },
+    {
+      "name": "tauri-generated-webview-ipc",
+      "correctness": true,
+      "warmup": 100,
+      "iterations": 1000,
+      "repeats": 3,
+      "batchSize": 20,
+      "normalization": "trimmed-mean-5pct",
+      "averageNs": 279044.11764705885,
+      "p50Ns": 299999.99999999715,
+      "p95Ns": 350000,
+      "p99Ns": 550000,
+      "throughputOpsPerSecond": 3583.6627140974965
+    }
+  ]
+}

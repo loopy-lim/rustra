@@ -168,6 +168,8 @@ export const RustraErrorCode = {
   PayloadTooLarge: 'payload.too_large',
   /** transport 계열 일시 오류 — retryable. */
   TransportError: 'transport.error',
+  /** 자동 host 탐색에서 실행 가능한 native transport를 찾지 못함. */
+  TransportUnavailable: 'transport.unavailable',
   /** 타임아웃 레이스 만료 — retryable. */
   TransportTimeout: 'transport.timeout',
   /** 사전/협력적 취소 — retryable. */
@@ -299,11 +301,15 @@ export type RustraNative = {
 
 // ── Global invoke (Tauri-like) ──────────────────────────────
 
-const invokeByIdSync = Symbol('rustra.invokeByIdSync');
-const invokeGeneratedFieldsSync = Symbol('rustra.invokeGeneratedFieldsSync');
-const resolveGeneratedFieldsSync = Symbol('rustra.resolveGeneratedFieldsSync');
-const invokeGeneratedBytesSync = Symbol('rustra.invokeGeneratedBytesSync');
-const resolveGeneratedBytesSync = Symbol('rustra.resolveGeneratedBytesSync');
+// A Metro bundle can contain more than one physical copy of @rustra/types
+// (for example when generated code lives outside the app workspace). Use a
+// versioned global protocol so those copies share configuration and private
+// fast-path symbols without colliding with incompatible package versions.
+const invokeByIdSync = Symbol.for('dev.rustra.types.v0.4.0.invokeByIdSync');
+const invokeGeneratedFieldsSync = Symbol.for('dev.rustra.types.v0.4.0.invokeGeneratedFieldsSync');
+const resolveGeneratedFieldsSync = Symbol.for('dev.rustra.types.v0.4.0.resolveGeneratedFieldsSync');
+const invokeGeneratedBytesSync = Symbol.for('dev.rustra.types.v0.4.0.invokeGeneratedBytesSync');
+const resolveGeneratedBytesSync = Symbol.for('dev.rustra.types.v0.4.0.resolveGeneratedBytesSync');
 
 const CODEC_TYPED = 1 << 0;
 const CODEC_POSITIONAL = 1 << 1;
@@ -367,9 +373,31 @@ type InternalEngineClient = EngineClient & {
   [resolveGeneratedBytesSync]?(commandId: number, command: string): GeneratedBytesRoute | undefined;
 };
 
-let _engine: InternalEngineClient | null = null;
-let _generatedFieldsRoutes: Array<CachedGeneratedFieldsRoute | null | undefined> = [];
-let _generatedBytesRoutes: Array<CachedGeneratedBytesRoute | null | undefined> = [];
+type RustraRuntimeState = {
+  engine: InternalEngineClient | null;
+  engineInitializer?: () => EngineClient | Promise<EngineClient>;
+  engineInitialization?: Promise<InternalEngineClient>;
+  engineGeneration: number;
+  generatedFieldsRoutes: Array<CachedGeneratedFieldsRoute | null | undefined>;
+  generatedBytesRoutes: Array<CachedGeneratedBytesRoute | null | undefined>;
+};
+
+const RUSTRA_RUNTIME_STATE = Symbol.for('dev.rustra.types.v0.4.0.runtimeState');
+const runtimeGlobal = globalThis as Record<PropertyKey, unknown>;
+const existingRuntime = runtimeGlobal[RUSTRA_RUNTIME_STATE] as RustraRuntimeState | undefined;
+const runtime: RustraRuntimeState = existingRuntime ?? {
+  engine: null,
+  engineGeneration: 0,
+  generatedFieldsRoutes: [],
+  generatedBytesRoutes: [],
+};
+if (!existingRuntime) runtimeGlobal[RUSTRA_RUNTIME_STATE] = runtime;
+
+function resetConfiguredRoutes(): void {
+  runtime.engineGeneration += 1;
+  runtime.generatedFieldsRoutes = [];
+  runtime.generatedBytesRoutes = [];
+}
 
 /**
  * 글로벌 엔진을 설정합니다. 앱 시작 시 한 번만 호출합니다.
@@ -395,9 +423,61 @@ let _generatedBytesRoutes: Array<CachedGeneratedBytesRoute | null | undefined> =
  * ```
  */
 export function configure(engine: EngineClient): void {
-  _engine = engine;
-  _generatedFieldsRoutes = [];
-  _generatedBytesRoutes = [];
+  runtime.engine = engine;
+  runtime.engineInitializer = undefined;
+  runtime.engineInitialization = undefined;
+  resetConfiguredRoutes();
+}
+
+/**
+ * Registers a single lazy engine bootstrap. Generated commands can then be the
+ * first Rustra API a user calls: concurrent first calls share one initializer,
+ * while initialized hot paths retain the same direct engine branch.
+ */
+export function configureLazy(initializer: () => EngineClient | Promise<EngineClient>): void {
+  runtime.engine = null;
+  runtime.engineInitializer = initializer;
+  runtime.engineInitialization = undefined;
+  resetConfiguredRoutes();
+}
+
+/** Resolves the configured engine, running a registered lazy bootstrap once. */
+export function ensureConfigured(): Promise<EngineClient> {
+  if (runtime.engine) return Promise.resolve(runtime.engine);
+  if (!runtime.engineInitializer) {
+    return Promise.reject(
+      new Error(
+        'Rustra not configured. Call configure(engine), or import the generated React Native entry that registers lazy setup.',
+      ),
+    );
+  }
+  if (!runtime.engineInitialization) {
+    const initializer = runtime.engineInitializer;
+    const generation = runtime.engineGeneration;
+    const initialization = Promise.resolve()
+      .then(initializer)
+      .then((engine) => {
+        // Explicit configure/configureLazy during an in-flight bootstrap wins;
+        // a late native installer must not replace the user's newer engine.
+        if (runtime.engineGeneration !== generation || runtime.engineInitializer !== initializer) {
+          return runtime.engine ?? ensureConfigured();
+        }
+        configure(engine);
+        return engine as InternalEngineClient;
+      })
+      .catch((error) => {
+        if (runtime.engineInitialization === initialization) {
+          runtime.engineInitialization = undefined;
+        }
+        throw error;
+      });
+    runtime.engineInitialization = initialization;
+  }
+  return runtime.engineInitialization;
+}
+
+function hasLazyInitializer(): boolean {
+  return runtime.engineInitializer !== undefined;
 }
 
 /**
@@ -441,13 +521,17 @@ export function resolveCommandId(commandFn: (...args: never[]) => unknown): stri
  * ```
  */
 export function invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
-  if (!_engine) {
+  const engine = runtime.engine;
+  if (!engine) {
+    if (hasLazyInitializer()) {
+      return ensureConfigured().then(() => invoke<T>(command, args, options));
+    }
     throw new Error('Rustra not configured. Call configure(engine) first.');
   }
   // 옵션을 엔진에 그대로 전달한다 (T1). 옵션을 이해하지 못하는 구형/서드파티
   // 엔진은 JS 호출 규약상 추가 인자를 무시한다 — 호출부 파괴 없이 확장된다.
   // timeoutMs 는 글로벌 레이스(invokeWithTimeout)로 여기서 소비한다.
-  return invokeWithTimeout(_engine, command, args, options);
+  return invokeWithTimeout(engine, command, args, options);
 }
 
 /**
@@ -463,14 +547,18 @@ export function invokeGenerated<T>(
   args?: unknown,
   options?: InvokeOptions,
 ): Promise<T> {
-  if (!_engine) {
+  const engine = runtime.engine;
+  if (!engine) {
+    if (hasLazyInitializer()) {
+      return ensureConfigured().then(() => invokeGenerated<T>(commandId, command, args, options));
+    }
     throw new Error('Rustra not configured. Call configure(engine) first.');
   }
   // createRkyvV2Engine의 동기 transport는 여기서 바로 한 번만 Promise로
   // 승격한다. 공개 EngineClient 계약과 옵션 의미는 그대로 두면서
   // invokeByIdWithTimeout → engine.invokeById → dispatchPromiseById가
   // 같은 Promise를 반복 정규화하던 hot-path 래퍼를 건너뛴다.
-  const syncInvoke = _engine[invokeByIdSync];
+  const syncInvoke = engine[invokeByIdSync];
   if (options === undefined && syncInvoke) {
     try {
       return Promise.resolve(syncInvoke<T>(commandId, command, args));
@@ -478,10 +566,10 @@ export function invokeGenerated<T>(
       return Promise.reject(error);
     }
   }
-  if (!_engine.invokeById) {
-    return invokeWithTimeout(_engine, command, args, options);
+  if (!engine.invokeById) {
+    return invokeWithTimeout(engine, command, args, options);
   }
-  return invokeByIdWithTimeout(_engine, commandId, command, args, options);
+  return invokeByIdWithTimeout(engine, commandId, command, args, options);
 }
 
 function resolveCachedGeneratedFieldsRoute(
@@ -492,7 +580,7 @@ function resolveCachedGeneratedFieldsRoute(
 ): CachedGeneratedFieldsRoute | null {
   const invoke = engine[resolveGeneratedFieldsSync]?.(commandId, command, fieldCount);
   const cached = invoke ? { command, fieldCount, invoke } : null;
-  _generatedFieldsRoutes[commandId] = cached;
+  runtime.generatedFieldsRoutes[commandId] = cached;
   return cached;
 }
 
@@ -503,7 +591,7 @@ function resolveCachedGeneratedBytesRoute(
 ): CachedGeneratedBytesRoute | null {
   const invoke = engine[resolveGeneratedBytesSync]?.(commandId, command);
   const cached = invoke ? { command, invoke } : null;
-  _generatedBytesRoutes[commandId] = cached;
+  runtime.generatedBytesRoutes[commandId] = cached;
   return cached;
 }
 
@@ -520,11 +608,19 @@ export function invokeGeneratedBytes<T>(
   value: Uint8Array | ArrayBuffer | number[],
   options?: InvokeOptions,
 ): Promise<T> {
-  if (!_engine) throw new Error('Rustra not configured. Call configure(engine) first.');
+  const engine = runtime.engine;
+  if (!engine) {
+    if (hasLazyInitializer()) {
+      return ensureConfigured().then(() =>
+        invokeGeneratedBytes<T>(commandId, command, args, value, options),
+      );
+    }
+    throw new Error('Rustra not configured. Call configure(engine) first.');
+  }
   if (options === undefined) {
-    let route = _generatedBytesRoutes[commandId];
+    let route = runtime.generatedBytesRoutes[commandId];
     if (route === undefined) {
-      route = resolveCachedGeneratedBytesRoute(_engine, commandId, command);
+      route = resolveCachedGeneratedBytesRoute(engine, commandId, command);
     }
     if (route && route.command === command) {
       try {
@@ -533,7 +629,7 @@ export function invokeGeneratedBytes<T>(
         return Promise.reject(error);
       }
     }
-    const syncInvoke = _engine[invokeGeneratedBytesSync];
+    const syncInvoke = engine[invokeGeneratedBytesSync];
     if (syncInvoke) {
       try {
         return Promise.resolve(syncInvoke<T>(commandId, command, args, value));
@@ -553,11 +649,19 @@ export function invokeGeneratedFields1<T>(
   field0: unknown,
   options?: InvokeOptions,
 ): Promise<T> {
-  if (!_engine) throw new Error('Rustra not configured. Call configure(engine) first.');
+  const engine = runtime.engine;
+  if (!engine) {
+    if (hasLazyInitializer()) {
+      return ensureConfigured().then(() =>
+        invokeGeneratedFields1<T>(commandId, command, args, field0, options),
+      );
+    }
+    throw new Error('Rustra not configured. Call configure(engine) first.');
+  }
   if (options === undefined) {
-    let route = _generatedFieldsRoutes[commandId];
+    let route = runtime.generatedFieldsRoutes[commandId];
     if (route === undefined) {
-      route = resolveCachedGeneratedFieldsRoute(_engine, commandId, command, 1);
+      route = resolveCachedGeneratedFieldsRoute(engine, commandId, command, 1);
     }
     if (route && route.command === command && route.fieldCount === 1) {
       try {
@@ -567,7 +671,7 @@ export function invokeGeneratedFields1<T>(
       }
     }
   }
-  const syncInvoke = _engine[invokeGeneratedFieldsSync];
+  const syncInvoke = engine[invokeGeneratedFieldsSync];
   if (options === undefined && syncInvoke) {
     try {
       return Promise.resolve(
@@ -589,11 +693,19 @@ export function invokeGeneratedFields2<T>(
   field1: unknown,
   options?: InvokeOptions,
 ): Promise<T> {
-  if (!_engine) throw new Error('Rustra not configured. Call configure(engine) first.');
+  const engine = runtime.engine;
+  if (!engine) {
+    if (hasLazyInitializer()) {
+      return ensureConfigured().then(() =>
+        invokeGeneratedFields2<T>(commandId, command, args, field0, field1, options),
+      );
+    }
+    throw new Error('Rustra not configured. Call configure(engine) first.');
+  }
   if (options === undefined) {
-    let route = _generatedFieldsRoutes[commandId];
+    let route = runtime.generatedFieldsRoutes[commandId];
     if (route === undefined) {
-      route = resolveCachedGeneratedFieldsRoute(_engine, commandId, command, 2);
+      route = resolveCachedGeneratedFieldsRoute(engine, commandId, command, 2);
     }
     if (route && route.command === command && route.fieldCount === 2) {
       try {
@@ -603,7 +715,7 @@ export function invokeGeneratedFields2<T>(
       }
     }
   }
-  const syncInvoke = _engine[invokeGeneratedFieldsSync];
+  const syncInvoke = engine[invokeGeneratedFieldsSync];
   if (options === undefined && syncInvoke) {
     try {
       return Promise.resolve(syncInvoke<T>(commandId, command, args, 2, field0, field1, undefined));
@@ -612,6 +724,60 @@ export function invokeGeneratedFields2<T>(
     }
   }
   return invokeGenerated<T>(commandId, command, args, options);
+}
+
+/** A generated command with a stable, minifier-safe command identifier. */
+export type GeneratedCommand<TInput, TOutput> = ((
+  input: TInput,
+  options?: InvokeOptions,
+) => Promise<TOutput>) & {
+  commandId: string;
+};
+
+/**
+ * Creates a generated two-field command whose no-options hot path resolves the
+ * native route once per configured engine. Timeout/cancellation options and
+ * engines without a raw/positional route retain the established helper path.
+ */
+export function createGeneratedFields2<TInput extends object, TOutput>(
+  commandId: number,
+  command: string,
+  field0Key: keyof TInput,
+  field1Key: keyof TInput,
+  functionName = command,
+): GeneratedCommand<TInput, TOutput> {
+  let routeGeneration = -1;
+  let route: GeneratedFieldsRoute | null = null;
+
+  const generated = ((input: TInput, options?: InvokeOptions): Promise<TOutput> => {
+    const engine = runtime.engine;
+    const field0 = input[field0Key];
+    const field1 = input[field1Key];
+    if (!engine) {
+      return invokeGeneratedFields2<TOutput>(commandId, command, input, field0, field1, options);
+    }
+    if (options !== undefined) {
+      return invokeGeneratedFields2<TOutput>(commandId, command, input, field0, field1, options);
+    }
+
+    if (routeGeneration !== runtime.engineGeneration) {
+      route = engine[resolveGeneratedFieldsSync]?.(commandId, command, 2) ?? null;
+      routeGeneration = runtime.engineGeneration;
+    }
+    if (route) {
+      try {
+        return Promise.resolve(route(input, field0, field1) as TOutput);
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }
+
+    return invokeGeneratedFields2<TOutput>(commandId, command, input, field0, field1);
+  }) as GeneratedCommand<TInput, TOutput>;
+
+  Object.defineProperty(generated, 'name', { configurable: true, value: functionName });
+  generated.commandId = command;
+  return generated;
 }
 
 /** Generated-client helper for a schema-proven three-field input. */
@@ -624,11 +790,19 @@ export function invokeGeneratedFields3<T>(
   field2: unknown,
   options?: InvokeOptions,
 ): Promise<T> {
-  if (!_engine) throw new Error('Rustra not configured. Call configure(engine) first.');
+  const engine = runtime.engine;
+  if (!engine) {
+    if (hasLazyInitializer()) {
+      return ensureConfigured().then(() =>
+        invokeGeneratedFields3<T>(commandId, command, args, field0, field1, field2, options),
+      );
+    }
+    throw new Error('Rustra not configured. Call configure(engine) first.');
+  }
   if (options === undefined) {
-    let route = _generatedFieldsRoutes[commandId];
+    let route = runtime.generatedFieldsRoutes[commandId];
     if (route === undefined) {
-      route = resolveCachedGeneratedFieldsRoute(_engine, commandId, command, 3);
+      route = resolveCachedGeneratedFieldsRoute(engine, commandId, command, 3);
     }
     if (route && route.command === command && route.fieldCount === 3) {
       try {
@@ -638,7 +812,7 @@ export function invokeGeneratedFields3<T>(
       }
     }
   }
-  const syncInvoke = _engine[invokeGeneratedFieldsSync];
+  const syncInvoke = engine[invokeGeneratedFieldsSync];
   if (options === undefined && syncInvoke) {
     try {
       return Promise.resolve(syncInvoke<T>(commandId, command, args, 3, field0, field1, field2));
@@ -754,10 +928,14 @@ function invokeByIdWithTimeout<T>(
  * ```
  */
 export function invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
-  if (!_engine) {
+  const engine = runtime.engine;
+  if (!engine) {
+    if (hasLazyInitializer()) {
+      return ensureConfigured().then(() => invokeBatch<T>(entries));
+    }
     throw new Error('Rustra not configured. Call configure(engine) first.');
   }
-  if (!_engine.invokeBatch) {
+  if (!engine.invokeBatch) {
     throw new Error('Configured engine does not support invokeBatch.');
   }
   // 배치 타임아웃 — 항목 timeoutMs 의 최솟값으로 배치 전체에 레이스를 건다.
@@ -768,14 +946,14 @@ export function invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
     return min === undefined || ms < min ? ms : min;
   }, undefined);
   if (batchTimeout === undefined) {
-    return _engine.invokeBatch<T>(entries);
+    return engine.invokeBatch<T>(entries);
   }
   const stripped = entries.map((entry) =>
     entry.options?.timeoutMs === undefined
       ? entry
       : { ...entry, options: { ...entry.options, timeoutMs: undefined } },
   );
-  const p = Promise.resolve(_engine.invokeBatch<T>(stripped));
+  const p = Promise.resolve(engine.invokeBatch<T>(stripped));
   // 지각 reject 흡수 — invokeWithTimeout 과 동일 계약.
   void p.catch(() => {});
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -1272,7 +1450,8 @@ export function createRkyvV2Engine(
       throw new RustraCommandError(
         'contract.unenforceable',
         'contractHash option was set but the native module does not expose ' +
-          'getContractHash(); cannot verify schema drift',
+          'getContractHash(); cannot verify schema drift. Check that the current generated codecs ' +
+          'and Rust native archive were both compiled into the installed app.',
       );
     }
     const hashBytes = new Uint8Array(native.getContractHash());
@@ -1283,7 +1462,8 @@ export function createRkyvV2Engine(
           'contract.mismatch',
           `contract hash mismatch: native="${nativeHash.slice(0, 16)}…" vs ` +
             `expected="${options.contractHash.slice(0, 16)}…" — generated client ` +
-            `and native binary are out of sync; regenerate the client`,
+            `and native binary are out of sync; regenerate the TypeScript and native codecs, ` +
+            `rebuild the Rust archive, then rebuild the native app`,
         );
       }
       options.onContractMismatch({ nativeHash, expectedHash: options.contractHash });
@@ -1541,21 +1721,35 @@ export function createRkyvV2Engine(
     }
 
     if (hasRawPath && (capabilities & CODEC_RAW) !== 0) {
-      const raw: GeneratedFieldsRoute =
-        fieldCount === 1
+      if (!fallback) {
+        return fieldCount === 1
           ? (_args, field0) => native.invokeTypedRaw!(commandId, field0)
           : fieldCount === 2
             ? (_args, field0, field1) => native.invokeTypedRaw!(commandId, field0, field1)
             : (_args, field0, field1, field2) =>
                 native.invokeTypedRaw!(commandId, field0, field1, field2);
-      if (!fallback) return raw;
+      }
       const rawFallback = fallback;
-      return (args, field0, field1, field2) => {
-        const result = raw(args, field0, field1, field2);
-        return typeof result === 'number' && Number.isNaN(result)
-          ? rawFallback(args, field0, field1, field2)
-          : result;
-      };
+      return fieldCount === 1
+        ? (args, field0) => {
+            const result = native.invokeTypedRaw!(commandId, field0);
+            return typeof result === 'number' && Number.isNaN(result)
+              ? rawFallback(args, field0)
+              : result;
+          }
+        : fieldCount === 2
+          ? (args, field0, field1) => {
+              const result = native.invokeTypedRaw!(commandId, field0, field1);
+              return typeof result === 'number' && Number.isNaN(result)
+                ? rawFallback(args, field0, field1)
+                : result;
+            }
+          : (args, field0, field1, field2) => {
+              const result = native.invokeTypedRaw!(commandId, field0, field1, field2);
+              return typeof result === 'number' && Number.isNaN(result)
+                ? rawFallback(args, field0, field1, field2)
+                : result;
+            };
     }
     return fallback;
   };

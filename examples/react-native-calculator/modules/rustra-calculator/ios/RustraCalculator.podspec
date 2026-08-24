@@ -16,8 +16,8 @@ Pod::Spec.new do |s|
   s.source_files = '**/*.{h,m,mm,swift,hpp,cpp}'
 
   s.dependency 'ExpoModulesCore'
-  # RustraJSI owns and force-loads the single Rust static archive. Depending on
+  # RustraBridge owns and force-loads the single Rust static archive. Depending on
   # that pod keeps the Swift FFI comparison on the exact same Rust build while
   # avoiding duplicate symbols from linking the archive twice.
-  s.dependency 'RustraJSI'
+  s.dependency 'RustraBridge'
 end
