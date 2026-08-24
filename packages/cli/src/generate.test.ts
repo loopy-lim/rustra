@@ -11,7 +11,17 @@ import {
   generatePositionalFacadeTs,
 } from './generate.js';
 import { collectDefinitions } from './codegen.js';
-import { parsePackageSchema, renderInitProjectFiles, templateVersions } from './index.js';
+import {
+  generateBunEntryTs,
+  generateNodeEntryTs,
+  generateReactNativeEntryTs,
+  generateTauriEntryTs,
+  parsePackageSchema,
+  renderReactNativeModule,
+  renderInitProjectFiles,
+  selectReactNativeCargoTarget,
+  templateVersions,
+} from './index.js';
 import type { PackageSchema } from './schema.js';
 
 const simpleSchema: PackageSchema = {
@@ -309,10 +319,9 @@ test('generateTypesTs maps oneOf with const tags to discriminated unions', () =>
 
 test('generateCommandsTs produces command function', () => {
   const commands = generateCommandsTs(simpleSchema);
-  assert.ok(commands.includes('export function add('));
-  assert.ok(commands.includes("invokeGeneratedFields2<AddOutput>(1, 'add', input"));
-  assert.ok(commands.includes('input["a"], input["b"], options'));
-  assert.ok(commands.includes('invokeGeneratedFields2'));
+  assert.ok(commands.includes('export const add = createGeneratedFields2<AddInput, AddOutput>'));
+  assert.ok(commands.includes('(1, \'add\', "a", "b", \'add\')'));
+  assert.ok(commands.includes('createGeneratedFields2'));
   assert.ok(commands.includes("import type { InvokeOptions } from '@rustra/types'"));
 });
 
@@ -369,6 +378,32 @@ test('generateTypesTs emits JSDoc comments from schema description', () => {
   const types = generateTypesTs(schema);
   assert.ok(types.includes('/**\n * Input for getting item\n */'));
   assert.ok(types.includes('/** Unique identifier */'));
+});
+
+test('generated TypeScript has clean JSDoc blank lines and one final newline', () => {
+  const schema: PackageSchema = {
+    ...simpleSchema,
+    commands: [
+      {
+        ...simpleSchema.commands[0]!,
+        inputSchema: {
+          ...simpleSchema.commands[0]!.inputSchema,
+          description: 'Adds two values.\n\nUsed by every host.',
+        },
+      },
+    ],
+  };
+
+  for (const generated of [
+    generateTypesTs(schema),
+    generateCommandsTs(schema),
+    generateRkyvCodecsTs(schema),
+  ]) {
+    assert.doesNotMatch(generated, /[ \t]+\n/u);
+    assert.ok(generated.endsWith('\n'));
+    assert.ok(!generated.endsWith('\n\n'));
+  }
+  assert.match(generateTypesTs(schema), /\* Adds two values\.\n \*\n \* Used by every host\./u);
 });
 
 test('generateContractTs produces hash constant', () => {
@@ -811,9 +846,10 @@ test('single-entry allOf newtype handles stay on the postcard fast path', () => 
         outputType: 'SendChannelOutput',
         inputSchema: {
           type: 'object',
-          required: ['channel'],
+          required: ['channel', 'label'],
           properties: {
             channel: { allOf: [{ $ref: '#/definitions/ChannelHandle' }] },
+            label: { type: 'string' },
           },
         },
         outputSchema: {
@@ -830,8 +866,14 @@ test('single-entry allOf newtype handles stay on the postcard fast path', () => 
 
   const registry = generateRkyvRegistryTs(schema);
   const codecs = generateRkyvCodecsTs(schema);
+  const commands = generateCommandsTs(schema);
   assert.match(registry, /\['sendChannel', sendChannelCodec\]/);
   assert.match(codecs, /_pcEncodeVarint\(args\.channel\)/);
+  assert.ok(
+    commands.includes(
+      'createGeneratedFields2<SendChannelInput, SendChannelOutput>(1, \'sendChannel\', "channel", "label", \'sendChannel\')',
+    ),
+  );
 });
 
 test('generateRkyvCodecsCpp excludes unsupported commands from has_static_codec', () => {
@@ -1160,21 +1202,21 @@ test('generated code escapes hostile enum/const string literals', () => {
   assert.ok(types.includes("'tag\\', evil() //'"), 'const value must stay inside escaped literal');
 });
 
-test('templateVersions keeps CLI, types, and crates versions independent', () => {
-  // @rustra/types는 CLI와 독립 버전이다. CLI 버전에서 추측하면 존재하지 않는
-  // 패키지를 scaffold에 기록할 수 있으므로 실제 dependency 범위를 보존한다.
-  assert.deepEqual(templateVersions('0.3.0', '^0.3.1', '0.3'), {
-    cargoMinor: '0.3',
-    npmCliCaret: '^0.3.0',
-    npmTypesRange: '^0.3.1',
+test('templateVersions requires one synchronized npm and Cargo release line', () => {
+  assert.deepEqual(templateVersions('0.4.0', '^0.4.0', '0.4'), {
+    cargoMinor: '0.4',
+    npmCliCaret: '^0.4.0',
+    npmTypesRange: '^0.4.0',
   });
+  assert.throws(() => templateVersions('0.4.0', '^0.3.1', '0.4'), /release versions must match/);
+  assert.throws(() => templateVersions('0.4.0', '^0.4.0', '0.3'), /release versions must match/);
 });
 
 test('init scaffold has a real shared package and executable codegen bin', () => {
-  const files = renderInitProjectFiles(templateVersions('0.3.0', '^0.3.1', '0.3'));
-  assert.match(files.cargoToml, /rustra = "0\.3"/);
-  assert.match(files.packageJson, /"@rustra\/cli": "\^0\.3\.0"/);
-  assert.match(files.packageJson, /"@rustra\/types": "\^0\.3\.1"/);
+  const files = renderInitProjectFiles(templateVersions('0.4.0', '^0.4.0', '0.4'));
+  assert.match(files.cargoToml, /rustra = "0\.4"/);
+  assert.match(files.packageJson, /"@rustra\/cli": "\^0\.4\.0"/);
+  assert.match(files.packageJson, /"@rustra\/types": "\^0\.4\.0"/);
   assert.match(files.packageJson, /"packageManager": "bun@1\.4\.0"/);
   assert.match(files.libRs, /pub fn package\(\) -> Package/);
   assert.match(files.generateRs, /rustra_app::package\(\)\.generate_typescript\(\)/);
@@ -1183,6 +1225,136 @@ test('init scaffold has a real shared package and executable codegen bin', () =>
     schema: './generated/schema.json',
     output: './src/generated',
   });
+});
+
+test('React Native entry owns lazy native setup and re-exports generated commands', () => {
+  const source = generateReactNativeEntryTs();
+  assert.match(source, /createRustraBootstrap/);
+  assert.match(source, /from "@rustra\/generated-react-native"/);
+  assert.match(source, /export \* from '\.\/commands\.js'/);
+  assert.match(source, /contractHash: GENERATED_CONTRACT_HASH/);
+  assert.match(source, /schemaVersion: SCHEMA_VERSION/);
+  assert.match(source, /export \{ subscribeEvent \} from '@rustra\/react-native'/);
+});
+
+test('desktop host entries own lazy setup and preserve explicit escape hatches', () => {
+  const node = generateNodeEntryTs({
+    targetDirectoryUrl: '../../target/',
+    targetName: 'my-app',
+  });
+  assert.match(node, /createNodeBootstrap/);
+  assert.match(node, /release\/\$\{executable\}/);
+  assert.match(node, /args: \["invoke"\]/);
+  assert.match(node, /RUSTRA_NODE_BINARY|commandCandidates/);
+
+  const bun = generateBunEntryTs({
+    targetDirectoryUrl: '../../target/',
+    targetName: 'my_app',
+  });
+  assert.match(bun, /createBunBootstrap/);
+  assert.match(bun, /rkyvV2Codecs: rkyvV2Registry/);
+  assert.match(bun, /GENERATED_CONTRACT_HASH/);
+
+  const tauri = generateTauriEntryTs();
+  assert.match(tauri, /createTauriBootstrap\(\)/);
+  assert.match(tauri, /subscribeTauriEvent as subscribeEvent/);
+});
+
+test('React Native Cargo target inference uses the manifest package and staticlib name', () => {
+  const selected = selectReactNativeCargoTarget(
+    {
+      packages: [
+        {
+          name: 'my-rust-app',
+          manifest_path: '/app/native/Cargo.toml',
+          targets: [{ name: 'custom_mobile_lib', crate_types: ['rlib', 'staticlib'] }],
+        },
+        {
+          name: 'other',
+          manifest_path: '/app/other/Cargo.toml',
+          targets: [{ name: 'other', crate_types: ['lib'] }],
+        },
+      ],
+    },
+    '/app/native/Cargo.toml',
+  );
+  assert.deepEqual(selected, {
+    rustPackage: 'my-rust-app',
+    rustLibrary: 'custom_mobile_lib',
+  });
+});
+
+test('React Native Cargo target inference fails with an actionable ambiguous-workspace hint', () => {
+  assert.throws(
+    () =>
+      selectReactNativeCargoTarget(
+        {
+          packages: ['one', 'two'].map((name) => ({
+            name,
+            manifest_path: `/workspace/${name}/Cargo.toml`,
+            targets: [{ name, crate_types: ['staticlib'] }],
+          })),
+        },
+        '/workspace/Cargo.toml',
+      ),
+    /Point rustManifest at the app crate, or set reactNative\.rustPackage/,
+  );
+});
+
+test('React Native Cargo target inference never substitutes a different requested package', () => {
+  assert.throws(
+    () =>
+      selectReactNativeCargoTarget(
+        {
+          packages: [
+            {
+              name: 'actual-app',
+              manifest_path: '/app/Cargo.toml',
+              targets: [{ name: 'actual_app', crate_types: ['staticlib'] }],
+            },
+          ],
+        },
+        '/workspace/Cargo.toml',
+        'missing-app',
+      ),
+    /Cargo package missing-app was not found uniquely/,
+  );
+});
+
+test('React Native scaffold is Expo-independent and collision-resistant', () => {
+  const files = renderReactNativeModule({
+    appRoot: '/app',
+    moduleDir: '/app/modules/rustra-bridge',
+    cppOutputPath: '/app/modules/rustra-bridge/generated',
+    rustManifestPath: '/workspace/Cargo.toml',
+    rustPackage: 'my-rust-app',
+    rustLibrary: 'my_rust_app',
+    adapterVersion: '0.3.0',
+  });
+  assert.equal(JSON.parse(files['package.json']!).name, '@rustra/generated-react-native');
+  assert.match(files['react-native.config.js']!, /dev\.rustra\.bridge\.RustraBridgePackage/);
+  assert.match(files['src/index.ts']!, /NativeModules\.RustraBridge/);
+  assert.ok(!Object.keys(files).some((name) => name.includes('expo')));
+  assert.ok(!Object.values(files).some((content) => content.includes('expo-modules-core')));
+  assert.match(files['RustraBridge.podspec']!, /RustraBridge/);
+  assert.match(files['android/CMakeLists.txt']!, /rustra_bridge/);
+});
+
+test('React Native scaffold keeps calculator-only ABI behind the fixture flag', () => {
+  const base = {
+    appRoot: '/app',
+    moduleDir: '/app/modules/rustra-bridge',
+    cppOutputPath: '/app/modules/rustra-bridge/generated',
+    rustManifestPath: '/workspace/Cargo.toml',
+    rustPackage: 'calculator',
+    rustLibrary: 'calculator',
+    adapterVersion: '0.3.0',
+  };
+  const production = renderReactNativeModule(base);
+  const fixture = renderReactNativeModule({ ...base, legacyBenchmarks: true });
+  assert.doesNotMatch(production['RustraBridge.podspec']!, /RUSTRA_ENABLE_LEGACY_BENCHMARKS/);
+  assert.match(fixture['RustraBridge.podspec']!, /RUSTRA_ENABLE_LEGACY_BENCHMARKS/);
+  assert.match(fixture['android/build.gradle']!, /RUSTRA_LEGACY_BENCHMARKS=ON/);
 });
 
 test('generateEventsTs emits payload types, name union, and subscribe helper', async () => {

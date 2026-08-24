@@ -13,7 +13,7 @@ That contract is the stable bridge for:
 - Node: an adapter calls local Rust through a process, N-API, or another Node transport.
 - Bun: an adapter calls local Rust through Bun FFI, subprocess, or another Bun transport.
 - Tauri: an adapter maps `EngineClient.invoke` to `window.__TAURI__.core.invoke` or a plugin invoke.
-- React Native: an adapter maps `EngineClient.invoke` to an Expo Module, Turbo/Nitro module, or future native transport.
+- React Native: the generated entry maps `EngineClient.invoke` to the autolinked Rustra JSI module.
 
 The generated command helpers must not import or mention host-specific APIs such as `node:`, `bun:`, `@tauri-apps`, `react-native`, or `expo`.
 
@@ -28,7 +28,7 @@ bun run test:compat
 
 - Adapter contract checks: generated commands call injected Tauri and React Native transports without importing host packages.
 - Runtime checks: Node and Bun execute the Rust calculator binary, and the Tauri example builds a real app then launches it long enough for WebView JavaScript to call a Rust command through `window.__TAURI__.core.invoke`. The Tauri command handler calls the shared `rustra` calculator package through `Package::invoke`, not a separate hand-written calculator path.
-- React Native app checks: the RN fixture typechecks against the same generated command helper and `@rustra/react-native` adapter. The native module (`rustra-jsi`) is implemented and verified — real-device JSI invoke measured at ~0.95µs and the Release build is covered in CI.
+- React Native checks: the Expo fixture builds the generated module on iOS and Android, while an Expo-free RN 0.81 fixture typechecks and verifies both autolinking platforms. Device measurements are kept separate from build/link proof.
 
 React Native passed its runtime gate: the native JSI module exists, real-device invocations were verified, and CI builds the Release app. See `docs/benchmarks.md` for the measured fast-path numbers.
 
@@ -36,12 +36,12 @@ React Native passed its runtime gate: the native JSI module exists, real-device 
 
 Each adapter package has a deliberately small stable range.
 
-| Package                | Stable range                                                             | Out of scope for this layer                                          |
-| ---------------------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| `@rustra/node`         | Convert a Node-side async transport into `EngineClient`                  | Choosing N-API vs subprocess vs HTTP                                 |
-| `@rustra/bun`          | Convert a Bun-side async transport into `EngineClient`                   | Choosing Bun FFI vs subprocess vs HTTP                               |
-| `@rustra/tauri`        | Convert a Tauri `invoke(command, args)` function into `EngineClient`     | Tauri plugin registration, ACL/capability generation                 |
-| `@rustra/react-native` | Convert a native module with `invoke(command, args)` into `EngineClient` | Expo Module, TurboModule, Nitro, Swift/Kotlin implementation details |
+| Package                | Stable range                                                         | Out of scope for this layer                                |
+| ---------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `@rustra/node`         | Convert a Node-side async transport into `EngineClient`              | Choosing N-API vs subprocess vs HTTP                       |
+| `@rustra/bun`          | Convert a Bun-side async transport into `EngineClient`               | Choosing Bun FFI vs subprocess vs HTTP                     |
+| `@rustra/tauri`        | Convert a Tauri `invoke(command, args)` function into `EngineClient` | Tauri plugin registration, ACL/capability generation       |
+| `@rustra/react-native` | Generated JSI bootstrap and low-level `EngineClient` adapters        | App-specific command definitions and benchmark comparators |
 
 The invariant is the same for every host:
 
@@ -62,9 +62,10 @@ Host examples must use the same command surface:
 - The only host-specific JavaScript difference is which adapter creates the `EngineClient`.
 - The only host-specific native/runtime difference is how that adapter transport reaches Rust.
 
-For the calculator example, the shared path is `addNumbers({ a, b })` (with the engine installed globally via `configure(engine)`). Node, Bun, and Tauri must not keep separate app-local calculator logic that bypasses the generated helper or `rustra` package dispatch.
+For the calculator example, the shared path is `addNumbers({ a, b })`. The generated platform entry owns lazy engine installation; manual `configure(engine)` is an explicit override only. Node, Bun, and Tauri must not keep separate app-local calculator logic that bypasses the generated helper or `rustra` package dispatch.
 
-React Native follows the same JavaScript path in `examples/react-native-calculator/App.tsx`, dispatching through the native `rustra-jsi` module (C++ JSI bridge + generated postcard codecs).
+React Native follows the same JavaScript path in both fixtures, dispatching through
+`@rustra/generated-react-native` (shared C++ JSI bridge + generated postcard codecs).
 
 ## Runtime Acceptance Gates
 

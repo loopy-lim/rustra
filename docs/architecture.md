@@ -49,17 +49,16 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
  │          │                            │                             │
  │  ┌───────┴────────────────────────────┴───────────────────────┐     │
  │  │                    host adapter                             │     │
- │  │  createNodeEngine(transport)                                │     │
- │  │  createBunEngine(transport)                                 │     │
- │  │  createTauriEngine({ invoke })                              │     │
- │  │  createReactNativeEngine(nativeModule)                      │     │
- │  │  createFastEngine(native, {rkyvV2Codecs})   (React Native)  │     │
+ │  │  generated node.ts → lazy Cargo binary                      │     │
+ │  │  generated bun.ts → lazy cdylib + stable FFI                │     │
+ │  │  generated tauri.ts → lazy global IPC                       │     │
+ │  │  generated react-native.ts → lazy JSI + fast engine         │     │
  │  └──────────────────────────────┬─────────────────────────────┘     │
  │                                 │                                   │
  │                                 ▼                                   │
  │  ┌──────────────────────────────────────────────────────────────┐   │
  │  │  transport (앱 레벨에서 결정)                                 │   │
- │  │  subprocess stdio / C FFI / napi / Tauri IPC / Expo native   │   │
+ │  │  subprocess stdio / C FFI / napi / Tauri IPC / RN JSI        │   │
  │  └──────────────────────────────────────────────────────────────┘   │
  └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -79,21 +78,22 @@ export type EngineClient = {
 
 각 host adapter는 transport를 주입받아 이 인터페이스를 구현한 객체를 반환한다:
 
-| adapter 패키지          | 팩토리 함수                             | 반환 타입                 | 파일 경로                            |
-| ----------------------- | --------------------------------------- | ------------------------- | ------------------------------------ |
-| `packages/node`         | `createNodeEngine(transport)`           | `NodeEngineClient`        | `packages/node/src/index.ts`         |
-| `packages/bun`          | `createBunEngine(transport)`            | `BunEngineClient`         | `packages/bun/src/index.ts`          |
-| `packages/tauri`        | `createTauriEngine({ invoke })`         | `TauriEngineClient`       | `packages/tauri/src/index.ts`        |
-| `packages/react-native` | `createReactNativeEngine(nativeModule)` | `ReactNativeEngineClient` | `packages/react-native/src/index.ts` |
-| `packages/react-native` | `createFastEngine(native, opts)`        | `EngineClient`            | `packages/react-native/src/index.ts` |
+| adapter 패키지          | 팩토리 함수                              | 반환 타입           | 파일 경로                            |
+| ----------------------- | ---------------------------------------- | ------------------- | ------------------------------------ |
+| `packages/node`         | `createNodeBootstrap(options)`           | lazy `EngineClient` | `packages/node/src/index.ts`         |
+| `packages/bun`          | `createBunBootstrap(options)`            | lazy `EngineClient` | `packages/bun/src/index.ts`          |
+| `packages/tauri`        | `createTauriBootstrap()`                 | lazy `EngineClient` | `packages/tauri/src/index.ts`        |
+| `packages/react-native` | generated bootstrap + `createFastEngine` | `EngineClient`      | `packages/react-native/src/index.ts` |
+| `packages/react-native` | `createReactNativeEngine(transport)`     | `EngineClient`      | `packages/react-native/src/index.ts` |
 
 모든 반환 타입(`NodeEngineClient`, `BunEngineClient`, `TauriEngineClient`, `ReactNativeEngineClient`)은 구조적으로 `EngineClient`와 동일한 `invoke<T>` 메서드를 제공한다.
 
 ### command helper 사용 예시
 
 `commands.ts`에 생성된 각 command helper는 엔진을 직접 받지 않는다 —
-`@rustra/types`의 글로벌 `invoke()`를 호출하며, 이것이 `configure(engine)`로
-설치한 엔진을 사용한다 (Tauri-like 글로벌 invoke 패턴):
+`@rustra/types`의 글로벌 `invoke()`를 호출한다. 기본 플랫폼 진입점은
+`configureLazy()`를 등록하고 첫 호출이 엔진을 한 번만 설치한다. 수동
+`configure(engine)`는 명시적 override다.
 
 ```ts
 // examples/calculator/generated/commands.ts (자동 생성됨)
@@ -168,11 +168,11 @@ rustra::build!("my.pkg", add_numbers, multiply)
 
 ```
 packages/
-├── node/           → createNodeEngine(transport: NodeInvokeTransport): NodeEngineClient
-├── bun/            → createBunEngine(transport: BunInvokeTransport): BunEngineClient
-├── tauri/          → createTauriEngine({ invoke: TauriInvoke }): TauriEngineClient
-└── react-native/   → createReactNativeEngine(nativeModule: ReactNativeRustraModule): ReactNativeEngineClient
-└── react-native/   → createFastEngine(native: RkyvV2SchemaNative, {rkyvV2Codecs}): EngineClient (rkyv V2 fast-path)
+├── node/           → generated node.ts + createNodeBootstrap
+├── bun/            → generated bun.ts + createBunBootstrap
+├── tauri/          → generated tauri.ts + createTauriBootstrap
+└── react-native/   → generated react-native.ts + createRustraBootstrap
+                     createReactNativeEngine(transport): EngineClient (low-level JSON path)
 ```
 
 각 adapter 패키지는 서로를 import하지 않으며, host-specific 패키지를 직접 import하지도 않는다. 호출자가 transport 객체를 생성하여 주입하는 방식이다.
@@ -191,7 +191,7 @@ examples/
 │       └── schema.json         # JSON Schema 표현
 │
 ├── tauri-calculator/           # Tauri 런타임 예시
-│   ├── src/app.ts              # createTauriEngine → addNumbers 사용
+│   ├── src/app.ts              # generated/tauri → addNumbers 사용
 │   └── src-tauri/src/main.rs   # tauri_support::register()로 Package 등록
 │
 └── react-native-calculator/    # Expo React Native 예시
@@ -298,15 +298,14 @@ pub fn invoke_json(&self, name: &str, params: Value) -> Result<Value>
  │  - Node:      transport.invoke(command, args)            │
  │  - Bun:       transport.invoke(command, args)            │
  │  - Tauri:     invoke('rustra_dispatch', {command, args}) │
- │  - RN:        nativeModule.invoke(command, args)         │
- │  - RN fast:   native.invokeRkyvV2(buf) (rkyv V2 fast-path)│
+ │  - RN:        generated bootstrap → native.invokeRkyvV2(buf) │
  │          │                                               │
  │          ▼                                               │
  │  transport (앱 레벨에서 생성/주입)                        │
  │  - subprocess stdio  (examples/calculator/src/main.rs)   │
  │  - C FFI            (examples/calculator/src/lib.rs)     │
  │  - Tauri IPC        (rustra_support::rustra_dispatch)    │
- │  - Expo native      (react-native-calculator/modules/)   │
+ │  - RN JSI native    (@rustra/generated-react-native)     │
 └──────────────────────────────────────────────────────────┘
 ```
 

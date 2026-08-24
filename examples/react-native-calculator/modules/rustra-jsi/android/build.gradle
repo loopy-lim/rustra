@@ -2,10 +2,7 @@ import javax.inject.Inject
 import org.gradle.process.ExecOperations
 
 buildscript {
-  repositories {
-    google()
-    mavenCentral()
-  }
+  repositories { google(); mavenCentral() }
   dependencies {
     classpath "com.android.tools.build:gradle:8.7.2"
     classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20"
@@ -15,90 +12,60 @@ buildscript {
 apply plugin: "com.android.library"
 apply plugin: "kotlin-android"
 
-def getExtOrDefault(name, defaultValue) {
-  return rootProject.ext.has(name) ? rootProject.ext.get(name) : defaultValue
-}
+def extOr = { name, fallback -> rootProject.ext.has(name) ? rootProject.ext.get(name) : fallback }
+def adapterRoot = file("../../../node_modules/@rustra/react-native/native").canonicalFile
+def generatedRoot = file("../generated").canonicalFile
+def rustManifest = file("../../../../calculator/Cargo.toml").canonicalFile
+def rustLibsDir = file("src/main/cpp/libs")
 
 abstract class RustraExecOperations {
-  @Inject
-  abstract ExecOperations getExecOperations()
+  @Inject abstract ExecOperations getExecOperations()
 }
-
 def rustraExec = objects.newInstance(RustraExecOperations)
 
 android {
-  namespace = "com.rustrajsi"
-  compileSdk = getExtOrDefault("compileSdkVersion", 36)
-  // Expo/CI가 설치한 NDK와 AGP library 기본값이 어긋나지 않게 루트 버전을
-  // 명시적으로 상속한다. 선언이 없으면 AGP 8.7이 27.0을 별도 요구한다.
-  ndkVersion = getExtOrDefault("ndkVersion", "27.1.12297006")
-
+  namespace = "dev.rustra.bridge"
+  compileSdk = extOr("compileSdkVersion", 36)
+  ndkVersion = extOr("ndkVersion", "27.1.12297006")
   defaultConfig {
-    minSdk = getExtOrDefault("minSdkVersion", 24)
-    targetSdk = getExtOrDefault("targetSdkVersion", 36)
-
-    externalNativeBuild {
-      cmake {
-        cppFlags "-std=c++20"
-        arguments "-DANDROID_STL=c++_shared"
-      }
+    minSdk = extOr("minSdkVersion", 24)
+    targetSdk = extOr("targetSdkVersion", 36)
+    externalNativeBuild.cmake {
+      cppFlags "-std=c++20"
+      arguments "-DANDROID_STL=c++_shared",
+        "-DRUSTRA_ADAPTER_ROOT=$adapterRoot",
+        "-DRUSTRA_GENERATED_ROOT=$generatedRoot",
+        "-DRUSTRA_LIB_NAME=rustra_calculator_example",
+        "-DRUSTRA_LEGACY_BENCHMARKS=ON"
     }
-    ndk {
-      abiFilters "x86_64", "arm64-v8a"
-    }
+    ndk { abiFilters "x86_64", "arm64-v8a" }
   }
-
-  externalNativeBuild {
-    cmake {
-      path = file("CMakeLists.txt")
-    }
-  }
-
-  buildFeatures {
-    prefab = true
-  }
-
-  packagingOptions {
-    excludes = ["**/libc++_shared.so"]
-  }
-
-  sourceSets {
-    main {
-      java.srcDirs = ["src/main/java"]
-    }
-  }
+  externalNativeBuild.cmake.path = file("CMakeLists.txt")
+  buildFeatures.prefab = true
+  packagingOptions.excludes = ["**/libc++_shared.so"]
+  sourceSets.main.java.srcDirs = ["src/main/java"]
 }
 
-// Rust 정적 라이브러리를 Gradle 빌드에 연결한다. iOS podspec의 prepare_command 와
-// 대칭 — Android 는 이 훅이 없으면 libs/<ABI>/ 아래 .a 가 미리 있어야 해서 클린
-// 체크아웃에서 CMake 구성이 실패한다. inputs/outputs 캐싱으로 Rust 소스가 바뀔 때만
-// cargo 가 재실행된다 (profile 은 buildType 에 따라 debug/release).
-def rustLibsDir = file("src/main/cpp/libs")
-def rustSourceRoot = file("../../../../..") // 저장소 루트 (examples/calculator Rust crate)
 tasks.register("buildRustAndroid") {
-  inputs.dir("${rustSourceRoot}/examples/calculator/src")
-  inputs.file("${rustSourceRoot}/examples/calculator/Cargo.toml")
-  inputs.file("${rustSourceRoot}/Cargo.lock")
-  inputs.property("profile", gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") } ? "release" : "dev")
+  inputs.files(fileTree(rustManifest.parentFile) {
+    include "**/*.rs", "**/Cargo.toml", "Cargo.lock"
+    exclude "target/**", "**/node_modules/**", "**/build/**"
+  })
+  inputs.property("profile", gradle.startParameter.taskNames.any {
+    it.toLowerCase().contains("release")
+  } ? "release" : "debug")
   outputs.dir(rustLibsDir)
   outputs.cacheIf { true }
   doLast {
-    def isRelease = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
-    def profile = isRelease ? "release" : "dev"
+    def release = gradle.startParameter.taskNames.any { it.toLowerCase().contains("release") }
     rustraExec.execOperations.exec {
       workingDir projectDir
-      environment "RUSTRA_PROFILE", profile == "dev" ? "debug" : "release"
+      environment "RUSTRA_PROFILE", release ? "release" : "debug"
       commandLine "sh", "build-rust-android.sh"
     }
   }
 }
 preBuild.dependsOn "buildRustAndroid"
 
-repositories {
-  google()
-  mavenCentral()
-}
-
-dependencies {
-  implementation "com.facebook.react:react-android"
-}
+repositories { google(); mavenCentral() }
+dependencies { implementation "com.facebook.react:react-android" }

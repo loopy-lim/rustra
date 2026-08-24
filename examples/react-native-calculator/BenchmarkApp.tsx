@@ -24,7 +24,7 @@ import {
   resourceClose,
 } from '../calculator/generated/commands';
 // ── Benchmark internals (not part of user-facing API) ───────
-import { installRustraJSI, getRustraNative } from 'rustra-jsi';
+import { installRustraJSI, getRustraNative } from '@rustra/generated-react-native';
 import RustraCalculator, { invokeCommand as invokeFfiCommand } from 'rustra-calculator';
 import { createBincodeEngine, bincodeRegistry } from './src/adapters/bincode-adapter';
 import { createJsonEngine } from './src/adapters/json-adapter';
@@ -33,7 +33,15 @@ import { createPostcardEngine, postcardRegistry } from './src/adapters/postcard-
 import { createRkyvEngine } from './src/adapters/rkyv-adapter';
 import { createHybridEngine, hybridRegistry } from './src/adapters/hybrid-adapter';
 import { createRkyvV2Engine, rkyvV2Registry } from './src/adapters/rkyv-v2-adapter';
+import {
+  analyzeRouteBottlenecks,
+  pairedRatioConfidence95,
+  summarize,
+  type BenchResult,
+  type RouteDiagnostic,
+} from './src/benchmark-stats';
 import { decodeUtf8, encodeUtf8, exactArrayBuffer } from './src/utf8';
+import { RUSTRA_BUILD_FINGERPRINT } from './src/build-fingerprint';
 // ── End benchmark internals ─────────────────────────────────
 
 // ── Helpers ──────────────────────────────────────────────
@@ -47,45 +55,6 @@ function formatNs(ns: number): string {
   if (ns >= 1_000_000) return `${(ns / 1_000_000).toFixed(2)} ms`;
   if (ns >= 1_000) return `${(ns / 1_000).toFixed(1)} µs`;
   return `${ns.toFixed(0)} ns`;
-}
-
-type BenchResult = {
-  label: string;
-  avg: number;
-  stddev: number;
-  min: number;
-  p50: number;
-  p95: number;
-  p99: number;
-  max: number;
-  ops: number;
-  batchMeans: number[];
-};
-
-function summarize(label: string, samples: number[]): BenchResult {
-  const times = [...samples].sort((a, b) => a - b);
-  const avg = times.reduce((sum, time) => sum + time, 0) / times.length;
-  const variance = times.reduce((sum, time) => sum + (time - avg) ** 2, 0) / times.length;
-  const at = (percentile: number) =>
-    times[Math.min(Math.floor(times.length * percentile), times.length - 1)];
-  const batchSize = Math.max(1, Math.ceil(samples.length / 100));
-  const batchMeans: number[] = [];
-  for (let start = 0; start < samples.length; start += batchSize) {
-    const batch = samples.slice(start, start + batchSize);
-    batchMeans.push(batch.reduce((sum, time) => sum + time, 0) / batch.length);
-  }
-  return {
-    label,
-    avg,
-    stddev: Math.sqrt(variance),
-    min: times[0],
-    p50: at(0.5),
-    p95: at(0.95),
-    p99: at(0.99),
-    max: times[times.length - 1],
-    ops: 1_000_000_000 / avg,
-    batchMeans,
-  };
 }
 
 function measureSync(label: string, fn: () => void, iterations = 100_000): BenchResult {
@@ -131,7 +100,10 @@ async function measureInterleaved(
   cases: InterleavedCase[],
   iterations = 10_000,
   warmupIterations = 500,
-): Promise<Record<string, BenchResult>> {
+): Promise<{
+  results: Record<string, BenchResult>;
+  samples: Record<string, number[]>;
+}> {
   const samples = new Map(cases.map((entry) => [entry.key, [] as number[]]));
   const runRound = async (round: number, record: boolean) => {
     const startIndex = round % cases.length;
@@ -146,9 +118,12 @@ async function measureInterleaved(
   for (let round = 0; round < warmupIterations; round += 1) await runRound(round, false);
   for (let round = 0; round < iterations; round += 1) await runRound(round, true);
 
-  return Object.fromEntries(
-    cases.map((entry) => [entry.key, summarize(entry.label, samples.get(entry.key)!)]),
-  );
+  return {
+    results: Object.fromEntries(
+      cases.map((entry) => [entry.key, summarize(entry.label, samples.get(entry.key)!)]),
+    ),
+    samples: Object.fromEntries(cases.map((entry) => [entry.key, samples.get(entry.key)!])),
+  };
 }
 
 // ── Benchmark Runner ─────────────────────────────────────
@@ -595,7 +570,7 @@ async function runBenchmarks(): Promise<string[]> {
     iterations = 10_000,
     warmupIterations = 500,
   ) => {
-    return measureInterleaved(
+    const measurement = await measureInterleaved(
       [
         { key: 'nitro', label: `nitro ${operation}`, run: nitro },
         { key: 'rustra', label: `rustra ${operation}`, run: rustra },
@@ -603,6 +578,11 @@ async function runBenchmarks(): Promise<string[]> {
       iterations,
       warmupIterations,
     );
+    return {
+      nitro: measurement.results.nitro,
+      rustra: measurement.results.rustra,
+      confidence95: pairedRatioConfidence95(measurement.samples.rustra, measurement.samples.nitro),
+    };
   };
 
   configure(rkyvV2Engine);
@@ -632,15 +612,21 @@ async function runBenchmarks(): Promise<string[]> {
   // environment. Keep an independent, still-interleaved Nitro/FFI lane so
   // both comparisons remain equivalent without cross-contaminating the fast
   // bridge gate.
-  const measureFfiEquivalent = (
+  const measureFfiEquivalent = async (
     operation: string,
     nitro: () => Promise<unknown>,
     ffi: () => Promise<unknown>,
-  ) =>
-    measureInterleaved([
+  ) => {
+    const measurement = await measureInterleaved([
       { key: 'nitro', label: `nitro ${operation} (FFI lane)`, run: nitro },
       { key: 'ffi', label: `ffi ${operation}`, run: ffi },
     ]);
+    return {
+      nitro: measurement.results.nitro,
+      ffi: measurement.results.ffi,
+      confidence95: pairedRatioConfidence95(measurement.samples.ffi, measurement.samples.nitro),
+    };
+  };
 
   const ffiAddResults = ffiSuiteAvailable
     ? await measureFfiEquivalent(
@@ -695,6 +681,7 @@ async function runBenchmarks(): Promise<string[]> {
       nitro: BenchResult;
       rustra: BenchResult;
       ratio: number;
+      confidence95: ReturnType<typeof pairedRatioConfidence95>;
     }
   > = {
     bytes64: {
@@ -703,15 +690,14 @@ async function runBenchmarks(): Promise<string[]> {
       nitro: nitroBuf,
       rustra: rustraBuf,
       ratio: rustraBuf.avg / nitroBuf.avg,
+      confidence95: bytesResults.confidence95,
     },
   };
 
   // 공개 generated helper와 그 helper가 최종 선택한 native route를 같은
   // 호출 단위로 교차 측정한다. 이 값은 Nitro 비교 ratio가 아니라 남은 비용을
   // JS routing과 native codec/FFI로 나누기 위한 진단 lower bound다.
-  let generatedRouteDiagnostics:
-    | Record<string, { native: BenchResult; generated: BenchResult; generatedToNative: number }>
-    | undefined;
+  let generatedRouteDiagnostics: Record<string, RouteDiagnostic> | undefined;
   if (
     native.invokeTypedRaw &&
     native.invokeTypedPos &&
@@ -723,14 +709,20 @@ async function runBenchmarks(): Promise<string[]> {
       direct: () => Promise<unknown>,
       generated: () => Promise<unknown>,
     ) => {
-      const measured = await measureInterleaved([
+      const measurement = await measureInterleaved([
         { key: 'native', label: `${operation} native route`, run: direct },
         { key: 'generated', label: `${operation} generated helper`, run: generated },
       ]);
+      const native = measurement.results.native;
+      const generatedResult = measurement.results.generated;
       return {
-        native: measured.native,
-        generated: measured.generated,
-        generatedToNative: measured.generated.avg / measured.native.avg,
+        native,
+        generated: generatedResult,
+        generatedToNative: generatedResult.avg / native.avg,
+        confidence95: pairedRatioConfidence95(
+          measurement.samples.generated,
+          measurement.samples.native,
+        ),
       };
     };
     generatedRouteDiagnostics = {
@@ -762,6 +754,7 @@ async function runBenchmarks(): Promise<string[]> {
           nativeAvgNs: result.native.avg,
           generatedAvgNs: result.generated.avg,
           generatedToNative: result.generatedToNative,
+          confidence95: result.confidence95,
         })}`,
       );
     }
@@ -773,7 +766,7 @@ async function runBenchmarks(): Promise<string[]> {
     { key: 'bytes64KiB', sizeBytes: 64 * 1024, iterations: 500, warmupIterations: 50 },
     // cmd_id(2 B) + postcard uvar length(3 B) + data = exactly the default
     // 1 MiB request limit. A full 1 MiB data buffer correctly fails closed.
-    { key: 'bytes1MiBWire', sizeBytes: 1024 * 1024 - 5, iterations: 50, warmupIterations: 5 },
+    { key: 'bytes1MiBWire', sizeBytes: 1024 * 1024 - 5, iterations: 200, warmupIterations: 20 },
   ]) {
     const payload = makeByteBufferPayload(byteCase.sizeBytes);
     const nitroValue = nitroBench.echoBuffer(payload);
@@ -794,6 +787,7 @@ async function runBenchmarks(): Promise<string[]> {
       nitro: measured.nitro,
       rustra: measured.rustra,
       ratio: measured.rustra.avg / measured.nitro.avg,
+      confidence95: measured.confidence95,
     };
   }
   for (const [operation, result] of Object.entries(byteSizeResults)) {
@@ -805,6 +799,7 @@ async function runBenchmarks(): Promise<string[]> {
         nitroAvgNs: result.nitro.avg,
         rustraAvgNs: result.rustra.avg,
         rustraToNitro: result.ratio,
+        confidence95: result.confidence95,
       })}`,
     );
   }
@@ -853,8 +848,12 @@ async function runBenchmarks(): Promise<string[]> {
   log('╚════════════════════════════════════════════════╝');
   log('');
 
+  const routeBottleneckAnalysis = generatedRouteDiagnostics
+    ? analyzeRouteBottlenecks(generatedRouteDiagnostics)
+    : undefined;
   const equivalentBenchmarkReceipt = {
-    schemaVersion: 4,
+    schemaVersion: 5,
+    buildFingerprint: RUSTRA_BUILD_FINGERPRINT,
     generatedAt: new Date().toISOString(),
     platform: Platform.OS,
     platformVersion: String(Platform.Version),
@@ -866,15 +865,49 @@ async function runBenchmarks(): Promise<string[]> {
     iterations: 10_000,
     warmupIterations: 500,
     order: 'rotating-interleaved',
+    confidencePolicy: {
+      level: 0.95,
+      method: 'paired-batch-log-ratio-t',
+      maximumBatches: 100,
+    },
     correctness: { equivalentOutputs, checkedBeforeTiming: true },
-    rawLowerBound: { nitroAdd: nitroRaw, generatedRoutes: generatedRouteDiagnostics },
+    rawLowerBound: {
+      nitroAdd: nitroRaw,
+      generatedRoutes: generatedRouteDiagnostics,
+      bottleneckAnalysis: routeBottleneckAnalysis,
+    },
     equivalent: {
-      add: { nitro: nitroAdd, rustra: rustraAdd, ratio: rustraAdd.avg / nitroAdd.avg },
-      string: { nitro: nitroStr, rustra: rustraStr, ratio: rustraStr.avg / nitroStr.avg },
-      bytes64: { nitro: nitroBuf, rustra: rustraBuf, ratio: rustraBuf.avg / nitroBuf.avg },
-      pair: { nitro: nitroPair, rustra: rustraPair, ratio: rustraPair.avg / nitroPair.avg },
+      add: {
+        nitro: nitroAdd,
+        rustra: rustraAdd,
+        ratio: rustraAdd.avg / nitroAdd.avg,
+        confidence95: addResults.confidence95,
+      },
+      string: {
+        nitro: nitroStr,
+        rustra: rustraStr,
+        ratio: rustraStr.avg / nitroStr.avg,
+        confidence95: stringResults.confidence95,
+      },
+      bytes64: {
+        nitro: nitroBuf,
+        rustra: rustraBuf,
+        ratio: rustraBuf.avg / nitroBuf.avg,
+        confidence95: bytesResults.confidence95,
+      },
+      pair: {
+        nitro: nitroPair,
+        rustra: rustraPair,
+        ratio: rustraPair.avg / nitroPair.avg,
+        confidence95: pairResults.confidence95,
+      },
     },
     byteSizes: byteSizeResults,
+    receiptExport: {
+      format: 'json',
+      filename: 'rustra-benchmark-receipt.json',
+      atomicWrite: true,
+    },
     ffi:
       Platform.OS === 'ios'
         ? {
@@ -896,6 +929,14 @@ async function runBenchmarks(): Promise<string[]> {
                   pair: ffiPair,
                 }
               : undefined,
+            confidence95: ffiSuiteAvailable
+              ? {
+                  add: ffiAddResults?.confidence95,
+                  string: ffiStringResults?.confidence95,
+                  bytes64: ffiBytesResults?.confidence95,
+                  pair: ffiPairResults?.confidence95,
+                }
+              : undefined,
           }
         : { available: false, reason: 'iOS-only Swift Expo module' },
   };
@@ -903,10 +944,22 @@ async function runBenchmarks(): Promise<string[]> {
   const bytes1MiBWireReceipt = equivalentBenchmarkReceipt.byteSizes.bytes1MiBWire;
   lines.unshift(
     `RESULT equivalent=${equivalentOutputs ? '✓' : '✗'} ffi=${Platform.OS === 'ios' ? (ffiSuiteAvailable ? '✓' : '✗') : 'skipped'} add=${equivalentBenchmarkReceipt.equivalent.add.ratio.toFixed(4)}x str=${equivalentBenchmarkReceipt.equivalent.string.ratio.toFixed(4)}x buf=${equivalentBenchmarkReceipt.equivalent.bytes64.ratio.toFixed(4)}x obj=${equivalentBenchmarkReceipt.equivalent.pair.ratio.toFixed(4)}x`,
-    `BYTES 64KiB nitro=${bytes64KiBReceipt.nitro.avg.toFixed(3)}ns rustra=${bytes64KiBReceipt.rustra.avg.toFixed(3)}ns ratio=${bytes64KiBReceipt.ratio.toFixed(4)}x`,
-    `BYTES 1MiB-wire nitro=${bytes1MiBWireReceipt.nitro.avg.toFixed(3)}ns rustra=${bytes1MiBWireReceipt.rustra.avg.toFixed(3)}ns ratio=${bytes1MiBWireReceipt.ratio.toFixed(4)}x`,
+    `BYTES 64KiB nitro=${bytes64KiBReceipt.nitro.avg.toFixed(3)}ns rustra=${bytes64KiBReceipt.rustra.avg.toFixed(3)}ns ratio=${bytes64KiBReceipt.ratio.toFixed(4)}x ci95=[${bytes64KiBReceipt.confidence95.lower.toFixed(4)},${bytes64KiBReceipt.confidence95.upper.toFixed(4)}]`,
+    `BYTES 1MiB-wire nitro=${bytes1MiBWireReceipt.nitro.avg.toFixed(3)}ns rustra=${bytes1MiBWireReceipt.rustra.avg.toFixed(3)}ns ratio=${bytes1MiBWireReceipt.ratio.toFixed(4)}x ci95=[${bytes1MiBWireReceipt.confidence95.lower.toFixed(4)},${bytes1MiBWireReceipt.confidence95.upper.toFixed(4)}]`,
     '',
   );
+  if (Platform.OS === 'ios' && typeof RustraCalculator.writeBenchmarkReceipt === 'function') {
+    try {
+      const filename = RustraCalculator.writeBenchmarkReceipt(
+        JSON.stringify(equivalentBenchmarkReceipt),
+      );
+      lines.unshift(`RECEIPT ${filename}`, '');
+    } catch (error: unknown) {
+      throw new Error(
+        `benchmark receipt export failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
   console.log(`RUSTRA_NITRO_JSON=${JSON.stringify(equivalentBenchmarkReceipt)}`);
   console.log(`RUSTRA_FFI_JSON=${JSON.stringify(equivalentBenchmarkReceipt.ffi)}`);
   console.log(
@@ -918,6 +971,7 @@ async function runBenchmarks(): Promise<string[]> {
       buildMode: equivalentBenchmarkReceipt.buildMode,
       jsEngine: equivalentBenchmarkReceipt.jsEngine,
       order: equivalentBenchmarkReceipt.order,
+      confidencePolicy: equivalentBenchmarkReceipt.confidencePolicy,
       iterations: equivalentBenchmarkReceipt.iterations,
       warmupIterations: equivalentBenchmarkReceipt.warmupIterations,
       correctness: equivalentBenchmarkReceipt.correctness,
@@ -944,6 +998,7 @@ async function runBenchmarks(): Promise<string[]> {
         rustraAvgNs: result.rustra.avg,
         ffiAvgNs: ffiResult?.avg,
         rustraToNitro: result.ratio,
+        rustraToNitroConfidence95: result.confidence95,
         ffiToNitro: ffiResult && ffiNitroResult ? ffiResult.avg / ffiNitroResult.avg : undefined,
       })}`,
     );

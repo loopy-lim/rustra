@@ -2,24 +2,35 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-test('host apps share generated commands and differ only by adapter transport', async () => {
+test('host apps use generated zero-config entrypoints without local transport wiring', async () => {
   const nodeApp = await readFile('examples/calculator/apps/node-app.ts', 'utf8');
-  const bunApp = await readFile('examples/calculator/apps/bun-app.ts', 'utf8');
+  const bunApp = await readFile('examples/calculator/apps/bun-ffi-app.ts', 'utf8');
   const tauriApp = await readFile('examples/tauri-calculator/src/app.ts', 'utf8');
   const tauriMain = await readFile('examples/tauri-calculator/src-tauri/src/main.rs', 'utf8');
   const reactNativeApp = await readFile('examples/react-native-calculator/App.tsx', 'utf8');
-  const reactNativeMetro = await readFile('examples/react-native-calculator/metro.config.js', 'utf8');
+  const reactNativeEntry = await readFile('examples/calculator/generated/react-native.ts', 'utf8');
+  const nodeEntry = await readFile('examples/calculator/generated/node.ts', 'utf8');
+  const bunEntry = await readFile('examples/calculator/generated/bun.ts', 'utf8');
+  const tauriEntry = await readFile('examples/calculator/generated/tauri.ts', 'utf8');
+  const reactNativeMetro = await readFile(
+    'examples/react-native-calculator/metro.config.js',
+    'utf8',
+  );
 
-  assert.match(nodeApp, /from '..\/generated\/commands\.js'/);
-  assert.match(bunApp, /from '..\/generated\/commands\.js'/);
-  assert.match(tauriApp, /from '..\/..\/calculator\/generated\/commands\.js'/);
-  assert.match(reactNativeApp, /from ['"].*calculator\/generated\/commands['"]/);
+  assert.match(nodeApp, /from '..\/generated\/node\.js'/);
+  assert.match(bunApp, /from '..\/generated\/bun\.js'/);
+  assert.match(tauriApp, /calculator\/generated\/tauri\.js'/);
+  assert.match(reactNativeApp, /from ['"]\.\/generated\/react-native['"]/);
+  assert.doesNotMatch(reactNativeApp, /\b(?:configure|installRustraJSI|createFastEngine)\s*\(/);
 
-  assert.match(nodeApp, /createNodeEngine/);
-  assert.match(bunApp, /createBunEngine/);
-  assert.match(tauriApp, /createTauriEngine/);
-  assert.match(reactNativeApp, /createFastEngine/);
-  assert.match(reactNativeApp, /installRustraJSI/);
+  assert.doesNotMatch(nodeApp, /createNodeEngine|configure\(/);
+  assert.doesNotMatch(bunApp, /createBunEngine|configure\(|dlopen/);
+  assert.doesNotMatch(tauriApp, /createTauriEngine|configure\(/);
+  assert.match(nodeEntry, /createNodeBootstrap/);
+  assert.match(bunEntry, /createBunBootstrap/);
+  assert.match(tauriEntry, /createTauriBootstrap/);
+  assert.match(reactNativeEntry, /createRustraBootstrap/);
+  assert.match(reactNativeEntry, /installRustraJSI/);
   assert.match(reactNativeMetro, /watchFolders = \[repoRoot\]/);
   assert.match(reactNativeMetro, /nodeModulesPaths/);
 

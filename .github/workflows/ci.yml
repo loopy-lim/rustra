@@ -134,8 +134,11 @@ jobs:
         run: ls examples/calculator-napi/*.node
       - name: Install root dependencies
         run: bun install --frozen-lockfile
-      - name: Build @rustra/types first
-        run: bun run --cwd packages/types build
+      # calculator tsconfig은 생성된 Node/Tauri entrypoint까지 함께 검사한다.
+      # package exports가 dist 타입을 가리키므로 types만 빌드하면 깨끗한 CI에서
+      # @rustra/node와 @rustra/tauri 선언을 찾을 수 없다.
+      - name: Build workspace packages
+        run: bun run build
       - name: Build calculator example binary
         run: cargo build -p rustra-calculator-example
       - name: Type check calculator
@@ -191,6 +194,12 @@ jobs:
         # react-native, nitro)을 필요로 하므로 루트 workspace와 별도로 앱
         # node_modules를 설치한다.
         run: bun install --cwd examples/react-native-calculator --frozen-lockfile
+      - name: Verify bare React Native zero-config fixture
+        run: |
+          bun install --cwd examples/react-native-bare-calculator --frozen-lockfile
+          bun run --cwd examples/react-native-bare-calculator codegen
+          bun run --cwd examples/react-native-bare-calculator typecheck
+          bun run --cwd examples/react-native-bare-calculator test:autolink
       - name: Install Tauri example deps
         run: bun install --cwd examples/tauri-calculator --frozen-lockfile
       - name: Test adapters
@@ -236,20 +245,21 @@ jobs:
         run: sdkmanager "ndk;27.1.12297006" "platforms;android-36" "build-tools;36.0.0"
       - name: Export NDK_HOME for build-rust-android.sh
         run: echo "NDK_HOME=$ANDROID_HOME/ndk/27.1.12297006" >> "$GITHUB_ENV"
-      - name: Install example deps
-        run: bun install --cwd examples/react-native-calculator --frozen-lockfile
-      # App.tsx 가 @rustra/types 를 import 하고 metro.config.js 가 상위 루트의
-      # node_modules 를 resolver 경로에 포함한다 (watchFolders: repoRoot) — 루트
-      # 워크스페이스 의존성 설치와 @rustra/types 빌드가 선행돼야 JS 번들링이
-      # 해석된다.
-      - name: Install root deps and build @rustra/types
+      # 생성된 RN entrypoint는 @rustra/react-native package export를 import하고,
+      # 그 export는 dist/index.js를 가리킨다. file: 의존성을 설치하기 전에 루트
+      # workspace를 빌드해야 앱 node_modules 스냅샷에도 dist가 포함된다.
+      - name: Install root deps and build workspace packages
         run: |
           bun install --frozen-lockfile
-          bun run --cwd packages/types build
+          bun run build
+      - name: Install example deps
+        run: bun install --cwd examples/react-native-calculator --frozen-lockfile
+      - name: Regenerate the autolinked Rustra module
+        run: bun run --cwd examples/react-native-calculator codegen
       # android/ 는 Expo prebuild 산물로 gitignore 되어 있다 (ios/ 도 동일).
       # 클린 체크아웃에서 재현하려면 prebuild 로 네이티브 프로젝트를 생성한다.
-      # rustra-jsi 모듈은 react-native.config.js 로 autolink 되고 settings.gradle
-      # include 가 예제 android 디렉터리에 대해 동작한다.
+      # 생성된 @rustra/generated-react-native 모듈은 react-native.config.js 만으로
+      # autolink 된다. 클린 네이티브 프로젝트에 수동 Gradle 패치는 없다.
       - name: Expo prebuild (generate native android project)
         working-directory: examples/react-native-calculator
         run: bunx expo prebuild --platform android --no-install
@@ -257,9 +267,9 @@ jobs:
         env:
           NODE_ENV: production
         run: cd examples/react-native-calculator/android && ./gradlew assembleRelease -x lint
-      - name: Verify APK contains rustrajsi native lib
+      - name: Verify APK contains the uniquely named Rustra native lib
         run: |
-          unzip -l examples/react-native-calculator/android/app/build/outputs/apk/release/app-release.apk | grep -E "lib/(arm64-v8a|x86_64)/librustrajsi\.so"
+          unzip -l examples/react-native-calculator/android/app/build/outputs/apk/release/app-release.apk | grep -E "lib/(arm64-v8a|x86_64)/librustra_bridge\.so"
 
   # RN iOS Release 프레임워크 빌드 — podspec prepare_command 이 Rust 를
   # 빌드한다. iOS 시뮬레이터 런타임 실행은 로컬 verify 게이트가 담당.
@@ -278,28 +288,30 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.0
-      - name: Install example deps
-        run: bun install --cwd examples/react-native-calculator --frozen-lockfile
-      # App.tsx 가 @rustra/types 를 import 하고 metro.config.js 가 상위 루트의
-      # node_modules 를 resolver 경로에 포함한다 — 루트 워크스페이스 의존성과
-      # @rustra/types 빌드가 필요하다 (rn-android 와 동일).
-      - name: Install root deps and build @rustra/types
+      # Android와 동일하게 생성 entrypoint가 참조하는 workspace package dist를
+      # 먼저 만들어 file: 의존성 설치 결과를 소비자 tarball과 맞춘다.
+      - name: Install root deps and build workspace packages
         run: |
           bun install --frozen-lockfile
-          bun run --cwd packages/types build
-      # ios/ 도 android/ 와 마찬가지로 Expo prebuild 산물 (gitignore). prebuild 는
-      # 기존 네이티브 파일의 수동 패치(settings.gradle include, podspec 연결)를
-      # 유지한다 — 로컬 검증으로 byte-identical 보존 확인.
+          bun run build
+      - name: Install example deps
+        run: bun install --cwd examples/react-native-calculator --frozen-lockfile
+      - name: Regenerate the autolinked Rustra module
+        run: bun run --cwd examples/react-native-calculator codegen
+      # ios/ 도 android/ 와 마찬가지로 Expo prebuild 산물 (gitignore). 생성 모듈의
+      # podspec은 CocoaPods autolinking만 사용하며 Podfile 수동 패치는 필요 없다.
       - name: Expo prebuild (generate native ios project)
         working-directory: examples/react-native-calculator
         run: bunx expo prebuild --platform ios --no-install
       - name: Build iOS Release (simulator, no codesign)
-        # pipefail — tail 파이프가 xcodebuild 실패 exit code 를 삼키지 않게.
         run: |
-          set -o pipefail
           cd examples/react-native-calculator/ios
           pod install --project-directory=.
-          xcodebuild -workspace reactnativecalculator.xcworkspace -scheme reactnativecalculator -configuration Release -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build 2>&1 | tail -5
+          if ! xcodebuild -workspace reactnativecalculator.xcworkspace -scheme reactnativecalculator -configuration Release -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/rustra-xcodebuild.log" 2>&1; then
+            tail -n 200 "$RUNNER_TEMP/rustra-xcodebuild.log"
+            exit 1
+          fi
+          tail -n 20 "$RUNNER_TEMP/rustra-xcodebuild.log"
 
   # 소비자 설치 smoke — 실제 npm tarball을 빈 디렉터리에 설치해 배포물이
   # 스스로 동작하는지 검증 (감사: '소비자 설치 후 smoke test' 없음).
@@ -318,6 +330,13 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Build all packages
         run: bun run build
+      - name: Verify React Native files are present in packed artifacts
+        run: |
+          mkdir -p /tmp/rustra-pack-check
+          bun pm pack --cwd packages/cli --destination /tmp/rustra-pack-check
+          bun pm pack --cwd packages/react-native --destination /tmp/rustra-pack-check
+          tar -tf /tmp/rustra-pack-check/rustra-cli-*.tgz | grep 'package/dist/react-native.js'
+          tar -tf /tmp/rustra-pack-check/rustra-react-native-*.tgz | grep 'package/native/cpp/RustraJSIBridge.cpp'
       - name: Install packed packages as a consumer
         run: |
           mkdir -p /tmp/rustra-pack

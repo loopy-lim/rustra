@@ -13,7 +13,9 @@ import type {
   RustraNative,
 } from '@rustra/types';
 import {
+  configureLazy,
   createRkyvV2Engine,
+  ensureConfigured,
   invokeWithTimeout,
   parseRustraErrorString,
   RustraCommandError,
@@ -52,6 +54,10 @@ export type RustraJSINative = RkyvV2SchemaNative & {
   offEvent?(name: string): void;
   /** CallInvoker 없는 호스트의 수동 drain 폴백. */
   drainEvents?(): number;
+  /** Rust가 JS로 값을 보낼 수 있는 일회성 채널 핸들을 만든다. */
+  createChannel?(callback: (payloadJson: string) => void): number;
+  /** 앞서 만든 채널을 해제한다. 이미 해제된 핸들은 false를 반환한다. */
+  dropChannel?(handle: number): boolean;
 };
 
 export function createReactNativeEngine(native: { invoke(payload: ArrayBuffer): ArrayBuffer }) {
@@ -110,6 +116,40 @@ export type FastEngineOptions = {
   rkyvV2Codecs: Map<string, import('@rustra/types').RkyvV2Codec<unknown, unknown>>;
 } & RkyvV2EngineOptions;
 
+export type RustraBootstrapOptions = FastEngineOptions & {
+  /** Installs the platform JSI module on the live JavaScript Runtime thread. */
+  install(): Promise<void>;
+  /** Returns the native surface after install completes. */
+  getNative(): RustraJSINative;
+};
+
+export type RustraBootstrap = {
+  /** Optional eager readiness hook; generated commands also initialize lazily. */
+  ready(): Promise<EngineClientType>;
+};
+
+/**
+ * Registers one concurrency-safe lazy React Native bootstrap. A generated
+ * platform entry calls this at module import, so the first generated command
+ * installs JSI, verifies the Rust contract, and configures the fast engine.
+ */
+export function createRustraBootstrap(options: RustraBootstrapOptions): RustraBootstrap {
+  configureLazy(async () => {
+    try {
+      await options.install();
+      return createFastEngine(options.getNative(), options);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `[rustra:bootstrap] Native setup failed: ${message}. ` +
+          'Rebuild the native app after checking autolinking, generated codecs, and Rust FFI symbols.',
+        { cause: error },
+      );
+    }
+  });
+  return { ready: ensureConfigured };
+}
+
 /**
  * 고속 엔진 — JSI 동기 호출로 Promise 오버헤드 없이 결과를 반환합니다.
  *
@@ -138,14 +178,16 @@ export type FastEngineOptions = {
  * const engine = createFastEngine(native, { rkyvV2Codecs: registry });
  * ```
  */
-export function getRustraNative(): RustraNative {
+export function getRustraNative(): RustraJSINative & RustraNative {
   const native = (globalThis as Record<string, unknown>).__rustraNative;
   if (!native) {
     throw new Error(
-      'JSI native module not installed. Call installRustraJSI() from your native module first.',
+      'JSI native module not installed. Call installRustraJSI() from your native module first. ' +
+        'Expo Go cannot load JSI; rebuild the native app after checking autolinking, the Rust static ' +
+        'archive, and required extern "C" FFI symbols. A JavaScript reload cannot repair native drift.',
     );
   }
-  return native as RustraNative;
+  return native as RustraJSINative & RustraNative;
 }
 
 export function createFastEngine(

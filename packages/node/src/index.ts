@@ -23,9 +23,26 @@ export type {
   RkyvV2Native,
   InvokeOptions,
 } from '@rustra/types';
-export { RustraCommandError, configure, invoke, createRkyvV2Engine } from '@rustra/types';
-import { RustraCommandError, parseRustraErrorString, type InvokeOptions } from '@rustra/types';
+export {
+  RustraCommandError,
+  configure,
+  configureLazy,
+  ensureConfigured,
+  invoke,
+  createRkyvV2Engine,
+} from '@rustra/types';
+import {
+  configureLazy,
+  ensureConfigured,
+  RustraErrorCode,
+  RustraCommandError,
+  parseRustraErrorString,
+  type EngineClient,
+  type InvokeOptions,
+} from '@rustra/types';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 
 /**
  * Node.js transport가 구현해야 하는 인터페이스입니다.
@@ -189,6 +206,69 @@ export function createNodeProcessTransport(
     },
     get pid() {
       return child?.pid ?? null;
+    },
+  };
+}
+
+export type NodeBootstrapOptions = {
+  /** Explicit runtime binary. `RUSTRA_NODE_BINARY` has higher priority. */
+  command?: string;
+  /** Codegen-provided release/debug candidates used when no override is set. */
+  commandCandidates?: readonly string[];
+  /** Cargo binary name used for bounded ancestor discovery after transpilation. */
+  binaryName?: string;
+  /** Runtime arguments. Defaults to the standard one-shot `invoke` protocol. */
+  args?: string[];
+  spawnOptions?: Parameters<typeof spawn>[2];
+};
+
+export type NodeBootstrap = {
+  ready(): Promise<EngineClient>;
+  dispose(): void;
+};
+
+function resolveNodeRuntime(options: NodeBootstrapOptions): string {
+  const explicit = process.env.RUSTRA_NODE_BINARY ?? options.command;
+  if (explicit) return explicit;
+  const candidates = [...(options.commandCandidates ?? [])];
+  if (options.binaryName) {
+    const executable = options.binaryName + (process.platform === 'win32' ? '.exe' : '');
+    let current = resolve(process.cwd());
+    while (true) {
+      candidates.push(resolve(current, 'target', 'release', executable));
+      candidates.push(resolve(current, 'target', 'debug', executable));
+      const parent = dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+  }
+  const inferred = candidates.find((candidate) => existsSync(candidate));
+  if (inferred) return inferred;
+  throw new RustraCommandError(
+    RustraErrorCode.TransportUnavailable,
+    'No Rustra Node runtime was found. Build the inferred Cargo binary, or set RUSTRA_NODE_BINARY to its absolute path.',
+  );
+}
+
+/**
+ * Installs a lazy Node process engine. Generated `node.ts` supplies portable
+ * Cargo target candidates, so application code only imports generated commands.
+ */
+export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBootstrap {
+  let transport: NodeProcessTransport | undefined;
+  configureLazy(() => {
+    transport = createNodeProcessTransport({
+      command: resolveNodeRuntime(options),
+      args: options.args,
+      spawnOptions: options.spawnOptions,
+    });
+    return createNodeEngine(transport);
+  });
+  return {
+    ready: ensureConfigured,
+    dispose() {
+      transport?.dispose();
+      transport = undefined;
     },
   };
 }

@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createReactNativeEngine, RustraCommandError } from './index.js';
+import {
+  createReactNativeEngine,
+  createRustraBootstrap,
+  getRustraNative,
+  RustraCommandError,
+} from './index.js';
+import type { RustraJSINative } from './index.js';
 
 const encoder = new TextEncoder();
 
@@ -32,6 +38,60 @@ function createMockNative(returnValue: { ok: boolean; result?: unknown; error?: 
     },
   };
 }
+
+test('missing JSI module error points through native linking to the Rust ABI', () => {
+  const globalRecord = globalThis as Record<string, unknown>;
+  const previous = Object.getOwnPropertyDescriptor(globalRecord, '__rustraNative');
+  Reflect.deleteProperty(globalRecord, '__rustraNative');
+  try {
+    assert.throws(
+      () => getRustraNative(),
+      (error: unknown) =>
+        error instanceof Error &&
+        /Expo Go/.test(error.message) &&
+        /Rust static archive/.test(error.message) &&
+        /extern "C" FFI symbols/.test(error.message),
+    );
+  } finally {
+    if (previous) Object.defineProperty(globalRecord, '__rustraNative', previous);
+  }
+});
+
+test('React Native bootstrap installs and configures once across concurrent readiness', async () => {
+  let installs = 0;
+  const native = {} as RustraJSINative;
+  const bootstrap = createRustraBootstrap({
+    install: async () => {
+      installs++;
+      await Promise.resolve();
+    },
+    getNative: () => native,
+    rkyvV2Codecs: new Map(),
+  });
+
+  const [left, right] = await Promise.all([bootstrap.ready(), bootstrap.ready()]);
+  assert.equal(installs, 1);
+  assert.equal(left, right);
+});
+
+test('React Native bootstrap adds native-to-Rust remediation to install failures', async () => {
+  const bootstrap = createRustraBootstrap({
+    install: async () => {
+      throw new Error('ERR_NO_BRIDGE');
+    },
+    getNative: () => ({}) as RustraJSINative,
+    rkyvV2Codecs: new Map(),
+  });
+
+  await assert.rejects(
+    bootstrap.ready(),
+    (error: unknown) =>
+      error instanceof Error &&
+      /ERR_NO_BRIDGE/.test(error.message) &&
+      /autolinking/.test(error.message) &&
+      /Rust FFI symbols/.test(error.message),
+  );
+});
 
 test('routes invoke through JSI native module', async () => {
   const native = createMockNative({ ok: true, result: { value: 42 } });
@@ -236,7 +296,7 @@ test('subscribeEvent coexists with multiple event names', () => {
 // ── createAsyncEngine (P0-3 + T1 얕은 취소) ─────────────────
 
 import { createAsyncEngine, createFastEngine } from './index.js';
-import type { RustraJSIAsyncNative, RustraJSINative } from './index.js';
+import type { RustraJSIAsyncNative } from './index.js';
 
 // ── FastEngineOptions → core 옵션 전달 (follow-up 2) ───────
 // 어댑터는 "전달됐는지"만 검증 — core 동작 상세는 @rustra/types 에서 이미 검증됨.

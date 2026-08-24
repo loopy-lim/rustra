@@ -1,212 +1,169 @@
 # React Native Setup Guide
 
-## Overview
+Rustra는 Expo development build와 bare React Native에 같은 generated native
+package를 사용합니다. 앱의 Podfile, Gradle settings, `MainApplication`, CMake를
+직접 편집하지 않습니다.
 
-rustra-bridge supports React Native via a native module that bridges Rust through JSI. This guide covers setting up the iOS and Android transports with a static Rust library.
+## 1. Rust crate 준비
 
-> **Status:** the repository calculator proves the shared C++ bridge builds on
-> iOS and Android, and its Android Release APK contains arm64/x86_64 native
-> libraries. `@rustra/react-native` is a JS adapter, not a prebuilt native
-> module. Consumers must adapt the reference module to their own Rust crate and
-> symbols. Build/link proof is not the same as install/launch/runtime proof.
+모바일 앱이 링크할 static library를 만들고, package 초기화를 한 줄로 export합니다.
 
-## Architecture
-
-```
-TypeScript (your app)
-  → ReactNativeEngineClient
-    → Native module (JSI, shared C++)
-      → Rust FFI (static lib per platform)
+```toml
+[lib]
+crate-type = ["rlib", "staticlib"]
 ```
 
-## iOS Setup
+```rust
+use rustra::prelude::*;
 
-### 1. Build the Rust static library
-
-Each native module needs a build script that cross-compiles your Rust crate for the iOS target.
-The command below uses the calculator reference script; a different crate must parameterize
-the crate and library names rather than copy them unchanged:
-
-```sh
-# From your module directory
-RUSTRA_IOS_TARGET=aarch64-apple-ios-sim ./ios/build-rust-ios.sh
-```
-
-The script:
-
-- Compiles your crate as a static library (`--lib --release`)
-- Copies `lib<crate_name>.a` into `ios/rust/lib/`
-
-### 2. Configure the Podspec
-
-Your module's `.podspec` must link the Rust static library:
-
-```ruby
-s.vendored_libraries = 'rust/lib/librustra_calculator_example.a'
-s.pod_target_xcconfig = {
-  'OTHER_LDFLAGS' => '-force_load $(PODS_TARGET_SRCROOT)/rust/lib/librustra_calculator_example.a'
+pub fn app_package() -> Package {
+    rustra::build!("app.example", add_numbers).done()
 }
+
+rustra::native_entry!(app_package);
 ```
 
-### 3. Create the Expo JSI Module
+`native_entry!`는 플랫폼 공통 `rustra_mobile_init` ABI를 만들고 Apple에서는 library
+load 시 package를 자동 등록합니다. 앱별 함수명을 C++에 복사하지 않습니다.
 
-`expo-module.config.json`:
+## 2. 앱 설정
+
+일반적인 단일-crate 앱은 `reactNative: {}`면 충분합니다.
 
 ```json
 {
-  "platforms": ["ios"],
-  "ios": { "modules": ["RustraJSIModule"] }
+  "schema": "./generated/schema.json",
+  "output": "./generated",
+  "reactNative": {}
 }
 ```
 
-The production fast path is installed by the Objective-C++ JSI Expo module. The
-example's separate Swift `RustraCalculatorModule` is a benchmark-only direct FFI
-comparator:
+Cargo workspace에 staticlib crate가 여러 개라면 manifest를 app crate로 좁힙니다.
 
-```objc
-AsyncFunction(@"install") {
-  // Obtain the React Native runtime + CallInvoker and call rustra::install(...).
-  // See examples/react-native-calculator/modules/rustra-jsi/ios/RustraJSIModule.mm.
-};
+```json
+{
+  "schema": "./generated/schema.json",
+  "output": "./generated",
+  "reactNative": {
+    "rustManifest": "../native/Cargo.toml"
+  }
+}
 ```
 
-### 4. Metro config for monorepo
+manifest 자체도 여러 package를 가리킬 때만 `rustPackage`를 추가합니다. library
+target 이름은 Cargo metadata에서 추론하므로 보통 `rustLibrary`는 필요 없습니다.
 
-If your RN app lives inside a monorepo, configure Metro to resolve shared packages:
+## 3. 생성과 설치
 
-```js
-const { getDefaultConfig } = require('expo/metro-config');
-const config = getDefaultConfig(__dirname);
-config.watchFolders = ['../../..']; // monorepo root
-module.exports = config;
+모든 JavaScript 작업은 Bun 1.4 이상으로 실행합니다.
+
+```bash
+bun add @rustra/react-native @rustra/types@0.4.0
+bun add -d @rustra/cli
+bunx --bun @rustra/cli generate --config rustra.json
+bun install
 ```
 
-## Usage
+생성 결과는 기본적으로 다음과 같습니다.
 
-### C++ codec generation (`--cpp-output`)
-
-The JSI fast path (B1) uses C++ postcard codecs compiled into the native module,
-which removes the ~3.4µs JS-side codec round trip. Generate them alongside the
-TS codecs:
-
-```sh
-bunx --bun rustra generate \
-  --schema ./generated/schema.json \
-  --output ./src/generated \
-  --cpp-output ./ios
+```text
+generated/
+  react-native.ts
+  commands.ts
+  rkyv-registry.ts
+modules/rustra-bridge/
+  package.json
+  react-native.config.js
+  RustraBridge.podspec
+  ios/
+  android/
+  generated/
 ```
 
-This emits `rustra-generated-codecs.{hpp,cpp}` into `./ios` — commit them next
-to `RustraJSIBridge.cpp` and add the `.cpp` to the Xcode/Podspec and Gradle
-sources. iOS and Android share the same C++ source. Commands whose fields the
-postcard codec does not support are excluded from the C++ dispatch and fall
-back to the JS Tier 3 (JSON-in-binary) path automatically.
+생성기는 `package.json`의 `@rustra/generated-react-native` workspace dependency가 다른
+경로를 가리키면 덮어쓰지 않고 실패합니다. 이 fail-closed 동작이 기존 패키지와의
+우발적 충돌을 막습니다.
 
-### TypeScript side
+## 4. 앱 코드
 
-```typescript
-import { configure, createFastEngine, getRustraNative } from '@rustra/react-native';
-import { installRustraJSI } from 'your-rustra-native-module';
-import { rkyvV2Registry } from './generated/rkyv-registry.js';
-
-await installRustraJSI();
-configure(createFastEngine(getRustraNative(), { rkyvV2Codecs: rkyvV2Registry }));
+```ts
+import { addNumbers } from './generated/react-native';
 
 const result = await addNumbers({ a: 1, b: 2 });
 ```
 
-### Types
+첫 호출이 native install, contract 검증, fast engine configure를 한 번만 수행합니다.
+reload 후에도 새 JavaScript runtime에 다시 설치되며, 동시 첫 호출은 하나의 bootstrap을
+공유합니다.
 
-The engine client is type-safe:
+## 5. bare React Native
 
-```typescript
-type ReactNativeEngineClient = {
-  invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T>;
-};
+React Native CLI가 생성 모듈의 iOS Podspec과 Android source directory를 찾는지
+확인합니다.
+
+```bash
+bunx --bun react-native config
+cd ios && pod install
 ```
 
-## Android Setup
+그 뒤 평소처럼 앱을 새로 빌드합니다. Metro reload만으로는 static archive나 JSI
+symbol 변경이 반영되지 않습니다.
 
-Android shares the same C++ JSI bridge as iOS — the module wiring is the
-only platform-specific part.
+저장소의 `examples/react-native-bare-calculator`는 Expo package 없이 RN 0.81에서
+TypeScript와 양 플랫폼 autolinking을 검증하는 fixture입니다.
 
-### 1. Build the Rust static libraries (per ABI)
+## 6. Expo
 
-The module's `build-rust-android.sh` cross-compiles your crate for both
-device ABIs with a pinned NDK. The Gradle hook invokes it automatically, or
-you can run it directly:
+Expo Go는 임의의 JSI native module을 포함할 수 없으므로 development build가
+필수입니다.
 
-```sh
-cd modules/rustra-jsi/android
-NDK_HOME=$ANDROID_HOME/ndk/27.1.12297006 ./build-rust-android.sh
+```bash
+bunx --bun expo prebuild --platform ios --no-install
+bunx --bun expo run:ios
 ```
 
-The script:
+생성 모듈은 React Native autolinking을 사용하므로 Expo module config나 Podfile
+수동 선언은 필요하지 않습니다.
 
-- Compiles your crate as a static library for `aarch64-linux-android` and
-  `x86_64-linux-android` (pinned NDK — the API level is set there)
-- Copies `lib<crate_name>.a` into `android/src/main/jniLibs/…`
+## 7. 검증
 
-### 2. Gradle + CMake wiring
-
-`android/build.gradle` of the module:
-
-```gradle
-android {
-  externalNativeBuild {
-    cmake { path "CMakeLists.txt" }
-  }
-  // Rust 빌드 훅 — Gradle sync 시 build-rust-android.sh 가 실행된다.
-  sourceSets {
-    main {
-      jniLibs.srcDirs = ['src/main/jniLibs']
-    }
-  }
-}
-tasks.preBuild {
-  dependsOn "buildRust"
-}
+```bash
+bun run typecheck
+bunx --bun react-native config
 ```
 
-`CMakeLists.txt` compiles the shared C++ bridge (`RustraJSIBridge.cpp`,
-generated codecs) into `librustrajsi.so` and links the Rust static libs.
+저장소 예제에서는 다음 추가 게이트를 제공합니다.
 
-### 3. JNI entry point
-
-`rustra-jsi-jni.cpp` installs the same JSI host object on load — the JS side
-(`installRustraJSI()` followed by `createFastEngine(getRustraNative(), ...)`)
-is identical to iOS.
-
-### Verify
-
-The repo example runs a full Release build in CI. This proves build/link and
-APK packaging, not emulator installation or rendered command output:
-
-```sh
+```bash
 cd examples/react-native-calculator
-bunx --bun expo prebuild --platform android --no-install
-cd android && ./gradlew assembleRelease -x lint
-unzip -l app/build/outputs/apk/release/app-release.apk | grep librustrajsi
+bun run codegen
+bun run test
+bun run test:cpp-codec
+bun run verify:native:android
+bun run verify:native:ios
 ```
 
-## Troubleshooting
+CI는 클린 Expo prebuild 후 Android Release APK의 `librustra_bridge.so`와 iOS
+Release workspace link를 확인합니다. build/link 성공은 실제 기기 실행과 별개이므로
+제품 릴리스 전에는 simulator/device에서 generated command 결과도 확인해야 합니다.
 
-### "library not found for -lrustra\_..."
+## 충돌 방지 계약
 
-Run the Rust build script before `pod install`:
+- JS package: `@rustra/generated-react-native`
+- native module: `RustraBridge`
+- Android namespace: `dev.rustra.bridge`
+- Android library: `rustra_bridge`
+- stable Rust initializer: `rustra_mobile_init`
 
-```sh
-./ios/build-rust-ios.sh && cd ios && pod install
-```
+calculator 전용 benchmark ABI는 `legacyBenchmarks: true` fixture에서만 컴파일됩니다.
+일반 사용자 생성물에는 포함되지 않습니다.
 
-### Metro can't resolve @rustra/react-native
+## 문제 해결
 
-Ensure `watchFolders` in `metro.config.js` points to the monorepo root.
+`RustraBridge was not linked`가 나오면 `bun run codegen`, `bun install`,
+`bunx --bun react-native config` 순서로 확인하고 iOS는 Pods를 다시 설치한 뒤 native
+app을 재빌드합니다.
 
-### "RustraCalculator" is undefined
-
-Verify the Expo module is properly linked:
-
-1. Check `expo-module.config.json` references the correct Swift class
-2. Run `bunx --bun expo-modules-core` to regenerate module providers
-3. Clean build: `cd ios && pod deintegrate && pod install`
+Cargo package가 모호하다는 오류는 `rustManifest`를 app crate의 `Cargo.toml`로
+좁혀 해결합니다. staticlib target 오류는 `[lib] crate-type`에 `staticlib`를
+추가합니다.

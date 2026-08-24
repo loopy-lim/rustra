@@ -727,24 +727,10 @@ pub fn calculator_package() -> Package {
         .clone()
 }
 
-// ── Library constructor: auto-register on load ──────────────
-// This ensures calculator_package() is called when the static library
-// is loaded, so generic FFI functions (rustra_ffi_invoke, etc.) work
-// without requiring a legacy calculator-specific call first.
-
-#[cfg(target_vendor = "apple")]
-mod apple_init {
-    extern "C" fn rustra_auto_init() {
-        super::calculator_package();
-    }
-
-    #[used]
-    #[cfg_attr(
-        target_vendor = "apple",
-        unsafe(link_section = "__DATA,__mod_init_func")
-    )]
-    static AUTO_INIT: extern "C" fn() = rustra_auto_init;
-}
+// Stable zero-config native entry shared by Bun FFI and the RN bridge. The
+// macro also installs the Apple load-time constructor; other hosts call the
+// exported symbol explicitly during lazy bootstrap.
+rustra::native_entry!(calculator_package);
 
 /// Linux(ELF) — `.init_array` constructor 로 동일 자동 등록. CI(Linux)에서
 /// FFI 라운드트립 테스트가 `ffi.not_registered` 로 실패하는 것을 막는다.
@@ -767,7 +753,7 @@ mod linux_init {
 /// 결정론적 대체 수단 (예: JSI install() 에서 호출).
 #[unsafe(no_mangle)]
 pub extern "C" fn rustra_calculator_init() {
-    let _ = calculator_package();
+    rustra_mobile_init();
 }
 
 /// 벤치마크용 최소 C ABI lower bound. 브리지/직렬화 비용은 포함하지 않으며
