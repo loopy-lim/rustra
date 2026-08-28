@@ -2,7 +2,10 @@ import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, 
 import { createGeneratedFields2, invokeGenerated, invokeGeneratedBytes, invokeGeneratedFields1, invokeGeneratedFields3 } from '@rustra/types';
 import type { InvokeOptions } from '@rustra/types';
 
-export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutput>(1, 'addNumbers', "a", "b", 'addNumbers');
+export function addNumbers(input: AddNumbersInput, options?: InvokeOptions): Promise<AddNumbersOutput> {
+  return invokeGenerated<AddNumbersOutput>(1, 'addNumbers', input, options);
+}
+addNumbers.commandId = 'addNumbers';
 
 export const benchAdd = createGeneratedFields2<BenchAddInput, BenchAddOutput>(23, 'benchAdd', "a", "b", 'benchAdd');
 
@@ -25,18 +28,30 @@ export function clamp(input: ClampInput, options?: InvokeOptions): Promise<Clamp
 }
 clamp.commandId = 'clamp';
 
-export const createItem = createGeneratedFields2<CreateItemInput, CreateItemOutput>(8, 'createItem', "name", "value", 'createItem');
+export function createItem(input: CreateItemInput, options?: InvokeOptions): Promise<CreateItemOutput> {
+  return invokeGenerated<CreateItemOutput>(8, 'createItem', input, options);
+}
+createItem.commandId = 'createItem';
 
-export const divide = createGeneratedFields2<DivideInput, DivideOutput>(10, 'divide', "a", "b", 'divide');
+export function divide(input: DivideInput, options?: InvokeOptions): Promise<DivideOutput> {
+  return invokeGenerated<DivideOutput>(10, 'divide', input, options);
+}
+divide.commandId = 'divide';
 
 export function echoGroups(input: EchoGroupsInput, options?: InvokeOptions): Promise<EchoGroupsOutput> {
   return invokeGenerated<EchoGroupsOutput>(27, 'echoGroups', input, options);
 }
 echoGroups.commandId = 'echoGroups';
 
-export const emitDemo = createGeneratedFields2<EmitDemoInput, EmitDemoOutput>(11, 'emitDemo', "ticks", "stepDelayMs", 'emitDemo');
+export function emitDemo(input: EmitDemoInput, options?: InvokeOptions): Promise<EmitDemoOutput> {
+  return invokeGenerated<EmitDemoOutput>(11, 'emitDemo', input, options);
+}
+emitDemo.commandId = 'emitDemo';
 
-export const gauge = createGeneratedFields2<GaugeInput, GaugeOutput>(17, 'gauge', "limit", "offset", 'gauge');
+export function gauge(input: GaugeInput, options?: InvokeOptions): Promise<GaugeOutput> {
+  return invokeGenerated<GaugeOutput>(17, 'gauge', input, options);
+}
+gauge.commandId = 'gauge';
 
 export function greet(input: GreetInput, options?: InvokeOptions): Promise<GreetOutput> {
   return invokeGeneratedFields1<GreetOutput>(5, 'greet', input, input["name"], options);
@@ -44,7 +59,7 @@ export function greet(input: GreetInput, options?: InvokeOptions): Promise<Greet
 greet.commandId = 'greet';
 
 export function isEven(input: IsEvenInput, options?: InvokeOptions): Promise<IsEvenOutput> {
-  return invokeGeneratedFields1<IsEvenOutput>(3, 'isEven', input, input["n"], options);
+  return invokeGenerated<IsEvenOutput>(3, 'isEven', input, options);
 }
 isEven.commandId = 'isEven';
 
@@ -82,7 +97,10 @@ export function scoreTotal(input: ScoreTotalInput, options?: InvokeOptions): Pro
 }
 scoreTotal.commandId = 'scoreTotal';
 
-export const secureCompute = createGeneratedFields2<SecureComputeInput, SecureComputeOutput>(13, 'secureCompute', "a", "b", 'secureCompute');
+export function secureCompute(input: SecureComputeInput, options?: InvokeOptions): Promise<SecureComputeOutput> {
+  return invokeGenerated<SecureComputeOutput>(13, 'secureCompute', input, options);
+}
+secureCompute.commandId = 'secureCompute';
 
 export function sizeOf(input: SizeOfInput, options?: InvokeOptions): Promise<SizeOfOutput> {
   return invokeGeneratedBytes<SizeOfOutput>(14, 'sizeOf', input, input["data"], options);

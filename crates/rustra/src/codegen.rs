@@ -57,6 +57,15 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
                         return variants.join(" | ");
                     }
                 }
+                // int64/uint64 는 2^53 을 넘을 수 있다 — postcard fast-path 코덱
+                // (uvar64/zigzag64)이 safe 범위를 넘으면 bigint 로 복원하므로
+                // TS CLI codegen 과 동일하게 `number | bigint` 로 표현한다.
+                if matches!(
+                    schema.get("format").and_then(Value::as_str),
+                    Some("int64") | Some("uint64")
+                ) {
+                    return "number | bigint".to_string();
+                }
                 "number".to_string()
             }
             "number" => "number".to_string(),
@@ -116,10 +125,14 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
                     .and_then(Value::as_bool)
                     .unwrap_or(false);
                 if unique {
-                    format!("Set<{item_type}>")
-                } else {
-                    format!("{item_type}[]")
+                    return format!("Set<{item_type}>");
                 }
+                // union 요소 타입(`number | bigint`)은 괄호로 감싸지 않으면
+                // `number | bigint[]` 로 잘못 결합된다 — TS CLI codegen 과 동일 규칙.
+                if item_type.contains(" | ") {
+                    return format!("({item_type})[]");
+                }
+                format!("{item_type}[]")
             }
             "null" => "null".to_string(),
             _ => "unknown".to_string(),

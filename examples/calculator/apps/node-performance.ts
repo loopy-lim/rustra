@@ -9,7 +9,8 @@ import { rkyvV2Registry } from '../generated/rkyv-registry.js';
 import { benchmarkCommand } from './performance-stats.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
-const validate = (result: { value: number }) => result.value === 42;
+// addNumbers 의 i64 결과는 fast-path 코덱이 safe 범위 밖에서 bigint 로 복원한다.
+const validate = (result: { value: number | bigint }) => result.value === 42;
 
 const oneShot = await benchmarkCommand({
   name: 'node-generated-one-shot',

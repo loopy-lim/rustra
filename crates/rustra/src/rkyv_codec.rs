@@ -678,16 +678,9 @@ fn js_field_supported_with_defs(
     if depth > 8 {
         return false; // 과도한 중첩(순환 $ref 포함) — 안전하게 미지원 취급
     }
-    // Keep the Rust route gate aligned with the TypeScript generator. Wide
-    // integers need the complex codec so unsafe JS values can remain bigint.
-    if schema.get("type").and_then(Value::as_str) == Some("integer")
-        && matches!(
-            schema.get("format").and_then(Value::as_str),
-            Some("int64" | "uint64")
-        )
-    {
-        return false;
-    }
+    // int64/uint64 는 TS CLI 의 uvar64/zigzag64 64-bit 헬퍼로 postcard
+    // fast-path 에 합류했다(@rustra/cli classifyPostcardField 와 동일 판정).
+    // safe 범위를 넘는 값은 number 대신 bigint 로 복원된다.
     // Set-shaped arrays are owned by the complex route, which restores Set
     // semantics at the JS boundary instead of exposing an array.
     if schema.get("uniqueItems") == Some(&Value::Bool(true)) {
@@ -822,10 +815,7 @@ fn js_field_supported(schema: &Value, depth: u8) -> bool {
     }
     match schema.get("type").and_then(Value::as_str) {
         Some("boolean") | Some("number") | Some("string") => true,
-        Some("integer") => !matches!(
-            schema.get("format").and_then(Value::as_str),
-            Some("int64" | "uint64")
-        ),
+        Some("integer") => true, // int64/uint64 포함 — uvar64/zigzag64 헬퍼로 지원
         Some("array") => {
             // tuple — items 가 배열 + minItems === maxItems(프로브: schemars
             // 튜플 표현). 모든 요소가 지원 타입일 때만 지원.

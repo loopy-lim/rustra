@@ -129,14 +129,14 @@ test('cross-wire frame layout: error has ok=0, err_len u16 LE @8, body @10', () 
 
 // ── 2026-08-22 타입 확장: bytes/map/tuple/uvar 교차 와이어 ──────
 // Rust wire_fixtures.rs 신규 4종과 짝. probe 계약: u32/u64 plain varint,
-// map count+(k,v)*, complex tuple count+elements, Vec<u8> len+raw.
+// map count+(k,v)*, tuple 은 A2부터 postcard prefix-free(len + elements).
 
 import { gaugeCodec, scoreTotalCodec, sizeOfCodec, spanCodec } from '../generated/rkyv-codecs.js';
 
 const SIZEOF_REQUEST = '0e0004010203fa';
 const SIZEOF_RESPONSE = '0100000000000000800204';
 const SCORETOTAL_RESPONSE = '01000000000000000254';
-const SPAN_REQUEST = '10000202686909';
+const SPAN_REQUEST = '100002686909';
 const SPAN_RESPONSE = '010000000000000002686909';
 const GAUGE_REQUEST = '1100ac02f0a204';
 const GAUGE_RESPONSE = '01000000000000009ca504';
@@ -166,10 +166,10 @@ test('cross-wire scoreTotal: map structure + response round-trip', () => {
   assert.equal(r.result?.count, 2);
 });
 
-// span — complex tuple count + elements ("hi", -5) → [2, 2,104,105, 9]
-test('cross-wire span: tuple length is explicit', () => {
+// span — postcard tuple: prefix-free ("hi", -5) → str len + bytes + zigzag i64
+test('cross-wire span: postcard tuple is prefix-free', () => {
   const req = spanCodec.encode({ pair: ['hi', -5] });
-  assert.equal(bytesToHex(req), SPAN_REQUEST, 'complex tuple: length then elements');
+  assert.equal(bytesToHex(req), SPAN_REQUEST, 'postcard tuple: str len + bytes + zigzag i64');
   const r = spanCodec.decode(hexToBytes(SPAN_RESPONSE));
   assert.equal(r.ok, true);
   assert.equal(r.result?.first, 'hi');
@@ -183,4 +183,51 @@ test('cross-wire gauge: unsigned fields use plain varint, not zigzag', () => {
   const r = gaugeCodec.decode(hexToBytes(GAUGE_RESPONSE));
   assert.equal(r.ok, true);
   assert.equal(r.result?.next, 70300, '300 + 70000');
+});
+
+// ── 2026-08-28 A2: 와이드 정수 postcard fast-path 경계 교차 와이어 ──
+// Rust wire_fixtures.rs 신규 3종과 짝. u64::MAX / i64::MIN / 2^53±1 값이
+// uvar64/zigzag64 헬퍼로 number 손실 없이 왕복함을 증명한다.
+
+const GAUGE_U64MAX_REQUEST = '1100ffffffffffffffffff0100';
+const GAUGE_U64MAX_RESPONSE = '0100000000000000ffffffffffffffffff01';
+const SPAN_I64MIN_REQUEST = '1000026869ffffffffffffffffff01';
+const SPAN_I64MIN_RESPONSE = '0100000000000000026869ffffffffffffffffff01';
+const SPAN_2POW53_M1_REQUEST = '1000026869feffffffffffff1f';
+const SPAN_2POW53_M1_RESPONSE = '0100000000000000026869feffffffffffff1f';
+const SPAN_2POW53_P1_REQUEST = '10000268698280808080808020';
+const SPAN_2POW53_P1_RESPONSE = '01000000000000000268698280808080808020';
+
+test('cross-wire gauge u64::MAX: 10-byte LEB128 round-trip', () => {
+  const req = gaugeCodec.encode({ limit: 18446744073709551615n, offset: 0 });
+  assert.equal(bytesToHex(req), GAUGE_U64MAX_REQUEST, 'u64::MAX → ff x9 + 01');
+  const r = gaugeCodec.decode(hexToBytes(GAUGE_U64MAX_RESPONSE));
+  assert.equal(r.ok, true);
+  assert.equal(r.result?.next, 18446744073709551615n, 'u64::MAX restored as bigint');
+});
+
+test('cross-wire span i64::MIN: worst-case zigzag (u64::MAX) round-trip', () => {
+  const req = spanCodec.encode({ pair: ['hi', -9223372036854775808n] });
+  assert.equal(bytesToHex(req), SPAN_I64MIN_REQUEST, 'zigzag(i64::MIN) = u64::MAX');
+  const r = spanCodec.decode(hexToBytes(SPAN_I64MIN_RESPONSE));
+  assert.equal(r.ok, true);
+  assert.equal(r.result?.second, -9223372036854775808n, 'i64::MIN restored as bigint');
+});
+
+test('cross-wire span 2^53-1: largest exact number', () => {
+  const req = spanCodec.encode({ pair: ['hi', 9007199254740991] });
+  assert.equal(bytesToHex(req), SPAN_2POW53_M1_REQUEST);
+  const r = spanCodec.decode(hexToBytes(SPAN_2POW53_M1_RESPONSE));
+  assert.equal(r.ok, true);
+  assert.equal(r.result?.second, 9007199254740991, 'stays a safe number');
+});
+
+test('cross-wire span 2^53+1: decode restores bigint beyond number precision', () => {
+  const req = spanCodec.encode({ pair: ['hi', 9007199254740993n] });
+  assert.equal(bytesToHex(req), SPAN_2POW53_P1_REQUEST);
+  const r = spanCodec.decode(hexToBytes(SPAN_2POW53_P1_RESPONSE));
+  assert.equal(r.ok, true);
+  const second = r.result?.second;
+  assert.equal(typeof second, 'bigint', 'unsafe value must come back as bigint');
+  assert.equal(second, 9007199254740993n, 'exact 2^53+1, not the rounded number');
 });

@@ -16,7 +16,7 @@
 //! 한쪽만 바뀌면 교차 테스트가 실패한다.
 
 use rustra_calculator_example::{
-    AddNumbersInput, DivideInput, GaugeInput, GreetInput, ScoreTotalInput, SizeOfInput,
+    AddNumbersInput, DivideInput, GaugeInput, GreetInput, ScoreTotalInput, SizeOfInput, SpanInput,
     calculator_package,
 };
 
@@ -96,10 +96,23 @@ const SIZEOF_RESPONSE: &str = "0100000000000000800204";
 // TS 인코더는 키를 정렬해 결정론적으로 인코딩하고 Rust 디코더는 순서독립
 // 이므로 round-trip 계약은 성립한다.
 const SCORETOTAL_RESPONSE: &str = "01000000000000000254";
-const SPAN_REQUEST: &str = "10000202686909";
+const SPAN_REQUEST: &str = "100002686909";
 const SPAN_RESPONSE: &str = "010000000000000002686909";
 const GAUGE_REQUEST: &str = "1100ac02f0a204";
 const GAUGE_RESPONSE: &str = "01000000000000009ca504";
+
+// ── 2026-08-28 A2: 와이드 정수 postcard fast-path 경계 와이어 ──
+// int64/uint64 가 uvar64/zigzag64 64-bit 헬퍼로 fast-path 에 합류하면서
+// 2^53 경계와 u64::MAX / i64::MIN 값이 TS number 손실 없이 와이어를 오가는지
+// 고정한다. TS cross-wire.test.ts 신규 블록과 짝이다.
+const GAUGE_U64MAX_REQUEST: &str = "1100ffffffffffffffffff0100";
+const GAUGE_U64MAX_RESPONSE: &str = "0100000000000000ffffffffffffffffff01";
+const SPAN_I64MIN_REQUEST: &str = "1000026869ffffffffffffffffff01";
+const SPAN_I64MIN_RESPONSE: &str = "0100000000000000026869ffffffffffffffffff01";
+const SPAN_2POW53_M1_REQUEST: &str = "1000026869feffffffffffff1f";
+const SPAN_2POW53_M1_RESPONSE: &str = "0100000000000000026869feffffffffffff1f";
+const SPAN_2POW53_P1_REQUEST: &str = "10000268698280808080808020";
+const SPAN_2POW53_P1_RESPONSE: &str = "01000000000000000268698280808080808020";
 
 #[test]
 fn size_of_wire_is_stable() {
@@ -134,10 +147,10 @@ fn score_total_wire_is_stable() {
 #[test]
 fn span_wire_is_stable() {
     let pkg = calculator_package();
-    // span contains i64, so both sides select complex-binary. Its tuple wire
-    // is count + elements, unlike postcard's prefix-free tuple.
+    // span (String, i64) tuple now rides the postcard fast-path (uvar64/zigzag64
+    // helpers). Postcard tuple wire is prefix-free: str len + bytes + zigzag i64.
     let mut req = 16u16.to_le_bytes().to_vec();
-    req.extend_from_slice(&[2, 2, b'h', b'i', 9]);
+    req.extend_from_slice(&[2, b'h', b'i', 9]);
     let resp = invoke_with_frame(&pkg, &req);
     assert_eq!(hexlify(&req), SPAN_REQUEST);
     assert_eq!(hexlify(&resp), SPAN_RESPONSE);
@@ -156,4 +169,58 @@ fn gauge_wire_is_stable() {
     let resp = invoke_with_frame(&pkg, &req);
     assert_eq!(hexlify(&req), GAUGE_REQUEST);
     assert_eq!(hexlify(&resp), GAUGE_RESPONSE);
+}
+
+#[test]
+fn gauge_u64max_wire_is_stable() {
+    let pkg = calculator_package();
+    // u64::MAX — 10바이트 LEB128(0xff x9 + 0x01). safe 정수 범위를 넘는 값이
+    // plain varint 로 손실 없이 왕복함을 고정한다.
+    let req = request_for(
+        17,
+        &GaugeInput {
+            limit: u64::MAX,
+            offset: 0,
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), GAUGE_U64MAX_REQUEST);
+    assert_eq!(hexlify(&resp), GAUGE_U64MAX_RESPONSE);
+}
+
+#[test]
+fn span_wide_int_boundaries_are_stable() {
+    let pkg = calculator_package();
+    // i64::MIN — zigzag 후 u64::MAX 가 되는 최악의 경우(10바이트 LEB128).
+    let req = request_for(
+        16,
+        &SpanInput {
+            pair: ("hi".into(), i64::MIN),
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), SPAN_I64MIN_REQUEST);
+    assert_eq!(hexlify(&resp), SPAN_I64MIN_RESPONSE);
+
+    // 2^53 - 1 — JS number 로 정확히 표현 가능한 최댓값.
+    let req = request_for(
+        16,
+        &SpanInput {
+            pair: ("hi".into(), (1i64 << 53) - 1),
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), SPAN_2POW53_M1_REQUEST);
+    assert_eq!(hexlify(&resp), SPAN_2POW53_M1_RESPONSE);
+
+    // 2^53 + 1 — number 로는 손실되고 TS 디코더가 bigint 로 복원해야 하는 값.
+    let req = request_for(
+        16,
+        &SpanInput {
+            pair: ("hi".into(), (1i64 << 53) + 1),
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), SPAN_2POW53_P1_REQUEST);
+    assert_eq!(hexlify(&resp), SPAN_2POW53_P1_RESPONSE);
 }

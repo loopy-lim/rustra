@@ -802,8 +802,52 @@ test('generateTypesTs exposes bigint for int64 and keeps those commands off C++ 
     ],
   };
   assert.match(generateTypesTs(schema), /value: number \| bigint;/);
+  // TS postcard fast-path 는 게이트 해제(A2) — C++ 정적 코덱만 여전히 제외(트랙 B).
   assert.doesNotMatch(generateRkyvCodecsCpp(schema), /readCounter/);
-  assert.match(generateRkyvRegistryTs(schema), /readCounterComplexCodec/);
+  assert.match(generateRkyvRegistryTs(schema), /\['readCounter', readCounterCodec\]/);
+});
+
+test('int64/uint64 fields join the postcard fast path with 64-bit helpers', () => {
+  const schema: PackageSchema = {
+    packageId: 'wide-fast-path',
+    fieldOrder: 'declaration',
+    commands: [
+      {
+        name: 'readCounter',
+        commandId: 31,
+        inputType: 'CounterInput',
+        outputType: 'CounterOutput',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            value: { type: 'integer', format: 'int64' },
+            offset: { type: 'integer', format: 'uint64' },
+          },
+          required: ['value', 'offset'],
+        },
+        outputSchema: {
+          type: 'object',
+          properties: { value: { type: 'integer', format: 'uint64' } },
+          required: ['value'],
+        },
+      },
+    ],
+  };
+
+  const codecs = generateRkyvCodecsTs(schema);
+  const registry = generateRkyvRegistryTs(schema);
+
+  // 와이드 정수 필드가 64-bit 헬퍼로 emit 된다(zigzag64 → _pcEncodeZigzag64,
+  // uvar64 → _pcEncodeVarint64).
+  assert.match(codecs, /_pcEncodeZigzag64\(args\.value\)/);
+  assert.match(codecs, /_pcEncodeVarint64\(args\.offset\)/);
+  assert.match(codecs, /_pcDecodeVarint64\(u8, offset\)/);
+  // complex 폴백이 아니라 postcard fast-path 코덱 그 자체가 된다.
+  assert.doesNotMatch(codecs, /createComplexCodec<CounterInput/);
+  assert.match(registry, /route: postcard/);
+  assert.doesNotMatch(registry, /route: complex/);
+  // C++ 게이트는 트랙 B — 여전히 와이드 정수를 native static codec 에서 제외.
+  assert.doesNotMatch(generateRkyvCodecsCpp(schema), /readCounter/);
 });
 
 test('generateRkyvCodecsTs encodes Option fields (no silent drop)', () => {
@@ -1059,9 +1103,12 @@ test('generateRkyvCodecsCpp keeps Set and BigInt-shaped commands on the JS compl
   const cpp = generateRkyvCodecsCpp(schema);
   const registry = generateRkyvRegistryTs(schema);
   assert.doesNotMatch(cpp, /encode_complex_setValues/);
+  // wideValue 는 A2 게이트 해제로 TS postcard fast-path — C++ 정적 코덱에는
+  // 계속 없다(C++ 은 uvar64/zigzag64 kind 를 emit 하지 않고 JS 폴백로 보낸다).
   assert.doesNotMatch(cpp, /wideValue/);
   assert.match(registry, /setValuesComplexCodec/);
-  assert.match(registry, /wideValueComplexCodec/);
+  assert.match(registry, /\['wideValue', wideValueCodec\]/);
+  assert.doesNotMatch(registry, /wideValueComplexCodec/);
 });
 
 test('generateRkyvCodecsCpp emits bounded recursive reference functions', () => {

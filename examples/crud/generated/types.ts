@@ -4,12 +4,12 @@ export { RustraCommandError } from '@rustra/types';
 export type Item = {
   id: string;
   name: string;
-  value: number;
+  value: number | bigint;
 };
 
 export type CreateItemInput = {
   name: string;
-  value: number;
+  value: number | bigint;
 };
 
 export type CreateItemOutput = {
@@ -33,7 +33,7 @@ export type GetItemOutput = {
 };
 
 export type ListItemsInput = {
-  minValue?: number | null;
+  minValue?: number | bigint | null;
 };
 
 export type ListItemsOutput = {
@@ -43,10 +43,9 @@ export type ListItemsOutput = {
 export type UpdateItemInput = {
   id: string;
   name?: string | null;
-  value?: number | null;
+  value?: number | bigint | null;
 };
 
 export type UpdateItemOutput = {
   item?: Item | null;
 };
-
