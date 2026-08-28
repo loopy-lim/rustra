@@ -1122,14 +1122,17 @@ test('generateRkyvCodecsCpp promotes primitive-element Sets to the native comple
   // postcard seq 로 인코딩하고 디코드는 전역 Set 생성자로 복원한다(TS
   // complex-codec 계약 동일: [...set] 순서 보존 encode, new Set(values) decode).
   assert.match(cpp, /encode_complex_setValues/);
-  // encode: 전역 Array.from 로 이터레이션 순서 보존 복사 — 실제 jsi
-  // Function::call 시그니처(callAsFunction 은 존재하지 않는다).
+  // encode: 전역 Array.from 로 이터레이션 순서 보존 복사. 실제 jsi 는 Value
+  // 복사가 삭제돼 initializer_list/배열 전달이 컴파일에 실패한다(RN Pods 빌드
+  // 게이트) — move-wrapped rvalue 1개로 가변 템플릿에 흘려보낸다.
   assert.match(cpp, /instanceOf\(rt, rt\.global\(\)\.getPropertyAsFunction\(rt, "Set"\)\)/);
   assert.match(cpp, /getPropertyAsFunction\(rt, "Array"\)\.getPropertyAsFunction\(rt, "from"\)/);
-  assert.match(cpp, /\.call\(rt, \{ /);
+  assert.match(cpp, /\.call\(rt, jsi::Value\(rt, \w+\)\)/);
   assert.doesNotMatch(cpp, /callAsFunction/);
-  // decode: 전역 Set 생성자 — callAsConstructor 도 실제 jsi 시그니처다.
-  assert.match(cpp, /callAsConstructor\(rt, _setArgs, 1\)/);
+  assert.doesNotMatch(cpp, /\.call\(rt, \{ /);
+  // decode: 전역 Set 생성자 — callAsConstructor 도 move-wrapped rvalue 로.
+  assert.match(cpp, /callAsConstructor\(rt, jsi::Value\(rt, _cx\d+\)\)/);
+  assert.doesNotMatch(cpp, /_setArgs/);
   // wideValue 는 B1 이후 C++ 정적 postcard 코덱 소속.
   assert.match(cpp, /wideValue/);
   // Set 명령도 registry 에는 complex 코덱이 그대로 남는다(non-typed 호스트용).
