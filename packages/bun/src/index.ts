@@ -206,8 +206,9 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
   // 실행된다. Rust malloc/free 0회 — free 짝이 필요 없다.
   const callerBufferCapacity = 512;
   const callerBuffer = new Uint8Array(callerBufferCapacity);
-  // usize::MAX 상태(버퍼 부족 재시도 신호) — 32/64비트 워드 모두 커버.
-  const statusOverflow = 0xffff_fffcn;
+  // 버퍼 부족 재시도 신호 — 코어가 반환하는 정확한 sentinel(usize::MAX,
+  // C++ typedInvokeTail 의 `n == SIZE_MAX` 와 동일). 성공 상태는 기록 바이트 수.
+  const statusOverflow = 0xffff_ffff_ffff_ffffn;
   const invokeRkyvV2Into = (payload: ArrayBuffer): ArrayBuffer => {
     const request = new Uint8Array(payload);
     outLength[0] = 0n;
@@ -218,8 +219,7 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
       callerBufferCapacity,
       outLength,
     );
-    // 상태는 bigint(usize) — 성공이면 기록 바이트 수, 부족이면 usize::MAX.
-    if (status >= statusOverflow) {
+    if (status === statusOverflow) {
       // 정확한 크기 heap 버퍼로 1회 재시도 — 코어가 캐시한 같은 응답을 쓴다.
       const needed = Number(outLength[0]);
       if (needed <= callerBufferCapacity || needed === 0) {
@@ -237,12 +237,14 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
         needed,
         outLength,
       );
-      if (retried === 0n || retried >= statusOverflow) {
+      if (retried === 0n || retried === statusOverflow) {
         throw new RustraCommandError(
           'invoke.failed',
           `Bun FFI caller-buffer retry failed (status ${retried})`,
         );
       }
+      // 전체 크기가 기록되면 fresh 버퍼를 그대로 소유 이전 — 복사 1회 생략.
+      if (retried === BigInt(needed)) return large.buffer as ArrayBuffer;
       return large.slice(0, Number(retried)).buffer as ArrayBuffer;
     }
     if (status === 0n) {

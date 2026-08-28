@@ -23,7 +23,7 @@ const addNumbersCodec: RkyvV2Codec<{ a: number; b: number }, { value: number }> 
 // [postcard: varint(len)+bytes]. 응답은 [ok u8][pad3][len u32 LE @4]
 // [postcard body @8]. 512B 초과 응답으로 caller-buffer overflow 재시도 경로를
 // 검증한다(Rust 핸들러는 bench_echo_bytes = echo).
-const benchEchoBytesCodec = (data: Uint8Array): RkyvV2Codec<Uint8Array, Uint8Array> => ({
+const benchEchoBytesCodec = (): RkyvV2Codec<Uint8Array, Uint8Array> => ({
   commandId: 25,
   encode(args) {
     const out = new Uint8Array(2 + 5 + args.length);
@@ -58,7 +58,7 @@ const benchEchoBytes = (length: number) => Uint8Array.from({ length }, (_, i) =>
 
 const testRegistry = new Map<string, RkyvV2Codec<unknown, unknown>>([
   ['addNumbers', addNumbersCodec as RkyvV2Codec<unknown, unknown>],
-  ['benchEchoBytes', benchEchoBytesCodec(benchEchoBytes(0)) as RkyvV2Codec<unknown, unknown>],
+  ['benchEchoBytes', benchEchoBytesCodec() as RkyvV2Codec<unknown, unknown>],
 ]);
 
 test('createBunEngine routes invoke to transport', async () => {
@@ -245,17 +245,8 @@ test('createBunFfiEngine dispatches rkyv V2 through the caller-buffer into bindi
 
     // 2) 큰 응답(610B > 512B) — overflow 상태 → 정확한 크기 heap 재시도.
     const payload = benchEchoBytes(600);
-    const codec = testRegistry.get('benchEchoBytes')!;
-    testRegistry.set(
-      'benchEchoBytes',
-      benchEchoBytesCodec(payload) as RkyvV2Codec<unknown, unknown>,
-    );
-    try {
-      const big = await engine.invoke<Uint8Array>('benchEchoBytes', payload);
-      assert.deepEqual(big, payload);
-    } finally {
-      testRegistry.set('benchEchoBytes', codec);
-    }
+    const big = await engine.invoke<Uint8Array>('benchEchoBytes', payload);
+    assert.deepEqual(big, payload);
 
     // 3) buffer 재사용 계약 — 이전 호출의 소유 결과는 이후 호출이 같은 재사용
     // 버퍼를 덮어써도 오염되지 않는다(malloc'd 포인터/뷰 공유 없음).
