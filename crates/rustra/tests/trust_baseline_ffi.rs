@@ -770,10 +770,13 @@ fn caller_buffer_rkyv_v2_large_response_executes_exactly_once() {
 // dispatch 안에서 heap 프레임으로 폴백해 owned=1 로 전달한다 — 핸들러는
 // 정확히 1회, 재시도 왕복 없음.
 
-/// on_complete 콜백 수신물 캡처 — bytes/len 과 owned 플래그, 포인터 정체
-/// (caller 버퍼 vs Rust heap) 를 함께 기록한다.
+/// 캡처 레코드 — (frame bytes, len, owned 플래그, resp 포인터 주소).
+/// 포인터 주소로 caller 버퍼 정체(caller 버퍼 vs Rust heap)를 판정한다.
+type CapturedFrame = (Vec<u8>, usize, u8, usize);
+
+/// on_complete 콜백 수신물 캡처.
 struct AsyncIntoCapture {
-    frame: std::sync::Mutex<Option<(Vec<u8>, usize, u8, usize)>>,
+    frame: std::sync::Mutex<Option<CapturedFrame>>,
     fired: std::sync::atomic::AtomicBool,
 }
 
@@ -785,7 +788,7 @@ impl AsyncIntoCapture {
         }
     }
 
-    fn wait(&self) -> (Vec<u8>, usize, u8, usize) {
+    fn wait(&self) -> CapturedFrame {
         for _ in 0..2_000 {
             if self.fired.load(std::sync::atomic::Ordering::Acquire) {
                 return self

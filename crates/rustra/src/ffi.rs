@@ -427,6 +427,16 @@ fn postcard_deserialize_envelope(bytes: &[u8]) -> Result<(String, serde_json::Va
 /// 가리키는 sync 진입점들의 `with_panic_guard` 가 에러 프레임으로 정규화한다
 /// (unwind 없이 복귀). guard 의 drop 을 콜백 직전에 명시해 완료→콜백 순서를
 /// 유지한다 — 호스트 콜백이 경계를 위반해도 complete 는 이미 실행된 상태다.
+///
+/// 완료 보장 guard 자체는 양쪽 async 워커(`run_worker`/`run_worker_into`)가
+/// 파일 수준의 [`EnsureComplete`] 하나를 공유한다.
+struct EnsureComplete(u64);
+impl Drop for EnsureComplete {
+    fn drop(&mut self) {
+        crate::cancel::complete_invocation(self.0);
+    }
+}
+
 fn run_worker(
     id: u64,
     bytes: Vec<u8>,
@@ -435,12 +445,6 @@ fn run_worker(
     invoke_fn: unsafe extern "C" fn(*const u8, usize, *mut usize) -> *mut u8,
     serialize: fn(&FfiResponse) -> Vec<u8>,
 ) {
-    struct EnsureComplete(u64);
-    impl Drop for EnsureComplete {
-        fn drop(&mut self) {
-            crate::cancel::complete_invocation(self.0);
-        }
-    }
     let _ensure = EnsureComplete(id);
     let mut out_len = 0;
     let resp_ptr = if crate::cancel::status(id) == crate::cancel::Status::Cancelled {
@@ -477,12 +481,6 @@ fn run_worker(
 /// null 콜백이면 owned 프레임만 즉시 해제한다(caller 버퍼는 호스트 소유 —
 /// 건드리지 않는다).
 fn run_worker_into(job: AsyncIntoJob) {
-    struct EnsureComplete(u64);
-    impl Drop for EnsureComplete {
-        fn drop(&mut self) {
-            crate::cancel::complete_invocation(self.0);
-        }
-    }
     let AsyncIntoJob {
         id,
         bytes,
@@ -1620,18 +1618,22 @@ pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2_async_into(
         unsafe { *invocation_id = id };
     }
     let user_data_raw = user_data as usize;
-    if payload_len > max_payload_bytes() {
-        // 크기 게이트 실패는 호출 스레드에서 즉시 완료한다 — 버퍼에 에러
-        // 프레임을 복사할 수 있으면 owned=0, 아니면 owned=1. 계약(콜백 1회,
-        // 레지스트리 정리)은 워커 경로와 동일하게 유지된다.
-        let e = crate::RustraError::payload_too_large(payload_len, max_payload_bytes());
-        let (ptr, len, owned) = deliver_into_frame(crate::encode_rkyv_v2_error(&e), buf, capacity);
+    // 즉시 실패(payload-too-large / backpressure) 공용 완료 — 버퍼에 에러
+    // 프레임을 복사할 수 있으면 owned=0, 아니면 owned=1. 콜백 1회 + 레지스트리
+    // 정리 계약은 워커 경로(`run_worker_into`)와 동일하게 유지된다.
+    let deliver_immediate = |frame: Vec<u8>| {
+        let (ptr, len, owned) = deliver_into_frame(frame, buf, capacity);
         crate::cancel::complete_invocation(id);
         if let Some(cb) = on_complete {
             unsafe { cb(user_data_raw as *mut c_void, ptr, len, owned) };
         } else if owned == 1 && !ptr.is_null() {
             unsafe { rustra_ffi_free(ptr, len) };
         }
+    };
+    if payload_len > max_payload_bytes() {
+        // 크기 게이트 실패는 호출 스레드에서 즉시 완료한다.
+        let e = crate::RustraError::payload_too_large(payload_len, max_payload_bytes());
+        deliver_immediate(crate::encode_rkyv_v2_error(&e));
         return;
     }
     let bytes = if payload.is_null() || payload_len == 0 {
@@ -1656,13 +1658,7 @@ pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2_async_into(
             "async worker queue is full — retry after drain",
         )
         .retryable();
-        let (ptr, len, owned) = deliver_into_frame(crate::encode_rkyv_v2_error(&e), buf, capacity);
-        crate::cancel::complete_invocation(id);
-        if let Some(cb) = on_complete {
-            unsafe { cb(user_data_raw as *mut c_void, ptr, len, owned) };
-        } else if owned == 1 && !ptr.is_null() {
-            unsafe { rustra_ffi_free(ptr, len) };
-        }
+        deliver_immediate(crate::encode_rkyv_v2_error(&e));
     }
 }
 
