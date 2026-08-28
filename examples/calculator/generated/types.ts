@@ -243,6 +243,14 @@ export type SumListOutput = {
   total: number | bigint;
 };
 
+export type TagSetInput = {
+  ids: Set<number | bigint>;
+};
+
+export type TagSetOutput = {
+  tags: Set<string>;
+};
+
 export type ToUpperInput = {
   s: string;
 };

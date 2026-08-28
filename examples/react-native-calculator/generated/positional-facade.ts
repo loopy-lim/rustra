@@ -61,12 +61,12 @@ export function benchAdd(a: number, b: number, options?: InvokeOptions): Promise
 
 export function benchEchoBytes(data: Uint8Array | ArrayBuffer, options?: InvokeOptions): Promise<BenchBytesPayload> {
   void options;
-  return Promise.resolve(callPos<BenchBytesPayload>(26, data));
+  return Promise.resolve(callPos<BenchBytesPayload>(27, data));
 }
 
 export function benchEchoPair(name: string, value: number, options?: InvokeOptions): Promise<BenchPairPayload> {
   void options;
-  return Promise.resolve(callPos<BenchPairPayload>(27, name, value));
+  return Promise.resolve(callPos<BenchPairPayload>(28, name, value));
 }
 
 export function benchEchoString(value: string, options?: InvokeOptions): Promise<BenchStringPayload> {

@@ -17,7 +17,7 @@
 
 use rustra_calculator_example::{
     AddNumbersInput, DivideInput, GaugeInput, GreetInput, ScoreTotalInput, SizeOfInput, SpanInput,
-    WideAggInput, calculator_package,
+    TagSetInput, WideAggInput, calculator_package,
 };
 
 fn request_for<I: serde::Serialize>(cmd_id: u16, input: &I) -> Vec<u8> {
@@ -279,4 +279,28 @@ fn wide_agg_wide_composite_wire_is_stable() {
     let resp = invoke_with_frame(&pkg, &req);
     assert_eq!(hexlify(&req), WIDEAGG_MULTIELEM_REQUEST);
     assert_eq!(hexlify(&resp), WIDEAGG_MULTIELEM_RESPONSE);
+}
+
+// ── 2026-08-29 B2: Set(uniqueItems) 복합 경로 와이어 ──
+// 원시 요소 Set 도 와이어는 순서 보존 postcard seq 다. Rust BTreeSet 은
+// 정렬 순서로 직렬화되고(zigzag 원소 / 문자열 원소), TS/C++ complex codec 은
+// JS Set 이터레이션 순서 그대로 쓴다 — 양쪽 다 디코딩은 Set 복원이므로 순서
+// 차이는 관측되지 않는다. TS cross-wire.test.ts 신규 블록과 짝이다.
+const TAGSET_REQUEST: &str = "1a00030d1ed00f";
+const TAGSET_RESPONSE: &str = "01000000000000000303742d3705743130303003743135";
+
+#[test]
+fn tag_set_primitive_elements_wire_is_stable() {
+    let pkg = calculator_package();
+    // BTreeSet<i64> {-7, 15, 1000} — 정렬 순서로 zigzag: -7→13(0x0d),
+    // 15→30(0x1e), 1000→2000(2바이트 LEB128: 0xd0 0x0f).
+    let req = request_for(
+        26,
+        &TagSetInput {
+            ids: std::collections::BTreeSet::from([-7i64, 15, 1000]),
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), TAGSET_REQUEST);
+    assert_eq!(hexlify(&resp), TAGSET_RESPONSE);
 }

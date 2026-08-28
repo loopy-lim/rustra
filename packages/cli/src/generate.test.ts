@@ -1079,7 +1079,7 @@ test('generateRkyvCodecsCpp promotes supported complex commands to native static
   );
 });
 
-test('generateRkyvCodecsCpp keeps Set on the JS complex route but promotes wide integers', () => {
+test('generateRkyvCodecsCpp promotes primitive-element Sets to the native complex codec', () => {
   const schema: PackageSchema = {
     packageId: 'native-complex-boundaries',
     commands: [
@@ -1093,7 +1093,14 @@ test('generateRkyvCodecsCpp keeps Set on the JS complex route but promotes wide 
           properties: { values: { type: 'array', items: { type: 'integer' }, uniqueItems: true } },
           required: ['values'],
         },
-        outputSchema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] },
+        outputSchema: {
+          type: 'object',
+          properties: {
+            ok: { type: 'boolean' },
+            uniques: { type: 'array', items: { type: 'string' }, uniqueItems: true },
+          },
+          required: ['ok', 'uniques'],
+        },
       },
       {
         name: 'wideValue',
@@ -1111,12 +1118,59 @@ test('generateRkyvCodecsCpp keeps Set on the JS complex route but promotes wide 
   };
   const cpp = generateRkyvCodecsCpp(schema);
   const registry = generateRkyvRegistryTs(schema);
-  assert.doesNotMatch(cpp, /encode_complex_setValues/);
-  // B1: wideValue 는 C++ 정적 postcard 코덱으로 승격 — u64 게이트 해소.
+  // B2: 원시 요소 Set 은 C++ complex 경로로 직결 — Set 안의 정수는 순서 보존
+  // postcard seq 로 인코딩하고 디코드는 전역 Set 생성자로 복원한다(TS
+  // complex-codec 계약 동일: [...set] 순서 보존 encode, new Set(values) decode).
+  assert.match(cpp, /encode_complex_setValues/);
+  // encode: 전역 Array.from 로 이터레이션 순서 보존 복사 — 실제 jsi
+  // Function::call 시그니처(callAsFunction 은 존재하지 않는다).
+  assert.match(cpp, /instanceOf\(rt, rt\.global\(\)\.getPropertyAsFunction\(rt, "Set"\)\)/);
+  assert.match(cpp, /getPropertyAsFunction\(rt, "Array"\)\.getPropertyAsFunction\(rt, "from"\)/);
+  assert.match(cpp, /\.call\(rt, \{ /);
+  assert.doesNotMatch(cpp, /callAsFunction/);
+  // decode: 전역 Set 생성자 — callAsConstructor 도 실제 jsi 시그니처다.
+  assert.match(cpp, /callAsConstructor\(rt, _setArgs, 1\)/);
+  // wideValue 는 B1 이후 C++ 정적 postcard 코덱 소속.
   assert.match(cpp, /wideValue/);
+  // Set 명령도 registry 에는 complex 코덱이 그대로 남는다(non-typed 호스트용).
   assert.match(registry, /setValuesComplexCodec/);
   assert.match(registry, /\['wideValue', wideValueCodec\]/);
   assert.doesNotMatch(registry, /wideValueComplexCodec/);
+});
+
+test('generateRkyvCodecsCpp keeps object-element Sets on the JS complex route', () => {
+  const schema: PackageSchema = {
+    packageId: 'native-complex-object-set',
+    commands: [
+      {
+        name: 'objectSet',
+        commandId: 24,
+        inputType: 'ObjectSetInput',
+        outputType: 'ObjectSetOutput',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: { name: { type: 'string' } },
+                required: ['name'],
+              },
+              uniqueItems: true,
+            },
+          },
+          required: ['items'],
+        },
+        outputSchema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] },
+      },
+    ],
+  };
+  const cpp = generateRkyvCodecsCpp(schema);
+  const registry = generateRkyvRegistryTs(schema);
+  // 객체 요소 Set 은 IR 정규화 한계로 여전히 JS complex 경로 소속이다.
+  assert.doesNotMatch(cpp, /encode_complex_objectSet/);
+  assert.match(registry, /objectSetComplexCodec/);
 });
 
 test('generateRkyvCodecsCpp promotes wide-int complex commands with BigInt safe-range decode', () => {

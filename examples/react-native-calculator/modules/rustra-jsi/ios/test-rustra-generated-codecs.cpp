@@ -83,7 +83,7 @@ int main() {
   // Raw eligibility mirrors the Rust raw_invoke_shape contract: up to three
   // scalar fields, and since B1 that includes int64/uint64 (the u64 slot
   // carries the full-width value). benchAdd/clamp are the raw-safe f64s;
-  // benchEchoBytes(26)/benchEchoPair(27)/wideAgg(25) stay off raw.
+  // benchEchoBytes(27)/benchEchoPair(28)/wideAgg(25)/tagSet(26) stay off raw.
   if (!gen::has_raw_codec(1) || !gen::has_raw_codec(23) || gen::has_raw_codec(24) ||
       gen::has_raw_codec(25) || gen::has_raw_codec(26) || gen::has_raw_codec(27)) {
     std::printf("FAIL raw capability set\n");
@@ -241,7 +241,10 @@ int main() {
       std::printf("FAIL encode_by_name(echoGroups) returned false\n");
       ++g_failures;
     }
-    check_bytes(w.take(), {0x1C, 0x00, 0x02, 0x01, 0x61, 0x01, 0x01, 0x78,
+    // echoGroups — id 28→29 시프트(tag_set 이 register! 맨 뒤가 아닌 앞에
+    // 끼워진 게 아니라 echo_groups 가 builder 체인 command_fn 이므로 id 가
+    // register! 뒤에 할당된다 — tag_set 추가로 29 로 시프트).
+    check_bytes(w.take(), {0x1D, 0x00, 0x02, 0x01, 0x61, 0x01, 0x01, 0x78,
                            0x01, 0x62, 0x02, 0x01, 0x79, 0x01, 0x7A},
                 "encode echoGroups sorted nested map");
 
@@ -283,7 +286,7 @@ int main() {
   {
     uint8_t data[] = {1, 2, 3, 250};
     rc::Writer w;
-    if (gen::has_buffer_codec(14) || !gen::has_buffer_codec(26) ||
+    if (gen::has_buffer_codec(14) || !gen::has_buffer_codec(27) ||
         gen::has_buffer_codec(23)) {
       std::printf("FAIL buffer capability set\n");
       ++g_failures;
@@ -293,8 +296,8 @@ int main() {
                 "encode_buffer_by_id sizeOf");
 
     rc::Writer empty;
-    gen::encode_buffer_by_id(26, nullptr, 0, empty);
-    check_bytes(empty.take(), {0x1a, 0x00, 0x00}, "encode_buffer_by_id empty");
+    gen::encode_buffer_by_id(27, nullptr, 0, empty);
+    check_bytes(empty.take(), {0x1b, 0x00, 0x00}, "encode_buffer_by_id empty");
 
     bool threw = false;
     try {
@@ -346,7 +349,7 @@ int main() {
   {
     uint8_t body[] = {0x04, 0x01, 0x02, 0x03, 0xFA};
     rc::Reader r(body, sizeof(body));
-    Value result = gen::decode_by_id(rt, 26, r);
+    Value result = gen::decode_by_id(rt, 27, r);
     Object bytesObject = result.getObject(rt).getProperty(rt, "data").getObject(rt);
     if (!bytesObject.isArrayBuffer(rt)) {
       std::printf("FAIL decode bytes must return ArrayBuffer\n");
@@ -359,7 +362,7 @@ int main() {
 
     uint8_t directBody[] = {1, 2, 3, 250};
     Value directBufferValue = gen::make_array_buffer(rt, directBody, sizeof(directBody));
-    Value direct = gen::decode_buffer_result_by_id(rt, 26, std::move(directBufferValue));
+    Value direct = gen::decode_buffer_result_by_id(rt, 27, std::move(directBufferValue));
     Object directBytes = direct.getObject(rt).getProperty(rt, "data").getObject(rt);
     ArrayBuffer directBuffer = directBytes.getArrayBuffer(rt);
     std::vector<uint8_t> directActual(
@@ -682,7 +685,68 @@ int main() {
     if (!gen::has_static_codec("wideAgg")) { std::printf("FAIL has_static_codec(wideAgg)\n"); ++g_failures; }
     if (!gen::has_static_codec("echoGroups")) { std::printf("FAIL has_static_codec(echoGroups)\n"); ++g_failures; }
     if (!gen::has_static_codec("rustraRegistryDemo")) { std::printf("FAIL has_static_codec(rustraRegistryDemo)\n"); ++g_failures; }
+    if (!gen::has_static_codec("tagSet")) { std::printf("FAIL has_static_codec(tagSet)\n"); ++g_failures; }
     if (gen::has_static_codec("dynamicCmd")) { std::printf("FAIL has_static_codec(dynamicCmd) should be false\n"); ++g_failures; }
+  }
+
+  // ── B2: native complex codec — Set(uniqueItems) ─────────────────
+  // tagSet 은 Set<i64> 입력 / Set<string> 출력. TS complex-codec 계약과
+  // 동일: encode 는 Set 이터레이션 순서 보존([...set] — 정렬/중복제거
+  // 없음), decode 는 전역 Set 생성자로 복원(new Set(values)). Rust
+  // BTreeSet 은 정렬 순서로 직렬화하지만 디코딩은 Set 이므로 순서 차이는
+  // 관측되지 않는다. PINNED hex 는 wire_fixtures.rs TAGSET_* 와 짝이다.
+  {
+    // Set encode: new Set([-7, 1000, 15]) — 이터레이션 순서 그대로
+    // [-7, 1000, 15] (Rust BTreeSet 의 정렬 순서와 다름이 의도).
+    Object args(rt);
+    Object setObj(rt);
+    Array items(rt, 3);
+    items.setValueAtIndex(rt, 0, -7.0);
+    items.setValueAtIndex(rt, 1, 1000.0);
+    items.setValueAtIndex(rt, 2, 15.0);
+    // shim/실 JSI 모두 Set 은 Object — 전역 Set 으로 만든다(실 런타임 계약).
+    Function setCtor = rt.global().getPropertyAsFunction(rt, "Set");
+    {
+      Value setArgs[] = {Value(rt, items)};
+      setObj = setCtor.callAsConstructor(rt, setArgs, 1).getObject(rt);
+    }
+    args.setProperty(rt, "ids", setObj);
+    Value argsV(rt, args);
+
+    rc::Writer w;
+    if (!gen::encode_by_name(rt, "tagSet", Value(rt, args), w)) {
+      std::printf("FAIL encode_by_name(tagSet) returned false\n");
+      ++g_failures;
+    }
+    // [cmd 26 LE][count 3][zigzag(-7)=13][zigzag(1000)=2000 LEB128 d0 0f][zigzag(15)=30]
+    check_bytes(w.take(), {0x1a, 0x00, 0x03, 0x0d, 0xd0, 0x0f, 0x1e},
+                "encode tagSet Set iteration order (no sort/dedup)");
+
+    // 배열 입력도 TS 계약과 동일하게 허용된다.
+    {
+      Object arrArgs(rt);
+      Array plain(rt, 2);
+      plain.setValueAtIndex(rt, 0, 5.0);
+      plain.setValueAtIndex(rt, 1, 5.0); // 중복 — C++ 는 중복제거하지 않는다
+      arrArgs.setProperty(rt, "ids", plain);
+      rc::Writer w2;
+      gen::encode_by_name(rt, "tagSet", Value(rt, arrArgs), w2);
+      check_bytes(w2.take(), {0x1a, 0x00, 0x02, 0x0a, 0x0a},
+                  "encode tagSet array input keeps duplicates");
+    }
+
+    // Set decode: ["t-7","t1000","t15"] → 전역 Set 생성자 복원.
+    // len: "t-7"=3, "t1000"=5, "t15"=3.
+    uint8_t body[] = {0x03, 0x03, 't', '-', '7', 0x05, 't', '1', '0', '0', '0', 0x03, 't', '1', '5'};
+    rc::Reader r(body, sizeof(body));
+    Value result = gen::decode_by_name(rt, "tagSet", r);
+    Object tags = result.getObject(rt).getProperty(rt, "tags").getObject(rt);
+    bool isSet = tags.instanceOf(rt, rt.global().getPropertyAsFunction(rt, "Set"));
+    Value sizeV = tags.getProperty(rt, "size");
+    if (!isSet || !sizeV.isNumber() || sizeV.asNumber() != 3.0) {
+      std::printf("FAIL decode tagSet must restore a real Set of size 3\n");
+      ++g_failures;
+    }
   }
 
   // ── encode_by_id / decode_by_id (P0-3: u16 디스패치) ──

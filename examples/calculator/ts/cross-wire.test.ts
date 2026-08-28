@@ -286,3 +286,38 @@ test('cross-wire wideAgg: multi-element 5/9/10-byte varints across mid-stream bo
   assert.equal(r.result?.max, 562949953421312, '2^49 stays a safe number');
   assert.equal(r.result?.adjusted, 8, '5 + 3 elements');
 });
+
+// ── 2026-08-29 B2: Set(uniqueItems) 복합 경로 교차 와이어 ──
+// Rust wire_fixtures.rs tag_set fixture 와 짝. 원시 요소 Set 도 와이어는
+// 순서 보존 postcard seq 다 — TS encode 는 Set 이터레이션 순서 그대로
+// ([...set] 계약, 정렬/중복제거 없음), decode 는 new Set(values) 로 복원.
+// Rust BTreeSet 은 정렬 순서로 직렬화하지만 디코딩은 Set 이므로 순서 차이는
+// 관측되지 않는다.
+
+import { tagSetCodec } from '../generated/rkyv-codecs.js';
+
+const TAGSET_REQUEST = '1a00030d1ed00f';
+const TAGSET_RESPONSE = '01000000000000000303742d3705743130303003743135';
+
+test('cross-wire tagSet: TS Set iteration-order encode matches Rust request wire', () => {
+  // Rust BTreeSet {-7, 15, 1000} 은 정렬 순서 [-7, 15, 1000] 로 직렬화된다
+  // (zigzag: 13, 30, 2000=LEB128 d0 0f). TS Set 을 같은 순서로 만들면 동일
+  // 바이트여야 한다.
+  const req = tagSetCodec.encode({ ids: new Set<bigint | number>([-7, 15, 1000]) });
+  assert.equal(bytesToHex(req), TAGSET_REQUEST, 'sorted Set → same wire as Rust BTreeSet');
+});
+
+test('cross-wire tagSet: Set is order-preserving, not sorted — insertion order wins', () => {
+  // 역순 삽입 Set 은 역순 그대로 인코딩된다(정렬 없음이 계약).
+  const req = tagSetCodec.encode({ ids: new Set([1000, 15, -7]) });
+  assert.equal(bytesToHex(req), '1a0003d00f1e0d', 'insertion order preserved');
+});
+
+test('cross-wire tagSet: Rust response → TS decode restores a real Set<string>', () => {
+  const r = tagSetCodec.decode(hexToBytes(TAGSET_RESPONSE));
+  assert.equal(r.ok, true);
+  const tags = r.result?.tags;
+  assert.ok(tags instanceof Set, 'tags must be a Set');
+  assert.equal(tags.size, 3);
+  assert.deepEqual([...tags], ['t-7', 't1000', 't15']);
+});

@@ -2608,6 +2608,33 @@ function cppComplexEncodeNode(
       const object = next();
       const array = next();
       const length = next();
+      if (node.unique) {
+        // B2: Set 직결. JS Set 은 jsi::Object 이므로 전역 Set 판별 후
+        // Array.from(set) 으로 이터레이션 순서 보존 복사([...set] 계약, TS
+        // complex-codec.ts encode 와 동일 — 정렬/중복제거 없음)한 뒤 postcard
+        // seq 를 쓴다. 배열 입력도 허용한다(TS encode 가 배열도 받는 것과 동일).
+        return [
+          `${indent}{ auto ${array} = [&]() -> jsi::Array {`,
+          `${indent}    if (!${value}.isObject()) throw jsi::JSError(rt, "complex Set or array expected");`,
+          `${indent}    auto ${object} = ${value}.asObject(rt);`,
+          `${indent}    if (${object}.isArray(rt)) return ${object}.getArray(rt);`,
+          `${indent}    if (!${object}.instanceOf(rt, rt.global().getPropertyAsFunction(rt, "Set"))) throw jsi::JSError(rt, "complex Set or array expected");`,
+          `${indent}    auto _from = rt.global().getPropertyAsFunction(rt, "Array").getPropertyAsFunction(rt, "from");`,
+          `${indent}    return _from.call(rt, { ${value} }).asObject(rt).getArray(rt);`,
+          `${indent}  }();`,
+          `${indent}  auto ${length} = ${array}.length(rt);`,
+          `${indent}  w.push_uvar(${length});`,
+          `${indent}  for (size_t _i = 0; _i < ${length}; _i++) {`,
+          ...cppComplexEncodeNode(
+            node.item,
+            `${array}.getValueAtIndex(rt, _i)`,
+            `${indent}    `,
+            `${depth} + 1`,
+            state,
+          ),
+          `${indent}  } }`,
+        ];
+      }
       const lines = [
         `${indent}{ auto ${object} = ${value}.asObject(rt);`,
         `${indent}  if (!${value}.isObject() || !${object}.isArray(rt)) throw jsi::JSError(rt, "complex array expected");`,
@@ -2623,13 +2650,6 @@ function cppComplexEncodeNode(
         ),
         `${indent}  } }`,
       ];
-      if (node.unique) {
-        lines.splice(
-          1,
-          1,
-          `${indent}  throw jsi::JSError(rt, "complex native codec requires an Array; use JS codec for Set");`,
-        );
-      }
       return lines;
     }
     case 'tuple': {
@@ -2773,10 +2793,14 @@ function cppComplexDecodeExpr(node: CodecIrNode, depth: string, state: CppComple
       return `[&]() -> jsi::Value { auto ${tag} = r.read_u8(); if (${tag} == 0) return jsi::Value::null(); if (${tag} != 1) throw std::runtime_error("complex optional presence tag"); return ${cppComplexDecodeExpr(node.inner, `${depth} + 1`, state)}; }()`;
     }
     case 'sequence': {
-      if (node.unique)
-        return '([&]() -> jsi::Value { throw std::runtime_error("complex native codec does not decode Set"); }())';
       const length = next();
       const array = next();
+      if (node.unique) {
+        // B2: Set 복원 — new Set(elements) 와 동일. 전역 Set 생성자에
+        // callAsConstructor 로 요소 배열을 넘긴다(TS decode 의
+        // new Set(values) 계약과 동일 — 중복은 Set 이 스스로 정리한다).
+        return `[&]() -> jsi::Value { auto ${length} = r.read_uvar(); if (${length} > 100000) throw std::runtime_error("complex collection length exceeds 100000"); auto ${array} = jsi::Array(rt, static_cast<size_t>(${length})); for (size_t _i = 0; _i < ${length}; _i++) ${array}.setValueAtIndex(rt, _i, ${cppComplexDecodeExpr(node.item, `${depth} + 1`, state)}); jsi::Value _setArgs[] = { jsi::Value(rt, ${array}) }; return rt.global().getPropertyAsFunction(rt, "Set").callAsConstructor(rt, _setArgs, 1); }()`;
+      }
       return `[&]() -> jsi::Value { auto ${length} = r.read_uvar(); if (${length} > 100000) throw std::runtime_error("complex collection length exceeds 100000"); auto ${array} = jsi::Array(rt, static_cast<size_t>(${length})); for (size_t _i = 0; _i < ${length}; _i++) ${array}.setValueAtIndex(rt, _i, ${cppComplexDecodeExpr(node.item, `${depth} + 1`, state)}); return ${array}; }()`;
     }
     case 'tuple': {
@@ -2840,6 +2864,24 @@ function cppComplexDecodeExpr(node: CodecIrNode, depth: string, state: CppComple
   }
 }
 
+/// B2: Set(uniqueItems sequence) 요소로 C++ 직결이 허용되는 원시 종류인지.
+/// string/number/integer/bool(literal/enum 포함 — 스칼라 와이어라 동일)만
+/// 지원한다. 객체/배열/맵 요소는 요소별 Set 시맨틱(동일성 비교)이 IR 에서
+/// 표현 불가해 제외한다.
+function cppComplexPrimitiveElement(node: CodecIrNode): boolean {
+  switch (node.kind) {
+    case 'boolean':
+    case 'integer':
+    case 'number':
+    case 'string':
+    case 'literal':
+    case 'enum':
+      return true;
+    default:
+      return false;
+  }
+}
+
 function cppComplexNativeSupported(
   node: CodecIrNode,
   definitions: Record<string, import('./schema.js').JsonSchema>,
@@ -2851,7 +2893,14 @@ function cppComplexNativeSupported(
       // jsi::BigInt::fromInt64/fromUint64 로 복원한다(TS toJsInteger 계약 동일).
       return true;
     case 'sequence':
-      return !node.unique && cppComplexNativeSupported(node.item, definitions, seen);
+      // B2: uniqueItems(Set) 도 원시 요소면 C++ 직결 — 인코딩은 Set 이터레이션
+      // 순서 보존([...set] 계약, TS complex-codec.ts 와 동일), 디코딩은 전역
+      // Set 생성자로 복원한다. 객체/배열 요소 Set 은 IR 정규화 한계로 여전히
+      // JS complex 경로 소속.
+      return (
+        (node.unique ? cppComplexPrimitiveElement(node.item) : true) &&
+        cppComplexNativeSupported(node.item, definitions, seen)
+      );
     case 'tuple':
       return node.items.every((item) => cppComplexNativeSupported(item, definitions, seen));
     case 'map':

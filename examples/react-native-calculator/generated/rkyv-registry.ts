@@ -1,4 +1,4 @@
-import { addNumbersCodec, benchAddCodec, benchEchoBytesCodec, benchEchoPairCodec, benchEchoStringCodec, channelDemoCodec, clampCodec, createItemCodec, divideCodec, echoGroupsComplexCodec, emitDemoCodec, gaugeCodec, greetCodec, isEvenCodec, multiplyCodec, processItemCodec, resourceCloseCodec, resourceOpenCodec, resourceReadCodec, resourceWriteCodec, rustraRegistryDemoCodec, scoreTotalCodec, secureComputeCodec, sizeOfCodec, spanCodec, sumListCodec, toUpperCodec, wideAggCodec } from './rkyv-codecs.js';
+import { addNumbersCodec, benchAddCodec, benchEchoBytesCodec, benchEchoPairCodec, benchEchoStringCodec, channelDemoCodec, clampCodec, createItemCodec, divideCodec, echoGroupsComplexCodec, emitDemoCodec, gaugeCodec, greetCodec, isEvenCodec, multiplyCodec, processItemCodec, resourceCloseCodec, resourceOpenCodec, resourceReadCodec, resourceWriteCodec, rustraRegistryDemoCodec, scoreTotalCodec, secureComputeCodec, sizeOfCodec, spanCodec, sumListCodec, tagSetComplexCodec, toUpperCodec, wideAggCodec } from './rkyv-codecs.js';
 
 export const rkyvV2Registry = new Map<string, import('@rustra/types').RkyvV2Codec<any, any>>([
   // route: postcard
@@ -53,6 +53,8 @@ export const rkyvV2Registry = new Map<string, import('@rustra/types').RkyvV2Code
   ['span', spanCodec],
   // route: postcard
   ['sumList', sumListCodec],
+  // route: complex
+  ['tagSet', tagSetComplexCodec],
   // route: postcard
   ['toUpper', toUpperCodec],
   // route: postcard
