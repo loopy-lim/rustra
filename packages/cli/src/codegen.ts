@@ -351,6 +351,57 @@ function _pcDecodeZigzagVarint(buf: Uint8Array, offset: number): { value: number
   return { value: _pcDecodeZigzag(value), bytesRead };
 }
 
+function _pcEncodeVarint64(v: number | bigint): Uint8Array {
+  // 64-bit LEB128. safe number 는 number 산술 fast path(_pcEncodeVarint 와
+  // 동일 출력), 그 밖(bigint, 2^53 초과)은 BigInt 산술 — 정밀도 손실 없음.
+  if (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0) {
+    return _pcEncodeVarint(v);
+  }
+  let value = BigInt(v);
+  if (value < 0n) throw new Error('varint must be non-negative: ' + value.toString());
+  const bytes: number[] = [];
+  do {
+    let next = Number(value & 0x7fn);
+    value >>= 7n;
+    if (value !== 0n) next |= 0x80;
+    bytes.push(next);
+  } while (value !== 0n);
+  return new Uint8Array(bytes);
+}
+
+function _pcDecodeVarint64(buf: Uint8Array, offset: number): { value: number | bigint; bytesRead: number } {
+  // LEB128 누적은 bigint 로 — 2^53 을 넘어도 정확하다. 반환 계약은
+  // complex-codec toJsInteger 선례: safe 정수 범위면 number, 넘으면 bigint.
+  let value = 0n;
+  let shift = 0n;
+  let bytesRead = 0;
+  while (true) {
+    const b = buf[offset + bytesRead];
+    if (b === undefined) throw new Error('varint out of bounds');
+    value |= BigInt(b & 0x7f) << shift;
+    shift += 7n;
+    bytesRead++;
+    if ((b & 0x80) === 0) break;
+    if (bytesRead >= 10) throw new Error('varint too long');
+  }
+  const asNumber = Number(value);
+  return { value: Number.isSafeInteger(asNumber) ? asNumber : value, bytesRead };
+}
+
+function _pcEncodeZigzag64(v: number | bigint): Uint8Array {
+  // i64 zigzag: (n << 1) ^ (n >> 63). bigint 산술로 i64 전체 범위를 커버.
+  const n = BigInt(v);
+  const encoded = (n << 1n) ^ (n >> 63n);
+  return _pcEncodeVarint64(encoded);
+}
+
+function _pcDecodeZigzag64(v: number | bigint): number | bigint {
+  const n = BigInt(v);
+  const decoded = (n >> 1n) ^ -(n & 1n);
+  const asNumber = Number(decoded);
+  return Number.isSafeInteger(asNumber) ? asNumber : decoded;
+}
+
 function _pcConcatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
   let totalLen = 0;
   for (const a of arrays) totalLen += a.length;

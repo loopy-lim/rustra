@@ -13,7 +13,7 @@ import {
   generateRkyvRegistryTs,
   generatePositionalFacadeTs,
 } from './generate.js';
-import { collectDefinitions } from './codegen.js';
+import { collectDefinitions, postcardHelperSource } from './codegen.js';
 import { buildCodecIr } from './codec-ir.js';
 import {
   generateBunEntryTs,
@@ -1743,4 +1743,98 @@ test('generateEventsTs returns empty string without events (backcompat)', async 
     typeof generateEventsTs
   >[0];
   assert.equal(generateEventsTs(schema), '');
+});
+
+// ── 64-bit varint/zigzag runtime helpers (postcardHelperSource) ────────────
+// postcardHelperSource() 가 반환하는 템플릿은 TS 코드 그 자체다. 임시 파일로
+// 쓰고 import 해서 실제 동작을 실행 검증한다(스냅샷/정규식만으로는 부정확).
+
+test('postcardHelperSource declares 64-bit varint/zigzag helpers', () => {
+  const source = postcardHelperSource();
+  for (const name of [
+    '_pcEncodeVarint64',
+    '_pcDecodeVarint64',
+    '_pcEncodeZigzag64',
+    '_pcDecodeZigzag64',
+  ]) {
+    assert.ok(source.includes(`function ${name}`), `missing helper ${name}`);
+  }
+});
+
+interface TestHooks {
+  encodeVarint64: (v: number | bigint) => Uint8Array;
+  decodeVarint64: (
+    buf: Uint8Array,
+    offset: number,
+  ) => { value: number | bigint; bytesRead: number };
+  encodeZigzag64: (v: number | bigint) => Uint8Array;
+  decodeZigzag64: (v: number | bigint) => number | bigint;
+  encodeVarint: (v: number) => Uint8Array;
+}
+
+async function loadHelperHooks(): Promise<TestHooks> {
+  const source = postcardHelperSource();
+  const bridge =
+    `export function _pcTestEncodeVarint64(v: number | bigint): Uint8Array { return _pcEncodeVarint64(v); }\n` +
+    `export function _pcTestDecodeVarint64(buf: Uint8Array, offset: number) { return _pcDecodeVarint64(buf, offset); }\n` +
+    `export function _pcTestEncodeZigzag64(v: number | bigint): Uint8Array { return _pcEncodeZigzag64(v); }\n` +
+    `export function _pcTestDecodeZigzag64(v: number | bigint) { return _pcDecodeZigzag64(v); }\n` +
+    `export function _pcTestEncodeVarint(v: number): Uint8Array { return _pcEncodeVarint(v); }\n`;
+  const dir = mkdtempSync(join(tmpdir(), 'rustra-varint64-'));
+  const file = join(dir, 'helpers.ts');
+  writeFileSync(file, source + bridge);
+  try {
+    const ns = (await import(file)) as Record<string, unknown>;
+    return {
+      encodeVarint64: ns._pcTestEncodeVarint64 as TestHooks['encodeVarint64'],
+      decodeVarint64: ns._pcTestDecodeVarint64 as TestHooks['decodeVarint64'],
+      encodeZigzag64: ns._pcTestEncodeZigzag64 as TestHooks['encodeZigzag64'],
+      decodeZigzag64: ns._pcTestDecodeZigzag64 as TestHooks['decodeZigzag64'],
+      encodeVarint: ns._pcTestEncodeVarint as TestHooks['encodeVarint'],
+    };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('postcardHelperSource 64-bit helpers round-trip u64 and i64 boundaries', async () => {
+  const h = await loadHelperHooks();
+  const u64Max = 2n ** 64n - 1n;
+
+  // u64::MAX → 10-byte LEB128, decode reverses it.
+  const encoded = h.encodeVarint64(u64Max);
+  assert.equal(encoded.length, 10);
+  const decoded = h.decodeVarint64(encoded, 0);
+  assert.equal(decoded.value, 18446744073709551615n);
+  assert.equal(decoded.bytesRead, 10);
+
+  // 2^53 경계: 이하 → number, 초과 → bigint (complex-codec toJsInteger 계약).
+  assert.equal(typeof h.decodeVarint64(h.encodeVarint64(2n ** 53n - 1n), 0).value, 'number');
+  assert.equal(h.decodeVarint64(h.encodeVarint64(2n ** 53n - 1n), 0).value, 9007199254740991);
+  assert.equal(typeof h.decodeVarint64(h.encodeVarint64(2n ** 53n), 0).value, 'bigint');
+  assert.equal(h.decodeVarint64(h.encodeVarint64(2n ** 53n), 0).value, 2n ** 53n);
+
+  // safe number 입력은 number 경로 — 32-bit number 헬퍼와 출력이 동일하다.
+  for (const v of [0, 1, 127, 128, 300, 2 ** 32 - 1]) {
+    assert.deepEqual(h.encodeVarint64(v), h.encodeVarint(v), `number path mismatch at ${v}`);
+  }
+});
+
+test('postcardHelperSource zigzag64 round-trips i64 boundaries', async () => {
+  const h = await loadHelperHooks();
+  const i64Min = -(2n ** 63n);
+  const i64Max = 2n ** 63n - 1n;
+
+  for (const v of [0n, 1n, -1n, i64Min, i64Max, 2n ** 53n, -(2n ** 53n) - 1n]) {
+    const bytes = h.encodeZigzag64(v);
+    const back = h.decodeZigzag64(h.decodeVarint64(bytes, 0).value);
+    // 디코드 계약: safe 범위면 number, 넘으면 bigint (toJsInteger 선례).
+    const expected = v >= -(2n ** 53n) + 1n && v <= 2n ** 53n - 1n ? Number(v) : v;
+    assert.equal(back, expected, `zigzag64 round-trip failed at ${v}`);
+  }
+
+  // i64::MIN → u64::MAX 와이어, i64::MAX → 2·i64MAX = 2^64-2 (둘 다 10바이트).
+  assert.deepEqual(h.encodeZigzag64(i64Min), h.encodeVarint64(2n ** 64n - 1n));
+  assert.deepEqual(h.encodeZigzag64(i64Max), h.encodeVarint64(2n ** 64n - 2n));
+  assert.equal(h.encodeZigzag64(i64Max).length, 10);
 });
