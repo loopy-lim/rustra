@@ -31,6 +31,89 @@ request 47 B, response 53 B, encode 5.678 µs, decode 5.556 µs였다. 이 수�
 합산하거나 RN runtime 수치로 해석하지 않는다. 원본 receipt는
 [`2026-08-27-complex-codec.json`](benchmark-receipts/2026-08-27-complex-codec.json)이다.
 
+## FFI caller-buffer 잔여 실측 (2026-08-28)
+
+로드맵의 caller-buffer 잔여 3항목(Bun 어댑터 `_into`, async 응답 caller-buffer,
+complex-route core into-handler)을 완성한 뒤 같은 머신에서 before/after를
+측정했다. 방법: 동일한 integrated release dylib(`examples/calculator`)에 대해
+(a) malloc 경로 = base 어댑터 동작(`rustra_ffi_invoke_rkyv_v2` + 복사 후 free),
+(b) into 경로 = `rustra_ffi_invoke_rkyv_v2_into` + 재사용 512B caller 버퍼를
+같은 프로세스에서 번갈아 측정했다(best-of-5 rounds). base 어댑터
+(98cdb689 `@rustra/bun`)와 integrated 어댑터의 전체 왕복도 같은 dylib으로
+교차 실행해 4쌍 중앙값을 냈다. 환경: macOS arm64 (Apple M-series, 10 core),
+Bun 1.4.0, Rust release. 측정 시 로드 평균 8–13으로 리프리가 아니다 —
+상대 비교 기준으로 읽는다.
+
+### Bun 어댑터 — transport 격리 (F2)
+
+동일 dylib에서 malloc 심볼과 `_into` 심볼을 직접 호출한 수치다.
+
+| 명령 (응답 크기)                       | malloc (base 동작) | into (F2) |      절감 |
+| -------------------------------------- | -----------------: | --------: | --------: |
+| addNumbers (9B, complex)               |          ~3,400 ns | ~3,150 ns |    ~7–10% |
+| benchEchoBytes (73B, 512B↑)            |             456 ns |    222 ns | **51.3%** |
+| benchEchoBytes (610B, overflow+재시도) |             681 ns |    648 ns |       ~5% |
+
+73B 응답에서 절반이면 512B caller 버퍼가 응답을 흡수하는 동안 Rust malloc/free와
+JS 복사(1회)가 사라지기 때문이다. 610B 응답은 overflow(`usize::MAX` 상태) 후
+exact-size heap 재시도로 흘러가 절감이 작다 — caller-buffer의 주 대상은
+"작은 응답 다수"다. 재사용 버퍼 경계의 `slice` 복사를 제거한 하한(FFI 순수
+절감)은 86ns까지 내려간다(into 218ns 대비 추가 60%).
+
+### Bun 어댑터 — 전체 왕복 (F2)
+
+코덱 인코딩/디코딩 + 엔진 + FFI를 포함한 `createBunFfiEngine` 전체 왕복이다.
+base 어댑터(malloc 경로)와 integrated 어댑터(`_into` 경로)를 같은 dylib으로
+교차 측정한 4쌍의 중앙값이다.
+
+| 명령 (응답 크기)      | base 어댑터 | integrated | 절감            |
+| --------------------- | ----------: | ---------: | --------------- |
+| echo 64B (73B 응답)   |      899 ns |     567 ns | **~37% (1.6x)** |
+| echo 600B (611B 응답) |    1,354 ns |   1,208 ns | ~11%            |
+| addNumbers (9B 응답)  |    3,772 ns |   3,350 ns | ~11%            |
+
+addNumbers/echo600 행은 complex/buffer 라우트의 스키마 코스트가 지배하고
+caller-buffer 절감은 그 위에 얹힌다. echo64가 37%인 것은 FFI와 복사가
+전체의 절반 가까이 차는 작은 페이로드 특성이다.
+
+### RN complex into-handler (F1) — 코어 복합 라우트
+
+F1은 complex binary 라운트 명령(addNumbers, echoGroups 등 oneOf/map/재귀
+스키마)에도 into-handler를 생성해 `DirectResponse::Written` 경로를 열었다.
+와이어는 `complex_encode` heap 경로와 바이트 동일함을 echoGroups 프로브로
+확인했다(57B/66,783B 응답 모두 into == malloc). 실측 효과는 응답 인코딩
+Vec 할당+복사 1회 제거라 작다 — complex 라우트는 complex_decode →
+`serde_json::from_value` → 핸들러 → `serde_json::to_value` → 인코딩의
+스키마 워크가 지배한다:
+
+| 명령 (complex 라우트)   |     malloc |  into (F1) | 절감 |
+| ----------------------- | ---------: | ---------: | ---: |
+| addNumbers 9B 응답      |   2,905 ns |   2,836 ns | 2.4% |
+| echoGroups 66,783B 응답 | 232,613 ns | 228,004 ns | 2.0% |
+
+즉 F1의 가치는 성능보다 계약 통일이다 — caller-buffer 호스트(C++ typedInvokeTail,
+Bun)가 complex 라우트 명령에서도 malloc 폴백 없이 Written을 받고, 버퍼 부족 시
+기존 `Buffered` 폴백으로 정확히 1회 실행 계약이 유지된다(헤더 포함 총량
+payload-limit 가드 포함). 참고로 base dylib의 echoGroups into는 F1 이전
+Buffered 폴백으로 같은 와이어를 만들었으므로 wire 호환성은 OTA 안전이다.
+
+### async 응답 caller-buffer (F3)
+
+F3은 RN C++ async 응답의 `std::vector frame` 복사를 제거하고 코어
+`rustra_ffi_invoke_rkyv_v2_async_into`가 caller 버퍼에 직접 쓰게 한다.
+RN 시뮬레이터 벤치는 이 섹션에서 다루지 않는다(C++ 게이트가 CI에 없어 실측
+주체는 기기 스모크). 코어 수준에서 확인한 사실:
+
+- worker-pool 왕복 자체는 JS 배치 드라이버 기준 ~0.6–1.6 µs/op로 async into가
+  동작하며, owned=0(caller 버퍼 기록) 계약으로 owned 프레임 malloc/free가
+  응답당 1회씩 사라진다.
+- 즉시 실패(payload-too-large/backpressure)는 호출 스레드에서 완료되고,
+  teardown/reload 시 큐잉된 전달 람다가 파괴돼도 shared_ptr 커스텀 deleter가
+  정확히 1회 free를 보장한다(구형 std::vector 경로의 누수 없음 특성 회복).
+- thread-local probe 재사용은 cross-thread unsafe로 판정해 single-dispatch
+  owned-flag 설계로 대체했다 — probe 캐시 없이도 재시도가 exactly-once다.
+  (근거: `crates/rustra/tests/trust_baseline_ffi.rs` 320행 추가)
+
 ## 2026-08-24 실제 host API 성능 (`0.4.0` merge candidate)
 
 기존 adapter-only 숫자는 transport 비용이 빠져 실제 사용자가 보는 지연과 달랐다.
@@ -566,11 +649,15 @@ RPC 계약"으로 설계 목표가 다르다. 같은 문제만 겹친다(RN에�
    Vec<u8>/ArrayBuffer, u8–u64 plain varint, chrono Date(ISO string)를
    3면(TS·Rust·C++) 코드젱에 구현하고 PINNED hex 와이어 게이트로 고정했다.
    남은 것: **bigint TS 표면**(postcard 현재 number — 2^53 정밀도 한계
-   문서화됨)과 C++ complex direct marshalling.
+   문서화됨). ~~C++ complex direct marshalling~~은 complex-route
+   into-handler로 코어가 `DirectResponse::Written`을 직접 반환하도록
+   해결(2026-08-28, 위 "FFI caller-buffer 잔여 실측" 참고).
 2. **schema-driven complex binary** (2026-08-27) — recursive struct,
    struct-valued map, data enum, nested Option/Set을 TS/Rust golden wire로
    처리한다. RN에서는 현재 JS codec이 Rust `invokeRkyvV2`까지 전달하며, C++
-   direct path는 별도 성능 확장이다.
+   direct path는 별도 성능 확장이다. 2026-08-28 caller-buffer 잔여 트랙에서
+   코어 into-handler와 Bun/async 응답 caller-buffer가 완료돼 호스트 복사는
+   응답 경계 1회로 수렴했다.
 3. **채널/리소스로 재정의** (2026-08-23 2단계 완료) — 콜백과 객체 참조.
    Nitro처럼 JS-first 객체 브릿지를 만드는 게 아니라, Tauri v2의
    `ipc::Channel<T>`(콜백을 직렬화 가능한 채널 핸들로)·`Resource`(객체를
