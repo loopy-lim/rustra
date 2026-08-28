@@ -845,7 +845,12 @@ where
                     &mut target[8..],
                     limits,
                 ) {
-                    return Ok(DirectResponse::Written(8 + body_len));
+                    let response_len = 8 + body_len;
+                    if response_len <= limits.max_payload_bytes {
+                        return Ok(DirectResponse::Written(response_len));
+                    }
+                    // 헤더 포함 총량이 한도를 넘으면 heap 경로의
+                    // payload_too_large 검사가 malloc 경로와 동일한 에러를 만든다.
                 }
             }
 
@@ -3238,5 +3243,55 @@ mod complex_into_tests {
                 panic!("no body room must fall back to Buffered")
             }
         }
+    }
+
+    // 폴백(exact-once) — caller 버퍼 부족으로 Buffered 로 흘러가도 핸들러는
+    // 정확히 1회만 실행된다. postcard 라우트의 동일 계약
+    // (trust_baseline_ffi::caller_buffer_rkyv_v2_large_response_executes_exactly_once)
+    // 를 complex 라우트에서 미러한다. 비멱등 command 안전성의 근거.
+    static INTO_FALLBACK_COUNTER: std::sync::atomic::AtomicUsize =
+        std::sync::atomic::AtomicUsize::new(0);
+
+    fn counted_status_echo(input: IntoStatusIn) -> Result<IntoStatusOut> {
+        INTO_FALLBACK_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(IntoStatusOut {
+            status: input.status,
+        })
+    }
+
+    #[test]
+    fn complex_into_fallback_executes_handler_exactly_once() {
+        let pkg = Package::builder("test.complex-into-once")
+            .command("countedStatusEcho", counted_status_echo)
+            .build();
+        let req = status_request(1);
+        let before = INTO_FALLBACK_COUNTER.load(std::sync::atomic::Ordering::SeqCst);
+
+        // 8B header 만 담는 target — body 2B 가 못 들어가 폴백 강제.
+        let mut target = vec![0u8; 8];
+        match pkg.invoke_rkyv_v2_into(&req, &mut target).unwrap() {
+            DirectResponse::Buffered(response) => {
+                assert_eq!(response.len(), 10);
+                assert_eq!(response[0], 1);
+                assert_eq!(&response[8..], &[0, 14]);
+            }
+            DirectResponse::Written(_) => panic!("small target must force the fallback"),
+        }
+        assert_eq!(
+            INTO_FALLBACK_COUNTER.load(std::sync::atomic::Ordering::SeqCst) - before,
+            1,
+            "fallback must not re-run the handler"
+        );
+
+        // 같은 요청을 넉넉한 target 으로 — Written 경로도 카운터를 1만 늘린다.
+        let mut roomy = vec![0u8; 64];
+        assert!(matches!(
+            pkg.invoke_rkyv_v2_into(&req, &mut roomy).unwrap(),
+            DirectResponse::Written(10)
+        ));
+        assert_eq!(
+            INTO_FALLBACK_COUNTER.load(std::sync::atomic::Ordering::SeqCst) - before,
+            2
+        );
     }
 }
