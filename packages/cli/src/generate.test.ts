@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import test from 'node:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   generateTypesTs,
   generateCommandsTs,
@@ -1784,7 +1785,8 @@ async function loadHelperHooks(): Promise<TestHooks> {
   const file = join(dir, 'helpers.ts');
   writeFileSync(file, source + bridge);
   try {
-    const ns = (await import(file)) as Record<string, unknown>;
+    // Node ESM 동적 import 는 파일 경로에 file:// URL 을 요구할 수 있어 변환.
+    const ns = (await import(pathToFileURL(file).href)) as Record<string, unknown>;
     return {
       encodeVarint64: ns._pcTestEncodeVarint64 as TestHooks['encodeVarint64'],
       decodeVarint64: ns._pcTestDecodeVarint64 as TestHooks['decodeVarint64'],
@@ -1837,4 +1839,45 @@ test('postcardHelperSource zigzag64 round-trips i64 boundaries', async () => {
   assert.deepEqual(h.encodeZigzag64(i64Min), h.encodeVarint64(2n ** 64n - 1n));
   assert.deepEqual(h.encodeZigzag64(i64Max), h.encodeVarint64(2n ** 64n - 2n));
   assert.equal(h.encodeZigzag64(i64Max).length, 10);
+});
+
+test('postcardHelperSource decoder rejects overlong and out-of-range encodings', async () => {
+  const h = await loadHelperHooks();
+  const u64MaxBytes = h.encodeVarint64(2n ** 64n - 1n); // ff ×9 + 01
+
+  // 10바이트째 마지막 바이트는 0x00/0x01 만 허용 (Rust postcard
+  // max_of_last_byte = 1). 0x02..0x7f 는 64비트 초과 — 무음 왜곡 대신 throw.
+  const overlong = new Uint8Array([...u64MaxBytes.slice(0, 9), 0x7f]);
+  assert.throws(() => h.decodeVarint64(overlong, 0), /varint exceeds 64 bits/);
+  // 같은 바이트가 0x01 이면 정상 — u64::MAX 와이어.
+  assert.equal(h.decodeVarint64(u64MaxBytes, 0).value, 2n ** 64n - 1n);
+  // 10바이트째 0x00 — 정확히 63비트 경계 인코딩.
+  const boundary = new Uint8Array([...u64MaxBytes.slice(0, 9), 0x00]);
+  assert.equal(h.decodeVarint64(boundary, 0).value, 2n ** 63n - 1n);
+
+  // 11바이트 — 앞 10바이트가 모두 continuation — 'varint too long'.
+  // (u64MaxBytes 뒤에 바이트를 붙이는 건 varint 가 아니라 다음 필드다.)
+  const eleven = new Uint8Array(11).fill(0xff);
+  assert.throws(() => h.decodeVarint64(eleven, 0), /varint too long/);
+
+  // 잘린 입력(continuation 으로 끝나는 5바이트) — 'varint out of bounds'.
+  const truncated = new Uint8Array([0xff, 0xff, 0xff, 0xff, 0xff]);
+  assert.throws(() => h.decodeVarint64(truncated, 0), /varint out of bounds/);
+  // buffer 끝을 넘기는 offset 도 동일.
+  assert.throws(() => h.decodeVarint64(new Uint8Array([0x01]), 5), /varint out of bounds/);
+});
+
+test('postcardHelperSource encoders reject negative and out-of-i64 inputs', async () => {
+  const h = await loadHelperHooks();
+
+  // 음수 varint — number 와 bigint 모두.
+  assert.throws(() => h.encodeVarint64(-1), /varint must be non-negative/);
+  assert.throws(() => h.encodeVarint64(-1n), /varint must be non-negative/);
+  assert.throws(() => h.encodeVarint64(-(2n ** 64n)), /varint must be non-negative/);
+
+  // zigzag64 는 i64 범위 밖 입력을 throw (validateInteger 선례, 무음 왜곡 금지).
+  assert.throws(() => h.encodeZigzag64(2n ** 63n), /outside i64 range/);
+  assert.throws(() => h.encodeZigzag64(-(2n ** 63n) - 1n), /outside i64 range/);
+  assert.doesNotThrow(() => h.encodeZigzag64(2n ** 63n - 1n));
+  assert.doesNotThrow(() => h.encodeZigzag64(-(2n ** 63n)));
 });
