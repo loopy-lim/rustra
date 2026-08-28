@@ -739,25 +739,33 @@ async function runBenchmarks(): Promise<string[]> {
         ),
       };
     };
+    // 커맨드 id는 register! 등록 순서에서 온다 — 하드코딩 대신 생성 codec 의
+    // commandId 를 읽어야 신규 커맨드 추가로 인한 시프트에도 진단이 유효하다.
+    const benchAddId = rkyvV2Registry.get('benchAdd')!.commandId;
+    const benchEchoStringId = rkyvV2Registry.get('benchEchoString')!.commandId;
+    const benchEchoBytesId = rkyvV2Registry.get('benchEchoBytes')!.commandId;
+    const benchEchoPairId = rkyvV2Registry.get('benchEchoPair')!.commandId;
     generatedRouteDiagnostics = {
       add: await routeCases(
         'add',
-        () => Promise.resolve(native.invokeTypedRaw!(23, 42, 58)),
+        () => Promise.resolve(native.invokeTypedRaw!(benchAddId, 42, 58)),
         () => benchAdd(INPUT),
       ),
       string: await routeCases(
         'string',
-        () => Promise.resolve(native.invokeTypedPos!(24, stringPayload.value)),
+        () => Promise.resolve(native.invokeTypedPos!(benchEchoStringId, stringPayload.value)),
         () => benchEchoString(stringPayload),
       ),
       bytes64: await routeCases(
         'buffer64',
-        () => Promise.resolve(native.invokeTypedBuffer!(25, byteBufferPayload.data)),
+        () => Promise.resolve(native.invokeTypedBuffer!(benchEchoBytesId, byteBufferPayload.data)),
         () => benchEchoBytes(byteBufferPayload),
       ),
       pair: await routeCases(
         'pair',
-        () => Promise.resolve(native.invokeTypedPos!(26, pairPayload.name, pairPayload.value)),
+        () => Promise.resolve(
+          native.invokeTypedPos!(benchEchoPairId, pairPayload.name, pairPayload.value),
+        ),
         () => benchEchoPair(pairPayload),
       ),
     };
