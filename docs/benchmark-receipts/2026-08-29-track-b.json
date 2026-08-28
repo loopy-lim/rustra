@@ -1,0 +1,42 @@
+{
+  "date": "2026-08-29",
+  "command": "bun scripts/track-b-bench.mjs",
+  "route": "complex-binary-js",
+  "results": [
+    {
+      "op": "encode",
+      "schema": "wideAgg Vec<u64>+Option<i64>",
+      "iterations": 20000,
+      "bytes": 36,
+      "us": 1.938
+    },
+    {
+      "op": "decode",
+      "schema": "wideAgg Vec<u64>+Option<i64>",
+      "iterations": 20000,
+      "bytes": 28,
+      "us": 0.542
+    },
+    {
+      "op": "encode",
+      "schema": "tagSet Set<i64>",
+      "iterations": 20000,
+      "bytes": 7,
+      "us": 1.042
+    },
+    {
+      "op": "decode",
+      "schema": "tagSet Set<i64>",
+      "iterations": 20000,
+      "bytes": 23,
+      "us": 1.259
+    }
+  ],
+  "allocationMode": "per-call-writer-and-response",
+  "verified": true,
+  "limitations": [
+    "does not measure Rust handler or C++ JSI marshalling (device smoke required)",
+    "single-process wall-clock sample",
+    "measures the JS codec path only — the C++ direct path is native and not measurable from this script"
+  ]
+}

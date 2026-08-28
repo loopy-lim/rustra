@@ -1,4 +1,4 @@
-import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
 import { createGeneratedFields2, invokeGenerated, invokeGeneratedBytes, invokeGeneratedFields1, invokeGeneratedFields3 } from '@rustra/types';
 import type { InvokeOptions } from '@rustra/types';
 
@@ -7,11 +7,11 @@ export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutp
 export const benchAdd = createGeneratedFields2<BenchAddInput, BenchAddOutput>(23, 'benchAdd', "a", "b", 'benchAdd');
 
 export function benchEchoBytes(input: BenchBytesPayload, options?: InvokeOptions): Promise<BenchBytesPayload> {
-  return invokeGeneratedBytes<BenchBytesPayload>(25, 'benchEchoBytes', input, input["data"], options);
+  return invokeGeneratedBytes<BenchBytesPayload>(27, 'benchEchoBytes', input, input["data"], options);
 }
 benchEchoBytes.commandId = 'benchEchoBytes';
 
-export const benchEchoPair = createGeneratedFields2<BenchPairPayload, BenchPairPayload>(26, 'benchEchoPair', "name", "value", 'benchEchoPair');
+export const benchEchoPair = createGeneratedFields2<BenchPairPayload, BenchPairPayload>(28, 'benchEchoPair', "name", "value", 'benchEchoPair');
 
 export function benchEchoString(input: BenchStringPayload, options?: InvokeOptions): Promise<BenchStringPayload> {
   return invokeGeneratedFields1<BenchStringPayload>(24, 'benchEchoString', input, input["value"], options);
@@ -30,7 +30,7 @@ export const createItem = createGeneratedFields2<CreateItemInput, CreateItemOutp
 export const divide = createGeneratedFields2<DivideInput, DivideOutput>(10, 'divide', "a", "b", 'divide');
 
 export function echoGroups(input: EchoGroupsInput, options?: InvokeOptions): Promise<EchoGroupsOutput> {
-  return invokeGenerated<EchoGroupsOutput>(27, 'echoGroups', input, options);
+  return invokeGenerated<EchoGroupsOutput>(29, 'echoGroups', input, options);
 }
 echoGroups.commandId = 'echoGroups';
 
@@ -99,7 +99,20 @@ export function sumList(input: SumListInput, options?: InvokeOptions): Promise<S
 }
 sumList.commandId = 'sumList';
 
+export function tagSet(input: TagSetInput, options?: InvokeOptions): Promise<TagSetOutput> {
+  return invokeGenerated<TagSetOutput>(26, 'tagSet', input, options);
+}
+tagSet.commandId = 'tagSet';
+
 export function toUpper(input: ToUpperInput, options?: InvokeOptions): Promise<ToUpperOutput> {
   return invokeGeneratedFields1<ToUpperOutput>(7, 'toUpper', input, input["s"], options);
 }
 toUpper.commandId = 'toUpper';
+
+/**
+ * A2 와이드 정수 복합 타입 표본 — Vec<u64> + Option<i64>. 원소/옵션 레벨 uvar64/zigzag64 헬퍼가 스트림 중간 7바이트 varint 경계를 넘는 값을 무손실 왕복하는지 cross-wire 픽스처로 고정한다.
+ */
+export function wideAgg(input: WideAggInput, options?: InvokeOptions): Promise<WideAggOutput> {
+  return invokeGenerated<WideAggOutput>(25, 'wideAgg', input, options);
+}
+wideAgg.commandId = 'wideAgg';

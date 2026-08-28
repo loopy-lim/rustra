@@ -351,6 +351,78 @@ function _pcDecodeZigzagVarint(buf: Uint8Array, offset: number): { value: number
   return { value: _pcDecodeZigzag(value), bytesRead };
 }
 
+const _pcI64Min = -(2n ** 63n);
+const _pcI64Max = 2n ** 63n - 1n;
+
+function _pcEncodeVarint64(v: number | bigint): Uint8Array {
+  // 64-bit LEB128. safe number 는 number 산술 fast path(_pcEncodeVarint 와
+  // 동일 출력), 그 밖(bigint, 2^53 초과)은 BigInt 산술 — 정밀도 손실 없음.
+  if (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0) {
+    return _pcEncodeVarint(v);
+  }
+  let value = BigInt(v);
+  if (value < 0n) throw new Error('varint must be non-negative: ' + value.toString());
+  const bytes: number[] = [];
+  do {
+    let next = Number(value & 0x7fn);
+    value >>= 7n;
+    if (value !== 0n) next |= 0x80;
+    bytes.push(next);
+  } while (value !== 0n);
+  return new Uint8Array(bytes);
+}
+
+function _pcDecodeVarint64(buf: Uint8Array, offset: number): { value: number | bigint; bytesRead: number } {
+  // 앞 7바이트(≤49비트, 2^53 이하)는 Number 누적 — 대부분의 varint 가 끝나는
+  // 구간이며 BigInt 할당이 전혀 없다. 8바이트 진입 시 BigInt 로 이월해 u64
+  // 전체를 무손실 누적한다. 반환 계약은 toJsInteger 선례: safe 정수면 number,
+  // 넘으면 bigint. 10바이트째 마지막 바이트는 0x00/0x01 만 허용한다(Rust
+  // postcard max_of_last_byte = 2^(64%7)−1 = 1) — 64비트 초과 인코딩은
+  // 무음 왜곡 대신 throw.
+  let num = 0;
+  let multiplier = 1;
+  let big = 0n;
+  let bytesRead = 0;
+  while (true) {
+    const b = buf[offset + bytesRead];
+    if (b === undefined) throw new Error('varint out of bounds');
+    bytesRead++;
+    if (bytesRead <= 7) {
+      num += (b & 0x7f) * multiplier;
+      multiplier *= 128;
+      if ((b & 0x80) === 0) return { value: num, bytesRead };
+    } else {
+      if (bytesRead === 8) big = BigInt(num); // 49비트 누적분을 BigInt 로 이월
+      big |= BigInt(b & 0x7f) << BigInt(7 * (bytesRead - 1));
+      if ((b & 0x80) === 0) {
+        if (bytesRead === 10 && (b & 0x7f) > 0x01) throw new Error('varint exceeds 64 bits');
+        const asNumber = Number(big);
+        return { value: Number.isSafeInteger(asNumber) ? asNumber : big, bytesRead };
+      }
+    }
+    if (bytesRead >= 10) throw new Error('varint too long');
+  }
+}
+
+function _pcEncodeZigzag64(v: number | bigint): Uint8Array {
+  // i64 zigzag: (n << 1) ^ (n >> 63). bigint 산술로 i64 전체 범위를 커버하며,
+  // 범위 밖 입력은 validateInteger 선례대로 throw 한다(무음 왜곡 금지 —
+  // 음수 varint throw 와 일관).
+  const n = BigInt(v);
+  if (n < _pcI64Min || n > _pcI64Max) {
+    throw new Error('zigzag64 input outside i64 range: ' + n.toString());
+  }
+  const encoded = (n << 1n) ^ (n >> 63n);
+  return _pcEncodeVarint64(encoded);
+}
+
+function _pcDecodeZigzag64(v: number | bigint): number | bigint {
+  const n = BigInt(v);
+  const decoded = (n >> 1n) ^ -(n & 1n);
+  const asNumber = Number(decoded);
+  return Number.isSafeInteger(asNumber) ? asNumber : decoded;
+}
+
 function _pcConcatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
   let totalLen = 0;
   for (const a of arrays) totalLen += a.length;

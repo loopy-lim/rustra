@@ -258,9 +258,19 @@ export function generateContractTs(schemaJson: string): string {
 // ── rkyv V2 codec generation (postcard wire format) ────────────────────
 
 /** Postcard field types for schema classification. */
+// ── 새 정수 폭(i128 등) 추가 체크리스트 ──────────────────────
+// 다음 전부를 손봐야 한다: (1) 이 union, (2) classifyPostcardField 스칼라 arm,
+// (3) generateFieldEncodeExpr / generateFieldDecodeExpr / generateFieldEncodeIntoExpr
+// (+ ENC_INTO_KINDS), (4) 복합 대응 kind(vec_/set_/map_/option_* — 있으면),
+// (5) tsFieldType 타입 표면, (6) Rust 미러 게이트(rkyv_codec.rs
+// js_field_supported[_with_defs]), (7) Rust ts_type_from_schema(codegen.rs),
+// (8) C++ 게이트(cppComplexNativeSupported), (9) 64-bit 헬퍼
+// 코드젠(codegen.ts postcardHelperSource) + 와이어 픽스처 양면.
 type PostcardFieldKind =
   | 'zigzag'
-  | 'uvar' // unsigned 정수(u8/u16/u32/u64) — postcard 는 plain varint(zigzag 아님)
+  | 'uvar' // unsigned 정수(u8/u16/u32/u64 아님 — u64 는 전용 uvar64) — plain varint(zigzag 아님)
+  | 'zigzag64' // int64 — 64-bit zigzag(_pcEncodeZigzag64/_pcDecodeZigzag64)
+  | 'uvar64' // uint64 — 64-bit varint(_pcEncodeVarint64/_pcDecodeVarint64)
   | 'f64'
   | 'f32'
   | 'bool'
@@ -269,9 +279,13 @@ type PostcardFieldKind =
   | 'vec_zigzag'
   | 'vec_f64'
   | 'vec_bool'
+  | 'vec_i64' // Vec<int64> — 원소별 zigzag64(_pc*64 헬퍼)
+  | 'vec_u64' // Vec<uint64> — 원소별 uvar64
   | 'set_zigzag'
   | 'set_f64'
   | 'set_bool'
+  | 'set_i64' // Set<int64> — 원소별 zigzag64
+  | 'set_u64' // Set<uint64> — 원소별 uvar64
   | 'set_uvar' // Set<unsigned> — 원소별 plain varint
   | 'struct' // nested struct via $ref; set_* = Set (wire-compatible with vec)
   | 'vec_string'
@@ -279,6 +293,8 @@ type PostcardFieldKind =
   | 'vec_uvar' // Vec<unsigned> — 원소별 plain varint
   | 'map_zigzag' // HashMap<String, signed> — count + (key,value)*
   | 'map_uvar'
+  | 'map_i64' // HashMap<String, int64> — 값 원소별 zigzag64
+  | 'map_u64' // HashMap<String, uint64> — 값 원소별 uvar64
   | 'map_f64'
   | 'map_bool'
   | 'map_string'
@@ -286,6 +302,8 @@ type PostcardFieldKind =
   | 'data_enum' // payload 있는 enum(oneOf) — variant varint + 필드 평탄화
   | 'option_zigzag'
   | 'option_uvar'
+  | 'option_zigzag64' // Option<int64> — 태그 + zigzag64
+  | 'option_uvar64' // Option<uint64> — 태그 + uvar64
   | 'option_f64'
   | 'option_f32'
   | 'option_bool'
@@ -349,12 +367,13 @@ function classifyPostcardField(
   // integer — postcard 는 unsigned(u8/u16/u32/u64)를 plain varint, signed 를
   // zigzag 로 직렬화한다. format 구분이 없으면 signed 로 간주(하위호환).
   // probe: u32=70000 → [240,162,4] (plain); i64=-300 → [215,4] (zigzag).
+  // u64/i64 는 JS 경계에서 전체 64비트가 필요하므로 전용 64-bit 종류로 분리해
+  // _pc*64 헬퍼(bigint 무손실)를 emit 한다 — 와이어는 동일 LEB128/zigzag.
   if (schema.type === 'integer') {
+    if (schema.format === 'uint64') return 'uvar64';
+    if (schema.format === 'int64') return 'zigzag64';
     const unsigned =
-      schema.format === 'uint8' ||
-      schema.format === 'uint16' ||
-      schema.format === 'uint32' ||
-      schema.format === 'uint64';
+      schema.format === 'uint8' || schema.format === 'uint16' || schema.format === 'uint32';
     return unsigned ? 'uvar' : 'zigzag';
   }
   if (schema.type === 'number') {
@@ -371,6 +390,8 @@ function classifyPostcardField(
     if (inner === null) return null;
     if (inner === 'zigzag') return 'option_zigzag';
     if (inner === 'uvar') return 'option_uvar';
+    if (inner === 'zigzag64') return 'option_zigzag64';
+    if (inner === 'uvar64') return 'option_uvar64';
     if (inner === 'f64') return 'option_f64';
     if (inner === 'f32') return 'option_f32';
     if (inner === 'bool') return 'option_bool';
@@ -386,12 +407,11 @@ function classifyPostcardField(
     // probe: vec![1,2,3] -> [3, 1, 2, 3].
     if (items.type === 'integer' && items.format === 'uint8') return 'bytes';
     const itemsUnsigned =
-      items.format === 'uint8' ||
-      items.format === 'uint16' ||
-      items.format === 'uint32' ||
-      items.format === 'uint64';
+      items.format === 'uint8' || items.format === 'uint16' || items.format === 'uint32';
     // uniqueItems(Set): wire = array. encode [...value], decode new Set(...).
     if (items.type === 'integer') {
+      if (items.format === 'uint64') return schema.uniqueItems ? 'set_u64' : 'vec_u64';
+      if (items.format === 'int64') return schema.uniqueItems ? 'set_i64' : 'vec_i64';
       if (itemsUnsigned) return schema.uniqueItems ? 'set_uvar' : 'vec_uvar';
       return schema.uniqueItems ? 'set_zigzag' : 'vec_zigzag';
     }
@@ -441,11 +461,9 @@ function classifyPostcardField(
   ) {
     const v = schema.additionalProperties;
     if (v.type === 'integer') {
-      const unsigned =
-        v.format === 'uint8' ||
-        v.format === 'uint16' ||
-        v.format === 'uint32' ||
-        v.format === 'uint64';
+      if (v.format === 'uint64') return 'map_u64';
+      if (v.format === 'int64') return 'map_i64';
+      const unsigned = v.format === 'uint8' || v.format === 'uint16' || v.format === 'uint32';
       return unsigned ? 'map_uvar' : 'map_zigzag';
     }
     if (v.type === 'number') return 'map_f64';
@@ -583,37 +601,6 @@ function hasCyclicRef(
 // actual named-definition cycle.
 type JsonSchemaIdentity = import('./schema.js').JsonSchema;
 
-/** BigInt-capable integers stay on the schema-driven JS complex route. */
-function hasWideInteger(
-  schema: import('./schema.js').JsonSchema,
-  definitions: Record<string, import('./schema.js').JsonSchema>,
-  path = new Set<string>(),
-): boolean {
-  if (schema.type === 'integer' && (schema.format === 'int64' || schema.format === 'uint64')) {
-    return true;
-  }
-  if (schema.$ref) {
-    const name = refTypeName(schema.$ref);
-    if (path.has(name)) return false;
-    const definition = definitions[name];
-    if (!definition) return false;
-    const nextPath = new Set(path);
-    nextPath.add(name);
-    return hasWideInteger(definition, definitions, nextPath);
-  }
-  const children: import('./schema.js').JsonSchema[] = [
-    ...(schema.anyOf ?? []),
-    ...(schema.oneOf ?? []),
-    ...(schema.allOf ?? []),
-    ...(Array.isArray(schema.items) ? schema.items : schema.items ? [schema.items] : []),
-    ...Object.values(schema.properties ?? {}),
-  ];
-  if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
-    children.push(schema.additionalProperties);
-  }
-  return children.some((child) => hasWideInteger(child, definitions, path));
-}
-
 /** Set-shaped arrays stay on the schema-driven JS complex route. */
 function hasSet(
   schema: import('./schema.js').JsonSchema,
@@ -673,10 +660,15 @@ function collectAllDefinitions(
  */
 /** encodeInto 가 다루는 필드 kind — 단일 패스 직접 기록이 자연스러운 것들.
  * PostcardField 유니언에 실제 존재하는 kind 만 포함한다(없는 kind 를 넣으면
- * 코드젠이 영원히 그 경로를 켜지 않는 것처럼 보인다). */
+ * 코드젠이 영원히 그 경로를 켜지 않는 것처럼 보인다).
+ * 의도적 제외: 복합 64-bit kind(vec_i64/vec_u64, set_i64/set_u64,
+ * map_i64/map_u64)와 tuple 은 커서 재작성 루프가 복잡해 encodeInto 를 켜지
+ * 않는다 — 이런 필드를 가진 코덱은 parts 조립 encode 만 얻는다. */
 const ENC_INTO_KINDS = new Set([
   'zigzag',
   'uvar',
+  'zigzag64',
+  'uvar64',
   'f64',
   'f32',
   'bool',
@@ -740,6 +732,25 @@ function generateFieldEncodeIntoExpr(
         `let _v = _arr.length; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; ` +
         `for (let _i = 0; _i < _arr.length; _i++) { let _x = _arr[_i]; do { ensure(1); out[w++] = (_x % 128) | 0x80; _x = Math.floor(_x / 128); } while (_x > 0); out[w - 1] &= 0x7f; } }`
       );
+    case 'uvar64':
+      // u64 커서 직접 기록 — safe number 는 number 산술(_pcEncodeVarint64 와
+      // 동일 출력), 그 밖은 bigint 산술로 64비트 전체를 무손실 기록한다.
+      return (
+        `${indent}{ const _v = ${valueExpr}; ` +
+        `if (typeof _v === 'number' && Number.isSafeInteger(_v) && _v >= 0) { ` +
+        `let _x = _v; do { ensure(1); out[w++] = (_x % 128) | 0x80; _x = Math.floor(_x / 128); } while (_x > 0); out[w - 1] &= 0x7f; ` +
+        `} else { const _b = BigInt(_v); if (_b < 0n) throw new Error('varint must be non-negative: ' + _b.toString()); ` +
+        `let _x = _b; do { ensure(1); out[w++] = Number(_x & 0x7fn) | 0x80; _x >>= 7n; } while (_x !== 0n); out[w - 1] &= 0x7f; } }`
+      );
+    case 'zigzag64':
+      // i64 커서 직접 기록 — bigint zigzag((n<<1)^(n>>63)) 후 varint64. 입력이
+      // i64 범위 밖이면 _pcEncodeZigzag64 계약과 동일하게 throw 한다.
+      return (
+        `${indent}{ let _x = BigInt(${valueExpr}); ` +
+        `if (_x < _pcI64Min || _x > _pcI64Max) throw new Error('zigzag64 input outside i64 range: ' + _x.toString()); ` +
+        `_x = (_x << 1n) ^ (_x >> 63n); ` +
+        `do { ensure(1); out[w++] = Number(_x & 0x7fn) | 0x80; _x >>= 7n; } while (_x !== 0n); out[w - 1] &= 0x7f; }`
+      );
     default:
       // 나머지 vec_* 는 원소 종류별 루프가 필요해 여기서 다루지 않는다 —
       // ENC_INTO_KINDS 체크가 encodeInto 자체를 스킵하게 한다.
@@ -758,6 +769,12 @@ function generateFieldEncodeExpr(
       return `${indent}parts.push(_pcEncodeZigzagVarint(${valueExpr}));`;
     case 'uvar':
       return `${indent}parts.push(_pcEncodeVarint(${valueExpr}));`;
+    case 'zigzag64':
+      // i64 — _pcEncodeZigzag64 가 바이트 배열을 반환한다(zigzag → varint64).
+      return `${indent}parts.push(_pcEncodeZigzag64(${valueExpr}));`;
+    case 'uvar64':
+      // u64 — 2^53 초과는 bigint 로 무손실(타입 표면이 number | bigint).
+      return `${indent}parts.push(_pcEncodeVarint64(${valueExpr}));`;
     case 'f64':
       return `${indent}parts.push(_pcEncodeF64(${valueExpr}));`;
     case 'f32':
@@ -784,6 +801,28 @@ function generateFieldEncodeExpr(
         `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
         `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
         `${indent}    parts.push(_pcEncodeZigzagVarint(_arr[_i]));\n` +
+        `${indent}  }\n` +
+        `${indent}}`
+      );
+    case 'vec_i64':
+      // Vec<i64> — 원소별 zigzag64(2^53 초과는 bigint 허용).
+      return (
+        `${indent}{\n` +
+        `${indent}  const _arr = ${valueExpr};\n` +
+        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
+        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
+        `${indent}    parts.push(_pcEncodeZigzag64(_arr[_i]));\n` +
+        `${indent}  }\n` +
+        `${indent}}`
+      );
+    case 'vec_u64':
+      // Vec<u64> — 원소별 uvar64.
+      return (
+        `${indent}{\n` +
+        `${indent}  const _arr = ${valueExpr};\n` +
+        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
+        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
+        `${indent}    parts.push(_pcEncodeVarint64(_arr[_i]));\n` +
         `${indent}  }\n` +
         `${indent}}`
       );
@@ -825,6 +864,28 @@ function generateFieldEncodeExpr(
         `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
         `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
         `${indent}    parts.push(_pcEncodeZigzagVarint(_arr[_i]));\n` +
+        `${indent}  }\n` +
+        `${indent}}`
+      );
+    case 'set_i64':
+      // Set<i64> — 원소별 zigzag64.
+      return (
+        `${indent}{\n` +
+        `${indent}  const _arr = [...${valueExpr}];\n` +
+        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
+        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
+        `${indent}    parts.push(_pcEncodeZigzag64(_arr[_i]));\n` +
+        `${indent}  }\n` +
+        `${indent}}`
+      );
+    case 'set_u64':
+      // Set<u64> — 원소별 uvar64.
+      return (
+        `${indent}{\n` +
+        `${indent}  const _arr = [...${valueExpr}];\n` +
+        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
+        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
+        `${indent}    parts.push(_pcEncodeVarint64(_arr[_i]));\n` +
         `${indent}  }\n` +
         `${indent}}`
       );
@@ -900,6 +961,8 @@ function generateFieldEncodeExpr(
     }
     case 'map_zigzag':
     case 'map_uvar':
+    case 'map_i64':
+    case 'map_u64':
     case 'map_f64':
     case 'map_bool':
     case 'map_string': {
@@ -911,11 +974,15 @@ function generateFieldEncodeExpr(
           ? '_pcEncodeZigzagVarint(_v)'
           : field.kind === 'map_uvar'
             ? '_pcEncodeVarint(_v)'
-            : field.kind === 'map_f64'
-              ? '_pcEncodeF64(_v)'
-              : field.kind === 'map_bool'
-                ? 'new Uint8Array([_v ? 1 : 0])'
-                : '_pcEncodeString(_v)';
+            : field.kind === 'map_i64'
+              ? '_pcEncodeZigzag64(_v)'
+              : field.kind === 'map_u64'
+                ? '_pcEncodeVarint64(_v)'
+                : field.kind === 'map_f64'
+                  ? '_pcEncodeF64(_v)'
+                  : field.kind === 'map_bool'
+                    ? 'new Uint8Array([_v ? 1 : 0])'
+                    : '_pcEncodeString(_v)';
       return (
         `${indent}{\n` +
         `${indent}  const _map = ${valueExpr};\n` +
@@ -943,6 +1010,8 @@ function generateFieldEncodeExpr(
     }
     case 'option_zigzag':
     case 'option_uvar':
+    case 'option_zigzag64':
+    case 'option_uvar64':
     case 'option_f64':
     case 'option_f32':
     case 'option_bool':
@@ -953,6 +1022,8 @@ function generateFieldEncodeExpr(
         {
           option_zigzag: 'zigzag',
           option_uvar: 'uvar',
+          option_zigzag64: 'zigzag64',
+          option_uvar64: 'uvar64',
           option_f64: 'f64',
           option_f32: 'f32',
           option_bool: 'bool',
@@ -1031,6 +1102,25 @@ function generateFieldDecodeExpr(
         `${indent}  offset += _v.bytesRead;\n` +
         `${indent}}`
       );
+    case 'uvar64':
+      // u64 — safe 범위는 number, 2^53 초과는 bigint 복원(_pcDecodeVarint64 계약).
+      // 객체 조립은 값을 그대로 통과하므로 number|bigint 공용합이 문제없다.
+      return (
+        `${indent}{\n` +
+        `${indent}  const _v = _pcDecodeVarint64(u8, offset);\n` +
+        `${indent}  ${lvalue} = _v.value;\n` +
+        `${indent}  offset += _v.bytesRead;\n` +
+        `${indent}}`
+      );
+    case 'zigzag64':
+      // i64 — varint64 디코드 후 zigzag 복원(반환은 number|bigint).
+      return (
+        `${indent}{\n` +
+        `${indent}  const _v = _pcDecodeVarint64(u8, offset);\n` +
+        `${indent}  ${lvalue} = _pcDecodeZigzag64(_v.value);\n` +
+        `${indent}  offset += _v.bytesRead;\n` +
+        `${indent}}`
+      );
     case 'bytes': {
       // Vec<u8> — len varint + raw bytes.
       return (
@@ -1087,6 +1177,36 @@ function generateFieldDecodeExpr(
         `${indent}  ${lvalue} = _arr;\n` +
         `${indent}}`
       );
+    case 'vec_i64':
+      // Vec<i64> — 원소별 varint64 + zigzag 복원(safe 범위 밖은 bigint).
+      return (
+        `${indent}{\n` +
+        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
+        `${indent}  offset += _len.bytesRead;\n` +
+        `${indent}  const _arr: (number | bigint)[] = new Array(_len.value);\n` +
+        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
+        `${indent}    const _v = _pcDecodeVarint64(u8, offset);\n` +
+        `${indent}    _arr[_i] = _pcDecodeZigzag64(_v.value);\n` +
+        `${indent}    offset += _v.bytesRead;\n` +
+        `${indent}  }\n` +
+        `${indent}  ${lvalue} = _arr;\n` +
+        `${indent}}`
+      );
+    case 'vec_u64':
+      // Vec<u64> — 원소별 varint64(safe 범위 밖은 bigint).
+      return (
+        `${indent}{\n` +
+        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
+        `${indent}  offset += _len.bytesRead;\n` +
+        `${indent}  const _arr: (number | bigint)[] = new Array(_len.value);\n` +
+        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
+        `${indent}    const _v = _pcDecodeVarint64(u8, offset);\n` +
+        `${indent}    _arr[_i] = _v.value;\n` +
+        `${indent}    offset += _v.bytesRead;\n` +
+        `${indent}  }\n` +
+        `${indent}  ${lvalue} = _arr;\n` +
+        `${indent}}`
+      );
     case 'vec_f64':
       return (
         `${indent}{\n` +
@@ -1136,6 +1256,36 @@ function generateFieldDecodeExpr(
         `${indent}  const _set = new Set<number>();\n` +
         `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
         `${indent}    const _v = _pcDecodeZigzagVarint(u8, offset);\n` +
+        `${indent}    _set.add(_v.value);\n` +
+        `${indent}    offset += _v.bytesRead;\n` +
+        `${indent}  }\n` +
+        `${indent}  ${lvalue} = _set;\n` +
+        `${indent}}`
+      );
+    case 'set_i64':
+      // Set<i64> — 원소별 varint64 + zigzag 복원.
+      return (
+        `${indent}{\n` +
+        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
+        `${indent}  offset += _len.bytesRead;\n` +
+        `${indent}  const _set = new Set<number | bigint>();\n` +
+        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
+        `${indent}    const _v = _pcDecodeVarint64(u8, offset);\n` +
+        `${indent}    _set.add(_pcDecodeZigzag64(_v.value));\n` +
+        `${indent}    offset += _v.bytesRead;\n` +
+        `${indent}  }\n` +
+        `${indent}  ${lvalue} = _set;\n` +
+        `${indent}}`
+      );
+    case 'set_u64':
+      // Set<u64> — 원소별 varint64.
+      return (
+        `${indent}{\n` +
+        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
+        `${indent}  offset += _len.bytesRead;\n` +
+        `${indent}  const _set = new Set<number | bigint>();\n` +
+        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
+        `${indent}    const _v = _pcDecodeVarint64(u8, offset);\n` +
         `${indent}    _set.add(_v.value);\n` +
         `${indent}    offset += _v.bytesRead;\n` +
         `${indent}  }\n` +
@@ -1214,6 +1364,8 @@ function generateFieldDecodeExpr(
       );
     case 'map_zigzag':
     case 'map_uvar':
+    case 'map_i64':
+    case 'map_u64':
     case 'map_f64':
     case 'map_bool':
     case 'map_string': {
@@ -1222,9 +1374,13 @@ function generateFieldDecodeExpr(
           ? '_pcDecodeZigzagVarint(u8, offset)'
           : field.kind === 'map_uvar'
             ? '_pcDecodeVarint(u8, offset)'
-            : field.kind === 'map_f64'
-              ? '_pcDecodeF64(u8, offset)'
-              : null;
+            : field.kind === 'map_i64'
+              ? '_pcDecodeVarint64(u8, offset)'
+              : field.kind === 'map_u64'
+                ? '_pcDecodeVarint64(u8, offset)'
+                : field.kind === 'map_f64'
+                  ? '_pcDecodeF64(u8, offset)'
+                  : null;
       const lines: string[] = [];
       lines.push(`${indent}{`);
       lines.push(`${indent}  const _len = _pcDecodeVarint(u8, offset);`);
@@ -1235,7 +1391,11 @@ function generateFieldDecodeExpr(
       lines.push(`${indent}    offset += _k.bytesRead;`);
       if (valueDecoder) {
         lines.push(`${indent}    const _v = ${valueDecoder};`);
-        lines.push(`${indent}    _map[_k.value] = _v.value;`);
+        if (field.kind === 'map_i64') {
+          lines.push(`${indent}    _map[_k.value] = _pcDecodeZigzag64(_v.value);`);
+        } else {
+          lines.push(`${indent}    _map[_k.value] = _v.value;`);
+        }
         lines.push(`${indent}    offset += _v.bytesRead;`);
       } else if (field.kind === 'map_bool') {
         lines.push(`${indent}    _map[_k.value] = u8[offset] === 1;`);
@@ -1284,6 +1444,8 @@ function generateFieldDecodeExpr(
     }
     case 'option_zigzag':
     case 'option_uvar':
+    case 'option_zigzag64':
+    case 'option_uvar64':
     case 'option_f64':
     case 'option_f32':
     case 'option_bool':
@@ -1294,6 +1456,8 @@ function generateFieldDecodeExpr(
         {
           option_zigzag: 'zigzag',
           option_uvar: 'uvar',
+          option_zigzag64: 'zigzag64',
+          option_uvar64: 'uvar64',
           option_f64: 'f64',
           option_f32: 'f32',
           option_bool: 'bool',
@@ -1547,12 +1711,10 @@ function commandCodecSupported(
   ) {
     return false;
   }
-  if (
-    hasWideInteger(command.inputSchema, definitions) ||
-    hasWideInteger(command.outputSchema, definitions)
-  ) {
-    return false;
-  }
+  // int64/uint64 는(uvar64/zigzag64 kind, _pc*64 헬퍼로) postcard fast-path 가
+  // 64비트 전 범위를 무손실 처리한다 — 과거의 complex 폴백 게이트(hasWideInteger)
+  // 는 해제됐다. Set(uniqueItems) 만 여전히 complex route 소유다(JS 경계에서
+  // Set 시맨틱 복원).
   if (hasSet(command.inputSchema, definitions) || hasSet(command.outputSchema, definitions)) {
     return false;
   }
@@ -1693,8 +1855,10 @@ function cppEncodeWithGetter(
 ): string {
   switch (field.kind) {
     case 'zigzag':
+    case 'zigzag64':
       return `${indent}w.push_i64(rustra_i64(rt, ${get}, "${field.name}"));`;
     case 'uvar':
+    case 'uvar64':
       return `${indent}w.push_uvar(rustra_u64(rt, ${get}, "${field.name}"));`;
     case 'f64':
       return `${indent}w.push_f64(rustra_f64(rt, ${get}, "${field.name}"));`;
@@ -1718,10 +1882,27 @@ function cppEncodeWithGetter(
       );
     }
     case 'vec_zigzag':
+    case 'vec_i64':
       return (
         `${indent}{ auto _arr = ${get}.asObject(rt).getArray(rt);` +
         ` auto _n = _arr.length(rt); w.push_uvar(_n);` +
         ` for (size_t _i = 0; _i < _n; _i++) w.push_i64(rustra_i64(rt, _arr.getValueAtIndex(rt, _i), "${field.name}[]")); }`
+      );
+    case 'vec_u64':
+      return (
+        `${indent}{ auto _arr = ${get}.asObject(rt).getArray(rt);` +
+        ` auto _n = _arr.length(rt); w.push_uvar(_n);` +
+        ` for (size_t _i = 0; _i < _n; _i++) w.push_uvar(rustra_u64(rt, _arr.getValueAtIndex(rt, _i), "${field.name}[]")); }`
+      );
+    case 'set_i64':
+    case 'set_u64':
+      // Set 와이어는 vec 와 동일(postcard seq). 요소 검증은 validator 가 처리.
+      return (
+        `${indent}{ auto _arr = ${get}.asObject(rt).getArray(rt);` +
+        ` auto _n = _arr.length(rt); w.push_uvar(_n);` +
+        (field.kind === 'set_i64'
+          ? ` for (size_t _i = 0; _i < _n; _i++) w.push_i64(rustra_i64(rt, _arr.getValueAtIndex(rt, _i), "${field.name}{}")); }`
+          : ` for (size_t _i = 0; _i < _n; _i++) w.push_uvar(rustra_u64(rt, _arr.getValueAtIndex(rt, _i), "${field.name}{}")); }`)
       );
     case 'vec_f64':
       return (
@@ -1751,13 +1932,15 @@ function cppEncodeWithGetter(
       );
     case 'map_zigzag':
     case 'map_uvar':
+    case 'map_i64':
+    case 'map_u64':
     case 'map_f64':
     case 'map_bool':
     case 'map_string': {
       const pushVal =
-        field.kind === 'map_zigzag'
+        field.kind === 'map_zigzag' || field.kind === 'map_i64'
           ? `w.push_i64(rustra_i64(rt, _e, "${field.name}{}"));`
-          : field.kind === 'map_uvar'
+          : field.kind === 'map_uvar' || field.kind === 'map_u64'
             ? `w.push_uvar(rustra_u64(rt, _e, "${field.name}{}"));`
             : field.kind === 'map_f64'
               ? `w.push_f64(rustra_f64(rt, _e, "${field.name}{}"));`
@@ -1806,6 +1989,8 @@ function cppEncodeWithGetter(
     }
     case 'option_zigzag':
     case 'option_uvar':
+    case 'option_zigzag64':
+    case 'option_uvar64':
     case 'option_f64':
     case 'option_f32':
     case 'option_bool':
@@ -1816,6 +2001,8 @@ function cppEncodeWithGetter(
         {
           option_zigzag: 'zigzag',
           option_uvar: 'uvar',
+          option_zigzag64: 'zigzag64',
+          option_uvar64: 'uvar64',
           option_f64: 'f64',
           option_f32: 'f32',
           option_bool: 'bool',
@@ -1863,8 +2050,17 @@ function cppFieldDecodeExpr(
   switch (field.kind) {
     case 'zigzag':
       return setProp('(double)r.read_i64()');
+    case 'zigzag64':
+      // B1: 2^53 경계 밖은 jsi::BigInt 복원 — TS toJsInteger 계약 동일.
+      return setProp(
+        '[&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }()',
+      );
     case 'uvar':
       return setProp('(double)r.read_uvar()');
+    case 'uvar64':
+      return setProp(
+        '[&]() -> jsi::Value { auto _v = r.read_uvar(); if (_v <= 9007199254740991ull) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v)); }()',
+      );
     case 'f64':
       return setProp('r.read_f64()');
     case 'f32':
@@ -1888,6 +2084,23 @@ function cppFieldDecodeExpr(
       return (
         `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
         ` for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, (double)r.read_i64()); }` +
+        ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`
+      );
+    case 'vec_i64':
+    case 'set_i64':
+      // B1: 원소별 safe 범위 분기 — 경계 밖은 jsi::BigInt 복원.
+      return (
+        `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
+        ` for (size_t _i = 0; _i < _n; _i++) { auto _v = r.read_i64();` +
+        ` _arr.setValueAtIndex(rt, _i, _v >= -9007199254740991ll && _v <= 9007199254740991ll ? jsi::Value(static_cast<double>(_v)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v))); }` +
+        ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`
+      );
+    case 'vec_u64':
+    case 'set_u64':
+      return (
+        `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
+        ` for (size_t _i = 0; _i < _n; _i++) { auto _v = r.read_uvar();` +
+        ` _arr.setValueAtIndex(rt, _i, _v <= 9007199254740991ull ? jsi::Value(static_cast<double>(_v)) : jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v))); }` +
         ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`
       );
     case 'vec_f64':
@@ -1932,6 +2145,8 @@ function cppFieldDecodeExpr(
       );
     case 'map_zigzag':
     case 'map_uvar':
+    case 'map_i64':
+    case 'map_u64':
     case 'map_f64':
     case 'map_bool':
     case 'map_string': {
@@ -1940,11 +2155,15 @@ function cppFieldDecodeExpr(
           ? '_map.setProperty(rt, _k, (double)r.read_i64());'
           : field.kind === 'map_uvar'
             ? '_map.setProperty(rt, _k, (double)r.read_uvar());'
-            : field.kind === 'map_f64'
-              ? '_map.setProperty(rt, _k, r.read_f64());'
-              : field.kind === 'map_bool'
-                ? '_map.setProperty(rt, _k, r.read_bool());'
-                : '{ auto _vs = r.read_string_view(); _map.setProperty(rt, _k, jsi::String::createFromUtf8(rt, _vs.data, _vs.size)); }';
+            : field.kind === 'map_i64'
+              ? '{ auto _v = r.read_i64(); _map.setProperty(rt, _k, _v >= -9007199254740991ll && _v <= 9007199254740991ll ? jsi::Value(static_cast<double>(_v)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v))); }'
+              : field.kind === 'map_u64'
+                ? '{ auto _v = r.read_uvar(); _map.setProperty(rt, _k, _v <= 9007199254740991ull ? jsi::Value(static_cast<double>(_v)) : jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v))); }'
+                : field.kind === 'map_f64'
+                  ? '_map.setProperty(rt, _k, r.read_f64());'
+                  : field.kind === 'map_bool'
+                    ? '_map.setProperty(rt, _k, r.read_bool());'
+                    : '{ auto _vs = r.read_string_view(); _map.setProperty(rt, _k, jsi::String::createFromUtf8(rt, _vs.data, _vs.size)); }';
       return (
         `${indent}{ auto _n = r.read_uvar(); auto _map = jsi::Object(rt);` +
         ` for (size_t _i = 0; _i < _n; _i++) { auto _ks = r.read_string_view();` +
@@ -1992,6 +2211,8 @@ function cppFieldDecodeExpr(
     }
     case 'option_zigzag':
     case 'option_uvar':
+    case 'option_zigzag64':
+    case 'option_uvar64':
     case 'option_f64':
     case 'option_f32':
     case 'option_bool':
@@ -2002,6 +2223,8 @@ function cppFieldDecodeExpr(
         {
           option_zigzag: 'zigzag',
           option_uvar: 'uvar',
+          option_zigzag64: 'zigzag64',
+          option_uvar64: 'uvar64',
           option_f64: 'f64',
           option_f32: 'f32',
           option_bool: 'bool',
@@ -2068,6 +2291,8 @@ function cppEncodeCommand(
 const POSITIONAL_SCALAR_KINDS = [
   'zigzag',
   'uvar',
+  'zigzag64',
+  'uvar64',
   'f64',
   'f32',
   'bool',
@@ -2076,7 +2301,7 @@ const POSITIONAL_SCALAR_KINDS = [
   'bytes',
 ] as const;
 
-const RAW_SCALAR_KINDS = ['zigzag', 'uvar', 'f64', 'f32', 'bool'] as const;
+const RAW_SCALAR_KINDS = ['zigzag', 'uvar', 'zigzag64', 'uvar64', 'f64', 'f32', 'bool'] as const;
 
 /** Existing object-input commands that can safely forward one to three fields. */
 function generatedFieldRoute(
@@ -2184,9 +2409,11 @@ function cppEncodePosCommand(
     const v = `argv[${i}]`;
     switch (f.kind) {
       case 'zigzag':
+      case 'zigzag64':
         lines.push(`  w.push_i64(rustra_i64(rt, ${v}, "${f.name}"));`);
         break;
       case 'uvar':
+      case 'uvar64':
         lines.push(`  w.push_uvar(rustra_u64(rt, ${v}, "${f.name}"));`);
         break;
       case 'f64':
@@ -2381,6 +2608,33 @@ function cppComplexEncodeNode(
       const object = next();
       const array = next();
       const length = next();
+      if (node.unique) {
+        // B2: Set 직결. JS Set 은 jsi::Object 이므로 전역 Set 판별 후
+        // Array.from(set) 으로 이터레이션 순서 보존 복사([...set] 계약, TS
+        // complex-codec.ts encode 와 동일 — 정렬/중복제거 없음)한 뒤 postcard
+        // seq 를 쓴다. 배열 입력도 허용한다(TS encode 가 배열도 받는 것과 동일).
+        return [
+          `${indent}{ auto ${array} = [&]() -> jsi::Array {`,
+          `${indent}    if (!${value}.isObject()) throw jsi::JSError(rt, "complex Set or array expected");`,
+          `${indent}    auto ${object} = ${value}.asObject(rt);`,
+          `${indent}    if (${object}.isArray(rt)) return ${object}.getArray(rt);`,
+          `${indent}    if (!${object}.instanceOf(rt, rt.global().getPropertyAsFunction(rt, "Set"))) throw jsi::JSError(rt, "complex Set or array expected");`,
+          `${indent}    auto _from = rt.global().getPropertyAsFunction(rt, "Array").getPropertyAsFunction(rt, "from");`,
+          `${indent}    return _from.call(rt, { ${value} }).asObject(rt).getArray(rt);`,
+          `${indent}  }();`,
+          `${indent}  auto ${length} = ${array}.length(rt);`,
+          `${indent}  w.push_uvar(${length});`,
+          `${indent}  for (size_t _i = 0; _i < ${length}; _i++) {`,
+          ...cppComplexEncodeNode(
+            node.item,
+            `${array}.getValueAtIndex(rt, _i)`,
+            `${indent}    `,
+            `${depth} + 1`,
+            state,
+          ),
+          `${indent}  } }`,
+        ];
+      }
       const lines = [
         `${indent}{ auto ${object} = ${value}.asObject(rt);`,
         `${indent}  if (!${value}.isObject() || !${object}.isArray(rt)) throw jsi::JSError(rt, "complex array expected");`,
@@ -2396,13 +2650,6 @@ function cppComplexEncodeNode(
         ),
         `${indent}  } }`,
       ];
-      if (node.unique) {
-        lines.splice(
-          1,
-          1,
-          `${indent}  throw jsi::JSError(rt, "complex native codec requires an Array; use JS codec for Set");`,
-        );
-      }
       return lines;
     }
     case 'tuple': {
@@ -2514,9 +2761,12 @@ function cppComplexDecodeExpr(node: CodecIrNode, depth: string, state: CppComple
     case 'boolean':
       return 'jsi::Value(r.read_bool())';
     case 'integer':
+      // B1: 2^53 경계 밖은 jsi::BigInt 로 복원 — TS toJsInteger(complex-codec.ts)
+      // 의 number|bigint 계약과 정확히 동일. Safe 판정은 디코드된 정수 자체로
+      // 수행하므로 double 나로써 손실이 없다.
       return node.format?.startsWith('uint')
-        ? 'jsi::Value(static_cast<double>(r.read_uvar()))'
-        : 'jsi::Value(static_cast<double>(r.read_i64()))';
+        ? '[&]() -> jsi::Value { auto _v = r.read_uvar(); if (_v <= 9007199254740991ull) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v)); }()'
+        : '[&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }()';
     case 'number':
       return node.format === 'float'
         ? 'jsi::Value(static_cast<double>(r.read_f32()))'
@@ -2543,10 +2793,14 @@ function cppComplexDecodeExpr(node: CodecIrNode, depth: string, state: CppComple
       return `[&]() -> jsi::Value { auto ${tag} = r.read_u8(); if (${tag} == 0) return jsi::Value::null(); if (${tag} != 1) throw std::runtime_error("complex optional presence tag"); return ${cppComplexDecodeExpr(node.inner, `${depth} + 1`, state)}; }()`;
     }
     case 'sequence': {
-      if (node.unique)
-        return '([&]() -> jsi::Value { throw std::runtime_error("complex native codec does not decode Set"); }())';
       const length = next();
       const array = next();
+      if (node.unique) {
+        // B2: Set 복원 — new Set(elements) 와 동일. 전역 Set 생성자에
+        // callAsConstructor 로 요소 배열을 넘긴다(TS decode 의
+        // new Set(values) 계약과 동일 — 중복은 Set 이 스스로 정리한다).
+        return `[&]() -> jsi::Value { auto ${length} = r.read_uvar(); if (${length} > 100000) throw std::runtime_error("complex collection length exceeds 100000"); auto ${array} = jsi::Array(rt, static_cast<size_t>(${length})); for (size_t _i = 0; _i < ${length}; _i++) ${array}.setValueAtIndex(rt, _i, ${cppComplexDecodeExpr(node.item, `${depth} + 1`, state)}); jsi::Value _setArgs[] = { jsi::Value(rt, ${array}) }; return rt.global().getPropertyAsFunction(rt, "Set").callAsConstructor(rt, _setArgs, 1); }()`;
+      }
       return `[&]() -> jsi::Value { auto ${length} = r.read_uvar(); if (${length} > 100000) throw std::runtime_error("complex collection length exceeds 100000"); auto ${array} = jsi::Array(rt, static_cast<size_t>(${length})); for (size_t _i = 0; _i < ${length}; _i++) ${array}.setValueAtIndex(rt, _i, ${cppComplexDecodeExpr(node.item, `${depth} + 1`, state)}); return ${array}; }()`;
     }
     case 'tuple': {
@@ -2610,6 +2864,24 @@ function cppComplexDecodeExpr(node: CodecIrNode, depth: string, state: CppComple
   }
 }
 
+/// B2: Set(uniqueItems sequence) 요소로 C++ 직결이 허용되는 원시 종류인지.
+/// string/number/integer/bool(literal/enum 포함 — 스칼라 와이어라 동일)만
+/// 지원한다. 객체/배열/맵 요소는 요소별 Set 시맨틱(동일성 비교)이 IR 에서
+/// 표현 불가해 제외한다.
+function cppComplexPrimitiveElement(node: CodecIrNode): boolean {
+  switch (node.kind) {
+    case 'boolean':
+    case 'integer':
+    case 'number':
+    case 'string':
+    case 'literal':
+    case 'enum':
+      return true;
+    default:
+      return false;
+  }
+}
+
 function cppComplexNativeSupported(
   node: CodecIrNode,
   definitions: Record<string, import('./schema.js').JsonSchema>,
@@ -2617,9 +2889,18 @@ function cppComplexNativeSupported(
 ): boolean {
   switch (node.kind) {
     case 'integer':
-      return node.format !== 'int64' && node.format !== 'uint64';
+      // B1: int64/uint64 도 C++ 직결 — safe 범위는 number, 초과는
+      // jsi::BigInt::fromInt64/fromUint64 로 복원한다(TS toJsInteger 계약 동일).
+      return true;
     case 'sequence':
-      return !node.unique && cppComplexNativeSupported(node.item, definitions, seen);
+      // B2: uniqueItems(Set) 도 원시 요소면 C++ 직결 — 인코딩은 Set 이터레이션
+      // 순서 보존([...set] 계약, TS complex-codec.ts 와 동일), 디코딩은 전역
+      // Set 생성자로 복원한다. 객체/배열 요소 Set 은 IR 정규화 한계로 여전히
+      // JS complex 경로 소속.
+      return (
+        (node.unique ? cppComplexPrimitiveElement(node.item) : true) &&
+        cppComplexNativeSupported(node.item, definitions, seen)
+      );
     case 'tuple':
       return node.items.every((item) => cppComplexNativeSupported(item, definitions, seen));
     case 'map':
@@ -2794,6 +3075,9 @@ export function generateRkyvCodecsHpp(_schema: PackageSchema): string {
  */
 export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   const definitions = collectAllDefinitions(schema);
+  // B1: 와이드 정수 게이트(cppSafe/hasWideIntegerField) 해소 — C++ 이
+  // push_i64/push_uvar 64-bit 와이어 + jsi::BigInt 복원을 직접 처리하므로
+  // 와이드 정수 명령도 C++ 정적 코덱을 광고한다.
   const supported = schema.commands.filter((c) => commandCodecSupported(c, definitions));
   const complexSupported = schema.commands
     .map((command) => {
@@ -2952,22 +3236,26 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   lines.push(
     `[[maybe_unused]] static int64_t rustra_i64(jsi::Runtime& rt, const jsi::Value& value, const char* field) {`,
   );
+  // B1: bigint 입력 — 전 int64 범위를 그대로 받는다(Number.isSafeInteger 가드는
+  // number 경로에만 적용). TS postcard fast-path의 number|bigint 계약과 동일.
+  lines.push(`  if (value.isBigInt()) return value.asBigInt(rt).asInt64(rt);`);
   lines.push(`  double number = rustra_f64(rt, value, field);`);
   lines.push(`  constexpr double maxSafe = 9007199254740991.0;`);
   lines.push(`  if (std::trunc(number) != number || number < -maxSafe || number > maxSafe)`);
   lines.push(
-    `    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a safe integer");`,
+    `    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a safe integer or bigint");`,
   );
   lines.push(`  return static_cast<int64_t>(number);`);
   lines.push(`}`);
   lines.push(
     `[[maybe_unused]] static uint64_t rustra_u64(jsi::Runtime& rt, const jsi::Value& value, const char* field) {`,
   );
+  lines.push(`  if (value.isBigInt()) return value.asBigInt(rt).asUint64(rt);`);
   lines.push(`  double number = rustra_f64(rt, value, field);`);
   lines.push(`  constexpr double maxSafe = 9007199254740991.0;`);
   lines.push(`  if (std::trunc(number) != number || number < 0.0 || number > maxSafe)`);
   lines.push(
-    `    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a non-negative safe integer");`,
+    `    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a non-negative safe integer or bigint");`,
   );
   lines.push(`  return static_cast<uint64_t>(number);`);
   lines.push(`}`);
@@ -3200,11 +3488,11 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
       `      if (argc != ${shape.inputFields.length}) throw JSError(rt, "rustra: ${cmd.name} expects ${shape.inputFields.length} raw argument(s), got " + std::to_string(argc));`,
     );
     shape.inputFields.forEach((field, index) => {
-      if (field.kind === 'zigzag') {
+      if (field.kind === 'zigzag' || field.kind === 'zigzag64') {
         lines.push(
           `      { int64_t value = rustra_i64(rt, argv[${index}], ${JSON.stringify(field.name)}); std::memcpy(&slots[${index}], &value, sizeof(value)); }`,
         );
-      } else if (field.kind === 'uvar') {
+      } else if (field.kind === 'uvar' || field.kind === 'uvar64') {
         lines.push(
           `      slots[${index}] = rustra_u64(rt, argv[${index}], ${JSON.stringify(field.name)});`,
         );
@@ -3243,9 +3531,19 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
         lines.push(
           `      result.setProperty(rt, cachedProp(rt, ${JSON.stringify(field.name)}), static_cast<double>(value));`,
         );
+      } else if (field.kind === 'zigzag64') {
+        // B1: i64::MIN..2^53 초과 구간은 BigInt 복원(raw 슬롯 왕복 보존).
+        lines.push(`      int64_t value; std::memcpy(&value, &slot, sizeof(value));`);
+        lines.push(
+          `      result.setProperty(rt, cachedProp(rt, ${JSON.stringify(field.name)}), value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));`,
+        );
       } else if (field.kind === 'uvar') {
         lines.push(
           `      result.setProperty(rt, cachedProp(rt, ${JSON.stringify(field.name)}), static_cast<double>(slot));`,
+        );
+      } else if (field.kind === 'uvar64') {
+        lines.push(
+          `      result.setProperty(rt, cachedProp(rt, ${JSON.stringify(field.name)}), slot <= 9007199254740991ull ? jsi::Value(static_cast<double>(slot)) : jsi::Value(rt, jsi::BigInt::fromUint64(rt, slot)));`,
         );
       } else if (field.kind === 'f64' || field.kind === 'f32') {
         lines.push(`      double value; std::memcpy(&value, &slot, sizeof(value));`);
@@ -3404,12 +3702,18 @@ function tsFieldType(field: PostcardField, _ownerType: string): string {
     case 'vec_zigzag':
     case 'vec_f64':
       return 'number[]';
+    case 'vec_i64':
+    case 'vec_u64':
+      return '(number | bigint)[]';
     case 'vec_bool':
       return 'boolean[]';
     case 'vec_string':
       return 'string[]';
     case 'set_zigzag':
       return 'Set<number>';
+    case 'set_i64':
+    case 'set_u64':
+      return 'Set<number | bigint>';
     case 'set_f64':
       return 'Set<number>';
     case 'set_bool':
@@ -3417,7 +3721,9 @@ function tsFieldType(field: PostcardField, _ownerType: string): string {
     case 'set_uvar':
       return 'Set<number>';
     case 'uvar':
-      return 'number';
+    case 'uvar64':
+    case 'zigzag64':
+      return 'number | bigint';
     case 'bytes':
       return 'Uint8Array | ArrayBuffer';
     case 'vec_uvar':
@@ -3425,6 +3731,9 @@ function tsFieldType(field: PostcardField, _ownerType: string): string {
     case 'map_zigzag':
     case 'map_uvar':
       return 'Record<string, number>';
+    case 'map_i64':
+    case 'map_u64':
+      return 'Record<string, number | bigint>';
     case 'map_f64':
       return 'Record<string, number>';
     case 'map_bool':
@@ -3440,6 +3749,9 @@ function tsFieldType(field: PostcardField, _ownerType: string): string {
     case 'option_f64':
     case 'option_f32':
       return 'number | null';
+    case 'option_zigzag64':
+    case 'option_uvar64':
+      return 'number | bigint | null';
     case 'option_bool':
       return 'boolean | null';
     case 'option_string':

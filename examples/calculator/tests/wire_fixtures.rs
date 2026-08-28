@@ -16,8 +16,8 @@
 //! 한쪽만 바뀌면 교차 테스트가 실패한다.
 
 use rustra_calculator_example::{
-    AddNumbersInput, DivideInput, GaugeInput, GreetInput, ScoreTotalInput, SizeOfInput,
-    calculator_package,
+    AddNumbersInput, DivideInput, GaugeInput, GreetInput, ScoreTotalInput, SizeOfInput, SpanInput,
+    TagSetInput, WideAggInput, calculator_package,
 };
 
 fn request_for<I: serde::Serialize>(cmd_id: u16, input: &I) -> Vec<u8> {
@@ -96,10 +96,34 @@ const SIZEOF_RESPONSE: &str = "0100000000000000800204";
 // TS 인코더는 키를 정렬해 결정론적으로 인코딩하고 Rust 디코더는 순서독립
 // 이므로 round-trip 계약은 성립한다.
 const SCORETOTAL_RESPONSE: &str = "01000000000000000254";
-const SPAN_REQUEST: &str = "10000202686909";
+const SPAN_REQUEST: &str = "100002686909";
 const SPAN_RESPONSE: &str = "010000000000000002686909";
 const GAUGE_REQUEST: &str = "1100ac02f0a204";
 const GAUGE_RESPONSE: &str = "01000000000000009ca504";
+
+// ── 2026-08-28 A2: 와이드 정수 postcard fast-path 경계 와이어 ──
+// int64/uint64 가 uvar64/zigzag64 64-bit 헬퍼로 fast-path 에 합류하면서
+// 2^53 경계와 u64::MAX / i64::MIN 값이 TS number 손실 없이 와이어를 오가는지
+// 고정한다. TS cross-wire.test.ts 신규 블록과 짝이다.
+const GAUGE_U64MAX_REQUEST: &str = "1100ffffffffffffffffff0100";
+const GAUGE_U64MAX_RESPONSE: &str = "0100000000000000ffffffffffffffffff01";
+const SPAN_I64MIN_REQUEST: &str = "1000026869ffffffffffffffffff01";
+const SPAN_I64MIN_RESPONSE: &str = "0100000000000000026869ffffffffffffffffff01";
+const SPAN_2POW53_M1_REQUEST: &str = "1000026869feffffffffffff1f";
+const SPAN_2POW53_M1_RESPONSE: &str = "0100000000000000026869feffffffffffff1f";
+const SPAN_2POW53_P1_REQUEST: &str = "10000268698280808080808020";
+const SPAN_2POW53_P1_RESPONSE: &str = "01000000000000000268698280808080808020";
+
+// wideAgg — 복합 64-bit 경로(Vec<u64> 원소별 uvar64 + Option<i64> zigzag64).
+// 원소 경계를 넘는 값(2^53+1, u64::MAX)이 스트림 중간에서 10바이트 LEB128로
+// 이어지는 것까지 고정한다.
+const WIDEAGG_BOUNDARY_REQUEST: &str =
+    "190005017f80018180808080808010ffffffffffffffffff0101ffffffffffffffffff01";
+const WIDEAGG_BOUNDARY_RESPONSE: &str = "0100000000000000ffffffffffffffffff01f5ffffffffffffffff01";
+const WIDEAGG_EMPTY_REQUEST: &str = "19000000";
+const WIDEAGG_EMPTY_RESPONSE: &str = "01000000000000000000";
+const WIDEAGG_MULTIELEM_REQUEST: &str = "19000380808080018080808080018080808080808001010a";
+const WIDEAGG_MULTIELEM_RESPONSE: &str = "0100000000000000808080808080800110";
 
 #[test]
 fn size_of_wire_is_stable() {
@@ -134,10 +158,12 @@ fn score_total_wire_is_stable() {
 #[test]
 fn span_wire_is_stable() {
     let pkg = calculator_package();
-    // span contains i64, so both sides select complex-binary. Its tuple wire
-    // is count + elements, unlike postcard's prefix-free tuple.
+    // span (String, i64) tuple now rides the postcard fast-path (uvar64/zigzag64
+    // helpers). Postcard tuple wire is prefix-free: str len + bytes + zigzag i64.
+    // NOTE: 0.4.1 complex-codec tuple wire was count + elements; this differs —
+    // old bytes and 0.4.1 TS codecs are NOT wire-compatible with this route.
     let mut req = 16u16.to_le_bytes().to_vec();
-    req.extend_from_slice(&[2, 2, b'h', b'i', 9]);
+    req.extend_from_slice(&[2, b'h', b'i', 9]);
     let resp = invoke_with_frame(&pkg, &req);
     assert_eq!(hexlify(&req), SPAN_REQUEST);
     assert_eq!(hexlify(&resp), SPAN_RESPONSE);
@@ -156,4 +182,125 @@ fn gauge_wire_is_stable() {
     let resp = invoke_with_frame(&pkg, &req);
     assert_eq!(hexlify(&req), GAUGE_REQUEST);
     assert_eq!(hexlify(&resp), GAUGE_RESPONSE);
+}
+
+#[test]
+fn gauge_u64max_wire_is_stable() {
+    let pkg = calculator_package();
+    // u64::MAX — 10바이트 LEB128(0xff x9 + 0x01). safe 정수 범위를 넘는 값이
+    // plain varint 로 손실 없이 왕복함을 고정한다.
+    let req = request_for(
+        17,
+        &GaugeInput {
+            limit: u64::MAX,
+            offset: 0,
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), GAUGE_U64MAX_REQUEST);
+    assert_eq!(hexlify(&resp), GAUGE_U64MAX_RESPONSE);
+}
+
+#[test]
+fn span_wide_int_boundaries_are_stable() {
+    let pkg = calculator_package();
+    // i64::MIN — zigzag 후 u64::MAX 가 되는 최악의 경우(10바이트 LEB128).
+    let req = request_for(
+        16,
+        &SpanInput {
+            pair: ("hi".into(), i64::MIN),
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), SPAN_I64MIN_REQUEST);
+    assert_eq!(hexlify(&resp), SPAN_I64MIN_RESPONSE);
+
+    // 2^53 - 1 — JS number 로 정확히 표현 가능한 최댓값.
+    let req = request_for(
+        16,
+        &SpanInput {
+            pair: ("hi".into(), (1i64 << 53) - 1),
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), SPAN_2POW53_M1_REQUEST);
+    assert_eq!(hexlify(&resp), SPAN_2POW53_M1_RESPONSE);
+
+    // 2^53 + 1 — number 로는 손실되고 TS 디코더가 bigint 로 복원해야 하는 값.
+    let req = request_for(
+        16,
+        &SpanInput {
+            pair: ("hi".into(), (1i64 << 53) + 1),
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), SPAN_2POW53_P1_REQUEST);
+    assert_eq!(hexlify(&resp), SPAN_2POW53_P1_RESPONSE);
+}
+
+#[test]
+fn wide_agg_wide_composite_wire_is_stable() {
+    let pkg = calculator_package();
+    // Vec<u64> 5원소 + Option<i64> — 원소 1/127(1바이트), 128(2바이트),
+    // 2^53+1과 u64::MAX(10바이트)가 스트림 중간에서 이어진다. offset 은
+    // Some(i64::MIN) — 태그 1 + 최악 zigzag.
+    let req = request_for(
+        25,
+        &WideAggInput {
+            samples: vec![1, 127, 128, (1u64 << 53) + 1, u64::MAX],
+            offset: Some(i64::MIN),
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), WIDEAGG_BOUNDARY_REQUEST);
+    assert_eq!(hexlify(&resp), WIDEAGG_BOUNDARY_RESPONSE);
+
+    // 빈 벡터 + None — 태그 없는 빈 시퀀스와 Option None 태그.
+    let req = request_for(
+        25,
+        &WideAggInput {
+            samples: vec![],
+            offset: None,
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), WIDEAGG_EMPTY_REQUEST);
+    assert_eq!(hexlify(&resp), WIDEAGG_EMPTY_RESPONSE);
+
+    // 5/9/10바이트 varint 원소 3개(2^28, 2^35, 2^49) + Some(5) — 경계가
+    // 스트림 중간에 반복되는 다원소 케이스.
+    let req = request_for(
+        25,
+        &WideAggInput {
+            samples: vec![1 << 28, 1 << 35, 1 << 49],
+            offset: Some(5),
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), WIDEAGG_MULTIELEM_REQUEST);
+    assert_eq!(hexlify(&resp), WIDEAGG_MULTIELEM_RESPONSE);
+}
+
+// ── 2026-08-29 B2: Set(uniqueItems) 복합 경로 와이어 ──
+// 원시 요소 Set 도 와이어는 순서 보존 postcard seq 다. Rust BTreeSet 은
+// 정렬 순서로 직렬화되고(zigzag 원소 / 문자열 원소), TS/C++ complex codec 은
+// JS Set 이터레이션 순서 그대로 쓴다 — 양쪽 다 디코딩은 Set 복원이므로 순서
+// 차이는 관측되지 않는다. TS cross-wire.test.ts 신규 블록과 짝이다.
+const TAGSET_REQUEST: &str = "1a00030d1ed00f";
+const TAGSET_RESPONSE: &str = "01000000000000000303742d3705743130303003743135";
+
+#[test]
+fn tag_set_primitive_elements_wire_is_stable() {
+    let pkg = calculator_package();
+    // BTreeSet<i64> {-7, 15, 1000} — 정렬 순서로 zigzag: -7→13(0x0d),
+    // 15→30(0x1e), 1000→2000(2바이트 LEB128: 0xd0 0x0f).
+    let req = request_for(
+        26,
+        &TagSetInput {
+            ids: std::collections::BTreeSet::from([-7i64, 15, 1000]),
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), TAGSET_REQUEST);
+    assert_eq!(hexlify(&resp), TAGSET_RESPONSE);
 }

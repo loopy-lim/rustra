@@ -114,6 +114,45 @@ RN 시뮬레이터 벤치는 이 섹션에서 다루지 않는다(C++ 게이트�
   owned-flag 설계로 대체했다 — probe 캐시 없이도 재시도가 exactly-once다.
   (근거: `crates/rustra/tests/trust_baseline_ffi.rs` 320행 추가)
 
+## Track B 실측 — wide int C++ 직결 잔여 (2026-08-29)
+
+트랙 B(C++ bigint/Set 직결)의 잔여 로드맵 항목은 **Set(int64/uint64 원시 요소)과
+C++ int64/uint64 네이티브 디코드 경로**였고, 둘 다 완성됐다(3면 wire gate:
+`wire_fixtures.rs` ↔ `cross-wire.test.ts` ↔ C++ `test-rustra-generated-codecs.cpp`
+가 `wideAgg`/`tagSet` PINNED hex 를 byte-exact 공유).
+
+### JS codec path 실측 (bun, 본 머신)
+
+C++ 직결이 대체하는 경로의 비용을 정량화하기 위해, calculator example 의 생성
+코덱(`wideAggCodec`/`tagSetCodec`)을 `scripts/complex-codec-bench.mjs` 와 동일
+레시피(warmup 2,000 + wall-clock 20,000회, per-call writer/response 할당,
+machine-readable receipt)로 측정했다. encode 는 PINNED fixture 요청 페이로드,
+decode 는 PINNED fixture 응답 바디(경계값 — 다중 바이트 varint64/zigzag64 경로)를
+쓴다. 3회 실행 중앙값:
+
+| 명령 (스키마)                        |   encode |       decode | wire 크기             |
+| ------------------------------------ | -------: | -----------: | --------------------- |
+| wideAgg (Vec\<u64\> + Option\<i64\>) | 1.813 µs | **0.510 µs** | 요청 36 B / 응답 28 B |
+| tagSet (Set\<i64\> → Set\<string\>)  | 1.069 µs |     1.291 µs | 요청 7 B / 응답 23 B  |
+
+```bash
+bun scripts/track-b-bench.mjs
+```
+
+원본 receipt는
+[`2026-08-29-track-b.json`](benchmark-receipts/2026-08-29-track-b.json)이다.
+
+### 기기 스모크 필요
+
+C++ 직결 경로 자체의 실측(RN JSI에서의 encode/decode 시간)은 이 환경에서
+불가능하다 — C++ codec 테스트 하네스(`run-cpp-codec-tests.sh`)는 정확성 게이트로
+타이머가 없고, JSI 네이티브 경로는 RN 런타임 안에서만 구동된다. 트랙 F의 RN async
+bench(PR #45)와 동일하게 **기기/시뮬레이터 스모크를 후속 과제로 남긴다**. 참고로
+직결 전 경로의 상한선으로 위 JS 수치를 읽을 수 있다: C++ 직결은 이 encode/decode가
+JSI Value 마샬링을 제외한 네이티브 코드로 이동하며, 트랙 F에서 관측된
+direct-marshalling 절감 패턴(transport 격리 51%, echo64 왕복 37%)이 상한이다.
+측정 시 로드 평균 8–13의 비리프리 환경이므로 절대 수치가 아닌 상대 비교 기준이다.
+
 ## 2026-08-24 실제 host API 성능 (`0.4.0` merge candidate)
 
 기존 adapter-only 숫자는 transport 비용이 빠져 실제 사용자가 보는 지연과 달랐다.
@@ -649,15 +688,19 @@ RPC 계약"으로 설계 목표가 다르다. 같은 문제만 겹친다(RN에�
    Vec<u8>/ArrayBuffer, u8–u64 plain varint, chrono Date(ISO string)를
    3면(TS·Rust·C++) 코드젱에 구현하고 PINNED hex 와이어 게이트로 고정했다.
    남은 것: **bigint TS 표면**(postcard 현재 number — 2^53 정밀도 한계
-   문서화됨). ~~C++ complex direct marshalling~~은 complex-route
-   into-handler로 코어가 `DirectResponse::Written`을 직접 반환하도록
-   해결(2026-08-28, 위 "FFI caller-buffer 잔여 실측" 참고).
+   문서화됨)은 2026-08-29 트랙 A(postcard fast-path, bigint 복원)와
+   트랙 B(C++ int64/uint64 네이티브 디코드 + 원시 요소 Set 직결)로 해소 —
+   C++ complex direct marshalling 잔여는 complex-route into-handler로 코어가
+   `DirectResponse::Written`을 직접 반환하도록 해결됐고(2026-08-28, 위
+   "FFI caller-buffer 잔여 실측" 참고), Set/int64/uint64 는 트랙 B로
+   완결됐다(위 "Track B 실측" 섹션. 기기 스모크는 후속).
 2. **schema-driven complex binary** (2026-08-27) — recursive struct,
    struct-valued map, data enum, nested Option/Set을 TS/Rust golden wire로
    처리한다. RN에서는 현재 JS codec이 Rust `invokeRkyvV2`까지 전달하며, C++
-   direct path는 별도 성능 확장이다. 2026-08-28 caller-buffer 잔여 트랙에서
-   코어 into-handler와 Bun/async 응답 caller-buffer가 완료돼 호스트 복사는
-   응답 경계 1회로 수렴했다.
+   direct path는 원시 요소 Set·int64/uint64 까지 확장됐고(트랙 B, 2026-08-29),
+   2026-08-28 caller-buffer 잔여 트랙에서 코어 into-handler와 Bun/async 응답
+   caller-buffer가 완료돼 호스트 복사는 응답 경계 1회로 수렴했다. 객체/배열
+   요소 Set·재귀 깊은 구조의 C++ 전개는 별도 성능 확장으로 남는다.
 3. **채널/리소스로 재정의** (2026-08-23 2단계 완료) — 콜백과 객체 참조.
    Nitro처럼 JS-first 객체 브릿지를 만드는 게 아니라, Tauri v2의
    `ipc::Channel<T>`(콜백을 직렬화 가능한 채널 핸들로)·`Resource`(객체를
@@ -755,6 +798,12 @@ node scripts/adapter-bench.mjs
 
 # Bun 어댑터 벤치마크
 bun scripts/adapter-bench.mjs
+
+# Complex binary codec JS path (nested map/Set/data enum)
+bun run bench:complex
+
+# Track B — wideAgg/tagSet JS codec path (C++ 직결이 대체하는 경로의 비용)
+bun scripts/track-b-bench.mjs
 
 # Swift FFI 벤치마크 (macOS, release dylib 필요)
 cd scripts/swift-ffi-bench && make

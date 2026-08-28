@@ -129,14 +129,14 @@ test('cross-wire frame layout: error has ok=0, err_len u16 LE @8, body @10', () 
 
 // ── 2026-08-22 타입 확장: bytes/map/tuple/uvar 교차 와이어 ──────
 // Rust wire_fixtures.rs 신규 4종과 짝. probe 계약: u32/u64 plain varint,
-// map count+(k,v)*, complex tuple count+elements, Vec<u8> len+raw.
+// map count+(k,v)*, tuple 은 A2부터 postcard prefix-free(len + elements).
 
 import { gaugeCodec, scoreTotalCodec, sizeOfCodec, spanCodec } from '../generated/rkyv-codecs.js';
 
 const SIZEOF_REQUEST = '0e0004010203fa';
 const SIZEOF_RESPONSE = '0100000000000000800204';
 const SCORETOTAL_RESPONSE = '01000000000000000254';
-const SPAN_REQUEST = '10000202686909';
+const SPAN_REQUEST = '100002686909';
 const SPAN_RESPONSE = '010000000000000002686909';
 const GAUGE_REQUEST = '1100ac02f0a204';
 const GAUGE_RESPONSE = '01000000000000009ca504';
@@ -166,10 +166,12 @@ test('cross-wire scoreTotal: map structure + response round-trip', () => {
   assert.equal(r.result?.count, 2);
 });
 
-// span — complex tuple count + elements ("hi", -5) → [2, 2,104,105, 9]
-test('cross-wire span: tuple length is explicit', () => {
+// span — postcard tuple: prefix-free ("hi", -5) → str len + bytes + zigzag i64
+// NOTE: 0.4.1 complex-codec tuple wire was count + elements; this is a
+// wire break for consumers mixing old TS codecs with regenerated Rust.
+test('cross-wire span: postcard tuple is prefix-free', () => {
   const req = spanCodec.encode({ pair: ['hi', -5] });
-  assert.equal(bytesToHex(req), SPAN_REQUEST, 'complex tuple: length then elements');
+  assert.equal(bytesToHex(req), SPAN_REQUEST, 'postcard tuple: str len + bytes + zigzag i64');
   const r = spanCodec.decode(hexToBytes(SPAN_RESPONSE));
   assert.equal(r.ok, true);
   assert.equal(r.result?.first, 'hi');
@@ -183,4 +185,139 @@ test('cross-wire gauge: unsigned fields use plain varint, not zigzag', () => {
   const r = gaugeCodec.decode(hexToBytes(GAUGE_RESPONSE));
   assert.equal(r.ok, true);
   assert.equal(r.result?.next, 70300, '300 + 70000');
+});
+
+// ── 2026-08-28 A2: 와이드 정수 postcard fast-path 경계 교차 와이어 ──
+// Rust wire_fixtures.rs 신규 3종과 짝. u64::MAX / i64::MIN / 2^53±1 값이
+// uvar64/zigzag64 헬퍼로 number 손실 없이 왕복함을 증명한다.
+
+const GAUGE_U64MAX_REQUEST = '1100ffffffffffffffffff0100';
+const GAUGE_U64MAX_RESPONSE = '0100000000000000ffffffffffffffffff01';
+const SPAN_I64MIN_REQUEST = '1000026869ffffffffffffffffff01';
+const SPAN_I64MIN_RESPONSE = '0100000000000000026869ffffffffffffffffff01';
+const SPAN_2POW53_M1_REQUEST = '1000026869feffffffffffff1f';
+const SPAN_2POW53_M1_RESPONSE = '0100000000000000026869feffffffffffff1f';
+const SPAN_2POW53_P1_REQUEST = '10000268698280808080808020';
+const SPAN_2POW53_P1_RESPONSE = '01000000000000000268698280808080808020';
+
+test('cross-wire gauge u64::MAX: 10-byte LEB128 round-trip', () => {
+  const req = gaugeCodec.encode({ limit: 18446744073709551615n, offset: 0 });
+  assert.equal(bytesToHex(req), GAUGE_U64MAX_REQUEST, 'u64::MAX → ff x9 + 01');
+  const r = gaugeCodec.decode(hexToBytes(GAUGE_U64MAX_RESPONSE));
+  assert.equal(r.ok, true);
+  assert.equal(r.result?.next, 18446744073709551615n, 'u64::MAX restored as bigint');
+});
+
+test('cross-wire span i64::MIN: worst-case zigzag (u64::MAX) round-trip', () => {
+  const req = spanCodec.encode({ pair: ['hi', -9223372036854775808n] });
+  assert.equal(bytesToHex(req), SPAN_I64MIN_REQUEST, 'zigzag(i64::MIN) = u64::MAX');
+  const r = spanCodec.decode(hexToBytes(SPAN_I64MIN_RESPONSE));
+  assert.equal(r.ok, true);
+  assert.equal(r.result?.second, -9223372036854775808n, 'i64::MIN restored as bigint');
+});
+
+test('cross-wire span 2^53-1: largest exact number', () => {
+  const req = spanCodec.encode({ pair: ['hi', 9007199254740991] });
+  assert.equal(bytesToHex(req), SPAN_2POW53_M1_REQUEST);
+  const r = spanCodec.decode(hexToBytes(SPAN_2POW53_M1_RESPONSE));
+  assert.equal(r.ok, true);
+  assert.equal(r.result?.second, 9007199254740991, 'stays a safe number');
+});
+
+test('cross-wire span 2^53+1: decode restores bigint beyond number precision', () => {
+  const req = spanCodec.encode({ pair: ['hi', 9007199254740993n] });
+  assert.equal(bytesToHex(req), SPAN_2POW53_P1_REQUEST);
+  const r = spanCodec.decode(hexToBytes(SPAN_2POW53_P1_RESPONSE));
+  assert.equal(r.ok, true);
+  const second = r.result?.second;
+  assert.equal(typeof second, 'bigint', 'unsafe value must come back as bigint');
+  assert.equal(second, 9007199254740993n, 'exact 2^53+1, not the rounded number');
+});
+
+// ── 2026-08-28 A2 후속: 복합 64-bit 경로(Vec<u64> + Option<i64>) 교차 와이어 ──
+// Rust wire_fixtures.rs wide_agg 3종과 짝. 원소/옵션 레벨 uvar64/zigzag64 가
+// 스트림 중간 7바이트 varint 경계를 넘는 값을 이어받는 것까지 고정한다.
+// 참고: span 튜플과 마찬가지로 와이드 정수 명령은 0.4.1 complex-codec 와이어
+// (count + elements)와 호환되지 않는다 — 구/신 코덱 혼용 금지.
+
+import { wideAggCodec } from '../generated/rkyv-codecs.js';
+
+const WIDEAGG_BOUNDARY_REQUEST =
+  '190005017f80018180808080808010ffffffffffffffffff0101ffffffffffffffffff01';
+const WIDEAGG_BOUNDARY_RESPONSE = '0100000000000000ffffffffffffffffff01f5ffffffffffffffff01';
+const WIDEAGG_EMPTY_REQUEST = '19000000';
+const WIDEAGG_EMPTY_RESPONSE = '01000000000000000000';
+const WIDEAGG_MULTIELEM_REQUEST = '19000380808080018080808080018080808080808001010a';
+const WIDEAGG_MULTIELEM_RESPONSE = '0100000000000000808080808080800110';
+
+test('cross-wire wideAgg: Vec<u64> + Option<i64> boundary values mid-stream', () => {
+  const req = wideAggCodec.encode({
+    samples: [1, 127, 128, 9007199254740993n, 18446744073709551615n],
+    offset: -9223372036854775808n,
+  });
+  assert.equal(
+    bytesToHex(req),
+    WIDEAGG_BOUNDARY_REQUEST,
+    '1B/2B varint elements then two 10-byte LEB128 elements + Some(i64::MIN)',
+  );
+  const r = wideAggCodec.decode(hexToBytes(WIDEAGG_BOUNDARY_RESPONSE));
+  assert.equal(r.ok, true);
+  assert.equal(r.result?.max, 18446744073709551615n, 'u64::MAX restored as bigint');
+  assert.equal(r.result?.adjusted, -9223372036854775803n, 'i64::MIN + 5 restored');
+});
+
+test('cross-wire wideAgg: empty vec + None option', () => {
+  const req = wideAggCodec.encode({ samples: [], offset: null });
+  assert.equal(bytesToHex(req), WIDEAGG_EMPTY_REQUEST, 'len=0 then None tag 0');
+  const r = wideAggCodec.decode(hexToBytes(WIDEAGG_EMPTY_RESPONSE));
+  assert.equal(r.ok, true);
+  assert.equal(r.result?.max, 0);
+  assert.equal(r.result?.adjusted, 0);
+});
+
+test('cross-wire wideAgg: multi-element 5/9/10-byte varints across mid-stream boundaries', () => {
+  const req = wideAggCodec.encode({
+    samples: [268435456, 34359738368, 562949953421312],
+    offset: 5,
+  });
+  assert.equal(bytesToHex(req), WIDEAGG_MULTIELEM_REQUEST, '2^28/2^35/2^49 + Some(5)');
+  const r = wideAggCodec.decode(hexToBytes(WIDEAGG_MULTIELEM_RESPONSE));
+  assert.equal(r.ok, true);
+  assert.equal(r.result?.max, 562949953421312, '2^49 stays a safe number');
+  assert.equal(r.result?.adjusted, 8, '5 + 3 elements');
+});
+
+// ── 2026-08-29 B2: Set(uniqueItems) 복합 경로 교차 와이어 ──
+// Rust wire_fixtures.rs tag_set fixture 와 짝. 원시 요소 Set 도 와이어는
+// 순서 보존 postcard seq 다 — TS encode 는 Set 이터레이션 순서 그대로
+// ([...set] 계약, 정렬/중복제거 없음), decode 는 new Set(values) 로 복원.
+// Rust BTreeSet 은 정렬 순서로 직렬화하지만 디코딩은 Set 이므로 순서 차이는
+// 관측되지 않는다.
+
+import { tagSetCodec } from '../generated/rkyv-codecs.js';
+
+const TAGSET_REQUEST = '1a00030d1ed00f';
+const TAGSET_RESPONSE = '01000000000000000303742d3705743130303003743135';
+
+test('cross-wire tagSet: TS Set iteration-order encode matches Rust request wire', () => {
+  // Rust BTreeSet {-7, 15, 1000} 은 정렬 순서 [-7, 15, 1000] 로 직렬화된다
+  // (zigzag: 13, 30, 2000=LEB128 d0 0f). TS Set 을 같은 순서로 만들면 동일
+  // 바이트여야 한다.
+  const req = tagSetCodec.encode({ ids: new Set<bigint | number>([-7, 15, 1000]) });
+  assert.equal(bytesToHex(req), TAGSET_REQUEST, 'sorted Set → same wire as Rust BTreeSet');
+});
+
+test('cross-wire tagSet: Set is order-preserving, not sorted — insertion order wins', () => {
+  // 역순 삽입 Set 은 역순 그대로 인코딩된다(정렬 없음이 계약).
+  const req = tagSetCodec.encode({ ids: new Set([1000, 15, -7]) });
+  assert.equal(bytesToHex(req), '1a0003d00f1e0d', 'insertion order preserved');
+});
+
+test('cross-wire tagSet: Rust response → TS decode restores a real Set<string>', () => {
+  const r = tagSetCodec.decode(hexToBytes(TAGSET_RESPONSE));
+  assert.equal(r.ok, true);
+  const tags = r.result?.tags;
+  assert.ok(tags instanceof Set, 'tags must be a Set');
+  assert.equal(tags.size, 3);
+  assert.deepEqual([...tags], ['t-7', 't1000', 't15']);
 });
