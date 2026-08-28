@@ -38,8 +38,25 @@ fn test_package() -> Package {
             ))
         })
         .command("largeCounted", large_counted)
+        .command("asyncIntoCounted", async_into_counted)
         .build()
 }
+
+/// async into 전용 픽스처 — LARGE_PROBE_COUNTER 를 sync caller-buffer 테스트와
+/// 공유하면 병렬 실행 시 카운터 델타가 서로 오염된다. 전용 카운터로 격리한다.
+static ASYNC_INTO_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+fn async_into_counted(input: LargeCountedInput) -> rustra::Result<LargeCountedOutput> {
+    let count = ASYNC_INTO_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+    Ok(LargeCountedOutput {
+        count: count as u64,
+        value: "x".repeat(input.len as usize),
+    })
+}
+
+/// async into 테스트 간 상호배제 — ASYNC_INTO_COUNTER 가 공유 static 이므로
+/// 병렬 실행 시 델타 판정이 오염된다 (ffi.rs WORKER_TEST_MUTEX 패턴).
+static ASYNC_INTO_TEST_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 /// probe 1회 실행 테스트용 전역 카운터 — PACKAGE OnceLock 이 테스트 간 공유되므로
 /// 카운터도 패키지에 붙여 함께 공유한다(각 테스트는 자기 측정 전후 델타로 판정).
@@ -741,4 +758,307 @@ fn caller_buffer_rkyv_v2_large_response_executes_exactly_once() {
         1,
         "probe and final write must execute the large handler exactly once"
     );
+}
+
+// ── async caller-buffer (rkyv V2 async into, F3) ────────────
+//
+// 비동기 완료 콜백이 caller 버퍼에 직접 기록하는 변형의 계약 검증.
+// 스레딩 모델: dispatch 와 on_complete 모두 워커 스레드에서 실행된다
+// (run_worker_into). 따라서 sync _into 의 probe → write 2단계 재시도는
+// 쓸 수 없다 — 재시도 호출이 다른 워커에 배정되면 thread-local probe
+// 캐시가 미스나 핸들러가 재실행된다. 대신 overflow 시 Rust 가 같은
+// dispatch 안에서 heap 프레임으로 폴백해 owned=1 로 전달한다 — 핸들러는
+// 정확히 1회, 재시도 왕복 없음.
+
+/// on_complete 콜백 수신물 캡처 — bytes/len 과 owned 플래그, 포인터 정체
+/// (caller 버퍼 vs Rust heap) 를 함께 기록한다.
+struct AsyncIntoCapture {
+    frame: std::sync::Mutex<Option<(Vec<u8>, usize, u8, usize)>>,
+    fired: std::sync::atomic::AtomicBool,
+}
+
+impl AsyncIntoCapture {
+    fn new() -> Self {
+        Self {
+            frame: std::sync::Mutex::new(None),
+            fired: std::sync::atomic::AtomicBool::new(false),
+        }
+    }
+
+    fn wait(&self) -> (Vec<u8>, usize, u8, usize) {
+        for _ in 0..2_000 {
+            if self.fired.load(std::sync::atomic::Ordering::Acquire) {
+                return self
+                    .frame
+                    .lock()
+                    .unwrap()
+                    .take()
+                    .expect("fired callback must carry a frame");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        panic!("async into callback did not fire within timeout");
+    }
+}
+
+unsafe extern "C" fn async_into_capture_cb(
+    user: *mut std::ffi::c_void,
+    resp: *mut u8,
+    resp_len: usize,
+    owned: u8,
+) {
+    let cap = unsafe { &*(user as *const AsyncIntoCapture) };
+    let bytes = if resp.is_null() {
+        Vec::new()
+    } else {
+        unsafe { std::slice::from_raw_parts(resp, resp_len) }.to_vec()
+    };
+    *cap.frame.lock().unwrap() = Some((bytes, resp_len, owned, resp as usize));
+    // Publish completion only after the captured frame is visible.
+    cap.fired.store(true, std::sync::atomic::Ordering::Release);
+}
+
+/// owned=1 프레임을 rustra_ffi_free 로 해제까지 수행하는 콜백 — free 짝
+/// (debug free_guard 가 잘못된 짝이면 abort) 을 테스트가 증명한다.
+unsafe extern "C" fn async_into_capture_and_free_cb(
+    user: *mut std::ffi::c_void,
+    resp: *mut u8,
+    resp_len: usize,
+    owned: u8,
+) {
+    unsafe { async_into_capture_cb(user, resp, resp_len, owned) };
+    if owned == 1 {
+        unsafe { rustra::ffi::rustra_ffi_free(resp, resp_len) };
+    }
+}
+
+fn large_counted_request(len: u32) -> Vec<u8> {
+    let schema = test_package().live_schema();
+    let id = schema["commands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "asyncIntoCounted")
+        .unwrap()["commandId"]
+        .as_u64()
+        .unwrap() as u16;
+    let mut request = id.to_le_bytes().to_vec();
+    request.extend_from_slice(&postcard::to_allocvec(&LargeCountedInput { len }).unwrap());
+    request
+}
+
+/// 작은 응답은 caller 버퍼에 직접 기록되고(owned=0, 포인터 동일) 핸들러는
+/// 1회 실행된다. 완료 후 invocation 레지스트리도 정리된다.
+#[test]
+fn async_into_writes_caller_buffer_in_place() {
+    use rustra::ffi::rustra_ffi_invoke_rkyv_v2_async_into;
+
+    test_package().register_ffi();
+    let request = large_counted_request(4);
+
+    let cap = AsyncIntoCapture::new();
+    let _guard = ASYNC_INTO_TEST_MUTEX
+        .lock()
+        .unwrap_or_else(|p| p.into_inner());
+    let mut buf = vec![0u8; 512];
+    let buf_addr = buf.as_ptr() as usize;
+    let mut invocation_id: u64 = 0;
+    let before = ASYNC_INTO_COUNTER.load(std::sync::atomic::Ordering::SeqCst);
+    unsafe {
+        rustra_ffi_invoke_rkyv_v2_async_into(
+            request.as_ptr(),
+            request.len(),
+            buf.as_mut_ptr(),
+            buf.len(),
+            &cap as *const _ as *mut std::ffi::c_void,
+            Some(async_into_capture_cb),
+            &mut invocation_id,
+        )
+    };
+    assert!(invocation_id > 0, "a fresh invocation id must be issued");
+
+    let (bytes, len, owned, ptr_addr) = cap.wait();
+    assert_eq!(
+        owned, 0,
+        "small response must be written into the caller buffer"
+    );
+    assert_eq!(
+        ptr_addr, buf_addr,
+        "callback must receive the caller buffer itself"
+    );
+    assert_eq!(len, bytes.len());
+    assert_eq!(bytes[0], 1, "success frame ok flag must be 1");
+    let out: LargeCountedOutput = postcard::from_bytes(&bytes[8..]).unwrap();
+    assert_eq!(out.value.len(), 4);
+    assert_eq!(out.count, (before + 1) as u64);
+    assert_eq!(
+        ASYNC_INTO_COUNTER.load(std::sync::atomic::Ordering::SeqCst) - before,
+        1,
+        "the handler must execute exactly once"
+    );
+    assert_eq!(
+        rustra::cancel::status(invocation_id),
+        rustra::cancel::Status::Unknown,
+        "completion must clear the registry entry"
+    );
+}
+
+/// caller 버퍼가 부족하면 재시도 없이 같은 dispatch 안에서 heap 프레임으로
+/// 폴백한다(owned=1). 핸들러 1회, rustra_ffi_free 짝이 성립한다.
+#[test]
+fn async_into_overflow_falls_back_to_owned_frame_exactly_once() {
+    use rustra::ffi::rustra_ffi_invoke_rkyv_v2_async_into;
+
+    test_package().register_ffi();
+    let request = large_counted_request(2048);
+
+    let cap = AsyncIntoCapture::new();
+    let _guard = ASYNC_INTO_TEST_MUTEX
+        .lock()
+        .unwrap_or_else(|p| p.into_inner());
+    let mut small = vec![0u8; 16];
+    let small_addr = small.as_ptr() as usize;
+    let mut invocation_id: u64 = 0;
+    let before = ASYNC_INTO_COUNTER.load(std::sync::atomic::Ordering::SeqCst);
+    unsafe {
+        rustra_ffi_invoke_rkyv_v2_async_into(
+            request.as_ptr(),
+            request.len(),
+            small.as_mut_ptr(),
+            small.len(),
+            &cap as *const _ as *mut std::ffi::c_void,
+            Some(async_into_capture_and_free_cb),
+            &mut invocation_id,
+        )
+    };
+
+    let (bytes, len, owned, ptr_addr) = cap.wait();
+    assert_eq!(owned, 1, "overflow must deliver an owned heap frame");
+    assert_ne!(
+        ptr_addr, small_addr,
+        "owned frame must not alias the caller buffer"
+    );
+    assert_eq!(len, bytes.len());
+    assert_eq!(bytes[0], 1);
+    let out: LargeCountedOutput = postcard::from_bytes(&bytes[8..]).unwrap();
+    assert_eq!(out.value.len(), 2048);
+    assert_eq!(
+        ASYNC_INTO_COUNTER.load(std::sync::atomic::Ordering::SeqCst) - before,
+        1,
+        "overflow fallback must not re-run the handler"
+    );
+    // owned=1 해제는 콜백 안에서 끝났다 — debug free_guard 가 잘못된 짝이면
+    // 여기 도달 전에 abort 된다.
+    assert_eq!(
+        rustra::cancel::status(invocation_id),
+        rustra::cancel::Status::Unknown
+    );
+}
+
+/// buf=null 이면 어떤 응답이든 owned=1 로 전달된다 — caller 버퍼 계약의
+/// 성립 조건(버퍼 제공)을 명시적으로 고정한다.
+#[test]
+fn async_into_null_buffer_delivers_owned_frame() {
+    use rustra::ffi::rustra_ffi_invoke_rkyv_v2_async_into;
+
+    test_package().register_ffi();
+    let request = large_counted_request(4);
+
+    let cap = AsyncIntoCapture::new();
+    let _guard = ASYNC_INTO_TEST_MUTEX
+        .lock()
+        .unwrap_or_else(|p| p.into_inner());
+    let mut invocation_id: u64 = 0;
+    unsafe {
+        rustra_ffi_invoke_rkyv_v2_async_into(
+            request.as_ptr(),
+            request.len(),
+            std::ptr::null_mut(),
+            0,
+            &cap as *const _ as *mut std::ffi::c_void,
+            Some(async_into_capture_and_free_cb),
+            &mut invocation_id,
+        )
+    };
+
+    let (bytes, _, owned, ptr_addr) = cap.wait();
+    assert_eq!(owned, 1, "null caller buffer must force owned delivery");
+    assert_ne!(ptr_addr, 0);
+    assert_eq!(bytes[0], 1);
+}
+
+/// dispatch 전 취소는 핸들러를 시작하지 않고 cancelled 에러 프레임을 caller
+/// 버퍼로 전달한다(워커가 먼저 통과한 드문 경합은 성공 프레임 — 계약상 허용).
+#[test]
+fn async_into_pre_cancelled_skips_handler_and_delivers_error_frame() {
+    use rustra::ffi::{rustra_ffi_invoke_cancel, rustra_ffi_invoke_rkyv_v2_async_into};
+
+    test_package().register_ffi();
+    let request = large_counted_request(4);
+
+    let cap = AsyncIntoCapture::new();
+    let _guard = ASYNC_INTO_TEST_MUTEX
+        .lock()
+        .unwrap_or_else(|p| p.into_inner());
+    let mut buf = vec![0u8; 512];
+    let mut invocation_id: u64 = 0;
+    let before = ASYNC_INTO_COUNTER.load(std::sync::atomic::Ordering::SeqCst);
+    unsafe {
+        rustra_ffi_invoke_rkyv_v2_async_into(
+            request.as_ptr(),
+            request.len(),
+            buf.as_mut_ptr(),
+            buf.len(),
+            &cap as *const _ as *mut std::ffi::c_void,
+            Some(async_into_capture_and_free_cb),
+            &mut invocation_id,
+        );
+        rustra_ffi_invoke_cancel(invocation_id);
+    }
+
+    let (bytes, _, owned, _) = cap.wait();
+    if bytes[0] == 1 {
+        // 드문 경합 — 워커가 cancel 보다 먼저 체크포인트를 통과. 계약상 허용.
+        return;
+    }
+    let (code, message) = decode_error_wire_public(&bytes);
+    assert_eq!(code, "cancelled");
+    assert!(
+        message.contains("cancelled before dispatch"),
+        "message should point at the pre-dispatch checkpoint, got: {message}"
+    );
+    assert_eq!(owned, 0, "small error frame must fit the caller buffer");
+    assert_eq!(
+        ASYNC_INTO_COUNTER.load(std::sync::atomic::Ordering::SeqCst) - before,
+        0,
+        "pre-cancelled invocation must never start the handler"
+    );
+}
+
+/// decode_error_wire 의 퍼블릭 래퍼 — calculator 테스트와 동일한 파싱.
+fn decode_error_wire_public(frame: &[u8]) -> (String, String) {
+    assert!(frame.len() >= 10, "error frame must carry the 10B header");
+    assert_eq!(frame[0], 0, "ok flag must be 0 for an error frame");
+    let body = &frame[10..];
+    fn read_str(b: &[u8]) -> (String, usize) {
+        let mut shift = 0;
+        let mut len = 0usize;
+        let mut i = 0;
+        loop {
+            let byte = b[i];
+            len |= ((byte & 0x7f) as usize) << shift;
+            i += 1;
+            if byte & 0x80 == 0 {
+                break;
+            }
+            shift += 7;
+        }
+        (
+            String::from_utf8_lossy(&b[i..i + len]).into_owned(),
+            i + len,
+        )
+    }
+    let (code, n) = read_str(body);
+    let (message, _) = read_str(&body[n..]);
+    (code, message)
 }
