@@ -180,7 +180,7 @@ use std::sync::{Arc, OnceLock, RwLock};
 
 use complex_codec::{
     ComplexCodecLimits, annotate_variant_order, complex_decode, complex_encode,
-    complex_schema_supported,
+    complex_encode_into, complex_schema_supported,
 };
 use rkyv_codec::{
     BinHandler, BinIntoHandler, DecodeFn, DirectResponse, EncodeFn, RawHandler,
@@ -764,9 +764,14 @@ where
         }))
     };
 
-    let rkyv_v2_into_handler: Option<BinIntoHandler> = if force_tier3 || !js_codec_supported {
+    // caller-buffer into-handler — postcard 코덱 명령에 더해 complex binary
+    // 라우트 명령도 생성한다. complex 출력은 bounded writer로 caller 버퍼에
+    // 직접 기록되고, 버퍼 부족은 기존 `DirectResponse::Buffered` 폴백(할당 경로)
+    // 으로 흘러간다. 와이어는 `rkyv_v2_handler` complex 분기와 동일한 바이트다.
+    // force_tier3 명령은 애초에 binary fast-path 가 없으므로 여전히 None.
+    let rkyv_v2_into_handler: Option<BinIntoHandler> = if force_tier3 || is_tier3 {
         None
-    } else {
+    } else if js_codec_supported {
         let handler_into = handler.clone();
         Some(Arc::new(move |payload: &[u8], target: &mut [u8]| {
             if payload.len() < 2 {
@@ -801,6 +806,66 @@ where
             response[0] = 1;
             let response = postcard::to_extend(&output, response)
                 .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))?;
+            Ok(DirectResponse::Buffered(response))
+        }))
+    } else {
+        // complex binary 라우트 — 입력 디코드/출력 인코딩은 rkyv_v2_handler 의
+        // complex 분기와 같은 스키마 같은 와이어. 출력만 bounded writer로 caller
+        // 버퍼에 직접 기록한다.
+        let input_schema = input_schema.clone();
+        let output_schema = output_schema.clone();
+        let definitions = definitions.clone();
+        let handler_into = handler.clone();
+        Some(Arc::new(move |payload: &[u8], target: &mut [u8]| {
+            if payload.len() < 2 {
+                return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+            }
+            let limits = ComplexCodecLimits {
+                max_payload_bytes: crate::ffi::max_payload_bytes(),
+                ..ComplexCodecLimits::DEFAULT
+            };
+            let input_value = complex_decode(&input_schema, &definitions, &payload[2..], limits)?;
+            let input: I = serde_json::from_value(input_value)
+                .map_err(|e| RustraError::invalid_args(format!("complex decode: {e}")))?;
+            let output = handler_into(input)?;
+            let output_value = serde_json::to_value(output)
+                .map_err(|e| RustraError::internal(format!("complex encode: {e}")))?;
+
+            // Try-first: 8B 응답 header를 깔고 body를 caller 버퍼에 직접 인코딩.
+            // 실패(버퍼 overflow, 인코딩 에러 모두)면 아래 heap 경로가 같은 값을
+            // 다시 인코딩해 Buffered 폴백 또는 동일 에러를 반환한다 — 인코딩이
+            // 결정론이므로 결과가 같고, 핸들러는 재실행되지 않는다(비멱등 안전).
+            if target.len() > 8 {
+                target[..8].fill(0);
+                target[0] = 1;
+                if let Ok(body_len) = complex_encode_into(
+                    &output_schema,
+                    &definitions,
+                    &output_value,
+                    &mut target[8..],
+                    limits,
+                ) {
+                    let response_len = 8 + body_len;
+                    if response_len <= limits.max_payload_bytes {
+                        return Ok(DirectResponse::Written(response_len));
+                    }
+                    // 헤더 포함 총량이 한도를 넘으면 heap 경로의
+                    // payload_too_large 검사가 malloc 경로와 동일한 에러를 만든다.
+                }
+            }
+
+            let body = complex_encode(&output_schema, &definitions, &output_value, limits)?;
+            let response_len = 8usize.saturating_add(body.len());
+            if response_len > limits.max_payload_bytes {
+                return Err(RustraError::payload_too_large(
+                    response_len,
+                    limits.max_payload_bytes,
+                ));
+            }
+            let mut response = Vec::with_capacity(response_len);
+            response.resize(8, 0);
+            response[0] = 1;
+            response.extend_from_slice(&body);
             Ok(DirectResponse::Buffered(response))
         }))
     };
@@ -3077,5 +3142,156 @@ mod buffer_invoke_tests {
         let _ = Package::builder("test.optional-buffer")
             .buffer_command("optional", |input: OptionalBytes| Ok(input))
             .build();
+    }
+}
+
+#[cfg(test)]
+mod complex_into_tests {
+    use super::*;
+
+    // oneOf data enum — JS postcard 코덱 미지원 → complex binary 라우트.
+    // (rkyv_v2_wire.rs 의 Status fixture 와 동일한 라우팅)
+    #[derive(Debug, serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+    #[serde(rename_all = "camelCase")]
+    enum IntoStatus {
+        Active { level: i64 },
+        Idle,
+    }
+
+    #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+    #[serde(rename_all = "camelCase")]
+    struct IntoStatusIn {
+        status: IntoStatus,
+    }
+
+    #[derive(Debug, serde::Serialize, schemars::JsonSchema)]
+    #[serde(rename_all = "camelCase")]
+    struct IntoStatusOut {
+        status: IntoStatus,
+    }
+
+    fn status_echo(input: IntoStatusIn) -> Result<IntoStatusOut> {
+        Ok(IntoStatusOut {
+            status: input.status,
+        })
+    }
+
+    fn complex_pkg() -> Package {
+        Package::builder("test.complex-into")
+            .command("statusEcho", status_echo)
+            .build()
+    }
+
+    // [cmd_id u16 LE][variant index=0(Active)][level zigzag(7)=14]
+    fn status_request(id: u16) -> Vec<u8> {
+        let mut req = id.to_le_bytes().to_vec();
+        req.extend_from_slice(&[0, 14]);
+        req
+    }
+
+    // complex 커맨드가 into-handler를 가져야 한다 (과거 None → Buffered 폴백).
+    #[test]
+    fn complex_command_gets_into_handler_and_writes_caller_buffer() {
+        let pkg = complex_pkg();
+        let req = status_request(1);
+        let mut target = vec![0u8; 64];
+        match pkg.invoke_rkyv_v2_into(&req, &mut target).unwrap() {
+            DirectResponse::Written(len) => {
+                // 8B header + [variant 0][zigzag(7)=14]
+                assert_eq!(len, 10);
+                assert_eq!(target[0], 1, "ok flag");
+                assert_eq!(&target[8..10], &[0, 14]);
+            }
+            DirectResponse::Buffered(_) => {
+                panic!("complex command must use the into-handler, not the malloc fallback")
+            }
+        }
+        // 와이어 무변경 게이트 — into 기록 바이트 == 할당 경로 응답 바이트.
+        let buffered = pkg.invoke_rkyv_v2(&req).unwrap();
+        assert_eq!(buffered.len(), 10);
+        assert_eq!(&buffered[..], &target[..10]);
+    }
+
+    // caller 버퍼 부족 → bounded writer overflow → 기존 Buffered 폴백 유지.
+    #[test]
+    fn complex_into_falls_back_to_buffered_when_caller_buffer_is_small() {
+        let pkg = complex_pkg();
+        let req = status_request(1);
+        // 8B header 만 들어가는 버퍼 — body 2B 는 못 들어간다.
+        let mut target = vec![0u8; 9];
+        match pkg.invoke_rkyv_v2_into(&req, &mut target).unwrap() {
+            DirectResponse::Buffered(response) => {
+                assert_eq!(response.len(), 10);
+                assert_eq!(response[0], 1);
+                assert_eq!(&response[8..], &[0, 14]);
+            }
+            DirectResponse::Written(_) => {
+                panic!("insufficient buffer must fall back to Buffered")
+            }
+        }
+    }
+
+    // caller 버퍼가 header 조차 못 담을 때(<=8B)도 Buffered 폴백이어야 한다.
+    #[test]
+    fn complex_into_falls_back_when_buffer_has_no_body_room() {
+        let pkg = complex_pkg();
+        let req = status_request(1);
+        let mut target = vec![0u8; 8];
+        match pkg.invoke_rkyv_v2_into(&req, &mut target).unwrap() {
+            DirectResponse::Buffered(response) => assert_eq!(response.len(), 10),
+            DirectResponse::Written(_) => {
+                panic!("no body room must fall back to Buffered")
+            }
+        }
+    }
+
+    // 폴백(exact-once) — caller 버퍼 부족으로 Buffered 로 흘러가도 핸들러는
+    // 정확히 1회만 실행된다. postcard 라우트의 동일 계약
+    // (trust_baseline_ffi::caller_buffer_rkyv_v2_large_response_executes_exactly_once)
+    // 를 complex 라우트에서 미러한다. 비멱등 command 안전성의 근거.
+    static INTO_FALLBACK_COUNTER: std::sync::atomic::AtomicUsize =
+        std::sync::atomic::AtomicUsize::new(0);
+
+    fn counted_status_echo(input: IntoStatusIn) -> Result<IntoStatusOut> {
+        INTO_FALLBACK_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(IntoStatusOut {
+            status: input.status,
+        })
+    }
+
+    #[test]
+    fn complex_into_fallback_executes_handler_exactly_once() {
+        let pkg = Package::builder("test.complex-into-once")
+            .command("countedStatusEcho", counted_status_echo)
+            .build();
+        let req = status_request(1);
+        let before = INTO_FALLBACK_COUNTER.load(std::sync::atomic::Ordering::SeqCst);
+
+        // 8B header 만 담는 target — body 2B 가 못 들어가 폴백 강제.
+        let mut target = vec![0u8; 8];
+        match pkg.invoke_rkyv_v2_into(&req, &mut target).unwrap() {
+            DirectResponse::Buffered(response) => {
+                assert_eq!(response.len(), 10);
+                assert_eq!(response[0], 1);
+                assert_eq!(&response[8..], &[0, 14]);
+            }
+            DirectResponse::Written(_) => panic!("small target must force the fallback"),
+        }
+        assert_eq!(
+            INTO_FALLBACK_COUNTER.load(std::sync::atomic::Ordering::SeqCst) - before,
+            1,
+            "fallback must not re-run the handler"
+        );
+
+        // 같은 요청을 넉넉한 target 으로 — Written 경로도 카운터를 1만 늘린다.
+        let mut roomy = vec![0u8; 64];
+        assert!(matches!(
+            pkg.invoke_rkyv_v2_into(&req, &mut roomy).unwrap(),
+            DirectResponse::Written(10)
+        ));
+        assert_eq!(
+            INTO_FALLBACK_COUNTER.load(std::sync::atomic::Ordering::SeqCst) - before,
+            2
+        );
     }
 }

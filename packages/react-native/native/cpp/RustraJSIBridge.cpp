@@ -536,6 +536,11 @@ struct AsyncCallContext {
   bool valid = true;
   uint64_t generation = 0;
   uint64_t invocationId = 0;
+  /// (F3) caller-buffer async 응답 버퍼 — Rust 워커가 응답을 여기에 직접
+  /// 기록한다(owned=0). context(shared_ptr)가 완료 콜백과 JS 스레드 전달
+  /// 람다까지 수명을 보장하므로 복사 없이 제자리 읽는다. 버퍼에 안 들어가는
+  /// 응답만 Rust heap 프레임으로 돌아온다(owned=1 → rustra_ffi_free 짝).
+  std::vector<uint8_t> frameBuffer = std::vector<uint8_t>(512);
 };
 
 static std::atomic<uint64_t> g_runtimeGeneration{0};
@@ -1145,23 +1150,39 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         ctx->generation = g_runtimeGeneration.load(std::memory_order_acquire);
         registerAsyncContext(ctx);
         // C ABI user_data는 shared_ptr holder를 소유한다. 동기 오류 콜백과
-        // install/invalidate 경합에서도 context 수명이 보장된다.
+        // install/invalidate 경합에서도 context 수명이 보장된다. 응답 버퍼는
+        // context 안에 살아 있다 — 콜백(ctx 해제 경합 포함)이 끝날 때까지
+        // holder/shared_ptr 체인이 수명을 보장하므로 Rust 워커가 안전히 쓴다.
         auto* holder = new std::shared_ptr<AsyncCallContext>(ctx);
 
         // 2) 비동기 FFI — id 를 동기 반환한다 (취소 핸들).
         uint64_t invocationId = 0;
-        rustra_ffi_invoke_rkyv_v2_async(
-          req.data(), req.size(), holder,
-          [](void* user_data, uint8_t* resp, size_t resp_len) {
-            // Rust 워커 스레드에서 실행 — JS 객체를 건드리지 않고, 결과를
-            // 소유한 뒤 CallInvoker 로 JS 스레드에 마샬링한다.
+        rustra_ffi_invoke_rkyv_v2_async_into(
+          req.data(), req.size(),
+          ctx->frameBuffer.data(), ctx->frameBuffer.size(),
+          holder,
+          [](void* user_data, uint8_t* resp, size_t resp_len, uint8_t owned) {
+            // 워커 스레드 또는(즉시 실패 시) 호출 스레드에서 실행 — JS 객체를
+            // 건드리지 않고, 결과를 소유한 뒤 CallInvoker 로 JS 스레드에
+            // 마샬링한다.
             std::unique_ptr<std::shared_ptr<AsyncCallContext>> holder(
               static_cast<std::shared_ptr<AsyncCallContext>*>(user_data));
             std::shared_ptr<AsyncCallContext> ctx = *holder;
-            std::vector<uint8_t> frame;
-            if (resp && resp_len > 0) {
-              frame.assign(resp, resp + resp_len);
-              rustra_ffi_free(resp, resp_len);
+            // 응답 소유 규칙(FFI 계약):
+            //   owned=0 — resp 는 ctx->frameBuffer 자체. ctx(shared_ptr)가
+            //             JS 스레드 람다까지 살아 있어 그대로 제자리 읽는다.
+            //             복사 0회 — 기존 std::vector assign 제거 지점.
+            //   owned=1 — resp 는 Rust heap 프레임. shared_ptr 로 소유권을
+            //             감싸 전달한다 — CallInvoker 가 reload/teardown 시
+            //             큐잉된 람다를 실행 없이 파괴해도 deleter 가 free 를
+            //             보장한다(구형 std::vector 경로의 누수 없음 특성 유지).
+            //             deleter 는 정확한 (ptr, resp_len) 짝으로 free 한다 —
+            //             debug free_guard 가 len 불일치 free 에 abort 하므로
+            //             길이를 버리는 deleter 는 쓸 수 없다.
+            std::shared_ptr<uint8_t> ownedFrame;
+            if (owned == 1) {
+              ownedFrame = std::shared_ptr<uint8_t>(
+                resp, [resp_len](uint8_t* p) { rustra_ffi_free(p, resp_len); });
             }
             std::shared_ptr<void> invoker;
             bool valid = false;
@@ -1172,12 +1193,15 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
                 ctx->generation == g_runtimeGeneration.load(std::memory_order_acquire);
             }
             if (!valid || !invoker) {
+              // invalidate가 JSI Function을 이미 JS thread에서 reset함 —
+              // 전달은 폐기. owned 프레임은 ownedFrame 의 소멸이 free 한다.
               unregisterAsyncContext(ctx);
-              return; // invalidate가 JSI Function을 이미 JS thread에서 reset함
+              return;
             }
             auto* nativeInvoker =
               static_cast<facebook::react::CallInvoker*>(invoker.get());
-            nativeInvoker->invokeAsync([ctx, frame = std::move(frame)](facebook::jsi::Runtime& rt) {
+            nativeInvoker->invokeAsync(
+              [ctx, resp, resp_len, owned, ownedFrame](facebook::jsi::Runtime& rt) {
               std::optional<facebook::jsi::Function> onSuccess;
               std::optional<facebook::jsi::Function> onError;
               std::string name;
@@ -1194,39 +1218,43 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
                   deliver = true;
                 }
               }
-              unregisterAsyncContext(ctx);
-              if (!deliver || !onSuccess || !onError) return;
-              const size_t out_len = frame.size();
-              const uint8_t* resp = frame.data();
-              if (out_len < 1) {
-                onError->call(rt, "RustraJSI: empty rkyv v2 async response");
-                return;
-              }
-              if (resp[0] == 0) {
-                // 에러 와이어: [ok:0][pad][err_len u16 @8][postcard{code,message} @10]
-                if (out_len < 10) {
-                  onError->call(rt, "RustraJSI: malformed async error response");
+                unregisterAsyncContext(ctx);
+                // owned=1 프레임의 해제는 캡처한 ownedFrame 의 소멸이 담당
+                // 한다 — 아래 모든 exit 경로(deliver 경합/empty/malformed/
+                // 에러/디코드 실패)와 람다가 실행되지 않고 파괴되는 teardown
+                // 경로에서도 정확히 1회 free. owned=0 이면 빈 shared_ptr —
+                // resp 는 ctx->frameBuffer(ctx 가 수명 보장).
+                if (!deliver || !onSuccess || !onError) return;
+                const size_t out_len = resp_len;
+                if (out_len < 1) {
+                  onError->call(rt, "RustraJSI: empty rkyv v2 async response");
                   return;
                 }
-                // postcard {code, message} → "code: message" 문자열 (RustraError
-                // Display 형태) — JS parseRustraErrorString 가 코드를 복구한다.
-                // 파싱 실패 시 원시 바이트 폴백(onError 누락 없음).
-                onError->call(rt, parseRkyvV2ErrorBody(resp, out_len));
-                return;
-              }
-              if (out_len < 8) {
-                onError->call(rt, "RustraJSI: malformed async success response");
-                return;
-              }
-              try {
-                rc::Reader r(resp + 8, out_len - 8);
-                Value result = gen::decode_by_name(rt, name, r);
-                onSuccess->call(rt, std::move(result));
-              } catch (const facebook::jsi::JSError& e) {
-                // 디코딩 실패는 에러 콜백으로 정규화 — 콜백 누락 방지.
-                onError->call(rt, e.getMessage());
-              }
-            });
+                if (resp[0] == 0) {
+                  // 에러 와이어: [ok:0][pad][err_len u16 @8][postcard{code,message} @10]
+                  if (out_len < 10) {
+                    onError->call(rt, "RustraJSI: malformed async error response");
+                    return;
+                  }
+                  // postcard {code, message} → "code: message" 문자열 (RustraError
+                  // Display 형태) — JS parseRustraErrorString 가 코드를 복구한다.
+                  // 파싱 실패 시 원시 바이트 폴백(onError 누락 없음).
+                  onError->call(rt, parseRkyvV2ErrorBody(resp, out_len));
+                  return;
+                }
+                if (out_len < 8) {
+                  onError->call(rt, "RustraJSI: malformed async success response");
+                  return;
+                }
+                try {
+                  rc::Reader r(resp + 8, out_len - 8);
+                  Value result = gen::decode_by_name(rt, name, r);
+                  onSuccess->call(rt, std::move(result));
+                } catch (const facebook::jsi::JSError& e) {
+                  // 디코딩 실패는 에러 콜백으로 정규화 — 콜백 누락 방지.
+                  onError->call(rt, e.getMessage());
+                }
+              });
           },
           &invocationId);
 
