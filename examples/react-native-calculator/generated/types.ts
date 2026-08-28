@@ -11,7 +11,7 @@ export type ChannelHandle = number;
 export type Item = {
   active: boolean;
   name: string;
-  value: number;
+  value: number | bigint;
 };
 
 /**
@@ -20,12 +20,12 @@ export type Item = {
 export type ResourceHandle = number;
 
 export type AddNumbersInput = {
-  a: number;
-  b: number;
+  a: number | bigint;
+  b: number | bigint;
 };
 
 export type AddNumbersOutput = {
-  value: number;
+  value: number | bigint;
 };
 
 export type BenchAddInput = {
@@ -74,7 +74,7 @@ export type ClampOutput = {
 
 export type CreateItemInput = {
   name: string;
-  value: number;
+  value: number | bigint;
 };
 
 export type CreateItemOutput = {
@@ -82,32 +82,40 @@ export type CreateItemOutput = {
 };
 
 export type DivideInput = {
-  a: number;
-  b: number;
+  a: number | bigint;
+  b: number | bigint;
 };
 
 export type DivideOutput = {
-  value: number;
+  value: number | bigint;
+};
+
+export type EchoGroupsInput = {
+  groups: Record<string, string[]>;
+};
+
+export type EchoGroupsOutput = {
+  groups: Record<string, string[]>;
 };
 
 export type EmitDemoInput = {
   /** 발행할 progress.tick 이벤트 수. */
-  ticks: number;
+  ticks: number | bigint;
   /** 각 스텝 사이 대기 (ms). 데모에서 이벤트 순서를 관찰하기 쉽게. */
-  stepDelayMs: number;
+  stepDelayMs: number | bigint;
 };
 
 export type EmitDemoOutput = {
-  emitted: number;
+  emitted: number | bigint;
 };
 
 export type GaugeInput = {
-  limit: number;
+  limit: number | bigint;
   offset: number;
 };
 
 export type GaugeOutput = {
-  next: number;
+  next: number | bigint;
 };
 
 export type GreetInput = {
@@ -119,7 +127,7 @@ export type GreetOutput = {
 };
 
 export type IsEvenInput = {
-  n: number;
+  n: number | bigint;
 };
 
 export type IsEvenOutput = {
@@ -191,21 +199,21 @@ export type RegistryDemoOutput = {
 };
 
 export type ScoreTotalInput = {
-  scores: Record<string, number>;
+  scores: Record<string, number | bigint>;
 };
 
 export type ScoreTotalOutput = {
   count: number;
-  total: number;
+  total: number | bigint;
 };
 
 export type SecureComputeInput = {
-  a: number;
-  b: number;
+  a: number | bigint;
+  b: number | bigint;
 };
 
 export type SecureComputeOutput = {
-  value: number;
+  value: number | bigint;
 };
 
 export type SizeOfInput = {
@@ -218,21 +226,21 @@ export type SizeOfOutput = {
 };
 
 export type SpanInput = {
-  pair: [string, number];
+  pair: [string, number | bigint];
 };
 
 export type SpanOutput = {
   first: string;
-  second: number;
+  second: number | bigint;
 };
 
 export type SumListInput = {
-  numbers: number[];
+  numbers: (number | bigint)[];
 };
 
 export type SumListOutput = {
   count: number;
-  total: number;
+  total: number | bigint;
 };
 
 export type ToUpperInput = {

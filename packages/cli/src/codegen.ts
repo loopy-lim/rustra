@@ -61,7 +61,11 @@ export function tsTypeFromSchema(
   if (typeof type === 'string') {
     switch (type) {
       case 'object':
-        if (!schema.properties && schema.additionalProperties) {
+        if (
+          !schema.properties &&
+          schema.additionalProperties &&
+          typeof schema.additionalProperties === 'object'
+        ) {
           const valueType = tsTypeFromSchema(schema.additionalProperties, definitions);
           return `Record<string, ${valueType}>`;
         }
@@ -71,6 +75,7 @@ export function tsTypeFromSchema(
         if (schema.enum && schema.enum.length > 0) {
           return schema.enum.map((v) => String(v)).join(' | ');
         }
+        if (schema.format === 'int64' || schema.format === 'uint64') return 'number | bigint';
         return 'number';
       }
       case 'number':
@@ -99,7 +104,7 @@ export function tsTypeFromSchema(
         // `uniqueItems: true` (Rust `BTreeSet`/`HashSet`)는 `Set<T>`로 매핑.
         // Rust codegen(ts_type_from_schema)과 동일 규칙.
         if (schema.uniqueItems) return `Set<${itemType}>`;
-        return `${itemType}[]`;
+        return itemType.includes(' | ') ? `(${itemType})[]` : `${itemType}[]`;
       }
       case 'null':
         return 'null';
@@ -113,6 +118,10 @@ export function tsTypeFromSchema(
     for (const member of type) {
       switch (member) {
         case 'integer':
+          parts.add(
+            schema.format === 'int64' || schema.format === 'uint64' ? 'number | bigint' : 'number',
+          );
+          break;
         case 'number':
           parts.add('number');
           break;
@@ -134,7 +143,8 @@ export function tsTypeFromSchema(
             const elementTypes = items.map((s) => tsTypeFromSchema(s, definitions));
             parts.add(`[${elementTypes.join(', ')}]`);
           } else {
-            parts.add(items ? `${tsTypeFromSchema(items, definitions)}[]` : 'unknown[]');
+            const itemType = items ? tsTypeFromSchema(items, definitions) : 'unknown';
+            parts.add(itemType.includes(' | ') ? `(${itemType})[]` : `${itemType}[]`);
           }
           break;
         }

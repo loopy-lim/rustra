@@ -5,7 +5,7 @@
 //!
 //! 1. `Package::invoke_rkyv_v2` (Rust API):
 //!    - 0바이트 / 1바이트 (cmd_id 미만) → `invalid_args`
-//!    - 정상 cmd_id + 잘린/쓰레기 postcard 본체 → `invalid_args("postcard decode: …")`
+//!    - 정상 cmd_id + 잘린/쓰레기 binary 본체 → clean `invalid_args`
 //!    - 알 수 없는 cmd_id → `command_not_found`
 //!      위 모두 `Err` 반환 — 패닉이 `extern "C"` 경계를 넘는 치명적 상황이 아니다.
 //!
@@ -77,7 +77,8 @@ fn invoke_rkyv_v2_garbage_postcard_body_returns_clean_error() {
     let pkg = robustness_package();
     let id = common::command_id_of(&pkg, "add");
     // [cmd_id u16 LE][쓰레기 — 모두 continuation 비트가 켜진 varint]
-    // postcard::from_bytes 가 AddInput{a,b} 를 역직렬화하지 못해야 한다.
+    // AddInput은 int64 보존을 위해 complex-binary route를 사용하므로,
+    // 여기서는 특정 코덱 이름이 아니라 clean decode 오류만 고정한다.
     let req = [
         (id & 0xff) as u8,
         ((id >> 8) & 0xff) as u8,
@@ -93,8 +94,8 @@ fn invoke_rkyv_v2_garbage_postcard_body_returns_clean_error() {
         .expect_err("garbage postcard body must error, not abort");
     let msg = err.to_string().to_lowercase();
     assert!(
-        msg.contains("postcard") || msg.contains("decode"),
-        "garbage body should yield a postcard decode error, got: {err}"
+        msg.contains("postcard") || msg.contains("complex") || msg.contains("decode"),
+        "garbage body should yield a binary decode error, got: {err}"
     );
 }
 
@@ -103,15 +104,15 @@ fn invoke_rkyv_v2_truncated_valid_postcard_prefix_returns_clean_error() {
     let pkg = robustness_package();
     let id = common::command_id_of(&pkg, "add");
     // 정상 인코딩의 *접두* 만 전송: AddInput{a:5} 의 `a` 하나(varint 0x0a)만.
-    // 두 번째 필드 b 가 없으므로 postcard 는 unexpected-end-of-input 에러.
+    // 두 번째 필드 b 가 없으므로 binary decoder는 unexpected-end-of-input 에러.
     let req = [(id & 0xff) as u8, ((id >> 8) & 0xff) as u8, 0x0a];
     let err = pkg
         .invoke_rkyv_v2(&req)
         .expect_err("truncated postcard prefix must error, not abort");
     let msg = err.to_string().to_lowercase();
     assert!(
-        msg.contains("postcard") || msg.contains("decode"),
-        "truncated body should yield a postcard decode error, got: {err}"
+        msg.contains("postcard") || msg.contains("complex") || msg.contains("decode"),
+        "truncated body should yield a binary decode error, got: {err}"
     );
 }
 
@@ -131,7 +132,7 @@ fn invoke_rkyv_v2_unknown_command_id_returns_clean_error() {
 }
 
 /// 동일 페이로드 패턴이 정상 명령과 비정상 명령을 구분하는지(회귀 가드):
-/// 같은 cmd_id 로 *정상* postcard 를 보내면 성공해야 한다. 위 malformed 테스트들이
+/// 같은 cmd_id 로 *정상* binary payload 를 보내면 성공해야 한다. 위 malformed 테스트들이
 /// "항상 실패" 가 되는 위양성(false-positive) 을 잡는다.
 #[test]
 fn invoke_rkyv_v2_well_formed_payload_succeeds_for_contrast() {
@@ -409,7 +410,7 @@ fn invoke_rkyv_v2_at_limit_passes_gate_into_pipeline() {
     let _guard = limit_guard();
     let pkg = robustness_package();
     let id = common::command_id_of(&pkg, "add");
-    // ==limit — `>` 검사를 통과한다. 본체는 쓰레기 postcard(0xff) 이므로 정상
+    // ==limit — `>` 검사를 통과한다. 본체는 쓰레기 binary(0xff) 이므로 정상
     // 파이프라인에서 invalid_args 로 실패한다 (게이트가 아닌 디코더 실패).
     let req = v2_request(id, 1024 * 1024 - 2);
     let err = pkg

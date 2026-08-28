@@ -206,6 +206,8 @@ jobs:
         run: bun run test:adapters
       - name: Test CLI
         run: bun run --cwd packages/cli test
+      - name: Test complex codec receipt
+        run: bun run test:complex-codec-bench
       - name: Bench regression gate unit tests
         # check-criterion-regression.mjs 로직의 단위 테스트 — umbrella `test`
         # 스크립트에만 포함돼 CI가 놓치고 있었다.
@@ -256,6 +258,8 @@ jobs:
         run: bun install --cwd examples/react-native-calculator --frozen-lockfile
       - name: Regenerate the autolinked Rustra module
         run: bun run --cwd examples/react-native-calculator codegen
+      - name: Verify packed React Native consumer resolves native sources
+        run: bun run verify:consumer:react-native
       # android/ 는 Expo prebuild 산물로 gitignore 되어 있다 (ios/ 도 동일).
       # 클린 체크아웃에서 재현하려면 prebuild 로 네이티브 프로젝트를 생성한다.
       # 생성된 @rustra/generated-react-native 모듈은 react-native.config.js 만으로
@@ -298,6 +302,8 @@ jobs:
         run: bun install --cwd examples/react-native-calculator --frozen-lockfile
       - name: Regenerate the autolinked Rustra module
         run: bun run --cwd examples/react-native-calculator codegen
+      - name: Verify packed React Native consumer resolves native sources
+        run: bun run verify:consumer:react-native
       # ios/ 도 android/ 와 마찬가지로 Expo prebuild 산물 (gitignore). 생성 모듈의
       # podspec은 CocoaPods autolinking만 사용하며 Podfile 수동 패치는 필요 없다.
       - name: Expo prebuild (generate native ios project)
@@ -331,12 +337,9 @@ jobs:
       - name: Build all packages
         run: bun run build
       - name: Verify React Native files are present in packed artifacts
-        run: |
-          mkdir -p /tmp/rustra-pack-check
-          bun pm pack --cwd packages/cli --destination /tmp/rustra-pack-check
-          bun pm pack --cwd packages/react-native --destination /tmp/rustra-pack-check
-          tar -tf /tmp/rustra-pack-check/rustra-cli-*.tgz | grep 'package/dist/react-native.js'
-          tar -tf /tmp/rustra-pack-check/rustra-react-native-*.tgz | grep 'package/native/cpp/RustraJSIBridge.cpp'
+        run: bun run verify:package:react-native
+      - name: Verify packed React Native consumer resolves native sources
+        run: bun run verify:consumer:react-native
       - name: Install packed packages as a consumer
         run: |
           mkdir -p /tmp/rustra-pack

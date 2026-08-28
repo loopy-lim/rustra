@@ -16,7 +16,7 @@
 //! 한쪽만 바뀌면 교차 테스트가 실패한다.
 
 use rustra_calculator_example::{
-    AddNumbersInput, DivideInput, GaugeInput, GreetInput, ScoreTotalInput, SizeOfInput, SpanInput,
+    AddNumbersInput, DivideInput, GaugeInput, GreetInput, ScoreTotalInput, SizeOfInput,
     calculator_package,
 };
 
@@ -86,7 +86,7 @@ fn divide_error_wire_is_stable() {
 }
 
 // ── 2026-08-22 타입 확장: bytes/map/tuple/uvar 와이어 고정 ──────
-// probe 실측 계약: u32/u64 plain varint, map count+(k,v)*, tuple 무접두,
+// probe 실측 계약: u32/u64 plain varint, map count+(k,v)*, complex tuple count+elements,
 // Vec<u8> len+raw. TS cross-wire.test.ts 신규 블록과 짝이다.
 
 const SIZEOF_REQUEST: &str = "0e0004010203fa";
@@ -96,7 +96,7 @@ const SIZEOF_RESPONSE: &str = "0100000000000000800204";
 // TS 인코더는 키를 정렬해 결정론적으로 인코딩하고 Rust 디코더는 순서독립
 // 이므로 round-trip 계약은 성립한다.
 const SCORETOTAL_RESPONSE: &str = "01000000000000000254";
-const SPAN_REQUEST: &str = "100002686909";
+const SPAN_REQUEST: &str = "10000202686909";
 const SPAN_RESPONSE: &str = "010000000000000002686909";
 const GAUGE_REQUEST: &str = "1100ac02f0a204";
 const GAUGE_RESPONSE: &str = "01000000000000009ca504";
@@ -134,12 +134,10 @@ fn score_total_wire_is_stable() {
 #[test]
 fn span_wire_is_stable() {
     let pkg = calculator_package();
-    let req = request_for(
-        16,
-        &SpanInput {
-            pair: ("hi".into(), -5),
-        },
-    );
+    // span contains i64, so both sides select complex-binary. Its tuple wire
+    // is count + elements, unlike postcard's prefix-free tuple.
+    let mut req = 16u16.to_le_bytes().to_vec();
+    req.extend_from_slice(&[2, 2, b'h', b'i', 9]);
     let resp = invoke_with_frame(&pkg, &req);
     assert_eq!(hexlify(&req), SPAN_REQUEST);
     assert_eq!(hexlify(&resp), SPAN_RESPONSE);

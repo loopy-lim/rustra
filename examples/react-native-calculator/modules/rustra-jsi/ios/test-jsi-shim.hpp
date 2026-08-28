@@ -72,6 +72,9 @@ public:
 
   Value(Runtime&, double n) : kind_(Kind::Number), num_(n) {}
   Value(Runtime&, bool b) : kind_(Kind::Bool), bool_(b) {}
+  Value(const String& s) : kind_(Kind::String), str_(s) {}
+  Value(String&& s) : kind_(Kind::String), str_(std::move(s)) {}
+  Value(Runtime&, const String& s) : kind_(Kind::String), str_(s) {}
   Value(Runtime&, const Object& o);
   Value(Runtime&, const Array& a);
 
@@ -80,8 +83,12 @@ public:
   Value(const Array& a);
 
   Kind kind() const { return kind_; }
-  bool isObject() const { return kind_ == Kind::Object; }
+  // In real JSI, Array is an Object value as well; generated complex array
+  // encoders rely on that relationship before calling asObject().
+  bool isObject() const { return kind_ == Kind::Object || kind_ == Kind::Array; }
   bool isNumber() const { return kind_ == Kind::Number; }
+  bool isBool() const { return kind_ == Kind::Bool; }
+  bool isString() const { return kind_ == Kind::String; }
   bool isUndefined() const { return kind_ == Kind::Undefined; }
 
   double asNumber() const {
@@ -151,6 +158,9 @@ public:
 
   void setProperty(Runtime&, const std::string& name, Value v) {
     data_->props[name] = std::move(v);
+  }
+  void setProperty(Runtime& rt, const String& name, Value v) {
+    setProperty(rt, name.utf8(rt), std::move(v));
   }
   void setProperty(Runtime& rt, const std::string& name, double n) {
     setProperty(rt, name, Value(n));

@@ -21,11 +21,69 @@
 - A generated route must be either complete or excluded with an actionable reason; no partial codec registration.
 - Release coherence must permit different public npm versions while enforcing valid dependency ranges and generated Rust compatibility.
 
+## Current execution status (2026-08-27)
+
+The implementation slice is complete and the release candidate has been
+verified at source, package, native-build, Android device, and iOS Simulator
+runtime boundaries. The iOS Simulator receipt uses a Release build with the
+embedded JS bundle on an iPhone 17 Simulator.
+
+- [x] Independent public package versions with compatibility-range validation.
+- [x] Stale React Native package resolution and clean packed-consumer evidence.
+- [x] Complex binary first slice: nested maps, recursive references, options,
+      sets, tuples, and data enums with bounded readers/writers.
+- [x] TypeScript/Rust golden byte tests, malformed-input tests, and a machine-readable
+      JS benchmark receipt.
+- [x] Shared recursive codec IR and explicit `x-rustra-variant-order` metadata;
+      TS generators now share one recursive IR and both TS/C++ paths consume the
+      explicit stable variant keys.
+- [x] Generated C++ complex marshalling for native-safe schemas; Set and
+      int64/uint64 commands intentionally remain on the JS complex codec path.
+- [x] Android release complex-command runtime receipt on a physical arm64
+      device; package/build and packed-consumer checks remain separate evidence.
+- [x] iOS device-target generic Debug build after regenerating the Rust archive
+      for `aarch64-apple-ios`.
+- [x] iOS Simulator runtime receipt on iPhone 17 Simulator using the Release
+      embedded JS bundle; codec, complex command, channel/resource, JSI, and
+      benchmark markers completed.
+- [x] Public bigint ergonomics and range validation for complex integer schemas
+      wider than JavaScript's safe-number range.
+
+### Final evidence receipt
+
+- Android release APK: `examples/react-native-calculator/android/app/build/outputs/apk/release/app-release.apk`, SHA-256
+  `5543c4058a16907b3161e7322baa2d48926ab6f7cbfcaba0d0c7605dd5dc15f9`.
+- Physical device: `HA2D6EMP` / `TB710FU`, Android SDK 36, `arm64-v8a`.
+- Device log receipt: all legacy adapters, `echoGroups` nested map/vector,
+  channel ordering/drop, resource close/not-found, and benchmark completed;
+  no `Benchmark failed` or `FATAL EXCEPTION` was observed.
+- iOS generic build: `xcodebuild ... -sdk iphoneos -destination
+'generic/platform=iOS' ... CODE_SIGNING_ALLOWED=NO -jobs 1 build` succeeded
+  after the vendored archive was rebuilt as a non-fat `arm64` device archive.
+- iOS Simulator runtime: the Release app built, installed, and launched on
+  iPhone 17 Simulator (`99B087B5-DEF6-4CF1-9177-81A5DE564CFC`); logs confirmed
+  all codec variants, `echoGroups`, channel ordering, resource post-close
+  behavior, JSI installation, and benchmark output with no `Benchmark failed`,
+  `No script URL`, or `FATAL EXCEPTION` marker.
+- Packed consumer: the CLI tarball explicitly includes `dist/codec-ir.*`, the
+  `@rustra/types` tarball includes `dist/complex-codec.*`, and
+  `bun run verify:consumer:react-native` imports `createComplexCodec` from the
+  packed dependency before checking native source resolution.
+- Default local iOS archive: restored to the Simulator slices after the device
+  link receipt. Reproduce the device check with
+  `RUSTRA_IOS_TARGET=aarch64-apple-ios RUSTRA_PROFILE=release sh
+modules/rustra-jsi/ios/build-rust-ios.sh` before a device-target build.
+- Follow-up backlog: keep a packed RN native smoke in both platform CI jobs and
+  publish only with explicit authorization.
+- No npm or crates.io publication was performed. The working tree remains
+  intentionally dirty and uncommitted.
+
 ---
 
 ## Task 1: Independent release metadata and validation
 
 **Files:**
+
 - Modify: `.changeset/config.json`
 - Modify: `scripts/check-release-coherence.mjs`
 - Modify: `package.json`
@@ -43,6 +101,7 @@
 - Test: `scripts/check-release-coherence.test.mjs` or the repository's established script-test location
 
 **Interfaces:**
+
 - Produces an independent-version coherence check that accepts different public package versions.
 - Produces explicit CLI-to-Rust compatibility metadata for generated Cargo manifests.
 
@@ -91,6 +150,7 @@ git commit -m "feat(release): allow independent package versions"
 ## Task 2: Packed React Native consumer gates and resolver diagnostics
 
 **Files:**
+
 - Modify: `scripts/check-react-native-package.mjs`
 - Modify: `packages/cli/src/react-native.ts`
 - Modify: `packages/cli/src/generate.test.ts`
@@ -100,6 +160,7 @@ git commit -m "feat(release): allow independent package versions"
 - Test: `packages/cli/src/generate.test.ts`, packed consumer script
 
 **Interfaces:**
+
 - Produces a clean packed adapter consumer build check for Android and iOS jobs.
 - Produces resolver diagnostics that distinguish missing, stale, incomplete, and selected adapter packages.
 
@@ -143,6 +204,7 @@ syntax/format checks.
 ## Task 3: Shared schema codec IR and explicit enum metadata
 
 **Files:**
+
 - Create: `packages/cli/src/codec-ir.ts`
 - Modify: `packages/cli/src/generate.ts`
 - Modify: `packages/cli/src/schema.ts`
@@ -152,11 +214,12 @@ syntax/format checks.
 - Test: `packages/cli/src/codec-ir.test.ts`, `crates/rustra/src/schema.rs` tests, schema fixture files
 
 **Interfaces:**
+
 - `buildCodecIr(schema: PackageSchema): CodecPackageIr` returns recursively typed nodes with stable field and variant order.
 - `CodecPackageIr` exposes command route eligibility and exact unsupported reasons.
 - Rust schema output includes explicit `x-rustra-variant-order` metadata for supported enum definitions.
 
-- [ ] **Step 1: Add failing IR tests for complex fixtures**
+- [x] **Step 1: Add failing IR tests for complex fixtures**
 
 Use fixtures containing a nested struct, `Record<string, Nested>`, an option of
 a collection, and a data enum. Assert the IR preserves declaration order,
@@ -164,32 +227,32 @@ resolves references, and reports no unsupported reason for the target complex
 route. Add a fixture with a recursive cycle beyond the configured depth and
 assert a bounded diagnostic.
 
-- [ ] **Step 2: Run the IR tests and verify they fail**
+- [x] **Step 2: Run the IR tests and verify they fail**
 
 Run `bun test packages/cli/src/codec-ir.test.ts`. The current generator has no
 shared recursive IR and must fail to provide the expected route/metadata.
 
-- [ ] **Step 3: Implement the recursive IR**
+- [x] **Step 3: Implement the recursive IR**
 
 Add explicit node types for scalar, bytes, string, option, sequence, set, map,
 tuple, struct reference, and enum variant payloads. Track a visited reference
 stack and a maximum depth. Return structured unsupported reasons rather than a
 boolean.
 
-- [ ] **Step 4: Emit and validate enum order metadata**
+- [x] **Step 4: Emit and validate enum order metadata**
 
 Extend the Rust schema envelope with an explicit variant-order extension where
 the runtime can prove it. Update CLI schema parsing and identifier validation
 to accept only the expected metadata shape. Reject data enums without this
 metadata from the complex route instead of guessing.
 
-- [ ] **Step 5: Migrate postcard classification to the IR**
+- [x] **Step 5: Migrate postcard classification to the IR**
 
 Use the IR to decide whether a command uses the unchanged postcard route,
 complex route, or Tier 3. Keep the old postcard support set and byte fixtures
 green.
 
-- [ ] **Step 6: Run Rust and CLI tests and commit**
+- [x] **Step 6: Run Rust and CLI tests and commit**
 
 Run `bun test packages/cli/src/codec-ir.test.ts packages/cli/src/generate.test.ts`
 and `cargo test -p rustra`. Commit the IR independently from codec emission.
@@ -197,12 +260,14 @@ and `cargo test -p rustra`. Commit the IR independently from codec emission.
 ## Task 4: Rust complex codec
 
 **Files:**
+
 - Create: `crates/rustra/src/complex_codec.rs`
 - Modify: `crates/rustra/src/lib.rs`
 - Modify: `crates/rustra/src/rkyv_codec.rs`
 - Test: `crates/rustra/src/complex_codec.rs` tests and golden fixtures under `crates/rustra/tests/fixtures/`
 
 **Interfaces:**
+
 - `complex_encode(schema: &Value, definitions: &Value, value: &Value, limits: CodecLimits) -> Result<Vec<u8>>`
 - `complex_decode(schema: &Value, definitions: &Value, bytes: &[u8], limits: CodecLimits) -> Result<Value>`
 - `CodecLimits { max_depth: usize, max_payload_bytes: usize, max_collection_len: usize }`
@@ -247,11 +312,13 @@ rustra -p rustra-macros --all-targets -- -D warnings`.
 ## Task 5: Generated TypeScript complex codecs
 
 **Files:**
+
 - Modify: `packages/cli/src/generate.ts`
 - Modify: `packages/types/src/index.ts` only if the route metadata requires a public type
 - Test: `packages/cli/src/generate.test.ts`, generated fixture tests under `examples/calculator/ts/`
 
 **Interfaces:**
+
 - Generated complex codecs implement the existing `RkyvV2Codec` interface with the same request/response envelope and a route marker.
 - Generated encode/decode helpers use the IR node recursion and enforce the same limits as Rust.
 
@@ -286,22 +353,24 @@ calculator fixture tests under both Node and Bun where supported.
 ## Task 6: Generated C++ React Native complex path
 
 **Files:**
+
 - Modify: `packages/cli/src/generate.ts`
 - Modify: `packages/react-native/native/cpp/rustra-codec.hpp` only for shared safe primitives
 - Test: generated C++ fixture compilation and React Native native build jobs
 
 **Interfaces:**
+
 - Generated C++ uses the same complex wire bytes and command route metadata as TypeScript.
 - JSI marshal helpers reject malformed values and preserve map/enum/collection semantics.
 
-- [ ] **Step 1: Add failing C++ fixture assertions**
+- [x] **Step 1: Add failing C++ fixture assertions**
 
 Generate C++ for the complex schema and assert the source contains complete
 encode/decode functions, explicit enum tables, sorted map handling, and no
 Tier 3 stub for the eligible command. Compile the fixture with the existing
 native test harness.
 
-- [ ] **Step 2: Implement C++ recursive writer/reader emission**
+- [x] **Step 2: Implement C++ recursive writer/reader emission**
 
 Emit checked primitives and recursive field functions from the same IR. Convert
 JSI arrays, objects, sets, ArrayBuffers, and tagged enum objects explicitly;
@@ -320,6 +389,7 @@ available Android/iOS native build gates.
 ## Task 7: Performance, DX, and documentation receipts
 
 **Files:**
+
 - Modify: `package.json`
 - Create: `scripts/complex-codec-bench.mjs`
 - Modify: `examples/calculator/ts/transport-bench.test.ts`
@@ -330,6 +400,7 @@ available Android/iOS native build gates.
 - Test: benchmark gate, doctor tests, docs/codegen fixture checks
 
 **Interfaces:**
+
 - `bun run bench:complex` emits a machine-readable receipt with payload shape, route, bytes, encode/decode timings, and allocation mode.
 - `rustra doctor` reports missing tools and actionable remediation without assuming `rustup` is on PATH.
 

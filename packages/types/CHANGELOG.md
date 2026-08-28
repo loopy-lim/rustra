@@ -1,5 +1,11 @@
 # @rustra/types
 
+## 0.4.1
+
+### Patch Changes
+
+- Export the schema-driven complex binary codec used by generated clients, including bounded recursive values and bigint-aware integer validation.
+
 ## 0.4.0
 
 ### Minor Changes

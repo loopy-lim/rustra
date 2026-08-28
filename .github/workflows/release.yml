@@ -56,6 +56,11 @@ jobs:
       - name: Build packages
         run: bun run build
 
+      - name: Verify React Native publish tarball
+        run: bun run verify:package:react-native
+      - name: Verify packed React Native consumer
+        run: bun run verify:consumer:react-native
+
       - name: Create release PR or publish
         id: changesets
         uses: changesets/action@v1

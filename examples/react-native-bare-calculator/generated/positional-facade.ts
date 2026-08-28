@@ -2,7 +2,7 @@
 // 정적 명령을 positional 시그니처로 노출해 JSI invokeTyped 를 직접 호출한다.
 // 미지원 명령은 이 파일에 없다 — commands.ts 의 global invoke(Tier 3 폴백 포함) 사용.
 
-import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
+import type { BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, GreetInput, GreetOutput, MultiplyInput, MultiplyOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, SizeOfInput, SizeOfOutput, ToUpperInput, ToUpperOutput } from './types.js';
 import type { InvokeOptions } from '@rustra/types';
 
 /** JSI 네이티브 모듈의 최소 인터페이스 — invokeTypedPos 노출 호스트 권장. */
@@ -49,11 +49,6 @@ function callPos<T>(cmdId: number, ...fields: unknown[]): T {
   );
 }
 
-export function addNumbers(a: number, b: number, options?: InvokeOptions): Promise<AddNumbersOutput> {
-  void options;
-  return Promise.resolve(callPos<AddNumbersOutput>(1, a, b));
-}
-
 export function benchAdd(a: number, b: number, options?: InvokeOptions): Promise<BenchAddOutput> {
   void options;
   return Promise.resolve(callPos<BenchAddOutput>(23, a, b));
@@ -84,44 +79,14 @@ export function clamp(max: number, min: number, value: number, options?: InvokeO
   return Promise.resolve(callPos<ClampOutput>(4, max, min, value));
 }
 
-export function createItem(name: string, value: number, options?: InvokeOptions): Promise<CreateItemOutput> {
-  void options;
-  return Promise.resolve(callPos<CreateItemOutput>(8, name, value));
-}
-
-export function divide(a: number, b: number, options?: InvokeOptions): Promise<DivideOutput> {
-  void options;
-  return Promise.resolve(callPos<DivideOutput>(10, a, b));
-}
-
-export function emitDemo(ticks: number, stepDelayMs: number, options?: InvokeOptions): Promise<EmitDemoOutput> {
-  void options;
-  return Promise.resolve(callPos<EmitDemoOutput>(11, ticks, stepDelayMs));
-}
-
-export function gauge(limit: number, offset: number, options?: InvokeOptions): Promise<GaugeOutput> {
-  void options;
-  return Promise.resolve(callPos<GaugeOutput>(17, limit, offset));
-}
-
 export function greet(name: string, options?: InvokeOptions): Promise<GreetOutput> {
   void options;
   return Promise.resolve(callPos<GreetOutput>(5, name));
 }
 
-export function isEven(n: number, options?: InvokeOptions): Promise<IsEvenOutput> {
-  void options;
-  return Promise.resolve(callPos<IsEvenOutput>(3, n));
-}
-
 export function multiply(a: number, b: number, options?: InvokeOptions): Promise<MultiplyOutput> {
   void options;
   return Promise.resolve(callPos<MultiplyOutput>(2, a, b));
-}
-
-export function processItem(input: ProcessItemInput, options?: InvokeOptions): Promise<ProcessItemOutput> {
-  void options;
-  return Promise.resolve(call<ProcessItemOutput>(9, 'processItem', input));
 }
 
 export function resourceClose(handle: number, options?: InvokeOptions): Promise<ResourceCloseOutput> {
@@ -149,29 +114,9 @@ export function rustraRegistryDemo(op: string, options?: InvokeOptions): Promise
   return Promise.resolve(callPos<RegistryDemoOutput>(12, op));
 }
 
-export function scoreTotal(input: ScoreTotalInput, options?: InvokeOptions): Promise<ScoreTotalOutput> {
-  void options;
-  return Promise.resolve(call<ScoreTotalOutput>(15, 'scoreTotal', input));
-}
-
-export function secureCompute(a: number, b: number, options?: InvokeOptions): Promise<SecureComputeOutput> {
-  void options;
-  return Promise.resolve(callPos<SecureComputeOutput>(13, a, b));
-}
-
 export function sizeOf(data: Uint8Array | ArrayBuffer, options?: InvokeOptions): Promise<SizeOfOutput> {
   void options;
   return Promise.resolve(callPos<SizeOfOutput>(14, data));
-}
-
-export function span(input: SpanInput, options?: InvokeOptions): Promise<SpanOutput> {
-  void options;
-  return Promise.resolve(call<SpanOutput>(16, 'span', input));
-}
-
-export function sumList(input: SumListInput, options?: InvokeOptions): Promise<SumListOutput> {
-  void options;
-  return Promise.resolve(call<SumListOutput>(6, 'sumList', input));
 }
 
 export function toUpper(s: string, options?: InvokeOptions): Promise<ToUpperOutput> {

@@ -90,7 +90,7 @@ export type JsonSchema = {
   prefixItems?: JsonSchema[];
   /** 배열 요소의 유일성 (Rust `BTreeSet`/`HashSet` → TS `Set<T>`) */
   uniqueItems?: boolean;
-  additionalProperties?: JsonSchema;
+  additionalProperties?: JsonSchema | boolean;
   /** 다른 스키마에 대한 참조 (예: "#/definitions/Foo") */
   $ref?: string;
   /** 유니온 타입의 각 변형 */
@@ -101,8 +101,10 @@ export type JsonSchema = {
   allOf?: JsonSchema[];
   /** 프로퍼티의 상수 값 (판별 유니온의 태그 필드 등) */
   const?: unknown;
+  /** oneOf variant key를 명시하는 wire metadata (선언 순서와 무관하게 정렬) */
+  'x-rustra-variant-order'?: string[];
   /** enum 값 목록 — string 또는 integer 리터럴 */
-  enum?: (string | number)[];
+  enum?: (string | number | boolean | null)[];
   /** 스키마 제목 */
   title?: string;
   /** 값 형식 (예: "int64", "date-time") */

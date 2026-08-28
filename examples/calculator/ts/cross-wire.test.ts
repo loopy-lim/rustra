@@ -129,14 +129,14 @@ test('cross-wire frame layout: error has ok=0, err_len u16 LE @8, body @10', () 
 
 // ── 2026-08-22 타입 확장: bytes/map/tuple/uvar 교차 와이어 ──────
 // Rust wire_fixtures.rs 신규 4종과 짝. probe 계약: u32/u64 plain varint,
-// map count+(k,v)*, tuple 무접두, Vec<u8> len+raw.
+// map count+(k,v)*, complex tuple count+elements, Vec<u8> len+raw.
 
 import { gaugeCodec, scoreTotalCodec, sizeOfCodec, spanCodec } from '../generated/rkyv-codecs.js';
 
 const SIZEOF_REQUEST = '0e0004010203fa';
 const SIZEOF_RESPONSE = '0100000000000000800204';
 const SCORETOTAL_RESPONSE = '01000000000000000254';
-const SPAN_REQUEST = '100002686909';
+const SPAN_REQUEST = '10000202686909';
 const SPAN_RESPONSE = '010000000000000002686909';
 const GAUGE_REQUEST = '1100ac02f0a204';
 const GAUGE_RESPONSE = '01000000000000009ca504';
@@ -166,10 +166,10 @@ test('cross-wire scoreTotal: map structure + response round-trip', () => {
   assert.equal(r.result?.count, 2);
 });
 
-// span — tuple 무접두 나열 ("hi", -5) → [2,104,105, 9]
-test('cross-wire span: tuple prefix-free concatenation', () => {
+// span — complex tuple count + elements ("hi", -5) → [2, 2,104,105, 9]
+test('cross-wire span: tuple length is explicit', () => {
   const req = spanCodec.encode({ pair: ['hi', -5] });
-  assert.equal(bytesToHex(req), SPAN_REQUEST, 'tuple: elements in order, no length prefix');
+  assert.equal(bytesToHex(req), SPAN_REQUEST, 'complex tuple: length then elements');
   const r = spanCodec.decode(hexToBytes(SPAN_RESPONSE));
   assert.equal(r.ok, true);
   assert.equal(r.result?.first, 'hi');

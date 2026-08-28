@@ -16,6 +16,21 @@
 | React Native   | 0.81.5 + Expo 54             |
 | iOS 시뮬레이터 | iPhone 17                    |
 
+## Complex binary codec receipt (2026-08-27)
+
+복잡 경로는 별도 receipt로 JS codec 비용을 측정한다.
+
+```bash
+bun run bench:complex
+```
+
+현재 checkout에서 실행한 샘플은 nested map + Option + Set + data enum에 대해
+request 47 B, response 53 B, encode 5.678 µs, decode 5.556 µs였다. 이 수치는
+단일 macOS 프로세스의 wall-clock 샘플이며 Rust handler, C++ JSI marshalling,
+실제 RN 디바이스 성능을 포함하지 않는다. 따라서 기존 host benchmark와 직접
+합산하거나 RN runtime 수치로 해석하지 않는다. 원본 receipt는
+[`2026-08-27-complex-codec.json`](benchmark-receipts/2026-08-27-complex-codec.json)이다.
+
 ## 2026-08-24 실제 host API 성능 (`0.4.0` merge candidate)
 
 기존 adapter-only 숫자는 transport 비용이 빠져 실제 사용자가 보는 지연과 달랐다.
@@ -507,8 +522,8 @@ RPC 계약"으로 설계 목표가 다르다. 같은 문제만 겹친다(RN에�
 | 튜플                   | ✅ Tuple                                       | ✅ **tuple(무접두 나열)** — 2026-08-22 fast-path 승격                                                                                                     | ✅                       |
 | 맵 Record<string,T>    | ✅ AnyMap/UnorderedMap                         | ✅ **map\_\*(원시값 맵 count+(k,v)\*)** — 2026-08-22 승격. struct-값 맵은 폴백                                                                            | ✅                       |
 | Option<T>              | ✅                                             | ✅ option\_\* (+option_uvar/option_bytes)                                                                                                                 | ✅                       |
-| enum(union variant)    | ✅ Variant                                     | ⚠️ string enum ✅, **data enum(oneOf)은 폴백 확정** — schemars oneOf 가 unit variant 를 앞으로 재배치해 postcard 선언순 index 복원 불가(probe 실증)       | ✅                       |
-| 구조체(중첩 포함)      | ✅ (객체)                                      | ✅ $ref 재귀 — 미지원 필드 있으면 폴백                                                                                                                    | ✅                       |
+| enum(union variant)    | ✅ Variant                                     | ✅ string enum은 postcard, data enum(oneOf)은 deterministic complex binary                                                                                | ✅                       |
+| 구조체(중첩 포함)      | ✅ (객체)                                      | ✅ $ref 재귀 — postcard 또는 complex binary, 미지원 keyword면 폴백                                                                                        | ✅                       |
 | Date                   | ✅                                             | ✅ chrono DateTime — postcard 는 ISO string 그대로(string kind로 자연 지원, probe 실증)                                                                   | ✅                       |
 | ArrayBuffer/TypedArray | ✅ (+ createNativeArrayBuffer)                 | ✅ **Vec<u8> bytes** — TS 표면 number[], C++ 는 ArrayBuffer/배열 양쪽 수용                                                                                | ✅                       |
 | Promise<T> (네이티브)  | ✅                                             | ⚠️ JS 래핑(async 엔진 레벨, 코어는 동기)                                                                                                                  | 동일                     |
@@ -550,10 +565,13 @@ RPC 계약"으로 설계 목표가 다르다. 같은 문제만 겹친다(RN에�
 1. **fast-path 확장** (2026-08-22 1단계 완료) — 동적 맵(원시값), 튜플,
    Vec<u8>/ArrayBuffer, u8–u64 plain varint, chrono Date(ISO string)를
    3면(TS·Rust·C++) 코드젱에 구현하고 PINNED hex 와이어 게이트로 고정했다.
-   남은 것: **bigint TS 표면**(현재 number — 2^53 정밀도 한계 문서화됨)과
-   **data enum**(oneOf 순서 비결정성으로 Tier 3 폴백 확정 — postcard
-   variant index는 Rust 선언순이나 schemars 가 재배치).
-2. **채널/리소스로 재정의** (2026-08-23 2단계 완료) — 콜백과 객체 참조.
+   남은 것: **bigint TS 표면**(postcard 현재 number — 2^53 정밀도 한계
+   문서화됨)과 C++ complex direct marshalling.
+2. **schema-driven complex binary** (2026-08-27) — recursive struct,
+   struct-valued map, data enum, nested Option/Set을 TS/Rust golden wire로
+   처리한다. RN에서는 현재 JS codec이 Rust `invokeRkyvV2`까지 전달하며, C++
+   direct path는 별도 성능 확장이다.
+3. **채널/리소스로 재정의** (2026-08-23 2단계 완료) — 콜백과 객체 참조.
    Nitro처럼 JS-first 객체 브릿지를 만드는 게 아니라, Tauri v2의
    `ipc::Channel<T>`(콜백을 직렬화 가능한 채널 핸들로)·`Resource`(객체를
    Rust-소유 핸들 id로 노출, 메서드는 코드젠) 모델을 rustra 계약 안으로
@@ -568,7 +586,7 @@ RPC 계약"으로 설계 목표가 다르다. 같은 문제만 겹친다(RN에�
    rustra는 Rust→TS)라는 차이도 이 방향에서는 그대로 살아있다. 시뮬레이터
    E2E: 채널 3페이로드 순서 보존 + drop, 리소스 open→read→write→close 후
    `resource.not_found`.
-3. **범위 밖 확정** — HybridView(UI 네이티브 뷰). 로직 레이어 전용이라는
+4. **범위 밖 확정** — HybridView(UI 네이티브 뷰). 로직 레이어 전용이라는
    프로젝트 정의와 충돌하며, 계약으로 직렬화되지 않는 표면이다.
 
 ## 동적 명령 (런타임 register, Tier 3) 성능
