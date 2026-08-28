@@ -1888,6 +1888,99 @@ test('postcardHelperSource zigzag64 round-trips i64 boundaries', async () => {
   assert.equal(h.encodeZigzag64(i64Max).length, 10);
 });
 
+test('generated composite 64-bit codecs (vec_u64/map_i64/option_i64) encode and decode known bytes', async () => {
+  // 복합 64-bit emit 경로(vec_i64/vec_u64/map_i64/map_u64/option_*)는 생성된
+  // 코드를 실제 실행해 알려진 바이트와 대조한다 — 오타가 조용히 배포되는 것을
+  // 막는 최소 게이트. wideAgg cross-wire 픽스처(examples/calculator)가
+  // Rust↔TS 쪽을 담당하고, 여기서는 분류별 emit 을 모두 실행 본다.
+  const schema: PackageSchema = {
+    packageId: 'wide-composite',
+    fieldOrder: 'declaration',
+    commands: [
+      {
+        name: 'wideComposite',
+        commandId: 41,
+        inputType: 'WideCompositeInput',
+        outputType: 'WideCompositeOutput',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            samples: { type: 'array', items: { type: 'integer', format: 'uint64' } },
+            scores: {
+              type: 'object',
+              additionalProperties: { type: 'integer', format: 'int64' },
+            },
+            offset: { type: ['integer', 'null'], format: 'int64' },
+          },
+          required: ['samples', 'scores', 'offset'],
+        },
+        outputSchema: {
+          type: 'object',
+          properties: {
+            max: { type: 'integer', format: 'uint64' },
+            pairs: { type: 'array', items: { type: 'integer', format: 'int64' } },
+          },
+          required: ['max', 'pairs'],
+        },
+      },
+    ],
+  };
+
+  const codecs = generateRkyvCodecsTs(schema);
+  // 분류 확인: 원소/값/옵션 레벨 64-bit 헬퍼.
+  assert.match(codecs, /_pcEncodeVarint64\(_arr\[_i\]\)/, 'vec_u64 element encode');
+  assert.match(codecs, /_pcEncodeZigzag64\(_v\)/, 'map_i64 value encode');
+  assert.match(codecs, /_pcEncodeZigzag64\(_opt\)/, 'option_zigzag64 encode');
+
+  // 생성물을 임시 모듈로 써서 실제 encode/decode 실행.
+  const dir = mkdtempSync(join(tmpdir(), 'rustra-wide-composite-'));
+  const stub =
+    `type RustraError = { code: string; message: string };\n` +
+    `export type RkyvV2Codec<TIn, TOut> = {\n` +
+    `  commandId: number;\n` +
+    `  encode(args: TIn): ArrayBuffer;\n` +
+    `  decode(buf: ArrayBuffer): { ok: boolean; result?: TOut; error?: RustraError };\n` +
+    `};\n`;
+  const file = join(dir, 'codecs.ts');
+  writeFileSync(file, stub + codecs);
+  try {
+    const ns = (await import(pathToFileURL(file).href)) as Record<string, any>;
+    const codec = ns.wideCompositeCodec;
+
+    // 알려진 바이트 — postcard 계약을 손으로 계산한 기대값.
+    // uvar(3) | uvar64(1)=01 uvar64(128)=8001 uvar64(2^53+1)=8180808080808010
+    // | map 1엔트리 {"a": zigzag64(-5)=09} | Some(zigzag64(7)=0e)
+    const req = codec.encode({
+      samples: [1, 128, 9007199254740993n],
+      scores: { a: -5 },
+      offset: 7,
+    });
+    assert.equal(
+      Buffer.from(new Uint8Array(req)).toString('hex'),
+      '290003' + '01' + '8001' + '8180808080808010' + '01' + '0161' + '09' + '01' + '0e',
+      'composite 64-bit encode must produce exact postcard bytes',
+    );
+
+    // 응답 디코드: max=u64::MAX(10B LEB128), pairs=[-1, 2^53-1](zigzag 01, feffffffffffff1f)
+    const body = [
+      ...[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01], // u64::MAX
+      2, // vec len
+      ...[0x01], // zigzag(-1)
+      ...[0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1f], // zigzag(2^53-1)… 8B
+    ];
+    const out = new Uint8Array(8 + body.length);
+    out[0] = 1;
+    out.set(body, 8);
+    const decoded = codec.decode(out.buffer);
+    assert.equal(decoded.ok, true);
+    assert.equal(decoded.result.max, 18446744073709551615n, 'u64::MAX → bigint');
+    assert.equal(decoded.result.pairs[0], -1);
+    assert.equal(decoded.result.pairs[1], 9007199254740991, 'safe boundary stays number');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('postcardHelperSource decoder rejects overlong and out-of-range encodings', async () => {
   const h = await loadHelperHooks();
   const u64MaxBytes = h.encodeVarint64(2n ** 64n - 1n); // ff ×9 + 01

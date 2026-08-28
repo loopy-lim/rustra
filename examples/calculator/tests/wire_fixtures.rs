@@ -17,7 +17,7 @@
 
 use rustra_calculator_example::{
     AddNumbersInput, DivideInput, GaugeInput, GreetInput, ScoreTotalInput, SizeOfInput, SpanInput,
-    calculator_package,
+    WideAggInput, calculator_package,
 };
 
 fn request_for<I: serde::Serialize>(cmd_id: u16, input: &I) -> Vec<u8> {
@@ -114,6 +114,17 @@ const SPAN_2POW53_M1_RESPONSE: &str = "0100000000000000026869feffffffffffff1f";
 const SPAN_2POW53_P1_REQUEST: &str = "10000268698280808080808020";
 const SPAN_2POW53_P1_RESPONSE: &str = "01000000000000000268698280808080808020";
 
+// wideAgg — 복합 64-bit 경로(Vec<u64> 원소별 uvar64 + Option<i64> zigzag64).
+// 원소 경계를 넘는 값(2^53+1, u64::MAX)이 스트림 중간에서 10바이트 LEB128로
+// 이어지는 것까지 고정한다.
+const WIDEAGG_BOUNDARY_REQUEST: &str =
+    "190005017f80018180808080808010ffffffffffffffffff0101ffffffffffffffffff01";
+const WIDEAGG_BOUNDARY_RESPONSE: &str = "0100000000000000ffffffffffffffffff01f5ffffffffffffffff01";
+const WIDEAGG_EMPTY_REQUEST: &str = "19000000";
+const WIDEAGG_EMPTY_RESPONSE: &str = "01000000000000000000";
+const WIDEAGG_MULTIELEM_REQUEST: &str = "19000380808080018080808080018080808080808001010a";
+const WIDEAGG_MULTIELEM_RESPONSE: &str = "0100000000000000808080808080800110";
+
 #[test]
 fn size_of_wire_is_stable() {
     let pkg = calculator_package();
@@ -149,6 +160,8 @@ fn span_wire_is_stable() {
     let pkg = calculator_package();
     // span (String, i64) tuple now rides the postcard fast-path (uvar64/zigzag64
     // helpers). Postcard tuple wire is prefix-free: str len + bytes + zigzag i64.
+    // NOTE: 0.4.1 complex-codec tuple wire was count + elements; this differs —
+    // old bytes and 0.4.1 TS codecs are NOT wire-compatible with this route.
     let mut req = 16u16.to_le_bytes().to_vec();
     req.extend_from_slice(&[2, b'h', b'i', 9]);
     let resp = invoke_with_frame(&pkg, &req);
@@ -223,4 +236,47 @@ fn span_wide_int_boundaries_are_stable() {
     let resp = invoke_with_frame(&pkg, &req);
     assert_eq!(hexlify(&req), SPAN_2POW53_P1_REQUEST);
     assert_eq!(hexlify(&resp), SPAN_2POW53_P1_RESPONSE);
+}
+
+#[test]
+fn wide_agg_wide_composite_wire_is_stable() {
+    let pkg = calculator_package();
+    // Vec<u64> 5원소 + Option<i64> — 원소 1/127(1바이트), 128(2바이트),
+    // 2^53+1과 u64::MAX(10바이트)가 스트림 중간에서 이어진다. offset 은
+    // Some(i64::MIN) — 태그 1 + 최악 zigzag.
+    let req = request_for(
+        25,
+        &WideAggInput {
+            samples: vec![1, 127, 128, (1u64 << 53) + 1, u64::MAX],
+            offset: Some(i64::MIN),
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), WIDEAGG_BOUNDARY_REQUEST);
+    assert_eq!(hexlify(&resp), WIDEAGG_BOUNDARY_RESPONSE);
+
+    // 빈 벡터 + None — 태그 없는 빈 시퀀스와 Option None 태그.
+    let req = request_for(
+        25,
+        &WideAggInput {
+            samples: vec![],
+            offset: None,
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), WIDEAGG_EMPTY_REQUEST);
+    assert_eq!(hexlify(&resp), WIDEAGG_EMPTY_RESPONSE);
+
+    // 5/9/10바이트 varint 원소 3개(2^28, 2^35, 2^49) + Some(5) — 경계가
+    // 스트림 중간에 반복되는 다원소 케이스.
+    let req = request_for(
+        25,
+        &WideAggInput {
+            samples: vec![1 << 28, 1 << 35, 1 << 49],
+            offset: Some(5),
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), WIDEAGG_MULTIELEM_REQUEST);
+    assert_eq!(hexlify(&resp), WIDEAGG_MULTIELEM_RESPONSE);
 }

@@ -258,6 +258,14 @@ export function generateContractTs(schemaJson: string): string {
 // ── rkyv V2 codec generation (postcard wire format) ────────────────────
 
 /** Postcard field types for schema classification. */
+// ── 새 정수 폭(i128 등) 추가 체크리스트 ──────────────────────
+// 다음 전부를 손봐야 한다: (1) 이 union, (2) classifyPostcardField 스칼라 arm,
+// (3) generateFieldEncodeExpr / generateFieldDecodeExpr / generateFieldEncodeIntoExpr
+// (+ ENC_INTO_KINDS), (4) 복합 대응 kind(vec_/set_/map_/option_* — 있으면),
+// (5) tsFieldType 타입 표면, (6) Rust 미러 게이트(rkyv_codec.rs
+// js_field_supported[_with_defs]), (7) Rust ts_type_from_schema(codegen.rs),
+// (8) C++ 게이트(cppComplexNativeSupported / cppSafe), (9) 64-bit 헬퍼
+// 코드젠(codegen.ts postcardHelperSource) + 와이어 픽스처 양면.
 type PostcardFieldKind =
   | 'zigzag'
   | 'uvar' // unsigned 정수(u8/u16/u32/u64 아님 — u64 는 전용 uvar64) — plain varint(zigzag 아님)
@@ -399,10 +407,7 @@ function classifyPostcardField(
     // probe: vec![1,2,3] -> [3, 1, 2, 3].
     if (items.type === 'integer' && items.format === 'uint8') return 'bytes';
     const itemsUnsigned =
-      items.format === 'uint8' ||
-      items.format === 'uint16' ||
-      items.format === 'uint32' ||
-      items.format === 'uint64';
+      items.format === 'uint8' || items.format === 'uint16' || items.format === 'uint32';
     // uniqueItems(Set): wire = array. encode [...value], decode new Set(...).
     if (items.type === 'integer') {
       if (items.format === 'uint64') return schema.uniqueItems ? 'set_u64' : 'vec_u64';
@@ -691,7 +696,10 @@ function collectAllDefinitions(
  */
 /** encodeInto 가 다루는 필드 kind — 단일 패스 직접 기록이 자연스러운 것들.
  * PostcardField 유니언에 실제 존재하는 kind 만 포함한다(없는 kind 를 넣으면
- * 코드젠이 영원히 그 경로를 켜지 않는 것처럼 보인다). */
+ * 코드젠이 영원히 그 경로를 켜지 않는 것처럼 보인다).
+ * 의도적 제외: 복합 64-bit kind(vec_i64/vec_u64, set_i64/set_u64,
+ * map_i64/map_u64)와 tuple 은 커서 재작성 루프가 복잡해 encodeInto 를 켜지
+ * 않는다 — 이런 필드를 가진 코덱은 parts 조립 encode 만 얻는다. */
 const ENC_INTO_KINDS = new Set([
   'zigzag',
   'uvar',

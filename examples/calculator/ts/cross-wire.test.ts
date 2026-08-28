@@ -167,6 +167,8 @@ test('cross-wire scoreTotal: map structure + response round-trip', () => {
 });
 
 // span — postcard tuple: prefix-free ("hi", -5) → str len + bytes + zigzag i64
+// NOTE: 0.4.1 complex-codec tuple wire was count + elements; this is a
+// wire break for consumers mixing old TS codecs with regenerated Rust.
 test('cross-wire span: postcard tuple is prefix-free', () => {
   const req = spanCodec.encode({ pair: ['hi', -5] });
   assert.equal(bytesToHex(req), SPAN_REQUEST, 'postcard tuple: str len + bytes + zigzag i64');
@@ -230,4 +232,57 @@ test('cross-wire span 2^53+1: decode restores bigint beyond number precision', (
   const second = r.result?.second;
   assert.equal(typeof second, 'bigint', 'unsafe value must come back as bigint');
   assert.equal(second, 9007199254740993n, 'exact 2^53+1, not the rounded number');
+});
+
+// ── 2026-08-28 A2 후속: 복합 64-bit 경로(Vec<u64> + Option<i64>) 교차 와이어 ──
+// Rust wire_fixtures.rs wide_agg 3종과 짝. 원소/옵션 레벨 uvar64/zigzag64 가
+// 스트림 중간 7바이트 varint 경계를 넘는 값을 이어받는 것까지 고정한다.
+// 참고: span 튜플과 마찬가지로 와이드 정수 명령은 0.4.1 complex-codec 와이어
+// (count + elements)와 호환되지 않는다 — 구/신 코덱 혼용 금지.
+
+import { wideAggCodec } from '../generated/rkyv-codecs.js';
+
+const WIDEAGG_BOUNDARY_REQUEST =
+  '190005017f80018180808080808010ffffffffffffffffff0101ffffffffffffffffff01';
+const WIDEAGG_BOUNDARY_RESPONSE = '0100000000000000ffffffffffffffffff01f5ffffffffffffffff01';
+const WIDEAGG_EMPTY_REQUEST = '19000000';
+const WIDEAGG_EMPTY_RESPONSE = '01000000000000000000';
+const WIDEAGG_MULTIELEM_REQUEST = '19000380808080018080808080018080808080808001010a';
+const WIDEAGG_MULTIELEM_RESPONSE = '0100000000000000808080808080800110';
+
+test('cross-wire wideAgg: Vec<u64> + Option<i64> boundary values mid-stream', () => {
+  const req = wideAggCodec.encode({
+    samples: [1, 127, 128, 9007199254740993n, 18446744073709551615n],
+    offset: -9223372036854775808n,
+  });
+  assert.equal(
+    bytesToHex(req),
+    WIDEAGG_BOUNDARY_REQUEST,
+    '1B/2B varint elements then two 10-byte LEB128 elements + Some(i64::MIN)',
+  );
+  const r = wideAggCodec.decode(hexToBytes(WIDEAGG_BOUNDARY_RESPONSE));
+  assert.equal(r.ok, true);
+  assert.equal(r.result?.max, 18446744073709551615n, 'u64::MAX restored as bigint');
+  assert.equal(r.result?.adjusted, -9223372036854775803n, 'i64::MIN + 5 restored');
+});
+
+test('cross-wire wideAgg: empty vec + None option', () => {
+  const req = wideAggCodec.encode({ samples: [], offset: null });
+  assert.equal(bytesToHex(req), WIDEAGG_EMPTY_REQUEST, 'len=0 then None tag 0');
+  const r = wideAggCodec.decode(hexToBytes(WIDEAGG_EMPTY_RESPONSE));
+  assert.equal(r.ok, true);
+  assert.equal(r.result?.max, 0);
+  assert.equal(r.result?.adjusted, 0);
+});
+
+test('cross-wire wideAgg: multi-element 5/9/10-byte varints across mid-stream boundaries', () => {
+  const req = wideAggCodec.encode({
+    samples: [268435456, 34359738368, 562949953421312],
+    offset: 5,
+  });
+  assert.equal(bytesToHex(req), WIDEAGG_MULTIELEM_REQUEST, '2^28/2^35/2^49 + Some(5)');
+  const r = wideAggCodec.decode(hexToBytes(WIDEAGG_MULTIELEM_RESPONSE));
+  assert.equal(r.ok, true);
+  assert.equal(r.result?.max, 562949953421312, '2^49 stays a safe number');
+  assert.equal(r.result?.adjusted, 8, '5 + 3 elements');
 });
