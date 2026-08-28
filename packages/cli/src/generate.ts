@@ -2620,7 +2620,11 @@ function cppComplexEncodeNode(
           `${indent}    if (${object}.isArray(rt)) return ${object}.getArray(rt);`,
           `${indent}    if (!${object}.instanceOf(rt, rt.global().getPropertyAsFunction(rt, "Set"))) throw jsi::JSError(rt, "complex Set or array expected");`,
           `${indent}    auto _from = rt.global().getPropertyAsFunction(rt, "Array").getPropertyAsFunction(rt, "from");`,
-          `${indent}    return _from.call(rt, { ${value} }).asObject(rt).getArray(rt);`,
+          // 실제 jsi 는 Value 복사 생성자가 삭제돼 initializer_list/배열로
+          // const Value 를 못 넘긴다. 인자 1개는 move-wrapped rvalue 로
+          // 가변 템플릿(detail::toValue(Value&&))에 흘려보낸다 — 실제
+          // jsi 헤더로 컴파일 검증 완료(RN Pods 빌드 게이트와 동일 조건).
+          `${indent}    return _from.call(rt, jsi::Value(rt, ${value})).asObject(rt).getArray(rt);`,
           `${indent}  }();`,
           `${indent}  auto ${length} = ${array}.length(rt);`,
           `${indent}  w.push_uvar(${length});`,
@@ -2799,7 +2803,9 @@ function cppComplexDecodeExpr(node: CodecIrNode, depth: string, state: CppComple
         // B2: Set 복원 — new Set(elements) 와 동일. 전역 Set 생성자에
         // callAsConstructor 로 요소 배열을 넘긴다(TS decode 의
         // new Set(values) 계약과 동일 — 중복은 Set 이 스스로 정리한다).
-        return `[&]() -> jsi::Value { auto ${length} = r.read_uvar(); if (${length} > 100000) throw std::runtime_error("complex collection length exceeds 100000"); auto ${array} = jsi::Array(rt, static_cast<size_t>(${length})); for (size_t _i = 0; _i < ${length}; _i++) ${array}.setValueAtIndex(rt, _i, ${cppComplexDecodeExpr(node.item, `${depth} + 1`, state)}); jsi::Value _setArgs[] = { jsi::Value(rt, ${array}) }; return rt.global().getPropertyAsFunction(rt, "Set").callAsConstructor(rt, _setArgs, 1); }()`;
+        // 실제 jsi 는 Value 복사가 삭제돼 배열 전달이 안 되므로
+        // move-wrapped rvalue 1개로 호출한다(실제 jsi 헤더로 검증).
+        return `[&]() -> jsi::Value { auto ${length} = r.read_uvar(); if (${length} > 100000) throw std::runtime_error("complex collection length exceeds 100000"); auto ${array} = jsi::Array(rt, static_cast<size_t>(${length})); for (size_t _i = 0; _i < ${length}; _i++) ${array}.setValueAtIndex(rt, _i, ${cppComplexDecodeExpr(node.item, `${depth} + 1`, state)}); return rt.global().getPropertyAsFunction(rt, "Set").callAsConstructor(rt, jsi::Value(rt, ${array})); }()`;
       }
       return `[&]() -> jsi::Value { auto ${length} = r.read_uvar(); if (${length} > 100000) throw std::runtime_error("complex collection length exceeds 100000"); auto ${array} = jsi::Array(rt, static_cast<size_t>(${length})); for (size_t _i = 0; _i < ${length}; _i++) ${array}.setValueAtIndex(rt, _i, ${cppComplexDecodeExpr(node.item, `${depth} + 1`, state)}); return ${array}; }()`;
     }

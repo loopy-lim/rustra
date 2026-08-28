@@ -103,7 +103,12 @@ public:
   Value(Runtime&, bool b) : kind_(Kind::Bool), bool_(b) {}
   /// 실제 jsi::Value(Runtime&, const BigInt&) 미러 — B1 bigint 디코드 경로.
   Value(Runtime&, const BigInt& b) : kind_(Kind::BigInt), big_(b) {}
-  Value(const String& s) : kind_(Kind::String), str_(s) {}
+  /// 실제 jsi::Value(Runtime&, const Value&) 미러 — B2 Set 직결이
+  /// move-wrapped rvalue 로 Function 을 호출할 때 쓰인다.
+  Value(Runtime&, const Value& v) : Value(v) {}
+  Value(const Value& v)
+      : kind_(v.kind_), num_(v.num_), bool_(v.bool_), big_(v.big_), str_(v.str_),
+        obj_(v.obj_), arr_(v.arr_), fn_(v.fn_) {}
   Value(String&& s) : kind_(Kind::String), str_(std::move(s)) {}
   Value(Runtime&, const String& s) : kind_(Kind::String), str_(s) {}
   Value(Runtime&, const Object& o);
@@ -306,6 +311,16 @@ public:
   Value call(Runtime& rt, const Value* args, size_t count) const;
   Value call(Runtime& rt, std::initializer_list<Value> args) const {
     return call(rt, args.begin(), args.size());
+  }
+  // 실제 jsi 의 가변 템플릿(detail::toValue(Value&&) 전달)을 흉내 — 생성 코드가
+  // move-wrapped rvalue 1개로 Function 을 호출한다(값 복사 금지 계약).
+  Value callAsConstructor(Runtime& rt, Value&& arg) const {
+    Value args[] = {std::move(arg)};
+    return callAsConstructor(rt, args, 1);
+  }
+  Value call(Runtime& rt, Value&& arg) const {
+    Value args[] = {std::move(arg)};
+    return call(rt, args, 1);
   }
 
   const std::string& name(Runtime&) const { return fdata_->name; }

@@ -720,7 +720,7 @@ static void encode_complex_tagSet(jsi::Runtime& rt, const jsi::Value& args, rc::
         if (_cx2.isArray(rt)) return _cx2.getArray(rt);
         if (!_cx2.instanceOf(rt, rt.global().getPropertyAsFunction(rt, "Set"))) throw jsi::JSError(rt, "complex Set or array expected");
         auto _from = rt.global().getPropertyAsFunction(rt, "Array").getPropertyAsFunction(rt, "from");
-        return _from.call(rt, { _cx1 }).asObject(rt).getArray(rt);
+        return _from.call(rt, jsi::Value(rt, _cx1)).asObject(rt).getArray(rt);
       }();
       auto _cx4 = _cx3.length(rt);
       w.push_uvar(_cx4);
@@ -731,7 +731,7 @@ static void encode_complex_tagSet(jsi::Runtime& rt, const jsi::Value& args, rc::
 }
 
 static jsi::Value decode_complex_tagSet(jsi::Runtime& rt, rc::Reader& r) {
-  return [&]() -> jsi::Value { auto _cx0 = jsi::Object(rt); _cx0.setProperty(rt, "tags", [&]() -> jsi::Value { auto _cx1 = r.read_uvar(); if (_cx1 > 100000) throw std::runtime_error("complex collection length exceeds 100000"); auto _cx2 = jsi::Array(rt, static_cast<size_t>(_cx1)); for (size_t _i = 0; _i < _cx1; _i++) _cx2.setValueAtIndex(rt, _i, [&]() -> jsi::Value { auto _s = r.read_string_view(); return jsi::String::createFromUtf8(rt, _s.data, _s.size); }()); jsi::Value _setArgs[] = { jsi::Value(rt, _cx2) }; return rt.global().getPropertyAsFunction(rt, "Set").callAsConstructor(rt, _setArgs, 1); }()); return _cx0; }();
+  return [&]() -> jsi::Value { auto _cx0 = jsi::Object(rt); _cx0.setProperty(rt, "tags", [&]() -> jsi::Value { auto _cx1 = r.read_uvar(); if (_cx1 > 100000) throw std::runtime_error("complex collection length exceeds 100000"); auto _cx2 = jsi::Array(rt, static_cast<size_t>(_cx1)); for (size_t _i = 0; _i < _cx1; _i++) _cx2.setValueAtIndex(rt, _i, [&]() -> jsi::Value { auto _s = r.read_string_view(); return jsi::String::createFromUtf8(rt, _s.data, _s.size); }()); return rt.global().getPropertyAsFunction(rt, "Set").callAsConstructor(rt, jsi::Value(rt, _cx2)); }()); return _cx0; }();
 }
 
 namespace rustra::generated {
