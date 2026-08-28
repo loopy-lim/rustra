@@ -248,7 +248,7 @@ function _pcDecodeF32(buf: Uint8Array, offset: number): { value: number; bytesRe
 
 import { createComplexCodec } from '@rustra/types';
 import type { RkyvV2Codec, RustraError, ComplexSchema } from '@rustra/types';
-import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ChannelHandle, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, Item, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandle, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ChannelHandle, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, Item, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandle, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
 
 export const addNumbersCodec: RkyvV2Codec<AddNumbersInput, AddNumbersOutput> = {
   commandId: 1,
@@ -365,13 +365,13 @@ export const benchAddCodec: RkyvV2Codec<BenchAddInput, BenchAddOutput> = {
 };
 
 export const benchEchoBytesCodec: RkyvV2Codec<BenchBytesPayload, BenchBytesPayload> = {
-  commandId: 25,
+  commandId: 26,
 
   encode(args: BenchBytesPayload): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(BenchBytesPayload)]
     const parts: Uint8Array[] = [];
     const cmdId = new Uint8Array(2);
-    new DataView(cmdId.buffer).setUint16(0, 25, true);
+    new DataView(cmdId.buffer).setUint16(0, 26, true);
     parts.push(cmdId);
     {
       const _b = args.data;
@@ -392,7 +392,7 @@ export const benchEchoBytesCodec: RkyvV2Codec<BenchBytesPayload, BenchBytesPaylo
       out = grown;
     };
     ensure(2);
-    out[w++] = 25; out[w++] = 0;
+    out[w++] = 26; out[w++] = 0;
     { const _b = args.data; const _u = typeof _b === 'string' ? _utf8Encode(_b) : _b instanceof Uint8Array ? _b : new Uint8Array(_b); ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }
     return out.subarray(0, w);
   },
@@ -426,13 +426,13 @@ export const benchEchoBytesCodec: RkyvV2Codec<BenchBytesPayload, BenchBytesPaylo
 };
 
 export const benchEchoPairCodec: RkyvV2Codec<BenchPairPayload, BenchPairPayload> = {
-  commandId: 26,
+  commandId: 27,
 
   encode(args: BenchPairPayload): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(BenchPairPayload)]
     const parts: Uint8Array[] = [];
     const cmdId = new Uint8Array(2);
-    new DataView(cmdId.buffer).setUint16(0, 26, true);
+    new DataView(cmdId.buffer).setUint16(0, 27, true);
     parts.push(cmdId);
     parts.push(_pcEncodeString(args.name));
     parts.push(_pcEncodeF64(args.value));
@@ -449,7 +449,7 @@ export const benchEchoPairCodec: RkyvV2Codec<BenchPairPayload, BenchPairPayload>
       out = grown;
     };
     ensure(2);
-    out[w++] = 26; out[w++] = 0;
+    out[w++] = 27; out[w++] = 0;
     { const _s = args.name; const _u = _utf8Encode(_s); ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }
     { ensure(8); _dvScratch.setFloat64(0, args.value, true); for (let _i = 0; _i < 8; _i++) out[w++] = _dvScratchU8[_i]; }
     return out.subarray(0, w);
@@ -792,7 +792,7 @@ export const divideCodec: RkyvV2Codec<DivideInput, DivideOutput> = {
 
 /** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
 export const echoGroupsComplexCodec: RkyvV2Codec<EchoGroupsInput, EchoGroupsOutput> = createComplexCodec<EchoGroupsInput, EchoGroupsOutput>({
-  commandId: 27,
+  commandId: 28,
   inputSchema: {"title":"EchoGroupsInput","type":"object","required":["groups"],"properties":{"groups":{"type":"object","additionalProperties":{"type":"array","items":{"type":"string"}}}}} as ComplexSchema,
   outputSchema: {"title":"EchoGroupsOutput","type":"object","required":["groups"],"properties":{"groups":{"type":"object","additionalProperties":{"type":"array","items":{"type":"string"}}}}} as ComplexSchema,
   definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
@@ -1760,5 +1760,65 @@ export const toUpperCodec: RkyvV2Codec<ToUpperInput, ToUpperOutput> = {
       offset += _v.bytesRead;
     }
     return { ok: true, result: result as ToUpperOutput };
+  },
+};
+
+export const wideAggCodec: RkyvV2Codec<WideAggInput, WideAggOutput> = {
+  commandId: 25,
+
+  encode(args: WideAggInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(WideAggInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 25, true);
+    parts.push(cmdId);
+    {
+      const _arr = args.samples;
+      parts.push(_pcEncodeVarint(_arr.length));
+      for (let _i = 0; _i < _arr.length; _i++) {
+        parts.push(_pcEncodeVarint64(_arr[_i]));
+      }
+    }
+    {
+      const _opt = args.offset;
+      if (_opt === null || _opt === undefined) {
+        parts.push(new Uint8Array([0]));
+      } else {
+        parts.push(new Uint8Array([1]));
+        parts.push(_pcEncodeZigzag64(_opt));
+      }
+    }
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: WideAggOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<WideAggOutput> = {};
+    {
+      const _v = _pcDecodeVarint64(u8, offset);
+      result.max = _v.value;
+      offset += _v.bytesRead;
+    }
+    {
+      const _v = _pcDecodeVarint64(u8, offset);
+      result.adjusted = _pcDecodeZigzag64(_v.value);
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as WideAggOutput };
   },
 };

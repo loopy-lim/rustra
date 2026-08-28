@@ -153,6 +153,28 @@ int main() {
     CHECK_EQ(r.read_uvar(), n, "uvar round-trip");
   }
 
+  // ── overlong varint: 10바이트째 payload > 1 은 throw (postcard
+  // max_of_last_byte = 2^(64%7)−1 = 1, TS _pcDecodeVarint64 계약과 동일) ──
+  {
+    // 2^64-1 + 2 → 마지막 바이트 0x03 (허용값 0x01 초과)
+    uint8_t overlong[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x03};
+    Reader r(overlong, sizeof(overlong));
+    bool threw = false;
+    try {
+      (void)r.read_uvar();
+    } catch (const std::runtime_error&) {
+      threw = true;
+    }
+    if (!threw) {
+      std::printf("FAIL overlong varint must throw\n");
+      ++g_failures;
+    }
+    // 경계값: 마지막 바이트 0x01 은 u64::MAX 와 동일하게 허용된다.
+    uint8_t maxLegal[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01};
+    Reader rmax(maxLegal, sizeof(maxLegal));
+    CHECK_EQ(rmax.read_uvar(), UINT64_MAX, "uvar 10-byte u64::MAX legal");
+  }
+
   // ── 응답 디코더 시뮬레이션: ok 헤더 + postcard(value) ──
   {
     // addNumbers 응답 빌드 후 C++ codec 으로 value 복원

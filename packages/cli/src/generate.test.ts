@@ -779,7 +779,7 @@ test('generateTypesTs maps allOf to intersection and integer enum to literal uni
   assert.ok(types.includes('level: 1 | 2 | 3;'), 'integer enum must map to literal union');
 });
 
-test('generateTypesTs exposes bigint for int64 and keeps those commands off C++ static codecs', () => {
+test('generateTypesTs exposes bigint for int64 and C++ joins with BigInt decode', () => {
   const schema: PackageSchema = {
     packageId: 'wide-integer',
     commands: [
@@ -802,8 +802,8 @@ test('generateTypesTs exposes bigint for int64 and keeps those commands off C++ 
     ],
   };
   assert.match(generateTypesTs(schema), /value: number \| bigint;/);
-  // TS postcard fast-path 는 게이트 해제(A2) — C++ 정적 코덱만 여전히 제외(트랙 B).
-  assert.doesNotMatch(generateRkyvCodecsCpp(schema), /readCounter/);
+  // B1: C++ 정적 코덱도 와이드 정수를 직접 처리한다 — 광고 제외 해제.
+  assert.match(generateRkyvCodecsCpp(schema), /readCounter/);
   assert.match(generateRkyvRegistryTs(schema), /\['readCounter', readCounterCodec\]/);
 });
 
@@ -846,8 +846,17 @@ test('int64/uint64 fields join the postcard fast path with 64-bit helpers', () =
   assert.doesNotMatch(codecs, /createComplexCodec<CounterInput/);
   assert.match(registry, /route: postcard/);
   assert.doesNotMatch(registry, /route: complex/);
-  // C++ 게이트는 트랙 B — 여전히 와이드 정수를 native static codec 에서 제외.
-  assert.doesNotMatch(generateRkyvCodecsCpp(schema), /readCounter/);
+  // B1: C++ 정적 코덱도 64-bit 헬퍼(push_i64/push_uvar)로 와이드 정수를 emit.
+  const cpp = generateRkyvCodecsCpp(schema);
+  assert.match(cpp, /readCounter/);
+  assert.match(
+    cpp,
+    /w\.push_i64\(rustra_i64\(rt, argsObj\.getProperty\(rt, "value"\), "value"\)\)/,
+  );
+  assert.match(
+    cpp,
+    /w\.push_uvar\(rustra_u64\(rt, argsObj\.getProperty\(rt, "offset"\), "offset"\)\)/,
+  );
 });
 
 test('generateRkyvCodecsTs encodes Option fields (no silent drop)', () => {
@@ -1070,7 +1079,7 @@ test('generateRkyvCodecsCpp promotes supported complex commands to native static
   );
 });
 
-test('generateRkyvCodecsCpp keeps Set and BigInt-shaped commands on the JS complex route', () => {
+test('generateRkyvCodecsCpp keeps Set on the JS complex route but promotes wide integers', () => {
   const schema: PackageSchema = {
     packageId: 'native-complex-boundaries',
     commands: [
@@ -1103,12 +1112,59 @@ test('generateRkyvCodecsCpp keeps Set and BigInt-shaped commands on the JS compl
   const cpp = generateRkyvCodecsCpp(schema);
   const registry = generateRkyvRegistryTs(schema);
   assert.doesNotMatch(cpp, /encode_complex_setValues/);
-  // wideValue 는 A2 게이트 해제로 TS postcard fast-path — C++ 정적 코덱에는
-  // 계속 없다(C++ 은 uvar64/zigzag64 kind 를 emit 하지 않고 JS 폴백로 보낸다).
-  assert.doesNotMatch(cpp, /wideValue/);
+  // B1: wideValue 는 C++ 정적 postcard 코덱으로 승격 — u64 게이트 해소.
+  assert.match(cpp, /wideValue/);
   assert.match(registry, /setValuesComplexCodec/);
   assert.match(registry, /\['wideValue', wideValueCodec\]/);
   assert.doesNotMatch(registry, /wideValueComplexCodec/);
+});
+
+test('generateRkyvCodecsCpp promotes wide-int complex commands with BigInt safe-range decode', () => {
+  const schema: PackageSchema = {
+    packageId: 'cpp-bigint-complex',
+    commands: [
+      {
+        name: 'wideAgg',
+        commandId: 40,
+        inputType: 'WideAggInput',
+        outputType: 'WideAggOutput',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            samples: { type: 'array', items: { type: 'integer', format: 'uint64' } },
+            offset: { type: ['integer', 'null'], format: 'int64' },
+          },
+          required: ['samples'],
+        },
+        outputSchema: {
+          type: 'object',
+          properties: {
+            adjusted: { type: 'integer', format: 'int64' },
+            max: { type: 'integer', format: 'uint64' },
+          },
+          required: ['adjusted', 'max'],
+        },
+      },
+    ],
+  };
+  const cpp = generateRkyvCodecsCpp(schema);
+  // 광고 — 정적 postcard 코덱 승격(A2 이후 와이드 정수는 fast-path 소속).
+  assert.match(cpp, /name == "wideAgg"/);
+  assert.match(cpp, /static void encode_wideAgg/);
+  // uint64 디코드: safe 범위면 number, 아니면 jsi::BigInt::fromUint64.
+  assert.match(
+    cpp,
+    /read_uvar\(\); if \(_v <= 9007199254740991ull\) return jsi::Value\(static_cast<double>\(_v\)\); return jsi::Value\(rt, jsi::BigInt::fromUint64\(rt, _v\)\)/,
+  );
+  // int64 디코드: safe 범위면 number, 아니면 jsi::BigInt::fromInt64.
+  assert.match(
+    cpp,
+    /read_i64\(\); if \(_v >= -9007199254740991ll && _v <= 9007199254740991ll\) return jsi::Value\(static_cast<double>\(_v\)\); return jsi::Value\(rt, jsi::BigInt::fromInt64\(rt, _v\)\)/,
+  );
+  // encode 는 확장된 validator 로 bigint 를 받는다.
+  assert.match(cpp, /value\.isBigInt\(\)/);
+  assert.match(cpp, /asBigInt\(rt\)\.asUint64\(rt\)/);
+  assert.match(cpp, /asBigInt\(rt\)\.asInt64\(rt\)/);
 });
 
 test('generateRkyvCodecsCpp emits bounded recursive reference functions', () => {

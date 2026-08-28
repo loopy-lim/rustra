@@ -219,8 +219,10 @@ fn ts_generator_handles_optional_fields() {
     let generated = package.generate_typescript().unwrap();
 
     assert!(
-        generated.types_ts.contains("age?: number | null;"),
-        "optional int field should be age?: number | null; got:\n{}",
+        // `Option<i64>` 는 union(["integer","null"]) 로 내려오므로 format
+        // int64 를 확인해 `number | bigint` 로 넓힌다(TS CLI 규칙과 동일).
+        generated.types_ts.contains("age?: number | bigint | null;"),
+        "optional int field should be age?: number | bigint | null; got:\n{}",
         generated.types_ts
     );
     assert!(

@@ -16,7 +16,30 @@
 
 namespace facebook::jsi {
 
-class Runtime {};
+class Runtime;
+class BigInt {
+public:
+  static BigInt fromInt64(Runtime&, int64_t v) { return BigInt(v); }
+  static BigInt fromUint64(Runtime&, uint64_t v) { return BigInt(static_cast<int64_t>(v)); }
+
+  int64_t asInt64(Runtime&) const { return v_; }
+  uint64_t asUint64(Runtime&) const { return static_cast<uint64_t>(v_); }
+
+private:
+  explicit BigInt(int64_t v) : v_(v) {}
+  BigInt() = default;
+  int64_t v_ = 0;
+  friend class Value;
+};
+
+class Runtime {
+public:
+  /// 실제 jsi::Runtime 팩토리 미러 — B1 bigint 디코드가 생성 코드에서 호출.
+  /// shim 은 raw 64비트를 그대로 보관한다(임의 정밀 불요).
+  virtual ~Runtime() = default;
+  BigInt createBigIntFromInt64(int64_t v) { return BigInt::fromInt64(*this, v); }
+  BigInt createBigIntFromUint64(uint64_t v) { return BigInt::fromUint64(*this, v); }
+};
 class Object;
 class Array;
 
@@ -55,7 +78,7 @@ struct ArrayData;
 
 class Value {
 public:
-  enum class Kind { Undefined, Null, Number, Bool, String, Object, Array };
+  enum class Kind { Undefined, Null, Number, Bool, BigInt, String, Object, Array };
 
   Value() : kind_(Kind::Undefined) {}
   Value(double n) : kind_(Kind::Number), num_(n) {}
@@ -72,6 +95,8 @@ public:
 
   Value(Runtime&, double n) : kind_(Kind::Number), num_(n) {}
   Value(Runtime&, bool b) : kind_(Kind::Bool), bool_(b) {}
+  /// 실제 jsi::Value(Runtime&, const BigInt&) 미러 — B1 bigint 디코드 경로.
+  Value(Runtime&, const BigInt& b) : kind_(Kind::BigInt), big_(b) {}
   Value(const String& s) : kind_(Kind::String), str_(s) {}
   Value(String&& s) : kind_(Kind::String), str_(std::move(s)) {}
   Value(Runtime&, const String& s) : kind_(Kind::String), str_(s) {}
@@ -88,8 +113,14 @@ public:
   bool isObject() const { return kind_ == Kind::Object || kind_ == Kind::Array; }
   bool isNumber() const { return kind_ == Kind::Number; }
   bool isBool() const { return kind_ == Kind::Bool; }
+  bool isBigInt() const { return kind_ == Kind::BigInt; }
   bool isString() const { return kind_ == Kind::String; }
   bool isUndefined() const { return kind_ == Kind::Undefined; }
+
+  BigInt asBigInt(Runtime&) const {
+    if (kind_ != Kind::BigInt) throw std::runtime_error("not a bigint");
+    return big_;
+  }
 
   double asNumber() const {
     if (kind_ != Kind::Number) throw std::runtime_error("not a number");
@@ -111,6 +142,7 @@ private:
   Kind kind_ = Kind::Undefined;
   double num_ = 0;
   bool bool_ = false;
+  BigInt big_;
   String str_;
   std::shared_ptr<detail::ObjectData> obj_;
   std::shared_ptr<detail::ArrayData> arr_;

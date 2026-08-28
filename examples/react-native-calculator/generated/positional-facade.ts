@@ -2,7 +2,7 @@
 // 정적 명령을 positional 시그니처로 노출해 JSI invokeTyped 를 직접 호출한다.
 // 미지원 명령은 이 파일에 없다 — commands.ts 의 global invoke(Tier 3 폴백 포함) 사용.
 
-import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
 import type { InvokeOptions } from '@rustra/types';
 
 /** JSI 네이티브 모듈의 최소 인터페이스 — invokeTypedPos 노출 호스트 권장. */
@@ -49,9 +49,9 @@ function callPos<T>(cmdId: number, ...fields: unknown[]): T {
   );
 }
 
-export function addNumbers(input: AddNumbersInput, options?: InvokeOptions): Promise<AddNumbersOutput> {
+export function addNumbers(a: number | bigint, b: number | bigint, options?: InvokeOptions): Promise<AddNumbersOutput> {
   void options;
-  return Promise.resolve(call<AddNumbersOutput>(1, 'addNumbers', input));
+  return Promise.resolve(callPos<AddNumbersOutput>(1, a, b));
 }
 
 export function benchAdd(a: number, b: number, options?: InvokeOptions): Promise<BenchAddOutput> {
@@ -61,12 +61,12 @@ export function benchAdd(a: number, b: number, options?: InvokeOptions): Promise
 
 export function benchEchoBytes(data: Uint8Array | ArrayBuffer, options?: InvokeOptions): Promise<BenchBytesPayload> {
   void options;
-  return Promise.resolve(callPos<BenchBytesPayload>(25, data));
+  return Promise.resolve(callPos<BenchBytesPayload>(26, data));
 }
 
 export function benchEchoPair(name: string, value: number, options?: InvokeOptions): Promise<BenchPairPayload> {
   void options;
-  return Promise.resolve(callPos<BenchPairPayload>(26, name, value));
+  return Promise.resolve(callPos<BenchPairPayload>(27, name, value));
 }
 
 export function benchEchoString(value: string, options?: InvokeOptions): Promise<BenchStringPayload> {
@@ -84,24 +84,24 @@ export function clamp(max: number, min: number, value: number, options?: InvokeO
   return Promise.resolve(callPos<ClampOutput>(4, max, min, value));
 }
 
-export function createItem(input: CreateItemInput, options?: InvokeOptions): Promise<CreateItemOutput> {
+export function createItem(name: string, value: number | bigint, options?: InvokeOptions): Promise<CreateItemOutput> {
   void options;
-  return Promise.resolve(call<CreateItemOutput>(8, 'createItem', input));
+  return Promise.resolve(callPos<CreateItemOutput>(8, name, value));
 }
 
-export function divide(input: DivideInput, options?: InvokeOptions): Promise<DivideOutput> {
+export function divide(a: number | bigint, b: number | bigint, options?: InvokeOptions): Promise<DivideOutput> {
   void options;
-  return Promise.resolve(call<DivideOutput>(10, 'divide', input));
+  return Promise.resolve(callPos<DivideOutput>(10, a, b));
 }
 
-export function emitDemo(input: EmitDemoInput, options?: InvokeOptions): Promise<EmitDemoOutput> {
+export function emitDemo(ticks: number | bigint, stepDelayMs: number | bigint, options?: InvokeOptions): Promise<EmitDemoOutput> {
   void options;
-  return Promise.resolve(call<EmitDemoOutput>(11, 'emitDemo', input));
+  return Promise.resolve(callPos<EmitDemoOutput>(11, ticks, stepDelayMs));
 }
 
-export function gauge(input: GaugeInput, options?: InvokeOptions): Promise<GaugeOutput> {
+export function gauge(limit: number | bigint, offset: number | bigint, options?: InvokeOptions): Promise<GaugeOutput> {
   void options;
-  return Promise.resolve(call<GaugeOutput>(17, 'gauge', input));
+  return Promise.resolve(callPos<GaugeOutput>(17, limit, offset));
 }
 
 export function greet(name: string, options?: InvokeOptions): Promise<GreetOutput> {
@@ -109,9 +109,9 @@ export function greet(name: string, options?: InvokeOptions): Promise<GreetOutpu
   return Promise.resolve(callPos<GreetOutput>(5, name));
 }
 
-export function isEven(input: IsEvenInput, options?: InvokeOptions): Promise<IsEvenOutput> {
+export function isEven(n: number | bigint, options?: InvokeOptions): Promise<IsEvenOutput> {
   void options;
-  return Promise.resolve(call<IsEvenOutput>(3, 'isEven', input));
+  return Promise.resolve(callPos<IsEvenOutput>(3, n));
 }
 
 export function multiply(a: number, b: number, options?: InvokeOptions): Promise<MultiplyOutput> {
@@ -154,9 +154,9 @@ export function scoreTotal(input: ScoreTotalInput, options?: InvokeOptions): Pro
   return Promise.resolve(call<ScoreTotalOutput>(15, 'scoreTotal', input));
 }
 
-export function secureCompute(input: SecureComputeInput, options?: InvokeOptions): Promise<SecureComputeOutput> {
+export function secureCompute(a: number | bigint, b: number | bigint, options?: InvokeOptions): Promise<SecureComputeOutput> {
   void options;
-  return Promise.resolve(call<SecureComputeOutput>(13, 'secureCompute', input));
+  return Promise.resolve(callPos<SecureComputeOutput>(13, a, b));
 }
 
 export function sizeOf(data: Uint8Array | ArrayBuffer, options?: InvokeOptions): Promise<SizeOfOutput> {
@@ -177,4 +177,9 @@ export function sumList(input: SumListInput, options?: InvokeOptions): Promise<S
 export function toUpper(s: string, options?: InvokeOptions): Promise<ToUpperOutput> {
   void options;
   return Promise.resolve(callPos<ToUpperOutput>(7, s));
+}
+
+export function wideAgg(input: WideAggInput, options?: InvokeOptions): Promise<WideAggOutput> {
+  void options;
+  return Promise.resolve(call<WideAggOutput>(25, 'wideAgg', input));
 }

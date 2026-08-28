@@ -264,7 +264,7 @@ export function generateContractTs(schemaJson: string): string {
 // (+ ENC_INTO_KINDS), (4) 복합 대응 kind(vec_/set_/map_/option_* — 있으면),
 // (5) tsFieldType 타입 표면, (6) Rust 미러 게이트(rkyv_codec.rs
 // js_field_supported[_with_defs]), (7) Rust ts_type_from_schema(codegen.rs),
-// (8) C++ 게이트(cppComplexNativeSupported / cppSafe), (9) 64-bit 헬퍼
+// (8) C++ 게이트(cppComplexNativeSupported), (9) 64-bit 헬퍼
 // 코드젠(codegen.ts postcardHelperSource) + 와이어 픽스처 양면.
 type PostcardFieldKind =
   | 'zigzag'
@@ -600,42 +600,6 @@ function hasCyclicRef(
 // already traversed inline schema object while `$ref` path state detects the
 // actual named-definition cycle.
 type JsonSchemaIdentity = import('./schema.js').JsonSchema;
-
-/**
- * 스키마 트리에 int64/uint64 필드가 있는지 검사한다. TS postcard fast-path 게이트
- * 해제(A2) 후 이 검사는 C++ 코드젠 전용이다 — C++ 정적 코덱은 트랙 B(Hermes
- * bigint 스파이크)까지 와이드 정수를 emit 하지 않으므로 그 명령을 광고
- * 대상에서 제외해 JS 폴백으로 보낸다.
- */
-function hasWideIntegerField(
-  schema: import('./schema.js').JsonSchema,
-  definitions: Record<string, import('./schema.js').JsonSchema>,
-  path = new Set<string>(),
-): boolean {
-  if (schema.type === 'integer' && (schema.format === 'int64' || schema.format === 'uint64')) {
-    return true;
-  }
-  if (schema.$ref) {
-    const name = refTypeName(schema.$ref);
-    if (path.has(name)) return false;
-    const definition = definitions[name];
-    if (!definition) return false;
-    const nextPath = new Set(path);
-    nextPath.add(name);
-    return hasWideIntegerField(definition, definitions, nextPath);
-  }
-  const children: import('./schema.js').JsonSchema[] = [
-    ...(schema.anyOf ?? []),
-    ...(schema.oneOf ?? []),
-    ...(schema.allOf ?? []),
-    ...(Array.isArray(schema.items) ? schema.items : schema.items ? [schema.items] : []),
-    ...Object.values(schema.properties ?? {}),
-  ];
-  if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
-    children.push(schema.additionalProperties);
-  }
-  return children.some((child) => hasWideIntegerField(child, definitions, path));
-}
 
 /** Set-shaped arrays stay on the schema-driven JS complex route. */
 function hasSet(
@@ -1891,8 +1855,10 @@ function cppEncodeWithGetter(
 ): string {
   switch (field.kind) {
     case 'zigzag':
+    case 'zigzag64':
       return `${indent}w.push_i64(rustra_i64(rt, ${get}, "${field.name}"));`;
     case 'uvar':
+    case 'uvar64':
       return `${indent}w.push_uvar(rustra_u64(rt, ${get}, "${field.name}"));`;
     case 'f64':
       return `${indent}w.push_f64(rustra_f64(rt, ${get}, "${field.name}"));`;
@@ -1916,10 +1882,27 @@ function cppEncodeWithGetter(
       );
     }
     case 'vec_zigzag':
+    case 'vec_i64':
       return (
         `${indent}{ auto _arr = ${get}.asObject(rt).getArray(rt);` +
         ` auto _n = _arr.length(rt); w.push_uvar(_n);` +
         ` for (size_t _i = 0; _i < _n; _i++) w.push_i64(rustra_i64(rt, _arr.getValueAtIndex(rt, _i), "${field.name}[]")); }`
+      );
+    case 'vec_u64':
+      return (
+        `${indent}{ auto _arr = ${get}.asObject(rt).getArray(rt);` +
+        ` auto _n = _arr.length(rt); w.push_uvar(_n);` +
+        ` for (size_t _i = 0; _i < _n; _i++) w.push_uvar(rustra_u64(rt, _arr.getValueAtIndex(rt, _i), "${field.name}[]")); }`
+      );
+    case 'set_i64':
+    case 'set_u64':
+      // Set 와이어는 vec 와 동일(postcard seq). 요소 검증은 validator 가 처리.
+      return (
+        `${indent}{ auto _arr = ${get}.asObject(rt).getArray(rt);` +
+        ` auto _n = _arr.length(rt); w.push_uvar(_n);` +
+        (field.kind === 'set_i64'
+          ? ` for (size_t _i = 0; _i < _n; _i++) w.push_i64(rustra_i64(rt, _arr.getValueAtIndex(rt, _i), "${field.name}{}")); }`
+          : ` for (size_t _i = 0; _i < _n; _i++) w.push_uvar(rustra_u64(rt, _arr.getValueAtIndex(rt, _i), "${field.name}{}")); }`)
       );
     case 'vec_f64':
       return (
@@ -1949,13 +1932,15 @@ function cppEncodeWithGetter(
       );
     case 'map_zigzag':
     case 'map_uvar':
+    case 'map_i64':
+    case 'map_u64':
     case 'map_f64':
     case 'map_bool':
     case 'map_string': {
       const pushVal =
-        field.kind === 'map_zigzag'
+        field.kind === 'map_zigzag' || field.kind === 'map_i64'
           ? `w.push_i64(rustra_i64(rt, _e, "${field.name}{}"));`
-          : field.kind === 'map_uvar'
+          : field.kind === 'map_uvar' || field.kind === 'map_u64'
             ? `w.push_uvar(rustra_u64(rt, _e, "${field.name}{}"));`
             : field.kind === 'map_f64'
               ? `w.push_f64(rustra_f64(rt, _e, "${field.name}{}"));`
@@ -2065,8 +2050,17 @@ function cppFieldDecodeExpr(
   switch (field.kind) {
     case 'zigzag':
       return setProp('(double)r.read_i64()');
+    case 'zigzag64':
+      // B1: 2^53 경계 밖은 jsi::BigInt 복원 — TS toJsInteger 계약 동일.
+      return setProp(
+        '[&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }()',
+      );
     case 'uvar':
       return setProp('(double)r.read_uvar()');
+    case 'uvar64':
+      return setProp(
+        '[&]() -> jsi::Value { auto _v = r.read_uvar(); if (_v <= 9007199254740991ull) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v)); }()',
+      );
     case 'f64':
       return setProp('r.read_f64()');
     case 'f32':
@@ -2090,6 +2084,23 @@ function cppFieldDecodeExpr(
       return (
         `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
         ` for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, (double)r.read_i64()); }` +
+        ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`
+      );
+    case 'vec_i64':
+    case 'set_i64':
+      // B1: 원소별 safe 범위 분기 — 경계 밖은 jsi::BigInt 복원.
+      return (
+        `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
+        ` for (size_t _i = 0; _i < _n; _i++) { auto _v = r.read_i64();` +
+        ` _arr.setValueAtIndex(rt, _i, _v >= -9007199254740991ll && _v <= 9007199254740991ll ? jsi::Value(static_cast<double>(_v)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v))); }` +
+        ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`
+      );
+    case 'vec_u64':
+    case 'set_u64':
+      return (
+        `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);` +
+        ` for (size_t _i = 0; _i < _n; _i++) { auto _v = r.read_uvar();` +
+        ` _arr.setValueAtIndex(rt, _i, _v <= 9007199254740991ull ? jsi::Value(static_cast<double>(_v)) : jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v))); }` +
         ` ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`
       );
     case 'vec_f64':
@@ -2134,6 +2145,8 @@ function cppFieldDecodeExpr(
       );
     case 'map_zigzag':
     case 'map_uvar':
+    case 'map_i64':
+    case 'map_u64':
     case 'map_f64':
     case 'map_bool':
     case 'map_string': {
@@ -2142,11 +2155,15 @@ function cppFieldDecodeExpr(
           ? '_map.setProperty(rt, _k, (double)r.read_i64());'
           : field.kind === 'map_uvar'
             ? '_map.setProperty(rt, _k, (double)r.read_uvar());'
-            : field.kind === 'map_f64'
-              ? '_map.setProperty(rt, _k, r.read_f64());'
-              : field.kind === 'map_bool'
-                ? '_map.setProperty(rt, _k, r.read_bool());'
-                : '{ auto _vs = r.read_string_view(); _map.setProperty(rt, _k, jsi::String::createFromUtf8(rt, _vs.data, _vs.size)); }';
+            : field.kind === 'map_i64'
+              ? '{ auto _v = r.read_i64(); _map.setProperty(rt, _k, _v >= -9007199254740991ll && _v <= 9007199254740991ll ? jsi::Value(static_cast<double>(_v)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v))); }'
+              : field.kind === 'map_u64'
+                ? '{ auto _v = r.read_uvar(); _map.setProperty(rt, _k, _v <= 9007199254740991ull ? jsi::Value(static_cast<double>(_v)) : jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v))); }'
+                : field.kind === 'map_f64'
+                  ? '_map.setProperty(rt, _k, r.read_f64());'
+                  : field.kind === 'map_bool'
+                    ? '_map.setProperty(rt, _k, r.read_bool());'
+                    : '{ auto _vs = r.read_string_view(); _map.setProperty(rt, _k, jsi::String::createFromUtf8(rt, _vs.data, _vs.size)); }';
       return (
         `${indent}{ auto _n = r.read_uvar(); auto _map = jsi::Object(rt);` +
         ` for (size_t _i = 0; _i < _n; _i++) { auto _ks = r.read_string_view();` +
@@ -2274,6 +2291,8 @@ function cppEncodeCommand(
 const POSITIONAL_SCALAR_KINDS = [
   'zigzag',
   'uvar',
+  'zigzag64',
+  'uvar64',
   'f64',
   'f32',
   'bool',
@@ -2282,7 +2301,7 @@ const POSITIONAL_SCALAR_KINDS = [
   'bytes',
 ] as const;
 
-const RAW_SCALAR_KINDS = ['zigzag', 'uvar', 'f64', 'f32', 'bool'] as const;
+const RAW_SCALAR_KINDS = ['zigzag', 'uvar', 'zigzag64', 'uvar64', 'f64', 'f32', 'bool'] as const;
 
 /** Existing object-input commands that can safely forward one to three fields. */
 function generatedFieldRoute(
@@ -2390,9 +2409,11 @@ function cppEncodePosCommand(
     const v = `argv[${i}]`;
     switch (f.kind) {
       case 'zigzag':
+      case 'zigzag64':
         lines.push(`  w.push_i64(rustra_i64(rt, ${v}, "${f.name}"));`);
         break;
       case 'uvar':
+      case 'uvar64':
         lines.push(`  w.push_uvar(rustra_u64(rt, ${v}, "${f.name}"));`);
         break;
       case 'f64':
@@ -2720,9 +2741,12 @@ function cppComplexDecodeExpr(node: CodecIrNode, depth: string, state: CppComple
     case 'boolean':
       return 'jsi::Value(r.read_bool())';
     case 'integer':
+      // B1: 2^53 경계 밖은 jsi::BigInt 로 복원 — TS toJsInteger(complex-codec.ts)
+      // 의 number|bigint 계약과 정확히 동일. Safe 판정은 디코드된 정수 자체로
+      // 수행하므로 double 나로써 손실이 없다.
       return node.format?.startsWith('uint')
-        ? 'jsi::Value(static_cast<double>(r.read_uvar()))'
-        : 'jsi::Value(static_cast<double>(r.read_i64()))';
+        ? '[&]() -> jsi::Value { auto _v = r.read_uvar(); if (_v <= 9007199254740991ull) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v)); }()'
+        : '[&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }()';
     case 'number':
       return node.format === 'float'
         ? 'jsi::Value(static_cast<double>(r.read_f32()))'
@@ -2823,9 +2847,9 @@ function cppComplexNativeSupported(
 ): boolean {
   switch (node.kind) {
     case 'integer':
-      // int64/uint64 는 계속 C++ 정적 코덱 제외 — Hermes JSI bigint 전달 검증은
-      // 트랙 B1 스파이크 과제다(TS postcard fast-path 게이트 해제와 무관).
-      return node.format !== 'int64' && node.format !== 'uint64';
+      // B1: int64/uint64 도 C++ 직결 — safe 범위는 number, 초과는
+      // jsi::BigInt::fromInt64/fromUint64 로 복원한다(TS toJsInteger 계약 동일).
+      return true;
     case 'sequence':
       return !node.unique && cppComplexNativeSupported(node.item, definitions, seen);
     case 'tuple':
@@ -3002,16 +3026,10 @@ export function generateRkyvCodecsHpp(_schema: PackageSchema): string {
  */
 export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   const definitions = collectAllDefinitions(schema);
-  // C++ 정적 postcard 코덱은 uvar64/zigzag64 kind 를 emit 하지 않는다(트랙 B —
-  // Hermes JSI bigint 검증 전까지). TS 쪽에선 postcard 로 승격된 와이드 정수
-  // 명령을 여기서 다시 걸러 C++ 정적 코덱 광고 대상에서 제외한다 — 그래야 RN
-  // 엔진이 JS 코덱 폴백을 쓴다(무음 왜곡/와이어 불일치 방지).
-  const cppSafe = (c: CommandSchema) =>
-    !hasWideIntegerField(c.inputSchema, definitions) &&
-    !hasWideIntegerField(c.outputSchema, definitions);
-  const supported = schema.commands.filter(
-    (c) => commandCodecSupported(c, definitions) && cppSafe(c),
-  );
+  // B1: 와이드 정수 게이트(cppSafe/hasWideIntegerField) 해소 — C++ 이
+  // push_i64/push_uvar 64-bit 와이어 + jsi::BigInt 복원을 직접 처리하므로
+  // 와이드 정수 명령도 C++ 정적 코덱을 광고한다.
+  const supported = schema.commands.filter((c) => commandCodecSupported(c, definitions));
   const complexSupported = schema.commands
     .map((command) => {
       if (commandCodecSupported(command, definitions)) return null;
@@ -3169,22 +3187,26 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   lines.push(
     `[[maybe_unused]] static int64_t rustra_i64(jsi::Runtime& rt, const jsi::Value& value, const char* field) {`,
   );
+  // B1: bigint 입력 — 전 int64 범위를 그대로 받는다(Number.isSafeInteger 가드는
+  // number 경로에만 적용). TS postcard fast-path의 number|bigint 계약과 동일.
+  lines.push(`  if (value.isBigInt()) return value.asBigInt(rt).asInt64(rt);`);
   lines.push(`  double number = rustra_f64(rt, value, field);`);
   lines.push(`  constexpr double maxSafe = 9007199254740991.0;`);
   lines.push(`  if (std::trunc(number) != number || number < -maxSafe || number > maxSafe)`);
   lines.push(
-    `    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a safe integer");`,
+    `    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a safe integer or bigint");`,
   );
   lines.push(`  return static_cast<int64_t>(number);`);
   lines.push(`}`);
   lines.push(
     `[[maybe_unused]] static uint64_t rustra_u64(jsi::Runtime& rt, const jsi::Value& value, const char* field) {`,
   );
+  lines.push(`  if (value.isBigInt()) return value.asBigInt(rt).asUint64(rt);`);
   lines.push(`  double number = rustra_f64(rt, value, field);`);
   lines.push(`  constexpr double maxSafe = 9007199254740991.0;`);
   lines.push(`  if (std::trunc(number) != number || number < 0.0 || number > maxSafe)`);
   lines.push(
-    `    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a non-negative safe integer");`,
+    `    throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a non-negative safe integer or bigint");`,
   );
   lines.push(`  return static_cast<uint64_t>(number);`);
   lines.push(`}`);
@@ -3417,11 +3439,11 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
       `      if (argc != ${shape.inputFields.length}) throw JSError(rt, "rustra: ${cmd.name} expects ${shape.inputFields.length} raw argument(s), got " + std::to_string(argc));`,
     );
     shape.inputFields.forEach((field, index) => {
-      if (field.kind === 'zigzag') {
+      if (field.kind === 'zigzag' || field.kind === 'zigzag64') {
         lines.push(
           `      { int64_t value = rustra_i64(rt, argv[${index}], ${JSON.stringify(field.name)}); std::memcpy(&slots[${index}], &value, sizeof(value)); }`,
         );
-      } else if (field.kind === 'uvar') {
+      } else if (field.kind === 'uvar' || field.kind === 'uvar64') {
         lines.push(
           `      slots[${index}] = rustra_u64(rt, argv[${index}], ${JSON.stringify(field.name)});`,
         );
@@ -3460,9 +3482,19 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
         lines.push(
           `      result.setProperty(rt, cachedProp(rt, ${JSON.stringify(field.name)}), static_cast<double>(value));`,
         );
+      } else if (field.kind === 'zigzag64') {
+        // B1: i64::MIN..2^53 초과 구간은 BigInt 복원(raw 슬롯 왕복 보존).
+        lines.push(`      int64_t value; std::memcpy(&value, &slot, sizeof(value));`);
+        lines.push(
+          `      result.setProperty(rt, cachedProp(rt, ${JSON.stringify(field.name)}), value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));`,
+        );
       } else if (field.kind === 'uvar') {
         lines.push(
           `      result.setProperty(rt, cachedProp(rt, ${JSON.stringify(field.name)}), static_cast<double>(slot));`,
+        );
+      } else if (field.kind === 'uvar64') {
+        lines.push(
+          `      result.setProperty(rt, cachedProp(rt, ${JSON.stringify(field.name)}), slot <= 9007199254740991ull ? jsi::Value(static_cast<double>(slot)) : jsi::Value(rt, jsi::BigInt::fromUint64(rt, slot)));`,
         );
       } else if (field.kind === 'f64' || field.kind === 'f32') {
         lines.push(`      double value; std::memcpy(&value, &slot, sizeof(value));`);

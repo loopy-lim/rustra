@@ -138,11 +138,23 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
             _ => "unknown".to_string(),
         },
         Some(Value::Array(types)) => {
+            // `["integer","null"]` 같은 union — 요소가 integer 면 format(int64/
+            // uint64)을 확인해 `number | bigint` 로 넓혀야 한다(A2/B1 이후 TS
+            // CLI codegen 과 동일 규칙). 단일 integer 분기와 정확히 일치.
+            let is_wide_integer = schema.get("format").and_then(Value::as_str) == Some("int64")
+                || schema.get("format").and_then(Value::as_str) == Some("uint64");
             let parts: Vec<String> = types
                 .iter()
                 .filter_map(|t| t.as_str())
                 .map(|t| match t {
-                    "integer" | "number" => "number".to_string(),
+                    "integer" => {
+                        if is_wide_integer {
+                            "number | bigint".to_string()
+                        } else {
+                            "number".to_string()
+                        }
+                    }
+                    "number" => "number".to_string(),
                     "string" => "string".to_string(),
                     "boolean" => "boolean".to_string(),
                     "null" => "null".to_string(),

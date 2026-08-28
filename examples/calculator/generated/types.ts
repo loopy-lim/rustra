@@ -256,7 +256,7 @@ export type ToUpperOutput = {
  */
 export type WideAggInput = {
   samples: (number | bigint)[];
-  offset?: number | null;
+  offset?: number | bigint | null;
 };
 
 export type WideAggOutput = {

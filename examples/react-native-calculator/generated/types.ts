@@ -250,3 +250,16 @@ export type ToUpperInput = {
 export type ToUpperOutput = {
   result: string;
 };
+
+/**
+ * A2 와이드 정수 복합 타입 표본 — Vec<u64> + Option<i64>. 원소/옵션 레벨 uvar64/zigzag64 헬퍼가 스트림 중간 7바이트 varint 경계를 넘는 값을 무손실 왕복하는지 cross-wire 픽스처로 고정한다.
+ */
+export type WideAggInput = {
+  samples: (number | bigint)[];
+  offset?: number | bigint | null;
+};
+
+export type WideAggOutput = {
+  max: number | bigint;
+  adjusted: number | bigint;
+};
