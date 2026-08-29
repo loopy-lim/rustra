@@ -11,6 +11,7 @@ import {
   isEven,
   createItem,
   processItem,
+  echoGroups,
   multiply,
   clamp,
   benchAdd,
@@ -260,6 +261,17 @@ async function runBenchmarks(): Promise<string[]> {
   }
 
   try {
+    const groups = await echoGroups({ groups: { beta: ['x', 'y'], alpha: ['z'] } });
+    const ok =
+      groups.groups.alpha?.[0] === 'z' &&
+      groups.groups.beta?.[0] === 'x' &&
+      groups.groups.beta?.[1] === 'y';
+    log(`│  echoGroups(nested map/vec) ${ok ? '✓' : '✗'}`);
+  } catch (e: any) {
+    log(`│  echoGroups FAIL ${String(e).slice(0, 40)}`);
+  }
+
+  try {
     const pi = await processItem({ item: { name: 'Gadget', value: 200, active: true } });
     const ok = pi.item.value === 400 && pi.doubled === true;
     log(`│  processItem(Gadget,200) val=${pi.item.value} dbl=${pi.doubled} ${ok ? '✓' : '✗'}`);
@@ -277,6 +289,7 @@ async function runBenchmarks(): Promise<string[]> {
   log('╠════════════════════════════════════════════════╣');
 
   const codec = rkyvV2Registry.get('addNumbers')!;
+  const positionalCodec = rkyvV2Registry.get('benchAdd')!;
 
   // 1. Pure encode
   const encodeBench = measureSync('rkyvV2 encode', () => codec.encode(INPUT));
@@ -307,12 +320,13 @@ async function runBenchmarks(): Promise<string[]> {
   );
 
   // (Tier 1/2) 최적화 경로 측정 — positional 진입(invokeTypedPos)은 인자 객체
-  // 생성/JS 코덱 encode 를 통째로 건너뛴다. cmd_id 는 codec.commandId(=1).
+  // 생성/JS 코덱 encode 를 통째로 건너뛴다. addNumbers는 int64-shaped complex
+  // 명령이라 이 경로에서 제외하고, 같은 두 f64 필드인 benchAdd를 측정한다.
   if (typeof native.invokeTypedPos === 'function') {
     const posBench = measureSync('rkyvV2 pos', () => {
       return (
         native as { invokeTypedPos(id: number, a: number, b: number): unknown }
-      ).invokeTypedPos(codec.commandId, INPUT.a, INPUT.b);
+      ).invokeTypedPos(positionalCodec.commandId, INPUT.a, INPUT.b);
     });
     log(`│  pos full avg: ${formatNs(posBench.avg).padStart(10)}  p50: ${formatNs(posBench.p50)}`);
     // 주성분 분해 — full sync 대비 절감 = (encode+객체생성) 비용.
@@ -323,7 +337,7 @@ async function runBenchmarks(): Promise<string[]> {
   if (typeof native.invokeTypedById === 'function') {
     const byIdBench = measureSync('rkyvV2 byId', () => {
       return (native as { invokeTypedById(id: number, args: unknown): unknown }).invokeTypedById(
-        codec.commandId,
+        positionalCodec.commandId,
         INPUT,
       );
     });

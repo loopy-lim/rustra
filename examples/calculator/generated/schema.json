@@ -379,6 +379,48 @@
       }
     },
     {
+      "name": "echoGroups",
+      "commandId": 27,
+      "inputType": "EchoGroupsInput",
+      "outputType": "EchoGroupsOutput",
+      "inputSchema": {
+        "title": "EchoGroupsInput",
+        "type": "object",
+        "required": [
+          "groups"
+        ],
+        "properties": {
+          "groups": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "EchoGroupsOutput",
+        "type": "object",
+        "required": [
+          "groups"
+        ],
+        "properties": {
+          "groups": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "name": "emitDemo",
       "commandId": 11,
       "inputType": "EmitDemoInput",

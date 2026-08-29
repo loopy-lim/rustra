@@ -1,0 +1,18 @@
+{
+  "date": "2026-08-27",
+  "command": "bun run bench:complex",
+  "schema": "nested-map-option-set-data-enum",
+  "route": "complex-binary-js",
+  "iterations": 20000,
+  "requestBytes": 47,
+  "responseBytes": 53,
+  "encodeUs": 6.768,
+  "decodeUs": 6.383,
+  "allocationMode": "per-call-writer-and-response",
+  "verified": true,
+  "limitations": [
+    "does not measure Rust or C++ native dispatch",
+    "single-process wall-clock sample",
+    "does not prove physical-device React Native runtime"
+  ]
+}

@@ -80,13 +80,16 @@ int main() {
   }
 
   // Raw eligibility is narrower than positional: string/pair/bytes stay off it.
-  if (!gen::has_raw_codec(1) || !gen::has_raw_codec(23) || gen::has_raw_codec(24) ||
+  // addNumbers is int64-shaped and stays on the JS complex codec so unsafe
+  // values can remain bigint. benchAdd is the raw-safe f64 command.
+  if (gen::has_raw_codec(1) || !gen::has_raw_codec(23) || gen::has_raw_codec(24) ||
       gen::has_raw_codec(25) || gen::has_raw_codec(26)) {
     std::printf("FAIL raw capability set\n");
     ++g_failures;
   }
 
-  // ── encode addNumbers {a:42, b:58} → [cmd_id 1 LE][postcard(42,58)] ──
+  // int64-shaped addNumbers is deliberately not a C++ static codec: the JS
+  // complex route owns number|bigint validation and preservation.
   {
     Object args(rt);
     args.setProperty(rt, "a", 42.0);
@@ -95,8 +98,10 @@ int main() {
 
     rc::Writer w;
     bool ok = gen::encode_by_name(rt, "addNumbers", argsV, w);
-    if (!ok) { std::printf("FAIL encode_by_name(addNumbers) returned false\n"); ++g_failures; }
-    check_bytes(w.take(), {0x01, 0x00, 0x54, 0x74}, "encode addNumbers {42,58}");
+    if (ok || !w.take().empty()) {
+      std::printf("FAIL addNumbers must remain on the JS complex route\n");
+      ++g_failures;
+    }
   }
 
   // ── encode multiply {a:1.5, b:2.5} → [cmd_id 2 LE][f64(1.5)][f64(2.5)] ──
@@ -115,14 +120,16 @@ int main() {
     check_bytes(w.take(), want, "encode multiply {1.5,2.5}");
   }
 
-  // ── encode isEven {n:100} → [cmd_id 3 LE][varint(100)] ──
+  // int64-shaped isEven also stays on the JS complex route.
   {
     Object args(rt);
     args.setProperty(rt, "n", 100.0);
     Value argsV(rt, args);
     rc::Writer w;
-    gen::encode_by_name(rt, "isEven", argsV, w);
-    check_bytes(w.take(), {0x03, 0x00, 0xC8, 0x01}, "encode isEven {100}");
+    if (gen::encode_by_name(rt, "isEven", argsV, w) || !w.take().empty()) {
+      std::printf("FAIL isEven must remain on the JS complex route\n");
+      ++g_failures;
+    }
   }
 
   // ── encode greet {name:"hi"} → [cmd_id 5 LE][str len 2]['h']['i']] ──
@@ -135,7 +142,7 @@ int main() {
     check_bytes(w.take(), {0x05, 0x00, 0x02, 0x68, 0x69}, "encode greet {hi}");
   }
 
-  // ── encode sumList {numbers:[10,20]} → [cmd_id 6 LE][count 2][10][20]] ──
+  // Vec<int64> follows the same BigInt-safe route.
   {
     Object args(rt);
     Array arr(rt, 2);
@@ -144,8 +151,49 @@ int main() {
     args.setProperty(rt, "numbers", arr);
     Value argsV(rt, args);
     rc::Writer w;
-    gen::encode_by_name(rt, "sumList", argsV, w);
-    check_bytes(w.take(), {0x06, 0x00, 0x02, 0x14, 0x28}, "encode sumList {[10,20]}");
+    if (gen::encode_by_name(rt, "sumList", argsV, w) || !w.take().empty()) {
+      std::printf("FAIL sumList must remain on the JS complex route\n");
+      ++g_failures;
+    }
+  }
+
+  // ── native complex codec: map<string, vec<string>> ─────────────────
+  // echoGroups is intentionally native-safe. The map keys are sorted by UTF-8
+  // bytes and each nested sequence carries its own postcard-style length.
+  {
+    Object args(rt);
+    Object groups(rt);
+    Array bValues(rt, 2);
+    bValues.setValueAtIndex(rt, 0, String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>("y"), 1));
+    bValues.setValueAtIndex(rt, 1, String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>("z"), 1));
+    groups.setProperty(rt, "b", bValues);
+    Array aValues(rt, 1);
+    aValues.setValueAtIndex(rt, 0, String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>("x"), 1));
+    groups.setProperty(rt, "a", aValues);
+    args.setProperty(rt, "groups", groups);
+
+    rc::Writer w;
+    if (!gen::encode_by_name(rt, "echoGroups", Value(rt, args), w)) {
+      std::printf("FAIL encode_by_name(echoGroups) returned false\n");
+      ++g_failures;
+    }
+    check_bytes(w.take(), {0x1B, 0x00, 0x02, 0x01, 0x61, 0x01, 0x01, 0x78,
+                           0x01, 0x62, 0x02, 0x01, 0x79, 0x01, 0x7A},
+                "encode echoGroups sorted nested map");
+
+    uint8_t body[] = {0x02, 0x01, 0x61, 0x01, 0x01, 0x78,
+                      0x01, 0x62, 0x02, 0x01, 0x79, 0x01, 0x7A};
+    rc::Reader r(body, sizeof(body));
+    Value result = gen::decode_by_name(rt, "echoGroups", r);
+    Object decodedGroups = result.getObject(rt).getProperty(rt, "groups").getObject(rt);
+    Array decodedA = decodedGroups.getProperty(rt, "a").getObject(rt).getArray(rt);
+    Array decodedB = decodedGroups.getProperty(rt, "b").getObject(rt).getArray(rt);
+    if (decodedA.length(rt) != 1 || decodedA.getValueAtIndex(rt, 0).getString(rt).utf8(rt) != "x" ||
+        decodedB.length(rt) != 2 || decodedB.getValueAtIndex(rt, 0).getString(rt).utf8(rt) != "y" ||
+        decodedB.getValueAtIndex(rt, 1).getString(rt).utf8(rt) != "z") {
+      std::printf("FAIL decode echoGroups nested map\n");
+      ++g_failures;
+    }
   }
 
   // ── 2026-08-22 타입 확장: bytes/map/tuple/uvar ─────────────────
@@ -265,10 +313,10 @@ int main() {
     args.setProperty(rt, "scores", scores);
     Value argsV(rt, args);
     rc::Writer w;
-    gen::encode_by_name(rt, "scoreTotal", argsV, w);
-    // count=2 | "a"(1,97) zigzag(10)=0x14 | "b"(1,98) zigzag(32)=0x40
-    check_bytes(w.take(), {0x0F, 0x00, 0x02, 0x01, 0x61, 0x14, 0x01, 0x62, 0x40},
-                "encode scoreTotal {a:10,b:32} sorted");
+    if (gen::encode_by_name(rt, "scoreTotal", argsV, w) || !w.take().empty()) {
+      std::printf("FAIL scoreTotal must remain on the JS complex route\n");
+      ++g_failures;
+    }
   }
 
   // encode span {pair:["hi",-5]} → [cmd 16][str "hi"][zigzag(-5)=9] — tuple 무접두
@@ -280,8 +328,10 @@ int main() {
     args.setProperty(rt, "pair", pair);
     Value argsV(rt, args);
     rc::Writer w;
-    gen::encode_by_name(rt, "span", argsV, w);
-    check_bytes(w.take(), {0x10, 0x00, 0x02, 0x68, 0x69, 0x09}, "encode span {['hi',-5]}");
+    if (gen::encode_by_name(rt, "span", argsV, w) || !w.take().empty()) {
+      std::printf("FAIL span must remain on the JS complex route\n");
+      ++g_failures;
+    }
   }
 
   // encode gauge {limit:300, offset:70000} → [cmd 17][ac 02][f0 a2 04] — plain varint
@@ -291,12 +341,15 @@ int main() {
     args.setProperty(rt, "offset", 70000.0);
     Value argsV(rt, args);
     rc::Writer w;
-    gen::encode_by_name(rt, "gauge", argsV, w);
-    check_bytes(w.take(), {0x11, 0x00, 0xAC, 0x02, 0xF0, 0xA2, 0x04}, "encode gauge {300,70000}");
+    if (gen::encode_by_name(rt, "gauge", argsV, w) || !w.take().empty()) {
+      std::printf("FAIL gauge must remain on the JS complex route\n");
+      ++g_failures;
+    }
   }
 
   // decode scoreTotal response body postcard(count=2,total=42) → 구조 검증
   {
+    if (gen::has_static_codec("scoreTotal")) {
     uint8_t body[] = {0x02, 0x54}; // uvar(2), zigzag(42)
     rc::Reader r(body, 2);
     Value result = gen::decode_by_name(rt, "scoreTotal", r);
@@ -307,10 +360,12 @@ int main() {
     if (obj.getProperty(rt, "total").asNumber() != 42.0) {
       std::printf("FAIL decode scoreTotal total\n"); ++g_failures;
     }
+    }
   }
 
   // decode span response body postcard(first="hi",second=-5) → tuple 재조립
   {
+    if (gen::has_static_codec("span")) {
     uint8_t body[] = {0x02, 0x68, 0x69, 0x09};
     rc::Reader r(body, 4);
     Value result = gen::decode_by_name(rt, "span", r);
@@ -321,10 +376,12 @@ int main() {
     if (obj.getProperty(rt, "second").asNumber() != -5.0) {
       std::printf("FAIL decode span second (zigzag)\n"); ++g_failures;
     }
+    }
   }
 
   // decode gauge response body postcard(next=70300) → uvar 정밀도
   {
+    if (gen::has_static_codec("gauge")) {
     uint8_t body[] = {0x9C, 0xA5, 0x04}; // uvar(70300)
     rc::Reader r(body, 3);
     Value result = gen::decode_by_name(rt, "gauge", r);
@@ -332,27 +389,26 @@ int main() {
     if (obj.getProperty(rt, "next").asNumber() != 70300.0) {
       std::printf("FAIL decode gauge next (uvar)\n"); ++g_failures;
     }
+    }
   }
 
-  // ── decode addNumbers response body postcard(value=100) → {value:100} ──
-  {
-    // value=100 → postcard varint 0xC8,0x01
-    uint8_t body[] = {0xC8, 0x01};
-    rc::Reader r(body, 2);
-    Value result = gen::decode_by_name(rt, "addNumbers", r);
-    Object obj = result.getObject(rt);
-    double v = obj.getProperty(rt, "value").asNumber();
-    if (v != 100.0) { std::printf("FAIL decode addNumbers value: got %f, want 100\n", v); ++g_failures; }
+  // addNumbers has no C++ decoder for the same BigInt-safe reason as its
+  // encoder; the generated JS complex codec handles this response.
+  if (gen::has_static_codec("addNumbers")) {
+    std::printf("FAIL addNumbers must not advertise a C++ static codec\n");
+    ++g_failures;
   }
 
   // ── decode isEven response body postcard(result=true) → {result:true} ──
   {
+    if (gen::has_static_codec("isEven")) {
     uint8_t body[] = {0x01}; // bool true
     rc::Reader r(body, 1);
     Value result = gen::decode_by_name(rt, "isEven", r);
     Object obj = result.getObject(rt);
     bool b = obj.getProperty(rt, "result").getBool();
     if (!b) { std::printf("FAIL decode isEven result: got false, want true\n"); ++g_failures; }
+    }
   }
 
   // ── decode greet response body postcard(message="yo") → {message:"yo"} ──
@@ -367,6 +423,7 @@ int main() {
 
   // ── decode sumList response body {count,total} → {count:2,total:30} ──
   {
+    if (gen::has_static_codec("sumList")) {
     // count=2 → 0x04; total=30 → 0x3C
     uint8_t body[] = {0x04, 0x3C};
     rc::Reader r(body, 2);
@@ -377,6 +434,7 @@ int main() {
     if (count != 2.0 || total != 30.0) {
       std::printf("FAIL decode sumList: count=%f total=%f, want 2/30\n", count, total);
       ++g_failures;
+    }
     }
   }
 
@@ -402,23 +460,12 @@ int main() {
   // generated C++ codec 이 동일하게 encode/decode 함을 증명한다. 코너 하나라도
   // 드리프트하면 세 테스트 중 하나가 실패 → 스키마/코덱 회귀 감지.
   //
-  // 정적 코덱에 존재하는 addNumbers/greet 만 C++ 교차 검증 가능.
+  // 정적 코덱에 존재하는 greet 만 C++ 교차 검증 가능. addNumbers 는
+  // int64/BigInt 안전성을 위해 JS complex codec 경로로 분리된다.
   // divide·secureCompute 는 동적 명령(C++ static codec 없음 → JS Tier 3 fallback)
   // 이므로 divide 에러 프레임은 Rust↔TS 교차 증명(cross-wire.test.ts)에 한정.
 
-  // (1) encode addNumbers {a:2,b:3} → [cmd 1 LE][zigzag(2)=04][zigzag(3)=06]
-  //     == Rust/TS ADDNUMBERS_REQUEST "01000406"
-  {
-    Object args(rt);
-    args.setProperty(rt, "a", 2.0);
-    args.setProperty(rt, "b", 3.0);
-    Value argsV(rt, args);
-    rc::Writer w;
-    gen::encode_by_name(rt, "addNumbers", argsV, w);
-    check_bytes(w.take(), {0x01, 0x00, 0x04, 0x06}, "shared-fixture encode addNumbers {2,3}");
-  }
-
-  // (2) encode greet {name:"Lynx"} → [cmd 5 LE][len 4]['L']['y']['n']['x']
+  // (1) encode greet {name:"Lynx"} → [cmd 5 LE][len 4]['L']['y']['n']['x']
   //     == Rust/TS GREET_REQUEST "0500044c796e78"
   {
     Object args(rt);
@@ -431,20 +478,7 @@ int main() {
                 "shared-fixture encode greet {Lynx}");
   }
 
-  // (3) decode addNumbers 응답 바디 (프레임 [ok:1][7B 0][body] 중 body=0x0a → 5)
-  //     전체 프레임 == Rust/TS ADDNUMBERS_RESPONSE "01000000000000000a"
-  {
-    std::vector<uint8_t> frame = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a};
-    rc::Reader r(frame.data() + 8, frame.size() - 8);  // 8바이트 프레임 헤더 건너뜀
-    Value result = gen::decode_by_name(rt, "addNumbers", r);
-    double v = result.getObject(rt).getProperty(rt, "value").asNumber();
-    if (v != 5.0) {
-      std::printf("FAIL shared-fixture decode addNumbers: got %f, want 5\n", v);
-      ++g_failures;
-    }
-  }
-
-  // (4) decode greet 응답 바디 (body = len 12 + "Hello, Lynx!")
+  // (2) decode greet 응답 바디 (body = len 12 + "Hello, Lynx!")
   //     전체 프레임 == Rust/TS GREET_RESPONSE "01000000000000000c48656c6c6f2c204c796e7821"
   {
     std::vector<uint8_t> frame = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -461,7 +495,8 @@ int main() {
 
   // ── has_static_codec / dispatch ──
   {
-    if (!gen::has_static_codec("addNumbers")) { std::printf("FAIL has_static_codec(addNumbers)\n"); ++g_failures; }
+    if (gen::has_static_codec("addNumbers")) { std::printf("FAIL has_static_codec(addNumbers) should be false\n"); ++g_failures; }
+    if (!gen::has_static_codec("echoGroups")) { std::printf("FAIL has_static_codec(echoGroups)\n"); ++g_failures; }
     if (!gen::has_static_codec("rustraRegistryDemo")) { std::printf("FAIL has_static_codec(rustraRegistryDemo)\n"); ++g_failures; }
     if (gen::has_static_codec("dynamicCmd")) { std::printf("FAIL has_static_codec(dynamicCmd) should be false\n"); ++g_failures; }
   }
@@ -470,7 +505,7 @@ int main() {
   // by_name 과 동일한 per-command 함수를 재사용하므로 바이트/값이 완전히
   // 동일해야 한다 — switch 케이스가 잘못 매핑되면 즉시 드러난다.
 
-  // (1) encode_by_id(addNumbers=1) — by_name 과 byte-exact
+  // (1) encode_by_id(addNumbers=1) is delegated to the JS complex route.
   {
     Object args(rt);
     args.setProperty(rt, "a", 42.0);
@@ -478,8 +513,10 @@ int main() {
     Value argsV(rt, args);
     rc::Writer w;
     bool ok = gen::encode_by_id(rt, 1, argsV, w);
-    if (!ok) { std::printf("FAIL encode_by_id(1) returned false\n"); ++g_failures; }
-    check_bytes(w.take(), {0x01, 0x00, 0x54, 0x74}, "encode_by_id addNumbers {42,58}");
+    if (ok || !w.take().empty()) {
+      std::printf("FAIL encode_by_id(1) must return false for JS complex route\n");
+      ++g_failures;
+    }
   }
 
   // (2) encode_by_id(greet=5) — 다른 케이스도 정확히 매핑되는지
@@ -493,16 +530,7 @@ int main() {
     check_bytes(w.take(), {0x05, 0x00, 0x02, 0x68, 0x69}, "encode_by_id greet {hi}");
   }
 
-  // (3) decode_by_id(addNumbers=1) round-trip — value=100 → {value:100}
-  {
-    uint8_t body[] = {0xC8, 0x01}; // postcard varint 100
-    rc::Reader r(body, 2);
-    Value result = gen::decode_by_id(rt, 1, r);
-    double v = result.getObject(rt).getProperty(rt, "value").asNumber();
-    if (v != 100.0) { std::printf("FAIL decode_by_id(1) value: got %f, want 100\n", v); ++g_failures; }
-  }
-
-  // (4) decode_by_id(greet=5) round-trip — "yo"
+  // (3) decode_by_id(greet=5) round-trip — "yo"
   {
     uint8_t body[] = {0x02, 0x79, 0x6F};
     rc::Reader r(body, 3);

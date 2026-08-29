@@ -37,6 +37,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 | [계약 마이그레이션 가이드](migration-guide.md)        | 전체   | 스키마 breaking change 검출(rustra diff)·해결 레시피·롤아웃 순서   |
 | [Rust API 가이드](rust-api-guide.md)                  | 사용자 | `#[command]`/`#[bridge_type]`/`build!` 매크로, Package/Builder API |
 | [벤치마크](benchmarks.md)                             | 전체   | 어댑터별 성능 비교, 오버헤드 분석, 페이로드 확장성                 |
+| [복잡 데이터 codec](complex-codecs.md)                | 사용자 | recursive map/enum/Option wire, limits, RN 경계                    |
 | [보안 감사](security-audit.md)                        | 기여자 | lockfile 취약점/경고 상태, 해소 이력                               |
 | [릴리즈 절차](release-procedure.md)                   | 기여자 | changeset 발행 절차, 버전 관리                                     |
 | [보안 정책](../.github/SECURITY.md)                   | 전체   | 취약점 신고 채널, 지원 버전, 스코프                                |

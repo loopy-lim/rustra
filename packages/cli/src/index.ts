@@ -53,32 +53,28 @@ export { parsePackageSchema };
 interface CliManifest {
   version: string;
   dependencies: { '@rustra/types': string };
-  rustraTemplate: { cargoMinor: string };
+  rustraTemplate: { cargoRange: string; reactNativeRange: string };
 }
 
 const cliManifest = createRequire(import.meta.url)('../package.json') as CliManifest;
 const cliVersion = cliManifest.version;
 
-/** 공개 npm 패키지와 Rust crate는 하나의 release line으로 움직인다.
- * manifest에서 각 값을 독립적으로 읽되, scaffold를 만들기 전에 drift를 크게
- * 실패시킨다. Changesets fixed group과 release coherence CI가 같은 계약을 지킨다. */
+/** CLI, types npm package, and Rust crates have independent versions.
+ * The scaffold records each package's own compatible dependency range instead
+ * of deriving a Cargo version from the CLI npm version. */
 export function templateVersions(
   cliVersion: string,
   npmTypesRange: string,
-  cargoMinor: string,
+  cargoRange: string,
 ): {
-  cargoMinor: string;
+  cargoRange: string;
   npmCliCaret: string;
   npmTypesRange: string;
 } {
-  const expectedTypesRange = `^${cliVersion}`;
-  const expectedCargoMinor = cliVersion.split('.').slice(0, 2).join('.');
-  if (npmTypesRange !== expectedTypesRange || cargoMinor !== expectedCargoMinor) {
-    throw new Error(
-      `Rustra release versions must match: cli=${cliVersion}, types=${npmTypesRange}, crates=${cargoMinor}`,
-    );
+  if (!npmTypesRange.trim() || !cargoRange.trim()) {
+    throw new Error('Rustra compatibility ranges must be non-empty');
   }
-  return { cargoMinor, npmCliCaret: `^${cliVersion}`, npmTypesRange };
+  return { cargoRange, npmCliCaret: `^${cliVersion}`, npmTypesRange };
 }
 
 export interface InitProjectFiles {
@@ -102,8 +98,8 @@ publish = false
 default-run = "rustra-app"
 
 [dependencies]
-rustra = "${v.cargoMinor}"
-rustra-macros = "${v.cargoMinor}"
+rustra = "${v.cargoRange}"
+rustra-macros = "${v.cargoRange}"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 schemars = "0.8"
@@ -456,7 +452,7 @@ async function runInit(args: string[]): Promise<void> {
   const versions = templateVersions(
     cliVersion,
     cliManifest.dependencies['@rustra/types'],
-    cliManifest.rustraTemplate.cargoMinor,
+    cliManifest.rustraTemplate.cargoRange,
   );
   const files = renderInitProjectFiles(versions);
 
@@ -728,7 +724,7 @@ async function generateFromSchema(
     await ensureReactNativeDependency(
       reactNativeScaffold.appRoot,
       reactNativeScaffold.moduleDir,
-      reactNativeScaffold.adapterVersion,
+      reactNativeScaffold.adapterRange,
     );
     written.push(...moduleFiles.map((name) => `native/${name}`));
   }
@@ -1069,7 +1065,7 @@ function resolveReactNativeScaffold(
     rustManifestPath,
     rustPackage,
     rustLibrary,
-    adapterVersion: cliVersion,
+    adapterRange: cliManifest.rustraTemplate.reactNativeRange,
     legacyBenchmarks: rn.legacyBenchmarks,
   };
 }
@@ -1077,7 +1073,7 @@ function resolveReactNativeScaffold(
 async function ensureReactNativeDependency(
   appRoot: string,
   moduleDir: string,
-  adapterVersion: string,
+  adapterRange: string,
 ): Promise<void> {
   const manifestPath = resolve(appRoot, 'package.json');
   let raw: string;
@@ -1114,7 +1110,7 @@ async function ensureReactNativeDependency(
     dependencies['@rustra/react-native'] === undefined &&
     manifest.devDependencies?.['@rustra/react-native'] === undefined
   ) {
-    dependencies['@rustra/react-native'] = `^${adapterVersion}`;
+    dependencies['@rustra/react-native'] = adapterRange;
   }
   manifest.dependencies = Object.fromEntries(
     Object.entries(dependencies).sort(([a], [b]) => a.localeCompare(b)),

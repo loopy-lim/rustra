@@ -237,9 +237,12 @@ literal enum, map/set/tuple/$ref 재귀 표면을 지원한다. JSON Schema의 �
 키워드(`if`/`then`/`else`)나 `patternProperties`처럼 Rust 타입 계약에서 생성하지
 않는 임의 스키마는 안전하게 `unknown`으로 폴백한다.
 
-**postcard 코덱(rkyv-codecs.ts/C++) 지원 정책**: 미지원 필드를 가진 명령은 부분 코덱을
-만들지 않고 레지스트리에서 **제외**된다(WARN 로그 출력). 엔진은 그 명령을 Tier 3
-(JSON-in-binary) 폴백으로 라우팅한다 — 과거 "미지원 필드 무음 삭제로 와이어 깨짐"
+**postcard 코덱(rkyv-codecs.ts/C++) 지원 정책**: 미지원 필드를 가진 명령은 부분
+postcard 코덱을 만들지 않는다. 대신 complex codec이 전체 schema를 지원하면 TS
+registry에 complex route로 등록한다. C++는 공용 Codec IR이 native-safe로 판정한
+complex subset만 정적 registry에 포함하고, 나머지는 제외한다. 두
+binary codec이 모두 지원하지 못하는 명령만 WARN과 함께 제외되어 Tier 3
+(JSON-in-binary) 폴백으로 라우팅된다 — 과거 "미지원 필드 무음 삭제로 와이어 깨짐"
 결함의 재발을 구조적으로 봉쇄한다.
 
 ### 이미 지원되는 타입 (이전에는 미지원)
@@ -262,7 +265,8 @@ literal enum, map/set/tuple/$ref 재귀 표면을 지원한다. JSON Schema의 �
 | `oneOf` 판별 필드 (`const`)              | `const_literal`/`constLiteral`로 `{ type: 'A' }` 판별 유니온 생성                                                                           |
 | single-entry `allOf` newtype (postcard)  | `ChannelHandle(u32)` 같은 투명 newtype의 내부 `$ref`를 따라가 동일 scalar wire로 생성                                                       |
 
-fast path에서 남은 Tier 3 대상은 payload data enum(`oneOf` 선언순을 스키마가
-보존하지 않음), 구조체/배열 값을 가진 map, collection/enum을 감싼 일부
-`Option<T>` 조합이다. 이 경우 명령 전체를 제외하고 한 번의 actionable WARN을
-출력하며 JSON-in-binary 경로로 라우팅한다.
+postcard fast path에서 빠지는 payload data enum, 구조체/배열 값을 가진 map,
+재귀 구조와 collection/enum을 감싼 `Option<T>` 조합은 complex binary route가
+담당한다. unknown ref, 모호한 union, 지원하지 않는 JSON Schema keyword처럼
+complex route도 증명하지 못하는 경우에만 명령 전체를 제외하고 한 번의 actionable
+WARN을 출력하며 JSON-in-binary 경로로 라우팅한다.

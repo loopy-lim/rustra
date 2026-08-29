@@ -209,6 +209,30 @@ pub fn process_item(input: ProcessItemInput) -> Result<ProcessItemOutput> {
     })
 }
 
+// ── Complex native-codec smoke command ───────────────────────────────
+// This deliberately exercises a nested map/sequence/string shape. It is
+// native-safe for the generated C++ JSI codec and gives the mobile fixture a
+// real runtime round-trip beyond scalar postcard commands.
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct EchoGroupsInput {
+    pub groups: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct EchoGroupsOutput {
+    pub groups: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+#[command]
+pub fn echo_groups(input: EchoGroupsInput) -> Result<EchoGroupsOutput> {
+    Ok(EchoGroupsOutput {
+        groups: input.groups,
+    })
+}
+
 // ── Tier 1 에러 전용 명령 (criterion 6: typed error roundtrip) ────────
 // divide 는 0으로 나눌 때 RustraError::custom("math.divide_by_zero", …) 를
 // 반환한다. rkyv V2 error wire([ok=0][pad][len u16][postcard{code,message}])를
@@ -313,7 +337,8 @@ pub fn emit_demo(input: EmitDemoInput) -> Result<EmitDemoOutput> {
 // probe 실측 계약:
 // - u32=70000 → [240,162,4] plain varint (zigzag 아님)
 // - map{a:1,b:2} → [2, 1,98,4, 1,97,2] count+(key,value)*
-// - tuple("hi",-5) → [2,104,105,9] 무접두 나열
+// - postcard tuple("hi",-5) → [2,104,105,9] 무접두 나열
+// - complex tuple("hi",-5) → [2,2,104,105,9] count + elements
 // - vec![1,2,3] u8 → [3,1,2,3] len+raw
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
@@ -443,7 +468,7 @@ pub struct SpanOutput {
     pub second: i64,
 }
 
-/// (String, i64) 튜플 — 무접두 나열 와이어 고정.
+/// (String, i64) 튜플 — i64 때문에 complex-binary count + elements 와이어.
 #[command]
 pub fn span(input: SpanInput) -> Result<SpanOutput> {
     Ok(SpanOutput {
@@ -716,6 +741,7 @@ pub fn calculator_package() -> Package {
             )
             .buffer_command_fn(bench_echo_bytes)
             .command_fn(bench_echo_pair)
+            .command_fn(echo_groups)
             .require_capability("secureCompute", "compute:secure")
             .build();
 

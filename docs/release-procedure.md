@@ -10,11 +10,13 @@
 
 ## 1단계 — changeset 확정
 
-공개 `@rustra/*` 9종과 `rustra`/`rustra-macros`는 하나의 release line입니다.
-한 패키지에 변경이 생겨도 Changesets `fixed` 그룹이 npm 9종을 모두 같은 버전으로
-올리고, Cargo workspace도 그 정확한 버전과 minor line을 맞춰야 합니다.
-`bun run test:release-coherence`가 패키지 버전, 내부 의존성, CLI scaffold의 Cargo
-minor, fixed group 누락을 실패로 처리합니다.
+공개 `@rustra/*` 9종은 독립 release line입니다. 변경된 package만 changeset에
+올리고, 각 adapter/CLI가 요구하는 `@rustra/types` 호환 범위를 유지합니다. Rust
+`rustra`/`rustra-macros` 쌍은 Cargo workspace 안에서 계속 함께 호환되어야 하지만
+npm package 버전과 일치할 필요는 없습니다. `@rustra/cli`의 `rustraTemplate`에는
+생성할 Rust crate와 RN adapter의 명시적 semver 범위가 들어갑니다.
+`bun run test:release-coherence`는 package별 버전, lockfile, 내부 의존성 범위,
+CLI의 Rust 범위, LICENSE 및 fixed group을 검사합니다.
 
 소비자에게 breaking DX 변경이 생긴 minor 릴리스는 버전 PR에
 `docs/migrations/<from>-to-<to>.md`를 포함하고 README에서 연결합니다. 자동
@@ -26,6 +28,8 @@ bunx changeset status   # 대상 패키지/범프 확인
 
 - `.changeset/*.md` 가 main 에 있으면 release.yml 이 "Version Packages" PR 을 만든다
 - PR 머지 시 버전 필드 + CHANGELOG 이 일괄 갱신되고 changeset 파일은 소비된다
+- 서로 다른 package가 함께 바뀌어야 할 때만 각 package를 같은 changeset에 명시한다.
+  fixed group을 다시 추가해 전체 package를 묶지 않는다.
 
 ## 2단계 — canary (사전 검증)
 
@@ -41,6 +45,14 @@ bunx changeset publish --tag canary
 mkdir /tmp/canary-check && cd /tmp/canary-check && bun init -y
 bun add @rustra/node@canary @rustra/types@canary
 bun -e "import * as n from '@rustra/node'; console.log(Object.keys(n))"
+```
+
+React Native adapter는 publish tarball의 native 파일과 clean consumer의 native root
+해석을 모두 확인한다.
+
+```bash
+bun run verify:package:react-native
+bun run verify:consumer:react-native
 ```
 
 crates.io canary 는 지원하지 않는다 (버전 삭제 불가) — Rust 는 stable 만 발행한다.

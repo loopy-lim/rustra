@@ -539,34 +539,6 @@ pub(crate) fn align_up(offset: usize, alignment: usize) -> usize {
     offset.div_ceil(alignment) * alignment
 }
 
-/// Check if an output schema requires Tier 3 encoding (JSON fallback).
-pub(crate) fn is_output_tier3(output_schema: &Value) -> bool {
-    let props = match output_schema.get("properties").and_then(Value::as_object) {
-        Some(p) => p,
-        None => return false,
-    };
-    let required: BTreeSet<String> = output_schema
-        .get("required")
-        .and_then(Value::as_array)
-        .map(|arr| {
-            arr.iter()
-                .filter_map(Value::as_str)
-                .map(String::from)
-                .collect()
-        })
-        .unwrap_or_default();
-
-    for (name, prop_schema) in props {
-        if !required.contains(name) {
-            return true;
-        }
-        if wire_kind_from_schema(prop_schema).is_none() {
-            return true;
-        }
-    }
-    false
-}
-
 pub(crate) fn read_wire_field(payload: &[u8], offset: usize, kind: WireFieldKind) -> Result<Value> {
     if offset + kind.size() > payload.len() {
         return Err(RustraError::invalid_args("rkyv v2: payload truncated"));
@@ -706,6 +678,21 @@ fn js_field_supported_with_defs(
     if depth > 8 {
         return false; // 과도한 중첩(순환 $ref 포함) — 안전하게 미지원 취급
     }
+    // Keep the Rust route gate aligned with the TypeScript generator. Wide
+    // integers need the complex codec so unsafe JS values can remain bigint.
+    if schema.get("type").and_then(Value::as_str) == Some("integer")
+        && matches!(
+            schema.get("format").and_then(Value::as_str),
+            Some("int64" | "uint64")
+        )
+    {
+        return false;
+    }
+    // Set-shaped arrays are owned by the complex route, which restores Set
+    // semantics at the JS boundary instead of exposing an array.
+    if schema.get("uniqueItems") == Some(&Value::Bool(true)) {
+        return false;
+    }
     // schemars의 tuple newtype는 single-entry allOf + $ref다. serde/postcard는
     // 내부 값만 직렬화하므로 이 한 겹은 투명하게 벗길 수 있다. 둘 이상의
     // allOf(intersection)는 와이어 순서를 증명할 수 없어 계속 미지원이다.
@@ -755,11 +742,8 @@ fn js_field_supported_with_defs(
                 }
                 return true;
             }
-            // Vec<u8> 등 원소 $ref 해석 후 원시 벡터 — bytes/vec_* 지원 집합.
-            return matches!(
-                items.get("type").and_then(Value::as_str),
-                Some("integer") | Some("number") | Some("boolean") | Some("string")
-            );
+            // Vec<u8> 등 원시 벡터 — scalar 지원 여부와 int64 범위를 함께 검사한다.
+            return js_field_supported_with_defs(items, defs, depth + 1);
         }
         return false;
     }
@@ -795,6 +779,9 @@ fn js_field_supported_with_defs(
 fn js_field_supported(schema: &Value, depth: u8) -> bool {
     if depth > 8 {
         return false; // 과도한 중첩 — 안전하게 미지원 취급
+    }
+    if schema.get("uniqueItems") == Some(&Value::Bool(true)) {
+        return false;
     }
     // string-only enum → 지원 (variant index varint)
     if schema.get("type").and_then(Value::as_str) == Some("string") {
@@ -834,7 +821,11 @@ fn js_field_supported(schema: &Value, depth: u8) -> bool {
         return false;
     }
     match schema.get("type").and_then(Value::as_str) {
-        Some("boolean") | Some("integer") | Some("number") | Some("string") => true,
+        Some("boolean") | Some("number") | Some("string") => true,
+        Some("integer") => !matches!(
+            schema.get("format").and_then(Value::as_str),
+            Some("int64" | "uint64")
+        ),
         Some("array") => {
             // tuple — items 가 배열 + minItems === maxItems(프로브: schemars
             // 튜플 표현). 모든 요소가 지원 타입일 때만 지원.

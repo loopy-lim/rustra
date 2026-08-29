@@ -708,9 +708,17 @@ Vec/Set/tuple, 원시값 map, string enum, 중첩 구조체, 그리고 single-en
 `allOf` newtype 핸들을 지원한다. 선언순을 스키마의
 `fieldOrder: "declaration"`로 보증할 수 없는 레거시 스키마는 코드젠이 경고한다.
 
-현재 data enum(`oneOf`의 payload variant), 구조체 값 map, collection/enum을
-감싼 일부 `Option<T>` 조합은 정확한 와이어 순서를 스키마만으로 증명할 수 없어
-명령 전체가 JSON-in-binary(Tier 3)로 자동 폴백한다. 필드는 조용히 삭제되지 않는다.
+postcard가 다루지 않는 data enum(`oneOf`의 payload variant), 구조체 값 map,
+재귀 구조와 collection/enum을 감싼 Option 조합은 schema-driven complex binary
+codec으로 생성된다. 이 경로는 UTF-8 map key 정렬, 선언순 struct field, deterministic
+variant key와 depth/payload/collection limits를 사용한다. 생성기와 Rust 양쪽이
+지원하지 못하는 스키마만 JSON-in-binary(Tier 3)로 폴백하며, 필드는 조용히 삭제되지
+않는다.
+
+복잡 명령은 native-safe schema라면 RN C++ complex codec으로 직접 마샬링되고,
+Set 또는 BigInt 경계가 필요한 명령은 JS complex codec이 네이티브
+`invokeRkyvV2`를 통해 Rust handler로 전달한다. 두 경로는 같은 complex wire를
+사용한다.
 
 ---
 

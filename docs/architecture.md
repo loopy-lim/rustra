@@ -410,9 +410,14 @@ struct RegistryState {
 
 ### 동적 명령의 호출 경로 (단일 rkyvV2 엔진 + live schema)
 
-- **정적 등록 명령**(codegen codec registry에 있음) → rkyv V2 postcard fast-path.
+- **정적 postcard 명령**(C++/TS codec registry에 있음) → rkyv V2 postcard fast-path.
+- **정적 complex 명령**(TS registry와 native-safe C++ registry에 있음) →
+  schema-driven complex binary `[command_id][body]`를 C++ JSI에서 마샬링한다.
+  Set 또는 BigInt 범위가 필요한 명령은 C++ 정적 광고를 하지 않고 JS complex
+  codec으로 같은 `invokeRkyvV2` 경계를 사용한다.
 - **런타임 등록 명령**(registry에 없음) → TS 엔진이 **Tier 3(JSON-in-binary) fallback**: `live schema`에서 `commandId`를 조회해 `[id][JSON]`으로 `invokeRkyvV2` 호출.
-- **단일 `createRkyvV2Engine`** 이 정적(fast) + 동적(Tier 3) 명령을 모두 처리한다. Rust 쪽 `register`는 동적 명령을 `force_tier3=true`로 만들어 postcard fast-handler 대신 Tier 3 JSON 디코더를 쓴다.
+- **단일 `createRkyvV2Engine`** 이 postcard/complex/Tier 3 명령을 함께 처리한다. Rust
+  쪽 `register`는 동적 명령을 `force_tier3=true`로 만들어 JSON 디코더를 쓴다.
 
 **live schema**: `Package::live_schema()` / `rustra_ffi_get_schema()` / JSI `getSchema()` 가 정적+동적 명령 전체 스키마(`{name, commandId, inputSchema, outputSchema}`)를 반환. TS(`getLiveSchema`)가 동적 명령의 id/타입을 조회한다. 읽기 전용 — debug/release 모두.
 

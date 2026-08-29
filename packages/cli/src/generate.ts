@@ -14,6 +14,8 @@ import {
   postcardHelperSource,
   tsTypeFromSchema,
 } from './codegen.js';
+import { buildCodecIr } from './codec-ir.js';
+import type { CodecIrNode } from './codec-ir.js';
 
 function generatedJsDoc(description: string): string {
   const body = escapeJsDoc(description)
@@ -375,7 +377,7 @@ function classifyPostcardField(
     if (inner === 'string') return 'option_string';
     if (inner === 'struct') return 'option_struct';
     if (inner === 'bytes') return 'option_bytes';
-    // enum_str/vec/set/map/tuple 등 조합은 아직 미지원 — Tier 3 제외 대상
+    // enum_str/vec/set/map/tuple 등 조합은 postcard 미지원 — complex route가 검사한다.
     return null;
   }
   if (schema.type === 'array' && schema.items && !Array.isArray(schema.items)) {
@@ -411,7 +413,8 @@ function classifyPostcardField(
   }
   // tuple (A, B, ...): items is an array + minItems === maxItems.
   // wire: elements in order, no length prefix (probe: ("hi",-5) -> [2,104,105,9]).
-  // 모든 요소가 지원 타입일 때만 fast-path — 요소 하나라도 미지원이면 Tier 3.
+  // 모든 요소가 지원 타입일 때만 postcard fast-path — 요소 하나라도 미지원이면
+  // complex route가 검사한다.
   if (schema.type === 'array' && Array.isArray(schema.items)) {
     const minItems = schema.minItems as number | undefined;
     const maxItems = schema.maxItems as number | undefined;
@@ -423,16 +426,19 @@ function classifyPostcardField(
     }
     return null;
   }
-  // payload 있는 enum — schemars 는 $ref → oneOf 로 내보낸다.
-  // ⚠️ Tier 3 확정: postcard variant index 는 Rust 선언순인데 oneOf 는 unit
-  // variant 를 맨 앞으로 재배치한다(probe: Circle,Rect,Tag 선언 → oneOf 는
-  // Tag,Circle,Rect; AllData First..Fourth 선언 → Third,First,Second,Fourth).
-  // 스키마만으로 선언순을 복원할 수 없어 와이어 계약이 성립하지 않는다.
+  // payload 있는 enum — schemars 는 $ref → oneOf 로 내보낸다. postcard는
+  // Rust declaration order를 증명할 수 없어 제외하고 complex route가 schema
+  // variant key를 사용한다.
   if (schema.oneOf) return null;
   // dynamic map HashMap<String, T>: additionalProperties, no fixed properties.
   // wire: entry-count varint + (key string, value)*
   // (probe: {a:1,b:2} -> [2, 1,98,4, 1,97,2]; decode is order-independent).
-  if (schema.type === 'object' && schema.additionalProperties && !schema.properties) {
+  if (
+    schema.type === 'object' &&
+    schema.additionalProperties &&
+    typeof schema.additionalProperties === 'object' &&
+    !schema.properties
+  ) {
     const v = schema.additionalProperties;
     if (v.type === 'integer') {
       const unsigned =
@@ -445,7 +451,7 @@ function classifyPostcardField(
     if (v.type === 'number') return 'map_f64';
     if (v.type === 'boolean') return 'map_bool';
     if (v.type === 'string') return 'map_string';
-    return null; // struct/array-valued map - Tier 3
+    return null; // struct/array-valued map - complex route가 검사한다.
   }
   return null;
 }
@@ -486,7 +492,7 @@ function unwrapOptionSchema(
  * 켠 시점부터 더 이상 성립하지 않는다.
  *
  * 미지원 타입 필드는 스킵하지 않고 `unsupported` 로 보고한다 — 호출부(코덱/레지스트리
- * 생성)가 그 명령을 Tier 3(JSON-in-binary) 로 제외시키는 데 쓴다. optional 필드는
+ * 생성)가 그 명령을 postcard에서 제외시키는 데 쓴다. optional 필드는
  * `Option<T>` 로 와이어에 실리므로(required 여부와 무관하게 태그 바이트가 나감)
  * 필드 집합에 포함한다.
  */
@@ -538,6 +544,103 @@ function collectPostcardFields(
 /** `#/definitions/Foo` → `Foo`. */
 function refTypeName(ref: string): string {
   return ref.startsWith('#/definitions/') ? ref.slice('#/definitions/'.length) : ref;
+}
+
+/** Postcard's inline struct emitter cannot represent a cyclic definition. */
+function hasCyclicRef(
+  schema: import('./schema.js').JsonSchema,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+  path = new Set<string>(),
+  visited = new Set<JsonSchemaIdentity>(),
+): boolean {
+  const identity = schema as JsonSchemaIdentity;
+  if (visited.has(identity)) return false;
+  visited.add(identity);
+  if (schema.$ref) {
+    const name = refTypeName(schema.$ref);
+    if (path.has(name)) return true;
+    const definition = definitions[name];
+    if (!definition) return false;
+    const nextPath = new Set(path);
+    nextPath.add(name);
+    return hasCyclicRef(definition, definitions, nextPath, visited);
+  }
+  const children: import('./schema.js').JsonSchema[] = [
+    ...(schema.anyOf ?? []),
+    ...(schema.oneOf ?? []),
+    ...(schema.allOf ?? []),
+    ...(Array.isArray(schema.items) ? schema.items : schema.items ? [schema.items] : []),
+    ...Object.values(schema.properties ?? {}),
+  ];
+  if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
+    children.push(schema.additionalProperties);
+  }
+  return children.some((child) => hasCyclicRef(child, definitions, path, visited));
+}
+
+// Object identity is sufficient here: the helper only prevents revisiting an
+// already traversed inline schema object while `$ref` path state detects the
+// actual named-definition cycle.
+type JsonSchemaIdentity = import('./schema.js').JsonSchema;
+
+/** BigInt-capable integers stay on the schema-driven JS complex route. */
+function hasWideInteger(
+  schema: import('./schema.js').JsonSchema,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+  path = new Set<string>(),
+): boolean {
+  if (schema.type === 'integer' && (schema.format === 'int64' || schema.format === 'uint64')) {
+    return true;
+  }
+  if (schema.$ref) {
+    const name = refTypeName(schema.$ref);
+    if (path.has(name)) return false;
+    const definition = definitions[name];
+    if (!definition) return false;
+    const nextPath = new Set(path);
+    nextPath.add(name);
+    return hasWideInteger(definition, definitions, nextPath);
+  }
+  const children: import('./schema.js').JsonSchema[] = [
+    ...(schema.anyOf ?? []),
+    ...(schema.oneOf ?? []),
+    ...(schema.allOf ?? []),
+    ...(Array.isArray(schema.items) ? schema.items : schema.items ? [schema.items] : []),
+    ...Object.values(schema.properties ?? {}),
+  ];
+  if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
+    children.push(schema.additionalProperties);
+  }
+  return children.some((child) => hasWideInteger(child, definitions, path));
+}
+
+/** Set-shaped arrays stay on the schema-driven JS complex route. */
+function hasSet(
+  schema: import('./schema.js').JsonSchema,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+  path = new Set<string>(),
+): boolean {
+  if (schema.uniqueItems === true) return true;
+  if (schema.$ref) {
+    const name = refTypeName(schema.$ref);
+    if (path.has(name)) return false;
+    const definition = definitions[name];
+    if (!definition) return false;
+    const nextPath = new Set(path);
+    nextPath.add(name);
+    return hasSet(definition, definitions, nextPath);
+  }
+  const children: import('./schema.js').JsonSchema[] = [
+    ...(schema.anyOf ?? []),
+    ...(schema.oneOf ?? []),
+    ...(schema.allOf ?? []),
+    ...(Array.isArray(schema.items) ? schema.items : schema.items ? [schema.items] : []),
+    ...Object.values(schema.properties ?? {}),
+  ];
+  if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
+    children.push(schema.additionalProperties);
+  }
+  return children.some((child) => hasSet(child, definitions, path));
 }
 
 /**
@@ -1237,9 +1340,10 @@ function generateFieldDecodeExpr(
  * - Response: `[ok: u8 @0][pad 7B][postcard(Output) @8...]`
  * - Error:    `[ok: u8 @0 = 0][pad 7B][error_len: u16 @8 LE][error_bytes @10...]`
  *
- * 미지원 타입 필드를 가진 명령은 코덱/레지스트리에서 **제외**되고 엔진의
- * Tier 3(JSON-in-binary) 폴백이 처리한다 — 부분 코덱이 등록되어 폴백을
- * 선점하는 과거 결함(필드 무음 소실)을 구조적으로 봉쇄한다.
+ * postcard 미지원 명령은 recursive complex codec을 우선 생성하고, 두 코덱이
+ * 모두 지원하지 못하는 경우에만 코덱/레지스트리에서 제외되어 엔진의 Tier
+ * 3(JSON-in-binary) 폴백으로 간다. 부분 코덱이 등록되어 필드를 무음 소실하는
+ * 경로는 허용하지 않는다.
  */
 export function generateRkyvCodecsTs(schema: PackageSchema): string {
   const allTypes = new Set<string>();
@@ -1257,12 +1361,17 @@ export function generateRkyvCodecsTs(schema: PackageSchema): string {
 
   let output = postcardHelperSource();
 
-  output += "import type { RkyvV2Codec, RustraError } from '@rustra/types';\n";
+  output += "import { createComplexCodec } from '@rustra/types';\n";
+  output += "import type { RkyvV2Codec, RustraError, ComplexSchema } from '@rustra/types';\n";
   output += `import type { ${importTypes.join(', ')} } from './types.js';\n\n`;
 
   for (const command of schema.commands) {
     const codec = generatePostcardCodec(command, definitions);
-    if (codec !== null) output += codec;
+    if (codec !== null) {
+      output += codec;
+    } else if (complexCodecSupported(command, definitions)) {
+      output += generateComplexCodec(command, definitions);
+    }
   }
 
   return finishGeneratedText(output);
@@ -1276,6 +1385,7 @@ function generatePostcardCodec(
   command: CommandSchema,
   definitions: Record<string, import('./schema.js').JsonSchema>,
 ): string | null {
+  if (!commandCodecSupported(command, definitions)) return null;
   const fnName = commandFunctionName(command.name);
   const inType = command.inputType;
   // unit 출력 `()` → void. postcard 와이어 상 unit 은 0바이트(outFields 자연히 빈 배열).
@@ -1429,6 +1539,23 @@ function commandCodecSupported(
   command: CommandSchema,
   definitions: Record<string, import('./schema.js').JsonSchema>,
 ): boolean {
+  if (command.inputType !== '()' && command.inputSchema.type !== 'object') return false;
+  if (command.outputType !== '()' && command.outputSchema.type !== 'object') return false;
+  if (
+    hasCyclicRef(command.inputSchema, definitions) ||
+    hasCyclicRef(command.outputSchema, definitions)
+  ) {
+    return false;
+  }
+  if (
+    hasWideInteger(command.inputSchema, definitions) ||
+    hasWideInteger(command.outputSchema, definitions)
+  ) {
+    return false;
+  }
+  if (hasSet(command.inputSchema, definitions) || hasSet(command.outputSchema, definitions)) {
+    return false;
+  }
   const inResult = collectPostcardFields(command.inputSchema, definitions);
   const outResult = collectPostcardFields(command.outputSchema, definitions);
   if (inResult.unsupported.length > 0 || outResult.unsupported.length > 0) return false;
@@ -1436,36 +1563,90 @@ function commandCodecSupported(
 }
 
 /**
+ * Complex codecs use a recursive schema-driven wire and therefore cover the
+ * shapes that the postcard fast path deliberately excludes. Cyclic references
+ * are valid: the runtime depth limit, rather than code generation, bounds the
+ * value. Unknown references and ambiguous unions remain Tier 3.
+ */
+function complexSchemaSupported(
+  schema: import('./schema.js').JsonSchema,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+): boolean {
+  return buildCodecIr(schema, definitions).ok;
+}
+
+function complexCodecSupported(
+  command: CommandSchema,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+): boolean {
+  return (
+    !commandCodecSupported(command, definitions) &&
+    complexSchemaSupported(command.inputSchema, definitions) &&
+    complexSchemaSupported(command.outputSchema, definitions)
+  );
+}
+
+/** Generate a schema-driven codec for commands outside the postcard subset. */
+function generateComplexCodec(
+  command: CommandSchema,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+): string {
+  const fnName = commandFunctionName(command.name);
+  const inType = command.inputType;
+  const outType = command.outputType === '()' ? 'void' : command.outputType;
+  return (
+    `/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */\n` +
+    `export const ${fnName}ComplexCodec: RkyvV2Codec<${inType}, ${outType}> = createComplexCodec<${inType}, ${outType}>({\n` +
+    `  commandId: ${command.commandId},\n` +
+    `  inputSchema: ${JSON.stringify(command.inputSchema)} as ComplexSchema,\n` +
+    `  outputSchema: ${JSON.stringify(command.outputSchema)} as ComplexSchema,\n` +
+    `  definitions: ${JSON.stringify(definitions)} as Record<string, ComplexSchema>,\n` +
+    `});\n\n` +
+    // Keep the historical generic codec name stable when a command moves from
+    // postcard to complex-binary because of a wider schema shape.
+    `export const ${fnName}Codec = ${fnName}ComplexCodec;\n\n`
+  );
+}
+
+/**
  * 패키지 스키마에서 rkyv V2 레지스트리 파일(`rkyv-registry.ts`)을 생성합니다.
  *
- * 미지원 타입 명령은 등록에서 제외된다 — 엔진의 Tier 3(JSON-in-binary) 폴백이
- * 처리한다. 제외 시 표준 출력으로 WARN 을 낸다(무음 제외 금지).
+ * 두 binary codec이 모두 지원하지 못하는 명령만 등록에서 제외된다 — 엔진의
+ * Tier 3(JSON-in-binary) 폴백이 처리한다. 제외 시 표준 출력으로 WARN 을 낸다.
  */
 export function generateRkyvRegistryTs(schema: PackageSchema): string {
   const definitions = collectAllDefinitions(schema);
-  const included: CommandSchema[] = [];
+  const included: { command: CommandSchema; codec: string; route: 'postcard' | 'complex' }[] = [];
   const excluded: string[] = [];
   for (const c of schema.commands) {
     if (commandCodecSupported(c, definitions)) {
-      included.push(c);
+      included.push({
+        command: c,
+        codec: `${commandFunctionName(c.name)}Codec`,
+        route: 'postcard',
+      });
+    } else if (complexCodecSupported(c, definitions)) {
+      included.push({
+        command: c,
+        codec: `${commandFunctionName(c.name)}ComplexCodec`,
+        route: 'complex',
+      });
     } else {
       excluded.push(c.name);
       console.warn(
-        `[rustra] WARN: command '${c.name}' has fields unsupported by the postcard codec ` +
-          `(Option combinations beyond string/number/bool/struct, maps, tuples, non-string enums); ` +
+        `[rustra] WARN: command '${c.name}' has a schema unsupported by both the postcard and complex codecs; ` +
           `excluding from rkyv V2 registry — the engine will route it via Tier 3 JSON fallback.`,
       );
     }
   }
 
   const entries = included
-    .map((c) => {
-      const fnName = commandFunctionName(c.name);
-      return `  ['${c.name}', ${fnName}Codec]`;
+    .map(({ command, codec, route }) => {
+      return `  // route: ${route}\n  ['${command.name}', ${codec}]`;
     })
     .join(',\n');
 
-  const codecImports = included.map((c) => commandFunctionName(c.name) + 'Codec').join(', ');
+  const codecImports = included.map(({ codec }) => codec).join(', ');
 
   const header =
     included.length === schema.commands.length
@@ -2057,6 +2238,474 @@ function cppDecodeCommand(
   return lines.join('\n') + '\n';
 }
 
+// ── C++ complex codec generation ─────────────────────────────
+//
+// Complex JS codecs and this native codec use the same canonical IR. The
+// generated C++ is intentionally specialized (there is no JSON parser in the
+// RN binary) and keeps the original JSI object shape at the boundary.
+
+type ComplexVariantIr = Extract<CodecIrNode, { kind: 'oneOf' }>['variants'][number];
+
+function cppComplexName(name: string): string {
+  return name.replace(/[^A-Za-z0-9_]/g, '_');
+}
+
+function cppComplexEncodeName(name: string): string {
+  return `complex_encode_ref_${cppComplexName(name)}`;
+}
+
+function cppComplexDecodeName(name: string): string {
+  return `complex_decode_ref_${cppComplexName(name)}`;
+}
+
+function cppLiteral(value: string | number | boolean | null): string {
+  if (value === null) return 'jsi::Value::null()';
+  if (typeof value === 'string') {
+    const literal = JSON.stringify(value);
+    return `jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(${literal}), sizeof(${literal}) - 1)`;
+  }
+  if (typeof value === 'boolean') return value ? 'jsi::Value(true)' : 'jsi::Value(false)';
+  return `jsi::Value(${String(value)})`;
+}
+
+function cppLiteralPredicate(value: string, literal: string | number | boolean | null): string {
+  if (literal === null) return `${value}.isNull()`;
+  if (typeof literal === 'string') {
+    const encoded = JSON.stringify(literal);
+    return `${value}.isString() && ${value}.getString(rt).utf8(rt) == std::string(${encoded})`;
+  }
+  if (typeof literal === 'boolean') {
+    return `${value}.isBool() && ${value}.getBool() == ${literal ? 'true' : 'false'}`;
+  }
+  return `${value}.isNumber() && ${value}.asNumber() == ${String(literal)}`;
+}
+
+function cppComplexNodePredicate(node: CodecIrNode, value: string): string {
+  switch (node.kind) {
+    case 'literal':
+      return cppLiteralPredicate(value, node.value);
+    case 'enum':
+      return node.values.map((item) => cppLiteralPredicate(value, item)).join(' || ');
+    case 'boolean':
+      return `${value}.isBool()`;
+    case 'integer':
+    case 'number':
+      return `${value}.isNumber()`;
+    case 'string':
+      return `${value}.isString()`;
+    case 'null':
+      return `${value}.isNull()`;
+    case 'sequence':
+    case 'tuple':
+      return `${value}.isObject() && ${value}.asObject(rt).isArray(rt)`;
+    case 'map':
+    case 'struct':
+    case 'ref':
+    case 'oneOf':
+      return `${value}.isObject() && !${value}.asObject(rt).isArray(rt)`;
+    case 'optional':
+      return `${value}.isNull() || ${cppComplexNodePredicate(node.inner, value)}`;
+    case 'variant':
+      return cppComplexNodePredicate(node.node, value);
+  }
+}
+
+function cppComplexVariantPredicate(variant: ComplexVariantIr, value: string): string {
+  if (variant.wrapper === 'value') return cppComplexNodePredicate(variant.node, value);
+  if (variant.wrapper === 'property') {
+    return `${value}.isObject() && ${value}.asObject(rt).hasProperty(rt, ${JSON.stringify(variant.property)})`;
+  }
+  if (variant.wrapper === 'discriminator' && variant.discriminator) {
+    const property = `${value}.asObject(rt).getProperty(rt, ${JSON.stringify(variant.discriminator.key)})`;
+    return `${value}.isObject() && ${cppLiteralPredicate(property, variant.discriminator.value)}`;
+  }
+  return cppComplexNodePredicate(variant.node, value);
+}
+
+type CppComplexState = { counter: number };
+
+function cppComplexEncodeNode(
+  node: CodecIrNode,
+  value: string,
+  indent: string,
+  depth: string,
+  state: CppComplexState,
+): string[] {
+  const next = () => `_cx${state.counter++}`;
+  switch (node.kind) {
+    case 'boolean':
+      return [
+        `${indent}if (!${value}.isBool()) throw jsi::JSError(rt, "complex boolean expected");`,
+        `${indent}w.push_bool(${value}.getBool());`,
+      ];
+    case 'integer':
+      return [
+        `${indent}w.${node.format?.startsWith('uint') ? 'push_uvar(rustra_u64' : 'push_i64(rustra_i64'}(rt, ${value}, "complex integer"));`,
+      ];
+    case 'number':
+      return [
+        `${indent}w.${node.format === 'float' ? 'push_f32(rustra_f32' : 'push_f64(rustra_f64'}(rt, ${value}, "complex number"));`,
+      ];
+    case 'string':
+      return [
+        `${indent}if (!${value}.isString()) throw jsi::JSError(rt, "complex string expected");`,
+        `${indent}w.push_string(${value}.getString(rt).utf8(rt));`,
+      ];
+    case 'null':
+      return [`${indent}if (!${value}.isNull()) throw jsi::JSError(rt, "complex null expected");`];
+    case 'literal':
+      return [
+        `${indent}if (!(${cppLiteralPredicate(value, node.value)})) throw jsi::JSError(rt, "complex literal mismatch");`,
+      ];
+    case 'enum': {
+      const index = next();
+      const lines = [`${indent}{ int ${index} = -1;`];
+      node.values.forEach((item, itemIndex) => {
+        lines.push(`${indent}  if (${cppLiteralPredicate(value, item)}) ${index} = ${itemIndex};`);
+      });
+      lines.push(
+        `${indent}  if (${index} < 0) throw jsi::JSError(rt, "complex enum value mismatch");`,
+        `${indent}  w.push_uvar(static_cast<uint64_t>(${index})); }`,
+      );
+      return lines;
+    }
+    case 'ref':
+      return [`${indent}${cppComplexEncodeName(node.name)}(rt, ${value}, w, ${depth});`];
+    case 'optional':
+      return [
+        `${indent}{ if (${value}.isNull() || ${value}.isUndefined()) { w.push_u8(0); } else { w.push_u8(1);`,
+        ...cppComplexEncodeNode(node.inner, value, `${indent}  `, `${depth} + 1`, state),
+        `${indent}} }`,
+      ];
+    case 'sequence': {
+      const object = next();
+      const array = next();
+      const length = next();
+      const lines = [
+        `${indent}{ auto ${object} = ${value}.asObject(rt);`,
+        `${indent}  if (!${value}.isObject() || !${object}.isArray(rt)) throw jsi::JSError(rt, "complex array expected");`,
+        `${indent}  auto ${array} = ${object}.getArray(rt); auto ${length} = ${array}.length(rt);`,
+        `${indent}  w.push_uvar(${length});`,
+        `${indent}  for (size_t _i = 0; _i < ${length}; _i++) {`,
+        ...cppComplexEncodeNode(
+          node.item,
+          `${array}.getValueAtIndex(rt, _i)`,
+          `${indent}    `,
+          `${depth} + 1`,
+          state,
+        ),
+        `${indent}  } }`,
+      ];
+      if (node.unique) {
+        lines.splice(
+          1,
+          1,
+          `${indent}  throw jsi::JSError(rt, "complex native codec requires an Array; use JS codec for Set");`,
+        );
+      }
+      return lines;
+    }
+    case 'tuple': {
+      const object = next();
+      const array = next();
+      const lines = [
+        `${indent}{ auto ${object} = ${value}.asObject(rt);`,
+        `${indent}  if (!${value}.isObject() || !${object}.isArray(rt) || ${object}.getArray(rt).length(rt) != ${node.items.length}) throw jsi::JSError(rt, "complex tuple length mismatch");`,
+        `${indent}  auto ${array} = ${object}.getArray(rt); w.push_uvar(${node.items.length});`,
+      ];
+      node.items.forEach((item, index) => {
+        lines.push(
+          ...cppComplexEncodeNode(
+            item,
+            `${array}.getValueAtIndex(rt, ${index})`,
+            `${indent}  `,
+            `${depth} + 1`,
+            state,
+          ),
+        );
+      });
+      lines.push(`${indent}}`);
+      return lines;
+    }
+    case 'map': {
+      const object = next();
+      const names = next();
+      const entries = next();
+      return [
+        `${indent}{ if (!${value}.isObject() || ${value}.asObject(rt).isArray(rt)) throw jsi::JSError(rt, "complex object map expected");`,
+        `${indent}  auto ${object} = ${value}.asObject(rt); auto ${names} = ${object}.getPropertyNames(rt);`,
+        `${indent}  std::vector<std::pair<std::string, jsi::Value>> ${entries};`,
+        `${indent}  for (size_t _i = 0; _i < ${names}.length(rt); _i++) { auto _key = ${names}.getValueAtIndex(rt, _i).getString(rt).utf8(rt); auto _property = ${object}.getProperty(rt, jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_key.data()), _key.size())); ${entries}.push_back({_key, std::move(_property)}); }`,
+        `${indent}  std::sort(${entries}.begin(), ${entries}.end(), [](const auto& _a, const auto& _b) { const auto& a = _a.first; const auto& b = _b.first; const size_t n = std::min(a.size(), b.size()); for (size_t i = 0; i < n; ++i) { const auto ca = static_cast<unsigned char>(a[i]); const auto cb = static_cast<unsigned char>(b[i]); if (ca != cb) return ca < cb; } return a.size() < b.size(); });`,
+        `${indent}  w.push_uvar(${entries}.size()); for (auto& _entry : ${entries}) { w.push_string(_entry.first); auto& _value = _entry.second;`,
+        ...cppComplexEncodeNode(node.value, '_value', `${indent}    `, `${depth} + 1`, state),
+        `${indent}  } }`,
+      ];
+    }
+    case 'struct': {
+      const object = next();
+      const lines = [
+        `${indent}{ if (!${value}.isObject() || ${value}.asObject(rt).isArray(rt)) throw jsi::JSError(rt, "complex object expected");`,
+        `${indent}  auto ${object} = ${value}.asObject(rt);`,
+      ];
+      for (const field of node.fields) {
+        const fieldValue = next();
+        const property = JSON.stringify(field.name);
+        if (field.optional) {
+          lines.push(
+            `${indent}  auto ${fieldValue} = ${object}.getProperty(rt, ${property}); if (${object}.hasProperty(rt, ${property}) && !${fieldValue}.isUndefined()) { w.push_u8(1);`,
+            ...cppComplexEncodeNode(field.node, fieldValue, `${indent}    `, `${depth} + 1`, state),
+            `${indent}  } else { w.push_u8(0); }`,
+          );
+        } else {
+          lines.push(
+            `${indent}  auto ${fieldValue} = ${object}.getProperty(rt, ${property});`,
+            ...cppComplexEncodeNode(field.node, fieldValue, `${indent}  `, `${depth} + 1`, state),
+          );
+        }
+      }
+      lines.push(`${indent}}`);
+      return lines;
+    }
+    case 'oneOf': {
+      const index = next();
+      const lines = [`${indent}{ int ${index} = -1;`];
+      node.variants.forEach((variant, variantIndex) => {
+        lines.push(
+          `${indent}  if (${cppComplexVariantPredicate(variant, value)}) ${index} = ${variantIndex};`,
+        );
+      });
+      lines.push(
+        `${indent}  if (${index} < 0) throw jsi::JSError(rt, "complex oneOf value mismatch");`,
+        `${indent}  w.push_uvar(static_cast<uint64_t>(${index}));`,
+      );
+      node.variants.forEach((variant, variantIndex) => {
+        lines.push(`${indent}  if (${index} == ${variantIndex}) {`);
+        if (variant.wrapper === 'property' && variant.property) {
+          const object = next();
+          lines.push(
+            `${indent}    auto ${object} = ${value}.asObject(rt);`,
+            ...cppComplexEncodeNode(
+              variant.node,
+              `${object}.getProperty(rt, ${JSON.stringify(variant.property)})`,
+              `${indent}    `,
+              `${depth} + 1`,
+              state,
+            ),
+          );
+        } else {
+          lines.push(
+            ...cppComplexEncodeNode(variant.node, value, `${indent}    `, `${depth} + 1`, state),
+          );
+        }
+        lines.push(`${indent}  }`);
+      });
+      lines.push(`${indent}}`);
+      return lines;
+    }
+    case 'variant':
+      return cppComplexEncodeNode(node.node, value, indent, depth, state);
+  }
+}
+
+function cppComplexDecodeExpr(node: CodecIrNode, depth: string, state: CppComplexState): string {
+  const next = () => `_cx${state.counter++}`;
+  switch (node.kind) {
+    case 'boolean':
+      return 'jsi::Value(r.read_bool())';
+    case 'integer':
+      return node.format?.startsWith('uint')
+        ? 'jsi::Value(static_cast<double>(r.read_uvar()))'
+        : 'jsi::Value(static_cast<double>(r.read_i64()))';
+    case 'number':
+      return node.format === 'float'
+        ? 'jsi::Value(static_cast<double>(r.read_f32()))'
+        : 'jsi::Value(r.read_f64())';
+    case 'string':
+      return `[&]() -> jsi::Value { auto _s = r.read_string_view(); return jsi::String::createFromUtf8(rt, _s.data, _s.size); }()`;
+    case 'null':
+      return 'jsi::Value::null()';
+    case 'literal':
+      return cppLiteral(node.value);
+    case 'enum': {
+      const index = next();
+      const lines = [`[&]() -> jsi::Value { auto ${index} = r.read_uvar();`];
+      node.values.forEach((value, valueIndex) => {
+        lines.push(` if (${index} == ${valueIndex}) return ${cppLiteral(value)};`);
+      });
+      lines.push(' throw std::runtime_error("complex enum index out of range"); }()');
+      return lines.join('');
+    }
+    case 'ref':
+      return `${cppComplexDecodeName(node.name)}(rt, r, ${depth})`;
+    case 'optional': {
+      const tag = next();
+      return `[&]() -> jsi::Value { auto ${tag} = r.read_u8(); if (${tag} == 0) return jsi::Value::null(); if (${tag} != 1) throw std::runtime_error("complex optional presence tag"); return ${cppComplexDecodeExpr(node.inner, `${depth} + 1`, state)}; }()`;
+    }
+    case 'sequence': {
+      if (node.unique)
+        return '([&]() -> jsi::Value { throw std::runtime_error("complex native codec does not decode Set"); }())';
+      const length = next();
+      const array = next();
+      return `[&]() -> jsi::Value { auto ${length} = r.read_uvar(); if (${length} > 100000) throw std::runtime_error("complex collection length exceeds 100000"); auto ${array} = jsi::Array(rt, static_cast<size_t>(${length})); for (size_t _i = 0; _i < ${length}; _i++) ${array}.setValueAtIndex(rt, _i, ${cppComplexDecodeExpr(node.item, `${depth} + 1`, state)}); return ${array}; }()`;
+    }
+    case 'tuple': {
+      const length = next();
+      const array = next();
+      const lines = [
+        `[&]() -> jsi::Value { auto ${length} = r.read_uvar(); if (${length} != ${node.items.length}) throw std::runtime_error("complex tuple length mismatch"); auto ${array} = jsi::Array(rt, ${node.items.length});`,
+      ];
+      node.items.forEach((item, index) => {
+        lines.push(
+          `${array}.setValueAtIndex(rt, ${index}, ${cppComplexDecodeExpr(item, `${depth} + 1`, state)});`,
+        );
+      });
+      lines.push(`return ${array}; }()`);
+      return lines.join(' ');
+    }
+    case 'map': {
+      const length = next();
+      const object = next();
+      const key = next();
+      return `[&]() -> jsi::Value { auto ${length} = r.read_uvar(); if (${length} > 100000) throw std::runtime_error("complex map length exceeds 100000"); auto ${object} = jsi::Object(rt); for (size_t _i = 0; _i < ${length}; _i++) { auto ${key} = r.read_string_view(); auto _keyValue = jsi::String::createFromUtf8(rt, ${key}.data, ${key}.size); ${object}.setProperty(rt, _keyValue, ${cppComplexDecodeExpr(node.value, `${depth} + 1`, state)}); } return ${object}; }()`;
+    }
+    case 'struct': {
+      const object = next();
+      const lines = [`[&]() -> jsi::Value { auto ${object} = jsi::Object(rt);`];
+      for (const field of node.fields) {
+        const property = JSON.stringify(field.name);
+        const value = cppComplexDecodeExpr(field.node, `${depth} + 1`, state);
+        if (field.optional) {
+          const tag = next();
+          lines.push(
+            ` auto ${tag} = r.read_u8(); if (${tag} > 1) throw std::runtime_error("complex optional field presence tag"); if (${tag} == 1) ${object}.setProperty(rt, ${property}, ${value});`,
+          );
+        } else {
+          lines.push(` ${object}.setProperty(rt, ${property}, ${value});`);
+        }
+      }
+      lines.push(` return ${object}; }()`);
+      return lines.join('');
+    }
+    case 'oneOf': {
+      const index = next();
+      const lines = [`[&]() -> jsi::Value { auto ${index} = r.read_uvar();`];
+      node.variants.forEach((variant, variantIndex) => {
+        let value = cppComplexDecodeExpr(variant.node, `${depth} + 1`, state);
+        if (variant.wrapper === 'property' && variant.property) {
+          const object = next();
+          value = `[&]() -> jsi::Value { auto ${object} = jsi::Object(rt); ${object}.setProperty(rt, ${JSON.stringify(variant.property)}, ${value}); return ${object}; }()`;
+        } else if (variant.wrapper === 'discriminator' && variant.discriminator) {
+          const decoded = next();
+          const object = next();
+          value = `[&]() -> jsi::Value { auto ${decoded} = ${value}; auto ${object} = ${decoded}.asObject(rt); ${object}.setProperty(rt, ${JSON.stringify(variant.discriminator.key)}, ${cppLiteral(variant.discriminator.value)}); return ${object}; }()`;
+        }
+        lines.push(` if (${index} == ${variantIndex}) return ${value};`);
+      });
+      lines.push(' throw std::runtime_error("complex oneOf index out of range"); }()');
+      return lines.join('');
+    }
+    case 'variant':
+      return cppComplexDecodeExpr(node.node, depth, state);
+  }
+}
+
+function cppComplexNativeSupported(
+  node: CodecIrNode,
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+  seen = new Set<string>(),
+): boolean {
+  switch (node.kind) {
+    case 'integer':
+      return node.format !== 'int64' && node.format !== 'uint64';
+    case 'sequence':
+      return !node.unique && cppComplexNativeSupported(node.item, definitions, seen);
+    case 'tuple':
+      return node.items.every((item) => cppComplexNativeSupported(item, definitions, seen));
+    case 'map':
+      return cppComplexNativeSupported(node.value, definitions, seen);
+    case 'struct':
+      return node.fields.every((field) => cppComplexNativeSupported(field.node, definitions, seen));
+    case 'optional':
+      return cppComplexNativeSupported(node.inner, definitions, seen);
+    case 'oneOf':
+      return node.variants.every((variant) =>
+        cppComplexNativeSupported(variant.node, definitions, seen),
+      );
+    case 'ref':
+      if (seen.has(node.name)) return true;
+      {
+        const definition = definitions[node.name];
+        const result = definition
+          ? buildCodecIr(definition, definitions)
+          : { ok: false as const, reason: 'missing definition' };
+        if (!result.ok) return false;
+        const nextSeen = new Set(seen);
+        nextSeen.add(node.name);
+        return cppComplexNativeSupported(result.node, definitions, nextSeen);
+      }
+    case 'variant':
+      return cppComplexNativeSupported(node.node, definitions, seen);
+    default:
+      return true;
+  }
+}
+
+function cppComplexEncodeCommand(command: CommandSchema, input: CodecIrNode): string {
+  const fnName = commandFunctionName(command.name);
+  const state: CppComplexState = { counter: 0 };
+  const lines = [
+    `static void encode_complex_${fnName}(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {`,
+    `  w.push_u8(${command.commandId & 0xff}); w.push_u8(${(command.commandId >> 8) & 0xff});`,
+    ...cppComplexEncodeNode(input, 'args', '  ', '0', state),
+    `}`,
+  ];
+  return lines.join('\n') + '\n';
+}
+
+function cppComplexDecodeCommand(command: CommandSchema, output: CodecIrNode): string {
+  const fnName = commandFunctionName(command.name);
+  const state: CppComplexState = { counter: 0 };
+  return (
+    [
+      `static jsi::Value decode_complex_${fnName}(jsi::Runtime& rt, rc::Reader& r) {`,
+      ...[`  return ${cppComplexDecodeExpr(output, '0', state)};`],
+      `}`,
+    ].join('\n') + '\n'
+  );
+}
+
+function cppComplexRefFunctions(
+  definitions: Record<string, import('./schema.js').JsonSchema>,
+  names: Set<string>,
+): { declarations: string[]; definitions: string[] } {
+  const declarations: string[] = [];
+  const bodies: string[] = [];
+  for (const name of names) {
+    const result = buildCodecIr(definitions[name], definitions);
+    if (!result.ok) continue;
+    declarations.push(
+      `static void ${cppComplexEncodeName(name)}(jsi::Runtime&, const jsi::Value&, rc::Writer&, size_t);`,
+    );
+    declarations.push(
+      `static jsi::Value ${cppComplexDecodeName(name)}(jsi::Runtime&, rc::Reader&, size_t);`,
+    );
+  }
+  for (const name of names) {
+    const result = buildCodecIr(definitions[name], definitions);
+    if (!result.ok) continue;
+    const encodeState: CppComplexState = { counter: 0 };
+    const decodeState: CppComplexState = { counter: 0 };
+    bodies.push(
+      `static void ${cppComplexEncodeName(name)}(jsi::Runtime& rt, const jsi::Value& value, rc::Writer& w, size_t _depth) { if (_depth > 32) throw std::runtime_error("complex value depth exceeds 32");`,
+      ...cppComplexEncodeNode(result.node, 'value', '  ', '_depth', encodeState),
+      `}`,
+      `static jsi::Value ${cppComplexDecodeName(name)}(jsi::Runtime& rt, rc::Reader& r, size_t _depth) { if (_depth > 32) throw std::runtime_error("complex value depth exceeds 32"); return ${cppComplexDecodeExpr(result.node, '_depth', decodeState)}; }`,
+    );
+  }
+  return { declarations, definitions: bodies };
+}
+
 /**
  * 패키지 스키마에서 C++ codec 헤더(`rustra-generated-codecs.hpp`)를 생성한다.
  * RN JSI bridge(RustraJSIBridge.cpp)가 include 하여 encode_by_name/decode_by_name 호출.
@@ -2065,7 +2714,9 @@ export function generateRkyvCodecsHpp(_schema: PackageSchema): string {
   return (
     `// AUTO-GENERATED by @rustra/cli — DO NOT EDIT.\n` +
     `// C++ postcard codec for the RN JSI fast path (B1).\n` +
-    `// 정적 명령: C++ codec 으로 postcard 인코딩/디코딩. 동적 명령은 JS Tier 3 fallback.\n` +
+    `// C++는 postcard subset과 Set을 제외한 complex subset을 직접 인코딩/디코딩한다.\n` +
+    `// Set을 포함한 complex 명령은 JS codec이 invokeRkyvV2로 전달하고, 동적 명령은\n` +
+    `// JS Tier 3 fallback을 사용한다.\n` +
     `#pragma once\n\n` +
     `#include <cstddef>\n` +
     `#include <cstdint>\n` +
@@ -2136,38 +2787,70 @@ export function generateRkyvCodecsHpp(_schema: PackageSchema): string {
 
 /**
  * 패키지 스키마에서 C++ codec 구현(`rustra-generated-codecs.cpp`)을 생성한다.
- * postcard 코덱 지원 명령만 디스패치에 포함한다 — 미지원 명령은 has_static_codec
- * 이 false 로 응답해 JS 엔진이 Tier 3(JSON-in-binary) 폴백으로 라우팅하게 한다.
+ * postcard 코덱과 Set 없는 complex 코덱 지원 명령을 디스패치에 포함한다.
+ * Set을 포함한 complex 명령은 TS registry에 남기고 C++에서는 정적 코덱을
+ * 광고하지 않아 JS complex route를 탄다. 양쪽 binary codec이 모두 미지원인
+ * 명령만 JS 엔진이 Tier 3로 라우팅한다.
  */
 export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   const definitions = collectAllDefinitions(schema);
   const supported = schema.commands.filter((c) => commandCodecSupported(c, definitions));
-  const encodeCases = supported
+  const complexSupported = schema.commands
+    .map((command) => {
+      if (commandCodecSupported(command, definitions)) return null;
+      const input = buildCodecIr(command.inputSchema, definitions);
+      const output = buildCodecIr(command.outputSchema, definitions);
+      if (!input.ok || !output.ok) return null;
+      if (
+        !cppComplexNativeSupported(input.node, definitions) ||
+        !cppComplexNativeSupported(output.node, definitions)
+      )
+        return null;
+      return { command, input: input.node, output: output.node };
+    })
+    .filter(
+      (entry): entry is { command: CommandSchema; input: CodecIrNode; output: CodecIrNode } =>
+        entry !== null,
+    );
+  const staticCommands = [
+    ...supported.map((command) => ({ command, route: 'postcard' as const })),
+    ...complexSupported.map(({ command }) => ({ command, route: 'complex' as const })),
+  ];
+  const encodeCases = staticCommands
     .map((c) => {
-      const fn = commandFunctionName(c.name);
-      return `  if (name == "${c.name}") { encode_${fn}(rt, args, w); return true; }`;
+      const fn = commandFunctionName(c.command.name);
+      const encoder = c.route === 'complex' ? `encode_complex_${fn}` : `encode_${fn}`;
+      return `  if (name == "${c.command.name}") { ${encoder}(rt, args, w); return true; }`;
     })
     .join('\n');
-  const decodeCases = supported
+  const decodeCases = staticCommands
     .map((c) => {
-      const fn = commandFunctionName(c.name);
-      return `  if (name == "${c.name}") return decode_${fn}(rt, r);`;
+      const fn = commandFunctionName(c.command.name);
+      const decoder = c.route === 'complex' ? `decode_complex_${fn}` : `decode_${fn}`;
+      return `  if (name == "${c.command.name}") return ${decoder}(rt, r);`;
     })
     .join('\n');
-  const hasCases = supported.map((c) => `  if (name == "${c.name}") return true;`).join('\n');
+  const hasCases = staticCommands
+    .map((c) => `  if (name == "${c.command.name}") return true;`)
+    .join('\n');
   // by_id 디스패치 (P0-3) — switch 문으로 u16 cmd_id 를 직접 분기한다.
   // 이름 비교체인(encode_by_name)과 동일한 per-command 함수를 재사용하므로
   // 바이트 출력은 항상 동일하다.
-  const encodeIdCases = supported
+  const encodeIdCases = staticCommands
     .map(
       (c) =>
-        `    case ${c.commandId}: encode_${commandFunctionName(c.name)}(rt, args, w); return true;`,
+        `    case ${c.command.commandId}: ${c.route === 'complex' ? 'encode_complex_' : 'encode_'}${commandFunctionName(c.command.name)}(rt, args, w); return true;`,
     )
     .join('\n');
-  const decodeIdCases = supported
-    .map((c) => `    case ${c.commandId}: return decode_${commandFunctionName(c.name)}(rt, r);`)
+  const decodeIdCases = staticCommands
+    .map(
+      (c) =>
+        `    case ${c.command.commandId}: return ${c.route === 'complex' ? 'decode_complex_' : 'decode_'}${commandFunctionName(c.command.name)}(rt, r);`,
+    )
     .join('\n');
-  const staticIdCases = supported.map((c) => `    case ${c.commandId}: return true;`).join('\n');
+  const staticIdCases = staticCommands
+    .map((c) => `    case ${c.command.commandId}: return true;`)
+    .join('\n');
   const posCommands = supported
     .map((c) => ({ cmd: c, code: cppEncodePosCommand(c, definitions) }))
     .filter((x): x is { cmd: CommandSchema; code: string } => x.code !== null);
@@ -2197,6 +2880,7 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   lines.push(`#include <stdexcept>`);
   lines.push(`#include <string>`);
   lines.push(`#include <unordered_map>`);
+  lines.push(`#include <utility>`);
   lines.push(``);
   lines.push(`using namespace facebook::jsi;`);
   // 명시적 `jsi::` 한정자(generated codec bodies) 를 위한 별칭 — RN Pods 의
@@ -2366,11 +3050,20 @@ export function generateRkyvCodecsCpp(schema: PackageSchema): string {
   lines.push(`  return static_cast<float>(number);`);
   lines.push(`}`);
   lines.push(``);
+  const complexRefs = new Set(Object.keys(definitions));
+  const refFunctions = cppComplexRefFunctions(definitions, complexRefs);
+  lines.push(...refFunctions.declarations);
+  lines.push(``);
+  lines.push(...refFunctions.definitions);
   for (const command of supported) {
     lines.push(cppEncodeCommand(command, definitions));
     const pos = cppEncodePosCommand(command, definitions);
     if (pos) lines.push(pos);
     lines.push(cppDecodeCommand(command, definitions));
+  }
+  for (const { command, input, output } of complexSupported) {
+    lines.push(cppComplexEncodeCommand(command, input));
+    lines.push(cppComplexDecodeCommand(command, output));
   }
   lines.push(`namespace rustra::generated {`);
   lines.push(``);

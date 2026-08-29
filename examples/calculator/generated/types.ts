@@ -90,6 +90,14 @@ export type DivideOutput = {
   value: number;
 };
 
+export type EchoGroupsInput = {
+  groups: Record<string, string[]>;
+};
+
+export type EchoGroupsOutput = {
+  groups: Record<string, string[]>;
+};
+
 export type EmitDemoInput = {
   /** 발행할 progress.tick 이벤트 수. */
   ticks: number;

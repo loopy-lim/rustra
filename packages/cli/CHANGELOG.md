@@ -1,5 +1,14 @@
 # @rustra/cli
 
+## 0.4.1
+
+### Patch Changes
+
+- Keep React Native generated native paths valid for hoisted npm/Bun workspaces and verify that published adapter tarballs contain the Android, iOS, and C++ bridge sources.
+- Allow the CLI template and release validation to use compatible Rust and types versions independently from the CLI package version.
+- Updated dependencies
+  - @rustra/types@0.4.1
+
 ## 0.4.0
 
 ### Minor Changes

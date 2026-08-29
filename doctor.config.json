@@ -21,8 +21,10 @@
         "files": [
           "examples/react-native-bare-calculator/generated/commands.ts",
           "examples/react-native-bare-calculator/generated/react-native.ts",
+          "examples/react-native-bare-calculator/generated/rkyv-codecs.ts",
           "examples/react-native-calculator/generated/commands.ts",
-          "examples/react-native-calculator/generated/react-native.ts"
+          "examples/react-native-calculator/generated/react-native.ts",
+          "examples/react-native-calculator/generated/rkyv-codecs.ts"
         ],
         "rules": ["deslop/unused-export"]
       },
