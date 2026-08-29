@@ -11,6 +11,7 @@ import { Writer } from './complex-codec-wire.js';
 import { decodeErrorFrame } from './complex-codec-error.js';
 import { decodeNode } from './complex-codec-decode-node.js';
 import { encodeNode } from './complex-codec-encode-node.js';
+import { compileSchema } from './complex-codec-compiled.js';
 
 export function createComplexCodec<I, O>(options: ComplexCodecOptions): RkyvV2Codec<I, O> {
   const definitions = options.definitions ?? {};
@@ -25,11 +26,16 @@ export function createComplexCodec<I, O>(options: ComplexCodecOptions): RkyvV2Co
     throw new ComplexCodecError('command id must fit u16');
   }
 
+  // 스키마를 코덱 생성 시점에 **한 번** 컴파일한다 — 이후 호출은 컴파일된
+  // 결정만 순회한다 (Rust complex_schema_ir 와 동일 전략).
+  const inputIr = compileSchema(options.inputSchema, definitions);
+  const outputIr = compileSchema(options.outputSchema, definitions);
+
   const encode = (args: I): ArrayBuffer => {
     const writer = new Writer(maxPayloadBytes);
     writer.byte(options.commandId & 0xff);
     writer.byte((options.commandId >> 8) & 0xff);
-    encodeNode(writer, options.inputSchema, args, definitions, maxDepth, 0, maxCollectionLength);
+    encodeNode(writer, inputIr, args, maxDepth, 0, maxCollectionLength);
     return writer.finish();
   };
 
@@ -56,14 +62,7 @@ export function createComplexCodec<I, O>(options: ComplexCodecOptions): RkyvV2Co
         if (bytes[0] !== 1) return { ok: false, error: decodeErrorFrame(bytes) };
         const reader = new Reader(bytes, maxCollectionLength);
         reader.raw(8);
-        const result = decodeNode(
-          reader,
-          options.outputSchema,
-          definitions,
-          maxDepth,
-          0,
-          maxCollectionLength,
-        ) as O;
+        const result = decodeNode(reader, outputIr, maxDepth, 0, maxCollectionLength) as O;
         if (reader.remaining !== 0)
           throw new ComplexCodecError('trailing bytes in complex response');
         return { ok: true, result };
