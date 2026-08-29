@@ -6,9 +6,9 @@
  */
 
 import { resolve, join } from 'node:path';
-import { spawn } from 'node:child_process';
 import { detectDirty, planPipeline, runOnce, type StageRunners } from './dev.js';
 import { runGenerate } from './index.js';
+import { spawnInherit } from './process.js';
 
 export interface RustraVitePluginOptions {
   /** Path to the Rust backend directory. Default: "backend" */
@@ -23,16 +23,7 @@ export function rustraPlugin(options: RustraVitePluginOptions = {}) {
 
   const runners: StageRunners = {
     rustBin: async () => {
-      await new Promise<void>((res, rej) => {
-        const proc = spawn('cargo', ['run', '--bin', 'generate'], {
-          cwd: resolve(backendDir),
-          stdio: 'inherit',
-        });
-        proc.on('close', (code) => {
-          if (code === 0) res();
-          else rej(new Error(`cargo run --bin generate failed with exit code ${code}`));
-        });
-      });
+      await spawnInherit('cargo', ['run', '--bin', 'generate'], resolve(backendDir));
     },
     tsCli: async () => {
       const schemaPath = join(resolve(generatedDir), 'schema.json');

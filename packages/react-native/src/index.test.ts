@@ -3,10 +3,12 @@ import test from 'node:test';
 import {
   createReactNativeEngine,
   createRustraBootstrap,
+  createChannel,
   getRustraNative,
   RustraCommandError,
 } from './index.js';
 import type { RustraJSINative } from './index.js';
+import { decodeUtf8, encodeUtf8, exactArrayBuffer } from './utf8.js';
 
 const encoder = new TextEncoder();
 
@@ -151,6 +153,19 @@ test('JSON adapter honors timeoutMs through the common timeout contract', async 
   assert.equal(await engine.invoke('fast', undefined, { timeoutMs: 100 }), 42);
 });
 
+test('JSON adapter exposes Promise-based invokeBatch with stable order', async () => {
+  const engine = createReactNativeEngine({
+    invoke(payload) {
+      const request = JSON.parse(decodeUtf8(payload)) as { command: string };
+      return exactArrayBuffer(
+        encodeUtf8(JSON.stringify({ ok: true, result: request.command === 'first' ? 1 : 2 })),
+      );
+    },
+  });
+  const out = await engine.invokeBatch<number>([{ command: 'first' }, { command: 'second' }]);
+  assert.deepEqual(out, [1, 2]);
+});
+
 // ── Trust-test baselines (Phase 0) ──────────────────────────
 // 현재 결함을 "현재 동작"으로 고정한다. Phase 1 수정 후 각 단언이
 // 실패하며, 그때 새 동작(Promise.reject / RustraCommandError)으로 전환한다.
@@ -241,6 +256,21 @@ test('subscribeEvent registers a native listener and parses the JSON payload onc
   assert.deepEqual(received, [{ step: 1, total: 5 }], 'callback receives the parsed object');
 });
 
+test('subscribeEvent supports the canonical name-first shape used by generated events', () => {
+  const h = createEventNative();
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = h.native;
+  const received: unknown[] = [];
+  try {
+    subscribeEvent('canonical.tick', (payload) => received.push(payload));
+    h.emit('canonical.tick', JSON.stringify({ ok: true }));
+    assert.deepEqual(received, [{ ok: true }]);
+  } finally {
+    root.__rustraNative = previous;
+  }
+});
+
 test('subscribeEvent unsubscribe removes the native listener', () => {
   const h = createEventNative();
 
@@ -291,6 +321,26 @@ test('subscribeEvent coexists with multiple event names', () => {
 
   assert.deepEqual(ticks, [{ step: 2 }]);
   assert.deepEqual(dones, [{ emitted: 6 }]);
+});
+
+test('createChannel exposes a typed handle and idempotent close', () => {
+  let callback: ((payloadJson: string) => void) | undefined;
+  const dropped: number[] = [];
+  const channel = createChannel((payload) => assert.deepEqual(payload, { chunk: 1 }), {
+    createChannel(next) {
+      callback = next;
+      return 42;
+    },
+    dropChannel(handle) {
+      dropped.push(handle);
+      return true;
+    },
+  });
+  assert.equal(channel.handle, 42);
+  callback!(JSON.stringify({ chunk: 1 }));
+  assert.equal(channel.close(), true);
+  assert.equal(channel.close(), false);
+  assert.deepEqual(dropped, [42]);
 });
 
 // ── createAsyncEngine (P0-3 + T1 얕은 취소) ─────────────────
@@ -408,6 +458,41 @@ test('async engine without signal resolves via invokeTypedAsync (T1 baseline)', 
 
   assert.equal(out.value, 42);
   assert.equal(h.state.calls, 1, 'invokeTypedAsync must be called exactly once');
+});
+
+test('async engine exposes Promise-based invokeBatch with stable order', async () => {
+  const native: RustraJSIAsyncNative = {
+    invoke: () => new ArrayBuffer(0),
+    invokeRkyvV2: () => new ArrayBuffer(0),
+    invokeTypedAsync(name, _args, onSuccess) {
+      onSuccess(name === 'first' ? 1 : 2);
+      return 0;
+    },
+  };
+  const engine = createAsyncEngine(native, { rkyvV2Codecs: new Map() });
+  assert.deepEqual(
+    await engine.invokeBatch<number>([{ command: 'first' }, { command: 'second' }]),
+    [1, 2],
+  );
+});
+
+test('createAsyncEngine reports when it falls back to the synchronous engine', () => {
+  const native: RustraJSIAsyncNative = {
+    invoke: () => new ArrayBuffer(0),
+    invokeRkyvV2: () => new ArrayBuffer(0),
+  };
+  const warnings: unknown[][] = [];
+  const originalWarn = console.warn;
+  console.warn = (...args: unknown[]) => warnings.push(args);
+  try {
+    createAsyncEngine(native, { rkyvV2Codecs: new Map() });
+  } finally {
+    console.warn = originalWarn;
+  }
+  assert.ok(
+    warnings.some((args) => String(args[0]).includes('synchronous')),
+    'sync fallback must be visible to the developer',
+  );
 });
 
 test('async engine without signal rejects via invokeTypedAsync error callback (T1 baseline)', async () => {

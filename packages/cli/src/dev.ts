@@ -7,12 +7,15 @@
  * 를 순서대로 재실행한다 (dual-path codegen).
  */
 
-import { readdirSync, statSync, existsSync } from 'node:fs';
+import { readdirSync, statSync, existsSync, readFileSync } from 'node:fs';
 import { watch } from 'node:fs';
-import { spawn } from 'node:child_process';
-import { resolve, dirname, join } from 'node:path';
+import { resolve, dirname, join, relative, sep } from 'node:path';
+import { spawnInherit } from './process.js';
+import { findCargoManifest } from './cargo.js';
+import { readConfigSync } from './config.js';
 
 export interface DevOptions {
+  configPath?: string;
   backendDir: string;
   appDir: string;
   inspect: boolean;
@@ -24,6 +27,7 @@ export function parseDevArgs(args: string[]): DevOptions {
     return i >= 0 ? args[i + 1] : undefined;
   };
   return {
+    configPath: get('config'),
     backendDir: get('backend') ?? 'backend',
     appDir: get('app') ?? 'app',
     inspect: args.includes('--inspect'),
@@ -85,9 +89,83 @@ export function detectDirty(
   };
 }
 
+/** config 모드용 stale 판정. schema와 codec 출력 위치가 달라도 동작한다. */
+export function detectConfigDirty(
+  manifestDir: string,
+  schemaPath: string,
+  outputPath: string,
+): boolean {
+  const schemaMtime = existsSync(schemaPath) ? statSync(schemaPath).mtimeMs : 0;
+  const rustNewest = newestMtime(join(manifestDir, 'src'));
+  const generatedNewest = newestMtime(outputPath);
+  return rustNewest > schemaMtime || schemaMtime > generatedNewest;
+}
+
 export interface StageRunners {
   rustBin: () => Promise<void>;
   tsCli: () => Promise<void>;
+}
+
+export type WatchLoop = {
+  run(reason: string, force?: boolean): Promise<void>;
+  schedule(reason: string): void;
+  dispose(): void;
+};
+
+/**
+ * 파일 감시 루프의 공통 상태 머신.
+ *
+ * 한 번에 하나의 pipeline 만 실행하고, 실행 중 들어온 여러 파일 이벤트는
+ * 하나의 queued run 으로 합친다. `force` 는 최초 실행처럼 dirty 판정을
+ * 건너뛰어야 하는 경우에만 사용한다.
+ */
+export function createWatchLoop(
+  perform: (reason: string) => Promise<void>,
+  shouldRun: () => boolean | Promise<boolean>,
+  debounceMs = 300,
+): WatchLoop {
+  let running = false;
+  let queued = false;
+  let disposed = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  let schedule: (reason: string) => void;
+  const run = async (reason: string, force = false): Promise<void> => {
+    if (disposed) return;
+    if (running) {
+      queued = true;
+      return;
+    }
+    running = true;
+    try {
+      if (force || (await shouldRun())) await perform(reason);
+    } finally {
+      running = false;
+      if (queued && !disposed) {
+        queued = false;
+        schedule('queued change');
+      }
+    }
+  };
+
+  schedule = (reason: string) => {
+    if (disposed) return;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      void run(reason);
+    }, debounceMs);
+  };
+
+  return {
+    run,
+    schedule,
+    dispose() {
+      disposed = true;
+      if (timer) clearTimeout(timer);
+      timer = null;
+    },
+  };
 }
 
 /** plan 이 지정한 스테이지만 순서대로 실행 (rust → ts). */
@@ -96,17 +174,48 @@ export async function runOnce(plan: PipelinePlan, runners: StageRunners): Promis
   if (plan.tsCli) await runners.tsCli();
 }
 
-function spawnInherit(cmd: string, args: string[], cwd: string): Promise<void> {
-  return new Promise((resolvePromise, reject) => {
-    const child = spawn(cmd, args, { cwd, stdio: 'inherit' });
-    child.on('exit', (code) =>
-      code === 0 ? resolvePromise() : reject(new Error(`${cmd} exit ${code}`)),
-    );
-    child.on('error', reject);
-  });
+export function readDevConfig(configPath: string): {
+  root: string;
+  schemaPath: string;
+  outputPath: string;
+  manifestPath: string;
+} {
+  const path = resolve(configPath);
+  const root = dirname(path);
+  const config = readConfigSync(path);
+  let manifestPath = config.codegen?.rustManifest
+    ? resolve(root, config.codegen.rustManifest)
+    : undefined;
+  if (!config.codegen?.rustManifest) {
+    manifestPath = findCargoManifest(root);
+  }
+  if (!manifestPath || !existsSync(manifestPath) || !statSync(manifestPath).isFile()) {
+    throw new Error('codegen.rust_manifest_missing: set codegen.rustManifest in rustra.json');
+  }
+  return {
+    root,
+    schemaPath: resolve(root, config.schema),
+    outputPath: resolve(root, config.output),
+    manifestPath,
+  };
 }
 
-/** rustra CLI 위치 탐색 — codegen.sh 의 find_repo_cli 정책과 동일 (명시 env > 상위 탐색). */
+function isWithin(root: string, candidate: string): boolean {
+  const path = relative(resolve(root), resolve(candidate));
+  return path === '' || (!path.startsWith(`..${sep}`) && path !== '..');
+}
+
+function sourceDirectories(root: string): string[] {
+  if (!existsSync(root)) return [];
+  const directories = [root];
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name === 'target' || entry.name === 'node_modules') continue;
+    directories.push(...sourceDirectories(join(root, entry.name)));
+  }
+  return directories;
+}
+
+/** legacy 감시 모드에서만 쓰는 repo-local CLI 위치 탐색. */
 function findRepoCli(from: string): string | null {
   let dir = from;
   for (let i = 0; i < 6; i++) {
@@ -119,6 +228,10 @@ function findRepoCli(from: string): string | null {
 
 export async function runDev(args: string[]): Promise<void> {
   const opts = parseDevArgs(args);
+  if (opts.configPath) {
+    await runConfigDev(opts.configPath, opts.inspect);
+    return;
+  }
   const backendDir = resolve(opts.backendDir);
   const appDir = resolve(opts.appDir);
   const generatedDir = join(appDir, 'generated');
@@ -137,10 +250,9 @@ export async function runDev(args: string[]): Promise<void> {
     );
   };
 
-  const tick = async (reason: string): Promise<void> => {
+  const perform = async (reason: string): Promise<void> => {
     console.log(`[dev] ${reason} → codegen`);
-    const dirty = detectDirty(backendDir, generatedDir);
-    const plan = planPipeline(dirty);
+    const plan = planPipeline(detectDirty(backendDir, generatedDir));
     if (!plan.rustBin && !plan.tsCli) {
       console.log('[dev] clean — nothing to do');
       return;
@@ -159,11 +271,69 @@ export async function runDev(args: string[]): Promise<void> {
     }
   };
 
-  await tick('initial');
-  console.log(`\n[dev] watching ${backendDir} for changes...`);
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  watch(join(backendDir, 'src'), { recursive: true }, () => {
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => void tick('rust change'), 300);
+  const loop = createWatchLoop(perform, () => {
+    const plan = planPipeline(detectDirty(backendDir, generatedDir));
+    return plan.rustBin || plan.tsCli;
   });
+  await loop.run('initial', true);
+  console.log(`\n[dev] watching ${backendDir} for changes...`);
+  for (const directory of sourceDirectories(join(backendDir, 'src'))) {
+    watch(directory, () => loop.schedule('rust change'));
+  }
+}
+
+async function runConfigDev(configPath: string, inspect: boolean): Promise<void> {
+  const config = readDevConfig(configPath);
+  let lastGeneratedSchema: string | undefined;
+  const codegen = async () => {
+    // CLI 자체가 실행 중이므로 npm 설치에서도 repo dist 경로를 추측하지
+    // 않고 동일 프로세스의 codegen 오케스트레이터를 직접 호출한다.
+    const { runCodegen } = await import('./index.js');
+    await runCodegen(['--config', resolve(configPath)]);
+    lastGeneratedSchema = existsSync(config.schemaPath)
+      ? readFileSync(config.schemaPath, 'utf8')
+      : undefined;
+  };
+
+  const perform = async (reason: string): Promise<void> => {
+    console.log(`[dev] ${reason} → codegen --config ${resolve(configPath)}`);
+    try {
+      await codegen();
+      console.log(`[dev] ${new Date().toLocaleTimeString()} regenerated`);
+      if (inspect) {
+        console.log('[dev:inspect] 앱 프로세스에서 createInstrumentedEngine 로 감싸면');
+        console.log('[dev:inspect] report() 를 콘솔/원격으로 노출할 수 있습니다: @rustra/devtools');
+      }
+    } catch (error) {
+      console.error(`[dev] regeneration failed: ${error instanceof Error ? error.message : error}`);
+    }
+  };
+
+  const manifestDir = dirname(config.manifestPath);
+  const loop = createWatchLoop(perform, () =>
+    detectConfigDirty(manifestDir, config.schemaPath, config.outputPath),
+  );
+  await loop.run('initial', true);
+  const sourceDir = join(manifestDir, 'src');
+  const generatedRoots = [config.outputPath, config.schemaPath];
+  for (const directory of sourceDirectories(sourceDir)) {
+    watch(directory, (_event, filename) => {
+      const changed = filename ? resolve(directory, String(filename)) : directory;
+      if (generatedRoots.some((root) => isWithin(root, changed))) return;
+      loop.schedule('Rust change');
+    });
+  }
+  for (const file of [config.manifestPath, join(manifestDir, 'Cargo.lock')]) {
+    if (existsSync(file)) watch(file, () => loop.schedule('config change'));
+  }
+  if (existsSync(config.schemaPath)) {
+    watch(config.schemaPath, () => {
+      // Rust generator는 내용이 같아도 schema.json을 write한다. Linux
+      // inotify가 발생시키는 자기 write 이벤트를 다시 codegen하지 않는다.
+      const current = readFileSync(config.schemaPath, 'utf8');
+      if (lastGeneratedSchema !== undefined && current === lastGeneratedSchema) return;
+      loop.schedule('schema change');
+    });
+  }
+  console.log(`\n[dev] watching ${manifestDir} and ${config.schemaPath} for changes...`);
 }

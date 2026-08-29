@@ -8,10 +8,11 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 
 1. [아키텍처 개요](architecture.md) — 전체 구조와 핵심 개념 파악
 2. [시작하기](getting-started.md) — 설치 및 첫 패키지 만들기
-3. [Rust API 가이드](rust-api-guide.md) — 매크로/Builder 전체 레퍼런스
-4. [React Native 셋업](extending/react-native-setup.md) — JSI 네이티브 모듈 연결 (iOS/Android)
-5. [Transport 교체 가이드](extending/transport-guide.md) — Bun FFI, Node napi-rs 등 transport 교체
-6. [새 Host 추가 가이드](extending/adding-host.md) — Electron, Deno 등 새 host adapter 추가
+3. [개발 허들 가이드](development-hurdles.md) — doctor, 통합 codegen, drift, native 경계
+4. [Rust API 가이드](rust-api-guide.md) — 매크로/Builder 전체 레퍼런스
+5. [React Native 셋업](extending/react-native-setup.md) — JSI 네이티브 모듈 연결 (iOS/Android)
+6. [Transport 교체 가이드](extending/transport-guide.md) — Bun FFI, Node napi-rs 등 transport 교체
+7. [새 Host 추가 가이드](extending/adding-host.md) — Electron, Deno 등 새 host adapter 추가
 
 ### 프로젝트 기여자
 
@@ -26,6 +27,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 | ----------------------------------------------------- | ------ | ------------------------------------------------------------------ |
 | [아키텍처 개요](architecture.md)                      | 전체   | 데이터 흐름, EngineClient 계약, transport 분리 원칙                |
 | [시작하기](getting-started.md)                        | 사용자 | 설치, 최소 예제, TS 통합, 에러 처리, adapter 선택, 실행            |
+| [개발 허들 가이드](development-hurdles.md)            | 사용자 | doctor, 통합 codegen/dev, drift 게이트, native/prebuilt 경계       |
 | [Transport 교체 가이드](extending/transport-guide.md) | 사용자 | Bun FFI, Node napi-rs 교체, 선택 기준                              |
 | [React Native 셋업](extending/react-native-setup.md)  | 사용자 | JSI 네이티브 모듈, iOS/Android 빌드, BenchmarkApp                  |
 | [새 Host 추가 가이드](extending/adding-host.md)       | 사용자 | adapter 만들기, Rust 진입점 선택, 테스트 추가                      |

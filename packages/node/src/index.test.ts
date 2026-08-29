@@ -17,10 +17,39 @@ test('createNodeEngine routes invoke to transport', async () => {
   assert.deepEqual(calls, [{ command: 'addNumbers', args: { a: 20, b: 22 } }]);
 });
 
+test('createNodeEngine applies timeoutMs and shallow abort to pending transports', async () => {
+  const engine = createNodeEngine({
+    invoke: () => new Promise<never>(() => {}),
+  });
+
+  await assert.rejects(
+    engine.invoke('slow', undefined, { timeoutMs: 10 }),
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'transport.timeout',
+  );
+
+  const controller = new AbortController();
+  const pending = engine.invoke('cancel-me', undefined, { signal: controller.signal });
+  controller.abort();
+  await assert.rejects(
+    pending,
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'cancelled',
+  );
+});
+
+test('createNodeEngine exposes Promise-based invokeBatch with stable order', async () => {
+  const engine = createNodeEngine({
+    async invoke(command) {
+      return command === 'first' ? 1 : 2;
+    },
+  });
+  const out = await engine.invokeBatch<number>([{ command: 'first' }, { command: 'second' }]);
+  assert.deepEqual(out, [1, 2]);
+});
+
 test('createNodeEngine wraps RustraError-shaped rejects into RustraCommandError', async () => {
   const engine = createNodeEngine({
     async invoke() {
-      throw { code: 'command.not_found', message: 'unknown command' };
+      throw { code: 'transport.timeout', message: 'request timed out', retryable: true };
     },
   });
 
@@ -28,8 +57,9 @@ test('createNodeEngine wraps RustraError-shaped rejects into RustraCommandError'
     () => engine.invoke('missing'),
     (err: unknown) => {
       if (!(err instanceof RustraCommandError)) return false;
-      assert.equal(err.code, 'command.not_found');
-      assert.equal(err.message, 'unknown command');
+      assert.equal(err.code, 'transport.timeout');
+      assert.equal(err.message, 'request timed out');
+      assert.equal(err.retryable, true);
       return true;
     },
   );
@@ -103,10 +133,12 @@ import { dirname, resolve, join } from 'node:path';
 
 // 저장소 루트 기준 절대경로 — 테스트는 packages/node/dist 에서 실행된다.
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-// Bun 1.4 coverage instrumentation currently makes node:child_process spawn fail
-// with EBADF. The normal Bun suite still runs these real-process tests; only the
-// coverage-only pass skips them until the upstream runner issue is fixed.
-const processTest = process.env.RUSTRA_BUN_COVERAGE === '1' ? test.skip : test;
+// Bun 1.4 currently makes node:child_process posix_spawn fail with EBADF in
+// this workspace. The process transport is a Node host API; run these tests
+// from the compiled Node test suite instead of reporting a Bun runner issue
+// as a transport failure.
+const isBun = typeof process.versions.bun === 'string';
+const processTest = isBun || process.env.RUSTRA_BUN_COVERAGE === '1' ? test.skip : test;
 
 processTest(
   'createNodeProcessTransport invokes a real Rust runtime over stdio',

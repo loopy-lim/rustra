@@ -26,14 +26,19 @@ rustra::native_entry!(package);
 {
   "schema": "./generated/schema.json",
   "output": "./generated",
+  "codegen": {
+    "rustManifest": "./Cargo.toml",
+    "rustBinary": "generate"
+  },
   "reactNative": {}
 }
 ```
 
 ```bash
-bun add @rustra/react-native @rustra/types@0.4.0
+bun add @rustra/react-native @rustra/types
 bun add -d @rustra/cli
-bunx --bun @rustra/cli generate --config rustra.json
+bunx --bun @rustra/cli doctor --config rustra.json
+bunx --bun @rustra/cli codegen --config rustra.json
 bun install
 ```
 

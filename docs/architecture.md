@@ -72,21 +72,24 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 ```ts
 // types.ts 에 자동 생성됨
 export type EngineClient = {
-  invoke<T>(command: string, args?: unknown): Promise<T>;
+  invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T>;
+  invokeBatch?<T>(entries: BatchEntry[]): Promise<T[]>;
 };
 ```
 
 각 host adapter는 transport를 주입받아 이 인터페이스를 구현한 객체를 반환한다:
 
-| adapter 패키지          | 팩토리 함수                              | 반환 타입           | 파일 경로                            |
-| ----------------------- | ---------------------------------------- | ------------------- | ------------------------------------ |
-| `packages/node`         | `createNodeBootstrap(options)`           | lazy `EngineClient` | `packages/node/src/index.ts`         |
-| `packages/bun`          | `createBunBootstrap(options)`            | lazy `EngineClient` | `packages/bun/src/index.ts`          |
-| `packages/tauri`        | `createTauriBootstrap()`                 | lazy `EngineClient` | `packages/tauri/src/index.ts`        |
-| `packages/react-native` | generated bootstrap + `createFastEngine` | `EngineClient`      | `packages/react-native/src/index.ts` |
-| `packages/react-native` | `createReactNativeEngine(transport)`     | `EngineClient`      | `packages/react-native/src/index.ts` |
+| adapter 패키지          | 팩토리 함수                              | 반환 타입                           | 파일 경로                            |
+| ----------------------- | ---------------------------------------- | ----------------------------------- | ------------------------------------ |
+| `packages/node`         | `createNodeBootstrap(options)`           | lazy `EngineClient`                 | `packages/node/src/index.ts`         |
+| `packages/bun`          | `createBunBootstrap(options)`            | lazy `EngineClient`                 | `packages/bun/src/index.ts`          |
+| `packages/tauri`        | `createTauriBootstrap()`                 | lazy `EngineClient`                 | `packages/tauri/src/index.ts`        |
+| `packages/react-native` | generated bootstrap + `createFastEngine` | `RkyvV2Engine`                      | `packages/react-native/src/index.ts` |
+| `packages/react-native` | `createReactNativeEngine(native)`        | `ReactNativeEngine` + `invokeBatch` | `packages/react-native/src/index.ts` |
 
-모든 반환 타입(`NodeEngineClient`, `BunEngineClient`, `TauriEngineClient`, `ReactNativeEngineClient`)은 구조적으로 `EngineClient`와 동일한 `invoke<T>` 메서드를 제공한다.
+모든 반환 타입은 구조적으로 `EngineClient`의 `invoke<T>`를 제공하며, 어댑터 팩토리는
+Promise 기반 `invokeBatch`도 보장한다. 진행 중 `AbortSignal`은 JSON/동기 경로에서
+얕은 취소이고, RN async rkyv 경로에서만 네이티브 취소 핸들이 있을 때 Rust까지 전파된다.
 
 ### command helper 사용 예시
 
@@ -172,7 +175,7 @@ packages/
 ├── bun/            → generated bun.ts + createBunBootstrap
 ├── tauri/          → generated tauri.ts + createTauriBootstrap
 └── react-native/   → generated react-native.ts + createRustraBootstrap
-                     createReactNativeEngine(transport): EngineClient (low-level JSON path)
+                     createReactNativeEngine(native): ReactNativeEngine (low-level JSON path)
 ```
 
 각 adapter 패키지는 서로를 import하지 않으며, host-specific 패키지를 직접 import하지도 않는다. 호출자가 transport 객체를 생성하여 주입하는 방식이다.

@@ -4,7 +4,8 @@
   "packageManager": "bun@1.4.0",
   "type": "module",
   "scripts": {
-    "codegen": "cargo run --bin rustra-calculator-example && bun ../../packages/cli/src/index.ts generate --config rustra.json"
+    "codegen": "bun ../../packages/cli/src/index.ts codegen --config rustra.json",
+    "codegen:check": "bun ../../packages/cli/src/index.ts codegen --config rustra.json --check"
   },
   "dependencies": {
     "@rustra/bun": "file:../../packages/bun",

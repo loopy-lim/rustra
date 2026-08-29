@@ -36,4 +36,4 @@ export { useMutation } from './useMutation.js';
 export type { UseMutationOptions, UseMutationResult } from './useMutation.js';
 
 export { useEvent } from './useEvent.js';
-export type { EventCallback, UnsubscribeFn, SubscribeFn } from './useEvent.js';
+export type { EventCallback, UnsubscribeFn, SubscribeResult, SubscribeFn } from './useEvent.js';

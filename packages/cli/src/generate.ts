@@ -5,7 +5,6 @@
  * 계약 해시 파일을 생성합니다.
  */
 
-import { createHash } from 'node:crypto';
 import type { CommandSchema, PackageSchema } from './schema.js';
 import {
   collectDefinitions,
@@ -16,6 +15,7 @@ import {
 } from './codegen.js';
 import { buildCodecIr } from './codec-ir.js';
 import type { CodecIrNode } from './codec-ir.js';
+import { sha256 } from './hash.js';
 
 function generatedJsDoc(description: string): string {
   const body = escapeJsDoc(description)
@@ -238,7 +238,7 @@ export function generateCommandsTs(schema: PackageSchema): string {
  * 필드가 없는 구 스키마는 1 로 취급한다.
  */
 export function generateContractTs(schemaJson: string): string {
-  const hash = createHash('sha256').update(schemaJson).digest('hex');
+  const hash = sha256(schemaJson);
   let schemaVersion = 1;
   try {
     const parsed: unknown = JSON.parse(schemaJson);
@@ -312,6 +312,20 @@ type PostcardFieldKind =
   | 'option_bytes'
   | 'enum_str'; // string-only enum (postcard: variant index varint)
 
+/** Option wire kinds are a decoration around one of these base postcard kinds. */
+const OPTION_INNER_KIND: Record<string, PostcardFieldKind> = {
+  option_zigzag: 'zigzag',
+  option_uvar: 'uvar',
+  option_zigzag64: 'zigzag64',
+  option_uvar64: 'uvar64',
+  option_f64: 'f64',
+  option_f32: 'f32',
+  option_bool: 'bool',
+  option_string: 'string',
+  option_struct: 'struct',
+  option_bytes: 'bytes',
+};
+
 type PostcardField = {
   name: string;
   kind: PostcardFieldKind;
@@ -384,7 +398,7 @@ function classifyPostcardField(
   // `Option<T>` — schemars는 `type: ["T","null"]` 또는 `anyOf: [T, null]`로 내보낸다.
   // probe: Option<u32> 스키마는 `type:["integer","null"], format:"uint32"` —
   // format 이 상위로 유지되므로 unwrap 후 일반 classify 로 재판정한다.
-  const optionInner = unwrapOptionSchema(schema, definitions);
+  const optionInner = unwrapOptionSchema(schema);
   if (optionInner) {
     const inner = classifyPostcardField(optionInner, definitions);
     if (inner === null) return null;
@@ -482,7 +496,6 @@ function classifyPostcardField(
  */
 function unwrapOptionSchema(
   schema: import('./schema.js').JsonSchema,
-  _definitions: Record<string, import('./schema.js').JsonSchema>,
 ): import('./schema.js').JsonSchema | null {
   if (Array.isArray(schema.type)) {
     const nonNull = schema.type.filter((t) => t !== 'null');
@@ -564,6 +577,22 @@ function refTypeName(ref: string): string {
   return ref.startsWith('#/definitions/') ? ref.slice('#/definitions/'.length) : ref;
 }
 
+function schemaChildren(
+  schema: import('./schema.js').JsonSchema,
+): import('./schema.js').JsonSchema[] {
+  const children: import('./schema.js').JsonSchema[] = [
+    ...(schema.anyOf ?? []),
+    ...(schema.oneOf ?? []),
+    ...(schema.allOf ?? []),
+    ...(Array.isArray(schema.items) ? schema.items : schema.items ? [schema.items] : []),
+    ...Object.values(schema.properties ?? {}),
+  ];
+  if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
+    children.push(schema.additionalProperties);
+  }
+  return children;
+}
+
 /** Postcard's inline struct emitter cannot represent a cyclic definition. */
 function hasCyclicRef(
   schema: import('./schema.js').JsonSchema,
@@ -583,17 +612,7 @@ function hasCyclicRef(
     nextPath.add(name);
     return hasCyclicRef(definition, definitions, nextPath, visited);
   }
-  const children: import('./schema.js').JsonSchema[] = [
-    ...(schema.anyOf ?? []),
-    ...(schema.oneOf ?? []),
-    ...(schema.allOf ?? []),
-    ...(Array.isArray(schema.items) ? schema.items : schema.items ? [schema.items] : []),
-    ...Object.values(schema.properties ?? {}),
-  ];
-  if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
-    children.push(schema.additionalProperties);
-  }
-  return children.some((child) => hasCyclicRef(child, definitions, path, visited));
+  return schemaChildren(schema).some((child) => hasCyclicRef(child, definitions, path, visited));
 }
 
 // Object identity is sufficient here: the helper only prevents revisiting an
@@ -617,17 +636,7 @@ function hasSet(
     nextPath.add(name);
     return hasSet(definition, definitions, nextPath);
   }
-  const children: import('./schema.js').JsonSchema[] = [
-    ...(schema.anyOf ?? []),
-    ...(schema.oneOf ?? []),
-    ...(schema.allOf ?? []),
-    ...(Array.isArray(schema.items) ? schema.items : schema.items ? [schema.items] : []),
-    ...Object.values(schema.properties ?? {}),
-  ];
-  if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
-    children.push(schema.additionalProperties);
-  }
-  return children.some((child) => hasSet(child, definitions, path));
+  return schemaChildren(schema).some((child) => hasSet(child, definitions, path));
 }
 
 /**
@@ -678,6 +687,36 @@ const ENC_INTO_KINDS = new Set([
   'vec_uvar',
 ]);
 
+const COLLECTION_ELEMENT_ENCODER: Record<string, string> = {
+  vec_zigzag: '_pcEncodeZigzagVarint(_arr[_i])',
+  vec_i64: '_pcEncodeZigzag64(_arr[_i])',
+  vec_u64: '_pcEncodeVarint64(_arr[_i])',
+  vec_uvar: '_pcEncodeVarint(_arr[_i])',
+  vec_f64: '_pcEncodeF64(_arr[_i])',
+  vec_bool: 'new Uint8Array([_arr[_i] ? 1 : 0])',
+  set_zigzag: '_pcEncodeZigzagVarint(_arr[_i])',
+  set_i64: '_pcEncodeZigzag64(_arr[_i])',
+  set_u64: '_pcEncodeVarint64(_arr[_i])',
+  set_uvar: '_pcEncodeVarint(_arr[_i])',
+  set_f64: '_pcEncodeF64(_arr[_i])',
+  set_bool: 'new Uint8Array([_arr[_i] ? 1 : 0])',
+};
+
+function generateCollectionEncodeExpr(kind: string, valueExpr: string, indent: string): string {
+  const element = COLLECTION_ELEMENT_ENCODER[kind];
+  if (!element) return `${indent}// unsupported collection kind: ${kind}`;
+  const source = kind.startsWith('set_') ? `[...${valueExpr}]` : valueExpr;
+  return (
+    `${indent}{\n` +
+    `${indent}  const _arr = ${source};\n` +
+    `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
+    `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
+    `${indent}    parts.push(${element});\n` +
+    `${indent}  }\n` +
+    `${indent}}`
+  );
+}
+
 /**
  * encodeInto 용 필드 기록식 — parts 배열 없이 out/w 커서에 직접 쓴다.
  * generateFieldEncodeExpr 와 완전히 동일한 와이어 바이트를 낸다.
@@ -685,10 +724,8 @@ const ENC_INTO_KINDS = new Set([
 function generateFieldEncodeIntoExpr(
   field: PostcardField,
   valueExpr: string,
-  definitions: Record<string, import('./schema.js').JsonSchema>,
   indent: string,
 ): string {
-  void definitions;
   const writeVarint = (target: string) =>
     `${indent}{ let _v = ${target}; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }`;
   const writeZigzag = (target: string) =>
@@ -795,130 +832,18 @@ function generateFieldEncodeExpr(
       );
     }
     case 'vec_zigzag':
-      return (
-        `${indent}{\n` +
-        `${indent}  const _arr = ${valueExpr};\n` +
-        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
-        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
-        `${indent}    parts.push(_pcEncodeZigzagVarint(_arr[_i]));\n` +
-        `${indent}  }\n` +
-        `${indent}}`
-      );
     case 'vec_i64':
-      // Vec<i64> — 원소별 zigzag64(2^53 초과는 bigint 허용).
-      return (
-        `${indent}{\n` +
-        `${indent}  const _arr = ${valueExpr};\n` +
-        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
-        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
-        `${indent}    parts.push(_pcEncodeZigzag64(_arr[_i]));\n` +
-        `${indent}  }\n` +
-        `${indent}}`
-      );
     case 'vec_u64':
-      // Vec<u64> — 원소별 uvar64.
-      return (
-        `${indent}{\n` +
-        `${indent}  const _arr = ${valueExpr};\n` +
-        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
-        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
-        `${indent}    parts.push(_pcEncodeVarint64(_arr[_i]));\n` +
-        `${indent}  }\n` +
-        `${indent}}`
-      );
     case 'vec_uvar':
-      // Vec<unsigned> — 원소별 plain varint (probe: vec![70000u32] -> [1, f0 a2 04]).
-      return (
-        `${indent}{\n` +
-        `${indent}  const _arr = ${valueExpr};\n` +
-        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
-        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
-        `${indent}    parts.push(_pcEncodeVarint(_arr[_i]));\n` +
-        `${indent}  }\n` +
-        `${indent}}`
-      );
     case 'vec_f64':
-      return (
-        `${indent}{\n` +
-        `${indent}  const _arr = ${valueExpr};\n` +
-        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
-        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
-        `${indent}    parts.push(_pcEncodeF64(_arr[_i]));\n` +
-        `${indent}  }\n` +
-        `${indent}}`
-      );
     case 'vec_bool':
-      return (
-        `${indent}{\n` +
-        `${indent}  const _arr = ${valueExpr};\n` +
-        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
-        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
-        `${indent}    parts.push(new Uint8Array([_arr[_i] ? 1 : 0]));\n` +
-        `${indent}  }\n` +
-        `${indent}}`
-      );
     case 'set_zigzag':
-      return (
-        `${indent}{\n` +
-        `${indent}  const _arr = [...${valueExpr}];\n` +
-        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
-        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
-        `${indent}    parts.push(_pcEncodeZigzagVarint(_arr[_i]));\n` +
-        `${indent}  }\n` +
-        `${indent}}`
-      );
     case 'set_i64':
-      // Set<i64> — 원소별 zigzag64.
-      return (
-        `${indent}{\n` +
-        `${indent}  const _arr = [...${valueExpr}];\n` +
-        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
-        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
-        `${indent}    parts.push(_pcEncodeZigzag64(_arr[_i]));\n` +
-        `${indent}  }\n` +
-        `${indent}}`
-      );
     case 'set_u64':
-      // Set<u64> — 원소별 uvar64.
-      return (
-        `${indent}{\n` +
-        `${indent}  const _arr = [...${valueExpr}];\n` +
-        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
-        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
-        `${indent}    parts.push(_pcEncodeVarint64(_arr[_i]));\n` +
-        `${indent}  }\n` +
-        `${indent}}`
-      );
     case 'set_uvar':
-      return (
-        `${indent}{\n` +
-        `${indent}  const _arr = [...${valueExpr}];\n` +
-        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
-        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
-        `${indent}    parts.push(_pcEncodeVarint(_arr[_i]));\n` +
-        `${indent}  }\n` +
-        `${indent}}`
-      );
     case 'set_f64':
-      return (
-        `${indent}{\n` +
-        `${indent}  const _arr = [...${valueExpr}];\n` +
-        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
-        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
-        `${indent}    parts.push(_pcEncodeF64(_arr[_i]));\n` +
-        `${indent}  }\n` +
-        `${indent}}`
-      );
     case 'set_bool':
-      return (
-        `${indent}{\n` +
-        `${indent}  const _arr = [...${valueExpr}];\n` +
-        `${indent}  parts.push(_pcEncodeVarint(_arr.length));\n` +
-        `${indent}  for (let _i = 0; _i < _arr.length; _i++) {\n` +
-        `${indent}    parts.push(new Uint8Array([_arr[_i] ? 1 : 0]));\n` +
-        `${indent}  }\n` +
-        `${indent}}`
-      );
+      return generateCollectionEncodeExpr(field.kind, valueExpr, indent);
     case 'struct': {
       if (!field.refType) return `${indent}// unknown struct field: ${field.name}`;
       const structDef = definitions[field.refType];
@@ -1018,20 +943,7 @@ function generateFieldEncodeExpr(
     case 'option_string':
     case 'option_struct':
     case 'option_bytes': {
-      const innerKind = (
-        {
-          option_zigzag: 'zigzag',
-          option_uvar: 'uvar',
-          option_zigzag64: 'zigzag64',
-          option_uvar64: 'uvar64',
-          option_f64: 'f64',
-          option_f32: 'f32',
-          option_bool: 'bool',
-          option_string: 'string',
-          option_struct: 'struct',
-          option_bytes: 'bytes',
-        } as const
-      )[field.kind];
+      const innerKind = OPTION_INNER_KIND[field.kind];
       const innerField: PostcardField = { ...field, kind: innerKind };
       return (
         `${indent}{
@@ -1079,6 +991,103 @@ ${indent}  }
  * Generate the postcard decode expression for a single field.
  * Returns code lines that decode from `u8` starting at `offset`.
  */
+type CollectionDecodeSpec = {
+  valueType: string;
+  decoder: string | null;
+  valueExpression: string;
+};
+
+const COLLECTION_ELEMENT_DECODER: Record<string, CollectionDecodeSpec> = {
+  vec_zigzag: {
+    valueType: 'number',
+    decoder: '_pcDecodeZigzagVarint(u8, offset)',
+    valueExpression: '_v.value',
+  },
+  vec_i64: {
+    valueType: 'number | bigint',
+    decoder: '_pcDecodeVarint64(u8, offset)',
+    valueExpression: '_pcDecodeZigzag64(_v.value)',
+  },
+  vec_u64: {
+    valueType: 'number | bigint',
+    decoder: '_pcDecodeVarint64(u8, offset)',
+    valueExpression: '_v.value',
+  },
+  vec_uvar: {
+    valueType: 'number',
+    decoder: '_pcDecodeVarint(u8, offset)',
+    valueExpression: '_v.value',
+  },
+  vec_f64: {
+    valueType: 'number',
+    decoder: '_pcDecodeF64(u8, offset)',
+    valueExpression: '_v.value',
+  },
+  vec_bool: {
+    valueType: 'boolean',
+    decoder: null,
+    valueExpression: 'u8[offset] === 1',
+  },
+  set_zigzag: {
+    valueType: 'number',
+    decoder: '_pcDecodeZigzagVarint(u8, offset)',
+    valueExpression: '_v.value',
+  },
+  set_i64: {
+    valueType: 'number | bigint',
+    decoder: '_pcDecodeVarint64(u8, offset)',
+    valueExpression: '_pcDecodeZigzag64(_v.value)',
+  },
+  set_u64: {
+    valueType: 'number | bigint',
+    decoder: '_pcDecodeVarint64(u8, offset)',
+    valueExpression: '_v.value',
+  },
+  set_uvar: {
+    valueType: 'number',
+    decoder: '_pcDecodeVarint(u8, offset)',
+    valueExpression: '_v.value',
+  },
+  set_f64: {
+    valueType: 'number',
+    decoder: '_pcDecodeF64(u8, offset)',
+    valueExpression: '_v.value',
+  },
+  set_bool: {
+    valueType: 'boolean',
+    decoder: null,
+    valueExpression: 'u8[offset] === 1',
+  },
+};
+
+function generateCollectionDecodeExpr(kind: string, lvalue: string, indent: string): string {
+  const spec = COLLECTION_ELEMENT_DECODER[kind];
+  if (!spec) return `${indent}// unsupported collection kind: ${kind}`;
+
+  const isSet = kind.startsWith('set_');
+  const collection = isSet
+    ? `const _set = new Set<${spec.valueType}>();`
+    : `const _arr: ${spec.valueType}[] = new Array(_len.value);`;
+  const element = isSet
+    ? `_set.add(${spec.valueExpression});`
+    : `_arr[_i] = ${spec.valueExpression};`;
+  const lines = [
+    `${indent}{`,
+    `${indent}  const _len = _pcDecodeVarint(u8, offset);`,
+    `${indent}  offset += _len.bytesRead;`,
+    `${indent}  ${collection}`,
+    `${indent}  for (let _i = 0; _i < _len.value; _i++) {`,
+  ];
+  if (spec.decoder) lines.push(`${indent}    const _v = ${spec.decoder};`);
+  lines.push(`${indent}    ${element}`);
+  if (!spec.decoder) lines.push(`${indent}    offset += 1;`);
+  else lines.push(`${indent}    offset += _v.bytesRead;`);
+  lines.push(`${indent}  }`);
+  lines.push(`${indent}  ${lvalue} = ${isSet ? '_set' : '_arr'};`);
+  lines.push(`${indent}}`);
+  return lines.join('\n');
+}
+
 function generateFieldDecodeExpr(
   field: PostcardField,
   lvalue: string,
@@ -1164,175 +1173,18 @@ function generateFieldDecodeExpr(
         `${indent}}`
       );
     case 'vec_zigzag':
-      return (
-        `${indent}{\n` +
-        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
-        `${indent}  offset += _len.bytesRead;\n` +
-        `${indent}  const _arr: number[] = new Array(_len.value);\n` +
-        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
-        `${indent}    const _v = _pcDecodeZigzagVarint(u8, offset);\n` +
-        `${indent}    _arr[_i] = _v.value;\n` +
-        `${indent}    offset += _v.bytesRead;\n` +
-        `${indent}  }\n` +
-        `${indent}  ${lvalue} = _arr;\n` +
-        `${indent}}`
-      );
     case 'vec_i64':
-      // Vec<i64> — 원소별 varint64 + zigzag 복원(safe 범위 밖은 bigint).
-      return (
-        `${indent}{\n` +
-        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
-        `${indent}  offset += _len.bytesRead;\n` +
-        `${indent}  const _arr: (number | bigint)[] = new Array(_len.value);\n` +
-        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
-        `${indent}    const _v = _pcDecodeVarint64(u8, offset);\n` +
-        `${indent}    _arr[_i] = _pcDecodeZigzag64(_v.value);\n` +
-        `${indent}    offset += _v.bytesRead;\n` +
-        `${indent}  }\n` +
-        `${indent}  ${lvalue} = _arr;\n` +
-        `${indent}}`
-      );
     case 'vec_u64':
-      // Vec<u64> — 원소별 varint64(safe 범위 밖은 bigint).
-      return (
-        `${indent}{\n` +
-        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
-        `${indent}  offset += _len.bytesRead;\n` +
-        `${indent}  const _arr: (number | bigint)[] = new Array(_len.value);\n` +
-        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
-        `${indent}    const _v = _pcDecodeVarint64(u8, offset);\n` +
-        `${indent}    _arr[_i] = _v.value;\n` +
-        `${indent}    offset += _v.bytesRead;\n` +
-        `${indent}  }\n` +
-        `${indent}  ${lvalue} = _arr;\n` +
-        `${indent}}`
-      );
-    case 'vec_f64':
-      return (
-        `${indent}{\n` +
-        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
-        `${indent}  offset += _len.bytesRead;\n` +
-        `${indent}  const _arr: number[] = new Array(_len.value);\n` +
-        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
-        `${indent}    const _v = _pcDecodeF64(u8, offset);\n` +
-        `${indent}    _arr[_i] = _v.value;\n` +
-        `${indent}    offset += _v.bytesRead;\n` +
-        `${indent}  }\n` +
-        `${indent}  ${lvalue} = _arr;\n` +
-        `${indent}}`
-      );
     case 'vec_uvar':
-      return (
-        `${indent}{\n` +
-        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
-        `${indent}  offset += _len.bytesRead;\n` +
-        `${indent}  const _arr: number[] = new Array(_len.value);\n` +
-        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
-        `${indent}    const _v = _pcDecodeVarint(u8, offset);\n` +
-        `${indent}    _arr[_i] = _v.value;\n` +
-        `${indent}    offset += _v.bytesRead;\n` +
-        `${indent}  }\n` +
-        `${indent}  ${lvalue} = _arr;\n` +
-        `${indent}}`
-      );
+    case 'vec_f64':
     case 'vec_bool':
-      return (
-        `${indent}{\n` +
-        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
-        `${indent}  offset += _len.bytesRead;\n` +
-        `${indent}  const _arr: boolean[] = new Array(_len.value);\n` +
-        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
-        `${indent}    _arr[_i] = u8[offset] === 1;\n` +
-        `${indent}    offset += 1;\n` +
-        `${indent}  }\n` +
-        `${indent}  ${lvalue} = _arr;\n` +
-        `${indent}}`
-      );
     case 'set_zigzag':
-      return (
-        `${indent}{\n` +
-        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
-        `${indent}  offset += _len.bytesRead;\n` +
-        `${indent}  const _set = new Set<number>();\n` +
-        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
-        `${indent}    const _v = _pcDecodeZigzagVarint(u8, offset);\n` +
-        `${indent}    _set.add(_v.value);\n` +
-        `${indent}    offset += _v.bytesRead;\n` +
-        `${indent}  }\n` +
-        `${indent}  ${lvalue} = _set;\n` +
-        `${indent}}`
-      );
     case 'set_i64':
-      // Set<i64> — 원소별 varint64 + zigzag 복원.
-      return (
-        `${indent}{\n` +
-        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
-        `${indent}  offset += _len.bytesRead;\n` +
-        `${indent}  const _set = new Set<number | bigint>();\n` +
-        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
-        `${indent}    const _v = _pcDecodeVarint64(u8, offset);\n` +
-        `${indent}    _set.add(_pcDecodeZigzag64(_v.value));\n` +
-        `${indent}    offset += _v.bytesRead;\n` +
-        `${indent}  }\n` +
-        `${indent}  ${lvalue} = _set;\n` +
-        `${indent}}`
-      );
     case 'set_u64':
-      // Set<u64> — 원소별 varint64.
-      return (
-        `${indent}{\n` +
-        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
-        `${indent}  offset += _len.bytesRead;\n` +
-        `${indent}  const _set = new Set<number | bigint>();\n` +
-        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
-        `${indent}    const _v = _pcDecodeVarint64(u8, offset);\n` +
-        `${indent}    _set.add(_v.value);\n` +
-        `${indent}    offset += _v.bytesRead;\n` +
-        `${indent}  }\n` +
-        `${indent}  ${lvalue} = _set;\n` +
-        `${indent}}`
-      );
     case 'set_uvar':
-      return (
-        `${indent}{\n` +
-        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
-        `${indent}  offset += _len.bytesRead;\n` +
-        `${indent}  const _set = new Set<number>();\n` +
-        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
-        `${indent}    const _v = _pcDecodeVarint(u8, offset);\n` +
-        `${indent}    _set.add(_v.value);\n` +
-        `${indent}    offset += _v.bytesRead;\n` +
-        `${indent}  }\n` +
-        `${indent}  ${lvalue} = _set;\n` +
-        `${indent}}`
-      );
     case 'set_f64':
-      return (
-        `${indent}{\n` +
-        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
-        `${indent}  offset += _len.bytesRead;\n` +
-        `${indent}  const _set = new Set<number>();\n` +
-        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
-        `${indent}    const _v = _pcDecodeF64(u8, offset);\n` +
-        `${indent}    _set.add(_v.value);\n` +
-        `${indent}    offset += _v.bytesRead;\n` +
-        `${indent}  }\n` +
-        `${indent}  ${lvalue} = _set;\n` +
-        `${indent}}`
-      );
     case 'set_bool':
-      return (
-        `${indent}{\n` +
-        `${indent}  const _len = _pcDecodeVarint(u8, offset);\n` +
-        `${indent}  offset += _len.bytesRead;\n` +
-        `${indent}  const _set = new Set<boolean>();\n` +
-        `${indent}  for (let _i = 0; _i < _len.value; _i++) {\n` +
-        `${indent}    _set.add(u8[offset] === 1);\n` +
-        `${indent}    offset += 1;\n` +
-        `${indent}  }\n` +
-        `${indent}  ${lvalue} = _set;\n` +
-        `${indent}}`
-      );
+      return generateCollectionDecodeExpr(field.kind, lvalue, indent);
     case 'struct': {
       if (!field.refType) return `${indent}// unknown struct field: ${field.name}`;
       const structDef = definitions[field.refType];
@@ -1452,20 +1304,7 @@ function generateFieldDecodeExpr(
     case 'option_string':
     case 'option_struct':
     case 'option_bytes': {
-      const innerKind = (
-        {
-          option_zigzag: 'zigzag',
-          option_uvar: 'uvar',
-          option_zigzag64: 'zigzag64',
-          option_uvar64: 'uvar64',
-          option_f64: 'f64',
-          option_f32: 'f32',
-          option_bool: 'bool',
-          option_string: 'string',
-          option_struct: 'struct',
-          option_bytes: 'bytes',
-        } as const
-      )[field.kind];
+      const innerKind = OPTION_INNER_KIND[field.kind];
       const innerField: PostcardField = { ...field, kind: innerKind };
       return (
         `${indent}{\n` +
@@ -1605,7 +1444,7 @@ function generatePostcardCodec(
       `    out[w++] = ${command.commandId & 0xff}; out[w++] = ${(command.commandId >> 8) & 0xff};`,
     );
     for (const field of inFields) {
-      lines.push(generateFieldEncodeIntoExpr(field, `args.${field.name}`, definitions, '    '));
+      lines.push(generateFieldEncodeIntoExpr(field, `args.${field.name}`, '    '));
     }
     lines.push(`    return out.subarray(0, w);`);
     lines.push(`  },`);
@@ -1997,20 +1836,7 @@ function cppEncodeWithGetter(
     case 'option_string':
     case 'option_struct':
     case 'option_bytes': {
-      const innerKind = (
-        {
-          option_zigzag: 'zigzag',
-          option_uvar: 'uvar',
-          option_zigzag64: 'zigzag64',
-          option_uvar64: 'uvar64',
-          option_f64: 'f64',
-          option_f32: 'f32',
-          option_bool: 'bool',
-          option_string: 'string',
-          option_struct: 'struct',
-          option_bytes: 'bytes',
-        } as const
-      )[field.kind];
+      const innerKind = OPTION_INNER_KIND[field.kind];
       const innerField: PostcardField = { ...field, kind: innerKind };
       return (
         `${indent}{ auto _v = ${get};` +
@@ -2177,14 +2003,22 @@ function cppFieldDecodeExpr(
       const lines: string[] = [];
       lines.push(`${indent}{ auto _arr = jsi::Array(rt, ${items.length});`);
       items.forEach((it, i) => {
-        // 요소 디코드는 임시 wrapper 객체 없이 배열 슬롯에 직접 심는다.
+        // cppFieldDecodeExpr 는 필드 값을 객체 property 로 조립하는 공통
+        // 경로이므로, tuple 요소도 작은 wrapper 에 먼저 기록한 뒤 배열
+        // 슬롯으로 옮긴다. 문자열 치환으로 property 호출을 바꾸는 방식은
+        // cachedProp(rt, ...) 래퍼를 놓쳐 컴파일 불가한 식별자를 남긴다.
+        const itemObject = `_tuple_item_${i}`;
+        lines.push(`${indent}  { auto ${itemObject} = jsi::Object(rt);`);
         lines.push(
           cppFieldDecodeExpr(
-            { ...it, name: `${i}` } as PostcardField,
-            `_arr_tmp_${i}`,
+            { ...it, name: 'value' } as PostcardField,
+            itemObject,
             definitions,
-            `${indent}  `,
-          ).replace(`_arr_tmp_${i}.setProperty(rt, "${i}"`, `_arr.setValueAtIndex(rt, ${i}`),
+            `${indent}    `,
+          ),
+        );
+        lines.push(
+          `${indent}    _arr.setValueAtIndex(rt, ${i}, ${itemObject}.getProperty(rustra::generated::cachedProp(rt, "value"))); }`,
         );
       });
       lines.push(
@@ -2219,20 +2053,7 @@ function cppFieldDecodeExpr(
     case 'option_string':
     case 'option_struct':
     case 'option_bytes': {
-      const innerKind = (
-        {
-          option_zigzag: 'zigzag',
-          option_uvar: 'uvar',
-          option_zigzag64: 'zigzag64',
-          option_uvar64: 'uvar64',
-          option_f64: 'f64',
-          option_f32: 'f32',
-          option_bool: 'bool',
-          option_string: 'string',
-          option_struct: 'struct',
-          option_bytes: 'bytes',
-        } as const
-      )[field.kind];
+      const innerKind = OPTION_INNER_KIND[field.kind];
       const innerField: PostcardField = { ...field, kind: innerKind };
       // Option 디코드: 태그 바이트 → None 이면 null, Some 이면 inner 디코드.
       // inner struct 디코드는 objExpr.setProperty 로 바로 심는다(임시 객체 없이).
@@ -3664,9 +3485,7 @@ export function generatePositionalFacadeTs(schema: PackageSchema): string {
     const cmdId = command.commandId ?? 0;
     if (fields.length > 0 && fields.length <= 3 && simple) {
       // (Tier 1) 순수 스칼라 필드는 invokeTypedPos 로 — 인자 객체 생성 0.
-      const params = fields
-        .map((f) => `${f.name}: ${tsFieldType(f, command.inputType)}`)
-        .join(', ');
+      const params = fields.map((f) => `${f.name}: ${tsFieldType(f)}`).join(', ');
       const argList = fields.map((f) => `${f.name}`).join(', ');
       output +=
         `export function ${fnName}(${params}, options?: InvokeOptions): Promise<${outType}> {\n` +
@@ -3692,7 +3511,7 @@ export function generatePositionalFacadeTs(schema: PackageSchema): string {
 }
 
 /** 필드의 TS 타입 표현 — input 타입 이름 기반 단순 매핑. */
-function tsFieldType(field: PostcardField, _ownerType: string): string {
+function tsFieldType(field: PostcardField): string {
   switch (field.kind) {
     case 'zigzag':
       return 'number';
@@ -3748,7 +3567,7 @@ function tsFieldType(field: PostcardField, _ownerType: string): string {
       return 'Record<string, string>';
     case 'tuple': {
       const items = field.tupleItems ?? [];
-      return `[${items.map((it) => tsFieldType(it, _ownerType)).join(', ')}]`;
+      return `[${items.map((it) => tsFieldType(it)).join(', ')}]`;
     }
     case 'option_zigzag':
     case 'option_uvar':
@@ -3764,7 +3583,7 @@ function tsFieldType(field: PostcardField, _ownerType: string): string {
       return 'string | null';
     case 'option_struct': {
       const inner: PostcardField = { ...field, kind: 'struct' };
-      return `${tsFieldType(inner, _ownerType)} | null`;
+      return `${tsFieldType(inner)} | null`;
     }
     case 'option_bytes':
       return 'Uint8Array | null';

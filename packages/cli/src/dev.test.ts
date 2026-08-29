@@ -3,7 +3,14 @@ import test from 'node:test';
 import { mkdtempSync, mkdirSync, writeFileSync, utimesSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseDevArgs, planPipeline, detectDirty, runOnce } from './dev.js';
+import {
+  createWatchLoop,
+  parseDevArgs,
+  planPipeline,
+  detectDirty,
+  readDevConfig,
+  runOnce,
+} from './dev.js';
 
 test('parseDevArgs parses backend dir and app dir', () => {
   const opts = parseDevArgs(['--backend', './backend', '--app', './app']);
@@ -11,10 +18,38 @@ test('parseDevArgs parses backend dir and app dir', () => {
   assert.equal(opts.appDir, './app');
 });
 
+test('parseDevArgs accepts config mode without requiring legacy directories', () => {
+  const opts = parseDevArgs(['--config', './rustra.json', '--inspect']);
+  assert.equal(opts.configPath, './rustra.json');
+  assert.equal(opts.inspect, true);
+});
+
 test('parseDevArgs defaults to conventional layout', () => {
   const opts = parseDevArgs([]);
   assert.equal(opts.backendDir, 'backend');
   assert.equal(opts.appDir, 'app');
+});
+
+test('readDevConfig rejects a config without a Cargo manifest', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'rustra-dev-config-'));
+  try {
+    const configPath = join(dir, 'rustra.json');
+    writeFileSync(configPath, JSON.stringify({ schema: 'schema.json', output: 'generated' }));
+    assert.throws(() => readDevConfig(configPath), /rust_manifest_missing/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('readDevConfig rejects unsafe path values before resolving them', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'rustra-dev-config-'));
+  try {
+    const configPath = join(dir, 'rustra.json');
+    writeFileSync(configPath, JSON.stringify({ schema: `schema\u0000.json`, output: 'generated' }));
+    assert.throws(() => readDevConfig(configPath), /safe path/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('planPipeline reports which stages are dirty after a rust-only change', () => {
@@ -82,4 +117,30 @@ test('runOnce executes dirty stages in order and skips clean ones', async () => 
     },
   );
   assert.deepEqual(calls, ['rust']);
+});
+
+test('createWatchLoop coalesces changes while a run is in flight', async () => {
+  const calls: string[] = [];
+  let release!: () => void;
+  const loop = createWatchLoop(
+    async (reason) => {
+      calls.push(reason);
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    },
+    () => true,
+    0,
+  );
+
+  const first = loop.run('first', true);
+  await Promise.resolve();
+  loop.run('second');
+  loop.run('third');
+  assert.deepEqual(calls, ['first']);
+  release();
+  await first;
+  await new Promise<void>((resolve) => setTimeout(resolve, 5));
+  assert.deepEqual(calls, ['first', 'queued change']);
+  loop.dispose();
 });

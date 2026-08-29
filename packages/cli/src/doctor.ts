@@ -1,6 +1,8 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { accessSync, constants, existsSync, statSync } from 'node:fs';
+import { execFile, spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
+import { cargoPackagesForManifest, findCargoManifest, selectCodegenBinary } from './cargo.js';
+import { readConfigSync } from './config.js';
 
 export const RUSTRA_MSRV: [number, number, number] = [1, 88, 0];
 export const ANDROID_NDK_VERSION = '27.1.12297006';
@@ -37,6 +39,7 @@ export interface DoctorCommandResult {
 }
 
 export type DoctorRunner = (command: string, args: string[]) => DoctorCommandResult;
+export type DoctorAsyncRunner = (command: string, args: string[]) => Promise<DoctorCommandResult>;
 
 export interface DoctorCliOptions {
   configPath: string;
@@ -114,7 +117,7 @@ export function isVersionAtLeast(
 
 export function doctorExitCode(report: DoctorReport, strict: boolean): number {
   return report.checks.some(
-    (check) => check.status === 'fail' || (strict && check.status === 'warn'),
+    (check) => (check.status === 'fail' && check.required) || (strict && check.status === 'warn'),
   )
     ? 1
     : 0;
@@ -130,6 +133,35 @@ export function defaultDoctorRunner(command: string, args: string[]): DoctorComm
   };
 }
 
+/** Async probe used by the CLI so independent native checks run concurrently. */
+export function defaultDoctorRunnerAsync(
+  command: string,
+  args: string[],
+): Promise<DoctorCommandResult> {
+  return new Promise((resolve) => {
+    execFile(command, args, { encoding: 'utf8' }, (error, stdout, stderr) => {
+      resolve({
+        ok: error === null,
+        stdout: stdout ?? '',
+        stderr: stderr ?? '',
+        error: error?.message,
+      });
+    });
+  });
+}
+
+function memoizeRunner(runner: DoctorRunner): DoctorRunner {
+  const cache = new Map<string, DoctorCommandResult>();
+  return (command, args) => {
+    const key = JSON.stringify([command, args]);
+    const cached = cache.get(key);
+    if (cached) return cached;
+    const result = runner(command, args);
+    cache.set(key, result);
+    return result;
+  };
+}
+
 function check(
   id: string,
   status: DoctorStatus,
@@ -141,6 +173,20 @@ function check(
   return { id, status, required, summary, ...(detail ? { detail } : {}), ...(fix ? { fix } : {}) };
 }
 
+function conditionalCheck(
+  id: string,
+  required: boolean,
+  condition: boolean,
+  passSummary: string,
+  failSummary: string,
+  detail?: string,
+  fix?: string[],
+): DoctorCheck {
+  return condition
+    ? check(id, 'pass', required, passSummary)
+    : check(id, 'fail', required, failSummary, detail, fix);
+}
+
 function commandCheck(
   runner: DoctorRunner,
   command: string,
@@ -150,28 +196,38 @@ function commandCheck(
   fix: string[],
 ): DoctorCheck {
   const result = runner(command, args);
-  return result.ok
-    ? check(id, 'pass', true, summary)
-    : check(id, 'fail', true, `${summary} is unavailable`, result.stderr || result.error, fix);
+  return conditionalCheck(
+    id,
+    true,
+    result.ok,
+    summary,
+    `${summary} is unavailable`,
+    result.stderr || result.error,
+    fix,
+  );
 }
 
 function readConfig(configPath: string): { config?: DoctorConfig; error?: string } {
   try {
-    const value = JSON.parse(readFileSync(configPath, 'utf8')) as unknown;
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      return { error: 'config must be a JSON object' };
-    }
-    return { config: value as DoctorConfig };
+    return { config: readConfigSync(configPath) as DoctorConfig };
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }
 }
 
-function findCargoManifest(start: string): string | undefined {
-  let current = resolve(start);
+function canAccess(path: string, mode: number): boolean {
+  try {
+    accessSync(path, mode);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function nearestExistingParent(path: string): string | undefined {
+  let current = resolve(path);
   while (true) {
-    const candidate = join(current, 'Cargo.toml');
-    if (existsSync(candidate)) return candidate;
+    if (existsSync(current)) return current;
     const parent = dirname(current);
     if (parent === current) return undefined;
     current = parent;
@@ -213,11 +269,11 @@ function selectGenerator(
   requestedPackage: string | undefined,
   requestedBinary: string | undefined,
 ): { packageName?: string; binaryName?: string; error?: string } {
-  const manifest = resolve(manifestPath);
-  const packages = (metadata.packages ?? []).filter((candidate) => {
-    if (requestedPackage && candidate.name !== requestedPackage) return false;
-    return requestedPackage || resolve(candidate.manifest_path ?? '') === manifest;
-  });
+  const packages = cargoPackagesForManifest(
+    metadata.packages ?? [],
+    manifestPath,
+    requestedPackage,
+  );
   if (packages.length !== 1) {
     return {
       error:
@@ -230,21 +286,19 @@ function selectGenerator(
   const binaries = (candidate.targets ?? []).filter(
     (target) => target.kind?.includes('bin') || target.crate_types?.includes('bin'),
   );
-  const selected = requestedBinary
-    ? binaries.find((target) => target.name === requestedBinary)
-    : (binaries.find((target) => target.name === 'generate') ??
-      (binaries.length === 1 ? binaries[0] : undefined));
-  if (!selected?.name) {
+  const validBinaries = binaries.filter(
+    (target): target is { name: string; kind?: string[]; crate_types?: string[] } =>
+      typeof target.name === 'string',
+  );
+  let binaryName: string;
+  try {
+    binaryName = selectCodegenBinary(validBinaries, requestedBinary);
+  } catch (error) {
     return {
-      error: `could not select one Cargo binary from ${
-        binaries
-          .map((target) => target.name)
-          .filter(Boolean)
-          .join(', ') || 'none'
-      }`,
+      error: error instanceof Error ? error.message : String(error),
     };
   }
-  return { packageName: candidate.name, binaryName: selected.name };
+  return { packageName: candidate.name, binaryName };
 }
 
 function javaMajor(value: string): number | null {
@@ -273,16 +327,15 @@ function addAndroidChecks(
   const java = runner('java', ['-version']);
   const javaVersion = javaMajor(`${java.stdout}\n${java.stderr}`);
   checks.push(
-    java.ok && javaVersion === 17
-      ? check('rn.android.java', 'pass', true, 'Java 17 is available')
-      : check(
-          'rn.android.java',
-          'fail',
-          true,
-          `Java 17 is required${javaVersion ? ` (found ${javaVersion})` : ''}`,
-          java.stderr || java.error,
-          ['Install Java 17 and set JAVA_HOME'],
-        ),
+    conditionalCheck(
+      'rn.android.java',
+      true,
+      java.ok && javaVersion === 17,
+      'Java 17 is available',
+      `Java 17 is required${javaVersion ? ` (found ${javaVersion})` : ''}`,
+      java.stderr || java.error,
+      ['Install Java 17 and set JAVA_HOME'],
+    ),
   );
   checks.push(
     commandCheck(runner, 'adb', ['version'], 'rn.android.sdk', 'Android SDK adb', [
@@ -291,44 +344,41 @@ function addAndroidChecks(
   );
   const sdkmanager = runner('sdkmanager', ['--version']);
   checks.push(
-    sdkmanager.ok
-      ? check('rn.android.sdkmanager', 'pass', true, 'Android sdkmanager is available')
-      : check(
-          'rn.android.sdkmanager',
-          'fail',
-          true,
-          'Android sdkmanager is unavailable',
-          sdkmanager.stderr || sdkmanager.error,
-          ['Install Android command-line tools and ensure sdkmanager is on PATH'],
-        ),
+    conditionalCheck(
+      'rn.android.sdkmanager',
+      true,
+      sdkmanager.ok,
+      'Android sdkmanager is available',
+      'Android sdkmanager is unavailable',
+      sdkmanager.stderr || sdkmanager.error,
+      ['Install Android command-line tools and ensure sdkmanager is on PATH'],
+    ),
   );
   const ndk = ndkPath(env);
   checks.push(
-    ndk
-      ? check('rn.android.ndk', 'pass', true, `Android NDK ${ANDROID_NDK_VERSION} is available`)
-      : check(
-          'rn.android.ndk',
-          'fail',
-          true,
-          `Android NDK ${ANDROID_NDK_VERSION} is missing`,
-          'Set ANDROID_NDK_HOME or ANDROID_HOME/ANDROID_SDK_ROOT to an SDK containing the pinned NDK',
-          [`sdkmanager "ndk;${ANDROID_NDK_VERSION}"`],
-        ),
+    conditionalCheck(
+      'rn.android.ndk',
+      true,
+      Boolean(ndk),
+      `Android NDK ${ANDROID_NDK_VERSION} is available`,
+      `Android NDK ${ANDROID_NDK_VERSION} is missing`,
+      'Set ANDROID_NDK_HOME or ANDROID_HOME/ANDROID_SDK_ROOT to an SDK containing the pinned NDK',
+      [`sdkmanager "ndk;${ANDROID_NDK_VERSION}"`],
+    ),
   );
   const targets = runner('rustup', ['target', 'list', '--installed']);
   const installed = new Set(targets.stdout.split(/\r?\n/).map((target) => target.trim()));
   const missing = DEFAULT_ANDROID_TARGETS.filter((target) => !installed.has(target));
   checks.push(
-    targets.ok && missing.length === 0
-      ? check('rn.android.rust_targets', 'pass', true, 'Android Rust targets are installed')
-      : check(
-          'rn.android.rust_targets',
-          'fail',
-          true,
-          `Missing Android Rust targets: ${missing.join(', ')}`,
-          targets.stderr || targets.error,
-          [`rustup target add ${missing.join(' ')}`],
-        ),
+    conditionalCheck(
+      'rn.android.rust_targets',
+      true,
+      targets.ok && missing.length === 0,
+      'Android Rust targets are installed',
+      `Missing Android Rust targets: ${missing.join(', ')}`,
+      targets.stderr || targets.error,
+      [`rustup target add ${missing.join(' ')}`],
+    ),
   );
 }
 
@@ -336,6 +386,7 @@ export function collectDoctorReport(
   options: DoctorOptions,
   runner: DoctorRunner = defaultDoctorRunner,
 ): DoctorReport {
+  runner = memoizeRunner(runner);
   const configPath = resolve(options.configPath);
   const configRoot = dirname(configPath);
   const env = options.env ?? process.env;
@@ -360,61 +411,83 @@ export function collectDoctorReport(
 
   const rustc = runner('rustc', ['--version']);
   checks.push(
-    rustc.ok
-      ? check('rustc.present', 'pass', true, 'rustc is available')
-      : check('rustc.present', 'fail', true, 'rustc is unavailable', rustc.stderr || rustc.error, [
-          'Install Rust with https://rustup.rs',
-        ]),
+    conditionalCheck(
+      'rustc.present',
+      true,
+      rustc.ok,
+      'rustc is available',
+      'rustc is unavailable',
+      rustc.stderr || rustc.error,
+      ['Install Rust with https://rustup.rs'],
+    ),
   );
   const rustVersion = parseRustVersion(`${rustc.stdout}\n${rustc.stderr}`);
   checks.push(
-    rustc.ok && rustVersion && isVersionAtLeast(rustVersion, RUSTRA_MSRV)
-      ? check('rustc.msrv', 'pass', true, `Rust ${rustVersion.join('.')} satisfies MSRV 1.88`)
-      : check(
-          'rustc.msrv',
-          'fail',
-          true,
-          `Rust 1.88 or newer is required${rustVersion ? ` (found ${rustVersion.join('.')})` : ''}`,
-          rustc.stderr || rustc.error,
-          ['rustup toolchain install 1.88.0', 'rustup default 1.88.0'],
-        ),
+    conditionalCheck(
+      'rustc.msrv',
+      true,
+      Boolean(rustc.ok && rustVersion && isVersionAtLeast(rustVersion, RUSTRA_MSRV)),
+      rustVersion
+        ? `Rust ${rustVersion.join('.')} satisfies MSRV 1.88`
+        : 'Rust satisfies MSRV 1.88',
+      `Rust 1.88 or newer is required${rustVersion ? ` (found ${rustVersion.join('.')})` : ''}`,
+      rustc.stderr || rustc.error,
+      ['rustup toolchain install 1.88.0', 'rustup default 1.88.0'],
+    ),
   );
   const cargo = runner('cargo', ['--version']);
   checks.push(
-    cargo.ok
-      ? check('cargo.present', 'pass', true, 'cargo is available')
-      : check('cargo.present', 'fail', true, 'cargo is unavailable', cargo.stderr || cargo.error, [
-          'Install Cargo with https://rustup.rs',
-        ]),
+    conditionalCheck(
+      'cargo.present',
+      true,
+      cargo.ok,
+      'cargo is available',
+      'cargo is unavailable',
+      cargo.stderr || cargo.error,
+      ['Install Cargo with https://rustup.rs'],
+    ),
   );
   const node = runner('node', ['--version']);
   const bun = runner('bun', ['--version']);
   checks.push(
-    node.ok || bun.ok
-      ? check('js.runtime', 'pass', true, node.ok ? 'Node.js is available' : 'Bun is available')
-      : check(
-          'js.runtime',
-          'fail',
-          true,
-          'Node.js or Bun is unavailable',
-          node.stderr || bun.stderr || node.error || bun.error,
-          ['Install Node.js 18+ or Bun 1.4+'],
-        ),
+    conditionalCheck(
+      'js.runtime',
+      true,
+      node.ok || bun.ok,
+      node.ok ? 'Node.js is available' : 'Bun is available',
+      'Node.js or Bun is unavailable',
+      node.stderr || bun.stderr || node.error || bun.error,
+      ['Install Node.js 18+ or Bun 1.4+'],
+    ),
+  );
+  const platform = options.platform ?? process.platform;
+  const compilerCommand = platform === 'win32' ? 'cl' : 'c++';
+  const compilerArgs = platform === 'win32' ? ['/Bv'] : ['--version'];
+  checks.push(
+    commandCheck(runner, compilerCommand, compilerArgs, 'toolchain.cpp', 'C/C++ compiler', [
+      platform === 'win32'
+        ? 'Open a Visual Studio Developer Command Prompt or install the MSVC C++ workload'
+        : 'Install the platform C++ compiler (Xcode Command Line Tools or build-essential)',
+    ]),
+  );
+  checks.push(
+    commandCheck(runner, 'cmake', ['--version'], 'toolchain.cmake', 'CMake', [
+      'Install CMake and ensure it is on PATH',
+    ]),
   );
 
   if (config) {
     const manifestPath = resolveManifest(configRoot, config);
     checks.push(
-      manifestPath
-        ? check('codegen.rust_manifest', 'pass', true, `Cargo manifest: ${manifestPath}`)
-        : check(
-            'codegen.rust_manifest',
-            'fail',
-            true,
-            'Could not find Cargo.toml for codegen',
-            undefined,
-            ['Set codegen.rustManifest in rustra.json'],
-          ),
+      conditionalCheck(
+        'codegen.rust_manifest',
+        true,
+        Boolean(manifestPath),
+        `Cargo manifest: ${manifestPath ?? ''}`,
+        'Could not find Cargo.toml for codegen',
+        undefined,
+        ['Set codegen.rustManifest in rustra.json'],
+      ),
     );
     if (manifestPath && existsSync(manifestPath) && cargo.ok) {
       const metadataResult = getCargoMetadata(runner, manifestPath);
@@ -426,21 +499,15 @@ export function collectDoctorReport(
           config.codegen?.rustBinary,
         );
         checks.push(
-          selected.binaryName
-            ? check(
-                'codegen.rust_binary',
-                'pass',
-                true,
-                `Rust generator: ${selected.packageName ?? 'package'} / ${selected.binaryName}`,
-              )
-            : check(
-                'codegen.rust_binary',
-                'fail',
-                true,
-                'Could not select a Cargo generator binary',
-                selected.error,
-                ['Set codegen.rustPackage and codegen.rustBinary in rustra.json'],
-              ),
+          conditionalCheck(
+            'codegen.rust_binary',
+            true,
+            Boolean(selected.binaryName),
+            `Rust generator: ${selected.packageName ?? 'package'} / ${selected.binaryName ?? ''}`,
+            'Could not select a Cargo generator binary',
+            selected.error,
+            ['Set codegen.rustPackage and codegen.rustBinary in rustra.json'],
+          ),
         );
       } else {
         checks.push(
@@ -468,7 +535,15 @@ export function collectDoctorReport(
     const outputPath = safeResolve(configRoot, config.output);
     checks.push(
       schemaPath && existsSync(schemaPath)
-        ? check('codegen.schema_output', 'pass', true, `Schema exists: ${schemaPath}`)
+        ? conditionalCheck(
+            'codegen.schema_output',
+            true,
+            statSync(schemaPath).isFile() && canAccess(schemaPath, constants.R_OK),
+            `Schema exists and is readable: ${schemaPath}`,
+            `Schema exists but is not readable: ${schemaPath}`,
+            undefined,
+            ['Check file permissions for schema.json'],
+          )
         : check(
             'codegen.schema_output',
             'warn',
@@ -478,18 +553,37 @@ export function collectDoctorReport(
             ['Run rustra codegen --config rustra.json'],
           ),
     );
-    if (outputPath && !existsSync(outputPath)) {
+    if (outputPath && existsSync(outputPath)) {
+      checks.push(
+        conditionalCheck(
+          'codegen.output_directory',
+          true,
+          statSync(outputPath).isDirectory() && canAccess(outputPath, constants.W_OK),
+          `Generated output directory is writable: ${outputPath}`,
+          `Generated output directory is not writable: ${outputPath}`,
+          undefined,
+          ['Check directory permissions for generated output'],
+        ),
+      );
+    } else if (outputPath) {
+      const parent = nearestExistingParent(dirname(outputPath));
+      const parentWritable = parent !== undefined && canAccess(parent, constants.W_OK);
       checks.push(
         check(
           'codegen.output_directory',
           'warn',
           false,
-          `Generated output directory will be created: ${outputPath}`,
+          parentWritable
+            ? `Generated output directory will be created: ${outputPath}`
+            : `Generated output directory may not be creatable: ${outputPath}`,
+          parentWritable
+            ? undefined
+            : `Nearest existing parent is not writable: ${parent ?? dirname(outputPath)}`,
+          ['Create the output directory or grant write permission'],
         ),
       );
     }
 
-    const platform = options.platform ?? process.platform;
     if (config.reactNative) {
       if (platform === 'darwin') {
         checks.push(
@@ -536,6 +630,85 @@ export function collectDoctorReport(
   }
 
   return { schemaVersion: 1, checks };
+}
+
+function doctorProbeKey(command: string, args: string[]): string {
+  return JSON.stringify([command, args]);
+}
+
+/**
+ * Async doctor collection for the CLI. Probe discovery is deliberately kept
+ * separate from report assembly: the existing synchronous collector remains a
+ * stable library API, while independent native commands are started together
+ * and then replayed from one result cache.
+ */
+export async function collectDoctorReportAsync(
+  options: DoctorOptions,
+  runner: DoctorAsyncRunner = defaultDoctorRunnerAsync,
+): Promise<DoctorReport> {
+  const probes = new Map<string, [string, string[]]>();
+  const add = (command: string, args: string[]) => {
+    probes.set(doctorProbeKey(command, args), [command, args]);
+  };
+
+  add('rustc', ['--version']);
+  add('cargo', ['--version']);
+  add('node', ['--version']);
+  add('bun', ['--version']);
+  const platform = options.platform ?? process.platform;
+  add(platform === 'win32' ? 'cl' : 'c++', platform === 'win32' ? ['/Bv'] : ['--version']);
+  add('cmake', ['--version']);
+
+  const configPath = resolve(options.configPath);
+  if (existsSync(configPath)) {
+    const parsed = readConfig(configPath);
+    if (parsed.config) {
+      const configRoot = dirname(configPath);
+      const manifestPath = resolveManifest(configRoot, parsed.config);
+      if (manifestPath) {
+        add('cargo', [
+          'metadata',
+          '--format-version',
+          '1',
+          '--no-deps',
+          '--manifest-path',
+          manifestPath,
+        ]);
+      }
+
+      if (parsed.config.reactNative) {
+        if (platform === 'darwin') {
+          add('xcodebuild', ['-version']);
+          add('pod', ['--version']);
+        }
+        add('java', ['-version']);
+        add('adb', ['version']);
+        add('sdkmanager', ['--version']);
+        add('rustup', ['target', 'list', '--installed']);
+      }
+      if (parsed.config.tauri) {
+        const command =
+          platform === 'darwin' ? 'xcodebuild' : platform === 'win32' ? 'cl' : 'pkg-config';
+        const args =
+          command === 'xcodebuild' ? ['-version'] : command === 'pkg-config' ? ['--version'] : [];
+        add(command, args);
+      }
+    }
+  }
+
+  const results = new Map<string, DoctorCommandResult>();
+  await Promise.all(
+    [...probes.entries()].map(async ([key, [command, args]]) => {
+      results.set(key, await runner(command, args));
+    }),
+  );
+  const cachedRunner: DoctorRunner = (command, args) =>
+    results.get(doctorProbeKey(command, args)) ?? {
+      ok: false,
+      stdout: '',
+      stderr: `probe was not prefetched: ${command} ${args.join(' ')}`,
+    };
+  return collectDoctorReport(options, cachedRunner);
 }
 
 export function formatDoctorJson(report: DoctorReport): string {

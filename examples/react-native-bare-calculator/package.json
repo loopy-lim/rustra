@@ -9,7 +9,8 @@
     "modules/rustra-bridge"
   ],
   "scripts": {
-    "codegen": "cargo run --manifest-path ../../Cargo.toml -p rustra-calculator-example --bin rustra-calculator-example && bun ../../packages/cli/src/index.ts generate --config rustra.json",
+    "codegen": "bun ../../packages/cli/src/index.ts codegen --config rustra.json",
+    "codegen:check": "bun ../../packages/cli/src/index.ts codegen --config rustra.json --check",
     "test:autolink": "bun scripts/check-autolink.mjs",
     "typecheck": "tsc --noEmit"
   },

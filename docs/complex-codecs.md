@@ -23,9 +23,9 @@ TypeScript 사이에서 달라도 wire index가 바뀌지 않는다.
 `command.invalid_args`/`invoke.malformed`로 처리된다.
 
 CLI의 공용 Codec IR이 TS/C++ 생성기의 recursive ref, struct field, map, option,
-tuple, enum 판정을 공유한다. RN C++는 현재 `Set`과 `int64/uint64` 명령을
-정적 광고하지 않는다. Set은 JSI 호환성, 64-bit 정수는 BigInt 표면을 보장하기
-위해 JS complex codec으로 간다. 복합 정수는 `number | bigint`를 받고
+tuple, enum 판정을 공유한다. RN C++는 원시 요소 `Set`과 `int64/uint64`를
+native-safe complex subset으로 정적 광고한다. 객체/배열 요소 Set처럼 native-safe
+판정 밖인 형태는 JS complex codec으로 간다. 복합 정수는 `number | bigint`를 받고
 `int8..uint64` 범위를 검증한다. 측정은 다음 명령으로 machine-readable JSON
 receipt를 만든다.
 

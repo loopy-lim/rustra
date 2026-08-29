@@ -116,4 +116,3 @@ export function wideAgg(input: WideAggInput, options?: InvokeOptions): Promise<W
   return invokeGenerated<WideAggOutput>(28, 'wideAgg', input, options);
 }
 wideAgg.commandId = 'wideAgg';
-

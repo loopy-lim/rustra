@@ -1,6 +1,8 @@
 use rustra::prelude::*;
 use std::fs;
 use std::process::Command;
+use std::thread;
+use std::time::Duration;
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -929,6 +931,32 @@ fn build_api_generates_typescript() {
     assert!(
         types_ts.contains("GreetInput"),
         "expected GreetInput type, got:\n{types_ts}"
+    );
+}
+
+#[test]
+fn generated_output_skips_unchanged_writes() {
+    let dir = tempfile::tempdir().unwrap();
+    let generated = register!(Package::builder("test.write-stability"), add_numbers)
+        .build()
+        .generate_typescript()
+        .unwrap();
+
+    generated.write_to_dir(dir.path()).unwrap();
+    let before = fs::metadata(dir.path().join("schema.json"))
+        .unwrap()
+        .modified()
+        .unwrap();
+    thread::sleep(Duration::from_millis(20));
+    generated.write_to_dir(dir.path()).unwrap();
+    let after = fs::metadata(dir.path().join("schema.json"))
+        .unwrap()
+        .modified()
+        .unwrap();
+
+    assert_eq!(
+        before, after,
+        "unchanged generated files must not be rewritten"
     );
 }
 

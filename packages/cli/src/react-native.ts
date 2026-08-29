@@ -1,5 +1,4 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve, sep } from 'node:path';
 
 export const GENERATED_REACT_NATIVE_PACKAGE = '@rustra/generated-react-native';
@@ -473,28 +472,4 @@ class RustraBridgePackage : ReactPackage {
     'android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt': androidModule,
     'android/src/main/java/dev/rustra/bridge/RustraBridgePackage.kt': androidPackage,
   };
-}
-
-export async function writeReactNativeModule(
-  options: ReactNativeScaffoldOptions,
-): Promise<string[]> {
-  const files = renderReactNativeModule(options);
-  const written: string[] = [];
-  for (const [name, content] of Object.entries(files)) {
-    const target = resolve(options.moduleDir, name);
-    let old: string | undefined;
-    try {
-      old = await readFile(target, 'utf8');
-    } catch {
-      // New file.
-    }
-    if (old === content) {
-      written.push(`${name} (unchanged)`);
-      continue;
-    }
-    await mkdir(dirname(target), { recursive: true });
-    await writeFile(target, content);
-    written.push(old === undefined ? name : `${name} (updated)`);
-  }
-  return written;
 }

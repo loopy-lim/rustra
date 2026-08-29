@@ -114,10 +114,10 @@ RN 시뮬레이터 벤치는 이 섹션에서 다루지 않는다(C++ 게이트�
   owned-flag 설계로 대체했다 — probe 캐시 없이도 재시도가 exactly-once다.
   (근거: `crates/rustra/tests/trust_baseline_ffi.rs` 320행 추가)
 
-## Track B 실측 — wide int C++ 직결 잔여 (2026-08-29)
+## Track B 실측 — wide int C++ 직결 완료 범위 (2026-08-29)
 
-트랙 B(C++ bigint/Set 직결)의 잔여 로드맵 항목은 **Set(int64/uint64 원시 요소)과
-C++ int64/uint64 네이티브 디코드 경로**였고, 둘 다 완성됐다(3면 wire gate:
+트랙 B(C++ bigint/Set 직결)의 이번 완료 범위는 **Set(int64/uint64 원시 요소)과
+C++ int64/uint64 네이티브 디코드 경로**다(3면 wire gate:
 `wire_fixtures.rs` ↔ `cross-wire.test.ts` ↔ C++ `test-rustra-generated-codecs.cpp`
 가 `wideAgg`/`tagSet` PINNED hex 를 byte-exact 공유).
 
@@ -636,7 +636,7 @@ RPC 계약"으로 설계 목표가 다르다. 같은 문제만 겹친다(RN에�
 
 | 타입                   | Nitro 0.35.10                                  | rustra (postcard/rkyv V2 fast path)                                                                                                                       | rustra 폴백(Tier 3 JSON) |
 | ---------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| 정수/실수 프리미티브   | ✅ int/float/double + **bigint(Int64/UInt64)** | ✅ f64/f32/zigzag 정수 + **uvar(u8–u64) plain varint** — bigint 표면은 ❌(number, 2^53 한계)                                                              | ✅ (serde JSON)          |
+| 정수/실수 프리미티브   | ✅ int/float/double + **bigint(Int64/UInt64)** | ✅ f64/f32/zigzag 정수 + **uvar(u8–u64) plain varint** + `number                                                                                          | bigint` wide-int 복원    | ✅ (serde JSON) |
 | string                 | ✅                                             | ✅                                                                                                                                                        | ✅                       |
 | bool / unit(void)      | ✅                                             | ✅                                                                                                                                                        | ✅                       |
 | 배열 Vec<T>            | ✅ Vector                                      | ✅ vec\_\*(정수 부호별/f64/bool/string/struct) + **Vec<u8>=bytes(len+raw)**                                                                               | ✅                       |
@@ -687,13 +687,12 @@ RPC 계약"으로 설계 목표가 다르다. 같은 문제만 겹친다(RN에�
 1. **fast-path 확장** (2026-08-22 1단계 완료) — 동적 맵(원시값), 튜플,
    Vec<u8>/ArrayBuffer, u8–u64 plain varint, chrono Date(ISO string)를
    3면(TS·Rust·C++) 코드젱에 구현하고 PINNED hex 와이어 게이트로 고정했다.
-   남은 것: **bigint TS 표면**(postcard 현재 number — 2^53 정밀도 한계
-   문서화됨)은 2026-08-29 트랙 A(postcard fast-path, bigint 복원)와
-   트랙 B(C++ int64/uint64 네이티브 디코드 + 원시 요소 Set 직결)로 해소 —
+   wide-int TS 표면은 트랙 A(postcard fast-path, `number | bigint` 복원)로,
+   C++ int64/uint64 네이티브 디코드와 원시 요소 Set 직결은 트랙 B로 완결됐다.
    C++ complex direct marshalling 잔여는 complex-route into-handler로 코어가
-   `DirectResponse::Written`을 직접 반환하도록 해결됐고(2026-08-28, 위
-   "FFI caller-buffer 잔여 실측" 참고), Set/int64/uint64 는 트랙 B로
-   완결됐다(위 "Track B 실측" 섹션. 기기 스모크는 후속).
+   `DirectResponse::Written`을 직접 반환하도록 해결됐다(2026-08-28, 위
+   "FFI caller-buffer 잔여 실측" 참고). 객체/배열 요소 Set과 재귀 깊은 구조의
+   C++ 전개는 여전히 JS complex codec 경로다.
 2. **schema-driven complex binary** (2026-08-27) — recursive struct,
    struct-valued map, data enum, nested Option/Set을 TS/Rust golden wire로
    처리한다. RN에서는 현재 JS codec이 Rust `invokeRkyvV2`까지 전달하며, C++

@@ -7,7 +7,9 @@
 
 import type {
   EngineClient as EngineClientType,
+  BatchEntry,
   InvokeOptions,
+  RkyvV2Engine,
   RkyvV2EngineOptions,
   RkyvV2SchemaNative,
   RustraNative,
@@ -37,6 +39,11 @@ export {
   createRkyvV2Engine,
   parseRustraErrorString,
 } from '@rustra/types';
+
+/** React Native 어댑터가 보장하는 공통 엔진 표면. */
+export type ReactNativeEngine = EngineClientType & {
+  invokeBatch<T>(entries: BatchEntry[]): Promise<T[]>;
+};
 
 /**
  * RN JSI 네이티브 표면 — 코어 `RkyvV2SchemaNative` 를 그대로 상속하고 RN 전용
@@ -93,17 +100,17 @@ export function createReactNativeEngine(native: { invoke(payload: ArrayBuffer): 
     invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
       return invokeWithTimeout(transport, command, args, options);
     },
+    invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
+      return Promise.all(
+        entries.map((entry) =>
+          invokeWithTimeout<T>(transport, entry.command, entry.args, entry.options),
+        ),
+      );
+    },
   };
 }
 
 // ── Fast sync engine ──────────────────────────────────────────
-
-/**
- * 동기 엔진 — JSI sync call로 Promise 오버헤드 없이 즉시 결과를 반환합니다.
- */
-export type SyncEngineClient = {
-  invoke<T>(command: string, args?: unknown): T;
-};
 
 /**
  * 고속 엔진 생성 옵션.
@@ -125,7 +132,7 @@ export type RustraBootstrapOptions = FastEngineOptions & {
 
 export type RustraBootstrap = {
   /** Optional eager readiness hook; generated commands also initialize lazily. */
-  ready(): Promise<EngineClientType>;
+  ready(): Promise<RkyvV2Engine>;
 };
 
 /**
@@ -147,7 +154,12 @@ export function createRustraBootstrap(options: RustraBootstrapOptions): RustraBo
       );
     }
   });
-  return { ready: ensureConfigured };
+  // configureLazy는 공통 configure() 호출자와의 하위 호환을 위해
+  // EngineClient를 반환하지만, 이 bootstrap이 설치하는 엔진은
+  // createFastEngine의 RkyvV2Engine(필수 invokeBatch)이다.
+  return {
+    ready: () => ensureConfigured() as Promise<RkyvV2Engine>,
+  };
 }
 
 /**
@@ -193,7 +205,7 @@ export function getRustraNative(): RustraJSINative & RustraNative {
 export function createFastEngine(
   native: RustraJSINative,
   options: FastEngineOptions,
-): EngineClientType {
+): RkyvV2Engine {
   // 명시 나열 + satisfies — core 에 옵션이 추가되면 이 객체 리터럴이 누락
   // 필드/오타를 타입 에러로 드러낸다 (수작업 필터링 누수 방지).
   const engineOptions = {
@@ -290,12 +302,17 @@ function raceAbortShallow<T>(
 export function createAsyncEngine(
   native: RustraJSIAsyncNative,
   options: FastEngineOptions,
-): EngineClientType {
+): ReactNativeEngine {
   const syncEngine = createFastEngine(native, options);
 
   if (typeof native.invokeTypedAsync !== 'function') {
-    // 폴백: 동기 엔진 재사용 (Promise 는 sync 엔진이 이미 반환).
-    // 동기 엔진(T1) 이 signal 옵션을 이미 처리하므로 여기서 추가 작업 없음.
+    // 폴백: 동기 엔진 재사용 (Promise 는 sync 엔진이 이미 반환). 동작은
+    // 유지하되, createAsyncEngine이라는 이름만 보고 JS 스레드 오프로드가
+    // 된다고 오해하지 않도록 개발자에게 명시적으로 알린다.
+    console.warn(
+      '[rustra/react-native] createAsyncEngine is using the synchronous fallback; ' +
+        'rebuild the native module with invokeTypedAsync for JS-thread offload.',
+    );
     return syncEngine;
   }
 
@@ -386,11 +403,17 @@ export function createAsyncEngine(
     },
   };
 
-  return {
+  const engine = {
     invoke<T>(command: string, args?: unknown, invokeOptions?: InvokeOptions): Promise<T> {
       return invokeWithTimeout(transport, command, args, invokeOptions);
     },
+    invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
+      return Promise.all(
+        entries.map((entry) => engine.invoke<T>(entry.command, entry.args, entry.options)),
+      );
+    },
   };
+  return engine;
 }
 
 // ── Event push: subscribeEvent (Rust → JS) ───────────────────
@@ -404,8 +427,52 @@ export type RustraEventNative = {
   offEvent?(name: string): void;
 };
 
+export type RustraChannelNative = {
+  createChannel?(callback: (payloadJson: string) => void): number;
+  dropChannel?(handle: number): boolean;
+};
+
+/**
+ * Rust → JS 역방향 채널을 만든다. 반환된 `handle`을 생성된 command 입력에
+ * 전달하고, `close()`는 Rust 채널 등록을 해제한다. native를 생략하면 설치된
+ * RN JSI 모듈을 사용한다.
+ */
+export function createChannel(
+  callback: (payload: unknown) => void,
+  native: RustraChannelNative = getRustraNative(),
+): { readonly handle: number; close(): boolean } {
+  if (typeof native.createChannel !== 'function' || typeof native.dropChannel !== 'function') {
+    throw new RustraCommandError(
+      'channel.unavailable',
+      'native module must expose createChannel() and dropChannel(); channel support is unavailable',
+    );
+  }
+  const dropChannel = native.dropChannel;
+  let closed = false;
+  const handle = native.createChannel((payloadJson) => {
+    if (closed) return;
+    let payload: unknown = null;
+    try {
+      payload = JSON.parse(payloadJson);
+    } catch {
+      payload = null;
+    }
+    callback(payload);
+  });
+  return {
+    handle,
+    close() {
+      if (closed) return false;
+      closed = true;
+      return dropChannel(handle);
+    },
+  };
+}
+
 /**
  * Rust `emit` → JS 콜백 구독. 반환 함수로 구독 해제한다.
+ * 기본형은 모든 플랫폼 이벤트 헬퍼와 같은 `(name, callback[, options])`다.
+ * 기존 `(native, name, callback[, options])` 호출도 호환 목적으로 유지한다.
  *
  * 네이티브 경로(C++ JSI `onEvent`/`offEvent`) 위에서:
  * - **페이로드 파싱**: C++ 가 JSON 문자열을 JSI 로 그대로 넘기고(경계 횡단
@@ -426,9 +493,7 @@ export type RustraEventNative = {
  * ```ts
  * import { subscribeEvent } from '@rustra/react-native';
  *
- * const unsubscribe = subscribeEvent(
- *   getRustraNative(), // onEvent/offEvent 를 노출하는 네이티브 객체
- *   'progress.tick',
+ * const unsubscribe = subscribeEvent('progress.tick',
  *   (payload) => {
  *     console.log(payload.step, '/', payload.total); // 파싱된 객체
  *   },
@@ -443,11 +508,32 @@ const nativeListeners = new WeakMap<
 >();
 
 export function subscribeEvent(
+  name: string,
+  cb: (payload: unknown) => void,
+  options?: { allowMissingNative?: boolean },
+): () => void;
+/** @deprecated Pass `(name, callback)`; this overload remains for 0.x compatibility. */
+export function subscribeEvent(
   native: RustraEventNative,
   name: string,
   cb: (payload: unknown) => void,
-  options: { allowMissingNative?: boolean } = {},
+  options?: { allowMissingNative?: boolean },
+): () => void;
+export function subscribeEvent(
+  nativeOrName: RustraEventNative | string,
+  nameOrCallback: string | ((payload: unknown) => void),
+  callbackOrOptions?: ((payload: unknown) => void) | { allowMissingNative?: boolean },
+  legacyOptions: { allowMissingNative?: boolean } = {},
 ): () => void {
+  const usesCanonicalShape = typeof nativeOrName === 'string';
+  const native = usesCanonicalShape ? getRustraNative() : nativeOrName;
+  const name = usesCanonicalShape ? nativeOrName : (nameOrCallback as string);
+  const cb = (usesCanonicalShape ? nameOrCallback : callbackOrOptions) as (
+    payload: unknown,
+  ) => void;
+  const options = (usesCanonicalShape ? callbackOrOptions : legacyOptions) as {
+    allowMissingNative?: boolean;
+  };
   if (typeof native.onEvent !== 'function') {
     if (options.allowMissingNative) return () => {};
     throw new RustraCommandError(

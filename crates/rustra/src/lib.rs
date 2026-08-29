@@ -164,6 +164,7 @@ mod error;
 pub mod events;
 mod executor;
 pub mod ffi;
+mod limits;
 pub mod renderer_host;
 mod rkyv_codec;
 mod schema;
@@ -174,7 +175,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 
@@ -585,20 +586,37 @@ pub struct GeneratedPackage {
 impl GeneratedPackage {
     /// 생성된 모든 파일을 지정한 디렉토리에 저장합니다.
     ///
+    /// `RUSTRA_SCHEMA_OUT` 환경 변수가 있으면 해당 디렉토리를 사용합니다.
+    /// CLI의 `codegen --check`가 작업 트리를 건드리지 않고 Rust 산출물을
+    /// 임시 디렉토리에서 검증할 때 사용하는 우회 경로입니다.
+    ///
     /// 디렉토리가 없으면 생성합니다:
     /// - `schema.json` — 전체 명령 스키마
     /// - `types.ts` — TypeScript 타입 정의
     /// - `commands.ts` — TypeScript 명령 헬퍼 함수
     /// - `contract.ts` — `GENERATED_CONTRACT_HASH`/`SCHEMA_VERSION` 상수
     pub fn write_to_dir(&self, output_dir: impl AsRef<Path>) -> crate::Result<()> {
-        let output_dir = output_dir.as_ref();
-        fs::create_dir_all(output_dir)?;
-        fs::write(output_dir.join("schema.json"), &self.schema_json)?;
-        fs::write(output_dir.join("types.ts"), &self.types_ts)?;
-        fs::write(output_dir.join("commands.ts"), &self.commands_ts)?;
-        fs::write(output_dir.join("contract.ts"), &self.contract_ts)?;
+        let requested_dir = output_dir.as_ref();
+        let output_dir = std::env::var_os("RUSTRA_SCHEMA_OUT")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| requested_dir.to_path_buf());
+        fs::create_dir_all(&output_dir)?;
+        write_if_changed(output_dir.join("schema.json"), &self.schema_json)?;
+        write_if_changed(output_dir.join("types.ts"), &self.types_ts)?;
+        write_if_changed(output_dir.join("commands.ts"), &self.commands_ts)?;
+        write_if_changed(output_dir.join("contract.ts"), &self.contract_ts)?;
         Ok(())
     }
+}
+
+fn write_if_changed(path: impl AsRef<Path>, content: &str) -> std::io::Result<()> {
+    let path = path.as_ref();
+    if let Ok(existing) = fs::read(path) {
+        if existing == content.as_bytes() {
+            return Ok(());
+        }
+    }
+    fs::write(path, content)
 }
 
 /// 단일 명령의 메타데이터와 핸들러입니다.
@@ -627,11 +645,6 @@ struct Command {
     buffer_handler: Option<BufferHandler>,
     /// raw 직결의 입력 필드 종류 — 호스트가 같은 순서로 비트를 해석한다.
     raw_input_kinds: Vec<crate::rkyv_codec::RawFieldKind>,
-    /// raw 직결의 출력 필드 종류(현재 단일 스칼라 또는 unit 만 지원).
-    /// 현재 코어 소비자는 없으나 호스트 디코딩 계약 문서로 남긴다 — JSI
-    /// decode_by_id 와 짝을 이루는 슬롯 해석 종류다(향후 C++ 코드젠 사용).
-    #[allow(dead_code)]
-    raw_output_kind: Option<crate::rkyv_codec::RawFieldKind>,
     rkyv_v2_decode: DecodeFn,
     rkyv_v2_encode_response: EncodeFn,
     /// true when this command uses Tier 3 (JSON fallback) wire format.
@@ -739,7 +752,7 @@ where
                 return Err(RustraError::invalid_args("rkyv v2: payload too short"));
             }
             let limits = ComplexCodecLimits {
-                max_payload_bytes: crate::ffi::max_payload_bytes(),
+                max_payload_bytes: crate::limits::max_payload_bytes(),
                 ..ComplexCodecLimits::DEFAULT
             };
             let input_value = complex_decode(&input_schema, &definitions, &payload[2..], limits)?;
@@ -821,7 +834,7 @@ where
                 return Err(RustraError::invalid_args("rkyv v2: payload too short"));
             }
             let limits = ComplexCodecLimits {
-                max_payload_bytes: crate::ffi::max_payload_bytes(),
+                max_payload_bytes: crate::limits::max_payload_bytes(),
                 ..ComplexCodecLimits::DEFAULT
             };
             let input_value = complex_decode(&input_schema, &definitions, &payload[2..], limits)?;
@@ -874,7 +887,7 @@ where
     // 조건: 입력이 스칼라 1..3개 + 출력이 단일 스칼라(또는 unit)인 정적 명령.
     // postcard 왕복 없이 u64 슬롯으로 직접 주고받는다. 필드 종류는 스키마의
     // 프로퍼티 선언순(fieldOrder=declaration 계약)에서 읽는다.
-    let (raw_handler, raw_input_kinds, raw_output_kind) =
+    let (raw_handler, raw_input_kinds) =
         build_raw_handler(&input_schema, &output_schema, &handler, force_tier3);
 
     Command {
@@ -894,7 +907,6 @@ where
         raw_handler,
         buffer_handler: None,
         raw_input_kinds,
-        raw_output_kind,
         rkyv_v2_decode: rkyv_v2_decoder,
         rkyv_v2_encode_response: rkyv_v2_response_encoder,
         rkyv_v2_tier3: is_tier3,
@@ -912,11 +924,7 @@ fn build_raw_handler<I, O, F>(
     output_schema: &Value,
     handler: &Arc<F>,
     force_tier3: bool,
-) -> (
-    Option<RawHandler>,
-    Vec<crate::rkyv_codec::RawFieldKind>,
-    Option<crate::rkyv_codec::RawFieldKind>,
-)
+) -> (Option<RawHandler>, Vec<crate::rkyv_codec::RawFieldKind>)
 where
     I: DeserializeOwned + 'static,
     O: Serialize + 'static,
@@ -925,20 +933,20 @@ where
     use crate::rkyv_codec::RawFieldKind;
 
     if force_tier3 {
-        return (None, Vec::new(), None);
+        return (None, Vec::new());
     }
     // 입력: object 프로퍼티 1..3개 전부 스칼라.
     let Some(props) = input_schema.get("properties").and_then(Value::as_object) else {
-        return (None, Vec::new(), None);
+        return (None, Vec::new());
     };
     if props.is_empty() || props.len() > 3 {
-        return (None, Vec::new(), None);
+        return (None, Vec::new());
     }
     let mut input_kinds = Vec::with_capacity(props.len());
     let mut field_names = Vec::with_capacity(props.len());
     for (name, schema) in props {
         let Some(kind_str) = schema.get("type").and_then(Value::as_str) else {
-            return (None, Vec::new(), None);
+            return (None, Vec::new());
         };
         // integer 형식 정보로 zigzag/uvar 를 가린다 — postcard 는 signed 는
         // zigzag, unsigned 는 plain varint. format 미지정 signed 정수는 zigzag.
@@ -952,7 +960,7 @@ where
             }
             "number" => RawFieldKind::F64,
             "boolean" => RawFieldKind::Bool,
-            _ => return (None, Vec::new(), None),
+            _ => return (None, Vec::new()),
         };
         // f32 판별: number + format "float"(schemars 관례).
         if kind == RawFieldKind::F64
@@ -971,12 +979,12 @@ where
         .and_then(Value::as_object)
         .cloned()
         .unwrap_or_default();
-    let (output_kind, output_name) = if out_props.is_empty() {
-        (None, None)
+    let output_kind = if out_props.is_empty() {
+        None
     } else if out_props.len() == 1 {
-        let (name, schema) = out_props.iter().next().expect("len==1");
+        let (_name, schema) = out_props.iter().next().expect("len==1");
         let Some(kind_str) = schema.get("type").and_then(Value::as_str) else {
-            return (None, Vec::new(), None);
+            return (None, Vec::new());
         };
         let kind = match kind_str {
             "integer" => {
@@ -988,16 +996,15 @@ where
             }
             "number" => RawFieldKind::F64,
             "boolean" => RawFieldKind::Bool,
-            _ => return (None, Vec::new(), None),
+            _ => return (None, Vec::new()),
         };
-        (Some(kind), Some(name.clone()))
+        Some(kind)
     } else {
-        return (None, Vec::new(), None);
+        return (None, Vec::new());
     };
 
     // postcard 출력은 필드명을 와이어에 싣지 않는다(선언순 값 나열) —
     // 출력 필드 이름은 디코딩에 불필요하다.
-    let _out_name: Option<String> = output_name;
     let kinds_snapshot = input_kinds.clone();
     let output_kind_snapshot = output_kind;
     let handler = Arc::clone(handler);
@@ -1108,7 +1115,7 @@ where
         };
         Ok(slot)
     });
-    (Some(raw), input_kinds, output_kind)
+    (Some(raw), input_kinds)
 }
 
 /// Existing object-input generated commands can forward one to three required
@@ -1401,7 +1408,7 @@ impl Package {
     /// Tier 3 commands require at least 2 bytes (command_id only, rest is JSON).
     ///
     /// 크기 게이트(구현 완료) — JSON/postcard FFI 경로와 동일한 동적 한도
-    /// ([`ffi::max_payload_bytes`]) 를 초과하면 `payload.too_large` 를 반환한다.
+    /// (현재 runtime payload limit)을 초과하면 `payload.too_large` 를 반환한다.
     /// 소비 크레이트 FFI(calculator/template)와 C++ typed fast path 가 모두
     /// 이 함수를 통과하므로 여기가 rkyv V2 와이어의 단일 검사 지점이다.
     /// typed(tier 1) 경로는 JS 인코딩이 없어 JS 사전 검사를 건너뛰므로,
@@ -1410,7 +1417,7 @@ impl Package {
         if payload.len() < 2 {
             return Err(RustraError::invalid_args("rkyv v2: payload too short"));
         }
-        let limit = crate::ffi::max_payload_bytes();
+        let limit = crate::limits::max_payload_bytes();
         if payload.len() > limit {
             return Err(RustraError::payload_too_large(payload.len(), limit));
         }
@@ -1492,7 +1499,7 @@ impl Package {
         let wire_size = 2usize
             .saturating_add(postcard_uvar_len(bytes.len()))
             .saturating_add(bytes.len());
-        let limit = crate::ffi::max_payload_bytes();
+        let limit = crate::limits::max_payload_bytes();
         if wire_size > limit {
             return Err(RustraError::payload_too_large(wire_size, limit));
         }
@@ -1636,7 +1643,7 @@ impl Package {
         if payload.len() < 2 {
             return Err(RustraError::invalid_args("rkyv v2: payload too short"));
         }
-        let limit = crate::ffi::max_payload_bytes();
+        let limit = crate::limits::max_payload_bytes();
         if payload.len() > limit {
             return Err(RustraError::payload_too_large(payload.len(), limit));
         }

@@ -18,6 +18,7 @@ import {
   invokeWithTimeout,
   RustraCommandError,
   parseRustraErrorString,
+  normalizeRustraError,
 } from './index.js';
 import type { RkyvV2SchemaNative, RkyvV2Codec, BatchEntry, EngineClient } from './index.js';
 
@@ -1051,6 +1052,26 @@ test('invokeBatch uses single invokeTypedBatch when all entries are static (P0-2
   );
 });
 
+test('invokeBatch turns a synchronous native batch throw into a rejected Promise', async () => {
+  const native = makeTypedNative({
+    hasStaticCodec: () => true,
+    invokeTyped: () => ({ value: 0 }),
+    invokeTypedBatch: () => {
+      throw new RustraCommandError('transport.error', 'batch transport failed', true);
+    },
+  });
+  const engine = createRkyvV2Engine(native, staticRegistry('add'));
+  const returned = engine.invokeBatch([{ command: 'add', args: {} }]);
+  assert.equal(typeof returned.then, 'function');
+  await assert.rejects(
+    returned,
+    (error: unknown) =>
+      error instanceof RustraCommandError &&
+      error.code === 'transport.error' &&
+      error.retryable === true,
+  );
+});
+
 test('invokeBatch falls back to per-entry invoke when dynamic commands are mixed', async () => {
   let batchCalls = 0;
   const native = makeTypedNative({
@@ -1650,6 +1671,15 @@ test('parseRustraErrorString parses JSON error objects and respects retryable', 
   assert.ok(err instanceof RustraCommandError);
   assert.equal(err.code, 'database.unavailable');
   assert.equal(err.message, 'Connection pool exhausted');
+  assert.equal(err.retryable, true);
+});
+
+test('normalizeRustraError preserves retryable metadata from string rejections', () => {
+  const err = normalizeRustraError(
+    '{"code":"transport.timeout","message":"request timed out","retryable":true}',
+  );
+  assert.equal(err.code, 'transport.timeout');
+  assert.equal(err.message, 'request timed out');
   assert.equal(err.retryable, true);
 });
 
@@ -2317,6 +2347,47 @@ test('timeout race ignores late result without unhandled rejection', async () =>
   await new Promise((r) => setTimeout(r, 20)); // unhandled rejection 이 여기서 터지면 테스트 프로세스가 죽는다
 });
 
+test('RkyvV2 engine applies timeoutMs to an async native dispatch', async () => {
+  const native = makeNative({ schema: schemaBytes([{ name: 'slow', commandId: 7 }]) });
+  native.invokeAsync = () => 77; // callback intentionally never arrives
+  native.invokeCancel = () => true;
+  const codec: RkyvV2Codec<unknown, unknown> = {
+    commandId: 7,
+    encode: () => new ArrayBuffer(2),
+    decode: () => ({ ok: true, result: {} }),
+  };
+  const engine = createRkyvV2Engine(native, new Map([['slow', codec]]));
+  const controller = new AbortController();
+  await assert.rejects(
+    engine.invoke('slow', {}, { signal: controller.signal, timeoutMs: 10 }),
+    (error: unknown) =>
+      error instanceof RustraCommandError &&
+      error.code === 'transport.timeout' &&
+      error.retryable === true,
+  );
+});
+
+test('invokeWithTimeout rejects a pending call when its signal aborts', async () => {
+  let resolveLate!: (value: number) => void;
+  const pending: EngineClient = {
+    invoke: () =>
+      new Promise<number>((resolve) => {
+        resolveLate = resolve;
+      }),
+  };
+  const controller = new AbortController();
+  const returned = invokeWithTimeout(pending, 'cancel-me', undefined, {
+    signal: controller.signal,
+  });
+  controller.abort();
+  await assert.rejects(
+    returned,
+    (error: unknown) => error instanceof RustraCommandError && error.code === 'cancelled',
+  );
+  resolveLate(42);
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
+});
+
 test('invokeWithTimeout without timeoutMs passes through directly', async () => {
   const ok: EngineClient = {
     invoke<T>(_command: string, _args?: unknown, _options?: unknown): Promise<T> {
@@ -2420,6 +2491,25 @@ test('global invokeBatch without timeoutMs passes through unchanged', async () =
   try {
     const out = await invokeBatch<number[]>([{ command: 'a' }, { command: 'b' }]);
     assert.deepEqual(out, [1, 2]);
+  } finally {
+    configure(sentinel);
+  }
+});
+
+test('global invokeBatch rejects unsupported engines as a Promise', async () => {
+  const engine: EngineClient = {
+    invoke: async <T>() => undefined as T,
+  };
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  configure(engine);
+  try {
+    const returned = invokeBatch([{ command: 'unsupported' }]);
+    assert.equal(typeof returned.then, 'function');
+    await assert.rejects(returned, /does not support invokeBatch/);
   } finally {
     configure(sentinel);
   }
