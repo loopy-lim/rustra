@@ -241,6 +241,27 @@ fn dynamic_command_invokable_via_rkyv_v2_tier3() {
     assert_eq!(out["v"], 7);
 }
 
+/// schema_generation 이 레지스트리 구조 변경(register/replace/unregister)마다
+/// 증가한다 — dev 치환 워크플로우의 재동기화 계약. 계약은 "증가 방향 보존"
+/// 만 요구한다(동일 이름 재등록 등 무실질 변경도 증가해도 무해).
+#[test]
+#[cfg(debug_assertions)]
+fn schema_generation_advances_on_register_replace_unregister() {
+    let pkg = empty_pkg();
+    let g0 = pkg.schema_generation();
+    pkg.register("echo", echo).unwrap();
+    let g1 = pkg.schema_generation();
+    assert!(g1 > g0, "register must advance generation");
+    pkg.replace("echo", c1).unwrap();
+    let g2 = pkg.schema_generation();
+    assert!(g2 > g1, "replace must advance generation");
+    pkg.unregister("echo").unwrap();
+    assert!(
+        pkg.schema_generation() > g2,
+        "unregister must advance generation"
+    );
+}
+
 /// live_schema() 가 동적 명령을 포함하는지 검증.
 #[test]
 #[cfg(debug_assertions)]

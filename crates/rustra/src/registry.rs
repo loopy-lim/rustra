@@ -120,6 +120,7 @@ impl Package {
         state.commands.insert(name.clone(), command);
         state.id_to_name.insert(command_id, name);
         state.live_schema_cache = None;
+        state.schema_generation = state.schema_generation.wrapping_add(1);
         Ok(())
     }
 
@@ -160,6 +161,7 @@ impl Package {
         state.id_to_command.insert(command_id, Arc::clone(&command));
         state.commands.insert(name.to_string(), command);
         state.live_schema_cache = None;
+        state.schema_generation = state.schema_generation.wrapping_add(1);
         Ok(())
     }
 
@@ -189,6 +191,7 @@ impl Package {
             state.id_to_command.remove(&id);
         }
         state.live_schema_cache = None;
+        state.schema_generation = state.schema_generation.wrapping_add(1);
         // NOTE: next_command_id는 감소시키지 않는다 — retired id는 영원히 재사용 금지.
         Ok(())
     }

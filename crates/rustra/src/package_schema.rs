@@ -1,4 +1,14 @@
 impl Package {
+    /// dev 치환 동기화 세대 — register/replace/unregister마다 단조 증가한다.
+    /// 호스트 엔진이 자신의 스키마/코덱 캐시가 현재 레지스트리와 같은 세대인지
+    /// 검증하는 데 쓴다. 읽기 전용이며 잠금 비용만 든다(FFI에서 수십 ns).
+    pub fn schema_generation(&self) -> u64 {
+        self.state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .schema_generation
+    }
+
     pub fn live_schema(&self) -> Value {
         {
             let state = self

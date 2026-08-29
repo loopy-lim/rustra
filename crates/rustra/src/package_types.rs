@@ -52,6 +52,10 @@ pub(crate) struct RegistryState {
     /// JSON 객체와 정의 트리를 다시 조립하는 비용은 피한다. 구조 mutation은
     /// write lock 안에서 반드시 이 값을 무효화한다.
     pub(crate) live_schema_cache: Option<Value>,
+    /// dev 치환 동기화 계약 — register/replace/unregister마다 단조 증가.
+    /// 호스트(TS 엔진)가 자신의 코덱/스키마 캐시 세대를 검증하는 데 쓴다.
+    /// wire 포맷과 무관하며 frozen(release) 정적 명령에는 영향이 없다.
+    pub(crate) schema_generation: u64,
 }
 
 pub(crate) struct FrozenRegistry {
