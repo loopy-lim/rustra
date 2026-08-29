@@ -88,6 +88,23 @@ test('unsubscribe is idempotent and safe after dispose', async () => {
   expect(true).toBe(true);
 });
 
+test('polling survives a synchronous drainEvents throw', async () => {
+  let calls = 0;
+  const source: BunEventDrainSource = {
+    drainEvents() {
+      calls += 1;
+      if (calls === 1) throw new Error('sync boom');
+      return Promise.resolve([{ name: 'ok', payload: 1 }]);
+    },
+  };
+  const bridge = await createBunEventBridge({ poll: source });
+  const got: unknown[] = [];
+  bridge.subscribeEvent('ok', (p) => got.push(p));
+  await waitFor(() => got.length >= 1);
+  bridge.dispose();
+  assert.ok(calls >= 2, 'polling continued after a synchronous drain failure');
+});
+
 // ── helpers ──────────────────────────────────────────────────
 
 async function waitFor(predicate: () => boolean, timeoutMs = 2000, stepMs = 1) {

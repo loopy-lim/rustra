@@ -196,15 +196,24 @@ function createPollingEventBridge(options: BunEventBridgeOptions): BunEventBridg
 
   const tick = (): void => {
     if (disposed) return;
-    void source
-      .drainEvents()
+    // drainEvents 가 동기 throw 할 수도 있다 — try/catch 로 가둬 폴링 루프와
+    // 이후 subscribe 가 죽지 않게 한다(아래 Promise catch 와 동일 정책).
+    let draining: Promise<Array<{ name: string; payload: unknown }>>;
+    try {
+      draining = Promise.resolve(source.drainEvents());
+    } catch (error) {
+      console.error('Rustra: drainEvents failed:', error);
+      timer = setTimeout(tick, intervalMs);
+      return;
+    }
+    void draining
       .then((events) => {
         for (const event of events) subscribers.dispatch(event.name, event.payload);
       })
       .catch((error) => {
         console.error('Rustra: drainEvents failed:', error);
       })
-      .finally(() => {
+      .then(() => {
         if (disposed || subscribers.isEmpty()) {
           timer = null;
           return;
