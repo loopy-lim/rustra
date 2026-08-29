@@ -59,6 +59,8 @@ cachedProp 2단 해시와 async 이름 기반 진입 등 미세 잔여가 있고
 - [ ] Node persistent loop: host-bench 측정 개선 + 기존 NDJSON 호환 폴백 또는 버전 협상 유지
 - [ ] Tauri: 측정 리포트에 타이머 왜곡 보정된 실성능 수치가 영수증으로 기록됨
 - [ ] 전체 테스트 게이트 green: `cargo test`, `bun run test:ts:node`, C++ codec tests
+- [ ] 트랙 T: replace 후 JS 재호출이 재동기화 없이 성공 (generation 계약 테스트) +
+      동적 명령 postcard 경로 실측 (교정된 tier_compare 기준)
 
 ## 범위 제한
 
@@ -67,8 +69,31 @@ cachedProp 2단 해시와 async 이름 기반 진입 등 미세 잔여가 있고
 - Node one-shot CLI 경로(2.76ms)는 저빈도 용도로 설계된 것 — 대상 아님
 - Tauri 커스텀 프로토콜+fetch raw body는 본 스펙에서 측정만 정의 (구현 여부는 실측 후 별도 결정)
 - RN sync 전용 API 경계(Promise 제거 표면)는 설계 결정이 필요해 본 스펙에서 제외
+- 동적 명령의 release 지원은 하지 않는다 — dev 전용(release frozen) 설계 유지
+- Tier 3 JSON-in-binary 자체는 유지된다 (미지원 스키마 map/data-enum 동적 명령의 폴백)
 - HybridView(UI 네이티브 뷰)는 계속 범위 밖
 - 벤치 측정은 로드 평균 조건을 영수증에 기재 (비리프리 환경 함정 — 세션 조건 필수)
+
+## 트랙 T — 동적 명령 (dev) 치환 계약 + Tier 정합화
+
+동적 명령(runtime register)은 dev 전용(release는 frozen) 설계를 유지한다. 현재 dev 치환
+워크플로우(replace 후 JS 재호출)의 안전성은 JSON wire가 self-describing이라는 성질에
+의존할 뿐 런타임 계약이 없다 — `schema_version`은 빌드 시점 고정값이고 치환 시 증가하는
+generation이 없다. 이를 명시적 계약으로 고정한 뒤, 동적 명령도 스키마가 binary 지원
+형태면 postcard fast-path를 옵트인해 JSON 3왕복(3.97µs)을 제거한다.
+
+- **T0 치환 계약 (wire 무관)**: `schema_generation: u64`가 register/replace/unregister마다
+  증가하고 live_schema + 저비용 FFI로 노출된다. TS 엔진은 동적 명령 코덱/경로 캐시에
+  generation을 묶어 저장하고 호출 전 일치를 확인, 불일치 시 live_schema 재조회 + 캐시
+  재구축 후 진행한다. 미등록/스키마 불일치는 기존대로 시끄럽게 실패한다(not_found /
+  decode 에러) — "고치고 replace하면 JS는 아무 것도 안 해도 된다"가 런타임 보장이 된다.
+- **T1 벤치 교정**: 기존 tier_compare는 서로 다른 연산(add/greet/echo) + debug 빌드라
+  6.55x가 wire 차이로 오독된다. 같은 연산·같은 빌드 조건으로 재측정해 격차 실측을 교정한다.
+- **T2 동적 명령 postcard 옵트인**: register 시 스키마가 js postcard 코덱 지원 형태면
+  `force_tier3=false`로 binary 핸들러 활성화 (기존 `js_codec_supported` 게이트 재사용).
+  TS 측은 live_schema 기반 스키마→postcard 코덱 인터프리터가 필요하다 (기존 코덱은
+  타입 기반 코드젠 산물). T0의 generation 계약이 스테일 코덱의 조용한 오염을 차단한다.
+  치환으로 스키마가 바뀐 직후 첫 호출은 T0 재동기화를 거치므로 잘못된 코덱으로 호출되지 않는다.
 
 ## 참고 자료
 
@@ -97,6 +122,17 @@ cachedProp 2단 해시와 async 이름 기반 진입 등 미세 잔여가 있고
 - 실행: `bun run bench:hosts -- --output /tmp/rustra-host-matrix.json`,
   `cargo bench -p rustra`, `bun scripts/transport-bench.mjs`
 - 이전 성능 트랙 설계: `docs/superpowers/plans/2026-08-28-perf-three-tracks-design.md`
+
+### 트랙 T 근거
+- register 강제 tier3: `crates/rustra/src/registry.rs:118` (`force_tier3=true`),
+  게이트 구조: `crates/rustra/src/command.rs:86-97` (`js_codec_supported` 재사용 가능)
+- 치환 불변식: commandId 재사용(`registry.rs:96-104`), live_schema 캐시 무효화
+  (`registry.rs:122,162,191`), 테스트 `runtime_registry_tests.rs:247-283`
+- `schema_version`은 빌드 시점 고정(`package.rs:51`, builder:231) — 치환 시 증가하는
+  generation 부재가 T0의 존재 이유
+- preserve_order 피처로 스키마 properties 순서 = struct 선언 순서 (`Cargo.toml:47-48`)
+- 격차 오독 근거: `docs/benchmarks.md` "Rust Criterion debug Tier 3 기준선" 절
+  (서로 다른 연산 + debug 빌드 주의 문구 이미 존재)
 
 ### 검증 게이트
 - PINNED hex: `crates/rustra/tests/wire_fixtures.rs` ↔ `packages/types` cross-wire.test.ts ↔
