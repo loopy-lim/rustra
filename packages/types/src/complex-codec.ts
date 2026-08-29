@@ -52,7 +52,10 @@ export function createComplexCodec<I, O>(options: ComplexCodecOptions): RkyvV2Co
     },
     decode(buffer) {
       try {
-        const bytes = new Uint8Array(buffer);
+        const bytes =
+          buffer instanceof ArrayBuffer
+            ? new Uint8Array(buffer)
+            : new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
         if (bytes.length < 8) {
           return {
             ok: false,

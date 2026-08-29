@@ -46,7 +46,7 @@ function _tier3DecodeString(u: Uint8Array, offset: number): { value: string; byt
   };
 }
 
-export function decodeTier3Response(bytes: ArrayBuffer): {
+export function decodeTier3Response(bytes: ArrayBuffer | ArrayBufferView): {
   ok: boolean;
   result?: unknown;
   error?: RustraError;
@@ -54,9 +54,13 @@ export function decodeTier3Response(bytes: ArrayBuffer): {
   if (bytes.byteLength < 8) {
     return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
   }
-  const u = new Uint8Array(bytes);
+  const u =
+    bytes instanceof ArrayBuffer
+      ? new Uint8Array(bytes)
+      : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const dv = new DataView(u.buffer, u.byteOffset, u.byteLength);
   if (u[0] === 1) {
-    const len = new DataView(bytes).getUint32(4, true);
+    const len = dv.getUint32(4, true);
     if (bytes.byteLength < 8 + len) {
       return {
         ok: false,
@@ -73,7 +77,7 @@ export function decodeTier3Response(bytes: ArrayBuffer): {
   if (bytes.byteLength < 10) {
     return { ok: false, error: { code: 'invoke.too_short', message: 'error frame too short' } };
   }
-  const errLen = new DataView(bytes).getUint16(8, true);
+  const errLen = dv.getUint16(8, true);
   let error: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
   if (errLen > 0) {
     // postcard({ code: String, message: String })

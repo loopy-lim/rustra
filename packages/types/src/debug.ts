@@ -46,10 +46,13 @@ export function debugWire(
   direction: RustraDebugEvent['direction'],
   transport: RustraDebugEvent['transport'],
   command: string,
-  bytes: ArrayBuffer,
+  bytes: ArrayBuffer | ArrayBufferView,
   error?: string,
 ): void {
-  const view = new Uint8Array(bytes);
+  const view =
+    bytes instanceof ArrayBuffer
+      ? new Uint8Array(bytes)
+      : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const preview = Array.from(view.subarray(0, 128), (byte) =>
     byte.toString(16).padStart(2, '0'),
   ).join('');

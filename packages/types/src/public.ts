@@ -84,7 +84,11 @@ export type RkyvV2Codec<I, O> = {
    * 코덱(레거시)에서는 encode 와 동일한 새 ArrayBuffer 를 돌려준다.
    */
   encodeInto?(args: I, reuse?: Uint8Array): Uint8Array;
-  decode(buf: ArrayBuffer): { ok: boolean; result?: O; error?: RustraError };
+  /**
+   * `buf` 는 소유 ArrayBuffer 또는 재사용 버퍼의 뷰다 — 디코드 동안에만
+   * 유효하다(호스트가 재사용하는 caller-buffer 뷰일 수 있음).
+   */
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: O; error?: RustraError };
 };
 
 export { createComplexCodec } from './complex-codec.js';
