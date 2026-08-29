@@ -217,6 +217,20 @@ jobs:
         # test:runtime:* 이 rustra-calculator-example 바이너리를 요구해 Rust
         # 툴체인이 필요하다 (rust 잡과 별도 캐시 재사용).
         run: bun run test:compat
+      - name: Build calculator example dylib
+        # packages/bun 의 into-binding 테스트가 release dylib 를 로드한다 —
+        # register! id 는 등록 순서이므로 dylib 가 stale 이면 테스트도 stale
+        # 결과를 낸다. 항상 클린 재빌드 후 실행.
+        run: cargo build -p rustra-calculator-example --release
+      - name: Test packages (bun binding + react-native engine)
+        # packages/bun 이 FFI caller-buffer(sentinel/overflow 재시도/재사용
+        # 버퍼 비앨리어싱) 계약의 유일한 자동화 검증이다. umbrella `test`에만
+        # 있어 CI가 놓치던 것을 PR 게이트로 승격.
+        run: bun run --cwd packages/bun test
+      - name: C++ generated codec tests
+        # TS/Rust/C++ 3면 PINNED hex 게이트의 C++ 다리 — shim 테스트가 실제로
+        # 실행돼야 생성 코덱과 fixture 간 드리프트를 PR 단계에서 잡는다.
+        run: bash examples/react-native-calculator/modules/rustra-jsi/ios/run-cpp-codec-tests.sh
 
   # RN 예제 네이티브 Release 빌드 — 감사에서 Android Release 실패가 P0 로
   # 지적됐다. Gradle 훅이 Rust 부터 빌드하므로 cargo-ndk + NDK 만 세팅하면

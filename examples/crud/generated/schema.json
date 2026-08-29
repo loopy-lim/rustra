@@ -1,6 +1,7 @@
 {
   "packageId": "examples.crud",
   "schemaVersion": 1,
+  "fieldOrder": "declaration",
   "commands": [
     {
       "name": "createItem",

@@ -195,6 +195,9 @@ public:
   }
 
   /// 부호 없는 varint(LEB128). 최대 10바이트(i64 범위).
+  /// 10바이트째 마지막 바이트는 0x00/0x01 만 허용한다(Rust postcard
+  /// max_of_last_byte = 2^(64%7)−1 = 1, TS _pcDecodeVarint64 와 동일 계약) —
+  /// 64비트 초과 인코딩은 무음 왜곡 대신 throw.
   uint64_t read_uvar() {
     uint64_t value = 0;
     int shift = 0;
@@ -202,7 +205,12 @@ public:
       require(1);
       uint8_t b = data[pos++];
       value |= static_cast<uint64_t>(b & 0x7f) << shift;
-      if ((b & 0x80) == 0) return value;
+      if ((b & 0x80) == 0) {
+        if (i == 9 && (b & 0x7f) > 0x01) {
+          throw std::runtime_error("postcard varint exceeds 64 bits");
+        }
+        return value;
+      }
       shift += 7;
     }
     throw std::runtime_error("postcard varint too long");

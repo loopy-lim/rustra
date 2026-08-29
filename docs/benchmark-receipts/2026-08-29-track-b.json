@@ -1,0 +1,49 @@
+{
+  "date": "2026-08-29",
+  "command": "bun scripts/track-b-bench.mjs",
+  "route": "complex-binary-js",
+  "results": [
+    {
+      "op": "encode",
+      "schema": "wideAgg Vec<u64>+Option<i64>",
+      "iterations": 20000,
+      "bytes": 36,
+      "us": 1.699
+    },
+    {
+      "op": "decode",
+      "schema": "wideAgg Vec<u64>+Option<i64>",
+      "iterations": 20000,
+      "bytes": 28,
+      "us": 0.455
+    },
+    {
+      "op": "encode",
+      "schema": "tagSet Set<i64>",
+      "iterations": 20000,
+      "bytes": 7,
+      "us": 0.979
+    },
+    {
+      "op": "decode",
+      "schema": "tagSet Set<i64>",
+      "iterations": 20000,
+      "bytes": 23,
+      "us": 1.179
+    }
+  ],
+  "runs": "median of 3 executions",
+  "allRunsUs": {
+    "encode:wideAgg Vec<u64>+Option<i64>": [1.784, 1.665, 1.699],
+    "decode:wideAgg Vec<u64>+Option<i64>": [0.501, 0.436, 0.455],
+    "encode:tagSet Set<i64>": [1.463, 0.979, 0.934],
+    "decode:tagSet Set<i64>": [1.334, 1.118, 1.179]
+  },
+  "allocationMode": "per-call-writer-and-response",
+  "verified": true,
+  "limitations": [
+    "does not measure Rust handler or C++ JSI marshalling (device smoke required)",
+    "three wall-clock executions in one process, per-op median reported",
+    "measures the JS codec path only — the C++ direct path is native and not measurable from this script"
+  ]
+}

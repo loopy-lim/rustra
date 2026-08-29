@@ -80,13 +80,20 @@ extern "C" {
   // invocation_id 로 진행 중 async 호출을 협력적 취소한다.
   bool rustra_ffi_invoke_cancel(uint64_t invocation_id);
 
-  // ── rkyv V2 async (follow-up 3) ──────────────────────────
-  // Generic async entry. Response buffers are paired with rustra_ffi_free.
-  typedef void (*rustra_async_callback_t)(
-    void* user_data, uint8_t* resp, size_t resp_len);
-  void rustra_ffi_invoke_rkyv_v2_async(
-    const uint8_t* payload, size_t payload_len, void* user_data,
-    rustra_async_callback_t on_complete, uint64_t* invocation_id);
+  // ── rkyv V2 async caller-buffer (F3) ─────────────────────
+  // Generic async entry. 성공 응답은 호스트 버퍼(buf/capacity)에 직접 기록되고
+  // 콜백은 (user_data, resp, resp_len, owned) 로 1회 호출된다:
+  //   owned=0 — resp 는 호스트가 넘긴 buf (호스트 해제 없음)
+  //   owned=1 — resp 는 Rust heap 프레임 (rustra_ffi_free 로 정확히 1회 해제)
+  // 수명 계약: buf 는 콜백이 실행되는 동안 살아 있어야 한다(호스트 소유).
+  // 버퍼가 부족하면 재시도 프로토콜 없이 같은 dispatch 안에서 heap 프레임으로
+  // 폴백한다 — 핸들러는 항상 정확히 1회 실행된다.
+  typedef void (*rustra_async_into_callback_t)(
+    void* user_data, uint8_t* resp, size_t resp_len, uint8_t owned);
+  void rustra_ffi_invoke_rkyv_v2_async_into(
+    const uint8_t* payload, size_t payload_len,
+    uint8_t* buf, size_t capacity, void* user_data,
+    rustra_async_into_callback_t on_complete, uint64_t* invocation_id);
 
   // ── (Tier 1) rkyv V2 caller-buffer — malloc→memcpy→free 사이클 제거 ──
   // buf=null → size-probe(0 반환, 필요 크기는 *out_len). buf≠null → 직접 기록,

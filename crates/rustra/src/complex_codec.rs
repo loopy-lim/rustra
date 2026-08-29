@@ -186,27 +186,70 @@ pub(crate) fn complex_schema_supported(schema: &Value, definitions: &Value) -> b
     visit(schema, definitions, &mut BTreeSet::new(), 0)
 }
 
-struct Writer {
-    bytes: Vec<u8>,
+/// 스키마 기반 binary 인코더의 bounded writer.
+///
+/// 두 가지 저장소 모드를 가진다 — 인코딩 로직(`encode_node` 이하)은 모드와
+/// 무관하게 공유된다:
+/// - heap: 소유 Vec 에 적립(`complex_encode` 의 기존 와이어).
+/// - into: 호스트가 제공한 caller 버퍼 앞부분에 직접 기록. 힙 할당이 없으며
+///   버퍼가 부족하면 패닉 대신 `Err`(overflow) — 호출자가 `Buffered` 폴백으로
+///   신호를 받는다(caller-buffer into-handler 계약).
+struct Writer<'s> {
+    heap: Vec<u8>,
+    /// into 모드 — `Some` 이면 `heap` 은 쓰이지 않는다.
+    into: Option<&'s mut [u8]>,
+    written: usize,
     limits: ComplexCodecLimits,
 }
 
-impl Writer {
+impl<'s> Writer<'s> {
     fn new(limits: ComplexCodecLimits) -> Self {
         Self {
-            bytes: Vec::new(),
+            heap: Vec::new(),
+            into: None,
+            written: 0,
             limits,
         }
     }
 
+    /// caller 버퍼에 직접 기록하는 into 모드로 시작한다.
+    fn into_slice(target: &'s mut [u8], limits: ComplexCodecLimits) -> Self {
+        Self {
+            heap: Vec::new(),
+            into: Some(target),
+            written: 0,
+            limits,
+        }
+    }
+
+    /// heap 모드의 최종 바이트.
+    fn finish(self) -> Vec<u8> {
+        debug_assert!(self.into.is_none(), "finish is heap-mode only");
+        self.heap
+    }
+
     fn push(&mut self, bytes: &[u8]) -> Result<()> {
-        if self.bytes.len().saturating_add(bytes.len()) > self.limits.max_payload_bytes {
+        let next_len = self.written.saturating_add(bytes.len());
+        if next_len > self.limits.max_payload_bytes {
             return Err(error(format!(
                 "payload exceeds {} bytes",
                 self.limits.max_payload_bytes
             )));
         }
-        self.bytes.extend_from_slice(bytes);
+        match &mut self.into {
+            Some(target) => {
+                if next_len > target.len() {
+                    return Err(error(format!(
+                        "caller buffer overflow: {} bytes needed, {} available",
+                        next_len,
+                        target.len()
+                    )));
+                }
+                target[self.written..next_len].copy_from_slice(bytes);
+            }
+            None => self.heap.extend_from_slice(bytes),
+        }
+        self.written = next_len;
         Ok(())
     }
 
@@ -286,8 +329,14 @@ impl<'a> Reader<'a> {
 
     fn varint(&mut self) -> Result<u128> {
         let mut value = 0u128;
-        for shift in (0..=126).step_by(7) {
+        // postcard 정규형 계약 — 최대 10바이트, 10바이트째 마지막 바이트의
+        // payload 는 2^(64%7)−1 = 1 이하. TS _pcDecodeVarint64 / C++ read_uvar /
+        // postcard 크레이트와 동일 규칙(비정규 >64-bit 인코딩 무음 수용 방지).
+        for (i, shift) in (0..=63u32).step_by(7).enumerate() {
             let byte = self.byte()?;
+            if i == 9 && byte & 0x7f > 0x01 {
+                return Err(error("varint exceeds 64 bits"));
+            }
             value |= u128::from(byte & 0x7f) << shift;
             if byte & 0x80 == 0 {
                 return Ok(value);
@@ -977,7 +1026,22 @@ pub(crate) fn complex_encode(
 ) -> Result<Vec<u8>> {
     let mut writer = Writer::new(limits);
     encode_node(&mut writer, schema, value, definitions, limits, 0)?;
-    Ok(writer.bytes)
+    Ok(writer.finish())
+}
+
+/// `complex_encode` 의 caller-buffer 변형 — 힙 할당 없이 `target` 에 직접
+/// 기록하고 기록한 바이트 수를 반환한다. 버퍼 부족(`Err`)은 호출자가 기존
+/// `Buffered` 폴백으로 처리한다. 와이어는 `complex_encode` 와 동일하다.
+pub(crate) fn complex_encode_into(
+    schema: &Value,
+    definitions: &Value,
+    value: &Value,
+    target: &mut [u8],
+    limits: ComplexCodecLimits,
+) -> Result<usize> {
+    let mut writer = Writer::into_slice(target, limits);
+    encode_node(&mut writer, schema, value, definitions, limits, 0)?;
+    Ok(writer.written)
 }
 
 pub(crate) fn complex_decode(

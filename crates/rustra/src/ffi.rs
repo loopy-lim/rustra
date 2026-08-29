@@ -427,6 +427,16 @@ fn postcard_deserialize_envelope(bytes: &[u8]) -> Result<(String, serde_json::Va
 /// 가리키는 sync 진입점들의 `with_panic_guard` 가 에러 프레임으로 정규화한다
 /// (unwind 없이 복귀). guard 의 drop 을 콜백 직전에 명시해 완료→콜백 순서를
 /// 유지한다 — 호스트 콜백이 경계를 위반해도 complete 는 이미 실행된 상태다.
+///
+/// 완료 보장 guard 자체는 양쪽 async 워커(`run_worker`/`run_worker_into`)가
+/// 파일 수준의 [`EnsureComplete`] 하나를 공유한다.
+struct EnsureComplete(u64);
+impl Drop for EnsureComplete {
+    fn drop(&mut self) {
+        crate::cancel::complete_invocation(self.0);
+    }
+}
+
 fn run_worker(
     id: u64,
     bytes: Vec<u8>,
@@ -435,12 +445,6 @@ fn run_worker(
     invoke_fn: unsafe extern "C" fn(*const u8, usize, *mut usize) -> *mut u8,
     serialize: fn(&FfiResponse) -> Vec<u8>,
 ) {
-    struct EnsureComplete(u64);
-    impl Drop for EnsureComplete {
-        fn drop(&mut self) {
-            crate::cancel::complete_invocation(self.0);
-        }
-    }
     let _ensure = EnsureComplete(id);
     let mut out_len = 0;
     let resp_ptr = if crate::cancel::status(id) == crate::cancel::Status::Cancelled {
@@ -460,6 +464,95 @@ fn run_worker(
     } else if !resp_ptr.is_null() {
         unsafe { rustra_ffi_free(resp_ptr, out_len) };
     }
+}
+
+/// caller-buffer async 워커 dispatch — [`run_worker`] 와 동일한 계약(취소
+/// 체크포인트, complete→callback 순서, exactly-once)을 호출자 버퍼 변형으로
+/// 실행한다.
+///
+/// 응답 크기가 `capacity` 이하면 `Package::invoke_rkyv_v2_into` 가 caller
+/// 버퍼에 직접 기록하고 `owned=0` 으로 전달한다 — Rust heap 할당과 복사가
+/// 없다. 부족하면 **같은 dispatch 안에서** heap 프레임으로 폴백해
+/// `owned=1` 로 전달한다. sync `_into` 처럼 재시도로 돌아오지 않는다:
+/// 재시도는 다른 워커 스레드에 배정될 수 있어(2워커 풀) thread-local probe
+/// 캐시가 미스나며 비멱등 핸들러가 재실행된다. 단일 dispatch + owned 폴백은
+/// 이 경합을 구조적으로 제거한다 — 핸들러는 어떤 경우에도 1회만 실행된다.
+///
+/// null 콜백이면 owned 프레임만 즉시 해제한다(caller 버퍼는 호스트 소유 —
+/// 건드리지 않는다).
+fn run_worker_into(job: AsyncIntoJob) {
+    let AsyncIntoJob {
+        id,
+        bytes,
+        buf_raw,
+        capacity,
+        user_data_raw,
+        on_complete,
+    } = job;
+    let buf = buf_raw as *mut u8;
+    let _ensure = EnsureComplete(id);
+
+    let (resp_ptr, resp_len, owned) = if crate::cancel::status(id)
+        == crate::cancel::Status::Cancelled
+    {
+        let frame = crate::encode_rkyv_v2_error(&crate::RustraError::cancelled(
+            "invocation cancelled before dispatch",
+        ));
+        deliver_into_frame(frame, buf, capacity)
+    } else {
+        // null caller buffer — owned 프레임으로만 전달할 수 있다.
+        let target: &mut [u8] = if buf.is_null() {
+            &mut []
+        } else {
+            unsafe { std::slice::from_raw_parts_mut(buf, capacity) }
+        };
+        let direct = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            get_package()
+                .ok_or_else(|| {
+                    crate::RustraError::custom("ffi.not_registered", "package not registered")
+                })
+                .and_then(|pkg| pkg.invoke_rkyv_v2_into(&bytes, target))
+        })) {
+            Ok(Ok(response)) => response,
+            Ok(Err(error)) => {
+                crate::rkyv_codec::DirectResponse::Buffered(crate::encode_rkyv_v2_error(&error))
+            }
+            Err(panic) => crate::rkyv_codec::DirectResponse::Buffered(crate::encode_rkyv_v2_error(
+                &crate::RustraError::internal(panic_frame_message(&*panic)),
+            )),
+        };
+        match direct {
+            crate::rkyv_codec::DirectResponse::Written(written) => (buf, written, 0u8),
+            crate::rkyv_codec::DirectResponse::Buffered(response) => {
+                deliver_into_frame(response, buf, capacity)
+            }
+        }
+    };
+
+    // 완료→콜백 순서 계약 — run_worker 와 동일.
+    drop(_ensure);
+    if let Some(cb) = on_complete {
+        unsafe { cb(user_data_raw as *mut c_void, resp_ptr, resp_len, owned) };
+    } else if owned == 1 && !resp_ptr.is_null() {
+        // 콜백이 없으면 소유권을 넘길 대상이 없다 — owned 프레임만 해제한다.
+        // caller 버퍼(owned=0)는 호스트 소유라 해제하지 않는다.
+        unsafe { rustra_ffi_free(resp_ptr, resp_len) };
+    }
+}
+
+/// 응답 프레임 전달 규칙 — 들어가면 caller 버퍼로 복사(owned=0, 호스트가
+/// 해제하지 않는다), 안 들어가면 `alloc_response` 포장으로 owned=1
+/// (`rustra_ffi_free` 짝 — 기존 async 경로와 동일한 free 함수 하나로 수렴).
+/// cancelled/error 프레임도 이 한 규칙을 따른다.
+fn deliver_into_frame(frame: Vec<u8>, buf: *mut u8, capacity: usize) -> (*mut u8, usize, u8) {
+    let needed = frame.len();
+    if !buf.is_null() && capacity >= needed {
+        unsafe { std::ptr::copy_nonoverlapping(frame.as_ptr(), buf, needed) };
+        return (buf, needed, 0);
+    }
+    let mut out_len = 0usize;
+    let ptr = alloc_response(frame, &mut out_len);
+    (ptr, out_len, 1)
 }
 
 // ── async 워커 풀 (백프레셔 포함) ────────────────────────────
@@ -485,10 +578,38 @@ type AsyncJob = (
     fn(&FfiResponse) -> Vec<u8>,
 );
 
-fn async_pool() -> &'static Mutex<std::sync::mpsc::SyncSender<AsyncJob>> {
-    static POOL: OnceLock<Mutex<std::sync::mpsc::SyncSender<AsyncJob>>> = OnceLock::new();
+/// caller-buffer 비동기 잡 — [`run_worker_into`] 가 소비한다.
+/// `buf`/`capacity` 는 호출자(호스트)가 소유한 응답 버퍼로, 완료 콜백이
+/// 실행되는 동안 살아 있음이 FFI 계약으로 보장된다(콜백이 버퍼를 소비한 뒤
+/// 호스트가 해제한다). `buf_raw` 는 raw 포인터 대신 `usize` 로 담는다 —
+/// 기존 `user_data` 와 같은 관례로 잡이 `Send` 를 만족하게 한다(포인터를
+/// 스레드 간 전달하는 것 자체는 FFI 계약상 안전 — 호스트가 콜백 종료까지
+/// 수명을 보장한다).
+struct AsyncIntoJob {
+    id: u64,
+    bytes: Vec<u8>,
+    buf_raw: usize,
+    capacity: usize,
+    user_data_raw: usize,
+    on_complete: Option<UnsafeIntoComplete>,
+}
+
+/// async into 완료 콜백 타입 — `(user_data, resp_ptr, resp_len, owned)`.
+/// `owned=0` 이면 `resp_ptr` 은 호출자가 제공한 버퍼(호스트가 해제하지
+/// 않는다), `owned=1` 이면 Rust heap 프레임(`rustra_ffi_free` 로 해제).
+type UnsafeIntoComplete = unsafe extern "C" fn(*mut c_void, *mut u8, usize, u8);
+
+/// 두 종류의 async 잡 — 기존 alloc 경로(튜플)와 caller-buffer 경로(구조체)를
+/// 같은 풀/워커에서 실행한다.
+enum AsyncTask {
+    Alloc(AsyncJob),
+    Into(AsyncIntoJob),
+}
+
+fn async_pool() -> &'static Mutex<std::sync::mpsc::SyncSender<AsyncTask>> {
+    static POOL: OnceLock<Mutex<std::sync::mpsc::SyncSender<AsyncTask>>> = OnceLock::new();
     POOL.get_or_init(|| {
-        let (tx, rx) = std::sync::mpsc::sync_channel::<AsyncJob>(ASYNC_QUEUE_DEPTH);
+        let (tx, rx) = std::sync::mpsc::sync_channel::<AsyncTask>(ASYNC_QUEUE_DEPTH);
         // 수신자를 Arc 로 공유해 각 워커가 lock-recv 로 잡는다 — Mutex 가 잠기는
         // 동안 다른 워커는 대기하지만 recv 자체가 블로킹이라 실제 경합은 짧다.
         let rx = std::sync::Arc::new(Mutex::new(rx));
@@ -501,9 +622,17 @@ fn async_pool() -> &'static Mutex<std::sync::mpsc::SyncSender<AsyncJob>> {
                         guard.recv()
                     };
                     match job {
-                        Ok((id, bytes, user_data_raw, on_complete, invoke_fn, serialize)) => {
+                        Ok(AsyncTask::Alloc((
+                            id,
+                            bytes,
+                            user_data_raw,
+                            on_complete,
+                            invoke_fn,
+                            serialize,
+                        ))) => {
                             run_worker(id, bytes, user_data_raw, on_complete, invoke_fn, serialize);
                         }
+                        Ok(AsyncTask::Into(job)) => run_worker_into(job),
                         Err(_) => break, // 송신자 전원 해제(프로세스 종료) — 워커 종료
                     }
                 }
@@ -515,7 +644,7 @@ fn async_pool() -> &'static Mutex<std::sync::mpsc::SyncSender<AsyncJob>> {
 
 /// 풀에 작업을 제출한다 — 큐가 가득 차면 Err(백프레셔). 호출자는
 /// `invoke.backpressure` 프레임으로 정규화한다.
-fn async_pool_submit(job: AsyncJob) -> Result<(), AsyncJob> {
+fn async_pool_submit(job: AsyncTask) -> Result<(), AsyncTask> {
     let tx = async_pool()
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -857,14 +986,14 @@ pub unsafe extern "C" fn rustra_ffi_invoke_async(
 
     // 고정 워커 풀로 제출(백프레셔 포함) — 호출당 thread::spawn 의 스레드 폭증을
     // 방지한다. 큐가 가득 차면 즉시 backpressure 프레임으로 거부한다(hang 없음).
-    if async_pool_submit((
+    if async_pool_submit(AsyncTask::Alloc((
         id,
         bytes,
         user_data_raw,
         on_complete,
         rustra_ffi_invoke,
         sync_serialize,
-    ))
+    )))
     .is_err()
     {
         deliver_spawn_failure(
@@ -921,14 +1050,14 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json_async(
         unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
     };
 
-    if async_pool_submit((
+    if async_pool_submit(AsyncTask::Alloc((
         id,
         bytes,
         user_data_raw,
         on_complete,
         rustra_ffi_invoke_json,
         json_serialize,
-    ))
+    )))
     .is_err()
     {
         deliver_spawn_failure(
@@ -1421,14 +1550,14 @@ pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2_async(
         unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
     };
 
-    if async_pool_submit((
+    if async_pool_submit(AsyncTask::Alloc((
         id,
         bytes,
         user_data_raw,
         on_complete,
         rustra_ffi_invoke_rkyv_v2,
         rkyv_error_bytes,
-    ))
+    )))
     .is_err()
     {
         deliver_spawn_failure(
@@ -1438,6 +1567,98 @@ pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2_async(
             rkyv_error_bytes,
             "invoke.backpressure: async worker queue is full — retry after drain",
         );
+    }
+}
+
+/// rkyv V2 비동기 caller-buffer 변형 — [`rustra_ffi_invoke_rkyv_v2_async`] 와
+/// 동일한 계약(invocation_id 발급, 워커 스레드 dispatch, cancel 체크포인트,
+/// complete 후 on_complete 1회)에 호스트 제공 응답 버퍼를 더한다.
+///
+/// `buf`/`capacity` — 호스트가 소유한 응답 버퍼. **수명 계약**: 호스트는
+/// 완료 콜백이 실행되는 동안 버퍼를 살아 있게 유지해야 하며, 콜백이 돌아온
+/// 뒤에 해제한다(호출 스레드는 즉시 반환하므로 버퍼를 스택에 둘 수 없다 —
+/// 힙/persistent 버퍼여야 한다). 워커가 버퍼에 응답을 쓰는 동안 호스트는
+/// 그 버퍼를 읽거나 다른 용도로 쓰지 않는다(단일 소유자 — dispatch 중).
+///
+/// 완료 콜백 `on_complete(user_data, resp_ptr, resp_len, owned)`:
+/// - `owned=0` — `resp_ptr` 은 호스트가 넘긴 `buf` 자체다. 응답은 그 안에
+///   있고 별도 해제는 없다.
+/// - `owned=1` — 응답이 버퍼에 안 들어갔다(overflow 또는 null buf). Rust 가
+///   heap 프레임을 새로 만들었으므로 호스트는 `rustra_ffi_free` 로 정확히
+///   1회 해제해야 한다.
+///
+/// overflow 시에도 재시도(signalling) 프로토콜을 쓰지 않는다 — sync `_into`
+/// 의 probe → write 2단계는 thread-local probe 캐시에 의존하는데, 재시도
+/// 호출이 2워커 풀의 다른 스레드에 배정되면 캐시가 미스나 비멱등 핸들러가
+/// 재실행된다. 대신 워커가 **같은 dispatch 안에서** heap 프레임으로 폴백해
+/// owned=1 로 전달한다 — 핸들러는 항상 정확히 1회 실행된다.
+///
+/// # Safety
+///
+/// - `payload` must point to `payload_len` valid bytes (or null if len 0).
+/// - `buf`, when non-null, must point to at least `capacity` writable bytes
+///   and must outlive the completion callback (heap or persistent storage).
+/// - `on_complete` must be a thread-safe C callback function pointer.
+/// - `invocation_id` must be null or a valid u64 write pointer (out-param).
+/// - When the callback reports `owned=1`, the caller must free `resp_ptr`
+///   with `rustra_ffi_free`. With `owned=0` the pointer is the caller's own
+///   buffer and must not be freed through the FFI.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2_async_into(
+    payload: *const u8,
+    payload_len: usize,
+    buf: *mut u8,
+    capacity: usize,
+    user_data: *mut c_void,
+    on_complete: Option<UnsafeIntoComplete>,
+    invocation_id: *mut u64,
+) {
+    let id = crate::cancel::register_invocation();
+    if !invocation_id.is_null() {
+        unsafe { *invocation_id = id };
+    }
+    let user_data_raw = user_data as usize;
+    // 즉시 실패(payload-too-large / backpressure) 공용 완료 — 버퍼에 에러
+    // 프레임을 복사할 수 있으면 owned=0, 아니면 owned=1. 콜백 1회 + 레지스트리
+    // 정리 계약은 워커 경로(`run_worker_into`)와 동일하게 유지된다.
+    let deliver_immediate = |frame: Vec<u8>| {
+        let (ptr, len, owned) = deliver_into_frame(frame, buf, capacity);
+        crate::cancel::complete_invocation(id);
+        if let Some(cb) = on_complete {
+            unsafe { cb(user_data_raw as *mut c_void, ptr, len, owned) };
+        } else if owned == 1 && !ptr.is_null() {
+            unsafe { rustra_ffi_free(ptr, len) };
+        }
+    };
+    if payload_len > max_payload_bytes() {
+        // 크기 게이트 실패는 호출 스레드에서 즉시 완료한다.
+        let e = crate::RustraError::payload_too_large(payload_len, max_payload_bytes());
+        deliver_immediate(crate::encode_rkyv_v2_error(&e));
+        return;
+    }
+    let bytes = if payload.is_null() || payload_len == 0 {
+        Vec::new()
+    } else {
+        unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
+    };
+
+    if async_pool_submit(AsyncTask::Into(AsyncIntoJob {
+        id,
+        bytes,
+        buf_raw: buf as usize,
+        capacity,
+        user_data_raw,
+        on_complete,
+    }))
+    .is_err()
+    {
+        // 백프레셔도 동일한 즉시 완료 규칙을 따른다.
+        let e = crate::RustraError::custom(
+            "invoke.backpressure",
+            "async worker queue is full — retry after drain",
+        )
+        .retryable();
+        deliver_immediate(crate::encode_rkyv_v2_error(&e));
     }
 }
 

@@ -104,6 +104,11 @@ export type BunFfiEngineOptions = Omit<RkyvV2EngineOptions, 'rkyvV2Codecs'> & {
 export type BunFfiRuntime = {
   engine: EngineClient;
   library: string;
+  /**
+   * rkyv V2 invoke 가 caller-buffer 변형(`rustra_ffi_invoke_rkyv_v2_into`)을
+   * 사용하면 true — Rust 는 응답을 malloc 하지 않고 free 짝이 필요 없다.
+   */
+  usesCallerBufferInto: boolean;
   close(): void;
 };
 
@@ -136,6 +141,13 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
     rustra_ffi_invoke_rkyv_v2: {
       args: [FFIType.ptr, FFIType.u64, FFIType.ptr],
       returns: FFIType.ptr,
+    },
+    // caller-buffer 변형 — Rust 가 응답을 caller 버퍼에 직접 기록한다.
+    // 반환 상태: 성공 = 기록 바이트 수, 버퍼 부족 = usize::MAX(필요 크기는
+    // out_len 에, 응답은 코어 probe 캐시에). ffi.rs 의 rkyv V2 into 계약.
+    rustra_ffi_invoke_rkyv_v2_into: {
+      args: [FFIType.ptr, 'usize' as const, FFIType.ptr, 'usize' as const, FFIType.ptr],
+      returns: 'usize' as const,
     },
     rustra_ffi_free: {
       args: [FFIType.ptr, FFIType.u64],
@@ -187,16 +199,73 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
       handle.symbols.rustra_ffi_free(pointer, BigInt(length));
     }
   };
-  const native = {
-    invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer {
-      const request = new Uint8Array(payload);
+  // (Tier 1) caller-buffer 변형 — C++ typedInvokeTail 과 동일한 패턴. 재사용
+  // 512B 버퍼로 바로 dispatch+write 하고(대부분의 응답이 여기서 끝난다),
+  // 부족하면 usize::MAX 상태 + out_len 의 필요 크기로 정확히 1회 재시도한다.
+  // 코어 probe 캐시가 같은 응답을 유지하므로 비멱등 핸들러도 정확히 1회만
+  // 실행된다. Rust malloc/free 0회 — free 짝이 필요 없다.
+  const callerBufferCapacity = 512;
+  const callerBuffer = new Uint8Array(callerBufferCapacity);
+  // 버퍼 부족 재시도 신호 — 코어가 반환하는 정확한 sentinel(usize::MAX,
+  // C++ typedInvokeTail 의 `n == SIZE_MAX` 와 동일). 성공 상태는 기록 바이트 수.
+  const statusOverflow = 0xffff_ffff_ffff_ffffn;
+  const invokeRkyvV2Into = (payload: ArrayBuffer): ArrayBuffer => {
+    const request = new Uint8Array(payload);
+    outLength[0] = 0n;
+    const status = handle.symbols.rustra_ffi_invoke_rkyv_v2_into(
+      request,
+      BigInt(request.byteLength),
+      callerBuffer,
+      callerBufferCapacity,
+      outLength,
+    );
+    if (status === statusOverflow) {
+      // 정확한 크기 heap 버퍼로 1회 재시도 — 코어가 캐시한 같은 응답을 쓴다.
+      const needed = Number(outLength[0]);
+      if (needed <= callerBufferCapacity || needed === 0) {
+        throw new RustraCommandError(
+          'invoke.failed',
+          `Bun FFI caller-buffer overflow reported an invalid size: ${needed}`,
+        );
+      }
+      const large = new Uint8Array(needed);
       outLength[0] = 0n;
-      const pointer = handle.symbols.rustra_ffi_invoke_rkyv_v2(
+      const retried = handle.symbols.rustra_ffi_invoke_rkyv_v2_into(
         request,
         BigInt(request.byteLength),
+        large,
+        needed,
         outLength,
       );
-      return copyOwned(pointer);
+      if (retried === 0n || retried === statusOverflow) {
+        throw new RustraCommandError(
+          'invoke.failed',
+          `Bun FFI caller-buffer retry failed (status ${retried})`,
+        );
+      }
+      // 전체 크기가 기록되면 fresh 버퍼를 그대로 소유 이전 — 복사 1회 생략.
+      if (retried === BigInt(needed)) return large.buffer as ArrayBuffer;
+      return large.slice(0, Number(retried)).buffer as ArrayBuffer;
+    }
+    if (status === 0n) {
+      // written == 0 — 크기 0 응답. 코어 rkyv V2 프레임은 최소 8B 헤더라
+      // 정상 경로에서는 없지만, 계약상 빈 owned 버퍼로 응답한다.
+      return new ArrayBuffer(0);
+    }
+    // 성공 상태는 기록 바이트 수 — capacity 를 넘을 수 없다. 초과값은 ABI
+    // 폭 불일치(32-bit usize 등)의 징후라 slice clamp 로 무음 왜곡하는 대신
+    // 거부한다(트랙 F 리뷰 경화).
+    if (status > callerBufferCapacity) {
+      throw new RustraCommandError(
+        'invoke.failed',
+        `Bun FFI caller-buffer status exceeds capacity: ${status}`,
+      );
+    }
+    return callerBuffer.slice(0, Number(status)).buffer as ArrayBuffer;
+  };
+  const native = {
+    invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer {
+      return invokeRkyvV2Into(payload);
     },
     getSchema(): ArrayBuffer {
       outLength[0] = 0n;
@@ -220,6 +289,7 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
   return {
     engine: createRkyvV2Engine(native, rkyvV2Codecs, engineOptions),
     library,
+    usesCallerBufferInto: true,
     close: () => handle.close(),
   };
 }

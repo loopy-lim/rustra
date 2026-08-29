@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import test from 'node:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   generateTypesTs,
   generateCommandsTs,
@@ -13,7 +14,7 @@ import {
   generateRkyvRegistryTs,
   generatePositionalFacadeTs,
 } from './generate.js';
-import { collectDefinitions } from './codegen.js';
+import { collectDefinitions, postcardHelperSource } from './codegen.js';
 import { buildCodecIr } from './codec-ir.js';
 import {
   generateBunEntryTs,
@@ -778,7 +779,7 @@ test('generateTypesTs maps allOf to intersection and integer enum to literal uni
   assert.ok(types.includes('level: 1 | 2 | 3;'), 'integer enum must map to literal union');
 });
 
-test('generateTypesTs exposes bigint for int64 and keeps those commands off C++ static codecs', () => {
+test('generateTypesTs exposes bigint for int64 and C++ joins with BigInt decode', () => {
   const schema: PackageSchema = {
     packageId: 'wide-integer',
     commands: [
@@ -801,8 +802,61 @@ test('generateTypesTs exposes bigint for int64 and keeps those commands off C++ 
     ],
   };
   assert.match(generateTypesTs(schema), /value: number \| bigint;/);
-  assert.doesNotMatch(generateRkyvCodecsCpp(schema), /readCounter/);
-  assert.match(generateRkyvRegistryTs(schema), /readCounterComplexCodec/);
+  // B1: C++ 정적 코덱도 와이드 정수를 직접 처리한다 — 광고 제외 해제.
+  assert.match(generateRkyvCodecsCpp(schema), /readCounter/);
+  assert.match(generateRkyvRegistryTs(schema), /\['readCounter', readCounterCodec\]/);
+});
+
+test('int64/uint64 fields join the postcard fast path with 64-bit helpers', () => {
+  const schema: PackageSchema = {
+    packageId: 'wide-fast-path',
+    fieldOrder: 'declaration',
+    commands: [
+      {
+        name: 'readCounter',
+        commandId: 31,
+        inputType: 'CounterInput',
+        outputType: 'CounterOutput',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            value: { type: 'integer', format: 'int64' },
+            offset: { type: 'integer', format: 'uint64' },
+          },
+          required: ['value', 'offset'],
+        },
+        outputSchema: {
+          type: 'object',
+          properties: { value: { type: 'integer', format: 'uint64' } },
+          required: ['value'],
+        },
+      },
+    ],
+  };
+
+  const codecs = generateRkyvCodecsTs(schema);
+  const registry = generateRkyvRegistryTs(schema);
+
+  // 와이드 정수 필드가 64-bit 헬퍼로 emit 된다(zigzag64 → _pcEncodeZigzag64,
+  // uvar64 → _pcEncodeVarint64).
+  assert.match(codecs, /_pcEncodeZigzag64\(args\.value\)/);
+  assert.match(codecs, /_pcEncodeVarint64\(args\.offset\)/);
+  assert.match(codecs, /_pcDecodeVarint64\(u8, offset\)/);
+  // complex 폴백이 아니라 postcard fast-path 코덱 그 자체가 된다.
+  assert.doesNotMatch(codecs, /createComplexCodec<CounterInput/);
+  assert.match(registry, /route: postcard/);
+  assert.doesNotMatch(registry, /route: complex/);
+  // B1: C++ 정적 코덱도 64-bit 헬퍼(push_i64/push_uvar)로 와이드 정수를 emit.
+  const cpp = generateRkyvCodecsCpp(schema);
+  assert.match(cpp, /readCounter/);
+  assert.match(
+    cpp,
+    /w\.push_i64\(rustra_i64\(rt, argsObj\.getProperty\(rt, "value"\), "value"\)\)/,
+  );
+  assert.match(
+    cpp,
+    /w\.push_uvar\(rustra_u64\(rt, argsObj\.getProperty\(rt, "offset"\), "offset"\)\)/,
+  );
 });
 
 test('generateRkyvCodecsTs encodes Option fields (no silent drop)', () => {
@@ -1025,7 +1079,7 @@ test('generateRkyvCodecsCpp promotes supported complex commands to native static
   );
 });
 
-test('generateRkyvCodecsCpp keeps Set and BigInt-shaped commands on the JS complex route', () => {
+test('generateRkyvCodecsCpp promotes primitive-element Sets to the native complex codec', () => {
   const schema: PackageSchema = {
     packageId: 'native-complex-boundaries',
     commands: [
@@ -1039,7 +1093,14 @@ test('generateRkyvCodecsCpp keeps Set and BigInt-shaped commands on the JS compl
           properties: { values: { type: 'array', items: { type: 'integer' }, uniqueItems: true } },
           required: ['values'],
         },
-        outputSchema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] },
+        outputSchema: {
+          type: 'object',
+          properties: {
+            ok: { type: 'boolean' },
+            uniques: { type: 'array', items: { type: 'string' }, uniqueItems: true },
+          },
+          required: ['ok', 'uniques'],
+        },
       },
       {
         name: 'wideValue',
@@ -1057,10 +1118,110 @@ test('generateRkyvCodecsCpp keeps Set and BigInt-shaped commands on the JS compl
   };
   const cpp = generateRkyvCodecsCpp(schema);
   const registry = generateRkyvRegistryTs(schema);
-  assert.doesNotMatch(cpp, /encode_complex_setValues/);
-  assert.doesNotMatch(cpp, /wideValue/);
+  // B2: 원시 요소 Set 은 C++ complex 경로로 직결 — Set 안의 정수는 순서 보존
+  // postcard seq 로 인코딩하고 디코드는 전역 Set 생성자로 복원한다(TS
+  // complex-codec 계약 동일: [...set] 순서 보존 encode, new Set(values) decode).
+  assert.match(cpp, /encode_complex_setValues/);
+  // encode: 전역 Array.from 로 이터레이션 순서 보존 복사. 실제 jsi 는 Value
+  // 복사가 삭제돼 initializer_list/배열 전달이 컴파일에 실패한다(RN Pods 빌드
+  // 게이트) — move-wrapped rvalue 1개로 가변 템플릿에 흘려보낸다.
+  assert.match(cpp, /instanceOf\(rt, rt\.global\(\)\.getPropertyAsFunction\(rt, "Set"\)\)/);
+  assert.match(cpp, /getPropertyAsFunction\(rt, "Array"\)\.getPropertyAsFunction\(rt, "from"\)/);
+  assert.match(cpp, /\.call\(rt, jsi::Value\(rt, \w+\)\)/);
+  assert.doesNotMatch(cpp, /callAsFunction/);
+  assert.doesNotMatch(cpp, /\.call\(rt, \{ /);
+  // decode: 전역 Set 생성자 — callAsConstructor 도 move-wrapped rvalue 로.
+  assert.match(cpp, /callAsConstructor\(rt, jsi::Value\(rt, _cx\d+\)\)/);
+  assert.doesNotMatch(cpp, /_setArgs/);
+  // wideValue 는 B1 이후 C++ 정적 postcard 코덱 소속.
+  assert.match(cpp, /wideValue/);
+  // Set 명령도 registry 에는 complex 코덱이 그대로 남는다(non-typed 호스트용).
   assert.match(registry, /setValuesComplexCodec/);
-  assert.match(registry, /wideValueComplexCodec/);
+  assert.match(registry, /\['wideValue', wideValueCodec\]/);
+  assert.doesNotMatch(registry, /wideValueComplexCodec/);
+});
+
+test('generateRkyvCodecsCpp keeps object-element Sets on the JS complex route', () => {
+  const schema: PackageSchema = {
+    packageId: 'native-complex-object-set',
+    commands: [
+      {
+        name: 'objectSet',
+        commandId: 24,
+        inputType: 'ObjectSetInput',
+        outputType: 'ObjectSetOutput',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            items: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: { name: { type: 'string' } },
+                required: ['name'],
+              },
+              uniqueItems: true,
+            },
+          },
+          required: ['items'],
+        },
+        outputSchema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] },
+      },
+    ],
+  };
+  const cpp = generateRkyvCodecsCpp(schema);
+  const registry = generateRkyvRegistryTs(schema);
+  // 객체 요소 Set 은 IR 정규화 한계로 여전히 JS complex 경로 소속이다.
+  assert.doesNotMatch(cpp, /encode_complex_objectSet/);
+  assert.match(registry, /objectSetComplexCodec/);
+});
+
+test('generateRkyvCodecsCpp promotes wide-int complex commands with BigInt safe-range decode', () => {
+  const schema: PackageSchema = {
+    packageId: 'cpp-bigint-complex',
+    commands: [
+      {
+        name: 'wideAgg',
+        commandId: 40,
+        inputType: 'WideAggInput',
+        outputType: 'WideAggOutput',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            samples: { type: 'array', items: { type: 'integer', format: 'uint64' } },
+            offset: { type: ['integer', 'null'], format: 'int64' },
+          },
+          required: ['samples'],
+        },
+        outputSchema: {
+          type: 'object',
+          properties: {
+            adjusted: { type: 'integer', format: 'int64' },
+            max: { type: 'integer', format: 'uint64' },
+          },
+          required: ['adjusted', 'max'],
+        },
+      },
+    ],
+  };
+  const cpp = generateRkyvCodecsCpp(schema);
+  // 광고 — 정적 postcard 코덱 승격(A2 이후 와이드 정수는 fast-path 소속).
+  assert.match(cpp, /name == "wideAgg"/);
+  assert.match(cpp, /static void encode_wideAgg/);
+  // uint64 디코드: safe 범위면 number, 아니면 jsi::BigInt::fromUint64.
+  assert.match(
+    cpp,
+    /read_uvar\(\); if \(_v <= 9007199254740991ull\) return jsi::Value\(static_cast<double>\(_v\)\); return jsi::Value\(rt, jsi::BigInt::fromUint64\(rt, _v\)\)/,
+  );
+  // int64 디코드: safe 범위면 number, 아니면 jsi::BigInt::fromInt64.
+  assert.match(
+    cpp,
+    /read_i64\(\); if \(_v >= -9007199254740991ll && _v <= 9007199254740991ll\) return jsi::Value\(static_cast<double>\(_v\)\); return jsi::Value\(rt, jsi::BigInt::fromInt64\(rt, _v\)\)/,
+  );
+  // encode 는 확장된 validator 로 bigint 를 받는다.
+  assert.match(cpp, /value\.isBigInt\(\)/);
+  assert.match(cpp, /asBigInt\(rt\)\.asUint64\(rt\)/);
+  assert.match(cpp, /asBigInt\(rt\)\.asInt64\(rt\)/);
 });
 
 test('generateRkyvCodecsCpp emits bounded recursive reference functions', () => {
@@ -1743,4 +1904,238 @@ test('generateEventsTs returns empty string without events (backcompat)', async 
     typeof generateEventsTs
   >[0];
   assert.equal(generateEventsTs(schema), '');
+});
+
+// ── 64-bit varint/zigzag runtime helpers (postcardHelperSource) ────────────
+// postcardHelperSource() 가 반환하는 템플릿은 TS 코드 그 자체다. 임시 파일로
+// 쓰고 import 해서 실제 동작을 실행 검증한다(스냅샷/정규식만으로는 부정확).
+
+test('postcardHelperSource declares 64-bit varint/zigzag helpers', () => {
+  const source = postcardHelperSource();
+  for (const name of [
+    '_pcEncodeVarint64',
+    '_pcDecodeVarint64',
+    '_pcEncodeZigzag64',
+    '_pcDecodeZigzag64',
+  ]) {
+    assert.ok(source.includes(`function ${name}`), `missing helper ${name}`);
+  }
+});
+
+interface TestHooks {
+  encodeVarint64: (v: number | bigint) => Uint8Array;
+  decodeVarint64: (
+    buf: Uint8Array,
+    offset: number,
+  ) => { value: number | bigint; bytesRead: number };
+  encodeZigzag64: (v: number | bigint) => Uint8Array;
+  decodeZigzag64: (v: number | bigint) => number | bigint;
+  encodeVarint: (v: number) => Uint8Array;
+}
+
+async function loadHelperHooks(): Promise<TestHooks> {
+  const source = postcardHelperSource();
+  const bridge =
+    `export function _pcTestEncodeVarint64(v: number | bigint): Uint8Array { return _pcEncodeVarint64(v); }\n` +
+    `export function _pcTestDecodeVarint64(buf: Uint8Array, offset: number) { return _pcDecodeVarint64(buf, offset); }\n` +
+    `export function _pcTestEncodeZigzag64(v: number | bigint): Uint8Array { return _pcEncodeZigzag64(v); }\n` +
+    `export function _pcTestDecodeZigzag64(v: number | bigint) { return _pcDecodeZigzag64(v); }\n` +
+    `export function _pcTestEncodeVarint(v: number): Uint8Array { return _pcEncodeVarint(v); }\n`;
+  const dir = mkdtempSync(join(tmpdir(), 'rustra-varint64-'));
+  const file = join(dir, 'helpers.ts');
+  writeFileSync(file, source + bridge);
+  try {
+    // Node ESM 동적 import 는 파일 경로에 file:// URL 을 요구할 수 있어 변환.
+    const ns = (await import(pathToFileURL(file).href)) as Record<string, unknown>;
+    return {
+      encodeVarint64: ns._pcTestEncodeVarint64 as TestHooks['encodeVarint64'],
+      decodeVarint64: ns._pcTestDecodeVarint64 as TestHooks['decodeVarint64'],
+      encodeZigzag64: ns._pcTestEncodeZigzag64 as TestHooks['encodeZigzag64'],
+      decodeZigzag64: ns._pcTestDecodeZigzag64 as TestHooks['decodeZigzag64'],
+      encodeVarint: ns._pcTestEncodeVarint as TestHooks['encodeVarint'],
+    };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('postcardHelperSource 64-bit helpers round-trip u64 and i64 boundaries', async () => {
+  const h = await loadHelperHooks();
+  const u64Max = 2n ** 64n - 1n;
+
+  // u64::MAX → 10-byte LEB128, decode reverses it.
+  const encoded = h.encodeVarint64(u64Max);
+  assert.equal(encoded.length, 10);
+  const decoded = h.decodeVarint64(encoded, 0);
+  assert.equal(decoded.value, 18446744073709551615n);
+  assert.equal(decoded.bytesRead, 10);
+
+  // 2^53 경계: 이하 → number, 초과 → bigint (complex-codec toJsInteger 계약).
+  assert.equal(typeof h.decodeVarint64(h.encodeVarint64(2n ** 53n - 1n), 0).value, 'number');
+  assert.equal(h.decodeVarint64(h.encodeVarint64(2n ** 53n - 1n), 0).value, 9007199254740991);
+  assert.equal(typeof h.decodeVarint64(h.encodeVarint64(2n ** 53n), 0).value, 'bigint');
+  assert.equal(h.decodeVarint64(h.encodeVarint64(2n ** 53n), 0).value, 2n ** 53n);
+
+  // safe number 입력은 number 경로 — 32-bit number 헬퍼와 출력이 동일하다.
+  for (const v of [0, 1, 127, 128, 300, 2 ** 32 - 1]) {
+    assert.deepEqual(h.encodeVarint64(v), h.encodeVarint(v), `number path mismatch at ${v}`);
+  }
+});
+
+test('postcardHelperSource zigzag64 round-trips i64 boundaries', async () => {
+  const h = await loadHelperHooks();
+  const i64Min = -(2n ** 63n);
+  const i64Max = 2n ** 63n - 1n;
+
+  for (const v of [0n, 1n, -1n, i64Min, i64Max, 2n ** 53n, -(2n ** 53n) - 1n]) {
+    const bytes = h.encodeZigzag64(v);
+    const back = h.decodeZigzag64(h.decodeVarint64(bytes, 0).value);
+    // 디코드 계약: safe 범위면 number, 넘으면 bigint (toJsInteger 선례).
+    const expected = v >= -(2n ** 53n) + 1n && v <= 2n ** 53n - 1n ? Number(v) : v;
+    assert.equal(back, expected, `zigzag64 round-trip failed at ${v}`);
+  }
+
+  // i64::MIN → u64::MAX 와이어, i64::MAX → 2·i64MAX = 2^64-2 (둘 다 10바이트).
+  assert.deepEqual(h.encodeZigzag64(i64Min), h.encodeVarint64(2n ** 64n - 1n));
+  assert.deepEqual(h.encodeZigzag64(i64Max), h.encodeVarint64(2n ** 64n - 2n));
+  assert.equal(h.encodeZigzag64(i64Max).length, 10);
+});
+
+test('generated composite 64-bit codecs (vec_u64/map_i64/option_i64) encode and decode known bytes', async () => {
+  // 복합 64-bit emit 경로(vec_i64/vec_u64/map_i64/map_u64/option_*)는 생성된
+  // 코드를 실제 실행해 알려진 바이트와 대조한다 — 오타가 조용히 배포되는 것을
+  // 막는 최소 게이트. wideAgg cross-wire 픽스처(examples/calculator)가
+  // Rust↔TS 쪽을 담당하고, 여기서는 분류별 emit 을 모두 실행 본다.
+  const schema: PackageSchema = {
+    packageId: 'wide-composite',
+    fieldOrder: 'declaration',
+    commands: [
+      {
+        name: 'wideComposite',
+        commandId: 41,
+        inputType: 'WideCompositeInput',
+        outputType: 'WideCompositeOutput',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            samples: { type: 'array', items: { type: 'integer', format: 'uint64' } },
+            scores: {
+              type: 'object',
+              additionalProperties: { type: 'integer', format: 'int64' },
+            },
+            offset: { type: ['integer', 'null'], format: 'int64' },
+          },
+          required: ['samples', 'scores', 'offset'],
+        },
+        outputSchema: {
+          type: 'object',
+          properties: {
+            max: { type: 'integer', format: 'uint64' },
+            pairs: { type: 'array', items: { type: 'integer', format: 'int64' } },
+          },
+          required: ['max', 'pairs'],
+        },
+      },
+    ],
+  };
+
+  const codecs = generateRkyvCodecsTs(schema);
+  // 분류 확인: 원소/값/옵션 레벨 64-bit 헬퍼.
+  assert.match(codecs, /_pcEncodeVarint64\(_arr\[_i\]\)/, 'vec_u64 element encode');
+  assert.match(codecs, /_pcEncodeZigzag64\(_v\)/, 'map_i64 value encode');
+  assert.match(codecs, /_pcEncodeZigzag64\(_opt\)/, 'option_zigzag64 encode');
+
+  // 생성물을 임시 모듈로 써서 실제 encode/decode 실행.
+  const dir = mkdtempSync(join(tmpdir(), 'rustra-wide-composite-'));
+  const stub =
+    `type RustraError = { code: string; message: string };\n` +
+    `export type RkyvV2Codec<TIn, TOut> = {\n` +
+    `  commandId: number;\n` +
+    `  encode(args: TIn): ArrayBuffer;\n` +
+    `  decode(buf: ArrayBuffer): { ok: boolean; result?: TOut; error?: RustraError };\n` +
+    `};\n`;
+  const file = join(dir, 'codecs.ts');
+  writeFileSync(file, stub + codecs);
+  try {
+    const ns = (await import(pathToFileURL(file).href)) as Record<string, any>;
+    const codec = ns.wideCompositeCodec;
+
+    // 알려진 바이트 — postcard 계약을 손으로 계산한 기대값.
+    // uvar(3) | uvar64(1)=01 uvar64(128)=8001 uvar64(2^53+1)=8180808080808010
+    // | map 1엔트리 {"a": zigzag64(-5)=09} | Some(zigzag64(7)=0e)
+    const req = codec.encode({
+      samples: [1, 128, 9007199254740993n],
+      scores: { a: -5 },
+      offset: 7,
+    });
+    assert.equal(
+      Buffer.from(new Uint8Array(req)).toString('hex'),
+      '290003' + '01' + '8001' + '8180808080808010' + '01' + '0161' + '09' + '01' + '0e',
+      'composite 64-bit encode must produce exact postcard bytes',
+    );
+
+    // 응답 디코드: max=u64::MAX(10B LEB128), pairs=[-1, 2^53-1](zigzag 01, feffffffffffff1f)
+    const body = [
+      ...[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01], // u64::MAX
+      2, // vec len
+      ...[0x01], // zigzag(-1)
+      ...[0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1f], // zigzag(2^53-1)… 8B
+    ];
+    const out = new Uint8Array(8 + body.length);
+    out[0] = 1;
+    out.set(body, 8);
+    const decoded = codec.decode(out.buffer);
+    assert.equal(decoded.ok, true);
+    assert.equal(decoded.result.max, 18446744073709551615n, 'u64::MAX → bigint');
+    assert.equal(decoded.result.pairs[0], -1);
+    assert.equal(decoded.result.pairs[1], 9007199254740991, 'safe boundary stays number');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('postcardHelperSource decoder rejects overlong and out-of-range encodings', async () => {
+  const h = await loadHelperHooks();
+  const u64MaxBytes = h.encodeVarint64(2n ** 64n - 1n); // ff ×9 + 01
+
+  // 10바이트째 마지막 바이트는 0x00/0x01 만 허용 (Rust postcard
+  // max_of_last_byte = 1). 0x02..0x7f 는 64비트 초과 — 무음 왜곡 대신 throw.
+  const overlong = new Uint8Array([...u64MaxBytes.slice(0, 9), 0x7f]);
+  assert.throws(() => h.decodeVarint64(overlong, 0), /varint exceeds 64 bits/);
+  // 같은 바이트가 0x01 이면 정상 — u64::MAX 와이어.
+  assert.equal(h.decodeVarint64(u64MaxBytes, 0).value, 2n ** 64n - 1n);
+  // 10바이트째 0x00 — 정확히 63비트 경계 인코딩.
+  const boundary = new Uint8Array([...u64MaxBytes.slice(0, 9), 0x00]);
+  assert.equal(h.decodeVarint64(boundary, 0).value, 2n ** 63n - 1n);
+
+  // 11바이트 — 앞 10바이트가 모두 continuation — 'varint too long'.
+  // (u64MaxBytes 뒤에 바이트를 붙이는 건 varint 가 아니라 다음 필드다.)
+  const eleven = new Uint8Array(11).fill(0xff);
+  assert.throws(() => h.decodeVarint64(eleven, 0), /varint too long/);
+
+  // 잘린 입력(continuation 으로 끝나는 5바이트) — 'varint out of bounds'.
+  const truncated = new Uint8Array([0xff, 0xff, 0xff, 0xff, 0xff]);
+  assert.throws(() => h.decodeVarint64(truncated, 0), /varint out of bounds/);
+  // buffer 끝을 넘기는 offset 도 동일.
+  assert.throws(() => h.decodeVarint64(new Uint8Array([0x01]), 5), /varint out of bounds/);
+});
+
+test('postcardHelperSource encoders reject negative and out-of-i64 inputs', async () => {
+  const h = await loadHelperHooks();
+
+  // 음수 varint — number 와 bigint 모두.
+  assert.throws(() => h.encodeVarint64(-1), /varint must be non-negative/);
+  assert.throws(() => h.encodeVarint64(-1n), /varint must be non-negative/);
+  assert.throws(() => h.encodeVarint64(-(2n ** 64n)), /varint must be non-negative/);
+
+  // zigzag64 는 i64 범위 밖 입력을 throw (validateInteger 선례, 무음 왜곡 금지).
+  assert.throws(() => h.encodeZigzag64(2n ** 63n), /outside i64 range/);
+  assert.throws(() => h.encodeZigzag64(-(2n ** 63n) - 1n), /outside i64 range/);
+  assert.doesNotThrow(() => h.encodeZigzag64(2n ** 63n - 1n));
+  assert.doesNotThrow(() => h.encodeZigzag64(-(2n ** 63n)));
+
+  // varint64 는 u64 범위 밖 입력을 throw — 아니면 모든 디코더가 거절하는
+  // 와이어(10바이트째 payload 0x02)를 내보게 된다(무음 왜곡 금지).
+  assert.throws(() => h.encodeVarint64(2n ** 64n), /varint exceeds u64 range/);
+  assert.doesNotThrow(() => h.encodeVarint64(2n ** 64n - 1n));
 });
