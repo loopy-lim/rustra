@@ -43,6 +43,7 @@ export function spawnInherit(
     const started = Date.now();
     let tick = 0;
     const render = (suffix: string): void => {
+      if (!options?.progressLabel) return;
       const elapsed = Math.floor((Date.now() - started) / 1000);
       const frame = SPINNER_FRAMES[tick % SPINNER_FRAMES.length];
       stream(`[rustra] ${frame} ${options.progressLabel} ${suffix} (${elapsed}s)`);
