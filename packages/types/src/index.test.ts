@@ -1730,6 +1730,15 @@ test('TimeoutError and CancelledError constructors keep code mapping and cause',
   assert.equal(cancelled.name, 'CancelledError');
 });
 
+test('Display-string rejections keep the flat RustraCommandError contract', () => {
+  // 문자열 경로는 기존 평탄화 계약을 유지한다 — 서브클래스 승격은 구조화
+  // {code, message} 경로에서만 일어난다(와이어 정합 영향 최소화).
+  const parsed = normalizeRustraError('transport.timeout: request timed out');
+  assert.equal(parsed.code, 'transport.timeout');
+  assert.ok(parsed instanceof RustraCommandError);
+  assert.ok(!(parsed instanceof TimeoutError));
+});
+
 test('opt-in debug sink receives bounded wire previews', () => {
   const events: Array<{ bytes?: string; byteLength?: number }> = [];
   configureDebug((event) => events.push({ bytes: event.bytes, byteLength: event.byteLength }));

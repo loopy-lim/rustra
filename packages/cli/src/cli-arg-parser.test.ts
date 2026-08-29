@@ -40,4 +40,52 @@ describe('parseCliArgs', () => {
       }),
     ).toThrow(/Unknown doctor option: --strick[\s\S]*Did you mean --strict/);
   });
+
+  test('accepts separated --flag value and -h boolean', () => {
+    const parsed = parseCliArgs(['--config', 'a.json', '-h'], {
+      command: 'codegen',
+      valueFlags: ['config', 'format'],
+      booleanFlags: ['check', 'help', 'h'],
+    });
+    expect(parsed.values.get('config')).toBe('a.json');
+    expect(parsed.flags.has('h')).toBe(true);
+  });
+
+  test('boolean flags reject an inline value', () => {
+    expect(() =>
+      parseCliArgs(['--check=yes'], {
+        command: 'codegen',
+        valueFlags: ['config'],
+        booleanFlags: ['check'],
+      }),
+    ).toThrow(/--check does not accept a value/);
+  });
+
+  test('value flags require a value', () => {
+    expect(() =>
+      parseCliArgs(['--config'], {
+        command: 'codegen',
+        valueFlags: ['config'],
+        booleanFlags: [],
+      }),
+    ).toThrow(/--config requires a value/);
+  });
+
+  test('positionals are rejected unless allowed', () => {
+    expect(() =>
+      parseCliArgs(['stray'], {
+        command: 'codegen',
+        valueFlags: ['config'],
+        booleanFlags: [],
+      }),
+    ).toThrow(/Unknown codegen option: stray/);
+    const parsed = parseCliArgs(['target-dir', '--force'], {
+      command: 'init',
+      valueFlags: [],
+      booleanFlags: ['force'],
+      allowPositionals: true,
+    });
+    expect(parsed.positionals).toEqual(['target-dir']);
+    expect(parsed.flags.has('force')).toBe(true);
+  });
 });
