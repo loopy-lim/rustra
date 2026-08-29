@@ -11,6 +11,44 @@ export type CliArgParserOptions = {
   allowPositionals?: boolean;
 };
 
+function editDistance(left: string, right: string): number {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let i = 0; i < left.length; i += 1) {
+    const current = [i + 1];
+    for (let j = 0; j < right.length; j += 1) {
+      current.push(
+        left[i] === right[j]
+          ? previous[j]!
+          : 1 + Math.min(previous[j]!, previous[j + 1]!, current[j]!),
+      );
+    }
+    previous.splice(0, previous.length, ...current);
+  }
+  return previous[right.length]!;
+}
+
+/** Levenshtein "Did you mean" over the command's declared flags, mirroring closestCommand. */
+function closestFlag(input: string, known: readonly string[]): string | undefined {
+  let best: { flag: string; distance: number } | undefined;
+  for (const flag of known) {
+    const distance = editDistance(input, flag);
+    if (distance <= 2 && (!best || distance < best.distance)) best = { flag, distance };
+  }
+  return best?.flag;
+}
+
+function unknownOptionError(command: string, argument: string, known: readonly string[]): Error {
+  const name = argument.replace(/^--?/, '');
+  const suggestion = closestFlag(name, known);
+  const available = known.map((flag) => `--${flag}`).join(', ');
+  const hint = suggestion
+    ? ` Did you mean --${suggestion}?`
+    : ` Available ${command} options: ${available}.`;
+  return new Error(
+    `Unknown ${command} option: ${argument}.${hint} Run "rustra ${command} --help".`,
+  );
+}
+
 /** Shared long-option parser used by every CLI subcommand. */
 export function parseCliArgs(args: readonly string[], options: CliArgParserOptions): ParsedCliArgs {
   const values = new Map<string, string>();
@@ -18,6 +56,7 @@ export function parseCliArgs(args: readonly string[], options: CliArgParserOptio
   const positionals: string[] = [];
   const valueFlags = new Set(options.valueFlags);
   const booleanFlags = new Set(options.booleanFlags);
+  const known = [...options.valueFlags, ...options.booleanFlags];
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index]!;
@@ -27,7 +66,7 @@ export function parseCliArgs(args: readonly string[], options: CliArgParserOptio
     }
     if (!argument.startsWith('--')) {
       if (!options.allowPositionals) {
-        throw new Error(`Unknown ${options.command} option: ${argument}`);
+        throw unknownOptionError(options.command, argument, known);
       }
       positionals.push(argument);
       continue;
@@ -41,7 +80,7 @@ export function parseCliArgs(args: readonly string[], options: CliArgParserOptio
       flags.add(name!);
       continue;
     }
-    if (!valueFlags.has(name!)) throw new Error(`Unknown ${options.command} option: ${argument}`);
+    if (!valueFlags.has(name!)) throw unknownOptionError(options.command, argument, known);
     const value = inlineValue ?? args[++index];
     if (!value || value.startsWith('--')) throw new Error(`--${name} requires a value`);
     values.set(name!, value);
