@@ -549,6 +549,42 @@ test('generation gate: unexposed generation in schema JSON is tolerated (legacy 
   assert.ok(schemaCalls >= 1, 'first invoke must fetch the live schema');
 });
 
+test('generation gate: async (invokeAsync) path re-syncs stale cache after substitution', async () => {
+  // 동기 dispatch 와 동일한 게이트 계약이 invokeAsync 전파 경로에도 적용되는지
+  // 검증한다(rkyv-engine-async.ts 의 generationGate()). 치환 전 캐시가 옛
+  // commandId(20)를 쓰면 네이티브는 엉뚱한 프레임을 받는다 — 게이트가 새
+  // 스키마(id 21)로 재동기화해야 한다.
+  const schemaHolder: { current: ArrayBuffer } = {
+    current: schemaBytesWithGeneration([{ name: 'asyncDyn', commandId: 20 }], 1),
+  };
+  let generation = 1;
+  const seenIds: number[] = [];
+  const native = generationTestNative({
+    schema: () => schemaHolder.current,
+    generation: () => generationBytes(generation),
+  });
+  native.invokeAsync = (payload: ArrayBuffer, cb: (resp: ArrayBuffer) => void) => {
+    seenIds.push(new DataView(payload).getUint16(0, true));
+    queueMicrotask(() => cb(tier3Success({ v: 1 })));
+    return 1;
+  };
+  native.invokeCancel = () => true; // 전파 경로 진입 조건 (호출되지 않음)
+  const engine = createRkyvV2Engine(native, new Map());
+  const ac = new AbortController(); // abort 하지 않음 — 전파 경로 유지
+  await engine.invoke('asyncDyn', {}, { signal: ac.signal });
+  assert.deepEqual(seenIds, [20], 'precondition: initial async invoke uses fresh schema');
+
+  // 치환(unregister+register) — 세대 2, 새 commandId 21.
+  schemaHolder.current = schemaBytesWithGeneration([{ name: 'asyncDyn', commandId: 21 }], 2);
+  generation = 2;
+  await engine.invoke('asyncDyn', {}, { signal: ac.signal });
+  assert.deepEqual(
+    seenIds,
+    [20, 21],
+    'async path gate must re-sync the stale commandId after substitution',
+  );
+});
+
 // ── createRkyvV2Engine: B1 (C++ invokeTyped fast path) ──────
 
 /**
