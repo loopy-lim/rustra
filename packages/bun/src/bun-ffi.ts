@@ -28,6 +28,7 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
     rustra_ffi_free: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.void },
     rustra_ffi_get_schema: { args: [FFIType.ptr], returns: FFIType.ptr },
     rustra_ffi_contract_hash: { args: [FFIType.ptr], returns: FFIType.ptr },
+    rustra_ffi_schema_generation: { args: [FFIType.ptr], returns: FFIType.ptr },
   } as const;
   const open = (library: string) => dlopen(library, definitions);
   let handle: ReturnType<typeof open> | undefined;
@@ -123,6 +124,11 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
     getContractHash: () => {
       outLength[0] = 0n;
       return copyOwned(handle.symbols.rustra_ffi_contract_hash(outLength));
+    },
+    // (T0-3) 레지스트리 세대 — 동적 명령 호출 전 스테일 캐시 게이트가 소비.
+    getSchemaGeneration: () => {
+      outLength[0] = 0n;
+      return copyOwned(handle.symbols.rustra_ffi_schema_generation(outLength));
     },
   };
   const {

@@ -416,6 +416,105 @@ test('createFastEngine forwards onContractMismatch (degraded mode entry)', () =>
   ]);
 });
 
+// ── (T0-4) generation 게이트 × RN JSI — 기능 저하 없음 ──────
+// DynamicRegistryApp 시나리오(JSI 네이티브 + 빈 코덱 맵 + 동적 Tier 3)의 축소:
+// (a) 구 JSI 네이티브(getSchemaGeneration 미노출)는 게이트가 스킵돼 기존과
+//     동일 — 캐시 히트 후 getSchema 재호출 없음.
+// (b) 신규 JSI 네이티브(generation 노출)는 치환(register/unregister) 후
+//     재호출 시 게이트가 재동기화해 commandId를 새로 읽는다.
+test('createFastEngine dynamic commands: legacy JSI (no generation) keeps existing cache behavior', async () => {
+  let schemaCalls = 0;
+  const schema = () =>
+    encoder
+      .encode(
+        JSON.stringify({
+          packageId: 't',
+          schemaVersion: 1,
+          commands: [{ name: 'ping', commandId: 9 }],
+        }),
+      )
+      .buffer as ArrayBuffer;
+  const native: RustraJSINative = {
+    invoke: () => new ArrayBuffer(0),
+    invokeRkyvV2: (payload) => {
+      // Tier 3 응답 — ok 플래그 + JSON 바디.
+      const json = encoder.encode(JSON.stringify({ pong: true }));
+      const ab = new ArrayBuffer(8 + json.length);
+      const view = new Uint8Array(ab);
+      view[0] = 1;
+      new DataView(ab).setUint32(4, json.length, true);
+      view.set(json, 8);
+      void payload;
+      return ab;
+    },
+    getSchema: () => {
+      schemaCalls += 1;
+      return schema();
+    },
+  };
+  const engine = createFastEngine(native, { rkyvV2Codecs: new Map() });
+  const first = await engine.invoke<{ pong: boolean }>('ping', {});
+  const second = await engine.invoke<{ pong: boolean }>('ping', {});
+  assert.equal(first.pong, true);
+  assert.equal(second.pong, true);
+  assert.equal(schemaCalls, 1, 'cached dynamic command must not re-fetch live schema');
+});
+
+test('createFastEngine dynamic commands: generation-exposing JSI re-syncs after substitution', async () => {
+  const generationHolder: { value: number } = { value: 1 };
+  const schemaHolder: { current: ArrayBuffer } = {
+    current: encoder
+      .encode(
+        JSON.stringify({
+          packageId: 't',
+          schemaVersion: 1,
+          schemaGeneration: 1,
+          commands: [{ name: 'ping', commandId: 9 }],
+        }),
+      )
+      .buffer as ArrayBuffer,
+  };
+  const generation = () => {
+    const ab = new ArrayBuffer(8);
+    new DataView(ab).setBigUint64(0, BigInt(generationHolder.value), true);
+    return ab;
+  };
+  const seenIds: number[] = [];
+  const native: RustraJSINative = {
+    invoke: () => new ArrayBuffer(0),
+    invokeRkyvV2: (payload) => {
+      seenIds.push(new DataView(payload).getUint16(0, true));
+      const json = encoder.encode(JSON.stringify({ pong: true }));
+      const ab = new ArrayBuffer(8 + json.length);
+      const view = new Uint8Array(ab);
+      view[0] = 1;
+      new DataView(ab).setUint32(4, json.length, true);
+      view.set(json, 8);
+      return ab;
+    },
+    getSchema: () => schemaHolder.current,
+    getSchemaGeneration: generation,
+  };
+  const engine = createFastEngine(native, { rkyvV2Codecs: new Map() });
+  await engine.invoke('ping', {});
+  assert.deepEqual(seenIds, [9], 'precondition: initial dispatch uses fresh schema');
+
+  // 치환(unregister + register → 새 commandId) — JS 측 동기화 없이 재호출.
+  schemaHolder.current = encoder
+    .encode(
+      JSON.stringify({
+        packageId: 't',
+        schemaVersion: 1,
+        schemaGeneration: 2,
+        commands: [{ name: 'ping', commandId: 10 }],
+      }),
+    )
+    .buffer as ArrayBuffer;
+  generationHolder.value = 2;
+  await engine.invoke('ping', {});
+  assert.deepEqual(seenIds, [9, 10], 'gate must re-sync the stale commandId after substitution');
+});
+
 /**
  * invokeTypedAsync mock 네이티브 — 성공 콜백을 보류(defer)했다가 수동 전달한다.
  * calls 로 네이티브 호출 수를, resolveNow 로 늦은 resolve 를 흉내낸다.

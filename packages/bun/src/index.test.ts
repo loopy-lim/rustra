@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { suffix } from 'bun:ffi';
+import { suffix, toArrayBuffer } from 'bun:ffi';
 import { createBunBootstrap, createBunEngine, createBunFfiEngine } from './index.js';
 import { RustraCommandError, type RkyvV2Codec } from '@rustra/types';
 
@@ -284,6 +284,72 @@ test('createBunFfiEngine dispatches rkyv V2 through the caller-buffer into bindi
     await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
     assert.equal(kept.length, 600);
     assert.deepEqual(kept, benchEchoBytes(600));
+  } finally {
+    runtime.close();
+  }
+});
+
+// (T0-4) dev 치환 워크플로우 E2E — register → invoke → unregister(스키마 변경)
+// → invoke. JS 엔진이 JS 측 동기화 없이 세대 게이트로 스테일 캐시를 재동기화하고,
+// 미등록 명령은 command.not_found로 시끄럽게 실패해야 한다.
+// 치환 제어는 범용 JSON FFI(`rustra_ffi_invoke_json` — FfiFormat::Json 기본
+// 응답)로 수행한다: `rustraRegistryDemo` 같은 정적 명령은 postcard wire라 빈
+// 코덱 맵의 엔진이 Tier 3 JSON을 보내면 디코드가 깨진다. 디버그 dylib을 쓰는
+// 이유는 런타임 mutation이 dev 전용(frozen)이기 때문이다.
+test('createBunFfiEngine dev-substitution workflow re-syncs live schema via generation gate', async () => {
+  const { dlopen, FFIType, suffix: ffiSuffix } = await import('bun:ffi');
+  const libPath = resolve(repoRoot, `target/debug/librustra_calculator_example.${ffiSuffix}`);
+  const control = dlopen(libPath, {
+    rustra_mobile_init: { args: [], returns: FFIType.void },
+    rustra_ffi_invoke_json: { args: [FFIType.ptr, FFIType.u64, FFIType.ptr], returns: FFIType.ptr },
+    rustra_ffi_free: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.void },
+  });
+  control.symbols.rustra_mobile_init();
+  const outLen = new BigUint64Array(1);
+  const callJson = (command: string, args: unknown): { ok: boolean; result?: unknown } => {
+    const request = new TextEncoder().encode(JSON.stringify({ command, args }));
+    outLen[0] = 0n;
+    const ptr = control.symbols.rustra_ffi_invoke_json(request, BigInt(request.length), outLen);
+    assert.ok(ptr !== null && Number(ptr) !== 0, 'JSON FFI must return a buffer');
+    const length = Number(outLen[0]);
+    try {
+      const view = new Uint8Array(toArrayBuffer(ptr, 0, length));
+      return JSON.parse(new TextDecoder().decode(view));
+    } finally {
+      control.symbols.rustra_ffi_free(ptr, BigInt(length));
+    }
+  };
+  const registryOp = (op: string): void => {
+    const resp = callJson('rustraRegistryDemo', { op });
+    assert.equal(resp.ok, true, `registry op ${op} must succeed: ${JSON.stringify(resp)}`);
+  };
+
+  const runtime = await createBunFfiEngine({
+    libraryCandidates: [libPath],
+    rkyvV2Codecs: new Map(),
+  });
+  try {
+    const engine = runtime.engine;
+
+    // 등록 전: 미등록 동적 명령은 시끄럽게 실패.
+    await assert.rejects(
+      engine.invoke('ping', {}),
+      (err: unknown) => err instanceof RustraCommandError && err.code === 'command.not_found',
+    );
+
+    // register (dev 치환) → 동적 Tier 3 invoke 성공.
+    registryOp('register');
+    const pong = await engine.invoke<{ pong: boolean }>('ping', {});
+    assert.equal(pong.pong, true, 'registered dynamic command must round-trip (tier 3)');
+
+    // unregister (스키마 변경) → 재호출. 스테일 캐시가 옛 entry를 쓰면 옛
+    // commandId로 invoke가 나가 네이티브 not_found 에러 프레임이 날아온다 —
+    // 게이트가 재동기화해 JS 측 command.not_found 계약을 지켜야 한다.
+    registryOp('unregister');
+    await assert.rejects(
+      engine.invoke('ping', {}),
+      (err: unknown) => err instanceof RustraCommandError && err.code === 'command.not_found',
+    );
   } finally {
     runtime.close();
   }
