@@ -48,7 +48,9 @@ fn main() -> rustra::Result<()> {
     let mut line = String::new();
     loop {
         line.clear();
-        let read = reader.read_line(&mut line).map_err(rustra::RustraError::internal)?;
+        let read = reader
+            .read_line(&mut line)
+            .map_err(rustra::RustraError::internal)?;
         if read == 0 {
             return Ok(()); // stdin EOF
         }
@@ -58,8 +60,13 @@ fn main() -> rustra::Result<()> {
         }
         if trimmed.contains("__hello") {
             if let Some(true) = hello_requested(trimmed) {
+                // id 에코 — 요청의 id 를 그대로 돌려준다(transport 상관 유지).
+                let echo_id = serde_json::from_str::<Value>(trimmed)
+                    .ok()
+                    .and_then(|v| v.get("id").cloned())
+                    .unwrap_or(Value::Null);
                 let response = json!({
-                    "id": 0,
+                    "id": echo_id,
                     "ok": true,
                     "binary": true,
                     "eventsCmdId": BINARY_DRAIN_EVENTS_CMD,
@@ -67,7 +74,8 @@ fn main() -> rustra::Result<()> {
                 let mut encoded =
                     serde_json::to_vec(&response).map_err(rustra::RustraError::internal)?;
                 encoded.push(b'\n');
-                out.write_all(&encoded).map_err(rustra::RustraError::internal)?;
+                out.write_all(&encoded)
+                    .map_err(rustra::RustraError::internal)?;
                 out.flush().map_err(rustra::RustraError::internal)?;
                 return run_binary(package, &mut reader, &mut out);
             }
@@ -117,16 +125,17 @@ fn run_binary<R: Read, W: Write>(
             return Err(rustra::RustraError::internal(e.to_string()));
         }
 
-        let response: Vec<u8> =
-            if len >= 2 && u16::from_le_bytes([payload[0], payload[1]]) == BINARY_DRAIN_EVENTS_CMD {
-                drain_events_binary(&package)
-            } else {
-                match package.invoke_rkyv_v2_into(&payload, &mut out_buffer) {
-                    Ok(rustra::DirectResponse::Written(n)) => out_buffer[..n].to_vec(),
-                    Ok(rustra::DirectResponse::Buffered(bytes)) => bytes,
-                    Err(error) => rustra::encode_rkyv_v2_error(&error),
-                }
-            };
+        let response: Vec<u8> = if len >= 2
+            && u16::from_le_bytes([payload[0], payload[1]]) == BINARY_DRAIN_EVENTS_CMD
+        {
+            drain_events_binary(&package)
+        } else {
+            match package.invoke_rkyv_v2_into(&payload, &mut out_buffer) {
+                Ok(rustra::DirectResponse::Written(n)) => out_buffer[..n].to_vec(),
+                Ok(rustra::DirectResponse::Buffered(bytes)) => bytes,
+                Err(error) => rustra::encode_rkyv_v2_error(&error),
+            }
+        };
 
         out.write_all(&(response.len() as u32).to_le_bytes())
             .and_then(|_| out.write_all(&response))
