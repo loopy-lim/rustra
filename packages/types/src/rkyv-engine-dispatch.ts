@@ -67,8 +67,12 @@ export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispa
       return outcome.value;
     }
     // 3순위: 동적 명령 → Tier 3 fallback (live schema 의 commandId 사용).
+    // (T0-3) 세대 게이트를 먼저 통과시켜 스테일 캐시(id 이동/등록 해제 반영
+    // 누락)를 차단한다 — FFI 미노출 호스트는 no-op. 게이트가 재조회에 실패해도
+    // 아래 cached lookup의 기존 command.not_found 계약이 그대로 유지된다.
     // getSchema 미노출 네이티브에서 cached lookup은 undefined 를
     // 돌려주므로 기존 command.not_found 계약이 그대로 유지된다.
+    schema.generationGate();
     const entry = schema.lookupCachedLiveSchemaEntry(command);
     if (!entry) {
       throw new RustraCommandError(

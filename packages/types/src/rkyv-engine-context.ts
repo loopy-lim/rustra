@@ -6,6 +6,8 @@ export type RkyvSchemaRuntime = {
   refreshLiveSchema(): Map<string, LiveSchemaEntry>;
   readLiveSchemaDocument(): LiveSchemaDocument;
   lookupCachedLiveSchemaEntry(command: string): LiveSchemaEntry | undefined;
+  /** (T0-3) FFI 세대 비교 게이트 — 불일치 시 live schema 재조회(스테일 캐시 차단). */
+  generationGate(): void;
 };
 
 export type RkyvCapabilityRuntime = {

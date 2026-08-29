@@ -58,6 +58,14 @@ export type RkyvV2SchemaNative = {
   invokeAsync?(payload: ArrayBuffer, onDone: (response: ArrayBuffer) => void): number;
   /** (T1) 진행 중 async 호출 취소 — `invokeAsync` 가 반환한 invocation id 를 넘긴다. */
   invokeCancel?(invocationId: number): boolean;
+  /**
+   * (T0-3) `rustra_ffi_schema_generation` 에 대응하는 현재 레지스트리 세대
+   * (u64 LE 8바이트). dev 치환(register/replace/unregister)마다 단조 증가하며
+   * live schema JSON의 `schemaGeneration` 필드와 같은 값을 가리킨다. 게이트는
+   * 동적(Tier 3) 명령 호출 전에 이 값을 비교해 스테일 캐시를 감지한다 —
+   * 미노출 호스트(구 RN JSI, Node stdio)는 게이트를 건너뛴다(현상 유지).
+   */
+  getSchemaGeneration?(): ArrayBuffer;
 };
 
 /**
@@ -68,6 +76,8 @@ export type RkyvV2SchemaNative = {
 export type LiveSchemaDocument = {
   commands: Map<string, LiveSchemaEntry>;
   schemaVersion?: number;
+  /** 문서 생성 시점의 레지스트리 세대 (구 네이티브는 필드 자체가 없다). */
+  schemaGeneration?: number;
 };
 
 /** getLiveSchema 의 파싱 내부 — 엔진 생성 시 schemaVersion 까지 읽는다 (T2). */
@@ -88,6 +98,7 @@ export function parseLiveSchemaDocument(native: { getSchema?(): ArrayBuffer }): 
   const json = decodeUtf8(u, 0, u.length);
   const parsed = JSON.parse(json) as {
     schemaVersion?: unknown;
+    schemaGeneration?: unknown;
     commands?: Array<{
       name: string;
       commandId: number;
@@ -106,6 +117,9 @@ export function parseLiveSchemaDocument(native: { getSchema?(): ArrayBuffer }): 
   const doc: LiveSchemaDocument = { commands: map };
   if (typeof parsed.schemaVersion === 'number' && Number.isFinite(parsed.schemaVersion)) {
     doc.schemaVersion = parsed.schemaVersion;
+  }
+  if (typeof parsed.schemaGeneration === 'number' && Number.isFinite(parsed.schemaGeneration)) {
+    doc.schemaGeneration = parsed.schemaGeneration;
   }
   return doc;
 }

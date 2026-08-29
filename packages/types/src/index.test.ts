@@ -168,15 +168,16 @@ function tier3Error(code: string, message: string): ArrayBuffer {
 /**
  * 스키마 JSON 바이트. schemaVersion 을 명시하면 최상위 필드로 포함하고,
  * 생략하면 필드 자체를 없앤다 (T2 테스트: 구 네이티브 pre-Task-8 에뮬레이션).
+ * schemaGeneration 도 동일 관례 (T0-3: 세대 게이트).
  */
 function schemaBytes(
   commands: Array<{ name: string; commandId: number }>,
   schemaVersion?: number,
+  schemaGeneration?: number,
 ): ArrayBuffer {
-  const doc: Record<string, unknown> =
-    schemaVersion !== undefined
-      ? { packageId: 't', schemaVersion, commands }
-      : { packageId: 't', commands };
+  const doc: Record<string, unknown> = { packageId: 't', commands };
+  if (schemaVersion !== undefined) doc.schemaVersion = schemaVersion;
+  if (schemaGeneration !== undefined) doc.schemaGeneration = schemaGeneration;
   return bytesFromStrings([JSON.stringify(doc)]);
 }
 
@@ -425,6 +426,127 @@ test('engine throws when native has no getSchema and command not in registry', a
     },
     (err: Error) => /no codec and not in live schema/.test(err.message),
   );
+});
+
+// ── T0-3: generation 게이트 — 스테일 캐시 재동기화 ───────────
+
+/** `schemaBytes` 와 같은 문서를 만들되 generation 필드만 다른 스키마. */
+function schemaBytesWithGeneration(
+  commands: Array<{ name: string; commandId: number }>,
+  generation: number,
+): ArrayBuffer {
+  return schemaBytes(commands, undefined, generation);
+}
+
+/** `getSchemaGeneration` 노출 유무와 무관한 최소 네이티브 (invoke 관찰자 포함). */
+function generationTestNative(opts: {
+  schema: () => ArrayBuffer;
+  generation?: () => ArrayBuffer;
+  invoke?: (payload: ArrayBuffer) => ArrayBuffer;
+}): RkyvV2SchemaNative {
+  const native: RkyvV2SchemaNative = {
+    getSchema: opts.schema,
+    invokeRkyvV2: (payload) => (opts.invoke ? opts.invoke(payload) : tier3Success({})),
+  };
+  if (opts.generation) native.getSchemaGeneration = opts.generation;
+  return native;
+}
+
+/** u64 LE 8바이트로 FFI 세대 응답을 흉내낸다. */
+function generationBytes(value: number): ArrayBuffer {
+  const ab = new ArrayBuffer(8);
+  const view = new DataView(ab);
+  view.setBigUint64(0, BigInt(value), true);
+  return ab;
+}
+
+test('generation gate: native exposing generation re-syncs stale cache before tier-3 invoke', async () => {
+  // 등록 → invoke 로 캐시 구축 → replace 로 명령 id 가 이동(unregister+register
+  // = 같은 이름 새 commandId)했는데 스테일 캐시가 옛 id 를 쓰면 엉뚱한 명령이
+  // 실행된다(조용한 오염). 게이트는 호출 전 세대를 비교해 재동기화해야 한다.
+  const schemaHolder: { current: ArrayBuffer } = {
+    current: schemaBytesWithGeneration([{ name: 'genProbe', commandId: 10 }], 1),
+  };
+  let generation = 1;
+  const seenIds: number[] = [];
+  const native = generationTestNative({
+    schema: () => schemaHolder.current,
+    generation: () => {
+      return generationBytes(generation);
+    },
+    invoke: (payload) => {
+      seenIds.push(new DataView(payload).getUint16(0, true));
+      return tier3Success({ v: 1 });
+    },
+  });
+  const engine = createRkyvV2Engine(native, new Map());
+  await engine.invoke('genProbe', {});
+  assert.deepEqual(seenIds, [10], 'precondition: initial invoke uses the fresh schema');
+
+  // 치환: 같은 이름이 새 id 로 재등록 (Rust 측 replace/unregister+register 시나리오).
+  schemaHolder.current = schemaBytesWithGeneration([{ name: 'genProbe', commandId: 11 }], 2);
+  generation = 2;
+  await engine.invoke('genProbe', {});
+  assert.deepEqual(
+    seenIds,
+    [10, 11],
+    'generation mismatch must re-sync live schema before dispatch',
+  );
+
+  // 같은 세대 내 후속 호출은 캐시를 유지한다 (재조회 폭증 없음).
+  await engine.invoke('genProbe', {});
+  assert.deepEqual(seenIds, [10, 11, 11]);
+});
+
+test('generation gate: once-per-call — resync failure surfaces not_found without retry loop', async () => {
+  // 게이트 재동기화 후에도 명령이 없으면 command.not_found 로 시끄럽게 실패한다.
+  // 재동기화는 호출당 1회만 (재귀 방지) — 실패해도 재게이트 재진입하지 않는다.
+  const native = generationTestNative({
+    schema: () => schemaBytesWithGeneration([], 2), // 등록 해제된 상태
+    generation: () => generationBytes(2),
+  });
+  const engine = createRkyvV2Engine(native, new Map());
+  // 첫 invoke 로 세대 1 캐시를 구축할 수 없으므로(빈 스키마) not_found.
+  await assert.rejects(
+    engine.invoke('removed', {}),
+    (e: unknown) => e instanceof RustraCommandError && e.code === 'command.not_found',
+  );
+});
+
+test('generation gate: FFI-less host skips the gate entirely (status quo preserved)', async () => {
+  // getSchemaGeneration 미노출 네이티브(RN 구버전 JSI, Node stdio)는 게이트를
+  // 건너뛴다 — getSchema 호출 횟수가 기존 캐시 동작과 동일해야 한다.
+  let schemaCalls = 0;
+  const schemaHolder: { current: ArrayBuffer } = {
+    current: schemaBytesWithGeneration([{ name: 'plainDyn', commandId: 5 }], 1),
+  };
+  const native = generationTestNative({
+    schema: () => {
+      schemaCalls += 1;
+      return schemaHolder.current;
+    },
+  });
+  const engine = createRkyvV2Engine(native, new Map());
+  await engine.invoke('plainDyn', {});
+  await engine.invoke('plainDyn', {});
+  assert.equal(schemaCalls, 1, 'cached dynamic command must not parse live schema per invoke');
+});
+
+test('generation gate: unexposed generation in schema JSON is tolerated (legacy natives)', async () => {
+  // 스키마 JSON에 schemaGeneration 필드가 없는 구 네이티브 — 게이트는 FFI 심볼
+  // (getSchemaGeneration) 기준으로만 판정하고 문서 필드 유무는 무시한다.
+  let schemaCalls = 0;
+  const native = generationTestNative({
+    schema: () => {
+      schemaCalls += 1;
+      return schemaBytes([{ name: 'legacyDyn', commandId: 3 }]); // generation 필드 없음
+    },
+    generation: () => generationBytes(7),
+  });
+  const engine = createRkyvV2Engine(native, new Map());
+  await engine.invoke('legacyDyn', {});
+  await engine.invoke('legacyDyn', {});
+  assert.ok(schemaCalls >= 1, 'first invoke must fetch the live schema');
 });
 
 // ── createRkyvV2Engine: B1 (C++ invokeTyped fast path) ──────

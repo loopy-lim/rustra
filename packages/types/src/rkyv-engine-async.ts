@@ -51,6 +51,9 @@ export function createRkyvInvokeRaw(
     }
     if (!codec && native.invokeAsync && native.invokeCancel) {
       const cmdId = hasTypedPath ? ensureStaticIds()?.get(command) : undefined;
+      // (T0-3) 동적 경로도 세대 게이트로 스테일 id 를 차단한다 (동기 dispatch 와
+      // 동일 계약). FFI 미노출 호스트는 no-op.
+      schema.generationGate();
       const entry =
         cmdId !== undefined ? { commandId: cmdId } : schema.lookupCachedLiveSchemaEntry(command);
       if (entry) {
