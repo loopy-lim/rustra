@@ -1086,16 +1086,19 @@ fn invoke_schema_generation() -> u64 {
 /// FFI 심볼이 현재 레지스트리 세대를 u64 LE 8바이트로 반환한다. live_schema 의
 /// `schemaGeneration` 필드와 같은 값을 가리킨다(TS 게이트가 소비).
 ///
-/// 전역 FFI 컨텍스트는 idempotent(첫 register_ffi 승자 고정)라 병렬 실행 시
-/// FFI가 가리키는 패키지는 이 테스트가 만든 것이 아닐 수 있다. 따라서 "내
-/// register 가 FFI 세대를 올린다"는 단언은 불가능하다 — 그 진행 계약은 lib
+/// 테스트가 자신의 패키지를 `register_ffi` 한다(idempotent — 이미 다른 테스트가
+/// 선점했으면 no-op). 전역 FFI 컨텍스트는 첫 register_ffi 승자 고정이라 병렬
+/// 실행 시 FFI가 가리키는 패키지는 이 테스트가 만든 것이 아닐 수 있다. 따라서
+/// "내 register 가 FFI 세대를 올린다"는 단언은 불가능하다 — 그 진행 계약은 lib
 /// 단위 테스트 `schema_generation_advances_on_register_replace_unregister` 가
 /// 결정적으로 담당한다. 여기서는 **전역 선점과 무관하게 항상 참인** 계약만
 /// 검증한다: 두 경로(FFI 심볼, live_schema JSON)가 같은 전역 패키지를 읽으므로
 /// 세대 일치, 8바이트 LE 인코딩, 무구조 invoke 무영향은 어느 패키지가 전역이든
-/// 성립한다.
+/// 성립한다. register_ffi 는 미등록 상태(단독 필터 실행)에서도 전역 컨텍스트를
+/// 채워 세대 경로가 `{}` 폴백(None → 세대 0 / 스키마 빈 객체)에 빠지지 않게 한다.
 #[test]
 fn schema_generation_ffi_tracks_registry_mutations() {
+    test_package().register_ffi();
     let g0 = invoke_schema_generation();
 
     // 무구조 조회는 세대를 바꾸지 않는다.
