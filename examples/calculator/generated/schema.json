@@ -1,6 +1,7 @@
 {
   "packageId": "examples.calculator",
   "schemaVersion": 1,
+  "schemaGeneration": 0,
   "fieldOrder": "declaration",
   "commands": [
     {
