@@ -73,7 +73,9 @@ test('Node/Bun-only config does not require RN platform tools', () => {
     );
 
     assert.ok(!report.checks.some((check) => check.id.startsWith('rn.')));
-    assert.ok(!report.checks.some((check) => check.status === 'fail' && check.id.startsWith('rn.')));
+    assert.ok(
+      !report.checks.some((check) => check.status === 'fail' && check.id.startsWith('rn.')),
+    );
   });
 });
 
@@ -137,9 +139,12 @@ test('doctor args default to rustra.json and text output', () => {
     format: 'text',
     strict: false,
   });
-  assert.deepEqual(parseDoctorArgs(['--config', './app/rustra.json', '--format', 'json', '--strict']), {
-    configPath: './app/rustra.json',
-    format: 'json',
-    strict: true,
-  });
+  assert.deepEqual(
+    parseDoctorArgs(['--config', './app/rustra.json', '--format', 'json', '--strict']),
+    {
+      configPath: './app/rustra.json',
+      format: 'json',
+      strict: true,
+    },
+  );
 });

@@ -184,9 +184,7 @@ function safeResolve(root: string, value: string | undefined): string | undefine
 }
 
 function resolveManifest(configRoot: string, config: DoctorConfig): string | undefined {
-  return (
-    safeResolve(configRoot, config.codegen?.rustManifest) ?? findCargoManifest(configRoot)
-  );
+  return safeResolve(configRoot, config.codegen?.rustManifest) ?? findCargoManifest(configRoot);
 }
 
 function getCargoMetadata(
@@ -234,14 +232,16 @@ function selectGenerator(
   );
   const selected = requestedBinary
     ? binaries.find((target) => target.name === requestedBinary)
-    : binaries.find((target) => target.name === 'generate') ??
-      (binaries.length === 1 ? binaries[0] : undefined);
+    : (binaries.find((target) => target.name === 'generate') ??
+      (binaries.length === 1 ? binaries[0] : undefined));
   if (!selected?.name) {
     return {
-      error: `could not select one Cargo binary from ${binaries
-        .map((target) => target.name)
-        .filter(Boolean)
-        .join(', ') || 'none'}`,
+      error: `could not select one Cargo binary from ${
+        binaries
+          .map((target) => target.name)
+          .filter(Boolean)
+          .join(', ') || 'none'
+      }`,
     };
   }
   return { packageName: candidate.name, binaryName: selected.name };
@@ -285,14 +285,9 @@ function addAndroidChecks(
         ),
   );
   checks.push(
-    commandCheck(
-      runner,
-      'adb',
-      ['version'],
-      'rn.android.sdk',
-      'Android SDK adb',
-      ['Install Android SDK platform tools and ensure adb is on PATH'],
-    ),
+    commandCheck(runner, 'adb', ['version'], 'rn.android.sdk', 'Android SDK adb', [
+      'Install Android SDK platform tools and ensure adb is on PATH',
+    ]),
   );
   const sdkmanager = runner('sdkmanager', ['--version']);
   checks.push(
@@ -349,14 +344,9 @@ export function collectDoctorReport(
 
   if (!existsSync(configPath)) {
     checks.push(
-      check(
-        'config.file',
-        'fail',
-        true,
-        `Config file does not exist: ${configPath}`,
-        undefined,
-        ['Create rustra.json or pass --config <path>'],
-      ),
+      check('config.file', 'fail', true, `Config file does not exist: ${configPath}`, undefined, [
+        'Create rustra.json or pass --config <path>',
+      ]),
     );
   } else {
     const parsed = readConfig(configPath);
@@ -393,14 +383,9 @@ export function collectDoctorReport(
   checks.push(
     cargo.ok
       ? check('cargo.present', 'pass', true, 'cargo is available')
-      : check(
-          'cargo.present',
-          'fail',
-          true,
-          'cargo is unavailable',
-          cargo.stderr || cargo.error,
-          ['Install Cargo with https://rustup.rs'],
-        ),
+      : check('cargo.present', 'fail', true, 'cargo is unavailable', cargo.stderr || cargo.error, [
+          'Install Cargo with https://rustup.rs',
+        ]),
   );
   const node = runner('node', ['--version']);
   const bun = runner('bun', ['--version']);
@@ -529,8 +514,14 @@ export function collectDoctorReport(
     }
 
     if (config.tauri) {
-      const platformCommand = platform === 'darwin' ? 'xcodebuild' : platform === 'win32' ? 'cl' : 'pkg-config';
-      const platformArgs = platformCommand === 'xcodebuild' ? ['-version'] : platformCommand === 'pkg-config' ? ['--version'] : [];
+      const platformCommand =
+        platform === 'darwin' ? 'xcodebuild' : platform === 'win32' ? 'cl' : 'pkg-config';
+      const platformArgs =
+        platformCommand === 'xcodebuild'
+          ? ['-version']
+          : platformCommand === 'pkg-config'
+            ? ['--version']
+            : [];
       checks.push(
         commandCheck(
           runner,
