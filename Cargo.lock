@@ -3039,6 +3039,7 @@ dependencies = [
  "postcard",
  "proptest",
  "rustra-macros",
+ "rustra-naming",
  "schemars 0.8.22",
  "serde",
  "serde_json",
@@ -3113,10 +3114,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustra",
+ "rustra-naming",
  "schemars 0.8.22",
  "serde",
  "syn 2.0.117",
 ]
+
+[[package]]
+name = "rustra-naming"
+version = "0.4.0"
 
 [[package]]
 name = "rustra-streaming-example"

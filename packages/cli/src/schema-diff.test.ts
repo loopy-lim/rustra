@@ -111,6 +111,67 @@ test('detects required field added', () => {
   assert.ok(result.breaking.some((c) => c.type === 'required_field_added'));
 });
 
+test('detects an existing optional field becoming required', () => {
+  const oldSchema = structuredClone(baseSchema) as PackageSchema;
+  const next = structuredClone(baseSchema) as PackageSchema;
+  oldSchema.commands[0].inputSchema.required = ['a'];
+  next.commands[0].inputSchema.required = ['a', 'b'];
+  const result = diffSchemas(oldSchema, next);
+  assert.ok(result.breaking.some((change) => change.type === 'field_became_required'));
+});
+
+test('detects nested referenced schema changes', () => {
+  const oldSchema = structuredClone(baseSchema) as PackageSchema;
+  const nextSchema = structuredClone(baseSchema) as PackageSchema;
+  oldSchema.commands[0].inputSchema = {
+    type: 'object',
+    properties: { payload: { $ref: '#/definitions/Payload' } },
+    required: ['payload'],
+    definitions: {
+      Payload: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  };
+  nextSchema.commands[0].inputSchema = {
+    type: 'object',
+    properties: { payload: { $ref: '#/definitions/Payload' } },
+    required: ['payload'],
+    definitions: {
+      Payload: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
+    },
+  };
+  const result = diffSchemas(oldSchema, nextSchema);
+  assert.ok(result.breaking.some((change) => change.type === 'field_type_changed'));
+});
+
+test('resolves command-level nested refs instead of treating them as opaque', () => {
+  const oldSchema = structuredClone(baseSchema) as PackageSchema;
+  const nextSchema = structuredClone(baseSchema) as PackageSchema;
+  oldSchema.commands[0].inputSchema = {
+    type: 'object',
+    properties: { payload: { $ref: '#/$defs/Payload' } },
+    required: ['payload'],
+  };
+  nextSchema.commands[0].inputSchema = structuredClone(oldSchema.commands[0].inputSchema);
+  oldSchema.commands[0].definitions = {
+    Payload: {
+      type: 'object',
+      properties: { child: { $ref: '#/$defs/Child' } },
+      required: ['child'],
+    },
+    Child: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+  };
+  nextSchema.commands[0].definitions = {
+    Payload: {
+      type: 'object',
+      properties: { child: { $ref: '#/$defs/Child' } },
+      required: ['child'],
+    },
+    Child: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
+  };
+  const result = diffSchemas(oldSchema, nextSchema);
+  assert.ok(result.breaking.some((change) => change.type === 'field_type_changed'));
+});
+
 test('formatDiffResult shows breaking changes', () => {
   const newSchema: PackageSchema = { packageId: 'test', commands: [] };
   const result = diffSchemas(baseSchema, newSchema);

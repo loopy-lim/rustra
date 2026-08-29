@@ -10,6 +10,7 @@ import {
   detectDirty,
   readDevConfig,
   runOnce,
+  runDev,
 } from './dev.js';
 
 test('parseDevArgs parses backend dir and app dir', () => {
@@ -28,6 +29,18 @@ test('parseDevArgs defaults to conventional layout', () => {
   const opts = parseDevArgs([]);
   assert.equal(opts.backendDir, 'backend');
   assert.equal(opts.appDir, 'app');
+});
+
+test('runDev fails fast instead of silently watching a missing layout', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'rustra-dev-layout-'));
+  try {
+    await assert.rejects(
+      () => runDev(['--backend', join(dir, 'backend'), '--app', join(dir, 'app')]),
+      /requires backend/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('readDevConfig rejects a config without a Cargo manifest', () => {

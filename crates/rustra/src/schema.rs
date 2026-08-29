@@ -4,7 +4,7 @@ use schemars::JsonSchema;
 use serde_json::Value;
 use std::any::type_name;
 
-use crate::codegen::snake_to_lower_camel;
+use rustra_naming::snake_to_lower_camel;
 
 /// 타입 `T`의 JSON Schema를 (루트 스키마, definitions) 튜플로 직렬화합니다.
 pub(super) fn schema_value<T>() -> (Value, Value)

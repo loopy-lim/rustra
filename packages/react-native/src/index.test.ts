@@ -8,7 +8,7 @@ import {
   RustraCommandError,
 } from './index.js';
 import type { RustraJSINative } from './index.js';
-import { decodeUtf8, encodeUtf8, exactArrayBuffer } from './utf8.js';
+import { decodeUtf8, encodeUtf8, exactArrayBuffer } from '@rustra/types';
 
 const encoder = new TextEncoder();
 
@@ -18,13 +18,11 @@ test('Hermes fallback encodes and decodes Korean and emoji without WHATWG global
   Object.defineProperty(globalThis, 'TextEncoder', { configurable: true, value: undefined });
   Object.defineProperty(globalThis, 'TextDecoder', { configurable: true, value: undefined });
   try {
-    const moduleUrl = new URL(`./utf8.ts?hermes=${Date.now()}`, import.meta.url).href;
-    const utf8 = (await import(moduleUrl)) as typeof import('./utf8.js');
     const input = '안녕하세요 Rustra 🚀';
-    const bytes = utf8.encodeUtf8(input);
-    assert.equal(utf8.decodeUtf8(bytes), input);
+    const bytes = encodeUtf8(input);
+    assert.equal(decodeUtf8(bytes), input);
     assert.deepEqual([...bytes], [...encoder.encode(input)]);
-    assert.equal(utf8.exactArrayBuffer(bytes).byteLength, bytes.byteLength);
+    assert.equal(exactArrayBuffer(bytes).byteLength, bytes.byteLength);
   } finally {
     if (encoderDescriptor) Object.defineProperty(globalThis, 'TextEncoder', encoderDescriptor);
     else Reflect.deleteProperty(globalThis, 'TextEncoder');
@@ -341,6 +339,14 @@ test('createChannel exposes a typed handle and idempotent close', () => {
   assert.equal(channel.close(), true);
   assert.equal(channel.close(), false);
   assert.deepEqual(dropped, [42]);
+});
+
+test('createChannel rejects an invalid native handle instead of creating an unusable channel', () => {
+  const native = {
+    createChannel: () => Number.NaN,
+    dropChannel: () => true,
+  };
+  assert.throws(() => createChannel(() => {}, native), /invalid handle/);
 });
 
 // ── createAsyncEngine (P0-3 + T1 얕은 취소) ─────────────────

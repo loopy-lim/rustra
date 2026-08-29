@@ -54,13 +54,17 @@ export function encodeUtf8(input: string): Uint8Array {
 }
 
 /** UTF-8 decode without assuming WHATWG encoding globals exist (Hermes-safe). */
-export function decodeUtf8(input: ArrayBuffer | Uint8Array): string {
+export function decodeUtf8(
+  input: ArrayBuffer | Uint8Array,
+  start = 0,
+  end = input instanceof Uint8Array ? input.length : input.byteLength,
+): string {
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
-  if (nativeDecoder) return nativeDecoder.decode(bytes);
+  if (nativeDecoder && start === 0 && end === bytes.length) return nativeDecoder.decode(bytes);
 
   let output = '';
-  let index = 0;
-  while (index < bytes.length) {
+  let index = start;
+  while (index < end) {
     const first = bytes[index];
     if (first < 0x80) {
       output += String.fromCharCode(first);
@@ -69,7 +73,7 @@ export function decodeUtf8(input: ArrayBuffer | Uint8Array): string {
     }
 
     const width = first >= 0xf0 ? 4 : first >= 0xe0 ? 3 : first >= 0xc2 ? 2 : 0;
-    if (width === 0 || index + width > bytes.length) {
+    if (width === 0 || index + width > end) {
       output += '\ufffd';
       index += 1;
       continue;

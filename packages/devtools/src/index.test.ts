@@ -110,3 +110,19 @@ test('invokeById is omitted when inner lacks it', () => {
   const engine = createInstrumentedEngine(makeInner());
   assert.equal(engine.invokeById, undefined);
 });
+
+test('instrumented engine exposes bounded payload logs and a logging hook', async () => {
+  const seen: string[] = [];
+  const engine = createInstrumentedEngine(makeInner(), {
+    capturePayload: true,
+    maxLogEntries: 1,
+    onLog: (entry) => seen.push(`${entry.command}:${entry.ok}`),
+  });
+  await engine.invoke('echo', { nested: { value: 42 } });
+  await engine.invoke('echo', { later: true });
+  const report = engine.report();
+  assert.deepEqual(seen, ['echo:true', 'echo:true']);
+  assert.equal(report.logs.length, 1);
+  assert.deepEqual(report.logs[0]?.payload, { later: true });
+  assert.deepEqual(report.logs[0]?.result, { echoed: { later: true } });
+});

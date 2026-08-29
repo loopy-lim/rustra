@@ -16,6 +16,7 @@ version.workspace = true
 tauri = ["dep:tauri"]
 
 [dependencies]
+rustra-naming.workspace = true
 rustra-macros.workspace = true
 schemars.workspace = true
 serde.workspace = true

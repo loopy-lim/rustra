@@ -157,6 +157,20 @@ processTest(
   },
 );
 
+processTest(
+  'createNodeProcessTransport exposes the runtime contract hash endpoint',
+  { timeout: 30_000 },
+  async () => {
+    const transport = createNodeProcessTransport({
+      command: resolve(repoRoot, 'target/debug/rustra-calculator-example'),
+      args: ['invoke'],
+    });
+    const hash = await transport.getContractHash();
+    assert.match(hash, /^[0-9a-f]{64}$/);
+    transport.dispose();
+  },
+);
+
 processTest('createNodeBootstrap owns lazy configure and Cargo runtime discovery', async () => {
   const bootstrap = createNodeBootstrap({
     commandCandidates: [resolve(repoRoot, 'target/debug/rustra-calculator-example')],
@@ -191,6 +205,27 @@ processTest('createNodeProcessTransport surfaces spawn failures as transport.err
     assert.equal(err.code, 'transport.error');
     return true;
   });
+});
+
+processTest('createNodeProcessTransport preserves structured retryable errors', async () => {
+  const transport = createNodeProcessTransport({
+    command: process.execPath,
+    args: [
+      '-e',
+      [
+        'process.stdin.resume();',
+        "process.stdin.on('end', () => process.stdout.write(JSON.stringify({ ok: false, error: JSON.stringify({ code: 'transport.timeout', message: 'timed out', retryable: true }) })));",
+      ].join(' '),
+    ],
+  });
+  await assert.rejects(transport.invoke('slow', {}) as Promise<unknown>, (err: unknown) => {
+    return (
+      err instanceof RustraCommandError &&
+      err.code === 'transport.timeout' &&
+      err.retryable === true
+    );
+  });
+  transport.dispose();
 });
 
 processTest('createNodeLoopTransport keeps a persistent process and correlates by id', async () => {

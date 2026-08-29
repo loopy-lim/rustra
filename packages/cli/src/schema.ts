@@ -23,6 +23,8 @@ export type CommandSchema = {
   inputSchema: JsonSchema;
   /** 출력 타입의 JSON Schema */
   outputSchema: JsonSchema;
+  /** Rust `///` command documentation, if present. */
+  description?: string;
   /** 명명된 타입 정의 (schemars가 생성한 $ref 대상) */
   definitions?: Record<string, JsonSchema>;
 };

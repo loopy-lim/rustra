@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { InvokeOptions } from '@rustra/types';
 import { resolveCommandId } from '@rustra/types';
 import { useRustraEngine } from './context.js';
+import { inputKey } from './input-key.js';
 
 export type CommandFn<I, O> = (input: I, options?: InvokeOptions) => Promise<O>;
 export type VoidCommandFn<O> = (options?: InvokeOptions) => Promise<O>;
@@ -46,15 +47,15 @@ export function useCommand<I, O>(
   // react-doctor/no-ref-current-in-render). useState 의 "이전 값과 같으면
   // 같은 참조 반환" 관례로 안정화한다: 키가 직전과 같으면 직전 state 를
   // 그대로 돌려받고, 다르면 setState 로 커밋 시점에 갱신한다.
-  const inputKey = input === undefined ? undefined : JSON.stringify(input);
+  const serializedInput = input === undefined ? undefined : inputKey(input);
   const [stableInputBox, setStableInputBox] = useState<{
     key: string | undefined;
     value: I;
-  }>(() => ({ key: inputKey, value: input as I }));
-  if (stableInputBox.key !== inputKey) {
-    setStableInputBox({ key: inputKey, value: input as I });
+  }>(() => ({ key: serializedInput, value: input as I }));
+  if (stableInputBox.key !== serializedInput) {
+    setStableInputBox({ key: serializedInput, value: input as I });
   }
-  const stableInput = stableInputBox.key === inputKey ? stableInputBox.value : input;
+  const stableInput = stableInputBox.key === serializedInput ? stableInputBox.value : input;
 
   const execute = useCallback(async (): Promise<O | undefined> => {
     if (abortControllerRef.current) {

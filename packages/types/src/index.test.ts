@@ -19,6 +19,8 @@ import {
   RustraCommandError,
   parseRustraErrorString,
   normalizeRustraError,
+  configureDebug,
+  debugWire,
 } from './index.js';
 import type { RkyvV2SchemaNative, RkyvV2Codec, BatchEntry, EngineClient } from './index.js';
 
@@ -1683,6 +1685,24 @@ test('normalizeRustraError preserves retryable metadata from string rejections',
   assert.equal(err.retryable, true);
 });
 
+test('normalizeRustraError preserves the original cause and stack', () => {
+  const original = new Error('native failure');
+  const normalized = normalizeRustraError(original);
+  assert.equal(normalized.cause, original);
+  assert.equal(normalized.stack, original.stack);
+});
+
+test('opt-in debug sink receives bounded wire previews', () => {
+  const events: Array<{ bytes?: string; byteLength?: number }> = [];
+  configureDebug((event) => events.push({ bytes: event.bytes, byteLength: event.byteLength }));
+  try {
+    debugWire('request', 'rkyv', 'echo', new Uint8Array([0, 1, 255]).buffer);
+    assert.deepEqual(events, [{ bytes: '0001ff', byteLength: 3 }]);
+  } finally {
+    configureDebug(undefined);
+  }
+});
+
 // ── T1: AbortSignal 배선 ────────────────────────────────────
 
 test('invoke without signal never calls invokeCancel (T1)', async () => {
@@ -2370,9 +2390,9 @@ test('RkyvV2 engine applies timeoutMs to an async native dispatch', async () => 
 test('invokeWithTimeout rejects a pending call when its signal aborts', async () => {
   let resolveLate!: (value: number) => void;
   const pending: EngineClient = {
-    invoke: () =>
-      new Promise<number>((resolve) => {
-        resolveLate = resolve;
+    invoke: <T>() =>
+      new Promise<T>((resolve) => {
+        resolveLate = (value) => resolve(value as T);
       }),
   };
   const controller = new AbortController();

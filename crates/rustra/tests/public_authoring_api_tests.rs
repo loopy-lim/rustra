@@ -24,6 +24,14 @@ fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
     })
 }
 
+/// Adds two numbers and exposes this sentence to generated TypeScript callers.
+#[command]
+fn documented_add(input: AddNumbersInput) -> Result<AddNumbersOutput> {
+    Ok(AddNumbersOutput {
+        value: input.a + input.b,
+    })
+}
+
 /// `#[command(capability = "...")]` 속성 — require_capability 문자열 결합 없이
 /// 매크로 시점에 권한을 심는다 (register!/build! 가 require_capability_if 로 연결).
 #[command(capability = "compute:secure")]
@@ -76,6 +84,25 @@ fn user_can_register_command_without_writing_command_name_string() {
             .contains("export const addNumbers = createGeneratedFields2")
     );
     assert!(generated.commands_ts.contains("'addNumbers'"));
+}
+
+#[test]
+fn command_doc_comments_flow_to_schema_and_typescript_jsdoc() {
+    let generated = register!(Package::builder("example.docs"), documented_add)
+        .build()
+        .generate_typescript()
+        .unwrap();
+    assert!(generated.schema_json.contains("documentedAdd"));
+    assert!(
+        generated
+            .schema_json
+            .contains("Adds two numbers and exposes this sentence")
+    );
+    assert!(
+        generated
+            .commands_ts
+            .contains("Adds two numbers and exposes this sentence")
+    );
 }
 
 #[test]
