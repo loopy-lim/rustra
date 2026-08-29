@@ -21,10 +21,13 @@ feat: bigint postcard fast-path — 와이드 정수 게이트 해제
   그 역)를 혼용하면 디코딩이 조용히 깨집니다 — 양쪽을 함께 재생성해야 합니다.
 - safe 정수 범위(±2^53) 밖의 값은 `number` 대신 `bigint` 로 복원됩니다.
   TS 타입 표면이 `i64`/`u64` 필드에서 `number` → `number | bigint` 로 넓어집니다.
-- 복합 타입도 와이드 정수를 수용: `Vec<u64>`, `Set<i64>`, `HashMap<String, u64>`,
+- 복합 타입도 와이드 정수를 수용: `Vec<u64>`, `HashMap<String, u64>`,
   `Option<i64>` 등이 원소/값 레벨 64-bit 헬퍼로 fast-path 를 사용합니다
-  (`vec_i64/vec_u64`, `set_i64/set_u64`, `map_i64/map_u64`,
-  `option_zigzag64/option_uvar64` kind 신설).
+  (`vec_i64/vec_u64`, `map_i64/map_u64`,
+  `option_zigzag64/option_uvar64` kind 신설). 단 `Set<T>` 는 이번에도
+  complex 라우트를 유지합니다 — 명령 단위 게이트(`hasSet`)가 uniqueItems 를
+  배제하므로 `set_i64/set_u64` kind 는 현 게이트에서는 도달하지 않는
+  준비물입니다(C++ Set 직결은 별도 changeset 참조).
 - C++ 정적 코덱(JSI 네이티브)은 여전히 int64/uint64 를 fast-path 에 넣지
   않습니다 — 해당 필드가 있으면 C++ 광고 집합에서 제외됩니다(트랙 B 후속).
 - 경계 와이어 픽스처: calculator `gauge`(u64::MAX), `span`(i64::MIN, 2^53±1),

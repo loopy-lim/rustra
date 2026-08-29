@@ -199,7 +199,7 @@ static jsi::Value decode_benchAdd(jsi::Runtime& rt, rc::Reader& r) {
 }
 
 static void encode_benchEchoBytes(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
-  w.push_u8(27); w.push_u8(0); // cmd_id = 27 LE
+  w.push_u8(25); w.push_u8(0); // cmd_id = 25 LE
   auto argsObj = args.asObject(rt);
   { const auto& _v = argsObj.getProperty(rt, "data"); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _span = rustra_bytes(rt, _v, "data"); w.push_uvar(_span.size); w.push_bytes(_span.data, _span.size); } }
 }
@@ -207,7 +207,7 @@ static void encode_benchEchoBytes(jsi::Runtime& rt, const jsi::Value& args, rc::
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
 static void encode_pos_benchEchoBytes(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
   if (argc != 1) throw jsi::JSError(rt, "rustra: benchEchoBytes expects 1 positional argument(s), got " + std::to_string(argc));
-  w.push_u8(27); w.push_u8(0); // cmd_id = 27 LE
+  w.push_u8(25); w.push_u8(0); // cmd_id = 25 LE
   { const auto& _v = argv[0]; auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _span = rustra_bytes(rt, _v, "data"); w.push_uvar(_span.size); w.push_bytes(_span.data, _span.size); } }
 }
 
@@ -218,7 +218,7 @@ static jsi::Value decode_benchEchoBytes(jsi::Runtime& rt, rc::Reader& r) {
 }
 
 static void encode_benchEchoPair(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
-  w.push_u8(28); w.push_u8(0); // cmd_id = 28 LE
+  w.push_u8(26); w.push_u8(0); // cmd_id = 26 LE
   auto argsObj = args.asObject(rt);
   { auto _v = argsObj.getProperty(rt, "name").getString(rt).utf8(rt); w.push_string(_v); }
   w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, "value"), "value"));
@@ -227,7 +227,7 @@ static void encode_benchEchoPair(jsi::Runtime& rt, const jsi::Value& args, rc::W
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
 static void encode_pos_benchEchoPair(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
   if (argc != 2) throw jsi::JSError(rt, "rustra: benchEchoPair expects 2 positional argument(s), got " + std::to_string(argc));
-  w.push_u8(28); w.push_u8(0); // cmd_id = 28 LE
+  w.push_u8(26); w.push_u8(0); // cmd_id = 26 LE
   { auto _s = argv[0].asString(rt).utf8(rt); w.push_string(_s); }
   w.push_f64(rustra_f64(rt, argv[1], "value"));
 }
@@ -669,7 +669,7 @@ static jsi::Value decode_toUpper(jsi::Runtime& rt, rc::Reader& r) {
 }
 
 static void encode_wideAgg(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
-  w.push_u8(25); w.push_u8(0); // cmd_id = 25 LE
+  w.push_u8(28); w.push_u8(0); // cmd_id = 28 LE
   auto argsObj = args.asObject(rt);
   { auto _arr = argsObj.getProperty(rt, "samples").asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_uvar(rustra_u64(rt, _arr.getValueAtIndex(rt, _i), "samples[]")); }
   { auto _v = argsObj.getProperty(rt, "offset"); if (_v.isNull() || _v.isUndefined()) { w.push_u8(0); } else { w.push_u8(1); w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, "offset"), "offset")); } }
@@ -683,7 +683,7 @@ static jsi::Value decode_wideAgg(jsi::Runtime& rt, rc::Reader& r) {
 }
 
 static void encode_complex_echoGroups(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
-  w.push_u8(29); w.push_u8(0);
+  w.push_u8(27); w.push_u8(0);
   { if (!args.isObject() || args.asObject(rt).isArray(rt)) throw jsi::JSError(rt, "complex object expected");
     auto _cx0 = args.asObject(rt);
     auto _cx1 = _cx0.getProperty(rt, "groups");
@@ -710,7 +710,7 @@ static jsi::Value decode_complex_echoGroups(jsi::Runtime& rt, rc::Reader& r) {
 }
 
 static void encode_complex_tagSet(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
-  w.push_u8(26); w.push_u8(0);
+  w.push_u8(29); w.push_u8(0);
   { if (!args.isObject() || args.asObject(rt).isArray(rt)) throw jsi::JSError(rt, "complex object expected");
     auto _cx0 = args.asObject(rt);
     auto _cx1 = _cx0.getProperty(rt, "ids");
@@ -806,8 +806,8 @@ bool encode_by_id(Runtime& rt, uint16_t cmd_id, const Value& args, rc::Writer& w
   switch (cmd_id) {
     case 1: encode_addNumbers(rt, args, w); return true;
     case 23: encode_benchAdd(rt, args, w); return true;
-    case 27: encode_benchEchoBytes(rt, args, w); return true;
-    case 28: encode_benchEchoPair(rt, args, w); return true;
+    case 25: encode_benchEchoBytes(rt, args, w); return true;
+    case 26: encode_benchEchoPair(rt, args, w); return true;
     case 24: encode_benchEchoString(rt, args, w); return true;
     case 18: encode_channelDemo(rt, args, w); return true;
     case 4: encode_clamp(rt, args, w); return true;
@@ -830,9 +830,9 @@ bool encode_by_id(Runtime& rt, uint16_t cmd_id, const Value& args, rc::Writer& w
     case 16: encode_span(rt, args, w); return true;
     case 6: encode_sumList(rt, args, w); return true;
     case 7: encode_toUpper(rt, args, w); return true;
-    case 25: encode_wideAgg(rt, args, w); return true;
-    case 29: encode_complex_echoGroups(rt, args, w); return true;
-    case 26: encode_complex_tagSet(rt, args, w); return true;
+    case 28: encode_wideAgg(rt, args, w); return true;
+    case 27: encode_complex_echoGroups(rt, args, w); return true;
+    case 29: encode_complex_tagSet(rt, args, w); return true;
     default: return false; // 동적/알 수 없는 cmd_id — JS 가 Tier 3 fallback 처리
   }
 }
@@ -841,8 +841,8 @@ Value decode_by_id(Runtime& rt, uint16_t cmd_id, rc::Reader& r) {
   switch (cmd_id) {
     case 1: return decode_addNumbers(rt, r);
     case 23: return decode_benchAdd(rt, r);
-    case 27: return decode_benchEchoBytes(rt, r);
-    case 28: return decode_benchEchoPair(rt, r);
+    case 25: return decode_benchEchoBytes(rt, r);
+    case 26: return decode_benchEchoPair(rt, r);
     case 24: return decode_benchEchoString(rt, r);
     case 18: return decode_channelDemo(rt, r);
     case 4: return decode_clamp(rt, r);
@@ -865,9 +865,9 @@ Value decode_by_id(Runtime& rt, uint16_t cmd_id, rc::Reader& r) {
     case 16: return decode_span(rt, r);
     case 6: return decode_sumList(rt, r);
     case 7: return decode_toUpper(rt, r);
-    case 25: return decode_wideAgg(rt, r);
-    case 29: return decode_complex_echoGroups(rt, r);
-    case 26: return decode_complex_tagSet(rt, r);
+    case 28: return decode_wideAgg(rt, r);
+    case 27: return decode_complex_echoGroups(rt, r);
+    case 29: return decode_complex_tagSet(rt, r);
     default: throw JSError(rt, "rustra: no C++ codec for cmd_id " + std::to_string(cmd_id));
   }
 }
@@ -909,8 +909,8 @@ bool has_static_codec_id(uint16_t cmd_id) {
   switch (cmd_id) {
     case 1: return true;
     case 23: return true;
-    case 27: return true;
-    case 28: return true;
+    case 25: return true;
+    case 26: return true;
     case 24: return true;
     case 18: return true;
     case 4: return true;
@@ -933,9 +933,9 @@ bool has_static_codec_id(uint16_t cmd_id) {
     case 16: return true;
     case 6: return true;
     case 7: return true;
-    case 25: return true;
+    case 28: return true;
+    case 27: return true;
     case 29: return true;
-    case 26: return true;
     default: return false;
   }
 }
@@ -944,8 +944,8 @@ bool has_static_codec_id(uint16_t cmd_id) {
 bool has_pos_codec(uint16_t cmd_id) {
   if (cmd_id == 1) return true;
   if (cmd_id == 23) return true;
-  if (cmd_id == 27) return true;
-  if (cmd_id == 28) return true;
+  if (cmd_id == 25) return true;
+  if (cmd_id == 26) return true;
   if (cmd_id == 24) return true;
   if (cmd_id == 18) return true;
   if (cmd_id == 4) return true;
@@ -971,8 +971,8 @@ void encode_pos_by_id(jsi::Runtime& rt, uint16_t cmd_id, const jsi::Value* argv,
   switch (cmd_id) {
     case 1: encode_pos_addNumbers(rt, argv, argc, w); return;
     case 23: encode_pos_benchAdd(rt, argv, argc, w); return;
-    case 27: encode_pos_benchEchoBytes(rt, argv, argc, w); return;
-    case 28: encode_pos_benchEchoPair(rt, argv, argc, w); return;
+    case 25: encode_pos_benchEchoBytes(rt, argv, argc, w); return;
+    case 26: encode_pos_benchEchoPair(rt, argv, argc, w); return;
     case 24: encode_pos_benchEchoString(rt, argv, argc, w); return;
     case 18: encode_pos_channelDemo(rt, argv, argc, w); return;
     case 4: encode_pos_clamp(rt, argv, argc, w); return;
@@ -996,7 +996,7 @@ void encode_pos_by_id(jsi::Runtime& rt, uint16_t cmd_id, const jsi::Value* argv,
 
 bool has_buffer_codec(uint16_t cmd_id) {
   switch (cmd_id) {
-    case 27: return true;
+    case 25: return true;
     default: return false;
   }
 }
@@ -1004,8 +1004,8 @@ bool has_buffer_codec(uint16_t cmd_id) {
 void encode_buffer_by_id(uint16_t cmd_id, const uint8_t* data, size_t size, rc::Writer& w) {
   if (size > 0 && data == nullptr) throw std::invalid_argument("rustra: null byte buffer");
   switch (cmd_id) {
-    case 27:
-      w.push_u8(27); w.push_u8(0);
+    case 25:
+      w.push_u8(25); w.push_u8(0);
       w.push_uvar(size);
       if (size > 0) w.push_bytes(data, size);
       return;
@@ -1020,7 +1020,7 @@ void encode_buffer_by_id(uint16_t cmd_id, const uint8_t* data, size_t size, rc::
 
 Value decode_buffer_result_by_id(Runtime& rt, uint16_t cmd_id, Value buffer) {
   switch (cmd_id) {
-    case 27: {
+    case 25: {
       auto result = Object(rt);
       result.setProperty(rt, cachedProp(rt, "data"), std::move(buffer));
       return result;

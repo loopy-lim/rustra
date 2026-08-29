@@ -329,8 +329,14 @@ impl<'a> Reader<'a> {
 
     fn varint(&mut self) -> Result<u128> {
         let mut value = 0u128;
-        for shift in (0..=126).step_by(7) {
+        // postcard 정규형 계약 — 최대 10바이트, 10바이트째 마지막 바이트의
+        // payload 는 2^(64%7)−1 = 1 이하. TS _pcDecodeVarint64 / C++ read_uvar /
+        // postcard 크레이트와 동일 규칙(비정규 >64-bit 인코딩 무음 수용 방지).
+        for (i, shift) in (0..=63u32).step_by(7).enumerate() {
             let byte = self.byte()?;
+            if i == 9 && byte & 0x7f > 0x01 {
+                return Err(error("varint exceeds 64 bits"));
+            }
             value |= u128::from(byte & 0x7f) << shift;
             if byte & 0x80 == 0 {
                 return Ok(value);

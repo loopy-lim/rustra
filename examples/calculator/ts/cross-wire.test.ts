@@ -243,11 +243,11 @@ test('cross-wire span 2^53+1: decode restores bigint beyond number precision', (
 import { wideAggCodec } from '../generated/rkyv-codecs.js';
 
 const WIDEAGG_BOUNDARY_REQUEST =
-  '190005017f80018180808080808010ffffffffffffffffff0101ffffffffffffffffff01';
+  '1c0005017f80018180808080808010ffffffffffffffffff0101ffffffffffffffffff01';
 const WIDEAGG_BOUNDARY_RESPONSE = '0100000000000000ffffffffffffffffff01f5ffffffffffffffff01';
-const WIDEAGG_EMPTY_REQUEST = '19000000';
+const WIDEAGG_EMPTY_REQUEST = '1c000000';
 const WIDEAGG_EMPTY_RESPONSE = '01000000000000000000';
-const WIDEAGG_MULTIELEM_REQUEST = '19000380808080018080808080018080808080808001010a';
+const WIDEAGG_MULTIELEM_REQUEST = '1c000380808080018080808080018080808080808001010a';
 const WIDEAGG_MULTIELEM_RESPONSE = '0100000000000000808080808080800110';
 
 test('cross-wire wideAgg: Vec<u64> + Option<i64> boundary values mid-stream', () => {
@@ -296,7 +296,7 @@ test('cross-wire wideAgg: multi-element 5/9/10-byte varints across mid-stream bo
 
 import { tagSetCodec } from '../generated/rkyv-codecs.js';
 
-const TAGSET_REQUEST = '1a00030d1ed00f';
+const TAGSET_REQUEST = '1d00030d1ed00f';
 const TAGSET_RESPONSE = '01000000000000000303742d3705743130303003743135';
 
 test('cross-wire tagSet: TS Set iteration-order encode matches Rust request wire', () => {
@@ -310,7 +310,7 @@ test('cross-wire tagSet: TS Set iteration-order encode matches Rust request wire
 test('cross-wire tagSet: Set is order-preserving, not sorted — insertion order wins', () => {
   // 역순 삽입 Set 은 역순 그대로 인코딩된다(정렬 없음이 계약).
   const req = tagSetCodec.encode({ ids: new Set([1000, 15, -7]) });
-  assert.equal(bytesToHex(req), '1a0003d00f1e0d', 'insertion order preserved');
+  assert.equal(bytesToHex(req), '1d0003d00f1e0d', 'insertion order preserved');
 });
 
 test('cross-wire tagSet: Rust response → TS decode restores a real Set<string>', () => {

@@ -739,7 +739,7 @@ function generateFieldEncodeIntoExpr(
         `${indent}{ const _v = ${valueExpr}; ` +
         `if (typeof _v === 'number' && Number.isSafeInteger(_v) && _v >= 0) { ` +
         `let _x = _v; do { ensure(1); out[w++] = (_x % 128) | 0x80; _x = Math.floor(_x / 128); } while (_x > 0); out[w - 1] &= 0x7f; ` +
-        `} else { const _b = BigInt(_v); if (_b < 0n) throw new Error('varint must be non-negative: ' + _b.toString()); ` +
+        `} else { const _b = BigInt(_v); if (_b < 0n) throw new Error('varint must be non-negative: ' + _b.toString()); if (_b > 0xffffffffffffffffn) throw new Error('varint exceeds u64 range: ' + _b.toString()); ` +
         `let _x = _b; do { ensure(1); out[w++] = Number(_x & 0x7fn) | 0x80; _x >>= 7n; } while (_x !== 0n); out[w - 1] &= 0x7f; } }`
       );
     case 'zigzag64':

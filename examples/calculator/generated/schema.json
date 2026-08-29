@@ -79,7 +79,7 @@
     },
     {
       "name": "benchEchoBytes",
-      "commandId": 27,
+      "commandId": 25,
       "inputType": "BenchBytesPayload",
       "outputType": "BenchBytesPayload",
       "inputSchema": {
@@ -119,7 +119,7 @@
     },
     {
       "name": "benchEchoPair",
-      "commandId": 28,
+      "commandId": 26,
       "inputType": "BenchPairPayload",
       "outputType": "BenchPairPayload",
       "inputSchema": {
@@ -380,7 +380,7 @@
     },
     {
       "name": "echoGroups",
-      "commandId": 29,
+      "commandId": 27,
       "inputType": "EchoGroupsInput",
       "outputType": "EchoGroupsOutput",
       "inputSchema": {
@@ -1075,7 +1075,7 @@
     },
     {
       "name": "tagSet",
-      "commandId": 26,
+      "commandId": 29,
       "inputType": "TagSetInput",
       "outputType": "TagSetOutput",
       "inputSchema": {
@@ -1144,7 +1144,7 @@
     },
     {
       "name": "wideAgg",
-      "commandId": 25,
+      "commandId": 28,
       "inputType": "WideAggInput",
       "outputType": "WideAggOutput",
       "inputSchema": {

@@ -118,11 +118,11 @@ const SPAN_2POW53_P1_RESPONSE: &str = "01000000000000000268698280808080808020";
 // 원소 경계를 넘는 값(2^53+1, u64::MAX)이 스트림 중간에서 10바이트 LEB128로
 // 이어지는 것까지 고정한다.
 const WIDEAGG_BOUNDARY_REQUEST: &str =
-    "190005017f80018180808080808010ffffffffffffffffff0101ffffffffffffffffff01";
+    "1c0005017f80018180808080808010ffffffffffffffffff0101ffffffffffffffffff01";
 const WIDEAGG_BOUNDARY_RESPONSE: &str = "0100000000000000ffffffffffffffffff01f5ffffffffffffffff01";
-const WIDEAGG_EMPTY_REQUEST: &str = "19000000";
+const WIDEAGG_EMPTY_REQUEST: &str = "1c000000";
 const WIDEAGG_EMPTY_RESPONSE: &str = "01000000000000000000";
-const WIDEAGG_MULTIELEM_REQUEST: &str = "19000380808080018080808080018080808080808001010a";
+const WIDEAGG_MULTIELEM_REQUEST: &str = "1c000380808080018080808080018080808080808001010a";
 const WIDEAGG_MULTIELEM_RESPONSE: &str = "0100000000000000808080808080800110";
 
 #[test]
@@ -245,7 +245,7 @@ fn wide_agg_wide_composite_wire_is_stable() {
     // 2^53+1과 u64::MAX(10바이트)가 스트림 중간에서 이어진다. offset 은
     // Some(i64::MIN) — 태그 1 + 최악 zigzag.
     let req = request_for(
-        25,
+        28,
         &WideAggInput {
             samples: vec![1, 127, 128, (1u64 << 53) + 1, u64::MAX],
             offset: Some(i64::MIN),
@@ -257,7 +257,7 @@ fn wide_agg_wide_composite_wire_is_stable() {
 
     // 빈 벡터 + None — 태그 없는 빈 시퀀스와 Option None 태그.
     let req = request_for(
-        25,
+        28,
         &WideAggInput {
             samples: vec![],
             offset: None,
@@ -270,7 +270,7 @@ fn wide_agg_wide_composite_wire_is_stable() {
     // 5/9/10바이트 varint 원소 3개(2^28, 2^35, 2^49) + Some(5) — 경계가
     // 스트림 중간에 반복되는 다원소 케이스.
     let req = request_for(
-        25,
+        28,
         &WideAggInput {
             samples: vec![1 << 28, 1 << 35, 1 << 49],
             offset: Some(5),
@@ -286,7 +286,7 @@ fn wide_agg_wide_composite_wire_is_stable() {
 // 정렬 순서로 직렬화되고(zigzag 원소 / 문자열 원소), TS/C++ complex codec 은
 // JS Set 이터레이션 순서 그대로 쓴다 — 양쪽 다 디코딩은 Set 복원이므로 순서
 // 차이는 관측되지 않는다. TS cross-wire.test.ts 신규 블록과 짝이다.
-const TAGSET_REQUEST: &str = "1a00030d1ed00f";
+const TAGSET_REQUEST: &str = "1d00030d1ed00f";
 const TAGSET_RESPONSE: &str = "01000000000000000303742d3705743130303003743135";
 
 #[test]
@@ -295,7 +295,7 @@ fn tag_set_primitive_elements_wire_is_stable() {
     // BTreeSet<i64> {-7, 15, 1000} — 정렬 순서로 zigzag: -7→13(0x0d),
     // 15→30(0x1e), 1000→2000(2바이트 LEB128: 0xd0 0x0f).
     let req = request_for(
-        26,
+        29,
         &TagSetInput {
             ids: std::collections::BTreeSet::from([-7i64, 15, 1000]),
         },

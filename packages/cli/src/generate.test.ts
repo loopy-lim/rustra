@@ -2133,4 +2133,9 @@ test('postcardHelperSource encoders reject negative and out-of-i64 inputs', asyn
   assert.throws(() => h.encodeZigzag64(-(2n ** 63n) - 1n), /outside i64 range/);
   assert.doesNotThrow(() => h.encodeZigzag64(2n ** 63n - 1n));
   assert.doesNotThrow(() => h.encodeZigzag64(-(2n ** 63n)));
+
+  // varint64 는 u64 범위 밖 입력을 throw — 아니면 모든 디코더가 거절하는
+  // 와이어(10바이트째 payload 0x02)를 내보게 된다(무음 왜곡 금지).
+  assert.throws(() => h.encodeVarint64(2n ** 64n), /varint exceeds u64 range/);
+  assert.doesNotThrow(() => h.encodeVarint64(2n ** 64n - 1n));
 });

@@ -1253,6 +1253,10 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
                 } catch (const facebook::jsi::JSError& e) {
                   // 디코딩 실패는 에러 콜백으로 정규화 — 콜백 누락 방지.
                   onError->call(rt, e.getMessage());
+                } catch (const std::exception& e) {
+                  // 생성 디코더와 read_uvar 가드는 std::runtime_error 를 던진다 —
+                  // JSError 만 받으면 async 콜백 스레드에서 미포착 → terminate.
+                  onError->call(rt, e.what());
                 }
               });
           },

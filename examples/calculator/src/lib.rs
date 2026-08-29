@@ -782,13 +782,16 @@ pub fn calculator_package() -> Package {
                 resource_write,
                 resource_close,
                 bench_add,
-                bench_echo_string,
-                wide_agg,
-                tag_set
+                bench_echo_string
             )
             .buffer_command_fn(bench_echo_bytes)
             .command_fn(bench_echo_pair)
             .command_fn(echo_groups)
+            // register! 튜플은 .command_fn 체인만 생성하므로 buffered 커맨드들이
+            // 중간에 끼일 수 없다 — 신규 커맨드는 체인 맨 뒤에 붙여야 기존 id가
+            // 시프트되지 않는다(register! id는 등록 순서 계약).
+            .command_fn(wide_agg)
+            .command_fn(tag_set)
             .require_capability("secureCompute", "compute:secure")
             .build();
 
@@ -1866,12 +1869,20 @@ mod tests {
     #[test]
     fn test_direct_buffer_ffi_transfers_owned_output() {
         ensure_registered();
+        // id는 등록 순서에서 나오므로 하드코딩하지 않는다 — resolve_command_id
+        // 역방향 조회로 찾는다(신규 커맨드 추가로 id가 시프트돼도 테스트가
+        // 무관하게 유지된다).
+        let bench_echo_bytes_id = (1u16..)
+            .find(|id| {
+                calculator_package().resolve_command_id(*id).as_deref() == Some("benchEchoBytes")
+            })
+            .expect("benchEchoBytes registered");
         let input = [0, 1, 127, 128, 255];
         let mut output = std::ptr::null_mut();
         let mut output_len = 0usize;
         let status = unsafe {
             rustra::ffi::rustra_ffi_invoke_buffer(
-                27, // benchEchoBytes — tag_set(id 26) appended ahead of it in register!
+                bench_echo_bytes_id,
                 input.as_ptr(),
                 input.len(),
                 &mut output,
@@ -1890,7 +1901,7 @@ mod tests {
         let mut empty_output_len = usize::MAX;
         let empty_status = unsafe {
             rustra::ffi::rustra_ffi_invoke_buffer(
-                27,
+                bench_echo_bytes_id,
                 std::ptr::null(),
                 0,
                 &mut empty_output,
@@ -1907,7 +1918,7 @@ mod tests {
         let mut error_len = 0usize;
         let over_limit_status = unsafe {
             rustra::ffi::rustra_ffi_invoke_buffer(
-                27,
+                bench_echo_bytes_id,
                 full_mebibyte.as_ptr(),
                 full_mebibyte.len(),
                 &mut error_output,
@@ -1925,7 +1936,7 @@ mod tests {
 
         let invalid_status = unsafe {
             rustra::ffi::rustra_ffi_invoke_buffer(
-                27,
+                bench_echo_bytes_id,
                 input.as_ptr(),
                 input.len(),
                 std::ptr::null_mut(),
@@ -1934,7 +1945,7 @@ mod tests {
         };
         assert_eq!(invalid_status, u32::MAX);
 
-        assert_eq!(rustra::ffi::rustra_ffi_has_buffer(27), 1);
+        assert_eq!(rustra::ffi::rustra_ffi_has_buffer(bench_echo_bytes_id), 1);
         assert_eq!(rustra::ffi::rustra_ffi_has_buffer(14), 0);
     }
 

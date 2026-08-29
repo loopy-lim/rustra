@@ -73,6 +73,7 @@ function _pcEncodeVarint64(v: number | bigint): Uint8Array {
   }
   let value = BigInt(v);
   if (value < 0n) throw new Error('varint must be non-negative: ' + value.toString());
+  if (value > 0xffffffffffffffffn) throw new Error('varint exceeds u64 range: ' + value.toString());
   const bytes: number[] = [];
   do {
     let next = Number(value & 0x7fn);
@@ -365,13 +366,13 @@ export const benchAddCodec: RkyvV2Codec<BenchAddInput, BenchAddOutput> = {
 };
 
 export const benchEchoBytesCodec: RkyvV2Codec<BenchBytesPayload, BenchBytesPayload> = {
-  commandId: 27,
+  commandId: 25,
 
   encode(args: BenchBytesPayload): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(BenchBytesPayload)]
     const parts: Uint8Array[] = [];
     const cmdId = new Uint8Array(2);
-    new DataView(cmdId.buffer).setUint16(0, 27, true);
+    new DataView(cmdId.buffer).setUint16(0, 25, true);
     parts.push(cmdId);
     {
       const _b = args.data;
@@ -392,7 +393,7 @@ export const benchEchoBytesCodec: RkyvV2Codec<BenchBytesPayload, BenchBytesPaylo
       out = grown;
     };
     ensure(2);
-    out[w++] = 27; out[w++] = 0;
+    out[w++] = 25; out[w++] = 0;
     { const _b = args.data; const _u = typeof _b === 'string' ? _utf8Encode(_b) : _b instanceof Uint8Array ? _b : new Uint8Array(_b); ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }
     return out.subarray(0, w);
   },
@@ -426,13 +427,13 @@ export const benchEchoBytesCodec: RkyvV2Codec<BenchBytesPayload, BenchBytesPaylo
 };
 
 export const benchEchoPairCodec: RkyvV2Codec<BenchPairPayload, BenchPairPayload> = {
-  commandId: 28,
+  commandId: 26,
 
   encode(args: BenchPairPayload): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(BenchPairPayload)]
     const parts: Uint8Array[] = [];
     const cmdId = new Uint8Array(2);
-    new DataView(cmdId.buffer).setUint16(0, 28, true);
+    new DataView(cmdId.buffer).setUint16(0, 26, true);
     parts.push(cmdId);
     parts.push(_pcEncodeString(args.name));
     parts.push(_pcEncodeF64(args.value));
@@ -449,7 +450,7 @@ export const benchEchoPairCodec: RkyvV2Codec<BenchPairPayload, BenchPairPayload>
       out = grown;
     };
     ensure(2);
-    out[w++] = 28; out[w++] = 0;
+    out[w++] = 26; out[w++] = 0;
     { const _s = args.name; const _u = _utf8Encode(_s); ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }
     { ensure(8); _dvScratch.setFloat64(0, args.value, true); for (let _i = 0; _i < 8; _i++) out[w++] = _dvScratchU8[_i]; }
     return out.subarray(0, w);
@@ -792,7 +793,7 @@ export const divideCodec: RkyvV2Codec<DivideInput, DivideOutput> = {
 
 /** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
 export const echoGroupsComplexCodec: RkyvV2Codec<EchoGroupsInput, EchoGroupsOutput> = createComplexCodec<EchoGroupsInput, EchoGroupsOutput>({
-  commandId: 29,
+  commandId: 27,
   inputSchema: {"title":"EchoGroupsInput","type":"object","required":["groups"],"properties":{"groups":{"type":"object","additionalProperties":{"type":"array","items":{"type":"string"}}}}} as ComplexSchema,
   outputSchema: {"title":"EchoGroupsOutput","type":"object","required":["groups"],"properties":{"groups":{"type":"object","additionalProperties":{"type":"array","items":{"type":"string"}}}}} as ComplexSchema,
   definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
@@ -882,7 +883,7 @@ export const gaugeCodec: RkyvV2Codec<GaugeInput, GaugeOutput> = {
     };
     ensure(2);
     out[w++] = 17; out[w++] = 0;
-    { const _v = args.limit; if (typeof _v === 'number' && Number.isSafeInteger(_v) && _v >= 0) { let _x = _v; do { ensure(1); out[w++] = (_x % 128) | 0x80; _x = Math.floor(_x / 128); } while (_x > 0); out[w - 1] &= 0x7f; } else { const _b = BigInt(_v); if (_b < 0n) throw new Error('varint must be non-negative: ' + _b.toString()); let _x = _b; do { ensure(1); out[w++] = Number(_x & 0x7fn) | 0x80; _x >>= 7n; } while (_x !== 0n); out[w - 1] &= 0x7f; } }
+    { const _v = args.limit; if (typeof _v === 'number' && Number.isSafeInteger(_v) && _v >= 0) { let _x = _v; do { ensure(1); out[w++] = (_x % 128) | 0x80; _x = Math.floor(_x / 128); } while (_x > 0); out[w - 1] &= 0x7f; } else { const _b = BigInt(_v); if (_b < 0n) throw new Error('varint must be non-negative: ' + _b.toString()); if (_b > 0xffffffffffffffffn) throw new Error('varint exceeds u64 range: ' + _b.toString()); let _x = _b; do { ensure(1); out[w++] = Number(_x & 0x7fn) | 0x80; _x >>= 7n; } while (_x !== 0n); out[w - 1] &= 0x7f; } }
     { let _v = args.offset; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
     return out.subarray(0, w);
   },
@@ -1710,7 +1711,7 @@ export const sumListCodec: RkyvV2Codec<SumListInput, SumListOutput> = {
 
 /** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
 export const tagSetComplexCodec: RkyvV2Codec<TagSetInput, TagSetOutput> = createComplexCodec<TagSetInput, TagSetOutput>({
-  commandId: 26,
+  commandId: 29,
   inputSchema: {"title":"TagSetInput","type":"object","required":["ids"],"properties":{"ids":{"type":"array","items":{"type":"integer","format":"int64"},"uniqueItems":true}}} as ComplexSchema,
   outputSchema: {"title":"TagSetOutput","type":"object","required":["tags"],"properties":{"tags":{"type":"array","items":{"type":"string"},"uniqueItems":true}}} as ComplexSchema,
   definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
@@ -1774,13 +1775,13 @@ export const toUpperCodec: RkyvV2Codec<ToUpperInput, ToUpperOutput> = {
 };
 
 export const wideAggCodec: RkyvV2Codec<WideAggInput, WideAggOutput> = {
-  commandId: 25,
+  commandId: 28,
 
   encode(args: WideAggInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(WideAggInput)]
     const parts: Uint8Array[] = [];
     const cmdId = new Uint8Array(2);
-    new DataView(cmdId.buffer).setUint16(0, 25, true);
+    new DataView(cmdId.buffer).setUint16(0, 28, true);
     parts.push(cmdId);
     {
       const _arr = args.samples;

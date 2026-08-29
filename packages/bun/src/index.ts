@@ -252,6 +252,15 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
       // 정상 경로에서는 없지만, 계약상 빈 owned 버퍼로 응답한다.
       return new ArrayBuffer(0);
     }
+    // 성공 상태는 기록 바이트 수 — capacity 를 넘을 수 없다. 초과값은 ABI
+    // 폭 불일치(32-bit usize 등)의 징후라 slice clamp 로 무음 왜곡하는 대신
+    // 거부한다(트랙 F 리뷰 경화).
+    if (status > callerBufferCapacity) {
+      throw new RustraCommandError(
+        'invoke.failed',
+        `Bun FFI caller-buffer status exceeds capacity: ${status}`,
+      );
+    }
     return callerBuffer.slice(0, Number(status)).buffer as ArrayBuffer;
   };
   const native = {

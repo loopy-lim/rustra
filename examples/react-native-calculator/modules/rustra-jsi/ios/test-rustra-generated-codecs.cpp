@@ -83,9 +83,10 @@ int main() {
   // Raw eligibility mirrors the Rust raw_invoke_shape contract: up to three
   // scalar fields, and since B1 that includes int64/uint64 (the u64 slot
   // carries the full-width value). benchAdd/clamp are the raw-safe f64s;
-  // benchEchoBytes(27)/benchEchoPair(28)/wideAgg(25)/tagSet(26) stay off raw.
+  // benchEchoBytes(25)/benchEchoPair(26)/wideAgg(28)/tagSet(29) stay off raw.
   if (!gen::has_raw_codec(1) || !gen::has_raw_codec(23) || gen::has_raw_codec(24) ||
-      gen::has_raw_codec(25) || gen::has_raw_codec(26) || gen::has_raw_codec(27)) {
+      gen::has_raw_codec(25) || gen::has_raw_codec(26) || gen::has_raw_codec(28) ||
+      gen::has_raw_codec(29)) {
     std::printf("FAIL raw capability set\n");
     ++g_failures;
   }
@@ -241,10 +242,9 @@ int main() {
       std::printf("FAIL encode_by_name(echoGroups) returned false\n");
       ++g_failures;
     }
-    // echoGroups — id 28→29 시프트(tag_set 이 register! 맨 뒤가 아닌 앞에
-    // 끼워진 게 아니라 echo_groups 가 builder 체인 command_fn 이므로 id 가
-    // register! 뒤에 할당된다 — tag_set 추가로 29 로 시프트).
-    check_bytes(w.take(), {0x1D, 0x00, 0x02, 0x01, 0x61, 0x01, 0x01, 0x78,
+    // echoGroups — id 27 (wide_agg/tag_set 은 builder 체인 맨 뒤로 이동해
+    // 28/29 로 할당된다 — 기존 커맨드 id 시프트 없음).
+    check_bytes(w.take(), {0x1B, 0x00, 0x02, 0x01, 0x61, 0x01, 0x01, 0x78,
                            0x01, 0x62, 0x02, 0x01, 0x79, 0x01, 0x7A},
                 "encode echoGroups sorted nested map");
 
@@ -286,7 +286,7 @@ int main() {
   {
     uint8_t data[] = {1, 2, 3, 250};
     rc::Writer w;
-    if (gen::has_buffer_codec(14) || !gen::has_buffer_codec(27) ||
+    if (gen::has_buffer_codec(14) || !gen::has_buffer_codec(25) ||
         gen::has_buffer_codec(23)) {
       std::printf("FAIL buffer capability set\n");
       ++g_failures;
@@ -296,8 +296,8 @@ int main() {
                 "encode_buffer_by_id sizeOf");
 
     rc::Writer empty;
-    gen::encode_buffer_by_id(27, nullptr, 0, empty);
-    check_bytes(empty.take(), {0x1b, 0x00, 0x00}, "encode_buffer_by_id empty");
+    gen::encode_buffer_by_id(25, nullptr, 0, empty);
+    check_bytes(empty.take(), {0x19, 0x00, 0x00}, "encode_buffer_by_id empty");
 
     bool threw = false;
     try {
@@ -349,7 +349,7 @@ int main() {
   {
     uint8_t body[] = {0x04, 0x01, 0x02, 0x03, 0xFA};
     rc::Reader r(body, sizeof(body));
-    Value result = gen::decode_by_id(rt, 27, r);
+    Value result = gen::decode_by_id(rt, 25, r);
     Object bytesObject = result.getObject(rt).getProperty(rt, "data").getObject(rt);
     if (!bytesObject.isArrayBuffer(rt)) {
       std::printf("FAIL decode bytes must return ArrayBuffer\n");
@@ -362,7 +362,7 @@ int main() {
 
     uint8_t directBody[] = {1, 2, 3, 250};
     Value directBufferValue = gen::make_array_buffer(rt, directBody, sizeof(directBody));
-    Value direct = gen::decode_buffer_result_by_id(rt, 27, std::move(directBufferValue));
+    Value direct = gen::decode_buffer_result_by_id(rt, 25, std::move(directBufferValue));
     Object directBytes = direct.getObject(rt).getProperty(rt, "data").getObject(rt);
     ArrayBuffer directBuffer = directBytes.getArrayBuffer(rt);
     std::vector<uint8_t> directActual(
@@ -547,13 +547,13 @@ int main() {
     args.setProperty(rt, "offset", Value(rt, jsi::BigInt::fromInt64(rt, INT64_MIN)));
     Value argsV(rt, args);
     rc::Writer w;
-    if (!gen::encode_by_id(rt, 25, argsV, w)) {
-      std::printf("FAIL encode_by_id(wideAgg=25) returned false\n");
+    if (!gen::encode_by_id(rt, 28, argsV, w)) {
+      std::printf("FAIL encode_by_id(wideAgg=28) returned false\n");
       ++g_failures;
     }
-    // == Rust/TS WIDEAGG_BOUNDARY_REQUEST "190005017f80018180808080808010…"
+    // == Rust/TS WIDEAGG_BOUNDARY_REQUEST "1c0005017f80018180808080808010…"
     check_bytes(w.take(),
-                {0x19, 0x00, 0x05, 0x01, 0x7f, 0x80, 0x01, 0x81, 0x80, 0x80, 0x80, 0x80,
+                {0x1c, 0x00, 0x05, 0x01, 0x7f, 0x80, 0x01, 0x81, 0x80, 0x80, 0x80, 0x80,
                  0x80, 0x80, 0x10, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
                  0x01, 0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01},
                 "shared-fixture encode wideAgg boundary");
@@ -563,7 +563,7 @@ int main() {
     uint8_t body[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01,
                       0xf5, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01};
     rc::Reader r(body, sizeof(body));
-    Value result = gen::decode_by_id(rt, 25, r);
+    Value result = gen::decode_by_id(rt, 28, r);
     Object obj = result.getObject(rt);
     Value max = obj.getProperty(rt, "max");
     Value adjusted = obj.getProperty(rt, "adjusted");
@@ -575,7 +575,7 @@ int main() {
     }
   }
 
-  // 빈 벡터 + None → "19000000" (WIDEAGG_EMPTY_REQUEST), 응답 00 00.
+  // 빈 벡터 + None → "1c000000" (WIDEAGG_EMPTY_REQUEST), 응답 00 00.
   {
     Object args(rt);
     Array samples(rt, 0);
@@ -583,15 +583,15 @@ int main() {
     args.setProperty(rt, "offset", Value::null());
     Value argsV(rt, args);
     rc::Writer w;
-    if (!gen::encode_by_id(rt, 25, argsV, w)) {
+    if (!gen::encode_by_id(rt, 28, argsV, w)) {
       std::printf("FAIL encode_by_id(wideAgg empty) returned false\n");
       ++g_failures;
     }
-    check_bytes(w.take(), {0x19, 0x00, 0x00, 0x00}, "shared-fixture encode wideAgg empty");
+    check_bytes(w.take(), {0x1c, 0x00, 0x00, 0x00}, "shared-fixture encode wideAgg empty");
 
     uint8_t body[] = {0x00, 0x00};
     rc::Reader r(body, sizeof(body));
-    Value result = gen::decode_by_id(rt, 25, r);
+    Value result = gen::decode_by_id(rt, 28, r);
     Object obj = result.getObject(rt);
     Value max = obj.getProperty(rt, "max");
     Value adjusted = obj.getProperty(rt, "adjusted");
@@ -604,7 +604,7 @@ int main() {
   }
 
   // 다원소 5/9/10바이트 varint (2^28, 2^35, 2^49) + Some(5)
-  // → WIDEAGG_MULTIELEMENT_REQUEST "19000380808080018080808080018080808080808001010a".
+  // → WIDEAGG_MULTIELEMENT_REQUEST "1c000380808080018080808080018080808080808001010a".
   {
     Object args(rt);
     Array samples(rt, 3);
@@ -615,12 +615,12 @@ int main() {
     args.setProperty(rt, "offset", 5.0);
     Value argsV(rt, args);
     rc::Writer w;
-    if (!gen::encode_by_id(rt, 25, argsV, w)) {
+    if (!gen::encode_by_id(rt, 28, argsV, w)) {
       std::printf("FAIL encode_by_id(wideAgg multi) returned false\n");
       ++g_failures;
     }
     check_bytes(w.take(),
-                {0x19, 0x00, 0x03, 0x80, 0x80, 0x80, 0x80, 0x01, 0x80, 0x80, 0x80, 0x80,
+                {0x1c, 0x00, 0x03, 0x80, 0x80, 0x80, 0x80, 0x01, 0x80, 0x80, 0x80, 0x80,
                  0x80, 0x01, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01, 0x01, 0x0a},
                 "shared-fixture encode wideAgg multi");
   }
@@ -719,7 +719,7 @@ int main() {
       ++g_failures;
     }
     // [cmd 26 LE][count 3][zigzag(-7)=13][zigzag(1000)=2000 LEB128 d0 0f][zigzag(15)=30]
-    check_bytes(w.take(), {0x1a, 0x00, 0x03, 0x0d, 0xd0, 0x0f, 0x1e},
+    check_bytes(w.take(), {0x1d, 0x00, 0x03, 0x0d, 0xd0, 0x0f, 0x1e},
                 "encode tagSet Set iteration order (no sort/dedup)");
 
     // 배열 입력도 TS 계약과 동일하게 허용된다.
@@ -731,7 +731,7 @@ int main() {
       arrArgs.setProperty(rt, "ids", plain);
       rc::Writer w2;
       gen::encode_by_name(rt, "tagSet", Value(rt, arrArgs), w2);
-      check_bytes(w2.take(), {0x1a, 0x00, 0x02, 0x0a, 0x0a},
+      check_bytes(w2.take(), {0x1d, 0x00, 0x02, 0x0a, 0x0a},
                   "encode tagSet array input keeps duplicates");
     }
 

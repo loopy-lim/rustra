@@ -362,6 +362,7 @@ function _pcEncodeVarint64(v: number | bigint): Uint8Array {
   }
   let value = BigInt(v);
   if (value < 0n) throw new Error('varint must be non-negative: ' + value.toString());
+  if (value > 0xffffffffffffffffn) throw new Error('varint exceeds u64 range: ' + value.toString());
   const bytes: number[] = [];
   do {
     let next = Number(value & 0x7fn);
