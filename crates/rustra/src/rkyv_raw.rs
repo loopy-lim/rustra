@@ -49,7 +49,7 @@ pub(crate) type BinIntoHandler =
 
 /// caller-buffer dispatch 결과. 작은 응답은 호스트 버퍼에 직접 기록하고, 용량이
 /// 부족한 응답만 한 번 할당해 probe cache로 넘긴다(핸들러 재실행 방지).
-pub(crate) enum DirectResponse {
+pub enum DirectResponse {
     Written(usize),
     Buffered(Vec<u8>),
 }
