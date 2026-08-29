@@ -1609,7 +1609,10 @@ test('init scaffold has a real shared package and executable codegen bin', () =>
   });
   assert.match(files.packageJson, /"doctor": "rustra doctor --config rustra\.json"/);
   assert.match(files.packageJson, /"codegen": "rustra codegen --config rustra\.json"/);
-  assert.match(files.packageJson, /"codegen:check": "rustra codegen --config rustra\.json --check"/);
+  assert.match(
+    files.packageJson,
+    /"codegen:check": "rustra codegen --config rustra\.json --check"/,
+  );
   assert.match(files.packageJson, /"dev": "rustra dev --config rustra\.json"/);
 });
 

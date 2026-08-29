@@ -474,10 +474,14 @@ export function selectCodegenBinary(
   );
   const selected = requested
     ? binaries.find((target) => target.name === requested)
-    : binaries.find((target) => target.name === 'generate') ??
-      (binaries.length === 1 ? binaries[0] : undefined);
+    : (binaries.find((target) => target.name === 'generate') ??
+      (binaries.length === 1 ? binaries[0] : undefined));
   if (!selected) {
-    const names = binaries.map((target) => target.name).sort().join(', ') || 'none';
+    const names =
+      binaries
+        .map((target) => target.name)
+        .sort()
+        .join(', ') || 'none';
     throw new Error(`codegen.rust_binary_ambiguous: found ${names}; set codegen.rustBinary`);
   }
   return selected.name;
@@ -984,12 +988,16 @@ export function resolveCodegenTarget(
   const metadata = readCargoMetadata(manifestPath);
   const candidates = config.codegen?.rustPackage
     ? metadata.packages.filter((candidate) => candidate.name === config.codegen?.rustPackage)
-    : metadata.packages.filter((candidate) => resolve(candidate.manifest_path) === resolve(manifestPath));
+    : metadata.packages.filter(
+        (candidate) => resolve(candidate.manifest_path) === resolve(manifestPath),
+      );
   if (candidates.length !== 1) {
-    const names = candidates.map((candidate) => candidate.name).sort().join(', ') || 'none';
-    throw new Error(
-      `codegen.rust_package_ambiguous: found ${names}; set codegen.rustPackage`,
-    );
+    const names =
+      candidates
+        .map((candidate) => candidate.name)
+        .sort()
+        .join(', ') || 'none';
+    throw new Error(`codegen.rust_package_ambiguous: found ${names}; set codegen.rustPackage`);
   }
   const packageInfo = candidates[0]!;
   return {
