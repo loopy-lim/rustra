@@ -3,7 +3,11 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { checkCriterionRegression, parseRegressionArgs } from './check-criterion-regression.mjs';
+import {
+  checkCriterionRegression,
+  parseRegressionArgs,
+  renderRegressionReport,
+} from './check-criterion-regression.mjs';
 
 type TestLogger = {
   logs: string[];
@@ -210,4 +214,36 @@ test('a lone regression with normal improvements stays a genuine failure', async
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('renderRegressionReport renders verdict badges per exit code', () => {
+  const rows = [
+    {
+      name: 'g/fast',
+      point: -0.44,
+      lower: -0.46,
+      upper: -0.42,
+      statisticallySlower: false,
+      statisticallyFaster: true,
+    },
+    {
+      name: 'g/slow',
+      point: 0.15,
+      lower: 0.11,
+      upper: 0.2,
+      statisticallySlower: true,
+      statisticallyFaster: false,
+    },
+  ];
+  assert.match(
+    renderRegressionReport({ exitCode: 1, rows }, { thresholdPercent: 10 }),
+    /❌ \*\*회귀 감지\*\*/u,
+  );
+  assert.match(renderRegressionReport({ exitCode: 0, rows }), /✅ \*\*통과\*\*/u);
+  assert.match(renderRegressionReport({ exitCode: 3, rows }), /⚠️ \*\*baseline 환경 불일치\*\*/u);
+  assert.match(renderRegressionReport({ exitCode: 2, rows: [] }), /⚠️ \*\*baseline 없음\*\*/u);
+
+  const report = renderRegressionReport({ exitCode: 1, rows }, { thresholdPercent: 10 });
+  assert.match(report, /`g\/slow` \| 15\.00% \| 11\.00% \.\. 20\.00% \| ❌ 회귀/u);
+  assert.match(report, /`g\/fast` \| -44\.00% \| -46\.00% \.\. -42\.00% \| ⚠️ 개선 이상/u);
 });
