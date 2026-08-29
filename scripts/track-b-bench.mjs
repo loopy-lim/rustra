@@ -38,6 +38,11 @@ function framed(body) {
   return response;
 }
 
+function median3(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[1];
+}
+
 function benchEncode(name, codec, sample, iterations, warmup) {
   for (let i = 0; i < warmup; i += 1) codec.encode(sample);
   let requestBytes = 0;
@@ -78,21 +83,39 @@ const TAGSET_RESPONSE = framed(hexToBytes('0303742d3705743130303003743135'));
 export function runTrackBBench(options = {}) {
   const iterations = numericOption(options.iterations, ITER);
   const warmup = numericOption(options.warmup, WARMUP);
-  return {
-    date: new Date().toISOString().slice(0, 10),
-    command: 'bun scripts/track-b-bench.mjs',
-    route: 'complex-binary-js',
-    results: [
+  // 3 full executions; the receipt reports the per-op median run and keeps
+  // every run's numbers so the median is auditable from the receipt alone.
+  const runs = [];
+  for (let run = 0; run < 3; run += 1) {
+    runs.push([
       benchEncode('wideAgg Vec<u64>+Option<i64>', wideAggCodec, WIDEAGG_SAMPLE, iterations, warmup),
       benchDecode('wideAgg Vec<u64>+Option<i64>', wideAggCodec, WIDEAGG_RESPONSE, iterations, warmup),
       benchEncode('tagSet Set<i64>', tagSetCodec, TAGSET_SAMPLE, iterations, warmup),
       benchDecode('tagSet Set<i64>', tagSetCodec, TAGSET_RESPONSE, iterations, warmup),
-    ],
+    ]);
+  }
+  const perOpMedian = [];
+  for (let op = 0; op < 4; op += 1) {
+    const medianUs = median3(runs.map((runRows) => runRows[op].us));
+    perOpMedian.push(runs.map((runRows) => runRows[op]).find((row) => row.us === medianUs));
+  }
+  return {
+    date: new Date().toISOString().slice(0, 10),
+    command: 'bun scripts/track-b-bench.mjs',
+    route: 'complex-binary-js',
+    results: perOpMedian,
+    runs: 'median of 3 executions',
+    allRunsUs: Object.fromEntries(
+      [0, 1, 2, 3].map((op) => [
+        `${perOpMedian[op].op}:${perOpMedian[op].schema}`,
+        runs.map((runRows) => runRows[op].us),
+      ]),
+    ),
     allocationMode: 'per-call-writer-and-response',
     verified: true,
     limitations: [
       'does not measure Rust handler or C++ JSI marshalling (device smoke required)',
-      'single-process wall-clock sample',
+      'three wall-clock executions in one process, per-op median reported',
       'measures the JS codec path only — the C++ direct path is native and not measurable from this script',
     ],
   };

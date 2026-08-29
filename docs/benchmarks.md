@@ -132,8 +132,8 @@ decode 는 PINNED fixture 응답 바디(경계값 — 다중 바이트 varint64/
 
 | 명령 (스키마)                        |   encode |       decode | wire 크기             |
 | ------------------------------------ | -------: | -----------: | --------------------- |
-| wideAgg (Vec\<u64\> + Option\<i64\>) | 1.704 µs | **0.469 µs** | 요청 36 B / 응답 28 B |
-| tagSet (Set\<i64\> → Set\<string\>)  | 1.003 µs |     1.207 µs | 요청 7 B / 응답 23 B  |
+| wideAgg (Vec\<u64\> + Option\<i64\>) | 1.699 µs | **0.455 µs** | 요청 36 B / 응답 28 B |
+| tagSet (Set\<i64\> → Set\<string\>)  | 0.979 µs |     1.179 µs | 요청 7 B / 응답 23 B  |
 
 ```bash
 bun scripts/track-b-bench.mjs
