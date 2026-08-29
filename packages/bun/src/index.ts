@@ -30,3 +30,5 @@ export function createBunEngine(transport: BunInvokeTransport) {
 export type { BunFfiEngineOptions, BunFfiRuntime } from './bun-ffi-library.js';
 export { createBunFfiEngine, createBunBootstrap } from './bun-ffi.js';
 export type { BunBootstrap } from './bun-ffi.js';
+export type { BunEventBridge, BunEventBridgeOptions, BunEventDrainSource } from './bun-events.js';
+export { createBunEventBridge } from './bun-events.js';
