@@ -33,12 +33,12 @@ export {
 } from '@rustra/types';
 import {
   configureLazy,
+  createJsonEngine,
   ensureConfigured,
   RustraErrorCode,
   RustraCommandError,
   parseRustraErrorString,
-  type EngineClient,
-  type InvokeOptions,
+  type EngineClientWithBatch,
 } from '@rustra/types';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -55,37 +55,7 @@ export type NodeInvokeTransport = {
  * napi-rs 등 JSON transport로 EngineClient을 생성합니다.
  */
 export function createNodeEngine(transport: NodeInvokeTransport) {
-  return {
-    async invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
-      // signal 정책(전 어댑터 공통): abort 된 signal 만 cancelled 로 거부하고,
-      // 미abort signal 은 정상 실행한다. 이 엔진은 취소를 전파할 수 없는 JSON
-      // transport 위에서 동작하므로 실행 중 abort 는 결과를 무시할 뿐이다(얕은
-      // 취소). useCommand 처럼 항상 signal 을 전달하는 호출부와의 호환을 위해
-      // signal 존재 자체를 에러로 삼지 않는다 — 매트릭스(docs/compatibility-matrix.md) 참고.
-      if (options?.signal?.aborted) {
-        throw new RustraCommandError(
-          'cancelled',
-          `invoke("${command}") aborted before dispatch`,
-          true,
-        );
-      }
-      try {
-        return (await transport.invoke(command, args)) as T;
-      } catch (e: unknown) {
-        if (typeof e === 'object' && e !== null && 'code' in e && 'message' in e) {
-          const err = e as { code: string; message: string };
-          throw new RustraCommandError(err.code, err.message);
-        }
-        // napi/rust 와이어 — reason 이 RustraError JSON 또는 "code: message"
-        // Display 문자열인 경우 parseRustraErrorString 이 code/retryable 을
-        // 복원한다(unknown 래핑 방지).
-        if (e instanceof Error) {
-          throw parseRustraErrorString(e.message);
-        }
-        throw new RustraCommandError('unknown', String(e));
-      }
-    },
-  };
+  return createJsonEngine((command, args) => transport.invoke(command, args));
 }
 
 // ── createNodeProcessTransport — "5분 온보딩" 완결 ──────────
@@ -223,7 +193,7 @@ export type NodeBootstrapOptions = {
 };
 
 export type NodeBootstrap = {
-  ready(): Promise<EngineClient>;
+  ready(): Promise<EngineClientWithBatch>;
   dispose(): void;
 };
 
@@ -265,7 +235,7 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
     return createNodeEngine(transport);
   });
   return {
-    ready: ensureConfigured,
+    ready: () => ensureConfigured() as Promise<EngineClientWithBatch>,
     dispose() {
       transport?.dispose();
       transport = undefined;

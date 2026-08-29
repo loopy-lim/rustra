@@ -40,12 +40,11 @@ export {
 
 import {
   configureLazy,
+  createJsonEngine,
   ensureConfigured,
-  parseRustraErrorString,
   RustraErrorCode,
   RustraCommandError,
-  type EngineClient,
-  type InvokeOptions,
+  type EngineClientWithBatch,
 } from '@rustra/types';
 
 /**
@@ -110,47 +109,21 @@ export type TauriEngineOptions = {
  */
 export function createTauriEngine(options: TauriEngineOptions = {}) {
   const tauriInvoke = options.invoke ?? requireTauriInvoke();
-  return {
-    async invoke<T>(command: string, args?: unknown, invokeOptions?: InvokeOptions): Promise<T> {
-      // signal 정책(전 어댑터 공통): abort 된 signal 만 cancelled 로 거부하고,
-      // 미abort signal 은 정상 실행한다(얕은 취소 — Tauri IPC 는 취소 전파 불가).
-      // useCommand 처럼 항상 signal 을 전달하는 호출부와의 호환을 위해 signal 존재
-      // 자체를 에러로 삼지 않는다 — 매트릭스(docs/compatibility-matrix.md) 참고.
-      if (invokeOptions?.signal?.aborted) {
-        throw new RustraCommandError(
-          'cancelled',
-          `invoke("${command}") aborted before dispatch`,
-          true,
-        );
-      }
-      try {
-        return (await tauriInvoke('rustra_dispatch', { command, args: args ?? {} })) as T;
-      } catch (e: unknown) {
-        if (typeof e === 'object' && e !== null && 'code' in e && 'message' in e) {
-          const err = e as { code: string; message: string };
-          throw new RustraCommandError(err.code, err.message);
-        }
-        // Rust 와이어 에러 — reason 이 RustraError JSON 또는 "code: message"
-        // Display 문자열인 경우 parseRustraErrorString 이 code/retryable 을
-        // 복원한다. @rustra/node 와 동일 파이프라인(unknown 래핑 방지).
-        if (e instanceof Error) {
-          throw parseRustraErrorString(e.message);
-        }
-        throw new RustraCommandError('unknown', String(e));
-      }
-    },
-  };
+  return createJsonEngine(
+    (command, args) => tauriInvoke('rustra_dispatch', { command, args }),
+    (args) => args ?? {},
+  );
 }
 
 export type TauriBootstrap = {
   /** Resolves after the lazily discovered Tauri engine is ready. */
-  ready(): Promise<EngineClient>;
+  ready(): Promise<EngineClientWithBatch>;
 };
 
 /** Registers lazy global-Tauri setup for generated platform entrypoints. */
 export function createTauriBootstrap(options: TauriEngineOptions = {}): TauriBootstrap {
   configureLazy(() => createTauriEngine(options));
-  return { ready: ensureConfigured };
+  return { ready: () => ensureConfigured() as Promise<EngineClientWithBatch> };
 }
 
 // ── 이벤트 구독 (Rust → JS push) ──────────────────────────
@@ -180,26 +153,38 @@ export function rustraEventChannel(name: string): string {
 }
 
 /**
- * rustra 이벤트를 구독한다 — Rust `Package::emit` 의 페이로드(JSON 문자열)를
- * 파싱해 콜백에 전달한다.
+ * rustra 이벤트를 구독한다 — 모든 어댑터와 같은 `(name, callback[, listen])`
+ * 형태를 기본으로 사용한다. 기존 `(listen, name, callback)`도 0.x 호환으로
+ * 지원한다. Rust `Package::emit`의 JSON 페이로드는 여기서 한 번 파싱한다.
  *
  * @example
  * ```ts
- * const unsubscribe = subscribeEvent(
- *   window.__TAURI__.event.listen,
- *   'progress.tick',
- *   (payload) => console.log(payload),
- * );
+ * const unsubscribe = await subscribeEvent('progress.tick', (payload) => console.log(payload));
  * // 정리 시: unsubscribe()
  * ```
- *
- * @returns unsubscribe 함수 (Tauri listen 이 반환하는 unlisten 그대로).
  */
-export async function subscribeEvent<T = unknown>(
+export function subscribeEvent<T = unknown>(
+  name: string,
+  callback: (payload: T) => void,
+  listen?: TauriListen,
+): Promise<() => void>;
+/** @deprecated Pass `(name, callback[, listen])`; this overload remains for 0.x compatibility. */
+export function subscribeEvent<T = unknown>(
   listen: TauriListen,
   name: string,
   callback: (payload: T) => void,
+): Promise<() => void>;
+export async function subscribeEvent<T = unknown>(
+  listenOrName: TauriListen | string,
+  nameOrCallback: string | ((payload: T) => void),
+  callbackOrListen?: ((payload: T) => void) | TauriListen,
 ): Promise<() => void> {
+  const legacyShape = typeof listenOrName === 'function';
+  const listen = legacyShape
+    ? listenOrName
+    : ((callbackOrListen as TauriListen | undefined) ?? requireTauriListen());
+  const name = legacyShape ? (nameOrCallback as string) : listenOrName;
+  const callback = (legacyShape ? callbackOrListen : nameOrCallback) as (payload: T) => void;
   const unlisten = await listen(rustraEventChannel(name), (event) => {
     // payload 는 Rust 가 JSON 직렬화한 문자열이다 — 파싱해 타입 값으로 전달.
     try {
@@ -218,5 +203,5 @@ export function subscribeTauriEvent<T = unknown>(
   callback: (payload: T) => void,
   listen: TauriListen = requireTauriListen(),
 ): Promise<() => void> {
-  return subscribeEvent(listen, name, callback);
+  return subscribeEvent(name, callback, listen);
 }

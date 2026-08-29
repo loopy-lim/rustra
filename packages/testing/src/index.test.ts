@@ -74,6 +74,7 @@ test('mock engine records options and rejects pre-aborted signals', async () => 
     (err: unknown) =>
       err instanceof RustraCommandError && err.code === 'cancelled' && err.retryable === true,
   );
+  assert.equal(engine.calls().length, 1, 'pre-aborted calls must not reach the mock handler log');
 
   // reset 이 기록을 비운다.
   engine.reset();

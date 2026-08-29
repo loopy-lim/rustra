@@ -1,6 +1,11 @@
 {
   "schema": "./generated/schema.json",
   "output": "./generated",
+  "codegen": {
+    "rustManifest": "./Cargo.toml",
+    "rustPackage": "rustra-calculator-example",
+    "rustBinary": "rustra-calculator-example"
+  },
   "node": {},
   "bun": {},
   "tauri": {}

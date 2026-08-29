@@ -1,8 +1,8 @@
-import { addNumbersComplexCodec, benchAddCodec, benchEchoBytesCodec, benchEchoPairCodec, benchEchoStringCodec, channelDemoCodec, clampCodec, createItemComplexCodec, divideComplexCodec, emitDemoComplexCodec, gaugeComplexCodec, greetCodec, isEvenComplexCodec, multiplyCodec, processItemComplexCodec, resourceCloseCodec, resourceOpenCodec, resourceReadCodec, resourceWriteCodec, rustraRegistryDemoCodec, scoreTotalComplexCodec, secureComputeComplexCodec, sizeOfCodec, spanComplexCodec, sumListComplexCodec, toUpperCodec } from './rkyv-codecs.js';
+import { addNumbersCodec, benchAddCodec, benchEchoBytesCodec, benchEchoPairCodec, benchEchoStringCodec, channelDemoCodec, clampCodec, createItemCodec, divideCodec, echoGroupsComplexCodec, emitDemoCodec, gaugeCodec, greetCodec, isEvenCodec, multiplyCodec, processItemCodec, resourceCloseCodec, resourceOpenCodec, resourceReadCodec, resourceWriteCodec, rustraRegistryDemoCodec, scoreTotalCodec, secureComputeCodec, sizeOfCodec, spanCodec, sumListCodec, tagSetComplexCodec, toUpperCodec, wideAggCodec } from './rkyv-codecs.js';
 
 export const rkyvV2Registry = new Map<string, import('@rustra/types').RkyvV2Codec<any, any>>([
-  // route: complex
-  ['addNumbers', addNumbersComplexCodec],
+  // route: postcard
+  ['addNumbers', addNumbersCodec],
   // route: postcard
   ['benchAdd', benchAddCodec],
   // route: postcard
@@ -15,22 +15,24 @@ export const rkyvV2Registry = new Map<string, import('@rustra/types').RkyvV2Code
   ['channelDemo', channelDemoCodec],
   // route: postcard
   ['clamp', clampCodec],
+  // route: postcard
+  ['createItem', createItemCodec],
+  // route: postcard
+  ['divide', divideCodec],
   // route: complex
-  ['createItem', createItemComplexCodec],
-  // route: complex
-  ['divide', divideComplexCodec],
-  // route: complex
-  ['emitDemo', emitDemoComplexCodec],
-  // route: complex
-  ['gauge', gaugeComplexCodec],
+  ['echoGroups', echoGroupsComplexCodec],
+  // route: postcard
+  ['emitDemo', emitDemoCodec],
+  // route: postcard
+  ['gauge', gaugeCodec],
   // route: postcard
   ['greet', greetCodec],
-  // route: complex
-  ['isEven', isEvenComplexCodec],
+  // route: postcard
+  ['isEven', isEvenCodec],
   // route: postcard
   ['multiply', multiplyCodec],
-  // route: complex
-  ['processItem', processItemComplexCodec],
+  // route: postcard
+  ['processItem', processItemCodec],
   // route: postcard
   ['resourceClose', resourceCloseCodec],
   // route: postcard
@@ -41,16 +43,20 @@ export const rkyvV2Registry = new Map<string, import('@rustra/types').RkyvV2Code
   ['resourceWrite', resourceWriteCodec],
   // route: postcard
   ['rustraRegistryDemo', rustraRegistryDemoCodec],
-  // route: complex
-  ['scoreTotal', scoreTotalComplexCodec],
-  // route: complex
-  ['secureCompute', secureComputeComplexCodec],
+  // route: postcard
+  ['scoreTotal', scoreTotalCodec],
+  // route: postcard
+  ['secureCompute', secureComputeCodec],
   // route: postcard
   ['sizeOf', sizeOfCodec],
+  // route: postcard
+  ['span', spanCodec],
+  // route: postcard
+  ['sumList', sumListCodec],
   // route: complex
-  ['span', spanComplexCodec],
-  // route: complex
-  ['sumList', sumListComplexCodec],
+  ['tagSet', tagSetComplexCodec],
   // route: postcard
   ['toUpper', toUpperCodec],
+  // route: postcard
+  ['wideAgg', wideAggCodec],
 ]);

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import {
   collectDoctorReport,
+  collectDoctorReportAsync,
   doctorExitCode,
   formatDoctorJson,
   formatDoctorText,
@@ -54,6 +55,66 @@ test('strict mode promotes warnings to a failing exit code', () => {
   };
   assert.equal(doctorExitCode(report, false), 0);
   assert.equal(doctorExitCode(report, true), 1);
+});
+
+test('non-required failures do not fail the doctor command', () => {
+  const report = {
+    schemaVersion: 1 as const,
+    checks: [{ id: 'optional', status: 'fail' as const, required: false, summary: 'optional' }],
+  };
+  assert.equal(doctorExitCode(report, false), 0);
+  assert.equal(doctorExitCode(report, true), 0);
+});
+
+test('doctor probes identical native commands once per report', () => {
+  withConfig(
+    {
+      schema: './generated/schema.json',
+      output: './generated',
+      reactNative: {},
+      tauri: {},
+    },
+    (path) => {
+      const calls: string[] = [];
+      const runner: DoctorRunner = (command, args) => {
+        calls.push([command, ...args].join(' '));
+        return { ok: true, stdout: command === 'rustc' ? 'rustc 1.88.0' : '', stderr: '' };
+      };
+      collectDoctorReport(options(path, 'darwin'), runner);
+      assert.equal(calls.filter((call) => call === 'xcodebuild -version').length, 1);
+    },
+  );
+});
+
+test('async doctor prefetches independent probes concurrently', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-doctor-async-'));
+  const path = join(root, 'rustra.json');
+  writeFileSync(
+    path,
+    `${JSON.stringify({
+      schema: './generated/schema.json',
+      output: './generated',
+      reactNative: {},
+      tauri: {},
+    })}\n`,
+  );
+  let active = 0;
+  let maximumActive = 0;
+  const calls: string[] = [];
+  try {
+    await collectDoctorReportAsync(options(path, 'darwin'), async (command, args) => {
+      calls.push([command, ...args].join(' '));
+      active++;
+      maximumActive = Math.max(maximumActive, active);
+      await Promise.resolve();
+      active--;
+      return { ok: true, stdout: command === 'rustc' ? 'rustc 1.88.0' : '', stderr: '' };
+    });
+    assert.ok(maximumActive > 1);
+    assert.equal(calls.filter((call) => call === 'xcodebuild -version').length, 1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('Node/Bun-only config does not require RN platform tools', () => {

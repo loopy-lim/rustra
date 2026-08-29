@@ -11,9 +11,10 @@ rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 
 ### 가장 빠른 시작 — `rustra init`
 
 ```bash
-bunx --bun @rustra/cli@0.4.0 init my-project
+bunx --bun @rustra/cli init my-project
 cd my-project
 bun install
+bun run doctor
 bun run codegen      # schema.json + 완전한 TS/C++ 클라이언트 생성
 cargo run            # 생성된 echo 커맨드를 실제 호출
 ```
@@ -427,12 +428,17 @@ rustra::native_entry!(my_package);
   "schema": "./generated/schema.json",
   "output": "./generated",
   "positional": true,
+  "codegen": {
+    "rustManifest": "./Cargo.toml",
+    "rustBinary": "generate"
+  },
   "reactNative": {}
 }
 ```
 
 ```bash
-bunx --bun @rustra/cli generate --config rustra.json
+bunx --bun @rustra/cli doctor --config rustra.json
+bunx --bun @rustra/cli codegen --config rustra.json
 ```
 
 **TypeScript 측 사용:**
@@ -595,21 +601,37 @@ my-app/
 
 ### 빌드 파이프라인
 
-**권장 방식: 빌드 스크립트에서 코드 생성 → TypeScript 빌드**
+**권장 방식: 통합 codegen → TypeScript 빌드**
 
 ```json
 // package.json
 {
   "scripts": {
-    "build:rust": "cargo build -p my-package && cargo run -p my-package -- generate",
+    "doctor": "rustra doctor --config rustra.json",
+    "codegen": "rustra codegen --config rustra.json",
+    "codegen:check": "rustra codegen --config rustra.json --check",
     "build:ts": "tsc",
-    "build": "bun run build:rust && bun run build:ts",
-    "dev": "bun run build:rust && tsc --watch"
+    "build": "bun run codegen && bun run build:ts",
+    "dev": "bun run codegen && tsc --watch"
   }
 }
 ```
 
-`cargo run`에서 `generate` 서브커맨드를 처리하도록 `main.rs`를 작성하면 된다:
+`rustra.json`은 Rust generator를 명시한다:
+
+```json
+{
+  "schema": "./generated/schema.json",
+  "output": "./generated",
+  "codegen": {
+    "rustManifest": "./Cargo.toml",
+    "rustBinary": "generate"
+  }
+}
+```
+
+기존 프로젝트에서 자체 subcommand를 유지해야 할 때만 `cargo run`에서 `generate`
+서브커맨드를 처리하도록 `main.rs`를 작성하면 된다:
 
 ```rust
 fn main() -> rustra::Result<()> {
@@ -627,12 +649,12 @@ fn main() -> rustra::Result<()> {
 생성된 파일이 Rust 코드와 동기화되어 있는지 확인하려면:
 
 ```bash
-# 기존 생성 파일을 백업, 재생성 후 diff
-cargo run -p my-package -- generate
-git diff --exit-code generated/
+# Rust schema 생성부터 TS/C++ 생성물까지 확인
+bun run codegen:check
 ```
 
-`git diff --exit-code`가 0이 아니면 Rust 코드는 바뀌었는데 TS 파일이 갱신되지 않은 것이다. CI에서 이 검사를 넣으면 계약 불일치를 사전에 발견할 수 있다.
+매니페스트와 실제 파일의 바이트가 다르면 실패한다. `codegen --check`의 Rust schema
+단계는 실행되지만 TS/C++/RN 검증 단계는 파일을 쓰지 않는다.
 
 ---
 
@@ -688,19 +710,19 @@ Node, Bun, React Native 어댑터는 transport 구현에 따라 에러 형태가
 
 대부분의 Rust 타입이 TypeScript로 올바르게 변환된다:
 
-| Rust 타입                           | TypeScript                      | 비고                                    |
-| ----------------------------------- | ------------------------------- | --------------------------------------- |
-| `String`, `&str`                    | `string`                        |                                         |
-| `i32`/`i64`/`u32`/`f32`/`f64`       | `number`                        | 64비트 정수는 JS safe integer 범위 권장 |
-| `bool`                              | `boolean`                       |                                         |
-| `Option<T>`                         | `T \| null` (필드는 선택적 `?`) |                                         |
-| `Vec<T>`                            | `T[]`                           |                                         |
-| `BTreeSet<T>` / `HashSet<T>`        | `Set<T>`                        | `uniqueItems` — JSON 경로는 배열 직렬화 |
-| `(A, B, C)`                         | `[A, B, C]`                     | 튜플                                    |
-| `HashMap<String, T>`                | `Record<string, T>`             |                                         |
-| `enum` (unit variants)              | `'VariantA' \| 'VariantB'`      | string enum 리터럴 union                |
-| 중첩 구조 (`Box<T>`, `Vec<T>` 내부) | 정의 이름 `$ref` 해석           | 재귀 타입(self-reference) 포함          |
-| `anyOf` / `oneOf`                   | `A \| B` (union join)           |                                         |
+| Rust 타입                           | TypeScript                      | 비고                                         |
+| ----------------------------------- | ------------------------------- | -------------------------------------------- |
+| `String`, `&str`                    | `string`                        |                                              |
+| `i32`/`i64`/`u32`/`f32`/`f64`       | `number` 또는 `bigint`          | 64비트 정수는 safe 범위 밖에서 `bigint` 복원 |
+| `bool`                              | `boolean`                       |                                              |
+| `Option<T>`                         | `T \| null` (필드는 선택적 `?`) |                                              |
+| `Vec<T>`                            | `T[]`                           |                                              |
+| `BTreeSet<T>` / `HashSet<T>`        | `Set<T>`                        | `uniqueItems` — JSON 경로는 배열 직렬화      |
+| `(A, B, C)`                         | `[A, B, C]`                     | 튜플                                         |
+| `HashMap<String, T>`                | `Record<string, T>`             |                                              |
+| `enum` (unit variants)              | `'VariantA' \| 'VariantB'`      | string enum 리터럴 union                     |
+| 중첩 구조 (`Box<T>`, `Vec<T>` 내부) | 정의 이름 `$ref` 해석           | 재귀 타입(self-reference) 포함               |
+| `anyOf` / `oneOf`                   | `A \| B` (union join)           |                                              |
 
 `allOf`는 `A & B`, integer enum은 숫자 리터럴 union, `oneOf`+`const`는 판별
 union으로 생성된다. postcard fast path(rkyv V2 코덱)는 primitive,
@@ -716,9 +738,10 @@ variant key와 depth/payload/collection limits를 사용한다. 생성기와 Rus
 않는다.
 
 복잡 명령은 native-safe schema라면 RN C++ complex codec으로 직접 마샬링되고,
-Set 또는 BigInt 경계가 필요한 명령은 JS complex codec이 네이티브
-`invokeRkyvV2`를 통해 Rust handler로 전달한다. 두 경로는 같은 complex wire를
-사용한다.
+원시 요소 `Set`과 `int64`/`uint64`를 포함한 native-safe wide-int 경로도 이 범위에
+포함된다. 객체/배열 요소 Set처럼 native-safe 판정 밖인 명령은 JS complex codec이
+네이티브 `invokeRkyvV2`를 통해 Rust handler로 전달한다. 두 경로는 같은 complex
+wire를 사용한다.
 
 ---
 

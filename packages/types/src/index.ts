@@ -43,6 +43,11 @@ export type EngineClient = {
 /** invokeBatch 의 입력 항목. `options.signal` 은 항목 단위 취소로 전달된다. */
 export type BatchEntry = { command: string; args?: unknown; options?: InvokeOptions };
 
+/** All first-party adapter factories guarantee the batch surface. */
+export type EngineClientWithBatch = EngineClient & {
+  invokeBatch<T>(entries: BatchEntry[]): Promise<T[]>;
+};
+
 /**
  * invoke 추가 옵션 (T1).
  *
@@ -131,6 +136,28 @@ export function parseRustraErrorString(error: string | undefined | null): Rustra
     }
   }
   return new RustraCommandError('invoke.failed', raw);
+}
+
+/**
+ * Adapter/transport 경계에서 들어온 reject 값을 하나의 RustraCommandError로
+ * 정규화한다. Promise rejection은 동기 throw와 달리 바깥 try/catch를 우회하므로
+ * 모든 호스트가 이 helper를 `.catch()` 경로에도 사용해야 retryable 플래그가
+ * JSON 와이어에서 유실되지 않는다.
+ */
+export function normalizeRustraError(error: unknown): RustraCommandError {
+  if (error instanceof RustraCommandError) return error;
+  if (typeof error === 'object' && error !== null && 'code' in error && 'message' in error) {
+    return parseRustraErrorString(JSON.stringify(error));
+  }
+  if (error instanceof Error) return parseRustraErrorString(error.message);
+  if (typeof error === 'string') {
+    // Plain transport strings are opaque failures, preserving the historical
+    // `unknown` adapter contract. Structured Rustra JSON and Display strings
+    // still go through the parser so retryable metadata is not lost.
+    const parsed = parseRustraErrorString(error);
+    return parsed.code === 'invoke.failed' ? new RustraCommandError('unknown', error) : parsed;
+  }
+  return new RustraCommandError('unknown', String(error));
 }
 
 /**
@@ -529,7 +556,7 @@ export function invoke<T>(command: string, args?: unknown, options?: InvokeOptio
     if (hasLazyInitializer()) {
       return ensureConfigured().then(() => invoke<T>(command, args, options));
     }
-    throw new Error('Rustra not configured. Call configure(engine) first.');
+    return Promise.reject(new Error('Rustra not configured. Call configure(engine) first.'));
   }
   // 옵션을 엔진에 그대로 전달한다 (T1). 옵션을 이해하지 못하는 구형/서드파티
   // 엔진은 JS 호출 규약상 추가 인자를 무시한다 — 호출부 파괴 없이 확장된다.
@@ -838,6 +865,12 @@ export function invokeWithTimeout<T>(
   args?: unknown,
   options?: InvokeOptions,
 ): Promise<T> {
+  const signal = options?.signal;
+  if (signal?.aborted) {
+    return Promise.reject(
+      new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
+    );
+  }
   let p: Promise<T>;
   try {
     // Promise.resolve(existingPromise)는 동일 객체를 반환한다. timeout이 없는
@@ -849,27 +882,76 @@ export function invokeWithTimeout<T>(
     return Promise.reject(error);
   }
   const ms = options?.timeoutMs;
-  if (ms === undefined) return p;
+  if (ms === undefined && signal === undefined) return p;
   // 원본 프라미스의 지각 reject 흡수 — race 에서 진 뒤에도 reject 되면
   // unhandled rejection 이 되므로 no-op catch 로 처리 표시만 남긴다.
   void p.catch(() => {});
   let timer: ReturnType<typeof setTimeout> | undefined;
-  return Promise.race([
-    p,
-    new Promise<never>((_, reject) => {
-      timer = setTimeout(() => {
-        reject(
-          new RustraCommandError(
-            'transport.timeout',
-            `invoke("${command}") timed out after ${ms}ms`,
-            true,
-          ),
-        );
-      }, ms);
-    }),
-  ]).finally(() => {
+  let onAbort: (() => void) | undefined;
+  const races: Array<Promise<T> | Promise<never>> = [p];
+  if (signal) {
+    races.push(
+      new Promise<never>((_, reject) => {
+        onAbort = () =>
+          reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
+        signal.addEventListener('abort', onAbort, { once: true });
+      }),
+    );
+  }
+  if (ms !== undefined) {
+    races.push(
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(
+            new RustraCommandError(
+              'transport.timeout',
+              `invoke("${command}") timed out after ${ms}ms`,
+              true,
+            ),
+          );
+        }, ms);
+      }),
+    );
+  }
+  return Promise.race(races).finally(() => {
     if (timer !== undefined) clearTimeout(timer);
+    if (signal && onAbort) signal.removeEventListener('abort', onAbort);
   });
+}
+
+/**
+ * Creates the common Promise-based wrapper for JSON transports. Host adapters
+ * only supply their one transport call and may normalize arguments (Tauri
+ * uses `{}` for omitted args); timeout, abort, batch ordering, and error
+ * normalization stay identical across hosts.
+ */
+export function createJsonEngine(
+  transport: (command: string, args?: unknown) => Promise<unknown> | unknown,
+  normalizeArgs: (args?: unknown) => unknown = (args) => args,
+): EngineClientWithBatch {
+  const rawEngine: EngineClient = {
+    invoke<T>(command: string, args?: unknown): Promise<T> {
+      try {
+        return Promise.resolve(transport(command, normalizeArgs(args))).catch((error: unknown) => {
+          throw normalizeRustraError(error);
+        }) as Promise<T>;
+      } catch (error: unknown) {
+        return Promise.reject(normalizeRustraError(error));
+      }
+    },
+  };
+  return {
+    invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
+      return invokeWithTimeout(rawEngine, command, args, options);
+    },
+    invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
+      return Promise.all(
+        entries.map((entry) =>
+          invokeWithTimeout<T>(rawEngine, entry.command, entry.args, entry.options),
+        ),
+      );
+    },
+  };
 }
 
 /** invokeGenerated의 id 경로에 invoke와 동일한 timeout/throw 계약을 적용한다. */
@@ -880,6 +962,12 @@ function invokeByIdWithTimeout<T>(
   args?: unknown,
   options?: InvokeOptions,
 ): Promise<T> {
+  const signal = options?.signal;
+  if (signal?.aborted) {
+    return Promise.reject(
+      new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
+    );
+  }
   let p: Promise<T>;
   try {
     p = Promise.resolve(engine.invokeById!<T>(commandId, command, args, options));
@@ -887,24 +975,38 @@ function invokeByIdWithTimeout<T>(
     return Promise.reject(error);
   }
   const ms = options?.timeoutMs;
-  if (ms === undefined) return p;
+  if (ms === undefined && signal === undefined) return p;
   void p.catch(() => {});
   let timer: ReturnType<typeof setTimeout> | undefined;
-  return Promise.race([
-    p,
-    new Promise<never>((_, reject) => {
-      timer = setTimeout(() => {
-        reject(
-          new RustraCommandError(
-            'transport.timeout',
-            `invoke("${command}") timed out after ${ms}ms`,
-            true,
-          ),
-        );
-      }, ms);
-    }),
-  ]).finally(() => {
+  let onAbort: (() => void) | undefined;
+  const races: Array<Promise<T> | Promise<never>> = [p];
+  if (signal) {
+    races.push(
+      new Promise<never>((_, reject) => {
+        onAbort = () =>
+          reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
+        signal.addEventListener('abort', onAbort, { once: true });
+      }),
+    );
+  }
+  if (ms !== undefined) {
+    races.push(
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(
+            new RustraCommandError(
+              'transport.timeout',
+              `invoke("${command}") timed out after ${ms}ms`,
+              true,
+            ),
+          );
+        }, ms);
+      }),
+    );
+  }
+  return Promise.race(races).finally(() => {
     if (timer !== undefined) clearTimeout(timer);
+    if (signal && onAbort) signal.removeEventListener('abort', onAbort);
   });
 }
 
@@ -936,10 +1038,10 @@ export function invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
     if (hasLazyInitializer()) {
       return ensureConfigured().then(() => invokeBatch<T>(entries));
     }
-    throw new Error('Rustra not configured. Call configure(engine) first.');
+    return Promise.reject(new Error('Rustra not configured. Call configure(engine) first.'));
   }
   if (!engine.invokeBatch) {
-    throw new Error('Configured engine does not support invokeBatch.');
+    return Promise.reject(new Error('Configured engine does not support invokeBatch.'));
   }
   // 배치 타임아웃 — 항목 timeoutMs 의 최솟값으로 배치 전체에 레이스를 건다.
   // 배치는 단일 프라미스로 settle 되므로 항목별 레이스보다 최솟값이 정확하다.
@@ -949,14 +1051,23 @@ export function invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
     return min === undefined || ms < min ? ms : min;
   }, undefined);
   if (batchTimeout === undefined) {
-    return engine.invokeBatch<T>(entries);
+    try {
+      return Promise.resolve(engine.invokeBatch<T>(entries));
+    } catch (error: unknown) {
+      return Promise.reject(error);
+    }
   }
   const stripped = entries.map((entry) =>
     entry.options?.timeoutMs === undefined
       ? entry
       : { ...entry, options: { ...entry.options, timeoutMs: undefined } },
   );
-  const p = Promise.resolve(engine.invokeBatch<T>(stripped));
+  let p: Promise<T[]>;
+  try {
+    p = Promise.resolve(engine.invokeBatch<T>(stripped));
+  } catch (error: unknown) {
+    return Promise.reject(error);
+  }
   // 지각 reject 흡수 — invokeWithTimeout 과 동일 계약.
   void p.catch(() => {});
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -1778,6 +1889,128 @@ export function createRkyvV2Engine(
   // two Map lookups on every invocation.
   ensureStaticIds();
 
+  const invokeRaw = <T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> => {
+    const signal = options?.signal;
+    if (signal?.aborted) {
+      return Promise.reject(
+        new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
+      );
+    }
+    if (!signal) return dispatchPromise<T>(command, args);
+    // 네이티브 전파 경로 (T1): JS 코덱(tier 2) 명령이고 invokeAsync +
+    // invokeCancel 이 모두 노출되면 Rust 측 체크포인트까지 취소가 닿는다.
+    // typed(tier 1)/tier 3 동적 경로는 invokeAsync 가 있어도 얕은 취소로
+    // 폴백한다 (설계 노트: 전파는 JS 코덱 경로만).
+    const codec = registry.get(command);
+    // P0-3: hasStaticCodec JSI 호출 대신 엔진 생애 1회 스윕 캐시 조회.
+    const onTypedPath = hasTypedPath && ensureStaticIds()?.has(command) === true;
+    if (!onTypedPath && codec && native.invokeAsync && native.invokeCancel) {
+      return new Promise<T>((resolve, reject) => {
+        let settled = false;
+        let invocationId = -1;
+        let listenerInstalled = false;
+        const onAbort = () => {
+          if (settled) return;
+          settled = true;
+          native.invokeCancel!(invocationId);
+          reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
+        };
+        try {
+          const encoded = codec.encode(args);
+          const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
+          if (tooLarge) throw tooLarge;
+          if (signal.aborted) {
+            throw new RustraCommandError(
+              'cancelled',
+              `invoke("${command}") aborted before dispatch`,
+              true,
+            );
+          }
+          signal.addEventListener('abort', onAbort, { once: true });
+          listenerInstalled = true;
+          invocationId = native.invokeAsync!(encoded, (resp) => {
+            if (settled) return;
+            const outcome = tier2Outcome<T>(codec, resp);
+            settled = true;
+            if (listenerInstalled) signal.removeEventListener('abort', onAbort);
+            if (outcome.ok) resolve(outcome.value);
+            else reject(outcome.error);
+          });
+        } catch (err) {
+          settled = true;
+          if (listenerInstalled) signal.removeEventListener('abort', onAbort);
+          reject(
+            err instanceof Error
+              ? err
+              : new RustraCommandError(
+                  'invoke.failed',
+                  `invoke("${command}") dispatch failed: ${String(err)}`,
+                ),
+          );
+        }
+      });
+    }
+    if (!codec && native.invokeAsync && native.invokeCancel) {
+      const cmdId = hasTypedPath ? ensureStaticIds()?.get(command) : undefined;
+      const entry =
+        cmdId !== undefined ? { commandId: cmdId } : lookupCachedLiveSchemaEntry(command);
+      if (entry) {
+        return new Promise<T>((resolve, reject) => {
+          let settled = false;
+          let invocationId = -1;
+          let listenerInstalled = false;
+          const onAbort = () => {
+            if (settled) return;
+            settled = true;
+            native.invokeCancel!(invocationId);
+            reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
+          };
+          try {
+            const encoded = encodeTier3Request(entry.commandId, args);
+            const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
+            if (tooLarge) throw tooLarge;
+            if (signal.aborted) {
+              throw new RustraCommandError(
+                'cancelled',
+                `invoke("${command}") aborted before dispatch`,
+                true,
+              );
+            }
+            signal.addEventListener('abort', onAbort, { once: true });
+            listenerInstalled = true;
+            invocationId = native.invokeAsync!(encoded, (resp) => {
+              if (settled) return;
+              settled = true;
+              signal.removeEventListener('abort', onAbort);
+              const outcome = decodeTier3Response(resp);
+              if (outcome.ok) resolve(outcome.result as T);
+              else {
+                const e =
+                  outcome.error ??
+                  ({ code: 'invoke.failed', message: 'RkyvV2 (tier3) invoke failed' } as const);
+                reject(new RustraCommandError(e.code, e.message, e.retryable ?? false));
+              }
+            });
+          } catch (err) {
+            settled = true;
+            if (listenerInstalled) signal.removeEventListener('abort', onAbort);
+            reject(
+              err instanceof Error
+                ? err
+                : new RustraCommandError(
+                    'invoke.failed',
+                    `invoke("${command}") dispatch failed: ${String(err)}`,
+                  ),
+            );
+          }
+        });
+      }
+    }
+    return raceAbort(dispatchPromise<T>(command, args), signal, command);
+  };
+
+  const invokeEngine: EngineClient = { invoke: invokeRaw };
+
   return {
     refreshLiveSchema,
 
@@ -1833,122 +2066,7 @@ export function createRkyvV2Engine(
     },
 
     invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
-      const signal = options?.signal;
-      if (signal?.aborted) {
-        return Promise.reject(
-          new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
-        );
-      }
-      if (!signal) return dispatchPromise<T>(command, args);
-      // 네이티브 전파 경로 (T1): JS 코덱(tier 2) 명령이고 invokeAsync +
-      // invokeCancel 이 모두 노출되면 Rust 측 체크포인트까지 취소가 닿는다.
-      // typed(tier 1)/tier 3 동적 경로는 invokeAsync 가 있어도 얕은 취소로
-      // 폴백한다 (설계 노트: 전파는 JS 코덱 경로만).
-      const codec = registry.get(command);
-      // P0-3: hasStaticCodec JSI 호출 대신 엔진 생애 1회 스윕 캐시 조회.
-      const onTypedPath = hasTypedPath && ensureStaticIds()?.has(command) === true;
-      if (!onTypedPath && codec && native.invokeAsync && native.invokeCancel) {
-        return new Promise<T>((resolve, reject) => {
-          let settled = false;
-          let invocationId = -1;
-          const onAbort = () => {
-            if (settled) return;
-            settled = true;
-            native.invokeCancel!(invocationId);
-            reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
-          };
-          // encode/invokeAsync 가 동기 throw 해도 abort 리스너가 signal 에
-          // 새어남기지 않도록 try/catch 로 정리한다. catch 에서 reject 할 때
-          // 이미 콜백이 정착했다면 reject 는 no-op 이므로 안전하다.
-          try {
-            // invokeAsync 가 콜백을 동기적으로 부를 수 있으므로 리스너를 먼저 단다.
-            signal.addEventListener('abort', onAbort, { once: true });
-            const encoded = codec.encode(args);
-            // (T3) 전파 경로도 동일한 사전 검사 — 초과면 invokeAsync 를 부르지
-            // 않고 throw 한다. Error 이므로 아래 catch 가 리스너를 정리한 뒤
-            // 그대로 reject 한다 (기존 동기 throw 정리 경로 재사용).
-            const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
-            if (tooLarge) throw tooLarge;
-            invocationId = native.invokeAsync!(encoded, (resp) => {
-              if (settled) return;
-              // settled 를 올리기 전에 환산한다 — tier2Outcome 은 decode 가
-              // throw 해도 (잘못된 프레임) 에러로 환산할 뿐 절대 throw 하지
-              // 않으므로, 이 지점 이후 프라미스는 반드시 정착한다. 예외가
-              // 네이티브 트램펄린으로 새어나가 영원히 대기하는 일이 없다.
-              const outcome = tier2Outcome<T>(codec, resp);
-              settled = true;
-              signal.removeEventListener('abort', onAbort);
-              if (outcome.ok) resolve(outcome.value);
-              else reject(outcome.error);
-            });
-          } catch (err) {
-            settled = true;
-            signal.removeEventListener('abort', onAbort);
-            reject(
-              err instanceof Error
-                ? err
-                : new RustraCommandError(
-                    'invoke.failed',
-                    `invoke("${command}") dispatch failed: ${String(err)}`,
-                  ),
-            );
-          }
-        });
-      }
-      // (의미론 마감) typed(tier 1)/tier 3 경로 전파 확장 — 코덱이 없어도
-      // invokeAsync + invokeCancel 이 노출되면 Rust 취소 체크포인트까지 전파한다.
-      // 인코딩: typed 캐시에 commandId 가 있으면 Tier 3(JSON-in-binary) 프레임으로
-      // invokeRkyvV2 와 동일한 와이어를 invokeAsync 로 보낸다. commandId 를 모르면
-      // (live schema 미노출) 얕은 취소로 폴백한다.
-      if (!codec && native.invokeAsync && native.invokeCancel) {
-        const cmdId = hasTypedPath ? ensureStaticIds()?.get(command) : undefined;
-        const entry =
-          cmdId !== undefined ? { commandId: cmdId } : lookupCachedLiveSchemaEntry(command);
-        if (entry) {
-          return new Promise<T>((resolve, reject) => {
-            let settled = false;
-            let invocationId = -1;
-            const onAbort = () => {
-              if (settled) return;
-              settled = true;
-              native.invokeCancel!(invocationId);
-              reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
-            };
-            try {
-              signal.addEventListener('abort', onAbort, { once: true });
-              const encoded = encodeTier3Request(entry.commandId, args);
-              const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
-              if (tooLarge) throw tooLarge;
-              invocationId = native.invokeAsync!(encoded, (resp) => {
-                if (settled) return;
-                settled = true;
-                signal.removeEventListener('abort', onAbort);
-                const outcome = decodeTier3Response(resp);
-                if (outcome.ok) resolve(outcome.result as T);
-                else {
-                  const e =
-                    outcome.error ??
-                    ({ code: 'invoke.failed', message: 'RkyvV2 (tier3) invoke failed' } as const);
-                  reject(new RustraCommandError(e.code, e.message, e.retryable ?? false));
-                }
-              });
-            } catch (err) {
-              settled = true;
-              signal.removeEventListener('abort', onAbort);
-              reject(
-                err instanceof Error
-                  ? err
-                  : new RustraCommandError(
-                      'invoke.failed',
-                      `invoke("${command}") dispatch failed: ${String(err)}`,
-                    ),
-              );
-            }
-          });
-        }
-      }
-      // 전파 불가 — 얕은 취소 (JS 프라미스만 거부, Rust 는 끝까지 실행):
-      return raceAbort(dispatchPromise<T>(command, args), signal, command);
+      return invokeWithTimeout(invokeEngine, command, args, options);
     },
 
     invokeById<T>(
@@ -1963,14 +2081,31 @@ export function createRkyvV2Engine(
           new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
         );
       }
-      if (!signal) return dispatchPromiseById<T>(commandId, command, args);
+      if (!signal) {
+        return invokeWithTimeout(
+          {
+            invoke: <U>() => dispatchPromiseById<U>(commandId, command, args),
+          },
+          command,
+          args,
+          options,
+        );
+      }
       // 검증된 typed-by-id 명령은 기존 invoke의 typed 경로와 동일하게 얕은
       // 취소를 적용한다. 검증 실패/구 네이티브는 기존 이름 경로가 취소 전파
       // 가능 여부를 판단하도록 위임한다.
       if (hasByIdPath && isVerifiedStaticId(commandId, command)) {
-        return raceAbort(dispatchPromiseById<T>(commandId, command, args), signal, command);
+        return invokeWithTimeout(
+          {
+            invoke: <U>() =>
+              raceAbort(dispatchPromiseById<U>(commandId, command, args), signal, command),
+          },
+          command,
+          args,
+          options,
+        );
       }
-      return this.invoke<T>(command, args, options);
+      return invokeRaw<T>(command, args, options);
     },
 
     invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
@@ -1993,14 +2128,18 @@ export function createRkyvV2Engine(
         // byId 진입(P0-2 후속): 네이티브가 cmd_id 배열 배치를 노출하면 문자열
         // 배열 마샬링 없이 id 로 단일 횡단. 모든 항목의 id 가 캐시에 있는 위의
         // every 검사가 이미 조립 가능성을 보장한다.
-        if (hasBatchByIdPath) {
-          const ids = entries.map((e) => staticIds.get(e.command)!);
-          const results = native.invokeTypedBatchById!(ids, args) as T[];
+        try {
+          if (hasBatchByIdPath) {
+            const ids = entries.map((e) => staticIds.get(e.command)!);
+            const results = native.invokeTypedBatchById!(ids, args) as T[];
+            return Promise.resolve(results);
+          }
+          const names = entries.map((e) => e.command);
+          const results = native.invokeTypedBatch!(names, args) as T[];
           return Promise.resolve(results);
+        } catch (error) {
+          return Promise.reject(error);
         }
-        const names = entries.map((e) => e.command);
-        const results = native.invokeTypedBatch!(names, args) as T[];
-        return Promise.resolve(results);
       }
       // 동적 명령/시그널 항목이 섞였거나 배치 미지원 → 항목별 라우팅.
       // 항목의 options(signal) 를 그대로 실어 보내 항목 단위 취소가 각자의

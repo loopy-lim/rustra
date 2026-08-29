@@ -75,10 +75,39 @@ test('createBunEngine routes invoke to transport', async () => {
   assert.deepEqual(calls, [{ command: 'addNumbers', args: { a: 20, b: 22 } }]);
 });
 
+test('createBunEngine applies timeoutMs and shallow abort to pending transports', async () => {
+  const engine = createBunEngine({
+    invoke: () => new Promise<never>(() => {}),
+  });
+
+  await assert.rejects(
+    engine.invoke('slow', undefined, { timeoutMs: 10 }),
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'transport.timeout',
+  );
+
+  const controller = new AbortController();
+  const pending = engine.invoke('cancel-me', undefined, { signal: controller.signal });
+  controller.abort();
+  await assert.rejects(
+    pending,
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'cancelled',
+  );
+});
+
+test('createBunEngine exposes Promise-based invokeBatch with stable order', async () => {
+  const engine = createBunEngine({
+    async invoke(command) {
+      return command === 'first' ? 1 : 2;
+    },
+  });
+  const out = await engine.invokeBatch<number>([{ command: 'first' }, { command: 'second' }]);
+  assert.deepEqual(out, [1, 2]);
+});
+
 test('createBunEngine wraps RustraError-shaped rejects into RustraCommandError', async () => {
   const engine = createBunEngine({
     async invoke() {
-      throw { code: 'command.not_found', message: 'unknown command' };
+      throw { code: 'transport.timeout', message: 'request timed out', retryable: true };
     },
   });
 
@@ -86,8 +115,9 @@ test('createBunEngine wraps RustraError-shaped rejects into RustraCommandError',
     () => engine.invoke('missing'),
     (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
-      assert.equal(err.code, 'command.not_found');
-      assert.equal(err.message, 'unknown command');
+      assert.equal(err.code, 'transport.timeout');
+      assert.equal(err.message, 'request timed out');
+      assert.equal(err.retryable, true);
       return true;
     },
   );

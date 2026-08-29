@@ -35,8 +35,8 @@ Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플�
 | 취소/타임아웃/배치 시맨틱     | ✅ 매트릭스로 문서화              | 직접 구현         | 직접 구현     | ❌             | ❌           |
 
 rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)를 하나의 계약으로
-소유**한다. 개별 경로의 마이크로 최적화보다 "한 번 정의하면 어디서든 같은
-시맨틱"이 이 프로젝트가 사는 지점이다.
+소유**한다. 명령 호출과 계약 검증은 호스트 간 공통으로 유지하고, 취소·이벤트·채널
+같은 capability 차이는 [호환성 매트릭스](docs/compatibility-matrix.md)에 명시한다.
 
 ## 로드맵
 
@@ -51,26 +51,36 @@ rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)�
 - [x] 타입 패리티 3단계 — schema-driven complex binary route (2026-08-27):
       recursive struct, struct-valued map, data enum, nested Option/Set —
       공용 Codec IR, TS/Rust golden wire + bounds, native-safe C++ complex
-      marshalling. Set/BigInt 경계는 JS complex codec으로 안전하게 폴백한다.
+      marshalling. 원시 요소 Set과 int64/uint64의 `number | bigint` 경계도
+      native-safe subset에서 직접 처리하며, 객체 요소 Set 등 나머지는 JS
+      complex codec으로 안전하게 폴백한다.
 - [x] 타입 패리티 2단계 — 채널/리소스 (Tauri v2 `ipc::Channel`·`Resource`
       모델, 2026-08-23): 콜백을 직렬화 가능한 채널 핸들(u32, 호출 귀속
       유니캐스트 회신)로, 객체 참조를 Rust-소유 리소스 핸들(`channels.rs`
       `ChannelHost` 테이블, 코드젠 커맨드로 read/write/close)로. wire는
-      정수 핸들뿐이라 계약 게이트·양방향 코드젠·멀티호스트 일관성 유지.
-      RN JSI `createChannel(cb)`/`dropChannel(h)` 배선 + Rust FFI
+      정수 핸들뿐이라 계약 게이트와 양방향 코드젠은 공통이고, 호스트별
+      channel adapter 지원 범위는 [호환성 매트릭스](docs/compatibility-matrix.md)에
+      따른다. RN JSI `createChannel(cb)`/`dropChannel(h)` 배선 + Rust FFI
       `rustra_ffi_channel_{create,send,drop}` — Android arm64 실기기 E2E 검증
       완료; iOS generic device build와 iPhone 17 Simulator Release runtime
       완료, physical-device runtime은 별도 증거
 - [x] async 커맨드 핸들러 — `#[command] async fn`, waker 기반 실행기,
       bounded FFI 워커 풀/백프레셔/취소 게이트
 - [x] Windows 코어 런타임 검증 — CI의 Windows MSVC 테스트 + release DLL 산출
-- [ ] 프리빌트 바이너리 배포 (bunx 설치 시 cargo 불필요)
+- [x] 개발 허들 완화 — `rustra doctor`, 설정 기반 `rustra codegen`, `rustra dev`,
+      생성물 drift 게이트 (`rustra generate --check`)
+- [ ] 범용 prebuilt 애플리케이션 네이티브 바이너리 — 앱별 Rust 코드와 target에
+      종속되므로 CI artifact/cache 방식으로 대체 권장
 
 ## FAQ
 
 **Q. Rust 툴체인이 꼭 필요한가요?**
-지금은 네(네이티브 라이브러리를 로컬 빌드). 프리빌트 배포는 로드맵에 있다.
-JS만으로 시작하려면 `@rustra/testing`의 mock 엔진으로 UI를 먼저 만들 수 있다.
+앱별 네이티브 라이브러리는 Rust와 플랫폼 toolchain으로 빌드해야 한다.
+CLI와 공용 adapter는 Bun/npm으로 설치할 수 있지만, 사용자의 command와 staticlib를
+포함한 앱별 네이티브 산출물은 Rust와 플랫폼 toolchain으로 빌드해야 한다. 팀에서는
+CI가 commit/target별 native artifact를 만들어 개발자가 재사용할 수 있다. Rust 없이
+UI를 먼저 만들려면 `@rustra/testing`의 mock 엔진을 사용한다. 상세한 진단과 설치
+범위는 [개발 허들 가이드](docs/development-hurdles.md)를 참고한다.
 
 **Q. JSON 경로도 지원하나요?**
 예. postcard fast-path가 다루지 않는 복잡 schema는 schema-driven complex binary로
@@ -126,22 +136,24 @@ fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
 fn main() -> Result<()> {
     let package = rustra::build!("example.calculator", add_numbers).done();
 
-    // TypeScript 클라이언트 생성 (1단계: types/commands/contract/schema)
+    // TypeScript 클라이언트 생성 — rustra codegen이 schema와 TS/C++를 함께 처리한다.
     package.generate_typescript()?.write_to_dir("generated")?;
     Ok(())
 }
 ```
 
-바이너리 fast-path(rkyv V2, RN)를 쓰려면 **2단계**가 추가로 필요하다 —
-Rust가 만든 `schema.json`을 읽어 TS CLI가 `rkyv-codecs.ts`/`rkyv-registry.ts`를
-생성한다(이 파일들이 없으면 fast-path 클라이언트는 import 에러로 부팅 실패):
+바이너리 fast-path(rkyv V2, RN)를 쓰려면 CLI codegen도 실행한다. `rustra.json`에
+Rust generator를 지정하면 schema 생성부터 `rkyv-codecs.ts`/`rkyv-registry.ts`까지
+한 번에 처리한다:
 
 ```bash
-bunx @rustra/cli generate --schema ./generated/schema.json --output ./generated
+bunx --bun @rustra/cli codegen --config rustra.json
 ```
 
-두 단계를 한 번에 실행하려면 `bunx @rustra/cli dev`(소스 감시 + dual-path 자동 재생성)
-또는 `bunx @rustra/cli init`이 만들어주는 `bun run codegen` 스크립트를 쓴다.
+기존 schema만 다시 렌더링해야 하는 경우에는 `generate --config`를 직접 사용할 수
+있다. Rust 수정까지 감시하려면 `bunx --bun @rustra/cli dev --config rustra.json`,
+CI 동기화 검사는 `bunx --bun @rustra/cli generate --config rustra.json --check`를
+사용한다.
 
 ### React Native: Expo와 bare RN 공통 설정
 
@@ -162,14 +174,19 @@ rustra::native_entry!(my_package);
 {
   "schema": "./generated/schema.json",
   "output": "./generated",
+  "codegen": {
+    "rustManifest": "./Cargo.toml",
+    "rustBinary": "generate"
+  },
   "reactNative": {}
 }
 ```
 
 ```bash
-bun add @rustra/react-native @rustra/types@0.4.0
+bun add @rustra/react-native @rustra/types
 bun add -d @rustra/cli
-bunx --bun @rustra/cli generate --config rustra.json
+bunx --bun @rustra/cli doctor --config rustra.json
+bunx --bun @rustra/cli codegen --config rustra.json
 bun install
 ```
 
@@ -311,6 +328,7 @@ packages/
   bun/             Bun adapter
   tauri/           Tauri adapter
   react-native/    React Native adapter
+  react/           React hooks (Provider/useCommand/useMutation/useEvent)
   testing/         Mock 엔진 + 계약 게이트 (createMockEngine)
   devtools/        호출 관측성 래퍼 (createInstrumentedEngine)
 
@@ -630,11 +648,17 @@ bun run format:check
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 
-# CLI watch 모드 (schema 변경 시 자동 재생성)
-bunx @rustra/cli generate --watch --schema ./generated/schema.json --output ./src/generated
+# 개발 환경 진단
+bunx --bun @rustra/cli doctor --config rustra.json
 
-# dev 루프 — Rust 소스 감시 + dual-path codegen 자동 재실행 (hot codegen)
-bunx @rustra/cli dev --backend ./backend --app ./app
+# Rust schema + TS/C++/RN을 한 번에 생성
+bunx --bun @rustra/cli codegen --config rustra.json
+
+# generated 파일 동기화 CI 게이트 (TS/C++/RN은 쓰지 않음)
+bunx --bun @rustra/cli generate --config rustra.json --check
+
+# Rust 소스 감시 + 통합 codegen 자동 재실행
+bunx --bun @rustra/cli dev --config rustra.json
 ```
 
 ## 문서
@@ -647,6 +671,7 @@ bunx @rustra/cli dev --backend ./backend --app ./app
 | [아키텍처 개요](docs/architecture.md)                            | 데이터 흐름, EngineClient 계약, transport 분리 |
 | [Transport 교체 가이드](docs/extending/transport-guide.md)       | Bun FFI, Node napi-rs 교체                     |
 | [React Native 설정 가이드](docs/extending/react-native-setup.md) | iOS JSI 모듈 설정, 사용법, 트러블슈팅          |
+| [개발 허들 가이드](docs/development-hurdles.md)                  | doctor, 통합 codegen, drift, native 경계       |
 | [새 Host 추가 가이드](docs/extending/adding-host.md)             | Electron, Deno 등 새 어댑터 추가               |
 | [전체 문서 목록](docs/README.md)                                 | 사용자 / 기여자별 읽기 경로                    |
 

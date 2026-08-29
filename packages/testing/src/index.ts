@@ -67,7 +67,6 @@ export function createMockEngine(): MockEngine {
       return engine;
     },
     async invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
-      log.push({ command, args, options });
       // pre-aborted signal — 전 어댑터 공통 정책과 동일하게 cancelled 로 거부.
       if (options?.signal?.aborted) {
         throw new RustraCommandError(
@@ -76,6 +75,7 @@ export function createMockEngine(): MockEngine {
           true,
         );
       }
+      log.push({ command, args, options });
       const handler = handlers.get(command);
       if (!handler) {
         throw new RustraCommandError('command.not_found', `no mock registered for '${command}'`);

@@ -34,6 +34,10 @@ load 시 package를 자동 등록합니다. 앱별 함수명을 C++에 복사하
 {
   "schema": "./generated/schema.json",
   "output": "./generated",
+  "codegen": {
+    "rustManifest": "./Cargo.toml",
+    "rustBinary": "generate"
+  },
   "reactNative": {}
 }
 ```
@@ -58,9 +62,10 @@ target 이름은 Cargo metadata에서 추론하므로 보통 `rustLibrary`는 �
 모든 JavaScript 작업은 Bun 1.4 이상으로 실행합니다.
 
 ```bash
-bun add @rustra/react-native @rustra/types@0.4.0
+bun add @rustra/react-native @rustra/types
 bun add -d @rustra/cli
-bunx --bun @rustra/cli generate --config rustra.json
+bunx --bun @rustra/cli doctor --config rustra.json
+bunx --bun @rustra/cli codegen --config rustra.json
 bun install
 ```
 
@@ -164,6 +169,7 @@ calculator 전용 benchmark ABI는 `legacyBenchmarks: true` fixture에서만 컴
 `bunx --bun react-native config` 순서로 확인하고 iOS는 Pods를 다시 설치한 뒤 native
 app을 재빌드합니다.
 
-Cargo package가 모호하다는 오류는 `rustManifest`를 app crate의 `Cargo.toml`로
-좁혀 해결합니다. staticlib target 오류는 `[lib] crate-type`에 `staticlib`를
-추가합니다.
+Cargo package가 모호하다는 오류는 `codegen.rustManifest`와
+`codegen.rustPackage`를 app crate로 좁혀 해결합니다. generator binary가 모호하면
+`codegen.rustBinary`를 추가합니다. staticlib target 오류는 `[lib] crate-type`에
+`staticlib`를 추가합니다.

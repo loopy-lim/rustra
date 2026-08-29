@@ -105,22 +105,13 @@ struct FfiPostcardResponse {
 
 // -- Buffer helpers ------------------------------------------------------
 
-/// (T3) 페이로드 크기 한도의 기본값 — 1 MiB. 런타임 값은
-/// [`MAX_PAYLOAD_BYTES`] (atomic) 로, `rustra_ffi_set_max_payload` 로 변경한다.
-const DEFAULT_MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
-
-/// (T3) 페이로드 크기 한도 — 부팅 시 고정이 아니라 호스트가 동적으로 조정한다.
-/// 크기 게이트는 어림잡기 용도이므로 원자성만 필요하고 순서는 요구되지 않는다.
-static MAX_PAYLOAD_BYTES: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(DEFAULT_MAX_PAYLOAD_BYTES);
-
 /// 현재 페이로드 크기 한도 (invoke 경로의 크기 가드가 읽는 단일 지점).
 ///
 /// 공개 판독기(구현 완료) — `Package::invoke_rkyv_v2` 등 FFI 엔트리가 직접
 /// 노출하지 않는 경로(rkyv V2 와이어)도 동일한 동적 한도를 읽어 게이트한다.
 /// `rustra_ffi_get_max_payload` FFI 심볼과 같은 값을 반환한다.
 pub fn max_payload_bytes() -> usize {
-    MAX_PAYLOAD_BYTES.load(std::sync::atomic::Ordering::Relaxed)
+    crate::limits::max_payload_bytes()
 }
 
 const FFI_MAGIC: u32 = 0x5255_5354; // "RUST" in ASCII
@@ -1135,7 +1126,7 @@ pub unsafe extern "C" fn rustra_ffi_cancellation_status(invocation_id: u64) -> u
 }
 
 /// (T3) 페이로드 크기 한도를 동적으로 변경한다. 기본 1 MiB
-/// ([`DEFAULT_MAX_PAYLOAD_BYTES`]). 축소/확대 모두 즉시 이후의
+/// (기본 1 MiB). 축소/확대 모두 즉시 이후의
 /// `rustra_ffi_invoke_json` / `rustra_ffi_invoke_postcard` 호출에 반영된다.
 /// 비동기 변형(`rustra_ffi_invoke_async`/`_json_async`)은 호출자 스레드에서
 /// 페이로드를 먼저 복사한 뒤에야 워커에서 검사한다 — 초과 페이로드도 일단
@@ -1151,7 +1142,7 @@ pub unsafe extern "C" fn rustra_ffi_cancellation_status(invocation_id: u64) -> u
 /// 어떤 값도 안전하다 — 0 으로 설정하면 모든 페이로드가 거부된다.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rustra_ffi_set_max_payload(bytes: usize) {
-    MAX_PAYLOAD_BYTES.store(bytes, std::sync::atomic::Ordering::Relaxed);
+    crate::limits::set_max_payload_bytes(bytes);
 }
 
 /// (T3) 현재 페이로드 크기 한도. [`rustra_ffi_set_max_payload`] 로 설정한
