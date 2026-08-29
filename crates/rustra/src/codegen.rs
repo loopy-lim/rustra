@@ -28,6 +28,10 @@ include!("codegen_names.rs");
 /// `clear_codegen_warnings()` → 명령 루프에서 `set_codegen_command_context(name)`
 /// → 종료 시 `take_codegen_warnings()`를 `GeneratedPackage` 신규 필드(예:
 /// `warnings: Vec<String>`)로 실어주면, CLI가 이를 stdout/stderr로 출력한다.
+/// 소비 연결 전까지는 이 모듈 단위 테스트만 사용자이므로 `dead_code` 를
+/// 허용한다(의도적 착지 — 경고 억제가 미구현을 숨기지 않도록 소비 계약을
+/// 이 문서에 고정).
+#[allow(dead_code)]
 pub(crate) struct CodegenWarning {
     /// 폴백이 일어난 TypeScript 타입 표현식 컨텍스트 (스키마 type/format 발췌).
     pub(crate) context: String,
@@ -43,16 +47,19 @@ thread_local! {
 }
 
 /// 경고 수집 시작 전 버퍼를 비운다 (생성 세션 진입점에서 호출).
+#[allow(dead_code)]
 pub(crate) fn clear_codegen_warnings() {
     CODEGEN_WARNINGS.with(|warnings| warnings.borrow_mut().clear());
 }
 
 /// 현재 코드젠 중인 명령명을 기록한다 — 이후 폴백 경고에 첨부된다.
+#[allow(dead_code)]
 pub(crate) fn set_codegen_command_context(command: &str) {
     CODEGEN_COMMAND.with(|slot| *slot.borrow_mut() = command.to_string());
 }
 
 /// 수집된 경고를 소비한다 (생성 세션 종료점에서 호출).
+#[allow(dead_code)]
 pub(crate) fn take_codegen_warnings() -> Vec<CodegenWarning> {
     CODEGEN_WARNINGS.with(|warnings| std::mem::take(&mut *warnings.borrow_mut()))
 }
