@@ -41,8 +41,11 @@ where
             // complex binary 라우트 — 스키마 IR 을 빌드 시점에 1회 컴파일해 캡처
             // 한다(트랙 A). 호출당 `resolved_schema` 클론/`variants` 정렬이 없고
             // 컴파일 결과(미지원 스키마 에러 포함)가 호출 시점에 재방출된다.
+            // 트랙 B: IR 이 직결 안전하면 와이어 ↔ 타입을 serde 로 바로 구동해
+            // Value 트리 3회 왕복을 건너뛴다. 게이트 미달이면 Value 경로.
             let input_codec = CompiledComplex::new(input_schema, definitions);
             let output_codec = CompiledComplex::new(output_schema, definitions);
+            let direct = input_codec.serde_direct() && output_codec.serde_direct();
             let handler_complex = handler.clone();
             Some(Arc::new(move |payload: &[u8]| {
                 if payload.len() < 2 {
@@ -52,13 +55,22 @@ where
                     max_payload_bytes: crate::limits::max_payload_bytes(),
                     ..ComplexCodecLimits::DEFAULT
                 };
-                let input_value = input_codec.decode(&payload[2..], limits)?;
-                let input: I = serde_json::from_value(input_value)
-                    .map_err(|e| RustraError::invalid_args(format!("complex decode: {e}")))?;
-                let output = handler_complex(input)?;
-                let output_value = serde_json::to_value(output)
-                    .map_err(|e| RustraError::internal(format!("complex encode: {e}")))?;
-                let body = output_codec.encode(&output_value, limits)?;
+                let output = if direct {
+                    let input: I = input_codec.decode_direct(&payload[2..], limits)?;
+                    handler_complex(input)?
+                } else {
+                    let input_value = input_codec.decode(&payload[2..], limits)?;
+                    let input: I = serde_json::from_value(input_value)
+                        .map_err(|e| RustraError::invalid_args(format!("complex decode: {e}")))?;
+                    handler_complex(input)?
+                };
+                let body = if direct {
+                    output_codec.encode_direct(&output, limits)?
+                } else {
+                    let output_value = serde_json::to_value(&output)
+                        .map_err(|e| RustraError::internal(format!("complex encode: {e}")))?;
+                    output_codec.encode(&output_value, limits)?
+                };
                 let response_len = 8usize.saturating_add(body.len());
                 if response_len > limits.max_payload_bytes {
                     return Err(RustraError::payload_too_large(

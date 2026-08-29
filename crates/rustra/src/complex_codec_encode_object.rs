@@ -5,6 +5,7 @@ use super::{
     complex_codec_schema::error,
     complex_codec_wire::{Reader, Writer},
     complex_schema_ir::{IrNode, compile},
+    complex_serde,
 };
 use serde_json::Value;
 
@@ -42,14 +43,64 @@ pub(crate) fn complex_encode_into(
 #[derive(Clone, Debug)]
 pub(crate) struct CompiledComplex {
     ir: Result<Arc<IrNode>>,
+    /// IR 이 serde 직결 경로로 안전한지(트랙 B 게이트). 컴파일 성공 시에만
+    /// 판정한다.
+    direct: bool,
 }
 
 impl CompiledComplex {
     /// 스키마 → IR 빌드 시점 1회 컴파일.
     pub(crate) fn new(schema: &Value, definitions: &Value) -> Self {
-        Self {
-            ir: compile(schema, definitions),
+        match compile(schema, definitions) {
+            Ok(ir) => Self {
+                direct: complex_serde::serde_direct_supported(&ir),
+                ir: Ok(ir),
+            },
+            Err(error) => Self {
+                ir: Err(error),
+                direct: false,
+            },
         }
+    }
+
+    /// serde 직결 경로 지원 여부 — 핸들러가 Value 트리 왕복을 건너뛸지 결정.
+    pub(crate) fn serde_direct(&self) -> bool {
+        self.direct
+    }
+
+    /// 와이어 → `I` 직결 역직렬화 (트랙 B). `serde_direct()`가 true 일 때만
+    /// 유효하다.
+    pub(crate) fn decode_direct<I: serde::de::DeserializeOwned>(
+        &self,
+        bytes: &[u8],
+        limits: ComplexCodecLimits,
+    ) -> Result<I> {
+        let ir = self.ir.as_ref().map_err(|error| error.clone())?;
+        complex_serde::from_bytes(bytes, ir, limits)
+    }
+
+    /// `O` → 와이어 직결 직렬화 (트랙 B).
+    pub(crate) fn encode_direct<O: serde::Serialize>(
+        &self,
+        value: &O,
+        limits: ComplexCodecLimits,
+    ) -> Result<Vec<u8>> {
+        let ir = self.ir.as_ref().map_err(|error| error.clone())?;
+        complex_serde::to_bytes(value, ir, limits)
+    }
+
+    /// `O` → 와이어 직결 직렬화, caller 버퍼에 직기록 (트랙 B). 반환값은 기록
+    /// 바이트 수다.
+    pub(crate) fn encode_direct_into<O: serde::Serialize>(
+        &self,
+        value: &O,
+        target: &mut [u8],
+        limits: ComplexCodecLimits,
+    ) -> Result<usize> {
+        let ir = self.ir.as_ref().map_err(|error| error.clone())?;
+        let mut writer = Writer::into_slice(target, limits);
+        complex_serde::to_writer(value, &mut writer, ir, limits, 0)?;
+        Ok(writer.written)
     }
 
     pub(crate) fn encode(&self, value: &Value, limits: ComplexCodecLimits) -> Result<Vec<u8>> {

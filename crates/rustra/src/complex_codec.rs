@@ -13,7 +13,9 @@ mod complex_codec_variants;
 #[path = "complex_codec_wire.rs"]
 mod complex_codec_wire;
 #[path = "complex_schema_ir.rs"]
-mod complex_schema_ir;
+pub(crate) mod complex_schema_ir;
+#[path = "complex_serde.rs"]
+pub(crate) mod complex_serde;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ComplexCodecLimits {
@@ -37,3 +39,7 @@ pub(crate) use complex_codec_variants::annotate_variant_order;
 // 호출당 컴파일 진입 — 테스트 전용 (핫 경로는 CompiledComplex 를 쓴다).
 #[cfg(test)]
 pub(crate) use complex_codec_encode_object::{complex_encode, test_only_complex_decode};
+
+#[cfg(test)]
+#[path = "complex_codec_tests.rs"]
+mod tests;
