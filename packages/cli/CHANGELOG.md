@@ -1,5 +1,65 @@
 # @rustra/cli
 
+## 0.5.0
+
+### Minor Changes
+
+- 6deb659: feat: C++ Set 직결 — 원시 요소 Set의 네이티브 encode
+
+  - `cppComplexNativeSupported` 가 `sequence.uniqueItems` 를 원시 요소
+    (string/number/integer/bool, literal/enum 포함)에 한해 허용한다. 객체/배열
+    요소 Set 은 IR 정규화 한계로 계속 JS complex 경로를 탄다.
+  - C++ complex encode: JS Set 을 `instanceof Set` 판별 후 `Array.from(set)` 으로
+    이터레이션 순서 보존 복사([...set] 계약 — TS complex-codec.ts 와 동일,
+    **정렬/중복제거 없음**)한 뒤 postcard seq 를 쓴다. 배열 입력도 허용한다.
+  - C++ complex decode: 전역 `Set` 생성자에 `callAsConstructor` 로 요소 배열을
+    넘겨 실제 JS `Set` 을 복원한다(new Set(values) 계약 — 중복은 Set 이 정리).
+  - example: calculator 에 `tagSet`(BTreeSet<i64> 입력 / BTreeSet<String> 출력,
+    commandId 29) 추가. 신규 command 는 기존 id 를 보존하기 위해 등록 순서 맨
+    뒤에 추가해야 한다 — register! 튜플은 `.command_fn` 체인만 생성하므로
+    builder 체인(.buffer_command_fn/.command_fn) 명령보다 **앞에** 올 수 없고,
+    체인 끝에 `.command_fn` 으로 붙인다(초기 구현이 register! 튜플에 넣어
+    benchEchoBytes/Pair/echoGroups id 를 시프트한 것을 수정 — generated id 는
+    원래 값 25/26/27 유지). 양쪽 생성물(Rust bin + TS CLI)을 함께 재생성할 것.
+  - wire fixture: `TAGSET_REQUEST/RESPONSE` PINNED hex (Rust wire_fixtures.rs ↔
+    TS cross-wire.test.ts ↔ C++ test-rustra-generated-codecs.cpp 3면 동일).
+    와이어 자체는 순서 보존 postcard seq 로 기존과 동일 — BTreeSet 은 정렬 순서로
+    직렬화되고 Set 복원 후 순서는 관측되지 않는다.
+  - test-jsi-shim: Function/global()/instanceOf/getPropertyAsFunction 최소 표면
+    추가 — Set 직결 경로를 독립 C++ 테스트에서 검증한다.
+
+- 6deb659: feat: bigint postcard fast-path — 와이드 정수 게이트 해제
+
+  **와이어 변경 (breaking for stale codecs)**
+
+  - `int64`/`uint64` 필드가 complex codec 폴백 대신 postcard fast-path 로 라우팅
+    됩니다(A1의 64-bit `_pcEncodeVarint64`/`_pcDecodeVarint64`/`_pcEncodeZigzag64`/
+    `_pcDecodeZigzag64` 헬퍼 사용). Rust 엔진 게이트도 동일 판정으로 갱신되어
+    양면 와이어가 일치합니다.
+  - **튜플/와이드 정수 명령의 와이어가 0.4.1 과 다릅니다.** 예: calculator
+    `span` — 0.4.1 complex-codec 튜플 와이어는 `count + elements` 였지만 postcard
+    튜플은 접두 없는 `elements` 나열입니다. 0.4.1 TS 코덱과 재생성된 Rust(또는
+    그 역)를 혼용하면 디코딩이 조용히 깨집니다 — 양쪽을 함께 재생성해야 합니다.
+  - safe 정수 범위(±2^53) 밖의 값은 `number` 대신 `bigint` 로 복원됩니다.
+    TS 타입 표면이 `i64`/`u64` 필드에서 `number` → `number | bigint` 로 넓어집니다.
+  - 복합 타입도 와이드 정수를 수용: `Vec<u64>`, `HashMap<String, u64>`,
+    `Option<i64>` 등이 원소/값 레벨 64-bit 헬퍼로 fast-path 를 사용합니다
+    (`vec_i64/vec_u64`, `map_i64/map_u64`,
+    `option_zigzag64/option_uvar64` kind 신설). 단 `Set<T>` 는 이번에도
+    complex 라우트를 유지합니다 — 명령 단위 게이트(`hasSet`)가 uniqueItems 를
+    배제하므로 `set_i64/set_u64` kind 는 현 게이트에서는 도달하지 않는
+    준비물입니다(C++ Set 직결은 별도 changeset 참조).
+  - C++ 정적 코덱(JSI 네이티브)은 여전히 int64/uint64 를 fast-path 에 넣지
+    않습니다 — 해당 필드가 있으면 C++ 광고 집합에서 제외됩니다(트랙 B 후속).
+  - 경계 와이어 픽스처: calculator `gauge`(u64::MAX), `span`(i64::MIN, 2^53±1),
+    신규 `wideAgg`(Vec<u64> + Option<i64> 다원소 10바이트 LEB128) — Rust
+    `wire_fixtures.rs` 와 TS `cross-wire.test.ts` 가 동일 hex 를 공유합니다.
+
+### Patch Changes
+
+- Updated dependencies [6deb659]
+  - @rustra/types@0.5.0
+
 ## 0.4.1
 
 ### Patch Changes
