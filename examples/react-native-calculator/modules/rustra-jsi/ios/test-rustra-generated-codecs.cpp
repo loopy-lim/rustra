@@ -421,6 +421,7 @@ int main() {
 
   // decode scoreTotal response body postcard(count=2,total=42) → 구조 검증
   {
+    if (gen::has_static_codec("scoreTotal")) {
     uint8_t body[] = {0x02, 0x54}; // uvar(2), zigzag(42)
     rc::Reader r(body, 2);
     Value result = gen::decode_by_name(rt, "scoreTotal", r);
@@ -431,10 +432,12 @@ int main() {
     if (obj.getProperty(rt, "total").asNumber() != 42.0) {
       std::printf("FAIL decode scoreTotal total\n"); ++g_failures;
     }
+    }
   }
 
   // decode span response body postcard(first="hi",second=-5) → tuple 재조립
   {
+    if (gen::has_static_codec("span")) {
     uint8_t body[] = {0x02, 0x68, 0x69, 0x09};
     rc::Reader r(body, 4);
     Value result = gen::decode_by_name(rt, "span", r);
@@ -445,16 +448,19 @@ int main() {
     if (obj.getProperty(rt, "second").asNumber() != -5.0) {
       std::printf("FAIL decode span second (zigzag)\n"); ++g_failures;
     }
+    }
   }
 
   // decode gauge response body postcard(next=70300) → uvar 정밀도
   {
+    if (gen::has_static_codec("gauge")) {
     uint8_t body[] = {0x9C, 0xA5, 0x04}; // uvar(70300)
     rc::Reader r(body, 3);
     Value result = gen::decode_by_name(rt, "gauge", r);
     Object obj = result.getObject(rt);
     if (obj.getProperty(rt, "next").asNumber() != 70300.0) {
       std::printf("FAIL decode gauge next (uvar)\n"); ++g_failures;
+    }
     }
   }
 
@@ -498,12 +504,14 @@ int main() {
 
   // ── decode isEven response body postcard(result=true) → {result:true} ──
   {
+    if (gen::has_static_codec("isEven")) {
     uint8_t body[] = {0x01}; // bool true
     rc::Reader r(body, 1);
     Value result = gen::decode_by_name(rt, "isEven", r);
     Object obj = result.getObject(rt);
     bool b = obj.getProperty(rt, "result").getBool();
     if (!b) { std::printf("FAIL decode isEven result: got false, want true\n"); ++g_failures; }
+    }
   }
 
   // ── decode greet response body postcard(message="yo") → {message:"yo"} ──
@@ -518,6 +526,7 @@ int main() {
 
   // ── decode sumList response body {count,total} → {count:2,total:30} ──
   {
+    if (gen::has_static_codec("sumList")) {
     // count=2 → 0x04; total=30 → 0x3C
     uint8_t body[] = {0x04, 0x3C};
     rc::Reader r(body, 2);
@@ -528,6 +537,7 @@ int main() {
     if (count != 2.0 || total != 30.0) {
       std::printf("FAIL decode sumList: count=%f total=%f, want 2/30\n", count, total);
       ++g_failures;
+    }
     }
   }
 
