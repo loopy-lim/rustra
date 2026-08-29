@@ -18,3 +18,4 @@ export {
 export * from './node-core.js';
 export * from './node-bootstrap.js';
 export * from './node-loop.js';
+export { subscribeEvent, type NodeEventTransport } from './node-events.js';
