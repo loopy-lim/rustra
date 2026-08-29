@@ -64,7 +64,7 @@
     "@changesets/cli": "^2.31.0",
     "@eslint/js": "^10.0.1",
     "@evilmartians/lefthook": "^2.1.6",
-    "@types/node": "^24.0.0",
+    "@types/node": "^26.3.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^10.3.0",
