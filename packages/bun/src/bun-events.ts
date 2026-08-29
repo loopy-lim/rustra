@@ -54,12 +54,12 @@ export type BunEventBridge = {
    * rustra 이벤트를 구독한다 — `(name, callback) => unsubscribe`.
    * 페이로드는 JSON 직렬화 문자열에서 한 번 파싱된 JS 값이다.
    */
-  subscribeEvent(name: string, callback: (payload: unknown) => void): () => void;
+  subscribeEvent(name: string, callback: (payload: never) => void): () => void;
   /** 싱크 등록/폴링을 모두 해제한다 — 종료 시 1회 호출. */
   dispose(): void;
 };
 
-type EventCallback = (payload: unknown) => void;
+type EventCallback = (payload: never) => void;
 
 const DEFAULT_POLL_MS = 100;
 
@@ -91,7 +91,9 @@ class SubscriberMap {
     if (!listeners) return;
     for (const listener of [...listeners]) {
       try {
-        listener(payload);
+        // EventCallback 은 계약상 (payload: never) => void — 모든 페이로드 콜백의
+        // 최소 상위집합이라 런타임 값 전달은 안전하다(never 는 타입 레벨 계약일 뿐).
+        (listener as (payload: unknown) => void)(payload);
       } catch (error) {
         // 리스너 예외가 브릿지를 죽이지 않는다(node/RN 어댑터와 동일 정책).
         console.error(`Rustra: event listener for "${name}" threw:`, error);
@@ -247,3 +249,26 @@ export async function createBunEventBridge(
   }
   return createPollingEventBridge(options);
 }
+
+// ── 코드젠 SubscribeFn 정합 (컴파일 타임 고정) ─────────────────
+// 코드젠(generateEventsTs)이 생성하는 `SubscribeFn` 계약:
+//   <N extends RustraEventName>(name: N, cb: (payload: RustraEventPayloads[N]) => void)
+//     => (() => void) | Promise<() => void>
+// 이벤트 1개('x': number)를 가진 동형 계약에 이 브릿지의 구독 시그니처가
+// 들어맞는지 tsc 로 고정한다 — 계약이 바뀌면 컴파일이 깨진다.
+
+/** 생성 계약의 동형 타입 — 이벤트 'x' 하나가 선언된 스키마에 상당. */
+type ContractPayloads = { x: number };
+type ContractName = keyof ContractPayloads & string;
+type GeneratedSubscribeFn = <N extends ContractName>(
+  name: N,
+  callback: (payload: ContractPayloads[N]) => void,
+) => (() => void) | Promise<() => void>;
+
+// 브릿지 subscribeEvent 는 생성 SubscribeFn 자리(onRustraEvent 의 subscribe
+// 매개변수 등)에 그대로 쓰인다 — 이 방향의 할당 가능성만 계약이다.
+type _BridgeFitsGenerated = BunEventBridge['subscribeEvent'] extends GeneratedSubscribeFn
+  ? true
+  : false;
+const _bridgeFits: _BridgeFitsGenerated = true;
+void _bridgeFits;

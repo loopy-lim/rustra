@@ -27,7 +27,10 @@ export type NodeEventTransport = NodeInvokeTransport & {
   drainEvents(): Promise<Array<{ name: string; payload: unknown }>>;
 };
 
-type NodeEventCallback = (payload: unknown) => void;
+// 콜백 페이로드를 never 로 선언한다 — (payload: never) => void 는 모든 페이로드
+// 콜백의 최소 상위집합이라 코드젠 SubscribeFn 계약에 그대로 할당된다(아래
+// 컴파일 타임 고정 참조). 런타임에는 실제 페이로드가 전달된다.
+type NodeEventCallback = (payload: never) => void;
 
 const DEFAULT_POLL_MS = 100;
 
@@ -78,7 +81,8 @@ function ensurePolling(transport: NodeEventTransport): void {
           if (!listeners) continue;
           for (const listener of [...listeners]) {
             try {
-              listener(event.payload);
+              // never 콜백 계약은 타입 레벨 최소 상위집합일 뿐 — 런타임 실값 전달.
+              (listener as (payload: unknown) => void)(event.payload);
             } catch (error) {
               // 리스너 예외가 폴링 루프를 죽이지 않는다(RN 어댑터와 동일 정책).
               console.error(`Rustra: event listener for "${event.name}" threw:`, error);
@@ -143,3 +147,33 @@ export function subscribeEvent(
     }
   };
 }
+
+// ── 코드젠 SubscribeFn 정합 (컴파일 타임 고정) ─────────────────
+// 코드젠(generateEventsTs)이 생성하는 `SubscribeFn` 계약:
+//   <N extends RustraEventName>(name: N, cb: (payload: RustraEventPayloads[N]) => void)
+//     => (() => void) | Promise<() => void>
+// 이벤트 1개('x': number)를 가진 동형 계약에 이 모듈의 구독 시그니처가
+// 들어맞는지 tsc 로 고정한다 — 계약이 바뀌면 컴파일이 깨진다.
+
+/** 생성 계약의 동형 타입 — 이벤트 'x' 하나가 선언된 스키마에 상당. */
+type ContractPayloads = { x: number };
+type ContractName = keyof ContractPayloads & string;
+type GeneratedSubscribeFn = <N extends ContractName>(
+  name: N,
+  callback: (payload: ContractPayloads[N]) => void,
+) => (() => void) | Promise<() => void>;
+
+// node 구독 시그니처(transport, name, callback)는 transport 에 커링하면
+// (name, callback) => unsubscribe 가 남는다 — 커링 결과 타입이 생성 SubscribeFn
+// 자리에 들어맞는지 타입 레벨에서 고정한다(값 없이 순수 타입 검증).
+type BoundNodeSubscribe = (transport: NodeEventTransport) => ReturnType<typeof subscribeEventNoop>;
+declare function subscribeEventNoop(
+  transport: NodeEventTransport,
+  name: 'x',
+  callback: (payload: number) => void,
+): () => void;
+type _NodeFitsGenerated =
+  ReturnType<BoundNodeSubscribe> extends (() => void) | Promise<() => void> ? true : false;
+type _NodeParamFits = Parameters<GeneratedSubscribeFn>[1] extends NodeEventCallback ? true : false;
+const _nodeChecks: [_NodeFitsGenerated, _NodeParamFits] = [true, true];
+void _nodeChecks;
