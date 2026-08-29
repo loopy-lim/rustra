@@ -33,12 +33,12 @@
     },
     "packages/cli": {
       "name": "@rustra/cli",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "bin": {
         "rustra": "./dist/index.js",
       },
       "dependencies": {
-        "@rustra/types": "^0.3.1",
+        "@rustra/types": "^0.4.1",
       },
       "devDependencies": {
         "@types/node": "^24.0.0",
@@ -49,7 +49,7 @@
       "name": "@rustra/devtools",
       "version": "0.4.0",
       "dependencies": {
-        "@rustra/types": "^0.3.1",
+        "@rustra/types": "^0.4.0",
       },
       "devDependencies": {
         "typescript": "^5.9.0",
@@ -59,7 +59,7 @@
       "name": "@rustra/node",
       "version": "0.4.0",
       "dependencies": {
-        "@rustra/types": "^0.3.1",
+        "@rustra/types": "^0.4.0",
       },
       "devDependencies": {
         "typescript": "^5.9.0",
@@ -69,7 +69,7 @@
       "name": "@rustra/react",
       "version": "0.4.0",
       "dependencies": {
-        "@rustra/types": "^0.3.1",
+        "@rustra/types": "^0.4.0",
       },
       "devDependencies": {
         "@types/react": "^19.0.0",
@@ -82,9 +82,9 @@
     },
     "packages/react-native": {
       "name": "@rustra/react-native",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "dependencies": {
-        "@rustra/types": "^0.4.0",
+        "@rustra/types": "^0.4.1",
       },
       "devDependencies": {
         "typescript": "^5.9.0",
@@ -100,7 +100,7 @@
       "name": "@rustra/tauri",
       "version": "0.4.0",
       "dependencies": {
-        "@rustra/types": "^0.3.1",
+        "@rustra/types": "^0.4.0",
       },
       "devDependencies": {
         "typescript": "^5.9.0",
@@ -110,7 +110,7 @@
       "name": "@rustra/testing",
       "version": "0.4.0",
       "dependencies": {
-        "@rustra/types": "^0.3.1",
+        "@rustra/types": "^0.4.0",
       },
       "devDependencies": {
         "typescript": "^5.9.0",
@@ -118,7 +118,7 @@
     },
     "packages/types": {
       "name": "@rustra/types",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "devDependencies": {
         "typescript": "^5.9.0",
       },

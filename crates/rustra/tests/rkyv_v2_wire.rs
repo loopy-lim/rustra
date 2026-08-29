@@ -1,7 +1,7 @@
-//! rkyv V2 wire path 종합 테스트 — dynamic import(Tier 3) + 정적(postcard) 경로.
+//! rkyv V2 wire path 종합 테스트 — dynamic import(Tier 3) + 정적 binary 경로.
 //!
 //! 도달 가능한 두 wire 를 다양한 타입으로 검증:
-//! - 정적(postcard fast-path): `[cmd_id u16][postcard(I)]` → `[ok u8][postcard(O)@8]`
+//! - 정적 binary: `[cmd_id u16][postcard 또는 complex(I)]` → `[ok u8][body@8]`
 //! - 동적(Tier 3 JSON):        `[cmd_id u16][json]`         → `[ok u8][pad3][json_len u32@4][json@8]`
 //!
 //! `register`(동적 명령)는 debug 빌드에서만 동작(release=frozen). 정적 테스트는 양쪽 모두.
@@ -96,14 +96,14 @@ struct OptOut {
     has_value: bool,
 }
 
-// 정적 postcard 경로의 Option 왕복 — JS 코드젠 option_* 코덱과 동일 와이어.
+// 정적 binary 경로의 Option 왕복 — JS 코드젠 option_* 코덱과 동일 와이어.
 // (과거 결함: JS 코덱이 Option 필드를 무음 삭제 — 여기가 Rust 측 계약 고정점)
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct StaticOptIn {
     id: String,
     name: Option<String>,
-    value: Option<i64>,
+    value: Option<i32>,
 }
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -115,7 +115,7 @@ struct StaticOptOut {
 struct StaticItem {
     id: String,
     name: String,
-    value: i64,
+    value: i32,
 }
 fn static_opt_cmd(input: StaticOptIn) -> rustra::Result<StaticOptOut> {
     let item = match (input.name, input.value) {
@@ -172,13 +172,13 @@ struct BytesIn {
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct BytesOut {
-    len: i64,
-    checksum: i64,
+    len: u32,
+    checksum: u32,
 }
 fn bytes_cmd(input: BytesIn) -> rustra::Result<BytesOut> {
     Ok(BytesOut {
-        len: input.data.len() as i64,
-        checksum: input.data.iter().map(|&b| b as i64).sum(),
+        len: input.data.len() as u32,
+        checksum: input.data.iter().map(|&b| b as u32).sum(),
     })
 }
 
@@ -193,15 +193,15 @@ struct MixedVecIn {
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct MixedVecOut {
-    bool_count: i64,
+    bool_count: u32,
     float_sum: f64,
-    int32_sum: i64,
+    int32_sum: i32,
 }
 fn mixed_vec_cmd(input: MixedVecIn) -> rustra::Result<MixedVecOut> {
     Ok(MixedVecOut {
-        bool_count: input.bools.iter().filter(|b| **b).count() as i64,
+        bool_count: input.bools.iter().filter(|b| **b).count() as u32,
         float_sum: input.floats.iter().sum(),
-        int32_sum: input.ints32.iter().map(|&v| v as i64).sum(),
+        int32_sum: input.ints32.iter().sum(),
     })
 }
 
@@ -232,7 +232,7 @@ fn prim_cmd(input: PrimIn) -> rustra::Result<PrimOut> {
 
 // ── 헬퍼 ───────────────────────────────────────────────────
 
-/// 정적 postcard 경로 호출 헬퍼.
+/// 정적 binary 경로 호출 헬퍼.
 fn static_invoke<I: Serialize, O: serde::de::DeserializeOwned>(
     pkg: &Package,
     name: &str,
@@ -260,7 +260,7 @@ fn dyn_invoke<I: Serialize, O: serde::de::DeserializeOwned>(
 }
 
 // ════════════════════════════════════════════════════════════
-// 1. 정적 Tier 1 (postcard fast-path)
+// 1. 정적 Tier 1 (postcard 또는 i64 complex fast-path)
 // ════════════════════════════════════════════════════════════
 
 #[test]
@@ -305,7 +305,7 @@ fn static_tier1_negative_and_large_i64() {
     }
 }
 
-// 정적 postcard Option 왕복 — Some/None 전 조합 + Option<Struct> 응답.
+// 정적 binary Option 왕복 — Some/None 전 조합 + Option<Struct> 응답.
 #[test]
 fn static_postcard_option_round_trip() {
     let pkg = Package::builder("wire.static.opt")
@@ -632,7 +632,7 @@ fn dynamic_tier3_large_payload() {
 #[test]
 #[cfg(debug_assertions)]
 fn static_and_dynamic_coexist_in_one_package() {
-    // 정적 add(빌더, postcard) + 동적 echo(register, Tier 3) 가 한 패키지에 공존.
+    // 정적 add(빌더, complex for i64) + 동적 echo(register, Tier 3) 가 한 패키지에 공존.
     let pkg = Package::builder("wire.mixed")
         .command("add", common::add)
         .build();
@@ -803,8 +803,8 @@ fn encode_rkyv_v2_error_wire_format() {
 // 코덱이 지원한다(count varint + (key,value)*; probe: {a:1,b:2} ->
 // [2, 1,98,4, 1,97,2]). 과거 map 은 Tier 3(JSON-in-binary) 강제였다 — 이제
 // postcard fast-path 로 승격됐고, 이 테스트가 그 와이어를 고정한다.
-// (여전히 미지원인 data enum(oneOf)의 Tier 3 라우팅은
-// oneof_command_uses_tier3_json_wire 로 검증한다.)
+// 복합 data enum(oneOf)의 complex binary 라우팅은
+// oneof_command_uses_complex_binary_wire 로 검증한다.
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -844,9 +844,8 @@ fn map_command_uses_postcard_fast_path() {
     assert_eq!(resp.len(), 9, "postcard frame: 8B header + 1B zigzag(42)");
 }
 
-// data enum(oneOf) — 여전히 Tier 3. schemars oneOf 는 unit variant 를 앞으로
-// 재배치해(probe 실증) postcard 선언순 variant index 를 스키마로 복원할 수
-// 없으므로, 양쪽 모두 JSON-in-binary 로만 계약이 성립한다.
+// data enum(oneOf) — complex binary path. Variant order is derived from the
+// deterministic schema key, so schemars declaration reordering is harmless.
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct OneOfIn {
@@ -855,32 +854,27 @@ struct OneOfIn {
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct OneOfOut {
-    label: String,
+    status: Status,
 }
 fn oneof_cmd(input: OneOfIn) -> rustra::Result<OneOfOut> {
-    let label = match input.status {
-        Status::Active { level } => format!("active:{level}"),
-        Status::Idle => "idle".to_string(),
-    };
-    Ok(OneOfOut { label })
+    Ok(OneOfOut {
+        status: input.status,
+    })
 }
 
 #[test]
-fn oneof_command_uses_tier3_json_wire() {
+fn oneof_command_uses_complex_binary_wire() {
     let pkg = Package::builder("wire.t3align.oneof")
         .command("oneofLabel", oneof_cmd)
         .build();
-
-    let req = common::tier3_request(1, r#"{"status":{"active":{"level":7}}}"#);
-    let resp = pkg.invoke_rkyv_v2(&req).expect("tier3 invoke must succeed");
-    let json = common::decode_tier3_response(&resp);
-    assert_eq!(json["label"], "active:7");
-    // 응답이 JSON-in-binary 프레임이어야 한다(postcard 가 아니라).
-    let json_len = u32::from_le_bytes(resp[4..8].try_into().unwrap()) as usize;
-    assert!(
-        json_len > 1,
-        "response must be JSON-in-binary, not postcard"
-    );
+    // [command_id u16][variant index][active.level zigzag varint]
+    let req = [1, 0, 0, 14];
+    let resp = pkg
+        .invoke_rkyv_v2(&req)
+        .expect("complex invoke must succeed");
+    assert_eq!(resp[0], 1, "ok");
+    // Output is the same data enum: [variant index][active.level zigzag varint].
+    assert_eq!(&resp[8..], &[0, 14]);
 }
 
 #[test]

@@ -61,6 +61,20 @@ Compat 테스트 (전체 파이프라인 통합)
 cargo test
 ```
 
+### Complex binary codec
+
+`crates/rustra/src/complex_codec.rs`와 `crates/rustra/tests/rkyv_v2_wire.rs`는
+schema-driven codec의 map key 정렬, Option, Set, data enum variant key와
+malformed/trailing payload 경계를 검증한다. TypeScript 대응 fixture는
+`packages/types/src/complex-codec.test.ts`에 있으며, 두 구현의 golden data-enum
+wire가 동일해야 한다.
+
+```bash
+cargo test -p rustra --test rkyv_v2_wire oneof_command_uses_complex_binary_wire
+bun test packages/types/src/complex-codec.test.ts
+bun run bench:complex
+```
+
 ---
 
 ## TypeScript 테스트
@@ -141,15 +155,19 @@ test:compat         → test:adapters + test:runtime
 
 ## React Native 테스트 상태
 
-| 계층                      | 상태   | 비고                                          |
-| ------------------------- | ------ | --------------------------------------------- |
-| adapter-compat.test.ts    | PASS   | `createReactNativeEngine` 동작 확인           |
-| runtime-contract.test.ts  | PASS   | Swift 모듈 + FFI export 구조 검증             |
-| test:adapter:react-native | PASS   | `bun react-native-app.ts` 실행                |
-| test:app:react-native     | PASS   | TypeScript 타입체크 통과                      |
-| 실제 시뮬레이터 실행      | 대기중 | iOS/Android 시뮬레이터에서 실제 FFI 호출 필요 |
+| 계층                        | 상태 | 비고                                                                |
+| --------------------------- | ---- | ------------------------------------------------------------------- |
+| adapter-compat.test.ts      | PASS | `createReactNativeEngine` 동작 확인                                 |
+| runtime-contract.test.ts    | PASS | Swift 모듈 + FFI export 구조 검증                                   |
+| test:adapter:react-native   | PASS | `bun react-native-app.ts` 실행                                      |
+| test:app:react-native       | PASS | TypeScript 타입체크 통과                                            |
+| Android release 실기기 실행 | PASS | `TB710FU` arm64에서 complex/channel/resource/benchmark receipt 확인 |
+| iOS generic device build    | PASS | `iphoneos` Debug 링크 성공; device runtime은 별도 미실행            |
+| iOS Simulator 실행          | PASS | iPhone 17 Simulator Release embedded-bundle runtime receipt 확인    |
 
-**이유:** RN 런타임 테스트는 Xcode 시뮬레이터 또는 Android 에뮬레이터가 필요하므로 CI 환경에서는 제외된다.
+**경계:** package/build 성공은 런타임을 대체하지 않는다. Android는 실기기
+runtime까지, iOS는 generic device build와 iPhone 17 Simulator runtime까지
+확인했다. iOS physical-device 실행은 별도 증거다.
 
 ---
 

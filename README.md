@@ -47,15 +47,20 @@ rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)�
 - [x] 타입 패리티 1단계 — fast path 타입 확장 (2026-08-22): u8–u64 plain
       varint, 동적 맵 `HashMap<String,T>`(원시값), 튜플(무접두), `Vec<u8>`
       bytes(ArrayBuffer 표면), chrono Date(ISO string), Set<unsigned> —
-      3면(TS·Rust·C++) 코드젠 + PINNED hex 와이어 게이트. 잔여: bigint TS
-      표면(number 유지, 2^53 한계), data enum(oneOf 순서 비결정 → Tier 3 확정)
+      3면(TS·Rust·C++) 코드젠 + PINNED hex 와이어 게이트.
+- [x] 타입 패리티 3단계 — schema-driven complex binary route (2026-08-27):
+      recursive struct, struct-valued map, data enum, nested Option/Set —
+      공용 Codec IR, TS/Rust golden wire + bounds, native-safe C++ complex
+      marshalling. Set/BigInt 경계는 JS complex codec으로 안전하게 폴백한다.
 - [x] 타입 패리티 2단계 — 채널/리소스 (Tauri v2 `ipc::Channel`·`Resource`
       모델, 2026-08-23): 콜백을 직렬화 가능한 채널 핸들(u32, 호출 귀속
       유니캐스트 회신)로, 객체 참조를 Rust-소유 리소스 핸들(`channels.rs`
       `ChannelHost` 테이블, 코드젠 커맨드로 read/write/close)로. wire는
       정수 핸들뿐이라 계약 게이트·양방향 코드젠·멀티호스트 일관성 유지.
       RN JSI `createChannel(cb)`/`dropChannel(h)` 배선 + Rust FFI
-      `rustra_ffi_channel_{create,send,drop}` — 시뮬레이터 E2E 검증 완료
+      `rustra_ffi_channel_{create,send,drop}` — Android arm64 실기기 E2E 검증
+      완료; iOS generic device build와 iPhone 17 Simulator Release runtime
+      완료, physical-device runtime은 별도 증거
 - [x] async 커맨드 핸들러 — `#[command] async fn`, waker 기반 실행기,
       bounded FFI 워커 풀/백프레셔/취소 게이트
 - [x] Windows 코어 런타임 검증 — CI의 Windows MSVC 테스트 + release DLL 산출
@@ -68,8 +73,9 @@ rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)�
 JS만으로 시작하려면 `@rustra/testing`의 mock 엔진으로 UI를 먼저 만들 수 있다.
 
 **Q. JSON 경로도 지원하나요?**
-예. rkyv V2는 fast-path일 뿐, 모든 명령은 JSON 폴백으로도 동작한다(Tier 3).
-바이너리 이식이 어려운 환경도 계약은 같다.
+예. postcard fast-path가 다루지 않는 복잡 schema는 schema-driven complex binary로
+처리하고, 두 binary route가 모두 지원하지 않는 명령은 JSON 폴백(Tier 3)으로
+간다. 바이너리 이식이 어려운 환경도 계약은 같다.
 
 **Q. 기존 napi-rs/Tauri 앱에 점진적으로 붙일 수 있나요?**
 예. 어댑터는 transport만 교체한다 — `createNodeEngine(transport)`에 기존
@@ -511,7 +517,11 @@ Node는 Cargo binary, Bun은 stable C ABI cdylib, React Native는 autolinked JSI
 
 #### React Native
 
-React Native는 rkyv V2 바이너리 fast-path를 기본으로 사용한다. JSI 네이티브 모듈이 `invokeRkyvV2`를 노출해야 한다. 입력과 출력이 각각 하나의 필수 `Vec<u8>` 필드인 명령은 명시적 Rust 등록 시 `Uint8Array`/`ArrayBuffer` 전용 네이티브 경로도 사용할 수 있다.
+React Native는 rkyv V2 바이너리 fast-path를 기본으로 사용한다. JSI 네이티브 모듈이
+`invokeRkyvV2`를 노출해야 한다. 입력과 출력이 각각 하나의 필수 `Vec<u8>` 필드인
+명령은 명시적 Rust 등록 시 `Uint8Array`/`ArrayBuffer` 전용 네이티브 경로도 사용할
+수 있다. complex schema 명령은 JS codec registry를 통해 같은 `invokeRkyvV2`로
+전달되며, C++ 직접 마샬링은 별도 성능 확장이다.
 
 ```ts
 import { addNumbers } from './generated/react-native.js';
@@ -523,13 +533,13 @@ const result = await addNumbers({ a: 20, b: 22 });
 
 ### 플랫폼 지원 매트릭스
 
-| 플랫폼               | 현재 증거 수준             | 비고                                                            |
-| -------------------- | -------------------------- | --------------------------------------------------------------- |
-| Node / Bun           | Runtime verified           | subprocess·N-API·Bun FFI 로컬 runtime + 어댑터 CI               |
-| Tauri (macOS)        | WebView runtime verified   | Release WebView `rustra_dispatch` 정확성·성능 영수증            |
-| Tauri (Linux)        | Build + smoke verified     | 실제 WebView 사용자 흐름은 별도 E2E 필요                        |
-| React Native iOS     | Simulator runtime verified | Release build·설치·launch·reload·Nitro 비교; 실기기 증거는 별도 |
-| React Native Android | Release APK verified       | arm64/x86_64 `.so` 포함; emulator/physical launch는 미검증      |
+| 플랫폼               | 현재 증거 수준             | 비고                                                               |
+| -------------------- | -------------------------- | ------------------------------------------------------------------ |
+| Node / Bun           | Runtime verified           | subprocess·N-API·Bun FFI 로컬 runtime + 어댑터 CI                  |
+| Tauri (macOS)        | WebView runtime verified   | Release WebView `rustra_dispatch` 정확성·성능 영수증               |
+| Tauri (Linux)        | Build + smoke verified     | 실제 WebView 사용자 흐름은 별도 E2E 필요                           |
+| React Native iOS     | Simulator runtime verified | Release build·설치·launch·reload·Nitro 비교; 실기기 증거는 별도    |
+| React Native Android | Release runtime verified   | `TB710FU` arm64 실기기와 arm64/x86_64 `.so` 확인; 다른 기기는 별도 |
 
 `bun run test:compat`는 JS 계약과 지원되는 로컬 runtime을 검증하고, CI 네이티브
 잡은 빌드·링크를 검증한다. 이 둘을 실제 기기 설치·화면 렌더 증거와 동일시하지 않는다.

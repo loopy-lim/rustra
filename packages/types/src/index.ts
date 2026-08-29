@@ -225,6 +225,9 @@ export type RkyvV2Codec<I, O> = {
   decode(buf: ArrayBuffer): { ok: boolean; result?: O; error?: RustraError };
 };
 
+export { createComplexCodec } from './complex-codec.js';
+export type { ComplexCodecOptions, ComplexSchema } from './complex-codec.js';
+
 /**
  * rkyv V2 네이티브 인터페이스 — 플랫폼별 FFI 브릿지가 구현합니다.
  */

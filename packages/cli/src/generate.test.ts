@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import test from 'node:test';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   generateTypesTs,
   generateCommandsTs,
@@ -11,6 +14,7 @@ import {
   generatePositionalFacadeTs,
 } from './generate.js';
 import { collectDefinitions } from './codegen.js';
+import { buildCodecIr } from './codec-ir.js';
 import {
   generateBunEntryTs,
   generateNodeEntryTs,
@@ -774,6 +778,33 @@ test('generateTypesTs maps allOf to intersection and integer enum to literal uni
   assert.ok(types.includes('level: 1 | 2 | 3;'), 'integer enum must map to literal union');
 });
 
+test('generateTypesTs exposes bigint for int64 and keeps those commands off C++ static codecs', () => {
+  const schema: PackageSchema = {
+    packageId: 'wide-integer',
+    commands: [
+      {
+        name: 'readCounter',
+        commandId: 31,
+        inputType: 'CounterInput',
+        outputType: 'CounterOutput',
+        inputSchema: {
+          type: 'object',
+          properties: { value: { type: 'integer', format: 'int64' } },
+          required: ['value'],
+        },
+        outputSchema: {
+          type: 'object',
+          properties: { value: { type: 'integer', format: 'uint64' } },
+          required: ['value'],
+        },
+      },
+    ],
+  };
+  assert.match(generateTypesTs(schema), /value: number \| bigint;/);
+  assert.doesNotMatch(generateRkyvCodecsCpp(schema), /readCounter/);
+  assert.match(generateRkyvRegistryTs(schema), /readCounterComplexCodec/);
+});
+
 test('generateRkyvCodecsTs encodes Option fields (no silent drop)', () => {
   const codecs = generateRkyvCodecsTs(richSchema);
   const update = codecs.split('updateItemCodec')[1];
@@ -811,7 +842,64 @@ test('generateRkyvCodecsTs encodes primitive-valued dynamic maps deterministical
   assert.ok(map.includes('result.total'));
 });
 
-test('generateRkyvRegistryTs excludes unsupported commands with a header note', () => {
+test('generateRkyvCodecsTs promotes complex maps and data enums to the complex codec', () => {
+  const schema: PackageSchema = {
+    packageId: 'complex.codec',
+    commands: [
+      {
+        name: 'process',
+        commandId: 17,
+        inputType: 'ProcessInput',
+        outputType: 'ProcessOutput',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            profiles: { type: 'object', additionalProperties: { $ref: '#/definitions/Profile' } },
+            status: {
+              oneOf: [
+                {
+                  type: 'object',
+                  properties: {
+                    Active: {
+                      type: 'object',
+                      properties: { level: { type: 'integer' } },
+                      required: ['level'],
+                    },
+                  },
+                  required: ['Active'],
+                  additionalProperties: false,
+                },
+                { type: 'string', enum: ['Idle'] },
+              ],
+            },
+          },
+          required: ['profiles', 'status'],
+        },
+        outputSchema: {
+          type: 'object',
+          properties: { accepted: { type: 'boolean' } },
+          required: ['accepted'],
+        },
+        definitions: {
+          Profile: {
+            type: 'object',
+            properties: { name: { type: 'string' } },
+            required: ['name'],
+          },
+        },
+      },
+    ],
+  };
+  const codecs = generateRkyvCodecsTs(schema);
+  const registry = generateRkyvRegistryTs(schema);
+  assert.match(codecs, /createComplexCodec/);
+  assert.match(codecs, /processComplexCodec/);
+  assert.match(codecs, /export const processCodec = processComplexCodec/);
+  assert.match(registry, /processComplexCodec/);
+  assert.match(registry, /route: complex/);
+});
+
+test('generateRkyvRegistryTs routes supported complex commands to the complex codec', () => {
   const warnings: string[] = [];
   const originalWarn = console.warn;
   console.warn = (message?: unknown) => warnings.push(String(message));
@@ -826,12 +914,63 @@ test('generateRkyvRegistryTs excludes unsupported commands with a header note', 
   assert.ok(registry.includes("['listItems'"), 'Vec<Struct> commands must be included');
   assert.ok(registry.includes("['mapScores'"), 'primitive-valued map commands must be included');
   assert.ok(
-    !registry.includes("['unsupportedNestedMap'"),
-    'nested collection map commands must be excluded',
+    registry.includes("['unsupportedNestedMap', unsupportedNestedMapComplexCodec]"),
+    'nested collection map commands must use the complex codec',
   );
-  assert.ok(registry.includes('Tier 3 fallback'), 'exclusion note must be present');
-  assert.equal(warnings.length, 1, 'unsupported commands must emit one actionable warning');
-  assert.match(warnings[0], /unsupportedNestedMap/);
+  assert.equal(warnings.length, 0, 'supported complex commands must not warn or fall back');
+});
+
+test('ambiguous oneOf schemas stay on the Tier 3 fallback', () => {
+  const schema: PackageSchema = {
+    packageId: 'complex.ambiguous-union',
+    commands: [
+      {
+        name: 'choose',
+        commandId: 1,
+        inputType: 'ChooseInput',
+        outputType: 'ChooseOutput',
+        inputSchema: {
+          oneOf: [{ type: 'string' }, { type: 'integer' }],
+        },
+        outputSchema: {
+          type: 'object',
+          properties: { ok: { type: 'boolean' } },
+          required: ['ok'],
+        },
+      },
+    ],
+  };
+  const warnings: string[] = [];
+  const originalWarn = console.warn;
+  console.warn = (message?: unknown) => warnings.push(String(message));
+  let registry: string;
+  try {
+    registry = generateRkyvRegistryTs(schema);
+  } finally {
+    console.warn = originalWarn;
+  }
+  assert.doesNotMatch(registry, /chooseCodec/);
+  assert.match(warnings[0] ?? '', /unsupported by both/);
+});
+
+test('codec IR accepts explicit oneOf keys for anonymous variants and sorts wire order', () => {
+  const result = buildCodecIr(
+    {
+      oneOf: [{ type: 'string' }, { type: 'integer' }],
+      'x-rustra-variant-order': ['text', 'count'],
+    },
+    {},
+  );
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.node.kind, 'oneOf');
+    if (result.node.kind === 'oneOf') {
+      assert.deepEqual(
+        result.node.variants.map((variant) => variant.key),
+        ['count', 'text'],
+      );
+    }
+  }
 });
 
 test('single-entry allOf newtype handles stay on the postcard fast path', () => {
@@ -876,14 +1015,91 @@ test('single-entry allOf newtype handles stay on the postcard fast path', () => 
   );
 });
 
-test('generateRkyvCodecsCpp excludes unsupported commands from has_static_codec', () => {
+test('generateRkyvCodecsCpp promotes supported complex commands to native static codec', () => {
   const cpp = generateRkyvCodecsCpp(richSchema);
   assert.ok(cpp.includes('if (name == "updateItem") { encode_updateItem'));
   assert.ok(cpp.includes('if (name == "mapScores") { encode_mapScores'));
   assert.ok(
-    !cpp.includes('unsupportedNestedMap'),
-    'unsupported nested map command must not appear in C++ codec',
+    cpp.includes('if (name == "unsupportedNestedMap") { encode_complex_unsupportedNestedMap'),
+    'supported nested map command must use the native complex codec',
   );
+});
+
+test('generateRkyvCodecsCpp keeps Set and BigInt-shaped commands on the JS complex route', () => {
+  const schema: PackageSchema = {
+    packageId: 'native-complex-boundaries',
+    commands: [
+      {
+        name: 'setValues',
+        commandId: 21,
+        inputType: 'SetInput',
+        outputType: 'SetOutput',
+        inputSchema: {
+          type: 'object',
+          properties: { values: { type: 'array', items: { type: 'integer' }, uniqueItems: true } },
+          required: ['values'],
+        },
+        outputSchema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] },
+      },
+      {
+        name: 'wideValue',
+        commandId: 22,
+        inputType: 'WideInput',
+        outputType: 'WideOutput',
+        inputSchema: {
+          type: 'object',
+          properties: { value: { type: 'integer', format: 'uint64' } },
+          required: ['value'],
+        },
+        outputSchema: { type: 'object', properties: { ok: { type: 'boolean' } }, required: ['ok'] },
+      },
+    ],
+  };
+  const cpp = generateRkyvCodecsCpp(schema);
+  const registry = generateRkyvRegistryTs(schema);
+  assert.doesNotMatch(cpp, /encode_complex_setValues/);
+  assert.doesNotMatch(cpp, /wideValue/);
+  assert.match(registry, /setValuesComplexCodec/);
+  assert.match(registry, /wideValueComplexCodec/);
+});
+
+test('generateRkyvCodecsCpp emits bounded recursive reference functions', () => {
+  const schema: PackageSchema = {
+    packageId: 'recursive-native-complex',
+    commands: [
+      {
+        name: 'walk',
+        commandId: 23,
+        inputType: 'WalkInput',
+        outputType: 'WalkOutput',
+        inputSchema: {
+          type: 'object',
+          properties: { node: { $ref: '#/definitions/Node' } },
+          required: ['node'],
+        },
+        outputSchema: {
+          type: 'object',
+          properties: { node: { $ref: '#/definitions/Node' } },
+          required: ['node'],
+        },
+        definitions: {
+          Node: {
+            type: 'object',
+            properties: {
+              value: { type: 'integer' },
+              next: { anyOf: [{ $ref: '#/definitions/Node' }, { type: 'null' }] },
+            },
+            required: ['value', 'next'],
+          },
+        },
+      },
+    ],
+  };
+  const cpp = generateRkyvCodecsCpp(schema);
+  assert.match(cpp, /complex_encode_ref_Node/);
+  assert.match(cpp, /complex_decode_ref_Node/);
+  assert.match(cpp, /complex value depth exceeds 32/);
+  assert.match(cpp, /encode_complex_walk/);
 });
 
 test('generateRkyvCodecsCpp positional codecs enforce arity and preserve enum wire', () => {
@@ -1202,20 +1418,20 @@ test('generated code escapes hostile enum/const string literals', () => {
   assert.ok(types.includes("'tag\\', evil() //'"), 'const value must stay inside escaped literal');
 });
 
-test('templateVersions requires one synchronized npm and Cargo release line', () => {
-  assert.deepEqual(templateVersions('0.4.0', '^0.4.0', '0.4'), {
-    cargoMinor: '0.4',
-    npmCliCaret: '^0.4.0',
+test('templateVersions permits independent CLI, types, and Cargo versions', () => {
+  assert.deepEqual(templateVersions('0.5.0', '^0.4.0', '^0.4.0'), {
+    cargoRange: '^0.4.0',
+    npmCliCaret: '^0.5.0',
     npmTypesRange: '^0.4.0',
   });
-  assert.throws(() => templateVersions('0.4.0', '^0.3.1', '0.4'), /release versions must match/);
-  assert.throws(() => templateVersions('0.4.0', '^0.4.0', '0.3'), /release versions must match/);
+  assert.throws(() => templateVersions('0.5.0', '', '^0.4.0'), /compatibility ranges/);
+  assert.throws(() => templateVersions('0.5.0', '^0.4.0', ''), /compatibility ranges/);
 });
 
 test('init scaffold has a real shared package and executable codegen bin', () => {
-  const files = renderInitProjectFiles(templateVersions('0.4.0', '^0.4.0', '0.4'));
-  assert.match(files.cargoToml, /rustra = "0\.4"/);
-  assert.match(files.packageJson, /"@rustra\/cli": "\^0\.4\.0"/);
+  const files = renderInitProjectFiles(templateVersions('0.5.0', '^0.4.0', '^0.4.0'));
+  assert.match(files.cargoToml, /rustra = "\^0\.4\.0"/);
+  assert.match(files.packageJson, /"@rustra\/cli": "\^0\.5\.0"/);
   assert.match(files.packageJson, /"@rustra\/types": "\^0\.4\.0"/);
   assert.match(files.packageJson, /"packageManager": "bun@1\.4\.0"/);
   assert.match(files.libRs, /pub fn package\(\) -> Package/);
@@ -1329,7 +1545,7 @@ test('React Native scaffold is Expo-independent and collision-resistant', () => 
     rustManifestPath: '/workspace/Cargo.toml',
     rustPackage: 'my-rust-app',
     rustLibrary: 'my_rust_app',
-    adapterVersion: '0.3.0',
+    adapterRange: '^0.3.0',
   });
   assert.equal(JSON.parse(files['package.json']!).name, '@rustra/generated-react-native');
   assert.match(files['react-native.config.js']!, /dev\.rustra\.bridge\.RustraBridgePackage/);
@@ -1340,6 +1556,145 @@ test('React Native scaffold is Expo-independent and collision-resistant', () => 
   assert.match(files['android/CMakeLists.txt']!, /rustra_bridge/);
 });
 
+test('React Native scaffold resolves a hoisted adapter with native sources', () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-rn-generate-'));
+  try {
+    const appRoot = join(root, 'apps', 'viewer-expo');
+    const moduleDir = join(appRoot, 'modules', 'rustra-bridge');
+    // An old app-local install must not hide the valid hoisted package.
+    mkdirSync(join(appRoot, 'node_modules', '@rustra', 'react-native'), {
+      recursive: true,
+    });
+    const adapterNative = join(root, 'node_modules', '@rustra', 'react-native', 'native');
+    mkdirSync(adapterNative, { recursive: true });
+    writeFileSync(
+      join(adapterNative, '..', 'package.json'),
+      JSON.stringify({ name: '@rustra/react-native', version: '0.4.0' }),
+    );
+    const nativeFiles = [
+      'android/rustra-jsi-jni.cpp',
+      'cpp/RustraJSIBridge.cpp',
+      'cpp/RustraJSIBridge.hpp',
+      'cpp/rustra-codec.hpp',
+      'ios/RustraJSIModule.mm',
+    ];
+    for (const file of nativeFiles) {
+      const target = join(adapterNative, file);
+      mkdirSync(join(target, '..'), { recursive: true });
+      writeFileSync(target, 'native fixture');
+    }
+
+    const files = renderReactNativeModule({
+      appRoot,
+      moduleDir,
+      cppOutputPath: join(moduleDir, 'generated'),
+      rustManifestPath: join(root, 'native', 'Cargo.toml'),
+      rustPackage: 'leftcar',
+      rustLibrary: 'leftcar',
+      adapterRange: '^0.4.0',
+    });
+
+    assert.match(
+      files['RustraBridge.podspec']!,
+      /File\.expand_path\('\.\.\/\.\.\/\.\.\/\.\.\/node_modules\/@rustra\/react-native\/native'/,
+    );
+    assert.match(
+      files['android/build.gradle']!,
+      /file\("\.\.\/\.\.\/\.\.\/\.\.\/\.\.\/node_modules\/@rustra\/react-native\/native"\)/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('React Native scaffold ignores a complete adapter package with the wrong version', () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-rn-versioned-generate-'));
+  try {
+    const appRoot = join(root, 'apps', 'viewer');
+    const moduleDir = join(appRoot, 'modules', 'rustra-bridge');
+    const nativeFiles = [
+      'android/rustra-jsi-jni.cpp',
+      'cpp/RustraJSIBridge.cpp',
+      'cpp/RustraJSIBridge.hpp',
+      'cpp/rustra-codec.hpp',
+      'ios/RustraJSIModule.mm',
+    ];
+    for (const [packageRoot, version] of [
+      [join(appRoot, 'node_modules', '@rustra', 'react-native'), '0.3.0'],
+      [join(root, 'node_modules', '@rustra', 'react-native'), '0.4.0'],
+    ] as const) {
+      mkdirSync(packageRoot, { recursive: true });
+      writeFileSync(
+        join(packageRoot, 'package.json'),
+        JSON.stringify({ name: '@rustra/react-native', version }),
+      );
+      for (const file of nativeFiles) {
+        const target = join(packageRoot, 'native', file);
+        mkdirSync(join(target, '..'), { recursive: true });
+        writeFileSync(target, `${version} native fixture`);
+      }
+    }
+
+    const files = renderReactNativeModule({
+      appRoot,
+      moduleDir,
+      cppOutputPath: join(moduleDir, 'generated'),
+      rustManifestPath: join(root, 'native', 'Cargo.toml'),
+      rustPackage: 'viewer',
+      rustLibrary: 'viewer',
+      adapterRange: '^0.4.0',
+    });
+
+    assert.match(
+      files['RustraBridge.podspec']!,
+      /File\.expand_path\('\.\.\/\.\.\/\.\.\/\.\.\/node_modules\/@rustra\/react-native\/native'/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('React Native scaffold reports when only a stale complete adapter is installed', () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-rn-stale-generate-'));
+  try {
+    const appRoot = join(root, 'app');
+    const packageRoot = join(appRoot, 'node_modules', '@rustra', 'react-native');
+    const nativeFiles = [
+      'android/rustra-jsi-jni.cpp',
+      'cpp/RustraJSIBridge.cpp',
+      'cpp/RustraJSIBridge.hpp',
+      'cpp/rustra-codec.hpp',
+      'ios/RustraJSIModule.mm',
+    ];
+    mkdirSync(packageRoot, { recursive: true });
+    writeFileSync(
+      join(packageRoot, 'package.json'),
+      JSON.stringify({ name: '@rustra/react-native', version: '0.3.0' }),
+    );
+    for (const file of nativeFiles) {
+      const target = join(packageRoot, 'native', file);
+      mkdirSync(join(target, '..'), { recursive: true });
+      writeFileSync(target, 'stale native fixture');
+    }
+
+    assert.throws(
+      () =>
+        renderReactNativeModule({
+          appRoot,
+          moduleDir: join(appRoot, 'modules/rustra-bridge'),
+          cppOutputPath: join(appRoot, 'modules/rustra-bridge/generated'),
+          rustManifestPath: join(root, 'Cargo.toml'),
+          rustPackage: 'stale',
+          rustLibrary: 'stale',
+          adapterRange: '^0.4.0',
+        }),
+      /complete but incompatible.*expected \^0\.4\.0/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('React Native scaffold keeps calculator-only ABI behind the fixture flag', () => {
   const base = {
     appRoot: '/app',
@@ -1348,7 +1703,7 @@ test('React Native scaffold keeps calculator-only ABI behind the fixture flag', 
     rustManifestPath: '/workspace/Cargo.toml',
     rustPackage: 'calculator',
     rustLibrary: 'calculator',
-    adapterVersion: '0.3.0',
+    adapterRange: '^0.3.0',
   };
   const production = renderReactNativeModule(base);
   const fixture = renderReactNativeModule({ ...base, legacyBenchmarks: true });
@@ -1377,7 +1732,7 @@ test('generateEventsTs emits payload types, name union, and subscribe helper', a
   const out = generateEventsTs(schema);
   assert.ok(out.includes("export type RustraEventName = 'progress.tick'"));
   assert.ok(out.includes("  'progress.tick': {"));
-  assert.ok(out.includes('value: number;'));
+  assert.ok(out.includes('value: number | bigint;'));
   assert.ok(out.includes('export function onRustraEvent'));
   assert.ok(out.includes('export type SubscribeFn'));
 });

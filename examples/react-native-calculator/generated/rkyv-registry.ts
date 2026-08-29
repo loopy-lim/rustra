@@ -1,30 +1,58 @@
-import { addNumbersCodec, benchAddCodec, benchEchoBytesCodec, benchEchoPairCodec, benchEchoStringCodec, channelDemoCodec, clampCodec, createItemCodec, divideCodec, emitDemoCodec, gaugeCodec, greetCodec, isEvenCodec, multiplyCodec, processItemCodec, resourceCloseCodec, resourceOpenCodec, resourceReadCodec, resourceWriteCodec, rustraRegistryDemoCodec, scoreTotalCodec, secureComputeCodec, sizeOfCodec, spanCodec, sumListCodec, toUpperCodec } from './rkyv-codecs.js';
+import { addNumbersComplexCodec, benchAddCodec, benchEchoBytesCodec, benchEchoPairCodec, benchEchoStringCodec, channelDemoCodec, clampCodec, createItemComplexCodec, divideComplexCodec, echoGroupsComplexCodec, emitDemoComplexCodec, gaugeComplexCodec, greetCodec, isEvenComplexCodec, multiplyCodec, processItemComplexCodec, resourceCloseCodec, resourceOpenCodec, resourceReadCodec, resourceWriteCodec, rustraRegistryDemoCodec, scoreTotalComplexCodec, secureComputeComplexCodec, sizeOfCodec, spanComplexCodec, sumListComplexCodec, toUpperCodec } from './rkyv-codecs.js';
 
 export const rkyvV2Registry = new Map<string, import('@rustra/types').RkyvV2Codec<any, any>>([
-  ['addNumbers', addNumbersCodec],
+  // route: complex
+  ['addNumbers', addNumbersComplexCodec],
+  // route: postcard
   ['benchAdd', benchAddCodec],
+  // route: postcard
   ['benchEchoBytes', benchEchoBytesCodec],
+  // route: postcard
   ['benchEchoPair', benchEchoPairCodec],
+  // route: postcard
   ['benchEchoString', benchEchoStringCodec],
+  // route: postcard
   ['channelDemo', channelDemoCodec],
+  // route: postcard
   ['clamp', clampCodec],
-  ['createItem', createItemCodec],
-  ['divide', divideCodec],
-  ['emitDemo', emitDemoCodec],
-  ['gauge', gaugeCodec],
+  // route: complex
+  ['createItem', createItemComplexCodec],
+  // route: complex
+  ['divide', divideComplexCodec],
+  // route: complex
+  ['echoGroups', echoGroupsComplexCodec],
+  // route: complex
+  ['emitDemo', emitDemoComplexCodec],
+  // route: complex
+  ['gauge', gaugeComplexCodec],
+  // route: postcard
   ['greet', greetCodec],
-  ['isEven', isEvenCodec],
+  // route: complex
+  ['isEven', isEvenComplexCodec],
+  // route: postcard
   ['multiply', multiplyCodec],
-  ['processItem', processItemCodec],
+  // route: complex
+  ['processItem', processItemComplexCodec],
+  // route: postcard
   ['resourceClose', resourceCloseCodec],
+  // route: postcard
   ['resourceOpen', resourceOpenCodec],
+  // route: postcard
   ['resourceRead', resourceReadCodec],
+  // route: postcard
   ['resourceWrite', resourceWriteCodec],
+  // route: postcard
   ['rustraRegistryDemo', rustraRegistryDemoCodec],
-  ['scoreTotal', scoreTotalCodec],
-  ['secureCompute', secureComputeCodec],
+  // route: complex
+  ['scoreTotal', scoreTotalComplexCodec],
+  // route: complex
+  ['secureCompute', secureComputeComplexCodec],
+  // route: postcard
   ['sizeOf', sizeOfCodec],
-  ['span', spanCodec],
-  ['sumList', sumListCodec],
+  // route: complex
+  ['span', spanComplexCodec],
+  // route: complex
+  ['sumList', sumListComplexCodec],
+  // route: postcard
   ['toUpper', toUpperCodec],
 ]);

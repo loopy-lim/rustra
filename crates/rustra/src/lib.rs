@@ -159,6 +159,7 @@ pub mod byte_buffer;
 pub mod cancel;
 pub mod channels;
 mod codegen;
+mod complex_codec;
 mod error;
 pub mod events;
 mod executor;
@@ -177,10 +178,14 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock, RwLock};
 
+use complex_codec::{
+    ComplexCodecLimits, annotate_variant_order, complex_decode, complex_encode,
+    complex_schema_supported,
+};
 use rkyv_codec::{
-    BinHandler, BinIntoHandler, DecodeFn, DirectResponse, EncodeFn, RawHandler, Tier,
+    BinHandler, BinIntoHandler, DecodeFn, DirectResponse, EncodeFn, RawHandler,
     build_rkyv_v2_decoder, build_rkyv_v2_response_encoder, build_tier3_json_decoder,
-    is_output_tier3, js_postcard_codec_supported_with_defs,
+    js_postcard_codec_supported_with_defs,
 };
 
 pub use error::{Result, RustraError};
@@ -667,16 +672,7 @@ where
             obj.insert(key, value);
         }
     }
-    let (rkyv_v2_decoder, input_tier) = build_rkyv_v2_decoder(&input_schema);
-    let output_tier3 = is_output_tier3(&output_schema);
-    // force_tier3 (런타임 등록된 동적 명령): TS codec 이 없으므로 JSON-in-binary(Tier 3) 강제.
-    let is_tier3 = force_tier3 || input_tier == Tier::Tier3 || output_tier3;
-    let rkyv_v2_decoder = if force_tier3 || (is_tier3 && input_tier != Tier::Tier3) {
-        build_tier3_json_decoder()
-    } else {
-        rkyv_v2_decoder
-    };
-    let rkyv_v2_response_encoder = build_rkyv_v2_response_encoder(&output_schema, is_tier3);
+    let (postcard_decoder, _input_tier) = build_rkyv_v2_decoder(&input_schema);
 
     // Wrap handler in Arc so both JSON and binary paths can use it
     let handler = Arc::new(handler);
@@ -690,12 +686,30 @@ where
     // JSON-in-binary 프레임)로 통일한다.
     let js_codec_supported = js_postcard_codec_supported_with_defs(&input_schema, &definitions)
         && js_postcard_codec_supported_with_defs(&output_schema, &definitions);
+    let complex_codec_supported = !js_codec_supported
+        && complex_schema_supported(&input_schema, &definitions)
+        && complex_schema_supported(&output_schema, &definitions);
+
+    // Runtime-registered commands have no generated JS codec, so they retain
+    // the JSON-in-binary contract. Static commands select the same route as
+    // the TypeScript registry: postcard first, then the recursive complex
+    // codec, and finally Tier 3 JSON only when neither binary route supports
+    // the schema.
+    let is_tier3 = force_tier3 || (!js_codec_supported && !complex_codec_supported);
+    let rkyv_v2_decoder = if force_tier3 || is_tier3 {
+        build_tier3_json_decoder()
+    } else {
+        postcard_decoder
+    };
+    let rkyv_v2_response_encoder = build_rkyv_v2_response_encoder(&output_schema, is_tier3);
 
     // Generate fast postcard-based binary handler that bypasses JSON Value.
     // force_tier3 인 경우 postcard fast-path 를 끄고 Tier 3 JSON fallback 로 보낸다.
-    let rkyv_v2_handler: Option<BinHandler> = if force_tier3 || !js_codec_supported {
+    let rkyv_v2_handler: Option<BinHandler> = if force_tier3
+        || (!js_codec_supported && !complex_codec_supported)
+    {
         None
-    } else {
+    } else if js_codec_supported {
         let handler_bin = handler.clone();
         Some(Arc::new(move |payload: &[u8]| {
             if payload.len() < 2 {
@@ -714,6 +728,39 @@ where
             buf[0] = 1; // ok = true
             postcard::to_extend(&output, buf)
                 .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))
+        }))
+    } else {
+        let input_schema = input_schema.clone();
+        let output_schema = output_schema.clone();
+        let definitions = definitions.clone();
+        let handler_complex = handler.clone();
+        Some(Arc::new(move |payload: &[u8]| {
+            if payload.len() < 2 {
+                return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+            }
+            let limits = ComplexCodecLimits {
+                max_payload_bytes: crate::ffi::max_payload_bytes(),
+                ..ComplexCodecLimits::DEFAULT
+            };
+            let input_value = complex_decode(&input_schema, &definitions, &payload[2..], limits)?;
+            let input: I = serde_json::from_value(input_value)
+                .map_err(|e| RustraError::invalid_args(format!("complex decode: {e}")))?;
+            let output = handler_complex(input)?;
+            let output_value = serde_json::to_value(output)
+                .map_err(|e| RustraError::internal(format!("complex encode: {e}")))?;
+            let body = complex_encode(&output_schema, &definitions, &output_value, limits)?;
+            let response_len = 8usize.saturating_add(body.len());
+            if response_len > limits.max_payload_bytes {
+                return Err(RustraError::payload_too_large(
+                    response_len,
+                    limits.max_payload_bytes,
+                ));
+            }
+            let mut response = Vec::with_capacity(response_len);
+            response.resize(8, 0);
+            response[0] = 1;
+            response.extend_from_slice(&body);
+            Ok(response)
         }))
     };
 
@@ -1830,22 +1877,28 @@ impl Package {
             .commands
             .iter()
             .map(|(name, command)| {
+                let mut input_schema = (*command.input_schema).clone();
+                let mut output_schema = (*command.output_schema).clone();
+                let mut definitions = (*command.definitions).clone();
+                annotate_variant_order(&mut input_schema);
+                annotate_variant_order(&mut output_schema);
+                annotate_variant_order(&mut definitions);
                 let mut entry = json!({
                     "name": name,
                     "commandId": command.command_id,
                     "inputType": command.input_type,
                     "outputType": command.output_type,
-                    "inputSchema": &*command.input_schema,
-                    "outputSchema": &*command.output_schema,
+                    "inputSchema": input_schema,
+                    "outputSchema": output_schema,
                 });
                 // Include definitions if non-empty (for $ref resolution)
                 #[allow(clippy::collapsible_if)]
-                if let Value::Object(defs) = &*command.definitions {
+                if let Value::Object(defs) = &definitions {
                     if !defs.is_empty() {
                         entry
                             .as_object_mut()
                             .unwrap()
-                            .insert("definitions".into(), (*command.definitions).clone());
+                            .insert("definitions".into(), definitions);
                     }
                 }
                 entry

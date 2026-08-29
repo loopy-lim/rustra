@@ -1,5 +1,13 @@
 # @rustra/react-native
 
+## 0.4.1
+
+### Patch Changes
+
+- Keep React Native generated native paths valid for hoisted npm/Bun workspaces and verify that published adapter tarballs contain the Android, iOS, and C++ bridge sources.
+- Updated dependencies
+  - @rustra/types@0.4.1
+
 ## 0.4.0
 
 ### Minor Changes
