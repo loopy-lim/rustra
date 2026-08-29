@@ -1065,3 +1065,65 @@ fn decode_error_wire_public(frame: &[u8]) -> (String, String) {
     let (message, _) = read_str(&body[n..]);
     (code, message)
 }
+
+// ── schema generation FFI (dev 치환 동기화 계약, T0-2) ─────
+
+/// `rustra_ffi_schema_generation` 이 반환하는 u64 를 읽는다.
+fn invoke_schema_generation() -> u64 {
+    let mut out_len: usize = 0;
+    let ptr = unsafe { rustra::ffi::rustra_ffi_schema_generation(&mut out_len) };
+    assert!(
+        !ptr.is_null(),
+        "schema_generation must return a non-null buffer"
+    );
+    assert_eq!(out_len, 8, "generation must be a fixed 8-byte u64 LE");
+    let bytes = unsafe { std::slice::from_raw_parts(ptr, out_len) };
+    let value = u64::from_le_bytes(bytes.try_into().unwrap());
+    unsafe { rustra::ffi::rustra_ffi_free(ptr, out_len) };
+    value
+}
+
+/// FFI 심볼이 현재 레지스트리 세대를 u64 LE 8바이트로 반환한다. live_schema 의
+/// `schemaGeneration` 필드와 같은 값을 가리킨다(TS 게이트가 소비).
+///
+/// 전역 FFI 컨텍스트는 idempotent(첫 register_ffi 승자 고정)라 병렬 실행 시
+/// FFI가 가리키는 패키지는 이 테스트가 만든 것이 아닐 수 있다. 따라서 "내
+/// register 가 FFI 세대를 올린다"는 단언은 불가능하다 — 그 진행 계약은 lib
+/// 단위 테스트 `schema_generation_advances_on_register_replace_unregister` 가
+/// 결정적으로 담당한다. 여기서는 **전역 선점과 무관하게 항상 참인** 계약만
+/// 검증한다: 두 경로(FFI 심볼, live_schema JSON)가 같은 전역 패키지를 읽으므로
+/// 세대 일치, 8바이트 LE 인코딩, 무구조 invoke 무영향은 어느 패키지가 전역이든
+/// 성립한다.
+#[test]
+fn schema_generation_ffi_tracks_registry_mutations() {
+    let g0 = invoke_schema_generation();
+
+    // 무구조 조회는 세대를 바꾸지 않는다.
+    let _ = invoke_json(br#"{"command":"echo","args":{"v":1}}"#);
+    assert_eq!(
+        invoke_schema_generation(),
+        g0,
+        "invoke must not advance generation"
+    );
+
+    // live_schema JSON의 schemaGeneration 필드와 일치 — 어느 패키지가 전역
+    // FFI 컨텍스트를 소유하든 두 경로는 같은 패키지를 읽는다.
+    let mut len: usize = 0;
+    let ptr = unsafe { rustra::ffi::rustra_ffi_get_schema(&mut len) };
+    assert!(!ptr.is_null(), "live_schema FFI must return a buffer");
+    let bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
+    let schema: serde_json::Value = serde_json::from_slice(bytes).unwrap();
+    unsafe { rustra::ffi::rustra_ffi_free(ptr, len) };
+    assert_eq!(
+        schema["schemaGeneration"].as_u64(),
+        Some(g0),
+        "live_schema must expose the same generation the FFI returns"
+    );
+}
+
+/// null out_len 가드 — get_schema 계약(F8)과 동일.
+#[test]
+fn schema_generation_null_out_len_returns_null() {
+    let ptr = unsafe { rustra::ffi::rustra_ffi_schema_generation(std::ptr::null_mut()) };
+    assert!(ptr.is_null());
+}

@@ -48,6 +48,28 @@ pub unsafe extern "C" fn rustra_ffi_get_schema(out_len: *mut usize) -> *mut u8 {
     }
 }
 
+/// 현재 등록된 패키지의 **스키마 세대** (u64 LE 8바이트) 를 반환한다.
+///
+/// dev 치환 동기화 계약 — register/replace/unregister 마다 단조 증가하며
+/// `live_schema()` 의 `schemaGeneration` 필드와 항상 같은 값을 가리킨다.
+/// 호스트(TS 엔진)는 자신이 캐시한 세대와 비교해 스테일 스키마/코덱 캐시를
+/// 감지하고 재동기화한다. 저비용 계약: read lock 1회 + u64 복사 — 동적 명령
+/// 호출 전 게이트로 쓰기에 충분히 싼다. 패키지가 미등록이면 0을 반환한다.
+///
+/// # Safety
+///
+/// `out_len` must be a valid, non-null write pointer (a null `out_len` returns
+/// a null pointer rather than dereferencing). Caller must free the returned
+/// buffer with `rustra_ffi_free`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_schema_generation(out_len: *mut usize) -> *mut u8 {
+    if out_len.is_null() {
+        return std::ptr::null_mut();
+    }
+    let generation = get_package().map_or(0, |pkg| pkg.schema_generation());
+    alloc_response(generation.to_le_bytes().to_vec(), out_len)
+}
+
 /// 현재 등록된 패키지의 **계약 해시** (SHA-256 hex) 를 UTF-8 바이트로 반환한다.
 ///
 /// `live_schema()` 를 `serde_json::to_string_pretty` 로 직렬화한 뒤 해시한다 — 이는

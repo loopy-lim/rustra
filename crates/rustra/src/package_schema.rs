@@ -105,6 +105,10 @@ impl Package {
         let mut root = json!({
             "packageId": id,
             "schemaVersion": state.schema_version,
+            // dev 치환 동기화 세대 — `rustra_ffi_schema_generation` FFI 와 같은 값.
+            // 레지스트리 구조가 바뀔 때만 증가하므로 frozen 정적 스키마의
+            // 직렬화에도 변함없는 상수다(하위호환 유지).
+            "schemaGeneration": state.schema_generation,
             // rustra enables schemars/serde_json `preserve_order`, so object
             // properties are emitted in the same declaration order postcard
             // uses on the wire. Consumers can distinguish this guaranteed
