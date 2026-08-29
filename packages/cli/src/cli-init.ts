@@ -3,11 +3,18 @@ import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { renderInitProjectFiles, templateVersions } from './init-template.js';
 import { cliManifest, cliVersion } from './cli-runtime.js';
+import { parseCliArgs } from './cli-arg-parser.js';
 
 export async function runInit(args: string[]): Promise<void> {
-  if (args.includes('--help') || args.includes('-h')) return;
-  const force = args.includes('--force');
-  const directories = args.filter((argument) => !argument.startsWith('--'));
+  const parsed = parseCliArgs(args, {
+    command: 'init',
+    valueFlags: [],
+    booleanFlags: ['force', 'help', 'h'],
+    allowPositionals: true,
+  });
+  if (parsed.flags.has('help') || parsed.flags.has('h')) return;
+  const force = parsed.flags.has('force');
+  const directories = parsed.positionals;
   if (directories.length !== 1)
     throw new Error('Provide one project directory. Usage: rustra init my-project [--force]');
   const root = resolve(directories[0]!);
