@@ -104,12 +104,17 @@ test('complex codec rejects invalid presence tags', () => {
 });
 
 test('complex codec rejects oneOf variants without stable keys', () => {
-  const codec = createComplexCodec({
-    commandId: 1,
-    inputSchema: { oneOf: [{ type: 'string' }, { type: 'integer' }] },
-    outputSchema: { type: 'null' },
-  });
-  assert.throws(() => codec.encode('value'), /stable key/);
+  // 컴파일 시점(코덱 생성)에 키 유도 실패가 조기 검출된다 — 이전에는
+  // encode 호출 시점이었다.
+  assert.throws(
+    () =>
+      createComplexCodec({
+        commandId: 1,
+        inputSchema: { oneOf: [{ type: 'string' }, { type: 'integer' }] },
+        outputSchema: { type: 'null' },
+      }),
+    /stable key/,
+  );
 });
 
 test('complex codec accepts explicit keys for anonymous oneOf variants', () => {
