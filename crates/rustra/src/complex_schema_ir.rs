@@ -130,6 +130,11 @@ pub(crate) enum IrBody {
 /// 정렬 완료된 oneOf 변형.
 #[derive(Debug)]
 pub(crate) struct IrVariant {
+    /// 정렬 키 — `variant_key` 유도 결과(explicit 순서 키 포함). 와이어 변형
+    /// 인덱스는 이 키의 사전순 순번이고, serde 유도 코드가 매칭하는 변형
+    /// 이름(또는 태그 값)도 schemars 스키마에서는 이 키와 일치한다 — 직결
+    /// 경로(complex_serde)가 인덱스↔이름 대응에 쓴다.
+    pub key: String,
     /// 변형 판별자 — 변형이 const 프로퍼티를 가진 struct 면 (필드명, 태그).
     pub discriminator: Option<(String, Value)>,
     /// 변형 매칭 결정.
@@ -359,7 +364,10 @@ impl<'a> Context<'a> {
         }
         let variants = ordered
             .into_iter()
-            .map(|(_key, variant)| self.compile_variant(variant, depth))
+            .map(|(key, variant)| {
+                let variant = self.compile_variant(variant, depth)?;
+                Ok(IrVariant { key, ..variant })
+            })
             .collect::<Result<Vec<_>>>()?;
         Ok(Arc::new(IrNode::OneOf { variants }))
     }
@@ -424,6 +432,7 @@ impl<'a> Context<'a> {
             IrBody::Node(self.compile_node(variant, depth + 1)?)
         };
         Ok(IrVariant {
+            key: String::new(),
             discriminator,
             matcher,
             body,
