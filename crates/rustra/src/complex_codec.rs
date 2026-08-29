@@ -2,8 +2,6 @@ use crate::Result;
 
 #[path = "complex_codec_decode.rs"]
 mod complex_codec_decode;
-#[path = "complex_codec_decode_object.rs"]
-mod complex_codec_decode_object;
 #[path = "complex_codec_encode.rs"]
 mod complex_codec_encode;
 #[path = "complex_codec_encode_object.rs"]
@@ -14,6 +12,8 @@ mod complex_codec_schema;
 mod complex_codec_variants;
 #[path = "complex_codec_wire.rs"]
 mod complex_codec_wire;
+#[path = "complex_schema_ir.rs"]
+mod complex_schema_ir;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ComplexCodecLimits {
@@ -30,11 +30,10 @@ impl ComplexCodecLimits {
     };
 }
 
-pub(crate) use complex_codec_decode::complex_decode;
-pub(crate) use complex_codec_encode_object::{complex_encode, complex_encode_into};
+pub(crate) use complex_codec_encode_object::CompiledComplex;
 pub(crate) use complex_codec_schema::complex_schema_supported;
 pub(crate) use complex_codec_variants::annotate_variant_order;
 
+// 호출당 컴파일 진입 — 테스트 전용 (핫 경로는 CompiledComplex 를 쓴다).
 #[cfg(test)]
-#[path = "complex_codec_tests.rs"]
-mod tests;
+pub(crate) use complex_codec_encode_object::{complex_encode, test_only_complex_decode};

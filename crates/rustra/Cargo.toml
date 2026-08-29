@@ -40,6 +40,10 @@ name = "tier_compare"
 harness = false
 
 [[bench]]
+name = "complex_route"
+harness = false
+
+[[bench]]
 name = "dynamic_registry"
 harness = false
 

@@ -1,4 +1,3 @@
-use super::complex_codec_schema::{error, type_name};
 use serde_json::{Map, Value, json};
 use std::collections::BTreeSet;
 
@@ -81,76 +80,5 @@ pub(crate) fn annotate_variant_order(value: &mut Value) {
     }
     for child in object.values_mut() {
         annotate_variant_order(child);
-    }
-}
-
-pub(crate) fn variants(schema: &Value) -> super::Result<Vec<(Value, String)>> {
-    let one_of = schema
-        .get("oneOf")
-        .and_then(Value::as_array)
-        .ok_or_else(|| error("enum schema is missing oneOf"))?;
-    let explicit = explicit_variant_keys(schema);
-    let mut result = one_of
-        .iter()
-        .enumerate()
-        .map(|(index, variant)| {
-            let key = explicit
-                .as_ref()
-                .and_then(|keys| keys.get(index).cloned())
-                .or_else(|| variant_key(variant, index))
-                .ok_or_else(|| error("enum variants require a stable key or explicit metadata"))?;
-            Ok((variant.clone(), key))
-        })
-        .collect::<super::Result<Vec<_>>>()?;
-    result.sort_by(|left, right| left.1.as_bytes().cmp(right.1.as_bytes()));
-    for pair in result.windows(2) {
-        if pair[0].1 == pair[1].1 {
-            return Err(error("enum variant keys must be unique"));
-        }
-    }
-    Ok(result)
-}
-
-pub(crate) fn discriminator(schema: &Value) -> Option<(String, Value)> {
-    schema
-        .get("properties")
-        .and_then(Value::as_object)
-        .and_then(|properties| {
-            properties
-                .iter()
-                .find_map(|(key, value)| value.get("const").map(|tag| (key.clone(), tag.clone())))
-        })
-}
-
-pub(crate) fn values_equal(left: &Value, right: &Value) -> bool {
-    left == right
-}
-
-pub(crate) fn matches_variant(schema: &Value, value: &Value) -> bool {
-    if let Some((key, tag)) = discriminator(schema) {
-        return value
-            .as_object()
-            .and_then(|object| object.get(&key))
-            .is_some_and(|candidate| values_equal(candidate, &tag));
-    }
-    if let Some(properties) = schema.get("properties").and_then(Value::as_object)
-        && properties.len() == 1
-    {
-        return value
-            .as_object()
-            .is_some_and(|object| object.contains_key(properties.keys().next().unwrap()));
-    }
-    if let Some(constant) = schema.get("const") {
-        return values_equal(constant, value);
-    }
-    if let Some(values) = schema.get("enum").and_then(Value::as_array)
-        && values.len() == 1
-    {
-        return values_equal(&values[0], value);
-    }
-    match type_name(schema) {
-        Some("string") => value.is_string(),
-        Some("object") => value.is_object(),
-        _ => false,
     }
 }

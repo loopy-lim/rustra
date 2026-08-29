@@ -20,7 +20,7 @@ fn round_trips_complex_map_option_and_enum() {
     };
     let bytes = complex_encode(&schema, &definitions, &value, limits).expect("encode");
     assert_eq!(
-        complex_decode(&schema, &definitions, &bytes, limits).expect("decode"),
+        test_only_complex_decode(&schema, &definitions, &bytes, limits).expect("decode"),
         value
     );
 }
@@ -37,7 +37,7 @@ fn round_trips_recursive_refs_and_enforces_depth_limit() {
     };
     let bytes = complex_encode(&schema, &definitions, &value, limits).expect("encode");
     assert_eq!(
-        complex_decode(&schema, &definitions, &bytes, limits).expect("decode"),
+        test_only_complex_decode(&schema, &definitions, &bytes, limits).expect("decode"),
         value
     );
     assert!(
@@ -58,7 +58,7 @@ fn round_trips_recursive_refs_and_enforces_depth_limit() {
 fn rejects_duplicate_map_keys() {
     let schema = json!({ "type":"object", "additionalProperties":{"type":"integer"} });
     assert!(
-        complex_decode(
+        test_only_complex_decode(
             &schema,
             &json!({}),
             &[2, 1, b'a', 0, 1, b'a', 0],
@@ -72,7 +72,9 @@ fn rejects_duplicate_map_keys() {
 fn rejects_invalid_presence_tags() {
     let schema =
         json!({ "type":"object", "properties":{"value":{"type":"integer"}}, "required":[] });
-    assert!(complex_decode(&schema, &json!({}), &[2], ComplexCodecLimits::DEFAULT).is_err());
+    assert!(
+        test_only_complex_decode(&schema, &json!({}), &[2], ComplexCodecLimits::DEFAULT).is_err()
+    );
 }
 
 #[test]
