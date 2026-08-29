@@ -10,7 +10,7 @@ Rust에서 명령을 한 번 정의하면, Node / Bun / Tauri / React Native 어
 > **English** — Define commands once in Rust, get type-safe TypeScript clients
 > for Node, Bun, Tauri, and React Native. Single Rust core, four host surfaces,
 > compact caller-buffer optimized binary wire (rkyv V2). Quick start: `cargo add rustra` +
-> `bunx --bun @rustra/cli init`. Full docs (Korean) below.
+> `bunx --bun @rustra/cli init my-project`. Full docs (Korean) below.
 
 ## 작동 방식
 

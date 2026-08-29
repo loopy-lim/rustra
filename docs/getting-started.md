@@ -16,11 +16,14 @@ cd my-project
 bun install
 bun run doctor
 bun run codegen      # schema.json + 완전한 TS/C++ 클라이언트 생성
-cargo run            # 생성된 echo 커맨드를 실제 호출
+bun run demo         # 생성된 Node 진입점으로 TypeScript에서 echo 호출
+cargo run            # Rust에서 직접 echo 호출
 ```
 
-스캐폴드는 Cargo 크레이트(echo 예제 커맨드 포함) + `generate` bin +
-package.json(codegen 스크립트)를 만든다.
+스캐폴드는 Cargo 크레이트(echo 예제 커맨드와 stdio 계약 프로브 포함) + `generate` bin +
+`src/index.ts` 첫 호출 예제 + Node 호스트 설정이 포함된 `rustra.json`과
+package.json(codegen/demo 스크립트)를 만든다. Node 진입점은 첫 호출 전에
+`__rustra_contract`로 Rust binary와 생성 TS의 계약 해시를 비교한다.
 
 ### 외부 프로젝트에서 사용
 
@@ -218,13 +221,14 @@ cargo run -p rustra-calculator-example --bin rustra-calculator-example
 2 + 3 = 5
 ```
 
-그리고 `generated/` 디렉토리에 4개 파일이 생성된다.
+그리고 `generated/` 디렉토리에 기본 5개 파일과 설정된 호스트 진입점이 생성된다.
 
 ---
 
 ## 3. 생성된 TypeScript 결과물
 
-`generated/` 디렉토리에는 다음 4개 파일이 생성된다.
+`generated/` 디렉토리에는 다음 기본 파일이 생성된다. `node`, `bun`, `tauri`,
+`reactNative`를 설정하면 해당 호스트 진입점도 추가된다.
 
 ### types.ts — 타입 정의
 
@@ -251,18 +255,22 @@ export type AddNumbersOutput = {
 ### commands.ts — 커맨드 헬퍼 함수
 
 ```ts
-import type { AddNumbersInput, AddNumbersOutput, EngineClient } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput } from './types.js';
+import { invokeGeneratedFields2 } from '@rustra/types';
 
-export function addNumbers(
-  engine: EngineClient,
-  input: AddNumbersInput,
-): Promise<AddNumbersOutput> {
-  return engine.invoke<AddNumbersOutput>('addNumbers', input);
+export function addNumbers(input: AddNumbersInput): Promise<AddNumbersOutput> {
+  return invokeGeneratedFields2<AddNumbersInput, AddNumbersOutput>(
+    1,
+    'addNumbers',
+    input,
+    input.a,
+    input.b,
+  );
 }
 ```
 
 - 각 `#[command]` 함수마다 TypeScript 함수가 하나씩 생성된다.
-- `engine` 파라미터로 `EngineClient`를 받아 `invoke`를 호출한다.
+- 생성된 호스트 진입점이 `configureLazy()`를 등록하므로 호출 전에 엔진을 직접 전달하지 않는다.
 - 커맨드명(`addNumbers`), 입력 타입, 출력 타입이 모두 타입 안전하게 연결된다.
 
 ### contract.ts — 계약 해시
@@ -312,11 +320,9 @@ export const GENERATED_CONTRACT_HASH =
 생성된 TypeScript 계약은 호스트에 종속되지 않는다. 일반 앱은 플랫폼 진입점이
 `EngineClient`를 lazy 설치하므로 엔진을 직접 만들거나 `configure()`하지 않는다.
 
-rustra는 4개의 공식 어댑터 패키지를 제공한다.
-
 ### Node
 
-`rustra.json`에 빈 Node 블록을 추가한다.
+`rustra.json`에 Node 블록을 추가한다. `rustra init`은 이 설정을 자동으로 만든다.
 
 ```json
 { "schema": "./generated/schema.json", "output": "./generated", "node": {} }
@@ -332,7 +338,9 @@ const result = await addNumbers({ a: 20, b: 22 });
 먼저 사용하고 Debug로 폴백하며, transpile 뒤에는 현재 작업 디렉터리의 부모에서 같은
 Cargo target을 찾는다. 배포 디렉터리가 다르면 `RUSTRA_NODE_BINARY`를 지정한다.
 표준 runtime은 `{command, args}` → `{ok, result}` one-shot stdio protocol을 구현해야
-한다. calculator의 `run_invoke_stdio`가 참조 구현이다.
+한다. 여기에 `__rustra_contract` 예약 명령이 현재 계약 해시를 문자열로 반환해야
+생성 Node 진입점의 fail-fast 검사가 통과한다. calculator와 `rustra init` 스캐폴드의
+`run_invoke_stdio`가 참조 구현이다.
 
 **커스텀 transport (napi-rs 등):**
 
@@ -690,10 +698,11 @@ fn divide(input: DivideInput) -> Result<DivideOutput> {
 커맨드 호출이 실패하면 어댑터가 에러를 throw한다. Tauri 어댑터는 `RustraCommandError` 클래스를 제공한다:
 
 ```ts
-import { RustraCommandError } from '@rustra/tauri';
+import { RustraCommandError } from '@rustra/types';
+import { divide } from '../generated/node.js';
 
 try {
-  const result = await divide(engine, { a: 10, b: 0 });
+  const result = await divide({ a: 10, b: 0 });
 } catch (e) {
   if (e instanceof RustraCommandError) {
     console.log(e.code); // "division.by_zero"

@@ -11,7 +11,7 @@
 - **resolver**: `"3"`
 - **edition**: `"2024"` (workspace.package 통해 일괄 적용)
 - **license**: MIT
-- **version**: 0.1.0
+- **version**: 릴리스 시점의 workspace `Cargo.toml`에서 관리한다. 이 문서는 버전을 고정하지 않는다.
 
 ### Workspace Members
 

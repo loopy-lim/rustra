@@ -57,7 +57,11 @@ async function main() {
       join(root, 'package.json'),
       JSON.stringify(createConsumerManifest({ typesArchive, cliArchive, reactNativeArchive })),
     );
-    execFileSync('bun', ['install', '--cwd', root, '--no-progress'], { stdio: 'pipe' });
+    execFileSync(
+      'bun',
+      ['install', '--cwd', root, '--cache-dir', join(root, 'bun-cache'), '--no-progress'],
+      { stdio: 'pipe' },
+    );
 
     const types = await import(
       pathToFileURL(join(root, 'node_modules/@rustra/types/dist/index.js')).href,

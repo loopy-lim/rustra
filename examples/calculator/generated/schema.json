@@ -497,7 +497,8 @@
             "minimum": 0.0
           }
         }
-      }
+      },
+      "description": "u64/u32 필드 — plain varint(uvar) 와이어 고정(과거 zigzag 버그 수정 증명)."
     },
     {
       "name": "greet",
@@ -864,7 +865,8 @@
             "type": "string"
           }
         }
-      }
+      },
+      "description": "런타임 registry 제어 명령. op:\n`register` / `unregister` / `replacePing` / `replaceAdd` / `restoreAdd` / `freeze` / `state`."
     },
     {
       "name": "scoreTotal",
@@ -905,7 +907,8 @@
             "format": "int64"
           }
         }
-      }
+      },
+      "description": "HashMap<String, i64>(동적 맵) — count + (key,value)* 와이어 고정."
     },
     {
       "name": "secureCompute",
@@ -985,7 +988,8 @@
             "minimum": 0.0
           }
         }
-      }
+      },
+      "description": "Vec<u8>(postcard bytes) 입력 + u32 출력 — plain varint 와이어 고정."
     },
     {
       "name": "span",
@@ -1031,7 +1035,8 @@
             "format": "int64"
           }
         }
-      }
+      },
+      "description": "(String, i64) 튜플 — i64 때문에 complex-binary count + elements 와이어."
     },
     {
       "name": "sumList",

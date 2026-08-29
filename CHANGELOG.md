@@ -5,6 +5,13 @@
 
 ## Unreleased
 
+### Changed
+
+- CLI codegen/dev 경로를 책임별 모듈로 분리하고, 잘못된 설정·레이아웃·기존 파일
+  덮어쓰기를 조기에 진단한다.
+- 생성물 drift 게이트, schema diff, Rust command 문서의 TypeScript JSDoc 전달,
+  opt-in `RUSTRA_DEBUG` wire 진단을 보강했다.
+
 ## 0.2.0 (2026-08-20)
 
 ### Removed

@@ -76,7 +76,7 @@ bun run doctor -- --json
 
 doctor는 읽기 전용이며 다음 층을 독립적으로 확인합니다.
 
-- Bun 1.4와 동기화된 `@rustra/*` 0.4.0 release line
+- 현재 checkout의 lockfile과 로컬 `@rustra/*` 패키지 조합
 - Rust schema, TypeScript entry, C++ codec, build fingerprint 동기화
 - iOS/Android autolinking과 Pods
 - iOS static archive 최신성, architecture, 필수 FFI symbol

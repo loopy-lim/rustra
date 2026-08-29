@@ -19,14 +19,7 @@
   "files": [
     "LICENSE",
     "native/**/*",
-    "dist/index.d.ts",
-    "dist/index.d.ts.map",
-    "dist/index.js",
-    "dist/index.js.map",
-    "dist/utf8.d.ts",
-    "dist/utf8.d.ts.map",
-    "dist/utf8.js",
-    "dist/utf8.js.map"
+    "dist"
   ],
   "scripts": {
     "build": "tsc",

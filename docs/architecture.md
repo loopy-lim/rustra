@@ -85,7 +85,7 @@ export type EngineClient = {
 | `packages/bun`          | `createBunBootstrap(options)`            | lazy `EngineClient`                 | `packages/bun/src/index.ts`          |
 | `packages/tauri`        | `createTauriBootstrap()`                 | lazy `EngineClient`                 | `packages/tauri/src/index.ts`        |
 | `packages/react-native` | generated bootstrap + `createFastEngine` | `RkyvV2Engine`                      | `packages/react-native/src/index.ts` |
-| `packages/react-native` | `createReactNativeEngine(native)`        | `ReactNativeEngine` + `invokeBatch` | `packages/react-native/src/index.ts` |
+| `packages/react-native` | `createReactNativeEngine(native)`        | JSON `EngineClient` + `invokeBatch` | `packages/react-native/src/index.ts` |
 
 모든 반환 타입은 구조적으로 `EngineClient`의 `invoke<T>`를 제공하며, 어댑터 팩토리는
 Promise 기반 `invokeBatch`도 보장한다. 진행 중 `AbortSignal`은 JSON/동기 경로에서
@@ -94,17 +94,21 @@ Promise 기반 `invokeBatch`도 보장한다. 진행 중 `AbortSignal`은 JSON/�
 ### command helper 사용 예시
 
 `commands.ts`에 생성된 각 command helper는 엔진을 직접 받지 않는다 —
-`@rustra/types`의 글로벌 `invoke()`를 호출한다. 기본 플랫폼 진입점은
+`@rustra/types`의 생성 경로(`invokeGenerated*`)를 호출한다. 기본 플랫폼 진입점은
 `configureLazy()`를 등록하고 첫 호출이 엔진을 한 번만 설치한다. 수동
 `configure(engine)`는 명시적 override다.
 
 ```ts
-// examples/calculator/generated/commands.ts (자동 생성됨)
-import { invoke } from '@rustra/types';
+// examples/calculator/generated/commands.ts (자동 생성됨, 일부 단순화)
+import { createGeneratedFields2 } from '@rustra/types';
 
-export function addNumbers(input: AddNumbersInput): Promise<AddNumbersOutput> {
-  return invoke<AddNumbersOutput>('addNumbers', input);
-}
+export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutput>(
+  1,
+  'addNumbers',
+  'a',
+  'b',
+  'addNumbers',
+);
 ```
 
 사용 예시 (Tauri):
@@ -175,10 +179,10 @@ packages/
 ├── bun/            → generated bun.ts + createBunBootstrap
 ├── tauri/          → generated tauri.ts + createTauriBootstrap
 └── react-native/   → generated react-native.ts + createRustraBootstrap
-                     createReactNativeEngine(native): ReactNativeEngine (low-level JSON path)
+                     createReactNativeEngine({ invoke(ArrayBuffer) }): EngineClient (low-level JSON path)
 ```
 
-각 adapter 패키지는 서로를 import하지 않으며, host-specific 패키지를 직접 import하지도 않는다. 호출자가 transport 객체를 생성하여 주입하는 방식이다.
+각 adapter 패키지는 서로를 import하지 않으며, host-specific 패키지를 직접 import하지도 않는다. 저수준 엔진 팩토리는 transport를 주입받고, 생성된 host entry는 필요한 transport와 runtime을 lazy하게 연결한다.
 
 ### 예시 프로젝트
 
@@ -198,7 +202,7 @@ examples/
 │   └── src-tauri/src/main.rs   # tauri_support::register()로 Package 등록
 │
 └── react-native-calculator/    # Expo React Native 예시
-    ├── App.tsx                 # createReactNativeEngine → addNumbers 사용
+    ├── App.tsx                 # generated/react-native.ts → addNumbers 사용
     └── modules/rustra-calculator  # 네이티브 모듈 (Expo module)
 ```
 
@@ -293,8 +297,8 @@ pub fn invoke_json(&self, name: &str, params: Value) -> Result<Value>
  │  addNumbers({ a: 1, b: 2 })                             │
  │          │                                               │
  │          ▼                                               │
- │  invoke<AddNumbersOutput>('addNumbers', input)          │
- │  (글로벌 — configure(engine) 로 설치된 엔진 사용)        │
+ │  invokeGenerated*(...)                                  │
+ │  (글로벌 — 생성된 host entry 또는 configure(engine))     │
  │          │                                               │
  │          ▼                                               │
  │  host adapter (createXxxEngine)                          │
