@@ -585,6 +585,58 @@ test('generation gate: async (invokeAsync) path re-syncs stale cache after subst
   );
 });
 
+test('generation gate: malformed generation buffer degrades to per-call re-judgment, not breakage', async () => {
+  // 구/버그 네이티브가 8바이트 미만 등 malformed 버퍼를 돌려주면 readGeneration 이
+  // throw 한다 — 이것이 getLiveSchema/lookup 밖으로 새어나가면 (1) 캐시는 갱신됐는데
+  // 조회가 실패해 spurious command.not_found 가 나오거나 (2) public refreshLiveSchema
+  // 가 던지는 새 실패 모드가 된다. swallow 계약: 세대 불명 → 게이트 재판정, 엔진은
+  // 계속 동작한다.
+  let schemaCalls = 0;
+  const native = generationTestNative({
+    schema: () => {
+      schemaCalls += 1;
+      return schemaBytesWithGeneration([{ name: 'genProbe', commandId: 9 }], 3);
+    },
+    generation: () => new ArrayBuffer(4), // malformed — u64 LE 가 아님
+    invoke: (payload) => {
+      assert.equal(new DataView(payload).getUint16(0, true), 9);
+      return tier3Success({ v: 1 });
+    },
+  });
+  const engine = createRkyvV2Engine(native, new Map());
+
+  // public 리프레시도 던지지 않는다.
+  assert.equal(engine.refreshLiveSchema().get('genProbe')?.commandId, 9);
+  // 동적 invoke 가 정상 동작한다 (세대 불명이 dispatch 를 깨지 않는다).
+  await engine.invoke('genProbe', {});
+  await engine.invoke('genProbe', {});
+  assert.ok(schemaCalls >= 1, 'schema lookups must still succeed despite malformed generation');
+});
+
+test('generation gate: first invoke after engine creation skips the gate re-fetch', async () => {
+  // engine 생성 시 schemaVersion 협상이 live schema 를 미리 읽는다(T2). 그때 세대도
+  // 캐시돼 있으므로 첫 invoke 의 게이트는 FFI 세대 비교만으로 통과해야 한다 —
+  // 재조회(getSchema 2회째)가 없어야 캐시 계약이 성립한다.
+  let schemaCalls = 0;
+  const native = generationTestNative({
+    schema: () => {
+      schemaCalls += 1;
+      return schemaBytes([{ name: 'eagerDyn', commandId: 4 }], 1);
+    },
+    generation: () => generationBytes(1),
+    invoke: () => tier3Success({ v: 1 }),
+  });
+  const engine = createRkyvV2Engine(native, new Map(), { schemaVersion: 1 });
+  assert.equal(schemaCalls, 1, 'precondition: engine creation reads the live schema once');
+
+  await engine.invoke('eagerDyn', {});
+  assert.equal(
+    schemaCalls,
+    1,
+    'first invoke must not re-fetch the live schema when generations match',
+  );
+});
+
 // ── createRkyvV2Engine: B1 (C++ invokeTyped fast path) ──────
 
 /**
