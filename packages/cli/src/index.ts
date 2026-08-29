@@ -2,7 +2,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { basename, resolve, dirname, relative } from 'node:path';
 import { existsSync, watch, readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
-import { execFileSync, execSync } from 'node:child_process';
+import { execFileSync, execSync, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import type { PackageSchema } from './schema.js';
@@ -166,7 +166,10 @@ pub fn package() -> Package {
   "packageManager": "bun@1.4.0",
   "type": "module",
   "scripts": {
-    "codegen": "cargo run --bin generate && rustra generate --config rustra.json"
+    "doctor": "rustra doctor --config rustra.json",
+    "codegen": "rustra codegen --config rustra.json",
+    "codegen:check": "rustra codegen --config rustra.json --check",
+    "dev": "rustra dev --config rustra.json"
   },
   "devDependencies": {
     "@rustra/cli": "${v.npmCliCaret}",
@@ -177,7 +180,11 @@ pub fn package() -> Package {
 
   const rustraJson = `{
   "schema": "./generated/schema.json",
-  "output": "./src/generated"
+  "output": "./src/generated",
+  "codegen": {
+    "rustManifest": "./Cargo.toml",
+    "rustBinary": "generate"
+  }
 }
 `;
 
@@ -379,6 +386,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (args[0] === 'codegen') {
+    await runCodegen(args.slice(1));
+    return;
+  }
+
   if (args[0] === 'init') {
     await runInit(args.slice(1));
     return;
@@ -414,6 +426,88 @@ export async function runDoctor(args: string[]): Promise<void> {
   });
   console.log(options.format === 'json' ? formatDoctorJson(report) : formatDoctorText(report));
   process.exitCode = doctorExitCode(report, options.strict);
+}
+
+interface CodegenOptions {
+  configPath?: string;
+  check?: boolean;
+}
+
+function parseCodegenArgs(args: string[]): CodegenOptions {
+  const options: CodegenOptions = {};
+  for (let index = 0; index < args.length; index += 1) {
+    switch (args[index]) {
+      case '--config':
+        options.configPath = args[++index];
+        break;
+      case '--check':
+        options.check = true;
+        break;
+      default:
+        throw new Error(`Unknown codegen option: ${args[index]}`);
+    }
+  }
+  if (!options.configPath) throw new Error('codegen requires --config <path>');
+  return options;
+}
+
+function spawnInherit(cmd: string, args: string[], cwd: string): Promise<void> {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(cmd, args, { cwd, stdio: 'inherit' });
+    child.on('error', reject);
+    child.on('exit', (code, signal) => {
+      if (code === 0) {
+        resolvePromise();
+      } else {
+        reject(new Error(`${cmd} ${signal ? `terminated by ${signal}` : `exit ${code}`}`));
+      }
+    });
+  });
+}
+
+export function selectCodegenBinary(
+  targets: Array<{ name: string; kind?: string[]; crate_types?: string[] }>,
+  requested?: string,
+): string {
+  const binaries = targets.filter(
+    (target) => target.kind?.includes('bin') || target.crate_types?.includes('bin'),
+  );
+  const selected = requested
+    ? binaries.find((target) => target.name === requested)
+    : binaries.find((target) => target.name === 'generate') ??
+      (binaries.length === 1 ? binaries[0] : undefined);
+  if (!selected) {
+    const names = binaries.map((target) => target.name).sort().join(', ') || 'none';
+    throw new Error(`codegen.rust_binary_ambiguous: found ${names}; set codegen.rustBinary`);
+  }
+  return selected.name;
+}
+
+export async function runCodegen(args: string[]): Promise<void> {
+  const options = parseCodegenArgs(args);
+  const configPath = resolve(options.configPath!);
+  const config = readConfigSync(configPath);
+  const target = resolveCodegenTarget(configPath, config);
+  console.log(
+    `[rustra] Rust schema: cargo run --manifest-path ${target.manifestPath} ` +
+      `--package ${target.packageName} --bin ${target.binaryName}`,
+  );
+  await spawnInherit(
+    'cargo',
+    [
+      'run',
+      '--quiet',
+      '--manifest-path',
+      target.manifestPath,
+      '--package',
+      target.packageName,
+      '--bin',
+      target.binaryName,
+    ],
+    target.cwd,
+  );
+  console.log(`[rustra] TypeScript/C++: generate --config ${configPath}`);
+  await runGenerate(['--config', configPath, ...(options.check ? ['--check'] : [])]);
 }
 
 /**
@@ -506,6 +600,7 @@ Usage:
   rustra generate --schema <path> --output <dir> --cpp-output <dir>
   rustra generate --config <path>
   rustra generate --watch --schema <path> --output <dir>
+  rustra codegen --config <path> [--check]
   rustra init <dir>
   rustra diff --old <schema.v1.json> --new <schema.json> [--format json]
   rustra doctor [--config <path>] [--format text|json] [--strict]
@@ -519,6 +614,7 @@ Options:
   --positional       Also emit positional-facade.ts (P2) — direct invokeTyped wrappers
   --config <path>    Path to rustra.json config file
   --watch            Watch schema file for changes and regenerate
+  --check            (generate/codegen) verify generated bytes without writing TS/C++/RN files
   --old <path>       (diff) old schema version to compare from
   --new <path>       (diff) new schema version to compare against
   --format <fmt>     (diff) 'text' (default) or 'json' (machine-readable DiffResult)
@@ -534,6 +630,7 @@ Examples:
   rustra generate --watch --config rustra.json
   rustra generate --schema ./gen/schema.json --output ./src/generated --cpp-output ./ios
   rustra generate --config rustra.json  # includes React Native when configured
+  rustra codegen --config rustra.json
   rustra diff --old ./generated/schema.v1.json --new ./generated/schema.json
   rustra doctor --config rustra.json --format json
   rustra dev --backend ./backend --app ./app
@@ -547,6 +644,7 @@ interface GenerateOptions {
   cppOutputPath?: string;
   /** (P2) positional-facade.ts 추가 생성 — RN JSI invokeTyped 직접 호출 래퍼. */
   positional?: boolean;
+  check?: boolean;
 }
 
 export async function runGenerate(args: string[]): Promise<void> {
@@ -819,6 +917,9 @@ function parseGenerateArgs(args: string[]): GenerateOptions {
       case '--positional':
         options.positional = true;
         break;
+      case '--check':
+        options.check = true;
+        break;
     }
   }
 
@@ -830,6 +931,11 @@ interface RustraConfig {
   output: string;
   cppOutput?: string;
   positional?: boolean;
+  codegen?: {
+    rustManifest?: string;
+    rustPackage?: string;
+    rustBinary?: string;
+  };
   reactNative?: {
     moduleDir?: string;
     rustManifest?: string;
@@ -863,6 +969,36 @@ type CargoMetadata = {
     }>;
   }>;
 };
+
+export function resolveCodegenTarget(
+  configPath: string,
+  config: RustraConfig,
+): { manifestPath: string; packageName: string; binaryName: string; cwd: string } {
+  const cwd = dirname(resolve(configPath));
+  const manifestPath = config.codegen?.rustManifest
+    ? resolve(cwd, config.codegen.rustManifest)
+    : findCargoManifest(cwd);
+  if (!manifestPath) {
+    throw new Error('codegen.rust_manifest_missing: set codegen.rustManifest in rustra.json');
+  }
+  const metadata = readCargoMetadata(manifestPath);
+  const candidates = config.codegen?.rustPackage
+    ? metadata.packages.filter((candidate) => candidate.name === config.codegen?.rustPackage)
+    : metadata.packages.filter((candidate) => resolve(candidate.manifest_path) === resolve(manifestPath));
+  if (candidates.length !== 1) {
+    const names = candidates.map((candidate) => candidate.name).sort().join(', ') || 'none';
+    throw new Error(
+      `codegen.rust_package_ambiguous: found ${names}; set codegen.rustPackage`,
+    );
+  }
+  const packageInfo = candidates[0]!;
+  return {
+    manifestPath: resolve(manifestPath),
+    packageName: packageInfo.name,
+    binaryName: selectCodegenBinary(packageInfo.targets, config.codegen?.rustBinary),
+    cwd,
+  };
+}
 
 type HostEntries = {
   appRoot: string;
@@ -1209,6 +1345,26 @@ function readConfigSync(configPath: string): RustraConfig {
       'Config file must have "schema" and "output" fields. Example:\n' +
         '{\n  "schema": "./generated/schema.json",\n  "output": "./src/generated"\n}',
     );
+  }
+  const codegen = config.codegen;
+  if (codegen !== undefined) {
+    if (typeof codegen !== 'object' || codegen === null || Array.isArray(codegen)) {
+      throw new Error('Config codegen must be an object');
+    }
+    if (
+      codegen.rustManifest !== undefined &&
+      (typeof codegen.rustManifest !== 'string' ||
+        codegen.rustManifest.length === 0 ||
+        /[\0\r\n]/.test(codegen.rustManifest))
+    ) {
+      throw new Error('Config codegen.rustManifest must be a non-empty safe path');
+    }
+    for (const field of ['rustPackage', 'rustBinary'] as const) {
+      const value = codegen[field];
+      if (value !== undefined && (typeof value !== 'string' || !/^[A-Za-z0-9_-]+$/.test(value))) {
+        throw new Error(`Config codegen.${field} must be a Cargo identifier`);
+      }
+    }
   }
   const rn = config.reactNative;
   if (rn !== undefined) {

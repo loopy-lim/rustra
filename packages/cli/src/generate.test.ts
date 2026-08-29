@@ -24,6 +24,7 @@ import {
   parsePackageSchema,
   renderReactNativeModule,
   renderInitProjectFiles,
+  selectCodegenBinary,
   selectReactNativeCargoTarget,
   templateVersions,
 } from './index.js';
@@ -1601,7 +1602,25 @@ test('init scaffold has a real shared package and executable codegen bin', () =>
   assert.deepEqual(JSON.parse(files.rustraJson), {
     schema: './generated/schema.json',
     output: './src/generated',
+    codegen: {
+      rustManifest: './Cargo.toml',
+      rustBinary: 'generate',
+    },
   });
+  assert.match(files.packageJson, /"doctor": "rustra doctor --config rustra\.json"/);
+  assert.match(files.packageJson, /"codegen": "rustra codegen --config rustra\.json"/);
+  assert.match(files.packageJson, /"codegen:check": "rustra codegen --config rustra\.json --check"/);
+  assert.match(files.packageJson, /"dev": "rustra dev --config rustra\.json"/);
+});
+
+test('selectCodegenBinary prefers generate, accepts one binary, and rejects ambiguity', () => {
+  const target = (name: string) => ({ name, kind: ['bin'], crate_types: ['bin'] });
+  assert.equal(selectCodegenBinary([target('app'), target('generate')]), 'generate');
+  assert.equal(selectCodegenBinary([target('app')]), 'app');
+  assert.throws(
+    () => selectCodegenBinary([target('app'), target('worker')]),
+    /codegen\.rust_binary_ambiguous.*app.*worker/s,
+  );
 });
 
 test('React Native entry owns lazy native setup and re-exports generated commands', () => {
