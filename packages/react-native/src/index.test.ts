@@ -425,15 +425,13 @@ test('createFastEngine forwards onContractMismatch (degraded mode entry)', () =>
 test('createFastEngine dynamic commands: legacy JSI (no generation) keeps existing cache behavior', async () => {
   let schemaCalls = 0;
   const schema = () =>
-    encoder
-      .encode(
-        JSON.stringify({
-          packageId: 't',
-          schemaVersion: 1,
-          commands: [{ name: 'ping', commandId: 9 }],
-        }),
-      )
-      .buffer as ArrayBuffer;
+    encoder.encode(
+      JSON.stringify({
+        packageId: 't',
+        schemaVersion: 1,
+        commands: [{ name: 'ping', commandId: 9 }],
+      }),
+    ).buffer as ArrayBuffer;
   const native: RustraJSINative = {
     invoke: () => new ArrayBuffer(0),
     invokeRkyvV2: (payload) => {
@@ -463,16 +461,14 @@ test('createFastEngine dynamic commands: legacy JSI (no generation) keeps existi
 test('createFastEngine dynamic commands: generation-exposing JSI re-syncs after substitution', async () => {
   const generationHolder: { value: number } = { value: 1 };
   const schemaHolder: { current: ArrayBuffer } = {
-    current: encoder
-      .encode(
-        JSON.stringify({
-          packageId: 't',
-          schemaVersion: 1,
-          schemaGeneration: 1,
-          commands: [{ name: 'ping', commandId: 9 }],
-        }),
-      )
-      .buffer as ArrayBuffer,
+    current: encoder.encode(
+      JSON.stringify({
+        packageId: 't',
+        schemaVersion: 1,
+        schemaGeneration: 1,
+        commands: [{ name: 'ping', commandId: 9 }],
+      }),
+    ).buffer as ArrayBuffer,
   };
   const generation = () => {
     const ab = new ArrayBuffer(8);
@@ -500,16 +496,14 @@ test('createFastEngine dynamic commands: generation-exposing JSI re-syncs after 
   assert.deepEqual(seenIds, [9], 'precondition: initial dispatch uses fresh schema');
 
   // 치환(unregister + register → 새 commandId) — JS 측 동기화 없이 재호출.
-  schemaHolder.current = encoder
-    .encode(
-      JSON.stringify({
-        packageId: 't',
-        schemaVersion: 1,
-        schemaGeneration: 2,
-        commands: [{ name: 'ping', commandId: 10 }],
-      }),
-    )
-    .buffer as ArrayBuffer;
+  schemaHolder.current = encoder.encode(
+    JSON.stringify({
+      packageId: 't',
+      schemaVersion: 1,
+      schemaGeneration: 2,
+      commands: [{ name: 'ping', commandId: 10 }],
+    }),
+  ).buffer as ArrayBuffer;
   generationHolder.value = 2;
   await engine.invoke('ping', {});
   assert.deepEqual(seenIds, [9, 10], 'gate must re-sync the stale commandId after substitution');
