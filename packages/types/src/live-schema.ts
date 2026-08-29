@@ -11,7 +11,12 @@ export type LiveSchemaEntry = {
 
 /** createRkyvV2Engine 이 요구하는 네이티브 인터페이스 (invokeRkyvV2 + live schema). */
 export type RkyvV2SchemaNative = {
-  invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
+  /**
+   * 응답은 소유 ArrayBuffer 또는 재사용 버퍼의 뷰(ArrayBufferView)다. 뷰는
+   * 이 호출의 디코드가 끝날 때까지만 유효하다(다음 invoke 가 덮어쓴다) —
+   * dispatch 는 응답을 동기로 즉시 디코드하므로 안전하다.
+   */
+  invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer | ArrayBufferView;
   getSchema?(): ArrayBuffer;
   /**
    * 네이티브 빌드의 계약 해시(SHA-256 hex)를 반환한다 (F5 opt-in 검증용).

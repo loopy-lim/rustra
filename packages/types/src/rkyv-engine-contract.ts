@@ -11,7 +11,7 @@ import type { RkyvV2Codec } from './public.js';
  */
 export function tier2Outcome<T>(
   codec: RkyvV2Codec<unknown, unknown>,
-  frame: ArrayBuffer,
+  frame: ArrayBuffer | ArrayBufferView,
 ): { ok: true; value: T } | { ok: false; error: Error } {
   let response: ReturnType<RkyvV2Codec<unknown, unknown>['decode']>;
   try {

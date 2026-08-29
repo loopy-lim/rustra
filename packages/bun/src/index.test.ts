@@ -14,7 +14,10 @@ const addNumbersCodec: RkyvV2Codec<{ a: number; b: number }, { value: number }> 
     return Uint8Array.from([1, 0, zigzag(a), zigzag(b)]).buffer;
   },
   decode(buffer) {
-    const bytes = new Uint8Array(buffer);
+    const bytes =
+      buffer instanceof ArrayBuffer
+        ? new Uint8Array(buffer)
+        : new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
     if (bytes[0] !== 1) return { ok: false, error: { code: 'invoke.failed', message: 'failed' } };
     return { ok: true, result: { value: bytes[8]! / 2 } };
   },
@@ -40,7 +43,10 @@ const benchEchoBytesCodec = (): RkyvV2Codec<Uint8Array, Uint8Array> => ({
     return out.slice(0, w + args.length).buffer;
   },
   decode(buffer) {
-    const bytes = new Uint8Array(buffer);
+    const bytes =
+      buffer instanceof ArrayBuffer
+        ? new Uint8Array(buffer)
+        : new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
     if (bytes[0] !== 1) return { ok: false, error: { code: 'invoke.failed', message: 'failed' } };
     let v = 0;
     let shift = 0;
@@ -284,6 +290,30 @@ test('createBunFfiEngine dispatches rkyv V2 through the caller-buffer into bindi
     await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
     assert.equal(kept.length, 600);
     assert.deepEqual(kept, benchEchoBytes(600));
+  } finally {
+    runtime.close();
+  }
+});
+
+test('createBunFfiEngine decodes caller-buffer responses without a copy', async () => {
+  const runtime = await createBunFfiEngine({
+    libraryCandidates: [resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`)],
+    rkyvV2Codecs: testRegistry,
+  });
+  try {
+    const engine = runtime.engine;
+    // 작은 응답은 재사용 caller 버퍼의 backing ArrayBuffer 를 그대로 돌려받는다
+    // (slice 복사 없음 — 트랙 C3). 프레임은 오프셋 0이고 길이는 프레임 내부
+    // 구조(varint/len 접두어)가 전달하므로 byteLength 가 capacity 여도 디코드는
+    // 정확하다. 버퍼는 이 호출의 동기 디코드 동안만 유효하다(다음 invoke 가
+    // 덮어씀).
+    const small = await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
+    assert.equal(small.value, 42);
+    // 이어지는 호출들이 같은 재사용 버퍼를 덮어써도 결과 오염이 없어야 한다.
+    for (let i = 0; i < 3; i += 1) {
+      const again = await engine.invoke<{ value: number }>('addNumbers', { a: i, b: 42 });
+      assert.equal(again.value, 42 + i);
+    }
   } finally {
     runtime.close();
   }

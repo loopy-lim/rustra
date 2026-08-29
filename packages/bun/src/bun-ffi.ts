@@ -69,7 +69,7 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
   const callerBufferCapacity = 512;
   const callerBuffer = new Uint8Array(callerBufferCapacity);
   const statusOverflow = 0xffff_ffff_ffff_ffffn;
-  const invokeRkyvV2Into = (payload: ArrayBuffer): ArrayBuffer => {
+  const invokeRkyvV2Into = (payload: ArrayBuffer): ArrayBuffer | ArrayBufferView => {
     const request = new Uint8Array(payload);
     outLength[0] = 0n;
     const status = handle.symbols.rustra_ffi_invoke_rkyv_v2_into(
@@ -102,8 +102,8 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
           `Bun FFI caller-buffer retry failed (status ${retried})`,
         );
       }
-      if (retried === BigInt(needed)) return large.buffer as ArrayBuffer;
-      return large.slice(0, Number(retried)).buffer as ArrayBuffer;
+      if (retried === BigInt(needed)) return large.buffer;
+      return large.subarray(0, Number(retried));
     }
     if (status === 0n) return new ArrayBuffer(0);
     if (status > callerBufferCapacity) {
@@ -112,7 +112,15 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
         `Bun FFI caller-buffer status exceeds capacity: ${status}`,
       );
     }
-    return callerBuffer.slice(0, Number(status)).buffer as ArrayBuffer;
+    // 재사용 caller 버퍼의 zero-copy 공유 — 응답 복사 1회 제거(트랙 C3). 프레임은
+    // 오프셋 0부터 기록되므로 backing ArrayBuffer 를 그대로 돌려준다(뷰가 아니라
+    // ArrayBuffer 인 이유: 생성된 코덱이 `new DataView(buf)` 로 ArrayBuffer 를
+    // 요구한다 — packages/cli 금지 목록상 제너레이터는 못 고친다). byteLength 는
+    // capacity(512)이고 프레임 길이는 프레임 내부 구조(postcard varint/tier3 len
+    // 접두어)가 전달한다 — 완결 프레임에서 디코드는 프레임 내부에서 종료된다.
+    // 공유 버퍼는 이 호출의 동기 디코드가 끝날 때까지만 유효하고, 다음 invoke 가
+    // 같은 버퍼를 덮어쓴다(dispatch 계약 — 응답은 즉시 디코드됨).
+    return callerBuffer.buffer;
   };
   const native = {
     invokeRkyvV2: (payload: ArrayBuffer) => invokeRkyvV2Into(payload),
