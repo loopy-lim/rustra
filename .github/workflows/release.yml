@@ -65,10 +65,12 @@ jobs:
         id: changesets
         uses: changesets/action@v2
         with:
-          publish: bun run release
-          version: bun run version
-          title: 'chore: version packages'
-          commit: 'chore: version packages'
+          # v2 부터 입력 이름이 변경됨 — 구 이름(publish/version/title/commit)은
+          # 하드-fail 한다 (2026-08-29 main Release failure 원인).
+          publish-script: bun run release
+          version-script: bun run version
+          commit-message: 'chore: version packages'
+          pr-title: 'chore: version packages'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # setup-node 의 registry-url 이 만드는 _temp/.npmrc 를 NPM_CONFIG_USERCONFIG
