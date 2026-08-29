@@ -1696,6 +1696,20 @@ test('config parser rejects unknown keys instead of silently skipping a host', (
   }
 });
 
+test('config parser suggests the closest known key for a typo', () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-config-suggest-'));
+  const path = join(root, 'rustra.json');
+  writeFileSync(
+    path,
+    JSON.stringify({ schema: './schema.json', output: './generated', reactNativ: {} }),
+  );
+  try {
+    assert.throws(() => readConfigSync(path), /unknown config key.*reactNativ[\s\S]*reactNative/i);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('selectCodegenBinary prefers generate, accepts one binary, and rejects ambiguity', () => {
   const target = (name: string) => ({ name, kind: ['bin'], crate_types: ['bin'] });
   assert.equal(selectCodegenBinary([target('app'), target('generate')]), 'generate');

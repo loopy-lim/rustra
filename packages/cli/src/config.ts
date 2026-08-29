@@ -205,6 +205,37 @@ function assertKnownKeys(value: unknown, allowed: readonly string[], label: stri
     throw new Error(`${label} must be an object`);
   }
   for (const key of Object.keys(value)) {
-    if (!allowed.includes(key)) throw new Error(`Unknown ${label} key "${key}"`);
+    if (!allowed.includes(key)) {
+      const suggestion = closestKey(key, allowed);
+      const hint = suggestion
+        ? ` Did you mean "${suggestion}"?`
+        : ` Known keys: ${allowed.join(', ')}.`;
+      throw new Error(`Unknown ${label} key "${key}".${hint}`);
+    }
   }
+}
+
+function closestKey(input: string, allowed: readonly string[]): string | undefined {
+  let best: { key: string; distance: number } | undefined;
+  for (const key of allowed) {
+    const distance = editDistance(input.toLowerCase(), key.toLowerCase());
+    if (distance <= 2 && (!best || distance < best.distance)) best = { key, distance };
+  }
+  return best?.key;
+}
+
+function editDistance(left: string, right: string): number {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let i = 0; i < left.length; i += 1) {
+    const current = [i + 1];
+    for (let j = 0; j < right.length; j += 1) {
+      current.push(
+        left[i] === right[j]
+          ? previous[j]!
+          : 1 + Math.min(previous[j]!, previous[j + 1]!, current[j]!),
+      );
+    }
+    previous.splice(0, previous.length, ...current);
+  }
+  return previous[right.length]!;
 }
