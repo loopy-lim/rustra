@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "crates/rustra-naming",
   "crates/rustra",
   "crates/rustra-macros",
   "examples/calculator",
@@ -39,6 +40,7 @@ categories = ["api-bindings", "development-tools::ffi"]
 rust-version = "1.88"
 
 [workspace.dependencies]
+rustra-naming = { version = "0.4.0", path = "crates/rustra-naming" }
 rustra-macros = { version = "0.4.0", path = "crates/rustra-macros" }
 rustra = { version = "0.4.0", path = "crates/rustra" }
 serde = { version = "1", features = ["derive"] }

@@ -90,6 +90,33 @@ test('mock engine supports invokeBatch routing per entry', async () => {
   assert.equal(engine.calls().length, 2);
 });
 
+test('mock engine supports deterministic delay, injected errors, and events', async () => {
+  const engine = createMockEngine({ delayMs: 1 });
+  const received: unknown[] = [];
+  const unsubscribe = engine.subscribeEvent('progress', (payload) => received.push(payload));
+  engine
+    .on('slow', () => ({ ok: true }))
+    .fail('broken', {
+      code: 'transport.timeout',
+      message: 'simulated timeout',
+      retryable: true,
+    });
+  engine.emit('progress', { step: 1 });
+  assert.deepEqual(received, [{ step: 1 }]);
+  assert.deepEqual(engine.events(), [{ name: 'progress', payload: { step: 1 } }]);
+  assert.deepEqual(await engine.invoke('slow'), { ok: true });
+  await assert.rejects(
+    () => engine.invoke('broken'),
+    (error: unknown) =>
+      error instanceof RustraCommandError &&
+      error.code === 'transport.timeout' &&
+      error.retryable === true,
+  );
+  unsubscribe();
+  engine.emit('progress', { step: 2 });
+  assert.deepEqual(received, [{ step: 1 }]);
+});
+
 test('assertContractCurrent passes when commands match', () => {
   const schema = JSON.parse(
     readFileSync(new URL('../fixtures/schema.sample.json', import.meta.url), 'utf-8'),

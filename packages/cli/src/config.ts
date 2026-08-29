@@ -34,7 +34,23 @@ export interface RustraConfig {
 
 export function readConfigSync(configPath: string): RustraConfig {
   const content = readFileSync(resolve(configPath), 'utf-8');
-  const config = JSON.parse(content) as RustraConfig;
+  const parsed = JSON.parse(content) as unknown;
+  assertKnownKeys(
+    parsed,
+    [
+      'schema',
+      'output',
+      'cppOutput',
+      'positional',
+      'codegen',
+      'reactNative',
+      'node',
+      'bun',
+      'tauri',
+    ],
+    'config',
+  );
+  const config = parsed as RustraConfig;
 
   if (
     typeof config.schema !== 'string' ||
@@ -52,6 +68,7 @@ export function readConfigSync(configPath: string): RustraConfig {
   }
   const codegen = config.codegen;
   if (codegen !== undefined) {
+    assertKnownKeys(codegen, ['rustManifest', 'rustPackage', 'rustBinary'], 'config codegen');
     if (typeof codegen !== 'object' || codegen === null || Array.isArray(codegen)) {
       throw new Error('Config codegen must be an object');
     }
@@ -72,6 +89,11 @@ export function readConfigSync(configPath: string): RustraConfig {
   }
   const rn = config.reactNative;
   if (rn !== undefined) {
+    assertKnownKeys(
+      rn,
+      ['moduleDir', 'rustManifest', 'rustPackage', 'rustLibrary', 'legacyBenchmarks'],
+      'config reactNative',
+    );
     if (typeof rn !== 'object' || rn === null || Array.isArray(rn)) {
       throw new Error('Config reactNative must be an object');
     }
@@ -120,6 +142,15 @@ export function readConfigSync(configPath: string): RustraConfig {
       throw new Error(`Config ${host} must be an object`);
     }
   }
+  if (config.node)
+    assertKnownKeys(
+      config.node,
+      ['rustManifest', 'rustPackage', 'rustBinary', 'args'],
+      'config node',
+    );
+  if (config.bun)
+    assertKnownKeys(config.bun, ['rustManifest', 'rustPackage', 'rustLibrary'], 'config bun');
+  if (config.tauri) assertKnownKeys(config.tauri, [], 'config tauri');
   for (const [host, value] of [
     ['node', config.node],
     ['bun', config.bun],
@@ -167,4 +198,13 @@ export function readConfigSync(configPath: string): RustraConfig {
   }
 
   return config;
+}
+
+function assertKnownKeys(value: unknown, allowed: readonly string[], label: string): void {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  for (const key of Object.keys(value)) {
+    if (!allowed.includes(key)) throw new Error(`Unknown ${label} key "${key}"`);
+  }
 }

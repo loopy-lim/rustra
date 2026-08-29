@@ -7,6 +7,7 @@ import { RustraProvider, useRustraEngine, useCommand, useMutation, useEvent } fr
 import type { EngineClient } from '@rustra/types';
 import type { UseCommandResult } from './useCommand.js';
 import type { UseMutationResult } from './useMutation.js';
+import { inputKey } from './input-key.js';
 
 function createTestEngine(dataMap: Record<string, unknown>): EngineClient {
   return {
@@ -65,7 +66,7 @@ test('useCommand stabilizes value-equal inline input (no re-request loop)', () =
   const source = readFileSync(new URL('./useCommand.ts', import.meta.url), 'utf8');
   assert.match(
     source,
-    /JSON\.stringify\(input\)/,
+    /inputKey\(input\)/,
     'input key must use value equality (serialized), not reference equality',
   );
   assert.match(
@@ -83,6 +84,10 @@ test('useCommand stabilizes value-equal inline input (no re-request loop)', () =
     /\[engine,\s*commandName,\s*input\]/,
     'raw input in deps re-creates execute every render for inline objects (infinite loop)',
   );
+});
+
+test('inputKey supports bigint values without throwing', () => {
+  assert.equal(inputKey({ value: 42n }), '{"value":{"$rustraBigInt":"42"}}');
 });
 
 test('useMutation hook contract and execution', async () => {

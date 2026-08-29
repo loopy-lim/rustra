@@ -1,0 +1,10 @@
+[package]
+name = "rustra-naming"
+description = "Shared identifier naming rules for Rustra"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+rust-version.workspace = true
+
+[lib]
+path = "src/lib.rs"

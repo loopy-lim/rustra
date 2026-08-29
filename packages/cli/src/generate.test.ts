@@ -15,6 +15,7 @@ import {
   generatePositionalFacadeTs,
 } from './generate.js';
 import { collectDefinitions, postcardHelperSource } from './codegen.js';
+import { readConfigSync } from './config.js';
 import { buildCodecIr } from './codec-ir.js';
 import {
   generateBunEntryTs,
@@ -31,6 +32,7 @@ import {
   checkGeneratedFiles,
 } from './index.js';
 import type { PackageSchema } from './schema.js';
+import { parseCodegenArgs, parseGenerateArgs } from './cli-options.js';
 
 const simpleSchema: PackageSchema = {
   packageId: 'test',
@@ -1637,9 +1639,12 @@ test('init scaffold has a real shared package and executable codegen bin', () =>
   assert.match(files.cargoToml, /rustra = "\^0\.4\.0"/);
   assert.match(files.packageJson, /"@rustra\/cli": "\^0\.5\.0"/);
   assert.match(files.packageJson, /"@rustra\/types": "\^0\.4\.0"/);
+  assert.match(files.packageJson, /"@rustra\/node": "\^0\.5\.0"/);
   assert.match(files.packageJson, /"packageManager": "bun@1\.4\.0"/);
   assert.match(files.libRs, /pub fn package\(\) -> Package/);
   assert.match(files.generateRs, /rustra_app::package\(\)\.generate_typescript\(\)/);
+  assert.match(files.mainRs, /__rustra_contract/);
+  assert.match(files.appTs, /generated\/node\.js/);
   assert.doesNotMatch(files.generateRs, /see src\/main\.rs/);
   assert.deepEqual(JSON.parse(files.rustraJson), {
     schema: './generated/schema.json',
@@ -1647,6 +1652,10 @@ test('init scaffold has a real shared package and executable codegen bin', () =>
     codegen: {
       rustManifest: './Cargo.toml',
       rustBinary: 'generate',
+    },
+    node: {
+      rustManifest: './Cargo.toml',
+      rustBinary: 'rustra-app',
     },
   });
   assert.match(files.packageJson, /"doctor": "rustra doctor --config rustra\.json"/);
@@ -1656,6 +1665,35 @@ test('init scaffold has a real shared package and executable codegen bin', () =>
     /"codegen:check": "rustra codegen --config rustra\.json --check"/,
   );
   assert.match(files.packageJson, /"dev": "rustra dev --config rustra\.json"/);
+  assert.match(files.gitignore, /target/);
+  assert.match(files.tsconfig, /NodeNext/);
+});
+
+test('codegen and generate parsers accept short help and JSON output format', () => {
+  assert.deepEqual(parseCodegenArgs(['-h']), { help: true });
+  assert.deepEqual(parseGenerateArgs(['--schema=x', '--output=y', '--format', 'json']), {
+    schemaPath: 'x',
+    outputPath: 'y',
+    format: 'json',
+  });
+  assert.deepEqual(parseCodegenArgs(['--config=x', '--format=json']), {
+    configPath: 'x',
+    format: 'json',
+  });
+});
+
+test('config parser rejects unknown keys instead of silently skipping a host', () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-config-unknown-'));
+  const path = join(root, 'rustra.json');
+  writeFileSync(
+    path,
+    JSON.stringify({ schema: './schema.json', output: './generated', reactNativ: {} }),
+  );
+  try {
+    assert.throws(() => readConfigSync(path), /unknown config key.*reactNativ/i);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('selectCodegenBinary prefers generate, accepts one binary, and rejects ambiguity', () => {
@@ -1753,6 +1791,8 @@ test('desktop host entries own lazy setup and preserve explicit escape hatches',
     targetName: 'my-app',
   });
   assert.match(node, /createNodeBootstrap/);
+  assert.match(node, /GENERATED_CONTRACT_HASH/);
+  assert.match(node, /contractHash: GENERATED_CONTRACT_HASH/);
   assert.match(node, /release\/\$\{executable\}/);
   assert.match(node, /args: \["invoke"\]/);
   assert.match(node, /RUSTRA_NODE_BINARY|commandCandidates/);

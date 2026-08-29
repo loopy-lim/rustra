@@ -1,0 +1,56 @@
+import { RustraCommandError } from './errors.js';
+import { ensureConfigured, isLazyConfigured } from './global-config.js';
+import { runtime } from './global-state.js';
+import type { BatchEntry } from './public.js';
+
+export function invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
+  const engine = runtime.engine;
+  if (!engine) {
+    if (isLazyConfigured()) return ensureConfigured().then(() => invokeBatch<T>(entries));
+    return Promise.reject(new Error('Rustra not configured. Call configure(engine) first.'));
+  }
+  if (!engine.invokeBatch)
+    return Promise.reject(new Error('Configured engine does not support invokeBatch.'));
+  const timeout = entries.reduce<number | undefined>((min, entry) => {
+    const ms = entry.options?.timeoutMs;
+    return ms === undefined ? min : min === undefined || ms < min ? ms : min;
+  }, undefined);
+  if (timeout === undefined) {
+    try {
+      return Promise.resolve(engine.invokeBatch<T>(entries));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+  const stripped = entries.map((entry) =>
+    entry.options?.timeoutMs === undefined
+      ? entry
+      : { ...entry, options: { ...entry.options, timeoutMs: undefined } },
+  );
+  let promise: Promise<T[]>;
+  try {
+    promise = Promise.resolve(engine.invokeBatch<T>(stripped));
+  } catch (error) {
+    return Promise.reject(error);
+  }
+  void promise.catch(() => {});
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () =>
+          reject(
+            new RustraCommandError(
+              'transport.timeout',
+              `invokeBatch(${entries.length} entries) timed out after ${timeout}ms`,
+              true,
+            ),
+          ),
+        timeout,
+      );
+    }),
+  ]).finally(() => {
+    if (timer !== undefined) clearTimeout(timer);
+  });
+}
