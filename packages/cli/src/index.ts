@@ -23,6 +23,13 @@ import {
   writeReactNativeModule,
   type ReactNativeScaffoldOptions,
 } from './react-native.js';
+import {
+  collectDoctorReport,
+  doctorExitCode,
+  formatDoctorJson,
+  formatDoctorText,
+  parseDoctorArgs,
+} from './doctor.js';
 
 export { generatePositionalFacadeTs };
 export {
@@ -382,6 +389,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (args[0] === 'doctor') {
+    await runDoctor(args.slice(1));
+    return;
+  }
+
   if (args[0] === 'dev') {
     const { runDev } = await import('./dev.js');
     await runDev(args.slice(1));
@@ -391,6 +403,17 @@ async function main(): Promise<void> {
   console.error(`Unknown command: ${args[0]}`);
   console.error('Run "rustra --help" for usage information.');
   process.exit(1);
+}
+
+/** `rustra doctor [--config rustra.json] [--format text|json] [--strict]`. */
+export async function runDoctor(args: string[]): Promise<void> {
+  const options = parseDoctorArgs(args);
+  const report = collectDoctorReport({
+    configPath: resolve(options.configPath),
+    strict: options.strict,
+  });
+  console.log(options.format === 'json' ? formatDoctorJson(report) : formatDoctorText(report));
+  process.exitCode = doctorExitCode(report, options.strict);
 }
 
 /**
@@ -485,6 +508,7 @@ Usage:
   rustra generate --watch --schema <path> --output <dir>
   rustra init <dir>
   rustra diff --old <schema.v1.json> --new <schema.json> [--format json]
+  rustra doctor [--config <path>] [--format text|json] [--strict]
   rustra dev [--backend <dir>] [--app <dir>]
 
 Options:
@@ -498,6 +522,8 @@ Options:
   --old <path>       (diff) old schema version to compare from
   --new <path>       (diff) new schema version to compare against
   --format <fmt>     (diff) 'text' (default) or 'json' (machine-readable DiffResult)
+  --format <fmt>     (doctor) 'text' (default) or 'json' (machine-readable DoctorReport)
+  --strict           (doctor) treat warnings as failures
   --backend <dir>    (dev) Rust backend crate dir (default: ./backend)
   --app <dir>        (dev) App dir containing generated/ (default: ./app)
   --inspect          (dev) codegen tick 후 @rustra/devtools 계측 안내 출력
@@ -509,6 +535,7 @@ Examples:
   rustra generate --schema ./gen/schema.json --output ./src/generated --cpp-output ./ios
   rustra generate --config rustra.json  # includes React Native when configured
   rustra diff --old ./generated/schema.v1.json --new ./generated/schema.json
+  rustra doctor --config rustra.json --format json
   rustra dev --backend ./backend --app ./app
 `);
 }
