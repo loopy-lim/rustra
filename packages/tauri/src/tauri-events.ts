@@ -88,3 +88,26 @@ export function subscribeTauriEvent<T = unknown>(
 ): Promise<() => void> {
   return subscribeEvent(name, callback, listen);
 }
+
+// ── 코드젠 SubscribeFn 정합 (컴파일 타임 고정) ─────────────────
+// 코드젠(generateEventsTs)이 생성하는 `SubscribeFn` 계약:
+//   <N extends RustraEventName>(name: N, cb: (payload: RustraEventPayloads[N]) => void)
+//     => (() => void) | Promise<() => void>
+// 4호스트 subscribeEvent 가 이 계약을 만족하는지 타입 레벨에서 고정한다.
+// RustraEventName 은 스키마별 이름만 다르므로 이벤트 1개('x': number)를 가진
+// 동형 계약으로 정합을 검증한다 — 계약 구조가 바뀌면 tsc 가 깨진다.
+
+/** 생성 계약의 동형 타입 — 이벤트 'x' 하나가 선언된 스키마에 상당. */
+type ContractPayloads = { x: number };
+type ContractName = keyof ContractPayloads & string;
+type GeneratedSubscribeFn = <N extends ContractName>(
+  name: N,
+  callback: (payload: ContractPayloads[N]) => void,
+) => (() => void) | Promise<() => void>;
+
+// 정합 1 — Tauri 본체가 생성 SubscribeFn 자리를 채운다(payload 타입 소거는
+// SubscribeFn 의 callback 매개변수가 공변 위치라 안전).
+const _tauriAsGenerated: GeneratedSubscribeFn = (name, callback) =>
+  subscribeEvent(name, callback as (payload: unknown) => void) as unknown as
+    (() => void) | Promise<() => void>;
+void _tauriAsGenerated;
