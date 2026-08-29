@@ -497,6 +497,51 @@ pub fn gauge(input: GaugeInput) -> Result<GaugeOutput> {
     })
 }
 
+/// A2 와이드 정수 복합 타입 표본 — Vec<u64> + Option<i64>. 원소/옵션 레벨
+/// uvar64/zigzag64 헬퍼가 스트림 중간 7바이트 varint 경계를 넘는 값을 무손실
+/// 왕복하는지 cross-wire 픽스처로 고정한다.
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WideAggInput {
+    pub samples: Vec<u64>,
+    pub offset: Option<i64>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WideAggOutput {
+    pub max: u64,
+    pub adjusted: i64,
+}
+
+#[command]
+pub fn wide_agg(input: WideAggInput) -> Result<WideAggOutput> {
+    let max = input.samples.iter().copied().max().unwrap_or(0);
+    let adjusted = input.offset.unwrap_or(0) + input.samples.len() as i64;
+    Ok(WideAggOutput { max, adjusted })
+}
+
+// ── B2 Set 직결 표본 — 원시 요소 Set(uniqueItems) 커맨드 ─────────────
+// register! 순서가 곧 command id 이므로 신규 커맨드는 반드시 맨 뒤에 붙는다
+// (기존 id 시프트 방지). 입력은 BTreeSet<i64>(zigzag 원소), 출력은
+// BTreeSet<String>(문자열 원소) — 와이어는 순서 보존 postcard seq 다.
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TagSetInput {
+    pub ids: std::collections::BTreeSet<i64>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TagSetOutput {
+    pub tags: std::collections::BTreeSet<String>,
+}
+
+#[command]
+pub fn tag_set(input: TagSetInput) -> Result<TagSetOutput> {
+    Ok(TagSetOutput {
+        tags: input.ids.into_iter().map(|id| format!("t{id}")).collect(),
+    })
+}
+
 // `rustraRegistryDemo` 는 빌드 시점에 등록되어 항상 호출 가능하며, 런타임에 live
 // package 를 mutate 한다. RN 이 사용하는 동일 FFI 경로(invoke_json)를 통해 동작하며,
 // mutation 사이에 rebuild 가 필요 없다. release 빌드에서는 frozen 이다.
@@ -742,6 +787,11 @@ pub fn calculator_package() -> Package {
             .buffer_command_fn(bench_echo_bytes)
             .command_fn(bench_echo_pair)
             .command_fn(echo_groups)
+            // register! 튜플은 .command_fn 체인만 생성하므로 buffered 커맨드들이
+            // 중간에 끼일 수 없다 — 신규 커맨드는 체인 맨 뒤에 붙여야 기존 id가
+            // 시프트되지 않는다(register! id는 등록 순서 계약).
+            .command_fn(wide_agg)
+            .command_fn(tag_set)
             .require_capability("secureCompute", "compute:secure")
             .build();
 
@@ -1819,12 +1869,20 @@ mod tests {
     #[test]
     fn test_direct_buffer_ffi_transfers_owned_output() {
         ensure_registered();
+        // id는 등록 순서에서 나오므로 하드코딩하지 않는다 — resolve_command_id
+        // 역방향 조회로 찾는다(신규 커맨드 추가로 id가 시프트돼도 테스트가
+        // 무관하게 유지된다).
+        let bench_echo_bytes_id = (1u16..)
+            .find(|id| {
+                calculator_package().resolve_command_id(*id).as_deref() == Some("benchEchoBytes")
+            })
+            .expect("benchEchoBytes registered");
         let input = [0, 1, 127, 128, 255];
         let mut output = std::ptr::null_mut();
         let mut output_len = 0usize;
         let status = unsafe {
             rustra::ffi::rustra_ffi_invoke_buffer(
-                25,
+                bench_echo_bytes_id,
                 input.as_ptr(),
                 input.len(),
                 &mut output,
@@ -1843,7 +1901,7 @@ mod tests {
         let mut empty_output_len = usize::MAX;
         let empty_status = unsafe {
             rustra::ffi::rustra_ffi_invoke_buffer(
-                25,
+                bench_echo_bytes_id,
                 std::ptr::null(),
                 0,
                 &mut empty_output,
@@ -1860,7 +1918,7 @@ mod tests {
         let mut error_len = 0usize;
         let over_limit_status = unsafe {
             rustra::ffi::rustra_ffi_invoke_buffer(
-                25,
+                bench_echo_bytes_id,
                 full_mebibyte.as_ptr(),
                 full_mebibyte.len(),
                 &mut error_output,
@@ -1878,7 +1936,7 @@ mod tests {
 
         let invalid_status = unsafe {
             rustra::ffi::rustra_ffi_invoke_buffer(
-                25,
+                bench_echo_bytes_id,
                 input.as_ptr(),
                 input.len(),
                 std::ptr::null_mut(),
@@ -1887,7 +1945,7 @@ mod tests {
         };
         assert_eq!(invalid_status, u32::MAX);
 
-        assert_eq!(rustra::ffi::rustra_ffi_has_buffer(25), 1);
+        assert_eq!(rustra::ffi::rustra_ffi_has_buffer(bench_echo_bytes_id), 1);
         assert_eq!(rustra::ffi::rustra_ffi_has_buffer(14), 0);
     }
 

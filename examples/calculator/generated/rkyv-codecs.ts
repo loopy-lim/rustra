@@ -62,6 +62,79 @@ function _pcDecodeZigzagVarint(buf: Uint8Array, offset: number): { value: number
   return { value: _pcDecodeZigzag(value), bytesRead };
 }
 
+const _pcI64Min = -(2n ** 63n);
+const _pcI64Max = 2n ** 63n - 1n;
+
+function _pcEncodeVarint64(v: number | bigint): Uint8Array {
+  // 64-bit LEB128. safe number 는 number 산술 fast path(_pcEncodeVarint 와
+  // 동일 출력), 그 밖(bigint, 2^53 초과)은 BigInt 산술 — 정밀도 손실 없음.
+  if (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0) {
+    return _pcEncodeVarint(v);
+  }
+  let value = BigInt(v);
+  if (value < 0n) throw new Error('varint must be non-negative: ' + value.toString());
+  if (value > 0xffffffffffffffffn) throw new Error('varint exceeds u64 range: ' + value.toString());
+  const bytes: number[] = [];
+  do {
+    let next = Number(value & 0x7fn);
+    value >>= 7n;
+    if (value !== 0n) next |= 0x80;
+    bytes.push(next);
+  } while (value !== 0n);
+  return new Uint8Array(bytes);
+}
+
+function _pcDecodeVarint64(buf: Uint8Array, offset: number): { value: number | bigint; bytesRead: number } {
+  // 앞 7바이트(≤49비트, 2^53 이하)는 Number 누적 — 대부분의 varint 가 끝나는
+  // 구간이며 BigInt 할당이 전혀 없다. 8바이트 진입 시 BigInt 로 이월해 u64
+  // 전체를 무손실 누적한다. 반환 계약은 toJsInteger 선례: safe 정수면 number,
+  // 넘으면 bigint. 10바이트째 마지막 바이트는 0x00/0x01 만 허용한다(Rust
+  // postcard max_of_last_byte = 2^(64%7)−1 = 1) — 64비트 초과 인코딩은
+  // 무음 왜곡 대신 throw.
+  let num = 0;
+  let multiplier = 1;
+  let big = 0n;
+  let bytesRead = 0;
+  while (true) {
+    const b = buf[offset + bytesRead];
+    if (b === undefined) throw new Error('varint out of bounds');
+    bytesRead++;
+    if (bytesRead <= 7) {
+      num += (b & 0x7f) * multiplier;
+      multiplier *= 128;
+      if ((b & 0x80) === 0) return { value: num, bytesRead };
+    } else {
+      if (bytesRead === 8) big = BigInt(num); // 49비트 누적분을 BigInt 로 이월
+      big |= BigInt(b & 0x7f) << BigInt(7 * (bytesRead - 1));
+      if ((b & 0x80) === 0) {
+        if (bytesRead === 10 && (b & 0x7f) > 0x01) throw new Error('varint exceeds 64 bits');
+        const asNumber = Number(big);
+        return { value: Number.isSafeInteger(asNumber) ? asNumber : big, bytesRead };
+      }
+    }
+    if (bytesRead >= 10) throw new Error('varint too long');
+  }
+}
+
+function _pcEncodeZigzag64(v: number | bigint): Uint8Array {
+  // i64 zigzag: (n << 1) ^ (n >> 63). bigint 산술로 i64 전체 범위를 커버하며,
+  // 범위 밖 입력은 validateInteger 선례대로 throw 한다(무음 왜곡 금지 —
+  // 음수 varint throw 와 일관).
+  const n = BigInt(v);
+  if (n < _pcI64Min || n > _pcI64Max) {
+    throw new Error('zigzag64 input outside i64 range: ' + n.toString());
+  }
+  const encoded = (n << 1n) ^ (n >> 63n);
+  return _pcEncodeVarint64(encoded);
+}
+
+function _pcDecodeZigzag64(v: number | bigint): number | bigint {
+  const n = BigInt(v);
+  const decoded = (n >> 1n) ^ -(n & 1n);
+  const asNumber = Number(decoded);
+  return Number.isSafeInteger(asNumber) ? asNumber : decoded;
+}
+
 function _pcConcatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
   let totalLen = 0;
   for (const a of arrays) totalLen += a.length;
@@ -176,17 +249,64 @@ function _pcDecodeF32(buf: Uint8Array, offset: number): { value: number; bytesRe
 
 import { createComplexCodec } from '@rustra/types';
 import type { RkyvV2Codec, RustraError, ComplexSchema } from '@rustra/types';
-import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ChannelHandle, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, Item, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandle, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ChannelHandle, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, Item, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandle, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
 
-/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
-export const addNumbersComplexCodec: RkyvV2Codec<AddNumbersInput, AddNumbersOutput> = createComplexCodec<AddNumbersInput, AddNumbersOutput>({
+export const addNumbersCodec: RkyvV2Codec<AddNumbersInput, AddNumbersOutput> = {
   commandId: 1,
-  inputSchema: {"title":"AddNumbersInput","type":"object","required":["a","b"],"properties":{"a":{"type":"integer","format":"int64"},"b":{"type":"integer","format":"int64"}}} as ComplexSchema,
-  outputSchema: {"title":"AddNumbersOutput","type":"object","required":["value"],"properties":{"value":{"type":"integer","format":"int64"}}} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
-});
 
-export const addNumbersCodec = addNumbersComplexCodec;
+  encode(args: AddNumbersInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(AddNumbersInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 1, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeZigzag64(args.a));
+    parts.push(_pcEncodeZigzag64(args.b));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: AddNumbersInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 1; out[w++] = 0;
+    { let _x = BigInt(args.a); if (_x < _pcI64Min || _x > _pcI64Max) throw new Error('zigzag64 input outside i64 range: ' + _x.toString()); _x = (_x << 1n) ^ (_x >> 63n); do { ensure(1); out[w++] = Number(_x & 0x7fn) | 0x80; _x >>= 7n; } while (_x !== 0n); out[w - 1] &= 0x7f; }
+    { let _x = BigInt(args.b); if (_x < _pcI64Min || _x > _pcI64Max) throw new Error('zigzag64 input outside i64 range: ' + _x.toString()); _x = (_x << 1n) ^ (_x >> 63n); do { ensure(1); out[w++] = Number(_x & 0x7fn) | 0x80; _x >>= 7n; } while (_x !== 0n); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: AddNumbersOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<AddNumbersOutput> = {};
+    {
+      const _v = _pcDecodeVarint64(u8, offset);
+      result.value = _pcDecodeZigzag64(_v.value);
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as AddNumbersOutput };
+  },
+};
 
 export const benchAddCodec: RkyvV2Codec<BenchAddInput, BenchAddOutput> = {
   commandId: 23,
@@ -544,25 +664,132 @@ export const clampCodec: RkyvV2Codec<ClampInput, ClampOutput> = {
   },
 };
 
-/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
-export const createItemComplexCodec: RkyvV2Codec<CreateItemInput, CreateItemOutput> = createComplexCodec<CreateItemInput, CreateItemOutput>({
+export const createItemCodec: RkyvV2Codec<CreateItemInput, CreateItemOutput> = {
   commandId: 8,
-  inputSchema: {"title":"CreateItemInput","type":"object","required":["name","value"],"properties":{"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}} as ComplexSchema,
-  outputSchema: {"title":"CreateItemOutput","type":"object","required":["item"],"properties":{"item":{"$ref":"#/definitions/Item"}}} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
-});
 
-export const createItemCodec = createItemComplexCodec;
+  encode(args: CreateItemInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(CreateItemInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 8, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeString(args.name));
+    parts.push(_pcEncodeZigzag64(args.value));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
 
-/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
-export const divideComplexCodec: RkyvV2Codec<DivideInput, DivideOutput> = createComplexCodec<DivideInput, DivideOutput>({
+  encodeInto(args: CreateItemInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 8; out[w++] = 0;
+    { const _s = args.name; const _u = _utf8Encode(_s); ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }
+    { let _x = BigInt(args.value); if (_x < _pcI64Min || _x > _pcI64Max) throw new Error('zigzag64 input outside i64 range: ' + _x.toString()); _x = (_x << 1n) ^ (_x >> 63n); do { ensure(1); out[w++] = Number(_x & 0x7fn) | 0x80; _x >>= 7n; } while (_x !== 0n); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: CreateItemOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<CreateItemOutput> = {};
+    {
+      const _obj: Item = {} as Item;
+      {
+        _obj.active = u8[offset] === 1;
+        offset += 1;
+      }
+      {
+        const _v = _pcDecodeString(u8, offset);
+        _obj.name = _v.value;
+        offset += _v.bytesRead;
+      }
+      {
+        const _v = _pcDecodeVarint64(u8, offset);
+        _obj.value = _pcDecodeZigzag64(_v.value);
+        offset += _v.bytesRead;
+      }
+      result.item = _obj;
+    }
+    return { ok: true, result: result as CreateItemOutput };
+  },
+};
+
+export const divideCodec: RkyvV2Codec<DivideInput, DivideOutput> = {
   commandId: 10,
-  inputSchema: {"title":"DivideInput","type":"object","required":["a","b"],"properties":{"a":{"type":"integer","format":"int64"},"b":{"type":"integer","format":"int64"}}} as ComplexSchema,
-  outputSchema: {"title":"DivideOutput","type":"object","required":["value"],"properties":{"value":{"type":"integer","format":"int64"}}} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
-});
 
-export const divideCodec = divideComplexCodec;
+  encode(args: DivideInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(DivideInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 10, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeZigzag64(args.a));
+    parts.push(_pcEncodeZigzag64(args.b));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: DivideInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 10; out[w++] = 0;
+    { let _x = BigInt(args.a); if (_x < _pcI64Min || _x > _pcI64Max) throw new Error('zigzag64 input outside i64 range: ' + _x.toString()); _x = (_x << 1n) ^ (_x >> 63n); do { ensure(1); out[w++] = Number(_x & 0x7fn) | 0x80; _x >>= 7n; } while (_x !== 0n); out[w - 1] &= 0x7f; }
+    { let _x = BigInt(args.b); if (_x < _pcI64Min || _x > _pcI64Max) throw new Error('zigzag64 input outside i64 range: ' + _x.toString()); _x = (_x << 1n) ^ (_x >> 63n); do { ensure(1); out[w++] = Number(_x & 0x7fn) | 0x80; _x >>= 7n; } while (_x !== 0n); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: DivideOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<DivideOutput> = {};
+    {
+      const _v = _pcDecodeVarint64(u8, offset);
+      result.value = _pcDecodeZigzag64(_v.value);
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as DivideOutput };
+  },
+};
 
 /** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
 export const echoGroupsComplexCodec: RkyvV2Codec<EchoGroupsInput, EchoGroupsOutput> = createComplexCodec<EchoGroupsInput, EchoGroupsOutput>({
@@ -574,25 +801,119 @@ export const echoGroupsComplexCodec: RkyvV2Codec<EchoGroupsInput, EchoGroupsOutp
 
 export const echoGroupsCodec = echoGroupsComplexCodec;
 
-/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
-export const emitDemoComplexCodec: RkyvV2Codec<EmitDemoInput, EmitDemoOutput> = createComplexCodec<EmitDemoInput, EmitDemoOutput>({
+export const emitDemoCodec: RkyvV2Codec<EmitDemoInput, EmitDemoOutput> = {
   commandId: 11,
-  inputSchema: {"title":"EmitDemoInput","type":"object","required":["stepDelayMs","ticks"],"properties":{"ticks":{"description":"발행할 progress.tick 이벤트 수.","type":"integer","format":"int64"},"stepDelayMs":{"description":"각 스텝 사이 대기 (ms). 데모에서 이벤트 순서를 관찰하기 쉽게.","type":"integer","format":"int64"}}} as ComplexSchema,
-  outputSchema: {"title":"EmitDemoOutput","type":"object","required":["emitted"],"properties":{"emitted":{"type":"integer","format":"int64"}}} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
-});
 
-export const emitDemoCodec = emitDemoComplexCodec;
+  encode(args: EmitDemoInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(EmitDemoInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 11, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeZigzag64(args.ticks));
+    parts.push(_pcEncodeZigzag64(args.stepDelayMs));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
 
-/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
-export const gaugeComplexCodec: RkyvV2Codec<GaugeInput, GaugeOutput> = createComplexCodec<GaugeInput, GaugeOutput>({
+  encodeInto(args: EmitDemoInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 11; out[w++] = 0;
+    { let _x = BigInt(args.ticks); if (_x < _pcI64Min || _x > _pcI64Max) throw new Error('zigzag64 input outside i64 range: ' + _x.toString()); _x = (_x << 1n) ^ (_x >> 63n); do { ensure(1); out[w++] = Number(_x & 0x7fn) | 0x80; _x >>= 7n; } while (_x !== 0n); out[w - 1] &= 0x7f; }
+    { let _x = BigInt(args.stepDelayMs); if (_x < _pcI64Min || _x > _pcI64Max) throw new Error('zigzag64 input outside i64 range: ' + _x.toString()); _x = (_x << 1n) ^ (_x >> 63n); do { ensure(1); out[w++] = Number(_x & 0x7fn) | 0x80; _x >>= 7n; } while (_x !== 0n); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: EmitDemoOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<EmitDemoOutput> = {};
+    {
+      const _v = _pcDecodeVarint64(u8, offset);
+      result.emitted = _pcDecodeZigzag64(_v.value);
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as EmitDemoOutput };
+  },
+};
+
+export const gaugeCodec: RkyvV2Codec<GaugeInput, GaugeOutput> = {
   commandId: 17,
-  inputSchema: {"title":"GaugeInput","type":"object","required":["limit","offset"],"properties":{"limit":{"type":"integer","format":"uint64","minimum":0},"offset":{"type":"integer","format":"uint32","minimum":0}}} as ComplexSchema,
-  outputSchema: {"title":"GaugeOutput","type":"object","required":["next"],"properties":{"next":{"type":"integer","format":"uint64","minimum":0}}} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
-});
 
-export const gaugeCodec = gaugeComplexCodec;
+  encode(args: GaugeInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(GaugeInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 17, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeVarint64(args.limit));
+    parts.push(_pcEncodeVarint(args.offset));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: GaugeInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 17; out[w++] = 0;
+    { const _v = args.limit; if (typeof _v === 'number' && Number.isSafeInteger(_v) && _v >= 0) { let _x = _v; do { ensure(1); out[w++] = (_x % 128) | 0x80; _x = Math.floor(_x / 128); } while (_x > 0); out[w - 1] &= 0x7f; } else { const _b = BigInt(_v); if (_b < 0n) throw new Error('varint must be non-negative: ' + _b.toString()); if (_b > 0xffffffffffffffffn) throw new Error('varint exceeds u64 range: ' + _b.toString()); let _x = _b; do { ensure(1); out[w++] = Number(_x & 0x7fn) | 0x80; _x >>= 7n; } while (_x !== 0n); out[w - 1] &= 0x7f; } }
+    { let _v = args.offset; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: GaugeOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<GaugeOutput> = {};
+    {
+      const _v = _pcDecodeVarint64(u8, offset);
+      result.next = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as GaugeOutput };
+  },
+};
 
 export const greetCodec: RkyvV2Codec<GreetInput, GreetOutput> = {
   commandId: 5,
@@ -649,15 +970,59 @@ export const greetCodec: RkyvV2Codec<GreetInput, GreetOutput> = {
   },
 };
 
-/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
-export const isEvenComplexCodec: RkyvV2Codec<IsEvenInput, IsEvenOutput> = createComplexCodec<IsEvenInput, IsEvenOutput>({
+export const isEvenCodec: RkyvV2Codec<IsEvenInput, IsEvenOutput> = {
   commandId: 3,
-  inputSchema: {"title":"IsEvenInput","type":"object","required":["n"],"properties":{"n":{"type":"integer","format":"int64"}}} as ComplexSchema,
-  outputSchema: {"title":"IsEvenOutput","type":"object","required":["result"],"properties":{"result":{"type":"boolean"}}} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
-});
 
-export const isEvenCodec = isEvenComplexCodec;
+  encode(args: IsEvenInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(IsEvenInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 3, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeZigzag64(args.n));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: IsEvenInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 3; out[w++] = 0;
+    { let _x = BigInt(args.n); if (_x < _pcI64Min || _x > _pcI64Max) throw new Error('zigzag64 input outside i64 range: ' + _x.toString()); _x = (_x << 1n) ^ (_x >> 63n); do { ensure(1); out[w++] = Number(_x & 0x7fn) | 0x80; _x >>= 7n; } while (_x !== 0n); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: IsEvenOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<IsEvenOutput> = {};
+    {
+      result.result = u8[offset] === 1;
+      offset += 1;
+    }
+    return { ok: true, result: result as IsEvenOutput };
+  },
+};
 
 export const multiplyCodec: RkyvV2Codec<MultiplyInput, MultiplyOutput> = {
   commandId: 2,
@@ -716,15 +1081,64 @@ export const multiplyCodec: RkyvV2Codec<MultiplyInput, MultiplyOutput> = {
   },
 };
 
-/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
-export const processItemComplexCodec: RkyvV2Codec<ProcessItemInput, ProcessItemOutput> = createComplexCodec<ProcessItemInput, ProcessItemOutput>({
+export const processItemCodec: RkyvV2Codec<ProcessItemInput, ProcessItemOutput> = {
   commandId: 9,
-  inputSchema: {"title":"ProcessItemInput","type":"object","required":["item"],"properties":{"item":{"$ref":"#/definitions/Item"}}} as ComplexSchema,
-  outputSchema: {"title":"ProcessItemOutput","type":"object","required":["doubled","item"],"properties":{"doubled":{"type":"boolean"},"item":{"$ref":"#/definitions/Item"}}} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
-});
 
-export const processItemCodec = processItemComplexCodec;
+  encode(args: ProcessItemInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(ProcessItemInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 9, true);
+    parts.push(cmdId);
+    parts.push(new Uint8Array([args.item.active ? 1 : 0]));
+    parts.push(_pcEncodeString(args.item.name));
+    parts.push(_pcEncodeZigzag64(args.item.value));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: ProcessItemOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<ProcessItemOutput> = {};
+    {
+      result.doubled = u8[offset] === 1;
+      offset += 1;
+    }
+    {
+      const _obj: Item = {} as Item;
+      {
+        _obj.active = u8[offset] === 1;
+        offset += 1;
+      }
+      {
+        const _v = _pcDecodeString(u8, offset);
+        _obj.name = _v.value;
+        offset += _v.bytesRead;
+      }
+      {
+        const _v = _pcDecodeVarint64(u8, offset);
+        _obj.value = _pcDecodeZigzag64(_v.value);
+        offset += _v.bytesRead;
+      }
+      result.item = _obj;
+    }
+    return { ok: true, result: result as ProcessItemOutput };
+  },
+};
 
 export const resourceCloseCodec: RkyvV2Codec<ResourceCloseInput, ResourceCloseOutput> = {
   commandId: 22,
@@ -1020,25 +1434,116 @@ export const rustraRegistryDemoCodec: RkyvV2Codec<RegistryDemoInput, RegistryDem
   },
 };
 
-/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
-export const scoreTotalComplexCodec: RkyvV2Codec<ScoreTotalInput, ScoreTotalOutput> = createComplexCodec<ScoreTotalInput, ScoreTotalOutput>({
+export const scoreTotalCodec: RkyvV2Codec<ScoreTotalInput, ScoreTotalOutput> = {
   commandId: 15,
-  inputSchema: {"title":"ScoreTotalInput","type":"object","required":["scores"],"properties":{"scores":{"type":"object","additionalProperties":{"type":"integer","format":"int64"}}}} as ComplexSchema,
-  outputSchema: {"title":"ScoreTotalOutput","type":"object","required":["count","total"],"properties":{"count":{"type":"integer","format":"uint32","minimum":0},"total":{"type":"integer","format":"int64"}}} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
-});
 
-export const scoreTotalCodec = scoreTotalComplexCodec;
+  encode(args: ScoreTotalInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(ScoreTotalInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 15, true);
+    parts.push(cmdId);
+    {
+      const _map = args.scores;
+      const _keys = Object.keys(_map).sort();
+      parts.push(_pcEncodeVarint(_keys.length));
+      for (const _k of _keys) {
+        const _v = _map[_k];
+        parts.push(_pcEncodeString(_k));
+        parts.push(_pcEncodeZigzag64(_v));
+      }
+    }
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
 
-/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
-export const secureComputeComplexCodec: RkyvV2Codec<SecureComputeInput, SecureComputeOutput> = createComplexCodec<SecureComputeInput, SecureComputeOutput>({
+  decode(buf: ArrayBuffer): { ok: boolean; result?: ScoreTotalOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<ScoreTotalOutput> = {};
+    {
+      const _v = _pcDecodeVarint(u8, offset);
+      result.count = _v.value;
+      offset += _v.bytesRead;
+    }
+    {
+      const _v = _pcDecodeVarint64(u8, offset);
+      result.total = _pcDecodeZigzag64(_v.value);
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as ScoreTotalOutput };
+  },
+};
+
+export const secureComputeCodec: RkyvV2Codec<SecureComputeInput, SecureComputeOutput> = {
   commandId: 13,
-  inputSchema: {"title":"SecureComputeInput","type":"object","required":["a","b"],"properties":{"a":{"type":"integer","format":"int64"},"b":{"type":"integer","format":"int64"}}} as ComplexSchema,
-  outputSchema: {"title":"SecureComputeOutput","type":"object","required":["value"],"properties":{"value":{"type":"integer","format":"int64"}}} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
-});
 
-export const secureComputeCodec = secureComputeComplexCodec;
+  encode(args: SecureComputeInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(SecureComputeInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 13, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeZigzag64(args.a));
+    parts.push(_pcEncodeZigzag64(args.b));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: SecureComputeInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 13; out[w++] = 0;
+    { let _x = BigInt(args.a); if (_x < _pcI64Min || _x > _pcI64Max) throw new Error('zigzag64 input outside i64 range: ' + _x.toString()); _x = (_x << 1n) ^ (_x >> 63n); do { ensure(1); out[w++] = Number(_x & 0x7fn) | 0x80; _x >>= 7n; } while (_x !== 0n); out[w - 1] &= 0x7f; }
+    { let _x = BigInt(args.b); if (_x < _pcI64Min || _x > _pcI64Max) throw new Error('zigzag64 input outside i64 range: ' + _x.toString()); _x = (_x << 1n) ^ (_x >> 63n); do { ensure(1); out[w++] = Number(_x & 0x7fn) | 0x80; _x >>= 7n; } while (_x !== 0n); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: SecureComputeOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<SecureComputeOutput> = {};
+    {
+      const _v = _pcDecodeVarint64(u8, offset);
+      result.value = _pcDecodeZigzag64(_v.value);
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as SecureComputeOutput };
+  },
+};
 
 export const sizeOfCodec: RkyvV2Codec<SizeOfInput, SizeOfOutput> = {
   commandId: 14,
@@ -1105,25 +1610,114 @@ export const sizeOfCodec: RkyvV2Codec<SizeOfInput, SizeOfOutput> = {
   },
 };
 
-/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
-export const spanComplexCodec: RkyvV2Codec<SpanInput, SpanOutput> = createComplexCodec<SpanInput, SpanOutput>({
+export const spanCodec: RkyvV2Codec<SpanInput, SpanOutput> = {
   commandId: 16,
-  inputSchema: {"title":"SpanInput","type":"object","required":["pair"],"properties":{"pair":{"type":"array","items":[{"type":"string"},{"type":"integer","format":"int64"}],"maxItems":2,"minItems":2}}} as ComplexSchema,
-  outputSchema: {"title":"SpanOutput","type":"object","required":["first","second"],"properties":{"first":{"type":"string"},"second":{"type":"integer","format":"int64"}}} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
-});
 
-export const spanCodec = spanComplexCodec;
+  encode(args: SpanInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(SpanInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 16, true);
+    parts.push(cmdId);
+    {
+      parts.push(_pcEncodeString(args.pair[0]));
+      parts.push(_pcEncodeZigzag64(args.pair[1]));
+    }
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: SpanOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<SpanOutput> = {};
+    {
+      const _v = _pcDecodeString(u8, offset);
+      result.first = _v.value;
+      offset += _v.bytesRead;
+    }
+    {
+      const _v = _pcDecodeVarint64(u8, offset);
+      result.second = _pcDecodeZigzag64(_v.value);
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as SpanOutput };
+  },
+};
+
+export const sumListCodec: RkyvV2Codec<SumListInput, SumListOutput> = {
+  commandId: 6,
+
+  encode(args: SumListInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(SumListInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 6, true);
+    parts.push(cmdId);
+    {
+      const _arr = args.numbers;
+      parts.push(_pcEncodeVarint(_arr.length));
+      for (let _i = 0; _i < _arr.length; _i++) {
+        parts.push(_pcEncodeZigzag64(_arr[_i]));
+      }
+    }
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: SumListOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<SumListOutput> = {};
+    {
+      const _v = _pcDecodeZigzagVarint(u8, offset);
+      result.count = _v.value;
+      offset += _v.bytesRead;
+    }
+    {
+      const _v = _pcDecodeVarint64(u8, offset);
+      result.total = _pcDecodeZigzag64(_v.value);
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as SumListOutput };
+  },
+};
 
 /** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */
-export const sumListComplexCodec: RkyvV2Codec<SumListInput, SumListOutput> = createComplexCodec<SumListInput, SumListOutput>({
-  commandId: 6,
-  inputSchema: {"title":"SumListInput","type":"object","required":["numbers"],"properties":{"numbers":{"type":"array","items":{"type":"integer","format":"int64"}}}} as ComplexSchema,
-  outputSchema: {"title":"SumListOutput","type":"object","required":["count","total"],"properties":{"count":{"type":"integer","format":"int32"},"total":{"type":"integer","format":"int64"}}} as ComplexSchema,
+export const tagSetComplexCodec: RkyvV2Codec<TagSetInput, TagSetOutput> = createComplexCodec<TagSetInput, TagSetOutput>({
+  commandId: 29,
+  inputSchema: {"title":"TagSetInput","type":"object","required":["ids"],"properties":{"ids":{"type":"array","items":{"type":"integer","format":"int64"},"uniqueItems":true}}} as ComplexSchema,
+  outputSchema: {"title":"TagSetOutput","type":"object","required":["tags"],"properties":{"tags":{"type":"array","items":{"type":"string"},"uniqueItems":true}}} as ComplexSchema,
   definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
 });
 
-export const sumListCodec = sumListComplexCodec;
+export const tagSetCodec = tagSetComplexCodec;
 
 export const toUpperCodec: RkyvV2Codec<ToUpperInput, ToUpperOutput> = {
   commandId: 7,
@@ -1177,5 +1771,65 @@ export const toUpperCodec: RkyvV2Codec<ToUpperInput, ToUpperOutput> = {
       offset += _v.bytesRead;
     }
     return { ok: true, result: result as ToUpperOutput };
+  },
+};
+
+export const wideAggCodec: RkyvV2Codec<WideAggInput, WideAggOutput> = {
+  commandId: 28,
+
+  encode(args: WideAggInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(WideAggInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 28, true);
+    parts.push(cmdId);
+    {
+      const _arr = args.samples;
+      parts.push(_pcEncodeVarint(_arr.length));
+      for (let _i = 0; _i < _arr.length; _i++) {
+        parts.push(_pcEncodeVarint64(_arr[_i]));
+      }
+    }
+    {
+      const _opt = args.offset;
+      if (_opt === null || _opt === undefined) {
+        parts.push(new Uint8Array([0]));
+      } else {
+        parts.push(new Uint8Array([1]));
+        parts.push(_pcEncodeZigzag64(_opt));
+      }
+    }
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  decode(buf: ArrayBuffer): { ok: boolean; result?: WideAggOutput; error?: RustraError } {
+    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    const u8 = new Uint8Array(buf);
+    const view = new DataView(buf);
+    if (u8[0] !== 1) {
+      const errLen = view.getUint16(8, true);
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      if (errLen > 0) {
+        // postcard({ code: String, message: String })
+        const c = _pcDecodeString(u8, 10);
+        const m = _pcDecodeString(u8, 10 + c.bytesRead);
+        err = { code: c.value, message: m.value };
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<WideAggOutput> = {};
+    {
+      const _v = _pcDecodeVarint64(u8, offset);
+      result.max = _v.value;
+      offset += _v.bytesRead;
+    }
+    {
+      const _v = _pcDecodeVarint64(u8, offset);
+      result.adjusted = _pcDecodeZigzag64(_v.value);
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as WideAggOutput };
   },
 };

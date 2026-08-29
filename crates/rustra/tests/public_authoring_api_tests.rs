@@ -219,8 +219,10 @@ fn ts_generator_handles_optional_fields() {
     let generated = package.generate_typescript().unwrap();
 
     assert!(
-        generated.types_ts.contains("age?: number | null;"),
-        "optional int field should be age?: number | null; got:\n{}",
+        // `Option<i64>` 는 union(["integer","null"]) 로 내려오므로 format
+        // int64 를 확인해 `number | bigint` 로 넓힌다(TS CLI 규칙과 동일).
+        generated.types_ts.contains("age?: number | bigint | null;"),
+        "optional int field should be age?: number | bigint | null; got:\n{}",
         generated.types_ts
     );
     assert!(
@@ -429,8 +431,8 @@ fn ts_generator_handles_hashmap() {
     assert!(
         generated
             .types_ts
-            .contains("scores: Record<string, number>;"),
-        "HashMap<String, i64> should become Record<string, number>, got:\n{}",
+            .contains("scores: Record<string, number | bigint>;"),
+        "HashMap<String, i64> should become Record<string, number | bigint>, got:\n{}",
         generated.types_ts
     );
     assert!(
@@ -475,13 +477,13 @@ fn ts_generator_handles_sets() {
         generated.types_ts
     );
     assert!(
-        generated.types_ts.contains("primes: Set<number>;"),
-        "BTreeSet<i64> should become Set<number>, got:\n{}",
+        generated.types_ts.contains("primes: Set<number | bigint>;"),
+        "BTreeSet<i64> should become Set<number | bigint>, got:\n{}",
         generated.types_ts
     );
     assert!(
-        generated.types_ts.contains("unique: Set<number>;"),
-        "output BTreeSet<i64> should become Set<number>, got:\n{}",
+        generated.types_ts.contains("unique: Set<number | bigint>;"),
+        "output BTreeSet<i64> should become Set<number | bigint>, got:\n{}",
         generated.types_ts
     );
 
@@ -701,15 +703,17 @@ fn ts_generator_handles_tuples() {
     let generated = package.generate_typescript().unwrap();
 
     assert!(
-        generated.types_ts.contains("pair: [string, number];"),
-        "tuple (String, i64) should become [string, number], got:\n{}",
+        generated
+            .types_ts
+            .contains("pair: [string, number | bigint];"),
+        "tuple (String, i64) should become [string, number | bigint], got:\n{}",
         generated.types_ts
     );
     assert!(
         generated
             .types_ts
-            .contains("triple: [string, number, boolean];"),
-        "tuple (String, i64, bool) should become [string, number, boolean], got:\n{}",
+            .contains("triple: [string, number | bigint, boolean];"),
+        "tuple (String, i64, bool) should become [string, number | bigint, boolean], got:\n{}",
         generated.types_ts
     );
 }
@@ -801,8 +805,10 @@ fn ts_generator_handles_deep_nesting() {
     let generated = package.generate_typescript().unwrap();
 
     assert!(
-        generated.types_ts.contains("matrix: number[][];"),
-        "Vec<Vec<i64>> should become number[][], got:\n{}",
+        generated
+            .types_ts
+            .contains("matrix: ((number | bigint)[])[];"),
+        "Vec<Vec<i64>> should become ((number | bigint)[])[], got:\n{}",
         generated.types_ts
     );
     assert!(

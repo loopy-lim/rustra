@@ -19,6 +19,7 @@
 
 #include "rustra-generated-codecs.hpp"
 
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <vector>
@@ -79,17 +80,57 @@ int main() {
     }
   }
 
-  // Raw eligibility is narrower than positional: string/pair/bytes stay off it.
-  // addNumbers is int64-shaped and stays on the JS complex codec so unsafe
-  // values can remain bigint. benchAdd is the raw-safe f64 command.
-  if (gen::has_raw_codec(1) || !gen::has_raw_codec(23) || gen::has_raw_codec(24) ||
-      gen::has_raw_codec(25) || gen::has_raw_codec(26)) {
+  // Raw eligibility mirrors the Rust raw_invoke_shape contract: up to three
+  // scalar fields, and since B1 that includes int64/uint64 (the u64 slot
+  // carries the full-width value). benchAdd/clamp are the raw-safe f64s;
+  // benchEchoBytes(25)/benchEchoPair(26)/wideAgg(28)/tagSet(29) stay off raw.
+  if (!gen::has_raw_codec(1) || !gen::has_raw_codec(23) || gen::has_raw_codec(24) ||
+      gen::has_raw_codec(25) || gen::has_raw_codec(26) || gen::has_raw_codec(28) ||
+      gen::has_raw_codec(29)) {
     std::printf("FAIL raw capability set\n");
     ++g_failures;
   }
 
-  // int64-shaped addNumbers is deliberately not a C++ static codec: the JS
-  // complex route owns number|bigint validation and preservation.
+  // ── B1: raw-tier wide restore. addNumbers(1) 는 raw 슬롯이 int64 비트를
+  // 운반하고 decode_raw_result 가 safe 범위 밖에서 BigInt 로 복원한다.
+  {
+    // encode_raw_slots accepts a bigint input (positional path) and stores the
+    // full-width i64 bits: a = i64::MIN, b = 58.
+    Value args[] = {Value(rt, jsi::BigInt::fromInt64(rt, INT64_MIN)), Value(58.0)};
+    uint64_t slots[] = {0, 0};
+    gen::encode_raw_slots(rt, 1, args, 2, slots);
+    int64_t a = 0;
+    std::memcpy(&a, &slots[0], sizeof(a));
+    int64_t b = 0;
+    std::memcpy(&b, &slots[1], sizeof(b));
+    if (a != INT64_MIN || b != 58) {
+      std::printf("FAIL raw addNumbers bigint input slots: a=%lld b=%lld\n",
+                  (long long)a, (long long)b);
+      ++g_failures;
+    }
+
+    // Out-of-safe-range raw restore: slot bits = 2^53+1 → BigInt.
+    int64_t beyond = 9007199254740993LL;
+    uint64_t beyondSlot = 0;
+    std::memcpy(&beyondSlot, &beyond, sizeof(beyondSlot));
+    Value result = gen::decode_raw_result(rt, 1, beyondSlot);
+    Value value = result.getObject(rt).getProperty(rt, "value");
+    if (!value.isBigInt() || value.asBigInt(rt).asInt64(rt) != 9007199254740993LL) {
+      std::printf("FAIL raw restore 2^53+1 must be BigInt\n");
+      ++g_failures;
+    }
+
+    // gauge(17) raw restore: slot = u64::MAX → BigInt.
+    Value umax = gen::decode_raw_result(rt, 17, UINT64_MAX);
+    Value next = umax.getObject(rt).getProperty(rt, "next");
+    if (!next.isBigInt() || next.asBigInt(rt).asUint64(rt) != UINT64_MAX) {
+      std::printf("FAIL raw restore u64::MAX must be BigInt\n");
+      ++g_failures;
+    }
+  }
+
+  // ── B1: int64 addNumbers is a C++ static codec now. Safe integers stay
+  // number; the validator also accepts bigint via jsi::BigInt::asInt64.
   {
     Object args(rt);
     args.setProperty(rt, "a", 42.0);
@@ -97,11 +138,12 @@ int main() {
     Value argsV(rt, args);
 
     rc::Writer w;
-    bool ok = gen::encode_by_name(rt, "addNumbers", argsV, w);
-    if (ok || !w.take().empty()) {
-      std::printf("FAIL addNumbers must remain on the JS complex route\n");
+    if (!gen::encode_by_name(rt, "addNumbers", argsV, w)) {
+      std::printf("FAIL encode_by_name(addNumbers) returned false\n");
       ++g_failures;
     }
+    // zigzag(42)=84 → 0x54, zigzag(58)=116 → 0x74.
+    check_bytes(w.take(), {0x01, 0x00, 0x54, 0x74}, "encode addNumbers {42,58}");
   }
 
   // ── encode multiply {a:1.5, b:2.5} → [cmd_id 2 LE][f64(1.5)][f64(2.5)] ──
@@ -120,16 +162,17 @@ int main() {
     check_bytes(w.take(), want, "encode multiply {1.5,2.5}");
   }
 
-  // int64-shaped isEven also stays on the JS complex route.
+  // int64 isEven joins the C++ static codec the same way (B1).
   {
     Object args(rt);
     args.setProperty(rt, "n", 100.0);
     Value argsV(rt, args);
     rc::Writer w;
-    if (gen::encode_by_name(rt, "isEven", argsV, w) || !w.take().empty()) {
-      std::printf("FAIL isEven must remain on the JS complex route\n");
+    if (!gen::encode_by_name(rt, "isEven", argsV, w)) {
+      std::printf("FAIL encode_by_name(isEven) returned false\n");
       ++g_failures;
     }
+    check_bytes(w.take(), {0x03, 0x00, 0xc8, 0x01}, "encode isEven {100}");
   }
 
   // ── encode greet {name:"hi"} → [cmd_id 5 LE][str len 2]['h']['i']] ──
@@ -142,7 +185,7 @@ int main() {
     check_bytes(w.take(), {0x05, 0x00, 0x02, 0x68, 0x69}, "encode greet {hi}");
   }
 
-  // Vec<int64> follows the same BigInt-safe route.
+  // Vec<int64> elements ride the native codec too — per-element zigzag64.
   {
     Object args(rt);
     Array arr(rt, 2);
@@ -151,10 +194,32 @@ int main() {
     args.setProperty(rt, "numbers", arr);
     Value argsV(rt, args);
     rc::Writer w;
-    if (gen::encode_by_name(rt, "sumList", argsV, w) || !w.take().empty()) {
-      std::printf("FAIL sumList must remain on the JS complex route\n");
+    if (!gen::encode_by_name(rt, "sumList", argsV, w)) {
+      std::printf("FAIL encode_by_name(sumList) returned false\n");
       ++g_failures;
     }
+    // zigzag(10)=20 → 0x14, zigzag(20)=40 → 0x28.
+    check_bytes(w.take(), {0x06, 0x00, 0x02, 0x14, 0x28}, "encode sumList {[10,20]}");
+  }
+
+  // B1 encode: bigint input beyond the safe range must survive losslessly.
+  {
+    Object args(rt);
+    Array arr(rt, 2);
+    arr.setValueAtIndex(rt, 0, Value(rt, jsi::BigInt::fromInt64(rt, INT64_MIN)));
+    arr.setValueAtIndex(rt, 1, 5.0);
+    args.setProperty(rt, "numbers", arr);
+    Value argsV(rt, args);
+    rc::Writer w;
+    if (!gen::encode_by_name(rt, "sumList", argsV, w)) {
+      std::printf("FAIL encode_by_name(sumList bigint) returned false\n");
+      ++g_failures;
+    }
+    // zigzag(i64::MIN) = u64::MAX → 10-byte LEB128 ff×9 + 01.
+    check_bytes(w.take(),
+                {0x06, 0x00, 0x02, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01,
+                 0x0a},
+                "encode sumList {[i64::MIN,5]} bigint");
   }
 
   // ── native complex codec: map<string, vec<string>> ─────────────────
@@ -177,6 +242,8 @@ int main() {
       std::printf("FAIL encode_by_name(echoGroups) returned false\n");
       ++g_failures;
     }
+    // echoGroups — id 27 (wide_agg/tag_set 은 builder 체인 맨 뒤로 이동해
+    // 28/29 로 할당된다 — 기존 커맨드 id 시프트 없음).
     check_bytes(w.take(), {0x1B, 0x00, 0x02, 0x01, 0x61, 0x01, 0x01, 0x78,
                            0x01, 0x62, 0x02, 0x01, 0x79, 0x01, 0x7A},
                 "encode echoGroups sorted nested map");
@@ -304,7 +371,7 @@ int main() {
   }
 
   // encode scoreTotal {scores:{a:10,b:32}} → [cmd 15][count 2][sorted a,b]
-  // map 인코더는 키를 정렬한다(BTreeMap 정합).
+  // map<int64> 인코더는 키를 정렬하고(BTreeMap 정합) 값을 zigzag64로 보낸다.
   {
     Object args(rt);
     Object scores(rt);
@@ -313,10 +380,13 @@ int main() {
     args.setProperty(rt, "scores", scores);
     Value argsV(rt, args);
     rc::Writer w;
-    if (gen::encode_by_name(rt, "scoreTotal", argsV, w) || !w.take().empty()) {
-      std::printf("FAIL scoreTotal must remain on the JS complex route\n");
+    if (!gen::encode_by_name(rt, "scoreTotal", argsV, w)) {
+      std::printf("FAIL encode_by_name(scoreTotal) returned false\n");
       ++g_failures;
     }
+    // [cmd 15 LE][count 2]["a" zigzag(10)=14]["b" zigzag(32)=64]
+    check_bytes(w.take(), {0x0f, 0x00, 0x02, 0x01, 0x61, 0x14, 0x01, 0x62, 0x40},
+                "encode scoreTotal {a:10,b:32}");
   }
 
   // encode span {pair:["hi",-5]} → [cmd 16][str "hi"][zigzag(-5)=9] — tuple 무접두
@@ -328,23 +398,25 @@ int main() {
     args.setProperty(rt, "pair", pair);
     Value argsV(rt, args);
     rc::Writer w;
-    if (gen::encode_by_name(rt, "span", argsV, w) || !w.take().empty()) {
-      std::printf("FAIL span must remain on the JS complex route\n");
+    if (!gen::encode_by_name(rt, "span", argsV, w)) {
+      std::printf("FAIL encode_by_name(span) returned false\n");
       ++g_failures;
     }
+    check_bytes(w.take(), {0x10, 0x00, 0x02, 0x68, 0x69, 0x09}, "encode span {[\"hi\",-5]}");
   }
 
-  // encode gauge {limit:300, offset:70000} → [cmd 17][ac 02][f0 a2 04] — plain varint
+  // encode gauge {limit:300, offset:70000} → [cmd 17][ac 02][f0 a2 04] — uvar64
   {
     Object args(rt);
     args.setProperty(rt, "limit", 300.0);
     args.setProperty(rt, "offset", 70000.0);
     Value argsV(rt, args);
     rc::Writer w;
-    if (gen::encode_by_name(rt, "gauge", argsV, w) || !w.take().empty()) {
-      std::printf("FAIL gauge must remain on the JS complex route\n");
+    if (!gen::encode_by_name(rt, "gauge", argsV, w)) {
+      std::printf("FAIL encode_by_name(gauge) returned false\n");
       ++g_failures;
     }
+    check_bytes(w.take(), {0x11, 0x00, 0xac, 0x02, 0xf0, 0xa2, 0x04}, "encode gauge {300,70000}");
   }
 
   // decode scoreTotal response body postcard(count=2,total=42) → 구조 검증
@@ -392,11 +464,42 @@ int main() {
     }
   }
 
-  // addNumbers has no C++ decoder for the same BigInt-safe reason as its
-  // encoder; the generated JS complex codec handles this response.
-  if (gen::has_static_codec("addNumbers")) {
-    std::printf("FAIL addNumbers must not advertise a C++ static codec\n");
-    ++g_failures;
+  // ── B1 decode contract: safe range → number, beyond → BigInt ──
+  {
+    // addNumbers output value=2^53+1 (zigzag 2^54+2) must restore as BigInt.
+    // 2^54+2 = 0x40000000000002 → LEB128: 82 80 80 80 80 80 80 80 10... check:
+    // value = 2^53+1 = 9007199254740993.
+    uint8_t body[] = {0x82, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x20};
+    rc::Reader r(body, sizeof(body));
+    Value result = gen::decode_by_name(rt, "addNumbers", r);
+    Value value = result.getObject(rt).getProperty(rt, "value");
+    if (!value.isBigInt()) {
+      std::printf("FAIL decode addNumbers 2^53+1 must be BigInt\n"); ++g_failures;
+    } else if (value.asBigInt(rt).asInt64(rt) != 9007199254740993LL) {
+      std::printf("FAIL decode addNumbers 2^53+1 value\n"); ++g_failures;
+    }
+  }
+  {
+    // addNumbers output value=42 (zigzag 84) stays a number.
+    uint8_t body[] = {0x54};
+    rc::Reader r(body, 1);
+    Value result = gen::decode_by_name(rt, "addNumbers", r);
+    Value value = result.getObject(rt).getProperty(rt, "value");
+    if (!value.isNumber() || value.asNumber() != 42.0) {
+      std::printf("FAIL decode addNumbers 42 must stay number\n"); ++g_failures;
+    }
+  }
+  {
+    // gauge output next=u64::MAX (10-byte LEB128) must restore as BigInt.
+    uint8_t body[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01};
+    rc::Reader r(body, sizeof(body));
+    Value result = gen::decode_by_name(rt, "gauge", r);
+    Value next = result.getObject(rt).getProperty(rt, "next");
+    if (!next.isBigInt()) {
+      std::printf("FAIL decode gauge u64::MAX must be BigInt\n"); ++g_failures;
+    } else if (next.asBigInt(rt).asUint64(rt) != UINT64_MAX) {
+      std::printf("FAIL decode gauge u64::MAX value\n"); ++g_failures;
+    }
   }
 
   // ── decode isEven response body postcard(result=true) → {result:true} ──
@@ -438,6 +541,100 @@ int main() {
     }
   }
 
+  // ── B1 wideAgg shared-fixture cross-check ────────────────────────────
+  // examples/calculator/tests/wire_fixtures.rs 의 WIDEAGG_* hex 와
+  // examples/calculator/ts/cross-wire.test.ts 의 대응 블록과 byte-exact.
+  // 요청: Vec<u64> samples=[1,127,128,2^53+1,u64::MAX] + Some(i64::MIN).
+  {
+    Object args(rt);
+    Array samples(rt, 5);
+    samples.setValueAtIndex(rt, 0, 1.0);
+    samples.setValueAtIndex(rt, 1, 127.0);
+    samples.setValueAtIndex(rt, 2, 128.0);
+    samples.setValueAtIndex(rt, 3, Value(rt, jsi::BigInt::fromUint64(rt, 9007199254740993ull)));
+    samples.setValueAtIndex(rt, 4, Value(rt, jsi::BigInt::fromUint64(rt, UINT64_MAX)));
+    args.setProperty(rt, "samples", samples);
+    args.setProperty(rt, "offset", Value(rt, jsi::BigInt::fromInt64(rt, INT64_MIN)));
+    Value argsV(rt, args);
+    rc::Writer w;
+    if (!gen::encode_by_id(rt, 28, argsV, w)) {
+      std::printf("FAIL encode_by_id(wideAgg=28) returned false\n");
+      ++g_failures;
+    }
+    // == Rust/TS WIDEAGG_BOUNDARY_REQUEST "1c0005017f80018180808080808010…"
+    check_bytes(w.take(),
+                {0x1c, 0x00, 0x05, 0x01, 0x7f, 0x80, 0x01, 0x81, 0x80, 0x80, 0x80, 0x80,
+                 0x80, 0x80, 0x10, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                 0x01, 0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01},
+                "shared-fixture encode wideAgg boundary");
+
+    // 응답: max=u64::MAX, adjusted=i64::MIN+5 → 둘 다 BigInt 복원.
+    // == WIDEAGG_BOUNDARY_RESPONSE 바디 "ffffffffffffffffff01 f5ffffffffffffffff01".
+    uint8_t body[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01,
+                      0xf5, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01};
+    rc::Reader r(body, sizeof(body));
+    Value result = gen::decode_by_id(rt, 28, r);
+    Object obj = result.getObject(rt);
+    Value max = obj.getProperty(rt, "max");
+    Value adjusted = obj.getProperty(rt, "adjusted");
+    if (!max.isBigInt() || max.asBigInt(rt).asUint64(rt) != UINT64_MAX) {
+      std::printf("FAIL decode wideAgg max u64::MAX\n"); ++g_failures;
+    }
+    if (!adjusted.isBigInt() || adjusted.asBigInt(rt).asInt64(rt) != (INT64_MIN + 5)) {
+      std::printf("FAIL decode wideAgg adjusted i64::MIN+5\n"); ++g_failures;
+    }
+  }
+
+  // 빈 벡터 + None → "1c000000" (WIDEAGG_EMPTY_REQUEST), 응답 00 00.
+  {
+    Object args(rt);
+    Array samples(rt, 0);
+    args.setProperty(rt, "samples", samples);
+    args.setProperty(rt, "offset", Value::null());
+    Value argsV(rt, args);
+    rc::Writer w;
+    if (!gen::encode_by_id(rt, 28, argsV, w)) {
+      std::printf("FAIL encode_by_id(wideAgg empty) returned false\n");
+      ++g_failures;
+    }
+    check_bytes(w.take(), {0x1c, 0x00, 0x00, 0x00}, "shared-fixture encode wideAgg empty");
+
+    uint8_t body[] = {0x00, 0x00};
+    rc::Reader r(body, sizeof(body));
+    Value result = gen::decode_by_id(rt, 28, r);
+    Object obj = result.getObject(rt);
+    Value max = obj.getProperty(rt, "max");
+    Value adjusted = obj.getProperty(rt, "adjusted");
+    if (!max.isNumber() || max.asNumber() != 0.0) {
+      std::printf("FAIL decode wideAgg empty max must be number 0\n"); ++g_failures;
+    }
+    if (!adjusted.isNumber() || adjusted.asNumber() != 0.0) {
+      std::printf("FAIL decode wideAgg empty adjusted must be number 0\n"); ++g_failures;
+    }
+  }
+
+  // 다원소 5/9/10바이트 varint (2^28, 2^35, 2^49) + Some(5)
+  // → WIDEAGG_MULTIELEMENT_REQUEST "1c000380808080018080808080018080808080808001010a".
+  {
+    Object args(rt);
+    Array samples(rt, 3);
+    samples.setValueAtIndex(rt, 0, 268435456.0);          // 2^28
+    samples.setValueAtIndex(rt, 1, 34359738368.0);        // 2^35
+    samples.setValueAtIndex(rt, 2, 562949953421312.0);    // 2^49
+    args.setProperty(rt, "samples", samples);
+    args.setProperty(rt, "offset", 5.0);
+    Value argsV(rt, args);
+    rc::Writer w;
+    if (!gen::encode_by_id(rt, 28, argsV, w)) {
+      std::printf("FAIL encode_by_id(wideAgg multi) returned false\n");
+      ++g_failures;
+    }
+    check_bytes(w.take(),
+                {0x1c, 0x00, 0x03, 0x80, 0x80, 0x80, 0x80, 0x01, 0x80, 0x80, 0x80, 0x80,
+                 0x80, 0x01, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01, 0x01, 0x0a},
+                "shared-fixture encode wideAgg multi");
+  }
+
   // ── decode rustraRegistryDemo response: struct 순서 ok,frozen,message 검증 ──
   // Rust 가 postcard(RegistryDemoOutput) 를 구조체 순서(ok,frozen,message)로 직렬화.
   {
@@ -460,8 +657,7 @@ int main() {
   // generated C++ codec 이 동일하게 encode/decode 함을 증명한다. 코너 하나라도
   // 드리프트하면 세 테스트 중 하나가 실패 → 스키마/코덱 회귀 감지.
   //
-  // 정적 코덱에 존재하는 greet 만 C++ 교차 검증 가능. addNumbers 는
-  // int64/BigInt 안전성을 위해 JS complex codec 경로로 분리된다.
+  // 정적 코덱에 존재하는 greet 와 B1 이후 직결된 wideAgg 를 C++ 교차 검증한다.
   // divide·secureCompute 는 동적 명령(C++ static codec 없음 → JS Tier 3 fallback)
   // 이므로 divide 에러 프레임은 Rust↔TS 교차 증명(cross-wire.test.ts)에 한정.
 
@@ -495,17 +691,79 @@ int main() {
 
   // ── has_static_codec / dispatch ──
   {
-    if (gen::has_static_codec("addNumbers")) { std::printf("FAIL has_static_codec(addNumbers) should be false\n"); ++g_failures; }
+    if (!gen::has_static_codec("addNumbers")) { std::printf("FAIL has_static_codec(addNumbers)\n"); ++g_failures; }
+    if (!gen::has_static_codec("wideAgg")) { std::printf("FAIL has_static_codec(wideAgg)\n"); ++g_failures; }
     if (!gen::has_static_codec("echoGroups")) { std::printf("FAIL has_static_codec(echoGroups)\n"); ++g_failures; }
     if (!gen::has_static_codec("rustraRegistryDemo")) { std::printf("FAIL has_static_codec(rustraRegistryDemo)\n"); ++g_failures; }
+    if (!gen::has_static_codec("tagSet")) { std::printf("FAIL has_static_codec(tagSet)\n"); ++g_failures; }
     if (gen::has_static_codec("dynamicCmd")) { std::printf("FAIL has_static_codec(dynamicCmd) should be false\n"); ++g_failures; }
+  }
+
+  // ── B2: native complex codec — Set(uniqueItems) ─────────────────
+  // tagSet 은 Set<i64> 입력 / Set<string> 출력. TS complex-codec 계약과
+  // 동일: encode 는 Set 이터레이션 순서 보존([...set] — 정렬/중복제거
+  // 없음), decode 는 전역 Set 생성자로 복원(new Set(values)). Rust
+  // BTreeSet 은 정렬 순서로 직렬화하지만 디코딩은 Set 이므로 순서 차이는
+  // 관측되지 않는다. PINNED hex 는 wire_fixtures.rs TAGSET_* 와 짝이다.
+  {
+    // Set encode: new Set([-7, 1000, 15]) — 이터레이션 순서 그대로
+    // [-7, 1000, 15] (Rust BTreeSet 의 정렬 순서와 다름이 의도).
+    Object args(rt);
+    Object setObj(rt);
+    Array items(rt, 3);
+    items.setValueAtIndex(rt, 0, -7.0);
+    items.setValueAtIndex(rt, 1, 1000.0);
+    items.setValueAtIndex(rt, 2, 15.0);
+    // shim/실 JSI 모두 Set 은 Object — 전역 Set 으로 만든다(실 런타임 계약).
+    Function setCtor = rt.global().getPropertyAsFunction(rt, "Set");
+    {
+      Value setArgs[] = {Value(rt, items)};
+      setObj = setCtor.callAsConstructor(rt, setArgs, 1).getObject(rt);
+    }
+    args.setProperty(rt, "ids", setObj);
+    Value argsV(rt, args);
+
+    rc::Writer w;
+    if (!gen::encode_by_name(rt, "tagSet", Value(rt, args), w)) {
+      std::printf("FAIL encode_by_name(tagSet) returned false\n");
+      ++g_failures;
+    }
+    // [cmd 26 LE][count 3][zigzag(-7)=13][zigzag(1000)=2000 LEB128 d0 0f][zigzag(15)=30]
+    check_bytes(w.take(), {0x1d, 0x00, 0x03, 0x0d, 0xd0, 0x0f, 0x1e},
+                "encode tagSet Set iteration order (no sort/dedup)");
+
+    // 배열 입력도 TS 계약과 동일하게 허용된다.
+    {
+      Object arrArgs(rt);
+      Array plain(rt, 2);
+      plain.setValueAtIndex(rt, 0, 5.0);
+      plain.setValueAtIndex(rt, 1, 5.0); // 중복 — C++ 는 중복제거하지 않는다
+      arrArgs.setProperty(rt, "ids", plain);
+      rc::Writer w2;
+      gen::encode_by_name(rt, "tagSet", Value(rt, arrArgs), w2);
+      check_bytes(w2.take(), {0x1d, 0x00, 0x02, 0x0a, 0x0a},
+                  "encode tagSet array input keeps duplicates");
+    }
+
+    // Set decode: ["t-7","t1000","t15"] → 전역 Set 생성자 복원.
+    // len: "t-7"=3, "t1000"=5, "t15"=3.
+    uint8_t body[] = {0x03, 0x03, 't', '-', '7', 0x05, 't', '1', '0', '0', '0', 0x03, 't', '1', '5'};
+    rc::Reader r(body, sizeof(body));
+    Value result = gen::decode_by_name(rt, "tagSet", r);
+    Object tags = result.getObject(rt).getProperty(rt, "tags").getObject(rt);
+    bool isSet = tags.instanceOf(rt, rt.global().getPropertyAsFunction(rt, "Set"));
+    Value sizeV = tags.getProperty(rt, "size");
+    if (!isSet || !sizeV.isNumber() || sizeV.asNumber() != 3.0) {
+      std::printf("FAIL decode tagSet must restore a real Set of size 3\n");
+      ++g_failures;
+    }
   }
 
   // ── encode_by_id / decode_by_id (P0-3: u16 디스패치) ──
   // by_name 과 동일한 per-command 함수를 재사용하므로 바이트/값이 완전히
   // 동일해야 한다 — switch 케이스가 잘못 매핑되면 즉시 드러난다.
 
-  // (1) encode_by_id(addNumbers=1) is delegated to the JS complex route.
+  // (1) encode_by_id(addNumbers=1) — B1 이후 네이티브 코덱이 직접 처리.
   {
     Object args(rt);
     args.setProperty(rt, "a", 42.0);
@@ -513,10 +771,11 @@ int main() {
     Value argsV(rt, args);
     rc::Writer w;
     bool ok = gen::encode_by_id(rt, 1, argsV, w);
-    if (ok || !w.take().empty()) {
-      std::printf("FAIL encode_by_id(1) must return false for JS complex route\n");
+    if (!ok) {
+      std::printf("FAIL encode_by_id(1) returned false\n");
       ++g_failures;
     }
+    check_bytes(w.take(), {0x01, 0x00, 0x54, 0x74}, "encode_by_id addNumbers {42,58}");
   }
 
   // (2) encode_by_id(greet=5) — 다른 케이스도 정확히 매핑되는지
