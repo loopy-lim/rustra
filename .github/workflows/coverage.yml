@@ -22,7 +22,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo install cargo-llvm-cov --locked
       - name: Rust coverage (rustra + macros)
+        # pipefail 필수 — 없으면 파이프 마지막 명령(tail)의 exit 0 가 잡 성공으로
+        # 이어져 llvm-cov/테스트 실패가 조용히 묻힌다.
         run: |
+          set -o pipefail
           cargo llvm-cov -p rustra -p rustra-macros --summary-only 2>&1 | tee cov.txt | tail -15 >> "$GITHUB_STEP_SUMMARY"
           cargo llvm-cov -p rustra -p rustra-macros --lcov --output-path lcov.info
       - uses: actions/upload-artifact@v7
@@ -43,7 +46,13 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build
       - name: TS coverage (c8)
+        # pipefail 필수 — 없으면 bun 테스트 실패가 tail 의 exit 0 에 묻혀 coverage
+        # 수치가 전부 실패한 테스트 기준으로 나온다(false signal). 또한 이 잡은
+        # cargo 빌드가 없어 target/ 가 비어 있으므로 네이티브 dlopen 테스트
+        # (packages/bun, examples 런타임)는 여기서 어차피 실패한다 — coverage:ts
+        # 가 유닛 성격의 테스트만 집는지 확인한다(실패 시 이 잡이 적신다).
         run: |
+          set -o pipefail
           bun run coverage:ts 2>&1 | tee cov-ts.txt | tail -20 >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
         with:

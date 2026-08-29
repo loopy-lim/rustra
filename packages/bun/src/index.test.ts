@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { suffix, toArrayBuffer } from 'bun:ffi';
@@ -7,6 +8,16 @@ import { createBunBootstrap, createBunEngine, createBunFfiEngine } from './index
 import { RustraCommandError, type RkyvV2Codec } from '@rustra/types';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+// 네이티브 dylib 를 dlopen 하는 테스트는 실제 라이브러리가 있을 때만 의미가 있다.
+// Coverage 워크플로(coverage.yml typescript 잡)는 cargo 빌드가 없어 target/ 가
+// 비어 있고, RUSTRA_BUN_COVERAGE=1 로 실행된다 — node 패키지의 processTest
+// 스킵 관례와 동일하게 그 환경에서 네이티브 테스트를 건너뛴다(실패로 기록하지
+// 않는다). 일반 PR 게이트(ci.yml typescript 잡)는 dylib 를 빌드하므로 항상 실행.
+const nativeTest =
+  process.env.RUSTRA_BUN_COVERAGE === '1' ||
+  !existsSync(resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`))
+    ? test.skip
+    : test;
 const addNumbersCodec: RkyvV2Codec<{ a: number; b: number }, { value: number }> = {
   commandId: 1,
   encode({ a, b }) {
@@ -181,22 +192,25 @@ test('createBunEngine parses Display-style "code: message" Error message', async
   );
 });
 
-test('createBunBootstrap loads the stable Rustra ABI without transport boilerplate', async () => {
-  const bootstrap = createBunBootstrap({
-    libraryCandidates: [
-      resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`),
-      resolve(repoRoot, `target/debug/librustra_calculator_example.${suffix}`),
-    ],
-    rkyvV2Codecs: testRegistry,
-  });
-  try {
-    const engine = await bootstrap.ready();
-    const result = await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
-    assert.equal(result.value, 42);
-  } finally {
-    bootstrap.dispose();
-  }
-});
+nativeTest(
+  'createBunBootstrap loads the stable Rustra ABI without transport boilerplate',
+  async () => {
+    const bootstrap = createBunBootstrap({
+      libraryCandidates: [
+        resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`),
+        resolve(repoRoot, `target/debug/librustra_calculator_example.${suffix}`),
+      ],
+      rkyvV2Codecs: testRegistry,
+    });
+    try {
+      const engine = await bootstrap.ready();
+      const result = await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
+      assert.equal(result.value, 42);
+    } finally {
+      bootstrap.dispose();
+    }
+  },
+);
 
 test('createBunBootstrap gives an actionable library override hint', async () => {
   const previous = process.env.RUSTRA_BUN_LIBRARY;
@@ -219,7 +233,7 @@ test('createBunBootstrap gives an actionable library override hint', async () =>
 // 바로 dispatch+write, 부족하면 usize::MAX 상태 + 필요 크기 → 정확한 크기로
 // 1회 재시도. Rust 는 응답을 malloc 하지 않으므로 free 짝이 필요 없다.
 
-test('rustra_ffi_invoke_rkyv_v2_into honors the caller-buffer status contract', async () => {
+nativeTest('rustra_ffi_invoke_rkyv_v2_into honors the caller-buffer status contract', async () => {
   const { dlopen, FFIType, suffix } = await import('bun:ffi');
   const dylib = resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`);
   const lib = dlopen(dylib, {
@@ -259,35 +273,40 @@ test('rustra_ffi_invoke_rkyv_v2_into honors the caller-buffer status contract', 
   assert.equal(buffer[8], 84);
 });
 
-test('createBunFfiEngine dispatches rkyv V2 through the caller-buffer into binding', async () => {
-  const runtime = await createBunFfiEngine({
-    libraryCandidates: [resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`)],
-    rkyvV2Codecs: testRegistry,
-  });
-  try {
-    // 어댑터가 malloc 변형이 아닌 _into 바인딩을 사용해야 한다.
-    assert.equal(runtime.usesCallerBufferInto, true);
-    const engine = runtime.engine;
+nativeTest(
+  'createBunFfiEngine dispatches rkyv V2 through the caller-buffer into binding',
+  async () => {
+    const runtime = await createBunFfiEngine({
+      libraryCandidates: [
+        resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`),
+      ],
+      rkyvV2Codecs: testRegistry,
+    });
+    try {
+      // 어댑터가 malloc 변형이 아닌 _into 바인딩을 사용해야 한다.
+      assert.equal(runtime.usesCallerBufferInto, true);
+      const engine = runtime.engine;
 
-    // 1) 작은 응답 — 재사용 512B 버퍼 경로.
-    const small = await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
-    assert.equal(small.value, 42);
+      // 1) 작은 응답 — 재사용 512B 버퍼 경로.
+      const small = await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
+      assert.equal(small.value, 42);
 
-    // 2) 큰 응답(610B > 512B) — overflow 상태 → 정확한 크기 heap 재시도.
-    const payload = benchEchoBytes(600);
-    const big = await engine.invoke<Uint8Array>('benchEchoBytes', payload);
-    assert.deepEqual(big, payload);
+      // 2) 큰 응답(610B > 512B) — overflow 상태 → 정확한 크기 heap 재시도.
+      const payload = benchEchoBytes(600);
+      const big = await engine.invoke<Uint8Array>('benchEchoBytes', payload);
+      assert.deepEqual(big, payload);
 
-    // 3) buffer 재사용 계약 — 이전 호출의 소유 결과는 이후 호출이 같은 재사용
-    // 버퍼를 덮어써도 오염되지 않는다(malloc'd 포인터/뷰 공유 없음).
-    const kept = await engine.invoke<Uint8Array>('benchEchoBytes', benchEchoBytes(600));
-    await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
-    assert.equal(kept.length, 600);
-    assert.deepEqual(kept, benchEchoBytes(600));
-  } finally {
-    runtime.close();
-  }
-});
+      // 3) buffer 재사용 계약 — 이전 호출의 소유 결과는 이후 호출이 같은 재사용
+      // 버퍼를 덮어써도 오염되지 않는다(malloc'd 포인터/뷰 공유 없음).
+      const kept = await engine.invoke<Uint8Array>('benchEchoBytes', benchEchoBytes(600));
+      await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
+      assert.equal(kept.length, 600);
+      assert.deepEqual(kept, benchEchoBytes(600));
+    } finally {
+      runtime.close();
+    }
+  },
+);
 
 // (T0-4) dev 치환 워크플로우 E2E — register → invoke → unregister(스키마 변경)
 // → invoke. JS 엔진이 JS 측 동기화 없이 세대 게이트로 스테일 캐시를 재동기화하고,
@@ -296,61 +315,67 @@ test('createBunFfiEngine dispatches rkyv V2 through the caller-buffer into bindi
 // 응답)로 수행한다: `rustraRegistryDemo` 같은 정적 명령은 postcard wire라 빈
 // 코덱 맵의 엔진이 Tier 3 JSON을 보내면 디코드가 깨진다. 디버그 dylib을 쓰는
 // 이유는 런타임 mutation이 dev 전용(frozen)이기 때문이다.
-test('createBunFfiEngine dev-substitution workflow re-syncs live schema via generation gate', async () => {
-  const { dlopen, FFIType, suffix: ffiSuffix } = await import('bun:ffi');
-  const libPath = resolve(repoRoot, `target/debug/librustra_calculator_example.${ffiSuffix}`);
-  const control = dlopen(libPath, {
-    rustra_mobile_init: { args: [], returns: FFIType.void },
-    rustra_ffi_invoke_json: { args: [FFIType.ptr, FFIType.u64, FFIType.ptr], returns: FFIType.ptr },
-    rustra_ffi_free: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.void },
-  });
-  control.symbols.rustra_mobile_init();
-  const outLen = new BigUint64Array(1);
-  const callJson = (command: string, args: unknown): { ok: boolean; result?: unknown } => {
-    const request = new TextEncoder().encode(JSON.stringify({ command, args }));
-    outLen[0] = 0n;
-    const ptr = control.symbols.rustra_ffi_invoke_json(request, BigInt(request.length), outLen);
-    assert.ok(ptr !== null && Number(ptr) !== 0, 'JSON FFI must return a buffer');
-    const length = Number(outLen[0]);
+nativeTest(
+  'createBunFfiEngine dev-substitution workflow re-syncs live schema via generation gate',
+  async () => {
+    const { dlopen, FFIType, suffix: ffiSuffix } = await import('bun:ffi');
+    const libPath = resolve(repoRoot, `target/debug/librustra_calculator_example.${ffiSuffix}`);
+    const control = dlopen(libPath, {
+      rustra_mobile_init: { args: [], returns: FFIType.void },
+      rustra_ffi_invoke_json: {
+        args: [FFIType.ptr, FFIType.u64, FFIType.ptr],
+        returns: FFIType.ptr,
+      },
+      rustra_ffi_free: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.void },
+    });
+    control.symbols.rustra_mobile_init();
+    const outLen = new BigUint64Array(1);
+    const callJson = (command: string, args: unknown): { ok: boolean; result?: unknown } => {
+      const request = new TextEncoder().encode(JSON.stringify({ command, args }));
+      outLen[0] = 0n;
+      const ptr = control.symbols.rustra_ffi_invoke_json(request, BigInt(request.length), outLen);
+      assert.ok(ptr !== null && Number(ptr) !== 0, 'JSON FFI must return a buffer');
+      const length = Number(outLen[0]);
+      try {
+        const view = new Uint8Array(toArrayBuffer(ptr, 0, length));
+        return JSON.parse(new TextDecoder().decode(view));
+      } finally {
+        control.symbols.rustra_ffi_free(ptr, BigInt(length));
+      }
+    };
+    const registryOp = (op: string): void => {
+      const resp = callJson('rustraRegistryDemo', { op });
+      assert.equal(resp.ok, true, `registry op ${op} must succeed: ${JSON.stringify(resp)}`);
+    };
+
+    const runtime = await createBunFfiEngine({
+      libraryCandidates: [libPath],
+      rkyvV2Codecs: new Map(),
+    });
     try {
-      const view = new Uint8Array(toArrayBuffer(ptr, 0, length));
-      return JSON.parse(new TextDecoder().decode(view));
+      const engine = runtime.engine;
+
+      // 등록 전: 미등록 동적 명령은 시끄럽게 실패.
+      await assert.rejects(
+        engine.invoke('ping', {}),
+        (err: unknown) => err instanceof RustraCommandError && err.code === 'command.not_found',
+      );
+
+      // register (dev 치환) → 동적 Tier 3 invoke 성공.
+      registryOp('register');
+      const pong = await engine.invoke<{ pong: boolean }>('ping', {});
+      assert.equal(pong.pong, true, 'registered dynamic command must round-trip (tier 3)');
+
+      // unregister (스키마 변경) → 재호출. 스테일 캐시가 옛 entry를 쓰면 옛
+      // commandId로 invoke가 나가 네이티브 not_found 에러 프레임이 날아온다 —
+      // 게이트가 재동기화해 JS 측 command.not_found 계약을 지켜야 한다.
+      registryOp('unregister');
+      await assert.rejects(
+        engine.invoke('ping', {}),
+        (err: unknown) => err instanceof RustraCommandError && err.code === 'command.not_found',
+      );
     } finally {
-      control.symbols.rustra_ffi_free(ptr, BigInt(length));
+      runtime.close();
     }
-  };
-  const registryOp = (op: string): void => {
-    const resp = callJson('rustraRegistryDemo', { op });
-    assert.equal(resp.ok, true, `registry op ${op} must succeed: ${JSON.stringify(resp)}`);
-  };
-
-  const runtime = await createBunFfiEngine({
-    libraryCandidates: [libPath],
-    rkyvV2Codecs: new Map(),
-  });
-  try {
-    const engine = runtime.engine;
-
-    // 등록 전: 미등록 동적 명령은 시끄럽게 실패.
-    await assert.rejects(
-      engine.invoke('ping', {}),
-      (err: unknown) => err instanceof RustraCommandError && err.code === 'command.not_found',
-    );
-
-    // register (dev 치환) → 동적 Tier 3 invoke 성공.
-    registryOp('register');
-    const pong = await engine.invoke<{ pong: boolean }>('ping', {});
-    assert.equal(pong.pong, true, 'registered dynamic command must round-trip (tier 3)');
-
-    // unregister (스키마 변경) → 재호출. 스테일 캐시가 옛 entry를 쓰면 옛
-    // commandId로 invoke가 나가 네이티브 not_found 에러 프레임이 날아온다 —
-    // 게이트가 재동기화해 JS 측 command.not_found 계약을 지켜야 한다.
-    registryOp('unregister');
-    await assert.rejects(
-      engine.invoke('ping', {}),
-      (err: unknown) => err instanceof RustraCommandError && err.code === 'command.not_found',
-    );
-  } finally {
-    runtime.close();
-  }
-});
+  },
+);

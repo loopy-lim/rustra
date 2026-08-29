@@ -227,6 +227,13 @@ jobs:
         # 버퍼 비앨리어싱) 계약의 유일한 자동화 검증이다. umbrella `test`에만
         # 있어 CI가 놓치던 것을 PR 게이트로 승격.
         run: bun run --cwd packages/bun test
+      - name: Test types + react-native engine units
+        # packages/types(generation 게이트 등 엔진 코어 계약)와
+        # packages/react-native(레거시 JSI 스킵/재동기화)는 umbrella `test`에만
+        # 있어 PR 게이트가 놓치고 있었다 — test:ts:bun 의 glob 은 examples 전용.
+        run: |
+          bun run --cwd packages/types test
+          bun run --cwd packages/react-native test
       - name: C++ generated codec tests
         # TS/Rust/C++ 3면 PINNED hex 게이트의 C++ 다리 — shim 테스트가 실제로
         # 실행돼야 생성 코덱과 fixture 간 드리프트를 PR 단계에서 잡는다.
