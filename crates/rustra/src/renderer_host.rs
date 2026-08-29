@@ -152,6 +152,9 @@ pub trait RendererHost: Send + 'static {
 ///
 /// `evaluate_script == false` 인 renderer (present-only) 에게는 eval 기반 경로를
 /// 시도하지 않아야 한다. 이 함수가 그 결정을 한 곳에서 내린다.
+// deprecated RendererHost 를 감싼 유일한 헬퍼 — 소비자는 이 함수를 쓰면 자체
+// allow 없이 deprecated 경고를 피한다.
+#[allow(deprecated)]
 pub fn host_supports_eval(host: &impl RendererHost) -> bool {
     host.capabilities().evaluate_script
 }

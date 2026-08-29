@@ -1,3 +1,7 @@
+// deprecated RendererHost 의 유일한 in-repo 구현체(MockHost)를 담은 테스트 모듈 —
+// trait 계약 자체를 검증하는 것이 목적이므로 모듈 전체에서 deprecated 를 허용한다.
+#![allow(deprecated)]
+
 use super::*;
 use std::sync::Mutex;
 

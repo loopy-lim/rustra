@@ -163,10 +163,8 @@ impl GeneratedPackage {
 
 fn write_if_changed(path: impl AsRef<Path>, content: &str) -> std::io::Result<()> {
     let path = path.as_ref();
-    if let Ok(existing) = fs::read(path) {
-        if existing == content.as_bytes() {
-            return Ok(());
-        }
+    if fs::read(path).is_ok_and(|existing| existing == content.as_bytes()) {
+        return Ok(());
     }
     fs::write(path, content)
 }
