@@ -1,7 +1,7 @@
 import { isRetryableCode, RustraCommandError } from './errors.js';
 import { CODEC_TYPED, CODEC_RAW, CODEC_POSITIONAL } from './global.js';
 import { decodeTier3Response, encodeTier3Request } from './json-wire.js';
-import { debugWire } from './debug.js';
+import { debugWire, dumpWire } from './debug.js';
 import { tier2Outcome, payloadTooLargeError } from './rkyv-engine-contract.js';
 import type { RkyvDispatchRuntime, RkyvEngineContext } from './rkyv-engine-context.js';
 
@@ -58,8 +58,10 @@ export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispa
       const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
       if (tooLarge) throw tooLarge;
       debugWire('request', 'rkyv', command, encoded);
+      dumpWire('request', encoded);
       const resultBytes = native.invokeRkyvV2(encoded);
       debugWire('response', 'rkyv', command, resultBytes);
+      dumpWire('response', resultBytes);
       // Reject (do not throw) so the declared Promise<T> contract holds and
       // callers can use .catch() / await-try-consistently for command errors.
       const outcome = tier2Outcome<T>(codec, resultBytes);
@@ -81,8 +83,10 @@ export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispa
     const tooLarge = payloadTooLargeError(tier3Request.byteLength, payloadLimit);
     if (tooLarge) throw tooLarge;
     debugWire('request', 'rkyv', command, tier3Request);
+    dumpWire('request', tier3Request);
     const tier3Response = native.invokeRkyvV2(tier3Request);
     debugWire('response', 'rkyv', command, tier3Response);
+    dumpWire('response', tier3Response);
     const resp = decodeTier3Response(tier3Response);
     if (!resp.ok) {
       const e = resp.error ?? { code: 'invoke.failed', message: 'RkyvV2 (tier3) invoke failed' };
