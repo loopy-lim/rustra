@@ -1,149 +1,28 @@
-use super::complex_codec_encode::encode_node;
 use super::{
     ComplexCodecLimits, Result,
+    complex_codec_decode::decode_node_ir,
+    complex_codec_encode::encode_node_ir,
     complex_codec_schema::error,
-    complex_codec_variants::{discriminator, sorted_map_keys},
-    complex_codec_wire::Writer,
+    complex_codec_wire::{Reader, Writer},
+    complex_schema_ir::{IrNode, compile},
 };
-use serde_json::{Map, Value};
-use std::collections::BTreeSet;
+use serde_json::Value;
 
-pub(crate) fn encode_object_or_map(
-    writer: &mut Writer,
-    schema: &Value,
-    value: &Value,
-    definitions: &Value,
-    limits: ComplexCodecLimits,
-    depth: usize,
-) -> Result<()> {
-    let object = value.as_object().ok_or_else(|| error("expected object"))?;
-    if schema.get("additionalProperties").is_some() && schema.get("properties").is_none() {
-        let value_schema = schema
-            .get("additionalProperties")
-            .filter(|schema| !schema.is_boolean())
-            .ok_or_else(|| error("map schema is missing value type"))?;
-        let keys = sorted_map_keys(object);
-        if keys.len() > limits.max_collection_length {
-            return Err(error(format!(
-                "collection length exceeds {}",
-                limits.max_collection_length
-            )));
-        }
-        writer.varint(keys.len() as u128)?;
-        for key in keys {
-            writer.string(key)?;
-            encode_node(
-                writer,
-                value_schema,
-                &object[key],
-                definitions,
-                limits,
-                depth + 1,
-            )?;
-        }
-        return Ok(());
-    }
-    encode_object(writer, schema, object, definitions, limits, depth, None)
-}
-
-fn encode_object(
-    writer: &mut Writer,
-    schema: &Value,
-    value: &Map<String, Value>,
-    definitions: &Value,
-    limits: ComplexCodecLimits,
-    depth: usize,
-    skip_key: Option<&str>,
-) -> Result<()> {
-    let required: BTreeSet<&str> = schema
-        .get("required")
-        .and_then(Value::as_array)
-        .map(|values| values.iter().filter_map(Value::as_str).collect())
-        .unwrap_or_default();
-    for (key, field_schema) in schema
-        .get("properties")
-        .and_then(Value::as_object)
-        .into_iter()
-        .flat_map(|properties| properties.iter())
-    {
-        if skip_key == Some(key.as_str()) {
-            continue;
-        }
-        let present = value.contains_key(key);
-        if !required.contains(key.as_str()) {
-            writer.byte(u8::from(present))?;
-        }
-        if present {
-            encode_node(
-                writer,
-                field_schema,
-                &value[key],
-                definitions,
-                limits,
-                depth + 1,
-            )?;
-        } else if required.contains(key.as_str()) {
-            return Err(error(format!("missing required field {key}")));
-        }
-    }
-    Ok(())
-}
-
-pub(crate) fn encode_variant(
-    writer: &mut Writer,
-    schema: &Value,
-    value: &Value,
-    definitions: &Value,
-    limits: ComplexCodecLimits,
-    depth: usize,
-) -> Result<()> {
-    if let Some((key, _)) = discriminator(schema) {
-        return encode_object(
-            writer,
-            schema,
-            value
-                .as_object()
-                .ok_or_else(|| error("expected enum object"))?,
-            definitions,
-            limits,
-            depth,
-            Some(&key),
-        );
-    }
-    if let Some(properties) = schema.get("properties").and_then(Value::as_object)
-        && properties.len() == 1
-    {
-        let key = properties.keys().next().unwrap();
-        let variant_value = value
-            .as_object()
-            .and_then(|object| object.get(key))
-            .ok_or_else(|| error(format!("missing enum variant payload {key}")))?;
-        return encode_node(
-            writer,
-            &properties[key],
-            variant_value,
-            definitions,
-            limits,
-            depth,
-        );
-    }
-    if schema.get("const").is_some() || schema.get("enum").is_some() {
-        return Ok(());
-    }
-    encode_node(writer, schema, value, definitions, limits, depth)
-}
-
+/// 호출당 컴파일 진입 — 테스트/비핫 경로용. 핫 경로(명령 핸들러)는 빌드 시점
+/// 1회 컴파일한 [`CompiledComplex`] 를 캡처한다.
 pub(crate) fn complex_encode(
     schema: &Value,
     definitions: &Value,
     value: &Value,
     limits: ComplexCodecLimits,
 ) -> Result<Vec<u8>> {
+    let ir = compile(schema, definitions)?;
     let mut writer = Writer::new(limits);
-    encode_node(&mut writer, schema, value, definitions, limits, 0)?;
+    encode_node_ir(&mut writer, &ir, value, limits, 0)?;
     Ok(writer.finish())
 }
 
+/// 호출당 컴파일 + caller 버퍼 직기록 (테스트/비핫 경로용).
 pub(crate) fn complex_encode_into(
     schema: &Value,
     definitions: &Value,
@@ -151,7 +30,72 @@ pub(crate) fn complex_encode_into(
     target: &mut [u8],
     limits: ComplexCodecLimits,
 ) -> Result<usize> {
+    let ir = compile(schema, definitions)?;
     let mut writer = Writer::into_slice(target, limits);
-    encode_node(&mut writer, schema, value, definitions, limits, 0)?;
+    encode_node_ir(&mut writer, &ir, value, limits, 0)?;
     Ok(writer.written)
 }
+
+/// 빌드 시점 1회 컴파일 결과 — 명령 핸들러가 캡처하는 complex 코덱. 컴파일
+/// 실패(미지원 스키마)도 빌드 시점에 고정되고, 호출 시점에 동일한 에러를
+/// 재방출한다(원본이 매 호출 실패했을 것과 동일한 관찰 동작).
+#[derive(Clone, Debug)]
+pub(crate) struct CompiledComplex {
+    ir: Result<Arc<IrNode>>,
+}
+
+impl CompiledComplex {
+    /// 스키마 → IR 빌드 시점 1회 컴파일.
+    pub(crate) fn new(schema: &Value, definitions: &Value) -> Self {
+        Self {
+            ir: compile(schema, definitions),
+        }
+    }
+
+    pub(crate) fn encode(&self, value: &Value, limits: ComplexCodecLimits) -> Result<Vec<u8>> {
+        let ir = self.ir.as_ref().map_err(|error| error.clone())?;
+        let mut writer = Writer::new(limits);
+        encode_node_ir(&mut writer, ir, value, limits, 0)?;
+        Ok(writer.finish())
+    }
+
+    pub(crate) fn encode_into(
+        &self,
+        value: &Value,
+        target: &mut [u8],
+        limits: ComplexCodecLimits,
+    ) -> Result<usize> {
+        let ir = self.ir.as_ref().map_err(|error| error.clone())?;
+        let mut writer = Writer::into_slice(target, limits);
+        encode_node_ir(&mut writer, ir, value, limits, 0)?;
+        Ok(writer.written)
+    }
+
+    pub(crate) fn decode(&self, bytes: &[u8], limits: ComplexCodecLimits) -> Result<Value> {
+        let ir = self.ir.as_ref().map_err(|error| error.clone())?;
+        let mut reader = Reader::new(bytes, limits)?;
+        let value = decode_node_ir(&mut reader, ir, limits, 0)?;
+        if reader.remaining() != 0 {
+            return Err(error("trailing bytes in complex payload"));
+        }
+        Ok(value)
+    }
+}
+
+/// 호출당 컴파일 디코드 — `complex_codec_tests` 와 비핫 경로용.
+pub(crate) fn test_only_complex_decode(
+    schema: &Value,
+    definitions: &Value,
+    bytes: &[u8],
+    limits: ComplexCodecLimits,
+) -> Result<Value> {
+    let ir = compile(schema, definitions)?;
+    let mut reader = Reader::new(bytes, limits)?;
+    let value = decode_node_ir(&mut reader, &ir, limits, 0)?;
+    if reader.remaining() != 0 {
+        return Err(error("trailing bytes in complex payload"));
+    }
+    Ok(value)
+}
+
+use std::sync::Arc;

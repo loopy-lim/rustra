@@ -60,11 +60,11 @@ where
         }))
     } else {
         // complex binary 라우트 — 입력 디코드/출력 인코딩은 rkyv_v2_handler 의
-        // complex 분기와 같은 스키마 같은 와이어. 출력만 bounded writer로 caller
-        // 버퍼에 직접 기록한다.
-        let input_schema = input_schema.clone();
-        let output_schema = output_schema.clone();
-        let definitions = definitions.clone();
+        // complex 분기와 같은 스키마 같은 와이어. 스키마 IR 을 빌드 시점에 1회
+        // 컴파일해 캡처한다(트랙 A). 출력만 bounded writer로 caller 버퍼에
+        // 직접 기록한다.
+        let input_codec = CompiledComplex::new(input_schema, definitions);
+        let output_codec = CompiledComplex::new(output_schema, definitions);
         let handler_into = handler.clone();
         Some(Arc::new(move |payload: &[u8], target: &mut [u8]| {
             if payload.len() < 2 {
@@ -74,7 +74,7 @@ where
                 max_payload_bytes: crate::limits::max_payload_bytes(),
                 ..ComplexCodecLimits::DEFAULT
             };
-            let input_value = complex_decode(&input_schema, &definitions, &payload[2..], limits)?;
+            let input_value = input_codec.decode(&payload[2..], limits)?;
             let input: I = serde_json::from_value(input_value)
                 .map_err(|e| RustraError::invalid_args(format!("complex decode: {e}")))?;
             let output = handler_into(input)?;
@@ -88,13 +88,9 @@ where
             if target.len() > 8 {
                 target[..8].fill(0);
                 target[0] = 1;
-                if let Ok(body_len) = complex_encode_into(
-                    &output_schema,
-                    &definitions,
-                    &output_value,
-                    &mut target[8..],
-                    limits,
-                ) {
+                if let Ok(body_len) =
+                    output_codec.encode_into(&output_value, &mut target[8..], limits)
+                {
                     let response_len = 8 + body_len;
                     if response_len <= limits.max_payload_bytes {
                         return Ok(DirectResponse::Written(response_len));
@@ -104,7 +100,7 @@ where
                 }
             }
 
-            let body = complex_encode(&output_schema, &definitions, &output_value, limits)?;
+            let body = output_codec.encode(&output_value, limits)?;
             let response_len = 8usize.saturating_add(body.len());
             if response_len > limits.max_payload_bytes {
                 return Err(RustraError::payload_too_large(

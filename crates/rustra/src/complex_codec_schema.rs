@@ -1,5 +1,4 @@
-use super::complex_codec_variants::{explicit_variant_keys, variant_key};
-use crate::{Result, RustraError};
+use crate::RustraError;
 use serde_json::Value;
 use std::collections::BTreeSet;
 
@@ -9,30 +8,6 @@ pub(crate) fn error(message: impl Into<String>) -> RustraError {
 
 pub(crate) fn ref_name(reference: &str) -> &str {
     reference.rsplit('/').next().unwrap_or(reference)
-}
-
-pub(crate) fn resolved_schema(
-    schema: &Value,
-    definitions: &Value,
-    limits: super::ComplexCodecLimits,
-    depth: usize,
-) -> Result<Value> {
-    if depth > limits.max_depth {
-        return Err(error("schema reference depth exceeded"));
-    }
-    if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
-        let definition = definitions
-            .get(ref_name(reference))
-            .ok_or_else(|| error(format!("missing schema definition {reference}")))?;
-        return resolved_schema(definition, definitions, limits, depth + 1);
-    }
-    if let Some(all_of) = schema.get("allOf").and_then(Value::as_array) {
-        if all_of.len() != 1 {
-            return Err(error("complex codec does not support multi-entry allOf"));
-        }
-        return resolved_schema(&all_of[0], definitions, limits, depth + 1);
-    }
-    Ok(schema.clone())
 }
 
 pub(crate) fn option_inner(schema: &Value) -> Option<Value> {
@@ -61,17 +36,6 @@ pub(crate) fn option_inner(schema: &Value) -> Option<Value> {
         }
     }
     None
-}
-
-pub(crate) fn is_unsigned(schema: &Value) -> bool {
-    schema
-        .get("format")
-        .and_then(Value::as_str)
-        .is_some_and(|format| format.starts_with("uint"))
-}
-
-pub(crate) fn type_name(schema: &Value) -> Option<&str> {
-    schema.get("type").and_then(Value::as_str)
 }
 
 pub(crate) fn complex_schema_supported(schema: &Value, definitions: &Value) -> bool {
@@ -124,12 +88,12 @@ pub(crate) fn complex_schema_supported(schema: &Value, definitions: &Value) -> b
             return true;
         }
         if matches!(
-            type_name(schema),
+            schema.get("type").and_then(Value::as_str),
             Some("boolean" | "integer" | "number" | "string" | "null")
         ) {
             return true;
         }
-        if type_name(schema) == Some("array") {
+        if schema.get("type").and_then(Value::as_str) == Some("array") {
             return match schema.get("items") {
                 Some(Value::Array(items)) => items
                     .iter()
@@ -138,7 +102,7 @@ pub(crate) fn complex_schema_supported(schema: &Value, definitions: &Value) -> b
                 _ => false,
             };
         }
-        if type_name(schema) == Some("object") {
+        if schema.get("type").and_then(Value::as_str) == Some("object") {
             if let Some(additional) = schema.get("additionalProperties") {
                 if let Some(properties) = schema.get("properties").and_then(Value::as_object) {
                     if additional.as_bool() != Some(false) {
@@ -167,3 +131,5 @@ pub(crate) fn complex_schema_supported(schema: &Value, definitions: &Value) -> b
     }
     visit(schema, definitions, &mut BTreeSet::new(), 0)
 }
+
+use super::complex_codec_variants::{explicit_variant_keys, variant_key};

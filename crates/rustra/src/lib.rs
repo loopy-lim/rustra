@@ -154,9 +154,10 @@ pub(crate) use std::sync::atomic::{AtomicBool, Ordering};
 pub(crate) use std::sync::{Arc, OnceLock, RwLock};
 
 pub(crate) use complex_codec::{
-    ComplexCodecLimits, annotate_variant_order, complex_decode, complex_encode,
-    complex_encode_into, complex_schema_supported,
+    CompiledComplex, ComplexCodecLimits, annotate_variant_order, complex_schema_supported,
 };
+#[cfg(test)]
+pub(crate) use complex_codec::{complex_encode, test_only_complex_decode};
 pub(crate) use rkyv_codec::{
     BinHandler, BinIntoHandler, DecodeFn, DirectResponse, EncodeFn, RawHandler,
     build_rkyv_v2_decoder, build_rkyv_v2_response_encoder, build_tier3_json_decoder,
