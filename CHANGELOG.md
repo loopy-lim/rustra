@@ -12,6 +12,42 @@
 - 생성물 drift 게이트, schema diff, Rust command 문서의 TypeScript JSDoc 전달,
   opt-in `RUSTRA_DEBUG` wire 진단을 보강했다.
 
+## 0.3 → 0.5 요약
+
+루트 버전 태그는 0.2.0 이후 패키지별 독립 릴리스로 운영된다. 세부 내역은
+각 `packages/*/CHANGELOG.md`와 `git tag`(`@rustra/*@0.3.0` ~ `0.5.0`) 참조.
+여기서는 0.2.0 이후 소비자가 알아야 할 최소한의 궤적만 요약한다.
+
+### 0.3.0 — 타입 패리티 1단계 + 채널/리소스
+
+- fast-path 타입 확장: uvar/bytes/map/tuple이 TS·Rust·C++ 3면 코드젠에서 일관
+  (f36cf983).
+- 타입 패리티 2단계 — Tauri v2 `ipc::Channel`·Resource 모델 채널/리소스 지원
+  (fa6bd00b). u32 핸들은 기존 uvar 와이어를 그대로 재사용한다.
+- `@rustra/testing` 계약 게이트, `@rustra/react` 훅 개선 등 성장 후속.
+
+### 0.4.0 — 멀티호스트 zero config (#42)
+
+- Node/Bun/Tauri/Expo/bare RN 생성 진입점이 lazy zero-config bootstrap을
+  소유한다. 호출부가 엔진을 직접 `configure()`하지 않는다.
+- JSI byte 전용 경로의 수명/복사 안전화, 호스트 벤치 영수증, Bun 1.4 고정.
+- 공개 패키지와 crate가 0.4로 lockstep 동기화되었다.
+
+### 0.4.1 → 0.5.0 — 복합 codec + bigint postcard fast-path (와이어 변경)
+
+- 0.4.1(#44): 스키마 기반 복합 바이너리 codec을 생성 클라이언트가 export.
+  독립 패키지 릴리스 라인 확정.
+- 0.5.0(#45): **와이어 변경 (stale codec 혼용 시 breaking)** —
+  - `int64`/`uint64` 필드가 complex codec 폴백 대신 postcard fast-path로
+    라우팅된다. 튜플/와이드 정수 명령의 와이어가 0.4.1과 다르다 — TS 코덱과
+    재생성된 Rust를 혼용하면 디코딩이 조용히 깨지므로 **양쪽을 함께
+    재생성**해야 한다.
+  - safe 정수(±2^53) 밖 값은 `bigint`로 복원된다. TS 타입 표면이
+    `i64`/`u64` 필드에서 `number` → `number | bigint`로 넓어진다
+    (`number`만 쓰던 호출부는 그대로 동작한다).
+  - `Vec<u64>`, `HashMap<String, u64>`, `Option<i64>` 등 복합 타입도 원소
+    레벨 64-bit 헬퍼 fast-path를 사용한다.
+
 ## 0.2.0 (2026-08-20)
 
 ### Removed
