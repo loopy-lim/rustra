@@ -18,14 +18,7 @@
   },
   "files": [
     "LICENSE",
-    "dist/index.d.ts",
-    "dist/index.d.ts.map",
-    "dist/index.js",
-    "dist/index.js.map",
-    "dist/contract-gate.d.ts",
-    "dist/contract-gate.d.ts.map",
-    "dist/contract-gate.js",
-    "dist/contract-gate.js.map",
+    "dist",
     "fixtures"
   ],
   "scripts": {

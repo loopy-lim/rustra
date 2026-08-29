@@ -18,26 +18,7 @@
   },
   "files": [
     "LICENSE",
-    "dist/context.d.ts",
-    "dist/context.d.ts.map",
-    "dist/context.js",
-    "dist/context.js.map",
-    "dist/index.d.ts",
-    "dist/index.d.ts.map",
-    "dist/index.js",
-    "dist/index.js.map",
-    "dist/useCommand.d.ts",
-    "dist/useCommand.d.ts.map",
-    "dist/useCommand.js",
-    "dist/useCommand.js.map",
-    "dist/useEvent.d.ts",
-    "dist/useEvent.d.ts.map",
-    "dist/useEvent.js",
-    "dist/useEvent.js.map",
-    "dist/useMutation.d.ts",
-    "dist/useMutation.d.ts.map",
-    "dist/useMutation.js",
-    "dist/useMutation.js.map"
+    "dist"
   ],
   "scripts": {
     "build": "tsc",

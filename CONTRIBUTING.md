@@ -232,14 +232,19 @@ Tauri 앱이 `rustra_dispatch`에서 에러를 반환할 때:
 
 ### 버전 관리
 
-- 현재 `0.1.0` (semver)
-- `0.x` 동안은 breaking change가 가능하나, 최소한의 변경으로 유지
-- Rust crate과 TS 패키지는 동일 버전을 유지
+- 현재 버전은 Rust workspace의 `Cargo.toml`과 각 `packages/*/package.json`을
+  기준으로 확인한다. 패키지들은 독립 release line이므로 모두 같은 버전일 것을
+  가정하지 않는다.
+- `0.x` 동안 breaking change가 가능하므로, 공개 API 변경은 반드시 changeset에
+  영향받는 패키지와 bump 종류를 명시한다.
+- 현재 릴리즈 작업은 `bunx changeset status`로 확인하고, 버전 필드와 CHANGELOG은
+  `bunx changeset version`이 갱신하도록 한다. 작업 중인 소스에서 임의로 버전을
+  올리거나 tag/push하지 않는다.
 
 ### 릴리즈 체크리스트
 
 1. `cargo test --workspace` 통과
 2. `bun run test:compat` 통과
-3. `Cargo.toml` 버전 갱신
-4. CHANGELOG 갱신 (있다면)
-5. git tag 및 push
+3. `bun run test:release-coherence`와 `bunx changeset status` 통과
+4. Version Packages PR에서 changeset 소비 및 CHANGELOG 갱신
+5. 승인된 릴리즈 절차에 따라 tag/push

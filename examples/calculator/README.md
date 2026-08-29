@@ -48,16 +48,16 @@ rustra.dispose();
 ## 생성된 커맨드 헬퍼
 
 ```ts
-import { invoke } from '@rustra/types';
+import { addNumbers } from '../generated/node.js';
 
-export function addNumbers(input: AddNumbersInput): Promise<AddNumbersOutput> {
-  return invoke<AddNumbersOutput>('addNumbers', input);
-}
+const result = await addNumbers({ a: 20, b: 22 });
+console.log(result.value); // 42
 ```
 
-생성된 host 파일이 lazy engine을 한 번 설치하므로 이후
-`addNumbers({ a: 42, b: 58 })`처럼 engine 파라미터 없이 호출합니다. 수동
-`configure()`는 custom transport를 주입할 때만 필요합니다.
+이 코드는 `createGeneratedFields2` 기반으로 생성된 helper와 Node host entry를
+사용합니다. 생성된 host 파일이 lazy engine을 한 번 설치하므로 helper는 engine
+파라미터 없이 호출합니다. Bun은 같은 방식으로 `../generated/bun.js`를 import하며,
+수동 `configure()`는 custom transport를 주입할 때만 필요합니다.
 
 ## 실사용 성능 확인
 

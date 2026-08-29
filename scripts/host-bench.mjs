@@ -30,7 +30,9 @@ function parseReceipt(stdout) {
 }
 
 if (!skipBuild) {
-  await run(['cargo', 'build', '--release', '-p', 'rustra-calculator-example', '--bins']);
+  // The Bun FFI path loads the package cdylib from target/release. `--bins`
+  // builds only the stdio executables and leaves that library absent.
+  await run(['cargo', 'build', '--release', '-p', 'rustra-calculator-example']);
   await run(['bun', 'run', '--cwd', 'examples/calculator-napi', 'build']);
   await run(['bun', 'run', 'build']);
   await run(['bunx', '--bun', 'tsc', '-p', 'examples/calculator/tsconfig.json']);

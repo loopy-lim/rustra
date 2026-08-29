@@ -423,12 +423,18 @@ generated/
 ```rust
 use rustra::prelude::*;
 
+#[bridge_type]
+struct DivideInput { a: i64, b: i64 }
+
+#[bridge_type]
+struct DivideOutput { value: i64 }
+
 #[command]
-fn divide(a: i64, b: i64) -> Result<i64> {
-    if b == 0 {
+fn divide(input: DivideInput) -> Result<DivideOutput> {
+    if input.b == 0 {
         return Err(RustraError::custom("division.by_zero", "cannot divide by zero"));
     }
-    Ok(a / b)
+    Ok(DivideOutput { value: input.a / input.b })
 }
 ```
 
