@@ -124,6 +124,33 @@ test('subscribeEvent shares one polling loop across separate subscribe calls', a
   }
 });
 
+test('subscribeEvent survives a synchronous drainEvents throw', async () => {
+  const restore = useFastPolling();
+  try {
+    let calls = 0;
+    const transport = {
+      invoke() {
+        return Promise.resolve(null);
+      },
+      drainEvents() {
+        calls += 1;
+        if (calls === 1) throw new Error('sync boom');
+        return Promise.resolve([{ name: 'ok', payload: 1 }]);
+      },
+      dispose() {},
+      get pid() {
+        return null;
+      },
+    } satisfies NodeLoopTransport;
+    const got: unknown[] = [];
+    subscribeEvent(transport, 'ok', (p) => got.push(p));
+    await waitFor(() => got.length >= 1);
+    assert.ok(calls >= 2, 'polling continued after a synchronous drain failure');
+  } finally {
+    restore();
+  }
+});
+
 // ── helpers ──────────────────────────────────────────────────
 
 function sleep(ms: number) {

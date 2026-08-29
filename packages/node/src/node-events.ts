@@ -73,8 +73,17 @@ function ensurePolling(transport: NodeEventTransport): void {
       current.timer = null;
       return;
     }
-    void transport
-      .drainEvents()
+    // drainEvents 가 동기 throw 할 수도 있다 — try/catch 로 가둬 폴링 루프와
+    // 이후 subscribe 가 죽지 않게 한다(아래 Promise catch 와 동일 정책).
+    let draining: Promise<Array<{ name: string; payload: unknown }>>;
+    try {
+      draining = Promise.resolve(transport.drainEvents());
+    } catch (error) {
+      console.error('Rustra: drainEvents failed:', error);
+      current.timer = setTimeout(tick, pollIntervalMs());
+      return;
+    }
+    void draining
       .then((events) => {
         for (const event of events) {
           const listeners = current.subscribers.get(event.name);
