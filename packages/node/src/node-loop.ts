@@ -52,9 +52,9 @@ export function createNodeLoopTransport(options: {
     resolve: (frame: Uint8Array) => void;
     reject: (error: RustraCommandError) => void;
   }> = [];
+  /** 수신 누적 버퍼 — 미처리 [len][frame] 바이트열. */
   let binLenBuf = Buffer.allocUnsafe(0);
   let binChunks: Buffer[] = [];
-  let binNeed = 0;
 
   const nameToCodec = (command: string) => binaryCodecs?.get(command);
 
@@ -70,38 +70,18 @@ export function createNodeLoopTransport(options: {
     return Buffer.concat([prefix, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)]);
   };
 
+  /** 누적 수신 버퍼 — [len][frame][len][frame]… 이 붙어 들어온다. */
   const drainBinaryFrames = (): void => {
-    for (;;) {
-      if (binNeed === 0) {
-        if (binLenBuf.length < 4) {
-          if (binChunks.length > 0) {
-            binLenBuf = Buffer.concat([binLenBuf, ...binChunks]);
-            binChunks = [];
-          }
-          if (binLenBuf.length < 4) return;
-        }
-        binNeed = binLenBuf.readUInt32LE(0);
-        binLenBuf = binLenBuf.subarray(4);
-      }
-      // 프레임 본문 수집 — 청크를 직접 소비해 불필요한 복사를 줄인다.
-      while (binNeed > 0 && binChunks.length > 0) {
-        const head = binChunks[0];
-        if (head.length <= binNeed) {
-          binLenBuf = Buffer.concat([binLenBuf, head]);
-          binChunks.shift();
-          binNeed -= head.length;
-        } else {
-          binLenBuf = Buffer.concat([binLenBuf, head.subarray(0, binNeed)]);
-          binChunks[0] = head.subarray(binNeed);
-          binNeed = 0;
-        }
-      }
-      if (binNeed > 0 || binLenBuf.length < binNeed) {
-        if (binNeed > 0) return;
-      }
-      const frame = binLenBuf;
-      binLenBuf = Buffer.allocUnsafe(0);
-      binNeed = 0;
+    // 남은 청크를 단일 버퍼로 합친다(작은 응답에서는 통상 1청크).
+    if (binChunks.length > 0) {
+      binLenBuf = Buffer.concat([binLenBuf, ...binChunks]);
+      binChunks = [];
+    }
+    while (binLenBuf.length >= 4) {
+      const len = binLenBuf.readUInt32LE(0);
+      if (binLenBuf.length < 4 + len) break; // 프레임 불완전 — 다음 청크 대기.
+      const frame = binLenBuf.subarray(4, 4 + len);
+      binLenBuf = binLenBuf.subarray(4 + len);
       const waiter = binQueue.shift();
       if (waiter) waiter.resolve(new Uint8Array(frame.buffer, frame.byteOffset, frame.byteLength));
     }
