@@ -158,9 +158,12 @@ pub(crate) use complex_codec::{
 };
 #[cfg(test)]
 pub(crate) use complex_codec::{complex_encode, test_only_complex_decode};
+/// caller-buffer dispatch 결과 — 바이너리 호스트(loop-stdio 등)가
+/// `invoke_rkyv_v2_into` 의 반환을 해석하기 위해 공개한다.
+pub use rkyv_codec::DirectResponse;
 pub(crate) use rkyv_codec::{
-    BinHandler, BinIntoHandler, DecodeFn, DirectResponse, EncodeFn, RawHandler,
-    build_rkyv_v2_decoder, build_rkyv_v2_response_encoder, build_tier3_json_decoder,
+    BinHandler, BinIntoHandler, DecodeFn, EncodeFn, RawHandler, build_rkyv_v2_decoder,
+    build_rkyv_v2_response_encoder, build_tier3_json_decoder,
     js_postcard_codec_supported_with_defs,
 };
 

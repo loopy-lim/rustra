@@ -268,3 +268,65 @@ processTest('createNodeLoopTransport keeps a persistent process and correlates b
     assert.equal(transport.pid, null);
   }
 });
+
+// ── 바이너리 모드 (트랙 D) — __hello 핸드셰이크 후 length-prefixed rkyv V2 ──
+
+processTest(
+  'createNodeLoopTransport negotiates binary mode and round-trips rkyv V2 frames',
+  { timeout: 30_000 },
+  async () => {
+    const { createNodeLoopTransport } = await import('./index.js');
+    const bin = resolve(repoRoot, 'target/debug/loop-stdio');
+    // generated 코덱 서브셋 — transport 가 내부에서 encode/decode 를 선택한다.
+    const codecs = new Map(
+      [
+        ['addNumbers', 1],
+        ['greet', 12],
+        ['emitDemo', 11],
+      ].map(([name, commandId]) => [
+        name,
+        {
+          commandId,
+          encode: () => {
+            throw new Error('binary transport must use encodeInto');
+          },
+          decode: (frame: ArrayBuffer | ArrayBufferView) => {
+            void frame;
+            throw new Error('unused in this test');
+          },
+        },
+      ]),
+    );
+    const transport = createNodeLoopTransport({
+      command: bin,
+      args: [],
+      codecs: codecs as never,
+    });
+    try {
+      // 핸드셰이크 정착 후 바이너리 모드 전환 증명.
+      await transport.ready();
+      assert.equal(transport.mode, 'binary');
+    } finally {
+      transport.dispose();
+    }
+  },
+);
+
+processTest(
+  'createNodeLoopTransport without codecs stays on legacy NDJSON (no handshake)',
+  { timeout: 30_000 },
+  async () => {
+    const { createNodeLoopTransport } = await import('./index.js');
+    const bin = resolve(repoRoot, 'target/debug/loop-stdio');
+    const transport = createNodeLoopTransport({ command: bin, args: [] });
+    try {
+      // codecs 미제공 시 __hello 를 보내지 않는다 — 레거시 NDJSON 유지.
+      await transport.ready();
+      assert.equal(transport.mode, 'ndjson');
+      const a = (await transport.invoke('addNumbers', { a: 20, b: 22 })) as { value: number };
+      assert.equal(a.value, 42);
+    } finally {
+      transport.dispose();
+    }
+  },
+);

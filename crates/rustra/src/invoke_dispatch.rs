@@ -41,7 +41,7 @@ impl Package {
 
     /// rkyv V2 caller-buffer 경로. 정적 postcard command는 호스트가 제공한
     /// slice에 직접 응답을 기록해 Rust heap allocation과 memcpy를 없앤다.
-    pub(crate) fn invoke_rkyv_v2_into(
+    pub fn invoke_rkyv_v2_into(
         &self,
         payload: &[u8],
         target: &mut [u8],
