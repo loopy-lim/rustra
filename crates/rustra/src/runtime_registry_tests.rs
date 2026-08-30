@@ -440,3 +440,41 @@ fn schema_generation_is_monotonic_across_errors() {
         "failed mutations must not rewind the generation"
     );
 }
+
+// ── T0-2: live_schema/FFI에 schema generation 노출 ──────────
+
+#[test]
+#[cfg(debug_assertions)]
+fn live_schema_json_includes_schema_generation_advancing() {
+    let pkg = empty_pkg();
+    pkg.register("echo", echo).unwrap();
+    let g1 = pkg.live_schema()["schemaGeneration"]
+        .as_u64()
+        .expect("live_schema must carry schemaGeneration");
+    pkg.replace("echo", c1).unwrap();
+    let g2 = pkg.live_schema()["schemaGeneration"]
+        .as_u64()
+        .expect("post-replace live_schema must carry schemaGeneration");
+    assert!(g2 > g1, "schemaGeneration must advance through live_schema");
+    assert_eq!(pkg.schema_generation(), g2, "accessor and JSON agree");
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn ffi_schema_generation_returns_current_generation() {
+    // FFI 전역 컨텍스트는 OnceLock — 프로세스에서 최초 install 이 승리한다.
+    // 어떤 패키지가 깔렸든 계약은 "FFI 값 == 설치된 패키지의 현재 세대" 이다.
+    let pkg = empty_pkg();
+    pkg.register("echo", echo).unwrap();
+    let before = unsafe { crate::ffi::rustra_ffi_schema_generation() };
+    pkg.replace("echo", c1).unwrap();
+    let after = unsafe { crate::ffi::rustra_ffi_schema_generation() };
+    assert!(
+        after >= before,
+        "FFI generation is monotonic across mutations"
+    );
+    // 설치된 패키지가 있으면 값이 그 패키지의 세대와 정확히 일치해야 한다.
+    if let Some(installed) = crate::ffi::get_package() {
+        assert_eq!(after, installed.schema_generation());
+    }
+}

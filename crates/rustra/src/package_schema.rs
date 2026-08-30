@@ -20,7 +20,14 @@ impl Package {
         if let Some(schema) = &state.live_schema_cache {
             return schema.clone();
         }
-        let schema = Self::schema(&self.id, &state, &self.event_contracts);
+        // (T0) 캐시 스냅샷 자체에 세대를 스냅샷으로 심는다 — mutation 시 캐시가
+        // 무효화되고 새 세대로 다시 채워지므로 live_schema() 소비자는 항상
+        // 일치하는 세대를 본다. schema() (contract hash 입력) 는 불변.
+        let mut schema = Self::schema(&self.id, &state, &self.event_contracts);
+        schema
+            .as_object_mut()
+            .expect("live schema root is an object")
+            .insert("schemaGeneration".into(), Value::from(state.schema_generation));
         state.live_schema_cache = Some(schema.clone());
         schema
     }
@@ -33,6 +40,12 @@ impl Package {
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .schema_generation
+    }
+
+    /// `live_schema()` 는 이미 `schemaGeneration` 을 포함한다(T0) — 별칭.
+    /// contract hash (`schema()`) 경로는 건드리지 않는다(와이어/OTA 계약 불변).
+    pub fn live_schema_with_generation(&self) -> Value {
+        self.live_schema()
     }
 
     /// 등록된 모든 명령에서 TypeScript 클라이언트 코드를 생성합니다.
