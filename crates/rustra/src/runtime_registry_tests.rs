@@ -227,10 +227,33 @@ fn replace_missing_errors_and_unregister_twice_errors() {
 }
 
 #[test]
+#[cfg(debug_assertions)]
 fn missing_json_command_lists_available_names_and_suggestion() {
     let pkg = empty_pkg();
     pkg.register("addNumbers", c1).unwrap();
     pkg.register("greet", c2).unwrap();
+    let error = pkg
+        .invoke_json("addNumber", serde_json::json!({}))
+        .unwrap_err();
+    assert_eq!(error.code(), "command.not_found");
+    assert!(
+        error
+            .message()
+            .contains("Available commands: addNumbers, greet")
+    );
+    assert!(error.message().contains("Did you mean 'addNumbers'?"));
+}
+
+/// release 빌드 동등 검증 — release 는 동결 시작이라 register 대신 빌더로
+/// 명령을 넣는다(위 release 동등 검증 관례와 동일). not_found 안내 메시지
+/// (사용 가능 목록 + Did you mean 제안) 자체는 빌드 프로필과 무관하다.
+#[test]
+#[cfg(not(debug_assertions))]
+fn missing_json_command_lists_available_names_and_suggestion_release() {
+    let pkg = Package::builder("test.missing.release")
+        .command("addNumbers", c1)
+        .command("greet", c2)
+        .build();
     let error = pkg
         .invoke_json("addNumber", serde_json::json!({}))
         .unwrap_err();
