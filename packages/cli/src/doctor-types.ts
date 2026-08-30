@@ -14,9 +14,28 @@ export interface DoctorCheck {
   detail?: string;
   fix?: string[];
 }
+/** 매트릭스 셀 — '—' 는 해당 열이 평가 대상이 아님(빌드 실패로 단락 등)을 뜻한다. */
+export type DoctorMatrixCell = 'OK' | 'WARN' | 'FAIL' | '—';
+export interface DoctorMatrixRow {
+  target: string;
+  build: DoctorMatrixCell;
+  contract: DoctorMatrixCell;
+  runtime: DoctorMatrixCell;
+  notes: string;
+}
+export interface DoctorMatrix {
+  rows: DoctorMatrixRow[];
+  warnings: string[];
+}
 export interface DoctorReport {
   schemaVersion: 1;
   checks: DoctorCheck[];
+  /**
+   * 다중 타깃 매트릭스 (집계 뷰). checks 가 원본(source of truth)이고 matrix 는
+   * 파생 값이므로 선택적 필드로 추가한다 — schemaVersion 은 1 유지(하위호환).
+   * 호스트 섹션이 2개 미만이면 매트릭스 자체를 생략해 기존 출력과 동일하게 유지한다.
+   */
+  matrix?: DoctorMatrix;
 }
 export interface DoctorOptions {
   configPath: string;

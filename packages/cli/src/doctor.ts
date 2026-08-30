@@ -4,3 +4,4 @@ export * from './doctor-support.js';
 export * from './doctor-report.js';
 export * from './doctor-async.js';
 export * from './doctor-format.js';
+export * from './doctor-matrix.js';
