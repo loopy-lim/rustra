@@ -128,7 +128,6 @@ async function createFfiEventBridge(
     rustra_ffi_event_sink_register: { args: ['ptr', 'ptr'], returns: FFIType.void },
     rustra_ffi_event_sink_unregister: { args: [], returns: FFIType.void },
   });
-  void options;
   const register = lib.symbols.rustra_ffi_event_sink_register;
   const unregister = lib.symbols.rustra_ffi_event_sink_unregister;
 
