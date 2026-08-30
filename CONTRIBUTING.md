@@ -20,11 +20,11 @@ This guide describes how to contribute to rustra.
 ```bash
 git clone <repo-url> && cd rustra-bridge
 
-# Rust 빌드 확인
-# (--workspace 는 default-members 를 무시하므로 macOS 전용 tauri-calculator 까지 빌드된다)
+# Verify the Rust build
+# (--workspace ignores default-members, so it also builds the macOS-only tauri-calculator)
 cargo build --workspace
 
-# 전체 테스트 실행
+# Run the full test suite
 cargo test --workspace
 bun run test:compat
 ```
@@ -46,8 +46,8 @@ Before contributing, read the following documents:
 ### 1. Create a Branch
 
 ```
-main → feature/짧은-설명
-     → fix/짧은-설명
+main → feature/short-description
+     → fix/short-description
 ```
 
 ### 2. Make Code Changes
@@ -55,23 +55,23 @@ main → feature/짧은-설명
 When changing Rust code:
 
 ```bash
-# Rust 테스트
+# Rust tests
 cargo test --workspace
 
-# 생성된 TS 갱신 (calculator 예시)
+# Regenerate the generated TS (calculator example)
 cargo run -p rustra-calculator-example --bin rustra-calculator-example
 
-# 전체 호환성 테스트
+# Full compatibility test
 bun run test:compat
 ```
 
 When changing TypeScript packages:
 
 ```bash
-# 어댑터 테스트
+# Adapter tests
 bun run test:adapters
 
-# 런타임 테스트
+# Runtime tests
 bun run test:runtime
 ```
 
@@ -102,15 +102,15 @@ refactor: extract command name resolution into shared function
 ### Test Layers
 
 ```
-cargo test          ← Rust 단위 테스트 (필수)
+cargo test          ← Rust unit tests (required)
     ↓
-bun run test:ts:node  ← TS 타입 검증 (필수)
+bun run test:ts:node  ← TS type validation (required)
     ↓
-bun run test:adapters ← 어댑터 동작 검증 (필수)
+bun run test:adapters ← Adapter behavior validation (required)
     ↓
-bun run test:runtime  ← 실제 Rust↔TS 실행 (필수)
+bun run test:runtime  ← Real Rust↔TS execution (required)
     ↓
-bun run test:compat   ← 전체 통합 (PR 필수)
+bun run test:compat   ← Full integration (required for PRs)
 ```
 
 ### Rust Tests
@@ -122,10 +122,10 @@ cargo test --workspace
 ### TypeScript Tests
 
 ```bash
-# 전체
+# All
 bun run test:compat
 
-# 개별
+# Individually
 bun run test:ts:node
 bun run test:ts:bun
 bun run test:adapters
@@ -184,10 +184,10 @@ Every change must satisfy the [compatibility contract](docs/compatibility-contra
 `GENERATED_CONTRACT_HASH` in `contract.ts` is the SHA-256 hash of `schema.json`. If you change Rust code without regenerating TS, the hash diverges:
 
 ```bash
-# 재생성
+# Regenerate
 cargo run -p rustra-calculator-example --bin rustra-calculator-example
 
-# diff로 확인
+# Verify with a diff
 git diff generated/contract.ts
 ```
 
@@ -200,11 +200,11 @@ git diff generated/contract.ts
 ### Adapter Test Failures
 
 ```bash
-# 특정 어댑터만 실행
+# Run only a specific adapter
 bun run test:adapter:tauri
 bun run test:adapter:react-native
 
-# 모킹 transport로 로깅
+# Log with a mocked transport
 const engine = createNodeEngine({
   invoke(command, args) {
     console.log('invoke:', command, args);
@@ -254,8 +254,8 @@ you forgot to amend.
   the affected packages and the bump kind in a changeset:
 
 ```bash
-bun run changeset          # 대화형 changeset 작성
-bunx changeset status      # 대기 중 changeset/범프 확인
+bun run changeset          # Create a changeset interactively
+bunx changeset status      # Check pending changesets/bumps
 ```
 
 - When a `.changeset/*.md` merges to main, the changesets action creates a

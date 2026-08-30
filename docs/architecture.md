@@ -12,7 +12,7 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
 
 ```
  ┌─────────────────────────────────────────────────────────────────────┐
- │                         Rust (작성 시점)                            │
+ │                         Rust (authoring time)                       │
  │                                                                     │
  │  #[command]                                                         │
  │  fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput>│
@@ -30,9 +30,9 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
  │         ▼                                                           │
  │  GeneratedPackage {                                                 │
  │      schema_json,      → schema.json                                │
- │      types_ts,         → types.ts    (EngineClient + I/O 타입)      │
- │      commands_ts,      → commands.ts (command helper 함수)          │
- │      contract_hash,    → contract.ts (계약 해시)                    │
+ │      types_ts,         → types.ts    (EngineClient + I/O types)     │
+ │      commands_ts,      → commands.ts (command helper functions)     │
+ │      contract_hash,    → contract.ts (contract hash)                │
  │  }                                                                  │
  │                                                                     │
  │  generated.write_to_dir("./generated")                              │
@@ -40,14 +40,14 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
                               │
                               ▼
  ┌─────────────────────────────────────────────────────────────────────┐
- │                    TypeScript (런타임)                               │
+ │                    TypeScript (runtime)                              │
  │                                                                     │
  │  generated/types.ts        generated/commands.ts                    │
  │  ┌──────────────────┐      ┌──────────────────────────────────┐     │
  │  │ EngineClient     │◄─────│ addNumbers({ a, b })             │     │
  │  │ AddNumbersInput  │      └──────────┬───────────────────────┘     │
  │  └──────────────────┘                 │                             │
- │          ▲                            │ invoke() (글로벌)           │
+ │          ▲                            │ invoke() (global)           │
  │          │                            │                             │
  │  ┌───────┴────────────────────────────┴───────────────────────┐     │
  │  │                    host adapter                             │     │
@@ -59,7 +59,7 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
  │                                 │                                   │
  │                                 ▼                                   │
  │  ┌──────────────────────────────────────────────────────────────┐   │
- │  │  transport (앱 레벨에서 결정)                                 │   │
+ │  │  transport (app-level choice)                                 │   │
  │  │  subprocess stdio / C FFI / napi / Tauri IPC / RN JSI        │   │
  │  └──────────────────────────────────────────────────────────────┘   │
  └─────────────────────────────────────────────────────────────────────┘
@@ -72,7 +72,7 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
 `EngineClient` is the only contract between the generated TypeScript code and the host adapters. Every command helper function depends solely on this interface and contains no host-specific code.
 
 ```ts
-// types.ts 에 자동 생성됨
+// auto-generated into types.ts
 export type EngineClient = {
   invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T>;
   invokeBatch?<T>(entries: BatchEntry[]): Promise<T[]>;
@@ -102,7 +102,7 @@ platform entry point registers `configureLazy()`, and the first call installs th
 engine exactly once. Manual `configure(engine)` is an explicit override.
 
 ```ts
-// examples/calculator/generated/commands.ts (자동 생성됨, 일부 단순화)
+// examples/calculator/generated/commands.ts (auto-generated, slightly simplified)
 import { createGeneratedFields2 } from '@rustra/types';
 
 export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutput>(
@@ -123,7 +123,7 @@ import { createTauriEngine } from '../../../packages/tauri/src/index.js';
 import { configure } from '@rustra/types';
 
 const engine = createTauriEngine({ invoke: window.__TAURI__.core.invoke });
-configure(engine); // 글로벌 invoke 에 엔진 설치
+configure(engine); // installs the engine into the global invoke
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
@@ -191,22 +191,22 @@ Each adapter package never imports the others, and never imports host-specific p
 
 ```
 examples/
-├── calculator/                 # 기본 Rust 라이브러리 예시
-│   ├── src/lib.rs              # command 정의 + calculator_package() + C FFI 진입점
-│   ├── src/main.rs             # stdio 진입점 + 코드 생성 데모
-│   └── generated/              # generate_typescript() 출력 결과
-│       ├── types.ts            # EngineClient + AddNumbersInput/Output 타입
+├── calculator/                 # basic Rust library example
+│   ├── src/lib.rs              # command definitions + calculator_package() + C FFI entry point
+│   ├── src/main.rs             # stdio entry point + codegen demo
+│   └── generated/              # generate_typescript() output
+│       ├── types.ts            # EngineClient + AddNumbersInput/Output types
 │       ├── commands.ts         # addNumbers() helper
-│       ├── contract.ts         # GENERATED_CONTRACT_HASH 상수
-│       └── schema.json         # JSON Schema 표현
+│       ├── contract.ts         # GENERATED_CONTRACT_HASH constant
+│       └── schema.json         # JSON Schema representation
 │
-├── tauri-calculator/           # Tauri 런타임 예시
-│   ├── src/app.ts              # generated/tauri → addNumbers 사용
-│   └── src-tauri/src/main.rs   # tauri_support::register()로 Package 등록
+├── tauri-calculator/           # Tauri runtime example
+│   ├── src/app.ts              # uses addNumbers from generated/tauri
+│   └── src-tauri/src/main.rs   # registers the Package via tauri_support::register()
 │
-└── react-native-calculator/    # Expo React Native 예시
-    ├── App.tsx                 # generated/react-native.ts → addNumbers 사용
-    └── modules/rustra-calculator  # 네이티브 모듈 (Expo module)
+└── react-native-calculator/    # Expo React Native example
+    ├── App.tsx                 # uses addNumbers from generated/react-native.ts
+    └── modules/rustra-calculator  # native module (Expo module)
 ```
 
 ---
@@ -281,10 +281,10 @@ Files written by `GeneratedPackage::write_to_dir(output_dir)`:
 The Rust `Package` provides two invoke interfaces:
 
 ```rust
-// 타입 안전한 인터페이스
+// type-safe interface
 pub fn invoke<I, O>(&self, name: &str, input: I) -> Result<O>
 
-// JSON 기반 인터페이스 (FFI, IPC에서 사용)
+// JSON-based interface (used by FFI, IPC)
 pub fn invoke_json(&self, name: &str, params: Value) -> Result<Value>
 ```
 
@@ -296,12 +296,12 @@ pub fn invoke_json(&self, name: &str, params: Value) -> Result<Value>
 
 ```
 ┌──────────────────────────────────────────────────────────┐
- │  앱 코드                                                 │
+ │  App code                                                │
  │  addNumbers({ a: 1, b: 2 })                             │
  │          │                                               │
  │          ▼                                               │
  │  invokeGenerated*(...)                                  │
- │  (글로벌 — 생성된 host entry 또는 configure(engine))     │
+ │  (global — generated host entry or configure(engine))    │
  │          │                                               │
  │          ▼                                               │
  │  host adapter (createXxxEngine)                          │
@@ -311,7 +311,7 @@ pub fn invoke_json(&self, name: &str, params: Value) -> Result<Value>
  │  - RN:        generated bootstrap → native.invokeRkyvV2(buf) │
  │          │                                               │
  │          ▼                                               │
- │  transport (앱 레벨에서 생성/주입)                        │
+ │  transport (created at app level)                         │
  │  - subprocess stdio  (examples/calculator/src/main.rs)   │
  │  - C FFI            (examples/calculator/src/lib.rs)     │
  │  - Tauri IPC        (rustra_support::rustra_dispatch)    │
@@ -337,7 +337,7 @@ return (await options.invoke('rustra_dispatch', { command, args: args ?? {} })) 
 This is because Tauri's IPC can only invoke pre-registered commands. The Rust-side `tauri_support` module registers the `rustra_dispatch` Tauri command as a single entry point and routes internally through `Package::invoke_json()`:
 
 ```rust
-// crates/rustra/src/lib.rs (tauri_support 모듈)
+// crates/rustra/src/lib.rs (tauri_support module)
 pub struct RustraState {
     pub package: Package,
 }
@@ -388,7 +388,7 @@ pub struct Package {
 struct RegistryState {
     commands: BTreeMap<String, Command>,
     id_to_name: BTreeMap<u16, String>,
-    next_command_id: u16, // 단조 증가, retired id 재사용 금지
+    next_command_id: u16, // monotonically increasing; retired ids must never be reused
 }
 ```
 
@@ -506,21 +506,21 @@ In Tauri, `rustra_dispatch` serializes `RustraError` into a JSON value (`{ code,
 The typical development workflow:
 
 ```
-1. Rust 측에서 command 함수 작성
+1. Write the command functions on the Rust side
    #[command]
    fn my_command(input: MyInput) -> Result<MyOutput> { ... }
 
-2. Package에 등록
+2. Register them with a Package
    Package::builder("my.package")
        .command_fn(my_command)
        .build()
 
-3. 코드 생성 실행
+3. Run code generation
    let package = my_package();
    let generated = package.generate_typescript()?;
    generated.write_to_dir("./generated")?;
 
-4. TypeScript 측에서 생성된 코드 사용
+4. Use the generated code on the TypeScript side
    import { myCommand } from './generated/commands.js';
    const result = await myCommand(engine, { ... });
 ```

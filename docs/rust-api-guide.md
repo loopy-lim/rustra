@@ -7,7 +7,7 @@ English | [한국어](./rust-api-guide.ko.md)
 rustra-bridge is a bridge framework that automatically generates a TypeScript client — working from Node / Bun / Tauri / React Native alike — once you define commands in Rust.
 
 ```text
-Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플랫폼 어댑터로 실행
+Rust #[command] definition → automatic TypeScript client generation → execution via each platform adapter
 ```
 
 There are three core components:
@@ -85,7 +85,7 @@ are compile errors:
 ```
 
 ```rust
-// ✅ 올바른 반환
+// ✅ correct return
 #[command]
 fn divide(input: DivisionInput) -> Result<DivisionOutput> {
     if input.divisor == 0 {
@@ -116,7 +116,7 @@ To specify one directly, use the `name` attribute:
 ```rust
 #[command(name = "calc.add")]
 fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
-    // 커맨드 이름이 "addNumbers" 대신 "calc.add" 로 등록된다
+    // registers as "calc.add" instead of "addNumbers"
     Ok(AddNumbersOutput { value: input.a + input.b })
 }
 ```
@@ -188,7 +188,7 @@ different naming convention, attach the derives directly without `#[bridge_type]
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 struct RawQuery {
-    pub field_name: String, // JSON에서 "field_name"으로 유지
+    pub field_name: String, // kept as "field_name" in JSON
 }
 ```
 
@@ -229,10 +229,10 @@ A macro that creates the package builder and registers `#[command]` functions al
 ### Basic Usage
 
 ```rust
-// 등록 + 빌드
+// register + build
 let pkg = rustra::build!("examples.calculator", add_numbers, multiply).done();
 
-// TypeScript 생성은 Package 의 generate_typescript 에서
+// TypeScript generation happens via Package's generate_typescript
 pkg.generate_typescript()?.write_to_dir("generated")?;
 ```
 
@@ -411,10 +411,10 @@ The generated files:
 
 ```text
 generated/
-  schema.json      # 전체 명령 스키마
-  types.ts         # TypeScript 타입 정의
-  commands.ts      # TypeScript 명령 헬퍼 함수
-  contract.ts      # GENERATED_CONTRACT_HASH 상수
+  schema.json      # full command schema
+  types.ts         # TypeScript type definitions
+  commands.ts      # TypeScript command helper functions
+  contract.ts      # GENERATED_CONTRACT_HASH constant
 ```
 
 ---
@@ -525,8 +525,8 @@ fn write_output() -> Result<()> {
 
 ```rust
 struct Example {
-    pub name: String,        // 필수
-    pub age: Option<u32>,    // 선택적
+    pub name: String,        // required
+    pub age: Option<u32>,    // optional
 }
 ```
 
@@ -552,8 +552,8 @@ fn add_numbers(input: AddNumbersInput) -> Result<i64> { Ok(input.a + input.b) }
 ```
 
 ```typescript
-// 스칼라 출력은 Promise<number> — type alias 없이 inline된다.
-// 실제 생성물(examples/calculator/generated/commands.ts)과 동일한 형태다.
+// Scalar outputs become Promise<number> — inlined without a type alias.
+// Same shape as the actual output (examples/calculator/generated/commands.ts).
 export function addNumbers(input: AddNumbersInput, options?: InvokeOptions): Promise<number> {
   return invokeGenerated<number>(1, 'addNumbers', input, options);
 }
@@ -567,7 +567,7 @@ export type { EngineClient, RustraError } from '@rustra/types';
 export { RustraCommandError } from '@rustra/types';
 
 export type AddNumbersInput = {
-  a: number | bigint; // i64 → number | bigint (와이어 정합)
+  a: number | bigint; // i64 → number | bigint (wire parity)
   b: number | bigint;
 };
 ```
@@ -624,24 +624,24 @@ Provided items:
 **Event bus** — Rust → JS event push:
 
 ```rust
-// 이벤트 발행 (드랍 가능 — 링 버퍼)
+// Publish an event (droppable — ring buffer)
 pkg.emit("item.created", serde_json::json!({ "id": "x1" }));
 
-// 네이티브 싱크 연결 (RN JSI 드레인 등)
+// Attach a native sink (e.g. RN JSI drain)
 pkg.set_event_sink(Some(sink));
-let bus = pkg.event_bus(); // EventBus 직접 접근
+let bus = pkg.event_bus(); // direct EventBus access
 ```
 
 **Runtime Authority (capabilities)** — deny-by-default permissions:
 
 ```rust
-// 빌더에서 요구 지정
+// Require a capability at the builder
 Package::builder("app.secure")
     .command("secureCompute", handler)
     .require_capability("secureCompute", "app.admin")
     .build();
 
-// 런타임 부여 — 부여 전까지 capability.denied
+// Grant at runtime — capability.denied until granted
 pkg.grant_capability("app.admin")?;
 ```
 
@@ -654,7 +654,7 @@ pkg.grant_capability("app.admin")?;
 **Freeze** — locking runtime mutation:
 
 ```rust
-pkg.freeze();          // 이후 register/unregister 는 registry.frozen 에러
+pkg.freeze();          // subsequent register/unregister fail with registry.frozen
 assert!(pkg.is_frozen());
 ```
 
@@ -709,13 +709,13 @@ fn multiply(input: MultiplyInput) -> Result<MultiplyOutput> {
 }
 
 fn main() -> Result<()> {
-    // 런타임 사용
+    // runtime usage
     let pkg = rustra::build!("example.calculator", add_numbers, multiply).done();
 
     let sum: AddNumbersOutput = pkg.invoke("addNumbers", AddNumbersInput { a: 2, b: 3 })?;
     println!("2 + 3 = {}", sum.value);
 
-    // TypeScript 생성
+    // generate TypeScript
     pkg.generate_typescript()?.write_to_dir("generated")?;
 
     Ok(())
@@ -798,7 +798,7 @@ fn main() -> Result<()> {
     let pkg = rustra::build!("math.division", divide).done();
 
     match pkg.invoke("divide", DivisionInput { dividend: 10, divisor: 3 }) {
-        Ok(result) => println!("10 / 3 = {} (나머지: {})", result.quotient, result.remainder),
+        Ok(result) => println!("10 / 3 = {} (remainder: {})", result.quotient, result.remainder),
         Err(e) => eprintln!("[{}] {}", e.code(), e.message()),
     }
 

@@ -231,9 +231,9 @@ The 2026-08-18 session's wire/napi/core tables are replaced by these values.
 
 ```mermaid
 xychart-beta
-    title "Wire 포맷별 평균 지연 (release, 2026-08-22)"
+    title "Average latency by wire format (release, 2026-08-22)"
     x-axis ["JSON", "postcard", "rkyv V2"]
-    y-axis "평균 지연 (µs)" 0 --> 1.4
+    y-axis "Average latency (µs)" 0 --> 1.4
     bar [1.19, 0.43, 0.13]
 ```
 
@@ -292,9 +292,9 @@ the RN/Nitro headline figures.
 
 ```mermaid
 xychart-beta
-    title "어댑터별 평균 지연 (2026-08-22, 로그 스케일 아님)"
+    title "Average latency by adapter (2026-08-22, not log scale)"
     x-axis ["Rust typed", "Bun JS", "Node JS", "Swift FFI", "Node napi", "Bun FFI"]
-    y-axis "평균 지연 (µs)" 0 --> 3
+    y-axis "Average latency (µs)" 0 --> 3
     bar [0.34, 0.19, 0.31, 1.2, 1.5, 1.7]
 ```
 
@@ -415,14 +415,14 @@ Rust execution + serialization + transport overhead (2026-08-22, release).
 
 ```
 Node napi-rs (release, 2026-08-22):
-  Rust core + serde     ~0.13 µs   (8.7%)  ← wire-bench JSON 실측
-  napi 브릿지 + JS      ~1.37 µs   (91.3%) ← napi 총지연 1.5µs − 코어
+  Rust core + serde     ~0.13 µs   (8.7%)  ← wire-bench JSON measurement
+  napi bridge + JS      ~1.37 µs   (91.3%) ← napi total latency 1.5µs − core
 
 Bun FFI (release, 2026-08-23):
   Rust core + JSON serde ~1.1 µs
   JS JSON ser/de         ~0.16 µs
-  Bun FFI 브릿지         ~0.42 µs
-  총 실측                 ~1.7 µs
+  Bun FFI bridge         ~0.42 µs
+  Total measured          ~1.7 µs
 ```
 
 The breakdown is computed by subtracting the `wire-bench` values of the same JSON invoke
@@ -435,13 +435,13 @@ comparison baseline.
 ### Running the Benchmarks
 
 ```bash
-# Transport 벤치마크 (Node)
+# Transport benchmark (Node)
 node scripts/transport-bench.mjs
 
-# Transport 벤치마크 (Bun)
+# Transport benchmark (Bun)
 bun scripts/transport-bench.mjs
 
-# Transport 성능 회귀 테스트
+# Transport performance regression test
 bun run test:runtime:node-napi
 ```
 
@@ -826,7 +826,7 @@ postcard round trip (the old `type_scaling_tier3` group retired).
 ### Running the Benchmarks
 
 ```bash
-# 동적/Tier 3 경로는 register 로만 도달 → debug 빌드 필수.
+# Dynamic/Tier 3 paths are reachable only via register → a debug build is required.
 cargo bench -p rustra --bench tier_compare    --profile dev
 cargo bench -p rustra --bench dynamic_registry --profile dev
 cargo bench -p rustra --bench type_scaling    --profile dev
@@ -849,25 +849,25 @@ The original figures are preserved in
 ## How to Run the Benchmarks
 
 ```bash
-# Rust 전체 벤치마크 (Summary 차트는 실측치 기반)
+# Full Rust benchmark (the Summary chart is based on measured figures)
 cargo run --release -p rustra-benchmark
 
-# Node.js 어댑터 벤치마크
+# Node.js adapter benchmark
 node scripts/adapter-bench.mjs
 
-# Bun 어댑터 벤치마크
+# Bun adapter benchmark
 bun scripts/adapter-bench.mjs
 
 # Complex binary codec JS path (nested map/Set/data enum)
 bun run bench:complex
 
-# Track B — wideAgg/tagSet JS codec path (C++ 직결이 대체하는 경로의 비용)
+# Track B — wideAgg/tagSet JS codec path (cost of the path the C++ direct path replaces)
 bun scripts/track-b-bench.mjs
 
-# Swift FFI 벤치마크 (macOS, release dylib 필요)
+# Swift FFI benchmark (macOS, requires the release dylib)
 cd scripts/swift-ffi-bench && make
 
-# React Native 벤치마크 (iOS 시뮬레이터, Release 강제)
+# React Native benchmark (iOS simulator, forced Release)
 cd examples/react-native-calculator
 bunx --bun expo run:ios --configuration Release
 ```

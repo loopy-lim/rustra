@@ -17,10 +17,10 @@ bunx --bun @rustra/cli init my-project
 cd my-project
 bun install
 bun run doctor
-bun run codegen      # schema.json + 완전한 TS/C++ 클라이언트 생성
-cargo build          # Node 진입점이 실행할 Rust 바이너리 빌드
-bun run demo         # 생성된 Node 진입점으로 TypeScript에서 echo 호출
-cargo run            # Rust에서 직접 echo 호출
+bun run codegen      # generate schema.json + the full TS/C++ client
+cargo build          # build the Rust binary the Node entry point runs
+bun run demo         # call echo from TypeScript via the generated Node entry point
+cargo run            # call echo directly from Rust
 ```
 
 The scaffold creates a Cargo crate (an echo example command and a stdio contract probe) +
@@ -159,7 +159,7 @@ You can specify the command name directly with the `name` attribute. When omitte
 ```rust
 #[command(name = "customName")]
 pub fn my_function(input: MyInput) -> Result<MyOutput> {
-    // 커맨드명: "customName"
+    // command name: "customName"
     Ok(MyOutput { /* ... */ })
 }
 ```
@@ -194,7 +194,7 @@ fn main() -> Result<()> {
     let package = rustra::register!(Package::builder("my.pkg"), add_numbers, multiply)
         .build();
 
-    // TypeScript 생성
+    // Generate TypeScript
     package.generate_typescript()?.write_to_dir("generated")?;
     Ok(())
 }
@@ -212,11 +212,11 @@ use rustra_calculator_example::{calculator_package, AddNumbersInput, AddNumbersO
 fn main() -> rustra::Result<()> {
     let package = calculator_package();
 
-    // Rust 내에서 직접 호출도 가능
+    // direct invocation from Rust also works
     let output: AddNumbersOutput = package.invoke("addNumbers", AddNumbersInput { a: 2, b: 3 })?;
     println!("2 + 3 = {}", output.value);
 
-    // TypeScript 클라이언트 생성
+    // generate the TypeScript client
     let generated = package.generate_typescript()?;
     generated.write_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
 
@@ -253,7 +253,7 @@ export type EngineClient = {
 };
 
 export type AddNumbersInput = {
-  a: number | bigint; // i64 — 와이어 정합을 위해 number | bigint 로 넓혀진다
+  a: number | bigint; // i64 — widened to number | bigint for wire parity
   b: number | bigint;
 };
 
@@ -273,7 +273,7 @@ export type AddNumbersOutput = {
 import type { AddNumbersInput, AddNumbersOutput } from './types.js';
 import { createGeneratedFields2 } from '@rustra/types';
 
-// 필드 2개 명령은 호출당 힘(required fields)을 직접 전달하는 const 형태로 생성된다.
+// Commands with two fields are generated as a const form that passes the required fields directly on each call.
 export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutput>(
   1,
   'addNumbers',
@@ -365,7 +365,7 @@ import { createNodeEngine } from '@rustra/node';
 
 const engine = createNodeEngine({
   invoke(command, args) {
-    // napi 애드온 직접 호출 등 자체 transport
+    // your own transport, e.g. a direct napi addon call
     return nativeAddon.invoke(command, JSON.stringify(args));
   },
 });
@@ -410,7 +410,7 @@ The Tauri adapter multiplexes all commands through the single `rustra_dispatch` 
 On the Rust side, register the package with the Tauri builder in one line via `rustra::tauri_support::register`.
 
 ```rust
-// Tauri 앱 main.rs
+// Tauri app main.rs
 use rustra::tauri_support;
 
 fn main() {
@@ -537,7 +537,7 @@ caller-buffer fast path of the generated `react-native.ts`.
 Every adapter returns an `EngineClient`, so subsequent code is identical regardless of environment.
 
 ```ts
-// 플랫폼 진입점 import가 bootstrap을 소유한다.
+// The platform entry point import owns the bootstrap.
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
@@ -579,13 +579,13 @@ This command runs all of the following:
 Individual runs are also possible.
 
 ```bash
-# 어댑터만 테스트
+# Test the adapters only
 bun run test:adapters
 
-# Node 런타임만 테스트 (Rust 빌드 포함)
+# Test the Node runtime only (includes the Rust build)
 bun run test:runtime:node
 
-# Tauri 런타임만 테스트
+# Test the Tauri runtime only
 bun run test:runtime:tauri
 ```
 
@@ -599,16 +599,16 @@ How to use the generated files in a TypeScript project after code generation.
 
 ```
 my-app/
-├── rust-core/            # Rust 패키지 (rustra 사용)
+├── rust-core/            # Rust package (uses rustra)
 │   ├── Cargo.toml
 │   ├── src/lib.rs
-│   └── generated/        ← rustra가 여기에 TS 생성
+│   └── generated/        ← rustra generates TS here
 │       ├── types.ts
 │       ├── commands.ts
 │       ├── contract.ts
 │       └── schema.json
 ├── src/
-│   └── app.ts            # 여기서 생성된 TS를 import
+│   └── app.ts            # imports the generated TS here
 ├── tsconfig.json
 └── package.json
 ```
@@ -682,7 +682,7 @@ fn main() -> rustra::Result<()> {
 To confirm the generated files are in sync with the Rust code:
 
 ```bash
-# Rust schema 생성부터 TS/C++ 생성물까지 확인
+# Verifies everything from the Rust schema to the TS/C++ artifacts
 bun run codegen:check
 ```
 
@@ -786,25 +786,25 @@ native `invokeRkyvV2` to the Rust handler. Both paths use the same complex wire.
 ## Summary: The Full Flow
 
 ```
-Rust 타입 정의 (Serialize + Deserialize + JsonSchema)
+Rust type definitions (Serialize + Deserialize + JsonSchema)
         |
         v
-#[command] 함수 작성 (name 속성으로 커맨드명 직접 지정 가능)
+Write #[command] functions (the command name can be set directly via the name attribute)
         |
         v
 Package::builder("id").command_fn(fn).build()
-또는 register!(Package::builder("id"), fn1, fn2, ...).build()
+or register!(Package::builder("id"), fn1, fn2, ...).build()
         |
         v
 package.generate_typescript()?.write_to_dir("generated")
         |
         v
 generated/
-  types.ts       -- EngineClient + 입력/출력 타입
-  commands.ts    -- 타입 안전한 커맨드 헬퍼 함수
-  contract.ts    -- 계약 해시
+  types.ts       -- EngineClient + input/output types
+  commands.ts    -- type-safe command helper functions
+  contract.ts    -- contract hash
   schema.json    -- JSON Schema
         |
         v
-TypeScript에서 createXxxEngine(transport) + configure(engine) + addNumbers(input) 호출
+From TypeScript, call createXxxEngine(transport) + configure(engine) + addNumbers(input)
 ```
