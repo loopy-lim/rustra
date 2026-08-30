@@ -2615,3 +2615,351 @@ test('stale cached dynamic command is not found after resync shows removal (T0-3
     (error: unknown) => error instanceof RustraCommandError && error.code === 'command.not_found',
   );
 });
+
+// ── (T2-2) 스키마→postcard 코덱 인터프리터 ──────────────────
+// live_schema 의 JSON Schema 로 생성한 인터프리터 코덱이 generated 코드젠 코덱과
+// **바이트 동일**임을 PINNED hex(examples/calculator/tests/wire_fixtures.rs 와
+// examples/calculator/ts/cross-wire.test.ts 가 공유하는 canonical wire)로
+// 고정한다. 동일 타입에 대해 스키마 → 인터프리터 경로와 코드젠 경로가 같은
+// 와이어를 내지 않으면 동적 명령 fast-path 가 정적 명령과 어긋난다.
+
+import { createSchemaPostcardCodec } from './schema-postcard-codec.js';
+
+function bytesToHex(buf: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+function hexToBytes(hex: string): ArrayBuffer {
+  const u = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < u.length; i++) u[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  return u.buffer;
+}
+function schemaCodec(
+  commandId: number,
+  inputSchema: Record<string, unknown>,
+  outputSchema: Record<string, unknown>,
+) {
+  const codec = createSchemaPostcardCodec(commandId, inputSchema as never, outputSchema as never);
+  assert.ok(codec, 'supported schema must compile');
+  return codec;
+}
+
+test('schema codec: i64 pair (addNumbers) — PINNED request/response wire', () => {
+  const codec = schemaCodec(
+    1,
+    {
+      type: 'object',
+      required: ['a', 'b'],
+      properties: {
+        a: { type: 'integer', format: 'int64' },
+        b: { type: 'integer', format: 'int64' },
+      },
+    },
+    {
+      type: 'object',
+      required: ['value'],
+      properties: { value: { type: 'integer', format: 'int64' } },
+    },
+  );
+  assert.equal(bytesToHex(codec.encode({ a: 2, b: 3 })), '01000406', 'TS→Rust request hex');
+  const r = codec.decode(hexToBytes('01000000000000000a'));
+  assert.equal(r.ok, true);
+  assert.equal(r.result && (r.result as { value: number }).value, 5);
+});
+
+test('schema codec: String (greet) — PINNED request/response wire', () => {
+  const codec = schemaCodec(
+    5,
+    {
+      type: 'object',
+      required: ['name'],
+      properties: { name: { type: 'string' } },
+    },
+    {
+      type: 'object',
+      required: ['message'],
+      properties: { message: { type: 'string' } },
+    },
+  );
+  assert.equal(bytesToHex(codec.encode({ name: 'Lynx' })), '0500044c796e78');
+  const r = codec.decode(hexToBytes('01000000000000000c48656c6c6f2c204c796e7821'));
+  assert.equal(r.ok, true);
+  assert.equal(r.result && (r.result as { message: string }).message, 'Hello, Lynx!');
+});
+
+test('schema codec: error frame (divide by zero) — PINNED wire → RustraError', () => {
+  const codec = schemaCodec(
+    10,
+    {
+      type: 'object',
+      required: ['a', 'b'],
+      properties: { a: { type: 'integer' }, b: { type: 'integer' } },
+    },
+    { type: 'object', required: ['value'], properties: { value: { type: 'integer' } } },
+  );
+  assert.equal(bytesToHex(codec.encode({ a: 1, b: 0 })), '0a000200');
+  const r = codec.decode(
+    hexToBytes(
+      '00000000000000002a00136d6174682e6469766964655f62795f7a65726f1563616e6e6f7420646976696465206279207a65726f',
+    ),
+  );
+  assert.equal(r.ok, false);
+  assert.equal(r.error?.code, 'math.divide_by_zero');
+  assert.equal(r.error?.message, 'cannot divide by zero');
+});
+
+test('schema codec: map count+(k,v)* (scoreTotal) — structure + response', () => {
+  const codec = schemaCodec(
+    15,
+    {
+      type: 'object',
+      required: ['scores'],
+      properties: {
+        scores: { type: 'object', additionalProperties: { type: 'integer', format: 'int64' } },
+      },
+    },
+    {
+      type: 'object',
+      required: ['count', 'total'],
+      properties: {
+        count: { type: 'integer', format: 'uint32' },
+        total: { type: 'integer', format: 'int64' },
+      },
+    },
+  );
+  // Rust 측 HashMap 순회가 비결정적이라 hex 고정 불가(코드젠 계약 동일) —
+  // 엔트리 수/길이 구조 검증.
+  const req = new Uint8Array(codec.encode({ scores: { a: 10, b: 32 } }));
+  assert.equal(req[0], 0x0f);
+  assert.equal(req[2], 2, 'entry count');
+  assert.equal(req.length, 9, 'count(1) + 2*(1 key + zigzag val)');
+  const r = codec.decode(hexToBytes('01000000000000000254'));
+  assert.equal(r.ok, true);
+  const out = r.result as { count: number; total: number };
+  assert.equal(out.total, 42);
+  assert.equal(out.count, 2);
+});
+
+test('schema codec: postcard tuple prefix-free (span) — PINNED wire', () => {
+  const codec = schemaCodec(
+    16,
+    {
+      type: 'object',
+      required: ['pair'],
+      properties: {
+        pair: {
+          type: 'array',
+          items: [{ type: 'string' }, { type: 'integer', format: 'int64' }],
+          maxItems: 2,
+          minItems: 2,
+        },
+      },
+    },
+    {
+      type: 'object',
+      required: ['first', 'second'],
+      properties: { first: { type: 'string' }, second: { type: 'integer', format: 'int64' } },
+    },
+  );
+  assert.equal(bytesToHex(codec.encode({ pair: ['hi', -5] })), '100002686909');
+  const r = codec.decode(hexToBytes('010000000000000002686909'));
+  assert.equal(r.ok, true);
+  const out = r.result as { first: string; second: number };
+  assert.equal(out.first, 'hi');
+  assert.equal(out.second, -5);
+});
+
+test('schema codec: u64/u32 plain varint (gauge) — PINNED wire', () => {
+  const codec = schemaCodec(
+    17,
+    {
+      type: 'object',
+      required: ['limit', 'offset'],
+      properties: {
+        limit: { type: 'integer', format: 'uint64' },
+        offset: { type: 'integer', format: 'uint32' },
+      },
+    },
+    {
+      type: 'object',
+      required: ['next'],
+      properties: { next: { type: 'integer', format: 'uint64' } },
+    },
+  );
+  assert.equal(bytesToHex(codec.encode({ limit: 300, offset: 70000 })), '1100ac02f0a204');
+  const r = codec.decode(hexToBytes('01000000000000009ca504'));
+  assert.equal(r.ok, true);
+  assert.equal(r.result && (r.result as { next: number }).next, 70300);
+});
+
+test('schema codec: bytes len+raw (sizeOf) — PINNED wire', () => {
+  const codec = schemaCodec(
+    14,
+    {
+      type: 'object',
+      required: ['data'],
+      properties: { data: { type: 'array', items: { type: 'integer', format: 'uint8' } } },
+    },
+    {
+      type: 'object',
+      required: ['checksum', 'len'],
+      properties: {
+        checksum: { type: 'integer', format: 'uint32' },
+        len: { type: 'integer', format: 'uint32' },
+      },
+    },
+  );
+  assert.equal(bytesToHex(codec.encode({ data: [1, 2, 3, 250] })), '0e0004010203fa');
+  const r = codec.decode(hexToBytes('0100000000000000800204'));
+  assert.equal(r.ok, true);
+  const out = r.result as { checksum: number; len: number };
+  assert.equal(out.checksum, 256);
+  assert.equal(out.len, 4);
+});
+
+test('schema codec: Vec<u64> + Option<i64> (wideAgg) — 64-bit boundaries', () => {
+  const codec = schemaCodec(
+    28,
+    {
+      type: 'object',
+      required: ['samples'],
+      properties: {
+        samples: { type: 'array', items: { type: 'integer', format: 'uint64' } },
+        offset: { type: ['integer', 'null'], format: 'int64' },
+      },
+    },
+    {
+      type: 'object',
+      required: ['max', 'adjusted'],
+      properties: {
+        max: { type: 'integer', format: 'uint64' },
+        adjusted: { type: 'integer', format: 'int64' },
+      },
+    },
+  );
+  assert.equal(
+    bytesToHex(
+      codec.encode({
+        samples: [1, 127, 128, 9007199254740993n, 18446744073709551615n],
+        offset: -9223372036854775808n,
+      }),
+    ),
+    '1c0005017f80018180808080808010ffffffffffffffffff0101ffffffffffffffffff01',
+  );
+  const r = codec.decode(hexToBytes('0100000000000000ffffffffffffffffff01f5ffffffffffffffff01'));
+  assert.equal(r.ok, true);
+  const out = r.result as { max: number | bigint; adjusted: number | bigint };
+  assert.equal(out.max, 18446744073709551615n, 'u64::MAX restored as bigint');
+  assert.equal(out.adjusted, -9223372036854775803n, 'i64::MIN + 5 restored');
+});
+
+test('schema codec: uniqueItems Set (tagSet) — insertion order, Set restore', () => {
+  const codec = schemaCodec(
+    29,
+    {
+      type: 'object',
+      required: ['ids'],
+      properties: {
+        ids: { type: 'array', items: { type: 'integer', format: 'int64' }, uniqueItems: true },
+      },
+    },
+    {
+      type: 'object',
+      required: ['tags'],
+      properties: { tags: { type: 'array', items: { type: 'string' }, uniqueItems: true } },
+    },
+  );
+  assert.equal(
+    bytesToHex(codec.encode({ ids: new Set<bigint | number>([-7, 15, 1000]) })),
+    '1d00030d1ed00f',
+  );
+  const r = codec.decode(hexToBytes('01000000000000000303742d3705743130303003743135'));
+  assert.equal(r.ok, true);
+  const tags = (r.result as { tags: Set<string> }).tags;
+  assert.ok(tags instanceof Set);
+  assert.deepEqual([...tags], ['t-7', 't1000', 't15']);
+});
+
+test('schema codec: unsupported nodes return null (oneOf, 3-term anyOf, mixed object)', () => {
+  // payload enum(oneOf) — Rust 는 complex 라우트로 승격하므로 JS 인터프리터도
+  // 만들지 않는다(엔진이 Tier 3 가 아니라 complex 로 우회하지만, 이 모듈의
+  // 계약은 null 반환).
+  assert.equal(
+    createSchemaPostcardCodec(
+      1,
+      {
+        type: 'object',
+        required: ['status'],
+        properties: { status: { oneOf: [{ type: 'string', enum: ['Idle'] }, { type: 'object' }] } },
+      } as never,
+      { type: 'object', properties: {} },
+    ),
+    null,
+  );
+  assert.equal(
+    createSchemaPostcardCodec(
+      1,
+      {
+        type: 'object',
+        required: ['v'],
+        properties: {
+          v: { anyOf: [{ type: 'integer' }, { type: 'string' }, { type: 'boolean' }] },
+        },
+      } as never,
+      { type: 'object', properties: {} },
+      { type: 'object', properties: {} },
+    ),
+    null,
+  );
+  // 혼합 object (properties + additionalProperties) — 미지원.
+  assert.equal(
+    createSchemaPostcardCodec(
+      1,
+      {
+        type: 'object',
+        properties: { a: { type: 'integer' } },
+        additionalProperties: { type: 'string' },
+      } as never,
+      { type: 'object', properties: {} },
+      { type: 'object', properties: {} },
+    ),
+    null,
+  );
+});
+
+test('schema codec: $ref resolution through definitions', () => {
+  // 정의가 없으면 fail-closed(null) — Tier 3 로 안전하게 폴백.
+  const missing = createSchemaPostcardCodec(
+    2,
+    {
+      type: 'object',
+      required: ['item'],
+      properties: { item: { $ref: '#/definitions/Item' } },
+    } as never,
+    {
+      type: 'object',
+      required: ['count'],
+      properties: { count: { type: 'integer', format: 'uint32' } },
+    } as never,
+    { type: 'object', properties: {} } as never,
+  );
+  assert.equal(missing, null, 'missing definition fails closed');
+  // definitions 해석 성공 — struct 선언순(postcard 필드순) 인코딩.
+  const withDefs = createSchemaPostcardCodec(
+    2,
+    {
+      type: 'object',
+      required: ['item'],
+      properties: { item: { $ref: '#/definitions/Item' } },
+    } as never,
+    {
+      type: 'object',
+      required: ['count'],
+      properties: { count: { type: 'integer', format: 'uint32' } },
+    } as never,
+    {
+      Item: { type: 'object', properties: { id: { type: 'integer' } }, required: ['id'] },
+    } as never,
+  );
+  assert.ok(withDefs, '$ref to a known definition compiles');
+  assert.equal(bytesToHex(withDefs!.encode({ item: { id: 3 } })), '020006');
+});
