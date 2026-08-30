@@ -19,43 +19,37 @@ pub(crate) fn decode_node_ir(
         return Err(error(format!("value depth exceeds {}", limits.max_depth)));
     }
     match ir {
-        IrNode::Option { inner } => {
-            return match reader.byte()? {
-                0 => Ok(Value::Null),
-                1 => decode_node_ir(reader, inner, limits, depth + 1),
-                _ => Err(error("invalid option presence tag")),
-            };
-        }
+        IrNode::Option { inner } => match reader.byte()? {
+            0 => Ok(Value::Null),
+            1 => decode_node_ir(reader, inner, limits, depth + 1),
+            _ => Err(error("invalid option presence tag")),
+        },
         IrNode::OneOf { variants } => {
             let index = reader.varint()? as usize;
             let variant = variants
                 .get(index)
                 .ok_or_else(|| error("enum variant index out of range"))?;
-            return decode_variant_ir(reader, variant, limits, depth + 1);
+            decode_variant_ir(reader, variant, limits, depth + 1)
         }
-        IrNode::Enum { values } => {
-            return values
-                .get(reader.varint()? as usize)
-                .cloned()
-                .ok_or_else(|| error("enum index out of range"));
-        }
+        IrNode::Enum { values } => values
+            .get(reader.varint()? as usize)
+            .cloned()
+            .ok_or_else(|| error("enum index out of range")),
         IrNode::Const { value, inner } => {
             // 원본 decode_node 에 const 분기가 없어 const 를 무시하고 타입으로
             // 읽는다. inner 가 없는 const 단독은 컴파일 시점에
             // `unsupported schema type None` 로 실패하므로 런타임 도달 불가
             // (안전 폴백: 값 복제).
-            return match inner {
+            match inner {
                 Some(node) => decode_node_ir(reader, node, limits, depth),
                 None => Ok(value.clone()),
-            };
+            }
         }
-        IrNode::Boolean => {
-            return match reader.byte()? {
-                0 => Ok(Value::Bool(false)),
-                1 => Ok(Value::Bool(true)),
-                _ => Err(error("invalid boolean value")),
-            };
-        }
+        IrNode::Boolean => match reader.byte()? {
+            0 => Ok(Value::Bool(false)),
+            1 => Ok(Value::Bool(true)),
+            _ => Err(error("invalid boolean value")),
+        },
         IrNode::Int { unsigned } => {
             if *unsigned {
                 return Ok(json!(
@@ -64,9 +58,9 @@ pub(crate) fn decode_node_ir(
                 ));
             }
             let value = reader.zigzag()?;
-            return i64::try_from(value)
+            i64::try_from(value)
                 .map(|value| json!(value))
-                .map_err(|_| error("decoded integer exceeds JSON safe range"));
+                .map_err(|_| error("decoded integer exceeds JSON safe range"))
         }
         IrNode::Float { single } => {
             let bytes = reader.raw(if *single { 4 } else { 8 })?;
@@ -75,12 +69,12 @@ pub(crate) fn decode_node_ir(
             } else {
                 f64::from_le_bytes(bytes.try_into().unwrap())
             };
-            return serde_json::Number::from_f64(value)
+            serde_json::Number::from_f64(value)
                 .map(Value::Number)
-                .ok_or_else(|| error("decoded non-finite number"));
+                .ok_or_else(|| error("decoded non-finite number"))
         }
-        IrNode::String => return Ok(Value::String(reader.string()?)),
-        IrNode::Null => return Ok(Value::Null),
+        IrNode::String => Ok(Value::String(reader.string()?)),
+        IrNode::Null => Ok(Value::Null),
         IrNode::Seq { tuple, items } => {
             let length = reader.length()?;
             if let Some(items) = tuple {
@@ -95,12 +89,12 @@ pub(crate) fn decode_node_ir(
             let Some(items) = items else {
                 return Err(error("array schema is missing items"));
             };
-            return (0..length)
+            (0..length)
                 .map(|_| decode_node_ir(reader, items, limits, depth + 1))
-                .collect();
+                .collect()
         }
         IrNode::Struct { .. } => {
-            return decode_struct_ir(reader, ir, None, limits, depth).map(Value::Object);
+            decode_struct_ir(reader, ir, None, limits, depth).map(Value::Object)
         }
         IrNode::Map { value } => {
             let length = reader.length()?;
@@ -112,11 +106,11 @@ pub(crate) fn decode_node_ir(
                 }
                 result.insert(key, decode_node_ir(reader, value, limits, depth + 1)?);
             }
-            return Ok(Value::Object(result));
+            Ok(Value::Object(result))
         }
         IrNode::Ref { target } => {
             let node = compiled_ref(target)?;
-            return decode_node_ir(reader, node, limits, depth);
+            decode_node_ir(reader, node, limits, depth)
         }
     }
 }
@@ -141,17 +135,17 @@ pub(crate) fn decode_variant_ir(
                 limits,
                 depth,
             )?);
-            return Ok(Value::Object(result));
+            Ok(Value::Object(result))
         }
         IrBody::UnwrapSingle { key, node } => {
             let value = decode_node_ir(reader, node, limits, depth)?;
             let mut result = serde_json::Map::new();
             result.insert(key.clone(), value);
-            return Ok(Value::Object(result));
+            Ok(Value::Object(result))
         }
-        IrBody::ConstValue(value) => return Ok(value.clone()),
-        IrBody::EnumFirst(value) => return Ok(value.clone()),
-        IrBody::Node(node) => return decode_node_ir(reader, node, limits, depth),
+        IrBody::ConstValue(value) => Ok(value.clone()),
+        IrBody::EnumFirst(value) => Ok(value.clone()),
+        IrBody::Node(node) => decode_node_ir(reader, node, limits, depth),
     }
 }
 
