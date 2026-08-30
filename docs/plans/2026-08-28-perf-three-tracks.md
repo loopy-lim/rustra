@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust (napi/FFI, postcard, rkyv), TypeScript (codegen, Bun FFI), C++ (JSI, React Native turbo module).
 
-**설계 문서:** `docs/superpowers/plans/2026-08-28-perf-three-tracks-design.md`
+**설계 문서:** `docs/plans/2026-08-28-perf-three-tracks-design.md`
 
 ---
 

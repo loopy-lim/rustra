@@ -1,7 +1,7 @@
 ## Summary
 
 <!-- What changed and why. Link the research/spec/plan docs if this comes
-from a tracked workstream (thoughts/shared/…). -->
+from a tracked workstream (docs/research/, docs/specs/, docs/plans/). -->
 
 ## Verification
 

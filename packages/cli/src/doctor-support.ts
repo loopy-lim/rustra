@@ -1,4 +1,4 @@
-import { accessSync, constants, existsSync } from 'node:fs';
+import { accessSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { cargoPackagesForManifest, findCargoManifest, selectCodegenBinary } from './cargo.js';
 import { readConfigSync } from './config.js';

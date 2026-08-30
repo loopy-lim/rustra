@@ -1,3 +1,5 @@
+English | [한국어](./README.ko.md)
+
 # rustra
 
 [![CI](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml/badge.svg)](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml)
@@ -5,97 +7,107 @@
 [![crates.io](https://img.shields.io/crates/v/rustra.svg)](https://crates.io/crates/rustra)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Rust에서 명령을 한 번 정의하면, Node / Bun / Tauri / React Native 어디서든 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크.
+A bridge framework that generates type-safe TypeScript clients from Rust
+commands — define once in Rust, run on Node, Bun, Tauri, and React Native.
 
-> **English** — Define commands once in Rust, get type-safe TypeScript clients
-> for Node, Bun, Tauri, and React Native. Single Rust core, four host surfaces,
-> compact caller-buffer optimized binary wire (rkyv V2). Quick start: `cargo add rustra` +
-> `bunx --bun @rustra/cli init my-project`. Full docs (Korean) below.
-
-## 작동 방식
+## How It Works
 
 ```
-Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플랫폼 어댑터로 실행
+Rust #[command] definition → TypeScript client codegen → platform adapter execution
 ```
 
-- Rust 쪽에서 `#[command]`로 함수를 정의
-- `generate_typescript()` 호출 시 타입 안전한 TS 클라이언트 코드 생성
-- Node, Bun, Tauri, React Native 어댑터가 동일한 `EngineClient` 인터페이스로 라우팅
+- Define functions with `#[command]` on the Rust side
+- `generate_typescript()` emits type-safe TS client code
+- Node, Bun, Tauri, and React Native adapters all route through the same
+  `EngineClient` interface
 
-## 왜 rustra인가 (비교)
+## Why rustra (Comparison)
 
-단일 Rust 코어를 여러 JS 호스트에 잇는 도구는 각자 다른 지점을 타협한다:
+Tools that bridge a single Rust core to multiple JS hosts each make different
+trade-offs:
 
-|                               | **rustra**                        | napi-rs           | Nitro Modules | Tauri commands | tauri-specta |
-| ----------------------------- | --------------------------------- | ----------------- | ------------- | -------------- | ------------ |
-| 단일 Rust 코어 × 멀티 호스트  | ✅ Node/Bun/Tauri/RN              | Node (+ Electron) | RN 중심       | Tauri 전용     | Tauri 전용   |
-| 타입 안전 코드젠 (양방향)     | ✅ 커맨드+이벤트                  | 수동 d.ts         | ✅            | ❌ (수동)      | ✅           |
-| compact 바이너리 와이어       | ✅ rkyv V2 (JSON 대비 11.8× 작음) | JSON/Buffer       | JSI 객체      | JSON IPC       | JSON IPC     |
-| 계약 게이트 (breaking change) | ✅ `rustra diff` + contract hash  | ❌                | ❌            | ❌             | 부분         |
-| 취소/타임아웃/배치 시맨틱     | ✅ 매트릭스로 문서화              | 직접 구현         | 직접 구현     | ❌             | ❌           |
+|                                 | **rustra**                           | napi-rs           | Nitro Modules | Tauri commands | tauri-specta |
+| ------------------------------- | ------------------------------------ | ----------------- | ------------- | -------------- | ------------ |
+| Single Rust core × multi-host   | ✅ Node/Bun/Tauri/RN                 | Node (+ Electron) | RN-centric    | Tauri only     | Tauri only   |
+| Type-safe codegen (both ways)   | ✅ commands+events                   | manual d.ts       | ✅            | ❌ (manual)    | ✅           |
+| Compact binary wire             | ✅ rkyv V2 (11.8× smaller than JSON) | JSON/Buffer       | JSI objects   | JSON IPC       | JSON IPC     |
+| Contract gate (breaking change) | ✅ `rustra diff` + contract hash     | ❌                | ❌            | ❌             | partial      |
+| Cancel/timeout/batch semantics  | ✅ documented as a matrix            | DIY               | DIY           | ❌             | ❌           |
 
-rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)를 하나의 계약으로
-소유**한다. 명령 호출과 계약 검증은 호스트 간 공통으로 유지하고, 취소·이벤트·채널
-같은 capability 차이는 [호환성 매트릭스](docs/compatibility-matrix.md)에 명시한다.
+rustra's choice: **own the whole RPC surface (definition → codegen → wire →
+verification) as a single contract.** Command invocation and contract
+verification stay common across hosts, while capability differences such as
+cancellation, events, and channels are documented explicitly in the
+[compatibility matrix](docs/compatibility-matrix.md).
 
-## 로드맵
+## Roadmap
 
-- [x] 4호스트 어댑터 (Node/Bun/Tauri/RN iOS+Android) — 0.1
-- [x] rkyv V2 바이너리 fast-path + 취소/타임아웃/배치 — 0.1~0.2
-- [x] 이벤트 계약 코드젠 (`PackageBuilder::event`) — 0.2.x
-- [x] persistent 루프 런타임 + Node loop transport — 0.2.x
-- [x] 타입 패리티 1단계 — fast path 타입 확장 (2026-08-22): u8–u64 plain
-      varint, 동적 맵 `HashMap<String,T>`(원시값), 튜플(무접두), `Vec<u8>`
-      bytes(ArrayBuffer 표면), chrono Date(ISO string), Set<unsigned> —
-      3면(TS·Rust·C++) 코드젠 + PINNED hex 와이어 게이트.
-- [x] 타입 패리티 3단계 — schema-driven complex binary route (2026-08-27):
-      recursive struct, struct-valued map, data enum, nested Option/Set —
-      공용 Codec IR, TS/Rust golden wire + bounds, native-safe C++ complex
-      marshalling. 원시 요소 Set과 int64/uint64의 `number | bigint` 경계도
-      native-safe subset에서 직접 처리하며, 객체 요소 Set 등 나머지는 JS
-      complex codec으로 안전하게 폴백한다.
-- [x] 타입 패리티 2단계 — 채널/리소스 (Tauri v2 `ipc::Channel`·`Resource`
-      모델, 2026-08-23): 콜백을 직렬화 가능한 채널 핸들(u32, 호출 귀속
-      유니캐스트 회신)로, 객체 참조를 Rust-소유 리소스 핸들(`channels.rs`
-      `ChannelHost` 테이블, 코드젠 커맨드로 read/write/close)로. wire는
-      정수 핸들뿐이라 계약 게이트와 양방향 코드젠은 공통이고, 호스트별
-      channel adapter 지원 범위는 [호환성 매트릭스](docs/compatibility-matrix.md)에
-      따른다. RN JSI `createChannel(cb)`/`dropChannel(h)` 배선 + Rust FFI
-      `rustra_ffi_channel_{create,send,drop}` — Android arm64 실기기 E2E 검증
-      완료; iOS generic device build와 iPhone 17 Simulator Release runtime
-      완료, physical-device runtime은 별도 증거
-- [x] async 커맨드 핸들러 — `#[command] async fn`, waker 기반 실행기,
-      bounded FFI 워커 풀/백프레셔/취소 게이트
-- [x] Windows 코어 런타임 검증 — CI의 Windows MSVC 테스트 + release DLL 산출
-- [x] 개발 허들 완화 — `rustra doctor`, 설정 기반 `rustra codegen`, `rustra dev`,
-      생성물 drift 게이트 (`rustra generate --check`)
-- [ ] 범용 prebuilt 애플리케이션 네이티브 바이너리 — 앱별 Rust 코드와 target에
-      종속되므로 CI artifact/cache 방식으로 대체 권장
+- [x] 4 host adapters (Node/Bun/Tauri/RN iOS+Android) — 0.1
+- [x] rkyv V2 binary fast-path + cancel/timeout/batch — 0.1~0.2
+- [x] Event contract codegen (`PackageBuilder::event`) — 0.2.x
+- [x] Persistent loop runtime + Node loop transport — 0.2.x
+- [x] Type parity stage 1 — fast path type expansion (2026-08-22): u8–u64 plain
+      varint, dynamic maps `HashMap<String,T>` (primitive values), tuples
+      (unprefixed), `Vec<u8>` bytes (ArrayBuffer surface), chrono Date (ISO
+      string), Set<unsigned> — 3-surface (TS·Rust·C++) codegen + PINNED hex
+      wire gates.
+- [x] Type parity stage 3 — schema-driven complex binary route (2026-08-27):
+      recursive structs, struct-valued maps, data enums, nested Option/Set —
+      shared Codec IR, TS/Rust golden wire + bounds, native-safe C++ complex
+      marshalling. Primitive-element Sets and the `number | bigint` boundary
+      for int64/uint64 are handled directly in the native-safe subset; the
+      rest, such as object-element Sets, falls back safely to the JS complex
+      codec.
+- [x] Type parity stage 2 — channels/resources (Tauri v2 `ipc::Channel`·
+      `Resource` model, 2026-08-23): callbacks become serializable channel
+      handles (u32, invocation-scoped unicast replies) and object references
+      become Rust-owned resource handles (`channels.rs` `ChannelHost` table,
+      read/write/close via codegen'd commands). The wire carries only integer
+      handles, so the contract gate and bidirectional codegen stay common;
+      per-host channel adapter support follows the
+      [compatibility matrix](docs/compatibility-matrix.md). RN JSI
+      `createChannel(cb)`/`dropChannel(h)` wiring + Rust FFI
+      `rustra_ffi_channel_{create,send,drop}` — verified end-to-end on an
+      Android arm64 physical device; iOS generic device build and iPhone 17
+      Simulator Release runtime done, physical-device runtime evidence
+      pending.
+- [x] Async command handlers — `#[command] async fn`, waker-based executor,
+      bounded FFI worker pool / backpressure / cancellation gates
+- [x] Windows core runtime verification — Windows MSVC tests in CI + release
+      DLL artifact
+- [x] Lowered development hurdles — `rustra doctor`, config-based
+      `rustra codegen`, `rustra dev`, generated-output drift gate
+      (`rustra generate --check`)
+- [ ] Universal prebuilt application native binaries — depends on per-app Rust
+      code and target; CI artifact/cache approach recommended instead
 
 ## FAQ
 
-**Q. Rust 툴체인이 꼭 필요한가요?**
-앱별 네이티브 라이브러리는 Rust와 플랫폼 toolchain으로 빌드해야 한다.
-CLI와 공용 adapter는 Bun/npm으로 설치할 수 있지만, 사용자의 command와 staticlib를
-포함한 앱별 네이티브 산출물은 Rust와 플랫폼 toolchain으로 빌드해야 한다. 팀에서는
-CI가 commit/target별 native artifact를 만들어 개발자가 재사용할 수 있다. Rust 없이
-UI를 먼저 만들려면 `@rustra/testing`의 mock 엔진을 사용한다. 상세한 진단과 설치
-범위는 [개발 허들 가이드](docs/development-hurdles.md)를 참고한다.
+**Q. Is a Rust toolchain strictly required?**
+App-specific native libraries must be built with Rust and the platform
+toolchain. The CLI and shared adapters install via Bun/npm, but the
+app-specific native artifacts that contain your commands and staticlib need
+Rust and the platform toolchain. Teams can have CI produce per-commit/per-target
+native artifacts for developers to reuse. To build the UI first without Rust,
+use the mock engine from `@rustra/testing`. See the
+[development hurdles guide](docs/development-hurdles.md) for diagnostics and
+install scope.
 
-**Q. JSON 경로도 지원하나요?**
-예. postcard fast-path가 다루지 않는 복잡 schema는 schema-driven complex binary로
-처리하고, 두 binary route가 모두 지원하지 않는 명령은 JSON 폴백(Tier 3)으로
-간다. 바이너리 이식이 어려운 환경도 계약은 같다.
+**Q. Is the JSON path still supported?**
+Yes. Complex schemas not covered by the postcard fast-path are handled by the
+schema-driven complex binary route, and commands unsupported by both binary
+routes fall back to JSON (Tier 3). Environments where binary is hard to ship
+share the same contract.
 
-**Q. 기존 napi-rs/Tauri 앱에 점진적으로 붙일 수 있나요?**
-예. 어댑터는 transport만 교체한다 — `createNodeEngine(transport)`에 기존
-invoke 함수를 넘기면 그 명령만 rustra 계약으로 들어온다.
+**Q. Can I adopt incrementally into an existing napi-rs/Tauri app?**
+Yes. Adapters only swap the transport — pass your existing invoke function to
+`createNodeEngine(transport)` and those commands enter the rustra contract.
 
-**Q. 스키마가 깨지면 어떻게 되나요?**
-`rustra diff`가 breaking change를 CI에서 잡고, 계약 해시(contract hash)가
-JS/네이티브 조합의 drift를 런타임에 감지한다.
+**Q. What happens when a schema drifts?**
+`rustra diff` catches breaking changes in CI, and the contract hash detects
+JS/native combination drift at runtime.
 
-## 설치
+## Installation
 
 ### Rust
 
@@ -106,23 +118,23 @@ serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
 
-### TypeScript 어댑터 (필요한 환경만)
+### TypeScript adapters (only the environments you need)
 
 ```bash
 bun add @rustra/node      # Node.js
 bun add @rustra/bun       # Bun
 bun add @rustra/tauri     # Tauri
 bun add @rustra/react-native  # React Native
-bun add @rustra/testing       # Mock 엔진 (테스트)
-bun add @rustra/devtools      # 호출 관측성 (개발)
+bun add @rustra/testing       # Mock engine (tests)
+bun add @rustra/devtools      # Invocation observability (dev)
 ```
 
-## 빠른 예제
+## Quick Example
 
 ```rust
 use rustra::prelude::*;
 
-// #[command] 는 단일 Input 구조체를 받고 Result<Output> 를 반환한다.
+// #[command] takes a single Input struct and returns Result<Output>.
 #[bridge_type]
 struct AddNumbersInput { a: i64, b: i64 }
 #[bridge_type]
@@ -136,30 +148,31 @@ fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
 fn main() -> Result<()> {
     let package = rustra::build!("example.calculator", add_numbers).done();
 
-    // TypeScript 클라이언트 생성 — rustra codegen이 schema와 TS/C++를 함께 처리한다.
+    // Generate the TypeScript client — `rustra codegen` handles schema plus TS/C++ together.
     package.generate_typescript()?.write_to_dir("generated")?;
     Ok(())
 }
 ```
 
-바이너리 fast-path(rkyv V2, RN)를 쓰려면 CLI codegen도 실행한다. `rustra.json`에
-Rust generator를 지정하면 schema 생성부터 `rkyv-codecs.ts`/`rkyv-registry.ts`까지
-한 번에 처리한다:
+To use the binary fast-path (rkyv V2, RN), also run the CLI codegen. Specifying
+the Rust generator in `rustra.json` processes schema generation through
+`rkyv-codecs.ts`/`rkyv-registry.ts` in one shot:
 
 ```bash
 bunx --bun @rustra/cli codegen --config rustra.json
 ```
 
-기존 schema만 다시 렌더링해야 하는 경우에는 `generate --config`를 직접 사용할 수
-있다. Rust 수정까지 감시하려면 `bunx --bun @rustra/cli dev --config rustra.json`,
-CI 동기화 검사는 `bunx --bun @rustra/cli generate --config rustra.json --check`를
-사용한다.
+If you only need to re-render an existing schema, use `generate --config`
+directly. To watch Rust sources, use `bunx --bun @rustra/cli dev --config
+rustra.json`; for the CI sync check use `bunx --bun @rustra/cli generate
+--config rustra.json --check`.
 
-### React Native: Expo와 bare RN 공통 설정
+### React Native: shared setup for Expo and bare RN
 
-React Native는 앱 네이티브 프로젝트를 직접 수정하지 않는다. Rust crate에 정적
-라이브러리 출력과 mobile entry를 선언하고, 앱의 `rustra.json`에 `reactNative`를
-켜면 생성기가 충돌 격리된 로컬 패키지를 만든다.
+React Native never modifies the app's native project directly. Declare the
+static library output and mobile entry in the Rust crate, enable `reactNative`
+in the app's `rustra.json`, and the generator produces a conflict-isolated
+local package.
 
 ```toml
 [lib]
@@ -196,14 +209,16 @@ import { addNumbers } from './generated/react-native';
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
-첫 호출이 JSI 설치, contract 검증, fast engine 설정을 한 번만 수행한다. 생성된
-`@rustra/generated-react-native` 패키지가 iOS Podspec과 Android Gradle/CMake를
-소유하므로 Expo development build와 bare React Native 모두 표준 autolinking을
-사용한다. Expo Go는 네이티브 JSI 모듈을 로드할 수 없다. Cargo workspace가
-모호한 경우에만 `reactNative.rustManifest`를 app crate의 `Cargo.toml`로 지정한다.
+The first call performs JSI installation, contract verification, and fast
+engine setup exactly once. The generated `@rustra/generated-react-native`
+package owns the iOS Podspec and Android Gradle/CMake, so both Expo development
+builds and bare React Native use standard autolinking. Expo Go cannot load
+native JSI modules. Specify `reactNative.rustManifest` as the app crate's
+`Cargo.toml` only when the Cargo workspace is ambiguous.
 
-Node, Bun, Tauri도 같은 생성 진입점 규칙을 쓴다. 필요한 host를 빈 객체로 켜면 Cargo
-metadata와 표준 host API를 추론한다.
+Node, Bun, and Tauri follow the same generated-entrypoint convention. Enable
+the hosts you need with empty objects and Cargo metadata plus standard host
+APIs are inferred.
 
 ```json
 {
@@ -216,20 +231,21 @@ metadata와 표준 host API를 추론한다.
 ```
 
 ```ts
-import { addNumbers } from './generated/node.js'; // Bun은 bun.js, Tauri는 tauri.js
+import { addNumbers } from './generated/node.js'; // bun.js for Bun, tauri.js for Tauri
 
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
-수동 `configure()`는 다중 런타임, custom N-API, global Tauri 비활성화처럼 자동
-추론을 의도적으로 벗어나는 경우에만 사용한다.
+Manual `configure()` is only for cases that intentionally step outside auto
+inference: multiple runtimes, custom N-API, disabling global Tauri, and the
+like.
 
-## 실사용 예시
+## Real-World Examples
 
-생성된 host 진입점이 연결을 소유하므로 제품 코드에는 transport 설정이 남지 않는다.
-아래 코드는 모두 같은 Rust `addNumbers` 명령을 호출한다.
+Generated host entrypoints own the connection, so no transport setup remains
+in product code. All of the following call the same Rust `addNumbers` command.
 
-### Node 배치 작업
+### Node batch jobs
 
 ```ts
 import { addNumbers, rustra } from './generated/node.js';
@@ -243,13 +259,15 @@ try {
 }
 ```
 
-기본 생성 경로는 설치가 단순한 one-shot 프로세스라 저빈도 CLI와 배치에 적합하다.
-요청이 계속 들어오는 서버에서는 `createNodeLoopTransport`를, 마이크로초 단위 호출이
-필요하면 N-API rkyv V2를 선택한다. 실제 코드는
-[`node-app.ts`](examples/calculator/apps/node-app.ts), 성능별 선택은
-[`node-performance.ts`](examples/calculator/apps/node-performance.ts)에 있다.
+The default generated path is a one-shot process with simple installation,
+which suits low-frequency CLIs and batch jobs. For servers with continuous
+request flow, use `createNodeLoopTransport`; for microsecond-scale calls,
+choose N-API rkyv V2. Working code lives in
+[`node-app.ts`](examples/calculator/apps/node-app.ts) and the
+per-performance-tier picks in
+[`node-performance.ts`](examples/calculator/apps/node-performance.ts).
 
-### Bun HTTP 서비스
+### Bun HTTP service
 
 ```ts
 import { addNumbers, rustra } from './generated/bun.js';
@@ -266,11 +284,12 @@ process.on('SIGTERM', () => {
 });
 ```
 
-이 경로는 생성된 stable C ABI와 rkyv V2 codec을 바로 사용한다. 별도 `dlopen`, pointer
-해제, contract 검증 코드는 앱에 필요 없다. 실행 가능한 최소 예제는
-[`bun-ffi-app.ts`](examples/calculator/apps/bun-ffi-app.ts)다.
+This path uses the generated stable C ABI and rkyv V2 codec directly. No
+separate `dlopen`, pointer freeing, or contract verification code is needed in
+the app. The runnable minimal example is
+[`bun-ffi-app.ts`](examples/calculator/apps/bun-ffi-app.ts).
 
-### Tauri 화면과 이벤트
+### Tauri UI and events
 
 ```ts
 import { addNumbers, subscribeEvent } from './generated/tauri.js';
@@ -282,11 +301,11 @@ button.addEventListener('click', async () => {
 });
 ```
 
-`withGlobalTauri`와 Rust 측 `register_with_events` 이후에는 프런트엔드 설정이 없다.
-[`tauri-calculator`](examples/tauri-calculator/)는 실제 WebView IPC 빌드, 실행, 성능
-영수증까지 포함한다.
+After `withGlobalTauri` and the Rust-side `register_with_events`, there is no
+frontend configuration. [`tauri-calculator`](examples/tauri-calculator/)
+includes a real WebView IPC build, run, and performance receipt.
 
-### Expo development build와 bare React Native
+### Expo development build and bare React Native
 
 ```tsx
 import { useState } from 'react';
@@ -307,21 +326,22 @@ export function Calculator() {
 }
 ```
 
-Expo API를 사용하지 않는 동일한 autolink 패키지이므로 앱 코드는 두 환경에서 같다.
-전체 화면 예제는 [`Expo App.tsx`](examples/react-native-calculator/App.tsx)와
-[`bare RN App.tsx`](examples/react-native-bare-calculator/App.tsx)를 참고한다. Expo Go는
-네이티브 JSI 코드를 포함하지 못하므로 지원하지 않는다.
+The same autolinked package without Expo APIs, so app code is identical in
+both environments. Full screen examples: the
+[`Expo App.tsx`](examples/react-native-calculator/App.tsx) and the
+[`bare RN App.tsx`](examples/react-native-bare-calculator/App.tsx). Expo Go is
+not supported because it cannot include native JSI code.
 
-0.3.1에서 올리는 경우에는 npm과 Rust 버전을 함께 맞춰야 한다. 호스트별 수동
-경계와 before/after는 [0.3에서 0.4로 마이그레이션](docs/migrations/0.3-to-0.4.md)을
-따른다.
+If you are coming from 0.3.1, align the npm and Rust versions together. For
+per-host manual boundaries and before/after, follow
+[migrating from 0.3 to 0.4](docs/migrations/0.3-to-0.4.md).
 
-## 프로젝트 구조
+## Project Structure
 
 ```txt
 crates/
-  rustra/          Rust 패키지 authoring API (core)
-  rustra-macros/   #[command], #[bridge_type] proc macros, build! 매크로
+  rustra/          Rust package authoring API (core)
+  rustra-macros/   #[command], #[bridge_type] proc macros, build! macro
 
 packages/
   node/            Node adapter
@@ -329,40 +349,42 @@ packages/
   tauri/           Tauri adapter
   react-native/    React Native adapter
   react/           React hooks (Provider/useCommand/useMutation/useEvent)
-  testing/         Mock 엔진 + 계약 게이트 (createMockEngine)
-  devtools/        호출 관측성 래퍼 (createInstrumentedEngine)
+  testing/         Mock engine + contract gate (createMockEngine)
+  devtools/        Invocation observability wrapper (createInstrumentedEngine)
 
 examples/
-  calculator/              기본 예시 (Rust crate + C FFI + stdio + 생성된 TS)
-  crud/                    CRUD 패턴 예시 (create/get/list/update/delete)
-  benchmark/               성능 벤치마크 (페이로드 확장, 처리량 측정)
-  tauri-calculator/        Tauri 런타임 예시
-  react-native-calculator/ React Native 런타임 예시
-  calculator-napi/         napi-rs transport 예시 (release transport 벤치마크의 소스)
-  streaming/               이벤트 스트리밍 예시 (Package::emit + 폴링 어댑터)
-  auth/                    세션/capability 게이트 예시 (deny-by-default)
-  reference-app/           @rustra/react 훅 레퍼런스 앱 (useCommand/useMutation/useEvent)
+  calculator/              Basic example (Rust crate + C FFI + stdio + generated TS)
+  crud/                    CRUD pattern example (create/get/list/update/delete)
+  benchmark/               Performance benchmark (payload scaling, throughput)
+  tauri-calculator/        Tauri runtime example
+  react-native-calculator/ React Native runtime example
+  calculator-napi/         napi-rs transport example (source of the release transport benchmark)
+  streaming/               Event streaming example (Package::emit + polling adapter)
+  auth/                    Session/capability gate example (deny-by-default)
+  reference-app/           @rustra/react hooks reference app (useCommand/useMutation/useEvent)
 ```
 
-## 로컬 저장공간 관리
+## Local Disk Management
 
-개발 및 테스트 Cargo 프로필은 incremental 캐시와 의존성 debug info를 저장하지 않는다.
+Development and test Cargo profiles store no incremental cache and no
+dependency debug info.
 
 ```bash
-bun run clean:dry    # deep clean 대상을 삭제하지 않고 크기만 확인
-bun run clean:build  # Rust/Xcode/Android/TS 빌드 산출물 제거, 설치 의존성 유지
-bun run clean:deep   # build 산출물 + node_modules/Pods/로컬 패키지 캐시 제거
+bun run clean:dry    # report sizes without deleting deep-clean targets
+bun run clean:build  # remove Rust/Xcode/Android/TS build artifacts, keep installed deps
+bun run clean:deep   # build artifacts + node_modules/Pods/local package caches
 ```
 
-정리 명령은 명시된 재생성 가능 경로만 제거한다. `git clean -fdX`는 로컬 모바일
-프로젝트나 설정 파일까지 삭제할 수 있으므로 저장공간 정리 용도로 사용하지 않는다.
+Cleanup commands only remove explicitly listed regenerable paths. Do not use
+`git clean -fdX` for disk cleanup — it can delete local mobile projects and
+config files too.
 
-## Rust: 명령 정의
+## Rust: Defining Commands
 
 ```rust
 use rustra::prelude::*;
 
-// 모든 #[command] 는 단일 Input 구조체(또는 인자 없음)를 받고 Result<O> 를 반환한다.
+// Every #[command] takes a single Input struct (or no args) and returns Result<O>.
 #[bridge_type]
 struct AddNumbersInput {
     a: i64,
@@ -379,22 +401,22 @@ fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
     Ok(AddNumbersOutput { sum: input.a + input.b })
 }
 
-// 인자가 없는 명령도 가능하다
+// Commands without arguments work too
 #[command]
 fn ping() -> Result<String> {
     Ok("pong".to_string())
 }
 
-// capability 게이트가 필요한 명령은 속성 하나로 (grant 전까지 deny-by-default)
+// Commands needing a capability gate: one attribute (deny-by-default until granted)
 #[command(capability = "compute:secure")]
 fn locked_add(input: AddNumbersInput) -> Result<AddNumbersOutput> { ... }
 ```
 
-패키지를 빌드하고 TypeScript 코드를 생성:
+Build the package and generate TypeScript code:
 
 ```rust
 fn main() -> Result<()> {
-    // build! 매크로로 여러 커맨드를 한 번에 등록
+    // register multiple commands at once with the build! macro
     let package = rustra::build!("example.calculator", add_numbers).done();
 
     package.generate_typescript()?.write_to_dir("generated")?;
@@ -402,11 +424,12 @@ fn main() -> Result<()> {
 }
 ```
 
-## 런타임 명령 레지스트리 (dev / prod)
+## Runtime Command Registry (dev / prod)
 
-`Package`는 **debug 빌드**에서 런타임에 명령을 추가/교체/삭제할 수 있다. **release 빌드**에서는
-`build()` 시점에 자동으로 동결(freeze)되어 불변이 된다. 동일한 바이너리를 debug/release로 빌드하는
-것만으로 dev(가변)/prod(불변) 동작이 결정된다.
+In **debug builds**, `Package` allows adding/replacing/removing commands at
+runtime. In **release builds**, the registry automatically freezes at `build()`
+and becomes immutable. Building the same binary as debug/release is all it
+takes to pick dev (mutable) vs prod (immutable) behavior.
 
 ```rust
 use rustra::prelude::*;
@@ -419,50 +442,57 @@ fn double(input: AddNumbersInput) -> Result<AddNumbersOutput> { /* ... */ }
 
 let pkg = rustra::build!("my.pkg", add_numbers).done();
 
-// 아래는 debug 빌드에서만 동작. release 빌드에서는 Err(code: "registry.frozen").
-pkg.register_fn(double)?;            // 런타임 등록 (이름 자동 추론 → "double")
-pkg.register("triple", double)?;     // 이름 지정 등록
-pkg.replace("addNumbers", double)?;  // 핸들러 교체 (command_id 유지)
-pkg.unregister("triple")?;           // 제거
-pkg.freeze();                        // 명시적 봉인 (debug에서 prod 동작 시뮬레이션)
+// The following work in debug builds only. In release builds: Err(code: "registry.frozen").
+pkg.register_fn(double)?;            // runtime registration (name inferred → "double")
+pkg.register("triple", double)?;     // named registration
+pkg.replace("addNumbers", double)?;  // swap handler (command_id preserved)
+pkg.unregister("triple")?;           // removal
+pkg.freeze();                        // explicit seal (simulate prod behavior in debug)
 ```
 
-- 동적으로 등록된 명령은 이름 기반 JSON 경로(`engine.invoke('double', ...)`)로 호출된다.
-- `command_id`(`u16`)는 단조 증가하며, `unregister` 시 **재사용되지 않는다**(retired).
-- `Package`의 `clone`은 동일 레지스트리를 공유한다(`Arc` 기반).
-- 제한: `command_id` 공간은 최대 65,534개. 초과 시 `registry.id_exhausted` 에러.
+- Dynamically registered commands are invoked through the name-based JSON path
+  (`engine.invoke('double', ...)`).
+- `command_id` (`u16`) is monotonically increasing and is **never reused**
+  after `unregister` (retired).
+- `Package` clones share the same registry (`Arc`-based).
+- Limit: the `command_id` space holds at most 65,534 entries. Beyond that:
+  `registry.id_exhausted` error.
 
-## 호출 취소 (AbortSignal)
+## Invocation Cancellation (AbortSignal)
 
-JS `invoke(cmd, args, { signal })` 옵션으로 진행 중 호출을 취소한다. 네이티브가
-`invokeAsync`/`invokeCancel`을 노출하면 취소가 Rust 체크포인트까지 전파되고(JS 코덱
-경로), 그렇지 않으면 JS 프라미스만 즉시 거부하는 얕은 취소로 폴백한다. 에러 코드는
-`cancelled`(retryable).
+Cancel in-flight calls with the JS `invoke(cmd, args, { signal })` option. If
+the native side exposes `invokeAsync`/`invokeCancel`, cancellation propagates
+to Rust checkpoints (JS codec path); otherwise it falls back to a shallow
+cancel that only rejects the JS promise immediately. The error code is
+`cancelled` (retryable).
 
-Rust FFI: `rustra_ffi_invoke_cancel(id)` / `rustra_ffi_cancellation_status(id)` —
-`invoke_async`는 `invocation_id` out-param으로 호출별 ID를 발급한다.
+Rust FFI: `rustra_ffi_invoke_cancel(id)` / `rustra_ffi_cancellation_status(id)`
+— `invoke_async` issues a per-call ID via the `invocation_id` out-param.
 
-## OTA 스키마 호환
+## OTA Schema Compatibility
 
-JS 번들만 갱신되는 배포(구 JS + 신 네이티브)에서 스키마 드리프트를 흡수한다:
+Absorbs schema drift in JS-bundle-only deployments (old JS + new native):
 
-- `PackageBuilder::alias_command_id(name, legacy_id)` — 구 JS 코드젠이 구운
-  command_id를 신 네이티브가 alias로 수용한다 (rkyv V2 와이어에는 이름이 없다).
-- `schema_version(n)` — schema.json의 버전. 코드젠은 `SCHEMA_VERSION`으로 노출.
-- 엔진 옵션 `onContractMismatch` — 계약 해시 불일치 시 throw 대신 degraded 모드로
-  계속(opt-in). `schemaVersion`/`onSchemaStale` — JS > native 조합(OTA 롤백 등)의
-  stale 경고.
+- `PackageBuilder::alias_command_id(name, legacy_id)` — the new native accepts
+  command_ids baked by old JS codegen as aliases (the rkyv V2 wire has no
+  names).
+- `schema_version(n)` — the version in schema.json. Codegen exposes it as
+  `SCHEMA_VERSION`.
+- Engine option `onContractMismatch` — continue in a degraded mode instead of
+  throwing on contract hash mismatch (opt-in). `schemaVersion`/`onSchemaStale`
+  — stale warnings for JS > native combinations (OTA rollback etc.).
 
-## 페이로드 크기 한도
+## Payload Size Limits
 
-페이로드 상한(기본 1 MiB)을 런타임에 조정한다: `rustra_ffi_set_max_payload(bytes)` /
-`rustra_ffi_get_max_payload()`. JS 엔진 옵션 `maxPayloadBytes`는 인코딩 직후 크기를
-검사해 네이티브 왕복 전 조기 실패시킨다(tier2/tier3/전파 경로; typed 경로는 네이티브
-게이트가 적용된다).
+Adjust the payload cap (default 1 MiB) at runtime:
+`rustra_ffi_set_max_payload(bytes)` / `rustra_ffi_get_max_payload()`. The JS
+engine option `maxPayloadBytes` checks the size right after encoding and fails
+fast before the native round trip (tier2/tier3/propagation paths; the typed
+path uses the native gate).
 
-## TypeScript: 생성된 클라이언트
+## TypeScript: Generated Client
 
-모든 플랫폼에서 동일한 인터페이스:
+The same interface on every platform:
 
 ```ts
 type EngineClient = {
@@ -475,33 +505,34 @@ type RustraError = {
 };
 ```
 
-### 타입 매핑
+### Type Mapping
 
-| Rust                 | TypeScript                                    |
-| -------------------- | --------------------------------------------- |
-| `i64`, `u32`, `f64`  | `number`                                      |
-| `String`             | `string`                                      |
-| `bool`               | `boolean`                                     |
-| `Vec<T>`             | `T[]`                                         |
-| `(A, B, C)`          | `[A, B, C]`                                   |
-| `HashMap<String, T>` | `Record<string, T>`                           |
-| `Option<T>`          | `T \| null` (필드가 optional이면 `?:`도 추가) |
-| `enum { A, B }`      | `'A' \| 'B'`                                  |
-| 구조체               | `{ field: type; ... }`                        |
+| Rust                 | TypeScript                                         |
+| -------------------- | -------------------------------------------------- |
+| `i64`, `u32`, `f64`  | `number`                                           |
+| `String`             | `string`                                           |
+| `bool`               | `boolean`                                          |
+| `Vec<T>`             | `T[]`                                              |
+| `(A, B, C)`          | `[A, B, C]`                                        |
+| `HashMap<String, T>` | `Record<string, T>`                                |
+| `Option<T>`          | `T \| null` (also `?:` when the field is optional) |
+| `enum { A, B }`      | `'A' \| 'B'`                                       |
+| struct               | `{ field: type; ... }`                             |
 
-각 어댑터가 `EngineClient`를 구현하므로, 생성된 커맨드 헬퍼는 플랫폼에 관계없이 동일하게 동작한다.
+Each adapter implements `EngineClient`, so generated command helpers behave
+identically regardless of platform.
 
-## 플랫폼 어댑터
+## Platform Adapters
 
 ### Tauri
 
-`tauri` feature를 활성화:
+Enable the `tauri` feature:
 
 ```toml
 rustra = { version = "0.4", features = ["tauri"] }
 ```
 
-Rust 측:
+Rust side:
 
 ```rust
 use rustra::tauri_support;
@@ -514,7 +545,7 @@ fn main() {
 }
 ```
 
-TypeScript 측:
+TypeScript side:
 
 ```ts
 import { addNumbers, subscribeEvent } from './generated/tauri.js';
@@ -523,23 +554,26 @@ await subscribeEvent('progress.tick', console.log);
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
-Tauri 설정의 `app.withGlobalTauri`를 켜면 생성 진입점이 IPC와 event API를 lazy
-감지한다. 기존 `createTauriEngine({ invoke })`는 global API를 쓰지 않는 앱의
-escape hatch다.
+Turning on `app.withGlobalTauri` in the Tauri config lets the generated
+entrypoint lazily detect the IPC and event APIs. The existing
+`createTauriEngine({ invoke })` is the escape hatch for apps that do not use
+the global API.
 
 ### Node / Bun / React Native
 
-Node는 Cargo binary, Bun은 stable C ABI cdylib, React Native는 autolinked JSI를
-각각 생성 진입점에서 lazy 연결한다. 배포 레이아웃만 다른 경우 Node는
-`RUSTRA_NODE_BINARY`, Bun은 `RUSTRA_BUN_LIBRARY`로 경로를 덮어쓴다.
+Node connects to a Cargo binary, Bun to a stable C ABI cdylib, and React
+Native to autolinked JSI — each lazily from the generated entrypoint. When only
+the deployment layout differs, Node overrides the path with
+`RUSTRA_NODE_BINARY` and Bun with `RUSTRA_BUN_LIBRARY`.
 
 #### React Native
 
-React Native는 rkyv V2 바이너리 fast-path를 기본으로 사용한다. JSI 네이티브 모듈이
-`invokeRkyvV2`를 노출해야 한다. 입력과 출력이 각각 하나의 필수 `Vec<u8>` 필드인
-명령은 명시적 Rust 등록 시 `Uint8Array`/`ArrayBuffer` 전용 네이티브 경로도 사용할
-수 있다. complex schema 명령은 JS codec registry를 통해 같은 `invokeRkyvV2`로
-전달되며, C++ 직접 마샬링은 별도 성능 확장이다.
+React Native uses the rkyv V2 binary fast-path by default. The JSI native
+module must expose `invokeRkyvV2`. Commands whose input and output are each a
+single required `Vec<u8>` field can also use the explicit `Uint8Array`/
+`ArrayBuffer`-only native path when registered explicitly in Rust. Complex
+schema commands go through the JS codec registry over the same `invokeRkyvV2`;
+direct C++ marshalling is a separate performance extension.
 
 ```ts
 import { addNumbers } from './generated/react-native.js';
@@ -547,67 +581,71 @@ import { addNumbers } from './generated/react-native.js';
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
-네이티브 모듈 설정(iOS JSI / Android C++)은 [React Native 설정 가이드](docs/extending/react-native-setup.md)를 참고.
+For native module setup (iOS JSI / Android C++), see the
+[React Native setup guide](docs/extending/react-native-setup.md).
 
-### 플랫폼 지원 매트릭스
+### Platform Support Matrix
 
-| 플랫폼               | 현재 증거 수준             | 비고                                                               |
-| -------------------- | -------------------------- | ------------------------------------------------------------------ |
-| Node / Bun           | Runtime verified           | subprocess·N-API·Bun FFI 로컬 runtime + 어댑터 CI                  |
-| Tauri (macOS)        | WebView runtime verified   | Release WebView `rustra_dispatch` 정확성·성능 영수증               |
-| Tauri (Linux)        | Build + smoke verified     | 실제 WebView 사용자 흐름은 별도 E2E 필요                           |
-| React Native iOS     | Simulator runtime verified | Release build·설치·launch·reload·Nitro 비교; 실기기 증거는 별도    |
-| React Native Android | Release runtime verified   | `TB710FU` arm64 실기기와 arm64/x86_64 `.so` 확인; 다른 기기는 별도 |
+| Platform             | Current evidence level     | Notes                                                                                   |
+| -------------------- | -------------------------- | --------------------------------------------------------------------------------------- |
+| Node / Bun           | Runtime verified           | subprocess·N-API·Bun FFI local runtime + adapter CI                                     |
+| Tauri (macOS)        | WebView runtime verified   | Release WebView `rustra_dispatch` accuracy·performance receipt                          |
+| Tauri (Linux)        | Build + smoke verified     | Real WebView user flows need separate E2E                                               |
+| React Native iOS     | Simulator runtime verified | Release build·install·launch·reload·Nitro comparison; physical-device evidence separate |
+| React Native Android | Release runtime verified   | `TB710FU` arm64 physical device plus arm64/x86_64 `.so` checks; other devices separate  |
 
-`bun run test:compat`는 JS 계약과 지원되는 로컬 runtime을 검증하고, CI 네이티브
-잡은 빌드·링크를 검증한다. 이 둘을 실제 기기 설치·화면 렌더 증거와 동일시하지 않는다.
+`bun run test:compat` verifies the JS contract and supported local runtimes,
+and the CI native jobs verify build and link. Neither should be equated with
+real-device install and screen-render evidence.
 
-## 성능
+## Performance
 
-`addNumbers({ a: 20, b: 22 })`를 생성된 API 또는 문서화된 고성능 경로로 호출한
-end-to-end Release 실측이다. 2026-08-24 Apple Silicon에서 정확성을 먼저 확인하고
-warm-up 뒤 3회 반복했다.
+End-to-end Release measurements of calling
+`addNumbers({ a: 20, b: 22 })` through the generated API or documented
+high-performance paths. Accuracy was confirmed first on 2026-08-24 Apple
+Silicon, then repeated 3 times after warm-up.
 
-| 실제 사용자 경로                | 평균 지연 |       p50 |        처리량 | 권장 용도        |
-| ------------------------------- | --------: | --------: | ------------: | ---------------- |
-| Node 생성 one-shot              |   2.76 ms |   2.76 ms |     363 ops/s | CLI, 저빈도 배치 |
-| Node persistent loop            |  16.86 µs |  16.67 µs |  59,301 ops/s | 일반 서버        |
-| Node N-API rkyv V2 escape hatch |   1.26 µs |   1.17 µs | 793,185 ops/s | 고빈도 hot path  |
-| Bun 생성 FFI rkyv V2            |   2.27 µs |   2.21 µs | 439,961 ops/s | 서비스, CLI      |
-| Tauri 생성 WebView IPC          | 279.04 µs | 300.00 µs |   3,584 ops/s | 데스크톱 UI 명령 |
-| RN 생성 JSI, iOS Simulator      |         — |   2.71 µs |             — | 모바일 hot path  |
+| Real user path                  | Mean latency |       p50 |    Throughput | Recommended use     |
+| ------------------------------- | -----------: | --------: | ------------: | ------------------- |
+| Node generated one-shot         |      2.76 ms |   2.76 ms |     363 ops/s | CLI, low-freq batch |
+| Node persistent loop            |     16.86 µs |  16.67 µs |  59,301 ops/s | General servers     |
+| Node N-API rkyv V2 escape hatch |      1.26 µs |   1.17 µs | 793,185 ops/s | High-freq hot path  |
+| Bun generated FFI rkyv V2       |      2.27 µs |   2.21 µs | 439,961 ops/s | Services, CLI       |
+| Tauri generated WebView IPC     |    279.04 µs | 300.00 µs |   3,584 ops/s | Desktop UI commands |
+| RN generated JSI, iOS Simulator |            — |   2.71 µs |             — | Mobile hot path     |
 
-평균과 처리량은 OS 스케줄링 꼬리값을 줄인 양끝 5% trimmed mean이다. Tauri는
-WKWebView 타이머 정밀도 때문에 20호출 배치의 호출당 값을 사용했다. RN 행은
-최종 Release receipt의 Rustra add p50이며, 다른 행과 다른 iOS Simulator 환경이다.
-bare RN과 Android는 동일한 생성 bridge를 빌드하지만 별도 런타임 성능 영수증이 없어
-숫자를 추정하지 않았다. 전체 호스트는 `bun run bench:hosts`, RN은 아래 receipt 명령으로
-재현한다.
+Mean and throughput are 5% two-sided trimmed means to reduce OS scheduling
+tail values. Tauri used per-call values from a 20-call batch due to WKWebView
+timer precision. The RN row is the Rustra add p50 from the final Release
+receipt, in a different iOS Simulator environment from the other rows. Bare RN
+and Android build the same generated bridge but have no separate runtime
+performance receipt, so no numbers were estimated. Reproduce all hosts with
+`bun run bench:hosts`, and RN with the receipt commands below.
 
-> 2026-08-24 iPhone 17 Simulator Release 측정에서 일반 객체 연산은 Nitro 대비
-> 3회 중앙값 add 1.0418x, string 1.0281x, pair 1.0535x였고 64B byte는
-> 0.9543x였다. 전용 byte 경로는 64 KiB 0.9338x, exact 1 MiB-wire
-> 1.0129x였다. 각 실행은 paired 95% CI가 포함된 JSON receipt로 자동 추출했다.
-> 이는 시뮬레이터 영수증이며
-> iOS/Android 실기기 성능 주장이 아니다.
-> 비교의 범위, 기능 패리티, 레이어별 오버헤드와 페이로드 확장성은
-> [벤치마크 문서](docs/benchmarks.md)를 참고한다.
+> In the 2026-08-24 iPhone 17 Simulator Release measurement, plain object ops
+> were a 3-run median of add 1.0418x, string 1.0281x, pair 1.0535x versus
+> Nitro, and 64B bytes were 0.9543x. The dedicated byte path was 64 KiB
+> 0.9338x and exact 1 MiB-wire 1.0129x. Each run was auto-extracted as a JSON
+> receipt with paired 95% CI. These are simulator receipts, not iOS/Android
+> physical-device performance claims.
+> For comparison scope, feature parity, per-layer overhead, and payload
+> scalability, see the [benchmark doc](docs/benchmarks.md).
 
-## 에러 처리
+## Error Handling
 
 Rust:
 
 ```rust
-// 커맨드에서 발생한 에러
+// Error raised in a command
 return Err(RustraError::command_not_found("unknownCommand"));
 
-// 잘못된 인자
+// Invalid arguments
 return Err(RustraError::invalid_args("expected non-empty name"));
 
-// 내부 에러
+// Internal error
 return Err(RustraError::internal("database connection failed"));
 
-// 커스텀 에러
+// Custom error
 return Err(RustraError::custom("validation.too_large", "value exceeds limit"));
 ```
 
@@ -623,58 +661,58 @@ try {
 }
 ```
 
-## 개발
+## Development
 
 ```bash
-# Rust 워크스페이스 전체 테스트
-# (--workspace 는 default-members 를 무시하므로 macOS 전용 tauri-calculator 까지
-#  빌드된다. CI 도 동일 명령을 쓴다: .github/workflows/ci.yml)
+# Test the whole Rust workspace
+# (--workspace ignores default-members, which builds the macOS-only
+#  tauri-calculator too. CI uses the same command: .github/workflows/ci.yml)
 cargo test --workspace
 
-# CI rust 잡은 ubuntu/macos/windows 3-OS 매트릭스로 돌고, 플랫폼별 cdylib
-# (.so/.dylib/.dll) 산출물을 아티팩트로 업로드한다 (.github/workflows/ci.yml).
+# The CI rust job runs on an ubuntu/macos/windows 3-OS matrix and uploads
+# per-platform cdylib (.so/.dylib/.dll) artifacts (.github/workflows/ci.yml).
 
-# calculator 예시 빌드 및 TS 생성
+# Build the calculator example and generate TS
 cargo run -p rustra-calculator-example --bin rustra-calculator-example
 
-# CRUD 예시 빌드 및 TS 생성
+# Build the CRUD example and generate TS
 cargo run -p rustra-crud-example --bin generate
 
-# TypeScript 린트 / 포맷
+# TypeScript lint / format
 bun run lint
 bun run format:check
 
-# Rust 린트 / 포맷
+# Rust lint / format
 cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 
-# 개발 환경 진단
+# Diagnose the dev environment
 bunx --bun @rustra/cli doctor --config rustra.json
 
-# Rust schema + TS/C++/RN을 한 번에 생성
+# Generate Rust schema + TS/C++/RN in one shot
 bunx --bun @rustra/cli codegen --config rustra.json
 
-# generated 파일 동기화 CI 게이트 (TS/C++/RN은 쓰지 않음)
+# Generated-file sync CI gate (TS/C++/RN excluded)
 bunx --bun @rustra/cli generate --config rustra.json --check
 
-# Rust 소스 감시 + 통합 codegen 자동 재실행
+# Watch Rust sources + re-run integrated codegen automatically
 bunx --bun @rustra/cli dev --config rustra.json
 ```
 
-## 문서
+## Documentation
 
-전체 문서는 [`docs/`](docs/)에 있다.
+Full documentation lives in [`docs/`](docs/).
 
-| 문서                                                             | 내용                                           |
-| ---------------------------------------------------------------- | ---------------------------------------------- |
-| [시작하기](docs/getting-started.md)                              | 설치, 첫 패키지 만들기, 어댑터 선택            |
-| [아키텍처 개요](docs/architecture.md)                            | 데이터 흐름, EngineClient 계약, transport 분리 |
-| [Transport 교체 가이드](docs/extending/transport-guide.md)       | Bun FFI, Node napi-rs 교체                     |
-| [React Native 설정 가이드](docs/extending/react-native-setup.md) | iOS JSI 모듈 설정, 사용법, 트러블슈팅          |
-| [개발 허들 가이드](docs/development-hurdles.md)                  | doctor, 통합 codegen, drift, native 경계       |
-| [새 Host 추가 가이드](docs/extending/adding-host.md)             | Electron, Deno 등 새 어댑터 추가               |
-| [전체 문서 목록](docs/README.md)                                 | 사용자 / 기여자별 읽기 경로                    |
+| Doc                                                              | Contents                                               |
+| ---------------------------------------------------------------- | ------------------------------------------------------ |
+| [Getting started](docs/getting-started.md)                       | Installation, first package, adapter choice            |
+| [Architecture overview](docs/architecture.md)                    | Data flow, EngineClient contract, transport separation |
+| [Transport swap guide](docs/extending/transport-guide.md)        | Bun FFI, Node napi-rs replacement                      |
+| [React Native setup guide](docs/extending/react-native-setup.md) | iOS JSI module setup, usage, troubleshooting           |
+| [Development hurdles guide](docs/development-hurdles.md)         | doctor, integrated codegen, drift, native boundary     |
+| [Adding a new host guide](docs/extending/adding-host.md)         | Adding new adapters like Electron, Deno                |
+| [Full doc index](docs/README.md)                                 | Reading paths for users / contributors                 |
 
-## 기여
+## Contributing
 
-[CONTRIBUTING.md](CONTRIBUTING.md)를 참고하세요.
+See [CONTRIBUTING.md](CONTRIBUTING.md).

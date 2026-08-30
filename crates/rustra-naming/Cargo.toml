@@ -1,6 +1,9 @@
 [package]
 name = "rustra-naming"
 description = "Shared identifier naming rules for Rustra"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/rustra-naming"
 edition.workspace = true
 license.workspace = true
 version.workspace = true

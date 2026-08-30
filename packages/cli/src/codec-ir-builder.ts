@@ -3,7 +3,6 @@ import type { CodecIrNode, CodecIrResult } from './codec-ir-types.js';
 import {
   codecVariantKey,
   compareCodecKeys,
-  discriminator,
   explicitVariantKeys,
   MAX_SCHEMA_DEPTH,
   optionalInner,

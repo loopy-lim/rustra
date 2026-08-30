@@ -1,37 +1,39 @@
-# rustra-bridge Rust API 가이드
+English | [한국어](./rust-api-guide.ko.md)
 
-## 1. 개요
+# rustra-bridge Rust API Guide
 
-rustra-bridge는 Rust에서 명령을 한 번 정의하면, Node / Bun / Tauri / React Native 어디서든 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크입니다.
+## 1. Overview
+
+rustra-bridge is a bridge framework that automatically generates a TypeScript client — working from Node / Bun / Tauri / React Native alike — once you define commands in Rust.
 
 ```text
-Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플랫폼 어댑터로 실행
+Rust #[command] definition → automatic TypeScript client generation → execution via each platform adapter
 ```
 
-핵심 구성 요소는 세 가지입니다:
+There are three core components:
 
-| 구성 요소          | 역할                                                   |
-| ------------------ | ------------------------------------------------------ |
-| `#[command]`       | 함수를 브릿지 명령으로 변환하는 속성 매크로            |
-| `#[bridge_type]`   | 구조체/열거형에 필요한 derive와 serde 설정을 자동 추가 |
-| `rustra::build!()` | 패키지 빌더를 생성하고 여러 명령을 한 번에 등록        |
+| Component          | Role                                                                        |
+| ------------------ | --------------------------------------------------------------------------- |
+| `#[command]`       | Attribute macro that turns a function into a bridge command                 |
+| `#[bridge_type]`   | Automatically adds the required derives and serde settings to structs/enums |
+| `rustra::build!()` | Creates the package builder and registers multiple commands at once         |
 
 ---
 
-## 2. `#[command]` 매크로
+## 2. The `#[command]` Macro
 
-함수를 rustra-bridge 명령으로 변환하는 속성 매크로입니다. `#[command]` 또는 `#[command(name = "customName")]` 형태로 사용합니다.
+An attribute macro that converts a function into a rustra-bridge command. Use it as `#[command]` or `#[command(name = "customName")]`.
 
-### 2-1. 구조체 파라미터 모드 (유일한 입력 형태)
+### 2-1. Struct Parameter Mode (the only input form)
 
-`#[command]` 함수는 **정확히 하나의 Input 구조체 파라미터**를 받아야 합니다. 스칼라
-멀티파라미터(`fn add(a: i64, b: i64)`)는 지원하지 않습니다 — 컴파일 에러가 납니다:
+A `#[command]` function must take **exactly one Input struct parameter**. Scalar
+multi-parameters (`fn add(a: i64, b: i64)`) are not supported — they fail to compile:
 
 ```text
 #[command] supports at most one input data parameter
 ```
 
-여러 값이 필요하면 Input 구조체를 정의합니다:
+If you need multiple values, define an Input struct:
 
 ```rust
 use rustra::prelude::*;
@@ -55,13 +57,13 @@ fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
 }
 ```
 
-`#[bridge_type]`은 `Serialize`/`Deserialize`/`JsonSchema` derive와
-`#[serde(rename_all = "camelCase")]`를 자동 추가하므로 TypeScript 쪽에는
-`{ a: number, b: number }`로 노출됩니다.
+`#[bridge_type]` automatically adds the `Serialize`/`Deserialize`/`JsonSchema` derives and
+`#[serde(rename_all = "camelCase")]`, so the TypeScript side sees
+`{ a: number, b: number }`.
 
-### 2-2. 0-파라미터 커맨드
+### 2-2. Zero-Parameter Commands
 
-입력이 필요 없는 명령은 `()` 입력으로 정의합니다:
+Commands that need no input are defined with a `()` input:
 
 ```rust
 #[command]
@@ -70,20 +72,20 @@ fn ping() -> Result<()> {
 }
 ```
 
-`()` 입력은 TypeScript에서 파라미터 없는 함수로 생성됩니다
+A `()` input generates a parameterless function in TypeScript
 (`invoke('ping', undefined)`).
 
-### 2-3. 반환 타입
+### 2-3. Return Types
 
-반환은 **반드시 `Result<O>`** 여야 합니다. bare 반환(`-> i64`)과 unit 반환 생략은
-컴파일 에러입니다:
+The return type **must be `Result<O>`**. Bare returns (`-> i64`) and omitted unit returns
+are compile errors:
 
 ```text
 #[command] function must have an explicit return type Result<O>
 ```
 
 ```rust
-// ✅ 올바른 반환
+// ✅ correct return
 #[command]
 fn divide(input: DivisionInput) -> Result<DivisionOutput> {
     if input.divisor == 0 {
@@ -96,46 +98,46 @@ fn divide(input: DivisionInput) -> Result<DivisionOutput> {
 }
 ```
 
-값이 없는 명령은 `Result<()>`를 사용합니다. 출력 `()`는 TypeScript에서
-`Promise<void>`로 생성됩니다.
+Commands with no value use `Result<()>`. A `()` output generates `Promise<void>` in
+TypeScript.
 
-### 2-4. 커맨드 이름 규칙
+### 2-4. Command Name Rules
 
-함수 이름은 자동으로 lowerCamelCase로 변환됩니다:
+Function names are converted to lowerCamelCase automatically:
 
-| 함수 이름              | 커맨드 이름                                 |
-| ---------------------- | ------------------------------------------- |
-| `add_numbers`          | `addNumbers`                                |
-| `find_user`            | `findUser`                                  |
-| `do_something_command` | `doSomething` (`_command` 접미사 자동 제거) |
+| Function name          | Command name                                             |
+| ---------------------- | -------------------------------------------------------- |
+| `add_numbers`          | `addNumbers`                                             |
+| `find_user`            | `findUser`                                               |
+| `do_something_command` | `doSomething` (`_command` suffix stripped automatically) |
 
-직접 지정하려면 `name` 속성을 사용합니다:
+To specify one directly, use the `name` attribute:
 
 ```rust
 #[command(name = "calc.add")]
 fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
-    // 커맨드 이름이 "addNumbers" 대신 "calc.add" 로 등록된다
+    // registers as "calc.add" instead of "addNumbers"
     Ok(AddNumbersOutput { value: input.a + input.b })
 }
 ```
 
-### 2-5. 컴파일 타임 검증
+### 2-5. Compile-Time Validation
 
-`#[command]` 매크로는 컴파일 타임에 다음을 검증합니다:
+The `#[command]` macro validates the following at compile time:
 
-**파라미터 개수 검증** — 데이터 파라미터는 최대 1개입니다. 2개 이상이면 컴파일
-에러가 발생합니다 (0개는 `()` 입력으로 허용 — §2-2 참고):
+**Parameter count validation** — there can be at most one data parameter. Two or more is
+a compile error (zero is allowed as a `()` input — see §2-2):
 
 ```text
 #[command] supports at most one input data parameter
 ```
 
-**trait bound 검증** — 입출력 타입이 필요한 trait을 충족하는지 확인합니다:
+**Trait bound validation** — the I/O types must satisfy the required traits:
 
-- 입력 타입: `DeserializeOwned + JsonSchema`
-- 출력 타입: `Serialize + JsonSchema`
+- Input type: `DeserializeOwned + JsonSchema`
+- Output type: `Serialize + JsonSchema`
 
-trait bound를 충족하지 않으면 `#[diagnostic::on_unimplemented]`를 통해 친절한 에러 메시지를 출력합니다:
+If a trait bound is not satisfied, `#[diagnostic::on_unimplemented]` produces a friendly error message:
 
 ```text
 error: `MyType` cannot be used as a command parameter
@@ -149,9 +151,9 @@ error: `MyType` cannot be used as a command parameter
 
 ---
 
-## 3. `#[bridge_type]` 속성
+## 3. The `#[bridge_type]` Attribute
 
-구조체나 열거형에 필요한 derive와 serde 설정을 한 줄로 추가합니다.
+Adds the derives and serde settings a struct or enum needs in one line.
 
 ```rust
 #[bridge_type]
@@ -161,7 +163,7 @@ struct UserQuery {
 }
 ```
 
-위 코드는 다음과 동일합니다:
+The above is equivalent to:
 
 ```rust
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
@@ -172,27 +174,27 @@ struct UserQuery {
 }
 ```
 
-자동 추가되는 항목:
+What is added automatically:
 
 - `#[derive(Debug, Serialize, Deserialize, JsonSchema)]`
 - `#[serde(rename_all = "camelCase")]`
 
-### 오버라이드
+### Overrides
 
-`#[bridge_type]`은 항상 `#[serde(rename_all = "camelCase")]`를 추가합니다.
-다른 명명 규칙이 필요하면 `#[bridge_type]` 없이 derive를 직접 붙입니다:
+`#[bridge_type]` always adds `#[serde(rename_all = "camelCase")]`. If you need a
+different naming convention, attach the derives directly without `#[bridge_type]`:
 
 ```rust
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 struct RawQuery {
-    pub field_name: String, // JSON에서 "field_name"으로 유지
+    pub field_name: String, // kept as "field_name" in JSON
 }
 ```
 
-(`#[bridge(rename_all = "...")]` 형태의 오버라이드 속성은 존재하지 않습니다.)
+(There is no override attribute of the form `#[bridge(rename_all = "...")]`.)
 
-### 열거형에도 사용 가능
+### Works on Enums Too
 
 ```rust
 #[bridge_type]
@@ -202,13 +204,13 @@ enum Status {
 }
 ```
 
-TypeScript에서 유니온 타입으로 생성됩니다:
+This generates a union type in TypeScript:
 
 ```typescript
 export type Status = 'Active' | 'Inactive';
 ```
 
-데이터를 가진 열거형도 지원됩니다:
+Data-carrying enums are also supported:
 
 ```rust
 #[bridge_type]
@@ -220,47 +222,49 @@ enum Shape {
 
 ---
 
-## 4. `rustra::build!()` 매크로
+## 4. The `rustra::build!()` Macro
 
-패키지 빌더를 생성하고 `#[command]` 함수들을 한 번에 등록하는 매크로입니다.
+A macro that creates the package builder and registers `#[command]` functions all at once.
 
-### 기본 사용법
+### Basic Usage
 
 ```rust
-// 등록 + 빌드
+// register + build
 let pkg = rustra::build!("examples.calculator", add_numbers, multiply).done();
 
-// TypeScript 생성은 Package 의 generate_typescript 에서
+// TypeScript generation happens via Package's generate_typescript
 pkg.generate_typescript()?.write_to_dir("generated")?;
 ```
 
-### 매크로 내부 동작
+### What the Macro Expands To
 
-`rustra::build!("examples.calculator", add_numbers)` 호출 시 다음 코드로 확장됩니다:
+Calling `rustra::build!("examples.calculator", add_numbers)` expands to:
 
 ```rust
 rustra::Package::builder("examples.calculator")
     .command(__RUstra_meta_add_numbers, __rustra_add_numbers_handler)
 ```
 
-각 `#[command]` 함수에 대해 매크로가 생성하는 것:
+For each `#[command]` function, the macro generates:
 
-| 생성물           | 이름 규칙                    | 역할                                            |
-| ---------------- | ---------------------------- | ----------------------------------------------- |
-| 메타데이터 상수  | `__RUstra_meta_<fn_name>`    | 커맨드 이름을 저장하는 `&str` 상수              |
-| 핸들러 함수      | `__rustra_<fn_name>_handler` | 입력 타입 변환과 Ok() 래핑을 수행하는 래퍼 함수 |
-| trait bound 검증 | `_check_command_bounds`      | 입출력 타입이 필요한 trait을 충족하는지 확인    |
+| Generated item    | Naming rule                  | Role                                                         |
+| ----------------- | ---------------------------- | ------------------------------------------------------------ |
+| Metadata constant | `__RUstra_meta_<fn_name>`    | A `&str` constant holding the command name                   |
+| Handler function  | `__rustra_<fn_name>_handler` | A wrapper performing input type conversion and Ok() wrapping |
+| Trait bound check | `_check_command_bounds`      | Verifies the I/O types satisfy the required traits           |
 
 ---
 
-## 5. PackageBuilder 메서드
+## 5. PackageBuilder Methods
 
-`PackageBuilder`는 명령을 점진적으로 등록하는 빌더입니다. `Package::builder(id)`로 생성합니다 (또는 `rustra::build!` 매크로가 내부적으로 호출).
+`PackageBuilder` is the builder that registers commands incrementally. Create it with
+`Package::builder(id)` (or the `rustra::build!` macro calls it internally).
 
 ### `.command_fn(handler)`
 
-`#[command]` 함수를 이름 자동 추론으로 등록합니다. 함수 이름에서 `_command` 접미사를
-제거한 뒤 lowerCamelCase로 변환하여 커맨드 이름으로 사용합니다.
+Registers a `#[command]` function with name inference. It strips the `_command` suffix
+from the function name, converts it to lowerCamelCase, and uses the result as the
+command name.
 
 ```rust
 use rustra::register;
@@ -268,11 +272,11 @@ use rustra::register;
 let pkg = register!(Package::builder("example.calculator"), add_numbers).build();
 ```
 
-`register!` 매크로가 `#[command]` 함수를 `.command_fn()` 으로 연결해 줍니다.
+The `register!` macro wires `#[command]` functions through `.command_fn()` for you.
 
 ### `.command(name, handler)`
 
-이름을 직접 지정하여 등록합니다.
+Registers with an explicitly given name.
 
 ```rust
 let pkg = Package::builder("example.calculator")
@@ -280,14 +284,14 @@ let pkg = Package::builder("example.calculator")
     .build();
 ```
 
-같은 이름의 명령이 이미 등록되어 있으면 패닉이 발생합니다.
+If a command with the same name is already registered, it panics.
 
 ### `.buffer_command_fn(handler)` / `.buffer_command(name, handler)`
 
-입력과 출력이 각각 하나의 필수 `Vec<u8>` 필드인 명령에 React Native의
-`Uint8Array`/`ArrayBuffer` 전용 소유권 경로를 명시적으로 등록합니다. 일반
-postcard/JSON 명령 계약도 함께 유지되므로 다른 호스트와 구 네이티브는 기존
-경로로 동작합니다.
+Explicitly registers the React Native `Uint8Array`/`ArrayBuffer` dedicated ownership path
+for commands whose input and output are each exactly one required `Vec<u8>` field. The
+ordinary postcard/JSON command contracts are kept as well, so other hosts and the legacy
+native module keep working through the existing paths.
 
 ```rust
 #[derive(Serialize, Deserialize, JsonSchema)]
@@ -313,28 +317,28 @@ let pkg = Package::builder("example.bytes")
     .build();
 ```
 
-스키마가 정확히 하나의 필수 `uint8` 배열 필드가 아니면 빌드 단계에서 패닉해
-직접 ABI를 잘못 광고하지 않습니다. 입력 JS 메모리는 동기 호출 동안만 빌리고,
-Rust 출력 allocation은 JSI `ArrayBuffer`가 수명 종료 시 해제합니다. 자세한
-계약은 [direct byte-buffer 설계](plans/2026-08-24-rn-byte-buffer-native-path.md)를
-참고합니다.
+If the schema is not exactly one required `uint8` array field, the build stage panics so
+the direct ABI is never advertised incorrectly. Input JS memory is borrowed only for the
+duration of the synchronous call, and the Rust output allocation is freed by the JSI
+`ArrayBuffer` at end of life. For the detailed contract see the
+[direct byte-buffer design](plans/2026-08-24-rn-byte-buffer-native-path.md).
 
-### 기타 빌더 메서드
+### Other Builder Methods
 
-| 메서드                                  | 역할                                                            |
-| --------------------------------------- | --------------------------------------------------------------- |
-| `.require_capability(name, cap)`        | 명령에 capability 요구 부여 (deny-by-default Runtime Authority) |
-| `.buffer_command_fn(handler)`           | 이름 추론 단일 `Vec<u8>` 직접 경로 등록                         |
-| `.buffer_command(name, handler)`        | 명시 이름 단일 `Vec<u8>` 직접 경로 등록                         |
-| `.alias_command_id(command, legacy_id)` | 구 cmd_id 별칭 등록 (하위호환 디스패치)                         |
-| `.event_capacity(capacity)`             | 이벤트 버스 링 버퍼 용량 설정                                   |
-| `.schema_version(version)`              | (T2, OTA) 스키마 협상 버전 명시                                 |
-| `.manage(state)`                        | 공유 상태(`Package::state::<T>()`로 접근) 등록                  |
+| Method                                  | Role                                                                    |
+| --------------------------------------- | ----------------------------------------------------------------------- |
+| `.require_capability(name, cap)`        | Requires a capability for a command (deny-by-default Runtime Authority) |
+| `.buffer_command_fn(handler)`           | Registers the name-inferred single `Vec<u8>` direct path                |
+| `.buffer_command(name, handler)`        | Registers the explicitly named single `Vec<u8>` direct path             |
+| `.alias_command_id(command, legacy_id)` | Registers a legacy cmd_id alias (backward-compatible dispatch)          |
+| `.event_capacity(capacity)`             | Sets the event bus ring buffer capacity                                 |
+| `.schema_version(version)`              | Declares the schema negotiation version (T2, OTA)                       |
+| `.manage(state)`                        | Registers shared state (accessed via `Package::state::<T>()`)           |
 
 ### `.build()` / `.done()`
 
-등록된 모든 명령을 불변 `Package`로 빌드합니다. `.done()`은 `.build()`의 별칭입니다
-(`rustra::build!` 확장 결과는 `.done()`으로 마무리).
+Builds all registered commands into an immutable `Package`. `.done()` is an alias of
+`.build()` (the `rustra::build!` expansion finishes with `.done()`).
 
 ```rust
 let pkg = Package::builder("example.calculator")
@@ -344,27 +348,28 @@ let pkg = Package::builder("example.calculator")
 
 ---
 
-## 6. Package 메서드
+## 6. Package Methods
 
-`Package`는 등록된 명령 집합을 나타내는 불변 타입입니다. 내부적으로 `Arc` 기반이므로 저비용으로 복제할 수 있습니다.
+`Package` is an immutable type representing a registered set of commands. Internally
+`Arc`-based, so it can be cloned cheaply.
 
 ### `.invoke::<I, O>(name, input)`
 
-타입 안전한 명령 호출입니다.
+The type-safe command invocation.
 
 ```rust
 let output: AddNumbersOutput = pkg.invoke("addNumbers", AddNumbersInput { a: 2, b: 3 })?;
 println!("Result: {}", output.value);
 ```
 
-제네릭 파라미터:
+Generic parameters:
 
-- `I: Serialize` — 입력 타입
-- `O: DeserializeOwned` — 출력 타입
+- `I: Serialize` — the input type
+- `O: DeserializeOwned` — the output type
 
 ### `.invoke_json(name, params)`
 
-JSON `Value`를 직접 전달하는 비제네릭 호출입니다. JSON 기반 라우팅에 적합합니다.
+A non-generic invocation that passes a JSON `Value` directly. Suited to JSON-based routing.
 
 ```rust
 use serde_json::json;
@@ -374,7 +379,7 @@ let result: Value = pkg.invoke_json("addNumbers", json!({ "a": 2, "b": 3 }))?;
 
 ### `.generate_typescript()`
 
-등록된 모든 명령에서 TypeScript 클라이언트 코드를 생성합니다.
+Generates the TypeScript client code from all registered commands.
 
 ```rust
 let generated = pkg.generate_typescript()?;
@@ -384,41 +389,41 @@ let generated = pkg.generate_typescript()?;
 
 ## 7. GeneratedPackage
 
-TypeScript 코드 생성 결과를 담는 구조체입니다.
+The struct holding the TypeScript code generation result.
 
-| 필드            | 출력 파일     | 내용                                |
-| --------------- | ------------- | ----------------------------------- |
-| `schema_json`   | `schema.json` | 전체 명령 스키마 (JSON)             |
-| `types_ts`      | `types.ts`    | TypeScript 타입 정의                |
-| `commands_ts`   | `commands.ts` | TypeScript 명령 헬퍼 함수           |
-| `contract_hash` | `contract.ts` | 스키마 SHA-256 해시 (무결성 검증용) |
+| Field           | Output file   | Content                                            |
+| --------------- | ------------- | -------------------------------------------------- |
+| `schema_json`   | `schema.json` | The full command schema (JSON)                     |
+| `types_ts`      | `types.ts`    | TypeScript type definitions                        |
+| `commands_ts`   | `commands.ts` | TypeScript command helper functions                |
+| `contract_hash` | `contract.ts` | The schema's SHA-256 hash (integrity verification) |
 
 ### `.write_to_dir(dir)`
 
-네 개의 파일을 지정한 디렉토리에 저장합니다. 디렉토리가 없으면 생성합니다.
+Writes the four files into the given directory, creating it if it does not exist.
 
 ```rust
 let generated = pkg.generate_typescript()?;
 generated.write_to_dir("generated")?;
 ```
 
-생성되는 파일:
+The generated files:
 
 ```text
 generated/
-  schema.json      # 전체 명령 스키마
-  types.ts         # TypeScript 타입 정의
-  commands.ts      # TypeScript 명령 헬퍼 함수
-  contract.ts      # GENERATED_CONTRACT_HASH 상수
+  schema.json      # full command schema
+  types.ts         # TypeScript type definitions
+  commands.ts      # TypeScript command helper functions
+  contract.ts      # GENERATED_CONTRACT_HASH constant
 ```
 
 ---
 
-## 8. 에러 처리
+## 8. Error Handling
 
 ### RustraError
 
-모든 에러는 `code`와 `message` 필드를 가집니다.
+Every error carries `code` and `message` fields.
 
 ```rust
 use rustra::prelude::*;
@@ -438,34 +443,34 @@ fn divide(input: DivideInput) -> Result<DivideOutput> {
 }
 ```
 
-### 에러 코드 분류
+### Error Code Classification
 
-| 코드                   | 팩토리 메서드                          | 의미                                    |
-| ---------------------- | -------------------------------------- | --------------------------------------- |
-| `command.not_found`    | `RustraError::command_not_found(name)` | 등록되지 않은 명령 호출                 |
-| `command.invalid_args` | `RustraError::invalid_args(error)`     | 입력 인자 역직렬화 실패                 |
-| `capability.denied`    | `RustraError::capability_denied(d)`    | capability 미부여                       |
-| `transport.error`      | `RustraError::transport(error)`        | transport/네트워크 오류 — **retryable** |
-| `transport.timeout`    | `RustraError::timeout(error)`          | 타임아웃 — **retryable**                |
-| `internal`             | `RustraError::internal(error)`         | 내부 오류 (직렬화, I/O 등)              |
-| (커스텀)               | `RustraError::custom(code, message)`   | 사용자 정의 에러                        |
+| Code                   | Factory method                         | Meaning                                   |
+| ---------------------- | -------------------------------------- | ----------------------------------------- |
+| `command.not_found`    | `RustraError::command_not_found(name)` | Invoking an unregistered command          |
+| `command.invalid_args` | `RustraError::invalid_args(error)`     | Input argument deserialization failure    |
+| `capability.denied`    | `RustraError::capability_denied(d)`    | Capability not granted                    |
+| `transport.error`      | `RustraError::transport(error)`        | Transport/network error — **retryable**   |
+| `transport.timeout`    | `RustraError::timeout(error)`          | Timeout — **retryable**                   |
+| `internal`             | `RustraError::internal(error)`         | Internal error (serialization, I/O, etc.) |
+| (custom)               | `RustraError::custom(code, message)`   | User-defined error                        |
 
-### 재시도 가능 여부 (retryable)
+### Retryability (retryable)
 
-`transport.error`/`transport.timeout` 생성 에러는 `retryable: true`로 설정된다.
-임의의 에러에 `.retryable()` 빌더를 붙일 수 있고, `is_retryable()`로 조회한다:
+Errors created via `transport.error`/`transport.timeout` carry `retryable: true`. Any
+error can take the `.retryable()` builder, and it is queried with `is_retryable()`:
 
 ```rust
 let err = RustraError::custom("db.locked", "retry later").retryable();
 assert!(err.is_retryable());
 ```
 
-TypeScript 측 `RustraCommandError`는 `.retryable` 필드로 같은 값을 노출한다
-(와이어에 플래그가 없는 JSON 경로에서는 `transport.*` 코드 기반으로 추론).
-JS 측 `invoke`의 `options.timeoutMs`는 만료 시 이 `transport.timeout`(retryable)로
-거부한다 — 네이티브 hang의 JS 측 탈출구.
+The TypeScript-side `RustraCommandError` exposes the same value as the `.retryable`
+field (on JSON paths without the flag on the wire, it is inferred from the
+`transport.*` codes). The JS-side `invoke` `options.timeoutMs` rejects with this
+`transport.timeout` (retryable) on expiry — the JS-side escape hatch from a hung native.
 
-### 에러 메서드
+### Error Methods
 
 ```rust
 let err = RustraError::custom("auth.unauthorized", "invalid token");
@@ -473,9 +478,9 @@ assert_eq!(err.code(), "auth.unauthorized");
 assert_eq!(err.message(), "invalid token");
 ```
 
-### Result 타입
+### The Result Type
 
-`rustra::prelude::Result<T>`는 `std::result::Result<T, RustraError>`의 별칭입니다.
+`rustra::prelude::Result<T>` is an alias of `std::result::Result<T, RustraError>`.
 
 ```rust
 use rustra::prelude::*;
@@ -485,9 +490,9 @@ fn my_function() -> Result<String> {
 }
 ```
 
-### std::io::Error 자동 변환
+### Automatic std::io::Error Conversion
 
-`From<std::io::Error>`가 구현되어 있어 `?` 연산자로 자연스럽게 전파할 수 있습니다:
+`From<std::io::Error>` is implemented, so errors propagate naturally with the `?` operator:
 
 ```rust
 fn write_output() -> Result<()> {
@@ -498,30 +503,30 @@ fn write_output() -> Result<()> {
 
 ---
 
-## 9. TypeScript 생성 규칙
+## 9. TypeScript Generation Rules
 
-### 타입 매핑
+### Type Mapping
 
-| Rust 타입                     | TypeScript 타입                         |
-| ----------------------------- | --------------------------------------- |
-| `i64`, `i32`, `u32`, `f64` 등 | `number`                                |
-| `String`                      | `string`                                |
-| `bool`                        | `boolean`                               |
-| `Option<T>`                   | `T \| null` (구조체 필드는 `?:` 선택적) |
-| `Vec<T>`                      | `T[]`                                   |
-| `Vec<Vec<T>>`                 | `T[][]` (중첩 지원)                     |
-| `HashMap<String, V>`          | `Record<string, V>`                     |
-| `BTreeSet<T>` / `HashSet<T>`  | `Set<T>` (`uniqueItems` 매핑)           |
-| `(A, B, C)`                   | `[A, B, C]` (튜플)                      |
-| 단순 `enum`                   | `'Variant1' \| 'Variant2'`              |
-| 데이터를 가진 `enum`          | 객체 유니온 타입                        |
+| Rust type                        | TypeScript type                      |
+| -------------------------------- | ------------------------------------ |
+| `i64`, `i32`, `u32`, `f64`, etc. | `number`                             |
+| `String`                         | `string`                             |
+| `bool`                           | `boolean`                            |
+| `Option<T>`                      | `T \| null` (struct fields use `?:`) |
+| `Vec<T>`                         | `T[]`                                |
+| `Vec<Vec<T>>`                    | `T[][]` (nesting supported)          |
+| `HashMap<String, V>`             | `Record<string, V>`                  |
+| `BTreeSet<T>` / `HashSet<T>`     | `Set<T>` (`uniqueItems` mapping)     |
+| `(A, B, C)`                      | `[A, B, C]` (tuple)                  |
+| Simple `enum`                    | `'Variant1' \| 'Variant2'`           |
+| Data-carrying `enum`             | Object union type                    |
 
-### 선택적 필드 처리
+### Optional Field Handling
 
 ```rust
 struct Example {
-    pub name: String,        // 필수
-    pub age: Option<u32>,    // 선택적
+    pub name: String,        // required
+    pub age: Option<u32>,    // optional
 }
 ```
 
@@ -532,9 +537,11 @@ export type Example = {
 };
 ```
 
-### 스칼라 반환 타입
+### Scalar Return Types
 
-반환값이 원시 타입(`i64`, `String`, `bool`)이면 TypeScript에서 별도 type alias 없이 직접 inline됩니다. 입력도 마찬가지로 단일 구조체 + `Result<O>` 계약을 지킵니다:
+When the return value is a primitive (`i64`, `String`, `bool`), TypeScript inlines it
+directly without a separate type alias. The input likewise keeps the single struct +
+`Result<O>` contract:
 
 ```rust
 #[bridge_type]
@@ -545,27 +552,27 @@ fn add_numbers(input: AddNumbersInput) -> Result<i64> { Ok(input.a + input.b) }
 ```
 
 ```typescript
-// 스칼라 출력은 Promise<number> — type alias 없이 inline된다.
-// 실제 생성물(examples/calculator/generated/commands.ts)과 동일한 형태다.
+// Scalar outputs become Promise<number> — inlined without a type alias.
+// Same shape as the actual output (examples/calculator/generated/commands.ts).
 export function addNumbers(input: AddNumbersInput, options?: InvokeOptions): Promise<number> {
   return invokeGenerated<number>(1, 'addNumbers', input, options);
 }
 addNumbers.commandId = 'addNumbers';
 ```
 
-### 생성된 types.ts 예시
+### Generated types.ts Example
 
 ```typescript
 export type { EngineClient, RustraError } from '@rustra/types';
 export { RustraCommandError } from '@rustra/types';
 
 export type AddNumbersInput = {
-  a: number | bigint; // i64 → number | bigint (와이어 정합)
+  a: number | bigint; // i64 → number | bigint (wire parity)
   b: number | bigint;
 };
 ```
 
-### 생성된 commands.ts 예시
+### Generated commands.ts Example
 
 ```typescript
 import type { AddNumbersInput, AddNumbersOutput } from './types.js';
@@ -578,88 +585,89 @@ export function addNumbers(input: AddNumbersInput, options?: InvokeOptions): Pro
 addNumbers.commandId = 'addNumbers';
 ```
 
-(`invokeGenerated`는 생성된 호스트 진입점이 `configureLazy()`로 등록한 엔진을 사용한다 —
-호스트 어댑터 import가 앞선다면 호출부에서 엔진을 직접 구성할 필요가 없다)
+(`invokeGenerated` uses the engine registered by the generated host entry point via
+`configureLazy()` — if the host adapter import precedes it, the call site never needs to
+configure an engine itself)
 
 ---
 
-## 10. prelude
+## 10. Prelude
 
-자주 사용하는 타입과 매크로를 한 번에 가져옵니다:
+Brings the frequently used types and macros in at once:
 
 ```rust
 use rustra::prelude::*;
 ```
 
-제공 항목:
+Provided items:
 
-| 항목               | 종류        | 용도                                  |
-| ------------------ | ----------- | ------------------------------------- |
-| `build`            | 함수        | `PackageBuilder` 생성                 |
-| `bridge_type`      | 속성 매크로 | 구조체/열거형 derive 자동화           |
-| `command`          | 속성 매크로 | 함수를 브릿지 명령으로 변환           |
-| `Package`          | 구조체      | 등록된 명령 집합                      |
-| `PackageBuilder`   | 구조체      | 명령 등록 빌더                        |
-| `Result<T>`        | 타입 별칭   | `std::result::Result<T, RustraError>` |
-| `RustraError`      | 구조체      | 에러 타입                             |
-| `Serialize`        | trait       | serde 직렬화                          |
-| `Deserialize`      | trait       | serde 역직렬화                        |
-| `JsonSchema`       | trait       | JSON Schema 생성                      |
-| `GeneratedPackage` | 구조체      | TypeScript 생성 결과                  |
+| Item               | Kind            | Purpose                                   |
+| ------------------ | --------------- | ----------------------------------------- |
+| `build`            | function        | Creates a `PackageBuilder`                |
+| `bridge_type`      | attribute macro | Automates struct/enum derives             |
+| `command`          | attribute macro | Converts a function into a bridge command |
+| `Package`          | struct          | The registered set of commands            |
+| `PackageBuilder`   | struct          | The command registration builder          |
+| `Result<T>`        | type alias      | `std::result::Result<T, RustraError>`     |
+| `RustraError`      | struct          | The error type                            |
+| `Serialize`        | trait           | serde serialization                       |
+| `Deserialize`      | trait           | serde deserialization                     |
+| `JsonSchema`       | trait           | JSON Schema generation                    |
+| `GeneratedPackage` | struct          | The TypeScript generation result          |
 
 ---
 
-## 부록: 전체 예제
+## Appendix: Full Examples
 
-### 고급 API 요약 (문서 본문에서 다루지 않은 공개 API)
+### Advanced API Summary (public APIs not covered in the body)
 
-**이벤트 버스** — Rust → JS 이벤트 푸시:
+**Event bus** — Rust → JS event push:
 
 ```rust
-// 이벤트 발행 (드랍 가능 — 링 버퍼)
+// Publish an event (droppable — ring buffer)
 pkg.emit("item.created", serde_json::json!({ "id": "x1" }));
 
-// 네이티브 싱크 연결 (RN JSI 드레인 등)
+// Attach a native sink (e.g. RN JSI drain)
 pkg.set_event_sink(Some(sink));
-let bus = pkg.event_bus(); // EventBus 직접 접근
+let bus = pkg.event_bus(); // direct EventBus access
 ```
 
-**Runtime Authority (capability)** — deny-by-default 권한:
+**Runtime Authority (capabilities)** — deny-by-default permissions:
 
 ```rust
-// 빌더에서 요구 지정
+// Require a capability at the builder
 Package::builder("app.secure")
     .command("secureCompute", handler)
     .require_capability("secureCompute", "app.admin")
     .build();
 
-// 런타임 부여 — 부여 전까지 capability.denied
+// Grant at runtime — capability.denied until granted
 pkg.grant_capability("app.admin")?;
 ```
 
-**FFI (C ABI)** — 네이티브 모듈/프로세스 경유 호출 (`rustra::ffi`):
+**FFI (C ABI)** — calls via native modules/processes (`rustra::ffi`):
 
 - `rustra_ffi_register` / `rustra_ffi_invoke_json` / `rustra_ffi_invoke_postcard`
-- `rustra_ffi_invoke_async` / `rustra_ffi_invoke_cancel` — 체크포인트 취소 전파
+- `rustra_ffi_invoke_async` / `rustra_ffi_invoke_cancel` — checkpoint cancellation propagation
 - `rustra_ffi_set_max_payload` / `rustra_ffi_contract_hash` / `rustra_ffi_schema_json`
 
-**동결(freeze)** — 런타임 mutation 잠금:
+**Freeze** — locking runtime mutation:
 
 ```rust
-pkg.freeze();          // 이후 register/unregister 는 registry.frozen 에러
+pkg.freeze();          // subsequent register/unregister fail with registry.frozen
 assert!(pkg.is_frozen());
 ```
 
-**Tauri 지원** (`tauri` feature) — `rustra::tauri_support`:
+**Tauri support** (`tauri` feature) — `rustra::tauri_support`:
 
-- `tauri_support::register(app, pkg)` — invoke 핸들러 등록
-- `tauri_support::register_with_events(...)` — 이벤트 푸시 포함
-- `tauri_support::rustra_dispatch(...)` — 커맨드 디스패치
+- `tauri_support::register(app, pkg)` — registers the invoke handler
+- `tauri_support::register_with_events(...)` — includes event push
+- `tauri_support::rustra_dispatch(...)` — command dispatch
 
-**스키마/버전** — `pkg.schema()` (전체 스키마 JSON), `pkg.live_schema()`
-(동적 명령 포함), `.schema_version(v)` 빌더 (T2/OTA 협상).
+**Schema/version** — `pkg.schema()` (the full schema JSON), `pkg.live_schema()`
+(including dynamic commands), the `.schema_version(v)` builder (T2/OTA negotiation).
 
-### 계산기 예제
+### Calculator Example
 
 ```rust
 use rustra::prelude::*;
@@ -701,20 +709,20 @@ fn multiply(input: MultiplyInput) -> Result<MultiplyOutput> {
 }
 
 fn main() -> Result<()> {
-    // 런타임 사용
+    // runtime usage
     let pkg = rustra::build!("example.calculator", add_numbers, multiply).done();
 
     let sum: AddNumbersOutput = pkg.invoke("addNumbers", AddNumbersInput { a: 2, b: 3 })?;
     println!("2 + 3 = {}", sum.value);
 
-    // TypeScript 생성
+    // generate TypeScript
     pkg.generate_typescript()?.write_to_dir("generated")?;
 
     Ok(())
 }
 ```
 
-### 사용자 검색 예제
+### User Search Example
 
 ```rust
 use rustra::prelude::*;
@@ -755,7 +763,7 @@ fn main() -> Result<()> {
 }
 ```
 
-### 에러 처리 예제
+### Error Handling Example
 
 ```rust
 use rustra::prelude::*;
@@ -790,7 +798,7 @@ fn main() -> Result<()> {
     let pkg = rustra::build!("math.division", divide).done();
 
     match pkg.invoke("divide", DivisionInput { dividend: 10, divisor: 3 }) {
-        Ok(result) => println!("10 / 3 = {} (나머지: {})", result.quotient, result.remainder),
+        Ok(result) => println!("10 / 3 = {} (remainder: {})", result.quotient, result.remainder),
         Err(e) => eprintln!("[{}] {}", e.code(), e.message()),
     }
 

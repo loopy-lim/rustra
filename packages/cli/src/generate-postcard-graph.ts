@@ -1,4 +1,4 @@
-import type { CommandSchema, JsonSchema, PackageSchema } from './schema.js';
+import type { JsonSchema, PackageSchema } from './schema.js';
 import { classifyPostcardField } from './generate-postcard-classify.js';
 import type { PostcardField } from './generate-postcard-types.js';
 

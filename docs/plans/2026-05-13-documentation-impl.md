@@ -381,17 +381,17 @@ rustra는 Rust 패키지를 한 번 정의하면, host-neutral TypeScript 클라
 
 ### 라이브러리 사용자
 
-1. [아키텍처 개요](architecture.md) — 전체 구조 파악
-2. [시작하기](getting-started.md) — 설치 및 기본 사용법
-3. [Transport 교체 가이드](extending/transport-guide.md) — Bun FFI, Node napi-rs 등
-4. [새 Host 추가 가이드](extending/adding-host.md) — Electron, Deno 등
+1. [아키텍처 개요](../../docs/architecture.md) — 전체 구조 파악
+2. [시작하기](../../docs/getting-started.md) — 설치 및 기본 사용법
+3. [Transport 교체 가이드](../../docs/extending/transport-guide.md) — Bun FFI, Node napi-rs 등
+4. [새 Host 추가 가이드](../../docs/extending/adding-host.md) — Electron, Deno 등
 
 ### 프로젝트 기여자
 
-1. [아키텍처 개요](architecture.md) — 전체 구조 파악
-2. [Crate 구조](internal/crate-structure.md) — 각 crate/package의 책임
-3. [Codegen](internal/codegen.md) — TypeScript 생성 로직
-4. [테스트 전략](internal/testing.md) — 테스트 계층 구조
+1. [아키텍처 개요](../../docs/architecture.md) — 전체 구조 파악
+2. [Crate 구조](../../docs/internal/crate-structure.md) — 각 crate/package의 책임
+3. [Codegen](../../docs/internal/codegen.md) — TypeScript 생성 로직
+4. [테스트 전략](../../docs/internal/testing.md) — 테스트 계층 구조
 
 ## 전체 문서 목록
 

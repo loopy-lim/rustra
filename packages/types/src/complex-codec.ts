@@ -1,4 +1,4 @@
-import type { RkyvV2Codec, RustraError } from './index.js';
+import type { RkyvV2Codec } from './index.js';
 import {
   ComplexCodecError,
   DEFAULT_MAX_COLLECTION_LENGTH,

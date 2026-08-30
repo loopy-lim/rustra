@@ -1,8 +1,10 @@
-# 새 Host Adapter 추가 가이드
+English | [한국어](./adding-host.ko.md)
 
-## 1. 최소 요구사항
+# Guide to Adding a New Host Adapter
 
-새 host adapter를 추가하려면 단 하나의 인터페이스만 구현하면 됩니다.
+## 1. Minimum Requirements
+
+Adding a new host adapter requires implementing exactly one interface.
 
 ```ts
 type EngineClient = {
@@ -10,7 +12,7 @@ type EngineClient = {
 };
 ```
 
-이것이 rustra가 TypeScript 쪽에서 요구하는 전부입니다. 생성된 명령 함수(`addNumbers` 등)는 모두 `@rustra/types`의 글로벌 `invoke`를 거치며, 이것이 `configure(engine)`로 설치한 `EngineClient`를 사용합니다:
+This is all rustra requires on the TypeScript side. The generated command functions (such as `addNumbers`) all go through the global `invoke` from `@rustra/types`, which uses the `EngineClient` installed with `configure(engine)`:
 
 ```ts
 // examples/calculator/generated/commands.ts
@@ -21,16 +23,16 @@ export function addNumbers(input: AddNumbersInput): Promise<AddNumbersOutput> {
 
 ---
 
-## 2. 새 Adapter 만들기
+## 2. Creating a New Adapter
 
-### 디렉토리 구조
+### Directory layout
 
 ```
-packages/<host>/src/index.ts    ← adapter 팩토리 함수
-packages/<host>/README.md       ← 사용법 문서
+packages/<host>/src/index.ts    ← adapter factory function
+packages/<host>/README.md       ← usage documentation
 ```
 
-기존 adapter들은 모두 동일한 패턴을 따릅니다:
+All existing adapters follow the same pattern:
 
 ```
 packages/node/src/index.ts
@@ -39,11 +41,11 @@ packages/react-native/src/index.ts
 packages/tauri/src/index.ts
 ```
 
-### 팩토리 함수 작성
+### Writing the factory function
 
-모든 adapter는 "transport를 주입받아 `EngineClient`를 반환"하는 팩토리 함수를 노출합니다. 기존 패턴을 그대로 따르면 됩니다.
+Every adapter exposes a factory function that "receives a transport and returns an `EngineClient`". Follow the existing pattern as-is.
 
-#### 기본 패턴 (Node/Bun 스타일)
+#### Basic pattern (Node/Bun style)
 
 ```ts
 // packages/<host>/src/index.ts
@@ -65,30 +67,30 @@ export function createMyHostEngine(transport: MyHostInvokeTransport): MyHostEngi
 }
 ```
 
-#### 프레임워크 내장 패턴 (Tauri 스타일)
+#### Framework built-in pattern (Tauri style)
 
-프레임워크가 자체적인 invoke 체계를 가진 경우, 어댑터에서 명령을 래핑할 수 있습니다:
+If the framework has its own invoke mechanism, the adapter can wrap commands:
 
 ```ts
-// packages/tauri/src/index.ts (참고용)
+// packages/tauri/src/index.ts (for reference)
 export type TauriInvoke = (command: string, args?: unknown) => Promise<unknown> | unknown;
 
 export function createTauriEngine(options: { invoke: TauriInvoke }): TauriEngineClient {
   return {
     async invoke<T>(command: string, args?: unknown): Promise<T> {
-      // Tauri는 rustra_dispatch라는 단일 커맨드로 라우팅
+      // Tauri routes through a single command: rustra_dispatch
       return (await options.invoke('rustra_dispatch', { command, args: args ?? {} })) as T;
     },
   };
 }
 ```
 
-#### 네이티브 모듈 패턴 (React Native 스타일)
+#### Native module pattern (React Native style)
 
-네이티브 모듈을 직접 주입받는 패턴입니다:
+This pattern injects the native module directly:
 
 ```ts
-// packages/react-native/src/index.ts (참고용)
+// packages/react-native/src/index.ts (for reference)
 export type ReactNativeRustraModule = {
   invoke(command: string, args?: unknown): Promise<unknown> | unknown;
 };
@@ -106,21 +108,21 @@ export function createReactNativeEngine(
 
 ---
 
-## 3. Rust 진입점 선택 기준
+## 3. Choosing the Rust Entry Point
 
-Rust 쪽에서 TypeScript와 통신하는 방식은 다음 네 가지 중에서 선택합니다.
+Choose one of the following four ways for the Rust side to communicate with TypeScript.
 
-### C FFI (`extern "C"`) — 범용, 높은 성능
+### C FFI (`extern "C"`) — universal, high performance
 
-**적합한 경우:** React Native, Bun(`bun:ffi`), 임베디드, C/C++ 프로젝트와의 통합
+**Best for:** React Native, Bun (`bun:ffi`), embedded systems, integration with C/C++ projects
 
-**장점:**
+**Advantages:**
 
-- 언어 바인딩이 자유로움 (Swift, Kotlin, C, Python 등)
-- 함수 호출 수준의 성능
-- 메모리 직접 관리로 오버헤드 최소
+- Bindings in any language (Swift, Kotlin, C, Python, etc.)
+- Function-call-level performance
+- Direct memory management keeps overhead minimal
 
-**구현:**
+**Implementation:**
 
 ```rust
 // lib.rs
@@ -144,7 +146,7 @@ pub unsafe extern "C" fn rustra_mypackage_invoke(payload: *const c_char) -> *mut
     };
 
     let command = request.get("command").and_then(Value::as_str)
-        .ok_or_else(|| "missing command").unwrap(); // 실제로는 적절히 처리
+        .ok_or_else(|| "missing command").unwrap(); // handle properly in real code
     let args = request.get("args").cloned().unwrap_or_else(|| json!({}));
 
     match my_package().invoke_json(command, args) {
@@ -167,31 +169,31 @@ fn json_string(value: Value) -> *mut c_char {
 }
 ```
 
-Cargo.toml에서 `cdylib` 또는 `staticlib`을 지정:
+Specify `cdylib` or `staticlib` in Cargo.toml:
 
 ```toml
 [lib]
-crate-type = ["rlib", "cdylib"]   # 동적 라이브러리 (Bun FFI, Python 등)
-# 또는
-crate-type = ["rlib", "staticlib"] # 정적 라이브러리 (iOS, Android 등)
+crate-type = ["rlib", "cdylib"]   # dynamic library (Bun FFI, Python, etc.)
+# or
+crate-type = ["rlib", "staticlib"] # static library (iOS, Android, etc.)
 ```
 
-### stdio (subprocess) — 범용, 구현이 간단
+### stdio (subprocess) — universal, simple to implement
 
-**적합한 경우:** Node.js, Bun, CLI 도구, 빠른 프로토타이핑
+**Best for:** Node.js, Bun, CLI tools, rapid prototyping
 
-**장점:**
+**Advantages:**
 
-- 구현이 매우 간단
-- 프로세스 격리로 안전성 보장
-- 언어 독립적 (stdin/stdout만 사용)
+- Very simple to implement
+- Process isolation provides safety
+- Language independent (uses only stdin/stdout)
 
-**단점:**
+**Drawbacks:**
 
-- 매 호출 시 프로세스 스폰 오버헤드
-- 프로세스 유지 불가 (stateless)
+- Per-call process spawn overhead
+- Cannot keep a process alive (stateless)
 
-**구현:**
+**Implementation:**
 
 ```rust
 // main.rs
@@ -211,7 +213,7 @@ fn run_invoke_stdio() -> rustra::Result<()> {
 }
 ```
 
-TypeScript 쪽:
+TypeScript side:
 
 ```ts
 import { spawnSync } from 'node:child_process';
@@ -229,17 +231,17 @@ function invokeRuntime(command: string, args: unknown): unknown {
 }
 ```
 
-### napi-rs — Node.js 고성능
+### napi-rs — high performance for Node.js
 
-**적합한 경우:** Node.js 전용 프로덕션 환경
+**Best for:** Node.js-only production environments
 
-**장점:**
+**Advantages:**
 
-- Node.js 네이티브 애드온으로서 최고 성능
-- 타입 안전한 Rust ↔ JavaScript 변환
-- 비동기 지원 (`Promise` 자동 생성)
+- Best performance as a Node.js native addon
+- Type-safe Rust ↔ JavaScript conversion
+- Async support (`Promise` generated automatically)
 
-**구현:**
+**Implementation:**
 
 ```rust
 use napi::bindgen_prelude::*;
@@ -256,11 +258,11 @@ pub fn rustra_invoke(command: String, args: Option<String>) -> Result<String> {
 }
 ```
 
-### 프레임워크 내장 — Tauri
+### Framework built-in — Tauri
 
-**적합한 경우:** Tauri 애플리케이션
+**Best for:** Tauri applications
 
-Tauri는 자체 `invoke` 체계를 가지므로, `rustra::tauri_support::register`로 패키지를 등록하기만 하면 됩니다. 이 함수는 `rustra_dispatch`라는 단일 커맨드 핸들러를 Tauri 빌더에 등록하고, 모든 rustra 커맨드를 이 엔드포인트로 멀티플렉싱합니다:
+Tauri has its own `invoke` mechanism, so you only need to register the package with `rustra::tauri_support::register`. This function registers a single command handler named `rustra_dispatch` on the Tauri builder and multiplexes all rustra commands through this endpoint:
 
 ```rust
 // src-tauri/src/main.rs
@@ -268,47 +270,47 @@ let builder = rustra::tauri_support::register(my_package(), tauri::Builder::defa
 builder.run(tauri::generate_context!()).expect("failed to run");
 ```
 
-> **참고:** `tauri_support`를 사용하려면 `Cargo.toml`에서 `tauri` feature를 활성화해야 합니다.
+> **Note:** Using `tauri_support` requires enabling the `tauri` feature in `Cargo.toml`.
 >
 > ```toml
 > rustra = { path = "...", features = ["tauri"] }
 > ```
 
-이 패턴은 다른 프레임워크와의 통합에서도 참고할 수 있습니다. 프레임워크가 단일 엔드포인트 기반의 명령 라우팅을 지원한다면, 비슷한 방식으로 멀티플렉스 adapter를 구현할 수 있습니다.
+This pattern also serves as a reference for integrating with other frameworks. If a framework supports single-endpoint command routing, you can implement a multiplexing adapter in a similar way.
 
-### 선택 결정 트리
+### Decision tree
 
 ```
-새로운 host를 추가하시나요?
+Adding a new host?
 │
-├─ Node.js 전용인가요?
-│   ├─ 최고 성능이 필요한가요? → napi-rs
-│   └─ 빠른 구현이 우선인가요? → subprocess stdio
+├─ Node.js only?
+│   ├─ Need maximum performance? → napi-rs
+│   └─ Prefer fast implementation? → subprocess stdio
 │
-├─ Bun 전용인가요?
-│   ├─ 최고 성능이 필요한가요? → bun:ffi (C FFI)
-│   └─ 빠른 구현이 우선인가요? → subprocess stdio
+├─ Bun only?
+│   ├─ Need maximum performance? → bun:ffi (direct C FFI)
+│   └─ Prefer fast implementation? → subprocess stdio
 │
-├─ React Native인가요?
-│   └─ C FFI → Expo Modules Core로 래핑
+├─ React Native?
+│   └─ C FFI → wrap with Expo Modules Core
 │
-├─ Tauri인가요?
-│   └─ 프레임워크 내장 invoke
+├─ Tauri?
+│   └─ Framework built-in invoke
 │
-├─ 다른 네이티브 환경인가요? (iOS, Android, 임베디드)
-│   └─ C FFI → 각 플랫폼의 FFI 메커니즘으로 래핑
+├─ Another native environment? (iOS, Android, embedded)
+│   └─ C FFI → wrap with the platform's FFI mechanism
 │
-└─ 범용 / 언어 독립적인가요?
+└─ Universal / language independent?
     └─ subprocess stdio
 ```
 
 ---
 
-## 4. 테스트 추가 방법
+## 4. How to Add Tests
 
-### 런타임 앱 작성
+### Writing a runtime app
 
-`examples/calculator/apps/` 아래에 새 host용 앱을 추가합니다.
+Add an app for the new host under `examples/calculator/apps/`.
 
 ```ts
 // examples/calculator/apps/<host>-app.ts
@@ -316,15 +318,15 @@ import { addNumbers } from '../generated/commands.js';
 import { createMyHostEngine } from '../../../packages/myhost/src/index.js';
 import { configure } from '@rustra/types';
 
-// transport 구현
+// transport implementation
 const engine = createMyHostEngine({
   invoke(command: string, args?: unknown) {
-    // 실제 transport 구현
+    // real transport implementation
     return invokeViaMyTransport(command, args);
   },
 });
 
-// 테스트
+// tests
 configure(engine);
 const result = await addNumbers({ a: 20, b: 22 });
 
@@ -335,12 +337,12 @@ if (result.value !== 42) {
 console.log(`<host> runtime result: ${result.value}`);
 ```
 
-### Adapter 테스트 작성 (모킹)
+### Writing an adapter test (mocking)
 
-실제 Rust 바이너리 없이 adapter 로직만 검증하는 테스트입니다. 기존 `tauri-app.ts`와 `react-native-app.ts`가 이 패턴을 사용합니다:
+This test validates only the adapter logic, without a real Rust binary. The existing `tauri-app.ts` and `react-native-app.ts` use this pattern:
 
 ```ts
-// examples/calculator/apps/<host>-app.ts (모킹 버전)
+// examples/calculator/apps/<host>-app.ts (mocked version)
 import { addNumbers } from '../generated/commands.js';
 import { createMyHostEngine } from '../../../packages/myhost/src/index.js';
 import { configure } from '@rustra/types';
@@ -350,7 +352,7 @@ const calls: Array<{ command: string; args: unknown }> = [];
 const engine = createMyHostEngine({
   async invoke(command: string, args?: unknown) {
     calls.push({ command, args });
-    return { value: 42 }; // 모킹된 응답
+    return { value: 42 }; // mocked response
   },
 });
 
@@ -368,7 +370,7 @@ if (JSON.stringify(calls) !== JSON.stringify([{ command: 'addNumbers', args: { a
 console.log(`<host> adapter test passed`);
 ```
 
-### package.json에 Bun script 추가
+### Adding Bun scripts to package.json
 
 ```json
 {
@@ -379,7 +381,7 @@ console.log(`<host> adapter test passed`);
 }
 ```
 
-기존 스크립트 패턴을 참고:
+Existing script patterns for reference:
 
 ```json
 {
@@ -393,30 +395,30 @@ console.log(`<host> adapter test passed`);
 }
 ```
 
-### 전체 테스트 실행
+### Running the full suite
 
 ```bash
-# 전체 호환성 테스트
+# full compatibility tests
 bun run test:compat
 
-# 개별 테스트
-bun run test:adapter:myhost       # adapter 모킹 테스트
-bun run test:runtime:myhost       # 실제 Rust 런타임 테스트
+# individual tests
+bun run test:adapter:myhost       # adapter mock tests
+bun run test:runtime:myhost       # real Rust runtime tests
 ```
 
 ---
 
-## 5. 실제 추가 예시: Electron adapter
+## 5. Worked Example: Electron Adapter
 
-Electron용 adapter를 추가하는 전체 과정을 보여줍니다.
+This walks through the full process of adding an adapter for Electron.
 
-### Step 1: 패키지 생성
+### Step 1: Create the package
 
 ```
 packages/electron/src/index.ts
 ```
 
-### Step 2: Adapter 작성
+### Step 2: Write the adapter
 
 ```ts
 // packages/electron/src/index.ts
@@ -437,9 +439,9 @@ export function createElectronEngine(transport: ElectronInvokeTransport): Electr
 }
 ```
 
-### Step 3: Rust 진입점 선택
+### Step 3: Choose the Rust entry point
 
-Electron은 Node.js 기반이므로 subprocess stdio로 시작:
+Electron is Node.js-based, so start with subprocess stdio:
 
 ```ts
 // examples/calculator/apps/electron-app.ts
@@ -474,7 +476,7 @@ if (result.value !== 42) {
 console.log(`electron runtime result: ${result.value}`);
 ```
 
-### Step 4: 테스트 스크립트 추가
+### Step 4: Add test scripts
 
 ```json
 {
@@ -483,9 +485,9 @@ console.log(`electron runtime result: ${result.value}`);
 }
 ```
 
-### Step 5: 나중에 napi-rs로 전환 (선택)
+### Step 5: Switch to napi-rs later (optional)
 
-프로덕션에서 성능이 필요하면, napi-rs로 transport만 교체합니다:
+If production needs more performance, swap only the transport for napi-rs:
 
 ```ts
 const engine = createElectronEngine({
@@ -499,4 +501,4 @@ const engine = createElectronEngine({
 });
 ```
 
-adapter 코드(`packages/electron/src/index.ts`)는 변경하지 않습니다. transport만 교체합니다.
+The adapter code (`packages/electron/src/index.ts`) stays unchanged. Only the transport is replaced.

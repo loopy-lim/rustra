@@ -1,3 +1,12 @@
+fn postcard_uvar_len(mut value: usize) -> usize {
+    let mut len = 1;
+    while value >= 0x80 {
+        value >>= 7;
+        len += 1;
+    }
+    len
+}
+
 impl Package {
     /// Invoke a schema-proven single-byte-field command without constructing a
     /// postcard request/response frame. The borrowed input is copied into an

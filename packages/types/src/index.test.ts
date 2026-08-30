@@ -3101,20 +3101,6 @@ test('schema codec: $ref resolution through definitions', () => {
 // 미러한다: postcard 지원 스키마는 인터프리터 binary, oneOf 는 complex binary
 // (Rust 가 t3align 계약으로 complex 로 승격), 둘 다 거부(anyOf 3항)만 Tier 3.
 
-/** postcard 에러 프레임 — [0][pad][err_len u16 @8][postcard{code,message}]. */
-function postcardError(code: string, message: string): ArrayBuffer {
-  const c = pcString(code);
-  const m = pcString(message);
-  const errLen = c.length + m.length;
-  const ab = new ArrayBuffer(10 + errLen);
-  const view = new Uint8Array(ab);
-  view[0] = 0;
-  new DataView(ab).setUint16(8, errLen, true);
-  view.set(c, 10);
-  view.set(m, 10 + c.length);
-  return ab;
-}
-
 test('engine routes postcard-supported dynamic commands through the schema interpreter (T2-3)', async () => {
   // Rust 계약: register("echo", echo) — EchoIn{v:i64} 는 postcard 지원 →
   // rkyv_v2_tier3=false, 핸들러는 [ok][pad][postcard(EchoOut)] 로 응답한다.

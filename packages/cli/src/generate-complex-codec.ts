@@ -1,5 +1,4 @@
 import type { CommandSchema, JsonSchema } from './schema.js';
-import type { RkyvV2Codec } from '@rustra/types';
 import { commandFunctionName } from './codegen.js';
 import { buildCodecIr } from './codec-ir.js';
 import { commandCodecSupported } from './generate-postcard-support.js';

@@ -1,8 +1,10 @@
-# Calculator 예시
+English | [한국어](./README.ko.md)
 
-별도의 Rust crate가 `rustra`를 사용하는 완전한 예시입니다. 애플리케이션 작성자가 실제로 사용하는 방식을 보여줍니다.
+# Calculator Example
 
-## 생성과 실행
+A complete example that uses `rustra` in a separate Rust crate. It shows how application authors actually use it.
+
+## Generation and Run
 
 ```bash
 bun run --cwd examples/calculator codegen
@@ -10,42 +12,40 @@ bun run test:runtime:node
 bun run test:runtime:bun
 ```
 
-Node 예제는 생성된 binary 후보를 lazy 발견하고, Bun 예제는 생성된 cdylib 후보와
-stable ABI를 lazy 연결한다. 둘 다 애플리케이션 코드에 `configure()`, 프로세스 생성,
-`dlopen` 또는 pointer 수명 관리가 없다.
+The Node example lazily discovers a generated binary candidate, and the Bun example lazily links a generated cdylib candidate against the stable ABI. Neither requires `configure()`, process spawning, `dlopen`, or pointer lifetime management in application code.
 
 ```ts
-import { addNumbers, rustra } from '../generated/node.js'; // Bun은 bun.js
+import { addNumbers, rustra } from '../generated/node.js'; // bun.js for Bun
 
 const { value } = await addNumbers({ a: 20, b: 22 });
 console.log(value);
 rustra.dispose();
 ```
 
-실행 파일은 [`apps/node-app.ts`](apps/node-app.ts)와
-[`apps/bun-ffi-app.ts`](apps/bun-ffi-app.ts)에 있다.
+The executables live in [`apps/node-app.ts`](apps/node-app.ts) and
+[`apps/bun-ffi-app.ts`](apps/bun-ffi-app.ts).
 
-## 예시가 보여주는 것
+## What the Example Shows
 
-1. **타입 정의** — `AddNumbersInput`, `AddNumbersOutput`을 `Serialize + Deserialize + JsonSchema`로 정의
-2. **커맨드 등록** — `#[command]`로 핸들러 함수를 표시하고 `Package::builder(...).command_fn(...)`로 등록
-3. **로컬 invoke** — `package.invoke("addNumbers", ...)`로 타입 안전한 호출
-4. **TypeScript 생성** — `package.generate_typescript()` → `generated.write_to_dir(...)`로 파일 출력
-5. **Host 생성 진입점** — `node.ts`, `bun.ts`, `tauri.ts`, `react-native.ts`
-6. **네이티브 진입점** — `native_entry!` 한 줄로 stable C ABI와 RN staticlib 공유
-7. **고성능 선택지** — Node persistent loop/N-API와 Bun FFI rkyv V2 실측
+1. **Type definitions** — define `AddNumbersInput`, `AddNumbersOutput` with `Serialize + Deserialize + JsonSchema`
+2. **Command registration** — mark handler functions with `#[command]` and register them via `Package::builder(...).command_fn(...)`
+3. **Local invoke** — type-safe invocation with `package.invoke("addNumbers", ...)`
+4. **TypeScript generation** — `package.generate_typescript()` → file output via `generated.write_to_dir(...)`
+5. **Host generated entrypoints** — `node.ts`, `bun.ts`, `tauri.ts`, `react-native.ts`
+6. **Native entrypoint** — `native_entry!` in one line shares the stable C ABI and the RN staticlib
+7. **High-performance options** — measured Node persistent loop/N-API and Bun FFI rkyv V2
 
-## 생성되는 파일
+## Generated Files
 
-`examples/calculator/generated/` 디렉토리에 다음 파일이 생성됩니다:
+The following files are generated in the `examples/calculator/generated/` directory:
 
-- `schema.json` — 패키지 스키마
-- `types.ts` — TypeScript 타입 정의
-- `commands.ts` — 커맨드 헬퍼 함수
-- `contract.ts` — 계약 해시
-- `node.ts`, `bun.ts`, `tauri.ts`, `react-native.ts` — host별 zero-config bootstrap
+- `schema.json` — package schema
+- `types.ts` — TypeScript type definitions
+- `commands.ts` — command helper functions
+- `contract.ts` — contract hash
+- `node.ts`, `bun.ts`, `tauri.ts`, `react-native.ts` — zero-config bootstrap per host
 
-## 생성된 커맨드 헬퍼
+## Generated Command Helper
 
 ```ts
 import { addNumbers } from '../generated/node.js';
@@ -54,26 +54,24 @@ const result = await addNumbers({ a: 20, b: 22 });
 console.log(result.value); // 42
 ```
 
-이 코드는 `createGeneratedFields2` 기반으로 생성된 helper와 Node host entry를
-사용합니다. 생성된 host 파일이 lazy engine을 한 번 설치하므로 helper는 engine
-파라미터 없이 호출합니다. Bun은 같은 방식으로 `../generated/bun.js`를 import하며,
-수동 `configure()`는 custom transport를 주입할 때만 필요합니다.
+This code uses a helper generated on top of `createGeneratedFields2` together with the Node host entry. Because the generated host file installs the lazy engine once, the helper is called without an engine parameter. Bun imports `../generated/bun.js` the same way, and a manual `configure()` is only needed when injecting a custom transport.
 
-## 실사용 성능 확인
+## Real-World Performance Check
 
 ```bash
 bun run bench:hosts
 ```
 
-[`apps/node-performance.ts`](apps/node-performance.ts)는 Node 기본 one-shot,
-persistent loop, N-API rkyv V2를 각각 재고,
-[`apps/bun-performance.ts`](apps/bun-performance.ts)는 생성된 Bun FFI 경로를 잽니다.
-기본 Node 경로는 단순 배포를 위한 CLI/저빈도 경로입니다. 서버 hot path에서 매 호출
-프로세스를 시작하지 않도록 loop 또는 N-API를 명시적으로 선택해야 합니다.
+[`apps/node-performance.ts`](apps/node-performance.ts) measures the Node default one-shot,
+persistent loop, and N-API rkyv V2 respectively, and
+[`apps/bun-performance.ts`](apps/bun-performance.ts) times the generated Bun FFI path.
+The default Node path is a CLI/low-frequency path for simple deployment. On server hot
+paths you must explicitly choose the loop or N-API so that a process is not started
+per call.
 
-## 호환성 테스트
+## Compatibility Test
 
-Node와 Bun에서 생성된 TypeScript 클라이언트를 검증합니다:
+Validates the generated TypeScript client on Node and Bun:
 
 ```bash
 bun run test:compat

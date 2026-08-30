@@ -1,5 +1,5 @@
 import type { RustraError } from './index.js';
-import { ComplexCodecError, DEFAULT_MAX_COLLECTION_LENGTH } from './complex-codec-types.js';
+import { DEFAULT_MAX_COLLECTION_LENGTH } from './complex-codec-types.js';
 import { Reader } from './complex-codec-reader.js';
 
 export function decodeErrorFrame(bytes: Uint8Array): RustraError {

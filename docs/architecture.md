@@ -1,16 +1,18 @@
-# rustra-bridge 아키텍처
+English | [한국어](./architecture.ko.md)
 
-## 개요
+# rustra-bridge Architecture
 
-rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크다. Rust 측에서 command 함수를 작성하고 `Package`로 등록하면, `generate_typescript()`가 TypeScript 타입 정의와 command helper 함수를 생성한다. 생성된 TypeScript 코드는 어떤 런타임(Node.js, Bun, Tauri, React Native)에도 종속되지 않으며, 각 host adapter가 transport를 주입받아 `EngineClient` 인터페이스로 래핑하는 방식으로 동작한다.
+## Overview
+
+rustra is a bridge framework that automatically generates a host-neutral TypeScript client once you define a Rust package. You write command functions on the Rust side and register them with a `Package`; `generate_typescript()` then produces TypeScript type definitions and command helper functions. The generated TypeScript code depends on no runtime (Node.js, Bun, Tauri, React Native); each host adapter receives an injected transport and wraps it behind the `EngineClient` interface.
 
 ---
 
-## 전체 데이터 흐름도
+## Overall Data Flow Diagram
 
 ```
  ┌─────────────────────────────────────────────────────────────────────┐
- │                         Rust (작성 시점)                            │
+ │                         Rust (authoring time)                       │
  │                                                                     │
  │  #[command]                                                         │
  │  fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput>│
@@ -28,9 +30,9 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
  │         ▼                                                           │
  │  GeneratedPackage {                                                 │
  │      schema_json,      → schema.json                                │
- │      types_ts,         → types.ts    (EngineClient + I/O 타입)      │
- │      commands_ts,      → commands.ts (command helper 함수)          │
- │      contract_hash,    → contract.ts (계약 해시)                    │
+ │      types_ts,         → types.ts    (EngineClient + I/O types)     │
+ │      commands_ts,      → commands.ts (command helper functions)     │
+ │      contract_hash,    → contract.ts (contract hash)                │
  │  }                                                                  │
  │                                                                     │
  │  generated.write_to_dir("./generated")                              │
@@ -38,14 +40,14 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
                               │
                               ▼
  ┌─────────────────────────────────────────────────────────────────────┐
- │                    TypeScript (런타임)                               │
+ │                    TypeScript (runtime)                              │
  │                                                                     │
  │  generated/types.ts        generated/commands.ts                    │
  │  ┌──────────────────┐      ┌──────────────────────────────────┐     │
  │  │ EngineClient     │◄─────│ addNumbers({ a, b })             │     │
  │  │ AddNumbersInput  │      └──────────┬───────────────────────┘     │
  │  └──────────────────┘                 │                             │
- │          ▲                            │ invoke() (글로벌)           │
+ │          ▲                            │ invoke() (global)           │
  │          │                            │                             │
  │  ┌───────┴────────────────────────────┴───────────────────────┐     │
  │  │                    host adapter                             │     │
@@ -57,7 +59,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
  │                                 │                                   │
  │                                 ▼                                   │
  │  ┌──────────────────────────────────────────────────────────────┐   │
- │  │  transport (앱 레벨에서 결정)                                 │   │
+ │  │  transport (app-level choice)                                 │   │
  │  │  subprocess stdio / C FFI / napi / Tauri IPC / RN JSI        │   │
  │  └──────────────────────────────────────────────────────────────┘   │
  └─────────────────────────────────────────────────────────────────────┘
@@ -65,21 +67,21 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 
 ---
 
-## EngineClient: 시스템의 핵심 계약
+## EngineClient: The Core Contract of the System
 
-`EngineClient`는 생성된 TypeScript 코드와 host adapter 사이의 유일한 계약이다. 모든 command helper 함수는 이 인터페이스만 의존하며, host-specific 코드를 포함하지 않는다.
+`EngineClient` is the only contract between the generated TypeScript code and the host adapters. Every command helper function depends solely on this interface and contains no host-specific code.
 
 ```ts
-// types.ts 에 자동 생성됨
+// auto-generated into types.ts
 export type EngineClient = {
   invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T>;
   invokeBatch?<T>(entries: BatchEntry[]): Promise<T[]>;
 };
 ```
 
-각 host adapter는 transport를 주입받아 이 인터페이스를 구현한 객체를 반환한다:
+Each host adapter takes an injected transport and returns an object implementing this interface:
 
-| adapter 패키지          | 팩토리 함수                              | 반환 타입                           | 파일 경로                            |
+| Adapter package         | Factory function                         | Return type                         | File path                            |
 | ----------------------- | ---------------------------------------- | ----------------------------------- | ------------------------------------ |
 | `packages/node`         | `createNodeBootstrap(options)`           | lazy `EngineClient`                 | `packages/node/src/index.ts`         |
 | `packages/bun`          | `createBunBootstrap(options)`            | lazy `EngineClient`                 | `packages/bun/src/index.ts`          |
@@ -87,19 +89,20 @@ export type EngineClient = {
 | `packages/react-native` | generated bootstrap + `createFastEngine` | `RkyvV2Engine`                      | `packages/react-native/src/index.ts` |
 | `packages/react-native` | `createReactNativeEngine(native)`        | JSON `EngineClient` + `invokeBatch` | `packages/react-native/src/index.ts` |
 
-모든 반환 타입은 구조적으로 `EngineClient`의 `invoke<T>`를 제공하며, 어댑터 팩토리는
-Promise 기반 `invokeBatch`도 보장한다. 진행 중 `AbortSignal`은 JSON/동기 경로에서
-얕은 취소이고, RN async rkyv 경로에서만 네이티브 취소 핸들이 있을 때 Rust까지 전파된다.
+All return types structurally provide `EngineClient`'s `invoke<T>`, and the adapter
+factories also guarantee a Promise-based `invokeBatch`. An `AbortSignal` in flight is
+a shallow cancellation on the JSON/synchronous paths; only on the RN async rkyv path,
+and only when a native cancellation handle exists, does it propagate into Rust.
 
-### command helper 사용 예시
+### Command Helper Usage Example
 
-`commands.ts`에 생성된 각 command helper는 엔진을 직접 받지 않는다 —
-`@rustra/types`의 생성 경로(`invokeGenerated*`)를 호출한다. 기본 플랫폼 진입점은
-`configureLazy()`를 등록하고 첫 호출이 엔진을 한 번만 설치한다. 수동
-`configure(engine)`는 명시적 override다.
+Each command helper generated in `commands.ts` does not take an engine directly —
+it calls the generated paths from `@rustra/types` (`invokeGenerated*`). The default
+platform entry point registers `configureLazy()`, and the first call installs the
+engine exactly once. Manual `configure(engine)` is an explicit override.
 
 ```ts
-// examples/calculator/generated/commands.ts (자동 생성됨, 일부 단순화)
+// examples/calculator/generated/commands.ts (auto-generated, slightly simplified)
 import { createGeneratedFields2 } from '@rustra/types';
 
 export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutput>(
@@ -111,7 +114,7 @@ export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutp
 );
 ```
 
-사용 예시 (Tauri):
+Usage example (Tauri):
 
 ```ts
 // examples/tauri-calculator/src/app.ts
@@ -120,15 +123,15 @@ import { createTauriEngine } from '../../../packages/tauri/src/index.js';
 import { configure } from '@rustra/types';
 
 const engine = createTauriEngine({ invoke: window.__TAURI__.core.invoke });
-configure(engine); // 글로벌 invoke 에 엔진 설치
+configure(engine); // installs the engine into the global invoke
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
 ---
 
-## crate 및 패키지 관계
+## Crate and Package Relationships
 
-### Rust crates
+### Rust Crates
 
 ```
 crates/
@@ -141,37 +144,37 @@ crates/
 
 #### `crates/rustra` (core)
 
-핵심 타입과 로직을 제공한다.
+Provides the core types and logic.
 
-| 구성 요소          | 설명                                                                                                                                                |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Package`          | 등록된 command들의 컬렉션. `invoke_json()`으로 런타임 디스패치, `generate_typescript()`로 코드 생성                                                 |
-| `PackageBuilder`   | `Package::builder(id)`로 생성. `.command_fn(handler)` / `.command(name, handler)`로 command 등록 후 `.build()`                                      |
-| `GeneratedPackage` | `generate_typescript()`의 결과. `schema_json`, `types_ts`, `commands_ts`, `contract_hash` 필드 보유. `write_to_dir()`로 파일 출력                   |
-| `RustraError`      | `Serialize` 구현. `command.not_found`, `command.invalid_args`, `internal` 에러 코드 + `custom(code, message)` 생성자 + `code()`, `message()` getter |
-| `build!`           | `rustra-macros`에서 제공. `rustra::build!("id", fn1, fn2).done()` 형태로 다중 command 일괄 등록                                                     |
-| `tauri_support`    | `cfg(feature = "tauri")` 활성화 시 제공. `RustraState`, `rustra_dispatch` 단일 Tauri command, `register()` 빌더 주입 함수                           |
-| `__private` 모듈   | `CommandInput`, `CommandOutput` sealed 트레이트. proc macro가 컴파일 타임에 command 타입 제약을 검증하는 데 사용. public API로 노출되지 않음        |
+| Component          | Description                                                                                                                                                            |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Package`          | A collection of registered commands. Runtime dispatch via `invoke_json()`, code generation via `generate_typescript()`                                                 |
+| `PackageBuilder`   | Created with `Package::builder(id)`. Register commands with `.command_fn(handler)` / `.command(name, handler)`, then `.build()`                                        |
+| `GeneratedPackage` | The result of `generate_typescript()`. Holds the `schema_json`, `types_ts`, `commands_ts`, `contract_hash` fields. Writes files with `write_to_dir()`                  |
+| `RustraError`      | Implements `Serialize`. `command.not_found`, `command.invalid_args`, `internal` error codes + a `custom(code, message)` constructor + `code()` and `message()` getters |
+| `build!`           | Provided by `rustra-macros`. Registers multiple commands in one go as `rustra::build!("id", fn1, fn2).done()`                                                          |
+| `tauri_support`    | Provided when `cfg(feature = "tauri")` is enabled. `RustraState`, the single `rustra_dispatch` Tauri command, and the `register()` builder injection function          |
+| `__private` module | The `CommandInput`, `CommandOutput` sealed traits. Used by the proc macro to verify command type constraints at compile time. Not exposed as public API                |
 
 #### `crates/rustra-macros` (proc-macro)
 
-`#[command]` attribute macro를 제공한다. 적용된 함수에 대해:
+Provides the `#[command]` attribute macro. For the annotated function it:
 
-1. 함수가 최소 1개의 파라미터를 가지는지 검증
-2. 스칼라 파라미터(2개 이상) 또는 구조체 파라미터(1개) 모드를 자동 감지
-3. `rustra::__private::CommandInput` / `CommandOutput` 트레이트 바운드를 만족하는지 컴파일 타임에 정적 검증
-4. `#[command(name = "customName")]` 속성으로 명시적 command 이름 지정 가능. 생략 시 함수명을 snake_to_lower_camel 변환하여 자동 생성
+1. Verifies that the function has at least one parameter
+2. Auto-detects scalar parameter (two or more) vs struct parameter (one) mode
+3. Statically verifies at compile time that the `rustra::__private::CommandInput` / `CommandOutput` trait bounds are satisfied
+4. Allows an explicit command name via `#[command(name = "customName")]`. When omitted, the name is derived automatically by converting the function name with snake_to_lower_camel
 
-함수 본문은 그대로 통과시키며 (identity passthrough), 컴파일 타임 타입 체크만 수행한다. 또한 `const __RUstra_meta_{fn_name}: &str = "commandName"` 상수를 생성하여 `build!` 매크로에서 command 이름을 참조할 수 있게 한다.
+The function body passes through unchanged (identity passthrough); only compile-time type checks are performed. It also generates the `const __RUstra_meta_{fn_name}: &str = "commandName"` constant so the `build!` macro can reference the command name.
 
-`build!` 매크로는 `#[command]`가 생성한 메타 상수를 이용하여 여러 command를 한 번에 등록한다:
+The `build!` macro uses the metadata constants produced by `#[command]` to register several commands at once:
 
 ```rust
 rustra::build!("my.pkg", add_numbers, multiply)
     .done()
 ```
 
-### TypeScript packages
+### TypeScript Packages
 
 ```
 packages/
@@ -182,35 +185,35 @@ packages/
                      createReactNativeEngine({ invoke(ArrayBuffer) }): EngineClient (low-level JSON path)
 ```
 
-각 adapter 패키지는 서로를 import하지 않으며, host-specific 패키지를 직접 import하지도 않는다. 저수준 엔진 팩토리는 transport를 주입받고, 생성된 host entry는 필요한 transport와 runtime을 lazy하게 연결한다.
+Each adapter package never imports the others, and never imports host-specific packages directly. The low-level engine factories receive an injected transport, and the generated host entries lazily wire up the required transport and runtime.
 
-### 예시 프로젝트
+### Example Projects
 
 ```
 examples/
-├── calculator/                 # 기본 Rust 라이브러리 예시
-│   ├── src/lib.rs              # command 정의 + calculator_package() + C FFI 진입점
-│   ├── src/main.rs             # stdio 진입점 + 코드 생성 데모
-│   └── generated/              # generate_typescript() 출력 결과
-│       ├── types.ts            # EngineClient + AddNumbersInput/Output 타입
+├── calculator/                 # basic Rust library example
+│   ├── src/lib.rs              # command definitions + calculator_package() + C FFI entry point
+│   ├── src/main.rs             # stdio entry point + codegen demo
+│   └── generated/              # generate_typescript() output
+│       ├── types.ts            # EngineClient + AddNumbersInput/Output types
 │       ├── commands.ts         # addNumbers() helper
-│       ├── contract.ts         # GENERATED_CONTRACT_HASH 상수
-│       └── schema.json         # JSON Schema 표현
+│       ├── contract.ts         # GENERATED_CONTRACT_HASH constant
+│       └── schema.json         # JSON Schema representation
 │
-├── tauri-calculator/           # Tauri 런타임 예시
-│   ├── src/app.ts              # generated/tauri → addNumbers 사용
-│   └── src-tauri/src/main.rs   # tauri_support::register()로 Package 등록
+├── tauri-calculator/           # Tauri runtime example
+│   ├── src/app.ts              # uses addNumbers from generated/tauri
+│   └── src-tauri/src/main.rs   # registers the Package via tauri_support::register()
 │
-└── react-native-calculator/    # Expo React Native 예시
-    ├── App.tsx                 # generated/react-native.ts → addNumbers 사용
-    └── modules/rustra-calculator  # 네이티브 모듈 (Expo module)
+└── react-native-calculator/    # Expo React Native example
+    ├── App.tsx                 # uses addNumbers from generated/react-native.ts
+    └── modules/rustra-calculator  # native module (Expo module)
 ```
 
 ---
 
-## 코드 생성 파이프라인
+## Code Generation Pipeline
 
-### Rust 측: command 등록
+### Rust Side: Command Registration
 
 ```rust
 // examples/calculator/src/lib.rs
@@ -230,24 +233,24 @@ pub fn calculator_package() -> Package {
 }
 ```
 
-`command_fn()`은 제네릭 파라미터에서 함수의 타입 이름을 추출한다 (`command_name_from_handler::<F>()`).Closure 타입 이름의 마지막 세그먼트에서 `_command` 접미사를 제거한 뒤 snake_case를 lowerCamelCase로 변환한다.
+`command_fn()` extracts the function's type name from the generic parameter (`command_name_from_handler::<F>()`). It strips the `_command` suffix from the last segment of the closure type name, then converts snake_case to lowerCamelCase.
 
-`command()`은 이름을 직접 지정할 수 있다:
+`command()` lets you specify the name directly:
 
 ```rust
 .command("myCommand", my_handler)
 ```
 
-### TypeScript 생성 과정
+### The TypeScript Generation Process
 
-`package.generate_typescript()` 호출 시:
+When `package.generate_typescript()` is called:
 
-1. **`schema_json`**: 모든 command의 메타데이터를 JSON Schema 형태로 직렬화. 각 command마다 `name`, `inputType`, `outputType`, `inputSchema`, `outputSchema`를 포함.
-2. **`contract_hash`**: `schema_json`의 SHA-256 해시. Rust/TS 양쪽에서 동일한 계약을 사용 중인지 확인하는 용도.
-3. **`types_ts`**: `EngineClient` 타입 정의 + 각 command의 I/O 타입을 `schemars` JSON Schema에서 TypeScript 타입으로 변환.
-4. **`commands_ts`**: 각 command마다 `engine.invoke<OutputType>('commandName', input)`을 호출하는 helper 함수.
+1. **`schema_json`**: Serializes the metadata of all commands as JSON Schema. Each command includes `name`, `inputType`, `outputType`, `inputSchema`, and `outputSchema`.
+2. **`contract_hash`**: The SHA-256 hash of `schema_json`. Used to confirm that Rust and TS are using the same contract.
+3. **`types_ts`**: The `EngineClient` type definition plus each command's I/O types converted from the `schemars` JSON Schema into TypeScript types.
+4. **`commands_ts`**: For each command, a helper function that calls `engine.invoke<OutputType>('commandName', input)`.
 
-타입 변환 규칙 (`ts_type_from_schema`):
+Type conversion rules (`ts_type_from_schema`):
 
 | JSON Schema type     | TypeScript                |
 | -------------------- | ------------------------- |
@@ -256,49 +259,49 @@ pub fn calculator_package() -> Package {
 | `string`             | `string`                  |
 | `boolean`            | `boolean`                 |
 | `array`              | `itemType[]`              |
-| 기타                 | `unknown`                 |
+| anything else        | `unknown`                 |
 
-`$defs` (공유 정의)는 모든 command의 정의를 병합한 뒤 인라인으로 전개한다. 현재는 별도의 named 타입 추출 없이 전체 스키마 트리를 직접 변환한다.
+`$defs` (shared definitions) are merged across all commands and then inlined. Currently the whole schema tree is converted directly, without extracting separate named types.
 
-### 생성 결과물의 파일 구조
+### File Structure of the Generated Output
 
-`GeneratedPackage::write_to_dir(output_dir)`이 출력하는 파일:
+Files written by `GeneratedPackage::write_to_dir(output_dir)`:
 
-| 파일          | 내용                           | 용도                        |
-| ------------- | ------------------------------ | --------------------------- |
-| `schema.json` | 전체 계약의 JSON Schema 표현   | 디버깅, 도구 연동           |
-| `types.ts`    | `EngineClient` + I/O 타입 정의 | command helper의 의존 대상  |
-| `commands.ts` | command helper 함수들          | 앱 코드에서 import하여 사용 |
-| `contract.ts` | `GENERATED_CONTRACT_HASH` 상수 | 런타임 계약 무결성 검증     |
+| File          | Content                                         | Purpose                                 |
+| ------------- | ----------------------------------------------- | --------------------------------------- |
+| `schema.json` | JSON Schema representation of the full contract | Debugging, tooling integration          |
+| `types.ts`    | `EngineClient` + I/O type definitions           | What command helpers depend on          |
+| `commands.ts` | Command helper functions                        | Imported and used by app code           |
+| `contract.ts` | The `GENERATED_CONTRACT_HASH` constant          | Runtime contract integrity verification |
 
 ---
 
-## 런타임 디스패치
+## Runtime Dispatch
 
-Rust `Package`는 두 가지 invoke 인터페이스를 제공한다:
+The Rust `Package` provides two invoke interfaces:
 
 ```rust
-// 타입 안전한 인터페이스
+// type-safe interface
 pub fn invoke<I, O>(&self, name: &str, input: I) -> Result<O>
 
-// JSON 기반 인터페이스 (FFI, IPC에서 사용)
+// JSON-based interface (used by FFI, IPC)
 pub fn invoke_json(&self, name: &str, params: Value) -> Result<Value>
 ```
 
-`invoke_json()`은 내부적으로 `BTreeMap<String, Command>`에서 command를 이름으로 조회한 뒤, 등록 시 생성한 클로저를 실행한다. 각 `Command`는 입력 JSON을 `serde_json::from_value`로 역직렬화하고, 핸들러를 호출한 뒤, 결과를 `serde_json::to_value`로 직렬화한다.
+`invoke_json()` looks up the command by name in the internal `BTreeMap<String, Command>` and executes the closure created at registration time. Each `Command` deserializes the input JSON with `serde_json::from_value`, calls the handler, then serializes the result with `serde_json::to_value`.
 
 ---
 
-## transport 레이어 분리 원칙
+## Transport Layer Separation Principles
 
 ```
 ┌──────────────────────────────────────────────────────────┐
- │  앱 코드                                                 │
+ │  App code                                                │
  │  addNumbers({ a: 1, b: 2 })                             │
  │          │                                               │
  │          ▼                                               │
  │  invokeGenerated*(...)                                  │
- │  (글로벌 — 생성된 host entry 또는 configure(engine))     │
+ │  (global — generated host entry or configure(engine))    │
  │          │                                               │
  │          ▼                                               │
  │  host adapter (createXxxEngine)                          │
@@ -308,7 +311,7 @@ pub fn invoke_json(&self, name: &str, params: Value) -> Result<Value>
  │  - RN:        generated bootstrap → native.invokeRkyvV2(buf) │
  │          │                                               │
  │          ▼                                               │
- │  transport (앱 레벨에서 생성/주입)                        │
+ │  transport (created at app level)                         │
  │  - subprocess stdio  (examples/calculator/src/main.rs)   │
  │  - C FFI            (examples/calculator/src/lib.rs)     │
  │  - Tauri IPC        (rustra_support::rustra_dispatch)    │
@@ -316,25 +319,25 @@ pub fn invoke_json(&self, name: &str, params: Value) -> Result<Value>
 └──────────────────────────────────────────────────────────┘
 ```
 
-핵심 원칙:
+Core principles:
 
-1. **adapter는 transport를 주입받는다**: adapter 패키지는 transport 객체를 인자로 받아 `EngineClient`로 래핑할 뿐, transport 자체를 생성하지 않는다.
-2. **transport는 앱 레벨에서 결정된다**: subprocess, FFI, napi 등 실제 통신 수단은 adapter가 아닌 앱 코드에서 선택하고 구성한다.
-3. **transport 교체가 adapter 교체 없이 가능하다**: 동일한 adapter로 다른 transport를 주입할 수 있으며, 반대도 마찬가지다.
+1. **Adapters receive an injected transport**: adapter packages take a transport object as an argument and merely wrap it as an `EngineClient`; they do not create the transport themselves.
+2. **The transport is decided at the app level**: the actual communication means — subprocess, FFI, napi, etc. — is chosen and configured by app code, not by the adapter.
+3. **Transports can be swapped without swapping adapters**: the same adapter can be given a different transport, and vice versa.
 
-### Tauri의 특수 처리
+### Tauri's Special Handling
 
-Tauri adapter는 다른 adapter와 달리 command를 직접 전달하지 않고 `rustra_dispatch`라는 단일 진입점으로 래핑한다:
+Unlike the other adapters, the Tauri adapter does not pass commands through directly; it wraps them behind the single `rustra_dispatch` entry point:
 
 ```ts
 // packages/tauri/src/index.ts
 return (await options.invoke('rustra_dispatch', { command, args: args ?? {} })) as T;
 ```
 
-이는 Tauri의 IPC가 미리 등록된 command만 호출할 수 있기 때문이다. Rust 측 `tauri_support` 모듈이 `rustra_dispatch` Tauri command를 단일 진입점으로 등록하고, 내부적으로 `Package::invoke_json()`으로 라우팅한다:
+This is because Tauri's IPC can only invoke pre-registered commands. The Rust-side `tauri_support` module registers the `rustra_dispatch` Tauri command as a single entry point and routes internally through `Package::invoke_json()`:
 
 ```rust
-// crates/rustra/src/lib.rs (tauri_support 모듈)
+// crates/rustra/src/lib.rs (tauri_support module)
 pub struct RustraState {
     pub package: Package,
 }
@@ -361,7 +364,7 @@ pub fn register<R: tauri::Runtime>(
 }
 ```
 
-사용 예시:
+Usage example:
 
 ```rust
 // examples/tauri-calculator/src-tauri/src/main.rs
@@ -371,9 +374,9 @@ let builder = rustra::tauri_support::register(package, tauri::Builder::default()
 
 ---
 
-## 런타임 명령 레지스트리 (dev / prod)
+## Runtime Command Registry (dev / prod)
 
-`Package` 내부는 가변 레지스트리로, `Arc<RwLock<RegistryState>>` + `Arc<AtomicBool> frozen` 이다.
+The inside of a `Package` is a mutable registry: `Arc<RwLock<RegistryState>>` + `Arc<AtomicBool> frozen`.
 
 ```rust
 pub struct Package {
@@ -385,88 +388,88 @@ pub struct Package {
 struct RegistryState {
     commands: BTreeMap<String, Command>,
     id_to_name: BTreeMap<u16, String>,
-    next_command_id: u16, // 단조 증가, retired id 재사용 금지
+    next_command_id: u16, // monotonically increasing; retired ids must never be reused
 }
 ```
 
-### dev / prod 분리
+### dev / prod Split
 
-`build()` 시 `frozen = !cfg!(debug_assertions)`:
+At `build()` time, `frozen = !cfg!(debug_assertions)`:
 
-| 빌드                       | `frozen` 기본값 | 런타임 mutation                                      |
-| -------------------------- | --------------- | ---------------------------------------------------- |
-| debug (`debug_assertions`) | `false`         | `register`/`register_fn`/`replace`/`unregister` 허용 |
-| release                    | `true`          | 모두 `Err("registry.frozen")`                        |
+| Build                      | `frozen` default | Runtime mutation                                        |
+| -------------------------- | ---------------- | ------------------------------------------------------- |
+| debug (`debug_assertions`) | `false`          | `register`/`register_fn`/`replace`/`unregister` allowed |
+| release                    | `true`           | all rejected with `Err("registry.frozen")`              |
 
-`Package::freeze()` 로 언제든 명시적 봉인 가능(debug에서 prod 동작 시뮬레이션 등). 한 번 동결하면 해제 불가.
+`Package::freeze()` seals the package explicitly at any time (e.g. simulating prod behavior in debug). Once frozen, it cannot be unfrozen.
 
-### mutation API
+### Mutation API
 
-| 메서드                    | 동작                                                        | 실패                                        |
-| ------------------------- | ----------------------------------------------------------- | ------------------------------------------- |
-| `register(name, handler)` | 등록. 같은 이름이면 핸들러 덮어쓰기(기존 `command_id` 유지) | `registry.frozen` / `registry.id_exhausted` |
-| `register_fn(handler)`    | 이름 자동 추론 등록                                         | 위와 동일                                   |
-| `replace(name, handler)`  | 핸들러 교체(`command_id` 유지)                              | `command.not_found` / `registry.frozen`     |
-| `unregister(name)`        | 제거(`command_id` retired)                                  | `command.not_found` / `registry.frozen`     |
+| Method                    | Behavior                                                                      | Failure                                     |
+| ------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------- |
+| `register(name, handler)` | Registers. Same name overwrites the handler (existing `command_id` preserved) | `registry.frozen` / `registry.id_exhausted` |
+| `register_fn(handler)`    | Registers with the inferred name                                              | same as above                               |
+| `replace(name, handler)`  | Replaces the handler (`command_id` preserved)                                 | `command.not_found` / `registry.frozen`     |
+| `unregister(name)`        | Removes (`command_id` retired)                                                | `command.not_found` / `registry.frozen`     |
 
-### 동시성
+### Concurrency
 
-- 읽기(`invoke_json`, `invoke_rkyv_v2`, `generate_typescript`) = 읽기 잠금, mutation = 쓰기 잠금.
-- 핸들러 실행 중에는 잠금을 hold 하지 않는다(`Command`를 clone-out 후 락 해제). 핸들러가 다시 `register`/`unregister`를 호출하는 **재진입 교착**을 방지한다.
-- prod 읽기 fast-path(무경쟁 `RwLock` read ≈ 10ns)는 벤치마크(3.8µs) 대비 무시 가능한 수준이다.
+- Reads (`invoke_json`, `invoke_rkyv_v2`, `generate_typescript`) take the read lock; mutations take the write lock.
+- No lock is held while a handler runs (the `Command` is cloned out and the lock released). This prevents **re-entrant deadlock** where a handler calls `register`/`unregister` again.
+- The prod read fast-path (uncontended `RwLock` read ≈ 10ns) is negligible next to the benchmark figure (3.8µs).
 
-### 동적 명령의 호출 경로 (단일 rkyvV2 엔진 + live schema)
+### Invocation Path for Dynamic Commands (single rkyvV2 engine + live schema)
 
-- **정적 postcard 명령**(C++/TS codec registry에 있음) → rkyv V2 postcard fast-path.
-- **정적 complex 명령**(TS registry와 native-safe C++ registry에 있음) →
-  schema-driven complex binary `[command_id][body]`를 C++ JSI에서 마샬링한다.
-  Set 또는 BigInt 범위가 필요한 명령은 C++ 정적 광고를 하지 않고 JS complex
-  codec으로 같은 `invokeRkyvV2` 경계를 사용한다.
-- **런타임 등록 명령**(registry에 없음) → TS 엔진이 live schema 의 스키마로
-  binary 코덱을 **런타임 판정**한다 (T2-3): postcard 지원 스키마는 스키마
-  인터프리터 코덱(`createSchemaPostcardCodec`)으로 `[id][postcard]`, oneOf
-  payload enum 은 complex 코덱으로 `[id][variant index][body]`, postcard/
-  complex 둘 다 거부하는 스키마(anyOf 3항 untagged 등)만 **Tier 3(JSON-in-
-  binary)** 로 `[id][JSON]` 호출. Rust 쪽 `register`도 동일 3-way 판정으로
-  핸들러를 고르므로 양쪽 와이어가 정합한다.
-- **단일 `createRkyvV2Engine`** 이 postcard/complex/Tier 3 명령을 함께 처리한다.
-  코덱 판정 결과는 live schema entry 객체별로 캐시되고, generation 게이트가
-  재조회하면(치환 후 첫 호출) 스키마가 바뀐 명령을 다시 판정한다.
+- **Static postcard commands** (present in the C++/TS codec registry) → rkyv V2 postcard fast-path.
+- **Static complex commands** (present in the TS registry and the native-safe C++ registry) →
+  schema-driven complex binary `[command_id][body]` is marshalled in C++ JSI.
+  Commands requiring Set or BigInt ranges do not advertise themselves as C++ static
+  and use the same `invokeRkyvV2` boundary through the JS complex codec.
+- **Runtime-registered commands** (not in the registry) → the TS engine **decides at
+  runtime** (T2-3) which binary codec to use from the live schema: postcard-supported
+  schemas use the schema interpreter codec (`createSchemaPostcardCodec`) as `[id][postcard]`,
+  oneOf payload enums use the complex codec as `[id][variant index][body]`, and only
+  schemas rejected by both postcard and complex (e.g. 3-arm untagged anyOf) fall back
+  to **Tier 3 (JSON-in-binary)** as `[id][JSON]`. The Rust-side `register` picks the
+  handler with the same 3-way decision, so both wire sides agree.
+- A **single `createRkyvV2Engine`** handles postcard/complex/Tier 3 commands together.
+  The codec decision is cached per live schema entry object, and when the generation
+  gate re-checks (first call after a swap) commands whose schema changed are re-decided.
 
-**live schema**: `Package::live_schema()` / `rustra_ffi_get_schema()` / JSI `getSchema()` 가 정적+동적 명령 전체 스키마(`{name, commandId, inputSchema, outputSchema, definitions?}`)를 반환. TS(`getLiveSchema`)가 동적 명령의 id/타입을 조회한다. 읽기 전용 — debug/release 모두.
+**live schema**: `Package::live_schema()` / `rustra_ffi_get_schema()` / JSI `getSchema()` return the schemas of all static+dynamic commands (`{name, commandId, inputSchema, outputSchema, definitions?}`). TS (`getLiveSchema`) looks up dynamic command ids/types. Read-only — in both debug and release.
 
-> 설계 의도: 동적 레지스트리는 **dev(DX) 용도**(느려도 OK). release는 frozen라 동적 명령이 없고, 정적 명령은 fast-path 그대로 → prod 성능 영향 없음.
+> Design intent: the dynamic registry is for **dev (DX)** (slowness is acceptable). Release is frozen so no dynamic commands exist, and static commands keep the fast-path → no production performance impact.
 
-### 동적 명령 경로의 검증/측정 (2026-07-05)
+### Verification/Measurement of the Dynamic Command Path (2026-07-05)
 
-동적 import(Tier 3) + 런타임 레지스트리 경로는 전체 스택에서 별도 검증/측정 인프라로 커버한다.
+The dynamic import (Tier 3) + runtime registry path is covered by dedicated verification/measurement infrastructure across the full stack.
 
-- **Rust 타입별 와이어 테스트** — `crates/rustra/tests/rkyv_v2_wire.rs`: 정적(postcard) Tier 1/2 + 동적(Tier 3) 경로를 i64/f64/bool/String/Vec/HashMap/tuple/enum-with-data/Option/중첩 타입으로 round-trip 검증 + edge(빈 컬렉션·유니코드·10K payload) + error(잘린 payload·알 수 없는 id·malformed JSON·frozen·unregister 후 호출).
-- **속성 기반 fuzz** — `crates/rustra/tests/rkyv_v2_fuzz.rs` (proptest): 무작위 페이로드 round-trip 보존.
-- **동시성 스모크** — `crates/rustra/tests/rkyv_v2_concurrency.rs`: 다중 스레드 register/invoke/live_schema 혼합 시 패닉/교착 없음.
-- **성능 벤치마크** — `crates/rustra/benches/` (criterion): `tier_compare`(정적/동적 postcard vs Tier 3 JSON — 동일 연산 통제), `dynamic_registry`(register/live_schema/frozen 비용), `type_scaling`(동적 postcard payload 확장성). 동적 명령은 dev-only이므로 `--profile dev`로 측정. 수치는 `docs/benchmarks.md` "동적 명령" 섹션.
-- **TS 단위 테스트** — `packages/types/src/index.test.ts`: `createRkyvV2Engine` Tier 3 fallback + `getLiveSchema` (`bun run test:types`).
-- **RN E2E** — `examples/react-native-calculator/DynamicRegistryApp.tsx` 가 4종 타입(Vec/String/Map/Nested) 동적 명령을 단일 rkyvV2 엔진으로 호출 + live schema commandId 표시. 실행 절차는 `docs/plans/2026-07-05-rn-verification-checklist.md`.
-
----
-
-## 계약 불변식
-
-rustra-bridge는 다음 불변식을 통해 host-neutral 특성을 보장한다:
-
-1. **생성된 TypeScript는 host-specific import를 금지한다**: `types.ts`, `commands.ts`, `contract.ts`는 `node:`, `bun:`, `@tauri-apps`, `react-native`, `expo-modules` 등 어떤 host-specific 모듈도 import하지 않는다. 유일한 import는 `commands.ts`가 `types.js`를 참조하는 것뿐이다.
-
-2. **adapter 패키지는 서로를 import하지 않는다**: `packages/node`, `packages/bun`, `packages/tauri`, `packages/react-native`는 각각 독립적이며 서로에 대한 의존성이 없다.
-
-3. **adapter는 host 패키지를 직접 import하지 않는다**: adapter의 소스 코드(`src/index.ts`)는 `node:child_process`, `@tauri-apps/api` 등을 import하지 않는다. 대신 호출자가 transport 객체를 생성하여 주입한다.
-
-4. **`EngineClient`가 유일한 계약이다**: 생성된 모든 command helper는 `EngineClient` 타입만 의존한다. host adapter의 구체적 타입(`NodeEngineClient` 등)이 아닌 `EngineClient`를 통해 호출된다.
+- **Per-type Rust wire tests** — `crates/rustra/tests/rkyv_v2_wire.rs`: round-trip verification of the static (postcard) Tier 1/2 and dynamic (Tier 3) paths over i64/f64/bool/String/Vec/HashMap/tuple/enum-with-data/Option/nested types + edge cases (empty collections, unicode, 10K payloads) + errors (truncated payload, unknown id, malformed JSON, frozen, invoke after unregister).
+- **Property-based fuzzing** — `crates/rustra/tests/rkyv_v2_fuzz.rs` (proptest): round-trip preservation of random payloads.
+- **Concurrency smoke** — `crates/rustra/tests/rkyv_v2_concurrency.rs`: no panics/deadlocks under mixed multi-threaded register/invoke/live_schema.
+- **Performance benchmarks** — `crates/rustra/benches/` (criterion): `tier_compare` (static/dynamic postcard vs Tier 3 JSON — operation-controlled), `dynamic_registry` (register/live_schema/frozen costs), `type_scaling` (dynamic postcard payload scaling). Dynamic commands are dev-only, so measured with `--profile dev`. Figures are in the "dynamic commands" section of `docs/benchmarks.md`.
+- **TS unit tests** — `packages/types/src/index.test.ts`: `createRkyvV2Engine` Tier 3 fallback + `getLiveSchema` (`bun run test:types`).
+- **RN E2E** — `examples/react-native-calculator/DynamicRegistryApp.tsx` invokes four kinds of dynamic commands (Vec/String/Map/Nested) through the single rkyvV2 engine and shows live schema commandIds. For the run procedure see `docs/plans/2026-07-05-rn-verification-checklist.md`.
 
 ---
 
-## 에러 모델
+## Contract Invariants
 
-Rust 측은 `RustraError` 구조체로 에러를 표현한다. `Serialize`가 구현되어 있어 Tauri IPC 등에서 JSON으로 직렬화 가능하다:
+rustra-bridge guarantees its host-neutral character through the following invariants:
+
+1. **Generated TypeScript forbids host-specific imports**: `types.ts`, `commands.ts`, and `contract.ts` never import any host-specific module such as `node:`, `bun:`, `@tauri-apps`, `react-native`, or `expo-modules`. The only import is `commands.ts` referencing `types.js`.
+
+2. **Adapter packages never import each other**: `packages/node`, `packages/bun`, `packages/tauri`, and `packages/react-native` are each independent, with no dependencies on one another.
+
+3. **Adapters never import host packages directly**: adapter source (`src/index.ts`) does not import `node:child_process`, `@tauri-apps/api`, etc. Instead, the caller creates and injects the transport object.
+
+4. **`EngineClient` is the only contract**: every generated command helper depends only on the `EngineClient` type. Calls go through `EngineClient`, not through concrete adapter types (`NodeEngineClient` etc.).
+
+---
+
+## Error Model
+
+The Rust side represents errors with the `RustraError` struct. `Serialize` is implemented, so it can be serialized to JSON over Tauri IPC and similar channels:
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -476,53 +479,53 @@ pub struct RustraError {
 }
 ```
 
-**생성자:**
+**Constructors:**
 
-| 메서드                                 | 에러 코드              | 발생 조건                                                                |
-| -------------------------------------- | ---------------------- | ------------------------------------------------------------------------ |
-| `RustraError::command_not_found(name)` | `command.not_found`    | `invoke_json()`에서 명시된 이름의 command가 `Package.commands`에 없을 때 |
-| `RustraError::invalid_args(error)`     | `command.invalid_args` | `serde_json::from_value` 역직렬화 실패 시                                |
-| `RustraError::internal(error)`         | `internal`             | `serde_json::to_value` 직렬화 실패, I/O 에러 등                          |
-| `RustraError::custom(code, message)`   | 지정한 코드            | 사용자 정의 에러                                                         |
+| Method                                 | Error code             | Raised when                                                                     |
+| -------------------------------------- | ---------------------- | ------------------------------------------------------------------------------- |
+| `RustraError::command_not_found(name)` | `command.not_found`    | `invoke_json()` cannot find a command with the given name in `Package.commands` |
+| `RustraError::invalid_args(error)`     | `command.invalid_args` | `serde_json::from_value` deserialization fails                                  |
+| `RustraError::internal(error)`         | `internal`             | `serde_json::to_value` serialization failure, I/O errors, etc.                  |
+| `RustraError::custom(code, message)`   | the given code         | user-defined errors                                                             |
 
-**Getter:**
+**Getters:**
 
-| 메서드            | 반환 타입      | 설명             |
-| ----------------- | -------------- | ---------------- |
-| `error.code()`    | `&'static str` | 에러 코드 조회   |
-| `error.message()` | `&str`         | 에러 메시지 조회 |
+| Method            | Return type    | Description             |
+| ----------------- | -------------- | ----------------------- |
+| `error.code()`    | `&'static str` | Reads the error code    |
+| `error.message()` | `&str`         | Reads the error message |
 
-`std::io::Error`는 `From` 트레이트를 통해 자동으로 `RustraError::internal`로 변환된다.
+`std::io::Error` is converted automatically into `RustraError::internal` through the `From` trait.
 
-Tauri에서 `rustra_dispatch`는 `RustraError`를 JSON 값(`{ code, message }`)으로 직렬화하여 반환한다. TypeScript 측 `createTauriEngine`은 이 값을 `RustraCommandError`로 변환하여 throw한다.
+In Tauri, `rustra_dispatch` serializes `RustraError` into a JSON value (`{ code, message }`) and returns it. The TypeScript-side `createTauriEngine` converts that value into a `RustraCommandError` and throws it.
 
 ---
 
-## 빌드 및 코드 생성 워크플로우
+## Build and Code Generation Workflow
 
-일반적인 개발 워크플로우:
+The typical development workflow:
 
 ```
-1. Rust 측에서 command 함수 작성
+1. Write the command functions on the Rust side
    #[command]
    fn my_command(input: MyInput) -> Result<MyOutput> { ... }
 
-2. Package에 등록
+2. Register them with a Package
    Package::builder("my.package")
        .command_fn(my_command)
        .build()
 
-3. 코드 생성 실행
+3. Run code generation
    let package = my_package();
    let generated = package.generate_typescript()?;
    generated.write_to_dir("./generated")?;
 
-4. TypeScript 측에서 생성된 코드 사용
+4. Use the generated code on the TypeScript side
    import { myCommand } from './generated/commands.js';
    const result = await myCommand(engine, { ... });
 ```
 
-`examples/calculator/src/main.rs`는 실행 시점에 코드 생성을 수행하는 예시다:
+`examples/calculator/src/main.rs` is an example that performs code generation at runtime:
 
 ```rust
 let package = calculator_package();
@@ -532,14 +535,14 @@ generated.write_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
 
 ---
 
-## 컴파일 타임 타입 안전성
+## Compile-Time Type Safety
 
-`#[command]` macro는 함수 시그니처에 대한 컴파일 타임 검증을 수행한다:
+The `#[command]` macro performs compile-time validation of the function signature:
 
-1. 입력 파라미터가 최소 1개인지 확인
-2. 입력 파라미터가 typed parameter인지 확인
-3. 반환 타입이 `Result<O>`, bare value, 또는 `()` 형태인지 확인
-4. 입력 타입이 `CommandInput` (`DeserializeOwned + JsonSchema + 'static`)을 만족하는지 정적 검증
-5. 출력 타입이 `CommandOutput` (`Serialize + JsonSchema + 'static`)을 만족하는지 정적 검증
+1. Confirms there is at least one input parameter
+2. Confirms the input parameter is a typed parameter
+3. Confirms the return type is `Result<O>`, a bare value, or `()`
+4. Statically verifies the input type satisfies `CommandInput` (`DeserializeOwned + JsonSchema + 'static`)
+5. Statically verifies the output type satisfies `CommandOutput` (`Serialize + JsonSchema + 'static`)
 
-이 검증은 `__private` 모듈의 sealed 트레이트를 통해 이루어지며, public API로 노출되지 않는다. `#[command]`는 검증 외에도 `const __RUstra_meta_{fn_name}: &str` 상수를 생성하여 command 이름을 저장하며, 이 상수는 `build!` 매크로에서 참조된다.
+This validation goes through the sealed traits in the `__private` module and is not exposed as public API. Beyond validation, `#[command]` generates the `const __RUstra_meta_{fn_name}: &str` constant holding the command name, which the `build!` macro references.

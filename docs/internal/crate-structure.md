@@ -1,26 +1,30 @@
-# Crate 및 Package 구조
+English | [한국어](./crate-structure.ko.md)
 
-프로젝트 기여자를 위한 내부 문서. 각 crate/package의 책임, 공개 API, 빌드 의존성 관계를 정리한다.
+# Crate and Package Structure
+
+Internal documentation for project contributors. Summarizes the
+responsibilities, public APIs, and build dependency relationships of each
+crate/package.
 
 ---
 
-## Cargo Workspace 설정
+## Cargo Workspace Configuration
 
-루트 `Cargo.toml`에서 워크스페이스를 구성한다.
+The root `Cargo.toml` configures the workspace.
 
 - **resolver**: `"3"`
-- **edition**: `"2024"` (workspace.package 통해 일괄 적용)
+- **edition**: `"2024"` (applied wholesale through workspace.package)
 - **license**: MIT
-- **version**: 릴리스 시점의 workspace `Cargo.toml`에서 관리한다. 이 문서는 버전을 고정하지 않는다.
+- **version**: managed in the workspace `Cargo.toml` at release time. This document does not pin a version.
 
 ### Workspace Members
 
-| Member 경로                           | 패키지명                    | 역할                                                             |
-| ------------------------------------- | --------------------------- | ---------------------------------------------------------------- |
-| `crates/rustra`                       | `rustra`                    | 핵심 라이브러리. Package 빌더, TypeScript 코드생성, command 등록 |
-| `crates/rustra-macros`                | `rustra-macros`             | `#[command]` proc macro. 컴파일 타임 시그니처 검증               |
-| `examples/calculator`                 | `rustra-calculator-example` | 예제 계산기. cdylib/staticlib으로 빌드하여 RN/FFI에서 사용       |
-| `examples/tauri-calculator/src-tauri` | (Tauri 앱)                  | Tauri 백엔드. rustra의 `tauri` feature 사용                      |
+| Member path                           | Package name                | Role                                                                    |
+| ------------------------------------- | --------------------------- | ----------------------------------------------------------------------- |
+| `crates/rustra`                       | `rustra`                    | Core library. Package builder, TypeScript codegen, command registration |
+| `crates/rustra-macros`                | `rustra-macros`             | `#[command]` proc macro. Compile-time signature verification            |
+| `examples/calculator`                 | `rustra-calculator-example` | Calculator example. Built as cdylib/staticlib and used from RN/FFI      |
+| `examples/tauri-calculator/src-tauri` | (Tauri app)                 | Tauri backend. Uses rustra's `tauri` feature                            |
 
 ### Workspace Dependencies
 
@@ -37,7 +41,7 @@ hex = "0.4"
 
 ---
 
-## 빌드 의존성 그래프
+## Build Dependency Graph
 
 ```
 rustra-macros (proc-macro)
@@ -69,146 +73,158 @@ tauri-calculator (src-tauri)
 
 ---
 
-## Crate 상세
+## Crate Details
 
 ### rustra (`crates/rustra`)
 
-핵심 라이브러리. 사용자가 Package를 구성하고 TypeScript 클라이언트를 생성하는 진입점이다.
+The core library. The entry point where users assemble a Package and generate
+TypeScript clients.
 
-**공개 API:**
+**Public API:**
 
-| 항목                                  | 종류                   | 설명                                                                                                   |
-| ------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------ |
-| `Package`                             | struct                 | 등록된 command들을 보유하는 런타임 객체                                                                |
-| `Package::builder(id)`                | method                 | `PackageBuilder` 생성                                                                                  |
-| `Package::invoke()` / `invoke_json()` | method                 | command 실행 (typed / JSON)                                                                            |
-| `Package::generate_typescript()`      | method                 | `GeneratedPackage` 생성                                                                                |
-| `PackageBuilder`                      | struct                 | 빌더 패턴으로 command 등록                                                                             |
-| `PackageBuilder::command()`           | method                 | 명시적 이름으로 command 등록                                                                           |
-| `PackageBuilder::command_fn()`        | method                 | 함수명에서 자동으로 command 이름 추출                                                                  |
-| `PackageBuilder::build()`             | method                 | `Package` 생성                                                                                         |
-| `GeneratedPackage`                    | struct                 | 생성된 TS 클라이언트 (4개 파일)                                                                        |
-| `GeneratedPackage::write_to_dir()`    | method                 | 디렉토리에 파일 쓰기                                                                                   |
-| `RustraError`                         | struct                 | 에러 타입. `Serialize` 구현. `code + message` 필드 + `custom()` 생성자 + `code()` / `message()` getter |
-| `command`                             | macro (re-export)      | `rustra_macros::command`                                                                               |
-| `register`                            | macro (re-export)      | `rustra_macros::register`. 다중 command 일괄 등록                                                      |
-| `prelude`                             | module                 | 자주 쓰는 항목 일괄 import (`command`, `register` 포함)                                                |
-| `tauri_support`                       | module (feature-gated) | `RustraState`, `rustra_dispatch`, `register()` — Tauri 연동 헬퍼                                       |
-| `__private`                           | module (sealed)        | `CommandInput`, `CommandOutput` trait. proc macro 전용                                                 |
+| Item                                  | Kind                   | Description                                                                                                           |
+| ------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `Package`                             | struct                 | Runtime object holding the registered commands                                                                        |
+| `Package::builder(id)`                | method                 | Creates a `PackageBuilder`                                                                                            |
+| `Package::invoke()` / `invoke_json()` | method                 | Executes a command (typed / JSON)                                                                                     |
+| `Package::generate_typescript()`      | method                 | Produces a `GeneratedPackage`                                                                                         |
+| `PackageBuilder`                      | struct                 | Registers commands with the builder pattern                                                                           |
+| `PackageBuilder::command()`           | method                 | Registers a command with an explicit name                                                                             |
+| `PackageBuilder::command_fn()`        | method                 | Derives the command name automatically from the function name                                                         |
+| `PackageBuilder::build()`             | method                 | Creates a `Package`                                                                                                   |
+| `GeneratedPackage`                    | struct                 | The generated TS client (4 files)                                                                                     |
+| `GeneratedPackage::write_to_dir()`    | method                 | Writes the files to a directory                                                                                       |
+| `RustraError`                         | struct                 | Error type. Implements `Serialize`. `code + message` fields + `custom()` constructor + `code()` / `message()` getters |
+| `command`                             | macro (re-export)      | `rustra_macros::command`                                                                                              |
+| `register`                            | macro (re-export)      | `rustra_macros::register`. Batch-registers multiple commands                                                          |
+| `prelude`                             | module                 | Batch import of frequently used items (including `command`, `register`)                                               |
+| `tauri_support`                       | module (feature-gated) | `RustraState`, `rustra_dispatch`, `register()` — Tauri integration helpers                                            |
+| `__private`                           | module (sealed)        | `CommandInput`, `CommandOutput` traits. For proc macros only                                                          |
 
 **Features:**
 
-- `tauri` — `tauri_support` 모듈 활성화. `tauri` crate을 의존성에 추가.
+- `tauri` — enables the `tauri_support` module. Adds the `tauri` crate as a dependency.
 
-**주요 비공개 함수 (내부 동작):**
+**Key private functions (internal behavior):**
 
-| 함수                               | 설명                                                                          |
-| ---------------------------------- | ----------------------------------------------------------------------------- |
-| `schema_value::<T>()`              | `schema_for!(T)`로 JSON Schema + definitions 생성. `(Value, Value)` 튜플 반환 |
-| `short_type_name::<T>()`           | `std::any::type_name`에서 마지막 세그먼트 추출                                |
-| `command_name_from_handler::<F>()` | 함수 타입명 → camelCase command 이름                                          |
-| `contract_hash()`                  | schema JSON → SHA256 hex                                                      |
-| `ts_type_from_schema()`            | JSON Schema → TS 타입 문자열. `(schema, definitions)` 2개 인자 받음           |
-| `ts_object_from_schema()`          | JSON Schema object → TS 객체 리터럴                                           |
-| `command_function_name()`          | command 이름 → TS 함수명 (camelCase)                                          |
-| `snake_to_lower_camel()`           | snake_case → lowerCamelCase                                                   |
+| Function                           | Description                                                                              |
+| ---------------------------------- | ---------------------------------------------------------------------------------------- |
+| `schema_value::<T>()`              | Builds JSON Schema + definitions with `schema_for!(T)`. Returns a `(Value, Value)` tuple |
+| `short_type_name::<T>()`           | Extracts the last segment from `std::any::type_name`                                     |
+| `command_name_from_handler::<F>()` | Function type name → camelCase command name                                              |
+| `contract_hash()`                  | Schema JSON → SHA256 hex                                                                 |
+| `ts_type_from_schema()`            | JSON Schema → TS type string. Takes 2 arguments, `(schema, definitions)`                 |
+| `ts_object_from_schema()`          | JSON Schema object → TS object literal                                                   |
+| `command_function_name()`          | Command name → TS function name (camelCase)                                              |
+| `snake_to_lower_camel()`           | snake_case → lowerCamelCase                                                              |
 
 ---
 
 ### rustra-macros (`crates/rustra-macros`)
 
-`#[command]` 속성 매크로와 `register!` 매크로를 제공하는 proc-macro crate.
+The proc-macro crate providing the `#[command]` attribute macro and the
+`register!` macro.
 
-**공개 API:**
+**Public API:**
 
-| 항목         | 종류            | 설명                                                        |
-| ------------ | --------------- | ----------------------------------------------------------- |
-| `#[command]` | attribute macro | 함수 시그니처 검증 + trait bound assert + 메타 상수 생성    |
-| `register!`  | macro           | 다중 command 일괄 등록. `register!(builder, fn1, fn2)` 형태 |
+| Item         | Kind            | Description                                                             |
+| ------------ | --------------- | ----------------------------------------------------------------------- |
+| `#[command]` | attribute macro | Signature verification + trait bound assert + meta constant generation  |
+| `register!`  | macro           | Batch-registers multiple commands. Form: `register!(builder, fn1, fn2)` |
 
-**`#[command]` 검증 규칙:**
+**`#[command]` verification rules:**
 
-1. 함수는 정확히 1개의 입력 파라미터를 가져야 함
-2. 반환 타입은 `Result<O>` 형태여야 함
-3. 컴파일 통과 시 `CommandInput`, `CommandOutput` trait bound를 정적 단언
-4. 함수명에서 snake_case → lowerCamelCase 변환하여 command 이름 자동 생성
+1. The function must have exactly 1 input parameter
+2. The return type must have the form `Result<O>`
+3. On compile success, statically asserts the `CommandInput`, `CommandOutput` trait bounds
+4. Generates the command name automatically by converting the function name snake_case → lowerCamelCase
 
-**`#[command]` 속성:** `#[command(name = "customName")]` 지원. 명시적으로 command 이름 지정. 생략 시 함수명 기반 자동 생성.
+**`#[command]` attribute:** supports `#[command(name = "customName")]` to
+specify the command name explicitly. When omitted, it is generated from the
+function name.
 
-**`#[command]` 생성물:**
+**`#[command]` generated output:**
 
-- 원본 함수 (그대로 통과)
-- `const __RUstra_meta_{fn_name}: &str` — command 이름을 저장하는 상수. `register!` 매크로에서 참조
-- `_assert_command_bounds::<I, O>()` — 컴파일 타임 trait bound 검증 함수
+- The original function (passed through unchanged)
+- `const __RUstra_meta_{fn_name}: &str` — a constant storing the command name, referenced by the `register!` macro
+- `_assert_command_bounds::<I, O>()` — compile-time trait bound verification function
 
-**`register!` 동작:**
+**`register!` behavior:**
 
 ```rust
 rustra::register!(Package::builder("pkg"), add_numbers, multiply)
 ```
 
-위 코드는 각 함수의 `__RUstra_meta_*` 상수를 읽어 `.command(name, fn)` 체인으로 확장한다.
+The above expands into a `.command(name, fn)` chain by reading each
+function's `__RUstra_meta_*` constant.
 
 ---
 
-## TypeScript Package 구조
+## TypeScript Package Structure
 
-`packages/` 아래 adapter 패키지. React Native 패키지는 TypeScript 어댑터와 생성기에
-재사용되는 iOS/Android/C++ native source를 함께 배포한다.
+Adapter packages under `packages/`. The React Native package also ships the
+iOS/Android/C++ native sources reused by the TypeScript adapter and the
+generator.
 
-| 패키지 경로                          | 팩토리 함수                            | 클라이언트 타입     | 전송 계층               |
+| Package path                         | Factory function                       | Client type         | Transport layer         |
 | ------------------------------------ | -------------------------------------- | ------------------- | ----------------------- |
 | `packages/node/src/index.ts`         | `createNodeEngine(transport)`          | `NodeEngineClient`  | `NodeInvokeTransport`   |
 | `packages/bun/src/index.ts`          | `createBunEngine(transport)`           | `BunEngineClient`   | `BunInvokeTransport`    |
 | `packages/tauri/src/index.ts`        | `createTauriEngine({ invoke })`        | `TauriEngineClient` | `TauriInvoke`           |
 | `packages/react-native/src/index.ts` | generated bootstrap / low-level engine | `EngineClient`      | JSI + caller-buffer FFI |
 
-모든 클라이언트는 `EngineClient` 인터페이스(`invoke<T>(command, args?)`)를 구현한다. Tauri adapter만 내부적으로 `rustra_dispatch`로 명령을 래핑하고, 나머지는 transport의 `invoke`를 직접 호출한다.
+Every client implements the `EngineClient` interface
+(`invoke<T>(command, args?)`). Only the Tauri adapter wraps commands in
+`rustra_dispatch` internally; the rest call the transport's `invoke` directly.
 
-Tauri adapter는 추가로 `RustraError` 타입과 `RustraCommandError` 클래스를 export한다. `createTauriEngine`은 `rustra_dispatch` 에러 응답을 `RustraCommandError`로 변환하여 throw한다.
+The Tauri adapter additionally exports the `RustraError` type and the
+`RustraCommandError` class. `createTauriEngine` converts `rustra_dispatch`
+error responses into `RustraCommandError` and throws it.
 
 ---
 
-## Examples 구조
+## Examples Structure
 
 ### calculator (`examples/calculator/`)
 
-핵심 예제. Rust crate + TypeScript 테스트 + 생성된 클라이언트 + 여러 host 앱을 포함.
+The core example. Contains a Rust crate + TypeScript tests + generated clients
+
+- several host apps.
 
 ```
 examples/calculator/
 ├── Cargo.toml          # rustra-calculator-example (rlib + staticlib)
 ├── src/lib.rs          # add_numbers command + calculator_package() + FFI export
 ├── ts/
-│   ├── adapter-compat.test.ts    # 4개 adapter 동작 + host-specific import 없음
-│   ├── generated-client.test.ts  # command helper 동작 + banned import 체크
-│   └── runtime-contract.test.ts  # host 앱들이 같은 generated commands 사용 + RN FFI
-├── generated/          # codegen 출력 (schema.json, types.ts, commands.ts, contract.ts)
+│   ├── adapter-compat.test.ts    # 4 adapter behaviors + no host-specific imports
+│   ├── generated-client.test.ts  # command helper behavior + banned import check
+│   └── runtime-contract.test.ts  # host apps share generated commands + RN FFI
+├── generated/          # codegen output (schema.json, types.ts, commands.ts, contract.ts)
 ├── apps/
-│   ├── node-app.ts     # Node.js 런타임 앱
-│   └── bun-app.ts      # Bun 런타임 앱
+│   ├── node-app.ts     # Node.js runtime app
+│   └── bun-app.ts      # Bun runtime app
 ```
 
 ### tauri-calculator (`examples/tauri-calculator/`)
 
-Tauri 데스크톱 앱 예제.
+A Tauri desktop app example.
 
 ```
 examples/tauri-calculator/
-├── src/app.ts                # 프론트엔드, createTauriEngine 사용
+├── src/app.ts                # frontend, uses createTauriEngine
 ├── src-tauri/
-│   ├── Cargo.toml            # rustra (features = ["tauri"]) 의존
-│   └── src/main.rs           # rustra_support::register로 Tauri에 연동
+│   ├── Cargo.toml            # depends on rustra (features = ["tauri"])
+│   └── src/main.rs           # integrates with Tauri via rustra_support::register
 ```
 
 ### react-native-calculator (`examples/react-native-calculator/`)
 
-React Native 모바일 앱 예제.
+A React Native mobile app example.
 
 ```
 examples/react-native-calculator/
-├── App.tsx                           # createReactNativeEngine 사용
-├── metro.config.js                   # watchFolders로 generated/ 공유
+├── App.tsx                           # uses createReactNativeEngine
+├── metro.config.js                   # shares generated/ via watchFolders
 ├── modules/rustra-calculator/
-│   └── ios/RustraCalculatorModule.swift  # Expo Module, FFI로 Rust 호출
+│   └── ios/RustraCalculatorModule.swift  # Expo Module, calls Rust via FFI
 ```

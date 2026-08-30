@@ -5,16 +5,9 @@
  * 계약 해시 파일을 생성합니다.
  */
 
-import type { CommandSchema, PackageSchema } from './schema.js';
-import {
-  collectDefinitions,
-  escapeJsDoc,
-  postcardHelperSource,
-  tsTypeFromSchema,
-} from './codegen.js';
+import type { PackageSchema } from './schema.js';
+import { collectDefinitions, escapeJsDoc, tsTypeFromSchema } from './codegen.js';
 import { setCodegenContext } from './codegen-warnings.js';
-import { buildCodecIr } from './codec-ir.js';
-import type { CodecIrNode } from './codec-ir.js';
 import { sha256 } from './hash.js';
 
 export function generatedJsDoc(description: string): string {

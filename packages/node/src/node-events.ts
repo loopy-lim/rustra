@@ -182,12 +182,7 @@ type GeneratedSubscribeFn = <N extends ContractName>(
 // node 구독 시그니처(transport, name, callback)는 transport 에 커링하면
 // (name, callback) => unsubscribe 가 남는다 — 커링 결과 타입이 생성 SubscribeFn
 // 자리에 들어맞는지 타입 레벨에서 고정한다(값 없이 순수 타입 검증).
-type BoundNodeSubscribe = (transport: NodeEventTransport) => ReturnType<typeof subscribeEventNoop>;
-declare function subscribeEventNoop(
-  transport: NodeEventTransport,
-  name: 'x',
-  callback: (payload: number) => void,
-): () => void;
+type BoundNodeSubscribe = (transport: NodeEventTransport) => () => void;
 type _NodeFitsGenerated =
   ReturnType<BoundNodeSubscribe> extends (() => void) | Promise<() => void> ? true : false;
 type _NodeParamFits = Parameters<GeneratedSubscribeFn>[1] extends NodeEventCallback ? true : false;

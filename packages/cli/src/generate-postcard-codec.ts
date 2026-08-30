@@ -1,11 +1,7 @@
 import type { CommandSchema, PackageSchema } from './schema.js';
 import { commandFunctionName, postcardHelperSource } from './codegen.js';
 import { finishGeneratedText } from './generate-surface.js';
-import {
-  collectAllDefinitions,
-  collectPostcardFields,
-  type PostcardField,
-} from './generate-postcard-ir.js';
+import { collectAllDefinitions, collectPostcardFields } from './generate-postcard-ir.js';
 import { ENC_INTO_KINDS } from './generate-postcard-ir.js';
 import {
   generateFieldEncodeExpr,

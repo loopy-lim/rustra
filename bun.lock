@@ -22,9 +22,9 @@
     },
     "packages/bun": {
       "name": "@rustra/bun",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
-        "@rustra/types": "^0.5.0",
+        "@rustra/types": "^0.6.0",
       },
       "devDependencies": {
         "@types/bun": "^1.4.0",
@@ -33,12 +33,12 @@
     },
     "packages/cli": {
       "name": "@rustra/cli",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "bin": {
         "rustra": "./dist/index.js",
       },
       "dependencies": {
-        "@rustra/types": "^0.5.0",
+        "@rustra/types": "^0.6.0",
       },
       "devDependencies": {
         "@types/node": "^26.3.0",
@@ -47,9 +47,9 @@
     },
     "packages/devtools": {
       "name": "@rustra/devtools",
-      "version": "0.4.1",
+      "version": "0.5.0",
       "dependencies": {
-        "@rustra/types": "^0.5.0",
+        "@rustra/types": "^0.6.0",
       },
       "devDependencies": {
         "typescript": "^5.9.0",
@@ -57,9 +57,9 @@
     },
     "packages/node": {
       "name": "@rustra/node",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
-        "@rustra/types": "^0.5.0",
+        "@rustra/types": "^0.6.0",
       },
       "devDependencies": {
         "typescript": "^5.9.0",
@@ -67,9 +67,9 @@
     },
     "packages/react": {
       "name": "@rustra/react",
-      "version": "0.4.1",
+      "version": "0.5.0",
       "dependencies": {
-        "@rustra/types": "^0.5.0",
+        "@rustra/types": "^0.6.0",
       },
       "devDependencies": {
         "@types/react": "^19.0.0",
@@ -82,9 +82,9 @@
     },
     "packages/react-native": {
       "name": "@rustra/react-native",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
-        "@rustra/types": "^0.5.0",
+        "@rustra/types": "^0.6.0",
       },
       "devDependencies": {
         "typescript": "^5.9.0",
@@ -98,9 +98,9 @@
     },
     "packages/tauri": {
       "name": "@rustra/tauri",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "dependencies": {
-        "@rustra/types": "^0.5.0",
+        "@rustra/types": "^0.6.0",
       },
       "devDependencies": {
         "typescript": "^5.9.0",
@@ -108,9 +108,9 @@
     },
     "packages/testing": {
       "name": "@rustra/testing",
-      "version": "0.4.1",
+      "version": "0.5.0",
       "dependencies": {
-        "@rustra/types": "^0.5.0",
+        "@rustra/types": "^0.6.0",
       },
       "devDependencies": {
         "typescript": "^5.9.0",
@@ -118,7 +118,7 @@
     },
     "packages/types": {
       "name": "@rustra/types",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "devDependencies": {
         "typescript": "^5.9.0",
       },

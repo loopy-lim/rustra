@@ -16,6 +16,7 @@ packages/*/dist/
 .pnpm-store/
 *.node
 examples/calculator-napi/node_modules/
+examples/calculator-napi/index.js
 
 # Claude Code worktrees (local only)
 .claude/worktrees/

@@ -1,127 +1,122 @@
-# 계약 마이그레이션 가이드
+English | [한국어](./migration-guide.ko.md)
 
-Rust 백엔드와 TypeScript 클라이언트가 공유하는 계약(schema)이 시간이 지나며
-변할 때, 파괴적 변경(breaking change)을 안전하게 롤아웃하는 방법을 정리한다.
+# Contract Migration Guide
 
-## 도구
+When the contract (schema) shared by the Rust backend and TypeScript clients changes over time, this guide describes how to roll out breaking changes safely.
+
+## Tools
 
 ### `rustra diff`
 
-두 스키마 버전을 비교해 breaking change를 검출한다. CI 게이트로 쓸 수 있게
-breaking이 있으면 exit 1을 반환한다.
+Compares two schema versions and detects breaking changes. It returns exit 1 when there is a breaking change so it can be used as a CI gate.
 
 ```bash
-# 텍스트 출력
+# text output
 rustra diff --old ./generated/schema.v1.json --new ./generated/schema.json
 
-# 기계 판독 (DiffResult JSON)
+# machine-readable (DiffResult JSON)
 rustra diff --old ./generated/schema.v1.json --new ./generated/schema.json --format json
 ```
 
-### 감지되는 breaking change 4종
+### The 4 detected breaking change types
 
-| 타입                   | 의미                   |
-| ---------------------- | ---------------------- |
-| `command_removed`      | 커맨드 삭제            |
-| `field_removed`        | input/output 필드 삭제 |
-| `field_type_changed`   | 필드 타입 변경         |
-| `required_field_added` | 필수 필드 신규 추가    |
+| Type                   | Meaning                    |
+| ---------------------- | -------------------------- |
+| `command_removed`      | Command deleted            |
+| `field_removed`        | input/output field deleted |
+| `field_type_changed`   | Field type changed         |
+| `required_field_added` | Required field newly added |
 
-## Breaking change별 해결 레시피
+## Recipes per breaking change
 
-### field_removed — 필드 삭제
+### field_removed — field deletion
 
-삭제 대신 **deprecated 2단계 전환**을 권장한다:
+Instead of deleting, a **two-step deprecated transition** is recommended:
 
 ```rust
-// 1단계: 필드를 Option 으로 남기고 클라이언트가 마이그레이션할 시간을 준다
+// Step 1: keep the field as Option and give clients time to migrate
 pub struct UserOutput {
     pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>, // deprecated — name 을 사용
+    pub display_name: Option<String>, // deprecated — use name
 }
 
-// 2단계 (다음 릴리스): 필드 제거 — 이때 diff 는 field_removed 를 보고한다
+// Step 2 (next release): remove the field — diff then reports field_removed
 ```
 
-즉시 삭제해야 한다면 TS 클라이언트를 먼저 재생성해 해당 필드 참조를 제거한
-뒤 Rust 를 배포한다.
+If you must delete immediately, regenerate the TS clients first to remove references to the field, then deploy the Rust side.
 
-### field_type_changed — 타입 변경
+### field_type_changed — type change
 
-중간 신규 필드를 두는 2단계 전환:
+A two-step transition with an intermediate new field:
 
 ```rust
 // before
 pub struct Config { pub timeout: i64 }
 
-// 1단계: 새 필드 추가 + 기존 필드 deprecated
+// Step 1: add the new field + deprecate the existing field
 pub struct Config {
     #[serde(default)]
     pub timeout_ms: i64,           // new
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub timeout: Option<i64>,      // deprecated (초 단위)
+    pub timeout: Option<i64>,      // deprecated (in seconds)
 }
 
-// 2단계: 구 필드 제거
+// Step 2: remove the old field
 ```
 
-### required_field_added — 필수 필드 추가
+### required_field_added — adding a required field
 
-`Option<T>` + `#[serde(default)]`로 시작하면 breaking이 아니다:
+Starting with `Option<T>` + `#[serde(default)]` is not breaking:
 
 ```rust
 pub struct SearchInput {
     pub query: String,
-    #[serde(default)]                    // 기본값 있음 → 필수 아님
-    pub limit: Option<i64>,              // 클라이언트가 안 보내도 OK
+    #[serde(default)]                    // has a default → not required
+    pub limit: Option<i64>,              // OK even if clients omit it
 }
 ```
 
-필수여야 하는 의미라면, 기본값을 가진 상태로 배포한 뒤 다음 버전에서
-기본값을 제거하는 2단계로 간다.
+If the semantics must be required, deploy with a default value first and then remove the default in the next version — two steps.
 
-### command_removed — 커맨드 삭제
+### command_removed — command deletion
 
-별칭으로 하위호환을 유지할 수 있다:
+Backward compatibility can be kept with an alias:
 
 ```rust
 #[command(name = "oldName")]
 fn new_name(input: NewInput) -> Result<NewOutput> { /* ... */ }
 ```
 
-새 이름 커맨드를 추가하고 구 이름을 별칭으로 남겨두면, 클라이언트가
-자연스럽게 이전한 뒤 별칭을 제거한다.
+Add the command under a new name and keep the old name as an alias; once clients have migrated naturally, remove the alias.
 
-## 롤아웃 순서와 contract hash
+## Rollout order and contract hash
 
-`contract.ts`의 `GENERATED_CONTRACT_HASH`는 스키마 전체의 SHA-256이다.
-스키마가 바뀌면 hash가 바뀐다. `createRkyvV2Engine`에 `contractHash` 옵션을
-전달하면 런타임에 네이티브 해시와 비교해 불일치 시 즉시 실패한다(fail-fast).
+`GENERATED_CONTRACT_HASH` in `contract.ts` is the SHA-256 of the entire schema. When the schema changes, the hash changes. Passing the `contractHash` option to `createRkyvV2Engine` compares against the native hash at runtime and fails immediately on mismatch (fail-fast).
 
-**안전한 배포 순서 (기본):**
+**Safe deployment order (default):**
 
-1. Rust 백엔드 배포 — **추가 전용(additive) 변경**이면 기존 클라이언트와 호환된다.
-   (`rustra diff`가 breaking 0을 보고하는 상태)
-2. TS 클라이언트 재생성 (`bun run codegen`) 후 배포.
+1. Deploy the Rust backend — **additive changes** are compatible with existing clients.
+   (the state where `rustra diff` reports 0 breaking changes)
+2. Regenerate the TS clients (`bun run codegen`) and deploy.
 
-**breaking 변경이 불가피할 때 (역방향 불가 — 항상 신규 클라이언트 먼저):**
+**When a breaking change is unavoidable (the reverse is impossible — always ship the new client first):**
 
-1. 새 스키마를 수용하는 Rust 를 배포하되, 구 스키마 요청도 받아들이게 한다
-   (위 레시피의 `#[serde(default)]` 패턴이 이 역할을 한다).
-2. TS 클라이언트 재생성·배포.
-3. 구 필드/커맨드를 제거한 Rust 를 배포 (이때 `field_removed`가 의도적으로 발생).
+1. Deploy Rust that accepts the new schema while also accepting old-schema requests
+   (the `#[serde(default)]` pattern from the recipes above serves this role).
+2. Regenerate and deploy the TS clients.
+3. Deploy Rust with the old fields/commands removed (`field_removed` then occurs intentionally).
 
-> contractHash 검증을 켜둔 환경에서는 1→2 사이에 hash 불일치 에러
-> (`contract.mismatch`)가 날 수 있으므로, 마이그레이션 기간에는 검증을
-> 끄거나 2단계로 hash 를 갱신한다.
+> In environments with contractHash verification enabled, a hash mismatch error
+> (`contract.mismatch`) can occur between steps 1→2, so turn verification off
+> during the migration window or update the hash in step 2.
 
-## CI 통합
+## CI integration
 
-스키마 변경이 breaking인지 PR 에서 자동으로 확인한다:
+Whether a schema change is breaking is checked automatically in the PR:
 
 ```yaml
-# .github/workflows/ci.yml 에 추가
+# add to .github/workflows/ci.yml
 - name: Check schema compatibility
   run: |
     git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q schema.json \
@@ -129,12 +124,10 @@ fn new_name(input: NewInput) -> Result<NewOutput> { /* ... */ }
                      --new generated/schema.json
 ```
 
-breaking이 감지되면 exit 1로 job이 실패한다. 의도된 breaking이면
-`docs/migration-guide.md`의 레시피로 2단계 전환하거나, 리뷰에서 명시적으로
-승인한다.
+If a breaking change is detected, the job fails with exit 1. If the breaking change is intended, perform a two-step transition using the recipes in `docs/migration-guide.md` or approve it explicitly in review.
 
-## 제한
+## Limitations
 
-- `diffSchemas`는 최상위 `properties`만 비교한다 — 중첩 `$ref` 정의 내부의
-  변경은 검출하지 않는다 (개선 후보).
-- `compatible[]` 목록은 새 커맨드/선택적 필드 추가를 보고한다.
+- `diffSchemas` compares only top-level `properties` — changes inside nested
+  `$ref` definitions are not detected (improvement candidate).
+- The `compatible[]` list reports new command/optional field additions.

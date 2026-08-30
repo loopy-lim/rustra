@@ -1,10 +1,13 @@
+English | [한국어](./README.ko.md)
+
 # @rustra/bun
 
-Bun 1.4 환경에서 Rustra cdylib를 stable C ABI로 자동 연결하는 어댑터입니다.
+Adapter that automatically connects the Rustra cdylib over a stable C ABI in Bun 1.4
+environments.
 
-## Zero-config 기본 경로
+## Zero-config default path
 
-Rust crate에 host-neutral entry를 한 줄 선언하고 `cdylib`을 켭니다.
+Declare a host-neutral entry in the Rust crate with one line and enable `cdylib`.
 
 ```rust
 rustra::native_entry!(app_package);
@@ -15,9 +18,9 @@ rustra::native_entry!(app_package);
 crate-type = ["rlib", "cdylib"]
 ```
 
-`rustra.json`에는 `"bun": {}`만 추가합니다. 생성된 파일이 Cargo metadata로 Release,
-Debug library 후보를 만들고, 실제 ABI 심볼까지 검사한 뒤 rkyv V2 engine을 lazy
-설치합니다.
+Add only `"bun": {}` to `rustra.json`. The generated file builds Release and Debug library
+candidates from Cargo metadata, verifies the actual ABI symbols, and lazily installs the
+rkyv V2 engine.
 
 ```ts
 import { addNumbers } from './generated/bun.js';
@@ -25,9 +28,9 @@ import { addNumbers } from './generated/bun.js';
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
-배포 레이아웃이 다르면 `RUSTRA_BUN_LIBRARY=/absolute/path/to/libapp.dylib`를 사용합니다.
+If the deployment layout differs, use `RUSTRA_BUN_LIBRARY=/absolute/path/to/libapp.dylib`.
 
-## 공개 API
+## Public API
 
 ```ts
 type BunInvokeTransport = {
@@ -41,9 +44,9 @@ type BunEngineClient = {
 function createBunEngine(transport: BunInvokeTransport): BunEngineClient;
 ```
 
-## 사용 예시
+## Usage examples
 
-### subprocess 기반
+### subprocess-based
 
 ```ts
 import { createBunEngine } from '@rustra/bun';
@@ -52,19 +55,19 @@ import { spawn } from 'bun';
 const engine = createBunEngine({
   async invoke(command, args) {
     const proc = spawn(['cargo', 'run', '-p', 'my-crate', '--', 'invoke']);
-    // JSON stdin/stdout으로 통신
+    // Communicates over JSON stdin/stdout
     return sendAndReceive(proc, { command, args });
   },
 });
 ```
 
-### bun:ffi 기반
+### bun:ffi-based
 
 ```ts
 import { createBunEngine } from '@rustra/bun';
 import { dlopen } from 'bun:ffi';
 
-const lib = dlopen('libmy_crate.so', {/* FFI 시그니처 */});
+const lib = dlopen('libmy_crate.so', {/* FFI signature */});
 
 const engine = createBunEngine({
   invoke(command, args) {
@@ -73,11 +76,13 @@ const engine = createBunEngine({
 });
 ```
 
-`createBunEngine(transport)`는 HTTP나 커스텀 FFI가 필요한 예외 경로입니다. 기본
-`createBunBootstrap`은 Rust 소유 응답을 JS 소유 `ArrayBuffer`로 복사한 뒤 정확한
-pointer/length 쌍으로 해제하며, schema/contract hash도 같은 ABI에서 검증합니다.
+`createBunEngine(transport)` is the escape path for HTTP or custom FFI. The default
+`createBunBootstrap` copies Rust-owned responses into JS-owned `ArrayBuffer`s, frees them
+with the exact pointer/length pair, and also verifies the schema/contract hash over the
+same ABI.
 
-2026-08-24 macOS arm64 Release에서 생성된 `addNumbers` API 전체 경로는 평균 2.27µs,
-p50 2.21µs, 약 439,961 ops/s였습니다. 이는 adapter 함수만 잰 숫자가 아니라 lazy
-bootstrap 이후 codec, FFI, Rust invoke, 응답 소유권 이전을 포함합니다. 재현 코드는
-[`bun-performance.ts`](../../examples/calculator/apps/bun-performance.ts)입니다.
+On 2026-08-24 macOS arm64 Release, the full path of the generated `addNumbers` API
+averaged 2.27µs, p50 2.21µs, and about 439,961 ops/s. This is not just the adapter
+function timed in isolation; it includes the codec, FFI, Rust invoke, and response
+ownership transfer after lazy bootstrap. The reproduction code is
+[`bun-performance.ts`](../../examples/calculator/apps/bun-performance.ts).

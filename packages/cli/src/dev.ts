@@ -13,14 +13,7 @@ import {
   type WatchHandle,
 } from './watch.js';
 import { assertDirectory, findRepoCli, readDevConfig, readSchemaSnapshot } from './dev-config.js';
-import {
-  detectConfigDirty,
-  detectDirty,
-  planPipeline,
-  runOnce,
-  type PipelinePlan,
-  type StageRunners,
-} from './dev-support.js';
+import { detectConfigDirty, detectDirty, planPipeline, runOnce } from './dev-support.js';
 
 export { createWatchLoop } from './watch.js';
 export {

@@ -1,36 +1,38 @@
-# Calculator napi-rs 예시
+English | [한국어](./README.ko.md)
 
-rustra 패키지를 Node.js 네이티브 애드온(napi-rs)으로 래핑하는 예시입니다.
+# Calculator napi-rs Example
 
-## 개요
+An example that wraps a rustra package as a Node.js native addon (napi-rs).
 
-`rustra-calculator-example` 패키지의 커맨드를 napi-rs를 통해 Node.js에서 직접 호출할 수 있는 네이티브 애드온으로 만듭니다. JSON 직렬화를 통해 Rust ↔ Node.js 통신이 이루어집니다.
+## Overview
 
-## 실행
+Turns the commands of the `rustra-calculator-example` package into a native addon that Node.js can call directly through napi-rs. Rust ↔ Node.js communication happens through JSON serialization.
+
+## Run
 
 ```bash
-# 디버그 빌드
+# Debug build
 bun run build:debug
 
-# 릴리스 빌드
+# Release build
 bun run build
 ```
 
-## 예시가 보여주는 것
+## What the Example Shows
 
-1. **napi-rs 래핑** — `rustra_calculator_example::calculator_package().invoke_json()`을 napi 함수로 노출
-2. **JSON 기반 통신** — 커맨드 이름과 JSON 문자열을 받아 결과를 JSON 문자열로 반환
-3. **크로스 플랫폼 빌드** — napi-rs를 통해 macOS, Linux, Windows에서 `.node` 바이너리 생성
+1. **napi-rs wrapping** — expose `rustra_calculator_example::calculator_package().invoke_json()` as a napi function
+2. **JSON-based communication** — receive a command name and a JSON string, return the result as a JSON string
+3. **Cross-platform build** — produce `.node` binaries on macOS, Linux, and Windows via napi-rs
 
-## 핵심 파일
+## Key Files
 
-| 파일         | 설명                                           |
-| ------------ | ---------------------------------------------- |
-| `src/lib.rs` | `#[napi]` 속성으로 `rustra_invoke` 함수를 노출 |
-| `build.rs`   | napi-rs 빌드 설정                              |
-| `Cargo.toml` | `cdylib` 크레이트 타입, napi 의존성            |
+| File         | Description                                                      |
+| ------------ | ---------------------------------------------------------------- |
+| `src/lib.rs` | Exposes the `rustra_invoke` function via the `#[napi]` attribute |
+| `build.rs`   | napi-rs build configuration                                      |
+| `Cargo.toml` | `cdylib` crate type, napi dependencies                           |
 
-## 생성된 함수
+## Generated Function
 
 ```ts
 const { rustraInvoke } = require('./calculator-napi.darwin-arm64.node');
@@ -39,8 +41,8 @@ const result = rustraInvoke('addNumbers', JSON.stringify({ a: 20, b: 22 }));
 // '{"ok":true,"result":{"value":42}}'
 ```
 
-## 사전 요구사항
+## Prerequisites
 
-- Rust 툴체인
-- `@napi-rs/cli` (Bun 스크립트로 자동 설치됨)
-- `rustra-calculator-example` 패키지 (같은 워크스페이스 내)
+- Rust toolchain
+- `@napi-rs/cli` (installed automatically by the Bun scripts)
+- `rustra-calculator-example` package (within the same workspace)
