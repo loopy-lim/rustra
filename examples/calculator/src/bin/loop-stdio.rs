@@ -58,27 +58,31 @@ fn main() -> rustra::Result<()> {
         if trimmed.is_empty() {
             continue;
         }
-        if trimmed.contains("__hello") {
-            if let Some(true) = hello_requested(trimmed) {
-                // id 에코 — 요청의 id 를 그대로 돌려준다(transport 상관 유지).
-                let echo_id = serde_json::from_str::<Value>(trimmed)
-                    .ok()
-                    .and_then(|v| v.get("id").cloned())
-                    .unwrap_or(Value::Null);
-                let response = json!({
-                    "id": echo_id,
-                    "ok": true,
-                    "binary": true,
-                    "eventsCmdId": BINARY_DRAIN_EVENTS_CMD,
-                });
-                let mut encoded =
-                    serde_json::to_vec(&response).map_err(rustra::RustraError::internal)?;
-                encoded.push(b'\n');
-                out.write_all(&encoded)
-                    .map_err(rustra::RustraError::internal)?;
-                out.flush().map_err(rustra::RustraError::internal)?;
-                return run_binary(package, &mut reader, &mut out);
-            }
+        // 라인당 JSON 파싱 1회 — 핸드셰이크 판별과 id 추출이 같은 파스를 쓴다.
+        let request: Option<Value> = serde_json::from_str(trimmed).ok();
+        let is_hello = request
+            .as_ref()
+            .and_then(|v| v.get("command").and_then(Value::as_str))
+            == Some("__hello");
+        if is_hello {
+            // id 에코 — 요청의 id 를 그대로 돌려준다(transport 상관 유지).
+            let echo_id = request
+                .as_ref()
+                .and_then(|v| v.get("id").cloned())
+                .unwrap_or(Value::Null);
+            let response = json!({
+                "id": echo_id,
+                "ok": true,
+                "binary": true,
+                "eventsCmdId": BINARY_DRAIN_EVENTS_CMD,
+            });
+            let mut encoded =
+                serde_json::to_vec(&response).map_err(rustra::RustraError::internal)?;
+            encoded.push(b'\n');
+            out.write_all(&encoded)
+                .map_err(rustra::RustraError::internal)?;
+            out.flush().map_err(rustra::RustraError::internal)?;
+            return run_binary(package, &mut reader, &mut out);
         }
         let response = handle_line(&package, trimmed);
         let mut encoded = serde_json::to_vec(&response).map_err(rustra::RustraError::internal)?;
@@ -88,13 +92,6 @@ fn main() -> rustra::Result<()> {
         // 라인 단위 flush — 호출자가 파이프에서 라인을 기다린다.
         out.flush().map_err(rustra::RustraError::internal)?;
     }
-}
-
-/// NDJSON 핸드셰이크 판별 — `{"command":"__hello"}` (id 는 무시).
-fn hello_requested(line: &str) -> Option<bool> {
-    let request: Value = serde_json::from_str(line).ok()?;
-    let command = request.get("command").and_then(Value::as_str)?;
-    Some(command == "__hello")
 }
 
 /// 바이너리 모드 루프 — 4B len 프레임을 read_exact 으로 읽고 rkyv V2 로
