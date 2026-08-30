@@ -21,22 +21,29 @@ include!("codegen_names.rs");
 /// [`set_codegen_command_context`]로 현재 명령을 알려준다. 경고는 폴백 시점의
 /// 타입 컨텍스트(스키마 발췌)를 포함한다.
 ///
-/// # 소비 계약 (CLI 출력 연결 — 현재는 경계 밖, SKIP)
+/// # 소비 계약
 ///
-/// `Package::generate_typescript`(package_codegen.rs 계열 — DX 트랙 경계 밖)가
-/// `generate_types_ts`/`generate_commands_ts` 진입에서
-/// `clear_codegen_warnings()` → 명령 루프에서 `set_codegen_command_context(name)`
-/// → 종료 시 `take_codegen_warnings()`를 `GeneratedPackage` 신규 필드(예:
-/// `warnings: Vec<String>`)로 실어주면, CLI가 이를 stdout/stderr로 출력한다.
-/// 소비 연결 전까지는 이 모듈 단위 테스트만 사용자이므로 `dead_code` 를
-/// 허용한다(의도적 착지 — 경고 억제가 미구현을 숨기지 않도록 소비 계약을
-/// 이 문서에 고정).
-#[allow(dead_code)]
+/// `Package::generate_typescript`가 `generate_types_ts`/`generate_commands_ts`
+/// 진입에서 `clear_codegen_warnings()` → 명령/정의 루프에서
+/// `set_codegen_command_context(컨텍스트명)` → 종료 시 `take_codegen_warnings()`를
+/// `GeneratedPackage::warnings` 필드로 실어준다. CLI(`@rustra/cli` codegen
+/// 파이프라인)가 이를 stderr로 출력한다. 경고는 생성 파일(types.ts 등)의
+/// 바이트 출력에 영향을 주지 않는다 — 별도 진행 채널이다.
 pub(crate) struct CodegenWarning {
     /// 폴백이 일어난 TypeScript 타입 표현식 컨텍스트 (스키마 type/format 발췌).
     pub(crate) context: String,
     /// 폴백 시점에 코드젠 중이던 명령명 (컨텍스트 미설정 시 `"<unknown>"`).
     pub(crate) command: String,
+}
+
+impl CodegenWarning {
+    /// CLI/호스트가 그대로 출력할 수 있는 한 줄 진단 문자열.
+    pub(crate) fn message(&self) -> String {
+        format!(
+            "{}: unmapped schema fell back to \"unknown\" ({})",
+            self.command, self.context
+        )
+    }
 }
 
 use std::cell::RefCell;
@@ -47,19 +54,16 @@ thread_local! {
 }
 
 /// 경고 수집 시작 전 버퍼를 비운다 (생성 세션 진입점에서 호출).
-#[allow(dead_code)]
 pub(crate) fn clear_codegen_warnings() {
     CODEGEN_WARNINGS.with(|warnings| warnings.borrow_mut().clear());
 }
 
 /// 현재 코드젠 중인 명령명을 기록한다 — 이후 폴백 경고에 첨부된다.
-#[allow(dead_code)]
 pub(crate) fn set_codegen_command_context(command: &str) {
     CODEGEN_COMMAND.with(|slot| *slot.borrow_mut() = command.to_string());
 }
 
 /// 수집된 경고를 소비한다 (생성 세션 종료점에서 호출).
-#[allow(dead_code)]
 pub(crate) fn take_codegen_warnings() -> Vec<CodegenWarning> {
     CODEGEN_WARNINGS.with(|warnings| std::mem::take(&mut *warnings.borrow_mut()))
 }
@@ -132,5 +136,22 @@ mod tests {
         let warnings = take_codegen_warnings();
         assert_eq!(warnings.len(), 1);
         assert_eq!(warnings[0].context, "mystery");
+    }
+
+    /// 수집기 소비 계약 — `take_codegen_warnings` 결과가 사람이 읽을 수 있는
+    /// 메시지(명령명 + 타입 컨텍스트)로 렌더링되는지 검증한다. 이 메시지가
+    /// `GeneratedPackage::warnings` 를 거쳐 CLI stderr 로 나간다.
+    #[test]
+    fn warning_message_contains_command_and_type_context() {
+        clear_codegen_warnings();
+        set_codegen_command_context("addNumbers");
+        let ts = ts_type_from_schema(&json!({ "type": "mystery" }), &json!({}));
+        assert_eq!(ts, "unknown");
+        let warnings = take_codegen_warnings();
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(
+            warnings[0].message(),
+            "addNumbers: unmapped schema fell back to \"unknown\" (mystery)"
+        );
     }
 }

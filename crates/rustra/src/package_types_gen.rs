@@ -19,6 +19,7 @@ impl Package {
         if let Value::Object(def_map) = &definitions {
             for (name, def_schema) in def_map {
                 if emitted.insert(name.clone()) {
+                    set_codegen_command_context(name);
                     if let Some(desc) = def_schema.get("description").and_then(Value::as_str) {
                         output.push_str(&format!("/**\n * {}\n */\n", desc.replace('\n', "\n * ")));
                     }
@@ -32,6 +33,7 @@ impl Package {
 
         for command in state.commands.values() {
             if command.input_type != "()" && emitted.insert(command.input_type.clone()) {
+                set_codegen_command_context(&command.input_type);
                 if let Some(desc) = command
                     .input_schema
                     .get("description")
@@ -46,6 +48,7 @@ impl Package {
                 ));
             }
             if command.output_type != "()" && emitted.insert(command.output_type.clone()) {
+                set_codegen_command_context(&command.output_type);
                 if let Some(desc) = command
                     .output_schema
                     .get("description")

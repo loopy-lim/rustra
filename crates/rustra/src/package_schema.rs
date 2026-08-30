@@ -1,4 +1,8 @@
 impl Package {
+    /// 라이브 스키마 스냅샷 — `schemaGeneration` 필드(T0)를 포함한다. mutation
+    /// (register/replace/unregister) 시 캐시가 무효화되고 새 세대로 다시
+    /// 채워지므로 소비자는 항상 일치하는 세대를 본다. contract hash 입력인
+    /// `schema()` 는 세대를 심지 않는다(와이어/OTA 계약 불변).
     pub fn live_schema(&self) -> Value {
         {
             let state = self
@@ -45,14 +49,12 @@ impl Package {
             .schema_generation
     }
 
-    /// `live_schema()` 는 이미 `schemaGeneration` 을 포함한다(T0) — 별칭.
-    /// contract hash (`schema()`) 경로는 건드리지 않는다(와이어/OTA 계약 불변).
-    pub fn live_schema_with_generation(&self) -> Value {
-        self.live_schema()
-    }
-
     /// 등록된 모든 명령에서 TypeScript 클라이언트 코드를 생성합니다.
+    ///
+    /// 생성 파일(`types_ts`/`commands_ts`)과 별개로 매핑 불가 스키마가
+    /// `"unknown"` 폴백한 위치를 `GeneratedPackage::warnings`로 돌려준다.
     pub fn generate_typescript(&self) -> crate::Result<GeneratedPackage> {
+        clear_codegen_warnings();
         let state = self
             .state
             .read()
@@ -63,6 +65,10 @@ impl Package {
         let contract_hash = contract_hash(&schema_json);
         let types_ts = Self::generate_types_ts(&state);
         let commands_ts = Self::generate_commands_ts(&state);
+        let warnings = take_codegen_warnings()
+            .into_iter()
+            .map(|warning| warning.message())
+            .collect();
 
         Ok(GeneratedPackage {
             contract_ts: format!(
@@ -74,6 +80,7 @@ impl Package {
             types_ts,
             commands_ts,
             contract_hash,
+            warnings,
         })
     }
 

@@ -1,3 +1,9 @@
+/// 매핑 불가 스키마의 공통 폴백 — 경고를 기록하고 `"unknown"`을 반환한다.
+fn unknown_fallback(schema: &Value) -> String {
+    record_unknown_fallback(schema);
+    "unknown".to_string()
+}
+
 /// JSON Schema [`Value`]를 TypeScript 타입 표현식으로 변환합니다.
 ///
 /// 재귀적으로 `$ref`, `anyOf`, `object`, `array` 등을 처리합니다.
@@ -107,10 +113,7 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
                 let item_type = schema
                     .get("items")
                     .map(|s| ts_type_from_schema(s, definitions))
-                    .unwrap_or_else(|| {
-                        record_unknown_fallback(schema);
-                        "unknown".to_string()
-                    });
+                    .unwrap_or_else(|| unknown_fallback(schema));
                 // `uniqueItems: true` (Rust `BTreeSet`/`HashSet`)는 `Set<T>`로 매핑.
                 // 와이어포맷은 배열 직렬화와 동일 — 런타임 변환은 생성된 코덱/호출부
                 // 에서 `[...value]` / `new Set(...)` 로 처리한다.
@@ -129,10 +132,7 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
                 format!("{item_type}[]")
             }
             "null" => "null".to_string(),
-            _ => {
-                record_unknown_fallback(schema);
-                "unknown".to_string()
-            }
+            _ => unknown_fallback(schema),
         },
         Some(Value::Array(types)) => {
             // `["integer","null"]` 같은 union — 요소가 integer 면 format(int64/
@@ -160,16 +160,10 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
                         schema
                             .get("items")
                             .map(|s| ts_type_from_schema(s, definitions))
-                            .unwrap_or_else(|| {
-                                record_unknown_fallback(schema);
-                                "unknown".to_string()
-                            })
+                            .unwrap_or_else(|| unknown_fallback(schema))
                             + "[]"
                     }
-                    _ => {
-                        record_unknown_fallback(schema);
-                        "unknown".to_string()
-                    }
+                    _ => unknown_fallback(schema),
                 })
                 .collect();
             parts.join(" | ")
@@ -177,9 +171,6 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
         // `Some(Null/Bool/Number/String/Object)` 등 type 필드가 문자열/배열이
         // 아닌 스키마 — 기존 `_ =>` 와일드카드 폴백을 명시 분기로 바꾸며
         // 경고를 남긴다.
-        _ => {
-            record_unknown_fallback(schema);
-            "unknown".to_string()
-        }
+        _ => unknown_fallback(schema),
     }
 }

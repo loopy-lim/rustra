@@ -86,6 +86,22 @@ fn user_can_register_command_without_writing_command_name_string() {
     assert!(generated.commands_ts.contains("'addNumbers'"));
 }
 
+/// 코드젠 경고 소비 계약 — 정상 스키마는 경고가 비어 있고, 생성 파일 바이트는
+/// 경고 유무와 무관하다(별도 진행 채널).
+#[test]
+fn codegen_of_wellformed_schemas_reports_no_warnings() {
+    let generated = Package::builder("example.warnings")
+        .command_fn(add_numbers)
+        .build()
+        .generate_typescript()
+        .unwrap();
+    assert!(
+        generated.warnings.is_empty(),
+        "well-formed schema must not produce codegen warnings: {:?}",
+        generated.warnings
+    );
+}
+
 #[test]
 fn command_doc_comments_flow_to_schema_and_typescript_jsdoc() {
     let generated = register!(Package::builder("example.docs"), documented_add)

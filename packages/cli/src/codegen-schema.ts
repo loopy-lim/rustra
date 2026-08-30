@@ -1,5 +1,6 @@
 import type { JsonSchema } from './schema.js';
 import { resolveRef, escapeStringLiteral, escapeJsDoc } from './codegen-text.js';
+import { recordUnknownFallback } from './codegen-warnings.js';
 
 export function tsTypeFromSchema(
   schema: JsonSchema,
@@ -42,7 +43,9 @@ export function tsTypeFromSchema(
           return `[${schema.items.map((item) => tsTypeFromSchema(item, definitions)).join(', ')}]`;
         if (schema.items?.type === 'integer' && schema.items.format === 'uint8')
           return 'Uint8Array | ArrayBuffer | number[]';
-        const itemType = schema.items ? tsTypeFromSchema(schema.items, definitions) : 'unknown';
+        const itemType = schema.items
+          ? tsTypeFromSchema(schema.items, definitions)
+          : recordUnknownFallback(schema);
         return schema.uniqueItems
           ? `Set<${itemType}>`
           : itemType.includes(' | ')
@@ -52,14 +55,14 @@ export function tsTypeFromSchema(
       case 'null':
         return 'null';
       default:
-        return 'unknown';
+        return recordUnknownFallback(schema);
     }
   }
   if (Array.isArray(type))
     return [...new Set(type.map((member) => unionMemberType(member, schema, definitions)))].join(
       ' | ',
     );
-  return 'unknown';
+  return recordUnknownFallback(schema);
 }
 
 function unionMemberType(
@@ -83,11 +86,13 @@ function unionMemberType(
     case 'array': {
       if (Array.isArray(schema.items))
         return `[${schema.items.map((item) => tsTypeFromSchema(item, definitions)).join(', ')}]`;
-      const itemType = schema.items ? tsTypeFromSchema(schema.items, definitions) : 'unknown';
+      const itemType = schema.items
+        ? tsTypeFromSchema(schema.items, definitions)
+        : recordUnknownFallback(schema);
       return itemType.includes(' | ') ? `(${itemType})[]` : `${itemType}[]`;
     }
     default:
-      return 'unknown';
+      return recordUnknownFallback(schema);
   }
 }
 

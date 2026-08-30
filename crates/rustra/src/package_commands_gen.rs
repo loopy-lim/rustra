@@ -44,6 +44,7 @@ impl Package {
             } else {
                 &command.output_type
             };
+            set_codegen_command_context(name);
             if let Some(desc) = command.description.as_deref() {
                 output.push_str(&format!("/**\n * {}\n */\n", desc.replace('\n', "\n * ")));
             }
