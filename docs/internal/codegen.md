@@ -1,18 +1,22 @@
-# TypeScript 코드 생성 파이프라인
+English | [한국어](./codegen.ko.md)
 
-프로젝트 기여자를 위한 내부 문서. `Package::generate_typescript()`의 전체 흐름, schema 추출, TS 타입 매핑 규칙, 생성 결과물을 설명한다.
+# TypeScript Code Generation Pipeline
+
+Internal documentation for project contributors. Describes the full flow of
+`Package::generate_typescript()`, schema extraction, TS type mapping rules,
+and the generated output.
 
 ---
 
-## 전체 흐름
+## Overall Flow
 
 ```
 Package::generate_typescript()
   │
-  ├─ 1. self.schema()           → JSON Value (packageId + commands 배열)
-  ├─ 2. contract_hash()         → schema.json 문자열 → SHA256 hex
-  ├─ 3. self.generate_types_ts() → types.ts 문자열
-  ├─ 4. self.generate_commands_ts() → commands.ts 문자열
+  ├─ 1. self.schema()           → JSON Value (packageId + commands array)
+  ├─ 2. contract_hash()         → schema.json string → SHA256 hex
+  ├─ 3. self.generate_types_ts() → types.ts string
+  ├─ 4. self.generate_commands_ts() → commands.ts string
   │
   └─ GeneratedPackage { schema_json, types_ts, commands_ts, contract_hash }
        │
@@ -21,11 +25,12 @@ Package::generate_typescript()
 
 ---
 
-## 1. Schema 추출
+## 1. Schema Extraction
 
 ### schema_value\<T\>()
 
-`command()` / `command_fn()`으로 command가 등록될 때 호출된다. `schemars`의 `schema_for!()` 매크로를 사용한다.
+Called when a command is registered via `command()` / `command_fn()`. Uses the
+`schema_for!()` macro from `schemars`.
 
 ```rust
 fn schema_value<T: JsonSchema>() -> (Value, Value) {
@@ -36,51 +41,56 @@ fn schema_value<T: JsonSchema>() -> (Value, Value) {
 }
 ```
 
-- 첫 번째 반환값: 타입 T의 JSON Schema (object)
-- 두 번째 반환값: `$defs`에 해당하는 definitions 객체 (enum 등 공유 타입 포함)
-- 여러 command의 definitions는 `PackageBuilder::command()`에서 병합된다 (BTreeMap merge)
-- 병합된 definitions는 `generate_types_ts()`에서 `$defs` 블록으로 출력되어 `ts_type_from_schema`의 `$ref` 해석에 사용됨
+- First return value: the JSON Schema of type T (object)
+- Second return value: the definitions object corresponding to `$defs` (including shared types such as enums)
+- Definitions from multiple commands are merged in `PackageBuilder::command()` (BTreeMap merge)
+- The merged definitions are emitted as the `$defs` block in `generate_types_ts()` and used for `$ref` resolution in `ts_type_from_schema`
 
 ### short_type_name\<T\>()
 
-`std::any::type_name::<T>()`에서 마지막 `::` 이후 세그먼트를 추출한다.
+Extracts the segment after the last `::` from `std::any::type_name::<T>()`.
 
-예: `calculator::AddNumbersInput` → `AddNumbersInput`
+Example: `calculator::AddNumbersInput` → `AddNumbersInput`
 
 ---
 
-## 2. TS 타입 매핑 규칙
+## 2. TS Type Mapping Rules
 
-`ts_type_from_schema(schema: &Value, definitions: &Value)`이 JSON Schema의 `"type"` 필드를 기준으로 TypeScript 타입 문자열을 생성한다. 두 번째 인자 `definitions`는 `$ref` 해석에 사용된다.
+`ts_type_from_schema(schema: &Value, definitions: &Value)` generates a
+TypeScript type string based on the JSON Schema `"type"` field. The second
+argument, `definitions`, is used for `$ref` resolution.
 
-### 매핑 테이블
+### Mapping table
 
-| JSON Schema type                  | TypeScript 타입        | 비고                                          |
-| --------------------------------- | ---------------------- | --------------------------------------------- |
-| `"$ref": "#/definitions/X"`       | `X` (참조된 타입 이름) | `resolve_ref()`로 이름 추출                   |
-| `"anyOf": [...]`                  | `A \| B \| ...`        | 각 스키마에 재귀 호출 후 union 생성           |
-| `"object"`                        | `{ field: type; ... }` | `ts_object_from_schema()` 호출                |
-| `"integer"`                       | `number`               |                                               |
-| `"number"`                        | `number`               |                                               |
-| `"string"` + `"enum"`             | `'A' \| 'B'`           | string enum 값을 문자열 리터럴 union으로 변환 |
-| `"string"`                        | `string`               | enum이 없으면 일반 string                     |
-| `"boolean"`                       | `boolean`              |                                               |
-| `"array"` + `"uniqueItems": true` | `Set<T>`               | Rust `BTreeSet`/`HashSet` 매핑 (2026-08-15)   |
-| `"array"`                         | `type[]`               | `items`에서 재귀 호출, 없으면 `unknown[]`     |
-| `"null"`                          | `null`                 |                                               |
-| `["string", "null"]` 등           | `string \| null`       | type 배열을 union으로 변환                    |
-| 그 외                             | `unknown`              |                                               |
+| JSON Schema type                  | TypeScript type            | Notes                                              |
+| --------------------------------- | -------------------------- | -------------------------------------------------- |
+| `"$ref": "#/definitions/X"`       | `X` (referenced type name) | Name extracted with `resolve_ref()`                |
+| `"anyOf": [...]`                  | `A \| B \| ...`            | Recursive call per schema, then union              |
+| `"object"`                        | `{ field: type; ... }`     | Calls `ts_object_from_schema()`                    |
+| `"integer"`                       | `number`                   |                                                    |
+| `"number"`                        | `number`                   |                                                    |
+| `"string"` + `"enum"`             | `'A' \| 'B'`               | String enum values become a string literal union   |
+| `"string"`                        | `string`                   | Plain string when there is no enum                 |
+| `"boolean"`                       | `boolean`                  |                                                    |
+| `"array"` + `"uniqueItems": true` | `Set<T>`                   | Mapping for Rust `BTreeSet`/`HashSet` (2026-08-15) |
+| `"array"`                         | `type[]`                   | Recursive call on `items`, `unknown[]` if absent   |
+| `"null"`                          | `null`                     |                                                    |
+| `["string", "null"]` etc.         | `string \| null`           | Type array becomes a union                         |
+| Anything else                     | `unknown`                  |                                                    |
 
-### `$ref` 해석 (`resolve_ref`)
+### `$ref` resolution (`resolve_ref`)
 
 ```
 "#/definitions/MyType" → "MyType"
 "#/$defs/MyType"       → "MyType"
 ```
 
-`$ref`를 만나면 definitions 맵에서 실제 스키마를 찾지 않고 타입 이름만 추출하여 반환한다. 해당 타입은 `generate_types_ts()`에서 `$defs` 블록을 별도로 순회하며 이미 출력되어 있어야 한다.
+When a `$ref` is encountered, `resolve_ref` does not look up the actual schema
+in the definitions map; it extracts and returns only the type name. The
+referenced type must already be emitted by `generate_types_ts()`, which walks
+the `$defs` block separately.
 
-### Object 매핑 상세 (`ts_object_from_schema`)
+### Object mapping details (`ts_object_from_schema`)
 
 ```
 JSON Schema:
@@ -99,40 +109,43 @@ TypeScript:
 }
 ```
 
-- `required` 배열에 없는 프로퍼티는 `?` (optional)로 표시
-- `properties`가 없으면 `Record<string, unknown>` 폴백
+- Properties missing from the `required` array are marked `?` (optional)
+- If there are no `properties`, it falls back to `Record<string, unknown>`
 
 ---
 
-## 3. Command 이름 변환
+## 3. Command Name Conversion
 
-### command_fn 경로 (자동 추출)
+### command_fn path (automatic extraction)
 
 ```
-함수 정의: fn add_numbers(input: ...) -> Result<...>
+Function definition: fn add_numbers(input: ...) -> Result<...>
                           ↓
-type_name::<F>() → "calculator::add_numbers::{{closure}}" 등
+type_name::<F>() → "calculator::add_numbers::{{closure}}" etc.
                           ↓
-short_type_name() → 마지막 세그먼트 추출
+short_type_name() → extract the last segment
                           ↓
-trim_end_matches("_command") → "_command" 접미사 제거
+trim_end_matches("_command") → strip the "_command" suffix
                           ↓
 snake_to_lower_camel() → "addNumbers"
 ```
 
-### command 경로 (명시적 이름)
+### command path (explicit name)
 
 ```rust
 .command("addNumbers", add_numbers)
 ```
 
-사용자가 직접 command 이름을 지정한다. 이름 변환 없이 그대로 사용.
+The user specifies the command name directly. It is used as-is, with no name
+conversion.
 
-### TS 함수명 생성 (`command_function_name`)
+### TS function name generation (`command_function_name`)
 
-command 이름을 TypeScript 함수명으로 변환한다. 구분자(`_`, `-`, `.` 등) 다음 글자를 대문자로 만드는 camelCase 변환이다. 결과가 빈 문자열이면 `"command"`로 폴백.
+Converts a command name into a TypeScript function name. It is a camelCase
+conversion that capitalizes the character following a separator (`_`, `-`,
+`.` etc). If the result is an empty string, it falls back to `"command"`.
 
-예: `"addNumbers"` → `"addNumbers"` (이미 camelCase면 변경 없음)
+Example: `"addNumbers"` → `"addNumbers"` (no change when already camelCase)
 
 ---
 
@@ -146,15 +159,16 @@ fn contract_hash(input: impl AsRef<[u8]>) -> String {
 }
 ```
 
-- 입력: `schema_json` 문자열 (pretty-printed JSON)
-- 출력: SHA256 hex 문자열
-- 용도: `contract.ts`에 `GENERATED_CONTRACT_HASH` 상수로 저장. 런타임에 호스트-클라이언트 간 계약 일치를 확인하는 데 사용.
+- Input: the `schema_json` string (pretty-printed JSON)
+- Output: a SHA256 hex string
+- Purpose: stored as the `GENERATED_CONTRACT_HASH` constant in `contract.ts`.
+  Used at runtime to verify contract agreement between host and client.
 
 ---
 
-## 5. 생성 결과물
+## 5. Generated Output
 
-`GeneratedPackage`가 생성하는 4개 파일:
+The 4 files produced by `GeneratedPackage`:
 
 ### schema.json
 
@@ -185,7 +199,7 @@ export type RustraError = {
   readonly message: string;
 };
 
-// $defs에 정의된 공유 타입 (enum 등)
+// shared types defined in $defs (enums, etc.)
 export type Status = 'Active' | 'Inactive';
 
 export type AddNumbersInput = {
@@ -198,12 +212,12 @@ export type AddNumbersOutput = {
 };
 ```
 
-`generate_types_ts()`는 다음 순서로 출력한다:
+`generate_types_ts()` emits in the following order:
 
-1. `EngineClient` 타입 정의
-2. `RustraError` 타입 정의 (`readonly code: string; readonly message: string`)
-3. `$defs`에 정의된 공유 타입 (enum, 재사용 구조체 등). 모든 command의 definitions를 병합한 뒤 emit
-4. 각 command의 input/output 타입. 이미 출력된 타입은 중복 emit하지 않음 (`BTreeSet`으로 추적)
+1. The `EngineClient` type definition
+2. The `RustraError` type definition (`readonly code: string; readonly message: string`)
+3. Shared types defined in `$defs` (enums, reusable structs, etc), emitted after merging definitions from all commands
+4. Each command's input/output types; already-emitted types are not emitted again (tracked with a `BTreeSet`)
 
 ### commands.ts
 
@@ -218,9 +232,9 @@ export function addNumbers(
 }
 ```
 
-- `EngineClient`와 `RustraError`를 항상 import에 포함
-- 모든 타입을 alphabetical로 import
-- 각 command당 하나의 함수
+- `EngineClient` and `RustraError` are always included in imports
+- All types are imported alphabetically
+- One function per command
 
 ### contract.ts
 
@@ -230,43 +244,47 @@ export const GENERATED_CONTRACT_HASH = '<sha256-hex>';
 
 ---
 
-## 6. 현재 제한사항
+## 6. Current Limitations
 
-JSON Schema → TypeScript 변환은 rustra가 내보내는 object/array/union/intersection,
-literal enum, map/set/tuple/$ref 재귀 표면을 지원한다. JSON Schema의 조건부
-키워드(`if`/`then`/`else`)나 `patternProperties`처럼 Rust 타입 계약에서 생성하지
-않는 임의 스키마는 안전하게 `unknown`으로 폴백한다.
+The JSON Schema → TypeScript conversion supports the object/array/union/
+intersection, literal enum, and map/set/tuple/$ref recursive surfaces that
+rustra emits. Arbitrary schemas that a Rust type contract never generates,
+such as JSON Schema conditional keywords (`if`/`then`/`else`) or
+`patternProperties`, fall back safely to `unknown`.
 
-**postcard 코덱(rkyv-codecs.ts/C++) 지원 정책**: 미지원 필드를 가진 명령은 부분
-postcard 코덱을 만들지 않는다. 대신 complex codec이 전체 schema를 지원하면 TS
-registry에 complex route로 등록한다. C++는 공용 Codec IR이 native-safe로 판정한
-complex subset만 정적 registry에 포함하고, 나머지는 제외한다. 두
-binary codec이 모두 지원하지 못하는 명령만 WARN과 함께 제외되어 Tier 3
-(JSON-in-binary) 폴백으로 라우팅된다 — 과거 "미지원 필드 무음 삭제로 와이어 깨짐"
-결함의 재발을 구조적으로 봉쇄한다.
+**postcard codec (rkyv-codecs.ts/C++) support policy**: commands with
+unsupported fields do not get a partial postcard codec. Instead, when the
+complex codec supports the full schema, the command is registered in the TS
+registry as a complex route. C++ includes only the complex subset that the
+shared Codec IR judges native-safe in its static registry and excludes the
+rest. Only commands that neither binary codec supports are excluded with a
+WARN and routed to the Tier 3 (JSON-in-binary) fallback — structurally
+blocking a recurrence of the past "unsupported field silently dropped, wire
+broken" defect.
 
-### 이미 지원되는 타입 (이전에는 미지원)
+### Already supported types (previously unsupported)
 
-| 타입                                     | 지원 방식                                                                                                                                   |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Set`                                    | `"array"` + `"uniqueItems": true` → `Set<T>` (2026-08-15). postcard 코덱 `set_*` kind (와이어는 vec 호환), JSON 경로 replacer로 배열 직렬화 |
-| `tuple`                                  | `items` 배열 / `prefixItems` → `[A, B, C]`                                                                                                  |
-| `oneOf` (Rust)                           | `anyOf`와 동일하게 `A \| B` union 생성 (TS CLI는 보강 중)                                                                                   |
-| `$ref`                                   | `#/definitions/X`, `#/$defs/X` → 타입 이름 추출                                                                                             |
-| `anyOf`                                  | 각 스키마에 재귀 호출 후 `A \| B` union 생성                                                                                                |
-| string `enum`                            | `'Value1' \| 'Value2'` 문자열 리터럴 union. postcard 코덱은 variant index varint로 인코딩 (`enum_str` kind)                                 |
-| `null`                                   | `null` 타입                                                                                                                                 |
-| type 배열 union                          | `["string", "null"]` → `string \| null`                                                                                                     |
-| optional 필드                            | `required`에 없으면 `?` + `\| null` (schemars가 `anyOf`로 표현)                                                                             |
-| `allOf`                                  | `A & B` 교차 타입 (2026-08-20, Rust bin + TS CLI 양쪽)                                                                                      |
-| integer enum                             | `1 \| 2 \| 3` 숫자 리터럴 union (2026-08-20, Rust bin + TS CLI 양쪽)                                                                        |
-| `Option<T>` (postcard)                   | 태그 바이트(0/1) + 값 — `option_zigzag/f64/f32/bool/string/struct` kind (2026-08-20)                                                        |
-| `Vec<String>` / `Vec<Struct>` (postcard) | varint 길이 + 요소 — `vec_string`/`vec_struct` kind (2026-08-20)                                                                            |
-| `oneOf` 판별 필드 (`const`)              | `const_literal`/`constLiteral`로 `{ type: 'A' }` 판별 유니온 생성                                                                           |
-| single-entry `allOf` newtype (postcard)  | `ChannelHandle(u32)` 같은 투명 newtype의 내부 `$ref`를 따라가 동일 scalar wire로 생성                                                       |
+| Type                                     | Support approach                                                                                                                                            |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Set`                                    | `"array"` + `"uniqueItems": true` → `Set<T>` (2026-08-15). postcard codec `set_*` kind (wire is vec-compatible), JSON path serializes as array via replacer |
+| `tuple`                                  | `items` array / `prefixItems` → `[A, B, C]`                                                                                                                 |
+| `oneOf` (Rust)                           | Produces an `A \| B` union just like `anyOf` (TS CLI being reinforced)                                                                                      |
+| `$ref`                                   | `#/definitions/X`, `#/$defs/X` → type name extracted                                                                                                        |
+| `anyOf`                                  | Recursive call per schema, then an `A \| B` union                                                                                                           |
+| string `enum`                            | `'Value1' \| 'Value2'` string literal union. The postcard codec encodes a variant index varint (`enum_str` kind)                                            |
+| `null`                                   | `null` type                                                                                                                                                 |
+| Type array union                         | `["string", "null"]` → `string \| null`                                                                                                                     |
+| Optional fields                          | `?` + `\| null` when absent from `required` (schemars represents this as `anyOf`)                                                                           |
+| `allOf`                                  | `A & B` intersection type (2026-08-20, both Rust bin and TS CLI)                                                                                            |
+| Integer enum                             | `1 \| 2 \| 3` numeric literal union (2026-08-20, both Rust bin and TS CLI)                                                                                  |
+| `Option<T>` (postcard)                   | Tag byte (0/1) + value — `option_zigzag/f64/f32/bool/string/struct` kinds (2026-08-20)                                                                      |
+| `Vec<String>` / `Vec<Struct>` (postcard) | varint length + elements — `vec_string`/`vec_struct` kinds (2026-08-20)                                                                                     |
+| `oneOf` discriminator field (`const`)    | `const_literal`/`constLiteral` builds `{ type: 'A' }` discriminated unions                                                                                  |
+| single-entry `allOf` newtype (postcard)  | Follows the inner `$ref` of a transparent newtype such as `ChannelHandle(u32)` and generates the same scalar wire                                           |
 
-postcard fast path에서 빠지는 payload data enum, 구조체/배열 값을 가진 map,
-재귀 구조와 collection/enum을 감싼 `Option<T>` 조합은 complex binary route가
-담당한다. unknown ref, 모호한 union, 지원하지 않는 JSON Schema keyword처럼
-complex route도 증명하지 못하는 경우에만 명령 전체를 제외하고 한 번의 actionable
-WARN을 출력하며 JSON-in-binary 경로로 라우팅한다.
+Payload data enums excluded from the postcard fast path, maps with
+struct/array values, recursive structures, and `Option<T>` combinations
+wrapping collections/enums are handled by the complex binary route. Only when
+the complex route also cannot prove the command — an unknown ref, an
+ambiguous union, an unsupported JSON Schema keyword — is the whole command
+excluded with a single actionable WARN and routed to the JSON-in-binary path.

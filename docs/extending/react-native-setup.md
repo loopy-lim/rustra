@@ -1,12 +1,15 @@
+English | [한국어](./react-native-setup.ko.md)
+
 # React Native Setup Guide
 
-Rustra는 Expo development build와 bare React Native에 같은 generated native
-package를 사용합니다. 앱의 Podfile, Gradle settings, `MainApplication`, CMake를
-직접 편집하지 않습니다.
+Rustra uses the same generated native package for Expo development builds and
+bare React Native. You do not edit the app's Podfile, Gradle settings,
+`MainApplication`, or CMake by hand.
 
-## 1. Rust crate 준비
+## 1. Prepare the Rust crate
 
-모바일 앱이 링크할 static library를 만들고, package 초기화를 한 줄로 export합니다.
+Build the static library the mobile app links against, and export package
+initialization as a one-liner.
 
 ```toml
 [lib]
@@ -23,12 +26,13 @@ pub fn app_package() -> Package {
 rustra::native_entry!(app_package);
 ```
 
-`native_entry!`는 플랫폼 공통 `rustra_mobile_init` ABI를 만들고 Apple에서는 library
-load 시 package를 자동 등록합니다. 앱별 함수명을 C++에 복사하지 않습니다.
+`native_entry!` creates the platform-neutral `rustra_mobile_init` ABI and, on
+Apple platforms, registers the package automatically at library load time. You
+never copy app-specific function names into C++.
 
-## 2. 앱 설정
+## 2. App configuration
 
-일반적인 단일-crate 앱은 `reactNative: {}`면 충분합니다.
+A typical single-crate app only needs `reactNative: {}`.
 
 ```json
 {
@@ -42,7 +46,8 @@ load 시 package를 자동 등록합니다. 앱별 함수명을 C++에 복사하
 }
 ```
 
-Cargo workspace에 staticlib crate가 여러 개라면 manifest를 app crate로 좁힙니다.
+If the Cargo workspace has multiple staticlib crates, narrow the manifest down
+to the app crate.
 
 ```json
 {
@@ -54,12 +59,13 @@ Cargo workspace에 staticlib crate가 여러 개라면 manifest를 app crate로 
 }
 ```
 
-manifest 자체도 여러 package를 가리킬 때만 `rustPackage`를 추가합니다. library
-target 이름은 Cargo metadata에서 추론하므로 보통 `rustLibrary`는 필요 없습니다.
+Add `rustPackage` only when the manifest itself points at multiple packages.
+The library target name is inferred from Cargo metadata, so `rustLibrary` is
+usually unnecessary.
 
-## 3. 생성과 설치
+## 3. Generation and installation
 
-모든 JavaScript 작업은 Bun 1.4 이상으로 실행합니다.
+Run all JavaScript work with Bun 1.4 or later.
 
 ```bash
 bun add @rustra/react-native @rustra/types
@@ -69,7 +75,7 @@ bunx --bun @rustra/cli codegen --config rustra.json
 bun install
 ```
 
-생성 결과는 기본적으로 다음과 같습니다.
+By default, generation produces the following layout.
 
 ```text
 generated/
@@ -85,11 +91,11 @@ modules/rustra-bridge/
   generated/
 ```
 
-생성기는 `package.json`의 `@rustra/generated-react-native` workspace dependency가 다른
-경로를 가리키면 덮어쓰지 않고 실패합니다. 이 fail-closed 동작이 기존 패키지와의
-우발적 충돌을 막습니다.
+If the `@rustra/generated-react-native` workspace dependency in `package.json`
+points somewhere else, the generator fails instead of overwriting. This
+fail-closed behavior prevents accidental collisions with an existing package.
 
-## 4. 앱 코드
+## 4. App code
 
 ```ts
 import { addNumbers } from './generated/react-native';
@@ -97,47 +103,48 @@ import { addNumbers } from './generated/react-native';
 const result = await addNumbers({ a: 1, b: 2 });
 ```
 
-첫 호출이 native install, contract 검증, fast engine configure를 한 번만 수행합니다.
-reload 후에도 새 JavaScript runtime에 다시 설치되며, 동시 첫 호출은 하나의 bootstrap을
-공유합니다.
+The first call performs native install, contract verification, and fast engine
+configuration exactly once. After a reload it reinstalls into the new
+JavaScript runtime, and concurrent first calls share a single bootstrap.
 
 ## 5. bare React Native
 
-React Native CLI가 생성 모듈의 iOS Podspec과 Android source directory를 찾는지
-확인합니다.
+Make sure the React Native CLI can find the generated module's iOS Podspec and
+Android source directory.
 
 ```bash
 bunx --bun react-native config
 cd ios && pod install
 ```
 
-그 뒤 평소처럼 앱을 새로 빌드합니다. Metro reload만으로는 static archive나 JSI
-symbol 변경이 반영되지 않습니다.
+Then rebuild the app as usual. A Metro reload alone does not pick up static
+archive or JSI symbol changes.
 
-저장소의 `examples/react-native-bare-calculator`는 Expo package 없이 RN 0.81에서
-TypeScript와 양 플랫폼 autolinking을 검증하는 fixture입니다.
+The `examples/react-native-bare-calculator` fixture in this repository
+validates TypeScript and autolinking on both platforms with RN 0.81, without
+the Expo package.
 
 ## 6. Expo
 
-Expo Go는 임의의 JSI native module을 포함할 수 없으므로 development build가
-필수입니다.
+Expo Go cannot include arbitrary JSI native modules, so a development build is
+required.
 
 ```bash
 bunx --bun expo prebuild --platform ios --no-install
 bunx --bun expo run:ios
 ```
 
-생성 모듈은 React Native autolinking을 사용하므로 Expo module config나 Podfile
-수동 선언은 필요하지 않습니다.
+The generated module uses React Native autolinking, so no Expo module config
+or manual Podfile declaration is needed.
 
-## 7. 검증
+## 7. Verification
 
 ```bash
 bun run typecheck
 bunx --bun react-native config
 ```
 
-저장소 예제에서는 다음 추가 게이트를 제공합니다.
+The repository examples provide these additional gates.
 
 ```bash
 cd examples/react-native-calculator
@@ -148,11 +155,12 @@ bun run verify:native:android
 bun run verify:native:ios
 ```
 
-CI는 클린 Expo prebuild 후 Android Release APK의 `librustra_bridge.so`와 iOS
-Release workspace link를 확인합니다. build/link 성공은 실제 기기 실행과 별개이므로
-제품 릴리스 전에는 simulator/device에서 generated command 결과도 확인해야 합니다.
+CI verifies `librustra_bridge.so` in the Android Release APK and the iOS
+Release workspace link after a clean Expo prebuild. Because build/link success
+is independent of running on a real device, you should also verify generated
+command results on a simulator/device before a product release.
 
-## 충돌 방지 계약
+## Collision Avoidance Contract
 
 - JS package: `@rustra/generated-react-native`
 - native module: `RustraBridge`
@@ -160,16 +168,17 @@ Release workspace link를 확인합니다. build/link 성공은 실제 기기 �
 - Android library: `rustra_bridge`
 - stable Rust initializer: `rustra_mobile_init`
 
-calculator 전용 benchmark ABI는 `legacyBenchmarks: true` fixture에서만 컴파일됩니다.
-일반 사용자 생성물에는 포함되지 않습니다.
+The calculator-only benchmark ABI compiles only in the
+`legacyBenchmarks: true` fixture. It is never included in regular user
+generated output.
 
-## 문제 해결
+## Troubleshooting
 
-`RustraBridge was not linked`가 나오면 `bun run codegen`, `bun install`,
-`bunx --bun react-native config` 순서로 확인하고 iOS는 Pods를 다시 설치한 뒤 native
-app을 재빌드합니다.
+If you see `RustraBridge was not linked`, check in this order: `bun run
+codegen`, `bun install`, `bunx --bun react-native config`; on iOS, reinstall
+Pods and rebuild the native app.
 
-Cargo package가 모호하다는 오류는 `codegen.rustManifest`와
-`codegen.rustPackage`를 app crate로 좁혀 해결합니다. generator binary가 모호하면
-`codegen.rustBinary`를 추가합니다. staticlib target 오류는 `[lib] crate-type`에
-`staticlib`를 추가합니다.
+An ambiguous Cargo package error is resolved by narrowing `codegen.rustManifest`
+and `codegen.rustPackage` to the app crate. If the generator binary is
+ambiguous, add `codegen.rustBinary`. A staticlib target error is resolved by
+adding `staticlib` to `[lib] crate-type`.

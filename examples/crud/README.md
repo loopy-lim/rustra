@@ -1,10 +1,12 @@
-# CRUD 예제
+English | [한국어](./README.ko.md)
 
-rustra-bridge를 사용한 전체 CRUD(Create, Read, Update, Delete) 패턴 예제입니다.
+# CRUD Example
 
-## 명령어
+A full CRUD (Create, Read, Update, Delete) pattern example using rustra-bridge.
 
-| 명령어       | 입력                    | 출력          |
+## Commands
+
+| Command      | Input                   | Output        |
 | ------------ | ----------------------- | ------------- |
 | `createItem` | `{ name, value }`       | `{ item }`    |
 | `getItem`    | `{ id }`                | `{ item }`    |
@@ -12,33 +14,33 @@ rustra-bridge를 사용한 전체 CRUD(Create, Read, Update, Delete) 패턴 예�
 | `updateItem` | `{ id, name?, value? }` | `{ item }`    |
 | `deleteItem` | `{ id }`                | `{ deleted }` |
 
-## 빌드
+## Build
 
 ```sh
 cargo build -p rustra-crud-example
 ```
 
-## TypeScript 코드 생성
+## TypeScript Code Generation
 
 ```sh
 cargo run -p rustra-crud-example --bin generate
 ```
 
-`examples/crud/generated/`에 생성됨:
+Generated into `examples/crud/generated/`:
 
-- `schema.json` — 모든 명령어의 JSON Schema
-- `types.ts` — TypeScript 타입 정의
-- `commands.ts` — 타입 안전 명령어 헬퍼 함수
-- `contract.ts` — 호환성 검사용 contract hash
+- `schema.json` — JSON Schema for all commands
+- `types.ts` — TypeScript type definitions
+- `commands.ts` — type-safe command helper functions
+- `contract.ts` — contract hash for compatibility checks
 
-## 테스트
+## Tests
 
 ```sh
 bunx tsc -p examples/crud/tsconfig.json
 node --test dist-ts/examples/crud/ts/crud-operations.test.js
 ```
 
-## TypeScript에서 사용
+## Usage from TypeScript
 
 ```typescript
 import { createItem, getItem, listItems } from './generated/commands.js';

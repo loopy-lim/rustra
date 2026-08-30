@@ -186,14 +186,6 @@ pub trait BufferCommandOutput: Serialize + JsonSchema + 'static {
     fn into_buffer(self) -> Vec<u8>;
 }
 
-fn postcard_uvar_len(mut value: usize) -> usize {
-    let mut len = 1;
-    while value >= 0x80 {
-        value >>= 7;
-        len += 1;
-    }
-    len
-}
 #[cfg(test)]
 mod buffer_invoke_tests;
 #[cfg(test)]

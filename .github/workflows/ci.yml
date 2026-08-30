@@ -227,6 +227,13 @@ jobs:
         # 버퍼 비앨리어싱) 계약의 유일한 자동화 검증이다. umbrella `test`에만
         # 있어 CI가 놓치던 것을 PR 게이트로 승격.
         run: bun run --cwd packages/bun test
+      - name: Test types + react-native engine units
+        # packages/types(세대 게이트 등 엔진 코어 계약)와
+        # packages/react-native(레거시 JSI 스킵/재동기화)는 umbrella `test`에만
+        # 있어 PR 게이트가 놓치고 있었다. examples glob과 별도로 직접 실행한다.
+        run: |
+          bun run --cwd packages/types test
+          bun run --cwd packages/react-native test
       - name: C++ generated codec tests
         # TS/Rust/C++ 3면 PINNED hex 게이트의 C++ 다리 — shim 테스트가 실제로
         # 실행돼야 생성 코덱과 fixture 간 드리프트를 PR 단계에서 잡는다.
@@ -403,9 +410,13 @@ jobs:
             bun pm pkg set "overrides.@rustra/cli=file:$rustra_cli_tgz"
             break
           done
+          for rustra_node_tgz in /tmp/rustra-pack/rustra-node-*.tgz; do
+            bun pm pkg set "overrides.@rustra/node=file:$rustra_node_tgz"
+            break
+          done
           bun install
-          # cargoRange 는 캐럿 범위(예: ^0.5.0) — [0-9.]* 는 ^ 를 못 맞춰 발행 전
-          # 버전에서는 crates.io 해석 실패가 된다. 캐럿을 포함해 치환한다.
+          # 발행 전 release candidate를 현재 checkout의 Rust crate로 고정한다.
+          # crates.io의 이전 버전으로 조용히 폴백하면 소비자 검증이 거짓 green이 된다.
           sed -i "s#rustra = \"[^\"]*\"#rustra = { path = \"$GITHUB_WORKSPACE/crates/rustra\" }#" Cargo.toml
           sed -i "s#rustra-macros = \"[^\"]*\"#rustra-macros = { path = \"$GITHUB_WORKSPACE/crates/rustra-macros\" }#" Cargo.toml
           bun run codegen

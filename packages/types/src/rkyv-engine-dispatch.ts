@@ -1,5 +1,5 @@
 import { isRetryableCode, RustraCommandError } from './errors.js';
-import { CODEC_TYPED, CODEC_RAW, CODEC_POSITIONAL } from './global.js';
+import { CODEC_RAW, CODEC_POSITIONAL } from './global.js';
 import { decodeTier3Response, encodeTier3Request } from './json-wire.js';
 import { traceWire } from './debug.js';
 import { tier2Outcome, payloadTooLargeError } from './rkyv-engine-contract.js';

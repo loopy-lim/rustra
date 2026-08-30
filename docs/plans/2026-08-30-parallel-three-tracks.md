@@ -39,7 +39,7 @@ git worktree add .claude/worktrees/events -b feat/event-surface
 - 트랙 게이트(아래) 전부 통과해야 완료
 - 커밋 관례 `feat(dx):`/`perf(x):`/`feat(events):`, lefthook prettier 후 amend 필수
 - 벤치는 세션 조건(로드 평균)을 영수증에 기재
-- 완료 시 thoughts/shared/prs/ 아래에 트랙 리포트 작성
+- 완료 시 docs/prs/ 아래에 트랙 리포트 작성
 
 **Step 4:** 메인 세션은 에이전트 완료 통지를 받으면 적대적 재검증 후 머지 순서 실행.
 
@@ -201,7 +201,7 @@ test("TimeoutError/CancelledError subclasses", () => {
 
 **소유:** `crates/rustra/**` (DX가 건드리는 2파일 제외), `packages/types/src/rkyv-engine.ts`·`complex-codec.ts`·`debug.ts` 제외, `packages/bun/**`, `packages/node/src/node-loop.ts`, `packages/tauri/src/index.ts`(dispatch)·`tauri_support.rs`, `packages/react-native/native/cpp/**`
 
-**계약:** 기존 4개 plan 문서가 상세 계획이므로 그대로 실행 (`docs/superpowers/plans/2026-08-29-perf-core-codec-tracks.md` 등 4건). 요약:
+**계약:** 기존 4개 plan 문서가 상세 계획이므로 그대로 실행 (`docs/plans/2026-08-29-perf-core-codec-tracks.md` 등 4건). 요약:
 
 - **Track A/B (core codec):** 스키마 사전컴파일 → serde 어댑터로 Value 트리 3왕복 제거. 게이트: addNumbers core dispatch 2.9µs→≤1µs, wire fixture byte-exact.
 - **Track Bun:** safe-integer fast-path + raw capability + slice 제거. 게이트: 2.27µs→1µs 내외, 바이트 동일성.

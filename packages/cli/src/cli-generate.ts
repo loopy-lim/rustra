@@ -8,7 +8,7 @@ import {
   type HostEntries,
 } from './host-entries.js';
 import { parseGenerateArgs, type GenerateOptions } from './cli-options.js';
-import { cliManifest, cliVersion } from './cli-runtime.js';
+import { cliManifest } from './cli-runtime.js';
 import { generateFromSchema } from './cli-generate-files.js';
 import { autoRebuild } from './cli-rebuild.js';
 

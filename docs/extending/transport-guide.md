@@ -1,12 +1,14 @@
-# Transport 교체 가이드
+English | [한국어](./transport-guide.ko.md)
 
-## 1. Transport란?
+# Transport Replacement Guide
 
-rustra에서 **transport**는 adapter 내부에서 Rust 코드를 실제로 호출하는 구체적인 수단을 말합니다.
+## 1. What Is a Transport?
 
-adapter(`createNodeEngine`, `createBunEngine` 등)는 transport를 주입받아 `EngineClient`로 래핑할 뿐, transport 자체는 구현하지 않습니다. 따라서 transport만 교체하면 같은 adapter 코드를 그대로 사용하면서 Rust와 통신하는 방식을 변경할 수 있습니다.
+In rustra, a **transport** is the concrete means by which adapter internals actually call Rust code.
 
-### adapter-transport 분리 구조
+An adapter (`createNodeEngine`, `createBunEngine`, etc.) merely receives a transport and wraps it into an `EngineClient`; it does not implement the transport itself. Replacing only the transport therefore changes how you communicate with Rust while reusing the same adapter code.
+
+### Adapter-transport separation
 
 ```ts
 // packages/node/src/index.ts
@@ -27,18 +29,18 @@ export function createNodeEngine(transport: NodeInvokeTransport): NodeEngineClie
 }
 ```
 
-`createNodeEngine`은 `NodeInvokeTransport`를 받아들이고, transport의 `invoke`를 호출하기만 합니다. **어떻게 Rust에 도달하는지**는 전적으로 transport 구현에 달려 있습니다.
+`createNodeEngine` accepts a `NodeInvokeTransport` and simply calls the transport's `invoke`. **How** the call reaches Rust is entirely up to the transport implementation.
 
 ---
 
-## 2. 현재 구현 현황
+## 2. Current Implementation Status
 
-| Host             | 현재 Transport                                 | Rust 진입점                                    | 대안                            |
-| ---------------- | ---------------------------------------------- | ---------------------------------------------- | ------------------------------- |
-| **Node**         | subprocess stdio (`spawnSync`)                 | `main.rs` → `run_invoke_stdio()`               | napi-rs 네이티브 모듈, WASM     |
-| **Bun**          | subprocess stdio (`spawnSync`)                 | `main.rs` → `run_invoke_stdio()`               | `bun:ffi` (C FFI 직접 호출)     |
-| **Tauri**        | `rustra_dispatch` 멀티플렉스 (프레임워크 내장) | `tauri_support::register()` (feature: `tauri`) | 없음                            |
-| **React Native** | C FFI (`extern "C"`)                           | `lib.rs` → `rustra_calculator_invoke`          | TurboModule, Nitro Modules, JSI |
+| Host             | Current Transport                                   | Rust Entry Point                               | Alternatives                    |
+| ---------------- | --------------------------------------------------- | ---------------------------------------------- | ------------------------------- |
+| **Node**         | subprocess stdio (`spawnSync`)                      | `main.rs` → `run_invoke_stdio()`               | napi-rs native module, WASM     |
+| **Bun**          | subprocess stdio (`spawnSync`)                      | `main.rs` → `run_invoke_stdio()`               | `bun:ffi` (direct C FFI call)   |
+| **Tauri**        | `rustra_dispatch` multiplexing (framework built-in) | `tauri_support::register()` (feature: `tauri`) | None                            |
+| **React Native** | C FFI (`extern "C"`)                                | `lib.rs` → `rustra_calculator_invoke`          | TurboModule, Nitro Modules, JSI |
 
 ### Node / Bun — subprocess stdio
 
@@ -68,7 +70,7 @@ function invokeCalculatorRuntime(command: string, args: unknown): unknown {
 }
 ```
 
-Rust stdio 진입점:
+Rust stdio entry point:
 
 ```rust
 // examples/calculator/src/main.rs
@@ -90,7 +92,7 @@ fn run_invoke_stdio() -> rustra::Result<()> {
 
 ### React Native — C FFI
 
-Swift에서 Rust C FFI 함수를 직접 호출합니다:
+Swift calls the Rust C FFI functions directly:
 
 ```swift
 // examples/react-native-calculator/modules/rustra-calculator/ios/RustraCalculatorModule.swift
@@ -112,7 +114,7 @@ public class RustraCalculatorModule: Module {
 }
 ```
 
-Rust C FFI 진입점:
+Rust C FFI entry point:
 
 ```rust
 // examples/calculator/src/lib.rs
@@ -139,9 +141,9 @@ pub unsafe extern "C" fn rustra_calculator_free_string(ptr: *mut c_char) {
 }
 ```
 
-### Tauri — rustra_dispatch 멀티플렉스 패턴
+### Tauri — the `rustra_dispatch` multiplexing pattern
 
-Tauri transport는 개별 커맨드를 passthrough하는 방식이 아니라, **모든 커맨드를 `rustra_dispatch` 단일 엔드포인트로 멀티플렉싱**하는 방식을 사용한다.
+The Tauri transport does not pass through individual commands; instead it **multiplexes every command through the single `rustra_dispatch` endpoint**.
 
 ```ts
 // packages/tauri/src/index.ts
@@ -150,14 +152,14 @@ export type TauriInvoke = (command: string, args?: unknown) => Promise<unknown> 
 export function createTauriEngine(options: { invoke: TauriInvoke }): TauriEngineClient {
   return {
     async invoke<T>(command: string, args?: unknown): Promise<T> {
-      // 모든 커맨드를 rustra_dispatch 하나로 라우팅
+      // routes all commands through a single rustra_dispatch
       return (await options.invoke('rustra_dispatch', { command, args: args ?? {} })) as T;
     },
   };
 }
 ```
 
-Rust 쪽에서는 `rustra::tauri_support::register`로 패키지를 Tauri 빌더에 등록한다. 이 함수가 `rustra_dispatch` 커맨드 핸들러와 상태 관리를 자동으로 설정한다.
+On the Rust side, the package is registered with the Tauri builder via `rustra::tauri_support::register`. This function sets up the `rustra_dispatch` command handler and state management automatically.
 
 ```rust
 // examples/tauri-calculator/src-tauri/src/main.rs
@@ -169,7 +171,7 @@ fn main() {
 }
 ```
 
-`tauri_support`를 사용하려면 `Cargo.toml`에서 `tauri` feature를 활성화해야 한다:
+Using `tauri_support` requires enabling the `tauri` feature in `Cargo.toml`:
 
 ```toml
 rustra = { path = "...", features = ["tauri"] }
@@ -177,35 +179,35 @@ rustra = { path = "...", features = ["tauri"] }
 
 ---
 
-## 3. Transport 교체 절차 (일반화된 3단계)
+## 3. Transport Replacement Procedure (Generalized 3 Steps)
 
-### Step 1: Rust 쪽에 새 진입점 추가 (필요한 경우만)
+### Step 1: Add a new Rust entry point (only if needed)
 
-이미 C FFI 진입점(`rustra_*_invoke`, `rustra_*_free_string`)이 존재하면, FFI 기반 transport로 전환할 때 새 진입점이 필요 없습니다.
+If C FFI entry points (`rustra_*_invoke`, `rustra_*_free_string`) already exist, switching to an FFI-based transport needs no new entry point.
 
-새로운 통신 방식(napi-rs, WASM 등)이 필요하면, `lib.rs`에 해당 진입점을 추가합니다.
+If you need a new communication mechanism (napi-rs, WASM, etc.), add the corresponding entry point to `lib.rs`.
 
 ```toml
-# Cargo.toml에서 crate-type 확인
+# check crate-type in Cargo.toml
 [lib]
 crate-type = ["rlib", "staticlib"]
 ```
 
-`staticlib`이 포함되어 있으면 `.a` / `.lib` 정적 라이브러리가 빌드되어 C FFI용으로 사용할 수 있습니다.
+With `staticlib` included, a `.a` / `.lib` static library is built and can be used for C FFI.
 
-### Step 2: App에서 transport 구현 변경
+### Step 2: Change the transport implementation in the app
 
-adapter의 팩토리 함수에 새로운 transport를 주입합니다. adapter 코드 자체는 수정하지 않습니다.
+Inject the new transport into the adapter's factory function. Do not modify the adapter code itself.
 
 ```ts
-// 변경 전: subprocess stdio
+// before: subprocess stdio
 const engine = createNodeEngine({
   invoke(command, args) {
     return invokeViaSubprocess(command, args);
   },
 });
 
-// 변경 후: 새로운 transport
+// after: the new transport
 const engine = createNodeEngine({
   invoke(command, args) {
     return invokeViaNewTransport(command, args);
@@ -213,45 +215,45 @@ const engine = createNodeEngine({
 });
 ```
 
-### Step 3: 기존 테스트로 회귀 검증
+### Step 3: Verify against existing tests for regressions
 
 ```bash
-# 모든 adapter 호환성 테스트 실행
+# run all adapter compatibility tests
 bun run test:compat
 
-# 특정 런타임 테스트
+# runtime-specific tests
 bun run test:runtime:node
 bun run test:runtime:bun
 ```
 
-테스트는 `configure(engine)` 후 `addNumbers({ a: 20, b: 22 })`의 결과가 `42`인지 확인하는 방식으로, transport가 바뀌어도 동일한 결과를 반환하는지 검증합니다.
+The tests call `configure(engine)` and then check that `addNumbers({ a: 20, b: 22 })` returns `42`, verifying that the same result is returned even after the transport changes.
 
 ---
 
-## 4. 예시: Bun FFI로 교체
+## 4. Example: Replacing with Bun FFI
 
-Bun은 `bun:ffi`로 `.dylib` / `.so`를 직접 로드할 수 있습니다. Rust C FFI 진입점이 이미 존재하므로, Rust 쪽 변경 없이 transport만 교체할 수 있습니다.
+Bun can load `.dylib` / `.so` files directly via `bun:ffi`. Since the Rust C FFI entry points already exist, you can replace only the transport with no Rust-side changes.
 
-### Rust 준비
+### Rust preparation
 
-`examples/calculator/Cargo.toml`에 `cdylib`을 추가합니다 (`staticlib`은 RN iOS용으로 유지):
+Add `cdylib` to `examples/calculator/Cargo.toml` (keep `staticlib` for RN iOS):
 
 ```toml
 [lib]
 crate-type = ["rlib", "cdylib", "staticlib"]
 ```
 
-빌드:
+Build:
 
 ```bash
 cargo build -p rustra-calculator-example
 ```
 
-`target/debug/librustra_calculator_example.dylib` (macOS) 또는 `.so` (Linux)가 생성됩니다.
+This produces `target/debug/librustra_calculator_example.dylib` (macOS) or `.so` (Linux).
 
-### Bun FFI transport 구현
+### Bun FFI transport implementation
 
-**주의**: `FFIType.cstring`을 리턴 타입으로 사용하면 메모리 누수가 발생합니다. Rust의 `CString::into_raw()`로 할당된 메모리는 반드시 `CString::from_raw()`로 해제해야 합니다. Bun의 `FFIType.cstring`은 C 문자열을 읽어 JS 문자열로 복사만 할 뿐 원본 메모리를 해제하지 않습니다. 따라서 `FFIType.ptr`로 포인터를 받은 뒤 수동으로 문자열을 읽고 `free_string`을 호출해야 합니다.
+**Caution**: using `FFIType.cstring` as the return type leaks memory. Memory allocated by Rust's `CString::into_raw()` must be freed with `CString::from_raw()`. Bun's `FFIType.cstring` only copies the C string into a JS string and never frees the original memory. Therefore you must receive the pointer as `FFIType.ptr`, read the string manually, and call `free_string`.
 
 ```ts
 import { dlopen, FFIType, suffix } from 'bun:ffi';
@@ -262,7 +264,7 @@ import { configure } from '@rustra/types';
 const lib = dlopen(`target/debug/librustra_calculator_example.${suffix}`, {
   rustra_calculator_invoke: {
     args: [FFIType.cstring],
-    returns: FFIType.ptr, // FFIType.cstring이 아님 — 수동 메모리 관리 필요
+    returns: FFIType.ptr, // not FFIType.cstring — manual memory management required
   },
   rustra_calculator_free_string: {
     args: [FFIType.ptr],
@@ -275,7 +277,7 @@ const engine = createBunEngine({
     const payload = JSON.stringify({ command, args });
     const rawPtr = lib.symbols.rustra_calculator_invoke(payload);
     const rawResponse = new CString(rawPtr);
-    lib.symbols.rustra_calculator_free_string(rawPtr); // Rust가 CString::from_raw로 해제
+    lib.symbols.rustra_calculator_free_string(rawPtr); // Rust frees via CString::from_raw
 
     const response = JSON.parse(rawResponse) as {
       ok: boolean;
@@ -296,32 +298,32 @@ const result = await addNumbers({ a: 20, b: 22 });
 console.log(`bun FFI result: ${result.value}`); // 42
 ```
 
-### 기존 Bun app과의 비교
+### Comparison with the existing Bun app
 
 ```ts
-// 기존: subprocess stdio (프로세스 스폰 오버헤드 있음)
+// before: subprocess stdio (process spawn overhead)
 const output = spawnSync('target/debug/rustra-calculator-example', ['invoke'], {
   input: JSON.stringify({ command, args }),
   encoding: 'utf8',
 });
 
-// 교체 후: 직접 FFI 호출 (프로세스 경계 없음, 더 빠름)
+// after: direct FFI call (no process boundary, faster)
 const rawResponse = lib.symbols.rustra_calculator_invoke(payload);
 ```
 
-장점:
+Advantages:
 
-- **프로세스 스폰 오버헤드 제거**: 매 호출마다 프로세스를 생성하지 않음
-- **낮은 레이턴시**: 함수 호출 수준의 성능
-- **메모리 공유**: 프로세스 간 직렬화/역직렬화 불필요
+- **No process spawn overhead**: no process is created per call
+- **Lower latency**: function-call-level performance
+- **Shared memory**: no cross-process serialization/deserialization
 
 ---
 
-## 5. 예시: Node napi-rs로 교체
+## 5. Example: Replacing with Node napi-rs
 
-[napi-rs](https://napi.rs/)를 사용하면 Rust 함수를 Node.js 네이티브 애드온(`.node` 파일)으로 노출할 수 있습니다.
+[napi-rs](https://napi.rs/) lets you expose Rust functions as Node.js native addons (`.node` files).
 
-### Rust 구현
+### Rust implementation
 
 ```rust
 // crates/calculator-napi/src/lib.rs
@@ -348,20 +350,20 @@ pub fn rustra_invoke(command: String, args: Option<String>) -> Result<String> {
 }
 ```
 
-빌드:
+Build:
 
 ```bash
 cargo build --release
-# 또는 napi-rs CLI 사용
+# or use the napi-rs CLI
 napi build --platform --release
 ```
 
-### Node transport 구현
+### Node transport implementation
 
 ```ts
 import { createNodeEngine } from '../../../packages/node/src/index.js';
 
-// napi-rs로 빌드한 네이티브 모듈 로드
+// load the native module built with napi-rs
 const native = require('./calculator-napi.node');
 
 const engine = createNodeEngine({
@@ -383,49 +385,49 @@ const engine = createNodeEngine({
   },
 });
 
-// 동일한 방식으로 사용
+// used the same way
 import { addNumbers } from '../generated/commands.js';
 configure(engine);
 const result = await addNumbers({ a: 20, b: 22 });
 console.log(`napi-rs result: ${result.value}`); // 42
 ```
 
-### 기존 Node app과의 비교
+### Comparison with the existing Node app
 
 ```ts
-// 기존: subprocess stdio
+// before: subprocess stdio
 const output = spawnSync('target/debug/rustra-calculator-example', ['invoke'], {
   input: JSON.stringify({ command, args }),
   encoding: 'utf8',
 });
 const response = JSON.parse(output.stdout);
 
-// 교체 후: 네이티브 모듈 직접 호출
+// after: direct native module call
 const rawResponse = native.rustra_invoke(command, argsJson);
 ```
 
-장점:
+Advantages:
 
-- **성능**: subprocess 오버헤드 없이 직접 함수 호출
-- **타입 안전성**: napi-rs가 Rust ↔ JavaScript 타입 변환을 처리
-- **비동기 지원**: napi-rs의 `#[napi]`는 자동으로 `Promise` 기반 비동기 함수를 생성 가능
+- **Performance**: direct function calls without subprocess overhead
+- **Type safety**: napi-rs handles Rust ↔ JavaScript type conversion
+- **Async support**: napi-rs's `#[napi]` can generate `Promise`-based async functions automatically
 
 ---
 
-## 6. 정리: Transport 선택 기준
+## 6. Summary: Choosing a Transport
 
-| 기준              | subprocess stdio     | C FFI                | napi-rs   | 프레임워크 내장        |
-| ----------------- | -------------------- | -------------------- | --------- | ---------------------- |
-| **구현 난이도**   | 낮음                 | 중간                 | 중간      | 낮음 (프레임워크 제공) |
-| **성능**          | 낮음 (프로세스 스폰) | 높음                 | 높음      | 높음                   |
-| **호환성**        | 범용                 | 언어 바인딩 필요     | Node 전용 | 해당 프레임워크 전용   |
-| **디버깅**        | 쉬움 (격리됨)        | 어려움 (메모리 관리) | 중간      | 중간                   |
-| **프로세스 격리** | 있음                 | 없음                 | 없음      | 없음                   |
+| Criterion             | subprocess stdio    | C FFI                    | napi-rs   | Framework built-in       |
+| --------------------- | ------------------- | ------------------------ | --------- | ------------------------ |
+| **Effort**            | Low                 | Medium                   | Medium    | Low (framework-provided) |
+| **Performance**       | Low (process spawn) | High                     | High      | High                     |
+| **Compatibility**     | Universal           | Needs language bindings  | Node only | That framework only      |
+| **Debugging**         | Easy (isolated)     | Hard (memory management) | Medium    | Medium                   |
+| **Process isolation** | Yes                 | No                       | No        | No                       |
 
-**권장사항:**
+**Recommendations:**
 
-- **빠른 프로토타이핑**: subprocess stdio로 시작
-- **프로덕션 (Node)**: napi-rs 또는 C FFI
-- **프로덕션 (Bun)**: `bun:ffi`
-- **프로덕션 (React Native)**: C FFI (현재 방식)
-- **프로덕션 (Tauri)**: `rustra_dispatch` 멀티플렉스 패턴 (`tauri_support::register`)
+- **Rapid prototyping**: start with subprocess stdio
+- **Production (Node)**: napi-rs or C FFI
+- **Production (Bun)**: `bun:ffi`
+- **Production (React Native)**: C FFI (current approach)
+- **Production (Tauri)**: the `rustra_dispatch` multiplexing pattern (`tauri_support::register`)

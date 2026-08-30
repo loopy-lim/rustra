@@ -1,10 +1,14 @@
+English | [한국어](./README.ko.md)
+
 # @rustra/tauri
 
-Tauri의 global IPC를 lazy 감지해 공통 `EngineClient`로 연결하는 어댑터입니다.
+Adapter that lazily detects Tauri's global IPC and connects it to the shared
+`EngineClient`.
 
-## Zero-config 기본 경로
+## Zero-config default path
 
-Tauri 설정에서 global API를 켜고 Rust package를 한 줄 등록합니다.
+Enable the global API in the Tauri configuration and register the Rust package with one
+line.
 
 ```json
 { "app": { "withGlobalTauri": true } }
@@ -14,8 +18,9 @@ Tauri 설정에서 global API를 켜고 Rust package를 한 줄 등록합니다.
 let builder = rustra::tauri_support::register_with_events(app_package(), tauri::Builder::default());
 ```
 
-`rustra.json`에는 `"tauri": {}`만 추가합니다. 생성된 진입점이 invoke와 event API를
-lazy 감지하므로 프런트엔드는 바로 명령과 구독 함수를 import합니다.
+Add only `"tauri": {}` to `rustra.json`. Because the generated entry point lazily detects
+the invoke and event APIs, the frontend imports command and subscription functions
+directly.
 
 ```ts
 import { addNumbers, subscribeEvent } from './generated/tauri.js';
@@ -24,7 +29,7 @@ await subscribeEvent('progress.tick', console.log);
 const result = await addNumbers({ a: 20, b: 22 });
 ```
 
-## 공개 API
+## Public API
 
 ```ts
 type TauriInvoke = (command: string, args?: unknown) => Promise<unknown> | unknown;
@@ -36,7 +41,7 @@ type TauriEngineClient = {
 function createTauriEngine(options: { invoke: TauriInvoke }): TauriEngineClient;
 ```
 
-## 사용 예시
+## Usage examples
 
 ```ts
 import { createTauriEngine } from '@rustra/tauri';
@@ -45,18 +50,19 @@ import { invoke } from '@tauri-apps/api/core';
 const engine = createTauriEngine({ invoke });
 ```
 
-내부적으로 Tauri의 `rustra_dispatch` 커맨드로 라우팅합니다:
+Internally it routes through Tauri's `rustra_dispatch` command:
 
 ```ts
 engine.invoke('addNumbers', { a: 2, b: 3 });
 // → options.invoke("rustra_dispatch", { command: "addNumbers", args: { a: 2, b: 3 } })
 ```
 
-이 패키지는 `@tauri-apps/api`를 강제로 설치하지 않아 기존 Tauri 버전과 충돌하지
-않습니다. `withGlobalTauri`를 쓰지 않는 앱은 기존 `createTauriEngine({ invoke })`를
-명시적 escape hatch로 사용할 수 있습니다.
+This package does not force-install `@tauri-apps/api`, so it does not conflict with
+existing Tauri versions. Apps that do not use `withGlobalTauri` can use the existing
+`createTauriEngine({ invoke })` as an explicit escape hatch.
 
-Rust 측에서 `tauri` feature를 활성화하고 `tauri_support::register()`로 패키지를 등록해야 합니다:
+On the Rust side, enable the `tauri` feature and register the package with
+`tauri_support::register()`:
 
 ```rust
 use rustra::tauri_support::register;
@@ -64,9 +70,9 @@ use rustra::tauri_support::register;
 let builder = register(my_package, tauri::Builder::default());
 ```
 
-`register()`가 등록하는 `rustra_dispatch` 엔드포인트를 통해 이 어댑터가 동작합니다.
+This adapter works through the `rustra_dispatch` endpoint that `register()` installs.
 
-실제 WebView IPC 예제와 Release 성능 영수증은
-[`tauri-calculator`](../../examples/tauri-calculator/)에 있습니다. 2026-08-24 macOS
-arm64 실측은 평균 279.04µs, p50 300µs였으며, Rust 직접 호출 스모크가 아니라 숨은
-WKWebView에서 생성된 `addNumbers`를 3,000회 호출한 값입니다.
+A real WebView IPC example and the Release performance receipts are in
+[`tauri-calculator`](../../examples/tauri-calculator/). Measured on 2026-08-24 macOS
+arm64: 279.04µs average, p50 300µs — not a direct-Rust-call smoke test, but 3,000 calls
+of the generated `addNumbers` from a hidden WKWebView.

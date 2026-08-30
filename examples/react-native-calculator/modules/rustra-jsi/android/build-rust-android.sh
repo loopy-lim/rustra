@@ -12,8 +12,6 @@ REL_FLAG=""
 if [ "$PROFILE" = "release" ]; then REL_FLAG="--release"; fi
 ABIS=${ANDROID_ABIS:-"x86_64-linux-android aarch64-linux-android"}
 
-# cargo-ndk gives ANDROID_NDK_HOME precedence over the SDK. Repair a common
-# shell setup where that variable accidentally points at the SDK root.
 if [ ! -f "${ANDROID_NDK_HOME:-}/source.properties" ]; then
   for SDK_ROOT in "${ANDROID_HOME:-}" "${ANDROID_SDK_ROOT:-}"; do
     [ -d "$SDK_ROOT/ndk" ] || continue

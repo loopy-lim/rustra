@@ -10,8 +10,8 @@ priority: high
 
 ## 문제
 
-2026-08-29 DX 감사(`thoughts/shared/research/2026-08-29_22-46-49_dx-audit.md`)와
-perf 5트랙 스펙(`docs/superpowers/specs/2026-08-29-perf-five-tracks-design.md`)이
+2026-08-29 DX 감사(`docs/research/2026-08-29-22-46-49-dx-audit.md`)와
+perf 5트랙 스펙(`docs/specs/2026-08-29-perf-five-tracks-design.md`)이
 남긴 세 축 — DX HIGH 결함, 성능 최적화, 이벤트 표면 완결 — 을 한 번에 진행한다.
 
 ## 구조: 3워크트리 병렬

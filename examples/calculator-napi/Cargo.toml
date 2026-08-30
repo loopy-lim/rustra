@@ -11,8 +11,8 @@ crate-type = ["cdylib"]
 [dependencies]
 rustra.workspace = true
 rustra-calculator-example = { path = "../calculator" }
-napi = { version = "2", default-features = false, features = ["napi4"] }
-napi-derive = "2"
+napi = { version = "3", default-features = false, features = ["napi4"] }
+napi-derive = "3"
 serde_json = { workspace = true }
 
 [build-dependencies]

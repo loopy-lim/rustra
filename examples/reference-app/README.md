@@ -1,35 +1,37 @@
+English | [한국어](./README.ko.md)
+
 # @rustra/example-reference-app
 
-`@rustra/react` 훅(useCommand/useMutation/useEvent/RustraProvider)의 레퍼런스
-앱 — CRUD + 이벤트 흐름을 어떻게 구성하는지 보여준다.
+The reference app for the `@rustra/react` hooks (useCommand/useMutation/useEvent/RustraProvider) —
+shows how to compose CRUD and event flows.
 
-## 구조
+## Structure
 
 ```
 src/
-  App.tsx     훅 사용 UI 트리 (플랫폼 무관 — 엔진만 교체)
-  app.ts      Node 진입점 — mock 엔진 + RustraProvider 로 App 렌더/검증
+  App.tsx     UI tree using the hooks (platform-agnostic — swap the engine only)
+  app.ts      Node entrypoint — renders/verifies App with a mock engine + RustraProvider
 ```
 
-`App.tsx`는 `../../crud/generated/commands.js`의 코드젠 산출물을 소비한다 —
-crud 예제를 먼저 빌드해야 한다(아래 실행 참고).
+`App.tsx` consumes the codegen output at `../../crud/generated/commands.js` — the crud
+example must be built first (see Run below).
 
-## 실행 (Node 스모크)
+## Run (Node Smoke)
 
 ```bash
-# 저장소 루트에서
+# From the repo root
 bun run test:app:reference
-# 또는 직접:
+# Or directly:
 cargo build -p rustra-crud-example && \
   tsc -p examples/reference-app/tsconfig.json && \
   node examples/reference-app/dist/examples/reference-app/src/main.js
 ```
 
-스모크는 실제 훅 트리를 실행해 CRUD 왕복을 검증한다 (mock 엔진 경유).
+The smoke test runs the real hook tree and verifies CRUD round-trips (via a mock engine).
 
-## 웹/RN으로 옮기기
+## Porting to Web/RN
 
-UI 트리는 엔진 주입만 바꾸면 어디서든 동일하다:
+The UI tree is identical anywhere — only the engine injection changes:
 
 ```tsx
 // RN
@@ -38,17 +40,17 @@ const engine = createReactNativeEngine(NativeModules.RustraJSI);
   <App />
 </RustraProvider>;
 
-// 웹 (Tauri)
+// Web (Tauri)
 const engine = createTauriEngine({ invoke: window.__TAURI__.core.invoke });
 <RustraProvider engine={engine}>
   <App />
 </RustraProvider>;
 ```
 
-## 무엇을 증명하나
+## What It Proves
 
-- `useCommand` — 마운트 시 자동 실행, input 변경 시 재실행, `commandId`
-  기반 minify-안전 식별
-- `useMutation` — 낙관적 갱신 없이 성공/실패 콜백 구성
-- `useEvent` — 이벤트 구독 정리(unsubscribe)
-- `RustraProvider` — 엔진 스코프 주입
+- `useCommand` — auto-runs on mount, re-runs when the input changes, minify-safe
+  identification based on `commandId`
+- `useMutation` — composes success/failure callbacks without optimistic updates
+- `useEvent` — cleans up (unsubscribes) event subscriptions
+- `RustraProvider` — injects the engine scope
