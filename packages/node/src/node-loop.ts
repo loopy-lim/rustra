@@ -172,9 +172,8 @@ export function createNodeLoopTransport(options: {
         const waiter = pending.get(frame.id);
         if (!waiter) continue;
         pending.delete(frame.id);
-        frame.ok
-          ? waiter.resolve(frame)
-          : waiter.reject(parseRustraErrorString(frame.error ?? 'invoke failed'));
+        if (frame.ok) waiter.resolve(frame);
+        else waiter.reject(parseRustraErrorString(frame.error ?? 'invoke failed'));
       }
     });
     proc.stderr.on('data', () => {});

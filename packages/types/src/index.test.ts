@@ -2599,7 +2599,7 @@ test('dynamic route resyncs live schema when native generation advances (T0-3)',
   // 재동기화된 새 commandId 로 Tier 3 요청을 보내야 한다.
   let generation = 1;
   let dynamicCommandId = 7;
-  let seenIds: number[] = [];
+  const seenIds: number[] = [];
   let schemaFetches = 0;
   const native = makeTypedNative({
     schema: schemaBytes([{ name: 'dyn', commandId: 7 }], undefined, 1),
@@ -2672,7 +2672,7 @@ test('async propagate path gates on generation resync before live schema lookup 
   // replace 후 재호출이 스테일 commandId 코덱/프레임을 쓰지 않음을 고정한다.
   let generation = 1;
   let dynamicCommandId = 7;
-  let seenIds: number[] = [];
+  const seenIds: number[] = [];
   const native = makeNative({
     schema: schemaBytes([{ name: 'dyn', commandId: 7 }], undefined, 1),
     schemaGeneration: () => generation,
