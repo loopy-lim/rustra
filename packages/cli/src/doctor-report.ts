@@ -8,6 +8,7 @@ import {
 } from './doctor-types.js';
 import { check, memoizeRunner, readConfig } from './doctor-support.js';
 import { collectBaseChecks, collectConfigChecks } from './doctor-checks.js';
+import { buildMatrix, collectSectionChecks } from './doctor-matrix.js';
 
 export function collectDoctorReport(
   options: DoctorOptions,
@@ -30,6 +31,11 @@ export function collectDoctorReport(
     return { schemaVersion: 1, checks };
   }
   checks.unshift(check('config.file', 'pass', true, `Config file is readable: ${configPath}`));
+  // 섹션 검사(빌드/교차 일관성)는 기존 codegen/RN/tauri 검사보다 먼저 수집한다.
+  // 한 섹션이 red 여도 다른 섹션 검사는 계속 수행된다(루프가 예외를 던지지 않는다).
+  checks.push(...collectSectionChecks(cached, configPath, parsed.config));
   checks.push(...collectConfigChecks(options, cached, configPath, parsed.config));
-  return { schemaVersion: 1, checks };
+  // 매트릭스는 checks 의 파생 뷰 — 호스트 섹션이 2개 이상일 때만 필드 자체를 만든다.
+  const matrix = buildMatrix(checks, parsed.config);
+  return matrix ? { schemaVersion: 1, checks, matrix } : { schemaVersion: 1, checks };
 }

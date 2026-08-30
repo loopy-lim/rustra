@@ -9,6 +9,7 @@ import {
   type DoctorRunner,
 } from './doctor-types.js';
 import { readConfig, resolveManifest } from './doctor-support.js';
+import { doctorHostSections, resolveSectionManifest } from './doctor-matrix.js';
 import { collectDoctorReport } from './doctor-report.js';
 
 const key = (command: string, args: string[]) => JSON.stringify([command, args]);
@@ -30,8 +31,16 @@ export async function collectDoctorReportAsync(
   if (existsSync(configPath)) {
     const parsed = readConfig(configPath);
     if (parsed.config) {
-      const manifest = resolveManifest(dirname(configPath), parsed.config);
-      if (manifest)
+      const configRoot = dirname(configPath);
+      const manifests = new Set<string>();
+      const codegenManifest = resolveManifest(configRoot, parsed.config);
+      if (codegenManifest) manifests.add(codegenManifest);
+      // 섹션 루프가 쓰는 매니페스트를 전부 미리 당겨 온다(한 섹션 red 무관 전부 수집).
+      for (const target of doctorHostSections(parsed.config)) {
+        const sectionManifest = resolveSectionManifest(configRoot, parsed.config, target);
+        if (sectionManifest) manifests.add(sectionManifest);
+      }
+      for (const manifest of manifests)
         add('cargo', [
           'metadata',
           '--format-version',
