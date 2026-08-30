@@ -5,6 +5,7 @@ import { runGenerate, runWatch } from './cli-generate.js';
 import { runInit } from './cli-init.js';
 import { runDiff } from './cli-diff.js';
 import { runDoctor } from './cli-doctor.js';
+import { closestMatch } from './cli-suggest.js';
 
 export async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -51,34 +52,10 @@ export async function main(): Promise<void> {
     await runDev(rest);
     return;
   }
-  const suggestion = closestCommand(command, CLI_COMMANDS);
+  const suggestion = closestMatch(command, CLI_COMMANDS);
   console.error(`Unknown command: ${command}`);
   console.error(`Available commands: ${CLI_COMMANDS.join(', ')}`);
   if (suggestion) console.error(`Did you mean "rustra ${suggestion}"?`);
   console.error('Run "rustra --help" for usage information.');
   process.exitCode = 1;
-}
-
-function closestCommand(input: string, commands: readonly string[]): string | undefined {
-  let best: { command: string; distance: number } | undefined;
-  for (const command of commands) {
-    const distance = editDistance(input, command);
-    if (distance <= 2 && (!best || distance < best.distance)) best = { command, distance };
-  }
-  return best?.command;
-}
-
-function editDistance(left: string, right: string): number {
-  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
-  for (let i = 0; i < left.length; i++) {
-    const current = [i + 1];
-    for (let j = 0; j < right.length; j++)
-      current.push(
-        left[i] === right[j]
-          ? previous[j]!
-          : 1 + Math.min(previous[j]!, previous[j + 1]!, current[j]!),
-      );
-    previous.splice(0, previous.length, ...current);
-  }
-  return previous[right.length]!;
 }

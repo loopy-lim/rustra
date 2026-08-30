@@ -1,3 +1,5 @@
+import { closestMatch } from './cli-suggest.js';
+
 export type ParsedCliArgs = {
   values: Map<string, string>;
   flags: Set<string>;
@@ -11,30 +13,9 @@ export type CliArgParserOptions = {
   allowPositionals?: boolean;
 };
 
-function editDistance(left: string, right: string): number {
-  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
-  for (let i = 0; i < left.length; i += 1) {
-    const current = [i + 1];
-    for (let j = 0; j < right.length; j += 1) {
-      current.push(
-        left[i] === right[j]
-          ? previous[j]!
-          : 1 + Math.min(previous[j]!, previous[j + 1]!, current[j]!),
-      );
-    }
-    previous.splice(0, previous.length, ...current);
-  }
-  return previous[right.length]!;
-}
-
-/** Levenshtein "Did you mean" over the command's declared flags, mirroring closestCommand. */
+/** Levenshtein "Did you mean" over the command's declared flags (case-sensitive). */
 function closestFlag(input: string, known: readonly string[]): string | undefined {
-  let best: { flag: string; distance: number } | undefined;
-  for (const flag of known) {
-    const distance = editDistance(input, flag);
-    if (distance <= 2 && (!best || distance < best.distance)) best = { flag, distance };
-  }
-  return best?.flag;
+  return closestMatch(input, known);
 }
 
 function unknownOptionError(command: string, argument: string, known: readonly string[]): Error {
