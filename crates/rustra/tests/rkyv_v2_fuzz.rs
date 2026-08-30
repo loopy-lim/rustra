@@ -245,12 +245,14 @@ fn fuzz_echo(input: FuzzIn) -> rustra::Result<FuzzOut> {
     })
 }
 
-// 동적 Tier 3: 임의 혼합 값 → JSON wire round-trip 보존
+// 동적 postcard fast-path (T2-1): 임의 혼합 값 → binary wire round-trip 보존.
+// FuzzIn 은 i64/String/Vec<i64>/bool/f64 — JS postcard 지원 형태이므로 동적
+// 등록이라도 postcard 핸들러를 받는다(Tier 3 는 양쪽 미지원 형태 전용).
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
     #[test]
     #[cfg(debug_assertions)]
-    fn dynamic_tier3_mixed_round_trip(
+    fn dynamic_postcard_mixed_round_trip(
         n: i64,
         s in ascii_string(),
         list in prop::collection::vec(-1_000_000i64..1_000_000, 0..100),
@@ -267,11 +269,9 @@ proptest! {
             flag,
             score,
         };
-        let json = serde_json::to_string(&input).unwrap();
-        let req = common::tier3_request(id, &json);
+        let req = common::postcard_request(id, &input);
         let resp = pkg.invoke_rkyv_v2(&req).unwrap();
-        let val = common::decode_tier3_response(&resp);
-        let out: FuzzOut = serde_json::from_value(val).unwrap();
+        let out: FuzzOut = common::decode_postcard_response(&resp);
         prop_assert_eq!(out.n, n);
         prop_assert_eq!(out.s, s);
         prop_assert_eq!(out.list, list);
@@ -289,23 +289,21 @@ proptest! {
     }
 }
 
-// 동적 Tier 3: 큰 Vec<i64> (최대 2000) → sum 보존
+// 동적 postcard fast-path (T2-1): 큰 Vec<i64> (최대 2000) → sum 보존
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
     #[test]
     #[cfg(debug_assertions)]
-    fn dynamic_tier3_large_vec_sum(
+    fn dynamic_postcard_large_vec_sum(
         nums in prop::collection::vec(-10_000i64..10_000, 0..2000)
     ) {
         let pkg = Package::builder("fuzz.dynlarge").build();
         pkg.register("sumList", common::sum_list).unwrap();
         let id = common::command_id_of(&pkg, "sumList");
         let input = common::SumListInput { numbers: nums.clone() };
-        let json = serde_json::to_string(&input).unwrap();
-        let req = common::tier3_request(id, &json);
+        let req = common::postcard_request(id, &input);
         let resp = pkg.invoke_rkyv_v2(&req).unwrap();
-        let val = common::decode_tier3_response(&resp);
-        let out: common::SumListOutput = serde_json::from_value(val).unwrap();
+        let out: common::SumListOutput = common::decode_postcard_response(&resp);
         let expected: i64 = nums.iter().sum();
         prop_assert_eq!(out.sum, expected);
         prop_assert_eq!(out.count, nums.len() as i64);

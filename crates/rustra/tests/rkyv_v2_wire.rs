@@ -244,7 +244,11 @@ fn static_invoke<I: Serialize, O: serde::de::DeserializeOwned>(
     common::decode_postcard_response::<O>(&resp)
 }
 
-/// 동적 Tier 3(JSON) 경로 호출 헬퍼.
+/// 동적 명령 호출 헬퍼. (T2-1 이후) 동적 명령은 정적 명령과 동일한 라우트 선택을
+/// 받는다 — postcard 지원 형태면 binary(또는 complex) 핸들러, 양쪽 미지원 형태만
+/// Tier 3 JSON. 이 헬퍼는 postcard 요청으로 왕복한다(섹션 3의 동적 명령들은
+/// 모두 postcard 지원 형태). Tier 3 전용 왕복은 하단 `dynamic_tier3_*` 에러
+/// 경로 테스트와 lib의 `dynamic_unsupported_schema_stays_tier3` 가 담당한다.
 #[cfg(debug_assertions)]
 fn dyn_invoke<I: Serialize, O: serde::de::DeserializeOwned>(
     pkg: &Package,
@@ -252,11 +256,9 @@ fn dyn_invoke<I: Serialize, O: serde::de::DeserializeOwned>(
     input: &I,
 ) -> O {
     let id = common::command_id_of(pkg, name);
-    let json = serde_json::to_string(input).expect("serialize dyn input");
-    let req = common::tier3_request(id, &json);
+    let req = common::postcard_request(id, input);
     let resp = pkg.invoke_rkyv_v2(&req).expect("dyn invoke ok");
-    let val: Value = common::decode_tier3_response(&resp);
-    serde_json::from_value(val).expect("deserialize dyn output")
+    common::decode_postcard_response::<O>(&resp)
 }
 
 // ════════════════════════════════════════════════════════════
@@ -674,18 +676,27 @@ fn unknown_command_id_errors() {
 
 #[test]
 #[cfg(debug_assertions)]
-fn dynamic_tier3_malformed_json_errors() {
+fn dynamic_promoted_command_no_longer_parses_tier3_json() {
+    // (T2-1) postcard 지원 형태 명령(echo)은 더 이상 Tier 3 를 서빙하지 않는다 —
+    // malformed JSON 프레임은 JSON 파서가 아니라 postcard 디코더로 간다
+    // (postcard 는 trailing bytes 를 무시하므로 첫 varint 가 유효하면 Ok).
+    // Tier 3 JSON 파싱 오류 계약은 양쪽 미지원 형태(untagged any) 명령이 유지한다
+    // — lib의 dynamic_unsupported_schema_stays_tier3 와 그 변형이 담당.
     let pkg = dyn_pkg();
     let id = common::command_id_of(&pkg, "echo");
-    // malformed JSON
+    // "{not valid json" → postcard varint 0x7B = zigzag(-62) → Ok(EchoIn{v:-62}).
+    // tier3 JSON 파서였다면 parse 실패 에러를 반환했을 것이다 — Ok 가 승격 증명.
     let req = common::tier3_request(id, "{not valid json");
-    let err = pkg.invoke_rkyv_v2(&req).unwrap_err();
-    // tier3 JSON parse 실패 → invalid_args 계열
-    assert!(
-        err.code().contains("invalid") || err.to_string().to_lowercase().contains("json"),
-        "unexpected error: {}",
-        err
-    );
+    let resp = pkg
+        .invoke_rkyv_v2(&req)
+        .expect("postcard decode of garbage");
+    let out: common::EchoOutput = common::decode_postcard_response(&resp);
+    assert_eq!(out.v, -62);
+    // 정상 postcard 프레임도 그대로 동작.
+    let postcard_req = common::postcard_request(id, &common::EchoInput { v: 5 });
+    let resp = pkg.invoke_rkyv_v2(&postcard_req).expect("postcard invoke");
+    let out: common::EchoOutput = common::decode_postcard_response(&resp);
+    assert_eq!(out.v, 5);
 }
 
 #[test]

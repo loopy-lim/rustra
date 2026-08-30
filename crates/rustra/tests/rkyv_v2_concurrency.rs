@@ -34,10 +34,11 @@ fn concurrent_invoke_dynamic_no_panic() {
                 let base = t as i64;
                 for i in 0..per_thread {
                     let v = base * 1000 + i;
-                    let req = common::tier3_request(echo_id, &format!("{{\"v\":{v}}}"));
+                    // (T2-1) 동적 echo 도 postcard 지원 형태 → binary 핸들러.
+                    let req = common::postcard_request(echo_id, &common::EchoInput { v });
                     let resp = pkg.invoke_rkyv_v2(&req).expect("invoke ok");
-                    let val = common::decode_tier3_response(&resp);
-                    assert_eq!(val["v"].as_i64().unwrap(), v, "echo must preserve value");
+                    let out: common::EchoOutput = common::decode_postcard_response(&resp);
+                    assert_eq!(out.v, v, "echo must preserve value");
                 }
             })
         })
@@ -85,10 +86,11 @@ fn concurrent_register_distinct_then_invoke() {
             .find(|c| c["name"] == name)
             .unwrap();
         let id = entry["commandId"].as_u64().unwrap() as u16;
-        let req = common::tier3_request(id, r#"{"v":0}"#);
+        // (T2-1) 동적 등록 명령도 postcard 지원 형태 → binary 핸들러.
+        let req = common::postcard_request(id, &common::EchoInput { v: 0 });
         let resp = pkg.invoke_rkyv_v2(&req).unwrap();
-        let val = common::decode_tier3_response(&resp);
-        assert_eq!(val["v"].as_i64().unwrap(), t as i64);
+        let out: common::EchoOutput = common::decode_postcard_response(&resp);
+        assert_eq!(out.v, t as i64);
     }
 }
 
@@ -115,8 +117,8 @@ fn concurrent_mutation_and_read_no_panic() {
     let reader = thread::spawn(move || {
         let stable_id = common::command_id_of(&pkg_r, "stable");
         for _ in 0..1000 {
-            // stable 은 항상 존재 → invoke 는 성공해야 함
-            let req = common::tier3_request(stable_id, r#"{"v":1}"#);
+            // stable 은 항상 존재 → invoke 는 성공해야 함 (postcard binary)
+            let req = common::postcard_request(stable_id, &common::EchoInput { v: 1 });
             let _ = pkg_r.invoke_rkyv_v2(&req);
             // live_schema 도 read 잠금 → writer 와 교착/패닉 없어야 함
             let _ = pkg_r.live_schema();
@@ -127,10 +129,8 @@ fn concurrent_mutation_and_read_no_panic() {
     reader.join().expect("reader must not panic");
     // stable 은 여전히 호출 가능
     let sid = common::command_id_of(&pkg, "stable");
-    let req = common::tier3_request(sid, r#"{"v":42}"#);
+    let req = common::postcard_request(sid, &common::EchoInput { v: 42 });
     let resp = pkg.invoke_rkyv_v2(&req).unwrap();
-    assert_eq!(
-        common::decode_tier3_response(&resp)["v"].as_i64().unwrap(),
-        42
-    );
+    let out: common::EchoOutput = common::decode_postcard_response(&resp);
+    assert_eq!(out.v, 42);
 }
