@@ -52,6 +52,11 @@ pub(crate) struct RegistryState {
     /// JSON 객체와 정의 트리를 다시 조립하는 비용은 피한다. 구조 mutation은
     /// write lock 안에서 반드시 이 값을 무효화한다.
     pub(crate) live_schema_cache: Option<Value>,
+    /// (T0) 스키마 세대 카운터 — register/replace/unregister 가 진행할 때마다
+    /// 증가한다. 호스트(JS) 쪽 동적 명령 캐시가 이 값을 비교해 치환 후
+    /// 재동기화할 시점을 알린다(증가 방향 보존만 계약 — 실패한 mutation 은
+    /// 되감지 않는다). `live_schema_cache` 무효화 지점과 함께 증가한다.
+    pub(crate) schema_generation: u64,
 }
 
 pub(crate) struct FrozenRegistry {

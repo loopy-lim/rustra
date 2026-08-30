@@ -91,6 +91,7 @@ impl PackageBuilder {
             granted_capabilities: BTreeSet::new(),
             schema_version: self.schema_version,
             live_schema_cache: None,
+            schema_generation: 0,
         };
         let frozen_registry = OnceLock::new();
         let frozen = !cfg!(debug_assertions);
