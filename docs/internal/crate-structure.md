@@ -19,12 +19,12 @@ The root `Cargo.toml` configures the workspace.
 
 ### Workspace Members
 
-| Member path                           | Package name                | Role                                                                 |
-| ------------------------------------- | --------------------------- | -------------------------------------------------------------------- |
+| Member path                           | Package name                | Role                                                                    |
+| ------------------------------------- | --------------------------- | ----------------------------------------------------------------------- |
 | `crates/rustra`                       | `rustra`                    | Core library. Package builder, TypeScript codegen, command registration |
-| `crates/rustra-macros`                | `rustra-macros`             | `#[command]` proc macro. Compile-time signature verification         |
-| `examples/calculator`                 | `rustra-calculator-example` | Calculator example. Built as cdylib/staticlib and used from RN/FFI   |
-| `examples/tauri-calculator/src-tauri` | (Tauri app)                 | Tauri backend. Uses rustra's `tauri` feature                         |
+| `crates/rustra-macros`                | `rustra-macros`             | `#[command]` proc macro. Compile-time signature verification            |
+| `examples/calculator`                 | `rustra-calculator-example` | Calculator example. Built as cdylib/staticlib and used from RN/FFI      |
+| `examples/tauri-calculator/src-tauri` | (Tauri app)                 | Tauri backend. Uses rustra's `tauri` feature                            |
 
 ### Workspace Dependencies
 
@@ -82,24 +82,24 @@ TypeScript clients.
 
 **Public API:**
 
-| Item                                  | Kind                   | Description                                                                                            |
-| ------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------ |
-| `Package`                             | struct                 | Runtime object holding the registered commands                                                          |
-| `Package::builder(id)`                | method                 | Creates a `PackageBuilder`                                                                              |
-| `Package::invoke()` / `invoke_json()` | method                 | Executes a command (typed / JSON)                                                                       |
-| `Package::generate_typescript()`      | method                 | Produces a `GeneratedPackage`                                                                           |
-| `PackageBuilder`                      | struct                 | Registers commands with the builder pattern                                                             |
-| `PackageBuilder::command()`           | method                 | Registers a command with an explicit name                                                               |
-| `PackageBuilder::command_fn()`        | method                 | Derives the command name automatically from the function name                                           |
-| `PackageBuilder::build()`             | method                 | Creates a `Package`                                                                                     |
-| `GeneratedPackage`                    | struct                 | The generated TS client (4 files)                                                                       |
-| `GeneratedPackage::write_to_dir()`    | method                 | Writes the files to a directory                                                                         |
+| Item                                  | Kind                   | Description                                                                                                           |
+| ------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `Package`                             | struct                 | Runtime object holding the registered commands                                                                        |
+| `Package::builder(id)`                | method                 | Creates a `PackageBuilder`                                                                                            |
+| `Package::invoke()` / `invoke_json()` | method                 | Executes a command (typed / JSON)                                                                                     |
+| `Package::generate_typescript()`      | method                 | Produces a `GeneratedPackage`                                                                                         |
+| `PackageBuilder`                      | struct                 | Registers commands with the builder pattern                                                                           |
+| `PackageBuilder::command()`           | method                 | Registers a command with an explicit name                                                                             |
+| `PackageBuilder::command_fn()`        | method                 | Derives the command name automatically from the function name                                                         |
+| `PackageBuilder::build()`             | method                 | Creates a `Package`                                                                                                   |
+| `GeneratedPackage`                    | struct                 | The generated TS client (4 files)                                                                                     |
+| `GeneratedPackage::write_to_dir()`    | method                 | Writes the files to a directory                                                                                       |
 | `RustraError`                         | struct                 | Error type. Implements `Serialize`. `code + message` fields + `custom()` constructor + `code()` / `message()` getters |
-| `command`                             | macro (re-export)      | `rustra_macros::command`                                                                                |
-| `register`                            | macro (re-export)      | `rustra_macros::register`. Batch-registers multiple commands                                            |
-| `prelude`                             | module                 | Batch import of frequently used items (including `command`, `register`)                                 |
-| `tauri_support`                       | module (feature-gated) | `RustraState`, `rustra_dispatch`, `register()` — Tauri integration helpers                              |
-| `__private`                           | module (sealed)        | `CommandInput`, `CommandOutput` traits. For proc macros only                                            |
+| `command`                             | macro (re-export)      | `rustra_macros::command`                                                                                              |
+| `register`                            | macro (re-export)      | `rustra_macros::register`. Batch-registers multiple commands                                                          |
+| `prelude`                             | module                 | Batch import of frequently used items (including `command`, `register`)                                               |
+| `tauri_support`                       | module (feature-gated) | `RustraState`, `rustra_dispatch`, `register()` — Tauri integration helpers                                            |
+| `__private`                           | module (sealed)        | `CommandInput`, `CommandOutput` traits. For proc macros only                                                          |
 
 **Features:**
 
@@ -107,16 +107,16 @@ TypeScript clients.
 
 **Key private functions (internal behavior):**
 
-| Function                           | Description                                                                   |
-| ---------------------------------- | ----------------------------------------------------------------------------- |
+| Function                           | Description                                                                              |
+| ---------------------------------- | ---------------------------------------------------------------------------------------- |
 | `schema_value::<T>()`              | Builds JSON Schema + definitions with `schema_for!(T)`. Returns a `(Value, Value)` tuple |
-| `short_type_name::<T>()`           | Extracts the last segment from `std::any::type_name`                          |
-| `command_name_from_handler::<F>()` | Function type name → camelCase command name                                   |
-| `contract_hash()`                  | Schema JSON → SHA256 hex                                                      |
-| `ts_type_from_schema()`            | JSON Schema → TS type string. Takes 2 arguments, `(schema, definitions)`      |
-| `ts_object_from_schema()`          | JSON Schema object → TS object literal                                        |
-| `command_function_name()`          | Command name → TS function name (camelCase)                                   |
-| `snake_to_lower_camel()`           | snake_case → lowerCamelCase                                                   |
+| `short_type_name::<T>()`           | Extracts the last segment from `std::any::type_name`                                     |
+| `command_name_from_handler::<F>()` | Function type name → camelCase command name                                              |
+| `contract_hash()`                  | Schema JSON → SHA256 hex                                                                 |
+| `ts_type_from_schema()`            | JSON Schema → TS type string. Takes 2 arguments, `(schema, definitions)`                 |
+| `ts_object_from_schema()`          | JSON Schema object → TS object literal                                                   |
+| `command_function_name()`          | Command name → TS function name (camelCase)                                              |
+| `snake_to_lower_camel()`           | snake_case → lowerCamelCase                                                              |
 
 ---
 
@@ -127,9 +127,9 @@ The proc-macro crate providing the `#[command]` attribute macro and the
 
 **Public API:**
 
-| Item         | Kind            | Description                                                 |
-| ------------ | --------------- | ----------------------------------------------------------- |
-| `#[command]` | attribute macro | Signature verification + trait bound assert + meta constant generation |
+| Item         | Kind            | Description                                                             |
+| ------------ | --------------- | ----------------------------------------------------------------------- |
+| `#[command]` | attribute macro | Signature verification + trait bound assert + meta constant generation  |
 | `register!`  | macro           | Batch-registers multiple commands. Form: `register!(builder, fn1, fn2)` |
 
 **`#[command]` verification rules:**
@@ -188,7 +188,8 @@ error responses into `RustraCommandError` and throws it.
 ### calculator (`examples/calculator/`)
 
 The core example. Contains a Rust crate + TypeScript tests + generated clients
-+ several host apps.
+
+- several host apps.
 
 ```
 examples/calculator/

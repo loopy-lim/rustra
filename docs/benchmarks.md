@@ -10,14 +10,14 @@ changes, past numbers are not treated as execution evidence of the current check
 
 ## Test Environment
 
-| Item           | Version                      |
-| -------------- | ---------------------------- |
-| OS             | macOS (Darwin 25.3.0, arm64) |
-| Rust           | stable, aarch64-apple-darwin |
-| Node.js        | v22.21.1                     |
-| Bun            | 1.4.0                        |
-| React Native   | 0.81.5 + Expo 54             |
-| iOS simulator  | iPhone 17                    |
+| Item          | Version                      |
+| ------------- | ---------------------------- |
+| OS            | macOS (Darwin 25.3.0, arm64) |
+| Rust          | stable, aarch64-apple-darwin |
+| Node.js       | v22.21.1                     |
+| Bun           | 1.4.0                        |
+| React Native  | 0.81.5 + Expo 54             |
+| iOS simulator | iPhone 17                    |
 
 ## Complex binary codec receipt (2026-08-27)
 
@@ -52,11 +52,11 @@ this is not a reproducible measurement — read it as a relative comparison.
 
 Figures from calling the malloc symbol and the `_into` symbol directly on the same dylib.
 
-| Command (response size)                | malloc (base behavior) | into (F2) |   Savings |
-| -------------------------------------- | -----------------: | --------: | --------: |
-| addNumbers (9B, complex)               |          ~3,400 ns | ~3,150 ns |    ~7–10% |
-| benchEchoBytes (73B, 512B↑)            |             456 ns |    222 ns | **51.3%** |
-| benchEchoBytes (610B, overflow+retry)  |             681 ns |    648 ns |       ~5% |
+| Command (response size)               | malloc (base behavior) | into (F2) |   Savings |
+| ------------------------------------- | ---------------------: | --------: | --------: |
+| addNumbers (9B, complex)              |              ~3,400 ns | ~3,150 ns |    ~7–10% |
+| benchEchoBytes (73B, 512B↑)           |                 456 ns |    222 ns | **51.3%** |
+| benchEchoBytes (610B, overflow+retry) |                 681 ns |    648 ns |       ~5% |
 
 At 73B responses the halving happens because the 512B caller buffer absorbs the
 response, eliminating both the Rust malloc/free and the JS copy (once). The 610B
@@ -71,11 +71,11 @@ This is the full `createBunFfiEngine` round trip including codec encode/decode, 
 engine, and the FFI. It is the median of 4 cross-measured pairs of the base adapter
 (malloc path) and the integrated adapter (`_into` path) against the same dylib.
 
-| Command (response size)  | base adapter | integrated | savings         |
-| ------------------------ | ----------: | ---------: | --------------- |
-| echo 64B (73B response)  |      899 ns |     567 ns | **~37% (1.6x)** |
-| echo 600B (611B response)|    1,354 ns |   1,208 ns | ~11%            |
-| addNumbers (9B response) |    3,772 ns |   3,350 ns | ~11%            |
+| Command (response size)   | base adapter | integrated | savings         |
+| ------------------------- | -----------: | ---------: | --------------- |
+| echo 64B (73B response)   |       899 ns |     567 ns | **~37% (1.6x)** |
+| echo 600B (611B response) |     1,354 ns |   1,208 ns | ~11%            |
+| addNumbers (9B response)  |     3,772 ns |   3,350 ns | ~11%            |
 
 For the addNumbers/echo600 rows, the schema cost of the complex/buffer route dominates
 and the caller-buffer savings stack on top. echo64's 37% reflects the small-payload
@@ -91,10 +91,10 @@ it removes a single Vec allocation+copy on response encoding — because the com
 route is dominated by the schema work of complex_decode → `serde_json::from_value` →
 handler → `serde_json::to_value` → encode:
 
-| Command (complex route)   |      malloc |  into (F1) | savings |
-| ------------------------- | ----------: | ---------: | ------: |
-| addNumbers 9B response    |   2,905 ns |   2,836 ns |    2.4% |
-| echoGroups 66,783B response | 232,613 ns | 228,004 ns |   2.0% |
+| Command (complex route)     |     malloc |  into (F1) | savings |
+| --------------------------- | ---------: | ---------: | ------: |
+| addNumbers 9B response      |   2,905 ns |   2,836 ns |    2.4% |
+| echoGroups 66,783B response | 232,613 ns | 228,004 ns |    2.0% |
 
 F1's value is therefore contract unification rather than performance — caller-buffer
 hosts (C++ typedInvokeTail, Bun) receive Written for complex-route commands without a
@@ -138,8 +138,8 @@ per-call writer/response allocation, machine-readable receipt). Encode uses the 
 fixture request payload; decode uses the PINNED fixture response body (boundary values —
 the multi-byte varint64/zigzag64 paths). Median of 3 runs:
 
-| Command (schema)                     |   encode |       decode | wire size             |
-| ------------------------------------ | -------: | -----------: | --------------------- |
+| Command (schema)                     |   encode |       decode | wire size                    |
+| ------------------------------------ | -------: | -----------: | ---------------------------- |
 | wideAgg (Vec\<u64\> + Option\<i64\>) | 1.699 µs | **0.455 µs** | request 36 B / response 28 B |
 | tagSet (Set\<i64\> → Set\<string\>)  | 0.979 µs |     1.179 µs | request 7 B / response 23 B  |
 
@@ -177,13 +177,13 @@ Environment: macOS arm64, Bun 1.4.0, Node v22.21.1, Rust release. The original f
 are preserved in
 [`2026-08-24-host-matrix.json`](benchmark-receipts/2026-08-24-host-matrix.json).
 
-| Path                            | warm-up | repetitions     |       mean |        p50 |        p95 |        p99 |   ops/s |
-| ------------------------------- | ------: | --------------- | ---------: | ---------: | ---------: | ---------: | ------: |
-| Node generated one-shot         |      10 | 200 × 3         |   2.758 ms |   2.760 ms |   3.119 ms |   3.295 ms |     363 |
-| Node persistent loop            |     100 | 2,000 × 3       |  16.863 µs |  16.666 µs |  26.917 µs |  44.084 µs |  59,301 |
-| Node N-API rkyv V2              |     500 | 10,000 × 3      |   1.261 µs |   1.167 µs |   2.125 µs |   4.292 µs | 793,185 |
-| Bun generated FFI rkyv V2       |     500 | 10,000 × 3      |   2.273 µs |   2.208 µs |   3.917 µs |   6.292 µs | 439,961 |
-| Tauri generated WebView IPC     |     100 | 1,000 × 3       | 279.044 µs | 300.000 µs | 350.000 µs | 550.000 µs |   3,584 |
+| Path                            | warm-up | repetitions      |       mean |        p50 |        p95 |        p99 |   ops/s |
+| ------------------------------- | ------: | ---------------- | ---------: | ---------: | ---------: | ---------: | ------: |
+| Node generated one-shot         |      10 | 200 × 3          |   2.758 ms |   2.760 ms |   3.119 ms |   3.295 ms |     363 |
+| Node persistent loop            |     100 | 2,000 × 3        |  16.863 µs |  16.666 µs |  26.917 µs |  44.084 µs |  59,301 |
+| Node N-API rkyv V2              |     500 | 10,000 × 3       |   1.261 µs |   1.167 µs |   2.125 µs |   4.292 µs | 793,185 |
+| Bun generated FFI rkyv V2       |     500 | 10,000 × 3       |   2.273 µs |   2.208 µs |   3.917 µs |   6.292 µs | 439,961 |
+| Tauri generated WebView IPC     |     100 | 1,000 × 3        | 279.044 µs | 300.000 µs | 350.000 µs | 550.000 µs |   3,584 |
 | RN generated JSI, iOS Simulator |     500 | 10,000 × 1 check |          — |   2.750 µs |          — |          — |       — |
 
 All means and throughput figures use a trimmed mean excluding the outermost 5% on each
@@ -220,11 +220,11 @@ The 2026-08-18 session's wire/napi/core tables are replaced by these values.
 
 `cargo run -p rustra-calculator-example --bin wire-bench --release`
 
-| Path                       | Request | Response |       mean |        p50 |             throughput |
-| -------------------------- | ---: | ---: | ---------: | ---------: | ------------------: |
-| JSON `invoke`              | 47 B | 34 B |    1.19 µs |    1.17 µs |       842,640 ops/s |
-| postcard `invoke_postcard` | 13 B |  4 B |     433 ns |     417 ns |     2,307,438 ops/s |
-| rkyv V2 `invoke_rkyv_v2`   |  4 B | 10 B | **134 ns** | **125 ns** | **7,442,853 ops/s** |
+| Path                       | Request | Response |       mean |        p50 |          throughput |
+| -------------------------- | ------: | -------: | ---------: | ---------: | ------------------: |
+| JSON `invoke`              |    47 B |     34 B |    1.19 µs |    1.17 µs |       842,640 ops/s |
+| postcard `invoke_postcard` |    13 B |      4 B |     433 ns |     417 ns |     2,307,438 ops/s |
+| rkyv V2 `invoke_rkyv_v2`   |     4 B |     10 B | **134 ns** | **125 ns** | **7,442,853 ops/s** |
 
 → rkyv V2 is ~8.9x faster than JSON and ~3.2x faster than postcard, with a request wire
 ~11.8x smaller than JSON.
@@ -241,7 +241,7 @@ xychart-beta
 
 `node scripts/transport-bench.mjs` (release native addon)
 
-| transport           |        mean |         throughput |
+| transport           |        mean |       throughput |
 | ------------------- | ----------: | ---------------: |
 | Node N-API rkyv V2  | **~0.6 µs** | ~1,600,000 ops/s |
 | Node N-API (String) |      1.5 µs |    654,817 ops/s |
@@ -261,8 +261,8 @@ floor.
 
 `bun scripts/transport-bench.mjs`
 
-| profile                    |        mean |         throughput |
-| -------------------------- | ----------: | ---------------: |
+| profile                   |        mean |       throughput |
+| ------------------------- | ----------: | ---------------: |
 | Bun FFI rkyv V2 (release) | **~0.5 µs** | ~1,890,000 ops/s |
 | Bun FFI JSON (release)    |      1.7 µs |   ~580,000 ops/s |
 | Bun subprocess            |     5.73 ms |       ~175 ops/s |
@@ -281,7 +281,7 @@ floor.
 
 `cd scripts/swift-ffi-bench && make` (linked against the release dylib)
 
-| Path                                   |       mean |       throughput |
+| Path                                   |       mean |     throughput |
 | -------------------------------------- | ---------: | -------------: |
 | legacy JSON CString FFI (Swift → Rust) | **1.2 µs** |  853,614 ops/s |
 | Full bridge (serialize → FFI → parse)  |     6.6 µs | ~151,000 ops/s |
@@ -303,12 +303,12 @@ xychart-beta
 `rustra-benchmark` gained global_allocator counting (atomic alloc/dealloc counters) and
 cold-start separation. Per the 2026-08-22 re-measurement:
 
-| Metric                          | Value                              |
-| ------------------------------- | ---------------------------------- |
-| First invoke (incl. tier resolution) | ~1.8 µs (5.0–6.5x steady-state) |
-| steady-state mean (1000 runs)   | 341–347 ns                         |
-| `invoke_json` heap allocations per call | 9 allocs / 9 deallocs     |
-| `invoke_rkyv_v2` heap allocations per call | 4 allocs / 4 deallocs   |
+| Metric                                     | Value                           |
+| ------------------------------------------ | ------------------------------- |
+| First invoke (incl. tier resolution)       | ~1.8 µs (5.0–6.5x steady-state) |
+| steady-state mean (1000 runs)              | 341–347 ns                      |
+| `invoke_json` heap allocations per call    | 9 allocs / 9 deallocs           |
+| `invoke_rkyv_v2` heap allocations per call | 4 allocs / 4 deallocs           |
 
 Allocation counts are a more stable comparison metric than nanoseconds — copy-elimination
 optimizations such as caller-buffer/Arc are validated as "reduced allocations" (the rkyv
@@ -322,9 +322,9 @@ V2 path halves the allocation count versus JSON).
 Package::builder("...").command_fn(...).build()
 ```
 
-| Metric | Value               |
-| ------ | ------------------- |
-| mean   | 12.7–13.1 µs        |
+| Metric | Value                |
+| ------ | -------------------- |
+| mean   | 12.7–13.1 µs         |
 | p50    | (see Summary output) |
 
 ### Command invocation (typed)
@@ -333,10 +333,10 @@ Package::builder("...").command_fn(...).build()
 package.invoke::<SimpleInput, SimpleOutput>("addNumbers", input)
 ```
 
-| Metric                    | Value           |
-| ------------------------- | --------------- |
-| mean                      | 341–347 ns      |
-| single-thread throughput  | 2,913,359 ops/s |
+| Metric                   | Value           |
+| ------------------------ | --------------- |
+| mean                     | 341–347 ns      |
+| single-thread throughput | 2,913,359 ops/s |
 
 ### TypeScript code generation
 
@@ -353,10 +353,10 @@ package.invoke::<SimpleInput, SimpleOutput>("addNumbers", input)
 | 100 items  |            33.1 µs |
 | 1000 items |             348 µs |
 
-| Operation                  | Simple | 1000 items |
-| -------------------------- | -----: | ---------: |
-| Serialization (to_value)   | 149 ns |     393 µs |
-| Deserialization (from_value) | 240 ns |   705 µs |
+| Operation                    | Simple | 1000 items |
+| ---------------------------- | -----: | ---------: |
+| Serialization (to_value)     | 149 ns |     393 µs |
+| Deserialization (from_value) | 240 ns |     705 µs |
 
 ## Rust Criterion debug Tier 3 baseline
 
@@ -365,15 +365,15 @@ Because the dynamic registry blocks mutation in release, it was measured with
 default warm-up/measurement times. The tier comparison uses different representative
 types and operations, so do not read 6.55x as the difference of the wire format alone.
 
-| Path                       | mean (2026-08-22) |
-| -------------------------- | ----------------: |
-| static Tier 1 postcard     |         605.57 ns |
-| static Tier 2 postcard     |         865.83 ns |
+| Path                          | mean (2026-08-22) |
+| ----------------------------- | ----------------: |
+| static Tier 1 postcard        |         605.57 ns |
+| static Tier 2 postcard        |         865.83 ns |
 | dynamic Tier 3 JSON-in-binary |         3.9677 µs |
-| `register()` once          |          30.51 µs |
-| `live_schema()` 3 commands |          48.92 µs |
-| mutable invoke             |           3.95 µs |
-| frozen invoke              |           3.94 µs |
+| `register()` once             |          30.51 µs |
+| `live_schema()` 3 commands    |          48.92 µs |
+| mutable invoke                |           3.95 µs |
+| frozen invoke                 |           3.94 µs |
 
 Payload scaling was 12.33 µs, 64.39 µs, 606.14 µs, and 5.68 ms at 1/10/100/1000 items
 respectively. As payload grows, JSON processing dominates dynamic Tier 3, so large
@@ -385,14 +385,14 @@ Based on a single `addNumbers({ a: 42, b: 58 })` call (10,000+ repetitions, rele
 builds, 2026-08-22).
 
 | Adapter                |          mean latency | throughput (ops/s) |
-| ---------------------- | -----------------: | -------------: |
-| Rust (typed invoke)    |         341–347 ns |      2,913,359 |
-| Rust (JSON roundtrip)  |            ~287 ns |     ~3,480,000 |
-| Bun (JS engine)        | 189 ns (prior record) |     ~5,284,714 |
-| Node.js (JS engine)    |         297–299 ns |     ~3,350,000 |
-| Swift → Rust FFI       |             1.2 µs |        853,614 |
-| Node napi-rs (release) |             1.5 µs |        654,817 |
-| Bun FFI (release)      |             1.7 µs |       ~580,000 |
+| ---------------------- | --------------------: | -----------------: |
+| Rust (typed invoke)    |            341–347 ns |          2,913,359 |
+| Rust (JSON roundtrip)  |               ~287 ns |         ~3,480,000 |
+| Bun (JS engine)        | 189 ns (prior record) |         ~5,284,714 |
+| Node.js (JS engine)    |            297–299 ns |         ~3,350,000 |
+| Swift → Rust FFI       |                1.2 µs |            853,614 |
+| Node napi-rs (release) |                1.5 µs |            654,817 |
+| Bun FFI (release)      |                1.7 µs |           ~580,000 |
 
 > The JS adapter (Bun, Node) figures measure only the JS-side overhead of
 > `EngineClient.invoke`; the actual IPC/FFI cost is separate.
@@ -405,11 +405,11 @@ Based on a single `addNumbers({ a: 42, b: 58 })` call. Actual measured values in
 Rust execution + serialization + transport overhead (2026-08-22, release).
 
 | Transport                  | mean latency | throughput (ops/s) |
-| -------------------------- | ----------- | -------------: |
-| **Node napi-rs (release)** | **1.5 µs**  |        654,817 |
-| **Bun FFI (release)**      | **1.7 µs**  |       ~580,000 |
-| Node.js subprocess (stdio) | 3.40 ms     |           ~294 |
-| Bun subprocess (stdio)     | 5.73 ms     |           ~175 |
+| -------------------------- | ------------ | -----------------: |
+| **Node napi-rs (release)** | **1.5 µs**   |            654,817 |
+| **Bun FFI (release)**      | **1.7 µs**   |           ~580,000 |
+| Node.js subprocess (stdio) | 3.40 ms      |               ~294 |
+| Bun subprocess (stdio)     | 5.73 ms      |               ~175 |
 
 ### Transport Overhead Analysis
 
@@ -455,12 +455,12 @@ same JS input shapes, the same operation, and the same output shape. bytes norma
 is included inside both measurement windows too. The raw `nitroBench.add(a, b)` call is
 recorded only as a lower bound and is not used in ratios.
 
-| Release run |    add object | string object |   bytes 64B |   pair object | output equivalence |
-| ----------- | ----------: | ----------: | ----------: | ----------: | :---------: |
-| 1           |     1.0474x |     1.0693x |     0.9543x |     1.0512x |     ✅      |
-| 2           |     1.0255x |     1.0253x |     0.9249x |     1.0933x |     ✅      |
-| 3           |     1.0418x |     1.0281x |     0.9817x |     1.0535x |     ✅      |
-| **median**  | **1.0418x** | **1.0281x** | **0.9543x** | **1.0535x** |   **✅**    |
+| Release run |  add object | string object |   bytes 64B | pair object | output equivalence |
+| ----------- | ----------: | ------------: | ----------: | ----------: | :----------------: |
+| 1           |     1.0474x |       1.0693x |     0.9543x |     1.0512x |         ✅         |
+| 2           |     1.0255x |       1.0253x |     0.9249x |     1.0933x |         ✅         |
+| 3           |     1.0418x |       1.0281x |     0.9817x |     1.0535x |         ✅         |
+| **median**  | **1.0418x** |   **1.0281x** | **0.9543x** | **1.0535x** |       **✅**       |
 
 The final build fingerprint of the 0.4 merge candidate,
 `eb14a45517032caa6adbfb1b366da70ef1adcb69633e09eac07fd831f37a90b1`, also passed the same
@@ -516,7 +516,7 @@ the Rust output allocation is transferred to a JSI `MutableBuffer`, removing the
 copy per echo. Each run validated result-byte equivalence before timing and alternated
 the Nitro/Rustra order per call.
 
-| Release run | 64 KiB Nitro | 64 KiB Rustra |       ratio | 1 MiB-wire Nitro | 1 MiB-wire Rustra |       ratio |
+| Release run | 64 KiB Nitro | 64 KiB Rustra |      ratio | 1 MiB-wire Nitro | 1 MiB-wire Rustra |      ratio |
 | ----------- | -----------: | ------------: | ---------: | ---------------: | ----------------: | ---------: |
 | 1           |     8.540 us |      8.456 us |     0.990x |        87.979 us |         89.923 us |     1.022x |
 | 2           |    12.815 us |      8.792 us |     0.686x |        84.797 us |         85.894 us |     1.013x |
@@ -528,10 +528,11 @@ a simple division of independent time medians. The second 64 KiB run was an outl
 only the Nitro lane slowed transiently, but Rustra held 8.456–8.792 us in all three runs.
 The representative figure is therefore the median of the three runs' paired ratios, not a
 single run. 64 KiB is measured with warm-up 50 + 500 runs, and 1 MiB-wire with warm-up 20
-+ 200 runs to reduce variance.
-The data length of 1 MiB-wire is 1,048,571 bytes — the default wire limit minus the
-command id and 5 bytes of postcard length. A full 1 MiB of data is
-`payload.too_large` as intended.
+
+- 200 runs to reduce variance.
+  The data length of 1 MiB-wire is 1,048,571 bytes — the default wire limit minus the
+  command id and 5 bytes of postcard length. A full 1 MiB of data is
+  `payload.too_large` as intended.
 
 Before the output ownership transfer, the medians were 64 KiB 24.174 us (2.344x Nitro)
 and 1 MiB-wire 169.315 us (3.644x Nitro). The table above is the final re-measurement
@@ -561,11 +562,11 @@ maintains this conclusion. The FFI below is the entire Swift Expo async module, 
 raw C ABI alone.
 
 | Equivalent operation | Nitro reference | Swift FFI async | FFI/Nitro |
-| --------- | --------------: | --------------: | --------: |
-| add       |        2.882 us |       30.474 us |   10.575x |
-| string    |        2.965 us |       30.858 us |   10.526x |
-| bytes64   |       19.086 us |       38.710 us |    2.027x |
-| pair      |        2.998 us |       30.621 us |   10.421x |
+| -------------------- | --------------: | --------------: | --------: |
+| add                  |        2.882 us |       30.474 us |   10.575x |
+| string               |        2.965 us |       30.858 us |   10.526x |
+| bytes64              |       19.086 us |       38.710 us |    2.027x |
+| pair                 |        2.998 us |       30.621 us |   10.421x |
 
 Since the Swift sync scalar lower bound was 12.459 us, the default path for
 ultra-high-frequency commands should be direct JSI, not the Expo async FFI. Leave the
@@ -661,39 +662,39 @@ the installed Nitro 0.35.10 (`cpp/jsi/JSIConverter*`) and the rustra codegen/cod
 
 #### Type System
 
-| Type                   | Nitro 0.35.10                                  | rustra (postcard/rkyv V2 fast path)                                                                                                                       | rustra fallback (Tier 3 JSON) |
-| ---------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| Integer/float primitives | ✅ int/float/double + **bigint(Int64/UInt64)** | ✅ f64/f32/zigzag integers + **uvar(u8–u64) plain varint** + `number                                                                                      | bigint` wide-int restore | ✅ (serde JSON) |
-| string                 | ✅                                             | ✅                                                                                                                                                        | ✅                       |
-| bool / unit(void)      | ✅                                             | ✅                                                                                                                                                        | ✅                       |
-| Array Vec<T>           | ✅ Vector                                      | ✅ vec\_\*(per-sign integers/f64/bool/string/struct) + **Vec<u8>=bytes(len+raw)**                                                                        | ✅                       |
-| Set                    | — (as Vector)                                  | ✅ set\_\* (per-sign)                                                                                                                                     | ✅                       |
-| Tuple                  | ✅ Tuple                                       | ✅ **tuple (unprefixed listing)** — promoted to fast path 2026-08-22                                                                                      | ✅                       |
-| Map Record<string,T>   | ✅ AnyMap/UnorderedMap                         | ✅ **map\_\*(primitive-value maps count+(k,v)\*)** — promoted 2026-08-22. struct-valued maps fall back                                                    | ✅                       |
-| Option<T>              | ✅                                             | ✅ option\_\* (+option_uvar/option_bytes)                                                                                                                 | ✅                       |
-| enum (union variants)  | ✅ Variant                                     | ✅ string enums via postcard, data enums (oneOf) via deterministic complex binary                                                                         | ✅                       |
-| Struct (incl. nested)  | ✅ (objects)                                   | ✅ $ref recursion — postcard or complex binary, fallback for unsupported keywords                                                                         | ✅                       |
-| Date                   | ✅                                             | ✅ chrono DateTime — postcard keeps the ISO string as-is (naturally supported as string kind, probe-verified)                                             | ✅                       |
-| ArrayBuffer/TypedArray | ✅ (+ createNativeArrayBuffer)                 | ✅ **Vec<u8> bytes** — TS surface number[], C++ accepts both ArrayBuffer/arrays                                                                            | ✅                       |
-| Promise<T> (native)    | ✅                                             | ⚠️ JS wrapping (async engine level, core is synchronous)                                                                                                  | same                     |
-| Callbacks/function args | ✅ Function                                   | ✅ **channel handles** (Tauri `ipc::Channel` model, 2026-08-23) — u32 handle argument, invocation-scoped unicast reply, RN JSI `createChannel`/`dropChannel` | same                     |
-| Hybrid object references | ✅ NativeState/HybridObject/dispose          | ✅ **resource handles** (Tauri `Resource` model, 2026-08-23) — Rust-owned table (`channels::ChannelHost`), JS references only an integer id, `resource.not_found` after close | same |
+| Type                     | Nitro 0.35.10                                  | rustra (postcard/rkyv V2 fast path)                                                                                                                                           | rustra fallback (Tier 3 JSON) |
+| ------------------------ | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| Integer/float primitives | ✅ int/float/double + **bigint(Int64/UInt64)** | ✅ f64/f32/zigzag integers + **uvar(u8–u64) plain varint** + `number                                                                                                          | bigint` wide-int restore      | ✅ (serde JSON) |
+| string                   | ✅                                             | ✅                                                                                                                                                                            | ✅                            |
+| bool / unit(void)        | ✅                                             | ✅                                                                                                                                                                            | ✅                            |
+| Array Vec<T>             | ✅ Vector                                      | ✅ vec\_\*(per-sign integers/f64/bool/string/struct) + **Vec<u8>=bytes(len+raw)**                                                                                             | ✅                            |
+| Set                      | — (as Vector)                                  | ✅ set\_\* (per-sign)                                                                                                                                                         | ✅                            |
+| Tuple                    | ✅ Tuple                                       | ✅ **tuple (unprefixed listing)** — promoted to fast path 2026-08-22                                                                                                          | ✅                            |
+| Map Record<string,T>     | ✅ AnyMap/UnorderedMap                         | ✅ **map\_\*(primitive-value maps count+(k,v)\*)** — promoted 2026-08-22. struct-valued maps fall back                                                                        | ✅                            |
+| Option<T>                | ✅                                             | ✅ option\_\* (+option_uvar/option_bytes)                                                                                                                                     | ✅                            |
+| enum (union variants)    | ✅ Variant                                     | ✅ string enums via postcard, data enums (oneOf) via deterministic complex binary                                                                                             | ✅                            |
+| Struct (incl. nested)    | ✅ (objects)                                   | ✅ $ref recursion — postcard or complex binary, fallback for unsupported keywords                                                                                             | ✅                            |
+| Date                     | ✅                                             | ✅ chrono DateTime — postcard keeps the ISO string as-is (naturally supported as string kind, probe-verified)                                                                 | ✅                            |
+| ArrayBuffer/TypedArray   | ✅ (+ createNativeArrayBuffer)                 | ✅ **Vec<u8> bytes** — TS surface number[], C++ accepts both ArrayBuffer/arrays                                                                                               | ✅                            |
+| Promise<T> (native)      | ✅                                             | ⚠️ JS wrapping (async engine level, core is synchronous)                                                                                                                      | same                          |
+| Callbacks/function args  | ✅ Function                                    | ✅ **channel handles** (Tauri `ipc::Channel` model, 2026-08-23) — u32 handle argument, invocation-scoped unicast reply, RN JSI `createChannel`/`dropChannel`                  | same                          |
+| Hybrid object references | ✅ NativeState/HybridObject/dispose            | ✅ **resource handles** (Tauri `Resource` model, 2026-08-23) — Rust-owned table (`channels::ChannelHost`), JS references only an integer id, `resource.not_found` after close | same                          |
 
 #### Runtime/Platform
 
-| Item                         | Nitro Modules                         | rustra                                                         |
-| ---------------------------- | ------------------------------------- | -------------------------------------------------------------- |
-| Target hosts                 | React Native only                     | Node / Bun / Tauri / RN (iOS+Android) on a single core         |
-| Implementation language      | C++/Swift/Kotlin (per platform)       | Single Rust + thin adapters per host                           |
-| Codegen                      | nitrogen (interface → native bindings) | Schema → **bidirectional** (commands + events + TS client)    |
-| Contract gates               | ❌                                    | ✅ `rustra diff` + contract hash + wire round-trip gates       |
-| Runtime command registration | ❌                                    | ⚠️ dev only (register → frozen)                                |
-| Cancellation (AbortSignal)   | roll your own                         | ✅ RN rkyvV2 propagates to native checkpoints                  |
-| Timeout                      | roll your own                         | ✅ timeoutMs (all adapters)                                    |
-| Batch                        | roll your own                         | ✅ invokeBatch single JSI crossing (fail-fast)                 |
-| Events (Rust→JS push)        | roll your own (possible via callbacks) | ✅ subscribeEvent/drainEvents (RN), register_with_events (Tauri) |
-| Dynamic schema (self-describing) | ❌                                | ✅ live_schema/dynamic Tier 3                                  |
-| UI views (native components) | ✅ HybridView                         | ❌ (out of scope — logic layer only)                           |
+| Item                             | Nitro Modules                          | rustra                                                           |
+| -------------------------------- | -------------------------------------- | ---------------------------------------------------------------- |
+| Target hosts                     | React Native only                      | Node / Bun / Tauri / RN (iOS+Android) on a single core           |
+| Implementation language          | C++/Swift/Kotlin (per platform)        | Single Rust + thin adapters per host                             |
+| Codegen                          | nitrogen (interface → native bindings) | Schema → **bidirectional** (commands + events + TS client)       |
+| Contract gates                   | ❌                                     | ✅ `rustra diff` + contract hash + wire round-trip gates         |
+| Runtime command registration     | ❌                                     | ⚠️ dev only (register → frozen)                                  |
+| Cancellation (AbortSignal)       | roll your own                          | ✅ RN rkyvV2 propagates to native checkpoints                    |
+| Timeout                          | roll your own                          | ✅ timeoutMs (all adapters)                                      |
+| Batch                            | roll your own                          | ✅ invokeBatch single JSI crossing (fail-fast)                   |
+| Events (Rust→JS push)            | roll your own (possible via callbacks) | ✅ subscribeEvent/drainEvents (RN), register_with_events (Tauri) |
+| Dynamic schema (self-describing) | ❌                                     | ✅ live_schema/dynamic Tier 3                                    |
+| UI views (native components)     | ✅ HybridView                          | ❌ (out of scope — logic layer only)                             |
 
 #### How to Read It
 
@@ -772,11 +773,11 @@ Performance of dynamic commands (registered at runtime via `register`, with the 
 > The table below is an **operation-controlled comparison** swapping only the wire with
 > the same operation (echo) and same payload (`{"v":7}`). Read against this table.
 
-| Path (same echo operation)                               | mean (2026-08-30) | wire multiple |
-| -------------------------------------------------------- | ----------------- | --------- |
-| static postcard (builder-registered `echo`)              | 478 ns            | 1x        |
-| dynamic postcard (runtime register `echo_dyn`, T2-1)     | 488 ns            | **1.02x** |
-| dynamic Tier 3 JSON (runtime register `echo_any`, 3-arm anyOf) | 4.75 µs     | **~9.9x** |
+| Path (same echo operation)                                     | mean (2026-08-30) | wire multiple |
+| -------------------------------------------------------------- | ----------------- | ------------- |
+| static postcard (builder-registered `echo`)                    | 478 ns            | 1x            |
+| dynamic postcard (runtime register `echo_dyn`, T2-1)           | 488 ns            | **1.02x**     |
+| dynamic Tier 3 JSON (runtime register `echo_any`, 3-arm anyOf) | 4.75 µs           | **~9.9x**     |
 
 → As a pure wire comparison, dynamic Tier 3 JSON is **~10x** slower than static postcard
 — JSON serialization/parsing dominates. (The old table's 6.55x coincidentally resembles
@@ -796,12 +797,12 @@ care when citing.
 
 `cargo bench -p rustra --bench dynamic_registry --profile dev`
 
-| Operation                           | mean     | notes                             |
-| ----------------------------------- | -------- | --------------------------------- |
+| Operation                                   | mean     | notes                                  |
+| ------------------------------------------- | -------- | -------------------------------------- |
 | `register()` once (incl. schema generation) | 30.51 µs | not a hot path (once, at registration) |
-| `live_schema()` lookup (3 commands) | 48.92 µs | read-only, in both debug/release  |
-| `invoke_rkyv_v2` (mutable package)  | 3.95 µs  | RwLock read path                  |
-| `invoke_rkyv_v2` (frozen package)   | 3.94 µs  | **under 0.2% difference** from mutable |
+| `live_schema()` lookup (3 commands)         | 48.92 µs | read-only, in both debug/release       |
+| `invoke_rkyv_v2` (mutable package)          | 3.95 µs  | RwLock read path                       |
+| `invoke_rkyv_v2` (frozen package)           | 3.94 µs  | **under 0.2% difference** from mutable |
 
 ### Dynamic command payload scaling (debug, 2026-08-30)
 
@@ -837,13 +838,13 @@ The original figures are preserved in
 ## JS Adapter JSON Performance
 
 | Operation                  | Node.js (2026-08-22) | Bun (prior record) |
-| -------------------------- | -------------------: | --------------: |
-| JSON.parse (simple)        |           211–224 ns |          127 ns |
-| JSON.stringify (simple)    |             94–96 ns |           61 ns |
-| EngineClient.invoke        |           297–299 ns |          189 ns |
-| JSON.parse (100 items)     |    (not re-measured) |         23.8 µs |
-| JSON.stringify (100 items) |    (not re-measured) |         33.6 µs |
-| Object spread copy         |    (not re-measured) |           19 ns |
+| -------------------------- | -------------------: | -----------------: |
+| JSON.parse (simple)        |           211–224 ns |             127 ns |
+| JSON.stringify (simple)    |             94–96 ns |              61 ns |
+| EngineClient.invoke        |           297–299 ns |             189 ns |
+| JSON.parse (100 items)     |    (not re-measured) |            23.8 µs |
+| JSON.stringify (100 items) |    (not re-measured) |            33.6 µs |
+| Object spread copy         |    (not re-measured) |              19 ns |
 
 ## How to Run the Benchmarks
 

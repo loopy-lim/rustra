@@ -136,13 +136,13 @@ bun run test:runtime:tauri
 
 ### Test File Locations
 
-| File                                                | Role                                      |
-| --------------------------------------------------- | ----------------------------------------- |
-| `crates/rustra/tests/public_authoring_api_tests.rs` | Rust public API tests (10)                |
-| `examples/calculator/tests/example_contract.rs`     | End-to-end contract test (1)              |
-| `examples/calculator/ts/generated-client.test.ts`   | TS client behavior (2)                    |
-| `examples/calculator/ts/adapter-compat.test.ts`     | 4-adapter compatibility (6)               |
-| `examples/calculator/ts/runtime-contract.test.ts`   | Runtime contract (2)                      |
+| File                                                | Role                         |
+| --------------------------------------------------- | ---------------------------- |
+| `crates/rustra/tests/public_authoring_api_tests.rs` | Rust public API tests (10)   |
+| `examples/calculator/tests/example_contract.rs`     | End-to-end contract test (1) |
+| `examples/calculator/ts/generated-client.test.ts`   | TS client behavior (2)       |
+| `examples/calculator/ts/adapter-compat.test.ts`     | 4-adapter compatibility (6)  |
+| `examples/calculator/ts/runtime-contract.test.ts`   | Runtime contract (2)         |
 
 ---
 

@@ -42,7 +42,7 @@
 
 **Step 1:** 기존 README.md를 README.ko.md로 git mv, crates/rustra 동일
 
-**Step 2:** 영어 README 작성 — 직역 금지, 표/코드블록/링크 구조 보존, 수치 무수정. 상단 언어 전환 링크: `English | [한국어](./README.ko.md)`
+**Step 2:** 영어 README 작성 — 직역 금지, 표/코드블록/링크 구조 보존, 수치 무수정. 상단 언어 전환 링크: `English | [한국어](./README.ko.md)` 형식 (예시 텍스트이므로 실제 링크 아님)
 
 **Step 3:** 검증: 한국어 README 대비 섹션 수 일치, 링크 유효
 

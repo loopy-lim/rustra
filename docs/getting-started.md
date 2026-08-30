@@ -93,10 +93,10 @@ serde_json.workspace = true
 
 Only four crates are needed.
 
-| crate                | Role                                                                       |
-| -------------------- | -------------------------------------------------------------------------- |
-| `rustra`             | Package builder, TypeScript generator, JSON Schema-based type mapping      |
-| `rustra-macros`      | The `#[command]` attribute macro (re-exported automatically by rustra)     |
+| crate                | Role                                                                           |
+| -------------------- | ------------------------------------------------------------------------------ |
+| `rustra`             | Package builder, TypeScript generator, JSON Schema-based type mapping          |
+| `rustra-macros`      | The `#[command]` attribute macro (re-exported automatically by rustra)         |
 | `serde` + `schemars` | Serialization/deserialization + JSON Schema generation. Three derives per type |
 
 ---
@@ -522,13 +522,13 @@ caller-buffer fast path of the generated `react-native.ts`.
 
 ### Summary
 
-| Environment  | Default generated entry point        | Auto wiring                         | Performance (release)               |
-| ------------ | ------------------------------------ | ----------------------------------- | ----------------------------------- |
+| Environment  | Default generated entry point        | Auto wiring                         | Performance (release)                |
+| ------------ | ------------------------------------ | ----------------------------------- | ------------------------------------ |
 | Node         | `generated/node.ts`                  | Cargo binary + stdio                | ~3.4 ms historical; N-API is ~1.5 µs |
-| Bun          | `generated/bun.ts`                   | Cargo cdylib + stable FFI + rkyv V2 | ~1.7 µs FFI                         |
-| Tauri        | `generated/tauri.ts`                 | global invoke/event                 | IPC-dependent                       |
+| Bun          | `generated/bun.ts`                   | Cargo cdylib + stable FFI + rkyv V2 | ~1.7 µs FFI                          |
+| Tauri        | `generated/tauri.ts`                 | global invoke/event                 | IPC-dependent                        |
 | React Native | generated `react-native.ts`          | autolinked JSI + postcard codecs    | Near Nitro; check the latest receipt |
-| React Native | `createReactNativeEngine(transport)` | custom JSON transport               | Depends on transport implementation |
+| React Native | `createReactNativeEngine(transport)` | custom JSON transport               | Depends on transport implementation  |
 
 > The ~24/27µs for Node/Bun are values when a debug native library is loaded —
 > release builds narrow this to the single-digit µs range. For per-session figures see
@@ -711,12 +711,12 @@ fn divide(input: DivideInput) -> Result<DivideOutput> {
 
 Error codes:
 
-| Error code             | Raised when                          |
-| ---------------------- | ------------------------------------ |
-| `command.not_found`    | Invoking a nonexistent command       |
-| `command.invalid_args` | Input JSON deserialization failure   |
+| Error code             | Raised when                                       |
+| ---------------------- | ------------------------------------------------- |
+| `command.not_found`    | Invoking a nonexistent command                    |
+| `command.invalid_args` | Input JSON deserialization failure                |
 | `internal`             | Internal error (serialization failure, I/O, etc.) |
-| custom (your code)     | `RustraError::custom(code, message)` |
+| custom (your code)     | `RustraError::custom(code, message)`              |
 
 ### TypeScript Side
 
@@ -748,19 +748,19 @@ original transport error is preserved in `err.cause`.
 
 Most Rust types convert correctly to TypeScript:
 
-| Rust type                           | TypeScript                      | Notes                                              |
-| ----------------------------------- | ------------------------------- | -------------------------------------------------- |
-| `String`, `&str`                    | `string`                        |                                                    |
-| `i32`/`i64`/`u32`/`f32`/`f64`       | `number` or `bigint`            | 64-bit integers restore as `bigint` outside the safe range |
-| `bool`                              | `boolean`                       |                                                    |
-| `Option<T>`                         | `T \| null` (fields optional `?`) |                                                  |
-| `Vec<T>`                            | `T[]`                           |                                                    |
-| `BTreeSet<T>` / `HashSet<T>`        | `Set<T>`                        | `uniqueItems` — the JSON path serializes as arrays |
-| `(A, B, C)`                         | `[A, B, C]`                     | Tuples                                             |
-| `HashMap<String, T>`                | `Record<string, T>`             |                                                    |
-| `enum` (unit variants)              | `'VariantA' \| 'VariantB'`      | String enum literal union                          |
-| Nested structures (inside `Box<T>`, `Vec<T>`) | Resolved by definition name `$ref` | Including recursive types (self-reference) |
-| `anyOf` / `oneOf`                   | `A \| B` (union join)           |                                                    |
+| Rust type                                     | TypeScript                         | Notes                                                      |
+| --------------------------------------------- | ---------------------------------- | ---------------------------------------------------------- |
+| `String`, `&str`                              | `string`                           |                                                            |
+| `i32`/`i64`/`u32`/`f32`/`f64`                 | `number` or `bigint`               | 64-bit integers restore as `bigint` outside the safe range |
+| `bool`                                        | `boolean`                          |                                                            |
+| `Option<T>`                                   | `T \| null` (fields optional `?`)  |                                                            |
+| `Vec<T>`                                      | `T[]`                              |                                                            |
+| `BTreeSet<T>` / `HashSet<T>`                  | `Set<T>`                           | `uniqueItems` — the JSON path serializes as arrays         |
+| `(A, B, C)`                                   | `[A, B, C]`                        | Tuples                                                     |
+| `HashMap<String, T>`                          | `Record<string, T>`                |                                                            |
+| `enum` (unit variants)                        | `'VariantA' \| 'VariantB'`         | String enum literal union                                  |
+| Nested structures (inside `Box<T>`, `Vec<T>`) | Resolved by definition name `$ref` | Including recursive types (self-reference)                 |
+| `anyOf` / `oneOf`                             | `A \| B` (union join)              |                                                            |
 
 `allOf` generates `A & B`, integer enums generate numeric literal unions, and
 `oneOf`+`const` generates discriminated unions. The postcard fast path (rkyv V2 codec)

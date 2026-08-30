@@ -146,15 +146,15 @@ crates/
 
 Provides the core types and logic.
 
-| Component          | Description                                                                                                                                         |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Package`          | A collection of registered commands. Runtime dispatch via `invoke_json()`, code generation via `generate_typescript()`                              |
-| `PackageBuilder`   | Created with `Package::builder(id)`. Register commands with `.command_fn(handler)` / `.command(name, handler)`, then `.build()`                     |
-| `GeneratedPackage` | The result of `generate_typescript()`. Holds the `schema_json`, `types_ts`, `commands_ts`, `contract_hash` fields. Writes files with `write_to_dir()` |
+| Component          | Description                                                                                                                                                            |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Package`          | A collection of registered commands. Runtime dispatch via `invoke_json()`, code generation via `generate_typescript()`                                                 |
+| `PackageBuilder`   | Created with `Package::builder(id)`. Register commands with `.command_fn(handler)` / `.command(name, handler)`, then `.build()`                                        |
+| `GeneratedPackage` | The result of `generate_typescript()`. Holds the `schema_json`, `types_ts`, `commands_ts`, `contract_hash` fields. Writes files with `write_to_dir()`                  |
 | `RustraError`      | Implements `Serialize`. `command.not_found`, `command.invalid_args`, `internal` error codes + a `custom(code, message)` constructor + `code()` and `message()` getters |
-| `build!`           | Provided by `rustra-macros`. Registers multiple commands in one go as `rustra::build!("id", fn1, fn2).done()`                                        |
-| `tauri_support`    | Provided when `cfg(feature = "tauri")` is enabled. `RustraState`, the single `rustra_dispatch` Tauri command, and the `register()` builder injection function |
-| `__private` module | The `CommandInput`, `CommandOutput` sealed traits. Used by the proc macro to verify command type constraints at compile time. Not exposed as public API |
+| `build!`           | Provided by `rustra-macros`. Registers multiple commands in one go as `rustra::build!("id", fn1, fn2).done()`                                                          |
+| `tauri_support`    | Provided when `cfg(feature = "tauri")` is enabled. `RustraState`, the single `rustra_dispatch` Tauri command, and the `register()` builder injection function          |
+| `__private` module | The `CommandInput`, `CommandOutput` sealed traits. Used by the proc macro to verify command type constraints at compile time. Not exposed as public API                |
 
 #### `crates/rustra-macros` (proc-macro)
 
@@ -267,12 +267,12 @@ Type conversion rules (`ts_type_from_schema`):
 
 Files written by `GeneratedPackage::write_to_dir(output_dir)`:
 
-| File          | Content                                 | Purpose                                |
-| ------------- | --------------------------------------- | -------------------------------------- |
-| `schema.json` | JSON Schema representation of the full contract | Debugging, tooling integration |
-| `types.ts`    | `EngineClient` + I/O type definitions   | What command helpers depend on         |
-| `commands.ts` | Command helper functions                | Imported and used by app code          |
-| `contract.ts` | The `GENERATED_CONTRACT_HASH` constant  | Runtime contract integrity verification |
+| File          | Content                                         | Purpose                                 |
+| ------------- | ----------------------------------------------- | --------------------------------------- |
+| `schema.json` | JSON Schema representation of the full contract | Debugging, tooling integration          |
+| `types.ts`    | `EngineClient` + I/O type definitions           | What command helpers depend on          |
+| `commands.ts` | Command helper functions                        | Imported and used by app code           |
+| `contract.ts` | The `GENERATED_CONTRACT_HASH` constant          | Runtime contract integrity verification |
 
 ---
 
@@ -396,21 +396,21 @@ struct RegistryState {
 
 At `build()` time, `frozen = !cfg!(debug_assertions)`:
 
-| Build                      | `frozen` default | Runtime mutation                                       |
-| -------------------------- | ---------------- | ------------------------------------------------------ |
+| Build                      | `frozen` default | Runtime mutation                                        |
+| -------------------------- | ---------------- | ------------------------------------------------------- |
 | debug (`debug_assertions`) | `false`          | `register`/`register_fn`/`replace`/`unregister` allowed |
-| release                    | `true`           | all rejected with `Err("registry.frozen")`             |
+| release                    | `true`           | all rejected with `Err("registry.frozen")`              |
 
 `Package::freeze()` seals the package explicitly at any time (e.g. simulating prod behavior in debug). Once frozen, it cannot be unfrozen.
 
 ### Mutation API
 
-| Method                    | Behavior                                                                      | Failure                                      |
-| ------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------- |
-| `register(name, handler)` | Registers. Same name overwrites the handler (existing `command_id` preserved) | `registry.frozen` / `registry.id_exhausted`  |
-| `register_fn(handler)`    | Registers with the inferred name                                              | same as above                                |
-| `replace(name, handler)`  | Replaces the handler (`command_id` preserved)                                 | `command.not_found` / `registry.frozen`      |
-| `unregister(name)`        | Removes (`command_id` retired)                                                | `command.not_found` / `registry.frozen`      |
+| Method                    | Behavior                                                                      | Failure                                     |
+| ------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------- |
+| `register(name, handler)` | Registers. Same name overwrites the handler (existing `command_id` preserved) | `registry.frozen` / `registry.id_exhausted` |
+| `register_fn(handler)`    | Registers with the inferred name                                              | same as above                               |
+| `replace(name, handler)`  | Replaces the handler (`command_id` preserved)                                 | `command.not_found` / `registry.frozen`     |
+| `unregister(name)`        | Removes (`command_id` retired)                                                | `command.not_found` / `registry.frozen`     |
 
 ### Concurrency
 
@@ -481,8 +481,8 @@ pub struct RustraError {
 
 **Constructors:**
 
-| Method                                 | Error code             | Raised when                                                                    |
-| -------------------------------------- | ---------------------- | ------------------------------------------------------------------------------ |
+| Method                                 | Error code             | Raised when                                                                     |
+| -------------------------------------- | ---------------------- | ------------------------------------------------------------------------------- |
 | `RustraError::command_not_found(name)` | `command.not_found`    | `invoke_json()` cannot find a command with the given name in `Package.commands` |
 | `RustraError::invalid_args(error)`     | `command.invalid_args` | `serde_json::from_value` deserialization fails                                  |
 | `RustraError::internal(error)`         | `internal`             | `serde_json::to_value` serialization failure, I/O errors, etc.                  |
@@ -490,10 +490,10 @@ pub struct RustraError {
 
 **Getters:**
 
-| Method            | Return type    | Description               |
-| ----------------- | -------------- | ------------------------- |
-| `error.code()`    | `&'static str` | Reads the error code      |
-| `error.message()` | `&str`         | Reads the error message   |
+| Method            | Return type    | Description             |
+| ----------------- | -------------- | ----------------------- |
+| `error.code()`    | `&'static str` | Reads the error code    |
+| `error.message()` | `&str`         | Reads the error message |
 
 `std::io::Error` is converted automatically into `RustraError::internal` through the `From` trait.
 

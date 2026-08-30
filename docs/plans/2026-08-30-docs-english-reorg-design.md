@@ -53,7 +53,7 @@ thoughts/ 디렉토리 → 소멸, docs/superpowers/ → 소멸
 - 용어 통일: 호스트→host, 생성물→generated output, 명령→command,
   계약→contract, 와이어→wire, 코드젠→codegen, 어댑터→adapter,
   성능 영수증→performance receipt, 실기기→physical device
-- 각 문서 상단: `English | [한국어](./xxx.ko.md)` 전환 링크 1줄
+- 각 문서 상단: `English | [한국어](./<문서명>.ko.md)` 전환 링크 1줄
 - 내부 상대 링크는 영어 문서 기준으로 재작성
 
 ## 검증 게이트

@@ -37,26 +37,26 @@ order from the top.
 
 10 tests. Verifies rustra's public authoring API.
 
-| Test function                                                   | What it verifies                                                                                                                                                                    |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `user_builds_package_without_touching_raw_engine_types`         | `Package::builder().command().build()` + `invoke()` basic flow. Confirms the result value is 42                                                                                      |
-| `user_can_register_command_without_writing_command_name_string` | Automatic name extraction with `command_fn()`. Confirms the generated `commands.ts` contains the function name and command name                                                      |
-| `register_macro_uses_macro_derived_name`                        | Registers a command with the `register!` macro. Confirms the name is auto-extracted from the `__RUstra_meta_*` constant and invoked correctly                                        |
+| Test function                                                   | What it verifies                                                                                                                                                                                                       |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user_builds_package_without_touching_raw_engine_types`         | `Package::builder().command().build()` + `invoke()` basic flow. Confirms the result value is 42                                                                                                                        |
+| `user_can_register_command_without_writing_command_name_string` | Automatic name extraction with `command_fn()`. Confirms the generated `commands.ts` contains the function name and command name                                                                                        |
+| `register_macro_uses_macro_derived_name`                        | Registers a command with the `register!` macro. Confirms the name is auto-extracted from the `__RUstra_meta_*` constant and invoked correctly                                                                          |
 | `package_generates_host_neutral_typescript_client`              | Confirms the `generate_typescript()` result contains the `AddNumbersInput` type, the `addNumbers` function, and `invoke<AddNumbersOutput>`. Confirms `EngineRequest`, `Attachment`, `node:`, `react-native` are absent |
-| `generated_package_can_be_written_to_a_directory`               | Confirms `write_to_dir()` produces the 4 files `schema.json`, `types.ts`, `commands.ts`, `contract.ts`                                                                               |
-| `unknown_command_uses_package_level_error`                      | Confirms the `RustraError` code is `"command.not_found"` when calling an unregistered command. Uses the `error.code()` getter                                                        |
-| `ts_generator_handles_optional_fields`                          | Confirms `Option<i64>`, `Option<String>` fields are generated as `age?: number \| null`, `label?: string \| null`                                                                    |
-| `ts_generator_handles_enums`                                    | Confirms the enum type is generated as a `Status` reference type + `'Active' \| 'Inactive'` union                                                                                    |
-| `ts_generator_handles_vec_and_optional_struct`                  | Confirms `Vec<String>` → `string[]` and `Option<Item>` → `Item \| null` generation                                                                                                   |
-| `command_macro_rejects_wrong_signature`                         | Verifies via compile check that the `#[command]` macro rejects wrong signatures. Valid signatures pass; a function without parameters and a non-`Result` return fail                 |
+| `generated_package_can_be_written_to_a_directory`               | Confirms `write_to_dir()` produces the 4 files `schema.json`, `types.ts`, `commands.ts`, `contract.ts`                                                                                                                 |
+| `unknown_command_uses_package_level_error`                      | Confirms the `RustraError` code is `"command.not_found"` when calling an unregistered command. Uses the `error.code()` getter                                                                                          |
+| `ts_generator_handles_optional_fields`                          | Confirms `Option<i64>`, `Option<String>` fields are generated as `age?: number \| null`, `label?: string \| null`                                                                                                      |
+| `ts_generator_handles_enums`                                    | Confirms the enum type is generated as a `Status` reference type + `'Active' \| 'Inactive'` union                                                                                                                      |
+| `ts_generator_handles_vec_and_optional_struct`                  | Confirms `Vec<String>` → `string[]` and `Option<Item>` → `Item \| null` generation                                                                                                                                     |
+| `command_macro_rejects_wrong_signature`                         | Verifies via compile check that the `#[command]` macro rejects wrong signatures. Valid signatures pass; a function without parameters and a non-`Result` return fail                                                   |
 
 ### File: `examples/calculator/tests/example_contract.rs`
 
 1 integration test. Verifies the calculator example's build output end to end.
 
-| Test function                                   | What it verifies                                                                                                                                                                                                        |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `calculator_example_runs_and_generates_client`  | Runs the `rustra-calculator-example` binary → confirms stdout contains `2 + 3 = 5`. Confirms `generated/commands.ts` contains the `addNumbers` function and `engine.invoke<AddNumbersOutput>('addNumbers')`, and that `EngineRequest`/`Attachment` are absent |
+| Test function                                  | What it verifies                                                                                                                                                                                                                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `calculator_example_runs_and_generates_client` | Runs the `rustra-calculator-example` binary → confirms stdout contains `2 + 3 = 5`. Confirms `generated/commands.ts` contains the `addNumbers` function and `engine.invoke<AddNumbersOutput>('addNumbers')`, and that `EngineRequest`/`Attachment` are absent |
 
 This test executes the built binary directly through the
 `CARGO_BIN_EXE_rustra-calculator-example` environment variable when
@@ -90,22 +90,22 @@ bun run bench:complex
 
 2 tests. Verifies the generated TS client's behavior.
 
-| Test                                                                          | What it verifies                                                                                                                                    |
-| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `generated command helper calls the host EngineClient invoke contract`        | After `configure(engine)`, calling `addNumbers(input)` passes the correct command name and args through the global invoke to the engine              |
-| `generated client stays host neutral for Node, Bun, Tauri, and React Native`  | Confirms `commands.ts` + `types.ts` contain none of `node:`, `bun:`, `@tauri-apps`, `react-native`, `@expo/`, `expo-modules`, `EngineRequest`, `Attachment` |
+| Test                                                                         | What it verifies                                                                                                                                            |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `generated command helper calls the host EngineClient invoke contract`       | After `configure(engine)`, calling `addNumbers(input)` passes the correct command name and args through the global invoke to the engine                     |
+| `generated client stays host neutral for Node, Bun, Tauri, and React Native` | Confirms `commands.ts` + `types.ts` contain none of `node:`, `bun:`, `@tauri-apps`, `react-native`, `@expo/`, `expo-modules`, `EngineRequest`, `Attachment` |
 
 ### File: `examples/calculator/ts/adapter-compat.test.ts`
 
 6 tests. Verifies the behavior and integrity of the 4 adapter packages.
 
-| Test                                                                          | What it verifies                                                                                         |
-| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `node adapter forwards generated commands to injected Node transport`         | `createNodeEngine` calls the transport's invoke correctly                                                |
-| `bun adapter forwards generated commands to injected Bun transport`           | `createBunEngine` calls the transport's invoke correctly                                                 |
+| Test                                                                          | What it verifies                                                                                          |
+| ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `node adapter forwards generated commands to injected Node transport`         | `createNodeEngine` calls the transport's invoke correctly                                                 |
+| `bun adapter forwards generated commands to injected Bun transport`           | `createBunEngine` calls the transport's invoke correctly                                                  |
 | `tauri adapter forwards generated commands to injected Tauri invoke`          | `createTauriEngine` wraps in `rustra_dispatch` and calls invoke. Confirms `RustraCommandError` conversion |
-| `react native adapter forwards generated commands to injected native module`  | `createReactNativeEngine` calls the native module's invoke correctly                                     |
-| `adapter packages keep host-specific imports out of the shared contract path` | Confirms the 4 adapter sources contain none of `@tauri-apps`, `react-native`, `@expo/`, `expo-modules`   |
+| `react native adapter forwards generated commands to injected native module`  | `createReactNativeEngine` calls the native module's invoke correctly                                      |
+| `adapter packages keep host-specific imports out of the shared contract path` | Confirms the 4 adapter sources contain none of `@tauri-apps`, `react-native`, `@expo/`, `expo-modules`    |
 
 Common pattern: `createRecordingTransport()` records the calls and the test
 checks that the `addNumbers` generated command reaches the transport with the
@@ -116,10 +116,10 @@ correct parameters.
 2 tests. Verifies that host apps use the same generated commands and that the
 RN FFI wiring is correct.
 
-| Test                                                                      | What it verifies                                                                                                                                                                                                                                 |
-| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Test                                                                      | What it verifies                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `host apps share generated commands and differ only by adapter transport` | The Node, Bun, Tauri, and RN apps all import `../generated/commands.js`. Each uses `createNodeEngine`, `createBunEngine`, `createTauriEngine`, `createReactNativeEngine`. The Tauri `main.rs` calls `invoke` directly from Rust and does not perform the addition in JS |
-| `react native runtime fixture exposes a native Rust-backed invoke module` | The Swift module registers as `RustraCalculator`, exposes the `invokeRaw` async function, and calls the `rustra_calculator_invoke` / `rustra_calculator_free_string` FFI functions. Confirms the FFI exports in the Rust lib.rs        |
+| `react native runtime fixture exposes a native Rust-backed invoke module` | The Swift module registers as `RustraCalculator`, exposes the `invokeRaw` async function, and calls the `rustra_calculator_invoke` / `rustra_calculator_free_string` FFI functions. Confirms the FFI exports in the Rust lib.rs                                         |
 
 ### Run
 
@@ -166,15 +166,15 @@ This verifies end to end, on a real Tauri runtime, the path
 
 ## React Native Test Status
 
-| Layer                       | Status | Notes                                                               |
-| --------------------------- | ------ | -------------------------------------------------------------------- |
-| adapter-compat.test.ts      | PASS   | Confirms `createReactNativeEngine` behavior                          |
-| runtime-contract.test.ts    | PASS   | Verifies the Swift module + FFI export structure                     |
-| test:adapter:react-native   | PASS   | Runs `bun react-native-app.ts`                                       |
-| test:app:react-native       | PASS   | TypeScript typecheck passes                                          |
-| Android release real-device run | PASS | Confirmed complex/channel/resource/benchmark receipts on `TB710FU` arm64 |
-| iOS generic device build    | PASS   | `iphoneos` Debug link succeeded; device runtime not yet run          |
-| iOS Simulator run           | PASS   | iPhone 17 Simulator Release embedded-bundle runtime receipt confirmed |
+| Layer                           | Status | Notes                                                                    |
+| ------------------------------- | ------ | ------------------------------------------------------------------------ |
+| adapter-compat.test.ts          | PASS   | Confirms `createReactNativeEngine` behavior                              |
+| runtime-contract.test.ts        | PASS   | Verifies the Swift module + FFI export structure                         |
+| test:adapter:react-native       | PASS   | Runs `bun react-native-app.ts`                                           |
+| test:app:react-native           | PASS   | TypeScript typecheck passes                                              |
+| Android release real-device run | PASS   | Confirmed complex/channel/resource/benchmark receipts on `TB710FU` arm64 |
+| iOS generic device build        | PASS   | `iphoneos` Debug link succeeded; device runtime not yet run              |
+| iOS Simulator run               | PASS   | iPhone 17 Simulator Release embedded-bundle runtime receipt confirmed    |
 
 **Boundary:** package/build success does not substitute for runtime. Android
 is verified up to real-device runtime, and iOS up to the generic device build

@@ -40,12 +40,12 @@ The same generators as the CLI can be used directly in a program:
 import { generateTypesTs, generateCommandsTs, diffSchemas } from '@rustra/cli';
 ```
 
-| Module            | Contents                                                       |
-| ----------------- | -------------------------------------------------------------- |
+| Module            | Contents                                                            |
+| ----------------- | ------------------------------------------------------------------- |
 | `generate`        | generator functions for types/commands/contract/rkyv codec/registry |
-| `schema`          | `PackageSchema` parsing and validation                          |
-| `schema-diff`     | breaking-change detection between schema versions (`diffSchemas`) |
-| `validate-engine` | runtime invoke validation engine wrapper (`createValidatedEngine`) |
+| `schema`          | `PackageSchema` parsing and validation                              |
+| `schema-diff`     | breaking-change detection between schema versions (`diffSchemas`)   |
+| `validate-engine` | runtime invoke validation engine wrapper (`createValidatedEngine`)  |
 
 ## Related docs
 

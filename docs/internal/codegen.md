@@ -62,21 +62,21 @@ argument, `definitions`, is used for `$ref` resolution.
 
 ### Mapping table
 
-| JSON Schema type                  | TypeScript type         | Notes                                          |
-| --------------------------------- | ----------------------- | ---------------------------------------------- |
-| `"$ref": "#/definitions/X"`       | `X` (referenced type name) | Name extracted with `resolve_ref()`         |
-| `"anyOf": [...]`                  | `A \| B \| ...`         | Recursive call per schema, then union          |
-| `"object"`                        | `{ field: type; ... }`  | Calls `ts_object_from_schema()`                |
-| `"integer"`                       | `number`                |                                                |
-| `"number"`                        | `number`                |                                                |
-| `"string"` + `"enum"`             | `'A' \| 'B'`            | String enum values become a string literal union |
-| `"string"`                        | `string`                | Plain string when there is no enum             |
-| `"boolean"`                       | `boolean`               |                                                |
-| `"array"` + `"uniqueItems": true` | `Set<T>`                | Mapping for Rust `BTreeSet`/`HashSet` (2026-08-15) |
-| `"array"`                         | `type[]`                | Recursive call on `items`, `unknown[]` if absent |
-| `"null"`                          | `null`                  |                                                |
-| `["string", "null"]` etc.         | `string \| null`        | Type array becomes a union                     |
-| Anything else                     | `unknown`               |                                                |
+| JSON Schema type                  | TypeScript type            | Notes                                              |
+| --------------------------------- | -------------------------- | -------------------------------------------------- |
+| `"$ref": "#/definitions/X"`       | `X` (referenced type name) | Name extracted with `resolve_ref()`                |
+| `"anyOf": [...]`                  | `A \| B \| ...`            | Recursive call per schema, then union              |
+| `"object"`                        | `{ field: type; ... }`     | Calls `ts_object_from_schema()`                    |
+| `"integer"`                       | `number`                   |                                                    |
+| `"number"`                        | `number`                   |                                                    |
+| `"string"` + `"enum"`             | `'A' \| 'B'`               | String enum values become a string literal union   |
+| `"string"`                        | `string`                   | Plain string when there is no enum                 |
+| `"boolean"`                       | `boolean`                  |                                                    |
+| `"array"` + `"uniqueItems": true` | `Set<T>`                   | Mapping for Rust `BTreeSet`/`HashSet` (2026-08-15) |
+| `"array"`                         | `type[]`                   | Recursive call on `items`, `unknown[]` if absent   |
+| `"null"`                          | `null`                     |                                                    |
+| `["string", "null"]` etc.         | `string \| null`           | Type array becomes a union                         |
+| Anything else                     | `unknown`                  |                                                    |
 
 ### `$ref` resolution (`resolve_ref`)
 
@@ -264,23 +264,23 @@ broken" defect.
 
 ### Already supported types (previously unsupported)
 
-| Type                                     | Support approach                                                                                                                            |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Type                                     | Support approach                                                                                                                                            |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Set`                                    | `"array"` + `"uniqueItems": true` → `Set<T>` (2026-08-15). postcard codec `set_*` kind (wire is vec-compatible), JSON path serializes as array via replacer |
-| `tuple`                                  | `items` array / `prefixItems` → `[A, B, C]`                                                                                                  |
-| `oneOf` (Rust)                           | Produces an `A \| B` union just like `anyOf` (TS CLI being reinforced)                                                                       |
-| `$ref`                                   | `#/definitions/X`, `#/$defs/X` → type name extracted                                                                                         |
-| `anyOf`                                  | Recursive call per schema, then an `A \| B` union                                                                                            |
-| string `enum`                            | `'Value1' \| 'Value2'` string literal union. The postcard codec encodes a variant index varint (`enum_str` kind)                              |
-| `null`                                   | `null` type                                                                                                                                  |
-| Type array union                         | `["string", "null"]` → `string \| null`                                                                                                      |
-| Optional fields                          | `?` + `\| null` when absent from `required` (schemars represents this as `anyOf`)                                                            |
-| `allOf`                                  | `A & B` intersection type (2026-08-20, both Rust bin and TS CLI)                                                                             |
-| Integer enum                             | `1 \| 2 \| 3` numeric literal union (2026-08-20, both Rust bin and TS CLI)                                                                   |
-| `Option<T>` (postcard)                   | Tag byte (0/1) + value — `option_zigzag/f64/f32/bool/string/struct` kinds (2026-08-20)                                                       |
-| `Vec<String>` / `Vec<Struct>` (postcard) | varint length + elements — `vec_string`/`vec_struct` kinds (2026-08-20)                                                                      |
-| `oneOf` discriminator field (`const`)    | `const_literal`/`constLiteral` builds `{ type: 'A' }` discriminated unions                                                                   |
-| single-entry `allOf` newtype (postcard)  | Follows the inner `$ref` of a transparent newtype such as `ChannelHandle(u32)` and generates the same scalar wire                             |
+| `tuple`                                  | `items` array / `prefixItems` → `[A, B, C]`                                                                                                                 |
+| `oneOf` (Rust)                           | Produces an `A \| B` union just like `anyOf` (TS CLI being reinforced)                                                                                      |
+| `$ref`                                   | `#/definitions/X`, `#/$defs/X` → type name extracted                                                                                                        |
+| `anyOf`                                  | Recursive call per schema, then an `A \| B` union                                                                                                           |
+| string `enum`                            | `'Value1' \| 'Value2'` string literal union. The postcard codec encodes a variant index varint (`enum_str` kind)                                            |
+| `null`                                   | `null` type                                                                                                                                                 |
+| Type array union                         | `["string", "null"]` → `string \| null`                                                                                                                     |
+| Optional fields                          | `?` + `\| null` when absent from `required` (schemars represents this as `anyOf`)                                                                           |
+| `allOf`                                  | `A & B` intersection type (2026-08-20, both Rust bin and TS CLI)                                                                                            |
+| Integer enum                             | `1 \| 2 \| 3` numeric literal union (2026-08-20, both Rust bin and TS CLI)                                                                                  |
+| `Option<T>` (postcard)                   | Tag byte (0/1) + value — `option_zigzag/f64/f32/bool/string/struct` kinds (2026-08-20)                                                                      |
+| `Vec<String>` / `Vec<Struct>` (postcard) | varint length + elements — `vec_string`/`vec_struct` kinds (2026-08-20)                                                                                     |
+| `oneOf` discriminator field (`const`)    | `const_literal`/`constLiteral` builds `{ type: 'A' }` discriminated unions                                                                                  |
+| single-entry `allOf` newtype (postcard)  | Follows the inner `$ref` of a transparent newtype such as `ChannelHandle(u32)` and generates the same scalar wire                                           |
 
 Payload data enums excluded from the postcard fast path, maps with
 struct/array values, recursive structures, and `Option<T>` combinations

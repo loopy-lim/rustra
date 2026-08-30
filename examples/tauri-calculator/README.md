@@ -34,14 +34,14 @@ bun run bench
 
 ## Key Files
 
-| File                    | Description                                          |
-| ----------------------- | ---------------------------------------------------- |
+| File                    | Description                                                      |
+| ----------------------- | ---------------------------------------------------------------- |
 | `src-tauri/src/main.rs` | Registers the rustra package with the Tauri builder + probe mode |
-| `src-tauri/Cargo.toml`  | Enables the `tauri` feature of the `rustra` crate    |
-| `src/app.ts`            | Screen using generated commands and events           |
-| `runtime-smoke.mjs`     | Automated runtime smoke test                         |
-| `src/benchmark.ts`      | Measures real WebView IPC accuracy and latency       |
-| `benchmark.mjs`         | Runs the hidden app + collects local receipts        |
+| `src-tauri/Cargo.toml`  | Enables the `tauri` feature of the `rustra` crate                |
+| `src/app.ts`            | Screen using generated commands and events                       |
+| `runtime-smoke.mjs`     | Automated runtime smoke test                                     |
+| `src/benchmark.ts`      | Measures real WebView IPC accuracy and latency                   |
+| `benchmark.mjs`         | Runs the hidden app + collects local receipts                    |
 
 ## Rust-Side Setup
 

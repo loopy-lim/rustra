@@ -26,13 +26,13 @@ Rust #[command] definition → TypeScript client codegen → platform adapter ex
 Tools that bridge a single Rust core to multiple JS hosts each make different
 trade-offs:
 
-|                               | **rustra**                       | napi-rs           | Nitro Modules | Tauri commands | tauri-specta |
-| ----------------------------- | -------------------------------- | ----------------- | ------------- | -------------- | ------------ |
-| Single Rust core × multi-host | ✅ Node/Bun/Tauri/RN             | Node (+ Electron) | RN-centric    | Tauri only     | Tauri only   |
-| Type-safe codegen (both ways) | ✅ commands+events               | manual d.ts       | ✅            | ❌ (manual)    | ✅           |
-| Compact binary wire           | ✅ rkyv V2 (11.8× smaller than JSON) | JSON/Buffer   | JSI objects   | JSON IPC       | JSON IPC     |
-| Contract gate (breaking change) | ✅ `rustra diff` + contract hash | ❌              | ❌            | ❌             | partial      |
-| Cancel/timeout/batch semantics | ✅ documented as a matrix        | DIY               | DIY           | ❌             | ❌           |
+|                                 | **rustra**                           | napi-rs           | Nitro Modules | Tauri commands | tauri-specta |
+| ------------------------------- | ------------------------------------ | ----------------- | ------------- | -------------- | ------------ |
+| Single Rust core × multi-host   | ✅ Node/Bun/Tauri/RN                 | Node (+ Electron) | RN-centric    | Tauri only     | Tauri only   |
+| Type-safe codegen (both ways)   | ✅ commands+events                   | manual d.ts       | ✅            | ❌ (manual)    | ✅           |
+| Compact binary wire             | ✅ rkyv V2 (11.8× smaller than JSON) | JSON/Buffer       | JSI objects   | JSON IPC       | JSON IPC     |
+| Contract gate (breaking change) | ✅ `rustra diff` + contract hash     | ❌                | ❌            | ❌             | partial      |
+| Cancel/timeout/batch semantics  | ✅ documented as a matrix            | DIY               | DIY           | ❌             | ❌           |
 
 rustra's choice: **own the whole RPC surface (definition → codegen → wire →
 verification) as a single contract.** Command invocation and contract
@@ -507,17 +507,17 @@ type RustraError = {
 
 ### Type Mapping
 
-| Rust                 | TypeScript                                      |
-| -------------------- | ----------------------------------------------- |
-| `i64`, `u32`, `f64`  | `number`                                        |
-| `String`             | `string`                                        |
-| `bool`               | `boolean`                                       |
-| `Vec<T>`             | `T[]`                                           |
-| `(A, B, C)`          | `[A, B, C]`                                     |
-| `HashMap<String, T>` | `Record<string, T>`                             |
+| Rust                 | TypeScript                                         |
+| -------------------- | -------------------------------------------------- |
+| `i64`, `u32`, `f64`  | `number`                                           |
+| `String`             | `string`                                           |
+| `bool`               | `boolean`                                          |
+| `Vec<T>`             | `T[]`                                              |
+| `(A, B, C)`          | `[A, B, C]`                                        |
+| `HashMap<String, T>` | `Record<string, T>`                                |
 | `Option<T>`          | `T \| null` (also `?:` when the field is optional) |
-| `enum { A, B }`      | `'A' \| 'B'`                                    |
-| struct               | `{ field: type; ... }`                          |
+| `enum { A, B }`      | `'A' \| 'B'`                                       |
+| struct               | `{ field: type; ... }`                             |
 
 Each adapter implements `EngineClient`, so generated command helpers behave
 identically regardless of platform.
@@ -586,13 +586,13 @@ For native module setup (iOS JSI / Android C++), see the
 
 ### Platform Support Matrix
 
-| Platform             | Current evidence level     | Notes                                                              |
-| -------------------- | -------------------------- | ------------------------------------------------------------------ |
-| Node / Bun           | Runtime verified           | subprocess·N-API·Bun FFI local runtime + adapter CI                |
-| Tauri (macOS)        | WebView runtime verified   | Release WebView `rustra_dispatch` accuracy·performance receipt     |
-| Tauri (Linux)        | Build + smoke verified     | Real WebView user flows need separate E2E                          |
+| Platform             | Current evidence level     | Notes                                                                                   |
+| -------------------- | -------------------------- | --------------------------------------------------------------------------------------- |
+| Node / Bun           | Runtime verified           | subprocess·N-API·Bun FFI local runtime + adapter CI                                     |
+| Tauri (macOS)        | WebView runtime verified   | Release WebView `rustra_dispatch` accuracy·performance receipt                          |
+| Tauri (Linux)        | Build + smoke verified     | Real WebView user flows need separate E2E                                               |
 | React Native iOS     | Simulator runtime verified | Release build·install·launch·reload·Nitro comparison; physical-device evidence separate |
-| React Native Android | Release runtime verified   | `TB710FU` arm64 physical device plus arm64/x86_64 `.so` checks; other devices separate |
+| React Native Android | Release runtime verified   | `TB710FU` arm64 physical device plus arm64/x86_64 `.so` checks; other devices separate  |
 
 `bun run test:compat` verifies the JS contract and supported local runtimes,
 and the CI native jobs verify build and link. Neither should be equated with
@@ -605,14 +605,14 @@ End-to-end Release measurements of calling
 high-performance paths. Accuracy was confirmed first on 2026-08-24 Apple
 Silicon, then repeated 3 times after warm-up.
 
-| Real user path                  | Mean latency |       p50 |   Throughput | Recommended use  |
-| ------------------------------- | -----------: | --------: | -----------: | ---------------- |
-| Node generated one-shot         |     2.76 ms  |   2.76 ms |    363 ops/s | CLI, low-freq batch |
-| Node persistent loop            |    16.86 µs  |  16.67 µs | 59,301 ops/s | General servers  |
-| Node N-API rkyv V2 escape hatch |     1.26 µs  |   1.17 µs | 793,185 ops/s | High-freq hot path |
-| Bun generated FFI rkyv V2       |     2.27 µs  |   2.21 µs | 439,961 ops/s | Services, CLI    |
-| Tauri generated WebView IPC     |   279.04 µs  | 300.00 µs |   3,584 ops/s | Desktop UI commands |
-| RN generated JSI, iOS Simulator |           —  |   2.71 µs |            — | Mobile hot path  |
+| Real user path                  | Mean latency |       p50 |    Throughput | Recommended use     |
+| ------------------------------- | -----------: | --------: | ------------: | ------------------- |
+| Node generated one-shot         |      2.76 ms |   2.76 ms |     363 ops/s | CLI, low-freq batch |
+| Node persistent loop            |     16.86 µs |  16.67 µs |  59,301 ops/s | General servers     |
+| Node N-API rkyv V2 escape hatch |      1.26 µs |   1.17 µs | 793,185 ops/s | High-freq hot path  |
+| Bun generated FFI rkyv V2       |      2.27 µs |   2.21 µs | 439,961 ops/s | Services, CLI       |
+| Tauri generated WebView IPC     |    279.04 µs | 300.00 µs |   3,584 ops/s | Desktop UI commands |
+| RN generated JSI, iOS Simulator |            — |   2.71 µs |             — | Mobile hot path     |
 
 Mean and throughput are 5% two-sided trimmed means to reduce OS scheduling
 tail values. Tauri used per-call values from a 20-call batch due to WKWebView
@@ -703,15 +703,15 @@ bunx --bun @rustra/cli dev --config rustra.json
 
 Full documentation lives in [`docs/`](docs/).
 
-| Doc                                                              | Contents                                        |
-| ---------------------------------------------------------------- | ----------------------------------------------- |
-| [Getting started](docs/getting-started.md)                       | Installation, first package, adapter choice     |
+| Doc                                                              | Contents                                               |
+| ---------------------------------------------------------------- | ------------------------------------------------------ |
+| [Getting started](docs/getting-started.md)                       | Installation, first package, adapter choice            |
 | [Architecture overview](docs/architecture.md)                    | Data flow, EngineClient contract, transport separation |
-| [Transport swap guide](docs/extending/transport-guide.md)        | Bun FFI, Node napi-rs replacement               |
-| [React Native setup guide](docs/extending/react-native-setup.md) | iOS JSI module setup, usage, troubleshooting    |
-| [Development hurdles guide](docs/development-hurdles.md)         | doctor, integrated codegen, drift, native boundary |
-| [Adding a new host guide](docs/extending/adding-host.md)         | Adding new adapters like Electron, Deno         |
-| [Full doc index](docs/README.md)                                 | Reading paths for users / contributors          |
+| [Transport swap guide](docs/extending/transport-guide.md)        | Bun FFI, Node napi-rs replacement                      |
+| [React Native setup guide](docs/extending/react-native-setup.md) | iOS JSI module setup, usage, troubleshooting           |
+| [Development hurdles guide](docs/development-hurdles.md)         | doctor, integrated codegen, drift, native boundary     |
+| [Adding a new host guide](docs/extending/adding-host.md)         | Adding new adapters like Electron, Deno                |
+| [Full doc index](docs/README.md)                                 | Reading paths for users / contributors                 |
 
 ## Contributing
 

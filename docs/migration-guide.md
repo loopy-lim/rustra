@@ -20,12 +20,12 @@ rustra diff --old ./generated/schema.v1.json --new ./generated/schema.json --for
 
 ### The 4 detected breaking change types
 
-| Type                    | Meaning                  |
-| ----------------------- | ------------------------ |
-| `command_removed`       | Command deleted          |
-| `field_removed`         | input/output field deleted |
-| `field_type_changed`    | Field type changed       |
-| `required_field_added`  | Required field newly added |
+| Type                   | Meaning                    |
+| ---------------------- | -------------------------- |
+| `command_removed`      | Command deleted            |
+| `field_removed`        | input/output field deleted |
+| `field_type_changed`   | Field type changed         |
+| `required_field_added` | Required field newly added |
 
 ## Recipes per breaking change
 

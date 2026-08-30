@@ -12,11 +12,11 @@ Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플�
 
 There are three core components:
 
-| Component          | Role                                                            |
-| ------------------ | --------------------------------------------------------------- |
-| `#[command]`       | Attribute macro that turns a function into a bridge command     |
+| Component          | Role                                                                        |
+| ------------------ | --------------------------------------------------------------------------- |
+| `#[command]`       | Attribute macro that turns a function into a bridge command                 |
 | `#[bridge_type]`   | Automatically adds the required derives and serde settings to structs/enums |
-| `rustra::build!()` | Creates the package builder and registers multiple commands at once |
+| `rustra::build!()` | Creates the package builder and registers multiple commands at once         |
 
 ---
 
@@ -105,10 +105,10 @@ TypeScript.
 
 Function names are converted to lowerCamelCase automatically:
 
-| Function name          | Command name                                |
-| ---------------------- | ------------------------------------------- |
-| `add_numbers`          | `addNumbers`                                |
-| `find_user`            | `findUser`                                  |
+| Function name          | Command name                                             |
+| ---------------------- | -------------------------------------------------------- |
+| `add_numbers`          | `addNumbers`                                             |
+| `find_user`            | `findUser`                                               |
 | `do_something_command` | `doSomething` (`_command` suffix stripped automatically) |
 
 To specify one directly, use the `name` attribute:
@@ -247,11 +247,11 @@ rustra::Package::builder("examples.calculator")
 
 For each `#[command]` function, the macro generates:
 
-| Generated item      | Naming rule                  | Role                                                          |
-| ------------------- | ---------------------------- | ------------------------------------------------------------- |
-| Metadata constant   | `__RUstra_meta_<fn_name>`    | A `&str` constant holding the command name                    |
-| Handler function    | `__rustra_<fn_name>_handler` | A wrapper performing input type conversion and Ok() wrapping  |
-| Trait bound check   | `_check_command_bounds`      | Verifies the I/O types satisfy the required traits            |
+| Generated item    | Naming rule                  | Role                                                         |
+| ----------------- | ---------------------------- | ------------------------------------------------------------ |
+| Metadata constant | `__RUstra_meta_<fn_name>`    | A `&str` constant holding the command name                   |
+| Handler function  | `__rustra_<fn_name>_handler` | A wrapper performing input type conversion and Ok() wrapping |
+| Trait bound check | `_check_command_bounds`      | Verifies the I/O types satisfy the required traits           |
 
 ---
 
@@ -325,15 +325,15 @@ duration of the synchronous call, and the Rust output allocation is freed by the
 
 ### Other Builder Methods
 
-| Method                                  | Role                                                            |
-| --------------------------------------- | --------------------------------------------------------------- |
+| Method                                  | Role                                                                    |
+| --------------------------------------- | ----------------------------------------------------------------------- |
 | `.require_capability(name, cap)`        | Requires a capability for a command (deny-by-default Runtime Authority) |
-| `.buffer_command_fn(handler)`           | Registers the name-inferred single `Vec<u8>` direct path        |
-| `.buffer_command(name, handler)`        | Registers the explicitly named single `Vec<u8>` direct path     |
-| `.alias_command_id(command, legacy_id)` | Registers a legacy cmd_id alias (backward-compatible dispatch)  |
-| `.event_capacity(capacity)`             | Sets the event bus ring buffer capacity                        |
-| `.schema_version(version)`              | Declares the schema negotiation version (T2, OTA)               |
-| `.manage(state)`                        | Registers shared state (accessed via `Package::state::<T>()`)   |
+| `.buffer_command_fn(handler)`           | Registers the name-inferred single `Vec<u8>` direct path                |
+| `.buffer_command(name, handler)`        | Registers the explicitly named single `Vec<u8>` direct path             |
+| `.alias_command_id(command, legacy_id)` | Registers a legacy cmd_id alias (backward-compatible dispatch)          |
+| `.event_capacity(capacity)`             | Sets the event bus ring buffer capacity                                 |
+| `.schema_version(version)`              | Declares the schema negotiation version (T2, OTA)                       |
+| `.manage(state)`                        | Registers shared state (accessed via `Package::state::<T>()`)           |
 
 ### `.build()` / `.done()`
 
@@ -391,11 +391,11 @@ let generated = pkg.generate_typescript()?;
 
 The struct holding the TypeScript code generation result.
 
-| Field           | Output file   | Content                                  |
-| --------------- | ------------- | ---------------------------------------- |
-| `schema_json`   | `schema.json` | The full command schema (JSON)           |
-| `types_ts`      | `types.ts`    | TypeScript type definitions              |
-| `commands_ts`   | `commands.ts` | TypeScript command helper functions      |
+| Field           | Output file   | Content                                            |
+| --------------- | ------------- | -------------------------------------------------- |
+| `schema_json`   | `schema.json` | The full command schema (JSON)                     |
+| `types_ts`      | `types.ts`    | TypeScript type definitions                        |
+| `commands_ts`   | `commands.ts` | TypeScript command helper functions                |
 | `contract_hash` | `contract.ts` | The schema's SHA-256 hash (integrity verification) |
 
 ### `.write_to_dir(dir)`
@@ -445,15 +445,15 @@ fn divide(input: DivideInput) -> Result<DivideOutput> {
 
 ### Error Code Classification
 
-| Code                   | Factory method                         | Meaning                                 |
-| ---------------------- | -------------------------------------- | --------------------------------------- |
-| `command.not_found`    | `RustraError::command_not_found(name)` | Invoking an unregistered command        |
-| `command.invalid_args` | `RustraError::invalid_args(error)`     | Input argument deserialization failure  |
-| `capability.denied`    | `RustraError::capability_denied(d)`    | Capability not granted                  |
-| `transport.error`      | `RustraError::transport(error)`        | Transport/network error — **retryable** |
-| `transport.timeout`    | `RustraError::timeout(error)`          | Timeout — **retryable**                 |
+| Code                   | Factory method                         | Meaning                                   |
+| ---------------------- | -------------------------------------- | ----------------------------------------- |
+| `command.not_found`    | `RustraError::command_not_found(name)` | Invoking an unregistered command          |
+| `command.invalid_args` | `RustraError::invalid_args(error)`     | Input argument deserialization failure    |
+| `capability.denied`    | `RustraError::capability_denied(d)`    | Capability not granted                    |
+| `transport.error`      | `RustraError::transport(error)`        | Transport/network error — **retryable**   |
+| `transport.timeout`    | `RustraError::timeout(error)`          | Timeout — **retryable**                   |
 | `internal`             | `RustraError::internal(error)`         | Internal error (serialization, I/O, etc.) |
-| (custom)               | `RustraError::custom(code, message)`   | User-defined error                      |
+| (custom)               | `RustraError::custom(code, message)`   | User-defined error                        |
 
 ### Retryability (retryable)
 
@@ -507,19 +507,19 @@ fn write_output() -> Result<()> {
 
 ### Type Mapping
 
-| Rust type                     | TypeScript type                         |
-| ----------------------------- | --------------------------------------- |
+| Rust type                        | TypeScript type                      |
+| -------------------------------- | ------------------------------------ |
 | `i64`, `i32`, `u32`, `f64`, etc. | `number`                             |
-| `String`                      | `string`                                |
-| `bool`                        | `boolean`                               |
-| `Option<T>`                   | `T \| null` (struct fields use `?:`)    |
-| `Vec<T>`                      | `T[]`                                   |
-| `Vec<Vec<T>>`                 | `T[][]` (nesting supported)             |
-| `HashMap<String, V>`          | `Record<string, V>`                     |
-| `BTreeSet<T>` / `HashSet<T>`  | `Set<T>` (`uniqueItems` mapping)        |
-| `(A, B, C)`                   | `[A, B, C]` (tuple)                     |
-| Simple `enum`                 | `'Variant1' \| 'Variant2'`              |
-| Data-carrying `enum`          | Object union type                       |
+| `String`                         | `string`                             |
+| `bool`                           | `boolean`                            |
+| `Option<T>`                      | `T \| null` (struct fields use `?:`) |
+| `Vec<T>`                         | `T[]`                                |
+| `Vec<Vec<T>>`                    | `T[][]` (nesting supported)          |
+| `HashMap<String, V>`             | `Record<string, V>`                  |
+| `BTreeSet<T>` / `HashSet<T>`     | `Set<T>` (`uniqueItems` mapping)     |
+| `(A, B, C)`                      | `[A, B, C]` (tuple)                  |
+| Simple `enum`                    | `'Variant1' \| 'Variant2'`           |
+| Data-carrying `enum`             | Object union type                    |
 
 ### Optional Field Handling
 
@@ -601,19 +601,19 @@ use rustra::prelude::*;
 
 Provided items:
 
-| Item               | Kind        | Purpose                               |
-| ------------------ | ----------- | ------------------------------------- |
-| `build`            | function    | Creates a `PackageBuilder`            |
-| `bridge_type`      | attribute macro | Automates struct/enum derives     |
+| Item               | Kind            | Purpose                                   |
+| ------------------ | --------------- | ----------------------------------------- |
+| `build`            | function        | Creates a `PackageBuilder`                |
+| `bridge_type`      | attribute macro | Automates struct/enum derives             |
 | `command`          | attribute macro | Converts a function into a bridge command |
-| `Package`          | struct      | The registered set of commands        |
-| `PackageBuilder`   | struct      | The command registration builder      |
-| `Result<T>`        | type alias  | `std::result::Result<T, RustraError>` |
-| `RustraError`      | struct      | The error type                        |
-| `Serialize`        | trait       | serde serialization                   |
-| `Deserialize`      | trait       | serde deserialization                 |
-| `JsonSchema`       | trait       | JSON Schema generation                |
-| `GeneratedPackage` | struct      | The TypeScript generation result      |
+| `Package`          | struct          | The registered set of commands            |
+| `PackageBuilder`   | struct          | The command registration builder          |
+| `Result<T>`        | type alias      | `std::result::Result<T, RustraError>`     |
+| `RustraError`      | struct          | The error type                            |
+| `Serialize`        | trait           | serde serialization                       |
+| `Deserialize`      | trait           | serde deserialization                     |
+| `JsonSchema`       | trait           | JSON Schema generation                    |
+| `GeneratedPackage` | struct          | The TypeScript generation result          |
 
 ---
 

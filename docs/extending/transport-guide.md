@@ -35,12 +35,12 @@ export function createNodeEngine(transport: NodeInvokeTransport): NodeEngineClie
 
 ## 2. Current Implementation Status
 
-| Host             | Current Transport                              | Rust Entry Point                               | Alternatives                    |
-| ---------------- | ---------------------------------------------- | ---------------------------------------------- | ------------------------------- |
-| **Node**         | subprocess stdio (`spawnSync`)                 | `main.rs` → `run_invoke_stdio()`               | napi-rs native module, WASM     |
-| **Bun**          | subprocess stdio (`spawnSync`)                 | `main.rs` → `run_invoke_stdio()`               | `bun:ffi` (direct C FFI call)   |
+| Host             | Current Transport                                   | Rust Entry Point                               | Alternatives                    |
+| ---------------- | --------------------------------------------------- | ---------------------------------------------- | ------------------------------- |
+| **Node**         | subprocess stdio (`spawnSync`)                      | `main.rs` → `run_invoke_stdio()`               | napi-rs native module, WASM     |
+| **Bun**          | subprocess stdio (`spawnSync`)                      | `main.rs` → `run_invoke_stdio()`               | `bun:ffi` (direct C FFI call)   |
 | **Tauri**        | `rustra_dispatch` multiplexing (framework built-in) | `tauri_support::register()` (feature: `tauri`) | None                            |
-| **React Native** | C FFI (`extern "C"`)                           | `lib.rs` → `rustra_calculator_invoke`          | TurboModule, Nitro Modules, JSI |
+| **React Native** | C FFI (`extern "C"`)                                | `lib.rs` → `rustra_calculator_invoke`          | TurboModule, Nitro Modules, JSI |
 
 ### Node / Bun — subprocess stdio
 
@@ -416,13 +416,13 @@ Advantages:
 
 ## 6. Summary: Choosing a Transport
 
-| Criterion         | subprocess stdio     | C FFI                | napi-rs   | Framework built-in     |
-| ----------------- | -------------------- | -------------------- | --------- | ---------------------- |
-| **Effort**        | Low                  | Medium               | Medium    | Low (framework-provided) |
-| **Performance**   | Low (process spawn)  | High                 | High      | High                   |
-| **Compatibility** | Universal            | Needs language bindings | Node only | That framework only |
-| **Debugging**     | Easy (isolated)      | Hard (memory management) | Medium | Medium                |
-| **Process isolation** | Yes              | No                   | No        | No                     |
+| Criterion             | subprocess stdio    | C FFI                    | napi-rs   | Framework built-in       |
+| --------------------- | ------------------- | ------------------------ | --------- | ------------------------ |
+| **Effort**            | Low                 | Medium                   | Medium    | Low (framework-provided) |
+| **Performance**       | Low (process spawn) | High                     | High      | High                     |
+| **Compatibility**     | Universal           | Needs language bindings  | Node only | That framework only      |
+| **Debugging**         | Easy (isolated)     | Hard (memory management) | Medium    | Medium                   |
+| **Process isolation** | Yes                 | No                       | No        | No                       |
 
 **Recommendations:**
 
