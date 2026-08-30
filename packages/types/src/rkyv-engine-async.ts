@@ -2,6 +2,7 @@ import { RustraCommandError } from './errors.js';
 import { invokeCallbackWithAbort, raceAbort } from './cancel.js';
 import { encodeTier3Request, decodeTier3Response } from './json-wire.js';
 import { tier2Outcome, payloadTooLargeError } from './rkyv-engine-contract.js';
+import { createDynamicCodecRuntime } from './rkyv-engine-dynamic-codec.js';
 import type { RkyvDispatchRuntime, RkyvEngineContext } from './rkyv-engine-context.js';
 import type { InvokeOptions } from './public.js';
 
@@ -16,6 +17,9 @@ export function createRkyvInvokeRaw(
   const { native, registry, schema, payloadLimit } = context;
   const { hasTypedPath, ensureStaticIds } = context.capabilities;
   const { dispatchPromise } = dispatch;
+  // (T2-3) dispatch 와 동일한 동적 binary 판정 — 캐시는 엔진별로 독립이지만
+  // entry 객체 식별(세대 재조회 시 새 객체)이라 두 캐시가 같은 판정에 수렴한다.
+  const dynamicCodecs = createDynamicCodecRuntime();
   const invokeRaw = <T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> => {
     const signal = options?.signal;
     if (signal?.aborted) {
@@ -54,6 +58,28 @@ export function createRkyvInvokeRaw(
       const entry =
         cmdId !== undefined ? { commandId: cmdId } : schema.lookupCachedLiveSchemaEntry(command);
       if (entry) {
+        // (T2-3) 동적 명령도 postcard/complex binary 가 가능하면 전파 경로에서
+        // binary 프레임을 쓴다 — Rust 핸들러 라우트와의 정합이 취소 전파보다
+        // 우선한다(와이어 불일치는 핸들러 오류로 귀결).
+        const dynamicCodec = dynamicCodecs.lookupBinaryCodec(entry);
+        if (dynamicCodec) {
+          return invokeCallbackWithAbort(
+            command,
+            signal,
+            (resolve, reject, isSettled) => {
+              const encoded = dynamicCodec.encode(args);
+              const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
+              if (tooLarge) throw tooLarge;
+              return native.invokeAsync!(encoded, (resp) => {
+                if (isSettled()) return;
+                const outcome = tier2Outcome<T>(dynamicCodec, resp);
+                if (outcome.ok) resolve(outcome.value);
+                else reject(outcome.error);
+              });
+            },
+            (invocationId) => native.invokeCancel!(invocationId),
+          );
+        }
         return invokeCallbackWithAbort(
           command,
           signal,

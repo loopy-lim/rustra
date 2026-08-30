@@ -1,3 +1,4 @@
+import type { ComplexSchema } from './complex-codec-types.js';
 import { RustraCommandError } from './errors.js';
 import { decodeUtf8 } from './utf8.js';
 
@@ -7,6 +8,12 @@ export type LiveSchemaEntry = {
   commandId: number;
   inputSchema?: unknown;
   outputSchema?: unknown;
+  /**
+   * (T2-3) 명령별 definitions — Rust live schema(package_schema.rs)는 $ref
+   * 해결용 definitions 를 비어있지 않을 때만 엔트리에 싣는다. 동적 명령
+   * binary 코덱(postcard/complex 인터프리터)이 $ref 를 풀 때 필요하다.
+   */
+  definitions?: Record<string, ComplexSchema>;
 };
 
 /** createRkyvV2Engine 이 요구하는 네이티브 인터페이스 (invokeRkyvV2 + live schema). */
@@ -108,6 +115,7 @@ export function parseLiveSchemaDocument(native: { getSchema?(): ArrayBuffer }): 
       commandId: number;
       inputSchema?: unknown;
       outputSchema?: unknown;
+      definitions?: Record<string, ComplexSchema>;
     }>;
   };
   const map = new Map<string, LiveSchemaEntry>();
@@ -116,6 +124,7 @@ export function parseLiveSchemaDocument(native: { getSchema?(): ArrayBuffer }): 
       commandId: c.commandId,
       inputSchema: c.inputSchema,
       outputSchema: c.outputSchema,
+      definitions: c.definitions,
     });
   }
   const doc: LiveSchemaDocument = { commands: map };
