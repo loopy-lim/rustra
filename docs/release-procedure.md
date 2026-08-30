@@ -31,7 +31,7 @@ hatches, and rollback procedures.
 bunx changeset status   # check target packages/bumps
 ```
 
-- If `.changeset/*.md` files exist on main, release.yml creates the "Version Packages" PR
+- If `.changeset/*.md` files exist on main, release.yml creates the version-packages PR (`chore: version packages`)
 - When the PR merges, version fields + CHANGELOGs are updated in bulk and the changeset files are consumed
 - Name multiple packages in the same changeset only when they must change together.
   Do not re-add a fixed group to bundle all packages.
