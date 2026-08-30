@@ -2701,6 +2701,55 @@ test('async propagate path gates on generation resync before live schema lookup 
   assert.deepEqual(seenIds, [7, 8], 'async path must resync before the live schema lookup');
 });
 
+test('dynamic codec cache prunes stale-generation codecs when the resync epoch advances', async () => {
+  // 세대가 바뀌면(resync 에포크 상승) 이전 세대 entry 의 코덱은 회수 가능해야
+  // 한다 — 강한 참조 맵이라 GC 에 맡기면 dev 치환 반복에서 구 코덱이 누적된다.
+  const { createRkyvSchemaRuntime } = await import('./rkyv-engine-schema.js');
+  const { createDynamicCodecRuntime } = await import('./rkyv-engine-dynamic-codec.js');
+  let generation = 1;
+  let commands: Array<Record<string, unknown>> = [];
+  const native: RkyvV2SchemaNative = {
+    getSchema: () => {
+      const doc = { packageId: 't', schemaGeneration: generation, commands };
+      return bytesFromStrings([JSON.stringify(doc)]);
+    },
+    getSchemaGeneration: () => generation,
+    invokeRkyvV2: () => new ArrayBuffer(0),
+  };
+  const schema = createRkyvSchemaRuntime(native);
+  const codecs = createDynamicCodecRuntime(schema);
+
+  const postcardSchema = {
+    type: 'object',
+    required: ['v'],
+    properties: { v: { type: 'integer', format: 'int64' } },
+  };
+  const entryOf = (
+    commandId: number,
+  ): { name: string; commandId: number } & Record<string, unknown> => ({
+    name: `dyn${commandId}`,
+    commandId,
+    inputSchema: postcardSchema,
+    outputSchema: postcardSchema,
+  });
+
+  // 세대 1 — 동적 명령 2개 조회로 코덱 2개 캐시.
+  commands = [entryOf(4), entryOf(5)];
+  const e4 = schema.lookupCachedLiveSchemaEntry('dyn4')!;
+  const e5 = schema.lookupCachedLiveSchemaEntry('dyn5')!;
+  assert.ok(codecs.lookupBinaryCodec(e4));
+  assert.ok(codecs.lookupBinaryCodec(e5));
+  assert.equal(codecs.size, 2, 'two codecs cached for generation 1');
+
+  // 세대 2 — 치환으로 세대 상승, 게이트가 재조회하면 새 entry 객체.
+  generation = 2;
+  commands = [entryOf(4)];
+  const e4New = schema.lookupCachedLiveSchemaEntry('dyn4')!;
+  assert.notEqual(e4New, e4, 'generation resync must produce fresh entry objects');
+  assert.ok(codecs.lookupBinaryCodec(e4New));
+  assert.equal(codecs.size, 1, 'generation change must prune the old-generation codecs');
+});
+
 // ── (T2-2) 스키마→postcard 코덱 인터프리터 ──────────────────
 // live_schema 의 JSON Schema 로 생성한 인터프리터 코덱이 generated 코드젠 코덱과
 // **바이트 동일**임을 PINNED hex(examples/calculator/tests/wire_fixtures.rs 와

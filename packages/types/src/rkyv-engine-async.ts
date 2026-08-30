@@ -19,7 +19,7 @@ export function createRkyvInvokeRaw(
   const { dispatchPromise } = dispatch;
   // (T2-3) dispatch 와 동일한 동적 binary 판정 — 캐시는 엔진별로 독립이지만
   // entry 객체 식별(세대 재조회 시 새 객체)이라 두 캐시가 같은 판정에 수렴한다.
-  const dynamicCodecs = createDynamicCodecRuntime();
+  const dynamicCodecs = createDynamicCodecRuntime(schema);
   const invokeRaw = <T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> => {
     const signal = options?.signal;
     if (signal?.aborted) {

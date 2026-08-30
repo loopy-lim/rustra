@@ -8,7 +8,7 @@ import type { RkyvDispatchRuntime, RkyvEngineContext } from './rkyv-engine-conte
 
 export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispatchRuntime {
   const { native, registry, schema, payloadLimit } = context;
-  const dynamicCodecs = createDynamicCodecRuntime();
+  const dynamicCodecs = createDynamicCodecRuntime(schema);
   const {
     hasTypedPath,
     hasByIdPath,
