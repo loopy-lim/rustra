@@ -19,6 +19,17 @@ export type RustraJSIAsyncNative = RustraJSINative & {
     onSuccess: (result: unknown) => void,
     onError: (message: string) => void,
   ): number | void;
+  /**
+   * (G2) id 인덱싱 async 진입 — 이름 문자열 마샬링 제거. 정적 명령(코드젠
+   * registry 안)은 byId 우선, 미노출 또는 registry 밖 동적 명령은 이름 경로
+   * 폴백(P0-3 sync byId 패턴과 동일 계약).
+   */
+  invokeTypedAsyncById?(
+    commandId: number,
+    args: unknown,
+    onSuccess: (result: unknown) => void,
+    onError: (message: string) => void,
+  ): number | void;
   invokeCancel?(invocationId: number): boolean;
 };
 
@@ -34,6 +45,16 @@ export function createAsyncEngine(
     return syncEngine;
   }
   const invokeTypedAsync = native.invokeTypedAsync.bind(native);
+  // G2 — 정적 id 캐시 (ensureStaticIds 선례): registry 기준 1회 스윕.
+  // registry 에 있는 이름 = 코드젠 정적 명령 = C++ encode_by_id 로 접근 가능.
+  const hasByIdPath = typeof native.invokeTypedAsyncById === 'function';
+  const invokeTypedAsyncById = hasByIdPath ? native.invokeTypedAsyncById!.bind(native) : null;
+  const staticIds = new Map<string, number>();
+  if (hasByIdPath) {
+    for (const [name, codec] of options.rkyvV2Codecs) {
+      staticIds.set(name, codec.commandId);
+    }
+  }
   const transport: EngineClientType = {
     invoke<T>(command: string, args?: unknown, invokeOptions?: InvokeOptions): Promise<T> {
       const signal = invokeOptions?.signal;
@@ -41,16 +62,24 @@ export function createAsyncEngine(
         return Promise.reject(
           new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
         );
+      const staticId = hasByIdPath ? staticIds.get(command) : undefined;
       const dispatch = (
         resolve: (value: T) => void,
         reject: (reason: unknown) => void,
       ): number | void =>
-        invokeTypedAsync(
-          command,
-          args,
-          (result) => resolve(result as T),
-          (message) => reject(parseRustraErrorString(message)),
-        );
+        staticId !== undefined
+          ? invokeTypedAsyncById!(
+              staticId,
+              args,
+              (result) => resolve(result as T),
+              (message) => reject(parseRustraErrorString(message)),
+            )
+          : invokeTypedAsync(
+              command,
+              args,
+              (result) => resolve(result as T),
+              (message) => reject(parseRustraErrorString(message)),
+            );
       if (!signal) {
         return new Promise<T>((resolve, reject) => {
           void dispatch(resolve, reject);

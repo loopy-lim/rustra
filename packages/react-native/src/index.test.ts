@@ -691,3 +691,91 @@ test('async engine applies timeoutMs and ignores a late native callback', async 
     (error: unknown) => error instanceof RustraCommandError && error.code === 'transport.timeout',
   );
 });
+
+// ── G2: async byId 진입 — 이름 마샬링 제거 ───────────────────
+
+function makeByIdAsyncNative() {
+  const state = {
+    byIdCalls: [] as Array<{ cmdId: number; args: unknown }>,
+    nameCalls: [] as string[],
+    resolveNow: () => {},
+    rejectNow: (_msg: string) => {},
+  };
+  const native: RustraJSIAsyncNative = {
+    invoke(_payload: ArrayBuffer): ArrayBuffer {
+      return new ArrayBuffer(0);
+    },
+    invokeRkyvV2(_payload: ArrayBuffer): ArrayBuffer {
+      return new ArrayBuffer(0);
+    },
+    invokeTypedAsyncById(
+      cmdId: number,
+      _args: unknown,
+      onSuccess: (result: unknown) => void,
+      onError: (message: string) => void,
+    ): number {
+      state.byIdCalls.push({ cmdId, args: _args });
+      state.resolveNow = () => onSuccess({ value: 42 });
+      state.rejectNow = (msg) => onError(msg);
+      return 9;
+    },
+    invokeTypedAsync(
+      name: string,
+      _args: unknown,
+      onSuccess: (result: unknown) => void,
+      onError: (message: string) => void,
+    ): number {
+      state.nameCalls.push(name);
+      state.resolveNow = () => onSuccess({ value: 42 });
+      state.rejectNow = (msg) => onError(msg);
+      return 8;
+    },
+  };
+  return { native, state };
+}
+
+test('async engine routes static commands through invokeTypedAsyncById (G2)', async () => {
+  const h = makeByIdAsyncNative();
+  const registry = new Map<string, { commandId: number }>([['heavy', { commandId: 5 }]]);
+  const engine = createAsyncEngine(h.native, { rkyvV2Codecs: registry as never });
+
+  const p = engine.invoke<{ value: number }>('heavy', { n: 1 });
+  h.state.resolveNow();
+  const out = await p;
+
+  assert.equal(out.value, 42);
+  assert.deepEqual(
+    h.state.byIdCalls,
+    [{ cmdId: 5, args: { n: 1 } }],
+    'static command must enter by cmdId — no name marshalling',
+  );
+  assert.deepEqual(h.state.nameCalls, [], 'name entry must be bypassed on the byId path');
+});
+
+test('async engine falls back to the name path for commands outside the registry (G2)', async () => {
+  // registry 밖 = 동적 명령 — C++ 코덱 테이블에 없으므로 byId 로 진입하면 안 된다.
+  const h = makeByIdAsyncNative();
+  const engine = createAsyncEngine(h.native, {
+    rkyvV2Codecs: new Map([['heavy', { commandId: 5 }]]) as never,
+  });
+
+  const p = engine.invoke<{ value: number }>('dynamicCmd', { n: 1 });
+  h.state.resolveNow();
+  const out = await p;
+  assert.equal(out.value, 42);
+  assert.deepEqual(h.state.byIdCalls, [], 'dynamic command must not ride the byId path');
+  assert.deepEqual(h.state.nameCalls, ['dynamicCmd']);
+});
+
+test('async engine without invokeTypedAsyncById keeps the name path (G2 compat)', async () => {
+  // 구형 네이티브 — byId 미노출 시 기존 이름 진입 유지.
+  const h = makeAsyncNative();
+  const engine = createAsyncEngine(h.native, {
+    rkyvV2Codecs: new Map([['heavy', { commandId: 5 }]]) as never,
+  });
+  const p = engine.invoke<{ value: number }>('heavy', { n: 1 });
+  h.state.resolveNow();
+  const out = await p;
+  assert.equal(out.value, 42);
+  assert.equal(h.state.calls, 1, 'name-based invokeTypedAsync must be used');
+});

@@ -529,6 +529,10 @@ void ChannelDispatcher::reset() {
 // 정리하고 구 Runtime을 절대 건드리지 않는다.
 struct AsyncCallContext {
   std::string commandName;
+  /// (G2) byId 진입 플래그 + cmd id — byId 경로에서는 이름 문자열 복사를
+  /// 피하기 위해 commandName 을 비워 두고 id 만 실는다(decode_by_id 진단용).
+  bool hasCommandId = false;
+  uint16_t commandId = 0;
   std::optional<facebook::jsi::Function> onSuccess;
   std::optional<facebook::jsi::Function> onError;
   std::shared_ptr<void> callInvoker;
@@ -1271,6 +1275,142 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         return Value(static_cast<double>(invocationId));
       });
     cache_["invokeTypedAsync"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+
+  // ── G2: invokeTypedAsyncById(cmdId, args, onSuccess, onError) ──
+  // invokeTypedAsync 의 id 인덱싱 변형 — 이름 문자열 마샬링(std::string name
+  // utf8 변환 + encode_by_name 의 name→codec 해시)을 cmdId 직접 인덱싱으로
+  // 대체한다. 완료 콜백의 std::string name 복사도 제거 — 컨텍스트에
+  // uint16_t commandId 만 실려 간다. 에러/디코드 진단은 id 기반 조립.
+  {
+    auto propNameId = PropNameID::forAscii(rt, "invokeTypedAsyncById");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 4,
+      [](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count != 4) {
+          throw JSError(rt, "RustraJSI: invokeTypedAsyncById requires (cmdId, args, onSuccess, onError)");
+        }
+        if (!args[0].isNumber()) {
+          throw JSError(rt, "RustraJSI: invokeTypedAsyncById cmdId must be a number");
+        }
+        if (!args[2].isObject() || !args[2].asObject(rt).isFunction(rt) ||
+            !args[3].isObject() || !args[3].asObject(rt).isFunction(rt)) {
+          throw JSError(rt, "RustraJSI: invokeTypedAsyncById callbacks must be functions");
+        }
+        const auto cmdId = static_cast<uint16_t>(args[0].asNumber());
+
+        std::shared_ptr<void> invoker = getEventDispatcher()->currentCallInvoker();
+        if (!invoker) {
+          throw JSError(rt,
+            "RustraJSI: invokeTypedAsyncById requires a CallInvoker — "
+            "install via installRustraJSIWithInvoker");
+        }
+
+        // 1) JS 객체 → postcard 요청 바이트 (encode_by_id — 해시 없이 직접 인덱싱).
+        rc::Writer w;
+        if (!gen::encode_by_id(rt, cmdId, args[1], w)) {
+          throw JSError(rt, "RustraJSI: no C++ codec for cmd id " + std::to_string(cmdId));
+        }
+        auto req = w.take();
+
+        auto ctx = std::make_shared<AsyncCallContext>();
+        ctx->hasCommandId = true;
+        ctx->commandId = cmdId;
+        ctx->onSuccess.emplace(args[2].asObject(rt).getFunction(rt));
+        ctx->onError.emplace(args[3].asObject(rt).getFunction(rt));
+        ctx->callInvoker = std::move(invoker);
+        ctx->generation = g_runtimeGeneration.load(std::memory_order_acquire);
+        registerAsyncContext(ctx);
+        auto* holder = new std::shared_ptr<AsyncCallContext>(ctx);
+
+        // 2) 비동기 FFI — invokeTypedAsync 와 동일한 엔트리, 동일한 응답 규약.
+        uint64_t invocationId = 0;
+        rustra_ffi_invoke_rkyv_v2_async_into(
+          req.data(), req.size(),
+          ctx->frameBuffer.data(), ctx->frameBuffer.size(),
+          holder,
+          [](void* user_data, uint8_t* resp, size_t resp_len, uint8_t owned) {
+            std::unique_ptr<std::shared_ptr<AsyncCallContext>> holder(
+              static_cast<std::shared_ptr<AsyncCallContext>*>(user_data));
+            std::shared_ptr<AsyncCallContext> ctx = *holder;
+            std::shared_ptr<uint8_t> ownedFrame;
+            if (owned == 1) {
+              ownedFrame = std::shared_ptr<uint8_t>(
+                resp, [resp_len](uint8_t* p) { rustra_ffi_free(p, resp_len); });
+            }
+            std::shared_ptr<void> invoker;
+            bool valid = false;
+            {
+              std::lock_guard<std::mutex> lock(ctx->mutex);
+              invoker = ctx->callInvoker;
+              valid = ctx->valid &&
+                ctx->generation == g_runtimeGeneration.load(std::memory_order_acquire);
+            }
+            if (!valid || !invoker) {
+              unregisterAsyncContext(ctx);
+              return;
+            }
+            auto* nativeInvoker =
+              static_cast<facebook::react::CallInvoker*>(invoker.get());
+            nativeInvoker->invokeAsync(
+              [ctx, resp, resp_len, owned, ownedFrame](facebook::jsi::Runtime& rt) {
+              std::optional<facebook::jsi::Function> onSuccess;
+              std::optional<facebook::jsi::Function> onError;
+              uint16_t commandId = 0;
+              bool deliver = false;
+              {
+                std::lock_guard<std::mutex> lock(ctx->mutex);
+                if (ctx->valid &&
+                    ctx->generation == g_runtimeGeneration.load(std::memory_order_acquire)) {
+                  ctx->valid = false;
+                  commandId = ctx->commandId;
+                  onSuccess = std::move(ctx->onSuccess);
+                  onError = std::move(ctx->onError);
+                  ctx->callInvoker.reset();
+                  deliver = true;
+                }
+              }
+                unregisterAsyncContext(ctx);
+                if (!deliver || !onSuccess || !onError) return;
+                const size_t out_len = resp_len;
+                if (out_len < 1) {
+                  onError->call(rt, "RustraJSI: empty rkyv v2 async response");
+                  return;
+                }
+                if (resp[0] == 0) {
+                  if (out_len < 10) {
+                    onError->call(rt, "RustraJSI: malformed async error response");
+                    return;
+                  }
+                  onError->call(rt, parseRkyvV2ErrorBody(resp, out_len));
+                  return;
+                }
+                if (out_len < 8) {
+                  onError->call(rt, "RustraJSI: malformed async success response");
+                  return;
+                }
+                try {
+                  rc::Reader r(resp + 8, out_len - 8);
+                  Value result = gen::decode_by_id(rt, commandId, r);
+                  onSuccess->call(rt, std::move(result));
+                } catch (const facebook::jsi::JSError& e) {
+                  onError->call(rt, e.getMessage());
+                } catch (const std::exception& e) {
+                  onError->call(rt, e.what());
+                }
+              });
+          },
+          &invocationId);
+
+        {
+          std::lock_guard<std::mutex> lock(ctx->mutex);
+          ctx->invocationId = invocationId;
+        }
+
+        return Value(static_cast<double>(invocationId));
+      });
+    cache_["invokeTypedAsyncById"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
 
