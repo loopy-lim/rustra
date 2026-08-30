@@ -21,6 +21,8 @@
 // 혼합 object, uniqueItems string set 등.
 
 import type { ComplexSchema } from './complex-codec-types.js';
+import { optionInner } from './complex-codec-schema.js';
+import { decodeUtf8, encodeUtf8 } from './utf8.js';
 import type { RustraError } from './errors.js';
 import type { RkyvV2Codec } from './public.js';
 
@@ -144,10 +146,10 @@ function concatBytes(arrays: Uint8Array[]): Uint8Array {
 }
 
 function utf8Encode(s: string): Uint8Array {
-  return new TextEncoder().encode(s);
+  return encodeUtf8(s);
 }
 function utf8Decode(bytes: Uint8Array): string {
-  return new TextDecoder().decode(bytes);
+  return decodeUtf8(bytes);
 }
 function encString(s: string): Uint8Array {
   const bytes = utf8Encode(s);
@@ -196,6 +198,9 @@ type SchemaNode = {
   decode: Decoder;
 };
 
+// TODO(json-wire): resolveRef 의 접두사 판정('#/definitions/' 가 아닌 슬래시
+// 경로는 null 로 폴백)은 postcard 지원 판정의 일부라 refName 로 바꾸지 않는다
+// — json-wire 쪽 공용 export 가 준비되면 이동한다.
 function resolveRef(
   schema: ComplexSchema,
   definitions: Record<string, ComplexSchema>,
@@ -206,14 +211,14 @@ function resolveRef(
   return definitions[name] ?? null;
 }
 
+/**
+ * Option<T> 언래핑 — `complex-codec-schema.optionInner` 를 재사용하되 postcard
+ * 판정(anyOf 조건)은 그대로 유지한다: anyOf 멤버 중 null 타입이 하나 있고,
+ * 나머지가 중첩 anyOf 가 아닌 단일 non-null 일 때만 Option 으로 인정한다.
+ * 와이어는 type-array 분기(공통)와 anyOf 분기(로컬)가 서로 다른 판정을 낸다.
+ */
 function unwrapOption(schema: ComplexSchema): ComplexSchema | null {
-  if (Array.isArray(schema.type)) {
-    const nonNull = schema.type.filter((t) => t !== 'null');
-    if (schema.type.length === 2 && nonNull.length === 1) {
-      return { ...schema, type: nonNull[0] } as ComplexSchema;
-    }
-    return null;
-  }
+  if (Array.isArray(schema.type)) return optionInner(schema);
   if (Array.isArray(schema.anyOf) && schema.anyOf.length === 2) {
     const nonNull = schema.anyOf.filter((item) => item.type !== 'null' && !('anyOf' in item));
     return nonNull.length === 1 && schema.anyOf.some((item) => item.type === 'null')
