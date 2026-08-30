@@ -422,11 +422,18 @@ struct RegistryState {
   schema-driven complex binary `[command_id][body]`를 C++ JSI에서 마샬링한다.
   Set 또는 BigInt 범위가 필요한 명령은 C++ 정적 광고를 하지 않고 JS complex
   codec으로 같은 `invokeRkyvV2` 경계를 사용한다.
-- **런타임 등록 명령**(registry에 없음) → TS 엔진이 **Tier 3(JSON-in-binary) fallback**: `live schema`에서 `commandId`를 조회해 `[id][JSON]`으로 `invokeRkyvV2` 호출.
-- **단일 `createRkyvV2Engine`** 이 postcard/complex/Tier 3 명령을 함께 처리한다. Rust
-  쪽 `register`는 동적 명령을 `force_tier3=true`로 만들어 JSON 디코더를 쓴다.
+- **런타임 등록 명령**(registry에 없음) → TS 엔진이 live schema 의 스키마로
+  binary 코덱을 **런타임 판정**한다 (T2-3): postcard 지원 스키마는 스키마
+  인터프리터 코덱(`createSchemaPostcardCodec`)으로 `[id][postcard]`, oneOf
+  payload enum 은 complex 코덱으로 `[id][variant index][body]`, postcard/
+  complex 둘 다 거부하는 스키마(anyOf 3항 untagged 등)만 **Tier 3(JSON-in-
+  binary)** 로 `[id][JSON]` 호출. Rust 쪽 `register`도 동일 3-way 판정으로
+  핸들러를 고르므로 양쪽 와이어가 정합한다.
+- **단일 `createRkyvV2Engine`** 이 postcard/complex/Tier 3 명령을 함께 처리한다.
+  코덱 판정 결과는 live schema entry 객체별로 캐시되고, generation 게이트가
+  재조회하면(치환 후 첫 호출) 스키마가 바뀐 명령을 다시 판정한다.
 
-**live schema**: `Package::live_schema()` / `rustra_ffi_get_schema()` / JSI `getSchema()` 가 정적+동적 명령 전체 스키마(`{name, commandId, inputSchema, outputSchema}`)를 반환. TS(`getLiveSchema`)가 동적 명령의 id/타입을 조회한다. 읽기 전용 — debug/release 모두.
+**live schema**: `Package::live_schema()` / `rustra_ffi_get_schema()` / JSI `getSchema()` 가 정적+동적 명령 전체 스키마(`{name, commandId, inputSchema, outputSchema, definitions?}`)를 반환. TS(`getLiveSchema`)가 동적 명령의 id/타입을 조회한다. 읽기 전용 — debug/release 모두.
 
 > 설계 의도: 동적 레지스트리는 **dev(DX) 용도**(느려도 OK). release는 frozen라 동적 명령이 없고, 정적 명령은 fast-path 그대로 → prod 성능 영향 없음.
 
@@ -437,7 +444,7 @@ struct RegistryState {
 - **Rust 타입별 와이어 테스트** — `crates/rustra/tests/rkyv_v2_wire.rs`: 정적(postcard) Tier 1/2 + 동적(Tier 3) 경로를 i64/f64/bool/String/Vec/HashMap/tuple/enum-with-data/Option/중첩 타입으로 round-trip 검증 + edge(빈 컬렉션·유니코드·10K payload) + error(잘린 payload·알 수 없는 id·malformed JSON·frozen·unregister 후 호출).
 - **속성 기반 fuzz** — `crates/rustra/tests/rkyv_v2_fuzz.rs` (proptest): 무작위 페이로드 round-trip 보존.
 - **동시성 스모크** — `crates/rustra/tests/rkyv_v2_concurrency.rs`: 다중 스레드 register/invoke/live_schema 혼합 시 패닉/교착 없음.
-- **성능 벤치마크** — `crates/rustra/benches/` (criterion): `tier_compare`(Tier 1/2/3 비교), `dynamic_registry`(register/live_schema/frozen 비용), `type_scaling`(payload 확장성). 동적 명령은 dev-only이므로 `--profile dev`로 측정. 수치는 `docs/benchmarks.md` "동적 명령 (Tier 3)" 섹션.
+- **성능 벤치마크** — `crates/rustra/benches/` (criterion): `tier_compare`(정적/동적 postcard vs Tier 3 JSON — 동일 연산 통제), `dynamic_registry`(register/live_schema/frozen 비용), `type_scaling`(동적 postcard payload 확장성). 동적 명령은 dev-only이므로 `--profile dev`로 측정. 수치는 `docs/benchmarks.md` "동적 명령" 섹션.
 - **TS 단위 테스트** — `packages/types/src/index.test.ts`: `createRkyvV2Engine` Tier 3 fallback + `getLiveSchema` (`bun run test:types`).
 - **RN E2E** — `examples/react-native-calculator/DynamicRegistryApp.tsx` 가 4종 타입(Vec/String/Map/Nested) 동적 명령을 단일 rkyvV2 엔진으로 호출 + live schema commandId 표시. 실행 절차는 `docs/plans/2026-07-05-rn-verification-checklist.md`.
 

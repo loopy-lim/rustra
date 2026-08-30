@@ -737,16 +737,25 @@ criterion 벤치마크(`crates/rustra/benches/`)로 측정.
 > 효과가 섞인 수치다. 아래 표는 동일 연산(echo), 동일 페이로드(`{"v":7}`)로
 > wire 만 교체한 **연산 통제 비교**다. 이 표를 기준으로 읽는다.
 
-| 경로 (동일 연산 echo)                         | 평균                | wire 배수               |
-| --------------------------------------------- | ------------------- | ----------------------- |
-| 정적 postcard (빌더 등록 `echo`)              | 466 ns              | 1x                      |
-| 동적 Tier 3 JSON (런타임 register `echo_dyn`) | 3.69 µs             | **~7.9x**               |
-| 동적 postcard (T2 fast-path)                  | — (T2 착수 시 측정) | 목표: 정적 대비 2x 이내 |
+| 경로 (동일 연산 echo)                                    | 평균 (2026-08-30) | wire 배수 |
+| -------------------------------------------------------- | ----------------- | --------- |
+| 정적 postcard (빌더 등록 `echo`)                         | 478 ns            | 1x        |
+| 동적 postcard (런타임 register `echo_dyn`, T2-1)         | 488 ns            | **1.02x** |
+| 동적 Tier 3 JSON (런타임 register `echo_any`, anyOf 3항) | 4.75 µs           | **~9.9x** |
 
-→ wire 순수 비교로도 동적 Tier 3 JSON 은 정적 postcard 대비 **약 8배**
+→ wire 순수 비교로 동적 Tier 3 JSON 은 정적 postcard 대비 **약 10배**
 느리다 — JSON 직렬화/파싱이 지배적이다. (구 표의 6.55x는 우연히 비슷한
 값이지만 연산 혼입 수치이므로 인용 금지. 2026-08-18 "1.44x" 주장은 측정
-오류로 폐기.) 동적 postcard fast-path(T2)가 이 격차의 제거 대상이다.
+오류로 폐기.)
+
+(T2-1) 동적 명령도 postcard 지원 스키마면 postcard 핸들러를 받고, (T2-3)
+JS 엔진도 live schema 인터프리터로 같은 와이어를 쓴다. 결과: **동적
+postcard 488 ns — 정적 478 ns 대비 1.02x** (목표 2x 이내 달성, 격차
+제거). Tier 3 JSON 은 이제 postcard/complex 둘 다 거부하는 스키마(anyOf
+3항 untagged 등)만 사용하며, `echo_any` 가 그 대표형이다. 구 표의
+"동적 Tier 3 (2026-08-22) 3.69 µs"는 `echo_dyn` 이 Tier 3 였던 시절
+수치로, T2-1 이후 `echo_dyn` 은 postcard 로 승격되어 더 이상 Tier 3 가
+아니므로 인용 시 주의한다.
 
 ### 런타임 레지스트리 비용 (debug, 2026-08-22)
 
@@ -759,18 +768,24 @@ criterion 벤치마크(`crates/rustra/benches/`)로 측정.
 | `invoke_rkyv_v2` (mutable 패키지)   | 3.95 µs  | RwLock read 경로              |
 | `invoke_rkyv_v2` (frozen 패키지)    | 3.94 µs  | mutable 과 **차이 0.2% 미만** |
 
-### 동적 Tier 3 경로 payload scaling (debug, 2026-08-22)
+### 동적 명령 payload scaling (debug, 2026-08-30)
 
 `cargo bench -p rustra --bench type_scaling --profile dev`
 
-| 항목 수 | 평균      |
-| ------- | --------- |
-| 1       | 12.33 µs  |
-| 10      | 64.39 µs  |
-| 100     | 606.14 µs |
-| 1000    | 5.68 ms   |
+(T2-1 이후) `processPayload`(PayloadInput: Vec<Item>)는 postcard 지원
+형태라 동적 등록 시 postcard 핸들러를 받는다 — 벤치가 postcard 왕복을
+측정하도록 갱신했다 (구 `type_scaling_tier3` 그룹 폐기).
 
-→ 데이터 크기에 대해 선형 증가(JSON 직렬화 비용 지배).
+| 항목 수 | 평균 (동적 postcard) |
+| ------- | -------------------- |
+| 1       | 1.45 µs              |
+| 10      | 6.54 µs              |
+| 100     | 56.96 µs             |
+| 1000    | 579.1 µs             |
+
+→ 데이터 크기에 대해 선형 증가(postcard 직렬화 비용 비례). 구 Tier 3 JSON
+수치(2026-08-22: 12.33 µs / 64.39 µs / 606.14 µs / 5.68 ms) 대비 약
+**8–10배** 개선됐다.
 
 ### 벤치마크 실행
 
