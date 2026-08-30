@@ -38,7 +38,7 @@ pub(crate) use complex_codec_variants::annotate_variant_order;
 
 // 호출당 컴파일 진입 — 테스트 전용 (핫 경로는 CompiledComplex 를 쓴다).
 #[cfg(test)]
-pub(crate) use complex_codec_encode_object::{complex_encode, test_only_complex_decode};
+pub(crate) use complex_codec_encode_object::complex_encode;
 
 #[cfg(test)]
 #[path = "complex_codec_tests.rs"]

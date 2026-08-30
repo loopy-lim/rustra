@@ -2,7 +2,7 @@ use super::{
     ComplexCodecLimits, Result,
     complex_codec_schema::error,
     complex_codec_wire::Reader,
-    complex_schema_ir::{IrBody, IrNode, IrVariant},
+    complex_schema_ir::{IrBody, IrNode, IrVariant, compiled_ref},
 };
 use serde_json::{Value, json};
 
@@ -189,15 +189,6 @@ fn decode_struct_ir(
         }
     }
     Ok(result)
-}
-
-/// 컴파일 성공 시 모든 도달 Ref 슬롯이 채워진다 — 빈 슬롯은 컴파일러 버그.
-fn compiled_ref(
-    target: &std::sync::OnceLock<std::sync::Arc<IrNode>>,
-) -> Result<&std::sync::Arc<IrNode>> {
-    target
-        .get()
-        .ok_or_else(|| error("unresolved schema reference"))
 }
 
 /// Tagged 본체의 판별자 필드 스킵 키.

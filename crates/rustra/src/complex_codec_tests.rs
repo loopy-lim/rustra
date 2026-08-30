@@ -19,10 +19,8 @@ fn round_trips_complex_map_option_and_enum() {
         max_collection_length: 100,
     };
     let bytes = complex_encode(&schema, &definitions, &value, limits).expect("encode");
-    assert_eq!(
-        test_only_complex_decode(&schema, &definitions, &bytes, limits).expect("decode"),
-        value
-    );
+    let codec = CompiledComplex::new(&schema, &definitions);
+    assert_eq!(codec.decode(&bytes, limits).expect("decode"), value);
 }
 
 #[test]
@@ -36,10 +34,8 @@ fn round_trips_recursive_refs_and_enforces_depth_limit() {
         max_collection_length: 100,
     };
     let bytes = complex_encode(&schema, &definitions, &value, limits).expect("encode");
-    assert_eq!(
-        test_only_complex_decode(&schema, &definitions, &bytes, limits).expect("decode"),
-        value
-    );
+    let codec = CompiledComplex::new(&schema, &definitions);
+    assert_eq!(codec.decode(&bytes, limits).expect("decode"), value);
     assert!(
         complex_encode(
             &schema,
@@ -57,14 +53,11 @@ fn round_trips_recursive_refs_and_enforces_depth_limit() {
 #[test]
 fn rejects_duplicate_map_keys() {
     let schema = json!({ "type":"object", "additionalProperties":{"type":"integer"} });
+    let codec = CompiledComplex::new(&schema, &json!({}));
     assert!(
-        test_only_complex_decode(
-            &schema,
-            &json!({}),
-            &[2, 1, b'a', 0, 1, b'a', 0],
-            ComplexCodecLimits::DEFAULT
-        )
-        .is_err()
+        codec
+            .decode(&[2, 1, b'a', 0, 1, b'a', 0], ComplexCodecLimits::DEFAULT)
+            .is_err()
     );
 }
 
@@ -72,9 +65,8 @@ fn rejects_duplicate_map_keys() {
 fn rejects_invalid_presence_tags() {
     let schema =
         json!({ "type":"object", "properties":{"value":{"type":"integer"}}, "required":[] });
-    assert!(
-        test_only_complex_decode(&schema, &json!({}), &[2], ComplexCodecLimits::DEFAULT).is_err()
-    );
+    let codec = CompiledComplex::new(&schema, &json!({}));
+    assert!(codec.decode(&[2], ComplexCodecLimits::DEFAULT).is_err());
 }
 
 #[test]
