@@ -796,6 +796,10 @@ cargo bench -p rustra --bench dynamic_registry --profile dev
 cargo bench -p rustra --bench type_scaling    --profile dev
 ```
 
+원본 수치는
+[`2026-08-30-dynamic-postcard.json`](benchmark-receipts/2026-08-30-dynamic-postcard.json)에
+보존했다.
+
 ## JS 어댑터 JSON 성능
 
 | 연산                       | Node.js (2026-08-22) | Bun (기존 기록) |

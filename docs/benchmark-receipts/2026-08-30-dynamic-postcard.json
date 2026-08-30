@@ -1,0 +1,59 @@
+{
+  "generated": "2026-08-30",
+  "profile": "dev (debug)",
+  "machine": "macOS arm64 (Apple M-series)",
+  "note": "dynamic commands are dev-only (release is frozen). Relative comparison only.",
+  "benches": {
+    "complex_route": {
+      "invoke_rkyv_v2/map_of_seqs": "2476.2 ns",
+      "invoke_rkyv_v2/oneof_data_enum": "1004.3 ns"
+    },
+    "tier_compare": {
+      "echo/dynamic_postcard": "487.4 ns",
+      "echo/dynamic_tier3_json": "4725.7 ns",
+      "echo/static_postcard": "476.0 ns",
+      "invoke_rkyv_v2/dynamic_tier3_json": "3855.0 ns",
+      "invoke_rkyv_v2/static_tier1_postcard": "537.6 ns",
+      "invoke_rkyv_v2/static_tier2_postcard": "811.9 ns"
+    },
+    "type_scaling_dynamic_postcard": {
+      "invoke_rkyv_v2_dynamic_postcard/1000_items": "576155.7 ns",
+      "invoke_rkyv_v2_dynamic_postcard/100_items": "56874.8 ns",
+      "invoke_rkyv_v2_dynamic_postcard/10_items": "6491.7 ns",
+      "invoke_rkyv_v2_dynamic_postcard/1_items": "1434.1 ns"
+    }
+  },
+  "runs": {
+    "tier_compare": {
+      "run1": {
+        "static_postcard": "478.31 ns",
+        "dynamic_postcard": "487.96 ns",
+        "dynamic_tier3_json": "4.7543 \u00b5s"
+      },
+      "run2": {
+        "static_postcard": "459.81 ns",
+        "dynamic_postcard": "472.61 ns",
+        "dynamic_tier3_json": "4.7175 \u00b5s"
+      },
+      "run3_criterion_new": {
+        "static_postcard": "476.0 ns",
+        "dynamic_postcard": "487.4 ns",
+        "dynamic_tier3_json": "4725.7 ns"
+      }
+    },
+    "type_scaling": {
+      "run1": {
+        "1": "1.4501 \u00b5s",
+        "10": "6.5354 \u00b5s",
+        "100": "56.960 \u00b5s",
+        "1000": "579.08 \u00b5s"
+      },
+      "run2": {
+        "1": "1.4352 \u00b5s",
+        "10": "6.4958 \u00b5s",
+        "100": "56.922 \u00b5s",
+        "1000": "576.33 \u00b5s"
+      }
+    }
+  }
+}
