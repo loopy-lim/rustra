@@ -36,6 +36,9 @@ echoGroups.commandId = 'echoGroups';
 
 export const emitDemo = createGeneratedFields2<EmitDemoInput, EmitDemoOutput>(11, 'emitDemo', "ticks", "stepDelayMs", 'emitDemo');
 
+/**
+ * u64/u32 필드 — plain varint(uvar) 와이어 고정(과거 zigzag 버그 수정 증명).
+ */
 export const gauge = createGeneratedFields2<GaugeInput, GaugeOutput>(17, 'gauge', "limit", "offset", 'gauge');
 
 export function greet(input: GreetInput, options?: InvokeOptions): Promise<GreetOutput> {
@@ -72,11 +75,18 @@ export function resourceWrite(input: ResourceWriteInput, options?: InvokeOptions
 }
 resourceWrite.commandId = 'resourceWrite';
 
+/**
+ * 런타임 registry 제어 명령. op:
+ * `register` / `unregister` / `replacePing` / `replaceAdd` / `restoreAdd` / `freeze` / `state`.
+ */
 export function rustraRegistryDemo(input: RegistryDemoInput, options?: InvokeOptions): Promise<RegistryDemoOutput> {
   return invokeGeneratedFields1<RegistryDemoOutput>(12, 'rustraRegistryDemo', input, input["op"], options);
 }
 rustraRegistryDemo.commandId = 'rustraRegistryDemo';
 
+/**
+ * HashMap<String, i64>(동적 맵) — count + (key,value)* 와이어 고정.
+ */
 export function scoreTotal(input: ScoreTotalInput, options?: InvokeOptions): Promise<ScoreTotalOutput> {
   return invokeGenerated<ScoreTotalOutput>(15, 'scoreTotal', input, options);
 }
@@ -84,11 +94,17 @@ scoreTotal.commandId = 'scoreTotal';
 
 export const secureCompute = createGeneratedFields2<SecureComputeInput, SecureComputeOutput>(13, 'secureCompute', "a", "b", 'secureCompute');
 
+/**
+ * Vec<u8>(postcard bytes) 입력 + u32 출력 — plain varint 와이어 고정.
+ */
 export function sizeOf(input: SizeOfInput, options?: InvokeOptions): Promise<SizeOfOutput> {
   return invokeGeneratedBytes<SizeOfOutput>(14, 'sizeOf', input, input["data"], options);
 }
 sizeOf.commandId = 'sizeOf';
 
+/**
+ * (String, i64) 튜플 — i64 때문에 complex-binary count + elements 와이어.
+ */
 export function span(input: SpanInput, options?: InvokeOptions): Promise<SpanOutput> {
   return invokeGenerated<SpanOutput>(16, 'span', input, options);
 }
