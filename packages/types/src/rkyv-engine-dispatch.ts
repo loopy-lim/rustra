@@ -3,10 +3,12 @@ import { CODEC_TYPED, CODEC_RAW, CODEC_POSITIONAL } from './global.js';
 import { decodeTier3Response, encodeTier3Request } from './json-wire.js';
 import { debugWire } from './debug.js';
 import { tier2Outcome, payloadTooLargeError } from './rkyv-engine-contract.js';
+import { createDynamicCodecRuntime } from './rkyv-engine-dynamic-codec.js';
 import type { RkyvDispatchRuntime, RkyvEngineContext } from './rkyv-engine-context.js';
 
 export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispatchRuntime {
   const { native, registry, schema, payloadLimit } = context;
+  const dynamicCodecs = createDynamicCodecRuntime();
   const {
     hasTypedPath,
     hasByIdPath,
@@ -66,7 +68,9 @@ export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispa
       if (!outcome.ok) throw outcome.error;
       return outcome.value;
     }
-    // 3순위: 동적 명령 → Tier 3 fallback (live schema 의 commandId 사용).
+    // 3순위: 동적 명령 → live schema 의 commandId 사용. (T2-3) Rust registry 의
+    // 3-way 판정을 미러해 binary 코덱(postcard → complex)이 가능한 스키마는
+    // binary 로, 둘 다 거부하는 스키마만 Tier 3(JSON-in-binary) 로 보낸다.
     // getSchema 미노출 네이티브에서 cached lookup은 undefined 를
     // 돌려주므로 기존 command.not_found 계약이 그대로 유지된다.
     // (T0-3) 진입 전 세대 게이트 — 치환(register/replace/unregister)으로 세대가
@@ -78,6 +82,19 @@ export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispa
         'command.not_found',
         `RkyvV2: no codec and not in live schema for "${command}"`,
       );
+    }
+    const dynamicCodec = dynamicCodecs.lookupBinaryCodec(entry);
+    if (dynamicCodec) {
+      // tier 2(정적 코덱)와 동일한 왕복 계약 — encode/검사/invoke/decode.
+      const encoded = dynamicCodec.encode(args);
+      const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
+      if (tooLarge) throw tooLarge;
+      debugWire('request', 'rkyv', command, encoded);
+      const resultBytes = native.invokeRkyvV2(encoded);
+      debugWire('response', 'rkyv', command, resultBytes);
+      const outcome = tier2Outcome<T>(dynamicCodec, resultBytes);
+      if (!outcome.ok) throw outcome.error;
+      return outcome.value;
     }
     const tier3Request = encodeTier3Request(entry.commandId, args);
     // (T3) tier 2 와 동일한 사전 검사 — 네이티브 호출 전에 조기 실패.

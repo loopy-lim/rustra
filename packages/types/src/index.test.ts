@@ -170,7 +170,7 @@ function tier3Error(code: string, message: string): ArrayBuffer {
  * 생략하면 필드 자체를 없앤다 (T2 테스트: 구 네이티브 pre-Task-8 에뮬레이션).
  */
 function schemaBytes(
-  commands: Array<{ name: string; commandId: number }>,
+  commands: Array<{ name: string; commandId: number } & Record<string, unknown>>,
   schemaVersion?: number,
   schemaGeneration?: number,
 ): ArrayBuffer {
@@ -1301,7 +1301,10 @@ function echoCodec(): RkyvV2Codec<{ tag: number; msg: string }, EchoOut> {
       return u.buffer;
     },
     decode(frame) {
-      const u = new Uint8Array(frame);
+      const u =
+        frame instanceof ArrayBuffer
+          ? new Uint8Array(frame)
+          : new Uint8Array(frame.buffer, frame.byteOffset, frame.byteLength);
       if (u[0] === 1) {
         return {
           ok: true,
@@ -2906,7 +2909,6 @@ test('schema codec: unsupported nodes return null (oneOf, 3-term anyOf, mixed ob
         },
       } as never,
       { type: 'object', properties: {} },
-      { type: 'object', properties: {} },
     ),
     null,
   );
@@ -2919,7 +2921,6 @@ test('schema codec: unsupported nodes return null (oneOf, 3-term anyOf, mixed ob
         properties: { a: { type: 'integer' } },
         additionalProperties: { type: 'string' },
       } as never,
-      { type: 'object', properties: {} },
       { type: 'object', properties: {} },
     ),
     null,
@@ -2962,4 +2963,258 @@ test('schema codec: $ref resolution through definitions', () => {
   );
   assert.ok(withDefs, '$ref to a known definition compiles');
   assert.equal(bytesToHex(withDefs!.encode({ item: { id: 3 } })), '020006');
+});
+
+// ── (T2-3) 동적 명령 postcard/complex 라우팅 ────────────────
+// Rust registry 의 3-way 판정(runtime_registry_tests 동적 계약)을 JS 엔진이
+// 미러한다: postcard 지원 스키마는 인터프리터 binary, oneOf 는 complex binary
+// (Rust 가 t3align 계약으로 complex 로 승격), 둘 다 거부(anyOf 3항)만 Tier 3.
+
+/** postcard 에러 프레임 — [0][pad][err_len u16 @8][postcard{code,message}]. */
+function postcardError(code: string, message: string): ArrayBuffer {
+  const c = pcString(code);
+  const m = pcString(message);
+  const errLen = c.length + m.length;
+  const ab = new ArrayBuffer(10 + errLen);
+  const view = new Uint8Array(ab);
+  view[0] = 0;
+  new DataView(ab).setUint16(8, errLen, true);
+  view.set(c, 10);
+  view.set(m, 10 + c.length);
+  return ab;
+}
+
+test('engine routes postcard-supported dynamic commands through the schema interpreter (T2-3)', async () => {
+  // Rust 계약: register("echo", echo) — EchoIn{v:i64} 는 postcard 지원 →
+  // rkyv_v2_tier3=false, 핸들러는 [ok][pad][postcard(EchoOut)] 로 응답한다.
+  const holder: { req: ArrayBuffer | null } = { req: null };
+  const native = makeNative({
+    schema: schemaBytes(
+      [
+        {
+          name: 'echo',
+          commandId: 7,
+          inputSchema: {
+            type: 'object',
+            required: ['v'],
+            properties: { v: { type: 'integer', format: 'int64' } },
+          },
+          outputSchema: {
+            type: 'object',
+            required: ['v'],
+            properties: { v: { type: 'integer', format: 'int64' } },
+          },
+        },
+      ],
+      undefined,
+      3,
+    ),
+    invokeImpl: (payload) => {
+      holder.req = payload;
+      // Rust postcard 핸들러 응답: [ok=1][pad 3][postcard(v=zigzag(7)=14)]
+      const ab = new ArrayBuffer(10);
+      const u = new Uint8Array(ab);
+      u[0] = 1;
+      u[8] = 14;
+      return ab;
+    },
+  });
+  const engine = createRkyvV2Engine(native, new Map());
+  const out = await engine.invoke<{ v: number }>('echo', { v: 7 });
+  assert.equal(out.v, 7);
+  // 요청이 postcard binary(Tier 3 JSON 아님)임을 고정 — [id u16][zigzag(7)].
+  const req = holder.req as ArrayBuffer;
+  assert.ok(req);
+  const u = new Uint8Array(req);
+  assert.equal(u.length, 3, 'postcard request is id(2)+zigzag(7)=1B varint, not JSON');
+  assert.equal(new DataView(req).getUint16(0, true), 7);
+  assert.deepEqual(Array.from(u.slice(2)), [14], 'zigzag(7)=14 — postcard, not JSON text');
+});
+
+test('engine routes dynamic oneOf commands through a compiled complex codec (T2-3)', async () => {
+  // Rust 계약: oneOf payload enum 동적 등록 → complex binary 라우트
+  // (dynamic_oneof_schema_gets_complex_binary_handler). JS 엔진도 Tier 3 로
+  // 보내면 와이어가 어긋나므로 createComplexCodec 으로 응답해야 한다.
+  // 스키마는 schemars 실제 형태(probe): oneOf 는 definitions.ShapeLabel 안에
+  // 있고(Idle=enum, Active=단일 프로퍼티 래퍼), live schema 는
+  // x-rustra-variant-order 를 annotate 한다(키 정렬 — Active=0, Idle=1).
+  const holder: { req: ArrayBuffer | null } = { req: null };
+  const native = makeNative({
+    schema: schemaBytes([
+      {
+        name: 'shape',
+        commandId: 5,
+        inputSchema: {
+          type: 'object',
+          required: ['status'],
+          properties: { status: { $ref: '#/definitions/ShapeLabel' } },
+        },
+        outputSchema: {
+          type: 'object',
+          required: ['label'],
+          properties: { label: { type: 'string' } },
+        },
+        definitions: {
+          ShapeLabel: {
+            oneOf: [
+              { type: 'string', enum: ['Idle'] },
+              {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  Active: {
+                    type: 'object',
+                    required: ['level'],
+                    properties: { level: { type: 'integer', format: 'int64' } },
+                  },
+                },
+                required: ['Active'],
+              },
+            ],
+            'x-rustra-variant-order': ['Idle', 'Active'],
+          },
+        },
+      } as never,
+    ]),
+    invokeImpl: (payload) => {
+      holder.req = payload;
+      // Rust complex 핸들러 응답: [ok=1][pad 7][complex body] — body 는
+      // struct{label: string} declaration순 → uvar(len)+"active:9".
+      const label = new TextEncoder().encode('active:9');
+      const bodyLen = 1 + label.length; // uvar len(1바이트) + bytes
+      const ab = new ArrayBuffer(8 + bodyLen);
+      const u = new Uint8Array(ab);
+      u[0] = 1;
+      u[8] = label.length;
+      u.set(label, 9);
+      return ab;
+    },
+  });
+  const engine = createRkyvV2Engine(native, new Map());
+  const out = await engine.invoke<{ label: string }>('shape', {
+    status: { Active: { level: 9 } },
+  });
+  assert.equal(out.label, 'active:9');
+  // 요청이 complex binary([id u16][variant 0][unwrapSingle→zigzag level]) 임을
+  // 고정 — variant 0 = Active (키 정렬), level=zigzag(9)=18.
+  const req = holder.req as ArrayBuffer;
+  const u = new Uint8Array(req);
+  assert.equal(new DataView(req).getUint16(0, true), 5);
+  assert.deepEqual(
+    Array.from(u.slice(2)),
+    [0, 18],
+    'complex wire: variant index 0 (Active, key-sorted) + zigzag(9), not JSON',
+  );
+});
+
+test('engine keeps unsupported dynamic schemas on Tier 3 (T2-3)', async () => {
+  // Rust 계약: 3-변형 untagged enum(anyOf 3항)은 postcard/complex 둘 다 거부 →
+  // rkyv_v2_tier3=true. JS 인터프리터도 null 이므로 기존 JSON 경로가 유지된다.
+  const holder: { req: ArrayBuffer | null } = { req: null };
+  const native = makeNative({
+    schema: schemaBytes([
+      {
+        name: 'anyShape',
+        commandId: 9,
+        inputSchema: {
+          type: 'object',
+          required: ['v'],
+          properties: {
+            v: { anyOf: [{ type: 'integer' }, { type: 'string' }, { type: 'boolean' }] },
+          },
+        },
+        outputSchema: {
+          type: 'object',
+          required: ['label'],
+          properties: { label: { type: 'string' } },
+        },
+      } as never,
+    ]),
+    invokeImpl: (payload) => {
+      holder.req = payload;
+      return tier3Success({ label: 'text:hi' });
+    },
+  });
+  const engine = createRkyvV2Engine(native, new Map());
+  const out = await engine.invoke<{ label: string }>('anyShape', { v: 'hi' });
+  assert.equal(out.label, 'text:hi');
+  // 요청이 Tier 3 JSON([id u16][json]) 임을 고정.
+  const req = holder.req as ArrayBuffer;
+  const u = new Uint8Array(req);
+  assert.equal(new DataView(req).getUint16(0, true), 9);
+  assert.equal(new TextDecoder().decode(u.slice(2)), JSON.stringify({ v: 'hi' }));
+});
+
+test('schema interpreter recompiles after generation resync picks up a new codec (T2-3)', async () => {
+  // 세대 게이트(T0-3)가 live schema 를 재조회하면 스키마도 새로 읽히고, 인터프리터
+  // 캐시(compute-if-absent)는 entry 객체 식별로 무효화된다 — replace 로 postcard
+  // 지원 형태가 된 명령이 JSON 이 아니라 postcard 로 가는지 고정.
+  let generation = 1;
+  let docCommands: Array<Record<string, unknown>> = [
+    {
+      name: 'dyn',
+      commandId: 4,
+      inputSchema: {
+        type: 'object',
+        required: ['v'],
+        properties: {
+          v: { anyOf: [{ type: 'integer' }, { type: 'string' }, { type: 'boolean' }] },
+        },
+      },
+      outputSchema: {
+        type: 'object',
+        required: ['v'],
+        properties: { v: { type: 'integer' } },
+      },
+    },
+  ];
+  const frames: ArrayBuffer[] = [];
+  const native = makeNative({
+    schemaGeneration: () => generation,
+    invokeImpl: (payload) => {
+      frames.push(payload);
+      const u = new Uint8Array(payload);
+      if (u.length > 2 && u[2] === 0x7b /* '{' */) return tier3Success({ v: 1 });
+      // postcard 프레임 — Rust postcard 핸들러 응답 [ok][pad][zigzag(1)=2].
+      const ab = new ArrayBuffer(9);
+      const resp = new Uint8Array(ab);
+      resp[0] = 1;
+      resp[8] = 2;
+      return ab;
+    },
+  });
+  (native as { getSchema: () => ArrayBuffer }).getSchema = () => {
+    const doc = { packageId: 't', schemaGeneration: generation, commands: docCommands };
+    return bytesFromStrings([JSON.stringify(doc)]);
+  };
+  const engine = createRkyvV2Engine(native, new Map());
+  await engine.invoke('dyn', { v: 'text' });
+  assert.equal(
+    new TextDecoder().decode(new Uint8Array(frames[0]!).slice(2)),
+    JSON.stringify({ v: 'text' }),
+    'first invoke: unsupported schema stays JSON',
+  );
+  // replace — 동일 이름/id, 이제 postcard 지원 형태(i64).
+  generation = 2;
+  docCommands = [
+    {
+      name: 'dyn',
+      commandId: 4,
+      inputSchema: {
+        type: 'object',
+        required: ['v'],
+        properties: { v: { type: 'integer', format: 'int64' } },
+      },
+      outputSchema: { type: 'object', required: ['v'], properties: { v: { type: 'integer' } } },
+    },
+  ];
+  const out = await engine.invoke<{ v: number }>('dyn', { v: 7 });
+  assert.equal(out.v, 1);
+  assert.equal(frames.length, 2);
+  const second = new Uint8Array(frames[1]!);
+  assert.deepEqual(
+    Array.from(second.slice(2)),
+    [14],
+    'post-resync invoke must speak postcard (zigzag), not JSON',
+  );
 });
