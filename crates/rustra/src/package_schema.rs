@@ -27,7 +27,10 @@ impl Package {
         schema
             .as_object_mut()
             .expect("live schema root is an object")
-            .insert("schemaGeneration".into(), Value::from(state.schema_generation));
+            .insert(
+                "schemaGeneration".into(),
+                Value::from(state.schema_generation),
+            );
         state.live_schema_cache = Some(schema.clone());
         schema
     }

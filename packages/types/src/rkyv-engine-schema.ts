@@ -7,9 +7,12 @@ import type { RkyvSchemaRuntime } from './rkyv-engine-context.js';
 
 export function createRkyvSchemaRuntime(native: RkyvV2SchemaNative): RkyvSchemaRuntime {
   let liveSchemaCache: Map<string, LiveSchemaEntry> | undefined;
+  /** (T0-3) 캐시가 빌드된 시점의 세대 — 네이티브 폴링 값과 비교한다. */
+  let cachedGeneration: number | undefined;
   const readLiveSchemaDocument = () => {
     const document = parseLiveSchemaDocument(native);
     liveSchemaCache = document.commands;
+    cachedGeneration = document.schemaGeneration;
     return document;
   };
   const refreshLiveSchema = (): Map<string, LiveSchemaEntry> => {
@@ -24,5 +27,26 @@ export function createRkyvSchemaRuntime(native: RkyvV2SchemaNative): RkyvSchemaR
       return undefined;
     }
   };
-  return { refreshLiveSchema, readLiveSchemaDocument, lookupCachedLiveSchemaEntry };
+  /**
+   * (T0-3) 세대 게이트 — 네이티브가 `getSchemaGeneration` 을 노출하고 캐시된
+   * 세대와 다르면 live schema 를 재조회해 캐시와 세대를 재동기화한다.
+   * 미노출 호스트는 폴링을 건너뛴다(현상 유지). 동적 명령 Tier 3 진입점 앞에서
+   * 호출한다 — 실패한 조회는 조용히 캐시를 유지한다(다음 호출이 재시도).
+   */
+  const resyncIfStale = (): void => {
+    if (typeof native.getSchemaGeneration !== 'function') return;
+    let current: number;
+    try {
+      current = native.getSchemaGeneration();
+    } catch {
+      return; // 폴링 실패는 치명적이지 않다 — 기존 캐시로 진행.
+    }
+    if (cachedGeneration !== undefined && current === cachedGeneration) return;
+    try {
+      refreshLiveSchema();
+    } catch {
+      // 재조회 실패 시 기존 캐시 유지 — 시끄러운 실패는 invoke 결과에서 낸다.
+    }
+  };
+  return { refreshLiveSchema, readLiveSchemaDocument, lookupCachedLiveSchemaEntry, resyncIfStale };
 }
