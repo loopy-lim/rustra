@@ -75,9 +75,7 @@ export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispa
     // binary 로, 둘 다 거부하는 스키마만 Tier 3(JSON-in-binary) 로 보낸다.
     // getSchema 미노출 네이티브에서 cached lookup은 undefined 를
     // 돌려주므로 기존 command.not_found 계약이 그대로 유지된다.
-    // (T0-3) 진입 전 세대 게이트 — 치환(register/replace/unregister)으로 세대가
-    // 상승했으면 live schema 를 재조회해 스테일 commandId 라우팅을 차단한다.
-    schema.resyncIfStale();
+    // (T0-3) 세대 게이트는 lookupCachedLiveSchemaEntry 내부에서 1회 흡수된다.
     const entry = schema.lookupCachedLiveSchemaEntry(command);
     if (!entry) {
       throw new RustraCommandError(

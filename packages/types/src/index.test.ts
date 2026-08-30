@@ -2666,6 +2666,41 @@ test('stale cached dynamic command is not found after resync shows removal (T0-3
   );
 });
 
+test('async propagate path gates on generation resync before live schema lookup (T0-3)', async () => {
+  // 동기 dispatch 와 달리 async 전파 경로(invokeAsync+invokeCancel)는 별도의
+  // resync 호출이 없었다 — lookupCachedLiveSchemaEntry 가 게이트를 흡수한 뒤로는
+  // replace 후 재호출이 스테일 commandId 코덱/프레임을 쓰지 않음을 고정한다.
+  let generation = 1;
+  let dynamicCommandId = 7;
+  let seenIds: number[] = [];
+  const native = makeNative({
+    schema: schemaBytes([{ name: 'dyn', commandId: 7 }], undefined, 1),
+    schemaGeneration: () => generation,
+    invokeImpl: (payload) => {
+      seenIds.push(new DataView(payload).getUint16(0, true));
+      return tier3Success({ v: dynamicCommandId });
+    },
+  });
+  (native as { getSchema: () => ArrayBuffer }).getSchema = () =>
+    schemaBytes([{ name: 'dyn', commandId: dynamicCommandId }], undefined, generation);
+  native.invokeAsync = (payload: ArrayBuffer, cb: (resp: ArrayBuffer) => void) => {
+    seenIds.push(new DataView(payload).getUint16(0, true));
+    cb(tier3Success({ v: dynamicCommandId }));
+    return 1;
+  };
+  native.invokeCancel = () => true;
+  const engine = createRkyvV2Engine(native, new Map());
+  await engine.invoke<{ v: number }>('dyn', {});
+  assert.deepEqual(seenIds, [7]);
+
+  // 치환 — commandId 7→8, 세대 상승. async(signal) 경로로 재호출한다.
+  generation = 2;
+  dynamicCommandId = 8;
+  const ac = new AbortController();
+  await engine.invoke<{ v: number }>('dyn', {}, { signal: ac.signal });
+  assert.deepEqual(seenIds, [7, 8], 'async path must resync before the live schema lookup');
+});
+
 // ── (T2-2) 스키마→postcard 코덱 인터프리터 ──────────────────
 // live_schema 의 JSON Schema 로 생성한 인터프리터 코덱이 generated 코드젠 코덱과
 // **바이트 동일**임을 PINNED hex(examples/calculator/tests/wire_fixtures.rs 와

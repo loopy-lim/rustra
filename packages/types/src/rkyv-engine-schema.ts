@@ -19,6 +19,10 @@ export function createRkyvSchemaRuntime(native: RkyvV2SchemaNative): RkyvSchemaR
     return readLiveSchemaDocument().commands;
   };
   const lookupCachedLiveSchemaEntry = (command: string): LiveSchemaEntry | undefined => {
+    // (T0-3) 단일 진입 게이트 — 모든 조회 경로(동기 dispatch, async 전파)가
+    // 세대 재동기화를 통과한 뒤 캐시를 읽는다. 호출자별 수동 resyncIfStale 은
+    // 중복이므로 두지 않는다(정확히 1회 게이트 보장).
+    resyncIfStale();
     const cached = liveSchemaCache?.get(command);
     if (cached) return cached;
     try {
