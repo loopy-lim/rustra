@@ -1,8 +1,12 @@
+English | [한국어](./README.ko.md)
+
 # rustra
 
-Rust 패키지를 한 번 정의하면, React Native / Node / Bun / Tauri 등 모든 호스트에서 동일하게 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크입니다.
+A bridge framework that generates identical TypeScript clients for React
+Native / Node / Bun / Tauri and every other host from a Rust package defined
+once.
 
-## 의존성
+## Dependencies
 
 ```toml
 [dependencies]
@@ -11,12 +15,12 @@ serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
 
-## 사용 예시
+## Example
 
 ```rust
 use rustra::prelude::*;
 
-// 입력/출력 타입 정의
+// Define input/output types
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 struct AddNumbersInput {
@@ -30,7 +34,7 @@ struct AddNumbersOutput {
     value: i64,
 }
 
-// #[command]로 커맨드 핸들러 표시
+// Annotate a command handler with #[command]
 #[command]
 fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
     Ok(AddNumbersOutput {
@@ -38,29 +42,29 @@ fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
     })
 }
 
-// name 속성으로 커맨드 이름 명시 지정
+// Specify the command name explicitly with the name attribute
 #[command(name = "customName")]
 fn my_function(input: Input) -> Result<Output> { ... }
 
 fn main() -> Result<()> {
-    // 개별 등록
+    // Individual registration
     let package = Package::builder("example.calculator")
-        .command_fn(add_numbers)  // 이름 자동 추출 (addNumbers)
+        .command_fn(add_numbers)  // name auto-extracted (addNumbers)
         .build();
 
-    // 또는 register! 매크로로 여러 커맨드를 일괄 등록
+    // Or register multiple commands at once with the register! macro
     let package = rustra::register!(
         Package::builder("example.calculator"),
         add_numbers,
         my_function
     ).build();
 
-    // 로컬에서 직접 invoke
+    // Invoke locally
     let output: AddNumbersOutput =
         package.invoke("addNumbers", AddNumbersInput { a: 2, b: 3 })?;
     assert_eq!(output.value, 5);
 
-    // TypeScript 클라이언트 생성
+    // Generate the TypeScript client
     let generated = package.generate_typescript()?;
     generated.write_to_dir("generated")?;
 
@@ -72,50 +76,52 @@ fn main() -> Result<()> {
 
 ### Package / PackageBuilder
 
-| 메서드                              | 설명                                                          |
-| ----------------------------------- | ------------------------------------------------------------- |
-| `Package::builder(id)`              | `PackageBuilder` 생성                                         |
-| `builder.command_fn(handler)`       | `#[command]` 함수 등록. 이름은 `type_name` 기반으로 자동 추출 |
-| `builder.command(name, handler)`    | 이름을 명시적으로 지정하여 핸들러 등록                        |
-| `builder.build()`                   | `Package` 생성                                                |
-| `register!(builder, fn1, fn2, ...)` | 여러 `#[command]` 함수를 한 번에 등록하는 매크로              |
+| Method                              | Description                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------- |
+| `Package::builder(id)`              | Creates a `PackageBuilder`                                                 |
+| `builder.command_fn(handler)`       | Registers a `#[command]` function. The name is auto-extracted from `type_name` |
+| `builder.command(name, handler)`    | Registers a handler with an explicit name                                  |
+| `builder.build()`                   | Creates a `Package`                                                        |
+| `register!(builder, fn1, fn2, ...)` | Macro registering multiple `#[command]` functions at once                  |
 
 ### RustraError
 
-| 메서드                           | 설명                                      |
-| -------------------------------- | ----------------------------------------- |
-| `RustraError::custom(code, msg)` | 안정적인 코드와 메시지로 커스텀 에러 생성 |
-| `error.code()`                   | 에러 코드 반환                            |
-| `error.message()`                | 에러 메시지 반환                          |
+| Method                           | Description                                            |
+| -------------------------------- | ------------------------------------------------------ |
+| `RustraError::custom(code, msg)` | Creates a custom error with a stable code and message  |
+| `error.code()`                   | Returns the error code                                 |
+| `error.message()`                | Returns the error message                              |
 
-`RustraError`는 `Serialize`를 구현하므로 TypeScript 측으로 직렬화되어 전달된다.
+`RustraError` implements `Serialize`, so it is serialized and delivered to the
+TypeScript side.
 
 ### invoke
 
-| 메서드                                | 설명                                   |
-| ------------------------------------- | -------------------------------------- |
-| `package.invoke::<I, O>(name, input)` | 타입 안전한 호출. 직렬화/역직렬화 포함 |
-| `package.invoke_json(name, params)`   | `serde_json::Value` 기반 호출          |
+| Method                                | Description                                          |
+| ------------------------------------- | ---------------------------------------------------- |
+| `package.invoke::<I, O>(name, input)` | Type-safe invocation, including (de)serialization    |
+| `package.invoke_json(name, params)`   | Invocation based on `serde_json::Value`              |
 
-### TypeScript 생성
+### TypeScript generation
 
-| 메서드                          | 설명                                                              |
-| ------------------------------- | ----------------------------------------------------------------- |
-| `package.generate_typescript()` | `GeneratedPackage` 반환                                           |
-| `generated.write_to_dir(path)`  | `schema.json`, `types.ts`, `commands.ts`, `contract.ts` 파일 출력 |
+| Method                          | Description                                                                        |
+| ------------------------------- | ---------------------------------------------------------------------------------- |
+| `package.generate_typescript()` | Returns a `GeneratedPackage`                                                        |
+| `generated.write_to_dir(path)`  | Writes `schema.json`, `types.ts`, `commands.ts`, `contract.ts`                     |
 
-### 생성 결과물
+### Generated output
 
-`generate_typescript()`는 다음 파일을 생성합니다:
+`generate_typescript()` produces the following files:
 
-- `schema.json` — 전체 패키지 스키마 (커맨드별 입력/출력 JSON Schema)
-- `types.ts` — `EngineClient` 타입 + `RustraError` + 모든 입력/출력 TypeScript 타입
-- `commands.ts` — 커맨드 헬퍼 함수
-- `contract.ts` — `GENERATED_CONTRACT_HASH` 상수 (스키마 해시)
+- `schema.json` — the full package schema (per-command input/output JSON Schema)
+- `types.ts` — the `EngineClient` type + `RustraError` + every input/output TypeScript type
+- `commands.ts` — command helper functions
+- `contract.ts` — the `GENERATED_CONTRACT_HASH` constant (schema hash)
 
-코드 생성은 `$ref` 해석, `anyOf` 유니온 타입, 문자열 `enum` 리터럴, `null` 타입, 타입 배열 유니온을 지원합니다.
+Code generation supports `$ref` resolution, `anyOf` union types, string `enum`
+literals, `null` types, and type-array unions.
 
-생성된 커맨드 헬퍼 예시:
+Example generated command helper:
 
 ```ts
 import { invokeGenerated, type InvokeOptions } from '@rustra/types';
@@ -128,14 +134,19 @@ export function addNumbers(
 }
 ```
 
-앱 시작 시 `configure(engine)`를 한 번 호출한 뒤 생성 함수에는 입력과 선택적
-취소/타임아웃 옵션만 전달한다. 숫자 command id를 지원하는 엔진은 자동으로
-고속 경로를 사용하고, 구형 엔진은 이름 기반 invoke로 안전하게 폴백한다.
+Call `configure(engine)` once at app startup, then pass only inputs and
+optional cancel/timeout options to the generated functions. Engines that
+support numeric command ids automatically use the fast path; older engines
+fall back safely to name-based invoke.
 
-## 주의사항
+## Caveats
 
-- `command_fn`은 `std::any::type_name` 기반으로 핸들러 함수 이름을 추출합니다. 디버그 빌드에서는 전체 경로가 포함될 수 있으므로, 릴리스 빌드에서 정확한 이름이 필요한 경우 `#[command(name = "...")]` 속성을 사용하거나 `command(name, handler)`를 사용하세요.
-- 모든 입력 타입은 `DeserializeOwned + JsonSchema`, 출력 타입은 `Serialize + JsonSchema`를 구현해야 합니다.
+- `command_fn` extracts the handler function name via `std::any::type_name`.
+  Debug builds may include the full path, so if you need exact names in
+  release builds, use the `#[command(name = "...")]` attribute or
+  `command(name, handler)`.
+- Every input type must implement `DeserializeOwned + JsonSchema`, and every
+  output type `Serialize + JsonSchema`.
 
 ## prelude
 
@@ -145,9 +156,10 @@ pub use schemars::JsonSchema;
 pub use serde::{Deserialize, Serialize};
 ```
 
-## Tauri 통합 (선택 기능)
+## Tauri integration (optional feature)
 
-`tauri` feature를 활성화하면 Tauri 앱에 바로 통합할 수 있는 `tauri_support` 모듈이 제공됩니다:
+Enabling the `tauri` feature provides the `tauri_support` module for direct
+integration into Tauri apps:
 
 ```toml
 [dependencies]
@@ -160,4 +172,6 @@ use rustra::tauri_support::register;
 let builder = register(my_package, tauri::Builder::default());
 ```
 
-`register()`는 패키지의 모든 커맨드를 `rustra_dispatch` 단일 Tauri 커맨드로 라우팅하는 핸들러를 등록합니다. TypeScript 측에서 `@rustra/tauri` 어댑터를 사용하면 내부적으로 이 엔드포인트로 자동 라우팅됩니다.
+`register()` installs a handler that routes every command in the package
+through the single `rustra_dispatch` Tauri command. On the TypeScript side,
+the `@rustra/tauri` adapter routes to this endpoint automatically.
