@@ -417,8 +417,8 @@ jobs:
           bun install
           # 발행 전 release candidate를 현재 checkout의 Rust crate로 고정한다.
           # crates.io의 이전 버전으로 조용히 폴백하면 소비자 검증이 거짓 green이 된다.
-          sed -i "s#rustra = \"[0-9.]*\"#rustra = { path = \"$GITHUB_WORKSPACE/crates/rustra\" }#" Cargo.toml
-          sed -i "s#rustra-macros = \"[0-9.]*\"#rustra-macros = { path = \"$GITHUB_WORKSPACE/crates/rustra-macros\" }#" Cargo.toml
+          sed -i "s#rustra = \"[^\"]*\"#rustra = { path = \"$GITHUB_WORKSPACE/crates/rustra\" }#" Cargo.toml
+          sed -i "s#rustra-macros = \"[^\"]*\"#rustra-macros = { path = \"$GITHUB_WORKSPACE/crates/rustra-macros\" }#" Cargo.toml
           bun run codegen
           test -f generated/schema.json
           test -f src/generated/rkyv-codecs.ts
