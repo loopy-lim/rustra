@@ -44,6 +44,7 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
 | [Complex Data Codecs](complex-codecs.md)                    | Users        | Recursive map/enum/Option wire, limits, RN boundary                                    |
 | [Security Audit](security-audit.md)                         | Contributors | Lockfile vulnerabilities/warnings status, resolution history                           |
 | [Release Procedure](release-procedure.md)                   | Contributors | Changeset publishing procedure, version management                                     |
+| [Versioning Policy](versioning-policy.md)                   | All          | Compatibility guarantees per surface, deprecation cycle, MSRV, experimental surface    |
 | [Security Policy](../.github/SECURITY.md)                   | All          | Vulnerability reporting channels, supported versions, scope                            |
 | [Contributing Guide](../CONTRIBUTING.md)                    | Contributors | Development environment, commit rules, debugging, releases                             |
 

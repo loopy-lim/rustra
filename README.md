@@ -81,6 +81,10 @@ cancellation, events, and channels are documented explicitly in the
 - [ ] Universal prebuilt application native binaries — depends on per-app Rust
       code and target; CI artifact/cache approach recommended instead
 
+Stability tracks: versioning, compatibility guarantees, and the deprecation
+cycle are defined in the
+[versioning policy](docs/versioning-policy.md).
+
 ## FAQ
 
 **Q. Is a Rust toolchain strictly required?**

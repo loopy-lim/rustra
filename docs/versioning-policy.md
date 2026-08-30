@@ -1,0 +1,81 @@
+English | [한국어](./versioning-policy.ko.md)
+
+# Versioning and Compatibility Policy
+
+This document defines what each version bump promises, how items are
+deprecated, and which surfaces are exempt from stability guarantees. It is the
+reference for CI gates and for the experimental surface listed below. Release
+mechanics (who publishes what, in which order) live in the
+[release procedure](release-procedure.md); schema-level breaking-change
+detection lives in the [contract migration guide](migration-guide.md).
+
+## Scope of compatibility guarantees
+
+| Surface                                                      | Guarantee within a minor release                                                                   | Breaking change requires                                                             |
+| ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Wire format (rkyv V2 / postcard bytes for a released schema) | Stable once a schema is released: bytes produced for a given schema + contract hash keep decoding. | Major version. Pre-1.0: a minor with explicit migration notes.                       |
+| Contract hash algorithm                                      | Compatibility-critical: the hash-of-schema input definition is frozen per release.                 | Major version. Pre-1.0: a minor with explicit migration notes.                       |
+| FFI symbol signatures (`rustra_ffi_*` C ABI)                 | Additive only. Existing symbols keep name, parameter list, and calling convention.                 | Removals and signature changes go through the deprecation cycle below, then a major. |
+| Generated output (TypeScript / C++ / RN generated files)     | Regenerated output stays drop-in for the same configuration.                                       | Major version. Pre-1.0: a minor with explicit migration notes.                       |
+| Public Rust API (`crates/rustra`, `rustra-macros` exports)   | Standard semver.                                                                                   | Major version.                                                                       |
+| Public TypeScript API (`@rustra/*` package exports)          | Standard semver.                                                                                   | Major version.                                                                       |
+
+Not covered by any guarantee:
+
+- Internal modules, including everything under `crates/rustra/src/__private`.
+- `#[doc(hidden)]` Rust items and `@internal`-tagged TypeScript items.
+- Anything reachable only through the surfaces above.
+
+## Deprecation procedure
+
+1. Mark it. Rust items get `#[deprecated]` with a note pointing at the
+   replacement; TypeScript items get JSDoc `@deprecated`. `#[doc(hidden)]` may
+   accompany the attribute but does not replace it.
+2. Announce it. The release notes of the deprecating version list the item and
+   the replacement.
+3. Keep it. A deprecated item remains for at least 1 minor release.
+
+Pre-1.0 rule: removal is allowed in a minor release if the item was deprecated
+in a previous release, and the removal is documented in the CHANGELOG and —
+where consumers must act — in `docs/migrations/<from>-to-<to>.md`.
+
+Current status: `RendererHost` is `#[doc(hidden)]` and `#[deprecated]`
+("RendererHost is retained for Rustra 0.x compatibility; prefer a
+host-specific adapter boundary"). It is kept for the remainder of the 0.x
+cycle; removal is not proposed here.
+
+## Experimental surface
+
+Experimental items may change or break in any release until they stabilize.
+Marking is explicit: a doc comment containing "experimental" plus an entry in
+the table below. An item leaves this table only by entering the guarantees
+above; any later change then follows the deprecation procedure.
+
+| Item                    | Status                 | Notes                                                                              |
+| ----------------------- | ---------------------- | ---------------------------------------------------------------------------------- |
+| `rustra_ffi_hot_reload` | Planned / experimental | Does not exist as of this writing. Listed here so its contract lands as breakable. |
+
+## MSRV policy
+
+The workspace MSRV is Rust 1.88: the root `Cargo.toml` sets
+`rust-version = "1.88"` and member crates inherit it via
+`rust-version.workspace = true`. The pin reflects edition 2024 (1.85) plus
+let-chains (1.88, used in `rustra-macros`).
+
+MSRV bumps happen only in minor releases, never in patch releases. A bump is a
+minor-release change even though it touches no API, because it can break
+consumer toolchains.
+
+## Release numbering
+
+The project is on 0.x. Versions of the 9 public `@rustra/*` npm packages are
+driven by changesets: when changeset files exist on main, `release.yml` opens
+the version-packages PR (`chore: version packages`), and merging it updates version fields and
+CHANGELOGs in bulk. crates.io publishing is manual — `cargo publish` per
+crate, in the order given by the
+[release procedure](release-procedure.md) — and published versions cannot be
+deleted or replaced.
+
+Under the pre-1.0 rules above, a wire-format or contract-hash change ships as
+a minor version with explicit migration notes; the same change after 1.0 would
+require a major version.
