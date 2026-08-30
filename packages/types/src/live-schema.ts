@@ -19,6 +19,13 @@ export type RkyvV2SchemaNative = {
   invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer | ArrayBufferView;
   getSchema?(): ArrayBuffer;
   /**
+   * (T0-3) 현재 스키마 세대 — `rustra_ffi_schema_generation` 과 대응.
+   * register/replace/unregister 마다 증가한다. 엔진은 동적 명령(live schema
+   * 캐시) 진입 전에 이 값을 비교해 불일치 시 live schema 를 재조회한다.
+   * 미노출 호스트는 폴링을 건너뛴다(현상 유지).
+   */
+  getSchemaGeneration?(): number;
+  /**
    * 네이티브 빌드의 계약 해시(SHA-256 hex)를 반환한다 (F5 opt-in 검증용).
    * `rustra_ffi_contract_hash` 와 대응. `contractHash` 엔진 옵션이 설정된
    * 경우에만 호출된다.
@@ -73,6 +80,8 @@ export type RkyvV2SchemaNative = {
 export type LiveSchemaDocument = {
   commands: Map<string, LiveSchemaEntry>;
   schemaVersion?: number;
+  /** (T0-3) 문서에 세대가 있으면 채운다(구 네이티브는 undefined). */
+  schemaGeneration?: number;
 };
 
 /** getLiveSchema 의 파싱 내부 — 엔진 생성 시 schemaVersion 까지 읽는다 (T2). */
@@ -93,6 +102,7 @@ export function parseLiveSchemaDocument(native: { getSchema?(): ArrayBuffer }): 
   const json = decodeUtf8(u, 0, u.length);
   const parsed = JSON.parse(json) as {
     schemaVersion?: unknown;
+    schemaGeneration?: unknown;
     commands?: Array<{
       name: string;
       commandId: number;
@@ -111,6 +121,9 @@ export function parseLiveSchemaDocument(native: { getSchema?(): ArrayBuffer }): 
   const doc: LiveSchemaDocument = { commands: map };
   if (typeof parsed.schemaVersion === 'number' && Number.isFinite(parsed.schemaVersion)) {
     doc.schemaVersion = parsed.schemaVersion;
+  }
+  if (typeof parsed.schemaGeneration === 'number' && Number.isFinite(parsed.schemaGeneration)) {
+    doc.schemaGeneration = parsed.schemaGeneration;
   }
   return doc;
 }

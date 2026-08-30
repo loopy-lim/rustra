@@ -6,6 +6,8 @@ export type RkyvSchemaRuntime = {
   refreshLiveSchema(): Map<string, LiveSchemaEntry>;
   readLiveSchemaDocument(): LiveSchemaDocument;
   lookupCachedLiveSchemaEntry(command: string): LiveSchemaEntry | undefined;
+  /** (T0-3) 세대 불일치 시 live schema 캐시를 재동기화한다(미노출 호스트는 no-op). */
+  resyncIfStale(): void;
 };
 
 export type RkyvCapabilityRuntime = {

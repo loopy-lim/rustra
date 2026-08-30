@@ -28,6 +28,8 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
     rustra_ffi_free: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.void },
     rustra_ffi_get_schema: { args: [FFIType.ptr], returns: FFIType.ptr },
     rustra_ffi_contract_hash: { args: [FFIType.ptr], returns: FFIType.ptr },
+    // (T0-3) 스키마 세대 — u64 반환, 인자 없음.
+    rustra_ffi_schema_generation: { args: [], returns: 'u64' as const },
   } as const;
   const open = (library: string) => dlopen(library, definitions);
   let handle: ReturnType<typeof open> | undefined;
@@ -132,6 +134,8 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
       outLength[0] = 0n;
       return copyOwned(handle.symbols.rustra_ffi_contract_hash(outLength));
     },
+    // (T0-3) 치환 재동기화 게이트용 세대 폴링 — u64 → JS number (안전 범위).
+    getSchemaGeneration: () => Number(handle.symbols.rustra_ffi_schema_generation()),
   };
   const {
     rkyvV2Codecs,

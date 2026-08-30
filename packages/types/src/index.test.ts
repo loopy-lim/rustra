@@ -172,11 +172,13 @@ function tier3Error(code: string, message: string): ArrayBuffer {
 function schemaBytes(
   commands: Array<{ name: string; commandId: number }>,
   schemaVersion?: number,
+  schemaGeneration?: number,
 ): ArrayBuffer {
   const doc: Record<string, unknown> =
     schemaVersion !== undefined
       ? { packageId: 't', schemaVersion, commands }
       : { packageId: 't', commands };
+  if (schemaGeneration !== undefined) doc.schemaGeneration = schemaGeneration;
   return bytesFromStrings([JSON.stringify(doc)]);
 }
 
@@ -185,6 +187,8 @@ interface NativeOpts {
   invokeImpl?: (payload: ArrayBuffer) => ArrayBuffer;
   /** 네이티브가 노출하는 계약 해시(F5). undefined 면 getContractHash 를 노출하지 않는다. */
   contractHash?: string;
+  /** (T0-3) FFI 세대 폴링. undefined 면 네이티브가 노출하지 않는 것으로 간주. */
+  schemaGeneration?: () => number;
 }
 
 function makeNative(opts: NativeOpts): RkyvV2SchemaNative {
@@ -195,6 +199,9 @@ function makeNative(opts: NativeOpts): RkyvV2SchemaNative {
   if (opts.contractHash !== undefined) {
     native.getContractHash = () =>
       new TextEncoder().encode(opts.contractHash!).buffer as ArrayBuffer;
+  }
+  if (opts.schemaGeneration !== undefined) {
+    native.getSchemaGeneration = opts.schemaGeneration;
   }
   return native;
 }
@@ -2533,4 +2540,78 @@ test('global invokeBatch rejects unsupported engines as a Promise', async () => 
   } finally {
     configure(sentinel);
   }
+});
+
+// ── T0-3: 치환 재동기화 — generation 게이트로 스테일 캐시 차단 ──
+
+test('dynamic route resyncs live schema when native generation advances (T0-3)', async () => {
+  // register → invoke(id 7 기록) → replace 후 generation 상승 → 재 invoke 는
+  // 재동기화된 새 commandId 로 Tier 3 요청을 보내야 한다.
+  let generation = 1;
+  let dynamicCommandId = 7;
+  let seenIds: number[] = [];
+  let schemaFetches = 0;
+  const native = makeTypedNative({
+    schema: schemaBytes([{ name: 'dyn', commandId: 7 }], undefined, 1),
+    schemaGeneration: () => generation,
+    invokeImpl: (payload) => {
+      seenIds.push(new DataView(payload).getUint16(0, true));
+      return tier3Success({ v: dynamicCommandId });
+    },
+  });
+  // getSchema 가 호출될 때마다 현재 세대의 스키마를 만들어 준다 — 치환 시뮬레이션.
+  (native as { getSchema: () => ArrayBuffer }).getSchema = () => {
+    schemaFetches++;
+    return schemaBytes([{ name: 'dyn', commandId: dynamicCommandId }], undefined, generation);
+  };
+
+  const engine = createRkyvV2Engine(native, new Map());
+  await engine.invoke<{ v: number }>('dyn', {});
+  assert.deepEqual(seenIds, [7]);
+
+  // 치환 — commandId 가 8 로 바뀌고 세대가 상승.
+  generation = 2;
+  dynamicCommandId = 8;
+  await engine.invoke<{ v: number }>('dyn', {});
+  assert.deepEqual(seenIds, [7, 8], 'resync must pick up the new commandId');
+  assert.ok(schemaFetches >= 2, 'live schema must be refetched after generation change');
+});
+
+test('dynamic route skips generation polling when native does not expose it (T0-3)', async () => {
+  // 구 네이티브 — getSchemaGeneration 미노출 → 현상 유지(1회 조회 후 캐시).
+  let schemaFetches = 0;
+  const native = makeTypedNative({
+    schema: schemaBytes([{ name: 'dyn', commandId: 3 }]),
+    invokeImpl: () => tier3Success({ v: 1 }),
+  });
+  (native as { getSchema: () => ArrayBuffer }).getSchema = () => {
+    schemaFetches++;
+    return schemaBytes([{ name: 'dyn', commandId: 3 }]);
+  };
+  const engine = createRkyvV2Engine(native, new Map());
+  await engine.invoke('dyn', {});
+  await engine.invoke('dyn', {});
+  assert.equal(schemaFetches, 1, 'without generation exposure the cache must hold');
+});
+
+test('stale cached dynamic command is not found after resync shows removal (T0-3)', async () => {
+  // 치환으로 명령이 사라진 경우 — 재동기화 후 not_found 로 시끄럽게 실패.
+  let generation = 1;
+  let present = true;
+  const native = makeTypedNative({
+    schema: schemaBytes([{ name: 'dyn', commandId: 7 }], undefined, 1),
+    schemaGeneration: () => generation,
+    invokeImpl: () => tier3Success({ v: 1 }),
+  });
+  (native as { getSchema: () => ArrayBuffer }).getSchema = () =>
+    schemaBytes(present ? [{ name: 'dyn', commandId: 7 }] : [], undefined, generation);
+
+  const engine = createRkyvV2Engine(native, new Map());
+  await engine.invoke('dyn', {});
+  present = false;
+  generation = 2;
+  await assert.rejects(
+    engine.invoke('dyn', {}),
+    (error: unknown) => error instanceof RustraCommandError && error.code === 'command.not_found',
+  );
 });
