@@ -42,6 +42,7 @@ import {
   configureLazy,
   createJsonEngine,
   ensureConfigured,
+  normalizeRustraError,
   RustraErrorCode,
   RustraCommandError,
   type EngineClientWithBatch,
@@ -110,7 +111,28 @@ export type TauriEngineOptions = {
 export function createTauriEngine(options: TauriEngineOptions = {}) {
   const tauriInvoke = options.invoke ?? requireTauriInvoke();
   return createJsonEngine(
-    (command, args) => tauriInvoke('rustra_dispatch', { command, args }),
+    {
+      invoke: (command, args) => tauriInvoke('rustra_dispatch', { command, args }),
+      // 트랙 E2 — N 개 명령을 `rustra_dispatch_batch` 한 번의 IPC 횡단으로
+      // 실행한다. Rust 측은 항목별 ok/error 로 응답하므로(fail-fast 아님)
+      // 실패 항목만 RustraCommandError 로 재구성해 reject 한다.
+      invokeBatch: async (entries) => {
+        const responses = (await tauriInvoke('rustra_dispatch_batch', {
+          requests: entries.map((entry) => ({ command: entry.command, args: entry.args ?? {} })),
+        })) as Array<{ ok: boolean; result?: unknown; error?: unknown }>;
+        return Promise.all(
+          responses.map(async (response, index) => {
+            if (response.ok) return response.result;
+            throw normalizeRustraError(
+              response.error ?? {
+                code: 'invoke.failed',
+                message: `batch entry ${entries[index]?.command ?? index} failed without an error payload`,
+              },
+            );
+          }),
+        );
+      },
+    },
     (args) => args ?? {},
   );
 }
