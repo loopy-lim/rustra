@@ -121,7 +121,7 @@ generation이 없다. 이를 명시적 계약으로 고정한 뒤, 동적 명령
   Track B 실측)
 - 실행: `bun run bench:hosts -- --output /tmp/rustra-host-matrix.json`,
   `cargo bench -p rustra`, `bun scripts/transport-bench.mjs`
-- 이전 성능 트랙 설계: `docs/superpowers/plans/2026-08-28-perf-three-tracks-design.md`
+- 이전 성능 트랙 설계: `docs/plans/2026-08-28-perf-three-tracks-design.md`
 
 ### 트랙 T 근거
 - register 강제 tier3: `crates/rustra/src/registry.rs:118` (`force_tier3=true`),

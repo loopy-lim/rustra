@@ -125,10 +125,8 @@ export function toUpper(input: ToUpperInput, options?: InvokeOptions): Promise<T
 }
 toUpper.commandId = 'toUpper';
 
-/**
- * A2 와이드 정수 복합 타입 표본 — Vec<u64> + Option<i64>. 원소/옵션 레벨 uvar64/zigzag64 헬퍼가 스트림 중간 7바이트 varint 경계를 넘는 값을 무손실 왕복하는지 cross-wire 픽스처로 고정한다.
- */
 export function wideAgg(input: WideAggInput, options?: InvokeOptions): Promise<WideAggOutput> {
   return invokeGenerated<WideAggOutput>(28, 'wideAgg', input, options);
 }
 wideAgg.commandId = 'wideAgg';
+

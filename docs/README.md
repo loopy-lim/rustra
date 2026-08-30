@@ -48,3 +48,9 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 ## 연구 배경
 
 [docs/research/](research/)에는 초기 iOS PoC에서 나온 bridge/benchmark/transport 연구 문서가 있다. 현재 구현과 crate명이 다를 수 있지만, 설계 판단 근거로 보존한다.
+
+## 계획/계약/보고 기록
+
+- [docs/specs/](specs/) — 기능별 설계 사양(spec)
+- [docs/plans/](plans/) — 구현 계획 및 스파이크 기록 (역사 문서 포함)
+- [docs/prs/](prs/) — 병합된 트랙의 PR 보고서

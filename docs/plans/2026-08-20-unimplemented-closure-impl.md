@@ -380,8 +380,8 @@ Rust 디코더 Tier 3의 바이너리(postcard) 와이어 지원을 중첩 구�
 
 ## 참고 자료
 
-- SPEC: `thoughts/shared/specs/2026-08-20_unimplemented-closure.md`
-- 리서치: `thoughts/shared/research/2026-08-20_09-55-00_unimplemented-survey.md`
+- SPEC: `docs/specs/2026-08-20-unimplemented-closure.md`
+- 리서치: `docs/research/2026-08-20-09-55-00-unimplemented-survey.md`
 - 성능 설계: `docs/plans/2026-08-18-perf-close-nitro-gap.md` Task 7
 - 취소 설계: `docs/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
 - dual-path 재생성 관례: 메모리 `codegen-dual-path-regen`

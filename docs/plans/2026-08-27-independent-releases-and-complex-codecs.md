@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024, Cargo workspace, TypeScript, Bun, Changesets, postcard, serde/serde_json/schemars, generated C++/JSI, React Native, GitHub Actions, Criterion.
 
-**Spec:** `docs/superpowers/specs/2026-08-27-independent-releases-and-complex-codecs.md`
+**Spec:** `docs/specs/2026-08-27-independent-releases-and-complex-codecs.md`
 
 ## Global Constraints
 

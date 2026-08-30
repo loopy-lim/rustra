@@ -373,7 +373,7 @@ JS 층의 조용한 드롭·누락을 메우고 타입 표면을 정리한다.
 
 #### 6.6 나머지 문서/인프라
 
-**파일**: `examples/reference-app/`(README + 독립 실행), `packages/*/typedoc.json`(또는 루트 설정), `thoughts/shared/plans/2026-08-20_unimplemented-closure-impl.md`(체크박스 폐쇄)
+**파일**: `examples/reference-app/`(README + 독립 실행), `packages/*/typedoc.json`(또는 루트 설정), `docs/plans/2026-08-20-unimplemented-closure-impl.md`(체크박스 폐쇄)
 **변경사항**: reference-app README + crud 의존 해소(로컬 generated 사본 또는 빌드 스텝). typedoc 설정 + `docs:api` 스크립트(게시는 CI 잡 추가까지만). 플랜 체크박스 실제 상태로 폐쇄(구현 확인된 항목 체크 + 근거 각주).
 
 ### 성공 기준:
@@ -428,8 +428,8 @@ JS 층의 조용한 드롭·누락을 메우고 타입 표면을 정리한다.
 
 ## 참고 자료
 
-- SPEC 문서: `thoughts/shared/specs/2026-08-21_growth-closure.md`
-- 리서치 문서: `thoughts/shared/research/2026-08-21_18-50-00_growth-opportunities-survey.md`
+- SPEC 문서: `docs/specs/2026-08-21-growth-closure.md`
+- 리서치 문서: `docs/research/2026-08-21-18-50-00-growth-opportunities-survey.md`
 - 성능 설계: `docs/plans/2026-08-18-perf-close-nitro-gap.md`
 - 코드젠 관례: 메모리 `codegen-dual-path-regen`
 - 커밋 관례: 메모리 `lefthook-prettier-amend`

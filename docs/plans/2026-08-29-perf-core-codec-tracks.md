@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust (postcard, serde, rkyv), TypeScript (Bun FFI, 코드젠 템플릿), Bun test, cargo test.
 
-**Spec:** `docs/superpowers/specs/2026-08-29-perf-five-tracks-design.md`
+**Spec:** `docs/specs/2026-08-29-perf-five-tracks-design.md`
 
 ## Global Constraints
 

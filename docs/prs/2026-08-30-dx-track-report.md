@@ -10,7 +10,7 @@ status: complete
 # DX 트랙 리포트 (feat/dx-hardening)
 
 계획: `docs/plans/2026-08-30-parallel-three-tracks.md` 트랙 1 (Task 1.1~1.6).
-근거: `thoughts/shared/research/2026-08-29_22-46-49_dx-audit.md`.
+근거: `docs/research/2026-08-29-22-46-49-dx-audit.md`.
 
 ## 0. 계획 대비 현실 — 선(先)착지 분석
 

@@ -136,8 +136,8 @@ last_updated_by: loopy-lim
 
 ## 히스토리 컨텍스트 (thoughts/ 디렉토리)
 
-- `thoughts/shared/research/2026-08-19_23-40-00_feasibility-multi-angle.md` §4(:95-114) — C1~C5 온보딩/DX 갭 최초 지적
-- `thoughts/shared/plans/2026-08-19_production-readiness-audit-fixes.md` — PR #14 감사 수정 (완료)
+- `docs/research/2026-08-19-23-40-00-feasibility-multi-angle.md` §4(:95-114) — C1~C5 온보딩/DX 갭 최초 지적
+- `docs/plans/2026-08-19-production-readiness-audit-fixes.md` — PR #14 감사 수정 (완료)
 - 메모리 `lynx-removed-2026-08-20.md` — post-Lynx 우선순위(온보딩→매트릭스→레퍼런스 앱)와 본 조사 일치
 - 메모리 `jsi-fastpath-optimization-complete.md` — caller-buffer/positional facade 후속 트랙 (의도적 유예 확인)
 - 메모리 `post-v1-growth-tracks.md` — 무중단 주입 별트랙 명시
@@ -146,7 +146,7 @@ last_updated_by: loopy-lim
 
 ## 관련 리서치
 
-- `thoughts/shared/research/2026-08-19_23-40-00_feasibility-multi-angle.md` (온보딩/DX 갭의 선행 연구)
+- `docs/research/2026-08-19-23-40-00-feasibility-multi-angle.md` (온보딩/DX 갭의 선행 연구)
 - `docs/research/2026-08-15-next-steps-analysis.ko.md` (과거 갭 분석 — gap-closure 체크박스는 현재 모두 해소 확인)
 
 ## 미해결 질문

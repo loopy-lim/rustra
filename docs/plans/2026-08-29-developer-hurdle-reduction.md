@@ -8,7 +8,7 @@
 
 **Tech Stack:** TypeScript, Node `fs`/`child_process`/`crypto`, Bun test, Rust/Cargo metadata, Markdown documentation, existing React Native generated module and shell build scripts.
 
-**Spec:** `docs/superpowers/specs/2026-08-29-developer-hurdle-reduction-design.md`
+**Spec:** `docs/specs/2026-08-29-developer-hurdle-reduction-design.md`
 
 ## Global Constraints
 

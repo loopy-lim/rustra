@@ -142,7 +142,7 @@ Mozilla uniffi-RN, craby 등장) 반면 rustra가 유일하게 커버하는 교�
 
 ## 히스토리 컨텍스트 (thoughts/ 디렉토리)
 
-- `thoughts/shared/plans/2026-08-19_production-readiness-audit-fixes.md` — 감사 No-Go 8항목 해소 계획(완료됨, PR #14/#15)
+- `docs/plans/2026-08-19-production-readiness-audit-fixes.md` — 감사 No-Go 8항목 해소 계획(완료됨, PR #14/#15)
 - 메모리: Production hardening/followup/JSI 최적화/감사 수정 완료 상태
 
 ## 관련 리서치

@@ -459,14 +459,14 @@ crates.io 총 98, npm 주간 410, star 0. 품질(감사·게이트·문서 정�
 
 ## 히스토리 컨텍스트 (thoughts/ 디렉토리)
 
-- `thoughts/shared/research/2026-08-20_09-55-00_unimplemented-survey.md` — 전날 26건 전수조사. 본 조사는 그 후속으로, 구현 완료 확인(D-11) + 신규 6각도 확장
-- `thoughts/shared/research/2026-08-19_23-40-00_feasibility-multi-angle.md` — 온보딩 퍼널 병목 최초 지적
+- `docs/research/2026-08-20-09-55-00-unimplemented-survey.md` — 전날 26건 전수조사. 본 조사는 그 후속으로, 구현 완료 확인(D-11) + 신규 6각도 확장
+- `docs/research/2026-08-19-23-40-00-feasibility-multi-angle.md` — 온보딩 퍼널 병목 최초 지적
 - `docs/research/2026-08-15-next-steps-analysis.ko.md` — 과거 트랙 A~E (대부분 완료됨)
 - 메모리 `production-readiness-audit-fixed.md`, `jsi-fastpath-optimization-complete.md`, `lynx-removed-2026-08-20.md` — 각 트랙 완료 상태
 
 ## 관련 리서치
 
-- `thoughts/shared/research/2026-08-20_09-55-00_unimplemented-survey.md` (직전 전수조사)
+- `docs/research/2026-08-20-09-55-00-unimplemented-survey.md` (직전 전수조사)
 - `docs/research/2026-08-15-next-steps-analysis.ko.md`
 
 ## 미해결 질문

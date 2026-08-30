@@ -2,9 +2,9 @@
 
 6각도 병렬 심층 조사(코어·JS패키지·CI·문서·성능·생태계)로 발굴한 **70여 건의 성장 건덕지 전수 구현** — 리서치 → SPEC(WS1~7) → 구현 계획(Phase 1~6) → 구현·검증 완료.
 
-- 리서치: `thoughts/shared/research/2026-08-21_18-50-00_growth-opportunities-survey.md`
-- SPEC: `thoughts/shared/specs/2026-08-21_growth-closure.md` (status: complete)
-- 플랜: `thoughts/shared/plans/2026-08-21_growth-closure-impl.md` (status: 구현 완료)
+- 리서치: `docs/research/2026-08-21-18-50-00-growth-opportunities-survey.md`
+- SPEC: `docs/specs/2026-08-21-growth-closure.md` (status: complete)
+- 플랜: `docs/plans/2026-08-21-growth-closure-impl.md` (status: 구현 완료)
 
 ### 결함 수리 6건 (조사에서 신규 발견)
 

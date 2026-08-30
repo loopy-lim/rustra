@@ -8,7 +8,7 @@
 
 **Tech Stack:** C++ (JSI), Rust (FFI), TypeScript (RN 패키지), RN 예제 앱 벤치.
 
-**Spec:** `docs/superpowers/specs/2026-08-29-perf-five-tracks-design.md`
+**Spec:** `docs/specs/2026-08-29-perf-five-tracks-design.md`
 
 ## Global Constraints
 

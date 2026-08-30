@@ -406,8 +406,11 @@ jobs:
           bun install
           # cargoRange 는 캐럿 범위(예: ^0.5.0) — [0-9.]* 는 ^ 를 못 맞춰 발행 전
           # 버전에서는 crates.io 해석 실패가 된다. 캐럿을 포함해 치환한다.
-          sed -i "s#rustra = \"[^\"]*\"#rustra = { path = \"$GITHUB_WORKSPACE/crates/rustra\" }#" Cargo.toml
-          sed -i "s#rustra-macros = \"[^\"]*\"#rustra-macros = { path = \"$GITHUB_WORKSPACE/crates/rustra-macros\" }#" Cargo.toml
+          for crate in rustra rustra-macros; do
+            sed -i "s#$crate = \"[^\"]*\"#$crate = { path = \"$GITHUB_WORKSPACE/crates/$crate\" }#" Cargo.toml
+            # 치환 no-op 시 crates.io 폴백(발행 후엔 조용히 발행본 테스트)을 막는다.
+            grep -q "$crate = { path = \"$GITHUB_WORKSPACE/crates/$crate\" }" Cargo.toml || exit 1
+          done
           bun run codegen
           test -f generated/schema.json
           test -f src/generated/rkyv-codecs.ts

@@ -8,7 +8,7 @@ priority: high
 
 # 미구현 항목 전수 마감(Unimplemented Closure) SPEC
 
-리서치: `thoughts/shared/research/2026-08-20_09-55-00_unimplemented-survey.md` (26건)
+리서치: `docs/research/2026-08-20-09-55-00-unimplemented-survey.md` (26건)
 
 ## 문제
 
@@ -85,7 +85,7 @@ priority: high
 
 ## 참고 자료
 
-- 리서치 문서: `thoughts/shared/research/2026-08-20_09-55-00_unimplemented-survey.md` (파일:줄 상세)
+- 리서치 문서: `docs/research/2026-08-20-09-55-00-unimplemented-survey.md` (파일:줄 상세)
 - 코드젠 결함 근원: `packages/cli/src/generate.ts:165-206`, 생성물 `examples/crud/generated/rkyv-codecs.ts:287,318,325-332`
 - 폴백 선점 구조: `packages/types/src/index.ts:780-795` (Tier 3 JSON 폴백), `examples/crud/generated/rkyv-registry.ts:7`
 - 매크로 실제 계약: `crates/rustra-macros/src/lib.rs:100-120,151-159,387`

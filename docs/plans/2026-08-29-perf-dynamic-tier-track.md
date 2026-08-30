@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust (postcard, serde_json, schemars), TypeScript (@rustra/types 런타임), criterion bench.
 
-**Spec:** `docs/superpowers/specs/2026-08-29-perf-five-tracks-design.md` (트랙 T 절)
+**Spec:** `docs/specs/2026-08-29-perf-five-tracks-design.md` (트랙 T 절)
 
 ## Global Constraints
 

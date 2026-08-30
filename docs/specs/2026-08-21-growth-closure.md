@@ -8,7 +8,7 @@ priority: high
 
 # 성장 건덕지 전수 구현(Growth Closure) SPEC
 
-리서치: `thoughts/shared/research/2026-08-21_18-50-00_growth-opportunities-survey.md` (6각도 병렬 조사, 70여 건)
+리서치: `docs/research/2026-08-21-18-50-00-growth-opportunities-survey.md` (6각도 병렬 조사, 70여 건)
 
 ## 문제
 
@@ -100,7 +100,7 @@ v0.2.0 발행 직후 전수조사에서 70여 건의 성장 후보를 확인했�
 - [ ] benchmarks.md의 측정 세션 불일치(2.9µs vs 24.3µs 공존)가 정비되고 p99 열이 채워진다 (Bench 앱 p99 로깅 + transport-bench 통계 개선 포함)
 - [ ] reference-app이 README + 독립 실행 가능한 형태로 승격된다
 - [ ] typedoc 설정이 추가되어 API 레퍼런스가 생성 가능해진다 (게시는 CI 잡 추가까지만)
-- [ ] unimplemented-closure 플랜 체크박스가 실제 상태로 폐쇄된다 (`thoughts/shared/plans/2026-08-20_unimplemented-closure-impl.md`)
+- [ ] unimplemented-closure 플랜 체크박스가 실제 상태로 폐쇄된다 (`docs/plans/2026-08-20-unimplemented-closure-impl.md`)
 - [ ] 할당 횟수/콜드스타트 측정이 benchmark 예제에 추가된다 (`examples/benchmark/src/main.rs`)
 - [ ] CI에 windows-latest 확장(Node/Bun 런타임 게이트)이 추가된다
 
@@ -118,10 +118,10 @@ v0.2.0 발행 직후 전수조사에서 70여 건의 성장 후보를 확인했�
 
 ## 참고 자료
 
-- 리서치 문서: `thoughts/shared/research/2026-08-21_18-50-00_growth-opportunities-survey.md` (A/B/C/D/E/F 항목별 파일:줄 근거)
+- 리서치 문서: `docs/research/2026-08-21-18-50-00-growth-opportunities-survey.md` (A/B/C/D/E/F 항목별 파일:줄 근거)
 - 결함 6건 근거: `lib.rs:1414`, `README.md:43,124`, `useCommand.ts:31,44`, `devtools/index.ts:57-60`, `release.yml:108`
 - 이벤트 갭: `compatibility-matrix.md:15`, `events.rs:145`, `lib.rs:249`
 - 성능 설계: `docs/plans/2026-08-18-perf-close-nitro-gap.md`, `docs/benchmarks.md:88-103`
 - 코드젠 dual-path 관례: 메모리 `codegen-dual-path-regen` (Rust bin + TS CLI, generated/ prettier 제외, test:ts:node)
 - 커밋 관례: lefthook prettier 재스테이징 없음 → 커밋 후 amend (메모리 `lefthook-prettier-amend`)
-- 선행 SPEC: `thoughts/shared/specs/2026-08-20_unimplemented-closure.md` (26건 — 완료, 본 SPEC은 후속)
+- 선행 SPEC: `docs/specs/2026-08-20-unimplemented-closure.md` (26건 — 완료, 본 SPEC은 후속)

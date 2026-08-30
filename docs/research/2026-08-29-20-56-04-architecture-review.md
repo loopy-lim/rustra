@@ -20,7 +20,7 @@ last_updated_by: claude
 **Repository**: rustra (loopy-lim/rustra)
 
 > 이 리뷰는 **작업 트리(미커밋 58파일, +3,558/−1,442) 기준**이다. 미커밋 작업은
-> `docs/superpowers/plans/2026-08-29-developer-hurdle-reduction.md` 플랜의
+> `docs/plans/2026-08-29-developer-hurdle-reduction.md` 플랜의
 > "개발 허들 완화" 구현으로, codegen 오케스트레이터·doctor·drift 게이트·dev 워치가
 > 하나의 일관된 세트로 진행 중이다. 별도 언급이 없는 한 파일:줄 참조는 작업 트리 상태다.
 
@@ -250,20 +250,20 @@ shim 3줄 + 생성 코덱 + Rust .a뿐), 와이어는 `[cmd_id u16][postcard]` /
 
 ## 히스토리 컨텍스트 (thoughts/ 디렉터리)
 
-- `thoughts/shared/research/2026-08-21_18-50-00_growth-opportunities-survey.md` —
+- `docs/research/2026-08-21-18-50-00-growth-opportunities-survey.md` —
   ~70 성장 기회. release-mode capability freeze 등 6건 결함은 이후 커밋으로
   해소된 것 확인(grant_capability는 이제 frozen에서 허용). perf 항목 3건은
   #39/#41/#45로 착지. **이벤트 표면(Node/Bun/Tauri JS 갭)·온보딩 축은 부분 미해결.**
-- `thoughts/shared/research/2026-08-20_09-55-00_unimplemented-survey.md` — 26건
+- `docs/research/2026-08-20-09-55-00-unimplemented-survey.md` — 26건
   전수 구현 완료(feat/unimplemented-closure, 메모리 기록과 일치).
-- `docs/superpowers/plans/2026-08-29-developer-hurdle-reduction.md` — 현재
+- `docs/plans/2026-08-29-developer-hurdle-reduction.md` — 현재
   미커밋 작업의 설계 근거. 체크박스 미완료 = 작업 진행 중.
 
 ## 관련 리서치
 
-- `thoughts/shared/research/2026-08-21_18-50-00_growth-opportunities-survey.md`
-- `thoughts/shared/research/2026-08-20_09-55-00_unimplemented-survey.md`
-- `thoughts/shared/research/2026-08-19_23-40-00_feasibility-multi-angle.md`
+- `docs/research/2026-08-21-18-50-00-growth-opportunities-survey.md`
+- `docs/research/2026-08-20-09-55-00-unimplemented-survey.md`
+- `docs/research/2026-08-19-23-40-00-feasibility-multi-angle.md`
 
 ## 미해결 질문 / 후속 조치 권장
 

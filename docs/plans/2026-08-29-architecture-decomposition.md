@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust workspace, Rust proc-macro, TypeScript NodeNext, Bun test, Cargo test, C++ generated codec tests.
 
-**Spec:** `docs/superpowers/specs/2026-08-29-architecture-decomposition-design.md`
+**Spec:** `docs/specs/2026-08-29-architecture-decomposition-design.md`
 
 ## Global Constraints
 
@@ -172,7 +172,7 @@
 **Files:**
 
 - Modify: `docs/development-hurdles.md`
-- Modify: `thoughts/shared/research/2026-08-29_20-56-04_architecture-review.md`
+- Modify: `docs/research/2026-08-29-20-56-04-architecture-review.md`
 
 - [ ] **Step 1: Run `bun run build`, `bun run test:architecture`, package tests, and `cargo test --workspace`**
 - [ ] **Step 2: Run generated TypeScript, C++ codec, React Doctor, and package dry-run checks**
