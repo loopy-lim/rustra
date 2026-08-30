@@ -1,3 +1,8 @@
+/**
+ * Codegen import contract — generated clients import these helpers by name
+ * (see rustra codegen). They are public in name only; signatures follow the
+ * generated calling convention and may change with codegen versions.
+ */
 import {
   invokeGeneratedFieldsSync,
   resolveGeneratedFieldsSync,
@@ -55,6 +60,7 @@ function invokeFields<T>(
   return invokeGenerated<T>(commandId, command, args, options);
 }
 
+/** @internal — codegen import contract; see note atop global-fields.ts. */
 export function invokeGeneratedFields1<T>(
   commandId: number,
   command: string,
@@ -64,6 +70,7 @@ export function invokeGeneratedFields1<T>(
 ): Promise<T> {
   return invokeFields(commandId, command, args, [field0], 1, options);
 }
+/** @internal — codegen import contract; see note atop global-fields.ts. */
 export function invokeGeneratedFields2<T>(
   commandId: number,
   command: string,
@@ -74,6 +81,7 @@ export function invokeGeneratedFields2<T>(
 ): Promise<T> {
   return invokeFields(commandId, command, args, [field0, field1], 2, options);
 }
+/** @internal — codegen import contract; see note atop global-fields.ts. */
 export function invokeGeneratedFields3<T>(
   commandId: number,
   command: string,
@@ -86,6 +94,7 @@ export function invokeGeneratedFields3<T>(
   return invokeFields(commandId, command, args, [field0, field1, field2], 3, options);
 }
 
+/** @internal — codegen import contract; see note atop global-fields.ts. */
 export function createGeneratedFields2<TInput extends object, TOutput>(
   commandId: number,
   command: string,

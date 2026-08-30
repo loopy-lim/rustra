@@ -3,6 +3,7 @@ import { ensureConfigured, isLazyConfigured } from './global-config.js';
 import { invokeGeneratedFields1 } from './global-fields.js';
 import type { InvokeOptions } from './public.js';
 
+/** @internal — codegen import contract; see note atop global-fields.ts. */
 export function invokeGeneratedBytes<T>(
   commandId: number,
   command: string,

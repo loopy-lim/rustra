@@ -72,6 +72,7 @@ export function invoke<T>(command: string, args?: unknown, options?: InvokeOptio
   return invokeWithTimeout(engine, command, args, options);
 }
 
+/** @internal — codegen import contract; see note atop global-fields.ts. */
 export function invokeGenerated<T>(
   commandId: number,
   command: string,
