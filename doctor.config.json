@@ -46,6 +46,13 @@
       {
         "files": ["examples/tauri-calculator/benchmark.mjs"],
         "rules": ["react-doctor/local-rpc-native-bridge-risk"]
+      },
+      {
+        "files": [
+          "packages/cli/src/cargo-metadata.ts",
+          "dist-ts/packages/cli/src/cargo-metadata.js"
+        ],
+        "rules": ["react-doctor/import-metadata-execution-risk"]
       }
     ]
   }

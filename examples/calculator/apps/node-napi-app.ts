@@ -2,8 +2,11 @@ import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { configure, createNodeEngine } from '../../../packages/node/src/index.js';
-import { createRkyvV2Engine } from '../../../packages/types/src/index.js';
+// barrel(index) 대신 개별 모듈 import — react-doctor no-barrel-import.
+// configure/createRkyvV2Engine 은 @rustra/types 전역 설정/엔진 팩토리다.
+import { createNodeEngine } from '../../../packages/node/src/node-core.js';
+import { configure } from '../../../packages/types/src/global-config.js';
+import { createRkyvV2Engine } from '../../../packages/types/src/rkyv-engine.js';
 import { addNumbers } from '../generated/commands.js';
 import { rkyvV2Registry } from '../generated/rkyv-registry.js';
 
