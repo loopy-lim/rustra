@@ -110,6 +110,9 @@ pub use rustra_macros::register;
 
 pub use rkyv_codec::encode_rkyv_v2_error;
 
+/// Proc-macro support surface — blanket-impl command type constraints. Internal;
+/// excluded from stability guarantees (see docs/versioning-policy.md).
+#[doc(hidden)]
 #[path = "private.rs"]
 pub mod __private;
 mod builder;

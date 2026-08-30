@@ -64,7 +64,7 @@ export function dumpWire(
   process.stderr.write(`[rustra:wire] ${direction} ${hex}${truncated}\n`);
 }
 
-/** 테스트 전용 — env 의 RUSTRA_DEBUG 를 정리하고 dump 게이트 메모이즈를 무효화한다. */
+/** @internal — test-only: clears RUSTRA_DEBUG from env and invalidates the dump-gate memo. Not public API. */
 export function resetDebugEnvForTests(): void {
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
     ?.env;
