@@ -1,6 +1,5 @@
 import type { ComplexSchema } from './complex-codec-types.js';
-import { ComplexCodecError, DEFAULT_MAX_DEPTH } from './complex-codec-types.js';
-import type { Reader } from './complex-codec-reader.js';
+import { ComplexCodecError } from './complex-codec-types.js';
 
 export function isUnsigned(schema: ComplexSchema): boolean {
   return typeof schema.format === 'string' && schema.format.startsWith('uint');
@@ -58,24 +57,6 @@ export function refName(ref: string): string {
   return ref.slice(ref.lastIndexOf('/') + 1);
 }
 
-export function resolvedSchema(
-  schema: ComplexSchema,
-  definitions: Record<string, ComplexSchema>,
-  depth: number,
-): ComplexSchema {
-  if (depth > DEFAULT_MAX_DEPTH) throw new ComplexCodecError('schema reference depth exceeded');
-  if (schema.$ref) {
-    const resolved = definitions[refName(schema.$ref)];
-    if (!resolved) throw new ComplexCodecError(`missing schema definition ${schema.$ref}`);
-    return resolvedSchema(resolved, definitions, depth + 1);
-  }
-  if (schema.allOf) {
-    if (schema.allOf.length === 1) return resolvedSchema(schema.allOf[0], definitions, depth + 1);
-    throw new ComplexCodecError('complex codec does not support multi-entry allOf');
-  }
-  return schema;
-}
-
 export function optionInner(schema: ComplexSchema): ComplexSchema | null {
   if (Array.isArray(schema.type)) {
     const nonNull = schema.type.filter((type) => type !== 'null');
@@ -86,11 +67,4 @@ export function optionInner(schema: ComplexSchema): ComplexSchema | null {
     if (nonNull.length === 1) return nonNull[0];
   }
   return null;
-}
-
-export function readPresence(reader: Reader, label: string): boolean {
-  const tag = reader.byte();
-  if (tag === 0) return false;
-  if (tag === 1) return true;
-  throw new ComplexCodecError(`invalid ${label} presence tag`);
 }

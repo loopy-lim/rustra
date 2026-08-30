@@ -1,13 +1,13 @@
-import type { ComplexSchema } from './complex-codec-types.js';
 import { ComplexCodecError } from './complex-codec-types.js';
 import { Writer, sortedKeys } from './complex-codec-wire.js';
 import { toInteger, validateInteger } from './complex-codec-schema.js';
 import type { CompiledNode, CompiledVariant } from './complex-codec-compiled.js';
 
 /**
- * 컴파일된 IR 을 순회하는 인코더 — `resolvedSchema`/`optionInner`/`variants`
- * 재계산 없이 노드 결정만 소비한다. 와이어는 기존 `&ComplexSchema` 해석
- * 버전과 바이트 단위로 동일하다(원본 분기 순서·에러 문자열 유지).
+ * 컴파일된 IR 을 순회하는 인코더 — 스키마 해석(`resolvedSchema`/`optionInner`/
+ * `variants`)을 호출마다 재계산하지 않고 노드 결정만 소비한다. 와이어는 기존
+ * `&ComplexSchema` 해석 버전과 바이트 단위로 동일하다(원본 분기 순서·에러
+ * 문자열 유지).
  */
 export function encodeNode(
   writer: Writer,
@@ -141,19 +141,6 @@ export function encodeNode(
     default:
       throw new ComplexCodecError('unsupported compiled node');
   }
-}
-
-/** `ComplexSchema` 진입 — 컴파일 후 순회하는 얇은 래퍼(기존 시그니처 유지). */
-export function encodeSchemaNode(
-  writer: Writer,
-  node: CompiledNode,
-  _schema: ComplexSchema,
-  value: unknown,
-  maxDepth: number,
-  depth: number,
-  maxCollectionLength: number,
-): void {
-  encodeNode(writer, node, value, maxDepth, depth, maxCollectionLength);
 }
 
 /** 변형 매칭 — 컴파일 시점에 고정된 matcher 를 값에 적용한다. */
