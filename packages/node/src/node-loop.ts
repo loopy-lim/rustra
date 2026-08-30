@@ -55,8 +55,9 @@ export function createNodeLoopTransport(options: {
     resolve: (frame: Uint8Array) => void;
     reject: (error: RustraCommandError) => void;
   }> = [];
-  /** 수신 누적 버퍼 — 미처리 [len][frame] 바이트열. */
-  let binLenBuf = Buffer.allocUnsafe(0);
+  /** 수신 누적 버퍼 — 미처리 [len][frame] 바이트열. concat 결과와 청크 채택을
+   * 모두 담으므로 ArrayBufferLike 로 넓힌다. */
+  let binLenBuf: Buffer<ArrayBufferLike> = Buffer.allocUnsafe(0);
   let binChunks: Buffer[] = [];
 
   const nameToCodec = (command: string) => binaryCodecs?.get(command);
