@@ -33,7 +33,7 @@
     "test:api-surface": "node scripts/api-surface.mjs",
     "verify:package:react-native": "node scripts/check-react-native-package.mjs",
     "verify:consumer:react-native": "bun scripts/check-packed-react-native-consumer.mjs",
-    "test:release-tools": "bun test scripts/check-release-coherence.test.ts scripts/check-packed-react-native-consumer.test.ts",
+    "test:release-tools": "bun test scripts/check-release-coherence.test.ts scripts/check-packed-react-native-consumer.test.ts scripts/api-surface.test.ts",
     "test:complex-codec-bench": "bun test scripts/complex-codec-bench.test.ts scripts/track-b-bench.test.ts",
     "bench:complex": "bun scripts/complex-codec-bench.mjs",
     "bench:track-b": "bun scripts/track-b-bench.mjs",

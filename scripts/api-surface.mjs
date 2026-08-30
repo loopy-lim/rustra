@@ -1,8 +1,18 @@
 // API 표면 스냅샷 게이트 — Rust/TS 공개 export 를 api-surface/snapshot.json 에 고정하고
 // 드리프트(추가/삭제)를 감지한다. `node scripts/api-surface.mjs` (비교) 또는 `--update`(갱신).
+//
+// 감지 범위 / known blind spots (이 형태로 export 를 추가하면 게이트가 조용히 통과한다):
+// - 여러 줄 `pub use x::{ A, B, };` 그룹 (현재 lib.rs의 공개 use는 전부 한 줄)
+// - `export default` (현재 9개 패키지에 없음)
+// - `#[proc_macro_derive(...)]`와 attribute↔`pub fn` 사이 doc comment
+// - package.json `exports` 서브패스 (src/index.ts 기준 수집이므로)
+// 새 형태를 도입하려면 위에 해당하는 수집기를 먼저 확장한다.
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+/** 스냅샷 형식 버전 — compare 시 불일치하면 --update 재실행을 요구한다. */
+const SNAPSHOT_VERSION = 1;
 
 const SNAPSHOT_DIR = 'api-surface';
 const SNAPSHOT_FILE = 'snapshot.json';
@@ -217,6 +227,7 @@ export function collectSurface(root = process.cwd()) {
 /** 스냅샷 JSON 문자열 — 2-space indent + trailing newline, 키 순서 고정. */
 export function serializeSurface(surface) {
   const ordered = {
+    version: SNAPSHOT_VERSION,
     rustModules: surface.rustModules,
     ffiExports: surface.ffiExports,
     macros: surface.macros,
@@ -279,6 +290,13 @@ function run() {
     return;
   }
   const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8'));
+  if (snapshot.version !== SNAPSHOT_VERSION) {
+    console.error(
+      `snapshot version ${snapshot.version ?? '(missing)'} != ${SNAPSHOT_VERSION} — re-run with --update after upgrading this script`,
+    );
+    process.exitCode = 1;
+    return;
+  }
   const drift = compareSurface(collectSurface(root), snapshot);
   if (driftCount(drift) > 0) {
     console.error('API surface drift detected — update intentionally via --update:');
