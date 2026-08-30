@@ -26,7 +26,7 @@ CLI의 Rust 범위, LICENSE 및 fixed group을 검사합니다.
 bunx changeset status   # 대상 패키지/범프 확인
 ```
 
-- `.changeset/*.md` 가 main 에 있으면 release.yml 이 "Version Packages" PR 을 만든다
+- `.changeset/*.md` 가 main 에 있으면 release.yml 이 version-packages PR(`chore: version packages`)을 만든다
 - PR 머지 시 버전 필드 + CHANGELOG 이 일괄 갱신되고 changeset 파일은 소비된다
 - 서로 다른 package가 함께 바뀌어야 할 때만 각 package를 같은 changeset에 명시한다.
   fixed group을 다시 추가해 전체 package를 묶지 않는다.
