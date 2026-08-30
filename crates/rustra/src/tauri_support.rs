@@ -47,6 +47,46 @@ pub fn rustra_dispatch(
     })
 }
 
+/// 벤치 전용 profiled dispatch — `rustra_dispatch` 와 동일한 왕복이지만 응답에
+/// 네이티브 처리 시간 성분을 실어 WebKit 크로싱/JS 직렬화 비용과 분리한다
+/// (측정 전용 뒷문 — 프로덕션 경로 오염 없음, 트랙 E1).
+///
+/// 성분 계약: `nativeNs` = 진입 직후 → 응답 직전 `Instant::now()` 2회 차분
+/// (패키지 invoke + 에러 매핑 포함). JS 는 RTT 에서 이 값을 차감해 크로싱
+/// 잔차를 추정한다. 타이머 해상도는 `Instant` (ns 등급) 이다.
+#[derive(serde::Serialize)]
+pub struct ProfiledResponse {
+    /// `rustra_dispatch` 가 반환했을 결과 (성공) 또는 에러 객체.
+    pub result: Value,
+    /// 성공 여부 — dispatch 결과가 에러여도 프로파일링은 성립한다.
+    pub ok: bool,
+    /// 네이티브 처리 시간 (ns).
+    pub native_ns: u128,
+}
+
+/// `rustra_dispatch` 의 벤치 전용 변형 — [`ProfiledResponse`] 를 반환한다.
+#[tauri::command]
+pub fn rustra_dispatch_profiled(
+    state: State<'_, RustraState>,
+    command: String,
+    args: Value,
+) -> ProfiledResponse {
+    let started = std::time::Instant::now();
+    let (result, ok) = match state.package.invoke_json(&command, args) {
+        Ok(value) => (value, true),
+        Err(error) => (
+            serde_json::to_value(&error)
+                .unwrap_or_else(|_| json!({"code": "unknown", "message": "unknown error"})),
+            false,
+        ),
+    };
+    ProfiledResponse {
+        result,
+        ok,
+        native_ns: started.elapsed().as_nanos(),
+    }
+}
+
 /// rustra 패키지를 Tauri 앱 빌더에 등록합니다.
 ///
 /// 이벤트는 폴링으로만 전달됩니다(기존 동작). 푸시 배선이 필요하면
@@ -57,7 +97,7 @@ pub fn register<R: tauri::Runtime>(
 ) -> tauri::Builder<R> {
     builder
         .manage(RustraState { package })
-        .invoke_handler(tauri::generate_handler![rustra_dispatch])
+        .invoke_handler(tauri::generate_handler![rustra_dispatch, rustra_dispatch_profiled])
 }
 
 /// [`register`] + 이벤트 푸시 배선 — `Package::emit` 이 즉시
@@ -181,5 +221,24 @@ mod tests {
         assert_eq!(event_channel("has space"), "rustra://has_space");
         assert_eq!(event_channel("a.b c"), "rustra://a_b_c");
         assert_eq!(event_channel("weird!*()"), "rustra://weird____");
+    }
+}
+
+#[cfg(test)]
+mod profiled_tests {
+    use super::*;
+
+    /// ProfiledResponse 의 필드 계약 — JS 측 차감 로직이 의존하는 표면 고정.
+    #[test]
+    fn profiled_response_serializes_native_ns_field() {
+        let response = ProfiledResponse {
+            result: json!({"value": 42}),
+            ok: true,
+            native_ns: 1234,
+        };
+        let value = serde_json::to_value(&response).expect("serializable");
+        assert_eq!(value["ok"], json!(true));
+        assert_eq!(value["native_ns"], json!(1234));
+        assert_eq!(value["result"]["value"], json!(42));
     }
 }
