@@ -12,6 +12,7 @@ use serde_json::Value;
 /// 호출당 컴파일 진입 — 테스트 전용 (핫 경로는 빌드 시점 1회 컴파일한
 /// [`CompiledComplex`] 를 캡처한다). 원본 런타임 해석과 바이트 단위 동일성은
 /// `CompiledComplex` 와 공유하는 IR 순회가 보장한다.
+#[cfg(test)]
 pub(crate) fn complex_encode(
     schema: &Value,
     definitions: &Value,
