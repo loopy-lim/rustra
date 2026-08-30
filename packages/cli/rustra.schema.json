@@ -1,0 +1,174 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/loopy-lim/rustra/main/packages/cli/rustra.schema.json",
+  "title": "rustra.json",
+  "description": "Configuration for the rustra CLI (@rustra/cli). Editor validation and completion via the $schema keyword.",
+  "type": "object",
+  "required": ["schema", "output"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "description": "Path to the schema JSON produced by the Rust generate step.",
+      "type": "string",
+      "minLength": 1
+    },
+    "output": {
+      "description": "Directory the TypeScript sources are generated into.",
+      "type": "string",
+      "minLength": 1
+    },
+    "cppOutput": {
+      "description": "Directory the C++ sources are generated into (enables the C++ surface).",
+      "type": "string",
+      "minLength": 1
+    },
+    "positional": {
+      "description": "Emit the positional facade alongside the byId API.",
+      "type": "boolean"
+    },
+    "codegen": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rustManifest": {
+          "description": "Path to the Cargo.toml the generate binary lives in.",
+          "type": "string",
+          "minLength": 1
+        },
+        "rustPackage": {
+          "description": "Cargo package name that owns the generate binary.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "rustBinary": {
+          "description": "Cargo binary invoked for codegen (defaults to the generate-style binary).",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      }
+    },
+    "reactNative": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "moduleDir": {
+          "description": "Directory the generated React Native module is written to.",
+          "type": "string",
+          "minLength": 1
+        },
+        "rustManifest": {
+          "description": "Path to the Cargo.toml hosting the staticlib target.",
+          "type": "string",
+          "minLength": 1
+        },
+        "rustPackage": {
+          "description": "Cargo package name that owns the staticlib.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "rustLibrary": {
+          "description": "Static-library identifier (crate name of the .a/.lib artifact).",
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "legacyBenchmarks": {
+          "description": "Keep generating the legacy benchmark harness.",
+          "type": "boolean"
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rustManifest": {
+          "description": "Path to the Cargo.toml hosting the codegen binary.",
+          "type": "string",
+          "minLength": 1
+        },
+        "rustPackage": {
+          "description": "Cargo package name that owns the binary.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "rustBinary": {
+          "description": "Cargo binary invoked for codegen.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "args": {
+          "description": "Extra arguments passed to the codegen binary.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "bun": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rustManifest": {
+          "description": "Path to the Cargo.toml hosting the cdylib.",
+          "type": "string",
+          "minLength": 1
+        },
+        "rustPackage": {
+          "description": "Cargo package name that owns the cdylib.",
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "rustLibrary": {
+          "description": "Cdylib identifier loaded by the Bun FFI runtime.",
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        }
+      }
+    },
+    "tauri": {
+      "description": "Reserved for Tauri-specific options; currently only an empty object is accepted.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
+    },
+    "dev": {
+      "description": "Dev-loop settings (rustra dev).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "description": "Backend the dev loop rebuilds. wasm requires a reactNative section and is dev-only.",
+          "enum": ["native", "wasm"],
+          "default": "native"
+        },
+        "wasm": {
+          "description": "Options for dev.target = \"wasm\" only.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "engine": {
+              "description": "wasm interpreter used on device. Only wasm3 is supported.",
+              "enum": ["wasm3"]
+            },
+            "parityGate": {
+              "description": "Compare native and wasm32 responses byte-for-byte on every reload (default true).",
+              "type": "boolean",
+              "default": true
+            }
+          }
+        }
+      }
+    },
+    "inspector": {
+      "description": "Inspector settings (devtools-side; tooling availability is reported by rustra doctor).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "onMismatch": {
+          "description": "Reaction when the runtime contract mismatches: diagnose (default) or ignore.",
+          "enum": ["diagnose", "ignore"],
+          "default": "diagnose"
+        }
+      }
+    }
+  }
+}
