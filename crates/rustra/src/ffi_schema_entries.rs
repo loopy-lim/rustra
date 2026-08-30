@@ -41,8 +41,7 @@ pub unsafe extern "C" fn rustra_ffi_get_schema(out_len: *mut usize) -> *mut u8 {
     }
     match get_package() {
         Some(pkg) => {
-            let json = serde_json::to_vec(&pkg.live_schema_with_generation())
-                .unwrap_or_else(|_| b"{}".to_vec());
+            let json = serde_json::to_vec(&pkg.live_schema()).unwrap_or_else(|_| b"{}".to_vec());
             alloc_response(json, out_len)
         }
         None => alloc_response(b"{}".to_vec(), out_len),
