@@ -21,6 +21,12 @@ function fakeTransport(eventsByPoll: Array<Array<{ name: string; payload: unknow
     get pid() {
       return null;
     },
+    get mode() {
+      return 'ndjson' as const;
+    },
+    ready() {
+      return Promise.resolve();
+    },
   } satisfies NodeLoopTransport;
   return { transport, drains };
 }
@@ -140,6 +146,12 @@ test('subscribeEvent survives a synchronous drainEvents throw', async () => {
       dispose() {},
       get pid() {
         return null;
+      },
+      get mode() {
+        return 'ndjson' as const;
+      },
+      ready() {
+        return Promise.resolve();
       },
     } satisfies NodeLoopTransport;
     const got: unknown[] = [];
