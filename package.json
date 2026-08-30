@@ -30,6 +30,7 @@
     "test:compat": "bun run test:ts:node && bun run test:ts:bun && bun run test:adapters && bun run test:runtime",
     "test:release-coherence": "bun scripts/check-release-coherence.mjs",
     "test:architecture": "bun test scripts/architecture-boundaries.test.ts",
+    "test:api-surface": "node scripts/api-surface.mjs",
     "verify:package:react-native": "node scripts/check-react-native-package.mjs",
     "verify:consumer:react-native": "bun scripts/check-packed-react-native-consumer.mjs",
     "test:release-tools": "bun test scripts/check-release-coherence.test.ts scripts/check-packed-react-native-consumer.test.ts",
