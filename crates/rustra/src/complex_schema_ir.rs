@@ -148,6 +148,14 @@ fn ir_error(message: impl Into<String>) -> RustraError {
     error(message)
 }
 
+/// 메모이즈된 Ref 슬롯 해석 — encode/decode 공통. 컴파일 성공 시 모든 도달
+/// Ref 슬롯이 채워진다 — 빈 슬롯은 컴파일러 버그.
+pub(crate) fn compiled_ref(target: &OnceLock<Arc<IrNode>>) -> Result<&Arc<IrNode>> {
+    target
+        .get()
+        .ok_or_else(|| error("unresolved schema reference"))
+}
+
 /// `$ref` 전개 깊이 한도 — 기존 `resolved_schema` 와 동일.
 const MAX_DEPTH: usize = 32;
 

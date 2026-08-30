@@ -9,8 +9,9 @@ use super::{
 };
 use serde_json::Value;
 
-/// 호출당 컴파일 진입 — 테스트/비핫 경로용. 핫 경로(명령 핸들러)는 빌드 시점
-/// 1회 컴파일한 [`CompiledComplex`] 를 캡처한다.
+/// 호출당 컴파일 진입 — 테스트 전용 (핫 경로는 빌드 시점 1회 컴파일한
+/// [`CompiledComplex`] 를 캡처한다). 원본 런타임 해석과 바이트 단위 동일성은
+/// `CompiledComplex` 와 공유하는 IR 순회가 보장한다.
 pub(crate) fn complex_encode(
     schema: &Value,
     definitions: &Value,
@@ -21,20 +22,6 @@ pub(crate) fn complex_encode(
     let mut writer = Writer::new(limits);
     encode_node_ir(&mut writer, &ir, value, limits, 0)?;
     Ok(writer.finish())
-}
-
-/// 호출당 컴파일 + caller 버퍼 직기록 (테스트/비핫 경로용).
-pub(crate) fn complex_encode_into(
-    schema: &Value,
-    definitions: &Value,
-    value: &Value,
-    target: &mut [u8],
-    limits: ComplexCodecLimits,
-) -> Result<usize> {
-    let ir = compile(schema, definitions)?;
-    let mut writer = Writer::into_slice(target, limits);
-    encode_node_ir(&mut writer, &ir, value, limits, 0)?;
-    Ok(writer.written)
 }
 
 /// 빌드 시점 1회 컴파일 결과 — 명령 핸들러가 캡처하는 complex 코덱. 컴파일
@@ -131,22 +118,6 @@ impl CompiledComplex {
         }
         Ok(value)
     }
-}
-
-/// 호출당 컴파일 디코드 — `complex_codec_tests` 와 비핫 경로용.
-pub(crate) fn test_only_complex_decode(
-    schema: &Value,
-    definitions: &Value,
-    bytes: &[u8],
-    limits: ComplexCodecLimits,
-) -> Result<Value> {
-    let ir = compile(schema, definitions)?;
-    let mut reader = Reader::new(bytes, limits)?;
-    let value = decode_node_ir(&mut reader, &ir, limits, 0)?;
-    if reader.remaining() != 0 {
-        return Err(error("trailing bytes in complex payload"));
-    }
-    Ok(value)
 }
 
 use std::sync::Arc;

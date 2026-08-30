@@ -2,7 +2,7 @@ use super::{
     ComplexCodecLimits, Result,
     complex_codec_schema::error,
     complex_codec_wire::Writer,
-    complex_schema_ir::{IrBody, IrMatcher, IrNode, IrVariant},
+    complex_schema_ir::{IrBody, IrMatcher, IrNode, IrVariant, compiled_ref},
 };
 use serde_json::Value;
 
@@ -230,15 +230,6 @@ fn encode_struct_ir(
         }
     }
     Ok(())
-}
-
-/// 컴파일 성공 시 모든 도달 Ref 슬롯이 채워진다 — 빈 슬롯은 컴파일러 버그.
-fn compiled_ref(
-    target: &std::sync::OnceLock<std::sync::Arc<IrNode>>,
-) -> Result<&std::sync::Arc<IrNode>> {
-    target
-        .get()
-        .ok_or_else(|| error("unresolved schema reference"))
 }
 
 fn value_as_i128(value: &Value) -> Result<i128> {

@@ -1984,12 +1984,22 @@ impl<'s, 'w, 'b> SerializeStructVariant for SerStructVariant<'s, 'w, 'b> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::complex_codec::complex_codec_encode_object::{
-        complex_encode, test_only_complex_decode,
-    };
+    use crate::complex_codec::complex_codec_encode_object::complex_encode;
+    use crate::{CompiledComplex, ComplexCodecLimits as Limits};
     use serde::Deserialize;
     use serde_json::json;
     use std::collections::BTreeMap;
+
+    /// 호출당 컴파일 디코드 — 삭제된 `test_only_complex_decode` 대체. Value
+    /// 경로와 동일 IR 순회를 쓰는 [`CompiledComplex`] 로 구동한다.
+    fn decode_value_path(
+        schema: &serde_json::Value,
+        definitions: &serde_json::Value,
+        bytes: &[u8],
+        limits: Limits,
+    ) -> Result<serde_json::Value> {
+        CompiledComplex::new(schema, definitions).decode(bytes, limits)
+    }
 
     fn limits() -> ComplexCodecLimits {
         ComplexCodecLimits {
@@ -2046,8 +2056,7 @@ mod tests {
             assert_eq!(bytes, expected, "encode mismatch for {value}");
             let back: Payload = from_bytes(&bytes, &ir, limits()).unwrap();
             assert_eq!(back, input);
-            let value_back =
-                test_only_complex_decode(&schema, &definitions, &bytes, limits()).unwrap();
+            let value_back = decode_value_path(&schema, &definitions, &bytes, limits()).unwrap();
             assert_eq!(value, value_back);
         }
 
@@ -2055,7 +2064,7 @@ mod tests {
         let bad: Result<Payload> = from_bytes(&[0x7f], &ir, limits());
         assert_eq!(
             bad.unwrap_err().to_string(),
-            test_only_complex_decode(&schema, &definitions, &[0x7f], limits())
+            decode_value_path(&schema, &definitions, &[0x7f], limits())
                 .unwrap_err()
                 .to_string()
         );
@@ -2088,7 +2097,7 @@ mod tests {
         let back: Scores = from_bytes(&bytes, &ir, limits()).unwrap();
         assert_eq!(back, input);
         // Value 경로 디코드와 동일 값.
-        let value_back = test_only_complex_decode(&schema, &definitions, &bytes, limits()).unwrap();
+        let value_back = decode_value_path(&schema, &definitions, &bytes, limits()).unwrap();
         assert_eq!(serde_json::to_value(&back).unwrap(), value_back);
     }
 
