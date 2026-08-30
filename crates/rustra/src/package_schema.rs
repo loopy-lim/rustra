@@ -25,6 +25,16 @@ impl Package {
         schema
     }
 
+    /// (T0) 현재 스키마 세대 — register/replace/unregister 마다 증가한다.
+    /// 호스트는 이 값을 폴링/비교해 동적 명령 캐시의 재동기화 시점을 판정한다.
+    /// read lock 1회 + u64 복사 — 호출 비용 수십 ns.
+    pub fn schema_generation(&self) -> u64 {
+        self.state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .schema_generation
+    }
+
     /// 등록된 모든 명령에서 TypeScript 클라이언트 코드를 생성합니다.
     pub fn generate_typescript(&self) -> crate::Result<GeneratedPackage> {
         let state = self

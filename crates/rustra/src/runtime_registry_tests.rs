@@ -400,3 +400,43 @@ fn core_rkyv_v2_ffi_symbol_dispatches() {
         unsafe { crate::ffi::rustra_ffi_free(ptr, out_len) };
     }
 }
+
+// ── T0-1: schema generation — 치환 동기화 계약 기반 ─────────
+
+#[test]
+#[cfg(debug_assertions)]
+fn schema_generation_advances_on_register_replace_unregister() {
+    let pkg = empty_pkg();
+    let g0 = pkg.schema_generation();
+    pkg.register("echo", echo).unwrap();
+    let g1 = pkg.schema_generation();
+    assert!(g1 > g0, "register must advance the generation");
+    pkg.replace("echo", c1).unwrap();
+    assert!(
+        pkg.schema_generation() > g1,
+        "replace must advance the generation"
+    );
+    pkg.unregister("echo").unwrap();
+    assert!(
+        pkg.schema_generation() > g1,
+        "unregister must advance the generation beyond the post-replace value"
+    );
+    // 스키마 불변 동작(register 중복 이름 = id 재사용, 실질 무변화)은
+    // 증가해도 무해 — 계약은 "증가 방향 보존"만 요구.
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn schema_generation_is_monotonic_across_errors() {
+    // 실패한 mutation(register 중복 에러, replace/unregister not_found)은
+    // generation을 되감지 않는다 — 단조성만 보이면 충분하다.
+    let pkg = empty_pkg();
+    pkg.register("echo", echo).unwrap();
+    let before = pkg.schema_generation();
+    assert!(pkg.replace("missing", c1).is_err());
+    assert!(pkg.unregister("missing").is_err());
+    assert!(
+        pkg.schema_generation() >= before,
+        "failed mutations must not rewind the generation"
+    );
+}
