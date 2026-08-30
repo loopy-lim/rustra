@@ -404,8 +404,10 @@ jobs:
             break
           done
           bun install
-          sed -i "s#rustra = \"[0-9.]*\"#rustra = { path = \"$GITHUB_WORKSPACE/crates/rustra\" }#" Cargo.toml
-          sed -i "s#rustra-macros = \"[0-9.]*\"#rustra-macros = { path = \"$GITHUB_WORKSPACE/crates/rustra-macros\" }#" Cargo.toml
+          # cargoRange 는 캐럿 범위(예: ^0.5.0) — [0-9.]* 는 ^ 를 못 맞춰 발행 전
+          # 버전에서는 crates.io 해석 실패가 된다. 캐럿을 포함해 치환한다.
+          sed -i "s#rustra = \"[^\"]*\"#rustra = { path = \"$GITHUB_WORKSPACE/crates/rustra\" }#" Cargo.toml
+          sed -i "s#rustra-macros = \"[^\"]*\"#rustra-macros = { path = \"$GITHUB_WORKSPACE/crates/rustra-macros\" }#" Cargo.toml
           bun run codegen
           test -f generated/schema.json
           test -f src/generated/rkyv-codecs.ts
