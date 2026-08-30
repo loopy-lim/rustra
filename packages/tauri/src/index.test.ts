@@ -44,9 +44,18 @@ test('createTauriEngine applies timeoutMs and shallow abort to pending transport
 });
 
 test('createTauriEngine exposes Promise-based invokeBatch with stable order', async () => {
+  // 트랙 E2 — invokeBatch 는 이제 rustra_dispatch_batch 와이어 배치 한 번으로
+  // 처리된다. mock 호스트는 Rust 계약(항목별 ok/result)을 그대로 흉내 낸다.
   const engine = createTauriEngine({
-    async invoke(_command, args) {
-      return (args as { command: string }).command === 'first' ? 1 : 2;
+    async invoke(command, args) {
+      if (command === 'rustra_dispatch_batch') {
+        const requests = (args as { requests: Array<{ command: string }> }).requests;
+        return requests.map((request) => ({
+          ok: true,
+          result: request.command === 'first' ? 1 : 2,
+        }));
+      }
+      return {};
     },
   });
   const out = await engine.invokeBatch<number>([{ command: 'first' }, { command: 'second' }]);
@@ -247,4 +256,94 @@ test('subscribeTauriEvent discovers the global listen API', async () => {
   } finally {
     root.__TAURI__ = previous;
   }
+});
+
+// ── 와이어 배치 — rustra_dispatch_batch 단일 횡단 (트랙 E2) ──
+
+test('createTauriEngine routes invokeBatch through rustra_dispatch_batch', async () => {
+  const calls: Array<{ command: string; args: unknown }> = [];
+  let dispatchCalls = 0;
+  const engine = createTauriEngine({
+    invoke(command, args) {
+      calls.push({ command, args });
+      if (command === 'rustra_dispatch_batch') {
+        dispatchCalls += 1;
+        const requests = (args as { requests: Array<{ command: string }> }).requests;
+        return Promise.resolve(
+          requests.map((request) =>
+            request.command === 'add'
+              ? { ok: true, result: { value: 42 } }
+              : { ok: true, result: { v: 1 } },
+          ),
+        );
+      }
+      return Promise.resolve({});
+    },
+  });
+  const out = await engine.invokeBatch<Array<{ value: number } | { v: number }>>([
+    { command: 'add', args: { a: 20, b: 22 } },
+    { command: 'mul', args: { a: 2, b: 3 } },
+    { command: 'add', args: { a: 1, b: 1 } },
+  ]);
+  assert.equal(dispatchCalls, 1, 'batch must be a single rustra_dispatch_batch crossing');
+  assert.equal(calls.length, 1, 'no per-entry rustra_dispatch calls');
+  assert.deepEqual(calls[0], {
+    command: 'rustra_dispatch_batch',
+    args: {
+      requests: [
+        { command: 'add', args: { a: 20, b: 22 } },
+        { command: 'mul', args: { a: 2, b: 3 } },
+        { command: 'add', args: { a: 1, b: 1 } },
+      ],
+    },
+  });
+  assert.deepEqual(out, [{ value: 42 }, { v: 1 }, { value: 42 }]);
+});
+
+test('createTauriEngine batch rejects with the failing entry error without failing siblings', async () => {
+  // Rust 계약: 항목별 ok/error (fail-fast 아님). TS 는 실패 항목의 에러를
+  // 그대로 전파한다 — Promise.all 이므로 형제 항목 성공은 관찰되지 않지만
+  // 에러 객체는 실패한 항목 것임이 보장되어야 한다.
+  const engine = createTauriEngine({
+    async invoke(command, args) {
+      if (command === 'rustra_dispatch_batch') {
+        const requests = (args as { requests: Array<{ command: string }> }).requests;
+        return requests.map((request) =>
+          request.command === 'boom'
+            ? {
+                ok: false,
+                error: { code: 'command.not_found', message: 'command not found: boom' },
+              }
+            : { ok: true, result: { value: 7 } },
+        );
+      }
+      return {};
+    },
+  });
+  await assert.rejects(
+    engine.invokeBatch([
+      { command: 'add', args: {} },
+      { command: 'boom', args: {} },
+    ]),
+    (error: unknown) => {
+      if (!(error instanceof RustraCommandError)) return false;
+      assert.equal(error.code, 'command.not_found');
+      assert.equal(error.message, 'command not found: boom');
+      return true;
+    },
+  );
+});
+
+test('createTauriEngine batch normalizes undefined args to empty objects', async () => {
+  const engine = createTauriEngine({
+    async invoke(command, args) {
+      if (command === 'rustra_dispatch_batch') {
+        const requests = (args as { requests: Array<{ args: unknown }> }).requests;
+        return requests.map(() => ({ ok: true, result: null }));
+      }
+      return {};
+    },
+  });
+  const out = await engine.invokeBatch([{ command: 'a' }, { command: 'b', args: undefined }]);
+  assert.deepEqual(out, [null, null]);
 });

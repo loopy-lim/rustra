@@ -87,6 +87,62 @@ pub fn rustra_dispatch_profiled(
     }
 }
 
+/// 와이어 배치 요청/응답 항목 — 기존 JSON 계약(`invoke_json`)을 그대로
+/// 재사용한다. 각 항목은 독립적으로 실행되며 개별 실패는 요청별 에러 객체로
+/// 응답한다(fail-fast 아님 — 순서는 요청 순서대로 보존).
+#[derive(serde::Deserialize)]
+pub struct BatchRequest {
+    pub command: String,
+    #[serde(default)]
+    pub args: Value,
+}
+
+#[derive(serde::Serialize)]
+pub struct BatchResponse {
+    pub ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<Value>,
+}
+
+/// 단일 IPC 횡단으로 N 개 명령을 실행하는 Tauri 커맨드 (트랙 E2).
+///
+/// 개별 명령 실패는 전체 배치를 중단시키지 않고 해당 항목의 `error` 필드로
+/// 반환된다 — RN `invokeTypedBatch` 의 fail-fast(첫 에러 throw)와 의도적으로
+/// 다른 계약이며, 배치 소비자는 항목별 `ok` 를 검사해야 한다.
+#[tauri::command]
+pub fn rustra_dispatch_batch(
+    state: State<'_, RustraState>,
+    requests: Vec<BatchRequest>,
+) -> Vec<BatchResponse> {
+    run_batch(&state.package, requests)
+}
+
+/// 배치 실행 본체 — Tauri `State` 없이 검증 가능한 순수 함수로 추출
+/// (코어 단위 테스트 대상).
+fn run_batch(package: &Package, requests: Vec<BatchRequest>) -> Vec<BatchResponse> {
+    requests
+        .into_iter()
+        .map(
+            |request| match package.invoke_json(&request.command, request.args) {
+                Ok(result) => BatchResponse {
+                    ok: true,
+                    result: Some(result),
+                    error: None,
+                },
+                Err(error) => BatchResponse {
+                    ok: false,
+                    result: None,
+                    error: Some(serde_json::to_value(&error).unwrap_or_else(
+                        |_| json!({"code": "unknown", "message": "unknown error"}),
+                    )),
+                },
+            },
+        )
+        .collect()
+}
+
 /// rustra 패키지를 Tauri 앱 빌더에 등록합니다.
 ///
 /// 이벤트는 폴링으로만 전달됩니다(기존 동작). 푸시 배선이 필요하면
@@ -97,7 +153,11 @@ pub fn register<R: tauri::Runtime>(
 ) -> tauri::Builder<R> {
     builder
         .manage(RustraState { package })
-        .invoke_handler(tauri::generate_handler![rustra_dispatch, rustra_dispatch_profiled])
+        .invoke_handler(tauri::generate_handler![
+            rustra_dispatch,
+            rustra_dispatch_profiled,
+            rustra_dispatch_batch
+        ])
 }
 
 /// [`register`] + 이벤트 푸시 배선 — `Package::emit` 이 즉시
@@ -240,5 +300,83 @@ mod profiled_tests {
         assert_eq!(value["ok"], json!(true));
         assert_eq!(value["native_ns"], json!(1234));
         assert_eq!(value["result"]["value"], json!(42));
+    }
+}
+
+#[cfg(test)]
+mod batch_tests {
+    use super::*;
+    use crate::RustraError;
+
+    /// run_batch 이 사용하는 것과 동일한 invoke_json 경로를 지나는 최소 패키지.
+    fn batch_package() -> Package {
+        Package::builder("test.batch")
+            .command("addNumbers", |args: serde_json::Value| {
+                let a = args["a"].as_i64().unwrap_or(0);
+                let b = args["b"].as_i64().unwrap_or(0);
+                Ok::<_, RustraError>(json!(a + b))
+            })
+            .command("failAlways", |_args: serde_json::Value| {
+                Err::<Value, _>(RustraError::custom("invoke.failed", "boom"))
+            })
+            .build()
+    }
+
+    /// 순서 보존 + 성공 응답 형태.
+    #[test]
+    fn batch_preserves_request_order_and_success_shape() {
+        let package = batch_package();
+        let responses = run_batch(
+            &package,
+            vec![
+                BatchRequest {
+                    command: "addNumbers".into(),
+                    args: json!({"a": 20, "b": 22}),
+                },
+                BatchRequest {
+                    command: "addNumbers".into(),
+                    args: json!({"a": 6, "b": 7}),
+                },
+            ],
+        );
+        assert_eq!(responses.len(), 2);
+        assert!(responses[0].ok);
+        assert_eq!(responses[0].result.as_ref().unwrap(), &json!(42));
+        assert!(responses[0].error.is_none(), "성공 항목은 error 필드 생략");
+        assert!(responses[1].ok);
+        assert_eq!(responses[1].result.as_ref().unwrap(), &json!(13));
+    }
+
+    /// 부분 실패 — 개별 실패가 배치 전체를 중단시키지 않는다(fail-fast 아님).
+    #[test]
+    fn batch_partial_failure_isolates_errors() {
+        let package = batch_package();
+        let responses = run_batch(
+            &package,
+            vec![
+                BatchRequest {
+                    command: "nope_not_found".into(),
+                    args: json!({}),
+                },
+                BatchRequest {
+                    command: "failAlways".into(),
+                    args: json!({}),
+                },
+                BatchRequest {
+                    command: "addNumbers".into(),
+                    args: json!({"a": 1, "b": 2}),
+                },
+            ],
+        );
+        assert!(!responses[0].ok, "unknown command must fail its own entry");
+        assert!(responses[0].error.is_some());
+        assert!(!responses[1].ok, "handler error must fail only its entry");
+        assert_eq!(
+            responses[1].error.as_ref().unwrap()["message"],
+            json!("boom")
+        );
+        // 이후 항목은 정상 실행된다.
+        assert!(responses[2].ok);
+        assert_eq!(responses[2].result.as_ref().unwrap(), &json!(3));
     }
 }
