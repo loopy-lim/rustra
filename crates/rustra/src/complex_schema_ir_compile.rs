@@ -1,5 +1,5 @@
-use super::complex_codec_variants::{explicit_variant_keys, variant_key};
 use super::complex_codec_schema::{option_inner, ref_name};
+use super::complex_codec_variants::{explicit_variant_keys, variant_key};
 use crate::RustraError;
 use std::collections::{BTreeSet, HashMap};
 

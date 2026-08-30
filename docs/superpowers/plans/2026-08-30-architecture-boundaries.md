@@ -23,10 +23,12 @@
 ### Task 1: Shrink the Rust public facade
 
 **Files:**
+
 - Modify: `crates/rustra/src/lib.rs`
 - Modify: `crates/rustra/src/invoke_buffer.rs`
 
 **Interfaces:**
+
 - Consumes: the existing `invoke.rs` `include!("invoke_buffer.rs")` composition.
 - Produces: the same private `postcard_uvar_len` helper for `Package::invoke_buffer`.
 
@@ -45,10 +47,12 @@ Run `cargo test -p rustra` and `bun run test:architecture`. The Rust crate must 
 ### Task 2: Split schema IR compilation
 
 **Files:**
+
 - Modify: `crates/rustra/src/complex_schema_ir.rs`
 - Create: `crates/rustra/src/complex_schema_ir_compile.rs`
 
 **Interfaces:**
+
 - Consumes: `IrNode`, `IrField`, `IrMatcher`, `IrBody`, `IrVariant`, and `compiled_ref` from the current IR module.
 - Produces: the same `pub(crate) fn compile` entry point and identical compiled IR.
 
@@ -67,11 +71,13 @@ Run `bun run test:architecture` and confirm no `source-module-size` error remain
 ### Task 3: Split the TypeScript schema postcard codec
 
 **Files:**
+
 - Modify: `packages/types/src/schema-postcard-codec.ts`
 - Create: `packages/types/src/schema-postcard-wire.ts`
 - Create: `packages/types/src/schema-postcard-node.ts`
 
 **Interfaces:**
+
 - Consumes: `ComplexSchema`, `RkyvV2Codec`, and the existing UTF-8 helpers.
 - Produces: the unchanged `createSchemaPostcardCodec` export and the same encode/decode behavior.
 
@@ -94,6 +100,7 @@ Run `bun run --cwd packages/types build`, `bun run --cwd packages/types test`, a
 ### Task 4: Split the Rust serde adapter
 
 **Files:**
+
 - Modify: `crates/rustra/src/complex_serde.rs`
 - Create: `crates/rustra/src/complex_serde_support.rs`
 - Create: `crates/rustra/src/complex_serde_de_core.rs`
@@ -105,6 +112,7 @@ Run `bun run --cwd packages/types build`, `bun run --cwd packages/types test`, a
 - Create: `crates/rustra/src/complex_serde_tests.rs`
 
 **Interfaces:**
+
 - Consumes: the current `from_bytes`, `to_bytes`, `to_writer`, `serde_direct_supported`, and private serde adapter types.
 - Produces: the same `complex_serde` private module API used by `complex_codec_encode_object.rs`.
 
@@ -131,6 +139,7 @@ Run `cargo test -p rustra`, the complex codec wire fixture tests, and the full w
 ### Task 5: Final gate and host verification
 
 **Files:**
+
 - No additional source changes unless a verification failure identifies a regression in the split.
 
 - [ ] **Step 1: Run architecture and formatting gates**
