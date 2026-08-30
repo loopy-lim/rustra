@@ -410,6 +410,10 @@ jobs:
             bun pm pkg set "overrides.@rustra/cli=file:$rustra_cli_tgz"
             break
           done
+          for rustra_node_tgz in /tmp/rustra-pack/rustra-node-*.tgz; do
+            bun pm pkg set "overrides.@rustra/node=file:$rustra_node_tgz"
+            break
+          done
           bun install
           # 발행 전 release candidate를 현재 checkout의 Rust crate로 고정한다.
           # crates.io의 이전 버전으로 조용히 폴백하면 소비자 검증이 거짓 green이 된다.
