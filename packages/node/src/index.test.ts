@@ -330,3 +330,41 @@ processTest(
     }
   },
 );
+
+processTest(
+  'dev replacement workflow: register → invoke → replace → invoke over the persistent loop (T0-4)',
+  { timeout: 30_000 },
+  async () => {
+    const { createNodeLoopTransport, createNodeEngine } = await import('./index.js');
+    // debug 빌드만 mutable — release 는 frozen(치환 차단)이 계약.
+    const transport = createNodeLoopTransport({
+      command: resolve(repoRoot, 'target/debug/loop-stdio'),
+      args: [],
+    });
+    try {
+      const engine = createNodeEngine(transport);
+      const base = (await engine.invoke('addNumbers', { a: 20, b: 22 })) as { value: number };
+      assert.equal(base.value, 42);
+
+      // 런타임 register — JS 는 아무 것도 안 해도 새 명령을 부를 수 있다.
+      const reg = (await engine.invoke('rustraRegistryDemo', { op: 'register' })) as {
+        message: string;
+      };
+      assert.match(reg.message, /registered 'ping'/);
+      const ping = (await engine.invoke('ping', {})) as { pong: boolean };
+      assert.equal(ping.pong, true);
+
+      // 치환 — 같은 이름 addNumbers 가 곱하기로 동작 (스키마 동일, 핸들러 교체).
+      await engine.invoke('rustraRegistryDemo', { op: 'replaceAdd' });
+      const replaced = (await engine.invoke('addNumbers', { a: 6, b: 7 })) as { value: number };
+      assert.equal(replaced.value, 42, '6*7 — the replaced handler must serve');
+
+      // 복원.
+      await engine.invoke('rustraRegistryDemo', { op: 'restoreAdd' });
+      const restored = (await engine.invoke('addNumbers', { a: 20, b: 22 })) as { value: number };
+      assert.equal(restored.value, 42);
+    } finally {
+      transport.dispose();
+    }
+  },
+);
