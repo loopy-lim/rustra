@@ -1,4 +1,6 @@
 /// Commonly used Rustra types and macros.
+// deprecated RendererHost 재노출은 0.x 호환 계약이다.
+#[allow(deprecated)]
 pub use crate::{
     BufferCommandInput, BufferCommandOutput, GeneratedPackage, Package, PackageBuilder, Result,
     RustraError, State, bridge_type, build, command,

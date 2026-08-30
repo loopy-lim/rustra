@@ -12,7 +12,6 @@
 use rustra::Package;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::BTreeMap;
 
 #[path = "../benches/common.rs"]

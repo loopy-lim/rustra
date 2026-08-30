@@ -152,6 +152,9 @@ pub trait RendererHost: Send + 'static {
 ///
 /// `evaluate_script == false` 인 renderer (present-only) 에게는 eval 기반 경로를
 /// 시도하지 않아야 한다. 이 함수가 그 결정을 한 곳에서 내린다.
+// 0.x 호환 표면(re-export, 헬퍼)이 deprecated trait 을 그대로 다룬다 —
+// prelude 재노출과 함께 의도적 사용이므로 지점 단위 allow.
+#[allow(deprecated)]
 pub fn host_supports_eval(host: &impl RendererHost) -> bool {
     host.capabilities().evaluate_script
 }
@@ -192,5 +195,6 @@ pub(crate) fn surface_destroyed(op: &str) -> RustraError {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 #[path = "renderer_host_tests.rs"]
 mod tests;

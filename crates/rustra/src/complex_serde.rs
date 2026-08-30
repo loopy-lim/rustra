@@ -181,7 +181,7 @@ impl<'de, 'b> De<'de, 'b> {
 
 /// `$ref`/const+type 해석 — 원본 decode_node 의 Ref 폴스루와 const 무시
 /// (const+type 은 타입으로만 읽음)를 진입마다 적용한다.
-fn peel<'x>(ir: &'x IrNode) -> Result<&'x IrNode> {
+fn peel(ir: &IrNode) -> Result<&IrNode> {
     match ir {
         IrNode::Ref { target } => target
             .get()
@@ -1017,7 +1017,7 @@ impl<'s, 'w, 'b> Ser<'s, 'w, 'b> {
 /// `$ref`/const 폴스루 — 원본 encode_node 와 동일하되 const 값 검사는 건너뛴다
 /// (Rust 타입이 값의 출처다; const 스키마는 타입 자신의 모양에서 유래하므로
 /// 실질 도달 불가). 스키마↔타입 어긋남은 Value 경로에서도 에러였다.
-fn peel_ser<'x>(ir: &'x IrNode) -> Result<&'x IrNode> {
+fn peel_ser(ir: &IrNode) -> Result<&IrNode> {
     match ir {
         IrNode::Ref { target } => target
             .get()
@@ -1370,7 +1370,7 @@ fn serialize_int(
         return Err(error("expected integer node"));
     };
     if *uint {
-        let value = signed.map(i64::from_u64_lossy).unwrap_or(unsigned);
+        let value = signed.map(i64::saturate_to_lossy).unwrap_or(unsigned);
         let value =
             u64::try_from(value).map_err(|_| error("unsigned integer must be non-negative"))?;
         writer.varint(u128::from(value))
@@ -1379,11 +1379,13 @@ fn serialize_int(
     }
 }
 
+// `from_*` 이름은 clippy wrong_self_convention(no-self convention)과 충돌한다
+// — lossy 시그니처(u64 입력 없음)를 유지하기 위해 네이밍만 피한다.
 trait I64Ext {
-    fn from_u64_lossy(self) -> i64;
+    fn saturate_to_lossy(self) -> i64;
 }
 impl I64Ext for i64 {
-    fn from_u64_lossy(self) -> i64 {
+    fn saturate_to_lossy(self) -> i64 {
         self
     }
 }
