@@ -193,6 +193,8 @@ function compileVariant(
 ): CompiledVariant {
   const tag = discriminator(variant);
   const properties = variant.properties;
+  // O(1) 조회 — required 배열을 필드 순회마다 includes 로 훑지 않는다.
+  const requiredSet = new Set(variant.required ?? []);
   // matchesVariant 순서: discriminator → 단일 프로퍼티 → const → 단일 enum →
   // type 폴백(string/object) → never.
   const matcher: CompiledVariant['matcher'] = tag
@@ -220,7 +222,7 @@ function compileVariant(
             fields: Object.entries(properties ?? {}).map(([key, fieldSchema]) => ({
               key,
               node: compileNode(fieldSchema, definitions, refs, depth + 1),
-              required: (variant.required ?? []).includes(key),
+              required: requiredSet.has(key),
             })),
           },
         }

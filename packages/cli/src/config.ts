@@ -205,8 +205,10 @@ function assertKnownKeys(value: unknown, allowed: readonly string[], label: stri
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error(`${label} must be an object`);
   }
+  // O(1) 조회 — allowed 배열을 루프 안에서 includes 로 훑지 않는다.
+  const allowedSet = new Set(allowed);
   for (const key of Object.keys(value)) {
-    if (!allowed.includes(key)) {
+    if (!allowedSet.has(key)) {
       const suggestion = closestKey(key, allowed);
       const hint = suggestion
         ? ` Did you mean "${suggestion}"?`
