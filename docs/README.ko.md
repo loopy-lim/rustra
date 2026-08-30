@@ -42,6 +42,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 | [복잡 데이터 codec](complex-codecs.md)                | 사용자 | recursive map/enum/Option wire, limits, RN 경계                    |
 | [보안 감사](security-audit.md)                        | 기여자 | lockfile 취약점/경고 상태, 해소 이력                               |
 | [릴리즈 절차](release-procedure.md)                   | 기여자 | changeset 발행 절차, 버전 관리                                     |
+| [버전 정책](versioning-policy.md)                     | 전체   | 표면별 호환성 보장, 폐기 절차, MSRV, 실험 표면                     |
 | [보안 정책](../.github/SECURITY.md)                   | 전체   | 취약점 신고 채널, 지원 버전, 스코프                                |
 | [기여 가이드](../CONTRIBUTING.md)                     | 기여자 | 개발 환경, 커밋 규칙, 디버깅, 릴리즈                               |
 

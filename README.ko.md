@@ -72,6 +72,9 @@ rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)�
 - [ ] 범용 prebuilt 애플리케이션 네이티브 바이너리 — 앱별 Rust 코드와 target에
       종속되므로 CI artifact/cache 방식으로 대체 권장
 
+안정화 트랙: 버전 관리, 호환성 보장, 폐기 절차는
+[버전 정책](docs/versioning-policy.md)에 정의되어 있다.
+
 ## FAQ
 
 **Q. Rust 툴체인이 꼭 필요한가요?**
