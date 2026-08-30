@@ -5,16 +5,16 @@
 
 ## 트랙 요약 (T = 이번 세션의 동적 명령 트랙)
 
-| 트랙 | 목표 | 결과 |
-| --- | --- | --- |
-| T0 (generation) | 치환 동기화 계약 | 완료 — schema generation → FFI 노출 → TS 게이트 (6bdbb813, 2e841f87, c487bee6) |
-| T1 (벤치 교정) | tier_compare 연산 통제 | 완료 — wire 순수 비교 재작성 (0dba9edc) |
-| T2 (동적 postcard) | 동적 명령 postcard fast-path | 완료 — Rust 핸들러 + TS 인터프리터 + 엔진 라우팅 + 실측 (639a494b, 2ded6a0d, fe24d42e, c8791d8f) |
-| Track A/B (complex 코어) | Value 왕복 제거 | 완료 — IR 사전컴파일 + serde 직결 (2cd5552f, 92f24f54, 16555a95) |
-| Node loop (F2 잔여) | persistent loop 바이너리화 | 완료 (c742eb7f, 7c1ccda5, a6ced290) |
-| Tauri (측정 정합화) | 타이머 그리드 왜곡 제거 + 배치 | 완료 (037c6488, 8c82d316) |
-| RN async byId | 이름 마샬링 제거 | 완료 (456274e9) |
-| Bun F2 | 응답 slice 제거 | 완료 (6be09a2c) |
+| 트랙                     | 목표                           | 결과                                                                                             |
+| ------------------------ | ------------------------------ | ------------------------------------------------------------------------------------------------ |
+| T0 (generation)          | 치환 동기화 계약               | 완료 — schema generation → FFI 노출 → TS 게이트 (6bdbb813, 2e841f87, c487bee6)                   |
+| T1 (벤치 교정)           | tier_compare 연산 통제         | 완료 — wire 순수 비교 재작성 (0dba9edc)                                                          |
+| T2 (동적 postcard)       | 동적 명령 postcard fast-path   | 완료 — Rust 핸들러 + TS 인터프리터 + 엔진 라우팅 + 실측 (639a494b, 2ded6a0d, fe24d42e, c8791d8f) |
+| Track A/B (complex 코어) | Value 왕복 제거                | 완료 — IR 사전컴파일 + serde 직결 (2cd5552f, 92f24f54, 16555a95)                                 |
+| Node loop (F2 잔여)      | persistent loop 바이너리화     | 완료 (c742eb7f, 7c1ccda5, a6ced290)                                                              |
+| Tauri (측정 정합화)      | 타이머 그리드 왜곡 제거 + 배치 | 완료 (037c6488, 8c82d316)                                                                        |
+| RN async byId            | 이름 마샬링 제거               | 완료 (456274e9)                                                                                  |
+| Bun F2                   | 응답 slice 제거                | 완료 (6be09a2c)                                                                                  |
 
 ## T2 — 동적 명령 postcard (이번 세션 완료분)
 
@@ -59,6 +59,7 @@ span, gauge, sizeOf, wideAgg 64-bit 경계, tagSet.
 싣는 `$ref` 해결용 정의와 정합.
 
 병행 결함 수정(같은 커밋):
+
 - T2-2 테스트가 definitions 자리에 outputSchema를 중복 전달한 2건
 - T0-3(c487bee6) 때 도입된 `echoCodec().decode`의 ArrayBufferView 전제 위반
   (examples calculator tsconfig 기준 tsc 오류 3건 → 0)
@@ -71,18 +72,18 @@ processPayload postcard 왕복으로 전환(구 tier3 벤치는 T2-1 이후 패�
 
 **측정 (criterion, `--profile dev`, macOS arm64 Apple M-series, 3회 실행):**
 
-| tier_compare (echo 동일 연산) | 평균 |
-| --- | --- |
-| 정적 postcard | 459–478 ns |
-| **동적 postcard** | **472–488 ns (정적 대비 1.02x — 목표 2x 이내 달성)** |
-| 동적 Tier 3 JSON | 4.72–4.75 µs (~9.9x) |
+| tier_compare (echo 동일 연산) | 평균                                                 |
+| ----------------------------- | ---------------------------------------------------- |
+| 정적 postcard                 | 459–478 ns                                           |
+| **동적 postcard**             | **472–488 ns (정적 대비 1.02x — 목표 2x 이내 달성)** |
+| 동적 Tier 3 JSON              | 4.72–4.75 µs (~9.9x)                                 |
 
-| type_scaling (동적 postcard) | 평균 |
-| --- | --- |
-| 1 items | 1.43–1.45 µs |
-| 10 items | 6.48–6.54 µs |
-| 100 items | 56.8–57.1 µs |
-| 1000 items | 575–580 µs (구 Tier 3 JSON 5.68 ms 대비 ~9.8x) |
+| type_scaling (동적 postcard) | 평균                                           |
+| ---------------------------- | ---------------------------------------------- |
+| 1 items                      | 1.43–1.45 µs                                   |
+| 10 items                     | 6.48–6.54 µs                                   |
+| 100 items                    | 56.8–57.1 µs                                   |
+| 1000 items                   | 575–580 µs (구 Tier 3 JSON 5.68 ms 대비 ~9.8x) |
 
 원본 receipt: `docs/benchmark-receipts/2026-08-30-dynamic-postcard.json`.
 
@@ -102,10 +103,10 @@ processPayload postcard 왕복으로 전환(구 tier3 벤치는 T2-1 이후 패�
 
 ## 목표 미달 항목 (기록 의무)
 
-| 항목 | 목표 | 실측 | 이유 |
-| --- | --- | --- | --- |
+| 항목                      | 목표    | 실측     | 이유                                                                                                                   |
+| ------------------------- | ------- | -------- | ---------------------------------------------------------------------------------------------------------------------- |
 | Node loop persistent 왕복 | ~3–6 µs | 16.86 µs | OS pipe 왕복 자체가 하한. 바이너리 프레이밍/직결로 JS측 비용은 제거했지만 프로세스 간 파이프 왕복 2회(RTT)는 제거 불가 |
-| Bun ~1 µs 왕복 | parity | 미달 | 같은 OS pipe 하한 구조 (Tauri는 IPC라 별도 기준) |
+| Bun ~1 µs 왕복            | parity  | 미달     | 같은 OS pipe 하한 구조 (Tauri는 IPC라 별도 기준)                                                                       |
 
 ## 보류/범위 밖 (이유 기록)
 
@@ -117,16 +118,16 @@ processPayload postcard 왕복으로 전환(구 tier3 벤치는 T2-1 이후 패�
 
 ## 완료 게이트 (전부 실행, 2026-08-30)
 
-| 게이트 | 결과 |
-| --- | --- |
+| 게이트                                         | 결과                                                                                                                 |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `cargo test -p rustra` (workspace 전 바이너리) | 전부 ok — lib 103 + 통합(wire 31, fuzz 10, concurrency 3, public_authoring 38, trust_baseline 19 등) + doc 9, fail 0 |
-| `cargo test -p rustra --features tauri --lib` | 108 pass, fail 0 |
-| `cargo fmt -p rustra -- --check` | clean |
-| `cd packages/types && bun test` | 135 pass, fail 0 |
-| `bun run test:ts:node` | 63 pass, fail 0 (컴파일 포함, tsc 오류 0) |
-| C++ codec tests (`run-cpp-codec-tests.sh`) | OK — all passed |
-| `tier_compare` / `type_scaling` 벤치 | 정상 실행 (`--test` 스모크 + 실측) |
-| 트리 상태 | clean (모든 커밋 prettier/cargo-fmt amend 흡수) |
+| `cargo test -p rustra --features tauri --lib`  | 108 pass, fail 0                                                                                                     |
+| `cargo fmt -p rustra -- --check`               | clean                                                                                                                |
+| `cd packages/types && bun test`                | 135 pass, fail 0                                                                                                     |
+| `bun run test:ts:node`                         | 63 pass, fail 0 (컴파일 포함, tsc 오류 0)                                                                            |
+| C++ codec tests (`run-cpp-codec-tests.sh`)     | OK — all passed                                                                                                      |
+| `tier_compare` / `type_scaling` 벤치           | 정상 실행 (`--test` 스모크 + 실측)                                                                                   |
+| 트리 상태                                      | clean (모든 커밋 prettier/cargo-fmt amend 흡수)                                                                      |
 
 ## 커밋 목록 (8f0a04fd..HEAD, 20 커밋)
 

@@ -21,14 +21,14 @@ status: complete
 
 ## (a) 태스크별 상태
 
-| 태스크 | 상태 | 내용 |
-|---|---|---|
-| 1.1 arg-parser 통일 | **완료** (잔여분) | 파서 헬퍼 자체는 기존 착지돼 있었음. 잔여 갭 구현: 미지 플래그 Levenshtein "Did you mean --X?" 제안 + 매치 없으면 옵션 전집 나열 + `Run "rustra <cmd> --help"` 안내, usage 오류 **exit 2**(기존 전부 1), `init`이 수동 필터링으로 파서를 우회하던 것을 `parseCliArgs`로 통일(오타 `--forcee` → `Did you mean --force?`) |
-| 1.2 CLI 인체공학 | **완료** (잔여분) | config 오타키 closest 제안(대소문자 무시, 기존 loud-fail 위에 제안 추가), codegen cargo 빌드 스피너(프레임 회전 + 1초 경과 틱 + 완료 시 총 소요 `done in N.Ns`). init 차단+`--force`, 스캐폴드 .gitignore/tsconfig, help `dev --config` 문서화는 **기존 착지 확인** → SKIP (구현 이미 존재) |
-| 1.3 errors.ts | **완료** (잔여분) | cause 옵션+normalize cause/stack 보존은 기존 착지돼 있었음. 잔여 갭: `TimeoutError`/`CancelledError` 서브클래스(코드 매핑 `transport.timeout`/`cancelled` + retryable:true 유지), 구조화 `{code,message}` 경로에서 서브클래스 승격 |
-| 1.4 RUSTRA_DEBUG | **완료** (잔여분) | debug.ts+rkyv/postcard/json 훅은 기존 착지. 잔여 갭: 계약의 `shouldDumpWire()`(순수 env 파싱) + `dumpWire(direction, bytes)`(hex+stderr, 미설정 시 완전 무음) 신설 및 rkyv-engine-dispatch 4곳 훅(허용 범위인 호출부 추가만) |
-| 1.5 문서 HIGH 6건 | **완료** (잔여분) | README init 예제는 이미 실동작 형태(스모크로 실증 — 아래 게이트). rust-api-guide :424-432 divide 예제는 이미 유효(`RustraError::custom` 서명+단일 구조체 계약 준수 — 이전 커밋에서 해소 확인). 잔여 갭 수정: 가이드 생성코드 샘플을 실물(`createGeneratedFields2`/`invokeGenerated`/`number \| bigint`)로 현세대화, getting-started types/commands 샘플 현세대화 + `divide` TS 예제의 "Tauri 어댑터가 RustraCommandError 제공" 오술 교정(전 어댑터 @rustra/types 정규화 + Timeout/Cancelled/cause 신규 API 반영) + dev 스크립트 이중정의 해소(`rustra dev --config`로 통일) + init 스모크 절차에 `cargo build` 보강 + `--force` 문서화, CONTRIBUTING 릴리스 섹션을 lefthook(pre-commit 3종 + amend 필수 관례)+changesets(Version Packages PR 흐름) 현행 프로세스로 재작성, CHANGELOG 0.3→0.5 요약 추가(0.4 와이어 lockstep, 0.5 bigint postcard fast-path breaking 포함) |
-| 1.6 Rust 저작면 | **완료** (1.6a) + **SKIP** (1.6b CLI 연결) | (a) unknown 폴백 경고 수집기 — 아래 상세. (b) `__RUstra_doc_` JSDoc 전달은 **기존 착지 확인**(`command_doc` → `command.description` → schema description → TS JSDoc, 검증 테스트 `command_doc_comments_flow_to_schema_and_typescript_jsdoc` green). SKIP: 수집기 → GeneratedPackage → CLI 출력 연결은 package_types.rs/package_codegen.rs 수정이 필요해 경계 밖 |
+| 태스크              | 상태                                       | 내용                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1.1 arg-parser 통일 | **완료** (잔여분)                          | 파서 헬퍼 자체는 기존 착지돼 있었음. 잔여 갭 구현: 미지 플래그 Levenshtein "Did you mean --X?" 제안 + 매치 없으면 옵션 전집 나열 + `Run "rustra <cmd> --help"` 안내, usage 오류 **exit 2**(기존 전부 1), `init`이 수동 필터링으로 파서를 우회하던 것을 `parseCliArgs`로 통일(오타 `--forcee` → `Did you mean --force?`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| 1.2 CLI 인체공학    | **완료** (잔여분)                          | config 오타키 closest 제안(대소문자 무시, 기존 loud-fail 위에 제안 추가), codegen cargo 빌드 스피너(프레임 회전 + 1초 경과 틱 + 완료 시 총 소요 `done in N.Ns`). init 차단+`--force`, 스캐폴드 .gitignore/tsconfig, help `dev --config` 문서화는 **기존 착지 확인** → SKIP (구현 이미 존재)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 1.3 errors.ts       | **완료** (잔여분)                          | cause 옵션+normalize cause/stack 보존은 기존 착지돼 있었음. 잔여 갭: `TimeoutError`/`CancelledError` 서브클래스(코드 매핑 `transport.timeout`/`cancelled` + retryable:true 유지), 구조화 `{code,message}` 경로에서 서브클래스 승격                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| 1.4 RUSTRA_DEBUG    | **완료** (잔여분)                          | debug.ts+rkyv/postcard/json 훅은 기존 착지. 잔여 갭: 계약의 `shouldDumpWire()`(순수 env 파싱) + `dumpWire(direction, bytes)`(hex+stderr, 미설정 시 완전 무음) 신설 및 rkyv-engine-dispatch 4곳 훅(허용 범위인 호출부 추가만)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 1.5 문서 HIGH 6건   | **완료** (잔여분)                          | README init 예제는 이미 실동작 형태(스모크로 실증 — 아래 게이트). rust-api-guide :424-432 divide 예제는 이미 유효(`RustraError::custom` 서명+단일 구조체 계약 준수 — 이전 커밋에서 해소 확인). 잔여 갭 수정: 가이드 생성코드 샘플을 실물(`createGeneratedFields2`/`invokeGenerated`/`number \| bigint`)로 현세대화, getting-started types/commands 샘플 현세대화 + `divide` TS 예제의 "Tauri 어댑터가 RustraCommandError 제공" 오술 교정(전 어댑터 @rustra/types 정규화 + Timeout/Cancelled/cause 신규 API 반영) + dev 스크립트 이중정의 해소(`rustra dev --config`로 통일) + init 스모크 절차에 `cargo build` 보강 + `--force` 문서화, CONTRIBUTING 릴리스 섹션을 lefthook(pre-commit 3종 + amend 필수 관례)+changesets(Version Packages PR 흐름) 현행 프로세스로 재작성, CHANGELOG 0.3→0.5 요약 추가(0.4 와이어 lockstep, 0.5 bigint postcard fast-path breaking 포함) |
+| 1.6 Rust 저작면     | **완료** (1.6a) + **SKIP** (1.6b CLI 연결) | (a) unknown 폴백 경고 수집기 — 아래 상세. (b) `__RUstra_doc_` JSDoc 전달은 **기존 착지 확인**(`command_doc` → `command.description` → schema description → TS JSDoc, 검증 테스트 `command_doc_comments_flow_to_schema_and_typescript_jsdoc` green). SKIP: 수집기 → GeneratedPackage → CLI 출력 연결은 package_types.rs/package_codegen.rs 수정이 필요해 경계 밖                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 ### 1.6 unknown 폴백 경고 상세
 
@@ -79,7 +79,7 @@ let warnings = take_codegen_warnings();          // Vec<CodegenWarning { context
      src/index.ts, package.json, rustra.json, .gitignore, tsconfig.json)
    - `bun install` → 3 packages, `bun run codegen` → Rust schema 생성
      (스피너+경과: `[rustra] ⠸ ... still running (4s)` → `✓ done in 6.7s`)
-     + generated/ + src/generated/ 생성
+     - generated/ + src/generated/ 생성
    - `cargo build` → `bun run demo` → `hello from TypeScript` (echo 왕복 성공)
    - `codegen --format json` → `{"command":"codegen",...,"files":[...unchanged...]}` (멱등 확인)
    - `codegen --check`: 워크스페이스 예제(examples/calculator)에서 **exit 0**.
@@ -87,24 +87,25 @@ let warnings = take_codegen_warnings();          // Vec<CodegenWarning { context
 
 ## (c) 변경 파일 + 커밋 (9 commits, main..HEAD)
 
-| 커밋 | 내용 |
-|---|---|
+| 커밋       | 내용                                                                                            |
+| ---------- | ----------------------------------------------------------------------------------------------- |
 | `5dd21bf4` | feat(cli): 통합 arg-parser — 미지 플래그 Did-you-mean 제안 + usage 오류 exit 2 + init 파서 통일 |
-| `4ecd12bc` | feat(cli): config 오타 closest 제안 + codegen 빌드 스피너(경과/총 시간) |
-| `411616a9` | feat(types): 에러 cause 보존 + Timeout/Cancelled 서브클래스 |
-| `0b110e5e` | feat(types): RUSTRA_DEBUG=wire 와이어 덤프 — dumpWire hex+stderr + postcard/rkyv 경로 훅 |
-| `2a17a5fa` | fix(cli): 스피너 렌더의 options 가드 — tsc 빌드 오류 수정 |
-| `dc9b02fb` | docs: 실행 실패 예제 교정 + CHANGELOG 0.3→0.5 요약 + 릴리즈 프로세스 현행화 |
-| `05ae3355` | feat(codegen): unknown 폴백 경고 수집 — 타입 컨텍스트+명령명 thread-local 수집기 |
-| `52b445a4` | test(cli,types): init 차단/--force·arg-parser 분리형 플래그·string 경로 비승격 경계 보강 |
-| `42cc79c2` | chore(codegen): 경고 수집기 dead_code 의도 명시 — 소비 계약 문서화 |
+| `4ecd12bc` | feat(cli): config 오타 closest 제안 + codegen 빌드 스피너(경과/총 시간)                         |
+| `411616a9` | feat(types): 에러 cause 보존 + Timeout/Cancelled 서브클래스                                     |
+| `0b110e5e` | feat(types): RUSTRA_DEBUG=wire 와이어 덤프 — dumpWire hex+stderr + postcard/rkyv 경로 훅        |
+| `2a17a5fa` | fix(cli): 스피너 렌더의 options 가드 — tsc 빌드 오류 수정                                       |
+| `dc9b02fb` | docs: 실행 실패 예제 교정 + CHANGELOG 0.3→0.5 요약 + 릴리즈 프로세스 현행화                     |
+| `05ae3355` | feat(codegen): unknown 폴백 경고 수집 — 타입 컨텍스트+명령명 thread-local 수집기                |
+| `52b445a4` | test(cli,types): init 차단/--force·arg-parser 분리형 플래그·string 경로 비승격 경계 보강        |
+| `42cc79c2` | chore(codegen): 경고 수집기 dead_code 의도 명시 — 소비 계약 문서화                              |
 
 파일(20, +778/−55): `packages/cli/src/{cli-arg-parser,cli-init,config,index,process}.ts`
-+ 신규 테스트 3(cli-arg-parser/cli-init/process), `packages/cli/src/generate.test.ts`,
-`packages/types/src/{errors,debug,rkyv-engine-dispatch}.ts` + 신규 debug.test.ts +
-index.test.ts, `crates/rustra/src/{codegen,codegen_types}.rs`, `README.md`(커밋 대상
-검증만 — 최종 변경 없음), `CONTRIBUTING.md`, `CHANGELOG.md`,
-`docs/{getting-started,rust-api-guide}.md`, 이 리포트(미커밋).
+
+- 신규 테스트 3(cli-arg-parser/cli-init/process), `packages/cli/src/generate.test.ts`,
+  `packages/types/src/{errors,debug,rkyv-engine-dispatch}.ts` + 신규 debug.test.ts +
+  index.test.ts, `crates/rustra/src/{codegen,codegen_types}.rs`, `README.md`(커밋 대상
+  검증만 — 최종 변경 없음), `CONTRIBUTING.md`, `CHANGELOG.md`,
+  `docs/{getting-started,rust-api-guide}.md`, 이 리포트(미커밋).
 
 ## (d) SKIP — 경계 밖 발견 (메인 세션 참고)
 
@@ -134,15 +135,15 @@ index.test.ts, `crates/rustra/src/{codegen,codegen_types}.rs`, `README.md`(커�
 
 ## (e) 테스트 채움도 자체 점검
 
-| 변경분 | 실패/경계 테스트 | 평가 |
-|---|---|---|
-| arg-parser 제안 | 미지 플래그+제안 3종(제안 있/없/인접), `--flag=value`, 분리형 `--flag value`, `-h`, boolean 값 거부, 값 누락, positional 거부/허용 — **신규 8종** | 충분 |
-| init 차단/--force | 2회째 차단+메시지, --force 재생성+유효성, 오타 플래그 미흡수, 디렉터리 0/2개 거부, --help 무생성, 무관 파일 비차단 — **신규 5종** (이전엔 runInit 직접 테스트 0종) | 충분 |
-| config 오타 제안 | 기존 loud-fail 테스트 + 제안 매칭 신규 1종 | 충분 (거리>2 미제안 분기는 closestKey 내부 분기로 제안-없음 케이스가 간접 커버) |
-| 스피너 | 경과 틱+총 시간, 즉 종료 커맨드에서 still-running 없음 — 신규 2종 | 충분 |
-| errors 서브클래스 | 구조화 경로 승격 2종+일반 코드 비승격, 생성자 코드 매핑/cause/name, string 경로 비승격(평탄화 계약 고정) — 신규 3종 + 기존 cause/stack 보존 1종 | 충분 |
-| debug env/dumpWire | `1/true/verbose` 수용, `wire/0/미설정` 거부, stderr hex 덤프, 미설정 무음 — 신규 4종 | 충분 |
-| codegen 수집기 | 폴백 경고 기록(context+command), 알려진 타입 무경고, 중첩 배열 내부 컨텍스트 — 신규 3종 | 충분 (수집기 단위; 연결은 SKIP) |
+| 변경분             | 실패/경계 테스트                                                                                                                                                   | 평가                                                                            |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| arg-parser 제안    | 미지 플래그+제안 3종(제안 있/없/인접), `--flag=value`, 분리형 `--flag value`, `-h`, boolean 값 거부, 값 누락, positional 거부/허용 — **신규 8종**                  | 충분                                                                            |
+| init 차단/--force  | 2회째 차단+메시지, --force 재생성+유효성, 오타 플래그 미흡수, 디렉터리 0/2개 거부, --help 무생성, 무관 파일 비차단 — **신규 5종** (이전엔 runInit 직접 테스트 0종) | 충분                                                                            |
+| config 오타 제안   | 기존 loud-fail 테스트 + 제안 매칭 신규 1종                                                                                                                         | 충분 (거리>2 미제안 분기는 closestKey 내부 분기로 제안-없음 케이스가 간접 커버) |
+| 스피너             | 경과 틱+총 시간, 즉 종료 커맨드에서 still-running 없음 — 신규 2종                                                                                                  | 충분                                                                            |
+| errors 서브클래스  | 구조화 경로 승격 2종+일반 코드 비승격, 생성자 코드 매핑/cause/name, string 경로 비승격(평탄화 계약 고정) — 신규 3종 + 기존 cause/stack 보존 1종                    | 충분                                                                            |
+| debug env/dumpWire | `1/true/verbose` 수용, `wire/0/미설정` 거부, stderr hex 덤프, 미설정 무음 — 신규 4종                                                                               | 충분                                                                            |
+| codegen 수집기     | 폴백 경고 기록(context+command), 알려진 타입 무경고, 중첩 배열 내부 컨텍스트 — 신규 3종                                                                            | 충분 (수집기 단위; 연결은 SKIP)                                                 |
 
 ## 아웃스탠딩
 
