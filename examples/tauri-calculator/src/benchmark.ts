@@ -106,8 +106,6 @@ async function measure(): Promise<{
     }
     nativeSamples.push(Number(response.native_ns));
   }
-  const profiledT1 = document.timeline?.currentTime;
-  void profiledT1;
   const profiledSummary = summarize(profiledSamples, {
     name: 'tauri-profiled-dispatch',
     warmup: 0,
