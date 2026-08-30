@@ -41,7 +41,8 @@ pub unsafe extern "C" fn rustra_ffi_get_schema(out_len: *mut usize) -> *mut u8 {
     }
     match get_package() {
         Some(pkg) => {
-            let json = serde_json::to_vec(&pkg.live_schema()).unwrap_or_else(|_| b"{}".to_vec());
+            let json = serde_json::to_vec(&pkg.live_schema_with_generation())
+                .unwrap_or_else(|_| b"{}".to_vec());
             alloc_response(json, out_len)
         }
         None => alloc_response(b"{}".to_vec(), out_len),
@@ -75,6 +76,22 @@ pub unsafe extern "C" fn rustra_ffi_contract_hash(out_len: *mut usize) -> *mut u
         None => String::new(),
     };
     alloc_response(hex.into_bytes(), out_len)
+}
+
+/// (T0) 현재 스키마 세대를 u64 로 반환한다 — read lock 1회 + 복사. 동적 명령
+/// 캐시를 가진 호스트가 호출 전후로 비교해 치환(replace/unregister) 여부를
+/// 감지하고, 불일치 시 `rustra_ffi_get_schema` 로 재동기화한다. 패키지가
+/// 미등록이면 0 을 반환한다.
+///
+/// # Safety
+///
+/// 진입점 자체는 포인터 인자를 갖지 않는다(값 반환).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_schema_generation() -> u64 {
+    match get_package() {
+        Some(pkg) => pkg.schema_generation(),
+        None => 0,
+    }
 }
 
 // -- Event sink (push delivery) ------------------------------------------
