@@ -27,12 +27,19 @@ export function isRustraDebugEnabled(): boolean {
 
 /**
  * 순수 env 파싱 — `RUSTRA_DEBUG` 만을 검사한다(RN 글로벌 스위치 불포함).
- * 와이어 바이트 덤프(dumpWire)의 게이트로, 테스트에서 env 주입으로 검증한다.
+ * 와이어 바이트 덤프(dumpWire)의 게이트로, 모듈 레벨에서 1회 메모이즈한다
+ * (호출당 env 객체 접근 제거). `resetDebugEnvForTests` 가 캐시를 무효화한다.
  */
+let cachedShouldDump: boolean | undefined;
 export function shouldDumpWire(): boolean {
-  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
-    ?.env;
-  return ['1', 'true', 'verbose'].includes(String(env?.RUSTRA_DEBUG ?? '').toLowerCase());
+  if (cachedShouldDump === undefined) {
+    const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+      ?.env;
+    cachedShouldDump = ['1', 'true', 'verbose'].includes(
+      String(env?.RUSTRA_DEBUG ?? '').toLowerCase(),
+    );
+  }
+  return cachedShouldDump;
 }
 
 /**
@@ -57,11 +64,12 @@ export function dumpWire(
   process.stderr.write(`[rustra:wire] ${direction} ${hex}${truncated}\n`);
 }
 
-/** 테스트 전용 — env 파싱 캐시가 없으므로 env 정리만 명시적으로 돕는다. */
+/** 테스트 전용 — env 의 RUSTRA_DEBUG 를 정리하고 dump 게이트 메모이즈를 무효화한다. */
 export function resetDebugEnvForTests(): void {
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
     ?.env;
   delete env?.RUSTRA_DEBUG;
+  cachedShouldDump = undefined;
 }
 
 /** Emit diagnostics only when explicitly enabled; secrets are never logged by default. */
@@ -101,6 +109,21 @@ export function debugWire(
     byteLength: view.byteLength,
     ...(error ? { error } : {}),
   });
+}
+
+/**
+ * 와이어 왕복 1점의 진단 총괄 — 구조화 이벤트(debugWire)와 바이트 덤프
+ * (dumpWire)를 한 번에 거친다. dispatch 의 3경로(tier2/dynamic/tier3)가
+ * 요청·응답 각 점에서 이 헬퍼 하나로 커버를 완결한다(호출 수 감소,
+ * dumpWire 누락 경로 제거).
+ */
+export function traceWire(
+  direction: RustraDebugEvent['direction'],
+  command: string,
+  bytes: ArrayBuffer | ArrayBufferView,
+): void {
+  debugWire(direction, 'rkyv', command, bytes);
+  dumpWire(direction, bytes);
 }
 
 function snapshot(value: unknown, depth = 0, budget = { remaining: 2048 }): unknown {

@@ -1,7 +1,7 @@
 import { isRetryableCode, RustraCommandError } from './errors.js';
 import { CODEC_TYPED, CODEC_RAW, CODEC_POSITIONAL } from './global.js';
 import { decodeTier3Response, encodeTier3Request } from './json-wire.js';
-import { debugWire, dumpWire } from './debug.js';
+import { traceWire } from './debug.js';
 import { tier2Outcome, payloadTooLargeError } from './rkyv-engine-contract.js';
 import { createDynamicCodecRuntime } from './rkyv-engine-dynamic-codec.js';
 import type { RkyvDispatchRuntime, RkyvEngineContext } from './rkyv-engine-context.js';
@@ -59,11 +59,9 @@ export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispa
       // (T3) 네이티브 왕복 전에 크기 검사 — 초과면 invokeRkyvV2 를 부르지 않는다.
       const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
       if (tooLarge) throw tooLarge;
-      debugWire('request', 'rkyv', command, encoded);
-      dumpWire('request', encoded);
+      traceWire('request', command, encoded);
       const resultBytes = native.invokeRkyvV2(encoded);
-      debugWire('response', 'rkyv', command, resultBytes);
-      dumpWire('response', resultBytes);
+      traceWire('response', command, resultBytes);
       // Reject (do not throw) so the declared Promise<T> contract holds and
       // callers can use .catch() / await-try-consistently for command errors.
       const outcome = tier2Outcome<T>(codec, resultBytes);
@@ -89,9 +87,9 @@ export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispa
       const encoded = dynamicCodec.encode(args);
       const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
       if (tooLarge) throw tooLarge;
-      debugWire('request', 'rkyv', command, encoded);
+      traceWire('request', command, encoded);
       const resultBytes = native.invokeRkyvV2(encoded);
-      debugWire('response', 'rkyv', command, resultBytes);
+      traceWire('response', command, resultBytes);
       const outcome = tier2Outcome<T>(dynamicCodec, resultBytes);
       if (!outcome.ok) throw outcome.error;
       return outcome.value;
@@ -100,11 +98,9 @@ export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispa
     // (T3) tier 2 와 동일한 사전 검사 — 네이티브 호출 전에 조기 실패.
     const tooLarge = payloadTooLargeError(tier3Request.byteLength, payloadLimit);
     if (tooLarge) throw tooLarge;
-    debugWire('request', 'rkyv', command, tier3Request);
-    dumpWire('request', tier3Request);
+    traceWire('request', command, tier3Request);
     const tier3Response = native.invokeRkyvV2(tier3Request);
-    debugWire('response', 'rkyv', command, tier3Response);
-    dumpWire('response', tier3Response);
+    traceWire('response', command, tier3Response);
     const resp = decodeTier3Response(tier3Response);
     if (!resp.ok) {
       const e = resp.error ?? { code: 'invoke.failed', message: 'RkyvV2 (tier3) invoke failed' };
