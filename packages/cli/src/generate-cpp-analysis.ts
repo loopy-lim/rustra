@@ -4,7 +4,7 @@ import { buildCodecIr } from './codec-ir.js';
 import { collectAllDefinitions } from './generate-postcard-ir.js';
 import { commandCodecSupported } from './generate-postcard-support.js';
 import { bufferCommandResultField, rawCommandShape } from './generate-cpp-routes.js';
-import { bufferCommandField, generatedFieldRoute } from './generate-routing.js';
+import { bufferCommandField } from './generate-routing.js';
 import { cppEncodePosCommand } from './generate-cpp-routes.js';
 import { cppComplexNativeSupported } from './generate-cpp-complex.js';
 import type { CppCommandSets } from './generate-cpp-output-types.js';

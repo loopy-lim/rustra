@@ -1,5 +1,3 @@
-import type { RkyvV2Codec, RustraError } from './index.js';
-
 export type ComplexSchema = {
   type?: string | string[];
   properties?: Record<string, ComplexSchema>;

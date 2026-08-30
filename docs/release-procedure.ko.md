@@ -61,10 +61,14 @@ crates.io canary 는 지원하지 않는다 (버전 삭제 불가) — Rust 는 
 
 1. Version Packages PR 머지 → release.yml 자동 실행 (npm 9종)
 2. crates 수동 잡: Actions → Release → Run workflow는 `main`의 동일 SHA에 대해
-   CI 성공을 다시 확인한 뒤 rustra-macros → 인덱스 반영 대기 → rustra 순서로 발행
+   CI 성공을 다시 확인한 뒤 rustra-naming → rustra-macros → rustra 순서로
+   각 의존성의 인덱스 반영을 기다리며 발행
 
 ```bash
-# 로컬 검증 후 수동 발행 (crates 는 되돌릴 수 없어 2단 게이트)
+# 로컬 검증 후 수동 발행 (crates 는 되돌릴 수 없어 의존성 순서 게이트)
+cargo publish -p rustra-naming --dry-run --allow-dirty
+cargo publish -p rustra-naming
+sleep 30
 cargo publish -p rustra-macros --dry-run --allow-dirty
 cargo publish -p rustra-macros
 sleep 30

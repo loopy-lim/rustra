@@ -86,7 +86,7 @@ jobs:
           # tarball에 첨부한다. 발견된 패키지의 공급망 신뢰성 직결.
           NPM_CONFIG_PROVENANCE: true
 
-  # crates.io 발행은 main 수동 트리거 전용 (rustra-macros → rustra 순서 필수).
+  # crates.io 발행은 main 수동 트리거 전용 (rustra-naming → rustra-macros → rustra 순서 필수).
   # 실행 직전 동일 SHA의 CI 성공을 확인하므로 workflow_dispatch가 게이트를 우회하지 않는다.
   cargo-publish:
     name: Publish crates (manual)
@@ -110,10 +110,23 @@ jobs:
       - name: Validate publishable crates
         run: |
           cargo fmt --all -- --check
-          cargo clippy -p rustra -p rustra-macros --all-targets -- -D warnings
-          cargo test -p rustra -p rustra-macros --release
-          cargo publish -p rustra-macros --dry-run --locked
-      - name: Publish rustra-macros first (path dependency)
+          cargo clippy -p rustra-naming -p rustra -p rustra-macros --all-targets -- -D warnings
+          cargo test -p rustra-naming -p rustra -p rustra-macros --release
+          cargo publish -p rustra-naming --dry-run --locked
+      - name: Publish rustra-naming first (path dependency)
+        run: cargo publish -p rustra-naming --locked
+      - name: Wait for rustra-naming index propagation
+        run: |
+          VERSION="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "rustra-naming") | .version')"
+          echo "waiting for rustra-naming@${VERSION} on crates.io index"
+          for attempt in {1..12}; do
+            cargo info "rustra-naming@${VERSION}" >/dev/null 2>&1 && exit 0
+            sleep 10
+          done
+          exit 1
+      - name: Validate rustra-macros package
+        run: cargo publish -p rustra-macros --dry-run --locked
+      - name: Publish rustra-macros (path dependency)
         run: cargo publish -p rustra-macros --locked
       - name: Wait for crates.io index propagation
         run: |

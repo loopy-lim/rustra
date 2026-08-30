@@ -59,7 +59,7 @@ export function createReactNativeEngine(native: {
   };
   return {
     invoke<T>(command: string, args?: unknown, options?: InvokeOptions) {
-      return invokeWithTimeout(transport, command, args, options);
+      return invokeWithTimeout<T>(transport, command, args, options);
     },
     invokeBatch<T>(entries: BatchEntry[]) {
       return Promise.all(

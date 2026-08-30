@@ -67,11 +67,14 @@ stable only.
 
 1. Merge the Version Packages PR → release.yml runs automatically (9 npm packages)
 2. crates manual job: Actions → Release → Run workflow re-verifies CI success for
-   the same SHA on `main`, then publishes in the order rustra-macros → wait for the
-   index to update → rustra
+   the same SHA on `main`, then publishes in the order rustra-naming → rustra-macros →
+   rustra, waiting for the index after each dependency.
 
 ```bash
-# manual publish after local verification (crates are irreversible: 2-stage gate)
+# manual publish after local verification (crates are irreversible: dependency-order gate)
+cargo publish -p rustra-naming --dry-run --allow-dirty
+cargo publish -p rustra-naming
+sleep 30
 cargo publish -p rustra-macros --dry-run --allow-dirty
 cargo publish -p rustra-macros
 sleep 30

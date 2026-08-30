@@ -1,4 +1,3 @@
-import type { JsonSchema } from './schema.js';
 /**
  * The canonical schema shape used by generated binary codecs.
  *

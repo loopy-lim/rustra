@@ -121,7 +121,7 @@ function parseJsonPayload(raw: string, name: string): unknown {
  */
 async function createFfiEventBridge(
   libraryPath: string,
-  options: BunEventBridgeOptions,
+  _options: BunEventBridgeOptions,
 ): Promise<BunEventBridge> {
   const { dlopen, FFIType, JSCallback } = (await import('bun:ffi')) as typeof import('bun:ffi');
   const lib = dlopen(libraryPath, {
