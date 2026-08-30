@@ -19,6 +19,29 @@ export class RustraCommandError extends Error {
 }
 
 /**
+ * `transport.timeout` 전용 서브클래스 — `err instanceof TimeoutError` 로
+ * 타임아웃 분기(재시도/백오프)를 문자열 비교 없이 할 수 있다.
+ * 코드 매핑은 기존 와이어 값(`transport.timeout`)을 그대로 유지한다.
+ */
+export class TimeoutError extends RustraCommandError {
+  constructor(message = 'command timed out', cause?: unknown) {
+    super(RustraErrorCode.TransportTimeout, message, true, cause);
+    this.name = 'TimeoutError';
+  }
+}
+
+/**
+ * `cancelled` 전용 서브클래스 — 협력적 취소(AbortSignal 등)와 구분되는
+ * catch 분기를 제공한다. 코드 매핑은 기존 와이어 값(`cancelled`) 유지.
+ */
+export class CancelledError extends RustraCommandError {
+  constructor(message = 'command cancelled', cause?: unknown) {
+    super(RustraErrorCode.Cancelled, message, true, cause);
+    this.name = 'CancelledError';
+  }
+}
+
+/**
  * Rust `RustraError::Display` 포맷(`"{code}: {message}"`)의 평탄화된 문자열을
  * [`RustraCommandError`]로 파싱한다. JSON fallback 경로(네이티브 모듈)에서 사용 —
  * rkyv V2 경로(Node/Tauri)는 구조화된 `{code, message}` 객체를 받으므로 불필요.
@@ -61,6 +84,15 @@ export function parseRustraErrorString(error: string | undefined | null): Rustra
 export function normalizeRustraError(error: unknown): RustraCommandError {
   if (error instanceof RustraCommandError) return error;
   if (typeof error === 'object' && error !== null && 'code' in error && 'message' in error) {
+    const structured = error as { code: string; message: string; retryable?: boolean };
+    // 타임아웃/취소는 코드 문자열 비교 없이 instanceof로 분기할 수 있도록
+    // 전용 서브클래스로 승격한다. 나머지 코드는 기존 파싱 경로를 유지한다.
+    if (structured.code === RustraErrorCode.TransportTimeout) {
+      return new TimeoutError(structured.message, error);
+    }
+    if (structured.code === RustraErrorCode.Cancelled) {
+      return new CancelledError(structured.message, error);
+    }
     return parseRustraErrorString(JSON.stringify(error));
   }
   if (error instanceof Error) {

@@ -16,14 +16,23 @@ cd my-project
 bun install
 bun run doctor
 bun run codegen      # schema.json + 완전한 TS/C++ 클라이언트 생성
+cargo build          # Node 진입점이 실행할 Rust 바이너리 빌드
 bun run demo         # 생성된 Node 진입점으로 TypeScript에서 echo 호출
 cargo run            # Rust에서 직접 echo 호출
 ```
 
 스캐폴드는 Cargo 크레이트(echo 예제 커맨드와 stdio 계약 프로브 포함) + `generate` bin +
 `src/index.ts` 첫 호출 예제 + Node 호스트 설정이 포함된 `rustra.json`과
-package.json(codegen/demo 스크립트)를 만든다. Node 진입점은 첫 호출 전에
-`__rustra_contract`로 Rust binary와 생성 TS의 계약 해시를 비교한다.
+package.json(doctor/codegen/codegen:check/dev/demo 스크립트), `.gitignore`
+(target/, node_modules/, dist/), `tsconfig.json`을 만든다. Node 진입점은 첫
+호출 전에 `__rustra_contract`로 Rust binary와 생성 TS의 계약 해시를 비교한다.
+
+이미 파일이 있는 디렉터리에 다시 init하면 덮어쓰기를 차단한다. 교체하려면
+`--force`를 붙인다:
+
+```bash
+bunx --bun @rustra/cli init my-project --force
+```
 
 ### 외부 프로젝트에서 사용
 
@@ -238,17 +247,17 @@ export type EngineClient = {
 };
 
 export type AddNumbersInput = {
-  a: number;
-  b: number;
+  a: number | bigint; // i64 — 와이어 정합을 위해 number | bigint 로 넓혀진다
+  b: number | bigint;
 };
 
 export type AddNumbersOutput = {
-  value: number;
+  value: number | bigint;
 };
 ```
 
 - `EngineClient` — 모든 호스트 어댑터가 구현해야 하는 공통 인터페이스. `invoke` 하나만 있다.
-- Rust의 `i64`는 TypeScript `number`로 매핑된다.
+- Rust의 `i64`는 TypeScript `number | bigint`로 매핑된다(2^53 초과 값 무손실 복원).
 - `#[serde(rename_all = "camelCase")]` 덕분에 필드명이 자동으로 camelCase로 변환된다.
 - **이 파일은 어떤 호스트별 의존성도 포함하지 않는다.** `node:`, `bun:`, `@tauri-apps`, `react-native` 같은 import가 없다.
 
@@ -256,17 +265,16 @@ export type AddNumbersOutput = {
 
 ```ts
 import type { AddNumbersInput, AddNumbersOutput } from './types.js';
-import { invokeGeneratedFields2 } from '@rustra/types';
+import { createGeneratedFields2 } from '@rustra/types';
 
-export function addNumbers(input: AddNumbersInput): Promise<AddNumbersOutput> {
-  return invokeGeneratedFields2<AddNumbersInput, AddNumbersOutput>(
-    1,
-    'addNumbers',
-    input,
-    input.a,
-    input.b,
-  );
-}
+// 필드 2개 명령은 호출당 힘(required fields)을 직접 전달하는 const 형태로 생성된다.
+export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutput>(
+  1,
+  'addNumbers',
+  'a',
+  'b',
+  'addNumbers',
+);
 ```
 
 - 각 `#[command]` 함수마다 TypeScript 함수가 하나씩 생성된다.
@@ -620,10 +628,14 @@ my-app/
     "codegen:check": "rustra codegen --config rustra.json --check",
     "build:ts": "tsc",
     "build": "bun run codegen && bun run build:ts",
-    "dev": "bun run codegen && tsc --watch"
+    "dev": "rustra dev --config rustra.json"
   }
 }
 ```
+
+`dev` 스크립트는 `rustra dev --config rustra.json`을 쓴다 — `rustra init`이 만드는
+스캐폴드와 동일하며, Rust 소스 변경까지 감시해 schema 재생성 + TS 재생성을 한 번에
+처리한다. 타입 검사만 반복하고 싶다면 `tsc --watch`를 별도 스크립트로 추가한다.
 
 `rustra.json`은 Rust generator를 명시한다:
 
@@ -695,7 +707,8 @@ fn divide(input: DivideInput) -> Result<DivideOutput> {
 
 ### TypeScript 측
 
-커맨드 호출이 실패하면 어댑터가 에러를 throw한다. Tauri 어댑터는 `RustraCommandError` 클래스를 제공한다:
+커맨드 호출이 실패하면 어댑터가 에러를 throw한다. 모든 호스트 어댑터(Node/Bun/Tauri/RN)는
+`@rustra/types`의 `RustraCommandError`로 정규화하므로 `instanceof` 분기가 하나뿐이다:
 
 ```ts
 import { RustraCommandError } from '@rustra/types';
@@ -711,7 +724,9 @@ try {
 }
 ```
 
-Node, Bun, React Native 어댑터는 transport 구현에 따라 에러 형태가 달라진다. 공통적으로 에러 응답은 `{ ok: false, error: { code, message } }` 형태의 JSON이다.
+`RustraCommandError`는 `err.code`, `err.retryable`을 노출하고, 타임아웃/취소는 각각
+`TimeoutError`/`CancelledError` 서브클래스로도 잡을 수 있다. 원본 transport 에러는
+`err.cause`에 보존된다.
 
 ---
 

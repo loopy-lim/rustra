@@ -17,6 +17,8 @@ import {
   invokeGeneratedFields2,
   invokeWithTimeout,
   RustraCommandError,
+  CancelledError,
+  TimeoutError,
   parseRustraErrorString,
   normalizeRustraError,
   configureDebug,
@@ -1700,6 +1702,51 @@ test('normalizeRustraError preserves the original cause and stack', () => {
   const normalized = normalizeRustraError(original);
   assert.equal(normalized.cause, original);
   assert.equal(normalized.stack, original.stack);
+});
+
+test('timeout and cancel codes normalize into dedicated error subclasses', () => {
+  const timeout = normalizeRustraError({
+    code: 'transport.timeout',
+    message: 'request timed out',
+  });
+  assert.ok(timeout instanceof TimeoutError);
+  assert.ok(timeout instanceof RustraCommandError);
+  assert.equal(timeout.code, 'transport.timeout');
+  assert.equal(timeout.retryable, true);
+
+  const cancelled = normalizeRustraError({ code: 'cancelled', message: 'aborted by host' });
+  assert.ok(cancelled instanceof CancelledError);
+  assert.ok(cancelled instanceof RustraCommandError);
+  assert.equal(cancelled.code, 'cancelled');
+  assert.equal(cancelled.retryable, true);
+
+  const ordinary = normalizeRustraError({ code: 'internal', message: 'boom' });
+  assert.ok(!(ordinary instanceof TimeoutError));
+  assert.ok(!(ordinary instanceof CancelledError));
+  assert.ok(ordinary instanceof RustraCommandError);
+});
+
+test('TimeoutError and CancelledError constructors keep code mapping and cause', () => {
+  const cause = new Error('slow backend');
+  const timeout = new TimeoutError('took too long', cause);
+  assert.equal(timeout.code, 'transport.timeout');
+  assert.equal(timeout.retryable, true);
+  assert.equal(timeout.cause, cause);
+  assert.equal(timeout.name, 'TimeoutError');
+
+  const cancelled = new CancelledError('aborted');
+  assert.equal(cancelled.code, 'cancelled');
+  assert.equal(cancelled.retryable, true);
+  assert.equal(cancelled.name, 'CancelledError');
+});
+
+test('Display-string rejections keep the flat RustraCommandError contract', () => {
+  // 문자열 경로는 기존 평탄화 계약을 유지한다 — 서브클래스 승격은 구조화
+  // {code, message} 경로에서만 일어난다(와이어 정합 영향 최소화).
+  const parsed = normalizeRustraError('transport.timeout: request timed out');
+  assert.equal(parsed.code, 'transport.timeout');
+  assert.ok(parsed instanceof RustraCommandError);
+  assert.ok(!(parsed instanceof TimeoutError));
 });
 
 test('opt-in debug sink receives bounded wire previews', () => {

@@ -107,7 +107,10 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
                 let item_type = schema
                     .get("items")
                     .map(|s| ts_type_from_schema(s, definitions))
-                    .unwrap_or_else(|| "unknown".to_string());
+                    .unwrap_or_else(|| {
+                        record_unknown_fallback(schema);
+                        "unknown".to_string()
+                    });
                 // `uniqueItems: true` (Rust `BTreeSet`/`HashSet`)는 `Set<T>`로 매핑.
                 // 와이어포맷은 배열 직렬화와 동일 — 런타임 변환은 생성된 코덱/호출부
                 // 에서 `[...value]` / `new Set(...)` 로 처리한다.
@@ -126,7 +129,10 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
                 format!("{item_type}[]")
             }
             "null" => "null".to_string(),
-            _ => "unknown".to_string(),
+            _ => {
+                record_unknown_fallback(schema);
+                "unknown".to_string()
+            }
         },
         Some(Value::Array(types)) => {
             // `["integer","null"]` 같은 union — 요소가 integer 면 format(int64/
@@ -154,14 +160,26 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
                         schema
                             .get("items")
                             .map(|s| ts_type_from_schema(s, definitions))
-                            .unwrap_or_else(|| "unknown".to_string())
+                            .unwrap_or_else(|| {
+                                record_unknown_fallback(schema);
+                                "unknown".to_string()
+                            })
                             + "[]"
                     }
-                    _ => "unknown".to_string(),
+                    _ => {
+                        record_unknown_fallback(schema);
+                        "unknown".to_string()
+                    }
                 })
                 .collect();
             parts.join(" | ")
         }
-        _ => "unknown".to_string(),
+        // `Some(Null/Bool/Number/String/Object)` 등 type 필드가 문자열/배열이
+        // 아닌 스키마 — 기존 `_ =>` 와일드카드 폴백을 명시 분기로 바꾸며
+        // 경고를 남긴다.
+        _ => {
+            record_unknown_fallback(schema);
+            "unknown".to_string()
+        }
     }
 }

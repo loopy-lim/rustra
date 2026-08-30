@@ -35,6 +35,13 @@ export { runDoctor } from './cli-doctor.js';
 if (isCliEntry()) {
   main().catch((error) => {
     console.error('Error:', error instanceof Error ? error.message : error);
-    process.exitCode = 1;
+    // Usage errors (bad flags/values from the shared arg parser) exit 2 so CI
+    // can distinguish "invoked the CLI wrong" from runtime failures (exit 1).
+    const message = error instanceof Error ? error.message : String(error);
+    const isUsageError =
+      /Unknown .* option|requires a value|does not accept a value|must be text or json/.test(
+        message,
+      );
+    process.exitCode = isUsageError ? 2 : 1;
   });
 }
