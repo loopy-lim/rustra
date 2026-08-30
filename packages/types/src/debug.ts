@@ -40,9 +40,16 @@ export function shouldDumpWire(): boolean {
  * 파이프로 연결된 프로세스에서 폐기되어도 안전하다. 요청/응답 바이트 정합을
  * 눈으로 확인할 때 쓰는 저수준 진단이다(구조화 값은 `configureDebug` 싱크 사용).
  */
-export function dumpWire(direction: 'request' | 'response' | 'error', bytes: ArrayBuffer): void {
+export function dumpWire(
+  direction: 'request' | 'response' | 'error',
+  bytes: ArrayBuffer | ArrayBufferView,
+): void {
   if (!shouldDumpWire()) return;
-  const view = new Uint8Array(bytes);
+  // caller-buffer 경로(F2)는 소유 ArrayBuffer 대신 뷰를 넘긴다 — 같은 정합을 지원.
+  const view =
+    bytes instanceof ArrayBuffer
+      ? new Uint8Array(bytes)
+      : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const hex = Array.from(view.subarray(0, 256), (byte) => byte.toString(16).padStart(2, '0')).join(
     '',
   );
