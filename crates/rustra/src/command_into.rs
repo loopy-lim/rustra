@@ -5,7 +5,6 @@ fn build_rkyv_v2_into_handler<I, O, F>(
     handler: &Arc<F>,
     js_codec_supported: bool,
     complex_codec_supported: bool,
-    force_tier3: bool,
 ) -> Option<BinIntoHandler>
 where
     I: DeserializeOwned + 'static,
@@ -16,9 +15,9 @@ where
     // 라우트 명령도 생성한다. complex 출력은 bounded writer로 caller 버퍼에
     // 직접 기록되고, 버퍼 부족은 기존 `DirectResponse::Buffered` 폴백(할당 경로)
     // 으로 흘러간다. 와이어는 `rkyv_v2_handler` complex 분기와 동일한 바이트다.
-    // force_tier3 명령은 애초에 binary fast-path 가 없으므로 여전히 None.
-    let rkyv_v2_into_handler: Option<BinIntoHandler> = if force_tier3
-        || (!js_codec_supported && !complex_codec_supported)
+    // Tier 3 명령은 애초에 binary fast-path 가 없으므로 여전히 None.
+    let rkyv_v2_into_handler: Option<BinIntoHandler> = if !js_codec_supported
+        && !complex_codec_supported
     {
         None
     } else if js_codec_supported {
