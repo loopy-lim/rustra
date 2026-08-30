@@ -120,6 +120,9 @@ pub struct PackageBuilder {
 /// | `types_ts` | `types.ts` | TypeScript 타입 정의 |
 /// | `commands_ts` | `commands.ts` | TypeScript 명령 헬퍼 함수 |
 /// | `contract_ts` | `contract.ts` | 계약 해시 + 스키마 버전 (무결성/stale 검증용) |
+///
+/// `warnings` 는 파일로 출력되지 않는다 — 매핑 불가 스키마가 조용히 `"unknown"`
+/// 폴백으로 떨어질 때의 진단 정보이며, 호출자(CLI 등)가 stderr 로 노출한다.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GeneratedPackage {
     /// JSON으로 직렬화된 전체 패키지 스키마입니다.
@@ -134,6 +137,9 @@ pub struct GeneratedPackage {
     /// `SCHEMA_VERSION` 상수를 함께 노출한다. JS 클라이언트가 이 값을
     /// 네이티브의 `schemaVersion` 과 비교해 JS > native stale 를 감지한다.
     pub contract_ts: String,
+    /// 코드접 경고 — 매핑 불가 스키마가 `"unknown"` 폴백한 위치(명령명 + 타입
+    /// 컨텍스트). 정상 스키마는 비어 있다.
+    pub warnings: Vec<String>,
 }
 
 impl GeneratedPackage {

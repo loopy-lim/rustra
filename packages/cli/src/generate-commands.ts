@@ -1,5 +1,6 @@
 import type { PackageSchema } from './schema.js';
 import { commandFunctionName } from './codegen.js';
+import { setCodegenContext } from './codegen-warnings.js';
 import { finishGeneratedText, generatedJsDoc } from './generate-surface.js';
 import { collectAllDefinitions } from './generate-postcard-ir.js';
 import { bufferCommandField, generatedFieldRoute } from './generate-routing.js';
@@ -43,6 +44,7 @@ export function generateCommandsTs(schema: PackageSchema): string {
     const fnName = commandFunctionName(command.name);
     // unit 출력 `()` → Promise<void>.
     const outType = command.outputType === '()' ? 'void' : command.outputType;
+    setCodegenContext(command.name);
     if (typeof command.description === 'string') {
       output += generatedJsDoc(command.description);
     } else if (typeof command.inputSchema?.description === 'string') {

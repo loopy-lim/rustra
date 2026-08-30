@@ -29,6 +29,11 @@ import {
 import { ensureHostDependencies, ensureReactNativeDependency } from './dependencies.js';
 import type { HostEntries } from './host-entries.js';
 import { cliVersion } from './cli-runtime.js';
+import {
+  clearCodegenWarnings,
+  formatCodegenWarning,
+  takeCodegenWarnings,
+} from './codegen-warnings.js';
 
 export async function generateFromSchema(
   schemaPath: string,
@@ -42,6 +47,7 @@ export async function generateFromSchema(
   const schemaContent = await readFile(schemaPath, 'utf-8');
   const schema: PackageSchema = parsePackageSchema(JSON.parse(schemaContent));
   warnIfFieldOrderIsUnspecified(schema);
+  clearCodegenWarnings();
   const files: GeneratedFile[] = [];
   const addFile = (targetDir: string, name: string, content: string) =>
     files.push({ path: resolve(targetDir, name), content });
@@ -66,6 +72,9 @@ export async function generateFromSchema(
       addFile(reactNativeScaffold.moduleDir, name, content);
   }
   const written: string[] = [];
+  // 코드젠 경고는 생성 파일 바이트와 무관한 별도 진행 채널 — stderr 로 출력해
+  // 머신이 읽는 stdout(JSON 리포트)을 오염시키지 않는다.
+  for (const warning of takeCodegenWarnings()) console.error(formatCodegenWarning(warning));
   if (check) {
     written.push(...files.map((file) => `${manifestPathFor(outputPath, file.path)} (verified)`));
     await checkGeneratedFiles(files, resolve(outputPath, '.rustra-generated.json'), {

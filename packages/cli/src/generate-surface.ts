@@ -12,6 +12,7 @@ import {
   postcardHelperSource,
   tsTypeFromSchema,
 } from './codegen.js';
+import { setCodegenContext } from './codegen-warnings.js';
 import { buildCodecIr } from './codec-ir.js';
 import type { CodecIrNode } from './codec-ir.js';
 import { sha256 } from './hash.js';
@@ -119,6 +120,7 @@ export function generateTypesTs(schema: PackageSchema): string {
   for (const [name, defSchema] of Object.entries(allDefinitions)) {
     if (emitted.has(name)) continue;
     emitted.add(name);
+    setCodegenContext(name);
     if (typeof defSchema.description === 'string') {
       output += generatedJsDoc(defSchema.description);
     }
@@ -128,6 +130,7 @@ export function generateTypesTs(schema: PackageSchema): string {
   for (const command of schema.commands) {
     if (command.inputType !== '()' && !emitted.has(command.inputType)) {
       emitted.add(command.inputType);
+      setCodegenContext(command.inputType);
       if (typeof command.inputSchema.description === 'string') {
         output += generatedJsDoc(command.inputSchema.description);
       }
@@ -136,6 +139,7 @@ export function generateTypesTs(schema: PackageSchema): string {
     // unit 출력 타입 `()` 은 TS 타입명으로 쓸 수 없다 — Promise<void> 로 표현.
     if (command.outputType !== '()' && !emitted.has(command.outputType)) {
       emitted.add(command.outputType);
+      setCodegenContext(command.outputType);
       if (typeof command.outputSchema.description === 'string') {
         output += generatedJsDoc(command.outputSchema.description);
       }
