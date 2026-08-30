@@ -1,7 +1,9 @@
-//! 동적 Tier 3 경로 payload scaling 벤치마크 — dynamic 명령의 데이터 크기별 확장성.
+//! 동적 명령 payload scaling 벤치마크 — dynamic 명령의 데이터 크기별 확장성.
 //!
 //! 동적 `processPayload` 명령(register)을 1/10/100/1000 items 로 호출.
-//! 측정: invoke_rkyv_v2 (Tier 3 JSON 디코드 → 핸들러 → Tier 3 인코드) end-to-end.
+//! (T2-1 이후) PayloadInput 은 postcard 지원 형태라 동적 등록이라도 postcard
+//! 핸들러를 받는다 — 측정: invoke_rkyv_v2 (postcard 디코드 → 핸들러 → postcard
+//! 인코드) end-to-end. Tier 3 비교선이 필요하면 tier_compare 벤치를 병기한다.
 //!
 //! 실행: `cargo bench -p rustra --profile dev -- type_scaling`
 
@@ -19,22 +21,22 @@ fn bench_type_scaling(c: &mut Criterion) {
 
     let sizes: &[usize] = &[1, 10, 100, 1000];
 
-    let mut group = c.benchmark_group("type_scaling_tier3");
+    let mut group = c.benchmark_group("type_scaling_dynamic_postcard");
     group.sample_size(100);
 
     for &size in sizes {
         let items = common::make_items(size);
         let input = common::PayloadInput { items };
-        let json = serde_json::to_string(&input).unwrap();
-        let req = common::tier3_request(id, &json);
+        let req = common::postcard_request(id, &input);
 
         group.bench_with_input(
-            BenchmarkId::new("invoke_rkyv_v2_tier3", format!("{size}_items")),
+            BenchmarkId::new("invoke_rkyv_v2_dynamic_postcard", format!("{size}_items")),
             &req,
             |b, req| {
                 b.iter(|| {
                     let resp = pkg.invoke_rkyv_v2(req).unwrap();
-                    common::decode_tier3_response(&resp);
+                    let out: common::PayloadOutput = common::decode_postcard_response(&resp);
+                    out
                 });
             },
         );

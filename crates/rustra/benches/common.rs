@@ -87,6 +87,32 @@ pub fn echo(input: EchoInput) -> rustra::Result<EchoOutput> {
     Ok(EchoOutput { v: input.v })
 }
 
+// 3-변형 untagged enum — postcard/complex 라우트 둘 다 거부하는 유일 형태.
+// tier_compare 의 dynamic_tier3_json 이 이 타입을 유지한다 (T2-1 이후 지원
+// 형태 명령은 전부 postcard 로 승격되므로 Tier 3 를 대표하려면 이 타입이
+// 필요하다). runtime_registry_tests::Untagged3 와 동일 모양.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+pub enum Untagged3Value {
+    Num(i64),
+    Text(String),
+    Flag(bool),
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct AnyIn {
+    pub v: Untagged3Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+pub struct AnyOut {
+    pub v: Untagged3Value,
+}
+
+pub fn any_value(input: AnyIn) -> rustra::Result<AnyOut> {
+    Ok(AnyOut { v: input.v })
+}
+
 // 큰 페이로드용
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]

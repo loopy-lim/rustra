@@ -5,8 +5,10 @@
 //! wire 차이만 남긴다:
 //!
 //! (a) 정적 postcard — 빌더로 등록된 `echo` (rkyv V2 postcard fast-path)
-//! (b) 동적 Tier 3 JSON — 런타임 `register` 로 등록된 `echo_dyn` (JSON-in-binary)
-//! (c) 동적 postcard — (T2) 동적 명령도 postcard 핸들러를 받으면 추가된다.
+//! (b) 동적 postcard — 런타임 `register` 로 등록된 `echo_dyn` (T2-1: 지원
+//!     스키마 동적 명령도 postcard 핸들러를 받는다)
+//! (c) 동적 Tier 3 JSON — 런타임 `register` 로 등록된 `echo_any` (anyOf 3항
+//!     untagged — postcard/complex 둘 다 거부 → JSON-in-binary 유지)
 //!
 //! 실행: `cargo bench -p rustra --bench tier_compare --profile dev`
 //! (동적 경로는 register 로만 도달 → debug 빌드 필수. 동적 명령은 dev-only 설계.)
@@ -24,8 +26,13 @@ fn build_pkg() -> Package {
     let pkg = Package::builder("bench.tier_compare")
         .command("echo", common::echo)
         .build();
-    // 동적 echo_dyn — 동일 타입을 런타임 register 로 등록 (Tier 3 JSON).
+    // 동적 echo_dyn — 동일 타입을 런타임 register 로 등록. (T2-1) EchoIn{v:i64}
+    // 는 postcard 지원 형태라 동적 등록이라도 postcard 핸들러를 받는다.
     pkg.register("echo_dyn", common::echo)
+        .expect("register must work in debug build");
+    // 동적 echo_any — anyOf 3항 untagged(Untagged3Value)는 postcard/complex
+    // 둘 다 거부 → Tier 3 JSON 핸들러 유지 (runtime_registry_tests 계약).
+    pkg.register("echo_any", common::any_value)
         .expect("register must work in debug build");
     pkg
 }
@@ -35,10 +42,12 @@ fn bench_tier_compare(c: &mut Criterion) {
 
     let static_id = common::command_id_of(&pkg, "echo");
     let dynamic_id = common::command_id_of(&pkg, "echo_dyn");
+    let tier3_id = common::command_id_of(&pkg, "echo_any");
 
     // 동일 의미 연산, 동일 페이로드 {"v":7} — wire 만 다르다.
     let static_req = common::postcard_request(static_id, &common::EchoInput { v: 7 });
-    let dynamic_req = common::tier3_request(dynamic_id, r#"{"v":7}"#);
+    let dynamic_req = common::postcard_request(dynamic_id, &common::EchoInput { v: 7 });
+    let tier3_req = common::tier3_request(tier3_id, r#"{"v":"text7"}"#);
 
     let mut group = c.benchmark_group("tier_compare");
     group.sample_size(500);
@@ -51,9 +60,17 @@ fn bench_tier_compare(c: &mut Criterion) {
         });
     });
 
-    group.bench_function(BenchmarkId::new("echo", "dynamic_tier3_json"), |b| {
+    group.bench_function(BenchmarkId::new("echo", "dynamic_postcard"), |b| {
         b.iter(|| {
             let resp = pkg.invoke_rkyv_v2(&dynamic_req).unwrap();
+            let out: common::EchoOutput = common::decode_postcard_response(&resp);
+            out
+        });
+    });
+
+    group.bench_function(BenchmarkId::new("echo", "dynamic_tier3_json"), |b| {
+        b.iter(|| {
+            let resp = pkg.invoke_rkyv_v2(&tier3_req).unwrap();
             common::decode_tier3_response(&resp)
         });
     });
