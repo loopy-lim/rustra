@@ -302,6 +302,24 @@ fn contract_hash_is_stable_64_hex() {
 }
 
 #[test]
+fn contract_hash_matches_generated_typescript_contract() {
+    // F5 계약의 핵심: FFI 런타임 해시 == 빌드 시점 generate_typescript() 해시.
+    // 양쪽 입력이 달라지면(예: 한쪽만 schemaGeneration 을 심음) TS 엔진이 모든
+    // bun-ffi 런타임을 contract.mismatch 로 거부한다. live_schema() 는 세대를
+    // 심으므로 FFI 도 generation 미포함 스키마를 해시해야 한다.
+    let package = test_package();
+    package.register_ffi();
+    let ffi_hash = invoke_contract_hash();
+    let generated = package
+        .generate_typescript()
+        .expect("generate_typescript must succeed");
+    assert_eq!(
+        ffi_hash, generated.contract_hash,
+        "FFI contract hash must equal GENERATED_CONTRACT_HASH from generate_typescript()"
+    );
+}
+
+#[test]
 fn contract_hash_null_out_len_returns_null() {
     // F5 companion: out_len=null → null ptr (F8 스타일 null 가드가 신설 함수에도 적용됨).
     let ptr = unsafe { rustra::ffi::rustra_ffi_contract_hash(std::ptr::null_mut()) };

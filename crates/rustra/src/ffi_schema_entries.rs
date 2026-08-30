@@ -50,11 +50,12 @@ pub unsafe extern "C" fn rustra_ffi_get_schema(out_len: *mut usize) -> *mut u8 {
 
 /// 현재 등록된 패키지의 **계약 해시** (SHA-256 hex) 를 UTF-8 바이트로 반환한다.
 ///
-/// `live_schema()` 를 `serde_json::to_string_pretty` 로 직렬화한 뒤 해시한다 — 이는
-/// 빌드 시점 `generate_typescript()` → `contract.ts` 의 `GENERATED_CONTRACT_HASH` 와
-/// 동일한 입력/알고리즘이므로 양쪽 값이 일치해야 한다. 호스트(TS 엔진)는 이 값을
-/// `contractHash` 옵션(F5) 과 비교해 스키마 드리프트를 런타임에 검증한다.
-/// 패키지가 미등록이면 빈 문자열을 반환한다.
+/// `Package::generated_contract_hash()` — 즉 빌드 시점 `generate_typescript()` →
+/// `contract.ts` 의 `GENERATED_CONTRACT_HASH` 와 동일한 입력(generation 미포함
+/// 스키마)/알고리즘을 쓴다. `live_schema()` 는 `schemaGeneration`(T0) 을 심으므로
+/// 여기서 쓰면 안 된다 — 세대가 바뀔 때마다 해시가 흔들려 TS 엔진의
+/// `contractHash` 검증(F5) 이 항상 실패한다. 호스트는 이 값으로 스키마 드리프트를
+/// 런타임에 검증한다. 패키지가 미등록이면 빈 문자열을 반환한다.
 ///
 /// 반환 버퍼는 `rustra_ffi_free` 로 해제.
 ///
@@ -68,10 +69,7 @@ pub unsafe extern "C" fn rustra_ffi_contract_hash(out_len: *mut usize) -> *mut u
         return std::ptr::null_mut();
     }
     let hex = match get_package() {
-        Some(pkg) => {
-            let json = serde_json::to_string_pretty(&pkg.live_schema()).unwrap_or_default();
-            crate::codegen::contract_hash(json)
-        }
+        Some(pkg) => pkg.generated_contract_hash(),
         None => String::new(),
     };
     alloc_response(hex.into_bytes(), out_len)

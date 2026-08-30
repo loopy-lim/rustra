@@ -49,6 +49,20 @@ impl Package {
             .schema_generation
     }
 
+    /// 계약 해시 입력 — generation 미포함 스키마(`schema()`)의 pretty JSON.
+    /// 빌드 시점 `generate_typescript()`의 `GENERATED_CONTRACT_HASH`와 FFI
+    /// `rustra_ffi_contract_hash`가 반드시 같은 입력을 해시하도록 직렬화를 이
+    /// 함수 하나로 단일 소스화한다. `live_schema()`와 달리 세대를 심지 않는다
+    /// (와이어/OTA 계약 불변).
+    ///
+    /// 호출자가 이미 잡은 read lock 상태에서 쓴다 — self에서 lock을 다시 잡지
+    /// 않는다.
+    fn contract_schema_json(&self, state: &RegistryState) -> String {
+        // serde_json::Value 직렬화는 실패할 수 없다(비문자열 키 맵이 없음).
+        serde_json::to_string_pretty(&Self::schema(&self.id, state, &self.event_contracts))
+            .expect("schema serialization cannot fail on a serde_json::Value")
+    }
+
     /// 등록된 모든 명령에서 TypeScript 클라이언트 코드를 생성합니다.
     ///
     /// 생성 파일(`types_ts`/`commands_ts`)과 별개로 매핑 불가 스키마가
@@ -59,9 +73,7 @@ impl Package {
             .state
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let schema_json =
-            serde_json::to_string_pretty(&Self::schema(&self.id, &state, &self.event_contracts))
-                .map_err(RustraError::internal)?;
+        let schema_json = self.contract_schema_json(&state);
         let contract_hash = contract_hash(&schema_json);
         let types_ts = Self::generate_types_ts(&state);
         let commands_ts = Self::generate_commands_ts(&state);
@@ -82,6 +94,17 @@ impl Package {
             contract_hash,
             warnings,
         })
+    }
+
+    /// FFI `rustra_ffi_contract_hash`용 계약 해시 — `generate_typescript()`와
+    /// 동일 입력(generation 미포함)을 해시한다. `contract_schema_json`이 단일
+    /// 소스이므로 양쪽이 갈라질 수 없다.
+    pub(crate) fn generated_contract_hash(&self) -> String {
+        let state = self
+            .state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        contract_hash(self.contract_schema_json(&state))
     }
 
     fn schema(id: &str, state: &RegistryState, event_contracts: &BTreeMap<String, Value>) -> Value {
