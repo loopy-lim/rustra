@@ -545,9 +545,12 @@ fn add_numbers(input: AddNumbersInput) -> Result<i64> { Ok(input.a + input.b) }
 ```
 
 ```typescript
-export function addNumbers(input: AddNumbersInput): Promise<number> {
-  return invoke<number>('addNumbers', input);
+// 스칼라 출력은 Promise<number> — type alias 없이 inline된다.
+// 실제 생성물(examples/calculator/generated/commands.ts)과 동일한 형태다.
+export function addNumbers(input: AddNumbersInput, options?: InvokeOptions): Promise<number> {
+  return invokeGenerated<number>(1, 'addNumbers', input, options);
 }
+addNumbers.commandId = 'addNumbers';
 ```
 
 ### 생성된 types.ts 예시
@@ -557,23 +560,26 @@ export type { EngineClient, RustraError } from '@rustra/types';
 export { RustraCommandError } from '@rustra/types';
 
 export type AddNumbersInput = {
-  a: number;
-  b: number;
+  a: number | bigint; // i64 → number | bigint (와이어 정합)
+  b: number | bigint;
 };
 ```
 
 ### 생성된 commands.ts 예시
 
 ```typescript
-import { invoke } from '@rustra/types';
-import type { AddNumbersInput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput } from './types.js';
+import { invokeGenerated } from '@rustra/types';
+import type { InvokeOptions } from '@rustra/types';
 
-export function addNumbers(input: AddNumbersInput): Promise<number> {
-  return invoke<number>('addNumbers', input);
+export function addNumbers(input: AddNumbersInput, options?: InvokeOptions): Promise<number> {
+  return invokeGenerated<number>(1, 'addNumbers', input, options);
 }
+addNumbers.commandId = 'addNumbers';
 ```
 
-(`invoke`는 `configure(engine)`로 설치한 글로벌 엔진을 사용한다)
+(`invokeGenerated`는 생성된 호스트 진입점이 `configureLazy()`로 등록한 엔진을 사용한다 —
+호스트 어댑터 import가 앞선다면 호출부에서 엔진을 직접 구성할 필요가 없다)
 
 ---
 

@@ -22,9 +22,39 @@ export function configureDebug(sink?: RustraDebugSink): void {
 export function isRustraDebugEnabled(): boolean {
   const globalValue = (globalThis as { __RUSTRA_DEBUG__?: unknown }).__RUSTRA_DEBUG__;
   if (globalValue === true) return true;
+  return shouldDumpWire();
+}
+
+/**
+ * 순수 env 파싱 — `RUSTRA_DEBUG` 만을 검사한다(RN 글로벌 스위치 불포함).
+ * 와이어 바이트 덤프(dumpWire)의 게이트로, 테스트에서 env 주입으로 검증한다.
+ */
+export function shouldDumpWire(): boolean {
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
     ?.env;
   return ['1', 'true', 'verbose'].includes(String(env?.RUSTRA_DEBUG ?? '').toLowerCase());
+}
+
+/**
+ * 방향 + 바이트 hex를 stderr로 덤프한다. `RUSTRA_DEBUG` 가 없으면 완전 무음이므로
+ * 파이프로 연결된 프로세스에서 폐기되어도 안전하다. 요청/응답 바이트 정합을
+ * 눈으로 확인할 때 쓰는 저수준 진단이다(구조화 값은 `configureDebug` 싱크 사용).
+ */
+export function dumpWire(direction: 'request' | 'response' | 'error', bytes: ArrayBuffer): void {
+  if (!shouldDumpWire()) return;
+  const view = new Uint8Array(bytes);
+  const hex = Array.from(view.subarray(0, 256), (byte) => byte.toString(16).padStart(2, '0')).join(
+    '',
+  );
+  const truncated = view.byteLength > 256 ? `… (${view.byteLength} bytes total)` : '';
+  process.stderr.write(`[rustra:wire] ${direction} ${hex}${truncated}\n`);
+}
+
+/** 테스트 전용 — env 파싱 캐시가 없으므로 env 정리만 명시적으로 돕는다. */
+export function resetDebugEnvForTests(): void {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env;
+  delete env?.RUSTRA_DEBUG;
 }
 
 /** Emit diagnostics only when explicitly enabled; secrets are never logged by default. */
