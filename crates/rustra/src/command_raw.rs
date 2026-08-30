@@ -7,7 +7,6 @@ fn build_raw_handler<I, O, F>(
     input_schema: &Value,
     output_schema: &Value,
     handler: &Arc<F>,
-    force_tier3: bool,
 ) -> (Option<RawHandler>, Vec<crate::rkyv_codec::RawFieldKind>)
 where
     I: DeserializeOwned + 'static,
@@ -16,9 +15,6 @@ where
 {
     use crate::rkyv_codec::RawFieldKind;
 
-    if force_tier3 {
-        return (None, Vec::new());
-    }
     // 입력: object 프로퍼티 1..3개 전부 스칼라.
     let Some(props) = input_schema.get("properties").and_then(Value::as_object) else {
         return (None, Vec::new());

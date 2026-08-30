@@ -2,7 +2,7 @@
 ///
 /// 빌드 시점(`PackageBuilder::command`)과 런타임 등록(`Package::register`)이
 /// 동일한 생성 로직을 공유하도록 분리한 helper.
-pub(crate) fn build_command<I, O, F>(command_id: u16, handler: F, force_tier3: bool) -> Command
+pub(crate) fn build_command<I, O, F>(command_id: u16, handler: F) -> Command
 where
     I: DeserializeOwned + JsonSchema + 'static,
     O: Serialize + JsonSchema + 'static,
@@ -39,8 +39,8 @@ where
     // the TypeScript registry: postcard first, then the recursive complex
     // codec, and finally Tier 3 JSON only when neither binary route supports
     // the schema.
-    let is_tier3 = force_tier3 || (!js_codec_supported && !complex_codec_supported);
-    let rkyv_v2_decoder = if force_tier3 || is_tier3 {
+    let is_tier3 = !js_codec_supported && !complex_codec_supported;
+    let rkyv_v2_decoder = if is_tier3 {
         build_tier3_json_decoder()
     } else {
         postcard_decoder
@@ -54,7 +54,6 @@ where
         &handler,
         js_codec_supported,
         complex_codec_supported,
-        force_tier3,
     );
     let rkyv_v2_into_handler = build_rkyv_v2_into_handler::<I, O, F>(
         &input_schema,
@@ -63,15 +62,13 @@ where
         &handler,
         js_codec_supported,
         complex_codec_supported,
-        force_tier3,
     );
 
     // ── 스칼라 직결 raw 핸들러 ──
     // 조건: 입력이 스칼라 1..3개 + 출력이 단일 스칼라(또는 unit)인 정적 명령.
     // postcard 왕복 없이 u64 슬롯으로 직접 주고받는다. 필드 종류는 스키마의
     // 프로퍼티 선언순(fieldOrder=declaration 계약)에서 읽는다.
-    let (raw_handler, raw_input_kinds) =
-        build_raw_handler(&input_schema, &output_schema, &handler, force_tier3);
+    let (raw_handler, raw_input_kinds) = build_raw_handler(&input_schema, &output_schema, &handler);
 
     Command {
         command_id,

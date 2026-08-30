@@ -28,7 +28,7 @@ impl PackageBuilder {
         if self.commands.contains_key(&name) {
             panic!("duplicate command registration: '{name}'");
         }
-        let command = build_command::<I, O, F>(self.next_command_id, handler, false);
+        let command = build_command::<I, O, F>(self.next_command_id, handler);
         self.commands.insert(name, command);
         self.next_command_id += 1;
         self
@@ -65,11 +65,8 @@ impl PackageBuilder {
         }
         let handler = Arc::new(handler);
         let normal_handler = Arc::clone(&handler);
-        let mut command = build_command::<I, O, _>(
-            self.next_command_id,
-            move |input| normal_handler(input),
-            false,
-        );
+        let mut command =
+            build_command::<I, O, _>(self.next_command_id, move |input| normal_handler(input));
         if generated_byte_field_name(&command.input_schema).is_none()
             || generated_byte_field_name(&command.output_schema).is_none()
         {
