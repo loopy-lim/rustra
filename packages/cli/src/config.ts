@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { closestMatch } from './cli-suggest.js';
 
 export interface RustraConfig {
   schema: string;
@@ -215,27 +216,10 @@ function assertKnownKeys(value: unknown, allowed: readonly string[], label: stri
   }
 }
 
+/** config 키 제안 — 키 비교만 소문자로 맞추는 기존 드리프트를 유지한다. */
 function closestKey(input: string, allowed: readonly string[]): string | undefined {
-  let best: { key: string; distance: number } | undefined;
-  for (const key of allowed) {
-    const distance = editDistance(input.toLowerCase(), key.toLowerCase());
-    if (distance <= 2 && (!best || distance < best.distance)) best = { key, distance };
-  }
-  return best?.key;
-}
-
-function editDistance(left: string, right: string): number {
-  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
-  for (let i = 0; i < left.length; i += 1) {
-    const current = [i + 1];
-    for (let j = 0; j < right.length; j += 1) {
-      current.push(
-        left[i] === right[j]
-          ? previous[j]!
-          : 1 + Math.min(previous[j]!, previous[j + 1]!, current[j]!),
-      );
-    }
-    previous.splice(0, previous.length, ...current);
-  }
-  return previous[right.length]!;
+  return closestMatch(
+    input.toLowerCase(),
+    allowed.map((key) => key.toLowerCase()),
+  );
 }
