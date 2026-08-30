@@ -30,6 +30,9 @@ export type NodeLoopBinaryCodecs = Map<string, RkyvV2Codec<unknown, unknown>>;
 /** 이벤트 drain 예약 커맨드 id — loop-stdio 의 BINARY_DRAIN_EVENTS_CMD 와 짝. */
 const BINARY_DRAIN_EVENTS_CMD = 0xfffe;
 
+/** drainEvents JSON 응답 디코더 — 모듈 상수(호출당 TextDecoder 할당 제거). */
+const drainDecoder = new TextDecoder();
+
 /** Persistent transport for Rust loop-stdio runtimes. */
 export function createNodeLoopTransport(options: {
   command: string;
@@ -72,8 +75,12 @@ export function createNodeLoopTransport(options: {
 
   /** 누적 수신 버퍼 — [len][frame][len][frame]… 이 붙어 들어온다. */
   const drainBinaryFrames = (): void => {
-    // 남은 청크를 단일 버퍼로 합친다(작은 응답에서는 통상 1청크).
-    if (binChunks.length > 0) {
+    // 남은 청크를 단일 버퍼로 합친다. 통상 케이스(빈 prefix + 단일 청크)는
+    // concat 없이 청크를 그대로 채택해 복사를 건너뛴다.
+    if (binChunks.length === 1 && binLenBuf.length === 0) {
+      binLenBuf = binChunks[0]!;
+      binChunks = [];
+    } else if (binChunks.length > 0) {
       binLenBuf = Buffer.concat([binLenBuf, ...binChunks]);
       binChunks = [];
     }
@@ -115,7 +122,7 @@ export function createNodeLoopTransport(options: {
       // 응답 본문: [ok u8][pad 3][len u32 @4][json @8]
       if (frame[0] !== 1) throw new RustraCommandError('invoke.failed', 'event drain failed');
       const jsonLen = frame[4]! | (frame[5]! << 8) | (frame[6]! << 16) | (frame[7]! << 24);
-      return JSON.parse(new TextDecoder().decode(frame.subarray(8, 8 + jsonLen))) as unknown;
+      return JSON.parse(drainDecoder.decode(frame.subarray(8, 8 + jsonLen))) as unknown;
     }
     const codec = nameToCodec(command);
     if (!codec) {
@@ -125,9 +132,9 @@ export function createNodeLoopTransport(options: {
       );
     }
     const frame = await binaryWrite(encodeBinaryRequest(codec, args));
-    const outcome = codec.decode(
-      frame.buffer.slice(frame.byteOffset, frame.byteOffset + frame.byteLength) as ArrayBuffer,
-    );
+    // decode 는 동기 완료 계약이므로 뷰를 그대로 넘긴다 — 왕복당 프레임 사본
+    // (buffer.slice) 하나를 제거한다(bun caller-buffer 와 동일 계약).
+    const outcome = codec.decode(frame);
     if (!outcome.ok) {
       const e = outcome.error ?? { code: 'invoke.failed', message: 'invoke failed' };
       throw parseRustraErrorString(`${e.code}: ${e.message}`);

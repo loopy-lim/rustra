@@ -105,6 +105,13 @@ function ensurePolling(transport: NodeEventTransport): void {
       })
       .finally(() => {
         if (!loops.get(transport)) return;
+        // drain 완료 사이에 구독자가 모두 떠났으면 재가동하지 않는다 —
+        // 마지막 unsubscribe 가 정지시킨다는 루프 공유 계약(모듈 JSDoc).
+        if (current.subscribers.size === 0) {
+          current.polling = false;
+          current.timer = null;
+          return;
+        }
         current.timer = setTimeout(tick, pollIntervalMs());
       });
   };
