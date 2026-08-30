@@ -227,5 +227,13 @@ test('real repo snapshot exists and matches a fresh collection', () => {
   const snapshotPath = join(REPO_ROOT, 'api-surface', 'snapshot.json');
   assert.ok(existsSync(snapshotPath), 'api-surface/snapshot.json is missing');
   const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8'));
-  assert.deepEqual(collectSurface(REPO_ROOT), snapshot);
+  // version 키는 serializeSurface 가 넣으므로, 포맷 진실원 경유로 비교한다.
+  const { version, ...surface } = JSON.parse(serializeSurface(collectSurface(REPO_ROOT)));
+  assert.equal(snapshot.version, version);
+  assert.deepEqual(surface, {
+    rustModules: snapshot.rustModules,
+    ffiExports: snapshot.ffiExports,
+    macros: snapshot.macros,
+    tsExports: snapshot.tsExports,
+  });
 });
