@@ -8,6 +8,11 @@ export type RkyvSchemaRuntime = {
   lookupCachedLiveSchemaEntry(command: string): LiveSchemaEntry | undefined;
   /** (T0-3) 세대 불일치 시 live schema 캐시를 재동기화한다(미노출 호스트는 no-op). */
   resyncIfStale(): void;
+  /**
+   * (T0-3 후속) live schema 재조회 때마다 오르는 에포크 — 파생 캐시가 세대
+   * 변경을 감지해 스스로를 비우는 데 쓴다(동적 코덱 캐시 prune).
+   */
+  readonly resyncEpoch: number;
 };
 
 export type RkyvCapabilityRuntime = {

@@ -9,10 +9,17 @@ export function createRkyvSchemaRuntime(native: RkyvV2SchemaNative): RkyvSchemaR
   let liveSchemaCache: Map<string, LiveSchemaEntry> | undefined;
   /** (T0-3) 캐시가 빌드된 시점의 세대 — 네이티브 폴링 값과 비교한다. */
   let cachedGeneration: number | undefined;
+  /**
+   * (T0-3 후속) 재동기화 에포크 — live schema 를 새로 읽을 때마다 1씩 오른다.
+   * 파생 캐시(동적 코덱 캐시)가 자신이 빌드된 에포크를 비교해 세대 변경 시
+   * 구 entry 코덱을 비울 수 있게 한다(구 코덱 누적 방지).
+   */
+  let resyncEpoch = 0;
   const readLiveSchemaDocument = () => {
     const document = parseLiveSchemaDocument(native);
     liveSchemaCache = document.commands;
     cachedGeneration = document.schemaGeneration;
+    resyncEpoch += 1;
     return document;
   };
   const refreshLiveSchema = (): Map<string, LiveSchemaEntry> => {
@@ -52,5 +59,13 @@ export function createRkyvSchemaRuntime(native: RkyvV2SchemaNative): RkyvSchemaR
       // 재조회 실패 시 기존 캐시 유지 — 시끄러운 실패는 invoke 결과에서 낸다.
     }
   };
-  return { refreshLiveSchema, readLiveSchemaDocument, lookupCachedLiveSchemaEntry, resyncIfStale };
+  return {
+    refreshLiveSchema,
+    readLiveSchemaDocument,
+    lookupCachedLiveSchemaEntry,
+    resyncIfStale,
+    get resyncEpoch() {
+      return resyncEpoch;
+    },
+  };
 }
