@@ -1,51 +1,53 @@
+English | [한국어](./README.ko.md)
+
 # @rustra/cli
 
-rustra-bridge의 TypeScript 코드 제너레이션 CLI입니다. Rust 백엔드가 내보낸
-`schema.json`으로부터 타입 안전 클라이언트(commands/types/contract/rkyv codec)를 생성합니다.
+The TypeScript code generation CLI for rustra-bridge. Generates type-safe clients
+(commands/types/contract/rkyv codec) from the `schema.json` exported by the Rust backend.
 
-## 사용법
+## Usage
 
 ```sh
-# 1. schema + TS/C++/RN 통합 생성
+# 1. schema + TS/C++/RN integrated generation
 rustra codegen --config rustra.json
 
-# 2. schema만 이미 있고 생성물을 다시 렌더링
+# 2. schema already exists; re-render the generated output
 rustra generate --schema ./generated/schema.json --output ./src/generated
 
-# 3. C++ 코덱(RN JSI fast path용) 동시 생성
+# 3. also generate the C++ codec (for the RN JSI fast path)
 rustra generate --schema ./gen/schema.json --output ./src/generated --cpp-output ./ios
 
-# 4. 개발 모드 (Rust 소스 변경 감시 + 통합 codegen)
+# 4. dev mode (watch Rust sources + integrated codegen)
 rustra dev --config rustra.json
 
-# 5. 생성물 동기화 검증 (CI 게이트용)
+# 5. verify generated output is in sync (CI gate)
 rustra generate --config rustra.json --check
 
-# 6. 스키마 버전 간 breaking change 검증 (CI 게이트용)
+# 6. detect breaking changes between schema versions (CI gate)
 rustra diff --old ./schema.v1.json --new ./schema.v2.json
 
-# 7. 새 프로젝트 스캐폴드 초기화
+# 7. initialize a new project scaffold
 rustra init my-app
 ```
 
-전체 옵션은 `rustra --help`로 확인하세요.
+See `rustra --help` for the full list of options.
 
-## 라이브러리 API
+## Library API
 
-CLI와 동일한 생성기를 프로그램에서 직접 사용할 수 있습니다:
+The same generators as the CLI can be used directly in a program:
 
 ```ts
 import { generateTypesTs, generateCommandsTs, diffSchemas } from '@rustra/cli';
 ```
 
-| 모듈              | 내용                                                    |
-| ----------------- | ------------------------------------------------------- |
-| `generate`        | types/commands/contract/rkyv codec/registry 생성 함수군 |
-| `schema`          | `PackageSchema` 파싱·검증                               |
-| `schema-diff`     | 스키마 버전 간 breaking change 검출 (`diffSchemas`)     |
-| `validate-engine` | 런타임 invoke 검증 엔진 래퍼 (`createValidatedEngine`)  |
+| Module            | Contents                                                       |
+| ----------------- | -------------------------------------------------------------- |
+| `generate`        | generator functions for types/commands/contract/rkyv codec/registry |
+| `schema`          | `PackageSchema` parsing and validation                          |
+| `schema-diff`     | breaking-change detection between schema versions (`diffSchemas`) |
+| `validate-engine` | runtime invoke validation engine wrapper (`createValidatedEngine`) |
 
-## 관련 문서
+## Related docs
 
 - [rustra-bridge](https://github.com/loopy-lim/rustra#readme)
-- `docs/getting-started.md` — 전체 파이프라인 (Rust `generate_typescript` → CLI)
+- `docs/getting-started.md` — the full pipeline (Rust `generate_typescript` → CLI)
