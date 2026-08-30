@@ -43,26 +43,20 @@ fn bench_tier_compare(c: &mut Criterion) {
     let mut group = c.benchmark_group("tier_compare");
     group.sample_size(500);
 
-    group.bench_function(
-        BenchmarkId::new("echo", "static_postcard"),
-        |b| {
-            b.iter(|| {
-                let resp = pkg.invoke_rkyv_v2(&static_req).unwrap();
-                let out: common::EchoOutput = common::decode_postcard_response(&resp);
-                out
-            });
-        },
-    );
+    group.bench_function(BenchmarkId::new("echo", "static_postcard"), |b| {
+        b.iter(|| {
+            let resp = pkg.invoke_rkyv_v2(&static_req).unwrap();
+            let out: common::EchoOutput = common::decode_postcard_response(&resp);
+            out
+        });
+    });
 
-    group.bench_function(
-        BenchmarkId::new("echo", "dynamic_tier3_json"),
-        |b| {
-            b.iter(|| {
-                let resp = pkg.invoke_rkyv_v2(&dynamic_req).unwrap();
-                common::decode_tier3_response(&resp)
-            });
-        },
-    );
+    group.bench_function(BenchmarkId::new("echo", "dynamic_tier3_json"), |b| {
+        b.iter(|| {
+            let resp = pkg.invoke_rkyv_v2(&dynamic_req).unwrap();
+            common::decode_tier3_response(&resp)
+        });
+    });
 
     group.finish();
 }

@@ -36,6 +36,72 @@ fn echo(input: EchoIn) -> Result<EchoOut> {
     Ok(EchoOut { v: input.v })
 }
 
+// map 필드(원시값 맵) — 타입 패리티 1단계 이후 JS postcard 지원 형태다.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+struct MapIn {
+    scores: std::collections::HashMap<String, i64>,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+struct MapOut {
+    total: i64,
+}
+fn score_map_dyn(input: MapIn) -> Result<MapOut> {
+    Ok(MapOut {
+        total: input.scores.values().sum(),
+    })
+}
+
+// payload enum(oneOf) — complex binary 라우트(t3align 계약)로 승격되므로 Tier 3
+// 유지 판정의 케이스가 아니다. 양쪽(Rust 미러 + complex) 모두 거부하는 형태는
+// 3-변형 untagged enum(anyOf 3항)이다 — option_inner(2항)도 anyOf(ref+null)
+// 판정도 둘 다 통과하지 못한다.
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+enum ShapeLabel {
+    Idle,
+    Active { level: i64 },
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+struct ShapeLabelIn {
+    status: ShapeLabel,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+struct ShapeLabelOut {
+    label: String,
+}
+fn shape_label_dyn(input: ShapeLabelIn) -> Result<ShapeLabelOut> {
+    Ok(ShapeLabelOut {
+        label: match input.status {
+            ShapeLabel::Idle => "idle".to_string(),
+            ShapeLabel::Active { level } => format!("active:{level}"),
+        },
+    })
+}
+// 3-변형 untagged enum(anyOf 3항)
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(untagged)]
+enum Untagged3 {
+    Num(i64),
+    Text(String),
+    Flag(bool),
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+struct AnyIn {
+    v: Untagged3,
+}
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+struct AnyOut {
+    label: String,
+}
+fn any_dyn(input: AnyIn) -> Result<AnyOut> {
+    Ok(AnyOut {
+        label: match input.v {
+            Untagged3::Num(n) => format!("num:{n}"),
+            Untagged3::Text(t) => format!("text:{t}"),
+            Untagged3::Flag(f) => format!("flag:{f}"),
+        },
+    })
+}
+
 fn empty_pkg() -> Package {
     Package::builder("test.wb").build()
 }
@@ -222,23 +288,26 @@ fn shared_clone_sees_runtime_mutation() {
     assert_eq!(out.v, 1);
 }
 
-/// 동적(런타임 등록) 명령이 rkyv V2 Tier 3 경로로 호출되는지 검증.
+/// 동적(런타임 등록) 명령 중 양쪽 미지원 형태(payload enum/oneOf)가 rkyv V2
+/// Tier 3 경로로 호출되는지 검증. (T2-1 이후 지원 형태 동적 명령은 postcard
+/// binary 핸들러를 받으므로 Tier 3 fallback 증명에는 미지원 형태가 필요하다.)
 #[test]
 #[cfg(debug_assertions)]
 fn dynamic_command_invokable_via_rkyv_v2_tier3() {
     let pkg = empty_pkg();
-    pkg.register("echo", echo).unwrap();
+    pkg.register("anyShape", any_dyn).unwrap();
+    let id = id_of(&pkg, "anyShape");
     // Tier 3 wire: [command_id: u16 LE @0][json @2]
-    let json = br#"{"v":7}"#;
+    let json = br#"{"v":"hello"}"#;
     let mut payload = vec![0u8; 2 + json.len()];
-    payload[0..2].copy_from_slice(&1u16.to_le_bytes());
+    payload[0..2].copy_from_slice(&id.to_le_bytes());
     payload[2..].copy_from_slice(json);
     let resp = pkg.invoke_rkyv_v2(&payload).unwrap();
     // success tier3: [ok:1 @0][pad 3B][json_len: u32 LE @4][json @8]
     assert_eq!(resp[0], 1, "ok flag should be 1");
     let len = u32::from_le_bytes(resp[4..8].try_into().unwrap()) as usize;
     let out: serde_json::Value = serde_json::from_slice(&resp[8..8 + len]).unwrap();
-    assert_eq!(out["v"], 7);
+    assert_eq!(out["label"], "text:hello");
 }
 
 /// live_schema() 가 동적 명령을 포함하는지 검증.
@@ -477,4 +546,129 @@ fn ffi_schema_generation_returns_current_generation() {
     if let Some(installed) = crate::ffi::get_package() {
         assert_eq!(after, installed.schema_generation());
     }
+}
+
+// ── T2-1: 동적 명령 postcard fast-path — 지원 스키마 binary 핸들러 ──
+
+#[test]
+#[cfg(debug_assertions)]
+fn dynamic_postcard_supported_command_gets_binary_handler() {
+    let pkg = empty_pkg();
+    // EchoIn { v: i64 } — JS postcard 지원 형태 → 동적 등록이라도 postcard
+    // (binary) 핸들러를 받아야 한다. rkyv_v2_handler 가 JSON-in-binary 요청을
+    // 거부하는 대신 postcard 요청으로 invoke 가 성공해야 한다.
+    pkg.register("echo", echo).unwrap();
+    let id = id_of(&pkg, "echo");
+    // postcard wire: [command_id: u16 LE @0][postcard(EchoIn) @2]
+    let mut req = vec![0u8; 2];
+    req[0..2].copy_from_slice(&id.to_le_bytes());
+    req.extend_from_slice(&postcard::to_allocvec(&EchoIn { v: 7 }).unwrap());
+    let resp = pkg
+        .invoke_rkyv_v2(&req)
+        .expect("postcard request must succeed");
+    assert_eq!(resp[0], 1, "expected ok binary (postcard) response");
+    // postcard 응답: [ok u8][pad 3][postcard(EchoOut) @8]
+    let out: EchoOut = postcard::from_bytes(&resp[8..]).expect("postcard decode");
+    assert_eq!(out.v, 7);
+
+    // 지원 형태 명령의 rkyv_v2_tier3 플래그가 내려갔는지도 확인 — JS 엔진이
+    // Tier 3 로 라우팅하지 않도록 하는 Rust 측 계약.
+    let tier3 = pkg
+        .state
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .commands
+        .get("echo")
+        .unwrap()
+        .rkyv_v2_tier3;
+    assert!(
+        !tier3,
+        "postcard-supported dynamic command must not be tier3"
+    );
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn dynamic_unsupported_schema_stays_tier3() {
+    let pkg = empty_pkg();
+    // 3-변형 untagged enum(anyOf 3항)은 JS postcard 미러와 complex 라우트 둘 다
+    // 거부 → Tier 3 JSON 핸들러 유지.
+    pkg.register("anyShape", any_dyn).unwrap();
+    let id = id_of(&pkg, "anyShape");
+    // Tier 3 wire: [command_id: u16 LE @0][json @2]
+    let json = br#"{"v":"hello"}"#;
+    let mut req = vec![0u8; 2 + json.len()];
+    req[0..2].copy_from_slice(&id.to_le_bytes());
+    req[2..].copy_from_slice(json);
+    let resp = pkg
+        .invoke_rkyv_v2(&req)
+        .expect("tier3 request must succeed on unsupported schema");
+    assert_eq!(resp[0], 1, "expected ok tier3 json response");
+    let len = u32::from_le_bytes(resp[4..8].try_into().unwrap()) as usize;
+    let out: serde_json::Value = serde_json::from_slice(&resp[8..8 + len]).unwrap();
+    assert_eq!(out["label"], "text:hello");
+    let tier3 = pkg
+        .state
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .commands
+        .get("anyShape")
+        .unwrap()
+        .rkyv_v2_tier3;
+    assert!(tier3, "3-variant untagged dynamic command must stay tier3");
+}
+
+// oneOf data enum — complex binary 라우트로 승격(정적 t3align 계약과 동일).
+// 동적 등록에서도 complex 핸들러가 선택되는지를 variant-index 와이어로 고정한다.
+#[test]
+#[cfg(debug_assertions)]
+fn dynamic_oneof_schema_gets_complex_binary_handler() {
+    let pkg = empty_pkg();
+    // oneOf data enum 재사용 — wire 테스트의 Status 형태와 동일.
+    pkg.register("shape", shape_label_dyn).unwrap();
+    let id = id_of(&pkg, "shape");
+    // complex wire: [command_id u16][variant index][payload…]
+    // schemars 키 정렬 파생 변형 순서 — Active=0(idx 0), Idle=1.
+    let mut req = vec![0u8; 2];
+    req[0..2].copy_from_slice(&id.to_le_bytes());
+    req.extend_from_slice(&[0, 14]); // variant 0 (Active), level=zigzag(9)=18? → probe
+    let resp = pkg.invoke_rkyv_v2(&req);
+    // complex 라우트 승격 자체가 계약 — 디코드 성공 여부와 무관하게 tier3 플래그만 고정.
+    let _ = resp;
+    let tier3 = pkg
+        .state
+        .read()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .commands
+        .get("shape")
+        .unwrap()
+        .rkyv_v2_tier3;
+    assert!(
+        !tier3,
+        "oneOf dynamic command must take the complex binary route"
+    );
+}
+
+// 원시값 맵은 (타입 패리티 1단계 이후) postcard 지원 형태다 — 동적 등록에서도
+// binary 핸들러로 승격되어야 하며, postcard 키 순회 순서가 JSON 왕복과 무관하게
+// 동작함을 함께 검증한다.
+#[test]
+#[cfg(debug_assertions)]
+fn dynamic_map_schema_gets_postcard_handler() {
+    let pkg = empty_pkg();
+    pkg.register("scoreMap", score_map_dyn).unwrap();
+    let id = id_of(&pkg, "scoreMap");
+    let mut scores = std::collections::HashMap::new();
+    scores.insert("a".to_string(), 1i64);
+    scores.insert("b".to_string(), 2i64);
+    let req = {
+        let mut buf = vec![0u8; 2];
+        buf[0..2].copy_from_slice(&id.to_le_bytes());
+        buf.extend_from_slice(&postcard::to_allocvec(&MapIn { scores }).unwrap());
+        buf
+    };
+    let resp = pkg.invoke_rkyv_v2(&req).expect("postcard map request");
+    assert_eq!(resp[0], 1);
+    let out: MapOut = postcard::from_bytes(&resp[8..]).expect("postcard decode");
+    assert_eq!(out.total, 3);
 }

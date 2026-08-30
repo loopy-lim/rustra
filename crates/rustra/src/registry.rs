@@ -115,7 +115,13 @@ impl Package {
                 id
             }
         };
-        let command = Arc::new(build_command::<I, O, F>(command_id, handler, true));
+        // (T2-1) 동적 명령도 정적 명령과 동일한 라우트 선택을 받는다 — JS 코덱
+        // 지원 형태면 postcard binary 핸들러, 아니면 complex codec, 둘 다
+        // 미지원일 때만 Tier 3 JSON. 구 `force_tier3=true` 는 Rust가 지원 형태인
+        //데도 항상 JSON 경유로 강제해 왕복 비용을 낭비했다. 와이어 분기는
+        // `build_command` 가 JS 코드젠 지원 판정을 미러해 결정하므로 JS 엔진과의
+        // 정합은 유지된다(T2-3 에서 JS 측 라우팅이 따라온다).
+        let command = Arc::new(build_command::<I, O, F>(command_id, handler, false));
         state.id_to_command.insert(command_id, Arc::clone(&command));
         state.commands.insert(name.clone(), command);
         state.id_to_name.insert(command_id, name);
