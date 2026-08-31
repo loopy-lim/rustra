@@ -155,19 +155,45 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
   };
 }
 
-export type BunBootstrap = { ready(): Promise<RkyvV2Engine>; dispose(): void };
+export type BunBootstrap = {
+  ready(): Promise<RkyvV2Engine>;
+  dispose(): void;
+  /**
+   * Dev-loop reload hook target (Task A1). Empirically (macOS, Bun 1.4.0),
+   * `bun:ffi` dlopen caches the library image per process: re-dlopen of a
+   * REPLACED file at the same path returns the OLD bytes while any handle of
+   * that image has ever been opened in the process — only close-then-reopen
+   * picks up new bytes, and even then only when no other handle is alive.
+   * Consequence: reload() re-runs engine init (fresh state over the resolved
+   * library) and WARNS that a rebuilt binary applies on the next process start
+   * unless every previous handle was closed first. Contract is the warning +
+   * state reset, not a true image swap — see docs/compatibility-matrix.md.
+   */
+  reload(): Promise<void>;
+};
 
 export function createBunBootstrap(options: BunFfiEngineOptions): BunBootstrap {
   let runtime: BunFfiRuntime | undefined;
-  configureLazy(async () => {
+  const bootstrap = async (): Promise<RkyvV2Engine> => {
     runtime = await createBunFfiEngine(options);
     return runtime.engine;
-  });
+  };
+  configureLazy(bootstrap);
   return {
     ready: () => ensureConfigured() as Promise<RkyvV2Engine>,
     dispose() {
       runtime?.close();
       runtime = undefined;
+    },
+    async reload() {
+      // 엔진 상태 재초기화 — a0 스파이크가 증명한 프로세스 내 리셋 경로.
+      this.dispose();
+      console.warn(
+        '[bun] engine re-initialized. bun:ffi caches the library image: a rebuilt ' +
+          'cdylib applies on the next process start (reload cannot swap bytes in-process).',
+      );
+      configureLazy(bootstrap);
+      await this.ready();
     },
   };
 }
