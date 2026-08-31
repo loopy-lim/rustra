@@ -10,12 +10,14 @@ import {
   combineWatchHandles,
   isWithin,
   sourceDirectories,
+  createReloadHooks,
   type WatchHandle,
 } from './watch.js';
 import { assertDirectory, findRepoCli, readDevConfig, readSchemaSnapshot } from './dev-config.js';
 import { detectConfigDirty, detectDirty, planPipeline, runOnce } from './dev-support.js';
 
-export { createWatchLoop } from './watch.js';
+export { createWatchLoop, createReloadHooks } from './watch.js';
+export type { WatchLoop } from './watch.js';
 export {
   detectConfigDirty,
   detectDirty,
@@ -24,6 +26,7 @@ export {
   type PipelinePlan,
   type StageRunners,
 } from './dev-support.js';
+export type { DevWatchHandle };
 export { readDevConfig } from './dev-config.js';
 
 export interface DevOptions {
@@ -32,6 +35,17 @@ export interface DevOptions {
   appDir: string;
   inspect: boolean;
 }
+
+/**
+ * Watch handle returned by `runDev`/`runConfigDev` with the engine-reload hook.
+ * The callback contract: invoked AFTER codegen completes for a run that touched
+ * the Rust side (rustBin) and BEFORE the loop idles again; the host drains its
+ * own in-flight invocations, then re-initializes its engine. Errors from the
+ * callback are logged (`[dev] reload failed: …`) and never kill the loop.
+ */
+export type DevWatchHandle = WatchHandle & {
+  onReload(cb: (reason: string) => void | Promise<void>): void;
+};
 
 export function parseDevArgs(args: string[]): DevOptions {
   const parsed = parseCliArgs(args, {
@@ -62,7 +76,7 @@ function watchPlan(backendDir: string, generatedDir: string): () => boolean {
   };
 }
 
-export async function runDev(args: string[]): Promise<WatchHandle> {
+export async function runDev(args: string[]): Promise<DevWatchHandle> {
   const options = parseDevArgs(args);
   if (options.configPath) return runConfigDev(options.configPath, options.inspect);
   const backendDir = resolve(options.backendDir);
@@ -77,6 +91,7 @@ export async function runDev(args: string[]): Promise<WatchHandle> {
     );
   }
   const rustBin = () => spawnInherit('cargo', ['run', '--quiet', '--bin', 'generate'], backendDir);
+  const reload = createReloadHooks();
   const tsCli = async () => {
     const cli = process.env.RUSTRA_CLI ?? findRepoCli(appDir);
     if (!cli) throw new Error('Rustra CLI is unavailable; set RUSTRA_CLI.');
@@ -94,6 +109,8 @@ export async function runDev(args: string[]): Promise<WatchHandle> {
       await runOnce(plan, { rustBin, tsCli });
       console.log(`[dev] ${new Date().toLocaleTimeString()} regenerated`);
       if (options.inspect) inspectHint();
+      // rustBin 이 돌았다 = 네이티브 바이너리가 바뀌었다 → 호스트 엔진 재초기화.
+      if (plan.rustBin) await reload.emitReload(reason);
     } catch (error) {
       console.error(`[dev] regeneration failed: ${error instanceof Error ? error.message : error}`);
     }
@@ -104,15 +121,20 @@ export async function runDev(args: string[]): Promise<WatchHandle> {
   const sourceWatch = createSourceWatch(join(backendDir, 'src'), () =>
     loop.schedule('rust change'),
   );
-  return combineWatchHandles(loop, sourceWatch);
+  const handle = combineWatchHandles(loop, sourceWatch) as DevWatchHandle;
+  handle.onReload = reload.onReload;
+  return handle;
 }
 
-async function runConfigDev(configPath: string, inspect: boolean): Promise<WatchHandle> {
+async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWatchHandle> {
   const config = readDevConfig(configPath);
   const manifestDir = dirname(config.manifestPath);
   assertDirectory(manifestDir, 'Cargo project root', 'set codegen.rustManifest');
   assertDirectory(join(manifestDir, 'src'), 'Rust src', 'set codegen.rustManifest');
   let lastGeneratedSchema: string | undefined;
+  // detectConfigDirty 는 rust/ts 원인을 구분하지 못한다 — 보수적 기본값으로
+  // 성공한 재생성마다 reload 를 방출한다(호스트 재초기화는 멱함수여야 한다).
+  const reload = createReloadHooks();
   const codegen = async () => {
     const { runCodegen } = await import('./index.js');
     await runCodegen(['--config', resolve(configPath)]);
@@ -124,6 +146,7 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<Watch
       await codegen();
       console.log(`[dev] ${new Date().toLocaleTimeString()} regenerated`);
       if (inspect) inspectHint();
+      await reload.emitReload(reason);
     } catch (error) {
       console.error(`[dev] regeneration failed: ${error instanceof Error ? error.message : error}`);
     }
@@ -163,5 +186,12 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<Watch
     },
   ]);
   console.log(`\n[dev] watching ${manifestDir} and ${config.schemaPath} for changes...`);
-  return combineWatchHandles(loop, sourceWatch, projectWatch, schemaWatch);
+  const handle = combineWatchHandles(
+    loop,
+    sourceWatch,
+    projectWatch,
+    schemaWatch,
+  ) as DevWatchHandle;
+  handle.onReload = reload.onReload;
+  return handle;
 }
