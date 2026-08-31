@@ -219,6 +219,51 @@ test('createBunBootstrap gives an actionable library override hint', async () =>
   }
 });
 
+// ── 핫스왑 reload (Task A1) ──────────────────────────────────────────────────
+//
+// 실측(2026-08-31, macOS arm64 + Bun 1.4.0): bun:ffi dlopen 은 파일이 같은
+// 경로에서 교체되어도 프로세스가 닫지 않은 핸들을 하나라도 연 적 있으면 예전
+// 이미지를 돌려준다(v1 로드 → v2 로 교체 → 재 dlopen → 여전히 v1).
+// close-후-재 dlopen 은 새 바이트를 얻지만, rustra 엔진은 어댑터 외부에서도
+// 핸들이 살아 있을 수 있어 진짜 이미지 스왑은 보장할 수 없다. 따라서 A1 계약은
+// "엔진 상태 재초기화 + 새 바이너리는 다음 프로세스 시작 시 적용" 경고.
+
+test('createBunBootstrap reload re-initializes engine state and warns loudly', async () => {
+  const bootstrap = createBunBootstrap({
+    libraryCandidates: [
+      resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`),
+      resolve(repoRoot, `target/debug/librustra_calculator_example.${suffix}`),
+    ],
+    rkyvV2Codecs: testRegistry,
+  });
+  const warnings: string[] = [];
+  const originalWarn = console.warn;
+  console.warn = (line: unknown) => warnings.push(String(line));
+  try {
+    const first = await bootstrap.ready();
+    const one = await first.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
+    assert.equal(one.value, 42);
+
+    await bootstrap.reload();
+
+    assert.ok(
+      warnings.some((line) => line.includes('[bun] engine re-initialized')),
+      'reload must warn that the rebuilt cdylib applies on next process start',
+    );
+    assert.ok(
+      warnings.some((line) => line.includes('bun:ffi caches the library image')),
+      'warning must state the dlopen caching finding',
+    );
+    const second = await bootstrap.ready();
+    assert.notEqual(second, first, 'reload must produce a fresh engine instance');
+    const two = await second.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
+    assert.equal(two.value, 42, 're-initialized engine serves commands');
+  } finally {
+    console.warn = originalWarn;
+    bootstrap.dispose();
+  }
+});
+
 // ── rkyv V2 caller-buffer (`_into`) 바인딩 ──────────────────────────────────
 //
 // C++ typedInvokeTail(RustraJSIBridge.cpp)과 동일한 계약: 512B 재사용 버퍼로
