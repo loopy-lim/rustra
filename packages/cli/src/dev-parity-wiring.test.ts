@@ -121,15 +121,36 @@ test(
       const originalLog = console.log;
       console.error = (line: unknown) => errors.push(String(line));
       console.log = (line: unknown) => errors.push(`LOG ${String(line)}`);
+      // watch → debounce → codegen → verify 왕복은 풀스위트 부하 하에서 들쭉날쭉
+      // 하다 — 고정 sleep 대신 관찰 조건을 폴링한다(디바운스 상수와 무관하게
+      // 안정적). 타임아웃은 실패 시점까지 캡처한 로그를 그대로 보여준다.
+      const waitFor = async (observe: () => boolean, what: string): Promise<void> => {
+        const deadline = Date.now() + 10_000;
+        while (!observe()) {
+          if (Date.now() > deadline) {
+            throw new Error(`timed out waiting for ${what}; captured:\n${errors.join('\n')}`);
+          }
+          await new Promise<void>((resolve) => setTimeout(resolve, 100));
+        }
+      };
+      const rejectionCount = (): number =>
+        errors.filter((line) => line.includes('[dev] reload rejected —')).length;
       try {
         const handle = await runDev(['--config', join(project, 'rustra.json')]);
         const reloads: string[] = [];
         handle.onReload((reason) => void reloads.push(reason));
 
         // 트리거 1 — fake cargo 가 integer 계약을 쓴다 → 게이트가 거부해야 한다.
+        // 거부 로그 자체가 "판정이 돌았다"는 양(陽) 관찰이자 동기화점이다.
         process.env.FAKE_SCHEMA_FILE = join(root, 'schema-integer.json');
         writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed() {}\n');
-        await new Promise<void>((resolve) => setTimeout(resolve, 1200));
+        await waitFor(
+          () =>
+            errors.some(
+              (line) => line.includes('[dev] reload rejected —') && line.includes('drift'),
+            ),
+          'the loud drift rejection',
+        );
 
         // 트리거 2 — 원래 계약으로 복귀. 첫 거부에서 기준이 드리프트 상태로
         // 재무장됐으므로 복귀 역시 "기준 대비 드리프트"로 판정된다 — 거부 2회.
@@ -137,13 +158,13 @@ test(
         // 판정됐다는 것. (같은 상태 유지 시의 통과는 rearm 단위 테스트가 담당.)
         process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
         writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed2() {}\n');
-        await new Promise<void>((resolve) => setTimeout(resolve, 1200));
+        await waitFor(() => rejectionCount() >= 2, 'the second (restored-contract) rejection');
 
+        // 두 번째 판정이 관찰된 뒤 짧은 유예 — 이 안에 reload 가 방출되지
+        // 않았음이 곧 부정(i) 검증이다(거부는 reload 를 방출하지 않는다).
+        await new Promise<void>((resolve) => setTimeout(resolve, 300));
         handle.dispose();
-        assert.ok(
-          errors.some((line) => line.includes('[dev] reload rejected —') && line.includes('drift')),
-          `rejection must be loud, got: ${errors.join('\n')}`,
-        );
+        assert.ok(rejectionCount() >= 2, `rejection must be loud, got: ${errors.join('\n')}`);
         assert.deepEqual(
           reloads,
           [],
