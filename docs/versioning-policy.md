@@ -56,11 +56,11 @@ Marking is explicit: a doc comment containing "experimental" plus an entry in
 the table below. An item leaves this table only by entering the guarantees
 above; any later change then follows the deprecation procedure.
 
-| Item                          | Status                 | Notes                                                                                                                                                                                   |
-| ----------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rustra_ffi_hot_reload`       | Planned / experimental | Does not exist as of this writing. Listed here so its contract lands as breakable.                                                                                                      |
-| `rustra_ffi_capture_snapshot` | Experimental           | B1 inspector dump. Shape changes are breaking, except additive fields, which are backward-compatible.                                                                                   |
-| `@rustra/types` inspector     | Experimental           | `DumpedWire` + `parseSnapshot`/`serializeSnapshot` mirror the blob contract above (additive fields allowed). `rustra inspect` renders this experimental format and inherits its status. |
+| Item                          | Status       | Notes                                                                                                                                                                                   |
+| ----------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rustra_ffi_hot_reload`       | Experimental | Landed this cycle. Hot-reload injection with replace semantics; the skip report and error ladder may still change between releases.                                                     |
+| `rustra_ffi_capture_snapshot` | Experimental | B1 inspector dump. Shape changes are breaking, except additive fields, which are backward-compatible.                                                                                   |
+| `@rustra/types` inspector     | Experimental | `DumpedWire` + `parseSnapshot`/`serializeSnapshot` mirror the blob contract above (additive fields allowed). `rustra inspect` renders this experimental format and inherits its status. |
 
 ## MSRV policy
 

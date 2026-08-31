@@ -95,7 +95,7 @@ Task A1(dev 루프 reload 오케스트레이션, 2026-08-31)은 A0 판정에 따
   구현이다.
 - **Tauri**: 문서만. 어댑터는 Tauri IPC(`rustra_dispatch`) 위의 상태 없는
   래퍼라 재초기화할 엔진 상태가 없고, 바이너리 교체는 Tauri 호스트 프로세스의
-  책임이다(앱 재시작, 또는 A2 `rustra_ffi_hot_reload` 주입 착수 후).
+  책임이다(앱 재시작, 또는 이번 사이클에 착수한 A2 `rustra_ffi_hot_reload` 주입).
 - **Dev 루프**: `rustra dev` 는 watch 핸들에 `onReload` 훅을 노출하고, Rust 측이
   바뀐 재생성 성공 후 방출한다(레거시 레이아웃: `plan.rustBin` 실행 시; config
   모드는 원인 구분이 불가해 성공한 재생성마다 방출 — 보수적 기본값). 훅 에러는
