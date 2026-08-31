@@ -50,10 +50,16 @@ function rangeContainsVersion(range, version) {
     const numbers = match[2].split('.').map(Number);
     const base = [numbers[0], numbers[1] ?? 0, numbers[2] ?? 0];
     if (prefix === '^') {
-      return compareVersions(parsedVersion, base) >= 0 && compareVersions(parsedVersion, upperBoundForCaret(base)) < 0;
+      return (
+        compareVersions(parsedVersion, base) >= 0 &&
+        compareVersions(parsedVersion, upperBoundForCaret(base)) < 0
+      );
     }
     if (prefix === '~') {
-      return compareVersions(parsedVersion, base) >= 0 && compareVersions(parsedVersion, [base[0], base[1] + 1, 0]) < 0;
+      return (
+        compareVersions(parsedVersion, base) >= 0 &&
+        compareVersions(parsedVersion, [base[0], base[1] + 1, 0]) < 0
+      );
     }
     if (prefix === '>=') return compareVersions(parsedVersion, base) >= 0;
     if (prefix === '<=') return compareVersions(parsedVersion, base) <= 0;
@@ -70,6 +76,34 @@ function workspaceVersion(cargo) {
   const workspace = cargo.match(/\[workspace\.package\][\s\S]*?^version = "([^"]+)"/m)?.[1];
   if (!workspace) throw new Error('workspace.package.version not found');
   return workspace;
+}
+
+/**
+ * wasm 백엔드(dev/experimental 전용 — Task A3 버전 정책 결정)가 릴리스 아티팩트에
+ * 새어 나가는가 — npm tarball 의 `files` 경로로 판정한다. 경로 세그먼트가 wasm
+ * 엔진 계열(vendored wasm3 소스, wasm32 타깃 산출물, wasm-backend 디렉터리,
+ * .wasm 엔진 바이너리)이면 배제 대상이다. 네이티브 어댑터(JSI/FFI)의 정상 발행
+ * 경로(`native` 글롭)는 세그먼트만 봐서는 걸리지 않는다.
+ */
+function isWasmBackendPath(publishPath) {
+  return String(publishPath)
+    .split('/')
+    .some(
+      (segment) =>
+        segment === 'wasm3' ||
+        segment === 'wasm-backend' ||
+        segment.startsWith('wasm32') ||
+        segment.endsWith('.wasm'),
+    );
+}
+
+function wasmBackendFailures(packageName, files) {
+  const leaked = (files ?? []).filter(isWasmBackendPath);
+  return leaked.length > 0
+    ? [
+        `${packageName} release files include the experimental wasm backend (dev-only, not shipped): ${leaked.join(', ')}`,
+      ]
+    : [];
 }
 
 function lockWorkspaceBlock(lock, packageName) {
@@ -102,25 +136,32 @@ export function checkReleaseCoherence(root = process.cwd()) {
       PUBLISHED_PACKAGES.every((name) => group.includes(`@rustra/${name}`)),
   );
   if (forcedPublicGroup) {
-    failures.push('Changesets must not force all published @rustra/* packages into one fixed version group');
+    failures.push(
+      'Changesets must not force all published @rustra/* packages into one fixed version group',
+    );
   }
 
   const cargoRange = cli.rustraTemplate?.cargoRange;
   if (typeof cargoRange !== 'string' || !rangeContainsVersion(cargoRange, cargoVersion)) {
-    failures.push(`@rustra/cli rustraTemplate.cargoRange=${cargoRange} does not contain Rust ${cargoVersion}`);
+    failures.push(
+      `@rustra/cli rustraTemplate.cargoRange=${cargoRange} does not contain Rust ${cargoVersion}`,
+    );
   }
 
   const typesVersion = types.version;
   for (const name of PUBLISHED_PACKAGES) {
     const packagePath = `packages/${name}`;
     const manifest = readJson(root, `${packagePath}/package.json`);
-    if (!parseVersion(manifest.version ?? '')) failures.push(`${manifest.name} has invalid version=${manifest.version}`);
+    if (!parseVersion(manifest.version ?? ''))
+      failures.push(`${manifest.name} has invalid version=${manifest.version}`);
     if (!manifest.files?.includes('LICENSE')) {
       failures.push(`${manifest.name} package files omit LICENSE`);
     }
+    failures.push(...wasmBackendFailures(manifest.name, manifest.files));
     try {
       const packageLicense = readFileSync(join(root, `${packagePath}/LICENSE`), 'utf8');
-      if (packageLicense !== rootLicense) failures.push(`${manifest.name} LICENSE differs from root LICENSE`);
+      if (packageLicense !== rootLicense)
+        failures.push(`${manifest.name} LICENSE differs from root LICENSE`);
     } catch {
       failures.push(`${manifest.name} LICENSE is missing`);
     }
@@ -129,17 +170,26 @@ export function checkReleaseCoherence(root = process.cwd()) {
     if (!block) {
       failures.push(`${manifest.name} is missing from bun.lock workspaces`);
     } else if (lockField(block, 'version') !== manifest.version) {
-      failures.push(`${manifest.name} lock version=${lockField(block, 'version')} but manifest=${manifest.version}`);
+      failures.push(
+        `${manifest.name} lock version=${lockField(block, 'version')} but manifest=${manifest.version}`,
+      );
     }
 
     if (name !== 'types') {
       const dependencyRange = manifest.dependencies?.['@rustra/types'];
-      if (typeof dependencyRange !== 'string' || !rangeContainsVersion(dependencyRange, typesVersion)) {
-        failures.push(`${manifest.name} depends on @rustra/types ${dependencyRange}, which does not contain ${typesVersion}`);
+      if (
+        typeof dependencyRange !== 'string' ||
+        !rangeContainsVersion(dependencyRange, typesVersion)
+      ) {
+        failures.push(
+          `${manifest.name} depends on @rustra/types ${dependencyRange}, which does not contain ${typesVersion}`,
+        );
       }
       const lockDependencyRange = block?.match(/"@rustra\/types"\s*:\s*"([^"]+)"/)?.[1];
       if (lockDependencyRange !== dependencyRange) {
-        failures.push(`${manifest.name} lock @rustra/types=${lockDependencyRange} but manifest=${dependencyRange}`);
+        failures.push(
+          `${manifest.name} lock @rustra/types=${lockDependencyRange} but manifest=${dependencyRange}`,
+        );
       }
     }
   }
@@ -154,8 +204,12 @@ function run() {
     process.exitCode = 1;
     return;
   }
-  const npmVersions = PUBLISHED_PACKAGES.map((name) => readJson(process.cwd(), `packages/${name}/package.json`).version);
-  console.log(`release coherence ok: ${new Set(npmVersions).size} npm versions, Rust ${workspaceVersion(readFileSync(resolve('Cargo.toml'), 'utf8'))}`);
+  const npmVersions = PUBLISHED_PACKAGES.map(
+    (name) => readJson(process.cwd(), `packages/${name}/package.json`).version,
+  );
+  console.log(
+    `release coherence ok: ${new Set(npmVersions).size} npm versions, Rust ${workspaceVersion(readFileSync(resolve('Cargo.toml'), 'utf8'))}`,
+  );
 }
 
 if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) run();
