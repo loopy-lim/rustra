@@ -14,11 +14,18 @@ export function readDevConfig(configPath: string) {
     throw new Error('codegen.rust_manifest_missing: set codegen.rustManifest in rustra.json');
   }
   // dev 섹션을 **해석된** 형태로 노출한다 — reload 오케스트레이션(parity 게이트)이
-  // `!== false` 재판정 없이 곧장 읽을 수 있게 wasm.parityGate 기본값(true)을 채운다.
+  // 재판정 없이 곧장 읽을 수 있게 기본값을 채운다. 대상별 정규화: target=wasm 이면
+  // wasm 섹션 자체가 없어도 `parityGate: true` 를 채운다(게이트 기본 on — 섹션
+  // 생략이 게이트 무음 스킵으로 이어지는 fail-open 을 막는다). wasm 섹션이 있으면
+  // parityGate 기본값(true)만 채운다.
   const dev = config.dev;
   const wasm = dev?.wasm;
   const resolved =
-    wasm === undefined ? undefined : { ...wasm, parityGate: wasm.parityGate ?? true };
+    wasm === undefined
+      ? dev?.target === 'wasm'
+        ? { parityGate: true }
+        : undefined
+      : { ...wasm, parityGate: wasm.parityGate ?? true };
   return {
     root,
     schemaPath: resolve(root, config.schema),
