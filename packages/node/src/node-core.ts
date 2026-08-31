@@ -117,4 +117,14 @@ export type NodeBootstrapOptions = {
   spawnOptions?: Parameters<typeof spawn>[2];
   contractHash?: string;
 };
-export type NodeBootstrap = { ready(): Promise<EngineClientWithBatch>; dispose(): void };
+export type NodeBootstrap = {
+  ready(): Promise<EngineClientWithBatch>;
+  dispose(): void;
+  /**
+   * Dev-loop reload hook target (Task A1): drains in-flight invocations when the
+   * transport supports it, disposes the current child, re-spawns and re-readies
+   * over the same runtime resolution. A rebuilt binary is picked up because the
+   * image is read at spawn time.
+   */
+  reload(): Promise<void>;
+};
