@@ -89,11 +89,35 @@ test('runDev suppresses the reload hook when regeneration fails', async () => {
   }
 });
 
-test('runDev does not fire the reload hook when the tree is clean (nothing to do)', async () => {
+test('createWatchLoop does not fire reload hooks when shouldRun skips the perform', async () => {
+  // 민감도 계약: reload 는 perform 이 실제 실행된 뒤에만 방출된다. 비강제 run 이
+  // shouldRun=false 로 perform 을 건너뛰면 reload 도 없어야 한다 — emitReload 가
+  // 게이트 밖으로 나가는 회귀를 이 대조 구조가 잡는다(sabotage 검증됨).
+  let dirty = false;
+  const loop = createWatchLoop(
+    async () => {},
+    () => dirty,
+    0,
+  );
+  const reloads: string[] = [];
+  loop.onReload((reason) => void reloads.push(reason));
+  await loop.run('clean check'); // 비강제 — shouldRun=false → perform 스킵.
+  assert.deepEqual(reloads, [], 'skipped perform must not emit reload');
+  // 대조: 같은 루프에서 shouldRun 이 참이 되면 정확히 한 번 방출된다.
+  dirty = true;
+  await loop.run('dirty check');
+  assert.deepEqual(reloads, ['dirty check'], 'performed run emits exactly one reload');
+  loop.dispose();
+});
+
+test('runDev logs "clean — nothing to do" and skips codegen on an up-to-date tree', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'rustra-dev-clean-'));
   try {
     // 완전한 clean 플랜을 시드한다: rust 소스는 schema 보다 과거, codecs 는 schema
     // 보다 새로 — perform 이 '[dev] clean — nothing to do' 로 조기 반환하는 경로.
+    // (runDev 수준에서 reload 를 관찰할 수 없는 이유: onReload 는 initial 강제 run
+    // 이 끝난 뒤에 등록되고 이후 run 이 결정적으로 발생하지 않는다. reload 방출
+    // 게이트의 민감한 검증은 위 createWatchLoop 단위 테스트가 담당한다.)
     const backend = join(dir, 'backend');
     const app = join(dir, 'app');
     mkdirSync(join(backend, 'src'), { recursive: true });
@@ -114,16 +138,16 @@ test('runDev does not fire the reload hook when the tree is clean (nothing to do
       new Date('2026-08-16T12:00:10Z'),
     );
     process.env.RUSTRA_CLI = process.execPath;
-    const reloads: string[] = [];
     const logs: string[] = [];
     const originalLog = console.log;
     console.log = (line: unknown) => logs.push(String(line));
     try {
       const handle = await runDev(['--backend', backend, '--app', app]);
-      handle.onReload((reason) => void reloads.push(reason));
-      await new Promise<void>((resolve) => setTimeout(resolve, 10));
       assert.ok(logs.some((line) => line.includes('[dev] clean — nothing to do')));
-      assert.deepEqual(reloads, [], 'clean run must not emit reload');
+      assert.ok(
+        !logs.some((line) => line.includes('regenerated')),
+        'clean tree must not run codegen',
+      );
       handle.dispose();
     } finally {
       console.log = originalLog;
