@@ -108,10 +108,14 @@ Task A1(dev 루프 reload 오케스트레이션, 2026-08-31)은 A0 판정에 따
 빌드를 오케스트레이션한다. A0 스파이크의 실제 명령과 산출물 레이아웃을 그대로
 쓴다(`cargo build --manifest-path <Cargo.toml> --target
 wasm32-unknown-unknown --release` →
-`<target>/wasm32-unknown-unknown/release/<crate_name>.wasm`; cdylib 타깃,
-릴리스 프로필은 A0 검증 구성 — opt-level "s", panic=abort). 엔진 crate 해석은
-RN 어댑터와 동일한 우선순위(`reactNative.rustManifest`/`rustPackage` →
-`codegen.*` → 상위 탐색)를 따르고, 빌드된 아티팩트 경로를 안내한다
+`<target>/wasm32-unknown-unknown/release/<lib 타깃 이름>.wasm` — cargo 는 cdylib
+산출물 이름을 패키지 이름이 아니라 **lib 타깃** 이름(`-`→`_`)에서 가져온다. RN의
+`lib${rustLibrary}.a` 관례와 같은 `[lib] name` 근원이다; cdylib 타깃, 릴리스
+프로필은 A0 검증 구성 — opt-level "s", panic=abort). 엔진 crate 해석은 RN
+어댑터와 동일한 우선순위(`reactNative.rustManifest`/`rustPackage` →
+`codegen.*`)를 따르되, 코드젠 매니페스트 폴백이 어댑터의 상위 탐색 단계를
+대신한다 — 이미 존재가 보장된 값이라 해석 실패는 cargo metadata 단계에서
+loud 하게 실패한다. 빌드된 아티팩트 경로를 안내한다
 (`[dev:wasm] engine artifact: <path>`). 그 파일을 기기로 푸시하는 것은 호스트
 통합점이다(adb push / Documents 드롭 — A0 앱의 흐름) — CLI 가 자동화하지
 않기로 명시적으로 결정했다. wasm 빌드 실패는 parity 게이트와 reload 방출보다

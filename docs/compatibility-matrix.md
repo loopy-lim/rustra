@@ -101,16 +101,20 @@ With `dev.target = "wasm"`, `rustra dev` (config mode) now orchestrates the
 engine's wasm32 build after every codegen run: the A0 spike's exact command and
 artifact layout (`cargo build --manifest-path <Cargo.toml> --target
 wasm32-unknown-unknown --release` →
-`<target>/wasm32-unknown-unknown/release/<crate_name>.wasm`, cdylib target,
-release profile = the A0-verified opt-level "s"/panic=abort configuration). The
-engine crate is resolved the same way the RN adapter resolves it
-(`reactNative.rustManifest`/`rustPackage` → `codegen.*` → upward search), and
-the built artifact path is announced (`[dev:wasm] engine artifact: <path>`).
-Pushing that file to a device is a host integration point (adb push / Documents
-drop — the A0 app flows), deliberately not automated by the CLI. A failed wasm
-build propagates before the parity gate and reload emission — the host never
-receives a reload signal for an engine that does not exist. The A2 parity gate
-composes unchanged.
+`<target>/wasm32-unknown-unknown/release/<lib_target_name>.wasm` — cargo derives
+the cdylib artifact name from the **lib target** name (`-`→`_`), not the package
+name; the same `[lib] name` source as the RN `lib${rustLibrary}.a` convention;
+cdylib target, release profile = the A0-verified opt-level
+"s"/panic=abort configuration). The engine crate is resolved with the RN
+adapter's priority (`reactNative.rustManifest`/`rustPackage` →
+`codegen.*`), where the codegen-manifest fallback replaces the adapter's upward
+search step — already validated to exist, so a bad resolution fails loudly at
+the `cargo metadata` stage. The built artifact path is announced
+(`[dev:wasm] engine artifact: <path>`). Pushing that file to a device is a host
+integration point (adb push / Documents drop — the A0 app flows), deliberately
+not automated by the CLI. A failed wasm build propagates before the parity gate
+and reload emission — the host never receives a reload signal for an engine
+that does not exist. The A2 parity gate composes unchanged.
 
 Two doctor checks accompany the target: a non-failing warning that the wasm dev
 target is experimental — **cooperative cancellation only; verify natively before
