@@ -37,3 +37,25 @@ A matrix of the invoke features (signal/cancellation, batch, events) each adapte
 
 - Per-adapter stable scope and gates: [compatibility-contract.md](compatibility-contract.md)
 - Cancellation propagation design: `docs/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
+
+## Spike: wasm32 engine in wasm3 (React Native) — VERDICT: PASS (spike)
+
+Task A0 spike (`examples/rn-wasm-spike/`, 2026-08-31) proved a rustra engine
+compiled to `wasm32-unknown-unknown` runs inside a wasm3 interpreter embedded
+in a React Native app, as a THIRD execution mode alongside the JSON adapter and
+rkyv V2 JSI:
+
+| Aspect                         | Result                                                                                                                                                                                                                                                                                   |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Platforms proven               | ✅ iOS simulator (iPhone 17) AND Android emulator (API 36 arm64) — real `.wasm`, real wasm3 v0.9.1, real RN 0.81.5 app                                                                                                                                                                   |
+| wasm vs native byte-equality   | ✅ postcard responses byte-identical to the native staticlib engine on both commands, both platforms (`double(21)` → `01010c7b2276616c7565223a34327d00`)                                                                                                                                 |
+| In-app engine swap, no restart | ✅ `engine_v1.wasm` → `engine_v2.wasm` re-instantiated mid-process (iOS via Documents push, Android via `adb push` + filesDir — like an OTA drop): engineVersion 2→3, **contract hash unchanged** (`e79b7f01…`), `double(21)` behavior 42→63 in-wasm while the native baseline stayed 42 |
+| Contract stability across swap | ✅ hash identical across engines and across native/wasm — the frozen-contract invariant holds on device                                                                                                                                                                                  |
+| Performance red flags          | ✅ none — instantiate 1–4 ms; per-call wasm 0.1–20 ms vs native 0.03–0.05 ms (gates: >100x native per-call, >10 s instantiate)                                                                                                                                                           |
+| Core patches required          | ✅ NONE — sync FFI entries only; the async worker pool is never initialized on wasm (see `examples/rn-wasm-spike/NOTES.md`)                                                                                                                                                              |
+
+Scope caveats: sync commands only (the async worker pool would panic on
+wasm32 without atomics), staging protocol uses spike-local
+`spike_alloc`/`spike_unstage` exports, and the evidence was captured on
+emulators/simulator — not yet on physical devices. Full hex transcripts:
+`examples/rn-wasm-spike/evidence/{ios,android}.md`.
