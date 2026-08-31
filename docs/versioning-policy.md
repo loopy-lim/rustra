@@ -56,9 +56,11 @@ Marking is explicit: a doc comment containing "experimental" plus an entry in
 the table below. An item leaves this table only by entering the guarantees
 above; any later change then follows the deprecation procedure.
 
-| Item                    | Status                 | Notes                                                                              |
-| ----------------------- | ---------------------- | ---------------------------------------------------------------------------------- |
-| `rustra_ffi_hot_reload` | Planned / experimental | Does not exist as of this writing. Listed here so its contract lands as breakable. |
+| Item                          | Status                 | Notes                                                                                      |
+| ----------------------------- | ---------------------- | ------------------------------------------------------------------------------------------ |
+| `rustra_ffi_hot_reload`       | Planned / experimental | Does not exist as of this writing. Listed here so its contract lands as breakable.         |
+| `rustra_ffi_capture_snapshot` | Experimental           | B1 inspector dump. Snapshot blob shape (fields, JSON layout) may change without notice.    |
+| `@rustra/types` inspector     | Experimental           | `DumpedWire` type plus `parseSnapshot`/`serializeSnapshot` mirror the blob contract above. |
 
 ## MSRV policy
 

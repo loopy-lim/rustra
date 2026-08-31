@@ -22,6 +22,7 @@ include!("ffi_typed_entries.rs");
 include!("ffi_typed_buffer.rs");
 include!("ffi_typed_async.rs");
 include!("ffi_schema_entries.rs");
+include!("ffi_snapshot.rs");
 include!("ffi_event_core.rs");
 include!("ffi_event_entries.rs");
 include!("ffi_channel.rs");
