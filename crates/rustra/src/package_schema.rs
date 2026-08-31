@@ -111,41 +111,8 @@ impl Package {
         let commands = state
             .commands
             .iter()
-            .map(|(name, command)| {
-                let mut input_schema = (*command.input_schema).clone();
-                let mut output_schema = (*command.output_schema).clone();
-                let mut definitions = (*command.definitions).clone();
-                annotate_variant_order(&mut input_schema);
-                annotate_variant_order(&mut output_schema);
-                annotate_variant_order(&mut definitions);
-                let mut entry = json!({
-                    "name": name,
-                    "commandId": command.command_id,
-                    "inputType": command.input_type,
-                    "outputType": command.output_type,
-                    "inputSchema": input_schema,
-                    "outputSchema": output_schema,
-                });
-                if let Some(description) = &command.description {
-                    entry
-                        .as_object_mut()
-                        .expect("command schema is an object")
-                        .insert("description".into(), Value::String(description.clone()));
-                }
-                // Include definitions if non-empty (for $ref resolution)
-                #[allow(clippy::collapsible_if)]
-                if let Value::Object(defs) = &definitions {
-                    if !defs.is_empty() {
-                        entry
-                            .as_object_mut()
-                            .unwrap()
-                            .insert("definitions".into(), definitions);
-                    }
-                }
-                entry
-            })
+            .map(|(name, command)| command_schema_entry(name, command))
             .collect::<Vec<_>>();
-
         // (이벤트 계약) 선언된 이벤트가 있을 때만 events 섹션을 만든다 — 없으면
         // 기존 schema.json 형태와 바이트 단위로 동일(하위호환).
         let mut root = json!({
@@ -171,4 +138,50 @@ impl Package {
         }
         root
     }
+}
+
+/// 스키마의 명령 한 항목 — `Package::schema` 와 핫 리로드 와이어 서명
+/// (`command_wire_signature`)이 함께 쓰는 단일 소스. 여기가 갈라지면 계약
+/// 해시와 서명이 어긋나므로 항목 형태 변경은 이 함수 하나에서만.
+pub(crate) fn command_schema_entry(name: &str, command: &Command) -> Value {
+    let mut input_schema = (*command.input_schema).clone();
+    let mut output_schema = (*command.output_schema).clone();
+    let mut definitions = (*command.definitions).clone();
+    annotate_variant_order(&mut input_schema);
+    annotate_variant_order(&mut output_schema);
+    annotate_variant_order(&mut definitions);
+    let mut entry = json!({
+        "name": name,
+        "commandId": command.command_id,
+        "inputType": command.input_type,
+        "outputType": command.output_type,
+        "inputSchema": input_schema,
+        "outputSchema": output_schema,
+    });
+    if let Some(description) = &command.description {
+        entry
+            .as_object_mut()
+            .expect("command schema is an object")
+            .insert("description".into(), Value::String(description.clone()));
+    }
+    // Include definitions if non-empty (for $ref resolution)
+    #[allow(clippy::collapsible_if)]
+    if let Value::Object(defs) = &definitions {
+        if !defs.is_empty() {
+            entry
+                .as_object_mut()
+                .unwrap()
+                .insert("definitions".into(), definitions);
+        }
+    }
+    entry
+}
+
+/// 명령의 와이어 서명 — 스키마 항목 JSON(`command_schema_entry`) 원본 바이트의
+/// SHA-256 hex. 계약 해시(`contract_hash`)와 같은 해시 함수를 쓰고 항목 빌더를
+/// 공유하므로 두 값이 갈라질 수 없다. 핫 리로드 주입(`rustra_ffi_hot_reload`)
+/// 이 "같은 와이어 계약의 핸들러인가"를 판정하는 단일 소스.
+pub(crate) fn command_wire_signature(name: &str, command: &Command) -> String {
+    let entry = command_schema_entry(name, command);
+    contract_hash(serde_json::to_vec(&entry).expect("schema entry serializes"))
 }

@@ -146,6 +146,7 @@ pub(crate) use command::{
 };
 pub(crate) use package::{FrozenRegistry, RegistryState};
 pub use package::{GeneratedPackage, Package, PackageBuilder};
+pub(crate) use package_codegen::command_wire_signature;
 
 pub(crate) use schemars::JsonSchema;
 pub(crate) use serde::{Serialize, de::DeserializeOwned};
