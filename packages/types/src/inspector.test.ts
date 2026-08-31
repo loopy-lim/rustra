@@ -1,12 +1,19 @@
 // B1 인스펙터 스냅샷 파서 테스트.
 // 저장소 표준(node:test + node:assert/strict, ESM) 사용 — 새 의존성 없음.
 //
-// golden PINNED hex 는 UTF-8 JSON 바이트를 손으로 고정한 것이다:
-// 스냅샷 blob 은 serde_json 이 만드는 UTF-8 JSON(rustra_ffi_capture_snapshot)
-// 이고, hex 는 아래 GOLDEN_SNAPSHOT 객체를 JSON.stringify 로 직렬화한 바이트와
-// 1:1 이다(키 순서·공백 없음까지 고정). 코덱 와이어가 아니므로 postcard 핀은
-// 없고, B2 wire 뷰어(rustra inspect)가 와이어 프레임 조립을 담당한다.
+// golden hex 의 정준 소스는 **실제 Rust 캡처**다:
+// crates/rustra/tests/fixtures/inspector-golden.hex.txt (committed 단일
+// 아티팩트) — 갱신은 RUSTRA_UPDATE_GOLDEN=1 cargo test -p rustra
+// --test inspector_golden. Rust 측 테스트(inspector_golden.rs)가 같은
+// 파일로 자기 캡처를 대조하므로, 한쪽 blob 필드가 드리프트하면 양쪽
+// 언어에서 동시에 실패한다.
+//
+// GOLDEN_DOC/HEX 아래의 인라인 상수는 serializeSnapshot의 바이트 계약
+// (canonical JSON, 키 순서 고정)을 검증하는 보조 fixture 이다 — 교차 언어
+// 링크는 위 fixture 파일 하나뿐이다.
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { parseSnapshot, RustraCommandError, serializeSnapshot } from './index.js';
@@ -22,8 +29,54 @@ function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** golden hex 의 원본 문서 — hex 와 1:1 대응(키 순서 포함). */
-const GOLDEN_SNAPSHOT = {
+/**
+ * Rust↔TS 단일 아티팩트 — crates/rustra/tests/fixtures/inspector-golden.hex.txt.
+ * 이 파일이 사라지면(드문 리포 구조 변경) 테스트가 실패한다 — 조용히 건너뛰지
+ * 않는다(loud).
+ */
+function loadGoldenHex(): string {
+  const path = join(
+    import.meta.dir,
+    '../../../crates/rustra/tests/fixtures/inspector-golden.hex.txt',
+  );
+  const text = readFileSync(path, 'utf8');
+  const hex = text
+    .split('\n')
+    .filter((line) => !line.startsWith('#') && line.trim() !== '')
+    .join('')
+    .trim();
+  assert.match(hex, /^[0-9a-f]+$/, 'fixture must contain a single lowercase hex line');
+  return hex;
+}
+
+const GOLDEN_HEX = loadGoldenHex();
+
+// ── 1. 교차 언어 링크: 실제 Rust 캡처의 디코드 ────────────────
+
+test('RUST golden fixture (real capture) decodes to the exact DumpedWire fields', () => {
+  const dumped = parseSnapshot(hexToBytes(GOLDEN_HEX));
+  assert.deepEqual(dumped, {
+    packageId: 'inspector.golden',
+    // contractHash 값 자체는 Rust 측 테스트(inspector_golden.rs)가 같은
+    // fixture 로 고정한다 — 여기선 형태(SHA-256 hex)만 검증한다.
+    contractHash: dumped.contractHash,
+    schemaGeneration: 0,
+    commands: [{ id: 1, name: 'sum', capability: null }],
+    limits: { maxPayloadBytes: 1048576 },
+    stats: {
+      registeredCommands: 1,
+      grantedCapabilities: [],
+      pendingEvents: 0,
+      droppedEvents: 0,
+    },
+  } satisfies DumpedWire);
+  assert.match(dumped.contractHash ?? '', /^[0-9a-f]{64}$/, 'contractHash is SHA-256 hex');
+});
+
+// ── 2. serializeSnapshot 바이트 계약(보조, 손 고정 canonical JSON) ──
+
+/** serializeSnapshot canonical-JSON 계약용 보조 문서 — golden fixture 와 무관하다. */
+const DOC = {
   packageId: 'test.calculator',
   contractHash: '9f2c0a5e5d4b3a29187f6e5d4c3b2a190807060504030201fffe0d0c0b0a0908',
   schemaGeneration: 7,
@@ -40,9 +93,8 @@ const GOLDEN_SNAPSHOT = {
   },
 } as const;
 
-// GOLDEN_SNAPSHOT 의 JSON 직렬화 바이트 — 위 객체에서 파생하지 않고 독립 고정.
-// 이 hex 가 바뀌면 골든 계약(파서가 읽는 바이트 모양)이 바뀐 것이다.
-const GOLDEN_HEX =
+/** DOC 의 JSON 직렬화 바이트 — 위 객체와 독립적으로 손으로 고정한 hex. */
+const DOC_HEX =
   '7b227061636b6167654964223a22746573742e63616c63756c61746f72222c22636f6e747261637448617368223a' +
   '22396632633061356535643462336132393138376636653564346333623261313930383037303630353034303330' +
   '32303166666665306430633062306130393038222c22736368656d6147656e65726174696f6e223a372c22636f6d' +
@@ -53,37 +105,17 @@ const GOLDEN_HEX =
   '61706162696c6974696573223a5b2261646d696e225d2c2270656e64696e674576656e7473223a302c2264726f70' +
   '7065644576656e7473223a337d7d';
 
-test('golden PINNED hex decodes to the exact DumpedWire fields', () => {
-  const dumped = parseSnapshot(hexToBytes(GOLDEN_HEX));
-  assert.deepEqual(dumped, {
-    packageId: 'test.calculator',
-    contractHash: GOLDEN_SNAPSHOT.contractHash,
-    schemaGeneration: 7,
-    commands: [
-      { id: 1, name: 'addNumbers', capability: null },
-      { id: 2, name: 'adminReset', capability: 'admin' },
-    ],
-    limits: { maxPayloadBytes: 1048576 },
-    stats: {
-      registeredCommands: 2,
-      grantedCapabilities: ['admin'],
-      pendingEvents: 0,
-      droppedEvents: 3,
-    },
-  } satisfies DumpedWire);
-});
-
-test('golden hex equals the canonical serialization of its document (byte contract)', () => {
-  // serializeSnapshot(golden 문서)이 PINNED hex 와 동일 — 파서와 직렬화기가
-  // 같은 표준 형태(canonical JSON, 키 순서 고정)를 공유함을 바이트로 고정.
-  const roundTrip = serializeSnapshot(parseSnapshot(hexToBytes(GOLDEN_HEX)));
-  assert.equal(bytesToHex(roundTrip), GOLDEN_HEX);
+test('serializeSnapshot reproduces the pinned canonical-JSON byte contract', () => {
+  const roundTrip = serializeSnapshot(parseSnapshot(hexToBytes(DOC_HEX)));
+  assert.equal(bytesToHex(roundTrip), DOC_HEX);
 });
 
 test('string input decodes identically to bytes', () => {
-  const fromString = parseSnapshot(JSON.stringify(GOLDEN_SNAPSHOT));
-  assert.deepEqual(fromString, parseSnapshot(hexToBytes(GOLDEN_HEX)));
+  const doc = parseSnapshot(hexToBytes(DOC_HEX));
+  assert.deepEqual(doc, parseSnapshot(JSON.stringify(DOC)));
 });
+
+// ── 3. degenerate 스냅샷(미등록 패키지) ──────────────────────
 
 test('unregistered degenerate snapshot (null contract) is a valid DumpedWire', () => {
   const degenerate = {
@@ -105,6 +137,8 @@ test('unregistered degenerate snapshot (null contract) is a valid DumpedWire', (
   assert.equal(dumped.schemaGeneration, null);
   assert.deepEqual(dumped.commands, []);
 });
+
+// ── 4. loud 실패 계약 ───────────────────────────────────────
 
 test('truncated JSON fails loudly with position or engine message context', () => {
   const full = hexToBytes(GOLDEN_HEX);
@@ -187,6 +221,49 @@ test('command id out of u16 range fails', () => {
   );
 });
 
+// ── 5. 카운터/한도 수치 검증 — 음수·소수·비안전 정수는 모두 loud ──
+
+function expectCounterError(fn: () => unknown, expectedMessage: string): void {
+  assert.throws(fn, (error: unknown) => {
+    assert.ok(error instanceof RustraCommandError);
+    assert.equal(error.code, 'inspector.unexpected_shape');
+    assert.equal(error.message, expectedMessage);
+    return true;
+  });
+}
+
+const COUNTER_BASE =
+  '{"packageId":null,"contractHash":null,"schemaGeneration":0,"commands":[],"limits":{"maxPayloadBytes":1048576},"stats":{"registeredCommands":0,"grantedCapabilities":[],"pendingEvents":0,"droppedEvents":0}}';
+
+test('negative limit and fractional counters fail with field-path context', () => {
+  expectCounterError(
+    () => parseSnapshot(COUNTER_BASE.replace('"maxPayloadBytes":1048576', '"maxPayloadBytes":-1')),
+    "snapshot 'limits.maxPayloadBytes' must be a non-negative safe integer, got -1",
+  );
+  expectCounterError(
+    () => parseSnapshot(COUNTER_BASE.replace('"pendingEvents":0', '"pendingEvents":2.5')),
+    "snapshot 'stats.pendingEvents' must be a non-negative safe integer, got 2.5",
+  );
+});
+
+test('negative generation, negative counters, and non-safe integers fail loudly', () => {
+  expectCounterError(
+    () => parseSnapshot(COUNTER_BASE.replace('"schemaGeneration":0', '"schemaGeneration":-3')),
+    "snapshot 'schemaGeneration' must be a non-negative safe integer, got -3",
+  );
+  expectCounterError(
+    () => parseSnapshot(COUNTER_BASE.replace('"droppedEvents":0', '"droppedEvents":-1')),
+    "snapshot 'stats.droppedEvents' must be a non-negative safe integer, got -1",
+  );
+  expectCounterError(
+    () =>
+      parseSnapshot(
+        COUNTER_BASE.replace('"registeredCommands":0', '"registeredCommands":9007199254740992'),
+      ),
+    "snapshot 'stats.registeredCommands' must be a non-negative safe integer, got 9007199254740992",
+  );
+});
+
 test('registeredCommands/commands.length divergence is rejected', () => {
   assert.throws(
     () =>
@@ -221,6 +298,3 @@ test('non-string contractHash and non-number limits fail with field paths', () =
     /'limits.maxPayloadBytes' must be a finite number, got string/,
   );
 });
-
-// 타입 표면 — DumpedWire 는 타입으로만 노출된다(값 표면은 parseSnapshot/
-// serializeSnapshot 두 함수뿐). satisfies 로 타입 정합을 컴파일 타임에 검증했다.

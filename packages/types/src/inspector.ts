@@ -5,17 +5,23 @@
  * # experimental
  *
  * 이 모듈과 `DumpedWire` 형태는 **experimental** 이다
- * (docs/versioning-policy.md 실험 표면 표 참조) — 필드 추가는 하위호환으로
- * 취급되지만, 형태 변경은 예고 없이 깨질 수 있다.
+ * (docs/versioning-policy.md 실험 표면 표 참조) — 형태 변경은 깨지는
+ * 변경이지만, 필드 **추가**는 하위호환으로 취급한다(기존 필드
+ * 삭제/이름 변경/타입 변경은 breaking).
  *
  * 스냅샷 blob 은 JSON(UTF-8)이므로 "디코더"는 엄격한 JSON 검증으로 귀결된다:
  * 잘린 바이트·깨진 UTF-8·모양이 다른 문서를 조용히 받아들이지 않고, 위치와
  * 기대값을 밝히는 에러로 크게 실패한다(loud). 와이어 프레임(postcard)이
  * 스냅샷 자체에 포함되지는 않으므로 복잡 코덱 디코더의 재사용은 불필요하고,
  * 필요하면 B2 wire 뷰어(`rustra inspect`)가 그쪽 조립을 담당한다.
+ *
+ * 정준 골든 바이트는 실제 Rust 캡처에서 나온다:
+ * `crates/rustra/tests/fixtures/inspector-golden.hex.txt` — 이 테스트가
+ * 소비하는 단일 아티팩트(갱신 절차는 fixture 헤더와
+ * crates/rustra/tests/inspector_golden.rs 참조).
  */
 
-import { RustraCommandError } from './errors.js';
+import { RustraCommandError, RustraErrorCode } from './errors.js';
 import { decodeUtf8, encodeUtf8 } from './utf8.js';
 
 /** `DumpedWire.limits` — 현재는 페이로드 크기 한도 하나다(존재하는 개념만 노출). */
@@ -68,11 +74,11 @@ export type DumpedWire = {
   stats: DumpedWireStats;
 };
 
-/** 검증 에러의 위치 정보 — 모양 불일치는 JSON 포인터 경로로 밝힌다. */
+/** 모양 불일치는 JSON 포인터 경로로 밝힌다(loud 계약). */
 function unexpectedShape(path: string, expected: string, actual: unknown): never {
   const shown = actual === null ? 'null' : Array.isArray(actual) ? 'array' : typeof actual;
   throw new RustraCommandError(
-    'inspector.unexpected_shape',
+    RustraErrorCode.InspectorUnexpectedShape,
     `snapshot '${path}' must be ${expected}, got ${shown}`,
   );
 }
@@ -82,9 +88,20 @@ function expectString(path: string, value: unknown): string {
   return value;
 }
 
-function expectFiniteNumber(path: string, value: unknown): number {
+/**
+ * 카운터/한도/세대 필드용 — 안전 정수 범위이면서 음수가 아닌 값만 통과한다.
+ * 스냅샷의 수치는 전부 Rust 부호 없는 정수(u16/u64/usize)이므로 음수·소수는
+ * 문서 손상 신호다.
+ */
+function expectCounter(path: string, value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     unexpectedShape(path, 'a finite number', value);
+  }
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new RustraCommandError(
+      RustraErrorCode.InspectorUnexpectedShape,
+      `snapshot '${path}' must be a non-negative safe integer, got ${value}`,
+    );
   }
   return value;
 }
@@ -107,7 +124,8 @@ function expectObject(path: string, value: unknown): Record<string, unknown> {
  * 잘린 JSON, 깨진 UTF-8, 모양이 다른 문서(필수 필드 누락/타입 불일치)는
  * `inspector.invalid_snapshot` / `inspector.unexpected_shape` 코드의
  * [`RustraCommandError`] 로 크게 실패한다 — 덤프 도구가 조용히 빈 스냅샷을
- * 렌더하는 것을 막기 위한 계약이다.
+ * 렌더하는 것을 막기 위한 계약이다. 카운터·한도·세대 필드는 안전 정수이면서
+ * 음수가 아니어야 하고, `commands[].id` 는 추가로 u16 범위여야 한다.
  */
 export function parseSnapshot(input: Uint8Array | string): DumpedWire {
   // decodeUtf8 은 throw 하지 않고 U+FFFD 로 대체하므로(Hermes-safe 관례) 깨진
@@ -122,7 +140,7 @@ export function parseSnapshot(input: Uint8Array | string): DumpedWire {
     // 전달된다. 어느 쪽이든 조용히 통과하지는 않는다(loud 계약).
     const position = /position (\d+)/.exec(error instanceof Error ? error.message : '');
     throw new RustraCommandError(
-      'inspector.invalid_snapshot',
+      RustraErrorCode.InspectorInvalidSnapshot,
       `invalid snapshot: truncated or malformed JSON${
         position
           ? ` at byte ${position[1]}`
@@ -140,10 +158,10 @@ function validateDocument(raw: Record<string, unknown>): DumpedWire {
   const commandsRaw = expectArray('commands', raw.commands);
   const commands: DumpedWireCommand[] = commandsRaw.map((item, index) => {
     const command = expectObject(`commands[${index}]`, item);
-    const id = expectFiniteNumber(`commands[${index}].id`, command.id);
-    if (!Number.isInteger(id) || id < 0 || id > 0xffff) {
+    const id = expectCounter(`commands[${index}].id`, command.id);
+    if (id > 0xffff) {
       throw new RustraCommandError(
-        'inspector.unexpected_shape',
+        RustraErrorCode.InspectorUnexpectedShape,
         `snapshot 'commands[${index}].id' must be a u16 integer, got ${id}`,
       );
     }
@@ -166,8 +184,9 @@ function validateDocument(raw: Record<string, unknown>): DumpedWire {
   if (generation !== null && typeof generation !== 'number') {
     unexpectedShape('schemaGeneration', 'a number or null', generation);
   }
-  if (typeof generation === 'number' && !Number.isFinite(generation)) {
-    unexpectedShape('schemaGeneration', 'a finite number', generation);
+  if (typeof generation === 'number') {
+    // 세대는 u64 — 부호 없는 안전 정수 범위만 통과한다.
+    expectCounter('schemaGeneration', generation);
   }
   const contractHash = raw.contractHash;
   if (contractHash !== null && typeof contractHash !== 'string') {
@@ -184,22 +203,22 @@ function validateDocument(raw: Record<string, unknown>): DumpedWire {
     schemaGeneration: generation,
     commands,
     limits: {
-      maxPayloadBytes: expectFiniteNumber('limits.maxPayloadBytes', limits.maxPayloadBytes),
+      maxPayloadBytes: expectCounter('limits.maxPayloadBytes', limits.maxPayloadBytes),
     },
     stats: {
-      registeredCommands: expectFiniteNumber('stats.registeredCommands', stats.registeredCommands),
+      registeredCommands: expectCounter('stats.registeredCommands', stats.registeredCommands),
       grantedCapabilities: granted.map((cap, index) =>
         expectString(`stats.grantedCapabilities[${index}]`, cap),
       ),
-      pendingEvents: expectFiniteNumber('stats.pendingEvents', stats.pendingEvents),
-      droppedEvents: expectFiniteNumber('stats.droppedEvents', stats.droppedEvents),
+      pendingEvents: expectCounter('stats.pendingEvents', stats.pendingEvents),
+      droppedEvents: expectCounter('stats.droppedEvents', stats.droppedEvents),
     },
   };
   // 정합 불변식 — 등록 명령 수는 명령 배열 길이와 항상 같다 (Rust 조립자의
   // 단일 read-lock 판독이 보장하는 것). 어긋나면 문서가 손상됐다는 뜻이다.
   if (dumped.stats.registeredCommands !== commands.length) {
     throw new RustraCommandError(
-      'inspector.unexpected_shape',
+      RustraErrorCode.InspectorUnexpectedShape,
       `snapshot 'stats.registeredCommands' (${dumped.stats.registeredCommands}) must equal 'commands.length' (${commands.length})`,
     );
   }
@@ -207,9 +226,10 @@ function validateDocument(raw: Record<string, unknown>): DumpedWire {
 }
 
 /**
- * [`parseSnapshot`] 의 역 — 스냅샷을 UTF-8 JSON 바이트로 직렬화한다. 테스트가
- * golden hex 를 만들 때와 호스트가 덤프 파일을 쓸 때 쓴다(에러 경로 없음 —
- * 스냅샷은 직렬화 가능한 값만 담는다).
+ * [`parseSnapshot`] 의 역 — 스냅샷을 UTF-8 JSON 바이트로 직렬화한다. 호스트가
+ * 덤프 파일을 쓸 때 쓴다(에러 경로 없음 — 스냅샷은 직렬화 가능한 값만 담는다).
+ * golden hex 의 정준 소스는 Rust 캡처 fixture 다(이 함수는 그 바이트 계약을
+ * 재현하는 보조 수단).
  */
 export function serializeSnapshot(snapshot: DumpedWire): Uint8Array {
   return encodeUtf8(JSON.stringify(snapshot));
