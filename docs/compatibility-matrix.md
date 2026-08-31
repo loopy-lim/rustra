@@ -94,3 +94,30 @@ True dlopen swap was evaluated and rejected:
   on every successful regeneration — the conservative default). Hook errors are
   logged (`[dev] reload failed: …`) and never kill the watch loop; the host
   callback owns draining its own in-flight invocations.
+
+## wasm dev target (Task A3): build orchestration, doctor notice, release guard
+
+With `dev.target = "wasm"`, `rustra dev` (config mode) now orchestrates the
+engine's wasm32 build after every codegen run: the A0 spike's exact command and
+artifact layout (`cargo build --manifest-path <Cargo.toml> --target
+wasm32-unknown-unknown --release` →
+`<target>/wasm32-unknown-unknown/release/<crate_name>.wasm`, cdylib target,
+release profile = the A0-verified opt-level "s"/panic=abort configuration). The
+engine crate is resolved the same way the RN adapter resolves it
+(`reactNative.rustManifest`/`rustPackage` → `codegen.*` → upward search), and
+the built artifact path is announced (`[dev:wasm] engine artifact: <path>`).
+Pushing that file to a device is a host integration point (adb push / Documents
+drop — the A0 app flows), deliberately not automated by the CLI. A failed wasm
+build propagates before the parity gate and reload emission — the host never
+receives a reload signal for an engine that does not exist. The A2 parity gate
+composes unchanged.
+
+Two doctor checks accompany the target: a non-failing warning that the wasm dev
+target is experimental — **cooperative cancellation only; verify natively before
+release** (concurrency bugs — races/cancellation/backpressure — cannot reproduce
+on single-threaded cooperative wasm32), and a required check that the
+`wasm32-unknown-unknown` rustup target is installed. The release-coherence
+script now fails if any published package's `files` would ship the wasm backend
+(`wasm3` sources, `wasm32*` artifacts, `wasm-backend` directories, `*.wasm`
+engines) — the backend is dev-only until it graduates through the versioning
+policy.
