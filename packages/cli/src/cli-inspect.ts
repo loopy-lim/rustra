@@ -18,6 +18,7 @@
  */
 
 import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { parseCliArgs } from './cli-arg-parser.js';
 import { parseSnapshot, type DumpedWire } from '@rustra/types';
 
@@ -115,16 +116,14 @@ export async function runInspect(args: string[]): Promise<void> {
     booleanFlags: ['help', 'h'],
     allowPositionals: true,
   });
-  if (parsed.flags.has('help') || parsed.flags.has('h')) {
-    console.log(
-      'Usage: rustra inspect <file>\n\nOptions:\n  --help, -h       Show this help message',
-    );
-    return;
-  }
+  // 내부 --help 분기는 조용히 돌아온다 — 사용자용 usage 는 cli-main 이
+  // cli-help.ts 텍스트로 출력한다(cli-diff/cli-init 의 무출력 내부 분기 관례).
+  if (parsed.flags.has('help') || parsed.flags.has('h')) return;
   const files = parsed.positionals;
   if (files.length !== 1)
     throw new Error('Provide one snapshot dump file. Usage: rustra inspect dump.hex');
-  const path = files[0]!;
+  // cli-diff 관례 — 사용자 경로를 resolve 해서 읽고, 에러 메시지도 절대 경로로 보인다.
+  const path = resolve(files[0]!);
   let raw: Uint8Array;
   try {
     raw = new Uint8Array(await readFile(path));
