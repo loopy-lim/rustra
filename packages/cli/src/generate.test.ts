@@ -33,6 +33,7 @@ import {
 } from './index.js';
 import type { PackageSchema } from './schema.js';
 import { parseCodegenArgs, parseGenerateArgs } from './cli-options.js';
+import { INIT_CONFIG_SCHEMA_PATH } from './init-template.js';
 
 const simpleSchema: PackageSchema = {
   packageId: 'test',
@@ -1646,17 +1647,13 @@ test('init scaffold has a real shared package and executable codegen bin', () =>
   assert.match(files.mainRs, /__rustra_contract/);
   assert.match(files.appTs, /generated\/node\.js/);
   assert.doesNotMatch(files.generateRs, /see src\/main\.rs/);
+  // 최소 템플릿 — $schema 참조 + schema/output + 감지된 호스트 섹션만.
+  // codegen/node 바이너리는 CLI 폴백 선택(selectCodegenBinary)이 scaffold 레이아웃에서 정답을 고른다.
   assert.deepEqual(JSON.parse(files.rustraJson), {
+    $schema: INIT_CONFIG_SCHEMA_PATH,
     schema: './generated/schema.json',
     output: './src/generated',
-    codegen: {
-      rustManifest: './Cargo.toml',
-      rustBinary: 'generate',
-    },
-    node: {
-      rustManifest: './Cargo.toml',
-      rustBinary: 'rustra-app',
-    },
+    node: {},
   });
   assert.match(files.packageJson, /"doctor": "rustra doctor --config rustra\.json"/);
   assert.match(files.packageJson, /"codegen": "rustra codegen --config rustra\.json"/);

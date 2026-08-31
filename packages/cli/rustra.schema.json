@@ -7,6 +7,11 @@
   "required": ["schema", "output"],
   "additionalProperties": false,
   "properties": {
+    "$schema": {
+      "description": "JSON Schema reference for editor validation. rustra init inserts ./node_modules/@rustra/cli/rustra.schema.json; keep it pointing at the schema shipped with @rustra/cli.",
+      "type": "string",
+      "minLength": 1
+    },
     "schema": {
       "description": "Path to the schema JSON produced by the Rust generate step.",
       "type": "string",
