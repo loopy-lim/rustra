@@ -133,6 +133,10 @@ fn snapshot_exposes_required_capability() {
 /// 동적 register/unregister 이후 스냅샷 세대와 명령 집합이 함께 움직인다.
 /// 전역 FFI_CONTEXT 선점 순서에 독립하도록 어셈블러를 이 패키지에 직접
 /// 호출해 결정적으로 검증한다.
+/// release 빌드는 build() 시점에 패키지가 동결되므로 mutation 검증은 debug 전용이다
+/// (runtime_registry_tests의 짝 convention). release 짝은 아래
+/// `snapshot_release_frozen_package_still_assembles`가 담당한다.
+#[cfg(debug_assertions)]
 #[test]
 fn snapshot_reflects_runtime_mutation() {
     let pkg = Package::builder("test.inspector.mutation")
@@ -190,4 +194,28 @@ fn snapshot_assembler_none_package_yields_null_contract() {
     assert_eq!(value["schemaGeneration"], serde_json::Value::Null);
     assert_eq!(value["commands"], serde_json::json!([]));
     assert_eq!(value["packageId"], serde_json::Value::Null);
+}
+
+/// release 프로파일 짝: 동결된 패키지라도 스냅샷 조립 자체는 정상 동작한다
+/// (읽기 전용 표면은 frozen 상태와 무관 — B1 계약의 하위 호환 절반).
+#[cfg(not(debug_assertions))]
+#[test]
+fn snapshot_release_frozen_package_still_assembles() {
+    let pkg = Package::builder("test.inspector.mutation")
+        .command("addNumbers", |args: serde_json::Value| {
+            let a = args["a"].as_i64().unwrap_or(0);
+            Ok::<_, crate::RustraError>(serde_json::json!(a))
+        })
+        .build();
+    let value = serde_json::to_value(super::assemble_snapshot(Some(&pkg))).unwrap();
+    assert!(value["contractHash"].is_string());
+    assert_eq!(value["schemaGeneration"].as_u64(), Some(0));
+    assert!(
+        value["commands"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|c| c["name"] == "addNumbers"),
+        "frozen package still exposes its build-time commands"
+    );
 }
