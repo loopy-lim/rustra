@@ -239,6 +239,107 @@ test('readDevConfig fills the parityGate default when target=wasm omits the wasm
   }
 });
 
+// ── devWasm 매니페스트·패키지 해석 (Task A3) — RN 어댑터와 동일 우선순위 ─────
+
+test('readDevConfig resolves devWasm from reactNative first, then codegen, then the codegen manifest', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'rustra-dev-wasm-resolve-'));
+  try {
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    writeFileSync(join(dir, 'Cargo.toml'), '[package]\nname = "x"\nversion = "0.1.0"\n');
+    mkdirSync(join(dir, 'engine'), { recursive: true });
+    writeFileSync(
+      join(dir, 'engine', 'Cargo.toml'),
+      '[package]\nname = "engine"\nversion = "0.1.0"\n',
+    );
+
+    // (1) 양쪽 rustManifest/rustPackage가 있으면 reactNative 가 이긴다 — wasm
+    // 엔진 crate는 RN 어댑터가 가리키는 crate이므로.
+    const bothPath = join(dir, 'both.json');
+    writeFileSync(
+      bothPath,
+      JSON.stringify({
+        schema: 'schema.json',
+        output: 'generated',
+        codegen: { rustManifest: './Cargo.toml', rustPackage: 'x' },
+        reactNative: {
+          moduleDir: 'modules',
+          rustManifest: './engine/Cargo.toml',
+          rustPackage: 'engine',
+        },
+        dev: { target: 'wasm' },
+      }),
+    );
+    const both = readDevConfig(bothPath);
+    assert.equal(
+      both.manifestPath,
+      join(dir, 'Cargo.toml'),
+      'codegen manifest stays the codegen target',
+    );
+    assert.equal(both.devWasm?.manifestPath, join(dir, 'engine', 'Cargo.toml'));
+    assert.equal(both.devWasm?.rustPackage, 'engine', 'reactNative.rustPackage wins too');
+
+    // (2) codegen 만 설정 시 codegen 이 사용된다.
+    const codegenOnlyPath = join(dir, 'codegen-only.json');
+    writeFileSync(
+      codegenOnlyPath,
+      JSON.stringify({
+        schema: 'schema.json',
+        output: 'generated',
+        codegen: { rustManifest: './Cargo.toml', rustPackage: 'x' },
+        reactNative: { moduleDir: 'modules' },
+        dev: { target: 'wasm' },
+      }),
+    );
+    const codegenOnly = readDevConfig(codegenOnlyPath);
+    assert.equal(codegenOnly.devWasm?.manifestPath, join(dir, 'Cargo.toml'));
+    assert.equal(codegenOnly.devWasm?.rustPackage, 'x');
+
+    // (3) 어디에도 없으면 코드젠 매니페스트(상위 탐색 결과)로 폴백한다.
+    const nonePath = join(dir, 'none.json');
+    writeFileSync(
+      nonePath,
+      JSON.stringify({
+        schema: 'schema.json',
+        output: 'generated',
+        reactNative: { moduleDir: 'modules' },
+        dev: { target: 'wasm' },
+      }),
+    );
+    const none = readDevConfig(nonePath);
+    assert.equal(none.devWasm?.manifestPath, none.manifestPath);
+    assert.equal(none.devWasm?.rustPackage, undefined);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('readDevConfig leaves devWasm undefined for the native target', () => {
+  // 절대 음성 — 네이티브 타깃에는 wasm 오케스트레이션 입력 자체가 없다.
+  const dir = mkdtempSync(join(tmpdir(), 'rustra-dev-wasm-native-'));
+  try {
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    writeFileSync(join(dir, 'Cargo.toml'), '[package]\nname = "x"\nversion = "0.1.0"\n');
+    const configPath = join(dir, 'rustra.json');
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        schema: 'schema.json',
+        output: 'generated',
+        reactNative: { moduleDir: 'modules', rustManifest: './Cargo.toml' },
+        dev: { target: 'native' },
+      }),
+    );
+    const config = readDevConfig(configPath);
+    assert.equal(
+      config.devWasm,
+      undefined,
+      'native target must not resolve a wasm engine manifest',
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('createWatchLoop parity orchestration rejects a drifted reload and keeps the old engine state', async () => {
   // parity gate 오케스트레이션 계약: reload 훅 안에서 gate.verify() 가 실패하면
   // reload 는 거부되고(로드), 루프는 살아남은다. 훅 에러 격리 계약(A1)과 동일한

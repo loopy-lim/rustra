@@ -19,8 +19,9 @@ import { runDev } from './dev.js';
 //   - `cargo run` → $FAKE_SCHEMA_FILE 을 generated/schema.json 으로 복사
 //     ("Rust schema generation" 단계의 역할)
 //   - `cargo build` → wasm32 엔진 빌드 대역(Task A3): $FAKE_WASM_LOG 에 인수를
-//     기록하고 target/wasm32-unknown-unknown/release/x.wasm 을 만든다.
-//     $FAKE_WASM_FAIL 이 설정되면 실패한다(reload 억제 계약 검증용).
+//     기록하고 target/wasm32-unknown-unknown/release/<lib 이름>.wasm 을 만든다.
+//     $FAKE_WASM_FAIL 이 설정되면 실패하고(reload 억제 계약 검증용),
+//     $FAKE_WASM_NO_ARTIFACT 가 설정되면 성공하지만 산출물을 만들지 않는다.
 // wasm dev-target은 reactNative 섹션을 요구하므로 RN 스캐폴드/의존성 경로도
 // 실제로 돈다 — moduleDir 을 프로젝트 src 밖으로 분리해 감시 루프가 생성물을
 // 소스 변경으로 오판하지 않게 한다.
@@ -53,7 +54,19 @@ function writeSchema(path: string, messageType: string): void {
   writeFileSync(path, JSON.stringify(schema));
 }
 
-function seedProject(root: string): string {
+/**
+ * fake cargo 의 메타데이터 대역 변형 — 엔진 crate(`x`)의 lib 타깃 이름·크레이트 타입.
+ *  - 기본 (`rustra_bridge`, staticlib+cdylib): codegen 의 RN staticlib 선택과 wasm
+ *    cdylib 선택이 모두 성공하는 정상형.
+ *  - `"staticlib"` 만: codegen 은 통과하지만 wasm 빌드가 cdylib 부재로 실패해야
+ *    하는 음성형 — exactly-one-cdylib 강제 계약 검증용.
+ *  - `"my_bridge"` + staticlib+cdylib: 커스텀 lib 이름형 — 산출물 이름이 패키지
+ *    이름(`x.wasm`)이 아니라 lib 타깃 이름(`my_bridge.wasm`)에서 와야 한다는
+ *    cargo 규약의 핀. 실제 cargo 는 `[lib] name` 으로 산출물 이름을 바꾼다.
+ */
+type EngineLibVariant = 'cdylib' | 'staticlib-only' | 'custom-name';
+
+function seedProject(root: string, engineLib: EngineLibVariant = 'cdylib'): string {
   const project = join(root, 'proj');
   mkdirSync(join(project, 'src'), { recursive: true });
   mkdirSync(join(project, 'generated'), { recursive: true });
@@ -74,6 +87,8 @@ function seedProject(root: string): string {
       dev: { target: 'wasm', wasm: { engine: 'wasm3' } },
     }),
   );
+  const libName = engineLib === 'custom-name' ? 'my_bridge' : 'rustra_bridge';
+  const crateTypes = engineLib === 'staticlib-only' ? '["staticlib"]' : '["staticlib","cdylib"]';
   const fakeCargo = [
     '#!/bin/bash',
     'if [ "$1" = "metadata" ]; then',
@@ -82,7 +97,7 @@ function seedProject(root: string): string {
     '  dir=$(dirname "$manifest")',
     '  printf \'{"target_directory":"%s/target","packages":[{"name":"x","manifest_path":"%s",',
     '"targets":[{"name":"generate","crate_types":["bin"],"kind":["bin"]},',
-    '{"name":"rustra_bridge","crate_types":["staticlib","cdylib"],"kind":["lib"]}]}]}\\n\' "$dir" "$manifest"',
+    `{"name":"${libName}","crate_types":${crateTypes},"kind":["lib"]}]}]}\\n\' "$dir" "$manifest"`,
     '  exit 0',
     'fi',
     'if [ "$1" = "run" ]; then',
@@ -104,7 +119,9 @@ function seedProject(root: string): string {
     '  done',
     '  dir=$(dirname "$manifest")',
     '  mkdir -p "$dir/target/$target/release"',
-    '  printf \'fake wasm engine\' > "$dir/target/$target/release/x.wasm"',
+    '  if [ -n "$FAKE_WASM_NO_ARTIFACT" ]; then exit 0; fi',
+    // cargo 규약: cdylib 산출물 이름은 lib 타깃 이름에서 온다([lib] name 반영).
+    `  printf 'fake wasm engine' > "$dir/target/$target/release/${libName}.wasm"`,
     '  exit 0',
     'fi',
     'echo "unexpected cargo invocation: $*" >&2',
@@ -289,7 +306,9 @@ test(
           errors.some(
             (line) =>
               line.includes('[dev:wasm] engine artifact:') &&
-              line.includes(join('target', 'wasm32-unknown-unknown', 'release', 'x.wasm')),
+              line.includes(
+                join('target', 'wasm32-unknown-unknown', 'release', 'rustra_bridge.wasm'),
+              ),
           ),
           `the artifact path must be announced for the host push step, got:\n${errors.join('\n')}`,
         );
@@ -367,6 +386,153 @@ test(
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
         delete process.env.FAKE_WASM_FAIL;
+      }
+    } finally {
+      process.env.PATH = originalPath;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'runConfigDev wasm target fails loudly when the engine crate has no cdylib target',
+  { timeout: 30_000 },
+  async () => {
+    // exactly-one-cdylib 강제 계약 — 엔진 crate에 cdylib 가 없으면 wasm32 산출물은
+    // 애초에 나오지 않는다. codegen(RN staticlib 선택)은 통과하는 상태에서 wasm
+    // 빌드 단계만 실패해야 하고, 에러는 cdylib 원인과 수정 힌트를 함께 말해야 한다
+    // (조용한 스킵/무음 재시도 없음). reload 는 물론 방출되지 않는다.
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-wasm-nocdylib-'));
+    const originalPath = process.env.PATH;
+    try {
+      const project = seedProject(root, 'staticlib-only');
+      writeSchema(join(project, 'generated', 'schema.json'), 'string');
+      writeSchema(join(root, 'schema-string.json'), 'string');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+
+      const errors: string[] = [];
+      const restore = captureConsole(errors);
+      try {
+        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        const reloads: string[] = [];
+        handle.onReload((reason) => void reloads.push(reason));
+        await sleep(300);
+        handle.dispose();
+        const failure = errors.find((line) => line.includes('[dev] regeneration failed'));
+        assert.ok(failure, `the missing-cdylib case must be loud, got:\n${errors.join('\n')}`);
+        assert.match(failure, /cdylib/, 'the error must name cdylib as the cause');
+        assert.match(
+          failure,
+          /crate-type/,
+          'the error must include the fix hint (Add crate-type = ["rlib", "cdylib"])',
+        );
+        assert.ok(
+          !errors.some((line) => line.includes('[dev:wasm] engine artifact:')),
+          'no artifact announcement without a cdylib target',
+        );
+        assert.deepEqual(reloads, [], 'no reload when the engine cannot be built for wasm32');
+      } finally {
+        restore();
+        delete process.env.FAKE_SCHEMA_FILE;
+      }
+    } finally {
+      process.env.PATH = originalPath;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'runConfigDev wasm target derives the artifact name from the lib target, not the package',
+  { timeout: 30_000 },
+  async () => {
+    // cargo 규약 핀 — cdylib 산출물 이름은 **lib 타깃** 이름에서 온다: 패키지 x 의
+    // [lib] name = "my_bridge" 는 my_bridge.wasm 을 만든다(x.wasm 이 아니다). 이
+    // 저장소의 RN 관례(lib${rustLibrary}.a)와 같은 이름 근원이다. 패키지 이름으로
+    // 계산하면 커스텀 lib 이름에서 경로가 어긋나 재빌드마다 오탈 실패한다.
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-wasm-custom-'));
+    const originalPath = process.env.PATH;
+    try {
+      const project = seedProject(root, 'custom-name');
+      writeSchema(join(project, 'generated', 'schema.json'), 'string');
+      writeSchema(join(root, 'schema-string.json'), 'string');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+
+      const errors: string[] = [];
+      const restore = captureConsole(errors);
+      try {
+        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        const reloads: string[] = [];
+        handle.onReload((reason) => void reloads.push(reason));
+        await triggerUntil(
+          () => errors,
+          () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed() {}\n'),
+          () => reloads.length >= 1,
+          'a reload with a custom-named cdylib',
+        );
+        handle.dispose();
+        assert.ok(
+          errors.some(
+            (line) =>
+              line.includes('[dev:wasm] engine artifact:') &&
+              line.includes(join('target', 'wasm32-unknown-unknown', 'release', 'my_bridge.wasm')),
+          ),
+          `the artifact name must follow the lib target (my_bridge.wasm), got:\n${errors.join('\n')}`,
+        );
+        assert.ok(
+          reloads.length >= 1,
+          `a correct artifact path must not break the loop, captured:\n${errors.join('\n')}`,
+        );
+      } finally {
+        restore();
+        delete process.env.FAKE_SCHEMA_FILE;
+      }
+    } finally {
+      process.env.PATH = originalPath;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'runConfigDev wasm target fails closed when cargo succeeds but the artifact is missing',
+  { timeout: 30_000 },
+  async () => {
+    // 산출물 부재 fail-closed — cargo 가 성공해도 산출물이 없으면(프로필 불일치,
+    // 예상 밖 target 레이아웃 등) 조용히 통과하지 않는다. existsSync 재확인이 이
+    // 불일치를 loud 하게 잡는다.
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-wasm-noart-'));
+    const originalPath = process.env.PATH;
+    try {
+      const project = seedProject(root);
+      writeSchema(join(project, 'generated', 'schema.json'), 'string');
+      writeSchema(join(root, 'schema-string.json'), 'string');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+      process.env.FAKE_WASM_NO_ARTIFACT = '1';
+
+      const errors: string[] = [];
+      const restore = captureConsole(errors);
+      try {
+        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        const reloads: string[] = [];
+        handle.onReload((reason) => void reloads.push(reason));
+        await sleep(300);
+        handle.dispose();
+        const failure = errors.find((line) => line.includes('[dev] regeneration failed'));
+        assert.ok(failure, `a silent artifact mismatch must not pass, got:\n${errors.join('\n')}`);
+        assert.match(failure, /did not produce/, 'the error must name the missing artifact path');
+        assert.ok(
+          !errors.some((line) => line.includes('[dev:wasm] engine artifact:')),
+          'no artifact announcement when the artifact never appeared',
+        );
+        assert.deepEqual(reloads, [], 'no reload when the artifact could not be verified on disk');
+      } finally {
+        restore();
+        delete process.env.FAKE_SCHEMA_FILE;
+        delete process.env.FAKE_WASM_NO_ARTIFACT;
       }
     } finally {
       process.env.PATH = originalPath;
