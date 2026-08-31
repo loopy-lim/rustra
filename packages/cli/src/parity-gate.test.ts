@@ -105,6 +105,56 @@ test('createParityGate rearms to the current state after every verdict', async (
   const rejected = await gate.verify();
   assert.equal(rejected.ok, false);
   assert.match(String(rejected.reason), /contract hash drift/);
+  assert.match(String(rejected.reason), /h1/, 'before hash in the message');
+  assert.match(String(rejected.reason), /h2/, 'after hash in the message');
   const next = await gate.verify(); // 새 기준(h2) 대조 — 같은 상태라 통과.
   assert.equal(next.ok, true, 'rejection must not wedge subsequent reloads');
+});
+
+test('createParityGate survives a transient capture failure without going silent', async () => {
+  // fail-closed 재시도 계약: capture 실패가 기준을 파괴해 다음 판정이 무조건
+  // 통과하는 fail-open(f68 이전 결함)이면, 일시적 capture 실패 이후의 실제
+  // 드리프트가 조용히 통과한다. 기준은 유지되어야 하고, 복구된 첫 판정은
+  // 유지된 기준과의 실제 대조여야 한다.
+  let alive = true;
+  let state = 'h1';
+  const gate = createParityGate({
+    capture: async () => {
+      if (!alive) throw new Error('transient capture failure');
+      return snapshot(state, 'g1');
+    },
+  });
+  await gate.arm();
+  alive = false;
+  const failed = await gate.verify();
+  assert.equal(failed.ok, false, 'capture failure must reject');
+  assert.match(String(failed.reason), /transient capture failure/);
+
+  alive = true;
+  state = 'h2'; // capture 실패 기간에 벌어진 실제 드리프트.
+  const drifted = await gate.verify();
+  assert.equal(drifted.ok, false, 'drift after a transient failure must NOT pass silently');
+  assert.match(String(drifted.reason), /contract hash drift/);
+
+  const settled = await gate.verify(); // 기준은 h2 로 재무장 — 같은 상태는 통과.
+  assert.equal(settled.ok, true, 'recovery must not wedge subsequent reloads');
+});
+
+test('createParityGate keeps rejecting while capture stays broken', async () => {
+  // 지속 실패: 복구가 없는 한 모든 판정이 거부다 — 검증 불가능한 리로드는
+  // 통과시키지 않는다(fail-closed). 기준 파괴로 인한 silent pass 가 없다.
+  let calls = 0;
+  const gate = createParityGate({
+    capture: async () => {
+      calls += 1;
+      if (calls > 1) throw new Error('persistent capture failure');
+      return snapshot('h1', 'g1');
+    },
+  });
+  await gate.arm();
+  const first = await gate.verify();
+  assert.equal(first.ok, false);
+  const second = await gate.verify();
+  assert.equal(second.ok, false, 'persistent capture failure keeps rejecting');
+  assert.match(String(second.reason), /persistent capture failure/);
 });

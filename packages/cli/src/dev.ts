@@ -162,11 +162,13 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
   // Task A2 — dev.target=wasm 이면 parity 게이트를 기본 켠다(`wasm.parityGate:
   // false` 로 명시 끄기 전까지). capture 는 빌드타임 계약(schema.json 의
   // SHA-256 — cd243cec 단일 소싱 계약상 rustra_ffi_contract_hash 및
-  // GENERATED_CONTRACT_HASH 와 같은 입력을 해시한다)과 golden wire 상태(호스트가
-  // onReload 훅 안에서 자신의 라이브 엔진으로 캡처해 주입 — A1 계약)를 대조
-  // 소재로 삼는다. reload 방출 후 게이트 검증이 실패하면 loud 하게 기록하고
-  // 기존 엔진을 유지한다(훅 격리 계약 — 루프는 살아남는다). 네이티브 타깃은
-  // 게이트 없다.
+  // GENERATED_CONTRACT_HASH 와 같은 입력을 해시한다)을 읽는다. 코드젠이 만든
+  // schema.json 은 reload 방출 **전부터** 최종 상태이므로, 방출 직전에 미리
+  // 검증해도 방출 후 검증과 같은 판정이다 — 오히려 거부 시 reload 가 아예
+  // 방출되지 않아 호스트가 기존 엔진을 유지하는 것이 보장된다(방출 후 검증은
+  // 이미 호스트가 새 계약을 로드한 뒤라 롤백 책임이 호스트로 넘어간다).
+  // 불일치·capture 실패는 loud 기록되고 emitReload 는 건너뛴다. 루프 자체는
+  // 살아남는다(다음 변경에 다시 판정). 네이티브 타깃은 게이트 없다.
   const wasmDev = config.dev?.target === 'wasm';
   const gate =
     wasmDev && config.dev?.wasm?.parityGate !== false
@@ -183,16 +185,16 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
       await codegen();
       console.log(`[dev] ${new Date().toLocaleTimeString()} regenerated`);
       if (inspect) inspectHint();
-      await reload.emitReload(reason);
-      // 게이트 검증은 reload 방출 **후** — 호스트 onReload 훅이 새 엔진 상태를
-      // 반영한 뒤의 계약을 대조해야 의미가 있다. 불일치는 loud 기록 + 리로드
-      // 거부 신호다(이미 방출된 훅의 롤백 책임은 호스트에게 있다 — A1 계약).
       if (gate) {
         const verdict = await gate.verify();
         if (!verdict.ok) {
+          // 거부 — reload 신호를 방출하지 않는다(호스트는 기존 엔진 유지).
+          // verdict 가 이미 현재 상태로 재무장했으므로 다음 변경은 정상 판정된다.
           console.error(`[dev] reload rejected — ${verdict.reason}`);
+          return;
         }
       }
+      await reload.emitReload(reason);
     } catch (error) {
       console.error(`[dev] regeneration failed: ${error instanceof Error ? error.message : error}`);
     }
@@ -202,7 +204,9 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
   );
   await loop.run('initial', true);
   // 기준 스냅샷은 initial 코드젠이 schema.json 을 만든 **뒤**에 잡는다 — 없는
-  // 파일 앞에서 게이트가 쓸모없는 baseline 으로 arm 되는 일을 막는다.
+  // 파일 앞에서 arm 이 실패하는 일을 막는다. arm 실패는 throw — 게이트가
+  // 요구됨(wasm + parityGate 기본)에도 계약을 못 잡는 상태로 감시에 들어가는
+  // 것은 fail-open 이므로 즉시 보인다.
   if (gate) await gate.arm();
   const generatedRoots = [config.outputPath, config.schemaPath];
   const sourceWatch = createFileWatch(
