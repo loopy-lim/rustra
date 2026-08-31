@@ -88,6 +88,36 @@ For PRODUCTION (design-review items, not done here):
    host ABI would standardize an alloc/export pair (or caller-buffer
    `*_into` entries, which already exist for JSON/rkyv but not postcard).
 
+## Verified on devices (2026-08-31) — verdict: PASS on BOTH
+
+Full hex-level transcripts: `evidence/ios.md`, `evidence/android.md`.
+
+- iOS simulator (iPhone 17, RN 0.81.5/Hermes, wasm3 + staticlib linked in-pod):
+  v1 instantiate 1.0 ms, ver=2, hash `e79b7f01…`; `double(21)` and
+  `addNumbers(40,2)` BYTE-IDENTICAL wasm vs native staticlib; mid-run swap
+  (Documents/engine_v2.wasm pushed via simctl, no restart) → ver=3, hash
+  UNCHANGED, `double(21)` in-wasm 42→63 while native baseline stayed 42,
+  `addNumbers` still identical.
+- Android emulator (Medium_Phone_API_36.1, RN 0.81.5 bridgeless, JNI + CMake,
+  per-ABI staticlibs): v1 instantiate 2.0 ms, same hash; both commands
+  BYTE-IDENTICAL; swap twice-proven (button tap pid 6245, and fully automatic
+  poller swap pid 6541 after `adb push` + `run-as cp` of engine_v2.wasm) →
+  ver=3, hash UNCHANGED, `double(21)` 42→63 in-wasm, `addNumbers` identical.
+- Spike gotchas recorded for posterity:
+  - On API 36 the JNI lib is mapped straight out of base.apk
+    (extractNativeLibs=false); `adb install -r` can silently keep the old APK —
+    the stale .so (per-entry-point engines) produced "find spike_alloc:
+    function lookup failed". Force `uninstall` + `install` when JNI signatures
+    change.
+  - RN android cannot serialize a JNI HashMap across the bridge — the Kotlin
+    side converts to a WritableMap.
+  - CocoaPods rejects source_files outside the pod root, so the pod's
+    prepare_command stages native/wasm3 + the staticlib INTO the pod
+    (ios/build-rust-ios.sh).
+- No perf red flags: worst observed per-call wasm time 20 ms (iOS first call),
+  steady state 0.1–9 ms vs native 0.03–0.05 ms; instantiate ≤ 4 ms everywhere
+  (gates: >100x native per-call, >10 s instantiate).
+
 ## Verified so far (desktop, before device runs)
 
 - `cargo test` (host rlib): 4/4 pass — postcard round-trip for both commands,
@@ -101,3 +131,4 @@ For PRODUCTION (design-review items, not done here):
 - v2 engine (`--features factor3`): version=3,
   `double(21)` → `01010c7b2276616c7565223a36337d00` (`{"value":63}`),
   contract hash UNCHANGED — the swap-PoC invariant holds on desktop.
+
