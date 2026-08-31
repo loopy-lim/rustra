@@ -84,7 +84,10 @@ cargo publish -p rustra
 ## Step 3.5 — main branch protection (applied 2026-08-21)
 
 - Required checks: `rust-audit`, `rust (ubuntu-latest)`, `rust (macos-latest)`,
-  `rust (windows-latest)`, `typescript`, `rn-android`, `rn-ios`, `consumer-smoke`.
+  `rust (windows-latest)`, `typescript`, `rn-android`, `rn-ios`, `consumer-smoke`,
+  `rust-wasm32`. Updating this document alone does not change the live branch
+  protection — the required-checks registration is a separate manual step via the
+  `gh api` below.
 - Direct pushes are allowed (efficiency for a one-person project); force pushes and
   deletions are blocked.
 - When adding a new CI job, add it to the required list as well — the list is
@@ -103,7 +106,8 @@ cargo publish -p rustra
         "typescript",
         "rn-android",
         "rn-ios",
-        "consumer-smoke"
+        "consumer-smoke",
+        "rust-wasm32"
       ]
     },
     "enforce_admins": false,
