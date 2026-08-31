@@ -89,6 +89,51 @@ test('runDev suppresses the reload hook when regeneration fails', async () => {
   }
 });
 
+test('runDev does not fire the reload hook when the tree is clean (nothing to do)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'rustra-dev-clean-'));
+  try {
+    // 완전한 clean 플랜을 시드한다: rust 소스는 schema 보다 과거, codecs 는 schema
+    // 보다 새로 — perform 이 '[dev] clean — nothing to do' 로 조기 반환하는 경로.
+    const backend = join(dir, 'backend');
+    const app = join(dir, 'app');
+    mkdirSync(join(backend, 'src'), { recursive: true });
+    mkdirSync(join(app, 'generated'), { recursive: true });
+    writeFileSync(join(backend, 'src', 'lib.rs'), 'fn main() {}');
+    const schema = join(app, 'generated', 'schema.json');
+    writeFileSync(schema, '{}');
+    writeFileSync(join(app, 'generated', 'rkyv-codecs.ts'), '');
+    utimesSync(
+      join(backend, 'src', 'lib.rs'),
+      new Date('2026-08-16T12:00:00Z'),
+      new Date('2026-08-16T12:00:00Z'),
+    );
+    utimesSync(schema, new Date('2026-08-16T12:00:05Z'), new Date('2026-08-16T12:00:05Z'));
+    utimesSync(
+      join(app, 'generated', 'rkyv-codecs.ts'),
+      new Date('2026-08-16T12:00:10Z'),
+      new Date('2026-08-16T12:00:10Z'),
+    );
+    process.env.RUSTRA_CLI = process.execPath;
+    const reloads: string[] = [];
+    const logs: string[] = [];
+    const originalLog = console.log;
+    console.log = (line: unknown) => logs.push(String(line));
+    try {
+      const handle = await runDev(['--backend', backend, '--app', app]);
+      handle.onReload((reason) => void reloads.push(reason));
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      assert.ok(logs.some((line) => line.includes('[dev] clean — nothing to do')));
+      assert.deepEqual(reloads, [], 'clean run must not emit reload');
+      handle.dispose();
+    } finally {
+      console.log = originalLog;
+      delete process.env.RUSTRA_CLI;
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('readDevConfig rejects a config without a Cargo manifest', () => {
   const dir = mkdtempSync(join(tmpdir(), 'rustra-dev-config-'));
   try {

@@ -77,10 +77,13 @@ Task A1(dev 루프 reload 오케스트레이션, 2026-08-31)은 A0 판정에 따
 **프로세스 내 엔진 리셋**을 1차 메커니즘으로 채택했다. 진짜 dlopen 스왑은
 검토 후 기각했다:
 
-- **Node**: 엔진은 자식 프로세스라 reload = 진행 중 invocation drain → 자식
-  dispose → 재스폰(새 바이너리 이미지는 스폰 시점에 읽힌다).
-  `NodeLoopTransport.drain(timeoutMs = 5s)` + `NodeBootstrap.reload()` 가
-  구현하며, cargo 재빌드 산출물은 reload 만으로 반영된다.
+- **Node**: 엔진은 자식 프로세스라 reload = 자식 dispose → 재스폰(새 바이너리
+  이미지는 스폰 시점에 읽힌다). 두 가지 경로: 루프 호스트는
+  `NodeLoopTransport.drain(timeoutMs = 5s)` 로 진행 중 invocation 을 우아하게
+  정착시킨 뒤 drain → dispose → 재부트스트랩을 거치고, 원샷 프로세스
+  트랜스포트의 `NodeBootstrap.reload()` 는 drain 이 없어 얕은 취소(dispose 시
+  진행 중 invocation reject) 후 재부트스트랩 + ready 로 간다. cargo 재빌드
+  산출물은 reload 만으로 반영된다.
 - **Bun**: 실측 결과(macOS arm64, Bun 1.4.0; 버전 함수를 가진 미니 dylib 양방향
   검증 + 실제 calculator cdylib close/재 dlopen 확인): `bun:ffi` dlopen 은
   프로세스당 라이브러리 이미지를 캐시한다. 같은 경로의 파일이 교체되어도 닫지
