@@ -7,7 +7,7 @@ import { createRkyvDispatchRuntime } from './rkyv-engine-dispatch.js';
 import { createRkyvRouteRuntime } from './rkyv-engine-routes.js';
 import { createRkyvInvokeRaw } from './rkyv-engine-async.js';
 import { createRkyvEngineSurface } from './rkyv-engine-surface.js';
-export type { RkyvV2EngineOptions } from './rkyv-engine-options.js';
+export type { RkyvV2EngineOptions, ContractMismatchDiagnosis } from './rkyv-engine-options.js';
 import type { RkyvV2EngineOptions } from './rkyv-engine-options.js';
 
 /**
