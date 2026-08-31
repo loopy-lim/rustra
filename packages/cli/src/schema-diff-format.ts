@@ -37,5 +37,8 @@ export function formatDiffResult(result: DiffResult): string {
     lines.push(`Compatible changes (${result.compatible.length}):`);
     for (const note of result.compatible) lines.push(`  + ${note}`);
   }
+  for (const diagnosis of result.diagnoses ?? []) {
+    lines.push(`Diagnosis: ${diagnosis.detail}`);
+  }
   return lines.join('\n');
 }

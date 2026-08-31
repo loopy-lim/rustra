@@ -90,6 +90,7 @@
       "* from './generate.js'",
       "BreakingChange",
       "CommandSchema",
+      "ContractDiagnosis",
       "DiffResult",
       "GENERATED_REACT_NATIVE_PACKAGE",
       "GeneratedFile",

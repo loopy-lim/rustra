@@ -1,6 +1,26 @@
 /**
  * `createRkyvV2Engine` 옵션. 모두 opt-in 이며 생략 시 하위 호환 동작을 유지한다.
  */
+
+/**
+ * (B4) 계약 diff 원인 진단 하나 — `@rustra/cli` `diffSchemas` 의
+ * `ContractDiagnosis` 와 동일한 구조적 타입 (types 는 leaf 패키지라 cli 를
+ * 의존하지 않는다; 생산자/소비자가 같은 모양을 공유한다). `detail` 은 사람이
+ * 읽는 원인 문장이다.
+ */
+export type ContractMismatchDiagnosis = {
+  code: 'command_id_displaced' | 'alias_missing' | 'wire_type_changed';
+  command: string;
+  detail: string;
+  field?: string;
+  from?: string;
+  to?: string;
+  oldId?: number;
+  newId?: number;
+  legacyId?: number;
+  occupiedBy?: string;
+};
+
 export type RkyvV2EngineOptions = {
   /**
    * (F5) 빌드 시점 코드젠이 생성한 계약 해시(`GENERATED_CONTRACT_HASH`).
@@ -21,8 +41,22 @@ export type RkyvV2EngineOptions = {
    * `getContractHash` 미노출 네이티브는 검증 자체가 불가능하므로 이 콜백과
    * 무관하게 항상 `contract.unenforceable` 로 throw 한다 (native hash 가
    * 없으면 degraded 모드가 무의미하다).
+   *
+   * (B4) `info.diagnosis.diagnoses` 는 계약 diff 원인 진단 목록이다 —
+   * `@rustra/cli` 의 `diffSchemas(old, live)` 가 만드는 `ContractDiagnosis`
+   * 와 같은 모양(구조적 타이핑, 패키지 의존 없음). 엔진 자체는 mismatch 시점에
+   * live schema 만 있고 빌드 시점 스키마가 없어 diff 를 계산할 수 없으므로
+   * 네이티브 코어는 이 필드를 채우지 않는다 (undefined). 생산자가 채우는
+   * 경로: 빌드 시점 schema.json 을 들고 있는 호스트(예: OTA 래퍼, dev 서버)가
+   * mismatch 를 감지하면 diffSchemas 를 돌려 `diagnoses` 배열을 이 필드로
+   * 전달한다 — 콜백 소비자는 `info.diagnosis?.diagnoses.map((d) => d.detail)`
+   * 로 원인 문장을 읽는다.
    */
-  onContractMismatch?: (info: { nativeHash: string; expectedHash: string }) => void;
+  onContractMismatch?: (info: {
+    nativeHash: string;
+    expectedHash: string;
+    diagnosis?: { diagnoses: ContractMismatchDiagnosis[] };
+  }) => void;
   /**
    * (T2, OTA) 빌드 시점 스키마 버전 — 코드젠이 생성한 SCHEMA_VERSION.
    * 설정하면 엔진 생성 시 live schema(getSchema)의 schemaVersion 과 비교해
