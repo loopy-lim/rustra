@@ -40,7 +40,7 @@ function resolveNodeRuntime(options: NodeBootstrapOptions): string {
 
 export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBootstrap {
   let transport: NodeProcessTransport | undefined;
-  configureLazy(async () => {
+  const bootstrap = async (): Promise<EngineClientWithBatch> => {
     transport = createNodeProcessTransport({
       command: resolveNodeRuntime(options),
       args: options.args,
@@ -71,12 +71,23 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
       }
     }
     return createNodeEngine(transport);
-  });
+  };
+  configureLazy(bootstrap);
   return {
     ready: () => ensureConfigured() as Promise<EngineClientWithBatch>,
     dispose() {
       transport?.dispose();
       transport = undefined;
+    },
+    async reload() {
+      // 재초기화 계약(A1): 진행 중 invocation 정착 대기 → 자식 dispose → 같은
+      // 런타임 해상으로 재스폰 + (설정 시) 계약 해시 재검증. 새 바이너리 이미지는
+      // 스폰 시점에 읽히므로 cargo 재빌드 후 reload 만으로 반영된다.
+      if (transport && 'drain' in transport && typeof transport.drain === 'function')
+        await (transport as { drain(): Promise<void> }).drain();
+      this.dispose();
+      configureLazy(bootstrap);
+      await this.ready();
     },
   };
 }

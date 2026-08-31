@@ -17,6 +17,11 @@ export type NodeLoopTransport = NodeInvokeTransport & {
   readonly mode: 'ndjson' | 'binary';
   /** 프로토콜 협상(바이너리 모드 핸드셰이크) 정착을 기다린다. */
   ready(): Promise<void>;
+  /**
+   * 진행 중 invocation 이 모두 정착할 때까지 기다린다(최대 5초 — 초과 시 로그 후
+   * 그래도 해소). reload 직전 drain 계약(A1)의 transport 측 구현.
+   */
+  drain(timeoutMs?: number): Promise<void>;
 };
 
 /**
@@ -263,6 +268,23 @@ export function createNodeLoopTransport(options: {
     },
     ready() {
       return handshakeSettled;
+    },
+    async drain(timeoutMs = 5_000) {
+      // pending(NDJSON id 상관) + binQueue(바이너리 프레임 대기) = in-flight 전체.
+      const settle = (): boolean => pending.size === 0 && binQueue.length === 0;
+      if (settle()) return;
+      const deadline = Date.now() + timeoutMs;
+      while (!settle()) {
+        if (Date.now() > deadline) {
+          console.error(
+            `[node] drain timeout after ${timeoutMs}ms with ${
+              pending.size + binQueue.length
+            } in-flight invocation(s); proceeding anyway`,
+          );
+          return;
+        }
+        await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      }
     },
   };
 }
