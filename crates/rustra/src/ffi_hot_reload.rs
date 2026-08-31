@@ -18,8 +18,9 @@
 ///   에러 코드 사다리의 문자열(`registry.frozen`, `ffi.not_registered`,
 ///   `command.invalid_args: …`)을 가진다.
 /// - `applied` / `skipped`: 교체 경로를 밟은 항목 수 / 건너뛴 항목 목록.
-///   스킵은 loud다 — 이름과 사유(기존 에러 코드 재사용: `command.not_found`,
-///   `signature.mismatch`)와 가능하면 라이브 서명을 돌려준다.
+///   스킵은 loud다 — 이름과 사유(`command.not_found` 는 기존 사다리 재사용,
+///   `signature.mismatch` 는 이 표면을 위해 registry.rs 의 replace_runtime_route
+///   가 사다리에 새로 합류시킨 코드)와 가능하면 라이브 서명을 돌려준다.
 /// - `schemaGeneration`: 적용이 있었으면 최종 세대 스냅샷, 없으면 null —
 ///   진행 중 컨텍스트가 `rustra_ffi_schema_generation` 과 대조할 수 있다.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -33,7 +34,8 @@ struct HotReloadReport {
     schema_generation: Option<u64>,
 }
 
-/// 리포트의 스킵 항목 — 사유는 기존 에러 코드 사다리를 재사용한다.
+/// 리포트의 스킵 항목 — 사유는 에러 코드 사다리의 문자열이다
+/// (`command.not_found` 는 기존 코드, `signature.mismatch` 는 새로 합류한 코드).
 #[derive(Debug, Clone, serde::Serialize)]
 struct HotReloadSkip {
     name: String,

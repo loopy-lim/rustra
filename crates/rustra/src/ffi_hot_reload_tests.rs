@@ -85,6 +85,7 @@ fn hot_reload_applies_matching_entry_with_replace_semantics() {
 }
 
 #[test]
+#[cfg(debug_assertions)]
 fn hot_reload_report_json_uses_camel_case_wire_keys() {
     let pkg = local_package();
     let report = run_hot_reload(Some(&pkg), &blob(&[("echo", &signature_of(&pkg, "echo"))]));
@@ -98,6 +99,7 @@ fn hot_reload_report_json_uses_camel_case_wire_keys() {
 // ── 코어: loud 스킵 — 조용한 스킵이 아니라 리포트에 남는다 ───
 
 #[test]
+#[cfg(debug_assertions)]
 fn hot_reload_skips_signature_mismatch_loudly() {
     let pkg = local_package();
     let generation_before = pkg.schema_generation();
@@ -123,6 +125,7 @@ fn hot_reload_skips_signature_mismatch_loudly() {
 }
 
 #[test]
+#[cfg(debug_assertions)]
 fn hot_reload_skips_unknown_names_loudly() {
     let pkg = local_package();
     let report = run_hot_reload(Some(&pkg), &blob(&[("ghost", &signature_of(&pkg, "echo"))]));
@@ -133,12 +136,13 @@ fn hot_reload_skips_unknown_names_loudly() {
     assert_eq!(report.skipped[0].name, "ghost");
     assert_eq!(
         report.skipped[0].reason, "command.not_found",
-        "reason reuses the existing error-code ladder"
+        "reason joins the existing error-code ladder"
     );
     assert!(report.skipped[0].actual.is_none());
 }
 
 #[test]
+#[cfg(debug_assertions)]
 fn hot_reload_reports_applied_and_skipped_together() {
     let pkg = local_package();
     let good = signature_of(&pkg, "echo");
@@ -173,6 +177,48 @@ fn hot_reload_rejects_frozen_registry() {
     assert_eq!(report.schema_generation, None);
 }
 
+/// release 프로파일 대응 — release `build()` 패키지는 태어날 때부터 동결
+/// (`builder_build.rs`: `!cfg!(debug_assertions)`)이므로 주입이 거부된다.
+/// debug의 `hot_reload_rejects_frozen_registry`(명시적 freeze)와 짝을 이루어
+/// 동결 거부 경로가 양쪽 프로파일에서 모두 고정된다.
+#[test]
+#[cfg(not(debug_assertions))]
+fn hot_reload_rejects_a_release_frozen_package() {
+    let pkg = local_package();
+    assert!(pkg.is_frozen(), "release build() freezes the package");
+    let blob_bytes = blob(&[("echo", &signature_of(&pkg, "echo"))]);
+
+    let report = run_hot_reload(Some(&pkg), &blob_bytes);
+
+    assert!(!report.ok, "frozen registry must reject the reload");
+    let error = report.error.as_deref().expect("error carries the code");
+    assert!(error.starts_with("registry.frozen"), "got: {error}");
+    assert_eq!(report.applied, None);
+    assert_eq!(report.schema_generation, None);
+}
+
+#[test]
+#[cfg(debug_assertions)]
+fn hot_reload_double_apply_of_the_same_name_applies_twice() {
+    // 같은 이름의 중복 항목도 각각 독립 판정한다 — 첫 항목 적용 후에도 라이브
+    // 서명은 같은 와이어 계약을 유지하므로(replace는 스키마 불변) 두 번째도
+    // 적용된다. benign 하고 문서화된 동작: applied: 2, 세대는 두 번 진행.
+    let pkg = local_package();
+    let generation_before = pkg.schema_generation();
+    let good = signature_of(&pkg, "echo");
+
+    let report = run_hot_reload(Some(&pkg), &blob(&[("echo", &good), ("echo", &good)]));
+
+    assert!(report.ok);
+    assert_eq!(report.applied, Some(2));
+    assert!(report.skipped.is_empty());
+    let generation_after = pkg.schema_generation();
+    assert!(
+        generation_after >= generation_before + 2,
+        "each apply advances the generation"
+    );
+}
+
 #[test]
 fn hot_reload_reports_unregistered_engine() {
     let report = run_hot_reload(None, &blob(&[("echo", "0")]));
@@ -185,6 +231,7 @@ fn hot_reload_reports_unregistered_engine() {
 }
 
 #[test]
+#[cfg(debug_assertions)]
 fn hot_reload_reports_malformed_blob_as_invalid_args() {
     let pkg = local_package();
     let report = run_hot_reload(Some(&pkg), &[0xff, 0x01, 0x02]);
@@ -197,6 +244,7 @@ fn hot_reload_reports_malformed_blob_as_invalid_args() {
 }
 
 #[test]
+#[cfg(debug_assertions)]
 fn hot_reload_accepts_an_explicitly_empty_manifest() {
     // 빈 목록도 유효한 blob 이다 — postcard 로는 길이 0 varint 한 바이트.
     let pkg = local_package();

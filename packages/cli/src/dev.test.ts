@@ -240,12 +240,20 @@ test('createWatchLoop parity orchestration rejects a drifted reload and keeps th
       reloads.push('applied');
     });
     await loop.run('rust change', true);
-    assert.deepEqual(reloads, [], 'drifted reload must be rejected');
+    // 루프 생존의 실제 증거: run() 이 던지지 않고 정상 반환됐고(훅 에러 격리),
+    // 그 왕복에서 reload 는 방출되지 않았다. hashState 는 생존 증거가 아니라
+    // "perform 이 돌았다"의 보조 관찰일 뿐이다.
+    assert.deepEqual(
+      reloads,
+      [],
+      'drifted reload must be rejected; an empty reload list plus run() returning ' +
+        'normally is the evidence the loop survived the rejection (A1 isolation)',
+    );
     assert.ok(
       errors.some((line) => line.includes('contract hash drift')),
       'rejection must be loud',
     );
-    assert.equal(hashState, 'h2', 'loop survived the rejection (A1 isolation contract)');
+    assert.equal(hashState, 'h2', 'perform ran before the hook rejected');
     loop.dispose();
   } finally {
     console.error = originalError;

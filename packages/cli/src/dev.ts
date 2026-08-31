@@ -160,18 +160,19 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
   // 성공한 재생성마다 reload 를 방출한다(호스트 재초기화는 멱함수여야 한다).
   const reload = createReloadHooks();
   // Task A2 — dev.target=wasm 이면 parity 게이트를 기본 켠다(`wasm.parityGate:
-  // false` 로 명시 끄기 전까지). capture 는 빌드타임 계약(schema.json 의
-  // SHA-256 — cd243cec 단일 소싱 계약상 rustra_ffi_contract_hash 및
-  // GENERATED_CONTRACT_HASH 와 같은 입력을 해시한다)을 읽는다. 코드젠이 만든
-  // schema.json 은 reload 방출 **전부터** 최종 상태이므로, 방출 직전에 미리
-  // 검증해도 방출 후 검증과 같은 판정이다 — 오히려 거부 시 reload 가 아예
-  // 방출되지 않아 호스트가 기존 엔진을 유지하는 것이 보장된다(방출 후 검증은
-  // 이미 호스트가 새 계약을 로드한 뒤라 롤백 책임이 호스트로 넘어간다).
-  // 불일치·capture 실패는 loud 기록되고 emitReload 는 건너뛴다. 루프 자체는
-  // 살아남는다(다음 변경에 다시 판정). 네이티브 타깃은 게이트 없다.
+  // false` 로 명시 끄기 전까지). capture 는 빌드타임 계약을 읽는다(계약 해시의
+  // 단일 소싱 근거는 captureSchemaParity 문서 참조). 코드젠이 만든 schema.json 은
+  // reload 방출 **전부터** 최종 상태이므로, 방출 직전에 미리 검증해도 방출 후
+  // 검증과 같은 판정이다 — 오히려 거부 시 reload 가 아예 방출되지 않아 호스트가
+  // 기존 엔진을 유지하는 것이 보장된다(방출 후 검증은 이미 호스트가 새 계약을
+  // 로드한 뒤라 롤백 책임이 호스트로 넘어간다). 불일치·capture 실패는 loud
+  // 기록되고 emitReload 는 건너뛴다. 루프 자체는 살아남는다(다음 변경에 다시
+  // 판정). 네이티브 타깃은 게이트 없다.
   const wasmDev = config.dev?.target === 'wasm';
   const gate =
-    wasmDev && config.dev?.wasm?.parityGate !== false
+    // readDevConfig 가 wasm.parityGate 기본값(true)을 채워 주므로(주석은
+    // dev-config.ts) 곧장 진리 판정한다 — `!== false` 재판정 불필요.
+    wasmDev && config.dev?.wasm?.parityGate
       ? createParityGate({ capture: () => captureSchemaParity(config.schemaPath) })
       : undefined;
   const codegen = async () => {
