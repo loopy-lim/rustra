@@ -85,12 +85,10 @@ export function createWatchLoop(
       return;
     }
     running = true;
-    let reloaded = false;
     try {
       if (force || (await shouldRun())) {
         await perform(reason);
         await reload.emitReload(reason);
-        reloaded = true;
       }
     } finally {
       running = false;
@@ -99,7 +97,6 @@ export function createWatchLoop(
         schedule('queued change');
       }
     }
-    void reloaded;
   };
 
   function schedule(reason: string): void {
