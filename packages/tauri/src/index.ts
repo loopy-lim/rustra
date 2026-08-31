@@ -142,7 +142,15 @@ export type TauriBootstrap = {
   ready(): Promise<EngineClientWithBatch>;
 };
 
-/** Registers lazy global-Tauri setup for generated platform entrypoints. */
+/**
+ * Registers lazy global-Tauri setup for generated platform entrypoints.
+ *
+ * 핫스왑 계약(Task A1) — Tauri 어댑터는 reload 표면이 없다. 엔진은 Tauri IPC
+ * (rustra_dispatch) 위의 상태 없는 래퍼라 재초기화할 엔진 상태가 없고, 러스트
+ * 측 바이너리 교체는 Tauri 호스트 프로세스의 책임이다(재빌드 후 앱 재시작 또는
+ * A2 rustra_ffi_hot_reload 주입). dev 루프의 onReload 훅을 Tauri 호스트가 받으면
+ * 앱 재시작 안내를 노출하는 것이 정직한 동작이다.
+ */
 export function createTauriBootstrap(options: TauriEngineOptions = {}): TauriBootstrap {
   configureLazy(() => createTauriEngine(options));
   return { ready: () => ensureConfigured() as Promise<EngineClientWithBatch> };

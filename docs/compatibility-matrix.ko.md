@@ -70,3 +70,31 @@ Task A0 스파이크(`examples/rn-wasm-spike/`, 2026-08-31)는 `wasm32-unknown-u
 스테이징 프로토콜은 스파이크 전용 `spike_alloc`/`spike_unstage` 익스포트 사용,
 증거는 에뮬레이터/시뮬레이터 캡처 — 실물 디바이스는 미검증. 전체 hex
 트랜스크립트: `examples/rn-wasm-spike/evidence/{ios,android}.md`.
+
+## 핫스왑 후속 (Task A1): 프로세스 내 리셋 채택 — dlopen 스왑 미채택
+
+Task A1(dev 루프 reload 오케스트레이션, 2026-08-31)은 A0 판정에 따라
+**프로세스 내 엔진 리셋**을 1차 메커니즘으로 채택했다. 진짜 dlopen 스왑은
+검토 후 기각했다:
+
+- **Node**: 엔진은 자식 프로세스라 reload = 진행 중 invocation drain → 자식
+  dispose → 재스폰(새 바이너리 이미지는 스폰 시점에 읽힌다).
+  `NodeLoopTransport.drain(timeoutMs = 5s)` + `NodeBootstrap.reload()` 가
+  구현하며, cargo 재빌드 산출물은 reload 만으로 반영된다.
+- **Bun**: 실측 결과(macOS arm64, Bun 1.4.0; 버전 함수를 가진 미니 dylib 양방향
+  검증 + 실제 calculator cdylib close/재 dlopen 확인): `bun:ffi` dlopen 은
+  프로세스당 라이브러리 이미지를 캐시한다. 같은 경로의 파일이 교체되어도 닫지
+  않은 핸들을 하나라도 연 적 있으면 예전 바이트를 돌려주고, close-후-재 dlopen
+  만 새 바이트를 얻는다. 실제 엔진은 모든 핸들 종료를 보장할 수 없으므로(codecs
+  맵·생성 클로저가 핸들을 붙잡을 수 있음) `BunBootstrap.reload()` 는 엔진 상태를
+  재초기화하고 재빌드된 cdylib 은 다음 프로세스 시작 시 적용된다고 loud warning
+  을 낸다. 계획의 "새 바이너리는 다음 프로세스 시작 시 적용" 옵션의 정직한
+  구현이다.
+- **Tauri**: 문서만. 어댑터는 Tauri IPC(`rustra_dispatch`) 위의 상태 없는
+  래퍼라 재초기화할 엔진 상태가 없고, 바이너리 교체는 Tauri 호스트 프로세스의
+  책임이다(앱 재시작, 또는 A2 `rustra_ffi_hot_reload` 주입 착수 후).
+- **Dev 루프**: `rustra dev` 는 watch 핸들에 `onReload` 훅을 노출하고, Rust 측이
+  바뀐 재생성 성공 후 방출한다(레거시 레이아웃: `plan.rustBin` 실행 시; config
+  모드는 원인 구분이 불가해 성공한 재생성마다 방출 — 보수적 기본값). 훅 에러는
+  기록되고(`[dev] reload failed: …`) watch 루프를 죽이지 않는다. 진행 중
+  invocation drain 은 호스트 콜백의 책임이다.

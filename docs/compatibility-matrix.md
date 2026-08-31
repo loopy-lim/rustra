@@ -59,3 +59,35 @@ wasm32 without atomics), staging protocol uses spike-local
 `spike_alloc`/`spike_unstage` exports, and the evidence was captured on
 emulators/simulator — not yet on physical devices. Full hex transcripts:
 `examples/rn-wasm-spike/evidence/{ios,android}.md`.
+
+## Hot-swap follow-up (Task A1): process-internal reset selected — dlopen swap NOT adopted
+
+Task A1 (dev-loop reload orchestration, 2026-08-31) adopted the
+**process-internal engine reset** as the primary mechanism, per the A0 verdict.
+True dlopen swap was evaluated and rejected:
+
+- **Node**: engines are spawned child processes, so reload = drain in-flight
+  invocations → dispose the child → re-spawn (the new binary image is read at
+  spawn time). `NodeLoopTransport.drain(timeoutMs = 5s)` +
+  `NodeBootstrap.reload()` implement this; a rebuilt `cargo` artifact is picked
+  up by reload alone.
+- **Bun**: EMPIRICAL FINDING (macOS arm64, Bun 1.4.0; probed with a minimal
+  versioned dylib in both directions plus the real calculator cdylib):
+  `bun:ffi` dlopen caches the library image per process. Re-dlopen of a REPLACED
+  file at the same path returns the OLD bytes while any unclosed handle to that
+  image has ever been opened; only close-then-reopen picks up new bytes. A real
+  engine cannot guarantee every handle is closed (the codecs map and generated
+  closures may retain one), so `BunBootstrap.reload()` re-initializes engine
+  state and WARNS loudly that a rebuilt cdylib applies on the next process
+  start. This is the honest "new binary applies on next process start" option
+  from the plan.
+- **Tauri**: docs-only. The adapter is a stateless wrapper over Tauri IPC
+  (`rustra_dispatch`) — there is no engine state to re-initialize, and binary
+  replacement is the Tauri host process's responsibility (app restart, or the
+  A2 `rustra_ffi_hot_reload` injection once it lands).
+- **Dev loop**: `rustra dev` exposes an `onReload` hook on its watch handle,
+  fired after a successful regeneration that touched the Rust side (legacy
+  layout: `plan.rustBin` ran; config mode cannot distinguish causes and fires
+  on every successful regeneration — the conservative default). Hook errors are
+  logged (`[dev] reload failed: …`) and never kill the watch loop; the host
+  callback owns draining its own in-flight invocations.
