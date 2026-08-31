@@ -253,9 +253,10 @@ export function collectConfigChecks(
         'dev.wasm.experimental',
         'warn',
         false,
-        'wasm dev target: cooperative cancellation only — verify natively before release ' +
-          '(협동형 취소만 유효 — 릴리스 전 native 검증 필수)',
-        undefined,
+        'wasm dev target: cooperative cancellation only — verify natively before release',
+        // 한국어 고지는 detail 로 — summary 는 기계 판독(JSON) 대비 영문 고정.
+        // detail 은 text 출력에서도 `detail:` 라인으로 렌더된다(시각 동일).
+        '협동형 취소만 유효 — 릴리스 전 native 검증 필수',
         [
           'Run the native build/test loop before releasing — wasm32 cannot reproduce ' +
             'race/cancellation/backpressure behavior',

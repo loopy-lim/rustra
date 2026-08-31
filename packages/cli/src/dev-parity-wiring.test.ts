@@ -97,7 +97,7 @@ function seedProject(root: string, engineLib: EngineLibVariant = 'cdylib'): stri
     '  dir=$(dirname "$manifest")',
     '  printf \'{"target_directory":"%s/target","packages":[{"name":"x","manifest_path":"%s",',
     '"targets":[{"name":"generate","crate_types":["bin"],"kind":["bin"]},',
-    `{"name":"${libName}","crate_types":${crateTypes},"kind":["lib"]}]}]}\\n\' "$dir" "$manifest"`,
+    `{"name":"${libName}","crate_types":${crateTypes},"kind":["lib"]}]}]}\\n' "$dir" "$manifest"`,
     '  exit 0',
     'fi',
     'if [ "$1" = "run" ]; then',
@@ -138,19 +138,6 @@ function seedProject(root: string, engineLib: EngineLibVariant = 'cdylib'): stri
 // 실패 시점까지 캡처한 로그를 그대로 보여준다.
 function sleep(ms: number): Promise<void> {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
-}
-
-function waitFor(captured: () => string[], observe: () => boolean, what: string): Promise<void> {
-  const deadline = Date.now() + 10_000;
-  const poll = async (): Promise<void> => {
-    while (!observe()) {
-      if (Date.now() > deadline) {
-        throw new Error(`timed out waiting for ${what}; captured:\n${captured().join('\n')}`);
-      }
-      await sleep(100);
-    }
-  };
-  return poll();
 }
 
 // 트리거는 "한 번 쓰고 기다림"이 아니라 "루프가 반응할 때까지 재터치"다. fs.watch 는

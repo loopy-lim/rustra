@@ -46,7 +46,7 @@ function resolveDevWasm(
   const manifest = config.reactNative?.rustManifest ?? config.codegen?.rustManifest;
   const rustPackage = config.reactNative?.rustPackage ?? config.codegen?.rustPackage;
   return {
-    manifestPath: (manifest ? resolve(root, manifest) : undefined) ?? manifestPath,
+    manifestPath: manifest === undefined ? manifestPath : resolve(root, manifest),
     rustPackage,
   };
 }

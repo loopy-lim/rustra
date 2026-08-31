@@ -724,10 +724,15 @@ test('wasm dev target warns about cooperative cancellation and checks the wasm32
       const warning = report.checks.find((candidate) => candidate.id === 'dev.wasm.experimental');
       assert.equal(warning?.status, 'warn');
       assert.equal(warning?.required, false, 'the notice must not fail the doctor run');
+      // summary 는 기계 판독 대비 영문 고정 — 한국어 고지는 detail 이다.
+      assert.equal(
+        warning?.summary,
+        'wasm dev target: cooperative cancellation only — verify natively before release',
+      );
       assert.match(
-        warning?.summary ?? '',
+        warning?.detail ?? '',
         /협동형 취소만 유효 — 릴리스 전 native 검증 필수/,
-        'the cancellation-gap notice must be loud in the summary',
+        'the Korean cancellation-gap notice must live in the detail',
       );
       assert.ok(
         !report.checks.some(
