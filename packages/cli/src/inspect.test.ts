@@ -8,14 +8,15 @@
 // 렌더 결과는 **전문 고정**(pinned)이다 — 출력 형태 드리프트를 조용히
 // 통과시키지 않기 위한 계약.
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { serializeSnapshot } from '@rustra/types';
 import type { DumpedWire } from '@rustra/types';
-import { formatInspectText, runInspect } from './cli-inspect.js';
+import { decodeDump, formatInspectText, runInspect } from './cli-inspect.js';
+import { printHelp } from './cli-help.js';
 
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
@@ -27,7 +28,7 @@ function withTempDir(fn: (root: string) => void | Promise<void>): Promise<void> 
 }
 
 /** console.log 를 가로채고 fn 실행 후 모아둔 줄을 돌려준다(cli-init.test.ts 패턴). */
-async function captureConsoleLog(fn: () => Promise<void>): Promise<string[]> {
+async function captureConsoleLog(fn: () => void | Promise<void>): Promise<string[]> {
   const lines: string[] = [];
   const originalLog = console.log;
   console.log = (...args: unknown[]) => lines.push(args.map(String).join(' '));
@@ -175,14 +176,19 @@ test('inspect rejects zero or multiple dump files', async () => {
   });
 });
 
-test('inspect --help prints usage without touching the filesystem', async () => {
+test('inspect --help stays silent internally; cli-help owns the usage text', async () => {
   await withTempDir(async (root) => {
+    // 내부 분기는 cli-diff/cli-init 관례대로 아무것도 출력하지 않고 돌아온다 —
+    // 사용자용 usage 는 cli-main 이 cli-help 텍스트로 출력한다.
     const lines = await captureConsoleLog(() => runInspect(['--help']));
-    assert.match(lines.join('\n'), /Usage: rustra inspect <file>/);
     const short = await captureConsoleLog(() => runInspect(['-h']));
-    assert.match(short.join('\n'), /Usage: rustra inspect <file>/);
+    assert.equal(lines.join('\n'), '');
+    assert.equal(short.join('\n'), '');
     // 도움말 호출은 존재하지 않는 파일을 읽으려 하지 않는다 — 아무것도 던지지 않음.
-    assert.equal(readdirSafe(root), true);
+    assert.equal(readdirSync(root).length, 0);
+    // 단일 사용자용 usage 출처 — cli-help.ts 텍스트가 실제로 존재하는지 게이트.
+    const usage = await captureConsoleLog(() => printHelp('inspect'));
+    assert.match(usage.join('\n'), /Usage: rustra inspect <file>/);
   });
 });
 
@@ -218,7 +224,11 @@ test('formatInspectText renders null identity fields and empty lists determinist
   assert.match(text, /grantedCapabilities: \(none\)/);
 });
 
-/** withTempDir 이 정상 해제됐는지 확인하는 자명한 헬퍼 — --help 테스트의 fs 무접촉 관례 자리 표시. */
-function readdirSafe(_root: string): boolean {
-  return true;
-}
+// ── 5. decodeDump 단위 — hex/raw 두 해석이 같은 바이트로 수렴 ─────
+
+test('decodeDump converges hex text and raw bytes to the identical byte array', () => {
+  const fromHex = decodeDump(Buffer.from(SNAPSHOT_HEX, 'utf8'));
+  const fromRaw = decodeDump(SNAPSHOT_BYTES);
+  assert.deepEqual(Array.from(fromHex), Array.from(SNAPSHOT_BYTES));
+  assert.deepEqual(Array.from(fromHex), Array.from(fromRaw));
+});
