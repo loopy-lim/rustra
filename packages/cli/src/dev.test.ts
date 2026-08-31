@@ -210,6 +210,35 @@ test('readDevConfig honors an explicit parityGate false and native default', () 
   }
 });
 
+test('readDevConfig fills the parityGate default when target=wasm omits the wasm section', () => {
+  // target=wasm + wasm 섹션 생략(L1/L2 검증상 유효)도 게이트 기본 on 이어야
+  // 한다 — 섹션 생략이 게이트 무음 스킵으로 이어지던 fail-open 회귀의 고정.
+  const dir = mkdtempSync(join(tmpdir(), 'rustra-dev-parity-'));
+  try {
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    writeFileSync(join(dir, 'Cargo.toml'), '[package]\nname = "x"\nversion = "0.1.0"\n');
+    const configPath = join(dir, 'rustra.json');
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        schema: 'schema.json',
+        output: 'generated',
+        reactNative: { moduleDir: 'modules' },
+        dev: { target: 'wasm' },
+      }),
+    );
+    const config = readDevConfig(configPath);
+    assert.equal(config.dev?.target, 'wasm');
+    assert.deepEqual(
+      config.dev?.wasm,
+      { parityGate: true },
+      'section-less wasm target still arms the gate by default',
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('createWatchLoop parity orchestration rejects a drifted reload and keeps the old engine state', async () => {
   // parity gate 오케스트레이션 계약: reload 훅 안에서 gate.verify() 가 실패하면
   // reload 는 거부되고(로드), 루프는 살아남은다. 훅 에러 격리 계약(A1)과 동일한
