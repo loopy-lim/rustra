@@ -338,7 +338,9 @@ not supported because it cannot include native JSI code.
 
 If you are coming from 0.3.1, align the npm and Rust versions together. For
 per-host manual boundaries and before/after, follow
-[migrating from 0.3 to 0.4](docs/migrations/0.3-to-0.4.md).
+[migrating from 0.3 to 0.4](docs/migrations/0.3-to-0.4.md). If your Rust crates
+are on the 0.5 line, follow
+[migrating from 0.5 to 0.6](docs/migrations/0.5-to-0.6.md).
 
 ## Project Structure
 
