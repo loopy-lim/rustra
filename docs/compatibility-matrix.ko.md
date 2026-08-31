@@ -50,3 +50,23 @@
 
 - 어댑터별 안정 범위와 게이트: [compatibility-contract.md](compatibility-contract.md)
 - 취소 전파 설계: `docs/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
+
+## 스파이크: wasm3 안의 wasm32 엔진 (React Native) — 판정: PASS (스파이크)
+
+Task A0 스파이크(`examples/rn-wasm-spike/`, 2026-08-31)는 `wasm32-unknown-unknown`으로
+컴파일한 rustra 엔진이 React Native 앱에 내장된 wasm3 인터프리터 안에서 구동됨을
+증명했다. JSON 어댑터와 rkyv V2 JSI에 이은 세 번째 실행 모드:
+
+| 항목                | 결과                                                                                                                                                                                                                                                            |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 플랫폼 증명         | ✅ iOS 시뮬레이터(iPhone 17) AND Android 에뮬레이터(API 36 arm64) — 실제 `.wasm`, 실제 wasm3 v0.9.1, 실제 RN 0.81.5 앱                                                                                                                                          |
+| wasm vs 네이티브    | ✅ postcard 응답이 두 커맨드·두 플랫폼 모두 네이티브 staticlib 엔진과 바이트 동일 (`double(21)` → `01010c7b2276616c7565223a34327d00`)                                                                                                                           |
+| 인앱 엔진 스왑      | ✅ `engine_v1.wasm` → `engine_v2.wasm` 프로세스 재시작 없이 재인스턴스화(iOS는 Documents 푸시, Android는 `adb push` + filesDir — OTA 드롭 방식): engineVersion 2→3, **계약 해시 불변**(`e79b7f01…`), in-wasm `double(21)` 42→63 (네이티브 베이스라인은 42 유지) |
+| 스왑 후 계약 안정성 | ✅ 네이티브/wasm·엔진 v1/v2 전부 해시 동일 — frozen-contract 불변식이 디바이스에서도 성립                                                                                                                                                                       |
+| 성능 레드플래그     | ✅ 없음 — instantiate 1–4 ms; 호출당 wasm 0.1–20 ms vs 네이티브 0.03–0.05 ms (게이트: 호출당 네이티브 100배 초과, instantiate 10초 초과)                                                                                                                        |
+| 코어 패치 필요 여부 | ✅ 없음 — sync FFI 엔트리만 사용; wasm 경로에서 async 워커 풀은 초기화되지 않음 (`examples/rn-wasm-spike/NOTES.md` 참조)                                                                                                                                        |
+
+범위 주의: sync 커맨드만 (atomics 없는 wasm32에서 async 워커 풀은 패닉),
+스테이징 프로토콜은 스파이크 전용 `spike_alloc`/`spike_unstage` 익스포트 사용,
+증거는 에뮬레이터/시뮬레이터 캡처 — 실물 디바이스는 미검증. 전체 hex
+트랜스크립트: `examples/rn-wasm-spike/evidence/{ios,android}.md`.
