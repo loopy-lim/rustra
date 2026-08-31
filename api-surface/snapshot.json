@@ -134,7 +134,8 @@
       "DevtoolsReport",
       "InstrumentedEngine",
       "InstrumentedEngineOptions",
-      "createInstrumentedEngine"
+      "createInstrumentedEngine",
+      "renderTimelineReport"
     ],
     "packages/node": [
       "* from './node-bootstrap.js'",
