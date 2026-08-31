@@ -2,13 +2,15 @@
 // 스냅샷 모델로 재조립한다. 새 직렬화 형식을 만들지 않는다: contractHash 는
 // `rustra_ffi_contract_hash`, schemaGeneration 은 `rustra_ffi_schema_generation`,
 // commands/limits/stats 는 레지스트리·한도·이벤트 버스의 기존 내부를 읽어
-// 하나의 serde_json blob 으로 조립한다.
+// 하나의 serde_json blob 으로 조립한다. blob 의 정준 바이트는
+// crates/rustra/tests/fixtures/inspector-golden.hex.txt 에 실제 캡처 결과로
+// 고정되며(Rust↔TS 단일 아티팩트), TS 디코더가 같은 파일을 소비한다.
 //
 // # experimental
 //
 // 이 FFI 와 스냅샷 blob 형태는 **experimental** 이다(docs/versioning-policy.md
-// 실험 표면 표 참조) — 필드 추가는 하위호환으로 취급되지만, 형태 변경은
-// 예고 없이 깨질 수 있다.
+// 실험 표면 표 참조) — 형태 변경은 깨지는 변경이지만, 필드 **추가**는
+// 하위호환으로 취급한다(기존 필드 삭제/이름 변경/타입 변경은 breaking).
 //
 // NOTE: include! 로 ffi.rs 모듈에 붙는 파일이라 `use super::*` 를 쓰지 않는다
 // — crate root 의 `Result` 별칭이 glob 로 유입되면 std Result 를 기대하는 기존
@@ -26,11 +28,19 @@ struct SnapshotCommand {
 
 /// `Package` 에서 스냅샷 JSON을 조립한다(FFI 진입과 테스트 None 경로가 공유).
 ///
+/// **원자성 계약**: 스냅샷은 필드별로 현재(current) 값을 반영하지만 동시
+/// mutation(register/replace/unregister) 아래에서 필드 간 원자성은 없다 —
+/// schemaGeneration 은 commands/grantedCapabilities 와 같은 read-lock
+/// 윈도우에서 판독해 이 셋의 쌍(pairwise) 정합은 보장하지만, contractHash
+/// 재계산과 limits/stats 판독은 그 창 밖에서 이뤄질 수 있다. 덤프 도구
+/// 관례상 충분한 수준이다(완전 일관 스냅샷이 필요하면 mutation을 멈추고
+/// 호출한다 — dump-tool acceptable).
+///
 /// 기존 내부의 단일 판독 경로:
 /// - contractHash — `generated_contract_hash()` (generation 미포함 입력 해시,
 ///   `rustra_ffi_contract_hash` 와 동일 값)
-/// - schemaGeneration — `schema_generation()` (`rustra_ffi_schema_generation` 과
-///   동일 값)
+/// - schemaGeneration — 레지스트리 상태에서 직접 판독
+///   (`rustra_ffi_schema_generation` 과 동일 값)
 /// - commands — 레지스트리 명령의 (command_id, name, required_capability)
 /// - limits — 현재 페이로드 한도 (`rustra_ffi_get_max_payload` 과 동일 값)
 /// - stats — 기존 카운터만: 등록 명령 수, 부여된 capability, 이벤트 버스
@@ -53,31 +63,34 @@ fn assemble_snapshot(package: Option<&Package>) -> crate::Value {
         });
     };
 
-    // read lock 1회로 commands/stats 를 함께 판독한다.
-    let state = pkg
-        .state
-        .read()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let commands: Vec<SnapshotCommand> = state
-        .commands
-        .iter()
-        .map(|(name, command)| SnapshotCommand {
-            id: command.command_id,
-            name: name.clone(),
-            capability: command.required_capability,
-        })
-        .collect();
+    // read lock 1회로 commands/generation/stats 를 함께 판독한다 — 세대와
+    // 명령 집합의 쌍 정합(pairwise consistency)을 보장하는 창이다. mutation
+    // writer는 이 read lock 과 직렬화되므로 TOCTOU 가 없다.
+    let (commands, schema_generation, granted) = {
+        let state = pkg
+            .state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let commands: Vec<SnapshotCommand> = state
+            .commands
+            .iter()
+            .map(|(name, command)| SnapshotCommand {
+                id: command.command_id,
+                name: name.clone(),
+                capability: command.required_capability,
+            })
+            .collect();
+        let granted: Vec<String> = state.granted_capabilities.iter().cloned().collect();
+        (commands, state.schema_generation, granted)
+    };
     let registered = commands.len() as u64;
-    let granted: Vec<String> = state.granted_capabilities.iter().cloned().collect();
-    drop(state);
 
-    // contractHash / schemaGeneration 은 기존 공개 메서드로 판독해
-    // `rustra_ffi_contract_hash` / `rustra_ffi_schema_generation` 심벌과
-    // 같은 입력·같은 알고리즘임을 구조적으로 보장한다.
+    // contractHash 는 기존 공개 메서드로 판독해 `rustra_ffi_contract_hash`
+    // 심벌과 같은 입력·같은 알고리즘임을 구조적으로 보장한다.
     crate::json!({
         "packageId": pkg.id,
         "contractHash": pkg.generated_contract_hash(),
-        "schemaGeneration": pkg.schema_generation(),
+        "schemaGeneration": schema_generation,
         "commands": commands,
         "limits": { "maxPayloadBytes": max_payload_bytes() },
         "stats": {
@@ -92,6 +105,10 @@ fn assemble_snapshot(package: Option<&Package>) -> crate::Value {
 /// (B1, experimental) 현재 FFI 패키지의 표준 인스펙터 스냅샷을 JSON 바이트로
 /// 반환한다. 산포된 스키마/한도/레지스트리 FFI 를 하나의 덤프 모델로 재조립한
 /// 것 — 새 직렬화 형식이 아니라 기존 내부의 단일 조립 지점이다.
+///
+/// 원자성: 필드별 current, 동시 mutation 아래 필드 간 원자성 없음
+/// (schemaGeneration↔commands 쌍 정합은 보장 — [`assemble_snapshot`] 문서
+/// 참조). 덤프 도구 관례상 acceptable하다.
 ///
 /// blob 필드:
 /// - `packageId` — 등록된 패키지 id (미등록이면 null)
