@@ -87,7 +87,7 @@ True dlopen swap was evaluated and rejected:
 - **Tauri**: docs-only. The adapter is a stateless wrapper over Tauri IPC
   (`rustra_dispatch`) — there is no engine state to re-initialize, and binary
   replacement is the Tauri host process's responsibility (app restart, or the
-  A2 `rustra_ffi_hot_reload` injection once it lands).
+  A2 `rustra_ffi_hot_reload` injection, landed this cycle).
 - **Dev loop**: `rustra dev` exposes an `onReload` hook on its watch handle,
   fired after a successful regeneration that touched the Rust side (legacy
   layout: `plan.rustBin` ran; config mode cannot distinguish causes and fires
