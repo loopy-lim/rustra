@@ -5,7 +5,7 @@
 //! and the ABI contract stay unchanged.
 
 use crate::Package;
-use crate::command_wire_signature;
+use crate::package_codegen::command_wire_signature;
 use serde::{Deserialize, Serialize};
 use std::ffi::{c_char, c_void};
 use std::sync::{Mutex, OnceLock};

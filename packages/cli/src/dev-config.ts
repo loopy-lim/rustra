@@ -13,11 +13,18 @@ export function readDevConfig(configPath: string) {
   if (!manifestPath || !existsSync(manifestPath) || !statSync(manifestPath).isFile()) {
     throw new Error('codegen.rust_manifest_missing: set codegen.rustManifest in rustra.json');
   }
+  // dev 섹션을 **해석된** 형태로 노출한다 — reload 오케스트레이션(parity 게이트)이
+  // `!== false` 재판정 없이 곧장 읽을 수 있게 wasm.parityGate 기본값(true)을 채운다.
+  const dev = config.dev;
+  const wasm = dev?.wasm;
+  const resolved =
+    wasm === undefined ? undefined : { ...wasm, parityGate: wasm.parityGate ?? true };
   return {
     root,
     schemaPath: resolve(root, config.schema),
     outputPath: resolve(root, config.output),
     manifestPath,
+    dev: dev === undefined ? undefined : { ...dev, wasm: resolved },
   };
 }
 

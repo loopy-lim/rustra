@@ -158,6 +158,100 @@ test('runDev logs "clean — nothing to do" and skips codegen on an up-to-date t
   }
 });
 
+// ── parity gate wiring (Task A2) — dev.target=wasm + parityGate ─────────────
+
+test('readDevConfig exposes wasm dev settings including parityGate default', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'rustra-dev-parity-'));
+  try {
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    writeFileSync(join(dir, 'Cargo.toml'), '[package]\nname = "x"\nversion = "0.1.0"\n');
+    const configPath = join(dir, 'rustra.json');
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        schema: 'schema.json',
+        output: 'generated',
+        reactNative: { moduleDir: 'modules' },
+        dev: { target: 'wasm', wasm: { engine: 'wasm3' } },
+      }),
+    );
+    const config = readDevConfig(configPath);
+    assert.equal(config.dev?.target, 'wasm');
+    assert.equal(config.dev?.wasm?.parityGate, true, 'parityGate defaults to true');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('readDevConfig honors an explicit parityGate false and native default', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'rustra-dev-parity-'));
+  try {
+    mkdirSync(join(dir, 'src'), { recursive: true });
+    writeFileSync(join(dir, 'Cargo.toml'), '[package]\nname = "x"\nversion = "0.1.0"\n');
+    const configPath = join(dir, 'rustra.json');
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        schema: 'schema.json',
+        output: 'generated',
+        reactNative: { moduleDir: 'modules' },
+        dev: { target: 'wasm', wasm: { engine: 'wasm3', parityGate: false } },
+      }),
+    );
+    const off = readDevConfig(configPath);
+    assert.equal(off.dev?.wasm?.parityGate, false);
+
+    const plainPath = join(dir, 'plain.json');
+    writeFileSync(plainPath, JSON.stringify({ schema: 'schema.json', output: 'generated' }));
+    const plain = readDevConfig(plainPath);
+    assert.equal(plain.dev, undefined, 'no dev section → native defaults, no gate');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('createWatchLoop parity orchestration rejects a drifted reload and keeps the old engine state', async () => {
+  // parity gate 오케스트레이션 계약: reload 훅 안에서 gate.verify() 가 실패하면
+  // reload 는 거부되고(로드), 루프는 살아남은다. 훅 에러 격리 계약(A1)과 동일한
+  // 구조 — 게이트 거부가 루프를 죽이지 않는다.
+  const { createParityGate } = await import('./parity-gate.js');
+  let hashState = 'h1';
+  const gate = createParityGate({
+    capture: async () => ({ contractHash: hashState, golden: 'aa' }),
+  });
+  await gate.arm();
+
+  const reloads: string[] = [];
+  const errors: string[] = [];
+  const originalError = console.error;
+  console.error = (line: unknown) => errors.push(String(line));
+  try {
+    const loop = createWatchLoop(
+      async () => {
+        // perform: 코드젠 후 "새 엔진"이 계약을 바꿔버린 시나리오.
+        hashState = 'h2';
+      },
+      () => true,
+      0,
+    );
+    loop.onReload(async () => {
+      const verdict = await gate.verify();
+      if (!verdict.ok) throw new Error(verdict.reason);
+      reloads.push('applied');
+    });
+    await loop.run('rust change', true);
+    assert.deepEqual(reloads, [], 'drifted reload must be rejected');
+    assert.ok(
+      errors.some((line) => line.includes('contract hash drift')),
+      'rejection must be loud',
+    );
+    assert.equal(hashState, 'h2', 'loop survived the rejection (A1 isolation contract)');
+    loop.dispose();
+  } finally {
+    console.error = originalError;
+  }
+});
+
 test('readDevConfig rejects a config without a Cargo manifest', () => {
   const dir = mkdtempSync(join(tmpdir(), 'rustra-dev-config-'));
   try {

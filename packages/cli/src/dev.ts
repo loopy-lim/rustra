@@ -14,6 +14,21 @@ import {
 } from './watch.js';
 import { assertDirectory, findRepoCli, readDevConfig, readSchemaSnapshot } from './dev-config.js';
 import { detectConfigDirty, detectDirty, planPipeline, runOnce } from './dev-support.js';
+import { createParityGate, type ParitySnapshot } from './parity-gate.js';
+import { sha256 } from './hash.js';
+import { readFile } from 'node:fs/promises';
+
+/**
+ * 빌드타임 parity 캡처 — schema.json 의 SHA-256. cd243cec 단일 소싱 계약상 이
+ * 해시는 `rustra_ffi_contract_hash` 및 생성물 `GENERATED_CONTRACT_HASH` 와 같은
+ * 원본(schema 직렬화)을 해시하므로, dev 루프는 라이브 엔진 없이도 "reload 전후
+ * 계약이 갈라졌는가"를 판정할 수 있다. golden wire 상태는 호스트 훅(A1
+ * onReload)이 주입하는 영역이라 여기서는 undefined 다.
+ */
+async function captureSchemaParity(schemaPath: string): Promise<ParitySnapshot> {
+  const schema = await readFile(schemaPath, 'utf8');
+  return { contractHash: sha256(schema) };
+}
 
 export { createWatchLoop, createReloadHooks } from './watch.js';
 export type { WatchLoop } from './watch.js';
@@ -144,6 +159,19 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
   // detectConfigDirty 는 rust/ts 원인을 구분하지 못한다 — 보수적 기본값으로
   // 성공한 재생성마다 reload 를 방출한다(호스트 재초기화는 멱함수여야 한다).
   const reload = createReloadHooks();
+  // Task A2 — dev.target=wasm 이면 parity 게이트를 기본 켠다(`wasm.parityGate:
+  // false` 로 명시 끄기 전까지). capture 는 빌드타임 계약(schema.json 의
+  // SHA-256 — cd243cec 단일 소싱 계약상 rustra_ffi_contract_hash 및
+  // GENERATED_CONTRACT_HASH 와 같은 입력을 해시한다)과 golden wire 상태(호스트가
+  // onReload 훅 안에서 자신의 라이브 엔진으로 캡처해 주입 — A1 계약)를 대조
+  // 소재로 삼는다. reload 방출 후 게이트 검증이 실패하면 loud 하게 기록하고
+  // 기존 엔진을 유지한다(훅 격리 계약 — 루프는 살아남는다). 네이티브 타깃은
+  // 게이트 없다.
+  const wasmDev = config.dev?.target === 'wasm';
+  const gate =
+    wasmDev && config.dev?.wasm?.parityGate !== false
+      ? createParityGate({ capture: () => captureSchemaParity(config.schemaPath) })
+      : undefined;
   const codegen = async () => {
     const { runCodegen } = await import('./index.js');
     await runCodegen(['--config', resolve(configPath)]);
@@ -156,6 +184,15 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
       console.log(`[dev] ${new Date().toLocaleTimeString()} regenerated`);
       if (inspect) inspectHint();
       await reload.emitReload(reason);
+      // 게이트 검증은 reload 방출 **후** — 호스트 onReload 훅이 새 엔진 상태를
+      // 반영한 뒤의 계약을 대조해야 의미가 있다. 불일치는 loud 기록 + 리로드
+      // 거부 신호다(이미 방출된 훅의 롤백 책임은 호스트에게 있다 — A1 계약).
+      if (gate) {
+        const verdict = await gate.verify();
+        if (!verdict.ok) {
+          console.error(`[dev] reload rejected — ${verdict.reason}`);
+        }
+      }
     } catch (error) {
       console.error(`[dev] regeneration failed: ${error instanceof Error ? error.message : error}`);
     }
@@ -164,6 +201,9 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
     detectConfigDirty(manifestDir, config.schemaPath, config.outputPath),
   );
   await loop.run('initial', true);
+  // 기준 스냅샷은 initial 코드젠이 schema.json 을 만든 **뒤**에 잡는다 — 없는
+  // 파일 앞에서 게이트가 쓸모없는 baseline 으로 arm 되는 일을 막는다.
+  if (gate) await gate.arm();
   const generatedRoots = [config.outputPath, config.schemaPath];
   const sourceWatch = createFileWatch(
     sourceDirectories(join(manifestDir, 'src')).map((path) => ({
