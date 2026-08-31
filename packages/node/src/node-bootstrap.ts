@@ -73,21 +73,22 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
     return createNodeEngine(transport);
   };
   configureLazy(bootstrap);
+  const dispose = () => {
+    transport?.dispose();
+    transport = undefined;
+  };
   return {
     ready: () => ensureConfigured() as Promise<EngineClientWithBatch>,
-    dispose() {
-      transport?.dispose();
-      transport = undefined;
-    },
+    dispose,
     async reload() {
       // 재초기화 계약(A1): 자식 dispose → 같은 런타임 해상으로 재스폰 + (설정 시)
       // 계약 해시 재검증. 새 바이너리 이미지는 스폰 시점에 읽히므로 cargo 재빌드 후
       // reload 만으로 반영된다. 원샷 트랜스포트에는 drain 이 없다(루프 호스트의
       // NodeLoopTransport.drain 과 다름): dispose 시 진행 중 invocation 은
       // 얕은 취소(re-dispose reject)로 정리된다 — 문서화된 동작.
-      this.dispose();
+      dispose();
       configureLazy(bootstrap);
-      await this.ready();
+      await (ensureConfigured() as Promise<EngineClientWithBatch>);
     },
   };
 }

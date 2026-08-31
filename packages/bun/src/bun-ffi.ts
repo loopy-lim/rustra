@@ -179,21 +179,23 @@ export function createBunBootstrap(options: BunFfiEngineOptions): BunBootstrap {
     return runtime.engine;
   };
   configureLazy(bootstrap);
+  const dispose = () => {
+    runtime?.close();
+    runtime = undefined;
+  };
   return {
     ready: () => ensureConfigured() as Promise<RkyvV2Engine>,
-    dispose() {
-      runtime?.close();
-      runtime = undefined;
-    },
+    dispose,
     async reload() {
       // 엔진 상태 재초기화 — a0 스파이크가 증명한 프로세스 내 리셋 경로.
-      this.dispose();
+      dispose();
+      configureLazy(bootstrap);
+      await (ensureConfigured() as Promise<RkyvV2Engine>);
+      // 경고는 재초기화가 실제 성공한 뒤에 — 실패 시 false success 신호 방지.
       console.warn(
         '[bun] engine re-initialized. bun:ffi caches the library image: a rebuilt ' +
           'cdylib applies on the next process start (reload cannot swap bytes in-process).',
       );
-      configureLazy(bootstrap);
-      await this.ready();
     },
   };
 }

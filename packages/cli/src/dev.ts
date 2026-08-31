@@ -7,7 +7,6 @@ import {
   createFileWatch,
   createSourceWatch,
   createWatchLoop,
-  combineWatchHandles,
   isWithin,
   sourceDirectories,
   createReloadHooks,
@@ -41,6 +40,10 @@ export interface DevOptions {
  * the Rust side (rustBin) and BEFORE the loop idles again; the host drains its
  * own in-flight invocations, then re-initializes its engine. Errors from the
  * callback are logged (`[dev] reload failed: …`) and never kill the loop.
+ *
+ * Registration timing: `onReload` exists only after `runDev`/`runConfigDev`
+ * returns — the initial forced regeneration is therefore never observed as a
+ * reload; hooks see subsequent watch-loop runs only.
  */
 export type DevWatchHandle = WatchHandle & {
   onReload(cb: (reason: string) => void | Promise<void>): void;
@@ -108,7 +111,9 @@ export async function runDev(args: string[]): Promise<DevWatchHandle> {
       await runOnce(plan, { rustBin, tsCli });
       console.log(`[dev] ${new Date().toLocaleTimeString()} regenerated`);
       if (options.inspect) inspectHint();
-      // rustBin 이 돌았다 = 네이티브 바이너리가 바뀌었다 → 호스트 엔진 재초기화.
+      // Rust 소스가 바뀌었다(rustBin 단계가 돌았다) → reload 신호. 네이티브
+      // 바이너리 반영 여부는 호스트 재빌드/스폰 시점에 달렸다 — 신호의 책임은
+      // "Rust 측 변경" 통보까지다.
       if (plan.rustBin) await reload.emitReload(reason);
     } catch (error) {
       console.error(`[dev] regeneration failed: ${error instanceof Error ? error.message : error}`);
@@ -120,8 +125,13 @@ export async function runDev(args: string[]): Promise<DevWatchHandle> {
   const sourceWatch = createSourceWatch(join(backendDir, 'src'), () =>
     loop.schedule('rust change'),
   );
-  const handle = combineWatchHandles(loop, sourceWatch) as DevWatchHandle;
-  handle.onReload = reload.onReload;
+  const handle: DevWatchHandle = {
+    dispose() {
+      loop.dispose();
+      sourceWatch.dispose();
+    },
+    onReload: reload.onReload,
+  };
   return handle;
 }
 
@@ -185,12 +195,14 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
     },
   ]);
   console.log(`\n[dev] watching ${manifestDir} and ${config.schemaPath} for changes...`);
-  const handle = combineWatchHandles(
-    loop,
-    sourceWatch,
-    projectWatch,
-    schemaWatch,
-  ) as DevWatchHandle;
-  handle.onReload = reload.onReload;
+  const handle: DevWatchHandle = {
+    dispose() {
+      loop.dispose();
+      sourceWatch.dispose();
+      projectWatch.dispose();
+      schemaWatch.dispose();
+    },
+    onReload: reload.onReload,
+  };
   return handle;
 }

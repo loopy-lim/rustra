@@ -382,11 +382,11 @@ processTest(
       await transport.ready();
       // in-flight 소스: 응답이 아직 오지 않은 invoke 하나를 걸어둔다.
       const slow = transport.invoke('addNumbers', { a: 20, b: 22 }) as Promise<unknown>;
-      await transport.drain(5_000); // idle 이면 즉시, in-flight 은 정착까지 대기.
+      await transport.drain?.(5_000); // idle 이면 즉시, in-flight 은 정착까지 대기.
       await slow;
       // drain 이 이미 정착을 기다렸으므로 즉시 반환된다(타임아웃 없음).
       const started = Date.now();
-      await transport.drain(5_000);
+      await transport.drain?.(5_000);
       assert.ok(Date.now() - started < 1_000, 'drain on idle transport resolves immediately');
     } finally {
       transport.dispose();
@@ -408,7 +408,7 @@ processTest(
     try {
       const never = transport.invoke('addNumbers', { a: 1, b: 2 }) as Promise<unknown>;
       const started = Date.now();
-      await transport.drain(200);
+      await transport.drain?.(200);
       const elapsed = Date.now() - started;
       assert.ok(elapsed >= 150, `drain waited until the guard fired (took ${elapsed}ms)`);
       assert.ok(elapsed < 5_000, 'drain must not wait past the guard');
