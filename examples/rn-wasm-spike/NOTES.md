@@ -131,4 +131,3 @@ Full hex-level transcripts: `evidence/ios.md`, `evidence/android.md`.
 - v2 engine (`--features factor3`): version=3,
   `double(21)` → `01010c7b2276616c7565223a36337d00` (`{"value":63}`),
   contract hash UNCHANGED — the swap-PoC invariant holds on desktop.
-
