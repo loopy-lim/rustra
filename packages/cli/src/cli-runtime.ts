@@ -11,7 +11,15 @@ export interface CliManifest {
 
 export const cliManifest = createRequire(import.meta.url)('../package.json') as CliManifest;
 export const cliVersion = cliManifest.version;
-export const CLI_COMMANDS = ['generate', 'codegen', 'init', 'diff', 'doctor', 'dev'] as const;
+export const CLI_COMMANDS = [
+  'generate',
+  'codegen',
+  'init',
+  'diff',
+  'doctor',
+  'inspect',
+  'dev',
+] as const;
 
 export function isCliEntry(): boolean {
   if (!process.argv[1]) return false;
