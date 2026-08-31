@@ -317,7 +317,8 @@ Expo API를 사용하지 않는 동일한 autolink 패키지이므로 앱 코드
 
 0.3.1에서 올리는 경우에는 npm과 Rust 버전을 함께 맞춰야 한다. 호스트별 수동
 경계와 before/after는 [0.3에서 0.4로 마이그레이션](docs/migrations/0.3-to-0.4.md)을
-따른다.
+따른다. Rust crate 가 0.5 라인이라면
+[0.5에서 0.6으로 마이그레이션](docs/migrations/0.5-to-0.6.md)을 따른다.
 
 ## 프로젝트 구조
 

@@ -39,6 +39,11 @@ Pre-1.0 rule: removal is allowed in a minor release if the item was deprecated
 in a previous release, and the removal is documented in the CHANGELOG and —
 where consumers must act — in `docs/migrations/<from>-to-<to>.md`.
 
+Per-version migration notes live in
+[`docs/migrations/`](migrations/) — see
+[0.3 to 0.4](migrations/0.3-to-0.4.md) and
+[0.5 to 0.6](migrations/0.5-to-0.6.md).
+
 Current status: `RendererHost` is `#[doc(hidden)]` and `#[deprecated]`
 ("RendererHost is retained for Rustra 0.x compatibility; prefer a
 host-specific adapter boundary"). It is kept for the remainder of the 0.x

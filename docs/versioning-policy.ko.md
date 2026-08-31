@@ -35,6 +35,11 @@ pre-1.0 규칙: 이전 릴리즈에서 폐기되었던 항목은 마이너 릴�
 있으며, 제거는 CHANGELOG와 — 소비자가 조치해야 하는 경우 —
 `docs/migrations/<from>-to-<to>.md`에 문서화한다.
 
+버전별 마이그레이션 문서는
+[`docs/migrations/`](migrations/)에 있다 —
+[0.3에서 0.4로](migrations/0.3-to-0.4.ko.md),
+[0.5에서 0.6으로](migrations/0.5-to-0.6.ko.md) 참고.
+
 현재 상태: `RendererHost`는 `#[doc(hidden)]`이자 `#[deprecated]`
 ("RendererHost is retained for Rustra 0.x compatibility; prefer a
 host-specific adapter boundary") 상태다. 0.x 사이클이 끝날 때까지 유지하며,
