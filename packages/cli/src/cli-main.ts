@@ -5,6 +5,7 @@ import { runGenerate, runWatch } from './cli-generate.js';
 import { runInit } from './cli-init.js';
 import { runDiff } from './cli-diff.js';
 import { runDoctor } from './cli-doctor.js';
+import { runInspect } from './cli-inspect.js';
 import { closestMatch } from './cli-suggest.js';
 
 export async function main(): Promise<void> {
@@ -45,6 +46,10 @@ export async function main(): Promise<void> {
   }
   if (command === 'doctor') {
     await runDoctor(rest);
+    return;
+  }
+  if (command === 'inspect') {
+    await runInspect(rest);
     return;
   }
   if (command === 'dev') {

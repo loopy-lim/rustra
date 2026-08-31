@@ -29,6 +29,12 @@ export function printHelp(command?: string): void {
     );
     return;
   }
+  if (command === 'inspect') {
+    console.log(
+      'Usage: rustra inspect <file>\n\nDecode a captured inspector snapshot dump (hex or raw bytes)\nand print its field tree.\n\nOptions:\n  --help, -h       Show this help message',
+    );
+    return;
+  }
   if (command === 'dev') {
     console.log(
       'Usage: rustra dev [--config <path>] [--backend <dir>] [--app <dir>] [--inspect]\n\nOptions:\n  --config <path>  rustra.json path\n  --backend <dir>  Rust backend directory\n  --app <dir>      App directory containing generated/\n  --inspect        Print devtools instrumentation guidance\n  --help, -h       Show this help message',
@@ -45,6 +51,7 @@ Usage:
   rustra init <dir> [--host <name>] [--force]
   rustra diff --old <schema.v1.json> --new <schema.json> [--format json]
   rustra doctor [--config <path>] [--format text|json] [--strict]
+  rustra inspect <file>
   rustra dev [--config <path>] [--backend <dir>] [--app <dir>]
 
 Options:

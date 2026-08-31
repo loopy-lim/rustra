@@ -23,6 +23,7 @@
   ],
   "ffiExports": [
     "rustra_ffi_cancellation_status",
+    "rustra_ffi_capture_snapshot",
     "rustra_ffi_channel_create",
     "rustra_ffi_channel_drop",
     "rustra_ffi_channel_send",
@@ -90,6 +91,7 @@
       "* from './generate.js'",
       "BreakingChange",
       "CommandSchema",
+      "ContractDiagnosis",
       "DiffResult",
       "GENERATED_REACT_NATIVE_PACKAGE",
       "GeneratedFile",
@@ -106,6 +108,7 @@
       "createWatchLoop",
       "diffSchemas",
       "formatDiffResult",
+      "formatInspectText",
       "generateBunEntryTs",
       "generateNodeEntryTs",
       "generateReactNativeEntryTs",
@@ -120,6 +123,7 @@
       "runDoctor",
       "runGenerate",
       "runInit",
+      "runInspect",
       "runWatch",
       "rustraPlugin",
       "selectCodegenBinary",
@@ -132,7 +136,8 @@
       "DevtoolsReport",
       "InstrumentedEngine",
       "InstrumentedEngineOptions",
-      "createInstrumentedEngine"
+      "createInstrumentedEngine",
+      "renderTimelineReport"
     ],
     "packages/node": [
       "* from './node-bootstrap.js'",
@@ -235,6 +240,7 @@
       "* from './debug.js'",
       "* from './errors.js'",
       "* from './global.js'",
+      "* from './inspector.js'",
       "* from './json-engine.js'",
       "* from './live-schema.js'",
       "* from './public.js'",

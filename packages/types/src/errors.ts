@@ -172,6 +172,17 @@ export const RustraErrorCode = {
   ContractMismatch: 'contract.mismatch',
   /** 계약 해시 검증 불가(네이티브 미지원). */
   ContractUnenforceable: 'contract.unenforceable',
+  /**
+   * 인스펙터 스냅샷 JSON이 잘렸거나 파싱 불가 (experimental).
+   * 파서 측 전용 코드 — Rust error.rs 에 대응 값이 없다(`rustra_ffi_capture_snapshot`
+   * 은 잘못된 스냅샷을 만들지 않는다. 이 코드는 TS 디코더의 loud-fail 계약).
+   */
+  InspectorInvalidSnapshot: 'inspector.invalid_snapshot',
+  /**
+   * 인스펙터 스냅샷 JSON은 유효하지만 기대한 모양이 아님 (experimental).
+   * 파서 측 전용 코드 — Rust error.rs 에 대응 값이 없다(위와 동일 사유).
+   */
+  InspectorUnexpectedShape: 'inspector.unexpected_shape',
   /** 분류 불가 오류. */
   Unknown: 'unknown',
 } as const;

@@ -5,7 +5,7 @@ import { main } from './cli-main.js';
 export * from './generate.js';
 export type { PackageSchema, CommandSchema, JsonSchema } from './schema.js';
 export { diffSchemas, formatDiffResult } from './schema-diff.js';
-export type { BreakingChange, DiffResult } from './schema-diff.js';
+export type { BreakingChange, ContractDiagnosis, DiffResult } from './schema-diff.js';
 export { createValidatedEngine } from './validate-engine.js';
 export type { EngineClient as ValidateEngineClient, ValidateOptions } from './validate-engine.js';
 export { rustraPlugin } from './vite.js';
@@ -31,6 +31,7 @@ export { runGenerate, runWatch } from './cli-generate.js';
 export { runInit } from './cli-init.js';
 export { runDiff } from './cli-diff.js';
 export { runDoctor } from './cli-doctor.js';
+export { runInspect, formatInspectText } from './cli-inspect.js';
 
 if (isCliEntry()) {
   main().catch((error) => {
