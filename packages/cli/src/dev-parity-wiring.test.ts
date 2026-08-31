@@ -124,13 +124,35 @@ test(
       // watch → debounce → codegen → verify 왕복은 풀스위트 부하 하에서 들쭉날쭉
       // 하다 — 고정 sleep 대신 관찰 조건을 폴링한다(디바운스 상수와 무관하게
       // 안정적). 타임아웃은 실패 시점까지 캡처한 로그를 그대로 보여준다.
+      const sleep = (ms: number): Promise<void> =>
+        new Promise<void>((resolve) => setTimeout(resolve, ms));
       const waitFor = async (observe: () => boolean, what: string): Promise<void> => {
         const deadline = Date.now() + 10_000;
         while (!observe()) {
           if (Date.now() > deadline) {
             throw new Error(`timed out waiting for ${what}; captured:\n${errors.join('\n')}`);
           }
-          await new Promise<void>((resolve) => setTimeout(resolve, 100));
+          await sleep(100);
+        }
+      };
+      // 트리거는 "한 번 쓰고 기다림"이 아니라 "루프가 반응할 때까지 재터치"다.
+      // fs.watch 는 관찰 등록 직후의 첫 이벤트를 플랫폼 수준에서 잃을 수 있다
+      // (macOS 감시 스트림 arming 윈도우 — 8중 동시 재현에서 첫 쓰기 24중 13 손실,
+      // Bun·Node 공통, 등록 후 25ms 유예로 0으로 수렴 확인). 같은 내용을 다시
+      // 써도 mtime 이 바뀌어 새 이벤트가 걸리고, 코드젠(fake cargo 복사)과 게이트
+      // 판정은 멱등하므로 재터치는 관찰 조건을 바꾸지 않는다.
+      const triggerUntil = async (write: () => void, observe: () => boolean, what: string) => {
+        const deadline = Date.now() + 10_000;
+        let nextTouch = 0;
+        while (!observe()) {
+          if (Date.now() > deadline) {
+            throw new Error(`timed out waiting for ${what}; captured:\n${errors.join('\n')}`);
+          }
+          if (Date.now() >= nextTouch) {
+            write();
+            nextTouch = Date.now() + 500;
+          }
+          await sleep(100);
         }
       };
       const rejectionCount = (): number =>
@@ -143,8 +165,8 @@ test(
         // 트리거 1 — fake cargo 가 integer 계약을 쓴다 → 게이트가 거부해야 한다.
         // 거부 로그 자체가 "판정이 돌았다"는 양(陽) 관찰이자 동기화점이다.
         process.env.FAKE_SCHEMA_FILE = join(root, 'schema-integer.json');
-        writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed() {}\n');
-        await waitFor(
+        await triggerUntil(
+          () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed() {}\n'),
           () =>
             errors.some(
               (line) => line.includes('[dev] reload rejected —') && line.includes('drift'),
@@ -157,8 +179,11 @@ test(
         // 핵심은 (iii): 두 거부 모두 루프를 죽이지 않고 다음 변경이 다시
         // 판정됐다는 것. (같은 상태 유지 시의 통과는 rearm 단위 테스트가 담당.)
         process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
-        writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed2() {}\n');
-        await waitFor(() => rejectionCount() >= 2, 'the second (restored-contract) rejection');
+        await triggerUntil(
+          () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed2() {}\n'),
+          () => rejectionCount() >= 2,
+          'the second (restored-contract) rejection',
+        );
 
         // 두 번째 판정이 관찰된 뒤 짧은 유예 — 이 안에 reload 가 방출되지
         // 않았음이 곧 부정(i) 검증이다(거부는 reload 를 방출하지 않는다).
