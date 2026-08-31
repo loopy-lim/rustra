@@ -4,6 +4,7 @@ import { closestMatch } from './cli-suggest.js';
 
 /** rustra.json 루트 허용 키 — L1 fail-closed의 단일 출처(스키마 대조 테스트가 함께 읽는다). */
 export const CONFIG_ROOT_KEYS = [
+  '$schema',
   'schema',
   'output',
   'cppOutput',
@@ -53,6 +54,8 @@ export interface InspectorConfig {
 }
 
 export interface RustraConfig {
+  /** JSON Schema 참조(init이 삽입) — 에디터 검증 전용이며 런타임은 읽지 않는다. */
+  $schema?: string;
   schema: string;
   output: string;
   cppOutput?: string;
@@ -104,6 +107,9 @@ export function readConfigSync(configPath: string): RustraConfig {
   }
   if (/[\0\r\n]/.test(config.schema) || /[\0\r\n]/.test(config.output)) {
     throw new Error('Config schema and output must be non-empty safe paths');
+  }
+  if (config.$schema !== undefined && typeof config.$schema !== 'string') {
+    throw new Error('Config $schema must be a string (JSON Schema reference for editors)');
   }
   const codegen = config.codegen;
   if (codegen !== undefined) {

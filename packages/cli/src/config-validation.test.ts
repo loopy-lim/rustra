@@ -107,6 +107,11 @@ test('a near-typo inspector.onMismatch value gets a did-you-mean suggestion', ()
   assert.match(error, /did you mean "diagnose"\?/i);
 });
 
+test('a non-string $schema value fails L1 like every other root key', () => {
+  const error = loadConfigError({ ...baseConfig, $schema: 123 });
+  assert.match(error, /\$schema/);
+});
+
 test('an invalid dev.target value fails L1 with a did-you-mean suggestion', () => {
   const error = loadConfigError({ ...baseConfig, dev: { target: 'wsm' } });
   assert.match(error, /unknown config dev\.target value "wsm"/i);
