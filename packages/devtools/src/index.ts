@@ -5,6 +5,7 @@
  * bounded payload log와 명령별 지연/error 통계를 제공한다.
  */
 export { createInstrumentedEngine } from './instrumented-engine.js';
+export { renderTimelineReport } from './timeline-report.js';
 export type {
   CommandStat,
   DevtoolsReport,
