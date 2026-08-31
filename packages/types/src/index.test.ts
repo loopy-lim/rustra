@@ -1489,6 +1489,45 @@ test('T2: unenforceable + onContractMismatch still throws (nothing to verify)', 
   );
 });
 
+// ── B4: mismatch 콜백 info 의 diagnosis 옵션 필드 ──
+// 엔진은 mismatch 시점에 diff 를 계산할 live schema 만 있고 빌드 시점 스키마가
+// 없어 diagnosis 를 채우지 않는다(undefined). 진단은 빌드 시점 schema.json 을
+// 들고 있는 생산자(diffSchemas 등)가 채워 전달하는 구조적 계약이다.
+
+test('B4: engine callback info leaves diagnosis undefined (additive contract)', () => {
+  const nativeHash = 'a'.repeat(64);
+  const native = makeNative({ contractHash: nativeHash });
+  const calls: Array<{ nativeHash: string; expectedHash: string; diagnosis?: unknown }> = [];
+  createRkyvV2Engine(native, new Map(), {
+    contractHash: 'b'.repeat(64),
+    onContractMismatch: (info) => calls.push(info),
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(
+    calls[0]?.diagnosis,
+    undefined,
+    'engine does not compute diffs; diagnosis stays undefined',
+  );
+});
+
+test('B4: ContractMismatchDiagnosis round-trips as a plain object', () => {
+  // 생산자가 diffSchemas 진단을 그대로 실어 보낼 수 있는지 (직렬화 가능 평이 객체).
+  const diagnosis = {
+    diagnoses: [
+      {
+        code: 'command_id_displaced' as const,
+        command: 'add',
+        oldId: 1,
+        newId: 2,
+        detail: "command 'add' kept its name but its command id changed from 1 to 2",
+      },
+    ],
+  };
+  const json = JSON.parse(JSON.stringify(diagnosis));
+  assert.deepEqual(json, diagnosis);
+  assert.equal(json.diagnoses[0].detail.includes('command id changed'), true);
+});
+
 test('T2: schemaVersion equal → no staleness warning', () => {
   const native = makeNative({ schema: schemaBytes([{ name: 'add', commandId: 1 }], 3) });
   const stale = mockSchemaStale();
