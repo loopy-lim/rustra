@@ -1,0 +1,40 @@
+buildscript {
+  repositories { google(); mavenCentral() }
+  dependencies {
+    classpath "com.android.tools.build:gradle:8.7.2"
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20"
+  }
+}
+
+apply plugin: "com.android.library"
+apply plugin: "kotlin-android"
+
+def extOr = { name, fallback -> rootProject.ext.has(name) ? rootProject.ext.get(name) : fallback }
+// wasm3 dir is located by CMakeLists (upward probe) — see CMakeLists.txt.
+def staticLibDir = file("src/main/cpp/libs/${project.findProperty('ABI') ?: ''}") // unused; CMake picks per-ABI
+def staticLibName = "rustra_wasm_spike_backend"
+
+android {
+  namespace = "dev.rustra.wasmspike"
+  compileSdk = extOr("compileSdkVersion", 36)
+  ndkVersion = extOr("ndkVersion", "27.1.12297006")
+  defaultConfig {
+    minSdk = extOr("minSdkVersion", 24)
+    targetSdk = extOr("targetSdkVersion", 36)
+    externalNativeBuild.cmake {
+      cppFlags "-std=c++17"
+      arguments "-DANDROID_STL=c++_shared", "-DSTATIC_LIB_NAME=$staticLibName"
+    }
+    ndk { abiFilters "x86_64", "arm64-v8a" }
+    // native staticlib per ABI is copied by scripts/build-android.sh into
+    // src/main/cpp/libs/<abi>/ — CMake imports it.
+  }
+  externalNativeBuild.cmake.path = file("CMakeLists.txt")
+  buildFeatures.prefab = true
+  packagingOptions.excludes += ["**/libc++_shared.so"]
+  sourceSets.main.java.srcDirs = ["src/main/java"]
+  sourceSets.main.resources.srcDirs += ["src/main/resources"]
+}
+
+repositories { google(); mavenCentral() }
+dependencies { implementation "com.facebook.react:react-android" }

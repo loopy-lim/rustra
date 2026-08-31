@@ -65,6 +65,8 @@ export interface DoctorConfig {
   node?: Record<string, unknown>;
   bun?: Record<string, unknown>;
   tauri?: Record<string, unknown>;
+  /** dev 섹션 — target=wasm 일 때 wasm 고지(A3) 검사를 수집한다. */
+  dev?: { target?: string; wasm?: { engine?: string; parityGate?: boolean } };
 }
 export interface CargoMetadata {
   packages?: Array<{

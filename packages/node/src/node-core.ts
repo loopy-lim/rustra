@@ -117,4 +117,16 @@ export type NodeBootstrapOptions = {
   spawnOptions?: Parameters<typeof spawn>[2];
   contractHash?: string;
 };
-export type NodeBootstrap = { ready(): Promise<EngineClientWithBatch>; dispose(): void };
+export type NodeBootstrap = {
+  ready(): Promise<EngineClientWithBatch>;
+  dispose(): void;
+  /**
+   * Dev-loop reload hook target (Task A1): disposes the current child,
+   * re-spawns and re-readies over the same runtime resolution. The one-shot
+   * process transport has no drain — in-flight invocations reject on
+   * re-dispose (shallow cancel). Loop-based hosts that need graceful settle
+   * use `NodeLoopTransport.drain` explicitly before reload. A rebuilt binary
+   * is picked up because the image is read at spawn time.
+   */
+  reload(): Promise<void>;
+};

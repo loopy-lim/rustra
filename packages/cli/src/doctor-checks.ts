@@ -242,5 +242,40 @@ export function collectConfigChecks(
       ]),
     );
   }
+  // Task A3 — wasm dev 타깃 고지. 협동형(단일스레드) 취소만 재현하므로 동시성
+  // 버그(race/취소/백프레셔)는 wasm dev 에서 절대 재현되지 않는다 — 경고는
+  // required 가 아니지만(warn), wasm32 빌드 타깃 부재는 필수 fail 이다(wasm32
+  // 없이는 엔진 빌드 자체가 성공하지 않는다). 네이티브 타깃은 어느 쪽도 수집하지
+  // 않는다(절대 음성).
+  if (config.dev?.target === 'wasm') {
+    checks.push(
+      check(
+        'dev.wasm.experimental',
+        'warn',
+        false,
+        'wasm dev target: cooperative cancellation only — verify natively before release',
+        // 한국어 고지는 detail 로 — summary 는 기계 판독(JSON) 대비 영문 고정.
+        // detail 은 text 출력에서도 `detail:` 라인으로 렌더된다(시각 동일).
+        '협동형 취소만 유효 — 릴리스 전 native 검증 필수',
+        [
+          'Run the native build/test loop before releasing — wasm32 cannot reproduce ' +
+            'race/cancellation/backpressure behavior',
+        ],
+      ),
+    );
+    const targets = runner('rustup', ['target', 'list', '--installed']);
+    const installed = new Set(targets.stdout.split(/\r?\n/).map((target) => target.trim()));
+    checks.push(
+      conditionalCheck(
+        'dev.wasm.rust_target',
+        true,
+        targets.ok && installed.has('wasm32-unknown-unknown'),
+        'wasm32-unknown-unknown Rust target is installed',
+        'Rust target wasm32-unknown-unknown is missing',
+        targets.stderr || targets.error,
+        ['rustup target add wasm32-unknown-unknown'],
+      ),
+    );
+  }
   return checks;
 }

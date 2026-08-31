@@ -200,4 +200,46 @@ impl Package {
         // NOTE: next_command_id는 감소시키지 않는다 — retired id는 영원히 재사용 금지.
         Ok(())
     }
+
+    /// 핫 리로드 주입의 교체 경로 (A2, experimental — versioning-policy의
+    /// experimental 규칙 적용). `Package::replace` 가 제네릭 핸들러를 받는
+    /// 반면, FFI 주입(`rustra_ffi_hot_reload`)은 네이티브 코드를 운반할 수
+    /// 없다 — blob 계약은 (이름, 와이어 서명) 목록이고, 서명이 라이브 명령과
+    /// 일치할 때 이 메서드가 **와이어 계약을 보존한 채** 세대만 진행시킨다:
+    /// command_id/스키마/핸들러 라우트는 모두 기존 값 그대로 유지되고
+    /// live_schema 캐시만 무효화되어 진행 중 컨텍스트가 재계산을 보게 한다.
+    /// 호스트 엔진(예: 새로 로드된 wasm 모듈)이 실제 핸들러를 소유하며, 세대
+    /// 진행은 동적 명령 캐시를 가진 소비자에게 재동기화 신호가 된다.
+    ///
+    /// 이름이 없으면 `command.not_found`, 서명이 라이브 명령과 다르면
+    /// `signature.mismatch` — 양쪽 모두 호출자(FFI 리포트)가 loud 하게
+    /// 기록한다. 동결 상태면 `registry.frozen`.
+    pub(crate) fn replace_runtime_route(
+        &self,
+        name: &str,
+        expected_signature: &str,
+    ) -> crate::Result<()> {
+        self.ensure_mutable()?;
+        let mut state = self
+            .state
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        self.ensure_mutable()?;
+        let command = state
+            .commands
+            .get(name)
+            .ok_or_else(|| RustraError::command_not_found(name))?;
+        if crate::package_codegen::command_wire_signature(name, command) != expected_signature {
+            return Err(RustraError::custom(
+                "signature.mismatch",
+                format!("wire signature mismatch for command '{name}'"),
+            ));
+        }
+        // 와이어 계약 불변 — command_id/핸들러/스키마는 그대로, 세대만 진행해
+        // live_schema 캐시를 무효화한다. 스키마 바이트가 같으므로 다음
+        // live_schema() 재계산 결과는 동일하다(세대 필드만 새 값).
+        state.live_schema_cache = None;
+        state.schema_generation = state.schema_generation.wrapping_add(1);
+        Ok(())
+    }
 }

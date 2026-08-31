@@ -5,7 +5,44 @@ export type WatchLoop = {
   run(reason: string, force?: boolean): Promise<void>;
   schedule(reason: string): void;
   dispose(): void;
+  /**
+   * Registers a reload hook fired after a successful pipeline run that touched
+   * the Rust side (the host's engine must re-initialize). Errors from hooks are
+   * logged and swallowed — a broken host callback must never take down codegen
+   * watching.
+   *
+   * Level distinction: this loop-level hook fires on EVERY performed run (the
+   * loop cannot tell engine-relevant changes apart). The `runDev` handle's
+   * `DevWatchHandle.onReload` is the filtered variant — legacy layout gates on
+   * `plan.rustBin`; config mode emits on every successful regeneration (it
+   * cannot distinguish causes — the conservative default).
+   */
+  onReload(cb: (reason: string) => void | Promise<void>): void;
 };
+
+/**
+ * Reload-hook fan-out shared by watch loops. Never throws: hook failures are
+ * logged loudly and isolated so one broken host callback cannot kill the loop.
+ */
+export function createReloadHooks() {
+  const hooks: Array<(reason: string) => void | Promise<void>> = [];
+  return {
+    onReload(cb: (reason: string) => void | Promise<void>): void {
+      hooks.push(cb);
+    },
+    async emitReload(reason: string): Promise<void> {
+      for (const hook of hooks) {
+        try {
+          await hook(reason);
+        } catch (error) {
+          console.error(
+            `[dev] reload failed: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+    },
+  };
+}
 
 export type FileWatchSpec = {
   path: string;
@@ -30,6 +67,11 @@ export function combineWatchHandles(...handles: readonly WatchHandle[]): WatchHa
  * A pipeline never overlaps itself. Events arriving while it is running are
  * coalesced into one follow-up run, and disposal prevents both timers and
  * queued work from touching a closed development session.
+ *
+ * Reload hooks registered via {@link WatchLoop.onReload} fire after every
+ * successful `perform` — the loop cannot tell engine-relevant changes from
+ * pure codegen output, so hosts filter by comparing their own state (the
+ * conservative default is to treat every regeneration as reload-worthy).
  */
 export function createWatchLoop(
   perform: (reason: string) => Promise<void>,
@@ -40,6 +82,7 @@ export function createWatchLoop(
   let queued = false;
   let disposed = false;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  const reload = createReloadHooks();
 
   const run = async (reason: string, force = false): Promise<void> => {
     if (disposed) return;
@@ -49,7 +92,10 @@ export function createWatchLoop(
     }
     running = true;
     try {
-      if (force || (await shouldRun())) await perform(reason);
+      if (force || (await shouldRun())) {
+        await perform(reason);
+        await reload.emitReload(reason);
+      }
     } finally {
       running = false;
       if (queued && !disposed) {
@@ -71,6 +117,7 @@ export function createWatchLoop(
   return {
     run,
     schedule,
+    onReload: reload.onReload,
     dispose() {
       disposed = true;
       queued = false;
