@@ -4,9 +4,12 @@
 
 /**
  * (B4) 계약 diff 원인 진단 하나 — `@rustra/cli` `diffSchemas` 의
- * `ContractDiagnosis` 와 동일한 구조적 타입 (types 는 leaf 패키지라 cli 를
- * 의존하지 않는다; 생산자/소비자가 같은 모양을 공유한다). `detail` 은 사람이
- * 읽는 원인 문장이다.
+ * `ContractDiagnosis` 유니언의 **넓어진 구조적 상위 타입**이다 (types 는 leaf
+ * 패키지라 cli 를 의존하지 않는다). 모든 변형별 필드가 옵션이라 cli 진단은
+ * 항상 이 타입에 대입 가능하지만(단방향), 역방향은 아니다 — 생산자는
+ * `diffSchemas` 의 `diagnoses` 를 그대로 실어 보내면 되고, 소비자가 변형별
+ * 필드를 정확히 좁히려면 cli 쪽 `ContractDiagnosis` 타입을 참조한다.
+ * `detail` 은 사람이 읽는 원인 문장이다.
  */
 export type ContractMismatchDiagnosis = {
   code: 'command_id_displaced' | 'alias_missing' | 'wire_type_changed';
@@ -43,14 +46,14 @@ export type RkyvV2EngineOptions = {
    * 없으면 degraded 모드가 무의미하다).
    *
    * (B4) `info.diagnosis.diagnoses` 는 계약 diff 원인 진단 목록이다 —
-   * `@rustra/cli` 의 `diffSchemas(old, live)` 가 만드는 `ContractDiagnosis`
-   * 와 같은 모양(구조적 타이핑, 패키지 의존 없음). 엔진 자체는 mismatch 시점에
-   * live schema 만 있고 빌드 시점 스키마가 없어 diff 를 계산할 수 없으므로
-   * 네이티브 코어는 이 필드를 채우지 않는다 (undefined). 생산자가 채우는
-   * 경로: 빌드 시점 schema.json 을 들고 있는 호스트(예: OTA 래퍼, dev 서버)가
-   * mismatch 를 감지하면 diffSchemas 를 돌려 `diagnoses` 배열을 이 필드로
-   * 전달한다 — 콜백 소비자는 `info.diagnosis?.diagnoses.map((d) => d.detail)`
-   * 로 원인 문장을 읽는다.
+   * `@rustra/cli` 의 `diffSchemas(old, live)` 가 만드는 `ContractDiagnosis` 가
+   * 대입되는 상위 타입(위 `ContractMismatchDiagnosis` 참조). 엔진 자체는
+   * mismatch 시점에 live schema 만 있고 빌드 시점 스키마가 없어 diff 를 계산할
+   * 수 없으므로 네이티브 코어는 이 필드를 채우지 않는다 (undefined). 생산자가
+   * 채우는 경로: 빌드 시점 schema.json 을 들고 있는 호스트(예: OTA 래퍼, dev
+   * 서버)가 mismatch 를 감지하면 diffSchemas 를 돌려 `diagnoses` 배열을 이
+   * 필드로 전달한다 — 콜백 소비자는
+   * `info.diagnosis?.diagnoses.map((d) => d.detail)` 로 원인 문장을 읽는다.
    */
   onContractMismatch?: (info: {
     nativeHash: string;

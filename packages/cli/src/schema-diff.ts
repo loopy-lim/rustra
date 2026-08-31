@@ -97,7 +97,7 @@ export function diffSchemas(oldSchema: PackageSchema, newSchema: PackageSchema):
     );
   }
 
-  diagnoseContractGaps(oldSchema, newSchema, oldCommands, newCommands, diagnoses, breaking);
+  diagnoseContractGaps(newSchema, oldCommands, newCommands, diagnoses, breaking);
 
   // 타입 변경 진단: postcard 는 위치 기반 비-자기서술 인코딩이므로 필드 타입이
   // 바뀌면 와이어 모양 자체가 바뀐다 (넓히기 호환 개념이 없다 — i64 와 f64 조차
@@ -125,9 +125,13 @@ export function diffSchemas(oldSchema: PackageSchema, newSchema: PackageSchema):
  * wire 디스패치의 핵심인 command_id 변화가 보이지 않는다 — 같은 스키마 모양이라도
  * id 가 밀리면 byId 호출이 전부 갈라진다. 새 breaking 항목(command_id_changed)과
  * 원인 문장 진단을 함께 만든다.
+ *
+ * parsePackageSchema 는 commandId 를 검증하지 않으므로 id 없는(또는 한쪽만 있는)
+ * 스키마가 CLI 에 그대로 들어올 수 있다 — id 가 양쪽 다 숫자가 아니면 비교 자체가
+ * 무의미하므로 (undefined → undefined 는 동일, 한쪽만 있으면 비교 불가) 조용히
+ * 건너뛴다. 'undefined' 문자열이 텍스트/JSON 에 새는 것을 막는 가드다.
  */
 function diagnoseContractGaps(
-  oldSchema: PackageSchema,
   newSchema: PackageSchema,
   oldCommands: Map<string, PackageSchema['commands'][number]>,
   newCommands: Map<string, PackageSchema['commands'][number]>,
@@ -138,6 +142,7 @@ function diagnoseContractGaps(
     const newCmd = newCommands.get(name);
     if (!newCmd) continue; // command_removed 는 위에서 이미 처리했다.
     if (oldCmd.commandId === newCmd.commandId) continue;
+    if (typeof oldCmd.commandId !== 'number' || typeof newCmd.commandId !== 'number') continue;
     breaking.push({
       type: 'command_id_changed',
       command: name,
@@ -159,10 +164,15 @@ function diagnoseContractGaps(
   // (OTA) 구 id 가 다른 명령의 실제 id 로 점유됐는지 검사한다 — 네이티브에
   // alias_command_id 선언이 빠졌을 때 정확히 이 모양이 된다 (builder_build.rs 의
   // 점유 해소가 없으면 구 id 호출이 새 명령으로 라우팅된다).
-  const newIdToName = new Map(newSchema.commands.map((c) => [c.commandId, c.name]));
+  const newIdToName = new Map(
+    newSchema.commands
+      .filter((c) => typeof c.commandId === 'number')
+      .map((c) => [c.commandId, c.name]),
+  );
   for (const [name, oldCmd] of oldCommands) {
     const newCmd = newCommands.get(name);
     if (!newCmd || oldCmd.commandId === newCmd.commandId) continue;
+    if (typeof oldCmd.commandId !== 'number') continue;
     const occupant = newIdToName.get(oldCmd.commandId);
     if (occupant === undefined || occupant === name) continue;
     diagnoses.push({
