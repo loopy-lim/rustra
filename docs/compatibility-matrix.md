@@ -66,11 +66,13 @@ Task A1 (dev-loop reload orchestration, 2026-08-31) adopted the
 **process-internal engine reset** as the primary mechanism, per the A0 verdict.
 True dlopen swap was evaluated and rejected:
 
-- **Node**: engines are spawned child processes, so reload = drain in-flight
-  invocations → dispose the child → re-spawn (the new binary image is read at
-  spawn time). `NodeLoopTransport.drain(timeoutMs = 5s)` +
-  `NodeBootstrap.reload()` implement this; a rebuilt `cargo` artifact is picked
-  up by reload alone.
+- **Node**: engines are spawned child processes, so reload = dispose the child
+  → re-spawn (the new binary image is read at spawn time). Two flavors:
+  loop-based hosts settle gracefully via `NodeLoopTransport.drain(timeoutMs =
+5s)` → dispose → re-bootstrap, while `NodeBootstrap.reload()` (one-shot
+  process transport, no drain) does a shallow cancel — in-flight invocations
+  reject during dispose — then re-bootstraps and re-readies. A rebuilt `cargo`
+  artifact is picked up by reload alone.
 - **Bun**: EMPIRICAL FINDING (macOS arm64, Bun 1.4.0; probed with a minimal
   versioned dylib in both directions plus the real calculator cdylib):
   `bun:ffi` dlopen caches the library image per process. Re-dlopen of a REPLACED

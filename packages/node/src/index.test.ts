@@ -441,44 +441,13 @@ processTest('createNodeBootstrap reload disposes and re-bootstraps the runtime',
   }
 });
 
-test('createNodeBootstrap reload drains before disposing (mock transport contract)', async () => {
-  // 결함 재발 방지: mock 은 mode/ready 까지 완전해야 한다(coupling-defect 패턴).
-  const order: string[] = [];
-  let pendingResolve: (() => void) | null = null;
-  const fakeTransport = {
-    invoke(_command: string, _args?: unknown) {
-      return new Promise<unknown>((resolve) => {
-        pendingResolve = () => resolve({ value: 42 });
-      });
-    },
-    getContractHash: () => Promise.resolve('0'.repeat(64)),
-    dispose() {
-      order.push('dispose');
-    },
-    get pid() {
-      return 1234 as number | null;
-    },
-    get mode() {
-      return 'ndjson' as const;
-    },
-    ready() {
-      return Promise.resolve();
-    },
-    drain() {
-      order.push('drain');
-      pendingResolve?.();
-      return Promise.resolve();
-    },
-  };
+test('createNodeBootstrap reload rejects when engine spawn fails (one-shot transport, no injected drain)', async () => {
+  // NodeBootstrap.reload 은 원샷 트랜스포트를 내부에서 생성한다 — drain 주입은
+  // 공개 계약에 없으며(drain 은 NodeLoopTransport 전용), 여기서 검증하는 것은
+  // 스폰 실패(resolveNodeRuntime 부재) 전파뿐이다. 정상 경로 재부트스트랩은
+  // 위의 'reload disposes and re-bootstraps' 실바이너리 테스트가 담당한다.
   const bootstrap = createNodeBootstrap({
     commandCandidates: ['./missing-rustra-runtime'],
-    contractHash: '0'.repeat(64),
-    // 실제 스폰 대신 fake transport 주입은 공개 계약에 없으므로, bootstrap 의
-    // reload 흐름에서 transport.drain → dispose 순서만 검증한다: 실패 재현이
-    // 필요하면 resolveNodeRuntime 이 던지는 것을 이용한다.
   });
-  void fakeTransport;
-  void order;
-  // reload 는 런타임 부재 시 transport.error 를 내며 실패해야 한다(스폰 실패 전파).
   await assert.rejects(bootstrap.reload(), /RUSTRA_NODE_BINARY|No Rustra Node runtime/);
 });

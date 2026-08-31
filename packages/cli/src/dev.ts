@@ -26,7 +26,6 @@ export {
   type PipelinePlan,
   type StageRunners,
 } from './dev-support.js';
-export type { DevWatchHandle };
 export { readDevConfig } from './dev-config.js';
 
 export interface DevOptions {
