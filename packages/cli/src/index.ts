@@ -31,6 +31,7 @@ export { runGenerate, runWatch } from './cli-generate.js';
 export { runInit } from './cli-init.js';
 export { runDiff } from './cli-diff.js';
 export { runDoctor } from './cli-doctor.js';
+export { runInspect, formatInspectText } from './cli-inspect.js';
 
 if (isCliEntry()) {
   main().catch((error) => {
