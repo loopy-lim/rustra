@@ -13,10 +13,72 @@ import {
   type WatchHandle,
 } from './watch.js';
 import { assertDirectory, findRepoCli, readDevConfig, readSchemaSnapshot } from './dev-config.js';
+import type { ResolvedDevWasm } from './dev-config.js';
 import { detectConfigDirty, detectDirty, planPipeline, runOnce } from './dev-support.js';
 import { createParityGate, type ParitySnapshot } from './parity-gate.js';
+import { readCargoMetadata, selectHostPackage, requireTargetDirectory } from './cargo-metadata.js';
 import { sha256 } from './hash.js';
 import { readFile } from 'node:fs/promises';
+
+/** cargo 규약 — cdylib wasm32 릴리스 산출물 이름(패키지 이름의 `-` → `_`). */
+function wasmArtifactName(packageName: string): string {
+  return `${packageName.replaceAll('-', '_')}.wasm`;
+}
+
+/**
+ * wasm32 엔진 아티팩트 경로 — A0 스파이크(`scripts/build-backend.sh`)가 실제로
+ * 생산하는 레이아웃을 그대로 따른다:
+ * `<target_directory>/wasm32-unknown-unknown/release/<crate_name>.wasm`
+ */
+export function wasmEngineArtifactPath(
+  manifestPath: string,
+  packageName: string,
+  metadata = readCargoMetadata(manifestPath),
+): string {
+  return join(
+    requireTargetDirectory(metadata),
+    'wasm32-unknown-unknown',
+    'release',
+    wasmArtifactName(packageName),
+  );
+}
+
+/**
+ * wasm dev 타깃(Task A3)의 rust 재빌드 단계 — 엔진 crate 의 cdylib 를
+ * wasm32-unknown-unknown 으로 빌드하고 산출물 경로를 돌려준다. 매니페스트의
+ * 패키지 중 cdylib 타깃을 가진 것을 고른다(reactNative.rustPackage 지정 시 그
+ * 패키지로 한정). 릴리스 프로필(`--release`)은 A0 스파이크가 검증한 구성
+ * (opt-level "s", panic=abort)과 동일하다 — dev 편의 프로필을 새로 발명하지 않는다.
+ */
+export async function buildWasmEngine(devWasm: ResolvedDevWasm): Promise<string> {
+  const manifestPath = devWasm.manifestPath;
+  const metadata = readCargoMetadata(manifestPath);
+  const cargoPackage = selectHostPackage(metadata, manifestPath, devWasm.rustPackage);
+  const cdylibs = cargoPackage.targets.filter((target) => target.crate_types.includes('cdylib'));
+  if (cdylibs.length !== 1) {
+    throw new Error(
+      `wasm engine build requires exactly one cdylib target in package ${cargoPackage.name}, found ${cdylibs.length}. ` +
+        `Add crate-type = ["rlib", "cdylib"] to ${manifestPath}` +
+        (devWasm.rustPackage ? '' : `, or set reactNative.rustPackage in rustra.json`),
+    );
+  }
+  const artifactPath = wasmEngineArtifactPath(manifestPath, cargoPackage.name, metadata);
+  await spawnInherit(
+    'cargo',
+    ['build', '--manifest-path', manifestPath, '--target', 'wasm32-unknown-unknown', '--release'],
+    dirname(manifestPath),
+    {
+      progressLabel: `wasm32 engine build (${cargoPackage.name})`,
+      childOutput: 'inherit',
+    },
+  );
+  if (!existsSync(artifactPath)) {
+    throw new Error(
+      `wasm32 build did not produce ${artifactPath} — the cdylib target must compile for wasm32-unknown-unknown`,
+    );
+  }
+  return artifactPath;
+}
 
 /**
  * 빌드타임 parity 캡처 — schema.json 의 SHA-256. cd243cec 단일 소싱 계약상 이
@@ -184,6 +246,16 @@ async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWa
     console.log(`[dev] ${reason} → codegen --config ${resolve(configPath)}`);
     try {
       await codegen();
+      // Task A3 — target=wasm 이면 코드젠에 이어 wasm32 엔진 빌드를
+      // 오케스트레이션한다(A0 스파이크의 빌드 명령·산출물 레이아웃과 동일). 빌드
+      // 실패는 throw 로 전파되어 아래 catch 로 간다 — 새 엔진이 존재하지 않는
+      // reload 를 방출하지 않기 위해 게이트 검증보다 **먼저** 실패해야 한다.
+      // 기기로의 푸시(adb push / Documents 등)는 호스트 영역 — 산출물 경로 안내가
+      // 오케스트레이션의 끝이다.
+      if (config.devWasm) {
+        const artifact = await buildWasmEngine(config.devWasm);
+        console.log(`[dev:wasm] engine artifact: ${artifact}`);
+      }
       console.log(`[dev] ${new Date().toLocaleTimeString()} regenerated`);
       if (inspect) inspectHint();
       if (gate) {

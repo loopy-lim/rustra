@@ -101,3 +101,27 @@ Task A1(dev 루프 reload 오케스트레이션, 2026-08-31)은 A0 판정에 따
   모드는 원인 구분이 불가해 성공한 재생성마다 방출 — 보수적 기본값). 훅 에러는
   기록되고(`[dev] reload failed: …`) watch 루프를 죽이지 않는다. 진행 중
   invocation drain 은 호스트 콜백의 책임이다.
+
+## wasm dev 타깃 (Task A3): 빌드 오케스트레이션 + doctor 고지 + 릴리스 가드
+
+`dev.target = "wasm"` 이면 `rustra dev`(config 모드)가 코드젠마다 엔진의 wasm32
+빌드를 오케스트레이션한다. A0 스파이크의 실제 명령과 산출물 레이아웃을 그대로
+쓴다(`cargo build --manifest-path <Cargo.toml> --target
+wasm32-unknown-unknown --release` →
+`<target>/wasm32-unknown-unknown/release/<crate_name>.wasm`; cdylib 타깃,
+릴리스 프로필은 A0 검증 구성 — opt-level "s", panic=abort). 엔진 crate 해석은
+RN 어댑터와 동일한 우선순위(`reactNative.rustManifest`/`rustPackage` →
+`codegen.*` → 상위 탐색)를 따르고, 빌드된 아티팩트 경로를 안내한다
+(`[dev:wasm] engine artifact: <path>`). 그 파일을 기기로 푸시하는 것은 호스트
+통합점이다(adb push / Documents 드롭 — A0 앱의 흐름) — CLI 가 자동화하지
+않기로 명시적으로 결정했다. wasm 빌드 실패는 parity 게이트와 reload 방출보다
+**먼저** 전파된다 — 존재하지 않는 엔진에 대한 reload 신호는 호스트에 가지 않는다.
+A2 parity 게이트는 그대로 결합된다.
+
+doctor 검사 2건이 타깃을 따라온다: wasm dev 타깃이 실험 상태라는 경고(required
+아님) — **협동형 취소만 유효 — 릴리스 전 native 검증 필수**(동시성 버그 —
+race/취소/백프레셔 — 는 단일스레드 협동형 wasm32 에서 재현되지 않음), 그리고
+`wasm32-unknown-unknown` rustup 타깃 설치 여부의 필수 검사. 릴리스 정합성
+스크립트는 이제 어떤 발행 패키지의 `files` 가 wasm 백엔드를 싣는다면(`wasm3`
+소스, `wasm32*` 산출물, `wasm-backend` 디렉터리, `*.wasm` 엔진) fail 한다 —
+백엔드는 버전 정책으로 승격되기 전까지 dev 전용이다.

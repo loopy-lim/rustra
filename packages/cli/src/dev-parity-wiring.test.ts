@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { chmodSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { chmodSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runDev } from './dev.js';
@@ -18,6 +18,9 @@ import { runDev } from './dev.js';
 //     (resolveCodegenTarget / selectReactNativeCargoTarget 계약)
 //   - `cargo run` → $FAKE_SCHEMA_FILE 을 generated/schema.json 으로 복사
 //     ("Rust schema generation" 단계의 역할)
+//   - `cargo build` → wasm32 엔진 빌드 대역(Task A3): $FAKE_WASM_LOG 에 인수를
+//     기록하고 target/wasm32-unknown-unknown/release/x.wasm 을 만든다.
+//     $FAKE_WASM_FAIL 이 설정되면 실패한다(reload 억제 계약 검증용).
 // wasm dev-target은 reactNative 섹션을 요구하므로 RN 스캐폴드/의존성 경로도
 // 실제로 돈다 — moduleDir 을 프로젝트 src 밖으로 분리해 감시 루프가 생성물을
 // 소스 변경으로 오판하지 않게 한다.
@@ -79,7 +82,7 @@ function seedProject(root: string): string {
     '  dir=$(dirname "$manifest")',
     '  printf \'{"target_directory":"%s/target","packages":[{"name":"x","manifest_path":"%s",',
     '"targets":[{"name":"generate","crate_types":["bin"],"kind":["bin"]},',
-    '{"name":"rustra_bridge","crate_types":["staticlib"],"kind":["lib"]}]}]}\\n\' "$dir" "$manifest"',
+    '{"name":"rustra_bridge","crate_types":["staticlib","cdylib"],"kind":["lib"]}]}]}\\n\' "$dir" "$manifest"',
     '  exit 0',
     'fi',
     'if [ "$1" = "run" ]; then',
@@ -90,6 +93,20 @@ function seedProject(root: string): string {
     '  cp "$FAKE_SCHEMA_FILE" "$dir/generated/schema.json"',
     '  exit 0',
     'fi',
+    'if [ "$1" = "build" ]; then',
+    '  [ -n "$FAKE_WASM_LOG" ] && printf \'%s\\n\' "$*" >> "$FAKE_WASM_LOG"',
+    '  if [ -n "$FAKE_WASM_FAIL" ]; then echo "fake wasm build failure" >&2; exit 3; fi',
+    '  manifest=""; prev=""; target=""',
+    '  for a in "$@"; do',
+    '    [ "$prev" = "--manifest-path" ] && manifest="$a"',
+    '    [ "$prev" = "--target" ] && target="$a"',
+    '    prev="$a"',
+    '  done',
+    '  dir=$(dirname "$manifest")',
+    '  mkdir -p "$dir/target/$target/release"',
+    '  printf \'fake wasm engine\' > "$dir/target/$target/release/x.wasm"',
+    '  exit 0',
+    'fi',
     'echo "unexpected cargo invocation: $*" >&2',
     'exit 1',
   ].join('\n');
@@ -97,6 +114,65 @@ function seedProject(root: string): string {
   writeFileSync(fakePath, fakeCargo);
   chmodSync(fakePath, 0o755);
   return project;
+}
+
+// watch → debounce → codegen → verify 왕복은 풀스위트 부하 하에서 들쭉날쭉하다 —
+// 고정 sleep 대신 관찰 조건을 폴링한다(디바운스 상수와 무관하게 안정적). 타임아웃은
+// 실패 시점까지 캡처한 로그를 그대로 보여준다.
+function sleep(ms: number): Promise<void> {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function waitFor(captured: () => string[], observe: () => boolean, what: string): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  const poll = async (): Promise<void> => {
+    while (!observe()) {
+      if (Date.now() > deadline) {
+        throw new Error(`timed out waiting for ${what}; captured:\n${captured().join('\n')}`);
+      }
+      await sleep(100);
+    }
+  };
+  return poll();
+}
+
+// 트리거는 "한 번 쓰고 기다림"이 아니라 "루프가 반응할 때까지 재터치"다. fs.watch 는
+// 관찰 등록 직후의 첫 이벤트를 플랫폼 수준에서 잃을 수 있다(macOS 감시 스트림 arming
+// 윈도우 — 8중 동시 재현에서 첫 쓰기 24중 13 손실, Bun·Node 공통, 등록 후 25ms 유예로
+// 0으로 수렴 확인). 같은 내용을 다시 써도 mtime 이 바뀌어 새 이벤트가 걸리고,
+// 코드젠(fake cargo 복사)과 게이트 판정은 멱등하므로 재터치는 관찰 조건을 바꾸지 않는다.
+function triggerUntil(
+  captured: () => string[],
+  write: () => void,
+  observe: () => boolean,
+  what: string,
+): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  const poll = async (): Promise<void> => {
+    let nextTouch = 0;
+    while (!observe()) {
+      if (Date.now() > deadline) {
+        throw new Error(`timed out waiting for ${what}; captured:\n${captured().join('\n')}`);
+      }
+      if (Date.now() >= nextTouch) {
+        write();
+        nextTouch = Date.now() + 500;
+      }
+      await sleep(100);
+    }
+  };
+  return poll();
+}
+
+function captureConsole(into: string[]): () => void {
+  const originalError = console.error;
+  const originalLog = console.log;
+  console.error = (line: unknown) => into.push(String(line));
+  console.log = (line: unknown) => into.push(`LOG ${String(line)}`);
+  return () => {
+    console.error = originalError;
+    console.log = originalLog;
+  };
 }
 
 test(
@@ -117,44 +193,7 @@ test(
       process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
 
       const errors: string[] = [];
-      const originalError = console.error;
-      const originalLog = console.log;
-      console.error = (line: unknown) => errors.push(String(line));
-      console.log = (line: unknown) => errors.push(`LOG ${String(line)}`);
-      // watch → debounce → codegen → verify 왕복은 풀스위트 부하 하에서 들쭉날쭉
-      // 하다 — 고정 sleep 대신 관찰 조건을 폴링한다(디바운스 상수와 무관하게
-      // 안정적). 타임아웃은 실패 시점까지 캡처한 로그를 그대로 보여준다.
-      const sleep = (ms: number): Promise<void> =>
-        new Promise<void>((resolve) => setTimeout(resolve, ms));
-      const waitFor = async (observe: () => boolean, what: string): Promise<void> => {
-        const deadline = Date.now() + 10_000;
-        while (!observe()) {
-          if (Date.now() > deadline) {
-            throw new Error(`timed out waiting for ${what}; captured:\n${errors.join('\n')}`);
-          }
-          await sleep(100);
-        }
-      };
-      // 트리거는 "한 번 쓰고 기다림"이 아니라 "루프가 반응할 때까지 재터치"다.
-      // fs.watch 는 관찰 등록 직후의 첫 이벤트를 플랫폼 수준에서 잃을 수 있다
-      // (macOS 감시 스트림 arming 윈도우 — 8중 동시 재현에서 첫 쓰기 24중 13 손실,
-      // Bun·Node 공통, 등록 후 25ms 유예로 0으로 수렴 확인). 같은 내용을 다시
-      // 써도 mtime 이 바뀌어 새 이벤트가 걸리고, 코드젠(fake cargo 복사)과 게이트
-      // 판정은 멱등하므로 재터치는 관찰 조건을 바꾸지 않는다.
-      const triggerUntil = async (write: () => void, observe: () => boolean, what: string) => {
-        const deadline = Date.now() + 10_000;
-        let nextTouch = 0;
-        while (!observe()) {
-          if (Date.now() > deadline) {
-            throw new Error(`timed out waiting for ${what}; captured:\n${errors.join('\n')}`);
-          }
-          if (Date.now() >= nextTouch) {
-            write();
-            nextTouch = Date.now() + 500;
-          }
-          await sleep(100);
-        }
-      };
+      const restore = captureConsole(errors);
       const rejectionCount = (): number =>
         errors.filter((line) => line.includes('[dev] reload rejected —')).length;
       try {
@@ -166,6 +205,7 @@ test(
         // 거부 로그 자체가 "판정이 돌았다"는 양(陽) 관찰이자 동기화점이다.
         process.env.FAKE_SCHEMA_FILE = join(root, 'schema-integer.json');
         await triggerUntil(
+          () => errors,
           () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed() {}\n'),
           () =>
             errors.some(
@@ -180,6 +220,7 @@ test(
         // 판정됐다는 것. (같은 상태 유지 시의 통과는 rearm 단위 테스트가 담당.)
         process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
         await triggerUntil(
+          () => errors,
           () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed2() {}\n'),
           () => rejectionCount() >= 2,
           'the second (restored-contract) rejection',
@@ -187,7 +228,7 @@ test(
 
         // 두 번째 판정이 관찰된 뒤 짧은 유예 — 이 안에 reload 가 방출되지
         // 않았음이 곧 부정(i) 검증이다(거부는 reload 를 방출하지 않는다).
-        await new Promise<void>((resolve) => setTimeout(resolve, 300));
+        await sleep(300);
         handle.dispose();
         assert.ok(rejectionCount() >= 2, `rejection must be loud, got: ${errors.join('\n')}`);
         assert.deepEqual(
@@ -197,9 +238,135 @@ test(
             '(baseline re-armed to the drifted state), so both triggers are rejected',
         );
       } finally {
-        console.error = originalError;
-        console.log = originalLog;
+        restore();
         delete process.env.FAKE_SCHEMA_FILE;
+      }
+    } finally {
+      process.env.PATH = originalPath;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+// ── wasm 타깃 빌드 오케스트레이션 (Task A3) ──────────────────────────────────
+
+test(
+  'runConfigDev wasm target builds the wasm32 engine artifact and still reloads',
+  { timeout: 30_000 },
+  async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-wasm-'));
+    const originalPath = process.env.PATH;
+    try {
+      const project = seedProject(root);
+      writeSchema(join(project, 'generated', 'schema.json'), 'string');
+      writeSchema(join(root, 'schema-string.json'), 'string');
+      const wasmLog = join(root, 'wasm-build.log');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+      process.env.FAKE_WASM_LOG = wasmLog;
+
+      const errors: string[] = [];
+      const restore = captureConsole(errors);
+      try {
+        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        const reloads: string[] = [];
+        handle.onReload((reason) => void reloads.push(reason));
+
+        // initial 강제 런이 codegen(cargo run)에 이어 wasm32 엔진 빌드(cargo build)를
+        // 오케스트레이션한다 — runDev 반환 시점에 이미 빌드 기록과 아티팩트 안내가
+        // 있어야 한다(A0 스파이크의 실빌드 명령과 동일: --target wasm32-unknown-unknown
+        // --release, 산출물은 <target>/wasm32-unknown-unknown/release/<name>.wasm).
+        const builds = readFileSync(wasmLog, 'utf8');
+        assert.ok(
+          builds.split('\n').some((line) => line.includes('--target wasm32-unknown-unknown')),
+          `cargo build must target wasm32-unknown-unknown, got:\n${builds}`,
+        );
+        assert.ok(
+          builds.split('\n').some((line) => line.includes('--release')),
+          'the dev wasm build follows the A0 release-profile artifact layout',
+        );
+        assert.ok(
+          errors.some(
+            (line) =>
+              line.includes('[dev:wasm] engine artifact:') &&
+              line.includes(join('target', 'wasm32-unknown-unknown', 'release', 'x.wasm')),
+          ),
+          `the artifact path must be announced for the host push step, got:\n${errors.join('\n')}`,
+        );
+
+        // 이어지는 변경도 codegen → wasm 빌드 → reload 순서로 계속 오케스트레이션된다
+        // (parity 게이트가 같은 계약을 유지하므로 reload 는 통과한다).
+        await triggerUntil(
+          () => errors,
+          () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed() {}\n'),
+          () => reloads.length >= 1,
+          'a reload after the wasm build',
+        );
+        handle.dispose();
+        assert.ok(
+          reloads.length >= 1,
+          `reload must still fire after a successful wasm build, captured:\n${errors.join('\n')}`,
+        );
+        const buildsAfter = readFileSync(wasmLog, 'utf8');
+        assert.ok(
+          buildsAfter.split('\n').filter((line) => line.includes('--target wasm32-unknown-unknown'))
+            .length >= 2,
+          'every dirty run rebuilds the wasm32 engine, not just the initial one',
+        );
+      } finally {
+        restore();
+        delete process.env.FAKE_SCHEMA_FILE;
+        delete process.env.FAKE_WASM_LOG;
+      }
+    } finally {
+      process.env.PATH = originalPath;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'runConfigDev wasm target suppresses reload when the wasm32 build fails',
+  { timeout: 30_000 },
+  async () => {
+    // wasm 빌드 실패 = 호스트가 받을 새 엔진이 없다 — codegen 이 성공해도 reload 는
+    // 방출되지 않는다(게이트 검증 이전에 실패가 전파되어 catch 로 간다).
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-wasm-fail-'));
+    const originalPath = process.env.PATH;
+    try {
+      const project = seedProject(root);
+      writeSchema(join(project, 'generated', 'schema.json'), 'string');
+      writeSchema(join(root, 'schema-string.json'), 'string');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+      process.env.FAKE_WASM_FAIL = '1';
+
+      const errors: string[] = [];
+      const restore = captureConsole(errors);
+      try {
+        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        const reloads: string[] = [];
+        handle.onReload((reason) => void reloads.push(reason));
+        // 유예 — 그 사이 reload 가 방출되지 않음이 곧 부정 검증이다.
+        await sleep(300);
+        handle.dispose();
+        assert.ok(
+          errors.some((line) => line.includes('[dev] regeneration failed')),
+          `the wasm build failure must be loud, got:\n${errors.join('\n')}`,
+        );
+        assert.ok(
+          !errors.some((line) => line.includes('[dev:wasm] engine artifact:')),
+          'no artifact announcement when the build failed',
+        );
+        assert.deepEqual(
+          reloads,
+          [],
+          'a failed wasm build must not emit reload — the host has no new engine to load',
+        );
+      } finally {
+        restore();
+        delete process.env.FAKE_SCHEMA_FILE;
+        delete process.env.FAKE_WASM_FAIL;
       }
     } finally {
       process.env.PATH = originalPath;
