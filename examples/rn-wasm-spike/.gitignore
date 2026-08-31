@@ -1,0 +1,4 @@
+# Spike-local build outputs (regenerate with scripts/build-backend.sh)
+backend/target/
+artifacts/
+smoke

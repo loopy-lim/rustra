@@ -35,6 +35,7 @@
     "rustra_ffi_get_schema",
     "rustra_ffi_has_buffer",
     "rustra_ffi_has_raw",
+    "rustra_ffi_hot_reload",
     "rustra_ffi_invoke",
     "rustra_ffi_invoke_async",
     "rustra_ffi_invoke_buffer",

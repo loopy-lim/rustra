@@ -672,3 +672,141 @@ test('async doctor prefetches divergent section manifests without false prefetch
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// ── wasm dev 타깃 고지 (Task A3) ─────────────────────────────────────────────
+//
+// dev.target=wasm 은 협동형(단일스레드) 취소만 재현한다 — 동시성 버그(race/취소/
+// 백프레셔)는 wasm dev 에서 절대 재현되지 않으므로 doctor 가 loud 경고해야 하고,
+// wasm32 빌드 타깃 설치 여부도 필수 검사로 확인한다. 네이티브 타깃은 어느 쪽도
+// 수집하지 않는다(절대 음성).
+
+const WASM_DEV_CONFIG = {
+  schema: './generated/schema.json',
+  output: './generated',
+  reactNative: { rustManifest: './Cargo.toml', rustLibrary: 'app' },
+  dev: { target: 'wasm', wasm: { engine: 'wasm3' } },
+};
+
+test('wasm dev target warns about cooperative cancellation and checks the wasm32 rust target', () => {
+  withProject(
+    {
+      'rustra.json': JSON.stringify(WASM_DEV_CONFIG),
+      'Cargo.toml': CARGO_TOML,
+      'generated/schema.json': '{}\n',
+      // reactNative 섹션이 있어 Android 검사(NDK 포함)가 켜진다 — NDK fixture 로
+      // 통과시켜 종료 코드 판정을 wasm 검사만으로 고립시킨다.
+      'ndk/source.properties': '',
+    },
+    (root) => {
+      const base = metadataRunner(root, [
+        {
+          name: 'app',
+          manifest_path: join(root, 'Cargo.toml'),
+          targets: [
+            { name: 'app', crate_types: ['rlib', 'staticlib', 'cdylib'] },
+            { name: 'generate', kind: ['bin'] },
+          ],
+        },
+      ]);
+      const runner: DoctorRunner = (command, args) => {
+        if (command === 'rustup')
+          return {
+            ok: true,
+            stdout: 'aarch64-linux-android\nx86_64-linux-android\nwasm32-unknown-unknown\n',
+            stderr: '',
+          };
+        return base(command, args);
+      };
+      const report = collectDoctorReport(
+        optionsWithNdk(join(root, 'rustra.json'), join(root, 'ndk')),
+        runner,
+      );
+      const warning = report.checks.find((candidate) => candidate.id === 'dev.wasm.experimental');
+      assert.equal(warning?.status, 'warn');
+      assert.equal(warning?.required, false, 'the notice must not fail the doctor run');
+      // summary 는 기계 판독 대비 영문 고정 — 한국어 고지는 detail 이다.
+      assert.equal(
+        warning?.summary,
+        'wasm dev target: cooperative cancellation only — verify natively before release',
+      );
+      assert.match(
+        warning?.detail ?? '',
+        /협동형 취소만 유효 — 릴리스 전 native 검증 필수/,
+        'the Korean cancellation-gap notice must live in the detail',
+      );
+      assert.ok(
+        !report.checks.some(
+          (candidate) => candidate.id === 'dev.wasm.rust_target' && candidate.status === 'fail',
+        ),
+      );
+      // warn 은 required 가 아니므로 non-strict 종료 코드는 0 이다.
+      assert.equal(doctorExitCode(report, false), 0);
+      // 텍스트 출력에도 고지가 렌더된다.
+      assert.match(formatDoctorText(report), /협동형 취소만 유효/);
+    },
+  );
+});
+
+test('wasm dev target fails the required check when the wasm32 rust target is missing', () => {
+  withProject(
+    {
+      'rustra.json': JSON.stringify(WASM_DEV_CONFIG),
+      'Cargo.toml': CARGO_TOML,
+      'generated/schema.json': '{}\n',
+    },
+    (root) => {
+      const report = collectDoctorReport(
+        options(join(root, 'rustra.json')),
+        metadataRunner(root, [
+          {
+            name: 'app',
+            manifest_path: join(root, 'Cargo.toml'),
+            targets: [
+              { name: 'app', crate_types: ['rlib', 'staticlib', 'cdylib'] },
+              { name: 'generate', kind: ['bin'] },
+            ],
+          },
+        ]),
+      );
+      const rustTarget = report.checks.find((candidate) => candidate.id === 'dev.wasm.rust_target');
+      assert.equal(rustTarget?.status, 'fail', 'missing wasm32 target must fail a required check');
+      assert.match(rustTarget?.summary ?? '', /wasm32-unknown-unknown/);
+      assert.match((rustTarget?.fix ?? []).join(' '), /rustup target add wasm32-unknown-unknown/);
+      // 필수 fail 이므로 non-strict 종료 코드는 1 — wasm32 없이 dev 를 진행하면 안 된다.
+      assert.equal(doctorExitCode(report, false), 1);
+    },
+  );
+});
+
+test('native dev target emits neither the wasm notice nor the wasm32 target check', () => {
+  withProject(
+    {
+      'rustra.json': JSON.stringify({
+        schema: './generated/schema.json',
+        output: './generated',
+        node: { rustManifest: './Cargo.toml' },
+      }),
+      'Cargo.toml': CARGO_TOML,
+      'generated/schema.json': '{}\n',
+    },
+    (root) => {
+      const report = collectDoctorReport(
+        options(join(root, 'rustra.json')),
+        metadataRunner(root, [
+          {
+            name: 'app',
+            manifest_path: join(root, 'Cargo.toml'),
+            targets: [
+              { name: 'app', crate_types: ['rlib'] },
+              { name: 'generate', kind: ['bin'] },
+            ],
+          },
+        ]),
+      );
+      assert.ok(
+        !report.checks.some((candidate) => candidate.id.startsWith('dev.wasm')),
+        'native target must not collect any wasm checks',
+      );
+    },
+  );
+});

@@ -5,6 +5,7 @@
 //! and the ABI contract stay unchanged.
 
 use crate::Package;
+use crate::package_codegen::command_wire_signature;
 use serde::{Deserialize, Serialize};
 use std::ffi::{c_char, c_void};
 use std::sync::{Mutex, OnceLock};
@@ -25,7 +26,12 @@ include!("ffi_schema_entries.rs");
 include!("ffi_event_core.rs");
 include!("ffi_event_entries.rs");
 include!("ffi_channel.rs");
+include!("ffi_hot_reload.rs");
 
 #[cfg(test)]
 #[path = "ffi_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "ffi_hot_reload_tests.rs"]
+mod hot_reload_tests;

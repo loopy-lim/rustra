@@ -77,3 +77,42 @@ test('reports an incompatible internal dependency range', () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+// ── wasm 백엔드 배제 (Task A3) ───────────────────────────────────────────────
+//
+// wasm 백엔드는 dev/experimental 전용이다 — 릴리스 아티팩트(npm tarball 의 files
+// 경로)에 wasm 엔진 계열 경로가 포함되면 fail 해야 한다.
+
+test('rejects release files that ship the experimental wasm backend', () => {
+  const root = makeFixture();
+  try {
+    const manifestPath = join(root, 'packages', 'react-native', 'package.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { files: string[] };
+    manifest.files = ['LICENSE', 'dist', 'native/wasm3/**/*', 'engines/engine_v1.wasm'];
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    const failures = checkReleaseCoherence(root);
+    assert.match(
+      failures.join('\n'),
+      /@rustra\/react-native.*wasm/,
+      'shipping wasm3 sources or .wasm engines in a published package must fail',
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('wasm backend guard tolerates unrelated native paths and conventional files', () => {
+  const root = makeFixture();
+  try {
+    for (const name of ['react-native', 'bun']) {
+      const manifestPath = join(root, 'packages', name, 'package.json');
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { files: string[] };
+      // native/**/* 는 네이티브 어댑터(JSI/FFI) 정상 발행 경로다 — wasm 계열이 아니다.
+      manifest.files = ['LICENSE', 'dist', 'native/**/*'];
+      writeFileSync(manifestPath, JSON.stringify(manifest));
+    }
+    assert.deepEqual(checkReleaseCoherence(root), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
