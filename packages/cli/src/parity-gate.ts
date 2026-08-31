@@ -32,11 +32,14 @@ export interface ParityGate {
   /** 리로드 전 기준 스냅샷을 잡는다. 실패 시 throw — 게이트 없이 진행 금지. */
   arm(): Promise<void>;
   /**
-   * 리로드 후 현재 상태를 기준과 대조한다. 불일치·capture 실패 모두
-   * `ok: false` (loud 거부 — 호출자가 리로드를 되돌려야 한다). 판정이 끝난
-   * 뒤 기준은 **현재 상태로 재무장**된다 — 재무장 없이는 합법적 스키마 변경
-   * 이후 모든 리로드가 영원히 거부되는 쐐기가 된다. disarm 된 게이트는 항상
-   * 통과(네이티브 dev 경로).
+   * 현재 상태를 capture 해 기준과 대조한다(리로드 신호 방출 전 — 빌드 직후
+   * 상태를 대조하는 것이 호출자의 배선 계약이다). 불일치·capture 실패 모두
+   * `ok: false` (fail-closed — 호출자는 리로드를 방출해선 안 된다). capture
+   * 실패 시 기준은 **버려지지 않는다** — 마지막으로 알려진 상태가 다음 판정의
+   * 대조 기준으로 남아, capture 가 복구된 첫 판정이 곧 재시도가 된다. 캡처에
+   * 성공한 판정이 끝나면 기준은 그 상태로 **재무장**된다 — 재무장 없이는
+   * 합법적 스키마 변경 이후 모든 리로드가 영원히 거부되는 쐐기가 된다.
+   * 무조건 통과하는 유일한 길은 명시적 disarm 뿐이다(네이티브 dev 경로).
    */
   verify(): Promise<ParityVerdict>;
   /** 게이트를 끈다 — 다음 verify는 no-op 통과. */
@@ -46,16 +49,6 @@ export interface ParityGate {
 export function createParityGate(options: { capture: ParityCapture }): ParityGate {
   let baseline: ParitySnapshot | undefined;
   const { capture } = options;
-  const rearm = async (): Promise<void> => {
-    try {
-      baseline = await capture();
-    } catch {
-      // 재무장 실패 — 다음 verify는 capture 실패 거부로 이어진다(fail-closed).
-      // arm() 과 달리 판정 도중에는 throw 하지 않는다: 이미 관찰한 판정을
-      // 뒤집지 않는다.
-      baseline = undefined;
-    }
-  };
   return {
     async arm(): Promise<void> {
       // 기준 캡처 실패는 거부가 아니라 throw — 불일치 판정 전에 게이트가
@@ -63,25 +56,33 @@ export function createParityGate(options: { capture: ParityCapture }): ParityGat
       baseline = await capture();
     },
     async verify(): Promise<ParityVerdict> {
+      // undefined 는 명시적 disarm 뿐이다 — 판정 실패로 기준이 사라지는 경로는
+      // 존재하지 않는다(fail-open 금지: 한 번의 실패가 이후 리로드를 조용히
+      // 전부 통과시키는 일이 없어야 한다).
       if (baseline === undefined) return { ok: true };
       let current: ParitySnapshot;
       try {
         current = await capture();
       } catch (error) {
-        void rearm();
+        // capture 실패 — 대조 불가능한 리로드는 통과시키지 않는다(fail-closed).
+        // 기준을 유지하므로 다음 verify 의 capture 가 곧 재시도다: 복구되면
+        // 유지된 기준과의 실제 대조로 이어지고, 계속 실패하면 계속 거부된다.
         return {
           ok: false,
-          reason: `parity gate: capture failed after reload: ${
+          reason: `parity gate: capture failed — refusing the reload: ${
             error instanceof Error ? error.message : String(error)
           }`,
         };
       }
       if (current.contractHash !== baseline.contractHash) {
-        void rearm();
+        const before = baseline.contractHash;
+        // 재무장 — 기준을 관찰된 현재 상태로 옮긴다. 거부가 이후 리로드를
+        // 영원히 묶어두는 쐐기가 되지 않게 하기 위함이다.
+        baseline = current;
         return {
           ok: false,
           reason:
-            `parity gate: contract hash drift — before="${baseline.contractHash.slice(0, 16)}…" ` +
+            `parity gate: contract hash drift — before="${before.slice(0, 16)}…" ` +
             `after="${current.contractHash.slice(0, 16)}…". The reload would change the wire ` +
             `contract; refusing it. Rebuild so the generated client and the engine agree.`,
         };
@@ -91,16 +92,17 @@ export function createParityGate(options: { capture: ParityCapture }): ParityGat
         current.golden !== undefined &&
         current.golden !== baseline.golden
       ) {
-        void rearm();
+        const before = baseline.golden;
+        baseline = current;
         return {
           ok: false,
           reason:
-            `parity gate: golden wire drift — before="${baseline.golden.slice(0, 16)}…" ` +
+            `parity gate: golden wire drift — before="${before.slice(0, 16)}…" ` +
             `after="${current.golden.slice(0, 16)}…". Same-schema commands returned different ` +
             `bytes across the reload; refusing it.`,
         };
       }
-      void rearm();
+      baseline = current;
       return { ok: true };
     },
     disarm(): void {
