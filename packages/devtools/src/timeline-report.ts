@@ -29,7 +29,12 @@ function escapeHtml(value: string): string {
     .replaceAll("'", '&#39;');
 }
 
-/** payload/result 프리뷰 — JSON 직렬화 뒤 잘라낸다(길이 초과분은 … 표기). */
+/**
+ * payload/result 프리뷰 — JSON 직렬화 뒤 잘라낸다(길이 초과분은 … 표기).
+ * 순환 참조처럼 직렬화가 실패하면 String(value) 로 낮춘다. 절단 경계가
+ * 서러게이트 쌍 사이에 걸리면 한 글자 물러선다 — unpaired high surrogate
+ * 가 문서에 섞이면 렌더러마다 깨진 글자/치환문자로 보이는 원인이 된다.
+ */
 function preview(value: unknown): string {
   if (value === undefined) return '—';
   let text: string;
@@ -38,7 +43,10 @@ function preview(value: unknown): string {
   } catch {
     text = String(value);
   }
-  return text.length > 200 ? `${text.slice(0, 200)}…` : text;
+  if (text.length <= 200) return text;
+  const boundary = text.charCodeAt(199);
+  const cut = boundary >= 0xd800 && boundary <= 0xdbff ? 199 : 200;
+  return `${text.slice(0, cut)}…`;
 }
 
 /** 로그 한 건을 타임라인 테이블 행 하나로 렌더한다. */
@@ -49,8 +57,9 @@ function renderRow(log: DevtoolsLog): string {
     : '';
   return [
     '      <tr>',
-    `        <td class="kind">${log.kind}</td>`,
+    `        <td class="kind">${escapeHtml(log.kind)}</td>`,
     `        <td>${escapeHtml(log.command)}</td>`,
+    // durationMs 는 숫자 — 메타문자를 운반할 수 없으므로 이스케이프 불필요.
     `        <td class="num">${log.durationMs}</td>`,
     `        <td class="${status}">${status}${escapeHtml(summary)}</td>`,
     `        <td>${escapeHtml(preview(log.payload))}</td>`,
@@ -82,6 +91,7 @@ li span { display: block; font-size: 0.75rem; color: #555; }
 table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
 th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: left; vertical-align: top; }
 th { background: #f2f2f2; }
+td { overflow-wrap: anywhere; }
 td.num { text-align: right; font-variant-numeric: tabular-nums; }
 td.ok { color: #0a6b2d; }
 td.error { color: #b3261e; }

@@ -60,6 +60,7 @@ li span { display: block; font-size: 0.75rem; color: #555; }
 table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
 th, td { border: 1px solid #ccc; padding: 4px 8px; text-align: left; vertical-align: top; }
 th { background: #f2f2f2; }
+td { overflow-wrap: anywhere; }
 td.num { text-align: right; font-variant-numeric: tabular-nums; }
 td.ok { color: #0a6b2d; }
 td.error { color: #b3261e; }
@@ -194,4 +195,38 @@ test('1000 entries render deterministically with one row per entry', () => {
   // thead 의 1행 + 엔트리 1000행.
   assert.equal((first.match(/<tr>/g) ?? []).length, 1001);
   assert.ok(first.includes('<b>1000</b>'));
+});
+
+test('200-char cut never splits a surrogate pair', () => {
+  // 직렬화 길이 204(따옴표 2 + x 198 + 😀 2쌍) — 경계(199번째 코드 유닛)가
+  // 첫 😀 의 high surrogate 에 걸리므로 199 로 물러서 잘라야 한다.
+  const html = renderTimelineReport([
+    {
+      kind: 'invoke',
+      command: 'emoji',
+      durationMs: 1,
+      ok: true,
+      payload: 'x'.repeat(198) + '😀😀',
+    },
+  ]);
+  // 문서 어디에도 unpaired high surrogate 가 없다.
+  assert.doesNotMatch(html, /[\ud800-\udbff](?![\udc00-\udfff])/);
+  // 잘린 프리뷰는 따옴표 + x 198자 + … — 쌍이 온전히 보존된 절단이다.
+  assert.ok(html.includes(`&quot;${'x'.repeat(198)}…</td>`));
+});
+
+test('circular payload falls back to String(value) without crashing, deterministically', () => {
+  const circular: { self?: unknown } = {};
+  circular.self = circular;
+  const log: DevtoolsLog = {
+    kind: 'invoke',
+    command: 'loop',
+    durationMs: 1,
+    ok: true,
+    payload: circular,
+  };
+  const first = renderTimelineReport([log]);
+  assert.ok(first.includes('[object Object]'));
+  // 직렬화 실패 경로도 같은 입력엔 같은 문서를 만든다.
+  assert.equal(first, renderTimelineReport([log]));
 });
