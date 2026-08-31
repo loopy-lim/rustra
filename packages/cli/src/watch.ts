@@ -10,6 +10,12 @@ export type WatchLoop = {
    * the Rust side (the host's engine must re-initialize). Errors from hooks are
    * logged and swallowed — a broken host callback must never take down codegen
    * watching.
+   *
+   * Level distinction: this loop-level hook fires on EVERY performed run (the
+   * loop cannot tell engine-relevant changes apart). The `runDev` handle's
+   * `DevWatchHandle.onReload` is the filtered variant — legacy layout gates on
+   * `plan.rustBin`; config mode emits on every successful regeneration (it
+   * cannot distinguish causes — the conservative default).
    */
   onReload(cb: (reason: string) => void | Promise<void>): void;
 };

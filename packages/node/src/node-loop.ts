@@ -20,8 +20,12 @@ export type NodeLoopTransport = NodeInvokeTransport & {
   /**
    * 진행 중 invocation 이 모두 정착할 때까지 기다린다(최대 5초 — 초과 시 로그 후
    * 그래도 해소). reload 직전 drain 계약(A1)의 transport 측 구현.
+   *
+   * 옵셔널 멤버: 필수로 정의하면 이 인터페이스를 구조적으로 구현하던 외부
+   * 구현체가 drain 부재로 깨진다(breaking). 호출측은 `transport.drain?.(...)` 로
+   * 우아하게 폴백한다.
    */
-  drain(timeoutMs?: number): Promise<void>;
+  drain?(timeoutMs?: number): Promise<void>;
 };
 
 /**
