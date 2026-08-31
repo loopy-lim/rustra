@@ -78,7 +78,9 @@ cargo publish -p rustra
 ## 3.5단계 — main 브랜치 보호 (2026-08-21 적용 완료)
 
 - 필수 체크(required checks): `rust-audit`, `rust (ubuntu-latest)`, `rust (macos-latest)`,
-  `rust (windows-latest)`, `typescript`, `rn-android`, `rn-ios`, `consumer-smoke`.
+  `rust (windows-latest)`, `typescript`, `rn-android`, `rn-ios`, `consumer-smoke`,
+  `rust-wasm32`. 이 문서의 목록 갱신만으로 실제 브랜치 보호가 바뀌지는 않는다 —
+  required-checks 등록은 별도이며 아래 `gh api`로 수동 적용한다.
 - 직접 push는 허용(1인 프로젝트 효율), force push/삭제는 차단.
 - 새 CI 잡을 추가할 때 required 목록에도 함께 넣는다 — 목록은 아래 API로 확인/변경:
   ```bash
@@ -95,7 +97,8 @@ cargo publish -p rustra
         "typescript",
         "rn-android",
         "rn-ios",
-        "consumer-smoke"
+        "consumer-smoke",
+        "rust-wasm32"
       ]
     },
     "enforce_admins": false,

@@ -107,6 +107,23 @@ jobs:
       - name: Test core crate on MSRV
         run: cargo test -p rustra --lib
 
+  # wasm32-unknown-unknown 컴파일 check — wasm dev target(dev.target: "wasm",
+  # wasm.engine: "wasm3") 을 위한 선수 게이트. 컴파일만 단언하고 테스트 실행은
+  # 아키텍처 제약으로 범위 밖이다. hard gate 유지 — 실패 시 이 diff 이전 기준선인지
+  # 신규 파손인지 귀속해 확인해야 한다(red baseline 에서 시작하지 않는다는 교훈:
+  # 게이트 파손은 내 diff 여부와 무관하게 먼저 확인).
+  rust-wasm32:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Check core crate compiles for wasm32
+        run: cargo check -p rustra --target wasm32-unknown-unknown
+
   # napi transport 경로(test:runtime:node-napi) — 어떤 CI 잡에서도 실행되지
   # 않아 무검증 방치였다. debug 애드온 빌드 + 런타임 스모크로 게이트한다.
   napi:
