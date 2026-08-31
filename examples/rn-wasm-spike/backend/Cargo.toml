@@ -1,0 +1,34 @@
+[package]
+name = "rustra-wasm-spike-backend"
+edition = "2024"
+license = "MIT"
+version = "0.0.0"
+publish = false
+
+# Standalone workspace on purpose: the repo root workspace pins desktop-only
+# defaults, and this crate must build for wasm32-unknown-unknown without
+# touching anything outside examples/rn-wasm-spike/.
+[workspace]
+
+[lib]
+# rlib: host round-trip tests. staticlib: native baseline (iOS/Android device
+# path). cdylib: wasm32 .wasm artifact for wasm3.
+crate-type = ["rlib", "staticlib", "cdylib"]
+
+[features]
+# v2 swap-PoC engine: bakes SPIKE_FACTOR=3 (handler logic only; the command
+# set/schema/contract hash stay identical). Built via scripts/build-v2.sh.
+factor3 = []
+
+[dependencies]
+rustra = { path = "../../../crates/rustra" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+schemars = { version = "0.8", features = ["derive", "preserve_order"] }
+
+[dev-dependencies]
+postcard = { version = "1", default-features = false, features = ["alloc"] }
+
+[profile.release]
+opt-level = "s"
+panic = "abort"
