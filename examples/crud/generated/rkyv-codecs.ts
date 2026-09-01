@@ -1,13 +1,18 @@
+// ── rustra generated ────────────────────────────────────────
+// File:   rkyv-codecs.ts
+// Source: schema.json (single source of truth for this file)
+// Regen:  rustra codegen --config rustra.json
+// Stage:  schema → ts codec renderer
+// DO NOT EDIT — changes will be overwritten and fail codegen --check.
+// ────────────────────────────────────────────────────────────
+
 // ── postcard wire format helpers ─────────────────────────────
 
-// encodeInto 의 f32/f64 기록용 모듈 스크립트 버퍼 — 호출당 할당 없이 재사용.
 const _dvScratchBuf = new ArrayBuffer(8);
 const _dvScratch = new DataView(_dvScratchBuf);
 const _dvScratchU8 = new Uint8Array(_dvScratchBuf);
 
 function _pcEncodeVarint(n: number): Uint8Array {
-  // 정수만 허용 — u32 최대(4,294,967,295)는 Number 로 정확히 표현된다.
-  // u64 는 2^53 까지 정확 (JS Number 한계; 그 이상은 정밀도 손실 — 계약 문서 참조).
   n = Math.floor(n);
   if (n < 0) throw new Error('varint must be non-negative: ' + n);
   if (n === 0) return new Uint8Array([0]);
@@ -22,8 +27,6 @@ function _pcEncodeVarint(n: number): Uint8Array {
 }
 
 function _pcDecodeVarint(buf: Uint8Array, offset: number): { value: number; bytesRead: number } {
-  // Number 산술로 2^53 까지 정확히 디코딩 (비트 시프트는 32비트 절단됨).
-  // u64 varint 최대 길이 10바이트 — 과거 5바이트 한계는 u32 전용이었다.
   let value = 0;
   let multiplier = 1;
   let bytesRead = 0;
@@ -38,25 +41,13 @@ function _pcDecodeVarint(buf: Uint8Array, offset: number): { value: number; byte
   return { value, bytesRead };
 }
 
-function _pcEncodeZigzag(n: number): number {
-  // zigzag encode: positive n -> n*2, negative n -> (-n)*2 - 1.
-  // Number 산술 — |n| ≤ 2^31 범위 i64 는 32비트 비트연산보다 정확하다
-  // (비트연산은 부호 있는 32비트로 절단됨).
-  return n >= 0 ? n * 2 : -n * 2 - 1;
-}
-
+function _pcEncodeZigzag(n: number): number { return n >= 0 ? n * 2 : -n * 2 - 1; }
 function _pcDecodeZigzag(n: number): number {
-  // zigzag decode: (n >>> 1) ^ -(n & 1). 음수는 -(Math.floor(n / 2) + 1) —
-  // (n-1)/2 가 아니라 내림 나눗셈이어야 한다(dec(9) = -5, not -4).
   const negative = n % 2 === 1;
   const magnitude = Math.floor(n / 2);
   return negative ? -magnitude - 1 : magnitude;
 }
-
-function _pcEncodeZigzagVarint(n: number): Uint8Array {
-  return _pcEncodeVarint(_pcEncodeZigzag(n));
-}
-
+function _pcEncodeZigzagVarint(n: number): Uint8Array { return _pcEncodeVarint(_pcEncodeZigzag(n)); }
 function _pcDecodeZigzagVarint(buf: Uint8Array, offset: number): { value: number; bytesRead: number } {
   const { value, bytesRead } = _pcDecodeVarint(buf, offset);
   return { value: _pcDecodeZigzag(value), bytesRead };
@@ -66,13 +57,10 @@ const _pcI64Min = -(2n ** 63n);
 const _pcI64Max = 2n ** 63n - 1n;
 
 function _pcEncodeVarint64(v: number | bigint): Uint8Array {
-  // 64-bit LEB128. safe number 는 number 산술 fast path(_pcEncodeVarint 와
-  // 동일 출력), 그 밖(bigint, 2^53 초과)은 BigInt 산술 — 정밀도 손실 없음.
-  if (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0) {
-    return _pcEncodeVarint(v);
-  }
+  if (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0) return _pcEncodeVarint(v);
   let value = BigInt(v);
   if (value < 0n) throw new Error('varint must be non-negative: ' + value.toString());
+  if (value > 0xffffffffffffffffn) throw new Error('varint exceeds u64 range: ' + value.toString());
   const bytes: number[] = [];
   do {
     let next = Number(value & 0x7fn);
@@ -84,12 +72,6 @@ function _pcEncodeVarint64(v: number | bigint): Uint8Array {
 }
 
 function _pcDecodeVarint64(buf: Uint8Array, offset: number): { value: number | bigint; bytesRead: number } {
-  // 앞 7바이트(≤49비트, 2^53 이하)는 Number 누적 — 대부분의 varint 가 끝나는
-  // 구간이며 BigInt 할당이 전혀 없다. 8바이트 진입 시 BigInt 로 이월해 u64
-  // 전체를 무손실 누적한다. 반환 계약은 toJsInteger 선례: safe 정수면 number,
-  // 넘으면 bigint. 10바이트째 마지막 바이트는 0x00/0x01 만 허용한다(Rust
-  // postcard max_of_last_byte = 2^(64%7)−1 = 1) — 64비트 초과 인코딩은
-  // 무음 왜곡 대신 throw.
   let num = 0;
   let multiplier = 1;
   let big = 0n;
@@ -103,7 +85,7 @@ function _pcDecodeVarint64(buf: Uint8Array, offset: number): { value: number | b
       multiplier *= 128;
       if ((b & 0x80) === 0) return { value: num, bytesRead };
     } else {
-      if (bytesRead === 8) big = BigInt(num); // 49비트 누적분을 BigInt 로 이월
+      if (bytesRead === 8) big = BigInt(num);
       big |= BigInt(b & 0x7f) << BigInt(7 * (bytesRead - 1));
       if ((b & 0x80) === 0) {
         if (bytesRead === 10 && (b & 0x7f) > 0x01) throw new Error('varint exceeds 64 bits');
@@ -116,20 +98,12 @@ function _pcDecodeVarint64(buf: Uint8Array, offset: number): { value: number | b
 }
 
 function _pcEncodeZigzag64(v: number | bigint): Uint8Array {
-  // i64 zigzag: (n << 1) ^ (n >> 63). bigint 산술로 i64 전체 범위를 커버하며,
-  // 범위 밖 입력은 validateInteger 선례대로 throw 한다(무음 왜곡 금지 —
-  // 음수 varint throw 와 일관).
   const n = BigInt(v);
-  if (n < _pcI64Min || n > _pcI64Max) {
-    throw new Error('zigzag64 input outside i64 range: ' + n.toString());
-  }
-  const encoded = (n << 1n) ^ (n >> 63n);
-  return _pcEncodeVarint64(encoded);
+  if (n < _pcI64Min || n > _pcI64Max) throw new Error('zigzag64 input outside i64 range: ' + n.toString());
+  return _pcEncodeVarint64((n << 1n) ^ (n >> 63n));
 }
-
 function _pcDecodeZigzag64(v: number | bigint): number | bigint {
-  const n = BigInt(v);
-  const decoded = (n >> 1n) ^ -(n & 1n);
+  const decoded = (BigInt(v) >> 1n) ^ -(BigInt(v) & 1n);
   const asNumber = Number(decoded);
   return Number.isSafeInteger(asNumber) ? asNumber : decoded;
 }
@@ -139,112 +113,48 @@ function _pcConcatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
   for (const a of arrays) totalLen += a.length;
   const result = new Uint8Array(totalLen);
   let offset = 0;
-  for (const a of arrays) {
-    result.set(a, offset);
-    offset += a.length;
-  }
+  for (const a of arrays) { result.set(a, offset); offset += a.length; }
   return result;
 }
 
-// Pure-JS UTF-8 codec. 임베디드 JS 런타임(예: Hermes)에는 TextEncoder/TextDecoder
-// 글로벌이 없을 수 있으므로 postcard 문자열 헬퍼는 이에 의존하지 않는다.
 function _utf8Encode(s: string): Uint8Array {
   const out: number[] = [];
   for (let i = 0; i < s.length; i++) {
-    let c = s.charCodeAt(i);
-    if (c < 0x80) {
-      out.push(c);
-    } else if (c < 0x800) {
-      out.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
-    } else if (c >= 0xd800 && c <= 0xdbff) {
-      // high surrogate → combine with following low surrogate into one codepoint
+    const c = s.charCodeAt(i);
+    if (c < 0x80) out.push(c);
+    else if (c < 0x800) out.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
+    else if (c >= 0xd800 && c <= 0xdbff) {
       const low = s.charCodeAt(++i);
       const cp = 0x10000 + ((c - 0xd800) << 10) + (low - 0xdc00);
-      out.push(
-        0xf0 | (cp >> 18),
-        0x80 | ((cp >> 12) & 0x3f),
-        0x80 | ((cp >> 6) & 0x3f),
-        0x80 | (cp & 0x3f),
-      );
-    } else {
-      out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
-    }
+      out.push(0xf0 | (cp >> 18), 0x80 | ((cp >> 12) & 0x3f), 0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f));
+    } else out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
   }
   return new Uint8Array(out);
 }
 
 function _utf8Decode(bytes: Uint8Array, start: number, end: number): string {
-  let s = '';
-  let i = start;
+  let s = ''; let i = start;
   while (i < end) {
     const b = bytes[i];
-    if (b < 0x80) {
-      s += String.fromCharCode(b);
-      i += 1;
-    } else if ((b & 0xe0) === 0xc0) {
-      s += String.fromCharCode(((b & 0x1f) << 6) | (bytes[i + 1] & 0x3f));
-      i += 2;
-    } else if ((b & 0xf0) === 0xe0) {
-      s += String.fromCharCode(
-        ((b & 0x0f) << 12) | ((bytes[i + 1] & 0x3f) << 6) | (bytes[i + 2] & 0x3f),
-      );
-      i += 3;
-    } else if ((b & 0xf8) === 0xf0) {
-      const cp =
-        ((b & 0x07) << 18) |
-        ((bytes[i + 1] & 0x3f) << 12) |
-        ((bytes[i + 2] & 0x3f) << 6) |
-        (bytes[i + 3] & 0x3f);
-      const adj = cp - 0x10000; // encode as UTF-16 surrogate pair
-      s += String.fromCharCode(0xd800 + (adj >> 10), 0xdc00 + (adj & 0x3ff));
-      i += 4;
-    } else {
-      i += 1; // invalid lead byte — skip
-    }
+    if (b < 0x80) { s += String.fromCharCode(b); i += 1; }
+    else if ((b & 0xe0) === 0xc0) { s += String.fromCharCode(((b & 0x1f) << 6) | (bytes[i + 1] & 0x3f)); i += 2; }
+    else if ((b & 0xf0) === 0xe0) { s += String.fromCharCode(((b & 0x0f) << 12) | ((bytes[i + 1] & 0x3f) << 6) | (bytes[i + 2] & 0x3f)); i += 3; }
+    else if ((b & 0xf8) === 0xf0) { const cp = ((b & 0x07) << 18) | ((bytes[i + 1] & 0x3f) << 12) | ((bytes[i + 2] & 0x3f) << 6) | (bytes[i + 3] & 0x3f); const adj = cp - 0x10000; s += String.fromCharCode(0xd800 + (adj >> 10), 0xdc00 + (adj & 0x3ff)); i += 4; }
+    else i += 1;
   }
   return s;
 }
 
-function _pcEncodeString(s: string): Uint8Array {
-  const bytes = _utf8Encode(s);
-  return _pcConcatUint8Arrays([_pcEncodeVarint(bytes.length), bytes]);
-}
-
+function _pcEncodeString(s: string): Uint8Array { const bytes = _utf8Encode(s); return _pcConcatUint8Arrays([_pcEncodeVarint(bytes.length), bytes]); }
 function _pcDecodeString(buf: Uint8Array, offset: number): { value: string; bytesRead: number } {
-  const len = _pcDecodeVarint(buf, offset);
-  const start = offset + len.bytesRead;
-  const end = start + len.value;
-  return {
-    value: _utf8Decode(buf, start, end),
-    bytesRead: len.bytesRead + len.value,
-  };
+  const len = _pcDecodeVarint(buf, offset); const start = offset + len.bytesRead; const end = start + len.value;
+  return { value: _utf8Decode(buf, start, end), bytesRead: len.bytesRead + len.value };
 }
 
-function _pcEncodeF64(n: number): Uint8Array {
-  const buf = new ArrayBuffer(8);
-  new DataView(buf).setFloat64(0, n, true);
-  return new Uint8Array(buf);
-}
-
-function _pcDecodeF64(buf: Uint8Array, offset: number): { value: number; bytesRead: number } {
-  return {
-    value: new DataView(buf.buffer, buf.byteOffset + offset, 8).getFloat64(0, true),
-    bytesRead: 8,
-  };
-}
-
-function _pcEncodeF32(n: number): Uint8Array {
-  const buf = new ArrayBuffer(4);
-  new DataView(buf).setFloat32(0, n, true);
-  return new Uint8Array(buf);
-}
-
-function _pcDecodeF32(buf: Uint8Array, offset: number): { value: number; bytesRead: number } {
-  return {
-    value: new DataView(buf.buffer, buf.byteOffset + offset, 4).getFloat32(0, true),
-    bytesRead: 4,
-  };
-}
+function _pcEncodeF64(n: number): Uint8Array { const buf = new ArrayBuffer(8); new DataView(buf).setFloat64(0, n, true); return new Uint8Array(buf); }
+function _pcDecodeF64(buf: Uint8Array, offset: number): { value: number; bytesRead: number } { return { value: new DataView(buf.buffer, buf.byteOffset + offset, 8).getFloat64(0, true), bytesRead: 8 }; }
+function _pcEncodeF32(n: number): Uint8Array { const buf = new ArrayBuffer(4); new DataView(buf).setFloat32(0, n, true); return new Uint8Array(buf); }
+function _pcDecodeF32(buf: Uint8Array, offset: number): { value: number; bytesRead: number } { return { value: new DataView(buf.buffer, buf.byteOffset + offset, 4).getFloat32(0, true), bytesRead: 4 }; }
 
 import { createComplexCodec } from '@rustra/types';
 import type { RkyvV2Codec, RustraError, ComplexSchema } from '@rustra/types';

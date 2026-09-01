@@ -284,3 +284,31 @@ test(
     });
   },
 );
+
+test(
+  'every generated file carries the self-describing header exactly once',
+  { timeout: 120_000 },
+  async () => {
+    await withTempDir(async (root) => {
+      const project = join(root, 'app');
+      await runInit([project]);
+      writeMinimalSchema(project);
+      const written = await runGenerate(['--config', join(project, 'rustra.json')], undefined, {
+        quiet: true,
+      });
+      const generatedDir = join(project, 'src', 'generated');
+      const files = written.filter((file) => file.endsWith('.ts'));
+      assert.ok(files.length >= 5, `expected the full TS surface, got: ${files.join(', ')}`);
+      for (const name of files) {
+        const content = readFileSync(join(generatedDir, name), 'utf-8');
+        const markers = content.split('// ── rustra generated').length - 1;
+        assert.equal(markers, 1, `${name} must carry the self-describing header exactly once`);
+        assert.match(content, /^\/\/ ── rustra generated/);
+        assert.match(content, /Source: schema\.json/);
+        assert.match(content, /Regen: {2}rustra codegen --config rustra\.json/);
+        assert.match(content, /Stage: {2}/);
+        assert.match(content, /DO NOT EDIT/);
+      }
+    });
+  },
+);

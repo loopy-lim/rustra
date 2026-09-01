@@ -1,3 +1,11 @@
+// ── rustra generated ────────────────────────────────────────
+// File:   rkyv-codecs.ts
+// Source: schema.json (single source of truth for this file)
+// Regen:  rustra codegen --config rustra.json
+// Stage:  schema → ts codec renderer
+// DO NOT EDIT — changes will be overwritten and fail codegen --check.
+// ────────────────────────────────────────────────────────────
+
 // ── postcard wire format helpers ─────────────────────────────
 
 const _dvScratchBuf = new ArrayBuffer(8);
