@@ -32,3 +32,8 @@ export { createBunFfiEngine, createBunBootstrap } from './bun-ffi.js';
 export type { BunBootstrap } from './bun-ffi.js';
 export type { BunEventBridge, BunEventBridgeOptions, BunEventDrainSource } from './bun-events.js';
 export { createBunEventBridge } from './bun-events.js';
+export type {
+  BunEventSubscription,
+  BunEventSubscriptionOptions,
+} from './bun-event-subscription.js';
+export { createBunEventSubscription } from './bun-event-subscription.js';

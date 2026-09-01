@@ -94,8 +94,13 @@ export async function generateFromSchema(
   if (events) addFile(outputPath, 'events.ts', events);
   if (positional) addFile(outputPath, 'positional-facade.ts', generatePositionalFacadeTs(schema));
   if (reactNativeScaffold) addFile(outputPath, 'react-native.ts', generateReactNativeEntryTs());
-  if (hostEntries?.node) addFile(outputPath, 'node.ts', generateNodeEntryTs(hostEntries.node));
-  if (hostEntries?.bun) addFile(outputPath, 'bun.ts', generateBunEntryTs(hostEntries.bun));
+  // 이벤트 선언 유무가 엔트리의 subscribeEvent export 를 결정한다 — 선언 없으면
+  // 출력은 이전 버전과 바이트 동일(기존 프로젝트 재생성 회피).
+  const hasEvents = (schema.events?.length ?? 0) > 0;
+  if (hostEntries?.node)
+    addFile(outputPath, 'node.ts', generateNodeEntryTs(hostEntries.node, { events: hasEvents }));
+  if (hostEntries?.bun)
+    addFile(outputPath, 'bun.ts', generateBunEntryTs(hostEntries.bun, { events: hasEvents }));
   if (hostEntries?.tauri) addFile(outputPath, 'tauri.ts', generateTauriEntryTs());
   if (cppOutputPath) {
     addFile(cppOutputPath, 'rustra-generated-codecs.hpp', generateRkyvCodecsHpp(schema));
