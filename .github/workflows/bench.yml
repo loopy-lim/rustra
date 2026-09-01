@@ -59,14 +59,26 @@ jobs:
 
       # dev 프로파일 벤치 — dynamic(Tier 3) 경로가 register 로만 도달해
       # debug 빌드가 필요하다 ( benches/tier_compare.rs 주석 참조 ).
+      # bash -o pipefail: `| tee` 만으로는 cargo bench 의 비정상 종료(패닉 등)가
+      # tee 종료 코드(0)에 묻혀 거짓 그린이 된다(실증: dynamic_registry 패닉
+      # 무시, 2026-09-01).
       - name: Run tier_compare benchmark
-        run: cargo bench -p rustra --profile dev --bench tier_compare 2>&1 | tee bench_tier.txt
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo bench -p rustra --profile dev --bench tier_compare 2>&1 | tee bench_tier.txt
 
       - name: Run type_scaling benchmark
-        run: cargo bench -p rustra --profile dev --bench type_scaling 2>&1 | tee bench_scaling.txt
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo bench -p rustra --profile dev --bench type_scaling 2>&1 | tee bench_scaling.txt
 
       - name: Run dynamic_registry benchmark
-        run: cargo bench -p rustra --profile dev --bench dynamic_registry 2>&1 | tee bench_dynamic.txt
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo bench -p rustra --profile dev --bench dynamic_registry 2>&1 | tee bench_dynamic.txt
 
       - name: Enforce 10% regression budget
         id: gate

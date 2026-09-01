@@ -52,17 +52,23 @@ fn bench_live_schema(c: &mut Criterion) {
 
 fn bench_invoke_frozen_vs_mutable(c: &mut Criterion) {
     // mutable 패키지 (debug 기본)
+    // echo({v:i64})는 postcard 지원 형태라 등록 시 binary 핸들러로 승격된다
+    // (639a494b, runtime_registry_tests::dynamic_unsupported_schema_stays_tier3
+    // 계약) — 따라서 요청/응답 모두 postcard 와이어를 사용한다. 구 tier3 JSON
+    // 와이어를 쓰면 응답 디코드가 어긋나 벤치가 패닉했다.
     let pkg_mut = fresh_pkg();
     pkg_mut.register("echo", common::echo).unwrap();
     let echo_id_mut = common::command_id_of(&pkg_mut, "echo");
-    let req_mut = common::tier3_request(echo_id_mut, r#"{"v":1}"#);
+    let input_mut = common::EchoInput { v: 1 };
+    let req_mut = common::postcard_request(echo_id_mut, &input_mut);
 
     // frozen 패키지 (명시적 freeze 후 동일 경로 read)
     let pkg_frz = fresh_pkg();
     pkg_frz.register("echo", common::echo).unwrap();
     pkg_frz.freeze();
     let echo_id_frz = common::command_id_of(&pkg_frz, "echo");
-    let req_frz = common::tier3_request(echo_id_frz, r#"{"v":1}"#);
+    let input_frz = common::EchoInput { v: 1 };
+    let req_frz = common::postcard_request(echo_id_frz, &input_frz);
 
     let mut group = c.benchmark_group("dynamic_registry_invoke_read");
     group.sample_size(500);
@@ -70,14 +76,16 @@ fn bench_invoke_frozen_vs_mutable(c: &mut Criterion) {
     group.bench_function(BenchmarkId::new("invoke_rkyv_v2", "mutable"), |b| {
         b.iter(|| {
             let resp = pkg_mut.invoke_rkyv_v2(&req_mut).unwrap();
-            common::decode_tier3_response(&resp);
+            let out: common::EchoOutput = common::decode_postcard_response(&resp);
+            out
         });
     });
 
     group.bench_function(BenchmarkId::new("invoke_rkyv_v2", "frozen"), |b| {
         b.iter(|| {
             let resp = pkg_frz.invoke_rkyv_v2(&req_frz).unwrap();
-            common::decode_tier3_response(&resp);
+            let out: common::EchoOutput = common::decode_postcard_response(&resp);
+            out
         });
     });
 
