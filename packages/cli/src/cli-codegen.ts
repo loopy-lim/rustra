@@ -8,6 +8,7 @@ import { resolveCodegenTarget } from './host-entries.js';
 import { runGenerate } from './cli-generate.js';
 import { parseCodegenArgs, type CliOutputFormat } from './cli-options.js';
 import { explainCodegenSurfaces, formatExplainText } from './codegen-explain.js';
+import { formatCodegenJson } from './cli-json-format.js';
 
 function status(format: CliOutputFormat | undefined, message: string): void {
   (format === 'json' ? console.error : console.log)(message);
@@ -38,6 +39,7 @@ function printExplain(
 export async function runCodegen(args: string[]): Promise<void> {
   const options = parseCodegenArgs(args);
   if (options.help) return;
+  const startedAt = Date.now();
   const configPath = resolve(options.configPath!);
   const config = readConfigSync(configPath);
   // --explain 은 순수 조회 — cargo/TS 렌더러를 실행하지 않고 표면 지도만 출력한다.
@@ -112,8 +114,14 @@ export async function runCodegen(args: string[]): Promise<void> {
     if (checkRoot) await rm(checkRoot, { recursive: true, force: true });
   }
   if (options.check) {
-    if (options.format === 'json')
-      console.log(JSON.stringify({ command: 'codegen', checked: true, configPath }));
+    // check 모드 — runGenerate(--check) 가 이미 불일치 시 throw 하므로 여기
+    // 도달은 drift=false 다. 실제 드리프트 관측은 doctor 의
+    // codegen.generated_freshness 검사가 담당한다.
+    if (options.format === 'json') {
+      console.log(
+        formatCodegenJson({ written: [], drift: false, durationMs: Date.now() - startedAt }),
+      );
+    }
     return;
   }
   status(options.format, `[rustra] TypeScript/C++: generate --config ${configPath}`);
@@ -124,7 +132,15 @@ export async function runCodegen(args: string[]): Promise<void> {
       { quiet: true },
     );
     if (options.format === 'json')
-      console.log(JSON.stringify({ command: 'codegen', checked: false, configPath, files }));
+      console.log(
+        formatCodegenJson({
+          written: files,
+          // "(updated)" 표기가 하나라도 있으면 기존 생성물이 갱신된 것 — CI가
+          // "재생성해도 바뀌는가"를 파싱 없이 판정하는 drift 신호다.
+          drift: files.some((file) => file.endsWith('(updated)')),
+          durationMs: Date.now() - startedAt,
+        }),
+      );
   } catch (error) {
     throw new Error(
       `TypeScript/C++ generation failed for ${configPath}: ${error instanceof Error ? error.message : String(error)}`,
