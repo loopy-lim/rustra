@@ -15,6 +15,15 @@ export type NodeLoopTransport = NodeInvokeTransport & {
   readonly pid: number | null;
   /** 'ndjson' = 레거시 라인 프로토콜, 'binary' = length-prefixed rkyv V2 (트랙 D). */
   readonly mode: 'ndjson' | 'binary';
+  /**
+   * 런타임이 `events:"push"` 핸드셰이크 capability 를 수용했는지 — ready() 정착
+   * 후 읽는다. true 면 0xfffd 푸시 프레임이 stdout 으로 흐르고 onPushEvent
+   * 구독이 실제 이벤트를 받는다. false 면(구 런타임, 미수용, codecs 미제공으로
+   * 핸드셰이크 미실행) 푸시가 절대 오지 않으므로 구독자는 폴링을 써야 한다.
+   * node-events 의 2-모드 dispatch가 이 플래그를 능력 판별 근거로 읽는다 —
+   * 존재만으로는 판별할 수 없다(메서드는 능력과 무관하게 항상 노출됨).
+   */
+  readonly pushCapable: boolean;
   /** 프로토콜 협상(바이너리 모드 핸드셰이크) 정착을 기다린다. */
   ready(): Promise<void>;
   /**
@@ -29,18 +38,17 @@ export type NodeLoopTransport = NodeInvokeTransport & {
   /**
    * 0xfffd 푸시 프레임을 구독한다 — `(event) => unsubscribe`. 런타임
    * (loop-stdio)이 `events:"push"` 핸드셰이크로 싱크를 설치한 경우에만 프레임이
-   * 흐른다. 푸시가 없는 런타임(구 바이너리, 미요청)에서는 조용히 아무것도
-   * 오지 않는다 — 능력 확인은 drain 응답/핸드셰이크 capability 계약(2-모드
-   * dispatch, node-events.ts)이 담당한다.
+   * 흐른다. 메서드 존재는 능력이 아니라 0xfffd 프레임 수신 "경로"의 노출일 뿐 —
+   * 실제 능력은 `pushCapable` 로 판별한다(node-events 2-모드 dispatch 계약).
    *
    * 옵셔널 멤버(drain? 과 동일 사유): 이 인터페이스를 구조적으로 구현하던
-   * 외부 구현체의 브레이킹을 피한다. 호출측은 `transport.addPushListener?.(...)`
+   * 외부 구현체의 브레이킹을 피한다. 호출측은 `transport.onPushEvent?.(...)`
    * 로 우아하게 폴백한다.
    *
    * payload 는 문자열 JSON — 파싱 책임은 구독자에 있다(폴링 drain 과 동일
    * 셰이프 경계).
    */
-  addPushListener?(
+  onPushEvent?(
     handler: (event: { name: string; payload: string; seq: number }) => void,
   ): () => void;
 };
@@ -120,6 +128,9 @@ export function createNodeLoopTransport(options: {
   let stdoutBuffer = '';
   // ── 바이너리 모드 상태 ──
   let mode: 'ndjson' | 'binary' = 'ndjson';
+  /** 런타임이 events:"push" 핸드셰이크를 수용했는지 — handshake 정착 후 확정.
+   * true 면 0xfffd 푸시 프레임이 stdout 으로 흐른다. */
+  let pushCapable = false;
   let binQueue: Array<{
     resolve: (frame: Uint8Array) => void;
     reject: (error: RustraCommandError) => void;
@@ -128,7 +139,7 @@ export function createNodeLoopTransport(options: {
    * 모두 담으므로 ArrayBufferLike 로 넓힌다. */
   let binLenBuf: Buffer<ArrayBufferLike> = Buffer.allocUnsafe(0);
   let binChunks: Buffer[] = [];
-  /** 0xfffd 푸시 프레임 구독자 — addPushListener 로 등록, 반환 해지 함수로 탈퇴. */
+  /** 0xfffd 푸시 프레임 구독자 — onPushEvent 로 등록, 반환 해지 함수로 탈퇴. */
   const pushListeners = new Set<(event: NodePushEventFrame) => void>();
 
   const nameToCodec = (command: string) => binaryCodecs?.get(command);
@@ -306,9 +317,13 @@ export function createNodeLoopTransport(options: {
   const handshake = async (): Promise<void> => {
     // codecs 가 주어지면 첫 줄로 __hello 를 보내 capability 를 협상한다.
     // 응답에 binary:true 가 없으면(구 런타임) NDJSON 을 유지한다.
-    const frame = await write({ command: '__hello', args: {} });
-    const result = frame as LoopResponseFrame & { binary?: boolean };
+    // events:"push" 를 함께 요청하고 — 런타임이 수용하면(events:"push" 에코)
+    // 0xfffd 푸시 프레임이 stdout 으로 흐른다. 미수용(구 런타임, 필드 무시)이면
+    // 푸시 프레임이 절대 오지 않으므로 기존 폴링이 그대로 동작한다.
+    const frame = await write({ command: '__hello', args: {}, events: 'push' });
+    const result = frame as LoopResponseFrame & { binary?: boolean; events?: string };
     if (result.ok && result.binary === true) mode = 'binary';
+    pushCapable = result.ok && result.binary === true && result.events === 'push';
   };
 
   // Lazy 프로세스는 첫 invoke 에서 spawn 되지만, 바이너리 모드 협상은 그 앞에
@@ -354,10 +369,13 @@ export function createNodeLoopTransport(options: {
     get mode() {
       return mode;
     },
+    get pushCapable() {
+      return pushCapable;
+    },
     ready() {
       return handshakeSettled;
     },
-    addPushListener(handler) {
+    onPushEvent(handler) {
       pushListeners.add(handler);
       return () => {
         pushListeners.delete(handler);
