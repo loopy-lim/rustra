@@ -426,6 +426,64 @@ test('event addition is non-breaking even when the old schema has no events sect
   );
 });
 
+test('new required payload field folds to (absent), not (optional)', () => {
+  // required_field_added 는 "이전에 optional 이었던" 게 아니라 "존재하지 않았던"
+  // 필드다 — 명령 쪽 렌더러의 Required field added 구분과 정합을 맞춘다.
+  const oldSchema = eventSchema([
+    {
+      name: 'progress.tick',
+      payload: { type: 'object', properties: { pct: { type: 'number' } }, required: ['pct'] },
+    },
+  ]);
+  const nextSchema = eventSchema([
+    {
+      name: 'progress.tick',
+      payload: {
+        type: 'object',
+        properties: { pct: { type: 'number' }, total: { type: 'number' } },
+        required: ['pct', 'total'],
+      },
+    },
+  ]);
+  const result = diffSchemas(oldSchema, nextSchema);
+  const change = result.breaking.find((c) => c.type === 'event_payload_changed');
+  assert.ok(
+    change,
+    `required field addition must be breaking, got: ${JSON.stringify(result.breaking)}`,
+  );
+  assert.equal(change.path, 'events.progress.tick.payload.total');
+  assert.equal(change.before, '(absent)');
+  assert.equal(change.after, '(required)');
+});
+
+test('payload definition removal folds to event_payload_changed', () => {
+  const payload = {
+    type: 'object',
+    properties: { data: { $ref: '#/definitions/Detail' } },
+    required: ['data'],
+    definitions: {
+      Detail: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  };
+  const oldSchema = eventSchema([{ name: 'progress.tick', payload: structuredClone(payload) }]);
+  const nextSchema = eventSchema([
+    {
+      name: 'progress.tick',
+      payload: {
+        type: 'object',
+        properties: { data: { $ref: '#/definitions/Detail' } },
+        required: ['data'],
+      },
+    },
+  ]);
+  const result = diffSchemas(oldSchema, nextSchema);
+  const change = result.breaking.find((c) => c.type === 'event_payload_changed');
+  assert.ok(change, `definition removal must be breaking, got: ${JSON.stringify(result.breaking)}`);
+  assert.equal(change.path, 'events.progress.tick.payload.Detail');
+  assert.equal(change.before, '(definition)');
+  assert.equal(change.after, '(removed)');
+});
+
 test('diagnoses wire-incompatible type change with cause sentence', () => {
   const oldSchema = structuredClone(baseSchema) as PackageSchema;
   const nextSchema = structuredClone(baseSchema) as PackageSchema;
