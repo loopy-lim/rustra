@@ -46,8 +46,12 @@ export function parseCliArgs(args: readonly string[], options: CliArgParserOptio
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index]!;
-    if (argument === '-h' && booleanFlags.has('h')) {
-      flags.add('h');
+    // help 관례 단일화 — -h 는 어느 커맨드에서든 help 로 정규화한다. 출력은
+    // cli-main 이 담당하고 파서는 플래그만 채우므로, 소비자는 flags.has('help')
+    // (또는 options.help) 하나만 본다. h 를 별도 플래그로 선언·판별하는 이중
+    // 관례는 남지 않는다.
+    if (argument === '-h') {
+      flags.add('help');
       continue;
     }
     if (!argument.startsWith('--')) {

@@ -80,7 +80,7 @@ export function parseDoctorArgs(args: string[]): DoctorCliOptions {
   const parsed = parseCliArgs(args, {
     command: 'doctor',
     valueFlags: ['config', 'format'],
-    booleanFlags: ['strict', 'help', 'h'],
+    booleanFlags: ['strict', 'help'],
   });
   const configPath = parsed.values.get('config') ?? 'rustra.json';
   if (!configPath) throw new Error('doctor --config requires a path');

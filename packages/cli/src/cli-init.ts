@@ -36,10 +36,12 @@ export async function runInit(args: string[]): Promise<void> {
   const parsed = parseCliArgs(args, {
     command: 'init',
     valueFlags: ['host'],
-    booleanFlags: ['force', 'help', 'h'],
+    booleanFlags: ['force', 'help'],
     allowPositionals: true,
   });
-  if (parsed.flags.has('help') || parsed.flags.has('h')) return;
+  // help 관례 — 파서는 플래그만 채우고 출력은 cli-main 이 담당한다. 도메인
+  // 검증(positional 수·host 값·덮어쓰기 확인)보다 help 가 우선한다.
+  if (parsed.flags.has('help')) return;
   const force = parsed.flags.has('force');
   const hostValue = parsed.values.get('host');
   if (hostValue !== undefined && !INIT_HOSTS.includes(hostValue as InitHost)) {

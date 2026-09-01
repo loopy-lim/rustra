@@ -20,6 +20,9 @@ export async function main(): Promise<void> {
   }
   const command = args[0];
   const rest = args.slice(1);
+  // help 관례의 출력 책임 — rest 사전검사로 서브커맨드 도메인 로직 진입 전에
+  // usage 를 일괄 출력한다. 파서 쪽은 help 플래그를 채우기만 하며(라이브러리
+  // 호출자용), 사용자 경로의 출력은 이 한 곳이다.
   if (rest.includes('--help') || rest.includes('-h')) {
     printHelp(command);
     return;

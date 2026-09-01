@@ -113,12 +113,12 @@ export async function runInspect(args: string[]): Promise<void> {
   const parsed = parseCliArgs(args, {
     command: 'inspect',
     valueFlags: [],
-    booleanFlags: ['help', 'h'],
+    booleanFlags: ['help'],
     allowPositionals: true,
   });
-  // 내부 --help 분기는 조용히 돌아온다 — 사용자용 usage 는 cli-main 이
-  // cli-help.ts 텍스트로 출력한다(cli-diff/cli-init 의 무출력 내부 분기 관례).
-  if (parsed.flags.has('help') || parsed.flags.has('h')) return;
+  // 내부 --help 분기는 조용히 돌아온다 — 파서는 플래그만 채우고 사용자용 usage
+  // 출력은 cli-main 이 cli-help.ts 텍스트로 담당한다(help 관례 단일화).
+  if (parsed.flags.has('help')) return;
   const files = parsed.positionals;
   if (files.length !== 1)
     throw new Error('Provide one snapshot dump file. Usage: rustra inspect dump.hex');

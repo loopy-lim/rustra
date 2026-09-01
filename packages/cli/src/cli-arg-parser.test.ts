@@ -86,14 +86,15 @@ describe('parseCliArgs', () => {
     ).toThrow(/Unknown doctor option: --strick[\s\S]*Did you mean --strict/);
   });
 
-  test('accepts separated --flag value and -h boolean', () => {
+  test('accepts separated --flag value and normalizes -h to help', () => {
     const parsed = parseCliArgs(['--config', 'a.json', '-h'], {
       command: 'codegen',
       valueFlags: ['config', 'format'],
-      booleanFlags: ['check', 'help', 'h'],
+      booleanFlags: ['check', 'help'],
     });
     expect(parsed.values.get('config')).toBe('a.json');
-    expect(parsed.flags.has('h')).toBe(true);
+    // help 관례 단일화 — -h 는 help 로 정규화되어 단일 판별 지점을 만든다.
+    expect(parsed.flags.has('help')).toBe(true);
   });
 
   test('boolean flags reject an inline value', () => {

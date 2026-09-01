@@ -109,6 +109,8 @@ export { readDevConfig } from './dev-config.js';
 
 export interface DevOptions {
   configPath?: string;
+  /** help 관례 — 파서가 플래그를 채우고 출력은 cli-main 이 담당한다. */
+  help?: boolean;
   backendDir: string;
   appDir: string;
   inspect: boolean;
@@ -133,12 +135,10 @@ export function parseDevArgs(args: string[]): DevOptions {
   const parsed = parseCliArgs(args, {
     command: 'dev',
     valueFlags: ['config', 'backend', 'app'],
-    booleanFlags: ['inspect', 'help', 'h'],
+    booleanFlags: ['inspect', 'help'],
   });
-  if (parsed.flags.has('help') || parsed.flags.has('h')) {
-    return { backendDir: 'backend', appDir: 'app', inspect: false };
-  }
   return {
+    ...(parsed.flags.has('help') ? { help: true } : {}),
     configPath: parsed.values.get('config'),
     backendDir: parsed.values.get('backend') ?? 'backend',
     appDir: parsed.values.get('app') ?? 'app',
@@ -160,6 +160,11 @@ function watchPlan(backendDir: string, generatedDir: string): () => boolean {
 
 export async function runDev(args: string[]): Promise<DevWatchHandle> {
   const options = parseDevArgs(args);
+  // help 관례 — 조용히 더미 핸들로 돌아온다(출력은 cli-main). 디렉터리 검증·
+  // 루프 진입 없음 — 기존 "기본값 객체로 워처 진입" 관례의 대체다. onReload 는
+  // reload 루프가 세팅 전이므로 no-op 이 계약상 정확하다(초기 강제 재생성도
+  // 관찰되지 않는다).
+  if (options.help) return { dispose() {}, onReload: () => {} };
   if (options.configPath) return runConfigDev(options.configPath, options.inspect);
   const backendDir = resolve(options.backendDir);
   const appDir = resolve(options.appDir);
