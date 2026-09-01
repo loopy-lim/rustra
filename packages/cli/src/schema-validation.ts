@@ -4,6 +4,18 @@ const TS_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
 function assertIdentifier(value: string, where: string): void {
   if (!TS_IDENTIFIER.test(value)) {
+    // 제네릭 파손 이름(`Wrapper<String >` — 구버전 rustra의 type_name 잔재)은
+    // 원인과 해결책을 명시한다. 신규 rustra는 schemars schema_name(모노몰포이즈
+    // `Wrapper_for_String`)을 쓰므로 이 경우 Rust 쪽 재빌드가 정답.
+    const genericMatch = value.match(/^(\w+)<.*>$/s);
+    if (genericMatch) {
+      throw new Error(
+        `Invalid schema: ${where} is a generic type name, got: ${JSON.stringify(value)}. ` +
+          `Generic payloads must use a concrete alias (type Foo = Bar<Baz>) or a ` +
+          `monomorphized schemars name like ${genericMatch[1]}_for_X. ` +
+          `Rebuild the Rust package with the current rustra and regenerate schema.json.`,
+      );
+    }
     throw new Error(
       `Invalid schema: ${where} must be a plain identifier, got: ${JSON.stringify(value)}`,
     );

@@ -23,3 +23,14 @@ DX additions in `@rustra/cli`: self-describing headers on every generated file
 (`bun run test:onboarding`: init → doctor → build → codegen → demo in a scratch dir).
 Example bins now publish schema only; all four examples were regenerated under the
 new header convention.
+
+User-defined generic types now work at the concrete-instance level: command
+`inputType`/`outputType` are pinned to the schemars `JsonSchema::schema_name`
+(monomorphized names like `Wrapper_for_String`) instead of Rust's `type_name`,
+which leaked invalid `Wrapper<String >` identifiers for generic payloads.
+`rustra` (minor): schema.json contract entries change for generic and
+`serde_json::Value` payloads (`Value` → `AnyValue`), so the contract hash shifts
+for packages using them — regenerate schema.json and TS clients together (same
+minor release, per the versioning policy). CLI: friendlier schema validation —
+missing config files point at `rustra init`, broken schema.json names the file
+and the regen command, and generic type names get a rebuild hint.

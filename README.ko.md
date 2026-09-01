@@ -69,6 +69,20 @@ rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)�
 - [x] Windows 코어 런타임 검증 — CI의 Windows MSVC 테스트 + release DLL 산출
 - [x] 개발 허들 완화 — `rustra doctor`, 설정 기반 `rustra codegen`, `rustra dev`,
       생성물 drift 게이트 (`rustra generate --check`)
+- [x] 단일 화살 코드젠 + 자기서술 생성 파일 (2026-09-01): Rust bin은 `schema.json`
+      만 발행하는 계약 프로브(`write_schema_to_dir`, `RUSTRA_SCHEMA_OUT` 존중)이고,
+      `rustra codegen`이 그 단일 파일에서 모든 TS/C++ 표면을 렌더링 — 같은 파일을
+      두 명령이 쓰는 이중 패스 함정이 사라졌다. 모든 생성 파일은 출처와 재생성
+      명령을 밝히는 헤더를 달고, `rustra doctor`가 스테일 생성물을 감지하며
+      (`codegen.generated_freshness`), `rustra codegen --explain`이 설정이
+      건드리는 표면 지도를 보여주고, CI 온보딩 게이트가 스크래치 프로젝트에서
+      init → doctor → build → codegen → demo를 실동행 검증한다.
+- [x] 사용자 정의 제네릭 — 구체 인스턴스 단위 (2026-09-01): `Wrapper<String>`을
+      명령 페이로드로 쓰면 모노몰포이즈 schemars 타입(`Wrapper_for_String`)이
+      생성된다 — 명령 `inputType`/`outputType`이 이제 `JsonSchema::schema_name`에서
+      나오므로, 제네릭 페이로드가 스키마 title·definitions 키와 일치하는 유효한
+      TypeScript 식별자로 코드젠된다. 파라미터화 템플릿(`Wrapper<T>` 자체)은
+      발행되지 않는다 — [타입 가이드](docs/rust-api-guide.ko.md#사용자-정의-제네릭-타입) 참고.
 - [ ] 범용 prebuilt 애플리케이션 네이티브 바이너리 — 앱별 Rust 코드와 target에
       종속되므로 CI artifact/cache 방식으로 대체 권장
 

@@ -78,6 +78,25 @@ cancellation, events, and channels are documented explicitly in the
 - [x] Lowered development hurdles — `rustra doctor`, config-based
       `rustra codegen`, `rustra dev`, generated-output drift gate
       (`rustra generate --check`)
+- [x] Single-arrow codegen + self-describing generated files (2026-09-01):
+      the Rust bin is a contract probe that publishes `schema.json` only
+      (`write_schema_to_dir`, honoring `RUSTRA_SCHEMA_OUT`), and
+      `rustra codegen` renders every TS/C++ surface from that single file —
+      the dual-pass trap of two writers producing the same files is gone.
+      Every generated file carries a header naming its source and regen
+      command; `rustra doctor` detects stale generated output
+      (`codegen.generated_freshness`); `rustra codegen --explain` maps which
+      surfaces a config touches; a CI onboarding gate runs
+      init → doctor → build → codegen → demo in a scratch project
+      (`bun run test:onboarding` upstream).
+- [x] User-defined generic types at the concrete-instance level
+      (2026-09-01): `Wrapper<String>` as a command payload generates the
+      monomorphized schemars type (`Wrapper_for_String`) — command
+      `inputType`/`outputType` now come from `JsonSchema::schema_name`, so
+      generic payloads yield valid TypeScript identifiers that match the
+      schema title and definitions keys. Parameterized templates (`Wrapper<T>`
+      itself) are not emitted; see the
+      [type guide](docs/rust-api-guide.md#user-defined-generic-types).
 - [ ] Universal prebuilt application native binaries — depends on per-app Rust
       code and target; CI artifact/cache approach recommended instead
 
