@@ -1,9 +1,17 @@
+// ── rustra generated ────────────────────────────────────────
+// File:   types.ts
+// Source: schema.json (single source of truth for this file)
+// Regen:  rustra codegen --config rustra.json
+// Stage:  rust-probe schema → ts renderer
+// DO NOT EDIT — changes will be overwritten and fail codegen --check.
+// ────────────────────────────────────────────────────────────
+
 export type { EngineClient, RustraError } from '@rustra/types';
 export { RustraCommandError } from '@rustra/types';
 
 /**
  * 커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.
- * 
+ *
  * 코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).
  */
 export type ChannelHandle = number;
@@ -271,4 +279,3 @@ export type WideAggOutput = {
   max: number | bigint;
   adjusted: number | bigint;
 };
-

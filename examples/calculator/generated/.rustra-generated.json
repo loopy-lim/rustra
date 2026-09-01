@@ -1,39 +1,39 @@
 {
   "schemaVersion": 1,
   "schemaHash": "b9ec095fd83d9c67befb83277adbb988ca248f2c3c64dbefd06c65c5a7bc2121",
-  "generatorVersion": "0.5.0",
+  "generatorVersion": "0.6.0",
   "files": [
     {
       "path": "bun.ts",
-      "sha256": "4dcafc89130edae079fa2c2f8d567396d6b9a9e394f5902d0b02d70657e052b7"
+      "sha256": "5ef9039924533a982e950e624d2d8500dadd9a458bbe33f2c2549c488d407a03"
     },
     {
       "path": "commands.ts",
-      "sha256": "52902c3e9e06cb5b3f0df0b6fe394c3c1bc31b48372a5e585c17cb68dce8ce99"
+      "sha256": "d93a1c1fbacdc3cbadda0848c02d8549c5a6e67fb8f562672ad6f9e3b879db24"
     },
     {
       "path": "contract.ts",
-      "sha256": "3bd0d848bb0edfc415655286e0d50384ad8586fdda1f32f0c9724ccb2ae9e44e"
+      "sha256": "f7f779b20f9211bc9a5ec7c0f33c754fe8ab203d32399ae14558352bf4fcae89"
     },
     {
       "path": "node.ts",
-      "sha256": "f6bb410c1fa13cfaea557a0c526221c0cf32d4ad2fe65d2a2c8cc9fb7518b919"
+      "sha256": "11f7dfa4898799b35871f5a6bd9c29245a1f22614c1351061195e32733b46c5f"
     },
     {
       "path": "rkyv-codecs.ts",
-      "sha256": "208828acf57ed49b4ba1c177222c8fe5a427b7acfedfcffbe3792865bf14589d"
+      "sha256": "ecbb3ca5674046adbdebe648baf738e9575f874ca810015e0a68ccea421b424a"
     },
     {
       "path": "rkyv-registry.ts",
-      "sha256": "92578fcd1adf42e903edf682f98578870a7fbb7e2db38d31d68ae74b30200f43"
+      "sha256": "9a5406bc221de6a37e1125c6d0ff9698354e062076786ac12a1588bbc06b2a67"
     },
     {
       "path": "tauri.ts",
-      "sha256": "7950308a02796c8be0cf70a9c10407ab9188ecd566dd4a83df96c3b1fda344b4"
+      "sha256": "319daaef0071b3bd6f235f4ab16091da635a0e705f1710ef9510f30429050b16"
     },
     {
       "path": "types.ts",
-      "sha256": "e70cfa6d9b00556699f89f28292cfee06a5c108779c5d1104cacb57607b4b93d"
+      "sha256": "b673c432823029bae720d86b4d2233572c3bfdba37c1a177b2bda8f57bf43af4"
     }
   ]
 }

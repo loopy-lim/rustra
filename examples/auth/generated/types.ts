@@ -1,3 +1,11 @@
+// ── rustra generated ────────────────────────────────────────
+// File:   types.ts
+// Source: schema.json (single source of truth for this file)
+// Regen:  rustra codegen --config rustra.json
+// Stage:  rust-probe schema → ts renderer
+// DO NOT EDIT — changes will be overwritten and fail codegen --check.
+// ────────────────────────────────────────────────────────────
+
 export type { EngineClient, RustraError } from '@rustra/types';
 export { RustraCommandError } from '@rustra/types';
 
@@ -6,8 +14,8 @@ export type AdminStatsInput = {
 };
 
 export type AdminStatsOutput = {
-  sessions: number;
-  uptimeMs: number;
+  sessions: number | bigint;
+  uptimeMs: number | bigint;
   /** 활성 세션 사용자명 목록 — admin 가시성 예시. */
   activeUsers: string[];
 };
@@ -39,4 +47,3 @@ export type SignOutInput = {
 export type SignOutOutput = {
   signedOut: boolean;
 };
-

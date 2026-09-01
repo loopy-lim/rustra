@@ -29,11 +29,23 @@ import {
 import { ensureHostDependencies, ensureReactNativeDependency } from './dependencies.js';
 import type { HostEntries } from './host-entries.js';
 import { cliVersion } from './cli-runtime.js';
+import { generatedFileHeader } from './generated-header.js';
 import {
   clearCodegenWarnings,
   formatCodegenWarning,
   takeCodegenWarnings,
 } from './codegen-warnings.js';
+
+/** 파일명 → 생성 단계 표기. 헤더의 "Stage:" 행이 다중 표면 출처를 대답한다. */
+function stageFor(fileName: string): string {
+  if (fileName.endsWith('.hpp') || fileName.endsWith('.cpp')) return 'schema → cpp codec renderer';
+  if (fileName === 'rkyv-codecs.ts' || fileName === 'rkyv-registry.ts')
+    return 'schema → ts codec renderer';
+  if (fileName === 'positional-facade.ts') return 'schema → positional facade';
+  if (['node.ts', 'bun.ts', 'tauri.ts', 'react-native.ts'].includes(fileName))
+    return 'schema → host entry';
+  return 'rust-probe schema → ts renderer';
+}
 
 export async function generateFromSchema(
   schemaPath: string,
@@ -49,8 +61,15 @@ export async function generateFromSchema(
   warnIfFieldOrderIsUnspecified(schema);
   clearCodegenWarnings();
   const files: GeneratedFile[] = [];
+  // 자기서술 헤더는 이 한 곳에서 주입한다 — 렌더러 개별 모듈은 헤더를 모른다.
+  // 단, 렌더러가 이미 헤더를 각인하는 파일(C++ 코덱 등)은 이중 접합하지 않는다.
   const addFile = (targetDir: string, name: string, content: string) =>
-    files.push({ path: resolve(targetDir, name), content });
+    files.push({
+      path: resolve(targetDir, name),
+      content: content.startsWith('// ── rustra generated')
+        ? content
+        : `${generatedFileHeader(name, stageFor(name))}${content}`,
+    });
   addFile(outputPath, 'types.ts', generateTypesTs(schema));
   addFile(outputPath, 'commands.ts', generateCommandsTs(schema));
   addFile(outputPath, 'contract.ts', generateContractTs(schemaContent));

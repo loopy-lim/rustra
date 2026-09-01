@@ -1,3 +1,11 @@
+// ── rustra generated ────────────────────────────────────────
+// File:   types.ts
+// Source: schema.json (single source of truth for this file)
+// Regen:  rustra codegen --config rustra.json
+// Stage:  rust-probe schema → ts renderer
+// DO NOT EDIT — changes will be overwritten and fail codegen --check.
+// ────────────────────────────────────────────────────────────
+
 export type { EngineClient, RustraError } from '@rustra/types';
 export { RustraCommandError } from '@rustra/types';
 
@@ -9,18 +17,17 @@ export type JobStatusInput = {
 };
 
 export type JobStatusOutput = {
-  pendingEvents: number;
-  droppedEvents: number;
+  pendingEvents: number | bigint;
+  droppedEvents: number | bigint;
 };
 
 export type StartJobInput = {
   jobId: string;
-  totalSteps: number;
+  totalSteps: number | bigint;
   /** 각 스텝 사이 대기 (ms) — 데모용. */
-  stepDelayMs: number;
+  stepDelayMs: number | bigint;
 };
 
 export type StartJobOutput = {
   accepted: boolean;
 };
-

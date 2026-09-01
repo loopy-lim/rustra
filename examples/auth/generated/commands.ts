@@ -1,24 +1,25 @@
+// ── rustra generated ────────────────────────────────────────
+// File:   commands.ts
+// Source: schema.json (single source of truth for this file)
+// Regen:  rustra codegen --config rustra.json
+// Stage:  rust-probe schema → ts renderer
+// DO NOT EDIT — changes will be overwritten and fail codegen --check.
+// ────────────────────────────────────────────────────────────
+
 import type { AdminStatsInput, AdminStatsOutput, GrantInput, GrantOutput, SignInInput, SignInOutput, SignOutInput, SignOutOutput } from './types.js';
-import { invokeGenerated } from '@rustra/types';
+import { createGeneratedFields2, invokeGenerated, invokeGeneratedFields1 } from '@rustra/types';
 import type { InvokeOptions } from '@rustra/types';
 
 export function adminStats(input: AdminStatsInput, options?: InvokeOptions): Promise<AdminStatsOutput> {
-  return invokeGenerated<AdminStatsOutput>(4, 'adminStats', input, options);
+  return invokeGeneratedFields1<AdminStatsOutput>(4, 'adminStats', input, input["token"], options);
 }
 adminStats.commandId = 'adminStats';
 
-export function grant(input: GrantInput, options?: InvokeOptions): Promise<GrantOutput> {
-  return invokeGenerated<GrantOutput>(3, 'grant', input, options);
-}
-grant.commandId = 'grant';
+export const grant = createGeneratedFields2<GrantInput, GrantOutput>(3, 'grant', "token", "capability", 'grant');
 
-export function signIn(input: SignInInput, options?: InvokeOptions): Promise<SignInOutput> {
-  return invokeGenerated<SignInOutput>(1, 'signIn', input, options);
-}
-signIn.commandId = 'signIn';
+export const signIn = createGeneratedFields2<SignInInput, SignInOutput>(1, 'signIn', "username", "password", 'signIn');
 
 export function signOut(input: SignOutInput, options?: InvokeOptions): Promise<SignOutOutput> {
-  return invokeGenerated<SignOutOutput>(2, 'signOut', input, options);
+  return invokeGeneratedFields1<SignOutOutput>(2, 'signOut', input, input["token"], options);
 }
 signOut.commandId = 'signOut';
-
