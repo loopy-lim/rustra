@@ -2309,6 +2309,28 @@ test('generated composite 64-bit codecs (vec_u64/map_i64/option_i64) encode and 
     assert.equal(decoded.result?.max, 18446744073709551615n, 'u64::MAX → bigint');
     assert.equal(decoded.result?.pairs[0], -1);
     assert.equal(decoded.result?.pairs[1], 9007199254740991, 'safe boundary stays number');
+
+    // caller-buffer 뷰(소유 ArrayBuffer가 아닌 subarray)도 decode 계약
+    // (ArrayBuffer | ArrayBufferView)을 충족해야 한다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다(881d4d93). DataView 생성이
+    // ArrayBuffer를 요구하면 Node 에서 TypeError 가 난다.
+    const padded = new Uint8Array(5 + out.length);
+    padded.set(out, 5);
+    const frameView = padded.subarray(5);
+    assert.notEqual(frameView.byteOffset, 0, 'precondition: view is offset into shared buffer');
+    const decodedFromView = codec.decode(frameView);
+    assert.equal(
+      decodedFromView.ok,
+      true,
+      'decode must accept an offset full-frame Uint8Array view',
+    );
+    assert.equal(decodedFromView.result?.max, 18446744073709551615n);
+    // 헤더가 어긋난 뷰는 무한 대기 없이 즉시 reject 된다(잘린 프레임 방어).
+    const skewedView = out.subarray(2);
+    const t0 = Date.now();
+    const skewed = codec.decode(skewedView);
+    assert.equal(skewed.ok, false, 'skewed view must reject');
+    assert.ok(Date.now() - t0 < 1000, 'skewed view must reject immediately, not spin');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

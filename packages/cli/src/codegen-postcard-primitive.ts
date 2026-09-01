@@ -23,6 +23,7 @@ function _pcDecodeVarint(buf: Uint8Array, offset: number): { value: number; byte
   let bytesRead = 0;
   while (true) {
     const b = buf[offset + bytesRead];
+    if (b === undefined) throw new Error('varint out of bounds');
     value += (b & 0x7f) * multiplier;
     bytesRead++;
     if ((b & 0x80) === 0) break;
