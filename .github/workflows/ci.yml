@@ -259,6 +259,11 @@ jobs:
         # TS/Rust/C++ 3면 PINNED hex 게이트의 C++ 다리 — shim 테스트가 실제로
         # 실행돼야 생성 코덱과 fixture 간 드리프트를 PR 단계에서 잡는다.
         run: bash examples/react-native-calculator/modules/rustra-jsi/ios/run-cpp-codec-tests.sh
+      - name: Onboarding gate (init → doctor → codegen → demo)
+        # 신규 사용자 여정을 임시 디렉토리에서 실동행 검증 — 산문이 아니라
+        # 게이트로 계약한다. init 스캐폴드가 repo CLI의 dist를 소비하므로
+        # bun run build 이후 실행되어야 한다.
+        run: bun run test:onboarding
 
   # RN 예제 네이티브 Release 빌드 — 감사에서 Android Release 실패가 P0 로
   # 지적됐다. Gradle 훅이 Rust 부터 빌드하므로 cargo-ndk + NDK 만 세팅하면
