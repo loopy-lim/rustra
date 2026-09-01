@@ -24,6 +24,9 @@ function _utf8Encode(s: string): Uint8Array {
 }
 
 function _utf8Decode(bytes: Uint8Array, start: number, end: number): string {
+  // end 가 버퍼를 넘으면 즉시 실패 — 잘린 프레임에서 while (i < end) 가
+  // undefined 바이트를 수없이 돌아 런타임이 멈추는 것을 막는다.
+  if (end > bytes.length) throw new Error('string out of bounds');
   let s = ''; let i = start;
   while (i < end) {
     const b = bytes[i];
