@@ -36,14 +36,20 @@ node dist-ts/examples/streaming/apps/node-app.js
 ## API
 
 ```rust
-// Rust — 커맨드 핸들러에서 이벤트 발행
-package.emit("progress.tick", serde_json::json!({ "value": 42 }));
+// Rust — 이벤트 계약 선언 (builder 체인)
+rustra::build!("examples.streaming", start_job, job_status)
+    .event::<JobProgress>("progress.tick")
+    .event::<JobDone>("job.done")
+    .done()
+
+// 커맨드 핸들러에서 선언된 타입으로 이벤트 발행
+package.emit("progress.tick", JobProgress { job_id, step, total });
 ```
 
 ```ts
 // 호스트 어댑터 — 이벤트 버스 폴링 (플랫폼 푸시 채널로 전달)
 const events = package.eventBus().takePendingEvents();
-// → [{ name: "progress.tick", payload: "{\"value\":42}", seq: 0 }]
+// → [{ name: "progress.tick", payload: "{\"jobId\":\"job-1\",\"step\":1,\"total\":5}", seq: 0 }]
 ```
 
 이벤트 버스는 고정 용량(기본 1024, drop-oldest) — 호스트가 느려도 Rust 호출을

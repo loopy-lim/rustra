@@ -9,6 +9,11 @@
 //!
 //! `startJob` 는 즉시 반환하고 백그라운드 스레드가 이벤트를 채운다
 //! (비동기 offload — invoke 호출자를 블록하지 않는다).
+//!
+//! 이벤트 계약은 `PackageBuilder::event::<T>()` 로 선언된다 — `progress.tick`
+//! 은 [`JobProgress`], `job.done` 은 [`JobDone`] 페이로드를 갖는다. 선언된
+//! 이벤트는 schema.json 의 `events` 섹션과 TS 코드젠(`events.ts`)으로 흘러
+//! 커맨드와 동일한 타입 안전 계약을 이룬다.
 
 use rustra::Package;
 use rustra::prelude::*;
@@ -25,6 +30,21 @@ pub struct StartJobInput {
 #[bridge_type]
 pub struct StartJobOutput {
     pub accepted: bool,
+}
+
+/// `progress.tick` 이벤트 페이로드 — `.event::<JobProgress>()` 로 선언된다.
+#[bridge_type]
+pub struct JobProgress {
+    pub job_id: String,
+    pub step: i64,
+    pub total: i64,
+}
+
+/// `job.done` 이벤트 페이로드 — `.event::<JobDone>()` 로 선언된다.
+#[bridge_type]
+pub struct JobDone {
+    pub job_id: String,
+    pub steps: i64,
 }
 
 /// 백그라운드 작업이 이벤트를 발행할 패키지 핸들. FFI 진입점이 staticlib 의
@@ -51,12 +71,19 @@ pub fn start_job(input: StartJobInput) -> Result<StartJobOutput> {
             }
             pkg.emit(
                 "progress.tick",
-                serde_json::json!({ "jobId": job_id, "step": step + 1, "total": total }),
+                JobProgress {
+                    job_id: job_id.clone(),
+                    step: step + 1,
+                    total,
+                },
             );
         }
         pkg.emit(
             "job.done",
-            serde_json::json!({ "jobId": job_id, "steps": total }),
+            JobDone {
+                job_id,
+                steps: total,
+            },
         );
     });
 
@@ -85,5 +112,8 @@ pub fn job_status(_input: JobStatusInput) -> Result<JobStatusOutput> {
 }
 
 pub fn streaming_package() -> Package {
-    rustra::build!("examples.streaming", start_job, job_status).done()
+    rustra::build!("examples.streaming", start_job, job_status)
+        .event::<JobProgress>("progress.tick")
+        .event::<JobDone>("job.done")
+        .done()
 }

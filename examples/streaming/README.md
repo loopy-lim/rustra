@@ -38,14 +38,20 @@ Sample output:
 ## API
 
 ```rust
-// Rust — emit events from a command handler
-package.emit("progress.tick", serde_json::json!({ "value": 42 }));
+// Rust — declare the event contract on the builder chain
+rustra::build!("examples.streaming", start_job, job_status)
+    .event::<JobProgress>("progress.tick")
+    .event::<JobDone>("job.done")
+    .done()
+
+// Emit with the declared type from a command handler
+package.emit("progress.tick", JobProgress { job_id, step, total });
 ```
 
 ```ts
 // Host adapter — poll the event bus (forward to the platform push channel)
 const events = package.eventBus().takePendingEvents();
-// → [{ name: "progress.tick", payload: "{\"value\":42}", seq: 0 }]
+// → [{ name: "progress.tick", payload: "{\"jobId\":\"job-1\",\"step\":1,\"total\":5}", seq: 0 }]
 ```
 
 The event bus has a fixed capacity (default 1024, drop-oldest) — it never blocks the

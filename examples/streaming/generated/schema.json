@@ -81,5 +81,56 @@
         }
       }
     }
+  ],
+  "events": [
+    {
+      "name": "job.done",
+      "payload": {
+        "title": "JobDone",
+        "description": "`job.done` 이벤트 페이로드 — `.event::<JobDone>()` 로 선언된다.",
+        "type": "object",
+        "required": [
+          "jobId",
+          "steps"
+        ],
+        "properties": {
+          "jobId": {
+            "type": "string"
+          },
+          "steps": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "definitions": {}
+    },
+    {
+      "name": "progress.tick",
+      "payload": {
+        "title": "JobProgress",
+        "description": "`progress.tick` 이벤트 페이로드 — `.event::<JobProgress>()` 로 선언된다.",
+        "type": "object",
+        "required": [
+          "jobId",
+          "step",
+          "total"
+        ],
+        "properties": {
+          "jobId": {
+            "type": "string"
+          },
+          "step": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "definitions": {}
+    }
   ]
 }
