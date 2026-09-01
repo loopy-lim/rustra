@@ -173,7 +173,7 @@ pub(crate) use codegen::{
     take_codegen_warnings, ts_type_from_schema,
 };
 pub use error::{Result, RustraError};
-pub(crate) use schema::{command_name_from_handler, schema_value, short_type_name};
+pub(crate) use schema::{command_name_from_handler, contract_type_name, schema_value};
 pub use state::{State, get_state, with_state_context};
 
 /// Input boundary for a command whose entire payload is one contiguous byte
