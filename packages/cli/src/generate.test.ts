@@ -34,6 +34,7 @@ import {
 import type { PackageSchema } from './schema.js';
 import { parseCodegenArgs, parseGenerateArgs } from './cli-options.js';
 import { INIT_CONFIG_SCHEMA_PATH } from './init-template.js';
+import { generateFromSchema } from './cli-generate-files.js';
 
 const simpleSchema: PackageSchema = {
   packageId: 'test',
@@ -2328,4 +2329,24 @@ test('postcardHelperSource encoders reject negative and out-of-i64 inputs', asyn
   // 와이어(10바이트째 payload 0x02)를 내보게 된다(무음 왜곡 금지).
   assert.throws(() => h.encodeVarint64(2n ** 64n), /varint exceeds u64 range/);
   assert.doesNotThrow(() => h.encodeVarint64(2n ** 64n - 1n));
+});
+
+test('generateFromSchema names the schema file when its JSON is broken', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-generate-broken-schema-'));
+  try {
+    const schemaPath = join(root, 'schema.json');
+    writeFileSync(schemaPath, '{ oops');
+    await assert.rejects(generateFromSchema(schemaPath, join(root, 'out')), (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      assert.match(message, /Invalid schema\.json/);
+      assert.ok(message.includes(schemaPath), 'error must name the schema file');
+      assert.match(message, /cargo run/);
+      // 파서 세부 문구는 런타임마다 다르다(Node: "Expected property name or '}'…",
+      // Bun: "Expected '}'") — 하드코딩 대신 원인이 살아있는지만 본다.
+      assert.match(message, /:\s*JSON Parse error|:\s*Expected/, 'parse detail must survive');
+      return true;
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
