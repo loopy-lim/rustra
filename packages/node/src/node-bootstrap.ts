@@ -15,7 +15,12 @@ import {
   type NodeProcessTransport,
 } from './node-core.js';
 
-function resolveNodeRuntime(options: NodeBootstrapOptions): string {
+/**
+ * 런타임 실행 파일 해상 — `command` → `RUSTRA_NODE_BINARY` → 후보/이름 추론.
+ * 이벤트 구독 팩토리(node-event-subscription.ts)도 같은 해상을 재사용한다 —
+ * 부트스트랩과 이벤트 transport 가 서로 다른 런타임을 가리키지 않게.
+ */
+export function resolveNodeRuntime(options: NodeBootstrapOptions): string {
   const explicit = process.env.RUSTRA_NODE_BINARY ?? options.command;
   if (explicit) return explicit;
   const candidates = [...(options.commandCandidates ?? [])];

@@ -19,3 +19,8 @@ export * from './node-core.js';
 export * from './node-bootstrap.js';
 export * from './node-loop.js';
 export { subscribeEvent, type NodeEventTransport } from './node-events.js';
+export type {
+  NodeEventSubscription,
+  NodeEventSubscriptionOptions,
+} from './node-event-subscription.js';
+export { createNodeEventSubscription } from './node-event-subscription.js';

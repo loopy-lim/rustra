@@ -1851,6 +1851,38 @@ test('desktop host entries own lazy setup and preserve explicit escape hatches',
   assert.match(tauri, /subscribeTauriEvent as subscribeEvent/);
 });
 
+test('host entries wire subscribeEvent when the schema declares events', () => {
+  const node = generateNodeEntryTs(
+    { targetDirectoryUrl: '../../target/', targetName: 'my-app' },
+    { events: true },
+  );
+  assert.match(node, /createNodeEventSubscription/);
+  assert.match(node, /export const subscribeEvent = events\.subscribeEvent/);
+  // 브릿지가 부트스트랩과 같은 런타임 해상(후보) 정보를 재사용한다 — 이중 해상 불일치 방지.
+  assert.match(node, /binaryName: "my-app"/);
+  assert.match(node, /release\/\$\{executable\}/);
+
+  const bun = generateBunEntryTs(
+    { targetDirectoryUrl: '../../target/', targetName: 'my_app' },
+    { events: true },
+  );
+  assert.match(bun, /createBunEventSubscription/);
+  assert.match(bun, /export const subscribeEvent = events\.subscribeEvent/);
+  // 팩토리가 부트스트랩과 같은 옵션 집합(libraryName + libraryCandidates)을 받는다 —
+  // 후보 경로 부재 시에도 cwd 체인 추론 폴백이 부트스트랩과 동일하게 작동한다.
+  assert.match(
+    bun,
+    /createBunEventSubscription\(\{\s*libraryName: "my_app",\s*libraryCandidates: \[/,
+  );
+});
+
+test('host entries stay byte-identical when the schema declares no events', () => {
+  const node = generateNodeEntryTs({ targetDirectoryUrl: '../../target/', targetName: 'my-app' });
+  assert.doesNotMatch(node, /subscribeEvent|createNodeEventSubscription/);
+  const bun = generateBunEntryTs({ targetDirectoryUrl: '../../target/', targetName: 'my_app' });
+  assert.doesNotMatch(bun, /subscribeEvent|createBunEventSubscription/);
+});
+
 test('React Native Cargo target inference uses the manifest package and staticlib name', () => {
   const selected = selectReactNativeCargoTarget(
     {
