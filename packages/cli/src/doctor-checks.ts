@@ -1,5 +1,5 @@
-import { constants, existsSync, statSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { constants, existsSync, readFileSync, statSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import {
   RUSTRA_MSRV,
   type DoctorCheck,
@@ -20,6 +20,8 @@ import {
   safeResolve,
   selectGenerator,
 } from './doctor-support.js';
+import { sha256 } from './hash.js';
+import { cliVersion } from './cli-runtime.js';
 
 export function collectBaseChecks(options: DoctorOptions, runner: DoctorRunner): DoctorCheck[] {
   const checks: DoctorCheck[] = [];
@@ -247,6 +249,68 @@ export function collectConfigChecks(
   // required 가 아니지만(warn), wasm32 빌드 타깃 부재는 필수 fail 이다(wasm32
   // 없이는 엔진 빌드 자체가 성공하지 않는다). 네이티브 타깃은 어느 쪽도 수집하지
   // 않는다(절대 음성).
+  // 코드젠 산출물 신선도 — .rustra-generated.json 매니페스트 기반 저비용 검사.
+  // 바이트 전수 검증은 codegen --check 의 소관이다 (doctor 는 읽기 전용 저비용 유지).
+  // 스키마 자체가 없으면 codegen.schema_output 이 이미 warn 이므로 이중 보고하지 않는다.
+  const manifestPath = outputPath ? resolve(outputPath, '.rustra-generated.json') : undefined;
+  if (manifestPath && existsSync(manifestPath) && schemaPath && existsSync(schemaPath)) {
+    let stale: string | undefined;
+    let detail: string | undefined;
+    try {
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+        schemaVersion?: unknown;
+        schemaHash?: unknown;
+        generatorVersion?: unknown;
+      };
+      if (
+        manifest.schemaVersion !== 1 ||
+        typeof manifest.schemaHash !== 'string' ||
+        typeof manifest.generatorVersion !== 'string'
+      )
+        stale = 'Generated manifest is invalid — generated output may be stale';
+      else {
+        const currentSchemaHash = sha256(readFileSync(schemaPath, 'utf8'));
+        if (manifest.schemaHash !== currentSchemaHash)
+          stale = 'schema.json changed after the last codegen — generated output is stale';
+        else if (manifest.generatorVersion !== cliVersion)
+          stale = `Generator version drift: manifest ${manifest.generatorVersion}, CLI ${cliVersion}`;
+      }
+    } catch (error) {
+      stale = 'Generated manifest could not be read — generated output may be stale';
+      detail = error instanceof Error ? error.message : String(error);
+    }
+    checks.push(
+      stale
+        ? check('codegen.generated_freshness', 'warn', false, stale, detail, [
+            'Run rustra codegen --config rustra.json',
+          ])
+        : check(
+            'codegen.generated_freshness',
+            'pass',
+            false,
+            'Generated output is fresh (schema and generator match the manifest)',
+          ),
+    );
+  } else if (schemaPath && existsSync(schemaPath))
+    checks.push(
+      check(
+        'codegen.generated_freshness',
+        'warn',
+        false,
+        'Generated manifest is missing — generated output may be stale or absent',
+        undefined,
+        ['Run rustra codegen --config rustra.json'],
+      ),
+    );
+  else
+    checks.push(
+      check(
+        'codegen.generated_freshness',
+        'skip',
+        false,
+        'Skipped freshness because schema.json is not generated yet',
+      ),
+    );
   if (config.dev?.target === 'wasm') {
     checks.push(
       check(
