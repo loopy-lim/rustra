@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "schemaHash": "060dcd5c66a8c386729d73bc467485cdd3818a11c108c786486c5b06d2e683f9",
+  "schemaHash": "73afb8cbfb541f442828e70ec9e0ab678000b9a944ef10f0bb079318b27d022d",
   "generatorVersion": "0.6.0",
   "files": [
     {
@@ -9,11 +9,15 @@
     },
     {
       "path": "contract.ts",
-      "sha256": "9d788329c76fa67c99882f96ee29ec757d69b9100df7849817978a34a872b830"
+      "sha256": "c5c51448440c886de3439b409d976d97201e1a21f0a5531ecd3366d3766750a7"
+    },
+    {
+      "path": "events.ts",
+      "sha256": "b57675e877bc969326fa1c35dd95474c45e865383f8d515938b2c38248c0154d"
     },
     {
       "path": "rkyv-codecs.ts",
-      "sha256": "43cddd60bebd8d07a66f1ae9c4b0fdc4df3559bc2ee6adc61e12f31c1e586c0d"
+      "sha256": "a37de91ba705afc0e0acad579dbf5046a9427c135298e708044fbbab88154560"
     },
     {
       "path": "rkyv-registry.ts",
