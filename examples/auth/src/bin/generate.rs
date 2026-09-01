@@ -4,6 +4,6 @@ fn main() {
     let package = auth_package();
     let generated = package.generate_typescript().expect("codegen failed");
     generated
-        .write_to_dir("examples/auth/generated")
+        .write_schema_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))
         .expect("write failed");
 }

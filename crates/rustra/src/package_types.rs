@@ -143,7 +143,32 @@ pub struct GeneratedPackage {
 }
 
 impl GeneratedPackage {
+    /// 계약 프로브 출력 — `schema.json` 만 디스크에 씁니다.
+    ///
+    /// 단일 화살 코드젠에서 Rust bin 의 역할은 스키마 발행까지다. TS/C++ 표면은
+    /// `rustra codegen` 이 schema.json 에서 렌더링한다 — 같은 파일을 두 렌더러가
+    /// 생산해 한쪽이 stale 이 되는 듀얼 패스 함정을 구조적으로 제거한다.
+    ///
+    /// `RUSTRA_SCHEMA_OUT` 환경 변수를 [`GeneratedPackage::write_to_dir`] 과
+    /// 동일하게 존중한다 — CLI의 `codegen --check` 가 임시 디렉토리에서
+    /// Rust 산출물을 검증할 때 사용하는 우회 경로다.
+    pub fn write_schema_to_dir(&self, output_dir: impl AsRef<Path>) -> crate::Result<()> {
+        let requested_dir = output_dir.as_ref();
+        let output_dir = std::env::var_os("RUSTRA_SCHEMA_OUT")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| requested_dir.to_path_buf());
+        fs::create_dir_all(&output_dir)?;
+        write_if_changed(output_dir.join("schema.json"), &self.schema_json)?;
+        Ok(())
+    }
+
     /// 생성된 모든 파일을 지정한 디렉토리에 저장합니다.
+    ///
+    /// Deprecated (단일 화살 코드젠 전환): TS 표면(`types.ts`/`commands.ts`/
+    /// `contract.ts`)은 `rustra codegen` 이 schema.json 에서 렌더링하는 것이
+    /// 단일 진실이다. 이 메서드는 Node 없는 환경의 참고용 출력으로 버전 정책상
+    /// 최소 1 minor 유지 후 제거를 검토한다. 신규 코드는
+    /// [`GeneratedPackage::write_schema_to_dir`] 을 사용한다.
     ///
     /// `RUSTRA_SCHEMA_OUT` 환경 변수가 있으면 해당 디렉토리를 사용합니다.
     /// CLI의 `codegen --check`가 작업 트리를 건드리지 않고 Rust 산출물을

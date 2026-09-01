@@ -224,6 +224,45 @@ fn generated_package_can_be_written_to_a_directory() {
     std::fs::remove_dir_all(output_dir).unwrap();
 }
 
+/// 단일 테스트로 병합한 이유 — `RUSTRA_SCHEMA_OUT` 는 프로세스 전역 env 다. 두 시나리오를
+/// 별도 테스트로 나누면 카고 병렬 실행 시 서로의 env 를 오염시켜 간헐적으로 깨진다.
+#[test]
+fn write_schema_to_dir_emits_schema_only_and_honors_rustra_schema_out() {
+    let output_dir = std::env::temp_dir().join(format!("rustra-probe-{}", std::process::id()));
+    let override_dir =
+        std::env::temp_dir().join(format!("rustra-probe-override-{}", std::process::id()));
+
+    let _ = std::fs::remove_dir_all(&output_dir);
+    let _ = std::fs::remove_dir_all(&override_dir);
+    let generated = Package::builder("example.calculator")
+        .command_fn(add_numbers)
+        .build()
+        .generate_typescript()
+        .unwrap();
+
+    // 시나리오 1 — 프로브 계약: schema.json 만 쓰고 TS 표면은 손대지 않는다.
+    generated.write_schema_to_dir(&output_dir).unwrap();
+    assert!(output_dir.join("schema.json").exists());
+    assert!(!output_dir.join("types.ts").exists());
+    assert!(!output_dir.join("commands.ts").exists());
+    assert!(!output_dir.join("contract.ts").exists());
+
+    // 시나리오 2 — RUSTRA_SCHEMA_OUT 우회: codegen --check 의 임시 디렉토리 검증 경로.
+    let write_result = unsafe {
+        std::env::set_var("RUSTRA_SCHEMA_OUT", &override_dir);
+        let result = generated.write_schema_to_dir(&output_dir);
+        std::env::remove_var("RUSTRA_SCHEMA_OUT");
+        result
+    };
+    write_result.unwrap();
+    assert!(override_dir.join("schema.json").exists());
+    // requested 쪽 두 번째 쓰기는 override 로 리다이렉트됐다 — requested 는 시나리오 1 산출물만.
+    assert_eq!(std::fs::read_dir(&override_dir).unwrap().count(), 1);
+
+    std::fs::remove_dir_all(output_dir).unwrap();
+    std::fs::remove_dir_all(override_dir).unwrap();
+}
+
 #[test]
 fn unknown_command_uses_package_level_error() {
     let package = Package::builder("example.empty").build();
