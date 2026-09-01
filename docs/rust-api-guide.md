@@ -589,9 +589,9 @@ export type Example = {
 ### Scalar Return Types
 
 When the return value is a primitive (`i64`, `String`, `bool`), codegen does not inline
-it — it emits a named alias for the widened primitive (`int64`, `String`, `Boolean`) in
-`types.ts` and uses it as the command's output type. The input likewise keeps the single
-struct + `Result<O>` contract:
+it — it emits a named alias in `types.ts` and uses it as the command's output type
+(`int64` widens to `number | bigint`; `String` and `Boolean` are renames of
+`string`/`boolean`). The input likewise keeps the single struct + `Result<O>` contract:
 
 ```rust
 #[bridge_type]

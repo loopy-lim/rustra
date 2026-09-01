@@ -579,7 +579,7 @@ export type Example = {
 
 ### 스칼라 반환 타입
 
-반환값이 원시 타입(`i64`, `String`, `bool`)이면 코드젠은 inline하지 않고, 넓혀진 원시 타입 별칭(`int64`, `String`, `Boolean`)을 `types.ts`에 발행해 커맨드 출력 타입으로 사용합니다. 입력도 마찬가지로 단일 구조체 + `Result<O>` 계약을 지킵니다:
+반환값이 원시 타입(`i64`, `String`, `bool`)이면 코드젠은 inline하지 않고, 이름 붙은 별칭을 `types.ts`에 발행해 커맨드 출력 타입으로 사용합니다(`int64`는 `number | bigint`로 widen, `String`/`Boolean`은 `string`/`boolean`의 rename). 입력도 마찬가지로 단일 구조체 + `Result<O>` 계약을 지킵니다:
 
 ```rust
 #[bridge_type]
