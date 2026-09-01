@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { isCliEntry } from './cli-runtime.js';
 import { main } from './cli-main.js';
+import { UsageError } from './cli-usage-error.js';
 
 export * from './generate.js';
 export type { PackageSchema, CommandSchema, JsonSchema } from './schema.js';
@@ -38,11 +39,7 @@ if (isCliEntry()) {
     console.error('Error:', error instanceof Error ? error.message : error);
     // Usage errors (bad flags/values from the shared arg parser) exit 2 so CI
     // can distinguish "invoked the CLI wrong" from runtime failures (exit 1).
-    const message = error instanceof Error ? error.message : String(error);
-    const isUsageError =
-      /Unknown .* option|requires a value|does not accept a value|must be text or json/.test(
-        message,
-      );
-    process.exitCode = isUsageError ? 2 : 1;
+    // 판별은 메시지 정규식이 아니라 UsageError 타입 — 파서가 던지는 계약 표면.
+    process.exitCode = error instanceof UsageError ? 2 : 1;
   });
 }

@@ -1,4 +1,5 @@
 import { closestMatch } from './cli-suggest.js';
+import { UsageError } from './cli-usage-error.js';
 
 export type ParsedCliArgs = {
   values: Map<string, string>;
@@ -18,14 +19,18 @@ function closestFlag(input: string, known: readonly string[]): string | undefine
   return closestMatch(input, known);
 }
 
-function unknownOptionError(command: string, argument: string, known: readonly string[]): Error {
+function unknownOptionError(
+  command: string,
+  argument: string,
+  known: readonly string[],
+): UsageError {
   const name = argument.replace(/^--?/, '');
   const suggestion = closestFlag(name, known);
   const available = known.map((flag) => `--${flag}`).join(', ');
   const hint = suggestion
     ? ` Did you mean --${suggestion}?`
     : ` Available ${command} options: ${available}.`;
-  return new Error(
+  return new UsageError(
     `Unknown ${command} option: ${argument}.${hint} Run "rustra ${command} --help".`,
   );
 }
@@ -56,14 +61,14 @@ export function parseCliArgs(args: readonly string[], options: CliArgParserOptio
     const [name, inlineValue] = argument.slice(2).split('=', 2);
     if (booleanFlags.has(name!)) {
       if (inlineValue !== undefined) {
-        throw new Error(`--${name} does not accept a value`);
+        throw new UsageError(`--${name} does not accept a value`);
       }
       flags.add(name!);
       continue;
     }
     if (!valueFlags.has(name!)) throw unknownOptionError(options.command, argument, known);
     const value = inlineValue ?? args[++index];
-    if (!value || value.startsWith('--')) throw new Error(`--${name} requires a value`);
+    if (!value || value.startsWith('--')) throw new UsageError(`--${name} requires a value`);
     values.set(name!, value);
   }
 
@@ -72,14 +77,14 @@ export function parseCliArgs(args: readonly string[], options: CliArgParserOptio
 
 export function requiredCliValue(parsed: ParsedCliArgs, name: string): string {
   const value = parsed.values.get(name);
-  if (!value) throw new Error(`--${name} requires a value`);
+  if (!value) throw new UsageError(`--${name} requires a value`);
   return value;
 }
 
 export function cliFormat(value: string | undefined, command: string): 'text' | 'json' | undefined {
   if (value === undefined) return undefined;
   if (value !== 'text' && value !== 'json') {
-    throw new Error(`${command} --format must be text or json`);
+    throw new UsageError(`${command} --format must be text or json`);
   }
   return value;
 }
