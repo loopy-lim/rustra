@@ -96,6 +96,49 @@ test('dispose before initialization cancels the pending bridge delegation', asyn
   assert.equal(drains, 0);
 });
 
+test('queueing keeps one entry per (name, callback) pair — same callback on two names', async () => {
+  let drains = 0;
+  const batches: Array<Array<{ name: string; payload: unknown }>> = [
+    [
+      { name: 'a', payload: 1 },
+      { name: 'b', payload: 2 },
+    ],
+    [{ name: 'b', payload: 3 }],
+  ];
+  const source: BunEventDrainSource = {
+    drainEvents() {
+      return Promise.resolve(batches[Math.min(drains++, batches.length - 1)]!);
+    },
+  };
+  const subscription = createBunEventSubscription({ poll: source, pollIntervalMs: 1 });
+  const got: unknown[] = [];
+  const callback: (payload: never) => void = (p) => got.push(p);
+  const unsubscribeA = subscription.subscribeEvent('a', callback);
+  subscription.subscribeEvent('b', callback);
+  // 브릿지 준비 후 양쪽 이름이 모두 위임된다 — 단일 키 맵이면 a 구독이 덮여 유실된다.
+  await waitFor(() => got.length >= 2);
+  unsubscribeA(); // a 만 해지 — b 구독은 살아남아 다음 배치를 받는다.
+  await waitFor(() => got.length >= 3);
+  subscription.dispose();
+  assert.deepEqual(got, [1, 2, 3]);
+});
+
+test('dispose during initialization prevents bridge revival and fails fast after dispose', async () => {
+  let drainCount = 0;
+  const source: BunEventDrainSource = {
+    drainEvents() {
+      drainCount += 1;
+      return Promise.resolve([{ name: 'x', payload: drainCount }]);
+    },
+  };
+  const subscription = createBunEventSubscription({ poll: source, pollIntervalMs: 1 });
+  subscription.subscribeEvent('x', () => {}); // 초기화 kick
+  subscription.dispose(); // 초기화 정착 전 해지 — 부활 없어야 한다
+  await Bun.sleep(20); // 초기화 promise 정착 대기
+  // dispose 후 구독은 fail-fast — 조용히 큐잉되어 부활 후보가 되지 않는다.
+  assert.throws(() => subscription.subscribeEvent('x', () => {}), /disposed/i);
+});
+
 // ── helpers ──────────────────────────────────────────────────
 
 async function waitFor(predicate: () => boolean, timeoutMs = 2000, stepMs = 1) {

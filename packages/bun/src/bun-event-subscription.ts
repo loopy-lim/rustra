@@ -39,10 +39,11 @@ export type BunEventSubscriptionOptions = Pick<
 export type BunEventSubscription = {
   /**
    * rustra 이벤트를 구독한다 — `(name, callback) => unsubscribe`(동기).
-   * 브릿지 초기화 전 구독은 큐잉됐다가 준비 즉시 위임된다.
+   * 브릿지 초기화 전 구독은 큐잉됐다가 준비 즉시 위임된다. dispose 후 호출은
+   * fail-fast 로 throw 한다(초기화 부활 후보가 남지 않게).
    */
   subscribeEvent(name: string, callback: (payload: never) => void): () => void;
-  /** 브릿지를 해제한다 — 종료 시 1회 호출. 초기화 전 호출은 no-op. */
+  /** 브릿지를 해제한다 — 종료 시 1회 호출. 초기화 정착 전이어도 확정(dispose 우선). */
   dispose(): void;
 };
 
@@ -65,8 +66,14 @@ export function createBunEventSubscription(
   let bridge: BunEventBridge | null = null;
   let bridgeReady: Promise<void> | null = null;
   let failure: { error: unknown } | null = null;
-  /** 브릿지 준비 전 구독 — 등록 순서 보존(준비 시 순서대로 위임). */
-  const pending = new Map<EventCallback, { name: string; unsubscribe: (() => void) | null }>();
+  /** dispose 확정 — 초기화 정착이 dispose 를 추월해 브릿지를 부활시키지 않게. */
+  let disposed = false;
+  /** 브릿지 준비 전 구독 — 콜백당 엔트리 목록(같은 콜백을 다른 이름으로 구독 가능).
+   * 등록 순서 보존(준비 시 목록 순서대로 위임). */
+  const pending = new Map<
+    EventCallback,
+    Array<{ name: string; unsubscribe: (() => void) | null }>
+  >();
 
   // narrowing 우회 — ensureBridge(클로저) 호출 뒤 TS 는 failure 의 재할당을
   // 추적하지 못해 null 로 좁혀버린다. 함수 경계를 거쳐 읽는다.
@@ -86,14 +93,16 @@ export function createBunEventSubscription(
       pollIntervalMs: options.pollIntervalMs,
     })
       .then((ready) => {
-        if (failure) {
-          // 초기화가 끝나기 전에 dispose 되었을 수 있다 — 위임하지 않고 즉시 해제.
+        if (disposed) {
+          // dispose 가 초기화 정착을 추월했다 — 위임 없이 즉시 해제(부활 방지).
           ready.dispose();
           return;
         }
         bridge = ready;
-        for (const [callback, entry] of pending) {
-          entry.unsubscribe = ready.subscribeEvent(entry.name, callback);
+        for (const [callback, entries] of pending) {
+          for (const entry of entries) {
+            entry.unsubscribe = ready.subscribeEvent(entry.name, callback);
+          }
         }
         pending.clear();
       })
@@ -104,6 +113,7 @@ export function createBunEventSubscription(
 
   return {
     subscribeEvent(name, callback) {
+      if (disposed) throw new Error('createBunEventSubscription: subscription was disposed');
       if (failure) throw failure.error;
       if (bridge) return bridge.subscribeEvent(name, callback);
       ensureBridge();
@@ -112,24 +122,27 @@ export function createBunEventSubscription(
       const synchronousFailure = failureNow();
       if (synchronousFailure) throw synchronousFailure.error;
       const entry = { name, unsubscribe: null as (() => void) | null };
-      pending.set(callback, entry);
+      const entries = pending.get(callback);
+      if (entries) entries.push(entry);
+      else pending.set(callback, [entry]);
       return () => {
-        // 브릿지 준비 전 해지: 큐에서 제거(위임 자체가 일어나지 않는다).
+        // 브릿지 준비 전 해지: 큐에서 해당 엔트리만 제거(다른 이름 구독은 보존).
         // 준비 후 해지: 위임된 unsubscribe 로 실제 싱크/폴링 정리.
         const queued = pending.get(callback);
-        if (queued === entry) {
-          pending.delete(callback);
+        const index = queued?.indexOf(entry) ?? -1;
+        if (queued && index >= 0) {
+          queued.splice(index, 1);
+          if (queued.length === 0) pending.delete(callback);
           return;
         }
         entry.unsubscribe?.();
       };
     },
     dispose() {
-      if (!failure) {
-        // 초기화 완료를 기다리지 않는다 — 완료 시 위임 없이 즉시 해제된다(위 then).
-        bridge?.dispose();
-        bridge = null;
-      }
+      disposed = true;
+      // 초기화 완료를 기다리지 않는다 — 정착 시 disposed 가드가 위임 없이 해제한다.
+      bridge?.dispose();
+      bridge = null;
       pending.clear();
     },
   };

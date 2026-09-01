@@ -19,22 +19,17 @@
  * transport 를 1회 생성(lazy)하고 이후 구독은 같은 transport 를 공유한다. 런타임이
  * push 능력을 갖추면(Task 6) 이 팩토리만 바꿔 끼우면 되고 엔트리 템플릿은 동일.
  */
-import type { spawn } from 'node:child_process';
 import { createNodeLoopTransport, type NodeLoopTransport } from './node-loop.js';
 import { subscribeEvent, type NodeEventTransport } from './node-events.js';
 import { resolveNodeRuntime } from './node-bootstrap.js';
+import type { NodeBootstrapOptions } from './node-core.js';
 
-export type NodeEventSubscriptionOptions = {
-  /** 런타임 실행 파일 절대/상대 경로 — 지정 시 후보 탐색을 건너뛴다. */
-  command?: string;
-  /** 시도할 런타임 경로 목록 — 존재하는 첫 경로가 채택된다. */
-  commandCandidates?: readonly string[];
-  /** 런타임 이름 — 바이너리 이름으로 cwd→루트 부모 체인을 따라 추론한다. */
-  binaryName?: string;
-  /** 런타임 인자 — 기본 없음(loop-stdio 런타임은 인자 없이 loop 모드로 진입). */
-  args?: string[];
-  spawnOptions?: Parameters<typeof spawn>[2];
-};
+/** 부트스트랩과 동일한 런타임 해상 필드 — Pick 합성으로 필드 드리프트를 막는다
+ * (contractHash 는 이벤트 transport 해상과 무관해 제외). */
+export type NodeEventSubscriptionOptions = Pick<
+  NodeBootstrapOptions,
+  'command' | 'commandCandidates' | 'binaryName' | 'args' | 'spawnOptions'
+>;
 
 export type NodeEventSubscription = {
   /**
