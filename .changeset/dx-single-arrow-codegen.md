@@ -8,7 +8,6 @@
 '@rustra/testing': patch
 '@rustra/react': patch
 '@rustra/react-native': patch
-'rustra': minor
 ---
 
 Single-arrow codegen: the Rust bin is a contract probe that publishes `schema.json`
@@ -28,9 +27,11 @@ User-defined generic types now work at the concrete-instance level: command
 `inputType`/`outputType` are pinned to the schemars `JsonSchema::schema_name`
 (monomorphized names like `Wrapper_for_String`) instead of Rust's `type_name`,
 which leaked invalid `Wrapper<String >` identifiers for generic payloads.
-`rustra` (minor): schema.json contract entries change for generic and
-`serde_json::Value` payloads (`Value` → `AnyValue`), so the contract hash shifts
-for packages using them — regenerate schema.json and TS clients together (same
-minor release, per the versioning policy). CLI: friendlier schema validation —
-missing config files point at `rustra init`, broken schema.json names the file
-and the regen command, and generic type names get a rebuild hint.
+The Rust `rustra` crate ships the same minor in its own Cargo workspace release
+(crates.io is manual — see docs/release-procedure.md): schema.json contract entries
+change for generic and `serde_json::Value` payloads (`Value` → `AnyValue`), so the
+contract hash shifts for packages using them — regenerate schema.json and TS
+clients together (same minor release, per the versioning policy). CLI: friendlier
+schema validation — missing config files point at `rustra init`, broken
+schema.json names the file and the regen command, and generic type names get a
+rebuild hint.
