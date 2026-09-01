@@ -8,6 +8,7 @@ import {
   type HostEntries,
 } from './host-entries.js';
 import { parseGenerateArgs, type GenerateOptions } from './cli-options.js';
+import { UsageError } from './cli-usage-error.js';
 import { cliManifest } from './cli-runtime.js';
 import { generateFromSchema } from './cli-generate-files.js';
 import { autoRebuild } from './cli-rebuild.js';
@@ -71,7 +72,7 @@ function resolvePaths(
   } else if (options.schemaPath && options.outputPath) {
     schemaPath = options.schemaPath;
     outputPath = options.outputPath;
-  } else throw new Error('Provide --schema and --output, or --config with a config file.');
+  } else throw new UsageError('Provide --schema and --output, or --config with a config file.');
   if (schemaOverride) schemaPath = schemaOverride;
   const reactNativeScaffold = config?.reactNative
     ? resolveReactNativeScaffold(

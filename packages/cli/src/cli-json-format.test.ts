@@ -51,9 +51,12 @@ test('formatCodegenJson renders the schemaVersion:1 report shape', () => {
   });
 });
 
-test('formatCodegenJson reports drift when check mode detected stale files', () => {
+test('formatCodegenJson reports drift:true for rewritten files (write mode)', () => {
+  // check 모드는 불일치 시 throw 하므로 JSON 에 도달하지 않는다 — drift:true 가
+  // 도달하는 경로는 write 모드의 (updated) 관측뿐이다(cli-codegen-json.test.ts
+  // 의 e2e 게이트가 실제 재생성으로 이 결합을 고정한다).
   const json = JSON.parse(
-    formatCodegenJson({ written: ['generated/types.ts (verified)'], drift: true, durationMs: 3 }),
+    formatCodegenJson({ written: ['generated/types.ts (updated)'], drift: true, durationMs: 3 }),
   );
   assert.equal(json.schemaVersion, 1);
   assert.equal(json.drift, true);
