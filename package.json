@@ -32,6 +32,7 @@
     "test:architecture": "bun test scripts/architecture-boundaries.test.ts",
     "test:api-surface": "node scripts/api-surface.mjs",
     "test:onboarding": "bun test scripts/onboarding-gate.test.ts && node scripts/onboarding-gate.mjs",
+    "test:docs": "bun test scripts/docs-gate.test.ts && node scripts/docs-gate.mjs",
     "verify:package:react-native": "node scripts/check-react-native-package.mjs",
     "verify:consumer:react-native": "bun scripts/check-packed-react-native-consumer.mjs",
     "test:release-tools": "bun test scripts/check-release-coherence.test.ts scripts/check-packed-react-native-consumer.test.ts scripts/api-surface.test.ts",
