@@ -830,8 +830,6 @@ test('wasm dev target fails the required check when the wasm32 rust target is mi
 // 일치하지 않으면 스테일이다 — 치명이 아니라 안내이므로 전부 warn(required: false).
 // 바이트 전수 검증은 codegen --check 의 소관이고 doctor 는 읽기 전용 저비용 유지.
 
-import { cliVersion } from './cli-runtime.js';
-
 function withFreshProject(manifest: object | null, callback: (root: string) => void): void {
   withProject(
     {

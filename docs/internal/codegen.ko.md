@@ -2,6 +2,11 @@
 
 프로젝트 기여자를 위한 내부 문서. `Package::generate_typescript()`의 전체 흐름, schema 추출, TS 타입 매핑 규칙, 생성 결과물을 설명한다.
 
+단일 화살 코드젠: Rust bin은 `schema.json`만 발행하는 계약 프로브(`write_schema_to_dir`)이고,
+TS CLI(`rustra codegen`)가 그 한 파일에서 전 표면 — TS, C++, positional facade, 호스트
+엔트리 — 를 렌더링한다. Rust가 TS를 직접 쓰던 `write_to_dir`는 듀얼 패스 함정으로서
+deprecated다.
+
 ---
 
 ## 전체 흐름
@@ -16,7 +21,12 @@ Package::generate_typescript()
   │
   └─ GeneratedPackage { schema_json, types_ts, commands_ts, contract_hash }
        │
-       └─ write_to_dir() → schema.json, types.ts, commands.ts, contract.ts
+       ├─ write_schema_to_dir() → schema.json                    (Rust 프로브는 여기까지)
+       │
+       └─ rustra codegen (TS CLI) 가 schema.json 읽어 렌더링:
+            types.ts, commands.ts, contract.ts, rkyv-codecs.ts,
+            rkyv-registry.ts, positional-facade.ts, 호스트 엔트리, C++ 코덱
+            + .rustra-generated.json (신선도 사이드카)
 ```
 
 ---

@@ -233,7 +233,7 @@ A macro that creates the package builder and registers `#[command]` functions al
 let pkg = rustra::build!("examples.calculator", add_numbers, multiply).done();
 
 // TypeScript generation happens via Package's generate_typescript
-pkg.generate_typescript()?.write_to_dir("generated")?;
+pkg.generate_typescript()?.write_schema_to_dir("generated")?;
 ```
 
 ### What the Macro Expands To
@@ -379,7 +379,9 @@ let result: Value = pkg.invoke_json("addNumbers", json!({ "a": 2, "b": 3 }))?;
 
 ### `.generate_typescript()`
 
-Generates the TypeScript client code from all registered commands.
+Generates the code generation result from all registered commands — the
+contract probe output. Publishing `schema.json` (`write_schema_to_dir`) is
+the Rust side's job; the TS CLI renders the surfaces from it.
 
 ```rust
 let generated = pkg.generate_typescript()?;
@@ -398,24 +400,34 @@ The struct holding the TypeScript code generation result.
 | `commands_ts`   | `commands.ts` | TypeScript command helper functions                |
 | `contract_hash` | `contract.ts` | The schema's SHA-256 hash (integrity verification) |
 
-### `.write_to_dir(dir)`
+### `.write_schema_to_dir(dir)`
 
-Writes the four files into the given directory, creating it if it does not exist.
+Writes `schema.json` — the contract probe output — into the given directory,
+creating it if it does not exist. `rustra codegen` then renders every surface
+(types, commands, contract, codecs, host entries) from this single file.
 
 ```rust
 let generated = pkg.generate_typescript()?;
-generated.write_to_dir("generated")?;
+generated.write_schema_to_dir("generated")?;
 ```
 
-The generated files:
+The pipeline:
 
 ```text
+generated/schema.json   # published by the Rust probe
+        │ rustra codegen --config rustra.json
+        ▼
 generated/
   schema.json      # full command schema
   types.ts         # TypeScript type definitions
   commands.ts      # TypeScript command helper functions
   contract.ts      # GENERATED_CONTRACT_HASH constant
+  ...              # codecs, positional facade, host entries
 ```
+
+> Deprecated: `.write_to_dir(dir)` also wrote `types.ts`/`commands.ts`/`contract.ts`
+> from Rust. That dual pass is the stale-file trap the single arrow removes; keep it
+> only for reference output in Node-less environments.
 
 ---
 
@@ -716,7 +728,7 @@ fn main() -> Result<()> {
     println!("2 + 3 = {}", sum.value);
 
     // generate TypeScript
-    pkg.generate_typescript()?.write_to_dir("generated")?;
+    pkg.generate_typescript()?.write_schema_to_dir("generated")?;
 
     Ok(())
 }
@@ -758,7 +770,7 @@ fn main() -> Result<()> {
     )?;
     println!("Found: {} ({})", user.display_name, user.email);
 
-    pkg.generate_typescript()?.write_to_dir("generated")?;
+    pkg.generate_typescript()?.write_schema_to_dir("generated")?;
     Ok(())
 }
 ```

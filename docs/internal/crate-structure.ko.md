@@ -77,24 +77,25 @@ tauri-calculator (src-tauri)
 
 **공개 API:**
 
-| 항목                                  | 종류                   | 설명                                                                                                   |
-| ------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------ |
-| `Package`                             | struct                 | 등록된 command들을 보유하는 런타임 객체                                                                |
-| `Package::builder(id)`                | method                 | `PackageBuilder` 생성                                                                                  |
-| `Package::invoke()` / `invoke_json()` | method                 | command 실행 (typed / JSON)                                                                            |
-| `Package::generate_typescript()`      | method                 | `GeneratedPackage` 생성                                                                                |
-| `PackageBuilder`                      | struct                 | 빌더 패턴으로 command 등록                                                                             |
-| `PackageBuilder::command()`           | method                 | 명시적 이름으로 command 등록                                                                           |
-| `PackageBuilder::command_fn()`        | method                 | 함수명에서 자동으로 command 이름 추출                                                                  |
-| `PackageBuilder::build()`             | method                 | `Package` 생성                                                                                         |
-| `GeneratedPackage`                    | struct                 | 생성된 TS 클라이언트 (4개 파일)                                                                        |
-| `GeneratedPackage::write_to_dir()`    | method                 | 디렉토리에 파일 쓰기                                                                                   |
-| `RustraError`                         | struct                 | 에러 타입. `Serialize` 구현. `code + message` 필드 + `custom()` 생성자 + `code()` / `message()` getter |
-| `command`                             | macro (re-export)      | `rustra_macros::command`                                                                               |
-| `register`                            | macro (re-export)      | `rustra_macros::register`. 다중 command 일괄 등록                                                      |
-| `prelude`                             | module                 | 자주 쓰는 항목 일괄 import (`command`, `register` 포함)                                                |
-| `tauri_support`                       | module (feature-gated) | `RustraState`, `rustra_dispatch`, `register()` — Tauri 연동 헬퍼                                       |
-| `__private`                           | module (sealed)        | `CommandInput`, `CommandOutput` trait. proc macro 전용                                                 |
+| 항목                                      | 종류                   | 설명                                                                                                   |
+| ----------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------ |
+| `Package`                                 | struct                 | 등록된 command들을 보유하는 런타임 객체                                                                |
+| `Package::builder(id)`                    | method                 | `PackageBuilder` 생성                                                                                  |
+| `Package::invoke()` / `invoke_json()`     | method                 | command 실행 (typed / JSON)                                                                            |
+| `Package::generate_typescript()`          | method                 | `GeneratedPackage` 생성                                                                                |
+| `PackageBuilder`                          | struct                 | 빌더 패턴으로 command 등록                                                                             |
+| `PackageBuilder::command()`               | method                 | 명시적 이름으로 command 등록                                                                           |
+| `PackageBuilder::command_fn()`            | method                 | 함수명에서 자동으로 command 이름 추출                                                                  |
+| `PackageBuilder::build()`                 | method                 | `Package` 생성                                                                                         |
+| `GeneratedPackage`                        | struct                 | 생성된 TS 클라이언트 (4개 파일)                                                                        |
+| `GeneratedPackage::write_to_dir()`        | method                 | 디렉토리에 파일 쓰기 — deprecated (single-arrow)                                                       |
+| `GeneratedPackage::write_schema_to_dir()` | method                 | schema.json 만 쓰기 (계약 프로브)                                                                      |
+| `RustraError`                             | struct                 | 에러 타입. `Serialize` 구현. `code + message` 필드 + `custom()` 생성자 + `code()` / `message()` getter |
+| `command`                                 | macro (re-export)      | `rustra_macros::command`                                                                               |
+| `register`                                | macro (re-export)      | `rustra_macros::register`. 다중 command 일괄 등록                                                      |
+| `prelude`                                 | module                 | 자주 쓰는 항목 일괄 import (`command`, `register` 포함)                                                |
+| `tauri_support`                           | module (feature-gated) | `RustraState`, `rustra_dispatch`, `register()` — Tauri 연동 헬퍼                                       |
+| `__private`                               | module (sealed)        | `CommandInput`, `CommandOutput` trait. proc macro 전용                                                 |
 
 **Features:**
 

@@ -231,7 +231,7 @@ enum Shape {
 let pkg = rustra::build!("examples.calculator", add_numbers, multiply).done();
 
 // TypeScript 생성은 Package 의 generate_typescript 에서
-pkg.generate_typescript()?.write_to_dir("generated")?;
+pkg.generate_typescript()?.write_schema_to_dir("generated")?;
 ```
 
 ### 매크로 내부 동작
@@ -393,24 +393,34 @@ TypeScript 코드 생성 결과를 담는 구조체입니다.
 | `commands_ts`   | `commands.ts` | TypeScript 명령 헬퍼 함수           |
 | `contract_hash` | `contract.ts` | 스키마 SHA-256 해시 (무결성 검증용) |
 
-### `.write_to_dir(dir)`
+### `.write_schema_to_dir(dir)`
 
-네 개의 파일을 지정한 디렉토리에 저장합니다. 디렉토리가 없으면 생성합니다.
+계약 프로브 출력인 `schema.json`을 지정한 디렉토리에 저장합니다. 디렉토리가 없으면
+생성합니다. 이어서 `rustra codegen`이 이 단일 파일에서 전 표면(types, commands,
+contract, 코덱, 호스트 엔트리)을 렌더링합니다.
 
 ```rust
 let generated = pkg.generate_typescript()?;
-generated.write_to_dir("generated")?;
+generated.write_schema_to_dir("generated")?;
 ```
 
-생성되는 파일:
+파이프라인:
 
 ```text
+generated/schema.json   # Rust 프로브가 발행
+        │ rustra codegen --config rustra.json
+        ▼
 generated/
   schema.json      # 전체 명령 스키마
   types.ts         # TypeScript 타입 정의
   commands.ts      # TypeScript 명령 헬퍼 함수
   contract.ts      # GENERATED_CONTRACT_HASH 상수
+  ...              # 코덱, positional facade, 호스트 엔트리
 ```
+
+> Deprecated: `.write_to_dir(dir)`은 Rust에서 `types.ts`/`commands.ts`/`contract.ts`까지
+> 썼습니다. 이 듀얼 패스가 단일 화살이 제거한 stale 파일 함정입니다. Node 없는 환경의
+> 참고용 출력으로만 유지됩니다.
 
 ---
 
@@ -708,7 +718,7 @@ fn main() -> Result<()> {
     println!("2 + 3 = {}", sum.value);
 
     // TypeScript 생성
-    pkg.generate_typescript()?.write_to_dir("generated")?;
+    pkg.generate_typescript()?.write_schema_to_dir("generated")?;
 
     Ok(())
 }
@@ -750,7 +760,7 @@ fn main() -> Result<()> {
     )?;
     println!("Found: {} ({})", user.display_name, user.email);
 
-    pkg.generate_typescript()?.write_to_dir("generated")?;
+    pkg.generate_typescript()?.write_schema_to_dir("generated")?;
     Ok(())
 }
 ```

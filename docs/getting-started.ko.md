@@ -188,8 +188,8 @@ fn main() -> Result<()> {
     let package = rustra::register!(Package::builder("my.pkg"), add_numbers, multiply)
         .build();
 
-    // TypeScript 생성
-    package.generate_typescript()?.write_to_dir("generated")?;
+    // TypeScript 생성 — 스키마를 발행하고, 표면 렌더링은 CLI가
+    package.generate_typescript()?.write_schema_to_dir("generated")?;
     Ok(())
 }
 ```
@@ -198,7 +198,9 @@ fn main() -> Result<()> {
 
 ### 2-4. TypeScript 생성
 
-`main.rs`에서 패키지를 빌드하고 TypeScript를 출력한다.
+한 커맨드로 전 표면을 렌더링한다: `bun run codegen` (즉 `rustra codegen --config rustra.json`).
+Rust 쪽 역할은 계약 발행까지다 — `src/bin/generate.rs`가 `schema.json`만 쓰고, TS/C++ 산출물은
+CLI가 이 파일에서 렌더링한다. 생성 코드의 단일 진실원이 유지된다.
 
 ```rust
 use rustra_calculator_example::{calculator_package, AddNumbersInput, AddNumbersOutput};
@@ -210,9 +212,8 @@ fn main() -> rustra::Result<()> {
     let output: AddNumbersOutput = package.invoke("addNumbers", AddNumbersInput { a: 2, b: 3 })?;
     println!("2 + 3 = {}", output.value);
 
-    // TypeScript 클라이언트 생성
-    let generated = package.generate_typescript()?;
-    generated.write_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
+    // 계약 프로브: schema.json만 발행 — TS/C++ 표면은 CLI가 렌더링
+    package.generate_typescript()?.write_schema_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
 
     Ok(())
 }
@@ -221,7 +222,8 @@ fn main() -> rustra::Result<()> {
 실행:
 
 ```bash
-cargo run -p rustra-calculator-example --bin rustra-calculator-example
+cargo run -p rustra-calculator-example
+bun run codegen
 ```
 
 출력:
@@ -544,7 +546,8 @@ cargo test --workspace
 ### TypeScript 생성 확인
 
 ```bash
-cargo run -p rustra-calculator-example --bin rustra-calculator-example
+cargo run -p rustra-calculator-example --bin generate   # 계약 프로브: schema.json
+bun run codegen                                          # TS 표면 렌더링
 ```
 
 `generated/` 디렉토리에 TypeScript 파일이 생성되었는지 확인한다.
@@ -658,7 +661,7 @@ fn main() -> rustra::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     if args.get(1).map(|s| s.as_str()) == Some("generate") {
         let package = my_package();
-        package.generate_typescript()?.write_to_dir("generated")?;
+        package.generate_typescript()?.write_schema_to_dir("generated")?;
     }
     Ok(())
 }
@@ -782,14 +785,17 @@ Package::builder("id").command_fn(fn).build()
 또는 register!(Package::builder("id"), fn1, fn2, ...).build()
         |
         v
-package.generate_typescript()?.write_to_dir("generated")
+package.generate_typescript()?.write_schema_to_dir("generated")   (schema.json 만)
+        |
+        v
+rustra codegen --config rustra.json                                (TS CLI 가 전 표면 렌더링)
         |
         v
 generated/
   types.ts       -- EngineClient + 입력/출력 타입
   commands.ts    -- 타입 안전한 커맨드 헬퍼 함수
   contract.ts    -- 계약 해시
-  schema.json    -- JSON Schema
+  schema.json    -- JSON Schema (Rust 프로브가 발행)
         |
         v
 TypeScript에서 createXxxEngine(transport) + configure(engine) + addNumbers(input) 호출

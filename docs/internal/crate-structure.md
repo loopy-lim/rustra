@@ -82,24 +82,25 @@ TypeScript clients.
 
 **Public API:**
 
-| Item                                  | Kind                   | Description                                                                                                           |
-| ------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `Package`                             | struct                 | Runtime object holding the registered commands                                                                        |
-| `Package::builder(id)`                | method                 | Creates a `PackageBuilder`                                                                                            |
-| `Package::invoke()` / `invoke_json()` | method                 | Executes a command (typed / JSON)                                                                                     |
-| `Package::generate_typescript()`      | method                 | Produces a `GeneratedPackage`                                                                                         |
-| `PackageBuilder`                      | struct                 | Registers commands with the builder pattern                                                                           |
-| `PackageBuilder::command()`           | method                 | Registers a command with an explicit name                                                                             |
-| `PackageBuilder::command_fn()`        | method                 | Derives the command name automatically from the function name                                                         |
-| `PackageBuilder::build()`             | method                 | Creates a `Package`                                                                                                   |
-| `GeneratedPackage`                    | struct                 | The generated TS client (4 files)                                                                                     |
-| `GeneratedPackage::write_to_dir()`    | method                 | Writes the files to a directory                                                                                       |
-| `RustraError`                         | struct                 | Error type. Implements `Serialize`. `code + message` fields + `custom()` constructor + `code()` / `message()` getters |
-| `command`                             | macro (re-export)      | `rustra_macros::command`                                                                                              |
-| `register`                            | macro (re-export)      | `rustra_macros::register`. Batch-registers multiple commands                                                          |
-| `prelude`                             | module                 | Batch import of frequently used items (including `command`, `register`)                                               |
-| `tauri_support`                       | module (feature-gated) | `RustraState`, `rustra_dispatch`, `register()` — Tauri integration helpers                                            |
-| `__private`                           | module (sealed)        | `CommandInput`, `CommandOutput` traits. For proc macros only                                                          |
+| Item                                      | Kind                   | Description                                                                                                           |
+| ----------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `Package`                                 | struct                 | Runtime object holding the registered commands                                                                        |
+| `Package::builder(id)`                    | method                 | Creates a `PackageBuilder`                                                                                            |
+| `Package::invoke()` / `invoke_json()`     | method                 | Executes a command (typed / JSON)                                                                                     |
+| `Package::generate_typescript()`          | method                 | Produces a `GeneratedPackage`                                                                                         |
+| `PackageBuilder`                          | struct                 | Registers commands with the builder pattern                                                                           |
+| `PackageBuilder::command()`               | method                 | Registers a command with an explicit name                                                                             |
+| `PackageBuilder::command_fn()`            | method                 | Derives the command name automatically from the function name                                                         |
+| `PackageBuilder::build()`                 | method                 | Creates a `Package`                                                                                                   |
+| `GeneratedPackage`                        | struct                 | The generated TS client (4 files)                                                                                     |
+| `GeneratedPackage::write_to_dir()`        | method                 | Writes the files to a directory — deprecated (single-arrow)                                                           |
+| `GeneratedPackage::write_schema_to_dir()` | method                 | Writes schema.json only (contract probe)                                                                              |
+| `RustraError`                             | struct                 | Error type. Implements `Serialize`. `code + message` fields + `custom()` constructor + `code()` / `message()` getters |
+| `command`                                 | macro (re-export)      | `rustra_macros::command`                                                                                              |
+| `register`                                | macro (re-export)      | `rustra_macros::register`. Batch-registers multiple commands                                                          |
+| `prelude`                                 | module                 | Batch import of frequently used items (including `command`, `register`)                                               |
+| `tauri_support`                           | module (feature-gated) | `RustraState`, `rustra_dispatch`, `register()` — Tauri integration helpers                                            |
+| `__private`                               | module (sealed)        | `CommandInput`, `CommandOutput` traits. For proc macros only                                                          |
 
 **Features:**
 

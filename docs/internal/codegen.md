@@ -6,6 +6,12 @@ Internal documentation for project contributors. Describes the full flow of
 `Package::generate_typescript()`, schema extraction, TS type mapping rules,
 and the generated output.
 
+Single-arrow codegen: the Rust bin is a contract probe that publishes
+`schema.json` only (`write_schema_to_dir`), and the TS CLI
+(`rustra codegen`) renders every surface — TS, C++, positional facade,
+host entries — from that one file. `write_to_dir` (Rust writing TS itself)
+is deprecated as the dual-pass trap it was.
+
 ---
 
 ## Overall Flow
@@ -20,7 +26,12 @@ Package::generate_typescript()
   │
   └─ GeneratedPackage { schema_json, types_ts, commands_ts, contract_hash }
        │
-       └─ write_to_dir() → schema.json, types.ts, commands.ts, contract.ts
+       ├─ write_schema_to_dir() → schema.json                    (Rust probe stops here)
+       │
+       └─ rustra codegen (TS CLI) reads schema.json and renders:
+            types.ts, commands.ts, contract.ts, rkyv-codecs.ts,
+            rkyv-registry.ts, positional-facade.ts, host entries, C++ codecs
+            + .rustra-generated.json (freshness sidecar)
 ```
 
 ---
