@@ -7,7 +7,10 @@ on:
     branches: [main]
   # 주간 취약점 스캔 — 커밋이 없는 기간에 공개된 신규 RUSTSEC 도 감지한다.
   # push/PR 트리거와 달리 이 스케줄은 rust-audit 잡만 실행된다(다른 잡은
-  # github.event_name 조건으로 스킵).
+  # github.event_name 조건으로 스킵). 스킵 전제가 중요하다: release.yml 의
+  # workflow_run 게이트는 CI workflow 의 "success" 로 판정하므로, schedule
+  # 실행(잡이 전부 skip 이어도 conclusion=success)이 발행을 발동해선 안 된다 —
+  # release 쪽 가드(event != 'schedule')와 한 쌍이다.
   schedule:
     - cron: '23 4 * * 1'
 
@@ -93,6 +96,7 @@ jobs:
   # 1.95.0 상위 툴체인만 쓰면 MSRV를 깨는 의존성/코드가 머지돼도 CI가 green이다.
   # (1.87 에는 let-chains stabilized 가 없다 — rustra-macros 가 1.88 이상을 요구.)
   rust-msrv:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
