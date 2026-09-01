@@ -199,6 +199,15 @@ function foldPayloadFinding(event: string, finding: SchemaLevelFinding): Breakin
         after: '(removed)',
       };
     case 'required_field_added':
+      // 구 페이로드에 필드가 없었다 — optional 이었던 게 아니다 (명령 쪽
+      // Required field added vs Existing field became required 구분과 정합).
+      return {
+        type: 'event_payload_changed',
+        event,
+        path: `${finding.command}.${finding.field}`,
+        before: '(absent)',
+        after: '(required)',
+      };
     case 'field_became_required':
       return {
         type: 'event_payload_changed',
@@ -223,6 +232,12 @@ function foldPayloadFinding(event: string, finding: SchemaLevelFinding): Breakin
         before: '(definition)',
         after: '(removed)',
       };
+    default: {
+      // 런타임 방어 — payloadFindings 배열의 공변성으로 컴파일 타임 완전성이
+      // 무력화될 수 있어 formatDiffResult 의 never+throw 관례와 정합하게 둔다.
+      const _exhaustive: never = finding;
+      throw new Error(`unhandled payload finding type: ${String(_exhaustive)}`);
+    }
   }
 }
 /**
