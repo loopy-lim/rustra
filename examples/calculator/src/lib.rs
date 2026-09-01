@@ -3,6 +3,9 @@ use rustra::prelude::*;
 use serde_json::{Value, json};
 use std::ffi::{CStr, CString, c_char};
 
+/// 루프형 stdio 런타임 코어 — `loop-stdio` bin 과 통합 테스트가 공유한다.
+pub mod loop_stdio;
+
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AddNumbersInput {
