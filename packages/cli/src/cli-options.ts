@@ -1,5 +1,6 @@
 export type CliOutputFormat = 'text' | 'json';
 import { cliFormat, parseCliArgs } from './cli-arg-parser.js';
+import { UsageError } from './cli-usage-error.js';
 
 export interface CodegenOptions {
   configPath?: string;
@@ -34,7 +35,9 @@ export function parseCodegenArgs(args: string[]): CodegenOptions {
     ...(format ? { format } : {}),
     ...(help ? { help: true } : {}),
   };
-  if (!options.help && !options.configPath) throw new Error('codegen requires --config <path>');
+  // 커맨드 레벨 필수 인자 누락도 usage — 파서 레벨과 같은 exit-2 계약.
+  if (!options.help && !options.configPath)
+    throw new UsageError('codegen requires --config <path>');
   return options;
 }
 

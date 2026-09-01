@@ -18,10 +18,17 @@
  */
 import type { DiffResult } from './schema-diff.js';
 
-/** `codegen --format json` 보고 입력 — written 은 runGenerate 의 진행 표기 문자열. */
+/**
+ * `codegen --format json` 보고 입력 — written 은 runGenerate 의 진행 표기
+ * 문자열(`(updated)`/`(unchanged)` 접미어, 신규 파일은 순수 경로).
+ */
 export interface CodegenJsonReport {
   written: string[];
-  /** check 모드에서 생성물이 스키마와 어긋났을 때 true. */
+  /**
+   * write 모드에서 재생성이 기존 파일을 고쳤을 때 true. check 모드는 불일치 시
+   * throw 하므로 JSON 에 도달하지 않는다(도달 시 항상 false) — 실제 드리프트
+   * 관측은 doctor 의 codegen.generated_freshness 검사가 담당한다.
+   */
   drift: boolean;
   durationMs: number;
 }

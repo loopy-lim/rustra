@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { diffSchemas, formatDiffResult } from './schema-diff.js';
 import { parsePackageSchema } from './schema-validation.js';
 import { cliFormat, parseCliArgs } from './cli-arg-parser.js';
+import { UsageError } from './cli-usage-error.js';
 import { formatDiffJson } from './cli-json-format.js';
 
 export async function runDiff(args: string[]): Promise<void> {
@@ -16,7 +17,7 @@ export async function runDiff(args: string[]): Promise<void> {
   const oldPath = options.values.get('old');
   const newPath = options.values.get('new');
   if (!oldPath || !newPath)
-    throw new Error('Provide --old and --new. Usage: rustra diff --old v1.json --new v2.json');
+    throw new UsageError('Provide --old and --new. Usage: rustra diff --old v1.json --new v2.json');
   const [oldRaw, newRaw] = await Promise.all([
     readFile(resolve(oldPath), 'utf-8'),
     readFile(resolve(newPath), 'utf-8'),

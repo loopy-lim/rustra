@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { renderInitProjectFiles, templateVersions, type InitHosts } from './init-template.js';
 import { cliManifest, cliVersion } from './cli-runtime.js';
 import { parseCliArgs } from './cli-arg-parser.js';
+import { UsageError } from './cli-usage-error.js';
 import { closestMatch } from './cli-suggest.js';
 
 /** --host 허용값 — 검증·did-you-mean·도움말이 함께 읽는 단일 출처. */
@@ -54,7 +55,7 @@ export async function runInit(args: string[]): Promise<void> {
   }
   const directories = parsed.positionals;
   if (directories.length !== 1)
-    throw new Error('Provide one project directory. Usage: rustra init my-project [--force]');
+    throw new UsageError('Provide one project directory. Usage: rustra init my-project [--force]');
   const root = resolve(directories[0]!);
   // 감지는 파일을 쓰기 전에 — 기존 프로젝트 위로 init 하는 경우가 관찰 대상이다.
   const detected = detectInitHosts(root);

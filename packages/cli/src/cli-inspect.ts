@@ -20,6 +20,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { parseCliArgs } from './cli-arg-parser.js';
+import { UsageError } from './cli-usage-error.js';
 import { parseSnapshot, type DumpedWire } from '@rustra/types';
 
 /**
@@ -121,7 +122,7 @@ export async function runInspect(args: string[]): Promise<void> {
   if (parsed.flags.has('help')) return;
   const files = parsed.positionals;
   if (files.length !== 1)
-    throw new Error('Provide one snapshot dump file. Usage: rustra inspect dump.hex');
+    throw new UsageError('Provide one snapshot dump file. Usage: rustra inspect dump.hex');
   // cli-diff 관례 — 사용자 경로를 resolve 해서 읽고, 에러 메시지도 절대 경로로 보인다.
   const path = resolve(files[0]!);
   let raw: Uint8Array;

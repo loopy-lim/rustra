@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { cliFormat, parseCliArgs, requiredCliValue } from './cli-arg-parser.js';
 import { UsageError } from './cli-usage-error.js';
+import { parseCodegenArgs } from './cli-options.js';
+import { runDiff } from './cli-diff.js';
 
 describe('parseCliArgs', () => {
   test('rejects unknown flags with closest-flag suggestion', () => {
@@ -55,6 +57,18 @@ describe('parseCliArgs', () => {
     // 일반 Error 는 그대로 exit 1 이어야 한다.
     const runtimeError = new Error('ENOENT: no such file');
     expect(runtimeError).not.toBeInstanceOf(UsageError);
+  });
+
+  // 커맨드 레벨 필수 인자 누락도 usage 다 — 파서 레벨(unknown option/누락 값)과
+  // 같은 exit-2 계약. changeset 이 "invoked the CLI wrong → exit 2"로 광고하는
+  // 표면이 파서와 커맨드 경계에서 갈라지지 않게 한다.
+  test('command-level missing-required-argument errors are UsageError instances', () => {
+    // codegen --config 누락
+    expect(() => parseCodegenArgs(['--check'])).toThrow(UsageError);
+    expect(() => parseCodegenArgs(['--check'])).toThrow(/codegen requires --config/);
+    // diff --old/--new 누락 (runDiff 경로 — 파일 접근 전에 검증된다)
+    expect(() => runDiff([])).toThrow(UsageError);
+    expect(() => runDiff([])).toThrow(/Provide --old and --new/);
   });
 
   test('supports --flag=value', () => {
