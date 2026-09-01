@@ -11,13 +11,34 @@
  * 를 스폰한다. 엔트리가 같은 옵션을 두 팩토리에 넘기면 두 해상이 같은 런타임을
  * 가리킨다.
  *
- * ### 전달 경로: 폴링 (Task 6 push 승격 전까지)
+ * ### 옵션 일치 정리 (Task 5 이슈 A 후속)
+ *
+ * 엔트리 템플릿은 `commandCandidates`/`binaryName` 만 넘긴다 — `args` 는
+ * 의도적 생략이다. loop-stdio 런타임은 argv 를 읽지 않으므로(부트스트랩의
+ * `args:["invoke"]` 도 사실상 장식) 이벤트 transport 가 다른 argv 로 스폰될
+ * 일이 없다. `codecs` 는 부트스트랩과 공유하지 않는다(엔트리가 이벤트 팩토리에
+ * `rkyvV2Registry` 를 넘기지 않는다): codecs 부재 시 핸드셰이크가 실행되지
+ * 않아 transport 는 NDJSON 모드로 남고 `pushCapable` 은 false — 2-모드
+ * dispatch(node-events.ts)의 능력 재판정이 이를 확인해 **폴링으로 확정**한다.
+ * 즉 이 팩토리의 전달 경로는 폴링이며, push 승격이 필요하면 codecs 를 직접
+ * 주입한 transport 로 `subscribeEvent` 를 부르면 된다(아래 예).
+ *
+ * ### 전달 경로: 폴링 (push 는 codecs 주입 시 자동 승격)
  *
  * transport 는 `drainEvents` 를 노출하는 loop-stdio 계열 런타임이고, 구독은
- * `node-events.ts` 의 폴링 `subscribeEvent` 로 위임한다(루프 공유/정지 계약 동일).
- * transport 생성은 동기이므로 Bun 쪽의 비동기 큐잉이 여기는 없다 — 첫 구독에서
- * transport 를 1회 생성(lazy)하고 이후 구독은 같은 transport 를 공유한다. 런타임이
- * push 능력을 갖추면(Task 6) 이 팩토리만 바꿔 끼우면 되고 엔트리 템플릿은 동일.
+ * `node-events.ts` 의 `subscribeEvent` 로 위임한다(루프 공유/정지 계약 동일).
+ * transport 생성은 동기이므로 Bun 콕의 비동기 큐잉이 여기는 없다 — 첫 구독에서
+ * transport 를 1회 생성(lazy)하고 이후 구독은 같은 transport 를 공유한다.
+ *
+ * @example
+ * ```ts
+ * // push 승격 — codecs 를 주입한 transport 로 직접 구독(0xfffd 프레임 수신):
+ * const transport = createNodeLoopTransport({
+ *   command: bin,
+ *   codecs: rkyvV2Registry,
+ * });
+ * subscribeEvent(transport, 'progress.tick', (payload) => console.log(payload));
+ * ```
  */
 import { createNodeLoopTransport, type NodeLoopTransport } from './node-loop.js';
 import { subscribeEvent, type NodeEventTransport } from './node-events.js';
