@@ -33,6 +33,14 @@ export function formatDiffResult(result: DiffResult): string {
         case 'command_id_changed':
           lines.push(`  - Command id changed: ${change.command} (${change.from} → ${change.to})`);
           break;
+        case 'event_removed':
+          lines.push(`  - Event removed: ${change.event}`);
+          break;
+        case 'event_payload_changed':
+          lines.push(
+            `  - Event payload changed: ${change.event} (${change.path}: ${change.before} → ${change.after})`,
+          );
+          break;
         default: {
           // 컴파일 타임 완전성 검사 — 새 BreakingChange 변형 추가 시 여기서 에러.
           const _exhaustive: never = change;

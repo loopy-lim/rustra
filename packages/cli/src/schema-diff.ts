@@ -16,7 +16,15 @@ export type BreakingChange =
   | { type: 'field_became_optional'; command: string; field: string }
   | { type: 'definition_removed'; command: string; field: string }
   | { type: 'command_removed'; command: string }
-  | { type: 'command_id_changed'; command: string; from: number; to: number };
+  | { type: 'command_id_changed'; command: string; from: number; to: number }
+  | { type: 'event_removed'; event: string }
+  | {
+      type: 'event_payload_changed';
+      event: string;
+      path: string;
+      before: string;
+      after: string;
+    };
 
 /**
  * (B4) breaking change 의 "왜 와이어가 깨지는가" 를 지목하는 진단.
@@ -97,6 +105,36 @@ export function diffSchemas(oldSchema: PackageSchema, newSchema: PackageSchema):
     );
   }
 
+  const oldEvents = new Map((oldSchema.events ?? []).map((e) => [e.name, e]));
+  const newEvents = new Map((newSchema.events ?? []).map((e) => [e.name, e]));
+
+  for (const [name, oldEvent] of oldEvents) {
+    const newEvent = newEvents.get(name);
+    if (!newEvent) {
+      // 이벤트 이름의 존재 자체가 계약이다 — 제거되면 구독 코드가 깨진다.
+      breaking.push({ type: 'event_removed', event: name });
+      continue;
+    }
+    // 페이로드 비교는 명령 입력/출력과 같은 compareSchemas 를 재사용하되 결과를
+    // event_payload_changed 로 접어 이벤트 계약의 보고 경로를 통일한다.
+    const payloadFindings: SchemaLevelFinding[] = [];
+    compareSchemas(
+      oldEvent.payload,
+      newEvent.payload,
+      `events.${name}.payload`,
+      payloadFindings,
+      compatible,
+      oldEvent.definitions,
+      newEvent.definitions,
+    );
+    for (const finding of payloadFindings) breaking.push(foldPayloadFinding(name, finding));
+  }
+
+  // 이벤트 추가는 구독자를 깨지 않는다(non-breaking) — compatible 로만 보고한다.
+  for (const name of newEvents.keys()) {
+    if (!oldEvents.has(name)) compatible.push(`event '${name}' added`);
+  }
+
   diagnoseContractGaps(newSchema, oldCommands, newCommands, diagnoses, breaking);
 
   // 타입 변경 진단: postcard 는 위치 기반 비-자기서술 인코딩이므로 필드 타입이
@@ -120,6 +158,73 @@ export function diffSchemas(oldSchema: PackageSchema, newSchema: PackageSchema):
   return { breaking, compatible, diagnoses };
 }
 
+/**
+ * compareSchemas 가 내보낼 수 있는 스키마 수준 진단 6종 — 명령/이벤트 공통.
+ */
+type SchemaLevelFinding = Extract<
+  BreakingChange,
+  {
+    type:
+      | 'field_removed'
+      | 'field_type_changed'
+      | 'required_field_added'
+      | 'field_became_required'
+      | 'field_became_optional'
+      | 'definition_removed';
+  }
+>;
+
+/**
+ * compareSchemas 가 내보낸 일반 필드 진단을 이벤트 계약 변형으로 접는다.
+ * 명령 필드와 달리 이벤트 페이로드는 command 컨텍스트가 없으므로 path/before/after
+ * 로 재표현해 event_payload_changed 하나의 보고 형태로 통일한다.
+ */
+function foldPayloadFinding(event: string, finding: SchemaLevelFinding): BreakingChange {
+  switch (finding.type) {
+    case 'field_type_changed':
+      // 타입 변경의 command 는 이미 전체 노드 경로다 (부모+필드 결합 금지).
+      return {
+        type: 'event_payload_changed',
+        event,
+        path: finding.command,
+        before: finding.from,
+        after: finding.to,
+      };
+    case 'field_removed':
+      return {
+        type: 'event_payload_changed',
+        event,
+        path: `${finding.command}.${finding.field}`,
+        before: '(present)',
+        after: '(removed)',
+      };
+    case 'required_field_added':
+    case 'field_became_required':
+      return {
+        type: 'event_payload_changed',
+        event,
+        path: `${finding.command}.${finding.field}`,
+        before: '(optional)',
+        after: '(required)',
+      };
+    case 'field_became_optional':
+      return {
+        type: 'event_payload_changed',
+        event,
+        path: `${finding.command}.${finding.field}`,
+        before: '(required)',
+        after: '(optional)',
+      };
+    case 'definition_removed':
+      return {
+        type: 'event_payload_changed',
+        event,
+        path: `${finding.command}.${finding.field}`,
+        before: '(definition)',
+        after: '(removed)',
+      };
+  }
+}
 /**
  * (B4) command_id 축의 불일치 진단. 기존 필드 비교는 스키마 JSON 만 보므로
  * wire 디스패치의 핵심인 command_id 변화가 보이지 않는다 — 같은 스키마 모양이라도
