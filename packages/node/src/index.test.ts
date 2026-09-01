@@ -451,3 +451,77 @@ test('createNodeBootstrap reload rejects when engine spawn fails (one-shot trans
   });
   await assert.rejects(bootstrap.reload(), /RUSTRA_NODE_BINARY|No Rustra Node runtime/);
 });
+
+// ── 이벤트 푸시 e2e (Task 6) — 실제 스폰 → 핸드셰이크 → 0xfffd → 콜백 ──────
+// 단위 테스트(node-events.test.ts)와 Rust 통합 테스트(loop_stdio_events.rs)가
+// 각 절반을 검증하므로, 이 테스트는 실 child stdout → demultiplexBinaryFrame →
+// subscribeEvent 콜백 사슬 전체를 연결해 매트릭스 "Node 푸시" 문구의 증거가
+// 된다.
+
+processTest(
+  'subscribeEvent delivers real emitted events as 0xfffd push frames from a spawned loop-stdio runtime',
+  { timeout: 30_000 },
+  async () => {
+    const { createNodeLoopTransport, subscribeEvent } = await import('./index.js');
+    // test:ts:node 체인이 컴파일한 calculator 생성 레지스트리(dist-ts) —
+    // rkyvV2Registry 는 rkyv-registry.js 의 export(name→codec Map).
+    const { rkyvV2Registry } = await import(
+      resolve(repoRoot, 'dist-ts/examples/calculator/generated/rkyv-registry.js')
+    );
+    const transport = createNodeLoopTransport({
+      command: resolve(repoRoot, 'target/debug/loop-stdio'),
+      args: [],
+      codecs: rkyvV2Registry as never,
+    });
+    try {
+      // (1) 핸드셰이크 capability — 런타임이 events:"push" 를 수용했다.
+      await transport.ready();
+      assert.equal(transport.pushCapable, true, 'runtime must accept the push capability');
+
+      // (2) 실제 emit → push 프레임 → 구독자 콜백. emitDemo(ticks:2)는
+      // progress.tick 2회 + demo.done 1회를 동기 emit 한다(단일 invoke 왕복
+      // 안에서 — 푸시 프레임은 응답 프레임과 같은 stdout 스트림을 공유하므로
+      // 디멀티플렉서가 둘을 찢지 않고 분기하는 것까지 함께 검증된다).
+      const seen: Array<{ name: string; payload: unknown }> = [];
+      const done = new Promise<void>((resolve, reject) => {
+        const deadline = setTimeout(
+          () => reject(new Error(`push events did not arrive in time; got ${seen.length}/3`)),
+          15_000,
+        );
+        const maybeSettled = (): void => {
+          if (seen.length < 3) return;
+          clearTimeout(deadline);
+          resolve();
+        };
+        const unsubscribe = subscribeEvent(transport as never, 'progress.tick', (payload) => {
+          seen.push({ name: 'progress.tick', payload });
+          maybeSettled();
+        });
+        void unsubscribe;
+        // demo.done 구독도 같은 루프 — 세 번째 이벤트 도달 시 settle.
+        subscribeEvent(transport as never, 'demo.done', (payload) => {
+          seen.push({ name: 'demo.done', payload });
+          maybeSettled();
+        });
+      });
+      const emitted = (await transport.invoke('emitDemo', {
+        ticks: 2,
+        stepDelayMs: 0,
+      })) as { emitted: number };
+      assert.equal(emitted.emitted, 3);
+      await done;
+      assert.equal(seen.length, 3, 'all 3 emitted events must reach subscribers via push');
+      assert.deepEqual(seen[0], {
+        name: 'progress.tick',
+        payload: { step: 1, total: 2 },
+      });
+      assert.deepEqual(seen[2], { name: 'demo.done', payload: { emitted: 3 } });
+
+      // (3) 이중 수신 부정 — 싱크가 설치된 동안 drain(0xfffe)은 빈 배열.
+      const drained = await transport.drainEvents();
+      assert.deepEqual(drained, [], 'sink-installed runtime must bypass the bus');
+    } finally {
+      transport.dispose();
+    }
+  },
+);

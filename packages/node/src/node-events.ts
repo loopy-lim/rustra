@@ -24,6 +24,13 @@
  * 문자열 JSON 을 구독자 도달 시점에 파싱 — 빈 문자열 null, 비 JSON 은 warn 후
  * 원본 문자열).
  *
+ * ### push 모드는 "구독 이전 emit" 을 버린다 (폴링과의 차이)
+ *
+ * 폴링은 구독 전에 버스에 쌓인 emit 을 첫 drain 에서 받지만, push 모드는 싱크가
+ * 버스를 우회하므로(코어 `deliver_via_sink` 계약) transport 생성~첫 subscribe
+ * 사이의 emit 은 수신자 없이 버려진다. emit 이 구독보다 늦게 일어나도록 구독을
+ * 먼저 하거나, 구독 전 emit 이 필요하면 폴링을 쓴다.
+ *
  * ### 능력 부재 loud-fail 계약 (Task 5 이슈 A 해소)
  *
  * transport 가 `drainEvents` 도 `onPushEvent` 도 노출하지 않으면 — 예: one-shot

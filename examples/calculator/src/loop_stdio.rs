@@ -11,7 +11,7 @@ use rustra::Package;
 use serde_json::{Value, json};
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 /// 이벤트 drain 예약 커맨드 id (바이너리 모드). 자동 부여 id(등록 순서)와
 /// 충돌하지 않는 u16 상한부다.
@@ -66,13 +66,27 @@ pub fn handle_hello_with_policy(package: &Package, wants_push: bool) -> PushDeci
     PushDecision::Push
 }
 
-/// stdout 기반 프레임 쓰기 — `write_push_frame_to_stdout` 의 실체. 싱크가
-/// 임의 스레드에서 불리므로 전역 뮤텍스로 main 루프의 응답 쓰기와의 프레임
-/// 원자성(쓰기+플러시 한 임계구역)을 보장한다.
+/// stdout 프레임 원자성 락 — 푸시 프레임, 바이너리 응답, NDJSON 응답 **모든**
+/// stdout 쓰기가 공유하는 단일 임계구역. 쓰기+플러시가 한 구역에서 일어나 emit
+/// 이 임의 백그라운드 스레드에서 불려도 프레임이 찢어지지 않는다.
+///
+/// # 획득 순서 규약 (데드락 방지 — 어디서든 역순 금지)
+///
+/// 반드시 이 락을 **먼저** 잡고 그 안에서 `stdout.lock()` 을 건다. 역순은 순환
+/// 대기를 만든다: 호출자가 프로그램 수명 `StdoutLock` 을 쥔 채 이 락을 기다리는
+/// 스레드와, 이 락을 쥔 싱크가 `stdout.lock()` 을 기다리면 서로 영구 블록된다.
+/// 이를 위해 bin `main` 은 프로그램 수명 `StdoutLock` 을 쥐지 않는다 — 락은
+/// 쓰기 시점에 임계구역 안에서만 건다.
 static STDOUT_LOCK: Mutex<()> = Mutex::new(());
 
+/// STDOUT_LOCK 을 잡는다 — 싱크 쓰기와 bin 응답/NDJSON 쓰기, 경합 테스트가
+/// 같은 규약으로 진입하는 단일 진입점(포이즈닝 관용).
+pub fn lock_stdout() -> MutexGuard<'static, ()> {
+    STDOUT_LOCK.lock().unwrap_or_else(|p| p.into_inner())
+}
+
 fn write_push_frame_to_stdout(frame: &[u8]) {
-    let _guard = STDOUT_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let _guard = lock_stdout();
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
     let _ = out
@@ -146,10 +160,17 @@ pub fn run_binary<R: Read, W: Write>(
             }
         };
 
-        out.write_all(&(response.len() as u32).to_le_bytes())
+        // 응답 쓰기도 STDOUT_LOCK 임계구역 — 백그라운드 스레드 emit 의 푸시
+        // 프레임이 응답 프레임 한가운데 끼어들어 찢지 못한다. invoke 자체는 이
+        // 구역 밖(위)에서 끝나므로 동기 emit(같은 스레드)의 락 재진입은 없다
+        // (std Mutex 는 재귀 아님 — 임계구역 안에서 emit 하지 않는 것이 규약).
+        let guard = lock_stdout();
+        let written = out
+            .write_all(&(response.len() as u32).to_le_bytes())
             .and_then(|_| out.write_all(&response))
-            .and_then(|_| out.flush())
-            .map_err(rustra::RustraError::internal)?;
+            .and_then(|_| out.flush());
+        drop(guard);
+        written.map_err(rustra::RustraError::internal)?;
     }
 }
 
