@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, test } from 'bun:test';
+import { dirname, join as pathJoin, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { collectDocs, stripGeneratedHeader, verifyDocs } from './docs-gate.mjs';
+
+// CLI exit 테스트에서 실제 게이트 스크립트를 spawn하기 위한 절대 경로.
+const gatePath = pathJoin(resolve(dirname(fileURLToPath(import.meta.url))), 'docs-gate.mjs');
 
 // 임시 디렉토리 fixture — 저장소의 실제 docs는 절대 건드리지 않는다(hermetic).
 let tmpRoot = '';
@@ -235,4 +241,128 @@ test('stripGeneratedHeader — 생성 헤더 블록과 뒤따르는 빈 줄을 �
 test('stripGeneratedHeader — 헤더가 없으면 원문을 그대로 돌려준다', () => {
   assert.deepEqual(stripGeneratedHeader('line1\nline2\n'), ['line1', 'line2']);
   assert.deepEqual(stripGeneratedHeader(''), []);
+});
+
+test('영역이 하나도 파싱되지 못해도 failures가 있으면 ok=false를 유지한다 (fail-open 차단)', () => {
+  // 종결 없는 begin → regions 0개. exit 순서 결함(수정 전)에서는 이 입력이
+  // "no docs:sync markers found"로 위장해 드리프트를 숨기고 통과했다.
+  const root = makeTmp();
+  mkdirSync(join(root, 'docs'));
+  writeFileSync(
+    join(root, 'docs/a.md'),
+    ['<!-- docs:sync:begin gen/types.ts -->', '', '<!-- prettier-ignore -->', '```ts', 'x'].join(
+      '\n',
+    ),
+  );
+  const report = verifyDocs(root);
+  assert.equal(report.ok, false);
+  assert.equal(report.regions.length, 0);
+  assert.ok(report.failures.length > 0);
+});
+
+test('CRLF 체크아웃 문서도 정상 파싱해 통과한다', () => {
+  const body = ['export type A = number;', 'export const x = 1;'];
+  const root = makeTmp();
+  mkdirSync(join(root, 'docs'));
+  // CRLF 문서 + LF 참조 파일 — git autocrlf 체크아웃 형태.
+  writeFileSync(
+    join(root, 'docs/a.md'),
+    `${region('gen/types.ts', body)}\n`.replace(/\n/g, '\r\n'),
+  );
+  mkdirSync(join(root, 'gen'));
+  writeFileSync(join(root, 'gen/types.ts'), `${GENERATED_HEADER}${body.join('\n')}\n`);
+  const report = verifyDocs(root);
+  assert.equal(report.ok, true, JSON.stringify(report.failures));
+  assert.equal(report.regions.length, 1);
+});
+
+test('begin 다음 빈 줄이 없으면 구조 위반으로 실패한다', () => {
+  const broken = [
+    '<!-- docs:sync:begin gen/types.ts -->',
+    '<!-- prettier-ignore -->',
+    '```ts',
+    'x',
+    '```',
+    '',
+    '<!-- docs:sync:end -->',
+  ].join('\n');
+  const root = fixture('docs/a.md', broken, 'gen/types.ts', `${GENERATED_HEADER}x\n`);
+  const report = verifyDocs(root);
+  assert.equal(report.ok, false);
+  assert.match(report.failures[0].message, /빈 줄/);
+});
+
+test('여는 코드 펜스가 없으면 구조 위반으로 실패한다', () => {
+  const broken = [
+    '<!-- docs:sync:begin gen/types.ts -->',
+    '',
+    '<!-- prettier-ignore -->',
+    '    indented code block, not a fence',
+    '```',
+    '',
+    '<!-- docs:sync:end -->',
+  ].join('\n');
+  const root = fixture('docs/a.md', broken, 'gen/types.ts', `${GENERATED_HEADER}x\n`);
+  const report = verifyDocs(root);
+  assert.equal(report.ok, false);
+  assert.match(report.failures[0].message, /펜스/);
+});
+
+test('참조 경로가 비면 실패한다', () => {
+  const root = makeTmp();
+  mkdirSync(join(root, 'docs'));
+  writeFileSync(
+    join(root, 'docs/a.md'),
+    '<!-- docs:sync:begin -->\n\n<!-- prettier-ignore -->\n```ts\nx\n```\n\n<!-- docs:sync:end -->\n',
+  );
+  const report = verifyDocs(root);
+  assert.equal(report.ok, false);
+  assert.match(report.failures[0].message, /참조 경로가 없다/);
+});
+
+test('end 마커 뒤 공백이 붙어도 마커로 인식한다 (CRLF/공백 내성의 일환)', () => {
+  // 종결은 되지만 정합 영역이 아닌 입력 — regions에 들어가 구조 검증을 받는다.
+  const body = ['x'];
+  const root = makeTmp();
+  mkdirSync(join(root, 'docs'));
+  writeFileSync(
+    join(root, 'docs/a.md'),
+    `${region('gen/types.ts', body)} \n`, // end 마커 줄 끝 공백 1개
+  );
+  mkdirSync(join(root, 'gen'));
+  writeFileSync(join(root, 'gen/types.ts'), `${GENERATED_HEADER}x\n`);
+  const report = verifyDocs(root);
+  assert.equal(report.ok, true, JSON.stringify(report.failures));
+});
+
+test('begin 마커 뒤 공백이 붙어도 경로 추출이 깨지지 않는다 (end trimEnd와 대칭)', () => {
+  const body = ['x'];
+  const root = makeTmp();
+  mkdirSync(join(root, 'docs'));
+  writeFileSync(
+    join(root, 'docs/a.md'),
+    `${region('gen/types.ts', body).replace('-->', '--> ')}\n`, // begin 줄 끝 공백 1개
+  );
+  mkdirSync(join(root, 'gen'));
+  writeFileSync(join(root, 'gen/types.ts'), `${GENERATED_HEADER}x\n`);
+  const report = verifyDocs(root);
+  assert.equal(report.ok, true, JSON.stringify(report.failures));
+  assert.equal(report.regions[0].path, 'gen/types.ts'); // `gen/types.ts -->` 같은 쓰레기 경로 아님
+});
+
+test('CLI: 종결 없는 begin은 실제 프로세스 exit 1과 begin 진단을 낸다 (fail-open 변이 방어)', () => {
+  // verifyDocs 불변식만으론 run()의 exit 해석(수정 전 regions-first 순서)을 못 잡는다.
+  // 실제 프로세스를 띄워 exit 코드 자체를 고정한다 — 결함 순서로 되돌리는 변이를 잡는다.
+  const root = makeTmp();
+  mkdirSync(join(root, 'docs'));
+  writeFileSync(
+    join(root, 'docs/a.md'),
+    ['<!-- docs:sync:begin gen/types.ts -->', '', '<!-- prettier-ignore -->', '```ts', 'x'].join(
+      '\n',
+    ),
+  );
+  const r = spawnSync(process.execPath, [gatePath], { cwd: root, encoding: 'utf8' });
+  assert.equal(r.status, 1, `stderr: ${r.stderr}`);
+  assert.match(r.stderr, /docs:sync:begin/);
+  assert.doesNotMatch(r.stdout, /no docs:sync markers found/);
 });
