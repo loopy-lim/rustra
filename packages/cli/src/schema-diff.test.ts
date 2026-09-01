@@ -354,6 +354,78 @@ test('diagnoses missing alias: old id is consumed by a different command', () =>
   );
 });
 
+const eventSchema = (events: PackageSchema['events']): PackageSchema => ({
+  packageId: 'test',
+  commands: [],
+  events,
+});
+
+test('detects removed event', () => {
+  // 다음 스키마에 events 섹션 자체가 없어도(구 스키마 하위호환) 제거는 breaking 이다.
+  const oldSchema = eventSchema([{ name: 'progress.tick', payload: { type: 'object' } }]);
+  const nextSchema: PackageSchema = { packageId: 'test', commands: [] };
+  const result = diffSchemas(oldSchema, nextSchema);
+  assert.ok(
+    result.breaking.some((c) => c.type === 'event_removed' && c.event === 'progress.tick'),
+    `removed event must be breaking, got: ${JSON.stringify(result.breaking)}`,
+  );
+});
+
+test('detects event payload field removal as breaking', () => {
+  const oldSchema = eventSchema([
+    { name: 'progress.tick', payload: { type: 'object', properties: { pct: { type: 'number' } } } },
+  ]);
+  const nextSchema = eventSchema([
+    {
+      name: 'progress.tick',
+      payload: { type: 'object', properties: { percent: { type: 'number' } } },
+    },
+  ]);
+  const result = diffSchemas(oldSchema, nextSchema);
+  const change = result.breaking.find((c) => c.type === 'event_payload_changed');
+  assert.ok(change, `payload change must be breaking, got: ${JSON.stringify(result.breaking)}`);
+  assert.equal(change.event, 'progress.tick');
+  assert.equal(change.path, 'events.progress.tick.payload.pct');
+  assert.equal(change.before, '(present)');
+  assert.equal(change.after, '(removed)');
+});
+
+test('renders event payload type change with from → to', () => {
+  const oldSchema = eventSchema([
+    { name: 'progress.tick', payload: { type: 'object', properties: { pct: { type: 'number' } } } },
+  ]);
+  const nextSchema = eventSchema([
+    { name: 'progress.tick', payload: { type: 'object', properties: { pct: { type: 'string' } } } },
+  ]);
+  const result = diffSchemas(oldSchema, nextSchema);
+  const change = result.breaking.find((c) => c.type === 'event_payload_changed');
+  assert.ok(
+    change,
+    `payload type change must be breaking, got: ${JSON.stringify(result.breaking)}`,
+  );
+  assert.equal(change.path, 'events.progress.tick.payload.pct');
+  assert.equal(change.before, 'number');
+  assert.equal(change.after, 'string');
+  const formatted = formatDiffResult(result);
+  assert.ok(
+    formatted.includes(
+      '  - Event payload changed: progress.tick (events.progress.tick.payload.pct: number → string)',
+    ),
+    `formatted output must render the payload change, got:\n${formatted}`,
+  );
+});
+
+test('event addition is non-breaking even when the old schema has no events section', () => {
+  const oldSchema: PackageSchema = { packageId: 'test', commands: [] };
+  const nextSchema = eventSchema([{ name: 'job.done', payload: { type: 'object' } }]);
+  const result = diffSchemas(oldSchema, nextSchema);
+  assert.equal(result.breaking.length, 0);
+  assert.ok(
+    result.compatible.some((note) => note.includes("event 'job.done' added")),
+    `event addition must be reported as compatible, got: ${JSON.stringify(result.compatible)}`,
+  );
+});
+
 test('diagnoses wire-incompatible type change with cause sentence', () => {
   const oldSchema = structuredClone(baseSchema) as PackageSchema;
   const nextSchema = structuredClone(baseSchema) as PackageSchema;
