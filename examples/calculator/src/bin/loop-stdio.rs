@@ -29,14 +29,34 @@
 //! 이벤트 drain 예약으로, 응답 본문에 대기 이벤트의 JSON 배열을 실는다.
 //! 기존 NDJSON 소비자는 핸드셰이크를 보내지 않으면 계속 라인 프로토콜을
 //! 그대로 쓴다(무중단 호환).
+//!
+//! # 이벤트 푸시 (옵트인 — 핸드셰이크 `events:"push"`)
+//!
+//! 핸드셰이크에 `"events":"push"` 를 함께 보내면 런타임이
+//! `Package::set_event_sink` 로 푸시 싱크를 설치한다(`"events":"push"`
+//! capability 로 응답). 이후 Rust `emit` 은 버스를 우회해 즉시 stdout 으로
+//! 프레임을 쓴다:
+//!
+//! ```text
+//! 푸시  [len: u32 LE][cmd u16 LE = 0xFFFD][1줄 JSON {"name","payload","seq"}]
+//! ```
+//!
+//! `payload` 는 문자열 JSON(NDJSON drain 페이로드와 동일 셰이프 — Node 측에서
+//! 파싱). `seq` 는 런타임별 0 시작 단조 증가. 응답 프레임은 ok 플래그 바이트로
+//! 시작하고 푸시 프레임은 cmd id 로 시작하므로 수신자가 안전하게 분기한다.
+//! 싱크 설치 중엔 drain(0xFFFE)이 항상 빈 배열을 반환한다(버스 우회 — 푸시+
+//! 폴링 이중 수신 방지 코어 계약). 구 클라이언트(`events` 요청 없음)는 싱크가
+//! 설치되지 않아 stdout 이 절대 오염되지 않는다 — 기존 폴링 사용자 무영향.
+//!
+//! 프로토콜 구현 본체는 `rustra_calculator_example::loop_stdio` 모듈 — 통합
+//! 테스트(`tests/loop_stdio_events.rs`)가 같은 모듈을 직접 검증한다.
 
 use rustra_calculator_example::calculator_package;
+use rustra_calculator_example::loop_stdio::{
+    PUSH_CAPABILITY, handle_hello_with_policy, hello_response, run_binary,
+};
 use serde_json::{Value, json};
-use std::io::{BufRead, Read, Write};
-
-/// 이벤트 drain 예약 커맨드 id (바이너리 모드). 자동 부여 id(등록 순서)와
-/// 충돌하지 않는 u16 상한부다.
-const BINARY_DRAIN_EVENTS_CMD: u16 = 0xFFFE;
+use std::io::{BufRead, Write};
 
 fn main() -> rustra::Result<()> {
     let package = calculator_package();
@@ -58,7 +78,7 @@ fn main() -> rustra::Result<()> {
         if trimmed.is_empty() {
             continue;
         }
-        // 라인당 JSON 파싱 1회 — 핸드셰이크 판별과 id 추출이 같은 파스를 쓴다.
+        // 라인당 JSON 파싱 1회 — 핸드셰이크 판별과 id/events 요청 추출이 같은 파스를 쓴다.
         let request: Option<Value> = serde_json::from_str(trimmed).ok();
         let is_hello = request
             .as_ref()
@@ -70,19 +90,33 @@ fn main() -> rustra::Result<()> {
                 .as_ref()
                 .and_then(|v| v.get("id").cloned())
                 .unwrap_or(Value::Null);
-            let response = json!({
-                "id": echo_id,
-                "ok": true,
-                "binary": true,
-                "eventsCmdId": BINARY_DRAIN_EVENTS_CMD,
-            });
-            let mut encoded =
-                serde_json::to_vec(&response).map_err(rustra::RustraError::internal)?;
+            // events:"push" 요청 시에만 싱크를 설치한다 — 푸시는 엄선된 옵트인.
+            // 요청이 없으면(구 클라이언트) 폴링 전용으로 응답하고 stdout 은 오염되지
+            // 않는다. 기존 drain 지원이 플래그 없이 항상 제공되듯, push 도 NDJSON/
+            // 바이너리 모드 협상과 같은 핸드셰이크 capability 로 옵트인한다.
+            let wants_push = request
+                .as_ref()
+                .and_then(|v| v.get("events").and_then(Value::as_str))
+                == Some(PUSH_CAPABILITY);
+            let events_mode = if wants_push {
+                match handle_hello_with_policy(&package, true) {
+                    rustra_calculator_example::loop_stdio::PushDecision::Push => {
+                        Some(PUSH_CAPABILITY)
+                    }
+                    rustra_calculator_example::loop_stdio::PushDecision::PollOnly => None,
+                }
+            } else {
+                // 암묵적 폴링 전용 — 응답에 events 필드를 두지 않는다(구 클라이언트
+                // 파서 오염 방지, 기존 응답과 바이트 호환 유지).
+                None
+            };
+            let mut encoded = serde_json::to_vec(&hello_response(echo_id, events_mode))
+                .map_err(rustra::RustraError::internal)?;
             encoded.push(b'\n');
             out.write_all(&encoded)
                 .map_err(rustra::RustraError::internal)?;
             out.flush().map_err(rustra::RustraError::internal)?;
-            return run_binary(package, &mut reader, &mut out);
+            return run_binary(&package, &mut reader, &mut out);
         }
         let response = handle_line(&package, trimmed);
         let mut encoded = serde_json::to_vec(&response).map_err(rustra::RustraError::internal)?;
@@ -92,74 +126,6 @@ fn main() -> rustra::Result<()> {
         // 라인 단위 flush — 호출자가 파이프에서 라인을 기다린다.
         out.flush().map_err(rustra::RustraError::internal)?;
     }
-}
-
-/// 바이너리 모드 루프 — 4B len 프레임을 read_exact 으로 읽고 rkyv V2 로
-/// 직결 dispatch 한다. 응답 복사를 줄이기 위해 재사용 출력 버퍼에
-/// `invoke_rkyv_v2_into` 로 기록하고(플러시 전까지 유지), 초과 응답만
-/// core 의 probe 캐시 경유 Vec 으로 받는다.
-fn run_binary<R: Read, W: Write>(
-    package: rustra::Package,
-    reader: &mut R,
-    out: &mut W,
-) -> rustra::Result<()> {
-    let mut len_bytes = [0u8; 4];
-    // 재사용 출력 버퍼 — 64KB. 초과 응답은 DirectResponse::Buffered 경로.
-    let mut out_buffer: Vec<u8> = vec![0u8; 64 * 1024];
-    loop {
-        use std::io::ErrorKind;
-        match reader.read_exact(&mut len_bytes) {
-            Ok(()) => {}
-            Err(e) if e.kind() == ErrorKind::UnexpectedEof => return Ok(()),
-            Err(e) => return Err(rustra::RustraError::internal(e.to_string())),
-        }
-        let len = u32::from_le_bytes(len_bytes) as usize;
-        if len == 0 {
-            continue;
-        }
-        let mut payload = vec![0u8; len];
-        if let Err(e) = reader.read_exact(&mut payload) {
-            return Err(rustra::RustraError::internal(e.to_string()));
-        }
-
-        let response: Vec<u8> = if len >= 2
-            && u16::from_le_bytes([payload[0], payload[1]]) == BINARY_DRAIN_EVENTS_CMD
-        {
-            drain_events_binary(&package)
-        } else {
-            match package.invoke_rkyv_v2_into(&payload, &mut out_buffer) {
-                Ok(rustra::DirectResponse::Written(n)) => out_buffer[..n].to_vec(),
-                Ok(rustra::DirectResponse::Buffered(bytes)) => bytes,
-                Err(error) => rustra::encode_rkyv_v2_error(&error),
-            }
-        };
-
-        out.write_all(&(response.len() as u32).to_le_bytes())
-            .and_then(|_| out.write_all(&response))
-            .and_then(|_| out.flush())
-            .map_err(rustra::RustraError::internal)?;
-    }
-}
-
-/// 바이너리 이벤트 drain — NDJSON `__drainEvents` 와 동일 페이로드를 JSON
-/// 배열로 실어 보낸다(응답 프레임 [ok=1][pad][len][json]).
-fn drain_events_binary(package: &rustra::Package) -> Vec<u8> {
-    let events: Vec<Value> = package
-        .event_bus()
-        .take_pending_events()
-        .into_iter()
-        .map(|ev| {
-            let payload: Value =
-                serde_json::from_str(&ev.payload).unwrap_or(Value::String(ev.payload));
-            json!({ "name": ev.name, "payload": payload })
-        })
-        .collect();
-    let json = serde_json::to_vec(&events).unwrap_or_default();
-    let mut frame = vec![0u8; 8 + json.len()];
-    frame[0] = 1; // ok = true
-    frame[4..8].copy_from_slice(&(json.len() as u32).to_le_bytes());
-    frame[8..].copy_from_slice(&json);
-    frame
 }
 
 fn handle_line(package: &rustra::Package, line: &str) -> Value {
