@@ -57,7 +57,22 @@ export async function generateFromSchema(
   check = false,
 ): Promise<string[]> {
   const schemaContent = await readFile(schemaPath, 'utf-8');
-  const schema: PackageSchema = parsePackageSchema(JSON.parse(schemaContent));
+  // schema.json 은 Rust 프로브의 산출물 — 파싱 실패를 파일 경로·재생성 명령 없이
+  // 날로 노출하면 사용자가 어디를 고쳐야 하는지 알 수 없다. 파일명과 cargo run
+  // 힌트를 붙이되, 하위 파서(parsePackageSchema)의 세부 메시지는 그대로 살린다.
+  let parsedSchema: unknown;
+  try {
+    parsedSchema = JSON.parse(schemaContent);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Invalid schema.json at ${resolve(schemaPath)}: ${detail}. ` +
+        `The file must be valid JSON; regenerate it with "cargo run" (the package's generate bin) ` +
+        `or fix it manually.`,
+      { cause: error },
+    );
+  }
+  const schema: PackageSchema = parsePackageSchema(parsedSchema);
   warnIfFieldOrderIsUnspecified(schema);
   clearCodegenWarnings();
   const files: GeneratedFile[] = [];

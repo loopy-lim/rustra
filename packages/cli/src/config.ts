@@ -89,7 +89,23 @@ export interface RustraConfig {
 }
 
 export function readConfigSync(configPath: string): RustraConfig {
-  const content = readFileSync(resolve(configPath), 'utf-8');
+  const resolvedPath = resolve(configPath);
+  let content: string;
+  try {
+    content = readFileSync(resolvedPath, 'utf-8');
+  } catch (error) {
+    // ENOENT 를 날로 노출하지 않는다 — 신규 사용자의 최빈 원인은 "init 을 아직
+    // 안 했다"이므로 그 해결 명령을 첫 줄에 내보내고, 원인 코드는 cause 로 보존.
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code === 'ENOENT') {
+      throw new Error(
+        `Config file not found: ${resolvedPath}. Run "rustra init <dir>" to create a ` +
+          `project, or pass the right path via --config.`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
   const parsed = JSON.parse(content) as unknown;
   assertKnownKeys(parsed, CONFIG_ROOT_KEYS, 'config');
   const config = parsed as RustraConfig;

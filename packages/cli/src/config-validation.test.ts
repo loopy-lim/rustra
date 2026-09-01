@@ -192,6 +192,24 @@ test('a complete wasm dev config with reactNative is accepted', () => {
   );
 });
 
+test('a missing config file points at rustra init instead of a raw ENOENT', () => {
+  const missing = join(mkdtempSync(join(tmpdir(), 'rustra-config-missing-')), 'nope.json');
+  try {
+    assert.throws(
+      () => readConfigSync(missing),
+      (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        assert.match(message, /Config file not found/);
+        assert.match(message, /rustra init/);
+        assert.ok(!/ENOENT/.test(message), 'raw ENOENT must not leak to users');
+        return true;
+      },
+    );
+  } finally {
+    rmSync(missing, { force: true });
+  }
+});
+
 test('rustra.schema.json stays in sync with the config field lists', () => {
   const schemaPath = fileURLToPath(new URL('../rustra.schema.json', import.meta.url));
   const schema = JSON.parse(readFileSync(schemaPath, 'utf8')) as {
