@@ -7,7 +7,7 @@ export function printHelp(command?: string): void {
   }
   if (command === 'codegen') {
     console.log(
-      'Usage: rustra codegen --config <path> [--check] [--format text|json]\n\nOptions:\n  --config <path>  Path to rustra.json\n  --check          Verify generated files without writing\n  --format <fmt>   text (default) or json\n  --help, -h       Show this help message',
+      'Usage: rustra codegen --config <path> [--check] [--explain] [--format text|json]\n\nOptions:\n  --config <path>  Path to rustra.json\n  --check          Verify generated files without writing\n  --explain        Show where each generated surface comes from (no generation)\n  --format <fmt>   text (default) or json\n  --help, -h       Show this help message',
     );
     return;
   }

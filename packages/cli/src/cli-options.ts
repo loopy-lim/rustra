@@ -4,6 +4,7 @@ import { cliFormat, parseCliArgs } from './cli-arg-parser.js';
 export interface CodegenOptions {
   configPath?: string;
   check?: boolean;
+  explain?: boolean;
   format?: CliOutputFormat;
   help?: boolean;
 }
@@ -22,13 +23,14 @@ export function parseCodegenArgs(args: string[]): CodegenOptions {
   const parsed = parseCliArgs(args, {
     command: 'codegen',
     valueFlags: ['config', 'format'],
-    booleanFlags: ['check', 'help', 'h'],
+    booleanFlags: ['check', 'explain', 'help', 'h'],
   });
   const format = cliFormat(parsed.values.get('format'), 'codegen');
   const help = parsed.flags.has('help') || parsed.flags.has('h');
   const options: CodegenOptions = {
     ...(parsed.values.get('config') ? { configPath: parsed.values.get('config') } : {}),
     ...(parsed.flags.has('check') ? { check: true } : {}),
+    ...(parsed.flags.has('explain') ? { explain: true } : {}),
     ...(format ? { format } : {}),
     ...(help ? { help: true } : {}),
   };
