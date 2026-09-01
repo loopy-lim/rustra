@@ -89,7 +89,7 @@ export function demultiplexBinaryFrame(options: {
 }): void {
   if (options.cmd === BINARY_PUSH_EVENTS_CMD) {
     try {
-      const json = new TextDecoder().decode(options.body.subarray(2));
+      const json = frameDecoder.decode(options.body.subarray(2));
       const parsed = JSON.parse(json) as Partial<NodePushEventFrame>;
       if (typeof parsed.name === 'string' && typeof parsed.seq === 'number') {
         options.onPush({
@@ -107,8 +107,8 @@ export function demultiplexBinaryFrame(options: {
   options.onResponse(options.body);
 }
 
-/** drainEvents JSON 응답 디코더 — 모듈 상수(호출당 TextDecoder 할당 제거). */
-const drainDecoder = new TextDecoder();
+/** 프레임 본문 JSON 디코더 — 모듈 상수(호출당 TextDecoder 할당 제거). */
+const frameDecoder = new TextDecoder();
 
 /** Persistent transport for Rust loop-stdio runtimes. */
 export function createNodeLoopTransport(options: {
@@ -227,7 +227,7 @@ export function createNodeLoopTransport(options: {
       // 응답 본문: [ok u8][pad 3][len u32 @4][json @8]
       if (frame[0] !== 1) throw new RustraCommandError('invoke.failed', 'event drain failed');
       const jsonLen = frame[4]! | (frame[5]! << 8) | (frame[6]! << 16) | (frame[7]! << 24);
-      return JSON.parse(drainDecoder.decode(frame.subarray(8, 8 + jsonLen))) as unknown;
+      return JSON.parse(frameDecoder.decode(frame.subarray(8, 8 + jsonLen))) as unknown;
     }
     const codec = nameToCodec(command);
     if (!codec) {

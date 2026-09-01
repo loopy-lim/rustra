@@ -14,9 +14,10 @@
 //!    기존 폴링 사용자의 stdout 이 푸시 프레임으로 오염되지 않는다(무중단).
 
 use rustra_calculator_example::loop_stdio::{
-    PushDecision, encode_push_frame, handle_hello_with_policy,
+    PushDecision, encode_push_frame, handle_hello_with_policy, lock_stdout,
 };
 use serde_json::Value;
+use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -117,4 +118,147 @@ fn hello_without_push_capability_keeps_polling_runtime() {
         1,
         "sink removal restores the bus"
     );
+}
+
+/// I-1 계약: 백그라운드 스레드 emit 이 실제로 푸시 프레임을 기록하고, main 스레드의
+/// 응답 쓰기와 **동시 경합**해도 프레임이 찢어지지 않는다.
+///
+/// bin 이 stdout 에 쓰는 경로(`run_binary` 응답, NDJSON 응답)와 싱크의 푸시 쓰기는
+/// 모두 `STDOUT_LOCK` 임계구역 안에 있어야 한다 — 그렇지 않으면 임의 스레드 emit 의
+/// 프레임이 응답 프레임 한가운데 끼어와(Node 디멀티플렉서의 프로토콜 오염) 응답
+/// waiter 가 깨진다. 테스트는 응답 쓰기(`run_binary`)와 별도 스레드 emit 을 반복
+/// 경합시켜 (1) emit 이 영구 블록 없이 완료되고(데드락 부정), (2) 수신 바이트열이
+/// 항상 잘 구성된 프레임 경계로만 파싱됨을 고정한다.
+#[test]
+fn background_thread_emit_races_response_writes_without_corruption() {
+    use std::time::Duration;
+
+    // 독립 Package — 병렬 테스트의 싱크 상태 간섭 방지(위 테스트와 동일 관례).
+    let package = rustra::Package::builder("test.push-thread-race").build();
+    let decision = handle_hello_with_policy(&package, true);
+    assert_eq!(decision, PushDecision::Push);
+
+    // run_binary 가 쓰는 W — 실제 stdout 대신 독립 버퍼로 수집한다. run_binary 의
+    // 응답 쓰기와 싱크의 푸시 쓰기가 같은 STDOUT_LOCK 임계구역을 공유하므로 경합
+    // 구조(락 상호배제)는 실 stdout 과 동일하다.
+    let main_writes: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+    struct Shared(Arc<Mutex<Vec<u8>>>);
+    impl Write for Shared {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            // run_binary 는 이미 lock_stdout() 을 잡은 상태로 W 에 쓴다 — W 내부
+            // 에서 락을 다시 잡으면(std Mutex 는 재귀 아님) 즉시 데드락이므로
+            // 잡지 않는다. 찢김 방지는 run_binary 쪽 임계구역이 담당한다.
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let mut out = Shared(Arc::clone(&main_writes));
+
+    // drain 요청 프레임 1개 — [len u32 LE=2][0xfffe]. run_binary 의 STDOUT_LOCK
+    // 응답 쓰기를 유발한다.
+    let drain_request = {
+        let mut frame = vec![2u8, 0, 0, 0];
+        frame.extend_from_slice(&0xFFFEu16.to_le_bytes());
+        frame
+    };
+
+    // emit 스레드 — 50회 푸시(싱크는 write_push_frame_to_stdout 로 stdout 에 쓴다).
+    // 백그라운드 스레드 emit 이 블록 없이 완료되는지가 I-1 데드락 부정의 핵심:
+    // main 이 프로그램 수명 StdoutLock 을 쥐면(구조) 이 스레드가 영구 블록돼
+    // join 이 멈춘다. 테스트 프로세스 stdout 은 테스트 하네스가 소유하므로 오염
+    // 되지 않게 하려면 stdout 이 아닌 writer 로 싱크를 다시 설치해야 하지만
+    // install_push_sink 는 stdout 고정 — 대신 싱크를 직접 설치해 같은 경로
+    // (STDOUT_LOCK → 쓰기)를 검증한다.
+    let emitter_writes: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
+    {
+        let emitter_sink = Arc::clone(&emitter_writes);
+        let seq = Arc::new(AtomicU64::new(0));
+        let sink_seq = Arc::clone(&seq);
+        package.set_event_sink(Some(Arc::new(move |name: &str, payload: &str| {
+            // write_push_frame_to_stdout 와 동일 임계구역 진입 — 실제 stdout 쓰기
+            // 대신 버퍼 기록(테스트 출력 오염 방지). 락 규약(STDOUT_LOCK 먼저 →
+            // 대상 write)은 동일하다.
+            let _guard = lock_stdout();
+            let frame = encode_push_frame(name, payload, sink_seq.fetch_add(1, Ordering::Relaxed));
+            emitter_sink.lock().unwrap().extend_from_slice(&frame);
+        })));
+    }
+    let emitter = {
+        let package = package.clone();
+        std::thread::spawn(move || {
+            for i in 0..50 {
+                package.emit("progress.tick", serde_json::json!({ "step": i }));
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        })
+    };
+
+    // emit 스레드와 경합하며 drain 요청 50회 — 각 요청이 run_binary 의
+    // STDOUT_LOCK 응답 쓰기를 유발한다.
+    for _ in 0..50 {
+        let mut cursor = std::io::Cursor::new(drain_request.clone());
+        rustra_calculator_example::loop_stdio::run_binary(&package, &mut cursor, &mut out)
+            .expect("run_binary must succeed");
+    }
+    emitter.join().expect("emitter must not deadlock");
+
+    // (1) emit 50회가 모두 프레임으로 도달했다 — 백그라운드 스레드가 블록/유실
+    // 없이 완료됐다(데드락 부정은 join 자체가 증명: 블록 시 타임아웃으로 fail).
+    let emitted = emitter_writes.lock().unwrap().clone();
+    let mut offset = 0usize;
+    let mut pushes = 0usize;
+    while offset < emitted.len() {
+        let len = u32::from_le_bytes([
+            emitted[offset],
+            emitted[offset + 1],
+            emitted[offset + 2],
+            emitted[offset + 3],
+        ]) as usize;
+        let frame_end = offset + 4 + len;
+        assert!(
+            frame_end <= emitted.len(),
+            "truncated push frame at {offset}"
+        );
+        assert_eq!(
+            u16::from_le_bytes([emitted[offset + 4], emitted[offset + 5]]),
+            0xFFFD,
+            "push frame cmd id"
+        );
+        let parsed: Value = serde_json::from_slice(&emitted[offset + 6..frame_end])
+            .expect("push frame body must be intact 1-line JSON");
+        assert!(parsed["name"].is_string());
+        offset = frame_end;
+        pushes += 1;
+    }
+    assert_eq!(pushes, 50, "all background emits must land as frames");
+
+    // (2) run_binary 수신 바이트열이 항상 잘 구성된 응답 경계로만 파싱된다 —
+    // 싱크/응답이 같은 락을 공유하지 않으면(위반 시나리오) emit 프레임이 응답
+    // 한가운데에 끼어 이 파싱이 깨진다.
+    let bytes = main_writes.lock().unwrap().clone();
+    assert!(!bytes.is_empty(), "race must produce response frames");
+    offset = 0;
+    let mut responses = 0usize;
+    while offset < bytes.len() {
+        assert!(offset + 4 <= bytes.len(), "truncated header at {offset}");
+        let len = u32::from_le_bytes([
+            bytes[offset],
+            bytes[offset + 1],
+            bytes[offset + 2],
+            bytes[offset + 3],
+        ]) as usize;
+        let frame_end = offset + 4 + len;
+        assert!(frame_end <= bytes.len(), "truncated body at {offset}");
+        // 응답 프레임 — ok 플래그로 시작. 푸시 프레임(0xfffd cmd)이 끼어 있으면
+        // 이 단언이 즉시 깨진다.
+        assert_eq!(bytes[offset + 4], 1, "drain response ok flag at {offset}");
+        offset = frame_end;
+        responses += 1;
+    }
+    assert_eq!(responses, 50, "all drain responses must land as frames");
+
+    package.set_event_sink(None);
 }

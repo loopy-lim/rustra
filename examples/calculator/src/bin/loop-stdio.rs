@@ -53,7 +53,7 @@
 
 use rustra_calculator_example::calculator_package;
 use rustra_calculator_example::loop_stdio::{
-    PUSH_CAPABILITY, handle_hello_with_policy, hello_response, run_binary,
+    PUSH_CAPABILITY, handle_hello_with_policy, hello_response, lock_stdout, run_binary,
 };
 use serde_json::{Value, json};
 use std::io::{BufRead, Write};
@@ -61,8 +61,6 @@ use std::io::{BufRead, Write};
 fn main() -> rustra::Result<()> {
     let package = calculator_package();
     let stdin = std::io::stdin();
-    let stdout = std::io::stdout();
-    let mut out = stdout.lock();
     let mut reader = stdin.lock();
 
     let mut line = String::new();
@@ -113,18 +111,33 @@ fn main() -> rustra::Result<()> {
             let mut encoded = serde_json::to_vec(&hello_response(echo_id, events_mode))
                 .map_err(rustra::RustraError::internal)?;
             encoded.push(b'\n');
-            out.write_all(&encoded)
-                .map_err(rustra::RustraError::internal)?;
-            out.flush().map_err(rustra::RustraError::internal)?;
-            return run_binary(&package, &mut reader, &mut out);
+            // stdout 획득 순서 규약(loop_stdio::STDOUT_LOCK 문서): 락 먼저,
+            // 그 안에서 stdout.lock(). 프로그램 수명 StdoutLock 을 쥐지 않는다 —
+            // 쥐면 백그라운드 스레드 emit(싱크)이 stdout.lock() 에서 영구 블록된다.
+            let guard = lock_stdout();
+            let mut stdout = std::io::stdout();
+            {
+                let mut out = stdout.lock();
+                out.write_all(&encoded)
+                    .map_err(rustra::RustraError::internal)?;
+                out.flush().map_err(rustra::RustraError::internal)?;
+            }
+            drop(guard);
+            return run_binary(&package, &mut reader, &mut stdout);
         }
         let response = handle_line(&package, trimmed);
         let mut encoded = serde_json::to_vec(&response).map_err(rustra::RustraError::internal)?;
         encoded.push(b'\n');
+        // NDJSON 응답 쓰기도 같은 규약 — 푸시 프레임이 응답 한가운데 끼지 못한다.
+        let guard = lock_stdout();
+        let stdout = std::io::stdout();
+        let mut out = stdout.lock();
         out.write_all(&encoded)
             .map_err(rustra::RustraError::internal)?;
         // 라인 단위 flush — 호출자가 파이프에서 라인을 기다린다.
         out.flush().map_err(rustra::RustraError::internal)?;
+        drop(out);
+        drop(guard);
     }
 }
 

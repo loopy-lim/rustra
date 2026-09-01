@@ -39,8 +39,10 @@
   프레임 **푸시**를 우선하고, 아니면(구 런타임, codecs 미제공 transport)
   `__drainEvents` 특수 명령 **폴링**(`RUSTRA_NODE_EVENT_POLL_MS`, 기본 100ms)으로
   폴백하며, 이벤트를 영원히 전달할 수 없는 transport 는 `event.unavailable` 로
-  throw 한다. Rust `set_event_sink` 설치 시 버스가 비므로(푸시+폴링 이중 수신
-  방지 계약) 푸시/폴링을 혼용하지 않는다.
+  throw 한다. 폴링과 달리 푸시 모드(Node stdout, Bun FFI)는 첫 구독 전의 emit 을
+  버린다(싱크가 버스를 우회) — 구독 전 emit 이 중요하면 구독을 먼저 하거나 폴링을
+  쓴다. Rust `set_event_sink` 설치 시 버스가 비므로(푸시+폴링 이중 수신 방지
+  계약) 푸시/폴링을 혼용하지 않는다.
 
 ## invokeBatch 시맨틱
 
