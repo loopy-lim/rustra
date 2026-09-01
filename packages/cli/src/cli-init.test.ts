@@ -59,8 +59,11 @@ test('runInit rejects zero or multiple project directories', async () => {
 
 test('runInit --help exits without creating anything', async () => {
   await withTempDir(async (root) => {
+    // help 관례 통일 — 출력은 cli-main, runInit 은 도메인 검증 전에 조용히 돌아온다.
+    // positional 이 없어도(또는 여러 개여도) help 가 우선한다.
     await runInit(['--help']);
     await runInit(['-h']);
+    await runInit(['--help', join(root, 'a'), join(root, 'b')]);
     assert.equal(readdirSync(root).length, 0);
   });
 });

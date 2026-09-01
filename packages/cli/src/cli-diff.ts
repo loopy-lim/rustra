@@ -8,9 +8,10 @@ export async function runDiff(args: string[]): Promise<void> {
   const options = parseCliArgs(args, {
     command: 'diff',
     valueFlags: ['old', 'new', 'format'],
-    booleanFlags: ['help', 'h'],
+    booleanFlags: ['help'],
   });
-  if (options.flags.has('help') || options.flags.has('h')) return;
+  // help 관례 — 파서는 플래그만 채우고 출력은 cli-main 이 담당한다.
+  if (options.flags.has('help')) return;
   const oldPath = options.values.get('old');
   const newPath = options.values.get('new');
   if (!oldPath || !newPath)

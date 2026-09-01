@@ -178,12 +178,14 @@ test('inspect rejects zero or multiple dump files', async () => {
 
 test('inspect --help stays silent internally; cli-help owns the usage text', async () => {
   await withTempDir(async (root) => {
-    // 내부 분기는 cli-diff/cli-init 관례대로 아무것도 출력하지 않고 돌아온다 —
-    // 사용자용 usage 는 cli-main 이 cli-help 텍스트로 출력한다.
+    // help 관례 통일 — 내부 분기는 아무것도 출력하지 않고 돌아온다(출력은
+    // cli-main). positional 이 0개·2개여도 help 가 우선하며 파일을 읽지 않는다.
     const lines = await captureConsoleLog(() => runInspect(['--help']));
     const short = await captureConsoleLog(() => runInspect(['-h']));
+    const extra = await captureConsoleLog(() => runInspect(['a.hex', 'b.hex', '--help']));
     assert.equal(lines.join('\n'), '');
     assert.equal(short.join('\n'), '');
+    assert.equal(extra.join('\n'), '');
     // 도움말 호출은 존재하지 않는 파일을 읽으려 하지 않는다 — 아무것도 던지지 않음.
     assert.equal(readdirSync(root).length, 0);
     // 단일 사용자용 usage 출처 — cli-help.ts 텍스트가 실제로 존재하는지 게이트.

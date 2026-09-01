@@ -31,6 +31,30 @@ test('parseDevArgs defaults to conventional layout', () => {
   assert.equal(opts.appDir, 'app');
 });
 
+// help 관례 통일 — 파서는 help 플래그를 options.help 로 채운다(출력은 cli-main).
+// 기존 관례는 "기본값 객체 반환"이라 runDev(['--help']) 가 워처에 진입했다.
+test('parseDevArgs reports the help flag instead of returning silent defaults', () => {
+  const opts = parseDevArgs(['--help']);
+  assert.equal(opts.help, true);
+  assert.equal(opts.backendDir, 'backend');
+  assert.equal(opts.appDir, 'app');
+  const short = parseDevArgs(['-h']);
+  assert.equal(short.help, true);
+});
+
+test('runDev --help returns a dummy handle instead of entering the watch loop', async () => {
+  // 존재하지 않는 경로여도 help 면 디렉터리 검증·루프 진입 없이 즉시 돌아온다 —
+  // 출력은 cli-main 이 담당하므로 서브커맨드는 조용히 return 이 통일 관례다.
+  const handle = await runDev([
+    '--backend',
+    '/nonexistent-rustra-help-probe',
+    '--app',
+    '/nonexistent-rustra-help-probe',
+    '--help',
+  ]);
+  handle.dispose();
+});
+
 test('runDev fails fast instead of silently watching a missing layout', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'rustra-dev-layout-'));
   try {
