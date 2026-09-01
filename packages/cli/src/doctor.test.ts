@@ -3,6 +3,8 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
+import { sha256 } from './hash.js';
+import { cliVersion } from './cli-runtime.js';
 import {
   collectDoctorReport,
   collectDoctorReportAsync,
@@ -236,6 +238,8 @@ function withProject(files: Record<string, string>, callback: (root: string) => 
 const CARGO_TOML =
   '[package]\nname = "app"\n\n[lib]\ncrate-type = ["rlib", "cdylib", "staticlib"]\n';
 
+const SCHEMA_CONTENT = '{}\n';
+
 function metadataRunner(root: string, packages: Array<Record<string, unknown>>): DoctorRunner {
   return makeRunner({
     'rustc --version': { ok: true, stdout: 'rustc 1.88.0 (abc)', stderr: '' },
@@ -293,6 +297,12 @@ test('multi-section config collects a matrix row for every host section', () => 
       }),
       'Cargo.toml': CARGO_TOML,
       'generated/schema.json': '{}\n',
+      'generated/.rustra-generated.json': JSON.stringify({
+        schemaVersion: 1,
+        schemaHash: sha256('{}\n'),
+        generatorVersion: cliVersion,
+        files: [],
+      }),
       'ndk/source.properties': '',
     },
     (root) => {
@@ -336,6 +346,12 @@ test('a red section fails the run without aborting the other sections', () => {
       }),
       'Cargo.toml': CARGO_TOML,
       'generated/schema.json': '{}\n',
+      'generated/.rustra-generated.json': JSON.stringify({
+        schemaVersion: 1,
+        schemaHash: sha256('{}\n'),
+        generatorVersion: cliVersion,
+        files: [],
+      }),
       'ndk/source.properties': '',
     },
     (root) => {
@@ -381,6 +397,12 @@ test('sections referencing different Rust manifests emit one consistency warning
       'Cargo.toml': CARGO_TOML,
       'alt/Cargo.toml': '[package]\nname = "alt"\n\n[lib]\ncrate-type = ["rlib", "cdylib"]\n',
       'generated/schema.json': '{}\n',
+      'generated/.rustra-generated.json': JSON.stringify({
+        schemaVersion: 1,
+        schemaHash: sha256('{}\n'),
+        generatorVersion: cliVersion,
+        files: [],
+      }),
       'ndk/source.properties': '',
     },
     (root) => {
@@ -419,6 +441,12 @@ test('single-section config stays matrix-free for backward compatibility', () =>
       }),
       'Cargo.toml': CARGO_TOML,
       'generated/schema.json': '{}\n',
+      'generated/.rustra-generated.json': JSON.stringify({
+        schemaVersion: 1,
+        schemaHash: sha256('{}\n'),
+        generatorVersion: cliVersion,
+        files: [],
+      }),
     },
     (root) => {
       const report = collectDoctorReport(
@@ -453,6 +481,12 @@ test('text formatter renders the matrix table', () => {
       }),
       'Cargo.toml': CARGO_TOML,
       'generated/schema.json': '{}\n',
+      'generated/.rustra-generated.json': JSON.stringify({
+        schemaVersion: 1,
+        schemaHash: sha256('{}\n'),
+        generatorVersion: cliVersion,
+        files: [],
+      }),
       'ndk/source.properties': '',
     },
     (root) => {
@@ -533,6 +567,12 @@ test('tauri matrix row has an em-dash build cell and a runtime cell driven by ta
       }),
       'Cargo.toml': CARGO_TOML,
       'generated/schema.json': '{}\n',
+      'generated/.rustra-generated.json': JSON.stringify({
+        schemaVersion: 1,
+        schemaHash: sha256('{}\n'),
+        generatorVersion: cliVersion,
+        files: [],
+      }),
     },
     (root) => {
       const report = collectDoctorReport(
@@ -753,6 +793,12 @@ test('wasm dev target fails the required check when the wasm32 rust target is mi
       'rustra.json': JSON.stringify(WASM_DEV_CONFIG),
       'Cargo.toml': CARGO_TOML,
       'generated/schema.json': '{}\n',
+      'generated/.rustra-generated.json': JSON.stringify({
+        schemaVersion: 1,
+        schemaHash: sha256('{}\n'),
+        generatorVersion: cliVersion,
+        files: [],
+      }),
     },
     (root) => {
       const report = collectDoctorReport(
@@ -778,6 +824,164 @@ test('wasm dev target fails the required check when the wasm32 rust target is mi
   );
 });
 
+// ── 코드젠 산출물 신선도 (codegen.generated_freshness) ────────────────────────
+//
+// .rustra-generated.json 매니페스트가 현재 schema.json / 제너레이터 버전과
+// 일치하지 않으면 스테일이다 — 치명이 아니라 안내이므로 전부 warn(required: false).
+// 바이트 전수 검증은 codegen --check 의 소관이고 doctor 는 읽기 전용 저비용 유지.
+
+import { cliVersion } from './cli-runtime.js';
+
+function withFreshProject(manifest: object | null, callback: (root: string) => void): void {
+  withProject(
+    {
+      'rustra.json': JSON.stringify({
+        schema: './generated/schema.json',
+        output: './generated',
+        node: { rustManifest: './Cargo.toml' },
+      }),
+      'Cargo.toml': CARGO_TOML,
+      'generated/schema.json': SCHEMA_CONTENT,
+      ...(manifest === null
+        ? {}
+        : { 'generated/.rustra-generated.json': `${JSON.stringify(manifest)}\n` }),
+    },
+    callback,
+  );
+}
+
+test('doctor flags missing generated manifest', () => {
+  withFreshProject(null, (root) => {
+    const report = collectDoctorReport(
+      options(join(root, 'rustra.json')),
+      metadataRunner(root, []),
+    );
+    const freshness = report.checks.find((check) => check.id === 'codegen.generated_freshness');
+    assert.equal(freshness?.status, 'warn');
+    assert.equal(freshness?.required, false);
+    assert.match((freshness?.fix ?? []).join(' '), /rustra codegen/);
+  });
+});
+
+test('doctor flags schema drift after schema.json change', () => {
+  withFreshProject(
+    {
+      schemaVersion: 1,
+      schemaHash: sha256('{"stale": true}'),
+      generatorVersion: cliVersion,
+      files: [],
+    },
+    (root) => {
+      const report = collectDoctorReport(
+        options(join(root, 'rustra.json')),
+        metadataRunner(root, [
+          {
+            name: 'app',
+            manifest_path: join(root, 'Cargo.toml'),
+            targets: [
+              { name: 'app', crate_types: ['rlib'] },
+              { name: 'generate', kind: ['bin'] },
+            ],
+          },
+        ]),
+      );
+      const freshness = report.checks.find((check) => check.id === 'codegen.generated_freshness');
+      assert.equal(freshness?.status, 'warn');
+      assert.match(freshness?.summary ?? '', /schema/);
+    },
+  );
+});
+
+test('doctor flags generator version drift', () => {
+  withFreshProject(
+    {
+      schemaVersion: 1,
+      schemaHash: sha256(SCHEMA_CONTENT),
+      generatorVersion: '0.0.0-dev',
+      files: [],
+    },
+    (root) => {
+      const report = collectDoctorReport(
+        options(join(root, 'rustra.json')),
+        metadataRunner(root, [
+          {
+            name: 'app',
+            manifest_path: join(root, 'Cargo.toml'),
+            targets: [
+              { name: 'app', crate_types: ['rlib'] },
+              { name: 'generate', kind: ['bin'] },
+            ],
+          },
+        ]),
+      );
+      const freshness = report.checks.find((check) => check.id === 'codegen.generated_freshness');
+      assert.equal(freshness?.status, 'warn');
+      assert.match(freshness?.summary ?? '', /version|generator/i);
+    },
+  );
+});
+
+test('doctor passes fresh generated output', () => {
+  withFreshProject(
+    {
+      schemaVersion: 1,
+      schemaHash: sha256(SCHEMA_CONTENT),
+      generatorVersion: cliVersion,
+      files: [],
+    },
+    (root) => {
+      const report = collectDoctorReport(
+        options(join(root, 'rustra.json')),
+        metadataRunner(root, [
+          {
+            name: 'app',
+            manifest_path: join(root, 'Cargo.toml'),
+            targets: [
+              { name: 'app', crate_types: ['rlib'] },
+              { name: 'generate', kind: ['bin'] },
+            ],
+          },
+        ]),
+      );
+      const freshness = report.checks.find((check) => check.id === 'codegen.generated_freshness');
+      assert.equal(freshness?.status, 'pass');
+      assert.equal(doctorExitCode(report, false), 0);
+      assert.equal(doctorExitCode(report, true), 0);
+    },
+  );
+});
+
+test('freshness check is skipped when the schema itself is missing', () => {
+  withProject(
+    {
+      'rustra.json': JSON.stringify({
+        schema: './generated/schema.json',
+        output: './generated',
+        node: { rustManifest: './Cargo.toml' },
+      }),
+      'Cargo.toml': CARGO_TOML,
+      // schema.json 이 없다 — codegen.schema_output 이 이미 warn 이므로 이중 보고하지 않는다.
+    },
+    (root) => {
+      const report = collectDoctorReport(
+        options(join(root, 'rustra.json')),
+        metadataRunner(root, [
+          {
+            name: 'app',
+            manifest_path: join(root, 'Cargo.toml'),
+            targets: [
+              { name: 'app', crate_types: ['rlib'] },
+              { name: 'generate', kind: ['bin'] },
+            ],
+          },
+        ]),
+      );
+      const freshness = report.checks.find((check) => check.id === 'codegen.generated_freshness');
+      assert.equal(freshness?.status, 'skip');
+    },
+  );
+});
+
 test('native dev target emits neither the wasm notice nor the wasm32 target check', () => {
   withProject(
     {
@@ -788,6 +992,12 @@ test('native dev target emits neither the wasm notice nor the wasm32 target chec
       }),
       'Cargo.toml': CARGO_TOML,
       'generated/schema.json': '{}\n',
+      'generated/.rustra-generated.json': JSON.stringify({
+        schemaVersion: 1,
+        schemaHash: sha256('{}\n'),
+        generatorVersion: cliVersion,
+        files: [],
+      }),
     },
     (root) => {
       const report = collectDoctorReport(
