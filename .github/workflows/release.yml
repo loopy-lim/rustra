@@ -18,9 +18,15 @@ concurrency:
 jobs:
   # CI가 green인 경우에만 발행을 시도한다 (CI 실패 시 release 스킵).
   # workflow_dispatch 우회를 제거해 이 조건은 workflow_run success 로만 만족한다.
+  # event != 'schedule' 필수: CI 의 주간 schedule 실행은 rust-audit 외 전부 skip
+  # 이지만 conclusion 은 success 로 끝난다. 이 가드가 없으면 잡이 하나도 안 돌은
+  # "success" 가 발행을 발동한다(2026-09-01 실제 발생 — run 33384627377 이
+  # 116eae3d Release 를 트리거).
   release:
     name: Changesets Publish (npm)
-    if: github.event.workflow_run.conclusion == 'success'
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event != 'schedule'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -103,7 +109,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          conclusion="$(gh run list --commit "$GITHUB_SHA" --workflow CI --limit 1 --json conclusion --jq '.[0].conclusion')"
+          # schedule 실행은 잡이 전부 skip 돼도 conclusion=success 로 기록된다.
+          # push/PR 트리거 실행(실제 게이트가 도는 유일한 실행)만 green 으로 인정한다.
+          conclusion="$(gh run list --commit "$GITHUB_SHA" --workflow CI \
+            --event push --event pull_request --limit 1 \
+            --json conclusion --jq '.[0].conclusion // empty')"
+          if [ -z "$conclusion" ]; then
+            echo "no push/PR CI run found for $GITHUB_SHA — refusing to publish on unverified commit" >&2
+            exit 1
+          fi
           test "$conclusion" = "success"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2

@@ -31,12 +31,19 @@ export function createReloadHooks() {
       hooks.push(cb);
     },
     async emitReload(reason: string): Promise<void> {
-      for (const hook of hooks) {
-        try {
-          await hook(reason);
-        } catch (error) {
+      // 훅은 서로 독립(호스트별 콜백)이므로 병렬로 방출한다. allSettled 로
+      // 격리 계약을 유지 — 한 훅의 실패가 다른 훅을 막지 않고 소리 내어 기록된다.
+      // Promise.resolve().then 으로 감싸는 이유: 동기 throw 도 rejection 으로
+      // 정규화해 allSettled 가 받도록 한다(map 이 중간에 던지는 것을 막는다).
+      const results = await Promise.allSettled(
+        hooks.map((hook) => Promise.resolve().then(() => hook(reason))),
+      );
+      for (const result of results) {
+        if (result.status === 'rejected') {
           console.error(
-            `[dev] reload failed: ${error instanceof Error ? error.message : String(error)}`,
+            `[dev] reload failed: ${
+              result.reason instanceof Error ? result.reason.message : String(result.reason)
+            }`,
           );
         }
       }

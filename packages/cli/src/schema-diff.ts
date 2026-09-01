@@ -164,11 +164,10 @@ function diagnoseContractGaps(
   // (OTA) 구 id 가 다른 명령의 실제 id 로 점유됐는지 검사한다 — 네이티브에
   // alias_command_id 선언이 빠졌을 때 정확히 이 모양이 된다 (builder_build.rs 의
   // 점유 해소가 없으면 구 id 호출이 새 명령으로 라우팅된다).
-  const newIdToName = new Map(
-    newSchema.commands
-      .filter((c) => typeof c.commandId === 'number')
-      .map((c) => [c.commandId, c.name]),
-  );
+  const newIdToName = new Map<number, string>();
+  for (const command of newSchema.commands) {
+    if (typeof command.commandId === 'number') newIdToName.set(command.commandId, command.name);
+  }
   for (const [name, oldCmd] of oldCommands) {
     const newCmd = newCommands.get(name);
     if (!newCmd || oldCmd.commandId === newCmd.commandId) continue;
