@@ -526,6 +526,41 @@ fn write_output() -> Result<()> {
 | 단순 `enum`                   | `'Variant1' \| 'Variant2'`              |
 | 데이터를 가진 `enum`          | 객체 유니온 타입                        |
 
+### 사용자 정의 제네릭 타입
+
+`Wrapper<T> { value: T }` 같은 제네릭 구조체는 **구체 인스턴스 단위로** 동작합니다.
+schemars 0.8은 인스턴스마다 모노몰포이즈된 스키마를 만들고(`Wrapper<String>` →
+스키마 이름 `Wrapper_for_String`), rustra는 명령의 `inputType`/`outputType`을 그
+schemars 이름에 고정합니다. 결과물은 유효한 TypeScript 식별자이며 스키마 `title`과
+`definitions` 키와 일치하므로 검증·TS/C++ 렌더링·코덱 생성이 특수 처리 없이 하나의
+이름으로 묶입니다.
+
+```rust
+#[bridge_type]
+struct Wrapper<T> { value: T }
+
+#[command]
+fn echo_wrapped(input: Wrapper<String>) -> Result<Wrapper<String>> {
+    Ok(Wrapper { value: input.value })
+}
+```
+
+```typescript
+export type Wrapper_for_String = { value: string };
+```
+
+참고:
+
+- `Option<T>`, `Vec<T>`, `Result<T, E>`(명령 반환), `Box<T>`는 표준 라이브러리
+  제네릭으로 별도 처리가 필요 없습니다 — 위 표를 참고하세요.
+- 파라미터화된 제네릭 템플릿(`Wrapper<T>` 자체)은 코드젠되지 않습니다. 사용된
+  인스턴스마다 각각의 타입이 생성됩니다. 구체 별칭(`type StringWrapper =
+Wrapper<String>;`)도 하나의 구체 타입으로 동작합니다.
+- 구버전 rustra는 `type_name`이 그대로 `inputType`에 새어 나갔습니다
+  (`Wrapper<String >` — 식별자 아님). 오래된 schema.json이 CLI 검증에서
+  "generic type name" 오류로 실패하면, 현재 rustra로 Rust 패키지를 재빌드하고
+  `schema.json`을 재생성하세요.
+
 ### 선택적 필드 처리
 
 ```rust

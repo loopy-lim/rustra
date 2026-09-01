@@ -1453,6 +1453,35 @@ test('parsePackageSchema rejects hostile identifiers', () => {
   );
 });
 
+test('parsePackageSchema diagnoses generic type names with a rebuild hint', () => {
+  const base = {
+    packageId: 'ok.pkg',
+    schemaVersion: 1,
+    commands: [
+      {
+        name: 'echo',
+        commandId: 1,
+        inputType: 'Wrapper<String >',
+        outputType: 'AddOutput',
+        inputSchema: { type: 'object' },
+        outputSchema: { type: 'object' },
+      },
+    ],
+  };
+  // 구버전 rustra의 type_name 파손 이름 — 원인(제네릭)과 해결책(재빌드·모노몰포이즈
+  // 이름)을 함께 알려줘야 사용자가 다음 동작을 알 수 있다.
+  assert.throws(
+    () => parsePackageSchema(base),
+    (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      assert.match(message, /generic type name/);
+      assert.match(message, /Wrapper_for_X/, 'monomorphized name example must be shown');
+      assert.match(message, /Rebuild the Rust package/);
+      return true;
+    },
+  );
+});
+
 test('parsePackageSchema accepts the declaration-order marker and rejects unknown values', () => {
   const base = {
     packageId: 'ok.pkg',

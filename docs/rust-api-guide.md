@@ -533,6 +533,43 @@ fn write_output() -> Result<()> {
 | Simple `enum`                    | `'Variant1' \| 'Variant2'`           |
 | Data-carrying `enum`             | Object union type                    |
 
+### User-Defined Generic Types
+
+Generic structs like `Wrapper<T> { value: T }` work at the **concrete instance
+level**: schemars 0.8 generates a monomorphized schema per instantiation
+(`Wrapper<String>` → schema name `Wrapper_for_String`), and rustra pins the
+command's `inputType`/`outputType` to that exact schemars name. The result is a
+valid TypeScript identifier that matches the schema `title` and the
+`definitions` keys, so validation, TS/C++ rendering, and codec generation all
+agree without special handling.
+
+```rust
+#[bridge_type]
+struct Wrapper<T> { value: T }
+
+#[command]
+fn echo_wrapped(input: Wrapper<String>) -> Result<Wrapper<String>> {
+    Ok(Wrapper { value: input.value })
+}
+```
+
+```typescript
+export type Wrapper_for_String = { value: string };
+```
+
+Notes:
+
+- `Option<T>`, `Vec<T>`, `Result<T, E>` (command returns), and `Box<T>` are
+  standard-library generics and need nothing special — see the table above.
+- Do **not** write a bare type alias expecting parameterized generics:
+  `type StringWrapper = Wrapper<String>;` also works, because the alias is a
+  concrete type — but rustra does not emit `Wrapper<T>` templates. Each used
+  instantiation becomes its own generated type.
+- Older rustra releases leaked Rust's `type_name` into `inputType`
+  (`Wrapper<String >` — not an identifier). If an old schema.json fails CLI
+  validation with a "generic type name" error, rebuild the Rust package with
+  the current rustra and regenerate `schema.json`.
+
 ### Optional Field Handling
 
 ```rust
