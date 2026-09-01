@@ -17,7 +17,7 @@ Rust #[command] definition → TypeScript client codegen → platform adapter ex
 ```
 
 - Define functions with `#[command]` on the Rust side
-- `generate_typescript()` emits type-safe TS client code
+- `generate_typescript()` publishes the contract; `rustra codegen` renders type-safe TS client code from it
 - Node, Bun, Tauri, and React Native adapters all route through the same
   `EngineClient` interface
 
@@ -152,8 +152,8 @@ fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
 fn main() -> Result<()> {
     let package = rustra::build!("example.calculator", add_numbers).done();
 
-    // Generate the TypeScript client — `rustra codegen` handles schema plus TS/C++ together.
-    package.generate_typescript()?.write_to_dir("generated")?;
+    // Contract probe: publish schema.json — `rustra codegen` renders TS/C++ from it.
+    package.generate_typescript()?.write_schema_to_dir("generated")?;
     Ok(())
 }
 ```
@@ -425,7 +425,7 @@ fn main() -> Result<()> {
     // register multiple commands at once with the build! macro
     let package = rustra::build!("example.calculator", add_numbers).done();
 
-    package.generate_typescript()?.write_to_dir("generated")?;
+    package.generate_typescript()?.write_schema_to_dir("generated")?;
     Ok(())
 }
 ```
@@ -679,10 +679,12 @@ cargo test --workspace
 # per-platform cdylib (.so/.dylib/.dll) artifacts (.github/workflows/ci.yml).
 
 # Build the calculator example and generate TS
-cargo run -p rustra-calculator-example --bin rustra-calculator-example
+cargo run -p rustra-calculator-example --bin generate   # contract probe: schema.json
+bun run codegen                                          # render TS surfaces
 
 # Build the CRUD example and generate TS
-cargo run -p rustra-crud-example --bin generate
+cargo run -p rustra-crud-example --bin generate   # contract probe: schema.json
+bun run --cwd examples/crud codegen               # render TS surfaces
 
 # TypeScript lint / format
 bun run lint

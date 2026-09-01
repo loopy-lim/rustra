@@ -4,7 +4,7 @@ English | [한국어](./architecture.ko.md)
 
 ## Overview
 
-rustra is a bridge framework that automatically generates a host-neutral TypeScript client once you define a Rust package. You write command functions on the Rust side and register them with a `Package`; `generate_typescript()` then produces TypeScript type definitions and command helper functions. The generated TypeScript code depends on no runtime (Node.js, Bun, Tauri, React Native); each host adapter receives an injected transport and wraps it behind the `EngineClient` interface.
+rustra is a bridge framework that automatically generates a host-neutral TypeScript client once you define a Rust package. You write command functions on the Rust side and register them with a `Package`; the Rust probe publishes `schema.json` (`write_schema_to_dir`), and `rustra codegen` renders the TypeScript type definitions and command helper functions from that single file. The generated TypeScript code depends on no runtime (Node.js, Bun, Tauri, React Native); each host adapter receives an injected transport and wraps it behind the `EngineClient` interface.
 
 ---
 
@@ -29,13 +29,13 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
  │         │                                                           │
  │         ▼                                                           │
  │  GeneratedPackage {                                                 │
- │      schema_json,      → schema.json                                │
- │      types_ts,         → types.ts    (EngineClient + I/O types)     │
- │      commands_ts,      → commands.ts (command helper functions)     │
- │      contract_hash,    → contract.ts (contract hash)                │
+ │      schema_json   →  schema.json  (the Rust probe stops here)      │
  │  }                                                                  │
  │                                                                     │
- │  generated.write_to_dir("./generated")                              │
+ │  generated.write_schema_to_dir("./generated")                       │
+ │                                                                     │
+ │  rustra codegen  →  renders types.ts / commands.ts / contract.ts    │
+ │                     (+ rkyv codecs, positional facade, host entries)│
  └─────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -146,15 +146,15 @@ crates/
 
 Provides the core types and logic.
 
-| Component          | Description                                                                                                                                                            |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Package`          | A collection of registered commands. Runtime dispatch via `invoke_json()`, code generation via `generate_typescript()`                                                 |
-| `PackageBuilder`   | Created with `Package::builder(id)`. Register commands with `.command_fn(handler)` / `.command(name, handler)`, then `.build()`                                        |
-| `GeneratedPackage` | The result of `generate_typescript()`. Holds the `schema_json`, `types_ts`, `commands_ts`, `contract_hash` fields. Writes files with `write_to_dir()`                  |
-| `RustraError`      | Implements `Serialize`. `command.not_found`, `command.invalid_args`, `internal` error codes + a `custom(code, message)` constructor + `code()` and `message()` getters |
-| `build!`           | Provided by `rustra-macros`. Registers multiple commands in one go as `rustra::build!("id", fn1, fn2).done()`                                                          |
-| `tauri_support`    | Provided when `cfg(feature = "tauri")` is enabled. `RustraState`, the single `rustra_dispatch` Tauri command, and the `register()` builder injection function          |
-| `__private` module | The `CommandInput`, `CommandOutput` sealed traits. Used by the proc macro to verify command type constraints at compile time. Not exposed as public API                |
+| Component          | Description                                                                                                                                                                                     |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Package`          | A collection of registered commands. Runtime dispatch via `invoke_json()`, code generation via `generate_typescript()`                                                                          |
+| `PackageBuilder`   | Created with `Package::builder(id)`. Register commands with `.command_fn(handler)` / `.command(name, handler)`, then `.build()`                                                                 |
+| `GeneratedPackage` | The result of `generate_typescript()`. Holds the `schema_json`, `types_ts`, `commands_ts`, `contract_hash` fields. `write_schema_to_dir()` publishes schema.json (deprecated: `write_to_dir()`) |
+| `RustraError`      | Implements `Serialize`. `command.not_found`, `command.invalid_args`, `internal` error codes + a `custom(code, message)` constructor + `code()` and `message()` getters                          |
+| `build!`           | Provided by `rustra-macros`. Registers multiple commands in one go as `rustra::build!("id", fn1, fn2).done()`                                                                                   |
+| `tauri_support`    | Provided when `cfg(feature = "tauri")` is enabled. `RustraState`, the single `rustra_dispatch` Tauri command, and the `register()` builder injection function                                   |
+| `__private` module | The `CommandInput`, `CommandOutput` sealed traits. Used by the proc macro to verify command type constraints at compile time. Not exposed as public API                                         |
 
 #### `crates/rustra-macros` (proc-macro)
 
@@ -193,8 +193,8 @@ Each adapter package never imports the others, and never imports host-specific p
 examples/
 ├── calculator/                 # basic Rust library example
 │   ├── src/lib.rs              # command definitions + calculator_package() + C FFI entry point
-│   ├── src/main.rs             # stdio entry point + codegen demo
-│   └── generated/              # generate_typescript() output
+│   ├── src/main.rs             # stdio entry point + invoke demo (see src/bin/generate.rs for the probe)
+│   └── generated/              # rustra codegen output (from schema.json)
 │       ├── types.ts            # EngineClient + AddNumbersInput/Output types
 │       ├── commands.ts         # addNumbers() helper
 │       ├── contract.ts         # GENERATED_CONTRACT_HASH constant
@@ -265,7 +265,7 @@ Type conversion rules (`ts_type_from_schema`):
 
 ### File Structure of the Generated Output
 
-Files written by `GeneratedPackage::write_to_dir(output_dir)`:
+Files in the `generated/` directory — `write_schema_to_dir()` writes only `schema.json`; `rustra codegen` renders the rest:
 
 | File          | Content                                         | Purpose                                 |
 | ------------- | ----------------------------------------------- | --------------------------------------- |
@@ -517,20 +517,20 @@ The typical development workflow:
 
 3. Run code generation
    let package = my_package();
-   let generated = package.generate_typescript()?;
-   generated.write_to_dir("./generated")?;
+   package.generate_typescript()?.write_schema_to_dir("./generated")?;
+   # then render the surfaces from schema.json:
+   #   rustra codegen --config rustra.json
 
 4. Use the generated code on the TypeScript side
    import { myCommand } from './generated/commands.js';
    const result = await myCommand(engine, { ... });
 ```
 
-`examples/calculator/src/main.rs` is an example that performs code generation at runtime:
+`examples/calculator/src/bin/generate.rs` is an example of the contract probe:
 
 ```rust
-let package = calculator_package();
-let generated = package.generate_typescript()?;
-generated.write_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
+let generated = calculator_package().generate_typescript()?;
+generated.write_schema_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
 ```
 
 ---

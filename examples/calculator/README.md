@@ -30,7 +30,7 @@ The executables live in [`apps/node-app.ts`](apps/node-app.ts) and
 1. **Type definitions** — define `AddNumbersInput`, `AddNumbersOutput` with `Serialize + Deserialize + JsonSchema`
 2. **Command registration** — mark handler functions with `#[command]` and register them via `Package::builder(...).command_fn(...)`
 3. **Local invoke** — type-safe invocation with `package.invoke("addNumbers", ...)`
-4. **TypeScript generation** — `package.generate_typescript()` → file output via `generated.write_to_dir(...)`
+4. **TypeScript generation** — contract probe publishes `schema.json` (`generate_schema` bin), then `rustra codegen` renders the TS/C++ surfaces from it
 5. **Host generated entrypoints** — `node.ts`, `bun.ts`, `tauri.ts`, `react-native.ts`
 6. **Native entrypoint** — `native_entry!` in one line shares the stable C ABI and the RN staticlib
 7. **High-performance options** — measured Node persistent loop/N-API and Bun FFI rkyv V2

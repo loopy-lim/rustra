@@ -194,8 +194,8 @@ fn main() -> Result<()> {
     let package = rustra::register!(Package::builder("my.pkg"), add_numbers, multiply)
         .build();
 
-    // Generate TypeScript
-    package.generate_typescript()?.write_to_dir("generated")?;
+    // Generate TypeScript — publish the schema; the CLI renders the surfaces
+    package.generate_typescript()?.write_schema_to_dir("generated")?;
     Ok(())
 }
 ```
@@ -204,7 +204,10 @@ fn main() -> Result<()> {
 
 ### 2-4. TypeScript Generation
 
-Build the package in `main.rs` and emit the TypeScript.
+One command renders every surface: `bun run codegen` (i.e. `rustra codegen --config rustra.json`).
+The Rust side only publishes the contract — `src/bin/generate.rs` writes `schema.json`
+(and nothing else), and the CLI renders the TypeScript/C++ artifacts from it, so there is
+a single source of truth for generated code.
 
 ```rust
 use rustra_calculator_example::{calculator_package, AddNumbersInput, AddNumbersOutput};
@@ -216,9 +219,8 @@ fn main() -> rustra::Result<()> {
     let output: AddNumbersOutput = package.invoke("addNumbers", AddNumbersInput { a: 2, b: 3 })?;
     println!("2 + 3 = {}", output.value);
 
-    // generate the TypeScript client
-    let generated = package.generate_typescript()?;
-    generated.write_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
+    // contract probe: publish schema.json only — the CLI renders the TS/C++ surfaces
+    package.generate_typescript()?.write_schema_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
 
     Ok(())
 }
@@ -227,7 +229,8 @@ fn main() -> rustra::Result<()> {
 Run it:
 
 ```bash
-cargo run -p rustra-calculator-example --bin rustra-calculator-example
+cargo run -p rustra-calculator-example
+bun run codegen
 ```
 
 Output:
@@ -556,7 +559,8 @@ Runs the unit tests of all crates.
 ### Verifying the TypeScript Output
 
 ```bash
-cargo run -p rustra-calculator-example --bin rustra-calculator-example
+cargo run -p rustra-calculator-example --bin generate   # contract probe: schema.json
+bun run codegen                                          # render TS surfaces
 ```
 
 Check that the TypeScript files were created in the `generated/` directory.
@@ -671,7 +675,7 @@ fn main() -> rustra::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     if args.get(1).map(|s| s.as_str()) == Some("generate") {
         let package = my_package();
-        package.generate_typescript()?.write_to_dir("generated")?;
+        package.generate_typescript()?.write_schema_to_dir("generated")?;
     }
     Ok(())
 }
@@ -796,14 +800,17 @@ Package::builder("id").command_fn(fn).build()
 or register!(Package::builder("id"), fn1, fn2, ...).build()
         |
         v
-package.generate_typescript()?.write_to_dir("generated")
+package.generate_typescript()?.write_schema_to_dir("generated")   (schema.json only)
+        |
+        v
+rustra codegen --config rustra.json                                (TS CLI renders every surface)
         |
         v
 generated/
   types.ts       -- EngineClient + input/output types
   commands.ts    -- type-safe command helper functions
   contract.ts    -- contract hash
-  schema.json    -- JSON Schema
+  schema.json    -- JSON Schema (published by the Rust probe)
         |
         v
 From TypeScript, call createXxxEngine(transport) + configure(engine) + addNumbers(input)

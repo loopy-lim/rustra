@@ -23,13 +23,14 @@ cargo build -p rustra-crud-example
 ## TypeScript Code Generation
 
 ```sh
-cargo run -p rustra-crud-example --bin generate
+cargo run -p rustra-crud-example --bin generate   # contract probe: schema.json
+bun run codegen                                   # render TS surfaces from schema.json
 ```
 
 Generated into `examples/crud/generated/`:
 
-- `schema.json` — JSON Schema for all commands
-- `types.ts` — TypeScript type definitions
+- `schema.json` — JSON Schema for all commands (published by the Rust probe)
+- `types.ts` — TypeScript type definitions (rendered by `rustra codegen`)
 - `commands.ts` — type-safe command helper functions
 - `contract.ts` — contract hash for compatibility checks
 

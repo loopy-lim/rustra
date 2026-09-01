@@ -2,7 +2,7 @@
 
 ## 개요
 
-rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크다. Rust 측에서 command 함수를 작성하고 `Package`로 등록하면, `generate_typescript()`가 TypeScript 타입 정의와 command helper 함수를 생성한다. 생성된 TypeScript 코드는 어떤 런타임(Node.js, Bun, Tauri, React Native)에도 종속되지 않으며, 각 host adapter가 transport를 주입받아 `EngineClient` 인터페이스로 래핑하는 방식으로 동작한다.
+rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크다. Rust 측에서 command 함수를 작성하고 `Package`로 등록하면, Rust 프로브가 `schema.json`을 발행(`write_schema_to_dir`)하고 `rustra codegen`이 그 단일 파일에서 TypeScript 타입 정의와 command helper 함수를 렌더링한다. 생성된 TypeScript 코드는 어떤 런타임(Node.js, Bun, Tauri, React Native)에도 종속되지 않으며, 각 host adapter가 transport를 주입받아 `EngineClient` 인터페이스로 래핑하는 방식으로 동작한다.
 
 ---
 
@@ -27,13 +27,13 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
  │         │                                                           │
  │         ▼                                                           │
  │  GeneratedPackage {                                                 │
- │      schema_json,      → schema.json                                │
- │      types_ts,         → types.ts    (EngineClient + I/O 타입)      │
- │      commands_ts,      → commands.ts (command helper 함수)          │
- │      contract_hash,    → contract.ts (계약 해시)                    │
+ │      schema_json   →  schema.json  (Rust 프로브는 여기까지)          │
  │  }                                                                  │
  │                                                                     │
- │  generated.write_to_dir("./generated")                              │
+ │  generated.write_schema_to_dir("./generated")                       │
+ │                                                                     │
+ │  rustra codegen  →  types.ts / commands.ts / contract.ts 렌더링      │
+ │                     (+ rkyv 코덱, positional facade, 호스트 엔트리)   │
  └─────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -143,15 +143,15 @@ crates/
 
 핵심 타입과 로직을 제공한다.
 
-| 구성 요소          | 설명                                                                                                                                                |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Package`          | 등록된 command들의 컬렉션. `invoke_json()`으로 런타임 디스패치, `generate_typescript()`로 코드 생성                                                 |
-| `PackageBuilder`   | `Package::builder(id)`로 생성. `.command_fn(handler)` / `.command(name, handler)`로 command 등록 후 `.build()`                                      |
-| `GeneratedPackage` | `generate_typescript()`의 결과. `schema_json`, `types_ts`, `commands_ts`, `contract_hash` 필드 보유. `write_to_dir()`로 파일 출력                   |
-| `RustraError`      | `Serialize` 구현. `command.not_found`, `command.invalid_args`, `internal` 에러 코드 + `custom(code, message)` 생성자 + `code()`, `message()` getter |
-| `build!`           | `rustra-macros`에서 제공. `rustra::build!("id", fn1, fn2).done()` 형태로 다중 command 일괄 등록                                                     |
-| `tauri_support`    | `cfg(feature = "tauri")` 활성화 시 제공. `RustraState`, `rustra_dispatch` 단일 Tauri command, `register()` 빌더 주입 함수                           |
-| `__private` 모듈   | `CommandInput`, `CommandOutput` sealed 트레이트. proc macro가 컴파일 타임에 command 타입 제약을 검증하는 데 사용. public API로 노출되지 않음        |
+| 구성 요소          | 설명                                                                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Package`          | 등록된 command들의 컬렉션. `invoke_json()`으로 런타임 디스패치, `generate_typescript()`로 코드 생성                                                                            |
+| `PackageBuilder`   | `Package::builder(id)`로 생성. `.command_fn(handler)` / `.command(name, handler)`로 command 등록 후 `.build()`                                                                 |
+| `GeneratedPackage` | `generate_typescript()`의 결과. `schema_json`, `types_ts`, `commands_ts`, `contract_hash` 필드 보유. `write_schema_to_dir()`로 schema.json 발행 (deprecated: `write_to_dir()`) |
+| `RustraError`      | `Serialize` 구현. `command.not_found`, `command.invalid_args`, `internal` 에러 코드 + `custom(code, message)` 생성자 + `code()`, `message()` getter                            |
+| `build!`           | `rustra-macros`에서 제공. `rustra::build!("id", fn1, fn2).done()` 형태로 다중 command 일괄 등록                                                                                |
+| `tauri_support`    | `cfg(feature = "tauri")` 활성화 시 제공. `RustraState`, `rustra_dispatch` 단일 Tauri command, `register()` 빌더 주입 함수                                                      |
+| `__private` 모듈   | `CommandInput`, `CommandOutput` sealed 트레이트. proc macro가 컴파일 타임에 command 타입 제약을 검증하는 데 사용. public API로 노출되지 않음                                   |
 
 #### `crates/rustra-macros` (proc-macro)
 
@@ -190,8 +190,8 @@ packages/
 examples/
 ├── calculator/                 # 기본 Rust 라이브러리 예시
 │   ├── src/lib.rs              # command 정의 + calculator_package() + C FFI 진입점
-│   ├── src/main.rs             # stdio 진입점 + 코드 생성 데모
-│   └── generated/              # generate_typescript() 출력 결과
+│   ├── src/main.rs             # stdio 진입점 + invoke 데모 (프로브는 src/bin/generate.rs)
+│   └── generated/              # rustra codegen 출력 (schema.json 기반)
 │       ├── types.ts            # EngineClient + AddNumbersInput/Output 타입
 │       ├── commands.ts         # addNumbers() helper
 │       ├── contract.ts         # GENERATED_CONTRACT_HASH 상수
@@ -262,7 +262,7 @@ pub fn calculator_package() -> Package {
 
 ### 생성 결과물의 파일 구조
 
-`GeneratedPackage::write_to_dir(output_dir)`이 출력하는 파일:
+`generated/` 디렉터리의 파일 — `write_schema_to_dir()`은 `schema.json`만 쓰고, 나머지는 `rustra codegen`이 렌더링:
 
 | 파일          | 내용                           | 용도                        |
 | ------------- | ------------------------------ | --------------------------- |
@@ -514,20 +514,20 @@ Tauri에서 `rustra_dispatch`는 `RustraError`를 JSON 값(`{ code, message }`)�
 
 3. 코드 생성 실행
    let package = my_package();
-   let generated = package.generate_typescript()?;
-   generated.write_to_dir("./generated")?;
+   package.generate_typescript()?.write_schema_to_dir("./generated")?;
+   # 이어서 schema.json 에서 표면 렌더링:
+   #   rustra codegen --config rustra.json
 
 4. TypeScript 측에서 생성된 코드 사용
    import { myCommand } from './generated/commands.js';
    const result = await myCommand(engine, { ... });
 ```
 
-`examples/calculator/src/main.rs`는 실행 시점에 코드 생성을 수행하는 예시다:
+`examples/calculator/src/bin/generate.rs`는 계약 프로브의 예시다:
 
 ```rust
-let package = calculator_package();
-let generated = package.generate_typescript()?;
-generated.write_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
+let generated = calculator_package().generate_typescript()?;
+generated.write_schema_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
 ```
 
 ---
