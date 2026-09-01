@@ -7,9 +7,32 @@ import { readConfigSync } from './config.js';
 import { resolveCodegenTarget } from './host-entries.js';
 import { runGenerate } from './cli-generate.js';
 import { parseCodegenArgs, type CliOutputFormat } from './cli-options.js';
+import { explainCodegenSurfaces, formatExplainText } from './codegen-explain.js';
 
 function status(format: CliOutputFormat | undefined, message: string): void {
   (format === 'json' ? console.error : console.log)(message);
+}
+
+/** 표면 지도 출력 — config 해석만으로 facts를 만든다(파일 시스템 쓰기 없음). */
+function printExplain(
+  configPath: string,
+  config: ReturnType<typeof readConfigSync>,
+  format: CliOutputFormat | undefined,
+): void {
+  const hostEntries = [
+    config.node ? 'node.ts' : null,
+    config.bun ? 'bun.ts' : null,
+    config.tauri ? 'tauri.ts' : null,
+    config.reactNative ? 'react-native.ts' : null,
+  ].filter((entry): entry is string => entry !== null);
+  const rows = explainCodegenSurfaces({
+    hasCpp: Boolean(config.cppOutput || config.reactNative),
+    hasReactNative: Boolean(config.reactNative),
+    positional: Boolean(config.positional),
+    hostEntries,
+  });
+  if (format === 'json') console.log(JSON.stringify({ command: 'codegen', explain: rows }));
+  else console.log(formatExplainText(rows));
 }
 
 export async function runCodegen(args: string[]): Promise<void> {
@@ -17,6 +40,11 @@ export async function runCodegen(args: string[]): Promise<void> {
   if (options.help) return;
   const configPath = resolve(options.configPath!);
   const config = readConfigSync(configPath);
+  // --explain 은 순수 조회 — cargo/TS 렌더러를 실행하지 않고 표면 지도만 출력한다.
+  if (options.explain) {
+    printExplain(configPath, config, options.format);
+    return;
+  }
   const target = resolveCodegenTarget(configPath, config);
   const manifestPath = resolve(dirname(configPath), config.output, '.rustra-generated.json');
   if (options.check && !existsSync(manifestPath))
