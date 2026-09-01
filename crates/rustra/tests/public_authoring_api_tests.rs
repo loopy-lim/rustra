@@ -1362,3 +1362,70 @@ fn event_contract_flows_to_generate_typescript_schema() {
     );
     assert!(generated.schema_json.contains("progress.tick"));
 }
+
+// ── (사용자 정의 제네릭) 모노몰포이즈 스키마가 전 계층에서 식별자로 흐른다 ──
+//
+// schemars 0.8은 제네릭 구조체의 구체 인스턴스마다 `Wrapper_for_String` 형태의
+// 모노몰포이즈 스키마 이름을 만든다(유효 TS 식별자). 명령의 inputType/outputType도
+// 이 이름과 정합해야 한다 — type_name의 `Wrapper<String >` 꼴은 비식별자라 검증과
+// TS 코드젠이 모두 깨진다. 3계층 계약:
+//   (1) schema.json의 inputType/outputType이 유효 식별자 (schemars title과 일치)
+//   (2) generate_typescript가 `export type Wrapper_for_String = ...` 방출
+//   (3) TS 렌더러(CLI)도 같은 이름으로 렌더 — wire round-trip은 스키마 주도라 불변
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+struct Wrapper<T> {
+    value: T,
+}
+
+#[command]
+fn echo_wrapped(input: Wrapper<String>) -> Result<Wrapper<String>> {
+    Ok(Wrapper { value: input.value })
+}
+
+#[test]
+fn generic_root_type_yields_identifier_input_type_matching_schemars_title() {
+    let package = Package::builder("example.generic")
+        .command("echoWrapped", echo_wrapped)
+        .build();
+    let schema = package.live_schema();
+    let commands = schema["commands"].as_array().expect("commands section");
+    let echo = &commands[0];
+
+    let input_type = echo["inputType"].as_str().expect("inputType string");
+    assert!(
+        !input_type.contains('<') && !input_type.contains('>'),
+        "inputType must be a plain identifier, got: {input_type}"
+    );
+    // schemars 의 모노몰포이즈 이름과 정합 — definitions 키·루트 title 이 이 이름으로
+    // 만들어지므로 코드젠 전 계층이 하나의 이름으로 묶인다.
+    assert_eq!(
+        input_type,
+        <Wrapper<String> as schemars::JsonSchema>::schema_name(),
+        "inputType must match the schemars schema_name"
+    );
+    // 루트 스키마 title 도 같은 이름 — inputType 이 스키마를 지목하는 유일한 대상.
+    assert_eq!(echo["inputSchema"]["title"], input_type);
+    assert_eq!(echo["outputType"], echo["inputType"]);
+}
+
+#[test]
+fn generic_root_type_renders_valid_typescript() {
+    let package = Package::builder("example.generic")
+        .command("echoWrapped", echo_wrapped)
+        .build();
+    let generated = package.generate_typescript().unwrap();
+
+    let name = <Wrapper<String> as schemars::JsonSchema>::schema_name();
+    let expected = format!("export type {name} = {{");
+    assert!(
+        generated.types_ts.contains(&expected),
+        "generated types.ts must emit the monomorphized type:\n{}",
+        generated.types_ts
+    );
+    assert!(
+        !generated.types_ts.contains("Wrapper<String"),
+        "raw generic type_name must never leak into generated TS:\n{}",
+        generated.types_ts
+    );
+}

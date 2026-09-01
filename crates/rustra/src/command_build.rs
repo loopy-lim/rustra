@@ -1,7 +1,24 @@
-/// 타입 지정 핸들러로부터 `Command`를 생성한다.
+/// 계약 타입 이름 — unit만 예외로 역사적 센티널 `"()"` 을 유지한다.
 ///
-/// 빌드 시점(`PackageBuilder::command`)과 런타임 등록(`Package::register`)이
-/// 동일한 생성 로직을 공유하도록 분리한 helper.
+/// unit의 schemars `schema_name()`은 `"Null"`이지만, schema.json의
+/// inputType/outputType은 `"()"` 센티널로 고정돼 있다(CLI/코드젠 전 계층이
+/// `!= "()"` 로 unit을 판별 — generate-commands.ts, generate-surface.ts,
+/// package_commands_gen.rs 등). 센티널을 바꾸면 계약 해시·호환성이 깨지므로
+/// 구체 타입만 `contract_type_name`으로 흘린다.
+fn unit_or_contract_name<T>() -> String
+where
+    T: JsonSchema,
+{
+    const UNIT_SENTINEL: &str = "()";
+    let candidate = contract_type_name::<T>();
+    if candidate == "Null" {
+        // schemars unit 이름 → unit 센티널. `Null`이라는 이름의 실제 사용자
+        // 구조체와 충돌하는 경우(드묾)에도 센티널 쪽이 안전 — unit 경로는
+        // 스키마가 `{"type":"null"}` 뿐이라 이름으로 지목할 대상이 없다.
+        return UNIT_SENTINEL.to_owned();
+    }
+    candidate
+}
 pub(crate) fn build_command<I, O, F>(command_id: u16, handler: F) -> Command
 where
     I: DeserializeOwned + JsonSchema + 'static,
@@ -73,8 +90,8 @@ where
     Command {
         command_id,
         description: None,
-        input_type: short_type_name::<I>(),
-        output_type: short_type_name::<O>(),
+        input_type: unit_or_contract_name::<I>(),
+        output_type: unit_or_contract_name::<O>(),
         input_schema: Arc::new(input_schema),
         output_schema: Arc::new(output_schema),
         definitions: Arc::new(definitions),
