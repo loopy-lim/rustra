@@ -81,7 +81,9 @@ export function verifyDocs(root, { docsDir = 'docs' } = {}) {
 
   for (const rel of docs) {
     const docPath = join(root, rel);
-    const lines = readFileSync(docPath, 'utf8').split('\n');
+    // CRLF 체크아웃에서도 마커/펜스 매칭이 깨지지 않아야 한다(\r가 end 마커 매칭과
+    // begin 경로 추출을 망가뜨린다). 참조 파일은 정규화하지 않는다 — byte 정합 계약.
+    const lines = readFileSync(docPath, 'utf8').split(/\r?\n/);
     let open = null; // { path, line }
 
     for (let idx = 0; idx < lines.length; idx++) {
@@ -94,7 +96,9 @@ export function verifyDocs(root, { docsDir = 'docs' } = {}) {
             message: `${rel}:${lineNo} — 새 docs:sync:begin이 이전 begin(${open.line}줄, ${open.path}) 종료 전에 나왔다`,
           });
         }
-        const path = line.slice(BEGIN.length).replace(/\s*-->$/, '').trim();
+        // `-->` 뒤 눈에 보이지 않는 공백도 허용한다 — 미허용 시 `f.ts -->` 같은
+        // 존재하지 않는 경로 진단이 나온다(end 마커 trimEnd와 대칭).
+        const path = line.slice(BEGIN.length).replace(/\s*-->\s*$/, '').trim();
         if (path === '') {
           failures.push({ message: `${rel}:${lineNo} — docs:sync:begin에 참조 경로가 없다` });
           open = null;
@@ -104,7 +108,9 @@ export function verifyDocs(root, { docsDir = 'docs' } = {}) {
         continue;
       }
 
-      if (line === END_MARKER) {
+      // end 마커 뒤 눈에 보이지 않는 공백도 마커로 인식한다 — 미인식 시 "end 없는 begin"
+      // 오진이 나오고(쓰레기 진단), 본문 byte 정합 계약과는 무관한 구조 스캐폴딩이므로.
+      if (line.trimEnd() === END_MARKER) {
         if (!open) {
           failures.push({
             message: `${rel}:${lineNo} — 대응하는 docs:sync:begin 없는 docs:sync:end`,
@@ -206,14 +212,17 @@ function verifyRegion(root, rel, lines, open, endLine, failures, regions) {
 function run() {
   const root = process.cwd(); // bun run/node scripts는 저장소 루트에서 실행한다(api-surface와 같은 관례).
   const report = verifyDocs(root);
-  if (report.regions.length === 0) {
-    console.log('docs-gate: no docs:sync markers found');
-    return;
-  }
+  // fail-closed: 불일치 판정을 마커 존재 판정보다 먼저 본다. 영역 파싱이 전부 깨진
+  // 입력(CRLF, end 마커 뒤 공백, 종결 없는 begin)에서는 regions가 0이므로, 이 검사를
+  // 먼저 하면 드리프트가 "no docs:sync markers found"로 위장해 거짓 통과한다.
   if (!report.ok) {
     console.error(`docs-gate: ${report.failures.length}개 불일치 — 문서와 현실이 갈라졌다:`);
     for (const f of report.failures) console.error(`  - ${f.message}`);
     process.exitCode = 1;
+    return;
+  }
+  if (report.regions.length === 0) {
+    console.log('docs-gate: no docs:sync markers found');
     return;
   }
   const files = new Set(report.regions.map((r) => r.doc)).size;
