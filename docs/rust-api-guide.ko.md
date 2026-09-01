@@ -579,7 +579,7 @@ export type Example = {
 
 ### 스칼라 반환 타입
 
-반환값이 원시 타입(`i64`, `String`, `bool`)이면 TypeScript에서 별도 type alias 없이 직접 inline됩니다. 입력도 마찬가지로 단일 구조체 + `Result<O>` 계약을 지킵니다:
+반환값이 원시 타입(`i64`, `String`, `bool`)이면 코드젠은 inline하지 않고, 넓혀진 원시 타입 별칭(`int64`, `String`, `Boolean`)을 `types.ts`에 발행해 커맨드 출력 타입으로 사용합니다. 입력도 마찬가지로 단일 구조체 + `Result<O>` 계약을 지킵니다:
 
 ```rust
 #[bridge_type]
@@ -589,13 +589,13 @@ struct AddNumbersInput { a: i64, b: i64 }
 fn add_numbers(input: AddNumbersInput) -> Result<i64> { Ok(input.a + input.b) }
 ```
 
+<!-- prettier-ignore -->
 ```typescript
-// 스칼라 출력은 Promise<number> — type alias 없이 inline된다.
-// 실제 생성물(examples/calculator/generated/commands.ts)과 동일한 형태다.
-export function addNumbers(input: AddNumbersInput, options?: InvokeOptions): Promise<number> {
-  return invokeGenerated<number>(1, 'addNumbers', input, options);
-}
-addNumbers.commandId = 'addNumbers';
+// 스칼라 출력은 넓혀진 원시 타입 별칭(i64 → number | bigint)을 유지한다.
+// 스칼라 반환 커맨드의 실제 코드젠 산출물과 동일한 형태다.
+export type int64 = number | bigint;
+
+export const addNumbers = createGeneratedFields2<AddNumbersInput, int64>(1, 'addNumbers', "a", "b", 'addNumbers');
 ```
 
 ### 생성된 types.ts 예시
@@ -605,23 +605,158 @@ export type { EngineClient, RustraError } from '@rustra/types';
 export { RustraCommandError } from '@rustra/types';
 
 export type AddNumbersInput = {
-  a: number | bigint; // i64 → number | bigint (와이어 정합)
+  a: number | bigint;
   b: number | bigint;
+};
+
+export type AddNumbersOutput = {
+  value: number | bigint;
 };
 ```
 
 ### 생성된 commands.ts 예시
 
+<!-- docs:sync:begin examples/calculator/generated/commands.ts -->
+
+<!-- prettier-ignore -->
 ```typescript
-import type { AddNumbersInput, AddNumbersOutput } from './types.js';
-import { invokeGenerated } from '@rustra/types';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
+import { createGeneratedFields2, invokeGenerated, invokeGeneratedBytes, invokeGeneratedFields1, invokeGeneratedFields3 } from '@rustra/types';
 import type { InvokeOptions } from '@rustra/types';
 
-export function addNumbers(input: AddNumbersInput, options?: InvokeOptions): Promise<number> {
-  return invokeGenerated<number>(1, 'addNumbers', input, options);
+export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutput>(1, 'addNumbers', "a", "b", 'addNumbers');
+
+export const benchAdd = createGeneratedFields2<BenchAddInput, BenchAddOutput>(23, 'benchAdd', "a", "b", 'benchAdd');
+
+export function benchEchoBytes(input: BenchBytesPayload, options?: InvokeOptions): Promise<BenchBytesPayload> {
+  return invokeGeneratedBytes<BenchBytesPayload>(25, 'benchEchoBytes', input, input["data"], options);
 }
-addNumbers.commandId = 'addNumbers';
+benchEchoBytes.commandId = 'benchEchoBytes';
+
+export const benchEchoPair = createGeneratedFields2<BenchPairPayload, BenchPairPayload>(26, 'benchEchoPair', "name", "value", 'benchEchoPair');
+
+export function benchEchoString(input: BenchStringPayload, options?: InvokeOptions): Promise<BenchStringPayload> {
+  return invokeGeneratedFields1<BenchStringPayload>(24, 'benchEchoString', input, input["value"], options);
+}
+benchEchoString.commandId = 'benchEchoString';
+
+export const channelDemo = createGeneratedFields2<ChannelDemoInput, ChannelDemoOutput>(18, 'channelDemo', "channel", "ticks", 'channelDemo');
+
+export function clamp(input: ClampInput, options?: InvokeOptions): Promise<ClampOutput> {
+  return invokeGeneratedFields3<ClampOutput>(4, 'clamp', input, input["max"], input["min"], input["value"], options);
+}
+clamp.commandId = 'clamp';
+
+export const createItem = createGeneratedFields2<CreateItemInput, CreateItemOutput>(8, 'createItem', "name", "value", 'createItem');
+
+export const divide = createGeneratedFields2<DivideInput, DivideOutput>(10, 'divide', "a", "b", 'divide');
+
+export function echoGroups(input: EchoGroupsInput, options?: InvokeOptions): Promise<EchoGroupsOutput> {
+  return invokeGenerated<EchoGroupsOutput>(27, 'echoGroups', input, options);
+}
+echoGroups.commandId = 'echoGroups';
+
+export const emitDemo = createGeneratedFields2<EmitDemoInput, EmitDemoOutput>(11, 'emitDemo', "ticks", "stepDelayMs", 'emitDemo');
+
+/**
+ * u64/u32 필드 — plain varint(uvar) 와이어 고정(과거 zigzag 버그 수정 증명).
+ */
+export const gauge = createGeneratedFields2<GaugeInput, GaugeOutput>(17, 'gauge', "limit", "offset", 'gauge');
+
+export function greet(input: GreetInput, options?: InvokeOptions): Promise<GreetOutput> {
+  return invokeGeneratedFields1<GreetOutput>(5, 'greet', input, input["name"], options);
+}
+greet.commandId = 'greet';
+
+export function isEven(input: IsEvenInput, options?: InvokeOptions): Promise<IsEvenOutput> {
+  return invokeGeneratedFields1<IsEvenOutput>(3, 'isEven', input, input["n"], options);
+}
+isEven.commandId = 'isEven';
+
+export const multiply = createGeneratedFields2<MultiplyInput, MultiplyOutput>(2, 'multiply', "a", "b", 'multiply');
+
+export function processItem(input: ProcessItemInput, options?: InvokeOptions): Promise<ProcessItemOutput> {
+  return invokeGenerated<ProcessItemOutput>(9, 'processItem', input, options);
+}
+processItem.commandId = 'processItem';
+
+export function resourceClose(input: ResourceCloseInput, options?: InvokeOptions): Promise<ResourceCloseOutput> {
+  return invokeGeneratedFields1<ResourceCloseOutput>(22, 'resourceClose', input, input["handle"], options);
+}
+resourceClose.commandId = 'resourceClose';
+
+export function resourceOpen(input: ResourceOpenInput, options?: InvokeOptions): Promise<ResourceHandleOutput> {
+  return invokeGenerated<ResourceHandleOutput>(19, 'resourceOpen', input, options);
+}
+resourceOpen.commandId = 'resourceOpen';
+
+export const resourceRead = createGeneratedFields2<ResourceReadInput, ResourceReadOutput>(20, 'resourceRead', "handle", "key", 'resourceRead');
+
+export function resourceWrite(input: ResourceWriteInput, options?: InvokeOptions): Promise<ResourceWriteOutput> {
+  return invokeGeneratedFields3<ResourceWriteOutput>(21, 'resourceWrite', input, input["handle"], input["key"], input["value"], options);
+}
+resourceWrite.commandId = 'resourceWrite';
+
+/**
+ * 런타임 registry 제어 명령. op:
+ * `register` / `unregister` / `replacePing` / `replaceAdd` / `restoreAdd` / `freeze` / `state`.
+ */
+export function rustraRegistryDemo(input: RegistryDemoInput, options?: InvokeOptions): Promise<RegistryDemoOutput> {
+  return invokeGeneratedFields1<RegistryDemoOutput>(12, 'rustraRegistryDemo', input, input["op"], options);
+}
+rustraRegistryDemo.commandId = 'rustraRegistryDemo';
+
+/**
+ * HashMap<String, i64>(동적 맵) — count + (key,value)* 와이어 고정.
+ */
+export function scoreTotal(input: ScoreTotalInput, options?: InvokeOptions): Promise<ScoreTotalOutput> {
+  return invokeGenerated<ScoreTotalOutput>(15, 'scoreTotal', input, options);
+}
+scoreTotal.commandId = 'scoreTotal';
+
+export const secureCompute = createGeneratedFields2<SecureComputeInput, SecureComputeOutput>(13, 'secureCompute', "a", "b", 'secureCompute');
+
+/**
+ * Vec<u8>(postcard bytes) 입력 + u32 출력 — plain varint 와이어 고정.
+ */
+export function sizeOf(input: SizeOfInput, options?: InvokeOptions): Promise<SizeOfOutput> {
+  return invokeGeneratedBytes<SizeOfOutput>(14, 'sizeOf', input, input["data"], options);
+}
+sizeOf.commandId = 'sizeOf';
+
+/**
+ * (String, i64) 튜플 — i64 때문에 complex-binary count + elements 와이어.
+ */
+export function span(input: SpanInput, options?: InvokeOptions): Promise<SpanOutput> {
+  return invokeGenerated<SpanOutput>(16, 'span', input, options);
+}
+span.commandId = 'span';
+
+export function sumList(input: SumListInput, options?: InvokeOptions): Promise<SumListOutput> {
+  return invokeGenerated<SumListOutput>(6, 'sumList', input, options);
+}
+sumList.commandId = 'sumList';
+
+export function tagSet(input: TagSetInput, options?: InvokeOptions): Promise<TagSetOutput> {
+  return invokeGenerated<TagSetOutput>(29, 'tagSet', input, options);
+}
+tagSet.commandId = 'tagSet';
+
+export function toUpper(input: ToUpperInput, options?: InvokeOptions): Promise<ToUpperOutput> {
+  return invokeGeneratedFields1<ToUpperOutput>(7, 'toUpper', input, input["s"], options);
+}
+toUpper.commandId = 'toUpper';
+
+/**
+ * A2 와이드 정수 복합 타입 표본 — Vec<u64> + Option<i64>. 원소/옵션 레벨 uvar64/zigzag64 헬퍼가 스트림 중간 7바이트 varint 경계를 넘는 값을 무손실 왕복하는지 cross-wire 픽스처로 고정한다.
+ */
+export function wideAgg(input: WideAggInput, options?: InvokeOptions): Promise<WideAggOutput> {
+  return invokeGenerated<WideAggOutput>(28, 'wideAgg', input, options);
+}
+wideAgg.commandId = 'wideAgg';
 ```
+
+<!-- docs:sync:end -->
 
 (`invokeGenerated`는 생성된 호스트 진입점이 `configureLazy()`로 등록한 엔진을 사용한다 —
 호스트 어댑터 import가 앞선다면 호출부에서 엔진을 직접 구성할 필요가 없다)
