@@ -235,9 +235,10 @@ export function buildMatrix(checks: DoctorCheck[], config: DoctorConfig): Doctor
       { cell: contract.cell, note: contract.note },
       { cell: runtime.cell, note: runtime.note },
     ];
-    const worst = columns
-      .filter((column) => column.cell !== '—')
-      .reduce((left, right) => (CELL_RANK[right.cell] > CELL_RANK[left.cell] ? right : left));
+    let worst = columns[0];
+    for (const column of columns) {
+      if (column.cell !== '—' && CELL_RANK[column.cell] > CELL_RANK[worst.cell]) worst = column;
+    }
     // 전부 OK 면 notes 는 '—' — 문제 없는 행은 요약 문장 대신 스펙 예시의 em-dash 를 쓴다.
     const note = worst.cell === 'OK' ? undefined : worst.note;
     return {
@@ -248,10 +249,9 @@ export function buildMatrix(checks: DoctorCheck[], config: DoctorConfig): Doctor
       notes: note ?? '—',
     } satisfies DoctorMatrixRow;
   });
-  return {
-    rows,
-    warnings: checks
-      .filter((candidate) => candidate.id === 'config.rust_consistency')
-      .map((candidate) => candidate.summary),
-  };
+  const warnings: string[] = [];
+  for (const candidate of checks) {
+    if (candidate.id === 'config.rust_consistency') warnings.push(candidate.summary);
+  }
+  return { rows, warnings };
 }

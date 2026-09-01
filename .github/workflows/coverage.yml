@@ -37,6 +37,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -45,6 +47,11 @@ jobs:
           bun-version: 1.4.0
       - run: bun install --frozen-lockfile
       - run: bun run build
+      # packages/bun 의 dlopen 테스트 5건이 release cdylib 을 하드 요구한다 —
+      # ci.yml typescript 잡과 동일한 선행 빌드. 이게 없으면 클린 러너에서
+      # coverage 수집이 반드시 실패한다(2026-09-01, 033060c4 이후 4연패 근원).
+      - name: Build calculator example dylib
+        run: cargo build -p rustra-calculator-example --release
       - name: TS coverage (c8)
         # pipefail 필수 — 테스트 실패가 tail의 exit 0에 묻히면 coverage 수치만 남는
         # false green이 된다. 이 job은 유닛 성격 테스트만 수집한다.

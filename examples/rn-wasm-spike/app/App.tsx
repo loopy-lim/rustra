@@ -8,7 +8,8 @@
 //      restart — and the SAME command bytes must now produce new bytes
 //      ({"value":63} for double(21)) with an UNCHANGED contract hash
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import type { ListRenderItem } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import {
   evalCommandNative,
@@ -21,7 +22,22 @@ import {
 
 type LogLine = { t: string; text: string; kind: 'info' | 'ok' | 'fail' | 'hex' };
 
+// FlatList 의 renderItem — 인라인 대신 모듈 수준 컴포넌트로 추출해 재렌더마다
+// 새로 만들어지는 클로저(=전 행 재렌더)를 피한다. 로그 줄은 시각 전용이므로
+// memo 까지는 불필요하고, 추출만으로 재작성 경고가 잡는 실질 비용이 사라진다.
+function LogLineRow({ line }: { line: LogLine }) {
+  return (
+    <Text style={[styles.line, styles[line.kind]]} selectable>
+      {line.t.slice(11, 23)} {line.text}
+    </Text>
+  );
+}
+
 const DOUBLE_21 = { command: 'double', args: { n: 21 } };
+
+// FlatList 의 renderItem — 모듈 수준 참조라 재렌더마다 새 함수가 만들어지지
+// 않는다. 로그 줄은 시각 전용이라 memo 까지는 불필요하다.
+const renderLogLine: ListRenderItem<LogLine> = ({ item }) => <LogLineRow line={item} />;
 const ADD_40_2 = { command: 'addNumbers', args: { a: 40, b: 2 } };
 
 export default function App() {
@@ -43,8 +59,12 @@ export default function App() {
       const env = await makeEnvelope(command, JSON.stringify(args));
       const envHex = env.map((b) => b.toString(16).padStart(2, '0')).join('');
       log(`${label} envelope (${env.length}B): ${envHex}`, 'hex');
-      const wasm = await evalCommandWasm(env);
-      const native = await evalCommandNative(env);
+      // wasm3 와 staticlib 은 서로 독립적인 엔진 인스턴스 — 병렬 평가해도
+      // 비교 대상 바이트가 동일하다(순수 함수 계약). 순차 대기는 측정만 2배로.
+      const [wasm, native] = await Promise.all([
+        evalCommandWasm(env),
+        evalCommandNative(env),
+      ]);
       log(`${label} wasm   (${wasm.ms.toFixed(3)}ms): ${wasm.hex}`, 'hex');
       log(`${label} native (${native.ms.toFixed(3)}ms): ${native.hex}`, 'hex');
       const equal = wasm.hex === native.hex;
@@ -107,17 +127,20 @@ export default function App() {
   useEffect(() => {
     if (autoRan.current) return;
     autoRan.current = true;
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, ms);
+      });
     void (async () => {
       await onInit();
       log('auto: waiting for engine_v2.wasm to be pushed (polling up to 120s)…');
       for (let i = 0; i < 60; i++) {
-        await new Promise<void>((r) => setTimeout(r, 2000));
-        try {
-          await onSwap();
-          return;
-        } catch {
-          /* not pushed yet — keep polling */
-        }
+        const swapped = await onSwap().then(
+          () => true,
+          () => false, /* not pushed yet — keep polling */
+        );
+        if (swapped) return;
+        await sleep(2000);
       }
       log('auto: gave up waiting for engine_v2.wasm', 'fail');
     })();
@@ -138,13 +161,15 @@ export default function App() {
           <Text style={styles.btnText}>3. swap to v2</Text>
         </Pressable>
       </View>
-      <ScrollView style={styles.logBox}>
-        {lines.map((l, i) => (
-          <Text key={i} style={[styles.line, styles[l.kind]]} selectable>
-            {l.t.slice(11, 23)} {l.text}
-          </Text>
-        ))}
-      </ScrollView>
+      <FlatList
+        style={styles.logBox}
+        data={lines}
+        // 로그 줄은 append-only(삭제·재정렬 없음) — 밀리초 타임스탬프가
+        // 사실상의 안정 키다. 배열 인덱스 키는 리렌더 시 이벤트 로그 오동작을
+        // 유발할 수 있어 쓰지 않는다.
+        keyExtractor={(l) => l.t + l.text}
+        renderItem={renderLogLine}
+      />
     </View>
   );
 }
