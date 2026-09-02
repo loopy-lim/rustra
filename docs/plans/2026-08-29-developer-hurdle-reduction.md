@@ -50,7 +50,7 @@
 - `collectDoctorReport(options, runner)` must not mutate the filesystem or invoke an installer.
 - `runner(command, args)` returns `{ ok: boolean; stdout: string; stderr: string; error?: string }` so tests can provide deterministic fake tools.
 
-- [ ] **Step 1: Write failing doctor tests for version parsing and strict status.**
+- [x] **Step 1: Write failing doctor tests for version parsing and strict status.**
 
 Add tests with a fake runner that returns exact command output:
 
@@ -72,7 +72,7 @@ Run: `bun test packages/cli/src/doctor.test.ts`
 
 Expected: FAIL because the doctor model and functions do not exist.
 
-- [ ] **Step 2: Add the doctor result model and pure version helpers.**
+- [x] **Step 2: Add the doctor result model and pure version helpers.**
 
 Implement the exact public types:
 
@@ -106,7 +106,7 @@ export type DoctorRunner = (command: string, args: string[]) => DoctorCommandRes
 
 Export `parseRustVersion`, `isVersionAtLeast`, and `doctorExitCode`. Parse only semantic `rustc X.Y.Z` output and return `null` for unknown output; never treat an unknown version as a pass.
 
-- [ ] **Step 3: Add common and host-conditional checks.**
+- [x] **Step 3: Add common and host-conditional checks.**
 
 Implement `collectDoctorReport` with these check IDs and behavior:
 
@@ -131,7 +131,7 @@ tauri.platform_tools
 
 Only emit RN iOS checks when `config.reactNative` is present and the host platform is macOS; emit RN Android checks when `config.reactNative` is present. For a Node/Bun-only config, RN checks must be `skip` or absent and must not fail the report. Check Java major version 17, NDK directory `ndk/27.1.12297006`, and the Android targets requested by the generated build script (`aarch64-linux-android` and `x86_64-linux-android` by default, with the other supported targets checked when configured). Use fix arrays such as `rustup toolchain install 1.88.0`, `xcode-select --install`, `gem install cocoapods`, and `sdkmanager "ndk;27.1.12297006"`; these are output only.
 
-- [ ] **Step 4: Add text/JSON formatting and CLI dispatch.**
+- [x] **Step 4: Add text/JSON formatting and CLI dispatch.**
 
 Format JSON with `JSON.stringify(report, null, 2)`. Format text with one line per check and indented `detail`/`fix` lines, for example:
 
@@ -143,13 +143,13 @@ FAIL rn.android.ndk Android NDK 27.1.12297006 is missing
 
 Add `doctor [--config <path>] [--format text|json] [--strict]` to `main()` and `printHelp()`. Default config is `rustra.json` in the current working directory. Exit 1 on required failures, and on warnings only with `--strict`.
 
-- [ ] **Step 5: Run the focused tests and package build.**
+- [x] **Step 5: Run the focused tests and package build.**
 
 Run: `bun test packages/cli/src/doctor.test.ts && bun run --cwd packages/cli build`
 
 Expected: PASS, with `packages/cli/dist/doctor.js`, declaration, and source-map files present.
 
-- [ ] **Step 6: Commit the self-contained doctor change.**
+- [x] **Step 6: Commit the self-contained doctor change.**
 
 ```bash
 git add packages/cli/src/doctor.ts packages/cli/src/doctor.test.ts packages/cli/src/index.ts packages/cli/package.json
@@ -172,7 +172,7 @@ git commit -m "feat(cli): 개발 환경 doctor 추가"
 - Add `export async function runCodegen(args: string[]): Promise<void>`.
 - `runCodegen` runs the resolved Cargo binary first and then invokes the existing schema renderer with the same config.
 
-- [ ] **Step 1: Add failing config and pipeline tests.**
+- [x] **Step 1: Add failing config and pipeline tests.**
 
 Add tests that assert the init config contains:
 
@@ -187,11 +187,11 @@ Run: `bun test packages/cli/src/generate.test.ts packages/cli/src/dev.test.ts`
 
 Expected: FAIL because `codegen` config and runner are not implemented.
 
-- [ ] **Step 2: Extend config validation and target resolution.**
+- [x] **Step 2: Extend config validation and target resolution.**
 
 Parse `codegen` as an object. Validate `rustManifest` as a non-empty safe path, `rustPackage` and `rustBinary` as Cargo identifiers, and reject arrays or control characters. Resolve the manifest from config directory, otherwise use the existing upward `findCargoManifest` behavior. Use existing `readCargoMetadata` and select the package by manifest/package name. Select `rustBinary` explicitly, then a binary named `generate`, then a sole binary; throw `codegen.rust_binary_ambiguous` with candidate names when selection is not unique.
 
-- [ ] **Step 3: Implement the Cargo process runner and `runCodegen`.**
+- [x] **Step 3: Implement the Cargo process runner and `runCodegen`.**
 
 Use `spawn` with an argument array, never a shell string:
 
@@ -214,17 +214,17 @@ await runGenerate(['--config', configPath]);
 
 Parse `--config` and `--check`; reject `--schema`/`--output` for `codegen` with an actionable usage message. Log the resolved manifest, package, and binary before execution. Propagate Cargo failure without starting the schema renderer.
 
-- [ ] **Step 4: Wire the command and preserve existing commands.**
+- [x] **Step 4: Wire the command and preserve existing commands.**
 
 Dispatch `codegen` before `dev`, update help text, and retain `generate --watch`, direct schema generation, `init`, and `diff`. Add a package script in the generated template that calls only `rustra codegen --config rustra.json`.
 
-- [ ] **Step 5: Verify the focused CLI tests.**
+- [x] **Step 5: Verify the focused CLI tests.**
 
 Run: `bun test packages/cli/src/generate.test.ts packages/cli/src/dev.test.ts && bun run --cwd packages/cli build`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the unified codegen change.**
+- [x] **Step 6: Commit the unified codegen change.**
 
 ```bash
 git add packages/cli/src/index.ts packages/cli/src/generate.test.ts packages/cli/src/dev.ts packages/cli/src/dev.test.ts
@@ -246,7 +246,7 @@ git commit -m "feat(cli): Rustra codegen 파이프라인 통합"
 - Add `export function buildGeneratedManifest(schemaContent: string, generatorVersion: string, files: Array<{ path: string; content: string }>): GeneratedManifest`.
 - Add `export async function checkGeneratedFiles(files: Array<{ path: string; content: string }>, manifestPath: string): Promise<void>`.
 
-- [ ] **Step 1: Write failing manifest and check tests.**
+- [x] **Step 1: Write failing manifest and check tests.**
 
 Use a temporary output directory and test all three drift classes:
 
@@ -279,21 +279,21 @@ Run: `bun test packages/cli/src/generate.test.ts`
 
 Expected: FAIL because manifest/check helpers do not exist.
 
-- [ ] **Step 2: Refactor generated output into a list of absolute targets.**
+- [x] **Step 2: Refactor generated output into a list of absolute targets.**
 
 Keep existing renderer functions unchanged. In `generateFromSchema`, build one list containing TypeScript output, optional C++ output, optional host entries, and rendered RN module files. Each item must contain an absolute `path`, a portable manifest `path` relative to the config app root, and `content`. Do not include `package.json` dependency edits in this list; dependency synchronization remains a normal generation side effect and is skipped in check mode.
 
-- [ ] **Step 3: Implement hashing and manifest writing.**
+- [x] **Step 3: Implement hashing and manifest writing.**
 
 Use `createHash('sha256')` over UTF-8 content. Write `.rustra-generated.json` in the configured output directory after successful normal generation. Include the CLI version and sorted file entries. Write the manifest only after all generated and RN module files have been written successfully.
 
-- [ ] **Step 4: Implement read-only `generate --check`.**
+- [x] **Step 4: Implement read-only `generate --check`.**
 
 When `--check` is present, render all expected contents in memory, read each target, compare bytes, and read the manifest. Report missing, changed, unexpected manifest entries, schema hash mismatch, and generator version mismatch. Do not call `writeFile`, `mkdir`, `writeReactNativeModule`, `ensureReactNativeDependency`, or `ensureHostDependencies` in check mode. Exit 1 through the existing top-level error handler.
 
 Add `--check` to help and make `runCodegen --check` execute the Rust stage followed by this read-only renderer check; the CLI must state that a user-provided Rust generator may update `schema.json`, while the TS/C++/RN check stage is read-only. CI can detect schema changes with `git diff --exit-code`.
 
-- [ ] **Step 5: Run drift tests and an example check.**
+- [x] **Step 5: Run drift tests and an example check.**
 
 Run:
 
@@ -306,7 +306,7 @@ node packages/cli/dist/index.js generate --config examples/calculator/rustra.jso
 
 Expected: all tests pass, normal generation creates `.rustra-generated.json`, and the second command exits 0 without changing generated file mtimes or contents.
 
-- [ ] **Step 6: Commit the drift gate.**
+- [x] **Step 6: Commit the drift gate.**
 
 ```bash
 git add packages/cli/src/index.ts packages/cli/src/generate.test.ts packages/cli/package.json
@@ -328,7 +328,7 @@ git commit -m "feat(cli): generated drift 검사 추가"
 - Add `export function parseDevArgs(args: string[]): DevOptions` behavior where `--config` takes precedence over `--backend`/`--app`.
 - Add an injectable `DevProcess` boundary for child process start/stop so tests do not spawn Cargo.
 
-- [ ] **Step 1: Add failing config-mode and single-flight tests.**
+- [x] **Step 1: Add failing config-mode and single-flight tests.**
 
 Test that config mode uses the configured manifest/schema/output, that a Rust failure prevents the TS stage, and that a source change during an active run causes exactly one follow-up run:
 
@@ -353,23 +353,25 @@ Run: `bun test packages/cli/src/dev.test.ts`
 
 Expected: FAIL for the new config/retry cases.
 
-- [ ] **Step 2: Resolve config source roots and generated paths.**
+- [x] **Step 2: Resolve config source roots and generated paths.**
 
 For `--config`, read `rustra.json`, resolve the codegen Cargo manifest, watch the manifest directory's `src` tree plus `Cargo.toml` and `Cargo.lock`, and use config `schema`/`output` plus RN `moduleDir`/`cppOutput` for stale checks. Keep `--backend`/`--app` as the legacy mode with current defaults.
 
-- [ ] **Step 3: Invoke the shared `codegen` command and preserve pipeline order.**
+- [x] **Step 3: Invoke the shared `codegen` command and preserve pipeline order.**
 
 Replace the hard-coded `cargo run --quiet --bin generate` in config mode with a child process invoking the current CLI entry and `codegen --config <path>`. Use the same executable path resolution used by the installed CLI. Keep the legacy mode's two injected runners for compatibility. The Rust stage must finish successfully before the renderer stage starts.
 
-- [ ] **Step 4: Add single-flight, pending-dirty retry, and signal cleanup.**
+- [x] **Step 4: Add single-flight, pending-dirty retry, and signal cleanup.**
+
+  > SIGINT 정리는 명시 핸들러 대신 spawnInherit의 stdio inherit(포그라운드 프로세스 그룹 시그널 전달)로 해결 — 0.6 트랙 Task 9 정합 복구 시 확인 (2026-09-02)
 
 Debounce source changes by 300 ms. While a run is active, set `pending = true` rather than starting a second run. After completion, call `detectDirty` again and run one follow-up if any relevant input is newer. On failure, retain the dirty state and keep watching. On `SIGINT`, clear timers, send `SIGINT` to the child, wait for its exit, close watchers, and resolve without an unhandled rejection.
 
-- [ ] **Step 5: Add CLI help and inspect output for config mode.**
+- [x] **Step 5: Add CLI help and inspect output for config mode.**
 
 Document `rustra dev --config rustra.json [--inspect]`. Keep the existing `--backend`/`--app` help lines and state that config mode is preferred. `--inspect` remains informational and points users to `@rustra/devtools` without claiming in-process instrumentation.
 
-- [ ] **Step 6: Run focused dev tests and commit.**
+- [x] **Step 6: Run focused dev tests and commit.**
 
 Run: `bun test packages/cli/src/dev.test.ts packages/cli/src/generate.test.ts && bun run --cwd packages/cli build`
 
@@ -399,7 +401,9 @@ git commit -m "feat(cli): 설정 기반 dev 감시와 재시도"
 - All example codegen scripts call the same `rustra codegen --config` entrypoint instead of duplicating Cargo and CLI commands.
 - RN generated module ownership and standard autolinking remain unchanged.
 
-- [ ] **Step 1: Add failing init/template assertions.**
+- [x] **Step 1: Add failing init/template assertions.**
+
+  > codegen.rustBinary/rustManifest 명시 키 어설션은 이후 폴백 선택(selectCodegenBinary) 진화로 생략 관례로 대체 — 스크립트 4종 어설션은 그대로 (init-template.ts 주석, 2026-09-02 확인)
 
 Assert the generated package scripts equal:
 
@@ -414,7 +418,9 @@ Assert the generated package scripts equal:
 
 Assert the generated config contains `codegen.rustBinary = "generate"` and `codegen.rustManifest = "./Cargo.toml"`.
 
-- [ ] **Step 2: Update the init generator and first-run messages.**
+- [x] **Step 2: Update the init generator and first-run messages.**
+
+  > Next steps 출력은 이후 진화로 bun run codegen/demo 순서 (doctor는 별도 커맨드) — 플랜 문구와 상이하나 착지 현실 기준 (2026-09-02)
 
 Make the generated Rust binary continue writing `generated/schema.json`, add the codegen config, and print:
 
@@ -429,11 +435,11 @@ Next steps:
 
 For RN templates, print `bun run doctor`, `bun run codegen`, then the platform development build command. Do not generate Expo Go instructions.
 
-- [ ] **Step 3: Convert repository examples to the unified command.**
+- [x] **Step 3: Convert repository examples to the unified command.**
 
 Add explicit `codegen` objects to configs whose Rust package is outside the example directory. Replace duplicate scripts with `bunx --bun @rustra/cli codegen --config rustra.json` or the repository-local CLI equivalent. Keep path and workspace dependency behavior unchanged.
 
-- [ ] **Step 4: Run init and example smoke checks.**
+- [x] **Step 4: Run init and example smoke checks.**
 
 Run:
 
@@ -448,7 +454,7 @@ bun run --cwd "$tmp_project" codegen
 
 Expected: the temporary scaffold reports structured doctor output, creates schema and generated TypeScript files, and does not require a manually remembered second CLI command.
 
-- [ ] **Step 5: Commit template/example updates.**
+- [x] **Step 5: Commit template/example updates.**
 
 ```bash
 git add packages/cli/src/index.ts packages/cli/src/generate.test.ts examples/calculator/rustra.json examples/calculator/package.json examples/react-native-calculator/rustra.json examples/react-native-calculator/package.json examples/react-native-bare-calculator/rustra.json examples/react-native-bare-calculator/package.json
@@ -473,7 +479,7 @@ git commit -m "feat(template): 첫 실행 codegen 경로 단순화"
 - Documentation must use the current independent release lines: Cargo `rustra` 0.4.x and npm CLI/types/RN packages at the repository's current compatible line.
 - Documentation must link users to `docs/development-hurdles.md` and the commands `rustra doctor`, `rustra codegen`, `rustra dev`, `rustra generate --check`.
 
-- [ ] **Step 1: Write the corrected development-hurdles document.**
+- [x] **Step 1: Write the corrected development-hurdles document.**
 
 Create a table with columns `주장`, `현재 구현`, `완화 방법`, and `남은 경계` covering:
 
@@ -490,19 +496,19 @@ unsafe: safety contracts, ownership tests, fuzzing/sanitizer and runtime receipt
 
 Include the exact first-run commands for Node/Bun and RN, and state that doctor pass is not physical-device runtime proof.
 
-- [ ] **Step 2: Remove stale or misleading command/version text.**
+- [x] **Step 2: Remove stale or misleading command/version text.**
 
 Change stale `@rustra/cli@0.4.0` examples to the current CLI line, keep Cargo `rustra = "0.4"` separate, replace duplicated `cargo run && rustra generate` instructions with `rustra codegen`, and fix `rustra init --name` to `rustra init <dir>`. Do not edit historical documents whose date and past release context are intentionally preserved unless the command is presented as current guidance.
 
-- [ ] **Step 3: Clarify native and prebuilt boundaries.**
+- [x] **Step 3: Clarify native and prebuilt boundaries.**
 
 Replace “prebuilt binary가 없어서 모든 사용자가 Rust를 설치해야 한다” with the precise distinction: the CLI is npm-installed, the shared RN adapter source is packaged, but the application-specific Rust staticlib contains the user's commands and must be built locally or in CI. Provide CI artifact as the recommended team workaround without pretending it is a generic prebuilt runtime.
 
-- [ ] **Step 4: Align codec, registry, and unsafe explanations with code.**
+- [x] **Step 4: Align codec, registry, and unsafe explanations with code.**
 
 Point complex-type readers to `docs/complex-codecs.md`, distinguish Tier 1 postcard/raw from Tier 2 schema-driven binary and Tier 3 JSON-in-binary, retain the measured benchmark caveat, and state that `command_id` capacity is 65,534 because `u16::MAX` is reserved. Keep `DeserializeOwned + Serialize + JsonSchema + 'static` and FFI Safety rules explicit.
 
-- [ ] **Step 5: Run documentation scans and commit.**
+- [x] **Step 5: Run documentation scans and commit.**
 
 Run:
 
@@ -525,7 +531,7 @@ git commit -m "docs(dx): 개발 허들과 native 경계 정정"
 - Modify: `package.json` only if repository-level convenience scripts are needed.
 - Modify: `docs/development-hurdles.md` only if verification discovers a documentation mismatch.
 
-- [ ] **Step 1: Build and test the CLI package.**
+- [x] **Step 1: Build and test the CLI package.**
 
 Run:
 
@@ -537,7 +543,7 @@ bun run test:release-tools
 
 Expected: PASS.
 
-- [ ] **Step 2: Run TypeScript package and Rust gates.**
+- [x] **Step 2: Run TypeScript package and Rust gates.**
 
 Run:
 
@@ -550,7 +556,7 @@ cargo clippy --all-targets -- -D warnings
 
 Expected: PASS. A failure caused by an existing platform-specific runtime must be reported with its exact command and must not be masked as a doctor success.
 
-- [ ] **Step 3: Exercise doctor and codegen against repository examples.**
+- [x] **Step 3: Exercise doctor and codegen against repository examples.**
 
 Run:
 
@@ -563,7 +569,7 @@ node packages/cli/dist/index.js doctor --config examples/react-native-calculator
 
 Expected: calculator common checks pass or report only environment-specific warnings, generated check exits 0, and RN doctor identifies missing platform tools instead of emitting unrelated failures.
 
-- [ ] **Step 4: Run formatting and final diff inspection.**
+- [x] **Step 4: Run formatting and final diff inspection.**
 
 Run:
 
