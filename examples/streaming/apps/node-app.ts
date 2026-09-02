@@ -59,14 +59,14 @@ const timeout = setTimeout(() => {
 }, 10_000);
 
 let ticks = 0;
-const unsubscribeTick = subscribeEvent(transport as never, 'progress.tick', (payload) => {
+const unsubscribeTick = subscribeEvent(transport, 'progress.tick', (payload) => {
   const { step, total } = payload as ProgressPayload;
   ticks += 1;
   console.log(
     `[streaming] tick ${String(step).padStart(2)}/${total} ${'▓'.repeat(step)}${'░'.repeat(total - step)}`,
   );
 });
-const unsubscribeDone = subscribeEvent(transport as never, 'job.done', (payload) => {
+const unsubscribeDone = subscribeEvent(transport, 'job.done', (payload) => {
   const { steps } = payload as DonePayload;
   console.log(`[streaming] done: ${steps} steps`);
   settleDone();

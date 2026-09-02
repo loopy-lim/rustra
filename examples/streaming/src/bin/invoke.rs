@@ -12,7 +12,7 @@
 //! 내부 폴링 명령 `__drainEvents`: 대기 중 이벤트 배열 반환.
 
 use rustra_streaming_example::streaming_package;
-use serde_json::json;
+use serde_json::{Value, json};
 use std::io::{BufRead, Write};
 
 fn main() -> rustra::Result<()> {
@@ -74,12 +74,10 @@ fn handle(input: &str) -> rustra::Result<Vec<u8>> {
             .take_pending_events()
             .into_iter()
             .map(|e| {
-                json!({
-                    "name": e.name,
-                    "payload": serde_json::from_str::<serde_json::Value>(&e.payload)
-                        .unwrap_or(json!({})),
-                    "seq": e.seq
-                })
+                // 비-UTF-8 페이로드 폴백도 참조 런타임과 동일 — 원본 문자열 전달.
+                let payload: serde_json::Value =
+                    serde_json::from_str(&e.payload).unwrap_or(Value::String(e.payload));
+                json!({ "name": e.name, "payload": payload, "seq": e.seq })
             })
             .collect();
         return respond(json!({ "ok": true, "events": events }));

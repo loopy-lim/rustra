@@ -349,6 +349,8 @@ test('transport without push capability moves to polling after the handshake ver
     transport.emit('tick', '{"early":true}');
     await waitFor(() => drains >= 1, 2000);
     assert.deepEqual(got, [{ early: true }, 'from-poll'], 'push first, then polling takes over');
+    // 조기 푸시 프레임은 정확히 1회 도달 — 두 번째원소는 폴링 drain 이다.
+    assert.equal(pushed, 1, 'exactly one early push frame reached the listener');
     assert.equal(listeners.size, 0, 'push listener detached after the polling verdict');
   } finally {
     restore();
