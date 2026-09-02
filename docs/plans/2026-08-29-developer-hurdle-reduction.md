@@ -582,6 +582,8 @@ git status --short
 
 Expected: format/lint pass, no generated build products are accidentally staged, and only the intended implementation/documentation commits are present.
 
-- [ ] **Step 5: Record final evidence and boundaries.**
+- [x] **Step 5: Record final evidence and boundaries.**
 
 Report the exact passing commands, whether iOS simulator/Android device runtime was available, the generated artifact check result, and the fact that no push, PR, npm publish, or crates.io publish occurred. Mark the plan complete only after the current worktree and verification output support those claims.
+
+> Recorded 2026-09-02 (feat/0.6-completeness, `5777d574`+`0ed7c9a3`): official gates green — `bun run --cwd packages/cli test` 247/0, node/bun/types suites green, cargo test/clippy/fmt, `bun run lint` 0 warning, `bun run test:docs`, `node scripts/api-surface.mjs`; onboarding E2E (`bun run test:app:streaming` + calculator push e2e, see 0.6 track Task 11 report). Generated artifact check (`generate --check`) exits 0. No push, no PR, no npm/crates.io publish — Version PR #51 remains pending user approval. iOS/Android runtime not exercised in this track (Node/Bun/Tauri-desktop surfaces only).
