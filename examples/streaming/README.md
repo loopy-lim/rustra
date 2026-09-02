@@ -4,7 +4,9 @@ English | [한국어](./README.ko.md)
 
 An example showing the pattern where JS consumes events published with
 `Package::emit()`. A long-running command streams progress, and the host adapter
-polls the event bus and forwards events to the platform push channel.
+subscribes (`@rustra/node` `subscribeEvent`) and forwards events to the platform
+push channel — this daemon is a legacy line-JSON runtime, so delivery flows
+through the polling fallback (no `events:"push"` handshake).
 
 ## Structure
 
@@ -21,18 +23,18 @@ streaming/
 
 ```bash
 cargo build -p rustra-streaming-example
-bunx tsc -p examples/streaming/tsconfig.json
-node dist-ts/examples/streaming/apps/node-app.js
+bun examples/streaming/apps/node-app.ts
 ```
 
 Sample output:
 
 ```
+[streaming] transport ready — mode=ndjson pushCapable=false (폴링 폴백 경로)
 [streaming] startJob(job-1, 5 steps)
-[streaming] tick  1/5 (seq=0) ▓░░░░
+[streaming] tick  1/5 ▓░░░░
 ...
 [streaming] done: 5 steps
-[streaming] PASS — 5/5 ticks received, seq 0..5
+[streaming] PASS — 5/5 ticks received via subscribeEvent
 ```
 
 ## API
@@ -63,5 +65,8 @@ receive-side order verification.
 - **Tauri**: polling timer → `app.emit()`
 - **RN**: polling → `DeviceEventEmitter`
 
-The `--serve` line daemon + `__drainEvents` polling of the Node demo is the reference
-implementation of this role.
+The `--serve` line daemon answers the `__drainEvents` polling command with the
+`events` field (`{"ok":true,"events":[...]}`) — the same contract as the
+calculator loop-stdio reference runtime, which is what `@rustra/node`'s polling
+fallback reads. For a push-mode (0xfffd frame) runtime see
+`examples/calculator/src/loop_stdio.rs`.
