@@ -67,6 +67,9 @@ fn handle(input: &str) -> rustra::Result<Vec<u8>> {
     };
 
     if command == "__drainEvents" {
+        // drain 페이로드는 `events` 필드로 돌아간다 — loop-stdio 참조 런타임과
+        // @rustra/node 폴링 폴백(`transport.drainEvents()`)이 읽는 계약 필드.
+        // `result` 에 넣으면 어댑터 subscribeEvent 가 이벤트를 영원히 받지 못한다.
         let events: Vec<serde_json::Value> = rustra_streaming_example::event_bus()
             .take_pending_events()
             .into_iter()
@@ -79,7 +82,7 @@ fn handle(input: &str) -> rustra::Result<Vec<u8>> {
                 })
             })
             .collect();
-        return respond(json!({ "ok": true, "result": events }));
+        return respond(json!({ "ok": true, "events": events }));
     }
 
     let result = streaming_package().invoke_json(&command, args)?;

@@ -1,8 +1,10 @@
 # Streaming 예시 — Rust → JS 이벤트 푸시
 
 `Package::emit()`으로 발행한 이벤트를 JS가 소비하는 패턴을 보여주는 예시.
-장기 실행 커맨드가 진행률을 스트리밍하고, 호스트 어댑터가 이벤트 버스를
-폴링해 플랫폼 푸시 채널로 전달한다.
+장기 실행 커맨드가 진행률을 스트리밍하고, 호스트 어댑터는
+(`@rustra/node` `subscribeEvent`) 구독으로 이벤트를 받아 플랫폼 푸시 채널로
+전달한다 — 이 데몬은 라인 JSON 프로토콜(구 런타임)이라 푸시 핸드셰이크
+(`events:"push"`)가 없고, 따라서 폴링 폴백 경로로 흐른다.
 
 ## 구조
 
@@ -19,18 +21,18 @@ streaming/
 
 ```bash
 cargo build -p rustra-streaming-example
-bunx tsc -p examples/streaming/tsconfig.json
-node dist-ts/examples/streaming/apps/node-app.js
+bun examples/streaming/apps/node-app.ts
 ```
 
 출력 예:
 
 ```
+[streaming] transport ready — mode=ndjson pushCapable=false (폴링 폴백 경로)
 [streaming] startJob(job-1, 5 steps)
-[streaming] tick  1/5 (seq=0) ▓░░░░
+[streaming] tick  1/5 ▓░░░░
 ...
 [streaming] done: 5 steps
-[streaming] PASS — 5/5 ticks received, seq 0..5
+[streaming] PASS — 5/5 ticks received via subscribeEvent
 ```
 
 ## API
@@ -60,4 +62,7 @@ const events = package.eventBus().takePendingEvents();
 - **Tauri**: 폴링 타이머 → `app.emit()`
 - **RN**: 폴링 → `DeviceEventEmitter`
 
-Node 데모의 `--serve` 라인 데몬 + `__drainEvents` 폴링이 이 역할의 참고 구현이다.
+Node 데모의 `--serve` 라인 데몬은 `__drainEvents` 폴링 명령에 `events` 필드
+(`{"ok":true,"events":[...]}`)로 답한다 — calculator loop-stdio 참조 런타임과
+같은 계약이며, `@rustra/node` 폴링 폴백이 읽는 필드다. 푸시 모드(0xfffd
+프레임) 런타임은 `examples/calculator/src/loop_stdio.rs` 참고.

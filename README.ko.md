@@ -77,6 +77,14 @@ rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)�
       (`codegen.generated_freshness`), `rustra codegen --explain`이 설정이
       건드리는 표면 지도를 보여주고, CI 온보딩 게이트가 스크래치 프로젝트에서
       init → doctor → build → codegen → demo를 실동행 검증한다.
+- [x] 이벤트 표면 완결 — Node 푸시(diff 게이트 포함) (2026-09-02): Node의
+      `subscribeEvent`는 `events:"push"` 핸드셰이크를 stdout 0xfffd 프레임보다
+      선호하고 능력 재판정 후 폴링으로 폴백하며, Bun FFI 이벤트 브릿지는 생성
+      엔트리에서 자동 배선된다. `rustra diff`는 이벤트 제거·페이로드 변경을
+      breaking으로 게이트한다.
+- [x] docs 동기화 게이트 (2026-09-02): `bun run test:docs`가 모든 `docs:sync`
+      영역을 실제 생성 파일과 대조한다 — 문서-현실 드리프트는 이제 독자 눈이
+      아니라 CI가 잡는다.
 - [x] 사용자 정의 제네릭 — 구체 인스턴스 단위 (2026-09-01): `Wrapper<String>`을
       명령 페이로드로 쓰면 모노몰포이즈 schemars 타입(`Wrapper_for_String`)이
       생성된다 — 명령 `inputType`/`outputType`이 이제 `JsonSchema::schema_name`에서
@@ -357,7 +365,7 @@ examples/
   tauri-calculator/        Tauri 런타임 예시
   react-native-calculator/ React Native 런타임 예시
   calculator-napi/         napi-rs transport 예시 (release transport 벤치마크의 소스)
-  streaming/               이벤트 스트리밍 예시 (Package::emit + 폴링 어댑터)
+  streaming/               이벤트 스트리밍 예시 (Package::emit + subscribeEvent 어댑터)
   auth/                    세션/capability 게이트 예시 (deny-by-default)
   reference-app/           @rustra/react 훅 레퍼런스 앱 (useCommand/useMutation/useEvent)
 ```

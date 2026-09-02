@@ -89,6 +89,14 @@ cancellation, events, and channels are documented explicitly in the
       surfaces a config touches; a CI onboarding gate runs
       init → doctor → build → codegen → demo in a scratch project
       (`bun run test:onboarding` upstream).
+- [x] Event surface completion — Node push events with the diff gate
+      (2026-09-02): `subscribeEvent` on Node prefers the `events:"push"`
+      handshake over stdout 0xfffd frames with a capability-recheck polling
+      fallback, Bun's FFI event bridge is auto-wired from generated entries,
+      and `rustra diff` gates event removal/payload changes as breaking.
+- [x] Docs sync gate (2026-09-02): `bun run test:docs` verifies every
+      `docs:sync` region against the real generated file it mirrors —
+      docs-to-reality drift now fails CI instead of being noticed by readers.
 - [x] User-defined generic types at the concrete-instance level
       (2026-09-01): `Wrapper<String>` as a command payload generates the
       monomorphized schemars type (`Wrapper_for_String`) — command
@@ -384,7 +392,7 @@ examples/
   tauri-calculator/        Tauri runtime example
   react-native-calculator/ React Native runtime example
   calculator-napi/         napi-rs transport example (source of the release transport benchmark)
-  streaming/               Event streaming example (Package::emit + polling adapter)
+  streaming/               Event streaming example (Package::emit + subscribeEvent adapter)
   auth/                    Session/capability gate example (deny-by-default)
   reference-app/           @rustra/react hooks reference app (useCommand/useMutation/useEvent)
 ```
