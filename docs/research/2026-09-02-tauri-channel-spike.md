@@ -20,7 +20,7 @@ Tauri 어댑터가 rustra 채널 표면(`channels.rs` ChannelHost + 코드젠 �
 
 ### 오늘 채널을 쓰는 호스트는 RN JSI 하나뿐이다
 
-`register_channel`/`ChannelSender` 의 호출부를 전수 검색한 결과 세 곳뿐이다:
+호스트·호스트 바인딩 기준으로 `register_channel`/`ChannelSender` 호출부를 찾으면 세 곳뿐이다(이 외 호출부는 코어 자체 단위 테스트 `crates/rustra/src/channels_tests.rs:9,23,44,46,57,59` 가 전부다):
 
 1. **FFI 엔트리** — `crates/rustra/src/ffi_channel.rs:115-135` (`rustra_ffi_channel_create`), `:143` (`rustra_ffi_channel_send`), `:162` (`rustra_ffi_channel_drop`). C++ JSI 호스트 전용.
 2. **RN JSI 브릿지** — `packages/react-native/native/cpp/RustraJSIBridge.cpp:442` (FFI create 호출), `:763-797` (`createChannel`/`dropChannel` host function). TS 래퍼는 `packages/react-native/src/react-native-events.ts:13-40`.
@@ -50,26 +50,27 @@ Tauri 어댑터가 rustra 채널 표면(`channels.rs` ChannelHost + 코드젠 �
 
 ### (b) invoke 큐만으로 JS 콜백 라우팅이 되는가? — 불충족
 
-Tauri webview IPC 가 JS 쪽에 노출하는 전송 수단은 정확히 둘이다: **invoke**(요청↔응답 1:1 상관, 단 1회 resolve)와 **event.listen**(서버 푸시). 채널 회신은 이 둘 중 invoke 와 구조적으로 어긋난다:
+JS 진입점 전송 수단은 **invoke**(요청↔응답 1:1 상관, 단 1회 resolve)와 **event.listen**(서버 푸시) 둘이다. 호스트 주도 push 는 listen 외에 셋째 경로 `WebviewWindow::eval`(호스트가 웹뷰에서 임의 JS 를 직접 실행 — tauri 2.11.1 `webview/webview_window.rs:2391`)이 더 있으나, 어느 쪽도 invoke 큐는 아니다. 채널 회신은 invoke 와 구조적으로 어긋난다:
 
-1. **상관 없는 푸시다.** invoke 큐(packages/tauri → `createJsonEngine` 의 요청-응답 상관)는 각 호출이 정확히 한 번 자기 응답으로 resolve 되는 걸 전제한다. 채널 send 는 (i) 커맨드 실행 중 동기 일 수 있지만 (ii) 워커 스레드/이후 tick 에 비동기로 올 수 있고, (iii) in-flight invoke 이 하나도 없을 때도 도달해야 한다. channel_demo 는 전부 동기이라 우연히 envelope 에 실리는 척할 수 있지만, 그렇게 하면 채널의 존재 이유(호출 종료 후에도 사는 역방향 스트림 — channels.rs:8-11 "호출별 회신 채널")를 버리는 것이 된다.
+1. **상관 없는 푸시다.** invoke 큐(packages/tauri → `createJsonEngine` 의 요청-응답 상관)는 각 호출이 정확히 한 번 자기 응답으로 resolve 되는 걸 전제한다. 채널 send 는 (i) 커맨드 실행 중 동기 일 수 있지만 (ii) 워커 스레드/이후 tick 에 비동기로 올 수 있고, (iii) in-flight invoke 이 하나도 없을 때도 도달해야 한다. channel_demo 는 전부 동기이라 우연히 envelope 에 실리는 척할 수 있지만, 그렇게 하면 채널의 존재 이유(호출 종료 후에도 사는 역방향 스트림 — channels.rs:8-11 "호출별 회신 채널")를 버리는 것이 된다. 더 강한 기계적 이유도 있다 — **프레임 귀속 수단이 코어에 없다.** `invoke_json(&self, name, params)`(package_json.rs:5)에는 invoke 문맥 매개변수가 없어, 동시 in-flight invoke 이 있으면 어떤 채널 프레임이 어느 응답 엔벨로프에 귀속되는지 판단할 수단이 코어에 없다. 스레드-로컬 invoke id 우회(`rustra_dispatch` 가 set/clear)로 같은-스레드 동기 send 만은 부분 귀속 가능하나(코어 무수정), 비동기·호출 생존 프레임은 커버하지 못해 전체 계약은 여전히 코어 invoke 경로의 문맥 전달(실질 코어 변경)을 요구한다 — 이 설계도 발급 커맨드(`rustra_channel_create`)는 어차피 필요해 (a) 비용을 줄이지 못한다.
 2. **폴링으로 우회하면 (a)를 깬다.** Node 의 drain(0xfffe) 선례를 흉내 내려면 채널 send 를 어딘가에 쌓아뒀다가 `__drainChannel(handle)` invoke 로 털어야 하는데, `ChannelHost::send` 는 버퍼 없이 클로저를 즉시 실행한다(channels_host.rs:70-80). 버퍼 상태 + 예약 커맨드는 코어/어댑터 상태 신설이고 예약 cmd id 관행(loop_stdio.rs:18-23)까지 새로 만드는 셈이라, "invoke 큐로 해결"이 아니라 "invoke 위에 이벤트 전송 계층을 재발명"이 된다.
 3. **실제 선례가 이 판정을 따른다.** 가장 유사한 호스트인 RN JSI 는 invoke/drain 큐로 채널을 흘리지 않았다 — 전용 C++ 콜백 디스패처(RustraJSIBridge.cpp:411-456)라는 아웃오브밴드 푸시 경로를 만들었다. Tauri 에서 그 아웃오브밴드 푸시 경로에 해당하는 것이 바로 event.listen 다. Node/Bun 이 채널 미지원인 것도 같은 이유다 — 루프 프로토콜에 푸시 프레임을 추가하지 않는 한 invoke/drain 큐로는 채널을 실을 수 없다.
+4. **셋째 경로 eval 도 기각된다.** `WebviewWindow::eval` 로 `window.__rustraChannelRecv(handle, payloadJson)` 같은 전역 훅을 직접 실행하면 어댑터만으로 콜백 도달이 가능하고 listen 도 새 와이어도 불필요하다. 그러나 기각 근거가 명확하다: (i) eval 은 invoke 큐가 아니라 listen 과 같은 호스트 주도 push 다 — 기준 (b)를 문자 그대로 실패한다; (ii) 페이로드를 JS 소스 문자열에 결합하므로 이스케이프/인젝션 위험을 어댑터가 떠안는다; (iii) 순서·전달 특성은 listen 과 본질적으로 동일하다 — Tauri 의 listen 전달 자체가 webview.eval 로 구현된다(tauri 2.11.1 `src/webview/mod.rs:1975` 의 `emit_js` = `self.eval(emit_js_script(...))`, `src/event/mod.rs:194` 의 emit_js_script 는 `fn && fn(...)` 형태라 훅 부재 시 양쪽 다 조용히 유실 — 내비게이션 유실은 eval 고유 약점이 아니라 양쪽 공유 해저드다); (iv) 어떤 WebviewWindow 가 핸들을 만들었는지 추적 상태를 어댑터가 따로 두지 않으면 멀티윈도우 라우팅이 불가능하다 — Tauri 자체가 이 라우팅을 위해 웹뷰 라벨 키 리스너 레지스트리(`src/event/listener.rs:260-273` js_event_listeners)를 유지한다. raw eval 어댑터가 이 상태를 재발명해야 한다는 (iv)를 프레임워크 소스가 직접 증명한다. 가능은 하지만 (b) 실패는 그대로라 판정에 영향이 없다.
 
-즉 (b)를 정직하게 답하면: `subscribeEvent`(=listen) 없이는 불가능하고, 가능하게 만드는 유일한 방법들이 전부 (a)를 위반하거나 채널 계약을 축소한다.
+즉 (b)를 정직하게 답하면: invoke 큐만으로는 불가능하고, 채널 회신의 도달 경로는 listen(또는 eval) 같은 푸시 수단을 필요로 한다 — 가능하게 만드는 방법들은 전부 (b)를 벗어나거나 (a)를 위반하거나 채널 계약을 축소한다.
 
 ## 판정: 0.7 이월
 
 - (a) 조건부 충족 — 코어/FFI 무변경, 단 tauri_support.rs 어댑터 커맨드 신설 필요
-- (b) **불충족** — 채널 회신은 상관 없는 비동기 푸시이고, webview IPC 의 유일한 푸시 수단이 event.listen 이다
+- (b) **불충족** — 채널 회신은 상관 없는 비동기 푸시이고, invoke 큐 외의 푸시 수단(listen, eval)은 어느 쪽도 "기존 invoke 큐"가 아니다
 
-기준이 "둘 다 충족"이라 계획문(P) 규칙에 따라 **0.7 이월**이 판정이다. 단, 이월이 "Tauri 에서 채널이 안 된다"는 뜻은 아니다 — `createChannel` 어댑터를 subscribeEvent 위에 얹으면(발급자 → `app.emit("rustra://channel/{handle}")`, JS 래퍼가 listen 을 콜백으로 변환) 실동선이 가능하다. 판정은 그 경로가 계획이 정한 "invoke 큐 전용" 기준을 벗어난다는 것이고, 채널의 유니캐스트 계약(channels.rs:17-21)과 Tauri emit 의 브로드캐스트 성격 사이의 계약 차이(핸들별 채널명으로 우회 근사할 뿐 강제되지 않음)까지 정리한 뒤 착지하는 편이 정직하다는 판단이다.
+기준이 "둘 다 충족"이라 계획문 규칙에 따라 **0.7 이월**이 판정이다. 단, 이월이 "Tauri 에서 채널이 안 된다"는 뜻은 아니다 — `createChannel` 어댑터를 subscribeEvent 위에 얹으면(발급자 → `app.emit("rustra://channel/{handle}")`, JS 래퍼가 listen 을 콜백으로 변환) 실동선이 가능하다. 판정은 그 경로가 계획이 정한 "invoke 큐 전용" 기준을 벗어난다는 것이고, 채널의 유니캐스트 계약(channels.rs:17-21)과 Tauri emit 의 브로드캐스트 성격 사이의 계약 차이(핸들별 채널명으로 우회 근사할 뿐 강제되지 않음)까지 정리한 뒤 착지하는 편이 정직하다는 판단이다.
 
 ### 이월 사유 (근거 3)
 
-1. **전송 수단의 구조적 어긋남** — `rustra_dispatch`(tauri_support.rs:39-48)는 단일 resolve 요청-응답이고, 채널 send(channels_host.rs:70-80)는 상관 없는 다중 푸시다. webview IPC 에는 listen 외에 푸시 경로가 없다.
-2. **우회 설계가 (a)를 연쇄 위반** — invoke-envelope 동봉은 동기 send 에만 통하고 스트림 계약을 축소하며, drain 폴링은 버퍼 상태+예약 커맨드 신설로 코어 변경을 요구한다. 두 기준은 독립적으로 만족 불가능하다.
-3. **선례 부합** — 채널을 실증한 유일한 호스트(RN JSI)도 전용 푸시 경로(RustraJSIBridge.cpp:442)를 만들었지 invoke 큐를 쓰지 않았다. Tauri 의 동급 경로는 event.listen 이며, 그것을 쓰는 설계는 0.7 에서 계약 차이까지 정리하고 하는 편이 낫다.
+1. **전송 수단의 구조적 어긋남** — `rustra_dispatch`(tauri_support.rs:39-48)는 단일 resolve 요청-응답이고, 채널 send(channels_host.rs:70-80)는 상관 없는 다중 푸시다. JS 진입점의 호스트 주도 푸시 수단은 listen 과 eval 이 있지만 둘 다 invoke 큐가 아니다.
+2. **우회 설계가 (a)를 연쇄 위반** — invoke-envelope 동봉은 스레드-로컬 우회로 같은-스레드 동기 send 만 부분 귀속 가능할 뿐(`invoke_json` 에 문맥 매개변수가 없어 비동기·호출 생존 프레임은 귀속 불가 — 전체 계약 = 실질 코어 변경), drain 폴링은 버퍼 상태+예약 커맨드 신설로 코어 변경을 요구한다. 두 기준은 독립적으로 만족 불가능하다.
+3. **선례 부합** — 채널을 실증한 유일한 실호스트(RN JSI)도 전용 푸시 경로(RustraJSIBridge.cpp:442)를 만들었지 invoke 큐를 쓰지 않았다. Tauri 의 동급 푸시 수단은 event.listen(또는 eval)이며, 그것을 쓰는 설계는 0.7 에서 계약 차이까지 정리하고 하는 편이 낫다.
 
 ### 0.7 착지 시 예상 작업 목록
 
