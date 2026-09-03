@@ -12,7 +12,7 @@ impl Default for EventState {
 }
 
 impl EventState {
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) fn new() -> Self {
         Self::default()
     }
