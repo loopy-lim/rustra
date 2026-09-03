@@ -26,7 +26,7 @@ cargo test --workspace
 bun run test:compat
 ```
 
-`bun run test:compat`에는 두 부류의 검사가 포함된다:
+`bun run test:compat`에는 아래 부류의 검사들이 포함된다:
 
 - 어댑터 계약 검사: 생성된 커맨드가 host 패키지를 import하지 않고 주입된 Tauri 및 React Native transport를 호출한다.
 - 런타임 검사: Node와 Bun이 Rust 계산기 바이너리를 실행하고, Tauri 예제는 실제 앱을 빌드한 뒤 WebView JavaScript가 `window.__TAURI__.core.invoke`로 Rust 커맨드를 호출할 수 있을 만큼 실행한다. Tauri 커맨드 핸들러는 별도의 수작업 계산기 경로가 아니라 공유 `rustra` 계산기 패키지를 `Package::invoke`로 호출한다.
