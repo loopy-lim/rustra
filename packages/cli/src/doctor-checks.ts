@@ -316,7 +316,14 @@ export function collectConfigChecks(
             'codegen.generated_freshness',
             'pass',
             false,
-            'Generated output is fresh (schema and generator match the manifest)',
+            'Generated output matches the schema probe (schema and generator match the manifest)',
+            // 감사 #3 고지 — 이 검사는 매니페스트 해시 기반 프리브 신선도만 확인한다.
+            // 실제 invoke 를 서브하는 런타임 바이너리는 codegen 이 재빌드하지 않으므로,
+            // 코드젠 드리프트 후 cargo build 없이 데모가 contract.mismatch 로 죽을 수
+            // 있다. PASS 라도 텍스트로 이 한계를 명시한다(판정 로직은 불변).
+            'This verifies the schema probe only — the runtime binary is not rebuilt by ' +
+              'code generation; run cargo build after regeneration or invokes may fail ' +
+              'with contract.mismatch.',
           ),
     );
   } else if (schemaPath && existsSync(schemaPath))

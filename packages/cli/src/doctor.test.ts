@@ -958,6 +958,21 @@ test('doctor passes fresh generated output', () => {
       );
       const freshness = report.checks.find((check) => check.id === 'codegen.generated_freshness');
       assert.equal(freshness?.status, 'pass');
+      // 감사 #3 고지 — 이 검사는 스키마 프리브(매니페스트 해시) 신선도만 확인한다.
+      // 실제 invoke 를 서브하는 런타임 바이너리는 codegen 이 재빌드하지 않으므로,
+      // PASS 여도 cargo build 전까지 contract.mismatch 가 날 수 있음을 텍스트가
+      // 명시해야 한다(스키마 프리브 vs 런타임 바이너리 구별).
+      assert.match(freshness?.summary ?? '', /schema/i);
+      assert.match(
+        `${freshness?.summary ?? ''} ${freshness?.detail ?? ''}`,
+        /runtime binary/i,
+        'freshness disclosure must distinguish the schema probe from the runtime binary',
+      );
+      assert.match(
+        `${freshness?.summary ?? ''} ${freshness?.detail ?? ''}`,
+        /cargo build/,
+        'freshness disclosure must point at cargo build as the remedy',
+      );
       assert.equal(doctorExitCode(report, false), 0);
       assert.equal(doctorExitCode(report, true), 0);
     },
