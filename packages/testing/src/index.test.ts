@@ -312,7 +312,8 @@ test('assertContractFieldsCurrent reports command missing from generated source'
     {
       command: 'staleCmd',
       kind: 'field_missing_in_client',
-      detail: 'command entry not found in generated source',
+      detail:
+        'command entry not found in generated source (or emitted in an unrecognized helper form)',
     },
   ]);
 });
@@ -333,6 +334,44 @@ test('assertContractFieldsCurrent reports unparseable source instead of silent p
     assert.equal(drift[0].command, 'addNumbers');
     assert.equal(drift[0].kind, 'unparseable_source');
   }
+});
+
+test('assertContractFieldsCurrent covers every parser branch', () => {
+  // invokeGeneratedFields3 — 3필드 와이어 순서 그대로.
+  // invokeGeneratedBytes — bytes 1필드.
+  // 평문 invokeGenerated — 필드 계약 없는 형태(비교 스킵).
+  const schema = {
+    commands: [
+      {
+        name: 'clamp',
+        inputSchema: {
+          required: ['max', 'min', 'value'],
+          properties: {
+            max: { type: 'number' },
+            min: { type: 'number' },
+            value: { type: 'number' },
+          },
+        },
+      },
+      {
+        name: 'upload',
+        inputSchema: { required: ['data'], properties: { data: { type: 'array' } } },
+      },
+      { name: 'ping', inputSchema: {} },
+    ],
+  };
+  const source = [
+    `export function clamp(input: ClampInput, options?: InvokeOptions): Promise<ClampOutput> {`,
+    `  return invokeGeneratedFields3<ClampOutput>(4, 'clamp', input, input["max"], input["min"], input["value"], options);`,
+    `}`,
+    `export function upload(input: UploadInput, options?: InvokeOptions): Promise<UploadOutput> {`,
+    `  return invokeGeneratedBytes<UploadOutput>(8, 'upload', input, input["data"], options);`,
+    `}`,
+    `export function ping(options?: InvokeOptions): Promise<void> {`,
+    `  return invokeGenerated<void>(9, 'ping', undefined, options);`,
+    `}`,
+  ].join('\n');
+  assert.deepEqual(assertContractFieldsCurrent(schema, source).drift, []);
 });
 
 test('expectContractFieldsCurrent throws with drift message and passes silently when clean', () => {

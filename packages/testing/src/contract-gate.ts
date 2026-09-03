@@ -105,15 +105,12 @@ const GENERATED_FIELD_PATTERNS: Array<{
   {
     // invokeGeneratedFieldsN<T>(id, 'name', input, input["f0"], ..., options)
     re: /invokeGeneratedFields([13])<[^>]*>\(\s*\d+\s*,\s*'([^']+)'\s*,\s*input\b([^;]*?)options\s*\)/g,
-    extract: (m) => ({
-      command: m[2],
-      fields: parseFieldAccessLiterals(m[3]).map((f) => f.field),
-    }),
+    extract: (m) => ({ command: m[2], fields: parseFieldAccessLiterals(m[3]) }),
   },
   {
     // invokeGeneratedBytes<T>(id, 'name', input, input["data"], options)
     re: /invokeGeneratedBytes<[^>]*>\(\s*\d+\s*,\s*'([^']+)'\s*,\s*input\b([^;]*?)options\s*\)/g,
-    extract: (m) => ({ command: m[1], fields: parseFieldAccessLiterals(m[2]).map((f) => f.field) }),
+    extract: (m) => ({ command: m[1], fields: parseFieldAccessLiterals(m[2]) }),
   },
   {
     // 평문 invokeGenerated<T>(id, 'name', input|undefined, options) — 필드 계약이
@@ -134,13 +131,11 @@ function parseStringLiterals(list: string): string[] {
 }
 
 /** `input["x"], input["y"]` 형태의 field-access 인자에서 필드 키를 뽑는다. */
-function parseFieldAccessLiterals(list: string): Array<{ field: string; access: string }> {
-  const out: Array<{ field: string; access: string }> = [];
+function parseFieldAccessLiterals(list: string): string[] {
+  const out: string[] = [];
   const re = /input\[(?:"([^"]*)"|'([^']*)')\]/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(list)) !== null) {
-    out.push({ field: m[1] ?? m[2], access: m[0] });
-  }
+  while ((m = re.exec(list)) !== null) out.push(m[1] ?? m[2]);
   return out;
 }
 
@@ -190,7 +185,10 @@ export function assertContractFieldsCurrent(
         drift.push({
           command: cmd.name,
           kind: 'field_missing_in_client',
-          detail: 'command entry not found in generated source',
+          // "emitted in an unrecognized helper form" — 코드젠이 신규 헬퍼 형태로
+          // 바뀌어 이 파서가 읽지 못하는 경우도 조용한 통과로 놓치지 않게 한다.
+          detail:
+            'command entry not found in generated source (or emitted in an unrecognized helper form)',
         });
       }
       continue;
@@ -227,9 +225,9 @@ export function assertContractFieldsCurrent(
         });
       }
     }
+    // 길이가 같고 위 집합 대조에서 드리프트가 없으면 집합이 동일 — 그때만 순서 비교.
     const sameSet =
-      generatedFields.length === schemaFields.length &&
-      !drift.some((d) => d.command === cmd.name && d.kind !== 'unparseable_source');
+      generatedFields.length === schemaFields.length && !drift.some((d) => d.command === cmd.name);
     if (sameSet && generatedFields.some((f, i) => f !== schemaFields[i])) {
       drift.push({
         command: cmd.name,
