@@ -105,6 +105,17 @@ cancellation, events, and channels are documented explicitly in the
       schema title and definitions keys. Parameterized templates (`Wrapper<T>`
       itself) are not emitted; see the
       [type guide](docs/rust-api-guide.md#user-defined-generic-types).
+- [x] Channel adapters on every JS host (2026-09-03): the
+      `{ handle, close() }` contract now works on Node (loop-stdio binary
+      reservation frames 0xfffb/0xfffa/0xfffc — background-thread send safe,
+      NDJSON loud-fails), Bun (`rustra_ffi_channel_*` FFI — JS-thread send
+      only), and Tauri (`rustra_channel_create/drop` commands + listen —
+      approximate unicast over `app.emit`), alongside the existing RN JSI
+      adapter. The RN JSON adapter's event gap is closed too: `subscribeEvent`
+      gained a `pollMs` option that drains the C++ dispatcher queue on
+      CallInvoker-less hosts. See the
+      [compatibility matrix](docs/compatibility-matrix.md) — no ❌ cells
+      remain.
 - [ ] Universal prebuilt application native binaries — depends on per-app Rust
       code and target; CI artifact/cache approach recommended instead
 
