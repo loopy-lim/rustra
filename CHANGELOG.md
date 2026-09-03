@@ -5,6 +5,15 @@
 
 ## Unreleased
 
+### Removed
+
+- deprecated `RendererHost` 표면을 제거한다(0.6.0에서 폐기, pre-1.0 규칙에 따른
+  마이너 제거): `crates/rustra`의 `renderer_host` 모듈과 prelude 재노출
+  (`RendererHost`, `HostMessage`, `MessageKind`, `RendererCapabilities`, `Size`,
+  `SurfaceOptions`, `host_supports_eval`). 대체재는 호스트별 어댑터 경계 —
+  채널·FFI 공개 표면으로 임베딩 호스트가 자체 렌더러/이벤트를 연결한다. npm
+  0.7.0 라인과 다음 `rustra` crate 발행에 반영된다.
+
 ### Changed
 
 - CLI codegen/dev 경로를 책임별 모듈로 분리하고, 잘못된 설정·레이아웃·기존 파일
