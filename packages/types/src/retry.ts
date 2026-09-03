@@ -2,7 +2,11 @@ import { CancelledError, RustraCommandError, isRetryableCode } from './errors.js
 
 /** [`withRetry`] 옵션. 모든 필드는 선택 — 기본값은 각 필드 설명 참고. */
 export type RetryOptions = {
-  /** 마지막 시도 실패 뒤 추가 재시도 횟수 — 기본 2 (총 시도 3회). */
+  /**
+   * 마지막 시도 실패 뒤 추가 재시도 횟수 — 기본 2 (총 시도 3회).
+   * 음수/비유한 값(NaN, ±Infinity)은 `TypeError` 로 즉시 거부한다 —
+   * `attempt >= NaN` 은 항상 거짓이라 조용히 무한 루프에 빠지기 때문.
+   */
   retries?: number;
   /** 백오프 기준 지연(ms) — 실패한 attempt N 뒤 `baseDelayMs * 2^N` 대기. 기본 100. */
   baseDelayMs?: number;
@@ -11,6 +15,7 @@ export type RetryOptions = {
   /**
    * 재시도 판정 — 기본은 `isRetryableCode(error.code)`. 지정하면 기본 판정을
    * 완전히 대체한다(합성 아님). `attempt` 는 방금 실패한 시도(0-based).
+   * 판정 함수 자체가 던진 에러는 재시도 없이 그대로 거부된다(마지막 에러 계약과 동일).
    */
   retryIf?: (error: RustraCommandError, attempt: number) => boolean;
 };
@@ -43,6 +48,9 @@ export async function withRetry<T>(
   options?: RetryOptions,
 ): Promise<T> {
   const retries = options?.retries ?? 2;
+  if (!Number.isFinite(retries) || retries < 0) {
+    throw new TypeError(`withRetry: retries must be a non-negative finite number, got ${retries}`);
+  }
   const baseDelayMs = options?.baseDelayMs ?? 100;
   const signal = options?.signal;
   const retryIf: NonNullable<RetryOptions['retryIf']> =

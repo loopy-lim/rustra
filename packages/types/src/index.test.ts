@@ -19,6 +19,7 @@ import {
   RustraCommandError,
   CancelledError,
   TimeoutError,
+  RustraErrorCode,
   parseRustraErrorString,
   normalizeRustraError,
   withRetry,
@@ -3378,9 +3379,9 @@ test('schema interpreter recompiles after generation resync picks up a new codec
 
 // ── withRetry (readiness Task 6) ────────────────────────────
 
-/** 재시도 판정 테스트용 retryable RustraCommandError. */
-function timeoutError(): RustraCommandError {
-  return new RustraCommandError('transport.timeout', 'timed out', true);
+/** 재시도 판정 테스트용 retryable 에러 — TimeoutError 서브클래스 (retryable=true). */
+function timeoutError(): TimeoutError {
+  return new TimeoutError('timed out');
 }
 
 test('withRetry succeeds on the second attempt after one retryable failure', async () => {
@@ -3420,7 +3421,7 @@ test('withRetry rethrows the last error unchanged after retries are exhausted', 
 
 test('withRetry rejects immediately without retrying non-retryable codes', async () => {
   let calls = 0;
-  const notFound = new RustraCommandError('command.not_found', 'missing', false);
+  const notFound = new RustraCommandError(RustraErrorCode.CommandNotFound, 'missing', false);
   let caught: unknown;
   try {
     await withRetry(
@@ -3458,7 +3459,7 @@ test('withRetry respects a custom retryIf in both directions', async () => {
 
   // 방향 2: 기본 판정은 non-retryable 코드인데 retryIf 가 true → 재시도됨.
   let callsB = 0;
-  const notFound = new RustraCommandError('command.not_found', 'missing', false);
+  const notFound = new RustraCommandError(RustraErrorCode.CommandNotFound, 'missing', false);
   const out = await withRetry(
     () => {
       callsB++;
@@ -3470,22 +3471,84 @@ test('withRetry respects a custom retryIf in both directions', async () => {
   assert.equal(callsB, 2, 'retryIf=true must override the default predicate entirely');
 });
 
+test('withRetry rejects with the retryIf predicate error when the predicate itself throws', async () => {
+  let calls = 0;
+  const predicateBoom = new Error('predicate exploded');
+  let caught: unknown;
+  try {
+    await withRetry(
+      () => {
+        calls++;
+        return Promise.reject(timeoutError());
+      },
+      {
+        retries: 3,
+        baseDelayMs: 1,
+        retryIf: () => {
+          throw predicateBoom;
+        },
+      },
+    );
+  } catch (error) {
+    caught = error;
+  }
+  assert.equal(caught, predicateBoom, 'predicate throw must propagate unchanged');
+  assert.equal(calls, 1, 'predicate failure must not schedule a retry');
+});
+
 test('withRetry promotes a mid-flight signal abort to CancelledError', async () => {
   const controller = new AbortController();
   const attempts: number[] = [];
   const pending = withRetry(
     (attempt) => {
       attempts.push(attempt);
-      if (attempt === 0) controller.abort(); // 첫 실패 직후 abort — sleep 중단 경로.
+      if (attempt === 0) controller.abort(); // 첫 실패 직후 abort — pre-aborted fast path.
       return Promise.reject(timeoutError());
     },
     { retries: 3, baseDelayMs: 50, signal: controller.signal },
   );
   await assert.rejects(
     pending,
-    (err: unknown) => err instanceof CancelledError && err.code === 'cancelled',
+    (err: unknown) => err instanceof CancelledError && err.code === RustraErrorCode.Cancelled,
   );
   assert.deepEqual(attempts, [0], 'abort during backoff sleep must cancel before the next attempt');
+});
+
+test('withRetry aborts a pending backoff sleep via the registered listener and preserves cause', async () => {
+  // sleep Promise 생성자 블록(타이머 생성 + abort 리스너 등록 + abort 시
+  // clearTimeout)을 실제로 타는 경로 — fn 안 동기 abort 는 항상 pre-aborted
+  // fast path 로 새므로, 타이머 abort 를 쓴다(경쟁 없음: 5ms ≪ 10s 백오프).
+  const controller = new AbortController();
+  const cause = timeoutError();
+  const attempts: number[] = [];
+  const startedAt = Date.now();
+  const pending = withRetry(
+    (attempt) => {
+      attempts.push(attempt);
+      if (attempt === 0) {
+        setTimeout(() => controller.abort(), 5);
+        return Promise.reject(cause);
+      }
+      return Promise.resolve('unreachable');
+    },
+    { retries: 3, baseDelayMs: 10_000, signal: controller.signal },
+  );
+  let caught: unknown;
+  try {
+    await pending;
+  } catch (error) {
+    caught = error;
+  }
+  const elapsed = Date.now() - startedAt;
+  assert.ok(caught instanceof CancelledError, 'timer abort must promote to CancelledError');
+  assert.equal((caught as CancelledError).code, RustraErrorCode.Cancelled);
+  assert.equal(
+    (caught as CancelledError).cause,
+    cause,
+    'abort promotion must preserve the failed error as cause',
+  );
+  assert.equal(attempts.length, 1, 'aborted sleep must cancel before the next attempt');
+  assert.ok(elapsed < 5000, `abort must cut the 10s sleep short immediately, took ${elapsed}ms`);
 });
 
 test('withRetry rejects with CancelledError immediately when the signal is already aborted', async () => {
@@ -3500,9 +3563,56 @@ test('withRetry rejects with CancelledError immediately when the signal is alrea
       },
       { signal: controller.signal },
     ),
-    (err: unknown) => err instanceof CancelledError && err.code === 'cancelled',
+    (err: unknown) => err instanceof CancelledError && err.code === RustraErrorCode.Cancelled,
   );
   assert.equal(calls, 0, 'pre-aborted signal must never invoke fn');
+});
+
+test('withRetry with retries 0 makes exactly one attempt and never sleeps', async () => {
+  const attempts: number[] = [];
+  let caught: unknown;
+  try {
+    await withRetry(
+      (attempt) => {
+        attempts.push(attempt);
+        return Promise.reject(timeoutError());
+      },
+      { retries: 0, baseDelayMs: 10_000 },
+    );
+  } catch (error) {
+    caught = error;
+  }
+  assert.ok(caught instanceof TimeoutError, 'single attempt must reject with the original error');
+  assert.deepEqual(attempts, [0], 'retries=0 must not retry even on retryable failures');
+});
+
+test('withRetry rejects invalid retries values with TypeError instead of looping forever', async () => {
+  // attempt >= NaN 은 항상 거짓 — 가드 없으면 조용한 무한 루프. async 함수라
+  // TypeError 는 동기 throw 가 아니라 즉시 rejection 로 관찰된다.
+  for (const bad of [Number.NaN, -1, Number.POSITIVE_INFINITY]) {
+    await assert.rejects(
+      withRetry(() => Promise.resolve('x'), { retries: bad }),
+      (err: unknown) => err instanceof TypeError,
+      `retries=${String(bad)} must reject with TypeError before any attempt`,
+    );
+  }
+  // 음이 아닌 유한 소수는 유효 — attempt 인덱스와의 수치 비교(>=)라 0.5 는
+  // attempt 1 에서 경계를 넘어 총 2회 시도된다 (floor/round 아님).
+  const attempts: number[] = [];
+  let fractional: unknown;
+  try {
+    await withRetry(
+      (attempt) => {
+        attempts.push(attempt);
+        return Promise.reject(timeoutError());
+      },
+      { retries: 0.5, baseDelayMs: 1 },
+    );
+  } catch (error) {
+    fractional = error;
+  }
+  assert.ok(fractional instanceof TimeoutError, 'retries=0.5 must exhaust and rethrow');
+  assert.deepEqual(attempts, [0, 1], 'retries=0.5 exhausts at attempt 1 (numeric boundary)');
 });
 
 test('withRetry preserves arbitrary rejection values unchanged', async () => {
