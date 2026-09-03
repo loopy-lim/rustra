@@ -39,8 +39,8 @@ import { addNumbers } from './generated/react-native';
 const result = await addNumbers({ a: 42, b: 58 });
 ```
 
-`rustra.json` only specifies the location of the monorepo app crate and a
-benchmark-only legacy ABI flag. Cargo package/library names, TypeScript bootstrap,
+`rustra.json` only specifies the location of the monorepo app crate. Cargo
+package/library names, TypeScript bootstrap,
 Podspec, Gradle, CMake, and JNI are owned by the generator. The first command
 performs JSI installation, contract verification, and fast engine setup exactly once,
 so app code has no manual `install`/`configure`.

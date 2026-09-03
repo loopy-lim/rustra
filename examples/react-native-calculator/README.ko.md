@@ -37,8 +37,8 @@ import { addNumbers } from './generated/react-native';
 const result = await addNumbers({ a: 42, b: 58 });
 ```
 
-`rustra.json`은 monorepo app crate의 위치와 benchmark 전용 legacy ABI flag만
-지정합니다. Cargo package/library 이름, TypeScript bootstrap, Podspec, Gradle,
+`rustra.json`은 monorepo app crate의 위치만 지정합니다. Cargo package/library 이름,
+TypeScript bootstrap, Podspec, Gradle,
 CMake와 JNI는 생성기가 소유합니다. 첫 명령이 JSI 설치, contract 검증, fast engine
 설정을 한 번만 수행하므로 앱 코드에 수동 `install`/`configure`가 없습니다.
 
