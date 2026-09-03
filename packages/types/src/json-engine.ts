@@ -15,7 +15,7 @@ export type JsonWireBatchTransport = {
 };
 
 /**
- * 응답 셰이프 이탈 감지 — debug 모드에서만 버전 스크의 조기 신호를 싱크로 보낸다
+ * 응답 셰이프 이탈 보고 — debug 모드에서만 버전 스크의 조기 신호를 싱크로 보낸다
  * (`kind: 'response.shape'`, 규칙 식별은 `reason`). json-engine 은 스키마가 없어
  * `undefined`/원시형 응답은 판정할 수 없고(void 커맨드가 존재), reject 경로의
  * `{ok:false,error}` 는 이미 `normalizeRustraError` 가 정규화한다. 따라서
@@ -30,12 +30,15 @@ export type JsonWireBatchTransport = {
  * - `resolved_error_envelope`: `{ok:false, error}` 실패 엔벨로프가 reject 대신
  *   resolve 로 도달 — transport 가 정규화 없이 통과시킨 스크 신호.
  *
- * 경고뿐 — 결과를 변형하지 않고 절대 던지지 않는다. 위음성은 허용한다. `ok` 가
- * 불리언인 객체만 검사하므로 (드물지만) `ok` 불리언 필드 하나뿐인 도메인 구조체는
- * 깨진 엔벨로프로 오경보할 수 있다 — debug 전용 경고(throw/변형 없음)로 감수한다.
- * 프로퍼티 접근과 이벤트 발행 전체를 try 로 감싼다.
+ * `{ok:true, error}` 하이브리드는 도메인 구조체일 수 있어 의도적으로 침묵한다.
+ *
+ * 경고가 아니라 debug 이벤트 발행이다 — 결과를 변형하지 않고 절대 던지지 않는다.
+ * 위음성은 허용한다. `ok` 가 불리언인 객체만 검사하므로 가장 그럴듯한 위양성은
+ * `ok`/`result` 필드 쌍을 가진 도메인 구조체가 `double_envelope` 로 오경보하는
+ * 것 — debug 전용 경고(throw/변형 없음)로 감수한다. 프로퍼티 접근과 이벤트
+ * 발행 전체를 try 로 감싼다.
  */
-function warnResponseShape(command: string, result: unknown): void {
+function reportResponseShape(command: string, result: unknown): void {
   if (!isRustraDebugEnabled()) return;
   try {
     if (typeof result !== 'object' || result === null) return;
@@ -82,7 +85,7 @@ export function createJsonEngine(
         return Promise.resolve(rawTransport.invoke(command, normalizedArgs))
           .then((result) => {
             debugRustra({ direction: 'response', transport: 'json', command, value: result });
-            warnResponseShape(command, result);
+            reportResponseShape(command, result);
             return result as T;
           })
           .catch((error: unknown) => {
@@ -102,6 +105,8 @@ export function createJsonEngine(
     invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
       // 와이어 배치(단일 횡단) 경로 — transport 가 지원할 때만. 항목별
       // options(signal/timeoutMs)가 섞이면 항목별 정책을 존중해 폴백한다.
+      // 단일 횡단 경로는 항목별 debug/셰이프 감지를 거치지 않는다 — 진단이
+      // 필요한 항목은 폴백 경로(options 를 통한 항목별 invoke)를 태운다.
       if (
         typeof rawTransport.invokeBatch === 'function' &&
         !entries.some((entry) => entry.options?.signal || entry.options?.timeoutMs)

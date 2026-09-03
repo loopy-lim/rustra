@@ -7,6 +7,7 @@ import {
   configure,
   configureLazy,
   createGeneratedFields2,
+  createJsonEngine,
   createRkyvV2Engine,
   getLiveSchema,
   ensureConfigured,
@@ -25,6 +26,7 @@ import {
   withRetry,
   configureDebug,
   debugWire,
+  resetDebugEnvForTests,
 } from './index.js';
 import type { RkyvV2SchemaNative, RkyvV2Codec, BatchEntry, EngineClient } from './index.js';
 
@@ -3646,15 +3648,20 @@ type ShapeDebugEvent = { kind?: string; reason?: string; command?: string; value
 /**
  * debug 모드 테스트 하네스 — `__RUSTRA_DEBUG__` 스위치를 켜고 console.debug
  * 미러 출력을 흡수해 테스트 결과를 깨끗하게 유지한다(node-loop.test.ts 관례).
- * 반환된 cleanup 을 finally 에서 반드시 호출한다.
+ * `resetDebugEnvForTests()` 로 모듈 메모이즈된 dump 게이트 캐시를 먼저 무효화해
+ * 주변 환경의 `RUSTRA_DEBUG=1` 이 스위치 판정에 새지 않게 한다(양방향 — 테스트
+ * 시작 시 환경을 고정하고, cleanup 때도 무효화해 이후 테스트가 오염되지 않게
+ * 한다). 반환된 cleanup 을 finally 에서 반드시 호출한다.
  */
 function enableShapeDebugHarness(): () => void {
+  resetDebugEnvForTests();
   (globalThis as { __RUSTRA_DEBUG__?: unknown }).__RUSTRA_DEBUG__ = true;
   const originalDebug = console.debug;
   console.debug = () => {};
   return () => {
     console.debug = originalDebug;
     delete (globalThis as { __RUSTRA_DEBUG__?: unknown }).__RUSTRA_DEBUG__;
+    resetDebugEnvForTests();
   };
 }
 
@@ -3664,7 +3671,6 @@ function envelopeTransport(payload: unknown): { invoke: (command: string) => Pro
 }
 
 test('double envelope resolution emits response.shape and resolves unchanged in debug mode', async () => {
-  const { createJsonEngine } = await import('./index.js');
   const seen: ShapeDebugEvent[] = [];
   const sink = (event: unknown) => seen.push(event as ShapeDebugEvent);
   const payload = { ok: true, result: { value: 42 } };
@@ -3685,7 +3691,6 @@ test('double envelope resolution emits response.shape and resolves unchanged in 
 });
 
 test('resolved ok:false without error emits response.shape and still resolves in debug mode', async () => {
-  const { createJsonEngine } = await import('./index.js');
   const seen: ShapeDebugEvent[] = [];
   const engine = createJsonEngine(envelopeTransport({ ok: false }));
   const cleanup = enableShapeDebugHarness();
@@ -3705,7 +3710,6 @@ test('resolved ok:false without error emits response.shape and still resolves in
 test('resolved error envelope ({ok:false,error}) emits response.shape but keeps the value', async () => {
   // reject 경로의 정규화는 rejection 일 때만 동작한다 — transport 가 실패 엔벨로프를
   // 그대로 resolve 하면(스크 신호) 경고는 하되 기존 값 계약을 변형하지 않는다.
-  const { createJsonEngine } = await import('./index.js');
   const seen: ShapeDebugEvent[] = [];
   const error = { code: 'math.divide_by_zero', message: 'division by zero' };
   const engine = createJsonEngine(envelopeTransport({ ok: false, error }));
@@ -3723,7 +3727,6 @@ test('resolved error envelope ({ok:false,error}) emits response.shape but keeps 
 });
 
 test('broken envelope ({ok:true} payload-less) emits envelope_missing_payload', async () => {
-  const { createJsonEngine } = await import('./index.js');
   const seen: ShapeDebugEvent[] = [];
   const engine = createJsonEngine(envelopeTransport({ ok: true }));
   const cleanup = enableShapeDebugHarness();
@@ -3739,7 +3742,9 @@ test('broken envelope ({ok:true} payload-less) emits envelope_missing_payload', 
 });
 
 test('debug disabled: no response.shape events (passthrough unchanged)', async () => {
-  const { createJsonEngine } = await import('./index.js');
+  // 모듈 메모이즈된 dump 게이트 캐시를 먼저 무효화해야 주변 RUSTRA_DEBUG=1 환경이
+  // 이 테스트로 새지 않는다(스위치 판정은 캐시 무효화 후 env 만 본다).
+  resetDebugEnvForTests();
   const shapes: ShapeDebugEvent[] = [];
   const engine = createJsonEngine(envelopeTransport({ ok: true, result: { value: 1 } }));
   try {
@@ -3756,11 +3761,11 @@ test('debug disabled: no response.shape events (passthrough unchanged)', async (
   } finally {
     configureDebug(undefined);
     delete (globalThis as { __RUSTRA_DEBUG__?: unknown }).__RUSTRA_DEBUG__;
+    resetDebugEnvForTests();
   }
 });
 
 test('plain payload without ok and primitive responses emit no shape event', async () => {
-  const { createJsonEngine } = await import('./index.js');
   for (const payload of [{ value: 42 }, { okay: true }, 'plain', 7, null, undefined]) {
     const seen: ShapeDebugEvent[] = [];
     const engine = createJsonEngine(envelopeTransport(payload));
@@ -3782,7 +3787,6 @@ test('plain payload without ok and primitive responses emit no shape event', asy
 });
 
 test('detection never throws on exotic result objects (frozen, null-prototype)', async () => {
-  const { createJsonEngine } = await import('./index.js');
   const exotic: unknown[] = [
     Object.freeze({ ok: true, result: { frozen: true } }),
     Object.create(null) as unknown, // 프로토타입 없음 — hasOwnProperty.call 로 안전
@@ -3808,7 +3812,6 @@ test('detection never throws on exotic result objects (frozen, null-prototype)',
 // 핀과, transport reject 값이 기존 정규화 계약으로 변환된다는 점을 함께 잠근다.
 
 test('json-engine rejection path normalizes errors and emits no shape event', async () => {
-  const { createJsonEngine, RustraCommandError } = await import('./index.js');
   const shapes: ShapeDebugEvent[] = [];
   const cleanup = enableShapeDebugHarness();
   const rejectTransport = (reason: unknown) => ({
