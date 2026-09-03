@@ -165,4 +165,10 @@ export function createMockEngine(mockOptions: MockEngineOptions = {}): MockEngin
   return engine;
 }
 
-export { assertContractCurrent, expectContractCurrent } from './contract-gate.js';
+export {
+  assertContractCurrent,
+  expectContractCurrent,
+  assertContractFieldsCurrent,
+  expectContractFieldsCurrent,
+  type ContractFieldDrift,
+} from './contract-gate.js';
