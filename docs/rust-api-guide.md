@@ -817,6 +817,27 @@ pkg.set_event_sink(Some(sink));
 let bus = pkg.event_bus(); // direct EventBus access
 ```
 
+**Channels** — Rust → JS unicast reply streams (invocation-scoped; see
+[compatibility matrix](compatibility-matrix.md#channel-delivery-path) for
+per-host issuance):
+
+```rust
+use rustra::channels;
+
+// Reserve a handle and install a sender (host adapters do this for you —
+// this is the escape hatch for custom hosts)
+let host = channels::host();
+let handle = host.reserve_handle();
+host.register_channel_with_handle(handle, std::sync::Arc::new(move |payload: &str| {
+    // deliver `payload` to the JS side (emit, stdout frame, FFI callback, …)
+}));
+
+// A command's ChannelHandle argument sends replies back to the caller
+assert!(channels::ChannelHandle(input.channel).send(r#"{"progress": 1}"#));
+// Stale/dropped handles return false (silent-ignore contract made visible)
+host.drop_channel(handle); // later sends report false
+```
+
 **Runtime Authority (capabilities)** — deny-by-default permissions:
 
 ```rust
