@@ -137,15 +137,28 @@ a compile error (zero is allowed as a `()` input — see §2-2):
 - Input type: `DeserializeOwned + JsonSchema`
 - Output type: `Serialize + JsonSchema`
 
-If a trait bound is not satisfied, `#[diagnostic::on_unimplemented]` produces a friendly error message:
+Currently, an unsatisfied trait bound produces the standard Rust E0277 diagnostic. A
+`#[diagnostic::on_unimplemented]`-based custom message is planned but not implemented — do not
+rely on a custom error text yet.
+
+```text
+error[E0277]: the trait bound `MyType: CommandInput` is not satisfied
+   --> src/main.rs:5:1
+    |
+5   | #[command]
+    | ^^^^^^^^^ the trait `CommandInput` is not implemented for `MyType`
+    |
+note: required for `MyType` to implement `CommandInput`
+    (unsatisfied trait bound introduced by the blanket `impl<T> CommandInput for T`)
+```
+
+A `#[diagnostic::on_unimplemented]` attribute on `CommandInput`/`CommandOutput` would turn this
+into a friendlier message (planned, not yet implemented):
 
 ```text
 error: `MyType` cannot be used as a command parameter
-  --> src/main.rs:5:1
    |
-5  | #[command]
-   | ^^^^^^^^^ command parameters require Serialize + Deserialize + JsonSchema
-   |
+   = note: command parameters require Serialize + Deserialize + JsonSchema
    = note: add `#[rustra::bridge_type]` to `MyType`
 ```
 

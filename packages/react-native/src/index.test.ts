@@ -240,12 +240,19 @@ function createEventNative() {
 
 test('subscribeEvent registers a native listener and parses the JSON payload once', () => {
   const h = createEventNative();
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = h.native;
   const received: unknown[] = [];
   const payloadJson = JSON.stringify({ step: 1, total: 5 });
 
-  subscribeEvent(h.native, 'progress.tick', (payload) => {
-    received.push(payload);
-  });
+  try {
+    subscribeEvent('progress.tick', (payload) => {
+      received.push(payload);
+    });
+  } finally {
+    root.__rustraNative = previous;
+  }
 
   assert.equal(h.calls.length, 1, 'native.onEvent must be called once');
   assert.equal(h.calls[0].name, 'progress.tick');
@@ -271,8 +278,16 @@ test('subscribeEvent supports the canonical name-first shape used by generated e
 
 test('subscribeEvent unsubscribe removes the native listener', () => {
   const h = createEventNative();
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = h.native;
 
-  const unsubscribe = subscribeEvent(h.native, 'demo.done', () => {});
+  let unsubscribe: () => void;
+  try {
+    unsubscribe = subscribeEvent('demo.done', () => {});
+  } finally {
+    root.__rustraNative = previous;
+  }
   assert.equal(h.listeners.size, 1);
   unsubscribe();
 
@@ -281,11 +296,18 @@ test('subscribeEvent unsubscribe removes the native listener', () => {
 
 test('subscribeEvent normalizes unparseable payloads to null', () => {
   const h = createEventNative();
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = h.native;
   const received: unknown[] = [];
 
-  subscribeEvent(h.native, 'bad.json', (payload) => {
-    received.push(payload);
-  });
+  try {
+    subscribeEvent('bad.json', (payload) => {
+      received.push(payload);
+    });
+  } finally {
+    root.__rustraNative = previous;
+  }
   h.emit('bad.json', 'not-json{');
 
   assert.deepEqual(received, [null], 'broken JSON must arrive as null, not throw');
@@ -293,27 +315,49 @@ test('subscribeEvent normalizes unparseable payloads to null', () => {
 
 test('subscribeEvent fails loudly when native has no event capability', () => {
   const legacy: RustraEventNative = {};
-  assert.throws(
-    () => subscribeEvent(legacy, 'any.event', () => {}),
-    (error: unknown) => error instanceof RustraCommandError && error.code === 'event.unavailable',
-  );
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = legacy;
+  try {
+    assert.throws(
+      () => subscribeEvent('any.event', () => {}),
+      (error: unknown) => error instanceof RustraCommandError && error.code === 'event.unavailable',
+    );
+  } finally {
+    root.__rustraNative = previous;
+  }
 });
 
-test('subscribeEvent allows an explicit legacy no-op fallback', () => {
+test('subscribeEvent allows an explicit no-op fallback when native lacks events', () => {
   const legacy: RustraEventNative = {};
-  const unsubscribe = subscribeEvent(legacy, 'any.event', () => {}, {
-    allowMissingNative: true,
-  });
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = legacy;
+  let unsubscribe: () => void;
+  try {
+    unsubscribe = subscribeEvent('any.event', () => {}, {
+      allowMissingNative: true,
+    });
+  } finally {
+    root.__rustraNative = previous;
+  }
   unsubscribe(); // throw 하지 않아야 한다
 });
 
 test('subscribeEvent coexists with multiple event names', () => {
   const h = createEventNative();
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = h.native;
   const ticks: unknown[] = [];
   const dones: unknown[] = [];
 
-  subscribeEvent(h.native, 'progress.tick', (p) => ticks.push(p));
-  subscribeEvent(h.native, 'demo.done', (p) => dones.push(p));
+  try {
+    subscribeEvent('progress.tick', (p) => ticks.push(p));
+    subscribeEvent('demo.done', (p) => dones.push(p));
+  } finally {
+    root.__rustraNative = previous;
+  }
   h.emit('progress.tick', JSON.stringify({ step: 2 }));
   h.emit('demo.done', JSON.stringify({ emitted: 6 }));
 

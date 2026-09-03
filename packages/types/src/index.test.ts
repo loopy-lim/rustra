@@ -7,6 +7,7 @@ import {
   configure,
   configureLazy,
   createGeneratedFields2,
+  createJsonEngine,
   createRkyvV2Engine,
   getLiveSchema,
   ensureConfigured,
@@ -19,10 +20,13 @@ import {
   RustraCommandError,
   CancelledError,
   TimeoutError,
+  RustraErrorCode,
   parseRustraErrorString,
   normalizeRustraError,
+  withRetry,
   configureDebug,
   debugWire,
+  resetDebugEnvForTests,
 } from './index.js';
 import type { RkyvV2SchemaNative, RkyvV2Codec, BatchEntry, EngineClient } from './index.js';
 
@@ -3373,4 +3377,492 @@ test('schema interpreter recompiles after generation resync picks up a new codec
     [14],
     'post-resync invoke must speak postcard (zigzag), not JSON',
   );
+});
+
+// ── withRetry (readiness Task 6) ────────────────────────────
+
+/** 재시도 판정 테스트용 retryable 에러 — TimeoutError 서브클래스 (retryable=true). */
+function timeoutError(): TimeoutError {
+  return new TimeoutError('timed out');
+}
+
+test('withRetry succeeds on the second attempt after one retryable failure', async () => {
+  const attempts: number[] = [];
+  const out = await withRetry(
+    (attempt) => {
+      attempts.push(attempt);
+      if (attempts.length === 1) return Promise.reject(timeoutError());
+      return Promise.resolve('ok');
+    },
+    { retries: 2, baseDelayMs: 1 },
+  );
+  assert.equal(out, 'ok');
+  assert.deepEqual(attempts, [0, 1]);
+});
+
+test('withRetry rethrows the last error unchanged after retries are exhausted', async () => {
+  const attempts: number[] = [];
+  const lastError = timeoutError();
+  let call = 0;
+  let caught: unknown;
+  try {
+    await withRetry(
+      (attempt) => {
+        attempts.push(attempt);
+        call++;
+        return Promise.reject(call < 3 ? timeoutError() : lastError);
+      },
+      { retries: 2, baseDelayMs: 1 },
+    );
+  } catch (error) {
+    caught = error;
+  }
+  assert.equal(caught, lastError, 'exhaustion must reject with the identical last error object');
+  assert.deepEqual(attempts, [0, 1, 2]);
+});
+
+test('withRetry rejects immediately without retrying non-retryable codes', async () => {
+  let calls = 0;
+  const notFound = new RustraCommandError(RustraErrorCode.CommandNotFound, 'missing', false);
+  let caught: unknown;
+  try {
+    await withRetry(
+      () => {
+        calls++;
+        return Promise.reject(notFound);
+      },
+      { retries: 2, baseDelayMs: 1 },
+    );
+  } catch (error) {
+    caught = error;
+  }
+  assert.equal(caught, notFound, 'non-retryable error must come out unchanged');
+  assert.equal(calls, 1, 'non-retryable failure must not schedule a retry');
+});
+
+test('withRetry respects a custom retryIf in both directions', async () => {
+  // 방향 1: 기본 판정은 retryable 코드인데 retryIf 가 false → 즉시 거부.
+  let callsA = 0;
+  const retryable = timeoutError();
+  let caughtA: unknown;
+  try {
+    await withRetry(
+      () => {
+        callsA++;
+        return Promise.reject(retryable);
+      },
+      { retries: 2, baseDelayMs: 1, retryIf: () => false },
+    );
+  } catch (error) {
+    caughtA = error;
+  }
+  assert.equal(caughtA, retryable);
+  assert.equal(callsA, 1, 'retryIf=false must suppress the default predicate');
+
+  // 방향 2: 기본 판정은 non-retryable 코드인데 retryIf 가 true → 재시도됨.
+  let callsB = 0;
+  const notFound = new RustraCommandError(RustraErrorCode.CommandNotFound, 'missing', false);
+  const out = await withRetry(
+    () => {
+      callsB++;
+      return callsB === 1 ? Promise.reject(notFound) : Promise.resolve('recovered');
+    },
+    { retries: 1, baseDelayMs: 1, retryIf: () => true },
+  );
+  assert.equal(out, 'recovered');
+  assert.equal(callsB, 2, 'retryIf=true must override the default predicate entirely');
+});
+
+test('withRetry rejects with the retryIf predicate error when the predicate itself throws', async () => {
+  let calls = 0;
+  const predicateBoom = new Error('predicate exploded');
+  let caught: unknown;
+  try {
+    await withRetry(
+      () => {
+        calls++;
+        return Promise.reject(timeoutError());
+      },
+      {
+        retries: 3,
+        baseDelayMs: 1,
+        retryIf: () => {
+          throw predicateBoom;
+        },
+      },
+    );
+  } catch (error) {
+    caught = error;
+  }
+  assert.equal(caught, predicateBoom, 'predicate throw must propagate unchanged');
+  assert.equal(calls, 1, 'predicate failure must not schedule a retry');
+});
+
+test('withRetry promotes a mid-flight signal abort to CancelledError', async () => {
+  const controller = new AbortController();
+  const attempts: number[] = [];
+  const pending = withRetry(
+    (attempt) => {
+      attempts.push(attempt);
+      if (attempt === 0) controller.abort(); // 첫 실패 직후 abort — pre-aborted fast path.
+      return Promise.reject(timeoutError());
+    },
+    { retries: 3, baseDelayMs: 50, signal: controller.signal },
+  );
+  await assert.rejects(
+    pending,
+    (err: unknown) => err instanceof CancelledError && err.code === RustraErrorCode.Cancelled,
+  );
+  assert.deepEqual(attempts, [0], 'abort during backoff sleep must cancel before the next attempt');
+});
+
+test('withRetry aborts a pending backoff sleep via the registered listener and preserves cause', async () => {
+  // sleep Promise 생성자 블록(타이머 생성 + abort 리스너 등록 + abort 시
+  // clearTimeout)을 실제로 타는 경로 — fn 안 동기 abort 는 항상 pre-aborted
+  // fast path 로 새므로, 타이머 abort 를 쓴다(경쟁 없음: 5ms ≪ 10s 백오프).
+  const controller = new AbortController();
+  const cause = timeoutError();
+  const attempts: number[] = [];
+  const startedAt = Date.now();
+  const pending = withRetry(
+    (attempt) => {
+      attempts.push(attempt);
+      if (attempt === 0) {
+        setTimeout(() => controller.abort(), 5);
+        return Promise.reject(cause);
+      }
+      return Promise.resolve('unreachable');
+    },
+    { retries: 3, baseDelayMs: 10_000, signal: controller.signal },
+  );
+  let caught: unknown;
+  try {
+    await pending;
+  } catch (error) {
+    caught = error;
+  }
+  const elapsed = Date.now() - startedAt;
+  assert.ok(caught instanceof CancelledError, 'timer abort must promote to CancelledError');
+  assert.equal((caught as CancelledError).code, RustraErrorCode.Cancelled);
+  assert.equal(
+    (caught as CancelledError).cause,
+    cause,
+    'abort promotion must preserve the failed error as cause',
+  );
+  assert.equal(attempts.length, 1, 'aborted sleep must cancel before the next attempt');
+  assert.ok(elapsed < 5000, `abort must cut the 10s sleep short immediately, took ${elapsed}ms`);
+});
+
+test('withRetry rejects with CancelledError immediately when the signal is already aborted', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  let calls = 0;
+  await assert.rejects(
+    withRetry(
+      () => {
+        calls++;
+        return Promise.resolve('never');
+      },
+      { signal: controller.signal },
+    ),
+    (err: unknown) => err instanceof CancelledError && err.code === RustraErrorCode.Cancelled,
+  );
+  assert.equal(calls, 0, 'pre-aborted signal must never invoke fn');
+});
+
+test('withRetry with retries 0 makes exactly one attempt and never sleeps', async () => {
+  const attempts: number[] = [];
+  let caught: unknown;
+  try {
+    await withRetry(
+      (attempt) => {
+        attempts.push(attempt);
+        return Promise.reject(timeoutError());
+      },
+      { retries: 0, baseDelayMs: 10_000 },
+    );
+  } catch (error) {
+    caught = error;
+  }
+  assert.ok(caught instanceof TimeoutError, 'single attempt must reject with the original error');
+  assert.deepEqual(attempts, [0], 'retries=0 must not retry even on retryable failures');
+});
+
+test('withRetry rejects invalid retries values with TypeError instead of looping forever', async () => {
+  // attempt >= NaN 은 항상 거짓 — 가드 없으면 조용한 무한 루프. async 함수라
+  // TypeError 는 동기 throw 가 아니라 즉시 rejection 로 관찰된다.
+  for (const bad of [Number.NaN, -1, Number.POSITIVE_INFINITY]) {
+    await assert.rejects(
+      withRetry(() => Promise.resolve('x'), { retries: bad }),
+      (err: unknown) => err instanceof TypeError,
+      `retries=${String(bad)} must reject with TypeError before any attempt`,
+    );
+  }
+  // 음이 아닌 유한 소수는 유효 — attempt 인덱스와의 수치 비교(>=)라 0.5 는
+  // attempt 1 에서 경계를 넘어 총 2회 시도된다 (floor/round 아님).
+  const attempts: number[] = [];
+  let fractional: unknown;
+  try {
+    await withRetry(
+      (attempt) => {
+        attempts.push(attempt);
+        return Promise.reject(timeoutError());
+      },
+      { retries: 0.5, baseDelayMs: 1 },
+    );
+  } catch (error) {
+    fractional = error;
+  }
+  assert.ok(fractional instanceof TimeoutError, 'retries=0.5 must exhaust and rethrow');
+  assert.deepEqual(attempts, [0, 1], 'retries=0.5 exhausts at attempt 1 (numeric boundary)');
+});
+
+test('withRetry preserves arbitrary rejection values unchanged', async () => {
+  const bigintPayload = 9007199254740993n; // Number.MAX_SAFE_INTEGER 초과 bigint
+  let caught: unknown;
+  try {
+    await withRetry(() => Promise.reject(bigintPayload), { retries: 2, baseDelayMs: 1 });
+  } catch (error) {
+    caught = error;
+  }
+  assert.equal(caught, bigintPayload, 'non-Error rejection must come out by identity');
+  assert.equal(typeof caught, 'bigint');
+});
+
+test('withRetry passes 0-based attempt numbers to fn', async () => {
+  const attempts: number[] = [];
+  await withRetry(
+    (attempt) => {
+      attempts.push(attempt);
+      return attempts.length < 3 ? Promise.reject(timeoutError()) : Promise.resolve('done');
+    },
+    { retries: 3, baseDelayMs: 1 },
+  );
+  assert.deepEqual(attempts, [0, 1, 2]);
+});
+
+// ── 응답 셰이프 검증 경고 (readiness Task 8) — RUSTRA_DEBUG 버전 스큐 조기 감지 ──
+
+type ShapeDebugEvent = { kind?: string; reason?: string; command?: string; value?: unknown };
+
+/**
+ * debug 모드 테스트 하네스 — `__RUSTRA_DEBUG__` 스위치를 켜고 console.debug
+ * 미러 출력을 흡수해 테스트 결과를 깨끗하게 유지한다(node-loop.test.ts 관례).
+ * `resetDebugEnvForTests()` 로 모듈 메모이즈된 dump 게이트 캐시를 먼저 무효화해
+ * 주변 환경의 `RUSTRA_DEBUG=1` 이 스위치 판정에 새지 않게 한다(양방향 — 테스트
+ * 시작 시 환경을 고정하고, cleanup 때도 무효화해 이후 테스트가 오염되지 않게
+ * 한다). 반환된 cleanup 을 finally 에서 반드시 호출한다.
+ */
+function enableShapeDebugHarness(): () => void {
+  resetDebugEnvForTests();
+  (globalThis as { __RUSTRA_DEBUG__?: unknown }).__RUSTRA_DEBUG__ = true;
+  const originalDebug = console.debug;
+  console.debug = () => {};
+  return () => {
+    console.debug = originalDebug;
+    delete (globalThis as { __RUSTRA_DEBUG__?: unknown }).__RUSTRA_DEBUG__;
+    resetDebugEnvForTests();
+  };
+}
+
+/** json-engine 테스트용 고정 payload 를 resolve 하는 가짜 transport. */
+function envelopeTransport(payload: unknown): { invoke: (command: string) => Promise<unknown> } {
+  return { invoke: () => Promise.resolve(payload) };
+}
+
+test('double envelope resolution emits response.shape and resolves unchanged in debug mode', async () => {
+  const seen: ShapeDebugEvent[] = [];
+  const sink = (event: unknown) => seen.push(event as ShapeDebugEvent);
+  const payload = { ok: true, result: { value: 42 } };
+  const engine = createJsonEngine(envelopeTransport(payload));
+  const cleanup = enableShapeDebugHarness();
+  try {
+    configureDebug(sink);
+    const result = await engine.invoke('echo', {});
+    assert.deepEqual(result, { ok: true, result: { value: 42 } }, 'no transform of the result');
+    const shapes = seen.filter((e) => e.kind === 'response.shape');
+    assert.equal(shapes.length, 1, 'exactly one shape event per invoke');
+    assert.equal(shapes[0]!.reason, 'double_envelope');
+    assert.equal(shapes[0]!.command, 'echo');
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
+});
+
+test('resolved ok:false without error emits response.shape and still resolves in debug mode', async () => {
+  const seen: ShapeDebugEvent[] = [];
+  const engine = createJsonEngine(envelopeTransport({ ok: false }));
+  const cleanup = enableShapeDebugHarness();
+  try {
+    configureDebug((event) => seen.push(event as ShapeDebugEvent));
+    const result = await engine.invoke<{ ok: boolean }>('broken', {});
+    assert.deepEqual(result, { ok: false }, 'warning only — the invoke still resolves');
+    const event = seen.filter((e) => e.kind === 'response.shape')[0]!;
+    assert.equal(event.reason, 'failed_without_error');
+    assert.equal(event.command, 'broken');
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
+});
+
+test('resolved error envelope ({ok:false,error}) emits response.shape but keeps the value', async () => {
+  // reject 경로의 정규화는 rejection 일 때만 동작한다 — transport 가 실패 엔벨로프를
+  // 그대로 resolve 하면(스크 신호) 경고는 하되 기존 값 계약을 변형하지 않는다.
+  const seen: ShapeDebugEvent[] = [];
+  const error = { code: 'math.divide_by_zero', message: 'division by zero' };
+  const engine = createJsonEngine(envelopeTransport({ ok: false, error }));
+  const cleanup = enableShapeDebugHarness();
+  try {
+    configureDebug((event) => seen.push(event as ShapeDebugEvent));
+    const result = await engine.invoke<{ ok: boolean; error: unknown }>('divide', {});
+    assert.deepEqual(result, { ok: false, error });
+    const event = seen.filter((e) => e.kind === 'response.shape')[0]!;
+    assert.equal(event.reason, 'resolved_error_envelope');
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
+});
+
+test('broken envelope ({ok:true} payload-less) emits envelope_missing_payload', async () => {
+  const seen: ShapeDebugEvent[] = [];
+  const engine = createJsonEngine(envelopeTransport({ ok: true }));
+  const cleanup = enableShapeDebugHarness();
+  try {
+    configureDebug((event) => seen.push(event as ShapeDebugEvent));
+    await engine.invoke('noPayload', {});
+    const event = seen.filter((e) => e.kind === 'response.shape')[0]!;
+    assert.equal(event.reason, 'envelope_missing_payload');
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
+});
+
+test('debug disabled: no response.shape events (passthrough unchanged)', async () => {
+  // 모듈 메모이즈된 dump 게이트 캐시를 먼저 무효화해야 주변 RUSTRA_DEBUG=1 환경이
+  // 이 테스트로 새지 않는다(스위치 판정은 캐시 무효화 후 env 만 본다).
+  resetDebugEnvForTests();
+  const shapes: ShapeDebugEvent[] = [];
+  const engine = createJsonEngine(envelopeTransport({ ok: true, result: { value: 1 } }));
+  try {
+    // sink-only 설치는 debugRustra 의 기존 계약(싱크만으로도 요청/응답 이벤트 도달)
+    // 이지만, 셰이프 감지는 isRustraDebugEnabled 로만 게이트된다 — 감지 게이트는
+    // 싱크 유무와 무관하게 debug 스위치만 본다. 여기선 스위치 없이 싱크만 설치.
+    configureDebug((event) => {
+      if ((event as ShapeDebugEvent).kind === 'response.shape')
+        shapes.push(event as ShapeDebugEvent);
+    });
+    const result = await engine.invoke('echo', {});
+    assert.deepEqual(result, { ok: true, result: { value: 1 } }, 'passthrough unchanged');
+    assert.equal(shapes.length, 0, 'debug off must suppress the shape warning entirely');
+  } finally {
+    configureDebug(undefined);
+    delete (globalThis as { __RUSTRA_DEBUG__?: unknown }).__RUSTRA_DEBUG__;
+    resetDebugEnvForTests();
+  }
+});
+
+test('plain payload without ok and primitive responses emit no shape event', async () => {
+  for (const payload of [{ value: 42 }, { okay: true }, 'plain', 7, null, undefined]) {
+    const seen: ShapeDebugEvent[] = [];
+    const engine = createJsonEngine(envelopeTransport(payload));
+    const cleanup = enableShapeDebugHarness();
+    try {
+      configureDebug((event) => seen.push(event as ShapeDebugEvent));
+      const result = await engine.invoke('normal', {});
+      assert.equal(result, payload, 'passthrough by identity');
+      assert.equal(
+        seen.filter((e) => e.kind === 'response.shape').length,
+        0,
+        `payload ${JSON.stringify(payload)} must not warn (false-positive guard)`,
+      );
+    } finally {
+      configureDebug(undefined);
+      cleanup();
+    }
+  }
+});
+
+test('detection never throws on exotic result objects (frozen, null-prototype)', async () => {
+  const exotic: unknown[] = [
+    Object.freeze({ ok: true, result: { frozen: true } }),
+    Object.create(null) as unknown, // 프로토타입 없음 — hasOwnProperty.call 로 안전
+    Object.freeze(Object.create(null, { ok: { value: false, enumerable: true } })),
+  ];
+  const cleanup = enableShapeDebugHarness();
+  try {
+    configureDebug(() => {});
+    for (const payload of exotic) {
+      const engine = createJsonEngine(envelopeTransport(payload));
+      // 어떤 특이 객체도 invoke 자체를 실패로 만들지 않는다(경고는 절대 throw 금지).
+      const result = await engine.invoke('weird', {});
+      assert.equal(result, payload, 'exotic object passes through by identity');
+    }
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
+});
+
+// ── rejection 경로 회귀 가드 — createJsonEngine 의 normalizeRustraError 배선 ──
+// 셰이프 감지는 resolve 경로 전용이다. rejection 이 왔을 때 감지가 조용하다는
+// 핀과, transport reject 값이 기존 정규화 계약으로 변환된다는 점을 함께 잠근다.
+
+test('json-engine rejection path normalizes errors and emits no shape event', async () => {
+  const shapes: ShapeDebugEvent[] = [];
+  const cleanup = enableShapeDebugHarness();
+  const rejectTransport = (reason: unknown) => ({
+    invoke: () => Promise.reject(reason),
+  });
+  try {
+    configureDebug((event) => {
+      if ((event as ShapeDebugEvent).kind === 'response.shape')
+        shapes.push(event as ShapeDebugEvent);
+    });
+
+    // 실패 엔벨로프 reject — 최상위 code/message 가 아니므로 normalizeRustraError 는
+    // 구조화 경로에 진입하지 않고 unknown 으로 정규화한다(기존 계약 — 코드가
+    // error 키 안으로 감춰져 있어 평탄화할 근거가 없다). 셰이프 경고도 없다.
+    let engine = createJsonEngine(
+      rejectTransport({ ok: false, error: { code: 'x', message: 'y' } }),
+    );
+    await assert.rejects(
+      engine.invoke('boom', {}),
+      (error: unknown) =>
+        error instanceof RustraCommandError && error.code === 'unknown' && error.message.length > 0,
+      'envelope-shaped rejection must normalize (not crash, not resolve)',
+    );
+
+    // 구조화 {code,message} reject — wire 표준 실패. 코드 보존이 본 계약.
+    engine = createJsonEngine(rejectTransport({ code: 'x', message: 'y' }));
+    await assert.rejects(
+      engine.invoke('boom', {}),
+      (error: unknown) =>
+        error instanceof RustraCommandError &&
+        error.code === 'x' &&
+        error.message === 'y' &&
+        error.retryable === false,
+      'structured rejection must preserve code/message through normalization',
+    );
+
+    // plain Error / string reject — 역사적 fallback 계약(invoke.failed / unknown).
+    engine = createJsonEngine(rejectTransport(new Error('plain boom')));
+    await assert.rejects(
+      engine.invoke('boom', {}),
+      (error: unknown) => error instanceof RustraCommandError && error.code === 'invoke.failed',
+    );
+    engine = createJsonEngine(rejectTransport('string boom'));
+    await assert.rejects(
+      engine.invoke('boom', {}),
+      (error: unknown) => error instanceof RustraCommandError && error.code === 'unknown',
+    );
+
+    assert.equal(shapes.length, 0, 'rejection path never emits response.shape');
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
 });
