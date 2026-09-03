@@ -14,6 +14,25 @@ function status(format: CliOutputFormat | undefined, message: string): void {
   (format === 'json' ? console.error : console.log)(message);
 }
 
+/** runGenerate 진행 표기의 drift 신호 — "(updated)" 접미어가 하나라도 있으면 갱신. */
+const hasUpdatedMarker = (files: string[]): boolean =>
+  files.some((file) => file.endsWith('(updated)'));
+
+/**
+ * 스테일 런타임 바이너리 힌트(감사 #3) — codegen 은 TS/C++ 만 다시 렌더하고 실제
+ * invoke 를 서브하는 런타임 바이너리는 재빌드하지 않는다. drift((updated) 표기)가
+ * 있으면 기존 생성물이 갱신된 것이므로 cargo build 전까지 invoke 가 contract.mismatch
+ * 로 죽을 수 있다(@rustra/types 의 RustraCommandError 코드 — 네이티브 contract hash
+ * ≠ 기대 hash). JSON 계약에는 손대지 않는다(텍스트 모드 전용).
+ */
+export function staleBinaryHint(files: string[]): string | null {
+  if (!hasUpdatedMarker(files)) return null;
+  return (
+    '[rustra] Note: generated code changed — rebuild the runtime binary before invoking ' +
+    '(cargo build), or invokes may fail with contract.mismatch.'
+  );
+}
+
 /** 표면 지도 출력 — config 해석만으로 facts를 만든다(파일 시스템 쓰기 없음). */
 function printExplain(
   config: ReturnType<typeof readConfigSync>,
@@ -139,10 +158,16 @@ export async function runCodegen(args: string[]): Promise<void> {
           written: files,
           // "(updated)" 표기가 하나라도 있으면 기존 생성물이 갱신된 것 — CI가
           // "재생성해도 바뀌는가"를 파싱 없이 판정하는 drift 신호다.
-          drift: files.some((file) => file.endsWith('(updated)')),
+          drift: hasUpdatedMarker(files),
           durationMs: Date.now() - startedAt,
         }),
       );
+    // 텍스트 모드 전용 — 스테일 런타임 바이너리 힌트(감사 #3). drift 는 JSON 필드로
+    // 이미 관측 가능하지만, 텍스트 사용자에게는 이 출력이 유일한 신호였다.
+    else {
+      const hint = staleBinaryHint(files);
+      if (hint) console.log(hint);
+    }
   } catch (error) {
     throw new Error(
       `TypeScript/C++ generation failed for ${configPath}: ${error instanceof Error ? error.message : String(error)}`,
