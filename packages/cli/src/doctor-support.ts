@@ -9,6 +9,7 @@ import {
   type DoctorCheck,
   type DoctorCommandResult,
   type DoctorConfig,
+  type DoctorFetcher,
   type DoctorRunner,
   type DoctorStatus,
 } from './doctor-types.js';
@@ -156,6 +157,70 @@ export function javaMajor(value: string): number | null {
   if (!match) return null;
   const major = Number(match[1]);
   return major === 1 && match[2] ? Number(match[2]) : major;
+}
+
+// ── registry 도달성 (registry.reachability) ──────────────────────────────────
+//
+// runner 는 명령 실행만 가능하고 HTTP 를 못 하므로 이 프리브는 fetch 시임이다.
+// 프록시 뒤 사용자는 첫 cargo build 에서 22초 무응답 + 원문 영문 cargo 에러를
+// 만난다 — cargo 가 망가진 뒤가 아니라 doctor 가 미리 진단한다. 네트워크 부재는
+// 환경 문제이지 설치 결함이 아니므로 warn 이 상한이다(fail-closed 금지 — 무네트워크
+// CI 에서 doctor 가 빨개지면 온보딩 게이트가 깨진다).
+
+/** crates.io sparse index config — 인증 없이 가장 작고 캐시 친화적인 도달성 표적. */
+export const REGISTRY_PROBE_URL = 'https://index.crates.io/config.json';
+/** doctor 는 CI 에서도 돈다 — 프리브가 느려도 3초면 충분하다. */
+export const REGISTRY_PROBE_TIMEOUT_MS = 3_000;
+/** 검사 id — JSON 소비자가 문자열로 조인하므로 단일 출처로 관리한다. */
+export const REGISTRY_CHECK_ID = 'registry.reachability';
+
+const REGISTRY_UNREACHABLE_SUMMARY =
+  'crates.io registry is unreachable — cargo build may fail or hang';
+const REGISTRY_REACHABILITY_FIX = [
+  'If a proxy is required, configure HTTPS_PROXY/HTTP_PROXY in the environment',
+  'For vendored or offline builds, set CARGO_NET_OFFLINE=true',
+];
+
+/**
+ * Node undici 가 네트워크 실패를 "fetch failed" TypeError 로 감싸고 실제 원인
+ * (ENOTFOUND/ECONNREFUSED/프록시 거절)은 cause 에 숨긴다 — 이 검사가 사는 페르소나가
+ * 정확히 그 원인을 봐야 하므로 한 겹만 벗긴다. Bun 은 cause 가 없어 폴백이 그대로 쓰인다.
+ */
+function registryProbeFailureDetail(error: unknown): string {
+  if (error instanceof Error && error.message === 'fetch failed') {
+    const cause = error.cause;
+    if (cause instanceof Error && cause.message) return cause.message;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+export async function probeRegistryReachability(
+  fetchImpl: DoctorFetcher = globalThis.fetch,
+): Promise<DoctorCheck> {
+  try {
+    const response = await fetchImpl(REGISTRY_PROBE_URL, {
+      signal: AbortSignal.timeout(REGISTRY_PROBE_TIMEOUT_MS),
+    });
+    if (!response.ok)
+      return check(
+        REGISTRY_CHECK_ID,
+        'warn',
+        false,
+        REGISTRY_UNREACHABLE_SUMMARY,
+        `${REGISTRY_PROBE_URL} responded with HTTP ${response.status}`,
+        REGISTRY_REACHABILITY_FIX,
+      );
+    return check(REGISTRY_CHECK_ID, 'pass', false, 'crates.io registry is reachable');
+  } catch (error) {
+    return check(
+      REGISTRY_CHECK_ID,
+      'warn',
+      false,
+      REGISTRY_UNREACHABLE_SUMMARY,
+      `${REGISTRY_PROBE_URL}: ${registryProbeFailureDetail(error)}`,
+      REGISTRY_REACHABILITY_FIX,
+    );
+  }
 }
 function ndkPath(env: NodeJS.ProcessEnv): string | undefined {
   const direct = env.ANDROID_NDK_HOME;

@@ -16,6 +16,7 @@ import {
   conditionalCheck,
   getCargoMetadata,
   nearestExistingParent,
+  REGISTRY_CHECK_ID,
   resolveManifest,
   safeResolve,
   selectGenerator,
@@ -23,7 +24,12 @@ import {
 import { sha256 } from './hash.js';
 import { cliVersion } from './cli-runtime.js';
 
-export function collectBaseChecks(options: DoctorOptions, runner: DoctorRunner): DoctorCheck[] {
+export function collectBaseChecks(
+  options: DoctorOptions,
+  runner: DoctorRunner,
+  /** collectDoctorReportAsync 가 미리 당겨 온 registry.reachability 프리브 결과. */
+  registry?: DoctorCheck,
+): DoctorCheck[] {
   const checks: DoctorCheck[] = [];
   const rustc = runner('rustc', ['--version']);
   const version = parseRustVersion(`${rustc.stdout}\n${rustc.stderr}`);
@@ -61,6 +67,28 @@ export function collectBaseChecks(options: DoctorOptions, runner: DoctorRunner):
       ['Install Cargo with https://rustup.rs'],
     ),
   );
+  // registry 도달성 — cargo 부재는 경고할 것도 없다(설치 자체가 선행 과제). 프리브가
+  // 없는 동기 경로(collectDoctorReport 직접 호출)는 skip 으로 명시해 기계 판독이
+  // "검사 누락"과 "의도된 스킵"을 구별하게 한다.
+  if (!registry)
+    checks.push(
+      check(
+        REGISTRY_CHECK_ID,
+        'skip',
+        false,
+        'Skipped registry reachability because the probe was not run',
+      ),
+    );
+  else if (!cargo.ok)
+    checks.push(
+      check(
+        REGISTRY_CHECK_ID,
+        'skip',
+        false,
+        'Skipped registry reachability because cargo is unavailable',
+      ),
+    );
+  else checks.push(registry);
   const node = runner('node', ['--version']);
   const bun = runner('bun', ['--version']);
   checks.push(
