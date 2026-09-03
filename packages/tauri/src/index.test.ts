@@ -1,11 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  createTauriBootstrap,
-  createTauriEngine,
-  subscribeEvent,
-  subscribeTauriEvent,
-} from './index.js';
+import { createTauriBootstrap, createTauriEngine, subscribeTauriEvent } from './index.js';
 import { RustraCommandError } from '@rustra/types';
 
 test('createTauriEngine routes invoke through rustra_dispatch', async () => {
@@ -210,7 +205,7 @@ test('subscribeEvent parses JSON payloads and falls back to raw string', async (
   };
 
   const seen: unknown[] = [];
-  await subscribeEvent<typeof seen>(fakeListen, 'tick', (p) => seen.push(p));
+  await subscribeEvent<typeof seen>('tick', (p) => seen.push(p), fakeListen);
 
   assert.equal(captured!.channel, 'rustra://tick');
   fire!('{"value":42}');
@@ -218,19 +213,6 @@ test('subscribeEvent parses JSON payloads and falls back to raw string', async (
   // 비 JSON 페이로드는 원본 문자열로 전달(조용한 드롭 방지).
   fire!('not-json');
   assert.equal(seen[1], 'not-json');
-});
-
-test('subscribeEvent also accepts the canonical name-first shape', async () => {
-  let subscribed = '';
-  const fakeListen = async (channel: string, handler: (e: { payload: string }) => void) => {
-    subscribed = channel;
-    handler({ payload: JSON.stringify({ value: 7 }) });
-    return () => {};
-  };
-  const received: unknown[] = [];
-  await subscribeEvent('calc.tick', (payload) => received.push(payload), fakeListen);
-  assert.equal(subscribed, 'rustra://calc_tick');
-  assert.deepEqual(received, [{ value: 7 }]);
 });
 
 test('subscribeTauriEvent discovers the global listen API', async () => {
