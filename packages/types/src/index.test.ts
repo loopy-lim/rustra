@@ -21,6 +21,7 @@ import {
   TimeoutError,
   parseRustraErrorString,
   normalizeRustraError,
+  withRetry,
   configureDebug,
   debugWire,
 } from './index.js';
@@ -3373,4 +3374,157 @@ test('schema interpreter recompiles after generation resync picks up a new codec
     [14],
     'post-resync invoke must speak postcard (zigzag), not JSON',
   );
+});
+
+// ── withRetry (readiness Task 6) ────────────────────────────
+
+/** 재시도 판정 테스트용 retryable RustraCommandError. */
+function timeoutError(): RustraCommandError {
+  return new RustraCommandError('transport.timeout', 'timed out', true);
+}
+
+test('withRetry succeeds on the second attempt after one retryable failure', async () => {
+  const attempts: number[] = [];
+  const out = await withRetry(
+    (attempt) => {
+      attempts.push(attempt);
+      if (attempts.length === 1) return Promise.reject(timeoutError());
+      return Promise.resolve('ok');
+    },
+    { retries: 2, baseDelayMs: 1 },
+  );
+  assert.equal(out, 'ok');
+  assert.deepEqual(attempts, [0, 1]);
+});
+
+test('withRetry rethrows the last error unchanged after retries are exhausted', async () => {
+  const attempts: number[] = [];
+  const lastError = timeoutError();
+  let call = 0;
+  let caught: unknown;
+  try {
+    await withRetry(
+      (attempt) => {
+        attempts.push(attempt);
+        call++;
+        return Promise.reject(call < 3 ? timeoutError() : lastError);
+      },
+      { retries: 2, baseDelayMs: 1 },
+    );
+  } catch (error) {
+    caught = error;
+  }
+  assert.equal(caught, lastError, 'exhaustion must reject with the identical last error object');
+  assert.deepEqual(attempts, [0, 1, 2]);
+});
+
+test('withRetry rejects immediately without retrying non-retryable codes', async () => {
+  let calls = 0;
+  const notFound = new RustraCommandError('command.not_found', 'missing', false);
+  let caught: unknown;
+  try {
+    await withRetry(
+      () => {
+        calls++;
+        return Promise.reject(notFound);
+      },
+      { retries: 2, baseDelayMs: 1 },
+    );
+  } catch (error) {
+    caught = error;
+  }
+  assert.equal(caught, notFound, 'non-retryable error must come out unchanged');
+  assert.equal(calls, 1, 'non-retryable failure must not schedule a retry');
+});
+
+test('withRetry respects a custom retryIf in both directions', async () => {
+  // 방향 1: 기본 판정은 retryable 코드인데 retryIf 가 false → 즉시 거부.
+  let callsA = 0;
+  const retryable = timeoutError();
+  let caughtA: unknown;
+  try {
+    await withRetry(
+      () => {
+        callsA++;
+        return Promise.reject(retryable);
+      },
+      { retries: 2, baseDelayMs: 1, retryIf: () => false },
+    );
+  } catch (error) {
+    caughtA = error;
+  }
+  assert.equal(caughtA, retryable);
+  assert.equal(callsA, 1, 'retryIf=false must suppress the default predicate');
+
+  // 방향 2: 기본 판정은 non-retryable 코드인데 retryIf 가 true → 재시도됨.
+  let callsB = 0;
+  const notFound = new RustraCommandError('command.not_found', 'missing', false);
+  const out = await withRetry(
+    () => {
+      callsB++;
+      return callsB === 1 ? Promise.reject(notFound) : Promise.resolve('recovered');
+    },
+    { retries: 1, baseDelayMs: 1, retryIf: () => true },
+  );
+  assert.equal(out, 'recovered');
+  assert.equal(callsB, 2, 'retryIf=true must override the default predicate entirely');
+});
+
+test('withRetry promotes a mid-flight signal abort to CancelledError', async () => {
+  const controller = new AbortController();
+  const attempts: number[] = [];
+  const pending = withRetry(
+    (attempt) => {
+      attempts.push(attempt);
+      if (attempt === 0) controller.abort(); // 첫 실패 직후 abort — sleep 중단 경로.
+      return Promise.reject(timeoutError());
+    },
+    { retries: 3, baseDelayMs: 50, signal: controller.signal },
+  );
+  await assert.rejects(
+    pending,
+    (err: unknown) => err instanceof CancelledError && err.code === 'cancelled',
+  );
+  assert.deepEqual(attempts, [0], 'abort during backoff sleep must cancel before the next attempt');
+});
+
+test('withRetry rejects with CancelledError immediately when the signal is already aborted', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  let calls = 0;
+  await assert.rejects(
+    withRetry(
+      () => {
+        calls++;
+        return Promise.resolve('never');
+      },
+      { signal: controller.signal },
+    ),
+    (err: unknown) => err instanceof CancelledError && err.code === 'cancelled',
+  );
+  assert.equal(calls, 0, 'pre-aborted signal must never invoke fn');
+});
+
+test('withRetry preserves arbitrary rejection values unchanged', async () => {
+  const bigintPayload = 9007199254740993n; // Number.MAX_SAFE_INTEGER 초과 bigint
+  let caught: unknown;
+  try {
+    await withRetry(() => Promise.reject(bigintPayload), { retries: 2, baseDelayMs: 1 });
+  } catch (error) {
+    caught = error;
+  }
+  assert.equal(caught, bigintPayload, 'non-Error rejection must come out by identity');
+  assert.equal(typeof caught, 'bigint');
+});
+
+test('withRetry passes 0-based attempt numbers to fn', async () => {
+  const attempts: number[] = [];
+  await withRetry(
+    (attempt) => {
+      attempts.push(attempt);
+      return attempts.length < 3 ? Promise.reject(timeoutError()) : Promise.resolve('done');
+    },
+    { retries: 3, baseDelayMs: 1 },
+  );
+  assert.deepEqual(attempts, [0, 1, 2]);
 });
