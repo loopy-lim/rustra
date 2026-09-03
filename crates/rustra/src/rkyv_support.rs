@@ -8,17 +8,6 @@
 // JS 쪽 지원 범위를 확장할 때 이 함수를 함께 갱신해야 한다 (codegen 마감 조항).
 
 /// 스키마(객체)의 모든 프로퍼티가 JS postcard 코덱 지원 타입인지 판정한다.
-/// 중첩 $ref 정의는 재귀 순회한다. definitions 없는 레거시 호출부용 — 신규
-/// 코드는 definitions 를 따라가는 [`js_postcard_codec_supported_with_defs`] 를
-/// 쓴다($ref 가 미지원 타입을 가리키는 경우까지 검증).
-#[allow(dead_code)]
-pub(crate) fn js_postcard_codec_supported(schema: &Value) -> bool {
-    let Some(props) = schema.get("properties").and_then(Value::as_object) else {
-        return true; // properties 없음(unit 등) — 항상 지원
-    };
-    props.values().all(|p| js_field_supported(p, 0))
-}
-
 /// definitions 를 받는 확장 판정 — `$ref` 를 실제 정의 스키마까지 따라간다.
 ///
 /// 과거 판정은 `$ref` 를 무조건 지원(struct)으로 취급했다(주석이 "단순화"라고
