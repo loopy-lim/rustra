@@ -1,3 +1,5 @@
+[English](./README.md)
+
 # rustra 문서
 
 rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크다.
@@ -34,7 +36,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 | [Crate 및 Package 구조](internal/crate-structure.md)  | 기여자 | 각 crate/package 책임, 빌드 의존성                                 |
 | [TypeScript 코드 생성](internal/codegen.md)           | 기여자 | codegen 파이프라인, 타입 매핑, 제한사항                            |
 | [테스트 구조](internal/testing.md)                    | 기여자 | 테스트 계층, 스크립트 체인, host별 상태                            |
-| [호환성 계약](compatibility-contract.md)              | 기여자 | EngineClient 안정 계약, runtime acceptance gates                   |
+| [호환성 계약](compatibility-contract.ko.md)           | 기여자 | EngineClient 안정 계약, runtime acceptance gates                   |
 | [호환성 매트릭스](compatibility-matrix.md)            | 사용자 | 기능(signal/취소/배치/이벤트) × 어댑터 지원 표                     |
 | [계약 마이그레이션 가이드](migration-guide.md)        | 전체   | 스키마 breaking change 검출(rustra diff)·해결 레시피·롤아웃 순서   |
 | [Rust API 가이드](rust-api-guide.md)                  | 사용자 | `#[command]`/`#[bridge_type]`/`build!` 매크로, Package/Builder API |

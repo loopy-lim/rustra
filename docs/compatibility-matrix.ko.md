@@ -1,3 +1,5 @@
+[English](./compatibility-matrix.md)
+
 # 기능 × 어댑터 호환성 매트릭스
 
 각 어댑터가 지원하는 invoke 기능(시그널/취소, 배치, 이벤트)의 행매트릭스.

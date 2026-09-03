@@ -1,3 +1,5 @@
+[English](./benchmarks.md)
+
 # 벤치마크
 
 모든 측정은 Apple Silicon (M-series) 환경에서 수행했다. 달리 표기하지 않은

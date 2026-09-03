@@ -1,3 +1,5 @@
+[English](./README.md)
+
 # rustra
 
 [![CI](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml/badge.svg)](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml)
