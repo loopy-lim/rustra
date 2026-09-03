@@ -41,10 +41,11 @@ pre-1.0 규칙: 이전 릴리즈에서 폐기되었던 항목은 마이너 릴�
 [0.5에서 0.6으로](migrations/0.5-to-0.6.ko.md) 참고.
 
 최근 제거: `RendererHost`(`HostMessage`, `MessageKind`, `RendererCapabilities`,
-`Size`, `SurfaceOptions`, `host_supports_eval` 포함)는 0.6.0까지 deprecated로
-유지되다가 위 pre-1.0 규칙에 따라 0.7.0에서 제거됐다. 대체재는 호스트별 어댑터
-경계다 — 각 임베딩 호스트는 공개된 채널·FFI 표면으로 자체 렌더러/이벤트를
-연결한다.
+`Size`, `SurfaceOptions`, `host_supports_eval` 포함)는 0.6.0부터 deprecated로
+위 pre-1.0 규칙에 따라 제거된다 — npm 패키지는 0.7.0에서(changeset),
+Rust crate는 다음 발행에서 제거된다(crates.io 발행은 수동이라 crate 버전은
+npm 라인을 따라간다). 대체재는 호스트별 어댑터 경계다 — 각 임베딩 호스트는
+공개된 채널·FFI 표면으로 자체 렌더러/이벤트를 연결한다.
 
 ## 실험 표면
 

@@ -45,9 +45,11 @@ Per-version migration notes live in
 [0.5 to 0.6](migrations/0.5-to-0.6.md).
 
 Recent removal: `RendererHost` (with `HostMessage`, `MessageKind`,
-`RendererCapabilities`, `Size`, `SurfaceOptions`, `host_supports_eval`) was
-deprecated through 0.6.0 and removed in 0.7.0 under the pre-1.0 rule above.
-The replacement is a host-specific adapter boundary — each embedding host
+`RendererCapabilities`, `Size`, `SurfaceOptions`, `host_supports_eval`) is
+deprecated as of 0.6.0 and removed under the pre-1.0 rule above — in the
+0.7.0 npm packages (changesets) and in the next `rustra` crate release
+(crates.io publishing is manual, so crate versions trail the npm line). The
+replacement is a host-specific adapter boundary — each embedding host
 bridges its own renderer/events via the published channel and FFI surfaces.
 
 ## Experimental surface
