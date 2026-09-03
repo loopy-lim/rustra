@@ -3802,3 +3802,64 @@ test('detection never throws on exotic result objects (frozen, null-prototype)',
     cleanup();
   }
 });
+
+// ── rejection 경로 회귀 가드 — createJsonEngine 의 normalizeRustraError 배선 ──
+// 셰이프 감지는 resolve 경로 전용이다. rejection 이 왔을 때 감지가 조용하다는
+// 핀과, transport reject 값이 기존 정규화 계약으로 변환된다는 점을 함께 잠근다.
+
+test('json-engine rejection path normalizes errors and emits no shape event', async () => {
+  const { createJsonEngine, RustraCommandError } = await import('./index.js');
+  const shapes: ShapeDebugEvent[] = [];
+  const cleanup = enableShapeDebugHarness();
+  const rejectTransport = (reason: unknown) => ({
+    invoke: () => Promise.reject(reason),
+  });
+  try {
+    configureDebug((event) => {
+      if ((event as ShapeDebugEvent).kind === 'response.shape')
+        shapes.push(event as ShapeDebugEvent);
+    });
+
+    // 실패 엔벨로프 reject — 최상위 code/message 가 아니므로 normalizeRustraError 는
+    // 구조화 경로에 진입하지 않고 unknown 으로 정규화한다(기존 계약 — 코드가
+    // error 키 안으로 감춰져 있어 평탄화할 근거가 없다). 셰이프 경고도 없다.
+    let engine = createJsonEngine(
+      rejectTransport({ ok: false, error: { code: 'x', message: 'y' } }),
+    );
+    await assert.rejects(
+      engine.invoke('boom', {}),
+      (error: unknown) =>
+        error instanceof RustraCommandError && error.code === 'unknown' && error.message.length > 0,
+      'envelope-shaped rejection must normalize (not crash, not resolve)',
+    );
+
+    // 구조화 {code,message} reject — wire 표준 실패. 코드 보존이 본 계약.
+    engine = createJsonEngine(rejectTransport({ code: 'x', message: 'y' }));
+    await assert.rejects(
+      engine.invoke('boom', {}),
+      (error: unknown) =>
+        error instanceof RustraCommandError &&
+        error.code === 'x' &&
+        error.message === 'y' &&
+        error.retryable === false,
+      'structured rejection must preserve code/message through normalization',
+    );
+
+    // plain Error / string reject — 역사적 fallback 계약(invoke.failed / unknown).
+    engine = createJsonEngine(rejectTransport(new Error('plain boom')));
+    await assert.rejects(
+      engine.invoke('boom', {}),
+      (error: unknown) => error instanceof RustraCommandError && error.code === 'invoke.failed',
+    );
+    engine = createJsonEngine(rejectTransport('string boom'));
+    await assert.rejects(
+      engine.invoke('boom', {}),
+      (error: unknown) => error instanceof RustraCommandError && error.code === 'unknown',
+    );
+
+    assert.equal(shapes.length, 0, 'rejection path never emits response.shape');
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
+});
