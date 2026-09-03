@@ -525,3 +525,123 @@ processTest(
     }
   },
 );
+
+// ── NDJSON 실패 라인·stderr 보존 (Task 7) — 실 스폰 경로 ──────────────────
+// 자식은 node -e 스텁으로 stdout/stderr 를 제어한다(cargo 바이너리 불필요 —
+// 'drain gives up after the timeout guard' 테스트와 동일 패턴). 추출된 순수
+// 함수(recordUnparsedLine/attachExitContext)의 단위 검증은 node-loop.test.ts,
+// debug 싱크 관측은 types configureDebug 계약을 따른다.
+
+const GARBAGE_EMITTER = [
+  'process.stdin.resume();',
+  "process.stdout.write('garbage-not-json\\n');",
+  "process.stdout.write(JSON.stringify({ id: 1, ok: true, result: { value: 42 } }) + '\\n');",
+].join('');
+
+processTest(
+  'createNodeLoopTransport resolves a valid response even when garbage lines interleave (Task 7)',
+  { timeout: 15_000 },
+  async () => {
+    const { createNodeLoopTransport } = await import('./index.js');
+    const transport = createNodeLoopTransport({
+      command: process.execPath,
+      args: ['-e', GARBAGE_EMITTER],
+    });
+    try {
+      const result = (await transport.invoke('addNumbers', { a: 20, b: 22 })) as {
+        value: number;
+      };
+      assert.equal(result.value, 42, 'valid response must resolve past unparsed lines');
+    } finally {
+      transport.dispose();
+    }
+  },
+);
+
+processTest(
+  'createNodeLoopTransport attaches preserved unparsed lines to pending rejections at exit (Task 7)',
+  { timeout: 15_000 },
+  async () => {
+    const { createNodeLoopTransport } = await import('./index.js');
+    // 40줄(용량 32 초과)의 garbage → exit. 최근 32줄(garbage-9..40)이 첨부되어야
+    // 하고 원문 메시지는 접두로 유지된다. join('\n') — 자식 스크립트 텍스트엔
+    // JSON.stringify 이스케이프로 실린다(자식에서 실제 개행으로 평가됨).
+    const lines = Array.from({ length: 40 }, (_, i) => `garbage-${i + 1}`).join('\n');
+    const transport = createNodeLoopTransport({
+      command: process.execPath,
+      args: [
+        '-e',
+        [
+          'process.stdin.resume();',
+          `process.stdout.write(${JSON.stringify(lines)} + '\\n');`,
+          'setTimeout(() => process.exit(0), 50);',
+        ].join(' '),
+      ],
+    });
+    try {
+      await assert.rejects(
+        () => transport.invoke('addNumbers', { a: 1, b: 2 }) as Promise<unknown>,
+        (err: unknown) => {
+          if (!(err instanceof RustraCommandError)) return false;
+          assert.equal(err.code, 'transport.error');
+          assert.ok(
+            err.message.startsWith('runtime process exited before responding'),
+            'original message must remain the prefix',
+          );
+          assert.ok(err.message.includes('recent unparsed stdout lines'));
+          assert.ok(err.message.includes('garbage-40'), 'most recent line is preserved');
+          assert.ok(err.message.includes('garbage-9'), 'the last 32 lines are kept');
+          assert.ok(!err.message.includes('garbage-8'), 'evicted lines past capacity are dropped');
+          assert.ok(!err.message.includes('garbage-1\n'), 'oldest line is dropped');
+          return true;
+        },
+      );
+    } finally {
+      transport.dispose();
+    }
+  },
+);
+
+processTest(
+  'createNodeLoopTransport collects stderr and attaches it at exit in debug mode (Task 7)',
+  { timeout: 15_000 },
+  async () => {
+    // 부모도 debug 모드로 세팅한다 — stderr 수집 게이트는 transport 쪽에서
+    // isRustraDebugEnabled() 를 매 데이터 이벤트마다 읽는다. 다만 shouldDumpWire
+    // 는 모듈 레벨 메모이즈이므로 resetDebugEnvForTests 로 먼저 무효화해야 env
+    // 변경이 보인다(types debug.test.ts 와 동일 순서).
+    const previousDebug = process.env.RUSTRA_DEBUG;
+    const { resetDebugEnvForTests } = await import('@rustra/types');
+    resetDebugEnvForTests();
+    process.env.RUSTRA_DEBUG = '1';
+    const { createNodeLoopTransport } = await import('./index.js');
+    const transport = createNodeLoopTransport({
+      command: process.execPath,
+      args: [
+        '-e',
+        [
+          'process.stdin.resume();',
+          "process.stderr.write('boom: child panicked\\n');",
+          'setTimeout(() => process.exit(1), 50);',
+        ].join(' '),
+      ],
+    });
+    try {
+      await assert.rejects(
+        () => transport.invoke('addNumbers', { a: 1, b: 2 }) as Promise<unknown>,
+        (err: unknown) => {
+          if (!(err instanceof RustraCommandError)) return false;
+          assert.ok(err.message.startsWith('runtime process exited before responding'));
+          assert.ok(err.message.includes('stderr:'), 'stderr section is attached');
+          assert.ok(err.message.includes('boom: child panicked'));
+          return true;
+        },
+      );
+    } finally {
+      transport.dispose();
+      if (previousDebug === undefined) delete process.env.RUSTRA_DEBUG;
+      else process.env.RUSTRA_DEBUG = previousDebug;
+      resetDebugEnvForTests();
+    }
+  },
+);
