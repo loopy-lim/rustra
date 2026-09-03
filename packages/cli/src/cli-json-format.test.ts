@@ -11,7 +11,7 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { formatCodegenJson, formatDiffJson } from './cli-json-format.js';
+import { formatCodegenJson, formatDiffJson, formatExplainJson } from './cli-json-format.js';
 import { diffSchemas, type BreakingChange } from './schema-diff.js';
 import type { PackageSchema } from './schema.js';
 
@@ -62,6 +62,20 @@ test('formatCodegenJson reports drift:true for rewritten files (write mode)', ()
   assert.equal(json.drift, true);
   assert.equal(json.written.length, 1);
   assert.equal(json.durationMs, 3);
+});
+
+// ── explain ─────────────────────────────────────────────────────────────────
+
+test('formatExplainJson renders the schemaVersion:1 report shape', () => {
+  const json = JSON.parse(
+    formatExplainJson({
+      explain: [{ output: 'types.ts', renderer: 'ts renderer', stage: 'types' }],
+    }),
+  );
+  assert.deepEqual(json, {
+    schemaVersion: 1,
+    explain: [{ output: 'types.ts', renderer: 'ts renderer', stage: 'types' }],
+  });
 });
 
 // ── diff ────────────────────────────────────────────────────────────────────

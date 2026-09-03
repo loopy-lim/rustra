@@ -47,11 +47,13 @@ export async function runInit(args: string[]): Promise<void> {
   const hostValue = parsed.values.get('host');
   if (hostValue !== undefined && !INIT_HOSTS.includes(hostValue as InitHost)) {
     // arg-parser/unknownValueError 관례 — nearest 후보 did-you-mean + 허용값 전체 나열.
+    // "닫힌 열거 외 값"은 exit-2 클래스다(cli-usage-error.ts 헤더의 경계 계약) —
+    // 플래그 형태가 아니라 값이 열거에서 벗어난 것일 뿐 호출 오류의 성격은 같다.
     const suggestion = closestMatch(hostValue, INIT_HOSTS);
     const hint = suggestion
       ? ` Did you mean "${suggestion}"?`
       : ` Supported hosts: ${INIT_HOSTS.join(', ')}.`;
-    throw new Error(`Unknown init --host value "${hostValue}".${hint}`);
+    throw new UsageError(`Unknown init --host value "${hostValue}".${hint}`);
   }
   const directories = parsed.positionals;
   if (directories.length !== 1)

@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInit } from './cli-init.js';
+import { UsageError } from './cli-usage-error.js';
 import { readConfigSync } from './config.js';
 import { INIT_CONFIG_SCHEMA_PATH } from './init-template.js';
 import { runGenerate } from './cli-generate.js';
@@ -138,6 +139,14 @@ test('init rejects unknown --host values with the supported list', async () => {
       () => runInit([join(root, 'x'), '--host', 'reactnative']),
       /Did you mean "react-native"\?/,
     );
+  });
+});
+
+test('unknown --host is a UsageError (exit-2 contract, closed-enum violation)', async () => {
+  // 닫힌 열거 외 값은 arg-parser 의 unknownValueError 와 동일한 exit-2 클래스다
+  // (cli-usage-error.ts 헤더 경계 계약). exit 1 로의 되돌림을 잡는 핀.
+  await withTempDir(async (root) => {
+    await assert.rejects(() => runInit([join(root, 'x'), '--host', 'bun']), UsageError);
   });
 });
 

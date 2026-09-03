@@ -2,14 +2,13 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { afterEach, test } from 'bun:test';
-import { dirname, join as pathJoin, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { collectDocs, stripGeneratedHeader, verifyDocs } from './docs-gate.mjs';
 
 // CLI exit 테스트에서 실제 게이트 스크립트를 spawn하기 위한 절대 경로.
-const gatePath = pathJoin(resolve(dirname(fileURLToPath(import.meta.url))), 'docs-gate.mjs');
+const gatePath = join(resolve(dirname(fileURLToPath(import.meta.url))), 'docs-gate.mjs');
 
 // 임시 디렉토리 fixture — 저장소의 실제 docs는 절대 건드리지 않는다(hermetic).
 let tmpRoot = '';
@@ -365,4 +364,65 @@ test('CLI: 종결 없는 begin은 실제 프로세스 exit 1과 begin 진단을 
   assert.equal(r.status, 1, `stderr: ${r.stderr}`);
   assert.match(r.stderr, /docs:sync:begin/);
   assert.doesNotMatch(r.stdout, /no docs:sync markers found/);
+});
+
+test('CLI: 마커 0개 문서는 exit 0으로 통과하되 명시적 상태 메시지를 낸다 (점진 채택)', () => {
+  // zero-region 분기 고정 — fail 전환(후속 판단 사항) 전이라도 "조용한 통과"가
+  // 아니라 게이트가 docs를 봤다는 증거를 stdout에 남겨야 한다. exit 0 과
+  // 안내 문구를 함께 고정해, 이후 fail 전환 시 이 테스트가 깨지는 핀이 된다.
+  const root = makeTmp();
+  mkdirSync(join(root, 'docs'));
+  writeFileSync(join(root, 'docs/plain.md'), '# 그냥 문서\n');
+  const r = spawnSync(process.execPath, [gatePath], { cwd: root, encoding: 'utf8' });
+  assert.equal(r.status, 0, `stderr: ${r.stderr}`);
+  assert.match(r.stdout, /no docs:sync markers found/);
+  assert.match(r.stdout, /마커 0이 의도인지 확인하세요/);
+});
+
+// ── 무테스트 failure 분기 2건 (nested-begin / fence→end 간격) ────────────────
+
+test('열린 region 안에서 begin이 재등장하면(nested-begin) 실패한다', () => {
+  // verifyDocs 의 open-region 분기 — "새 begin이 이전 begin 종료 전에 나왔다".
+  // 첫 region 은 정합 규약을 갖추되 end 전에 두 번째 begin 이 끼어든 형태다.
+  const broken = [
+    '<!-- docs:sync:begin gen/types.ts -->',
+    '',
+    '<!-- prettier-ignore -->',
+    '```ts',
+    'x',
+    '<!-- docs:sync:begin gen/other.ts -->',
+    '```',
+    '',
+    '<!-- docs:sync:end -->',
+  ].join('\n');
+  const root = fixture('docs/a.md', broken, 'gen/types.ts', `${GENERATED_HEADER}x\n`);
+  const report = verifyDocs(root);
+  assert.equal(report.ok, false);
+  const f = report.failures.find((failure) => /종료 전에 나왔다/.test(failure.message));
+  assert.ok(f, `nested-begin 진단이 없다: ${JSON.stringify(report.failures)}`);
+  assert.match(f.message, /docs\/a\.md/);
+  // 진단은 문서 위치와 방해된 이전 begin(경로+줄)을 이름으로 꼽는다.
+  assert.match(f.message, /gen\/types\.ts/);
+  assert.match(f.message, /1줄/);
+});
+
+test('닫는 펜스와 end 마커 사이가 빈 줄 하나가 아니면 실패한다 (fence→end 간격 위반)', () => {
+  // verifyRegion 의 펜스~end 간격 분기 — 규약은 "닫는 펜스 다음 빈 줄 하나,
+  // 그 다음 end 마커". 본문이 정확히 일치해도 구조 위반이면 fail 해야 한다.
+  const body = ['x'];
+  const broken = [
+    '<!-- docs:sync:begin gen/types.ts -->',
+    '',
+    '<!-- prettier-ignore -->',
+    '```ts',
+    ...body,
+    '```',
+    '<!-- docs:sync:end -->', // 빈 줄 없이 바로 붙음
+  ].join('\n');
+  const root = fixture('docs/a.md', broken, 'gen/types.ts', `${GENERATED_HEADER}x\n`);
+  const report = verifyDocs(root);
+  assert.equal(report.ok, false);
+  const f = report.failures.find((failure) => /빈 줄 하나여야 한다/.test(failure.message));
+  assert.ok(f, `간격 위반 진단이 없다: ${JSON.stringify(report.failures)}`);
+  assert.match(f.message, /docs\/a\.md/);
 });

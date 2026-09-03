@@ -142,6 +142,29 @@ bun run test:runtime:tauri
 | `examples/calculator/ts/adapter-compat.test.ts`     | 4개 어댑터 호환성 (6개)     |
 | `examples/calculator/ts/runtime-contract.test.ts`   | 런타임 계약 (2개)           |
 
+### 문서 동기화 게이트
+
+생성 코드를 인용하는 문서는 `docs:sync` 마커로 감싸야 한다. `bun run test:docs`가
+인용 본문과 실제 파일을 byte-for-byte로 대조한다:
+
+````markdown
+<!-- docs:sync:begin <저장소 상대 경로> -->
+
+<!-- prettier-ignore -->
+```ts
+(인용한 파일 본문 — 생성물의 자기서술 헤더는 자동 제외)
+```
+
+<!-- docs:sync:end -->
+````
+
+- 배치 규약: `begin` 다음 빈 줄 하나, 그 다음 `<!-- prettier-ignore -->`와 바로
+  이어지는 여는 펜스. 닫는 펜스 뒤에는 빈 줄 하나를 두고 `docs:sync:end`. 구조
+  위반은 게이트가 실패로 보고한다.
+- 스캔 범위는 `docs/`뿐(`docs/plans/` 제외)이므로 이 규약을 `CONTRIBUTING.ko.md`
+  에 인용해도 오탐이 없다.
+- 로컬 실행: `bun run test:docs`.
+
 ---
 
 ## 코드 규칙

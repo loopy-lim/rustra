@@ -144,6 +144,29 @@ bun run test:runtime:tauri
 | `examples/calculator/ts/adapter-compat.test.ts`     | 4-adapter compatibility (6)  |
 | `examples/calculator/ts/runtime-contract.test.ts`   | Runtime contract (2)         |
 
+### Docs Sync Gate
+
+Docs that quote generated code must wrap it in `docs:sync` markers so
+`bun run test:docs` can verify it byte-for-byte against the real file:
+
+````markdown
+<!-- docs:sync:begin <repo-relative path> -->
+
+<!-- prettier-ignore -->
+```ts
+(quoted file body — the generated self-describing header is stripped)
+```
+
+<!-- docs:sync:end -->
+````
+
+- Layout contract: one blank line after `begin`, then `<!-- prettier-ignore -->`
+  immediately followed by the opening fence; after the closing fence, one blank
+  line before `docs:sync:end`. The gate fails on structural violations.
+- Only `docs/` is scanned (`docs/plans/` excluded), so quoting this syntax in
+  `CONTRIBUTING.md` itself cannot false-positive.
+- Run locally: `bun run test:docs`.
+
 ---
 
 ## Code Conventions
