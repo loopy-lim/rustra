@@ -44,10 +44,11 @@ Per-version migration notes live in
 [0.3 to 0.4](migrations/0.3-to-0.4.md) and
 [0.5 to 0.6](migrations/0.5-to-0.6.md).
 
-Current status: `RendererHost` is `#[doc(hidden)]` and `#[deprecated]`
-("RendererHost is retained for Rustra 0.x compatibility; prefer a
-host-specific adapter boundary"). It is kept for the remainder of the 0.x
-cycle; removal is not proposed here.
+Recent removal: `RendererHost` (with `HostMessage`, `MessageKind`,
+`RendererCapabilities`, `Size`, `SurfaceOptions`, `host_supports_eval`) was
+deprecated through 0.6.0 and removed in 0.7.0 under the pre-1.0 rule above.
+The replacement is a host-specific adapter boundary — each embedding host
+bridges its own renderer/events via the published channel and FFI surfaces.
 
 ## Experimental surface
 
