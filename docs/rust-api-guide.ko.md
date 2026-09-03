@@ -135,15 +135,25 @@ fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
 - 입력 타입: `DeserializeOwned + JsonSchema`
 - 출력 타입: `Serialize + JsonSchema`
 
-trait bound를 충족하지 않으면 `#[diagnostic::on_unimplemented]`를 통해 친절한 에러 메시지를 출력합니다:
+현재 trait bound가 충족되지 않으면 표준 Rust E0277 진단이 출력됩니다. `#[diagnostic::on_unimplemented]` 기반 커스텀 메시지는 계획만 있고 구현되지 않았습니다 — 커스텀 에러 텍스트에 의존하지 마세요.
+
+```text
+error[E0277]: the trait bound `MyType: CommandInput` is not satisfied
+   --> src/main.rs:5:1
+    |
+5   | #[command]
+    | ^^^^^^^^^ the trait `CommandInput` is not implemented for `MyType`
+    |
+    = note: required for `MyType` to implement `DeserializeOwned + JsonSchema`
+    = help: add `#[rustra::bridge_type]` to `MyType`
+```
+
+`CommandInput`/`CommandOutput`에 `#[diagnostic::on_unimplemented]`를 붙이면 이것이 더 친절한 메시지로 바뀝니다 (계획됨, 미구현):
 
 ```text
 error: `MyType` cannot be used as a command parameter
-  --> src/main.rs:5:1
    |
-5  | #[command]
-   | ^^^^^^^^^ command parameters require Serialize + Deserialize + JsonSchema
-   |
+   = note: command parameters require Serialize + Deserialize + JsonSchema
    = note: add `#[rustra::bridge_type]` to `MyType`
 ```
 
