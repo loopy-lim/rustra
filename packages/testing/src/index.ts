@@ -172,3 +172,4 @@ export {
   expectContractFieldsCurrent,
   type ContractFieldDrift,
 } from './contract-gate.js';
+export { assertContractHashCurrent } from './contract-gate.js';

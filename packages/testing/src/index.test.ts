@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import {
   createMockEngine,
   assertContractCurrent,
@@ -370,4 +371,46 @@ test('assertContractCurrent and expectContractCurrent keep prior behavior', () =
     missingInSchema: ['ghost'],
   });
   expectContractCurrent({ commands: [{ name: 'addNumbers' }] }, ['addNumbers']);
+});
+
+// ── assertContractHashCurrent — schema.json 원문 ↔ contract.ts 해시 대조 ──
+
+test('assertContractHashCurrent passes when hash matches schema content', () => {
+  const schemaJson = '{"packageId":"demo","commands":[]}';
+  const hash = createHash('sha256').update(schemaJson, 'utf8').digest('hex');
+  const contractTs = `export const GENERATED_CONTRACT_HASH = '${hash}';\nexport const SCHEMA_VERSION = 1;\n`;
+  assertContractHashCurrent(schemaJson, contractTs);
+});
+
+test('assertContractHashCurrent throws on single-character hash mismatch', () => {
+  const schemaJson = '{"packageId":"demo","commands":[]}';
+  const hash = createHash('sha256').update(schemaJson, 'utf8').digest('hex');
+  const flipped = (hash[0] === '0' ? '1' : '0') + hash.slice(1);
+  assert.throws(
+    () =>
+      assertContractHashCurrent(
+        schemaJson,
+        `export const GENERATED_CONTRACT_HASH = '${flipped}';\n`,
+      ),
+    (err: unknown) => {
+      const msg = err instanceof Error ? err.message : '';
+      return (
+        msg.includes('contract hash mismatch') &&
+        msg.includes('expected') &&
+        msg.includes(hash) &&
+        msg.includes(flipped) &&
+        msg.includes('regenerate')
+      );
+    },
+  );
+});
+
+test('assertContractHashCurrent throws when hash constant is absent', () => {
+  assert.throws(
+    () => assertContractHashCurrent('{"commands":[]}', 'export const SCHEMA_VERSION = 1;\n'),
+    (err: unknown) => {
+      const msg = err instanceof Error ? err.message : '';
+      return msg.includes('GENERATED_CONTRACT_HASH') && msg.includes('not found');
+    },
+  );
 });

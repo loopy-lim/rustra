@@ -4,6 +4,8 @@
  * CI 에서 `rustra diff` (스키마 버전 간 breaking change) 와 짝을 이뤄,
  * 커밋된 schema.json 이 생성된 클라이언트와 어긋나는지 (드리프트) 검출한다.
  */
+import { createHash } from 'node:crypto';
+
 /** schema.json 의 명령 목록과 클라이언트가 노출하는 명령 목록의 정합성. */
 export function assertContractCurrent(
   schema: { commands: Array<{ name: string }> },
@@ -264,4 +266,34 @@ export function expectContractFieldsCurrent(
   }
   lines.push('  → regenerate the client (bunx @rustra/cli generate) or update schema.json.');
   throw new Error(lines.join('\n'));
+}
+
+// ── contract hash 대조 — schema.json 원문 ↔ contract.ts ────────────────────
+
+/**
+ * schema.json 파일 원문의 sha256 이 contract.ts 의
+ * `GENERATED_CONTRACT_HASH` 와 일치하는지 검증한다(코드젠 `generateContractTs`
+ * 와 동일한 해시 입력). 불일치 또는 상수 추출 실패 시 throw 한다.
+ */
+export function assertContractHashCurrent(
+  schemaJsonContent: string,
+  contractTsContent: string,
+): void {
+  const expected = createHash('sha256').update(schemaJsonContent, 'utf8').digest('hex');
+  const m = /GENERATED_CONTRACT_HASH\s*=\s*['"]([0-9a-fA-F]{64})['"]/.exec(contractTsContent);
+  if (!m) {
+    throw new Error(
+      'rustra contract hash check failed: GENERATED_CONTRACT_HASH constant not found in contract.ts\n' +
+        '  → regenerate the client (bunx @rustra/cli generate).',
+    );
+  }
+  const actual = m[1];
+  if (actual !== expected) {
+    throw new Error(
+      'rustra contract hash mismatch:\n' +
+        `  expected (sha256 of schema.json): ${expected}\n` +
+        `  actual (contract.ts):             ${actual}\n` +
+        '  → regenerate the client (bunx @rustra/cli generate).',
+    );
+  }
 }
