@@ -23,7 +23,6 @@ Pod::Spec.new do |s|
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
     'HEADER_SEARCH_PATHS' => "$(inherited) #{adapter_root}/cpp #{adapter_root}/ios #{generated_root}",
-    'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) RUSTRA_ENABLE_LEGACY_BENCHMARKS=1',
     'OTHER_LDFLAGS' => "$(inherited) -force_load $(PODS_TARGET_SRCROOT)/#{rust_archive}",
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++20',
   }

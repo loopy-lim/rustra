@@ -63,7 +63,6 @@ export function renderPodspec(options: {
   adapterFromIos: string;
   generatedFromIos: string;
   rustLibrary: string;
-  legacyDefinition: string;
 }): string {
   return `Pod::Spec.new do |s|
   s.name = 'RustraBridge'
@@ -90,7 +89,7 @@ export function renderPodspec(options: {
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
     'HEADER_SEARCH_PATHS' => "$(inherited) #{adapter_root}/cpp #{adapter_root}/ios #{generated_root}",
-${options.legacyDefinition}    'OTHER_LDFLAGS' => "$(inherited) -force_load $(PODS_TARGET_SRCROOT)/#{rust_archive}",
+    'OTHER_LDFLAGS' => "$(inherited) -force_load $(PODS_TARGET_SRCROOT)/#{rust_archive}",
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++20',
   }
 end

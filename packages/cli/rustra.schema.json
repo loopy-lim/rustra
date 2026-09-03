@@ -75,10 +75,6 @@
           "description": "Static-library identifier (crate name of the .a/.lib artifact).",
           "type": "string",
           "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
-        },
-        "legacyBenchmarks": {
-          "description": "Keep generating the legacy benchmark harness.",
-          "type": "boolean"
         }
       }
     },
