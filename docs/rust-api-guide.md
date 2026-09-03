@@ -148,8 +148,8 @@ error[E0277]: the trait bound `MyType: CommandInput` is not satisfied
 5   | #[command]
     | ^^^^^^^^^ the trait `CommandInput` is not implemented for `MyType`
     |
-    = note: required for `MyType` to implement `DeserializeOwned + JsonSchema`
-    = help: add `#[rustra::bridge_type]` to `MyType`
+note: required for `MyType` to implement `CommandInput`
+    (unsatisfied trait bound introduced by the blanket `impl<T> CommandInput for T`)
 ```
 
 A `#[diagnostic::on_unimplemented]` attribute on `CommandInput`/`CommandOutput` would turn this

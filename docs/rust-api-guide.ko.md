@@ -135,7 +135,9 @@ fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
 - 입력 타입: `DeserializeOwned + JsonSchema`
 - 출력 타입: `Serialize + JsonSchema`
 
-현재 trait bound가 충족되지 않으면 표준 Rust E0277 진단이 출력됩니다. `#[diagnostic::on_unimplemented]` 기반 커스텀 메시지는 계획만 있고 구현되지 않았습니다 — 커스텀 에러 텍스트에 의존하지 마세요.
+현재 trait bound가 충족되지 않으면 표준 Rust E0277 진단이 출력됩니다.
+`#[diagnostic::on_unimplemented]` 기반 커스텀 메시지는 계획만 있고 구현되지 않았습니다 —
+커스텀 에러 텍스트에 의존하지 마세요.
 
 ```text
 error[E0277]: the trait bound `MyType: CommandInput` is not satisfied
@@ -144,8 +146,8 @@ error[E0277]: the trait bound `MyType: CommandInput` is not satisfied
 5   | #[command]
     | ^^^^^^^^^ the trait `CommandInput` is not implemented for `MyType`
     |
-    = note: required for `MyType` to implement `DeserializeOwned + JsonSchema`
-    = help: add `#[rustra::bridge_type]` to `MyType`
+note: required for `MyType` to implement `CommandInput`
+    (unsatisfied trait bound introduced by the blanket `impl<T> CommandInput for T`)
 ```
 
 `CommandInput`/`CommandOutput`에 `#[diagnostic::on_unimplemented]`를 붙이면 이것이 더 친절한 메시지로 바뀝니다 (계획됨, 미구현):
