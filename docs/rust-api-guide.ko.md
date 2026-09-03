@@ -804,6 +804,26 @@ pkg.set_event_sink(Some(sink));
 let bus = pkg.event_bus(); // EventBus 직접 접근
 ```
 
+**채널** — Rust → JS 유니캐스트 응답 스트림 (호출 스코프; 호스트별 발급 경로는
+[호환성 매트릭스](compatibility-matrix.ko.md#채널-전달-경로) 참고):
+
+```rust
+use rustra::channels;
+
+// 핸들을 발급하고 sender 설치 (호스트 어댑터는 이걸 대신 해준다 —
+// 커스텀 호스트용 탈출구)
+let host = channels::host();
+let handle = host.reserve_handle();
+host.register_channel_with_handle(handle, std::sync::Arc::new(move |payload: &str| {
+    // `payload` 를 JS 쪽으로 전달 (emit, stdout 프레임, FFI 콜백, …)
+}));
+
+// 커맨드의 ChannelHandle 인자로 호출자에게 응답을 보낸다
+assert!(channels::ChannelHandle(input.channel).send(r#"{"progress": 1}"#));
+// 이미 드랍된 핸들은 false (조용히-무시 계약이 보이는 형태)
+host.drop_channel(handle); // 이후 send 는 false 반환
+```
+
 **Runtime Authority (capability)** — deny-by-default 권한:
 
 ```rust
