@@ -9,8 +9,9 @@ import React from 'react';
 import { RustraProvider, useCommand, useMutation, useEvent } from '@rustra/react';
 import type { EngineClient } from '@rustra/types';
 import { listItems, createItem, updateItem, deleteItem } from '../../crud/generated/commands.js';
-
-type Item = { id: string; name: string; value: number };
+// 생성 타입을 그대로 쓴다 — 손으로 복제한 로컬 타입은 코드젠 진화(bigint
+// fast-path 등)와 갈라져 tsc 가 잡는다.
+import type { Item } from '../../crud/generated/types.js';
 
 /** 조회 — useCommand: 마운트 시 자동 실행, input 변경 시 재실행. */
 function ItemList({ minValue }: { minValue?: number }) {
