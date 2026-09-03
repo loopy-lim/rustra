@@ -590,9 +590,7 @@ void invalidateRustraJSI() {
 
 using InvokeFn = uint8_t*(*)(const uint8_t*, size_t, size_t*);
 
-// free 짝 계약: generic FFI response buffers use rustra_ffi_free. The optional
-// calculator benchmark surface is compiled only in the repository fixture and
-// retains its legacy allocator-specific pairs.
+// free 짝 계약: generic FFI response buffers use rustra_ffi_free.
 using FreeFn = void(*)(uint8_t*, size_t);
 
 // live schema FFI (from rustra crate)
@@ -622,31 +620,16 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   };
 
-  // ── Generic FFI paths (default, json, postcard) — magic 헤더 레이아웃이므로
-  //    rustra_ffi_free 로 해제 짝. ─────────────────────────────
+  // ── Generic FFI paths (default, json, postcard, rkyv V2) — magic 헤더
+  //    레이아웃이므로 rustra_ffi_free 로 해제 짝. ─────────────────────
   makeInvoke("invoke",        rustra_ffi_invoke,              rustra_ffi_free, "Rust returned null");
   makeInvoke("invokeJson",    rustra_ffi_invoke_json,         rustra_ffi_free, "Rust json returned null");
   makeInvoke("invokePostcardFFI", rustra_ffi_invoke_postcard, rustra_ffi_free, "Rust postcard FFI returned null");
-
-#if defined(RUSTRA_ENABLE_LEGACY_BENCHMARKS)
-  // ── Per-example benchmark paths (legacy) — calculator 응답(magic 헤더 없는
-  //    Box<[u8]>)이므로 rustra_calculator_free_buffer 로 해제 짝. ──
-  makeInvoke("invokeBytes",   rustra_calculator_invoke_bytes,  rustra_calculator_free_buffer, "Rust bytes returned null");
-  makeInvoke("invokeMsgpack",  rustra_calculator_invoke_msgpack, rustra_calculator_free_buffer, "Rust msgpack returned null");
-  makeInvoke("invokeBincode",  rustra_calculator_invoke_bincode, rustra_calculator_free_buffer, "Rust bincode returned null");
-  // Keep the public JS adapter name aligned with RustraNative. This is the
-  // calculator's legacy postcard envelope (command + a + b), while
-  // invokePostcardFFI above is the generic framework envelope.
-  makeInvoke("invokePostcard", rustra_calculator_invoke_postcard, rustra_calculator_free_buffer, "Rust postcard returned null");
-  makeInvoke("invokeLegacyPostcard", rustra_calculator_invoke_postcard, rustra_calculator_free_buffer, "Rust postcard returned null");
-  makeInvoke("invokeRkyv",     rustra_calculator_invoke_rkyv,    rustra_calculator_free_buffer, "Rust rkyv returned null");
-  makeInvoke("invokeHybrid",   rustra_calculator_invoke_hybrid,  rustra_calculator_free_buffer, "Rust hybrid returned null");
-  // rkyv V2 는 코어 rustra_ffi_invoke_rkyv_v2 로 위임된 뒤라 응답이 코어 FFI
-  // 레이아웃(8B magic 헤더)이다 — 전용 free 짝 필수(Phase 2 위임 시 누락돼
-  // ArrayBuffer 경로에서 double-free/unallocated-free 크래시를 일으켰다).
-  makeInvoke("invokeRkyvV2",   rustra_calculator_invoke_rkyv_v2, rustra_calculator_free_rkyv_v2_buffer, "Rust rkyv v2 returned null");
-  makeInvoke("invokeRaw",      rustra_calculator_invoke_raw,     rustra_calculator_free_buffer, "Rust invoke_raw returned null");
-#endif
+  // rkyv V2 는 코어 제네릭 심볼 직결이며 legacy ifdef 밖에 둔다 — 엔진 tier2/3
+  // 폴백이 모든 빌드(legacy-OFF 포함)에서 이 함수를 요구한다(RustraNative
+  // non-optional). 응답은 코어 FFI 레이아웃(8B magic 헤더)이므로 free 짝은
+  // rustra_ffi_free (과거 double-free 크래시의 free-짝 계약 유지).
+  makeInvoke("invokeRkyvV2",  rustra_ffi_invoke_rkyv_v2,     rustra_ffi_free, "Rust rkyv v2 returned null");
 
   // noop: returns input bytes unchanged
   {
@@ -894,7 +877,7 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
           throw JSError(rt, "RustraJSI: no C++ codec for '" + name + "'");
         }
         // 2) Rust FFI (rkyv V2 단일 엔진) + 응답 tail — 공통 헬퍼로
-        //    (typedInvokeTail 주석의 free 짝 계약: rustra_calculator_free_buffer).
+        //    (typedInvokeTail 주석의 free 짝 계약: rustra_ffi_free).
         //    decoder 만 이름 기반 decode_by_name.
         return typedInvokeTail(rt, w.data(), w.size(), "", [&rt, &name](rc::Reader& r) {
           return gen::decode_by_name(rt, name, r);
@@ -926,7 +909,7 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
           throw JSError(rt, "RustraJSI: no C++ codec for cmd_id " + std::to_string(cmdId));
         }
         // 2) Rust FFI + 응답 tail — invokeTyped 와 동일하지만 decoder 만
-        //    u16 디스패치 decode_by_id (free 짝: rustra_calculator_free_buffer).
+        //    u16 디스패치 decode_by_id (free 짝: rustra_ffi_free).
         return typedInvokeTail(rt, w.data(), w.size(), "", [&rt, cmdId](rc::Reader& r) {
           return gen::decode_by_id(rt, cmdId, r);
         });
