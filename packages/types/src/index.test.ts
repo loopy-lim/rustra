@@ -3638,3 +3638,167 @@ test('withRetry passes 0-based attempt numbers to fn', async () => {
   );
   assert.deepEqual(attempts, [0, 1, 2]);
 });
+
+// ── 응답 셰이프 검증 경고 (readiness Task 8) — RUSTRA_DEBUG 버전 스큐 조기 감지 ──
+
+type ShapeDebugEvent = { kind?: string; reason?: string; command?: string; value?: unknown };
+
+/**
+ * debug 모드 테스트 하네스 — `__RUSTRA_DEBUG__` 스위치를 켜고 console.debug
+ * 미러 출력을 흡수해 테스트 결과를 깨끗하게 유지한다(node-loop.test.ts 관례).
+ * 반환된 cleanup 을 finally 에서 반드시 호출한다.
+ */
+function enableShapeDebugHarness(): () => void {
+  (globalThis as { __RUSTRA_DEBUG__?: unknown }).__RUSTRA_DEBUG__ = true;
+  const originalDebug = console.debug;
+  console.debug = () => {};
+  return () => {
+    console.debug = originalDebug;
+    delete (globalThis as { __RUSTRA_DEBUG__?: unknown }).__RUSTRA_DEBUG__;
+  };
+}
+
+/** json-engine 테스트용 고정 payload 를 resolve 하는 가짜 transport. */
+function envelopeTransport(payload: unknown): { invoke: (command: string) => Promise<unknown> } {
+  return { invoke: () => Promise.resolve(payload) };
+}
+
+test('double envelope resolution emits response.shape and resolves unchanged in debug mode', async () => {
+  const { createJsonEngine } = await import('./index.js');
+  const seen: ShapeDebugEvent[] = [];
+  const sink = (event: unknown) => seen.push(event as ShapeDebugEvent);
+  const payload = { ok: true, result: { value: 42 } };
+  const engine = createJsonEngine(envelopeTransport(payload));
+  const cleanup = enableShapeDebugHarness();
+  try {
+    configureDebug(sink);
+    const result = await engine.invoke('echo', {});
+    assert.deepEqual(result, { ok: true, result: { value: 42 } }, 'no transform of the result');
+    const shapes = seen.filter((e) => e.kind === 'response.shape');
+    assert.equal(shapes.length, 1, 'exactly one shape event per invoke');
+    assert.equal(shapes[0]!.reason, 'double_envelope');
+    assert.equal(shapes[0]!.command, 'echo');
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
+});
+
+test('resolved ok:false without error emits response.shape and still resolves in debug mode', async () => {
+  const { createJsonEngine } = await import('./index.js');
+  const seen: ShapeDebugEvent[] = [];
+  const engine = createJsonEngine(envelopeTransport({ ok: false }));
+  const cleanup = enableShapeDebugHarness();
+  try {
+    configureDebug((event) => seen.push(event as ShapeDebugEvent));
+    const result = await engine.invoke<{ ok: boolean }>('broken', {});
+    assert.deepEqual(result, { ok: false }, 'warning only — the invoke still resolves');
+    const event = seen.filter((e) => e.kind === 'response.shape')[0]!;
+    assert.equal(event.reason, 'failed_without_error');
+    assert.equal(event.command, 'broken');
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
+});
+
+test('resolved error envelope ({ok:false,error}) emits response.shape but keeps the value', async () => {
+  // reject 경로의 정규화는 rejection 일 때만 동작한다 — transport 가 실패 엔벨로프를
+  // 그대로 resolve 하면(스크 신호) 경고는 하되 기존 값 계약을 변형하지 않는다.
+  const { createJsonEngine } = await import('./index.js');
+  const seen: ShapeDebugEvent[] = [];
+  const error = { code: 'math.divide_by_zero', message: 'division by zero' };
+  const engine = createJsonEngine(envelopeTransport({ ok: false, error }));
+  const cleanup = enableShapeDebugHarness();
+  try {
+    configureDebug((event) => seen.push(event as ShapeDebugEvent));
+    const result = await engine.invoke<{ ok: boolean; error: unknown }>('divide', {});
+    assert.deepEqual(result, { ok: false, error });
+    const event = seen.filter((e) => e.kind === 'response.shape')[0]!;
+    assert.equal(event.reason, 'resolved_error_envelope');
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
+});
+
+test('broken envelope ({ok:true} payload-less) emits envelope_missing_payload', async () => {
+  const { createJsonEngine } = await import('./index.js');
+  const seen: ShapeDebugEvent[] = [];
+  const engine = createJsonEngine(envelopeTransport({ ok: true }));
+  const cleanup = enableShapeDebugHarness();
+  try {
+    configureDebug((event) => seen.push(event as ShapeDebugEvent));
+    await engine.invoke('noPayload', {});
+    const event = seen.filter((e) => e.kind === 'response.shape')[0]!;
+    assert.equal(event.reason, 'envelope_missing_payload');
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
+});
+
+test('debug disabled: no response.shape events (passthrough unchanged)', async () => {
+  const { createJsonEngine } = await import('./index.js');
+  const shapes: ShapeDebugEvent[] = [];
+  const engine = createJsonEngine(envelopeTransport({ ok: true, result: { value: 1 } }));
+  try {
+    // sink-only 설치는 debugRustra 의 기존 계약(싱크만으로도 요청/응답 이벤트 도달)
+    // 이지만, 셰이프 감지는 isRustraDebugEnabled 로만 게이트된다 — 감지 게이트는
+    // 싱크 유무와 무관하게 debug 스위치만 본다. 여기선 스위치 없이 싱크만 설치.
+    configureDebug((event) => {
+      if ((event as ShapeDebugEvent).kind === 'response.shape')
+        shapes.push(event as ShapeDebugEvent);
+    });
+    const result = await engine.invoke('echo', {});
+    assert.deepEqual(result, { ok: true, result: { value: 1 } }, 'passthrough unchanged');
+    assert.equal(shapes.length, 0, 'debug off must suppress the shape warning entirely');
+  } finally {
+    configureDebug(undefined);
+    delete (globalThis as { __RUSTRA_DEBUG__?: unknown }).__RUSTRA_DEBUG__;
+  }
+});
+
+test('plain payload without ok and primitive responses emit no shape event', async () => {
+  const { createJsonEngine } = await import('./index.js');
+  for (const payload of [{ value: 42 }, { okay: true }, 'plain', 7, null, undefined]) {
+    const seen: ShapeDebugEvent[] = [];
+    const engine = createJsonEngine(envelopeTransport(payload));
+    const cleanup = enableShapeDebugHarness();
+    try {
+      configureDebug((event) => seen.push(event as ShapeDebugEvent));
+      const result = await engine.invoke('normal', {});
+      assert.equal(result, payload, 'passthrough by identity');
+      assert.equal(
+        seen.filter((e) => e.kind === 'response.shape').length,
+        0,
+        `payload ${JSON.stringify(payload)} must not warn (false-positive guard)`,
+      );
+    } finally {
+      configureDebug(undefined);
+      cleanup();
+    }
+  }
+});
+
+test('detection never throws on exotic result objects (frozen, null-prototype)', async () => {
+  const { createJsonEngine } = await import('./index.js');
+  const exotic: unknown[] = [
+    Object.freeze({ ok: true, result: { frozen: true } }),
+    Object.create(null) as unknown, // 프로토타입 없음 — hasOwnProperty.call 로 안전
+    Object.freeze(Object.create(null, { ok: { value: false, enumerable: true } })),
+  ];
+  const cleanup = enableShapeDebugHarness();
+  try {
+    configureDebug(() => {});
+    for (const payload of exotic) {
+      const engine = createJsonEngine(envelopeTransport(payload));
+      // 어떤 특이 객체도 invoke 자체를 실패로 만들지 않는다(경고는 절대 throw 금지).
+      const result = await engine.invoke('weird', {});
+      assert.equal(result, payload, 'exotic object passes through by identity');
+    }
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
+});
