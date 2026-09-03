@@ -6,16 +6,14 @@
 //! 정상 경로를 오염하지 않는지 확인한다: (1) 정상 왕복이 여전히 성공 프레임,
 //! (2) 잘린 페이로드가 여전히 clean 한 에러 프레임(ok=0) — abort 아님.
 //!
-//! async 진입점(`rustra_calculator_invoke_rkyv_v2_async`)은 on-complete 계약을
+//! async 진입점(`rustra_ffi_invoke_rkyv_v2_async`)은 on-complete 계약을
 //! 핀한다: 워커가 어떤 경로로 끝나도 (1) `on_complete` 가 정확히 1회 발화
 //! (JS 프라미스 hang 방지), (2) 취소 레지스트리 엔트리가 정리됨(Unknown).
 //! 패닉 유도가 불가능하므로 정상 경로 계약 고정이 곧 구조 보장의 기준선이다.
 //!
-//! 응답 버퍼는 (rkyv V2 sync 경로가 코어 `rustra_ffi_invoke_rkyv_v2` 로 위임된
-//! 이후) 코어 FFI 할당 레이아웃을 따른다 — 반드시
-//! `rustra_calculator_free_rkyv_v2_buffer`(코어 `rustra_ffi_free` 위임)로
-//! 해제한다. async 경로는 여전히 calculator 자체 `alloc_response` 레이아웃이므로
-//! `rustra_calculator_free_buffer` 를 쓴다.
+//! sync/async 응답 버퍼 모두 코어 FFI 할당 레이아웃을 따른다 — 반드시 코어
+//! `rustra_ffi_free` 로 해제한다. 테스트는 calculator 재노출 심볼을 거치지
+//! 않고 코어 제네릭 심볼을 직접 extern 한다 (와이어는 동일).
 
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -25,13 +23,13 @@ use std::time::{Duration, Instant};
 use rustra_calculator_example::{AddNumbersInput, AddNumbersOutput, calculator_package};
 
 unsafe extern "C" {
-    fn rustra_calculator_invoke_rkyv_v2(
+    fn rustra_ffi_invoke_rkyv_v2(
         payload: *const u8,
         payload_len: usize,
         out_len: *mut usize,
     ) -> *mut u8;
-    fn rustra_calculator_free_rkyv_v2_buffer(ptr: *mut u8, len: usize);
-    fn rustra_calculator_invoke_rkyv_v2_async(
+    fn rustra_ffi_free(ptr: *mut u8, len: usize);
+    fn rustra_ffi_invoke_rkyv_v2_async(
         payload: *const u8,
         payload_len: usize,
         user_data: *mut c_void,
@@ -65,13 +63,13 @@ fn add_numbers_id() -> u16 {
 fn invoke_rkyv_v2(payload: &[u8]) -> Vec<u8> {
     let mut out_len = 0usize;
     let ptr =
-        unsafe { rustra_calculator_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len) };
+        unsafe { rustra_ffi_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len) };
     assert!(
         !ptr.is_null(),
         "FFI must return a response buffer, not null"
     );
     let out = unsafe { std::slice::from_raw_parts(ptr, out_len) }.to_vec();
-    unsafe { rustra_calculator_free_rkyv_v2_buffer(ptr, out_len) };
+    unsafe { rustra_ffi_free(ptr, out_len) };
     out
 }
 
@@ -106,7 +104,7 @@ unsafe extern "C" fn async_test_cb(_ud: *mut c_void, resp: *mut u8, len: usize) 
     if !resp.is_null() && len > 0 {
         let first = unsafe { *resp }; // ok flag
         ASYNC_OK.store(first == 1, Ordering::SeqCst);
-        unsafe { rustra_calculator_free_rkyv_v2_buffer(resp, len) };
+        unsafe { rustra_ffi_free(resp, len) };
     }
     ASYNC_DONE.store(true, Ordering::SeqCst);
 }
@@ -125,7 +123,7 @@ fn async_invoke_completes_exactly_once_and_cleans_registry() {
 
     let mut id: u64 = 0;
     unsafe {
-        rustra_calculator_invoke_rkyv_v2_async(
+        rustra_ffi_invoke_rkyv_v2_async(
             req.as_ptr(),
             req.len(),
             std::ptr::null_mut(),
