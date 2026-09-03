@@ -762,6 +762,14 @@ const richSchema: PackageSchema = {
       },
     },
     {
+      name: 'clearItems',
+      commandId: 9,
+      inputType: '()',
+      outputType: '()',
+      inputSchema: { description: 'Removes all items' },
+      outputSchema: {},
+    },
+    {
       name: 'unsupportedNestedMap',
       commandId: 8,
       inputType: 'NestedMapInput',
@@ -1376,7 +1384,7 @@ test('generatePositionalFacadeTs emits positional signatures for simple commands
 test('generatePositionalFacadeTs uses positional params for ≤3 primitive fields', () => {
   const facade = generatePositionalFacadeTs(simpleSchema);
   assert.ok(
-    facade.includes('export function add(a: number, b: number,'),
+    facade.includes('export function add(a: number, b: number): Promise<'),
     'simple 2-field command must be positional',
   );
 });
@@ -1409,6 +1417,62 @@ test('facade callPos command set exactly matches C++ positional codec set', () =
     [],
     `C++ has positional codecs the facade never uses: ${missingInFacade.join(', ')}`,
   );
+});
+
+test('generatePositionalFacadeTs does not accept or ignore InvokeOptions', () => {
+  // 감사 #6: options?: InvokeOptions 를 받아놓고 void options 로 버리면
+  // timeoutMs/signal 을 넘긴 호출자가 조용한 무시(no-op)를 당한다. 네이티브
+  // 표면(invokeTypedPos/invokeTypedById/invokeTyped)에는 options 파라미터가
+  // 존재하지 않으므로 전달도 불가능 — 시그니처 자체에서 제거해야 한다.
+  const facade = generatePositionalFacadeTs(richSchema);
+  assert.ok(!facade.includes('InvokeOptions'), 'facade must not reference InvokeOptions');
+  assert.ok(!facade.includes("from '@rustra/types'"), 'stale @rustra/types import must go');
+  assert.ok(!facade.includes('void options'), 'facade must not void-ignore options');
+  // 0-field 경로(b)도 동일 계약 — 별도 fixture 로 재확인.
+  const minimal = generatePositionalFacadeTs(simpleSchema);
+  assert.ok(!minimal.includes('InvokeOptions'));
+});
+
+test('generatePositionalFacadeTs helpers are async so sync throws become rejections', () => {
+  // 감사 #7: call/callPos 가 동기 throw 하면 선언된 Promise<T> 와 어긋나
+  // .catch() 핸들러를 통과해 uncaught exception 이 된다. 헬퍼가 async function
+  // 이면 throw 는 자동으로 rejected Promise 로 정규화된다.
+  const facade = generatePositionalFacadeTs(richSchema);
+  assert.ok(facade.includes('async function call<'), 'call must be async');
+  assert.ok(facade.includes('async function callPos<'), 'callPos must be async');
+  // Promise.resolve 래핑은 동기 호출의 착시를 유지 — async 함수 반환이 대체.
+  assert.ok(!facade.includes('Promise.resolve('), 'no sync-wrapping Promise.resolve');
+});
+
+test('generated facade wrapper returns a rejected Promise when native is not installed', async () => {
+  // 행위 스모크(감사 #7): 미설치 상태에서 래퍼를 호출하면 동기 throw 대신
+  // rejected Promise 를 돌려 .catch() 가 반드시 에러를 받는다. bun test 는 TS를
+  // 직접 변환하므로 생성물을 temp 파일로 쓰고 동적 import 해 실제 모듈로 검증한다.
+  const facade = generatePositionalFacadeTs(simpleSchema);
+  const dir = mkdtempSync(join(tmpdir(), 'rustra-facade-'));
+  const file = join(dir, 'positional-facade.ts');
+  writeFileSync(file, facade);
+  try {
+    const ns = (await import(pathToFileURL(file).href)) as Record<string, unknown>;
+    const add = ns.add as (a: number, b: number) => Promise<unknown>;
+    let caught: unknown;
+    await add(1, 2).catch((error: unknown) => {
+      caught = error;
+    });
+    assert.ok(caught instanceof Error, '.catch() must receive the requireNative throw');
+    assert.match(
+      (caught as Error).message,
+      /installRustraPositional/,
+      'error must carry the install hint',
+    );
+    // 반환값이 진짜 Promise 인지(thenable이 아닌 Promise)도 확인 — 같은 인스턴스를
+    // 검증하고 처리해야 미처리 rejection 이 다음 테스트로 새어나가지 않는다.
+    const pending = add(1, 2);
+    assert.ok(pending instanceof Promise, 'wrapper must return a native Promise');
+    await pending.catch(() => {});
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 // ── 스키마 식별자 화이트리스트 (생성 TS 코드 주입 방어) ─────
