@@ -3,6 +3,7 @@ import test from 'node:test';
 import { configureDebug, resetDebugEnvForTests } from '@rustra/types';
 import {
   UNPARSED_LINES_CAPACITY,
+  UNPARSED_LINE_MAX_CHARS,
   attachExitContext,
   demultiplexBinaryFrame,
   recordUnparsedLine,
@@ -225,4 +226,15 @@ test('attachExitContext appends the stderr tail after the preserved lines', () =
   const stderrIndex = message.indexOf('stderr:');
   const linesIndex = message.indexOf('bad-line');
   assert.ok(linesIndex >= 0 && stderrIndex > linesIndex, 'stderr section comes last');
+});
+
+test('recordUnparsedLine truncates a huge line to the char cap', () => {
+  delete process.env.RUSTRA_DEBUG;
+  resetDebugEnvForTests();
+  const state = newState();
+  const huge = 'x'.repeat(UNPARSED_LINE_MAX_CHARS * 8);
+  recordUnparsedLine(huge, state);
+  assert.equal(state.buffer.length, 1);
+  assert.equal(state.buffer[0]!.length, UNPARSED_LINE_MAX_CHARS);
+  assert.equal(state.buffer[0]!, huge.slice(0, UNPARSED_LINE_MAX_CHARS));
 });

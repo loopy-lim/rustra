@@ -120,6 +120,13 @@ const frameDecoder = new TextDecoder();
 /** 비 NDJSON 라인 링 버퍼 크기 — exit 시 대기 요청 에러에 첨부할 최근 줄 수. */
 export const UNPARSED_LINES_CAPACITY = 32;
 
+/**
+ * 라인 1줄의 보존 상한(문자) — 멀티 MB 비 JSON 라인도 버퍼와 exit 메시지에
+ * 온전히 살지 않도록 절단한다(stderr 꼬리 상한과 대칭). 보장은
+ * `UNPARSED_LINES_CAPACITY` 줄 × 이 상한으로 이중 경계다.
+ */
+export const UNPARSED_LINE_MAX_CHARS = 4_096;
+
 /** debug 모드에서 보존할 stderr 꼬리 상한(문자) — 무한 stderr 도 메모리 상한 유지. */
 const STDERR_TAIL_CHARS = 8_192;
 
@@ -135,10 +142,10 @@ export type UnparsedLineState = { buffer: string[]; warned: boolean };
  * - debug 모드(`RUSTRA_DEBUG`)면 `kind: 'ndjson.unparsed'` debug 이벤트를 싱크로
  *   내고 stderr 에 **최초 1회만** warn 한다(로그 스팸 방지 — 워닝 규약은
  *   node-events 의 `parsePushPayload` 와 동일 톤).
- * - 비 debug 모드면 최근 `UNPARSED_LINES_CAPACITY` 줄을 ring 으로 보존한다 —
- *   프로세스가 exit 할 때 대기 중 요청의 에러 메시지에 첨부해, 사용자가 맨몸의
- *   "exited" 오류 대신 자식이 실제로 출력한 것을 보게 한다. 버퍼는 절대 커지지
- *   않는다(초과분은 가장 오래된 줄부터 탈락).
+ * - 비 debug 모드면 최근 `UNPARSED_LINES_CAPACITY` 줄을 ring 으로 보존한다(각
+ *   줄은 `UNPARSED_LINE_MAX_CHARS` 로 절단) — 프로세스가 exit 할 때 대기 중
+ *   요청의 에러 메시지에 첨부해, 사용자가 맨몸의 "exited" 오류 대신 자식이
+ *   실제로 출력한 것을 보게 한다. 보존량은 줄 수와 줄 길이 이중으로 경계된다.
  */
 export function recordUnparsedLine(line: string, state: UnparsedLineState): void {
   if (isRustraDebugEnabled()) {
@@ -148,12 +155,12 @@ export function recordUnparsedLine(line: string, state: UnparsedLineState): void
     if (!state.warned) {
       state.warned = true;
       console.warn(
-        'Rustra: runtime stdout line was not valid NDJSON; continuing (first occurrence only). Set RUSTRA_DEBUG for wire diagnostics.',
+        'Rustra: runtime stdout line was not valid NDJSON; continuing (first occurrence only).',
       );
     }
     return;
   }
-  state.buffer.push(line);
+  state.buffer.push(line.slice(0, UNPARSED_LINE_MAX_CHARS));
   if (state.buffer.length > UNPARSED_LINES_CAPACITY) {
     state.buffer.splice(0, state.buffer.length - UNPARSED_LINES_CAPACITY);
   }
@@ -323,6 +330,14 @@ export function createNodeLoopTransport(options: {
 
   const ensureProcess = (): ChildProcessWithoutNullStreams => {
     if (child && child.exitCode === null) return child;
+    // 프로세스 라이프마다 진단 상태를 새로 시작한다 — 죽어가는 프로세스의 늦은
+    // stdout/stderr 데이터가 exit 핸들러의 소비·clear 이후 도착해 재스폰된
+    // 프로세스의 exit 에 오속(stale) 첨부되는 것을, 반대 방향(dispose→재스폰이
+    // 새 라인을 지우는 것)과 함께 스폰 경계에서 양쪽 다 차단한다. exit 핸들러의
+    // clear 는 정상 도착한 보존분을 처리하고, 이 스폰 경계 clear 는 'exit' 이
+    // stdio 닫힘보다 먼저 온다(Node 문서)는 지연 데이터 창까지 막는 이중 잠금이다.
+    unparsed.buffer.length = 0;
+    stderrTail = undefined;
     const proc = spawn(options.command, options.args ?? [], options.spawnOptions ?? {});
     child = proc as ChildProcessWithoutNullStreams;
     if (!proc.stdout || !proc.stderr) {
