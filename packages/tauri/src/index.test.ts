@@ -347,3 +347,123 @@ test('createTauriEngine batch normalizes undefined args to empty objects', async
   const out = await engine.invokeBatch([{ command: 'a' }, { command: 'b', args: undefined }]);
   assert.deepEqual(out, [null, null]);
 });
+
+// ── 채널 어댑터 — invoke 발급 + listen 콜백 브릿지 ──
+
+test('createChannel issues a handle via rustra_channel_create and listens on the handle channel', async () => {
+  const { createChannel } = await import('./index.js');
+  const calls: Array<{ command: string; args: unknown }> = [];
+  const channels = new Set<string>();
+  const fakeInvoke = async (command: string, args?: unknown) => {
+    calls.push({ command, args });
+    if (command === 'rustra_channel_create') return { handle: 7 };
+    if (command === 'rustra_channel_drop') return true;
+    throw new Error(`unexpected command: ${command}`);
+  };
+  const fakeListen = async (channel: string, handler: (e: { payload: string }) => void) => {
+    channels.add(channel);
+    (fakeInvoke as unknown as { __fire?: (p: string) => void }).__fire = (payload: string) =>
+      handler({ payload });
+    return () => {};
+  };
+
+  const received: unknown[] = [];
+  const channel = await createChannel((p) => received.push(p), {
+    invoke: fakeInvoke,
+    listen: fakeListen,
+  });
+  assert.equal(channel.handle, 7);
+  assert.deepEqual(calls, [{ command: 'rustra_channel_create', args: undefined }]);
+  assert.ok(channels.has('rustra://channel/7'), 'listener bound to rustra://channel/{handle}');
+
+  (fakeInvoke as unknown as { __fire: (p: string) => void }).__fire('{"step":1}');
+  assert.deepEqual(received, [{ step: 1 }], 'payload parsed once to a typed value');
+});
+
+test('createChannel falls back to the raw string payload when JSON parsing fails', async () => {
+  const { createChannel } = await import('./index.js');
+  let fire: ((p: string) => void) | null = null;
+  const channel = await createChannel((p) => received.push(p), {
+    invoke: async () => ({ handle: 3 }),
+    listen: async (_channel, handler) => {
+      fire = (payload) => handler({ payload });
+      return () => {};
+    },
+  });
+  const received: unknown[] = [];
+  fire!('not-json');
+  assert.equal(received[0], 'not-json');
+  void channel;
+});
+
+test('createChannel loud-fails on handle 0 (channel-space exhaustion)', async () => {
+  const { createChannel } = await import('./index.js');
+  await assert.rejects(
+    createChannel(() => {}, { invoke: async () => ({ handle: 0 }) }),
+    (err: unknown) => err instanceof RustraCommandError,
+  );
+});
+
+test('createChannel loud-fails on invoke rejection', async () => {
+  const { createChannel } = await import('./index.js');
+  await assert.rejects(
+    createChannel(() => {}, {
+      invoke: async () => {
+        throw new Error('ipc dead');
+      },
+    }),
+    /ipc dead/,
+  );
+});
+
+test('createChannel close() invokes rustra_channel_drop, unhooks the listener, ignores late frames', async () => {
+  const { createChannel } = await import('./index.js');
+  const calls: Array<{ command: string; args: unknown }> = [];
+  let unlistened = 0;
+  let fire: ((p: string) => void) | null = null;
+  const received: unknown[] = [];
+  const channel = await createChannel((p) => received.push(p), {
+    invoke: async (command, args) => {
+      calls.push({ command, args });
+      if (command === 'rustra_channel_create') return { handle: 9 };
+      if (command === 'rustra_channel_drop') return true;
+      throw new Error('unexpected');
+    },
+    listen: async (_channel, handler) => {
+      fire = (payload) => handler({ payload });
+      return () => {
+        unlistened += 1;
+      };
+    },
+  });
+
+  fire!('{"v":1}');
+  assert.deepEqual(received, [{ v: 1 }]);
+  assert.equal(await channel.close(), true);
+  assert.deepEqual(
+    calls.filter((c) => c.command === 'rustra_channel_drop'),
+    [{ command: 'rustra_channel_drop', args: { handle: 9 } }],
+  );
+  assert.equal(unlistened, 1, 'listener unhooked');
+  fire!('{"v":2}');
+  assert.deepEqual(received, [{ v: 1 }], 'late frames ignored after close');
+  assert.equal(await channel.close(), true, 'double close is idempotent');
+});
+
+test('createChannel discovers the Tauri global without explicit io', async () => {
+  const { createChannel } = await import('./index.js');
+  const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
+  const previous = root.__TAURI__;
+  root.__TAURI__ = {
+    core: { invoke: async (command: string) => ({ handle: 5, dropped: command === 'x' }) },
+    event: {
+      listen: async () => () => {},
+    },
+  };
+  try {
+    const channel = await createChannel(() => {});
+    assert.equal(channel.handle, 5);
+  } finally {
+    root.__TAURI__ = previous;
+  }
+});
