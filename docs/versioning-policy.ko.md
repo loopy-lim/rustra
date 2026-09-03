@@ -1,3 +1,5 @@
+[English](./versioning-policy.md)
+
 # 버전 및 호환성 정책
 
 이 문서는 각 버전 bump가 무엇을 보장하는지, 항목을 어떻게 폐기(deprecated)하는지,

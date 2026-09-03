@@ -1,3 +1,5 @@
+[English](./getting-started.md)
+
 # rustra 시작하기
 
 rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 어디에서나 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크다.

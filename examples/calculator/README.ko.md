@@ -30,7 +30,7 @@ rustra.dispose();
 1. **타입 정의** — `AddNumbersInput`, `AddNumbersOutput`을 `Serialize + Deserialize + JsonSchema`로 정의
 2. **커맨드 등록** — `#[command]`로 핸들러 함수를 표시하고 `Package::builder(...).command_fn(...)`로 등록
 3. **로컬 invoke** — `package.invoke("addNumbers", ...)`로 타입 안전한 호출
-4. **TypeScript 생성** — `package.generate_typescript()` → `generated.write_to_dir(...)`로 파일 출력
+4. **TypeScript 생성** — 계약 프로브가 `schema.json`을 발행(`generate_schema` bin)하고, `rustra codegen`이 그로부터 TS/C++ 표면을 렌더링
 5. **Host 생성 진입점** — `node.ts`, `bun.ts`, `tauri.ts`, `react-native.ts`
 6. **네이티브 진입점** — `native_entry!` 한 줄로 stable C ABI와 RN staticlib 공유
 7. **고성능 선택지** — Node persistent loop/N-API와 Bun FFI rkyv V2 실측
