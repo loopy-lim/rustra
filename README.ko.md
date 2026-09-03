@@ -64,6 +64,14 @@ rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)�
       `rustra_ffi_channel_{create,send,drop}` — Android arm64 실기기 E2E 검증
       완료; iOS generic device build와 iPhone 17 Simulator Release runtime
       완료, physical-device runtime은 별도 증거
+- [x] 모든 JS 호스트의 채널 어댑터 (2026-09-03): `{ handle, close() }` 계약이
+      Node(loop-stdio 바이너리 예약 프레임 0xfffb/0xfffa/0xfffc — 백그라운드 스레드
+      send 안전, NDJSON loud-fail), Bun(`rustra_ffi_channel_*` FFI — JS 스레드
+      send 전용), Tauri(`rustra_channel_create/drop` 커맨드 + listen — `app.emit`
+      근사 유니캐스트)에서 동작한다. 기존 RN JSI 어댑터에 더해, RN JSON 어댑터의
+      이벤트 갭도 해소: `subscribeEvent`에 `pollMs` 옵션이 생겨 CallInvoker 없는
+      호스트에서 C++ 디스패처 큐를 drain 한다.
+      [호환성 매트릭스](docs/compatibility-matrix.ko.md)에 ❌ 셀이 남지 않았다.
 - [x] async 커맨드 핸들러 — `#[command] async fn`, waker 기반 실행기,
       bounded FFI 워커 풀/백프레셔/취소 게이트
 - [x] Windows 코어 런타임 검증 — CI의 Windows MSVC 테스트 + release DLL 산출
