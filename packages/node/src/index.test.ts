@@ -525,3 +525,108 @@ processTest(
     }
   },
 );
+
+// ── 채널 e2e — 실제 스폰 → 발급(0xfffb) → channelDemo → 0xfffc 프레임 ──────
+// Rust 통합 테스트(loop_stdio_channels.rs)와 단위 테스트(node-loop.test.ts)가
+// 각 절반을 검증하므로, 이 테스트는 발급 invoke → ChannelHandle::send → stdout
+// 0xfffc 프레임 → demultiplexBinaryFrame → 채널 콜백 사슬 전체를 연결해
+// 매트릭스 "Node 채널" 셀의 증거가 된다. Bun FFI 브릿지와 달리 백그라운드
+// 스레드 send(stdout 프레임은 JS 턴 데이터 이벤트로 도달)도 이 사슬에서 안전하다.
+
+processTest(
+  'createNodeChannel round-trips channelDemo frames from a spawned loop-stdio runtime',
+  { timeout: 30_000 },
+  async () => {
+    const { createNodeLoopTransport, createNodeChannel } = await import('./index.js');
+    const { rkyvV2Registry } = await import(
+      resolve(repoRoot, 'dist-ts/examples/calculator/generated/rkyv-registry.js')
+    );
+    const transport = createNodeLoopTransport({
+      command: resolve(repoRoot, 'target/debug/loop-stdio'),
+      args: [],
+      codecs: rkyvV2Registry as never,
+    });
+    try {
+      await transport.ready();
+      assert.equal(transport.mode, 'binary', 'channels need binary mode');
+
+      // (1) 발급 — 핸들은 양의 정수.
+      const received: unknown[] = [];
+      const channel = await createNodeChannel(transport, (payload) => received.push(payload));
+      const channelHandle = channel.handle;
+      assert.ok(
+        Number.isSafeInteger(channelHandle) && channelHandle > 0,
+        'issued handle is a positive safe integer',
+      );
+
+      // (2) 왕복 — channelDemo(channel, ticks:3)이 같은 invoke 왕복 안에서
+      // 채널로 3회 send 한다(응답과 0xfffc 프레임이 같은 stdout 스트림을
+      // 공유 — 디멀티플렉서 분기가 실경합에서 정확히 동작함을 함께 검증).
+      // channelDemo 의 send 는 핸들러(동기) 안에서 일어나므로 프레임은 응답
+      // 전/후 어느 쪽이든 stdout 에 착지할 수 있다 — 3프레임 정착을 기다린다.
+      const allFrames = new Promise<void>((resolve, reject) => {
+        const deadline = setTimeout(
+          () =>
+            reject(new Error(`channel frames did not arrive in time; got ${received.length}/3`)),
+          15_000,
+        );
+        const timer = setInterval(() => {
+          if (received.length >= 3) {
+            clearTimeout(deadline);
+            clearInterval(timer);
+            resolve();
+          }
+        }, 5);
+      });
+      const result = (await transport.invoke('channelDemo', {
+        channel: channelHandle,
+        ticks: 3,
+      })) as { sent: number; droppedSends: number };
+      assert.equal(result.sent, 3);
+      assert.equal(result.droppedSends, 0);
+      await allFrames;
+      assert.equal(received.length, 3, 'all 3 channel frames must reach the callback');
+      assert.deepEqual(received, [
+        { step: 1, of: 3 },
+        { step: 2, of: 3 },
+        { step: 3, of: 3 },
+      ]);
+
+      // (3) close — 이후 send 는 droppedSends 로 보고되고 콜백에 도달하지 않는다.
+      assert.equal(await channel.close(), true, 'first close drops a live handle');
+      assert.equal(await channel.close(), false, 'double close reports staleness');
+      const after = (await transport.invoke('channelDemo', {
+        channel: channelHandle,
+        ticks: 1,
+      })) as { sent: number; droppedSends: number };
+      assert.equal(after.sent, 0);
+      assert.equal(after.droppedSends, 1, 'stale send is dropped, not delivered');
+      assert.equal(received.length, 3, 'no frames after close');
+    } finally {
+      transport.dispose();
+    }
+  },
+);
+
+processTest(
+  'createNodeChannel loud-fails on an NDJSON transport instead of hanging',
+  { timeout: 30_000 },
+  async () => {
+    const { createNodeLoopTransport, createNodeChannel } = await import('./index.js');
+    // codecs 미제공 — 핸드셰이크가 없어 NDJSON 에 머문다(구 런타임 동일 위상).
+    const transport = createNodeLoopTransport({
+      command: resolve(repoRoot, 'target/debug/loop-stdio'),
+      args: [],
+    });
+    try {
+      await transport.ready();
+      assert.equal(transport.mode, 'ndjson');
+      await assert.rejects(
+        createNodeChannel(transport as never, () => {}),
+        (err: unknown) => err instanceof RustraCommandError && err.code === 'channel.unavailable',
+      );
+    } finally {
+      transport.dispose();
+    }
+  },
+);

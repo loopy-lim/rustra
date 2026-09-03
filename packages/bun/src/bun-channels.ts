@@ -53,12 +53,22 @@ export async function createBunChannelBridge(
   }
 
   const { dlopen, FFIType, JSCallback } = (await import('bun:ffi')) as typeof import('bun:ffi');
-  let lib: ReturnType<typeof dlopen>;
-  try {
-    lib = dlopen(libraryPath, {
+  // dlopen 을 try 밖 한 식으로 호출한다 — ReturnType<typeof dlopen> 로 타입을
+  // 짜면 제네릭이 constraint 로 고정돼 심볼 인자 타입이 never 로 무너진다
+  // (bun-events.ts 가 const 추론을 쓰는 것과 같은 이유).
+  const openLibrary = (): ReturnType<
+    typeof dlopen<{
+      rustra_ffi_channel_create: { args: ['ptr', 'ptr']; returns: typeof FFIType.u32 };
+      rustra_ffi_channel_drop: { args: ['u32']; returns: typeof FFIType.i32 };
+    }>
+  > =>
+    dlopen(libraryPath, {
       rustra_ffi_channel_create: { args: ['ptr', 'ptr'], returns: FFIType.u32 },
       rustra_ffi_channel_drop: { args: ['u32'], returns: FFIType.i32 },
     });
+  let lib;
+  try {
+    lib = openLibrary();
   } catch (error) {
     // dlopen 원시 에러를 transport 계약으로 정규화(bun-events 폴백과 동일 분류) —
     // 원인은 cause 로 보존한다.
@@ -97,7 +107,9 @@ export async function createBunChannelBridge(
   );
 
   return (channelCallback: BunChannelCallback): BunChannel => {
-    const handle = channelCreate(callback.ptr, null);
+    // FFI 심볼 반환값은 bun:ffi 타입상 unknown — 경계에서 1회 좁힌다.
+    const rawHandle = channelCreate(callback.ptr, null) as unknown;
+    const handle = Number(rawHandle);
     if (!Number.isSafeInteger(handle) || handle < 1) {
       throw new RustraCommandError(
         RustraErrorCode.ChannelUnavailable,

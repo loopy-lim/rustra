@@ -94,8 +94,9 @@ export async function createChannel(
   // 발급 성공 후 listen 이 실패하면 발급된 핸들을 drop 으로 정리한다
   // (리스너 없는 채널은 프레임을 받을 수 없으므로 누수다).
   const raw = (await invoke('rustra_channel_create')) as { handle?: unknown };
-  const handle = raw?.handle;
-  if (!Number.isSafeInteger(handle) || (handle as number) < 1) {
+  // IPC 경계의 unknown — 발급 검증에서 1회 좁힌다.
+  const handle = Number(raw?.handle);
+  if (!Number.isSafeInteger(handle) || handle < 1) {
     throw new RustraCommandError(
       RustraErrorCode.ChannelUnavailable,
       'rustra_channel_create returned an invalid handle; expected a positive safe integer',
@@ -117,7 +118,8 @@ export async function createChannel(
       }
     });
   } catch (listenError) {
-    await invoke('rustra_channel_drop', { handle }).catch(() => {});
+    // 정리 drop 은 절대 원래 listen 에러를 가리지 않는다 — 실패해도 무시.
+    await Promise.resolve(invoke('rustra_channel_drop', { handle })).catch(() => {});
     throw listenError;
   }
 
@@ -127,7 +129,7 @@ export async function createChannel(
       if (closed) return true;
       closed = true;
       unlisten();
-      const result = await invoke('rustra_channel_drop', { handle });
+      const result = (await invoke('rustra_channel_drop', { handle })) as unknown;
       return result === true;
     },
   };
