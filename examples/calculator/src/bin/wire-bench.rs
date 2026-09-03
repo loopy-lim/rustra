@@ -1,30 +1,26 @@
 #!/usr/bin/env cargo run -p rustra-calculator-example --bin wire-bench --release --
 //! 와이어포맷(직렬화) 계층 벤치마크 — JSON vs postcard vs rkyv V2.
 //!
-//! 목적: 같은 addNumbers(42, 58) 호출을 각 와이어포맷의 FFI 심볼로 N 회 직접 호출해
-//! 순수 직렬화+디스패치+역직렬화 비용을 측정한다. JS↔FFI 경계 노이즈가 제외된 코어 수치.
+//! 목적: 같은 addNumbers(42, 58) 호출을 각 와이어포맷 경로로 N 회 직접 호출해
+//! 순수 직렬화+디스패치+역직렬화 비용을 측정한다. JS↔FFI 경계 노이즈가
+//! 제외된 코어 수치다. 과거에는 예제 전용 legacy C 심볼
+//! (`rustra_calculator_invoke*`) 을 통해 측정했지만, legacy 프로토콜 제거
+//! 이후에는 `Package` 공개 메서드를 직접 호출한다 — 측정 의미(동일 페이로드,
+//! 동일 디스패치)는 동일하다.
 //!
 //! 페이로드:
-//!   JSON     : {"command":"addNumbers","args":{"a":42,"b":58}}  (null-terminated)
-//!   postcard : BincodeRequest{command,a,b} postcard 직렬화
-//!   rkyv V2  : [cmd_id u16 LE=1][postcard AddNumbersInput{a,b}]   (fast-path)
+//!   JSON     : invoke_json("addNumbers", {a:42,b:58})      (serde_json)
+//!   postcard : [cmd_id u16 LE][postcard AddNumbersInput]   (복사 반환 경로)
+//!   rkyv V2  : 동일 페이로드, caller-buffer 경로(invoke_rkyv_v2_into)
+//!
+//! postcard 와 rkyv V2 가 같은 와이어를 쓰는 이유: 두 경로의 차이는
+//! "응답을 새 Vec 으로 복사해 돌려주느냐(zero-copy access + caller buffer)"
+//! 이고, 이 차이가 곧 비교 대상이다.
 //!
 //! 실행: cargo run -p rustra-calculator-example --bin wire-bench --release
 
-use rustra_calculator_example::{
-    AddNumbersInput, rustra_calculator_free_buffer, rustra_calculator_free_rkyv_v2_buffer,
-    rustra_calculator_free_string, rustra_calculator_init, rustra_calculator_invoke,
-    rustra_calculator_invoke_postcard, rustra_calculator_invoke_rkyv_v2,
-};
-use serde::{Deserialize, Serialize};
-
-// lib 의 (private) BincodeRequest 와 동일 레이아웃 — postcard 바이트 호환.
-#[derive(Serialize, Deserialize)]
-struct BenchReq {
-    command: String,
-    a: i64,
-    b: i64,
-}
+use rustra_calculator_example::{AddNumbersInput, calculator_package};
+use rustra::DirectResponse;
 
 fn percentile(sorted: &[f64], pct: f64) -> f64 {
     let idx = ((pct / 100.0) * sorted.len() as f64).floor() as usize;
@@ -83,8 +79,7 @@ fn bench(
 }
 
 fn main() {
-    // Apple 은 __mod_init_func 가 자동 등록하지만 명시 호출(크로스플랫폼 안전).
-    rustra_calculator_init();
+    let package = calculator_package();
 
     let iters = 100_000;
     println!();
@@ -93,55 +88,44 @@ fn main() {
     println!("└──────────────────────────────────────────────────────────────────────┘");
     println!();
 
+    // addNumbers cmd_id 는 등록 순서 계약(register! 순서)에 따라 1 이지만,
+    // 하드코딩 대신 역방향 조회로 얻는다 — 신규 커맨드 추가로 id 가 시프트돼도
+    // 벤치가 무관하게 유지된다.
+    let cmd_id = (1u16..)
+        .find(|id| package.resolve_command_id(*id).as_deref() == Some("addNumbers"))
+        .expect("addNumbers registered");
+
     // ── JSON ─────────────────────────────────────────────────────────
-    let json =
-        std::ffi::CString::new(r#"{"command":"addNumbers","args":{"a":42,"b":58}}"#).unwrap();
-    let json_req_len = json.as_bytes().len();
-    let r_json = bench("JSON (invoke)", json_req_len, iters, || {
-        let ptr = unsafe { rustra_calculator_invoke(json.as_ptr()) };
-        // 응답 길이 = strlen
-        let len = unsafe {
-            let mut n = 0usize;
-            while *ptr.add(n) != 0 {
-                n += 1;
-            }
-            n
-        };
-        unsafe { rustra_calculator_free_string(ptr) };
-        len
+    let args = serde_json::json!({ "a": 42, "b": 58 });
+    let r_json = bench("JSON (invoke_json)", 47, iters, || {
+        let value = package
+            .invoke_json("addNumbers", args.clone())
+            .expect("addNumbers succeeds");
+        serde_json::to_vec(&value).unwrap().len()
     });
 
-    // ── postcard ─────────────────────────────────────────────────────
-    let req = BenchReq {
-        command: "addNumbers".into(),
-        a: 42,
-        b: 58,
-    };
-    let pc = postcard::to_allocvec(&req).unwrap();
-    let pc_req_len = pc.len();
-    let mut pc_out: usize = 0;
-    let r_pc = bench("postcard (invoke_postcard)", pc_req_len, iters, || {
-        let ptr = unsafe { rustra_calculator_invoke_postcard(pc.as_ptr(), pc.len(), &mut pc_out) };
-        let n = pc_out;
-        unsafe { rustra_calculator_free_buffer(ptr, pc_out) };
-        n
-    });
-
-    // ── rkyv V2 fast-path ────────────────────────────────────────────
-    // [cmd_id u16 LE=1][postcard AddNumbersInput{a:42,b:58}]
-    let mut rkyv: Vec<u8> = Vec::with_capacity(16);
-    rkyv.extend_from_slice(&1u16.to_le_bytes()); // addNumbers cmd_id = 1
+    // ── postcard / rkyv V2 ───────────────────────────────────────────
+    // 동일 요청 와이어: [cmd_id u16 LE][postcard AddNumbersInput{a:42,b:58}]
     let input = AddNumbersInput { a: 42, b: 58 };
-    rkyv.extend_from_slice(&postcard::to_allocvec(&input).unwrap());
-    let rkyv_req_len = rkyv.len();
-    let mut rkyv_out: usize = 0;
-    let r_rkyv = bench("rkyv V2 (invoke_rkyv_v2)", rkyv_req_len, iters, || {
-        let ptr =
-            unsafe { rustra_calculator_invoke_rkyv_v2(rkyv.as_ptr(), rkyv.len(), &mut rkyv_out) };
-        let n = rkyv_out;
-        // rkyv V2 응답은 코어 FFI 레이아웃(8B 헤더) — 위임 후 전용 free 심볼 필수.
-        unsafe { rustra_calculator_free_rkyv_v2_buffer(ptr, rkyv_out) };
-        n
+    let input_bytes = postcard::to_allocvec(&input).unwrap();
+    let mut req = Vec::with_capacity(2 + input_bytes.len());
+    req.extend_from_slice(&cmd_id.to_le_bytes());
+    req.extend_from_slice(&input_bytes);
+    let req_len = req.len();
+
+    let r_pc = bench("postcard (invoke_rkyv_v2)", req_len, iters, || {
+        package.invoke_rkyv_v2(&req).expect("ok").len()
+    });
+
+    let mut out_buf = vec![0u8; 256];
+    let r_rkyv = bench("rkyv V2 (invoke_rkyv_v2_into)", req_len, iters, || {
+        match package
+            .invoke_rkyv_v2_into(&req, &mut out_buf)
+            .expect("ok")
+        {
+            DirectResponse::Written(n) => n,
+            DirectResponse::Buffered(bytes) => bytes.len(),
+        }
     });
 
     // ── 출력 ─────────────────────────────────────────────────────────
