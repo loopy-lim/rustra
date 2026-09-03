@@ -40,10 +40,11 @@ pre-1.0 규칙: 이전 릴리즈에서 폐기되었던 항목은 마이너 릴�
 [0.3에서 0.4로](migrations/0.3-to-0.4.ko.md),
 [0.5에서 0.6으로](migrations/0.5-to-0.6.ko.md) 참고.
 
-현재 상태: `RendererHost`는 `#[doc(hidden)]`이자 `#[deprecated]`
-("RendererHost is retained for Rustra 0.x compatibility; prefer a
-host-specific adapter boundary") 상태다. 0.x 사이클이 끝날 때까지 유지하며,
-여기서 제거를 제안하지 않는다.
+최근 제거: `RendererHost`(`HostMessage`, `MessageKind`, `RendererCapabilities`,
+`Size`, `SurfaceOptions`, `host_supports_eval` 포함)는 0.6.0까지 deprecated로
+유지되다가 위 pre-1.0 규칙에 따라 0.7.0에서 제거됐다. 대체재는 호스트별 어댑터
+경계다 — 각 임베딩 호스트는 공개된 채널·FFI 표면으로 자체 렌더러/이벤트를
+연결한다.
 
 ## 실험 표면
 

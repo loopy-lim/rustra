@@ -133,8 +133,6 @@ mod package;
 mod package_codegen;
 pub mod prelude;
 mod registry;
-#[doc(hidden)]
-pub mod renderer_host;
 mod rkyv_codec;
 mod schema;
 pub mod state;
