@@ -7,6 +7,7 @@
 
 export * from './public.js';
 export * from './errors.js';
+export * from './retry.js';
 export * from './global.js';
 export * from './json-engine.js';
 export * from './live-schema.js';

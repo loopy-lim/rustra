@@ -8,7 +8,6 @@
     "pub mod events",
     "pub mod ffi",
     "pub mod prelude",
-    "pub mod renderer_host",
     "pub mod state",
     "pub mod tauri_support",
     "pub use error::{Result, RustraError}",
@@ -171,16 +170,19 @@
       "RustraProviderProps",
       "SubscribeFn",
       "SubscribeResult",
+      "SuspenseEntry",
       "UnsubscribeFn",
       "UseCommandOptions",
       "UseCommandResult",
       "UseMutationOptions",
       "UseMutationResult",
       "VoidCommandFn",
+      "invalidateCommands",
       "useCommand",
       "useEvent",
       "useMutation",
-      "useRustraEngine"
+      "useRustraEngine",
+      "useSuspenseCommand"
     ],
     "packages/react-native": [
       "EngineClient",
@@ -234,13 +236,17 @@
     ],
     "packages/testing": [
       "CommandFunction",
+      "ContractFieldDrift",
       "MockEngine",
       "MockEngineOptions",
       "MockError",
       "MockEvent",
       "assertContractCurrent",
+      "assertContractFieldsCurrent",
+      "assertContractHashCurrent",
       "createMockEngine",
-      "expectContractCurrent"
+      "expectContractCurrent",
+      "expectContractFieldsCurrent"
     ],
     "packages/types": [
       "* from './debug.js'",
@@ -250,6 +256,7 @@
       "* from './json-engine.js'",
       "* from './live-schema.js'",
       "* from './public.js'",
+      "* from './retry.js'",
       "* from './rkyv-engine.js'",
       "createSchemaPostcardCodec",
       "decodeUtf8",

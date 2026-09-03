@@ -37,8 +37,7 @@ export function rustraEventChannel(name: string): string {
 
 /**
  * rustra 이벤트를 구독한다 — 모든 어댑터와 같은 `(name, callback[, listen])`
- * 형태를 기본으로 사용한다. 기존 `(listen, name, callback)`도 0.x 호환으로
- * 지원한다. Rust `Package::emit`의 JSON 페이로드는 여기서 한 번 파싱한다.
+ * 형태다. Rust `Package::emit`의 JSON 페이로드는 여기서 한 번 파싱한다.
  *
  * @example
  * ```ts
@@ -46,29 +45,13 @@ export function rustraEventChannel(name: string): string {
  * // 정리 시: unsubscribe()
  * ```
  */
-export function subscribeEvent<T = unknown>(
+export async function subscribeEvent<T = unknown>(
   name: string,
   callback: (payload: T) => void,
   listen?: TauriListen,
-): Promise<() => void>;
-/** @deprecated Pass `(name, callback[, listen])`; this overload remains for 0.x compatibility. */
-export function subscribeEvent<T = unknown>(
-  listen: TauriListen,
-  name: string,
-  callback: (payload: T) => void,
-): Promise<() => void>;
-export async function subscribeEvent<T = unknown>(
-  listenOrName: TauriListen | string,
-  nameOrCallback: string | ((payload: T) => void),
-  callbackOrListen?: ((payload: T) => void) | TauriListen,
 ): Promise<() => void> {
-  const legacyShape = typeof listenOrName === 'function';
-  const listen = legacyShape
-    ? listenOrName
-    : ((callbackOrListen as TauriListen | undefined) ?? requireTauriListen());
-  const name = legacyShape ? (nameOrCallback as string) : listenOrName;
-  const callback = (legacyShape ? callbackOrListen : nameOrCallback) as (payload: T) => void;
-  const unlisten = await listen(rustraEventChannel(name), (event) => {
+  const resolvedListen = listen ?? requireTauriListen();
+  const unlisten = await resolvedListen(rustraEventChannel(name), (event) => {
     // payload 는 Rust 가 JSON 직렬화한 문자열이다 — 파싱해 타입 값으로 전달.
     try {
       callback(JSON.parse(event.payload) as T);
