@@ -1,5 +1,96 @@
 # @rustra/bun
 
+## 0.7.0
+
+### Minor Changes
+
+- 62763e9: Generated `node.ts`/`bun.ts` host entries now export `subscribeEvent` when the
+  schema declares events — same one-line import surface as the RN/Tauri entries.
+  New adapter factories back it: `createBunEventSubscription` (`@rustra/bun`)
+  resolves the cdylib with the exact same candidate computation as the bootstrap
+  (`RUSTRA_BUN_LIBRARY` included), keeps the synchronous
+  `(name, callback) => unsubscribe` signature by queueing subscribers until the
+  FFI bridge (with polling fallback) is ready, and fails fast on initialization
+  failure; `createNodeEventSubscription` (`@rustra/node`) lazily spawns an event
+  transport resolved like the bootstrap and delegates to the existing polling
+  `subscribeEvent`. Schemas without events keep byte-identical entry output.
+- a23a4d6: Next-cycle integration: hot-reload track + inspector track.
+
+  **Hot-reload track (dev-time):** `rustra dev` gains a reload hook on its watch
+  handle, a parity gate for the wasm dev target (fail-closed, rejects reloads on
+  contract drift), wasm32 engine build orchestration (`[dev:wasm]` artifact
+  logging; device push is the host's integration point), a doctor notice for the
+  experimental wasm target (cooperative cancellation only — verify natively
+  before release) plus a required `wasm32-unknown-unknown` rustup target check,
+  and a release-coherence rule excluding the wasm backend from release artifacts.
+  `@rustra/node` adds `NodeLoopTransport.drain(timeoutMs)` (optional member) and
+  reload support on both bootstraps (loop hosts: graceful drain; one-shot:
+  shallow cancel); `@rustra/bun` reload re-initializes engine state in-process
+  with a loud dlopen-cache warning. The experimental `rustra_ffi_hot_reload` FFI
+  (replace semantics, loud skip report) lands in `rustra` — Rust-only, no npm
+  surface.
+
+  **Inspector track:** `rustra_ffi_capture_snapshot` FFI plus
+  `parseSnapshot`/`serializeSnapshot` in `@rustra/types`, the `rustra inspect`
+  CLI for dump files, a self-contained `renderTimelineReport` HTML generator in
+  `@rustra/devtools`, and contract-diff diagnosis in the existing
+  `onContractMismatch` info.
+
+  **Type-level breaking changes in `@rustra/cli` (pre-1.0 minor, no migration
+  action required beyond recompiling):**
+
+  1. The `BreakingChange` union gains a new member `command_id_changed`.
+     Exhaustive switches over `BreakingChange` (e.g. `satisfies never` checks)
+     must add the new case.
+  2. `DiffResult.diagnoses` becomes a REQUIRED field (always present, possibly
+     empty). Code reading `result.diagnoses?.…` keeps working; code doing
+     `in`-checks or exact-shape comparisons must drop the optionality
+     assumption.
+
+- 5777d57: 0.6 완성도 트랙 — `rustra diff` 이벤트 게이트(event_removed/event_payload_changed,
+  이벤트 추가는 non-breaking), Node 푸시 이벤트(0xfffd 프레임 + 능력 재판정 폴링
+  폴백, 2-모드 dispatch), Bun FFI 이벤트 브릿지 자동배선, 생성 엔트리
+  subscribeEvent export(node/bun, 이벤트 없으면 바이트 불변), `codegen`/`diff
+--format json`, UsageError exit-2 계약, docs 동기화 게이트(test:docs + CI).
+- be29e0d: Behavior-preserving cleanup pass (Rust side): the serde struct/variant
+  serializers share one core (`complex_serde_ser_core`), `register!`/`build!`
+  expand to the same `PackageBuilder` command chain, and the command
+  function-name rule lives in `rustra-naming::snake_to_lower_camel`.
+
+  No wire-format or error-message changes.
+
+### Patch Changes
+
+- 23c2f17: Single-arrow codegen: the Rust bin is a contract probe that publishes `schema.json`
+  only (`GeneratedPackage::write_schema_to_dir`, honoring `RUSTRA_SCHEMA_OUT`), and
+  `rustra codegen` renders every TS/C++ surface from that single file — the dual-pass
+  trap of two writers producing the same files is gone. `GeneratedPackage::write_to_dir`
+  is deprecated (documentation-only; kept at least one minor per the versioning policy).
+  DX additions in `@rustra/cli`: self-describing headers on every generated file
+  (file, source, regen command, stage), a `codegen.generated_freshness` doctor check
+  (manifest-based stale detection: missing manifest, schema drift, generator drift),
+  `codegen --explain` surface map (text or `--format json`), and a CI onboarding gate
+  (`bun run test:onboarding`: init → doctor → build → codegen → demo in a scratch dir).
+  Example bins now publish schema only; all four examples were regenerated under the
+  new header convention.
+
+  User-defined generic types now work at the concrete-instance level: command
+  `inputType`/`outputType` are pinned to the schemars `JsonSchema::schema_name`
+  (monomorphized names like `Wrapper_for_String`) instead of Rust's `type_name`,
+  which leaked invalid `Wrapper<String >` identifiers for generic payloads.
+  The Rust `rustra` crate ships the same minor in its own Cargo workspace release
+  (crates.io is manual — see docs/release-procedure.md): schema.json contract entries
+  change for generic and `serde_json::Value` payloads (`Value` → `AnyValue`), so the
+  contract hash shifts for packages using them — regenerate schema.json and TS
+  clients together (same minor release, per the versioning policy). CLI: friendlier
+  schema validation — missing config files point at `rustra init`, broken
+  schema.json names the file and the regen command, and generic type names get a
+  rebuild hint.
+
+- Updated dependencies [23c2f17]
+- Updated dependencies [a23a4d6]
+  - @rustra/types@0.7.0
+
 ## 0.6.0
 
 ### Minor Changes
