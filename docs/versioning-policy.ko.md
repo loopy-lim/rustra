@@ -14,8 +14,8 @@
 | Contract hash 알고리즘                                    | 호환성 핵심: 스키마 해시 입력 정의는 릴리즈별로 고정된다.                                              | 메이저 버전. pre-1.0에서는 마이그레이션 노트를 동반한 마이너.                                                                                                           |
 | FFI 심볼 시그니처 (`rustra_ffi_*` C ABI)                  | 추가만 허용. 기존 심볼은 이름·파라미터 목록·호출 규약을 유지한다.                                      | 제거와 시그니처 변경은 아래 폐기 절차를 거친 뒤 메이저로. pre-1.0에서는 위 폐기 규칙이 그대로 적용된다 — 이전 릴리즈에서 deprecated된 심볼은 마이너에서 제거할 수 있다. |
 | 생성 산출물 (TypeScript / C++ / RN 생성 파일)             | 동일 설정으로 재생성하면 drop-in으로 교체된다.                                                         | 메이저 버전. pre-1.0에서는 마이그레이션 노트를 동반한 마이너.                                                                                                           |
-| 공개 Rust API (`crates/rustra`, `rustra-macros` export)   | 표준 semver.                                                                                           | 메이저 버전.                                                                                                                                                            |
-| 공개 TypeScript API (`@rustra/*` 패키지 export)           | 표준 semver.                                                                                           | 메이저 버전.                                                                                                                                                            |
+| 공개 Rust API (`crates/rustra`, `rustra-macros` export)   | 표준 semver.                                                                                           | 메이저 버전. pre-1.0에서는 마이그레이션 노트를 동반한 마이너.                                                                                                           |
+| 공개 TypeScript API (`@rustra/*` 패키지 export)           | 표준 semver.                                                                                           | 메이저 버전. pre-1.0에서는 마이그레이션 노트를 동반한 마이너.                                                                                                           |
 
 어떤 보장에도 해당하지 않는 것:
 
@@ -77,6 +77,9 @@ PR(`chore: version packages`)을 열고, 이를 병합하면 버전 필드와 CH
 수동이다 — [릴리즈 절차](release-procedure.md)가 지정한 순서대로 crate별로
 `cargo publish`를 실행하며, 발행된 버전은 삭제하거나 교체할 수 없다.
 
-위 pre-1.0 규칙에 따라 wire format이나 contract hash 변경은 명시적인
-마이그레이션 노트와 함께 마이너로 발행된다. 동일한 변경이 1.0 이후라면 메이저
-버전이 필요하다.
+1.0까지는 위 보장 범위의 어떤 표면에서든 — 공개 Rust·TypeScript API를
+포함해 — breaking change가 명시적인 마이그레이션 노트(CHANGELOG에 문서화하고,
+소비자가 조치해야 하는 경우 `docs/migrations/<from>-to-<to>.md`에도 문서화)를
+동반한 마이너로 발행된다. 1.0부터는 이 허용이 사라진다: 그런 변경은 메이저
+버전이 필요하다. 그때까지 프로젝트는 마이너 릴리즈를 유지하며, pre-1.0에서는
+메이저를 내지 않는다.

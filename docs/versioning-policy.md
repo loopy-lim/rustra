@@ -17,8 +17,8 @@ detection lives in the [contract migration guide](migration-guide.md).
 | Contract hash algorithm                                      | Compatibility-critical: the hash-of-schema input definition is frozen per release.                 | Major version. Pre-1.0: a minor with explicit migration notes.                                                                                                                                    |
 | FFI symbol signatures (`rustra_ffi_*` C ABI)                 | Additive only. Existing symbols keep name, parameter list, and calling convention.                 | Removals and signature changes go through the deprecation cycle below, then a major. Pre-1.0: the deprecation rule applies — a symbol deprecated in a previous release may be removed in a minor. |
 | Generated output (TypeScript / C++ / RN generated files)     | Regenerated output stays drop-in for the same configuration.                                       | Major version. Pre-1.0: a minor with explicit migration notes.                                                                                                                                    |
-| Public Rust API (`crates/rustra`, `rustra-macros` exports)   | Standard semver.                                                                                   | Major version.                                                                                                                                                                                    |
-| Public TypeScript API (`@rustra/*` package exports)          | Standard semver.                                                                                   | Major version.                                                                                                                                                                                    |
+| Public Rust API (`crates/rustra`, `rustra-macros` exports)   | Standard semver.                                                                                   | Major version. Pre-1.0: a minor with explicit migration notes.                                                                                                                                    |
+| Public TypeScript API (`@rustra/*` package exports)          | Standard semver.                                                                                   | Major version. Pre-1.0: a minor with explicit migration notes.                                                                                                                                    |
 
 Not covered by any guarantee:
 
@@ -83,6 +83,9 @@ crate, in the order given by the
 [release procedure](release-procedure.md) — and published versions cannot be
 deleted or replaced.
 
-Under the pre-1.0 rules above, a wire-format or contract-hash change ships as
-a minor version with explicit migration notes; the same change after 1.0 would
-require a major version.
+Until 1.0, a breaking change on any guaranteed surface above — including the
+public Rust and TypeScript APIs — ships as a minor version with explicit
+migration notes (documented in CHANGELOG and, where consumers must act, in
+`docs/migrations/<from>-to-<to>.md`). From 1.0 this allowance is gone: such
+changes require a major version. The project stays on minor releases until
+then; majors are not issued pre-1.0.
