@@ -18,6 +18,10 @@ import { POSITIONAL_SCALAR_KINDS } from './generate-routing.js';
  * 내부적으로 `installRustraPositional(native)` 로 주입받은 native 의
  * `invokeTyped(name, args)` 를 호출한다 (RN JSI). 코덱 미지원 명령은 생성에서
  * 제외된다 — Tier 3 폴백 경로(commands.ts)를 쓰면 된다.
+ *
+ * 계약: 헬퍼(call/callPos)는 async — 동기 throw 도 rejected Promise 로 정규화되어
+ * 선언된 Promise<T> 와 .catch() 체인이 어긋나지 않는다. options 파라미터는
+ * 받지 않는다 — 네이티브 표면에 options 전달 경로가 없어 받아도 버려질 뿐이다.
  */
 export function generatePositionalFacadeTs(schema: PackageSchema): string {
   const definitions = collectAllDefinitions(schema);
@@ -38,7 +42,6 @@ export function generatePositionalFacadeTs(schema: PackageSchema): string {
   if (sortedTypeImports.length > 0) {
     output += `import type { ${sortedTypeImports.join(', ')} } from './types.js';\n`;
   }
-  output += `import type { InvokeOptions } from '@rustra/types';\n\n`;
   output +=
     `/** JSI 네이티브 모듈의 최소 인터페이스 — invokeTypedPos 노출 호스트 권장. */\n` +
     `export type PositionalNative = {\n` +
@@ -59,8 +62,10 @@ export function generatePositionalFacadeTs(schema: PackageSchema): string {
     `  }\n` +
     `  return _native;\n` +
     `}\n\n` +
+    // 헬퍼는 async 여야 한다(감사 #7) — 미설치/미노출 동기 throw 를 rejected
+    // Promise 로 정규화해 선언된 Promise<T> 와 .catch() 체인이 어긋나지 않는다.
     `/** byId 진입(우선) — 미노출 구 네이티브는 이름 기반 invokeTyped 로 폴백. */\n` +
-    `function call<T>(cmdId: number, name: string, args: unknown): T {\n` +
+    `async function call<T>(cmdId: number, name: string, args: unknown): Promise<T> {\n` +
     `  const native = requireNative();\n` +
     `  if (native.invokeTypedById) {\n` +
     `    return native.invokeTypedById(cmdId, args) as T;\n` +
@@ -68,7 +73,7 @@ export function generatePositionalFacadeTs(schema: PackageSchema): string {
     `  return native.invokeTyped(name, args) as T;\n` +
     `}\n\n` +
     `/** (Tier 1) positional 진입 — 개별 인자를 그대로 넘긴다(객체 생성 0). */\n` +
-    `function callPos<T>(cmdId: number, ...fields: unknown[]): T {\n` +
+    `async function callPos<T>(cmdId: number, ...fields: unknown[]): Promise<T> {\n` +
     `  const native = requireNative();\n` +
     `  if (native.invokeTypedPos) {\n` +
     `    return native.invokeTypedPos(cmdId, ...fields) as T;\n` +
@@ -91,25 +96,24 @@ export function generatePositionalFacadeTs(schema: PackageSchema): string {
     const cmdId = command.commandId ?? 0;
     if (fields.length > 0 && fields.length <= 3 && simple) {
       // (Tier 1) 순수 스칼라 필드는 invokeTypedPos 로 — 인자 객체 생성 0.
+      // options 파라미터는 일부러 없다(감사 #6) — 네이티브 표면에 options 가
+      // 없어 전달이 불가능하고, 받아서 버리면 timeoutMs/silent no-op 결함이 된다.
       const params = fields.map((f) => `${f.name}: ${tsFieldType(f)}`).join(', ');
       const argList = fields.map((f) => `${f.name}`).join(', ');
       output +=
-        `export function ${fnName}(${params}, options?: InvokeOptions): Promise<${outType}> {\n` +
-        `  void options;\n` +
-        `  return Promise.resolve(callPos<${outType}>(${cmdId}, ${argList}));\n` +
+        `export function ${fnName}(${params}): Promise<${outType}> {\n` +
+        `  return callPos<${outType}>(${cmdId}, ${argList});\n` +
         `}\n\n`;
     } else if (fields.length === 0) {
       output +=
-        `export function ${fnName}(options?: InvokeOptions): Promise<${outType}> {\n` +
-        `  void options;\n` +
-        `  return Promise.resolve(call<${outType}>(${cmdId}, '${command.name}', undefined));\n` +
+        `export function ${fnName}(): Promise<${outType}> {\n` +
+        `  return call<${outType}>(${cmdId}, '${command.name}', undefined);\n` +
         `}\n\n`;
     } else {
       const inType = command.inputType;
       output +=
-        `export function ${fnName}(input: ${inType}, options?: InvokeOptions): Promise<${outType}> {\n` +
-        `  void options;\n` +
-        `  return Promise.resolve(call<${outType}>(${cmdId}, '${command.name}', input));\n` +
+        `export function ${fnName}(input: ${inType}): Promise<${outType}> {\n` +
+        `  return call<${outType}>(${cmdId}, '${command.name}', input);\n` +
         `}\n\n`;
     }
   }
