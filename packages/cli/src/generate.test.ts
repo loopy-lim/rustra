@@ -1674,6 +1674,10 @@ test('init scaffold has a real shared package and executable codegen bin', () =>
   assert.match(files.packageJson, /"packageManager": "bun@1\.4\.0"/);
   assert.match(files.libRs, /pub fn package\(\) -> Package/);
   assert.match(files.generateRs, /rustra_app::package\(\)\.generate_typescript\(\)/);
+  // 스타 스캔폴드 계약: schema.json 만 기록(TS 표면은 rustra codegen 소관) + 발행된
+  // rustra 에 존재하는 API만 사용(write_schema_to_dir 는 미발행 — 온보딩 게이트 red 사례).
+  assert.match(files.generateRs, /schema\.json/);
+  assert.doesNotMatch(files.generateRs, /write_schema_to_dir|write_to_dir/);
   assert.match(files.mainRs, /__rustra_contract/);
   assert.match(files.appTs, /generated\/node\.js/);
   assert.doesNotMatch(files.generateRs, /see src\/main\.rs/);
