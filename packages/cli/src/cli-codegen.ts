@@ -8,7 +8,7 @@ import { resolveCodegenTarget } from './host-entries.js';
 import { runGenerate } from './cli-generate.js';
 import { parseCodegenArgs, type CliOutputFormat } from './cli-options.js';
 import { explainCodegenSurfaces, formatExplainText } from './codegen-explain.js';
-import { formatCodegenJson } from './cli-json-format.js';
+import { formatCodegenJson, formatExplainJson } from './cli-json-format.js';
 
 function status(format: CliOutputFormat | undefined, message: string): void {
   (format === 'json' ? console.error : console.log)(message);
@@ -16,7 +16,6 @@ function status(format: CliOutputFormat | undefined, message: string): void {
 
 /** 표면 지도 출력 — config 해석만으로 facts를 만든다(파일 시스템 쓰기 없음). */
 function printExplain(
-  configPath: string,
   config: ReturnType<typeof readConfigSync>,
   format: CliOutputFormat | undefined,
 ): void {
@@ -32,7 +31,10 @@ function printExplain(
     positional: Boolean(config.positional),
     hostEntries,
   });
-  if (format === 'json') console.log(JSON.stringify({ command: 'codegen', explain: rows }));
+  // doctor/codegen/diff 가 공유하는 schemaVersion:1 관례(cli-json-format.ts) —
+  // 구형 `{command:'codegen', explain}` 임의 shape 는 소비자 0건을 확인하고
+  // 통일했다. rows 는 ExplainRow 를 그대로 실린다(텍스트 렌더러와 같은 판별).
+  if (format === 'json') console.log(formatExplainJson({ explain: rows }));
   else console.log(formatExplainText(rows));
 }
 
@@ -44,7 +46,7 @@ export async function runCodegen(args: string[]): Promise<void> {
   const config = readConfigSync(configPath);
   // --explain 은 순수 조회 — cargo/TS 렌더러를 실행하지 않고 표면 지도만 출력한다.
   if (options.explain) {
-    printExplain(configPath, config, options.format);
+    printExplain(config, options.format);
     return;
   }
   const target = resolveCodegenTarget(configPath, config);

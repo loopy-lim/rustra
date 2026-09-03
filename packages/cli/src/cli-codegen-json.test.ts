@@ -78,6 +78,30 @@ function seedProject(root: string): string {
   return project;
 }
 
+test('codegen --explain --format json carries the schemaVersion:1 surface map', async () => {
+  // 신형 explain shape 핀 — 구형 `{command:'codegen', explain}` 임의 shape 로의
+  // 회귀를 잡는다. explain 은 config 해석만 하므로 cargo 없이 순수 조회 경로다.
+  const root = mkdtempSync(join(tmpdir(), 'rustra-codegen-explain-'));
+  const originalLog = console.log;
+  const stdout: string[] = [];
+  console.log = (line: unknown) => stdout.push(String(line));
+  try {
+    const project = seedProject(root);
+    await runCodegen(['--config', join(project, 'rustra.json'), '--explain', '--format', 'json']);
+    const report = JSON.parse(stdout.at(-1)!) as {
+      schemaVersion: number;
+      command?: string;
+      explain: unknown[];
+    };
+    assert.equal(report.schemaVersion, 1, `got: ${stdout.at(-1)}`);
+    assert.equal(report.command, undefined, 'legacy command field must not return');
+    assert.ok(Array.isArray(report.explain) && report.explain.length > 0);
+  } finally {
+    console.log = originalLog;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('codegen --format json reports drift:true when regeneration rewrites existing files', async () => {
   const root = mkdtempSync(join(tmpdir(), 'rustra-codegen-drift-'));
   const originalPath = process.env.PATH;

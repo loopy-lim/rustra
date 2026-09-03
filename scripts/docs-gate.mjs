@@ -53,8 +53,15 @@ export function collectDocs(root) {
 
 /**
  * 생성물의 자기서술 헤더 주석 블록을 제거한 본문 줄들을 돌려준다.
- * 선행 빈 줄을 건너뛴 뒤 첫 줄이 `// ──`로 시작하면 `//` 프리픽스가 아닌
- * 첫 줄까지(포함하지 않음) 소비한다. 헤더가 없으면 원문 전체를 비교 대상으로 삼는다.
+ *
+ * 스코프(휴리스틱의 정확한 동작): 고정 "8행" 규칙이 아니라 — 선행 빈 줄을
+ * 건너뛴 뒤 첫 줄이 `// ──`로 시작하면, `//` 프리픽스 줄만 쓰는 첫 줄(포함
+ *하지 않음)까지와 그 직후 빈 줄 하나를 소비한다. 즉 헤더 행 수가 달라도
+ * (`// ──` 줄과 본문 사이가 `//`만 쓰는 블록이면) strip 된다. 헤더로 판정되지
+ * 않으면 원문 전체(선행 빈 줄 포함)가 비교 대상.
+ *
+ * 과잉 strip 가능성(본문 첫 줄이 우연히 `// ──`로 시작하는 TS 파일 등)은
+ * 알려진 트레이드오프 — 후속 판단 사항으로 기록하며 코드는 바꾸지 않는다.
  */
 export function stripGeneratedHeader(text) {
   const lines = text.split('\n');
@@ -222,7 +229,12 @@ function run() {
     return;
   }
   if (report.regions.length === 0) {
-    console.log('docs-gate: no docs:sync markers found');
+    // 마커 채택 초기라 fail 전환이 아니라 명시적 상태 유지다. 다만 이 출력이
+    // "게이트가 실제로 docs를 봤는지"의 유일 증거이므로, 마커 0이 의도인지
+    // 확인하라는 안내를 붙인다(fail 전환은 후속 판단 사항).
+    console.log(
+      'docs-gate: no docs:sync markers found (게이트 우회 없음 확인용 — 마커 0이 의도인지 확인하세요)',
+    );
     return;
   }
   const files = new Set(report.regions.map((r) => r.doc)).size;

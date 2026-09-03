@@ -168,6 +168,14 @@ export const RustraErrorCode = {
   InvokeTooShort: 'invoke.too_short',
   /** 스키마 조회 실패. */
   SchemaUnavailable: 'schema.unavailable',
+  /**
+   * 이벤트 전달 불가 — transport 가 drainEvents(폴링)와 onPushEvent(푸시)를
+   * 모두 노출하지 않을 때(node-events.ts loud-fail), 폴링 간격 환경변수가
+   * 음수/비숫자일 때(node 전용, node-events.ts), 또는 RN 네이티브 모듈이
+   * onEvent를 노출하지 않을 때(react-native-events.ts). JS 어댑터 측 전용
+   * 코드 — Rust error.rs 에 대응 값이 없다.
+   */
+  EventUnavailable: 'event.unavailable',
   /** 계약 해시 불일치(JS>native stale). */
   ContractMismatch: 'contract.mismatch',
   /** 계약 해시 검증 불가(네이티브 미지원). */

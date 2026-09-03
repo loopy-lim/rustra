@@ -1,0 +1,4 @@
+# 저장소 전체를 LF로 정규화한다. 기존 checkout 의 파일 모드/내용은 이 파일만으로는
+# 바뀌지 않는다(새 clone/renormalize 시에만 적용). docs-gate 의 CRLF 내성이 이미
+# 있지만, 마커 파싱이 줄 끝과 무관하게 안정적이도록 원천을 고정한다.
+* text=auto

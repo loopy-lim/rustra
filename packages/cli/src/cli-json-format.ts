@@ -7,6 +7,7 @@
  * 한 가지 파싱 관례만 알면 된다.
  *
  * - codegen → `{ schemaVersion: 1, written, drift, durationMs }`
+ * - explain → `{ schemaVersion: 1, explain: rows }` (`codegen --explain --format json`)
  * - diff    → `{ schemaVersion: 1, breaking, clean }` (exit 코드는 불변 —
  *   breaking 이면 1. clean 필드는 파싱 없이도 판정을 복창하는 중복 표기다)
  *
@@ -17,6 +18,19 @@
  * 스키마 수준 판정만 운반한다.
  */
 import type { DiffResult } from './schema-diff.js';
+import type { ExplainRow } from './codegen-explain.js';
+
+/** `codegen --explain --format json` 보고 — 표면 지도 행을 그대로 실린다. */
+export interface ExplainJsonReport {
+  explain: ExplainRow[];
+}
+
+/**
+ * `codegen --explain` 의 JSON 표면 — doctor/diff 와 같은 schemaVersion:1 관례.
+ * 구형 `{command:'codegen', explain}` 임의 shape 는 소비자 0건을 확인하고 통일했다.
+ */
+export const formatExplainJson = (report: ExplainJsonReport): string =>
+  JSON.stringify({ schemaVersion: 1 as const, ...report }, null, 2);
 
 /**
  * `codegen --format json` 보고 입력 — written 은 runGenerate 의 진행 표기

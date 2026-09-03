@@ -79,12 +79,6 @@ export function parseCliArgs(args: readonly string[], options: CliArgParserOptio
   return { values, flags, positionals };
 }
 
-export function requiredCliValue(parsed: ParsedCliArgs, name: string): string {
-  const value = parsed.values.get(name);
-  if (!value) throw new UsageError(`--${name} requires a value`);
-  return value;
-}
-
 export function cliFormat(value: string | undefined, command: string): 'text' | 'json' | undefined {
   if (value === undefined) return undefined;
   if (value !== 'text' && value !== 'json') {

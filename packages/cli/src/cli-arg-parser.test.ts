@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { cliFormat, parseCliArgs, requiredCliValue } from './cli-arg-parser.js';
+import { cliFormat, parseCliArgs } from './cli-arg-parser.js';
 import { UsageError } from './cli-usage-error.js';
 import { parseCodegenArgs } from './cli-options.js';
 import { runDiff } from './cli-diff.js';
@@ -44,8 +44,6 @@ describe('parseCliArgs', () => {
           booleanFlags: [],
         }),
       () => cliFormat('yaml', 'diff'),
-      // requiredCliValue 의 누락 값도 기존 정규식 관례상 usage 오류였다.
-      () => requiredCliValue({ values: new Map(), flags: new Set(), positionals: [] }, 'old'),
     ];
     for (const usageThrow of usageThrows) {
       expect(usageThrow).toThrow(UsageError);
