@@ -210,6 +210,11 @@ Node/Bun/Tauri와 실행 환경이 다르므로 직접 순위를 매기지 않�
 
 `cargo run -p rustra-calculator-example --bin wire-bench --release`
 
+명령은 동일하나, legacy 프로토콜 제거(2026-09-03) 이후 벤치가 계산기 전용 C 심볼이
+아니라 `Package` 메서드(`invoke_json` / `invoke_rkyv_v2` / `invoke_rkyv_v2_into`)를
+직접 호출한다. 명령을 재실행하면 표가 갱신된다 — 아래 수치는 2026-08-22 측정값으로
+현재 측정 경로를 더 이상 묘사하지 않는다.
+
 | 경로                       | 요청 | 응답 |       평균 |        p50 |              처리량 |
 | -------------------------- | ---: | ---: | ---------: | ---------: | ------------------: |
 | JSON `invoke`              | 47 B | 34 B |    1.19 µs |    1.17 µs |       842,640 ops/s |
@@ -272,8 +277,12 @@ xychart-beta
 
 | 경로                                   |       평균 |         처리량 |
 | -------------------------------------- | ---------: | -------------: |
-| legacy JSON CString FFI (Swift → Rust) | **1.2 µs** |  853,614 ops/s |
+| 코어 JSON FFI (Swift → Rust)¹          | **1.2 µs** |  853,614 ops/s |
 | Full bridge (serialize → FFI → parse)  |     6.6 µs | ~151,000 ops/s |
+
+¹ 2026-08-22에 계산기 전용 CString 심볼로 측정 — legacy 제거(2026-09-03)로 코어
+`rustra_ffi_invoke_json` 바이트 경로로 교체됐다. 와이어 봉투는 동일하며 Swift 모듈이
+이제 C 문자열이 아닌 바이트를 다룬다.
 
 이 Swift 표는 macOS dylib과 Foundation JSON을 쓰는 C ABI 레이어 분해다. Hermes,
 JSI, Nitro 비용을 포함하지 않으므로 RN/Nitro headline과 직접 비율을 계산하지 않는다.

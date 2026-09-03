@@ -143,3 +143,11 @@ rustra의 객관적인 DX 경험은 어떤가? docs를 안 보고 거의 사용�
 1. 목록 일원화 시 `alias_command_id` 호환 표면을 어떻게 유지할지 (와이어 계약 변경 없이 매크로 문법만 확장 가능한지).
 2. stdio 프로토콜 매크로화 시 `__rustra_contract` 커스텀 분기(사용자 데모 main)와의 충돌 처리.
 3. `#[bridge_type]` 전환의 예제/템플릿 파급 범위 (docs:sync 리전과 generated 재생성 동반 필요).
+
+## Follow-up 정정 (2026-09-03, legacy-removal 트랙)
+
+§"죽은 코드" 주장(`__RUstra_doc_` 소비자 없음)은 **오독**이었다. build! 매크로가
+생성하는 `__RUstra_doc_<fn>` 상수는 `command_doc()`으로 흡수되어 schema
+description이 되고, TS 코드젠이 이를 JSDoc으로 렌더링한다. 실증:
+`examples/calculator/generated/types.ts:110`의 `/** 발행할 progress.tick 이벤트 수. */`
+가 `emit_demo` 입력 필드 doc에서 온 것이다. 해당 갭 항목(a/2/6번)은 무효.

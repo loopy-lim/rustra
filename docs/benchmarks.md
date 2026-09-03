@@ -220,6 +220,12 @@ The 2026-08-18 session's wire/napi/core tables are replaced by these values.
 
 `cargo run -p rustra-calculator-example --bin wire-bench --release`
 
+The command is unchanged, but since the legacy protocol removal (2026-09-03) the
+benchmark calls `Package` methods directly (`invoke_json` / `invoke_rkyv_v2` /
+`invoke_rkyv_v2_into`) instead of going through the removed calculator-specific C
+symbols. Re-run the command to refresh the table — the figures below are from the
+2026-08-22 measurement and no longer describe the current measurement path.
+
 | Path                       | Request | Response |       mean |        p50 |          throughput |
 | -------------------------- | ------: | -------: | ---------: | ---------: | ------------------: |
 | JSON `invoke`              |    47 B |     34 B |    1.19 µs |    1.17 µs |       842,640 ops/s |
@@ -283,8 +289,12 @@ floor.
 
 | Path                                   |       mean |     throughput |
 | -------------------------------------- | ---------: | -------------: |
-| legacy JSON CString FFI (Swift → Rust) | **1.2 µs** |  853,614 ops/s |
+| core JSON FFI (Swift → Rust)¹          | **1.2 µs** |  853,614 ops/s |
 | Full bridge (serialize → FFI → parse)  |     6.6 µs | ~151,000 ops/s |
+
+¹ Measured 2026-08-22 via the calculator-specific CString symbol, which the legacy
+removal replaced with the core `rustra_ffi_invoke_json` bytes path (2026-09-03).
+Same wire envelope; the Swift module now allocates bytes, not C strings.
 
 This Swift table is a breakdown of the C ABI layer using a macOS dylib and Foundation
 JSON. It excludes Hermes, JSI, and Nitro costs, so do not compute direct ratios against
