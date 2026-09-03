@@ -779,3 +779,76 @@ test('async engine without invokeTypedAsyncById keeps the name path (G2 compat)'
   assert.equal(out.value, 42);
   assert.equal(h.state.calls, 1, 'name-based invokeTypedAsync must be used');
 });
+
+// ── subscribeEvent pollMs — CallInvoker 없는 호스트의 JS 폴링 drain ─────────
+
+test('subscribeEvent pollMs drains queued events from a CallInvoker-less native', async () => {
+  // C++ 디스패처 계약 재현: CallInvoker 없으면 emit 이 큐에만 쌓이고 JS 의
+  // drainEvents() 폴링을 기다린다. onEvent 콜백은 큐 소비 시점에 호출된다.
+  const received: unknown[] = [];
+  let drainCount = 0;
+  const native = {
+    onEvent(name: string, callback: (payloadJson: string) => void) {
+      // 실 C++ HostFunction 과 동일 — 리스너 등록만 하고 큐는 drain 에서 소비.
+      listeners.set(name, callback);
+    },
+    offEvent(name: string) {
+      listeners.delete(name);
+    },
+    drainEvents() {
+      drainCount += 1;
+      // 큐에 쌓인 이벤트를 drain 이 소비하며 등록된 콜백을 호출한다.
+      const queued = queue.splice(0);
+      for (const [name, json] of queued) listeners.get(name)?.(json);
+      return queued.length;
+    },
+  };
+  const listeners = new Map<string, (payloadJson: string) => void>();
+  const queue: Array<[string, string]> = [];
+
+  // canonical (name, callback) 형태는 getRustraNative() 로 __rustraNative 를 읽는다.
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = native;
+  try {
+    const unsubscribe = subscribeEvent('poll.tick', (payload) => received.push(payload), {
+      pollMs: 5,
+    });
+    // emit — CallInvoker 없으므로 큐에만 적재.
+    queue.push(['poll.tick', JSON.stringify({ step: 1 })]);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    assert.ok(drainCount >= 2, 'polling loop must run repeatedly');
+    assert.deepEqual(received, [{ step: 1 }], 'queued event must reach the callback via drain');
+    unsubscribe();
+    const drainsAtStop = drainCount;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(drainCount, drainsAtStop, 'unsubscribe must stop the polling loop');
+  } finally {
+    root.__rustraNative = previous;
+  }
+});
+
+test('subscribeEvent pollMs delivers directly on onEvent hosts without waiting for drain', () => {
+  // CallInvoker 호스트 — onEvent 콜백이 즉시 호출되고 drain 은 비어 있어 무해.
+  const received: unknown[] = [];
+  const h = createEventNative();
+  const unsubscribe = subscribeEvent(h.native, 'direct.tick', (payload) => received.push(payload), {
+    pollMs: 5,
+  });
+  h.emit('direct.tick', JSON.stringify({ ok: 1 }));
+  assert.deepEqual(received, [{ ok: 1 }]);
+  unsubscribe();
+});
+
+test('subscribeEvent pollMs is ignored on natives without drainEvents', () => {
+  // drainEvents 미노출 — 옵션은 조용히 무시(푸시 전용 네이티브 보호).
+  const h = createEventNative();
+  const received: unknown[] = [];
+  const unsubscribe = subscribeEvent(h.native, 'push.only', (payload) => received.push(payload), {
+    pollMs: 5,
+  });
+  h.emit('push.only', JSON.stringify({ v: 1 }));
+  assert.deepEqual(received, [{ v: 1 }]);
+  unsubscribe();
+});
