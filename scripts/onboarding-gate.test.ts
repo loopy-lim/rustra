@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'bun:test';
+import { renderInitProjectFiles, templateVersions } from '../packages/cli/src/init-template.ts';
 import { runOnboardingSteps, ONBOARDING_STEPS } from './onboarding-gate.mjs';
 
 function okRunner() {
@@ -44,6 +45,24 @@ test('gate aborts at the first failed step without running later steps', async (
   });
   assert.equal(report.ok, false);
   assert.deepEqual(ran, ['init', 'doctor'], 'steps after a failure must not run');
+});
+
+test('scaffold generate bin honors RUSTRA_SCHEMA_OUT (codegen:check contract)', () => {
+  // cli-codegen.ts check 모드는 RUSTRA_SCHEMA_OUT=<mkdtemp 디렉터리> 를 넘기고
+  // resolve(checkRoot, 'schema.json') 이 존재하는지 요구한다. 스캐폴드의 generate bin
+  // (src/bin/generate.rs)은 env 디렉터리 안에 schema.json 을 써야 codegen:check 가 녹색이다.
+  const files = renderInitProjectFiles(templateVersions('0.7.0', '^0.7.0', '^0.5.0'));
+  const generateRs = files.generateRs;
+  // 1) env 를 읽는다.
+  assert.match(generateRs, /RUSTRA_SCHEMA_OUT/);
+  // 2) env 값은 디렉터리 — 그 안에 schema.json 을 붙여 쓴다 (<env>/schema.json 합성).
+  assert.match(generateRs, /PathBuf::from\(p\)\.join\("schema\.json"\)/);
+  // 3) env 가 없으면 기존처럼 generated/schema.json 폴백 (docs 가 가르치는 기본 흐름).
+  assert.match(generateRs, /PathBuf::from\("generated"\)\.join\("schema\.json"\)/);
+  // 구버전 결함 회귀 방지 — 쓰기는 env 분기 이후 out 이라는 단일 대상으로만.
+  assert.match(generateRs, /std::fs::write\(&out/);
+  // write_to_dir, write_schema_to_dir 모두 금지 — 발행 보장이 없는 헬퍼 의존 차단.
+  assert.doesNotMatch(generateRs, /write(_schema)?_to_dir/);
 });
 
 test('every step command runs inside the onboarding scratch project', async () => {
