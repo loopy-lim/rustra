@@ -1,3 +1,5 @@
+English | [한국어](./compatibility-contract.ko.md)
+
 # Compatibility Contract
 
 `rustra` generated TypeScript must stay host-neutral. The generated files may depend on this shape only:
