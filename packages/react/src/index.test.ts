@@ -190,10 +190,11 @@ function flushAsync(): Promise<void> {
 }
 
 test('suspense cache state machine: pending -> fulfilled stores value', async () => {
+  invalidateCommands();
   const deferred = createDeferred<string>();
   let invocations = 0;
 
-  const entry = resolveSuspenseEntry('suspense-cmd::{"a":1}', () => {
+  const entry = resolveSuspenseEntry('suspense-cmd::{"a":1}', 'suspense-cmd', () => {
     invocations += 1;
     return deferred.promise;
   });
@@ -202,7 +203,7 @@ test('suspense cache state machine: pending -> fulfilled stores value', async ()
   assert.equal(invocations, 1);
 
   // 같은 키 재접근 — 새 promise 를 만들지 않고 동일 entry 반환
-  const again = resolveSuspenseEntry('suspense-cmd::{"a":1}', () => {
+  const again = resolveSuspenseEntry('suspense-cmd::{"a":1}', 'suspense-cmd', () => {
     invocations += 1;
     return deferred.promise;
   });
@@ -215,40 +216,60 @@ test('suspense cache state machine: pending -> fulfilled stores value', async ()
   assert.equal(entry.status, 'fulfilled');
   assert.equal(entry.value, 'payload');
   assert.equal(entry.error, undefined);
+
+  // fulfilled 재접근 — 새 entry/실행 없이 동일 entry 재사용
+  const settled = resolveSuspenseEntry('suspense-cmd::{"a":1}', 'suspense-cmd', () => {
+    invocations += 1;
+    return Promise.resolve('should-not-run');
+  });
+  assert.equal(settled, entry);
+  assert.equal(invocations, 1);
 });
 
 test('suspense cache state machine: pending -> rejected stores error and re-throws same object', async () => {
+  invalidateCommands();
   const deferred = createDeferred<string>();
   const failure = new Error('engine exploded');
 
-  const entry = resolveSuspenseEntry('failing-cmd::', () => deferred.promise);
+  const entry = resolveSuspenseEntry('failing-cmd::', 'failing-cmd', () => deferred.promise);
   assert.equal(entry.status, 'pending');
 
   deferred.reject(failure);
   await assert.rejects(deferred.promise);
 
   assert.equal(entry.status, 'rejected');
+  // 같은 에러 객체가 저장·재사용된다 (error boundary 계약)
   assert.equal(entry.error, failure);
+});
 
-  // 이후 접근에서도 같은 에러 객체를 재던진다 (error boundary 계약)
-  assert.equal(entry.error, failure);
-  assert.throws(
-    () => {
-      throw entry.error;
-    },
-    (err: unknown) => err === failure,
+test('suspense cache: non-Error rejections are normalized to Error', async () => {
+  invalidateCommands();
+  const deferred = createDeferred<string>();
+  // useCommand/useMutation 과의 관례 정합: non-Error reject 는 Error 로 감싼다
+  const entry = resolveSuspenseEntry(
+    'string-reject-cmd::',
+    'string-reject-cmd',
+    () => deferred.promise,
   );
+
+  deferred.reject('plain string failure');
+  await assert.rejects(deferred.promise);
+
+  assert.equal(entry.status, 'rejected');
+  assert.ok(entry.error instanceof Error);
+  assert.equal((entry.error as Error).message, 'plain string failure');
 });
 
 test('suspense cache: different inputs to same command create separate entries', async () => {
+  invalidateCommands();
   let invocations = 0;
   const start = () => {
     invocations += 1;
     return Promise.resolve(invocations);
   };
 
-  const entryA = resolveSuspenseEntry('sep-cmd::{"id":1}', start);
-  const entryB = resolveSuspenseEntry('sep-cmd::{"id":2}', start);
+  const entryA = resolveSuspenseEntry('sep-cmd::{"id":1}', 'sep-cmd', start);
+  const entryB = resolveSuspenseEntry('sep-cmd::{"id":2}', 'sep-cmd', start);
 
   assert.notEqual(entryA, entryB);
   assert.equal(invocations, 2);
@@ -258,17 +279,18 @@ test('suspense cache: different inputs to same command create separate entries',
 });
 
 test('invalidateCommands(commandName) clears only that command, () clears all', async () => {
+  invalidateCommands();
   const deferredA = createDeferred<string>();
   const deferredB = createDeferred<string>();
   const deferredC = createDeferred<string>();
 
-  const entryA = resolveSuspenseEntry('cmd-a::{"x":1}', () => deferredA.promise);
-  const entryA2 = resolveSuspenseEntry('cmd-a::{"x":2}', () => deferredB.promise);
-  const entryB = resolveSuspenseEntry('cmd-b::{"y":1}', () => deferredC.promise);
+  const entryA = resolveSuspenseEntry('cmd-a::{"x":1}', 'cmd-a', () => deferredA.promise);
+  const entryA2 = resolveSuspenseEntry('cmd-a::{"x":2}', 'cmd-a', () => deferredB.promise);
+  const entryB = resolveSuspenseEntry('cmd-b::{"y":1}', 'cmd-b', () => deferredC.promise);
 
   invalidateCommands('cmd-a');
   // cmd-a 의 두 키는 제거 — 새 요청은 새 entry(새 promise 실행)를 만든다
-  const freshA = resolveSuspenseEntry('cmd-a::{"x":1}', () => Promise.resolve('fresh'));
+  const freshA = resolveSuspenseEntry('cmd-a::{"x":1}', 'cmd-a', () => Promise.resolve('fresh'));
   assert.notEqual(freshA, entryA);
   assert.notEqual(freshA, entryA2);
   await flushAsync();
@@ -276,7 +298,9 @@ test('invalidateCommands(commandName) clears only that command, () clears all', 
   assert.equal(freshA.value, 'fresh');
 
   // cmd-b 는 살아있다 — 같은 entry 재사용
-  const stillB = resolveSuspenseEntry('cmd-b::{"y":1}', () => Promise.resolve('should-not-run'));
+  const stillB = resolveSuspenseEntry('cmd-b::{"y":1}', 'cmd-b', () =>
+    Promise.resolve('should-not-run'),
+  );
   assert.equal(stillB, entryB);
 
   // (정리 완료 대기) 남은 pending promise 들을 settle 시켜 unhandled rejection 방지
@@ -286,13 +310,38 @@ test('invalidateCommands(commandName) clears only that command, () clears all', 
   await Promise.all([deferredA.promise, deferredB.promise, deferredC.promise]);
 
   invalidateCommands();
-  const afterFull = resolveSuspenseEntry('cmd-b::{"y":1}', () => Promise.resolve('recreated'));
+  const afterFull = resolveSuspenseEntry('cmd-b::{"y":1}', 'cmd-b', () =>
+    Promise.resolve('recreated'),
+  );
   assert.notEqual(afterFull, entryB);
   await flushAsync();
   assert.equal(afterFull.value, 'recreated');
 });
 
+test('invalidateCommands matches the owning command exactly, not a key prefix', async () => {
+  invalidateCommands();
+  let invocations = 0;
+  const start = () => {
+    invocations += 1;
+    return Promise.resolve(invocations);
+  };
+
+  // `#[command(name = "a::b")]` 처럼 이름에 :: 를 포함하는 커맨드 —
+  // 'a' 로의 부분 무효화가 이를 지워선 안 된다 (prefix 매치 회귀 가드)
+  const nested = resolveSuspenseEntry('a::b::{"k":1}', 'a::b', start);
+  resolveSuspenseEntry('plain-cmd::{"k":1}', 'plain-cmd', start);
+  assert.equal(invocations, 2);
+
+  invalidateCommands('a');
+
+  const stillNested = resolveSuspenseEntry('a::b::{"k":1}', 'a::b', start);
+  assert.equal(stillNested, nested);
+  // 등록 2회분만 실행 — 무효화 후 재접근에서 재실행되지 않았다
+  assert.equal(invocations, 2);
+});
+
 test('suspense cache: bigint input does not throw and keys stay distinct', () => {
+  invalidateCommands();
   let invocations = 0;
   const start = () => {
     invocations += 1;
@@ -300,9 +349,21 @@ test('suspense cache: bigint input does not throw and keys stay distinct', () =>
   };
 
   // bigint 는 JSON.stringify 가 throw 하므로 inputKey 의 태그 표현을 써야 한다
-  const entryBig = resolveSuspenseEntry(`bigint-cmd::${inputKey({ value: 42n })}`, start);
-  const entryBigSame = resolveSuspenseEntry(`bigint-cmd::${inputKey({ value: 42n })}`, start);
-  const entryStr = resolveSuspenseEntry(`bigint-cmd::${inputKey({ value: '42' })}`, start);
+  const entryBig = resolveSuspenseEntry(
+    `bigint-cmd::${inputKey({ value: 42n })}`,
+    'bigint-cmd',
+    start,
+  );
+  const entryBigSame = resolveSuspenseEntry(
+    `bigint-cmd::${inputKey({ value: 42n })}`,
+    'bigint-cmd',
+    start,
+  );
+  const entryStr = resolveSuspenseEntry(
+    `bigint-cmd::${inputKey({ value: '42' })}`,
+    'bigint-cmd',
+    start,
+  );
 
   assert.equal(entryBig, entryBigSame);
   assert.notEqual(entryBig, entryStr);
@@ -324,13 +385,17 @@ test('useSuspenseCommand hook contract (source-level): throws promise while pend
   assert.match(source, /if \(entry\.status === 'rejected'\) throw entry\.error;/);
   assert.match(source, /engine\.invoke<O>\(commandName,\s*input/);
   assert.match(source, /resolveCommandId\(commandFn\)/);
-  assert.match(source, /resolveSuspenseEntry<O>\(cacheKey\(commandName,\s*input\)/);
+  assert.match(
+    source,
+    /resolveSuspenseEntry<O>\(cacheKey\(commandName,\s*input\),\s*commandName/,
+    'entry must carry the owning command name for exact invalidation',
+  );
 });
 
-test('useSuspenseCommand returns cached value via engine after invalidation cycle', async () => {
-  // 훅의 얇은 위임 계약을 실행 기반으로도 확인: 훅은 engine.invoke 를
-  // resolveSuspenseEntry 에 위임할 뿐이다. (레지스터 재사용 계약은 상태 머신
-  // 테스트가 담당)
+test('resolveSuspenseEntry wires engine.invoke exactly once', async () => {
+  invalidateCommands();
+  // 훅의 얇은 위임 계약을 실행 기반으로 확인: 훅은 engine.invoke 를
+  // resolveSuspenseEntry 에 위임할 뿐이며, settle 후 재접근은 재실행하지 않는다.
   let calls = 0;
   const engine: EngineClient = {
     invoke<T>(_command: string, _args?: unknown): Promise<T> {
@@ -339,9 +404,20 @@ test('useSuspenseCommand returns cached value via engine after invalidation cycl
     },
   };
 
-  const entry = resolveSuspenseEntry('wiring-cmd::', () => engine.invoke('wiring-cmd'));
+  const entry = resolveSuspenseEntry('wiring-cmd::', 'wiring-cmd', () =>
+    engine.invoke('wiring-cmd'),
+  );
   await entry.promise;
   assert.equal(entry.status, 'fulfilled');
   assert.equal(entry.value, 'ok');
   assert.equal(calls, 1);
+
+  // 무효화 → 재요청 사이클: invalidate 후 같은 키 접근은 engine 을 다시 호출한다
+  invalidateCommands('wiring-cmd');
+  const fresh = resolveSuspenseEntry('wiring-cmd::', 'wiring-cmd', () =>
+    engine.invoke('wiring-cmd'),
+  );
+  assert.notEqual(fresh, entry);
+  await fresh.promise;
+  assert.equal(calls, 2);
 });
