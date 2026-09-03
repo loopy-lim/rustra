@@ -1,5 +1,5 @@
 import { normalizeRustraError } from './errors.js';
-import { debugRustra } from './debug.js';
+import { debugRustra, isRustraDebugEnabled } from './debug.js';
 import { invokeWithTimeout } from './cancel.js';
 import type { BatchEntry, EngineClient, EngineClientWithBatch, InvokeOptions } from './public.js';
 
@@ -13,6 +13,59 @@ export type JsonWireBatchTransport = {
   /** 와이어 배치 — `rustra_dispatch_batch` 커맨드 한 번으로 N 개 명령 실행. */
   invokeBatch?(requests: BatchEntry[]): Promise<unknown[]> | unknown[];
 };
+
+/**
+ * 응답 셰이프 이탈 감지 — debug 모드에서만 버전 스크의 조기 신호를 싱크로 보낸다
+ * (`kind: 'response.shape'`, 규칙 식별은 `reason`). json-engine 은 스키마가 없어
+ * `undefined`/원시형 응답은 판정할 수 없고(void 커맨드가 존재), reject 경로의
+ * `{ok:false,error}` 는 이미 `normalizeRustraError` 가 정규화한다. 따라서
+ * **resolve 경로에서 관찰되는 엔벨로프 왜곡**만 보수적으로 검사한다:
+ *
+ * - `double_envelope`: `{ok:true, result}` 엔벨로프가 원시 결과에 또 보이면
+ *   와이어 디코드가 벗긴 뒤 한 겹 더 감싸진 이중 래핑 스크 신호.
+ * - `failed_without_error`: `{ok:false}`인데 `error` 가 없으면 정규화 대상이
+ *   없어 조용히 resolve — 실패가 값으로 변질된 스크 신호.
+ * - `envelope_missing_payload`: `ok:true` 인데 `result`/`error` 키가 모두 없으면
+ *   깨진 엔벨로프(페이로드 유실 — `ok:false` 의 동일 형태는 `failed_without_error`).
+ * - `resolved_error_envelope`: `{ok:false, error}` 실패 엔벨로프가 reject 대신
+ *   resolve 로 도달 — transport 가 정규화 없이 통과시킨 스크 신호.
+ *
+ * 경고뿐 — 결과를 변형하지 않고 절대 던지지 않는다. 위음성은 허용한다. `ok` 가
+ * 불리언인 객체만 검사하므로 (드물지만) `ok` 불리언 필드 하나뿐인 도메인 구조체는
+ * 깨진 엔벨로프로 오경보할 수 있다 — debug 전용 경고(throw/변형 없음)로 감수한다.
+ * 프로퍼티 접근과 이벤트 발행 전체를 try 로 감싼다.
+ */
+function warnResponseShape(command: string, result: unknown): void {
+  if (!isRustraDebugEnabled()) return;
+  try {
+    if (typeof result !== 'object' || result === null) return;
+    const ok = (result as { ok?: unknown }).ok;
+    if (typeof ok !== 'boolean') return;
+    const envelope = result as Record<string, unknown>;
+    const hasResult = Object.prototype.hasOwnProperty.call(envelope, 'result');
+    const hasError = Object.prototype.hasOwnProperty.call(envelope, 'error');
+    let reason: string | undefined;
+    if (ok) {
+      if (hasResult) reason = 'double_envelope';
+      else if (!hasError) reason = 'envelope_missing_payload';
+    } else if (!hasError) {
+      reason = 'failed_without_error';
+    } else {
+      reason = 'resolved_error_envelope';
+    }
+    if (reason === undefined) return;
+    debugRustra({
+      direction: 'response',
+      transport: 'json',
+      command,
+      kind: 'response.shape',
+      reason,
+      value: result,
+    });
+  } catch {
+    // 감지 자체는 절대 invoke 를 실패로 만들지 않는다(프록시 등 특이 객체 방어).
+  }
+}
 
 export function createJsonEngine(
   transport:
@@ -29,6 +82,7 @@ export function createJsonEngine(
         return Promise.resolve(rawTransport.invoke(command, normalizedArgs))
           .then((result) => {
             debugRustra({ direction: 'response', transport: 'json', command, value: result });
+            warnResponseShape(command, result);
             return result as T;
           })
           .catch((error: unknown) => {
