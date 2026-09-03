@@ -40,17 +40,22 @@ function responseBody(result: unknown): Buffer {
 test('demultiplexBinaryFrame routes 0xfffd frames to push listeners', () => {
   const pushes: Array<{ name: string; payload: string; seq: number }> = [];
   let responseHits = 0;
+  let channelHits = 0;
   const body = pushBody('progress.tick', '{"step":1}', 0);
   demultiplexBinaryFrame({
     cmd: BINARY_PUSH_EVENTS_CMD,
     body,
     onPush: (event) => pushes.push(event),
+    onChannel: () => {
+      channelHits += 1;
+    },
     onResponse: () => {
       responseHits += 1;
     },
   });
   assert.deepEqual(pushes, [{ name: 'progress.tick', payload: '{"step":1}', seq: 0 }]);
   assert.equal(responseHits, 0, 'push frame must not resolve a response waiter');
+  assert.equal(channelHits, 0, 'push frame must not reach channel listeners');
 });
 
 test('demultiplexBinaryFrame routes non-push frames to the response queue', () => {
@@ -58,10 +63,11 @@ test('demultiplexBinaryFrame routes non-push frames to the response queue', () =
   const responses: Uint8Array[] = [];
   const body = responseBody({ value: 42 });
   demultiplexBinaryFrame({
-    // 응답 프레임의 첫 u16 LE = ok|pad — 0xfffd 가 될 수 없다(ok는 0/1).
+    // 응답 프레임의 첫 u16 LE = ok|pad — 0xfffd/0xfffc 가 될 수 없다(ok는 0/1).
     cmd: body[0]! | (body[1]! << 8),
     body,
     onPush: () => pushes.push('unexpected'),
+    onChannel: () => pushes.push('unexpected-channel'),
     onResponse: (frameBytes) => responses.push(frameBytes),
   });
   assert.equal(responses.length, 1);
@@ -75,6 +81,7 @@ test('demultiplexBinaryFrame tolerates malformed push bodies without throwing', 
     cmd: BINARY_PUSH_EVENTS_CMD,
     body: Buffer.from([0xfd, 0xff, 0x6e, 0x6f, 0x70, 0x65]),
     onPush: () => pushes.push('x'),
+    onChannel: () => {},
     onResponse: () => {},
   });
   assert.deepEqual(pushes, []);
@@ -100,6 +107,7 @@ test('interleaved push and response frames dispatch independently', () => {
       cmd: body[0]! | (body[1]! << 8),
       body,
       onPush: (event) => pushes.push(event),
+      onChannel: () => {},
       onResponse: (frameBytes) => {
         // 응답 프레임 디코드 — node-loop invokeBinary 와 동일 셰이프.
         const jsonLen =
@@ -119,4 +127,82 @@ test('interleaved push and response frames dispatch independently', () => {
     { name: 'done', payload: '{"emitted":2}', seq: 1 },
   ]);
   assert.deepEqual(responses, ['1', '2']);
+});
+
+// ── 채널 푸시 프레임 (0xfffc) — 0.7 채널 트랙 ──────────────────
+
+const BINARY_CHANNEL_PUSH_CMD = 0xfffc;
+
+/** 0xfffc 채널 프레임 본문 — [cmd u16 LE][1줄 JSON {handle, payload}]. */
+function channelBody(handle: number, payloadJson: string): Buffer {
+  const json = Buffer.from(JSON.stringify({ handle, payload: payloadJson }));
+  const body = Buffer.allocUnsafe(2 + json.length);
+  body.writeUInt16LE(BINARY_CHANNEL_PUSH_CMD, 0);
+  json.copy(body, 2);
+  return body;
+}
+
+test('demultiplexBinaryFrame routes 0xfffc frames to channel listeners', () => {
+  const channels: Array<{ handle: number; payload: string }> = [];
+  let pushHits = 0;
+  let responseHits = 0;
+  demultiplexBinaryFrame({
+    cmd: BINARY_CHANNEL_PUSH_CMD,
+    body: channelBody(7, '{"step":1}'),
+    onPush: () => {
+      pushHits += 1;
+    },
+    onChannel: (frame) => channels.push(frame),
+    onResponse: () => {
+      responseHits += 1;
+    },
+  });
+  assert.deepEqual(channels, [{ handle: 7, payload: '{"step":1}' }]);
+  assert.equal(pushHits, 0, 'channel frame must not reach push listeners');
+  assert.equal(responseHits, 0, 'channel frame must not resolve a response waiter');
+});
+
+test('demultiplexBinaryFrame tolerates malformed channel bodies without throwing', () => {
+  const channels: unknown[] = [];
+  demultiplexBinaryFrame({
+    cmd: BINARY_CHANNEL_PUSH_CMD,
+    // cmd id 뒤에 비정상 JSON — 조용히 건너뛴다(푸시 프레임과 동일 정책).
+    body: Buffer.from([0xfc, 0xff, 0x6e, 0x6f, 0x70, 0x65]),
+    onPush: () => {},
+    onChannel: (frame) => channels.push(frame),
+    onResponse: () => {},
+  });
+  assert.deepEqual(channels, []);
+});
+
+test('channel frames and response frames interleave without interference', () => {
+  const channels: Array<{ handle: number; payload: string }> = [];
+  const responses: Uint8Array[] = [];
+  // 채널 프레임이 응답 프레임 두 개 사이에 끼어 드는 시나리오 — Rust 쪽
+  // STDOUT_LOCK 경합이 실제로 만들어내는 위상. 각 프레임이 정확히 자기 경로로
+  // 간다(binQueue resolve 와 채널 브로드캐스트의 무간섭).
+  const stream = Buffer.concat([
+    frame(responseBody({ value: 1 })),
+    frame(channelBody(3, '{"tick":1}')),
+    frame(responseBody({ value: 2 })),
+    frame(channelBody(3, '{"tick":2}')),
+  ]);
+  let offset = 0;
+  while (offset + 4 <= stream.length) {
+    const len = stream.readUInt32LE(offset);
+    const body = stream.subarray(offset + 4, offset + 4 + len);
+    offset += 4 + len;
+    demultiplexBinaryFrame({
+      cmd: body[0]! | (body[1]! << 8),
+      body,
+      onPush: () => {},
+      onChannel: (frameData) => channels.push(frameData),
+      onResponse: (frameBytes) => responses.push(frameBytes),
+    });
+  }
+  assert.deepEqual(channels, [
+    { handle: 3, payload: '{"tick":1}' },
+    { handle: 3, payload: '{"tick":2}' },
+  ]);
+  assert.equal(responses.length, 2);
 });
