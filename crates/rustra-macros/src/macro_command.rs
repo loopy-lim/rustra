@@ -96,6 +96,11 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
     );
     let mut inner_func = func.clone();
     inner_func.sig.ident = inner_fn_name.clone();
+    // (감사 #5 후속) inner 클론은 반드시 비공개 — `#vis` 를 남기면
+    // `.command_fn(__rustra_inner_{fn})` 이 안전 `fn` 으로 조용히 통과하는
+    // 우회 경로가 된다(C1). 래퍼/어댑터와 같은 모듈에서만 호출되므로 비공개로
+    // 충분하다.
+    inner_func.vis = syn::Visibility::Inherited;
 
     let command_name = attr.name.unwrap_or_else(|| {
         let raw = fn_name.to_string();
@@ -141,6 +146,10 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
     // register!/build! 가 이름추론 등록에 쓰는 doc(hidden) 안전 어댑터 — fn 아이템이라
     // `Fn(I) -> Result<O>` 바운드에서 I/O 추론이 그대로 성립한다(클로저 추론과 달리).
+    // (감사 #5 후속) 비공개로 고정 — `#vis` 를 남기면 크로스 크레이트에서
+    // `.command_fn(__rustra_register_{fn})` 우회가 가능해진다(I1). 같은 모듈의
+    // register!/build! 호출(`crate::` 경로)은 fn 저자와 같은 신뢰 도메인이라
+    // 허용 잔여다.
     let register_ident = Ident::new(
         &format!("__rustra_register_{}", fn_name),
         proc_macro2::Span::call_site(),
@@ -199,7 +208,7 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         #capability_const
 
         #[doc(hidden)]
-        #vis fn #register_ident(__rustra_input: #input_type) -> rustra::Result<#output_type> {
+        fn #register_ident(__rustra_input: #input_type) -> rustra::Result<#output_type> {
             #register_call
         }
 

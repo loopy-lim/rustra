@@ -1,5 +1,3 @@
-use crate::__private;
-
 impl PackageBuilder {
     /// `#[command]` 속성으로 정의된 함수를 이름 자동 추론으로 등록합니다.
     ///
@@ -8,13 +6,13 @@ impl PackageBuilder {
     ///
     /// (감사 #5) `#[command(capability = "...")]` 함수는 이 경로로 등록할 수
     /// 없다 — 그 래퍼는 `unsafe fn` 이라 `F: Fn` 바운드를 통과하지 못하고
-    /// [`__private::CommandHandler`]의 계약 메시지가 capability 무음 드랍을
+    /// [`crate::__private::CommandHandler`]의 계약 메시지가 capability 무음 드랍을
     /// 컴파일 에러로 이름한다. register!/build! 를 사용한다.
     pub fn command_fn<I, O, F>(self, handler: F) -> Self
     where
         I: DeserializeOwned + JsonSchema + 'static,
         O: Serialize + JsonSchema + 'static,
-        F: __private::CommandHandler<I, O>,
+        F: crate::__private::CommandHandler<I, O>,
     {
         let name = command_name_from_handler::<F>();
         self.command(name, handler)
@@ -29,7 +27,7 @@ impl PackageBuilder {
     where
         I: DeserializeOwned + JsonSchema + 'static,
         O: Serialize + JsonSchema + 'static,
-        F: __private::CommandHandler<I, O>,
+        F: crate::__private::CommandHandler<I, O>,
     {
         let name = name.into();
         if self.commands.contains_key(&name) {
@@ -64,7 +62,7 @@ impl PackageBuilder {
     where
         I: BufferCommandInput,
         O: BufferCommandOutput,
-        F: __private::CommandHandler<I, O>,
+        F: crate::__private::CommandHandler<I, O>,
     {
         let name = name.into();
         if self.commands.contains_key(&name) {
@@ -95,7 +93,7 @@ impl PackageBuilder {
     where
         I: BufferCommandInput,
         O: BufferCommandOutput,
-        F: __private::CommandHandler<I, O>,
+        F: crate::__private::CommandHandler<I, O>,
     {
         let name = command_name_from_handler::<F>();
         self.buffer_command(name, handler)
