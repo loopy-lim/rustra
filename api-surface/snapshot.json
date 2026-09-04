@@ -183,6 +183,7 @@
       "useRustraEngine"
     ],
     "packages/react-native": [
+      "CancelledError",
       "EngineClient",
       "FastEngineOptions",
       "InvokeOptions",
@@ -198,6 +199,7 @@
       "RustraEventNative",
       "RustraJSIAsyncNative",
       "RustraJSINative",
+      "TimeoutError",
       "configure",
       "createAsyncEngine",
       "createChannel",
