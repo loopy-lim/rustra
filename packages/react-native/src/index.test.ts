@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  CancelledError,
   createReactNativeEngine,
   createRustraBootstrap,
   createChannel,
@@ -778,4 +779,47 @@ test('async engine without invokeTypedAsyncById keeps the name path (G2 compat)'
   const out = await p;
   assert.equal(out.value, 42);
   assert.equal(h.state.calls, 1, 'name-based invokeTypedAsync must be used');
+});
+
+// ── DX Track Task 6 후속: 호스트별 pre-abort instanceof 일치 ──
+// 두 어댑터의 pre-abort 경로도 CancelledError 서브클래스로 승격 — abort
+// 타이밍(pre-abort vs mid-flight)에 관계없이 같은 instanceof 답을 보장한다.
+
+test('JSON adapter pre-abort rejects with CancelledError instance', async () => {
+  const engine = createReactNativeEngine({
+    invoke() {
+      throw new Error('native must not be called when already aborted');
+    },
+  });
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(
+    engine.invoke('cancelled', undefined, { signal: ac.signal }),
+    (error: unknown) => {
+      assert.ok(error instanceof CancelledError, 'JSON adapter pre-abort must be CancelledError');
+      assert.ok(
+        error instanceof RustraCommandError,
+        'CancelledError must remain a RustraCommandError',
+      );
+      assert.equal((error as CancelledError).code, 'cancelled');
+      assert.equal((error as CancelledError).retryable, true);
+      assert.match((error as Error).message, /aborted before dispatch/);
+      return true;
+    },
+  );
+});
+
+test('async engine pre-abort rejects with CancelledError instance (matches mid-flight)', async () => {
+  const h = makeAsyncNative();
+  const engine = createAsyncEngine(h.native, { rkyvV2Codecs: new Map() });
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(engine.invoke('heavy', { n: 1 }, { signal: ac.signal }), (err: unknown) => {
+    assert.ok(err instanceof CancelledError, 'async pre-abort must be CancelledError');
+    assert.equal((err as CancelledError).code, 'cancelled');
+    assert.equal((err as CancelledError).retryable, true);
+    assert.match((err as Error).message, /heavy/);
+    return true;
+  });
+  assert.equal(h.state.calls, 0, 'native must never be called for a pre-aborted signal');
 });
