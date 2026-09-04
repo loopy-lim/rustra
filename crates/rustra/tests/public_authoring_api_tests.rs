@@ -174,6 +174,98 @@ fn build_macro_also_applies_capability_attribute() {
     assert_eq!(out.value, 1004);
 }
 
+/// (감사 #5) capability 무음 드랍 차단 — `#[command(capability = "...")]` 함수를
+/// 일반 등록 경로(`.command_fn`/`.command`)로 등록하면 capability 가 조용히
+/// 버려진다. 계약: 그 등록은 **컴파일 에러**로 거부되고, register!/build! 경로는
+/// capability 를 require_capability 로 연결한다(위의
+/// command_capability_attribute_enforces_deny_by_default 테스트).
+///
+/// trybuild 가 없으므로 기존 관례(command_macro_rejects_wrong_signature)대로
+/// 중첩 temp crate cargo check 로 컴파일 실패를 증명한다.
+#[test]
+fn capability_command_cannot_be_silently_registered_without_capability() {
+    let try_compile = |source: &str| -> (bool, String) {
+        let tmp_dir = std::env::temp_dir().join(format!("rustra-cap-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+        std::fs::create_dir_all(tmp_dir.join("src")).unwrap();
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+        let workspace_dir = std::path::Path::new(&manifest_dir)
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
+        std::fs::write(
+            tmp_dir.join("Cargo.toml"),
+            format!(
+                "[package]\nname = \"cap-test\"\nedition = \"2024\"\nversion = \"0.1.0\"\n\n\
+                [dependencies]\nrustra = {{ path = \"{}/crates/rustra\" }}\n\
+                serde = {{ version = \"1\", features = [\"derive\"] }}\n\
+                schemars = {{ version = \"0.8\", features = [\"derive\"] }}\n",
+                workspace_dir.display().to_string().replace('\\', "/")
+            ),
+        )
+        .unwrap();
+        std::fs::write(tmp_dir.join("src").join("lib.rs"), source).unwrap();
+
+        let output = Command::new("cargo")
+            .args(["check"])
+            .current_dir(&tmp_dir)
+            .output()
+            .unwrap();
+
+        let _ = std::fs::remove_dir_all(&tmp_dir);
+        let stderr = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        (output.status.success(), stderr)
+    };
+
+    let shared = "\
+        use rustra::prelude::*;\n\
+        #[derive(Serialize, Deserialize, JsonSchema)]\n\
+        struct In { x: i64 }\n\
+        #[derive(Serialize, Deserialize, JsonSchema)]\n\
+        struct Out { y: i64 }\n\
+        #[command(capability = \"test:secure\")]\n\
+        pub fn locked(input: In) -> Result<Out> { Ok(Out { y: input.x }) }\n\
+        #[command(capability = \"test:secure2\")]\n\
+        pub fn locked2(input: In) -> Result<Out> { Ok(Out { y: input.x }) }\n";
+
+    // GREEN 경로 — register! 는 capability 를 연결하므로 컴파일된다.
+    let (ok, stderr) = try_compile(&format!(
+        "{shared}\n\
+         pub fn pkg() -> Package {{ register!(Package::builder(\"cap.ok\"), locked).build() }}\n"
+    ));
+    assert!(
+        ok,
+        "register! must keep wiring the capability; got:\n{stderr}"
+    );
+
+    // 계약 — 일반 등록 경로는 컴파일 에러로 거부되고, 에러가 capability 를 이름한다.
+    let (ok, stderr) = try_compile(&format!(
+        "{shared}\n\
+         #[allow(dead_code)]\n\
+         fn silent_drop_a() {{\n\
+         \x20   let _ = Package::builder(\"cap.bad\").command_fn(locked);\n\
+         }}\n\
+         #[allow(dead_code)]\n\
+         fn silent_drop_b() {{\n\
+         \x20   let _ = Package::builder(\"cap.bad\").command(\"locked2\", locked2);\n\
+         }}\n"
+    ));
+    assert!(
+        !ok,
+        "capability fn must NOT compile through plain registration \
+         (capability silently dropped); got:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("capability"),
+        "compile error must name the capability contract; got:\n{stderr}"
+    );
+}
+
 #[test]
 fn package_generates_host_neutral_typescript_client() {
     let package = Package::builder("example.calculator")

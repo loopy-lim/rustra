@@ -128,6 +128,29 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
+    // (감사 #5) capability 무음 드랍 차단: capability 가 있으면 래퍼를 `unsafe fn`
+    // 으로 생성한다. `unsafe fn` 아이템 타입은 `Fn` 을 구현하지 않으므로
+    // `.command_fn(f)`/`.command(name, f)`/`buffer_command_fn`/`register_fn` 등
+    // 일반 등록 경로의 `F: Fn` 바운드에서 **컴파일 에러**가 된다 — 조용한 공개
+    // 명령화를 원천 차단. register!/build! 는 명시적 unsafe 클로저로 감싸 등록하며
+    // capability 연결(require_capability_if)은 그대로 유지된다.
+    let wrapper_unsafety: TokenStream2 = if attr.capability.is_some() {
+        quote! { unsafe }
+    } else {
+        quote! {}
+    };
+    // register!/build! 가 이름추론 등록에 쓰는 doc(hidden) 안전 어댑터 — fn 아이템이라
+    // `Fn(I) -> Result<O>` 바운드에서 I/O 추론이 그대로 성립한다(클로저 추론과 달리).
+    let register_ident = Ident::new(
+        &format!("__rustra_register_{}", fn_name),
+        proc_macro2::Span::call_site(),
+    );
+    let register_call: TokenStream2 = if attr.capability.is_some() {
+        quote! { unsafe { #fn_name(__rustra_input) } }
+    } else {
+        quote! { #fn_name(__rustra_input) }
+    };
+
     // Prepare state bindings and call args
     let mut state_bindings = Vec::new();
     let mut call_args = Vec::new();
@@ -168,12 +191,17 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
     let expanded = quote! {
         #inner_func
 
-        #vis fn #fn_name(#outer_input_arg) -> rustra::Result<#output_type> {
+        #vis #wrapper_unsafety fn #fn_name(#outer_input_arg) -> rustra::Result<#output_type> {
             #(#state_bindings)*
             #inner_invocation
         }
 
         #capability_const
+
+        #[doc(hidden)]
+        #vis fn #register_ident(__rustra_input: #input_type) -> rustra::Result<#output_type> {
+            #register_call
+        }
 
         #[allow(non_upper_case_globals, dead_code)]
         const #meta_ident: &str = #command_name;
