@@ -1,4 +1,4 @@
-import { RustraCommandError } from './errors.js';
+import { RustraCommandError, TimeoutError, RustraErrorCode } from './errors.js';
 import { ensureConfigured, isLazyConfigured } from './global-config.js';
 import { runtime } from './global-state.js';
 import type { BatchEntry } from './public.js';
@@ -7,7 +7,12 @@ export function invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
   const engine = runtime.engine;
   if (!engine) {
     if (isLazyConfigured()) return ensureConfigured().then(() => invokeBatch<T>(entries));
-    return Promise.reject(new Error('Rustra not configured. Call configure(engine) first.'));
+    return Promise.reject(
+      new RustraCommandError(
+        RustraErrorCode.TransportUnavailable,
+        'Rustra not configured. Call configure(engine) first.',
+      ),
+    );
   }
   if (!engine.invokeBatch)
     return Promise.reject(new Error('Configured engine does not support invokeBatch.'));
@@ -41,11 +46,7 @@ export function invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
       timer = setTimeout(
         () =>
           reject(
-            new RustraCommandError(
-              'transport.timeout',
-              `invokeBatch(${entries.length} entries) timed out after ${timeout}ms`,
-              true,
-            ),
+            new TimeoutError(`invokeBatch(${entries.length} entries) timed out after ${timeout}ms`),
           ),
         timeout,
       );

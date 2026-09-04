@@ -1,4 +1,4 @@
-import { RustraCommandError } from './errors.js';
+import { CancelledError, RustraCommandError, TimeoutError } from './errors.js';
 import type { EngineClient, InvokeOptions } from './public.js';
 export { invokeByIdWithTimeout } from './cancel-by-id.js';
 export { raceAbort } from './cancel-abort.js';
@@ -30,9 +30,7 @@ function invokeWithTimeoutInternal<T>(
 ): Promise<T> {
   const signal = handleSignal ? options?.signal : undefined;
   if (signal?.aborted)
-    return Promise.reject(
-      new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
-    );
+    return Promise.reject(new CancelledError(`invoke("${command}") aborted before dispatch`));
   let promise: Promise<T>;
   try {
     promise = Promise.resolve(engine.invoke<T>(command, args, options));
@@ -48,8 +46,7 @@ function invokeWithTimeoutInternal<T>(
   if (signal)
     races.push(
       new Promise<never>((_, reject) => {
-        onAbort = () =>
-          reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
+        onAbort = () => reject(new CancelledError(`invoke("${command}") aborted`));
         signal.addEventListener('abort', onAbort, { once: true });
       }),
     );
@@ -57,14 +54,7 @@ function invokeWithTimeoutInternal<T>(
     races.push(
       new Promise<never>((_, reject) => {
         timer = setTimeout(
-          () =>
-            reject(
-              new RustraCommandError(
-                'transport.timeout',
-                `invoke("${command}") timed out after ${ms}ms`,
-                true,
-              ),
-            ),
+          () => reject(new TimeoutError(`invoke("${command}") timed out after ${ms}ms`)),
           ms,
         );
       }),
@@ -86,9 +76,7 @@ export function invokeCallbackWithAbort<T>(
   cancel?: (invocationId: number) => void,
 ): Promise<T> {
   if (signal.aborted)
-    return Promise.reject(
-      new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
-    );
+    return Promise.reject(new CancelledError(`invoke("${command}") aborted before dispatch`));
   return new Promise<T>((resolve, reject) => {
     let settled = false;
     let invocationId = -1;
@@ -102,7 +90,7 @@ export function invokeCallbackWithAbort<T>(
     const onAbort = () =>
       finish(() => {
         if (cancel && invocationId >= 0) cancel(invocationId);
-        reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
+        reject(new CancelledError(`invoke("${command}") aborted`));
       });
     signal.addEventListener('abort', onAbort, { once: true });
     try {
