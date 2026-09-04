@@ -39,9 +39,11 @@ bunx --bun @rustra/cli init my-project --force
 
 ### Using in an External Project
 
+<!-- 발행 시 갱신: 0.7.0 라인 -->
+
 ```toml
 [dependencies]
-rustra = "0.4"
+rustra = "0.6"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -207,30 +209,44 @@ fn main() -> Result<()> {
 One command renders every surface: `bun run codegen` (i.e. `rustra codegen --config rustra.json`).
 The Rust side only publishes the contract — `src/bin/generate.rs` writes `schema.json`
 (and nothing else), and the CLI renders the TypeScript/C++ artifacts from it, so there is
-a single source of truth for generated code.
+a single source of truth for generated code. This is the calculator's own probe, and it
+respects `RUSTRA_SCHEMA_OUT`: when the variable is set, `schema.json` is written inside
+that directory (this is how `codegen --check` verifies the Rust stage without touching
+your working tree); when unset, it lands in `generated/schema.json`.
 
 ```rust
-use rustra_calculator_example::{calculator_package, AddNumbersInput, AddNumbersOutput};
+// examples/calculator/src/bin/generate.rs
+use rustra_calculator_example::calculator_package;
+use std::path::PathBuf;
 
 fn main() -> rustra::Result<()> {
-    let package = calculator_package();
-
-    // direct invocation from Rust also works
-    let output: AddNumbersOutput = package.invoke("addNumbers", AddNumbersInput { a: 2, b: 3 })?;
-    println!("2 + 3 = {}", output.value);
-
-    // contract probe: publish schema.json only — the CLI renders the TS/C++ surfaces
-    package.generate_typescript()?.write_schema_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
-
+    let generated = calculator_package().generate_typescript()?;
+    let out = match std::env::var_os("RUSTRA_SCHEMA_OUT") {
+        Some(p) if !p.is_empty() => PathBuf::from(p).join("schema.json"),
+        _ => PathBuf::from("generated").join("schema.json"),
+    };
+    if let Some(parent) = out.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&out, generated.schema_json)?;
+    println!("{} written", out.display());
     Ok(())
 }
+```
+
+Direct invocation from Rust also works — the demo binary in `src/main.rs` shows it:
+
+```rust
+let output: AddNumbersOutput = package.invoke("addNumbers", AddNumbersInput { a: 2, b: 3 })?;
+println!("2 + 3 = {}", output.value);
 ```
 
 Run it:
 
 ```bash
-cargo run -p rustra-calculator-example
-bun run codegen
+cargo run -p rustra-calculator-example          # demo: 2 + 3 = 5
+cargo run -p rustra-calculator-example --bin generate   # contract probe: schema.json
+bun run codegen                                          # render TS surfaces from it
 ```
 
 Output:
@@ -239,14 +255,17 @@ Output:
 2 + 3 = 5
 ```
 
-The `generated/` directory then contains the five base files plus any configured host entry points.
+The `generated/` directory then contains the base files (`types.ts`, `commands.ts`,
+`contract.ts`, `rkyv-codecs.ts`, `rkyv-registry.ts`, `schema.json`) plus any configured
+host entry points.
 
 ---
 
 ## 3. Generated TypeScript Output
 
 The `generated/` directory contains the following base files. Configuring `node`,
-`bun`, `tauri`, or `reactNative` adds the corresponding host entry point.
+`bun`, `tauri`, or `reactNative` adds the corresponding host entry point, and the
+`codegen.rustBinary`-driven rkyv V2 fast path adds `rkyv-codecs.ts`/`rkyv-registry.ts`.
 
 ### types.ts — Type Definitions
 
@@ -558,43 +577,55 @@ export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutp
 
 ### contract.ts — Contract Hash
 
+<!-- docs:sync:begin examples/calculator/generated/contract.ts -->
+
+<!-- prettier-ignore -->
 ```ts
-export const GENERATED_CONTRACT_HASH =
-  '5ed9d6dc29fb1b0d437b110a8f48e0cb828cc1e27a562b79049e86975b970aba';
+export const GENERATED_CONTRACT_HASH = 'b9ec095fd83d9c67befb83277adbb988ca248f2c3c64dbefd06c65c5a7bc2121';
+export const SCHEMA_VERSION = 1;
 ```
 
-- The SHA-256 hash of the entire schema.
+<!-- docs:sync:end -->
+
+- `GENERATED_CONTRACT_HASH` — the SHA-256 hash of the entire schema.
 - Used to verify at runtime that the Rust and TypeScript sides share the same contract version.
+- The hash changes with any schema change, so docs:sync pins this sample to the real generated file.
 
 ### schema.json — JSON Schema
 
 ```json
 {
+  "packageId": "examples.calculator",
+  "schemaVersion": 1,
+  "fieldOrder": "declaration",
   "commands": [
     {
       "name": "addNumbers",
+      "commandId": 1,
       "inputType": "AddNumbersInput",
       "outputType": "AddNumbersOutput",
       "inputSchema": {
+        "title": "AddNumbersInput",
         "type": "object",
+        "required": ["a", "b"],
         "properties": {
           "a": { "type": "integer", "format": "int64" },
           "b": { "type": "integer", "format": "int64" }
-        },
-        "required": ["a", "b"]
+        }
       },
       "outputSchema": {
+        "title": "AddNumbersOutput",
         "type": "object",
-        "properties": { "value": { "type": "integer", "format": "int64" } },
-        "required": ["value"]
+        "required": ["value"],
+        "properties": { "value": { "type": "integer", "format": "int64" } }
       }
     }
-  ],
-  "packageId": "examples.calculator"
+  ]
 }
 ```
 
 - The JSON Schema generated by schemars. Useful for runtime validation, automated documentation, and external tool integration.
+- Shown truncated to the first command; the real file carries all 29 commands.
 
 ---
 

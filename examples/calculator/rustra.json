@@ -4,7 +4,7 @@
   "codegen": {
     "rustManifest": "./Cargo.toml",
     "rustPackage": "rustra-calculator-example",
-    "rustBinary": "rustra-calculator-example"
+    "rustBinary": "generate"
   },
   "node": {},
   "bun": {},
