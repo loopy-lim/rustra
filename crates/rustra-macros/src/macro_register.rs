@@ -76,10 +76,23 @@ pub fn register(input: TokenStream) -> TokenStream {
                 &format!("__RUstra_doc_{}", fn_name),
                 proc_macro2::Span::call_site(),
             );
+            // (감사 #5) `#[command]` 가 생성하는 안전 어댑터(`__rustra_register_*`)를
+            // 통해 등록한다 — capability 래퍼는 `unsafe fn` 이므로 원본 이름으로는
+            // F: Fn 바운드를 통과하지 못하고(무음 드랍 차단), 어댑터는 I/O 타입
+            // 추론이 그대로 성립한다.
+            let register_ident = Ident::new(
+                &format!("__rustra_register_{}", fn_name),
+                proc_macro2::Span::call_site(),
+            );
             // capability 메타가 Some이면 .require_capability 로 이어 붙인다. 상수가
             // Option<&str> 이므로 if let 체인으로 분기 — None이면 .command 만.
+            //
+            // (감사 #5) #[command(capability)] 래퍼는 `unsafe fn` 이다(무음 드랍
+            // 차단 — 일반 등록 경로의 F: Fn 바운드에서 컴파일 에러). 매크로 등록은
+            // 유일하게 허락된 경로로서 명시적 unsafe 클로저로 감싸고, capability 는
+            // require_capability_if 로 연결한다 — 권한 부여 없이는 deny-by-default.
             quote! {
-                .command(#meta_ident, #fn_name)
+                .command(#meta_ident, #register_ident)
                 .command_doc(#meta_ident, #doc_ident)
                 .require_capability_if(#meta_ident, #cap_ident)
             }
