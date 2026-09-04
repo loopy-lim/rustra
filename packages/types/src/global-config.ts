@@ -1,3 +1,4 @@
+import { RustraCommandError, RustraErrorCode } from './errors.js';
 import { invokeByIdWithTimeout, invokeWithTimeout } from './cancel.js';
 import type { EngineClient, InvokeOptions } from './public.js';
 import {
@@ -29,7 +30,8 @@ export function ensureConfigured(): Promise<EngineClient> {
   if (runtime.engine) return Promise.resolve(runtime.engine);
   if (!runtime.engineInitializer)
     return Promise.reject(
-      new Error(
+      new RustraCommandError(
+        RustraErrorCode.TransportUnavailable,
         'Rustra not configured. Call configure(engine), or import the generated React Native entry that registers lazy setup.',
       ),
     );
@@ -67,7 +69,12 @@ export function invoke<T>(command: string, args?: unknown, options?: InvokeOptio
   const engine = runtime.engine;
   if (!engine) {
     if (isLazyConfigured()) return ensureConfigured().then(() => invoke<T>(command, args, options));
-    return Promise.reject(new Error('Rustra not configured. Call configure(engine) first.'));
+    return Promise.reject(
+      new RustraCommandError(
+        RustraErrorCode.TransportUnavailable,
+        'Rustra not configured. Call configure(engine) first.',
+      ),
+    );
   }
   return invokeWithTimeout(engine, command, args, options);
 }
@@ -83,7 +90,12 @@ export function invokeGenerated<T>(
   if (!engine) {
     if (isLazyConfigured())
       return ensureConfigured().then(() => invokeGenerated<T>(commandId, command, args, options));
-    throw new Error('Rustra not configured. Call configure(engine) first.');
+    return Promise.reject(
+      new RustraCommandError(
+        RustraErrorCode.TransportUnavailable,
+        'Rustra not configured. Call configure(engine) first.',
+      ),
+    );
   }
   const syncInvoke = engine[invokeByIdSync];
   if (options === undefined && syncInvoke) {

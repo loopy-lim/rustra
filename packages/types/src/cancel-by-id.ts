@@ -1,4 +1,4 @@
-import { RustraCommandError } from './errors.js';
+import { CancelledError, TimeoutError } from './errors.js';
 import type { EngineClient, InvokeOptions } from './public.js';
 
 export function invokeByIdWithTimeout<T>(
@@ -10,9 +10,7 @@ export function invokeByIdWithTimeout<T>(
 ): Promise<T> {
   const signal = options?.signal;
   if (signal?.aborted)
-    return Promise.reject(
-      new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
-    );
+    return Promise.reject(new CancelledError(`invoke("${command}") aborted before dispatch`));
   let promise: Promise<T>;
   try {
     promise = Promise.resolve(engine.invokeById!<T>(commandId, command, args, options));
@@ -28,8 +26,7 @@ export function invokeByIdWithTimeout<T>(
   if (signal) {
     races.push(
       new Promise<never>((_, reject) => {
-        onAbort = () =>
-          reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
+        onAbort = () => reject(new CancelledError(`invoke("${command}") aborted`));
         signal.addEventListener('abort', onAbort, { once: true });
       }),
     );
@@ -38,14 +35,7 @@ export function invokeByIdWithTimeout<T>(
     races.push(
       new Promise<never>((_, reject) => {
         timer = setTimeout(
-          () =>
-            reject(
-              new RustraCommandError(
-                'transport.timeout',
-                `invoke("${command}") timed out after ${ms}ms`,
-                true,
-              ),
-            ),
+          () => reject(new TimeoutError(`invoke("${command}") timed out after ${ms}ms`)),
           ms,
         );
       }),

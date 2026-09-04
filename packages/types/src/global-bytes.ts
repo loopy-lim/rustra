@@ -1,6 +1,7 @@
 import { invokeGeneratedBytesSync, runtime, resolveGeneratedBytesSync } from './global-state.js';
 import { ensureConfigured, isLazyConfigured } from './global-config.js';
 import { invokeGeneratedFields1 } from './global-fields.js';
+import { RustraCommandError, RustraErrorCode } from './errors.js';
 import type { InvokeOptions } from './public.js';
 
 /** @internal — codegen import contract; see note atop global-fields.ts. */
@@ -17,7 +18,12 @@ export function invokeGeneratedBytes<T>(
       return ensureConfigured().then(() =>
         invokeGeneratedBytes<T>(commandId, command, args, value, options),
       );
-    throw new Error('Rustra not configured. Call configure(engine) first.');
+    return Promise.reject(
+      new RustraCommandError(
+        RustraErrorCode.TransportUnavailable,
+        'Rustra not configured. Call configure(engine) first.',
+      ),
+    );
   }
   if (options === undefined) {
     let route = runtime.generatedBytesRoutes[commandId];
