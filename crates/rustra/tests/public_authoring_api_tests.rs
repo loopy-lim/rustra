@@ -1545,6 +1545,33 @@ fn event_contract_appears_in_schema_json() {
     );
 }
 
+// ── (R02) 이벤트 채널 충돌 거부 — 서로 다른 이름이 같은 정규화 채널로
+// 수렴하면 Package::build 가 패닉한다 (거부 문구는 tauri-calculator 의
+// event_name_mapping.rs should_panic 도 함께 고정).
+
+#[test]
+#[should_panic(expected = "event channel collision: \"a.b\" and \"a_b\" both map to a_b")]
+fn build_rejects_event_names_colliding_after_sanitization() {
+    let _ = Package::builder("example.event-collision")
+        .event::<ProgressPayload>("a.b")
+        .event::<ProgressPayload>("a_b")
+        .build();
+}
+
+#[test]
+fn build_accepts_non_colliding_sanitized_event_names() {
+    // 같은 정규화 채널로 수렴하지 않는 이벤트는 그대로 통과한다 — 충돌 검증이
+    // 정상 선언을 막지 않는다.
+    let package = Package::builder("example.event-collision-free")
+        .event::<ProgressPayload>("progress.tick")
+        .event::<ProgressPayload>("progress:done")
+        .event::<ProgressPayload>("진행.갱신")
+        .build();
+    let schema = package.live_schema();
+    let events = schema["events"].as_array().expect("events");
+    assert_eq!(events.len(), 3);
+}
+
 #[test]
 fn schema_without_events_has_no_section() {
     // 하위호환 — event 선언이 없으면 events 키 자체가 없다.

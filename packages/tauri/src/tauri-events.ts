@@ -31,12 +31,32 @@ function requireTauriListen(): TauriListen {
   return events.listen.bind(events);
 }
 
-/** rustra 이벤트명 → Tauri 채널명 (`rustra://{sanitized}`, Rust `event_channel` 과 동일 규칙). */
+/**
+ * rustra 이벤트명 → Tauri 채널명 (`rustra://{sanitized}`).
+ *
+ * Rust `tauri_support::sanitize_event_name` 과 **문자 단위까지 동일한** 규칙이다
+ * (R02 — 양쪽이 다른 규칙을 쓰면 비 ASCII 이벤트가 조용히 유실됐다):
+ *
+ * 1. 코드포인트 순회(`for..of` — UTF-16 코드 유닛 순회가 아니라).
+ * 2. `[A-Za-z0-9/_:-]` 와 Unicode 알파벳·숫자(`\p{Alphabetic}|\p{N}` — 한글,
+ *    CJK, 비 BMP 영숫자 포함)는 그대로 보존한다. `\p{L}` 이 아니라
+ *    `\p{Alphabetic}` 인 이유: Rust `char::is_alphanumeric()` 이
+ *    Alphabetic ∪ N 이므로(예: U+0345) 양쪽 술어를 일치시킨다.
+ * 3. 그 외 문자(구두점·기호·공백·NonAlphabetic 결합 문자)는 `_` 로 치환한다.
+ * 4. NFC 정규화는 하지 않는다 — 정규화 후 같아지는 이름도 다른 이름이며, 그런
+ *    충돌은 Rust 빌더가 `Package::build` 시점에 거부한다(단일 진실원 — 이벤트
+ *    등록은 Rust 측에서만 일어난다).
+ *
+ * 코드포인트 1개당 결과도 최대 1개라 비 BMP 문자(이모지 등)가 surrogate 2개로
+ * 갈라져 `_` 2개가 되는 구 규칙의 결함도 함께 사라진다.
+ */
 export function rustraEventChannel(name: string): string {
-  const sanitized = name
-    .split('')
-    .map((c) => (/[A-Za-z0-9/_:-]/.test(c) ? c : '_'))
-    .join('');
+  const allowed = /[A-Za-z0-9/_:-]/;
+  const unicodeAlnum = /\p{Alphabetic}|\p{N}/u;
+  let sanitized = '';
+  for (const c of name) {
+    sanitized += allowed.test(c) || unicodeAlnum.test(c) ? c : '_';
+  }
   return `rustra://${sanitized}`;
 }
 
