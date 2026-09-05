@@ -96,6 +96,11 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
     );
     let mut inner_func = func.clone();
     inner_func.sig.ident = inner_fn_name.clone();
+    // (감사 #5 후속) inner 클론은 반드시 비공개 — `#vis` 를 남기면
+    // `.command_fn(__rustra_inner_{fn})` 이 안전 `fn` 으로 조용히 통과하는
+    // 우회 경로가 된다(C1). 래퍼/어댑터와 같은 모듈에서만 호출되므로 비공개로
+    // 충분하다.
+    inner_func.vis = syn::Visibility::Inherited;
 
     let command_name = attr.name.unwrap_or_else(|| {
         let raw = fn_name.to_string();
@@ -126,6 +131,33 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
             #[allow(non_upper_case_globals, dead_code)]
             const #capability_ident: Option<&str> = None;
         }
+    };
+
+    // (감사 #5) capability 무음 드랍 차단: capability 가 있으면 래퍼를 `unsafe fn`
+    // 으로 생성한다. `unsafe fn` 아이템 타입은 `Fn` 을 구현하지 않으므로
+    // `.command_fn(f)`/`.command(name, f)`/`buffer_command_fn`/`register_fn` 등
+    // 일반 등록 경로의 `F: Fn` 바운드에서 **컴파일 에러**가 된다 — 조용한 공개
+    // 명령화를 원천 차단. register!/build! 는 명시적 unsafe 클로저로 감싸 등록하며
+    // capability 연결(require_capability_if)은 그대로 유지된다.
+    let wrapper_unsafety: TokenStream2 = if attr.capability.is_some() {
+        quote! { unsafe }
+    } else {
+        quote! {}
+    };
+    // register!/build! 가 이름추론 등록에 쓰는 doc(hidden) 안전 어댑터 — fn 아이템이라
+    // `Fn(I) -> Result<O>` 바운드에서 I/O 추론이 그대로 성립한다(클로저 추론과 달리).
+    // (감사 #5 후속) 비공개로 고정 — `#vis` 를 남기면 크로스 크레이트에서
+    // `.command_fn(__rustra_register_{fn})` 우회가 가능해진다(I1). 같은 모듈의
+    // register!/build! 호출(`crate::` 경로)은 fn 저자와 같은 신뢰 도메인이라
+    // 허용 잔여다.
+    let register_ident = Ident::new(
+        &format!("__rustra_register_{}", fn_name),
+        proc_macro2::Span::call_site(),
+    );
+    let register_call: TokenStream2 = if attr.capability.is_some() {
+        quote! { unsafe { #fn_name(__rustra_input) } }
+    } else {
+        quote! { #fn_name(__rustra_input) }
     };
 
     // Prepare state bindings and call args
@@ -168,12 +200,17 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
     let expanded = quote! {
         #inner_func
 
-        #vis fn #fn_name(#outer_input_arg) -> rustra::Result<#output_type> {
+        #vis #wrapper_unsafety fn #fn_name(#outer_input_arg) -> rustra::Result<#output_type> {
             #(#state_bindings)*
             #inner_invocation
         }
 
         #capability_const
+
+        #[doc(hidden)]
+        fn #register_ident(__rustra_input: #input_type) -> rustra::Result<#output_type> {
+            #register_call
+        }
 
         #[allow(non_upper_case_globals, dead_code)]
         const #meta_ident: &str = #command_name;

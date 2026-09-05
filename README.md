@@ -142,9 +142,11 @@ JS/native combination drift at runtime.
 
 ### Rust
 
+<!-- 발행 시 갱신: 0.7.0 라인 -->
+
 ```toml
 [dependencies]
-rustra = "0.4"
+rustra = "0.6"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -542,7 +544,8 @@ type RustraError = {
 
 | Rust                 | TypeScript                                         |
 | -------------------- | -------------------------------------------------- |
-| `i64`, `u32`, `f64`  | `number`                                           |
+| `i64`                | `number \| bigint`                                 |
+| `u32`, `f64`         | `number`                                           |
 | `String`             | `string`                                           |
 | `bool`               | `boolean`                                          |
 | `Vec<T>`             | `T[]`                                              |
@@ -561,8 +564,10 @@ identically regardless of platform.
 
 Enable the `tauri` feature:
 
+<!-- 발행 시 갱신: 0.7.0 라인 -->
+
 ```toml
-rustra = { version = "0.4", features = ["tauri"] }
+rustra = { version = "0.6", features = ["tauri"] }
 ```
 
 Rust side:

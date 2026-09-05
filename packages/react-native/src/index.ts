@@ -8,7 +8,9 @@ export type {
   RkyvV2SchemaNative,
 } from '@rustra/types';
 export {
+  CancelledError,
   RustraCommandError,
+  TimeoutError,
   configure,
   invoke,
   createRkyvV2Engine,

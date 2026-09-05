@@ -30,7 +30,7 @@ The executables live in [`apps/node-app.ts`](apps/node-app.ts) and
 1. **Type definitions** — define `AddNumbersInput`, `AddNumbersOutput` with `Serialize + Deserialize + JsonSchema`
 2. **Command registration** — mark handler functions with `#[command]` and register them via `Package::builder(...).command_fn(...)`
 3. **Local invoke** — type-safe invocation with `package.invoke("addNumbers", ...)`
-4. **TypeScript generation** — contract probe publishes `schema.json` (`generate_schema` bin), then `rustra codegen` renders the TS/C++ surfaces from it
+4. **TypeScript generation** — contract probe publishes `schema.json` (`generate` bin), then `rustra codegen` renders the TS/C++ surfaces from it
 5. **Host generated entrypoints** — `node.ts`, `bun.ts`, `tauri.ts`, `react-native.ts`
 6. **Native entrypoint** — `native_entry!` in one line shares the stable C ABI and the RN staticlib
 7. **High-performance options** — measured Node persistent loop/N-API and Bun FFI rkyv V2
@@ -39,11 +39,16 @@ The executables live in [`apps/node-app.ts`](apps/node-app.ts) and
 
 The following files are generated in the `examples/calculator/generated/` directory:
 
-- `schema.json` — package schema
+- `schema.json` — package schema (published by the `generate` bin)
 - `types.ts` — TypeScript type definitions
 - `commands.ts` — command helper functions
 - `contract.ts` — contract hash
+- `rkyv-codecs.ts`, `rkyv-registry.ts` — rkyv V2 binary fast-path codecs
 - `node.ts`, `bun.ts`, `tauri.ts`, `react-native.ts` — zero-config bootstrap per host
+
+Enabling the `positional` option (as the React Native examples do) additionally
+generates `positional-facade.ts`. `.rustra-generated.json` records the schema hash
+and per-file hashes so `codegen:check` (CI) can detect a single byte of drift.
 
 ## Generated Command Helper
 

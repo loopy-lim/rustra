@@ -17,6 +17,7 @@ import {
   invokeGenerated,
   invokeGeneratedFields2,
   invokeWithTimeout,
+  raceAbort,
   RustraCommandError,
   CancelledError,
   TimeoutError,
@@ -29,6 +30,11 @@ import {
   resetDebugEnvForTests,
 } from './index.js';
 import type { RkyvV2SchemaNative, RkyvV2Codec, BatchEntry, EngineClient } from './index.js';
+// @internal 경로 — invokeByIdWithTimeout 은 index.js 공개 진입점 목록에 없고,
+// unconfigured 상태 주입은 내부 runtime 조작이 필요하다 (테스트 전용 접근).
+import { invokeByIdWithTimeout } from './cancel-by-id.js';
+import { invokeCallbackWithAbort } from './cancel.js';
+import { resetConfiguredRoutes, runtime } from './global-state.js';
 
 test('lazy configuration lets the first generated command initialize Rustra once', async () => {
   let initializations = 0;
@@ -3864,5 +3870,275 @@ test('json-engine rejection path normalizes errors and emits no shape event', as
   } finally {
     configureDebug(undefined);
     cleanup();
+  }
+});
+
+// ── DX Track Task 6: 타임아웃/취소/미구성 에러 서브클래스·계약 통일 ──
+// instanceof 분기 지원: TimeoutError/CancelledError 서브클래스와
+// transport.unavailable 정규화. 와이어 코드·retryable·메시지는 불변.
+
+test('timeout race rejects with TimeoutError instance across all timeout paths', async () => {
+  const hanging: EngineClient = { invoke: () => new Promise(() => {}) };
+  // ① invokeWithTimeout (cancel.ts)
+  await assert.rejects(
+    invokeWithTimeout(hanging, 'addNumbers', { a: 1 }, { timeoutMs: 20 }),
+    (err: unknown) => {
+      assert.ok(err instanceof TimeoutError, 'invokeWithTimeout must throw TimeoutError');
+      assert.ok(err instanceof RustraCommandError, 'TimeoutError must remain a RustraCommandError');
+      assert.equal((err as TimeoutError).code, 'transport.timeout');
+      assert.equal((err as TimeoutError).retryable, true);
+      return true;
+    },
+  );
+
+  // ② global invokeBatch timeout race (global-batch.ts)
+  const sentinelBatch: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  configure({
+    invokeBatch: () => new Promise(() => {}),
+  } as unknown as EngineClient);
+  try {
+    await assert.rejects(
+      invokeBatch<{ v: number }>([{ command: 'a', options: { timeoutMs: 20 } }]),
+      (err: unknown) => {
+        assert.ok(err instanceof TimeoutError, 'invokeBatch must throw TimeoutError');
+        assert.equal((err as TimeoutError).code, 'transport.timeout');
+        assert.equal((err as TimeoutError).retryable, true);
+        return true;
+      },
+    );
+  } finally {
+    configure(sentinelBatch);
+  }
+});
+
+test('invokeByIdWithTimeout rejects with TimeoutError and CancelledError instances', async () => {
+  // timeout race (cancel-by-id.ts)
+  const hanging: EngineClient = {
+    invokeById: () => new Promise(() => {}),
+  } as unknown as EngineClient;
+  await assert.rejects(
+    invokeByIdWithTimeout(hanging, 7, 'addNumbers', { a: 1 }, { timeoutMs: 20 }),
+    (err: unknown) => {
+      assert.ok(err instanceof TimeoutError, 'invokeByIdWithTimeout must throw TimeoutError');
+      assert.equal((err as TimeoutError).code, 'transport.timeout');
+      assert.equal((err as TimeoutError).retryable, true);
+      return true;
+    },
+  );
+
+  // pre-aborted before dispatch (cancel-by-id.ts)
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(
+    invokeByIdWithTimeout(
+      {
+        invoke: () => Promise.resolve(1),
+      } as unknown as EngineClient,
+      7,
+      'addNumbers',
+      undefined,
+      { signal: ac.signal },
+    ),
+    (err: unknown) => {
+      assert.ok(err instanceof CancelledError, 'pre-abort must throw CancelledError');
+      assert.equal((err as CancelledError).code, 'cancelled');
+      assert.equal((err as CancelledError).retryable, true);
+      return true;
+    },
+  );
+
+  // abort race mid-flight (cancel-by-id.ts)
+  const late: EngineClient = {
+    invokeById: () => new Promise(() => {}),
+  } as unknown as EngineClient;
+  const controller = new AbortController();
+  const p = invokeByIdWithTimeout(late, 7, 'addNumbers', undefined, {
+    signal: controller.signal,
+  });
+  controller.abort();
+  await assert.rejects(p, (err: unknown) => {
+    assert.ok(err instanceof CancelledError, 'abort race must throw CancelledError');
+    assert.equal((err as CancelledError).code, 'cancelled');
+    return true;
+  });
+});
+
+test('raceAbort and invokeCallbackWithAbort reject with CancelledError instances', async () => {
+  // raceAbort (cancel-abort.ts)
+  const controller = new AbortController();
+  const raced = raceAbort(new Promise(() => {}), controller.signal, 'cancel-me');
+  controller.abort();
+  await assert.rejects(raced, (err: unknown) => {
+    assert.ok(err instanceof CancelledError, 'raceAbort must throw CancelledError');
+    assert.equal((err as CancelledError).code, 'cancelled');
+    assert.equal((err as CancelledError).retryable, true);
+    return true;
+  });
+
+  // invokeCallbackWithAbort: pre-aborted before dispatch (cancel.ts)
+  await assert.rejects(
+    invokeCallbackWithAbort('cancel-me', AbortSignal.abort(), () => {
+      throw new Error('dispatch must not run when already aborted');
+    }),
+    (err: unknown) => {
+      assert.ok(err instanceof CancelledError, 'callback pre-abort must throw CancelledError');
+      assert.equal((err as CancelledError).code, 'cancelled');
+      return true;
+    },
+  );
+
+  // invokeCallbackWithAbort: abort mid-flight (cancel.ts)
+  const mid = new AbortController();
+  const pending = invokeCallbackWithAbort<void>('cancel-me', mid.signal, () => {
+    /* dispatch settles nothing — abort must win */
+  });
+  mid.abort();
+  await assert.rejects(pending, (err: unknown) => {
+    assert.ok(err instanceof CancelledError, 'callback abort mid-flight must throw CancelledError');
+    assert.equal((err as CancelledError).code, 'cancelled');
+    return true;
+  });
+});
+
+test('engine-level pre-aborted invoke and invokeById reject with CancelledError', async () => {
+  // rkyv-engine-surface.ts invokeById pre-abort + invokeRaw pre-abort paths.
+  const native = makeNative({
+    schema: schemaBytes([{ name: 'dyn', commandId: 1 }]),
+    invokeImpl: () => {
+      throw new Error('native must not be called when already aborted');
+    },
+  });
+  const engine = createRkyvV2Engine(native, new Map());
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(engine.invoke('dyn', {}, { signal: ac.signal }), (e: unknown) => {
+    assert.ok(e instanceof CancelledError, 'engine.invoke pre-abort must throw CancelledError');
+    assert.equal((e as CancelledError).code, 'cancelled');
+    return true;
+  });
+  await assert.rejects(engine.invokeById(1, 'dyn', {}, { signal: ac.signal }), (e: unknown) => {
+    assert.ok(e instanceof CancelledError, 'engine.invokeById pre-abort must throw CancelledError');
+    assert.equal((e as CancelledError).code, 'cancelled');
+    return true;
+  });
+});
+
+test('unconfigured invoke rejects with RustraCommandError transport.unavailable', async () => {
+  // sentinel이 호출되면 이전 테스트 오염을 즉시 드러낸다.
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  try {
+    // runtime.engine === null && runtime.engineInitializer === undefined 상태를
+    // 만들기 위해 configureLazy의 initializer를 지운다 — public API로는
+    // configure(null 엔진) 없이는 불가하므로 내부 runtime에 직접 접근한다.
+    runtime.engine = null;
+    runtime.engineInitializer = undefined;
+    const returned = invoke('dyn', { a: 1 });
+    assert.ok(returned instanceof Promise, 'unconfigured invoke must return a Promise');
+    await assert.rejects(returned, (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      assert.equal((err as RustraCommandError).retryable, false);
+      assert.match((err as Error).message, /Rustra not configured/);
+      return true;
+    });
+  } finally {
+    runtime.engine = null;
+    runtime.engineInitializer = undefined;
+    runtime.engineInitialization = undefined;
+    resetConfiguredRoutes();
+    configure(sentinel);
+  }
+});
+
+test('unconfigured invokeGenerated and invokeGeneratedFields reject instead of sync throw', async () => {
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  try {
+    runtime.engine = null;
+    runtime.engineInitializer = undefined;
+    runtime.engineInitialization = undefined;
+    resetConfiguredRoutes();
+
+    // ④ invokeGenerated — 계약 통일: sync throw 금지, rejected Promise.
+    const gen = invokeGenerated<{ v: number }>(1, 'dyn');
+    assert.ok(gen instanceof Promise, 'unconfigured invokeGenerated must return a Promise');
+    await assert.rejects(gen, (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      assert.equal((err as RustraCommandError).retryable, false);
+      return true;
+    });
+
+    // invokeGeneratedFields (global-fields.ts) — 동일 codegen 계약.
+    const fields = invokeGeneratedFields2<{ v: number }>(1, 'dyn', { a: 1 }, 1, 2);
+    assert.ok(fields instanceof Promise, 'unconfigured invokeFields must return a Promise');
+    await assert.rejects(fields, (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      return true;
+    });
+
+    // invokeGeneratedBytes (global-bytes.ts) — 동일 codegen 계약.
+    const bytes = invokeGeneratedBytes(1, 'dyn', { data: new ArrayBuffer(0) }, new ArrayBuffer(0));
+    assert.ok(bytes instanceof Promise, 'unconfigured invokeGeneratedBytes must return a Promise');
+    await assert.rejects(bytes, (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      return true;
+    });
+  } finally {
+    runtime.engine = null;
+    runtime.engineInitializer = undefined;
+    runtime.engineInitialization = undefined;
+    resetConfiguredRoutes();
+    configure(sentinel);
+  }
+});
+
+test('unconfigured invokeBatch and ensureConfigured reject with transport.unavailable', async () => {
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  try {
+    runtime.engine = null;
+    runtime.engineInitializer = undefined;
+    runtime.engineInitialization = undefined;
+    resetConfiguredRoutes();
+
+    // invokeBatch (global-batch.ts)
+    const batch = invokeBatch<{ v: number }>([{ command: 'a' }]);
+    assert.ok(batch instanceof Promise, 'unconfigured invokeBatch must return a Promise');
+    await assert.rejects(batch, (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      return true;
+    });
+
+    // ensureConfigured (global-config.ts) — RN lazy entry 힌트 메시지 보존.
+    await assert.rejects(ensureConfigured(), (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      assert.match((err as Error).message, /React Native entry/);
+      return true;
+    });
+  } finally {
+    runtime.engine = null;
+    runtime.engineInitializer = undefined;
+    runtime.engineInitialization = undefined;
+    resetConfiguredRoutes();
+    configure(sentinel);
   }
 });
