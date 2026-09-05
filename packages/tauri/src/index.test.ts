@@ -474,6 +474,10 @@ test('subscribeEvent payload contract table — decoded pass-through, string-onl
     // 핵심 회귀(통합 문서 표): 문자열 '123' — number 123 으로 디코딩되지 않는다.
     ['123', 'string', '123', 'string that looks numeric stays a string'],
     ['true', 'string', 'true', 'string that looks boolean stays a string'],
+    // JSDoc 이 주장하는 원시 결과 규칙(원본 유지)의 마지막 게이트 — 파서의
+    // `parsed !== null` 판정(line 위 계약 2번)은 이 행이 지킨다. `JSON.parse('null')`
+    // 은 null 이라 parse "성공"이지만 원시 결과므로 원본 문자열이 유지된다.
+    ['null', 'string', 'null', "string 'null' parses to null — primitive result, original kept"],
     // 문자열이지만 escape 로 인코딩된 JSON — 딱 한 번만 parse 된다.
     ['"{\\"a\\":1}"', 'string', '{"a":1}', 'escaped-JSON string parses exactly once to the string'],
     // parse 실패 — 원본 문자열이 그대로 전달된다.
@@ -482,14 +486,15 @@ test('subscribeEvent payload contract table — decoded pass-through, string-onl
     // 문자열이 아닌 원시값 — 스니핑 없이 그대로 통과한다.
     [null, 'object', null, 'null payload passes through (typeof null is object)'],
     [false, 'boolean', false, 'boolean payload passes through'],
+    [undefined, 'undefined', undefined, 'missing/undefined payload passes through'],
   ];
 
-  for (const [payload, expectedTypeof, expectedValue] of rows) {
+  for (const [payload, expectedTypeof, expectedValue, description] of rows) {
     seen.length = 0;
     fire(payload);
-    assert.equal(seen.length, 1, `row "${String(payload)}": exactly one delivery`);
-    assert.equal(seen[0]!.typeofIn, expectedTypeof, `row ${JSON.stringify(payload)}: typeof`);
-    assert.deepEqual(seen[0]!.value, expectedValue, `row ${JSON.stringify(payload)}: value`);
+    assert.equal(seen.length, 1, `${description}: exactly one delivery`);
+    assert.equal(seen[0]!.typeofIn, expectedTypeof, `${description}: typeof`);
+    assert.deepEqual(seen[0]!.value, expectedValue, `${description}: value`);
   }
 
   // 객체 행의 신원 보존 — 같은 참조가 그대로 도달한다(재직렬화 부재의 최강 증거).
