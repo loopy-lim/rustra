@@ -1,10 +1,10 @@
-// ── rustra generated ────────────────────────────────────────
-// File:   RustraBridge.podspec
-// Source: schema.json (single source of truth for this file)
-// Regen:  rustra codegen --config rustra.json
-// Stage:  rust-probe schema → ts renderer
-// DO NOT EDIT — changes will be overwritten and fail codegen --check.
-// ────────────────────────────────────────────────────────────
+# ── rustra generated ────────────────────────────────────────
+# File:   RustraBridge.podspec
+# Source: schema.json (single source of truth for this file)
+# Regen:  rustra codegen --config rustra.json
+# Stage:  rust-probe schema → ts renderer
+# DO NOT EDIT — changes will be overwritten and fail codegen --check.
+# ────────────────────────────────────────────────────────────
 
 Pod::Spec.new do |s|
   s.name = 'RustraBridge'
@@ -17,7 +17,7 @@ Pod::Spec.new do |s|
   s.source = { :path => '.' }
   s.static_framework = true
 
-  adapter_root = File.expand_path('../../../../node_modules/@rustra/react-native/native', __dir__)
+  adapter_root = File.expand_path('../../node_modules/@rustra/react-native/native', __dir__)
   generated_root = File.expand_path('generated', __dir__)
   rust_archive = 'ios/rust/lib/librustra_calculator_example.a'
 

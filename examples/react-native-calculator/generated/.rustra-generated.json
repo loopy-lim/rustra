@@ -5,19 +5,19 @@
   "files": [
     {
       "path": "../modules/rustra-jsi/android/build-rust-android.sh",
-      "sha256": "2d058422bebee665b0bed81ea37a74e56496cf9909e11c9c42c775349ef965b9"
+      "sha256": "a915117c69c6ad73b9d42a89ea5d67f6ee238c242f194b6fc67d8d02c074a485"
     },
     {
       "path": "../modules/rustra-jsi/android/build.gradle",
-      "sha256": "57d2a17b631f96095f3d3ebd5c4eb79a38f550e9d0eaa952ea96aa0767fbcaf2"
+      "sha256": "1c4b55f02e3047a2cd411a3e04b6bcf1752785af6bb77f51c67d8ef8c7e89366"
     },
     {
       "path": "../modules/rustra-jsi/android/CMakeLists.txt",
-      "sha256": "89bcf80598b6c2d6162be36cb26ebfdcd7582f90ede3be86fb1250a347646fac"
+      "sha256": "5ed79a976b5bd3f53d80209dce5e4a079984a35dac65709826ab06293a343535"
     },
     {
       "path": "../modules/rustra-jsi/android/src/main/AndroidManifest.xml",
-      "sha256": "3579e03b68745e4da4039da9368f7c3e5a3b9a9dce02f27279a362ae6be3b503"
+      "sha256": "29a5250621c15524c26a69d3f3f62199b1a2946cce7a0b738acf299f9ca6e547"
     },
     {
       "path": "../modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt",
@@ -37,7 +37,7 @@
     },
     {
       "path": "../modules/rustra-jsi/ios/build-rust-ios.sh",
-      "sha256": "9cdccceb669b6aff5f50fbee2a91add75fb3fe917c2d2c0c7085c78702a17182"
+      "sha256": "e65e51258d0cfc5476d6dfc7fb5ddca41d5bbf54684013789a6005095557f00e"
     },
     {
       "path": "../modules/rustra-jsi/ios/RustraBridge.cpp",
@@ -49,7 +49,7 @@
     },
     {
       "path": "../modules/rustra-jsi/package.json",
-      "sha256": "b6fd54b12c8313a31e6f17981154f454ff3c7974762ae0faf1814c0b9bb777bf"
+      "sha256": "b52d40dfd226cd6941689435ddc448d92033d59efa9a32c6fa87267f6cbed539"
     },
     {
       "path": "../modules/rustra-jsi/react-native.config.js",
@@ -57,7 +57,7 @@
     },
     {
       "path": "../modules/rustra-jsi/RustraBridge.podspec",
-      "sha256": "8a1869c8c930ca473b3b0b89eb5d0b7153885f795b60d9546976ae0eeba54a52"
+      "sha256": "dc816ee0c629ec3ad15540fd332d5b4e255dfb2b5c84f0e2526a6866b532bd84"
     },
     {
       "path": "../modules/rustra-jsi/src/index.ts",

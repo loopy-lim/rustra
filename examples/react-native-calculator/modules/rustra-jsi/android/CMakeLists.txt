@@ -1,10 +1,10 @@
-// ── rustra generated ────────────────────────────────────────
-// File:   android/CMakeLists.txt
-// Source: schema.json (single source of truth for this file)
-// Regen:  rustra codegen --config rustra.json
-// Stage:  rust-probe schema → ts renderer
-// DO NOT EDIT — changes will be overwritten and fail codegen --check.
-// ────────────────────────────────────────────────────────────
+# ── rustra generated ────────────────────────────────────────
+# File:   android/CMakeLists.txt
+# Source: schema.json (single source of truth for this file)
+# Regen:  rustra codegen --config rustra.json
+# Stage:  rust-probe schema → ts renderer
+# DO NOT EDIT — changes will be overwritten and fail codegen --check.
+# ────────────────────────────────────────────────────────────
 
 cmake_minimum_required(VERSION 3.18.1)
 project(rustra_bridge)
