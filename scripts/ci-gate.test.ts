@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { dirname, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parse } from 'yaml';
 import { test } from 'bun:test';
 
 // gate 잡이 실제로 호출하는 스크립트를 spawn한다 — 로직 복제 없이 계약을 검증한다.
 const gatePath = resolve(dirname(fileURLToPath(import.meta.url)), 'ci-gate.sh');
+const ciYmlPath = join(dirname(fileURLToPath(import.meta.url)), '..', '.github/workflows/ci.yml');
 
 // .github/workflows/ci.yml gate 잡의 needs 순서와 정확히 일치해야 한다.
 const MANDATORY_JOBS = [
@@ -84,9 +87,10 @@ test('mixed failure/skipped names every offending job', () => {
 test('multiple failures each appear once in the report', () => {
   const r = runGate({ ...success, 'rn-android': 'failure', 'rn-ios': 'failure' });
   assert.notEqual(r.status, 0);
-  const count = r.stderr.split('rn-android').length - 1;
-  assert.ok(count >= 1, 'rn-android must appear in stderr');
-  assert.match(r.stderr, /rn-ios/);
+  const rnAndroidCount = r.stderr.split('rn-android').length - 1;
+  const rnIosCount = r.stderr.split('rn-ios').length - 1;
+  assert.equal(rnAndroidCount, 1, 'rn-android must appear exactly once');
+  assert.equal(rnIosCount, 1, 'rn-ios must appear exactly once');
 });
 
 test('an unknown result value fails loudly instead of passing silently', () => {
@@ -137,4 +141,13 @@ test('duplicate job argument is a hard error even when all results are success',
   );
   assert.notEqual(r.status, 0);
   assert.match(r.stderr, /duplicate/);
+});
+
+test('workflow gate needs list matches MANDATORY_JOBS in name and order', () => {
+  // 조용한 커버리지 갈라짐 차단 — gate needs 에 새 잡이 추가돼도 스크립트 인자가
+  // 없으면 그 잡은 검사 없이 통과한다(반대 방향도 마찬가지). 이 테스트가 갈라짐을
+  // 즉시 loud failure 로 만든다.
+  const doc = parse(readFileSync(ciYmlPath, 'utf8'));
+  const needs = doc.jobs.gate.needs;
+  assert.deepEqual(needs, [...MANDATORY_JOBS]);
 });

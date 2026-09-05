@@ -548,6 +548,11 @@ jobs:
       ]
     if: always() && github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    # bash 한 번 실행이 전부 — 토큰 권한 불필요, hung runner 가 branch-protection
+    # 체크를 기본 360분 동안 pending 시키지 않게 짧은 타임아웃을 건다.
+    permissions:
+      contents: read
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
       - name: Aggregate mandatory results
