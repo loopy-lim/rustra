@@ -115,19 +115,28 @@ export function createJsonEngine(
         typeof rawTransport.invokeBatch === 'function' &&
         !entries.some((entry) => entry.options?.signal || entry.options?.timeoutMs !== undefined)
       ) {
-        // 단건 경로와 동일하게 항목별 args 를 normalizeArgs 로 정규화한다(R04-c).
-        // 값이 바뀐 항목만 새 객체로 재생성하고 원본 배열·항목은 변형하지 않는다
-        // (global-batch 의 stripped 재생성 관례와 동일). 폴백 경로는 rawEngine.invoke
-        // 가 이미 정규화를 담당하므로 이곳 재생성과 무관하다.
-        const normalized = entries.map((entry) => {
-          const args = normalizeArgs(entry.args);
-          return args === entry.args ? entry : { ...entry, args };
-        });
         try {
+          // 단건 경로와 동일하게 항목별 args 를 normalizeArgs 로 정규화한다(R04-c).
+          // 값이 바뀐 항목만 새 객체로 재생성하고 원본 배열·항목은 변형하지 않는다
+          // (global-batch 의 stripped 재생성 관례와 동일). 정규화는 주입된 사용자
+          // 코드를 실행하므로 try 경계 안에 둔다 — normalizer 의 동기 throw 도
+          // transport 동기 throw 와 동일하게 수렴한다. 폴백 경로는 rawEngine.invoke
+          // 가 이미 정규화를 담당하므로 이곳 재생성과 무관하다.
+          const normalized = entries.map((entry) => {
+            const args = normalizeArgs(entry.args);
+            return args === entry.args ? entry : { ...entry, args };
+          });
           return Promise.resolve(rawTransport.invokeBatch(normalized)) as Promise<T[]>;
         } catch (error: unknown) {
-          // transport 의 동기 throw 도 단건 경로와 동일하게 rejected Promise 로
-          // 정규화한다(R04-b) — 동기 throw 는 호출자의 try/catch 를 우회한다.
+          // transport/normalizer 의 동기 throw 도 단건 경로와 동일하게 rejected
+          // Promise 로 정규화한다(R04-b) — 동기 throw 는 `.catch()` 기반 호출자를
+          // 우회한다. 단건 경로와 같은 debug 에러 이벤트를 배치 라벨로 남긴다.
+          debugRustra({
+            direction: 'error',
+            transport: 'json',
+            command: `invokeBatch(${entries.length} entries)`,
+            error: String(error),
+          });
           return Promise.reject(normalizeRustraError(error));
         }
       }
