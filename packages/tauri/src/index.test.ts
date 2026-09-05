@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createTauriBootstrap, createTauriEngine, subscribeTauriEvent } from './index.js';
-import { RustraCommandError } from '@rustra/types';
+import { RustraCommandError, configureDebug, type RustraDebugEvent } from '@rustra/types';
 
 test('createTauriEngine routes invoke through rustra_dispatch', async () => {
   const calls: Array<{ command: string; args: unknown }> = [];
@@ -213,6 +213,108 @@ test('subscribeEvent parses JSON payloads and falls back to raw string', async (
   // 비 JSON 페이로드는 원본 문자열로 전달(조용한 드롭 방지).
   fire!('not-json');
   assert.equal(seen[1], 'not-json');
+});
+
+// ── 콜백 예외 경계 (R01) — 변환 경계와 사용자 콜백 경계는 분리된다 ──
+// 결함: 콜백이 JSON.parse 와 같은 try 에 있어 콜백 throw 가 catch 로 떨어져
+// 원본 문자열로 "재호출"되고, 두 번째 throw 는 Tauri 이벤트 기계로 탈출해
+// 형제 리스너를 깨뜨릴 수 있었다. 계약: 변환 실패 시 원본 문자열 1회 전달은
+// 단일 전달이고, 콜백 예외는 리스너 오류 정책(관측 + 삼켜서 형제 보호)으로 귀결.
+
+/** listen 목업 — 채널 정합을 확인하고 `fire` 로 테스트가 이벤트를 발사한다.
+ * 실제 Tauri 처럼 채널당 리스너 여럿을 독립 등록하며, fire 는 등록 순서대로
+ * 동기 호출한다(리스너 예외를 흡수하지 않는다 — 경계 위반은 그대로 실패로). */
+function mockListen(): {
+  listen: (channel: string, handler: (event: { payload: string }) => void) => Promise<() => void>;
+  fire: (payload: string) => void;
+} {
+  const handlers: Array<(event: { payload: string }) => void> = [];
+  return {
+    listen: async (channel, handler) => {
+      assert.equal(channel, 'rustra://tick');
+      handlers.push(handler);
+      return () => {};
+    },
+    fire: (payload) => {
+      for (const handler of handlers) handler({ payload });
+    },
+  };
+}
+
+test('subscribeEvent keeps a throwing callback inside the listener boundary (called once, error observed)', async () => {
+  const { subscribeEvent } = await import('./index.js');
+  const { listen, fire } = mockListen();
+  const events: RustraDebugEvent[] = [];
+  configureDebug((event) => events.push(event));
+  try {
+    let calls = 0;
+    const boom = new Error('callback exploded');
+    await subscribeEvent<{ value: number }>(
+      'tick',
+      () => {
+        calls += 1;
+        throw boom;
+      },
+      listen,
+    );
+
+    // 프로미스 자체가 resolve 해야 한다 — 콜백 예외가 구독/전달 경로를 깨지 않는다.
+    fire('{"value":42}');
+    assert.equal(calls, 1, 'callback must be invoked exactly once — no re-invocation');
+    const listenerErrors = events.filter((event) => event.kind === 'tauri.listener_error');
+    assert.equal(listenerErrors.length, 1, 'exactly one listener_error diagnostic');
+    assert.equal(listenerErrors[0]!.command, 'tick');
+    assert.equal(listenerErrors[0]!.error, String(boom));
+  } finally {
+    configureDebug(undefined);
+  }
+});
+
+test('subscribeEvent delivers parsed payloads once for a normal callback', async () => {
+  const { subscribeEvent } = await import('./index.js');
+  const { listen, fire } = mockListen();
+  const seen: unknown[] = [];
+  await subscribeEvent<{ value: number }>('tick', (payload) => seen.push(payload), listen);
+  fire('{"value":42}');
+  assert.deepEqual(seen, [{ value: 42 }]);
+});
+
+test('subscribeEvent delivers invalid JSON as the original string exactly once', async () => {
+  const { subscribeEvent } = await import('./index.js');
+  const { listen, fire } = mockListen();
+  const seen: unknown[] = [];
+  await subscribeEvent<string>('tick', (payload) => seen.push(payload), listen);
+  fire('not-json');
+  assert.deepEqual(seen, ['not-json'], 'single-pass fallback delivery of the raw string');
+});
+
+test('subscribeEvent protects sibling listeners from a throwing listener', async () => {
+  const { subscribeEvent } = await import('./index.js');
+  const { listen, fire } = mockListen();
+  const events: RustraDebugEvent[] = [];
+  configureDebug((event) => events.push(event));
+  try {
+    // 같은 이벤트 채널에 리스너 2개 — 첫 리스너가 throw 해도 둘째는 정상 도달.
+    await subscribeEvent<{ value: number }>(
+      'tick',
+      () => {
+        throw new Error('first listener exploded');
+      },
+      listen,
+    );
+    const seen: unknown[] = [];
+    await subscribeEvent<{ value: number }>('tick', (payload) => seen.push(payload), listen);
+
+    fire('{"value":42}');
+    assert.deepEqual(seen, [{ value: 42 }], 'sibling listener unaffected by the throwing one');
+    assert.equal(
+      events.filter((event) => event.kind === 'tauri.listener_error').length,
+      1,
+      'only the throwing listener is diagnosed',
+    );
+  } finally {
+    configureDebug(undefined);
+  }
 });
 
 test('subscribeTauriEvent discovers the global listen API', async () => {
