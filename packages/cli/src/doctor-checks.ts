@@ -16,6 +16,7 @@ import {
   conditionalCheck,
   getCargoMetadata,
   nearestExistingParent,
+  REGISTRY_CHECK_ID,
   resolveManifest,
   safeResolve,
   selectGenerator,
@@ -23,7 +24,12 @@ import {
 import { sha256 } from './hash.js';
 import { cliVersion } from './cli-runtime.js';
 
-export function collectBaseChecks(options: DoctorOptions, runner: DoctorRunner): DoctorCheck[] {
+export function collectBaseChecks(
+  options: DoctorOptions,
+  runner: DoctorRunner,
+  /** collectDoctorReportAsync 가 미리 당겨 온 registry.reachability 프리브 결과. */
+  registry?: DoctorCheck,
+): DoctorCheck[] {
   const checks: DoctorCheck[] = [];
   const rustc = runner('rustc', ['--version']);
   const version = parseRustVersion(`${rustc.stdout}\n${rustc.stderr}`);
@@ -61,6 +67,28 @@ export function collectBaseChecks(options: DoctorOptions, runner: DoctorRunner):
       ['Install Cargo with https://rustup.rs'],
     ),
   );
+  // registry 도달성 — cargo 부재는 경고할 것도 없다(설치 자체가 선행 과제). 프리브가
+  // 없는 동기 경로(collectDoctorReport 직접 호출)는 skip 으로 명시해 기계 판독이
+  // "검사 누락"과 "의도된 스킵"을 구별하게 한다.
+  if (!registry)
+    checks.push(
+      check(
+        REGISTRY_CHECK_ID,
+        'skip',
+        false,
+        'Skipped registry reachability because the probe was not run',
+      ),
+    );
+  else if (!cargo.ok)
+    checks.push(
+      check(
+        REGISTRY_CHECK_ID,
+        'skip',
+        false,
+        'Skipped registry reachability because cargo is unavailable',
+      ),
+    );
+  else checks.push(registry);
   const node = runner('node', ['--version']);
   const bun = runner('bun', ['--version']);
   checks.push(
@@ -288,7 +316,14 @@ export function collectConfigChecks(
             'codegen.generated_freshness',
             'pass',
             false,
-            'Generated output is fresh (schema and generator match the manifest)',
+            'Generated output matches the schema probe (schema and generator match the manifest)',
+            // 감사 #3 고지 — 이 검사는 매니페스트 해시 기반 프리브 신선도만 확인한다.
+            // 실제 invoke 를 서브하는 런타임 바이너리는 codegen 이 재빌드하지 않으므로,
+            // 코드젠 드리프트 후 cargo build 없이 데모가 contract.mismatch 로 죽을 수
+            // 있다. PASS 라도 텍스트로 이 한계를 명시한다(판정 로직은 불변).
+            'This verifies the schema probe only — the runtime binary is not rebuilt by ' +
+              'code generation; run cargo build after regeneration or invokes may fail ' +
+              'with contract.mismatch.',
           ),
     );
   } else if (schemaPath && existsSync(schemaPath))

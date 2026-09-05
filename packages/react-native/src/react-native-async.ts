@@ -1,9 +1,9 @@
 import type { BatchEntry, EngineClient as EngineClientType, InvokeOptions } from '@rustra/types';
 import {
+  CancelledError,
   invokeCallbackWithAbort,
   invokeWithTimeoutHandledSignal,
   parseRustraErrorString,
-  RustraCommandError,
 } from '@rustra/types';
 import {
   createFastEngine,
@@ -59,9 +59,7 @@ export function createAsyncEngine(
     invoke<T>(command: string, args?: unknown, invokeOptions?: InvokeOptions): Promise<T> {
       const signal = invokeOptions?.signal;
       if (signal?.aborted)
-        return Promise.reject(
-          new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
-        );
+        return Promise.reject(new CancelledError(`invoke("${command}") aborted before dispatch`));
       const staticId = hasByIdPath ? staticIds.get(command) : undefined;
       const dispatch = (
         resolve: (value: T) => void,

@@ -8,6 +8,7 @@ import type {
   RustraNative,
 } from '@rustra/types';
 import {
+  CancelledError,
   configureLazy,
   createRkyvV2Engine,
   decodeUtf8,
@@ -17,7 +18,6 @@ import {
   invokeWithTimeout,
   parseRustraErrorString,
   raceAbort,
-  RustraCommandError,
 } from '@rustra/types';
 
 export type ReactNativeEngine = EngineClientType & {
@@ -38,9 +38,7 @@ export function createReactNativeEngine(native: {
   const transport: EngineClientType = {
     invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
       if (options?.signal?.aborted) {
-        return Promise.reject(
-          new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
-        );
+        return Promise.reject(new CancelledError(`invoke("${command}") aborted before dispatch`));
       }
       try {
         const payload = exactArrayBuffer(encodeUtf8(JSON.stringify({ command, args })));

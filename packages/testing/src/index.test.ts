@@ -10,7 +10,7 @@ import {
   expectContractFieldsCurrent,
   assertContractHashCurrent,
 } from './index.js';
-import { RustraCommandError } from '@rustra/types';
+import { CancelledError, RustraCommandError } from '@rustra/types';
 
 test('mock engine invokes registered handler', async () => {
   const engine = createMockEngine();
@@ -75,12 +75,15 @@ test('mock engine records options and rejects pre-aborted signals', async () => 
   assert.equal(last?.options?.timeoutMs, 100);
   assert.equal(last?.options?.signal, ac.signal);
 
-  // pre-aborted — 전 어댑터 공통 정책(cancelled, retryable).
+  // pre-aborted — 전 어댑터 공통 CancelledError instanceof 계약 정합.
   ac.abort();
   await assert.rejects(
     () => engine.invoke('a', undefined, { signal: ac.signal }),
     (err: unknown) =>
-      err instanceof RustraCommandError && err.code === 'cancelled' && err.retryable === true,
+      err instanceof CancelledError &&
+      err instanceof RustraCommandError &&
+      err.code === 'cancelled' &&
+      err.retryable === true,
   );
   assert.equal(engine.calls().length, 1, 'pre-aborted calls must not reach the mock handler log');
 

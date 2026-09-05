@@ -124,9 +124,11 @@ JS/네이티브 조합의 drift를 런타임에 감지한다.
 
 ### Rust
 
+<!-- 발행 시 갱신: 0.7.0 라인 -->
+
 ```toml
 [dependencies]
-rustra = "0.4"
+rustra = "0.6"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -505,7 +507,8 @@ type RustraError = {
 
 | Rust                 | TypeScript                                    |
 | -------------------- | --------------------------------------------- |
-| `i64`, `u32`, `f64`  | `number`                                      |
+| `i64`                | `number \| bigint`                            |
+| `u32`, `f64`         | `number`                                      |
 | `String`             | `string`                                      |
 | `bool`               | `boolean`                                     |
 | `Vec<T>`             | `T[]`                                         |
@@ -523,8 +526,10 @@ type RustraError = {
 
 `tauri` feature를 활성화:
 
+<!-- 발행 시 갱신: 0.7.0 라인 -->
+
 ```toml
-rustra = { version = "0.4", features = ["tauri"] }
+rustra = { version = "0.6", features = ["tauri"] }
 ```
 
 Rust 측:
@@ -661,7 +666,8 @@ cargo test --workspace
 # (.so/.dylib/.dll) 산출물을 아티팩트로 업로드한다 (.github/workflows/ci.yml).
 
 # calculator 예시 빌드 및 TS 생성
-cargo run -p rustra-calculator-example --bin rustra-calculator-example
+cargo run -p rustra-calculator-example --bin generate   # 계약 프로브: schema.json
+bun run codegen                                          # TS 표면 렌더링
 
 # CRUD 예시 빌드 및 TS 생성
 cargo run -p rustra-crud-example --bin generate

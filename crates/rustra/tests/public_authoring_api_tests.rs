@@ -174,6 +174,206 @@ fn build_macro_also_applies_capability_attribute() {
     assert_eq!(out.value, 1004);
 }
 
+/// (감사 #5) capability 무음 드랍 차단 — `#[command(capability = "...")]` 함수를
+/// 일반 등록 경로(`.command_fn`/`.command`)로 등록하면 capability 가 조용히
+/// 버려진다. 계약: 그 등록은 **컴파일 에러**로 거부되고, register!/build! 경로는
+/// capability 를 require_capability 로 연결한다(위의
+/// command_capability_attribute_enforces_deny_by_default 테스트).
+///
+/// trybuild 가 없으므로 기존 관례(command_macro_rejects_wrong_signature)대로
+/// 중첩 temp crate cargo check 로 컴파일 실패를 증명한다.
+#[test]
+fn capability_command_cannot_be_silently_registered_without_capability() {
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let workspace_dir = std::path::Path::new(&manifest_dir)
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    let workspace_dir = workspace_dir.display().to_string().replace('\\', "/");
+    let tmp_dir = std::env::temp_dir().join(format!("rustra-cap-test-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+
+    // try_compile: 단일 temp crate 에 `source` 를 넣고 cargo check. 밀폐성(I2) —
+    // 네트워크 차단 환경에서 중첩 cargo 가 crates.io 해석 오류로 fail-open 하지
+    // 않도록 CARGO_NET_OFFLINE 을 강제한다.
+    let try_compile = |source: &str| -> (bool, String) {
+        std::fs::create_dir_all(tmp_dir.join("src")).unwrap();
+        std::fs::write(
+            tmp_dir.join("Cargo.toml"),
+            format!(
+                "[package]\nname = \"cap-test\"\nedition = \"2024\"\nversion = \"0.1.0\"\n\n\
+                [dependencies]\nrustra = {{ path = \"{}/crates/rustra\" }}\n\
+                serde = {{ version = \"1\", features = [\"derive\"] }}\n\
+                schemars = {{ version = \"0.8\", features = [\"derive\"] }}\n",
+                workspace_dir
+            ),
+        )
+        .unwrap();
+        std::fs::write(tmp_dir.join("src").join("lib.rs"), source).unwrap();
+
+        let output = Command::new("cargo")
+            .args(["check"])
+            .env("CARGO_NET_OFFLINE", "true")
+            .current_dir(&tmp_dir)
+            .output()
+            .unwrap();
+
+        let stderr = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        (output.status.success(), stderr)
+    };
+
+    // try_compile_cross_crate: lib 크레이트(`lib_source`) + 의존하는 user
+    // 크레이트(`user_source`)의 2-크레이트 임시 워크스페이스. 매크로 생성
+    // 심벌의 프라이버시는 모듈 경계가 아니라 크레이트 경계에서만 검증되므로
+    // (자식 모듈은 부모의 private 도 이름解할 수 있다) 우회 차단 계약은 이
+    // 레이아웃으로 증명한다.
+    let try_compile_cross_crate = |lib_source: &str, user_source: &str| -> (bool, String) {
+        for d in ["lib", "lib/src", "user", "user/src"] {
+            std::fs::create_dir_all(tmp_dir.join(d)).unwrap();
+        }
+        let manifest = format!(
+            "[package]\nname = \"cap-lib\"\nedition = \"2024\"\nversion = \"0.1.0\"\n\n\
+             [dependencies]\nrustra = {{ path = \"{}/crates/rustra\" }}\n\
+             serde = {{ version = \"1\", features = [\"derive\"] }}\n\
+             schemars = {{ version = \"0.8\", features = [\"derive\"] }}\n",
+            workspace_dir
+        );
+        std::fs::write(tmp_dir.join("lib").join("Cargo.toml"), manifest).unwrap();
+        std::fs::write(tmp_dir.join("lib").join("src").join("lib.rs"), lib_source).unwrap();
+        std::fs::write(
+            tmp_dir.join("user").join("Cargo.toml"),
+            format!(
+                "[package]\nname = \"cap-user\"\nedition = \"2024\"\nversion = \"0.1.0\"\n\n\
+                 [dependencies]\ncap-lib = {{ path = \"../lib\" }}\n\
+                 rustra = {{ path = \"{}/crates/rustra\" }}\n",
+                workspace_dir
+            ),
+        )
+        .unwrap();
+        std::fs::write(tmp_dir.join("user").join("src").join("lib.rs"), user_source).unwrap();
+        std::fs::write(
+            tmp_dir.join("Cargo.toml"),
+            "[workspace]\nmembers = [\"lib\", \"user\"]\nresolver = \"2\"\n",
+        )
+        .unwrap();
+
+        let output = Command::new("cargo")
+            .args(["check", "--offline"])
+            .env("CARGO_NET_OFFLINE", "true")
+            .current_dir(tmp_dir.join("user"))
+            .output()
+            .unwrap();
+
+        let stderr = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        (output.status.success(), stderr)
+    };
+
+    let shared = "\
+        use rustra::prelude::*;\n\
+        #[derive(Serialize, Deserialize, JsonSchema)]\n\
+        pub struct In { pub x: i64 }\n\
+        #[derive(Serialize, Deserialize, JsonSchema)]\n\
+        pub struct Out { pub y: i64 }\n\
+        #[command(capability = \"test:secure\")]\n\
+        pub fn locked(input: In) -> Result<Out> { Ok(Out { y: input.x }) }\n\
+        #[command(capability = \"test:secure2\")]\n\
+        pub fn locked2(input: In) -> Result<Out> { Ok(Out { y: input.x }) }\n";
+
+    // GREEN 경로 — register! 는 capability 를 연결하므로 컴파일된다.
+    let (ok, stderr) = try_compile(&format!(
+        "{shared}\n\
+         pub fn pkg() -> Package {{ register!(Package::builder(\"cap.ok\"), locked).build() }}\n"
+    ));
+    assert!(
+        ok,
+        "register! must keep wiring the capability; got:\n{stderr}"
+    );
+
+    // 계약 — 일반 등록 경로는 컴파일 에러로 거부되고, 에러가 capability 를 이름한다.
+    let (ok, stderr) = try_compile(&format!(
+        "{shared}\n\
+         #[allow(dead_code)]\n\
+         fn silent_drop_a() {{\n\
+         \x20   let _ = Package::builder(\"cap.bad\").command_fn(locked);\n\
+         }}\n\
+         #[allow(dead_code)]\n\
+         fn silent_drop_b() {{\n\
+         \x20   let _ = Package::builder(\"cap.bad\").command(\"locked2\", locked2);\n\
+         }}\n"
+    ));
+    assert!(
+        !ok,
+        "capability fn must NOT compile through plain registration \
+         (capability silently dropped); got:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("capability"),
+        "compile error must name the capability contract; got:\n{stderr}"
+    );
+
+    // 우회 차단(감사 #5 후속) — 매크로가 생성하는 inner 클론과 등록 어댑터는
+    // 비공개여야 한다. 공개라면 안전 `fn`/`__rustra_register_{fn}` 을 그대로
+    // `.command_fn` 에 넘겨 capability 없이 등록하는 우회 경로가 된다.
+    // 프라이버시는 크레이트 경계에서만 강제되므로(자식 모듈은 부모의 private 도
+    // 이름 解 가능) 2-크레이트 임시 워크스페이스로 증명한다 — 참조는 E0603.
+    let (ok, stderr) = try_compile_cross_crate(
+        &format!(
+            "{shared}\n\
+             pub fn pkg_ok() -> Package {{ register!(Package::builder(\"cap.ok\"), locked).build() }}\n"
+        ),
+        "\
+         #[allow(dead_code)]\n\
+         fn bypass_inner() {\n\
+         \x20   let _ = rustra::Package::builder(\"x\").command_fn(cap_lib::__rustra_inner_locked);\n\
+         }\n\
+         #[allow(dead_code)]\n\
+         fn bypass_adapter() {\n\
+         \x20   let _ = rustra::Package::builder(\"x\").command_fn(cap_lib::__rustra_register_locked);\n\
+         }\n",
+    );
+    assert!(
+        !ok,
+        "inner clone and register adapter must be private (no bypass via \
+         __rustra_inner_* / __rustra_register_*); got:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("private"),
+        "bypass rejection must be a privacy error (E0603); got:\n{stderr}"
+    );
+
+    // 잔여 허용 경로가 여전히 유효한지 — cap-lib 의 문서화된 표면(register!로
+    // 만든 패키지)은 크로스 크레이트에서 그대로 동작한다.
+    let (ok, stderr) = try_compile_cross_crate(
+        &format!(
+            "{shared}\n\
+             pub fn pkg_ok() -> Package {{ register!(Package::builder(\"cap.ok\"), locked).build() }}\n"
+        ),
+        "pub fn use_pkg() -> rustra::Package { cap_lib::pkg_ok() }\n\
+         pub fn invoke_ok() -> i64 {\n\
+         \x20   let pkg = use_pkg();\n\
+         \x20   pkg.grant_capability(\"test:secure\").unwrap();\n\
+         \x20   pkg.invoke::<cap_lib::In, cap_lib::Out>(\"locked\", cap_lib::In { x: 9 }).unwrap().y\n\
+         }\n",
+    );
+    // user 크레이트는 rustra 를 직접 의존해야 한다(타입 언급).
+    assert!(
+        ok,
+        "documented cross-crate surface (register!-built package) must keep \
+         compiling; got:\n{stderr}"
+    );
+
+    let _ = std::fs::remove_dir_all(&tmp_dir);
+}
+
 #[test]
 fn package_generates_host_neutral_typescript_client() {
     let package = Package::builder("example.calculator")
@@ -434,6 +634,9 @@ fn command_macro_rejects_wrong_signature() {
 
         let output = Command::new("cargo")
             .args(["check"])
+            // 밀폐성 — 오프라인 환경에서 crates.io 해석 오류가 컴파일 실패로
+            // 오독되지 않도록 오프라인을 강제한다.
+            .env("CARGO_NET_OFFLINE", "true")
             .current_dir(&tmp_dir)
             .output()
             .unwrap();
