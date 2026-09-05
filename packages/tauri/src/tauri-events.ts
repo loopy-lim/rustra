@@ -48,11 +48,19 @@ export function rustraEventChannel(name: string): string {
  * 항상 도달하고, `RUSTRA_DEBUG` 가 없으면 콘솔 출력은 없다.
  */
 function reportListenerError(name: string, error: unknown): void {
-  debugRustra({
-    kind: 'tauri.listener_error',
-    command: name,
-    error: String(error),
-  } as unknown as RustraDebugEvent);
+  // debugRustra 는 이벤트 백을 pass-through(spread) 하므로 계약 밖 필드도 싱크에
+  // 도달한다 — kind/command/error 를 읽기 편한 진단 어휘로 그대로 실어 보낸다.
+  try {
+    debugRustra({
+      kind: 'tauri.listener_error',
+      command: name,
+      // 스택 보존 — Error 면 stack 이 우선, 그 외 throwable 은 String 이 안전하다.
+      error: error instanceof Error ? (error.stack ?? String(error)) : String(error),
+    } as unknown as RustraDebugEvent);
+  } catch {
+    // 진단 자체의 실패는 전달 경로로 탈출하지 않는다(json-engine 의 "감지 자체는
+    // 절대 invoke 를 실패로 만들지 않는다"와 동일 계약).
+  }
 }
 
 /** 콜백 호출의 유일한 경로(R01) — 모든 콜백 호출(파싱 성공/폴백 raw-string

@@ -264,7 +264,35 @@ test('subscribeEvent keeps a throwing callback inside the listener boundary (cal
     const listenerErrors = events.filter((event) => event.kind === 'tauri.listener_error');
     assert.equal(listenerErrors.length, 1, 'exactly one listener_error diagnostic');
     assert.equal(listenerErrors[0]!.command, 'tick');
-    assert.equal(listenerErrors[0]!.error, String(boom));
+    // 스택 보존 — Error 면 stack 이 우선이고 메시지가 항상 들어 있다.
+    assert.ok(listenerErrors[0]!.error!.includes('callback exploded'));
+  } finally {
+    configureDebug(undefined);
+  }
+});
+
+test('subscribeEvent absorbs diagnostics failures — a throwing sink never escapes', async () => {
+  // 진단 싱크 자체가 throw 해도 전달 경로로 탈출하지 않는다(json-engine 의
+  // "감지 자체는 절대 invoke 를 실패로 만들지 않는다" 계약과 동일 톤).
+  const { subscribeEvent } = await import('./index.js');
+  const { listen, fire } = mockListen();
+  configureDebug(() => {
+    throw new Error('sink exploded');
+  });
+  try {
+    let calls = 0;
+    await subscribeEvent<{ value: number }>(
+      'tick',
+      () => {
+        calls += 1;
+        throw new Error('callback exploded');
+      },
+      listen,
+    );
+
+    fire('{"value":42}');
+    assert.equal(calls, 1, 'callback still invoked exactly once');
+    // sink 예외가 여기까지 전파되면 이 테스트는 실패한다 — 경계 흡수 계약.
   } finally {
     configureDebug(undefined);
   }
