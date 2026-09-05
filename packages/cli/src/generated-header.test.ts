@@ -97,6 +97,25 @@ describe('header syntax per file type — CI01 root cause', () => {
 
   test('확장자 없는/미지 파일은 // 기본값을 유지한다 — 기존 호출부 호환', () => {
     expect(generatedFileHeader('types.ts', 'x').startsWith('// ── rustra generated')).toBe(true);
+    expect(generatedFileHeader('Dockerfile', 't', 'FROM node\n').startsWith('// ── rustra')).toBe(
+      true,
+    );
+  });
+
+  test('중첩 경로는 basename으로 문법을 판정한다', () => {
+    expect(
+      generatedFileHeader('android/src/main/AndroidManifest.xml', 't', '<manifest>\n').startsWith(
+        '<!--',
+      ),
+    ).toBe(true);
+    expect(
+      generatedFileHeader('android/keystore.properties', 't', 'key=x\n').startsWith('# ── rustra'),
+    ).toBe(true);
+  });
+
+  test('확장자 대소문자 무관하게 JSON을 판정한다 — config.JSON 도 무헤더', () => {
+    expect(generatedFileHeader('config.JSON', 't', '{"k": 1}\n')).toBe('{"k": 1}\n');
+    expect(generatedFileHeader('assets/Data.XML', 't', '<x/>\n').startsWith('<!--')).toBe(true);
   });
 
   test('헤더 파싱 헬퍼 headerFor가 스트립을 대칭 달성한다', () => {

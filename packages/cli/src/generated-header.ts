@@ -55,11 +55,11 @@ type HeaderSyntax = 'slash' | 'hash' | 'xml' | 'none';
 
 /** 파일 이름으로 헤더 문법을 판정한다. 기본값 slash — 기존 TS/C++/Kotlin 산출물 호환. */
 function syntaxFor(fileName: string): HeaderSyntax {
-  const base = fileName.split('/').pop() ?? fileName;
+  const base = (fileName.split('/').pop() ?? fileName).toLowerCase();
   if (base.endsWith('.json')) return 'none';
   if (/\.(xml|html|htm)$/.test(base)) return 'xml';
   if (
-    base === 'CMakeLists.txt' ||
+    base === 'cmakelists.txt' ||
     /\.cmake$/.test(base) ||
     /\.(sh|podspec|rb|py|ya?ml|properties|toml|gitignore|env)$/.test(base)
   )
