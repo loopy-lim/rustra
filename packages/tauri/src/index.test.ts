@@ -317,6 +317,38 @@ test('subscribeEvent protects sibling listeners from a throwing listener', async
   }
 });
 
+test('subscribeEvent keeps the raw-string fallback inside the callback boundary too', async () => {
+  // 폴백 전달(원본 문자열)도 콜백 호출 경로다 — 여기서 throw 하면 파서 catch 에서
+  // 탈출해 무음 이스케이프(형제 중단 + 진단 0건)가 됐다. R01 계약: 모든 콜백
+  // 호출 경로가 경계 안에 있다.
+  const { subscribeEvent } = await import('./index.js');
+  const { listen, fire } = mockListen();
+  const events: RustraDebugEvent[] = [];
+  configureDebug((event) => events.push(event));
+  try {
+    let calls = 0;
+    await subscribeEvent<string>(
+      'tick',
+      () => {
+        calls += 1;
+        throw new Error('fallback listener exploded');
+      },
+      listen,
+    );
+    const seen: unknown[] = [];
+    await subscribeEvent<string>('tick', (payload) => seen.push(payload), listen);
+
+    fire('not-json');
+    assert.equal(calls, 1, 'fallback delivery must also be invoked exactly once');
+    assert.deepEqual(seen, ['not-json'], 'sibling listener still receives the raw string');
+    const listenerErrors = events.filter((event) => event.kind === 'tauri.listener_error');
+    assert.equal(listenerErrors.length, 1, 'the silent escape now produces one diagnostic');
+    assert.equal(listenerErrors[0]!.command, 'tick');
+  } finally {
+    configureDebug(undefined);
+  }
+});
+
 test('subscribeTauriEvent discovers the global listen API', async () => {
   const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
   const previous = root.__TAURI__;

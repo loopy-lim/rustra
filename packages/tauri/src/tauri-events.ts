@@ -55,6 +55,16 @@ function reportListenerError(name: string, error: unknown): void {
   } as unknown as RustraDebugEvent);
 }
 
+/** 콜백 호출의 유일한 경로(R01) — 모든 콜백 호출(파싱 성공/폴백 raw-string
+ * 모두)이 이 경계를 지난다. 예외는 관측 후 삼켜 형제 리스너를 보호한다. */
+function invokeListener<T>(name: string, callback: (payload: T) => void, payload: T): void {
+  try {
+    callback(payload);
+  } catch (error) {
+    reportListenerError(name, error);
+  }
+}
+
 /**
  * rustra 이벤트를 구독한다 — 모든 어댑터와 같은 `(name, callback[, listen])`
  * 형태다. Rust `Package::emit`의 JSON 페이로드는 여기서 한 번 파싱한다.
@@ -84,16 +94,13 @@ export async function subscribeEvent<T = unknown>(
       payload = JSON.parse(event.payload) as T;
     } catch {
       // 파싱 실패 시 원본 문자열이라도 전달한다(조용한 드롭 방지) — 콜백
-      // 재호출이 아니라 유일한 단일 전달이다.
-      callback(event.payload as unknown as T);
+      // 재호출이 아니라 유일한 단일 전달이다. 전달도 invokeListener 경계를
+      // 지난다(R01 보강 — 폴백 경로의 무음 이스케이프 제거).
+      invokeListener(name, callback, event.payload as unknown as T);
       return;
     }
     // 경계 2 — 사용자 콜백. 예외는 관측 후 삼켜 형제 리스너를 보호한다.
-    try {
-      callback(payload);
-    } catch (error) {
-      reportListenerError(name, error);
-    }
+    invokeListener(name, callback, payload);
   });
   return unlisten;
 }
