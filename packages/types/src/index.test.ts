@@ -4508,3 +4508,227 @@ test('global invokeBatch mixed-signal entries keep the per-entry fallback (regre
     configure(sentinel);
   }
 });
+
+// ── R05: dispatch 중 동기 abort 관측 — listener 등록 직후 재검사 ──
+// cancel.ts / cancel-by-id.ts 의 abort 레이스는 dispatch 가 끝난 뒤에 리스너를
+// 등록한다. transport 의 invoke 가 동기 구간 안에서 controller.abort() 를 부르고
+// 정상 resolve 하면, abort 이벤트는 리스너 등록 전에 이미 지나갔고
+// addEventListener 는 이미 중단된 signal 에서 이벤트를 재발화하지 않는다 —
+// 취소가 소실되고 resolve 가 이긴다. 등록 직후 signal.aborted 재검사 + 선정착
+// (early-settle) 레이스가 이 갭을 닫는다. 지연 transport + 호출 카운터로
+// 제어한다(실제 sleep 없음).
+
+/** R05 테스트용 — dispatch 를 카운트하고 즉시 resolve 하는 transport. */
+function resolvingCancelTransport(calls: { dispatches: number }): {
+  invoke<T>(command: string, args?: unknown): Promise<T>;
+} {
+  return {
+    invoke<T>(command: string, _args?: unknown): Promise<T> {
+      calls.dispatches++;
+      return Promise.resolve(`ok:${command}` as unknown as T);
+    },
+  };
+}
+
+test('R05 invokeWithTimeout: dispatch 중 동기 abort 는 취소로 정착한다', async () => {
+  // 핵심 신규 사례: invoke 내부에서 abort → 정상 resolve. 리스너 등록이 dispatch
+  // 뒤에 있으므로 이벤트는 이미 발화됐다 — 재검사 없으면 resolve 가 이긴다.
+  const calls = { dispatches: 0 };
+  const ac = new AbortController();
+  const transport = resolvingCancelTransport(calls);
+  const engine: EngineClient = {
+    invoke<T>(command: string, args?: unknown): Promise<T> {
+      const dispatching = transport.invoke<T>(command, args);
+      ac.abort(); // dispatch 동기 구간 안에서 abort
+      return dispatching;
+    },
+  };
+  await assert.rejects(
+    invokeWithTimeout(engine, 'sync-abort', undefined, { signal: ac.signal }),
+    (err: unknown) => err instanceof CancelledError && err.code === 'cancelled',
+    'sync abort inside dispatch must be observed and reject with cancelled',
+  );
+  assert.equal(calls.dispatches, 1, 'dispatch must have happened exactly once');
+});
+
+test('R05 invokeByIdWithTimeout: dispatch 중 동기 abort 는 취소로 정착한다', async () => {
+  const calls = { dispatches: 0 };
+  const ac = new AbortController();
+  const transport = resolvingCancelTransport(calls);
+  const engine: EngineClient = {
+    invokeById<T>(commandId: number, command: string, args?: unknown): Promise<T> {
+      void commandId;
+      const dispatching = transport.invoke<T>(command, args);
+      ac.abort(); // dispatch 동기 구간 안에서 abort
+      return dispatching;
+    },
+  } as unknown as EngineClient;
+  await assert.rejects(
+    invokeByIdWithTimeout(engine, 7, 'sync-abort', undefined, { signal: ac.signal }),
+    (err: unknown) => err instanceof CancelledError && err.code === 'cancelled',
+    'sync abort inside dispatch must be observed and reject with cancelled',
+  );
+  assert.equal(calls.dispatches, 1, 'dispatch must have happened exactly once');
+});
+
+test('R05 회귀 가드: pre-abort 는 0 dispatch 로 즉시 거부한다', async () => {
+  // 기존 fast path — 재검사 추가가 이 경로를 흔들면 안 된다.
+  let dispatches = 0;
+  const ac = new AbortController();
+  ac.abort();
+  const engine: EngineClient = {
+    invoke<T>(): Promise<T> {
+      dispatches++;
+      return new Promise<T>(() => {});
+    },
+  };
+  await assert.rejects(
+    invokeWithTimeout(engine, 'pre-abort', undefined, { signal: ac.signal }),
+    (err: unknown) => err instanceof CancelledError && /aborted before dispatch/.test(err.message),
+    'pre-abort must reject with the before-dispatch message',
+  );
+  assert.equal(dispatches, 0, 'pre-abort must never dispatch');
+});
+
+test('R05 회귀 가드: in-flight 비동기 abort 는 기존대로 취소한다', async () => {
+  // dispatch 이후 promise settle 전에 abort — 기존 이벤트 경로.
+  let resolveDispatch!: (v: string) => void;
+  let dispatches = 0;
+  const ac = new AbortController();
+  const engine: EngineClient = {
+    invoke<T>(): Promise<T> {
+      dispatches++;
+      return new Promise<T>((resolve) => {
+        resolveDispatch = resolve as (v: string) => void;
+      });
+    },
+  };
+  const pending = invokeWithTimeout(engine, 'in-flight', undefined, { signal: ac.signal });
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
+  ac.abort();
+  await assert.rejects(
+    pending,
+    (err: unknown) => err instanceof CancelledError && err.code === 'cancelled',
+    'async mid-flight abort must still reject with cancelled',
+  );
+  assert.equal(dispatches, 1);
+  resolveDispatch('late'); // 지각 응답 — 흡수되어야 함
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
+});
+
+test('R05 회귀 가드: 정상 완료 후 abort 는 결과를 바꾸지 않는다', async () => {
+  const calls = { dispatches: 0 };
+  const ac = new AbortController();
+  const engine: EngineClient = {
+    invoke<T>(command: string, args?: unknown): Promise<T> {
+      return resolvingCancelTransport(calls).invoke<T>(command, args);
+    },
+  };
+  const settled = await invokeWithTimeout<string>(engine, 'done', undefined, {
+    signal: ac.signal,
+  });
+  ac.abort(); // 완료 뒤 abort — 리스너는 이미 제거됐다
+  assert.equal(settled, 'ok:done', 'abort after completion must not alter the result');
+  assert.equal(calls.dispatches, 1);
+});
+
+test('R05 정착 일변성: 동기 abort 재검사는 resolve 와의 경쟁에서 정확히 한 번 이긴다', async () => {
+  // 재진입: dispatch 가 이중 abort 를 부르고 정상 resolve 까지 반환한다.
+  // settle-once 의 관측 증거 — cancel 이 정착한 뒤 resolve 리스너가 절대
+  // 실행되지 않는다. 이미 fulfill 된 promise 가 races[0] 로 먼저 연결되면
+  // Promise.race 는 동시 정착에서 그쪽을 이기게 하므로, 재검사가 이 테스트를
+  // 이기려면 race 참여가 아니라 선정착 반환이어야 한다는 것이 이 표의 뜻이다.
+  const calls = { dispatches: 0 };
+  const ac = new AbortController();
+  const engine: EngineClient = {
+    invoke<T>(command: string): Promise<T> {
+      calls.dispatches++;
+      const dispatching = Promise.resolve(`ok:${command}` as unknown as T);
+      ac.abort();
+      ac.abort(); // 이중 abort — 두 번째는 no-op
+      return dispatching;
+    },
+  };
+  let resolved = 0;
+  const pending = invokeWithTimeout(engine, 'double-abort', undefined, { signal: ac.signal });
+  const watched = pending.then(
+    () => {
+      resolved++;
+      return 'resolved';
+    },
+    (err: unknown) => {
+      assert.ok(err instanceof CancelledError, 'settlement must be the cancel rejection');
+      return 'cancelled';
+    },
+  );
+  assert.equal(await watched, 'cancelled');
+  assert.equal(resolved, 0, 'resolve callback must never run once cancel has settled');
+  assert.equal(calls.dispatches, 1);
+});
+
+test('R05 정리 경로: 정착 후 abort 리스너가 정확히 한 번 제거된다', async () => {
+  // 기존 cleanup path 보존 — in-flight abort 로 정착한 뒤 finally 정리가
+  // 리스너를 제거해야 한다. removeEventListener 스파이로 직접 증명한다.
+  // (동기 abort 재검사 경로는 애초에 리스너를 등록하지 않으므로 이 표의
+  // 대상이 아니다 — 선정착 반환이 정리를 필요로 하지 않는다.)
+  const ac = new AbortController();
+  let removals = 0;
+  const origRemove = ac.signal.removeEventListener.bind(ac.signal);
+  ac.signal.removeEventListener = (...args: Parameters<typeof origRemove>) => {
+    if (args[0] === 'abort') removals++;
+    return origRemove(...args);
+  };
+  const engine: EngineClient = {
+    invoke<T>(): Promise<T> {
+      return new Promise<T>(() => {});
+    },
+  };
+  const pending = invokeWithTimeout(engine, 'cleanup', undefined, { signal: ac.signal });
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
+  ac.abort();
+  await assert.rejects(pending, (err: unknown) => err instanceof CancelledError);
+  // finally 정리가 돌 때까지 마이크로태스크 대기.
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
+  assert.equal(removals, 1, 'abort listener must be removed exactly once after settlement');
+});
+
+test('R05 배치 폴백: 와이어 배치 항목의 동기 abort 도 취소로 정착한다', async () => {
+  // 배치 폴백은 항목별 invokeWithTimeout 을 태운다(cancel.ts) — 케이스 2가
+  // 폴백을 통해서도 관측되는지 암묵적 핀. signal 항목이 단일 횡단을 깨는 것은
+  // 기존 R04 회귀 표가 담당한다.
+  const ac = new AbortController();
+  let dispatches = 0;
+  const engine = createJsonEngine({
+    invoke<T>(command: string): Promise<T> {
+      dispatches++;
+      if (command === 'boom') ac.abort(); // dispatch 동기 구간 안에서 abort
+      return Promise.resolve(`ok:${command}` as unknown as T);
+    },
+  });
+  await assert.rejects(
+    engine.invokeBatch([{ command: 'calm' }, { command: 'boom', options: { signal: ac.signal } }]),
+    (err: unknown) => err instanceof CancelledError && err.code === 'cancelled',
+    'batch fallback: sync abort inside dispatch must reject the whole batch with cancelled',
+  );
+  assert.equal(dispatches, 2, 'both entries must have dispatched (Promise.all semantics)');
+});
+
+test('R05 흡수 보장: 선정착 반환이 나중에 reject 하는 dispatch promise 를 흡수한다', async () => {
+  // 재검사 reject 로 선정착 반환할 때 dispatch promise 의 reject 흡수자가 이미
+  // 붙어 있어야 한다 — transport 가 abort 중 reject 하면 지각 rejection 이
+  // unhandled rejection 이 되어 프로세스가 죽는다(레이스 경로와 동일 보장).
+  const ac = new AbortController();
+  const engine: EngineClient = {
+    invoke<T>(command: string): Promise<T> {
+      ac.abort(); // dispatch 동기 구간 안에서 abort
+      return Promise.reject(new Error(`late rejection from ${command}`));
+    },
+  };
+  await assert.rejects(
+    invokeWithTimeout(engine, 'late-reject', undefined, { signal: ac.signal }),
+    (err: unknown) => err instanceof CancelledError && err.code === 'cancelled',
+    'early settle must win over the late dispatch rejection',
+  );
+  // 지각 rejection 이 여기서 터지면 테스트 프로세스가 죽는다 — 흡수 증명.
+  await new Promise((resolve) => setTimeout(resolve, 20));
+});
