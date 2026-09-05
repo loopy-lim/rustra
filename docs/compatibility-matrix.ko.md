@@ -5,16 +5,16 @@
 
 ## 매트릭스
 
-| 기능                                    | Node (`createNodeEngine`)                                                                                     | Bun (`createBunEngine`)                               | Tauri (`createTauriEngine`)               | RN (`createReactNativeEngine`)          | RN (`createRkyvV2Engine`)                                                                     |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `options.signal` (사전 abort)           | ✅ 즉시 `cancelled`                                                                                           | ✅ 즉시 `cancelled`                                   | ✅ 즉시 `cancelled`                       | ✅ 즉시 `cancelled`                     | ✅ 즉시 `cancelled`                                                                           |
-| `options.signal` (진행 중 취소)         | ⚠️ 얕은 취소 (미abort signal 은 정상 실행, 실행 중 abort 는 결과 무시)                                        | ⚠️ 얕은 취소 (동일)                                   | ⚠️ 얕은 취소 (동일)                       | ⚠️ 얕은 취소 (JS 프라미스만 거부)       | ⚠️ 조건부 전파 — JS 코덱 + `invokeAsync`/`invokeCancel` 확인 시만 Rust 체크포인트까지         |
-| `invokeBatch`                           | ✅ per-entry Promise fallback                                                                                 | ✅ per-entry Promise fallback                         | ✅ per-entry Promise fallback             | ✅ per-entry Promise fallback           | ✅ 정적 명령 단일 횡단 (`invokeTypedBatch[ById]`), signal 항목 포함 시 항목별 라우팅          |
-| 배치 항목별 취소                        | ✅ 각 `invoke`의 얕은 취소                                                                                    | ✅ 동일                                               | ✅ 동일                                   | ✅ 동일                                 | ⚠️ 단일 횡단 배치는 취소 미지원 — signal 항목이 있으면 자동으로 항목별 `invoke` 경로로 라우팅 |
-| `options.timeoutMs`                     | ✅ 직접/글로벌 `invoke` 레이스 — `transport.timeout`(retryable)                                               | ✅ 동일                                               | ✅ 동일                                   | ⚠️ 동기 native 호출은 호출 중 선점 불가 | ✅ 동일 (글로벌 배치는 항목 최솟값으로 전체 레이스)                                           |
-| 이벤트 (`subscribeEvent`/`onEvent`)     | ✅ `subscribeEvent(transport, name, cb)` — 0xfffd 푸시 프레임 (폴백 폴링; 이벤트 불능 transport 는 loud-fail) | ✅ `createBunEventBridge` — FFI 푸시 싱크 (폴백 폴링) | ✅ `subscribeEvent`/`subscribeTauriEvent` | ❌ JSON adapter                         | ✅ `subscribeEvent`/`drainEvents` (CallInvoker 자동 drain)                                    |
-| 채널 (`createChannel`)                  | ❌ transport 채널 소스 없음                                                                                   | ❌ transport 채널 소스 없음                           | ❌ Tauri 채널 어댑터 없음                 | ✅ JSI handle + `close()`               | ✅ JSI native channel handle                                                                  |
-| rkyv V2 바이너리 (`createRkyvV2Engine`) | ✅ (napi/FFI 네이티브 필요)                                                                                   | ✅ (FFI 네이티브 필요)                                | ✅ (`rustra_dispatch` 바이너리 경로)      | —                                       | ✅ JSI                                                                                        |
+| 기능                                    | Node (`createNodeEngine`)                                                                                     | Bun (`createBunEngine`)                               | Tauri (`createTauriEngine`)                                                       | RN (`createReactNativeEngine`)          | RN (`createRkyvV2Engine`)                                                                     |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `options.signal` (사전 abort)           | ✅ 즉시 `cancelled`                                                                                           | ✅ 즉시 `cancelled`                                   | ✅ 즉시 `cancelled`                                                               | ✅ 즉시 `cancelled`                     | ✅ 즉시 `cancelled`                                                                           |
+| `options.signal` (진행 중 취소)         | ⚠️ 얕은 취소 (미abort signal 은 정상 실행, 실행 중 abort 는 결과 무시)                                        | ⚠️ 얕은 취소 (동일)                                   | ⚠️ 얕은 취소 (동일)                                                               | ⚠️ 얕은 취소 (JS 프라미스만 거부)       | ⚠️ 조건부 전파 — JS 코덱 + `invokeAsync`/`invokeCancel` 확인 시만 Rust 체크포인트까지         |
+| `invokeBatch`                           | ✅ per-entry Promise fallback                                                                                 | ✅ per-entry Promise fallback                         | ✅ per-entry Promise fallback                                                     | ✅ per-entry Promise fallback           | ✅ 정적 명령 단일 횡단 (`invokeTypedBatch[ById]`), signal 항목 포함 시 항목별 라우팅          |
+| 배치 항목별 취소                        | ✅ 각 `invoke`의 얕은 취소                                                                                    | ✅ 동일                                               | ✅ 동일                                                                           | ✅ 동일                                 | ⚠️ 단일 횡단 배치는 취소 미지원 — signal 항목이 있으면 자동으로 항목별 `invoke` 경로로 라우팅 |
+| `options.timeoutMs`                     | ✅ 직접/글로벌 `invoke` 레이스 — `transport.timeout`(retryable)                                               | ✅ 동일                                               | ✅ 동일                                                                           | ⚠️ 동기 native 호출은 호출 중 선점 불가 | ✅ 동일 (글로벌 배치는 항목 최솟값으로 전체 레이스)                                           |
+| 이벤트 (`subscribeEvent`/`onEvent`)     | ✅ `subscribeEvent(transport, name, cb)` — 0xfffd 푸시 프레임 (폴백 폴링; 이벤트 불능 transport 는 loud-fail) | ✅ `createBunEventBridge` — FFI 푸시 싱크 (폴백 폴링) | ✅ `subscribeEvent`/`subscribeTauriEvent` — decoded 우선 payload 계약 (아래 참조) | ❌ JSON adapter                         | ✅ `subscribeEvent`/`drainEvents` (CallInvoker 자동 drain)                                    |
+| 채널 (`createChannel`)                  | ❌ transport 채널 소스 없음                                                                                   | ❌ transport 채널 소스 없음                           | ❌ Tauri 채널 어댑터 없음                                                         | ✅ JSI handle + `close()`               | ✅ JSI native channel handle                                                                  |
+| rkyv V2 바이너리 (`createRkyvV2Engine`) | ✅ (napi/FFI 네이티브 필요)                                                                                   | ✅ (FFI 네이티브 필요)                                | ✅ (`rustra_dispatch` 바이너리 경로)                                              | —                                       | ✅ JSI                                                                                        |
 
 ## 시그널 시맨틱 상세
 
@@ -43,6 +43,16 @@
   버린다(싱크가 버스를 우회) — 구독 전 emit 이 중요하면 구독을 먼저 하거나 폴링을
   쓴다. Rust `set_event_sink` 설치 시 버스가 비므로(푸시+폴링 이중 수신 방지
   계약) 푸시/폴링을 혼용하지 않는다.
+- **Tauri payload 계약 (decoded 우선, 문자열만 1회 parse)**: 실제 WebView 경계에서
+  tauri 는 `emit_str` JSON 을 `payload: {…}` 로 페이지에 인라인 splice 하므로 JS
+  listener 는 이미 해석된 값을 받는다 — `subscribeEvent` 는 문자열이 아닌 payload 는
+  그대로 전달한다(재파싱 없음, 객체 신원 보존). `typeof payload === 'string'` 일 때만
+  정확히 한 번 `JSON.parse` 를 시도한다. 결과가 객체·배열·문자열이면 그 결과를
+  전달하고(escape 된 JSON 문자열은 딱 한 번 풀림), 원시값(`'123'`, `'true'`)이면
+  원본 문자열을 유지한다 — 문자열 payload 가 몰래 타입이 바뀌지 않는다. parse 실패 시
+  원본 문자열을 전달한다. 내용 기반 추론은 없다: JSON 처럼 생긴 문자열도 문자열로
+  남는다. 레거시 주입 transport(직렬화된 문자열을 주는 `__TAURI__` fake)도 같은
+  규칙으로 커버되며 별도 모드는 없다.
 
 ## invokeBatch 시맨틱
 
