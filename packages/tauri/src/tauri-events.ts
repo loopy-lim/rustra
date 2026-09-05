@@ -1,4 +1,9 @@
-import { RustraCommandError, RustraErrorCode } from '@rustra/types';
+import {
+  debugRustra,
+  RustraCommandError,
+  RustraErrorCode,
+  type RustraDebugEvent,
+} from '@rustra/types';
 import type { TauriListen } from './index.js';
 
 type TauriGlobal = {
@@ -36,8 +41,29 @@ export function rustraEventChannel(name: string): string {
 }
 
 /**
+ * 리스너 콜백 예외의 관측 지점(R01) — 예외는 재던지지 않고 삼킨다. Tauri 이벤트
+ * 기계로 예외가 탈출하면 콜백 재호출/형제 리스너 중단이 관찰됐으므로, 브라우저
+ * EventTarget 표준과 같은 정책(각 리스너 독립, 예외는 보고 후 계속)을 적용한다.
+ * 진단은 `@rustra/types` 의 debug 스위치로 관측한다 — `configureDebug` 싱크에는
+ * 항상 도달하고, `RUSTRA_DEBUG` 가 없으면 콘솔 출력은 없다.
+ */
+function reportListenerError(name: string, error: unknown): void {
+  debugRustra({
+    kind: 'tauri.listener_error',
+    command: name,
+    error: String(error),
+  } as unknown as RustraDebugEvent);
+}
+
+/**
  * rustra 이벤트를 구독한다 — 모든 어댑터와 같은 `(name, callback[, listen])`
  * 형태다. Rust `Package::emit`의 JSON 페이로드는 여기서 한 번 파싱한다.
+ *
+ * 오류 경계는 두 개로 분리된다(R01): (1) 전송 변환 — `JSON.parse` 실패 시 원본
+ * 문자열을 그대로 한 번 전달한다(재호출이 아니라 유일한 단일 전달). (2) 사용자
+ * 콜백 — 콜백 예외는 `reportListenerError` 로 관측만 하고 재던지지 않는다. 예외가
+ * Tauri 이벤트 기계로 탈출하면 콜백이 이벤트 하나당 여러 번 불리거나 형제
+ * 리스너가 깨지는 것이 관찰됐다(브라우저 EventTarget 도 리스너 예외를 삼킨다).
  *
  * @example
  * ```ts
@@ -52,12 +78,21 @@ export async function subscribeEvent<T = unknown>(
 ): Promise<() => void> {
   const resolvedListen = listen ?? requireTauriListen();
   const unlisten = await resolvedListen(rustraEventChannel(name), (event) => {
-    // payload 는 Rust 가 JSON 직렬화한 문자열이다 — 파싱해 타입 값으로 전달.
+    // 경계 1 — 전송 변환. payload 는 Rust 가 JSON 직렬화한 문자열이다.
+    let payload: T;
     try {
-      callback(JSON.parse(event.payload) as T);
+      payload = JSON.parse(event.payload) as T;
     } catch {
-      // 파싱 실패 시 원본 문자열이라도 전달한다(조용한 드롭 방지).
+      // 파싱 실패 시 원본 문자열이라도 전달한다(조용한 드롭 방지) — 콜백
+      // 재호출이 아니라 유일한 단일 전달이다.
       callback(event.payload as unknown as T);
+      return;
+    }
+    // 경계 2 — 사용자 콜백. 예외는 관측 후 삼켜 형제 리스너를 보호한다.
+    try {
+      callback(payload);
+    } catch (error) {
+      reportListenerError(name, error);
     }
   });
   return unlisten;
