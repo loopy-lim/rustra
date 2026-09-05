@@ -78,12 +78,14 @@ export async function generateFromSchema(
   const files: GeneratedFile[] = [];
   // 자기서술 헤더는 이 한 곳에서 주입한다 — 렌더러 개별 모듈은 헤더를 모른다.
   // 단, 렌더러가 이미 헤더를 각인하는 파일(C++ 코덱 등)은 이중 접합하지 않는다.
+  // 원문을 함께 넘기면 3인자 시그니처가 최종 바이트 전체를 돌려준다 — 문법 판정이
+  // 파일 종류별이기 때문이다(JSON은 무헤더, shebang 스크립트는 첫 줄 뒤 부착 — CI01).
   const addFile = (targetDir: string, name: string, content: string) =>
     files.push({
       path: resolve(targetDir, name),
       content: content.startsWith('// ── rustra generated')
         ? content
-        : `${generatedFileHeader(name, stageFor(name))}${content}`,
+        : generatedFileHeader(name, stageFor(name), content),
     });
   addFile(outputPath, 'types.ts', generateTypesTs(schema));
   addFile(outputPath, 'commands.ts', generateCommandsTs(schema));
