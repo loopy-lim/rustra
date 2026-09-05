@@ -187,20 +187,17 @@ test('createTauriEngine parses Display-style "code: message" Error message', asy
   );
 });
 
-test('rustraEventChannel sanitizes and prefixes like Rust event_channel', async () => {
-  const { rustraEventChannel } = await import('./index.js');
-  assert.equal(rustraEventChannel('progress.tick'), 'rustra://progress_tick');
-  assert.equal(rustraEventChannel('llm.stream-token'), 'rustra://llm_stream-token');
-  assert.equal(rustraEventChannel('a b/c'), 'rustra://a_b/c');
-});
-
 // ── R02 — 이벤트 채널명 Unicode 규칙 통일 ──
+// (구 `rustraEventChannel sanitizes...` 테스트는 GOLDEN_CASES 에 흡수됐다 —
+// 골든 테이블이 이 함수 매핑의 단일 진실원이다.)
 // 공동 골든 테이블 — Rust 측 examples/tauri-calculator/src-tauri/tests/
 // event_name_mapping.rs 의 GOLDEN_CASES 와 문자 그대로 동일한 리터럴이다.
 // 규칙을 바꿀 때는 양쪽을 함께 갱신하고, 한쪽만 바꾸면 이 테이블이 drift 를
 // 검출한다. 규칙: 코드포인트 순회 + [A-Za-z0-9/_:-] 와 Unicode 알파벳·숫자는
 // 보존, 나머지는 '_' 치환. NFC 정규화는 하지 않는다(정규화 후 같아지는 이름도
-// 다른 이름 — Rust 빌더가 충돌로 거부한다).
+// 다른 이름 — Rust 빌더가 충돌로 거부한다). 보장은 "같은 술어, 각자의
+// Unicode 테이블"이다 — 유니코드 버전이 올라가 판정이 바뀌면 각자 갱신하며,
+// 수렴 사례는 빌드 타임 충돌 거부가 잡는다.
 const GOLDEN_CASES: ReadonlyArray<readonly [string, string]> = [
   // 기본 치환 — '.' → '_'.
   ['progress.tick', 'rustra://progress_tick'],
@@ -216,6 +213,10 @@ const GOLDEN_CASES: ReadonlyArray<readonly [string, string]> = [
   ['done🎉now', 'rustra://done_now'],
   // 비 BMP 영숫자(U+1D54F) 보존 — 구 JS 규칙은 surrogate 쌍을 '__' 로.
   ['n.𝕏', 'rustra://n_𝕏'],
+  // Alphabetic-but-not-L (U+0345, ypogegrammeni) 보존 게이트 — 술어를
+  // `\p{L}|\p{N}` 으로 "단순화"하면 이 행이 깨진다. `is_alphanumeric()` =
+  // Alphabetic ∪ N 이라는 설계 결정을 산문 대신 게이트로 고정한다.
+  ['ypogegrammeni:\u{0345}', 'rustra://ypogegrammeni:\u{0345}'],
 ];
 
 test('rustraEventChannel matches the shared Unicode golden table (Rust event_channel twin)', async () => {

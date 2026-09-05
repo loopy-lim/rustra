@@ -254,7 +254,7 @@ pub fn event_channel(name: &str) -> String {
 }
 
 /// Tauri 채널 이름 규칙으로 이름을 정규화한다 — 정규화 규칙의 단일 사본은
-/// 빌더 쪽([`crate::events` 가 include 하는 `builder_events.rs`],
+/// 빌더 쪽([`crate::builder` 가 include 하는 `builder_events.rs`],
 /// `sanitize_event_name`)이 갖고 TS `rustraEventChannel` 과도 동일하다(R02).
 /// 여기서는 접두사 결합만 담당한다.
 fn sanitize_event_name(name: &str) -> String {

@@ -33,7 +33,9 @@ struct AlternatePayload {
 
 /// 공동 골든 테이블 — packages/tauri/src/index.test.ts 의 `GOLDEN_CASES` 와
 /// 문자 그대로 동일한 리터럴이다. 규칙을 바꿀 때는 양쪽을 함께 갱신해야 하며,
-/// 한쪽만 바꾸면 이 테이블이 drift 를 검출한다.
+/// 한쪽만 바꾸면 이 테이블이 drift 를 검출한다. 보장은 "같은 술어, 각자의
+/// Unicode 테이블"이다 — 유니코드 버전이 올라가 판정이 바뀌면 각자 갱신하며,
+/// 수렴 사례는 빌드 타임 충돌 거부가 잡는다.
 ///
 /// 결합 문자(cafe + U+0301)는 에디터 NFC 정규화에 갈라지지 않게 이스케이프로
 /// 적는다. 비 BMP 사례(이모지, U+1D54F 𝕏)는 코드포인트 순회 증명용 — 구 JS
@@ -52,6 +54,10 @@ const GOLDEN_CASES: &[(&str, &str)] = &[
     ("done🎉now", "rustra://done_now"),
     // 비 BMP 영숫자(U+1D54F) 보존 — 구 JS 규칙은 surrogate 쌍을 '__' 로.
     ("n.𝕏", "rustra://n_𝕏"),
+    // Alphabetic-but-not-L (U+0345, ypogegrammeni) 보존 게이트 — 술어를
+    // `\p{L}|\p{N}` 으로 "단순화"하면 이 행이 깨진다. `is_alphanumeric()` =
+    // Alphabetic ∪ N 이라는 설계 결정을 산문 대신 게이트로 고정한다.
+    ("ypogegrammeni:\u{0345}", "rustra://ypogegrammeni:\u{0345}"),
 ];
 
 #[test]
