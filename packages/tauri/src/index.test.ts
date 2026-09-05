@@ -194,6 +194,41 @@ test('rustraEventChannel sanitizes and prefixes like Rust event_channel', async 
   assert.equal(rustraEventChannel('a b/c'), 'rustra://a_b/c');
 });
 
+// ── R02 — 이벤트 채널명 Unicode 규칙 통일 ──
+// 공동 골든 테이블 — Rust 측 examples/tauri-calculator/src-tauri/tests/
+// event_name_mapping.rs 의 GOLDEN_CASES 와 문자 그대로 동일한 리터럴이다.
+// 규칙을 바꿀 때는 양쪽을 함께 갱신하고, 한쪽만 바꾸면 이 테이블이 drift 를
+// 검출한다. 규칙: 코드포인트 순회 + [A-Za-z0-9/_:-] 와 Unicode 알파벳·숫자는
+// 보존, 나머지는 '_' 치환. NFC 정규화는 하지 않는다(정규화 후 같아지는 이름도
+// 다른 이름 — Rust 빌더가 충돌로 거부한다).
+const GOLDEN_CASES: ReadonlyArray<readonly [string, string]> = [
+  // 기본 치환 — '.' → '_'.
+  ['progress.tick', 'rustra://progress_tick'],
+  // 한국어(Unicode 알파벳) 보존 — 구 JS 규칙은 전부 '_' 로 깨뜨렸다.
+  ['진행.갱신', 'rustra://진행_갱신'],
+  ['a.b', 'rustra://a_b'],
+  ['llm.stream-token', 'rustra://llm_stream-token'],
+  ['a b/c', 'rustra://a_b/c'],
+  // 결합 문자(U+0301)는 알파벳이 아니므로 '_' — NFC 정규화는 하지 않는다.
+  // (Rust 와 동일하게 이스케이프로 적는다 — 에디터 NFC 정규화 방지.)
+  ['cafe\u{301}', 'rustra://cafe_'],
+  // 비 BMP 이모지는 코드포인트 1개 — '_' 1개 (surrogate 2개 아님).
+  ['done🎉now', 'rustra://done_now'],
+  // 비 BMP 영숫자(U+1D54F) 보존 — 구 JS 규칙은 surrogate 쌍을 '__' 로.
+  ['n.𝕏', 'rustra://n_𝕏'],
+];
+
+test('rustraEventChannel matches the shared Unicode golden table (Rust event_channel twin)', async () => {
+  const { rustraEventChannel } = await import('./index.js');
+  for (const [input, expected] of GOLDEN_CASES) {
+    assert.equal(
+      rustraEventChannel(input),
+      expected,
+      `channel mapping drifted for ${JSON.stringify(input)} — TS/Rust 골든 테이블 동기 필요`,
+    );
+  }
+});
+
 test('subscribeEvent parses JSON payloads and falls back to raw string', async () => {
   const { subscribeEvent } = await import('./index.js');
   let captured: { channel: string } | null = null;
