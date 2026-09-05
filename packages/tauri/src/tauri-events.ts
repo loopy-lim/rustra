@@ -145,7 +145,10 @@ export async function subscribeEvent<T = unknown>(
       try {
         const parsed = JSON.parse(payload) as T;
         // 원시 결과(number/boolean/null)는 원본 문자열 유지 — 문자열 payload 가
-        // 디코딩으로 타입이 바뀌는 회귀 차단(R03 표의 '123'/'true' 행).
+        // 디코딩으로 타입이 바뀌는 회귀 차단(R03 표의 '123'/'true'/'null' 행).
+        // 이 판정은 패키지에서 테스트 외 유일한 JSON.parse 사이트다 — 계약 표
+        // (index.test.ts)의 'null' 행이 여기서 parsed === null 이 원본 유지로
+        // 빠지는 것을 게이트한다.
         if (parsed !== null && (typeof parsed === 'object' || typeof parsed === 'string')) {
           payload = parsed;
         }
