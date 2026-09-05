@@ -4142,3 +4142,297 @@ test('unconfigured invokeBatch and ensureConfigured reject with transport.unavai
     configure(sentinel);
   }
 });
+
+// ── R04: 와이어 배치 옵션·정규화·동기 throw 계약 통일 ─────────────
+// json-engine 의 단일 횡단(invokeBatch) 경로가 단건 invoke 경로와 세 계약에서
+// 갈라졌다: ① timeoutMs truthiness 판정(0 이 누락), ② transport 동기 throw 가
+// Promise.reject 로 정규화되지 않음, ③ normalizeArgs 미적용. 아래 회귀 표는
+// 각 사례를 와이어 배치 경로(transport.invokeBatch 제공)와 글로벌 파사드
+// (configure + invokeBatch) 양쪽에서 모두 핀한다 — 두 경로의 결과가 동일해야 한다.
+
+/** R04 테스트용 — 지연 resolve 하는 단일 횡단 배치 transport. */
+function delayedWireBatchTransport(delayMs: number): {
+  invoke: (command: string, args?: unknown) => Promise<unknown>;
+  invokeBatch: (requests: BatchEntry[]) => Promise<unknown[]>;
+} {
+  return {
+    invoke: async (command, args) => {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return { command, args };
+    },
+    invokeBatch: async (requests) => {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return requests.map((entry) => ({ ok: true, command: entry.command }));
+    },
+  };
+}
+
+test('wire batch timeoutMs 0 takes the per-entry timeout path like the single invoke (R04-a)', async () => {
+  const engine = createJsonEngine(delayedWireBatchTransport(50));
+  // 단건 경로(cancel.ts): timeoutMs 0 은 "옵션 제공"으로 판정되어 즉시
+  // transport.timeout reject. 와이어 배치 게이트도 동일 판정이어야 한다 —
+  // truthiness 검사면 0 이 falsy 로 누락되어 50ms 지연 응답이 resolve 된다.
+  await assert.rejects(
+    engine.invoke('slow', {}, { timeoutMs: 0 }),
+    (err: unknown) => err instanceof TimeoutError && err.code === 'transport.timeout',
+    'single invoke: timeoutMs 0 must time out immediately',
+  );
+  await assert.rejects(
+    engine.invokeBatch<number>([{ command: 'slow', args: {}, options: { timeoutMs: 0 } }]),
+    (err: unknown) => err instanceof TimeoutError && err.code === 'transport.timeout',
+    'wire batch: timeoutMs 0 must fall back to the per-entry timeout path',
+  );
+});
+
+test('wire batch options object without timeoutMs still rides the single crossing (R04-a nuance)', async () => {
+  // 판정은 "timeoutMs !== undefined" — options 객체가 있어도 timeoutMs 가
+  // undefined 면 항목별 타임아웃 경로로 보내지 않는다(단건 경로 계약 —
+  // undefined timeout 은 레이스 없음). signal 도 없으니 와이어 단일 횡단 유지.
+  let batchCalls = 0;
+  const transport = delayedWireBatchTransport(0);
+  const engine = createJsonEngine({
+    invoke: transport.invoke,
+    invokeBatch: (requests) => {
+      batchCalls++;
+      return transport.invokeBatch(requests);
+    },
+  });
+  const out = await engine.invokeBatch([{ command: 'a', options: {} }]);
+  assert.equal(batchCalls, 1, 'empty options must not knock the batch off the wire crossing');
+  assert.deepEqual(out, [{ ok: true, command: 'a' }]);
+});
+
+test('wire batch turns a synchronous transport throw into a rejected Promise (R04-b)', async () => {
+  // 단건 경로(json-engine invoke)는 transport 동기 throw 를 catch 해서
+  // Promise.reject(normalizeRustraError(error)) 로 정규화한다. 배치 경로도
+  // 동일해야 한다 — 동기 throw 는 호출자의 try/catch 를 건너뛰는 계약 위반이다.
+  const engine = createJsonEngine({
+    invoke: () => Promise.resolve('unused'),
+    invokeBatch: () => {
+      throw { code: 'transport.error', message: 'wire batch blew up', retryable: true };
+    },
+  });
+  const returned = engine.invokeBatch([{ command: 'a' }, { command: 'b' }]);
+  assert.ok(returned instanceof Promise, 'sync throw must not escape invokeBatch');
+  await assert.rejects(returned, (err: unknown) => {
+    assert.ok(err instanceof RustraCommandError, 'must pass through normalizeRustraError');
+    assert.equal((err as RustraCommandError).code, 'transport.error');
+    assert.equal((err as RustraCommandError).message, 'wire batch blew up');
+    assert.equal((err as RustraCommandError).retryable, true);
+    return true;
+  });
+
+  // plain Error 동기 throw — normalizeRustraError 의 fallback 계약(invoke.failed).
+  const plainEngine = createJsonEngine({
+    invoke: () => Promise.resolve('unused'),
+    invokeBatch: () => {
+      throw new Error('sync boom');
+    },
+  });
+  await assert.rejects(
+    plainEngine.invokeBatch([{ command: 'a' }]),
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'invoke.failed',
+  );
+});
+
+test('wire batch applies normalizeArgs per entry without mutating the original entries (R04-c)', async () => {
+  // tauri 어댑터 계약과 동일 — normalizeArgs: undefined → {}. 와이어 배치도
+  // 항목별 args 를 정규화해서 transport 에 건네야 한다(단건 경로는 이미 적용).
+  // 원본 entries 배열과 항목 객체는 절대 변형하지 않는다(global-batch 의
+  // stripped 패턴과 동일한 재생성 관례).
+  const seenRequests: Array<{ command: string; args: unknown }> = [];
+  const engine = createJsonEngine(
+    {
+      invoke: () => Promise.resolve('unused'),
+      invokeBatch: (requests) => {
+        for (const request of requests) {
+          seenRequests.push({ command: request.command, args: request.args });
+        }
+        return requests.map(() => ({ ok: true }));
+      },
+    },
+    (args) => args ?? { normalized: true },
+  );
+  const originalFirst: BatchEntry = { command: 'a' };
+  const originalSecond: BatchEntry = { command: 'b', args: undefined };
+  const entries = [originalFirst, originalSecond];
+  const out = await engine.invokeBatch(entries);
+  assert.deepEqual(out, [{ ok: true }, { ok: true }]);
+  assert.deepEqual(
+    seenRequests,
+    [
+      { command: 'a', args: { normalized: true } },
+      { command: 'b', args: { normalized: true } },
+    ],
+    'each entry args must be normalized before the wire crossing',
+  );
+  // 원본 무변형 핀 — 항목 객체를 재생성하지 않고 흔들면 호출자 계약이 깨진다.
+  assert.deepEqual(originalFirst, { command: 'a' });
+  assert.deepEqual(originalSecond, { command: 'b', args: undefined });
+  assert.deepEqual(entries, [{ command: 'a' }, { command: 'b', args: undefined }]);
+});
+
+test('wire batch mixed-signal entries keep the per-entry fallback path (R04 regression guard)', async () => {
+  // signal 항목이 섞이면 기존 폴백(항목별 invokeWithTimeout) — 단일 횡단 금지.
+  let batchCalls = 0;
+  let singleCalls = 0;
+  const controller = new AbortController();
+  const engine = createJsonEngine({
+    invoke: (command, args) => {
+      singleCalls++;
+      return Promise.resolve({ command, args });
+    },
+    invokeBatch: () => {
+      batchCalls++;
+      return [];
+    },
+  });
+  const out = await engine.invokeBatch([
+    { command: 'a' },
+    { command: 'b', options: { signal: controller.signal } },
+  ]);
+  assert.equal(batchCalls, 0, 'signal entry must knock the batch off the wire crossing');
+  assert.equal(singleCalls, 2, 'fallback must route each entry through invokeWithTimeout');
+  assert.deepEqual(out, [
+    { command: 'a', args: undefined },
+    { command: 'b', args: undefined },
+  ]);
+});
+
+test('wire batch empty entries resolves to an empty array on the single crossing (regression guard)', async () => {
+  let batchCalls = 0;
+  const engine = createJsonEngine({
+    invoke: () => Promise.resolve('unused'),
+    invokeBatch: (requests) => {
+      batchCalls++;
+      return requests.map(() => ({}));
+    },
+  });
+  const out = await engine.invokeBatch([]);
+  assert.deepEqual(out, []);
+  assert.equal(batchCalls, 1, 'empty batch must still use the single crossing, not the fallback');
+});
+
+// ── R04: 글로벌 파사드(invokeBatch)와의 경로 동일성 ─────────────
+// 와이어 배치 엔진을 configure 해서 글로벌 invokeBatch 로 같은 사례를 돌린다 —
+// 두 경로의 관찰 결과가 동일해야 한다(경로별 갈라짐이 재발하면 이 표가 잡는다).
+
+test('global invokeBatch matches the wire batch on timeout 0, sync throw, and normalization (R04)', async () => {
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  try {
+    // ① timeoutMs 0 → 항목별 폴백 경로의 즉시 transport.timeout (단건 경로와
+    // 동일 판정. 글로벌 최소 timeout 레이스 정책은 불변 — 이 사례는 timeout
+    // 최솟값 계산과 무관하게 항목 options 를 존중하는 폴백으로 간다).
+    const delayedEngine = createJsonEngine(delayedWireBatchTransport(50));
+    configure(delayedEngine as unknown as EngineClient);
+    await assert.rejects(
+      invokeBatch([{ command: 'slow', args: {}, options: { timeoutMs: 0 } }]),
+      (err: unknown) => err instanceof TimeoutError && err.code === 'transport.timeout',
+      'global path: timeoutMs 0 must behave like the wire batch path',
+    );
+
+    // ② transport 동기 throw → rejected Promise + 정규화.
+    const throwingEngine = createJsonEngine({
+      invoke: () => Promise.resolve('unused'),
+      invokeBatch: () => {
+        throw { code: 'transport.error', message: 'wire batch blew up', retryable: true };
+      },
+    });
+    configure(throwingEngine as unknown as EngineClient);
+    const returned = invokeBatch([{ command: 'a' }]);
+    assert.ok(returned instanceof Promise, 'global path: sync throw must not escape');
+    await assert.rejects(returned, (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.error');
+      assert.equal((err as RustraCommandError).message, 'wire batch blew up');
+      assert.equal((err as RustraCommandError).retryable, true);
+      return true;
+    });
+
+    // ③ normalizeArgs 항목별 적용 — 글로벌 파사드가 엔진 위에서 정규화를
+    // 우회하지 않는다(정규화는 엔진 내부 배선).
+    const seenRequests: Array<{ command: string; args: unknown }> = [];
+    const normalizingEngine = createJsonEngine(
+      {
+        invoke: () => Promise.resolve('unused'),
+        invokeBatch: (requests) => {
+          for (const request of requests) {
+            seenRequests.push({ command: request.command, args: request.args });
+          }
+          return requests.map(() => ({ ok: true }));
+        },
+      },
+      (args) => args ?? { normalized: true },
+    );
+    configure(normalizingEngine as unknown as EngineClient);
+    const out = await invokeBatch([{ command: 'a' }, { command: 'b', args: undefined }]);
+    assert.deepEqual(out, [{ ok: true }, { ok: true }]);
+    assert.deepEqual(seenRequests, [
+      { command: 'a', args: { normalized: true } },
+      { command: 'b', args: { normalized: true } },
+    ]);
+  } finally {
+    configure(sentinel);
+  }
+});
+
+test('global invokeBatch empty entries resolves to an empty array (regression guard)', async () => {
+  const engine = createJsonEngine({
+    invoke: () => Promise.resolve('unused'),
+    invokeBatch: (requests) => requests.map(() => ({})),
+  });
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  configure(engine as unknown as EngineClient);
+  try {
+    assert.deepEqual(await invokeBatch([]), []);
+  } finally {
+    configure(sentinel);
+  }
+});
+
+test('global invokeBatch mixed-signal entries keep the per-entry fallback (regression guard)', async () => {
+  // signal 전용 항목(timeoutMs 없음)은 글로벌 최소 timeout 레이스를 만들지 않고
+  // 엔진의 폴백 경로로 그대로 통과해야 한다 — 엔진 내부 판정과 파사드가 갈라지면
+  // 이 표가 잡는다.
+  let batchCalls = 0;
+  let singleCalls = 0;
+  const controller = new AbortController();
+  const engine = createJsonEngine({
+    invoke: (command, args) => {
+      singleCalls++;
+      return Promise.resolve({ command, args });
+    },
+    invokeBatch: () => {
+      batchCalls++;
+      return [];
+    },
+  });
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  configure(engine as unknown as EngineClient);
+  try {
+    const out = await invokeBatch([
+      { command: 'a' },
+      { command: 'b', options: { signal: controller.signal } },
+    ]);
+    assert.equal(batchCalls, 0, 'facade path: signal entry must knock the batch off the crossing');
+    assert.equal(singleCalls, 2, 'facade path: fallback routes each entry through invoke');
+    assert.deepEqual(out, [
+      { command: 'a', args: undefined },
+      { command: 'b', args: undefined },
+    ]);
+  } finally {
+    configure(sentinel);
+  }
+});
