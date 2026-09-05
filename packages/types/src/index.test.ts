@@ -4235,6 +4235,78 @@ test('wire batch turns a synchronous transport throw into a rejected Promise (R0
   );
 });
 
+test('wire batch throwing custom normalizer converges to a rejection like the single path (R04-c)', async () => {
+  // normalizeArgs 는 주입된 사용자 코드다 — 정규화 맵이 try 경계 밖에 있으면
+  // normalizer 의 동기 throw 가 호출자 try/catch 를 건너뛴다. 단건 경로는 같은
+  // 실패를 rejected Promise 로 정규화하므로 배치 경로도 동일해야 한다.
+  const engine = createJsonEngine(
+    {
+      invoke: () => Promise.resolve('unused'),
+      invokeBatch: () => [],
+    },
+    () => {
+      throw new Error('normalizer exploded');
+    },
+  );
+  const returned = engine.invokeBatch([{ command: 'a' }]);
+  assert.ok(returned instanceof Promise, 'normalizer sync throw must not escape invokeBatch');
+  await assert.rejects(returned, (err: unknown) => {
+    assert.ok(err instanceof RustraCommandError, 'must pass through normalizeRustraError');
+    assert.equal((err as RustraCommandError).code, 'invoke.failed');
+    assert.match((err as Error).message, /normalizer exploded/);
+    return true;
+  });
+});
+
+test('wire batch entry with combined signal and timeoutMs 0 keeps per-entry fallback (R04-a table row)', async () => {
+  // signal + timeoutMs 0 조합 — 두 옵션이 모두 "제공됨"으로 판정되어 폴백 경로로
+  // 간다. 폴백은 단건 경로(cancel.ts)와 같은 판정이므로 timeoutMs 0 이 즉시
+  // transport.timeout 을 내고 signal abort 는 그 앞에서 cancelled 를 낼 수 있다.
+  let batchCalls = 0;
+  const controller = new AbortController();
+  const engine = createJsonEngine({
+    invoke: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return 'late';
+    },
+    invokeBatch: () => {
+      batchCalls++;
+      return [];
+    },
+  });
+  await assert.rejects(
+    engine.invokeBatch([{ command: 'slow', options: { signal: controller.signal, timeoutMs: 0 } }]),
+    (err: unknown) => err instanceof TimeoutError && err.code === 'transport.timeout',
+    'combined options must take the per-entry fallback and honor timeoutMs 0',
+  );
+  assert.equal(batchCalls, 0, 'combined options must knock the batch off the wire crossing');
+});
+
+test('wire batch extra entry properties survive the normalized recreation (R04-c table row)', async () => {
+  // { ...entry, args } 재생성이 BatchEntry 계약 밖의 추가 프로퍼티를 보존하는지
+  // 핀 — transport 가 커스텀 메타데이터에 의존해도 정규화가 이를 훼손하지 않는다.
+  const seenRequests: Array<{ command: string; meta?: unknown }> = [];
+  const engine = createJsonEngine({
+    invoke: () => Promise.resolve('unused'),
+    invokeBatch: (requests) => {
+      for (const request of requests) {
+        seenRequests.push({ command: request.command, meta: (request as { meta?: unknown }).meta });
+      }
+      return requests.map(() => ({ ok: true }));
+    },
+  });
+  const entries = [
+    { command: 'a', args: undefined, meta: 'keep-me' },
+    { command: 'b', args: { v: 1 }, meta: { nested: true } },
+  ] as unknown as BatchEntry[];
+  const out = await engine.invokeBatch(entries);
+  assert.deepEqual(out, [{ ok: true }, { ok: true }]);
+  assert.deepEqual(seenRequests, [
+    { command: 'a', meta: 'keep-me' },
+    { command: 'b', meta: { nested: true } },
+  ]);
+});
+
 test('wire batch applies normalizeArgs per entry without mutating the original entries (R04-c)', async () => {
   // tauri 어댑터 계약과 동일 — normalizeArgs: undefined → {}. 와이어 배치도
   // 항목별 args 를 정규화해서 transport 에 건네야 한다(단건 경로는 이미 적용).
