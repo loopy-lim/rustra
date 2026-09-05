@@ -60,9 +60,18 @@ import {
  */
 export type TauriInvoke = (command: string, args?: unknown) => Promise<unknown> | unknown;
 
+/**
+ * Tauri `event.listen` 함수 시그니처.
+ *
+ * handler 의 `payload` 는 `unknown` 이다(R03): 실제 WebView 경계(tauri 가
+ * `emit_str` JSON 을 `payload: {}` 로 인라인 평가)에선 이미 해석된 값이 오고,
+ * 레거시 주입 transport 는 직렬화된 문자열을 줄 수 있다. `subscribeEvent` 가
+ * 양쪽을 단일 규칙(문자열만 1회 parse)으로 정규화하므로 이 타입을 문자열로
+ * 좁히지 않는다.
+ */
 export type TauriListen = (
   event: string,
-  handler: (event: { payload: string }) => void,
+  handler: (event: { payload: unknown }) => void,
 ) => Promise<() => void>;
 
 type TauriGlobal = {

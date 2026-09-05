@@ -259,12 +259,14 @@ test('subscribeEvent parses JSON payloads and falls back to raw string', async (
 
 /** listen 목업 — 채널 정합을 확인하고 `fire` 로 테스트가 이벤트를 발사한다.
  * 실제 Tauri 처럼 채널당 리스너 여럿을 독립 등록하며, fire 는 등록 순서대로
- * 동기 호출한다(리스너 예외를 흡수하지 않는다 — 경계 위반은 그대로 실패로). */
+ * 동기 호출한다(리스너 예외를 흡수하지 않는다 — 경계 위반은 그대로 실패로).
+ * payload 는 `unknown` — R03 계약(문자열·이미 해석된 객체 모두 경계에서 가능)을
+ * 그대로 발사할 수 있어야 하므로 문자열로 좁히지 않는다. */
 function mockListen(): {
-  listen: (channel: string, handler: (event: { payload: string }) => void) => Promise<() => void>;
-  fire: (payload: string) => void;
+  listen: (channel: string, handler: (event: { payload: unknown }) => void) => Promise<() => void>;
+  fire: (payload: unknown) => void;
 } {
-  const handlers: Array<(event: { payload: string }) => void> = [];
+  const handlers: Array<(event: { payload: unknown }) => void> = [];
   return {
     listen: async (channel, handler) => {
       assert.equal(channel, 'rustra://tick');
@@ -436,6 +438,91 @@ test('subscribeTauriEvent discovers the global listen API', async () => {
   } finally {
     root.__TAURI__ = previous;
   }
+});
+
+// ── R03 — payload 단일 파싱 계약 (decoded 우선·문자열만 1회 parse) ──
+// 실제 WebView 경계(tauri `emit_str` → `payload: {}` 인라인 평가)에서 JS listener 는
+// 이미 해석된 값을 받는다 — 무조건 JSON.parse 하면 이미 해석된 객체를 재직렬화·재파싱해
+// 훼손하고, "JSON 처럼 생긴" 문자열 payload 도 몰래 디코딩한다. 계약 표 하나가
+// 파서의 전부다 — 각 행은 typeof/null 이중 assert 로 고정한다(동치 혼동 방지:
+// 123 ≠ '123', true ≠ 'true', null 은 typeof 'object').
+
+test('subscribeEvent payload contract table — decoded pass-through, string-only single parse (R03)', async () => {
+  const { subscribeEvent } = await import('./index.js');
+  const { listen, fire } = mockListen();
+  const seen: Array<{ typeofIn: string; value: unknown }> = [];
+  await subscribeEvent<unknown>(
+    'tick',
+    (payload) => {
+      seen.push({ typeofIn: typeof payload, value: payload });
+    },
+    listen,
+  );
+
+  // [경계 payload, 기대 typeof, 기대 값(deep-equal), 행 설명]
+  const rows: ReadonlyArray<readonly [unknown, string, unknown, string]> = [
+    // 이미 해석된 객체 — 그대로 통과, 재파싱 없음(중첩 JSON 문자열도 그대로).
+    [{ a: 1 }, 'object', { a: 1 }, 'decoded object passes through untouched'],
+    [
+      { inner: '{"a":1}' },
+      'object',
+      { inner: '{"a":1}' },
+      'nested JSON-string inside a decoded object is NOT double-parsed',
+    ],
+    // 문자열 payload — JSON 처럼 생겨도 문자열이면 한 번만 parse.
+    ['{"a":1}', 'object', { a: 1 }, 'JSON object string parses to an object'],
+    // 핵심 회귀(통합 문서 표): 문자열 '123' — number 123 으로 디코딩되지 않는다.
+    ['123', 'string', '123', 'string that looks numeric stays a string'],
+    ['true', 'string', 'true', 'string that looks boolean stays a string'],
+    // 문자열이지만 escape 로 인코딩된 JSON — 딱 한 번만 parse 된다.
+    ['"{\\"a\\":1}"', 'string', '{"a":1}', 'escaped-JSON string parses exactly once to the string'],
+    // parse 실패 — 원본 문자열이 그대로 전달된다.
+    ['', 'string', '', 'empty string fails to parse — original delivered'],
+    ['hello', 'string', 'hello', 'plain text fails to parse — original delivered'],
+    // 문자열이 아닌 원시값 — 스니핑 없이 그대로 통과한다.
+    [null, 'object', null, 'null payload passes through (typeof null is object)'],
+    [false, 'boolean', false, 'boolean payload passes through'],
+  ];
+
+  for (const [payload, expectedTypeof, expectedValue] of rows) {
+    seen.length = 0;
+    fire(payload);
+    assert.equal(seen.length, 1, `row "${String(payload)}": exactly one delivery`);
+    assert.equal(seen[0]!.typeofIn, expectedTypeof, `row ${JSON.stringify(payload)}: typeof`);
+    assert.deepEqual(seen[0]!.value, expectedValue, `row ${JSON.stringify(payload)}: value`);
+  }
+
+  // 객체 행의 신원 보존 — 같은 참조가 그대로 도달한다(재직렬화 부재의 최강 증거).
+  seen.length = 0;
+  const identity: { a: number } = { a: 1 };
+  fire(identity);
+  assert.equal(seen[0]!.value, identity, 'decoded object keeps its identity — no clone via parse');
+});
+
+test('subscribeEvent converges both WebView delivery modes on the same value (MockRuntime coherence, R03)', async () => {
+  // tauri 실제 경계: Rust `app.emit("…", payload_json)` → tauri 가 `payload: {}`
+  // 로 JSON 을 JS 소스에 인라인 splice → JS listener 는 이미 파싱된 객체를 받는다.
+  // 레거시 fake transport: payload 를 (직렬화된) 문자열로 전달한다.
+  // 두 모드가 이 규칙 아래 같은 값으로 수렴하는지 fixture 로 고정한다.
+  const { subscribeEvent } = await import('./index.js');
+  const { listen, fire } = mockListen();
+  const seen: unknown[] = [];
+  await subscribeEvent<{ n: number }>('tick', (payload) => seen.push(payload), listen);
+
+  // Rust 측이 만든 직렬화 형태(실제 emit 스트링) — event_push.rs 패턴의 TS 재현.
+  const emittedJson = JSON.stringify({ n: 42 });
+  assert.equal(emittedJson, '{"n":42}');
+
+  // 모드 A — 실제 WebView: tauri 가 이미 파싱한 값.
+  fire({ n: 42 });
+  // 모드 B — 레거시/헤드리스: 직렬화된 문자열이 그대로 도착.
+  fire(emittedJson);
+
+  assert.equal(seen.length, 2);
+  assert.deepEqual(seen[0], { n: 42 });
+  assert.deepEqual(seen[1], { n: 42 });
+  assert.equal(typeof seen[0], 'object');
+  assert.equal(typeof seen[1], 'object');
 });
 
 // ── 와이어 배치 — rustra_dispatch_batch 단일 횡단 (트랙 E2) ──
