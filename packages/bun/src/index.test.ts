@@ -435,6 +435,83 @@ test('A05: dispose is idempotent — second dispose is a no-op (bun)', async () 
   }
 });
 
+test('A05: failed reload keeps the original error and stays retryable, not disposed (bun I-2)', async () => {
+  // I-2 회귀 — reload 내부 리셋이 state 를 'disposed' 로 만들면 재초기화 실패 시
+  // bootstrap 이 벽돌이 된다. resetForReinit 은 'initializing' 을 유지하고
+  // reload 는 원본 에러로 reject 해야 한다. env 전환으로 재초기화 실패를 만든다
+  // (RUSTRA_BUN_LIBRARY 는 엔진 생성마다 읽힌다).
+  const { configure } = await import('@rustra/types');
+  const previous = process.env.RUSTRA_BUN_LIBRARY;
+  delete process.env.RUSTRA_BUN_LIBRARY;
+  const realDylib = resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`);
+  const bootstrap = createBunBootstrap({
+    libraryCandidates: [realDylib],
+    rkyvV2Codecs: testRegistry,
+  });
+  try {
+    configure(A05_SLOT_ENGINE);
+    await bootstrap.ready();
+    assert.equal(bootstrap.state, 'ready');
+    process.env.RUSTRA_BUN_LIBRARY = './missing-reloaded-library';
+    await assert.rejects(
+      bootstrap.reload(),
+      (err: unknown) =>
+        err instanceof RustraCommandError && /RUSTRA_BUN_LIBRARY|No compatible/.test(err.message),
+      'reload rejects with the ORIGINAL engine-creation error',
+    );
+    assert.equal(bootstrap.state, 'initializing', 'state stays retryable — never disposed');
+    if (previous === undefined) delete process.env.RUSTRA_BUN_LIBRARY;
+    else process.env.RUSTRA_BUN_LIBRARY = previous;
+    await bootstrap.ready();
+    assert.equal(bootstrap.state, 'ready', 'retry succeeds once the library resolves again');
+  } finally {
+    if (previous === undefined) delete process.env.RUSTRA_BUN_LIBRARY;
+    else process.env.RUSTRA_BUN_LIBRARY = previous;
+    bootstrap.dispose();
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: dispose during reload re-init is honored at the await boundary (bun I-1)', async () => {
+  // I-1 회귀 — reload 의 await 경계 재검사가 dispose 를 존중한다. 재초기화가
+  // dispose 보다 먼저 끝나면 reload 는 정상 성공(state=ready)하고, dispose 가
+  // 재초기화 완료 전에 불리면 reload 는 'ready' 기록 없이 disposed 를 유지한다.
+  // 어느 쪽이든 좀비(ready() 해소 + state=disposed)는 금지된다.
+  const { configure } = await import('@rustra/types');
+  const realDylib = resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`);
+  const bootstrap = createBunBootstrap({
+    libraryCandidates: [realDylib],
+    rkyvV2Codecs: testRegistry,
+  });
+  try {
+    configure(A05_SLOT_ENGINE);
+    await bootstrap.ready();
+    const reloading = bootstrap.reload();
+    bootstrap.dispose(); // await 중 dispose — 어느 순서든 좀비는 금지
+    let settled = 'disposed';
+    try {
+      await reloading;
+      settled = 'completed';
+    } catch {
+      settled = 'aborted';
+    }
+    assert.notEqual(settled, 'completed-and-disposed', 'no contradiction state');
+    if (settled === 'completed') {
+      assert.equal(bootstrap.state, 'ready', 'completed reload owns the state');
+    } else {
+      assert.equal(bootstrap.state, 'disposed', 'aborted reload leaves disposed');
+    }
+    await assert.rejects(
+      bootstrap.ready(),
+      (err: unknown) =>
+        settled === 'completed' ? false : err instanceof Error && /disposed/.test(err.message),
+      'ready must not resolve while disposed (no zombie)',
+    );
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
 test('A05: concurrent ready calls share one initialization promise (bun)', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);

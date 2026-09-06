@@ -1046,3 +1046,88 @@ test('A05: reload duck-drains its own transport before dispose (createTransport 
     configure(cleanSlotEngine);
   }
 });
+
+test('A05: dispose during reload drain aborts the reload — no zombie ready (I-1)', async () => {
+  // I-1 회귀 — drain 중 dispose 하면 reload 가 재개해 state='ready' 로 부활하고
+  // ready() 가 해소하는 좀비를 만들 수 없다. await 경계마다 disposed 재검사.
+  const { configure } = await import('@rustra/types');
+  try {
+    configure(cleanSlotEngine);
+    let releaseDrain: (() => void) | undefined;
+    let spawnCount = 0;
+    const bootstrap = createNodeBootstrap({
+      createTransport: () => {
+        spawnCount++;
+        const transport = {
+          invoke: async () => ({}),
+          getContractHash: async () => '0'.repeat(64),
+          dispose() {},
+        } as unknown as NodeProcessTransport;
+        (transport as { drain?: (timeoutMs?: number) => Promise<void> }).drain = async () => {
+          await new Promise<void>((resolve) => {
+            releaseDrain = resolve;
+          });
+        };
+        return transport;
+      },
+    });
+    await bootstrap.ready();
+    const reloading = bootstrap.reload();
+    // drain 이 걸려 있는 동안 dispose — reload 는 중단되어야 한다.
+    bootstrap.dispose();
+    releaseDrain?.();
+    await assert.rejects(reloading, (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.match((err as RustraCommandError).message, /disposed/);
+      return true;
+    });
+    assert.equal(bootstrap.state, 'disposed', 'state stays disposed after abort');
+    assert.equal(spawnCount, 1, 'no re-spawn after dispose');
+    await assert.rejects(bootstrap.ready(), /disposed/, 'no zombie ready() resolution');
+  } finally {
+    configure(cleanSlotEngine);
+  }
+});
+
+test('A05: failed reload keeps the original error and restores retryable state (I-2)', async () => {
+  // I-2 회귀 — 재초기화 실패는 bootstrap 을 'disposed' 로 벽돌화하지 않는다.
+  // 상태는 'initializing' 으로 복원되고 다음 ready() 는 원본 에러를 다시 낸다.
+  const { configure } = await import('@rustra/types');
+  try {
+    configure(cleanSlotEngine);
+    let failNextSpawn = false;
+    let spawnCount = 0;
+    const bootstrap = createNodeBootstrap({
+      createTransport: () => {
+        spawnCount++;
+        if (failNextSpawn) {
+          const error = new RustraCommandError('transport.error', 'transient spawn failure');
+          failNextSpawn = false;
+          return Promise.reject(error);
+        }
+        return {
+          invoke: async () => ({}),
+          getContractHash: async () => '0'.repeat(64),
+          dispose() {},
+        } as unknown as NodeProcessTransport;
+      },
+    });
+    await bootstrap.ready();
+    assert.equal(spawnCount, 1);
+    failNextSpawn = true;
+    await assert.rejects(
+      bootstrap.reload(),
+      (err: unknown) =>
+        err instanceof RustraCommandError && /transient spawn failure/.test(err.message),
+      'reload rejects with the ORIGINAL error',
+    );
+    assert.equal(bootstrap.state, 'initializing', 'state restored to retryable initializing');
+    // 재시도 경로 — ensureConfigured 가 실패 초기화를 비우므로 같은 bootstrap 으로 재시도 가능.
+    await bootstrap.ready();
+    assert.equal(bootstrap.state, 'ready', 'retry succeeds after transient failure');
+    assert.equal(spawnCount, 3);
+    await bootstrap.dispose();
+  } finally {
+    configure(cleanSlotEngine);
+  }
+});

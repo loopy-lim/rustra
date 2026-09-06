@@ -42,14 +42,15 @@ export {
 import {
   configureLazy,
   createJsonEngine,
+  disposedBootstrapError,
   ensureConfigured,
   normalizeRustraError,
   RustraErrorCode,
   RustraCommandError,
+  type BootstrapState,
   type EngineClientWithBatch,
   type EngineSupports,
 } from '@rustra/types';
-import { disposedBootstrapError } from './bootstrap-lifecycle.js';
 
 /**
  * Tauri의 IPC invoke 함수 타입입니다.
@@ -166,10 +167,10 @@ export function createTauriEngine(options: TauriEngineOptions = {}) {
 
 export type TauriBootstrap = {
   /**
-   * bootstrap 수명 상태(A05) — 'initializing' | 'ready' | 'disposed'.
+   * bootstrap 수명 상태(A05) — 공용 `BootstrapState`(@rustra/types).
    * dispose 는 멱등이고 dispose 후 ready 는 loud-fail 한다.
    */
-  readonly state: 'initializing' | 'ready' | 'disposed';
+  readonly state: BootstrapState;
   /** Resolves after the lazily discovered Tauri engine is ready. */
   ready(): Promise<EngineClientWithBatch>;
   /** (A05) dispose-once — 두 번째 호출은 no-op. */
@@ -210,4 +211,4 @@ export function createTauriBootstrap(options: TauriEngineOptions = {}): TauriBoo
 }
 
 export { rustraEventChannel, subscribeEvent, subscribeTauriEvent } from './tauri-events.js';
-export { disposedBootstrapError, type BootstrapState } from './bootstrap-lifecycle.js';
+export { disposedBootstrapError, type BootstrapState } from '@rustra/types';

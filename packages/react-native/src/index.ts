@@ -2,6 +2,7 @@
 export type {
   EngineClient,
   EngineSupports,
+  BootstrapState,
   InvokeOptions,
   RustraError,
   RkyvV2Codec,
@@ -13,6 +14,7 @@ export {
   RustraCommandError,
   TimeoutError,
   configure,
+  disposedBootstrapError,
   invoke,
   createRkyvV2Engine,
   parseRustraErrorString,

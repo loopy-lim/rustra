@@ -1,5 +1,6 @@
 import type {
   BatchEntry,
+  BootstrapState,
   EngineClient as EngineClientType,
   EngineSupports,
   InvokeOptions,
@@ -13,6 +14,7 @@ import {
   configureLazy,
   createRkyvV2Engine,
   decodeUtf8,
+  disposedBootstrapError,
   encodeUtf8,
   ensureConfigured,
   exactArrayBuffer,
@@ -110,17 +112,22 @@ export type RustraBootstrapOptions = FastEngineOptions & {
 };
 export type RustraBootstrap = {
   /**
-   * bootstrap 수명 상태(A05) — 'initializing' | 'ready' | 'disposed'.
+   * bootstrap 수명 상태(A05) — 공용 `BootstrapState`(@rustra/types).
    * dispose 는 멱등이고 dispose 후 ready 는 loud-fail 한다.
    */
-  readonly state: 'initializing' | 'ready' | 'disposed';
+  readonly state: BootstrapState;
   ready(): Promise<RkyvV2Engine>;
   /** (A05) dispose-once — 두 번째 호출은 no-op. JS reload 는 네이티브 drift 를 못 고친다. */
   dispose(): void;
 };
 
 export function createRustraBootstrap(options: RustraBootstrapOptions): RustraBootstrap {
-  let state: 'initializing' | 'ready' | 'disposed' = 'initializing';
+  let state: BootstrapState = 'initializing';
+  const disposed = () =>
+    disposedBootstrapError(
+      'Rustra (React Native)',
+      'A JS reload cannot repair native drift — remount the React Native screen/app to create a fresh bootstrap.',
+    );
   configureLazy(async () => {
     try {
       await options.install();
@@ -141,19 +148,9 @@ export function createRustraBootstrap(options: RustraBootstrapOptions): RustraBo
       return state;
     },
     ready: () => {
-      if (state === 'disposed')
-        return Promise.reject(
-          new Error(
-            'This rustra bootstrap has been disposed. A JS reload cannot repair native drift — ' +
-              'remount the React Native screen/app to create a fresh bootstrap.',
-          ),
-        );
+      if (state === 'disposed') return Promise.reject(disposed());
       return (ensureConfigured() as Promise<RkyvV2Engine>).then((engine) => {
-        if (state === 'disposed')
-          throw new Error(
-            'This rustra bootstrap has been disposed. A JS reload cannot repair native drift — ' +
-              'remount the React Native screen/app to create a fresh bootstrap.',
-          );
+        if (state === 'disposed') throw disposed();
         state = 'ready';
         return engine;
       });

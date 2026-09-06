@@ -89,6 +89,7 @@
       "createBunFfiEngine",
       "createJsonEngine",
       "createRkyvV2Engine",
+      "disposedBootstrapError",
       "ensureConfigured",
       "invoke"
     ],
@@ -163,6 +164,7 @@
       "configureLazy",
       "createNodeEventSubscription",
       "createRkyvV2Engine",
+      "disposedBootstrapError",
       "ensureConfigured",
       "invoke",
       "subscribeEvent"
@@ -189,6 +191,7 @@
       "useSuspenseCommand"
     ],
     "packages/react-native": [
+      "BootstrapState",
       "CancelledError",
       "EngineClient",
       "EngineSupports",
@@ -216,6 +219,7 @@
       "createReactNativeEngine",
       "createRkyvV2Engine",
       "createRustraBootstrap",
+      "disposedBootstrapError",
       "getRustraNative",
       "invoke",
       "parseRustraErrorString",
@@ -262,6 +266,7 @@
       "expectContractFieldsCurrent"
     ],
     "packages/types": [
+      "* from './bootstrap-lifecycle.js'",
       "* from './debug.js'",
       "* from './errors.js'",
       "* from './global-batch-settled.js'",
