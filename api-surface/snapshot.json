@@ -60,6 +60,9 @@
   ],
   "tsExports": {
     "packages/bun": [
+      "BUN_ENGINE_SUPPORTS",
+      "BUN_RKYV_V2_ENGINE_SUPPORTS",
+      "BootstrapState",
       "BunBootstrap",
       "BunEventBridge",
       "BunEventBridgeOptions",
@@ -70,6 +73,7 @@
       "BunFfiRuntime",
       "BunInvokeTransport",
       "EngineClient",
+      "EngineSupports",
       "InvokeOptions",
       "RkyvV2Codec",
       "RkyvV2Engine",
@@ -86,6 +90,7 @@
       "createBunFfiEngine",
       "createJsonEngine",
       "createRkyvV2Engine",
+      "disposedBootstrapError",
       "ensureConfigured",
       "invoke"
     ],
@@ -147,6 +152,7 @@
       "* from './node-loop.js'",
       "EngineClient",
       "EngineClientWithBatch",
+      "EngineSupports",
       "InvokeOptions",
       "NodeEventSubscription",
       "NodeEventSubscriptionOptions",
@@ -159,6 +165,7 @@
       "configureLazy",
       "createNodeEventSubscription",
       "createRkyvV2Engine",
+      "disposedBootstrapError",
       "ensureConfigured",
       "invoke",
       "subscribeEvent"
@@ -185,10 +192,14 @@
       "useSuspenseCommand"
     ],
     "packages/react-native": [
+      "BootstrapState",
       "CancelledError",
       "EngineClient",
+      "EngineSupports",
       "FastEngineOptions",
       "InvokeOptions",
+      "REACT_NATIVE_JSON_ENGINE_SUPPORTS",
+      "REACT_NATIVE_RKYV_V2_ENGINE_SUPPORTS",
       "ReactNativeEngine",
       "RkyvV2Codec",
       "RkyvV2Native",
@@ -209,18 +220,22 @@
       "createReactNativeEngine",
       "createRkyvV2Engine",
       "createRustraBootstrap",
+      "disposedBootstrapError",
       "getRustraNative",
       "invoke",
       "parseRustraErrorString",
       "subscribeEvent"
     ],
     "packages/tauri": [
+      "BootstrapState",
       "EngineClient",
+      "EngineSupports",
       "InvokeOptions",
       "RkyvV2Codec",
       "RkyvV2Native",
       "RustraCommandError",
       "RustraError",
+      "TAURI_ENGINE_SUPPORTS",
       "TauriBootstrap",
       "TauriEngineOptions",
       "TauriInvoke",
@@ -230,6 +245,7 @@
       "createRkyvV2Engine",
       "createTauriBootstrap",
       "createTauriEngine",
+      "disposedBootstrapError",
       "ensureConfigured",
       "invoke",
       "rustraEventChannel",
@@ -251,8 +267,10 @@
       "expectContractFieldsCurrent"
     ],
     "packages/types": [
+      "* from './bootstrap-lifecycle.js'",
       "* from './debug.js'",
       "* from './errors.js'",
+      "* from './global-batch-settled.js'",
       "* from './global.js'",
       "* from './inspector.js'",
       "* from './json-engine.js'",

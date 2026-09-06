@@ -1,7 +1,13 @@
 import { normalizeRustraError } from './errors.js';
 import { debugRustra, isRustraDebugEnabled } from './debug.js';
 import { invokeWithTimeout } from './cancel.js';
-import type { BatchEntry, EngineClient, EngineClientWithBatch, InvokeOptions } from './public.js';
+import type {
+  BatchEntry,
+  EngineClient,
+  EngineClientWithBatch,
+  EngineSupports,
+  InvokeOptions,
+} from './public.js';
 
 /**
  * json-engine 이 이미 아는 와이어 배치 표면 — transport 가 단일 IPC 횡단으로
@@ -74,6 +80,7 @@ export function createJsonEngine(
   transport:
     ((command: string, args?: unknown) => Promise<unknown> | unknown) | JsonWireBatchTransport,
   normalizeArgs: (args?: unknown) => unknown = (args) => args,
+  supports?: EngineSupports,
 ): EngineClientWithBatch {
   const rawTransport: JsonWireBatchTransport =
     typeof transport === 'function' ? { invoke: transport } : transport;
@@ -99,19 +106,47 @@ export function createJsonEngine(
     },
   };
   return {
+    supports,
     invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
       return invokeWithTimeout(rawEngine, command, args, options);
     },
     invokeBatch<T>(entries: BatchEntry[]): Promise<T[]> {
       // 와이어 배치(단일 횡단) 경로 — transport 가 지원할 때만. 항목별
       // options(signal/timeoutMs)가 섞이면 항목별 정책을 존중해 폴백한다.
+      // timeoutMs 판정은 단건 경로(cancel.ts)와 동일한 `!== undefined` —
+      // truthiness 면 0 이 falsy 로 누락되어 즉시 타임아웃이 지연 응답으로
+      // 변질된다(R04-a). options 객체만 있고 timeoutMs 가 undefined 면
+      // 단건 경로와 같이 레이스 없이 단일 횡단을 유지한다.
       // 단일 횡단 경로는 항목별 debug/셰이프 감지를 거치지 않는다 — 진단이
       // 필요한 항목은 폴백 경로(options 를 통한 항목별 invoke)를 태운다.
       if (
         typeof rawTransport.invokeBatch === 'function' &&
-        !entries.some((entry) => entry.options?.signal || entry.options?.timeoutMs)
+        !entries.some((entry) => entry.options?.signal || entry.options?.timeoutMs !== undefined)
       ) {
-        return Promise.resolve(rawTransport.invokeBatch(entries)) as Promise<T[]>;
+        try {
+          // 단건 경로와 동일하게 항목별 args 를 normalizeArgs 로 정규화한다(R04-c).
+          // 값이 바뀐 항목만 새 객체로 재생성하고 원본 배열·항목은 변형하지 않는다
+          // (global-batch 의 stripped 재생성 관례와 동일). 정규화는 주입된 사용자
+          // 코드를 실행하므로 try 경계 안에 둔다 — normalizer 의 동기 throw 도
+          // transport 동기 throw 와 동일하게 수렴한다. 폴백 경로는 rawEngine.invoke
+          // 가 이미 정규화를 담당하므로 이곳 재생성과 무관하다.
+          const normalized = entries.map((entry) => {
+            const args = normalizeArgs(entry.args);
+            return args === entry.args ? entry : { ...entry, args };
+          });
+          return Promise.resolve(rawTransport.invokeBatch(normalized)) as Promise<T[]>;
+        } catch (error: unknown) {
+          // transport/normalizer 의 동기 throw 도 단건 경로와 동일하게 rejected
+          // Promise 로 정규화한다(R04-b) — 동기 throw 는 `.catch()` 기반 호출자를
+          // 우회한다. 단건 경로와 같은 debug 에러 이벤트를 배치 라벨로 남긴다.
+          debugRustra({
+            direction: 'error',
+            transport: 'json',
+            command: `invokeBatch(${entries.length} entries)`,
+            error: String(error),
+          });
+          return Promise.reject(normalizeRustraError(error));
+        }
       }
       return Promise.all(
         entries.map((entry) =>
