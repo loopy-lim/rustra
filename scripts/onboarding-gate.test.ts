@@ -16,8 +16,16 @@ import {
 const ROOT = '/tmp/unused';
 const PROJECT_DIR = join(ROOT, 'onboarding-probe');
 
-/** runner 가 도달하는 단계 — mutate 는 fs 조작이라 runner 를 거치지 않는다. */
-const RUNNER_STEPS = ONBOARDING_STEPS.map((step) => step.name).filter((name) => name !== 'mutate');
+/** runner 가 도달하는 단계 — patch(fs 전제 주입)와 mutate(fs 조작)는 스폰이 아니라
+ *  runner 를 거치지 않는다. */
+const RUNNER_STEPS = ONBOARDING_STEPS.map((step) => step.name).filter(
+  (name) => name !== 'patch' && name !== 'mutate',
+);
+
+/** 사용자 여정 전체 순서 — 보고서에 기록되는 단계(patch 제외, mutate 포함). */
+const CYCLE_STEPS = ONBOARDING_STEPS.filter((step) => step.report !== false).map(
+  (step) => step.name,
+);
 
 /** 검증용 스크래치 프로젝트 — verify 가 읽는 생성물만 심어둔다(스폰 없는 단위 실험). */
 function scratchProject({ typesTs }: { typesTs?: string }) {
@@ -56,16 +64,13 @@ test('gate runs the full maintenance cycle in order: init → … → codegen-ch
       mutate: () => events.push('mutate'),
     });
     assert.ok(report.ok);
-    // runner 시퀀스 — mutate 만 빠지고 나머지는 전부 runner 를 거친다.
+    // runner 시퀀스 — mutate(fs 조작)와 patch(fs 전제 주입)만 빠지고 나머지는 전부 runner.
     assert.deepEqual(
       events.filter((step) => step !== 'mutate'),
       RUNNER_STEPS,
     );
-    // 전체 사이클 순서 — mutate 포함, 정의 순서 그대로.
-    assert.deepEqual(
-      events,
-      ONBOARDING_STEPS.map((step) => step.name),
-    );
+    // 전체 사이클 순서 — mutate 포함, patch(스폰 없는 fs 전제) 제외, 정의 순서 그대로.
+    assert.deepEqual(events, CYCLE_STEPS);
   } finally {
     cleanup();
   }
@@ -259,6 +264,7 @@ test('full offline cycle: real mutate + simulated regen propagates the field to 
       },
     });
     assert.ok(report.ok, report.error);
+    // runner 기록 — patch/mutate 는 fs 동작이라 runner 로그에 없다.
     assert.deepEqual(runnerLog, RUNNER_STEPS);
     assert.match(readFileSync(join(projectDir, 'src', 'lib.rs'), 'utf8'), /pub repeat: u32/);
     assert.match(readFileSync(join(projectDir, 'src', 'index.ts'), 'utf8'), /repeat: 3/);
@@ -276,9 +282,10 @@ test('report records per-step timing without threshold gating', async () => {
       mutate: () => {},
     });
     assert.ok(report.ok);
+    // 보고서는 발행 전 patch 우회 단계를 제외한 사용자 여정 단계만 기록한다.
     assert.deepEqual(
       report.steps.map((step) => step.name),
-      ONBOARDING_STEPS.map((step) => step.name),
+      ONBOARDING_STEPS.filter((step) => step.report !== false).map((step) => step.name),
     );
     for (const step of report.steps) {
       assert.equal(typeof step.durationMs, 'number');
