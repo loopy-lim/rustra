@@ -147,21 +147,67 @@ fn run_batch(package: &Package, requests: Vec<BatchRequest>) -> Vec<BatchRespons
 ///
 /// 이벤트는 폴링으로만 전달됩니다(기존 동작). 푸시 배선이 필요하면
 /// [`register_with_events`]를 사용하세요.
+///
+/// 노출 커맨드는 프로덕션 경로인 [`rustra_dispatch`]·[`rustra_dispatch_batch`]
+/// 뿐이다 — 측정 전용 [`rustra_dispatch_profiled`] 은 기본 노출에서 제외된다
+/// (A07). 벤치 호스트는 [`register_profiled`] 을 사용한다.
 pub fn register<R: tauri::Runtime>(
     package: Package,
     builder: tauri::Builder<R>,
 ) -> tauri::Builder<R> {
-    builder
-        .manage(RustraState { package })
-        .invoke_handler(tauri::generate_handler![
-            rustra_dispatch,
-            rustra_dispatch_profiled,
-            rustra_dispatch_batch
-        ])
+    finish_registration(package, builder, |state, builder| {
+        builder
+            .manage(state)
+            .invoke_handler(tauri::generate_handler![
+                rustra_dispatch,
+                rustra_dispatch_batch
+            ])
+    })
+}
+
+/// [`register`] 의 벤치 변형 — 프로덕션 커맨드에 측정 전용
+/// [`rustra_dispatch_profiled`] 이 추가로 노출된다(A07). 프로덕션 앱은
+/// [`register`] 나 [`register_with_events`] 를 쓰고, 벤치 호스트만 이 함수를
+/// 쓴다.
+///
+/// [`rustra_dispatch_profiled`] 심볼 자체는 공용 API 로 유지된다 — 이미 이
+/// 커맨드를 소비하는 코드의 컴파일은 깨지지 않으며, 분리는 **노출**에만
+/// 적용된다. Tauri invoke 는 handler 목록에 등록된 커맨드에만 도달하므로
+/// production 등록에서 빠지면 노출이 꺼진다.
+pub fn register_profiled<R: tauri::Runtime>(
+    package: Package,
+    builder: tauri::Builder<R>,
+) -> tauri::Builder<R> {
+    finish_registration(package, builder, |state, builder| {
+        builder
+            .manage(state)
+            .invoke_handler(tauri::generate_handler![
+                rustra_dispatch,
+                rustra_dispatch_profiled,
+                rustra_dispatch_batch
+            ])
+    })
+}
+
+/// 등록 공통 — `RustraState` 를 만들어 배선 클로저에 넘긴다. `register` 와
+/// `register_profiled` 는 노출 커맨드 목록 하나로만 갈라진다.
+fn finish_registration<R, F>(
+    package: Package,
+    builder: tauri::Builder<R>,
+    wire: F,
+) -> tauri::Builder<R>
+where
+    R: tauri::Runtime,
+    F: FnOnce(RustraState, tauri::Builder<R>) -> tauri::Builder<R>,
+{
+    wire(RustraState { package }, builder)
 }
 
 /// [`register`] + 이벤트 푸시 배선 — `Package::emit` 이 즉시
 /// `app.emit("rustra://{name}", payload_json)` 로 전달된다.
+///
+/// `register` 의 노출 커맨드 목록을 그대로 따른다 —
+/// `rustra_dispatch_profiled` 미포함(A07).
 ///
 /// 싱크 설치는 Tauri **플러그인**의 setup 훅에서 일어난다. `tauri::Builder`
 /// 자체의 `.setup()` 은 단일 슬롯이라 우리가 등록하면 호스트가 나중에 자기
