@@ -122,14 +122,20 @@ RN rkyv V2 의 `cancellation: 'cooperative'` 는 매트릭스의 "조건부 전�
 
 bootstrap 객체(`createNodeBootstrap`/`createBunBootstrap`/
 `createTauriBootstrap`/`createRustraBootstrap`)는 로컬 상태
-`state: 'initializing' | 'ready' | 'disposed'` 를 노출한다. `dispose()` 는
-멱등(두 번째 호출은 no-op)이고, dispose 뒤의 `ready()` 는 조용히 재해상하는
-대신 loud-fail 한다. `NodeBootstrap.reload()` 는 bootstrap 이 소유한
-transport 가 `drain(timeoutMs)` 을 노출할 때 그 transport 를 drain 한다
-(duck-typing; 기본 5초 가드 — 타임아웃 후에도 reload 는 진행)하고, 없으면 즉시
-진행한다(원샷 stdio transport 에는 drain 이 없다; 루프 transport 호스트는
-NodeBootstrap 을 통해 연결되지 않는다). `draining` 상태는 의도적으로
-모델링하지 않는다 — drain 은 3상태 수명 주기에 투명하다.
+`state: 'initializing' | 'ready' | 'disposed'` 를 노출한다(`@rustra/types` 의
+공용 `BootstrapState`; 모든 어댑터는 dispose 뒤 `ready()` 를 같은
+`disposedBootstrapError` 계열로 거부한다). `dispose()` 는 멱등(두 번째 호출은
+no-op)이고, dispose 뒤의 `ready()` 는 조용히 재해상하는 대신 loud-fail 한다.
+`NodeBootstrap.reload()` 는 bootstrap 이 소유한 transport 가
+`drain(timeoutMs)` 을 노출할 때 그 transport 를 drain 한다(duck-typing; 기본
+5초 가드 — 타임아웃 후에도 reload 는 진행, drain 이 **거부**되면 dispose 없이
+reload 만 중단)하고, 없으면 즉시 진행한다(원샷 stdio transport 에는 drain 이
+없다; 루프 transport 호스트는 NodeBootstrap 을 통해 연결되지 않는다).
+`reload()` 는 await 경계마다 상태를 재검사한다 — drain·재초기화 중 `dispose()`
+하면 reload 는 부활 없이 중단되고, 재초기화 실패는 `disposed` 벽돌 대신
+`initializing`(원본 에러 전파)으로 남는다. `draining` 상태는 의도적으로
+모델링하지 않는다 — drain 은 3상태 수명 주기에 투명하다. reload 계약의 기반은
+아래 핫스왕 절 참고.
 
 ## 스파이크: wasm3 안의 wasm32 엔진 (React Native) — 판정: PASS (스파이크)
 

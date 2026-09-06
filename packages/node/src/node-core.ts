@@ -2,6 +2,7 @@ import {
   createJsonEngine,
   parseRustraErrorString,
   RustraCommandError,
+  type BootstrapState,
   type EngineClientWithBatch,
   type EngineSupports,
 } from '@rustra/types';
@@ -137,14 +138,14 @@ export type NodeBootstrapOptions = {
    * 기본은 `createNodeProcessTransport` 스폰 경로. loop transport 등 drain 이
    * 있는 transport 를 주입하면 reload 의 duck-typed drain 이 그 drain 을 쓴다.
    */
-  createTransport?: () => NodeProcessTransport;
+  createTransport?: () => NodeProcessTransport | Promise<NodeProcessTransport>;
 };
 export type NodeBootstrap = {
   /**
-   * bootstrap 수명 상태(A05) — 'initializing' | 'ready' | 'disposed'.
+   * bootstrap 수명 상태(A05) — 공용 `BootstrapState`(@rustra/types).
    * dispose 는 멱등이고 dispose 후 ready 는 loud-fail 한다.
    */
-  readonly state: 'initializing' | 'ready' | 'disposed';
+  readonly state: BootstrapState;
   ready(): Promise<EngineClientWithBatch>;
   dispose(): void;
   /**

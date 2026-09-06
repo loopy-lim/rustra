@@ -89,14 +89,22 @@ single-IPC wire batch (`rustra_dispatch_batch`) as an optimization.
 
 The bootstrap objects (`createNodeBootstrap`/`createBunBootstrap`/
 `createTauriBootstrap`/`createRustraBootstrap`) expose a local
-`state: 'initializing' | 'ready' | 'disposed'`. `dispose()` is idempotent (a
-second call is a no-op), and `ready()` after `dispose()` rejects loudly instead
-of silently re-resolving. `NodeBootstrap.reload()` drains the bootstrap's own
-transport when it exposes `drain(timeoutMs)` (duck-typed; default 5 s guard —
-reload proceeds after the timeout), and proceeds immediately otherwise
-(the one-shot stdio transport has no drain; loop-transport hosts are not wired
-through `NodeBootstrap`). A `draining` state is deliberately not modeled:
-drain is transparent to the three-state lifecycle.
+`state: 'initializing' | 'ready' | 'disposed'` (shared as `BootstrapState` in
+`@rustra/types`; all adapters reject post-dispose `ready()` with the same
+`disposedBootstrapError` family). `dispose()` is idempotent (a second call is a
+no-op), and `ready()` after `dispose()` rejects loudly instead of silently
+re-resolving. `NodeBootstrap.reload()` drains the bootstrap's own transport
+when it exposes `drain(timeoutMs)` (duck-typed; default 5 s guard — reload
+proceeds after the timeout; a drain **rejection** aborts the reload without
+disposing), and proceeds immediately otherwise (the one-shot stdio transport
+has no drain; loop-transport hosts are not wired through `NodeBootstrap`).
+State is re-checked at every await boundary inside `reload()`: a `dispose()`
+during the drain or re-initialization aborts the reload instead of resurrecting
+the bootstrap, and a failed re-initialization restores `initializing` (the
+original error propagates) rather than bricking the bootstrap as `disposed`.
+A `draining` state is deliberately not modeled: drain is transparent to the
+three-state lifecycle. See the hot-swap section below for the reload contract
+this builds on.
 
 ## Spike: wasm32 engine in wasm3 (React Native) — VERDICT: PASS (spike)
 

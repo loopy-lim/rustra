@@ -1,9 +1,11 @@
 import {
   configureLazy,
   createRkyvV2Engine,
+  disposedBootstrapError,
   ensureConfigured,
   RustraErrorCode,
   RustraCommandError,
+  type BootstrapState,
   type EngineSupports,
   type RkyvV2Engine,
 } from '@rustra/types';
@@ -13,7 +15,6 @@ import {
   type BunFfiEngineOptions,
   type BunFfiRuntime,
 } from './bun-ffi-library.js';
-import { disposedBootstrapError } from './bootstrap-lifecycle.js';
 
 /**
  * Bun JSON 엔진의 기술적 지표(A02) — compatibility-matrix.md 의 Bun 열 셀을
@@ -194,10 +195,10 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
 
 export type BunBootstrap = {
   /**
-   * bootstrap 수명 상태(A05) — 'initializing' | 'ready' | 'disposed'.
+   * bootstrap 수명 상태(A05) — 공용 `BootstrapState`(@rustra/types).
    * dispose 는 멱등이고 dispose 후 ready 는 loud-fail 한다.
    */
-  readonly state: 'initializing' | 'ready' | 'disposed';
+  readonly state: BootstrapState;
   ready(): Promise<RkyvV2Engine>;
   dispose(): void;
   /**
@@ -216,7 +217,10 @@ export type BunBootstrap = {
 
 export function createBunBootstrap(options: BunFfiEngineOptions): BunBootstrap {
   let runtime: BunFfiRuntime | undefined;
-  let state: 'initializing' | 'ready' | 'disposed' = 'initializing';
+  let state: BootstrapState = 'initializing';
+  // await 경계 재검사용 — 클로저 변수를 직접 비교하면 TS 제어 흐름 분석이
+  // dispose() 의 부수 효과를 추적하지 못해 비교를 데드 코드로 지워버린다.
+  const readState = (): BootstrapState => state;
   const bootstrap = async (): Promise<RkyvV2Engine> => {
     runtime = await createBunFfiEngine(options);
     return runtime.engine;
@@ -225,6 +229,14 @@ export function createBunBootstrap(options: BunFfiEngineOptions): BunBootstrap {
   const dispose = () => {
     if (state === 'disposed') return; // dispose-once 멱등 — 두 번째는 no-op
     state = 'disposed';
+    runtime?.close();
+    runtime = undefined;
+  };
+  // (I-1/I-2) reload 내부 리셋 — 사용자 dispose 와 다른 상태 의미: 재초기화가
+  // 곧 진행되므로 'initializing' 을 유지한다. 'disposed' 로 놓으면 reload 자신의
+  // 리셋을 사용자 dispose 로 오판(I-1)하고, 실패 시 벽돌 상태가 남는다(I-2).
+  const resetForReinit = () => {
+    state = 'initializing';
     runtime?.close();
     runtime = undefined;
   };
@@ -244,9 +256,17 @@ export function createBunBootstrap(options: BunFfiEngineOptions): BunBootstrap {
     async reload() {
       // 엔진 상태 재초기화 — a0 스파이크가 증명한 프로세스 내 리셋 경로.
       if (state === 'disposed') return Promise.reject(disposedBootstrapError('Bun'));
-      dispose();
+      resetForReinit();
       configureLazy(bootstrap);
-      await (ensureConfigured() as Promise<RkyvV2Engine>);
+      try {
+        await (ensureConfigured() as Promise<RkyvV2Engine>);
+      } catch (error) {
+        // (I-2) 재초기화 실패는 'initializing'(재시도 가능)을 유지하고 원본
+        // 에러를 그대로 reject — disposed 벽돌 없음.
+        throw error;
+      }
+      // (I-1) await 경계 재검사 — 재초기화 중 dispose 되면 'ready' 기록 금지.
+      if (readState() === 'disposed') throw disposedBootstrapError('Bun');
       state = 'ready';
       // 경고는 재초기화가 실제 성공한 뒤에 — 실패 시 false success 신호 방지.
       console.warn(

@@ -13,6 +13,7 @@ export {
   RustraCommandError,
   configure,
   configureLazy,
+  disposedBootstrapError,
   ensureConfigured,
   invoke,
   createRkyvV2Engine,
