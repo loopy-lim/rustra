@@ -24,17 +24,69 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PROJECT_NAME = 'onboarding-probe';
 
+/**
+ * 발행 전 검증 패치 — repo 체크아웃(개발/CI)에서만 적용되는 검증 전제 주입.
+ * init 스캐폴드는 발행 버전(cli rustraTemplate.cargoRange / npm ranges, 현재
+ * ^0.8.0)을 요구하는데, 발행은 이 게이트보다 뒤 단계다. 발행 전에도 게이트가
+ * 돌아야 하므로 repo에 크레이트 소스가 있으면 두 축을 로컬로 우회한다:
+ *
+ *   1. Rust — .cargo/config.toml 의 [patch.crates-io] 로 워크스페이스 크레이트 사용
+ *   2. JS  — node_modules/@rustra/{node,types,cli} 를 repo 패키지로 심링크.
+ *      게이트는 스캐폴드에서 bun install 을 실행하지 않으므로 bun run 의 자동
+ *      설치가 레지스트리(발행 전엔 ^0.8.0 없음)를 보지 않게 막는다.
+ *
+ * 발행물을 소비하는 신규 사용자 환경(크레이트 소스 없음)에는 아무것도
+ * 생성되지 않아 실 레지스트리 흐름이 그대로 검증된다. 레지스트리 도달성은
+ * doctor의 registry.reachability가 계속 담당한다.
+ */
+function injectWorkspacePatch(projectDir, repoRoot) {
+  const repo = repoRoot ?? join(projectDir, '..', '..');
+  const cratesRoot = resolve(repo, 'crates');
+  if (!existsSync(join(cratesRoot, 'rustra', 'Cargo.toml'))) return false;
+  const posix = (p) => p.split('\\').join('/');
+  const patchDir = join(projectDir, '.cargo');
+  mkdirSync(patchDir, { recursive: true });
+  writeFileSync(
+    join(patchDir, 'config.toml'),
+    [
+      '# [onboarding-gate] 발행 전 검증용 — repo 워크스페이스 크레이트로 우회한다.',
+      '# 신규 사용자 환경(크레이트 소스 없음)에는 생성되지 않는다.',
+      '[patch.crates-io]',
+      `rustra = { path = "${posix(join(cratesRoot, 'rustra'))}" }`,
+      `rustra-macros = { path = "${posix(join(cratesRoot, 'rustra-macros'))}" }`,
+      `rustra-naming = { path = "${posix(join(cratesRoot, 'rustra-naming'))}" }`,
+      '',
+    ].join('\n'),
+  );
+  const modulesDir = join(projectDir, 'node_modules', '@rustra');
+  mkdirSync(modulesDir, { recursive: true });
+  for (const name of ['node', 'types', 'cli']) {
+    const linkPath = join(modulesDir, name);
+    if (!existsSync(linkPath)) symlinkSync(join(repo, 'packages', name), linkPath, 'dir');
+  }
+  return true;
+}
+
 /** 단계 정의 — name은 게이트 보고용, argv가 있으면 프로젝트 디렉터리에서 그대로 실행하고,
  *  없으면 commandFor 가 커맨드를 구성한다. mutate/verify 는 루프에서 이름으로 특수 처리된다. */
 export const ONBOARDING_STEPS = [
   { name: 'init' },
+  { name: 'patch', report: false },
   { name: 'doctor' },
   { name: 'build', argv: ['cargo', 'build'] },
   { name: 'codegen' },
@@ -42,6 +94,7 @@ export const ONBOARDING_STEPS = [
   { name: 'codegen-check' },
   { name: 'mutate' },
   { name: 'regen' },
+  { name: 'rebuild', argv: ['cargo', 'build'] },
   { name: 'verify' },
 ];
 
@@ -86,7 +139,9 @@ export function commandFor(step, root, repoRoot) {
         argv: [process.execPath, bin, 'codegen', '--config', 'rustra.json', '--check'],
       };
     case 'regen':
-      // 재코드젠 — 일반 codegen 과 같은 커맨드. cargo run 이 lib.rs 변경을 감지해 재빌드한다.
+      // 재코드젠 — 일반 codegen 과 같은 커맨드. 주의: cargo run --bin generate 는
+      // generate 만 재빌드하고 런타임 바이너리(rustra-app)를 재링크하지 않는다
+      // (2026-09-06 실측) — 뒤 rebuild 단계가 런타임 재빌드를 담당한다.
       return {
         cwd: projectDir,
         argv: [process.execPath, bin, 'codegen', '--config', 'rustra.json'],
@@ -179,7 +234,16 @@ export async function runOnboardingSteps({
   for (const step of ONBOARDING_STEPS) {
     const startedAt = Date.now();
     let failure = null;
-    if (step.name === 'mutate') {
+    if (step.name === 'patch') {
+      // 발행 전 우회 설정 — repo 크레이트가 있을 때만 .cargo/config.toml을 심는다.
+      // 보고서에는 기록하지 않는다(report: false): 신규 사용자 여정의 단계가 아니라
+      // 개발/CI 체크아웃의 검증 전제다.
+      try {
+        injectWorkspacePatch(projectDir, repoRoot);
+      } catch (cause) {
+        failure = cause instanceof Error ? cause.message : String(cause);
+      }
+    } else if (step.name === 'mutate') {
       // 스키마 변경은 스폰이 아니라 fs 조작으로 재현한다 — runner 를 거치지 않는다.
       try {
         mutate(projectDir);
@@ -201,6 +265,7 @@ export async function runOnboardingSteps({
       const result = await runner(step.name, command);
       if (!result.ok) failure = result.output;
     }
+    if (step.report === false) continue;
     steps.push({ name: step.name, durationMs: Date.now() - startedAt });
     if (failure)
       return {
