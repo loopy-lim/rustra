@@ -889,11 +889,13 @@ test('A02: createReactNativeEngine exposes supports matching the compatibility m
 });
 
 test('A02: createAsyncEngine exposes cooperative cancellation supports', async () => {
+  // 리뷰 정정 — async invokeBatch 는 항목별 Promise.all 폴백이므로 sync 엔진의
+  // `single-crossing` 셀을 상속하지 않는다: batch 는 `per-entry` 재정의.
   const h = makeAsyncNative();
   const engine = createAsyncEngine(h.native, { rkyvV2Codecs: new Map() });
   assert.deepEqual(engine.supports, {
     cancellation: 'cooperative',
-    batch: 'single-crossing',
+    batch: 'per-entry',
     events: 'push',
     channels: true,
     timeoutPreemption: true,
@@ -963,6 +965,29 @@ test('A05: dispose is idempotent — second dispose is a no-op (react-native)', 
     bootstrap.dispose();
     bootstrap.dispose(); // no-op — must not throw
     assert.equal(bootstrap.state, 'disposed');
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: concurrent ready calls share one initialization promise (react-native)', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    let installs = 0;
+    const native = {} as RustraJSINative;
+    const bootstrap = createRustraBootstrap({
+      install: async () => {
+        installs++;
+        await Promise.resolve();
+      },
+      getNative: () => native,
+      rkyvV2Codecs: new Map(),
+    });
+    const [a, b] = await Promise.all([bootstrap.ready(), bootstrap.ready()]);
+    assert.equal(a, b, 'concurrent ready must share the same engine instance');
+    assert.equal(installs, 1, 'install must run exactly once');
+    bootstrap.dispose();
   } finally {
     configure(A05_SLOT_ENGINE);
   }

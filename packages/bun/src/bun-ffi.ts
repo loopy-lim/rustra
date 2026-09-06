@@ -29,16 +29,17 @@ export const BUN_ENGINE_SUPPORTS: EngineSupports = {
 };
 
 /**
- * Bun FFI rkyv V2 엔진의 기술적 지표(A02) — compatibility-matrix.md 의 RN
- * `createRkyvV2Engine` 열(동일 createRkyvV2Engine 코어)을 Bun FFI 네이티브에
- * 적용한 것. 취소는 조건부 전파(invokeAsync/invokeCancel 확인 시 Rust
- * 체크포인트까지), 배치는 정적 명령 단일 횡단(signal 항목은 항목별 라우팅),
+ * Bun FFI rkyv V2 엔진의 기술적 지표(A02) — 동일 createRkyvV2Engine 코어라도
+ * Bun FFI 네이티브 바인딩은 invokeRkyvV2/getSchema/getContractHash/
+ * getSchemaGeneration 뿐이다(invokeAsync/invokeCancel·invokeTypedBatch 심볼
+ * 미바인딩). 따라서 rkyv 코어의 조건부 취소 전파와 정적 명령 단일 횡단 조건이
+ * 도달 불가 — 관측값은 얕은 취소(`shallow`)와 항목별 폴백(`per-entry`)이다.
  * 이벤트는 FFI 푸시 싱크(폴링 폴백). 채널은 Bun FFI 네이티브에 소스가 없으므로
  * RN JSI 열과 달리 false 다.
  */
 export const BUN_RKYV_V2_ENGINE_SUPPORTS: EngineSupports = {
-  cancellation: 'cooperative',
-  batch: 'single-crossing',
+  cancellation: 'shallow',
+  batch: 'per-entry',
   events: 'push',
   channels: false,
   timeoutPreemption: true,
@@ -179,9 +180,9 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
   void _candidates;
   void _libraryName;
   const engine = createRkyvV2Engine(native, rkyvV2Codecs, engineOptions);
-  // A02 — Bun FFI rkyv V2 엔진의 지표. 취소는 rkyv conditional 전파
-  // (invokeAsync/invokeCancel 노출 시 Rust 체크포인트까지), 배치는 정적 명령
-  // 단일 횡단, 이벤트는 FFI 푸시 싱크(폴링 폴백).
+  // A02 — Bun FFI rkyv V2 엔진의 지표. FFI 바인딩에 invokeAsync/invokeCancel·
+  // invokeTypedBatch 심볼이 없어 코어의 전파/단일 횡단 조건은 도달 불가 —
+  // 관측값은 shallow 취소 + per-entry 배치(상수 주석 참고).
   engine.supports = { ...BUN_RKYV_V2_ENGINE_SUPPORTS };
   return {
     engine,

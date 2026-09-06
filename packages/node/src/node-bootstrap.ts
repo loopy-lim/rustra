@@ -52,11 +52,15 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
   let transport: NodeProcessTransport | undefined;
   let state: BootstrapState = 'initializing';
   const bootstrap = async (): Promise<EngineClientWithBatch> => {
-    transport = createNodeProcessTransport({
-      command: resolveNodeRuntime(options),
-      args: options.args,
-      spawnOptions: options.spawnOptions,
-    });
+    const spawnTransport =
+      options.createTransport ??
+      (() =>
+        createNodeProcessTransport({
+          command: resolveNodeRuntime(options),
+          args: options.args,
+          spawnOptions: options.spawnOptions,
+        }));
+    transport = spawnTransport();
     if (options.contractHash !== undefined) {
       try {
         const nativeHash = await transport.getContractHash();
@@ -109,14 +113,16 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
     async reload() {
       // 재초기화 계약(A1): 자식 dispose → 같은 런타임 해상으로 재스폰 + (설정 시)
       // 계약 해시 재검증. 새 바이너리 이미지는 스폰 시점에 읽히므로 cargo 재빌드 후
-      // reload 만으로 반영된다. 원샷 트랜스포트에는 drain 이 없다(루프 호스트의
-      // NodeLoopTransport.drain 과 다름): dispose 시 진행 중 invocation 은
-      // 얕은 취소(re-dispose reject)로 정리된다 — 문서화된 동작.
+      // reload 만으로 반영된다.
       if (state === 'disposed') return Promise.reject(disposedBootstrapError('Node'));
-      // (A05) drain 연결 — 루프 호스트는 onReloadDrain 훅으로 자기 transport 의
-      // drain 을 reload 에 연결한다(기본 5초, 타임아웃 후 진행). drain 자체가
-      // 타임아웃 후 항상 해소하므로(transport 계약) reload 는 여기서 멈추지 않는다.
-      await options.onReloadDrain?.(5_000);
+      // (A05) drain 연결 — reload 는 부트스트랩이 소유한 transport 를 duck-typing
+      // 으로 drain 한다(기본 5초, 타임아웃 후 진행). drain 이 없는 원샷 트랜스포트
+      // (NodeProcessTransport)는 즉시 진행 — dispose 시 진행 중 invocation 은
+      // 얕은 취소(re-dispose reject)로 정리된다. drain 은 타임아웃 후 항상
+      // 해소하므로(transport 계약) reload 는 여기서 멈추지 않는다.
+      await (transport as { drain?: (timeoutMs?: number) => Promise<void> } | undefined)?.drain?.(
+        5_000,
+      );
       dispose();
       configureLazy(bootstrap, { ownerId: 'node' });
       await (ensureConfigured() as Promise<EngineClientWithBatch>);

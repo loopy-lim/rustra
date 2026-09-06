@@ -92,9 +92,11 @@ export function createAsyncEngine(
     },
   };
   const engine: ReactNativeEngine = {
-    // A02 — async 엔진은 sync rkyv V2 엔진과 동일한 매트릭스 셀을 공유한다
-    // (취소는 invokeCancel 노출 시 전파 — 존재는 위 transport 경로가 판별).
-    supports: syncEngine.supports,
+    // A02 — async 엔진은 sync rkyv V2 엔진의 지표를 상속하되 배치만 재정의한다:
+    // 아래 invokeBatch 는 항목별 Promise.all 폴백이므로 `single-crossing` 이
+    // 아니다(리뷰 정정). 취소는 invokeCancel 노출 시 전파 — 존재는 위 transport
+    // 경로가 판별하므로 `cooperative` 상속이 참이다.
+    supports: { ...syncEngine.supports, batch: 'per-entry' },
     invoke<T>(command: string, args?: unknown, invokeOptions?: InvokeOptions): Promise<T> {
       return invokeWithTimeoutHandledSignal<T>(transport, command, args, invokeOptions);
     },

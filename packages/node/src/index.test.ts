@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createNodeBootstrap, createNodeEngine } from './index.js';
+import type { NodeProcessTransport } from './index.js';
 import { RustraCommandError } from '@rustra/types';
 import type { EngineClientWithBatch } from '@rustra/types';
 
@@ -1006,17 +1007,42 @@ test('A05: concurrent ready calls share one initialization promise (ensureConfig
   }
 });
 
-test('A05: reload connects the loop transport drain before dispose (drain hook contract)', async () => {
-  // drain 연결 계약은 reload 가 transport drain 을 부르는지를 NodeBootstrap
-  // 옵션의 onReloadDrain 훅(프로덕션 표면)으로 관측한다. 루프 transport drain
-  // 시맨틱 자체는 NodeLoopTransport drain 테스트(실바이너리)가 담당한다.
-  const drained: Array<number | undefined> = [];
-  const bootstrap = createNodeBootstrap({
-    commandCandidates: ['./missing-rustra-runtime'],
-    onReloadDrain: (timeoutMs) => {
-      drained.push(timeoutMs);
-    },
-  });
-  await assert.rejects(bootstrap.reload(), /No Rustra Node runtime/);
-  assert.deepEqual(drained, [5_000], 'reload must drain with the documented 5s default');
+test('A05: reload duck-drains its own transport before dispose (createTransport seam)', async () => {
+  // drain 연결 계약 — reload 는 bootstrap 이 소유한 transport 를 duck-typing 으로
+  // drain 한다. drain 이 있는 transport(createTransport seam 주입)만 drain 되고,
+  // drain 이 없는 원샷 transport 는 즉시 진행한다. drain 시맨틱 자체는
+  // NodeLoopTransport drain 테스트(실바이너리)가 담당한다.
+  const { configure } = await import('@rustra/types');
+  try {
+    configure(cleanSlotEngine);
+    const drained: Array<number | undefined> = [];
+    let spawnCount = 0;
+    const bootstrap = createNodeBootstrap({
+      createTransport: () => {
+        spawnCount++;
+        const transport = {
+          invoke: async () => ({ value: spawnCount }),
+          getContractHash: async () => '0'.repeat(64),
+          dispose() {},
+        } as unknown as NodeProcessTransport;
+        // duck-typed drain — NodeLoopTransport 가 구조적으로 제공하는 것과 동일한
+        // 선택 멤버. 부트스트랩 소유 transport 에 붙어 있을 때만 reload 가 쓴다.
+        (transport as { drain?: (timeoutMs?: number) => Promise<void> }).drain = async (
+          timeoutMs,
+        ) => {
+          drained.push(timeoutMs);
+        };
+        return transport;
+      },
+    });
+    await bootstrap.ready();
+    assert.equal(spawnCount, 1);
+    await bootstrap.reload();
+    assert.deepEqual(drained, [5_000], 'reload must drain its own transport with the 5s default');
+    assert.equal(spawnCount, 2, 'reload must re-bootstrap through the seam after draining');
+    assert.equal(bootstrap.state, 'ready', 'reload ends in the ready state');
+    await bootstrap.dispose();
+  } finally {
+    configure(cleanSlotEngine);
+  }
 });

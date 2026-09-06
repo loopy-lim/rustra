@@ -58,19 +58,28 @@ Each adapter's engine factory exposes a `supports` object (`@rustra/types`
 claims. Apps can branch before any side effect, e.g.
 `engine.supports?.cancellation === 'cooperative'`. The mapping per column:
 
-| `supports` field    | Node        | Bun JSON / Bun FFI rkyv V2      | Tauri       | RN JSON     | RN rkyv V2        |
-| ------------------- | ----------- | ------------------------------- | ----------- | ----------- | ----------------- |
-| `cancellation`      | `shallow`   | `shallow` / `cooperative`       | `shallow`   | `shallow`   | `cooperative`     |
-| `batch`             | `per-entry` | `per-entry` / `single-crossing` | `per-entry` | `per-entry` | `single-crossing` |
-| `events`            | `push`      | `push` / `push`                 | `push`      | `none`      | `push`            |
-| `channels`          | `false`     | `false` / `false`               | `false`     | `true`      | `true`            |
-| `timeoutPreemption` | `true`      | `true` / `true`                 | `true`      | `false`     | `true`            |
+| `supports` field    | Node        | Bun JSON / Bun FFI rkyv V2 | Tauri       | RN JSON     | RN rkyv V2        |
+| ------------------- | ----------- | -------------------------- | ----------- | ----------- | ----------------- |
+| `cancellation`      | `shallow`   | `shallow` / `shallow`      | `shallow`   | `shallow`   | `cooperative`     |
+| `batch`             | `per-entry` | `per-entry` / `per-entry`  | `per-entry` | `per-entry` | `single-crossing` |
+| `events`            | `push`      | `push` / `push`            | `push`      | `none`      | `push`            |
+| `channels`          | `false`     | `false` / `false`          | `false`     | `true`      | `true`            |
+| `timeoutPreemption` | `true`      | `true` / `true`            | `true`      | `false`     | `true`            |
 
 Nuances that do not fit one enum value stay in the matrix prose, not the enum:
-Bun FFI and RN rkyv V2 `cancellation: 'cooperative'` means the matrix's
-"conditional propagation" cell (reaches the Rust checkpoint only when
+RN rkyv V2 `cancellation: 'cooperative'` means the matrix's "conditional
+propagation" cell (reaches the Rust checkpoint only when
 `invokeAsync`+`invokeCancel` are exposed and the commandId/codec path is
 confirmed; static typed paths and legacy natives fall back to shallow). The
+Bun FFI rkyv V2 engine shares the same `createRkyvV2Engine` core, but its FFI
+native binds only `invokeRkyvV2`/`getSchema`/`getContractHash`/
+`getSchemaGeneration` — the `invokeAsync`/`invokeCancel` and
+`invokeTypedBatch` symbols are not bound, so the conditional-propagation and
+single-crossing conditions are unreachable and the engine is observed as
+`shallow`/`per-entry`. The RN async engine (`createAsyncEngine`) runs
+`invokeBatch` as per-entry `Promise.all` over the async `invoke`, so it
+reports `batch: 'per-entry'` even though it inherits the sync engine's
+`cancellation: 'cooperative'` (real when `invokeCancel` is exposed). The
 `'push'` event value includes each engine's polling fallback — the actual
 delivery path is determined by the per-adapter subscription surface. Tauri
 `batch: 'per-entry'` follows the cell family even though track E2 added a
@@ -82,12 +91,12 @@ The bootstrap objects (`createNodeBootstrap`/`createBunBootstrap`/
 `createTauriBootstrap`/`createRustraBootstrap`) expose a local
 `state: 'initializing' | 'ready' | 'disposed'`. `dispose()` is idempotent (a
 second call is a no-op), and `ready()` after `dispose()` rejects loudly instead
-of silently re-resolving. `NodeBootstrap.reload()` optionally connects the
-host's loop-transport drain through the `onReloadDrain(timeoutMs)` option
-(default 5 s — the `NodeLoopTransport.drain` contract; reload proceeds after
-the timeout). A `draining` state is deliberately not modeled: drain is not
-wired into reload by default — hosts that need graceful settle call
-`drain()` themselves (see the hot-swap section above).
+of silently re-resolving. `NodeBootstrap.reload()` drains the bootstrap's own
+transport when it exposes `drain(timeoutMs)` (duck-typed; default 5 s guard —
+reload proceeds after the timeout), and proceeds immediately otherwise
+(the one-shot stdio transport has no drain; loop-transport hosts are not wired
+through `NodeBootstrap`). A `draining` state is deliberately not modeled:
+drain is transparent to the three-state lifecycle.
 
 ## Spike: wasm32 engine in wasm3 (React Native) — VERDICT: PASS (spike)
 

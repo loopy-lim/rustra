@@ -133,12 +133,11 @@ export type NodeBootstrapOptions = {
   spawnOptions?: Parameters<typeof spawn>[2];
   contractHash?: string;
   /**
-   * (A05) reload 직전 drain 연결 — 루프 호스트가 자기 transport 의
-   * `drain(timeoutMs)` 을 reload 에 연결하는 훅. 기본 5초(`NodeLoopTransport`
-   * drain 계약과 동일)로 호출되고, 타임아웃 후에도 reload 는 진행한다.
-   * 훅이 없으면 기존 동작(원샷 transport — dispose 시 얕은 취소) 그대로.
+   * (A05) 테스트 관측 seam — bootstrap 이 소유한 transport 를 대체 주입한다.
+   * 기본은 `createNodeProcessTransport` 스폰 경로. loop transport 등 drain 이
+   * 있는 transport 를 주입하면 reload 의 duck-typed drain 이 그 drain 을 쓴다.
    */
-  onReloadDrain?: (timeoutMs: number) => void | Promise<void>;
+  createTransport?: () => NodeProcessTransport;
 };
 export type NodeBootstrap = {
   /**
@@ -149,12 +148,13 @@ export type NodeBootstrap = {
   ready(): Promise<EngineClientWithBatch>;
   dispose(): void;
   /**
-   * Dev-loop reload hook target (Task A1): disposes the current child,
-   * re-spawns and re-readies over the same runtime resolution. The one-shot
-   * process transport has no drain — in-flight invocations reject on
-   * re-dispose (shallow cancel). Loop-based hosts that need graceful settle
-   * use `NodeLoopTransport.drain` explicitly before reload. A rebuilt binary
-   * is picked up because the image is read at spawn time.
+   * Dev-loop reload hook target (Task A1): drains the bootstrap's own
+   * transport when it exposes `drain` (duck-typed, default 5 s guard —
+   * reload proceeds after the timeout), then disposes the child, re-spawns
+   * and re-readies over the same runtime resolution. The one-shot process
+   * transport has no drain — reload proceeds immediately and in-flight
+   * invocations reject on re-dispose (shallow cancel). A rebuilt binary is
+   * picked up because the image is read at spawn time.
    */
   reload(): Promise<void>;
 };
