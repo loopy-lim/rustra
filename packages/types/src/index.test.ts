@@ -5016,3 +5016,115 @@ test('R06 실제 신호: AbortController 로도 핵심 사례가 동일하게 �
   // 구현 후에는 cancel 예외가 cause 로 흡수되므로 탈출이 없어야 한다.
   assert.equal(uncaught.length, 0, 'cancel exception must be contained, not escape the listener');
 });
+
+// ── R07: 통합 문서 도착 검증 — 에러 승격·cause 보존 축 ─────────────
+// dx 트랙(DX Track Task 6)이 timeout→TimeoutError, cancel→CancelledError,
+// pre-abort 승격을 착지시켰다. 이 절은 그 착지의 통합 문서(T09) 회귀 축만
+// 고정한다 — 승격 로직 자체는 errors.ts 기존 구현 그대로(회귀 고정).
+
+test('R07 도착: wire 구조화 transport.timeout rejection 을 전역 invoke 파사드가 TimeoutError 로 승격한다', async () => {
+  // json-engine 의 .catch(normalizeRustraError) 배선 → errors.ts 승격 →
+  // cancel.ts 레이스 경유. instanceof 분기가 파사드 경로 끝까지 살아있는지.
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  try {
+    configure(
+      createJsonEngine({
+        invoke: () => Promise.reject({ code: 'transport.timeout', message: 'wire timed out' }),
+      }),
+    );
+    await assert.rejects(invoke('slow', { a: 1 }), (err: unknown) => {
+      assert.ok(err instanceof TimeoutError, 'wire timeout must surface as TimeoutError');
+      assert.ok(err instanceof RustraCommandError, 'TimeoutError must stay a RustraCommandError');
+      assert.equal((err as TimeoutError).code, 'transport.timeout');
+      assert.equal((err as TimeoutError).retryable, true, 'wire retryable must be derived');
+      assert.match((err as Error).message, /wire timed out/);
+      return true;
+    });
+  } finally {
+    configure(sentinel);
+  }
+});
+
+test('R07 도착: 전역 invokeBatch timeout race 는 TimeoutError 로 정착한다', async () => {
+  // global-batch.ts 의 최솟값 레이스 — 지각 배치 결과는 버려지고 레이스 승자는
+  // TimeoutError 서브클래스여야 한다(dx ② 재확인: 최종 소비자 관점).
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  try {
+    let batchCrossings = 0;
+    configure({
+      invokeBatch: <T>(): Promise<T[]> => {
+        batchCrossings++;
+        return new Promise<T[]>((resolve) => setTimeout(() => resolve([1, 2] as T[]), 500));
+      },
+    } as unknown as EngineClient);
+    const startedAt = Date.now();
+    await assert.rejects(
+      invokeBatch<number>([{ command: 'a', options: { timeoutMs: 20 } }]),
+      (err: unknown) => {
+        assert.ok(err instanceof TimeoutError, 'batch race must settle with TimeoutError');
+        assert.equal((err as TimeoutError).code, 'transport.timeout');
+        assert.equal((err as TimeoutError).retryable, true);
+        assert.match((err as Error).message, /timed out/);
+        return true;
+      },
+    );
+    const elapsed = Date.now() - startedAt;
+    assert.ok(elapsed < 500, 'the race must reject at the timeout, not the late batch');
+    assert.equal(batchCrossings, 1, 'exactly one batch crossing is issued');
+  } finally {
+    configure(sentinel);
+  }
+});
+
+test('R07 도착: 승격된 서브클래스도 cause 와 retryable 을 보존한다', async () => {
+  // errors.ts 승격 경로 — 원본 wire 객체가 cause 로 남고 retryable 유실이
+  // 없어야 재시도·원인 추적 코드가 instanceof 경로에서도 동작한다.
+  const wire = { code: 'transport.timeout', message: 'backend died', retryable: true };
+  const promoted = normalizeRustraError(wire);
+  assert.ok(promoted instanceof TimeoutError);
+  assert.equal(promoted.cause, wire, 'the original wire object must remain the cause');
+  assert.equal(promoted.retryable, true);
+  assert.equal(promoted.code, 'transport.timeout');
+
+  const cancelledWire = { code: 'cancelled', message: 'host aborted' };
+  const cancelled = normalizeRustraError(cancelledWire);
+  assert.ok(cancelled instanceof CancelledError);
+  assert.equal(cancelled.cause, cancelledWire);
+  assert.equal(cancelled.retryable, true, 'cancelled code implies retryable');
+  assert.equal(cancelled.code, 'cancelled');
+});
+
+test('R07 회귀: 사용자 code 커스텀 RustraCommandError 는 normalize 를 통과해도 원본이 보존된다', async () => {
+  // 정책 — normalizeRustraError 의 instanceof fast-path: 이미 RustraCommandError
+  // (및 서브클래스)인 값은 절대 재생성하지 않는다. 사용자가 code 를 커스텀한
+  // 인스턴스를 transport 가 그대로 reject 해도 객체 동일성·코드·retryable 이
+  // 유지된다. json-engine 배선을 통해서도 동일(정규화 관통).
+  const custom = new RustraCommandError('order.conflict', 'order 42 already shipped', true);
+  const passedThrough = normalizeRustraError(custom);
+  assert.equal(passedThrough, custom, 'RustraCommandError instances must pass through untouched');
+  assert.equal(passedThrough.code, 'order.conflict');
+  assert.equal(passedThrough.retryable, true);
+
+  // json-engine rejection 배선 — transport 가 서브클래스를 reject 해도 동일.
+  const engine = createJsonEngine({ invoke: () => Promise.reject(custom) });
+  await assert.rejects(engine.invoke('ship', {}), (err: unknown) => {
+    assert.equal(err, custom, 'engine rejection must preserve the caller error by identity');
+    return true;
+  });
+
+  // 서브클래스도 동일 — TimeoutError 를 reject 하면 재래핑 없이 그대로.
+  const timeout = new TimeoutError('custom timeout instance');
+  const engine2 = createJsonEngine({ invoke: () => Promise.reject(timeout) });
+  await assert.rejects(engine2.invoke('slow', {}), (err: unknown) => {
+    assert.equal(err, timeout);
+    return true;
+  });
+});

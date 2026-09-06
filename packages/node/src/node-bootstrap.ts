@@ -77,7 +77,10 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
     }
     return createNodeEngine(transport);
   };
-  configureLazy(bootstrap);
+  // R08 — 글로벌 슬롯은 단일 엔진 전용. ownerId 는 소비 전 경쟁 등록이
+  // 일어나면 registry.frozen loud-fail 의 진단 메시지에 양쪽 주체를 보고한다.
+  // 같은 bootstrap 클로저의 재등록(reload)은 참조 동일성으로 언제나 허용된다.
+  configureLazy(bootstrap, { ownerId: 'node' });
   const dispose = () => {
     transport?.dispose();
     transport = undefined;
@@ -92,7 +95,7 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
       // NodeLoopTransport.drain 과 다름): dispose 시 진행 중 invocation 은
       // 얕은 취소(re-dispose reject)로 정리된다 — 문서화된 동작.
       dispose();
-      configureLazy(bootstrap);
+      configureLazy(bootstrap, { ownerId: 'node' });
       await (ensureConfigured() as Promise<EngineClientWithBatch>);
     },
   };
