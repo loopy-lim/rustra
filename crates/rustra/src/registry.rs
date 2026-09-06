@@ -90,7 +90,7 @@ impl Package {
     where
         I: DeserializeOwned + JsonSchema + 'static,
         O: Serialize + JsonSchema + 'static,
-        F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+        F: crate::__private::CommandHandler<I, O>,
     {
         self.ensure_mutable()?;
         let name = name.to_string();
@@ -130,11 +130,14 @@ impl Package {
     }
 
     /// `#[command]` 함수를 이름 자동 추론으로 런타임 등록한다.
+    ///
+    /// (감사 #5) capability 래퍼(`unsafe fn`)는 이 경로에서도 컴파일 에러로
+    /// 거부된다 — [`crate::__private::CommandHandler`] 계약.
     pub fn register_fn<I, O, F>(&self, handler: F) -> crate::Result<()>
     where
         I: DeserializeOwned + JsonSchema + 'static,
         O: Serialize + JsonSchema + 'static,
-        F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+        F: crate::__private::CommandHandler<I, O>,
     {
         let name = command_name_from_handler::<F>();
         self.register::<I, O, F>(&name, handler)
@@ -146,7 +149,7 @@ impl Package {
     where
         I: DeserializeOwned + JsonSchema + 'static,
         O: Serialize + JsonSchema + 'static,
-        F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+        F: crate::__private::CommandHandler<I, O>,
     {
         self.ensure_mutable()?;
         let mut state = self

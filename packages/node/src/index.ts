@@ -1,6 +1,7 @@
 /** @rustra/node — Node.js transport and generated-engine adapters. */
 export type {
   EngineClient,
+  EngineSupports,
   RustraError,
   RkyvV2Codec,
   RkyvV2Native,
@@ -11,6 +12,7 @@ export {
   RustraCommandError,
   configure,
   configureLazy,
+  disposedBootstrapError,
   ensureConfigured,
   invoke,
   createRkyvV2Engine,

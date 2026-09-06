@@ -17,8 +17,8 @@ detection lives in the [contract migration guide](migration-guide.md).
 | Contract hash algorithm                                      | Compatibility-critical: the hash-of-schema input definition is frozen per release.                 | Major version. Pre-1.0: a minor with explicit migration notes.                                                                                                                                    |
 | FFI symbol signatures (`rustra_ffi_*` C ABI)                 | Additive only. Existing symbols keep name, parameter list, and calling convention.                 | Removals and signature changes go through the deprecation cycle below, then a major. Pre-1.0: the deprecation rule applies — a symbol deprecated in a previous release may be removed in a minor. |
 | Generated output (TypeScript / C++ / RN generated files)     | Regenerated output stays drop-in for the same configuration.                                       | Major version. Pre-1.0: a minor with explicit migration notes.                                                                                                                                    |
-| Public Rust API (`crates/rustra`, `rustra-macros` exports)   | Standard semver.                                                                                   | Major version.                                                                                                                                                                                    |
-| Public TypeScript API (`@rustra/*` package exports)          | Standard semver.                                                                                   | Major version.                                                                                                                                                                                    |
+| Public Rust API (`crates/rustra`, `rustra-macros` exports)   | Standard semver.                                                                                   | Major version. Pre-1.0: a minor with explicit migration notes.                                                                                                                                    |
+| Public TypeScript API (`@rustra/*` package exports)          | Standard semver.                                                                                   | Major version. Pre-1.0: a minor with explicit migration notes.                                                                                                                                    |
 
 Not covered by any guarantee:
 
@@ -44,10 +44,13 @@ Per-version migration notes live in
 [0.3 to 0.4](migrations/0.3-to-0.4.md) and
 [0.5 to 0.6](migrations/0.5-to-0.6.md).
 
-Current status: `RendererHost` is `#[doc(hidden)]` and `#[deprecated]`
-("RendererHost is retained for Rustra 0.x compatibility; prefer a
-host-specific adapter boundary"). It is kept for the remainder of the 0.x
-cycle; removal is not proposed here.
+Recent removal: `RendererHost` (with `HostMessage`, `MessageKind`,
+`RendererCapabilities`, `Size`, `SurfaceOptions`, `host_supports_eval`) is
+deprecated as of 0.6.0 and removed under the pre-1.0 rule above — in the
+0.7.0 npm packages (changesets) and in the next `rustra` crate release
+(crates.io publishing is manual, so crate versions trail the npm line). The
+replacement is a host-specific adapter boundary — each embedding host
+bridges its own renderer/events via the published channel and FFI surfaces.
 
 ## Experimental surface
 
@@ -83,6 +86,9 @@ crate, in the order given by the
 [release procedure](release-procedure.md) — and published versions cannot be
 deleted or replaced.
 
-Under the pre-1.0 rules above, a wire-format or contract-hash change ships as
-a minor version with explicit migration notes; the same change after 1.0 would
-require a major version.
+Until 1.0, a breaking change on any guaranteed surface above — including the
+public Rust and TypeScript APIs — ships as a minor version with explicit
+migration notes (documented in CHANGELOG and, where consumers must act, in
+`docs/migrations/<from>-to-<to>.md`). From 1.0 this allowance is gone: such
+changes require a major version. The project stays on minor releases until
+then; majors are not issued pre-1.0.

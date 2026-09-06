@@ -3,7 +3,42 @@ import type { LiveSchemaEntry } from './live-schema.js';
 
 // ── Core types ──────────────────────────────────────────────
 
+/**
+ * 어댑터가 실측으로 제공하는 기술적 지원 표면(A02) — 호환성 매트릭스
+ * (docs/compatibility-matrix.md)의 각 셀을 기계 판독 가능하게 옮긴 것.
+ * 새 주장이 아니라 기존 문서 계약의 타입화다. 앱은 부작용 이전에
+ * `engine.supports?.cancellation === 'cooperative'` 로 분기할 수 있다.
+ *
+ * - `cancellation`: in-flight `options.signal` 의 실제 관측 수준.
+ *   `'shallow'` = JS 프라미스만 거부(Rust 실행은 계속), `'pre-abort'` =
+ *   사전 abort 만 보장, `'cooperative'` = Rust 체크포인트까지 전파(조건부).
+ *   사전 abort 는 모든 어댑터가 보장하므로 레벨 값에 포함하지 않는다.
+ * - `batch`: `invokeBatch` 의 실행 형태. `'single-crossing'` = 정적 명령을
+ *   단일 네이티브 횡단으로 일괄(signal 항목은 항목별로 자동 라우팅),
+ *   `'per-entry'` = 항목별 invoke, `'none'` = 배치 표면 없음.
+ * - `events`: 이벤트 전달 경로. `'push'` 는 폴링 폴백을 포함한다(매트릭스 셀의
+ *   "푸시 + 폴백 폴링" 표기) — 실제 경로 판별은 어댑터별 구독 표면을 쓴다.
+ * - `timeoutPreemption`: `options.timeoutMs` 레이스가 존재하는지. `false` 면
+ *   동기 네이티브 호출을 중단할 수 없다(RN JSON 어댑터).
+ *
+ * 기술적 지원만 담는다 — 권한(capability)은 별도 표면이다. 초기값은
+ * 어댑터의 엔진 생성 함수가 자신의 매트릭스 셀에서 채운다.
+ */
+export type EngineSupports = {
+  cancellation: 'pre-abort' | 'shallow' | 'cooperative';
+  batch: 'single-crossing' | 'per-entry' | 'none';
+  events: 'push' | 'polling' | 'none';
+  channels: boolean;
+  /** RN JSON = false — 동기 native 호출은 실행 중 선점할 수 없다. */
+  timeoutPreemption: boolean;
+};
+
 export type EngineClient = {
+  /**
+   * 이 엔진의 기술적 지원 표면(A02) — 값은 호환성 매트릭스의 셀과 1:1.
+   * 옵셔널: 타사 엔진 구현체에 요구하지 않는다(구조적 호환 유지).
+   */
+  supports?: EngineSupports;
   invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T>;
   /**
    * 코드젠이 이미 알고 있는 숫자 command id를 전달하는 빠른 경로.
@@ -26,6 +61,17 @@ export type EngineClient = {
 /** invokeBatch 의 입력 항목. `options.signal` 은 항목 단위 취소로 전달된다. */
 export type BatchEntry = { command: string; args?: unknown; options?: InvokeOptions };
 
+/**
+ * `invokeBatchSettled` 의 항목별 결과(A04). 실패한 항목 **이후** 실행되지 않은
+ * 항목은 `rejected` 가 아니라 `unexecuted` 다 — "실행됐지만 실패"와 "실행 안 됨"
+ * 의 구분이 이 표면의 핵심 가치다. 실행 정책(항상 per-entry 순차, 와이어 배치
+ * 미사용)은 `invokeBatchSettled` 문서 참고.
+ */
+export type BatchSettledEntry<T> =
+  | { status: 'fulfilled'; value: T }
+  | { status: 'rejected'; reason: unknown }
+  | { status: 'unexecuted' };
+
 /** All first-party adapter factories guarantee the batch surface. */
 export type EngineClientWithBatch = EngineClient & {
   invokeBatch<T>(entries: BatchEntry[]): Promise<T[]>;
@@ -38,15 +84,24 @@ export type EngineClientWithBatch = EngineClient & {
  * `invokeAsync`/`invokeCancel` 을 노출하면 취소를 전파(전파는 JS 코덱
  * 경로만; typed/tier3 경로는 얕은 취소)하고, 그렇지 않으면 JS 프라미스만
  * 거부하는 얕은 취소로 폴백한다 — Rust 핸들러는 끝까지 실행된다.
+ *
+ * **얕은 취소 경고**: 취소/타임아웃의 관측 수준은 transport 에 따라 얕을 수
+ * 있다. reject 되어도 Rust 명령은 계속 실행됐거나 이미 완료했을 수 있으므로
+ * `retryable: true` ≠ "재실행 안전" — 비멱등 명령을 무조건 재시도하지 말고
+ * 필요하면 상태를 재조회한다. 자세한 의미는 (저장소)
+ * `docs/rust-api-guide.md` 의 "Timeout, Cancellation, and Retry Semantics"
+ * 절(한국어: "타임아웃·취소·재시도 의미") 참고.
  */
 export type InvokeOptions = {
   /** (T1) AbortSignal — abort 시 Promise 를 즉시 reject 하고, 네이티브가
-   *  invokeAsync/invokeCancel 을 노출하면 취소를 전파한다. */
+   *  invokeAsync/invokeCancel 을 노출하면 취소를 전파한다. 전파가 불가한
+   *  경로는 얕은 취소(JS 프라미스만 거부, Rust 실행은 계속)에 해당한다. */
   signal?: AbortSignal;
   /**
    * (프로덕션 준비) 호출별 타임아웃(ms). 만료 시 `transport.timeout`
    * (retryable)으로 reject 한다. 네이티브가 응답하지 않는 hang(워커 패닉,
    * FFI 데드락 등)의 유일한 JS 측 탈출구다. 지각 응답은 무시된다.
+   * 만료는 Rust 실행을 중단시키지 않는다 — 위 얕은 취소 경고 참고.
    */
   timeoutMs?: number;
 };

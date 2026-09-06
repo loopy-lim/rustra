@@ -1,4 +1,4 @@
-import { RustraCommandError } from './errors.js';
+import { CancelledError, RustraCommandError, TimeoutError } from './errors.js';
 import type { EngineClient, InvokeOptions } from './public.js';
 export { invokeByIdWithTimeout } from './cancel-by-id.js';
 export { raceAbort } from './cancel-abort.js';
@@ -30,9 +30,7 @@ function invokeWithTimeoutInternal<T>(
 ): Promise<T> {
   const signal = handleSignal ? options?.signal : undefined;
   if (signal?.aborted)
-    return Promise.reject(
-      new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
-    );
+    return Promise.reject(new CancelledError(`invoke("${command}") aborted before dispatch`));
   let promise: Promise<T>;
   try {
     promise = Promise.resolve(engine.invoke<T>(command, args, options));
@@ -42,14 +40,22 @@ function invokeWithTimeoutInternal<T>(
   const ms = options?.timeoutMs;
   if (ms === undefined && signal === undefined) return promise;
   void promise.catch(() => {});
+  // dispatch 동기 구간 안에서 abort 가 이미 발화했을 수 있다(transport 가
+  // invoke 내부에서 controller.abort() 후 정상 반환). 리스너 등록은 dispatch
+  // 뒤에 있으므로 abort 이벤트를 놓쳤다 — 등록 직후 재검사가 이 갭을 닫는다.
+  // 재검사는 레이스 참여가 아니라 선정착 반환이어야 한다: 이미 fulfill 된
+  // promise 가 races[0] 로 먼저 연결되면 Promise.race 는 동시 정착에서
+  // 그쪽을 이기게 하므로, 같은 틱에 reject 되는 레이스 항목은 무시된다.
+  // 선정착 반환은 위의 흡수자 뒤에 둔다 — dispatch promise 가 나중에
+  // reject 해도 unhandled rejection 이 되지 않는다(레이스 경로와 동일).
+  if (signal?.aborted) return Promise.reject(new CancelledError(`invoke("${command}") aborted`));
   let timer: ReturnType<typeof setTimeout> | undefined;
   let onAbort: (() => void) | undefined;
   const races: Array<Promise<T> | Promise<never>> = [promise];
   if (signal)
     races.push(
       new Promise<never>((_, reject) => {
-        onAbort = () =>
-          reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
+        onAbort = () => reject(new CancelledError(`invoke("${command}") aborted`));
         signal.addEventListener('abort', onAbort, { once: true });
       }),
     );
@@ -57,14 +63,7 @@ function invokeWithTimeoutInternal<T>(
     races.push(
       new Promise<never>((_, reject) => {
         timer = setTimeout(
-          () =>
-            reject(
-              new RustraCommandError(
-                'transport.timeout',
-                `invoke("${command}") timed out after ${ms}ms`,
-                true,
-              ),
-            ),
+          () => reject(new TimeoutError(`invoke("${command}") timed out after ${ms}ms`)),
           ms,
         );
       }),
@@ -86,9 +85,7 @@ export function invokeCallbackWithAbort<T>(
   cancel?: (invocationId: number) => void,
 ): Promise<T> {
   if (signal.aborted)
-    return Promise.reject(
-      new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
-    );
+    return Promise.reject(new CancelledError(`invoke("${command}") aborted before dispatch`));
   return new Promise<T>((resolve, reject) => {
     let settled = false;
     let invocationId = -1;
@@ -101,8 +98,16 @@ export function invokeCallbackWithAbort<T>(
     };
     const onAbort = () =>
       finish(() => {
-        if (cancel && invocationId >= 0) cancel(invocationId);
-        reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
+        let cancelFailure: unknown;
+        if (cancel && invocationId >= 0) {
+          try {
+            cancel(invocationId);
+          } catch (error) {
+            cancelFailure = error; // JS 결과 확정을 native cancel 성공에 묶지 않는다
+          }
+        }
+        reject(new CancelledError(`invoke("${command}") aborted`, cancelFailure));
+        // cancel 실패는 cause로 보존 — 통합 문서 "별도 관측 정보"의 최소 구현.
       });
     signal.addEventListener('abort', onAbort, { once: true });
     try {

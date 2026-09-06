@@ -7,24 +7,41 @@ import {
   configure,
   configureLazy,
   createGeneratedFields2,
+  createJsonEngine,
   createRkyvV2Engine,
   getLiveSchema,
   ensureConfigured,
   invoke,
   invokeBatch,
+  invokeBatchSettled,
   invokeGeneratedBytes,
   invokeGenerated,
   invokeGeneratedFields2,
   invokeWithTimeout,
+  raceAbort,
   RustraCommandError,
   CancelledError,
   TimeoutError,
+  RustraErrorCode,
   parseRustraErrorString,
   normalizeRustraError,
+  withRetry,
   configureDebug,
   debugWire,
+  resetDebugEnvForTests,
 } from './index.js';
-import type { RkyvV2SchemaNative, RkyvV2Codec, BatchEntry, EngineClient } from './index.js';
+import type {
+  RkyvV2SchemaNative,
+  RkyvV2Codec,
+  BatchEntry,
+  BatchSettledEntry,
+  EngineClient,
+} from './index.js';
+// @internal 경로 — invokeByIdWithTimeout 은 index.js 공개 진입점 목록에 없고,
+// unconfigured 상태 주입은 내부 runtime 조작이 필요하다 (테스트 전용 접근).
+import { invokeByIdWithTimeout } from './cancel-by-id.js';
+import { invokeCallbackWithAbort } from './cancel.js';
+import { resetConfiguredRoutes, runtime } from './global-state.js';
 
 test('lazy configuration lets the first generated command initialize Rustra once', async () => {
   let initializations = 0;
@@ -3373,4 +3390,1986 @@ test('schema interpreter recompiles after generation resync picks up a new codec
     [14],
     'post-resync invoke must speak postcard (zigzag), not JSON',
   );
+});
+
+// ── withRetry (readiness Task 6) ────────────────────────────
+
+/** 재시도 판정 테스트용 retryable 에러 — TimeoutError 서브클래스 (retryable=true). */
+function timeoutError(): TimeoutError {
+  return new TimeoutError('timed out');
+}
+
+test('withRetry succeeds on the second attempt after one retryable failure', async () => {
+  const attempts: number[] = [];
+  const out = await withRetry(
+    (attempt) => {
+      attempts.push(attempt);
+      if (attempts.length === 1) return Promise.reject(timeoutError());
+      return Promise.resolve('ok');
+    },
+    { retries: 2, baseDelayMs: 1 },
+  );
+  assert.equal(out, 'ok');
+  assert.deepEqual(attempts, [0, 1]);
+});
+
+test('withRetry rethrows the last error unchanged after retries are exhausted', async () => {
+  const attempts: number[] = [];
+  const lastError = timeoutError();
+  let call = 0;
+  let caught: unknown;
+  try {
+    await withRetry(
+      (attempt) => {
+        attempts.push(attempt);
+        call++;
+        return Promise.reject(call < 3 ? timeoutError() : lastError);
+      },
+      { retries: 2, baseDelayMs: 1 },
+    );
+  } catch (error) {
+    caught = error;
+  }
+  assert.equal(caught, lastError, 'exhaustion must reject with the identical last error object');
+  assert.deepEqual(attempts, [0, 1, 2]);
+});
+
+test('withRetry rejects immediately without retrying non-retryable codes', async () => {
+  let calls = 0;
+  const notFound = new RustraCommandError(RustraErrorCode.CommandNotFound, 'missing', false);
+  let caught: unknown;
+  try {
+    await withRetry(
+      () => {
+        calls++;
+        return Promise.reject(notFound);
+      },
+      { retries: 2, baseDelayMs: 1 },
+    );
+  } catch (error) {
+    caught = error;
+  }
+  assert.equal(caught, notFound, 'non-retryable error must come out unchanged');
+  assert.equal(calls, 1, 'non-retryable failure must not schedule a retry');
+});
+
+test('withRetry respects a custom retryIf in both directions', async () => {
+  // 방향 1: 기본 판정은 retryable 코드인데 retryIf 가 false → 즉시 거부.
+  let callsA = 0;
+  const retryable = timeoutError();
+  let caughtA: unknown;
+  try {
+    await withRetry(
+      () => {
+        callsA++;
+        return Promise.reject(retryable);
+      },
+      { retries: 2, baseDelayMs: 1, retryIf: () => false },
+    );
+  } catch (error) {
+    caughtA = error;
+  }
+  assert.equal(caughtA, retryable);
+  assert.equal(callsA, 1, 'retryIf=false must suppress the default predicate');
+
+  // 방향 2: 기본 판정은 non-retryable 코드인데 retryIf 가 true → 재시도됨.
+  let callsB = 0;
+  const notFound = new RustraCommandError(RustraErrorCode.CommandNotFound, 'missing', false);
+  const out = await withRetry(
+    () => {
+      callsB++;
+      return callsB === 1 ? Promise.reject(notFound) : Promise.resolve('recovered');
+    },
+    { retries: 1, baseDelayMs: 1, retryIf: () => true },
+  );
+  assert.equal(out, 'recovered');
+  assert.equal(callsB, 2, 'retryIf=true must override the default predicate entirely');
+});
+
+test('withRetry rejects with the retryIf predicate error when the predicate itself throws', async () => {
+  let calls = 0;
+  const predicateBoom = new Error('predicate exploded');
+  let caught: unknown;
+  try {
+    await withRetry(
+      () => {
+        calls++;
+        return Promise.reject(timeoutError());
+      },
+      {
+        retries: 3,
+        baseDelayMs: 1,
+        retryIf: () => {
+          throw predicateBoom;
+        },
+      },
+    );
+  } catch (error) {
+    caught = error;
+  }
+  assert.equal(caught, predicateBoom, 'predicate throw must propagate unchanged');
+  assert.equal(calls, 1, 'predicate failure must not schedule a retry');
+});
+
+test('withRetry promotes a mid-flight signal abort to CancelledError', async () => {
+  const controller = new AbortController();
+  const attempts: number[] = [];
+  const pending = withRetry(
+    (attempt) => {
+      attempts.push(attempt);
+      if (attempt === 0) controller.abort(); // 첫 실패 직후 abort — pre-aborted fast path.
+      return Promise.reject(timeoutError());
+    },
+    { retries: 3, baseDelayMs: 50, signal: controller.signal },
+  );
+  await assert.rejects(
+    pending,
+    (err: unknown) => err instanceof CancelledError && err.code === RustraErrorCode.Cancelled,
+  );
+  assert.deepEqual(attempts, [0], 'abort during backoff sleep must cancel before the next attempt');
+});
+
+test('withRetry aborts a pending backoff sleep via the registered listener and preserves cause', async () => {
+  // sleep Promise 생성자 블록(타이머 생성 + abort 리스너 등록 + abort 시
+  // clearTimeout)을 실제로 타는 경로 — fn 안 동기 abort 는 항상 pre-aborted
+  // fast path 로 새므로, 타이머 abort 를 쓴다(경쟁 없음: 5ms ≪ 10s 백오프).
+  const controller = new AbortController();
+  const cause = timeoutError();
+  const attempts: number[] = [];
+  const startedAt = Date.now();
+  const pending = withRetry(
+    (attempt) => {
+      attempts.push(attempt);
+      if (attempt === 0) {
+        setTimeout(() => controller.abort(), 5);
+        return Promise.reject(cause);
+      }
+      return Promise.resolve('unreachable');
+    },
+    { retries: 3, baseDelayMs: 10_000, signal: controller.signal },
+  );
+  let caught: unknown;
+  try {
+    await pending;
+  } catch (error) {
+    caught = error;
+  }
+  const elapsed = Date.now() - startedAt;
+  assert.ok(caught instanceof CancelledError, 'timer abort must promote to CancelledError');
+  assert.equal((caught as CancelledError).code, RustraErrorCode.Cancelled);
+  assert.equal(
+    (caught as CancelledError).cause,
+    cause,
+    'abort promotion must preserve the failed error as cause',
+  );
+  assert.equal(attempts.length, 1, 'aborted sleep must cancel before the next attempt');
+  assert.ok(elapsed < 5000, `abort must cut the 10s sleep short immediately, took ${elapsed}ms`);
+});
+
+test('withRetry rejects with CancelledError immediately when the signal is already aborted', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  let calls = 0;
+  await assert.rejects(
+    withRetry(
+      () => {
+        calls++;
+        return Promise.resolve('never');
+      },
+      { signal: controller.signal },
+    ),
+    (err: unknown) => err instanceof CancelledError && err.code === RustraErrorCode.Cancelled,
+  );
+  assert.equal(calls, 0, 'pre-aborted signal must never invoke fn');
+});
+
+test('withRetry with retries 0 makes exactly one attempt and never sleeps', async () => {
+  const attempts: number[] = [];
+  let caught: unknown;
+  try {
+    await withRetry(
+      (attempt) => {
+        attempts.push(attempt);
+        return Promise.reject(timeoutError());
+      },
+      { retries: 0, baseDelayMs: 10_000 },
+    );
+  } catch (error) {
+    caught = error;
+  }
+  assert.ok(caught instanceof TimeoutError, 'single attempt must reject with the original error');
+  assert.deepEqual(attempts, [0], 'retries=0 must not retry even on retryable failures');
+});
+
+test('withRetry rejects invalid retries values with TypeError instead of looping forever', async () => {
+  // attempt >= NaN 은 항상 거짓 — 가드 없으면 조용한 무한 루프. async 함수라
+  // TypeError 는 동기 throw 가 아니라 즉시 rejection 로 관찰된다.
+  for (const bad of [Number.NaN, -1, Number.POSITIVE_INFINITY]) {
+    await assert.rejects(
+      withRetry(() => Promise.resolve('x'), { retries: bad }),
+      (err: unknown) => err instanceof TypeError,
+      `retries=${String(bad)} must reject with TypeError before any attempt`,
+    );
+  }
+  // 음이 아닌 유한 소수는 유효 — attempt 인덱스와의 수치 비교(>=)라 0.5 는
+  // attempt 1 에서 경계를 넘어 총 2회 시도된다 (floor/round 아님).
+  const attempts: number[] = [];
+  let fractional: unknown;
+  try {
+    await withRetry(
+      (attempt) => {
+        attempts.push(attempt);
+        return Promise.reject(timeoutError());
+      },
+      { retries: 0.5, baseDelayMs: 1 },
+    );
+  } catch (error) {
+    fractional = error;
+  }
+  assert.ok(fractional instanceof TimeoutError, 'retries=0.5 must exhaust and rethrow');
+  assert.deepEqual(attempts, [0, 1], 'retries=0.5 exhausts at attempt 1 (numeric boundary)');
+});
+
+test('withRetry preserves arbitrary rejection values unchanged', async () => {
+  const bigintPayload = 9007199254740993n; // Number.MAX_SAFE_INTEGER 초과 bigint
+  let caught: unknown;
+  try {
+    await withRetry(() => Promise.reject(bigintPayload), { retries: 2, baseDelayMs: 1 });
+  } catch (error) {
+    caught = error;
+  }
+  assert.equal(caught, bigintPayload, 'non-Error rejection must come out by identity');
+  assert.equal(typeof caught, 'bigint');
+});
+
+test('withRetry passes 0-based attempt numbers to fn', async () => {
+  const attempts: number[] = [];
+  await withRetry(
+    (attempt) => {
+      attempts.push(attempt);
+      return attempts.length < 3 ? Promise.reject(timeoutError()) : Promise.resolve('done');
+    },
+    { retries: 3, baseDelayMs: 1 },
+  );
+  assert.deepEqual(attempts, [0, 1, 2]);
+});
+
+// ── 응답 셰이프 검증 경고 (readiness Task 8) — RUSTRA_DEBUG 버전 스큐 조기 감지 ──
+
+type ShapeDebugEvent = { kind?: string; reason?: string; command?: string; value?: unknown };
+
+/**
+ * debug 모드 테스트 하네스 — `__RUSTRA_DEBUG__` 스위치를 켜고 console.debug
+ * 미러 출력을 흡수해 테스트 결과를 깨끗하게 유지한다(node-loop.test.ts 관례).
+ * `resetDebugEnvForTests()` 로 모듈 메모이즈된 dump 게이트 캐시를 먼저 무효화해
+ * 주변 환경의 `RUSTRA_DEBUG=1` 이 스위치 판정에 새지 않게 한다(양방향 — 테스트
+ * 시작 시 환경을 고정하고, cleanup 때도 무효화해 이후 테스트가 오염되지 않게
+ * 한다). 반환된 cleanup 을 finally 에서 반드시 호출한다.
+ */
+function enableShapeDebugHarness(): () => void {
+  resetDebugEnvForTests();
+  (globalThis as { __RUSTRA_DEBUG__?: unknown }).__RUSTRA_DEBUG__ = true;
+  const originalDebug = console.debug;
+  console.debug = () => {};
+  return () => {
+    console.debug = originalDebug;
+    delete (globalThis as { __RUSTRA_DEBUG__?: unknown }).__RUSTRA_DEBUG__;
+    resetDebugEnvForTests();
+  };
+}
+
+/** json-engine 테스트용 고정 payload 를 resolve 하는 가짜 transport. */
+function envelopeTransport(payload: unknown): { invoke: (command: string) => Promise<unknown> } {
+  return { invoke: () => Promise.resolve(payload) };
+}
+
+test('double envelope resolution emits response.shape and resolves unchanged in debug mode', async () => {
+  const seen: ShapeDebugEvent[] = [];
+  const sink = (event: unknown) => seen.push(event as ShapeDebugEvent);
+  const payload = { ok: true, result: { value: 42 } };
+  const engine = createJsonEngine(envelopeTransport(payload));
+  const cleanup = enableShapeDebugHarness();
+  try {
+    configureDebug(sink);
+    const result = await engine.invoke('echo', {});
+    assert.deepEqual(result, { ok: true, result: { value: 42 } }, 'no transform of the result');
+    const shapes = seen.filter((e) => e.kind === 'response.shape');
+    assert.equal(shapes.length, 1, 'exactly one shape event per invoke');
+    assert.equal(shapes[0]!.reason, 'double_envelope');
+    assert.equal(shapes[0]!.command, 'echo');
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
+});
+
+test('resolved ok:false without error emits response.shape and still resolves in debug mode', async () => {
+  const seen: ShapeDebugEvent[] = [];
+  const engine = createJsonEngine(envelopeTransport({ ok: false }));
+  const cleanup = enableShapeDebugHarness();
+  try {
+    configureDebug((event) => seen.push(event as ShapeDebugEvent));
+    const result = await engine.invoke<{ ok: boolean }>('broken', {});
+    assert.deepEqual(result, { ok: false }, 'warning only — the invoke still resolves');
+    const event = seen.filter((e) => e.kind === 'response.shape')[0]!;
+    assert.equal(event.reason, 'failed_without_error');
+    assert.equal(event.command, 'broken');
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
+});
+
+test('resolved error envelope ({ok:false,error}) emits response.shape but keeps the value', async () => {
+  // reject 경로의 정규화는 rejection 일 때만 동작한다 — transport 가 실패 엔벨로프를
+  // 그대로 resolve 하면(스크 신호) 경고는 하되 기존 값 계약을 변형하지 않는다.
+  const seen: ShapeDebugEvent[] = [];
+  const error = { code: 'math.divide_by_zero', message: 'division by zero' };
+  const engine = createJsonEngine(envelopeTransport({ ok: false, error }));
+  const cleanup = enableShapeDebugHarness();
+  try {
+    configureDebug((event) => seen.push(event as ShapeDebugEvent));
+    const result = await engine.invoke<{ ok: boolean; error: unknown }>('divide', {});
+    assert.deepEqual(result, { ok: false, error });
+    const event = seen.filter((e) => e.kind === 'response.shape')[0]!;
+    assert.equal(event.reason, 'resolved_error_envelope');
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
+});
+
+test('broken envelope ({ok:true} payload-less) emits envelope_missing_payload', async () => {
+  const seen: ShapeDebugEvent[] = [];
+  const engine = createJsonEngine(envelopeTransport({ ok: true }));
+  const cleanup = enableShapeDebugHarness();
+  try {
+    configureDebug((event) => seen.push(event as ShapeDebugEvent));
+    await engine.invoke('noPayload', {});
+    const event = seen.filter((e) => e.kind === 'response.shape')[0]!;
+    assert.equal(event.reason, 'envelope_missing_payload');
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
+});
+
+test('debug disabled: no response.shape events (passthrough unchanged)', async () => {
+  // 모듈 메모이즈된 dump 게이트 캐시를 먼저 무효화해야 주변 RUSTRA_DEBUG=1 환경이
+  // 이 테스트로 새지 않는다(스위치 판정은 캐시 무효화 후 env 만 본다).
+  resetDebugEnvForTests();
+  const shapes: ShapeDebugEvent[] = [];
+  const engine = createJsonEngine(envelopeTransport({ ok: true, result: { value: 1 } }));
+  try {
+    // sink-only 설치는 debugRustra 의 기존 계약(싱크만으로도 요청/응답 이벤트 도달)
+    // 이지만, 셰이프 감지는 isRustraDebugEnabled 로만 게이트된다 — 감지 게이트는
+    // 싱크 유무와 무관하게 debug 스위치만 본다. 여기선 스위치 없이 싱크만 설치.
+    configureDebug((event) => {
+      if ((event as ShapeDebugEvent).kind === 'response.shape')
+        shapes.push(event as ShapeDebugEvent);
+    });
+    const result = await engine.invoke('echo', {});
+    assert.deepEqual(result, { ok: true, result: { value: 1 } }, 'passthrough unchanged');
+    assert.equal(shapes.length, 0, 'debug off must suppress the shape warning entirely');
+  } finally {
+    configureDebug(undefined);
+    delete (globalThis as { __RUSTRA_DEBUG__?: unknown }).__RUSTRA_DEBUG__;
+    resetDebugEnvForTests();
+  }
+});
+
+test('plain payload without ok and primitive responses emit no shape event', async () => {
+  for (const payload of [{ value: 42 }, { okay: true }, 'plain', 7, null, undefined]) {
+    const seen: ShapeDebugEvent[] = [];
+    const engine = createJsonEngine(envelopeTransport(payload));
+    const cleanup = enableShapeDebugHarness();
+    try {
+      configureDebug((event) => seen.push(event as ShapeDebugEvent));
+      const result = await engine.invoke('normal', {});
+      assert.equal(result, payload, 'passthrough by identity');
+      assert.equal(
+        seen.filter((e) => e.kind === 'response.shape').length,
+        0,
+        `payload ${JSON.stringify(payload)} must not warn (false-positive guard)`,
+      );
+    } finally {
+      configureDebug(undefined);
+      cleanup();
+    }
+  }
+});
+
+test('detection never throws on exotic result objects (frozen, null-prototype)', async () => {
+  const exotic: unknown[] = [
+    Object.freeze({ ok: true, result: { frozen: true } }),
+    Object.create(null) as unknown, // 프로토타입 없음 — hasOwnProperty.call 로 안전
+    Object.freeze(Object.create(null, { ok: { value: false, enumerable: true } })),
+  ];
+  const cleanup = enableShapeDebugHarness();
+  try {
+    configureDebug(() => {});
+    for (const payload of exotic) {
+      const engine = createJsonEngine(envelopeTransport(payload));
+      // 어떤 특이 객체도 invoke 자체를 실패로 만들지 않는다(경고는 절대 throw 금지).
+      const result = await engine.invoke('weird', {});
+      assert.equal(result, payload, 'exotic object passes through by identity');
+    }
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
+});
+
+// ── rejection 경로 회귀 가드 — createJsonEngine 의 normalizeRustraError 배선 ──
+// 셰이프 감지는 resolve 경로 전용이다. rejection 이 왔을 때 감지가 조용하다는
+// 핀과, transport reject 값이 기존 정규화 계약으로 변환된다는 점을 함께 잠근다.
+
+test('json-engine rejection path normalizes errors and emits no shape event', async () => {
+  const shapes: ShapeDebugEvent[] = [];
+  const cleanup = enableShapeDebugHarness();
+  const rejectTransport = (reason: unknown) => ({
+    invoke: () => Promise.reject(reason),
+  });
+  try {
+    configureDebug((event) => {
+      if ((event as ShapeDebugEvent).kind === 'response.shape')
+        shapes.push(event as ShapeDebugEvent);
+    });
+
+    // 실패 엔벨로프 reject — 최상위 code/message 가 아니므로 normalizeRustraError 는
+    // 구조화 경로에 진입하지 않고 unknown 으로 정규화한다(기존 계약 — 코드가
+    // error 키 안으로 감춰져 있어 평탄화할 근거가 없다). 셰이프 경고도 없다.
+    let engine = createJsonEngine(
+      rejectTransport({ ok: false, error: { code: 'x', message: 'y' } }),
+    );
+    await assert.rejects(
+      engine.invoke('boom', {}),
+      (error: unknown) =>
+        error instanceof RustraCommandError && error.code === 'unknown' && error.message.length > 0,
+      'envelope-shaped rejection must normalize (not crash, not resolve)',
+    );
+
+    // 구조화 {code,message} reject — wire 표준 실패. 코드 보존이 본 계약.
+    engine = createJsonEngine(rejectTransport({ code: 'x', message: 'y' }));
+    await assert.rejects(
+      engine.invoke('boom', {}),
+      (error: unknown) =>
+        error instanceof RustraCommandError &&
+        error.code === 'x' &&
+        error.message === 'y' &&
+        error.retryable === false,
+      'structured rejection must preserve code/message through normalization',
+    );
+
+    // plain Error / string reject — 역사적 fallback 계약(invoke.failed / unknown).
+    engine = createJsonEngine(rejectTransport(new Error('plain boom')));
+    await assert.rejects(
+      engine.invoke('boom', {}),
+      (error: unknown) => error instanceof RustraCommandError && error.code === 'invoke.failed',
+    );
+    engine = createJsonEngine(rejectTransport('string boom'));
+    await assert.rejects(
+      engine.invoke('boom', {}),
+      (error: unknown) => error instanceof RustraCommandError && error.code === 'unknown',
+    );
+
+    assert.equal(shapes.length, 0, 'rejection path never emits response.shape');
+  } finally {
+    configureDebug(undefined);
+    cleanup();
+  }
+});
+
+// ── DX Track Task 6: 타임아웃/취소/미구성 에러 서브클래스·계약 통일 ──
+// instanceof 분기 지원: TimeoutError/CancelledError 서브클래스와
+// transport.unavailable 정규화. 와이어 코드·retryable·메시지는 불변.
+
+test('timeout race rejects with TimeoutError instance across all timeout paths', async () => {
+  const hanging: EngineClient = { invoke: () => new Promise(() => {}) };
+  // ① invokeWithTimeout (cancel.ts)
+  await assert.rejects(
+    invokeWithTimeout(hanging, 'addNumbers', { a: 1 }, { timeoutMs: 20 }),
+    (err: unknown) => {
+      assert.ok(err instanceof TimeoutError, 'invokeWithTimeout must throw TimeoutError');
+      assert.ok(err instanceof RustraCommandError, 'TimeoutError must remain a RustraCommandError');
+      assert.equal((err as TimeoutError).code, 'transport.timeout');
+      assert.equal((err as TimeoutError).retryable, true);
+      return true;
+    },
+  );
+
+  // ② global invokeBatch timeout race (global-batch.ts)
+  const sentinelBatch: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  configure({
+    invokeBatch: () => new Promise(() => {}),
+  } as unknown as EngineClient);
+  try {
+    await assert.rejects(
+      invokeBatch<{ v: number }>([{ command: 'a', options: { timeoutMs: 20 } }]),
+      (err: unknown) => {
+        assert.ok(err instanceof TimeoutError, 'invokeBatch must throw TimeoutError');
+        assert.equal((err as TimeoutError).code, 'transport.timeout');
+        assert.equal((err as TimeoutError).retryable, true);
+        return true;
+      },
+    );
+  } finally {
+    configure(sentinelBatch);
+  }
+});
+
+test('invokeByIdWithTimeout rejects with TimeoutError and CancelledError instances', async () => {
+  // timeout race (cancel-by-id.ts)
+  const hanging: EngineClient = {
+    invokeById: () => new Promise(() => {}),
+  } as unknown as EngineClient;
+  await assert.rejects(
+    invokeByIdWithTimeout(hanging, 7, 'addNumbers', { a: 1 }, { timeoutMs: 20 }),
+    (err: unknown) => {
+      assert.ok(err instanceof TimeoutError, 'invokeByIdWithTimeout must throw TimeoutError');
+      assert.equal((err as TimeoutError).code, 'transport.timeout');
+      assert.equal((err as TimeoutError).retryable, true);
+      return true;
+    },
+  );
+
+  // pre-aborted before dispatch (cancel-by-id.ts)
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(
+    invokeByIdWithTimeout(
+      {
+        invoke: () => Promise.resolve(1),
+      } as unknown as EngineClient,
+      7,
+      'addNumbers',
+      undefined,
+      { signal: ac.signal },
+    ),
+    (err: unknown) => {
+      assert.ok(err instanceof CancelledError, 'pre-abort must throw CancelledError');
+      assert.equal((err as CancelledError).code, 'cancelled');
+      assert.equal((err as CancelledError).retryable, true);
+      return true;
+    },
+  );
+
+  // abort race mid-flight (cancel-by-id.ts)
+  const late: EngineClient = {
+    invokeById: () => new Promise(() => {}),
+  } as unknown as EngineClient;
+  const controller = new AbortController();
+  const p = invokeByIdWithTimeout(late, 7, 'addNumbers', undefined, {
+    signal: controller.signal,
+  });
+  controller.abort();
+  await assert.rejects(p, (err: unknown) => {
+    assert.ok(err instanceof CancelledError, 'abort race must throw CancelledError');
+    assert.equal((err as CancelledError).code, 'cancelled');
+    return true;
+  });
+});
+
+test('raceAbort and invokeCallbackWithAbort reject with CancelledError instances', async () => {
+  // raceAbort (cancel-abort.ts)
+  const controller = new AbortController();
+  const raced = raceAbort(new Promise(() => {}), controller.signal, 'cancel-me');
+  controller.abort();
+  await assert.rejects(raced, (err: unknown) => {
+    assert.ok(err instanceof CancelledError, 'raceAbort must throw CancelledError');
+    assert.equal((err as CancelledError).code, 'cancelled');
+    assert.equal((err as CancelledError).retryable, true);
+    return true;
+  });
+
+  // invokeCallbackWithAbort: pre-aborted before dispatch (cancel.ts)
+  await assert.rejects(
+    invokeCallbackWithAbort('cancel-me', AbortSignal.abort(), () => {
+      throw new Error('dispatch must not run when already aborted');
+    }),
+    (err: unknown) => {
+      assert.ok(err instanceof CancelledError, 'callback pre-abort must throw CancelledError');
+      assert.equal((err as CancelledError).code, 'cancelled');
+      return true;
+    },
+  );
+
+  // invokeCallbackWithAbort: abort mid-flight (cancel.ts)
+  const mid = new AbortController();
+  const pending = invokeCallbackWithAbort<void>('cancel-me', mid.signal, () => {
+    /* dispatch settles nothing — abort must win */
+  });
+  mid.abort();
+  await assert.rejects(pending, (err: unknown) => {
+    assert.ok(err instanceof CancelledError, 'callback abort mid-flight must throw CancelledError');
+    assert.equal((err as CancelledError).code, 'cancelled');
+    return true;
+  });
+});
+
+test('engine-level pre-aborted invoke and invokeById reject with CancelledError', async () => {
+  // rkyv-engine-surface.ts invokeById pre-abort + invokeRaw pre-abort paths.
+  const native = makeNative({
+    schema: schemaBytes([{ name: 'dyn', commandId: 1 }]),
+    invokeImpl: () => {
+      throw new Error('native must not be called when already aborted');
+    },
+  });
+  const engine = createRkyvV2Engine(native, new Map());
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(engine.invoke('dyn', {}, { signal: ac.signal }), (e: unknown) => {
+    assert.ok(e instanceof CancelledError, 'engine.invoke pre-abort must throw CancelledError');
+    assert.equal((e as CancelledError).code, 'cancelled');
+    return true;
+  });
+  await assert.rejects(engine.invokeById(1, 'dyn', {}, { signal: ac.signal }), (e: unknown) => {
+    assert.ok(e instanceof CancelledError, 'engine.invokeById pre-abort must throw CancelledError');
+    assert.equal((e as CancelledError).code, 'cancelled');
+    return true;
+  });
+});
+
+test('unconfigured invoke rejects with RustraCommandError transport.unavailable', async () => {
+  // sentinel이 호출되면 이전 테스트 오염을 즉시 드러낸다.
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  try {
+    // runtime.engine === null && runtime.engineInitializer === undefined 상태를
+    // 만들기 위해 configureLazy의 initializer를 지운다 — public API로는
+    // configure(null 엔진) 없이는 불가하므로 내부 runtime에 직접 접근한다.
+    runtime.engine = null;
+    runtime.engineInitializer = undefined;
+    const returned = invoke('dyn', { a: 1 });
+    assert.ok(returned instanceof Promise, 'unconfigured invoke must return a Promise');
+    await assert.rejects(returned, (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      assert.equal((err as RustraCommandError).retryable, false);
+      assert.match((err as Error).message, /Rustra not configured/);
+      return true;
+    });
+  } finally {
+    runtime.engine = null;
+    runtime.engineInitializer = undefined;
+    runtime.engineInitialization = undefined;
+    resetConfiguredRoutes();
+    configure(sentinel);
+  }
+});
+
+test('unconfigured invokeGenerated and invokeGeneratedFields reject instead of sync throw', async () => {
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  try {
+    runtime.engine = null;
+    runtime.engineInitializer = undefined;
+    runtime.engineInitialization = undefined;
+    resetConfiguredRoutes();
+
+    // ④ invokeGenerated — 계약 통일: sync throw 금지, rejected Promise.
+    const gen = invokeGenerated<{ v: number }>(1, 'dyn');
+    assert.ok(gen instanceof Promise, 'unconfigured invokeGenerated must return a Promise');
+    await assert.rejects(gen, (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      assert.equal((err as RustraCommandError).retryable, false);
+      return true;
+    });
+
+    // invokeGeneratedFields (global-fields.ts) — 동일 codegen 계약.
+    const fields = invokeGeneratedFields2<{ v: number }>(1, 'dyn', { a: 1 }, 1, 2);
+    assert.ok(fields instanceof Promise, 'unconfigured invokeFields must return a Promise');
+    await assert.rejects(fields, (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      return true;
+    });
+
+    // invokeGeneratedBytes (global-bytes.ts) — 동일 codegen 계약.
+    const bytes = invokeGeneratedBytes(1, 'dyn', { data: new ArrayBuffer(0) }, new ArrayBuffer(0));
+    assert.ok(bytes instanceof Promise, 'unconfigured invokeGeneratedBytes must return a Promise');
+    await assert.rejects(bytes, (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      return true;
+    });
+  } finally {
+    runtime.engine = null;
+    runtime.engineInitializer = undefined;
+    runtime.engineInitialization = undefined;
+    resetConfiguredRoutes();
+    configure(sentinel);
+  }
+});
+
+test('unconfigured invokeBatch and ensureConfigured reject with transport.unavailable', async () => {
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  try {
+    runtime.engine = null;
+    runtime.engineInitializer = undefined;
+    runtime.engineInitialization = undefined;
+    resetConfiguredRoutes();
+
+    // invokeBatch (global-batch.ts)
+    const batch = invokeBatch<{ v: number }>([{ command: 'a' }]);
+    assert.ok(batch instanceof Promise, 'unconfigured invokeBatch must return a Promise');
+    await assert.rejects(batch, (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      return true;
+    });
+
+    // invokeBatchSettled (global-batch-settled.ts) — 형제 계약 동일성.
+    // 빈 배치도 구성되지 않은 상태에서는 조용히 [] 로 resolve 하지 않는다.
+    const settledP = invokeBatchSettled<{ v: number }>([{ command: 'a' }]);
+    assert.ok(settledP instanceof Promise, 'unconfigured invokeBatchSettled must return a Promise');
+    await assert.rejects(settledP, (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      return true;
+    });
+    await assert.rejects(invokeBatchSettled([]), (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      return true;
+    });
+
+    // ensureConfigured (global-config.ts) — RN lazy entry 힌트 메시지 보존.
+    await assert.rejects(ensureConfigured(), (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      assert.match((err as Error).message, /React Native entry/);
+      return true;
+    });
+  } finally {
+    runtime.engine = null;
+    runtime.engineInitializer = undefined;
+    runtime.engineInitialization = undefined;
+    resetConfiguredRoutes();
+    configure(sentinel);
+  }
+});
+
+// ── R04: 와이어 배치 옵션·정규화·동기 throw 계약 통일 ─────────────
+// json-engine 의 단일 횡단(invokeBatch) 경로가 단건 invoke 경로와 세 계약에서
+// 갈라졌다: ① timeoutMs truthiness 판정(0 이 누락), ② transport 동기 throw 가
+// Promise.reject 로 정규화되지 않음, ③ normalizeArgs 미적용. 아래 회귀 표는
+// 각 사례를 와이어 배치 경로(transport.invokeBatch 제공)와 글로벌 파사드
+// (configure + invokeBatch) 양쪽에서 모두 핀한다 — 두 경로의 결과가 동일해야 한다.
+
+/** R04 테스트용 — 지연 resolve 하는 단일 횡단 배치 transport. */
+function delayedWireBatchTransport(delayMs: number): {
+  invoke: (command: string, args?: unknown) => Promise<unknown>;
+  invokeBatch: (requests: BatchEntry[]) => Promise<unknown[]>;
+} {
+  return {
+    invoke: async (command, args) => {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return { command, args };
+    },
+    invokeBatch: async (requests) => {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return requests.map((entry) => ({ ok: true, command: entry.command }));
+    },
+  };
+}
+
+test('wire batch timeoutMs 0 takes the per-entry timeout path like the single invoke (R04-a)', async () => {
+  const engine = createJsonEngine(delayedWireBatchTransport(50));
+  // 단건 경로(cancel.ts): timeoutMs 0 은 "옵션 제공"으로 판정되어 즉시
+  // transport.timeout reject. 와이어 배치 게이트도 동일 판정이어야 한다 —
+  // truthiness 검사면 0 이 falsy 로 누락되어 50ms 지연 응답이 resolve 된다.
+  await assert.rejects(
+    engine.invoke('slow', {}, { timeoutMs: 0 }),
+    (err: unknown) => err instanceof TimeoutError && err.code === 'transport.timeout',
+    'single invoke: timeoutMs 0 must time out immediately',
+  );
+  await assert.rejects(
+    engine.invokeBatch<number>([{ command: 'slow', args: {}, options: { timeoutMs: 0 } }]),
+    (err: unknown) => err instanceof TimeoutError && err.code === 'transport.timeout',
+    'wire batch: timeoutMs 0 must fall back to the per-entry timeout path',
+  );
+});
+
+test('wire batch options object without timeoutMs still rides the single crossing (R04-a nuance)', async () => {
+  // 판정은 "timeoutMs !== undefined" — options 객체가 있어도 timeoutMs 가
+  // undefined 면 항목별 타임아웃 경로로 보내지 않는다(단건 경로 계약 —
+  // undefined timeout 은 레이스 없음). signal 도 없으니 와이어 단일 횡단 유지.
+  let batchCalls = 0;
+  const transport = delayedWireBatchTransport(0);
+  const engine = createJsonEngine({
+    invoke: transport.invoke,
+    invokeBatch: (requests) => {
+      batchCalls++;
+      return transport.invokeBatch(requests);
+    },
+  });
+  const out = await engine.invokeBatch([{ command: 'a', options: {} }]);
+  assert.equal(batchCalls, 1, 'empty options must not knock the batch off the wire crossing');
+  assert.deepEqual(out, [{ ok: true, command: 'a' }]);
+});
+
+test('wire batch turns a synchronous transport throw into a rejected Promise (R04-b)', async () => {
+  // 단건 경로(json-engine invoke)는 transport 동기 throw 를 catch 해서
+  // Promise.reject(normalizeRustraError(error)) 로 정규화한다. 배치 경로도
+  // 동일해야 한다 — 동기 throw 는 호출자의 try/catch 를 건너뛰는 계약 위반이다.
+  const engine = createJsonEngine({
+    invoke: () => Promise.resolve('unused'),
+    invokeBatch: () => {
+      throw { code: 'transport.error', message: 'wire batch blew up', retryable: true };
+    },
+  });
+  const returned = engine.invokeBatch([{ command: 'a' }, { command: 'b' }]);
+  assert.ok(returned instanceof Promise, 'sync throw must not escape invokeBatch');
+  await assert.rejects(returned, (err: unknown) => {
+    assert.ok(err instanceof RustraCommandError, 'must pass through normalizeRustraError');
+    assert.equal((err as RustraCommandError).code, 'transport.error');
+    assert.equal((err as RustraCommandError).message, 'wire batch blew up');
+    assert.equal((err as RustraCommandError).retryable, true);
+    return true;
+  });
+
+  // plain Error 동기 throw — normalizeRustraError 의 fallback 계약(invoke.failed).
+  const plainEngine = createJsonEngine({
+    invoke: () => Promise.resolve('unused'),
+    invokeBatch: () => {
+      throw new Error('sync boom');
+    },
+  });
+  await assert.rejects(
+    plainEngine.invokeBatch([{ command: 'a' }]),
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'invoke.failed',
+  );
+});
+
+test('wire batch throwing custom normalizer converges to a rejection like the single path (R04-c)', async () => {
+  // normalizeArgs 는 주입된 사용자 코드다 — 정규화 맵이 try 경계 밖에 있으면
+  // normalizer 의 동기 throw 가 호출자 try/catch 를 건너뛴다. 단건 경로는 같은
+  // 실패를 rejected Promise 로 정규화하므로 배치 경로도 동일해야 한다.
+  const engine = createJsonEngine(
+    {
+      invoke: () => Promise.resolve('unused'),
+      invokeBatch: () => [],
+    },
+    () => {
+      throw new Error('normalizer exploded');
+    },
+  );
+  const returned = engine.invokeBatch([{ command: 'a' }]);
+  assert.ok(returned instanceof Promise, 'normalizer sync throw must not escape invokeBatch');
+  await assert.rejects(returned, (err: unknown) => {
+    assert.ok(err instanceof RustraCommandError, 'must pass through normalizeRustraError');
+    assert.equal((err as RustraCommandError).code, 'invoke.failed');
+    assert.match((err as Error).message, /normalizer exploded/);
+    return true;
+  });
+});
+
+test('wire batch entry with combined signal and timeoutMs 0 keeps per-entry fallback (R04-a table row)', async () => {
+  // signal + timeoutMs 0 조합 — 두 옵션이 모두 "제공됨"으로 판정되어 폴백 경로로
+  // 간다. 폴백은 단건 경로(cancel.ts)와 같은 판정이므로 timeoutMs 0 이 즉시
+  // transport.timeout 을 내고 signal abort 는 그 앞에서 cancelled 를 낼 수 있다.
+  let batchCalls = 0;
+  const controller = new AbortController();
+  const engine = createJsonEngine({
+    invoke: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return 'late';
+    },
+    invokeBatch: () => {
+      batchCalls++;
+      return [];
+    },
+  });
+  await assert.rejects(
+    engine.invokeBatch([{ command: 'slow', options: { signal: controller.signal, timeoutMs: 0 } }]),
+    (err: unknown) => err instanceof TimeoutError && err.code === 'transport.timeout',
+    'combined options must take the per-entry fallback and honor timeoutMs 0',
+  );
+  assert.equal(batchCalls, 0, 'combined options must knock the batch off the wire crossing');
+});
+
+test('wire batch extra entry properties survive the normalized recreation (R04-c table row)', async () => {
+  // { ...entry, args } 재생성이 BatchEntry 계약 밖의 추가 프로퍼티를 보존하는지
+  // 핀 — transport 가 커스텀 메타데이터에 의존해도 정규화가 이를 훼손하지 않는다.
+  const seenRequests: Array<{ command: string; meta?: unknown }> = [];
+  const engine = createJsonEngine({
+    invoke: () => Promise.resolve('unused'),
+    invokeBatch: (requests) => {
+      for (const request of requests) {
+        seenRequests.push({ command: request.command, meta: (request as { meta?: unknown }).meta });
+      }
+      return requests.map(() => ({ ok: true }));
+    },
+  });
+  const entries = [
+    { command: 'a', args: undefined, meta: 'keep-me' },
+    { command: 'b', args: { v: 1 }, meta: { nested: true } },
+  ] as unknown as BatchEntry[];
+  const out = await engine.invokeBatch(entries);
+  assert.deepEqual(out, [{ ok: true }, { ok: true }]);
+  assert.deepEqual(seenRequests, [
+    { command: 'a', meta: 'keep-me' },
+    { command: 'b', meta: { nested: true } },
+  ]);
+});
+
+test('wire batch applies normalizeArgs per entry without mutating the original entries (R04-c)', async () => {
+  // tauri 어댑터 계약과 동일 — normalizeArgs: undefined → {}. 와이어 배치도
+  // 항목별 args 를 정규화해서 transport 에 건네야 한다(단건 경로는 이미 적용).
+  // 원본 entries 배열과 항목 객체는 절대 변형하지 않는다(global-batch 의
+  // stripped 패턴과 동일한 재생성 관례).
+  const seenRequests: Array<{ command: string; args: unknown }> = [];
+  const engine = createJsonEngine(
+    {
+      invoke: () => Promise.resolve('unused'),
+      invokeBatch: (requests) => {
+        for (const request of requests) {
+          seenRequests.push({ command: request.command, args: request.args });
+        }
+        return requests.map(() => ({ ok: true }));
+      },
+    },
+    (args) => args ?? { normalized: true },
+  );
+  const originalFirst: BatchEntry = { command: 'a' };
+  const originalSecond: BatchEntry = { command: 'b', args: undefined };
+  const entries = [originalFirst, originalSecond];
+  const out = await engine.invokeBatch(entries);
+  assert.deepEqual(out, [{ ok: true }, { ok: true }]);
+  assert.deepEqual(
+    seenRequests,
+    [
+      { command: 'a', args: { normalized: true } },
+      { command: 'b', args: { normalized: true } },
+    ],
+    'each entry args must be normalized before the wire crossing',
+  );
+  // 원본 무변형 핀 — 항목 객체를 재생성하지 않고 흔들면 호출자 계약이 깨진다.
+  assert.deepEqual(originalFirst, { command: 'a' });
+  assert.deepEqual(originalSecond, { command: 'b', args: undefined });
+  assert.deepEqual(entries, [{ command: 'a' }, { command: 'b', args: undefined }]);
+});
+
+test('wire batch mixed-signal entries keep the per-entry fallback path (R04 regression guard)', async () => {
+  // signal 항목이 섞이면 기존 폴백(항목별 invokeWithTimeout) — 단일 횡단 금지.
+  let batchCalls = 0;
+  let singleCalls = 0;
+  const controller = new AbortController();
+  const engine = createJsonEngine({
+    invoke: (command, args) => {
+      singleCalls++;
+      return Promise.resolve({ command, args });
+    },
+    invokeBatch: () => {
+      batchCalls++;
+      return [];
+    },
+  });
+  const out = await engine.invokeBatch([
+    { command: 'a' },
+    { command: 'b', options: { signal: controller.signal } },
+  ]);
+  assert.equal(batchCalls, 0, 'signal entry must knock the batch off the wire crossing');
+  assert.equal(singleCalls, 2, 'fallback must route each entry through invokeWithTimeout');
+  assert.deepEqual(out, [
+    { command: 'a', args: undefined },
+    { command: 'b', args: undefined },
+  ]);
+});
+
+test('wire batch empty entries resolves to an empty array on the single crossing (regression guard)', async () => {
+  let batchCalls = 0;
+  const engine = createJsonEngine({
+    invoke: () => Promise.resolve('unused'),
+    invokeBatch: (requests) => {
+      batchCalls++;
+      return requests.map(() => ({}));
+    },
+  });
+  const out = await engine.invokeBatch([]);
+  assert.deepEqual(out, []);
+  assert.equal(batchCalls, 1, 'empty batch must still use the single crossing, not the fallback');
+});
+
+// ── R04: 글로벌 파사드(invokeBatch)와의 경로 동일성 ─────────────
+// 와이어 배치 엔진을 configure 해서 글로벌 invokeBatch 로 같은 사례를 돌린다 —
+// 두 경로의 관찰 결과가 동일해야 한다(경로별 갈라짐이 재발하면 이 표가 잡는다).
+
+test('global invokeBatch matches the wire batch on timeout 0, sync throw, and normalization (R04)', async () => {
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  try {
+    // ① timeoutMs 0 → 항목별 폴백 경로의 즉시 transport.timeout (단건 경로와
+    // 동일 판정. 글로벌 최소 timeout 레이스 정책은 불변 — 이 사례는 timeout
+    // 최솟값 계산과 무관하게 항목 options 를 존중하는 폴백으로 간다).
+    const delayedEngine = createJsonEngine(delayedWireBatchTransport(50));
+    configure(delayedEngine as unknown as EngineClient);
+    await assert.rejects(
+      invokeBatch([{ command: 'slow', args: {}, options: { timeoutMs: 0 } }]),
+      (err: unknown) => err instanceof TimeoutError && err.code === 'transport.timeout',
+      'global path: timeoutMs 0 must behave like the wire batch path',
+    );
+
+    // ② transport 동기 throw → rejected Promise + 정규화.
+    const throwingEngine = createJsonEngine({
+      invoke: () => Promise.resolve('unused'),
+      invokeBatch: () => {
+        throw { code: 'transport.error', message: 'wire batch blew up', retryable: true };
+      },
+    });
+    configure(throwingEngine as unknown as EngineClient);
+    const returned = invokeBatch([{ command: 'a' }]);
+    assert.ok(returned instanceof Promise, 'global path: sync throw must not escape');
+    await assert.rejects(returned, (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.error');
+      assert.equal((err as RustraCommandError).message, 'wire batch blew up');
+      assert.equal((err as RustraCommandError).retryable, true);
+      return true;
+    });
+
+    // ③ normalizeArgs 항목별 적용 — 글로벌 파사드가 엔진 위에서 정규화를
+    // 우회하지 않는다(정규화는 엔진 내부 배선).
+    const seenRequests: Array<{ command: string; args: unknown }> = [];
+    const normalizingEngine = createJsonEngine(
+      {
+        invoke: () => Promise.resolve('unused'),
+        invokeBatch: (requests) => {
+          for (const request of requests) {
+            seenRequests.push({ command: request.command, args: request.args });
+          }
+          return requests.map(() => ({ ok: true }));
+        },
+      },
+      (args) => args ?? { normalized: true },
+    );
+    configure(normalizingEngine as unknown as EngineClient);
+    const out = await invokeBatch([{ command: 'a' }, { command: 'b', args: undefined }]);
+    assert.deepEqual(out, [{ ok: true }, { ok: true }]);
+    assert.deepEqual(seenRequests, [
+      { command: 'a', args: { normalized: true } },
+      { command: 'b', args: { normalized: true } },
+    ]);
+  } finally {
+    configure(sentinel);
+  }
+});
+
+test('global invokeBatch empty entries resolves to an empty array (regression guard)', async () => {
+  const engine = createJsonEngine({
+    invoke: () => Promise.resolve('unused'),
+    invokeBatch: (requests) => requests.map(() => ({})),
+  });
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  configure(engine as unknown as EngineClient);
+  try {
+    assert.deepEqual(await invokeBatch([]), []);
+  } finally {
+    configure(sentinel);
+  }
+});
+
+test('global invokeBatch mixed-signal entries keep the per-entry fallback (regression guard)', async () => {
+  // signal 전용 항목(timeoutMs 없음)은 글로벌 최소 timeout 레이스를 만들지 않고
+  // 엔진의 폴백 경로로 그대로 통과해야 한다 — 엔진 내부 판정과 파사드가 갈라지면
+  // 이 표가 잡는다.
+  let batchCalls = 0;
+  let singleCalls = 0;
+  const controller = new AbortController();
+  const engine = createJsonEngine({
+    invoke: (command, args) => {
+      singleCalls++;
+      return Promise.resolve({ command, args });
+    },
+    invokeBatch: () => {
+      batchCalls++;
+      return [];
+    },
+  });
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  configure(engine as unknown as EngineClient);
+  try {
+    const out = await invokeBatch([
+      { command: 'a' },
+      { command: 'b', options: { signal: controller.signal } },
+    ]);
+    assert.equal(batchCalls, 0, 'facade path: signal entry must knock the batch off the crossing');
+    assert.equal(singleCalls, 2, 'facade path: fallback routes each entry through invoke');
+    assert.deepEqual(out, [
+      { command: 'a', args: undefined },
+      { command: 'b', args: undefined },
+    ]);
+  } finally {
+    configure(sentinel);
+  }
+});
+
+// ── R05: dispatch 중 동기 abort 관측 — listener 등록 직후 재검사 ──
+// cancel.ts / cancel-by-id.ts 의 abort 레이스는 dispatch 가 끝난 뒤에 리스너를
+// 등록한다. transport 의 invoke 가 동기 구간 안에서 controller.abort() 를 부르고
+// 정상 resolve 하면, abort 이벤트는 리스너 등록 전에 이미 지나갔고
+// addEventListener 는 이미 중단된 signal 에서 이벤트를 재발화하지 않는다 —
+// 취소가 소실되고 resolve 가 이긴다. 등록 직후 signal.aborted 재검사 + 선정착
+// (early-settle) 레이스가 이 갭을 닫는다. 지연 transport + 호출 카운터로
+// 제어한다(실제 sleep 없음).
+
+/** R05 테스트용 — dispatch 를 카운트하고 즉시 resolve 하는 transport. */
+function resolvingCancelTransport(calls: { dispatches: number }): {
+  invoke<T>(command: string, args?: unknown): Promise<T>;
+} {
+  return {
+    invoke<T>(command: string, _args?: unknown): Promise<T> {
+      calls.dispatches++;
+      return Promise.resolve(`ok:${command}` as unknown as T);
+    },
+  };
+}
+
+test('R05 invokeWithTimeout: dispatch 중 동기 abort 는 취소로 정착한다', async () => {
+  // 핵심 신규 사례: invoke 내부에서 abort → 정상 resolve. 리스너 등록이 dispatch
+  // 뒤에 있으므로 이벤트는 이미 발화됐다 — 재검사 없으면 resolve 가 이긴다.
+  const calls = { dispatches: 0 };
+  const ac = new AbortController();
+  const transport = resolvingCancelTransport(calls);
+  const engine: EngineClient = {
+    invoke<T>(command: string, args?: unknown): Promise<T> {
+      const dispatching = transport.invoke<T>(command, args);
+      ac.abort(); // dispatch 동기 구간 안에서 abort
+      return dispatching;
+    },
+  };
+  await assert.rejects(
+    invokeWithTimeout(engine, 'sync-abort', undefined, { signal: ac.signal }),
+    (err: unknown) => err instanceof CancelledError && err.code === 'cancelled',
+    'sync abort inside dispatch must be observed and reject with cancelled',
+  );
+  assert.equal(calls.dispatches, 1, 'dispatch must have happened exactly once');
+});
+
+test('R05 invokeByIdWithTimeout: dispatch 중 동기 abort 는 취소로 정착한다', async () => {
+  const calls = { dispatches: 0 };
+  const ac = new AbortController();
+  const transport = resolvingCancelTransport(calls);
+  const engine: EngineClient = {
+    invokeById<T>(commandId: number, command: string, args?: unknown): Promise<T> {
+      void commandId;
+      const dispatching = transport.invoke<T>(command, args);
+      ac.abort(); // dispatch 동기 구간 안에서 abort
+      return dispatching;
+    },
+  } as unknown as EngineClient;
+  await assert.rejects(
+    invokeByIdWithTimeout(engine, 7, 'sync-abort', undefined, { signal: ac.signal }),
+    (err: unknown) => err instanceof CancelledError && err.code === 'cancelled',
+    'sync abort inside dispatch must be observed and reject with cancelled',
+  );
+  assert.equal(calls.dispatches, 1, 'dispatch must have happened exactly once');
+});
+
+test('R05 회귀 가드: pre-abort 는 0 dispatch 로 즉시 거부한다', async () => {
+  // 기존 fast path — 재검사 추가가 이 경로를 흔들면 안 된다.
+  let dispatches = 0;
+  const ac = new AbortController();
+  ac.abort();
+  const engine: EngineClient = {
+    invoke<T>(): Promise<T> {
+      dispatches++;
+      return new Promise<T>(() => {});
+    },
+  };
+  await assert.rejects(
+    invokeWithTimeout(engine, 'pre-abort', undefined, { signal: ac.signal }),
+    (err: unknown) => err instanceof CancelledError && /aborted before dispatch/.test(err.message),
+    'pre-abort must reject with the before-dispatch message',
+  );
+  assert.equal(dispatches, 0, 'pre-abort must never dispatch');
+});
+
+test('R05 회귀 가드: in-flight 비동기 abort 는 기존대로 취소한다', async () => {
+  // dispatch 이후 promise settle 전에 abort — 기존 이벤트 경로.
+  let resolveDispatch!: (v: string) => void;
+  let dispatches = 0;
+  const ac = new AbortController();
+  const engine: EngineClient = {
+    invoke<T>(): Promise<T> {
+      dispatches++;
+      return new Promise<T>((resolve) => {
+        resolveDispatch = resolve as (v: string) => void;
+      });
+    },
+  };
+  const pending = invokeWithTimeout(engine, 'in-flight', undefined, { signal: ac.signal });
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
+  ac.abort();
+  await assert.rejects(
+    pending,
+    (err: unknown) => err instanceof CancelledError && err.code === 'cancelled',
+    'async mid-flight abort must still reject with cancelled',
+  );
+  assert.equal(dispatches, 1);
+  resolveDispatch('late'); // 지각 응답 — 흡수되어야 함
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
+});
+
+test('R05 회귀 가드: 정상 완료 후 abort 는 결과를 바꾸지 않는다', async () => {
+  const calls = { dispatches: 0 };
+  const ac = new AbortController();
+  const engine: EngineClient = {
+    invoke<T>(command: string, args?: unknown): Promise<T> {
+      return resolvingCancelTransport(calls).invoke<T>(command, args);
+    },
+  };
+  const settled = await invokeWithTimeout<string>(engine, 'done', undefined, {
+    signal: ac.signal,
+  });
+  ac.abort(); // 완료 뒤 abort — 리스너는 이미 제거됐다
+  assert.equal(settled, 'ok:done', 'abort after completion must not alter the result');
+  assert.equal(calls.dispatches, 1);
+});
+
+test('R05 정착 일변성: 동기 abort 재검사는 resolve 와의 경쟁에서 정확히 한 번 이긴다', async () => {
+  // 재진입: dispatch 가 이중 abort 를 부르고 정상 resolve 까지 반환한다.
+  // settle-once 의 관측 증거 — cancel 이 정착한 뒤 resolve 리스너가 절대
+  // 실행되지 않는다. 이미 fulfill 된 promise 가 races[0] 로 먼저 연결되면
+  // Promise.race 는 동시 정착에서 그쪽을 이기게 하므로, 재검사가 이 테스트를
+  // 이기려면 race 참여가 아니라 선정착 반환이어야 한다는 것이 이 테스트가
+  // 존재하는 이유이다.
+  const calls = { dispatches: 0 };
+  const ac = new AbortController();
+  const engine: EngineClient = {
+    invoke<T>(command: string): Promise<T> {
+      calls.dispatches++;
+      const dispatching = Promise.resolve(`ok:${command}` as unknown as T);
+      ac.abort();
+      ac.abort(); // 이중 abort — 두 번째는 no-op
+      return dispatching;
+    },
+  };
+  let resolved = 0;
+  const pending = invokeWithTimeout(engine, 'double-abort', undefined, { signal: ac.signal });
+  const watched = pending.then(
+    () => {
+      resolved++;
+      return 'resolved';
+    },
+    (err: unknown) => {
+      assert.ok(err instanceof CancelledError, 'settlement must be the cancel rejection');
+      return 'cancelled';
+    },
+  );
+  assert.equal(await watched, 'cancelled');
+  assert.equal(resolved, 0, 'resolve callback must never run once cancel has settled');
+  assert.equal(calls.dispatches, 1);
+});
+
+test('R05 정리 경로: 정착 후 abort 리스너가 정확히 한 번 제거된다', async () => {
+  // 기존 cleanup path 보존 — in-flight abort 로 정착한 뒤 finally 정리가
+  // 리스너를 제거해야 한다. removeEventListener 스파이로 직접 증명한다.
+  // (동기 abort 재검사 경로는 애초에 리스너를 등록하지 않으므로 이 테스트의
+  // 대상이 아니다 — 선정착 반환이 정리를 필요로 하지 않는다.)
+  const ac = new AbortController();
+  let removals = 0;
+  let registeredFn: unknown;
+  let removedFn: unknown;
+  const origAdd = ac.signal.addEventListener.bind(ac.signal);
+  ac.signal.addEventListener = (...args: Parameters<typeof origAdd>) => {
+    if (args[0] === 'abort') registeredFn = args[1];
+    return origAdd(...args);
+  };
+  const origRemove = ac.signal.removeEventListener.bind(ac.signal);
+  ac.signal.removeEventListener = (...args: Parameters<typeof origRemove>) => {
+    if (args[0] === 'abort') {
+      removals++;
+      removedFn = args[1];
+    }
+    return origRemove(...args);
+  };
+  const engine: EngineClient = {
+    invoke<T>(): Promise<T> {
+      return new Promise<T>(() => {});
+    },
+  };
+  const pending = invokeWithTimeout(engine, 'cleanup', undefined, { signal: ac.signal });
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
+  ac.abort();
+  await assert.rejects(pending, (err: unknown) => err instanceof CancelledError);
+  // finally 정리가 돌 때까지 마이크로태스크 대기.
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
+  assert.equal(removals, 1, 'abort listener must be removed exactly once after settlement');
+  assert.ok(
+    typeof registeredFn === 'function' && removedFn === registeredFn,
+    'the removed fn must be the registered abort listener itself',
+  );
+});
+
+test('R05 배치 폴백: 와이어 배치 항목의 동기 abort 도 취소로 정착한다', async () => {
+  // 배치 폴백은 항목별 invokeWithTimeout 을 태운다(cancel.ts) — 케이스 2가
+  // 폴백을 통해서도 관측되는지 암묵적 핀. signal 항목이 단일 횡단을 깨는 것은
+  // 기존 R04 회귀 표가 담당한다.
+  const ac = new AbortController();
+  let dispatches = 0;
+  const engine = createJsonEngine({
+    invoke<T>(command: string): Promise<T> {
+      dispatches++;
+      if (command === 'boom') ac.abort(); // dispatch 동기 구간 안에서 abort
+      return Promise.resolve(`ok:${command}` as unknown as T);
+    },
+  });
+  await assert.rejects(
+    engine.invokeBatch([{ command: 'calm' }, { command: 'boom', options: { signal: ac.signal } }]),
+    (err: unknown) => err instanceof CancelledError && err.code === 'cancelled',
+    'batch fallback: sync abort inside dispatch must reject the whole batch with cancelled',
+  );
+  assert.equal(dispatches, 2, 'both entries must have dispatched (Promise.all semantics)');
+});
+
+test('R05 흡수 보장: 선정착 반환이 나중에 reject 하는 dispatch promise 를 흡수한다', async () => {
+  // 재검사 reject 로 선정착 반환할 때 dispatch promise 의 reject 흡수자가 이미
+  // 붙어 있어야 한다 — transport 가 abort 중 reject 하면 지각 rejection 이
+  // unhandled rejection 이 되어 프로세스가 죽는다(레이스 경로와 동일 보장).
+  const ac = new AbortController();
+  const engine: EngineClient = {
+    invoke<T>(command: string): Promise<T> {
+      ac.abort(); // dispatch 동기 구간 안에서 abort
+      return Promise.reject(new Error(`late rejection from ${command}`));
+    },
+  };
+  await assert.rejects(
+    invokeWithTimeout(engine, 'late-reject', undefined, { signal: ac.signal }),
+    (err: unknown) => err instanceof CancelledError && err.code === 'cancelled',
+    'early settle must win over the late dispatch rejection',
+  );
+  // 지각 rejection 이 여기서 터지면 테스트 프로세스가 죽는다 — 흡수 증명.
+  await new Promise((resolve) => setTimeout(resolve, 20));
+});
+
+// ── R06: native cancel 예외와 Promise 완료 분리 ─────────────────────
+// invokeCallbackWithAbort 의 onAbort 는 settle 로컬을 먼저 뒤집은 뒤
+// outcome() 안에서 native cancel(invocationId) 를 부른다. cancel 이 throw 하면
+// reject 이전에 예외가 새어나가 settled 은 이미 true — 리스너는 제거됐고
+// Promise 는 영원히 pending 에 남는다. 취소는 JS 결과 확정(cancellation
+// rejection)이어야 하고, native cancel 의 실패는 그 성공에 묶여서는 안 된다 —
+// CancelledError.cause 로 관측 가능하게 보존한다(통합 문서 "별도 관측 정보").
+//
+// 스코프 구분: ①–⑤는 주입 double(abort 이벤트를 흉내 내는 신호 유사 객체 —
+// 리스너 등록/제거와 fire() 를 주입)로 제어 흐름을 정밀 검증하고, ⑥은 실제
+// AbortController 로 핵심 사례(①)를 재현해 double 주입 결과가 실제 신호
+// 경로와 같음을 증명한다.
+// 지연 transport + 호출 카운터로 제어한다(실제 sleep 없음 — ⑥의 탈출 throw
+// 귀속 관측만 패턴 정당화된 20ms 카나리아를 쓴다).
+
+/** R06 테스트용 — abort 이벤트를 흉내 내는 신호 유사 주입 double. */
+function fakeAbortSignal(): {
+  signal: AbortSignal;
+  fire(): void;
+} {
+  const listeners: Array<() => void> = [];
+  return {
+    signal: {
+      aborted: false,
+      addEventListener: ((_type: string, listener: () => void) => {
+        listeners.push(listener);
+      }) as AbortSignal['addEventListener'],
+      removeEventListener: ((_type: string, listener: () => void) => {
+        const idx = listeners.indexOf(listener);
+        if (idx >= 0) listeners.splice(idx, 1);
+      }) as AbortSignal['removeEventListener'],
+    } as unknown as AbortSignal,
+    fire() {
+      const snapshot = [...listeners];
+      listeners.length = 0;
+      for (const listener of snapshot) listener();
+    },
+  };
+}
+
+test('R06 핵심: native cancel 이 throw 해도 rejection 으로 정착하고 cause 에 보존된다', async () => {
+  // ① 실패 사례 — cancel 이 throw 하면 현재 코드는 예외가 finish() 밖으로
+  // 새어나가 reject 전에 정착 플래그가 이미 뒤집혔다: Promise 는 pending 에
+  // 영원히 남는다. 기대 계약은 rejection 정착 + cancel 예외의 cause 보존.
+  const cancelError = new Error('native teardown exploded');
+  let cancelCalls = 0;
+  const fake = fakeAbortSignal();
+  const pending = invokeCallbackWithAbort<number>(
+    'teardown-boom',
+    fake.signal,
+    (resolve, _reject, isSettled) => {
+      assert.equal(isSettled(), false, 'abort must not have fired at dispatch time');
+      void resolve;
+      return 42; // invocationId — cancel 이 반드시 호출되는 상태
+    },
+    (id) => {
+      assert.equal(id, 42);
+      cancelCalls++;
+      throw cancelError;
+    },
+  );
+  let settled: 'pending' | 'cancelled' | 'resolved' = 'pending';
+  const watched = pending.then(
+    (value) => {
+      settled = 'resolved';
+      return `resolved:${value}`;
+    },
+    (err: unknown) => {
+      settled = 'cancelled';
+      assert.ok(err instanceof CancelledError, 'abort settle must be a CancelledError');
+      assert.equal(err.code, RustraErrorCode.Cancelled);
+      assert.equal(
+        err.cause,
+        cancelError,
+        'the native cancel exception must be preserved as observable cause',
+      );
+      return 'cancelled';
+    },
+  );
+  fake.fire(); // 주입 double — abort 이벤트 흉내
+  assert.equal(await watched, 'cancelled');
+  // ① 의 red 증거: 현재 결함에서는 cancel 의 탈출 throw 가 이 테스트를 위
+  // 라인 이전에 죽이고(fire 안에서 동기 전파), 구현 후에는 정착이 관측된다.
+  assert.equal(settled, 'cancelled', 'abort must settle the promise (no pending hang)');
+  assert.equal(cancelCalls, 1, 'cancel must have been invoked exactly once');
+});
+
+test('R06 회귀 가드: 정상 cancel 은 기존대로 rejection 으로 정착한다', async () => {
+  // ② — cancel 성공 경로. try/catch 추가가 이 경로를 흔들면 안 된다.
+  let cancelCalls = 0;
+  const fake = fakeAbortSignal();
+  const pending = invokeCallbackWithAbort<number>(
+    'calm-teardown',
+    fake.signal,
+    () => 7,
+    (id) => {
+      cancelCalls++;
+      assert.equal(id, 7);
+    },
+  );
+  fake.fire();
+  await assert.rejects(
+    pending,
+    (err: unknown) => {
+      assert.ok(err instanceof CancelledError);
+      assert.equal(err.code, RustraErrorCode.Cancelled);
+      assert.equal(err.cause, undefined, 'successful cancel must not fabricate a cause');
+      return true;
+    },
+    'successful cancel must settle with a plain cancelled rejection',
+  );
+  assert.equal(cancelCalls, 1, 'cancel must have been invoked exactly once');
+});
+
+test('R06 회귀 가드: cancel 미지원·invocationId 수신 전에도 rejection 으로 정착한다', async () => {
+  // ③ — cancel 이 undefined 이거나 dispatch 가 아직 id 를 돌려주지 않은
+  // (invocationId < 0) 상태. 둘 다 onAbort 의 기존 가드가 커버하며,
+  // try/catch 추가는 가드 없는 reject 경로를 그대로 유지해야 한다.
+  const fake = fakeAbortSignal();
+  const noCancel = invokeCallbackWithAbort<number>('no-cancel', fake.signal, () => 1);
+  fake.fire();
+  await assert.rejects(
+    noCancel,
+    (err: unknown) => {
+      assert.ok(err instanceof CancelledError);
+      assert.equal(err.cause, undefined, 'missing cancel support must not fabricate a cause');
+      return true;
+    },
+    'abort without cancel support must still settle with cancelled',
+  );
+  const fake2 = fakeAbortSignal();
+  const voidDispatch = invokeCallbackWithAbort<number>('void-dispatch', fake2.signal, () => {
+    /* id 반환 없음 — invocationId 는 -1 로 남는다 */
+  });
+  fake2.fire();
+  await assert.rejects(
+    voidDispatch,
+    (err: unknown) => {
+      assert.ok(err instanceof CancelledError);
+      assert.equal(err.cause, undefined);
+      return true;
+    },
+    'abort before invocationId assignment must still settle with cancelled',
+  );
+});
+
+test('R06 회귀 가드: completion 이 cancel 보다 늦게 도착해도 결과는 불변이다', async () => {
+  // ④ — abort 로 정착한 뒤 지각 completion(resolve) 이 와도 결과가 뒤집히지
+  // 않는다. settled 이 cancel 예외로 새어나간 결함 상태에서는 fire() 가 예외를
+  // 던져 이 테스트 자체가 여기서 죽는다 — red 증거의 부수 관측.
+  let lateResolve: ((value: number) => void) | undefined;
+  const fake = fakeAbortSignal();
+  const pending = invokeCallbackWithAbort<number>(
+    'late-completion',
+    fake.signal,
+    (resolve) => {
+      lateResolve = resolve;
+      return 9;
+    },
+    () => {
+      /* 정상 cancel */
+    },
+  );
+  fake.fire(); // 먼저 cancel 정착
+  await assert.rejects(pending, (err: unknown) => err instanceof CancelledError);
+  lateResolve?.(12345); // 지각 completion — 무시되어야 한다
+  assert.equal(
+    await watchedResult(pending),
+    'cancelled',
+    'late completion must not flip the result',
+  );
+});
+
+/** R06 ④ 전용 — 이미 reject 된 promise 의 최종 정착 형태를 재관측한다. */
+function watchedResult(p: Promise<number>): Promise<string> {
+  return p.then(
+    (value) => `resolved:${value}`,
+    () => 'cancelled',
+  );
+}
+
+test('R06 회귀 가드: completion 중복은 정확히 한 번만 정착한다', async () => {
+  // ⑤ — 이중 completion. settle-once 일변성 보존.
+  let resolveFirst: ((value: number) => void) | undefined;
+  let resolveSecond: ((value: number) => void) | undefined;
+  const fake = fakeAbortSignal();
+  let resolutions = 0;
+  const pending = invokeCallbackWithAbort<number>('double-completion', fake.signal, (resolve) => {
+    resolveFirst = resolve;
+    resolveSecond = resolve;
+    return 11;
+  });
+  const watched = pending.then(
+    (value) => {
+      resolutions++;
+      return value;
+    },
+    () => {
+      resolutions++;
+      return -1;
+    },
+  );
+  resolveFirst?.(1);
+  resolveSecond?.(2); // 중복 — 무시되어야 한다
+  fake.fire(); // completion 후 abort — 역시 무시되어야 한다
+  assert.equal(await watched, 1, 'double completion must settle exactly once with the first value');
+  assert.equal(resolutions, 1, 'settlement observer must run exactly once');
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
+});
+
+test('R06 실제 신호: AbortController 로도 핵심 사례가 동일하게 정착한다', async () => {
+  // ⑥ — 주입 double(①)이 실제 AbortSignal 경로와 같은 결과를 내는지의
+  // 범위 대조. 실제 신호에서는 abort 리스너의 탈출 throw 가 bun test 에서
+  // "활성 테스트의 실패"로 귀속되므로, 이 테스트는 탈출 관측이 red 증거가
+  // 된다: 구현이 try/catch 로 분리되기 전에는 아래 watched 단언 대신 이
+  // 귀속 실패가 테스트를 죽인다. 카나리아 20ms 만 대기한다(패턴 정당화:
+  // 탈출 throw 의 비동기 귀속 관측).
+  const ac = new AbortController();
+  const cancelError = new Error('real-signal native teardown exploded');
+  let cancelCalls = 0;
+  let settled: 'pending' | 'cancelled' | 'resolved' = 'pending';
+  const pending = invokeCallbackWithAbort<number>(
+    'real-teardown-boom',
+    ac.signal,
+    () => 42,
+    (id) => {
+      assert.equal(id, 42);
+      cancelCalls++;
+      throw cancelError;
+    },
+  );
+  const watched = pending.then(
+    (value) => {
+      settled = 'resolved';
+      void value;
+    },
+    (err: unknown) => {
+      settled = 'cancelled';
+      assert.ok(err instanceof CancelledError);
+      assert.equal(
+        err.cause,
+        cancelError,
+        'real AbortSignal path must also preserve the cancel exception as cause',
+      );
+    },
+  );
+  const uncaught: unknown[] = [];
+  const collector = (e: unknown) => {
+    uncaught.push(e);
+  };
+  process.on('uncaughtException', collector);
+  try {
+    ac.abort(); // 실제 신호 — 리스너의 탈출 throw 가 여기서 발생한다
+    await watched; // ← 결함 상태에서는 pending 에 걸려 타임아웃(또는 위 귀속 실패)이 red 증거
+    // 탈출 귀속 카나리아 — 컬렉터가 장착된 상태에서 지각 귀속까지 관측한다.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  } finally {
+    process.off('uncaughtException', collector);
+  }
+  assert.equal(settled, 'cancelled', 'real signal abort must settle with cancelled');
+  assert.equal(cancelCalls, 1);
+  // 구현 후에는 cancel 예외가 cause 로 흡수되므로 탈출이 없어야 한다.
+  assert.equal(uncaught.length, 0, 'cancel exception must be contained, not escape the listener');
+});
+
+// ── R07: 통합 문서 도착 검증 — 에러 승격·cause 보존 축 ─────────────
+// dx 트랙(DX Track Task 6)이 timeout→TimeoutError, cancel→CancelledError,
+// pre-abort 승격을 착지시켰다. 이 절은 그 착지의 통합 문서(T09) 회귀 축만
+// 고정한다 — 승격 로직 자체는 errors.ts 기존 구현 그대로(회귀 고정).
+
+test('R07 도착: wire 구조화 transport.timeout rejection 을 전역 invoke 파사드가 TimeoutError 로 승격한다', async () => {
+  // json-engine 의 .catch(normalizeRustraError) 배선 → errors.ts 승격 →
+  // cancel.ts 레이스 경유. instanceof 분기가 파사드 경로 끝까지 살아있는지.
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  try {
+    configure(
+      createJsonEngine({
+        invoke: () => Promise.reject({ code: 'transport.timeout', message: 'wire timed out' }),
+      }),
+    );
+    await assert.rejects(invoke('slow', { a: 1 }), (err: unknown) => {
+      assert.ok(err instanceof TimeoutError, 'wire timeout must surface as TimeoutError');
+      assert.ok(err instanceof RustraCommandError, 'TimeoutError must stay a RustraCommandError');
+      assert.equal((err as TimeoutError).code, 'transport.timeout');
+      assert.equal((err as TimeoutError).retryable, true, 'wire retryable must be derived');
+      assert.match((err as Error).message, /wire timed out/);
+      return true;
+    });
+  } finally {
+    configure(sentinel);
+  }
+});
+
+test('R07 도착: 전역 invokeBatch timeout race 는 TimeoutError 로 정착한다', async () => {
+  // global-batch.ts 의 최솟값 레이스 — 지각 배치 결과는 버려지고 레이스 승자는
+  // TimeoutError 서브클래스여야 한다(dx ② 재확인: 최종 소비자 관점).
+  const sentinel: EngineClient = {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+  try {
+    let batchCrossings = 0;
+    configure({
+      invokeBatch: <T>(): Promise<T[]> => {
+        batchCrossings++;
+        return new Promise<T[]>((resolve) => setTimeout(() => resolve([1, 2] as T[]), 500));
+      },
+    } as unknown as EngineClient);
+    const startedAt = Date.now();
+    await assert.rejects(
+      invokeBatch<number>([{ command: 'a', options: { timeoutMs: 20 } }]),
+      (err: unknown) => {
+        assert.ok(err instanceof TimeoutError, 'batch race must settle with TimeoutError');
+        assert.equal((err as TimeoutError).code, 'transport.timeout');
+        assert.equal((err as TimeoutError).retryable, true);
+        assert.match((err as Error).message, /timed out/);
+        return true;
+      },
+    );
+    const elapsed = Date.now() - startedAt;
+    assert.ok(elapsed < 500, 'the race must reject at the timeout, not the late batch');
+    assert.equal(batchCrossings, 1, 'exactly one batch crossing is issued');
+  } finally {
+    configure(sentinel);
+  }
+});
+
+test('R07 도착: 승격된 서브클래스도 cause 와 retryable 을 보존한다', async () => {
+  // errors.ts 승격 경로 — 원본 wire 객체가 cause 로 남고 retryable 유실이
+  // 없어야 재시도·원인 추적 코드가 instanceof 경로에서도 동작한다.
+  const wire = { code: 'transport.timeout', message: 'backend died', retryable: true };
+  const promoted = normalizeRustraError(wire);
+  assert.ok(promoted instanceof TimeoutError);
+  assert.equal(promoted.cause, wire, 'the original wire object must remain the cause');
+  assert.equal(promoted.retryable, true);
+  assert.equal(promoted.code, 'transport.timeout');
+
+  const cancelledWire = { code: 'cancelled', message: 'host aborted' };
+  const cancelled = normalizeRustraError(cancelledWire);
+  assert.ok(cancelled instanceof CancelledError);
+  assert.equal(cancelled.cause, cancelledWire);
+  assert.equal(cancelled.retryable, true, 'cancelled code implies retryable');
+  assert.equal(cancelled.code, 'cancelled');
+});
+
+test('R07 회귀: 사용자 code 커스텀 RustraCommandError 는 normalize 를 통과해도 원본이 보존된다', async () => {
+  // 정책 — normalizeRustraError 의 instanceof fast-path: 이미 RustraCommandError
+  // (및 서브클래스)인 값은 절대 재생성하지 않는다. 사용자가 code 를 커스텀한
+  // 인스턴스를 transport 가 그대로 reject 해도 객체 동일성·코드·retryable 이
+  // 유지된다. json-engine 배선을 통해서도 동일(정규화 관통).
+  const custom = new RustraCommandError('order.conflict', 'order 42 already shipped', true);
+  const passedThrough = normalizeRustraError(custom);
+  assert.equal(passedThrough, custom, 'RustraCommandError instances must pass through untouched');
+  assert.equal(passedThrough.code, 'order.conflict');
+  assert.equal(passedThrough.retryable, true);
+
+  // json-engine rejection 배선 — transport 가 서브클래스를 reject 해도 동일.
+  const engine = createJsonEngine({ invoke: () => Promise.reject(custom) });
+  await assert.rejects(engine.invoke('ship', {}), (err: unknown) => {
+    assert.equal(err, custom, 'engine rejection must preserve the caller error by identity');
+    return true;
+  });
+
+  // 서브클래스도 동일 — TimeoutError 를 reject 하면 재래핑 없이 그대로.
+  const timeout = new TimeoutError('custom timeout instance');
+  const engine2 = createJsonEngine({ invoke: () => Promise.reject(timeout) });
+  await assert.rejects(engine2.invoke('slow', {}), (err: unknown) => {
+    assert.equal(err, timeout);
+    return true;
+  });
+});
+
+// ── A04: allSettled 형태 opt-in batch — 부분 성공·미실행 구분 ────────
+// invokeBatchSettled 는 기존 invokeBatch 의 reject·순서·fail-fast 정책을
+// 건드리지 않는 별도 opt-in 표면이다. 실행은 항목별 폴백과 달리 **순차**다:
+// 항목 i 가 reject 하면 그 이후 항목은 아예 dispatch 되지 않고 `unexecuted`
+// 로 표시된다("실행됐지만 실패"와 "실행 안 됨"의 구분이 이 API의 핵심 가치).
+// 와이어 배치(단일 횡단)를 지원하는 transport 를 넣어도 settled 표면은
+// **항상 per-entry 폴백으로 실행**한다 — 부분 성공 관측이 목적이므로.
+// 지연 transport + 호출 카운터로 제어한다(실제 sleep 없음).
+
+/** A04 테스트용 — 유출 방지 sentinel. R04 글로벌 표와 동일한 패턴. */
+function a04Sentinel(): EngineClient {
+  return {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+}
+
+test('A04 중간 실패: 앞 항목 fulfilled + 해당 rejected + 뒤 항목 unexecuted, 순서 보존', async () => {
+  // ① 핵심 사례 — 실패 항목 뒤는 dispatch 자체가 없어야 한다. 순차 실행 증명을
+  // 겸한다: 항목 2 의 dispatch 는 항목 1 이 정착한 뒤에만 시작된다.
+  const calls: Array<{ command: string; phase: 'start' | 'settle' }> = [];
+  configure({
+    invoke<T>(command: string): Promise<T> {
+      calls.push({ command, phase: 'start' });
+      if (command === 'boom')
+        return Promise.resolve().then(() => {
+          calls.push({ command, phase: 'settle' });
+          throw new Error(`explosion:${command}`);
+        });
+      return Promise.resolve().then(() => {
+        calls.push({ command, phase: 'settle' });
+        return `ok:${command}` as T;
+      });
+    },
+  } as unknown as EngineClient);
+  try {
+    const settled = await invokeBatchSettled<string>([
+      { command: 'a' },
+      { command: 'boom' },
+      { command: 'c' },
+    ]);
+    assert.deepEqual(
+      settled.map((entry) => entry.status),
+      ['fulfilled', 'rejected', 'unexecuted'],
+      'entries must be fulfilled / rejected / unexecuted in input order',
+    );
+    assert.deepEqual(settled[0], { status: 'fulfilled', value: 'ok:a' });
+    assert.ok(
+      settled[1].status === 'rejected' &&
+        settled[1].reason instanceof Error &&
+        (settled[1].reason as Error).message === 'explosion:boom',
+      'the rejection reason must be the normalized original error',
+    );
+    assert.deepEqual(
+      calls.map((call) => `${call.command}:${call.phase}`),
+      ['a:start', 'a:settle', 'boom:start', 'boom:settle'],
+      'dispatch must be sequential — item 3 must never start, item 2 only after item 1 settles',
+    );
+  } finally {
+    configure(a04Sentinel());
+  }
+});
+
+test('A04 빈 batch: resolve [] (invokeBatch 회귀와 동일 형태)', async () => {
+  const calls = { invokes: 0 };
+  configure({
+    invoke<T>(): Promise<T> {
+      calls.invokes++;
+      return Promise.resolve('unused' as T);
+    },
+  } as unknown as EngineClient);
+  try {
+    const settled = await invokeBatchSettled([]);
+    assert.deepEqual(settled, [], 'empty batch must resolve to an empty array');
+    assert.equal(calls.invokes, 0, 'empty batch must not invoke');
+  } finally {
+    configure(a04Sentinel());
+  }
+});
+
+test('A04 signal 혼합: abort 항목만 rejected, 이후 항목 unexecuted', async () => {
+  // per-entry invokeWithTimeout 경로 — signal 옵션이 항목별로 존중되는지
+  // (in-flight abort → rejected, reason 은 CancelledError). 3번 항목은 dispatch
+  // 자체가 안 되므로 unexecuted 로 남는다. 순차 실행이므로 abort 시점 제어가
+  // 가능하다 — 'hang' 이 dispatch 된 뒤, 정착 전에 abort 한다.
+  const calls: Array<{ command: string; phase: 'start' | 'settle' }> = [];
+  const ac = new AbortController();
+  configure({
+    invoke<T>(command: string): Promise<T> {
+      calls.push({ command, phase: 'start' });
+      if (command === 'hang') return new Promise<T>(() => {}); // 결코 settle 하지 않는다
+      return Promise.resolve().then(() => {
+        calls.push({ command, phase: 'settle' });
+        return `ok:${command}` as T;
+      });
+    },
+  } as unknown as EngineClient);
+  try {
+    const settledPromise = invokeBatchSettled<string>([
+      { command: 'a' },
+      { command: 'hang', options: { signal: ac.signal } },
+      { command: 'c' },
+    ]);
+    // 순차 실행 증명 — 'hang' 이 dispatch 될 때까지 마이크로태스크를 흘린다.
+    for (let i = 0; i < 20 && !calls.some((call) => call.command === 'hang'); i++)
+      await new Promise<void>((resolve) => queueMicrotask(resolve));
+    assert.ok(
+      calls.some((call) => call.command === 'hang'),
+      'the hanging entry must be reached sequentially',
+    );
+    ac.abort(); // in-flight abort — CancelledError 로 rejected
+    const settled = await settledPromise;
+    assert.deepEqual(
+      calls.map((call) => `${call.command}:${call.phase}`),
+      ['a:start', 'a:settle', 'hang:start'],
+      'no dispatch may start after the aborted entry settles',
+    );
+    assert.deepEqual(
+      settled.map((entry) => entry.status),
+      ['fulfilled', 'rejected', 'unexecuted'],
+    );
+    assert.ok(
+      settled[1].status === 'rejected' && settled[1].reason instanceof CancelledError,
+      'abort rejection reason must be a CancelledError',
+    );
+  } finally {
+    configure(a04Sentinel());
+  }
+});
+
+test('A04 전부 성공: 전부 fulfilled, 순서 = entry 순서', async () => {
+  configure({
+    invoke<T>(command: string): Promise<T> {
+      return Promise.resolve(`ok:${command}` as T);
+    },
+  } as unknown as EngineClient);
+  try {
+    const settled: Array<BatchSettledEntry<string>> = await invokeBatchSettled<string>([
+      { command: 'x' },
+      { command: 'y' },
+      { command: 'z' },
+    ]);
+    assert.deepEqual(
+      settled.map((entry) => (entry.status === 'fulfilled' ? entry.value : entry)),
+      ['ok:x', 'ok:y', 'ok:z'],
+      'all-fulfilled results must keep input order',
+    );
+  } finally {
+    configure(a04Sentinel());
+  }
+});
+
+test('A04 회귀 가드: 동일 입력의 invokeBatch 는 기존 reject 계약(Promise.all 동시성) 그대로다', async () => {
+  // ⑤ — invokeBatch 는 무변경이어야 한다: 중간 실패 시 전체 reject, 그리고
+  // 폴백 경로는 동시 실행이므로 boom 이 reject 하는 시점에 뒤 항목의 dispatch가
+  // 이미 시작됐다(정확히 invokeBatchSettled 의 순차 정책과 반대). 이 대조가
+  // "settled 전용 순차" 결정을 고정하고 기존 표면의 회귀를 잡는다.
+  const calls: Array<{ command: string; phase: 'start' | 'settle' }> = [];
+  const engine = createJsonEngine({
+    invoke<T>(command: string): Promise<T> {
+      calls.push({ command, phase: 'start' });
+      if (command === 'boom') return Promise.reject(new Error('explosion:boom'));
+      return new Promise<T>((resolve) => {
+        calls.push({ command, phase: 'settle' });
+        resolve(`ok:${command}` as T);
+      });
+    },
+  });
+  await assert.rejects(
+    engine.invokeBatch([{ command: 'a' }, { command: 'boom' }, { command: 'c' }]),
+    (err: unknown) => err instanceof Error && err.message === 'explosion:boom',
+    'invokeBatch contract must remain fail-fast whole-batch rejection',
+  );
+  assert.ok(
+    calls.filter((call) => call.phase === 'start').length === 3,
+    'fallback is concurrent — all three entries must have started',
+  );
+});
+
+test('A04 와이어 배치 무시: invokeBatch 를 지원해도 settled 은 항상 per-entry 로 실행한다', async () => {
+  // 설계 명시 사항의 고정 — transport 가 단일 횡단 invokeBatch 를 제공해도
+  // settled 표면은 per-entry 폴백만 탄다(부분 성공 관측이 목적). 와이어 배치가
+  // 원자적 all-or-nothing 이므로 settled 로는 부분 성공을 관측할 수 없다.
+  let wireBatchCalls = 0;
+  const calls: Array<{ command: string; phase: 'start' | 'settle' }> = [];
+  const engine = createJsonEngine({
+    invoke<T>(command: string): Promise<T> {
+      calls.push({ command, phase: 'start' });
+      const settledSync = () => calls.push({ command, phase: 'settle' });
+      if (command === 'boom')
+        return Promise.resolve().then(() => {
+          settledSync();
+          throw new Error('explosion:boom');
+        });
+      settledSync();
+      return Promise.resolve(`ok:${command}` as T);
+    },
+    // 와이어 배치가 있으면 invokeBatch 는 이걸 탄다 — settled 이 이걸 타면
+    // wireBatchCalls 가 0 이 아님이 red 신호다.
+    invokeBatch: (requests) => {
+      wireBatchCalls++;
+      return requests.map(() => 'wire');
+    },
+  });
+  configure(engine as unknown as EngineClient);
+  try {
+    const settled = await invokeBatchSettled<string>([
+      { command: 'a' },
+      { command: 'boom' },
+      { command: 'c' },
+    ]);
+    assert.equal(wireBatchCalls, 0, 'the settled surface must never use the wire batch crossing');
+    assert.deepEqual(
+      settled.map((entry) => entry.status),
+      ['fulfilled', 'rejected', 'unexecuted'],
+    );
+    assert.deepEqual(
+      calls.map((call) => `${call.command}:${call.phase}`),
+      ['a:start', 'a:settle', 'boom:start', 'boom:settle'],
+      'per-entry execution must be sequential even with wire batch available',
+    );
+  } finally {
+    configure(a04Sentinel());
+  }
 });

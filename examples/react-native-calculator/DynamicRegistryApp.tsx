@@ -194,7 +194,7 @@ async function runEventPushDemo(
   let ticksObserved = 0;
   let doneObserved = false;
 
-  const unsubscribeTick = subscribeEvent(native, "progress.tick", (payload) => {
+  const unsubscribeTick = subscribeEvent("progress.tick", (payload) => {
     ticksObserved += 1;
     const p = payload as { step: number; total: number } | null;
     if (p) {
@@ -202,7 +202,7 @@ async function runEventPushDemo(
       log(`  ⬇ progress.tick step=${p.step}/${p.total}`);
     }
   });
-  const unsubscribeDone = subscribeEvent(native, "demo.done", (payload) => {
+  const unsubscribeDone = subscribeEvent("demo.done", (payload) => {
     doneObserved = true;
     const p = payload as { emitted: number } | null;
     if (p) {

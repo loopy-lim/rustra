@@ -6,16 +6,16 @@ A matrix of the invoke features (signal/cancellation, batch, events) each adapte
 
 ## Matrix
 
-| Feature                                   | Node (`createNodeEngine`)                                                                                                 | Bun (`createBunEngine`)                                      | Tauri (`createTauriEngine`)               | RN (`createReactNativeEngine`)                           | RN (`createRkyvV2Engine`)                                                                                                                   |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `options.signal` (pre-abort)              | ✅ immediate `cancelled`                                                                                                  | ✅ immediate `cancelled`                                     | ✅ immediate `cancelled`                  | ✅ immediate `cancelled`                                 | ✅ immediate `cancelled`                                                                                                                    |
-| `options.signal` (in-flight cancellation) | ⚠️ shallow cancellation (a non-aborted signal runs normally; an abort mid-run discards the result)                        | ⚠️ shallow cancellation (same)                               | ⚠️ shallow cancellation (same)            | ⚠️ shallow cancellation (rejects the JS promise only)    | ⚠️ conditional propagation — reaches the Rust checkpoint only when the JS codec + `invokeAsync`/`invokeCancel` are confirmed                |
-| `invokeBatch`                             | ✅ per-entry Promise fallback                                                                                             | ✅ per-entry Promise fallback                                | ✅ per-entry Promise fallback             | ✅ per-entry Promise fallback                            | ✅ single crossing for static commands (`invokeTypedBatch[ById]`); per-entry routing when signal entries are present                        |
-| Per-entry batch cancellation              | ✅ shallow cancellation of each `invoke`                                                                                  | ✅ same                                                      | ✅ same                                   | ✅ same                                                  | ⚠️ single-crossing batches do not support cancellation — routed automatically to the per-entry `invoke` path when a signal entry is present |
-| `options.timeoutMs`                       | ✅ direct/global `invoke` race — `transport.timeout` (retryable)                                                          | ✅ same                                                      | ✅ same                                   | ⚠️ synchronous native calls cannot be preempted mid-call | ✅ same (a global batch races the whole batch at the per-entry minimum)                                                                     |
-| Events (`subscribeEvent`/`onEvent`)       | ✅ `subscribeEvent(transport, name, cb)` — 0xfffd push frames (polling fallback; loud-fail on event-incapable transports) | ✅ `createBunEventBridge` — FFI push sink (polling fallback) | ✅ `subscribeEvent`/`subscribeTauriEvent` | ❌ JSON adapter                                          | ✅ `subscribeEvent`/`drainEvents` (CallInvoker auto drain)                                                                                  |
-| Channels (`createChannel`)                | ❌ no transport channel source                                                                                            | ❌ no transport channel source                               | ❌ no Tauri channel adapter               | ✅ JSI handle + `close()`                                | ✅ JSI native channel handle                                                                                                                |
-| rkyv V2 binary (`createRkyvV2Engine`)     | ✅ (requires the napi/FFI native)                                                                                         | ✅ (requires the FFI native)                                 | ✅ (`rustra_dispatch` binary path)        | —                                                        | ✅ JSI                                                                                                                                      |
+| Feature                                   | Node (`createNodeEngine`)                                                                                                 | Bun (`createBunEngine`)                                      | Tauri (`createTauriEngine`)                                                            | RN (`createReactNativeEngine`)                           | RN (`createRkyvV2Engine`)                                                                                                                   |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `options.signal` (pre-abort)              | ✅ immediate `cancelled`                                                                                                  | ✅ immediate `cancelled`                                     | ✅ immediate `cancelled`                                                               | ✅ immediate `cancelled`                                 | ✅ immediate `cancelled`                                                                                                                    |
+| `options.signal` (in-flight cancellation) | ⚠️ shallow cancellation (a non-aborted signal runs normally; an abort mid-run discards the result)                        | ⚠️ shallow cancellation (same)                               | ⚠️ shallow cancellation (same)                                                         | ⚠️ shallow cancellation (rejects the JS promise only)    | ⚠️ conditional propagation — reaches the Rust checkpoint only when the JS codec + `invokeAsync`/`invokeCancel` are confirmed                |
+| `invokeBatch`                             | ✅ per-entry Promise fallback                                                                                             | ✅ per-entry Promise fallback                                | ✅ per-entry Promise fallback                                                          | ✅ per-entry Promise fallback                            | ✅ single crossing for static commands (`invokeTypedBatch[ById]`); per-entry routing when signal entries are present                        |
+| Per-entry batch cancellation              | ✅ shallow cancellation of each `invoke`                                                                                  | ✅ same                                                      | ✅ same                                                                                | ✅ same                                                  | ⚠️ single-crossing batches do not support cancellation — routed automatically to the per-entry `invoke` path when a signal entry is present |
+| `options.timeoutMs`                       | ✅ direct/global `invoke` race — `transport.timeout` (retryable)                                                          | ✅ same                                                      | ✅ same                                                                                | ⚠️ synchronous native calls cannot be preempted mid-call | ✅ same (a global batch races the whole batch at the per-entry minimum)                                                                     |
+| Events (`subscribeEvent`/`onEvent`)       | ✅ `subscribeEvent(transport, name, cb)` — 0xfffd push frames (polling fallback; loud-fail on event-incapable transports) | ✅ `createBunEventBridge` — FFI push sink (polling fallback) | ✅ `subscribeEvent`/`subscribeTauriEvent` — decoded-first payload contract (see below) | ❌ JSON adapter                                          | ✅ `subscribeEvent`/`drainEvents` (CallInvoker auto drain)                                                                                  |
+| Channels (`createChannel`)                | ❌ no transport channel source                                                                                            | ❌ no transport channel source                               | ❌ no Tauri channel adapter                                                            | ✅ JSI handle + `close()`                                | ✅ JSI native channel handle                                                                                                                |
+| rkyv V2 binary (`createRkyvV2Engine`)     | ✅ (requires the napi/FFI native)                                                                                         | ✅ (requires the FFI native)                                 | ✅ (`rustra_dispatch` binary path)                                                     | —                                                        | ✅ JSI                                                                                                                                      |
 
 ## Signal semantics in detail
 
@@ -24,8 +24,10 @@ A matrix of the invoke features (signal/cancellation, batch, events) each adapte
   - JSON transports (Node/Bun/Tauri and the RN JSON adapter) forward the round trip to the native side and cannot interrupt execution itself. Under the **shallow cancellation policy** they reject only the JS Promise with `cancelled` and ignore late results.
   - The RN rkyv V2 engine **propagates** to the Rust checkpoint when `invokeAsync`+`invokeCancel` exist and the commandId/codec path is confirmed. Static typed paths, legacy natives, and paths where the commandId cannot be confirmed fall back to shallow cancellation.
 - **Timeout** (`options.timeoutMs`): common to all engines — the global `invoke` starts a settle race. On expiry it rejects with `transport.timeout` (retryable) and late responses are ignored. A batch (`invokeBatch`) races the entire batch with the **minimum** of the per-entry `timeoutMs` values.
+- **Shallow cancellation/timeout ≠ the command did not run**: the ⚠️ cells on shallow cancellation and `timeoutMs` mark the _JS observation_, not the Rust execution. On a shallow-cancel adapter (`signal` without `invokeCancel` propagation) or after a timeout, the Rust command keeps running or has already completed — its result is discarded, not its execution. `retryable: true` (`transport.timeout`, `cancelled`, `transport.error`) therefore means "the failure class may clear on a retry", never "re-running the command is safe". Retry non-idempotent commands only after a status re-query proves the earlier attempt did not land; see "Timeout, Cancellation, and Retry Semantics" in [rust-api-guide.md](rust-api-guide.md).
 - **Event subscription call shape**: generated event contracts use `(name, callback)`. RN accepts both this canonical form and the legacy `(native, name, callback)`; Tauri uses an optional `listen` injection or the global Tauri event API.
 - **Event delivery path**: Tauri is a Rust `app.emit` **push**, RN is a JSI sink **push**, Bun is an FFI C callback sink **push** (`rustra_ffi_event_sink_register` — hosts that emit from background threads use the `poll` option's polling fallback), and Node is dual-mode: `subscribeEvent` prefers `events:"push"` handshake **push** over stdout 0xfffd frames when the loop-stdio runtime accepted it, falls back to `__drainEvents` special-command **polling** (`RUSTRA_NODE_EVENT_POLL_MS`, default 100ms) otherwise (legacy runtimes, no-codecs transports), and throws `event.unavailable` on transports that can never deliver events. Unlike polling, push mode (Node stdout, Bun FFI) discards emits that happen before the first subscription — the sink bypasses the bus, so subscribe before emitting or use polling if pre-subscription emits matter. When a Rust `set_event_sink` is installed the bus drains (the contract that prevents dual push+polling reception), so push and polling are not mixed.
+- **Tauri payload contract (decoded-first, string-only single parse)**: at the real WebView boundary tauri splices the `emit_str` JSON into the page as `payload: {…}`, so the JS listener already receives a decoded value — `subscribeEvent` passes any non-string payload through untouched (no re-parse, object identity preserved). Only `typeof payload === 'string'` gets exactly one `JSON.parse`; if the result is an object, array, or string it is delivered (an escaped-JSON string unwraps exactly once), and if the result is a primitive (`'123'`, `'true'`) the original string is kept — a string payload never silently changes type. Parse failure delivers the original string. There is no content-based sniffing: a string payload stays a string even when it looks like JSON. Legacy injected transports (`__TAURI__` fakes delivering serialized strings) are covered by the same rule, with no separate mode. One known divergence between the two delivery modes: primitive event payloads arrive as the primitive itself under the real WebView (`payload: 42`) but stay the original string (`'42'`) under a legacy-string transport — the production boundary is the real WebView.
 
 ## invokeBatch semantics
 
@@ -35,8 +37,74 @@ A matrix of the invoke features (signal/cancellation, batch, events) each adapte
 
 ## Notes
 
+- **Verified combination**: npm `@rustra/*` 0.8.x ↔ Rust crate 0.8.x (workspace) is the combination currently exercised by CI. The npm and crates.io version lines were aligned in the 2026-09-06 release step; future bumps follow the same release procedure, not adapter code.
+- **Engine slot is single-engine** (bootstrap ownership): first `configureLazy`/`configure` registration wins; a second bootstrap registered while the first is still pending throws `registry.frozen` instead of silently winning by import order. Dispose/reload re-registration and post-consumption replacement stay allowed. Multi-engine is not supported.
+- **Platforms not covered by runtime evidence**: the runtime claims in this
+  matrix and in the README platform matrix are backed by the specific
+  host/OS/build combinations listed there — macOS (Tauri WebView, Node, Bun),
+  iOS simulator (RN), Android emulator and the `TB710FU` arm64 device (RN),
+  plus the wasm spike's emulator/simulator runs. Everything outside those
+  combinations — e.g. Tauri on Windows, Tauri Linux WebView user flows, other
+  Android/iOS devices, RN Windows/macOS hosts — is **not** covered by a
+  runtime claim here, and nothing in this matrix asserts it. Per-run manual
+  checks: [verification checklist](verification-checklist.md).
 - Per-adapter stable scope and gates: [compatibility-contract.md](compatibility-contract.md)
 - Cancellation propagation design: `docs/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
+
+### Machine-readable surface: `engine.supports` (A02)
+
+Each adapter's engine factory exposes a `supports` object (`@rustra/types`
+`EngineSupports`) whose values are this matrix's cells transcribed 1:1 — no new
+claims. Apps can branch before any side effect, e.g.
+`engine.supports?.cancellation === 'cooperative'`. The mapping per column:
+
+| `supports` field    | Node        | Bun JSON / Bun FFI rkyv V2 | Tauri       | RN JSON     | RN rkyv V2        |
+| ------------------- | ----------- | -------------------------- | ----------- | ----------- | ----------------- |
+| `cancellation`      | `shallow`   | `shallow` / `shallow`      | `shallow`   | `shallow`   | `cooperative`     |
+| `batch`             | `per-entry` | `per-entry` / `per-entry`  | `per-entry` | `per-entry` | `single-crossing` |
+| `events`            | `push`      | `push` / `push`            | `push`      | `none`      | `push`            |
+| `channels`          | `false`     | `false` / `false`          | `false`     | `true`      | `true`            |
+| `timeoutPreemption` | `true`      | `true` / `true`            | `true`      | `false`     | `true`            |
+
+Nuances that do not fit one enum value stay in the matrix prose, not the enum:
+RN rkyv V2 `cancellation: 'cooperative'` means the matrix's "conditional
+propagation" cell (reaches the Rust checkpoint only when
+`invokeAsync`+`invokeCancel` are exposed and the commandId/codec path is
+confirmed; static typed paths and legacy natives fall back to shallow). The
+Bun FFI rkyv V2 engine shares the same `createRkyvV2Engine` core, but its FFI
+native binds only `invokeRkyvV2`/`getSchema`/`getContractHash`/
+`getSchemaGeneration` — the `invokeAsync`/`invokeCancel` and
+`invokeTypedBatch` symbols are not bound, so the conditional-propagation and
+single-crossing conditions are unreachable and the engine is observed as
+`shallow`/`per-entry`. The RN async engine (`createAsyncEngine`) runs
+`invokeBatch` as per-entry `Promise.all` over the async `invoke`, so it
+reports `batch: 'per-entry'` even though it inherits the sync engine's
+`cancellation: 'cooperative'` (real when `invokeCancel` is exposed). The
+`'push'` event value includes each engine's polling fallback — the actual
+delivery path is determined by the per-adapter subscription surface. Tauri
+`batch: 'per-entry'` follows the cell family even though track E2 added a
+single-IPC wire batch (`rustra_dispatch_batch`) as an optimization.
+
+### Bootstrap lifecycle state (A05)
+
+The bootstrap objects (`createNodeBootstrap`/`createBunBootstrap`/
+`createTauriBootstrap`/`createRustraBootstrap`) expose a local
+`state: 'initializing' | 'ready' | 'disposed'` (shared as `BootstrapState` in
+`@rustra/types`; all adapters reject post-dispose `ready()` with the same
+`disposedBootstrapError` family). `dispose()` is idempotent (a second call is a
+no-op), and `ready()` after `dispose()` rejects loudly instead of silently
+re-resolving. `NodeBootstrap.reload()` drains the bootstrap's own transport
+when it exposes `drain(timeoutMs)` (duck-typed; default 5 s guard — reload
+proceeds after the timeout; a drain **rejection** aborts the reload without
+disposing), and proceeds immediately otherwise (the one-shot stdio transport
+has no drain; loop-transport hosts are not wired through `NodeBootstrap`).
+State is re-checked at every await boundary inside `reload()`: a `dispose()`
+during the drain or re-initialization aborts the reload instead of resurrecting
+the bootstrap, and a failed re-initialization restores `initializing` (the
+original error propagates) rather than bricking the bootstrap as `disposed`.
+A `draining` state is deliberately not modeled: drain is transparent to the
+three-state lifecycle. See the hot-swap section below for the reload contract
+this builds on.
 
 ## Spike: wasm32 engine in wasm3 (React Native) — VERDICT: PASS (spike)
 

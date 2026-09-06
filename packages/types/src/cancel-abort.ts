@@ -1,4 +1,4 @@
-import { RustraCommandError } from './errors.js';
+import { CancelledError } from './errors.js';
 
 export function raceAbort<T>(
   promise: Promise<T>,
@@ -6,8 +6,7 @@ export function raceAbort<T>(
   command: string,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const onAbort = () =>
-      reject(new RustraCommandError('cancelled', `invoke("${command}") aborted`, true));
+    const onAbort = () => reject(new CancelledError(`invoke("${command}") aborted`));
     signal.addEventListener('abort', onAbort, { once: true });
     promise.then(
       (value) => {
