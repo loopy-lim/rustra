@@ -1,7 +1,13 @@
 import { normalizeRustraError } from './errors.js';
 import { debugRustra, isRustraDebugEnabled } from './debug.js';
 import { invokeWithTimeout } from './cancel.js';
-import type { BatchEntry, EngineClient, EngineClientWithBatch, InvokeOptions } from './public.js';
+import type {
+  BatchEntry,
+  EngineClient,
+  EngineClientWithBatch,
+  EngineSupports,
+  InvokeOptions,
+} from './public.js';
 
 /**
  * json-engine 이 이미 아는 와이어 배치 표면 — transport 가 단일 IPC 횡단으로
@@ -74,6 +80,7 @@ export function createJsonEngine(
   transport:
     ((command: string, args?: unknown) => Promise<unknown> | unknown) | JsonWireBatchTransport,
   normalizeArgs: (args?: unknown) => unknown = (args) => args,
+  supports?: EngineSupports,
 ): EngineClientWithBatch {
   const rawTransport: JsonWireBatchTransport =
     typeof transport === 'function' ? { invoke: transport } : transport;
@@ -99,6 +106,7 @@ export function createJsonEngine(
     },
   };
   return {
+    supports,
     invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
       return invokeWithTimeout(rawEngine, command, args, options);
     },

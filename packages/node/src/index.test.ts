@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createNodeBootstrap, createNodeEngine } from './index.js';
+import type { NodeProcessTransport } from './index.js';
 import { RustraCommandError } from '@rustra/types';
 import type { EngineClientWithBatch } from '@rustra/types';
 
@@ -918,3 +919,311 @@ processTest(
     );
   },
 );
+
+// ── A02: EngineSupports 표면 — 매트릭스 셀의 기계 판독 가능한 이행 ─────────
+// 초기값은 docs/compatibility-matrix.md 의 각 셀에서 옮긴 것(새 주장 없음).
+// 매핑: signal(진행 중 취소) ⚠️ 얕은 취소 → 'shallow' / invokeBatch ✅ per-entry
+// Promise fallback → 'per-entry' / 이벤트 ✅ 0xfffd 푸시 프레임(폴링 폴백) → 'push'
+// / 채널 ❌ → false / timeoutMs ✅ 레이스 → true.
+
+test('A02: createNodeEngine exposes supports matching the compatibility matrix', async () => {
+  const engine = createNodeEngine({
+    invoke: () => ({ value: 1 }),
+  });
+  assert.deepEqual(engine.supports, {
+    cancellation: 'shallow',
+    batch: 'per-entry',
+    events: 'push',
+    channels: false,
+    timeoutPreemption: true,
+  });
+});
+
+// ── A05: bootstrap 수명 상태 모델 — 'initializing' | 'ready' | 'disposed' ──
+// R08 loud-fail 가드 위의 로컬 상태 3종. reload 는 루프 transport 의 drain 을
+// 연결한다(기존 시그니처 유지, 타임아웃 후 진행). dispose 는 멱등(두 번째는
+// no-op)하되 dispose 후 ready 는 loud-fail 한다.
+
+test('A05: createNodeBootstrap exposes the lifecycle state surface', async () => {
+  const { configure } = await import('@rustra/types');
+  try {
+    configure(cleanSlotEngine);
+    // 스폰 실패 bootstrap — 상태 전이만 검증하므로 실바이너리가 필요 없다.
+    const bootstrap = createNodeBootstrap({ commandCandidates: ['./missing-rustra-runtime'] });
+    assert.equal(bootstrap.state, 'initializing', 'fresh bootstrap starts as initializing');
+    await assert.rejects(bootstrap.ready(), /No Rustra Node runtime/);
+    assert.equal(bootstrap.state, 'initializing', 'failed readiness keeps initializing');
+    bootstrap.dispose();
+    assert.equal(bootstrap.state, 'disposed');
+  } finally {
+    configure(cleanSlotEngine);
+  }
+});
+
+test('A05: ready after dispose rejects loudly (no zombie re-resolution)', async () => {
+  const { configure } = await import('@rustra/types');
+  try {
+    configure(cleanSlotEngine);
+    const bootstrap = createNodeBootstrap({ commandCandidates: ['./missing-rustra-runtime'] });
+    bootstrap.dispose();
+    assert.equal(bootstrap.state, 'disposed');
+    await assert.rejects(bootstrap.ready(), (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.match((err as RustraCommandError).message, /disposed/);
+      return true;
+    });
+  } finally {
+    configure(cleanSlotEngine);
+  }
+});
+
+test('A05: dispose is idempotent — second dispose is a no-op', () => {
+  const bootstrap = createNodeBootstrap({ commandCandidates: ['./missing-rustra-runtime'] });
+  bootstrap.dispose();
+  bootstrap.dispose(); // no-op — must not throw
+  assert.equal(bootstrap.state, 'disposed');
+});
+
+test('A05: concurrent ready calls share one initialization promise (ensureConfigured regression)', async () => {
+  // 동일 초기화 프라미스 공유는 ensureConfigured 의 기존 계약 — JSON 엔진을
+  // 직접 configure 하는 스파로 회귀를 고정한다(스폰 없는 node bootstrap 은
+  // 만들 수 없다 — 원샷 transport 내장).
+  const { configure, configureLazy, ensureConfigured } = await import('@rustra/types');
+  try {
+    configure(cleanSlotEngine);
+    let constructions = 0;
+    configureLazy(async () => {
+      constructions++;
+      return { invoke: async <T>() => 'shared' as T } as unknown as EngineClientWithBatch;
+    });
+    const [a, b] = (await Promise.all([ensureConfigured(), ensureConfigured()])) as unknown as [
+      EngineClientWithBatch,
+      EngineClientWithBatch,
+    ];
+    assert.equal(a, b, 'concurrent ready must share the same engine instance');
+    assert.equal(constructions, 1, 'initializer must run exactly once');
+  } finally {
+    configure(cleanSlotEngine);
+  }
+});
+
+test('A05: reload duck-drains its own transport before dispose (createTransport seam)', async () => {
+  // drain 연결 계약 — reload 는 bootstrap 이 소유한 transport 를 duck-typing 으로
+  // drain 한다. drain 이 있는 transport(createTransport seam 주입)만 drain 되고,
+  // drain 이 없는 원샷 transport 는 즉시 진행한다. drain 시맨틱 자체는
+  // NodeLoopTransport drain 테스트(실바이너리)가 담당한다.
+  const { configure } = await import('@rustra/types');
+  try {
+    configure(cleanSlotEngine);
+    const drained: Array<number | undefined> = [];
+    let spawnCount = 0;
+    const bootstrap = createNodeBootstrap({
+      createTransport: () => {
+        spawnCount++;
+        const transport = {
+          invoke: async () => ({ value: spawnCount }),
+          getContractHash: async () => '0'.repeat(64),
+          dispose() {},
+        } as unknown as NodeProcessTransport;
+        // duck-typed drain — NodeLoopTransport 가 구조적으로 제공하는 것과 동일한
+        // 선택 멤버. 부트스트랩 소유 transport 에 붙어 있을 때만 reload 가 쓴다.
+        (transport as { drain?: (timeoutMs?: number) => Promise<void> }).drain = async (
+          timeoutMs,
+        ) => {
+          drained.push(timeoutMs);
+        };
+        return transport;
+      },
+    });
+    await bootstrap.ready();
+    assert.equal(spawnCount, 1);
+    await bootstrap.reload();
+    assert.deepEqual(drained, [5_000], 'reload must drain its own transport with the 5s default');
+    assert.equal(spawnCount, 2, 'reload must re-bootstrap through the seam after draining');
+    assert.equal(bootstrap.state, 'ready', 'reload ends in the ready state');
+    await bootstrap.dispose();
+  } finally {
+    configure(cleanSlotEngine);
+  }
+});
+
+test('A05: dispose during reload drain aborts the reload — no zombie ready (I-1)', async () => {
+  // I-1 회귀 — drain 중 dispose 하면 reload 가 재개해 state='ready' 로 부활하고
+  // ready() 가 해소하는 좀비를 만들 수 없다. await 경계마다 disposed 재검사.
+  const { configure } = await import('@rustra/types');
+  try {
+    configure(cleanSlotEngine);
+    let releaseDrain: (() => void) | undefined;
+    let spawnCount = 0;
+    const bootstrap = createNodeBootstrap({
+      createTransport: () => {
+        spawnCount++;
+        const transport = {
+          invoke: async () => ({}),
+          getContractHash: async () => '0'.repeat(64),
+          dispose() {},
+        } as unknown as NodeProcessTransport;
+        (transport as { drain?: (timeoutMs?: number) => Promise<void> }).drain = async () => {
+          await new Promise<void>((resolve) => {
+            releaseDrain = resolve;
+          });
+        };
+        return transport;
+      },
+    });
+    await bootstrap.ready();
+    const reloading = bootstrap.reload();
+    // drain 이 걸려 있는 동안 dispose — reload 는 중단되어야 한다.
+    bootstrap.dispose();
+    releaseDrain?.();
+    await assert.rejects(reloading, (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.match((err as RustraCommandError).message, /disposed/);
+      return true;
+    });
+    assert.equal(bootstrap.state, 'disposed', 'state stays disposed after abort');
+    assert.equal(spawnCount, 1, 'no re-spawn after dispose');
+    await assert.rejects(bootstrap.ready(), /disposed/, 'no zombie ready() resolution');
+  } finally {
+    configure(cleanSlotEngine);
+  }
+});
+
+test('A05: failed reload keeps the original error and restores retryable state (I-2)', async () => {
+  // I-2 회귀 — 재초기화 실패는 bootstrap 을 'disposed' 로 벽돌화하지 않는다.
+  // 상태는 'initializing' 으로 복원되고 다음 ready() 는 원본 에러를 다시 낸다.
+  const { configure } = await import('@rustra/types');
+  try {
+    configure(cleanSlotEngine);
+    let failNextSpawn = false;
+    let spawnCount = 0;
+    const bootstrap = createNodeBootstrap({
+      createTransport: () => {
+        spawnCount++;
+        if (failNextSpawn) {
+          const error = new RustraCommandError('transport.error', 'transient spawn failure');
+          failNextSpawn = false;
+          return Promise.reject(error);
+        }
+        return {
+          invoke: async () => ({}),
+          getContractHash: async () => '0'.repeat(64),
+          dispose() {},
+        } as unknown as NodeProcessTransport;
+      },
+    });
+    await bootstrap.ready();
+    assert.equal(spawnCount, 1);
+    failNextSpawn = true;
+    await assert.rejects(
+      bootstrap.reload(),
+      (err: unknown) =>
+        err instanceof RustraCommandError && /transient spawn failure/.test(err.message),
+      'reload rejects with the ORIGINAL error',
+    );
+    assert.equal(bootstrap.state, 'initializing', 'state restored to retryable initializing');
+    // 재시도 경로 — ensureConfigured 가 실패 초기화를 비우므로 같은 bootstrap 으로 재시도 가능.
+    await bootstrap.ready();
+    assert.equal(bootstrap.state, 'ready', 'retry succeeds after transient failure');
+    assert.equal(spawnCount, 3);
+    await bootstrap.dispose();
+  } finally {
+    configure(cleanSlotEngine);
+  }
+});
+
+test('A05: dispose during reload re-init leaves no zombie engine in the global slot (I-NEW seam)', async () => {
+  // I-NEW 회귀(RV7) — 재초기화 클로저의 transport 주입 await 중 dispose 하면
+  // 클로저의 엔진이 전역 슬롯에 설치되어선 안 된다. 클로저 반환 직전 disposed
+  // 재검사가 configure(engine) 기록을 막고(ensureConfigured catch 가 초기화를
+  // 비움), dispose 후 글로벌 invoke() 는 disposed loud-fail 로 거부된다.
+  const { configure, invoke } = await import('@rustra/types');
+  try {
+    configure(cleanSlotEngine);
+    const makeTransport = () =>
+      ({
+        invoke: async () => ({ value: 'zombie' }),
+        getContractHash: async () => '0'.repeat(64),
+        dispose() {},
+      }) as unknown as NodeProcessTransport;
+    let spawns = 0;
+    let releaseSpawn: (() => void) | undefined;
+    let resolveReinitSpawn!: () => void;
+    const reinitSpawnStarted = new Promise<void>((resolve) => {
+      resolveReinitSpawn = resolve;
+    });
+    // 공유 게이트 — resolve 된 뒤에는 이후 대기자(retry 스폰)도 즉시 통과한다.
+    // invoke() 의 lazy 재시도가 같은 bootstrap 클로저에 재진입해도 게이트에 갇히지
+    // 않고 경계 가드의 disposed reject 에 도달해야 하기 때문이다.
+    const spawnGate = new Promise<void>((resolve) => {
+      releaseSpawn = resolve;
+    });
+    const bootstrap = createNodeBootstrap({
+      createTransport: async () => {
+        spawns++;
+        if (spawns === 1) return makeTransport(); // 첫 ready() 스폰은 즉시 성공
+        // 두 번째 스폰(reload 재초기화)부터 게이트 — dispose 가 await 중 착지하게.
+        resolveReinitSpawn();
+        await spawnGate;
+        return makeTransport();
+      },
+    });
+    await bootstrap.ready();
+    const reloading = bootstrap.reload();
+    await reinitSpawnStarted; // 재초기화 클로저가 게이트 안에 진입한 뒤에 dispose
+    bootstrap.dispose();
+    releaseSpawn?.();
+    await assert.rejects(reloading, /disposed/, 'reload must reject at the closure boundary');
+    assert.equal(bootstrap.state, 'disposed');
+    await assert.rejects(
+      invoke('addNumbers'),
+      (err: unknown) =>
+        err instanceof RustraCommandError &&
+        (err.code === 'transport.unavailable' || /disposed|not configured/.test(err.message)),
+      'global invoke must not resolve through the zombie engine',
+    );
+  } finally {
+    configure(cleanSlotEngine);
+  }
+});
+
+test('A05: dispose during reload re-init on the one-shot path leaves no TypeError engine (I-NEW default)', async () => {
+  // I-NEW 회귀(RV8b) — 원샷 경로에서 dispose 가 transport 를 undefined 로 만든
+  // 뒤 클로저가 엔진을 반환하면 글로벌 invoke() 가 TypeError 로 터진다. 반환 직전
+  // 재검사가 이를 막는다.
+  const { configure, invoke } = await import('@rustra/types');
+  try {
+    configure(cleanSlotEngine);
+    const makeTransport = () =>
+      ({
+        invoke: async () => ({}),
+        getContractHash: async () => '0'.repeat(64),
+        dispose() {},
+      }) as unknown as NodeProcessTransport;
+    let spawns = 0;
+    const bootstrap = createNodeBootstrap({
+      createTransport: async () => {
+        spawns++;
+        // 원샷 스폰(게이트 없음) — 두 번째 스폰(reload 재초기화)의 await 도중에
+        // dispose 가 착지하게 setImmediate 로 마이크로태스크 경계를 만든다.
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        return makeTransport();
+      },
+    });
+    await bootstrap.ready();
+    const reloading = bootstrap.reload();
+    // drain await 을 통과시킨 뒤 — 재초기화 클로저(스폰 await) 안에서 dispose.
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    bootstrap.dispose();
+    await assert.rejects(reloading, /disposed/);
+    await assert.rejects(
+      invoke('addNumbers'),
+      (err: unknown) =>
+        err instanceof RustraCommandError &&
+        (err.code === 'transport.unavailable' || /disposed|not configured/.test(err.message)),
+      'global invoke must not hit a TypeError from a disposed-transport engine',
+    );
+  } finally {
+    configure(cleanSlotEngine);
+  }
+});

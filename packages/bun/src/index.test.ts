@@ -363,3 +363,191 @@ test('createBunFfiEngine decodes caller-buffer responses without a copy', async 
     runtime.close();
   }
 });
+
+// ── A02: EngineSupports 표면 — 매트릭스 셀의 기계 판독 가능한 이행 ─────────
+// 매핑: signal(진행 중 취소) ⚠️ 얕은 취소 → 'shallow' / invokeBatch ✅ per-entry
+// Promise fallback → 'per-entry' / 이벤트 ✅ FFI 푸시 싱크(폴링 폴백) → 'push'
+// / 채널 ❌ → false / timeoutMs ✅ 레이스 → true.
+
+test('A02: createBunEngine exposes supports matching the compatibility matrix', async () => {
+  const engine = createBunEngine({
+    invoke: () => ({ value: 1 }),
+  });
+  assert.deepEqual(engine.supports, {
+    cancellation: 'shallow',
+    batch: 'per-entry',
+    events: 'push',
+    channels: false,
+    timeoutPreemption: true,
+  });
+});
+
+// ── A05: bootstrap 수명 상태 모델 — 'initializing' | 'ready' | 'disposed' ──
+// dispose 는 멱등(두 번째는 no-op)하되 dispose 후 ready 는 loud-fail 한다.
+// 각 테스트는 글로벌 슬롯을 configure 로 리셋한 뒤 등록한다(R08 가드 — 소비 전
+// 경쟁 등록 loud-fail 은 여기서 재검증 대상이 아니다).
+
+const A05_SLOT_ENGINE = {
+  invoke: async <T>() => 'slot' as T,
+} as unknown as import('@rustra/types').EngineClientWithBatch;
+
+test('A05: createBunBootstrap exposes the lifecycle state surface', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createBunBootstrap({ libraryCandidates: [], rkyvV2Codecs: testRegistry });
+    assert.equal(bootstrap.state, 'initializing');
+    await assert.rejects(bootstrap.ready(), /RUSTRA_BUN_LIBRARY|No compatible/);
+    assert.equal(bootstrap.state, 'initializing');
+    bootstrap.dispose();
+    assert.equal(bootstrap.state, 'disposed');
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: ready after dispose rejects loudly (bun)', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createBunBootstrap({ libraryCandidates: [], rkyvV2Codecs: testRegistry });
+    bootstrap.dispose();
+    await assert.rejects(bootstrap.ready(), (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.match((err as RustraCommandError).message, /disposed/);
+      return true;
+    });
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: dispose is idempotent — second dispose is a no-op (bun)', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createBunBootstrap({ libraryCandidates: [], rkyvV2Codecs: testRegistry });
+    bootstrap.dispose();
+    bootstrap.dispose(); // no-op — must not throw
+    assert.equal(bootstrap.state, 'disposed');
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: failed reload keeps the original error and stays retryable, not disposed (bun I-2)', async () => {
+  // I-2 회귀 — reload 내부 리셋이 state 를 'disposed' 로 만들면 재초기화 실패 시
+  // bootstrap 이 벽돌이 된다. resetForReinit 은 'initializing' 을 유지하고
+  // reload 는 원본 에러로 reject 해야 한다. env 전환으로 재초기화 실패를 만든다
+  // (RUSTRA_BUN_LIBRARY 는 엔진 생성마다 읽힌다).
+  const { configure } = await import('@rustra/types');
+  const previous = process.env.RUSTRA_BUN_LIBRARY;
+  delete process.env.RUSTRA_BUN_LIBRARY;
+  const realDylib = resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`);
+  const bootstrap = createBunBootstrap({
+    libraryCandidates: [realDylib],
+    rkyvV2Codecs: testRegistry,
+  });
+  try {
+    configure(A05_SLOT_ENGINE);
+    await bootstrap.ready();
+    assert.equal(bootstrap.state, 'ready');
+    process.env.RUSTRA_BUN_LIBRARY = './missing-reloaded-library';
+    await assert.rejects(
+      bootstrap.reload(),
+      (err: unknown) =>
+        err instanceof RustraCommandError && /RUSTRA_BUN_LIBRARY|No compatible/.test(err.message),
+      'reload rejects with the ORIGINAL engine-creation error',
+    );
+    assert.equal(bootstrap.state, 'initializing', 'state stays retryable — never disposed');
+    if (previous === undefined) delete process.env.RUSTRA_BUN_LIBRARY;
+    else process.env.RUSTRA_BUN_LIBRARY = previous;
+    await bootstrap.ready();
+    assert.equal(bootstrap.state, 'ready', 'retry succeeds once the library resolves again');
+  } finally {
+    if (previous === undefined) delete process.env.RUSTRA_BUN_LIBRARY;
+    else process.env.RUSTRA_BUN_LIBRARY = previous;
+    bootstrap.dispose();
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: dispose during reload re-init is honored at the await boundary (bun I-1)', async () => {
+  // I-1 회귀 — reload 의 await 경계 재검사가 dispose 를 존중한다. 재초기화가
+  // dispose 보다 먼저 끝나면 reload 는 정상 성공(state=ready)하고, dispose 가
+  // 재초기화 완료 전에 불리면 reload 는 'ready' 기록 없이 disposed 를 유지한다.
+  // 어느 쪽이든 좀비(ready() 해소 + state=disposed)는 금지된다.
+  const { configure } = await import('@rustra/types');
+  const realDylib = resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`);
+  const bootstrap = createBunBootstrap({
+    libraryCandidates: [realDylib],
+    rkyvV2Codecs: testRegistry,
+  });
+  try {
+    configure(A05_SLOT_ENGINE);
+    await bootstrap.ready();
+    const reloading = bootstrap.reload();
+    bootstrap.dispose(); // await 중 dispose — 어느 순서든 좀비는 금지
+    let settled = 'disposed';
+    try {
+      await reloading;
+      settled = 'completed';
+    } catch {
+      settled = 'aborted';
+    }
+    assert.notEqual(settled, 'completed-and-disposed', 'no contradiction state');
+    if (settled === 'completed') {
+      assert.equal(bootstrap.state, 'ready', 'completed reload owns the state');
+    } else {
+      assert.equal(bootstrap.state, 'disposed', 'aborted reload leaves disposed');
+    }
+    await assert.rejects(
+      bootstrap.ready(),
+      (err: unknown) =>
+        settled === 'completed' ? false : err instanceof Error && /disposed/.test(err.message),
+      'ready must not resolve while disposed (no zombie)',
+    );
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: concurrent ready calls share one initialization promise (bun)', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  const bootstrap = createBunBootstrap({ libraryCandidates: [], rkyvV2Codecs: testRegistry });
+  // dlopen 실패라도 두 ready 는 같은 초기화 프라미스를 공유한다 — 실패가 1회
+  // 기록되고 두 프라미스가 같은 rejection 으로 정착하면 계약 충족.
+  const [a, b] = await Promise.allSettled([bootstrap.ready(), bootstrap.ready()]);
+  assert.equal(a.status, 'rejected');
+  assert.equal(b.status, 'rejected');
+  assert.equal(
+    (a as PromiseRejectedResult).reason,
+    (b as PromiseRejectedResult).reason,
+    'both ready calls must observe the same failure',
+  );
+  bootstrap.dispose();
+  configure(A05_SLOT_ENGINE);
+});
+
+test('A02: createBunFfiEngine exposes supports reflecting the actual FFI bindings (real dylib)', async () => {
+  // 리뷰 정정 — bun FFI native 는 invokeRkyvV2/getSchema/getContractHash/
+  // getSchemaGeneration 만 바인딩한다. invokeAsync/invokeCancel·invokeTypedBatch
+  // 심볼은 바인딩되지 않으므로 rkyv V2 코어의 전파/단일 횡단 조건이 도달 불가:
+  // 취소는 얕은 취소, 배치는 항목별 폴백으로 관측된다.
+  const runtime = await createBunFfiEngine({
+    libraryCandidates: [resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`)],
+    rkyvV2Codecs: testRegistry,
+  });
+  try {
+    assert.deepEqual(runtime.engine.supports, {
+      cancellation: 'shallow',
+      batch: 'per-entry',
+      events: 'push',
+      channels: false,
+      timeoutPreemption: true,
+    });
+  } finally {
+    runtime.close();
+  }
+});

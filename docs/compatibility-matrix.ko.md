@@ -87,6 +87,56 @@
 - 어댑터별 안정 범위와 게이트: [compatibility-contract.md](compatibility-contract.md)
 - 취소 전파 설계: `docs/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
 
+### 기계 판독 표면: `engine.supports` (A02)
+
+각 어댑터의 엔진 팩토리는 `supports` 객체(`@rustra/types` 의 `EngineSupports`)를
+노출한다. 값은 이 매트릭스의 셀을 1:1 로 옮긴 것 — 새 주장이 아니다. 앱은
+부작용 이전에 분기할 수 있다(예:
+`engine.supports?.cancellation === 'cooperative'`). 열별 매핑:
+
+| `supports` 필드     | Node        | Bun JSON / Bun FFI rkyv V2 | Tauri       | RN JSON     | RN rkyv V2        |
+| ------------------- | ----------- | -------------------------- | ----------- | ----------- | ----------------- |
+| `cancellation`      | `shallow`   | `shallow` / `shallow`      | `shallow`   | `shallow`   | `cooperative`     |
+| `batch`             | `per-entry` | `per-entry` / `per-entry`  | `per-entry` | `per-entry` | `single-crossing` |
+| `events`            | `push`      | `push` / `push`            | `push`      | `none`      | `push`            |
+| `channels`          | `false`     | `false` / `false`          | `false`     | `true`      | `true`            |
+| `timeoutPreemption` | `true`      | `true` / `true`            | `true`      | `false`     | `true`            |
+
+엔벌레 하나에 담지 않는 뉘앙스는 열거값이 아니라 매트릭스 산문에 남아 있다:
+RN rkyv V2 의 `cancellation: 'cooperative'` 는 매트릭스의 "조건부 전파" 셀을
+뜻한다(`invokeAsync`+`invokeCancel` 이 노출되고 commandId/코덱 경로가 확인될
+때만 Rust 체크포인트에 닿고, 정적 typed 경로와 구형 네이티브는 얕은 취소로
+폴백). Bun FFI rkyv V2 엔진은 같은 `createRkyvV2Engine` 코어를 공유하지만 FFI
+네이티브는 `invokeRkyvV2`/`getSchema`/`getContractHash`/`getSchemaGeneration`
+만 바인딩한다 — `invokeAsync`/`invokeCancel`·`invokeTypedBatch` 심볼은
+바인딩되지 않아 조건부 전파와 단일 횡단 조건이 도달 불가이며, 엔진은
+`shallow`/`per-entry` 로 관측된다. RN async 엔진(`createAsyncEngine`)은
+`invokeBatch` 를 async `invoke` 위의 항목별 `Promise.all` 로 실행하므로 sync
+엔진의 `cancellation: 'cooperative'`(`invokeCancel` 노출 시 참)를 상속해도
+`batch: 'per-entry'` 를 보고한다. 이벤트 `'push'` 값은 각 엔진의 폴링 폴백을
+포함한다 — 실제 전달 경로는 어댑터별 구독 표면이 판별한다. Tauri 의
+`batch: 'per-entry'` 는 트랙 E2 가 단일 IPC 와이어 배치(`rustra_dispatch_batch`)
+최적화를 추가했어도 셀 계열을 따른다.
+
+### bootstrap 수명 상태 (A05)
+
+bootstrap 객체(`createNodeBootstrap`/`createBunBootstrap`/
+`createTauriBootstrap`/`createRustraBootstrap`)는 로컬 상태
+`state: 'initializing' | 'ready' | 'disposed'` 를 노출한다(`@rustra/types` 의
+공용 `BootstrapState`; 모든 어댑터는 dispose 뒤 `ready()` 를 같은
+`disposedBootstrapError` 계열로 거부한다). `dispose()` 는 멱등(두 번째 호출은
+no-op)이고, dispose 뒤의 `ready()` 는 조용히 재해상하는 대신 loud-fail 한다.
+`NodeBootstrap.reload()` 는 bootstrap 이 소유한 transport 가
+`drain(timeoutMs)` 을 노출할 때 그 transport 를 drain 한다(duck-typing; 기본
+5초 가드 — 타임아웃 후에도 reload 는 진행, drain 이 **거부**되면 dispose 없이
+reload 만 중단)하고, 없으면 즉시 진행한다(원샷 stdio transport 에는 drain 이
+없다; 루프 transport 호스트는 NodeBootstrap 을 통해 연결되지 않는다).
+`reload()` 는 await 경계마다 상태를 재검사한다 — drain·재초기화 중 `dispose()`
+하면 reload 는 부활 없이 중단되고, 재초기화 실패는 `disposed` 벽돌 대신
+`initializing`(원본 에러 전파)으로 남는다. `draining` 상태는 의도적으로
+모델링하지 않는다 — drain 은 3상태 수명 주기에 투명하다. reload 계약의 기반은
+아래 핫스왕 절 참고.
+
 ## 스파이크: wasm3 안의 wasm32 엔진 (React Native) — 판정: PASS (스파이크)
 
 Task A0 스파이크(`examples/rn-wasm-spike/`, 2026-08-31)는 `wasm32-unknown-unknown`으로
