@@ -567,14 +567,18 @@ jobs:
           GATE_RN_ANDROID: ${{ needs.rn-android.result }}
           GATE_RN_IOS: ${{ needs.rn-ios.result }}
           GATE_CONSUMER_SMOKE: ${{ needs.consumer-smoke.result }}
-        run: bash scripts/ci-gate.sh \
-          "rust=$GATE_RUST" \
-          "rust-msrv=$GATE_RUST_MSRV" \
-          "rust-wasm32=$GATE_RUST_WASM32" \
-          "rust-audit=$GATE_RUST_AUDIT" \
-          "rust-deny=$GATE_RUST_DENY" \
-          "napi=$GATE_NAPI" \
-          "typescript=$GATE_TYPESCRIPT" \
-          "rn-android=$GATE_RN_ANDROID" \
-          "rn-ios=$GATE_RN_IOS" \
-          "consumer-smoke=$GATE_CONSUMER_SMOKE"
+        # 주의: run 에 | 리터럴 블록을 쓴다. 폴딩 스칼라(기본)는 줄바꿈을 공백으로
+        # 접어 `\<space>` 가 이스케이프 공백이 돼 인자가 " rust=..." 로 합쳐지고
+        # ci-gate.sh 가 unknown job 으로 죽는다(2026-09-06 실측, 라운드 4).
+        run: |
+          bash scripts/ci-gate.sh \
+            "rust=$GATE_RUST" \
+            "rust-msrv=$GATE_RUST_MSRV" \
+            "rust-wasm32=$GATE_RUST_WASM32" \
+            "rust-audit=$GATE_RUST_AUDIT" \
+            "rust-deny=$GATE_RUST_DENY" \
+            "napi=$GATE_NAPI" \
+            "typescript=$GATE_TYPESCRIPT" \
+            "rn-android=$GATE_RN_ANDROID" \
+            "rn-ios=$GATE_RN_IOS" \
+            "consumer-smoke=$GATE_CONSUMER_SMOKE"
