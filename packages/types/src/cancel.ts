@@ -98,8 +98,16 @@ export function invokeCallbackWithAbort<T>(
     };
     const onAbort = () =>
       finish(() => {
-        if (cancel && invocationId >= 0) cancel(invocationId);
-        reject(new CancelledError(`invoke("${command}") aborted`));
+        let cancelFailure: unknown;
+        if (cancel && invocationId >= 0) {
+          try {
+            cancel(invocationId);
+          } catch (error) {
+            cancelFailure = error; // JS 결과 확정을 native cancel 성공에 묶지 않는다
+          }
+        }
+        reject(new CancelledError(`invoke("${command}") aborted`, cancelFailure));
+        // cancel 실패는 cause로 보존 — 통합 문서 "별도 관측 정보"의 최소 구현.
       });
     signal.addEventListener('abort', onAbort, { once: true });
     try {
