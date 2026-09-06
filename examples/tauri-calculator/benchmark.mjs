@@ -45,7 +45,9 @@ const server = Bun.serve({
 
 const app = spawn(binary, [], {
   cwd: root,
-  env: process.env,
+  // RUSTRA_BENCH=1 — 벤치 빌드임을 호스트에 알려 register_profiled 등록
+  // (측정 전용 rustra_dispatch_profiled 노출) 으로 뜨게 한다(A07).
+  env: { ...process.env, RUSTRA_BENCH: '1' },
   stdio: ['ignore', 'ignore', 'pipe'],
 });
 let stderr = '';
