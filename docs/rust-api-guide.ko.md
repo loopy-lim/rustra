@@ -846,6 +846,7 @@ assert!(pkg.is_frozen());
 
 - `tauri_support::register(app, pkg)` — invoke 핸들러 등록
 - `tauri_support::register_with_events(...)` — 이벤트 푸시 포함
+- `tauri_support::register_profiled(...)` — 벤치 전용, `rustra_dispatch_profiled` 노출
 - `tauri_support::rustra_dispatch(...)` — 커맨드 디스패치
 
 **스키마/버전** — `pkg.schema()` (전체 스키마 JSON), `pkg.live_schema()`
