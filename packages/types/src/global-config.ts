@@ -36,8 +36,8 @@ function rejectConflictingRegistration(
     RustraErrorCode.RegistryFrozen,
     `bootstrap slot already claimed by ${holder} (lazy initialization pending); ` +
       `rejecting conflicting registration from ${incoming}. The engine slot is ` +
-      `single-engine: register one bootstrap, or dispose/reload the existing one. ` +
-      `Multi-engine is not supported.`,
+      `single-engine: reuse the existing one (reload), or configure() an explicit ` +
+      `engine to take over the slot. Multi-engine is not supported.`,
   );
 }
 
