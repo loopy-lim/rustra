@@ -1,6 +1,7 @@
 /** @rustra/bun — Bun JSON transport and FFI adapter. */
 export type {
   EngineClient,
+  BootstrapState,
   RustraError,
   RkyvV2Codec,
   RkyvV2Native,

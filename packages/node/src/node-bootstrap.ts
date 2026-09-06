@@ -65,6 +65,11 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
           spawnOptions: options.spawnOptions,
         }));
     transport = await spawnTransport();
+    // (I-NEW) 재초기화 클로저의 dispose 경계 — transport 주입 await 중 dispose
+    // 되면 이 클로저의 엔진은 전역 슬롯에 설치되면 안 된다. ensureConfigured 의
+    // catch(initialization 비움)가 configure(engine) 기록을 막아 dispose 후
+    // 글로벌 invoke() 는 disposed loud-fail 로 귀결된다.
+    if (readState() === 'disposed') throw disposedBootstrapError('Node');
     if (options.contractHash !== undefined) {
       try {
         const nativeHash = await transport.getContractHash();
@@ -89,6 +94,9 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
         );
       }
     }
+    // (I-NEW) 반환 직전 dispose 경계 — 계약 해시 검증 await 중 dispose 되면
+    // 이 엔진(죽은 transport 를 참조)을 전역 슬롯에 설치하지 않는다.
+    if (readState() === 'disposed') throw disposedBootstrapError('Node');
     return createNodeEngine(transport);
   };
   // R08 — 글로벌 슬롯은 단일 엔진 전용. ownerId 는 소비 전 경쟁 등록이
@@ -140,16 +148,13 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
       // (I-1) await 경계 재검사 — drain 중 dispose 되면 reload 는 중단한다.
       // 재개해 state='ready' 로 부활하는 좀비 bootstrap 을 만들지 않는다.
       if (readState() === 'disposed') throw disposedBootstrapError('Node');
-      try {
-        resetForRespawn();
-        configureLazy(bootstrap, { ownerId: 'node' });
-        await (ensureConfigured() as Promise<EngineClientWithBatch>);
-      } catch (error) {
-        // (I-2) 재초기화 실패는 벽돌이 아니라 'initializing'(재시도 가능)으로
-        // 남는다 — 원본 에러를 그대로 reject. resetForRespawn 이 이미
-        // 'initializing' 을 유지하므로 다음 ready() 가 재시도한다.
-        throw error;
-      }
+      // (I-2) 재초기화 실패는 벽돌이 아니라 'initializing'(재시도 가능)으로
+      // 남는다 — resetForRespawn 이 이미 'initializing' 을 유지하므로 다음
+      // ready() 가 재시도한다. 원본 에러는 그대로 전파된다(N-2: rethrow 만
+      // 하던 try/catch 는 제거 — 삼키면 false success 가 된다).
+      resetForRespawn();
+      configureLazy(bootstrap, { ownerId: 'node' });
+      await (ensureConfigured() as Promise<EngineClientWithBatch>);
       // (I-1) 두 번째 await 경계 — 재초기화 중 dispose 되면 'ready' 기록을 금지.
       // resetForRespawn 이 'initializing' 을 유지하므로 disposed 는 사용자
       // dispose 뿐이다.
