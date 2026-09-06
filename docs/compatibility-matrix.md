@@ -51,6 +51,61 @@ A matrix of the invoke features (signal/cancellation, batch, events) each adapte
 - Per-adapter stable scope and gates: [compatibility-contract.md](compatibility-contract.md)
 - Cancellation propagation design: `docs/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
 
+### Machine-readable surface: `engine.supports` (A02)
+
+Each adapter's engine factory exposes a `supports` object (`@rustra/types`
+`EngineSupports`) whose values are this matrix's cells transcribed 1:1 — no new
+claims. Apps can branch before any side effect, e.g.
+`engine.supports?.cancellation === 'cooperative'`. The mapping per column:
+
+| `supports` field    | Node        | Bun JSON / Bun FFI rkyv V2 | Tauri       | RN JSON     | RN rkyv V2        |
+| ------------------- | ----------- | -------------------------- | ----------- | ----------- | ----------------- |
+| `cancellation`      | `shallow`   | `shallow` / `shallow`      | `shallow`   | `shallow`   | `cooperative`     |
+| `batch`             | `per-entry` | `per-entry` / `per-entry`  | `per-entry` | `per-entry` | `single-crossing` |
+| `events`            | `push`      | `push` / `push`            | `push`      | `none`      | `push`            |
+| `channels`          | `false`     | `false` / `false`          | `false`     | `true`      | `true`            |
+| `timeoutPreemption` | `true`      | `true` / `true`            | `true`      | `false`     | `true`            |
+
+Nuances that do not fit one enum value stay in the matrix prose, not the enum:
+RN rkyv V2 `cancellation: 'cooperative'` means the matrix's "conditional
+propagation" cell (reaches the Rust checkpoint only when
+`invokeAsync`+`invokeCancel` are exposed and the commandId/codec path is
+confirmed; static typed paths and legacy natives fall back to shallow). The
+Bun FFI rkyv V2 engine shares the same `createRkyvV2Engine` core, but its FFI
+native binds only `invokeRkyvV2`/`getSchema`/`getContractHash`/
+`getSchemaGeneration` — the `invokeAsync`/`invokeCancel` and
+`invokeTypedBatch` symbols are not bound, so the conditional-propagation and
+single-crossing conditions are unreachable and the engine is observed as
+`shallow`/`per-entry`. The RN async engine (`createAsyncEngine`) runs
+`invokeBatch` as per-entry `Promise.all` over the async `invoke`, so it
+reports `batch: 'per-entry'` even though it inherits the sync engine's
+`cancellation: 'cooperative'` (real when `invokeCancel` is exposed). The
+`'push'` event value includes each engine's polling fallback — the actual
+delivery path is determined by the per-adapter subscription surface. Tauri
+`batch: 'per-entry'` follows the cell family even though track E2 added a
+single-IPC wire batch (`rustra_dispatch_batch`) as an optimization.
+
+### Bootstrap lifecycle state (A05)
+
+The bootstrap objects (`createNodeBootstrap`/`createBunBootstrap`/
+`createTauriBootstrap`/`createRustraBootstrap`) expose a local
+`state: 'initializing' | 'ready' | 'disposed'` (shared as `BootstrapState` in
+`@rustra/types`; all adapters reject post-dispose `ready()` with the same
+`disposedBootstrapError` family). `dispose()` is idempotent (a second call is a
+no-op), and `ready()` after `dispose()` rejects loudly instead of silently
+re-resolving. `NodeBootstrap.reload()` drains the bootstrap's own transport
+when it exposes `drain(timeoutMs)` (duck-typed; default 5 s guard — reload
+proceeds after the timeout; a drain **rejection** aborts the reload without
+disposing), and proceeds immediately otherwise (the one-shot stdio transport
+has no drain; loop-transport hosts are not wired through `NodeBootstrap`).
+State is re-checked at every await boundary inside `reload()`: a `dispose()`
+during the drain or re-initialization aborts the reload instead of resurrecting
+the bootstrap, and a failed re-initialization restores `initializing` (the
+original error propagates) rather than bricking the bootstrap as `disposed`.
+A `draining` state is deliberately not modeled: drain is transparent to the
+three-state lifecycle. See the hot-swap section below for the reload contract
+this builds on.
+
 ## Spike: wasm32 engine in wasm3 (React Native) — VERDICT: PASS (spike)
 
 Task A0 spike (`examples/rn-wasm-spike/`, 2026-08-31) proved a rustra engine
