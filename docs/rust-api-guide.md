@@ -860,6 +860,7 @@ assert!(pkg.is_frozen());
 
 - `tauri_support::register(app, pkg)` — registers the invoke handler
 - `tauri_support::register_with_events(...)` — includes event push
+- `tauri_support::register_profiled(...)` — bench-only, exposes `rustra_dispatch_profiled`
 - `tauri_support::rustra_dispatch(...)` — command dispatch
 
 **Schema/version** — `pkg.schema()` (the full schema JSON), `pkg.live_schema()`
