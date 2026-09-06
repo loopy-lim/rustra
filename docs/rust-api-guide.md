@@ -1003,3 +1003,29 @@ fn main() -> Result<()> {
     Ok(())
 }
 ```
+
+---
+
+## Appendix: Bootstrap Instance Ownership (single-engine slot)
+
+Each JS host process owns **one global engine slot**. The generated host entry
+point registers a bootstrap with `configureLazy()` (or an explicit engine with
+`configure()`), and every invoke routes through that single slot.
+
+Current policy (R08 — early guard):
+
+- **First registration wins.** A second bootstrap registered while the first is
+  still pending (registered but not yet consumed by the first `ready()`/invoke)
+  throws `registry.frozen` — the import order no longer silently decides which
+  engine serves commands.
+- **Re-registration after consumption stays allowed.** `dispose()` + the same
+  bootstrap closure (`reload()` on the Node/Bun adapters) re-registers freely;
+  replacing a lazy initializer after consumption started, and recovery
+  registration after a failed initialization, follow the existing contracts.
+- **Multi-engine is not supported.** The guard exists to surface accidental
+  cross-host registration loudly (`ownerId` on `configure`/`configureLazy`
+  reports both parties in the error message); it is not a multi-engine API.
+
+All first-party adapters (`createNodeBootstrap`, `createBunBootstrap`,
+`createTauriBootstrap`, RN `createRustraBootstrap`) share the same slot path,
+so the guard covers them automatically.

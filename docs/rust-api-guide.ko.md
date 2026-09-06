@@ -989,3 +989,28 @@ fn main() -> Result<()> {
     Ok(())
 }
 ```
+
+---
+
+## 부록: bootstrap 인스턴스 소유권 (단일 엔진 슬롯)
+
+각 JS 호스트 프로세스는 **하나의 글로벌 엔진 슬롯**을 가진다. 생성된 호스트
+진입점이 `configureLazy()`로 bootstrap 을 등록하고(또는 `configure()`로 명시적
+엔진을 등록하고), 모든 invoke 는 그 단일 슬롯으로 라우팅된다.
+
+현재 정책(R08 — 조기 가드):
+
+- **첫 등록이 승리한다.** 첫 bootstrap 이 아직 소비되지 않은 상태(등록 후 첫
+  `ready()`/invoke 가 시작되기 전)에서 두 번째 bootstrap 을 등록하면
+  `registry.frozen` 을 throw 한다 — import 순서가 조용히 엔진을 정하는 일은
+  이제 없다.
+- **소비 뒤의 재등록은 그대로 허용된다.** `dispose()` + 같은 bootstrap 클로저
+  (Node/Bun 어댑터의 `reload()`) 재등록은 자유롭고, 소비가 시작된 뒤의 lazy
+  교체와 초기화 실패 뒤의 복구 등록은 기존 계약을 따른다.
+- **다중 엔진은 미지원이다.** 이 가드는 사고로 인한 교차 호스트 등록을 조기에
+  실패시키기 위한 것(`configure`/`configureLazy` 의 `ownerId` 가 에러 메시지에
+  양쪽 주체를 보고한다)이며, 다중 엔진 API 가 아니다.
+
+모든 자사 어댑터(`createNodeBootstrap`, `createBunBootstrap`,
+`createTauriBootstrap`, RN `createRustraBootstrap`)가 같은 슬롯 경로를
+공유하므로 가드가 자동으로 함께 적용된다.
