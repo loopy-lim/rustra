@@ -37,6 +37,7 @@ A matrix of the invoke features (signal/cancellation, batch, events) each adapte
 
 ## Notes
 
+- **Verified combination**: npm `@rustra/*` 0.6.x ↔ Rust crate 0.5.x (workspace) is the combination currently exercised by CI. The crates.io version bump is part of the release procedure, not of adapter code — expect the documented pairing to move only in a release step.
 - **Engine slot is single-engine** (bootstrap ownership): first `configureLazy`/`configure` registration wins; a second bootstrap registered while the first is still pending throws `registry.frozen` instead of silently winning by import order. Dispose/reload re-registration and post-consumption replacement stay allowed. Multi-engine is not supported.
 - Per-adapter stable scope and gates: [compatibility-contract.md](compatibility-contract.md)
 - Cancellation propagation design: `docs/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`

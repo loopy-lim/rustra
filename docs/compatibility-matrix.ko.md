@@ -74,6 +74,7 @@
 
 ## 참고
 
+- **검증된 조합**: npm `@rustra/*` 0.6.x ↔ Rust crate 0.5.x (워크스페이스)가 현재 CI가 검증하는 조합이다. crates.io 버전 bump는 어댑터 코드가 아니라 발행 절차의 단계다 — 문서화된 쌍은 발행 단계에서만 움직인다.
 - **엔진 슬롯은 단일 엔진** (bootstrap 소유권): 첫 `configureLazy`/`configure` 등록이 승리하고, 첫 등록이 아직 소비되지 않은 상태에서의 두 번째 bootstrap 등록은 import 순서로 조용히 이기는 대신 `registry.frozen` 을 throw 한다. dispose/reload 재등록과 소비 뒤 교체는 기존대로 허용. 다중 엔진은 미지원.
 - 어댑터별 안정 범위와 게이트: [compatibility-contract.md](compatibility-contract.md)
 - 취소 전파 설계: `docs/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
