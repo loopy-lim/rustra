@@ -51,6 +51,44 @@ A matrix of the invoke features (signal/cancellation, batch, events) each adapte
 - Per-adapter stable scope and gates: [compatibility-contract.md](compatibility-contract.md)
 - Cancellation propagation design: `docs/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
 
+### Machine-readable surface: `engine.supports` (A02)
+
+Each adapter's engine factory exposes a `supports` object (`@rustra/types`
+`EngineSupports`) whose values are this matrix's cells transcribed 1:1 — no new
+claims. Apps can branch before any side effect, e.g.
+`engine.supports?.cancellation === 'cooperative'`. The mapping per column:
+
+| `supports` field    | Node        | Bun JSON / Bun FFI rkyv V2      | Tauri       | RN JSON     | RN rkyv V2        |
+| ------------------- | ----------- | ------------------------------- | ----------- | ----------- | ----------------- |
+| `cancellation`      | `shallow`   | `shallow` / `cooperative`       | `shallow`   | `shallow`   | `cooperative`     |
+| `batch`             | `per-entry` | `per-entry` / `single-crossing` | `per-entry` | `per-entry` | `single-crossing` |
+| `events`            | `push`      | `push` / `push`                 | `push`      | `none`      | `push`            |
+| `channels`          | `false`     | `false` / `false`               | `false`     | `true`      | `true`            |
+| `timeoutPreemption` | `true`      | `true` / `true`                 | `true`      | `false`     | `true`            |
+
+Nuances that do not fit one enum value stay in the matrix prose, not the enum:
+Bun FFI and RN rkyv V2 `cancellation: 'cooperative'` means the matrix's
+"conditional propagation" cell (reaches the Rust checkpoint only when
+`invokeAsync`+`invokeCancel` are exposed and the commandId/codec path is
+confirmed; static typed paths and legacy natives fall back to shallow). The
+`'push'` event value includes each engine's polling fallback — the actual
+delivery path is determined by the per-adapter subscription surface. Tauri
+`batch: 'per-entry'` follows the cell family even though track E2 added a
+single-IPC wire batch (`rustra_dispatch_batch`) as an optimization.
+
+### Bootstrap lifecycle state (A05)
+
+The bootstrap objects (`createNodeBootstrap`/`createBunBootstrap`/
+`createTauriBootstrap`/`createRustraBootstrap`) expose a local
+`state: 'initializing' | 'ready' | 'disposed'`. `dispose()` is idempotent (a
+second call is a no-op), and `ready()` after `dispose()` rejects loudly instead
+of silently re-resolving. `NodeBootstrap.reload()` optionally connects the
+host's loop-transport drain through the `onReloadDrain(timeoutMs)` option
+(default 5 s — the `NodeLoopTransport.drain` contract; reload proceeds after
+the timeout). A `draining` state is deliberately not modeled: drain is not
+wired into reload by default — hosts that need graceful settle call
+`drain()` themselves (see the hot-swap section above).
+
 ## Spike: wasm32 engine in wasm3 (React Native) — VERDICT: PASS (spike)
 
 Task A0 spike (`examples/rn-wasm-spike/`, 2026-08-31) proved a rustra engine

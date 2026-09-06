@@ -918,3 +918,105 @@ processTest(
     );
   },
 );
+
+// ── A02: EngineSupports 표면 — 매트릭스 셀의 기계 판독 가능한 이행 ─────────
+// 초기값은 docs/compatibility-matrix.md 의 각 셀에서 옮긴 것(새 주장 없음).
+// 매핑: signal(진행 중 취소) ⚠️ 얕은 취소 → 'shallow' / invokeBatch ✅ per-entry
+// Promise fallback → 'per-entry' / 이벤트 ✅ 0xfffd 푸시 프레임(폴링 폴백) → 'push'
+// / 채널 ❌ → false / timeoutMs ✅ 레이스 → true.
+
+test('A02: createNodeEngine exposes supports matching the compatibility matrix', async () => {
+  const engine = createNodeEngine({
+    invoke: () => ({ value: 1 }),
+  });
+  assert.deepEqual(engine.supports, {
+    cancellation: 'shallow',
+    batch: 'per-entry',
+    events: 'push',
+    channels: false,
+    timeoutPreemption: true,
+  });
+});
+
+// ── A05: bootstrap 수명 상태 모델 — 'initializing' | 'ready' | 'disposed' ──
+// R08 loud-fail 가드 위의 로컬 상태 3종. reload 는 루프 transport 의 drain 을
+// 연결한다(기존 시그니처 유지, 타임아웃 후 진행). dispose 는 멱등(두 번째는
+// no-op)하되 dispose 후 ready 는 loud-fail 한다.
+
+test('A05: createNodeBootstrap exposes the lifecycle state surface', async () => {
+  const { configure } = await import('@rustra/types');
+  try {
+    configure(cleanSlotEngine);
+    // 스폰 실패 bootstrap — 상태 전이만 검증하므로 실바이너리가 필요 없다.
+    const bootstrap = createNodeBootstrap({ commandCandidates: ['./missing-rustra-runtime'] });
+    assert.equal(bootstrap.state, 'initializing', 'fresh bootstrap starts as initializing');
+    await assert.rejects(bootstrap.ready(), /No Rustra Node runtime/);
+    assert.equal(bootstrap.state, 'initializing', 'failed readiness keeps initializing');
+    bootstrap.dispose();
+    assert.equal(bootstrap.state, 'disposed');
+  } finally {
+    configure(cleanSlotEngine);
+  }
+});
+
+test('A05: ready after dispose rejects loudly (no zombie re-resolution)', async () => {
+  const { configure } = await import('@rustra/types');
+  try {
+    configure(cleanSlotEngine);
+    const bootstrap = createNodeBootstrap({ commandCandidates: ['./missing-rustra-runtime'] });
+    bootstrap.dispose();
+    assert.equal(bootstrap.state, 'disposed');
+    await assert.rejects(bootstrap.ready(), (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.match((err as RustraCommandError).message, /disposed/);
+      return true;
+    });
+  } finally {
+    configure(cleanSlotEngine);
+  }
+});
+
+test('A05: dispose is idempotent — second dispose is a no-op', () => {
+  const bootstrap = createNodeBootstrap({ commandCandidates: ['./missing-rustra-runtime'] });
+  bootstrap.dispose();
+  bootstrap.dispose(); // no-op — must not throw
+  assert.equal(bootstrap.state, 'disposed');
+});
+
+test('A05: concurrent ready calls share one initialization promise (ensureConfigured regression)', async () => {
+  // 동일 초기화 프라미스 공유는 ensureConfigured 의 기존 계약 — JSON 엔진을
+  // 직접 configure 하는 스파로 회귀를 고정한다(스폰 없는 node bootstrap 은
+  // 만들 수 없다 — 원샷 transport 내장).
+  const { configure, configureLazy, ensureConfigured } = await import('@rustra/types');
+  try {
+    configure(cleanSlotEngine);
+    let constructions = 0;
+    configureLazy(async () => {
+      constructions++;
+      return { invoke: async <T>() => 'shared' as T } as unknown as EngineClientWithBatch;
+    });
+    const [a, b] = (await Promise.all([ensureConfigured(), ensureConfigured()])) as unknown as [
+      EngineClientWithBatch,
+      EngineClientWithBatch,
+    ];
+    assert.equal(a, b, 'concurrent ready must share the same engine instance');
+    assert.equal(constructions, 1, 'initializer must run exactly once');
+  } finally {
+    configure(cleanSlotEngine);
+  }
+});
+
+test('A05: reload connects the loop transport drain before dispose (drain hook contract)', async () => {
+  // drain 연결 계약은 reload 가 transport drain 을 부르는지를 NodeBootstrap
+  // 옵션의 onReloadDrain 훅(프로덕션 표면)으로 관측한다. 루프 transport drain
+  // 시맨틱 자체는 NodeLoopTransport drain 테스트(실바이너리)가 담당한다.
+  const drained: Array<number | undefined> = [];
+  const bootstrap = createNodeBootstrap({
+    commandCandidates: ['./missing-rustra-runtime'],
+    onReloadDrain: (timeoutMs) => {
+      drained.push(timeoutMs);
+    },
+  });
+  await assert.rejects(bootstrap.reload(), /No Rustra Node runtime/);
+  assert.deepEqual(drained, [5_000], 'reload must drain with the documented 5s default');
+});

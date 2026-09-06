@@ -14,6 +14,7 @@ import {
   type NodeBootstrapOptions,
   type NodeProcessTransport,
 } from './node-core.js';
+import { disposedBootstrapError, type BootstrapState } from './bootstrap-lifecycle.js';
 
 /**
  * 런타임 실행 파일 해상 — `command` → `RUSTRA_NODE_BINARY` → 후보/이름 추론.
@@ -43,8 +44,13 @@ export function resolveNodeRuntime(options: NodeBootstrapOptions): string {
   );
 }
 
+export type { BootstrapState } from './bootstrap-lifecycle.js';
+
+/** (A05) bootstrap 수명 상태 3종 — 상태 모델 계약은 bootstrap-lifecycle.ts 참고. */
+
 export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBootstrap {
   let transport: NodeProcessTransport | undefined;
+  let state: BootstrapState = 'initializing';
   const bootstrap = async (): Promise<EngineClientWithBatch> => {
     transport = createNodeProcessTransport({
       command: resolveNodeRuntime(options),
@@ -82,11 +88,23 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
   // 같은 bootstrap 클로저의 재등록(reload)은 참조 동일성으로 언제나 허용된다.
   configureLazy(bootstrap, { ownerId: 'node' });
   const dispose = () => {
+    if (state === 'disposed') return; // dispose-once 멱등 — 두 번째는 no-op
+    state = 'disposed';
     transport?.dispose();
     transport = undefined;
   };
   return {
-    ready: () => ensureConfigured() as Promise<EngineClientWithBatch>,
+    get state() {
+      return state;
+    },
+    ready: () => {
+      if (state === 'disposed') return Promise.reject(disposedBootstrapError('Node'));
+      return (ensureConfigured() as Promise<EngineClientWithBatch>).then((engine) => {
+        if (state === 'disposed') throw disposedBootstrapError('Node');
+        state = 'ready';
+        return engine;
+      });
+    },
     dispose,
     async reload() {
       // 재초기화 계약(A1): 자식 dispose → 같은 런타임 해상으로 재스폰 + (설정 시)
@@ -94,9 +112,15 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
       // reload 만으로 반영된다. 원샷 트랜스포트에는 drain 이 없다(루프 호스트의
       // NodeLoopTransport.drain 과 다름): dispose 시 진행 중 invocation 은
       // 얕은 취소(re-dispose reject)로 정리된다 — 문서화된 동작.
+      if (state === 'disposed') return Promise.reject(disposedBootstrapError('Node'));
+      // (A05) drain 연결 — 루프 호스트는 onReloadDrain 훅으로 자기 transport 의
+      // drain 을 reload 에 연결한다(기본 5초, 타임아웃 후 진행). drain 자체가
+      // 타임아웃 후 항상 해소하므로(transport 계약) reload 는 여기서 멈추지 않는다.
+      await options.onReloadDrain?.(5_000);
       dispose();
       configureLazy(bootstrap, { ownerId: 'node' });
       await (ensureConfigured() as Promise<EngineClientWithBatch>);
+      state = 'ready';
     },
   };
 }

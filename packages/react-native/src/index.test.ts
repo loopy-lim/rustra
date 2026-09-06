@@ -867,3 +867,103 @@ test('async engine pre-abort rejects with CancelledError instance (matches mid-f
   });
   assert.equal(h.state.calls, 0, 'native must never be called for a pre-aborted signal');
 });
+
+// ── A02: EngineSupports 표면 — 매트릭스 셀의 기계 판독 가능한 이행 ─────────
+// RN JSON 어댑터 매핑: signal(진행 중 취소) ⚠️ 얕은 취소(JS 프라미스만 거부)
+// → 'shallow' / invokeBatch ✅ per-entry Promise fallback → 'per-entry' /
+// 이벤트 ❌ JSON adapter → 'none' / 채널 ✅ JSI handle + close() → true /
+// timeoutMs ⚠️ 동기 native 호출은 호출 중 선점 불가 → false.
+// RN rkyv V2 매핑: 취소 ⚠️ 조건부 전파(invokeAsync/invokeCancel 확인 시 Rust
+// 체크포인트까지) → 'cooperative' / 배치 ✅ 정적 명령 단일 횡단 →
+// 'single-crossing' / 이벤트 ✅ → 'push' / 채널 ✅ → true / timeoutMs ✅ → true.
+
+test('A02: createReactNativeEngine exposes supports matching the compatibility matrix', async () => {
+  const engine = createReactNativeEngine(createMockNative({ ok: true, result: { value: 42 } }));
+  assert.deepEqual(engine.supports, {
+    cancellation: 'shallow',
+    batch: 'per-entry',
+    events: 'none',
+    channels: true,
+    timeoutPreemption: false,
+  });
+});
+
+test('A02: createAsyncEngine exposes cooperative cancellation supports', async () => {
+  const h = makeAsyncNative();
+  const engine = createAsyncEngine(h.native, { rkyvV2Codecs: new Map() });
+  assert.deepEqual(engine.supports, {
+    cancellation: 'cooperative',
+    batch: 'single-crossing',
+    events: 'push',
+    channels: true,
+    timeoutPreemption: true,
+  });
+});
+
+// ── A05: bootstrap 수명 상태 모델 (RN createRustraBootstrap) ────────────────
+// 각 테스트는 글로벌 슬롯을 configure 로 리셋한 뒤 등록한다(R08 가드 — 소비 전
+// 경쟁 등록 loud-fail 은 여기서 재검증 대상이 아니다).
+
+const A05_SLOT_ENGINE = {
+  invoke: async <T>() => 'slot' as T,
+} as unknown as import('@rustra/types').EngineClientWithBatch;
+
+test('A05: createRustraBootstrap exposes the lifecycle state surface', async () => {
+  const { configure } = await import('@rustra/types');
+  let installs = 0;
+  const native = {} as RustraJSINative;
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createRustraBootstrap({
+      install: async () => {
+        installs++;
+        await Promise.resolve();
+      },
+      getNative: () => native,
+      rkyvV2Codecs: new Map(),
+    });
+    assert.equal(bootstrap.state, 'initializing');
+    await bootstrap.ready();
+    assert.equal(bootstrap.state, 'ready');
+    bootstrap.dispose();
+    assert.equal(bootstrap.state, 'disposed');
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: ready after dispose rejects loudly (react-native)', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createRustraBootstrap({
+      install: async () => {},
+      getNative: () => ({}) as RustraJSINative,
+      rkyvV2Codecs: new Map(),
+    });
+    bootstrap.dispose();
+    await assert.rejects(
+      bootstrap.ready(),
+      (error: unknown) => error instanceof Error && /disposed/.test(error.message),
+    );
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: dispose is idempotent — second dispose is a no-op (react-native)', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createRustraBootstrap({
+      install: async () => {},
+      getNative: () => ({}) as RustraJSINative,
+      rkyvV2Codecs: new Map(),
+    });
+    bootstrap.dispose();
+    bootstrap.dispose(); // no-op — must not throw
+    assert.equal(bootstrap.state, 'disposed');
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
