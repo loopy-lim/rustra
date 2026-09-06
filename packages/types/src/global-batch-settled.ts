@@ -25,6 +25,8 @@ import type { BatchEntry, BatchSettledEntry } from './public.js';
  * settled 결과에서 "결과 불명" 항목은 존재하지 않는다 — reason 으로 판독한다.
  *
  * 순서는 entry 순서와 동일함이 보장된다. 빈 batch 는 `[]` 로 resolve 한다.
+ * 미구성 시 `invokeBatch` 와 동일한 `transport.unavailable` loud-reject, lazy
+ * 설정 시 `ensureConfigured` 재진입 후 실행한다.
  */
 export function invokeBatchSettled<T>(entries: BatchEntry[]): Promise<Array<BatchSettledEntry<T>>> {
   const engine = runtime.engine;

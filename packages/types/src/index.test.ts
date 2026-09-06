@@ -4134,6 +4134,21 @@ test('unconfigured invokeBatch and ensureConfigured reject with transport.unavai
       return true;
     });
 
+    // invokeBatchSettled (global-batch-settled.ts) — 형제 계약 동일성.
+    // 빈 배치도 구성되지 않은 상태에서는 조용히 [] 로 resolve 하지 않는다.
+    const settledP = invokeBatchSettled<{ v: number }>([{ command: 'a' }]);
+    assert.ok(settledP instanceof Promise, 'unconfigured invokeBatchSettled must return a Promise');
+    await assert.rejects(settledP, (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      return true;
+    });
+    await assert.rejects(invokeBatchSettled([]), (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'transport.unavailable');
+      return true;
+    });
+
     // ensureConfigured (global-config.ts) — RN lazy entry 힌트 메시지 보존.
     await assert.rejects(ensureConfigured(), (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
