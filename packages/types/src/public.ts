@@ -26,6 +26,17 @@ export type EngineClient = {
 /** invokeBatch 의 입력 항목. `options.signal` 은 항목 단위 취소로 전달된다. */
 export type BatchEntry = { command: string; args?: unknown; options?: InvokeOptions };
 
+/**
+ * `invokeBatchSettled` 의 항목별 결과(A04). 실패한 항목 **이후** 실행되지 않은
+ * 항목은 `rejected` 가 아니라 `unexecuted` 다 — "실행됐지만 실패"와 "실행 안 됨"
+ * 의 구분이 이 표면의 핵심 가치다. 실행 정책(항상 per-entry 순차, 와이어 배치
+ * 미사용)은 `invokeBatchSettled` 문서 참고.
+ */
+export type BatchSettledEntry<T> =
+  | { status: 'fulfilled'; value: T }
+  | { status: 'rejected'; reason: unknown }
+  | { status: 'unexecuted' };
+
 /** All first-party adapter factories guarantee the batch surface. */
 export type EngineClientWithBatch = EngineClient & {
   invokeBatch<T>(entries: BatchEntry[]): Promise<T[]>;

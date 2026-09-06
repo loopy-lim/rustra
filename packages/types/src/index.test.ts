@@ -13,6 +13,7 @@ import {
   ensureConfigured,
   invoke,
   invokeBatch,
+  invokeBatchSettled,
   invokeGeneratedBytes,
   invokeGenerated,
   invokeGeneratedFields2,
@@ -29,7 +30,13 @@ import {
   debugWire,
   resetDebugEnvForTests,
 } from './index.js';
-import type { RkyvV2SchemaNative, RkyvV2Codec, BatchEntry, EngineClient } from './index.js';
+import type {
+  RkyvV2SchemaNative,
+  RkyvV2Codec,
+  BatchEntry,
+  BatchSettledEntry,
+  EngineClient,
+} from './index.js';
 // @internal 경로 — invokeByIdWithTimeout 은 index.js 공개 진입점 목록에 없고,
 // unconfigured 상태 주입은 내부 runtime 조작이 필요하다 (테스트 전용 접근).
 import { invokeByIdWithTimeout } from './cancel-by-id.js';
@@ -5127,4 +5134,231 @@ test('R07 회귀: 사용자 code 커스텀 RustraCommandError 는 normalize 를 
     assert.equal(err, timeout);
     return true;
   });
+});
+
+// ── A04: allSettled 형태 opt-in batch — 부분 성공·미실행 구분 ────────
+// invokeBatchSettled 는 기존 invokeBatch 의 reject·순서·fail-fast 정책을
+// 건드리지 않는 별도 opt-in 표면이다. 실행은 항목별 폴백과 달리 **순차**다:
+// 항목 i 가 reject 하면 그 이후 항목은 아예 dispatch 되지 않고 `unexecuted`
+// 로 표시된다("실행됐지만 실패"와 "실행 안 됨"의 구분이 이 API의 핵심 가치).
+// 와이어 배치(단일 횡단)를 지원하는 transport 를 넣어도 settled 표면은
+// **항상 per-entry 폴백으로 실행**한다 — 부분 성공 관측이 목적이므로.
+// 지연 transport + 호출 카운터로 제어한다(실제 sleep 없음).
+
+/** A04 테스트용 — 유출 방지 sentinel. R04 글로벌 표와 동일한 패턴. */
+function a04Sentinel(): EngineClient {
+  return {
+    invoke(): Promise<never> {
+      throw new Error('sentinel engine: global engine leaked from a previous test');
+    },
+  } as unknown as EngineClient;
+}
+
+test('A04 중간 실패: 앞 항목 fulfilled + 해당 rejected + 뒤 항목 unexecuted, 순서 보존', async () => {
+  // ① 핵심 사례 — 실패 항목 뒤는 dispatch 자체가 없어야 한다. 순차 실행 증명을
+  // 겸한다: 항목 2 의 dispatch 는 항목 1 이 정착한 뒤에만 시작된다.
+  const calls: Array<{ command: string; phase: 'start' | 'settle' }> = [];
+  configure({
+    invoke<T>(command: string): Promise<T> {
+      calls.push({ command, phase: 'start' });
+      if (command === 'boom')
+        return Promise.resolve().then(() => {
+          calls.push({ command, phase: 'settle' });
+          throw new Error(`explosion:${command}`);
+        });
+      return Promise.resolve().then(() => {
+        calls.push({ command, phase: 'settle' });
+        return `ok:${command}` as T;
+      });
+    },
+  } as unknown as EngineClient);
+  try {
+    const settled = await invokeBatchSettled<string>([
+      { command: 'a' },
+      { command: 'boom' },
+      { command: 'c' },
+    ]);
+    assert.deepEqual(
+      settled.map((entry) => entry.status),
+      ['fulfilled', 'rejected', 'unexecuted'],
+      'entries must be fulfilled / rejected / unexecuted in input order',
+    );
+    assert.deepEqual(settled[0], { status: 'fulfilled', value: 'ok:a' });
+    assert.ok(
+      settled[1].status === 'rejected' &&
+        settled[1].reason instanceof Error &&
+        (settled[1].reason as Error).message === 'explosion:boom',
+      'the rejection reason must be the normalized original error',
+    );
+    assert.deepEqual(
+      calls.map((call) => `${call.command}:${call.phase}`),
+      ['a:start', 'a:settle', 'boom:start', 'boom:settle'],
+      'dispatch must be sequential — item 3 must never start, item 2 only after item 1 settles',
+    );
+  } finally {
+    configure(a04Sentinel());
+  }
+});
+
+test('A04 빈 batch: resolve [] (invokeBatch 회귀와 동일 형태)', async () => {
+  const calls = { invokes: 0 };
+  configure({
+    invoke<T>(): Promise<T> {
+      calls.invokes++;
+      return Promise.resolve('unused' as T);
+    },
+  } as unknown as EngineClient);
+  try {
+    const settled = await invokeBatchSettled([]);
+    assert.deepEqual(settled, [], 'empty batch must resolve to an empty array');
+    assert.equal(calls.invokes, 0, 'empty batch must not invoke');
+  } finally {
+    configure(a04Sentinel());
+  }
+});
+
+test('A04 signal 혼합: abort 항목만 rejected, 이후 항목 unexecuted', async () => {
+  // per-entry invokeWithTimeout 경로 — signal 옵션이 항목별로 존중되는지
+  // (in-flight abort → rejected, reason 은 CancelledError). 3번 항목은 dispatch
+  // 자체가 안 되므로 unexecuted 로 남는다. 순차 실행이므로 abort 시점 제어가
+  // 가능하다 — 'hang' 이 dispatch 된 뒤, 정착 전에 abort 한다.
+  const calls: Array<{ command: string; phase: 'start' | 'settle' }> = [];
+  const ac = new AbortController();
+  configure({
+    invoke<T>(command: string): Promise<T> {
+      calls.push({ command, phase: 'start' });
+      if (command === 'hang') return new Promise<T>(() => {}); // 결코 settle 하지 않는다
+      return Promise.resolve().then(() => {
+        calls.push({ command, phase: 'settle' });
+        return `ok:${command}` as T;
+      });
+    },
+  } as unknown as EngineClient);
+  try {
+    const settledPromise = invokeBatchSettled<string>([
+      { command: 'a' },
+      { command: 'hang', options: { signal: ac.signal } },
+      { command: 'c' },
+    ]);
+    // 순차 실행 증명 — 'hang' 이 dispatch 될 때까지 마이크로태스크를 흘린다.
+    for (let i = 0; i < 20 && !calls.some((call) => call.command === 'hang'); i++)
+      await new Promise<void>((resolve) => queueMicrotask(resolve));
+    assert.ok(
+      calls.some((call) => call.command === 'hang'),
+      'the hanging entry must be reached sequentially',
+    );
+    ac.abort(); // in-flight abort — CancelledError 로 rejected
+    const settled = await settledPromise;
+    assert.deepEqual(
+      calls.map((call) => `${call.command}:${call.phase}`),
+      ['a:start', 'a:settle', 'hang:start'],
+      'no dispatch may start after the aborted entry settles',
+    );
+    assert.deepEqual(
+      settled.map((entry) => entry.status),
+      ['fulfilled', 'rejected', 'unexecuted'],
+    );
+    assert.ok(
+      settled[1].status === 'rejected' && settled[1].reason instanceof CancelledError,
+      'abort rejection reason must be a CancelledError',
+    );
+  } finally {
+    configure(a04Sentinel());
+  }
+});
+
+test('A04 전부 성공: 전부 fulfilled, 순서 = entry 순서', async () => {
+  configure({
+    invoke<T>(command: string): Promise<T> {
+      return Promise.resolve(`ok:${command}` as T);
+    },
+  } as unknown as EngineClient);
+  try {
+    const settled: Array<BatchSettledEntry<string>> = await invokeBatchSettled<string>([
+      { command: 'x' },
+      { command: 'y' },
+      { command: 'z' },
+    ]);
+    assert.deepEqual(
+      settled.map((entry) => (entry.status === 'fulfilled' ? entry.value : entry)),
+      ['ok:x', 'ok:y', 'ok:z'],
+      'all-fulfilled results must keep input order',
+    );
+  } finally {
+    configure(a04Sentinel());
+  }
+});
+
+test('A04 회귀 가드: 동일 입력의 invokeBatch 는 기존 reject 계약(Promise.all 동시성) 그대로다', async () => {
+  // ⑤ — invokeBatch 는 무변경이어야 한다: 중간 실패 시 전체 reject, 그리고
+  // 폴백 경로는 동시 실행이므로 boom 이 reject 하는 시점에 뒤 항목의 dispatch가
+  // 이미 시작됐다(정확히 invokeBatchSettled 의 순차 정책과 반대). 이 대조가
+  // "settled 전용 순차" 결정을 고정하고 기존 표면의 회귀를 잡는다.
+  const calls: Array<{ command: string; phase: 'start' | 'settle' }> = [];
+  const engine = createJsonEngine({
+    invoke<T>(command: string): Promise<T> {
+      calls.push({ command, phase: 'start' });
+      if (command === 'boom') return Promise.reject(new Error('explosion:boom'));
+      return new Promise<T>((resolve) => {
+        calls.push({ command, phase: 'settle' });
+        resolve(`ok:${command}` as T);
+      });
+    },
+  });
+  await assert.rejects(
+    engine.invokeBatch([{ command: 'a' }, { command: 'boom' }, { command: 'c' }]),
+    (err: unknown) => err instanceof Error && err.message === 'explosion:boom',
+    'invokeBatch contract must remain fail-fast whole-batch rejection',
+  );
+  assert.ok(
+    calls.filter((call) => call.phase === 'start').length === 3,
+    'fallback is concurrent — all three entries must have started',
+  );
+});
+
+test('A04 와이어 배치 무시: invokeBatch 를 지원해도 settled 은 항상 per-entry 로 실행한다', async () => {
+  // 설계 명시 사항의 고정 — transport 가 단일 횡단 invokeBatch 를 제공해도
+  // settled 표면은 per-entry 폴백만 탄다(부분 성공 관측이 목적). 와이어 배치가
+  // 원자적 all-or-nothing 이므로 settled 로는 부분 성공을 관측할 수 없다.
+  let wireBatchCalls = 0;
+  const calls: Array<{ command: string; phase: 'start' | 'settle' }> = [];
+  const engine = createJsonEngine({
+    invoke<T>(command: string): Promise<T> {
+      calls.push({ command, phase: 'start' });
+      const settledSync = () => calls.push({ command, phase: 'settle' });
+      if (command === 'boom')
+        return Promise.resolve().then(() => {
+          settledSync();
+          throw new Error('explosion:boom');
+        });
+      settledSync();
+      return Promise.resolve(`ok:${command}` as T);
+    },
+    // 와이어 배치가 있으면 invokeBatch 는 이걸 탄다 — settled 이 이걸 타면
+    // wireBatchCalls 가 0 이 아님이 red 신호다.
+    invokeBatch: (requests) => {
+      wireBatchCalls++;
+      return requests.map(() => 'wire');
+    },
+  });
+  configure(engine as unknown as EngineClient);
+  try {
+    const settled = await invokeBatchSettled<string>([
+      { command: 'a' },
+      { command: 'boom' },
+      { command: 'c' },
+    ]);
+    assert.equal(wireBatchCalls, 0, 'the settled surface must never use the wire batch crossing');
+    assert.deepEqual(
+      settled.map((entry) => entry.status),
+      ['fulfilled', 'rejected', 'unexecuted'],
+    );
+    assert.deepEqual(
+      calls.map((call) => `${call.command}:${call.phase}`),
+      ['a:start', 'a:settle', 'boom:start', 'boom:settle'],
+      'per-entry execution must be sequential even with wire batch available',
+    );
+  } finally {
+    configure(a04Sentinel());
+  }
 });
