@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createNodeBootstrap, createNodeEngine } from './index.js';
 import { RustraCommandError } from '@rustra/types';
+import type { EngineClientWithBatch } from '@rustra/types';
 
 test('createNodeEngine routes invoke to transport', async () => {
   const calls: Array<{ command: string; args: unknown }> = [];
@@ -743,5 +744,177 @@ processTest(
       else process.env.RUSTRA_DEBUG = previousDebug;
       resetDebugEnvForTests();
     }
+  },
+);
+
+// ── R08: bootstrap 단일 슬롯 소유권 — 소비 전 교차 등록 loud-fail ─────────
+// 글로벌 엔진 슬롯은 단일 엔진 전용이다. 과거엔 두 부트스트랩이 연달아 등록되면
+// 마지막 등록이 조용히 이겼고(import 순서가 정하는 엔진), 교차 라우팅은
+// 소비되기 전까지 아무 신호도 없었다. 정책: **첫 등록 승리 + 소비 전 경쟁
+// 등록은 loud-fail**. 소비가 시작된 뒤의 교체(신규 승자 계약)와 소비 실패 뒤의
+// 복구 등록, 같은 bootstrap 클로저의 reload 재등록은 기존 경로 그대로 허용한다.
+
+const cleanSlotEngine = {
+  invoke: async <T>() => 'slot-clean' as T,
+} as unknown as EngineClientWithBatch;
+
+test('R08: 소비 전 경쟁 lazy 등록은 loud-fail 하고 첫 등록이 승리한다', async () => {
+  const { configure, configureLazy, invoke } = await import('@rustra/types');
+  try {
+    // 슬롯을 알려진 상태로 — configure 이후의 등록이 유일한 pending 이 된다.
+    configure(cleanSlotEngine);
+    const engineA = { invoke: async <T>() => 'engine-a' as T };
+    configureLazy(async () => engineA, { ownerId: 'host-a' });
+
+    // B 등록 — 소비 전이므로 등록 즉시 loud-fail 해야 한다(동기 throw).
+    let bCalls = 0;
+    assert.throws(
+      () =>
+        configureLazy(
+          () => {
+            bCalls++;
+            return Promise.resolve({ invoke: async <T>() => 'engine-b' as T });
+          },
+          { ownerId: 'host-b' },
+        ),
+      (err: unknown) => {
+        assert.ok(err instanceof RustraCommandError, 'conflict must be a RustraCommandError');
+        assert.equal((err as RustraCommandError).code, 'registry.frozen');
+        assert.match((err as Error).message, /host-a/);
+        assert.match((err as Error).message, /host-b/);
+        return true;
+      },
+    );
+    assert.equal(bCalls, 0, 'the conflicting initializer must never run');
+
+    // 첫 등록 승리 — dispatch 는 A 의 엔진으로 간다.
+    assert.equal(await invoke('anything'), 'engine-a');
+  } finally {
+    configure(cleanSlotEngine);
+  }
+});
+
+test('R08: createNodeBootstrap 도 같은 가드를 통과한다 — pending 노드 bootstrap 위 다른 호스트 등록 거부', async () => {
+  const { configure, configureLazy } = await import('@rustra/types');
+  try {
+    configure(cleanSlotEngine);
+    // 노드 bootstrap 을 등록만 하고 ready 전에 둔다(프로세스 스폰 없음 —
+    // initializer 는 ready/dispatch 시점에야 달린다).
+    const pending = createNodeBootstrap({ commandCandidates: ['./missing-rustra-runtime'] });
+    let foreignRan = 0;
+    assert.throws(
+      () =>
+        configureLazy(
+          () => {
+            foreignRan++;
+            return Promise.resolve(cleanSlotEngine);
+          },
+          { ownerId: 'host-foreign' },
+        ),
+      (err: unknown) => {
+        assert.ok(err instanceof RustraCommandError);
+        assert.equal((err as RustraCommandError).code, 'registry.frozen');
+        assert.match((err as Error).message, /node/);
+        return true;
+      },
+    );
+    assert.equal(foreignRan, 0);
+    pending.dispose();
+  } finally {
+    configure(cleanSlotEngine);
+  }
+});
+
+test('R08: 소비가 시작된 뒤의 교체와 소비 실패 뒤의 복구 등록은 허용된다', async () => {
+  const { configure, configureLazy, ensureConfigured, invoke } = await import('@rustra/types');
+  try {
+    // (a) 소비 진행 중 교체 — 기존 "newer wins" 계약 보존.
+    configure(cleanSlotEngine);
+    let finishOld!: (engine: EngineClientWithBatch) => void;
+    configureLazy(
+      () =>
+        new Promise<EngineClientWithBatch>((resolve) => {
+          finishOld = resolve;
+        }),
+      { ownerId: 'host-old' },
+    );
+    const waiting = ensureConfigured() as Promise<EngineClientWithBatch>;
+    await Promise.resolve();
+    configureLazy(async () => ({ invoke: async <T>() => 'new-wins' as T }), {
+      ownerId: 'host-new',
+    });
+    finishOld({ invoke: async <T>() => 'old' as unknown as T } as unknown as EngineClientWithBatch);
+    await waiting;
+    assert.equal(await invoke('x'), 'new-wins');
+
+    // (b) 소비 실패 뒤 다른 이니셜라이저로의 복구 등록 — 허용(재시도 경로).
+    let attempts = 0;
+    configureLazy(
+      async () => {
+        attempts++;
+        if (attempts === 1) throw new Error('install failed');
+        return { invoke: async <T>() => 'recovered' as T };
+      },
+      { ownerId: 'host-retry' },
+    );
+    await assert.rejects(invoke('boot'), /install failed/);
+    configureLazy(async () => ({ invoke: async <T>() => 'recovered-b' as T }), {
+      ownerId: 'host-rescue',
+    });
+    assert.equal(await invoke('boot'), 'recovered-b');
+  } finally {
+    configure(cleanSlotEngine);
+  }
+});
+
+test('R08: 같은 bootstrap 클로저의 재등록(reload 경로)은 허용된다', async () => {
+  const { configure, configureLazy, ensureConfigured } = await import('@rustra/types');
+  try {
+    configure(cleanSlotEngine);
+    // node-bootstrap.ts 의 reload 는 dispose 뒤 같은 bootstrap 클로저로
+    // configureLazy 를 다시 부른다 — 참조 동일성이라 소비 여부와 무관하게 허용.
+    const bootstrap = async (): Promise<EngineClientWithBatch> =>
+      ({ invoke: async <T>() => 'reloadable' as T }) as unknown as EngineClientWithBatch;
+    configureLazy(bootstrap, { ownerId: 'node' });
+    await ensureConfigured();
+    // 소비 후 재등록 — reload 시퀀스(dispose → configureLazy(같은 클로저)).
+    configureLazy(bootstrap, { ownerId: 'node' });
+    const engine = (await ensureConfigured()) as { invoke<T>(c: string): Promise<T> };
+    assert.equal(await engine.invoke('x'), 'reloadable');
+  } finally {
+    configure(cleanSlotEngine);
+  }
+});
+
+processTest(
+  'R08: import 순서 격리 — 서브프로세스에서 마지막 bootstrap 이 조용히 이기는 대신 loud-fail 한다',
+  { timeout: 15_000 },
+  async () => {
+    // 모듈 import 순서 시나리오는 모듈 레지스트리가 갈린 다른 프로세스에서
+    // 재현한다. 빌드된 @rustra/types dist 를 절대 URL 로 import 하는 최소
+    // 스크립트 — 호스트 A 등록 → 호스트 B 등록 → B 는 거부되어야 한다.
+    const { spawnSync } = await import('node:child_process');
+    const { pathToFileURL } = await import('node:url');
+    const typesEntry = resolve(repoRoot, 'packages', 'types', 'dist', 'index.js');
+    const script = [
+      `import { configureLazy } from ${JSON.stringify(pathToFileURL(typesEntry).href)};`,
+      `configureLazy(async () => ({}), { ownerId: 'host-a' });`,
+      `try {`,
+      `  configureLazy(async () => ({}), { ownerId: 'host-b' });`,
+      `  console.log('NO-THROW');`,
+      `} catch (error) {`,
+      `  console.log('THREW:' + (error.code ?? ''));`,
+      `}`,
+    ].join('\n');
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+      encoding: 'utf8',
+      timeout: 10_000,
+    });
+    assert.equal(result.status, 0, `subprocess failed: ${result.stderr}`);
+    assert.match(
+      result.stdout,
+      /THREW:registry\.frozen/,
+      'the second bootstrap registration must loud-fail in a fresh module registry',
+    );
   },
 );
