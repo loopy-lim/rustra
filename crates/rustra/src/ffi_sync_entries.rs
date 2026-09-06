@@ -73,7 +73,8 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json(
     with_panic_guard(out_len, json_serialize, || dispatch_json(&command, args))
 }
 
-/// (성능 후속) caller-buffer JSON 변형 — 응답의 3중 복사 제거.
+/// caller-buffer JSON 변형 — 응답의 3중 복사 제거(구현 완료: probe → write
+/// 2단계 프로토콜, trust_baseline_ffi.rs 가 검증한다).
 ///
 /// `buf` 가 null 이면 필요한 응답 크기를 `out_len` 에 쓰고 0 을 반환한다
 /// (size-probe). `buf` 가 non-null 이면 응답을 `buf` 에 직접 기록하고 기록한

@@ -177,6 +177,46 @@ test('--host node suppresses a detected react-native host and says so', async ()
   }
 });
 
+test('Next steps puts cargo build before install/codegen/demo (cold-start order)', async () => {
+  // 감사 #4 — Next steps 가 cargo build 를 빠뜨리면 콜드 개발자는 demo 실패(스테일 바이너리
+  // contract.mismatch)를 만난다. 첫 빌드가 2-4 분의 병목이므로 순서도 build 가 앞서야 한다.
+  const lines: string[] = [];
+  const originalLog = console.log;
+  console.log = (...args: unknown[]) => lines.push(args.map(String).join(' '));
+  try {
+    await withTempDir(async (root) => {
+      await runInit([join(root, 'app')]);
+    });
+  } finally {
+    console.log = originalLog;
+  }
+  const start = lines.findIndex((line) => line.includes('Next steps:'));
+  assert.ok(start >= 0, 'Next steps block must be printed');
+  const steps = lines
+    .slice(start + 1)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const stepIndex = (command: string) => {
+    const at = steps.findIndex((step) => step.startsWith(command));
+    assert.ok(at >= 0, `"${command}" must appear in Next steps`);
+    return at;
+  };
+  const build = stepIndex('cargo build');
+  const install = stepIndex('bun install');
+  const codegen = stepIndex('bun run codegen');
+  const demo = stepIndex('bun run demo');
+  const run = stepIndex('cargo run');
+  assert.ok(build < install, 'cargo build must precede bun install');
+  assert.ok(
+    build < codegen,
+    'codegen shells out to the built generate bin — build must come first',
+  );
+  assert.ok(build < demo, 'demo needs the built native binary — build must come first');
+  assert.ok(run > demo, 'cargo run stays as the final step (demos the Rust side)');
+  // 첫 빌드가 오래 걸린다는 사실 자체가 계약 — 없으면 개발자가 멈춘 줄 알고 이탈한다(감사 #4).
+  assert.match(steps[build] ?? '', /few minutes/);
+});
+
 test('react-native in the pre-existing package.json dependencies switches detection to RN', async () => {
   await withTempDir(async (root) => {
     const project = join(root, 'app');

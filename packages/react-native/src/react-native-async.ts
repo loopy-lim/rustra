@@ -1,12 +1,13 @@
 import type { BatchEntry, EngineClient as EngineClientType, InvokeOptions } from '@rustra/types';
 import {
+  CancelledError,
   invokeCallbackWithAbort,
   invokeWithTimeoutHandledSignal,
   parseRustraErrorString,
-  RustraCommandError,
 } from '@rustra/types';
 import {
   createFastEngine,
+  REACT_NATIVE_RKYV_V2_ENGINE_SUPPORTS,
   type FastEngineOptions,
   type ReactNativeEngine,
   type RustraJSINative,
@@ -59,9 +60,7 @@ export function createAsyncEngine(
     invoke<T>(command: string, args?: unknown, invokeOptions?: InvokeOptions): Promise<T> {
       const signal = invokeOptions?.signal;
       if (signal?.aborted)
-        return Promise.reject(
-          new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
-        );
+        return Promise.reject(new CancelledError(`invoke("${command}") aborted before dispatch`));
       const staticId = hasByIdPath ? staticIds.get(command) : undefined;
       const dispatch = (
         resolve: (value: T) => void,
@@ -94,6 +93,12 @@ export function createAsyncEngine(
     },
   };
   const engine: ReactNativeEngine = {
+    // A02 — async 엔진은 sync rkyv V2 엔진의 지표를 상속하되 배치만 재정의한다:
+    // 아래 invokeBatch 는 항목별 Promise.all 폴백이므로 `single-crossing` 이
+    // 아니다(리뷰 정정). 취소는 invokeCancel 노출 시 전파 — 존재는 위 transport
+    // 경로가 판별하므로 `cooperative` 상속이 참이다. syncEngine.supports 는
+    // 옵셔널이라 스프레드 대신 상수에 재정의를 얹어 완전한 EngineSupports 를 만든다.
+    supports: { ...REACT_NATIVE_RKYV_V2_ENGINE_SUPPORTS, batch: 'per-entry' },
     invoke<T>(command: string, args?: unknown, invokeOptions?: InvokeOptions): Promise<T> {
       return invokeWithTimeoutHandledSignal<T>(transport, command, args, invokeOptions);
     },

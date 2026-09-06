@@ -1,4 +1,4 @@
-import { RustraCommandError } from './errors.js';
+import { CancelledError, RustraCommandError } from './errors.js';
 import { invokeCallbackWithAbort, raceAbort } from './cancel.js';
 import { encodeTier3Request, decodeTier3Response } from './json-wire.js';
 import { tier2Outcome, payloadTooLargeError } from './rkyv-engine-contract.js';
@@ -23,9 +23,7 @@ export function createRkyvInvokeRaw(
   const invokeRaw = <T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> => {
     const signal = options?.signal;
     if (signal?.aborted) {
-      return Promise.reject(
-        new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
-      );
+      return Promise.reject(new CancelledError(`invoke("${command}") aborted before dispatch`));
     }
     if (!signal) return dispatchPromise<T>(command, args);
     // 네이티브 전파 경로 (T1): JS 코덱(tier 2) 명령이고 invokeAsync +

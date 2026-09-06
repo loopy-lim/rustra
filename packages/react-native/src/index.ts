@@ -1,6 +1,8 @@
 /** @rustra/react-native — JSI, async, event, and channel adapter surfaces. */
 export type {
   EngineClient,
+  EngineSupports,
+  BootstrapState,
   InvokeOptions,
   RustraError,
   RkyvV2Codec,
@@ -8,8 +10,11 @@ export type {
   RkyvV2SchemaNative,
 } from '@rustra/types';
 export {
+  CancelledError,
   RustraCommandError,
+  TimeoutError,
   configure,
+  disposedBootstrapError,
   invoke,
   createRkyvV2Engine,
   parseRustraErrorString,
@@ -19,6 +24,8 @@ export {
   createRustraBootstrap,
   getRustraNative,
   createFastEngine,
+  REACT_NATIVE_JSON_ENGINE_SUPPORTS,
+  REACT_NATIVE_RKYV_V2_ENGINE_SUPPORTS,
 } from './react-native-core.js';
 export type {
   ReactNativeEngine,

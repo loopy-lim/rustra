@@ -36,9 +36,11 @@ bunx --bun @rustra/cli init my-project --force
 
 ### 외부 프로젝트에서 사용
 
+<!-- 발행 시 갱신: 0.7.0 라인 -->
+
 ```toml
 [dependencies]
-rustra = "0.4"
+rustra = "0.6"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -200,30 +202,44 @@ fn main() -> Result<()> {
 
 한 커맨드로 전 표면을 렌더링한다: `bun run codegen` (즉 `rustra codegen --config rustra.json`).
 Rust 쪽 역할은 계약 발행까지다 — `src/bin/generate.rs`가 `schema.json`만 쓰고, TS/C++ 산출물은
-CLI가 이 파일에서 렌더링한다. 생성 코드의 단일 진실원이 유지된다.
+CLI가 이 파일에서 렌더링한다. 생성 코드의 단일 진실원이 유지된다. 이것이 calculator의 실제
+프로브 bin이며 `RUSTRA_SCHEMA_OUT`를 존중한다 — 환경 변수가 있으면 그 디렉토리 안에
+`schema.json`을 쓰고(이 방식으로 `codegen --check`가 작업 트리를 건드리지 않고 Rust 단계를
+검증한다), 없으면 `generated/schema.json`에 기록한다.
 
 ```rust
-use rustra_calculator_example::{calculator_package, AddNumbersInput, AddNumbersOutput};
+// examples/calculator/src/bin/generate.rs
+use rustra_calculator_example::calculator_package;
+use std::path::PathBuf;
 
 fn main() -> rustra::Result<()> {
-    let package = calculator_package();
-
-    // Rust 내에서 직접 호출도 가능
-    let output: AddNumbersOutput = package.invoke("addNumbers", AddNumbersInput { a: 2, b: 3 })?;
-    println!("2 + 3 = {}", output.value);
-
-    // 계약 프로브: schema.json만 발행 — TS/C++ 표면은 CLI가 렌더링
-    package.generate_typescript()?.write_schema_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
-
+    let generated = calculator_package().generate_typescript()?;
+    let out = match std::env::var_os("RUSTRA_SCHEMA_OUT") {
+        Some(p) if !p.is_empty() => PathBuf::from(p).join("schema.json"),
+        _ => PathBuf::from("generated").join("schema.json"),
+    };
+    if let Some(parent) = out.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&out, generated.schema_json)?;
+    println!("{} written", out.display());
     Ok(())
 }
+```
+
+Rust 내에서 직접 호출도 가능하다 — `src/main.rs`의 데모 바이너리가 보여준다:
+
+```rust
+let output: AddNumbersOutput = package.invoke("addNumbers", AddNumbersInput { a: 2, b: 3 })?;
+println!("2 + 3 = {}", output.value);
 ```
 
 실행:
 
 ```bash
-cargo run -p rustra-calculator-example
-bun run codegen
+cargo run -p rustra-calculator-example          # 데모: 2 + 3 = 5
+cargo run -p rustra-calculator-example --bin generate   # 계약 프로브: schema.json
+bun run codegen                                          # TS 표면 렌더링
 ```
 
 출력:
@@ -232,14 +248,16 @@ bun run codegen
 2 + 3 = 5
 ```
 
-그리고 `generated/` 디렉토리에 기본 5개 파일과 설정된 호스트 진입점이 생성된다.
+그리고 `generated/` 디렉토리에 기본 파일(`types.ts`, `commands.ts`, `contract.ts`,
+`rkyv-codecs.ts`, `rkyv-registry.ts`, `schema.json`)과 설정된 호스트 진입점이 생성된다.
 
 ---
 
 ## 3. 생성된 TypeScript 결과물
 
 `generated/` 디렉토리에는 다음 기본 파일이 생성된다. `node`, `bun`, `tauri`,
-`reactNative`를 설정하면 해당 호스트 진입점도 추가된다.
+`reactNative`를 설정하면 해당 호스트 진입점도 추가되고, `codegen.rustBinary`로 구동되는
+rkyv V2 fast path는 `rkyv-codecs.ts`/`rkyv-registry.ts`를 추가한다.
 
 ### types.ts — 타입 정의
 
@@ -551,43 +569,55 @@ export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutp
 
 ### contract.ts — 계약 해시
 
+<!-- docs:sync:begin examples/calculator/generated/contract.ts -->
+
+<!-- prettier-ignore -->
 ```ts
-export const GENERATED_CONTRACT_HASH =
-  '5ed9d6dc29fb1b0d437b110a8f48e0cb828cc1e27a562b79049e86975b970aba';
+export const GENERATED_CONTRACT_HASH = 'b9ec095fd83d9c67befb83277adbb988ca248f2c3c64dbefd06c65c5a7bc2121';
+export const SCHEMA_VERSION = 1;
 ```
 
-- 스키마 전체를 SHA-256으로 해시한 값.
+<!-- docs:sync:end -->
+
+- `GENERATED_CONTRACT_HASH` — 스키마 전체를 SHA-256으로 해시한 값.
 - Rust 쪽과 TypeScript 쪽이 같은 계약 버전을 공유하는지 런타임에 검증할 때 사용.
+- 해시는 스키마가 바뀌면 함께 바뀌므로, docs:sync 마커가 이 샘플을 실제 생성 파일에 고정한다.
 
 ### schema.json — JSON Schema
 
 ```json
 {
+  "packageId": "examples.calculator",
+  "schemaVersion": 1,
+  "fieldOrder": "declaration",
   "commands": [
     {
       "name": "addNumbers",
+      "commandId": 1,
       "inputType": "AddNumbersInput",
       "outputType": "AddNumbersOutput",
       "inputSchema": {
+        "title": "AddNumbersInput",
         "type": "object",
+        "required": ["a", "b"],
         "properties": {
           "a": { "type": "integer", "format": "int64" },
           "b": { "type": "integer", "format": "int64" }
-        },
-        "required": ["a", "b"]
+        }
       },
       "outputSchema": {
+        "title": "AddNumbersOutput",
         "type": "object",
-        "properties": { "value": { "type": "integer", "format": "int64" } },
-        "required": ["value"]
+        "required": ["value"],
+        "properties": { "value": { "type": "integer", "format": "int64" } }
       }
     }
-  ],
-  "packageId": "examples.calculator"
+  ]
 }
 ```
 
 - schemars가 생성한 JSON Schema. 런타임 검증, 문서 자동화, 외부 도구 연동에 활용.
+- 첫 커맨드만 발췌했다 — 실제 파일은 29개 커맨드 전부를 담는다.
 
 ---
 
