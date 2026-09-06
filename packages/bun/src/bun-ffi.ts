@@ -223,6 +223,15 @@ export function createBunBootstrap(options: BunFfiEngineOptions): BunBootstrap {
   const readState = (): BootstrapState => state;
   const bootstrap = async (): Promise<RkyvV2Engine> => {
     runtime = await createBunFfiEngine(options);
+    // (I-NEW) 재초기화 클로저의 dispose 경계 — dlopen await 중 dispose 되면 이
+    // 엔진(이미 닫힌 핸들이거나 곧 닫힐 핸들 위)은 전역 슬롯에 설치되면 안 된다.
+    // ensureConfigured 의 catch(initialization 비움)가 configure(engine) 기록을
+    // 막아 dispose 후 글로벌 invoke() 는 disposed loud-fail 로 귀결된다.
+    if (readState() === 'disposed') {
+      runtime.close();
+      runtime = undefined;
+      throw disposedBootstrapError('Bun');
+    }
     return runtime.engine;
   };
   configureLazy(bootstrap);
@@ -258,13 +267,10 @@ export function createBunBootstrap(options: BunFfiEngineOptions): BunBootstrap {
       if (state === 'disposed') return Promise.reject(disposedBootstrapError('Bun'));
       resetForReinit();
       configureLazy(bootstrap);
-      try {
-        await (ensureConfigured() as Promise<RkyvV2Engine>);
-      } catch (error) {
-        // (I-2) 재초기화 실패는 'initializing'(재시도 가능)을 유지하고 원본
-        // 에러를 그대로 reject — disposed 벽돌 없음.
-        throw error;
-      }
+      // (I-2) 재초기화 실패는 'initializing'(재시도 가능)을 유지 — disposed
+      // 벽돌 없음. 원본 에러는 그대로 전파된다(N-2: rethrow 만 하던 try/catch 는
+      // 제거 — 삼키면 false success 가 된다).
+      await (ensureConfigured() as Promise<RkyvV2Engine>);
       // (I-1) await 경계 재검사 — 재초기화 중 dispose 되면 'ready' 기록 금지.
       if (readState() === 'disposed') throw disposedBootstrapError('Bun');
       state = 'ready';

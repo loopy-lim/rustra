@@ -62,6 +62,7 @@
     "packages/bun": [
       "BUN_ENGINE_SUPPORTS",
       "BUN_RKYV_V2_ENGINE_SUPPORTS",
+      "BootstrapState",
       "BunBootstrap",
       "BunEventBridge",
       "BunEventBridgeOptions",
