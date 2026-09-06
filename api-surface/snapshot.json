@@ -253,6 +253,7 @@
     "packages/types": [
       "* from './debug.js'",
       "* from './errors.js'",
+      "* from './global-batch-settled.js'",
       "* from './global.js'",
       "* from './inspector.js'",
       "* from './json-engine.js'",
