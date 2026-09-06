@@ -4772,11 +4772,7 @@ test('R05 흡수 보장: 선정착 반환이 나중에 reject 하는 dispatch pr
 
 /** R06 테스트용 — abort 이벤트를 흉내 내는 신호 유사 주입 double. */
 function fakeAbortSignal(): {
-  signal: {
-    aborted: boolean;
-    addEventListener: AbortSignal['addEventListener'];
-    removeEventListener: AbortSignal['removeEventListener'];
-  };
+  signal: AbortSignal;
   fire(): void;
 } {
   const listeners: Array<() => void> = [];
