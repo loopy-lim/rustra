@@ -5,6 +5,31 @@ impl PackageBuilder {
         self
     }
 
+    /// 이벤트 이름 → Tauri 채널 이름 조각의 정규화 규칙 (R02 — TS
+    /// `@rustra/tauri` `rustraEventChannel` 과 문자 단위까지 동일한 알고리즘).
+    ///
+    /// 1. 코드포인트 순회(`chars()`).
+    /// 2. `-`, `/`, `:`, `_` 와 Unicode 알파벳·숫자(`char::is_alphanumeric()` =
+    ///    Alphabetic ∪ N — 한글, CJK, 비 BMP 영숫자 포함)는 보존.
+    /// 3. 그 외 문자는 `_` 치환.
+    /// 4. NFC 정규화는 하지 않는다 — 정규화 후 같아지는 이름도 다른 이름이며,
+    ///    그런 충돌은 [`PackageBuilder::validate_event_channel_uniqueness`] 가
+    ///    `build()` 시점에 거부한다.
+    ///
+    /// `tauri_support` 의 `event_channel` 이 접두사를 덧씌워 소비하고, 위
+    /// 충돌 검증이 같은 함수로 정규화 맵을 만든다 — 규칙의 단일 사본.
+    pub(crate) fn sanitize_event_name(name: &str) -> String {
+        name.chars()
+            .map(|c| {
+                if c.is_alphanumeric() || matches!(c, '-' | '/' | ':' | '_') {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect()
+    }
+
     /// (이벤트 계약) `Package::emit` 으로 발행될 이벤트를 타입과 함께 선언한다.
     ///
     /// 선언된 이벤트는 schema.json 의 최상위 `events` 섹션에 이름/페이로드
@@ -32,6 +57,21 @@ impl PackageBuilder {
             json!({ "payload": schema, "definitions": defs }),
         );
         self
+    }
+
+    /// 빌드([`PackageBuilder::build`]) 시점의 이벤트 채널 충돌 검증
+    /// (R02). 서로 다른 이벤트 이름이 정규화 규칙을 지난 뒤 같은 채널로
+    /// 수렴하면(`a.b` vs `a_b`) 호스트 어댑터는 구분 불가능한 채널 하나를
+    /// 얻는다 — 구독자가 다른 이벤트의 페이로드를 받는 조용한 오배선이므로
+    /// 빌드 시점에 패닉으로 거부한다(선언된 이벤트만 검증 대상).
+    pub(crate) fn validate_event_channel_uniqueness(&self) {
+        let mut seen: BTreeMap<String, String> = BTreeMap::new();
+        for name in self.events.keys() {
+            let channel = Self::sanitize_event_name(name);
+            if let Some(first) = seen.insert(channel.clone(), name.clone()) {
+                panic!("event channel collision: {first:?} and {name:?} both map to {channel}");
+            }
+        }
     }
 
     /// (T2, OTA) 스키마 버전 — 구 JS 클라이언트의 stale 감지에 사용된다.
