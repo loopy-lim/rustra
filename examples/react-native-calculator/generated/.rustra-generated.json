@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "schemaHash": "b9ec095fd83d9c67befb83277adbb988ca248f2c3c64dbefd06c65c5a7bc2121",
-  "generatorVersion": "0.7.0",
+  "generatorVersion": "0.8.0",
   "files": [
     {
       "path": "../modules/rustra-jsi/android/build-rust-android.sh",
@@ -9,7 +9,7 @@
     },
     {
       "path": "../modules/rustra-jsi/android/build.gradle",
-      "sha256": "1c4b55f02e3047a2cd411a3e04b6bcf1752785af6bb77f51c67d8ef8c7e89366"
+      "sha256": "57d2a17b631f96095f3d3ebd5c4eb79a38f550e9d0eaa952ea96aa0767fbcaf2"
     },
     {
       "path": "../modules/rustra-jsi/android/CMakeLists.txt",
@@ -49,7 +49,7 @@
     },
     {
       "path": "../modules/rustra-jsi/package.json",
-      "sha256": "b52d40dfd226cd6941689435ddc448d92033d59efa9a32c6fa87267f6cbed539"
+      "sha256": "fd1040dc80a43215c7290c062638da529381ba233863218b408bbac7aa9dedd5"
     },
     {
       "path": "../modules/rustra-jsi/react-native.config.js",
@@ -57,7 +57,7 @@
     },
     {
       "path": "../modules/rustra-jsi/RustraBridge.podspec",
-      "sha256": "dc816ee0c629ec3ad15540fd332d5b4e255dfb2b5c84f0e2526a6866b532bd84"
+      "sha256": "e4984e076f1bd115a2d664b3fd6bac184511cebdb2c8f4fe0489d411f8a415d2"
     },
     {
       "path": "../modules/rustra-jsi/src/index.ts",
