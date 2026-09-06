@@ -113,7 +113,7 @@ jobs:
         # main 벤치 결과를 커밋 댓글로 게시 — GitHub UI 에서 회귀/재부트 판정을
         # 바로 볼 수 있게 한다. 게이트 실패(진짜 회귀)에도 판정 내용을 남긴다.
         if: always() && github.event_name == 'push'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
