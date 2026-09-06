@@ -640,7 +640,11 @@ For native module setup (iOS JSI / Android C++), see the
 
 `bun run test:compat` verifies the JS contract and supported local runtimes,
 and the CI native jobs verify build and link. Neither should be equated with
-real-device install and screen-render evidence.
+real-device install and screen-render evidence. The checks that must be run
+and recorded by hand (real WebView, real device, emit timing) live in the
+[host verification manual checklist](docs/verification-checklist.md) — an
+evidence level in this table is backed by a filled checklist block, not by CI
+green alone.
 
 ## Performance
 
