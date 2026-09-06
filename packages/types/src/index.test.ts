@@ -4747,3 +4747,272 @@ test('R05 흡수 보장: 선정착 반환이 나중에 reject 하는 dispatch pr
   // 지각 rejection 이 여기서 터지면 테스트 프로세스가 죽는다 — 흡수 증명.
   await new Promise((resolve) => setTimeout(resolve, 20));
 });
+
+// ── R06: native cancel 예외와 Promise 완료 분리 ─────────────────────
+// invokeCallbackWithAbort 의 onAbort 는 settle 로컬을 먼저 뒤집은 뒤
+// outcome() 안에서 native cancel(invocationId) 를 부른다. cancel 이 throw 하면
+// reject 이전에 예외가 새어나가 settled 은 이미 true — 리스너는 제거됐고
+// Promise 는 영원히 pending 에 남는다. 취소는 JS 결과 확정(cancellation
+// rejection)이어야 하고, native cancel 의 실패는 그 성공에 묶여서는 안 된다 —
+// CancelledError.cause 로 관측 가능하게 보존한다(통합 문서 "별도 관측 정보").
+//
+// 스코프 구분: ①–⑤는 주입 double(abort 이벤트를 흉내 내는 신호 유사 객체 —
+// 리스너 등록/제거와 fire() 를 주입)로 제어 흐름을 정밀 검증하고, ⑥은 실제
+// AbortController 로 핵심 사례(①)를 재현해 double 주입 결과가 실제 신호
+// 경로와 같음을 증명한다.
+// 지연 transport + 호출 카운터로 제어한다(실제 sleep 없음 — ⑥의 탈출 throw
+// 귀속 관측만 패턴 정당화된 20ms 카나리아를 쓴다).
+
+/** R06 테스트용 — abort 이벤트를 흉내 내는 신호 유사 주입 double. */
+function fakeAbortSignal(): {
+  signal: {
+    aborted: boolean;
+    addEventListener: AbortSignal['addEventListener'];
+    removeEventListener: AbortSignal['removeEventListener'];
+  };
+  fire(): void;
+} {
+  const listeners: Array<() => void> = [];
+  return {
+    signal: {
+      aborted: false,
+      addEventListener: ((_type: string, listener: () => void) => {
+        listeners.push(listener);
+      }) as AbortSignal['addEventListener'],
+      removeEventListener: ((_type: string, listener: () => void) => {
+        const idx = listeners.indexOf(listener);
+        if (idx >= 0) listeners.splice(idx, 1);
+      }) as AbortSignal['removeEventListener'],
+    } as unknown as AbortSignal,
+    fire() {
+      const snapshot = [...listeners];
+      listeners.length = 0;
+      for (const listener of snapshot) listener();
+    },
+  };
+}
+
+test('R06 핵심: native cancel 이 throw 해도 rejection 으로 정착하고 cause 에 보존된다', async () => {
+  // ① 실패 사례 — cancel 이 throw 하면 현재 코드는 예외가 finish() 밖으로
+  // 새어나가 reject 전에 정착 플래그가 이미 뒤집혔다: Promise 는 pending 에
+  // 영원히 남는다. 기대 계약은 rejection 정착 + cancel 예외의 cause 보존.
+  const cancelError = new Error('native teardown exploded');
+  let cancelCalls = 0;
+  const fake = fakeAbortSignal();
+  const pending = invokeCallbackWithAbort<number>(
+    'teardown-boom',
+    fake.signal,
+    (resolve, _reject, isSettled) => {
+      assert.equal(isSettled(), false, 'abort must not have fired at dispatch time');
+      void resolve;
+      return 42; // invocationId — cancel 이 반드시 호출되는 상태
+    },
+    (id) => {
+      assert.equal(id, 42);
+      cancelCalls++;
+      throw cancelError;
+    },
+  );
+  let settled: 'pending' | 'cancelled' | 'resolved' = 'pending';
+  const watched = pending.then(
+    (value) => {
+      settled = 'resolved';
+      return `resolved:${value}`;
+    },
+    (err: unknown) => {
+      settled = 'cancelled';
+      assert.ok(err instanceof CancelledError, 'abort settle must be a CancelledError');
+      assert.equal(err.code, RustraErrorCode.Cancelled);
+      assert.equal(
+        err.cause,
+        cancelError,
+        'the native cancel exception must be preserved as observable cause',
+      );
+      return 'cancelled';
+    },
+  );
+  fake.fire(); // 주입 double — abort 이벤트 흉내
+  assert.equal(await watched, 'cancelled');
+  // ① 의 red 증거: 현재 결함에서는 cancel 의 탈출 throw 가 이 테스트를 위
+  // 라인 이전에 죽이고(fire 안에서 동기 전파), 구현 후에는 정착이 관측된다.
+  assert.equal(settled, 'cancelled', 'abort must settle the promise (no pending hang)');
+  assert.equal(cancelCalls, 1, 'cancel must have been invoked exactly once');
+});
+
+test('R06 회귀 가드: 정상 cancel 은 기존대로 rejection 으로 정착한다', async () => {
+  // ② — cancel 성공 경로. try/catch 추가가 이 경로를 흔들면 안 된다.
+  let cancelCalls = 0;
+  const fake = fakeAbortSignal();
+  const pending = invokeCallbackWithAbort<number>(
+    'calm-teardown',
+    fake.signal,
+    () => 7,
+    (id) => {
+      cancelCalls++;
+      assert.equal(id, 7);
+    },
+  );
+  fake.fire();
+  await assert.rejects(
+    pending,
+    (err: unknown) => {
+      assert.ok(err instanceof CancelledError);
+      assert.equal(err.code, RustraErrorCode.Cancelled);
+      assert.equal(err.cause, undefined, 'successful cancel must not fabricate a cause');
+      return true;
+    },
+    'successful cancel must settle with a plain cancelled rejection',
+  );
+  assert.equal(cancelCalls, 1, 'cancel must have been invoked exactly once');
+});
+
+test('R06 회귀 가드: cancel 미지원·invocationId 수신 전에도 rejection 으로 정착한다', async () => {
+  // ③ — cancel 이 undefined 이거나 dispatch 가 아직 id 를 돌려주지 않은
+  // (invocationId < 0) 상태. 둘 다 onAbort 의 기존 가드가 커버하며,
+  // try/catch 추가는 가드 없는 reject 경로를 그대로 유지해야 한다.
+  const fake = fakeAbortSignal();
+  const noCancel = invokeCallbackWithAbort<number>('no-cancel', fake.signal, () => 1);
+  fake.fire();
+  await assert.rejects(
+    noCancel,
+    (err: unknown) => {
+      assert.ok(err instanceof CancelledError);
+      assert.equal(err.cause, undefined, 'missing cancel support must not fabricate a cause');
+      return true;
+    },
+    'abort without cancel support must still settle with cancelled',
+  );
+  const fake2 = fakeAbortSignal();
+  const voidDispatch = invokeCallbackWithAbort<number>('void-dispatch', fake2.signal, () => {
+    /* id 반환 없음 — invocationId 는 -1 로 남는다 */
+  });
+  fake2.fire();
+  await assert.rejects(
+    voidDispatch,
+    (err: unknown) => {
+      assert.ok(err instanceof CancelledError);
+      assert.equal(err.cause, undefined);
+      return true;
+    },
+    'abort before invocationId assignment must still settle with cancelled',
+  );
+});
+
+test('R06 회귀 가드: completion 이 cancel 보다 늦게 도착해도 결과는 불변이다', async () => {
+  // ④ — abort 로 정착한 뒤 지각 completion(resolve) 이 와도 결과가 뒤집히지
+  // 않는다. settled 이 cancel 예외로 새어나간 결함 상태에서는 fire() 가 예외를
+  // 던져 이 테스트 자체가 여기서 죽는다 — red 증거의 부수 관측.
+  let lateResolve: ((value: number) => void) | undefined;
+  const fake = fakeAbortSignal();
+  const pending = invokeCallbackWithAbort<number>(
+    'late-completion',
+    fake.signal,
+    (resolve) => {
+      lateResolve = resolve;
+      return 9;
+    },
+    () => {
+      /* 정상 cancel */
+    },
+  );
+  fake.fire(); // 먼저 cancel 정착
+  await assert.rejects(pending, (err: unknown) => err instanceof CancelledError);
+  lateResolve?.(12345); // 지각 completion — 무시되어야 한다
+  assert.equal(
+    await watchedResult(pending),
+    'cancelled',
+    'late completion must not flip the result',
+  );
+});
+
+/** R06 ④ 전용 — 이미 reject 된 promise 의 최종 정착 형태를 재관측한다. */
+function watchedResult(p: Promise<number>): Promise<string> {
+  return p.then(
+    (value) => `resolved:${value}`,
+    () => 'cancelled',
+  );
+}
+
+test('R06 회귀 가드: completion 중복은 정확히 한 번만 정착한다', async () => {
+  // ⑤ — 이중 completion. settle-once 일변성 보존.
+  let resolveFirst: ((value: number) => void) | undefined;
+  let resolveSecond: ((value: number) => void) | undefined;
+  const fake = fakeAbortSignal();
+  let resolutions = 0;
+  const pending = invokeCallbackWithAbort<number>('double-completion', fake.signal, (resolve) => {
+    resolveFirst = resolve;
+    resolveSecond = resolve;
+    return 11;
+  });
+  const watched = pending.then(
+    (value) => {
+      resolutions++;
+      return value;
+    },
+    () => {
+      resolutions++;
+      return -1;
+    },
+  );
+  resolveFirst?.(1);
+  resolveSecond?.(2); // 중복 — 무시되어야 한다
+  fake.fire(); // completion 후 abort — 역시 무시되어야 한다
+  assert.equal(await watched, 1, 'double completion must settle exactly once with the first value');
+  assert.equal(resolutions, 1, 'settlement observer must run exactly once');
+  await new Promise<void>((resolve) => queueMicrotask(resolve));
+});
+
+test('R06 실제 신호: AbortController 로도 핵심 사례가 동일하게 정착한다', async () => {
+  // ⑥ — 주입 double(①)이 실제 AbortSignal 경로와 같은 결과를 내는지의
+  // 범위 대조. 실제 신호에서는 abort 리스너의 탈출 throw 가 bun test 에서
+  // "활성 테스트의 실패"로 귀속되므로, 이 테스트는 탈출 관측이 red 증거가
+  // 된다: 구현이 try/catch 로 분리되기 전에는 아래 watched 단언 대신 이
+  // 귀속 실패가 테스트를 죽인다. 카나리아 20ms 만 대기한다(패턴 정당화:
+  // 탈출 throw 의 비동기 귀속 관측).
+  const ac = new AbortController();
+  const cancelError = new Error('real-signal native teardown exploded');
+  let cancelCalls = 0;
+  let settled: 'pending' | 'cancelled' | 'resolved' = 'pending';
+  const pending = invokeCallbackWithAbort<number>(
+    'real-teardown-boom',
+    ac.signal,
+    () => 42,
+    (id) => {
+      assert.equal(id, 42);
+      cancelCalls++;
+      throw cancelError;
+    },
+  );
+  const watched = pending.then(
+    (value) => {
+      settled = 'resolved';
+      void value;
+    },
+    (err: unknown) => {
+      settled = 'cancelled';
+      assert.ok(err instanceof CancelledError);
+      assert.equal(
+        err.cause,
+        cancelError,
+        'real AbortSignal path must also preserve the cancel exception as cause',
+      );
+    },
+  );
+  const uncaught: unknown[] = [];
+  const collector = (e: unknown) => {
+    uncaught.push(e);
+  };
+  process.on('uncaughtException', collector);
+  try {
+    ac.abort(); // 실제 신호 — 리스너의 탈출 throw 가 여기서 발생한다
+    await watched; // ← 결함 상태에서는 pending 에 걸려 타임아웃(또는 위 귀속 실패)이 red 증거
+    // 탈출 귀속 카나리아 — 컬렉터가 장착된 상태에서 지각 귀속까지 관측한다.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  } finally {
+    process.off('uncaughtException', collector);
+  }
+  assert.equal(settled, 'cancelled', 'real signal abort must settle with cancelled');
+  assert.equal(cancelCalls, 1);
+  // 구현 후에는 cancel 예외가 cause 로 흡수되므로 탈출이 없어야 한다.
+  assert.equal(uncaught.length, 0, 'cancel exception must be contained, not escape the listener');
+});
