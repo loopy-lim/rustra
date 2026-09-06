@@ -37,7 +37,7 @@ A matrix of the invoke features (signal/cancellation, batch, events) each adapte
 
 ## Notes
 
-- **Verified combination**: npm `@rustra/*` 0.6.x ↔ Rust crate 0.5.x (workspace) is the combination currently exercised by CI. The crates.io version bump is part of the release procedure, not of adapter code — expect the documented pairing to move only in a release step.
+- **Verified combination**: npm `@rustra/*` 0.8.x ↔ Rust crate 0.8.x (workspace) is the combination currently exercised by CI. The npm and crates.io version lines were aligned in the 2026-09-06 release step; future bumps follow the same release procedure, not adapter code.
 - **Engine slot is single-engine** (bootstrap ownership): first `configureLazy`/`configure` registration wins; a second bootstrap registered while the first is still pending throws `registry.frozen` instead of silently winning by import order. Dispose/reload re-registration and post-consumption replacement stay allowed. Multi-engine is not supported.
 - **Platforms not covered by runtime evidence**: the runtime claims in this
   matrix and in the README platform matrix are backed by the specific

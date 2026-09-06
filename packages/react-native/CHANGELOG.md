@@ -1,5 +1,18 @@
 # @rustra/react-native
 
+## 0.7.0
+
+### Minor Changes
+
+- 4c97b78: Removes the deprecated legacy `subscribeEvent` overloads (deprecated in 0.6.0; the one-minor deprecation policy requirement is satisfied). `@rustra/tauri` now accepts only `subscribeEvent(name, callback[, listen])`, and `@rustra/react-native` accepts only `subscribeEvent(name, callback[, options])` with the native module resolved from `globalThis.__rustraNative`.
+
+### Patch Changes
+
+- Updated dependencies [e420f92]
+- Updated dependencies [582d740]
+- Updated dependencies [f2c7980]
+  - @rustra/types@0.8.0
+
 ## 0.6.1
 
 ### Patch Changes

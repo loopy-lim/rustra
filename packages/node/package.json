@@ -1,6 +1,6 @@
 {
   "name": "@rustra/node",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Node adapter for rustra-bridge",
   "license": "MIT",
   "type": "module",
@@ -31,7 +31,7 @@
     "test:node-runtime": "tsc -p tsconfig.test.json && node --test dist-test/index.test.js"
   },
   "dependencies": {
-    "@rustra/types": "^0.7.0"
+    "@rustra/types": "^0.8.0"
   },
   "devDependencies": {
     "typescript": "^5.9.0"

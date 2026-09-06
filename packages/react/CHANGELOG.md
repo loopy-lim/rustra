@@ -1,5 +1,18 @@
 # @rustra/react
 
+## 0.7.0
+
+### Minor Changes
+
+- ebb018f: Adds `useSuspenseCommand` — a Suspense-compatible command hook (thrown-promise Suspense on React 18, `use` on React 19) with a module-level promise cache and `invalidateCommands(commandName?)` for targeted or full invalidation.
+
+### Patch Changes
+
+- Updated dependencies [e420f92]
+- Updated dependencies [582d740]
+- Updated dependencies [f2c7980]
+  - @rustra/types@0.8.0
+
 ## 0.6.0
 
 ### Minor Changes

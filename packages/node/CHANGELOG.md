@@ -1,5 +1,19 @@
 # @rustra/node
 
+## 0.8.0
+
+### Minor Changes
+
+- dc084d9: Preserves unparsed NDJSON stdout lines and stderr for loop transport diagnostics, activated by `RUSTRA_DEBUG` only (a `configureDebug` sink alone does not activate collection — sink-only installs keep the previous silent behavior). When the runtime emits a line that fails JSON parsing, debug mode emits an `ndjson.unparsed` event plus a once-only stderr warning, and non-debug mode keeps the most recent 32 unparsed lines in a bounded ring buffer (each line truncated to 4096 chars). When the child process exits with requests still pending, the rejection message now appends those preserved lines (and the stderr tail collected in debug mode) after the original "exited before responding" prefix, so callers see what the child actually emitted. Also exports `recordUnparsedLine`, `attachExitContext`, `UNPARSED_LINES_CAPACITY`, `UNPARSED_LINE_MAX_CHARS`, and the `UnparsedLineState` type.
+- 582d740: 안정화 통합: generated 헤더 형식 판정(CI 근원 수정), Tauri 이벤트 콜백 경계·채널명 Unicode 통일·payload 단일 파싱, wire batch 계약 통일(옵션·정규화·동기 throw), dispatch 중 abort 관측, native cancel 예외 분리, bootstrap 단일 슬롯 가드, EngineSupports 표면, invokeBatchSettled, profiled dispatch 등록 분리(`register`는 dispatch+batch만, 벤치 경로는 `register_profiled`).
+
+### Patch Changes
+
+- Updated dependencies [e420f92]
+- Updated dependencies [582d740]
+- Updated dependencies [f2c7980]
+  - @rustra/types@0.8.0
+
 ## 0.7.0
 
 ### Minor Changes

@@ -74,7 +74,7 @@
 
 ## 참고
 
-- **검증된 조합**: npm `@rustra/*` 0.6.x ↔ Rust crate 0.5.x (워크스페이스)가 현재 CI가 검증하는 조합이다. crates.io 버전 bump는 어댑터 코드가 아니라 발행 절차의 단계다 — 문서화된 쌍은 발행 단계에서만 움직인다.
+- **검증된 조합**: npm `@rustra/*` 0.8.x ↔ Rust crate 0.8.x (워크스페이스)가 현재 CI가 검증하는 조합이다. npm과 crates.io 버전 라인은 2026-09-06 발행 단계에서 정렬됐다 — 이후 bump도 같은 발행 절차를 따르며 어댑터 코드와 무관하다.
 - **엔진 슬롯은 단일 엔진** (bootstrap 소유권): 첫 `configureLazy`/`configure` 등록이 승리하고, 첫 등록이 아직 소비되지 않은 상태에서의 두 번째 bootstrap 등록은 import 순서로 조용히 이기는 대신 `registry.frozen` 을 throw 한다. dispose/reload 재등록과 소비 뒤 교체는 기존대로 허용. 다중 엔진은 미지원.
 - **런타임 증거가 닿지 않는 플랫폼**: 이 매트릭스와 README 플랫폼 매트릭스의
   런타임 주장은 거기에 적힌 특정 host/OS/빌드 조합 — macOS(Tauri WebView,
