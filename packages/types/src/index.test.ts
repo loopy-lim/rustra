@@ -4793,7 +4793,7 @@ test('R07 도착: 전역 invokeBatch timeout race 는 TimeoutError 로 정착한
     configure({
       invokeBatch: <T>(): Promise<T[]> => {
         batchCrossings++;
-        return new Promise<T[]>((resolve) => setTimeout(() => resolve([1, 2]), 500));
+        return new Promise<T[]>((resolve) => setTimeout(() => resolve([1, 2] as T[]), 500));
       },
     } as unknown as EngineClient);
     const startedAt = Date.now();
