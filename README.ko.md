@@ -592,6 +592,9 @@ const result = await addNumbers({ a: 20, b: 22 });
 
 `bun run test:compat`는 JS 계약과 지원되는 로컬 runtime을 검증하고, CI 네이티브
 잡은 빌드·링크를 검증한다. 이 둘을 실제 기기 설치·화면 렌더 증거와 동일시하지 않는다.
+실제 WebView·실기기·emit 타이밍처럼 손으로 실행하고 기록해야 하는 검증은
+[호스트 검증 수동 체크리스트](docs/verification-checklist.ko.md)에 있다 — 이
+표의 증거 수준은 CI green 만이 아니라 채워진 체크리스트 블록이 뒤받는다.
 
 ## 성능
 

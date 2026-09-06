@@ -76,6 +76,14 @@
 
 - **검증된 조합**: npm `@rustra/*` 0.6.x ↔ Rust crate 0.5.x (워크스페이스)가 현재 CI가 검증하는 조합이다. crates.io 버전 bump는 어댑터 코드가 아니라 발행 절차의 단계다 — 문서화된 쌍은 발행 단계에서만 움직인다.
 - **엔진 슬롯은 단일 엔진** (bootstrap 소유권): 첫 `configureLazy`/`configure` 등록이 승리하고, 첫 등록이 아직 소비되지 않은 상태에서의 두 번째 bootstrap 등록은 import 순서로 조용히 이기는 대신 `registry.frozen` 을 throw 한다. dispose/reload 재등록과 소비 뒤 교체는 기존대로 허용. 다중 엔진은 미지원.
+- **런타임 증거가 닿지 않는 플랫폼**: 이 매트릭스와 README 플랫폼 매트릭스의
+  런타임 주장은 거기에 적힌 특정 host/OS/빌드 조합 — macOS(Tauri WebView,
+  Node, Bun), iOS 시뮬레이터(RN), Android 에뮬레이터와 `TB710FU` arm64 실기기(RN),
+  wasm 스파이크의 에뮬레이터/시뮬레이터 — 가 뒤받는다. 그 조합 밖의 전부(예:
+  Windows 의 Tauri, Tauri Linux WebView 사용자 흐름, 다른 Android/iOS 기기,
+  RN Windows/macOS 호스트)는 여기 어떤 런타임 주장에도 닿지 않으며 이 매트릭스는
+  그에 대해 아무것도 주장하지 않는다. 실행별 수동 검증:
+  [검증 체크리스트](verification-checklist.ko.md).
 - 어댑터별 안정 범위와 게이트: [compatibility-contract.md](compatibility-contract.md)
 - 취소 전파 설계: `docs/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
 

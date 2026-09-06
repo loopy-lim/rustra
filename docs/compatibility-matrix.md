@@ -39,6 +39,15 @@ A matrix of the invoke features (signal/cancellation, batch, events) each adapte
 
 - **Verified combination**: npm `@rustra/*` 0.6.x ↔ Rust crate 0.5.x (workspace) is the combination currently exercised by CI. The crates.io version bump is part of the release procedure, not of adapter code — expect the documented pairing to move only in a release step.
 - **Engine slot is single-engine** (bootstrap ownership): first `configureLazy`/`configure` registration wins; a second bootstrap registered while the first is still pending throws `registry.frozen` instead of silently winning by import order. Dispose/reload re-registration and post-consumption replacement stay allowed. Multi-engine is not supported.
+- **Platforms not covered by runtime evidence**: the runtime claims in this
+  matrix and in the README platform matrix are backed by the specific
+  host/OS/build combinations listed there — macOS (Tauri WebView, Node, Bun),
+  iOS simulator (RN), Android emulator and the `TB710FU` arm64 device (RN),
+  plus the wasm spike's emulator/simulator runs. Everything outside those
+  combinations — e.g. Tauri on Windows, Tauri Linux WebView user flows, other
+  Android/iOS devices, RN Windows/macOS hosts — is **not** covered by a
+  runtime claim here, and nothing in this matrix asserts it. Per-run manual
+  checks: [verification checklist](verification-checklist.md).
 - Per-adapter stable scope and gates: [compatibility-contract.md](compatibility-contract.md)
 - Cancellation propagation design: `docs/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
 
