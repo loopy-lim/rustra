@@ -26,17 +26,22 @@ Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플�
 
 단일 Rust 코어를 여러 JS 호스트에 잇는 도구는 각자 다른 지점을 타협한다:
 
-|                               | **rustra**                        | napi-rs           | Nitro Modules | Tauri commands | tauri-specta |
-| ----------------------------- | --------------------------------- | ----------------- | ------------- | -------------- | ------------ |
-| 단일 Rust 코어 × 멀티 호스트  | ✅ Node/Bun/Tauri/RN              | Node (+ Electron) | RN 중심       | Tauri 전용     | Tauri 전용   |
-| 타입 안전 코드젠 (양방향)     | ✅ 커맨드+이벤트                  | 수동 d.ts         | ✅            | ❌ (수동)      | ✅           |
-| compact 바이너리 와이어       | ✅ rkyv V2 (JSON 대비 11.8× 작음) | JSON/Buffer       | JSI 객체      | JSON IPC       | JSON IPC     |
-| 계약 게이트 (breaking change) | ✅ `rustra diff` + contract hash  | ❌                | ❌            | ❌             | 부분         |
-| 취소/타임아웃/배치 시맨틱     | ✅ 매트릭스로 문서화              | 직접 구현         | 직접 구현     | ❌             | ❌           |
+|                               | **rustra**                                                              | napi-rs                                           | Nitro Modules | Tauri commands | tauri-specta |
+| ----------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------- | ------------- | -------------- | ------------ |
+| 단일 Rust 코어 × 멀티 호스트  | ✅ Node/Bun/Tauri/RN                                                    | Node (+ Electron)                                 | RN 중심       | Tauri 전용     | Tauri 전용   |
+| 타입 안전 코드젠 (양방향)     | ✅ 커맨드+이벤트                                                        | Rust 구조체에서 TS 정의 생성 (어트리뷰트 매크로)² | ✅            | ❌ (수동)      | ✅           |
+| compact 바이너리 와이어       | ✅ rkyv V2 ([JSON 대비 요청 와이어 11.8× 작음](docs/wire-format.ko.md)) | JSON/Buffer                                       | JSI 객체      | JSON IPC       | JSON IPC     |
+| 계약 게이트 (breaking change) | ✅ `rustra diff` + contract hash                                        | ❌                                                | ❌            | ❌             | 부분         |
+| 취소/타임아웃/배치 시맨틱     | ✅ 매트릭스로 문서화                                                    | 직접 구현                                         | 직접 구현     | ❌             | ❌           |
 
 rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)를 하나의 계약으로
 소유**한다. 명령 호출과 계약 검증은 호스트 간 공통으로 유지하고, 취소·이벤트·채널
 같은 capability 차이는 [호환성 매트릭스](docs/compatibility-matrix.md)에 명시한다.
+
+² 2026-09-05 napi-rs 문서 대조 검증: napi-rs는 어트리뷰트 매크로(`#[napi(object)]`)
+로 Rust 구조체에서 TypeScript 정의를 생성한다 — "수동 d.ts" 표기는 이를 과소
+평가한 것이었다. rustra 셀의 차별점은 타입·이벤트·검증 게이트가 모든 호스트에서
+하나의 공유 스키마로 나온다는 것이지, 다른 도구에 코드젠이 없다는 주장이 아니다.
 
 ## 로드맵
 
