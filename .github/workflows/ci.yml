@@ -23,7 +23,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.120.0
       - name: Install cargo-audit
         run: cargo install cargo-audit --version 0.22.2 --locked
       - name: Audit Rust dependencies
@@ -48,7 +48,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.120.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -100,7 +100,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: dtolnay/rust-toolchain@1.120.0
       - uses: Swatinem/rust-cache@v2
       - name: Install system dependencies
         run: |
@@ -121,7 +121,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.120.0
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
@@ -135,7 +135,7 @@ jobs:
     needs: rust
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.120.0
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -173,7 +173,7 @@ jobs:
     needs: [rust, rust-audit]
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.120.0
       - uses: Swatinem/rust-cache@v2
       # test:compat 의 test:runtime:tauri 가 tauri-calculator release 빌드를
       # 돌린다 — gtk/webkit 시스템 의존이 필요하다 (rust 잡과 동일 목록).
@@ -305,7 +305,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.0
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.120.0
         with:
           targets: aarch64-linux-android, x86_64-linux-android
       - name: Install cargo-ndk
@@ -373,7 +373,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.95.0
+      - uses: dtolnay/rust-toolchain@1.120.0
         with:
           targets: aarch64-apple-ios-sim, x86_64-apple-ios
       - uses: actions/setup-node@v7
