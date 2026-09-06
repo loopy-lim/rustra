@@ -452,3 +452,25 @@ test('A05: concurrent ready calls share one initialization promise (bun)', async
   bootstrap.dispose();
   configure(A05_SLOT_ENGINE);
 });
+
+test('A02: createBunFfiEngine exposes supports reflecting the actual FFI bindings (real dylib)', async () => {
+  // 리뷰 정정 — bun FFI native 는 invokeRkyvV2/getSchema/getContractHash/
+  // getSchemaGeneration 만 바인딩한다. invokeAsync/invokeCancel·invokeTypedBatch
+  // 심볼은 바인딩되지 않으므로 rkyv V2 코어의 전파/단일 횡단 조건이 도달 불가:
+  // 취소는 얕은 취소, 배치는 항목별 폴백으로 관측된다.
+  const runtime = await createBunFfiEngine({
+    libraryCandidates: [resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`)],
+    rkyvV2Codecs: testRegistry,
+  });
+  try {
+    assert.deepEqual(runtime.engine.supports, {
+      cancellation: 'shallow',
+      batch: 'per-entry',
+      events: 'push',
+      channels: false,
+      timeoutPreemption: true,
+    });
+  } finally {
+    runtime.close();
+  }
+});
