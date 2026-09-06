@@ -162,6 +162,46 @@ error: `MyType` cannot be used as a command parameter
    = note: add `#[rustra::bridge_type]` to `MyType`
 ```
 
+### 2-6. Async Commands and the Executor
+
+`#[command]` accepts `async fn`. An async command registers, schema-generates, and
+dispatches exactly like a synchronous one:
+
+```rust
+#[command]
+async fn find_user(input: UserQuery) -> Result<User> {
+    let user = slow_lookup(&input.id).await;
+    Ok(user)
+}
+```
+
+Async syntax support is **not** a general-purpose async runtime. The generated wrapper
+drives the future on the calling thread with a park-based executor (the waker is
+`Thread::unpark`; see `crates/rustra/src/executor.rs`). Four consequences matter to
+host integrators:
+
+1. **The executor parks the current thread.** Inside a multithreaded host runtime
+   (e.g. tokio) a parked worker thread is a starved worker — route async command
+   dispatch through `spawn_blocking` (or an equivalent dedicated pool), or wait for a
+   fully async dispatch path. On the FFI async path the handler runs on rustra's fixed
+   worker pool (below), so one slow async command parks one of the two workers.
+2. **`State<T>` is thread-local and invisible to spawned tasks.** State injection
+   travels through a thread-local context, valid only on the thread the dispatch
+   started on; a task the handler moves to another worker observes `None`. Capture
+   what you need (clone the `Arc`) before spawning.
+3. **FFI async calls run on a fixed pool — 2 workers, queue depth 256.** The pool is
+   fail-fast: a full queue rejects immediately with `invoke.backpressure` instead of
+   hanging (`crates/rustra/src/ffi_pool.rs`). Treat it as backpressure and retry after
+   drain. The constants are fixed, not configurable.
+4. **No I/O reactor or timer driver is provided.** Any future that completes
+   independent of a runtime context works — wakeups from any thread unpark the
+   blocked one. Futures that require a reactor or timer (tokio resources,
+   `tokio::time`) need the host's runtime entered around the dispatch; rustra creates
+   none.
+
+Executor injection (plugging in your own `block_on`) is not supported. If you feel the
+need, measure first — it is deliberately out of scope.
+
 ---
 
 ## 3. The `#[bridge_type]` Attribute
@@ -494,6 +534,46 @@ The TypeScript-side `RustraCommandError` exposes the same value as the `.retryab
 field (on JSON paths without the flag on the wire, it is inferred from the
 `transport.*` codes). The JS-side `invoke` `options.timeoutMs` rejects with this
 `transport.timeout` (retryable) on expiry — the JS-side escape hatch from a hung native.
+
+### Timeout, Cancellation, and Retry Semantics (what a flag does and does not mean)
+
+`retryable: true` means the transport observed a _retryable class of failure_. It does
+**not** mean the command is safe to re-run.
+
+**Not receiving a response ≠ the command not running.** Shallow cancellation
+(`options.signal` on adapters without `invokeCancel`) and `options.timeoutMs` both
+abandon the JS promise while the Rust side keeps going. After either fires, the
+command may still be running — or already completed, its result discarded. Re-running
+a non-idempotent command on a retryable flag can double-charge, double-send, or
+double-insert. Before retrying on general transport failures, check the effect:
+
+```ts
+import { withRetry } from '@rustra/types';
+
+// Safe: the command is a read — retrying cannot duplicate an effect.
+const user = await withRetry((attempt) => invoke('getUser', { id }), {
+  retries: 2,
+  baseDelayMs: 100,
+});
+
+// Unsafe without a guard: a non-idempotent command must not retry blindly.
+// Narrow the retry decision with retryIf — it fully replaces the default
+// isRetryableCode judgment (transport.error / transport.timeout / cancelled):
+await withRetry((attempt) => invoke('chargeCard', { id, amountCents: 500 }), {
+  retryIf: (err) => err.code === 'transport.error', // connection-level only
+});
+// For a write whose success is unobservable, don't guess — reconcile:
+//   retry only after a status re-query proves the write did not land.
+```
+
+Batch rejection is not a rollback. `invokeBatch` rejects the overall promise when an
+entry fails, but dispatched entries have run and their effects stand — there is no
+all-or-nothing transaction. The per-entry fallback starts every entry concurrently,
+and the RN single-crossing batch stops at the first failing entry; the Tauri wire
+batch runs all entries and rejects afterwards. Use per-entry success checks to
+observe partial outcomes — `invokeBatch` has no settled form; if you need one, issue
+the entries as individual `invoke` calls and settle them yourself
+(`Promise.allSettled`).
 
 ### Error Methods
 
