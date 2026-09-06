@@ -29,6 +29,14 @@
 - **타임아웃**(`options.timeoutMs`): 모든 엔진 공통 — 글로벌 `invoke`가 settle 레이스를
   건다. 만료 시 `transport.timeout`(retryable)으로 거부하며 지각 응답은 무시된다.
   배치(`invokeBatch`)는 항목별 `timeoutMs`의 **최솟값**으로 배치 전체에 레이스를 건다.
+- **얕은 취소/타임아웃 ≠ 명령이 실행되지 않음**: 위 얕은 취소·타임아웃 ⚠️ 셀들은
+  *JS 쪽 관측*을 표시할 뿐, Rust 실행을 표시하지 않는다. 얕은 취소 어댑터
+  (`invokeCancel` 전파가 없는 `signal`)나 타임아웃 발화 뒤에도 Rust 명령은 계속
+  실행되거나 이미 완료했다 — 버려지는 것은 결과이지 실행이 아니다. 따라서 `retryable: true`
+  (`transport.timeout`, `cancelled`, `transport.error`)는 "재시도하면 해소될 수 있는
+  실패 부류"일 뿐, "명령을 재실행해도 안전하다"를 뜻하지 않는다. 비멱등 명령은 상태
+  재조회로 이전 시도가 자리 잡지 않았음이 확인된 뒤에만 재시도하라 —
+  [rust-api-guide.ko.md](rust-api-guide.ko.md)의 "타임아웃·취소·재시도 의미" 절 참고.
 - **이벤트 구독 호출형**: 생성된 이벤트 계약은 `(name, callback)`을 사용한다. RN은
   이 canonical 형식과 기존 `(native, name, callback)`을 모두 받고, Tauri는 선택적
   `listen` 주입 또는 global Tauri 이벤트 API를 사용한다.

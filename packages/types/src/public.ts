@@ -38,15 +38,24 @@ export type EngineClientWithBatch = EngineClient & {
  * `invokeAsync`/`invokeCancel` 을 노출하면 취소를 전파(전파는 JS 코덱
  * 경로만; typed/tier3 경로는 얕은 취소)하고, 그렇지 않으면 JS 프라미스만
  * 거부하는 얕은 취소로 폴백한다 — Rust 핸들러는 끝까지 실행된다.
+ *
+ * **얕은 취소 경고**: 취소/타임아웃의 관측 수준은 transport 에 따라 얕을 수
+ * 있다. reject 되어도 Rust 명령은 계속 실행됐거나 이미 완료했을 수 있으므로
+ * `retryable: true` ≠ "재실행 안전" — 비멱등 명령을 무조건 재시도하지 말고
+ * 필요하면 상태를 재조회한다. 자세한 의미는 (저장소)
+ * `docs/rust-api-guide.md` 의 "Timeout, Cancellation, and Retry Semantics"
+ * 절(한국어: "타임아웃·취소·재시도 의미") 참고.
  */
 export type InvokeOptions = {
   /** (T1) AbortSignal — abort 시 Promise 를 즉시 reject 하고, 네이티브가
-   *  invokeAsync/invokeCancel 을 노출하면 취소를 전파한다. */
+   *  invokeAsync/invokeCancel 을 노출하면 취소를 전파한다. 전파가 불가한
+   *  경로는 얕은 취소(JS 프라미스만 거부, Rust 실행은 계속)에 해당한다. */
   signal?: AbortSignal;
   /**
    * (프로덕션 준비) 호출별 타임아웃(ms). 만료 시 `transport.timeout`
    * (retryable)으로 reject 한다. 네이티브가 응답하지 않는 hang(워커 패닉,
    * FFI 데드락 등)의 유일한 JS 측 탈출구다. 지각 응답은 무시된다.
+   * 만료는 Rust 실행을 중단시키지 않는다 — 위 얕은 취소 경고 참고.
    */
   timeoutMs?: number;
 };
