@@ -3,7 +3,42 @@ import type { LiveSchemaEntry } from './live-schema.js';
 
 // ── Core types ──────────────────────────────────────────────
 
+/**
+ * 어댑터가 실측으로 제공하는 기술적 지원 표면(A02) — 호환성 매트릭스
+ * (docs/compatibility-matrix.md)의 각 셀을 기계 판독 가능하게 옮긴 것.
+ * 새 주장이 아니라 기존 문서 계약의 타입화다. 앱은 부작용 이전에
+ * `engine.supports?.cancellation === 'cooperative'` 로 분기할 수 있다.
+ *
+ * - `cancellation`: in-flight `options.signal` 의 실제 관측 수준.
+ *   `'shallow'` = JS 프라미스만 거부(Rust 실행은 계속), `'pre-abort'` =
+ *   사전 abort 만 보장, `'cooperative'` = Rust 체크포인트까지 전파(조건부).
+ *   사전 abort 는 모든 어댑터가 보장하므로 레벨 값에 포함하지 않는다.
+ * - `batch`: `invokeBatch` 의 실행 형태. `'single-crossing'` = 정적 명령을
+ *   단일 네이티브 횡단으로 일괄(signal 항목은 항목별로 자동 라우팅),
+ *   `'per-entry'` = 항목별 invoke, `'none'` = 배치 표면 없음.
+ * - `events`: 이벤트 전달 경로. `'push'` 는 폴링 폴백을 포함한다(매트릭스 셀의
+ *   "푸시 + 폴백 폴링" 표기) — 실제 경로 판별은 어댑터별 구독 표면을 쓴다.
+ * - `timeoutPreemption`: `options.timeoutMs` 레이스가 존재하는지. `false` 면
+ *   동기 네이티브 호출을 중단할 수 없다(RN JSON 어댑터).
+ *
+ * 기술적 지원만 담는다 — 권한(capability)은 별도 표면이다. 초기값은
+ * 어댑터의 엔진 생성 함수가 자신의 매트릭스 셀에서 채운다.
+ */
+export type EngineSupports = {
+  cancellation: 'pre-abort' | 'shallow' | 'cooperative';
+  batch: 'single-crossing' | 'per-entry' | 'none';
+  events: 'push' | 'polling' | 'none';
+  channels: boolean;
+  /** RN JSON = false — 동기 native 호출은 실행 중 선점할 수 없다. */
+  timeoutPreemption: boolean;
+};
+
 export type EngineClient = {
+  /**
+   * 이 엔진의 기술적 지원 표면(A02) — 값은 호환성 매트릭스의 셀과 1:1.
+   * 옵셔널: 타사 엔진 구현체에 요구하지 않는다(구조적 호환 유지).
+   */
+  supports?: EngineSupports;
   invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T>;
   /**
    * 코드젠이 이미 알고 있는 숫자 command id를 전달하는 빠른 경로.

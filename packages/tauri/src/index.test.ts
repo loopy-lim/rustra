@@ -619,3 +619,89 @@ test('createTauriEngine batch normalizes undefined args to empty objects', async
   const out = await engine.invokeBatch([{ command: 'a' }, { command: 'b', args: undefined }]);
   assert.deepEqual(out, [null, null]);
 });
+
+// ── A02: EngineSupports 표면 — 매트릭스 셀의 기계 판독 가능한 이행 ─────────
+// 매핑: signal(진행 중 취소) ⚠️ 얕은 취소 → 'shallow' / invokeBatch ✅ per-entry
+// Promise fallback → 'per-entry'(와이어 배치는 단일 IPC 횡단이지만 셀 표기는
+// per-entry 폴백 계열이므로 매트릭스 셀을 따른다) / 이벤트 ✅ Rust app.emit 푸시
+// → 'push' / 채널 ❌ Tauri 채널 어댑터 없음 → false / timeoutMs ✅ 레이스 → true.
+
+test('A02: createTauriEngine exposes supports matching the compatibility matrix', async () => {
+  const engine = createTauriEngine({
+    invoke: () => ({}),
+  });
+  assert.deepEqual(engine.supports, {
+    cancellation: 'shallow',
+    batch: 'per-entry',
+    events: 'push',
+    channels: false,
+    timeoutPreemption: true,
+  });
+});
+
+// ── A05: bootstrap 수명 상태 모델 (Tauri는 reload 표면이 없다 — 상태 3종만) ──
+// 각 테스트는 글로벌 슬롯을 configure 로 리셋한 뒤 등록한다(R08 가드 — 소비 전
+// 경쟁 등록 loud-fail 은 여기서 재검증 대상이 아니다).
+
+const A05_SLOT_ENGINE = {
+  invoke: async <T>() => 'slot' as T,
+} as unknown as import('@rustra/types').EngineClientWithBatch;
+
+test('A05: createTauriBootstrap exposes the lifecycle state surface', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createTauriBootstrap({ invoke: () => ({}) });
+    assert.equal(bootstrap.state, 'initializing');
+    await bootstrap.ready();
+    assert.equal(bootstrap.state, 'ready');
+    bootstrap.dispose();
+    assert.equal(bootstrap.state, 'disposed');
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: ready after dispose rejects loudly (tauri)', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createTauriBootstrap({ invoke: () => ({}) });
+    bootstrap.dispose();
+    await assert.rejects(bootstrap.ready(), (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.match((err as RustraCommandError).message, /disposed/);
+      return true;
+    });
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: dispose is idempotent — second dispose is a no-op (tauri)', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createTauriBootstrap({ invoke: () => ({}) });
+    bootstrap.dispose();
+    bootstrap.dispose(); // no-op — must not throw
+    assert.equal(bootstrap.state, 'disposed');
+  } finally {
+    // pending lazy 등록을 소비 없이 버리므로 슬롯을 리셋한다 — 뒤 테스트(다른
+    // 파일 포함)가 R08 가드를 대변 경고로 받지 않게.
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: concurrent ready calls share one initialization promise (tauri)', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createTauriBootstrap({ invoke: () => ({}) });
+    const [a, b] = await Promise.all([bootstrap.ready(), bootstrap.ready()]);
+    assert.equal(a, b);
+    bootstrap.dispose();
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});

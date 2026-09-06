@@ -92,6 +92,9 @@ export function createAsyncEngine(
     },
   };
   const engine: ReactNativeEngine = {
+    // A02 — async 엔진은 sync rkyv V2 엔진과 동일한 매트릭스 셀을 공유한다
+    // (취소는 invokeCancel 노출 시 전파 — 존재는 위 transport 경로가 판별).
+    supports: syncEngine.supports,
     invoke<T>(command: string, args?: unknown, invokeOptions?: InvokeOptions): Promise<T> {
       return invokeWithTimeoutHandledSignal<T>(transport, command, args, invokeOptions);
     },

@@ -4,6 +4,7 @@ import {
   ensureConfigured,
   RustraErrorCode,
   RustraCommandError,
+  type EngineSupports,
   type RkyvV2Engine,
 } from '@rustra/types';
 import type { Pointer } from 'bun:ffi';
@@ -12,6 +13,36 @@ import {
   type BunFfiEngineOptions,
   type BunFfiRuntime,
 } from './bun-ffi-library.js';
+import { disposedBootstrapError } from './bootstrap-lifecycle.js';
+
+/**
+ * Bun JSON 엔진의 기술적 지표(A02) — compatibility-matrix.md 의 Bun 열 셀을
+ * 그대로 옮긴 것: in-flight 취소는 얕은 취소, 배치는 per-entry 폴백, 이벤트는
+ * FFI 푸시 싱크(폴링 폴백), 채널 소스 없음, timeoutMs 레이스 있음.
+ */
+export const BUN_ENGINE_SUPPORTS: EngineSupports = {
+  cancellation: 'shallow',
+  batch: 'per-entry',
+  events: 'push',
+  channels: false,
+  timeoutPreemption: true,
+};
+
+/**
+ * Bun FFI rkyv V2 엔진의 기술적 지표(A02) — compatibility-matrix.md 의 RN
+ * `createRkyvV2Engine` 열(동일 createRkyvV2Engine 코어)을 Bun FFI 네이티브에
+ * 적용한 것. 취소는 조건부 전파(invokeAsync/invokeCancel 확인 시 Rust
+ * 체크포인트까지), 배치는 정적 명령 단일 횡단(signal 항목은 항목별 라우팅),
+ * 이벤트는 FFI 푸시 싱크(폴링 폴백). 채널은 Bun FFI 네이티브에 소스가 없으므로
+ * RN JSI 열과 달리 false 다.
+ */
+export const BUN_RKYV_V2_ENGINE_SUPPORTS: EngineSupports = {
+  cancellation: 'cooperative',
+  batch: 'single-crossing',
+  events: 'push',
+  channels: false,
+  timeoutPreemption: true,
+};
 
 export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<BunFfiRuntime> {
   const { dlopen, FFIType, toArrayBuffer } = await import('bun:ffi');
@@ -147,8 +178,13 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
   void _library;
   void _candidates;
   void _libraryName;
+  const engine = createRkyvV2Engine(native, rkyvV2Codecs, engineOptions);
+  // A02 — Bun FFI rkyv V2 엔진의 지표. 취소는 rkyv conditional 전파
+  // (invokeAsync/invokeCancel 노출 시 Rust 체크포인트까지), 배치는 정적 명령
+  // 단일 횡단, 이벤트는 FFI 푸시 싱크(폴링 폴백).
+  engine.supports = { ...BUN_RKYV_V2_ENGINE_SUPPORTS };
   return {
-    engine: createRkyvV2Engine(native, rkyvV2Codecs, engineOptions),
+    engine,
     library,
     usesCallerBufferInto: true,
     close: () => handle.close(),
@@ -156,6 +192,11 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
 }
 
 export type BunBootstrap = {
+  /**
+   * bootstrap 수명 상태(A05) — 'initializing' | 'ready' | 'disposed'.
+   * dispose 는 멱등이고 dispose 후 ready 는 loud-fail 한다.
+   */
+  readonly state: 'initializing' | 'ready' | 'disposed';
   ready(): Promise<RkyvV2Engine>;
   dispose(): void;
   /**
@@ -174,23 +215,38 @@ export type BunBootstrap = {
 
 export function createBunBootstrap(options: BunFfiEngineOptions): BunBootstrap {
   let runtime: BunFfiRuntime | undefined;
+  let state: 'initializing' | 'ready' | 'disposed' = 'initializing';
   const bootstrap = async (): Promise<RkyvV2Engine> => {
     runtime = await createBunFfiEngine(options);
     return runtime.engine;
   };
   configureLazy(bootstrap);
   const dispose = () => {
+    if (state === 'disposed') return; // dispose-once 멱등 — 두 번째는 no-op
+    state = 'disposed';
     runtime?.close();
     runtime = undefined;
   };
   return {
-    ready: () => ensureConfigured() as Promise<RkyvV2Engine>,
+    get state() {
+      return state;
+    },
+    ready: () => {
+      if (state === 'disposed') return Promise.reject(disposedBootstrapError('Bun'));
+      return (ensureConfigured() as Promise<RkyvV2Engine>).then((engine) => {
+        if (state === 'disposed') throw disposedBootstrapError('Bun');
+        state = 'ready';
+        return engine;
+      });
+    },
     dispose,
     async reload() {
       // 엔진 상태 재초기화 — a0 스파이크가 증명한 프로세스 내 리셋 경로.
+      if (state === 'disposed') return Promise.reject(disposedBootstrapError('Bun'));
       dispose();
       configureLazy(bootstrap);
       await (ensureConfigured() as Promise<RkyvV2Engine>);
+      state = 'ready';
       // 경고는 재초기화가 실제 성공한 뒤에 — 실패 시 false success 신호 방지.
       console.warn(
         '[bun] engine re-initialized. bun:ffi caches the library image: a rebuilt ' +

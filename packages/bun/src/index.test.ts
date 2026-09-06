@@ -363,3 +363,92 @@ test('createBunFfiEngine decodes caller-buffer responses without a copy', async 
     runtime.close();
   }
 });
+
+// ── A02: EngineSupports 표면 — 매트릭스 셀의 기계 판독 가능한 이행 ─────────
+// 매핑: signal(진행 중 취소) ⚠️ 얕은 취소 → 'shallow' / invokeBatch ✅ per-entry
+// Promise fallback → 'per-entry' / 이벤트 ✅ FFI 푸시 싱크(폴링 폴백) → 'push'
+// / 채널 ❌ → false / timeoutMs ✅ 레이스 → true.
+
+test('A02: createBunEngine exposes supports matching the compatibility matrix', async () => {
+  const engine = createBunEngine({
+    invoke: () => ({ value: 1 }),
+  });
+  assert.deepEqual(engine.supports, {
+    cancellation: 'shallow',
+    batch: 'per-entry',
+    events: 'push',
+    channels: false,
+    timeoutPreemption: true,
+  });
+});
+
+// ── A05: bootstrap 수명 상태 모델 — 'initializing' | 'ready' | 'disposed' ──
+// dispose 는 멱등(두 번째는 no-op)하되 dispose 후 ready 는 loud-fail 한다.
+// 각 테스트는 글로벌 슬롯을 configure 로 리셋한 뒤 등록한다(R08 가드 — 소비 전
+// 경쟁 등록 loud-fail 은 여기서 재검증 대상이 아니다).
+
+const A05_SLOT_ENGINE = {
+  invoke: async <T>() => 'slot' as T,
+} as unknown as import('@rustra/types').EngineClientWithBatch;
+
+test('A05: createBunBootstrap exposes the lifecycle state surface', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createBunBootstrap({ libraryCandidates: [], rkyvV2Codecs: testRegistry });
+    assert.equal(bootstrap.state, 'initializing');
+    await assert.rejects(bootstrap.ready(), /RUSTRA_BUN_LIBRARY|No compatible/);
+    assert.equal(bootstrap.state, 'initializing');
+    bootstrap.dispose();
+    assert.equal(bootstrap.state, 'disposed');
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: ready after dispose rejects loudly (bun)', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createBunBootstrap({ libraryCandidates: [], rkyvV2Codecs: testRegistry });
+    bootstrap.dispose();
+    await assert.rejects(bootstrap.ready(), (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.match((err as RustraCommandError).message, /disposed/);
+      return true;
+    });
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: dispose is idempotent — second dispose is a no-op (bun)', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createBunBootstrap({ libraryCandidates: [], rkyvV2Codecs: testRegistry });
+    bootstrap.dispose();
+    bootstrap.dispose(); // no-op — must not throw
+    assert.equal(bootstrap.state, 'disposed');
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: concurrent ready calls share one initialization promise (bun)', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  const bootstrap = createBunBootstrap({ libraryCandidates: [], rkyvV2Codecs: testRegistry });
+  // dlopen 실패라도 두 ready 는 같은 초기화 프라미스를 공유한다 — 실패가 1회
+  // 기록되고 두 프라미스가 같은 rejection 으로 정착하면 계약 충족.
+  const [a, b] = await Promise.allSettled([bootstrap.ready(), bootstrap.ready()]);
+  assert.equal(a.status, 'rejected');
+  assert.equal(b.status, 'rejected');
+  assert.equal(
+    (a as PromiseRejectedResult).reason,
+    (b as PromiseRejectedResult).reason,
+    'both ready calls must observe the same failure',
+  );
+  bootstrap.dispose();
+  configure(A05_SLOT_ENGINE);
+});
