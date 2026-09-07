@@ -28,12 +28,12 @@
 기준점 `88701491`(플랫폼 작업 직전) vs `89f1ce97`(패리티 완료) — 동일 머신,
 교차(interleaved) 반복, trimmed-mean 수령증 중앙값:
 
-| 케이스 | base µs | cur µs | delta | n |
-|---|---|---|---|---|
-| node-persistent-loop (Read 인터셉터 경과) | 15.13 | 15.00 | -0.8% | 5 |
-| node-napi-rkyv-v2 | 2.93 | 2.91 | -0.5% | 7 |
-| bun-generated-ffi-rkyv-v2 | 6.04 | 6.05 | +0.2% | 5 |
-| node-generated-one-shot (spawn 지배) | 2692.97 | 2720.66 | +1.0% | 5 |
+| 케이스                                    | base µs | cur µs  | delta | n   |
+| ----------------------------------------- | ------- | ------- | ----- | --- |
+| node-persistent-loop (Read 인터셉터 경과) | 15.13   | 15.00   | -0.8% | 5   |
+| node-napi-rkyv-v2                         | 2.93    | 2.91    | -0.5% | 7   |
+| bun-generated-ffi-rkyv-v2                 | 6.04    | 6.05    | +0.2% | 5   |
+| node-generated-one-shot (spawn 지배)      | 2692.97 | 2720.66 | +1.0% | 5   |
 
 전 케이스 범위(min~max)가 겹친다 — **회귀 없음**. 정적 검토에서 발견한
 이벤트 핫패스의 per-event `Array.from` 할당은 `Set.forEach`로 교체(무할당).
