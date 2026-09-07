@@ -8,7 +8,7 @@ import {
   type DoctorReport,
   type DoctorRunner,
 } from './doctor-types.js';
-import { readConfig, resolveManifest } from './doctor-support.js';
+import { probeRegistryReachability, readConfig, resolveManifest } from './doctor-support.js';
 import { doctorHostSections, resolveSectionManifest } from './doctor-matrix.js';
 import { collectDoctorReport } from './doctor-report.js';
 
@@ -70,16 +70,19 @@ export async function collectDoctorReportAsync(
     }
   }
   const results = new Map<string, DoctorCommandResult>();
-  await Promise.all(
-    [...probes.entries()].map(async ([probe, [command, args]]) =>
+  // registry 도달성은 명령 프리브가 아니라 fetch 다 — runner 시임 밖에서 같은
+  // Promise.all 로 병렬 당겨 온다(3초 타임아웃, doctor 가 느려지지 않게).
+  const [registry] = await Promise.all([
+    probeRegistryReachability(options.fetchImpl),
+    ...[...probes.entries()].map(async ([probe, [command, args]]) =>
       results.set(probe, await runner(command, args)),
     ),
-  );
+  ]);
   const cachedRunner: DoctorRunner = (command, args) =>
     results.get(key(command, args)) ?? {
       ok: false,
       stdout: '',
       stderr: `probe was not prefetched: ${command} ${args.join(' ')}`,
     };
-  return collectDoctorReport(options, cachedRunner);
+  return collectDoctorReport(options, cachedRunner, registry);
 }

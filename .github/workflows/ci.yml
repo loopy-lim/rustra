@@ -199,15 +199,18 @@ jobs:
       - name: Lint
         run: bun run lint
       - name: React Doctor (100/100, warnings block)
-        run: bunx --bun react-doctor@0.9.12 . --yes --scope full --verbose --blocking warning
+        shell: bash
+        run: set -o pipefail && bunx --bun react-doctor@0.9.12 . --yes --scope full --verbose --blocking warning 2>&1 | tee "$RUNNER_TEMP/rustra-react-doctor.log"
       - name: Format check
         run: bun run format:check
       - name: Production dependency audit
         run: bun run audit:prod
       - name: Type check calculator
-        run: bunx tsc --noEmit -p examples/calculator/tsconfig.json
+        shell: bash
+        run: set -o pipefail && bunx tsc --noEmit -p examples/calculator/tsconfig.json 2>&1 | tee "$RUNNER_TEMP/rustra-tsc-calculator.log"
       - name: Type check crud
-        run: bunx tsc --noEmit -p examples/crud/tsconfig.json
+        shell: bash
+        run: set -o pipefail && bunx tsc --noEmit -p examples/crud/tsconfig.json 2>&1 | tee "$RUNNER_TEMP/rustra-tsc-crud.log"
       - name: Test TypeScript (Bun 1.4)
         run: bun run test:ts:bun
       - name: Install react-native example deps
@@ -269,6 +272,24 @@ jobs:
         # 게이트로 종결한다. 마커 영역을 참조 파일과 byte-for-byte 대조한다.
         run: bun run test:docs
 
+      # 실패 로그 보존 — tsc/react-doctor 는 콘솔 전용이라 잡 로그 retention 이
+      # 지나면 사라진다(tee 로 파일로 남긴다). bun 설치 실패는 bun-debug.log 를
+      # 남기므로 함께 보존한다.
+      - name: Upload failure logs (TypeScript)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failure-logs-typescript
+          path: |
+            ${{ runner.temp }}/rustra-tsc-calculator.log
+            ${{ runner.temp }}/rustra-tsc-crud.log
+            ${{ runner.temp }}/rustra-react-doctor.log
+            bun-debug.log
+            examples/**/bun-debug.log
+            packages/**/bun-debug.log
+          if-no-files-found: ignore
+          retention-days: 14
+
   # RN 예제 네이티브 Release 빌드 — 감사에서 Android Release 실패가 P0 로
   # 지적됐다. Gradle 훅이 Rust 부터 빌드하므로 cargo-ndk + NDK 만 세팅하면
   # 클린 러너에서 assembleRelease 가 재현된다 (Phase 1 수정 검증).
@@ -317,14 +338,32 @@ jobs:
       # autolink 된다. 클린 네이티브 프로젝트에 수동 Gradle 패치는 없다.
       - name: Expo prebuild (generate native android project)
         working-directory: examples/react-native-calculator
-        run: bunx expo prebuild --platform android --no-install
+        # prebuild 실패도 디버깅 가능해야 하므로 로그를 파일로 남긴다. pipefail
+        # 필수 — tee 가 마지막 명령이라 pipefail 없이는 prebuild 실패가 흡수된다.
+        shell: bash
+        run: set -o pipefail && bunx expo prebuild --platform android --no-install 2>&1 | tee "$RUNNER_TEMP/rustra-expo-prebuild-android.log"
       - name: Build Release APK
         env:
           NODE_ENV: production
-        run: cd examples/react-native-calculator/android && ./gradlew assembleRelease -x lint
+        shell: bash
+        run: set -o pipefail && cd examples/react-native-calculator/android && ./gradlew assembleRelease -x lint --stacktrace 2>&1 | tee "$RUNNER_TEMP/rustra-gradle.log"
       - name: Verify APK contains the uniquely named Rustra native lib
         run: |
           unzip -l examples/react-native-calculator/android/app/build/outputs/apk/release/app-release.apk | grep -E "lib/(arm64-v8a|x86_64)/librustra_bridge\.so"
+
+      # 실패 로그 보존 — gradle/prebuild 로그는 잡 로그 retention 이 지나면 사라진다.
+      # autolinking 실패는 주로 prebuild/codegen 단계에서, 네이티브 링크 실패는
+      # gradle 단계에서 진단된다. 성공 시 업로드하지 않는다(if: failure()).
+      - name: Upload failure logs (Android)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failure-logs-rn-android
+          path: |
+            ${{ runner.temp }}/rustra-gradle.log
+            ${{ runner.temp }}/rustra-expo-prebuild-android.log
+          if-no-files-found: ignore
+          retention-days: 14
 
   # RN iOS Release 프레임워크 빌드 — podspec prepare_command 이 Rust 를
   # 빌드한다. iOS 시뮬레이터 런타임 실행은 로컬 verify 게이트가 담당.
@@ -359,16 +398,37 @@ jobs:
       # podspec은 CocoaPods autolinking만 사용하며 Podfile 수동 패치는 필요 없다.
       - name: Expo prebuild (generate native ios project)
         working-directory: examples/react-native-calculator
-        run: bunx expo prebuild --platform ios --no-install
+        # Android 와 동일 — prebuild 실패 로그를 보존한다(실패 시 pod/xcodebuild
+        # 로그는 아예 생성되지 않는다).
+        shell: bash
+        run: set -o pipefail && bunx expo prebuild --platform ios --no-install 2>&1 | tee "$RUNNER_TEMP/rustra-expo-prebuild-ios.log"
       - name: Build iOS Release (simulator, no codesign)
+        shell: bash
         run: |
+          set -o pipefail
           cd examples/react-native-calculator/ios
-          pod install --project-directory=.
+          # pod install 은 치명적으로 유지한다(원래 실패 의미 보존) — tee 로 로그만
+          # 남긴다. podspec prepare_command 의 Rust 빌드 출력도 여기에 담긴다.
+          pod install --project-directory=. 2>&1 | tee "$RUNNER_TEMP/rustra-pod.log"
           if ! xcodebuild -workspace reactnativecalculator.xcworkspace -scheme reactnativecalculator -configuration Release -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/rustra-xcodebuild.log" 2>&1; then
             tail -n 200 "$RUNNER_TEMP/rustra-xcodebuild.log"
             exit 1
           fi
           tail -n 20 "$RUNNER_TEMP/rustra-xcodebuild.log"
+      # 실패 로그 보존 — xcodebuild 로그는 기본 보존(90일) 후 사라지므로 artifact로
+      # 남긴다. pod install 실패는 xcodebuild 로그가 아예 생성되지 않는 고장이므로
+      # pod 로그도 함께 보존한다. 성공 시 일반 로그만으로 충분하다(if: failure()).
+      - name: Upload failure logs (iOS)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failure-logs-rn-ios
+          path: |
+            ${{ runner.temp }}/rustra-xcodebuild.log
+            ${{ runner.temp }}/rustra-pod.log
+            ${{ runner.temp }}/rustra-expo-prebuild-ios.log
+          if-no-files-found: ignore
+          retention-days: 14
 
   # 소비자 설치 smoke — 실제 npm tarball을 빈 디렉터리에 설치해 배포물이
   # 스스로 동작하는지 검증 (감사: '소비자 설치 후 smoke test' 없음).
@@ -453,3 +513,72 @@ jobs:
           test -f generated/schema.json
           test -f src/generated/rkyv-codecs.ts
           cargo run | grep "hello from rustra"
+
+  # 필수 잡 집계 gate — branch protection 이 이 단일 체크만 요구하면 된다.
+  # needs.*.result 의 공식 값은 success/failure/cancelled/skipped 4종이며(Actions
+  # contexts 레퍼런스), contains(needs.*.result, ...) 배열 필터도 표현식으로
+  # 가능하다. 그럼에도 env-var fan-out 을 쓰는 이유: (1) 판정 로직을 유닛테스트된
+  # 셸 스크립트(scripts/ci-gate.test.ts)로 추출해야 한다 — if: 표현식은 로컬
+  # 단위 테스트가 불가능하다. (2) rust 는 매트릭스 job 이라 per-leg outputs 노출
+  # 자체가 불가능하다. 잡은 10개 result 를 그대로 전달만 한다.
+  #
+  # if: always() 필수 — 선행 잡이 실패하면 기본 조건에서는 gate 자체가 skip 되어
+  # "gate green = 전체 green" 계약이 깨진다. always() 로 항상 실행해 판정한다.
+  #
+  # skipped 를 실패로 치는 이유: consumer-smoke 는 typescript 실패 시 skip 되는
+  # 체인이므로, skip 통과는 체인 실패의 조용한 green 이 된다.
+  #
+  # schedule 실행은 gate 도 skip 한다(rust-audit 잡의 스케줄 전제와 한 쌍). 잡
+  # 대부분이 skip 되는 스케줄 실행에서 gate 가 red 가 되면 주간 red 노이즈와
+  # "전부 skip 인데 conclusion=success" 문서 전제가 함께 깨진다. 발행은
+  # release.yml 의 event != 'schedule' 가드로 별도 차단된다.
+  gate:
+    needs:
+      [
+        rust,
+        rust-msrv,
+        rust-wasm32,
+        rust-audit,
+        rust-deny,
+        napi,
+        typescript,
+        rn-android,
+        rn-ios,
+        consumer-smoke,
+      ]
+    if: always() && github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    # bash 한 번 실행이 전부 — 토큰 권한 불필요, hung runner 가 branch-protection
+    # 체크를 기본 360분 동안 pending 시키지 않게 짧은 타임아웃을 건다.
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Aggregate mandatory results
+        env:
+          GATE_RUST: ${{ needs.rust.result }}
+          GATE_RUST_MSRV: ${{ needs.rust-msrv.result }}
+          GATE_RUST_WASM32: ${{ needs.rust-wasm32.result }}
+          GATE_RUST_AUDIT: ${{ needs.rust-audit.result }}
+          GATE_RUST_DENY: ${{ needs.rust-deny.result }}
+          GATE_NAPI: ${{ needs.napi.result }}
+          GATE_TYPESCRIPT: ${{ needs.typescript.result }}
+          GATE_RN_ANDROID: ${{ needs.rn-android.result }}
+          GATE_RN_IOS: ${{ needs.rn-ios.result }}
+          GATE_CONSUMER_SMOKE: ${{ needs.consumer-smoke.result }}
+        # 주의: run 에 | 리터럴 블록을 쓴다. 폴딩 스칼라(기본)는 줄바꿈을 공백으로
+        # 접어 `\<space>` 가 이스케이프 공백이 돼 인자가 " rust=..." 로 합쳐지고
+        # ci-gate.sh 가 unknown job 으로 죽는다(2026-09-06 실측, 라운드 4).
+        run: |
+          bash scripts/ci-gate.sh \
+            "rust=$GATE_RUST" \
+            "rust-msrv=$GATE_RUST_MSRV" \
+            "rust-wasm32=$GATE_RUST_WASM32" \
+            "rust-audit=$GATE_RUST_AUDIT" \
+            "rust-deny=$GATE_RUST_DENY" \
+            "napi=$GATE_NAPI" \
+            "typescript=$GATE_TYPESCRIPT" \
+            "rn-android=$GATE_RN_ANDROID" \
+            "rn-ios=$GATE_RN_IOS" \
+            "consumer-smoke=$GATE_CONSUMER_SMOKE"

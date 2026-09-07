@@ -42,6 +42,11 @@ export interface DoctorOptions {
   strict: boolean;
   platform?: NodeJS.Platform;
   env?: NodeJS.ProcessEnv;
+  /**
+   * registry.reachability 프리브용 fetch 주입 — 미지정이면 globalThis.fetch 를 쓴다.
+   * runner 가 HTTP 를 못 하는 것과 달리 이 프리브는 네트워크라 별도 시임이다.
+   */
+  fetchImpl?: DoctorFetcher;
 }
 export interface DoctorCommandResult {
   ok: boolean;
@@ -51,6 +56,12 @@ export interface DoctorCommandResult {
 }
 export type DoctorRunner = (command: string, args: string[]) => DoctorCommandResult;
 export type DoctorAsyncRunner = (command: string, args: string[]) => Promise<DoctorCommandResult>;
+/**
+ * registry.reachability 프리브용 최소 fetch 시임 — 구조적 최소 요구라 실제
+ * globalThis.fetch 가 그대로 대입되고, 테스트 주입도 응답 셰이프만 맞으면 된다.
+ * (typeof fetch 는 preconnect 등 런타임 메서드까지 요구해 주입형으로는 과하다.)
+ */
+export type DoctorFetcher = (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
 export interface DoctorCliOptions {
   configPath: string;
   format: 'text' | 'json';

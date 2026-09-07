@@ -367,9 +367,9 @@ test('CLI: 종결 없는 begin은 실제 프로세스 exit 1과 begin 진단을 
 });
 
 test('CLI: 마커 0개 문서는 exit 0으로 통과하되 명시적 상태 메시지를 낸다 (점진 채택)', () => {
-  // zero-region 분기 고정 — fail 전환(후속 판단 사항) 전이라도 "조용한 통과"가
-  // 아니라 게이트가 docs를 봤다는 증거를 stdout에 남겨야 한다. exit 0 과
-  // 안내 문구를 함께 고정해, 이후 fail 전환 시 이 테스트가 깨지는 핀이 된다.
+  // 결정 고정: 마커 0 허용은 점진 채택 정책 — fail 전환하지 않는다. exit 0과
+  // 안내 문구를 함께 고정해, fail 전환 변이가 들어오면 이 테스트가 깨진다.
+  // "조용한 통과"가 아니라 게이트가 docs를 봤다는 증거를 stdout에 남긴다.
   const root = makeTmp();
   mkdirSync(join(root, 'docs'));
   writeFileSync(join(root, 'docs/plain.md'), '# 그냥 문서\n');
@@ -377,6 +377,15 @@ test('CLI: 마커 0개 문서는 exit 0으로 통과하되 명시적 상태 메�
   assert.equal(r.status, 0, `stderr: ${r.stderr}`);
   assert.match(r.stdout, /no docs:sync markers found/);
   assert.match(r.stdout, /마커 0이 의도인지 확인하세요/);
+});
+
+test('stripGeneratedHeader — 본문 첫 줄이 우연히 // ──로 시작해도 규약대로 strip한다 (트레이드오프 수용)', () => {
+  // 결정 고정: 과잉 strip 가능성은 수용된 트레이드오프다. strip 동작을 바꿔
+  // "우연한 헤더"를 구하려는 변이는 이 테스트가 잡는다. 회피 관례는 코드가
+  // 아니라 docs:sync 대상 파일 선택으로 한다 — 첫 줄이 `// ──`인 파일은
+  // 대상으로 쓰지 않는다.
+  const accidental = ['// ── looks like a header but is the body', 'export const x = 1;'];
+  assert.deepEqual(stripGeneratedHeader(`${accidental.join('\n')}\n`), ['export const x = 1;']);
 });
 
 // ── 무테스트 failure 분기 2건 (nested-begin / fence→end 간격) ────────────────

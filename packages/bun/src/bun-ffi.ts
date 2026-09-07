@@ -1,9 +1,12 @@
 import {
   configureLazy,
   createRkyvV2Engine,
+  disposedBootstrapError,
   ensureConfigured,
   RustraErrorCode,
   RustraCommandError,
+  type BootstrapState,
+  type EngineSupports,
   type RkyvV2Engine,
 } from '@rustra/types';
 import type { Pointer } from 'bun:ffi';
@@ -12,6 +15,36 @@ import {
   type BunFfiEngineOptions,
   type BunFfiRuntime,
 } from './bun-ffi-library.js';
+
+/**
+ * Bun JSON 엔진의 기술적 지표(A02) — compatibility-matrix.md 의 Bun 열 셀을
+ * 그대로 옮긴 것: in-flight 취소는 얕은 취소, 배치는 per-entry 폴백, 이벤트는
+ * FFI 푸시 싱크(폴링 폴백), 채널 소스 없음, timeoutMs 레이스 있음.
+ */
+export const BUN_ENGINE_SUPPORTS: EngineSupports = {
+  cancellation: 'shallow',
+  batch: 'per-entry',
+  events: 'push',
+  channels: false,
+  timeoutPreemption: true,
+};
+
+/**
+ * Bun FFI rkyv V2 엔진의 기술적 지표(A02) — 동일 createRkyvV2Engine 코어라도
+ * Bun FFI 네이티브 바인딩은 invokeRkyvV2/getSchema/getContractHash/
+ * getSchemaGeneration 뿐이다(invokeAsync/invokeCancel·invokeTypedBatch 심볼
+ * 미바인딩). 따라서 rkyv 코어의 조건부 취소 전파와 정적 명령 단일 횡단 조건이
+ * 도달 불가 — 관측값은 얕은 취소(`shallow`)와 항목별 폴백(`per-entry`)이다.
+ * 이벤트는 FFI 푸시 싱크(폴링 폴백). 채널은 Bun FFI 네이티브에 소스가 없으므로
+ * RN JSI 열과 달리 false 다.
+ */
+export const BUN_RKYV_V2_ENGINE_SUPPORTS: EngineSupports = {
+  cancellation: 'shallow',
+  batch: 'per-entry',
+  events: 'push',
+  channels: false,
+  timeoutPreemption: true,
+};
 
 export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<BunFfiRuntime> {
   const { dlopen, FFIType, toArrayBuffer } = await import('bun:ffi');
@@ -147,8 +180,13 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
   void _library;
   void _candidates;
   void _libraryName;
+  const engine = createRkyvV2Engine(native, rkyvV2Codecs, engineOptions);
+  // A02 — Bun FFI rkyv V2 엔진의 지표. FFI 바인딩에 invokeAsync/invokeCancel·
+  // invokeTypedBatch 심볼이 없어 코어의 전파/단일 횡단 조건은 도달 불가 —
+  // 관측값은 shallow 취소 + per-entry 배치(상수 주석 참고).
+  engine.supports = { ...BUN_RKYV_V2_ENGINE_SUPPORTS };
   return {
-    engine: createRkyvV2Engine(native, rkyvV2Codecs, engineOptions),
+    engine,
     library,
     usesCallerBufferInto: true,
     close: () => handle.close(),
@@ -156,6 +194,11 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
 }
 
 export type BunBootstrap = {
+  /**
+   * bootstrap 수명 상태(A05) — 공용 `BootstrapState`(@rustra/types).
+   * dispose 는 멱등이고 dispose 후 ready 는 loud-fail 한다.
+   */
+  readonly state: BootstrapState;
   ready(): Promise<RkyvV2Engine>;
   dispose(): void;
   /**
@@ -174,23 +217,63 @@ export type BunBootstrap = {
 
 export function createBunBootstrap(options: BunFfiEngineOptions): BunBootstrap {
   let runtime: BunFfiRuntime | undefined;
+  let state: BootstrapState = 'initializing';
+  // await 경계 재검사용 — 클로저 변수를 직접 비교하면 TS 제어 흐름 분석이
+  // dispose() 의 부수 효과를 추적하지 못해 비교를 데드 코드로 지워버린다.
+  const readState = (): BootstrapState => state;
   const bootstrap = async (): Promise<RkyvV2Engine> => {
     runtime = await createBunFfiEngine(options);
+    // (I-NEW) 재초기화 클로저의 dispose 경계 — dlopen await 중 dispose 되면 이
+    // 엔진(이미 닫힌 핸들이거나 곧 닫힐 핸들 위)은 전역 슬롯에 설치되면 안 된다.
+    // ensureConfigured 의 catch(initialization 비움)가 configure(engine) 기록을
+    // 막아 dispose 후 글로벌 invoke() 는 disposed loud-fail 로 귀결된다.
+    if (readState() === 'disposed') {
+      runtime.close();
+      runtime = undefined;
+      throw disposedBootstrapError('Bun');
+    }
     return runtime.engine;
   };
   configureLazy(bootstrap);
   const dispose = () => {
+    if (state === 'disposed') return; // dispose-once 멱등 — 두 번째는 no-op
+    state = 'disposed';
+    runtime?.close();
+    runtime = undefined;
+  };
+  // (I-1/I-2) reload 내부 리셋 — 사용자 dispose 와 다른 상태 의미: 재초기화가
+  // 곧 진행되므로 'initializing' 을 유지한다. 'disposed' 로 놓으면 reload 자신의
+  // 리셋을 사용자 dispose 로 오판(I-1)하고, 실패 시 벽돌 상태가 남는다(I-2).
+  const resetForReinit = () => {
+    state = 'initializing';
     runtime?.close();
     runtime = undefined;
   };
   return {
-    ready: () => ensureConfigured() as Promise<RkyvV2Engine>,
+    get state() {
+      return state;
+    },
+    ready: () => {
+      if (state === 'disposed') return Promise.reject(disposedBootstrapError('Bun'));
+      return (ensureConfigured() as Promise<RkyvV2Engine>).then((engine) => {
+        if (state === 'disposed') throw disposedBootstrapError('Bun');
+        state = 'ready';
+        return engine;
+      });
+    },
     dispose,
     async reload() {
       // 엔진 상태 재초기화 — a0 스파이크가 증명한 프로세스 내 리셋 경로.
-      dispose();
+      if (state === 'disposed') return Promise.reject(disposedBootstrapError('Bun'));
+      resetForReinit();
       configureLazy(bootstrap);
+      // (I-2) 재초기화 실패는 'initializing'(재시도 가능)을 유지 — disposed
+      // 벽돌 없음. 원본 에러는 그대로 전파된다(N-2: rethrow 만 하던 try/catch 는
+      // 제거 — 삼키면 false success 가 된다).
       await (ensureConfigured() as Promise<RkyvV2Engine>);
+      // (I-1) await 경계 재검사 — 재초기화 중 dispose 되면 'ready' 기록 금지.
+      if (readState() === 'disposed') throw disposedBootstrapError('Bun');
+      state = 'ready';
       // 경고는 재초기화가 실제 성공한 뒤에 — 실패 시 false success 신호 방지.
       console.warn(
         '[bun] engine re-initialized. bun:ffi caches the library image: a rebuilt ' +

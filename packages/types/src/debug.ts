@@ -7,6 +7,19 @@ export type RustraDebugEvent = {
   byteLength?: number;
   value?: unknown;
   error?: string;
+  /**
+   * 계약 밖 진단 어휘의 식별자 — `response.shape`(json-engine 응답 셰이프 경고),
+   * `ndjson.unparsed`(@rustra/node) 등 이벤트 종류를 식별한다. debugRustra 는
+   * 이벤트를 싱크에 그대로 spread 하므로 선택 필드 추가는 기존 이벤트에 영향을
+   * 주지 않는다(non-breaking, additive).
+   */
+  kind?: string;
+  /**
+   * `kind`가 붙은 진단 이벤트의 세부 규칙 식별자 — `response.shape` 이벤트에서
+   * `double_envelope` / `failed_without_error` / `envelope_missing_payload` /
+   * `resolved_error_envelope` 를 구분한다(선택 필드, 위와 동일한 추가).
+   */
+  reason?: string;
 };
 
 export type RustraDebugSink = (event: RustraDebugEvent) => void;

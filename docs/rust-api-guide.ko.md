@@ -135,15 +135,27 @@ fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
 - 입력 타입: `DeserializeOwned + JsonSchema`
 - 출력 타입: `Serialize + JsonSchema`
 
-trait bound를 충족하지 않으면 `#[diagnostic::on_unimplemented]`를 통해 친절한 에러 메시지를 출력합니다:
+현재 trait bound가 충족되지 않으면 표준 Rust E0277 진단이 출력됩니다.
+`#[diagnostic::on_unimplemented]` 기반 커스텀 메시지는 계획만 있고 구현되지 않았습니다 —
+커스텀 에러 텍스트에 의존하지 마세요.
+
+```text
+error[E0277]: the trait bound `MyType: CommandInput` is not satisfied
+   --> src/main.rs:5:1
+    |
+5   | #[command]
+    | ^^^^^^^^^ the trait `CommandInput` is not implemented for `MyType`
+    |
+note: required for `MyType` to implement `CommandInput`
+    (unsatisfied trait bound introduced by the blanket `impl<T> CommandInput for T`)
+```
+
+`CommandInput`/`CommandOutput`에 `#[diagnostic::on_unimplemented]`를 붙이면 이것이 더 친절한 메시지로 바뀝니다 (계획됨, 미구현):
 
 ```text
 error: `MyType` cannot be used as a command parameter
-  --> src/main.rs:5:1
    |
-5  | #[command]
-   | ^^^^^^^^^ command parameters require Serialize + Deserialize + JsonSchema
-   |
+   = note: command parameters require Serialize + Deserialize + JsonSchema
    = note: add `#[rustra::bridge_type]` to `MyType`
 ```
 
@@ -977,3 +989,29 @@ fn main() -> Result<()> {
     Ok(())
 }
 ```
+
+---
+
+## 부록: bootstrap 인스턴스 소유권 (단일 엔진 슬롯)
+
+각 JS 호스트 프로세스는 **하나의 글로벌 엔진 슬롯**을 가진다. 생성된 호스트
+진입점이 `configureLazy()`로 bootstrap 을 등록하고(또는 `configure()`로 명시적
+엔진을 등록하고), 모든 invoke 는 그 단일 슬롯으로 라우팅된다.
+
+현재 정책(R08 — 조기 가드):
+
+- **첫 등록이 승리한다.** 첫 bootstrap 이 아직 소비되지 않은 상태(등록 후 첫
+  `ready()`/invoke 가 시작되기 전)에서 두 번째 bootstrap 을 등록하면
+  `registry.frozen` 을 throw 한다 — import 순서가 조용히 엔진을 정하는 일은
+  이제 없다.
+- **소비 뒤의 재등록은 그대로 허용된다.** `dispose()` + 같은 bootstrap 클로저
+  (Node/Bun 어댑터의 `reload()`) 재등록은 자유롭고, 소비가 시작된 뒤의 lazy
+  교체와 초기화 실패 뒤의 복구 등록은 기존 계약을 따른다.
+- **다중 엔진은 미지원이다.** 이 가드는 사고로 인한 교차 호스트 등록을 조기에
+  실패시키기 위한 것(`configure`/`configureLazy` 의 `ownerId` 가 에러 메시지에
+  양쪽 주체를 보고한다)이며, 다중 엔진 API 가 아니다.
+
+모든 자사 어댑터(`createNodeBootstrap`, `createBunBootstrap`,
+`createTauriBootstrap`, RN `createRustraBootstrap`)가 같은 슬롯 경로를
+공유하므로 가드가 자동으로 함께 적용된다. 현재 `ownerId` 를 전달하는 어댑터는
+Node 뿐이라 — 나머지 어댑터의 충돌 진단은 익명 주체로 보고된다.

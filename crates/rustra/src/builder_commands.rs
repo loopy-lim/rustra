@@ -3,11 +3,16 @@ impl PackageBuilder {
     ///
     /// 함수 이름에서 `_command` 접미사를 제거한 뒤 lowerCamelCase로 변환하여
     /// 명령 이름으로 사용합니다. 예: `add_numbers` → `addNumbers`
+    ///
+    /// (감사 #5) `#[command(capability = "...")]` 함수는 이 경로로 등록할 수
+    /// 없다 — 그 래퍼는 `unsafe fn` 이라 `F: Fn` 바운드를 통과하지 못하고
+    /// [`crate::__private::CommandHandler`]의 계약 메시지가 capability 무음 드랍을
+    /// 컴파일 에러로 이름한다. register!/build! 를 사용한다.
     pub fn command_fn<I, O, F>(self, handler: F) -> Self
     where
         I: DeserializeOwned + JsonSchema + 'static,
         O: Serialize + JsonSchema + 'static,
-        F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+        F: crate::__private::CommandHandler<I, O>,
     {
         let name = command_name_from_handler::<F>();
         self.command(name, handler)
@@ -22,7 +27,7 @@ impl PackageBuilder {
     where
         I: DeserializeOwned + JsonSchema + 'static,
         O: Serialize + JsonSchema + 'static,
-        F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+        F: crate::__private::CommandHandler<I, O>,
     {
         let name = name.into();
         if self.commands.contains_key(&name) {
@@ -57,7 +62,7 @@ impl PackageBuilder {
     where
         I: BufferCommandInput,
         O: BufferCommandOutput,
-        F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+        F: crate::__private::CommandHandler<I, O>,
     {
         let name = name.into();
         if self.commands.contains_key(&name) {
@@ -88,7 +93,7 @@ impl PackageBuilder {
     where
         I: BufferCommandInput,
         O: BufferCommandOutput,
-        F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+        F: crate::__private::CommandHandler<I, O>,
     {
         let name = command_name_from_handler::<F>();
         self.buffer_command(name, handler)

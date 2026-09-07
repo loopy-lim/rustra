@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  CancelledError,
   createReactNativeEngine,
   createRustraBootstrap,
   createChannel,
@@ -240,12 +241,19 @@ function createEventNative() {
 
 test('subscribeEvent registers a native listener and parses the JSON payload once', () => {
   const h = createEventNative();
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = h.native;
   const received: unknown[] = [];
   const payloadJson = JSON.stringify({ step: 1, total: 5 });
 
-  subscribeEvent(h.native, 'progress.tick', (payload) => {
-    received.push(payload);
-  });
+  try {
+    subscribeEvent('progress.tick', (payload) => {
+      received.push(payload);
+    });
+  } finally {
+    root.__rustraNative = previous;
+  }
 
   assert.equal(h.calls.length, 1, 'native.onEvent must be called once');
   assert.equal(h.calls[0].name, 'progress.tick');
@@ -271,8 +279,16 @@ test('subscribeEvent supports the canonical name-first shape used by generated e
 
 test('subscribeEvent unsubscribe removes the native listener', () => {
   const h = createEventNative();
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = h.native;
 
-  const unsubscribe = subscribeEvent(h.native, 'demo.done', () => {});
+  let unsubscribe: () => void;
+  try {
+    unsubscribe = subscribeEvent('demo.done', () => {});
+  } finally {
+    root.__rustraNative = previous;
+  }
   assert.equal(h.listeners.size, 1);
   unsubscribe();
 
@@ -281,11 +297,18 @@ test('subscribeEvent unsubscribe removes the native listener', () => {
 
 test('subscribeEvent normalizes unparseable payloads to null', () => {
   const h = createEventNative();
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = h.native;
   const received: unknown[] = [];
 
-  subscribeEvent(h.native, 'bad.json', (payload) => {
-    received.push(payload);
-  });
+  try {
+    subscribeEvent('bad.json', (payload) => {
+      received.push(payload);
+    });
+  } finally {
+    root.__rustraNative = previous;
+  }
   h.emit('bad.json', 'not-json{');
 
   assert.deepEqual(received, [null], 'broken JSON must arrive as null, not throw');
@@ -293,27 +316,49 @@ test('subscribeEvent normalizes unparseable payloads to null', () => {
 
 test('subscribeEvent fails loudly when native has no event capability', () => {
   const legacy: RustraEventNative = {};
-  assert.throws(
-    () => subscribeEvent(legacy, 'any.event', () => {}),
-    (error: unknown) => error instanceof RustraCommandError && error.code === 'event.unavailable',
-  );
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = legacy;
+  try {
+    assert.throws(
+      () => subscribeEvent('any.event', () => {}),
+      (error: unknown) => error instanceof RustraCommandError && error.code === 'event.unavailable',
+    );
+  } finally {
+    root.__rustraNative = previous;
+  }
 });
 
-test('subscribeEvent allows an explicit legacy no-op fallback', () => {
+test('subscribeEvent allows an explicit no-op fallback when native lacks events', () => {
   const legacy: RustraEventNative = {};
-  const unsubscribe = subscribeEvent(legacy, 'any.event', () => {}, {
-    allowMissingNative: true,
-  });
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = legacy;
+  let unsubscribe: () => void;
+  try {
+    unsubscribe = subscribeEvent('any.event', () => {}, {
+      allowMissingNative: true,
+    });
+  } finally {
+    root.__rustraNative = previous;
+  }
   unsubscribe(); // throw 하지 않아야 한다
 });
 
 test('subscribeEvent coexists with multiple event names', () => {
   const h = createEventNative();
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = h.native;
   const ticks: unknown[] = [];
   const dones: unknown[] = [];
 
-  subscribeEvent(h.native, 'progress.tick', (p) => ticks.push(p));
-  subscribeEvent(h.native, 'demo.done', (p) => dones.push(p));
+  try {
+    subscribeEvent('progress.tick', (p) => ticks.push(p));
+    subscribeEvent('demo.done', (p) => dones.push(p));
+  } finally {
+    root.__rustraNative = previous;
+  }
   h.emit('progress.tick', JSON.stringify({ step: 2 }));
   h.emit('demo.done', JSON.stringify({ emitted: 6 }));
 
@@ -778,4 +823,172 @@ test('async engine without invokeTypedAsyncById keeps the name path (G2 compat)'
   const out = await p;
   assert.equal(out.value, 42);
   assert.equal(h.state.calls, 1, 'name-based invokeTypedAsync must be used');
+});
+
+// ── DX Track Task 6 후속: 호스트별 pre-abort instanceof 일치 ──
+// 두 어댑터의 pre-abort 경로도 CancelledError 서브클래스로 승격 — abort
+// 타이밍(pre-abort vs mid-flight)에 관계없이 같은 instanceof 답을 보장한다.
+
+test('JSON adapter pre-abort rejects with CancelledError instance', async () => {
+  const engine = createReactNativeEngine({
+    invoke() {
+      throw new Error('native must not be called when already aborted');
+    },
+  });
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(
+    engine.invoke('cancelled', undefined, { signal: ac.signal }),
+    (error: unknown) => {
+      assert.ok(error instanceof CancelledError, 'JSON adapter pre-abort must be CancelledError');
+      assert.ok(
+        error instanceof RustraCommandError,
+        'CancelledError must remain a RustraCommandError',
+      );
+      assert.equal((error as CancelledError).code, 'cancelled');
+      assert.equal((error as CancelledError).retryable, true);
+      assert.match((error as Error).message, /aborted before dispatch/);
+      return true;
+    },
+  );
+});
+
+test('async engine pre-abort rejects with CancelledError instance (matches mid-flight)', async () => {
+  const h = makeAsyncNative();
+  const engine = createAsyncEngine(h.native, { rkyvV2Codecs: new Map() });
+  const ac = new AbortController();
+  ac.abort();
+  await assert.rejects(engine.invoke('heavy', { n: 1 }, { signal: ac.signal }), (err: unknown) => {
+    assert.ok(err instanceof CancelledError, 'async pre-abort must be CancelledError');
+    assert.equal((err as CancelledError).code, 'cancelled');
+    assert.equal((err as CancelledError).retryable, true);
+    assert.match((err as Error).message, /heavy/);
+    return true;
+  });
+  assert.equal(h.state.calls, 0, 'native must never be called for a pre-aborted signal');
+});
+
+// ── A02: EngineSupports 표면 — 매트릭스 셀의 기계 판독 가능한 이행 ─────────
+// RN JSON 어댑터 매핑: signal(진행 중 취소) ⚠️ 얕은 취소(JS 프라미스만 거부)
+// → 'shallow' / invokeBatch ✅ per-entry Promise fallback → 'per-entry' /
+// 이벤트 ❌ JSON adapter → 'none' / 채널 ✅ JSI handle + close() → true /
+// timeoutMs ⚠️ 동기 native 호출은 호출 중 선점 불가 → false.
+// RN rkyv V2 매핑: 취소 ⚠️ 조건부 전파(invokeAsync/invokeCancel 확인 시 Rust
+// 체크포인트까지) → 'cooperative' / 배치 ✅ 정적 명령 단일 횡단 →
+// 'single-crossing' / 이벤트 ✅ → 'push' / 채널 ✅ → true / timeoutMs ✅ → true.
+
+test('A02: createReactNativeEngine exposes supports matching the compatibility matrix', async () => {
+  const engine = createReactNativeEngine(createMockNative({ ok: true, result: { value: 42 } }));
+  assert.deepEqual(engine.supports, {
+    cancellation: 'shallow',
+    batch: 'per-entry',
+    events: 'none',
+    channels: true,
+    timeoutPreemption: false,
+  });
+});
+
+test('A02: createAsyncEngine exposes cooperative cancellation supports', async () => {
+  // 리뷰 정정 — async invokeBatch 는 항목별 Promise.all 폴백이므로 sync 엔진의
+  // `single-crossing` 셀을 상속하지 않는다: batch 는 `per-entry` 재정의.
+  const h = makeAsyncNative();
+  const engine = createAsyncEngine(h.native, { rkyvV2Codecs: new Map() });
+  assert.deepEqual(engine.supports, {
+    cancellation: 'cooperative',
+    batch: 'per-entry',
+    events: 'push',
+    channels: true,
+    timeoutPreemption: true,
+  });
+});
+
+// ── A05: bootstrap 수명 상태 모델 (RN createRustraBootstrap) ────────────────
+// 각 테스트는 글로벌 슬롯을 configure 로 리셋한 뒤 등록한다(R08 가드 — 소비 전
+// 경쟁 등록 loud-fail 은 여기서 재검증 대상이 아니다).
+
+const A05_SLOT_ENGINE = {
+  invoke: async <T>() => 'slot' as T,
+} as unknown as import('@rustra/types').EngineClientWithBatch;
+
+test('A05: createRustraBootstrap exposes the lifecycle state surface', async () => {
+  const { configure } = await import('@rustra/types');
+  let installs = 0;
+  const native = {} as RustraJSINative;
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createRustraBootstrap({
+      install: async () => {
+        installs++;
+        await Promise.resolve();
+      },
+      getNative: () => native,
+      rkyvV2Codecs: new Map(),
+    });
+    assert.equal(bootstrap.state, 'initializing');
+    await bootstrap.ready();
+    assert.equal(bootstrap.state, 'ready');
+    bootstrap.dispose();
+    assert.equal(bootstrap.state, 'disposed');
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: ready after dispose rejects loudly (react-native)', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createRustraBootstrap({
+      install: async () => {},
+      getNative: () => ({}) as RustraJSINative,
+      rkyvV2Codecs: new Map(),
+    });
+    bootstrap.dispose();
+    await assert.rejects(
+      bootstrap.ready(),
+      (error: unknown) => error instanceof Error && /disposed/.test(error.message),
+    );
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: dispose is idempotent — second dispose is a no-op (react-native)', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    const bootstrap = createRustraBootstrap({
+      install: async () => {},
+      getNative: () => ({}) as RustraJSINative,
+      rkyvV2Codecs: new Map(),
+    });
+    bootstrap.dispose();
+    bootstrap.dispose(); // no-op — must not throw
+    assert.equal(bootstrap.state, 'disposed');
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
+});
+
+test('A05: concurrent ready calls share one initialization promise (react-native)', async () => {
+  const { configure } = await import('@rustra/types');
+  configure(A05_SLOT_ENGINE);
+  try {
+    let installs = 0;
+    const native = {} as RustraJSINative;
+    const bootstrap = createRustraBootstrap({
+      install: async () => {
+        installs++;
+        await Promise.resolve();
+      },
+      getNative: () => native,
+      rkyvV2Codecs: new Map(),
+    });
+    const [a, b] = await Promise.all([bootstrap.ready(), bootstrap.ready()]);
+    assert.equal(a, b, 'concurrent ready must share the same engine instance');
+    assert.equal(installs, 1, 'install must run exactly once');
+    bootstrap.dispose();
+  } finally {
+    configure(A05_SLOT_ENGINE);
+  }
 });

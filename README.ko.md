@@ -26,17 +26,22 @@ Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플�
 
 단일 Rust 코어를 여러 JS 호스트에 잇는 도구는 각자 다른 지점을 타협한다:
 
-|                               | **rustra**                        | napi-rs           | Nitro Modules | Tauri commands | tauri-specta |
-| ----------------------------- | --------------------------------- | ----------------- | ------------- | -------------- | ------------ |
-| 단일 Rust 코어 × 멀티 호스트  | ✅ Node/Bun/Tauri/RN              | Node (+ Electron) | RN 중심       | Tauri 전용     | Tauri 전용   |
-| 타입 안전 코드젠 (양방향)     | ✅ 커맨드+이벤트                  | 수동 d.ts         | ✅            | ❌ (수동)      | ✅           |
-| compact 바이너리 와이어       | ✅ rkyv V2 (JSON 대비 11.8× 작음) | JSON/Buffer       | JSI 객체      | JSON IPC       | JSON IPC     |
-| 계약 게이트 (breaking change) | ✅ `rustra diff` + contract hash  | ❌                | ❌            | ❌             | 부분         |
-| 취소/타임아웃/배치 시맨틱     | ✅ 매트릭스로 문서화              | 직접 구현         | 직접 구현     | ❌             | ❌           |
+|                               | **rustra**                                                              | napi-rs                                           | Nitro Modules | Tauri commands | tauri-specta |
+| ----------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------- | ------------- | -------------- | ------------ |
+| 단일 Rust 코어 × 멀티 호스트  | ✅ Node/Bun/Tauri/RN                                                    | Node (+ Electron)                                 | RN 중심       | Tauri 전용     | Tauri 전용   |
+| 타입 안전 코드젠 (양방향)     | ✅ 커맨드+이벤트                                                        | Rust 구조체에서 TS 정의 생성 (어트리뷰트 매크로)² | ✅            | ❌ (수동)      | ✅           |
+| compact 바이너리 와이어       | ✅ rkyv V2 ([JSON 대비 요청 와이어 11.8× 작음](docs/wire-format.ko.md)) | JSON/Buffer                                       | JSI 객체      | JSON IPC       | JSON IPC     |
+| 계약 게이트 (breaking change) | ✅ `rustra diff` + contract hash                                        | ❌                                                | ❌            | ❌             | 부분         |
+| 취소/타임아웃/배치 시맨틱     | ✅ 매트릭스로 문서화                                                    | 직접 구현                                         | 직접 구현     | ❌             | ❌           |
 
 rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)를 하나의 계약으로
 소유**한다. 명령 호출과 계약 검증은 호스트 간 공통으로 유지하고, 취소·이벤트·채널
 같은 capability 차이는 [호환성 매트릭스](docs/compatibility-matrix.md)에 명시한다.
+
+² 2026-09-05 napi-rs 문서 대조 검증: napi-rs는 어트리뷰트 매크로(`#[napi(object)]`)
+로 Rust 구조체에서 TypeScript 정의를 생성한다 — "수동 d.ts" 표기는 이를 과소
+평가한 것이었다. rustra 셀의 차별점은 타입·이벤트·검증 게이트가 모든 호스트에서
+하나의 공유 스키마로 나온다는 것이지, 다른 도구에 코드젠이 없다는 주장이 아니다.
 
 ## 로드맵
 
@@ -124,9 +129,11 @@ JS/네이티브 조합의 drift를 런타임에 감지한다.
 
 ### Rust
 
+<!-- 발행 시 갱신: 0.7.0 라인 -->
+
 ```toml
 [dependencies]
-rustra = "0.4"
+rustra = "0.6"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -505,7 +512,8 @@ type RustraError = {
 
 | Rust                 | TypeScript                                    |
 | -------------------- | --------------------------------------------- |
-| `i64`, `u32`, `f64`  | `number`                                      |
+| `i64`                | `number \| bigint`                            |
+| `u32`, `f64`         | `number`                                      |
 | `String`             | `string`                                      |
 | `bool`               | `boolean`                                     |
 | `Vec<T>`             | `T[]`                                         |
@@ -523,8 +531,10 @@ type RustraError = {
 
 `tauri` feature를 활성화:
 
+<!-- 발행 시 갱신: 0.7.0 라인 -->
+
 ```toml
-rustra = { version = "0.4", features = ["tauri"] }
+rustra = { version = "0.6", features = ["tauri"] }
 ```
 
 Rust 측:
@@ -587,6 +597,9 @@ const result = await addNumbers({ a: 20, b: 22 });
 
 `bun run test:compat`는 JS 계약과 지원되는 로컬 runtime을 검증하고, CI 네이티브
 잡은 빌드·링크를 검증한다. 이 둘을 실제 기기 설치·화면 렌더 증거와 동일시하지 않는다.
+실제 WebView·실기기·emit 타이밍처럼 손으로 실행하고 기록해야 하는 검증은
+[호스트 검증 수동 체크리스트](docs/verification-checklist.ko.md)에 있다 — 이
+표의 증거 수준은 CI green 만이 아니라 채워진 체크리스트 블록이 뒤받는다.
 
 ## 성능
 
@@ -661,7 +674,8 @@ cargo test --workspace
 # (.so/.dylib/.dll) 산출물을 아티팩트로 업로드한다 (.github/workflows/ci.yml).
 
 # calculator 예시 빌드 및 TS 생성
-cargo run -p rustra-calculator-example --bin rustra-calculator-example
+cargo run -p rustra-calculator-example --bin generate   # 계약 프로브: schema.json
+bun run codegen                                          # TS 표면 렌더링
 
 # CRUD 예시 빌드 및 TS 생성
 cargo run -p rustra-crud-example --bin generate

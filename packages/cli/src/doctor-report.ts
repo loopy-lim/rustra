@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   defaultDoctorRunner,
+  type DoctorCheck,
   type DoctorOptions,
   type DoctorReport,
   type DoctorRunner,
@@ -13,10 +14,13 @@ import { buildMatrix, collectSectionChecks } from './doctor-matrix.js';
 export function collectDoctorReport(
   options: DoctorOptions,
   runner: DoctorRunner = defaultDoctorRunner,
+  /** collectDoctorReportAsync 가 미리 당겨 온 registry.reachability 결과 — 없으면 skip. */
+  registry?: DoctorCheck,
 ): DoctorReport {
   const configPath = resolve(options.configPath);
   const cached = memoizeRunner(runner);
-  const checks = collectBaseChecks(options, cached);
+  // 동기 경로는 fetch 프리브를 못 돌린다 — skip 행으로 명시한다(누락이 아님).
+  const checks = collectBaseChecks(options, cached, registry);
   if (!existsSync(configPath)) {
     checks.unshift(
       check('config.file', 'fail', true, `Config file does not exist: ${configPath}`, undefined, [

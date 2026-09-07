@@ -11,6 +11,7 @@ import {
   type GeneratedFieldsRoute,
 } from './global-state.js';
 import { ensureConfigured, isLazyConfigured, invokeGenerated } from './global-config.js';
+import { RustraCommandError, RustraErrorCode } from './errors.js';
 import type { InvokeOptions } from './public.js';
 
 function invokeRoute<T>(route: GeneratedFieldsRoute, args: unknown, fields: unknown[]): Promise<T> {
@@ -35,7 +36,12 @@ function invokeFields<T>(
       return ensureConfigured().then(() =>
         invokeFields<T>(commandId, command, args, fields, count, options),
       );
-    throw new Error('Rustra not configured. Call configure(engine) first.');
+    return Promise.reject(
+      new RustraCommandError(
+        RustraErrorCode.TransportUnavailable,
+        'Rustra not configured. Call configure(engine) first.',
+      ),
+    );
   }
   if (options === undefined) {
     let route = runtime.generatedFieldsRoutes[commandId];

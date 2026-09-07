@@ -1,6 +1,10 @@
 impl PackageBuilder {
     /// 등록된 모든 명령을 불변 [`Package`]로 빌드합니다.
     pub fn build(self) -> Package {
+        // (R02) 서로 다른 이벤트 이름이 같은 정규화 채널로 수렴하면 빌드 거부 —
+        // 선언 시점이 아닌 build 시점에 검증한다(이벤트 맵이 여기서 완성된다).
+        self.validate_event_channel_uniqueness();
+
         let mut commands = self.commands;
         let mut next_command_id = self.next_command_id;
 

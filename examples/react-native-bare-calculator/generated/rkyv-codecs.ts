@@ -1,3 +1,11 @@
+// ── rustra generated ────────────────────────────────────────
+// File:   rkyv-codecs.ts
+// Source: schema.json (single source of truth for this file)
+// Regen:  rustra codegen --config rustra.json
+// Stage:  schema → ts codec renderer
+// DO NOT EDIT — changes will be overwritten and fail codegen --check.
+// ────────────────────────────────────────────────────────────
+
 // ── postcard wire format helpers ─────────────────────────────
 
 const _dvScratchBuf = new ArrayBuffer(8);
@@ -24,6 +32,7 @@ function _pcDecodeVarint(buf: Uint8Array, offset: number): { value: number; byte
   let bytesRead = 0;
   while (true) {
     const b = buf[offset + bytesRead];
+    if (b === undefined) throw new Error('varint out of bounds');
     value += (b & 0x7f) * multiplier;
     bytesRead++;
     if ((b & 0x80) === 0) break;
@@ -125,6 +134,9 @@ function _utf8Encode(s: string): Uint8Array {
 }
 
 function _utf8Decode(bytes: Uint8Array, start: number, end: number): string {
+  // end 가 버퍼를 넘으면 즉시 실패 — 잘린 프레임에서 while (i < end) 가
+  // undefined 바이트를 수없이 돌아 런타임이 멈추는 것을 막는다.
+  if (end > bytes.length) throw new Error('string out of bounds');
   let s = ''; let i = start;
   while (i < end) {
     const b = bytes[i];
@@ -182,18 +194,30 @@ export const addNumbersCodec: RkyvV2Codec<AddNumbersInput, AddNumbersOutput> = {
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: AddNumbersOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: AddNumbersOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -239,18 +263,30 @@ export const benchAddCodec: RkyvV2Codec<BenchAddInput, BenchAddOutput> = {
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: BenchAddOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: BenchAddOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -299,18 +335,30 @@ export const benchEchoBytesCodec: RkyvV2Codec<BenchBytesPayload, BenchBytesPaylo
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: BenchBytesPayload; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: BenchBytesPayload; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -357,18 +405,30 @@ export const benchEchoPairCodec: RkyvV2Codec<BenchPairPayload, BenchPairPayload>
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: BenchPairPayload; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: BenchPairPayload; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -417,18 +477,30 @@ export const benchEchoStringCodec: RkyvV2Codec<BenchStringPayload, BenchStringPa
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: BenchStringPayload; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: BenchStringPayload; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -474,18 +546,30 @@ export const channelDemoCodec: RkyvV2Codec<ChannelDemoInput, ChannelDemoOutput> 
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: ChannelDemoOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: ChannelDemoOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -538,18 +622,30 @@ export const clampCodec: RkyvV2Codec<ClampInput, ClampOutput> = {
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: ClampOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: ClampOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -595,18 +691,30 @@ export const createItemCodec: RkyvV2Codec<CreateItemInput, CreateItemOutput> = {
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: CreateItemOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: CreateItemOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -665,18 +773,30 @@ export const divideCodec: RkyvV2Codec<DivideInput, DivideOutput> = {
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: DivideOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: DivideOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -732,18 +852,30 @@ export const emitDemoCodec: RkyvV2Codec<EmitDemoInput, EmitDemoOutput> = {
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: EmitDemoOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: EmitDemoOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -789,18 +921,30 @@ export const gaugeCodec: RkyvV2Codec<GaugeInput, GaugeOutput> = {
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: GaugeOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: GaugeOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -844,18 +988,30 @@ export const greetCodec: RkyvV2Codec<GreetInput, GreetOutput> = {
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: GreetOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: GreetOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -899,18 +1055,30 @@ export const isEvenCodec: RkyvV2Codec<IsEvenInput, IsEvenOutput> = {
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: IsEvenOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: IsEvenOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -955,18 +1123,30 @@ export const multiplyCodec: RkyvV2Codec<MultiplyInput, MultiplyOutput> = {
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: MultiplyOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: MultiplyOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -997,18 +1177,30 @@ export const processItemCodec: RkyvV2Codec<ProcessItemInput, ProcessItemOutput> 
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: ProcessItemOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: ProcessItemOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -1069,18 +1261,30 @@ export const resourceCloseCodec: RkyvV2Codec<ResourceCloseInput, ResourceCloseOu
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: ResourceCloseOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: ResourceCloseOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -1117,18 +1321,30 @@ export const resourceOpenCodec: RkyvV2Codec<ResourceOpenInput, ResourceHandleOut
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: ResourceHandleOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: ResourceHandleOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -1174,18 +1390,30 @@ export const resourceReadCodec: RkyvV2Codec<ResourceReadInput, ResourceReadOutpu
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: ResourceReadOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: ResourceReadOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -1245,18 +1473,30 @@ export const resourceWriteCodec: RkyvV2Codec<ResourceWriteInput, ResourceWriteOu
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: ResourceWriteOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: ResourceWriteOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -1300,18 +1540,30 @@ export const rustraRegistryDemoCodec: RkyvV2Codec<RegistryDemoInput, RegistryDem
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: RegistryDemoOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: RegistryDemoOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -1357,18 +1609,30 @@ export const scoreTotalCodec: RkyvV2Codec<ScoreTotalInput, ScoreTotalOutput> = {
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: ScoreTotalOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: ScoreTotalOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -1419,18 +1683,30 @@ export const secureComputeCodec: RkyvV2Codec<SecureComputeInput, SecureComputeOu
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: SecureComputeOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: SecureComputeOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -1479,18 +1755,30 @@ export const sizeOfCodec: RkyvV2Codec<SizeOfInput, SizeOfOutput> = {
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: SizeOfOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: SizeOfOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -1527,18 +1815,30 @@ export const spanCodec: RkyvV2Codec<SpanInput, SpanOutput> = {
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: SpanOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: SpanOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -1578,18 +1878,30 @@ export const sumListCodec: RkyvV2Codec<SumListInput, SumListOutput> = {
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: SumListOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: SumListOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -1648,18 +1960,30 @@ export const toUpperCodec: RkyvV2Codec<ToUpperInput, ToUpperOutput> = {
     return out.subarray(0, w);
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: ToUpperOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: ToUpperOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
@@ -1703,18 +2027,30 @@ export const wideAggCodec: RkyvV2Codec<WideAggInput, WideAggOutput> = {
     return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
   },
 
-  decode(buf: ArrayBuffer): { ok: boolean; result?: WideAggOutput; error?: RustraError } {
-    if (buf.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    const u8 = new Uint8Array(buf);
-    const view = new DataView(buf);
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: WideAggOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
     if (u8[0] !== 1) {
-      const errLen = view.getUint16(8, true);
       let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      if (errLen > 0) {
-        // postcard({ code: String, message: String })
-        const c = _pcDecodeString(u8, 10);
-        const m = _pcDecodeString(u8, 10 + c.bytesRead);
-        err = { code: c.value, message: m.value };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
       }
       return { ok: false, error: err };
     }
