@@ -6,6 +6,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <utility>
 
@@ -18,6 +19,8 @@ extern "C" {
   uint8_t* rustra_ffi_invoke_json(
     const uint8_t* payload, size_t payload_len, size_t* out_len);
   uint8_t* rustra_ffi_invoke_postcard(
+    const uint8_t* payload, size_t payload_len, size_t* out_len);
+  uint8_t* rustra_ffi_invoke_rkyv_v2(
     const uint8_t* payload, size_t payload_len, size_t* out_len);
   void rustra_ffi_free(uint8_t* ptr, size_t len);
   uint32_t rustra_ffi_invoke_buffer(
@@ -48,33 +51,18 @@ extern "C" {
   uint32_t rustra_ffi_channel_create(
     rustra_channel_callback_t callback, void* user_data);
   int32_t rustra_ffi_channel_send(uint32_t handle, const char* payload);
+  // 바이너리 채널 — 페이로드가 임의 바이트(rkyv V2 프레임 등). JSON 채널과
+  // 동일 핸들 공간/수명 계약, 한 핸들은 한 경로로만 동작한다.
+  typedef void (*rustra_channel_bytes_callback_t)(
+    void* user_data, uint32_t handle, const uint8_t* payload, size_t payload_len);
+  uint32_t rustra_ffi_channel_create_bytes(
+    rustra_channel_bytes_callback_t callback, void* user_data);
+  int32_t rustra_ffi_channel_send_bytes(
+    uint32_t handle, const uint8_t* payload, size_t payload_len);
   int32_t rustra_ffi_channel_drop(uint32_t handle);
 
   // Stable package registration symbol emitted by `rustra::mobile_entry!`.
   void rustra_mobile_init(void);
-
-#if defined(RUSTRA_ENABLE_LEGACY_BENCHMARKS)
-  // ── Per-example FFI (benchmark legacy) ──────────────────
-  uint8_t* rustra_calculator_invoke_bytes(
-    const uint8_t* payload, size_t payload_len, size_t* out_len);
-  uint8_t* rustra_calculator_invoke_raw(
-    const uint8_t* payload, size_t payload_len, size_t* out_len);
-  uint8_t* rustra_calculator_invoke_msgpack(
-    const uint8_t* payload, size_t payload_len, size_t* out_len);
-  uint8_t* rustra_calculator_invoke_bincode(
-    const uint8_t* payload, size_t payload_len, size_t* out_len);
-  uint8_t* rustra_calculator_invoke_postcard(
-    const uint8_t* payload, size_t payload_len, size_t* out_len);
-  uint8_t* rustra_calculator_invoke_rkyv(
-    const uint8_t* payload, size_t payload_len, size_t* out_len);
-  uint8_t* rustra_calculator_invoke_hybrid(
-    const uint8_t* payload, size_t payload_len, size_t* out_len);
-  uint8_t* rustra_calculator_invoke_rkyv_v2(
-    const uint8_t* payload, size_t payload_len, size_t* out_len);
-
-  void rustra_calculator_free_buffer(uint8_t* ptr, size_t len);
-  void rustra_calculator_free_rkyv_v2_buffer(uint8_t* ptr, size_t len);
-#endif
 
   // ── Cancellation (from rustra::ffi) ─────────────────────
   // invocation_id 로 진행 중 async 호출을 협력적 취소한다.
@@ -191,15 +179,22 @@ public:
   /// JS 스레드 마샬링용 CallInvoker 설정(EventDispatcher 와 동일 소스 공유).
   void setCallInvoker(std::shared_ptr<void> invoker);
 
-  /// JS 콜백 등록 + Rust 채널 발급. 반환값 = 채널 핸들(≥1). JS 스레드 호출.
+  /// JS 콜백 등록 + Rust 채널 발급(JSON 경로 — 페이로드는 JSON 문자열).
+  /// 반환값 = 채널 핸들(≥1). JS 스레드 호출.
   uint32_t create(facebook::jsi::Runtime& rt,
                   facebook::jsi::Function callback);
+  /// 바이너리 채널 변형 — 콜백은 ArrayBuffer 를 받는다(복사본).
+  uint32_t createBytes(facebook::jsi::Runtime& rt,
+                       facebook::jsi::Function callback);
   /// 채널 해제(호출 완료/취소). 성공 true. JS 스레드 호출.
   bool drop(uint32_t handle);
 
   /// FFI C 콜백 — send 스레드에서 호출. 큐 적재 + drain 예약만.
   /// handle 은 발급 시 캡처된 채널 번호(핸들→JS 콜백 룩업 키).
   static void onChannelPayload(void* user_data, uint32_t handle, const char* payload);
+  /// 바이너리 경로 C 콜백 — 페이로드는 (ptr, len), 콜백 반환 전까지만 유효.
+  static void onChannelPayloadBytes(
+    void* user_data, uint32_t handle, const uint8_t* payload, size_t payload_len);
 
   /// 큐의 모든 페이로드를 대응 핸들의 JS 콜백으로 전달. JS 스레드만.
   void drain(facebook::jsi::Runtime& rt);
@@ -213,6 +208,10 @@ private:
   std::mutex mutex_;
   /// (handle, payload) 큐 — onChannelPayload 가 적재, drain 이 소비.
   std::deque<std::pair<uint32_t, std::string>> queue_;
+  /// 바이너리 큐 — onChannelPayloadBytes 가 적재. drop-oldest 정책 동일.
+  std::deque<std::pair<uint32_t, std::vector<uint8_t>>> bytesQueue_;
+  /// 바이너리 경로로 발급된 핸들 — drain 이 전달 형태를 고른다.
+  std::unordered_set<uint32_t> bytesHandles_;
   size_t capacity_ = 1024;
   bool drainScheduled_ = false;
   std::shared_ptr<void> callInvoker_;
@@ -275,5 +274,49 @@ void invalidateRustraJSI();
 void installRustraJSIWithInvoker(
   facebook::jsi::Runtime& rt,
   std::shared_ptr<void> typeErasedCallInvoker);
+
+// ── C++ TurboModule 상호운용 — jsi::Value 직접 typed invoke ─────────────
+// 다른 C++ TurboModule/네이티브 코드가 JS 왕복 없이 rustra 정적 명령을
+// 호출하는 진입점. JS 측 __rustraNative.invokeTyped* 와 동일 경로
+// (encode → FFI → decode)를 공유한다 — HostFunction 이 이 함수들을 감싼다.
+//
+// 계약:
+// - JS 런타임 스레드에서만 호출(jsi 스레드 친화성 — installRustraJSI 와 동일).
+// - installRustraJSI 없이도 호출 가능 — FFI 전역 패키지(native_entry 등록)만
+//   필요하다. JS 전역(__rustraNative) 설치 상태와 무관하다.
+// - 예외를 던지지 않는다 — 결과는 status 로 구분한다(아래 enum 참고).
+
+enum class TypedInvokeStatus {
+  /// 성공 — value 에 디코딩된 출력이 담긴다.
+  Ok,
+  /// 정적 코덱 미보유 명령 — value 는 undefined. 호출자는 JS 엔진과 동일하게
+  /// invokeRkyvV2(Tier 2/3) 폴백을 선택할 수 있다.
+  NoStaticCodec,
+  /// Rust 명령 에러 — value 는 { code: string, message: string } 객체,
+  /// message 필드는 "code: message" 결합 텍스트.
+  CommandError,
+  /// 응답 와이어 파손/디코딩 실패 — value 는 undefined, message 에 상세.
+  MalformedResponse,
+};
+
+struct TypedInvokeResult {
+  TypedInvokeStatus status;
+  facebook::jsi::Value value;
+  /// CommandError 는 "code: message" 결합 텍스트, MalformedResponse 는 상세.
+  /// Ok/NoStaticCodec 은 빈 문자열.
+  std::string message;
+};
+
+/// 이름 기반 typed invoke — encode_by_name → FFI → decode_by_name.
+TypedInvokeResult invokeTypedByName(
+  facebook::jsi::Runtime& rt,
+  const std::string& commandName,
+  const facebook::jsi::Value& args);
+
+/// command_id(u16) 기반 typed invoke — encode_by_id → FFI → decode_by_id.
+TypedInvokeResult invokeTypedById(
+  facebook::jsi::Runtime& rt,
+  uint16_t commandId,
+  const facebook::jsi::Value& args);
 
 } // namespace rustra

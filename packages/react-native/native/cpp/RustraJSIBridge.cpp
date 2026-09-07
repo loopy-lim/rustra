@@ -1,5 +1,7 @@
 #include "RustraJSIBridge.hpp"
+#include "RustraTurboInterop.hpp"
 #include "rustra-generated-codecs.hpp"
+#include <folly/dynamic.h>
 #include <atomic>
 #include <cmath>
 #include <cstdio>
@@ -256,6 +258,78 @@ static Value typedInvokeTail(Runtime& rt, const uint8_t* reqData, size_t reqSize
   return result;
 }
 
+// ── C++ TurboModule 상호운용 — 공개 typed invoke 진입점 ──────────────────
+// 헤더 선언 참고(TypedInvokeStatus 계약). HostFunction(invokeTyped/invokeTypedById)
+// 도 같은 경로를 쓴다 — 이 구현이 단일 소스다. 예외 기반 tail(typedInvokeTail)을
+// 감싸 status 로 변환한다: Rust 명령 에러 와이어는 "code: message" 문자열로
+// 조립되므로(parseRkyvV2ErrorBody) 첫 ':' 기준으로 구조를 복원한다. code 에는
+// ':' 가 올 수 없으므로(에러 코드 문자집합 계약) 첫 콜론 분리는 비모호하다.
+namespace {
+
+TypedInvokeResult toCommandErrorResult(
+  facebook::jsi::Runtime& rt, const std::string& codeAndMessage) {
+  size_t sep = codeAndMessage.find(": ");
+  std::string code = sep == std::string::npos ? codeAndMessage : codeAndMessage.substr(0, sep);
+  std::string detail =
+    sep == std::string::npos ? std::string() : codeAndMessage.substr(sep + 2);
+  facebook::jsi::Object errorObject(rt);
+  errorObject.setProperty(rt, "code", facebook::jsi::String::createFromUtf8(rt, code));
+  errorObject.setProperty(rt, "message", facebook::jsi::String::createFromUtf8(rt, detail));
+  return TypedInvokeResult{
+    TypedInvokeStatus::CommandError,
+    facebook::jsi::Value(rt, errorObject),
+    codeAndMessage,
+  };
+}
+
+} // namespace
+
+TypedInvokeResult invokeTypedByName(
+  facebook::jsi::Runtime& rt, const std::string& commandName,
+  const facebook::jsi::Value& args) {
+  rc::Writer w;
+  if (!gen::encode_by_name(rt, commandName, args, w)) {
+    return TypedInvokeResult{
+      TypedInvokeStatus::NoStaticCodec, facebook::jsi::Value(), std::string()};
+  }
+  try {
+    facebook::jsi::Value out = typedInvokeTail(rt, w.data(), w.size(), "",
+      [&rt, &commandName](rc::Reader& r) { return gen::decode_by_name(rt, commandName, r); });
+    return TypedInvokeResult{
+      TypedInvokeStatus::Ok, std::move(out), std::string()};
+  } catch (const facebook::jsi::JSError& err) {
+    std::string text = err.what();
+    if (text.rfind("RustraJSI: ", 0) == 0) {
+      return TypedInvokeResult{
+        TypedInvokeStatus::MalformedResponse, facebook::jsi::Value(), text};
+    }
+    return toCommandErrorResult(rt, text);
+  }
+}
+
+TypedInvokeResult invokeTypedById(
+  facebook::jsi::Runtime& rt, uint16_t commandId,
+  const facebook::jsi::Value& args) {
+  rc::Writer w;
+  if (!gen::encode_by_id(rt, commandId, args, w)) {
+    return TypedInvokeResult{
+      TypedInvokeStatus::NoStaticCodec, facebook::jsi::Value(), std::string()};
+  }
+  try {
+    facebook::jsi::Value out = typedInvokeTail(rt, w.data(), w.size(), "",
+      [&rt, commandId](rc::Reader& r) { return gen::decode_by_id(rt, commandId, r); });
+    return TypedInvokeResult{
+      TypedInvokeStatus::Ok, std::move(out), std::string()};
+  } catch (const facebook::jsi::JSError& err) {
+    std::string text = err.what();
+    if (text.rfind("RustraJSI: ", 0) == 0) {
+      return TypedInvokeResult{
+        TypedInvokeStatus::MalformedResponse, facebook::jsi::Value(), text};
+    }
+    return toCommandErrorResult(rt, text);
+  }
+}
+
 // ── EventDispatcher: Rust → JS push delivery ───────────────
 //
 // 스레드 마샬링 설계:
@@ -426,6 +500,8 @@ void ChannelDispatcher::setCallInvoker(std::shared_ptr<void> invoker) {
     for (auto& [h, _cb] : callbacks_) toDrop.push_back(h);
     callbacks_.clear();
     queue_.clear();
+    bytesQueue_.clear();
+    bytesHandles_.clear();
     drainScheduled_ = false;
   }
   // 리로드 대응: 귀속 채널 전부를 Rust 쪽에서도 drop(락 밖 — FFI 재진입 방지).
@@ -445,11 +521,31 @@ uint32_t ChannelDispatcher::create(facebook::jsi::Runtime& rt,
   return handle;
 }
 
+uint32_t ChannelDispatcher::createBytes(facebook::jsi::Runtime& rt,
+                                         facebook::jsi::Function callback) {
+  // JSON 경로와 동일한 등록 + 바이너리 경로 FFI 발급. bytesHandles_ 표시로
+  // drain 이 ArrayBuffer 로 전달한다.
+  (void)rt;
+  uint32_t handle =
+    rustra_ffi_channel_create_bytes(&ChannelDispatcher::onChannelPayloadBytes, this);
+  if (handle == 0) return 0;
+  callbacks_.insert_or_assign(handle, std::move(callback));
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    bytesHandles_.insert(handle);
+  }
+  return handle;
+}
+
 bool ChannelDispatcher::drop(uint32_t handle) {
   // JS 스레드 호출. Rust 채널 해제 후 콜백 제거. 해제 후 drain 에 이미
   // 적재된 해당 핸들 페이로드는 콜백 부재로 무시된다(유니캐스트 만료).
   int dropped = rustra_ffi_channel_drop(handle);
   callbacks_.erase(handle);
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    bytesHandles_.erase(handle);
+  }
   return dropped == 1;
 }
 
@@ -469,13 +565,41 @@ void ChannelDispatcher::onChannelPayload(void* user_data, uint32_t handle,
   self->scheduleDrainLocked();
 }
 
+void ChannelDispatcher::onChannelPayloadBytes(
+  void* user_data, uint32_t handle, const uint8_t* payload, size_t payload_len) {
+  // send 스레드 — JSON 경로와 동일하게 큐 적재 + drain 예약만(복사 소유).
+  auto* self = static_cast<ChannelDispatcher*>(user_data);
+  if (!self) return;
+
+  std::lock_guard<std::mutex> lock(self->mutex_);
+  if (self->bytesQueue_.size() >= self->capacity_) {
+    self->bytesQueue_.pop_front(); // drop-oldest — JSON 경로와 동일 정책
+  }
+  const uint8_t* src = payload ? payload : reinterpret_cast<const uint8_t*>("");
+  self->bytesQueue_.emplace_back(
+    handle, std::vector<uint8_t>(src, src + payload_len));
+  self->scheduleDrainLocked();
+}
+
 void ChannelDispatcher::drain(facebook::jsi::Runtime& rt) {
   // JS 런타임 스레드에서만 호출(CallInvoker 콜백 또는 폴링).
   std::deque<std::pair<uint32_t, std::string>> items;
+  std::deque<std::pair<uint32_t, std::vector<uint8_t>>> byteItems;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     drainScheduled_ = false;
     items.swap(queue_);
+    byteItems.swap(bytesQueue_);
+  }
+  for (auto& [handle, payload] : byteItems) {
+    auto it = callbacks_.find(handle);
+    if (it == callbacks_.end()) continue; // 만료 채널 — 조용히 무시
+    try {
+      // 바이너리 페이로드는 복사본 ArrayBuffer 로 — 소유권 이전 없이 안전.
+      it->second.call(rt, createArrayBuffer(rt, payload.data(), payload.size()));
+    } catch (const std::exception&) {
+      // JSON 경로와 동일 정책 — 콜백 예외 무시, 나머지 프레임 계속 전달.
+    }
   }
   for (auto& [handle, payload] : items) {
     auto it = callbacks_.find(handle);
@@ -590,9 +714,7 @@ void invalidateRustraJSI() {
 
 using InvokeFn = uint8_t*(*)(const uint8_t*, size_t, size_t*);
 
-// free 짝 계약: generic FFI response buffers use rustra_ffi_free. The optional
-// calculator benchmark surface is compiled only in the repository fixture and
-// retains its legacy allocator-specific pairs.
+// free 짝 계약: generic FFI response buffers use rustra_ffi_free.
 using FreeFn = void(*)(uint8_t*, size_t);
 
 // live schema FFI (from rustra crate)
@@ -622,31 +744,16 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   };
 
-  // ── Generic FFI paths (default, json, postcard) — magic 헤더 레이아웃이므로
-  //    rustra_ffi_free 로 해제 짝. ─────────────────────────────
+  // ── Generic FFI paths (default, json, postcard, rkyv V2) — magic 헤더
+  //    레이아웃이므로 rustra_ffi_free 로 해제 짝. ─────────────────────
   makeInvoke("invoke",        rustra_ffi_invoke,              rustra_ffi_free, "Rust returned null");
   makeInvoke("invokeJson",    rustra_ffi_invoke_json,         rustra_ffi_free, "Rust json returned null");
   makeInvoke("invokePostcardFFI", rustra_ffi_invoke_postcard, rustra_ffi_free, "Rust postcard FFI returned null");
-
-#if defined(RUSTRA_ENABLE_LEGACY_BENCHMARKS)
-  // ── Per-example benchmark paths (legacy) — calculator 응답(magic 헤더 없는
-  //    Box<[u8]>)이므로 rustra_calculator_free_buffer 로 해제 짝. ──
-  makeInvoke("invokeBytes",   rustra_calculator_invoke_bytes,  rustra_calculator_free_buffer, "Rust bytes returned null");
-  makeInvoke("invokeMsgpack",  rustra_calculator_invoke_msgpack, rustra_calculator_free_buffer, "Rust msgpack returned null");
-  makeInvoke("invokeBincode",  rustra_calculator_invoke_bincode, rustra_calculator_free_buffer, "Rust bincode returned null");
-  // Keep the public JS adapter name aligned with RustraNative. This is the
-  // calculator's legacy postcard envelope (command + a + b), while
-  // invokePostcardFFI above is the generic framework envelope.
-  makeInvoke("invokePostcard", rustra_calculator_invoke_postcard, rustra_calculator_free_buffer, "Rust postcard returned null");
-  makeInvoke("invokeLegacyPostcard", rustra_calculator_invoke_postcard, rustra_calculator_free_buffer, "Rust postcard returned null");
-  makeInvoke("invokeRkyv",     rustra_calculator_invoke_rkyv,    rustra_calculator_free_buffer, "Rust rkyv returned null");
-  makeInvoke("invokeHybrid",   rustra_calculator_invoke_hybrid,  rustra_calculator_free_buffer, "Rust hybrid returned null");
-  // rkyv V2 는 코어 rustra_ffi_invoke_rkyv_v2 로 위임된 뒤라 응답이 코어 FFI
-  // 레이아웃(8B magic 헤더)이다 — 전용 free 짝 필수(Phase 2 위임 시 누락돼
-  // ArrayBuffer 경로에서 double-free/unallocated-free 크래시를 일으켰다).
-  makeInvoke("invokeRkyvV2",   rustra_calculator_invoke_rkyv_v2, rustra_calculator_free_rkyv_v2_buffer, "Rust rkyv v2 returned null");
-  makeInvoke("invokeRaw",      rustra_calculator_invoke_raw,     rustra_calculator_free_buffer, "Rust invoke_raw returned null");
-#endif
+  // rkyv V2 는 코어 제네릭 심볼 직결이며 legacy ifdef 밖에 둔다 — 엔진 tier2/3
+  // 폴백이 모든 빌드(legacy-OFF 포함)에서 이 함수를 요구한다(RustraNative
+  // non-optional). 응답은 코어 FFI 레이아웃(8B magic 헤더)이므로 free 짝은
+  // rustra_ffi_free (과거 double-free 크래시의 free-짝 계약 유지).
+  makeInvoke("invokeRkyvV2",  rustra_ffi_invoke_rkyv_v2,     rustra_ffi_free, "Rust rkyv v2 returned null");
 
   // noop: returns input bytes unchanged
   {
@@ -782,6 +889,24 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
   {
+    // 바이너리 채널 — 콜백이 ArrayBuffer(복사본)를 받는다. rkyv V2 프레임 등
+    // 임의 바이트를 JSON 직렬화 없이 흘리는 TurboModule 상호운용 경로.
+    auto dispatcher = getChannelDispatcher();
+    auto propNameId = PropNameID::forAscii(rt, "createChannelBytes");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 1,
+      [dispatcher](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1 || !args[0].isObject() || !args[0].asObject(rt).isFunction(rt)) {
+          throw JSError(rt, "RustraJSI: createChannelBytes requires (callback)");
+        }
+        Function cb = args[0].asObject(rt).getFunction(rt);
+        uint32_t handle = dispatcher->createBytes(rt, std::move(cb));
+        return Value(static_cast<double>(handle));
+      });
+    cache_["createChannelBytes"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+  {
     auto dispatcher = getChannelDispatcher();
     auto propNameId = PropNameID::forAscii(rt, "dropChannel");
     auto hostFn = Function::createFromHostFunction(
@@ -888,17 +1013,17 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         }
         std::string name = args[0].asString(rt).utf8(rt);
 
-        // 1) JS 객체 → postcard 요청 바이트 ([cmd_id u16 LE][postcard(I)])
-        rc::Writer w;
-        if (!gen::encode_by_name(rt, name, args[1], w)) {
-          throw JSError(rt, "RustraJSI: no C++ codec for '" + name + "'");
+        // 공개 C++ 진입점(invokeTypedByName)과 동일 경로 — HostFunction 은
+        // status 를 기존 예외 메시지로 그대로 옮긴다(호환 보존).
+        TypedInvokeResult result = invokeTypedByName(rt, name, args[1]);
+        switch (result.status) {
+          case TypedInvokeStatus::Ok:
+            return std::move(result.value);
+          case TypedInvokeStatus::NoStaticCodec:
+            throw JSError(rt, "RustraJSI: no C++ codec for '" + name + "'");
+          default:
+            throw JSError(rt, result.message);
         }
-        // 2) Rust FFI (rkyv V2 단일 엔진) + 응답 tail — 공통 헬퍼로
-        //    (typedInvokeTail 주석의 free 짝 계약: rustra_calculator_free_buffer).
-        //    decoder 만 이름 기반 decode_by_name.
-        return typedInvokeTail(rt, w.data(), w.size(), "", [&rt, &name](rc::Reader& r) {
-          return gen::decode_by_name(rt, name, r);
-        });
       });
     cache_["invokeTyped"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
@@ -920,16 +1045,17 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         }
         uint16_t cmdId = requireU16(rt, args[0], "command id");
 
-        // 1) JS 객체 → postcard 요청 바이트 ([cmd_id u16 LE][postcard(I)])
-        rc::Writer w;
-        if (!gen::encode_by_id(rt, cmdId, args[1], w)) {
-          throw JSError(rt, "RustraJSI: no C++ codec for cmd_id " + std::to_string(cmdId));
+        // 공개 C++ 진입점(invokeTypedById)과 동일 경로 — status 를 기존 예외
+        // 메시지로 옮긴다(호환 보존).
+        TypedInvokeResult result = invokeTypedById(rt, cmdId, args[1]);
+        switch (result.status) {
+          case TypedInvokeStatus::Ok:
+            return std::move(result.value);
+          case TypedInvokeStatus::NoStaticCodec:
+            throw JSError(rt, "RustraJSI: no C++ codec for cmd_id " + std::to_string(cmdId));
+          default:
+            throw JSError(rt, result.message);
         }
-        // 2) Rust FFI + 응답 tail — invokeTyped 와 동일하지만 decoder 만
-        //    u16 디스패치 decode_by_id (free 짝: rustra_calculator_free_buffer).
-        return typedInvokeTail(rt, w.data(), w.size(), "", [&rt, cmdId](rc::Reader& r) {
-          return gen::decode_by_id(rt, cmdId, r);
-        });
       });
     cache_["invokeTypedById"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
@@ -1508,6 +1634,62 @@ void installRustraJSI(Runtime& rt) {
   // CallInvoker 없는 설치(레거시 경로) — 이벤트 푸시는 JS 가 drainEvents() 로
   // 폴링해야 한다. 프로덕션 플랫폼 글루는 installRustraJSIWithInvoker 사용.
   installRustraJSIWithInvoker(rt, nullptr);
+}
+
+// ── folly::dynamic 진입점 — jsi::Value 오버로드의 dynamic 변환 wrapper ──
+// 변환 규칙: null/bool/int/double/string/array/object. int64 는 jsi 표면에
+// BigInt 생성이 없어 double 로 간다(2^53 초과 손실 — 헤더 계약에 명시).
+namespace {
+facebook::jsi::Value dynamicToValue(
+  facebook::jsi::Runtime& rt, const folly::dynamic& value) {
+  using facebook::jsi::Value;
+  switch (value.type()) {
+    case folly::dynamic::NULLT:
+      return Value::null();
+    case folly::dynamic::BOOL:
+      return Value(static_cast<bool>(value.asBool()));
+    case folly::dynamic::INT64:
+      return Value(static_cast<double>(value.asInt()));
+    case folly::dynamic::DOUBLE:
+      return Value(value.asDouble());
+    case folly::dynamic::STRING: {
+      const std::string& str = value.asString();
+      return facebook::jsi::String::createFromUtf8(
+        rt, reinterpret_cast<const uint8_t*>(str.data()), str.size());
+    }
+    case folly::dynamic::ARRAY: {
+      facebook::jsi::Array array(rt, value.size());
+      size_t index = 0;
+      for (const auto& item : value) {
+        array.setValueAtIndex(rt, index++, dynamicToValue(rt, item));
+      }
+      return Value(rt, array);
+    }
+    case folly::dynamic::OBJECT: {
+      facebook::jsi::Object object(rt);
+      for (const auto& [key, item] : value.items()) {
+        object.setProperty(
+          rt, facebook::jsi::String::createFromUtf8(rt, key), dynamicToValue(rt, item));
+      }
+      return Value(rt, object);
+    }
+  }
+  return facebook::jsi::Value::undefined();
+}
+} // namespace
+
+TypedInvokeResult invokeTypedByNameDynamic(
+  facebook::jsi::Runtime& rt, const std::string& commandName,
+  const folly::dynamic& args) {
+  facebook::jsi::Value value = dynamicToValue(rt, args);
+  return invokeTypedByName(rt, commandName, value);
+}
+
+TypedInvokeResult invokeTypedByIdDynamic(
+  facebook::jsi::Runtime& rt, uint16_t commandId,
+  const folly::dynamic& args) {
+  facebook::jsi::Value value = dynamicToValue(rt, args);
+  return invokeTypedById(rt, commandId, value);
 }
 
 } // namespace rustra

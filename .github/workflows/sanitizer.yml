@@ -1,0 +1,53 @@
+name: Sanitizer
+
+# A09 — AddressSanitizer/LeakSanitizer 야간 검증.
+#
+# 안정화 통합 문서(2026-09-05)의 A09 정의는 "sanitizer — native 환경, 수동
+# 체크리스트로만"(실행 검증 보류)이므로 이 잡은 **게이트가 아니다**
+# (continue-on-error). miri(UB)·fuzz(디코드 신뢰 경계)가 이미 실험 트랙으로
+# 존재하고, 이 잡은 그 사이의 메모리 오염·누수(할당 경계, 버퍼 재구성,
+# FFI 해제 경로)를 잡는 보완 트랙이다. 실기기(RN) 검증은 여전히 수동
+# 체크리스트 영역 — 안정화 통합 트랙 Task 15 가 작성할
+# docs/verification-checklist.md 참조.
+#
+# 제외 범위(--lib): miri 와 동일한 선택. FFI 진입점 통합 테스트는 extern "C"
+# 경계에서 호스트 콜백 포인터를 실제로 호출하므로 ASan 하에서 비협조적
+# (콜백 스택이 샌드위치된 스택 프레임을 침범 보고할 수 있음). 코어 로직의
+# 힙 경계 검증이 1차 대상이다. 확장은 필요 시 --test rkyv_v2_wire 부터.
+#
+# nightly 필수: `-Zsanitizer=address` 는 nightly 전용 플래그. 도구체인 결정은
+# miri.yml 과 동일한 dtolnay/rust-toolchain@nightly 패턴을 따른다(별도
+# rust-toolchain 파일 도입 없음).
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '41 21 * * 0' # 일요일 KST 새벽 6:41 — 오프피크, miri(05:37)와 분산
+
+jobs:
+  asan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true # 실험 트랙 — 발견은 수확, 실패는 게이트 아님
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - name: Run lib tests under AddressSanitizer + LeakSanitizer
+        env:
+          RUSTFLAGS: -Zsanitizer=address
+          ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1:log_path=asan
+          # 순차 실행 — ASan 이 교착 오탐(느린 할당 스레딩)을 낼 수 있어
+          # 병렬 테스트 스레드를 끈다. 워커 풀 자체는 실제 스레드를 쓰므로
+          # 동시성 커버리지는 유지된다.
+          RUST_TEST_THREADS: '1'
+        run: cargo test -p rustra --lib --target x86_64-unknown-linux-gnu
+      - name: Upload sanitizer reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: asan-report-${{ github.run_id }}
+          path: |
+            target/x86_64-unknown-linux/debug/asan.*
+            asan.*
+          if-no-files-found: ignore

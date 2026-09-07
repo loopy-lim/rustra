@@ -18,6 +18,8 @@ impl Package {
             events: BTreeMap::new(),
             schema_version: 1,
             states: state::StateMap::new(),
+            platform_command_declarations: BTreeMap::new(),
+            implemented_platform_commands: BTreeSet::new(),
         }
     }
 

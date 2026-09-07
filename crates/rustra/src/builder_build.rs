@@ -5,6 +5,10 @@ impl PackageBuilder {
         // 선언 시점이 아닌 build 시점에 검증한다(이벤트 맵이 여기서 완성된다).
         self.validate_event_channel_uniqueness();
 
+        // (플랫폼 상호운용) 지원 플랫폼에서 platform_impl 누락은 계약 오류다 —
+        // 스텁이 platform.unavailable 로 조용히 남는 것을 빌드 시점에 잡는다.
+        self.validate_platform_command_impls();
+
         let mut commands = self.commands;
         let mut next_command_id = self.next_command_id;
 

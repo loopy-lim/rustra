@@ -131,6 +131,7 @@ mod invoke;
 mod limits;
 mod package;
 mod package_codegen;
+pub mod platform;
 pub mod prelude;
 mod registry;
 mod rkyv_codec;
@@ -189,6 +190,8 @@ pub trait BufferCommandOutput: Serialize + JsonSchema + 'static {
 
 #[cfg(test)]
 mod buffer_invoke_tests;
+#[cfg(test)]
+mod builder_platform_tests;
 #[cfg(test)]
 mod complex_into_tests;
 #[cfg(test)]

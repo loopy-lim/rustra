@@ -40,3 +40,43 @@ and the response. It is not an end-to-end RTT claim.
 
 When quoting numbers, name the layer. A payload ratio must not be quoted as an
 RTT ratio; an FFI micro figure must not be quoted as a user-path latency.
+
+## Loop-stdio binary-mode reserved frames
+
+The loop-stdio runtime multiplexes unsolicited pushes and channel control onto
+the same length-prefixed stream as request/response frames
+(`[len u32 LE][cmd/body]`). Response frames start with an `ok` flag byte
+(0/1), so their first `u16 LE` can never collide with a reserved cmd id — that
+wire fact is what the receiver's demultiplexer branches on. Reserved ids
+(counting down from the top of the u16 space):
+
+| cmd id   | Direction        | Body                                   | Purpose                                                               |
+| -------- | ---------------- | -------------------------------------- | --------------------------------------------------------------------- |
+| `0xFFFE` | client → runtime | (none)                                 | event drain request                                                   |
+| `0xFFFD` | runtime → client | 1-line JSON `{"name","payload","seq"}` | event push frame                                                      |
+| `0xFFFC` | runtime → client | 1-line JSON `{"handle","payload"}`     | JSON channel push frame                                               |
+| `0xFFFB` | client → runtime | empty, or `[mode u8]`                  | channel create — `mode`: absent/`0x00` = JSON, `0x01` = bytes         |
+| `0xFFFA` | client → runtime | postcard varint `u32` handle           | channel drop (removes the handle from both the JSON and bytes tables) |
+| `0xFFF9` | runtime → client | `[handle u32 LE][payload bytes]`       | **binary channel push frame** (raw bytes, no JSON wrapping)           |
+
+Channel-create responses use the rkyv V2 response shape with a
+`{"handle": u32}` JSON body on both paths.
+
+The `0xFFF9` body carries the payload as raw bytes (e.g. an rkyv V2 frame).
+There is no payload length prefix inside the body — the frame wrapper's `len`
+already bounds it, and unlike the JSON channel body there is no internal
+structure that needs its own boundary. One handle works on exactly one path
+(JSON xor bytes), fixed at creation by the `0xFFFB` mode byte; the drop frame
+and the monotonic handle space are shared by both paths.
+
+The `0xFFFB` mode byte is the only extension to an existing frame: a create
+with an empty body is byte-for-byte the legacy JSON request, so old runtimes
+and old clients interoperate in both directions (an old runtime ignores the
+body entirely; a `0x00` explicit-JSON flag is defined for wire completeness).
+An unknown mode value is answered `ok=0` rather than silently falling back to
+the JSON path. New clients additionally gate binary channels on the
+`"channelBytes": true` capability echoed in the `__hello` response — a runtime
+that does not echo it makes `createNodeBytesChannel` fail loudly with
+`channel.unavailable` before any frame is sent, instead of silently mismatching
+the JSON path. `0xFFF9` frames only ever flow to a client that issued a
+`mode=0x01` create, so an old demultiplexer never sees one.

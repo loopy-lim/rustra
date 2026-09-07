@@ -4,7 +4,9 @@ import {
   CancelledError,
   createReactNativeEngine,
   createRustraBootstrap,
+  createBytesChannel,
   createChannel,
+  invokeTypedSync,
   getRustraNative,
   RustraCommandError,
 } from './index.js';
@@ -384,6 +386,68 @@ test('createChannel exposes a typed handle and idempotent close', () => {
   assert.equal(channel.close(), true);
   assert.equal(channel.close(), false);
   assert.deepEqual(dropped, [42]);
+});
+
+test('createBytesChannel round-trips binary frames without JSON parsing', () => {
+  let callback: ((payload: ArrayBuffer) => void) | undefined;
+  const dropped: number[] = [];
+  const frames: number[][] = [];
+  const channel = createBytesChannel((payload) => frames.push(Array.from(payload)), {
+    createChannelBytes(next) {
+      callback = next as (payload: ArrayBuffer) => void;
+      return 7;
+    },
+    dropChannel(handle) {
+      dropped.push(handle);
+      return true;
+    },
+  });
+  assert.equal(channel.handle, 7);
+  callback!(new Uint8Array([0xff, 0xfc, 0x00, 0xde]).buffer);
+  assert.deepEqual(frames, [[0xff, 0xfc, 0x00, 0xde]], 'bytes must arrive untouched');
+  assert.equal(channel.close(), true);
+  assert.equal(channel.close(), false);
+  assert.deepEqual(dropped, [7]);
+});
+
+test('invokeTypedSync returns the decoded value without a Promise hop', () => {
+  const native = {
+    invokeTyped(name: string, args: unknown) {
+      assert.equal(name, 'addNumbers');
+      assert.deepEqual(args, { a: 1, b: 2 });
+      return { value: 3 };
+    },
+  };
+  const result = invokeTypedSync<{ value: number }>('addNumbers', { a: 1, b: 2 }, native);
+  assert.deepEqual(result, { value: 3 }, 'sync path returns the decoded output directly');
+});
+
+test('invokeTypedSync normalizes C++ "code: message" JSError into RustraCommandError', () => {
+  const native = {
+    invokeTyped() {
+      throw new Error("platform.unavailable: command 'x' is declared for platforms [macos]");
+    },
+  };
+  assert.throws(
+    () => invokeTypedSync('x', {}, native),
+    (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'platform.unavailable');
+      return true;
+    },
+  );
+});
+
+test('invokeTypedSync loud-fails on natives without the typed fast path', () => {
+  assert.throws(() => invokeTypedSync('x', {}, {}), /invokeTyped/);
+});
+
+test('createBytesChannel loud-fails on natives without the bytes path', () => {
+  const native = {
+    createChannel: () => 1,
+    dropChannel: () => true,
+  };
+  assert.throws(() => createBytesChannel(() => {}, native), /createChannelBytes/);
 });
 
 test('createChannel rejects an invalid native handle instead of creating an unusable channel', () => {
@@ -990,5 +1054,93 @@ test('A05: concurrent ready calls share one initialization promise (react-native
     bootstrap.dispose();
   } finally {
     configure(A05_SLOT_ENGINE);
+  }
+});
+
+// ── subscribeEvent pollMs — CallInvoker 없는 호스트의 JS 폴링 drain ─────────
+
+test('subscribeEvent pollMs drains queued events from a CallInvoker-less native', async () => {
+  // C++ 디스패처 계약 재현: CallInvoker 없으면 emit 이 큐에만 쌓이고 JS 의
+  // drainEvents() 폴링을 기다린다. onEvent 콜백은 큐 소비 시점에 호출된다.
+  const received: unknown[] = [];
+  let drainCount = 0;
+  const native = {
+    onEvent(name: string, callback: (payloadJson: string) => void) {
+      // 실 C++ HostFunction 과 동일 — 리스너 등록만 하고 큐는 drain 에서 소비.
+      listeners.set(name, callback);
+    },
+    offEvent(name: string) {
+      listeners.delete(name);
+    },
+    drainEvents() {
+      drainCount += 1;
+      // 큐에 쌓인 이벤트를 drain 이 소비하며 등록된 콜백을 호출한다.
+      const queued = queue.splice(0);
+      for (const [name, json] of queued) listeners.get(name)?.(json);
+      return queued.length;
+    },
+  };
+  const listeners = new Map<string, (payloadJson: string) => void>();
+  const queue: Array<[string, string]> = [];
+
+  // canonical (name, callback) 형태는 getRustraNative() 로 __rustraNative 를 읽는다.
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = native;
+  try {
+    const unsubscribe = subscribeEvent('poll.tick', (payload) => received.push(payload), {
+      pollMs: 5,
+    });
+    // emit — CallInvoker 없으므로 큐에만 적재.
+    queue.push(['poll.tick', JSON.stringify({ step: 1 })]);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    assert.ok(drainCount >= 2, 'polling loop must run repeatedly');
+    assert.deepEqual(received, [{ step: 1 }], 'queued event must reach the callback via drain');
+    unsubscribe();
+    const drainsAtStop = drainCount;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(drainCount, drainsAtStop, 'unsubscribe must stop the polling loop');
+  } finally {
+    root.__rustraNative = previous;
+  }
+});
+
+test('subscribeEvent pollMs delivers directly on onEvent hosts without waiting for drain', () => {
+  // CallInvoker 호스트 — onEvent 콜백이 즉시 호출되고 drain 은 비어 있어 무해.
+  const received: unknown[] = [];
+  const h = createEventNative();
+  (h.native as { drainEvents?: () => number }).drainEvents = () => 0;
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = h.native;
+  try {
+    const unsubscribe = subscribeEvent('direct.tick', (payload) => received.push(payload), {
+      pollMs: 5,
+    });
+    h.emit('direct.tick', JSON.stringify({ ok: 1 }));
+    assert.deepEqual(received, [{ ok: 1 }]);
+    unsubscribe();
+  } finally {
+    root.__rustraNative = previous;
+  }
+});
+
+test('subscribeEvent pollMs is ignored on natives without drainEvents', () => {
+  // drainEvents 미노출 — 옵션은 조용히 무시(푸시 전용 네이티브 보호).
+  const h = createEventNative();
+  const received: unknown[] = [];
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = h.native;
+  try {
+    const unsubscribe = subscribeEvent('push.only', (payload) => received.push(payload), {
+      pollMs: 5,
+    });
+    h.emit('push.only', JSON.stringify({ v: 1 }));
+    assert.deepEqual(received, [{ v: 1 }]);
+    unsubscribe();
+  } finally {
+    root.__rustraNative = previous;
   }
 });

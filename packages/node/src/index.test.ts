@@ -1227,3 +1227,356 @@ test('A05: dispose during reload re-init on the one-shot path leaves no TypeErro
     configure(cleanSlotEngine);
   }
 });
+
+// ── 채널 e2e — 실제 스폰 → 발급(0xfffb) → channelDemo → 0xfffc 프레임 ──────
+// Rust 통합 테스트(loop_stdio_channels.rs)와 단위 테스트(node-loop.test.ts)가
+// 각 절반을 검증하므로, 이 테스트는 발급 invoke → ChannelHandle::send → stdout
+// 0xfffc 프레임 → demultiplexBinaryFrame → 채널 콜백 사슬 전체를 연결해
+// 매트릭스 "Node 채널" 셀의 증거가 된다. Bun FFI 브릿지와 달리 백그라운드
+// 스레드 send(stdout 프레임은 JS 턴 데이터 이벤트로 도달)도 이 사슬에서 안전하다.
+
+processTest(
+  'createNodeChannel round-trips channelDemo frames from a spawned loop-stdio runtime',
+  { timeout: 30_000 },
+  async () => {
+    const { createNodeLoopTransport, createNodeChannel } = await import('./index.js');
+    const { rkyvV2Registry } = await import(
+      resolve(repoRoot, 'dist-ts/examples/calculator/generated/rkyv-registry.js')
+    );
+    const transport = createNodeLoopTransport({
+      command: resolve(repoRoot, 'target/debug/loop-stdio'),
+      args: [],
+      codecs: rkyvV2Registry as never,
+    });
+    try {
+      await transport.ready();
+      assert.equal(transport.mode, 'binary', 'channels need binary mode');
+
+      // (1) 발급 — 핸들은 양의 정수.
+      const received: unknown[] = [];
+      const channel = await createNodeChannel(transport, (payload) => received.push(payload));
+      const channelHandle = channel.handle;
+      assert.ok(
+        Number.isSafeInteger(channelHandle) && channelHandle > 0,
+        'issued handle is a positive safe integer',
+      );
+
+      // (2) 왕복 — channelDemo(channel, ticks:3)이 같은 invoke 왕복 안에서
+      // 채널로 3회 send 한다(응답과 0xfffc 프레임이 같은 stdout 스트림을
+      // 공유 — 디멀티플렉서 분기가 실경합에서 정확히 동작함을 함께 검증).
+      // channelDemo 의 send 는 핸들러(동기) 안에서 일어나므로 프레임은 응답
+      // 전/후 어느 쪽이든 stdout 에 착지할 수 있다 — 3프레임 정착을 기다린다.
+      const allFrames = new Promise<void>((resolve, reject) => {
+        const deadline = setTimeout(
+          () =>
+            reject(new Error(`channel frames did not arrive in time; got ${received.length}/3`)),
+          15_000,
+        );
+        const timer = setInterval(() => {
+          if (received.length >= 3) {
+            clearTimeout(deadline);
+            clearInterval(timer);
+            resolve();
+          }
+        }, 5);
+      });
+      const result = (await transport.invoke('channelDemo', {
+        channel: channelHandle,
+        ticks: 3,
+      })) as { sent: number; droppedSends: number };
+      assert.equal(result.sent, 3);
+      assert.equal(result.droppedSends, 0);
+      await allFrames;
+      assert.equal(received.length, 3, 'all 3 channel frames must reach the callback');
+      assert.deepEqual(received, [
+        { step: 1, of: 3 },
+        { step: 2, of: 3 },
+        { step: 3, of: 3 },
+      ]);
+
+      // (3) close — 이후 send 는 droppedSends 로 보고되고 콜백에 도달하지 않는다.
+      assert.equal(await channel.close(), true, 'first close drops a live handle');
+      assert.equal(await channel.close(), false, 'double close reports staleness');
+      const after = (await transport.invoke('channelDemo', {
+        channel: channelHandle,
+        ticks: 1,
+      })) as { sent: number; droppedSends: number };
+      assert.equal(after.sent, 0);
+      assert.equal(after.droppedSends, 1, 'stale send is dropped, not delivered');
+      assert.equal(received.length, 3, 'no frames after close');
+    } finally {
+      transport.dispose();
+    }
+  },
+);
+
+processTest(
+  'createNodeChannel loud-fails on an NDJSON transport instead of hanging',
+  { timeout: 30_000 },
+  async () => {
+    const { createNodeLoopTransport, createNodeChannel } = await import('./index.js');
+    // codecs 미제공 — 핸드셰이크가 없어 NDJSON 에 머문다(구 런타임 동일 위상).
+    const transport = createNodeLoopTransport({
+      command: resolve(repoRoot, 'target/debug/loop-stdio'),
+      args: [],
+    });
+    try {
+      await transport.ready();
+      assert.equal(transport.mode, 'ndjson');
+      await assert.rejects(
+        createNodeChannel(transport as never, () => {}),
+        (err: unknown) => err instanceof RustraCommandError && err.code === 'channel.unavailable',
+      );
+    } finally {
+      transport.dispose();
+    }
+  },
+);
+
+// ── 바이너리 채널 (createNodeBytesChannel) ────────────────────────────────
+// 0xfffb 모드 플래그(0x01) 발급 → ChannelHandle::send_bytes → stdout 0xfff9
+// 프레임 → demultiplexBinaryFrame → Uint8Array 콜백 사슬. 매직 모의(스폰 없음)
+// 유닛 테스트는 Bun 러너에서도 실행되고, 실제 런타임 왕복은 아래 processTest
+// (node 러너 전용 — channelDemoBytes 로 LE u64 프레임 왕복).
+
+test('createNodeBytesChannel loud-fails without a bytes frame path', async () => {
+  const { createNodeBytesChannel } = await import('./index.js');
+  // 원샷 invoke transport — onChannelBytesFrame 노출 없음(경로 자체 부재).
+  const transport = { invoke: async () => ({ handle: 1 }) };
+  await assert.rejects(
+    createNodeBytesChannel(transport as never, () => {}),
+    (err: unknown) =>
+      err instanceof RustraCommandError &&
+      err.code === 'channel.unavailable' &&
+      /onChannelBytesFrame/.test(err.message),
+  );
+});
+
+test('createNodeBytesChannel loud-fails on an NDJSON transport', async () => {
+  const { createNodeBytesChannel } = await import('./index.js');
+  const transport = {
+    invoke: async () => ({ handle: 1 }),
+    onChannelBytesFrame: () => () => {},
+    ready: async () => {},
+    mode: 'ndjson' as const,
+  };
+  await assert.rejects(
+    createNodeBytesChannel(transport as never, () => {}),
+    (err: unknown) =>
+      err instanceof RustraCommandError &&
+      err.code === 'channel.unavailable' &&
+      /NDJSON/.test(err.message),
+  );
+});
+
+test('createNodeBytesChannel loud-fails when the runtime lacks the channelBytes capability', async () => {
+  const { createNodeBytesChannel } = await import('./index.js');
+  // 구 런타임 매트릭스 — 바이너리 모드는 협상됐지만 channelBytes capability 가
+  // 없다(모드 바이트를 무시하고 JSON 채널을 파는 위상). 프레임을 보내기 전에
+  // 끊어야 한다: invoke 자체가 일어나지 않는다.
+  const invokes: string[] = [];
+  const transport = {
+    async invoke(command: string) {
+      invokes.push(command);
+      return { handle: 1 };
+    },
+    onChannelBytesFrame: () => () => {},
+    ready: async () => {},
+    mode: 'binary' as const,
+    channelBytesCapable: false,
+  };
+  await assert.rejects(
+    createNodeBytesChannel(transport as never, () => {}),
+    (err: unknown) =>
+      err instanceof RustraCommandError &&
+      err.code === 'channel.unavailable' &&
+      /channelBytes/.test(err.message),
+  );
+  assert.deepEqual(invokes, [], 'capability gate must fire before any wire frame is sent');
+});
+
+test('createNodeBytesChannel issues, delivers copied bytes, and drops on close', async () => {
+  const { createNodeBytesChannel } = await import('./index.js');
+  // 최소 바이너리 모드 모의 — 발급 invoke 는 모드 플래그 프레임을 보내는
+  // 내부 커맨드(__createChannelBytes), 프레임은 등록된 핸들러로 시뮬레이션.
+  // detach 는 고의로 no-op: close 이후의 late frame 무시가 구독 해지가 아니라
+  // 어댑터의 closed 플래그(실계약)에서 일어나는지를 보기 위해서다.
+  const invokes: Array<{ command: string; args?: unknown }> = [];
+  let handler: ((frame: { handle: number; payload: Uint8Array }) => void) | null = null;
+  const transport = {
+    async invoke(command: string, args?: unknown) {
+      invokes.push({ command, args });
+      if (command === '__createChannelBytes') return { handle: 42 };
+      if (command === '__dropChannel') return true;
+      throw new Error(`unexpected invoke: ${command}`);
+    },
+    onChannelBytesFrame(h: (frame: { handle: number; payload: Uint8Array }) => void) {
+      handler = h;
+      return () => {};
+    },
+    ready: async () => {},
+    mode: 'binary' as const,
+    channelBytesCapable: true,
+  };
+  const received: Uint8Array[] = [];
+  const channel = await createNodeBytesChannel(transport as never, (payload) =>
+    received.push(payload),
+  );
+  assert.equal(channel.handle, 42);
+  assert.deepEqual(invokes, [{ command: '__createChannelBytes', args: undefined }]);
+
+  // 프레임 도달 — 타 핸들 프레임은 무시되고 자기 핸들만 콜백으로 간다.
+  handler!({ handle: 41, payload: Uint8Array.from([9]) });
+  const raw = Uint8Array.from([1, 0, 0, 0, 0, 0, 0, 0]);
+  handler!({ handle: 42, payload: raw });
+  assert.equal(received.length, 1);
+  assert.deepEqual([...received[0]!], [...raw]);
+  // 복사 계약 — 콜백이 받은 바이트는 원본 뷰와 분리된다(전달 후 변형 무영향).
+  raw[0] = 0xff;
+  assert.equal(received[0]![0], 1);
+
+  // close — 이후 프레임은 closed 플래그로 무시되고 0xfffa drop invoke 가 간다.
+  assert.equal(await channel.close(), true);
+  assert.equal(await channel.close(), false, 'double close is idempotent');
+  handler!({ handle: 42, payload: Uint8Array.from([2]) });
+  assert.equal(received.length, 1, 'late frames after close are ignored');
+  assert.deepEqual(invokes[invokes.length - 1], {
+    command: '__dropChannel',
+    args: { handle: 42 },
+  });
+});
+
+processTest(
+  'createNodeBytesChannel round-trips channelDemoBytes frames from a spawned loop-stdio runtime',
+  { timeout: 30_000 },
+  async () => {
+    const { createNodeLoopTransport, createNodeBytesChannel, createNodeChannel } =
+      await import('./index.js');
+    const { rkyvV2Registry } = await import(
+      resolve(repoRoot, 'dist-ts/examples/calculator/generated/rkyv-registry.js')
+    );
+    const transport = createNodeLoopTransport({
+      command: resolve(repoRoot, 'target/debug/loop-stdio'),
+      args: [],
+      codecs: rkyvV2Registry as never,
+    });
+    try {
+      await transport.ready();
+      assert.equal(transport.mode, 'binary', 'binary channels need binary mode');
+      assert.equal(
+        transport.channelBytesCapable,
+        true,
+        'fresh runtime echoes the channelBytes capability',
+      );
+
+      // (1) 발급 — 0xfffb 모드 0x01. 핸들은 양의 정수(JSON 경로와 공유 공간).
+      const received: Uint8Array[] = [];
+      const channel = await createNodeBytesChannel(transport, (payload) => received.push(payload));
+      assert.ok(
+        Number.isSafeInteger(channel.handle) && channel.handle > 0,
+        'issued handle is a positive safe integer',
+      );
+
+      // (2) 왕복 — channelDemoBytes(channel, ticks:3)이 스텝 카운터 LE u64 를
+      // 8바이트 프레임 3개로 흘린다(응답과 0xfff9 프레임이 같은 stdout 스트림을
+      // 공유 — 디멀티플렉서 분기가 실경합에서 정확히 동작함을 함께 검증).
+      const allFrames = new Promise<void>((resolve, reject) => {
+        const deadline = setTimeout(
+          () =>
+            reject(
+              new Error(`bytes channel frames did not arrive in time; got ${received.length}/3`),
+            ),
+          15_000,
+        );
+        const timer = setInterval(() => {
+          if (received.length >= 3) {
+            clearTimeout(deadline);
+            clearInterval(timer);
+            resolve();
+          }
+        }, 5);
+      });
+      const result = (await transport.invoke('channelDemoBytes', {
+        channel: channel.handle,
+        ticks: 3,
+      })) as { sent: number; droppedSends: number };
+      assert.equal(result.sent, 3);
+      assert.equal(result.droppedSends, 0);
+      await allFrames;
+      assert.equal(received.length, 3, 'all 3 bytes frames must reach the callback');
+      // 페이로드는 1..3 의 LE u64 (channelDemoBytes 계약) — JSON 파싱 없이 디코딩.
+      const steps = received.map((bytes) =>
+        Number(new DataView(bytes.buffer, bytes.byteOffset, 8).getBigUint64(0, true)),
+      );
+      assert.deepEqual(steps, [1, 2, 3]);
+
+      // (3) close — 이후 send_bytes 는 droppedSends 로 보고되고 콜백에 도달하지
+      // 않는다(0xfffa drop 이 bytes 테이블도 내린다).
+      assert.equal(await channel.close(), true, 'first close drops a live bytes handle');
+      assert.equal(await channel.close(), false, 'double close reports staleness');
+      const after = (await transport.invoke('channelDemoBytes', {
+        channel: channel.handle,
+        ticks: 1,
+      })) as { sent: number; droppedSends: number };
+      assert.equal(after.sent, 0);
+      assert.equal(after.droppedSends, 1, 'stale send_bytes is dropped, not delivered');
+      assert.equal(received.length, 3, 'no frames after close');
+
+      // (4) JSON 채널 공존 — 같은 세션에서 legacy 발급(본문 없음)이 그대로
+      // 동작한다(모드 가로채기 리더의 통과 경로 — 무중단 호환 증거).
+      const jsonReceived: unknown[] = [];
+      const jsonChannel = await createNodeChannel(transport, (payload) =>
+        jsonReceived.push(payload),
+      );
+      const jsonResult = (await transport.invoke('channelDemo', {
+        channel: jsonChannel.handle,
+        ticks: 2,
+      })) as { sent: number; droppedSends: number };
+      assert.equal(jsonResult.sent, 2);
+      await new Promise<void>((resolve, reject) => {
+        const deadline = setTimeout(
+          () => reject(new Error(`JSON channel frames late; got ${jsonReceived.length}/2`)),
+          15_000,
+        );
+        const timer = setInterval(() => {
+          if (jsonReceived.length >= 2) {
+            clearTimeout(deadline);
+            clearInterval(timer);
+            resolve();
+          }
+        }, 5);
+      });
+      assert.deepEqual(jsonReceived, [
+        { step: 1, of: 2 },
+        { step: 2, of: 2 },
+      ]);
+      assert.equal(received.length, 3, 'JSON channel frames must not reach the bytes callback');
+      assert.equal(await jsonChannel.close(), true);
+    } finally {
+      transport.dispose();
+    }
+  },
+);
+
+processTest(
+  'createNodeBytesChannel loud-fails on an NDJSON transport instead of hanging',
+  { timeout: 30_000 },
+  async () => {
+    const { createNodeLoopTransport, createNodeBytesChannel } = await import('./index.js');
+    // codecs 미제공 — 핸드셰이크가 없어 NDJSON 에 머문다(구 런타임 동일 위상).
+    const transport = createNodeLoopTransport({
+      command: resolve(repoRoot, 'target/debug/loop-stdio'),
+      args: [],
+    });
+    try {
+      await transport.ready();
+      assert.equal(transport.mode, 'ndjson');
+      await assert.rejects(
+        createNodeBytesChannel(transport as never, () => {}),
+        (err: unknown) => err instanceof RustraCommandError && err.code === 'channel.unavailable',
+      );
+    } finally {
+      transport.dispose();
+    }
+  },
+);

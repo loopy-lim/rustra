@@ -109,5 +109,6 @@ where
         rkyv_v2_encode_response: rkyv_v2_response_encoder,
         rkyv_v2_tier3: is_tier3,
         required_capability: None,
+        platforms: Vec::new(),
     }
 }

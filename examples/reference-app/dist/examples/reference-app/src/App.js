@@ -10,7 +10,8 @@ import { RustraProvider, useCommand, useMutation, useEvent } from '@rustra/react
 import { listItems, createItem, updateItem, deleteItem } from '../../crud/generated/commands.js';
 /** 조회 — useCommand: 마운트 시 자동 실행, input 변경 시 재실행. */
 function ItemList({ minValue }) {
-    const { data, loading, error } = useCommand(listItems, { minValue });
+    const query = React.useMemo(() => ({ minValue }), [minValue]);
+    const { data, loading, error } = useCommand(listItems, query);
     if (loading)
         return React.createElement("p", null, "\uBD88\uB7EC\uC624\uB294 \uC911\u2026");
     if (error)
@@ -25,13 +26,14 @@ function ItemList({ minValue }) {
 }
 /** 생성/수정/삭제 — useMutation: 수동 실행 + pending 상태. */
 function ItemActions({ onDone }) {
-    const create = useMutation(createItem);
-    const update = useMutation(updateItem);
-    const remove = useMutation(deleteItem);
+    const mutationOptions = React.useMemo(() => ({ onSuccess: onDone }), [onDone]);
+    const create = useMutation(createItem, mutationOptions);
+    const update = useMutation(updateItem, mutationOptions);
+    const remove = useMutation(deleteItem, mutationOptions);
     return (React.createElement("div", null,
-        React.createElement("button", { disabled: create.loading, onClick: () => create.mutateAsync({ name: 'New', value: 1 }).then(onDone) }, "\uC0DD\uC131"),
-        React.createElement("button", { disabled: update.loading, onClick: () => update.mutateAsync({ id: 'first', name: 'Renamed', value: null }).then(onDone) }, "\uC218\uC815"),
-        React.createElement("button", { disabled: remove.loading, onClick: () => remove.mutateAsync({ id: 'first' }).then(onDone) }, "\uC0AD\uC81C")));
+        React.createElement("button", { disabled: create.loading, onClick: () => create.mutate({ name: 'New', value: 1 }) }, "\uC0DD\uC131"),
+        React.createElement("button", { disabled: update.loading, onClick: () => update.mutate({ id: 'first', name: 'Renamed', value: null }) }, "\uC218\uC815"),
+        React.createElement("button", { disabled: remove.loading, onClick: () => remove.mutate({ id: 'first' }) }, "\uC0AD\uC81C")));
 }
 /** 이벤트 — useEvent: Rust emit 을 구독(RN rkyv V2 엔진에서 활성화). */
 function LiveFeed() {
