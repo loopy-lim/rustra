@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "schemaHash": "6dd79fc5a63b3ba04e215034452d67f1adbef14b7597b9024ec62fcd6f1b45af",
+  "schemaHash": "469de763d700360d784560e55457d52737601b29309f8aeca64e87de46c0afaf",
   "generatorVersion": "0.8.0",
   "files": [
     {
@@ -13,7 +13,11 @@
     },
     {
       "path": "contract.ts",
-      "sha256": "42b7dffd2e09dd657fefd7318be90ba503dcf708a89c63b84735677c2ac9ec38"
+      "sha256": "323a884a940b97eb9410de156b349372547caa98575689337add4a5de910c688"
+    },
+    {
+      "path": "errors.ts",
+      "sha256": "01de485660ff23d21fcd77009c5d23310ed8dae06da1b4b21be7576f57ef08b7"
     },
     {
       "path": "node.ts",

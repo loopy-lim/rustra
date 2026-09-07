@@ -434,7 +434,14 @@
             "format": "int64"
           }
         }
-      }
+      },
+      "errors": [
+        {
+          "code": "math.divide_by_zero",
+          "description": null,
+          "retryable": false
+        }
+      ]
     },
     {
       "name": "echoGroups",
@@ -863,6 +870,13 @@
           }
         }
       },
+      "errors": [
+        {
+          "code": "resource.not_found",
+          "description": null,
+          "retryable": false
+        }
+      ],
       "definitions": {
         "ResourceHandle": {
           "description": "커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.",
@@ -911,6 +925,13 @@
           }
         }
       },
+      "errors": [
+        {
+          "code": "resource.not_found",
+          "description": null,
+          "retryable": false
+        }
+      ],
       "definitions": {
         "ResourceHandle": {
           "description": "커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.",
