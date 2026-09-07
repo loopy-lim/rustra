@@ -9,7 +9,6 @@
   },
   "reactNative": {
     "moduleDir": "./modules/rustra-jsi",
-    "rustManifest": "../calculator/Cargo.toml",
-    "legacyBenchmarks": true
+    "rustManifest": "../calculator/Cargo.toml"
   }
 }

@@ -438,9 +438,9 @@ generated/
   ...              # codecs, positional facade, host entries
 ```
 
-> Deprecated: `.write_to_dir(dir)` also wrote `types.ts`/`commands.ts`/`contract.ts`
-> from Rust. That dual pass is the stale-file trap the single arrow removes; keep it
-> only for reference output in Node-less environments.
+> `.write_schema_to_dir(dir)` publishes only `schema.json`. The TS surfaces
+> (`types.ts` etc.) are owned by `rustra codegen` — never regenerate them from Rust.
+> The old `.write_to_dir(dir)` dual pass is deprecated for this reason.
 
 ---
 

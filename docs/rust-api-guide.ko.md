@@ -430,9 +430,9 @@ generated/
   ...              # 코덱, positional facade, 호스트 엔트리
 ```
 
-> Deprecated: `.write_to_dir(dir)`은 Rust에서 `types.ts`/`commands.ts`/`contract.ts`까지
-> 썼습니다. 이 듀얼 패스가 단일 화살이 제거한 stale 파일 함정입니다. Node 없는 환경의
-> 참고용 출력으로만 유지됩니다.
+> `.write_schema_to_dir(dir)`은 `schema.json`만 발행합니다. TS 표면(`types.ts` 등)은
+> `rustra codegen`의 소관 — Rust에서 재생성하지 않습니다. 구(舊) `.write_to_dir(dir)`
+> 듀얼 패스는 이런 이유로 deprecated입니다.
 
 ---
 

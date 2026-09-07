@@ -9,11 +9,11 @@
     },
     {
       "path": "../modules/rustra-jsi/android/build.gradle",
-      "sha256": "57d2a17b631f96095f3d3ebd5c4eb79a38f550e9d0eaa952ea96aa0767fbcaf2"
+      "sha256": "e7d026c2d44ea9d208186d2add5125752aa07ee480d185bb7e96cfdce9f56206"
     },
     {
       "path": "../modules/rustra-jsi/android/CMakeLists.txt",
-      "sha256": "5ed79a976b5bd3f53d80209dce5e4a079984a35dac65709826ab06293a343535"
+      "sha256": "a6e98b79c39a71b1f59a758144c577002922ce73e888b2b2a19bafba24ee4d5d"
     },
     {
       "path": "../modules/rustra-jsi/android/src/main/AndroidManifest.xml",
@@ -57,7 +57,7 @@
     },
     {
       "path": "../modules/rustra-jsi/RustraBridge.podspec",
-      "sha256": "e4984e076f1bd115a2d664b3fd6bac184511cebdb2c8f4fe0489d411f8a415d2"
+      "sha256": "23fb18d212466977d53634c86573c9d7a32e7570a8751355f4c4144aa2d9a324"
     },
     {
       "path": "../modules/rustra-jsi/src/index.ts",
