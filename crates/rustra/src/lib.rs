@@ -88,6 +88,7 @@ pub use rustra_macros::build;
 /// ```
 pub use rustra_macros::command;
 
+pub use rkyv_codec::encode_rkyv_v2_error;
 /// 패키지 빌더에 `#[command]` 함수들을 등록하는 매크로입니다.
 ///
 /// ```rust
@@ -107,8 +108,6 @@ pub use rustra_macros::command;
 /// assert_eq!(pkg.id(), "example.ping");
 /// ```
 pub use rustra_macros::register;
-
-pub use rkyv_codec::encode_rkyv_v2_error;
 
 /// Proc-macro support surface — blanket-impl command type constraints. Internal;
 /// excluded from stability guarantees (see docs/versioning-policy.md).
@@ -138,26 +137,18 @@ mod rkyv_codec;
 mod schema;
 pub mod state;
 #[cfg(feature = "tauri")]
+pub mod tauri_channels;
+#[cfg(feature = "tauri")]
 pub mod tauri_support;
 
 pub(crate) use command::{
     Command, build_command, generated_byte_field_name, generated_field_names,
 };
-pub(crate) use package::{FrozenRegistry, RegistryState};
-pub use package::{GeneratedPackage, Package, PackageBuilder};
-
-pub(crate) use schemars::JsonSchema;
-pub(crate) use serde::{Serialize, de::DeserializeOwned};
-pub(crate) use serde_json::{Value, json};
-pub(crate) use std::collections::{BTreeMap, BTreeSet};
-pub(crate) use std::fs;
-pub(crate) use std::path::{Path, PathBuf};
-pub(crate) use std::sync::atomic::{AtomicBool, Ordering};
-pub(crate) use std::sync::{Arc, OnceLock, RwLock};
-
 pub(crate) use complex_codec::{
     CompiledComplex, ComplexCodecLimits, annotate_variant_order, complex_schema_supported,
 };
+pub(crate) use package::{FrozenRegistry, RegistryState};
+pub use package::{GeneratedPackage, Package, PackageBuilder};
 /// caller-buffer dispatch 결과 — 바이너리 호스트(loop-stdio 등)가
 /// `invoke_rkyv_v2_into` 의 반환을 해석하기 위해 공개한다.
 pub use rkyv_codec::DirectResponse;
@@ -166,6 +157,14 @@ pub(crate) use rkyv_codec::{
     build_rkyv_v2_response_encoder, build_tier3_json_decoder,
     js_postcard_codec_supported_with_defs,
 };
+pub(crate) use schemars::JsonSchema;
+pub(crate) use serde::{Serialize, de::DeserializeOwned};
+pub(crate) use serde_json::{Value, json};
+pub(crate) use std::collections::{BTreeMap, BTreeSet};
+pub(crate) use std::fs;
+pub(crate) use std::path::{Path, PathBuf};
+pub(crate) use std::sync::atomic::{AtomicBool, Ordering};
+pub(crate) use std::sync::{Arc, OnceLock, RwLock};
 
 pub(crate) use codegen::{
     clear_codegen_warnings, command_function_name, contract_hash, set_codegen_command_context,
