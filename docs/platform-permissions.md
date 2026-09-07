@@ -112,8 +112,8 @@ Common entries:
 
 ## 8. The device capability contract (rustra side)
 
-OS permissions stay with the host — but rustra gives commands a way to *declare* which
-device capabilities they assume, and JS a standard way to *query* status, so the
+OS permissions stay with the host — but rustra gives commands a way to _declare_ which
+device capabilities they assume, and JS a standard way to _query_ status, so the
 ad-hoc per-app wiring doesn't fork across hosts.
 
 **Declare (Rust)** — the requirement becomes part of schema.json and codegen output:
@@ -159,7 +159,7 @@ enforce; rustra's core never emits these codes.
 
 **How the layers compose**: the OS gates hardware (declare + runtime prompt), the
 Tauri ACL gates which webview may invoke plugins, rustra capabilities gate who may
-call a bridge command, and the device declaration documents *why* a command needs
+call a bridge command, and the device declaration documents _why_ a command needs
 the hardware — see §2.
 
 ## 9. Current state of the examples
