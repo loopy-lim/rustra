@@ -392,19 +392,16 @@ test('createBytesChannel round-trips binary frames without JSON parsing', () => 
   let callback: ((payload: ArrayBuffer) => void) | undefined;
   const dropped: number[] = [];
   const frames: number[][] = [];
-  const channel = createBytesChannel(
-    (payload) => frames.push(Array.from(payload)),
-    {
-      createChannelBytes(next) {
-        callback = next as (payload: ArrayBuffer) => void;
-        return 7;
-      },
-      dropChannel(handle) {
-        dropped.push(handle);
-        return true;
-      },
+  const channel = createBytesChannel((payload) => frames.push(Array.from(payload)), {
+    createChannelBytes(next) {
+      callback = next as (payload: ArrayBuffer) => void;
+      return 7;
     },
-  );
+    dropChannel(handle) {
+      dropped.push(handle);
+      return true;
+    },
+  });
   assert.equal(channel.handle, 7);
   callback!(new Uint8Array([0xff, 0xfc, 0x00, 0xde]).buffer);
   assert.deepEqual(frames, [[0xff, 0xfc, 0x00, 0xde]], 'bytes must arrive untouched');
@@ -428,7 +425,7 @@ test('invokeTypedSync returns the decoded value without a Promise hop', () => {
 test('invokeTypedSync normalizes C++ "code: message" JSError into RustraCommandError', () => {
   const native = {
     invokeTyped() {
-      throw new Error('platform.unavailable: command \'x\' is declared for platforms [macos]');
+      throw new Error("platform.unavailable: command 'x' is declared for platforms [macos]");
     },
   };
   assert.throws(
@@ -450,10 +447,7 @@ test('createBytesChannel loud-fails on natives without the bytes path', () => {
     createChannel: () => 1,
     dropChannel: () => true,
   };
-  assert.throws(
-    () => createBytesChannel(() => {}, native),
-    /createChannelBytes/,
-  );
+  assert.throws(() => createBytesChannel(() => {}, native), /createChannelBytes/);
 });
 
 test('createChannel rejects an invalid native handle instead of creating an unusable channel', () => {

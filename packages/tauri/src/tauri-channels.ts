@@ -1,4 +1,10 @@
-import { RustraCommandError, RustraErrorCode } from '@rustra/types';
+import {
+  debugRustra,
+  RustraCommandError,
+  RustraErrorCode,
+  type RustraDebugEvent,
+  type RustraErrorCodeValue,
+} from '@rustra/types';
 import type { TauriInvoke } from './index.js';
 
 type TauriGlobal = {
@@ -8,9 +14,13 @@ type TauriGlobal = {
   };
 };
 
+// payload 는 `unknown` 이다 — index.ts 의 TauriListen 이 문서화한 것과 동일
+// 이유(R03): 실제 WebView 경계는 이미 해석된 값을 주고(채널 프레임의 JSON
+// 경로는 객체, 바이너리 경로는 숫자 배열), 목/레거시 transport 는 문자열을
+// 준다. 좁히지 않고 각 경로의 핸들러에서 값의 형태로 정규화한다.
 type TauriListenType = (
   event: string,
-  handler: (event: { payload: string }) => void,
+  handler: (event: { payload: unknown }) => void,
 ) => Promise<() => void>;
 
 function tauriGlobal(): TauriGlobal {
@@ -34,25 +44,34 @@ export type TauriChannelIo = {
   /** Tauri IPC invoke — 미전달 시 `globalThis.__TAURI__.core.invoke` 사용. */
   invoke?: TauriInvoke;
   /** Tauri event listen — 미전달 시 `globalThis.__TAURI__.event.listen` 사용. */
-  listen?: (event: string, handler: (event: { payload: string }) => void) => Promise<() => void>;
+  listen?: (event: string, handler: (event: { payload: unknown }) => void) => Promise<() => void>;
 };
 
-function requireTauriInvoke(): TauriInvoke {
+// JSON 경로(createChannel)는 전송 부재를 transport.unavailable 로 알린다.
+// 바이너리 경로(createChannelBytes)는 RN 참조 계약(createBytesChannel)에
+// 맞춰 channel.unavailable 로 알린다 — 가드 구조는 동일하고 코드만 다르므로
+// 헬퍼가 코드를 받는다.
+function requireTauriInvoke(
+  code: RustraErrorCodeValue = RustraErrorCode.TransportUnavailable,
+  api = 'createChannel()',
+): TauriInvoke {
   const invoke = tauriGlobal().__TAURI__?.core?.invoke;
   if (typeof invoke !== 'function') {
     throw new RustraCommandError(
-      RustraErrorCode.TransportUnavailable,
-      'Tauri IPC was not found. Enable app.withGlobalTauri, or pass { invoke } to createChannel().',
+      code,
+      `Tauri IPC was not found. Enable app.withGlobalTauri, or pass { invoke } to ${api}.`,
     );
   }
   return invoke.bind(tauriGlobal().__TAURI__!.core);
 }
 
-function requireTauriListen(): TauriListenType {
+function requireTauriListen(
+  code: RustraErrorCodeValue = RustraErrorCode.TransportUnavailable,
+): TauriListenType {
   const listen = tauriGlobal().__TAURI__?.event?.listen;
   if (typeof listen !== 'function') {
     throw new RustraCommandError(
-      RustraErrorCode.TransportUnavailable,
+      code,
       'Tauri event.listen was not found. Enable app.withGlobalTauri, or pass a listen function.',
     );
   }
@@ -65,6 +84,25 @@ function requireTauriListen(): TauriListenType {
  */
 export function rustraChannelEventChannel(handle: number): string {
   return `rustra://channel/${handle}`;
+}
+
+/**
+ * 바이트 채널 이벤트 채널명 — Rust `CHANNEL_BYTES_EVENT_PREFIX` 와 동일 규칙
+ * (`rustra://channel-bytes/{handle}`). JSON 경로(`rustra://channel/`)와 이벤트가
+ * 분리되어 있어 한 핸들이 두 경로를 동시에 배선하지 않는다.
+ */
+export function rustraChannelBytesEventChannel(handle: number): string {
+  return `rustra://channel-bytes/${handle}`;
+}
+
+/** 문자열 페이로드의 1회 파싱 — 실패 시 원본 문자열을 그대로 반환한다
+ * (조용한 드롭 방지, subscribeEvent R03 규칙과 동일). */
+function parseJsonOrRaw(raw: string): unknown {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
 }
 
 /**
@@ -109,13 +147,131 @@ export async function createChannel(
     const listen = io.listen ?? requireTauriListen();
     unlisten = await listen(rustraChannelEventChannel(handle), (event) => {
       if (closed) return;
-      // Rust sender 가 JSON 문자열을 그대로 emit 한다 — 파싱 1회 복원.
-      // 파싱 실패 시 원본 문자열 전달(조용한 드롭 방지 — subscribeEvent 동일).
-      try {
-        callback(JSON.parse(event.payload));
-      } catch {
-        callback(event.payload);
+      // Rust sender 가 JSON 문자열을 그대로 emit 한다 — 실제 WebView 경계는
+      // 이미 파싱된 값으로 도착하고(R03, index.ts TauriListen 참고) 목/레거시
+      // transport 는 문자열을 준다. 문자열일 때만 1회 파싱하고 실패 시 원본을
+      // 전달한다(조용한 드롭 방지).
+      const payload = typeof event.payload === 'string' ? parseJsonOrRaw(event.payload) : event.payload;
+      callback(payload);
+    });
+  } catch (listenError) {
+    // 정리 drop 은 절대 원래 listen 에러를 가리지 않는다 — 실패해도 무시.
+    await Promise.resolve(invoke('rustra_channel_drop', { handle })).catch(() => {});
+    throw listenError;
+  }
+
+  return {
+    handle,
+    async close(): Promise<boolean> {
+      if (closed) return true;
+      closed = true;
+      unlisten();
+      const result = (await invoke('rustra_channel_drop', { handle })) as unknown;
+      return result === true;
+    },
+  };
+}
+
+// ── 바이너리 채널 (Rust create_bytes_channel_for 와 짝) ──────────────
+
+/**
+ * rustra 바이너리 채널 — `createChannelBytes` 의 발급 결과. 필드 계약은
+ * [`RustraTauriChannel`] 과 동일(handle + 멱등 close). JSON 경로와 다른 점은
+ * 프레임 페이로드가 JSON 값이 아니라 `Uint8Array` 라는 것뿐이다(콜백
+ * 시그니처에만 나타난다 — 핸들은 코드젠 `ChannelHandle = number` 에 그대로
+ * 들어간다).
+ */
+export type RustraTauriBytesChannel = RustraTauriChannel;
+
+/**
+ * 바이트 채널 페이로드 복원 — Rust sender 가 `Vec<u8>` 를 Tauri `emit` 의
+ * serde 로 내보내므로 웹뷰는 JSON 숫자 배열(`[104,101,…]`)을 받는다. 미래의
+ * raw-bytes 전송 계층(Uint8Array/ArrayBuffer 직접 전달)도 그대로 수용한다.
+ * 계약 밖 형태(문자열 등)는 `null` — 호출자가 관측 후 건너뛴다.
+ */
+function toUint8Array(payload: unknown): Uint8Array | null {
+  if (payload instanceof Uint8Array) return payload;
+  if (payload instanceof ArrayBuffer) return new Uint8Array(payload);
+  if (Array.isArray(payload)) return Uint8Array.from(payload as number[]);
+  return null;
+}
+
+/** 계약 밖 바이트 페이로드의 관측 지점 — R01(tauri-events) 과 동일 방침으로
+ * 예외를 삼키지 않고 재던지지도 않는다: debug 싱크로 관측하고 이 프레임만
+ * 건너뛴다. 정상 배선에서는 도달 불가(Rust sender 는 항상 숫자 배열). */
+function observeBytesPayloadError(handle: number, payload: unknown): void {
+  try {
+    debugRustra({
+      kind: 'tauri.bytes_payload_error',
+      command: rustraChannelBytesEventChannel(handle),
+      error: `unexpected bytes channel payload (expected a number array, got ${typeof payload})`,
+    } as unknown as RustraDebugEvent);
+  } catch {
+    // 진단 자체의 실패는 전달 경로로 탈출하지 않는다.
+  }
+}
+
+/**
+ * Tauri 어댑터의 바이너리 채널을 발급한다 — Rust `ChannelHost` 에 AppHandle
+ * 캡처 sender(`rustra://channel-bytes/{handle}` emit)를 등록하고 같은 채널을
+ * listen 해 콜백으로 변환한다. RN `createBytesChannel` 과 동형 계약: 콜백은
+ * `Uint8Array` 를 받는다.
+ *
+ * JSON 경로(`createChannel`)와 동일한 핸들 번호 공간이지만 한 핸들은 한
+ * 경로로만 동작한다(Rust 측 별도 테이블). close/drop 은 공용
+ * `rustra_channel_drop` 을 쓴다 — Rust `ChannelHost::drop_channel` 이 양쪽
+ * 테이블을 해제한다.
+ *
+ * # 와이어 인코딩 (비용 고지)
+ *
+ * Rust sender 가 `Vec<u8>` 를 Tauri `emit` 의 serde 로 내보내므로 웹뷰는 JSON
+ * 숫자 배열을 받는다 — 최대 ~4배 와이어 부풀림 + 배열 리터럴 평가 비용(RN 의
+ * ArrayBuffer 무손실 전달보다 비싸다, Rust `create_bytes_channel_for` doc
+ * 참고). 어댑터는 여기서 배열을 `Uint8Array` 로 1회 복원한다.
+ *
+ * # 가드
+ *
+ * Tauri global(invoke/listen)이 없으면 `channel.unavailable` 로 loud-fail 한다
+ * — RN 참조 계약(`createBytesChannel`)과 동일 코드다. JSON 경로가 쓰는
+ * `transport.unavailable` 과 다르므로 주의. 발급된 핸들이 무효(0 등)여도
+ * `channel.unavailable` 이다. `rustra_channel_create_bytes` 커맨드 미등록(구
+ * Rust)은 invoke rejection 이 그대로 전파된다.
+ *
+ * @example
+ * ```ts
+ * const channel = await createChannelBytes((frame) => decodeRkyv(frame));
+ * await channelBytesDemo(engine, { channel: channel.handle });
+ * await channel.close();
+ * ```
+ */
+export async function createChannelBytes(
+  callback: (payload: Uint8Array) => void,
+  io: TauriChannelIo = {},
+): Promise<RustraTauriBytesChannel> {
+  const invoke =
+    io.invoke ?? requireTauriInvoke(RustraErrorCode.ChannelUnavailable, 'createChannelBytes()');
+  // 발급이 먼저다 — createChannel 과 동일 배선 순서/정리 계약.
+  const raw = (await invoke('rustra_channel_create_bytes')) as { handle?: unknown };
+  const handle = Number(raw?.handle);
+  if (!Number.isSafeInteger(handle) || handle < 1) {
+    throw new RustraCommandError(
+      RustraErrorCode.ChannelUnavailable,
+      'rustra_channel_create_bytes returned an invalid handle; expected a positive safe integer',
+    );
+  }
+
+  let unlisten: () => void;
+  let closed = false;
+  try {
+    const listen = io.listen ?? requireTauriListen(RustraErrorCode.ChannelUnavailable);
+    unlisten = await listen(rustraChannelBytesEventChannel(handle), (event) => {
+      if (closed) return;
+      const bytes = toUint8Array(event.payload);
+      if (bytes === null) {
+        observeBytesPayloadError(handle, event.payload);
+        return;
       }
+      callback(bytes);
     });
   } catch (listenError) {
     // 정리 drop 은 절대 원래 listen 에러를 가리지 않는다 — 실패해도 무시.

@@ -83,10 +83,7 @@ impl ChannelHost {
     }
 
     /// 바이너리 채널을 발급한다 — JSON 경로와 동일한 단조 핸들 공간.
-    pub fn register_channel_bytes(
-        &self,
-        sender: crate::channels::ChannelBytesSender,
-    ) -> u32 {
+    pub fn register_channel_bytes(&self, sender: crate::channels::ChannelBytesSender) -> u32 {
         let handle = self.reserve_handle();
         if handle == 0 {
             return 0;

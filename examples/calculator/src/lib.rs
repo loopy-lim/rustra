@@ -803,6 +803,7 @@ pub fn calculator_package() -> Package {
                 __RUstra_meta_platform_native_info,
                 __RUstra_platforms_platform_native_info,
             )
+            .command_fn(channel_demo_bytes)
             .build();
 
             // Auto-register for generic FFI with JSON default
@@ -984,6 +985,44 @@ pub fn channel_demo(input: ChannelDemoInput) -> Result<ChannelDemoOutput> {
     Ok(ChannelDemoOutput {
         sent,
         dropped_sends: dropped,
+    })
+}
+
+/// 바이너리 채널 데모 — `channel_demo` 의 바이트 경로 쌍둥이. 모든 호스트
+/// 어댑터의 createBytesChannel/createChannelBytes 패리티를 동일 명령으로
+/// e2e 검증한다(페이로드는 스텝 카운터 LE u64).
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelDemoBytesInput {
+    /// 바이너리 채널로 발급받은 핸들.
+    pub channel: rustra::channels::ChannelHandle,
+    /// 전송할 프레임 수.
+    pub ticks: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelDemoBytesOutput {
+    pub sent: u32,
+    pub droppedSends: u32,
+}
+
+#[command]
+fn channel_demo_bytes(input: ChannelDemoBytesInput) -> Result<ChannelDemoBytesOutput> {
+    let mut sent = 0;
+    let mut dropped = 0;
+    for step in 0..input.ticks.max(0) {
+        let mut frame = Vec::with_capacity(8);
+        frame.extend_from_slice(&((step + 1) as u64).to_le_bytes());
+        if input.channel.send_bytes(&frame) {
+            sent += 1;
+        } else {
+            dropped += 1;
+        }
+    }
+    Ok(ChannelDemoBytesOutput {
+        sent,
+        droppedSends: dropped,
     })
 }
 

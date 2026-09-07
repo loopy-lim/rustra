@@ -9,31 +9,31 @@ wasm-bindgen)은 공식 문서/저장소 기준. 문서에 없는 사항은 "미
 
 ### DX
 
-| 축 | rustra | Tauri 2 (+specta) | flutter_rust_bridge v2 | UniFFI | napi-rs | NitroModules | wasm-bindgen |
-|---|---|---|---|---|---|---|---|
-| 코드젠 | schema.json 단일 소스 → TS+C++, commands+events 양방향 | 본체 없음(수동). tauri-specta 보조 | 폴더 스캔, enum→sealed class | UDL+proc-macro → Kotlin/Swift/Python | v2부터 .d.ts+JS 자동 | TS 스펙 → Swift/Kotlin(Nitrogen), 컴파일 타임 강제 | TS 바인딩 + web-sys 전체 바인딩 |
-| 에러 타입화 | 제네릭 `RustraCommandError{code,message}` | `Result<T,E>` 수동 패턴 | Dart 타입화 예외 | enum → 각 언어 예외 생성 | `napi::Error` + cause 체인 | 가이드 존재(상세 미공개) | `catch` 속성 → `Result` |
-| 개발 도구 | dev/doctor/diff/`--check` 드리프트 게이트 + 문서 동기화 CI + 온보딩 CI 게이트 | 프론트 HMR, 코드젠 게이트 없음 | create 원라이너 + watch 옵션 | 빌드 통합 | `napi build` CLI + GitHub Action | 라이브러리 개발 시점 생성 | wasm-pack + wasm-bindgen-test |
-| 문서/온보딩 | 영/한 이중어 + 문서-현실 동기화 CI | 방대 + 모바일 가이드 | 매우 방대 | 가이드 존재 | 충실 | 충실 + 비교표 | 충실 |
+| 축          | rustra                                                                        | Tauri 2 (+specta)                  | flutter_rust_bridge v2       | UniFFI                               | napi-rs                          | NitroModules                                       | wasm-bindgen                    |
+| ----------- | ----------------------------------------------------------------------------- | ---------------------------------- | ---------------------------- | ------------------------------------ | -------------------------------- | -------------------------------------------------- | ------------------------------- |
+| 코드젠      | schema.json 단일 소스 → TS+C++, commands+events 양방향                        | 본체 없음(수동). tauri-specta 보조 | 폴더 스캔, enum→sealed class | UDL+proc-macro → Kotlin/Swift/Python | v2부터 .d.ts+JS 자동             | TS 스펙 → Swift/Kotlin(Nitrogen), 컴파일 타임 강제 | TS 바인딩 + web-sys 전체 바인딩 |
+| 에러 타입화 | 제네릭 `RustraCommandError{code,message}`                                     | `Result<T,E>` 수동 패턴            | Dart 타입화 예외             | enum → 각 언어 예외 생성             | `napi::Error` + cause 체인       | 가이드 존재(상세 미공개)                           | `catch` 속성 → `Result`         |
+| 개발 도구   | dev/doctor/diff/`--check` 드리프트 게이트 + 문서 동기화 CI + 온보딩 CI 게이트 | 프론트 HMR, 코드젠 게이트 없음     | create 원라이너 + watch 옵션 | 빌드 통합                            | `napi build` CLI + GitHub Action | 라이브러리 개발 시점 생성                          | wasm-pack + wasm-bindgen-test   |
+| 문서/온보딩 | 영/한 이중어 + 문서-현실 동기화 CI                                            | 방대 + 모바일 가이드               | 매우 방대                    | 가이드 존재                          | 충실                             | 충실 + 비교표                                      | 충실                            |
 
 ### 성능
 
-| 축 | rustra | Tauri 2 | FRB | UniFFI | napi-rs | Nitro | wasm-bindgen |
-|---|---|---|---|---|---|---|---|
-| 와이어 | rkyv V2 3티어(패스트패스→복합 바이너리→JSON) + caller-buffer | JSON 기본 + Raw 탈출구 | 기본 제로카피 + 멀티 코덱 | 미공개 | JS 객체 직접(N-API) | JSI 객체 직접 | JsValue 직접; JSON 왕복은 ~10배 느림 보고 |
-| 제로카피 | 부분(핸들·caller-buffer·`Vec<u8>` ArrayBuffer) | Raw 바디 | 자동 제로카피 기본 | 미공개 | zero-copy 버퍼 | JSI NativeState | `&mut [u8]` 뷰 |
-| 벤치마크 | 수령증 기반: Node 1.26µs/793k ops/s, Bun 2.27µs, RN JSI p50 2.71µs (Nitro 대비 ~1.0x) | 미제시 | CI 벤치마크 명시 | 미공개 | 미공개 | NitroBenchmarks: Nitro 7.27ms vs Turbo 115.86ms vs Expo 434.85ms (10만 회 addNumbers) | 경계 비용 이슈 문서화 |
-| 비동기 | waker 실행자 + 고정 풀 + 백프레셔 + AbortSignal 의 Rust 체크포인트 전파 | async_runtime::spawn | async/sync 4모드 | 코루틴/Swift async | libuv Task + ThreadsafeFunction(개시 후 취소 미보장) | Promise + **동기 메서드 가능** | Future |
+| 축       | rustra                                                                                | Tauri 2                | FRB                       | UniFFI             | napi-rs                                              | Nitro                                                                                 | wasm-bindgen                              |
+| -------- | ------------------------------------------------------------------------------------- | ---------------------- | ------------------------- | ------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------- |
+| 와이어   | rkyv V2 3티어(패스트패스→복합 바이너리→JSON) + caller-buffer                          | JSON 기본 + Raw 탈출구 | 기본 제로카피 + 멀티 코덱 | 미공개             | JS 객체 직접(N-API)                                  | JSI 객체 직접                                                                         | JsValue 직접; JSON 왕복은 ~10배 느림 보고 |
+| 제로카피 | 부분(핸들·caller-buffer·`Vec<u8>` ArrayBuffer)                                        | Raw 바디               | 자동 제로카피 기본        | 미공개             | zero-copy 버퍼                                       | JSI NativeState                                                                       | `&mut [u8]` 뷰                            |
+| 벤치마크 | 수령증 기반: Node 1.26µs/793k ops/s, Bun 2.27µs, RN JSI p50 2.71µs (Nitro 대비 ~1.0x) | 미제시                 | CI 벤치마크 명시          | 미공개             | 미공개                                               | NitroBenchmarks: Nitro 7.27ms vs Turbo 115.86ms vs Expo 434.85ms (10만 회 addNumbers) | 경계 비용 이슈 문서화                     |
+| 비동기   | waker 실행자 + 고정 풀 + 백프레셔 + AbortSignal 의 Rust 체크포인트 전파               | async_runtime::spawn   | async/sync 4모드          | 코루틴/Swift async | libuv Task + ThreadsafeFunction(개시 후 취소 미보장) | Promise + **동기 메서드 가능**                                                        | Future                                    |
 
 ### 구조 안정성
 
-| 축 | rustra | Tauri 2 | FRB | UniFFI | napi-rs | Nitro | wasm-bindgen |
-|---|---|---|---|---|---|---|---|
-| 계약 버전 관리 | **컨트랙트 해시 + `rustra diff` CI + OTA alias 협상** | 없음 | v1→v2 마이그레이션 가이드 | 가이드 수준 | Node-API ABI 안정 | 미공개 | 컴포넌트 모델 방향성 |
-| 런타임 계약 검증 | **JS/native 해시 불일치 검출** | 없음 | 미공개 | 미공개 | 미공개 | 빌드 타임 스펙 강제 | 없음 |
-| 플랫폼 매트릭스 | Node/Bun/Tauri/RN(iOS·Android) + 증거 수준 표 | 데스크톱 3종 + 모바일(성숙도 논쟁) | 모바일+데스크톱+**웹(WASM)** | Kotlin/Swift/Python | 데스크톱+Android+**WASM(WASI)**, Bun best-effort | iOS/Android, 구/신 아키텍처 | 브라우저 전체 |
-| 보안/권한 | 커맨드 단위 deny-by-default capability + 공개 위협 모델 | 윈도우/플러그인 ACL(**앱 자체 커맨드는 allow-by-default**) | 미공개 | 없음 | 미공개 | 미공개 | 미공개 |
-| 테스트 인프라 | mock 엔진 + 컨트랙트 게이트 + 3-OS CI + 주간 fuzz/miri + cargo audit/deny | 자체 | CI 벤치마크 명시 | 픽스처 기반 | CI(Node 3버전) | 미공개 | 헤드리스 브라우저 CI |
+| 축               | rustra                                                                    | Tauri 2                                                    | FRB                          | UniFFI              | napi-rs                                          | Nitro                       | wasm-bindgen         |
+| ---------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------- | ------------------- | ------------------------------------------------ | --------------------------- | -------------------- |
+| 계약 버전 관리   | **컨트랙트 해시 + `rustra diff` CI + OTA alias 협상**                     | 없음                                                       | v1→v2 마이그레이션 가이드    | 가이드 수준         | Node-API ABI 안정                                | 미공개                      | 컴포넌트 모델 방향성 |
+| 런타임 계약 검증 | **JS/native 해시 불일치 검출**                                            | 없음                                                       | 미공개                       | 미공개              | 미공개                                           | 빌드 타임 스펙 강제         | 없음                 |
+| 플랫폼 매트릭스  | Node/Bun/Tauri/RN(iOS·Android) + 증거 수준 표                             | 데스크톱 3종 + 모바일(성숙도 논쟁)                         | 모바일+데스크톱+**웹(WASM)** | Kotlin/Swift/Python | 데스크톱+Android+**WASM(WASI)**, Bun best-effort | iOS/Android, 구/신 아키텍처 | 브라우저 전체        |
+| 보안/권한        | 커맨드 단위 deny-by-default capability + 공개 위협 모델                   | 윈도우/플러그인 ACL(**앱 자체 커맨드는 allow-by-default**) | 미공개                       | 없음                | 미공개                                           | 미공개                      | 미공개               |
+| 테스트 인프라    | mock 엔진 + 컨트랙트 게이트 + 3-OS CI + 주간 fuzz/miri + cargo audit/deny | 자체                                                       | CI 벤치마크 명시             | 픽스처 기반         | CI(Node 3버전)                                   | 미공개                      | 헤드리스 브라우저 CI |
 
 ## 격차 Top 10 (가치순)
 

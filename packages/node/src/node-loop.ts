@@ -70,6 +70,27 @@ export type NodeLoopTransport = NodeInvokeTransport & {
    * payload 는 문자열 JSON — 파싱 책임은 채널 콜백 소유자에게 있다.
    */
   onChannelFrame(handler: (frame: { handle: number; payload: string }) => void): () => void;
+  /**
+   * 0xfff9 **바이너리** 채널 프레임을 구독한다 — `createNodeBytesChannel` 이
+   * 발급 핸들과 콜백을 잇는 데 쓴다. JSON 채널(0xfffc)과 같은 리더 안의 demux
+   * 분기를 공유하지만 payload 는 원시 바이트(Uint8Array)다.
+   *
+   * 옵셔널 멤버(drain?/onPushEvent? 와 동일 사유): 이 인터페이스를 구조적으로
+   * 구현하던 외부 구현체의 브레이킹을 피한다. 호출측은
+   * `transport.onChannelBytesFrame?.(...)` 로 우아하게 폴백한다.
+   */
+  onChannelBytesFrame?(handler: (frame: NodeChannelBytesFrame) => void): () => void;
+  /**
+   * 런타임이 `__hello` 에 `channelBytes: true` capability 를 에코했는지 —
+   * ready() 정착 후 읽는다. 바이너리 채널(0xfffb 모드 `0x01` 발급 → 0xfff9
+   * 프레임)은 런타임 bin 의 지원이 필요하다. false 면(구 런타임 — 모드 바이트를
+   * 무시하고 JSON 채널을 파는 위상) `createNodeBytesChannel` 이
+   * `channel.unavailable` 로 loud-fail 한다 — 조용한 경로 불일치 방지.
+   *
+   * 옵셔널 멤버(onChannelBytesFrame? 과 동일 사유). 구 런타임/구 실현체는
+   * 이 필드가 undefined 이고, 호출측은 `!== true` 를 능력 부재로 읽는다.
+   */
+  readonly channelBytesCapable?: boolean;
 };
 
 /**
@@ -92,6 +113,13 @@ const BINARY_PUSH_EVENTS_CMD = 0xfffd;
  * "cmd id 로 시작하는 프레임" 와이어). */
 const BINARY_CHANNEL_PUSH_CMD = 0xfffc;
 
+/** 채널 **바이너리 푸시** 프레임 예약 cmd id — loop-stdio bin 의
+ * BINARY_CHANNEL_PUSH_BYTES_CMD 와 짝. 본문은 `[handle u32 LE][payload bytes]` —
+ * JSON 래핑 없이 바이트 그대로며 페이로드 길이 접두가 없다(프레임 래퍼[len]이
+ * 이미 경계를 제공한다). 한 핸들은 생성 시점의 한 경로로만 동작한다(JSON xor
+ * bytes — 코어 ChannelHost 계약). */
+const BINARY_CHANNEL_PUSH_BYTES_CMD = 0xfff9;
+
 /** 채널 **발급** 예약 cmd id — loop-stdio 의 BINARY_CHANNEL_CREATE_CMD 와 짝.
  * 본문 없는 요청, 응답 본문은 JSON `{"handle": u32}`(Tauri rustra_channel_create
  * 와 동일 페이로드). */
@@ -107,22 +135,33 @@ export type NodePushEventFrame = { name: string; payload: string; seq: number };
 /** 채널 푸시 프레임 본문 — handle 은 발급 핸들, payload 는 문자열 JSON. */
 export type NodeChannelFrame = { handle: number; payload: string };
 
+/** 바이너리 채널 푸시 프레임 본문 — handle 은 발급 핸들, payload 는 원시 바이트
+ * (rkyv V2 프레임 등 — JSON 파싱 경로를 거치지 않는다). payload 는 수신 누적
+ * 버퍼의 뷰다 — 사용자 코드로 내보내는 경계(createNodeBytesChannel)에서
+ * 복사한다. */
+export type NodeChannelBytesFrame = { handle: number; payload: Uint8Array };
+
 /**
  * stdout 바이너리 프레임 1개를 분기한다 — 0xfffd 면 푸시 리스너 브로드캐스트,
- * 0xfffc 면 채널 리스너 브로드캐스트, 그 외(응답)면 `onResponse` 로 위임.
- * 순수 함수로 추출해 프레임 경로를 스폰 없이 단위 검증할 수 있다
- * (node-loop.test.ts).
+ * 0xfffc 면 채널 리스너 브로드캐스트, 0xfff9 면 바이너리 채널 리스너
+ * 브로드캐스트, 그 외(응답)면 `onResponse` 로 위임. 순수 함수로 추출해 프레임
+ * 경로를 스폰 없이 단위 검증할 수 있다 (node-loop.test.ts).
  *
  * 응답 프레임은 rkyv V2 셰이프 `[ok u8][pad 3][len u32][body]` — 첫 u16 LE
- * (ok|pad)가 0xfffd/0xfffc(ok는 0/1)가 될 수 없다는 와이어 사실이 판별 근거다.
- * 푸시/채널 본문의 JSON 파싱 실패는 조용히 건너뛴다(폴링 drain 파싱과 동일
- * 정책 — 프로토콜 오염 한 프레임이 transport 전체를 죽이지 않는다).
+ * (ok|pad)가 0xfffd/0xfffc/0xfff9(ok는 0/1)가 될 수 없다는 와이어 사실이 판별
+ * 근거다. 푸시/채널 본문의 JSON 파싱 실패는 조용히 건너뛴다(폴링 drain 파싱과
+ * 동일 정책 — 프로토콜 오염 한 프레임이 transport 전체를 죽이지 않는다).
+ * 0xfff9 본문은 JSON 이 아니므로 파싱이 없다 — 최소 길이(핸들 4B) 미만만
+ * 조용히 건너뛴다.
+ *
+ * `onChannelBytes` 는 옵셔널 — 구 형태 호출(분기 없음)과의 호환을 유지한다.
  */
 export function demultiplexBinaryFrame(options: {
   cmd: number;
   body: Uint8Array;
   onPush: (event: NodePushEventFrame) => void;
   onChannel: (frame: NodeChannelFrame) => void;
+  onChannelBytes?: (frame: NodeChannelBytesFrame) => void;
   onResponse: (frame: Uint8Array) => void;
 }): void {
   if (options.cmd === BINARY_PUSH_EVENTS_CMD) {
@@ -155,6 +194,20 @@ export function demultiplexBinaryFrame(options: {
       }
     } catch {
       // 비정상 채널 프레임 — 조용히 건너뛴다(푸시와 동일 정책).
+    }
+    return;
+  }
+  if (options.cmd === BINARY_CHANNEL_PUSH_BYTES_CMD) {
+    // 본문 [handle u32 LE][payload bytes] — 최소 6바이트(cmd 2 + 핸들 4) 못
+    // 미치면 조용히 건너뛴다(JSON 파싱이 없어 실패 모드가 이것뿐이다).
+    if (options.body.length >= 6 && options.onChannelBytes) {
+      const handle =
+        (options.body[2]! |
+          (options.body[3]! << 8) |
+          (options.body[4]! << 16) |
+          (options.body[5]! << 24)) >>>
+        0;
+      options.onChannelBytes({ handle, payload: options.body.subarray(6) });
     }
     return;
   }
@@ -259,6 +312,9 @@ export function createNodeLoopTransport(options: {
   /** 런타임이 events:"push" 핸드셰이크를 수용했는지 — handshake 정착 후 확정.
    * true 면 0xfffd 푸시 프레임이 stdout 으로 흐른다. */
   let pushCapable = false;
+  /** 런타임이 channelBytes capability 를 에코했는지 — handshake 정착 후 확정.
+   * true 면 0xfffb 모드 바이트 발급(→ 0xfff9 프레임) 경로가 있다. */
+  let channelBytesCapable = false;
   let binQueue: Array<{
     resolve: (frame: Uint8Array) => void;
     reject: (error: RustraCommandError) => void;
@@ -271,6 +327,8 @@ export function createNodeLoopTransport(options: {
   const pushListeners = new Set<(event: NodePushEventFrame) => void>();
   /** 0xfffc 채널 프레임 구독자 — onChannelFrame 로 등록(발급 핸들↔콜백 배선). */
   const channelListeners = new Set<(frame: NodeChannelFrame) => void>();
+  /** 0xfff9 바이너리 채널 프레임 구독자 — onChannelBytesFrame 로 등록. */
+  const bytesChannelListeners = new Set<(frame: NodeChannelBytesFrame) => void>();
 
   const nameToCodec = (command: string) => binaryCodecs?.get(command);
 
@@ -325,8 +383,21 @@ export function createNodeLoopTransport(options: {
             try {
               listener(frame);
             } catch (error) {
-              // 채널 콜백 예외도 stdout 리더를 죽이지 않는다(푸시와 동일 정책).
+              // 채널 콜백 예외도 stdout 리더를 죽이지 않는다(폴링과 동일 정책).
               console.error(`Rustra: channel listener for handle ${frame.handle} threw:`, error);
+            }
+          }
+        },
+        onChannelBytes: (frame) => {
+          for (const listener of [...bytesChannelListeners]) {
+            try {
+              listener(frame);
+            } catch (error) {
+              // 바이너리 채널 콜백 예외도 동일 격리(푸시/JSON 채널과 동일 정책).
+              console.error(
+                `Rustra: bytes channel listener for handle ${frame.handle} threw:`,
+                error,
+              );
             }
           }
         },
@@ -369,16 +440,22 @@ export function createNodeLoopTransport(options: {
       const jsonLen = frame[4]! | (frame[5]! << 8) | (frame[6]! << 16) | (frame[7]! << 24);
       return JSON.parse(frameDecoder.decode(frame.subarray(8, 8 + jsonLen))) as unknown;
     }
-    if (command === '__createChannel') {
-      // 채널 발급 — 본문 없는 예약 프레임. 응답 본문은 {"handle": u32} JSON.
-      const request = Buffer.allocUnsafe(6);
-      request.writeUInt32LE(2, 0);
+    if (command === '__createChannel' || command === '__createChannelBytes') {
+      // 채널 발급 — 예약 프레임. 바이너리 경로는 0xfffb 본문에 모드 플래그
+      // 0x01 을 붙인다(JSON 경로는 본문 없음 — 기존 와이어와 바이트 동일).
+      // 응답 본문은 두 경로 모두 {"handle": u32} JSON (셰이프 공유).
+      const wantsBytes = command === '__createChannelBytes';
+      const request = Buffer.allocUnsafe(wantsBytes ? 7 : 6);
+      request.writeUInt32LE(request.length - 4, 0);
       request.writeUInt16LE(BINARY_CHANNEL_CREATE_CMD, 4);
+      if (wantsBytes) request[6] = 1; // CHANNEL_CREATE_MODE_BYTES
       const frame = await binaryWrite(request);
       if (frame[0] !== 1) {
         throw new RustraCommandError(
           RustraErrorCode.ChannelUnavailable,
-          'channel creation failed; handle space may be exhausted',
+          wantsBytes
+            ? 'binary channel creation failed; the runtime rejected the mode byte or the handle space is exhausted'
+            : 'channel creation failed; handle space may be exhausted',
         );
       }
       const jsonLen = frame[4]! | (frame[5]! << 8) | (frame[6]! << 16) | (frame[7]! << 24);
@@ -388,7 +465,7 @@ export function createNodeLoopTransport(options: {
       if (!Number.isSafeInteger(parsed.handle) || (parsed.handle as number) < 1) {
         throw new RustraCommandError(
           RustraErrorCode.ChannelUnavailable,
-          'loop-stdio returned an invalid channel handle; expected a positive safe integer',
+          `loop-stdio returned an invalid ${command} handle; expected a positive safe integer`,
         );
       }
       return { handle: parsed.handle };
@@ -530,9 +607,17 @@ export function createNodeLoopTransport(options: {
     // 0xfffd 푸시 프레임이 stdout 으로 흐른다. 미수용(구 런타임, 필드 무시)이면
     // 푸시 프레임이 절대 오지 않으므로 기존 폴링이 그대로 동작한다.
     const frame = await write({ command: '__hello', args: {}, events: 'push' });
-    const result = frame as LoopResponseFrame & { binary?: boolean; events?: string };
+    const result = frame as LoopResponseFrame & {
+      binary?: boolean;
+      events?: string;
+      channelBytes?: boolean;
+    };
     if (result.ok && result.binary === true) mode = 'binary';
     pushCapable = result.ok && result.binary === true && result.events === 'push';
+    // 바이너리 채널 capability — 구 런타임은 이 필드가 없다(undefined → false).
+    // 필드가 없는데 모드 바이트를 보내면 구 런타임이 JSON 채널을 파버리므로,
+    // createNodeBytesChannel 은 이 플래그로 프레임 전송 자체를 차단한다.
+    channelBytesCapable = result.ok && result.binary === true && result.channelBytes === true;
   };
 
   // Lazy 프로세스는 첫 invoke 에서 spawn 되지만, 바이너리 모드 협상은 그 앞에
@@ -549,7 +634,11 @@ export function createNodeLoopTransport(options: {
       if (mode === 'binary') return invokeBinary(command, args);
       // 채널은 바이너리 모드 전용 — 콜백 함수 값은 NDJSON 라인으로 전송 불가.
       // 조용한 command.not_found 대신 명확한 계약 에러로 loud-fail 한다.
-      if (command === '__createChannel' || command === '__dropChannel') {
+      if (
+        command === '__createChannel' ||
+        command === '__createChannelBytes' ||
+        command === '__dropChannel'
+      ) {
         return Promise.reject(
           new RustraCommandError(
             RustraErrorCode.ChannelUnavailable,
@@ -561,7 +650,11 @@ export function createNodeLoopTransport(options: {
         // 핸드셰이크가 아직 정착하지 않은 첫 호출 — 정착을 기다린 뒤 재분기.
         return handshakeSettled.then(() => {
           if (mode === 'binary') return invokeBinary(command, args);
-          if (command === '__createChannel' || command === '__dropChannel') {
+          if (
+            command === '__createChannel' ||
+            command === '__createChannelBytes' ||
+            command === '__dropChannel'
+          ) {
             // 정착 후에도 NDJSON 구 런타임 — 위와 동일 loud-fail(능력 부재).
             return Promise.reject(
               new RustraCommandError(
@@ -600,6 +693,9 @@ export function createNodeLoopTransport(options: {
     get pushCapable() {
       return pushCapable;
     },
+    get channelBytesCapable() {
+      return channelBytesCapable;
+    },
     ready() {
       return handshakeSettled;
     },
@@ -613,6 +709,12 @@ export function createNodeLoopTransport(options: {
       channelListeners.add(handler);
       return () => {
         channelListeners.delete(handler);
+      };
+    },
+    onChannelBytesFrame(handler) {
+      bytesChannelListeners.add(handler);
+      return () => {
+        bytesChannelListeners.delete(handler);
       };
     },
     async drain(timeoutMs = 5_000) {

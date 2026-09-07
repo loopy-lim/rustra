@@ -51,10 +51,7 @@ export function createBytesChannel(
   callback: (payload: Uint8Array) => void,
   native: RustraChannelNative = getRustraNative(),
 ): { readonly handle: number; close(): boolean } {
-  if (
-    typeof native.createChannelBytes !== 'function' ||
-    typeof native.dropChannel !== 'function'
-  ) {
+  if (typeof native.createChannelBytes !== 'function' || typeof native.dropChannel !== 'function') {
     throw new RustraCommandError(
       'channel.unavailable',
       'native module must expose createChannelBytes() and dropChannel(); binary channel support is unavailable',

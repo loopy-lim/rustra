@@ -331,6 +331,21 @@ export type ChannelDemoOutput = {
   droppedSends: number;
 };
 
+/**
+ * 바이너리 채널 데모 — `channel_demo` 의 바이트 경로 쌍둥이. 모든 호스트 어댑터의 createBytesChannel/createChannelBytes 패리티를 동일 명령으로 e2e 검증한다(페이로드는 스텝 카운터 LE u64).
+ */
+export type ChannelDemoBytesInput = {
+  /** 바이너리 채널로 발급받은 핸들. */
+  channel: ChannelHandle;
+  /** 전송할 프레임 수. */
+  ticks: number;
+};
+
+export type ChannelDemoBytesOutput = {
+  sent: number;
+  droppedSends: number;
+};
+
 export type ClampInput = {
   max: number;
   min: number;
@@ -587,7 +602,7 @@ export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutp
 
 <!-- prettier-ignore -->
 ```ts
-export const GENERATED_CONTRACT_HASH = 'bdaa727af51b5969d0b0fcaaa6be9e154ee10afd2b51506a54346ab1b6759aa0';
+export const GENERATED_CONTRACT_HASH = '6dd79fc5a63b3ba04e215034452d67f1adbef14b7597b9024ec62fcd6f1b45af';
 export const SCHEMA_VERSION = 1;
 ```
 

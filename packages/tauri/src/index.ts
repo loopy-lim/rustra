@@ -214,7 +214,10 @@ export { rustraEventChannel, subscribeEvent, subscribeTauriEvent } from './tauri
 export { disposedBootstrapError, type BootstrapState } from '@rustra/types';
 export {
   createChannel,
+  createChannelBytes,
   rustraChannelEventChannel,
+  rustraChannelBytesEventChannel,
   type RustraTauriChannel,
+  type RustraTauriBytesChannel,
   type TauriChannelIo,
 } from './tauri-channels.js';
