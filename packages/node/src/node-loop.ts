@@ -1,14 +1,38 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import {
   RustraCommandError,
-  debugRustra,
   isRustraDebugEnabled,
   parseRustraErrorString,
   RustraErrorCode,
-  type RustraDebugEvent,
-  type RkyvV2Codec,
 } from '@rustra/types';
 import type { NodeInvokeTransport } from './node-core.js';
+import type { NodeChannelBytesFrame, NodeLoopBinaryCodecs } from './node-binary-framing.js';
+import { createBinaryLoopSession } from './node-binary-session.js';
+import {
+  STDERR_TAIL_CHARS,
+  attachExitContext,
+  recordUnparsedLine,
+  type UnparsedLineState,
+} from './node-ndjson-diagnostics.js';
+
+// 분리 모듈 표면 재수출 — 기존 공개 API(index.ts 의 export *)와 테스트
+// (node-loop.test.ts) 가 './node-loop.js' 경로에서 import 하던 계약을 그대로
+// 유지한다. 바이너리 프레이밍은 node-binary-framing.ts, NDJSON 진단은
+// node-ndjson-diagnostics.ts 로 이사했다.
+export {
+  demultiplexBinaryFrame,
+  type NodeChannelBytesFrame,
+  type NodeChannelFrame,
+  type NodeLoopBinaryCodecs,
+  type NodePushEventFrame,
+} from './node-binary-framing.js';
+export {
+  UNPARSED_LINES_CAPACITY,
+  UNPARSED_LINE_MAX_CHARS,
+  attachExitContext,
+  recordUnparsedLine,
+  type UnparsedLineState,
+} from './node-ndjson-diagnostics.js';
 
 type LoopResponseFrame = {
   id: number;
@@ -93,200 +117,6 @@ export type NodeLoopTransport = NodeInvokeTransport & {
   readonly channelBytesCapable?: boolean;
 };
 
-/**
- * 바이너리 모드 코덱 표면 — generated `rkyvV2Registry` 를 그대로 넘긴다.
- * `encodeInto` 재사용 버퍼로 요청을 조립하고 `decode` 로 응답 프레임을
- * 파싱한다(둘 다 rkyv V2 프레임 계약 — [cmd_id u16][postcard] 요청,
- * [ok u8][pad][len][body] 응답).
- */
-export type NodeLoopBinaryCodecs = Map<string, RkyvV2Codec<unknown, unknown>>;
-
-/** 이벤트 drain 예약 커맨드 id — loop-stdio 의 BINARY_DRAIN_EVENTS_CMD 와 짝. */
-const BINARY_DRAIN_EVENTS_CMD = 0xfffe;
-
-/** 이벤트 **푸시** 프레임 예약 cmd id — loop-stdio 의 BINARY_PUSH_EVENTS_CMD 와 짝.
- * 응답 프레임의 첫 u16 LE 는 ok|pad(ok는 0/1)라 이 값과 절대 충돌하지 않는다. */
-const BINARY_PUSH_EVENTS_CMD = 0xfffd;
-
-/** 채널 **푸시** 프레임 예약 cmd id — loop-stdio 의 BINARY_CHANNEL_PUSH_CMD 와 짝.
- * 본문은 1줄 JSON `{"handle": u32, "payload": <문자열 JSON>}`(이벤트 푸시와 동일
- * "cmd id 로 시작하는 프레임" 와이어). */
-const BINARY_CHANNEL_PUSH_CMD = 0xfffc;
-
-/** 채널 **바이너리 푸시** 프레임 예약 cmd id — loop-stdio bin 의
- * BINARY_CHANNEL_PUSH_BYTES_CMD 와 짝. 본문은 `[handle u32 LE][payload bytes]` —
- * JSON 래핑 없이 바이트 그대로며 페이로드 길이 접두가 없다(프레임 래퍼[len]이
- * 이미 경계를 제공한다). 한 핸들은 생성 시점의 한 경로로만 동작한다(JSON xor
- * bytes — 코어 ChannelHost 계약). */
-const BINARY_CHANNEL_PUSH_BYTES_CMD = 0xfff9;
-
-/** 채널 **발급** 예약 cmd id — loop-stdio 의 BINARY_CHANNEL_CREATE_CMD 와 짝.
- * 본문 없는 요청, 응답 본문은 JSON `{"handle": u32}`(Tauri rustra_channel_create
- * 와 동일 페이로드). */
-const BINARY_CHANNEL_CREATE_CMD = 0xfffb;
-
-/** 채널 **해제** 예약 cmd id — loop-stdio 의 BINARY_CHANNEL_DROP_CMD 와 짝.
- * 본문은 postcard varint u32 핸들, 응답은 ok 플래그만(핸들이 살아있었으면 1). */
-const BINARY_CHANNEL_DROP_CMD = 0xfffa;
-
-/** 푸시 프레임 본문(JSON) 뒤의 `{name, payload, seq}` — payload 는 문자열 JSON. */
-export type NodePushEventFrame = { name: string; payload: string; seq: number };
-
-/** 채널 푸시 프레임 본문 — handle 은 발급 핸들, payload 는 문자열 JSON. */
-export type NodeChannelFrame = { handle: number; payload: string };
-
-/** 바이너리 채널 푸시 프레임 본문 — handle 은 발급 핸들, payload 는 원시 바이트
- * (rkyv V2 프레임 등 — JSON 파싱 경로를 거치지 않는다). payload 는 수신 누적
- * 버퍼의 뷰다 — 사용자 코드로 내보내는 경계(createNodeBytesChannel)에서
- * 복사한다. */
-export type NodeChannelBytesFrame = { handle: number; payload: Uint8Array };
-
-/**
- * stdout 바이너리 프레임 1개를 분기한다 — 0xfffd 면 푸시 리스너 브로드캐스트,
- * 0xfffc 면 채널 리스너 브로드캐스트, 0xfff9 면 바이너리 채널 리스너
- * 브로드캐스트, 그 외(응답)면 `onResponse` 로 위임. 순수 함수로 추출해 프레임
- * 경로를 스폰 없이 단위 검증할 수 있다 (node-loop.test.ts).
- *
- * 응답 프레임은 rkyv V2 셰이프 `[ok u8][pad 3][len u32][body]` — 첫 u16 LE
- * (ok|pad)가 0xfffd/0xfffc/0xfff9(ok는 0/1)가 될 수 없다는 와이어 사실이 판별
- * 근거다. 푸시/채널 본문의 JSON 파싱 실패는 조용히 건너뛴다(폴링 drain 파싱과
- * 동일 정책 — 프로토콜 오염 한 프레임이 transport 전체를 죽이지 않는다).
- * 0xfff9 본문은 JSON 이 아니므로 파싱이 없다 — 최소 길이(핸들 4B) 미만만
- * 조용히 건너뛴다.
- *
- * `onChannelBytes` 는 옵셔널 — 구 형태 호출(분기 없음)과의 호환을 유지한다.
- */
-export function demultiplexBinaryFrame(options: {
-  cmd: number;
-  body: Uint8Array;
-  onPush: (event: NodePushEventFrame) => void;
-  onChannel: (frame: NodeChannelFrame) => void;
-  onChannelBytes?: (frame: NodeChannelBytesFrame) => void;
-  onResponse: (frame: Uint8Array) => void;
-}): void {
-  if (options.cmd === BINARY_PUSH_EVENTS_CMD) {
-    try {
-      const json = frameDecoder.decode(options.body.subarray(2));
-      const parsed = JSON.parse(json) as Partial<NodePushEventFrame>;
-      if (typeof parsed.name === 'string' && typeof parsed.seq === 'number') {
-        options.onPush({
-          name: parsed.name,
-          // payload 는 문자열 JSON — 파싱 책임은 구독자(2-모드 dispatch)에 있다.
-          payload: typeof parsed.payload === 'string' ? parsed.payload : '',
-          seq: parsed.seq,
-        });
-      }
-    } catch {
-      // 비정상 푸시 프레임 — 조용히 건너뛴다.
-    }
-    return;
-  }
-  if (options.cmd === BINARY_CHANNEL_PUSH_CMD) {
-    try {
-      const json = frameDecoder.decode(options.body.subarray(2));
-      const parsed = JSON.parse(json) as Partial<NodeChannelFrame>;
-      if (typeof parsed.handle === 'number' && Number.isSafeInteger(parsed.handle)) {
-        options.onChannel({
-          handle: parsed.handle,
-          // payload 는 문자열 JSON — 파싱 책임은 채널 콜백 소유자에게 있다.
-          payload: typeof parsed.payload === 'string' ? parsed.payload : '',
-        });
-      }
-    } catch {
-      // 비정상 채널 프레임 — 조용히 건너뛴다(푸시와 동일 정책).
-    }
-    return;
-  }
-  if (options.cmd === BINARY_CHANNEL_PUSH_BYTES_CMD) {
-    // 본문 [handle u32 LE][payload bytes] — 최소 6바이트(cmd 2 + 핸들 4) 못
-    // 미치면 조용히 건너뛴다(JSON 파싱이 없어 실패 모드가 이것뿐이다).
-    if (options.body.length >= 6 && options.onChannelBytes) {
-      const handle =
-        (options.body[2]! |
-          (options.body[3]! << 8) |
-          (options.body[4]! << 16) |
-          (options.body[5]! << 24)) >>>
-        0;
-      options.onChannelBytes({ handle, payload: options.body.subarray(6) });
-    }
-    return;
-  }
-  options.onResponse(options.body);
-}
-
-/** 프레임 본문 JSON 디코더 — 모듈 상수(호출당 TextDecoder 할당 제거). */
-const frameDecoder = new TextDecoder();
-
-/** 비 NDJSON 라인 링 버퍼 크기 — exit 시 대기 요청 에러에 첨부할 최근 줄 수. */
-export const UNPARSED_LINES_CAPACITY = 32;
-
-/**
- * 라인 1줄의 보존 상한(문자) — 멀티 MB 비 JSON 라인도 버퍼와 exit 메시지에
- * 온전히 살지 않도록 절단한다(stderr 꼬리 상한과 대칭). 보장은
- * `UNPARSED_LINES_CAPACITY` 줄 × 이 상한으로 이중 경계다.
- */
-export const UNPARSED_LINE_MAX_CHARS = 4_096;
-
-/** debug 모드에서 보존할 stderr 꼬리 상한(문자) — 무한 stderr 도 메모리 상한 유지. */
-const STDERR_TAIL_CHARS = 8_192;
-
-/** transport 인스턴스별 unparsed 라인 진단 상태 — 링 버퍼와 1회 warn 플래그. */
-export type UnparsedLineState = { buffer: string[]; warned: boolean };
-
-/**
- * NDJSON 파싱 실패 라인 1점의 처리 — 진단 관측 지점을 순수 함수로 추출해 스폰
- * 없이 단위 검증한다(node-loop.test.ts, demultiplexBinaryFrame 추출과 동일 취지).
- * 상태는 호출측(transport 인스턴스 클로저)이 소유하고 이 함수가 in-place 로
- * 갱신한다 — 라이프사이클은 transport 생성/재스폰을 따른다.
- *
- * - debug 모드(`RUSTRA_DEBUG`)면 `kind: 'ndjson.unparsed'` debug 이벤트를 싱크로
- *   내고 stderr 에 **최초 1회만** warn 한다(로그 스팸 방지 — 워닝 규약은
- *   node-events 의 `parsePushPayload` 와 동일 톤).
- * - 비 debug 모드면 최근 `UNPARSED_LINES_CAPACITY` 줄을 ring 으로 보존한다(각
- *   줄은 `UNPARSED_LINE_MAX_CHARS` 로 절단) — 프로세스가 exit 할 때 대기 중
- *   요청의 에러 메시지에 첨부해, 사용자가 맨몸의 "exited" 오류 대신 자식이
- *   실제로 출력한 것을 보게 한다. 보존량은 줄 수와 줄 길이 이중으로 경계된다.
- */
-export function recordUnparsedLine(line: string, state: UnparsedLineState): void {
-  if (isRustraDebugEnabled()) {
-    // debugRustra 는 이벤트 백을 pass-through(spread) 하므로 계약 밖 필드도 싱크에
-    // 도달한다 — kind/line 을 읽기 편한 진단 어휘로 그대로 실어 보낸다.
-    debugRustra({ kind: 'ndjson.unparsed', line } as unknown as RustraDebugEvent);
-    if (!state.warned) {
-      state.warned = true;
-      console.warn(
-        'Rustra: runtime stdout line was not valid NDJSON; continuing (first occurrence only).',
-      );
-    }
-    return;
-  }
-  state.buffer.push(line.slice(0, UNPARSED_LINE_MAX_CHARS));
-  if (state.buffer.length > UNPARSED_LINES_CAPACITY) {
-    state.buffer.splice(0, state.buffer.length - UNPARSED_LINES_CAPACITY);
-  }
-}
-
-/**
- * exit 시 대기 요청의 에러 메시지 조립 — 원문 계약 메시지를 접두로 유지하고
- * 보존된 unparsed 줄(및 debug 모드의 stderr 꼬리)이 있으면 덧붙인다. 기존
- * "exited before responding" 메시지를 단정하는 테스트·호출측이 있으므로 접두
- * 보존이 계약이다. 첨부가 비면 원문 그대로(기존 동작과 비트 동일).
- */
-export function attachExitContext(
-  message: string,
-  unparsed: readonly string[],
-  stderrTail?: string,
-): string {
-  const parts: string[] = [];
-  if (unparsed.length > 0) {
-    parts.push(`recent unparsed stdout lines:\n${unparsed.map((line) => `  ${line}`).join('\n')}`);
-  }
-  if (stderrTail) {
-    parts.push(`stderr:\n${stderrTail}`);
-  }
-  return parts.length === 0 ? message : `${message}\n${parts.join('\n')}`;
-}
-
 /** Persistent transport for Rust loop-stdio runtimes. */
 export function createNodeLoopTransport(options: {
   command: string;
@@ -315,203 +145,14 @@ export function createNodeLoopTransport(options: {
   /** 런타임이 channelBytes capability 를 에코했는지 — handshake 정착 후 확정.
    * true 면 0xfffb 모드 바이트 발급(→ 0xfff9 프레임) 경로가 있다. */
   let channelBytesCapable = false;
-  let binQueue: Array<{
-    resolve: (frame: Uint8Array) => void;
-    reject: (error: RustraCommandError) => void;
-  }> = [];
-  /** 수신 누적 버퍼 — 미처리 [len][frame] 바이트열. concat 결과와 청크 채택을
-   * 모두 담으므로 ArrayBufferLike 로 넓힌다. */
-  let binLenBuf: Buffer<ArrayBufferLike> = Buffer.allocUnsafe(0);
-  let binChunks: Buffer[] = [];
-  /** 0xfffd 푸시 프레임 구독자 — onPushEvent 로 등록, 반환 해지 함수로 탈퇴. */
-  const pushListeners = new Set<(event: NodePushEventFrame) => void>();
-  /** 0xfffc 채널 프레임 구독자 — onChannelFrame 로 등록(발급 핸들↔콜백 배선). */
-  const channelListeners = new Set<(frame: NodeChannelFrame) => void>();
-  /** 0xfff9 바이너리 채널 프레임 구독자 — onChannelBytesFrame 로 등록. */
-  const bytesChannelListeners = new Set<(frame: NodeChannelBytesFrame) => void>();
-
-  const nameToCodec = (command: string) => binaryCodecs?.get(command);
-
-  /** 요청 프레임 [len u32 LE][rkyv V2 요청] 조립 — encodeInto 재사용 버퍼 우선. */
-  const encodeBinaryRequest = (codec: RkyvV2Codec<unknown, unknown>, args: unknown): Buffer => {
-    const encoded = codec.encodeInto ? codec.encodeInto(args) : codec.encode(args);
-    const bytes =
-      encoded instanceof Uint8Array
-        ? encoded
-        : Uint8Array.from(encoded instanceof ArrayBuffer ? new Uint8Array(encoded) : encoded);
-    const prefix = Buffer.allocUnsafe(4);
-    prefix.writeUInt32LE(bytes.byteLength, 0);
-    return Buffer.concat([prefix, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength)]);
-  };
-
-  /** 누적 수신 버퍼 — [len][frame][len][frame]… 이 붙어 들어온다. */
-  const drainBinaryFrames = (): void => {
-    // 남은 청크를 단일 버퍼로 합친다. 통상 케이스(빈 prefix + 단일 청크)는
-    // concat 없이 청크를 그대로 채택해 복사를 건너뛴다.
-    if (binChunks.length === 1 && binLenBuf.length === 0) {
-      binLenBuf = binChunks[0]!;
-      binChunks = [];
-    } else if (binChunks.length > 0) {
-      binLenBuf = Buffer.concat([binLenBuf, ...binChunks]);
-      binChunks = [];
-    }
-    while (binLenBuf.length >= 4) {
-      const len = binLenBuf.readUInt32LE(0);
-      if (binLenBuf.length < 4 + len) break; // 프레임 불완전 — 다음 청크 대기.
-      const frame = binLenBuf.subarray(4, 4 + len);
-      binLenBuf = binLenBuf.subarray(4 + len);
-      const bytes = new Uint8Array(frame.buffer, frame.byteOffset, frame.byteLength);
-      // cmd id 분기 — 0xfffd(푸시)는 binQueue 에서 소비하지 않는다. 구분 없이
-      // shift 하던 구조와 달리, 응답을 기다리는 waiter가 없는 푸시 프레임이
-      // 와도 유실되지 않고 리스너로 브로드캐스트된다.
-      const cmd = frame.length >= 2 ? frame.readUInt16LE(0) : -1;
-      demultiplexBinaryFrame({
-        cmd,
-        body: bytes,
-        onPush: (event) => {
-          for (const listener of [...pushListeners]) {
-            try {
-              listener(event);
-            } catch (error) {
-              // 리스너 예외가 stdout 리더를 죽이지 않는다(폴링 루프와 동일 정책).
-              console.error(`Rustra: push listener for "${event.name}" threw:`, error);
-            }
-          }
-        },
-        onChannel: (frame) => {
-          for (const listener of [...channelListeners]) {
-            try {
-              listener(frame);
-            } catch (error) {
-              // 채널 콜백 예외도 stdout 리더를 죽이지 않는다(폴링과 동일 정책).
-              console.error(`Rustra: channel listener for handle ${frame.handle} threw:`, error);
-            }
-          }
-        },
-        onChannelBytes: (frame) => {
-          for (const listener of [...bytesChannelListeners]) {
-            try {
-              listener(frame);
-            } catch (error) {
-              // 바이너리 채널 콜백 예외도 동일 격리(푸시/JSON 채널과 동일 정책).
-              console.error(
-                `Rustra: bytes channel listener for handle ${frame.handle} threw:`,
-                error,
-              );
-            }
-          }
-        },
-        onResponse: (response) => {
-          const waiter = binQueue.shift();
-          // waiter 없는 응답(프로세스 종료 경합 등)은 드랍 — 기존 계약 유지.
-          if (waiter) waiter.resolve(response);
-        },
-      });
-    }
-  };
-
-  const binaryWrite = (payload: Buffer): Promise<Uint8Array> =>
-    new Promise((resolve, reject) => {
-      let proc: ChildProcessWithoutNullStreams;
-      try {
-        proc = ensureProcess();
-      } catch (error) {
-        reject(error as RustraCommandError);
-        return;
-      }
-      binQueue.push({ resolve, reject });
-      proc.stdin.write(payload, (error) => {
-        if (error) {
-          const index = binQueue.findIndex((entry) => entry.resolve === resolve);
-          if (index >= 0) binQueue.splice(index, 1);
-          reject(new RustraCommandError('transport.error', `write failed: ${String(error)}`, true));
-        }
-      });
-    });
-
-  const invokeBinary = async (command: string, args: unknown): Promise<unknown> => {
-    if (command === '__drainEvents') {
-      const drain = Buffer.allocUnsafe(6);
-      drain.writeUInt32LE(2, 0);
-      drain.writeUInt16LE(BINARY_DRAIN_EVENTS_CMD, 4);
-      const frame = await binaryWrite(drain);
-      // 응답 본문: [ok u8][pad 3][len u32 @4][json @8]
-      if (frame[0] !== 1) throw new RustraCommandError('invoke.failed', 'event drain failed');
-      const jsonLen = frame[4]! | (frame[5]! << 8) | (frame[6]! << 16) | (frame[7]! << 24);
-      return JSON.parse(frameDecoder.decode(frame.subarray(8, 8 + jsonLen))) as unknown;
-    }
-    if (command === '__createChannel' || command === '__createChannelBytes') {
-      // 채널 발급 — 예약 프레임. 바이너리 경로는 0xfffb 본문에 모드 플래그
-      // 0x01 을 붙인다(JSON 경로는 본문 없음 — 기존 와이어와 바이트 동일).
-      // 응답 본문은 두 경로 모두 {"handle": u32} JSON (셰이프 공유).
-      const wantsBytes = command === '__createChannelBytes';
-      const request = Buffer.allocUnsafe(wantsBytes ? 7 : 6);
-      request.writeUInt32LE(request.length - 4, 0);
-      request.writeUInt16LE(BINARY_CHANNEL_CREATE_CMD, 4);
-      if (wantsBytes) request[6] = 1; // CHANNEL_CREATE_MODE_BYTES
-      const frame = await binaryWrite(request);
-      if (frame[0] !== 1) {
-        throw new RustraCommandError(
-          RustraErrorCode.ChannelUnavailable,
-          wantsBytes
-            ? 'binary channel creation failed; the runtime rejected the mode byte or the handle space is exhausted'
-            : 'channel creation failed; handle space may be exhausted',
-        );
-      }
-      const jsonLen = frame[4]! | (frame[5]! << 8) | (frame[6]! << 16) | (frame[7]! << 24);
-      const parsed = JSON.parse(frameDecoder.decode(frame.subarray(8, 8 + jsonLen))) as {
-        handle?: unknown;
-      };
-      if (!Number.isSafeInteger(parsed.handle) || (parsed.handle as number) < 1) {
-        throw new RustraCommandError(
-          RustraErrorCode.ChannelUnavailable,
-          `loop-stdio returned an invalid ${command} handle; expected a positive safe integer`,
-        );
-      }
-      return { handle: parsed.handle };
-    }
-    if (command === '__dropChannel') {
-      // 채널 해제 — 본문은 postcard varint u32 핸들(LEB128, 채널은 1 이상).
-      const handle = (args as { handle?: unknown })?.handle;
-      if (!Number.isSafeInteger(handle) || (handle as number) < 1) {
-        throw new RustraCommandError(
-          RustraErrorCode.ChannelUnavailable,
-          '__dropChannel requires a positive integer handle',
-        );
-      }
-      let value = handle as number;
-      const varint: number[] = [];
-      do {
-        let byte = value % 128;
-        value = Math.floor(value / 128);
-        if (value > 0) byte |= 0x80;
-        varint.push(byte);
-      } while (value > 0);
-      const request = Buffer.allocUnsafe(6 + varint.length);
-      request.writeUInt32LE(2 + varint.length, 0);
-      request.writeUInt16LE(BINARY_CHANNEL_DROP_CMD, 4);
-      Buffer.from(varint).copy(request, 6);
-      const frame = await binaryWrite(request);
-      // 응답은 ok 플래그만 — 핸들이 살아있었으면 1, 이미 만료면 0.
-      return frame[0] === 1;
-    }
-    const codec = nameToCodec(command);
-    if (!codec) {
-      throw new RustraCommandError(
-        'command.not_found',
-        `binary loop transport has no codec for "${command}"`,
-      );
-    }
-    const frame = await binaryWrite(encodeBinaryRequest(codec, args));
-    // decode 는 동기 완료 계약이므로 뷰를 그대로 넘긴다 — 왕복당 프레임 사본
-    // (buffer.slice) 하나를 제거한다(bun caller-buffer 와 동일 계약).
-    const outcome = codec.decode(frame);
-    if (!outcome.ok) {
-      const e = outcome.error ?? { code: 'invoke.failed', message: 'invoke failed' };
-      throw parseRustraErrorString(`${e.code}: ${e.message}`);
-    }
-    return outcome.result;
-  };
+  /** 바이너리 모드 세션 — 응답 대기 큐(binQueue)·프레임 디멀티플렉싱 배선·
+   * 0xfffd/0xfffc/0xfff9 리스너 구독 표면을 소유한다(node-binary-session).
+   * stdin 확보(스폰)는 ensureProcess 로 콜백한다 — 프로세스 라이프사이클은
+   * 이 transport 가 계속 소유한다. */
+  const session = createBinaryLoopSession({
+    codecs: binaryCodecs,
+    acquireStdin: () => ensureProcess(),
+  });
 
   const ensureProcess = (): ChildProcessWithoutNullStreams => {
     if (child && child.exitCode === null) return child;
@@ -531,8 +172,7 @@ export function createNodeLoopTransport(options: {
     }
     proc.stdout.on('data', (chunk: Buffer) => {
       if (mode === 'binary') {
-        if (chunk.length > 0) binChunks.push(chunk);
-        drainBinaryFrames();
+        session.onChunk(chunk);
         return;
       }
       stdoutBuffer += chunk.toString('utf8');
@@ -571,8 +211,7 @@ export function createNodeLoopTransport(options: {
       );
       for (const waiter of pending.values()) waiter.reject(error);
       pending.clear();
-      for (const waiter of binQueue) waiter.reject(error);
-      binQueue = [];
+      session.rejectAll(error);
       // 보존분은 이번 exit 의 에러 메시지로 소비됐다 — 다음 라이프(재스폰)의
       // exit 에 전 라이프 맥락을 오속 첨부하지 않도록 지운다.
       unparsed.buffer.length = 0;
@@ -631,7 +270,7 @@ export function createNodeLoopTransport(options: {
 
   return {
     invoke(command, args) {
-      if (mode === 'binary') return invokeBinary(command, args);
+      if (mode === 'binary') return session.invoke(command, args);
       // 채널은 바이너리 모드 전용 — 콜백 함수 값은 NDJSON 라인으로 전송 불가.
       // 조용한 command.not_found 대신 명확한 계약 에러로 loud-fail 한다.
       if (
@@ -649,7 +288,7 @@ export function createNodeLoopTransport(options: {
       if (binaryCodecs) {
         // 핸드셰이크가 아직 정착하지 않은 첫 호출 — 정착을 기다린 뒤 재분기.
         return handshakeSettled.then(() => {
-          if (mode === 'binary') return invokeBinary(command, args);
+          if (mode === 'binary') return session.invoke(command, args);
           if (
             command === '__createChannel' ||
             command === '__createChannelBytes' ||
@@ -670,7 +309,7 @@ export function createNodeLoopTransport(options: {
     },
     async drainEvents() {
       if (mode === 'binary') {
-        return (await invokeBinary('__drainEvents', {})) as Array<{
+        return (await session.invoke('__drainEvents', {})) as Array<{
           name: string;
           payload: unknown;
         }>;
@@ -700,33 +339,25 @@ export function createNodeLoopTransport(options: {
       return handshakeSettled;
     },
     onPushEvent(handler) {
-      pushListeners.add(handler);
-      return () => {
-        pushListeners.delete(handler);
-      };
+      return session.onPushEvent(handler);
     },
     onChannelFrame(handler) {
-      channelListeners.add(handler);
-      return () => {
-        channelListeners.delete(handler);
-      };
+      return session.onChannelFrame(handler);
     },
     onChannelBytesFrame(handler) {
-      bytesChannelListeners.add(handler);
-      return () => {
-        bytesChannelListeners.delete(handler);
-      };
+      return session.onChannelBytesFrame(handler);
     },
     async drain(timeoutMs = 5_000) {
-      // pending(NDJSON id 상관) + binQueue(바이너리 프레임 대기) = in-flight 전체.
-      const settle = (): boolean => pending.size === 0 && binQueue.length === 0;
+      // pending(NDJSON id 상관) + session.inFlight(바이너리 프레임 대기) =
+      // in-flight 전체.
+      const settle = (): boolean => pending.size === 0 && session.inFlight === 0;
       if (settle()) return;
       const deadline = Date.now() + timeoutMs;
       while (!settle()) {
         if (Date.now() > deadline) {
           console.error(
             `[node] drain timeout after ${timeoutMs}ms with ${
-              pending.size + binQueue.length
+              pending.size + session.inFlight
             } in-flight invocation(s); proceeding anyway`,
           );
           return;
