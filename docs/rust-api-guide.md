@@ -137,15 +137,28 @@ a compile error (zero is allowed as a `()` input — see §2-2):
 - Input type: `DeserializeOwned + JsonSchema`
 - Output type: `Serialize + JsonSchema`
 
-If a trait bound is not satisfied, `#[diagnostic::on_unimplemented]` produces a friendly error message:
+Currently, an unsatisfied trait bound produces the standard Rust E0277 diagnostic. A
+`#[diagnostic::on_unimplemented]`-based custom message is planned but not implemented — do not
+rely on a custom error text yet.
+
+```text
+error[E0277]: the trait bound `MyType: CommandInput` is not satisfied
+   --> src/main.rs:5:1
+    |
+5   | #[command]
+    | ^^^^^^^^^ the trait `CommandInput` is not implemented for `MyType`
+    |
+note: required for `MyType` to implement `CommandInput`
+    (unsatisfied trait bound introduced by the blanket `impl<T> CommandInput for T`)
+```
+
+A `#[diagnostic::on_unimplemented]` attribute on `CommandInput`/`CommandOutput` would turn this
+into a friendlier message (planned, not yet implemented):
 
 ```text
 error: `MyType` cannot be used as a command parameter
-  --> src/main.rs:5:1
    |
-5  | #[command]
-   | ^^^^^^^^^ command parameters require Serialize + Deserialize + JsonSchema
-   |
+   = note: command parameters require Serialize + Deserialize + JsonSchema
    = note: add `#[rustra::bridge_type]` to `MyType`
 ```
 
@@ -990,3 +1003,31 @@ fn main() -> Result<()> {
     Ok(())
 }
 ```
+
+---
+
+## Appendix: Bootstrap Instance Ownership (single-engine slot)
+
+Each JS host process owns **one global engine slot**. The generated host entry
+point registers a bootstrap with `configureLazy()` (or an explicit engine with
+`configure()`), and every invoke routes through that single slot.
+
+Current policy (R08 — early guard):
+
+- **First registration wins.** A second bootstrap registered while the first is
+  still pending (registered but not yet consumed by the first `ready()`/invoke)
+  throws `registry.frozen` — the import order no longer silently decides which
+  engine serves commands.
+- **Re-registration after consumption stays allowed.** `dispose()` + the same
+  bootstrap closure (`reload()` on the Node/Bun adapters) re-registers freely;
+  replacing a lazy initializer after consumption started, and recovery
+  registration after a failed initialization, follow the existing contracts.
+- **Multi-engine is not supported.** The guard exists to surface accidental
+  cross-host registration loudly (`ownerId` on `configure`/`configureLazy`
+  reports both parties in the error message); it is not a multi-engine API.
+
+All first-party adapters (`createNodeBootstrap`, `createBunBootstrap`,
+`createTauriBootstrap`, RN `createRustraBootstrap`) share the same slot path,
+so the guard covers them automatically. Only the Node adapter passes `ownerId`
+today — conflicts from the other adapters report the anonymous party in the
+diagnostics.

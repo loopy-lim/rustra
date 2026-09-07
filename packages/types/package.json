@@ -1,6 +1,6 @@
 {
   "name": "@rustra/types",
-  "version": "0.6.0",
+  "version": "0.8.0",
   "description": "Shared types for rustra-bridge",
   "license": "MIT",
   "type": "module",

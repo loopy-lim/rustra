@@ -93,6 +93,14 @@ export const runtime: {
   engine: InternalEngineClient | null;
   engineInitializer?: () => EngineClient | Promise<EngineClient>;
   engineInitialization?: Promise<InternalEngineClient>;
+  /**
+   * @internal — R08 소유권: 현재 pending lazy 등록이 ensureConfigured 에 의해
+   * 소비를 시작했는지. 소비 전 경쟁 등록만 loud-fail 한다(소비 뒤 교체·복구는
+   * 기존 계약 유지). configure/configureLazy 의 새 등록에서 리셋된다.
+   */
+  engineInitializerConsumed: boolean;
+  /** @internal — R08 소유권: pending 등록자 식별(진단 메시지용). */
+  engineOwnerId?: string;
   engineGeneration: number;
   generatedFieldsRoutes: Array<CachedGeneratedFieldsRoute | null | undefined>;
   generatedBytesRoutes: Array<CachedGeneratedBytesRoute | null | undefined>;
@@ -104,6 +112,7 @@ export const runtime: {
   const value = {
     engine: null,
     engineGeneration: 0,
+    engineInitializerConsumed: false,
     generatedFieldsRoutes: [],
     generatedBytesRoutes: [],
   } as typeof runtime;

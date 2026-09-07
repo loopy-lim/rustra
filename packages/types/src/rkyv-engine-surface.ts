@@ -1,4 +1,4 @@
-import { RustraCommandError } from './errors.js';
+import { CancelledError } from './errors.js';
 import { invokeWithTimeoutHandledSignal } from './cancel.js';
 import { raceAbort } from './cancel.js';
 import {
@@ -95,9 +95,7 @@ export function createRkyvEngineSurface(
     ): Promise<T> {
       const signal = options?.signal;
       if (signal?.aborted) {
-        return Promise.reject(
-          new RustraCommandError('cancelled', `invoke("${command}") aborted before dispatch`, true),
-        );
+        return Promise.reject(new CancelledError(`invoke("${command}") aborted before dispatch`));
       }
       if (!signal) {
         return invokeWithTimeoutHandledSignal(
