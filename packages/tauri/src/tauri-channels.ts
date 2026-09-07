@@ -151,7 +151,8 @@ export async function createChannel(
       // 이미 파싱된 값으로 도착하고(R03, index.ts TauriListen 참고) 목/레거시
       // transport 는 문자열을 준다. 문자열일 때만 1회 파싱하고 실패 시 원본을
       // 전달한다(조용한 드롭 방지).
-      const payload = typeof event.payload === 'string' ? parseJsonOrRaw(event.payload) : event.payload;
+      const payload =
+        typeof event.payload === 'string' ? parseJsonOrRaw(event.payload) : event.payload;
       callback(payload);
     });
   } catch (listenError) {

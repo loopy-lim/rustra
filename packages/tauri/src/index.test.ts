@@ -872,8 +872,7 @@ test('createChannelBytes loud-fails with channel.unavailable when the Tauri glob
   try {
     await assert.rejects(
       createChannelBytes(() => {}),
-      (err: unknown) =>
-        err instanceof RustraCommandError && err.code === 'channel.unavailable',
+      (err: unknown) => err instanceof RustraCommandError && err.code === 'channel.unavailable',
     );
   } finally {
     root.__TAURI__ = previous;
@@ -884,8 +883,7 @@ test('createChannelBytes loud-fails on handle 0 (channel-space exhaustion)', asy
   const { createChannelBytes } = await import('./index.js');
   await assert.rejects(
     createChannelBytes(() => {}, { invoke: async () => ({ handle: 0 }) }),
-    (err: unknown) =>
-      err instanceof RustraCommandError && err.code === 'channel.unavailable',
+    (err: unknown) => err instanceof RustraCommandError && err.code === 'channel.unavailable',
   );
 });
 

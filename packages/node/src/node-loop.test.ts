@@ -428,8 +428,11 @@ test('bytes channel, JSON channel, and response frames interleave without interf
           frameBytes[4]! | (frameBytes[5]! << 8) | (frameBytes[6]! << 16) | (frameBytes[7]! << 24);
         responses.push(
           Number(
-            (JSON.parse(Buffer.from(frameBytes.buffer, frameBytes.byteOffset + 8, jsonLen).toString()) as { value: number })
-              .value,
+            (
+              JSON.parse(
+                Buffer.from(frameBytes.buffer, frameBytes.byteOffset + 8, jsonLen).toString(),
+              ) as { value: number }
+            ).value,
           ),
         );
       },

@@ -1450,9 +1450,8 @@ processTest(
   'createNodeBytesChannel round-trips channelDemoBytes frames from a spawned loop-stdio runtime',
   { timeout: 30_000 },
   async () => {
-    const { createNodeLoopTransport, createNodeBytesChannel, createNodeChannel } = await import(
-      './index.js'
-    );
+    const { createNodeLoopTransport, createNodeBytesChannel, createNodeChannel } =
+      await import('./index.js');
     const { rkyvV2Registry } = await import(
       resolve(repoRoot, 'dist-ts/examples/calculator/generated/rkyv-registry.js')
     );
@@ -1484,7 +1483,9 @@ processTest(
       const allFrames = new Promise<void>((resolve, reject) => {
         const deadline = setTimeout(
           () =>
-            reject(new Error(`bytes channel frames did not arrive in time; got ${received.length}/3`)),
+            reject(
+              new Error(`bytes channel frames did not arrive in time; got ${received.length}/3`),
+            ),
           15_000,
         );
         const timer = setInterval(() => {
@@ -1504,8 +1505,8 @@ processTest(
       await allFrames;
       assert.equal(received.length, 3, 'all 3 bytes frames must reach the callback');
       // 페이로드는 1..3 의 LE u64 (channelDemoBytes 계약) — JSON 파싱 없이 디코딩.
-      const steps = received.map(
-        (bytes) => Number(new DataView(bytes.buffer, bytes.byteOffset, 8).getBigUint64(0, true)),
+      const steps = received.map((bytes) =>
+        Number(new DataView(bytes.buffer, bytes.byteOffset, 8).getBigUint64(0, true)),
       );
       assert.deepEqual(steps, [1, 2, 3]);
 

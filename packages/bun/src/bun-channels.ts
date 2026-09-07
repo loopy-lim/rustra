@@ -162,9 +162,8 @@ export async function createBunChannelBytesBridge(
     );
   }
 
-  const { dlopen, FFIType, JSCallback, toArrayBuffer } = (await import(
-    'bun:ffi'
-  )) as typeof import('bun:ffi');
+  const { dlopen, FFIType, JSCallback, toArrayBuffer } =
+    (await import('bun:ffi')) as typeof import('bun:ffi');
   // dlopen 을 try 밖 한 식으로 호출한다 — JSON 브릿지와 같은 제네릭 고정 관례.
   const openLibrary = (): ReturnType<
     typeof dlopen<{
