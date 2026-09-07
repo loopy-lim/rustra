@@ -10,4 +10,6 @@ include!("builder_platform.rs");
 
 include!("builder_errors.rs");
 
+include!("builder_devices.rs");
+
 include!("builder_build.rs");

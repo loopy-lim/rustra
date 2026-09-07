@@ -187,6 +187,19 @@ pub(crate) fn command_schema_entry(name: &str, command: &Command) -> Value {
             .expect("command schema is an object")
             .insert("errors".into(), json!(errors));
     }
+    // 커맨드별 디바이스 역량 선언 — 단순 문자열 배열(메타데이터 없음, YAGNI).
+    // 선언 없으면 미기록(platforms/errors 관례 — 기존 패키지의 계약 해시 불변).
+    if !command.device_requirements.is_empty() {
+        let devices: Vec<&str> = command
+            .device_requirements
+            .iter()
+            .map(|capability| capability.as_str())
+            .collect();
+        entry
+            .as_object_mut()
+            .expect("command schema is an object")
+            .insert("devices".into(), json!(devices));
+    }
     if let Some(description) = &command.description {
         entry
             .as_object_mut()

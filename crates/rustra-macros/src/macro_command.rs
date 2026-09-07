@@ -221,6 +221,29 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
+    // 디바이스 역량 속성 — 커맨드가 전제하는 역량 토큰 선언. 카탈로그 검증은
+    // 등록 시점(command_devices)에 loud-fail 한다 — 매크로 크레이트는 카탈로그를
+    // 모르므로 토큰 목록만 상수로 싣는다(platforms/errors 메타 상수 관례).
+    let devices_ident = Ident::new(
+        &format!("__RUstra_devices_{}", fn_name),
+        proc_macro2::Span::call_site(),
+    );
+    let devices_const: TokenStream2 = if let Some(devices) = &attr.devices {
+        let capabilities = devices
+            .iter()
+            .map(|token| quote! { rustra::device_capabilities::DeviceCapability::new(#token) });
+        quote! {
+            #[allow(non_upper_case_globals, dead_code)]
+            const #devices_ident: Option<&'static [rustra::device_capabilities::DeviceCapability]> =
+                Some(&[#(#capabilities),*]);
+        }
+    } else {
+        quote! {
+            #[allow(non_upper_case_globals, dead_code)]
+            const #devices_ident: Option<&'static [rustra::device_capabilities::DeviceCapability]> = None;
+        }
+    };
+
     // (감사 #5) capability 무음 드랍 차단: capability 가 있으면 래퍼를 `unsafe fn`
     // 으로 생성한다. `unsafe fn` 아이템 타입은 `Fn` 을 구현하지 않으므로
     // `.command_fn(f)`/`.command(name, f)`/`buffer_command_fn`/`register_fn` 등
@@ -323,6 +346,8 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         #platforms_const
 
         #errors_const
+
+        #devices_const
 
         #[doc(hidden)]
         fn #register_ident(__rustra_input: #input_type) -> rustra::Result<#output_type> {

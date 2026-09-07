@@ -108,6 +108,7 @@ impl PackageBuilder {
         let required_capability = existing.required_capability;
         let platforms = existing.platforms.clone();
         let error_variants = existing.error_variants.clone();
+        let device_requirements = existing.device_requirements.clone();
 
         let mut command = build_command::<I, O, F>(command_id, handler);
         if command.input_type != existing.input_type || command.output_type != existing.output_type
@@ -123,6 +124,7 @@ impl PackageBuilder {
         command.required_capability = required_capability;
         command.platforms = platforms;
         command.error_variants = error_variants;
+        command.device_requirements = device_requirements;
         self.commands.insert(name.to_string(), command);
         self.implemented_platform_commands.insert(name.to_string());
         self

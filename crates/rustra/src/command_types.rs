@@ -36,6 +36,10 @@ pub(crate) struct Command {
     /// schema.json `errors` 필드와 TS 코드젠(타입 가드)의 원천이며 런타임
     /// 와이어는 무변경이다. 선언 경로는 `command_errors` 참고.
     pub(crate) error_variants: Vec<CommandErrorVariant>,
+    /// 이 명령이 전제하는 디바이스 역량 선언 — 빈 벡터는 "선언 없음".
+    /// schema.json `devices` 필드의 원천이며 런타임 자동 게이팅은 없다(선언은
+    /// 계약 문서). 선언 경로는 `command_devices` 참고.
+    pub(crate) device_requirements: Vec<crate::device_capabilities::DeviceCapability>,
 }
 
 pub(crate) type BufferHandler = Arc<dyn Fn(&[u8]) -> crate::Result<Vec<u8>> + Send + Sync>;

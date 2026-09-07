@@ -111,5 +111,6 @@ where
         required_capability: None,
         platforms: Vec::new(),
         error_variants: Vec::new(),
+        device_requirements: Vec::new(),
     }
 }
