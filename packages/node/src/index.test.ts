@@ -1228,7 +1228,6 @@ test('A05: dispose during reload re-init on the one-shot path leaves no TypeErro
   }
 });
 
-
 // ── 채널 e2e — 실제 스폰 → 발급(0xfffb) → channelDemo → 0xfffc 프레임 ──────
 // Rust 통합 테스트(loop_stdio_channels.rs)와 단위 테스트(node-loop.test.ts)가
 // 각 절반을 검증하므로, 이 테스트는 발급 invoke → ChannelHandle::send → stdout
