@@ -42,6 +42,8 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
 | [Rust API Guide](rust-api-guide.md)                                                          | Users        | `#[command]`/`#[bridge_type]`/`build!` macros, Package/Builder API                     |
 | [Benchmarks](benchmarks.md)                                                                  | All          | Per-adapter performance comparison, overhead analysis, payload scaling                 |
 | [Complex Data Codecs](complex-codecs.md)                                                     | Users        | Recursive map/enum/Option wire, limits, RN boundary                                    |
+| [Platform Permissions](platform-permissions.md)                                             | Users        | OS permission ownership per platform (iOS/Android/Windows/macOS), Tauri ACL vs rustra capabilities |
+| [Threat Model](threat-model.md)                                                              | Contributors | STRIDE analysis, trust boundaries, code-backed mitigations, open gaps                  |
 | [Security Audit](security-audit.md)                                                          | Contributors | Lockfile vulnerabilities/warnings status, resolution history                           |
 | [Release Procedure](release-procedure.md)                                                    | Contributors | Changeset publishing procedure, version management                                     |
 | [Versioning Policy](versioning-policy.md)                                                    | All          | Compatibility guarantees per surface, deprecation cycle, MSRV, experimental surface    |

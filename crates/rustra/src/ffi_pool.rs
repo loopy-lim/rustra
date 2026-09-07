@@ -173,11 +173,7 @@ pub fn async_pool_stats() -> AsyncPoolStats {
 mod a08_tests {
     use super::*;
 
-    unsafe extern "C" fn noop_invoke(
-        _p: *const u8,
-        _len: usize,
-        _out_len: *mut usize,
-    ) -> *mut u8 {
+    unsafe extern "C" fn noop_invoke(_p: *const u8, _len: usize, _out_len: *mut usize) -> *mut u8 {
         std::ptr::null_mut()
     }
 
@@ -208,7 +204,10 @@ mod a08_tests {
             }
             std::thread::yield_now();
         };
-        assert!(after.completed > before.completed, "worker did not complete the job within deadline: {after:?}");
+        assert!(
+            after.completed > before.completed,
+            "worker did not complete the job within deadline: {after:?}"
+        );
         assert!(after.submitted > before.submitted);
         // 불변: 제출 = 완료 + 실행 중 + (경합 무시 근사) — inflight 는 음이 될 수 없다.
         assert!(after.inflight <= after.submitted);

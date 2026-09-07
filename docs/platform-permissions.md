@@ -16,7 +16,7 @@ Native bridge owns only engine lifecycle and platform permission UX.
 
 (From [docs/research/rust-local-engine-vs-native-bridges.md](./research/rust-local-engine-vs-native-bridges.md).)
 
-The library's own authorization layer is the **command-level capability system** (Runtime Authority): deny-by-default, `require_capability` at the builder, `grant_capability` at runtime. That system governs *who may call a bridge command* — it is independent of, and does not replace, OS-level permission prompts. See the "Runtime Authority (capabilities)" section of the [Rust API Guide](./rust-api-guide.md) (Appendix: Advanced API Summary) and the `.require_capability(name, cap)` builder entry.
+The library's own authorization layer is the **command-level capability system** (Runtime Authority): deny-by-default, `require_capability` at the builder, `grant_capability` at runtime. That system governs _who may call a bridge command_ — it is independent of, and does not replace, OS-level permission prompts. See the "Runtime Authority (capabilities)" section of the [Rust API Guide](./rust-api-guide.md) (Appendix: Advanced API Summary) and the `.require_capability(name, cap)` builder entry.
 
 This guide walks host apps through the platform permission surfaces they own when embedding rustra.
 
@@ -24,12 +24,12 @@ This guide walks host apps through the platform permission surfaces they own whe
 
 ## 2. Which layer answers which question?
 
-| Question                                                              | OS permission (iOS/Android/Windows/macOS) | Tauri ACL (capabilities/permissions)            | rustra capability system                          |
-| --------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------ | ------------------------------------------------- |
-| May the app access hardware (camera, mic, location)?                  | **Yes** — declared + runtime-prompted     | No (except via specific Tauri plugins)           | No                                                |
-| May this window/webview call this Tauri command/plugin?               | No                                        | **Yes**                                          | Only for commands routed through `tauri_support` |
-| Who may call this bridge command at runtime?                          | No                                        | No                                               | **Yes** — deny-by-default, `grant_capability`     |
-| May the app load remote code / connect to arbitrary origins?          | Partially (ATS, cleartext, CSP at OS/app level) | **Yes** — CSP in `tauri.conf.json`        | No                                                |
+| Question                                                     | OS permission (iOS/Android/Windows/macOS)       | Tauri ACL (capabilities/permissions)   | rustra capability system                         |
+| ------------------------------------------------------------ | ----------------------------------------------- | -------------------------------------- | ------------------------------------------------ |
+| May the app access hardware (camera, mic, location)?         | **Yes** — declared + runtime-prompted           | No (except via specific Tauri plugins) | No                                               |
+| May this window/webview call this Tauri command/plugin?      | No                                              | **Yes**                                | Only for commands routed through `tauri_support` |
+| Who may call this bridge command at runtime?                 | No                                              | No                                     | **Yes** — deny-by-default, `grant_capability`    |
+| May the app load remote code / connect to arbitrary origins? | Partially (ATS, cleartext, CSP at OS/app level) | **Yes** — CSP in `tauri.conf.json`     | No                                               |
 
 Rule of thumb: OS permissions gate **hardware and system resources**, Tauri ACL gates **which webview may invoke which Tauri plugin command**, and rustra capabilities gate **which bridge commands are callable** until granted.
 
@@ -39,7 +39,7 @@ Rule of thumb: OS permissions gate **hardware and system resources**, Tauri ACL 
 
 ### 3-1. Tauri ACL
 
-Tauri v2 uses an Access Control List system: capabilities files (`src-tauri/capabilities/*.json`) declare which windows may use which plugin permissions. A rustra host that only dispatches through `rustra::tauri_support` (`tauri_support::register(app, pkg)` / `register_with_events`) typically needs minimal ACL grants beyond the defaults — rustra commands ride Tauri's invoke handler, not a plugin. Consult the official Tauri "Capabilities" and "Permissions" documentation for the full model.
+Tauri v2 uses an Access Control List system: capabilities files (`src-tauri/capabilities/*.json`) declare which windows may use which plugin permissions. A rustra host that only dispatches through `rustra::tauri_support` (`tauri_support::register(pkg, builder)` / `register_with_events(pkg, builder)`) typically needs minimal ACL grants beyond the defaults — rustra commands ride Tauri's invoke handler, not a plugin. Consult the official Tauri "Capabilities" and "Permissions" documentation for the full model.
 
 Note: `examples/tauri-calculator` currently has an empty `gen/schemas/capabilities.json` — the calculator commands need no extra ACL entries.
 
@@ -75,13 +75,13 @@ Even inside Tauri, rustra commands guarded by `require_capability` still answer 
 
 iOS gates hardware behind Info.plist usage descriptions plus a runtime prompt. Add keys only for what your bridge commands actually touch. Common entries:
 
-| Key                                  | Resource           | When a rustra host needs it                        |
-| ------------------------------------ | ------------------ | -------------------------------------------------- |
-| `NSCameraUsageDescription`           | Camera             | Bridge commands that capture photos/video          |
-| `NSMicrophoneUsageDescription`       | Microphone         | Bridge commands that record audio                  |
-| `NSPhotoLibraryUsageDescription`     | Photo library read | Bridge commands that read user photos              |
-| `NSPhotoLibraryAddUsageDescription`  | Photo library write| Bridge commands that save images                   |
-| `NSLocationWhenInUseUsageDescription`| Location (foreground) | Bridge commands that read location              |
+| Key                                   | Resource              | When a rustra host needs it               |
+| ------------------------------------- | --------------------- | ----------------------------------------- |
+| `NSCameraUsageDescription`            | Camera                | Bridge commands that capture photos/video |
+| `NSMicrophoneUsageDescription`        | Microphone            | Bridge commands that record audio         |
+| `NSPhotoLibraryUsageDescription`      | Photo library read    | Bridge commands that read user photos     |
+| `NSPhotoLibraryAddUsageDescription`   | Photo library write   | Bridge commands that save images          |
+| `NSLocationWhenInUseUsageDescription` | Location (foreground) | Bridge commands that read location        |
 
 Notes:
 
@@ -96,13 +96,13 @@ Declare what the app needs in `AndroidManifest.xml`; dangerous permissions addit
 
 Common entries:
 
-| Permission                              | Protection level | Purpose                              |
-| --------------------------------------- | ---------------- | ------------------------------------ |
-| `android.permission.INTERNET`           | normal           | Network access; dev-server / remote code loading |
-| `android.permission.CAMERA`             | dangerous        | Camera capture (runtime prompt)      |
-| `android.permission.RECORD_AUDIO`       | dangerous        | Microphone (runtime prompt)          |
-| `android.permission.READ_MEDIA_IMAGES`  | dangerous        | Photo library read (API 33+)         |
-| `android.permission.ACCESS_FINE_LOCATION` | dangerous      | Location (runtime prompt)            |
+| Permission                                | Protection level | Purpose                                          |
+| ----------------------------------------- | ---------------- | ------------------------------------------------ |
+| `android.permission.INTERNET`             | normal           | Network access; dev-server / remote code loading |
+| `android.permission.CAMERA`               | dangerous        | Camera capture (runtime prompt)                  |
+| `android.permission.RECORD_AUDIO`         | dangerous        | Microphone (runtime prompt)                      |
+| `android.permission.READ_MEDIA_IMAGES`    | dangerous        | Photo library read (API 33+)                     |
+| `android.permission.ACCESS_FINE_LOCATION` | dangerous        | Location (runtime prompt)                        |
 
 - `INTERNET` is the baseline for any app loading bundles from a dev server or fetching remote resources.
 - Cleartext traffic is controlled separately (`android:usesCleartextTraffic`); the RN wasm spike templates this per build type.
@@ -112,10 +112,10 @@ Common entries:
 
 ## 8. Current state of the examples
 
-| Example                                        | Platform | Permission declarations                                                        | Why                                                                   |
-| ---------------------------------------------- | -------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| `examples/tauri-calculator`                    | Tauri    | None (empty `capabilities.json`, `"csp": null`, bundling inactive)             | Pure compute commands; dev-only configuration                          |
-| `examples/react-native-calculator`             | iOS (RN) | No `NS*UsageDescription` entries; ATS strict with local networking only        | The calculator needs no protected resources — absence here is correct  |
-| `examples/rn-wasm-spike`                       | Android  | `INTERNET` only (plus templated `usesCleartextTraffic`)                        | Spikes load the engine over the dev server; no hardware access        |
+| Example                            | Platform | Permission declarations                                                 | Why                                                                   |
+| ---------------------------------- | -------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `examples/tauri-calculator`        | Tauri    | None (empty `capabilities.json`, `"csp": null`, bundling inactive)      | Pure compute commands; dev-only configuration                         |
+| `examples/react-native-calculator` | iOS (RN) | No `NS*UsageDescription` entries; ATS strict with local networking only | The calculator needs no protected resources — absence here is correct |
+| `examples/rn-wasm-spike`           | Android  | `INTERNET` only (plus templated `usesCleartextTraffic`)                 | Spikes load the engine over the dev server; no hardware access        |
 
 If a future example gains camera/audio features, its manifests and this table should be updated together.
