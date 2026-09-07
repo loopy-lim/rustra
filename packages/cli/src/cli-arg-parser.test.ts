@@ -61,12 +61,56 @@ describe('parseCliArgs', () => {
   // 같은 exit-2 계약. changeset 이 "invoked the CLI wrong → exit 2"로 광고하는
   // 표면이 파서와 커맨드 경계에서 갈라지지 않게 한다.
   test('command-level missing-required-argument errors are UsageError instances', () => {
-    // codegen --config 누락
+    // codegen --config 누락 (cwd 에 ./rustra.json 이 없을 때 — 아래 기본 채택 테스트와 짝)
     expect(() => parseCodegenArgs(['--check'])).toThrow(UsageError);
     expect(() => parseCodegenArgs(['--check'])).toThrow(/codegen requires --config/);
     // diff --old/--new 누락 (runDiff 경로 — 파일 접근 전에 검증된다)
     expect(() => runDiff([])).toThrow(UsageError);
     expect(() => runDiff([])).toThrow(/Provide --old and --new/);
+  });
+
+  // 감사 A10 — `rustra codegen` 무인자가 ./rustra.json 을 기본 채택(doctor 관례
+  // 대칭). 파일이 없으면 기존 usage 안내로 실패한다.
+  test('parseCodegenArgs adopts ./rustra.json as the default config when present', async () => {
+    const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const previousCwd = process.cwd();
+    const root = mkdtempSync(join(tmpdir(), 'rustra-codegen-default-'));
+    try {
+      writeFileSync(
+        join(root, 'rustra.json'),
+        JSON.stringify({ schema: './generated/schema.json', output: './generated' }),
+      );
+      process.chdir(root);
+      expect(parseCodegenArgs([])).toEqual({ configPath: 'rustra.json' });
+      expect(parseCodegenArgs(['--check'])).toEqual({ configPath: 'rustra.json', check: true });
+    } finally {
+      process.chdir(previousCwd);
+      rmSync(root, { recursive: true, force: true });
+    }
+    // 기본 파일이 없는 cwd — 기존 usage 계약 유지(이 테스트 파일의 cwd 는 패키지
+    // 루트로 rustra.json 이 없다).
+    expect(() => parseCodegenArgs([])).toThrow(/codegen requires --config/);
+  });
+
+  // 감사 A9 — unknown 커맨드도 UsageError(exit 2). 플래그 오타와 커맨드 오타가
+  // exit 코드 계약에서 갈라지지 않게 한다.
+  test('unknown top-level command rejects with UsageError and a did-you-mean', async () => {
+    const { main } = await import('./cli-main.js');
+    const originalArgv = process.argv;
+    process.argv = ['node', 'rustra', 'genrate'];
+    try {
+      await expect(main()).rejects.toBeInstanceOf(UsageError);
+      process.argv = ['node', 'rustra', 'genrate'];
+      await expect(main()).rejects.toThrow(
+        /Unknown command: genrate[\s\S]*Did you mean "rustra generate"/,
+      );
+      process.argv = ['node', 'rustra', 'zzzzqqqq'];
+      await expect(main()).rejects.toThrow(/Unknown command: zzzzqqqq[\s\S]*--help/);
+    } finally {
+      process.argv = originalArgv;
+    }
   });
 
   test('supports --flag=value', () => {

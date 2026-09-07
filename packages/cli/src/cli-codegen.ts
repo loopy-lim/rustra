@@ -162,9 +162,12 @@ export async function runCodegen(args: string[]): Promise<void> {
           durationMs: Date.now() - startedAt,
         }),
       );
-    // 텍스트 모드 전용 — 스테일 런타임 바이너리 힌트(감사 #3). drift 는 JSON 필드로
-    // 이미 관측 가능하지만, 텍스트 사용자에게는 이 출력이 유일한 신호였다.
+    // 텍스트 모드 전용 — generate 와 동일한 파일 목록·(unchanged)/(updated) 표기
+    // (감사 A3). codegen 이 주력 경로인데 목록을 quiet 로 삼키면 drift 표기가 stale
+    // 힌트에만 의존한다. 이어서 스테일 런타임 바이너리 힌트(감사 #3)를 붙인다.
     else {
+      console.log(`Generated TypeScript files in ${resolve(dirname(configPath), config.output)}:`);
+      for (const file of files) console.log(`  ${file}`);
       const hint = staleBinaryHint(files);
       if (hint) console.log(hint);
     }

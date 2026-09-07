@@ -1,0 +1,1313 @@
+{
+  "packageId": "examples.calculator",
+  "schemaVersion": 1,
+  "fieldOrder": "declaration",
+  "commands": [
+    {
+      "name": "addNumbers",
+      "commandId": 1,
+      "inputType": "AddNumbersInput",
+      "outputType": "AddNumbersOutput",
+      "inputSchema": {
+        "title": "AddNumbersInput",
+        "type": "object",
+        "required": [
+          "a",
+          "b"
+        ],
+        "properties": {
+          "a": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "b": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "AddNumbersOutput",
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      }
+    },
+    {
+      "name": "benchAdd",
+      "commandId": 23,
+      "inputType": "BenchAddInput",
+      "outputType": "BenchAddOutput",
+      "inputSchema": {
+        "title": "BenchAddInput",
+        "type": "object",
+        "required": [
+          "a",
+          "b"
+        ],
+        "properties": {
+          "a": {
+            "type": "number",
+            "format": "double"
+          },
+          "b": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "BenchAddOutput",
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      }
+    },
+    {
+      "name": "benchEchoBytes",
+      "commandId": 25,
+      "inputType": "BenchBytesPayload",
+      "outputType": "BenchBytesPayload",
+      "inputSchema": {
+        "title": "BenchBytesPayload",
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "BenchBytesPayload",
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "benchEchoPair",
+      "commandId": 26,
+      "inputType": "BenchPairPayload",
+      "outputType": "BenchPairPayload",
+      "inputSchema": {
+        "title": "BenchPairPayload",
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "BenchPairPayload",
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      }
+    },
+    {
+      "name": "benchEchoString",
+      "commandId": 24,
+      "inputType": "BenchStringPayload",
+      "outputType": "BenchStringPayload",
+      "inputSchema": {
+        "title": "BenchStringPayload",
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "BenchStringPayload",
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "channelDemo",
+      "commandId": 18,
+      "inputType": "ChannelDemoInput",
+      "outputType": "ChannelDemoOutput",
+      "inputSchema": {
+        "title": "ChannelDemoInput",
+        "type": "object",
+        "required": [
+          "channel",
+          "ticks"
+        ],
+        "properties": {
+          "channel": {
+            "description": "호스트가 발급한 채널 핸들 — JS 콜백이 이 번호에 배선돼 있다.",
+            "allOf": [
+              {
+                "$ref": "#/definitions/ChannelHandle"
+              }
+            ]
+          },
+          "ticks": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ChannelDemoOutput",
+        "type": "object",
+        "required": [
+          "droppedSends",
+          "sent"
+        ],
+        "properties": {
+          "sent": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "droppedSends": {
+            "description": "만료된 핸들로의 send 시도 수(stale 무시 계약의 가시화).",
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "definitions": {
+        "ChannelHandle": {
+          "description": "커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
+      "name": "channelDemoBytes",
+      "commandId": 31,
+      "inputType": "ChannelDemoBytesInput",
+      "outputType": "ChannelDemoBytesOutput",
+      "inputSchema": {
+        "title": "ChannelDemoBytesInput",
+        "description": "바이너리 채널 데모 — `channel_demo` 의 바이트 경로 쌍둥이. 모든 호스트 어댑터의 createBytesChannel/createChannelBytes 패리티를 동일 명령으로 e2e 검증한다(페이로드는 스텝 카운터 LE u64).",
+        "type": "object",
+        "required": [
+          "channel",
+          "ticks"
+        ],
+        "properties": {
+          "channel": {
+            "description": "바이너리 채널로 발급받은 핸들.",
+            "allOf": [
+              {
+                "$ref": "#/definitions/ChannelHandle"
+              }
+            ]
+          },
+          "ticks": {
+            "description": "전송할 프레임 수.",
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ChannelDemoBytesOutput",
+        "type": "object",
+        "required": [
+          "droppedSends",
+          "sent"
+        ],
+        "properties": {
+          "sent": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          },
+          "droppedSends": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          }
+        }
+      },
+      "definitions": {
+        "ChannelHandle": {
+          "description": "커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
+      "name": "clamp",
+      "commandId": 4,
+      "inputType": "ClampInput",
+      "outputType": "ClampOutput",
+      "inputSchema": {
+        "title": "ClampInput",
+        "type": "object",
+        "required": [
+          "max",
+          "min",
+          "value"
+        ],
+        "properties": {
+          "max": {
+            "type": "number",
+            "format": "double"
+          },
+          "min": {
+            "type": "number",
+            "format": "double"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ClampOutput",
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      }
+    },
+    {
+      "name": "createItem",
+      "commandId": 8,
+      "inputType": "CreateItemInput",
+      "outputType": "CreateItemOutput",
+      "inputSchema": {
+        "title": "CreateItemInput",
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "CreateItemOutput",
+        "type": "object",
+        "required": [
+          "item"
+        ],
+        "properties": {
+          "item": {
+            "$ref": "#/definitions/Item"
+          }
+        }
+      },
+      "definitions": {
+        "Item": {
+          "type": "object",
+          "required": [
+            "active",
+            "name",
+            "value"
+          ],
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "value": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "divide",
+      "commandId": 10,
+      "inputType": "DivideInput",
+      "outputType": "DivideOutput",
+      "inputSchema": {
+        "title": "DivideInput",
+        "type": "object",
+        "required": [
+          "a",
+          "b"
+        ],
+        "properties": {
+          "a": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "b": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "DivideOutput",
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "errors": [
+        {
+          "code": "math.divide_by_zero",
+          "description": null,
+          "retryable": false
+        }
+      ]
+    },
+    {
+      "name": "echoGroups",
+      "commandId": 27,
+      "inputType": "EchoGroupsInput",
+      "outputType": "EchoGroupsOutput",
+      "inputSchema": {
+        "title": "EchoGroupsInput",
+        "type": "object",
+        "required": [
+          "groups"
+        ],
+        "properties": {
+          "groups": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "EchoGroupsOutput",
+        "type": "object",
+        "required": [
+          "groups"
+        ],
+        "properties": {
+          "groups": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "emitDemo",
+      "commandId": 11,
+      "inputType": "EmitDemoInput",
+      "outputType": "EmitDemoOutput",
+      "inputSchema": {
+        "title": "EmitDemoInput",
+        "type": "object",
+        "required": [
+          "stepDelayMs",
+          "ticks"
+        ],
+        "properties": {
+          "ticks": {
+            "description": "발행할 progress.tick 이벤트 수.",
+            "type": "integer",
+            "format": "int64"
+          },
+          "stepDelayMs": {
+            "description": "각 스텝 사이 대기 (ms). 데모에서 이벤트 순서를 관찰하기 쉽게.",
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "EmitDemoOutput",
+        "type": "object",
+        "required": [
+          "emitted"
+        ],
+        "properties": {
+          "emitted": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      }
+    },
+    {
+      "name": "gauge",
+      "commandId": 17,
+      "inputType": "GaugeInput",
+      "outputType": "GaugeOutput",
+      "inputSchema": {
+        "title": "GaugeInput",
+        "type": "object",
+        "required": [
+          "limit",
+          "offset"
+        ],
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "offset": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "GaugeOutput",
+        "type": "object",
+        "required": [
+          "next"
+        ],
+        "properties": {
+          "next": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          }
+        }
+      },
+      "description": "u64/u32 필드 — plain varint(uvar) 와이어 고정(과거 zigzag 버그 수정 증명)."
+    },
+    {
+      "name": "greet",
+      "commandId": 5,
+      "inputType": "GreetInput",
+      "outputType": "GreetOutput",
+      "inputSchema": {
+        "title": "GreetInput",
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "GreetOutput",
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "isEven",
+      "commandId": 3,
+      "inputType": "IsEvenInput",
+      "outputType": "IsEvenOutput",
+      "inputSchema": {
+        "title": "IsEvenInput",
+        "type": "object",
+        "required": [
+          "n"
+        ],
+        "properties": {
+          "n": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "IsEvenOutput",
+        "type": "object",
+        "required": [
+          "result"
+        ],
+        "properties": {
+          "result": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    {
+      "name": "multiply",
+      "commandId": 2,
+      "inputType": "MultiplyInput",
+      "outputType": "MultiplyOutput",
+      "inputSchema": {
+        "title": "MultiplyInput",
+        "type": "object",
+        "required": [
+          "a",
+          "b"
+        ],
+        "properties": {
+          "a": {
+            "type": "number",
+            "format": "double"
+          },
+          "b": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "MultiplyOutput",
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      }
+    },
+    {
+      "name": "platformNativeInfo",
+      "commandId": 30,
+      "inputType": "()",
+      "outputType": "PlatformNativeInfoOutput",
+      "inputSchema": {
+        "title": "Null",
+        "type": "null"
+      },
+      "outputSchema": {
+        "title": "PlatformNativeInfoOutput",
+        "description": "플랫폼 상호운용 — 플랫폼 특화 명령의 계약 안정화 예시.\n\n`platformNativeInfo` 는 `#[command(platform(windows, macos))]` 로 macos/windows 에만 구현을 선언한다. 등록(id·스키마·계약 해시)은 전 플랫폼에서 동일하게 일어나고, Linux(및 기타)에서 호출하면 `platform.unavailable` 이 반환된다 (`command.not_found` 와 구분된다). 실제 구현은 cfg 로 보호해 지원 OS 에서만 주입된다 — win32/objc2 호출을 하는 실명령의 뼈대가 되는 패턴이다.",
+        "type": "object",
+        "required": [
+          "os",
+          "windowKind"
+        ],
+        "properties": {
+          "os": {
+            "description": "std::env::consts::OS — 컴파일 대상 OS 문자열.",
+            "type": "string"
+          },
+          "windowKind": {
+            "description": "네이티브 윈도우 시스템 식별자 — 실제 예에서는 win32/objc2 API 조사값.",
+            "type": "string"
+          }
+        }
+      },
+      "platforms": [
+        "windows",
+        "macos"
+      ]
+    },
+    {
+      "name": "processItem",
+      "commandId": 9,
+      "inputType": "ProcessItemInput",
+      "outputType": "ProcessItemOutput",
+      "inputSchema": {
+        "title": "ProcessItemInput",
+        "type": "object",
+        "required": [
+          "item"
+        ],
+        "properties": {
+          "item": {
+            "$ref": "#/definitions/Item"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ProcessItemOutput",
+        "type": "object",
+        "required": [
+          "doubled",
+          "item"
+        ],
+        "properties": {
+          "doubled": {
+            "type": "boolean"
+          },
+          "item": {
+            "$ref": "#/definitions/Item"
+          }
+        }
+      },
+      "definitions": {
+        "Item": {
+          "type": "object",
+          "required": [
+            "active",
+            "name",
+            "value"
+          ],
+          "properties": {
+            "active": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string"
+            },
+            "value": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "resourceClose",
+      "commandId": 22,
+      "inputType": "ResourceCloseInput",
+      "outputType": "ResourceCloseOutput",
+      "inputSchema": {
+        "title": "ResourceCloseInput",
+        "type": "object",
+        "required": [
+          "handle"
+        ],
+        "properties": {
+          "handle": {
+            "$ref": "#/definitions/ResourceHandle"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ResourceCloseOutput",
+        "type": "object",
+        "required": [
+          "closed"
+        ],
+        "properties": {
+          "closed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "definitions": {
+        "ResourceHandle": {
+          "description": "커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
+      "name": "resourceOpen",
+      "commandId": 19,
+      "inputType": "ResourceOpenInput",
+      "outputType": "ResourceHandleOutput",
+      "inputSchema": {
+        "title": "ResourceOpenInput",
+        "type": "object",
+        "required": [
+          "initial"
+        ],
+        "properties": {
+          "initial": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ResourceHandleOutput",
+        "type": "object",
+        "required": [
+          "handle"
+        ],
+        "properties": {
+          "handle": {
+            "$ref": "#/definitions/ResourceHandle"
+          }
+        }
+      },
+      "definitions": {
+        "ResourceHandle": {
+          "description": "커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
+      "name": "resourceRead",
+      "commandId": 20,
+      "inputType": "ResourceReadInput",
+      "outputType": "ResourceReadOutput",
+      "inputSchema": {
+        "title": "ResourceReadInput",
+        "type": "object",
+        "required": [
+          "handle",
+          "key"
+        ],
+        "properties": {
+          "handle": {
+            "$ref": "#/definitions/ResourceHandle"
+          },
+          "key": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ResourceReadOutput",
+        "type": "object",
+        "required": [
+          "found"
+        ],
+        "properties": {
+          "found": {
+            "type": "boolean"
+          },
+          "value": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "errors": [
+        {
+          "code": "resource.not_found",
+          "description": null,
+          "retryable": false
+        }
+      ],
+      "definitions": {
+        "ResourceHandle": {
+          "description": "커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
+      "name": "resourceWrite",
+      "commandId": 21,
+      "inputType": "ResourceWriteInput",
+      "outputType": "ResourceWriteOutput",
+      "inputSchema": {
+        "title": "ResourceWriteInput",
+        "type": "object",
+        "required": [
+          "handle",
+          "key",
+          "value"
+        ],
+        "properties": {
+          "handle": {
+            "$ref": "#/definitions/ResourceHandle"
+          },
+          "key": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ResourceWriteOutput",
+        "type": "object",
+        "required": [
+          "entries"
+        ],
+        "properties": {
+          "entries": {
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0.0
+          }
+        }
+      },
+      "errors": [
+        {
+          "code": "resource.not_found",
+          "description": null,
+          "retryable": false
+        }
+      ],
+      "definitions": {
+        "ResourceHandle": {
+          "description": "커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    {
+      "name": "rustraRegistryDemo",
+      "commandId": 12,
+      "inputType": "RegistryDemoInput",
+      "outputType": "RegistryDemoOutput",
+      "inputSchema": {
+        "title": "RegistryDemoInput",
+        "type": "object",
+        "required": [
+          "op"
+        ],
+        "properties": {
+          "op": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "RegistryDemoOutput",
+        "type": "object",
+        "required": [
+          "frozen",
+          "message",
+          "ok"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "frozen": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "런타임 registry 제어 명령. op:\n`register` / `unregister` / `replacePing` / `replaceAdd` / `restoreAdd` / `freeze` / `state`."
+    },
+    {
+      "name": "scoreTotal",
+      "commandId": 15,
+      "inputType": "ScoreTotalInput",
+      "outputType": "ScoreTotalOutput",
+      "inputSchema": {
+        "title": "ScoreTotalInput",
+        "type": "object",
+        "required": [
+          "scores"
+        ],
+        "properties": {
+          "scores": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ScoreTotalOutput",
+        "type": "object",
+        "required": [
+          "count",
+          "total"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "description": "HashMap<String, i64>(동적 맵) — count + (key,value)* 와이어 고정."
+    },
+    {
+      "name": "secureCompute",
+      "commandId": 13,
+      "inputType": "SecureComputeInput",
+      "outputType": "SecureComputeOutput",
+      "inputSchema": {
+        "title": "SecureComputeInput",
+        "type": "object",
+        "required": [
+          "a",
+          "b"
+        ],
+        "properties": {
+          "a": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "b": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "SecureComputeOutput",
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      }
+    },
+    {
+      "name": "sizeOf",
+      "commandId": 14,
+      "inputType": "SizeOfInput",
+      "outputType": "SizeOfOutput",
+      "inputSchema": {
+        "title": "SizeOfInput",
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "SizeOfOutput",
+        "type": "object",
+        "required": [
+          "checksum",
+          "len"
+        ],
+        "properties": {
+          "checksum": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          },
+          "len": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          }
+        }
+      },
+      "description": "Vec<u8>(postcard bytes) 입력 + u32 출력 — plain varint 와이어 고정."
+    },
+    {
+      "name": "span",
+      "commandId": 16,
+      "inputType": "SpanInput",
+      "outputType": "SpanOutput",
+      "inputSchema": {
+        "title": "SpanInput",
+        "type": "object",
+        "required": [
+          "pair"
+        ],
+        "properties": {
+          "pair": {
+            "type": "array",
+            "items": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer",
+                "format": "int64"
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "SpanOutput",
+        "type": "object",
+        "required": [
+          "first",
+          "second"
+        ],
+        "properties": {
+          "first": {
+            "type": "string"
+          },
+          "second": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "description": "(String, i64) 튜플 — i64 때문에 complex-binary count + elements 와이어."
+    },
+    {
+      "name": "sumList",
+      "commandId": 6,
+      "inputType": "SumListInput",
+      "outputType": "SumListOutput",
+      "inputSchema": {
+        "title": "SumListInput",
+        "type": "object",
+        "required": [
+          "numbers"
+        ],
+        "properties": {
+          "numbers": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "SumListOutput",
+        "type": "object",
+        "required": [
+          "count",
+          "total"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      }
+    },
+    {
+      "name": "tagSet",
+      "commandId": 29,
+      "inputType": "TagSetInput",
+      "outputType": "TagSetOutput",
+      "inputSchema": {
+        "title": "TagSetInput",
+        "type": "object",
+        "required": [
+          "ids"
+        ],
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "uniqueItems": true
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "TagSetOutput",
+        "type": "object",
+        "required": [
+          "tags"
+        ],
+        "properties": {
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        }
+      }
+    },
+    {
+      "name": "toUpper",
+      "commandId": 7,
+      "inputType": "ToUpperInput",
+      "outputType": "ToUpperOutput",
+      "inputSchema": {
+        "title": "ToUpperInput",
+        "type": "object",
+        "required": [
+          "s"
+        ],
+        "properties": {
+          "s": {
+            "type": "string"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ToUpperOutput",
+        "type": "object",
+        "required": [
+          "result"
+        ],
+        "properties": {
+          "result": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    {
+      "name": "wideAgg",
+      "commandId": 28,
+      "inputType": "WideAggInput",
+      "outputType": "WideAggOutput",
+      "inputSchema": {
+        "title": "WideAggInput",
+        "description": "A2 와이드 정수 복합 타입 표본 — Vec<u64> + Option<i64>. 원소/옵션 레벨 uvar64/zigzag64 헬퍼가 스트림 중간 7바이트 varint 경계를 넘는 값을 무손실 왕복하는지 cross-wire 픽스처로 고정한다.",
+        "type": "object",
+        "required": [
+          "samples"
+        ],
+        "properties": {
+          "samples": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "offset": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "WideAggOutput",
+        "type": "object",
+        "required": [
+          "adjusted",
+          "max"
+        ],
+        "properties": {
+          "max": {
+            "type": "integer",
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "adjusted": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      }
+    }
+  ]
+}

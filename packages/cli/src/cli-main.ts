@@ -7,6 +7,7 @@ import { runDiff } from './cli-diff.js';
 import { runDoctor } from './cli-doctor.js';
 import { runInspect } from './cli-inspect.js';
 import { closestMatch } from './cli-suggest.js';
+import { UsageError } from './cli-usage-error.js';
 
 export async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -61,9 +62,11 @@ export async function main(): Promise<void> {
     return;
   }
   const suggestion = closestMatch(command, CLI_COMMANDS);
-  console.error(`Unknown command: ${command}`);
-  console.error(`Available commands: ${CLI_COMMANDS.join(', ')}`);
-  if (suggestion) console.error(`Did you mean "rustra ${suggestion}"?`);
-  console.error('Run "rustra --help" for usage information.');
-  process.exitCode = 1;
+  // 커맨드 오타도 플래그 오타와 같은 usage 오류(exit 2)다 — index.ts 핸들러가
+  // UsageError 타입으로 판별한다(감사 A9). did-you-mean 과 --help 안내 유지.
+  throw new UsageError(
+    `Unknown command: ${command}. Available commands: ${CLI_COMMANDS.join(', ')}.` +
+      (suggestion ? ` Did you mean "rustra ${suggestion}"?` : '') +
+      ` Run "rustra --help" for usage information.`,
+  );
 }

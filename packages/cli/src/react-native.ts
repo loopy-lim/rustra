@@ -102,7 +102,16 @@ function resolveReactNativeAdapterNative(appRoot: string, adapterRange: string):
     throw new Error(
       `Found a complete but incompatible @rustra/react-native package: ${rejected.join('; ')}. Install a version satisfying ${adapterRange} and regenerate.`,
     );
-  return resolve(appRoot, 'node_modules/@rustra/react-native/native');
+  // 미설치(경로 자체가 없음)는 조용히 기본 경로를 반환하지 않는다(감사 A11) —
+  // 생성된 podspec/gradle 이 존재하지 않는 경로를 가리키면 첫 loud 실패는
+  // pod install 시점으로 미뤄진다. codegen 시점에 설치 안내로 실패한다.
+  const fallback = resolve(appRoot, 'node_modules/@rustra/react-native/native');
+  if (!NATIVE_FILES.every((file) => existsSync(resolve(fallback, file))))
+    throw new Error(
+      `@rustra/react-native adapter not installed: ${fallback} was not found. ` +
+        `Run "bun install" to install @rustra/react-native@${adapterRange} first, then regenerate.`,
+    );
+  return fallback;
 }
 
 export function renderReactNativeModule(
