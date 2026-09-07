@@ -390,6 +390,16 @@ export type CreateItemOutput = {
   item: Item;
 };
 
+/**
+ * 디바이스 역량 계약 — 커맨드가 전제하는 디바이스 역량 선언의 예시.
+ *
+ * `device_demo` 는 `#[command(device(camera, bluetooth))]` 로 카메라·블루투스를 전제한다고 선언한다. 선언은 schema.json 의 조건부 `devices` 필드와 생성 `devices.ts`(토큰 유니언 + 커맨드별 요구 상수)의 원천이 될 뿐 런타임 게이팅은 하지 않는다 — 하드웨어 접근·권한 확인은 호스트 앱이 getDeviceStatus 로 사전 조회하는 패턴의 뼈대가 되는 예시다(여기서는 하드웨어에 접근하지 않는다).
+ */
+export type DeviceDemoOutput = {
+  /** std::env::consts::OS — 선언과 무관한 컴파일 대상 확인용. */
+  os: string;
+};
+
 export type DivideInput = {
   a: number | bigint;
   b: number | bigint;
@@ -627,7 +637,7 @@ export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutp
 
 <!-- prettier-ignore -->
 ```ts
-export const GENERATED_CONTRACT_HASH = '469de763d700360d784560e55457d52737601b29309f8aeca64e87de46c0afaf';
+export const GENERATED_CONTRACT_HASH = '01bec0c77aecaf313ce30bafb93c95d788162dc1e6f661a62e9ddd8d964337be';
 export const SCHEMA_VERSION = 1;
 ```
 

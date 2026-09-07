@@ -1,4 +1,4 @@
-use super::*;
+use crate::*;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
