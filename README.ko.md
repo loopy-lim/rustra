@@ -139,14 +139,15 @@ JS/네이티브 조합의 drift를 런타임에 감지한다.
 
 ### Rust
 
-<!-- 발행 시 갱신: 0.7.0 라인 -->
-
 ```toml
 [dependencies]
-rustra = "0.6"
+rustra = "0.8"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
+
+검증된 조합: npm `@rustra/*` 0.8.x ↔ Rust crate 0.8.x — npm과 Rust 버전 라인은
+함께 맞춘다([호환성 매트릭스](docs/compatibility-matrix.ko.md#매트릭스) 참고).
 
 ### TypeScript 어댑터 (필요한 환경만)
 
@@ -184,9 +185,33 @@ fn main() -> Result<()> {
 }
 ```
 
-바이너리 fast-path(rkyv V2, RN)를 쓰려면 CLI codegen도 실행한다. `rustra.json`에
-Rust generator를 지정하면 schema 생성부터 `rkyv-codecs.ts`/`rkyv-registry.ts`까지
-한 번에 처리한다:
+바이너리 fast-path(rkyv V2, RN)를 쓰려면 CLI codegen도 실행한다. 먼저 프로젝트
+루트에 `rustra.json`을 만든다 — 이 최소형은 CLI에 발행된 schema, 출력 디렉터리,
+사용할 호스트를 알려준다:
+
+```json
+{
+  "schema": "./generated/schema.json",
+  "output": "./generated",
+  "node": {}
+}
+```
+
+`rustra.json`에 Rust generator를 지정하면 schema 생성부터
+`rkyv-codecs.ts`/`rkyv-registry.ts`까지 한 번에 처리한다:
+
+```json
+{
+  "schema": "./generated/schema.json",
+  "output": "./generated",
+  "codegen": {
+    "rustManifest": "./Cargo.toml",
+    "rustBinary": "generate"
+  }
+}
+```
+
+그리고 실행한다:
 
 ```bash
 bunx --bun @rustra/cli codegen --config rustra.json
@@ -541,10 +566,8 @@ type RustraError = {
 
 `tauri` feature를 활성화:
 
-<!-- 발행 시 갱신: 0.7.0 라인 -->
-
 ```toml
-rustra = { version = "0.6", features = ["tauri"] }
+rustra = { version = "0.8", features = ["tauri"] }
 ```
 
 Rust 측:
@@ -715,15 +738,17 @@ bunx --bun @rustra/cli dev --config rustra.json
 
 전체 문서는 [`docs/`](docs/)에 있다.
 
-| 문서                                                             | 내용                                           |
-| ---------------------------------------------------------------- | ---------------------------------------------- |
-| [시작하기](docs/getting-started.md)                              | 설치, 첫 패키지 만들기, 어댑터 선택            |
-| [아키텍처 개요](docs/architecture.md)                            | 데이터 흐름, EngineClient 계약, transport 분리 |
-| [Transport 교체 가이드](docs/extending/transport-guide.md)       | Bun FFI, Node napi-rs 교체                     |
-| [React Native 설정 가이드](docs/extending/react-native-setup.md) | iOS JSI 모듈 설정, 사용법, 트러블슈팅          |
-| [개발 허들 가이드](docs/development-hurdles.md)                  | doctor, 통합 codegen, drift, native 경계       |
-| [새 Host 추가 가이드](docs/extending/adding-host.md)             | Electron, Deno 등 새 어댑터 추가               |
-| [전체 문서 목록](docs/README.md)                                 | 사용자 / 기여자별 읽기 경로                    |
+| 문서                                                             | 내용                                                |
+| ---------------------------------------------------------------- | --------------------------------------------------- |
+| [시작하기](docs/getting-started.md)                              | 설치, 첫 패키지 만들기, 어댑터 선택                 |
+| [이벤트·채널 가이드](docs/events-and-channels.md)                | 호스트별 `subscribeEvent`/`createChannel` 사용법    |
+| [아키텍처 개요](docs/architecture.md)                            | 데이터 흐름, EngineClient 계약, transport 분리      |
+| [Transport 교체 가이드](docs/extending/transport-guide.md)       | Bun FFI, Node napi-rs 교체                          |
+| [React Native 설정 가이드](docs/extending/react-native-setup.md) | iOS JSI 모듈 설정, 사용법, 트러블슈팅               |
+| [Tauri 설정 가이드](docs/extending/tauri-setup.md)               | 기존 Tauri 앱에 rustra 얹기, 파일별 워크스루        |
+| [개발 허들 가이드](docs/development-hurdles.md)                  | doctor, 통합 codegen, drift, native 경계, mock 엔진 |
+| [새 Host 추가 가이드](docs/extending/adding-host.md)             | Electron, Deno 등 새 어댑터 추가                    |
+| [전체 문서 목록](docs/README.md)                                 | 사용자 / 기여자별 읽기 경로                         |
 
 ## 기여
 

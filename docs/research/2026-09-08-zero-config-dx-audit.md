@@ -4,7 +4,7 @@ researcher: claude
 git_commit: 5a33a206
 branch: changeset-release/main
 repository: loopy-lim/rustra
-topic: "zero-config 실측 검증 + 첫 사용 흐름 벤치마킹 + DX 개선 후보 발굴"
+topic: 'zero-config 실측 검증 + 첫 사용 흐름 벤치마킹 + DX 개선 후보 발굴'
 tags: [research, dx, zero-config, onboarding, cli, codegen, benchmark]
 status: complete
 last_updated: 2026-09-08
@@ -59,15 +59,15 @@ capability 무음 드랍 제거, positional facade 렌더러 수정 모두 현 �
 
 ### 상태 등급
 
-| 영역 | 등급 | 근거 |
-| --- | --- | --- |
-| zero-config 달성(JS 설정 0개) | **A** | 4호스트 전부 생성 엔트리가 lazy bootstrap 소유, examples가 이를 사용 중 |
-| zero-config 신뢰성(실패 경로) | **C+** | stale-release 탐색 함정(재현), RN 예제 probe 오지정, 어댑터 미설치 조용한 폴백 |
-| 첫 사용 흐름 | **A-** | 6명령/12초/게이트 계약화. 감점: init이 node·RN 2호스트만 스캐폴드 |
-| 재생성 루프(watch/dev) | **B+** | `rustra dev --config`가 Rust+config+schema 감시·reload 훅·parity 게이트. 감점: codegen 텍스트 모드가 drift 표시 숨김 |
-| 에러 메시지 품질 | **B** | CLI did-you-mean/fix 안내 성숙. 감점: diff 무경로, Node mismatch 무힌트, 호스트 특정 문구 |
-| 문서-코드 정합 | **B-** | docs:sync 게이트 존재하나 매트릭스 표 2개 중복 모순(en)/스테일 단일 표(ko), 버전 스니펫 0.6 방치 |
-| 업그레이드 경험 | **B-** | doctor가 generatorVersion drift 감지. 감점: 0.7→0.8 마이그레이션 문서 부재 |
+| 영역                          | 등급   | 근거                                                                                                                 |
+| ----------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------- |
+| zero-config 달성(JS 설정 0개) | **A**  | 4호스트 전부 생성 엔트리가 lazy bootstrap 소유, examples가 이를 사용 중                                              |
+| zero-config 신뢰성(실패 경로) | **C+** | stale-release 탐색 함정(재현), RN 예제 probe 오지정, 어댑터 미설치 조용한 폴백                                       |
+| 첫 사용 흐름                  | **A-** | 6명령/12초/게이트 계약화. 감점: init이 node·RN 2호스트만 스캐폴드                                                    |
+| 재생성 루프(watch/dev)        | **B+** | `rustra dev --config`가 Rust+config+schema 감시·reload 훅·parity 게이트. 감점: codegen 텍스트 모드가 drift 표시 숨김 |
+| 에러 메시지 품질              | **B**  | CLI did-you-mean/fix 안내 성숙. 감점: diff 무경로, Node mismatch 무힌트, 호스트 특정 문구                            |
+| 문서-코드 정합                | **B-** | docs:sync 게이트 존재하나 매트릭스 표 2개 중복 모순(en)/스테일 단일 표(ko), 버전 스니펫 0.6 방치                     |
+| 업그레이드 경험               | **B-** | doctor가 generatorVersion drift 감지. 감점: 0.7→0.8 마이그레이션 문서 부재                                           |
 
 ### Top 개선 5 (우선순위 순)
 
@@ -76,7 +76,7 @@ capability 무음 드랍 제거, positional facade 렌더러 수정 모두 현 �
    실패 시에만 오류. 비용 M.
 2. **RN 예제 `rustBinary` 오지정 정정 + codegen의 probe 갱신 무결성** —
    `codegen:check` 항상 실패 + 스키마 조용한 재사용(A2). 비용 XS(정정) /
-   S-M(근본). 
+   S-M(근본).
 3. **호환 매트릭스 중복·모순 표 제거 + ko 갱신** — 도입 의사결정 표면이 두
    개의 반대 답을 준다(A4). 비용 XS.
 4. **codegen 텍스트 모드에 파일 목록·drift 표시** — `rustra codegen`(주력
@@ -102,18 +102,18 @@ capability 무음 드랍 제거, positional facade 렌더러 수정 모두 현 �
 
 ### 호스트 × 설정항목 매트릭스 (2026-09-08 실측)
 
-| 설정항목 | Node | Bun | Tauri | React Native |
-| --- | --- | --- | --- | --- |
-| 앱의 엔진 생성/`configure()` | **0** (엔트리 side-effect import 1줄) | **0** (동일) | **0** (동일) | **0** (동일) |
-| 생성 엔트리 | `node.ts` → `createNodeBootstrap` (init-entries.ts:70-89) | `bun.ts` → `createBunBootstrap` (:130-152) | `tauri.ts` → `createTauriBootstrap()` 무인자 (:154-162) | `react-native.ts` → `createRustraBootstrap({install: installRustraJSI, …})` (:5-22) |
-| lazy 등록 지점 | node-bootstrap.ts:105 `configureLazy` | bun-ffi.ts:237 | tauri/src/index.ts:192 | react-native-core.ts:140 |
-| 아티팩트 자동 탐색 | binary 후보 release→debug + cwd 조상 탐색 (node-bootstrap.ts:25-46) | cdylib 후보 + ABI probe (bun-ffi-library.ts:33-45) | `globalThis.__TAURI__.core.invoke` (tauri/src/index.ts:93-99) | autolink된 `globalThis.__rustraNative` (react-native-core.ts:171-181) |
-| `rustra.json` host 섹션 | `{}`로 충분 | `{}`로 충분 | `{}`로 충분 | `{}`로 충분 (모노레포에서만 `rustManifest` 지정 — examples/react-native-bare-calculator/rustra.json 참고) |
-| Rust 측 필요 작업 | `Package::builder().command_fn()` + main.rs stdio invoke 루프 — **전부 스캐폴드가 심음** | 좌동 + `[lib] crate-type cdylib` **수동 1줄** (init이 Bun 호스트 미지원) | `features=["tauri"]` + `tauri_support::register_with_events(pkg, Builder)` **1줄** | `[lib] staticlib` (init `--host react-native`이 심음) + 모듈 15파일은 코드젠 생성(react-native.ts:130-146) |
-| 호스트 플랫폼 설정 | 없음 | 없음 | `tauri.conf.json` `app.withGlobalTauri: true` **1개** (또는 `createTauriEngine({invoke})` 명시) | autolink 설정 불요(생성됨). 단 코드젠 전 `bun install`로 `@rustra/react-native` 먼저 설치 필요 |
-| npm 의존성 | 코드젠이 자동 주입(cli-generate-files.ts:146-152 `ensureHostDependencies`) | 동일 | 동일 | `ensureReactNativeDependency`가 workspace 연결 |
-| escape hatch | `RUSTRA_NODE_BINARY` | `RUSTRA_BUN_LIBRARY` | `createTauriEngine({invoke})` | custom native transport |
-| examples 실사용 증거 | calculator/apps/node-app.ts:1 | calculator/apps/bun-ffi-app.ts:1 ("bun FFI zero-config result: 42" 재현) | tauri-calculator/src/app.ts:1 | react-native-calculator/App.tsx:3, react-native-bare-calculator/App.tsx |
+| 설정항목                     | Node                                                                                     | Bun                                                                      | Tauri                                                                                           | React Native                                                                                               |
+| ---------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| 앱의 엔진 생성/`configure()` | **0** (엔트리 side-effect import 1줄)                                                    | **0** (동일)                                                             | **0** (동일)                                                                                    | **0** (동일)                                                                                               |
+| 생성 엔트리                  | `node.ts` → `createNodeBootstrap` (init-entries.ts:70-89)                                | `bun.ts` → `createBunBootstrap` (:130-152)                               | `tauri.ts` → `createTauriBootstrap()` 무인자 (:154-162)                                         | `react-native.ts` → `createRustraBootstrap({install: installRustraJSI, …})` (:5-22)                        |
+| lazy 등록 지점               | node-bootstrap.ts:105 `configureLazy`                                                    | bun-ffi.ts:237                                                           | tauri/src/index.ts:192                                                                          | react-native-core.ts:140                                                                                   |
+| 아티팩트 자동 탐색           | binary 후보 release→debug + cwd 조상 탐색 (node-bootstrap.ts:25-46)                      | cdylib 후보 + ABI probe (bun-ffi-library.ts:33-45)                       | `globalThis.__TAURI__.core.invoke` (tauri/src/index.ts:93-99)                                   | autolink된 `globalThis.__rustraNative` (react-native-core.ts:171-181)                                      |
+| `rustra.json` host 섹션      | `{}`로 충분                                                                              | `{}`로 충분                                                              | `{}`로 충분                                                                                     | `{}`로 충분 (모노레포에서만 `rustManifest` 지정 — examples/react-native-bare-calculator/rustra.json 참고)  |
+| Rust 측 필요 작업            | `Package::builder().command_fn()` + main.rs stdio invoke 루프 — **전부 스캐폴드가 심음** | 좌동 + `[lib] crate-type cdylib` **수동 1줄** (init이 Bun 호스트 미지원) | `features=["tauri"]` + `tauri_support::register_with_events(pkg, Builder)` **1줄**              | `[lib] staticlib` (init `--host react-native`이 심음) + 모듈 15파일은 코드젠 생성(react-native.ts:130-146) |
+| 호스트 플랫폼 설정           | 없음                                                                                     | 없음                                                                     | `tauri.conf.json` `app.withGlobalTauri: true` **1개** (또는 `createTauriEngine({invoke})` 명시) | autolink 설정 불요(생성됨). 단 코드젠 전 `bun install`로 `@rustra/react-native` 먼저 설치 필요             |
+| npm 의존성                   | 코드젠이 자동 주입(cli-generate-files.ts:146-152 `ensureHostDependencies`)               | 동일                                                                     | 동일                                                                                            | `ensureReactNativeDependency`가 workspace 연결                                                             |
+| escape hatch                 | `RUSTRA_NODE_BINARY`                                                                     | `RUSTRA_BUN_LIBRARY`                                                     | `createTauriEngine({invoke})`                                                                   | custom native transport                                                                                    |
+| examples 실사용 증거         | calculator/apps/node-app.ts:1                                                            | calculator/apps/bun-ffi-app.ts:1 ("bun FFI zero-config result: 42" 재현) | tauri-calculator/src/app.ts:1                                                                   | react-native-calculator/App.tsx:3, react-native-bare-calculator/App.tsx                                    |
 
 ### 0이 아닌 것의 불가피성 판단
 
@@ -137,7 +137,7 @@ capability 무음 드랍 제거, positional facade 렌더러 수정 모두 현 �
 - **`rustra.json`의 codegen 키(rustManifest/rustPackage/rustBinary)는
   examples 대부분이 명시하지만 전부 생략 가능하다** — `findCargoManifest` +
   단일 패키지 추론 + `selectCodegenBinary`의 `generate` 우선(cargo.ts:45-68)
- 이 정답을 고른다. 오히려 RN 예제의 `rustBinary` 명시가 **오답을 고정**하는
+  이 정답을 고른다. 오히려 RN 예제의 `rustBinary` 명시가 **오답을 고정**하는
   원인이 됐다(A2) — "불가피하지 않은 명시가 신뢰성을 해치는" 사례.
 
 ### 직전 감사 항목의 착지 확인 (2026-09-04 감사 대비)
@@ -161,14 +161,14 @@ capability 무음 드랍 제거, positional facade 렌더러 수정 모두 현 �
 
 ### 실측: 스캐폴드 경로 (Node, /tmp에서 전 과정 재현)
 
-| 단계 | 명령 | 실측 시간 | 비고 |
-| --- | --- | --- | --- |
-| 1 | `rustra init hello` | ~0.1s | 9파일 스캐폴드(Cargo/package.json/rustra.json/demo 등), Next steps 6줄 안내 |
-| 2 | `cd hello` | - | |
-| 3 | `cargo build` | **9.97s** (레지스트리 웜) | 유일한 대기. 콜드 환경에선 의존성 다운로드로 수 분 — 흐름의 병목 전부 |
-| 4 | `bun install` | 0.98s | 3패키지 |
-| 5 | `bun run codegen` | 0.196s | cargo run probe 0.1s + TS 렌더 |
-| 6 | `bun run demo` | 0.046s | "hello from TypeScript" |
+| 단계 | 명령                | 실측 시간                 | 비고                                                                        |
+| ---- | ------------------- | ------------------------- | --------------------------------------------------------------------------- |
+| 1    | `rustra init hello` | ~0.1s                     | 9파일 스캐폴드(Cargo/package.json/rustra.json/demo 등), Next steps 6줄 안내 |
+| 2    | `cd hello`          | -                         |                                                                             |
+| 3    | `cargo build`       | **9.97s** (레지스트리 웜) | 유일한 대기. 콜드 환경에선 의존성 다운로드로 수 분 — 흐름의 병목 전부       |
+| 4    | `bun install`       | 0.98s                     | 3패키지                                                                     |
+| 5    | `bun run codegen`   | 0.196s                    | cargo run probe 0.1s + TS 렌더                                              |
+| 6    | `bun run demo`      | 0.046s                    | "hello from TypeScript"                                                     |
 
 합계 **약 12초(웜)** / 6명령 / **수동 파일 편집 0건**. `rustra doctor`는
 0.26s, 신선 스캐폴드에서 schema 미생성 WARN + `fix:` 안내로 정확히 안내한다.
@@ -191,14 +191,14 @@ uniffi는 UDL/바인딴 재실행이 필요하다 — rustra의 등록이 패키
 
 ### 경쟁 라이브러리 비교 (공개 문서 기준 단계수)
 
-| | rustra (스캐폴드) | Tauri commands | Nitro Modules | uniffi-rs |
-| --- | --- | --- | --- | --- |
-| 최초 hello world | 6명령, 편집 0건 | Tauri 앱 생성 후 **3단계/명령**(매크로→`generate_handler!` 등록→`invoke()`) | `npx nitrogen init` → nitro.json → **TS 스펙 작성** → nitrogen 코드젠 → 네이티브 구현(C++/Swift/Kotlin) → 앱 통합 | UDL/proc-macro 작성 → Rust 구현 → `uniffi-bindgen` 언어별 실행 → Xcode/Gradle 빌드 페이즈 **수동 배선** |
-| 스캐폴드 CLI | `rustra init`(9파일+demo) | `create-tauri-app`(앱 전체, 브릿지 아님) | 템플릿 부트스트랩 있음 | 없음 |
-| 환경 진단 | `rustra doctor` 17+검사/`--format json`/매트릭스 | 없음 | 없음 | 없음 |
-| 클라이언트 타입 | **명령별 완전 타입 자동** + 도메인 에러 코드 유니언(errors.ts) + JSDoc(Rust doc 전달) | 무타입(`invoke('이름', args)` stringly) | TS 스펙이 원천(소유 방향 반대) | 생성 바인딩 타입 |
-| drift 감지 | `codegen --check` + doctor freshness + runtime contract hash 3층 | 해당 없음 | nitrogen 재실행 | 수동 |
-| 남은 비용축 | 첫 cargo build, codegen 명령 1개 | 명령마다 등록 갱신, 무타입 | 네이티브 구현 필수, 스펙-구현 이중 관리 | bindgen 반복 실행 + 빌드 배선 |
+|                  | rustra (스캐폴드)                                                                     | Tauri commands                                                              | Nitro Modules                                                                                                     | uniffi-rs                                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| 최초 hello world | 6명령, 편집 0건                                                                       | Tauri 앱 생성 후 **3단계/명령**(매크로→`generate_handler!` 등록→`invoke()`) | `npx nitrogen init` → nitro.json → **TS 스펙 작성** → nitrogen 코드젠 → 네이티브 구현(C++/Swift/Kotlin) → 앱 통합 | UDL/proc-macro 작성 → Rust 구현 → `uniffi-bindgen` 언어별 실행 → Xcode/Gradle 빌드 페이즈 **수동 배선** |
+| 스캐폴드 CLI     | `rustra init`(9파일+demo)                                                             | `create-tauri-app`(앱 전체, 브릿지 아님)                                    | 템플릿 부트스트랩 있음                                                                                            | 없음                                                                                                    |
+| 환경 진단        | `rustra doctor` 17+검사/`--format json`/매트릭스                                      | 없음                                                                        | 없음                                                                                                              | 없음                                                                                                    |
+| 클라이언트 타입  | **명령별 완전 타입 자동** + 도메인 에러 코드 유니언(errors.ts) + JSDoc(Rust doc 전달) | 무타입(`invoke('이름', args)` stringly)                                     | TS 스펙이 원천(소유 방향 반대)                                                                                    | 생성 바인딩 타입                                                                                        |
+| drift 감지       | `codegen --check` + doctor freshness + runtime contract hash 3층                      | 해당 없음                                                                   | nitrogen 재실행                                                                                                   | 수동                                                                                                    |
+| 남은 비용축      | 첫 cargo build, codegen 명령 1개                                                      | 명령마다 등록 갱신, 무타입                                                  | 네이티브 구현 필수, 스펙-구현 이중 관리                                                                           | bindgen 반복 실행 + 빌드 배선                                                                           |
 
 해석: rustra는 "Tauri의 3단계 + 무타입" 대비 "등록 1회 + 완전 타입"을,
 uniffi 대비 "빌드 배선 자동화"를, Nitro 대비 "명세 소유가 Rust(단일 소스)"를
@@ -233,6 +233,7 @@ uniffi 대비 "빌드 배선 자동화"를, Nitro 대비 "명세 소유가 Rust(
 ### A. HIGH
 
 **A1. stale release 우선 탐색 함정 — "방금 빌드했는데 out of sync"**
+
 - 증거(재현 완료, 본 트리): `target/release`의 calculator 산출물이 00:31,
   `target/debug`가 01:38(최신)인 상태에서 `bun apps/node-app.ts` /
   `apps/bun-ffi-app.ts` 모두 `contract.mismatch`로 사망. 해상 로직:
@@ -251,6 +252,7 @@ uniffi 대비 "빌드 배선 자동화"를, Nitro 대비 "명세 소유가 Rust(
   픽스처 테스트, 문서 경고 1줄). zero-config 신뢰성의 최대 단일 항목.
 
 **A2. RN 예제 `rustBinary` 오지정 — codegen:check 항상 실패 + 스키마 조용한 재사용**
+
 - 증거: `examples/react-native-calculator/rustra.json:8`과
   `examples/react-native-bare-calculator/rustra.json:8`이
   `rustBinary: "rustra-calculator-example"`(데모 main bin)를 지정. 실행
@@ -266,9 +268,10 @@ uniffi 대비 "빌드 배선 자동화"를, Nitro 대비 "명세 소유가 Rust(
 - 비용: XS(정정) / S-M(근본). 직전 감사 #1과 동일 결함 클래스의 잔존 인스턴스.
 
 **A3. `rustra codegen` 텍스트 모드가 무엇을 했는지 말하지 않는다**
+
 - 증거: cli-codegen.ts:150-170은 `runGenerate(…, { quiet: true })`로 호출 —
   JSON 모드는 files+drift를 출력하지만 텍스트 모드는 `[rustra] TypeScript/C++:
-  generate --config …` 한 줄로 끝. 파일 목록·`(updated)` 표기는
+generate --config …` 한 줄로 끝. 파일 목록·`(updated)` 표기는
   `rustra generate --config`를 직접 쳤을 때만 보인다(실측). 사용자의 주력
   경로(codegen)에서 drift가 무음이다(stale 힌트는 갱신이 있을 때만).
 - 개선안: 텍스트 모드에도 generate와 동일한 파일 목록+`(unchanged)/(updated)`
@@ -276,6 +279,7 @@ uniffi 대비 "빌드 배선 자동화"를, Nitro 대비 "명세 소유가 Rust(
 - 비용: **XS**.
 
 **A4. 호환 매트릭스 표 2개 중복 수록 — 서로 모순 (en), ko는 스테일 단일 표**
+
 - 증거: `docs/compatibility-matrix.md`에 `| Feature |` 헤더가 2개(:9 신규
   표 — 채널 ✅, :21 구형 표 — Node/Bun/Tauri 채널 ❌). git 추적: 채널
   어댑터 머지 f18df822에서 1개→2개. ko판은 표 1개뿐이며 그것이 구형(❌)
@@ -286,6 +290,7 @@ uniffi 대비 "빌드 배선 자동화"를, Nitro 대비 "명세 소유가 Rust(
 - 비용: **XS**.
 
 **A5. 버전 스니펫이 2릴리스째 방치 — `rustra = "0.6"` vs 발행 0.8.0**
+
 - 증거: `README.md:166`, `README.ko.md:146`, `docs/getting-started.md:46`(+ko)
   모두 `rustra = "0.6"`. crates.io/npm latest는 0.8.0(2026-09-06 발행).
   `<!-- 발행 시 갱신: 0.7.0 라인 -->` 주석이 독자 facing 파일에 노출된 채.
@@ -298,6 +303,7 @@ uniffi 대비 "빌드 배선 자동화"를, Nitro 대비 "명세 소유가 Rust(
 ### B. MEDIUM
 
 **A6. Node `contract.mismatch` 에러에 fix 안내 없음 — Bun에는 이미 있다**
+
 - 증거: `packages/node/src/node-bootstrap.ts:77-80`의 메시지는 해시 두 개만
   보고("contract hash mismatch: native=… vs expected=…"). 반면
   `packages/bun/src/bun-ffi.ts:59-61`는 "regenerate the TypeScript and native
@@ -309,14 +315,16 @@ uniffi 대비 "빌드 배선 자동화"를, Nitro 대비 "명세 소유가 Rust(
 - 비용: **XS**.
 
 **A7. `rustra diff` 입력 오류 무경로·무힌트**
+
 - 증거: `packages/cli/src/cli-diff.ts:26-27`이 raw `JSON.parse` —
   `diff --old /dev/null --new schema.json` 실측 결과 `Error: JSON Parse error:
-  Unexpected EOF`. generate 경로(cli-generate-files.ts:61-76)는 경로+재생성
+Unexpected EOF`. generate 경로(cli-generate-files.ts:61-76)는 경로+재생성
   힌트를 갖춘 패턴이 이미 있다.
 - 개선안: 동일 래핑 패턴 적용(어느 파일이·왜·무엇을 할지).
 - 비용: **XS**.
 
 **A8. 미구성 엔진 오류의 호스트 특정 문구**
+
 - 증거: `packages/types/src/global-config.ts:76-79` — 엔트리 import를 빼먹으면
   "import the generated **React Native** entry"라고 안내한다. Node/Bun/Tauri
   사용자에게 잘못된 호스트를 지시한다.
@@ -325,6 +333,7 @@ uniffi 대비 "빌드 배선 자동화"를, Nitro 대비 "명세 소유가 Rust(
 - 비용: **XS**.
 
 **A9. 최상위 오타 커맨드 exit 1 — exit-2 계약 구멍 (직전 #9 잔존)**
+
 - 증거: `packages/cli/src/cli-main.ts:63-68`은 unknown command를
   `process.exitCode = 1`로 종료. 플래그 오타는 exit 2(실측), cli-usage-error.ts
   헤더의 계약("호출을 잘못한" 오류=exit 2)과 불일치. did-you-mean은 이미 좋다.
@@ -332,6 +341,7 @@ uniffi 대비 "빌드 배선 자동화"를, Nitro 대비 "명세 소유가 Rust(
 - 비용: **XS**.
 
 **A10. `codegen --config` 기본값 부재 — doctor와 비대칭 (구 M12 잔존)**
+
 - 증거: `packages/cli/src/cli-options.ts:39-41` — `rustra codegen`(무인자)이
   "codegen requires --config <path>"로 실패(실측). `rustra doctor`는
   `rustra.json` 기본 해석(실측).
@@ -340,6 +350,7 @@ uniffi 대비 "빌드 배선 자동화"를, Nitro 대비 "명세 소유가 Rust(
 - 비용: **XS**.
 
 **A11. RN 코드젠 전 어댑터 미설치가 조용히 폴백한다**
+
 - 증거: `packages/cli/src/react-native.ts:70-106`
   `resolveReactNativeAdapterNative`은 완전하나 버전 불일치인 경우만 loud
   fail하고, 미설치(경로 자체가 없음)면 검증 없이 기본 경로
@@ -351,6 +362,7 @@ uniffi 대비 "빌드 배선 자동화"를, Nitro 대비 "명세 소유가 Rust(
 - 비용: **XS**.
 
 **A12. 고아 생성물: examples/calculator의 positional-facade.ts가 수정 이전 렌더러 산물**
+
 - 증거: `examples/calculator/generated/positional-facade.ts`에 `void options;`
   26곳 + 동기 throw 헬퍼 — 0df517eb(감사 #6/#7 수정) **이전** 출력. calculator의
   rustra.json에 `positional: true`가 없어 이 파일은 codegen이 재생성·체크하지
@@ -361,6 +373,7 @@ uniffi 대비 "빌드 배선 자동화"를, Nitro 대비 "명세 소유가 Rust(
 - 비용: **XS**.
 
 **A13. rkyv registry eager import — RN 번들 크기가 전체 명령 수에 비례**
+
 - 증거: `examples/calculator/generated/rkyv-registry.ts:9-`가 **모든** 코덱을
   import해 Map을 즉시 구성(31명령 기준 rkyv-codecs.ts 94KB ≈ 3KB/명령).
   bun/RN 생성 엔트리가 이를 정적 import한다(init-entries.ts:100,134). Node/
@@ -374,6 +387,7 @@ uniffi 대비 "빌드 배선 자동화"를, Nitro 대비 "명세 소유가 Rust(
 - 비용: **M**(생성 포맷+네이티브 협상 경로 회귀).
 
 **A14. `rustra init --host`가 bun/tauri를 지원하지 않는다**
+
 - 증거: `packages/cli/src/cli-init.ts:11` `INIT_HOSTS = ['node','react-native']`.
   Bun 신규 사용자는 `[lib] crate-type cdylib` 1줄을 문서로 배워 수동 추가해야
   한다(§2). Tauri는 rustra.json `tauri: {}` + Rust 1줄 + withGlobalTauri를
@@ -384,6 +398,7 @@ uniffi 대비 "빌드 배선 자동화"를, Nitro 대비 "명세 소유가 Rust(
 - 비용: **S-M**.
 
 **A15. 마이그레이션 문서가 0.5→0.6에서 멈춤 — 업그레이드 안내 공백**
+
 - 증거: `docs/migrations/`의 최신 항목이 0.5-to-0.6. 0.7(hot-reload/inspector
   트랙, legacy subscribeEvent 제거 — react-native CHANGELOG 0.7.0 breaking
   포함)과 0.8(타입화 에러 코드젠 등)에 대한 안내가 없다. doctor는
@@ -396,17 +411,20 @@ uniffi 대비 "빌드 배선 자동화"를, Nitro 대비 "명세 소유가 Rust(
 ### C. LOW
 
 **A16. `generate --format json`이 구형 shape (구 M9 잔존)**
+
 - 증거: `packages/cli/src/cli-generate.ts:35-43` — `{command, checked,
-  outputPath, files}`에 `schemaVersion` 없음. doctor/codegen/diff는
+outputPath, files}`에 `schemaVersion` 없음. doctor/codegen/diff는
   `schemaVersion: 1`(cli-json-format.ts)으로 통일돼 있다(실측).
 - 개선안: 동일 래퍼로 통일. 비용: **XS**.
 
 **A17. `rustra dev --inspect` 힌트가 한국어 하드코딩 (구 L18 잔존)**
+
 - 증거: `packages/cli/src/dev.ts:150-151` — 2줄 한국어 console.log. 다른 CLI
   출력은 영문.
 - 개선안: 영문 전환(또는 메시지 카탈로그). 비용: **XS**.
 
 **A18. `generate --watch`는 schema.json만 감시**
+
 - 증거: `packages/cli/src/cli-generate.ts:136-144` — Rust 소스 변경은 감시
   대상 아님. `rustra dev --config`가 실루프(dev.ts:283-322)라 기능 중복은
   없으나, `--watch` 이름이 "Rust까지 본다"로 오독될 수 있다.
@@ -441,7 +459,7 @@ release 픽스처를 만드는 회귀 테스트 포함.
 
 **슬라이스 3 — 확장 (0.9+)**
 A13(RN lazy registry — 성능 트랙과 접점), A14(init bun/tauri), A15(업그레이드
-안내 체계), A16~A18(사소). A13은 perf 트랙 번들 크기 지표와, A14~A15는 문서
+안내 체계), A16~~A18(사소). A13은 perf 트랙 번들 크기 지표와, A14~~A15는 문서
 감사의 구조 제안(P2/P3 여정)과 함께 가는 것이 저렴하다.
 
 **명시적 범위 밖**: 문서 사용성 전반(페르소나 여정, 읽기 순서, 예제 연결)은

@@ -6,6 +6,23 @@ rustra is a bridge framework that automatically generates a TypeScript client �
 
 This guide aims to get a developer new to rustra building their first package and generating a TypeScript client within 10 minutes.
 
+> Terminology: **rustra** is the Rust crate and the npm scope (`@rustra/*`);
+> **rustra-bridge** is this repository. The two names refer to the same project.
+
+## Prerequisites
+
+| Tool                         | Version      | Where it is checked                                                          |
+| ---------------------------- | ------------ | ---------------------------------------------------------------------------- |
+| Rust toolchain               | 1.88+ (MSRV) | root `Cargo.toml` `rust-version` / [versioning policy](versioning-policy.md) |
+| Bun                          | 1.4+         | all JS-side commands (`rustra init`, codegen, doctor)                        |
+| Node.js                      | 22.x         | Node adapter runtime (measured on v22.21.1)                                  |
+| Cargo + linker               | per host     | a C/C++ compiler is required for native builds                               |
+| Xcode / CocoaPods            | iOS only     | React Native iOS (see the [RN setup guide](extending/react-native-setup.md)) |
+| Android SDK/NDK 27+, Java 17 | Android only | React Native Android                                                         |
+
+`rustra doctor` checks every row that applies to your configuration — see the
+[development hurdles guide](development-hurdles.md).
+
 ---
 
 ## 1. Installation
@@ -39,14 +56,16 @@ bunx --bun @rustra/cli init my-project --force
 
 ### Using in an External Project
 
-<!-- 발행 시 갱신: 0.7.0 라인 -->
-
 ```toml
 [dependencies]
-rustra = "0.6"
+rustra = "0.8"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
+
+Verified combination: npm `@rustra/*` 0.8.x ↔ Rust crate 0.8.x — keep the npm
+and Rust version lines in lockstep (see the
+[compatibility matrix](compatibility-matrix.md#matrix)).
 
 For the TypeScript adapters, install only the environment you use:
 
@@ -683,7 +702,46 @@ set `RUSTRA_NODE_BINARY`. The standard runtime must implement the one-shot stdio
 protocol `{command, args}` → `{ok, result}`. On top of that, the reserved `__rustra_contract`
 command must return the current contract hash as a string for the generated Node entry
 point's fail-fast check to pass. `run_invoke_stdio` in the calculator and the `rustra init`
-scaffold is the reference implementation.
+scaffold is the reference implementation — here is the complete minimal `src/main.rs`
+(generalized from that scaffold, ~30 lines):
+
+```rust
+use serde_json::{json, Value};
+use std::io::{Read, Write};
+
+fn main() -> rustra::Result<()> {
+    if std::env::args().nth(1).as_deref() == Some("invoke") {
+        return run_invoke_stdio();
+    }
+    // plain `cargo run` demo invocation goes here
+    Ok(())
+}
+
+fn run_invoke_stdio() -> rustra::Result<()> {
+    let mut input = String::new();
+    std::io::stdin().read_to_string(&mut input)?;
+    let request: Value = serde_json::from_str(&input).map_err(rustra::RustraError::invalid_args)?;
+    let command = request.get("command").and_then(Value::as_str)
+        .ok_or_else(|| rustra::RustraError::invalid_args("missing command"))?;
+    if command == "__rustra_contract" {
+        // the generated Node entry verifies Rust and TS share one contract
+        let hash = my_package().generate_typescript()?.contract_hash;
+        let response = serde_json::to_vec(&json!({ "ok": true, "result": hash }))
+            .map_err(rustra::RustraError::internal)?;
+        std::io::stdout().write_all(&response)?;
+        return Ok(());
+    }
+    let args = request.get("args").cloned().unwrap_or_else(|| json!({}));
+    let result = my_package().invoke_json(command, args)?;
+    let response = serde_json::to_vec(&json!({ "ok": true, "result": result }))?;
+    std::io::stdout().write_all(&response)?;
+    Ok(())
+}
+```
+
+The generated entry spawns this binary once per invoke with the JSON envelope on stdin
+(one-shot). For continuous request flow, use `createNodeLoopTransport` instead — see
+[`node-performance.ts`](../examples/calculator/apps/node-performance.ts).
 
 **Custom transports (napi-rs, etc.):**
 
@@ -788,6 +846,11 @@ In `Cargo.toml`, `[lib]` holds `crate-type = ["rlib", "staticlib"]`.
 }
 ```
 
+`"positional": true` additionally emits `generated/positional-facade.ts`: static
+commands whose input has 0–3 fields are published as field-positional helpers
+(`addNumbers(a, b)`) that call the RN JSI `invokeTyped` entry directly. Commands
+outside that shape keep the object-input `commands.ts` path.
+
 ```bash
 bunx --bun @rustra/cli doctor --config rustra.json
 bunx --bun @rustra/cli codegen --config rustra.json
@@ -849,17 +912,18 @@ caller-buffer fast path of the generated `react-native.ts`.
 
 ### Summary
 
-| Environment  | Default generated entry point        | Auto wiring                         | Performance (release)                |
-| ------------ | ------------------------------------ | ----------------------------------- | ------------------------------------ |
-| Node         | `generated/node.ts`                  | Cargo binary + stdio                | ~3.4 ms historical; N-API is ~1.5 µs |
-| Bun          | `generated/bun.ts`                   | Cargo cdylib + stable FFI + rkyv V2 | ~1.7 µs FFI                          |
-| Tauri        | `generated/tauri.ts`                 | global invoke/event                 | IPC-dependent                        |
-| React Native | generated `react-native.ts`          | autolinked JSI + postcard codecs    | Near Nitro; check the latest receipt |
-| React Native | `createReactNativeEngine(transport)` | custom JSON transport               | Depends on transport implementation  |
+| Environment  | Default generated entry point        | Auto wiring                         | Performance (release, 2026-08-24)                      |
+| ------------ | ------------------------------------ | ----------------------------------- | ------------------------------------------------------ |
+| Node         | `generated/node.ts`                  | Cargo binary + stdio                | 2.76 ms one-shot; loop 16.86 µs; N-API rkyv V2 1.26 µs |
+| Bun          | `generated/bun.ts`                   | Cargo cdylib + stable FFI + rkyv V2 | 2.27 µs FFI rkyv V2                                    |
+| Tauri        | `generated/tauri.ts`                 | global invoke/event                 | 279.04 µs WebView IPC                                  |
+| React Native | `generated/react-native.ts`          | autolinked JSI + postcard codecs    | p50 2.71 µs (iOS Simulator receipt)                    |
+| React Native | `createReactNativeEngine(transport)` | custom JSON transport               | Depends on transport implementation                    |
 
-> The ~24/27µs for Node/Bun are values when a debug native library is loaded —
-> release builds narrow this to the single-digit µs range. For per-session figures see
-> the [benchmark document](benchmarks.md) (2026-08-23 RN re-measurement).
+> End-to-end Release measurements of `addNumbers({ a: 20, b: 22 })`, first
+> confirmed 2026-08-24 on Apple Silicon and identical to the README performance
+> table. Mean values are 5% trimmed; per-layer overhead, payload scaling, and the
+> reproduction commands live in the [benchmark document](benchmarks.md).
 
 Every adapter returns an `EngineClient`, so subsequent code is identical regardless of environment.
 
@@ -1164,5 +1228,13 @@ generated/
   schema.json    -- JSON Schema (published by the Rust probe)
         |
         v
-From TypeScript, call createXxxEngine(transport) + configure(engine) + addNumbers(input)
+import { addNumbers } from './generated/node.js'   (host entry installs the engine lazily)
+        |
+        v
+await addNumbers({ a: 20, b: 22 })
 ```
+
+> The generated host entry (`node.js` / `bun.js` / `tauri.js` / `react-native.ts`)
+> registers `configureLazy()` on import — ordinary apps never build an engine or call
+> `configure()` themselves. Manual `configure(engine)` is the §4 escape hatch (custom
+> transports, multiple runtimes, custom N-API).

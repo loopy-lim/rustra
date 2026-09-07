@@ -159,14 +159,16 @@ JS/native combination drift at runtime.
 
 ### Rust
 
-<!-- 발행 시 갱신: 0.7.0 라인 -->
-
 ```toml
 [dependencies]
-rustra = "0.6"
+rustra = "0.8"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
+
+Verified combination: npm `@rustra/*` 0.8.x ↔ Rust crate 0.8.x — keep the npm
+and Rust version lines in lockstep (see the
+[compatibility matrix](docs/compatibility-matrix.md#matrix)).
 
 ### TypeScript adapters (only the environments you need)
 
@@ -204,9 +206,33 @@ fn main() -> Result<()> {
 }
 ```
 
-To use the binary fast-path (rkyv V2, RN), also run the CLI codegen. Specifying
-the Rust generator in `rustra.json` processes schema generation through
+To use the binary fast-path (rkyv V2, RN), also run the CLI codegen. First create
+`rustra.json` at the project root — this minimal form points the CLI at the
+published schema, the output directory, and the hosts you use:
+
+```json
+{
+  "schema": "./generated/schema.json",
+  "output": "./generated",
+  "node": {}
+}
+```
+
+Specifying the Rust generator in `rustra.json` processes schema generation through
 `rkyv-codecs.ts`/`rkyv-registry.ts` in one shot:
+
+```json
+{
+  "schema": "./generated/schema.json",
+  "output": "./generated",
+  "codegen": {
+    "rustManifest": "./Cargo.toml",
+    "rustBinary": "generate"
+  }
+}
+```
+
+Then run:
 
 ```bash
 bunx --bun @rustra/cli codegen --config rustra.json
@@ -581,10 +607,8 @@ identically regardless of platform.
 
 Enable the `tauri` feature:
 
-<!-- 발행 시 갱신: 0.7.0 라인 -->
-
 ```toml
-rustra = { version = "0.6", features = ["tauri"] }
+rustra = { version = "0.8", features = ["tauri"] }
 ```
 
 Rust side:
@@ -764,15 +788,17 @@ bunx --bun @rustra/cli dev --config rustra.json
 
 Full documentation lives in [`docs/`](docs/).
 
-| Doc                                                              | Contents                                               |
-| ---------------------------------------------------------------- | ------------------------------------------------------ |
-| [Getting started](docs/getting-started.md)                       | Installation, first package, adapter choice            |
-| [Architecture overview](docs/architecture.md)                    | Data flow, EngineClient contract, transport separation |
-| [Transport swap guide](docs/extending/transport-guide.md)        | Bun FFI, Node napi-rs replacement                      |
-| [React Native setup guide](docs/extending/react-native-setup.md) | iOS JSI module setup, usage, troubleshooting           |
-| [Development hurdles guide](docs/development-hurdles.md)         | doctor, integrated codegen, drift, native boundary     |
-| [Adding a new host guide](docs/extending/adding-host.md)         | Adding new adapters like Electron, Deno                |
-| [Full doc index](docs/README.md)                                 | Reading paths for users / contributors                 |
+| Doc                                                              | Contents                                                        |
+| ---------------------------------------------------------------- | --------------------------------------------------------------- |
+| [Getting started](docs/getting-started.md)                       | Installation, first package, adapter choice                     |
+| [Events and channels guide](docs/events-and-channels.md)         | `subscribeEvent`/`createChannel` usage per host                 |
+| [Architecture overview](docs/architecture.md)                    | Data flow, EngineClient contract, transport separation          |
+| [Transport swap guide](docs/extending/transport-guide.md)        | Bun FFI, Node napi-rs replacement                               |
+| [React Native setup guide](docs/extending/react-native-setup.md) | iOS JSI module setup, usage, troubleshooting                    |
+| [Tauri setup guide](docs/extending/tauri-setup.md)               | Adding rustra to an existing Tauri app, file by file            |
+| [Development hurdles guide](docs/development-hurdles.md)         | doctor, integrated codegen, drift, native boundary, mock engine |
+| [Adding a new host guide](docs/extending/adding-host.md)         | Adding new adapters like Electron, Deno                         |
+| [Full doc index](docs/README.md)                                 | Reading paths for users / contributors                          |
 
 ## Contributing
 

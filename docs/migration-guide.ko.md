@@ -5,6 +5,12 @@
 Rust 백엔드와 TypeScript 클라이언트가 공유하는 계약(schema)이 시간이 지나며
 변할 때, 파괴적 변경(breaking change)을 안전하게 롤아웃하는 방법을 정리한다.
 
+## 버전별 시작 지점
+
+- **0.3.x에서 올라오는 경우** — 먼저 [0.3에서 0.4로 마이그레이션](migrations/0.3-to-0.4.ko.md)을 따른 뒤 이 가이드를 쓴다.
+- **0.5.x에서 올라오는 경우** — 먼저 [0.5에서 0.6으로 마이그레이션](migrations/0.5-to-0.6.ko.md)을 따른다. 오래된 스키마는 CLI 검증에서 "generic type name" 오류로 실패할 수도 있다([Rust API 가이드 — 사용자 정의 제네릭](rust-api-guide.ko.md#사용자-정의-제네릭-타입)) — `rustra diff` 전에 현재 rustra로 `schema.json`을 재생성한다.
+- **0.6 이상(0.8 포함)** — 별도 마이그레이션 노트는 없다. 아래 레시피를 그대로 쓴다.
+
 ## 도구
 
 ### `rustra diff`
@@ -124,6 +130,11 @@ fn new_name(input: NewInput) -> Result<NewOutput> { /* ... */ }
 
 ```yaml
 # .github/workflows/ci.yml 에 추가
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0 # rustra diff가 베이스 커밋과 비교하므로 전체 히스토리 필요
+- uses: oven-sh/setup-bun@v2
+- run: bun install -g @rustra/cli # 또는: bun add -d @rustra/cli + bunx --bun rustra
 - name: Check schema compatibility
   run: |
     git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q schema.json \

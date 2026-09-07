@@ -11,7 +11,7 @@ desktop은 권한과 할 수 있는 게 많다 — wifi, bluetooth, camera, batt
 것들. 이 나열을 포함해 인터넷에서 추가로 찾아서 그것들도 호환되도록 지원."
 
 전제 제약: rustra는 OS 권한을 직접 요청하지 않는다(`docs/platform-permissions.md:7`).
-따라서 "호환"의 의미는 *하드웨어 접근의 균일화*(불가능 — OS 몫)가 아니라
+따라서 "호환"의 의미는 _하드웨어 접근의 균일화_(불가능 — OS 몫)가 아니라
 **역량 계약의 균일화** — 명령이 어떤 디바이스 역량을 요구하는지 선언하고,
 호스트가 그 역량의 상태를 표준 형태로 조회·보고하고, 실패를 표준 에러 코드로
 구분하는 것 — 이어야 한다. 이 경계가 철학에 맞는지는 §5.0에서 검증한다.
@@ -50,31 +50,31 @@ entitlement(+샌드박스 밖 Info.plist/TCC), **Tauri** = 공식/커뮤니티 �
 **RN/Expo** · **Node** = 대표 라이브러리. "무권한" = 선언 없이 사용 가능.
 셀이 비었으면 표준 경로 없음. rustra 토큰은 제안(§5.1).
 
-| rustra 토큰 | Android | iOS | Windows | macOS | Tauri v2 | RN/Expo | Node |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `camera` | `CAMERA`(dangerous) | `NSCameraUsageDescription` | `webcam`(DeviceCapability); Win32는 무권한+개인정보 토글 | `com.apple.security.device.camera` + `NSCameraUsageDescription` | 공식 barcode-scanner(모바일 전용·스캔 한정); 커뮤니티 CrabCamera(데스크톱) | vision-camera, expo-camera | 표준 라이브러리 없음 |
-| `microphone` | `RECORD_AUDIO`(dangerous) | `NSMicrophoneUsageDescription` | `microphone` | `com.apple.security.device.audio-input` | 공식 없음 | vision-camera(오디오), expo-audio | 없음 |
-| `location` | `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION`(dangerous) | `NSLocationWhenInUseUsageDescription`(백그라운드 별도 키) | `location`(DeviceCapability) | `com.apple.security.personal-information.location` | **geolocation 공식 플러그인은 iOS/Android만**(데스크톱 스텁, 이슈 #2074) | @react-native-community/geolocation, expo-location | 없음 |
-| `bluetooth` | `BLUETOOTH_SCAN/CONNECT/ADVERTISE`(API 31+, NEARBY_DEVICES 그룹) | `NSBluetoothAlwaysUsageDescription`(iOS 13+) | `bluetooth`(GATT/RFCOMM) | `com.apple.security.device.bluetooth` | 커뮤니티 tauri-plugin-bluetooth(BLE) | react-native-ble-plx(BLE 중심) | @stoprocent/noble(BLE 센트럴) |
-| `wifi` | `ACCESS_WIFI_STATE`(normal); 스캔에 위치 권한, 조인 `CHANGE_WIFI_STATE` | `NSLocalNetworkUsageDescription` + Hotspot Configuration entitlement(프로그래밍 조인은 제한적) | `wiFiControl`(2024 가을 이후 동작 변경 예고) | CoreWLAN — 샌드박스 하 제약(상세 미검증) | 공식 없음 | react-native-wifi-reborn | wifi-control 등(신뢰도 낮음, 미검증) |
-| `network` | `ACCESS_NETWORK_STATE`(normal) | 키 불필요(NWPathMonitor) | `internetClient`(AppContainer 앱만) | `com.apple.security.network.client`(샌드박스) | 커뮤니티 device-info | @react-native-community/netinfo | `node:os`(networkInterfaces) |
-| `battery` | `BATTERY_STATS`는 signature\|privileged(일반 앱 불가); BatteryManager 조회 자체는 무권한 | 키 불필요(UIDevice) | 무권한(GetSystemPowerStatus) | 무권한(IOPowerSources) | 커뮤니티 device-info | react-native-device-info(getBatteryLevel), expo-battery, react-native-nitro-battery | `battery` npm(pmset/upower/Win32 래핑) |
-| `notifications` | `POST_NOTIFICATIONS`(API 33+, dangerous) | plist 키 불필요, 런타임 프롬프트 | 무권한(토스트; `userNotificationListener`는 별도) | 무권한 | **notification(전 플랫폼, 공식)** | expo-notifications — **notifee는 아카이브됨** | node-notifier |
-| `flashlight` | 무권한(CameraManager.setTorchMode, API 23+; `FLASHLIGHT`는 deprecated) | AVCaptureDevice torch(프롬프트 없음 — 세부 미검증) | 없음 | 없음 | 없음 | react-native-torch(커뮤니티) | 없음 |
-| `nfc` | `NFC`(normal) | `NFCReaderUsageDescription` + "Near Field Communication Tag Reading" capability | `proximity` | (Mac은 앱용 NFC API 없음) | **nfc(모바일, 공식)** | react-native-nfc-manager | 없음 |
-| `biometrics` | `USE_BIOMETRIC`(normal)+BiometricPrompt | `NSFaceIDUsageDescription` | Windows Hello(무권한) | LocalAuthentication(무권한, 미검증) | **biometric(모바일, 공식)** | expo-local-authentication, react-native-biometrics | 없음 |
-| `motion`(가속/자이로) | SensorManager 무권한; `ACTIVITY_RECOGNITION`(API 29+, dangerous)은 걸음수 등 | `NSMotionUsageDescription` | `activity`(DeviceCapability) | CoreMotion(무권한, 미검증) | 없음 | **expo-sensors 권장** — react-native-sensors는 유지보수 중단 | 없음 |
-| `clipboard` | 무권한(백그라운드 접근 제한 API 26+) | UIPasteboard 무권한(iOS 16+ 시스템 확인 UI) | 무권한 | 무권한 | **clipboard-manager(전 플랫폼, 공식)** | @react-native-community/clipboard, expo-clipboard | clipboardy |
-| `filesystem` | Scoped Storage; `READ_MEDIA_*`(API 33+), `MANAGE_EXTERNAL_STORAGE`(특별 승인) | 샌드박스 내 무키 — 문서 피커로 확장 | `broadFileSystemAccess`(restricted)/`picturesLibrary` 등 | `com.apple.security.files.user-selected.read-write` 등 | **fs(전 플랫폼, 공식)** | expo-file-system, react-native-fs | **`node:fs`(내장)** |
-| `contacts` | `READ_CONTACTS`/`WRITE_CONTACTS`(dangerous) | `NSContactsUsageDescription` | `contacts` | `com.apple.security.personal-information.addressbook`(미검증 — 문서상 `.addressbook` 키 존재 언급) | 없음 | react-native-contacts, expo-contacts | 없음 |
-| `calendar` | `READ_CALENDAR`/`WRITE_CALENDAR`(dangerous) | `NSCalendarsUsageDescription` | `appointments` | `com.apple.security.personal-information.calendars` | 없음 | expo-calendar, react-native-calendar-events | 없음 |
-| `media_library`(사진/미디어) | `READ_MEDIA_IMAGES/VIDEO/AUDIO`(API 33+) | `NSPhotoLibraryUsageDescription` / `NSPhotoLibraryAddUsageDescription` | `picturesLibrary`/`videosLibrary`/`musicLibrary` | `com.apple.security.assets.pictures.read-write` 등 | 없음(dialog+fs 조합 패턴) | expo-media-library, react-native-image-picker | 없음 |
-| `brightness` | `WRITE_SETTINGS`(특별 승인 액세스) | UIScreen(무권한) | 무권한 | 무권한 | 없음 | expo-brightness | 없음 |
-| `vibration` | `VIBRATE`(normal) | UIFeedbackGenerator/CoreHaptics(무권한) | 무권한 | 무권한 | **haptics(모바일, 공식)** | RN 코어 `Vibration`, expo-haptics | 없음 |
-| `printer` | PrintManager(무권한) | UIPrintInteractionController(무권한) | 무권한 | 무권한 | 없음 | expo-print, react-native-print | 없음 |
-| `usb_serial` | USB Host API — 무권한+사용자 승인 다이얼로그 | ExternalAccessory(MFi 제한 — 사실상 폐쇄) | `usb`/`serialcommunication`/`humaninterfacedevice`(DeviceCapability) | `com.apple.security.device.usb` | 없음 | react-native-serialport 등 커뮤니티(저신뢰) | **serialport(사실상 표준), node-usb** |
-| `audio_playback` | 무권한(백그라운드 재생은 별도) | 무권한(백그라운드 `UIBackgroundModes: audio`) | 무권한 | 무권한 | 없음(웹뷰 오디오+asset 프로토콜) | expo-audio | 네이티브 모듈(speaker 등) |
-| `audio_recording` | `microphone` 행 참조(RECORD_AUDIO) | `microphone` 행 참조 | `microphone` | `microphone` 행 참조 | 없음 | `microphone` 행 참조 | 없음 |
+| rustra 토큰                  | Android                                                                                  | iOS                                                                                            | Windows                                                              | macOS                                                                                              | Tauri v2                                                                   | RN/Expo                                                                             | Node                                   |
+| ---------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------- |
+| `camera`                     | `CAMERA`(dangerous)                                                                      | `NSCameraUsageDescription`                                                                     | `webcam`(DeviceCapability); Win32는 무권한+개인정보 토글             | `com.apple.security.device.camera` + `NSCameraUsageDescription`                                    | 공식 barcode-scanner(모바일 전용·스캔 한정); 커뮤니티 CrabCamera(데스크톱) | vision-camera, expo-camera                                                          | 표준 라이브러리 없음                   |
+| `microphone`                 | `RECORD_AUDIO`(dangerous)                                                                | `NSMicrophoneUsageDescription`                                                                 | `microphone`                                                         | `com.apple.security.device.audio-input`                                                            | 공식 없음                                                                  | vision-camera(오디오), expo-audio                                                   | 없음                                   |
+| `location`                   | `ACCESS_FINE_LOCATION`/`ACCESS_COARSE_LOCATION`(dangerous)                               | `NSLocationWhenInUseUsageDescription`(백그라운드 별도 키)                                      | `location`(DeviceCapability)                                         | `com.apple.security.personal-information.location`                                                 | **geolocation 공식 플러그인은 iOS/Android만**(데스크톱 스텁, 이슈 #2074)   | @react-native-community/geolocation, expo-location                                  | 없음                                   |
+| `bluetooth`                  | `BLUETOOTH_SCAN/CONNECT/ADVERTISE`(API 31+, NEARBY_DEVICES 그룹)                         | `NSBluetoothAlwaysUsageDescription`(iOS 13+)                                                   | `bluetooth`(GATT/RFCOMM)                                             | `com.apple.security.device.bluetooth`                                                              | 커뮤니티 tauri-plugin-bluetooth(BLE)                                       | react-native-ble-plx(BLE 중심)                                                      | @stoprocent/noble(BLE 센트럴)          |
+| `wifi`                       | `ACCESS_WIFI_STATE`(normal); 스캔에 위치 권한, 조인 `CHANGE_WIFI_STATE`                  | `NSLocalNetworkUsageDescription` + Hotspot Configuration entitlement(프로그래밍 조인은 제한적) | `wiFiControl`(2024 가을 이후 동작 변경 예고)                         | CoreWLAN — 샌드박스 하 제약(상세 미검증)                                                           | 공식 없음                                                                  | react-native-wifi-reborn                                                            | wifi-control 등(신뢰도 낮음, 미검증)   |
+| `network`                    | `ACCESS_NETWORK_STATE`(normal)                                                           | 키 불필요(NWPathMonitor)                                                                       | `internetClient`(AppContainer 앱만)                                  | `com.apple.security.network.client`(샌드박스)                                                      | 커뮤니티 device-info                                                       | @react-native-community/netinfo                                                     | `node:os`(networkInterfaces)           |
+| `battery`                    | `BATTERY_STATS`는 signature\|privileged(일반 앱 불가); BatteryManager 조회 자체는 무권한 | 키 불필요(UIDevice)                                                                            | 무권한(GetSystemPowerStatus)                                         | 무권한(IOPowerSources)                                                                             | 커뮤니티 device-info                                                       | react-native-device-info(getBatteryLevel), expo-battery, react-native-nitro-battery | `battery` npm(pmset/upower/Win32 래핑) |
+| `notifications`              | `POST_NOTIFICATIONS`(API 33+, dangerous)                                                 | plist 키 불필요, 런타임 프롬프트                                                               | 무권한(토스트; `userNotificationListener`는 별도)                    | 무권한                                                                                             | **notification(전 플랫폼, 공식)**                                          | expo-notifications — **notifee는 아카이브됨**                                       | node-notifier                          |
+| `flashlight`                 | 무권한(CameraManager.setTorchMode, API 23+; `FLASHLIGHT`는 deprecated)                   | AVCaptureDevice torch(프롬프트 없음 — 세부 미검증)                                             | 없음                                                                 | 없음                                                                                               | 없음                                                                       | react-native-torch(커뮤니티)                                                        | 없음                                   |
+| `nfc`                        | `NFC`(normal)                                                                            | `NFCReaderUsageDescription` + "Near Field Communication Tag Reading" capability                | `proximity`                                                          | (Mac은 앱용 NFC API 없음)                                                                          | **nfc(모바일, 공식)**                                                      | react-native-nfc-manager                                                            | 없음                                   |
+| `biometrics`                 | `USE_BIOMETRIC`(normal)+BiometricPrompt                                                  | `NSFaceIDUsageDescription`                                                                     | Windows Hello(무권한)                                                | LocalAuthentication(무권한, 미검증)                                                                | **biometric(모바일, 공식)**                                                | expo-local-authentication, react-native-biometrics                                  | 없음                                   |
+| `motion`(가속/자이로)        | SensorManager 무권한; `ACTIVITY_RECOGNITION`(API 29+, dangerous)은 걸음수 등             | `NSMotionUsageDescription`                                                                     | `activity`(DeviceCapability)                                         | CoreMotion(무권한, 미검증)                                                                         | 없음                                                                       | **expo-sensors 권장** — react-native-sensors는 유지보수 중단                        | 없음                                   |
+| `clipboard`                  | 무권한(백그라운드 접근 제한 API 26+)                                                     | UIPasteboard 무권한(iOS 16+ 시스템 확인 UI)                                                    | 무권한                                                               | 무권한                                                                                             | **clipboard-manager(전 플랫폼, 공식)**                                     | @react-native-community/clipboard, expo-clipboard                                   | clipboardy                             |
+| `filesystem`                 | Scoped Storage; `READ_MEDIA_*`(API 33+), `MANAGE_EXTERNAL_STORAGE`(특별 승인)            | 샌드박스 내 무키 — 문서 피커로 확장                                                            | `broadFileSystemAccess`(restricted)/`picturesLibrary` 등             | `com.apple.security.files.user-selected.read-write` 등                                             | **fs(전 플랫폼, 공식)**                                                    | expo-file-system, react-native-fs                                                   | **`node:fs`(내장)**                    |
+| `contacts`                   | `READ_CONTACTS`/`WRITE_CONTACTS`(dangerous)                                              | `NSContactsUsageDescription`                                                                   | `contacts`                                                           | `com.apple.security.personal-information.addressbook`(미검증 — 문서상 `.addressbook` 키 존재 언급) | 없음                                                                       | react-native-contacts, expo-contacts                                                | 없음                                   |
+| `calendar`                   | `READ_CALENDAR`/`WRITE_CALENDAR`(dangerous)                                              | `NSCalendarsUsageDescription`                                                                  | `appointments`                                                       | `com.apple.security.personal-information.calendars`                                                | 없음                                                                       | expo-calendar, react-native-calendar-events                                         | 없음                                   |
+| `media_library`(사진/미디어) | `READ_MEDIA_IMAGES/VIDEO/AUDIO`(API 33+)                                                 | `NSPhotoLibraryUsageDescription` / `NSPhotoLibraryAddUsageDescription`                         | `picturesLibrary`/`videosLibrary`/`musicLibrary`                     | `com.apple.security.assets.pictures.read-write` 등                                                 | 없음(dialog+fs 조합 패턴)                                                  | expo-media-library, react-native-image-picker                                       | 없음                                   |
+| `brightness`                 | `WRITE_SETTINGS`(특별 승인 액세스)                                                       | UIScreen(무권한)                                                                               | 무권한                                                               | 무권한                                                                                             | 없음                                                                       | expo-brightness                                                                     | 없음                                   |
+| `vibration`                  | `VIBRATE`(normal)                                                                        | UIFeedbackGenerator/CoreHaptics(무권한)                                                        | 무권한                                                               | 무권한                                                                                             | **haptics(모바일, 공식)**                                                  | RN 코어 `Vibration`, expo-haptics                                                   | 없음                                   |
+| `printer`                    | PrintManager(무권한)                                                                     | UIPrintInteractionController(무권한)                                                           | 무권한                                                               | 무권한                                                                                             | 없음                                                                       | expo-print, react-native-print                                                      | 없음                                   |
+| `usb_serial`                 | USB Host API — 무권한+사용자 승인 다이얼로그                                             | ExternalAccessory(MFi 제한 — 사실상 폐쇄)                                                      | `usb`/`serialcommunication`/`humaninterfacedevice`(DeviceCapability) | `com.apple.security.device.usb`                                                                    | 없음                                                                       | react-native-serialport 등 커뮤니티(저신뢰)                                         | **serialport(사실상 표준), node-usb**  |
+| `audio_playback`             | 무권한(백그라운드 재생은 별도)                                                           | 무권한(백그라운드 `UIBackgroundModes: audio`)                                                  | 무권한                                                               | 무권한                                                                                             | 없음(웹뷰 오디오+asset 프로토콜)                                           | expo-audio                                                                          | 네이티브 모듈(speaker 등)              |
+| `audio_recording`            | `microphone` 행 참조(RECORD_AUDIO)                                                       | `microphone` 행 참조                                                                           | `microphone`                                                         | `microphone` 행 참조                                                                               | 없음                                                                       | `microphone` 행 참조                                                                | 없음                                   |
 
 출처(표 전체):
 [Android Manifest.permission](https://developer.android.com/reference/android/Manifest.permission),
@@ -134,12 +134,12 @@ entitlement(+샌드박스 밖 Info.plist/TCC), **Tauri** = 공식/커뮤니티 �
   `barcode-scanner:allow-scan`, `nfc:allow-scan`, `biometric:allow-authenticate`.
   코어는 3세그먼트 `core:window:allow-set-title` 형태. `allow-<command>`가
   명령 단위 매핑이다. 이 식별자 체계는 **호스트 앱 설정(src-tauri/capabilities/
-  *.json)의 몫**이고 rustra 계약과 직접 맞물리지 않는다 — 단, rustra의
+  \*.json)의 몫**이고 rustra 계약과 직접 맞물리지 않는다 — 단, rustra의
   `devices` 선언은 호스트가 어떤 플러그인/capability를 켜야 하는지 안내하는
   단서가 된다.
 - **모바일 권한 주입**: Tauri 모바일 플러그인은 AndroidManifest.xml 권한을
   빌드 시 자동 추가하고(geolocation 문서), iOS Info.plist는 `bundle > iOS >
-  infoPlist` 설정으로 확장한다([CLI v2.9.0](https://v2.tauri.app/release/@tauri-apps/cli/v2.9.0/)).
+infoPlist` 설정으로 확장한다([CLI v2.9.0](https://v2.tauri.app/release/@tauri-apps/cli/v2.9.0/)).
   즉 Tauri 생태계에서조차 "권한 선언은 플러그인/호스트 빌드 설정 소관"이다.
   rustra가 OS 권한을 요청하지 않는 철학과 정합.
 
@@ -184,7 +184,7 @@ entitlement(+샌드박스 밖 Info.plist/TCC), **Tauri** = 공식/커뮤니티 �
 ### 4.1 W3C Permissions API — "조회는 표준, 요청은 각 API"
 
 - 모델: `navigator.permissions.query({name})` → `PermissionStatus.state ∈
-  {granted, denied, prompt}` + `onchange` 이벤트. 이름 레지스트리(PermissionName):
+{granted, denied, prompt}` + `onchange` 이벤트. 이름 레지스트리(PermissionName):
   `geolocation`, `notifications`, `camera`, `microphone`, `clipboard-read/write`,
   `accelerometer`, `gyroscope`, `magnetometer`, `bluetooth`, `midi`,
   `screen-wake-lock`, `local-fonts` 등([MDN](https://developer.mozilla.org/en-US/docs/Web/API/Permissions_API)).
@@ -212,7 +212,7 @@ entitlement(+샌드박스 밖 Info.plist/TCC), **Tauri** = 공식/커뮤니티 �
 ### 4.3 Expo — 모듈별 PermissionResponse와 규격화된 상태
 
 - `PermissionResponse = {status: granted|denied|undetermined, granted,
-  canAskAgain, expires}` — `expo-camera.requestCameraPermissionsAsync()` 등
+canAskAgain, expires}` — `expo-camera.requestCameraPermissionsAsync()` 등
   모듈별 메서드로 흩어져 있으나 응답 형태는 전 모듈 동일
   ([expo-notifications](https://docs.expo.dev/versions/latest/sdk/notifications/)).
   통합 `expo-permissions`는 SDK 41/43부터 deprecated(모듈별 메서드로 이관).
@@ -333,10 +333,12 @@ docs/research/2026-09-07-typed-error-codesgen.md §4) — 포워드 호환 확�
 
 ```ts
 // devices.ts (생성 예시 — scanBarcode가 camera를 선언한 경우)
-export type RustraDeviceId = 'camera' | 'microphone';  // 패키지가 사용한 토큰만
+export type RustraDeviceId = 'camera' | 'microphone'; // 패키지가 사용한 토큰만
 export const ScanBarcodeDevices = ['camera'] as const satisfies readonly RustraDeviceId[];
 /** 요구 역량의 상태를 조회해 미충족이면 RustraCommandError를 던진다. */
-export async function requireScanBarcodeDevices(): Promise<void> { /* getDeviceStatus 루프 */ }
+export async function requireScanBarcodeDevices(): Promise<void> {
+  /* getDeviceStatus 루프 */
+}
 ```
 
 - 리터럴 유니언은 **패키지가 실제 사용한 토큰만** — 개방 계약(임의 문자열)과
@@ -371,7 +373,7 @@ export function getDeviceStatus(capability: string): Promise<DeviceStatus>;
   §4.2)의 최소 공통. BLOCKED/LIMITED는 `permission: 'denied'` + detail로
   접는다(와이어 평면성, §4.2 교훈).
 - provider 미등록 시 `getDeviceStatus`는 `{available: 'unknown', permission:
-  'unknown'}`을 반환 — 조회는 실종되지 않고, **가드는 unknown을 거부하지
+'unknown'}`을 반환 — 조회는 실종되지 않고, **가드는 unknown을 거부하지
   않는다**(fail-open) — rustra가 자동 게이팅을 하지 않는 이상 unknown에서
   명령을 막는 것은 호스트의 결정을 대신하는 것이다. fail-closed를 원하는
   호스트는 provider에서 unknown을 명시적으로 정규화하면 된다.
@@ -387,10 +389,10 @@ export function getDeviceStatus(capability: string): Promise<DeviceStatus>;
 
 **결정 제안**: 2종 추가.
 
-| 코드 | 의미 | retryable | 대비 |
-| --- | --- | --- | --- |
-| `device.unavailable` | 요구 역량이 이 기기/OS 설정에서 사용 불가(하드웨어 부재, OS 스위치 off, 플랫폼이 그 역량을 지원 안 함) | 아니요 | `platform.unavailable`은 **명령 구현**의 부재(builder_platform.rs:58-60 스텁). 같은 명령이 windows에선 platform.unavailable, 노트북에서 device.unavailable(웹캠 없음)일 수 있다 — 원인·복구 경로(다른 OS vs 장치 연결/설정)가 다르다. |
-| `device.permission_denied` | OS 권한이 사용자/정책에 의해 거부됨 | 아니요(재요청은 호스트 UX 몫) | `capability.denied`는 rustra 자체 런타임 권한(누가 이 브리지 명령을 부를 수 있는가, builder_capabilities.rs:2-6). OS 권한 거부는 rustra가 알 수 없는 층이다 — 호스트 가드/provider가 보고한 상태의 정규화 결과다. |
+| 코드                       | 의미                                                                                                   | retryable                     | 대비                                                                                                                                                                                                                                  |
+| -------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `device.unavailable`       | 요구 역량이 이 기기/OS 설정에서 사용 불가(하드웨어 부재, OS 스위치 off, 플랫폼이 그 역량을 지원 안 함) | 아니요                        | `platform.unavailable`은 **명령 구현**의 부재(builder_platform.rs:58-60 스텁). 같은 명령이 windows에선 platform.unavailable, 노트북에서 device.unavailable(웹캠 없음)일 수 있다 — 원인·복구 경로(다른 OS vs 장치 연결/설정)가 다르다. |
+| `device.permission_denied` | OS 권한이 사용자/정책에 의해 거부됨                                                                    | 아니요(재요청은 호스트 UX 몫) | `capability.denied`는 rustra 자체 런타임 권한(누가 이 브리지 명령을 부를 수 있는가, builder_capabilities.rs:2-6). OS 권한 거부는 rustra가 알 수 없는 층이다 — 호스트 가드/provider가 보고한 상태의 정규화 결과다.                     |
 
 - 구분 정당화 요약: 4코드는 각각 **호출 자격(capability.denied) / 구현 존재
   (platform.unavailable) / 자원 존재(device.unavailable) / 사용자 승인
@@ -405,11 +407,11 @@ export function getDeviceStatus(capability: string): Promise<DeviceStatus>;
 
 ### 5.6 기존 트랙과의 정합 요약
 
-| 트랙 | device 트랙이 복제하는 것 | 차이 |
-| --- | --- | --- |
-| platforms | 전 플랫폼 등록+조건부 필드+`_meta_if`+build() 정합 | 스텁/구현 교체 없음 — 런타임 게이팅 자체가 없다 |
-| errors | 검증된 문자열 토큰+조건부 필드+조건부 TS 파일+폐쇄 유니언 | 카탈로그 상수(`DeviceCapability::CAMERA`)가 추가로 존재 |
-| capability | none — `require_capability`와 `devices`는 독립 직교(조합 안내는 문서 몫, platform-permissions.md:109 확장) | |
+| 트랙       | device 트랙이 복제하는 것                                                                                  | 차이                                                    |
+| ---------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| platforms  | 전 플랫폼 등록+조건부 필드+`_meta_if`+build() 정합                                                         | 스텁/구현 교체 없음 — 런타임 게이팅 자체가 없다         |
+| errors     | 검증된 문자열 토큰+조건부 필드+조건부 TS 파일+폐쇄 유니언                                                  | 카탈로그 상수(`DeviceCapability::CAMERA`)가 추가로 존재 |
+| capability | none — `require_capability`와 `devices`는 독립 직교(조합 안내는 문서 몫, platform-permissions.md:109 확장) |                                                         |
 
 ## 6. 오픈 질문
 
@@ -418,8 +420,8 @@ export function getDeviceStatus(capability: string): Promise<DeviceStatus>;
    `location`이 우세하다. 권고: `location`(제안 유지), wasm 트랙에서 교차표로
    대응.
 2. **`DeviceStatus.available`의 3치**: `boolean | 'unknown'` 대신 상태 enum
-  (`'available' | 'unavailable' | 'unknown'`)이 TS 가독성이 나은지 — 구현
-  슬라이스에서 확정.
+   (`'available' | 'unavailable' | 'unknown'`)이 TS 가독성이 나은지 — 구현
+   슬라이스에서 확정.
 3. **fail-open 기본값**: provider 미등록·unknown 상태에서 가드 통과(§5.4 제안)가
    맞는가? 보수적 대안은 unknown 즉시 거부 — 그러나 이는 "조회만으로 게이팅"을
    사실상 자동화해 철학(§5.0)과 어긋난다. 문서로 명시할 것.

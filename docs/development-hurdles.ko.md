@@ -10,6 +10,64 @@ Rustra는 Rust 명령을 네이티브 코드로 연결하므로 모든 환경 �
 패키지, Rust crate는 독립적인 버전 범위를 가지므로 실제 호환성은 프로젝트의
 lockfile과 생성된 manifest를 함께 확인해야 합니다.
 
+## CLI 실행 — 표준 3형태
+
+| 형태                                                 | 언제                                           |
+| ---------------------------------------------------- | ---------------------------------------------- |
+| `bunx --bun @rustra/cli <cmd>`                       | 권장 일회성 형태 (설치 없음, bunx가 버전 고정) |
+| `bun add -d @rustra/cli` + `bunx --bun rustra <cmd>` | 패키지 스크립트로 CLI 명령을 돌리는 프로젝트   |
+| `bun i -g @rustra/cli` + `rustra <cmd>`              | 드물게 — 전역 바이너리가 필요한 머신만         |
+
+`rustra init`이 만드는 패키지 스크립트(`bun run doctor`, `bun run codegen`, …)는
+디펜던시 형태를 쓰고, CI와 문서 예제는 `bunx` 형태를 쓴다. 모든 명령은
+`--config rustra.json`을 명시적으로 받는다.
+
+## Rust 없이 시작하기: mock 엔진
+
+UI가 네이티브 빌드를 기다릴 필요는 없다. `@rustra/testing`의
+`createMockEngine`은 실제 `EngineClient`다 — `configure()`로 한 번 설치하면 생성된
+커맨드 헬퍼가 그대로 동작하고 Rust 툴체인이 필요 없다:
+
+```bash
+bun add @rustra/testing @rustra/types
+```
+
+```ts
+// src/mock.ts — UI를 만드는 동안 일찍 import한다
+import { createMockEngine } from '@rustra/testing';
+import { configure } from '@rustra/types';
+import { addNumbers } from './generated/commands.js';
+
+const engine = createMockEngine()
+  // 문자열 형태 — 아무 커맨드 이름
+  .on('addNumbers', ({ a, b }) => ({ value: a + b }))
+  // 타입 형태 — 생성 함수에서 이름을 해석, 오타는 바로 실패
+  .mock(addNumbers, ({ a, b }) => ({ value: a + b }))
+  // 실패 시뮬레이션: {code,message}는 구조화된 RustraCommandError가 된다
+  .fail('secureCompute', { code: 'capability.denied', message: 'not granted in mock' });
+
+configure(engine); // 글로벌 invoke에 설치
+
+const result = await addNumbers({ a: 20, b: 22 }); // 42 — Rust 불필요
+engine.calls(); // [{ command: 'addNumbers', args: { a: 20, b: 22 } }]
+```
+
+mock은 비정상 경로도 커버한다:
+
+- `createMockEngine({ delayMs: 50 })` 또는 `.delay('addNumbers', 50)` — 취소/
+  로딩 상태 테스트용 지연(abort된 `signal`은 실제 어댑터와 같은
+  `CancelledError` 계약으로 거부된다).
+- `.emit('progress.tick', payload)` + `engine.subscribeEvent(name, cb)` —
+  이벤트 기반 UI를 구동하고 `.events()`로 발행 이력을 조사한다.
+- 테스트 케이스 사이 `.reset()`; `.calls()`가 모든 invoke를 기록해 순서·인자
+  단언에 쓸 수 있다.
+- 패키지는 계약 게이트(`assertContractCurrent`, `expectContractCurrent`, …)도
+  export한다 — `generated/`가 커밋된 schema에서 벗어나면 실패한다.
+  `packages/testing/src/contract-gate.ts` 참고.
+
+`configure()` 호출을 지우면 mock이 생성 호스트 엔트리로 바뀐다 — 앱 코드의
+다른 부분은 바뀌지 않는다.
+
 ## 첫 실행 경로
 
 새 프로젝트는 다음 순서로 시작합니다.

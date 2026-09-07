@@ -69,9 +69,7 @@ fn scan_tags(input: ScanInput) -> Result<ScanOutput> { … }
 import type { DeviceStatusProvider } from '@rustra/types';
 
 /** 이 패키지가 선언에 사용한 디바이스 역량 토큰 (Rust 카탈로그 기준). */
-export type RustraDeviceCapability =
-  | 'camera'
-  | 'bluetooth';
+export type RustraDeviceCapability = 'camera' | 'bluetooth';
 
 /** scanTags 가 전제하는 디바이스 역량 (Rust 선언 기준). */
 export const SCAN_TAGS_DEVICES: readonly RustraDeviceCapability[] = ['camera', 'bluetooth'];
@@ -128,7 +126,7 @@ export function getDeviceStatus(capability: string): Promise<DeviceStatus>;
 4. 계산기 예제: `device_demo` 커맨드(선언만 — 하드웨어 미사용, 모의 provider로
    JS 조회 e2e) + 재생성 + api-surface.
 5. 문서: platform-permissions.md/.ko.md에 "디바이스 역량 계약" 절(카탈로그 표 +
-  조회 표면 + 호스트 매핑 안내는 리서치 §2 표로 연결) — en/ko.
+   조회 표면 + 호스트 매핑 안내는 리서치 §2 표로 연결) — en/ko.
 
 ## 하위 호환성
 

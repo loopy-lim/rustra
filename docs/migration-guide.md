@@ -4,6 +4,12 @@ English | [한국어](./migration-guide.ko.md)
 
 When the contract (schema) shared by the Rust backend and TypeScript clients changes over time, this guide describes how to roll out breaking changes safely.
 
+## Where to start (by your rustra version)
+
+- **From 0.3.x** — follow [migrating from 0.3 to 0.4](migrations/0.3-to-0.4.md) first, then use this guide.
+- **From 0.5.x** — follow [migrating from 0.5 to 0.6](migrations/0.5-to-0.6.md) first. Old schemas may also fail CLI validation with a "generic type name" error (see the [Rust API guide — user-defined generics](rust-api-guide.md#user-defined-generic-types)); rebuild `schema.json` with the current rustra before running `rustra diff`.
+- **0.6 and later (incl. 0.8)** — no migration note needed; the recipes below apply directly.
+
 ## Tools
 
 ### `rustra diff`
@@ -117,6 +123,11 @@ Whether a schema change is breaking is checked automatically in the PR:
 
 ```yaml
 # add to .github/workflows/ci.yml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0 # rustra diff compares against the base commit
+- uses: oven-sh/setup-bun@v2
+- run: bun install -g @rustra/cli # or: bun add -d @rustra/cli + bunx --bun rustra
 - name: Check schema compatibility
   run: |
     git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q schema.json \
