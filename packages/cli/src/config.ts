@@ -23,7 +23,6 @@ export const REACT_NATIVE_CONFIG_KEYS = [
   'rustManifest',
   'rustPackage',
   'rustLibrary',
-  'legacyBenchmarks',
 ] as const;
 export const NODE_CONFIG_KEYS = ['rustManifest', 'rustPackage', 'rustBinary', 'args'] as const;
 export const BUN_CONFIG_KEYS = ['rustManifest', 'rustPackage', 'rustLibrary'] as const;
@@ -70,7 +69,6 @@ export interface RustraConfig {
     rustManifest?: string;
     rustPackage?: string;
     rustLibrary?: string;
-    legacyBenchmarks?: boolean;
   };
   node?: {
     rustManifest?: string;
@@ -181,9 +179,6 @@ export function readConfigSync(configPath: string): RustraConfig {
       ) {
         throw new Error(`Config reactNative.${key} must be a non-empty safe path`);
       }
-    }
-    if (rn.legacyBenchmarks !== undefined && typeof rn.legacyBenchmarks !== 'boolean') {
-      throw new Error('Config reactNative.legacyBenchmarks must be a boolean');
     }
   }
 

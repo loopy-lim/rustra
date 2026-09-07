@@ -160,9 +160,6 @@ Release workspace link를 확인합니다. build/link 성공은 실제 기기 �
 - Android library: `rustra_bridge`
 - stable Rust initializer: `rustra_mobile_init`
 
-calculator 전용 benchmark ABI는 `legacyBenchmarks: true` fixture에서만 컴파일됩니다.
-일반 사용자 생성물에는 포함되지 않습니다.
-
 ## 문제 해결
 
 `RustraBridge was not linked`가 나오면 `bun run codegen`, `bun install`,

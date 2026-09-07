@@ -19,6 +19,8 @@ extern "C" {
     const uint8_t* payload, size_t payload_len, size_t* out_len);
   uint8_t* rustra_ffi_invoke_postcard(
     const uint8_t* payload, size_t payload_len, size_t* out_len);
+  uint8_t* rustra_ffi_invoke_rkyv_v2(
+    const uint8_t* payload, size_t payload_len, size_t* out_len);
   void rustra_ffi_free(uint8_t* ptr, size_t len);
   uint32_t rustra_ffi_invoke_buffer(
     uint16_t command_id, const uint8_t* payload, size_t payload_len,
@@ -52,29 +54,6 @@ extern "C" {
 
   // Stable package registration symbol emitted by `rustra::mobile_entry!`.
   void rustra_mobile_init(void);
-
-#if defined(RUSTRA_ENABLE_LEGACY_BENCHMARKS)
-  // ── Per-example FFI (benchmark legacy) ──────────────────
-  uint8_t* rustra_calculator_invoke_bytes(
-    const uint8_t* payload, size_t payload_len, size_t* out_len);
-  uint8_t* rustra_calculator_invoke_raw(
-    const uint8_t* payload, size_t payload_len, size_t* out_len);
-  uint8_t* rustra_calculator_invoke_msgpack(
-    const uint8_t* payload, size_t payload_len, size_t* out_len);
-  uint8_t* rustra_calculator_invoke_bincode(
-    const uint8_t* payload, size_t payload_len, size_t* out_len);
-  uint8_t* rustra_calculator_invoke_postcard(
-    const uint8_t* payload, size_t payload_len, size_t* out_len);
-  uint8_t* rustra_calculator_invoke_rkyv(
-    const uint8_t* payload, size_t payload_len, size_t* out_len);
-  uint8_t* rustra_calculator_invoke_hybrid(
-    const uint8_t* payload, size_t payload_len, size_t* out_len);
-  uint8_t* rustra_calculator_invoke_rkyv_v2(
-    const uint8_t* payload, size_t payload_len, size_t* out_len);
-
-  void rustra_calculator_free_buffer(uint8_t* ptr, size_t len);
-  void rustra_calculator_free_rkyv_v2_buffer(uint8_t* ptr, size_t len);
-#endif
 
   // ── Cancellation (from rustra::ffi) ─────────────────────
   // invocation_id 로 진행 중 async 호출을 협력적 취소한다.

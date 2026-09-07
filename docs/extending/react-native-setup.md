@@ -168,10 +168,6 @@ command results on a simulator/device before a product release.
 - Android library: `rustra_bridge`
 - stable Rust initializer: `rustra_mobile_init`
 
-The calculator-only benchmark ABI compiles only in the
-`legacyBenchmarks: true` fixture. It is never included in regular user
-generated output.
-
 ## Troubleshooting
 
 If you see `RustraBridge was not linked`, check in this order: `bun run

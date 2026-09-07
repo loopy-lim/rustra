@@ -177,7 +177,6 @@ export function resolveReactNativeScaffold(
     rustPackage: inferred.rustPackage,
     rustLibrary: rn.rustLibrary ?? inferred.rustLibrary,
     adapterRange,
-    legacyBenchmarks: rn.legacyBenchmarks,
   };
 }
 
