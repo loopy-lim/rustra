@@ -1,3 +1,5 @@
+[English](./architecture.md)
+
 # rustra-bridge 아키텍처
 
 ## 개요

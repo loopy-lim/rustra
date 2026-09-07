@@ -28,6 +28,12 @@ use tauri::{Emitter, State};
 /// emit 된다.
 pub const EVENT_CHANNEL_PREFIX: &str = "rustra://";
 
+/// 채널 프레임의 예약 이벤트 세그먼트 — 핸들 `h` 는
+/// `rustra://channel/{h}` 채널로 emit 된다. 이벤트 이름공간
+/// (`rustra://{name}`)과 구조적으로 분리되어, 스키마가 `channel` 이라는
+/// 이름의 이벤트를 선언해도 충돌하지 않는다.
+pub const CHANNEL_EVENT_PREFIX: &str = "rustra://channel/";
+
 /// Tauri의 managed state로 보관되는 rustra 패키지입니다.
 pub struct RustraState {
     /// 등록된 rustra 명령 패키지입니다.
@@ -45,6 +51,25 @@ pub fn rustra_dispatch(
         serde_json::to_value(&e)
             .unwrap_or_else(|_| json!({"code": "unknown", "message": "unknown error"}))
     })
+}
+
+/// JS 어댑터 발급 커맨드 — `createChannel(callback)` 이 invoke 한다.
+/// Tauri IPC 는 함수 값을 실어 보낼 수 없으므로 콜백은 받지 않는다: 핸들만
+/// 발급하고, sender 는 [`create_channel_for`] 가 `rustra://channel/{handle}`
+/// emit 으로 고정 배선한다(어댑터가 같은 채널을 listen).
+///
+/// 반환: `{ "handle": u32 }`. 핸들 공간 소진 시 `handle: 0` — JS 어댑터가
+/// loud-fail 한다.
+#[tauri::command]
+pub fn rustra_channel_create<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Value {
+    let handle = create_channel_for(&app);
+    json!({ "handle": handle })
+}
+
+/// JS 어댑터 `close()` 가 invoke 한다 — [`drop_channel_for`] 참고.
+#[tauri::command]
+pub fn rustra_channel_drop<R: tauri::Runtime>(app: tauri::AppHandle<R>, handle: u32) -> bool {
+    drop_channel_for(&app, handle)
 }
 
 /// 벤치 전용 profiled dispatch — `rustra_dispatch` 와 동일한 왕복이지만 응답에
@@ -160,7 +185,9 @@ pub fn register<R: tauri::Runtime>(
             .manage(state)
             .invoke_handler(tauri::generate_handler![
                 rustra_dispatch,
-                rustra_dispatch_batch
+                rustra_dispatch_batch,
+                rustra_channel_create,
+                rustra_channel_drop
             ])
     })
 }
@@ -184,7 +211,9 @@ pub fn register_profiled<R: tauri::Runtime>(
             .invoke_handler(tauri::generate_handler![
                 rustra_dispatch,
                 rustra_dispatch_profiled,
-                rustra_dispatch_batch
+                rustra_dispatch_batch,
+                rustra_channel_create,
+                rustra_channel_drop
             ])
     })
 }
@@ -277,6 +306,46 @@ pub fn tauri_event_sink<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> crate::e
             eprintln!("rustra: tauri emit failed on channel '{channel}' (event '{name}'): {error}");
         }
     })
+}
+
+/// 웹뷰(JS) 발급자용 채널을 `ChannelHost` 에 등록하고 핸들을 발급한다.
+///
+/// sender 는 `AppHandle` 과 핸들을 캡처해 [`CHANNEL_EVENT_PREFIX`]{handle}
+/// 채널로 emit 한다 — JS 어댑터(`packages/tauri` createChannel)가 같은 채널을
+/// `listen` 하여 콜백으로 변환한다. 핸들 캡처를 위해 reserve→insert 2단계를
+/// 쓴다(`ffi_channel.rs` 와 동일 관용).
+///
+/// 반환 핸들은 1부터 단조 증가하며 0 은 핸들 공간 소진(u32 exhaustion) —
+/// 호출자(JS 어댑터)가 loud-fail 한다.
+///
+/// # 근사 유니캐스트
+///
+/// 채널 계약([`crate::channels`])은 호출 귀속 유니캐스트지만 Tauri emit 은
+/// 브로드캐스트다. `rustra://channel/{handle}` 채널명으로 근사한다 — 같은
+/// 프로세스의 다른 웹뷰가 같은 채널명을 listen 하면 프레임을 관측할 수 있다.
+/// 정상 흐름(단일 발급자 = 단일 listen)에서는 유니캐스트와 동일하다.
+pub fn create_channel_for<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> u32 {
+    let handle = crate::channels::host().reserve_handle();
+    if handle == 0 {
+        return 0;
+    }
+    let app_for_sender = app.clone();
+    crate::channels::host().register_channel_with_handle(
+        handle,
+        Arc::new(move |payload: &str| {
+            let channel = format!("{CHANNEL_EVENT_PREFIX}{handle}");
+            if let Err(error) = app_for_sender.emit_str(&channel, payload.to_string()) {
+                eprintln!("rustra: tauri channel emit failed (handle {handle}): {error}");
+            }
+        }),
+    );
+    handle
+}
+
+/// JS 어댑터 `close()` 의 Rust 측 — 채널을 해제한다. 이후 동일 핸들 send 는
+/// `false`(stale). 이미 없는 핸들은 `false`(double-drop 무해).
+pub fn drop_channel_for<R: tauri::Runtime>(_app: &tauri::AppHandle<R>, handle: u32) -> bool {
+    crate::channels::host().drop_channel(handle)
 }
 
 /// 이벤트 이름 → Tauri 채널 이름 매핑 (`rustra://{sanitized}`).

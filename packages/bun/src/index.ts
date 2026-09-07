@@ -44,3 +44,5 @@ export type {
   BunEventSubscriptionOptions,
 } from './bun-event-subscription.js';
 export { createBunEventSubscription } from './bun-event-subscription.js';
+export type { BunChannel, BunChannelCallback } from './bun-channels.js';
+export { createBunChannelBridge } from './bun-channels.js';

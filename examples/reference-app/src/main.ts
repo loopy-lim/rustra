@@ -13,6 +13,7 @@
 import { createElement } from 'react';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
 import { createNodeEngine, createNodeProcessTransport } from '@rustra/node';
 import { configure } from '@rustra/types';
 import { RustraProvider, useCommand, useMutation, useEvent } from '@rustra/react';
@@ -20,16 +21,17 @@ import type { EngineClient } from '@rustra/types';
 import { App } from './App.js';
 import { listItems, createItem } from '../../crud/generated/commands.js';
 
-// 컴파일 산출 위치(dist/examples/reference-app/src)에서 저장소 루트까지 6단계.
-const repoRoot = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  '..',
-  '..',
-  '..',
-  '..',
-  '..',
-  '..',
-);
+// 저장소 루트 탐색 — 컴파일 산출(dist/examples/reference-app/src)은 6단계,
+// 직접 실행(src)은 3단계 위다. Cargo.toml 이 보이는 첫 조상을 찾는다.
+const here = dirname(fileURLToPath(import.meta.url));
+let repoRoot = here;
+for (let i = 0; i < 8; i++) {
+  if (existsSync(resolve(repoRoot, 'Cargo.toml'))) break;
+  repoRoot = dirname(repoRoot);
+}
+if (!existsSync(resolve(repoRoot, 'Cargo.toml'))) {
+  throw new Error(`rustra repo root not found from ${here}`);
+}
 
 export function makeEngine(): EngineClient {
   const transport = createNodeProcessTransport({
@@ -76,7 +78,10 @@ void useEvent;
 void RustraProvider;
 void createElement;
 
-if (process.argv[1] && process.argv[1].endsWith('main.js')) {
+// 컴파일 실행(node …/main.js)과 직접 실행(bun src/main.ts) 모두 스모크를
+// 돌린다 — guard 가 한쪽만 맞으면 `bun run test:app:reference` 가 조용히
+// 아무 증명 없이 green 이 되는 함정이 된다(빌드-only green).
+if (process.argv[1] && /main\.[jt]s$/.test(process.argv[1])) {
   main().catch((err) => {
     console.error(err);
     process.exit(1);

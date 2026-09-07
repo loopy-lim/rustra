@@ -176,6 +176,11 @@ export const RustraErrorCode = {
    * 코드 — Rust error.rs 에 대응 값이 없다.
    */
   EventUnavailable: 'event.unavailable',
+  /**
+   * 채널 발급/해제 불가 — JS 어댑터 측 전용 코드(RN react-native-events.ts,
+   * Tauri tauri-channels.ts). Rust error.rs 에 대응 값이 없다.
+   */
+  ChannelUnavailable: 'channel.unavailable',
   /** 계약 해시 불일치(JS>native stale). */
   ContractMismatch: 'contract.mismatch',
   /** 계약 해시 검증 불가(네이티브 미지원). */
