@@ -199,3 +199,73 @@ impl From<std::io::Error> for RustraError {
 #[cfg(test)]
 #[path = "error_tests.rs"]
 mod cancelled_tests;
+
+/// 커맨드가 반환할 수 있는 도메인 에러 코드의 선언 — const 문맥에서 구성 가능.
+///
+/// [`PackageBuilder::command_errors`](crate::PackageBuilder::command_errors) 빌더와
+/// `#[command(error(...))]` 속성의 원재료다. 선언은 schema.json `errors` 필드와
+/// TS 코드젠(타입 가드)의 원천이며, 런타임 에러 와이어(`{code, message}`)는
+/// 바꾸지 않는다.
+///
+/// [`RustraError`]의 프레임워크 코드(`transport.timeout` 등)와 달리 도메인 코드는
+/// 어느 커맨드에서 발생할지 선언으로만 알 수 있으므로 이 타입이 계약을 담는다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CommandErrorVariant {
+    code: &'static str,
+    description: Option<&'static str>,
+    retryable: bool,
+}
+
+impl CommandErrorVariant {
+    /// dot-notation 도메인 에러 코드로 variant 를 만든다.
+    pub const fn new(code: &'static str) -> Self {
+        Self {
+            code,
+            description: None,
+            retryable: false,
+        }
+    }
+
+    /// 생성 JSDoc 으로 흐르는 한 줄 설명을 붙인다.
+    pub const fn describe(mut self, text: &'static str) -> Self {
+        self.description = Some(text);
+        self
+    }
+
+    /// 재시도 가능 표시 — 코드젠 문서 메타데이터로만 소비되고, 런타임
+    /// retryable 판정은 여전히 인스턴스의 코드 기반 도출이다.
+    pub const fn retryable(mut self) -> Self {
+        self.retryable = true;
+        self
+    }
+
+    /// 도메인 에러 코드.
+    pub const fn code(&self) -> &'static str {
+        self.code
+    }
+
+    /// 선언 시 붙인 설명 — 없으면 `None`.
+    pub const fn description(&self) -> Option<&'static str> {
+        self.description
+    }
+
+    /// 선언의 재시도 가능 표시.
+    pub const fn is_retryable(&self) -> bool {
+        self.retryable
+    }
+}
+
+/// 도메인 에러 코드 패턴 검증 — `^[a-z][a-z0-9_.]*$`.
+///
+/// TS 파서(errors.ts)의 코드 토큰 판정과 동일 집합이다. 위반 코드는 JSON 폴백
+/// 경로의 code/message 재분할에 실패해 `invoke.failed` 로 뭉개지므로 선언
+/// 단계에서 거부한다. 정규식 크레이트 없이 수동 스캔한다.
+pub(crate) fn validate_error_code(code: &str) {
+    let mut chars = code.chars();
+    let first_ok = matches!(chars.next(), Some(c) if c.is_ascii_lowercase());
+    let rest_ok =
+        chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '_' | '.'));
+    if !first_ok || !rest_ok {
+        panic!("invalid error code '{code}': must match ^[a-z][a-z0-9_.]*$");
+    }
+}

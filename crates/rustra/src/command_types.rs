@@ -32,6 +32,10 @@ pub(crate) struct Command {
     /// 전 플랫폼에서 동일하게 등록되고, 미지원 플랫폼의 핸들러는
     /// `platform.unavailable` 스텁이다.
     pub(crate) platforms: Vec<crate::platform::Platform>,
+    /// 이 명령이 반환할 수 있는 도메인 에러 코드 선언 — 빈 벡터는 "선언 없음".
+    /// schema.json `errors` 필드와 TS 코드젠(타입 가드)의 원천이며 런타임
+    /// 와이어는 무변경이다. 선언 경로는 `command_errors` 참고.
+    pub(crate) error_variants: Vec<CommandErrorVariant>,
 }
 
 pub(crate) type BufferHandler = Arc<dyn Fn(&[u8]) -> crate::Result<Vec<u8>> + Send + Sync>;

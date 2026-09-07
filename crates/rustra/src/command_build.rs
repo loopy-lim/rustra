@@ -110,5 +110,6 @@ where
         rkyv_v2_tier3: is_tier3,
         required_capability: None,
         platforms: Vec::new(),
+        error_variants: Vec::new(),
     }
 }
