@@ -40,6 +40,13 @@ use std::sync::{Arc, Mutex, OnceLock};
 /// [`ChannelHost::send`] 가 잡아서 무시한다(호출자를 죽이지 않는다).
 pub type ChannelSender = Arc<dyn Fn(&str) + Send + Sync>;
 
+/// 호스트 채널 수신端(바이너리) — `channel_send_bytes` 호출 시 실행된다.
+///
+/// JSON 문자열 경로([`ChannelSender`])와 동일한 핸들 공간/수명 계약을 쓰지만
+/// 페이로드는 임의 바이트(rkyv V2 응답 프레임 등)다. 한 핸들은 생성 시점에
+/// 선택한 한쪽 경로로만 동작한다 — 혼합 발송은 지원하지 않는다(계약 단순성).
+pub type ChannelBytesSender = Arc<dyn Fn(&[u8]) + Send + Sync>;
+
 include!("channels_host.rs");
 
 include!("channels_handles.rs");

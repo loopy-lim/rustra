@@ -1,3 +1,5 @@
+[English](./migration-guide.md)
+
 # 계약 마이그레이션 가이드
 
 Rust 백엔드와 TypeScript 클라이언트가 공유하는 계약(schema)이 시간이 지나며

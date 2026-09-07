@@ -212,3 +212,12 @@ export function createTauriBootstrap(options: TauriEngineOptions = {}): TauriBoo
 
 export { rustraEventChannel, subscribeEvent, subscribeTauriEvent } from './tauri-events.js';
 export { disposedBootstrapError, type BootstrapState } from '@rustra/types';
+export {
+  createChannel,
+  createChannelBytes,
+  rustraChannelEventChannel,
+  rustraChannelBytesEventChannel,
+  type RustraTauriChannel,
+  type RustraTauriBytesChannel,
+  type TauriChannelIo,
+} from './tauri-channels.js';

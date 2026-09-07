@@ -142,6 +142,10 @@ export const RustraErrorCode = {
   CommandInvalidArgs: 'command.invalid_args',
   /** capability 미부여로 거부됨 (deny-by-default). */
   CapabilityDenied: 'capability.denied',
+  /** 플랫폼 특화 명령의 이 플랫폼 미구현 — `command.not_found` 와 달리 계약상 존재. */
+  PlatformUnavailable: 'platform.unavailable',
+  /** 동기 invoke 미지원 — 네이티브가 typed fast path 를 노출하지 않음(JS 어댑터 발행). */
+  SyncUnavailable: 'sync.unavailable',
   /** 페이로드가 크기 한도(기본 1MiB)를 초과. */
   PayloadTooLarge: 'payload.too_large',
   /** transport 계열 일시 오류 — retryable. */
@@ -176,6 +180,11 @@ export const RustraErrorCode = {
    * 코드 — Rust error.rs 에 대응 값이 없다.
    */
   EventUnavailable: 'event.unavailable',
+  /**
+   * 채널 발급/해제 불가 — JS 어댑터 측 전용 코드(RN react-native-events.ts,
+   * Tauri tauri-channels.ts). Rust error.rs 에 대응 값이 없다.
+   */
+  ChannelUnavailable: 'channel.unavailable',
   /** 계약 해시 불일치(JS>native stale). */
   ContractMismatch: 'contract.mismatch',
   /** 계약 해시 검증 불가(네이티브 미지원). */

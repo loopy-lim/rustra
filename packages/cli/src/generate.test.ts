@@ -1738,6 +1738,10 @@ test('init scaffold has a real shared package and executable codegen bin', () =>
   assert.match(files.packageJson, /"packageManager": "bun@1\.4\.0"/);
   assert.match(files.libRs, /pub fn package\(\) -> Package/);
   assert.match(files.generateRs, /rustra_app::package\(\)\.generate_typescript\(\)/);
+  // 스타 스캔폴드 계약: schema.json 만 기록(TS 표면은 rustra codegen 소관) + 발행된
+  // rustra 에 존재하는 API만 사용(write_schema_to_dir 는 미발행 — 온보딩 게이트 red 사례).
+  assert.match(files.generateRs, /schema\.json/);
+  assert.doesNotMatch(files.generateRs, /write_schema_to_dir|write_to_dir/);
   assert.match(files.mainRs, /__rustra_contract/);
   assert.match(files.appTs, /generated\/node\.js/);
   assert.doesNotMatch(files.generateRs, /see src\/main\.rs/);
@@ -2166,8 +2170,8 @@ test('React Native scaffold reports when only a stale complete adapter is instal
   }
 });
 
-test('React Native scaffold keeps calculator-only ABI behind the fixture flag', () => {
-  const base = {
+test('React Native scaffold no longer carries the legacy benchmark flag', () => {
+  const output = renderReactNativeModule({
     appRoot: '/app',
     moduleDir: '/app/modules/rustra-bridge',
     cppOutputPath: '/app/modules/rustra-bridge/generated',
@@ -2175,12 +2179,10 @@ test('React Native scaffold keeps calculator-only ABI behind the fixture flag', 
     rustPackage: 'calculator',
     rustLibrary: 'calculator',
     adapterRange: '^0.3.0',
-  };
-  const production = renderReactNativeModule(base);
-  const fixture = renderReactNativeModule({ ...base, legacyBenchmarks: true });
-  assert.doesNotMatch(production['RustraBridge.podspec']!, /RUSTRA_ENABLE_LEGACY_BENCHMARKS/);
-  assert.match(fixture['RustraBridge.podspec']!, /RUSTRA_ENABLE_LEGACY_BENCHMARKS/);
-  assert.match(fixture['android/build.gradle']!, /RUSTRA_LEGACY_BENCHMARKS=ON/);
+  });
+  const joined = Object.values(output).join('\n');
+  assert.doesNotMatch(joined, /RUSTRA_ENABLE_LEGACY_BENCHMARKS/);
+  assert.doesNotMatch(joined, /RUSTRA_LEGACY_BENCHMARKS/);
 });
 
 test('generateEventsTs emits payload types, name union, and subscribe helper', async () => {

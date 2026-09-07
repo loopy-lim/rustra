@@ -146,15 +146,15 @@ crates/
 
 Provides the core types and logic.
 
-| Component          | Description                                                                                                                                                                                     |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Package`          | A collection of registered commands. Runtime dispatch via `invoke_json()`, code generation via `generate_typescript()`                                                                          |
-| `PackageBuilder`   | Created with `Package::builder(id)`. Register commands with `.command_fn(handler)` / `.command(name, handler)`, then `.build()`                                                                 |
-| `GeneratedPackage` | The result of `generate_typescript()`. Holds the `schema_json`, `types_ts`, `commands_ts`, `contract_hash` fields. `write_schema_to_dir()` publishes schema.json (deprecated: `write_to_dir()`) |
-| `RustraError`      | Implements `Serialize`. `command.not_found`, `command.invalid_args`, `internal` error codes + a `custom(code, message)` constructor + `code()` and `message()` getters                          |
-| `build!`           | Provided by `rustra-macros`. Registers multiple commands in one go as `rustra::build!("id", fn1, fn2).done()`                                                                                   |
-| `tauri_support`    | Provided when `cfg(feature = "tauri")` is enabled. `RustraState`, the single `rustra_dispatch` Tauri command, and the `register()` builder injection function                                   |
-| `__private` module | The `CommandInput`, `CommandOutput` sealed traits. Used by the proc macro to verify command type constraints at compile time. Not exposed as public API                                         |
+| Component          | Description                                                                                                                                                                                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Package`          | A collection of registered commands. Runtime dispatch via `invoke_json()`, code generation via `generate_typescript()`                                                                                                                                                          |
+| `PackageBuilder`   | Created with `Package::builder(id)`. Register commands with `.command_fn(handler)` / `.command(name, handler)`, then `.build()`                                                                                                                                                 |
+| `GeneratedPackage` | The result of `generate_typescript()`. Holds the `schema_json`, `types_ts`, `commands_ts`, `contract_hash` fields. `write_schema_to_dir()` publishes schema.json (deprecated: `write_to_dir()`, which also regenerated TS surfaces from Rust — `rustra codegen` owns those now) |
+| `RustraError`      | Implements `Serialize`. `command.not_found`, `command.invalid_args`, `internal` error codes + a `custom(code, message)` constructor + `code()` and `message()` getters                                                                                                          |
+| `build!`           | Provided by `rustra-macros`. Registers multiple commands in one go as `rustra::build!("id", fn1, fn2).done()`                                                                                                                                                                   |
+| `tauri_support`    | Provided when `cfg(feature = "tauri")` is enabled. `RustraState`, the single `rustra_dispatch` Tauri command, and the `register()` builder injection function                                                                                                                   |
+| `__private` module | The `CommandInput`, `CommandOutput` sealed traits. Used by the proc macro to verify command type constraints at compile time. Not exposed as public API                                                                                                                         |
 
 #### `crates/rustra-macros` (proc-macro)
 

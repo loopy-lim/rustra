@@ -19,6 +19,7 @@ pub type Result<T> = std::result::Result<T, RustraError>;
 /// | `command.not_found` | [`command_not_found`] | 등록되지 않은 명령 호출 |
 /// | `command.invalid_args` | [`invalid_args`] | 입력 인자 역직렬화 실패 |
 /// | `capability.denied` | [`capability_denied`] | 필요 capability 미부여 (deny-by-default) |
+/// | `platform.unavailable` | [`platform_unavailable`] | 플랫폼 특화 명령의 이 플랫폼 미구현 |
 /// | `payload.too_large` | [`payload_too_large`] | 페이로드가 동적 크기 한도 초과 |
 /// | `internal` | [`internal`] | 내부 오류 (직렬화, I/O 등) |
 /// | `cancelled` | [`cancelled`] | 호출 취소 (AbortSignal 등) |
@@ -27,6 +28,7 @@ pub type Result<T> = std::result::Result<T, RustraError>;
 /// [`command_not_found`]: RustraError::command_not_found
 /// [`invalid_args`]: RustraError::invalid_args
 /// [`capability_denied`]: RustraError::capability_denied
+/// [`platform_unavailable`]: RustraError::platform_unavailable
 /// [`payload_too_large`]: RustraError::payload_too_large
 /// [`internal`]: RustraError::internal
 /// [`cancelled`]: RustraError::cancelled
@@ -92,6 +94,29 @@ impl RustraError {
         Self {
             code: "capability.denied",
             message: detail.to_string(),
+            retryable: false,
+        }
+    }
+
+    /// 플랫폼 특화 명령이 현재 플랫폼용 구현 없이 호출됨.
+    ///
+    /// `command_platform` 으로 선언된 명령이 지원 목록에 없는 플랫폼에서 호출되면
+    /// 이 에러가 반환된다. `command.not_found` 와 구분된다 — 계약(스키마/id)에는
+    /// 존재하지만 이 플랫폼에서는 구현이 없다는 신호다. Code: `platform.unavailable`.
+    pub fn platform_unavailable(command: &str, platforms: &[crate::platform::Platform]) -> Self {
+        let supported = platforms
+            .iter()
+            .map(|p| p.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let current = crate::platform::Platform::current()
+            .map(|p| p.as_str().to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+        Self {
+            code: "platform.unavailable",
+            message: format!(
+                "command '{command}' is declared for platforms [{supported}] but the current platform is '{current}'"
+            ),
             retryable: false,
         }
     }

@@ -31,7 +31,6 @@ export type ReactNativeScaffoldOptions = {
   rustPackage: string;
   rustLibrary: string;
   adapterRange: string;
-  legacyBenchmarks?: boolean;
 };
 
 function portableRelative(from: string, to: string): string {
@@ -119,9 +118,6 @@ export function renderReactNativeModule(
     options.cppOutputPath,
   );
   const manifestFromModule = portableRelative(moduleRoot, options.rustManifestPath);
-  const legacyDefinition = options.legacyBenchmarks
-    ? "    'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) RUSTRA_ENABLE_LEGACY_BENCHMARKS=1',\n"
-    : '';
   const values = {
     adapterFromIos,
     generatedFromIos,
@@ -130,8 +126,6 @@ export function renderReactNativeModule(
     manifestFromModule,
     rustPackage: options.rustPackage,
     rustLibrary: options.rustLibrary,
-    cmakeLegacy: options.legacyBenchmarks ? 'ON' : 'OFF',
-    legacyDefinition,
   };
   return {
     'package.json': renderPackageJson(options.adapterRange),

@@ -20,6 +20,7 @@ examples/calculator-napi/index.js
 
 # Claude Code worktrees (local only)
 .claude/worktrees/
+.worktrees/
 
 # Native build outputs / caches (Gradle, Android, Expo, Xcode)
 **/android/build/

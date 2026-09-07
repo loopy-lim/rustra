@@ -1,3 +1,5 @@
+[English](./compatibility-contract.md)
+
 # 호환성 계약
 
 `rustra`가 생성하는 TypeScript는 host 중립을 유지해야 한다. 생성 파일은 이

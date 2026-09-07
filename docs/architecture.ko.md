@@ -1,3 +1,5 @@
+[English](./architecture.md)
+
 # rustra-bridge 아키텍처
 
 ## 개요
@@ -143,15 +145,15 @@ crates/
 
 핵심 타입과 로직을 제공한다.
 
-| 구성 요소          | 설명                                                                                                                                                                           |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Package`          | 등록된 command들의 컬렉션. `invoke_json()`으로 런타임 디스패치, `generate_typescript()`로 코드 생성                                                                            |
-| `PackageBuilder`   | `Package::builder(id)`로 생성. `.command_fn(handler)` / `.command(name, handler)`로 command 등록 후 `.build()`                                                                 |
-| `GeneratedPackage` | `generate_typescript()`의 결과. `schema_json`, `types_ts`, `commands_ts`, `contract_hash` 필드 보유. `write_schema_to_dir()`로 schema.json 발행 (deprecated: `write_to_dir()`) |
-| `RustraError`      | `Serialize` 구현. `command.not_found`, `command.invalid_args`, `internal` 에러 코드 + `custom(code, message)` 생성자 + `code()`, `message()` getter                            |
-| `build!`           | `rustra-macros`에서 제공. `rustra::build!("id", fn1, fn2).done()` 형태로 다중 command 일괄 등록                                                                                |
-| `tauri_support`    | `cfg(feature = "tauri")` 활성화 시 제공. `RustraState`, `rustra_dispatch` 단일 Tauri command, `register()` 빌더 주입 함수                                                      |
-| `__private` 모듈   | `CommandInput`, `CommandOutput` sealed 트레이트. proc macro가 컴파일 타임에 command 타입 제약을 검증하는 데 사용. public API로 노출되지 않음                                   |
+| 구성 요소          | 설명                                                                                                                                                                                                                                                            |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Package`          | 등록된 command들의 컬렉션. `invoke_json()`으로 런타임 디스패치, `generate_typescript()`로 코드 생성                                                                                                                                                             |
+| `PackageBuilder`   | `Package::builder(id)`로 생성. `.command_fn(handler)` / `.command(name, handler)`로 command 등록 후 `.build()`                                                                                                                                                  |
+| `GeneratedPackage` | `generate_typescript()`의 결과. `schema_json`, `types_ts`, `commands_ts`, `contract_hash` 필드 보유. `write_schema_to_dir()`로 schema.json 발행 (deprecated: `write_to_dir()` — Rust에서 TS 표면까지 재생성하던 구(舊) 듀얼 패스, 이제 `rustra codegen`의 소관) |
+| `RustraError`      | `Serialize` 구현. `command.not_found`, `command.invalid_args`, `internal` 에러 코드 + `custom(code, message)` 생성자 + `code()`, `message()` getter                                                                                                             |
+| `build!`           | `rustra-macros`에서 제공. `rustra::build!("id", fn1, fn2).done()` 형태로 다중 command 일괄 등록                                                                                                                                                                 |
+| `tauri_support`    | `cfg(feature = "tauri")` 활성화 시 제공. `RustraState`, `rustra_dispatch` 단일 Tauri command, `register()` 빌더 주입 함수                                                                                                                                       |
+| `__private` 모듈   | `CommandInput`, `CommandOutput` sealed 트레이트. proc macro가 컴파일 타임에 command 타입 제약을 검증하는 데 사용. public API로 노출되지 않음                                                                                                                    |
 
 #### `crates/rustra-macros` (proc-macro)
 

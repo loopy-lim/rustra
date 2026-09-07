@@ -1,9 +1,23 @@
+[English](./compatibility-matrix.md)
+
 # 기능 × 어댑터 호환성 매트릭스
 
 각 어댑터가 지원하는 invoke 기능(시그널/취소, 배치, 이벤트)의 행매트릭스.
 어느 조합이 조용히 드롭되는지 — 그리고 드롭되지 않는지 — 한눈에 확인한다.
 
 ## 매트릭스
+
+| 기능                                    | Node (`createNodeEngine`)                                                                                                                                                             | Bun (`createBunEngine`)                                                                                                | Tauri (`createTauriEngine`)                                                                                                       | RN (`createReactNativeEngine`)                                                        | RN (`createRkyvV2Engine`)                                                                     |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `options.signal` (사전 abort)           | ✅ 즉시 `cancelled`                                                                                                                                                                   | ✅ 즉시 `cancelled`                                                                                                    | ✅ 즉시 `cancelled`                                                                                                               | ✅ 즉시 `cancelled`                                                                   | ✅ 즉시 `cancelled`                                                                           |
+| `options.signal` (진행 중 취소)         | ⚠️ 얕은 취소 (미abort signal 은 정상 실행, 실행 중 abort 는 결과 무시)                                                                                                                | ⚠️ 얕은 취소 (동일)                                                                                                    | ⚠️ 얕은 취소 (동일)                                                                                                               | ⚠️ 얕은 취소 (JS 프라미스만 거부)                                                     | ⚠️ 조건부 전파 — JS 코덱 + `invokeAsync`/`invokeCancel` 확인 시만 Rust 체크포인트까지         |
+| `invokeBatch`                           | ✅ per-entry Promise fallback                                                                                                                                                         | ✅ per-entry Promise fallback                                                                                          | ✅ per-entry Promise fallback                                                                                                     | ✅ per-entry Promise fallback                                                         | ✅ 정적 명령 단일 횡단 (`invokeTypedBatch[ById]`), signal 항목 포함 시 항목별 라우팅          |
+| 배치 항목별 취소                        | ✅ 각 `invoke`의 얕은 취소                                                                                                                                                            | ✅ 동일                                                                                                                | ✅ 동일                                                                                                                           | ✅ 동일                                                                               | ⚠️ 단일 횡단 배치는 취소 미지원 — signal 항목이 있으면 자동으로 항목별 `invoke` 경로로 라우팅 |
+| `options.timeoutMs`                     | ✅ 직접/글로벌 `invoke` 레이스 — `transport.timeout`(retryable)                                                                                                                       | ✅ 동일                                                                                                                | ✅ 동일                                                                                                                           | ⚠️ 동기 native 호출은 호출 중 선점 불가                                               | ✅ 동일 (글로벌 배치는 항목 최솟값으로 전체 레이스)                                           |
+| 이벤트 (`subscribeEvent`/`onEvent`)     | ✅ `subscribeEvent(transport, name, cb)` — 0xfffd 푸시 프레임 (폴백 폴링; 이벤트 불능 transport 는 loud-fail)                                                                         | ✅ `createBunEventBridge` — FFI 푸시 싱크 (폴백 폴링)                                                                  | ✅ `subscribeEvent`/`subscribeTauriEvent`                                                                                         | ✅ JSI 싱크 푸시; `pollMs` 옵션으로 CallInvoker 없는 호스트용 JS 폴링 drain 루프 추가 | ✅ `subscribeEvent`/`drainEvents` (CallInvoker 자동 drain)                                    |
+| 채널 (`createChannel`)                  | ✅ `createNodeChannel(transport, cb)` — loop-stdio 채널 예약 프레임 0xfffb/0xfffa/0xfffc (바이너리 모드 전용; NDJSON 은 `channel.unavailable` loud-fail; 백그라운드 스레드 send 안전) | ✅ `createBunChannelBridge(options)(cb)` — FFI `rustra_ffi_channel_*` (JS 스레드 send 만 — `threadsafe:false` 계약)    | ✅ `createChannel(cb)` — Tauri 커맨드 + listen (근사 유니캐스트: 핸들별 `app.emit` 브로드캐스트)                                  | ✅ JSI handle + `close()`                                                             | ✅ JSI native channel handle                                                                  |
+| 바이너리 채널 (`createBytesChannel`)    | ✅ `createNodeBytesChannel` — 0xfff9 프레임 (능력 협상 게이트; 구 런타임은 `channel.unavailable` loud-fail)                                                                           | ✅ `createBunChannelBytesBridge` — FFI `rustra_ffi_channel_create_bytes` (JS 스레드 send 만 — `threadsafe:false` 계약) | ✅ `createChannelBytes` — `rustra://channel-bytes/{handle}` emit (바이트는 JSON 숫자 배열 직렬화 — ~4배 와이어 비용, 기능 패리티) | ✅ JSI `createChannelBytes` — ArrayBuffer 복사본                                      | ✅ 동일 JSI 바이트 경로                                                                       |
+| rkyv V2 바이너리 (`createRkyvV2Engine`) | ✅ (napi/FFI 네이티브 필요)                                                                                                                                                           | ✅ (FFI 네이티브 필요)                                                                                                 | ✅ (`rustra_dispatch` 바이너리 경로)                                                                                              | —                                                                                     | ✅ JSI                                                                                        |
 
 | 기능                                    | Node (`createNodeEngine`)                                                                                     | Bun (`createBunEngine`)                               | Tauri (`createTauriEngine`)                                                       | RN (`createReactNativeEngine`)          | RN (`createRkyvV2Engine`)                                                                     |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -50,7 +64,28 @@
   throw 한다. 폴링과 달리 푸시 모드(Node stdout, Bun FFI)는 첫 구독 전의 emit 을
   버린다(싱크가 버스를 우회) — 구독 전 emit 이 중요하면 구독을 먼저 하거나 폴링을
   쓴다. Rust `set_event_sink` 설치 시 버스가 비므로(푸시+폴링 이중 수신 방지
-  계약) 푸시/폴링을 혼용하지 않는다.
+  계약) 푸시/폴링을 혼용하지 않는다. RN JSON adapter 의
+  `subscribeEvent({ pollMs })` 옵션은 CallInvoker 없는 네이티브(C++ 디스패처가
+  JS 의 `drainEvents()` 호출까지 큐에 쌓아둠)를 위해 같은 drain 루프를 JS 쪽에서
+  돌린다.
+
+### 채널 전달 경로
+
+모든 호스트가 동일 `{ handle, close() }` 계약을 노출하며, 발급자(전송 수단)만
+다르다. Node 는 loop-stdio 바이너리 모드 예약 프레임 (0xfffb 발급 / 0xfffa 해제 /
+0xfffc 푸시)으로 발급하며 백그라운드 스레드 `send` 도 안전하다(stdout 프레임이 JS
+턴 데이터 이벤트로 도달); NDJSON transport 는 `channel.unavailable` 로 loud-fail
+한다. Bun 은 `rustra_ffi_channel_*` FFI 심볼로 발급하며 콜백이 `threadsafe:false`
+이므로 send 는 JS 스레드(동기 FFI invoke 체인)에 한정된다 — 백그라운드 send
+미지원. Tauri 는 `rustra_channel_create`/`rustra_channel_drop` 커맨드로 발급하고
+`app.emit("rustra://channel/{handle}")` 로 프레임을 전달한다 — **근사 유니캐스트**:
+채널 계약은 호출 귀속 유니캐스트지만 Tauri emit 은 브로드캐스트라 같은 채널명을
+listen 하는 다른 웹뷰가 프레임을 관측할 수 있다(단일 발급자 = 단일 listen 이 정상
+흐름). RN 은 C++ 콜백 디스패처가 받친 JSI `createChannel`/`dropChannel` host
+function 으로 발급한다(진짜 유니캐스트).
+
+계약) 푸시/폴링을 혼용하지 않는다.
+
 - **Tauri payload 계약 (decoded 우선, 문자열만 1회 parse)**: 실제 WebView 경계에서
   tauri 는 `emit_str` JSON 을 `payload: {…}` 로 페이지에 인라인 splice 하므로 JS
   listener 는 이미 해석된 값을 받는다 — `subscribeEvent` 는 문자열이 아닌 payload 는

@@ -7,6 +7,9 @@ struct CommandAttr {
     name: Option<String>,
     /// 이 명령이 요구하는 capability. `require_capability` 문자열 결합을 대체한다.
     capability: Option<String>,
+    /// 이 명령이 구현되는 플랫폼 목록 (`platform(windows, macos)`).
+    /// None 이면 전 플랫폼 명령.
+    platforms: Option<Vec<String>>,
 }
 
 /// `#[command]` 속성의 입력을 파싱합니다.
@@ -18,6 +21,7 @@ impl Parse for CommandAttr {
         let mut attr = CommandAttr {
             name: None,
             capability: None,
+            platforms: None,
         };
         if input.is_empty() {
             return Ok(attr);
@@ -33,10 +37,29 @@ impl Parse for CommandAttr {
                 let _: Token![=] = input.parse()?;
                 let cap: LitStr = input.parse()?;
                 attr.capability = Some(cap.value());
+            } else if key == "platform" {
+                // platform(windows, macos) — 괄호 안 플랫폼 식별자 목록.
+                let content;
+                let _: syn::token::Paren = syn::parenthesized!(content in input);
+                let mut platforms = Vec::new();
+                loop {
+                    let ident: Ident = content.parse()?;
+                    platforms.push(ident.to_string());
+                    if content.parse::<Token![,]>().is_err() {
+                        break;
+                    }
+                }
+                if platforms.is_empty() {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        "platform(...) requires at least one platform",
+                    ));
+                }
+                attr.platforms = Some(platforms);
             } else {
                 return Err(syn::Error::new(
                     key.span(),
-                    "unsupported `#[command]` key; supported keys: `name`, `capability`",
+                    "unsupported `#[command]` key; supported keys: `name`, `capability`, `platform`",
                 ));
             }
             if input.parse::<Token![,]>().is_err() {

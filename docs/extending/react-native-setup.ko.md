@@ -160,8 +160,49 @@ Release workspace link를 확인합니다. build/link 성공은 실제 기기 �
 - Android library: `rustra_bridge`
 - stable Rust initializer: `rustra_mobile_init`
 
-calculator 전용 benchmark ABI는 `legacyBenchmarks: true` fixture에서만 컴파일됩니다.
-일반 사용자 생성물에는 포함되지 않습니다.
+## C++ 에서 rustra 호출 (TurboModule 상호운용)
+
+다른 C++ TurboModule(또는 JS 런타임 스레드의 네이티브 코드)이 `jsi::Value` 로
+rustra 를 직접 호출할 수 있다 — JS 왕복도 JSON 마샬링도 없다.
+`RustraJSIBridge.hpp` 의 공개 진입점은 JS 측 `__rustraNative.invokeTyped*` 와
+정확히 같은 경로를 공유한다:
+
+```cpp
+#include <RustraJSIBridge.hpp>
+
+// JS 런타임 스레드에서만 호출(installRustraJSI 와 동일한 스레드 친화성 계약).
+// installRustraJSI 호출은 불필요 — FFI 전역 패키지 등록만 있으면 된다.
+rustra::TypedInvokeResult result =
+    rustra::invokeTypedById(runtime, commandId, argsValue);
+
+switch (result.status) {
+  case rustra::TypedInvokeStatus::Ok:            // result.value — 디코딩된 출력
+    break;
+  case rustra::TypedInvokeStatus::NoStaticCodec: // invokeRkyvV2 로 폴백
+    break;
+  case rustra::TypedInvokeStatus::CommandError:  // result.value: {code, message}
+    break;                                       // (예: platform.unavailable)
+  case rustra::TypedInvokeStatus::MalformedResponse:
+    break;                                       // result.message 에 상세
+}
+```
+
+인코더는 `getProperty` 로 필드를 읽으므로 명령 입력 형태와 같은 `jsi::Value`
+라면 모두 인코딩된다 — 다른 C++ TurboModule 이 만든 객체도 그대로 쓸 수 있다.
+이 함수들은 예외를 던지지 않는다 — 결과는 `TypedInvokeStatus` 로 구분한다.
+
+인접한 상호운용 표면:
+
+- **folly::dynamic 입력** — `RustraTurboInterop.hpp` 의
+  `invokeTypedByNameDynamic`/`invokeTypedByIdDynamic` 오버로드가 dynamic 을
+  `jsi::Value` 로 변환해 동일 경로를 쓴다(2^53 초과 int64 는 정밀도 손실 —
+  헤더 계약 참고).
+- **바이너리 채널** — `createChannelBytes(callback)`(JS: `createBytesChannel`)
+  는 채널 페이로드를 ArrayBuffer 복사본으로 전달한다 — JSON 직렬화 없이
+  rkyv V2 프레임. JSON 채널과 동일한 핸들/close 계약, 한 핸들은 한 경로.
+- **동기 invoke** — `invokeTypedSync(name, args)`(`@rustra/react-native`)는
+  UI 핫패스에서 Promise 홉 없이 C++ typed fast path 를 직접 쓴다 — 미지원
+  환경은 `sync.unavailable` 로 loud-fail.
 
 ## 문제 해결
 

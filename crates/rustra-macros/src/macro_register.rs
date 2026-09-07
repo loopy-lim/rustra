@@ -72,6 +72,10 @@ pub fn register(input: TokenStream) -> TokenStream {
                 &format!("__RUstra_cap_{}", fn_name),
                 proc_macro2::Span::call_site(),
             );
+            let platforms_ident = Ident::new(
+                &format!("__RUstra_platforms_{}", fn_name),
+                proc_macro2::Span::call_site(),
+            );
             let doc_ident = Ident::new(
                 &format!("__RUstra_doc_{}", fn_name),
                 proc_macro2::Span::call_site(),
@@ -95,6 +99,7 @@ pub fn register(input: TokenStream) -> TokenStream {
                 .command(#meta_ident, #register_ident)
                 .command_doc(#meta_ident, #doc_ident)
                 .require_capability_if(#meta_ident, #cap_ident)
+                .platform_meta_if(#meta_ident, #platforms_ident)
             }
         })
         .collect();
