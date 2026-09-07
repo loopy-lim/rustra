@@ -70,6 +70,21 @@ export type ChannelDemoOutput = {
   droppedSends: number;
 };
 
+/**
+ * 바이너리 채널 데모 — `channel_demo` 의 바이트 경로 쌍둥이. 모든 호스트 어댑터의 createBytesChannel/createChannelBytes 패리티를 동일 명령으로 e2e 검증한다(페이로드는 스텝 카운터 LE u64).
+ */
+export type ChannelDemoBytesInput = {
+  /** 바이너리 채널로 발급받은 핸들. */
+  channel: ChannelHandle;
+  /** 전송할 프레임 수. */
+  ticks: number;
+};
+
+export type ChannelDemoBytesOutput = {
+  sent: number;
+  droppedSends: number;
+};
+
 export type ClampInput = {
   max: number;
   min: number;
@@ -149,6 +164,18 @@ export type MultiplyInput = {
 
 export type MultiplyOutput = {
   value: number;
+};
+
+/**
+ * 플랫폼 상호운용 — 플랫폼 특화 명령의 계약 안정화 예시.
+ *
+ * `platformNativeInfo` 는 `#[command(platform(windows, macos))]` 로 macos/windows 에만 구현을 선언한다. 등록(id·스키마·계약 해시)은 전 플랫폼에서 동일하게 일어나고, Linux(및 기타)에서 호출하면 `platform.unavailable` 이 반환된다 (`command.not_found` 와 구분된다). 실제 구현은 cfg 로 보호해 지원 OS 에서만 주입된다 — win32/objc2 호출을 하는 실명령의 뼈대가 되는 패턴이다.
+ */
+export type PlatformNativeInfoOutput = {
+  /** std::env::consts::OS — 컴파일 대상 OS 문자열. */
+  os: string;
+  /** 네이티브 윈도우 시스템 식별자 — 실제 예에서는 win32/objc2 API 조사값. */
+  windowKind: string;
 };
 
 export type ProcessItemInput = {

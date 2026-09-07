@@ -73,7 +73,10 @@ export function ensureConfigured(): Promise<EngineClient> {
     return Promise.reject(
       new RustraCommandError(
         RustraErrorCode.TransportUnavailable,
-        'Rustra not configured. Call configure(engine), or import the generated React Native entry that registers lazy setup.',
+        // 호스트 중립 안내 — 등록 엔트리는 호스트별로 생성되므로 특정 호스트를
+        // 지시하지 않는다(감사 A8).
+        'Rustra not configured. Call configure(engine), or import your generated host entry ' +
+          '(node.ts/bun.ts/tauri.ts/react-native.ts) that registers lazy setup.',
       ),
     );
   if (!runtime.engineInitialization) {

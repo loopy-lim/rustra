@@ -9,7 +9,7 @@
 // 정적 명령을 positional 시그니처로 노출해 JSI invokeTyped 를 직접 호출한다.
 // 미지원 명령은 이 파일에 없다 — commands.ts 의 global invoke(Tier 3 폴백 포함) 사용.
 
-import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoBytesInput, ChannelDemoBytesOutput, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
 /** JSI 네이티브 모듈의 최소 인터페이스 — invokeTypedPos 노출 호스트 권장. */
 export type PositionalNative = {
   invokeTyped(name: string, args: unknown): unknown;
@@ -78,6 +78,10 @@ export function channelDemo(channel: number | bigint, ticks: number): Promise<Ch
   return callPos<ChannelDemoOutput>(18, channel, ticks);
 }
 
+export function channelDemoBytes(channel: number | bigint, ticks: number): Promise<ChannelDemoBytesOutput> {
+  return callPos<ChannelDemoBytesOutput>(31, channel, ticks);
+}
+
 export function clamp(max: number, min: number, value: number): Promise<ClampOutput> {
   return callPos<ClampOutput>(4, max, min, value);
 }
@@ -108,6 +112,10 @@ export function isEven(n: number | bigint): Promise<IsEvenOutput> {
 
 export function multiply(a: number, b: number): Promise<MultiplyOutput> {
   return callPos<MultiplyOutput>(2, a, b);
+}
+
+export function platformNativeInfo(): Promise<PlatformNativeInfoOutput> {
+  return call<PlatformNativeInfoOutput>(30, 'platformNativeInfo', undefined);
 }
 
 export function processItem(input: ProcessItemInput): Promise<ProcessItemOutput> {

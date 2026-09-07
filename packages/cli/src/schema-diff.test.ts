@@ -512,3 +512,31 @@ test('diagnoses wire-incompatible type change with cause sentence', () => {
     `formatted output must explain the wire consequence, got:\n${formatted}`,
   );
 });
+
+// ── runDiff 입력 파싱 래핑(감사 A7) — 무경로 JSON.parse 교정 ──────────────────
+
+test('runDiff reports the offending file path and a regenerate hint for invalid JSON', async () => {
+  // `diff --old /dev/null` 이 "JSON Parse error: Unexpected EOF" 로 죽던 경로.
+  // generate(cli-generate-files)의 래핑 패턴과 동일하게 어느 파일이·왜·무엇을
+  // 할지를 안내해야 한다.
+  const { runDiff } = await import('./cli-diff.js');
+  const { mkdtempSync, rmSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const root = mkdtempSync(join(tmpdir(), 'rustra-diff-input-'));
+  try {
+    const good = join(root, 'good.json');
+    const bad = join(root, 'bad.json');
+    writeFileSync(good, JSON.stringify(baseSchema));
+    writeFileSync(bad, '');
+    await assert.rejects(runDiff(['--old', bad, '--new', good]), (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /Invalid schema\.json at .*bad\.json/);
+      assert.match(error.message, /must be valid JSON/);
+      assert.match(error.message, /regenerate it with "cargo run"/);
+      return true;
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

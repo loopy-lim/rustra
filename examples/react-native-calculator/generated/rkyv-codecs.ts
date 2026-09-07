@@ -162,7 +162,7 @@ function _pcDecodeF32(buf: Uint8Array, offset: number): { value: number; bytesRe
 
 import { createComplexCodec } from '@rustra/types';
 import type { RkyvV2Codec, RustraError, ComplexSchema } from '@rustra/types';
-import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ChannelHandle, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, Item, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandle, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoBytesInput, ChannelDemoBytesOutput, ChannelDemoInput, ChannelDemoOutput, ChannelHandle, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, Item, MultiplyInput, MultiplyOutput, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandle, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
 
 export const addNumbersCodec: RkyvV2Codec<AddNumbersInput, AddNumbersOutput> = {
   commandId: 1,
@@ -587,6 +587,80 @@ export const channelDemoCodec: RkyvV2Codec<ChannelDemoInput, ChannelDemoOutput> 
       offset += _v.bytesRead;
     }
     return { ok: true, result: result as ChannelDemoOutput };
+  },
+};
+
+export const channelDemoBytesCodec: RkyvV2Codec<ChannelDemoBytesInput, ChannelDemoBytesOutput> = {
+  commandId: 31,
+
+  encode(args: ChannelDemoBytesInput): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(ChannelDemoBytesInput)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 31, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeVarint(args.channel));
+    parts.push(_pcEncodeZigzagVarint(args.ticks));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: ChannelDemoBytesInput, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 31; out[w++] = 0;
+    { let _v = args.channel; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    { const _z = args.ticks >= 0 ? args.ticks * 2 : -args.ticks * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: ChannelDemoBytesOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    if (u8[0] !== 1) {
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<ChannelDemoBytesOutput> = {};
+    {
+      const _v = _pcDecodeVarint(u8, offset);
+      result.sent = _v.value;
+      offset += _v.bytesRead;
+    }
+    {
+      const _v = _pcDecodeVarint(u8, offset);
+      result.droppedSends = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as ChannelDemoBytesOutput };
   },
 };
 
@@ -1159,6 +1233,76 @@ export const multiplyCodec: RkyvV2Codec<MultiplyInput, MultiplyOutput> = {
       offset += _v.bytesRead;
     }
     return { ok: true, result: result as MultiplyOutput };
+  },
+};
+
+export const platformNativeInfoCodec: RkyvV2Codec<void, PlatformNativeInfoOutput> = {
+  commandId: 30,
+
+  encode(args: void): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(void)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 30, true);
+    parts.push(cmdId);
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: void, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 30; out[w++] = 0;
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: PlatformNativeInfoOutput; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    if (u8[0] !== 1) {
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    const result: Partial<PlatformNativeInfoOutput> = {};
+    {
+      const _v = _pcDecodeString(u8, offset);
+      result.os = _v.value;
+      offset += _v.bytesRead;
+    }
+    {
+      const _v = _pcDecodeString(u8, offset);
+      result.windowKind = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as PlatformNativeInfoOutput };
   },
 };
 

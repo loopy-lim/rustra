@@ -130,10 +130,11 @@ test('createNodeEngine parses Display-style "code: message" Error message', asyn
 // ── createNodeProcessTransport — subprocess stdio 프로토콜 ──
 
 import { createNodeProcessTransport } from './index.js';
+import { nodeRuntimeCandidates, selectVerifiedRuntime } from './node-bootstrap.js';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 
 // 저장소 루트 기준 절대경로 — 테스트는 packages/node/dist 에서 실행된다.
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -199,6 +200,194 @@ test('createNodeBootstrap reports the exact runtime override when discovery fail
     else process.env.RUSTRA_NODE_BINARY = previous;
   }
 });
+
+// ── 계약 검증 기반 후보 선택(감사 A1) — stale release 함정 ──────────────────
+//
+// release→debug 순 "첫 존재 후보" 채택은 target/release 에 오래된 산출물이 남은
+// 상태(한 번이라도 --release 빌드를 돈 이후)에서 방금 debug 빌드한 사용자를
+// contract.mismatch 로 죽인다. 계약: (1) 후보는 mtime 최신 빌드 우선, (2) mismatch/
+// unenforceable 은 fatal 이 아니라 후보 기각 사유 — 다음 후보 시도, (3) 전부 기각될
+// 때만 오류, 그때 시도한 전체 경로+mtime 보고.
+
+function writeRuntimeScript(directory: string, name: string, contractHash: string): string {
+  const script = [
+    '#!/usr/bin/env node',
+    'let input = "";',
+    "process.stdin.setEncoding('utf8');",
+    "process.stdin.on('data', (chunk) => { input += chunk; });",
+    'process.stdin.on("end", () => {',
+    '  const request = JSON.parse(input);',
+    '  if (request.command === "__rustra_contract") {',
+    `    process.stdout.write(JSON.stringify({ ok: true, result: ${JSON.stringify(contractHash)} }));`,
+    '    return;',
+    '  }',
+    '  process.stdout.write(JSON.stringify({ ok: true, result: { value: 42 } }));',
+    '});',
+  ].join('\n');
+  const path = join(directory, name);
+  writeFileSync(path, script);
+  chmodSync(path, 0o755);
+  return path;
+}
+
+/** 후보 2개 픽스처 — 첫 후보가 stale release(오래된 mtime), 둘째가 최신 debug 빌드. */
+function seedStaleReleaseFixture(prefix: string): { root: string; stale: string; fresh: string } {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  const stale = join(root, 'release', 'app-runtime');
+  const fresh = join(root, 'debug', 'app-runtime');
+  mkdirSync(join(root, 'release'), { recursive: true });
+  mkdirSync(join(root, 'debug'), { recursive: true });
+  writeFileSync(stale, 'stale release artifact');
+  writeFileSync(fresh, 'fresh debug artifact');
+  const older = new Date(Date.now() - 60_000);
+  utimesSync(stale, older, older);
+  return { root, stale, fresh };
+}
+
+test('nodeRuntimeCandidates orders existing candidates newest-build-first', () => {
+  const { root, stale, fresh } = seedStaleReleaseFixture('rustra-node-candidates-');
+  const previous = process.env.RUSTRA_NODE_BINARY;
+  delete process.env.RUSTRA_NODE_BINARY;
+  try {
+    // 최신 빌드(debug) 우선 + 부재 후보 제거 — stale release 가 첫 존재 후보로
+    // 잡히는 함정이 후보 열거 단계에서부터 해소된다.
+    assert.deepEqual(
+      nodeRuntimeCandidates({
+        commandCandidates: [stale, fresh, join(root, 'missing-runtime')],
+      }),
+      [fresh, stale],
+    );
+    // 명시 지정(command/RUSTRA_NODE_BINARY)은 존재 검사·정렬 없이 단일 후보.
+    assert.deepEqual(nodeRuntimeCandidates({ command: './anywhere' }), ['./anywhere']);
+    process.env.RUSTRA_NODE_BINARY = fresh;
+    assert.deepEqual(nodeRuntimeCandidates({}), [fresh]);
+  } finally {
+    if (previous === undefined) delete process.env.RUSTRA_NODE_BINARY;
+    else process.env.RUSTRA_NODE_BINARY = previous;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('selectVerifiedRuntime treats contract mismatch as candidate rejection, not fatal', async () => {
+  const { root, stale, fresh } = seedStaleReleaseFixture('rustra-node-select-');
+  try {
+    const attempts: string[] = [];
+    const selected = await selectVerifiedRuntime([stale, fresh], async (candidate) => {
+      attempts.push(candidate);
+      if (candidate === stale)
+        throw new RustraCommandError('contract.mismatch', 'contract hash mismatch: stale');
+      return `engine@${candidate}`;
+    });
+    assert.equal(selected.value, `engine@${fresh}`);
+    assert.deepEqual(attempts, [stale, fresh], 'stale 기각 후 다음 후보를 시도한다');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('selectVerifiedRuntime reports every attempted candidate with mtime when all are stale', async () => {
+  const { root, stale, fresh } = seedStaleReleaseFixture('rustra-node-allstale-');
+  try {
+    await assert.rejects(
+      selectVerifiedRuntime([stale, fresh], async () => {
+        throw new RustraCommandError('contract.mismatch', 'contract hash mismatch: stale');
+      }),
+      (error: unknown) => {
+        if (!(error instanceof RustraCommandError)) return false;
+        assert.equal(error.code, 'contract.mismatch');
+        assert.match(error.message, /Tried 2 runtime candidates \(newest first\)/);
+        assert.ok(error.message.includes(stale), `보고에 stale 경로 포함: ${error.message}`);
+        assert.ok(error.message.includes(fresh), `보고에 fresh 경로 포함: ${error.message}`);
+        assert.match(error.message, /\(modified [^)]+\): contract\.mismatch/);
+        return true;
+      },
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('selectVerifiedRuntime rethrows non-contract failures without trying further candidates', async () => {
+  const { root, stale, fresh } = seedStaleReleaseFixture('rustra-node-fatal-');
+  try {
+    const attempts: string[] = [];
+    await assert.rejects(
+      selectVerifiedRuntime([stale, fresh], async (candidate) => {
+        attempts.push(candidate);
+        throw new Error('spawn failed');
+      }),
+      /spawn failed/,
+    );
+    assert.deepEqual(attempts, [stale], '폴백은 계약 기각에만 — 그 외 실패는 즉시 전파');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+processTest(
+  'createNodeBootstrap skips a stale release candidate and adopts the fresh build',
+  { timeout: 30_000 },
+  async () => {
+    // 스테일 release 함정의 종단 재현 — stale 해시를 내놓는 release 후보가
+    // 후보 목록 앞에 있어도 fresh 후보로 폴백해 부트스트랩이 성공해야 한다.
+    const root = mkdtempSync(join(tmpdir(), 'rustra-node-stale-release-'));
+    const previous = process.env.RUSTRA_NODE_BINARY;
+    delete process.env.RUSTRA_NODE_BINARY;
+    try {
+      const stale = writeRuntimeScript(root, 'stale-runtime', 'stale-contract-hash');
+      const fresh = writeRuntimeScript(root, 'fresh-runtime', 'fresh-contract-hash');
+      const bootstrap = createNodeBootstrap({
+        commandCandidates: [stale, fresh],
+        args: ['invoke'],
+        contractHash: 'fresh-contract-hash',
+      });
+      try {
+        const engine = await bootstrap.ready();
+        const result = await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
+        assert.equal(result.value, 42, 'fresh 후보가 invoke 를 서브한다');
+      } finally {
+        bootstrap.dispose();
+      }
+    } finally {
+      if (previous === undefined) delete process.env.RUSTRA_NODE_BINARY;
+      else process.env.RUSTRA_NODE_BINARY = previous;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+processTest(
+  'createNodeBootstrap reports fix guidance and all candidate paths when every runtime is stale',
+  { timeout: 30_000 },
+  async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rustra-node-all-stale-'));
+    const previous = process.env.RUSTRA_NODE_BINARY;
+    delete process.env.RUSTRA_NODE_BINARY;
+    try {
+      const stale = writeRuntimeScript(root, 'stale-release', 'stale-contract-hash');
+      const alsoStale = writeRuntimeScript(root, 'stale-debug', 'another-stale-hash');
+      const bootstrap = createNodeBootstrap({
+        commandCandidates: [stale, alsoStale],
+        args: ['invoke'],
+        contractHash: 'fresh-contract-hash',
+      });
+      await assert.rejects(bootstrap.ready(), (error: unknown) => {
+        if (!(error instanceof RustraCommandError)) return false;
+        assert.equal(error.code, 'contract.mismatch');
+        // A6 — Bun 선례와 동일한 fix 안내가 Node mismatch 에도 붙는다.
+        assert.match(error.message, /regenerate the TypeScript and native codecs/);
+        assert.match(error.message, /Tried 2 runtime candidates \(newest first\)/);
+        assert.ok(error.message.includes(stale));
+        assert.ok(error.message.includes(alsoStale));
+        return true;
+      });
+    } finally {
+      if (previous === undefined) delete process.env.RUSTRA_NODE_BINARY;
+      else process.env.RUSTRA_NODE_BINARY = previous;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
 
 processTest('createNodeProcessTransport surfaces spawn failures as transport.error', async () => {
   const transport = createNodeProcessTransport({

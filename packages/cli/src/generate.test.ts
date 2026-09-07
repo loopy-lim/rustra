@@ -2012,23 +2012,80 @@ test('React Native Cargo target inference never substitutes a different requeste
   );
 });
 
+/** RN 어댑터 설치 픽스처 — native 소스 5파일 + 버전 매니페스트를 root 에 심는다. */
+function seedReactNativeAdapter(root: string, version: string): void {
+  const packageRoot = join(root, 'node_modules', '@rustra', 'react-native');
+  mkdirSync(join(packageRoot, 'native'), { recursive: true });
+  writeFileSync(
+    join(packageRoot, 'package.json'),
+    JSON.stringify({ name: '@rustra/react-native', version }),
+  );
+  for (const file of [
+    'android/rustra-jsi-jni.cpp',
+    'cpp/RustraJSIBridge.cpp',
+    'cpp/RustraJSIBridge.hpp',
+    'cpp/rustra-codec.hpp',
+    'ios/RustraJSIModule.mm',
+  ]) {
+    const target = join(packageRoot, 'native', file);
+    mkdirSync(join(target, '..'), { recursive: true });
+    writeFileSync(target, `${version} adapter fixture`);
+  }
+}
+
 test('React Native scaffold is Expo-independent and collision-resistant', () => {
-  const files = renderReactNativeModule({
-    appRoot: '/app',
-    moduleDir: '/app/modules/rustra-bridge',
-    cppOutputPath: '/app/modules/rustra-bridge/generated',
-    rustManifestPath: '/workspace/Cargo.toml',
-    rustPackage: 'my-rust-app',
-    rustLibrary: 'my_rust_app',
-    adapterRange: '^0.3.0',
-  });
-  assert.equal(JSON.parse(files['package.json']!).name, '@rustra/generated-react-native');
-  assert.match(files['react-native.config.js']!, /dev\.rustra\.bridge\.RustraBridgePackage/);
-  assert.match(files['src/index.ts']!, /NativeModules\.RustraBridge/);
-  assert.ok(!Object.keys(files).some((name) => name.includes('expo')));
-  assert.ok(!Object.values(files).some((content) => content.includes('expo-modules-core')));
-  assert.match(files['RustraBridge.podspec']!, /RustraBridge/);
-  assert.match(files['android/CMakeLists.txt']!, /rustra_bridge/);
+  const root = mkdtempSync(join(tmpdir(), 'rustra-rn-expo-independent-'));
+  try {
+    seedReactNativeAdapter(root, '0.3.0');
+    const files = renderReactNativeModule({
+      appRoot: root,
+      moduleDir: join(root, 'modules', 'rustra-bridge'),
+      cppOutputPath: join(root, 'modules', 'rustra-bridge', 'generated'),
+      rustManifestPath: '/workspace/Cargo.toml',
+      rustPackage: 'my-rust-app',
+      rustLibrary: 'my_rust_app',
+      adapterRange: '^0.3.0',
+    });
+    assert.equal(JSON.parse(files['package.json']!).name, '@rustra/generated-react-native');
+    assert.match(files['react-native.config.js']!, /dev\.rustra\.bridge\.RustraBridgePackage/);
+    assert.match(files['src/index.ts']!, /NativeModules\.RustraBridge/);
+    assert.ok(!Object.keys(files).some((name) => name.includes('expo')));
+    assert.ok(!Object.values(files).some((content) => content.includes('expo-modules-core')));
+    assert.match(files['RustraBridge.podspec']!, /RustraBridge/);
+    assert.match(files['android/CMakeLists.txt']!, /rustra_bridge/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('React Native scaffold loud-fails when the adapter is not installed', () => {
+  // 감사 A11 — 미설치(경로 자체가 없음)가 조용히 기본 경로 폴백하면 생성된
+  // podspec/gradle 이 존재하지 않는 경로를 가리키고 첫 loud 실패는 pod install
+  // 시점으로 미뤄진다. codegen 시점에 bun install 안내로 실패해야 한다.
+  const root = mkdtempSync(join(tmpdir(), 'rustra-rn-uninstalled-'));
+  try {
+    assert.throws(
+      () =>
+        renderReactNativeModule({
+          appRoot: root,
+          moduleDir: join(root, 'modules', 'rustra-bridge'),
+          cppOutputPath: join(root, 'modules', 'rustra-bridge', 'generated'),
+          rustManifestPath: join(root, 'Cargo.toml'),
+          rustPackage: 'uninstalled',
+          rustLibrary: 'uninstalled',
+          adapterRange: '^0.4.0',
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /@rustra\/react-native adapter not installed/);
+        assert.match(error.message, /bun install/);
+        assert.match(error.message, /node_modules\/@rustra\/react-native\/native/);
+        return true;
+      },
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('React Native scaffold resolves a hoisted adapter with native sources', () => {
@@ -2171,18 +2228,24 @@ test('React Native scaffold reports when only a stale complete adapter is instal
 });
 
 test('React Native scaffold no longer carries the legacy benchmark flag', () => {
-  const output = renderReactNativeModule({
-    appRoot: '/app',
-    moduleDir: '/app/modules/rustra-bridge',
-    cppOutputPath: '/app/modules/rustra-bridge/generated',
-    rustManifestPath: '/workspace/Cargo.toml',
-    rustPackage: 'calculator',
-    rustLibrary: 'calculator',
-    adapterRange: '^0.3.0',
-  });
-  const joined = Object.values(output).join('\n');
-  assert.doesNotMatch(joined, /RUSTRA_ENABLE_LEGACY_BENCHMARKS/);
-  assert.doesNotMatch(joined, /RUSTRA_LEGACY_BENCHMARKS/);
+  const root = mkdtempSync(join(tmpdir(), 'rustra-rn-legacy-flag-'));
+  try {
+    seedReactNativeAdapter(root, '0.3.0');
+    const output = renderReactNativeModule({
+      appRoot: root,
+      moduleDir: join(root, 'modules', 'rustra-bridge'),
+      cppOutputPath: join(root, 'modules', 'rustra-bridge', 'generated'),
+      rustManifestPath: '/workspace/Cargo.toml',
+      rustPackage: 'calculator',
+      rustLibrary: 'calculator',
+      adapterRange: '^0.3.0',
+    });
+    const joined = Object.values(output).join('\n');
+    assert.doesNotMatch(joined, /RUSTRA_ENABLE_LEGACY_BENCHMARKS/);
+    assert.doesNotMatch(joined, /RUSTRA_LEGACY_BENCHMARKS/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('generateEventsTs emits payload types, name union, and subscribe helper', async () => {
