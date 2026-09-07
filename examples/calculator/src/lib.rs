@@ -804,6 +804,8 @@ pub fn calculator_package() -> Package {
                 __RUstra_platforms_platform_native_info,
             )
             .command_fn(channel_demo_bytes)
+            .command_fn(device_demo)
+            .devices_meta_if(__RUstra_meta_device_demo, __RUstra_devices_device_demo)
             .build();
 
             // Auto-register for generic FFI with JSON default
@@ -1054,6 +1056,28 @@ fn platform_native_info(_input: ()) -> Result<PlatformNativeInfoOutput> {
     Ok(PlatformNativeInfoOutput {
         os: std::env::consts::OS.to_string(),
         window_kind: window_kind.to_string(),
+    })
+}
+
+/// 디바이스 역량 계약 — 커맨드가 전제하는 디바이스 역량 선언의 예시.
+///
+/// `device_demo` 는 `#[command(device(camera, bluetooth))]` 로 카메라·블루투스를
+/// 전제한다고 선언한다. 선언은 schema.json 의 조건부 `devices` 필드와 생성
+/// `devices.ts`(토큰 유니언 + 커맨드별 요구 상수)의 원천이 될 뿐 런타임
+/// 게이팅은 하지 않는다 — 하드웨어 접근·권한 확인은 호스트 앱이
+/// getDeviceStatus 로 사전 조회하는 패턴의 뼈대가 되는 예시다(여기서는
+/// 하드웨어에 접근하지 않는다).
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceDemoOutput {
+    /// std::env::consts::OS — 선언과 무관한 컴파일 대상 확인용.
+    pub os: String,
+}
+
+#[command(device(camera, bluetooth))]
+fn device_demo(_input: ()) -> Result<DeviceDemoOutput> {
+    Ok(DeviceDemoOutput {
+        os: std::env::consts::OS.to_string(),
     })
 }
 

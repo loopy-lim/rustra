@@ -1,10 +1,13 @@
 // ── rustra generated ────────────────────────────────────────
-// File:   contract.ts
+// File:   devices.ts
 // Source: schema.json (single source of truth for this file)
 // Regen:  rustra codegen --config rustra.json
-// Stage:  rust-probe schema → ts renderer
+// Stage:  schema → ts device renderer
 // DO NOT EDIT — changes will be overwritten and fail codegen --check.
 // ────────────────────────────────────────────────────────────
 
-export const GENERATED_CONTRACT_HASH = '01bec0c77aecaf313ce30bafb93c95d788162dc1e6f661a62e9ddd8d964337be';
-export const SCHEMA_VERSION = 1;
+/** 이 패키지가 선언에 사용한 디바이스 역량 토큰 (Rust 카탈로그 기준). */
+export type RustraDeviceCapability = 'camera' | 'bluetooth';
+
+/** deviceDemo 가 전제하는 디바이스 역량 (Rust 선언 기준 — getDeviceStatus(토큰)로 사전 조회). */
+export const DEVICE_DEMO_DEVICES: readonly RustraDeviceCapability[] = ['camera', 'bluetooth'];

@@ -2448,6 +2448,174 @@ test('generateFromSchema writes errors.ts only when declared', async () => {
   }
 });
 
+// ── 디바이스 역량 선언 (devices.ts 렌더러) ──────────────────
+
+/**
+ * scan_tags·read_barcode가 역량을 선언한 최소 스키마 — 토큰은 카탈로그 역순으로
+ * 섞어 카탈로그 순 정렬과 교차 커맨드 유니언 합집합을 함께 검증한다.
+ */
+const deviceSchema: PackageSchema = {
+  packageId: 'example.scanner',
+  commands: [
+    {
+      name: 'scan_tags',
+      commandId: 1,
+      inputType: 'ScanInput',
+      outputType: 'ScanOutput',
+      inputSchema: {
+        type: 'object',
+        properties: { tags: { type: 'array', items: { type: 'string' } } },
+        required: ['tags'],
+        title: 'ScanInput',
+      },
+      outputSchema: {
+        type: 'object',
+        properties: { count: { type: 'integer' } },
+        required: ['count'],
+        title: 'ScanOutput',
+      },
+      devices: ['bluetooth', 'camera'],
+    },
+    {
+      name: 'read_barcode',
+      commandId: 2,
+      inputType: 'BarcodeInput',
+      outputType: 'BarcodeOutput',
+      inputSchema: {
+        type: 'object',
+        properties: { image: { type: 'string' } },
+        required: ['image'],
+        title: 'BarcodeInput',
+      },
+      outputSchema: {
+        type: 'object',
+        properties: { text: { type: 'string' } },
+        required: ['text'],
+        title: 'BarcodeOutput',
+      },
+      devices: ['wifi', 'camera'],
+    },
+  ],
+};
+
+test('generateDevicesTs emits package union and per-command constants', async () => {
+  const { generateDevicesTs } = await import('./generate.js');
+  const out = generateDevicesTs(deviceSchema);
+  // 패키지 유니언 — 선언은 bluetooth 먼저지만 카탈로그 순(camera, wifi, bluetooth).
+  assert.ok(
+    out.includes("export type RustraDeviceCapability = 'camera' | 'wifi' | 'bluetooth';"),
+    out,
+  );
+  // 커맨드 상수 — commandFunctionName('scan_tags') → scanTags → SCAN_TAGS_DEVICES.
+  assert.ok(
+    out.includes(
+      "export const SCAN_TAGS_DEVICES: readonly RustraDeviceCapability[] = ['camera', 'bluetooth'];",
+    ),
+  );
+  assert.ok(
+    out.includes(
+      "export const READ_BARCODE_DEVICES: readonly RustraDeviceCapability[] = ['camera', 'wifi'];",
+    ),
+  );
+  // JSDoc 안내 — Rust 선언 기준 + getDeviceStatus 사전 조회.
+  assert.match(out, /scanTags 가 전제하는/u);
+  assert.match(out, /Rust 선언 기준 — getDeviceStatus\(토큰\)로 사전 조회/u);
+});
+
+test('generateDevicesTs returns empty string without declarations (backcompat)', async () => {
+  const { generateDevicesTs } = await import('./generate.js');
+  assert.equal(generateDevicesTs(simpleSchema), '');
+  // 선언/미선언 커맨드 혼합 — 선언된 커맨드만 상수를 받고 유니언도 그 토큰만.
+  const mixed: PackageSchema = {
+    ...deviceSchema,
+    commands: [deviceSchema.commands[0]!, { ...simpleSchema.commands[0]!, commandId: 3 }],
+  };
+  const out = generateDevicesTs(mixed);
+  assert.ok(out.includes('SCAN_TAGS_DEVICES'));
+  assert.ok(!out.includes('ADD_DEVICES'), '미선언 커맨드에는 상수가 없다');
+  assert.ok(!out.includes("'wifi'"), '선언 커맨드의 토큰만 유니언에 들어간다');
+});
+
+test('device declarations leave commands.ts/types.ts/errors.ts bytes unchanged', async () => {
+  const { generateDevicesTs, generateErrorsTs } = await import('./generate.js');
+  const withBoth: PackageSchema = {
+    ...deviceSchema,
+    commands: [
+      { ...deviceSchema.commands[0]!, errors: typedErrorSchema.commands[0]!.errors },
+      deviceSchema.commands[1]!,
+    ],
+  };
+  const withoutDevices: PackageSchema = {
+    ...withBoth,
+    commands: [
+      { ...withBoth.commands[0]!, devices: undefined },
+      { ...withBoth.commands[1]!, devices: undefined },
+    ],
+  };
+  // 디바이스 표면은 devices.ts로만 흘러간다 — 기존 렌더러 출력은 바이트 불변.
+  assert.equal(generateCommandsTs(withBoth), generateCommandsTs(withoutDevices));
+  assert.equal(generateTypesTs(withBoth), generateTypesTs(withoutDevices));
+  assert.notEqual(generateErrorsTs(withBoth), '');
+  assert.equal(generateErrorsTs(withBoth), generateErrorsTs(withoutDevices));
+  assert.notEqual(generateDevicesTs(withBoth), '');
+  assert.equal(generateDevicesTs(withoutDevices), '');
+});
+
+test('generateDevicesTs fails loud on out-of-catalog tokens', async () => {
+  const { generateDevicesTs } = await import('./generate.js');
+  // Rust 카탈로그(DeviceCapability::ALL)가 이미 거부하는 오표기 — 손으로 편집한
+  // schema.json이 카탈로그 밖 토큰을 흘려보내면 코드젠에서 막는다.
+  for (const bad of ['Camera', 'nearby-devices', 'photo_library', '']) {
+    const invalid: PackageSchema = {
+      ...deviceSchema,
+      commands: [{ ...deviceSchema.commands[0]!, devices: [bad] }],
+    };
+    assert.throws(
+      () => generateDevicesTs(invalid),
+      (error: unknown) =>
+        error instanceof Error &&
+        error.message.includes(`'${bad}'`) &&
+        error.message.includes('device_capabilities.rs'),
+      `token '${bad}' must be rejected`,
+    );
+  }
+});
+
+test('generateDevicesTs fails loud on command symbol collision', async () => {
+  const { generateDevicesTs } = await import('./generate.js');
+  // 'scan_tags'와 'scanTags'는 다른 명령이지만 같은 SCAN_TAGS 상수로 수렴한다.
+  const colliding: PackageSchema = {
+    ...deviceSchema,
+    commands: [
+      deviceSchema.commands[0]!,
+      { ...deviceSchema.commands[0]!, name: 'scanTags', commandId: 3 },
+    ],
+  };
+  assert.throws(() => generateDevicesTs(colliding), /SCAN_TAGS_DEVICES/u);
+});
+
+test('generateFromSchema writes devices.ts only when declared', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-devices-codegen-'));
+  try {
+    const schemaPath = join(root, 'schema.json');
+    writeFileSync(schemaPath, JSON.stringify(deviceSchema));
+    const written = await generateFromSchema(schemaPath, join(root, 'out'));
+    assert.ok(written.includes('devices.ts'), `devices.ts must be written: ${written.join(', ')}`);
+    const onDisk = readFileSync(join(root, 'out', 'devices.ts'), 'utf-8');
+    assert.match(onDisk, /Stage: {2}schema → ts device renderer/u);
+    assert.match(onDisk, /export const SCAN_TAGS_DEVICES/u);
+
+    // 선언 없는 스키마는 devices.ts를 만들지 않는다 — 기존 파일 배터리 불변.
+    const plainPath = join(root, 'plain.json');
+    writeFileSync(plainPath, JSON.stringify(simpleSchema));
+    const plainWritten = await generateFromSchema(plainPath, join(root, 'out-plain'));
+    assert.ok(!plainWritten.includes('devices.ts'));
+    assert.ok(!existsSync(join(root, 'out-plain', 'devices.ts')));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // ── 64-bit varint/zigzag runtime helpers (postcardHelperSource) ────────────
 // postcardHelperSource() 가 반환하는 템플릿은 TS 코드 그 자체다. 임시 파일로
 // 쓰고 import 해서 실제 동작을 실행 검증한다(스냅샷/정규식만으로는 부정확).
