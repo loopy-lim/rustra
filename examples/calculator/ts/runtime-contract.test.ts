@@ -48,8 +48,10 @@ test('react native runtime fixture exposes a native Rust-backed invoke module', 
 
   assert.match(swiftModule, /Name\("RustraCalculator"\)/);
   assert.match(swiftModule, /AsyncFunction\("invokeRaw"\)/);
-  assert.match(swiftModule, /rustra_calculator_invoke/);
-  assert.match(swiftModule, /rustra_calculator_free_string/);
-  assert.match(calculatorLib, /extern "C" fn rustra_calculator_invoke/);
+  // legacy FFI 심볼(rustra_calculator_invoke) 제거 후 — Swift 는 코어
+  // rustra_ffi_invoke_json + rustra_ffi_free 짝으로 직결한다.
+  assert.match(swiftModule, /rustra_ffi_invoke_json/);
+  assert.match(swiftModule, /rustra_ffi_free/);
+  assert.doesNotMatch(swiftModule, /rustra_calculator_invoke/);
   assert.match(calculatorLib, /get_package\(\).*invoke_json/s);
 });

@@ -338,12 +338,56 @@ Rust 출력 allocation은 JSI `ArrayBuffer`가 수명 종료 시 해제합니다
 | 메서드                                  | 역할                                                            |
 | --------------------------------------- | --------------------------------------------------------------- |
 | `.require_capability(name, cap)`        | 명령에 capability 요구 부여 (deny-by-default Runtime Authority) |
+| `.platform_command::<I, O>(name, ps)`   | 플랫폼 특화 명령 선언 — **전 플랫폼**에 등록 (미지원은 스텁)     |
+| `.platform_command_impl(name, handler)` | 지원 플랫폼에서 실제 핸들러 주입                                  |
 | `.buffer_command_fn(handler)`           | 이름 추론 단일 `Vec<u8>` 직접 경로 등록                         |
 | `.buffer_command(name, handler)`        | 명시 이름 단일 `Vec<u8>` 직접 경로 등록                         |
 | `.alias_command_id(command, legacy_id)` | 구 cmd_id 별칭 등록 (하위호환 디스패치)                         |
 | `.event_capacity(capacity)`             | 이벤트 버스 링 버퍼 용량 설정                                   |
 | `.schema_version(version)`              | (T2, OTA) 스키마 협상 버전 명시                                 |
 | `.manage(state)`                        | 공유 상태(`Package::state::<T>()`로 접근) 등록                  |
+
+### 플랫폼 특화 명령 (`.platform_command` / `.platform_command_impl`)
+
+Win32/AppKit 호출, 네이티브 윈도우 핸들 같은 플랫폼 특화 명령도 계약은 플랫폼
+무관하게 안정적이다. `platform_command` 는 command_id·schema.json·계약 해시를
+**전 플랫폼에서 동일하게** 등록하고 미지원 플랫폼에는 `platform.unavailable`
+을 반환하는 스텁을 심는다. `platform_command_impl` 이 지원 플랫폼에서 스텁을
+실제 핸들러로 교체한다:
+
+```rust
+use rustra::platform::Platform;
+
+let builder = Package::builder("app.native")
+    .platform_command::<(), NativeWindowInfo>(
+        "nativeWindowInfo",
+        &[Platform::Windows, Platform::Macos],
+    );
+// 실구현은 존재하는 플랫폼에서만 컴파일되도록 cfg 로 보호한다.
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+let builder = builder.platform_command_impl("nativeWindowInfo", native_window_info_impl);
+let pkg = builder.build();
+```
+
+계약:
+
+- 명령 집합(id·스키마·해시)은 전 플랫폼에서 동일 — by-id 디스패치와 교차
+  검증이 플랫폼 때문에 밀리지 않는다.
+- 미지원 플랫폼에서 스텁 호출은 `platform.unavailable`(non-retryable) —
+  "계약 자체에 없는" `command.not_found` 와 구분된다.
+- 현재 플랫폼이 선언 목록에 있는데 `platform_command_impl` 을 빠뜨리면
+  `build()` 가 패닉한다(지원 플랫폼에서 조용한 스텁 방치는 배선 결함).
+  반대로 선언되지 않은 플랫폼에서 `platform_command_impl` 을 호출하면 그
+  자리에서 패닉한다(`#[cfg]` 배치 오류).
+- 선언과 구현의 `I`/`O` 타입은 동일해야 한다 — 플랫폼별로 스키마가 달라지면
+  안 된다.
+- schema.json 에는 이런 명령에 `"platforms": [...]` 가 기록된다 — 지원
+  플랫폼이 아닌 호출자는 호출 전에 분기할 수 있다.
+
+불투명 네이티브 리소스(Win32 `HANDLE`, `NSView*`, …)는 기존 `ResourceHandle`
+패턴을 따른다 — 실체는 Rust 측 리소스 테이블(channels 모듈의
+`ResourceHandle`)에 두고 JS 는 `u32` id 만 주고받는다. 64비트 포인터를 JS 에
+직접 노출하지 않는다.
 
 ### `.build()` / `.done()`
 
@@ -634,7 +678,7 @@ export type AddNumbersOutput = {
 
 <!-- prettier-ignore -->
 ```typescript
-import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
 import { createGeneratedFields2, invokeGenerated, invokeGeneratedBytes, invokeGeneratedFields1, invokeGeneratedFields3 } from '@rustra/types';
 import type { InvokeOptions } from '@rustra/types';
 
@@ -688,6 +732,11 @@ export function isEven(input: IsEvenInput, options?: InvokeOptions): Promise<IsE
 isEven.commandId = 'isEven';
 
 export const multiply = createGeneratedFields2<MultiplyInput, MultiplyOutput>(2, 'multiply', "a", "b", 'multiply');
+
+export function platformNativeInfo(options?: InvokeOptions): Promise<PlatformNativeInfoOutput> {
+  return invokeGenerated<PlatformNativeInfoOutput>(30, 'platformNativeInfo', undefined, options);
+}
+platformNativeInfo.commandId = 'platformNativeInfo';
 
 export function processItem(input: ProcessItemInput, options?: InvokeOptions): Promise<ProcessItemOutput> {
   return invokeGenerated<ProcessItemOutput>(9, 'processItem', input, options);

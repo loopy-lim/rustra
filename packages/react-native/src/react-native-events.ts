@@ -109,7 +109,8 @@ export function subscribeEvent(
       } catch {
         /* malformed payload stays null */
       }
-      for (const listener of events?.get(name) ?? []) {
+      // Array.from — Expo 의 ES5 타겟에서 Set 순회는 downlevelIteration 이 필요하다.
+      for (const listener of Array.from(events?.get(name) ?? [])) {
         try {
           listener(payload);
         } catch (error) {
@@ -132,6 +133,6 @@ export function subscribeEvent(
     }
     // 해당 네이티브의 모든 구독이 떠나면 폴링 루프도 정지한다.
     const all = nativeListeners.get(native);
-    if (all && [...all.values()].every((set) => set.size === 0)) stopPollingDrain(native);
+    if (all && Array.from(all.values()).every((set) => set.size === 0)) stopPollingDrain(native);
   };
 }

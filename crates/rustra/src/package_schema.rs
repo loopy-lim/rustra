@@ -158,6 +158,15 @@ pub(crate) fn command_schema_entry(name: &str, command: &Command) -> Value {
         "inputSchema": input_schema,
         "outputSchema": output_schema,
     });
+    // 플랫폼 특화 명령 — 지원 플랫폼 목록. 전 플랫폼에서 동일하게 기록되므로
+    // 계약 해시도 플랫폼 무관하게 안정이다(빈 목록=전 플랫폼은 미기록).
+    if !command.platforms.is_empty() {
+        let platforms: Vec<&str> = command.platforms.iter().map(|p| p.as_str()).collect();
+        entry
+            .as_object_mut()
+            .expect("command schema is an object")
+            .insert("platforms".into(), serde_json::json!(platforms));
+    }
     if let Some(description) = &command.description {
         entry
             .as_object_mut()
