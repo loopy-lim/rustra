@@ -1142,3 +1142,198 @@ test('subscribeEvent pollMs is ignored on natives without drainEvents', () => {
     root.__rustraNative = previous;
   }
 });
+
+// ── 채널 pollMs — CallInvoker 없는 호스트의 채널 큐 폴링 drain ─────────────
+
+test('createChannel pollMs drains queued frames from a CallInvoker-less native', async () => {
+  // C++ ChannelDispatcher 계약 재현: CallInvoker 없으면 send 가 큐에만 쌓이고 JS 의
+  // drainEvents() 폴링을 기다린다(이벤트 폴링 테스트의 채널 변주).
+  const received: unknown[] = [];
+  let drainCount = 0;
+  const callbacks = new Map<number, (payloadJson: string) => void>();
+  const queue: Array<[number, string]> = [];
+  const native = {
+    createChannel(callback: (payloadJson: string) => void) {
+      callbacks.set(1, callback);
+      return 1;
+    },
+    dropChannel(handle: number) {
+      callbacks.delete(handle);
+      return true;
+    },
+    drainEvents() {
+      drainCount += 1;
+      // 큐에 쌓인 프레임을 drain 이 소비하며 등록된 콜백을 호출한다.
+      const queued = queue.splice(0);
+      for (const [handle, json] of queued) callbacks.get(handle)?.(json);
+      return queued.length;
+    },
+  };
+
+  const channel = createChannel((payload) => received.push(payload), native, { pollMs: 5 });
+  try {
+    // send — CallInvoker 없으므로 큐에만 적재.
+    queue.push([channel.handle, JSON.stringify({ chunk: 1 })]);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    assert.ok(drainCount >= 2, 'polling loop must run repeatedly');
+    assert.deepEqual(received, [{ chunk: 1 }], 'queued frame must reach the callback via drain');
+  } finally {
+    channel.close();
+  }
+});
+
+test('createChannel close releases polling demand — last close stops the loop', async () => {
+  // 폴링 루프는 네이티브 인스턴스당 수요 집계 — 채널 하나가 close 해도 다른
+  // 채널의 수요가 남으면 유지되고, 마지막 close 로 정지한다(타이머 해제).
+  let drainCount = 0;
+  let nextHandle = 0;
+  const callbacks = new Map<number, (payloadJson: string) => void>();
+  const native = {
+    createChannel(callback: (payloadJson: string) => void) {
+      const handle = ++nextHandle;
+      callbacks.set(handle, callback);
+      return handle;
+    },
+    dropChannel(handle: number) {
+      callbacks.delete(handle);
+      return true;
+    },
+    drainEvents() {
+      drainCount += 1;
+      return 0;
+    },
+  };
+
+  const first = createChannel(() => {}, native, { pollMs: 5 });
+  const second = createChannel(() => {}, native, { pollMs: 5 });
+  try {
+    first.close(); // 수요 1 남음 — 루프는 계속.
+    const drainsAfterFirstClose = drainCount;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.ok(
+      drainCount > drainsAfterFirstClose,
+      'loop must keep running while another channel holds polling demand',
+    );
+
+    second.close(); // 마지막 수요 해제 — 루프 정지.
+    const drainsAtStop = drainCount;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(drainCount, drainsAtStop, 'last close must stop the polling loop');
+  } finally {
+    first.close();
+    second.close();
+  }
+});
+
+test('createChannel pollMs is ignored on natives without drainEvents', () => {
+  // drainEvents 미노출 — 옵션은 조용히 무시, 채널 생성 자체는 정상 동작한다.
+  const received: unknown[] = [];
+  const dropped: number[] = [];
+  let callback: ((payloadJson: string) => void) | undefined;
+  const native = {
+    createChannel(next: (payloadJson: string) => void) {
+      callback = next;
+      return 3;
+    },
+    dropChannel(handle: number) {
+      dropped.push(handle);
+      return true;
+    },
+  };
+  const channel = createChannel((payload) => received.push(payload), native, { pollMs: 5 });
+  assert.equal(channel.handle, 3);
+  callback!(JSON.stringify({ ok: 1 }));
+  assert.deepEqual(received, [{ ok: 1 }], 'push delivery must work without a polling loop');
+  assert.equal(channel.close(), true);
+  assert.deepEqual(dropped, [3]);
+});
+
+test('createBytesChannel pollMs drains queued binary frames from a CallInvoker-less native', async () => {
+  const frames: number[][] = [];
+  let drainCount = 0;
+  const callbacks = new Map<number, (payload: ArrayBuffer) => void>();
+  const queue: Array<[number, Uint8Array]> = [];
+  const native = {
+    createChannelBytes(next: (payload: ArrayBuffer | Uint8Array) => void) {
+      callbacks.set(9, next as (payload: ArrayBuffer) => void);
+      return 9;
+    },
+    dropChannel(handle: number) {
+      callbacks.delete(handle);
+      return true;
+    },
+    drainEvents() {
+      drainCount += 1;
+      const queued = queue.splice(0);
+      for (const [handle, bytes] of queued) callbacks.get(handle)?.(bytes.buffer as ArrayBuffer);
+      return queued.length;
+    },
+  };
+
+  const channel = createBytesChannel((payload) => frames.push(Array.from(payload)), native, {
+    pollMs: 5,
+  });
+  try {
+    queue.push([channel.handle, new Uint8Array([0x01, 0x02, 0xff])]);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.ok(drainCount >= 2, 'polling loop must run repeatedly');
+    assert.deepEqual(frames, [[1, 2, 255]], 'queued binary frame must arrive untouched via drain');
+  } finally {
+    channel.close();
+  }
+});
+
+test('polling demand is shared between event subscriptions and channels on one native', async () => {
+  // 이벤트 구독 해제는 채널 폴링을 끄지 않고, pollMs 없는 구독이 남아 있어도
+  // 마지막 채널 close 로 루프가 정지한다(정지 조건 = pollMs 수요 합계 0).
+  let drainCount = 0;
+  const listeners = new Map<string, (payloadJson: string) => void>();
+  const callbacks = new Map<number, (payloadJson: string) => void>();
+  const native = {
+    onEvent(name: string, callback: (payloadJson: string) => void) {
+      listeners.set(name, callback);
+    },
+    offEvent(name: string) {
+      listeners.delete(name);
+    },
+    createChannel(callback: (payloadJson: string) => void) {
+      callbacks.set(1, callback);
+      return 1;
+    },
+    dropChannel(handle: number) {
+      callbacks.delete(handle);
+      return true;
+    },
+    drainEvents() {
+      drainCount += 1;
+      return 0;
+    },
+  };
+
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  root.__rustraNative = native;
+  const unsubscribe = subscribeEvent('poll.tick', () => {}, { pollMs: 5 });
+  const passive = subscribeEvent('push.only', () => {}); // pollMs 없는 구독
+  const channel = createChannel(() => {}, native, { pollMs: 5 });
+  try {
+    unsubscribe(); // 채널 수요 남음 — 루프 유지.
+    const drainsAfterUnsubscribe = drainCount;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.ok(
+      drainCount > drainsAfterUnsubscribe,
+      'event unsubscribe must not stop the loop while a channel holds demand',
+    );
+
+    channel.close(); // 마지막 수요 해제 — pollMs 없는 구독이 남아도 정지.
+    const drainsAtStop = drainCount;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    assert.equal(drainCount, drainsAtStop, 'last polling demand release must stop the loop');
+  } finally {
+    unsubscribe();
+    passive();
+    channel.close();
+    root.__rustraNative = previous;
+  }
+});

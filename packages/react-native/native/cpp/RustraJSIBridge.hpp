@@ -174,6 +174,8 @@ private:
 ///
 /// createChannel(cb) 이 u32 핸들을 발급하면 JS 는 그 값을 커맨드 인자
 /// `channel` 로 그대로 전달한다(TS 타입 ChannelHandle = number).
+/// CallInvoker 가 없는 호스트는 `drainEvents()` 폴링으로 이 큐도 소비한다
+/// (해당 HostFunction 이 EventDispatcher 와 본 디스패처를 함께 drain).
 class ChannelDispatcher : public std::enable_shared_from_this<ChannelDispatcher> {
 public:
   /// JS 스레드 마샬링용 CallInvoker 설정(EventDispatcher 와 동일 소스 공유).
@@ -198,6 +200,9 @@ public:
 
   /// 큐의 모든 페이로드를 대응 핸들의 JS 콜백으로 전달. JS 스레드만.
   void drain(facebook::jsi::Runtime& rt);
+
+  /// 미처리 프레임 수(JSON + 바이너리 합산 — JS 폴링/디버그용).
+  size_t pendingCount();
 
   /// 리로드 대응: 보유 콜백·큐 폐기 및 Rust 채널 전부 drop. JS 스레드 호출.
   void reset();
