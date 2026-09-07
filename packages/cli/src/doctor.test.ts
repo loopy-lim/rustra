@@ -14,7 +14,11 @@ import {
   isVersionAtLeast,
   parseDoctorArgs,
   parseRustVersion,
+  REGISTRY_CHECK_ID,
+  type DoctorAsyncRunner,
+  type DoctorCheck,
   type DoctorCommandResult,
+  type DoctorFetcher,
   type DoctorMatrixRow,
   type DoctorOptions,
   type DoctorRunner,
@@ -110,14 +114,18 @@ test('async doctor prefetches independent probes concurrently', async () => {
   let maximumActive = 0;
   const calls: string[] = [];
   try {
-    await collectDoctorReportAsync(options(path, 'darwin'), async (command, args) => {
-      calls.push([command, ...args].join(' '));
-      active++;
-      maximumActive = Math.max(maximumActive, active);
-      await Promise.resolve();
-      active--;
-      return { ok: true, stdout: command === 'rustc' ? 'rustc 1.88.0' : '', stderr: '' };
-    });
+    // fetchImpl 미주입 시 이 테스트가 실제 네트워크(registry 프리브)에 닿는다 — 밀폐 유지.
+    await collectDoctorReportAsync(
+      { ...options(path, 'darwin'), fetchImpl: rejectingFetch() },
+      async (command, args) => {
+        calls.push([command, ...args].join(' '));
+        active++;
+        maximumActive = Math.max(maximumActive, active);
+        await Promise.resolve();
+        active--;
+        return { ok: true, stdout: command === 'rustc' ? 'rustc 1.88.0' : '', stderr: '' };
+      },
+    );
     assert.ok(maximumActive > 1);
     assert.equal(calls.filter((call) => call === 'xcodebuild -version').length, 1);
   } finally {
@@ -523,28 +531,31 @@ test('async doctor prefetches per-section cargo metadata probes', async () => {
     })}\n`,
   );
   try {
-    const report = await collectDoctorReportAsync(options(path), async (command, args) => ({
-      ok: true,
-      stdout:
-        command === 'rustc'
-          ? 'rustc 1.88.0'
-          : command === 'cargo' && args[0] === 'metadata'
-            ? JSON.stringify({
-                target_directory: root,
-                packages: [
-                  {
-                    name: 'app',
-                    manifest_path: join(root, 'Cargo.toml'),
-                    targets: [
-                      { name: 'app', crate_types: ['rlib', 'cdylib', 'staticlib'] },
-                      { name: 'generate', kind: ['bin'] },
-                    ],
-                  },
-                ],
-              })
-            : '',
-      stderr: '',
-    }));
+    const report = await collectDoctorReportAsync(
+      { ...options(path), fetchImpl: rejectingFetch() },
+      async (command, args) => ({
+        ok: true,
+        stdout:
+          command === 'rustc'
+            ? 'rustc 1.88.0'
+            : command === 'cargo' && args[0] === 'metadata'
+              ? JSON.stringify({
+                  target_directory: root,
+                  packages: [
+                    {
+                      name: 'app',
+                      manifest_path: join(root, 'Cargo.toml'),
+                      targets: [
+                        { name: 'app', crate_types: ['rlib', 'cdylib', 'staticlib'] },
+                        { name: 'generate', kind: ['bin'] },
+                      ],
+                    },
+                  ],
+                })
+              : '',
+        stderr: '',
+      }),
+    );
     assert.ok(report.matrix);
     assert.ok(
       !report.checks.some((check) => check.detail?.includes('probe was not prefetched')),
@@ -665,33 +676,37 @@ test('async doctor prefetches divergent section manifests without false prefetch
   );
   const probes: string[] = [];
   try {
-    const report = await collectDoctorReportAsync(options(path), async (command, args) => {
-      probes.push([command, ...args].join(' '));
-      if (command === 'cargo' && args[0] === 'metadata') {
-        const manifestPath = args[args.length - 1]!;
-        const isAlt = manifestPath.endsWith('alt/Cargo.toml');
-        return {
-          ok: true,
-          stdout: JSON.stringify({
-            target_directory: root,
-            packages: [
-              {
-                name: isAlt ? 'alt' : 'app',
-                manifest_path: isAlt ? join(root, 'alt/Cargo.toml') : join(root, 'Cargo.toml'),
-                targets: isAlt
-                  ? [{ name: 'alt', crate_types: ['rlib', 'cdylib'] }]
-                  : [
-                      { name: 'app', crate_types: ['rlib', 'cdylib', 'staticlib'] },
-                      { name: 'generate', kind: ['bin'] },
-                    ],
-              },
-            ],
-          }),
-          stderr: '',
-        };
-      }
-      return { ok: true, stdout: command === 'rustc' ? 'rustc 1.88.0' : '', stderr: '' };
-    });
+    // fetchImpl 미주입 시 이 테스트가 실제 네트워크(registry 프리브)에 닿는다 — 밀폐 유지.
+    const report = await collectDoctorReportAsync(
+      { ...options(path), fetchImpl: rejectingFetch() },
+      async (command, args) => {
+        probes.push([command, ...args].join(' '));
+        if (command === 'cargo' && args[0] === 'metadata') {
+          const manifestPath = args[args.length - 1]!;
+          const isAlt = manifestPath.endsWith('alt/Cargo.toml');
+          return {
+            ok: true,
+            stdout: JSON.stringify({
+              target_directory: root,
+              packages: [
+                {
+                  name: isAlt ? 'alt' : 'app',
+                  manifest_path: isAlt ? join(root, 'alt/Cargo.toml') : join(root, 'Cargo.toml'),
+                  targets: isAlt
+                    ? [{ name: 'alt', crate_types: ['rlib', 'cdylib'] }]
+                    : [
+                        { name: 'app', crate_types: ['rlib', 'cdylib', 'staticlib'] },
+                        { name: 'generate', kind: ['bin'] },
+                      ],
+                },
+              ],
+            }),
+            stderr: '',
+          };
+        }
+        return { ok: true, stdout: command === 'rustc' ? 'rustc 1.88.0' : '', stderr: '' };
+      },
+    );
     // (a) alt 매니페스트에 대한 cargo metadata 프리페치가 실제로 요청됐다.
     const altProbe = probes.find(
       (probe) => probe.startsWith('cargo metadata') && probe.endsWith('alt/Cargo.toml'),
@@ -943,6 +958,21 @@ test('doctor passes fresh generated output', () => {
       );
       const freshness = report.checks.find((check) => check.id === 'codegen.generated_freshness');
       assert.equal(freshness?.status, 'pass');
+      // 감사 #3 고지 — 이 검사는 스키마 프리브(매니페스트 해시) 신선도만 확인한다.
+      // 실제 invoke 를 서브하는 런타임 바이너리는 codegen 이 재빌드하지 않으므로,
+      // PASS 여도 cargo build 전까지 contract.mismatch 가 날 수 있음을 텍스트가
+      // 명시해야 한다(스키마 프리브 vs 런타임 바이너리 구별).
+      assert.match(freshness?.summary ?? '', /schema/i);
+      assert.match(
+        `${freshness?.summary ?? ''} ${freshness?.detail ?? ''}`,
+        /runtime binary/i,
+        'freshness disclosure must distinguish the schema probe from the runtime binary',
+      );
+      assert.match(
+        `${freshness?.summary ?? ''} ${freshness?.detail ?? ''}`,
+        /cargo build/,
+        'freshness disclosure must point at cargo build as the remedy',
+      );
       assert.equal(doctorExitCode(report, false), 0);
       assert.equal(doctorExitCode(report, true), 0);
     },
@@ -978,6 +1008,172 @@ test('freshness check is skipped when the schema itself is missing', () => {
       assert.equal(freshness?.status, 'skip');
     },
   );
+});
+
+// ── registry 도달성 (registry.reachability) ──────────────────────────────────
+//
+// 프록시 뒤 사용자의 첫 cargo build 는 crates.io 도달 실패로 22초 무응답 + 원문
+// 영문 cargo 에러로 끝난다 — cargo 가 실패한 뒤가 아니라 doctor 가 미리 진단한다.
+// 네트워크 실패는 환경 문제이지 설치 결함이 아니므로 warn(required: false)이
+// 상한이다(fail-closed 금지 — 네트워크 없는 CI 에서 doctor 가 빨개지는 것을 막는다).
+
+const REGISTRY_CONFIG = {
+  schema: './generated/schema.json',
+  output: './generated',
+  node: { rustManifest: './Cargo.toml' },
+};
+
+/** 도달성 테스트 프로젝트 — Cargo.toml 이 있어야 section/codegen 검사가 실패하지 않는다. */
+function withRegistryProject(
+  callback: (root: string, path: string) => Promise<void>,
+): Promise<void> {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-doctor-registry-'));
+  const path = join(root, 'rustra.json');
+  writeFileSync(path, `${JSON.stringify(REGISTRY_CONFIG)}\n`);
+  writeFileSync(join(root, 'Cargo.toml'), CARGO_TOML);
+  return callback(root, path).finally(() => rmSync(root, { recursive: true, force: true }));
+}
+
+/** fetch 주입형 options — 실제 네트워크 없이 도달성 판정을 고정한다(샌드박스 무네트워크). */
+function optionsWithFetch(configPath: string, fetchImpl: DoctorFetcher): DoctorOptions {
+  return { configPath, strict: false, platform: 'linux', env: {}, fetchImpl };
+}
+
+/** 명령 프리브를 전부 스텁하는 비동기 러너 — CI 의 실제 rustc 버전·cmake 존재와 무관하게 고정. */
+function registryAsyncRunner(root: string, cargoOk = true): DoctorAsyncRunner {
+  return async (command, args) => {
+    if (command === 'cargo' && args[0] === '--version')
+      return {
+        ok: cargoOk,
+        stdout: cargoOk ? 'cargo 1.88.0' : '',
+        stderr: cargoOk ? '' : 'missing',
+      };
+    if (command === 'cargo' && args[0] === 'metadata')
+      return {
+        ok: cargoOk,
+        stdout: cargoOk
+          ? JSON.stringify({
+              target_directory: root,
+              packages: [
+                {
+                  name: 'app',
+                  manifest_path: join(root, 'Cargo.toml'),
+                  targets: [
+                    { name: 'app', crate_types: ['rlib'] },
+                    { name: 'generate', kind: ['bin'] },
+                  ],
+                },
+              ],
+            })
+          : '',
+        stderr: cargoOk ? '' : 'cargo metadata unavailable',
+      };
+    return { ok: true, stdout: command === 'rustc' ? 'rustc 1.88.0' : '', stderr: '' };
+  };
+}
+
+/** registry.reachability 검사를 꺼내온다 — 모든 도달성 테스트가 같은 방식으로 접근한다. */
+function findRegistry(report: { checks: DoctorCheck[] }): DoctorCheck | undefined {
+  return report.checks.find((check) => check.id === REGISTRY_CHECK_ID);
+}
+
+/** 거절하는 fetch 주입 — 실제 네트워크에 닿지 않는 밀폐 테스트용 공통 시임. */
+function rejectingFetch(message = 'getaddrinfo ENOTFOUND index.crates.io'): DoctorFetcher {
+  return () => Promise.reject(new Error(message));
+}
+
+test('registry reachability passes when the probe fetch succeeds and cargo is present', async () => {
+  await withRegistryProject(async (root, path) => {
+    // 실제 fetch(globalThis)는 환경에 따라 실패할 수 있다 — 통과 경로는 200 응답을
+    // 돌려주는 주입으로만 고정할 수 있다(프로덕션 기본값은 globalThis.fetch).
+    const okFetch: DoctorFetcher = () => Promise.resolve(new Response('{}', { status: 200 }));
+    const report = await collectDoctorReportAsync(
+      optionsWithFetch(path, okFetch),
+      registryAsyncRunner(root),
+    );
+    const registry = findRegistry(report);
+    assert.ok(registry, 'cargo 가 있으면 도달성 검사 행이 존재해야 한다');
+    assert.equal(registry?.status, 'pass');
+    assert.equal(registry?.required, false);
+  });
+});
+
+test('registry reachability warns with proxy/offline hints when the probe fetch fails', async () => {
+  await withRegistryProject(async (root, path) => {
+    // Node undici 의 실제 실패 형태 — "fetch failed" TypeError 에 원인은 cause 에 숨긴다.
+    // detail 이 cause 문구를 끌어올려야 오프라인/프록시 사용자가 행동 가능한 힌트를 본다.
+    const nodeStyleFetch: DoctorFetcher = () =>
+      Promise.reject(
+        new TypeError('fetch failed', {
+          cause: new Error('getaddrinfo ENOTFOUND index.crates.io'),
+        }),
+      );
+    const report = await collectDoctorReportAsync(
+      optionsWithFetch(path, nodeStyleFetch),
+      registryAsyncRunner(root),
+    );
+    const registry = findRegistry(report);
+    assert.equal(registry?.status, 'warn', 'network failure must warn, never fail');
+    assert.equal(registry?.required, false);
+    assert.match(registry?.summary ?? '', /unreachable/i);
+    assert.match(registry?.detail ?? '', /index\.crates\.io/);
+    assert.match(
+      registry?.detail ?? '',
+      /ENOTFOUND/,
+      'the undici cause message must surface, not the bare "fetch failed"',
+    );
+    assert.ok(
+      (registry?.fix ?? []).some((line) => /CARGO_NET_OFFLINE|proxy/i.test(line)),
+      'fix hints must mention offline flag or proxy',
+    );
+    // warn 은 required 가 아니므로 — 다른 필수 검사가 전부 green 일 때 — 종료 코드는 0 이다.
+    assert.equal(doctorExitCode(report, false), 0);
+  });
+});
+
+test('registry reachability warns when the registry responds with a non-200 status', async () => {
+  await withRegistryProject(async (root, path) => {
+    const serverErrorFetch: DoctorFetcher = () =>
+      Promise.resolve(new Response('unavailable', { status: 503 }));
+    const report = await collectDoctorReportAsync(
+      optionsWithFetch(path, serverErrorFetch),
+      registryAsyncRunner(root),
+    );
+    const registry = findRegistry(report);
+    assert.equal(registry?.status, 'warn', 'a reachable-but-broken registry is still only a warn');
+    assert.match(registry?.detail ?? '', /HTTP 503/);
+    assert.equal(doctorExitCode(report, false), 0);
+  });
+});
+
+test('registry reachability is skipped when cargo is unavailable', async () => {
+  await withRegistryProject(async (root, path) => {
+    const report = await collectDoctorReportAsync(
+      optionsWithFetch(path, rejectingFetch()),
+      registryAsyncRunner(root, false),
+    );
+    const registry = findRegistry(report);
+    assert.equal(registry?.status, 'skip', 'cargo 가 없으면 경고할 것도 없다');
+    assert.match(formatDoctorText(report), /SKIP registry\.reachability/);
+  });
+});
+
+test('registry reachability probe fetches the crates.io sparse index config', async () => {
+  await withRegistryProject(async (root, path) => {
+    const urls: string[] = [];
+    const recordingFetch: DoctorFetcher = (input) => {
+      urls.push(String(input));
+      return Promise.reject(new Error('recorded'));
+    };
+    await collectDoctorReportAsync(
+      optionsWithFetch(path, recordingFetch),
+      registryAsyncRunner(root),
+    );
+    assert.ok(
+      urls.includes('https://index.crates.io/config.json'),
+      `probe must hit the sparse index config, got: ${urls.join(', ')}`,
+    );
+  });
 });
 
 test('native dev target emits neither the wasm notice nor the wasm32 target check', () => {

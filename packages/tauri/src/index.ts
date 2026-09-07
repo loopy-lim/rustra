@@ -24,6 +24,7 @@
 
 export type {
   EngineClient,
+  EngineSupports,
   RustraError,
   RkyvV2Codec,
   RkyvV2Native,
@@ -41,11 +42,14 @@ export {
 import {
   configureLazy,
   createJsonEngine,
+  disposedBootstrapError,
   ensureConfigured,
   normalizeRustraError,
   RustraErrorCode,
   RustraCommandError,
+  type BootstrapState,
   type EngineClientWithBatch,
+  type EngineSupports,
 } from '@rustra/types';
 
 /**
@@ -60,9 +64,18 @@ import {
  */
 export type TauriInvoke = (command: string, args?: unknown) => Promise<unknown> | unknown;
 
+/**
+ * Tauri `event.listen` 함수 시그니처.
+ *
+ * handler 의 `payload` 는 `unknown` 이다(R03): 실제 WebView 경계(tauri 가
+ * `emit_str` JSON 을 `payload: {}` 로 인라인 평가)에선 이미 해석된 값이 오고,
+ * 레거시 주입 transport 는 직렬화된 문자열을 줄 수 있다. `subscribeEvent` 가
+ * 양쪽을 단일 규칙(문자열만 1회 parse)으로 정규화하므로 이 타입을 문자열로
+ * 좁히지 않는다.
+ */
 export type TauriListen = (
   event: string,
-  handler: (event: { payload: string }) => void,
+  handler: (event: { payload: unknown }) => void,
 ) => Promise<() => void>;
 
 type TauriGlobal = {
@@ -90,6 +103,20 @@ function requireTauriInvoke(): TauriInvoke {
 export type TauriEngineOptions = {
   /** Omit when Tauri `app.withGlobalTauri` is enabled. */
   invoke?: TauriInvoke;
+};
+
+/**
+ * Tauri JSON 엔진의 기술적 지표(A02) — compatibility-matrix.md 의 Tauri 열 셀을
+ * 그대로 옮긴 것: in-flight 취소는 얕은 취소, 배치는 per-entry 폴백(와이어
+ * 배치는 E2 트랙의 단일 IPC 횡단 최적화 — 셀 표기 계열은 per-entry), 이벤트는
+ * Rust `app.emit` 푸시, 채널 어댑터 없음, timeoutMs 레이스 있음.
+ */
+export const TAURI_ENGINE_SUPPORTS: EngineSupports = {
+  cancellation: 'shallow',
+  batch: 'per-entry',
+  events: 'push',
+  channels: false,
+  timeoutPreemption: true,
 };
 
 /**
@@ -134,12 +161,20 @@ export function createTauriEngine(options: TauriEngineOptions = {}) {
       },
     },
     (args) => args ?? {},
+    { ...TAURI_ENGINE_SUPPORTS },
   );
 }
 
 export type TauriBootstrap = {
+  /**
+   * bootstrap 수명 상태(A05) — 공용 `BootstrapState`(@rustra/types).
+   * dispose 는 멱등이고 dispose 후 ready 는 loud-fail 한다.
+   */
+  readonly state: BootstrapState;
   /** Resolves after the lazily discovered Tauri engine is ready. */
   ready(): Promise<EngineClientWithBatch>;
+  /** (A05) dispose-once — 두 번째 호출은 no-op. */
+  dispose(): void;
 };
 
 /**
@@ -152,8 +187,28 @@ export type TauriBootstrap = {
  * 앱 재시작 안내를 노출하는 것이 정직한 동작이다.
  */
 export function createTauriBootstrap(options: TauriEngineOptions = {}): TauriBootstrap {
-  configureLazy(() => createTauriEngine(options));
-  return { ready: () => ensureConfigured() as Promise<EngineClientWithBatch> };
+  let state: 'initializing' | 'ready' | 'disposed' = 'initializing';
+  const bootstrap = () => createTauriEngine(options);
+  configureLazy(bootstrap);
+  const dispose = () => {
+    if (state === 'disposed') return; // dispose-once 멱등 — 두 번째는 no-op
+    state = 'disposed';
+  };
+  return {
+    get state() {
+      return state;
+    },
+    ready: () => {
+      if (state === 'disposed') return Promise.reject(disposedBootstrapError('Tauri'));
+      return (ensureConfigured() as Promise<EngineClientWithBatch>).then((engine) => {
+        if (state === 'disposed') throw disposedBootstrapError('Tauri');
+        state = 'ready';
+        return engine;
+      });
+    },
+    dispose,
+  };
 }
 
 export { rustraEventChannel, subscribeEvent, subscribeTauriEvent } from './tauri-events.js';
+export { disposedBootstrapError, type BootstrapState } from '@rustra/types';

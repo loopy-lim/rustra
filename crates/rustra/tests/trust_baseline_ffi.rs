@@ -363,7 +363,7 @@ fn caller_buffer_null_out_len_is_safe() {
     assert_eq!(rkyv, usize::MAX);
 }
 
-// ── (성능 후속) caller-buffer FFI — 3중 복사 제거 경로 ────────
+// ── caller-buffer FFI — 3중 복사 제거 경로(구현 완료) ────────
 
 /// `rustra_ffi_invoke_json_into` size-probe → 쓰기 2단계 프로토콜 검증.
 #[test]

@@ -18,7 +18,7 @@
  */
 
 import type { BatchEntry, EngineClient, InvokeOptions } from '@rustra/types';
-import { RustraCommandError, resolveCommandId } from '@rustra/types';
+import { CancelledError, RustraCommandError, resolveCommandId } from '@rustra/types';
 import { editDistance, toMockError } from './testing-helpers.js';
 
 type Handler = (args: unknown) => unknown;
@@ -124,13 +124,10 @@ export function createMockEngine(mockOptions: MockEngineOptions = {}): MockEngin
       return () => handlersForName!.delete(handler);
     },
     async invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
-      // pre-aborted signal — 전 어댑터 공통 정책과 동일하게 cancelled 로 거부.
+      // pre-aborted signal — 전 어댑터 공통 CancelledError instanceof 계약 정합
+      // (와이어 코드 'cancelled'·retryable:true 는 기존과 동일).
       if (options?.signal?.aborted) {
-        throw new RustraCommandError(
-          'cancelled',
-          `invoke("${command}") aborted before dispatch`,
-          true,
-        );
+        throw new CancelledError(`invoke("${command}") aborted before dispatch`);
       }
       log.push({ command, args, options });
       const effectiveDelay = delays.get(command) ?? mockOptions.delayMs ?? 0;
@@ -165,4 +162,11 @@ export function createMockEngine(mockOptions: MockEngineOptions = {}): MockEngin
   return engine;
 }
 
-export { assertContractCurrent, expectContractCurrent } from './contract-gate.js';
+export {
+  assertContractCurrent,
+  expectContractCurrent,
+  assertContractFieldsCurrent,
+  expectContractFieldsCurrent,
+  assertContractHashCurrent,
+  type ContractFieldDrift,
+} from './contract-gate.js';

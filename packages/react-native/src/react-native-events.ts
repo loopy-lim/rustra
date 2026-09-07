@@ -47,27 +47,10 @@ export function subscribeEvent(
   name: string,
   cb: (payload: unknown) => void,
   options?: SubscribeOptions,
-): () => void;
-/** @deprecated Pass `(name, callback)`; this overload remains for 0.x compatibility. */
-export function subscribeEvent(
-  native: RustraEventNative,
-  name: string,
-  cb: (payload: unknown) => void,
-  options?: SubscribeOptions,
-): () => void;
-export function subscribeEvent(
-  nativeOrName: RustraEventNative | string,
-  nameOrCallback: string | ((payload: unknown) => void),
-  callbackOrOptions?: ((payload: unknown) => void) | SubscribeOptions,
-  legacyOptions: SubscribeOptions = {},
 ): () => void {
-  const canonical = typeof nativeOrName === 'string';
-  const native = canonical ? getRustraNative() : nativeOrName;
-  const name = canonical ? nativeOrName : (nameOrCallback as string);
-  const callback = (canonical ? nameOrCallback : callbackOrOptions) as (payload: unknown) => void;
-  const options = (canonical ? callbackOrOptions : legacyOptions) as SubscribeOptions;
+  const native: RustraEventNative = getRustraNative();
   if (typeof native.onEvent !== 'function') {
-    if (options.allowMissingNative) return () => {};
+    if (options?.allowMissingNative) return () => {};
     throw new RustraCommandError(
       'event.unavailable',
       'native module does not expose onEvent(); event subscription is unavailable',
@@ -94,11 +77,11 @@ export function subscribeEvent(
       }
     });
   }
-  listeners.add(callback);
+  listeners.add(cb);
   return () => {
     const current = events?.get(name);
     if (!current) return;
-    current.delete(callback);
+    current.delete(cb);
     if (current.size === 0) {
       events?.delete(name);
       native.offEvent?.(name);

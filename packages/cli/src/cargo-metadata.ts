@@ -14,6 +14,24 @@ export type CargoMetadata = {
 
 const cache = new Map<string, { mtimeMs: number; size: number; metadata: CargoMetadata }>();
 
+/**
+ * 감사 #9 후반 — cargo 바이너리 부재(ENOENT)만 rustup 설치 안내를 덧붙인다.
+ * 매니페스트 파일 부재도 ENOENT 이므로 path === 'cargo' 로 실행 파일만 골라내야
+ * "설치하라"는 오안내를 피한다. 나머지 실패는 원인 문맥만 남긴다.
+ */
+export function describeCargoMetadataError(manifestPath: string, error: unknown): string {
+  const cause = error instanceof Error ? error.message : String(error);
+  const missingBinary =
+    typeof error === 'object' &&
+    error !== null &&
+    (error as NodeJS.ErrnoException).code === 'ENOENT' &&
+    (error as NodeJS.ErrnoException).path === 'cargo';
+  const hint = missingBinary
+    ? ' — cargo was not found on PATH. Install Rust with https://rustup.rs'
+    : '';
+  return `Could not inspect ${manifestPath} with cargo metadata: ${cause}${hint}`;
+}
+
 export function readCargoMetadata(manifestPath: string): CargoMetadata {
   try {
     const cargoToml = realpathSync(resolve(manifestPath));
@@ -38,10 +56,7 @@ export function readCargoMetadata(manifestPath: string): CargoMetadata {
     cache.set(cargoToml, { mtimeMs: manifestStat.mtimeMs, size: manifestStat.size, metadata });
     return metadata;
   } catch (error) {
-    throw new Error(
-      `Could not inspect ${manifestPath} with cargo metadata: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
-    );
+    throw new Error(describeCargoMetadataError(manifestPath, error), { cause: error });
   }
 }
 

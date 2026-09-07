@@ -5,12 +5,32 @@
 
 ## Unreleased
 
+### Removed
+
+- deprecated `RendererHost` 표면을 제거한다(0.6.0에서 폐기, pre-1.0 규칙에 따른
+  마이너 제거): `crates/rustra`의 `renderer_host` 모듈과 prelude 재노출
+  (`RendererHost`, `HostMessage`, `MessageKind`, `RendererCapabilities`, `Size`,
+  `SurfaceOptions`, `host_supports_eval`). 대체재는 호스트별 어댑터 경계 —
+  채널·FFI 공개 표면으로 임베딩 호스트가 자체 렌더러/이벤트를 연결한다. npm
+  0.7.0 라인과 다음 `rustra` crate 발행에 반영된다.
+
 ### Changed
 
 - CLI codegen/dev 경로를 책임별 모듈로 분리하고, 잘못된 설정·레이아웃·기존 파일
   덮어쓰기를 조기에 진단한다.
 - 생성물 drift 게이트, schema diff, Rust command 문서의 TypeScript JSDoc 전달,
   opt-in `RUSTRA_DEBUG` wire 진단을 보강했다.
+
+## 0.6.0 (2026-08)
+
+0.6은 Rust crate 라인(`rustra`/`rustra-macros` 0.5 → 0.6)의 안정화 트랙이다.
+`rustra.json`에 `$schema`·`dev`·`inspector` 선택 섹션이 추가되고, `@rustra/cli`가
+배포하는 JSON Schema로 에디터 자동완성·검증을 받는다. `rustra doctor`는 멀티
+타깃 상태 매트릭스와 빌드 검증(`section.*.build`)을 갖춘다 — 깨진 Rust 설정이
+이제 exit 1이 된다(계획이 필요한 유일한 동작 변경). 와이어 포맷·contract
+hash·FFI 표면은 그대로며, API 스냅샷 게이트와 골든 fixture로 하위호환이 관례
+대신 게이트로 강제된다. 세부는 packages/*/CHANGELOG.md 및
+docs/migrations/0.5-to-0.6.md 참고.
 
 ## 0.3 → 0.5 요약
 
