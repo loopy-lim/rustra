@@ -121,6 +121,7 @@ pub mod channels;
 mod codegen;
 mod command;
 mod complex_codec;
+pub mod device_capabilities;
 mod entry;
 mod error;
 pub mod events;
@@ -189,6 +190,8 @@ pub trait BufferCommandOutput: Serialize + JsonSchema + 'static {
 
 #[cfg(test)]
 mod buffer_invoke_tests;
+#[cfg(test)]
+mod builder_devices_tests;
 #[cfg(test)]
 mod builder_errors_tests;
 #[cfg(test)]

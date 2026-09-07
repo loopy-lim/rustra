@@ -2,7 +2,8 @@
 ///
 /// `#[command]`, `#[command(name = "customName")]`,
 /// `#[command(capability = "compute:secure")]`,
-/// `#[command(error("math.divide_by_zero"))]` 형태를 지원합니다.
+/// `#[command(error("math.divide_by_zero"))]`,
+/// `#[command(device(camera, "clipboard-read"))]` 형태를 지원합니다.
 struct CommandAttr {
     /// 명시적으로 지정한 명령 이름. 없으면 함수 이름에서 자동 추론합니다.
     name: Option<String>,
@@ -15,6 +16,11 @@ struct CommandAttr {
     /// (`error("math.divide_by_zero")`). 설명/retryable 메타데이터는 빌더
     /// `command_errors` 체인으로 — 속성은 코드 문자열 목록만 받는다.
     errors: Option<Vec<String>>,
+    /// 이 명령이 전제하는 디바이스 역량 토큰 목록
+    /// (`device(camera, "clipboard-read")`). 카탈로그 검증은 등록 시점
+    /// (`command_devices`)에 loud-fail 한다 — 매크로 크레이트는 카탈로그를
+    /// 모른다(중복 유지 대신 단일 소스).
+    devices: Option<Vec<String>>,
 }
 
 /// `#[command]` 속성의 입력을 파싱합니다.
@@ -28,6 +34,7 @@ impl Parse for CommandAttr {
             capability: None,
             platforms: None,
             errors: None,
+            devices: None,
         };
         if input.is_empty() {
             return Ok(attr);
@@ -81,10 +88,37 @@ impl Parse for CommandAttr {
                     }
                 }
                 attr.errors = Some(errors);
+            } else if key == "device" {
+                // device(camera, "clipboard-read") — 괄호 안 역량 토큰 목록.
+                // 식별자와 문자열 리터럴을 모두 받는다(platform 파싱의 변주) —
+                // kebab-case 토큰(clipboard-read)은 식별자로 쓸 수 없어 문자열
+                // 리터럴 경로가 필요하다.
+                let content;
+                let _: syn::token::Paren = syn::parenthesized!(content in input);
+                if content.is_empty() {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        "device(...) requires at least one capability token",
+                    ));
+                }
+                let mut devices = Vec::new();
+                loop {
+                    if content.peek(LitStr) {
+                        let token: LitStr = content.parse()?;
+                        devices.push(token.value());
+                    } else {
+                        let ident: Ident = content.parse()?;
+                        devices.push(ident.to_string());
+                    }
+                    if content.parse::<Token![,]>().is_err() {
+                        break;
+                    }
+                }
+                attr.devices = Some(devices);
             } else {
                 return Err(syn::Error::new(
                     key.span(),
-                    "unsupported `#[command]` key; supported keys: `name`, `capability`, `platform`, `error`",
+                    "unsupported `#[command]` key; supported keys: `name`, `capability`, `platform`, `error`, `device`",
                 ));
             }
             if input.parse::<Token![,]>().is_err() {

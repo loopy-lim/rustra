@@ -70,6 +70,21 @@ fn divide_typed_errors(input: DivideInput) -> Result<DivideOutput> {
     }
 }
 
+/// `#[command(device(...))]` — 커맨드가 전제하는 디바이스 역량 선언을 매크로
+/// 시점에 심는다 (register!/build! 가 devices_meta_if 로 연결). 식별자와
+/// 문자열 리터럴을 함께 쓸 수 있다 — kebab-case 토큰(clipboard-read)은
+/// 식별자로 쓸 수 없어 문자열 리터럴 경로가 필요하다.
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct ScanTagsOutput {
+    found: i64,
+}
+
+#[command(device(camera, "clipboard-read"))]
+fn scan_tags() -> Result<ScanTagsOutput> {
+    Ok(ScanTagsOutput { found: 0 })
+}
+
 fn mobile_package() -> Package {
     Package::builder("example.mobile").build()
 }
@@ -223,6 +238,24 @@ fn command_error_attr_declares_schema_errors() {
             .code(),
         "math.divide_by_zero"
     );
+}
+
+#[test]
+fn command_device_attr_declares_schema_devices() {
+    let package = rustra::register!(Package::builder("example.attr"), scan_tags).build();
+    let schema = package.live_schema();
+    let entry = &schema["commands"][0];
+    let devices = entry["devices"]
+        .as_array()
+        .expect("device(...) attribute must flow into the schema entry");
+    assert_eq!(devices.len(), 2);
+    assert_eq!(devices[0], "camera");
+    assert_eq!(devices[1], "clipboard-read");
+
+    // 선언은 계약 문서일 뿐 — 런타임 자동 게이팅은 없으므로 호출 경로가
+    // 그대로 동작한다(설계 F절).
+    let out: ScanTagsOutput = package.invoke("scanTags", ()).unwrap();
+    assert_eq!(out.found, 0);
 }
 
 /// (감사 #5) capability 무음 드랍 차단 — `#[command(capability = "...")]` 함수를
