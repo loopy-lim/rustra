@@ -141,13 +141,15 @@ export function subscribeEvent(
         /* malformed payload stays null */
       }
       // Array.from — Expo 의 ES5 타겟에서 Set 순회는 downlevelIteration 이 필요하다.
-      for (const listener of Array.from(events?.get(name) ?? [])) {
+      // forEach — 이벤트마다 Array.from 이 배열을 할당하지 않는다(핫패스).
+      const listeners = events?.get(name);
+      listeners?.forEach((listener) => {
         try {
           listener(payload);
         } catch (error) {
           console.error(`Rustra: event listener for "${name}" threw:`, error);
         }
-      }
+      });
     });
   }
   listeners.add(cb);

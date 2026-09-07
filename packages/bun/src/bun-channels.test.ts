@@ -255,29 +255,33 @@ test('bun bytes channel bridge: one handle serves exactly one path (JSON xor byt
     'JSON send on a bytes handle is dropped',
   );
   // 각자의 경로로는 도달한다.
-  assert.equal(lib.symbols.rustra_ffi_channel_send(jsonChannel.handle, Buffer.from('{"a":1}\0')), 1);
+  assert.equal(
+    lib.symbols.rustra_ffi_channel_send(jsonChannel.handle, Buffer.from('{"a":1}\0')),
+    1,
+  );
   assert.equal(lib.symbols.rustra_ffi_channel_send_bytes(bytesChannel.handle, frame, BigInt(8)), 1);
   jsonChannel.close();
   bytesChannel.close();
 });
 
 test('bun bytes channel bridge: throws TransportUnavailable when no library resolves', async () => {
-  await expect(createBunChannelBytesBridge({ library: '/nonexistent/librustra.dylib' })).rejects.toThrow(
-    'channel',
-  );
+  await expect(
+    createBunChannelBytesBridge({ library: '/nonexistent/librustra.dylib' }),
+  ).rejects.toThrow('channel');
 });
 
 test('bun bytes channel bridge: a non-Rustra dylib classifies as transport failure, not channel.unavailable', async () => {
   const foreign =
-    process.platform === 'darwin'
-      ? '/usr/lib/libz.1.dylib'
-      : '/lib/x86_64-linux-gnu/libz.so.1';
+    process.platform === 'darwin' ? '/usr/lib/libz.1.dylib' : '/lib/x86_64-linux-gnu/libz.so.1';
   if (!existsSync(foreign)) return; // 플랫폼 기본 라이브러리 경로가 없으면 스킵.
   const error = await createBunChannelBytesBridge({ library: foreign }).then(
     () => null,
     (thrown: unknown) => thrown,
   );
-  assert.ok(error instanceof RustraCommandError, 'bridge loud-fails instead of returning a factory');
+  assert.ok(
+    error instanceof RustraCommandError,
+    'bridge loud-fails instead of returning a factory',
+  );
   assert.equal(error.code, 'transport.unavailable');
 });
 

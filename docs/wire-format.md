@@ -50,14 +50,14 @@ the same length-prefixed stream as request/response frames
 wire fact is what the receiver's demultiplexer branches on. Reserved ids
 (counting down from the top of the u16 space):
 
-| cmd id  | Direction         | Body                                              | Purpose                                                        |
-| ------- | ----------------- | ------------------------------------------------- | -------------------------------------------------------------- |
-| `0xFFFE` | client → runtime | (none)                                            | event drain request                                            |
-| `0xFFFD` | runtime → client | 1-line JSON `{"name","payload","seq"}`            | event push frame                                               |
-| `0xFFFC` | runtime → client | 1-line JSON `{"handle","payload"}`                | JSON channel push frame                                        |
-| `0xFFFB` | client → runtime | empty, or `[mode u8]`                             | channel create — `mode`: absent/`0x00` = JSON, `0x01` = bytes  |
-| `0xFFFA` | client → runtime | postcard varint `u32` handle                      | channel drop (removes the handle from both the JSON and bytes tables) |
-| `0xFFF9` | runtime → client | `[handle u32 LE][payload bytes]`                  | **binary channel push frame** (raw bytes, no JSON wrapping)     |
+| cmd id   | Direction        | Body                                   | Purpose                                                               |
+| -------- | ---------------- | -------------------------------------- | --------------------------------------------------------------------- |
+| `0xFFFE` | client → runtime | (none)                                 | event drain request                                                   |
+| `0xFFFD` | runtime → client | 1-line JSON `{"name","payload","seq"}` | event push frame                                                      |
+| `0xFFFC` | runtime → client | 1-line JSON `{"handle","payload"}`     | JSON channel push frame                                               |
+| `0xFFFB` | client → runtime | empty, or `[mode u8]`                  | channel create — `mode`: absent/`0x00` = JSON, `0x01` = bytes         |
+| `0xFFFA` | client → runtime | postcard varint `u32` handle           | channel drop (removes the handle from both the JSON and bytes tables) |
+| `0xFFF9` | runtime → client | `[handle u32 LE][payload bytes]`       | **binary channel push frame** (raw bytes, no JSON wrapping)           |
 
 Channel-create responses use the rkyv V2 response shape with a
 `{"handle": u32}` JSON body on both paths.
