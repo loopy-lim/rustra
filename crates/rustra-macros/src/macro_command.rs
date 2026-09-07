@@ -198,6 +198,29 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         )
     };
 
+    // 에러 속성 — 커맨드별 도메인 에러 코드 선언. const 생성자 체인으로 상수를
+    // 구성하고 register!/build! 가 errors_meta_if 로 연결한다(capability/platforms
+    // 메타 상수 관례 — None 이면 선언 없는 명령도 체인을 그대로 통과).
+    let errors_ident = Ident::new(
+        &format!("__RUstra_errors_{}", fn_name),
+        proc_macro2::Span::call_site(),
+    );
+    let errors_const: TokenStream2 = if let Some(errors) = &attr.errors {
+        let variants = errors
+            .iter()
+            .map(|code| quote! { rustra::CommandErrorVariant::new(#code) });
+        quote! {
+            #[allow(non_upper_case_globals, dead_code)]
+            const #errors_ident: Option<&'static [rustra::CommandErrorVariant]> =
+                Some(&[#(#variants),*]);
+        }
+    } else {
+        quote! {
+            #[allow(non_upper_case_globals, dead_code)]
+            const #errors_ident: Option<&'static [rustra::CommandErrorVariant]> = None;
+        }
+    };
+
     // (감사 #5) capability 무음 드랍 차단: capability 가 있으면 래퍼를 `unsafe fn`
     // 으로 생성한다. `unsafe fn` 아이템 타입은 `Fn` 을 구현하지 않으므로
     // `.command_fn(f)`/`.command(name, f)`/`buffer_command_fn`/`register_fn` 등
@@ -298,6 +321,8 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         #capability_const
 
         #platforms_const
+
+        #errors_const
 
         #[doc(hidden)]
         fn #register_ident(__rustra_input: #input_type) -> rustra::Result<#output_type> {
