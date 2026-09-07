@@ -137,7 +137,6 @@ test('interleaved push and response frames dispatch independently', () => {
   assert.deepEqual(responses, ['1', '2']);
 });
 
-
 // ── NDJSON 실패 라인 보존 (Task 7) — recordUnparsedLine / attachExitContext ──
 // stdout 스트림 경로 자체는 스폰이 필요하므로(Bun 러너 EBADF — index.test.ts
 // processTest 주석 참조), 여기선 추출된 순수 함수로 진단 경로를 단위 검증한다.
@@ -247,7 +246,6 @@ test('recordUnparsedLine truncates a huge line to the char cap', () => {
   assert.equal(state.buffer[0]!.length, UNPARSED_LINE_MAX_CHARS);
   assert.equal(state.buffer[0]!, huge.slice(0, UNPARSED_LINE_MAX_CHARS));
 });
-
 
 // ── 채널 푸시 프레임 (0xfffc) — 0.7 채널 트랙 ──────────────────
 

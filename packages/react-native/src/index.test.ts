@@ -993,7 +993,6 @@ test('A05: concurrent ready calls share one initialization promise (react-native
   }
 });
 
-
 // ── subscribeEvent pollMs — CallInvoker 없는 호스트의 JS 폴링 drain ─────────
 
 test('subscribeEvent pollMs drains queued events from a CallInvoker-less native', async () => {

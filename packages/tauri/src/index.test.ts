@@ -706,7 +706,6 @@ test('A05: concurrent ready calls share one initialization promise (tauri)', asy
   }
 });
 
-
 // ── 채널 어댑터 — invoke 발급 + listen 콜백 브릿지 ──
 
 test('createChannel issues a handle via rustra_channel_create and listens on the handle channel', async () => {
