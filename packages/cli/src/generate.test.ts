@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import test from 'node:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -2216,6 +2216,173 @@ test('generateEventsTs returns empty string without events (backcompat)', async 
     typeof generateEventsTs
   >[0];
   assert.equal(generateEventsTs(schema), '');
+});
+
+// ── 커맨드별 타입화 에러 (errors.ts 렌더러) ──────────────────
+
+/** divide가 도메인 에러 2종(설명 있/없 + retryable 혼합)을 선언한 최소 스키마. */
+const typedErrorSchema: PackageSchema = {
+  packageId: 'example.math',
+  commands: [
+    {
+      name: 'divide',
+      commandId: 1,
+      inputType: 'DivideInput',
+      outputType: 'DivideOutput',
+      inputSchema: {
+        type: 'object',
+        properties: { a: { type: 'integer' }, b: { type: 'integer' } },
+        required: ['a', 'b'],
+        title: 'DivideInput',
+      },
+      outputSchema: {
+        type: 'object',
+        properties: { value: { type: 'integer' } },
+        required: ['value'],
+        title: 'DivideOutput',
+      },
+      errors: [
+        { code: 'math.divide_by_zero', description: '0으로 나눌 때', retryable: false },
+        { code: 'math.overflow', retryable: true },
+      ],
+    },
+  ],
+};
+
+test('generateErrorsTs emits per-command code unions and type guards', async () => {
+  const { generateErrorsTs } = await import('./generate.js');
+  const out = generateErrorsTs(typedErrorSchema);
+  // import는 선언 커맨드가 있을 때만.
+  assert.ok(out.startsWith("import { RustraCommandError } from '@rustra/types';"));
+  // 가드의 원천이 되는 내부 코드 집합.
+  assert.ok(
+    out.includes(
+      "const divideErrorCodes: ReadonlySet<string> = new Set(['math.divide_by_zero', 'math.overflow']);",
+    ),
+  );
+  // 코드→PascalCase 키 매핑(RustraErrorCode.TransportTimeout 관례).
+  assert.ok(out.includes('export const DivideErrorCode = {'));
+  assert.ok(out.includes("MathDivideByZero: 'math.divide_by_zero',"));
+  assert.ok(out.includes("MathOverflow: 'math.overflow',"));
+  assert.ok(out.includes('} as const;'));
+  // variant JSDoc — description + retryable 메타데이터.
+  assert.ok(out.includes('/** 0으로 나눌 때 — non-retryable. */'));
+  assert.ok(out.includes('/** retryable. */'), 'description 없는 variant는 retryable만');
+  // 타입 표면 — 리터럴 유니언 + RustraCommandError 교차.
+  assert.ok(
+    out.includes(
+      'export type DivideErrorCode = (typeof DivideErrorCode)[keyof typeof DivideErrorCode];',
+    ),
+  );
+  assert.ok(
+    out.includes(
+      'export type DivideError = RustraCommandError & { readonly code: DivideErrorCode };',
+    ),
+  );
+  // 가드 — instanceof + Set.has.
+  assert.ok(out.includes('export function isDivideError(error: unknown): error is DivideError {'));
+  assert.ok(
+    out.includes('return error instanceof RustraCommandError && divideErrorCodes.has(error.code);'),
+  );
+});
+
+test('generateErrorsTs guard JSDoc declares the open runtime contract', async () => {
+  const { generateErrorsTs } = await import('./generate.js');
+  const out = generateErrorsTs(typedErrorSchema);
+  // 미선언 코드는 false + 폴백 안내(설계 E-3 — 런타임 개방 계약, 타입 폐쇄 유니언).
+  assert.match(out, /미선언 코드.*false/su);
+  assert.match(out, /err\.code 문자열 분기/u);
+});
+
+test('generateErrorsTs returns empty string without declarations (backcompat)', async () => {
+  const { generateErrorsTs } = await import('./generate.js');
+  assert.equal(generateErrorsTs(simpleSchema), '');
+  // 선언/미선언 커맨드 혼합 — 선언된 커맨드만 가드를 받는다.
+  const mixed: PackageSchema = {
+    ...typedErrorSchema,
+    commands: [typedErrorSchema.commands[0]!, { ...simpleSchema.commands[0]!, commandId: 2 }],
+  };
+  const out = generateErrorsTs(mixed);
+  assert.ok(out.includes('export function isDivideError'));
+  assert.ok(!out.includes('isAddError'), '미선언 커맨드에는 가드가 없다');
+});
+
+test('errors declarations leave commands.ts/types.ts bytes unchanged', async () => {
+  const { generateErrorsTs } = await import('./generate.js');
+  const withoutErrors: PackageSchema = {
+    ...typedErrorSchema,
+    commands: [{ ...typedErrorSchema.commands[0]!, errors: undefined }],
+  };
+  // 에러 표면은 errors.ts로만 흘러간다 — 기존 렌더러 출력은 바이트 불변.
+  assert.equal(generateCommandsTs(typedErrorSchema), generateCommandsTs(withoutErrors));
+  assert.equal(generateTypesTs(typedErrorSchema), generateTypesTs(withoutErrors));
+  assert.notEqual(generateErrorsTs(typedErrorSchema), '');
+  assert.equal(generateErrorsTs(withoutErrors), '');
+});
+
+test('generateErrorsTs fails loud on PascalCase key collision', async () => {
+  const { generateErrorsTs } = await import('./generate.js');
+  const colliding: PackageSchema = {
+    ...typedErrorSchema,
+    commands: [
+      {
+        ...typedErrorSchema.commands[0]!,
+        // 패턴은 둘 다 유효하지만 구분자 위치 차이가 같은 키로 수렴한다
+        // ('MathOverflow2'). 혼합 대소문자 코드(math.divideByZero)는 패턴
+        // 위반으로 아래 invalid token 테스트가 잡는다.
+        errors: [{ code: 'math.overflow_2' }, { code: 'math.overflow2' }],
+      },
+    ],
+  };
+  assert.throws(() => generateErrorsTs(colliding), /MathOverflow2/u);
+});
+
+test('generateErrorsTs fails loud on command symbol collision', async () => {
+  const { generateErrorsTs } = await import('./generate.js');
+  // 'divide'와 'Divide'는 다른 명령이지만 같은 Divide 심볼로 수렴한다.
+  const colliding: PackageSchema = {
+    ...typedErrorSchema,
+    commands: [
+      typedErrorSchema.commands[0]!,
+      { ...typedErrorSchema.commands[0]!, name: 'Divide', commandId: 2 },
+    ],
+  };
+  assert.throws(() => generateErrorsTs(colliding), /DivideErrorCode/u);
+});
+
+test('generateErrorsTs fails loud on invalid error code tokens', async () => {
+  const { generateErrorsTs } = await import('./generate.js');
+  // Rust 빌더가 이미 거부하는 패턴(^[a-z][a-z0-9_.]*$) — 손으로 편집한
+  // schema.json이 같은 위반(대문자/슬래시)을 코드젠까지 흘려보내면 여기서 막는다.
+  for (const bad of ['Math/Divide', 'math.divideByZero']) {
+    const colliding: PackageSchema = {
+      ...typedErrorSchema,
+      commands: [{ ...typedErrorSchema.commands[0]!, errors: [{ code: bad }] }],
+    };
+    assert.throws(() => generateErrorsTs(colliding), new RegExp(bad.replace('/', '\\/')));
+  }
+});
+
+test('generateFromSchema writes errors.ts only when declared', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-errors-codegen-'));
+  try {
+    const schemaPath = join(root, 'schema.json');
+    writeFileSync(schemaPath, JSON.stringify(typedErrorSchema));
+    const written = await generateFromSchema(schemaPath, join(root, 'out'));
+    assert.ok(written.includes('errors.ts'), `errors.ts must be written: ${written.join(', ')}`);
+    const onDisk = readFileSync(join(root, 'out', 'errors.ts'), 'utf-8');
+    assert.match(onDisk, /Stage: {2}schema → ts error renderer/u);
+    assert.match(onDisk, /export function isDivideError/u);
+
+    // 선언 없는 스키마는 errors.ts를 만들지 않는다 — 기존 파일 배터리 불변.
+    const plainPath = join(root, 'plain.json');
+    writeFileSync(plainPath, JSON.stringify(simpleSchema));
+    const plainWritten = await generateFromSchema(plainPath, join(root, 'out-plain'));
+    assert.ok(!plainWritten.includes('errors.ts'));
+    assert.ok(!existsSync(join(root, 'out-plain', 'errors.ts')));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 // ── 64-bit varint/zigzag runtime helpers (postcardHelperSource) ────────────
