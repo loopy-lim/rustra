@@ -6,6 +6,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <utility>
 
@@ -50,6 +51,14 @@ extern "C" {
   uint32_t rustra_ffi_channel_create(
     rustra_channel_callback_t callback, void* user_data);
   int32_t rustra_ffi_channel_send(uint32_t handle, const char* payload);
+  // 바이너리 채널 — 페이로드가 임의 바이트(rkyv V2 프레임 등). JSON 채널과
+  // 동일 핸들 공간/수명 계약, 한 핸들은 한 경로로만 동작한다.
+  typedef void (*rustra_channel_bytes_callback_t)(
+    void* user_data, uint32_t handle, const uint8_t* payload, size_t payload_len);
+  uint32_t rustra_ffi_channel_create_bytes(
+    rustra_channel_bytes_callback_t callback, void* user_data);
+  int32_t rustra_ffi_channel_send_bytes(
+    uint32_t handle, const uint8_t* payload, size_t payload_len);
   int32_t rustra_ffi_channel_drop(uint32_t handle);
 
   // Stable package registration symbol emitted by `rustra::mobile_entry!`.
@@ -170,15 +179,22 @@ public:
   /// JS 스레드 마샬링용 CallInvoker 설정(EventDispatcher 와 동일 소스 공유).
   void setCallInvoker(std::shared_ptr<void> invoker);
 
-  /// JS 콜백 등록 + Rust 채널 발급. 반환값 = 채널 핸들(≥1). JS 스레드 호출.
+  /// JS 콜백 등록 + Rust 채널 발급(JSON 경로 — 페이로드는 JSON 문자열).
+  /// 반환값 = 채널 핸들(≥1). JS 스레드 호출.
   uint32_t create(facebook::jsi::Runtime& rt,
                   facebook::jsi::Function callback);
+  /// 바이너리 채널 변형 — 콜백은 ArrayBuffer 를 받는다(복사본).
+  uint32_t createBytes(facebook::jsi::Runtime& rt,
+                       facebook::jsi::Function callback);
   /// 채널 해제(호출 완료/취소). 성공 true. JS 스레드 호출.
   bool drop(uint32_t handle);
 
   /// FFI C 콜백 — send 스레드에서 호출. 큐 적재 + drain 예약만.
   /// handle 은 발급 시 캡처된 채널 번호(핸들→JS 콜백 룩업 키).
   static void onChannelPayload(void* user_data, uint32_t handle, const char* payload);
+  /// 바이너리 경로 C 콜백 — 페이로드는 (ptr, len), 콜백 반환 전까지만 유효.
+  static void onChannelPayloadBytes(
+    void* user_data, uint32_t handle, const uint8_t* payload, size_t payload_len);
 
   /// 큐의 모든 페이로드를 대응 핸들의 JS 콜백으로 전달. JS 스레드만.
   void drain(facebook::jsi::Runtime& rt);
@@ -192,6 +208,10 @@ private:
   std::mutex mutex_;
   /// (handle, payload) 큐 — onChannelPayload 가 적재, drain 이 소비.
   std::deque<std::pair<uint32_t, std::string>> queue_;
+  /// 바이너리 큐 — onChannelPayloadBytes 가 적재. drop-oldest 정책 동일.
+  std::deque<std::pair<uint32_t, std::vector<uint8_t>>> bytesQueue_;
+  /// 바이너리 경로로 발급된 핸들 — drain 이 전달 형태를 고른다.
+  std::unordered_set<uint32_t> bytesHandles_;
   size_t capacity_ = 1024;
   bool drainScheduled_ = false;
   std::shared_ptr<void> callInvoker_;

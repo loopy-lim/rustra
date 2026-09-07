@@ -12,7 +12,7 @@
 - [x] Task 7 — 계산기 예제 `platformNativeInfo` (macos/windows impl, linux=스텁) + Rust 테스트
 - [x] Task 8 — 예제 재생성(schema.json/TS/fingerprint) + api-surface 스냅샷
       — 도중 발견·수정: codegen unit-입력 코덱 버그(`args: ()` 그대로 방출), legacy-removal
-        병합 이후 stale 계약테스트(Swift 심볼 기대치) 갱신
+      병합 이후 stale 계약테스트(Swift 심볼 기대치) 갱신
 - [x] Task 9 — RN C++ 공개 진입점 `invokeTypedByName/ById` 추출 (RustraJSIBridge, 단일 경로 리팩터)
 - [x] Task 10 — 문서: rust-api-guide(en/ko) 플랫폼 명령 절 + react-native-setup(en/ko) C++ 진입점 절
 - [ ] Task 11 — changeset — **사용자 지시로 제외** (발행 게이트에서 별도 처리)

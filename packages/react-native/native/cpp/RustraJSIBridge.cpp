@@ -1,5 +1,7 @@
 #include "RustraJSIBridge.hpp"
+#include "RustraTurboInterop.hpp"
 #include "rustra-generated-codecs.hpp"
+#include <folly/dynamic.h>
 #include <atomic>
 #include <cmath>
 #include <cstdio>
@@ -498,6 +500,8 @@ void ChannelDispatcher::setCallInvoker(std::shared_ptr<void> invoker) {
     for (auto& [h, _cb] : callbacks_) toDrop.push_back(h);
     callbacks_.clear();
     queue_.clear();
+    bytesQueue_.clear();
+    bytesHandles_.clear();
     drainScheduled_ = false;
   }
   // 리로드 대응: 귀속 채널 전부를 Rust 쪽에서도 drop(락 밖 — FFI 재진입 방지).
@@ -517,11 +521,31 @@ uint32_t ChannelDispatcher::create(facebook::jsi::Runtime& rt,
   return handle;
 }
 
+uint32_t ChannelDispatcher::createBytes(facebook::jsi::Runtime& rt,
+                                         facebook::jsi::Function callback) {
+  // JSON 경로와 동일한 등록 + 바이너리 경로 FFI 발급. bytesHandles_ 표시로
+  // drain 이 ArrayBuffer 로 전달한다.
+  (void)rt;
+  uint32_t handle =
+    rustra_ffi_channel_create_bytes(&ChannelDispatcher::onChannelPayloadBytes, this);
+  if (handle == 0) return 0;
+  callbacks_.insert_or_assign(handle, std::move(callback));
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    bytesHandles_.insert(handle);
+  }
+  return handle;
+}
+
 bool ChannelDispatcher::drop(uint32_t handle) {
   // JS 스레드 호출. Rust 채널 해제 후 콜백 제거. 해제 후 drain 에 이미
   // 적재된 해당 핸들 페이로드는 콜백 부재로 무시된다(유니캐스트 만료).
   int dropped = rustra_ffi_channel_drop(handle);
   callbacks_.erase(handle);
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    bytesHandles_.erase(handle);
+  }
   return dropped == 1;
 }
 
@@ -541,13 +565,41 @@ void ChannelDispatcher::onChannelPayload(void* user_data, uint32_t handle,
   self->scheduleDrainLocked();
 }
 
+void ChannelDispatcher::onChannelPayloadBytes(
+  void* user_data, uint32_t handle, const uint8_t* payload, size_t payload_len) {
+  // send 스레드 — JSON 경로와 동일하게 큐 적재 + drain 예약만(복사 소유).
+  auto* self = static_cast<ChannelDispatcher*>(user_data);
+  if (!self) return;
+
+  std::lock_guard<std::mutex> lock(self->mutex_);
+  if (self->bytesQueue_.size() >= self->capacity_) {
+    self->bytesQueue_.pop_front(); // drop-oldest — JSON 경로와 동일 정책
+  }
+  const uint8_t* src = payload ? payload : reinterpret_cast<const uint8_t*>("");
+  self->bytesQueue_.emplace_back(
+    handle, std::vector<uint8_t>(src, src + payload_len));
+  self->scheduleDrainLocked();
+}
+
 void ChannelDispatcher::drain(facebook::jsi::Runtime& rt) {
   // JS 런타임 스레드에서만 호출(CallInvoker 콜백 또는 폴링).
   std::deque<std::pair<uint32_t, std::string>> items;
+  std::deque<std::pair<uint32_t, std::vector<uint8_t>>> byteItems;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     drainScheduled_ = false;
     items.swap(queue_);
+    byteItems.swap(bytesQueue_);
+  }
+  for (auto& [handle, payload] : byteItems) {
+    auto it = callbacks_.find(handle);
+    if (it == callbacks_.end()) continue; // 만료 채널 — 조용히 무시
+    try {
+      // 바이너리 페이로드는 복사본 ArrayBuffer 로 — 소유권 이전 없이 안전.
+      it->second.call(rt, createArrayBuffer(rt, payload.data(), payload.size()));
+    } catch (const std::exception&) {
+      // JSON 경로와 동일 정책 — 콜백 예외 무시, 나머지 프레임 계속 전달.
+    }
   }
   for (auto& [handle, payload] : items) {
     auto it = callbacks_.find(handle);
@@ -834,6 +886,24 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         return Value(static_cast<double>(handle));
       });
     cache_["createChannel"] = std::make_unique<CachedFunction>(
+      CachedFunction{std::move(propNameId), std::move(hostFn)});
+  }
+  {
+    // 바이너리 채널 — 콜백이 ArrayBuffer(복사본)를 받는다. rkyv V2 프레임 등
+    // 임의 바이트를 JSON 직렬화 없이 흘리는 TurboModule 상호운용 경로.
+    auto dispatcher = getChannelDispatcher();
+    auto propNameId = PropNameID::forAscii(rt, "createChannelBytes");
+    auto hostFn = Function::createFromHostFunction(
+      rt, propNameId, 1,
+      [dispatcher](Runtime& rt, const Value&, const Value* args, size_t count) -> Value {
+        if (count < 1 || !args[0].isObject() || !args[0].asObject(rt).isFunction(rt)) {
+          throw JSError(rt, "RustraJSI: createChannelBytes requires (callback)");
+        }
+        Function cb = args[0].asObject(rt).getFunction(rt);
+        uint32_t handle = dispatcher->createBytes(rt, std::move(cb));
+        return Value(static_cast<double>(handle));
+      });
+    cache_["createChannelBytes"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
   {
@@ -1564,6 +1634,62 @@ void installRustraJSI(Runtime& rt) {
   // CallInvoker 없는 설치(레거시 경로) — 이벤트 푸시는 JS 가 drainEvents() 로
   // 폴링해야 한다. 프로덕션 플랫폼 글루는 installRustraJSIWithInvoker 사용.
   installRustraJSIWithInvoker(rt, nullptr);
+}
+
+// ── folly::dynamic 진입점 — jsi::Value 오버로드의 dynamic 변환 wrapper ──
+// 변환 규칙: null/bool/int/double/string/array/object. int64 는 jsi 표면에
+// BigInt 생성이 없어 double 로 간다(2^53 초과 손실 — 헤더 계약에 명시).
+namespace {
+facebook::jsi::Value dynamicToValue(
+  facebook::jsi::Runtime& rt, const folly::dynamic& value) {
+  using facebook::jsi::Value;
+  switch (value.type()) {
+    case folly::dynamic::NULLT:
+      return Value::null();
+    case folly::dynamic::BOOL:
+      return Value(static_cast<bool>(value.asBool()));
+    case folly::dynamic::INT64:
+      return Value(static_cast<double>(value.asInt()));
+    case folly::dynamic::DOUBLE:
+      return Value(value.asDouble());
+    case folly::dynamic::STRING: {
+      const std::string& str = value.asString();
+      return facebook::jsi::String::createFromUtf8(
+        rt, reinterpret_cast<const uint8_t*>(str.data()), str.size());
+    }
+    case folly::dynamic::ARRAY: {
+      facebook::jsi::Array array(rt, value.size());
+      size_t index = 0;
+      for (const auto& item : value) {
+        array.setValueAtIndex(rt, index++, dynamicToValue(rt, item));
+      }
+      return Value(rt, array);
+    }
+    case folly::dynamic::OBJECT: {
+      facebook::jsi::Object object(rt);
+      for (const auto& [key, item] : value.items()) {
+        object.setProperty(
+          rt, facebook::jsi::String::createFromUtf8(rt, key), dynamicToValue(rt, item));
+      }
+      return Value(rt, object);
+    }
+  }
+  return facebook::jsi::Value::undefined();
+}
+} // namespace
+
+TypedInvokeResult invokeTypedByNameDynamic(
+  facebook::jsi::Runtime& rt, const std::string& commandName,
+  const folly::dynamic& args) {
+  facebook::jsi::Value value = dynamicToValue(rt, args);
+  return invokeTypedByName(rt, commandName, value);
+}
+
+TypedInvokeResult invokeTypedByIdDynamic(
+  facebook::jsi::Runtime& rt, uint16_t commandId,
+  const folly::dynamic& args) {
+  facebook::jsi::Value value = dynamicToValue(rt, args);
+  return invokeTypedById(rt, commandId, value);
 }
 
 } // namespace rustra

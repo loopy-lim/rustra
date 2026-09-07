@@ -103,15 +103,32 @@ bool rustra::invokeTypedByIdValue(jsi::Runtime& rt, uint16_t commandId,
 `resource_open/read/write/close`가 전체 수명주기를 이미 시연)의 공식 사용법을
 문서화한다: Win32 `HANDLE`은 `Drop`에서 `CloseHandle`하는 래퍼를 테이블에 넣고,
 JS는 u32 id만 주고받는다. 64비트 포인터를 JS에 직접 노출하지 않는다(number 정밀도
-+ 위협 모델상 포인터 노출 회피).
 
-## 남는 일 (후속 슬라이스, 이번 범위 밖)
+- 위협 모델상 포인터 노출 회피).
 
-- 채널/이벤트 바이너리 페이로드 FFI 변형 (`rustra_ffi_channel_*` bytes 계열)
-- folly::dynamic → postcard 동적 인코더
-- `#[command(platform = ...)]` 매크로 속성 (현재는 빌더 API)
+## 남는 일 (후속 슬라이스)
+
+**2026-09-07 후속 트랙에서 착지**:
+
+- ✅ `#[command(platform(...))]` 매크로 속성 — 매크로가 cfg 게이팅을 소유:
+  지원 플랫폼엔 진짜 inner, 미지원 플랫폼엔 같은 시그니처의 자동 스텁을
+  cfg 배타적으로 생성. register!/build! 체인은 `platform_meta_if` 로 메타를
+  자동 연결한다.
+- ✅ 채널 바이너리 페이로드 — `ChannelBytesSender`/`ChannelHandle::send_bytes`/
+  `rustra_ffi_channel_create_bytes`/`rustra_ffi_channel_send_bytes`(Rust) +
+  C++ `createChannelBytes` HostFunction + JS `createBytesChannel`. JSON 경로와
+  동일 핸들 공간·수명 계약, 한 핸들은 한 경로로만 동작.
+- ✅ folly::dynamic — `RustraTurboInterop.hpp` 의
+  `invokeTypedByNameDynamic/ByIdDynamic`(dynamic→jsi::Value 변환 후 동일 경로).
+- ✅ RN 동기 호출 경로 — `invokeTypedSync`(비교 분석 격차 #3 부분 해소).
+
+**여전히 남는 것** (경쟁 비교 `docs/research/2026-09-07-competitive-landscape.md` 참고):
+
+- 이벤트 싱크(브로드캐스트)의 바이너리 변형 — 채널만 바이너리 지원
 - 다중바이트 TypedArray의 `invokeTypedBuffer` 수용
 - ResourceHandle JS 자동 해제(FinalizationRegistry)·테이블 스위핑
+- 커맨드별 타입화 에러 코드젠(격차 #2 — 다음 트랙 1순위 권장)
+- 역방향 콜백(반환값 있는 JS 함수, 격차 #4)
 - 실기기(iOS/Android)·실 Windows/macOS 실행 증거 (1.0 트랙)
 
 ## 하위 호환성

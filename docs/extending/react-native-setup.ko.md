@@ -191,6 +191,19 @@ switch (result.status) {
 라면 모두 인코딩된다 — 다른 C++ TurboModule 이 만든 객체도 그대로 쓸 수 있다.
 이 함수들은 예외를 던지지 않는다 — 결과는 `TypedInvokeStatus` 로 구분한다.
 
+인접한 상호운용 표면:
+
+- **folly::dynamic 입력** — `RustraTurboInterop.hpp` 의
+  `invokeTypedByNameDynamic`/`invokeTypedByIdDynamic` 오버로드가 dynamic 을
+  `jsi::Value` 로 변환해 동일 경로를 쓴다(2^53 초과 int64 는 정밀도 손실 —
+  헤더 계약 참고).
+- **바이너리 채널** — `createChannelBytes(callback)`(JS: `createBytesChannel`)
+  는 채널 페이로드를 ArrayBuffer 복사본으로 전달한다 — JSON 직렬화 없이
+  rkyv V2 프레임. JSON 채널과 동일한 핸들/close 계약, 한 핸들은 한 경로.
+- **동기 invoke** — `invokeTypedSync(name, args)`(`@rustra/react-native`)는
+  UI 핫패스에서 Promise 홉 없이 C++ typed fast path 를 직접 쓴다 — 미지원
+  환경은 `sync.unavailable` 로 loud-fail.
+
 ## 문제 해결
 
 `RustraBridge was not linked`가 나오면 `bun run codegen`, `bun install`,

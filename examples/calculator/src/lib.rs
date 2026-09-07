@@ -795,19 +795,15 @@ pub fn calculator_package() -> Package {
             .command_fn(tag_set)
             .require_capability("secureCompute", "compute:secure")
             // 신규 커맨드는 id 시프트 방지를 위해 체인 맨 뒤에 붙인다(위 주석).
-            // command_platform 은 전 플랫폼 등록 + 미지원 플랫폼 스텁이다.
-            .platform_command::<(), PlatformNativeInfoOutput>(
-                "platformNativeInfo",
-                &[Platform::Macos, Platform::Windows],
-            );
-            // 지원 플랫폼에서만 실구현 주입(체인은 cfg 표현식 속성을 못 받으므로
-            // let 바인딩으로 갈라 넣는다) — Linux CI 는 스텁 경로
-            // (platform.unavailable)를 그대로 검증한다.
-            #[cfg(any(target_os = "windows", target_os = "macos"))]
-            let pkg = pkg.platform_command_impl("platformNativeInfo", platform_native_info_impl);
-            #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-            let pkg = pkg;
-            let pkg = pkg.build();
+            // #[command(platform(...))] 폼 — 등록은 전 플랫폼에서 동일하고
+            // 스텁/실구현 분기는 매크로가 cfg 로 소유한다. register! 밖 체인
+            // 등록은 매크로 메타(platforms)를 명시적으로 연결한다.
+            .command_fn(platform_native_info)
+            .platform_meta_if(
+                __RUstra_meta_platform_native_info,
+                __RUstra_platforms_platform_native_info,
+            )
+            .build();
 
             // Auto-register for generic FFI with JSON default
             pkg.register_ffi_with_default(FfiFormat::Json);
@@ -993,7 +989,7 @@ pub fn channel_demo(input: ChannelDemoInput) -> Result<ChannelDemoOutput> {
 
 /// 플랫폼 상호운용 — 플랫폼 특화 명령의 계약 안정화 예시.
 ///
-/// `platformNativeInfo` 는 platform_command 으로 macos/windows 에만 구현을
+/// `platformNativeInfo` 는 `#[command(platform(windows, macos))]` 로 macos/windows 에만 구현을
 /// 선언한다. 등록(id·스키마·계약 해시)은 전 플랫폼에서 동일하게 일어나고,
 /// Linux(및 기타)에서 호출하면 `platform.unavailable` 이 반환된다
 /// (`command.not_found` 와 구분된다). 실제 구현은 cfg 로 보호해 지원 OS 에서만
@@ -1007,8 +1003,11 @@ pub struct PlatformNativeInfoOutput {
     pub windowKind: String,
 }
 
-#[cfg(any(target_os = "windows", target_os = "macos"))]
-fn platform_native_info_impl(_input: ()) -> Result<PlatformNativeInfoOutput> {
+#[command(platform(windows, macos))]
+fn platform_native_info(_input: ()) -> Result<PlatformNativeInfoOutput> {
+    // 이 본문은 선언된 플랫폼(windows/macos)에서만 컴파일된다 — 매크로가 cfg
+    // 게이팅을 소유하고, 나머지 플랫폼은 같은 시그니처의 platform.unavailable
+    // 스텁을 자동 생성한다(스텁 경로는 Linux CI 가 검증).
     #[cfg(target_os = "windows")]
     let window_kind = "win32-hwnd";
     #[cfg(target_os = "macos")]
@@ -1204,6 +1203,45 @@ mod tests {
         assert!(
             schema.contains("\"platforms\""),
             "platforms recorded: {schema}"
+        );
+    }
+
+    /// 매크로 폼 회귀 — #[command(platform(...))] 는 cfg 게이팅을 매크로가
+    /// 소유한다. 이 테스트의 선언(linux, windows)은 macOS 를 제외하므로 여기서는
+    /// 자동 스텁 경로가 관측된다(register! 체인이 메타를 자동 연결하는지까지
+    /// 함께 검증).
+    #[test]
+    fn command_macro_platform_form_stub_path() {
+        #[command(platform(linux, windows))]
+        fn macro_platform_probe(_input: ()) -> Result<()> {
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            {
+                Ok(())
+            }
+            #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+            {
+                unreachable!("macro stub replaces this body on unsupported platforms")
+            }
+        }
+        let pkg = register!(
+            Package::builder("test.platform.macro"),
+            macro_platform_probe
+        )
+        .build();
+        let err = pkg.invoke_json("macroPlatformProbe", serde_json::json!(null));
+        #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+        {
+            let err = err.expect_err("unsupported platform must reject");
+            assert_eq!(err.code(), "platform.unavailable");
+            assert!(err.message().contains("macroPlatformProbe"));
+        }
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        {
+            err.expect("declared platform runs the real body");
+        }
+        assert!(
+            pkg.live_schema().to_string().contains("\"platforms\""),
+            "register! chains platform metadata automatically"
         );
     }
 

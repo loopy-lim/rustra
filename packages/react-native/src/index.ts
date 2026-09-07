@@ -36,5 +36,10 @@ export type {
 } from './react-native-core.js';
 export { createAsyncEngine } from './react-native-async.js';
 export type { RustraJSIAsyncNative } from './react-native-async.js';
-export { createChannel, subscribeEvent } from './react-native-events.js';
+export {
+  createBytesChannel,
+  createChannel,
+  invokeTypedSync,
+  subscribeEvent,
+} from './react-native-events.js';
 export type { RustraEventNative, RustraChannelNative } from './react-native-events.js';

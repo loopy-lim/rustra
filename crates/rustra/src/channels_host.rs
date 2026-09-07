@@ -10,6 +10,8 @@ pub struct ChannelHost {
     // 반환할 수 있다.
     next_handle: AtomicU64,
     channels: Mutex<BTreeMap<u32, ChannelSender>>,
+    // 바이너리 채널 — JSON 채널과 동일 핸들 공간(next_handle 공유), 별도 테이블.
+    bytes_channels: Mutex<BTreeMap<u32, crate::channels::ChannelBytesSender>>,
     resources: Mutex<BTreeMap<u32, Arc<dyn std::any::Any + Send + Sync>>>,
 }
 
@@ -18,6 +20,7 @@ impl Default for ChannelHost {
         Self {
             next_handle: AtomicU64::new(1),
             channels: Mutex::new(BTreeMap::new()),
+            bytes_channels: Mutex::new(BTreeMap::new()),
             resources: Mutex::new(BTreeMap::new()),
         }
     }
@@ -79,13 +82,63 @@ impl ChannelHost {
         true
     }
 
+    /// 바이너리 채널을 발급한다 — JSON 경로와 동일한 단조 핸들 공간.
+    pub fn register_channel_bytes(
+        &self,
+        sender: crate::channels::ChannelBytesSender,
+    ) -> u32 {
+        let handle = self.reserve_handle();
+        if handle == 0 {
+            return 0;
+        }
+        self.register_channel_bytes_with_handle(handle, sender);
+        handle
+    }
+
+    /// 선발급된 핸들로 바이너리 채널을 등록한다(FFI 2단계 발급 패턴).
+    pub fn register_channel_bytes_with_handle(
+        &self,
+        handle: u32,
+        sender: crate::channels::ChannelBytesSender,
+    ) {
+        self.bytes_channels
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .insert(handle, sender);
+    }
+
+    /// Rust→JS 로 바이너리 페이로드를 흘린다. 계약은 [`ChannelHost::send`] 와
+    /// 동일(없는 핸들 `false`, 콜백 패닉 무시).
+    pub fn send_bytes(&self, handle: u32, payload: &[u8]) -> bool {
+        let sender = {
+            let channels = self
+                .bytes_channels
+                .lock()
+                .unwrap_or_else(|p| p.into_inner());
+            channels.get(&handle).cloned()
+        };
+        let Some(sender) = sender else {
+            return false;
+        };
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| sender(payload)));
+        true
+    }
+
     /// 채널을 해제한다(호출 완료/취소 시). 이후 동일 핸들 send 는 `false`.
     pub fn drop_channel(&self, handle: u32) -> bool {
-        self.channels
+        let json_removed = self
+            .channels
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .remove(&handle)
-            .is_some()
+            .is_some();
+        let bytes_removed = self
+            .bytes_channels
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove(&handle)
+            .is_some();
+        json_removed || bytes_removed
     }
 
     /// Rust-소유 리소스를 등록하고 핸들을 발급한다.

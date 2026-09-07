@@ -81,12 +81,15 @@ impl PackageBuilder {
         O: Serialize + JsonSchema + 'static,
         F: crate::__private::CommandHandler<I, O>,
     {
-        let declared = self.platform_command_declarations.get(name).unwrap_or_else(|| {
-            panic!(
-                "platform_command_impl('{name}'): command is not declared by command_platform \
+        let declared = self
+            .platform_command_declarations
+            .get(name)
+            .unwrap_or_else(|| {
+                panic!(
+                    "platform_command_impl('{name}'): command is not declared by command_platform \
                  (register a plain handler with .command(...) instead)"
-            )
-        });
+                )
+            });
         let current = crate::platform::Platform::current();
         if let Some(current) = current
             && !declared.contains(&current)
@@ -112,10 +115,7 @@ impl PackageBuilder {
                 "platform_command_impl('{name}'): handler types mismatch the declaration — \
                  declared input '{}' / output '{}' but the impl provides \
                  input '{}' / output '{}' (schema must stay identical across platforms)",
-                existing.input_type,
-                existing.output_type,
-                command.input_type,
-                command.output_type
+                existing.input_type, existing.output_type, command.input_type, command.output_type
             );
         }
         command.description = description;
@@ -123,6 +123,30 @@ impl PackageBuilder {
         command.platforms = platforms;
         self.commands.insert(name.to_string(), command);
         self.implemented_platform_commands.insert(name.to_string());
+        self
+    }
+
+    /// `#[command(platform(...))]` 메타데이터 연결 — register!/build! 체인이
+    /// 항상 호출한다. `None`(전 플랫폼 명령)이면 no-op, `Some`이면 해당 명령의
+    /// 스키마 `platforms` 필드를 채운다. 핸들러는 매크로가 cfg 배타적으로
+    /// 생성한 진짜 구현/스텁이 이미 `.command` 로 등록된 상태다.
+    ///
+    /// # 패닉
+    ///
+    /// 명령이 등록되지 않은 경우 (매크로 체인 오류를 숨기지 않기 위해).
+    pub fn platform_meta_if(
+        mut self,
+        name: &str,
+        platforms: Option<&'static [crate::platform::Platform]>,
+    ) -> Self {
+        let Some(platforms) = platforms else {
+            return self;
+        };
+        let command = self
+            .commands
+            .get_mut(name)
+            .unwrap_or_else(|| panic!("platform_meta_if: command '{name}' is not registered"));
+        command.platforms = platforms.to_vec();
         self
     }
 
