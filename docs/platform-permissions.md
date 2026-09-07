@@ -110,7 +110,59 @@ Common entries:
 
 ---
 
-## 8. Current state of the examples
+## 8. The device capability contract (rustra side)
+
+OS permissions stay with the host — but rustra gives commands a way to *declare* which
+device capabilities they assume, and JS a standard way to *query* status, so the
+ad-hoc per-app wiring doesn't fork across hosts.
+
+**Declare (Rust)** — the requirement becomes part of schema.json and codegen output:
+
+```rust
+#[command(device(camera, bluetooth))]
+fn scan_tags(input: ScanInput) -> Result<ScanOutput> { /* … */ }
+```
+
+Tokens come from a versioned catalog (`DeviceCapability::ALL`): `camera`,
+`microphone`, `geolocation`, `notifications`, `clipboard-read`, `clipboard-write`,
+`wifi`, `bluetooth`, `battery`, `nfc`, `biometric`, `haptics`, `flashlight`,
+`contacts`, `calendar`, `photo-library`, `motion`, `usb`, `serial`,
+`network-state`, `screen-brightness`. W3C PermissionName spelling is kept where one
+exists. OS-specific permission strings (Android `NEARBY_DEVICES`, iOS `NSCameraUsageDescription`,
+macOS entitlements) are intentionally hidden behind the token — the cross-reference
+for each OS/plugin/library lives in
+[docs/research/2026-09-08-device-capabilities.md](./research/2026-09-08-device-capabilities.md).
+
+A declaration is a contract document, not runtime gating: rustra never blocks the
+invoke and never prompts. Declaring `devices` changes schema.json (and therefore the
+contract hash) — intended evolution, caught by `rustra diff`.
+
+**Query (TypeScript)** — one registered provider answers for the whole app:
+
+```ts
+import { registerDeviceStatusProvider, getDeviceStatus } from '@rustra/types';
+
+registerDeviceStatusProvider(async (capability) => {
+  if (capability === 'camera') return { availability: 'available', permission: 'granted' };
+  return { availability: 'unknown', permission: 'unknown' };
+});
+
+const status = await getDeviceStatus('camera');
+// → { availability: 'available' | 'unavailable' | 'unknown',
+//     permission:   'granted' | 'denied' | 'prompt' | 'unknown' }
+```
+
+Without a registered provider the query fails open (`unknown`/`unknown`) with a
+one-time debug note — the host app decides what to do. Hosts raise
+`device.unavailable` / `device.permission_denied` themselves when they choose to
+enforce; rustra's core never emits these codes.
+
+**How the layers compose**: the OS gates hardware (declare + runtime prompt), the
+Tauri ACL gates which webview may invoke plugins, rustra capabilities gate who may
+call a bridge command, and the device declaration documents *why* a command needs
+the hardware — see §2.
+
+## 9. Current state of the examples
 
 | Example                            | Platform | Permission declarations                                                 | Why                                                                   |
 | ---------------------------------- | -------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------- |
