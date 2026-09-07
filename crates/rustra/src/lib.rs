@@ -189,16 +189,4 @@ pub trait BufferCommandOutput: Serialize + JsonSchema + 'static {
 }
 
 #[cfg(test)]
-mod buffer_invoke_tests;
-#[cfg(test)]
-mod builder_devices_tests;
-#[cfg(test)]
-mod builder_errors_tests;
-#[cfg(test)]
-mod builder_platform_tests;
-#[cfg(test)]
-mod complex_into_tests;
-#[cfg(test)]
-mod raw_invoke_tests;
-#[cfg(test)]
-mod runtime_registry_tests;
+mod internal_tests;

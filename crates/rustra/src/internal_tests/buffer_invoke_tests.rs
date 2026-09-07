@@ -97,4 +97,4 @@ fn buffer_command_rejects_optional_byte_fields() {
         .buffer_command("optional", |input: OptionalBytes| Ok(input))
         .build();
 }
-use super::*;
+use crate::*;
