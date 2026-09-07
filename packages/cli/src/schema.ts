@@ -31,6 +31,13 @@ export type CommandSchema = {
    * 키 자체가 없다(platforms·events 관례 — 기존 계약 해시 불변).
    */
   errors?: CommandErrorVariantSchema[];
+  /**
+   * (디바이스 역량 계약) 이 명령이 전제하는 디바이스 역량 토큰 선언(Rust
+   * `DeviceCapability` 카탈로그의 kebab-case 토큰) — `devices.ts`(패키지 토큰
+   * 유니언 + 커맨드별 상수) 생성에 쓰인다. 선언이 없으면 키 자체가 없다
+   * (platforms·errors 관례 — 기존 계약 해시 불변).
+   */
+  devices?: string[];
   /** 명명된 타입 정의 (schemars가 생성한 $ref 대상) */
   definitions?: Record<string, JsonSchema>;
 };

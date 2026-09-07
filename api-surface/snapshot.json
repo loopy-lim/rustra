@@ -5,6 +5,7 @@
     "pub mod byte_buffer",
     "pub mod cancel",
     "pub mod channels",
+    "pub mod device_capabilities",
     "pub mod events",
     "pub mod ffi",
     "pub mod platform",
@@ -293,6 +294,7 @@
     "packages/types": [
       "* from './bootstrap-lifecycle.js'",
       "* from './debug.js'",
+      "* from './device-status.js'",
       "* from './errors.js'",
       "* from './global-batch-settled.js'",
       "* from './global.js'",

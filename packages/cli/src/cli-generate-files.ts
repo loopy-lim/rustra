@@ -7,6 +7,7 @@ import {
   generateCommandsTs,
   generateEventsTs,
   generateErrorsTs,
+  generateDevicesTs,
   generateContractTs,
   generateRkyvCodecsTs,
   generateRkyvRegistryTs,
@@ -44,6 +45,7 @@ function stageFor(fileName: string): string {
     return 'schema → ts codec renderer';
   if (fileName === 'positional-facade.ts') return 'schema → positional facade';
   if (fileName === 'errors.ts') return 'schema → ts error renderer';
+  if (fileName === 'devices.ts') return 'schema → ts device renderer';
   if (['node.ts', 'bun.ts', 'tauri.ts', 'react-native.ts'].includes(fileName))
     return 'schema → host entry';
   return 'rust-probe schema → ts renderer';
@@ -98,6 +100,8 @@ export async function generateFromSchema(
   if (events) addFile(outputPath, 'events.ts', events);
   const errors = generateErrorsTs(schema);
   if (errors) addFile(outputPath, 'errors.ts', errors);
+  const devices = generateDevicesTs(schema);
+  if (devices) addFile(outputPath, 'devices.ts', devices);
   if (positional) addFile(outputPath, 'positional-facade.ts', generatePositionalFacadeTs(schema));
   if (reactNativeScaffold) addFile(outputPath, 'react-native.ts', generateReactNativeEntryTs());
   // 이벤트 선언 유무가 엔트리의 subscribeEvent export 를 결정한다 — 선언 없으면
