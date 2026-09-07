@@ -54,15 +54,10 @@ test('isDivideError rejects non-RustraCommandError values', () => {
 });
 
 test('resource guards cover the declared resource.not_found code', async () => {
-  configure(
-    rejectingEngine('resource.not_found', 'unknown or closed handle'),
-  );
+  configure(rejectingEngine('resource.not_found', 'unknown or closed handle'));
 
   await assert.rejects(
-    () =>
-      import('../generated/commands.js').then((m) =>
-        m.resourceRead({ handle: 999, key: 'k' }),
-      ),
+    () => import('../generated/commands.js').then((m) => m.resourceRead({ handle: 999, key: 'k' })),
     (error: unknown) => {
       if (!isResourceReadError(error)) return false;
       assert.equal(error.code, ResourceReadErrorCode.ResourceNotFound);
