@@ -159,3 +159,43 @@ fn command_errors_panics_on_empty_slice() {
         .command_errors("divide", &[])
         .build();
 }
+
+// ── 스키마 엔트리 — 조건부 "errors" 필드 (platforms 관례와 동일) ──
+
+#[test]
+fn schema_entry_includes_errors_when_declared() {
+    let schema = errors_package().live_schema();
+    let errors = schema["commands"][0]["errors"]
+        .as_array()
+        .expect("declared command records an errors array");
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0]["code"], "math.divide_by_zero");
+    assert_eq!(errors[0]["description"], "0으로 나눌 때");
+    assert_eq!(errors[0]["retryable"], false);
+    // 원소는 항상 3키 고정 — 바이트 안정성(조건부는 errors 필드 자체와
+    // 배열 원소 수준에서만).
+    let keys: Vec<&str> = errors[0]
+        .as_object()
+        .expect("variant is an object")
+        .keys()
+        .map(|key| key.as_str())
+        .collect();
+    assert_eq!(keys, vec!["code", "description", "retryable"]);
+}
+
+#[test]
+fn schema_entry_omits_errors_when_undeclared() {
+    let package = Package::builder("example.errors")
+        .command("divide", |input: serde_json::Value| {
+            Ok::<_, RustraError>(input)
+        })
+        .build();
+    let schema = package.live_schema();
+    // 선언 없는 명령 엔트리에 "errors" 키가 없어야 한다 — 기존 패키지의
+    // schema.json/계약 해시 불변.
+    assert!(
+        schema["commands"][0].get("errors").is_none(),
+        "undeclared command must not record an errors key: {}",
+        schema["commands"][0]
+    );
+}
