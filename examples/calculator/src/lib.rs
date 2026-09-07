@@ -1004,7 +1004,7 @@ pub struct ChannelDemoBytesInput {
 #[serde(rename_all = "camelCase")]
 pub struct ChannelDemoBytesOutput {
     pub sent: u32,
-    pub droppedSends: u32,
+    pub dropped_sends: u32,
 }
 
 #[command]
@@ -1022,7 +1022,7 @@ fn channel_demo_bytes(input: ChannelDemoBytesInput) -> Result<ChannelDemoBytesOu
     }
     Ok(ChannelDemoBytesOutput {
         sent,
-        droppedSends: dropped,
+        dropped_sends: dropped,
     })
 }
 
@@ -1039,7 +1039,7 @@ pub struct PlatformNativeInfoOutput {
     /// std::env::consts::OS — 컴파일 대상 OS 문자열.
     pub os: String,
     /// 네이티브 윈도우 시스템 식별자 — 실제 예에서는 win32/objc2 API 조사값.
-    pub windowKind: String,
+    pub window_kind: String,
 }
 
 #[command(platform(windows, macos))]
@@ -1053,7 +1053,7 @@ fn platform_native_info(_input: ()) -> Result<PlatformNativeInfoOutput> {
     let window_kind = "appkit-nswindow";
     Ok(PlatformNativeInfoOutput {
         os: std::env::consts::OS.to_string(),
-        windowKind: window_kind.to_string(),
+        window_kind: window_kind.to_string(),
     })
 }
 
@@ -1209,9 +1209,6 @@ mod tests {
         assert_eq!(out.dropped_sends, 2);
     }
 
-    /// 리소스 라이프사이클: open → write → read → close → close 후 not_found.
-    /// JS 표면은 정수 핸들뿐이고 소유권은 Rust 테이블에 있다.
-    #[test]
     /// 플랫폼 특화 명령 계약 — (1) 전 플랫폼에서 계약상 존재해야 하고 (2) 지원
     /// 플랫폼에서는 실구현, 미지원 플랫폼에서는 platform.unavailable 로 정확히
     /// 구분되어야 한다. macOS/Windows 실행은 impl 경로, Linux CI 는 스텁 경로를
@@ -1284,6 +1281,9 @@ mod tests {
         );
     }
 
+    /// 리소스 라이프사이클: open → write → read → close → close 후 not_found.
+    /// JS 표면은 정수 핸들뿐이고 소유권은 Rust 테이블에 있다.
+    #[test]
     fn resource_kv_lifecycle() {
         let mut initial = std::collections::BTreeMap::new();
         initial.insert("seed".to_string(), "1".to_string());

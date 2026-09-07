@@ -297,7 +297,7 @@ fn channel_create_varint_body_is_rejected_without_panic() {
             WireFrame::Response { ok, .. } => Some(ok),
             WireFrame::ChannelPush { .. } => None,
         })
-        .last()
+        .next_back()
         .expect("response for malformed drop");
     assert_eq!(ok, 0, "malformed varint body is rejected, not panicked");
 }
