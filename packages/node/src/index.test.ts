@@ -1200,10 +1200,8 @@ test('A05: dispose during reload re-init on the one-shot path leaves no TypeErro
         getContractHash: async () => '0'.repeat(64),
         dispose() {},
       }) as unknown as NodeProcessTransport;
-    let spawns = 0;
     const bootstrap = createNodeBootstrap({
       createTransport: async () => {
-        spawns++;
         // 원샷 스폰(게이트 없음) — 두 번째 스폰(reload 재초기화)의 await 도중에
         // dispose 가 착지하게 setImmediate 로 마이크로태스크 경계를 만든다.
         await new Promise<void>((resolve) => setImmediate(resolve));
