@@ -30,6 +30,7 @@ export type RustraJSINative = RkyvV2SchemaNative & {
   invoke(payload: ArrayBuffer): ArrayBuffer;
   onEvent?(name: string, callback: (payloadJson: string) => void): void;
   offEvent?(name: string): void;
+  /** JS 폴링 drain(CallInvoker 없는 호스트). 처리된 이벤트+채널 프레임 수 반환. */
   drainEvents?(): number;
   createChannel?(callback: (payloadJson: string) => void): number;
   /** 바이너리 채널 — 콜백이 rkyv V2 프레임 등 임의 바이트를 받는다. */

@@ -613,6 +613,11 @@ void ChannelDispatcher::drain(facebook::jsi::Runtime& rt) {
   }
 }
 
+size_t ChannelDispatcher::pendingCount() {
+  std::lock_guard<std::mutex> lock(mutex_);
+  return queue_.size() + bytesQueue_.size();
+}
+
 void ChannelDispatcher::scheduleDrainLocked() {
   if (drainScheduled_ || !callInvoker_) return;
   drainScheduled_ = true;
@@ -851,16 +856,19 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
     cache_["offEvent"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
   }
-  // drainEvents(): CallInvoker 없는 호스트의 JS 폴링 drain. 반환값 = 처리된
-  // 이벤트 수. CallInvoker 경로가 켜져 있으면 보통 비어 있다(자동 drain 됨).
+  // drainEvents(): CallInvoker 없는 호스트의 JS 폴링 drain. 이벤트 큐와 채널
+  // 큐(JSON+바이너리)를 모두 소비한다 — 반환값 = 처리한 프레임 수(이벤트 +
+  // 채널 합산). CallInvoker 경로가 켜져 있으면 보통 비어 있다(자동 drain 됨).
   {
     auto dispatcher = getEventDispatcher();
+    auto channels = getChannelDispatcher();
     auto propNameId = PropNameID::forAscii(rt, "drainEvents");
     auto hostFn = Function::createFromHostFunction(
       rt, propNameId, 0,
-      [dispatcher](Runtime& rt, const Value&, const Value*, size_t) -> Value {
-        size_t before = dispatcher->pendingCount();
+      [dispatcher, channels](Runtime& rt, const Value&, const Value*, size_t) -> Value {
+        size_t before = dispatcher->pendingCount() + channels->pendingCount();
         dispatcher->drain(rt);
+        channels->drain(rt);
         return Value(static_cast<double>(before));
       });
     cache_["drainEvents"] = std::make_unique<CachedFunction>(
