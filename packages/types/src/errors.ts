@@ -185,6 +185,18 @@ export const RustraErrorCode = {
    * Tauri tauri-channels.ts). Rust error.rs 에 대응 값이 없다.
    */
   ChannelUnavailable: 'channel.unavailable',
+  /**
+   * 디바이스 역량 부재/OS 스위치 off — `platform.unavailable`(그 플랫폼용
+   * 구현 자체가 없음)·`capability.denied`(호출 자격 미부여)와는 원인·복구
+   * 경로가 다른 독립 축. 발급 주체는 호스트 앱/파생 provider — rustra 코어는
+   * 게이팅을 하지 않으므로 Rust error.rs 에 대응 값이 없다.
+   */
+  DeviceUnavailable: 'device.unavailable',
+  /**
+   * 디바이스 역량 사용의 사용자·정책 거부 — retryable 아님. 발급 주체는
+   * 호스트 앱/파생 provider 이며 Rust error.rs 에 대응 값이 없다.
+   */
+  DevicePermissionDenied: 'device.permission_denied',
   /** 계약 해시 불일치(JS>native stale). */
   ContractMismatch: 'contract.mismatch',
   /** 계약 해시 검증 불가(네이티브 미지원). */

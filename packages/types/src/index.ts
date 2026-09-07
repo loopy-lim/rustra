@@ -16,6 +16,7 @@ export * from './rkyv-engine.js';
 export * from './debug.js';
 export * from './global-batch-settled.js';
 export * from './inspector.js';
+export * from './device-status.js';
 export { createSchemaPostcardCodec } from './schema-postcard-codec.js';
 export {
   invokeCallbackWithAbort,

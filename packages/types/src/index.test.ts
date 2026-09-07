@@ -9,6 +9,7 @@ import {
   createGeneratedFields2,
   createJsonEngine,
   createRkyvV2Engine,
+  getDeviceStatus,
   getLiveSchema,
   ensureConfigured,
   invoke,
@@ -18,7 +19,12 @@ import {
   invokeGenerated,
   invokeGeneratedFields2,
   invokeWithTimeout,
+  isRetryableCode,
+  isRustraErrorCode,
+  registerDeviceStatusProvider,
   raceAbort,
+  resetDebugEnvForTests,
+  resetDeviceStatusForTests,
   RustraCommandError,
   CancelledError,
   TimeoutError,
@@ -28,7 +34,6 @@ import {
   withRetry,
   configureDebug,
   debugWire,
-  resetDebugEnvForTests,
 } from './index.js';
 import type {
   RkyvV2SchemaNative,
@@ -5372,4 +5377,141 @@ test('A04 와이어 배치 무시: invokeBatch 를 지원해도 settled 은 항�
   } finally {
     configure(a04Sentinel());
   }
+});
+
+// ── 디바이스 역량 조회 표면 (디바이스 역량 계약 레이어 D/E절) ──────────────
+// 선언과 조회는 rustra 몫, OS 권한 요청은 호스트 몫 — JS 표면은 provider
+// 등록/조회만 갖는다(요청 API 없음). 미등록·provider 예외 모두 fail-open
+// (조회가 부수효과를 만들지 않는다). provider 슬롯은 configure 관례의
+// 모듈 전역 1-slot — 테스트 간 오염 방지를 위해 resetDeviceStatusForTests 로 정리.
+
+/** console.debug 교체 헬퍼 — D절 fail-open 진단 채널 캡처용. */
+function mockConsoleDebug(): { calls: string[]; restore(): void } {
+  const original = console.debug;
+  const calls: string[] = [];
+  console.debug = (...args: unknown[]) => {
+    calls.push(args.map(String).join(' '));
+  };
+  return {
+    calls,
+    restore: () => {
+      console.debug = original;
+    },
+  };
+}
+
+test('getDeviceStatus delegates to the registered provider (sync and async)', async () => {
+  try {
+    // 동기 provider — 반환값을 그대로 전달한다.
+    registerDeviceStatusProvider((capability) => {
+      assert.equal(capability, 'camera', 'capability 인자는 provider 에 그대로 전달');
+      return { availability: 'available', permission: 'granted' };
+    });
+    assert.deepEqual(await getDeviceStatus('camera'), {
+      availability: 'available',
+      permission: 'granted',
+    });
+
+    // 비동기 provider — Promise 결과를 기다린 뒤 전달한다.
+    registerDeviceStatusProvider(async (capability) => {
+      assert.equal(capability, 'nfc');
+      return { availability: 'unavailable', permission: 'denied' };
+    });
+    assert.deepEqual(await getDeviceStatus('nfc'), {
+      availability: 'unavailable',
+      permission: 'denied',
+    });
+  } finally {
+    resetDeviceStatusForTests();
+  }
+});
+
+test('getDeviceStatus fails open when no provider is registered, warning once', async () => {
+  resetDeviceStatusForTests();
+  const debugs = mockConsoleDebug();
+  try {
+    const first = await getDeviceStatus('camera');
+    const second = await getDeviceStatus('bluetooth');
+    assert.deepEqual(first, { availability: 'unknown', permission: 'unknown' });
+    assert.deepEqual(second, { availability: 'unknown', permission: 'unknown' });
+    // 경고는 반복 호출마다가 아니라 모듈당 정확히 1회.
+    assert.equal(debugs.calls.length, 1, 'unregistered warning must fire exactly once');
+    assert.match(debugs.calls[0] ?? '', /registerDeviceStatusProvider/);
+  } finally {
+    debugs.restore();
+    resetDeviceStatusForTests();
+  }
+});
+
+test('getDeviceStatus recovers from provider exceptions with fail-open status', async () => {
+  const debugs = mockConsoleDebug();
+  try {
+    // 동기 throw — rejection 대신 unknown 상태로 회복.
+    registerDeviceStatusProvider(() => {
+      throw new Error('provider exploded');
+    });
+    assert.deepEqual(await getDeviceStatus('camera'), {
+      availability: 'unknown',
+      permission: 'unknown',
+    });
+
+    // 비동기 reject — 동일하게 회복.
+    registerDeviceStatusProvider(() => Promise.reject(new Error('async provider exploded')));
+    assert.deepEqual(await getDeviceStatus('camera'), {
+      availability: 'unknown',
+      permission: 'unknown',
+    });
+    // 경로 관측 — 회복된 예외는 debug 진단으로 보인다.
+    assert.equal(debugs.calls.length, 2, 'each recovered exception must be observable');
+    assert.match(debugs.calls[0] ?? '', /provider exploded/);
+    assert.match(debugs.calls[1] ?? '', /async provider exploded/);
+  } finally {
+    debugs.restore();
+    resetDeviceStatusForTests();
+  }
+});
+
+test('re-registering a provider replaces the previous one (last wins)', async () => {
+  let oldCalls = 0;
+  try {
+    registerDeviceStatusProvider(() => {
+      oldCalls++;
+      return { availability: 'available', permission: 'unknown' };
+    });
+    registerDeviceStatusProvider(() => ({ availability: 'unavailable', permission: 'prompt' }));
+    assert.deepEqual(await getDeviceStatus('wifi'), {
+      availability: 'unavailable',
+      permission: 'prompt',
+    });
+    assert.equal(oldCalls, 0, '재등록 후 이전 provider 는 호출되지 않는다');
+  } finally {
+    resetDeviceStatusForTests();
+  }
+});
+
+test('duplicate package copies share the registered provider', async () => {
+  try {
+    const duplicateUrl = new URL(`./index.ts?device-duplicate=${Date.now()}`, import.meta.url).href;
+    const duplicate = (await import(duplicateUrl)) as typeof import('./index.js');
+    duplicate.registerDeviceStatusProvider(() => ({
+      availability: 'available',
+      permission: 'granted',
+    }));
+    assert.deepEqual(await getDeviceStatus('camera'), {
+      availability: 'available',
+      permission: 'granted',
+    });
+  } finally {
+    resetDeviceStatusForTests();
+  }
+});
+
+test('device error codes are registered and non-retryable (E절)', () => {
+  assert.equal(RustraErrorCode.DeviceUnavailable, 'device.unavailable');
+  assert.equal(RustraErrorCode.DevicePermissionDenied, 'device.permission_denied');
+  assert.equal(isRustraErrorCode('device.unavailable'), true);
+  assert.equal(isRustraErrorCode('device.permission_denied'), true);
+  // 역량 부재와 사용자·정책 거부는 재시도로 해결되지 않는다.
+  assert.equal(isRetryableCode('device.unavailable'), false);
+  assert.equal(isRetryableCode('device.permission_denied'), false);
 });
