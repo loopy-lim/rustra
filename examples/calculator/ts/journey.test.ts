@@ -33,6 +33,7 @@ import { createNodeEngine, createNodeLoopTransport, subscribeEvent } from '@rust
 // 같은 dist-ts 트리의 generated registry — codecs 주입으로 바이너리 모드 +
 // events:"push" 핸드셰이크가 협상된다(node 패키지 e2e와 동일 패턴).
 import { rkyvV2Registry } from '../generated/rkyv-registry.js';
+import { isDivideError } from '../generated/errors.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // dist-ts/examples/calculator/ts → 저장소 루트 — transport-bench.test.ts 와 동일
@@ -181,10 +182,10 @@ journeyTest(journeyName, { timeout: 30_000 }, async () => {
     detachObserver();
 
     // ── 6. 오류 복구 — 에러 프레임 후 같은 호스트가 계속 응답한다 ──
+    // 와이어에서 도착한 도메인 코드는 생성된 가드로 좁혀진다(typed errors).
     await assert.rejects(
       () => engine.invoke('divide', { a: 1, b: 0 }),
-      (error: unknown) =>
-        error instanceof RustraCommandError && error.code === 'math.divide_by_zero',
+      (error: unknown) => isDivideError(error) && error.code === 'math.divide_by_zero',
     );
     const recovered = await engine.invoke<{ value: number }>('addNumbers', { a: 1, b: 2 });
     assert.equal(recovered.value, 3, 'host serves fresh commands after an error frame');

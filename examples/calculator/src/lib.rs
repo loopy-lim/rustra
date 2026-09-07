@@ -253,7 +253,7 @@ pub struct DivideOutput {
     pub value: i64,
 }
 
-#[command]
+#[command(error("math.divide_by_zero"))]
 pub fn divide(input: DivideInput) -> Result<DivideOutput> {
     if input.b == 0 {
         return Err(RustraError::custom(
@@ -1100,7 +1100,7 @@ pub struct ResourceReadOutput {
     pub value: Option<String>,
 }
 
-#[command]
+#[command(error("resource.not_found"))]
 pub fn resource_read(input: ResourceReadInput) -> Result<ResourceReadOutput> {
     let res = input
         .handle
@@ -1128,7 +1128,7 @@ pub struct ResourceWriteOutput {
     pub entries: usize,
 }
 
-#[command]
+#[command(error("resource.not_found"))]
 pub fn resource_write(input: ResourceWriteInput) -> Result<ResourceWriteOutput> {
     let res = input
         .handle
