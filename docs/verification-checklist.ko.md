@@ -53,13 +53,17 @@ invoke → 이벤트 → progress → 취소 → 구독 해제 → 복구 → di
 
 ```text
 - 항목: 1. Tauri 실제 WebView (R01/R02/R03 + profiled 미노출)
-- Host:
-- OS:
-- 빌드:
-- SHA:
-- 날짜:
-- 결과:
-- 증거:
+- Host: tauri-calculator
+- OS: macOS (darwin 25.6.0) arm64
+- 빌드: release (tauri build)
+- SHA: 255ec1b1
+- 날짜: 2026-09-08
+- 결과: PARTIAL — 실제 Wry WebView 위에서 build+smoke 통과
+  (`tauri runtime probe result: 42`, probe 파일 핸드셰이크, 정상 종료).
+  R01/R02/R03 상호작용 단계와 profiled 미노출 확인은 수동 `tauri dev`
+  세션이 여전히 필요하다.
+- 증거: 전면 게이트 배터리 9단계 — `bun run test:runtime:tauri`
+  (release 빌드 35.9초 + runtime-smoke.mjs PASS)
 ```
 
 ## 2. React Native 실호스트 (이벤트 형태, listener 예외, 재구독)
