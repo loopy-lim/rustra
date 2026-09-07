@@ -15,6 +15,7 @@
 ### Task 1: Rust 측 채널 커맨드 (`rustra_channel_create`/`rustra_channel_drop`)
 
 **Files:**
+
 - Modify: `crates/rustra/src/tauri_support.rs`
 - Test: `examples/tauri-calculator/src-tauri/tests/channel_push.rs` (신설 — event_push.rs 패턴)
 
@@ -132,7 +133,9 @@ sender가 핸들 캡처를 위해 reserve→insert 2단계가 필요한 이유: 
 ```bash
 cargo test -p rustra-tauri-calculator --test channel_push
 ```
+
 Expected: PASS. 추가 검증:
+
 - 같은 프로세스에서 handle 1씩 증가(단조 증가),
 - drop 후 재발급 핸들은 새 handle,
 - `send` 후 listener 도달 + close 후 `send → false`.
@@ -144,6 +147,7 @@ Expected: PASS. 추가 검증:
 ### Task 2: JS 어댑터 `createChannel` (`packages/tauri`)
 
 **Files:**
+
 - Create: `packages/tauri/src/tauri-channels.ts`
 - Modify: `packages/tauri/src/index.ts` (re-export)
 - Test: `packages/tauri/test/tauri-channels.test.ts`
@@ -155,7 +159,10 @@ import { describe, expect, test } from 'bun:test';
 import { createChannel } from '../src/tauri-channels.js';
 
 type Invoke = (cmd: string, args?: unknown) => Promise<unknown>;
-type Listen = (channel: string, handler: (event: { payload: string }) => void | Promise<void>) => Promise<() => void>;
+type Listen = (
+  channel: string,
+  handler: (event: { payload: string }) => void | Promise<void>,
+) => Promise<() => void>;
 
 function harness() {
   const invocations: Array<{ cmd: string; args?: unknown }> = [];
@@ -171,7 +178,9 @@ function harness() {
     const set = listeners.get(channel) ?? new Set();
     set.add(handler);
     listeners.set(channel, set);
-    const unlisten = () => { set.delete(handler); };
+    const unlisten = () => {
+      set.delete(handler);
+    };
     unlisteners.push(unlisten);
     return unlisten;
   };
@@ -180,6 +189,7 @@ function harness() {
 ```
 
 검증 항목:
+
 1. `createChannel(cb, { invoke, listen })` → `{ handle: 7, close }` — invoke로 `rustra_channel_create` 호출.
 2. `listen('rustra://channel/7', ...)` 배선 — 채널명이 `rustra://channel/${handle}`.
 3. Rust가 프레임을 push하면 cb가 파싱된 객체로 호출 — `handler({ payload: '{"v":1}' })` → `cb({v:1})`.
@@ -201,12 +211,15 @@ type TauriInvoke = (cmd: string, args?: Record<string, unknown>) => Promise<pack
 
 ```ts
 export type TauriChannelInvoke = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
-export type TauriListen = (channel: string, handler: (event: { payload: string }) => unknown) => Promise<() => void>;
+export type TauriListen = (
+  channel: string,
+  handler: (event: { payload: string }) => unknown,
+) => Promise<() => void>;
 
 export function createChannel(
   callback: (payload: unknown) => void,
   io?: { invoke?: TauriInvoke; listen?: TauriListen },
-): Promise<{ readonly handle: TauriChannelHandle; close(): Promise<boolean> }>
+): Promise<{ readonly handle: TauriChannelHandle; close(): Promise<boolean> }>;
 ```
 
 - `invoke`/`listen` 미전달 시 `globalThis.__TAURI__` 자동 감지(`requireTauriListen` 패턴 재사용 — core.invoke, event.listen).
@@ -230,6 +243,7 @@ bun test packages/tauri
 ### Task 3: 예제 + 문서 + 매트릭스 + changeset
 
 **Files:**
+
 - Modify: `docs/compatibility-matrix.md` (+ `docs/compatibility-matrix.ko.md`)
 - Modify: `docs/rust-api-guide.md` 채널 절
 - Modify: `docs/getting-started.md` (근사 유니캐스트 주의)
@@ -241,14 +255,17 @@ bun test packages/tauri
 **Step E2E 성공 후 Step 2: 매트릭스 갱신**
 
 `docs/Channels` 행의 Tauri 셀:
+
 ```
 ✅ `createChannel(cb)` — invoke 발급 + `rustra://channel/{handle}` listen 근사 유니캐스트
 ```
-+ Notes에 근사 계약 명시(다른 웹뷰 listen 시 프레임 관측 가능 — 단일 발급자=단일 수신자 정상 흐름에서는 유니캐스트와 동일).
+
+- Notes에 근사 계약 명시(다른 웹뷰 listen 시 프레임 관측 가능 — 단일 발급자=단일 수신자 정상 흐름에서는 유니캐스트와 동일).
 
 **Step 3: guide/getting-started 갱신 + changeset**
 
 `.changeset/tauri-channel-adapter.md`:
+
 ```md
 ---
 '@rustra/tauri': minor
@@ -256,6 +273,7 @@ bun test packages/tauri
 
 Tauri 채널 어댑터: `createChannel(callback)` ...
 ```
+
 (Rust 측 rustra crate는 별도 Cargo workspace 발행 — docs/release-procedure.md. tauri_support.rs는 rustra crate의 tauri feature 코드라 crates.io 발행 대상 — release-procedure에 따라 수동.)
 
 **Step 4: ko/en 문서 동기화 확인** — `bun run test:docs` 게이트가 지키는 `docs:sync` 영역을 건드리면 en/ko 쌍으로 갱신.

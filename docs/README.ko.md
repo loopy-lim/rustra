@@ -42,6 +42,8 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 | [Rust API 가이드](rust-api-guide.md)                                               | 사용자 | `#[command]`/`#[bridge_type]`/`build!` 매크로, Package/Builder API |
 | [벤치마크](benchmarks.md)                                                          | 전체   | 어댑터별 성능 비교, 오버헤드 분석, 페이로드 확장성                 |
 | [복잡 데이터 codec](complex-codecs.md)                                             | 사용자 | recursive map/enum/Option wire, limits, RN 경계                    |
+| [플랫폼 권한 가이드](platform-permissions.md)                                      | 사용자 | 플랫폼별 OS 권한 소관(iOS/Android/Windows/macOS), Tauri ACL vs rustra capability |
+| [위협 모델](threat-model.md)                                                      | 기여자 | STRIDE 분석, 신뢰 경계, 코드 기반 완화 매핑, 미해결 간극           |
 | [보안 감사](security-audit.md)                                                     | 기여자 | lockfile 취약점/경고 상태, 해소 이력                               |
 | [릴리즈 절차](release-procedure.md)                                                | 기여자 | changeset 발행 절차, 버전 관리                                     |
 | [버전 정책](versioning-policy.md)                                                  | 전체   | 표면별 호환성 보장, 폐기 절차, MSRV, 실험 표면                     |

@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 안정화 통합 문서(2026-09-05, 32개 항목)의 M1~M3 중 자동화 가능한 전부를 한 트랙에 착지 — CI 3개 실패 복구(CI01), 집계 게이트(A01), Tauri 이벤트 3결함(R01~R03), types 코어 계약 통일(R04~R07 잔여, R08 최소), 수명·지원·문서 정합(A02, A04, A05, A07, A10, A12, A13, A17, A18), R09/R10 문서화.
+**Goal:** 안정화 통합 문서(2026-09-05, 32개 항목)의 M1~~M3 중 자동화 가능한 전부를 한 트랙에 착지 — CI 3개 실패 복구(CI01), 집계 게이트(A01), Tauri 이벤트 3결함(R01~~R03), types 코어 계약 통일(R04~R07 잔여, R08 최소), 수명·지원·문서 정합(A02, A04, A05, A07, A10, A12, A13, A17, A18), R09/R10 문서화.
 
 **Architecture:** 워크트리 `.worktrees/stabilization`, 브랜치 `feat/stabilization-unified`. 베이스 = dx 트랙 로컬 머지 후의 `changeset-release/main`. 기존 트랙 리듬 준수 — 태스크별 커밋 → 전면 게이트 → `changeset-release/main` 로컬 머지. 푸시·PR 머지·발행은 사용자 승인 게이트.
 
@@ -16,33 +16,33 @@
 
 통합 문서 1.4의 "기준 재확인" 단계 완료. 6개 병렬 검증 + 로컬 재현 결과:
 
-| 항목 | HEAD 기준 상태 | 근거 |
-|---|---|---|
-| CI01 | **여전** — 3 job 실패 원인 확정: `generated-header.ts`가 JSON/Ruby/XML/shell에 `//` 주석 헤더. typescript job은 로컬 100% 재현 완료 | run 33776685582 로그 + 로컬 codegen 재현 |
-| R01 | **여전** — tauri-events.ts:71-79 parse+callback 동일 try | 에이전트 검증 (패키지 기준 SHA 이후 무변경) |
-| R02 | **여전** — JS ASCII 정규식 vs Rust `char::is_alphanumeric`, 충돌 거부 0건 | tauri-events.ts:30-36 vs tauri_support.rs:248-258 |
-| R03 | **여전** — `emit_str`은 이미 해석된 값을 전달하는데 JS가 재파싱, `payload: string` 타입 오탈 | tauri 2.11.1 소스 검증 포함 |
-| R04-a/b/c | **여전** — json-engine.ts:53 truthiness / :55 무 try-catch / :55 normalizeArgs 우회 | json-engine.ts (무변경) |
-| R05 | **여전** — cancel.ts:32→38→53 사전검사→dispatch→listener 순서 | cancel.ts (무변경) |
-| R06 | **여전** — cancel.ts:98 settled 먼저 → :104 native cancel → :105 reject | cancel.ts (무변경) |
-| R07 | **dx 트랙이 대부분 소처** — e5b53055(타임아웃/취소 서브클래스 통일), 3114119b(pre-abort 승격). 잔여: 도착 검증만 | dx 브랜치 커밋 로그 |
-| R08 | **여전** — 단일 global 슬롯(Symbol.for), 마지막 bootstrap 승리 | global-state.ts:99-112, node-bootstrap.ts:80,86 |
-| R09 | **문서는 존재** — executor.rs:22-33 제한 명시. 잔여: 지원 범위 문서화 | 에이전트 검증 |
-| R10 | **여전** — retryable≠안전 구분 문서 부재 | errors.ts isRetryableCode만 존재 |
-| A01 | **여전** — 집계 gate job 없음, consumer-smoke가 typescript에 needs로 묶여 skip | ci.yml 전수 (workflow 변경 0건) |
-| A02 | **여전** — EngineClient에 supports 표면 없음(코덱 비트마크 조각만) | public.ts:6-32 |
-| A03 | **부분** — Node loop-stdio+Tauri MockRuntime sink는 검증 존재. 잔여: Tauri JS 어댑터 이벤트, RN 실호스트 | event_push.rs 4테스트, node index.test.ts |
-| A04 | **여전** — allSettled 표면 0건 | 전 패키지 grep |
-| A05 | **부분** — generation 가드+drain 프리미티브 존재. 상태 모델·dispose-once·reload drain 미연결 | global-config.ts:38-43, node-loop.ts:384-400 |
-| A07 | **여전** — `rustra_dispatch_profiled`가 기본 register에 포함 | tauri_support.rs:156-160 |
-| A09/A15/A16 | **여전** (P2/P3 — 이번 사이클 수동 체크리스트·보류) | ffi_free_guard.rs 등 |
-| A10 | **dx 트랙이 버전 스니펫 소처** — README `rustra = "0.6"`. 잔여: Cargo 0.5.0 vs npm 0.6.0 조합 문서 | dx 브랜치 README:149 |
-| A11 | **보류** — 발행은 사용자 게이트 | release-procedure |
-| A12 | **여전** — README.md:32 "manual d.ts" 그대로 | dx 브랜치에서도 무변경 |
-| A13 | **여전** — "rkyv V2" 명칭+11.8× 표현 그대로 (manifest는 postcard) | README.md:33 |
-| A14 | **readiness 트랙이 4건 소처** — CHANGELOG 0.6, ko 미러, on_unimplemented 정정, docs-gate 결정 고정 | changeset-release/main 커밋 |
-| A17/A18 | **여전** — calculator가 대표 소비자, 증거표 존재 | README.md:622-628 |
-| F01~F03 | **부분** — percentile+면책 존재, receipt에 SHA/artifact 식별자 부재 | docs/benchmark-receipts/ |
+| 항목        | HEAD 기준 상태                                                                                                                      | 근거                                              |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| CI01        | **여전** — 3 job 실패 원인 확정: `generated-header.ts`가 JSON/Ruby/XML/shell에 `//` 주석 헤더. typescript job은 로컬 100% 재현 완료 | run 33776685582 로그 + 로컬 codegen 재현          |
+| R01         | **여전** — tauri-events.ts:71-79 parse+callback 동일 try                                                                            | 에이전트 검증 (패키지 기준 SHA 이후 무변경)       |
+| R02         | **여전** — JS ASCII 정규식 vs Rust `char::is_alphanumeric`, 충돌 거부 0건                                                           | tauri-events.ts:30-36 vs tauri_support.rs:248-258 |
+| R03         | **여전** — `emit_str`은 이미 해석된 값을 전달하는데 JS가 재파싱, `payload: string` 타입 오탈                                        | tauri 2.11.1 소스 검증 포함                       |
+| R04-a/b/c   | **여전** — json-engine.ts:53 truthiness / :55 무 try-catch / :55 normalizeArgs 우회                                                 | json-engine.ts (무변경)                           |
+| R05         | **여전** — cancel.ts:32→38→53 사전검사→dispatch→listener 순서                                                                       | cancel.ts (무변경)                                |
+| R06         | **여전** — cancel.ts:98 settled 먼저 → :104 native cancel → :105 reject                                                             | cancel.ts (무변경)                                |
+| R07         | **dx 트랙이 대부분 소처** — e5b53055(타임아웃/취소 서브클래스 통일), 3114119b(pre-abort 승격). 잔여: 도착 검증만                    | dx 브랜치 커밋 로그                               |
+| R08         | **여전** — 단일 global 슬롯(Symbol.for), 마지막 bootstrap 승리                                                                      | global-state.ts:99-112, node-bootstrap.ts:80,86   |
+| R09         | **문서는 존재** — executor.rs:22-33 제한 명시. 잔여: 지원 범위 문서화                                                               | 에이전트 검증                                     |
+| R10         | **여전** — retryable≠안전 구분 문서 부재                                                                                            | errors.ts isRetryableCode만 존재                  |
+| A01         | **여전** — 집계 gate job 없음, consumer-smoke가 typescript에 needs로 묶여 skip                                                      | ci.yml 전수 (workflow 변경 0건)                   |
+| A02         | **여전** — EngineClient에 supports 표면 없음(코덱 비트마크 조각만)                                                                  | public.ts:6-32                                    |
+| A03         | **부분** — Node loop-stdio+Tauri MockRuntime sink는 검증 존재. 잔여: Tauri JS 어댑터 이벤트, RN 실호스트                            | event_push.rs 4테스트, node index.test.ts         |
+| A04         | **여전** — allSettled 표면 0건                                                                                                      | 전 패키지 grep                                    |
+| A05         | **부분** — generation 가드+drain 프리미티브 존재. 상태 모델·dispose-once·reload drain 미연결                                        | global-config.ts:38-43, node-loop.ts:384-400      |
+| A07         | **여전** — `rustra_dispatch_profiled`가 기본 register에 포함                                                                        | tauri_support.rs:156-160                          |
+| A09/A15/A16 | **여전** (P2/P3 — 이번 사이클 수동 체크리스트·보류)                                                                                 | ffi_free_guard.rs 등                              |
+| A10         | **dx 트랙이 버전 스니펫 소처** — README `rustra = "0.6"`. 잔여: Cargo 0.5.0 vs npm 0.6.0 조합 문서                                  | dx 브랜치 README:149                              |
+| A11         | **보류** — 발행은 사용자 게이트                                                                                                     | release-procedure                                 |
+| A12         | **여전** — README.md:32 "manual d.ts" 그대로                                                                                        | dx 브랜치에서도 무변경                            |
+| A13         | **여전** — "rkyv V2" 명칭+11.8× 표현 그대로 (manifest는 postcard)                                                                   | README.md:33                                      |
+| A14         | **readiness 트랙이 4건 소처** — CHANGELOG 0.6, ko 미러, on_unimplemented 정정, docs-gate 결정 고정                                  | changeset-release/main 커밋                       |
+| A17/A18     | **여전** — calculator가 대표 소비자, 증거표 존재                                                                                    | README.md:622-628                                 |
+| F01~F03     | **부분** — percentile+면책 존재, receipt에 SHA/artifact 식별자 부재                                                                 | docs/benchmark-receipts/                          |
 
 ## 이번 사이클 착지 vs 보류
 
@@ -51,6 +51,7 @@
 **보류 (명시):** A06(위협 모델 — 격리 요건이 생길 때), A08(overload 계측 — 측정 근거 선행), A09(sanitizer — native 환경, 수동 체크리스트로만), A11(발행 후 검증 — 발행 승인 후), A14 잔여(quickstart CI 스모크 — 별도), A15/A16(P3 리팩터링), F02/F03(실기기·실부하 — 하드웨어 필요), 채널 어댑터 트랙 통합(별도 결정).
 
 ---
+
 ## Phase 0: 기반 준비
 
 ### Task 0: 워크트리 생성 + dx 트랙 로컬 머지 (사용자 승인 사항 포함)
@@ -91,11 +92,13 @@ bun install --frozen-lockfile
 ### Task 1: CI01 — generated 헤더 형식 판정 (실패 3개의 단일 근원)
 
 **Files:**
+
 - Modify: `packages/cli/src/generated-header.ts`
 - Test: `packages/cli/src/generated-header.test.ts`
 - Regen: `examples/react-native-calculator/modules/rustra-jsi/**`, `examples/react-native-bare-calculator/**` (codegen 재실행)
 
 **재확정된 원인 (로컬 재현 완료):** `generatedFileHeader()`가 무조건 `//` 라인을 7개 내보낸다. `package.json`(JSON — 주석 문법 없음), `RustraBridge.podspec`(Ruby), `AndroidManifest.xml`(XML), `build-rust-android.sh`(shebang 선행 필요)에 찍히면 파일이 파괴된다.
+
 - typescript job: codegen이 `modules/rustra-bridge/package.json`에 헤더 → `react-native config` JSON 파싱 사망 → `test:autolink` exit 1 (로컬 100% 재현)
 - rn-ios: pod install이 podspec의 `//` 라인에서 Ruby SyntaxError
 - rn-android: settings.gradle line 29 autolinking 커맨드(node)가 동일 JSON 파싱 사망
@@ -126,8 +129,14 @@ test('xml은 <!-- --> 헤더를 부착한다', () => {
   expect(out.startsWith('<!--')).toBe(true);
 });
 test('cmake/gradle/kotlin/cpp는 // 헤더를 유지한다', () => {
-  expect(generatedFileHeader('build.gradle', 'test', 'plugins {}\n').startsWith('// ── rustra')).toBe(true);
-  expect(generatedFileHeader('CMakeLists.txt', 'test', 'cmake_minimum_required\n').startsWith('// ── rustra')).toBe(true);
+  expect(
+    generatedFileHeader('build.gradle', 'test', 'plugins {}\n').startsWith('// ── rustra'),
+  ).toBe(true);
+  expect(
+    generatedFileHeader('CMakeLists.txt', 'test', 'cmake_minimum_required\n').startsWith(
+      '// ── rustra',
+    ),
+  ).toBe(true);
 });
 test('헤더 파싱 헬퍼 headerFor가 스트립을 대칭 달성한다', () => {
   const content = 'x\n';
@@ -144,11 +153,14 @@ test('헤더 파싱 헬퍼 headerFor가 스트립을 대칭 달성한다', () =>
 type HeaderSyntax = 'slash' | 'hash' | 'xml' | 'none';
 
 function syntaxFor(fileName: string): HeaderSyntax {
-  if (fileName.endsWith('.json')) return 'none';          // JSON — 주석 불가, 매니페스트가 출처
+  if (fileName.endsWith('.json')) return 'none'; // JSON — 주석 불가, 매니페스트가 출처
   if (/\.(sh|podspec|rb|py|ya?ml|properties|toml|gitignore)$/.test(fileName)) return 'hash';
   if (/\.(xml|html|md)$/.test(fileName)) return 'xml';
-  if (/^(build\.gradle(\.kts)?|settings\.gradle(\.kts)?|CMakeLists\.txt)$/.test(fileName)
-    || /\.(kt|kts|java|c|cpp|h|hpp|mm|m|cc|swift|rs|ts|tsx|js|mjs|cjs|cts|mts)$/.test(fileName)) return 'slash';
+  if (
+    /^(build\.gradle(\.kts)?|settings\.gradle(\.kts)?|CMakeLists\.txt)$/.test(fileName) ||
+    /\.(kt|kts|java|c|cpp|h|hpp|mm|m|cc|swift|rs|ts|tsx|js|mjs|cjs|cts|mts)$/.test(fileName)
+  )
+    return 'slash';
   return 'slash';
 }
 
@@ -162,7 +174,8 @@ function commentLines(fileName: string, stage: string, opener: string, closer?: 
     `${opener} DO NOT EDIT — changes will be overwritten and fail codegen --check.`,
     `${opener} ────────────────────────────────────────────────────────────`,
   ];
-  if (closer) return [...body.map((l) => `<!--${l.slice(opener.length)}...`)].map((l) => l) as string[];
+  if (closer)
+    return [...body.map((l) => `<!--${l.slice(opener.length)}...`)].map((l) => l) as string[];
   return body;
 }
 ```
@@ -215,6 +228,7 @@ Expected: Ruby SyntaxError 없이 진행(네트워크 의존 단계 실패 시 �
 ### Task 3: A01 — 독립 job 집계 gate + 실패 로그 보존
 
 **Files:**
+
 - Modify: `.github/workflows/ci.yml`
 - Create: `.github/workflows/ci-gate-test.md` 아님 — 검증은 수동 fault-injection (아래 Step 4)
 
@@ -222,7 +236,19 @@ Expected: Ruby SyntaxError 없이 진행(네트워크 의존 단계 실패 시 �
 
 ```yaml
 gate:
-  needs: [rust, rust-msrv, rust-wasm32, rust-audit, rust-deny, napi, typescript, rn-android, rn-ios, consumer-smoke]
+  needs:
+    [
+      rust,
+      rust-msrv,
+      rust-wasm32,
+      rust-audit,
+      rust-deny,
+      napi,
+      typescript,
+      rn-android,
+      rn-ios,
+      consumer-smoke,
+    ]
   if: always()
   runs-on: ubuntu-latest
   steps:
@@ -239,11 +265,13 @@ gate:
 **Step 1: workflow 수정.** **Step 2: `actionlint`로 정적 검증** (`brew install actionlint` 또는 docker). **Step 3: fault-injection 검증** — 임시 커밋으로 typescript 스텝 하나를 `exit 1`로 조작 → 푸시 없이 로컬 판정 로직 검증이 불가하므로, **gate 논리를 별도 셸 스크립트로 추출해 유닛 테스트**(스크립트에 failure/skipped/cancelled/mixed 입력 → 실패 판정 유닛 테스트)한 뒤 workflow는 그 스크립트를 호출. **Step 4: 원복 후 커밋** `ci: 필수 job 집계 gate + 실패 로그 artifact 보존 (A01)` — fault-injection 실증(T24)은 푸시 후 첫 CI run에서 확인하고 이를 작업 노트에 기록.
 
 ---
+
 ## Phase 2: Tauri 이벤트 결함 (R01~R03, A03 자동화분)
 
 ### Task 4: R01 — 콜백 예외 경계 분리 + MockRuntime 회귀 테스트
 
 **Files:**
+
 - Modify: `packages/tauri/src/tauri-events.ts:71-79`
 - Test: `packages/tauri/src/index.test.ts` (기존 mock `__TAURI__` 패턴)
 - Test: `examples/tauri-calculator/src-tauri/tests/event_push.rs` (Rust 측 sink는 무변경 — TS 경계만)
@@ -254,7 +282,7 @@ gate:
 const unlisten = await listen(rustraEventChannel(name), (event) => {
   let payload: T;
   try {
-    payload = JSON.parse(event.payload) as T;   // ← transport 변환 경계 (R03에서 추가 축소)
+    payload = JSON.parse(event.payload) as T; // ← transport 변환 경계 (R03에서 추가 축소)
   } catch (error) {
     // 파싱 실패: 원본 문자열 전달 — 단, 이것이 콜백 "재호출"이 아닌 유일한 1회 전달이다.
     callback(event.payload as unknown as T);
@@ -264,7 +292,7 @@ const unlisten = await listen(rustraEventChannel(name), (event) => {
   try {
     callback(payload);
   } catch (error) {
-    reportListenerError(name, error);  // RUSTRA_DEBUG 시 console.error + 콜백 예외는 재던지지 않음(다른 listener 보호)
+    reportListenerError(name, error); // RUSTRA_DEBUG 시 console.error + 콜백 예외는 재던지지 않음(다른 listener 보호)
   }
 });
 ```
@@ -272,6 +300,7 @@ const unlisten = await listen(rustraEventChannel(name), (event) => {
 `reportListenerError`는 tauri 패키지 신설 헬퍼 — `@rustra/types`의 debug 스위치(`debugRustra`)를 재사용해 `{ kind: 'tauri.listener_error', event: name, error }`로 관측. 다른 listener 중단 정책: **예외 삼켜서 나머지 listener 계속**(브라우저 EventTarget 표준 동작과 동일) — 문서와 테스트로 고정.
 
 **Step 1: 실패 테스트** — 기존 index.test.ts의 `subscribeEvent` 스위트에:
+
 1. 정상 payload + throwing callback → callback 호출 **1회**, debug sink에 `tauri.listener_error` 도달, promise resolve.
 2. 정상 payload + 정상 callback → 1회.
 3. 잘못된 JSON text + callback → 1회, 인자가 원본 string.
@@ -288,6 +317,7 @@ const unlisten = await listen(rustraEventChannel(name), (event) => {
 ### Task 5: R02 — 이벤트 채널명 규칙 통일 + 충돌 거부
 
 **Files:**
+
 - Modify: `packages/tauri/src/tauri-events.ts:30-36` (`rustraEventChannel`)
 - Modify: `crates/rustra/src/tauri_support.rs:248-258` (`sanitize_event_name`)
 - Modify: `crates/rustra/src/builder_events.rs:28-35` (등록 시 충돌 검증)
@@ -298,12 +328,14 @@ const unlisten = await listen(rustraEventChannel(name), (event) => {
 **설계 결정 (통합 문서 9.3 권장 방향):** 공통 규칙 = **Unicode-aware, 양측 동일 알고리즘** + 등록 시 충돌 거부. 장기 가역 인코딩은 YAGNI(스키마에 고정 이름이면 충돌이 구조적으로 불가 — 등록 거부가 최소 완전 해결).
 
 공통 알고리즘(양측 동일 명세):
+
 1. 코드포인트 단위 처리(JS는 `[...str]`, Rust는 `chars()`).
 2. 허용: `[A-Za-z0-9/_:-]` + `char::is_alphanumeric()` (Unicode 알파벳·숫자 — 한글·한자 유지).
 3. 그 외(구두점·기호·공백) → `_` (치환).
 4. **충돌 거부**: 같은 패키지 내 서로 다른 원본 이름이 같은 채널로 수렴하면 `Package::build` 시 panic(빌더 계약 — `builder_events.rs`에서 정규화 맵 구축, 중복 발견 시 `panic!("event channel collision: {a!r} and {b!r} both map to {ch}")`). Unicode NFC 정규화는 수행하지 않음(정규화로 같아지는 이름도 다른 이름 — 거부 대상; 이 선택을 Rust/TS 문서에 명시).
 
 **Step 1: 실패 테스트 (Rust)** — `event_name_mapping.rs`:
+
 - golden: `진행.갱신`→`rustra://진행_갱신`, `a.b`→`rustra://a_b`, 결합문자, 비BMP(emoji) 포함 케이스 — Rust `sanitize_event_name` 단위 assert.
 - 충돌 거부: `event::<A>("a.b")` + `event::<B>("a_b")` 빌드 → panic (should_panic 테스트).
 - MockRuntime 발행·구독 정합: 한글 이벤트 emit → `app.listen("rustra://진행_갱신")` 도달.
@@ -325,12 +357,14 @@ const unlisten = await listen(rustraEventChannel(name), (event) => {
 ### Task 6: R03 — payload 단일 파싱 계약 확정 + 타입 정정
 
 **Files:**
+
 - Modify: `packages/tauri/src/tauri-events.ts` (`subscribeEvent` 본체, Task 4 코드의 parse 경계)
 - Modify: `packages/tauri/src/index.ts:63-66` (`TauriListen` payload 타입)
 - Test: `packages/tauri/src/index.test.ts`
 - 문서: `docs/compatibility-matrix.md`+ko (Events 행 Tauri 셀 보강), `crates/rustra/src/tauri_support.rs:179-185` doc은 이미 올바름 — 무변경
 
 **설계:** 실제 WebView 경계(`emit_str` → `payload: {}` 인라인 평가, tauri 2.11.1 검증 완료)에서 JS listener는 **이미 해석된 값**을 받는다. 따라서:
+
 1. `subscribeEvent`의 payload 처리는 **"이미 객체면 그대로, 문자열이면 JSON.parse 1회"** — 문자열 내용 기반 자동 추론은 하지 않는다(문자열이면 문자열 payload였던 것).
 2. `TauriListen` 타입을 `handler: (event: { payload: unknown }) => void`로 정정하고, `subscribeEvent`는 `typeof payload === 'string'`일 때만 parse. parse 실패 시 원본 문자열 전달(Task 4 경계 유지).
 3. 레거시 주입 transport(`__TAURI__`가 `payload`를 문자열로 주는 fake)는 위 규칙으로 자동 커버 — 별도 모드 불필요. 이 결정을 JSDoc에 명시.
@@ -344,6 +378,7 @@ const unlisten = await listen(rustraEventChannel(name), (event) => {
 **Step 5: 커밋** `fix(tauri): 이벤트 payload 단일 파싱 계약 — decoded 우선·문자열만 1회 parse (R03)`
 
 ---
+
 ## Phase 3: types 코어 계약 통일 (R04~R08)
 
 **선행 상태 주의:** dx 트랙이 `cancel.ts`/`cancel-by-id.ts`/`global-batch.ts`/`global-config.ts`를 이미 고쳤다(에러 서브클래스 통일 — Task 6 머지 완료 후 베이스에 존재). 아래 구현은 **dx 이후 코드 위에서** 진행하며, 시작 시 `git diff bd72610b..HEAD -- packages/types/src/cancel.ts`로 dx 변경분을 먼저 읽는다.
@@ -351,15 +386,18 @@ const unlisten = await listen(rustraEventChannel(name), (event) => {
 ### Task 7: R04 — batch 경로 옵션·정규화·동기 throw 계약 통일
 
 **Files:**
+
 - Modify: `packages/types/src/json-engine.ts:48-56`
 - Test: `packages/types/src/index.test.ts`
 
 **수정 내용 (재검증 확정 3건):**
+
 1. **R04-a**: `:53`의 `entry.options?.timeoutMs` truthiness → `entry.options?.timeoutMs !== undefined`로 판정 변경. `0`은 "제공된 옵션"으로 per-entry 폴백 경로를 태워야 한다(단건 경로 cancel.ts:42와 동일 판정). NaN/Infinity/음수 정책: 기존 단건 경로와 동일하게 유지(setTimeout이 비정상 값을 즉시 실행으로 처리하는 브라우저 동작 의존 — 통합 문서의 "호스트 timer 범위 초과 정책 명시"는 R10 문서 태스크에서 다룬다).
 2. **R04-b**: `:55` `Promise.resolve(rawTransport.invokeBatch(entries))`를 try/catch로 감싸 동기 throw → `Promise.reject(normalizeRustraError(error))` (단건 경로 :26-41 패턴 동일).
 3. **R04-c**: wire batch 진입 전 각 entry의 args에 `normalizeArgs` 적용 — 단, dx 트랙이 global-batch에 적용한 방식이 있으면 그것과 같은 규칙. entry 객체 재생성 시 **원본 배열·원본 entry를 변이하지 않는다**(새 entry 객체).
 
 **Step 1: 실패 테스트** — 통합 문서 회귀 표 기준:
+
 1. delayed transport + `timeoutMs: 0` → 단건과 동일하게 즉시 timeout rejection (직접 engine).
 2. 동기 throwing batch transport → Promise rejection (동기 throw 아님), `normalizeRustraError` 통과.
 3. custom normalizer 주입 → wire batch에서도 entry별 적용, 원본 entries 불변.
@@ -378,6 +416,7 @@ const unlisten = await listen(rustraEventChannel(name), (event) => {
 ### Task 8: R05 — dispatch 중 abort 누락 제거
 
 **Files:**
+
 - Modify: `packages/types/src/cancel.ts` (`invokeWithTimeoutInternal`)
 - Modify: `packages/types/src/cancel-by-id.ts` (동일 패턴)
 - Test: `packages/types/src/index.test.ts`
@@ -399,6 +438,7 @@ if (signal) {
 주의: `addEventListener`는 이미 aborted인 signal에서도 리스너를 등록하지만 이벤트를 재발화하지 않으므로 재검사가 필수. 재검사-시점 reject는 settlement 경계(`settled` 플래그/`Promise.race` 한 번 확정)에서 이후 resolve와 자연 경합 — **Promise settlement 정확 1회** 불변.
 
 **Step 1: 실패 테스트** — 통합 문서 회귀 시나리오:
+
 1. pre-abort → dispatch 0회 (기존 — 회귀 방지).
 2. **dispatch 내부 동기 abort** (transport invoke 안에서 `controller.abort()` 후 정상 resolve) → cancel rejection. **이것이 핵심 신규 케이스.**
 3. 진행 중 abort(비동기) → 기존 동작 유지.
@@ -417,6 +457,7 @@ if (signal) {
 ### Task 9: R06 — native cancel 예외와 Promise 완료 분리
 
 **Files:**
+
 - Modify: `packages/types/src/cancel.ts` (`invokeCallbackWithAbort` onAbort)
 - Test: `packages/types/src/index.test.ts`
 
@@ -430,7 +471,7 @@ const onAbort = () =>
       try {
         cancel(invocationId);
       } catch (error) {
-        cancelFailure = error;   // JS 결과 확정을 native cancel 성공에 묶지 않는다
+        cancelFailure = error; // JS 결과 확정을 native cancel 성공에 묶지 않는다
       }
     }
     reject(new CancelledError(`invoke("${command}") aborted`, cancelFailure));
@@ -449,18 +490,21 @@ const onAbort = () =>
 ### Task 10: R07 도착 검증 + R08 최소 가드
 
 **Files:**
+
 - Test: `packages/types/src/index.test.ts` (R07 도착 검증만)
 - Modify: `packages/types/src/global-config.ts` + `packages/node/src/node-bootstrap.ts` (R08 최소)
 - 문서: `docs/rust-api-guide.md`+ko (bootstrap 소유권 절 신설), `docs/compatibility-matrix.md`+ko
 - Test: `packages/node/src/index.test.ts` (R08 회귀)
 
 **10a — R07 도착 검증 (구현 최소화):** dx 트랙(e5b53055, 3114119b)이 timeout→TimeoutError, cancel→CancelledError, pre-abort 승격을 착지했다. 여기에 통합 문서 회귀 T09의 **나머지 축만 추가**:
+
 1. wire가 구조화 `{code:'transport.timeout'}`을 줄 때 `normalizeRustraError` 승격 → `instanceof TimeoutError` (기존 errors.ts:90-95 — 회귀 고정).
 2. 전역 batch timeout race → TimeoutError (dx 이후 코드에서 확인, 없으면 dx 스타일 승격 보강).
 3. `cause`/`retryable` 보존 — 서브클래스 경유 시에도 유지.
 4. 부작용 검증: 기존 사용자 code 커스텀 RustraCommandError가 normalize를 통과 시 원본 보존(errors.ts:85 — 회귀 고정).
 
 **10b — R08 최소 가드 (이번 사이클):** 통합 문서 R08은 "다중 엔진 사용 전 P1" — 다중 엔진 API는 이번 사이클 범위 밖이되, **단일 엔진 제한을 명시하고 조용한 교차 라우팅을 loud-fail로 바꾼다**:
+
 1. `node-bootstrap.ts`의 `configureLazy(bootstrap)` 호출부에서, global 슬롯에 **이미 다른 initializer가 등록돼 있고 아직 소비되지 않은 경우**(`runtime.engine === null && engineInitializer !== bootstrap` && generation 소비 전) → `throw`(또는 debug warn+문서 경로) — import 순서로 마지막 bootstrap이 조용히 이기는 현재 동작을 조기에 잡는다. 정책: **첫 등록 승리 + 이후 등록은 loud-fail**(기존 단일 사용자 경로 보존, 교차 라우팅 제거). 구현 디테일은 global-config의 configure/configureLazy에 `ownerId` 옵션 추가로.
 2. bun-ffi.ts도 동일 관용 확인(같은 configureLazy 경로면 자동 커버).
 3. 문서: rust-api-guide에 "bootstrap 인스턴스 소유권 — 현재 단일 엔진 슬롯, 다중 엔진은 미지원(조기 실패)" 절 + compatibility-matrix에도 반영.
@@ -474,6 +518,7 @@ const onAbort = () =>
 ### Task 11: R09·R10 문서화 (동작 변경 없음)
 
 **Files:**
+
 - Modify: `docs/rust-api-guide.md` + `.ko.md` (R09: executor 지원 범위 절 / R10: timeout·취소·재시도 의미 절)
 - Modify: `docs/compatibility-matrix.md` + `.ko.md` (취소 ⚠️ 셀 상세 각주)
 - Modify: `packages/types/src/public.ts` (InvokeOptions JSDoc — shallow cancel 경고 보강)
@@ -490,6 +535,7 @@ const onAbort = () =>
 ### Task 12: A02 — 최소 supports 표면 + A05 수명 상태 모델
 
 **Files:**
+
 - Modify: `packages/types/src/public.ts` (EngineClient에 `supports?` 추가)
 - Modify: `packages/node/src/node-loop.ts`, `packages/node/src/index.ts` (supports 제공)
 - Modify: `packages/tauri/src/index.ts`, `packages/bun/src/bun-ffi.ts` (supports 제공)
@@ -500,11 +546,11 @@ const onAbort = () =>
 
 ```ts
 export type EngineSupports = {
-  cancellation: 'pre-abort' | 'shallow' | 'cooperative';  // 실측: node/bun=rkyv conditional, json=pre-abort+shallow
+  cancellation: 'pre-abort' | 'shallow' | 'cooperative'; // 실측: node/bun=rkyv conditional, json=pre-abort+shallow
   batch: 'single-crossing' | 'per-entry' | 'none';
   events: 'push' | 'polling' | 'none';
   channels: boolean;
-  timeoutPreemption: boolean;  // RN JSON = false (동기 native 선점 불가)
+  timeoutPreemption: boolean; // RN JSON = false (동기 native 선점 불가)
 };
 // EngineClient에 supports?: EngineSupports
 ```
@@ -517,11 +563,13 @@ export type EngineSupports = {
 **Step 2: FAIL → 구현 → PASS.** **Step 3: 문서 갱신 + 커밋** `feat(types,adapters): EngineSupports 표면 + bootstrap 상태 모델 최소 (A02/A05)`
 
 ---
+
 ## Phase 4: batch 표면 + 등록 정리 + 문서·증거 정합
 
 ### Task 13: A04 — allSettled 형태 opt-in batch API
 
 **Files:**
+
 - Create: `packages/types/src/global-batch-settled.ts`
 - Modify: `packages/types/src/index.ts` (export)
 - Modify: `packages/types/src/public.ts` (타입)
@@ -533,7 +581,7 @@ export type EngineSupports = {
 export type BatchSettledEntry<T> =
   | { status: 'fulfilled'; value: T }
   | { status: 'rejected'; reason: unknown }
-  | { status: 'unexecuted' };   // 실패한 항목 이후 실행되지 않은 것 — 실패≠미실행 구분
+  | { status: 'unexecuted' }; // 실패한 항목 이후 실행되지 않은 것 — 실패≠미실행 구분
 
 export function invokeBatchSettled<T>(entries: BatchEntry[]): Promise<Array<BatchSettledEntry<T>>>;
 ```
@@ -550,6 +598,7 @@ export function invokeBatchSettled<T>(entries: BatchEntry[]): Promise<Array<Batc
 ### Task 14: A07 — profiled dispatch 등록 분리
 
 **Files:**
+
 - Modify: `crates/rustra/src/tauri_support.rs` (`register`의 generate_handler에서 `rustra_dispatch_profiled` 제거, `register_profiled` 신설 또는 feature 게이트)
 - Modify: `examples/tauri-calculator/src/benchmark.ts` 및 관련 bench host 설정 (`register_profiled` 경로 사용)
 - Test: `examples/tauri-calculator/src-tauri/tests/` (등록 노출 검증)
@@ -564,6 +613,7 @@ export function invokeBatchSettled<T>(entries: BatchEntry[]): Promise<Array<Batc
 ### Task 15: A03/A17/A18 — 수동 검증 체크리스트 + reference 여정 + 증거 수준 명시
 
 **Files:**
+
 - Create: `docs/verification-checklist.md` + `.ko.md`
 - Modify: `examples/calculator/tests/` (여정 통합 테스트 확장 — 자동화분)
 - Modify: `README.md` + `README.ko.md` (증거표 — "manual checklist" 링크 추가)
@@ -572,12 +622,13 @@ export function invokeBatchSettled<T>(entries: BatchEntry[]): Promise<Array<Batc
 **자동화분 (A17):** calculator의 기존 7개 테스트 중 `runtime-contract`/`generated-client`를 확장해 **한 흐름 여정** 구성: invoke 성공 → 이벤트 구독+수신 → 장기 작업 진행 이벤트 → 취소 → 구독 해제 → 오류 복구 → dispose. Node loop-stdio 실호스트 위에서 실행(기존 test:ts:node에 연결).
 
 **수동 체크리스트 문서 (A03 — 이 환경 불가분):**
+
 1. Tauri 실제 WebView: R01(콜백 1회), R02(한글 이벤트 발행→구독), R03(payload 타입·값), Task 14(production 등록에서 profiled 미노출) — `examples/tauri-calculator`를 macOS에서 `bun run test:runtime:tauri` + 수동 실행.
 2. RN 실호스트: 문자열·primitive·Unicode 이벤트, listener 예외, unsubscribe/re-subscribe — `examples/react-native-calculator` (실기기는 1.0 트랙, 시뮬레이터 수준 명시).
 3. 등록 전 emit/구독 후 emit/unsubscribe 후 emit/reload 직후 늦은 emit 정책 확인.
 4. A09 범위: RN 실기기에서 cancel·teardown 후 ownership 이상 무여부 관찰 (sanitizer는 별도 — 기록만).
 5. A11 준비: 발행 승인 후 registry consumer 실행 절차 (실행은 하지 않음 — 절차만 문서화).
-각 항목에 host·OS·빌드 종류·SHA·결과 기록 칸 포함(A03 완료 기준 형식).
+   각 항목에 host·OS·빌드 종류·SHA·결과 기록 칸 포함(A03 완료 기준 형식).
 
 **A18:** README 증거표에 "수동 체크리스트 실행 여부" 열 대신 링크를 추가하고, "Build-only/Simulator/Physical" 수준 구분이 현재 표에 이미 존재하는지 확인해 간격만 메운다(새 주장 금지).
 
@@ -588,6 +639,7 @@ export function invokeBatchSettled<T>(entries: BatchEntry[]): Promise<Array<Batc
 ### Task 16: A10/A12/A13 + F01 최소 + changeset + 전면 게이트
 
 **Files:**
+
 - Modify: `README.md`+`README.ko.md` (A12 비교표 근거, A13 wire 명칭 정리)
 - Create: `docs/wire-format.md` + `.ko.md` (A13 — rkyv V2 명칭 vs postcard codec 구분)
 - Modify: `docs/benchmarks.md`+ko, `scripts/` 벤치 receipt 생성부 (F01 — receipt에 source SHA/artifact 식별자 필드 추가)
@@ -597,10 +649,11 @@ export function invokeBatchSettled<T>(entries: BatchEntry[]): Promise<Array<Batc
 **A12:** README.md:32의 napi-rs "manual d.ts" 셀을 공식 문서 기준으로 정정 — "TypeScript definitions generated from Rust structs (attributes)" 수준으로. 각 셀에 확인 기준일·참조 링크를 각주로. Rustra 우위 표현은 multi-host 계약·검증 관리로 재배치. **확인 날짜(2026-09-05)와 출처를 문서에 남긴다.**
 
 **A13:** 신설 `docs/wire-format.md`:
+
 - "rkyv V2"는 Rustra 자체 프레임/프로토콜 이름이고, payload codec은 postcard(manifest/dispatch 경로)다 — upstream rkyv 아카이브 포맷과의 호환은 별도 검증 없이 동일하다고 표기하지 않는다.
 - "zero-copy"의 실제 범위: 어느 경계의 copy/allocation을 없애는지(Bun `toArrayBuffer` 뷰 등 실측 사례 참조) 명시 — 전체 RTT 의미로 확대 금지.
 - 11.8×/47B 사례: payload 요청 wire 기준, 측정 경로·분모 명시. bytes/core dispatch/FFI/RTT 구분 표.
-README의 "rkyv V2 (11.8× smaller)" 표현은 wire-format.md로 링크 + "(request wire vs JSON, see wire-format)" 수준으로 정밀화.
+  README의 "rkyv V2 (11.8× smaller)" 표현은 wire-format.md로 링크 + "(request wire vs JSON, see wire-format)" 수준으로 정밀화.
 
 **F01 최소:** 벤치 receipt JSON 생성 스크립트에 `sourceSha`(git rev-parse), `nativeArtifact`(존재 시 식별자) 필드 추가 — 기존 receipt 재생성 없이 이후 receipt부터. 기존 receipt에 소급 주입하지 않는다.
 
@@ -638,6 +691,7 @@ bun run test:ts:node && bun run test:adapter:tauri
 ```
 
 **Step 6: 적대적 재검증 (검증 4계율):**
+
 1. 헤더: 임의 생성물의 package.json에 수동으로 헤더 주입 → autolink red 확인 → 원복.
 2. R01: tauri-events.ts를 원래 try-합침으로 임시 되돌림 → 신규 테스트 red → 원복.
 3. R05: listener 재검사 제거 → red → 원복.
@@ -690,7 +744,3 @@ git merge --no-ff feat/stabilization-unified -m "merge: 안정화 통합 트랙 
 - 리서치: `docs/research/2026-09-03-20-08-17-production-readiness-gap-analysis.md`
 - 선행 트랙: `docs/plans/2026-09-03-readiness-tracks.md`, `docs/plans/2026-09-04-dx-friction-track.md` (dx는 Task 0에서 선머지)
 - CI 실패 로그: run 33776685582 (typescript/rn-ios/rn-android failure + 로컬 재현)
-
-
-
-
