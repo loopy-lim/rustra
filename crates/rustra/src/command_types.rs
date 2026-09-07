@@ -27,6 +27,11 @@ pub(crate) struct Command {
     /// `Some(cap)` 면 `cap` 이 `grant_capability` 로 부여되기 전까지 deny-by-default.
     /// `None` 이면 항상 허용 (기본 명령).
     pub(crate) required_capability: Option<&'static str>,
+    /// 플랫폼 특화 명령의 지원 플랫폼 — 빈 벡터는 "전 플랫폼" (기본 명령).
+    /// [`crate::PackageBuilder::platform_command`] 참고. command_id·스키마는
+    /// 전 플랫폼에서 동일하게 등록되고, 미지원 플랫폼의 핸들러는
+    /// `platform.unavailable` 스텁이다.
+    pub(crate) platforms: Vec<crate::platform::Platform>,
 }
 
 pub(crate) type BufferHandler = Arc<dyn Fn(&[u8]) -> crate::Result<Vec<u8>> + Send + Sync>;

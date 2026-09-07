@@ -794,7 +794,20 @@ pub fn calculator_package() -> Package {
             .command_fn(wide_agg)
             .command_fn(tag_set)
             .require_capability("secureCompute", "compute:secure")
-            .build();
+            // 신규 커맨드는 id 시프트 방지를 위해 체인 맨 뒤에 붙인다(위 주석).
+            // command_platform 은 전 플랫폼 등록 + 미지원 플랫폼 스텁이다.
+            .platform_command::<(), PlatformNativeInfoOutput>(
+                "platformNativeInfo",
+                &[Platform::Macos, Platform::Windows],
+            );
+            // 지원 플랫폼에서만 실구현 주입(체인은 cfg 표현식 속성을 못 받으므로
+            // let 바인딩으로 갈라 넣는다) — Linux CI 는 스텁 경로
+            // (platform.unavailable)를 그대로 검증한다.
+            #[cfg(any(target_os = "windows", target_os = "macos"))]
+            let pkg = pkg.platform_command_impl("platformNativeInfo", platform_native_info_impl);
+            #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+            let pkg = pkg;
+            let pkg = pkg.build();
 
             // Auto-register for generic FFI with JSON default
             pkg.register_ffi_with_default(FfiFormat::Json);
@@ -978,6 +991,34 @@ pub fn channel_demo(input: ChannelDemoInput) -> Result<ChannelDemoOutput> {
     })
 }
 
+/// 플랫폼 상호운용 — 플랫폼 특화 명령의 계약 안정화 예시.
+///
+/// `platformNativeInfo` 는 platform_command 으로 macos/windows 에만 구현을
+/// 선언한다. 등록(id·스키마·계약 해시)은 전 플랫폼에서 동일하게 일어나고,
+/// Linux(및 기타)에서 호출하면 `platform.unavailable` 이 반환된다
+/// (`command.not_found` 와 구분된다). 실제 구현은 cfg 로 보호해 지원 OS 에서만
+/// 주입된다 — win32/objc2 호출을 하는 실명령의 뼈대가 되는 패턴이다.
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PlatformNativeInfoOutput {
+    /// std::env::consts::OS — 컴파일 대상 OS 문자열.
+    pub os: String,
+    /// 네이티브 윈도우 시스템 식별자 — 실제 예에서는 win32/objc2 API 조사값.
+    pub windowKind: String,
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+fn platform_native_info_impl(_input: ()) -> Result<PlatformNativeInfoOutput> {
+    #[cfg(target_os = "windows")]
+    let window_kind = "win32-hwnd";
+    #[cfg(target_os = "macos")]
+    let window_kind = "appkit-nswindow";
+    Ok(PlatformNativeInfoOutput {
+        os: std::env::consts::OS.to_string(),
+        windowKind: window_kind.to_string(),
+    })
+}
+
 /// Rust-소유 키-값 저장소 리소스 — resource_open 이 발급하고 read/write/close
 /// 가 핸들로 접근한다. JS 표면은 { handle: number } 뿐이다.
 /// Tauri Resource 와 동일하게 상태는 Mutex 안에 있다(핸들 접근은 &self).
@@ -1133,6 +1174,39 @@ mod tests {
     /// 리소스 라이프사이클: open → write → read → close → close 후 not_found.
     /// JS 표면은 정수 핸들뿐이고 소유권은 Rust 테이블에 있다.
     #[test]
+    /// 플랫폼 특화 명령 계약 — (1) 전 플랫폼에서 계약상 존재해야 하고 (2) 지원
+    /// 플랫폼에서는 실구현, 미지원 플랫폼에서는 platform.unavailable 로 정확히
+    /// 구분되어야 한다. macOS/Windows 실행은 impl 경로, Linux CI 는 스텁 경로를
+    /// 각각 검증한다.
+    #[test]
+    fn platform_native_info_contract() {
+        let pkg = calculator_package();
+        let result = pkg.invoke_json("platformNativeInfo", serde_json::json!(null));
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        {
+            let out = result.expect("supported platform must run the real impl");
+            assert_eq!(
+                out["os"].as_str().unwrap(),
+                std::env::consts::OS,
+                "impl reports the compile-target OS"
+            );
+        }
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        {
+            let err = result.expect_err("unsupported platform must reject");
+            assert_eq!(err.code(), "platform.unavailable");
+            assert!(err.message().contains("platformNativeInfo"));
+            // command.not_found 와의 구분 — 계약에는 존재한다.
+            assert_ne!(err.code(), "command.not_found");
+        }
+        // 스키마 platforms 필드 — 플랫폼 무관하게 동일하게 기록된다.
+        let schema = pkg.live_schema().to_string();
+        assert!(
+            schema.contains("\"platforms\""),
+            "platforms recorded: {schema}"
+        );
+    }
+
     fn resource_kv_lifecycle() {
         let mut initial = std::collections::BTreeMap::new();
         initial.insert("seed".to_string(), "1".to_string());

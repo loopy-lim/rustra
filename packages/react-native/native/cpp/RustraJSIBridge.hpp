@@ -255,4 +255,48 @@ void installRustraJSIWithInvoker(
   facebook::jsi::Runtime& rt,
   std::shared_ptr<void> typeErasedCallInvoker);
 
+// ── C++ TurboModule 상호운용 — jsi::Value 직접 typed invoke ─────────────
+// 다른 C++ TurboModule/네이티브 코드가 JS 왕복 없이 rustra 정적 명령을
+// 호출하는 진입점. JS 측 __rustraNative.invokeTyped* 와 동일 경로
+// (encode → FFI → decode)를 공유한다 — HostFunction 이 이 함수들을 감싼다.
+//
+// 계약:
+// - JS 런타임 스레드에서만 호출(jsi 스레드 친화성 — installRustraJSI 와 동일).
+// - installRustraJSI 없이도 호출 가능 — FFI 전역 패키지(native_entry 등록)만
+//   필요하다. JS 전역(__rustraNative) 설치 상태와 무관하다.
+// - 예외를 던지지 않는다 — 결과는 status 로 구분한다(아래 enum 참고).
+
+enum class TypedInvokeStatus {
+  /// 성공 — value 에 디코딩된 출력이 담긴다.
+  Ok,
+  /// 정적 코덱 미보유 명령 — value 는 undefined. 호출자는 JS 엔진과 동일하게
+  /// invokeRkyvV2(Tier 2/3) 폴백을 선택할 수 있다.
+  NoStaticCodec,
+  /// Rust 명령 에러 — value 는 { code: string, message: string } 객체,
+  /// message 필드는 "code: message" 결합 텍스트.
+  CommandError,
+  /// 응답 와이어 파손/디코딩 실패 — value 는 undefined, message 에 상세.
+  MalformedResponse,
+};
+
+struct TypedInvokeResult {
+  TypedInvokeStatus status;
+  facebook::jsi::Value value;
+  /// CommandError 는 "code: message" 결합 텍스트, MalformedResponse 는 상세.
+  /// Ok/NoStaticCodec 은 빈 문자열.
+  std::string message;
+};
+
+/// 이름 기반 typed invoke — encode_by_name → FFI → decode_by_name.
+TypedInvokeResult invokeTypedByName(
+  facebook::jsi::Runtime& rt,
+  const std::string& commandName,
+  const facebook::jsi::Value& args);
+
+/// command_id(u16) 기반 typed invoke — encode_by_id → FFI → decode_by_id.
+TypedInvokeResult invokeTypedById(
+  facebook::jsi::Runtime& rt,
+  uint16_t commandId,
+  const facebook::jsi::Value& args);
+
 } // namespace rustra

@@ -142,6 +142,8 @@ export const RustraErrorCode = {
   CommandInvalidArgs: 'command.invalid_args',
   /** capability 미부여로 거부됨 (deny-by-default). */
   CapabilityDenied: 'capability.denied',
+  /** 플랫폼 특화 명령의 이 플랫폼 미구현 — `command.not_found` 와 달리 계약상 존재. */
+  PlatformUnavailable: 'platform.unavailable',
   /** 페이로드가 크기 한도(기본 1MiB)를 초과. */
   PayloadTooLarge: 'payload.too_large',
   /** transport 계열 일시 오류 — retryable. */

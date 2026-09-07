@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "schemaHash": "b9ec095fd83d9c67befb83277adbb988ca248f2c3c64dbefd06c65c5a7bc2121",
-  "generatorVersion": "0.7.0",
+  "schemaHash": "40ba0d21c315b6ac0069dfaa1fbdb6f895a312904a9c3604ff34599c4b3af3cc",
+  "generatorVersion": "0.8.0",
   "files": [
     {
       "path": "bun.ts",
@@ -9,11 +9,11 @@
     },
     {
       "path": "commands.ts",
-      "sha256": "d93a1c1fbacdc3cbadda0848c02d8549c5a6e67fb8f562672ad6f9e3b879db24"
+      "sha256": "a9077b8dbdad31f89ea5ca1b696faab34d4e74d5d292880fb8f52433725d4d1f"
     },
     {
       "path": "contract.ts",
-      "sha256": "f7f779b20f9211bc9a5ec7c0f33c754fe8ab203d32399ae14558352bf4fcae89"
+      "sha256": "ff43e70f35af1b2b0a5bfc809bbf658c642dd40a8200240f411e634a8340ef72"
     },
     {
       "path": "node.ts",
@@ -21,11 +21,11 @@
     },
     {
       "path": "rkyv-codecs.ts",
-      "sha256": "95153172b6b57c26b0ad52e2ab1f82de6d3ad75e30694bad2a0a703f5ee57536"
+      "sha256": "545e53b5bd4d60bd9fa3eb46051d80fe4436c9fe52946e7e41903131f85bc991"
     },
     {
       "path": "rkyv-registry.ts",
-      "sha256": "9a5406bc221de6a37e1125c6d0ff9698354e062076786ac12a1588bbc06b2a67"
+      "sha256": "292f97c2f22e9ddae19df3fc45e7d6c8b6efc265b1548fd9d716e5806eb95354"
     },
     {
       "path": "tauri.ts",
@@ -33,7 +33,7 @@
     },
     {
       "path": "types.ts",
-      "sha256": "b673c432823029bae720d86b4d2233572c3bfdba37c1a177b2bda8f57bf43af4"
+      "sha256": "41e4b8db19ec9742de0f75b101786379f04eed102cdde5d5ac8b8a62ab58243c"
     }
   ]
 }

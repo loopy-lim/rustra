@@ -7,6 +7,7 @@
     "pub mod channels",
     "pub mod events",
     "pub mod ffi",
+    "pub mod platform",
     "pub mod prelude",
     "pub mod state",
     "pub mod tauri_support",

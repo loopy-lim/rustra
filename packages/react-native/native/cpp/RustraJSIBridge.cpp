@@ -256,6 +256,78 @@ static Value typedInvokeTail(Runtime& rt, const uint8_t* reqData, size_t reqSize
   return result;
 }
 
+// ── C++ TurboModule 상호운용 — 공개 typed invoke 진입점 ──────────────────
+// 헤더 선언 참고(TypedInvokeStatus 계약). HostFunction(invokeTyped/invokeTypedById)
+// 도 같은 경로를 쓴다 — 이 구현이 단일 소스다. 예외 기반 tail(typedInvokeTail)을
+// 감싸 status 로 변환한다: Rust 명령 에러 와이어는 "code: message" 문자열로
+// 조립되므로(parseRkyvV2ErrorBody) 첫 ':' 기준으로 구조를 복원한다. code 에는
+// ':' 가 올 수 없으므로(에러 코드 문자집합 계약) 첫 콜론 분리는 비모호하다.
+namespace {
+
+TypedInvokeResult toCommandErrorResult(
+  facebook::jsi::Runtime& rt, const std::string& codeAndMessage) {
+  size_t sep = codeAndMessage.find(": ");
+  std::string code = sep == std::string::npos ? codeAndMessage : codeAndMessage.substr(0, sep);
+  std::string detail =
+    sep == std::string::npos ? std::string() : codeAndMessage.substr(sep + 2);
+  facebook::jsi::Object errorObject(rt);
+  errorObject.setProperty(rt, "code", facebook::jsi::String::createFromUtf8(rt, code));
+  errorObject.setProperty(rt, "message", facebook::jsi::String::createFromUtf8(rt, detail));
+  return TypedInvokeResult{
+    TypedInvokeStatus::CommandError,
+    facebook::jsi::Value(rt, errorObject),
+    codeAndMessage,
+  };
+}
+
+} // namespace
+
+TypedInvokeResult invokeTypedByName(
+  facebook::jsi::Runtime& rt, const std::string& commandName,
+  const facebook::jsi::Value& args) {
+  rc::Writer w;
+  if (!gen::encode_by_name(rt, commandName, args, w)) {
+    return TypedInvokeResult{
+      TypedInvokeStatus::NoStaticCodec, facebook::jsi::Value(), std::string()};
+  }
+  try {
+    facebook::jsi::Value out = typedInvokeTail(rt, w.data(), w.size(), "",
+      [&rt, &commandName](rc::Reader& r) { return gen::decode_by_name(rt, commandName, r); });
+    return TypedInvokeResult{
+      TypedInvokeStatus::Ok, std::move(out), std::string()};
+  } catch (const facebook::jsi::JSError& err) {
+    std::string text = err.what();
+    if (text.rfind("RustraJSI: ", 0) == 0) {
+      return TypedInvokeResult{
+        TypedInvokeStatus::MalformedResponse, facebook::jsi::Value(), text};
+    }
+    return toCommandErrorResult(rt, text);
+  }
+}
+
+TypedInvokeResult invokeTypedById(
+  facebook::jsi::Runtime& rt, uint16_t commandId,
+  const facebook::jsi::Value& args) {
+  rc::Writer w;
+  if (!gen::encode_by_id(rt, commandId, args, w)) {
+    return TypedInvokeResult{
+      TypedInvokeStatus::NoStaticCodec, facebook::jsi::Value(), std::string()};
+  }
+  try {
+    facebook::jsi::Value out = typedInvokeTail(rt, w.data(), w.size(), "",
+      [&rt, commandId](rc::Reader& r) { return gen::decode_by_id(rt, commandId, r); });
+    return TypedInvokeResult{
+      TypedInvokeStatus::Ok, std::move(out), std::string()};
+  } catch (const facebook::jsi::JSError& err) {
+    std::string text = err.what();
+    if (text.rfind("RustraJSI: ", 0) == 0) {
+      return TypedInvokeResult{
+        TypedInvokeStatus::MalformedResponse, facebook::jsi::Value(), text};
+    }
+    return toCommandErrorResult(rt, text);
+  }
+}
+
 // ── EventDispatcher: Rust → JS push delivery ───────────────
 //
 // 스레드 마샬링 설계:
@@ -871,17 +943,17 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         }
         std::string name = args[0].asString(rt).utf8(rt);
 
-        // 1) JS 객체 → postcard 요청 바이트 ([cmd_id u16 LE][postcard(I)])
-        rc::Writer w;
-        if (!gen::encode_by_name(rt, name, args[1], w)) {
-          throw JSError(rt, "RustraJSI: no C++ codec for '" + name + "'");
+        // 공개 C++ 진입점(invokeTypedByName)과 동일 경로 — HostFunction 은
+        // status 를 기존 예외 메시지로 그대로 옮긴다(호환 보존).
+        TypedInvokeResult result = invokeTypedByName(rt, name, args[1]);
+        switch (result.status) {
+          case TypedInvokeStatus::Ok:
+            return std::move(result.value);
+          case TypedInvokeStatus::NoStaticCodec:
+            throw JSError(rt, "RustraJSI: no C++ codec for '" + name + "'");
+          default:
+            throw JSError(rt, result.message);
         }
-        // 2) Rust FFI (rkyv V2 단일 엔진) + 응답 tail — 공통 헬퍼로
-        //    (typedInvokeTail 주석의 free 짝 계약: rustra_ffi_free).
-        //    decoder 만 이름 기반 decode_by_name.
-        return typedInvokeTail(rt, w.data(), w.size(), "", [&rt, &name](rc::Reader& r) {
-          return gen::decode_by_name(rt, name, r);
-        });
       });
     cache_["invokeTyped"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});
@@ -903,16 +975,17 @@ RustraHostObject::RustraHostObject(Runtime& rt) {
         }
         uint16_t cmdId = requireU16(rt, args[0], "command id");
 
-        // 1) JS 객체 → postcard 요청 바이트 ([cmd_id u16 LE][postcard(I)])
-        rc::Writer w;
-        if (!gen::encode_by_id(rt, cmdId, args[1], w)) {
-          throw JSError(rt, "RustraJSI: no C++ codec for cmd_id " + std::to_string(cmdId));
+        // 공개 C++ 진입점(invokeTypedById)과 동일 경로 — status 를 기존 예외
+        // 메시지로 옮긴다(호환 보존).
+        TypedInvokeResult result = invokeTypedById(rt, cmdId, args[1]);
+        switch (result.status) {
+          case TypedInvokeStatus::Ok:
+            return std::move(result.value);
+          case TypedInvokeStatus::NoStaticCodec:
+            throw JSError(rt, "RustraJSI: no C++ codec for cmd_id " + std::to_string(cmdId));
+          default:
+            throw JSError(rt, result.message);
         }
-        // 2) Rust FFI + 응답 tail — invokeTyped 와 동일하지만 decoder 만
-        //    u16 디스패치 decode_by_id (free 짝: rustra_ffi_free).
-        return typedInvokeTail(rt, w.data(), w.size(), "", [&rt, cmdId](rc::Reader& r) {
-          return gen::decode_by_id(rt, cmdId, r);
-        });
       });
     cache_["invokeTypedById"] = std::make_unique<CachedFunction>(
       CachedFunction{std::move(propNameId), std::move(hostFn)});

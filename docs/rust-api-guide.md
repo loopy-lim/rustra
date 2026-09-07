@@ -341,12 +341,57 @@ duration of the synchronous call, and the Rust output allocation is freed by the
 | Method                                  | Role                                                                    |
 | --------------------------------------- | ----------------------------------------------------------------------- |
 | `.require_capability(name, cap)`        | Requires a capability for a command (deny-by-default Runtime Authority) |
+| `.platform_command::<I, O>(name, ps)`   | Declares a platform-specific command (registered on **all** platforms)  |
+| `.platform_command_impl(name, handler)` | Injects the real handler on a platform the command supports             |
 | `.buffer_command_fn(handler)`           | Registers the name-inferred single `Vec<u8>` direct path                |
 | `.buffer_command(name, handler)`        | Registers the explicitly named single `Vec<u8>` direct path             |
 | `.alias_command_id(command, legacy_id)` | Registers a legacy cmd_id alias (backward-compatible dispatch)          |
 | `.event_capacity(capacity)`             | Sets the event bus ring buffer capacity                                 |
 | `.schema_version(version)`              | Declares the schema negotiation version (T2, OTA)                       |
 | `.manage(state)`                        | Registers shared state (accessed via `Package::state::<T>()`)           |
+
+### Platform-specific commands (`.platform_command` / `.platform_command_impl`)
+
+Platform-specific commands (Win32/AppKit calls, native window handles, ...) stay
+contract-stable across platforms. `platform_command` registers the command —
+command_id, schema.json and the contract hash — on **every** platform with a stub
+that returns `platform.unavailable`; `platform_command_impl` replaces the stub with
+the real handler on the platforms you support:
+
+```rust
+use rustra::platform::Platform;
+
+let builder = Package::builder("app.native")
+    .platform_command::<(), NativeWindowInfo>(
+        "nativeWindowInfo",
+        &[Platform::Windows, Platform::Macos],
+    );
+// Guard the real implementation so it only compiles where it exists.
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+let builder = builder.platform_command_impl("nativeWindowInfo", native_window_info_impl);
+let pkg = builder.build();
+```
+
+Contract:
+
+- The command set (ids, schema, hash) is identical on every platform — by-id
+  dispatch and cross-validation never shift.
+- Calling a stub on an unsupported platform returns `platform.unavailable`
+  (non-retryable) — distinct from `command.not_found` ("not in the contract at
+  all").
+- `build()` panics if the current platform is declared but `platform_command_impl`
+  was never called (a silent stub on a supported platform is a wiring bug), and
+  `platform_command_impl` panics if the current platform is *not* declared
+  (misplaced `#[cfg]`).
+- `I`/`O` types must be identical in declaration and impl — the schema may not
+  differ per platform.
+- schema.json records `"platforms": [...]` on such commands; unsupported callers
+  can branch before invoking.
+
+Opaque native resources (Win32 `HANDLE`, `NSView*`, ...) follow the existing
+`ResourceHandle` pattern: the host stores the resource in the Rust-side resource
+table (`ResourceHandle`, see the channels module) and JS only ever passes the
+`u32` id. Never expose raw 64-bit pointers to JS.
 
 ### `.build()` / `.done()`
 
@@ -645,7 +690,7 @@ export type AddNumbersOutput = {
 
 <!-- prettier-ignore -->
 ```typescript
-import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
 import { createGeneratedFields2, invokeGenerated, invokeGeneratedBytes, invokeGeneratedFields1, invokeGeneratedFields3 } from '@rustra/types';
 import type { InvokeOptions } from '@rustra/types';
 
@@ -699,6 +744,11 @@ export function isEven(input: IsEvenInput, options?: InvokeOptions): Promise<IsE
 isEven.commandId = 'isEven';
 
 export const multiply = createGeneratedFields2<MultiplyInput, MultiplyOutput>(2, 'multiply', "a", "b", 'multiply');
+
+export function platformNativeInfo(options?: InvokeOptions): Promise<PlatformNativeInfoOutput> {
+  return invokeGenerated<PlatformNativeInfoOutput>(30, 'platformNativeInfo', undefined, options);
+}
+platformNativeInfo.commandId = 'platformNativeInfo';
 
 export function processItem(input: ProcessItemInput, options?: InvokeOptions): Promise<ProcessItemOutput> {
   return invokeGenerated<ProcessItemOutput>(9, 'processItem', input, options);
