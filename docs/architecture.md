@@ -20,7 +20,7 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
  │         │                                                           │
  │         ▼                                                           │
  │  Package::builder("examples.calculator")                            │
- │      .register(add_numbers)                                         │
+ │      .command_fn(add_numbers)                                       │
  │      .build()                                          Package      │
  │                                                             │       │
  │         ┌───────────────────────────────────────────────────┘       │
@@ -160,10 +160,12 @@ Provides the core types and logic.
 
 Provides the `#[command]` attribute macro. For the annotated function it:
 
-1. Verifies that the function has at least one parameter
-2. Auto-detects scalar parameter (two or more) vs struct parameter (one) mode
-3. Statically verifies at compile time that the `rustra::__private::CommandInput` / `CommandOutput` trait bounds are satisfied
-4. Allows an explicit command name via `#[command(name = "customName")]`. When omitted, the name is derived automatically by converting the function name with snake_to_lower_camel
+1. Verifies that the function has **at most one input data parameter** (zero is allowed as a `()` input); two or more data parameters are a compile error. Optional `State<T>` parameters are injected additionally (see the [Rust API guide](rust-api-guide.md#5-packagebuilder-methods))
+2. Statically verifies at compile time that the `rustra::__private::CommandInput` / `CommandOutput` trait bounds are satisfied
+3. Requires an explicit `Result<O>` return type — bare returns (`-> i64`) and omitted unit returns are compile errors
+4. Allows an explicit command name via `#[command(name = "customName")]`. When omitted, the name is derived automatically by converting the function name with snake_to_lower_camel (the `_command` suffix is stripped)
+
+The same rules are documented with examples in the [Rust API guide — the `#[command]` macro](rust-api-guide.md#2-the-command-macro); that guide is the reference when the two documents could drift.
 
 The function body passes through unchanged (identity passthrough); only compile-time type checks are performed. It also generates the `const __RUstra_meta_{fn_name}: &str = "commandName"` constant so the `build!` macro can reference the command name.
 
@@ -252,16 +254,20 @@ When `package.generate_typescript()` is called:
 
 Type conversion rules (`ts_type_from_schema`):
 
-| JSON Schema type     | TypeScript                |
-| -------------------- | ------------------------- |
-| `object`             | `{ property: type; ... }` |
-| `integer` / `number` | `number`                  |
-| `string`             | `string`                  |
-| `boolean`            | `boolean`                 |
-| `array`              | `itemType[]`              |
-| anything else        | `unknown`                 |
+| JSON Schema type             | TypeScript                                                    |
+| ---------------------------- | ------------------------------------------------------------- |
+| `object`                     | `{ property: type; ... }`                                     |
+| `integer` (`int64`/`uint64`) | `number \| bigint` (values outside ±2^53 restore as `bigint`) |
+| `integer` / `number` (other) | `number`                                                      |
+| `string`                     | `string`                                                      |
+| `boolean`                    | `boolean`                                                     |
+| `array`                      | `itemType[]`                                                  |
+| anything else                | `unknown`                                                     |
 
-`$defs` (shared definitions) are merged across all commands and then inlined. Currently the whole schema tree is converted directly, without extracting separate named types.
+`$defs` (shared definitions) are merged across all commands and published as
+**named types** — e.g. a struct `AddNumbersInput` becomes
+`export type AddNumbersInput = { a: number | bigint; b: number | bigint }` in
+`types.ts`, and nested/referenced types resolve by definition name (`$ref`).
 
 ### File Structure of the Generated Output
 
@@ -522,8 +528,10 @@ The typical development workflow:
    #   rustra codegen --config rustra.json
 
 4. Use the generated code on the TypeScript side
-   import { myCommand } from './generated/commands.js';
-   const result = await myCommand(engine, { ... });
+   import { addNumbers } from './generated/node.js';   // host entry, not commands.js
+   const result = await addNumbers({ a: 20, b: 22 });
+   # the generated host entry installed the engine lazily via configureLazy() —
+   # no engine argument, no manual configure()
 ```
 
 `examples/calculator/src/bin/generate.rs` is an example of the contract probe:
@@ -539,10 +547,9 @@ generated.write_schema_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))
 
 The `#[command]` macro performs compile-time validation of the function signature:
 
-1. Confirms there is at least one input parameter
-2. Confirms the input parameter is a typed parameter
-3. Confirms the return type is `Result<O>`, a bare value, or `()`
-4. Statically verifies the input type satisfies `CommandInput` (`DeserializeOwned + JsonSchema + 'static`)
-5. Statically verifies the output type satisfies `CommandOutput` (`Serialize + JsonSchema + 'static`)
+1. Confirms there is at most one input data parameter (zero is allowed as a `()` input; two or more is a compile error)
+2. Confirms the return type is an explicit `Result<O>` (bare values and omitted unit returns are compile errors)
+3. Statically verifies the input type satisfies `CommandInput` (`DeserializeOwned + JsonSchema + 'static`)
+4. Statically verifies the output type satisfies `CommandOutput` (`Serialize + JsonSchema + 'static`)
 
 This validation goes through the sealed traits in the `__private` module and is not exposed as public API. Beyond validation, `#[command]` generates the `const __RUstra_meta_{fn_name}: &str` constant holding the command name, which the `build!` macro references.

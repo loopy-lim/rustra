@@ -137,9 +137,7 @@ a compile error (zero is allowed as a `()` input — see §2-2):
 - Input type: `DeserializeOwned + JsonSchema`
 - Output type: `Serialize + JsonSchema`
 
-Currently, an unsatisfied trait bound produces the standard Rust E0277 diagnostic. A
-`#[diagnostic::on_unimplemented]`-based custom message is planned but not implemented — do not
-rely on a custom error text yet.
+Currently, an unsatisfied trait bound produces the standard Rust E0277 diagnostic:
 
 ```text
 error[E0277]: the trait bound `MyType: CommandInput` is not satisfied
@@ -152,15 +150,9 @@ note: required for `MyType` to implement `CommandInput`
     (unsatisfied trait bound introduced by the blanket `impl<T> CommandInput for T`)
 ```
 
-A `#[diagnostic::on_unimplemented]` attribute on `CommandInput`/`CommandOutput` would turn this
-into a friendlier message (planned, not yet implemented):
-
-```text
-error: `MyType` cannot be used as a command parameter
-   |
-   = note: command parameters require Serialize + Deserialize + JsonSchema
-   = note: add `#[rustra::bridge_type]` to `MyType`
-```
+Roadmap: a `#[diagnostic::on_unimplemented]` attribute on `CommandInput`/`CommandOutput`
+may one day turn this into a friendlier message (e.g. suggesting `#[bridge_type]`), but
+it is not implemented — always read the E0277 text above.
 
 ---
 
@@ -330,25 +322,70 @@ let pkg = Package::builder("example.bytes")
     .build();
 ```
 
-If the schema is not exactly one required `uint8` array field, the build stage panics so
-the direct ABI is never advertised incorrectly. Input JS memory is borrowed only for the
-duration of the synchronous call, and the Rust output allocation is freed by the JSI
-`ArrayBuffer` at end of life. For the detailed contract see the
+Contract essentials (what you rely on as a user):
+
+- **Schema condition** — the command's input and output must each be exactly one
+  required `uint8` array (`Vec<u8>`) field; anything else panics at the `build()`
+  stage so the direct ABI is never advertised incorrectly.
+- **Memory ownership** — input JS memory is borrowed only for the duration of the
+  synchronous call; the Rust output allocation is copied into a JS-owned
+  `ArrayBuffer` and freed by the JSI `ArrayBuffer` at end of life (no manual
+  pointer management on the JS side).
+- The ordinary postcard/JSON command contracts are kept as well — other hosts and
+  the legacy native module keep working through the existing paths.
+
+Design rationale and the full C++/JSI boundary discussion:
 [direct byte-buffer design](plans/2026-08-24-rn-byte-buffer-native-path.md).
 
 ### Other Builder Methods
 
-| Method                                  | Role                                                                    |
-| --------------------------------------- | ----------------------------------------------------------------------- |
-| `.require_capability(name, cap)`        | Requires a capability for a command (deny-by-default Runtime Authority) |
-| `.platform_command::<I, O>(name, ps)`   | Declares a platform-specific command (registered on **all** platforms)  |
-| `.platform_command_impl(name, handler)` | Injects the real handler on a platform the command supports             |
-| `.buffer_command_fn(handler)`           | Registers the name-inferred single `Vec<u8>` direct path                |
-| `.buffer_command(name, handler)`        | Registers the explicitly named single `Vec<u8>` direct path             |
-| `.alias_command_id(command, legacy_id)` | Registers a legacy cmd_id alias (backward-compatible dispatch)          |
-| `.event_capacity(capacity)`             | Sets the event bus ring buffer capacity                                 |
-| `.schema_version(version)`              | Declares the schema negotiation version (T2, OTA)                       |
-| `.manage(state)`                        | Registers shared state (accessed via `Package::state::<T>()`)           |
+| Method                                  | Role                                                                                                                                                                                           |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.require_capability(name, cap)`        | Requires a capability for a command (deny-by-default Runtime Authority)                                                                                                                        |
+| `.platform_command::<I, O>(name, ps)`   | Declares a platform-specific command (registered on **all** platforms)                                                                                                                         |
+| `.platform_command_impl(name, handler)` | Injects the real handler on a platform the command supports                                                                                                                                    |
+| `.buffer_command_fn(handler)`           | Registers the name-inferred single `Vec<u8>` direct path                                                                                                                                       |
+| `.buffer_command(name, handler)`        | Registers the explicitly named single `Vec<u8>` direct path                                                                                                                                    |
+| `.alias_command_id(command, legacy_id)` | Registers a legacy cmd_id alias (backward-compatible dispatch)                                                                                                                                 |
+| `.event::<T>(name)`                     | Declares an event contract — payload type `T` for `name`; recorded in schema.json `events` and rendered to `generated/events.ts` (see the [events and channels guide](events-and-channels.md)) |
+| `.event_capacity(capacity)`             | Sets the event bus ring buffer capacity                                                                                                                                                        |
+| `.schema_version(version)`              | Declares the schema negotiation version (T2, OTA)                                                                                                                                              |
+| `.manage(state)`                        | Registers shared state (accessed via `State<T>` parameters and `Package::state::<T>()`)                                                                                                        |
+
+### State injection: `State<T>` parameters
+
+A `#[command]` function may take additional `State<T>` parameters besides the single
+input struct. Register the state with `.manage(state)`; the macro injects it into the
+handler via `rustra::get_state::<T>()`. Calling a command whose `State<T>` was never
+managed fails with the `internal` error `State<T> not managed in package`.
+
+```rust
+use rustra::prelude::*;
+
+#[bridge_type]
+struct QueryInput { user_id: String }
+
+#[bridge_type]
+struct QueryOutput { display_name: String }
+
+struct Db { /* your connection pool, caches, ... */ }
+
+#[command]
+fn query_user(input: QueryInput, db: State<Db>) -> Result<QueryOutput> {
+    let _db: &Db = &db.0; // State<T>(pub Arc<T>) — cheap shared handle
+    Ok(QueryOutput { display_name: input.user_id })
+}
+```
+
+```rust
+let pkg = Package::builder("app.users")
+    .command_fn(query_user)
+    .manage(Db { /* ... */ })
+    .build();
+```
+
+`State<T>` parameters are never part of the wire contract — they do not appear in
+schema.json, so adding or removing them is not a breaking change.
 
 ### Platform-specific commands (`.platform_command` / `.platform_command_impl`)
 
@@ -598,6 +635,35 @@ field (on JSON paths without the flag on the wire, it is inferred from the
 `transport.*` codes). The JS-side `invoke` `options.timeoutMs` rejects with this
 `transport.timeout` (retryable) on expiry — the JS-side escape hatch from a hung native.
 
+### JS call semantics: signal, timeoutMs, invokeBatch
+
+Every generated helper accepts `InvokeOptions` as its last parameter, and
+`@rustra/types` exports the same options for raw `invoke`/`invokeBatch`:
+
+```ts
+import { invokeBatch } from '@rustra/types';
+import { addNumbers, slowCompute } from './generated/commands.js';
+
+// cancellation — AbortSignal rejects the promise immediately (`cancelled`); on
+// hosts without invokeCancel propagation this is a shallow cancel
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 100);
+await addNumbers({ a: 20, b: 22 }, { signal: controller.signal });
+
+// timeout — rejects with `transport.timeout` (retryable) after the deadline
+await slowCompute({ workload: 'heavy' }, { timeoutMs: 500 });
+
+// batch — one array, order preserved; entries without a signal can take a
+// single native crossing on the rkyv V2 engine
+const [sum, echo] = await invokeBatch([
+  { command: 'addNumbers', args: { a: 20, b: 22 } },
+  { command: 'echo', args: { message: 'hi' }, options: { timeoutMs: 1000 } },
+]);
+```
+
+Per-adapter behavior of each option (which cancellation is shallow, which batch
+takes a single crossing) is the [compatibility matrix](compatibility-matrix.md).
+
 ### Error Methods
 
 ```rust
@@ -635,19 +701,20 @@ fn write_output() -> Result<()> {
 
 ### Type Mapping
 
-| Rust type                        | TypeScript type                      |
-| -------------------------------- | ------------------------------------ |
-| `i64`, `i32`, `u32`, `f64`, etc. | `number`                             |
-| `String`                         | `string`                             |
-| `bool`                           | `boolean`                            |
-| `Option<T>`                      | `T \| null` (struct fields use `?:`) |
-| `Vec<T>`                         | `T[]`                                |
-| `Vec<Vec<T>>`                    | `T[][]` (nesting supported)          |
-| `HashMap<String, V>`             | `Record<string, V>`                  |
-| `BTreeSet<T>` / `HashSet<T>`     | `Set<T>` (`uniqueItems` mapping)     |
-| `(A, B, C)`                      | `[A, B, C]` (tuple)                  |
-| Simple `enum`                    | `'Variant1' \| 'Variant2'`           |
-| Data-carrying `enum`             | Object union type                    |
+| Rust type                    | TypeScript type                                               |
+| ---------------------------- | ------------------------------------------------------------- |
+| `i64`, `u64`                 | `number \| bigint` (values outside ±2^53 restore as `bigint`) |
+| `i32`, `u32`, `f64`, etc.    | `number`                                                      |
+| `String`                     | `string`                                                      |
+| `bool`                       | `boolean`                                                     |
+| `Option<T>`                  | `T \| null` (struct fields use `?:`)                          |
+| `Vec<T>`                     | `T[]`                                                         |
+| `Vec<Vec<T>>`                | `T[][]` (nesting supported)                                   |
+| `HashMap<String, V>`         | `Record<string, V>`                                           |
+| `BTreeSet<T>` / `HashSet<T>` | `Set<T>` (`uniqueItems` mapping)                              |
+| `(A, B, C)`                  | `[A, B, C]` (tuple)                                           |
+| Simple `enum`                | `'Variant1' \| 'Variant2'`                                    |
+| Data-carrying `enum`         | Object union type                                             |
 
 ### User-Defined Generic Types
 
@@ -942,6 +1009,12 @@ pkg.emit("item.created", serde_json::json!({ "id": "x1" }));
 pkg.set_event_sink(Some(sink));
 let bus = pkg.event_bus(); // direct EventBus access
 ```
+
+Declare typed event contracts with `.event::<T>(name)` so codegen renders
+`generated/events.ts` and the JS side subscribes type-safely. The full flow —
+declaration → generated `events.ts` → per-host `subscribeEvent`/channels — is the
+[events and channels guide](events-and-channels.md), with a working example in
+[`examples/streaming`](../examples/streaming).
 
 **Channels** — Rust → JS unicast reply streams (invocation-scoped; see
 [compatibility matrix](compatibility-matrix.md#channel-delivery-path) for

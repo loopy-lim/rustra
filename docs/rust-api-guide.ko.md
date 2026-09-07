@@ -137,9 +137,7 @@ fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
 - 입력 타입: `DeserializeOwned + JsonSchema`
 - 출력 타입: `Serialize + JsonSchema`
 
-현재 trait bound가 충족되지 않으면 표준 Rust E0277 진단이 출력됩니다.
-`#[diagnostic::on_unimplemented]` 기반 커스텀 메시지는 계획만 있고 구현되지 않았습니다 —
-커스텀 에러 텍스트에 의존하지 마세요.
+현재 trait bound가 충족되지 않으면 표준 Rust E0277 진단이 출력됩니다:
 
 ```text
 error[E0277]: the trait bound `MyType: CommandInput` is not satisfied
@@ -152,14 +150,9 @@ note: required for `MyType` to implement `CommandInput`
     (unsatisfied trait bound introduced by the blanket `impl<T> CommandInput for T`)
 ```
 
-`CommandInput`/`CommandOutput`에 `#[diagnostic::on_unimplemented]`를 붙이면 이것이 더 친절한 메시지로 바뀝니다 (계획됨, 미구현):
-
-```text
-error: `MyType` cannot be used as a command parameter
-   |
-   = note: command parameters require Serialize + Deserialize + JsonSchema
-   = note: add `#[rustra::bridge_type]` to `MyType`
-```
+로드맵: `CommandInput`/`CommandOutput`에 `#[diagnostic::on_unimplemented]`를 붙여
+더 친절한 메시지(예: `#[bridge_type]` 제안)로 바꿀 계획이 있으나 미구현이다 —
+위의 E0277 텍스트를 기준으로 읽는다.
 
 ---
 
@@ -327,25 +320,69 @@ let pkg = Package::builder("example.bytes")
     .build();
 ```
 
-스키마가 정확히 하나의 필수 `uint8` 배열 필드가 아니면 빌드 단계에서 패닉해
-직접 ABI를 잘못 광고하지 않습니다. 입력 JS 메모리는 동기 호출 동안만 빌리고,
-Rust 출력 allocation은 JSI `ArrayBuffer`가 수명 종료 시 해제합니다. 자세한
-계약은 [direct byte-buffer 설계](plans/2026-08-24-rn-byte-buffer-native-path.md)를
-참고합니다.
+계약 요지(사용자가 의존하는 부분):
+
+- **스키마 조건** — 명령의 입력과 출력이 각각 정확히 하나의 필수 `uint8`
+  배열(`Vec<u8>`) 필드여야 한다. 아니면 `build()` 단계에서 패닉해 직접 ABI를
+  잘못 광고하지 않는다.
+- **메모리 소유** — 입력 JS 메모리는 동기 호출 동안만 빌리고, Rust 출력
+  allocation은 JS 소유 `ArrayBuffer`로 복사된 뒤 JSI `ArrayBuffer`가 수명 종료
+  시 해제한다(JS 쪽 수동 포인터 관리는 없다).
+- 일반 postcard/JSON 명령 계약도 함께 유지되므로 다른 호스트와 구 네이티브는
+  기존 경로로 동작한다.
+
+설계 근거와 C++/JSI 경계 전체 논의:
+[direct byte-buffer 설계](plans/2026-08-24-rn-byte-buffer-native-path.md).
 
 ### 기타 빌더 메서드
 
-| 메서드                                  | 역할                                                            |
-| --------------------------------------- | --------------------------------------------------------------- |
-| `.require_capability(name, cap)`        | 명령에 capability 요구 부여 (deny-by-default Runtime Authority) |
-| `.platform_command::<I, O>(name, ps)`   | 플랫폼 특화 명령 선언 — **전 플랫폼**에 등록 (미지원은 스텁)    |
-| `.platform_command_impl(name, handler)` | 지원 플랫폼에서 실제 핸들러 주입                                |
-| `.buffer_command_fn(handler)`           | 이름 추론 단일 `Vec<u8>` 직접 경로 등록                         |
-| `.buffer_command(name, handler)`        | 명시 이름 단일 `Vec<u8>` 직접 경로 등록                         |
-| `.alias_command_id(command, legacy_id)` | 구 cmd_id 별칭 등록 (하위호환 디스패치)                         |
-| `.event_capacity(capacity)`             | 이벤트 버스 링 버퍼 용량 설정                                   |
-| `.schema_version(version)`              | (T2, OTA) 스키마 협상 버전 명시                                 |
-| `.manage(state)`                        | 공유 상태(`Package::state::<T>()`로 접근) 등록                  |
+| 메서드                                  | 역할                                                                                                                                                                 |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.require_capability(name, cap)`        | 명령에 capability 요구 부여 (deny-by-default Runtime Authority)                                                                                                      |
+| `.platform_command::<I, O>(name, ps)`   | 플랫폼 특화 명령 선언 — **전 플랫폼**에 등록 (미지원은 스텁)                                                                                                         |
+| `.platform_command_impl(name, handler)` | 지원 플랫폼에서 실제 핸들러 주입                                                                                                                                     |
+| `.buffer_command_fn(handler)`           | 이름 추론 단일 `Vec<u8>` 직접 경로 등록                                                                                                                              |
+| `.buffer_command(name, handler)`        | 명시 이름 단일 `Vec<u8>` 직접 경로 등록                                                                                                                              |
+| `.alias_command_id(command, legacy_id)` | 구 cmd_id 별칭 등록 (하위호환 디스패치)                                                                                                                              |
+| `.event::<T>(name)`                     | 이벤트 계약 선언 — `name`의 페이로드 타입 `T`. schema.json `events`에 기록되고 `generated/events.ts`로 렌더링 ([이벤트·채널 가이드](events-and-channels.ko.md) 참고) |
+| `.event_capacity(capacity)`             | 이벤트 버스 링 버퍼 용량 설정                                                                                                                                        |
+| `.schema_version(version)`              | (T2, OTA) 스키마 협상 버전 명시                                                                                                                                      |
+| `.manage(state)`                        | 공유 상태 등록 (`State<T>` 파라미터와 `Package::state::<T>()`로 접근)                                                                                                |
+
+### 상태 주입: `State<T>` 파라미터
+
+`#[command]` 함수는 단일 입력 구조체 외에 추가 `State<T>` 파라미터를 받을 수 있다.
+상태는 빌더의 `.manage(state)`로 등록하고, 매크로가 `rustra::get_state::<T>()`로
+핸들러에 주입한다. `.manage()` 없이 등록된 `State<T>` 파라미터를 가진 명령을 호출하면
+`internal` 에러 `State<T> not managed in package`로 실패한다.
+
+```rust
+use rustra::prelude::*;
+
+#[bridge_type]
+struct QueryInput { user_id: String }
+
+#[bridge_type]
+struct QueryOutput { display_name: String }
+
+struct Db { /* 커넥션 풀, 캐시 등 */ }
+
+#[command]
+fn query_user(input: QueryInput, db: State<Db>) -> Result<QueryOutput> {
+    let _db: &Db = &db.0; // State<T>(pub Arc<T>) — 저렴한 공유 핸들
+    Ok(QueryOutput { display_name: input.user_id })
+}
+```
+
+```rust
+let pkg = Package::builder("app.users")
+    .command_fn(query_user)
+    .manage(Db { /* ... */ })
+    .build();
+```
+
+`State<T>` 파라미터는 와이어 계약에 포함되지 않는다 — schema.json에 나타나지
+않으므로 추가/제거가 breaking change가 아니다.
 
 ### 플랫폼 특화 명령 (`.platform_command` / `.platform_command_impl`)
 
@@ -590,6 +627,35 @@ TypeScript 측 `RustraCommandError`는 `.retryable` 필드로 같은 값을 노�
 JS 측 `invoke`의 `options.timeoutMs`는 만료 시 이 `transport.timeout`(retryable)로
 거부한다 — 네이티브 hang의 JS 측 탈출구.
 
+### JS 호출 시맨틱: signal, timeoutMs, invokeBatch
+
+생성된 모든 헬퍼는 마지막 파라미터로 `InvokeOptions`를 받고, `@rustra/types`는
+raw `invoke`/`invokeBatch`에도 같은 옵션을 제공한다:
+
+```ts
+import { invokeBatch } from '@rustra/types';
+import { addNumbers, slowCompute } from './generated/commands.js';
+
+// 취소 — AbortSignal은 프라미스를 즉시 거부한다(`cancelled`).
+// invokeCancel 전파가 없는 호스트에서는 얕은 취소다.
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 100);
+await addNumbers({ a: 20, b: 22 }, { signal: controller.signal });
+
+// 타임아웃 — deadline 후 `transport.timeout`(retryable)으로 거부
+await slowCompute({ workload: 'heavy' }, { timeoutMs: 500 });
+
+// 배치 — 하나의 배열, 순서 보존; signal 없는 항목은 rkyv V2 엔진에서
+// 단일 native crossing으로 묶일 수 있다
+const [sum, echo] = await invokeBatch([
+  { command: 'addNumbers', args: { a: 20, b: 22 } },
+  { command: 'echo', args: { message: 'hi' }, options: { timeoutMs: 1000 } },
+]);
+```
+
+옵션별 어댑터 동작(어느 취소가 얕은지, 어느 배치가 단일 횡단인지)은
+[호환성 매트릭스](compatibility-matrix.ko.md)에 있다.
+
 ### 에러 메서드
 
 ```rust
@@ -627,19 +693,20 @@ fn write_output() -> Result<()> {
 
 ### 타입 매핑
 
-| Rust 타입                     | TypeScript 타입                         |
-| ----------------------------- | --------------------------------------- |
-| `i64`, `i32`, `u32`, `f64` 등 | `number`                                |
-| `String`                      | `string`                                |
-| `bool`                        | `boolean`                               |
-| `Option<T>`                   | `T \| null` (구조체 필드는 `?:` 선택적) |
-| `Vec<T>`                      | `T[]`                                   |
-| `Vec<Vec<T>>`                 | `T[][]` (중첩 지원)                     |
-| `HashMap<String, V>`          | `Record<string, V>`                     |
-| `BTreeSet<T>` / `HashSet<T>`  | `Set<T>` (`uniqueItems` 매핑)           |
-| `(A, B, C)`                   | `[A, B, C]` (튜플)                      |
-| 단순 `enum`                   | `'Variant1' \| 'Variant2'`              |
-| 데이터를 가진 `enum`          | 객체 유니온 타입                        |
+| Rust 타입                    | TypeScript 타입                                    |
+| ---------------------------- | -------------------------------------------------- |
+| `i64`, `u64`                 | `number \| bigint` (±2^53 밖 값은 `bigint`로 복원) |
+| `i32`, `u32`, `f64` 등       | `number`                                           |
+| `String`                     | `string`                                           |
+| `bool`                       | `boolean`                                          |
+| `Option<T>`                  | `T \| null` (구조체 필드는 `?:` 선택적)            |
+| `Vec<T>`                     | `T[]`                                              |
+| `Vec<Vec<T>>`                | `T[][]` (중첩 지원)                                |
+| `HashMap<String, V>`         | `Record<string, V>`                                |
+| `BTreeSet<T>` / `HashSet<T>` | `Set<T>` (`uniqueItems` 매핑)                      |
+| `(A, B, C)`                  | `[A, B, C]` (튜플)                                 |
+| 단순 `enum`                  | `'Variant1' \| 'Variant2'`                         |
+| 데이터를 가진 `enum`         | 객체 유니온 타입                                   |
 
 ### 사용자 정의 제네릭 타입
 
@@ -928,6 +995,12 @@ pkg.emit("item.created", serde_json::json!({ "id": "x1" }));
 pkg.set_event_sink(Some(sink));
 let bus = pkg.event_bus(); // EventBus 직접 접근
 ```
+
+타입 있는 이벤트 계약은 `.event::<T>(name)`으로 선언하면 코드젠이
+`generated/events.ts`를 렌더링하고 JS 쪽이 타입 안전하게 구독한다. 선언 → 생성
+`events.ts` → 호스트별 `subscribeEvent`/채널까지의 전체 흐름은
+[이벤트·채널 가이드](events-and-channels.ko.md), 동작 예제는
+[`examples/streaming`](../examples/streaming)에 있다.
 
 **채널** — Rust → JS 유니캐스트 응답 스트림 (호출 스코프; 호스트별 발급 경로는
 [호환성 매트릭스](compatibility-matrix.ko.md#채널-전달-경로) 참고):
