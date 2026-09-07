@@ -21,13 +21,14 @@ cargo build -p rustra-crud-example
 ## TypeScript 코드 생성
 
 ```sh
-cargo run -p rustra-crud-example --bin generate
+cargo run -p rustra-crud-example --bin generate   # 계약 프로브: schema.json
+bun run codegen                                   # schema.json 에서 TS 표면 렌더링
 ```
 
 `examples/crud/generated/`에 생성됨:
 
-- `schema.json` — 모든 명령어의 JSON Schema
-- `types.ts` — TypeScript 타입 정의
+- `schema.json` — 모든 명령어의 JSON Schema (Rust 프로브가 발행)
+- `types.ts` — TypeScript 타입 정의 (`rustra codegen` 이 렌더링)
 - `commands.ts` — 타입 안전 명령어 헬퍼 함수
 - `contract.ts` — 호환성 검사용 contract hash
 

@@ -4,6 +4,7 @@ import {
   debugRustra,
   isRustraDebugEnabled,
   parseRustraErrorString,
+  RustraErrorCode,
   type RustraDebugEvent,
   type RkyvV2Codec,
 } from '@rustra/types';
@@ -58,6 +59,17 @@ export type NodeLoopTransport = NodeInvokeTransport & {
   onPushEvent?(
     handler: (event: { name: string; payload: string; seq: number }) => void,
   ): () => void;
+  /**
+   * 0xfffc 채널 프레임을 구독한다 — `(frame) => unsubscribe`. `createChannel`
+   * 이 발급 핸들과 콜백을 잇는 데 쓴다(0.7 채널 트랙). 메서드 존재는 채널
+   * "경로"의 노출이고 실제 능력은 바이너리 모드 협상에 있다 — NDJSON 모드의
+   * transport 도 메서드는 갖지만 채널 프레임은 절대 오지 않는다.
+   *
+   * 필수 멤버 — 이 인터페이스의 실현체(createNodeLoopTransport)가 항상
+   * 노출하며, 채널 프레임 demux 분기는 응답/푸시와 같은 리더 안에 있다.
+   * payload 는 문자열 JSON — 파싱 책임은 채널 콜백 소유자에게 있다.
+   */
+  onChannelFrame(handler: (frame: { handle: number; payload: string }) => void): () => void;
 };
 
 /**
@@ -75,23 +87,42 @@ const BINARY_DRAIN_EVENTS_CMD = 0xfffe;
  * 응답 프레임의 첫 u16 LE 는 ok|pad(ok는 0/1)라 이 값과 절대 충돌하지 않는다. */
 const BINARY_PUSH_EVENTS_CMD = 0xfffd;
 
+/** 채널 **푸시** 프레임 예약 cmd id — loop-stdio 의 BINARY_CHANNEL_PUSH_CMD 와 짝.
+ * 본문은 1줄 JSON `{"handle": u32, "payload": <문자열 JSON>}`(이벤트 푸시와 동일
+ * "cmd id 로 시작하는 프레임" 와이어). */
+const BINARY_CHANNEL_PUSH_CMD = 0xfffc;
+
+/** 채널 **발급** 예약 cmd id — loop-stdio 의 BINARY_CHANNEL_CREATE_CMD 와 짝.
+ * 본문 없는 요청, 응답 본문은 JSON `{"handle": u32}`(Tauri rustra_channel_create
+ * 와 동일 페이로드). */
+const BINARY_CHANNEL_CREATE_CMD = 0xfffb;
+
+/** 채널 **해제** 예약 cmd id — loop-stdio 의 BINARY_CHANNEL_DROP_CMD 와 짝.
+ * 본문은 postcard varint u32 핸들, 응답은 ok 플래그만(핸들이 살아있었으면 1). */
+const BINARY_CHANNEL_DROP_CMD = 0xfffa;
+
 /** 푸시 프레임 본문(JSON) 뒤의 `{name, payload, seq}` — payload 는 문자열 JSON. */
 export type NodePushEventFrame = { name: string; payload: string; seq: number };
 
+/** 채널 푸시 프레임 본문 — handle 은 발급 핸들, payload 는 문자열 JSON. */
+export type NodeChannelFrame = { handle: number; payload: string };
+
 /**
  * stdout 바이너리 프레임 1개를 분기한다 — 0xfffd 면 푸시 리스너 브로드캐스트,
- * 그 외(응답)면 `onResponse` 로 위임. 순수 함수로 추출해 프레임 경로를
- * 스폰 없이 단위 검증할 수 있다(node-loop.test.ts).
+ * 0xfffc 면 채널 리스너 브로드캐스트, 그 외(응답)면 `onResponse` 로 위임.
+ * 순수 함수로 추출해 프레임 경로를 스폰 없이 단위 검증할 수 있다
+ * (node-loop.test.ts).
  *
  * 응답 프레임은 rkyv V2 셰이프 `[ok u8][pad 3][len u32][body]` — 첫 u16 LE
- * (ok|pad)가 0xfffd(ok는 0/1)가 될 수 없다는 와이어 사실이 판별 근거다.
- * 푸시 본문의 JSON 파싱 실패는 조용히 건너뛴다(폴링 drain 파싱과 동일 정책 —
- * 프로토콜 오염 한 프레임이 transport 전체를 죽이지 않는다).
+ * (ok|pad)가 0xfffd/0xfffc(ok는 0/1)가 될 수 없다는 와이어 사실이 판별 근거다.
+ * 푸시/채널 본문의 JSON 파싱 실패는 조용히 건너뛴다(폴링 drain 파싱과 동일
+ * 정책 — 프로토콜 오염 한 프레임이 transport 전체를 죽이지 않는다).
  */
 export function demultiplexBinaryFrame(options: {
   cmd: number;
   body: Uint8Array;
   onPush: (event: NodePushEventFrame) => void;
+  onChannel: (frame: NodeChannelFrame) => void;
   onResponse: (frame: Uint8Array) => void;
 }): void {
   if (options.cmd === BINARY_PUSH_EVENTS_CMD) {
@@ -108,6 +139,22 @@ export function demultiplexBinaryFrame(options: {
       }
     } catch {
       // 비정상 푸시 프레임 — 조용히 건너뛴다.
+    }
+    return;
+  }
+  if (options.cmd === BINARY_CHANNEL_PUSH_CMD) {
+    try {
+      const json = frameDecoder.decode(options.body.subarray(2));
+      const parsed = JSON.parse(json) as Partial<NodeChannelFrame>;
+      if (typeof parsed.handle === 'number' && Number.isSafeInteger(parsed.handle)) {
+        options.onChannel({
+          handle: parsed.handle,
+          // payload 는 문자열 JSON — 파싱 책임은 채널 콜백 소유자에게 있다.
+          payload: typeof parsed.payload === 'string' ? parsed.payload : '',
+        });
+      }
+    } catch {
+      // 비정상 채널 프레임 — 조용히 건너뛴다(푸시와 동일 정책).
     }
     return;
   }
@@ -222,6 +269,8 @@ export function createNodeLoopTransport(options: {
   let binChunks: Buffer[] = [];
   /** 0xfffd 푸시 프레임 구독자 — onPushEvent 로 등록, 반환 해지 함수로 탈퇴. */
   const pushListeners = new Set<(event: NodePushEventFrame) => void>();
+  /** 0xfffc 채널 프레임 구독자 — onChannelFrame 로 등록(발급 핸들↔콜백 배선). */
+  const channelListeners = new Set<(frame: NodeChannelFrame) => void>();
 
   const nameToCodec = (command: string) => binaryCodecs?.get(command);
 
@@ -271,6 +320,16 @@ export function createNodeLoopTransport(options: {
             }
           }
         },
+        onChannel: (frame) => {
+          for (const listener of [...channelListeners]) {
+            try {
+              listener(frame);
+            } catch (error) {
+              // 채널 콜백 예외도 stdout 리더를 죽이지 않는다(푸시와 동일 정책).
+              console.error(`Rustra: channel listener for handle ${frame.handle} threw:`, error);
+            }
+          }
+        },
         onResponse: (response) => {
           const waiter = binQueue.shift();
           // waiter 없는 응답(프로세스 종료 경합 등)은 드랍 — 기존 계약 유지.
@@ -309,6 +368,55 @@ export function createNodeLoopTransport(options: {
       if (frame[0] !== 1) throw new RustraCommandError('invoke.failed', 'event drain failed');
       const jsonLen = frame[4]! | (frame[5]! << 8) | (frame[6]! << 16) | (frame[7]! << 24);
       return JSON.parse(frameDecoder.decode(frame.subarray(8, 8 + jsonLen))) as unknown;
+    }
+    if (command === '__createChannel') {
+      // 채널 발급 — 본문 없는 예약 프레임. 응답 본문은 {"handle": u32} JSON.
+      const request = Buffer.allocUnsafe(6);
+      request.writeUInt32LE(2, 0);
+      request.writeUInt16LE(BINARY_CHANNEL_CREATE_CMD, 4);
+      const frame = await binaryWrite(request);
+      if (frame[0] !== 1) {
+        throw new RustraCommandError(
+          RustraErrorCode.ChannelUnavailable,
+          'channel creation failed; handle space may be exhausted',
+        );
+      }
+      const jsonLen = frame[4]! | (frame[5]! << 8) | (frame[6]! << 16) | (frame[7]! << 24);
+      const parsed = JSON.parse(frameDecoder.decode(frame.subarray(8, 8 + jsonLen))) as {
+        handle?: unknown;
+      };
+      if (!Number.isSafeInteger(parsed.handle) || (parsed.handle as number) < 1) {
+        throw new RustraCommandError(
+          RustraErrorCode.ChannelUnavailable,
+          'loop-stdio returned an invalid channel handle; expected a positive safe integer',
+        );
+      }
+      return { handle: parsed.handle };
+    }
+    if (command === '__dropChannel') {
+      // 채널 해제 — 본문은 postcard varint u32 핸들(LEB128, 채널은 1 이상).
+      const handle = (args as { handle?: unknown })?.handle;
+      if (!Number.isSafeInteger(handle) || (handle as number) < 1) {
+        throw new RustraCommandError(
+          RustraErrorCode.ChannelUnavailable,
+          '__dropChannel requires a positive integer handle',
+        );
+      }
+      let value = handle as number;
+      const varint: number[] = [];
+      do {
+        let byte = value % 128;
+        value = Math.floor(value / 128);
+        if (value > 0) byte |= 0x80;
+        varint.push(byte);
+      } while (value > 0);
+      const request = Buffer.allocUnsafe(6 + varint.length);
+      request.writeUInt32LE(2 + varint.length, 0);
+      request.writeUInt16LE(BINARY_CHANNEL_DROP_CMD, 4);
+      Buffer.from(varint).copy(request, 6);
+      const frame = await binaryWrite(request);
+      // 응답은 ok 플래그만 — 핸들이 살아있었으면 1, 이미 만료면 0.
+      return frame[0] === 1;
     }
     const codec = nameToCodec(command);
     if (!codec) {
@@ -439,10 +547,29 @@ export function createNodeLoopTransport(options: {
   return {
     invoke(command, args) {
       if (mode === 'binary') return invokeBinary(command, args);
+      // 채널은 바이너리 모드 전용 — 콜백 함수 값은 NDJSON 라인으로 전송 불가.
+      // 조용한 command.not_found 대신 명확한 계약 에러로 loud-fail 한다.
+      if (command === '__createChannel' || command === '__dropChannel') {
+        return Promise.reject(
+          new RustraCommandError(
+            RustraErrorCode.ChannelUnavailable,
+            'channels require binary mode: create the transport with codecs (createNodeLoopTransport({ command, codecs })) so the __hello handshake negotiates binary framing',
+          ),
+        );
+      }
       if (binaryCodecs) {
         // 핸드셰이크가 아직 정착하지 않은 첫 호출 — 정착을 기다린 뒤 재분기.
         return handshakeSettled.then(() => {
           if (mode === 'binary') return invokeBinary(command, args);
+          if (command === '__createChannel' || command === '__dropChannel') {
+            // 정착 후에도 NDJSON 구 런타임 — 위와 동일 loud-fail(능력 부재).
+            return Promise.reject(
+              new RustraCommandError(
+                RustraErrorCode.ChannelUnavailable,
+                'runtime stayed on legacy NDJSON (no binary capability) — channels are unavailable on this runtime',
+              ),
+            );
+          }
           return write({ command, args: args ?? {} }).then((frame) => frame.result);
         });
       }
@@ -480,6 +607,12 @@ export function createNodeLoopTransport(options: {
       pushListeners.add(handler);
       return () => {
         pushListeners.delete(handler);
+      };
+    },
+    onChannelFrame(handler) {
+      channelListeners.add(handler);
+      return () => {
+        channelListeners.delete(handler);
       };
     },
     async drain(timeoutMs = 5_000) {

@@ -26,3 +26,5 @@ export type {
   NodeEventSubscriptionOptions,
 } from './node-event-subscription.js';
 export { createNodeEventSubscription } from './node-event-subscription.js';
+export type { NodeChannel, NodeChannelCallback } from './node-channels.js';
+export { createNodeChannel } from './node-channels.js';
