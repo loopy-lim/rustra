@@ -167,6 +167,26 @@ pub(crate) fn command_schema_entry(name: &str, command: &Command) -> Value {
             .expect("command schema is an object")
             .insert("platforms".into(), serde_json::json!(platforms));
     }
+    // 커맨드별 도메인 에러 선언 — 원소는 항상 code/description/retryable 3키로
+    // 기록한다(description 은 null 허용 — 바이트 안정성). 선언 없으면 미기록
+    // (platforms 관례 — 기존 패키지의 계약 해시 불변).
+    if !command.error_variants.is_empty() {
+        let errors: Vec<Value> = command
+            .error_variants
+            .iter()
+            .map(|variant| {
+                json!({
+                    "code": variant.code(),
+                    "description": variant.description(),
+                    "retryable": variant.is_retryable(),
+                })
+            })
+            .collect();
+        entry
+            .as_object_mut()
+            .expect("command schema is an object")
+            .insert("errors".into(), json!(errors));
+    }
     if let Some(description) = &command.description {
         entry
             .as_object_mut()
