@@ -504,14 +504,72 @@ struct DivideInput { a: i64, b: i64 }
 #[bridge_type]
 struct DivideOutput { value: i64 }
 
-#[command]
+#[command(error("math.divide_by_zero"))]
 fn divide(input: DivideInput) -> Result<DivideOutput> {
     if input.b == 0 {
-        return Err(RustraError::custom("division.by_zero", "cannot divide by zero"));
+        return Err(RustraError::custom("math.divide_by_zero", "cannot divide by zero"));
     }
     Ok(DivideOutput { value: input.a / input.b })
 }
 ```
+
+### Command-scoped Error Declarations (typed errors)
+
+String-comparing `err.code` in TypeScript works, but typos in codes compile fine and
+fail silently. Declare the domain codes a command may return, and `rustra codegen`
+turns them into a per-command literal union plus a type guard.
+
+Declare with the attribute (recommended — the declaration lives next to the handler):
+
+```rust
+#[command(error("math.divide_by_zero"))]
+fn divide(input: DivideInput) -> Result<DivideOutput> { /* … */ }
+```
+
+or with the builder chain, where you can also attach metadata (JSDoc/`retryable` —
+documentation only, it does not change wire semantics):
+
+```rust
+use rustra::CommandErrorVariant;
+
+let package = Package::builder("example.math")
+    .command_errors(
+        "divide",
+        &[CommandErrorVariant::new("math.divide_by_zero")
+            .describe("raised when the divisor is zero")],
+    )
+    // …register commands and build…
+```
+
+After `rustra codegen`, a generated `errors.ts` appears whenever at least one command
+declares errors. On the TypeScript side, catch and narrow instead of string-matching:
+
+```ts
+import { isDivideError, DivideErrorCode } from './generated/errors.js';
+
+try {
+  await divide({ a: 10, b: 0 });
+} catch (e) {
+  if (isDivideError(e) && e.code === DivideErrorCode.MathDivideByZero) {
+    // e is DivideError here — `e.code === 'math.divideBy_zero'` would not compile.
+  }
+}
+```
+
+Rules:
+
+- Codes must match `^[a-z][a-z0-9_.]*$` — the builder panics otherwise (the JSON
+  fallback path could not split such a code back out of `Display` output).
+- Declarations cover the command's **domain** codes only. Framework codes
+  (`cancelled`, `transport.timeout`, `command.invalid_args`, …) can occur on any
+  command and stay in the shared `RustraErrorCode` table — compare those directly.
+- A declaration is a contract document, not runtime validation: handlers may still
+  return undeclared codes, and the guard returns `false` for them (the runtime is an
+  open contract; the union is closed). Adding declarations changes schema.json and
+  therefore the contract hash — intended contract evolution, caught by
+  `rustra diff`.
+- The wire error frame and `RustraCommandError` are unchanged — see
+  [wire-format.md](./wire-format.md).
 
 ### Error Code Classification
 
@@ -1058,7 +1116,7 @@ struct DivisionOutput {
 fn divide(input: DivisionInput) -> Result<DivisionOutput> {
     if input.divisor == 0 {
         return Err(RustraError::custom(
-            "division.by_zero",
+            "math.divide_by_zero",
             "cannot divide by zero",
         ));
     }

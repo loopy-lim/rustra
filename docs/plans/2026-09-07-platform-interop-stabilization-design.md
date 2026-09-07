@@ -127,8 +127,10 @@ JS는 u32 id만 주고받는다. 64비트 포인터를 JS에 직접 노출하지
 - 이벤트 싱크(브로드캐스트)의 바이너리 변형 — 채널만 바이너리 지원
 - 다중바이트 TypedArray의 `invokeTypedBuffer` 수용
 - ResourceHandle JS 자동 해제(FinalizationRegistry)·테이블 스위핑
-- 커맨드별 타입화 에러 코드젠(격차 #2 — 다음 트랙 1순위 권장)
-- 역방향 콜백(반환값 있는 JS 함수, 격차 #4)
+- ~~커맨드별 타입화 에러 코드젠(격차 #2)~~ — 착지 완료(2026-09-08,
+  `docs/plans/2026-09-07-typed-errors.md` 전 태스크; changeset은 사용자 승인 게이트)
+- 역방향 콜백(반환값 있는 JS 함수, 격차 #4) — 구현 계획 확정
+  (`docs/plans/2026-09-08-reverse-callbacks.md`; 선행 drain 공백은 착지 완료)
 - 실기기(iOS/Android)·실 Windows/macOS 실행 증거 (1.0 트랙)
 
 ## 하위 호환성

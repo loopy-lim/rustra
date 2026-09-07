@@ -602,7 +602,7 @@ export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutp
 
 <!-- prettier-ignore -->
 ```ts
-export const GENERATED_CONTRACT_HASH = '6dd79fc5a63b3ba04e215034452d67f1adbef14b7597b9024ec62fcd6f1b45af';
+export const GENERATED_CONTRACT_HASH = '469de763d700360d784560e55457d52737601b29309f8aeca64e87de46c0afaf';
 export const SCHEMA_VERSION = 1;
 ```
 
@@ -1018,7 +1018,7 @@ use rustra::prelude::*;
 #[command]
 fn divide(input: DivideInput) -> Result<DivideOutput> {
     if input.b == 0 {
-        return Err(RustraError::custom("division.by_zero", "cannot divide by zero"));
+        return Err(RustraError::custom("math.divide_by_zero", "cannot divide by zero"));
     }
     Ok(DivideOutput { value: input.a / input.b })
 }
@@ -1046,7 +1046,7 @@ try {
   const result = await divide({ a: 10, b: 0 });
 } catch (e) {
   if (e instanceof RustraCommandError) {
-    console.log(e.code); // "division.by_zero"
+    console.log(e.code); // "math.divide_by_zero"
     console.log(e.message); // "cannot divide by zero"
   }
 }
@@ -1055,6 +1055,32 @@ try {
 `RustraCommandError`는 `err.code`, `err.retryable`을 노출하고, 타임아웃/취소는 각각
 `TimeoutError`/`CancelledError` 서브클래스로도 잡을 수 있다. 원본 transport 에러는
 `err.cause`에 보존된다.
+
+#### 타입화 에러 가드 (Rust 측에서 에러 코드를 선언한 경우)
+
+문자열 비교는 오타를 못 잡는다. Rust 커맨드가 도메인 에러 코드를 선언하면(참조:
+[Rust API 가이드 — 커맨드별 에러 코드 선언](./rust-api-guide.ko.md)) `rustra codegen`이
+`generated/errors.ts`에 커맨드별 가드도 함께 생성한다. 가드로 잡으면 code가 리터럴
+유니언으로 좁혀져 코드 오타가 컴파일 에러로 바뀐다:
+
+```ts
+import { isDivideError, DivideErrorCode } from '../generated/errors.js';
+
+try {
+  await divide({ a: 10, b: 0 });
+} catch (e) {
+  if (isDivideError(e)) {
+    if (e.code === DivideErrorCode.MathDivideByZero) {
+      // 좁혀짐: e.code 는 'math.divide_by_zero' — 오타는 컴파일되지 않는다
+    }
+  }
+  // 미선언 코드(예: 신규 네이티브가 새 코드를 반환)는 여기로 흐른다:
+  // 폴백은 e instanceof RustraCommandError + e.code 문자열 분기.
+}
+```
+
+선언하지 않은 커맨드에는 가드가 없을 뿐 — 위의 일반 `RustraCommandError` 패턴은
+어디서나 그대로 동작한다.
 
 ---
 

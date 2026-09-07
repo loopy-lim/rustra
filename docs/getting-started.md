@@ -608,7 +608,7 @@ export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutp
 
 <!-- prettier-ignore -->
 ```ts
-export const GENERATED_CONTRACT_HASH = '6dd79fc5a63b3ba04e215034452d67f1adbef14b7597b9024ec62fcd6f1b45af';
+export const GENERATED_CONTRACT_HASH = '469de763d700360d784560e55457d52737601b29309f8aeca64e87de46c0afaf';
 export const SCHEMA_VERSION = 1;
 ```
 
@@ -1031,7 +1031,7 @@ use rustra::prelude::*;
 #[command]
 fn divide(input: DivideInput) -> Result<DivideOutput> {
     if input.b == 0 {
-        return Err(RustraError::custom("division.by_zero", "cannot divide by zero"));
+        return Err(RustraError::custom("math.divide_by_zero", "cannot divide by zero"));
     }
     Ok(DivideOutput { value: input.a / input.b })
 }
@@ -1060,7 +1060,7 @@ try {
   const result = await divide({ a: 10, b: 0 });
 } catch (e) {
   if (e instanceof RustraCommandError) {
-    console.log(e.code); // "division.by_zero"
+    console.log(e.code); // "math.divide_by_zero"
     console.log(e.message); // "cannot divide by zero"
   }
 }
@@ -1069,6 +1069,33 @@ try {
 `RustraCommandError` exposes `err.code` and `err.retryable`; timeouts/cancellations can
 also be caught as the `TimeoutError`/`CancelledError` subclasses respectively. The
 original transport error is preserved in `err.cause`.
+
+#### Typed error guards (when the Rust side declares error codes)
+
+String comparisons don't catch typos. If the Rust command declares its domain error
+codes (see the [Rust API Guide — command-scoped error
+declarations](./rust-api-guide.md))), `rustra codegen` also emits `generated/errors.ts`
+with one guard per command. Catch with the guard and the code becomes a literal union —
+a typo'd code stops compiling:
+
+```ts
+import { isDivideError, DivideErrorCode } from '../generated/errors.js';
+
+try {
+  await divide({ a: 10, b: 0 });
+} catch (e) {
+  if (isDivideError(e)) {
+    if (e.code === DivideErrorCode.MathDivideByZero) {
+      // narrowed: e.code is 'math.divide_by_zero' and typos would not compile
+    }
+  }
+  // Undeclared codes (e.g. a newer native returning a new code) fall through:
+  // fall back to `e instanceof RustraCommandError` + `e.code` string checks.
+}
+```
+
+Commands without declarations simply have no guard — the plain
+`RustraCommandError` pattern above keeps working everywhere.
 
 ---
 

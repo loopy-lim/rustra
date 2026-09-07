@@ -75,3 +75,15 @@ loop-stdio 런타임은 요청/응답 프레임과 같은 길이 접두 스트�
 `channel.unavailable` 로 loud-fail 한다(JSON 경로와의 조용한 불일치 방지).
 `0xFFF9` 프레임은 `mode=0x01` 발급을 한 클라이언트로만 흐르므로, 구
 디멀티플렉서는 이를 절대 보지 않는다.
+
+## 에러 프레임 (타입화 에러가 바꾸지 않는 것)
+
+에러 응답은 다른 응답과 같은 프레임 래퍼에 `ok=0` 을 실을 뿐이다. rkyv 경로는
+`[ok=0][pad][len u16][postcard{code, message}]` 를, JSON 폴백은 `Display` 문자열을
+`{code, message}` 로 되분할한다. 와이어의 에러 표면은 이게 전부이며 payload 필드도
+선언 데이터도 없다.
+
+커맨드별 타입화 에러(참조: [Rust API 가이드](./rust-api-guide.ko.md))는 여기를
+건드리지 않는다. 선언은 schema.json 에 살고, 코드젠 시점에 생성 TypeScript
+(`errors.ts` — 리터럴 유니언 + 가드)로 변환된다. 프레임, 호스트 승격,
+`RustraCommandError` 는 이전과 바이트 단위로 동일하다.

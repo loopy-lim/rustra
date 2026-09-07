@@ -80,3 +80,15 @@ that does not echo it makes `createNodeBytesChannel` fail loudly with
 `channel.unavailable` before any frame is sent, instead of silently mismatching
 the JSON path. `0xFFF9` frames only ever flow to a client that issued a
 `mode=0x01` create, so an old demultiplexer never sees one.
+
+## Error frames (unchanged by typed errors)
+
+An error response uses the same frame wrapper as any other response with `ok=0`;
+the rkyv path carries `[ok=0][pad][len u16][postcard{code, message}]` and the JSON
+fallback re-splits a `Display` string back into `{code, message}`. That is the whole
+error surface on the wire — there is no payload field and no declaration data.
+
+Command-scoped typed errors (see the [Rust API Guide](./rust-api-guide.md)) do not
+touch this: declarations live in schema.json and turn into generated TypeScript
+(`errors.ts` — literal unions + guards) at codegen time. The frame, the host
+promotions, and `RustraCommandError` are byte-for-byte what they were before.

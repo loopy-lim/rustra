@@ -497,14 +497,71 @@ struct DivideInput { a: i64, b: i64 }
 #[bridge_type]
 struct DivideOutput { value: i64 }
 
-#[command]
+#[command(error("math.divide_by_zero"))]
 fn divide(input: DivideInput) -> Result<DivideOutput> {
     if input.b == 0 {
-        return Err(RustraError::custom("division.by_zero", "cannot divide by zero"));
+        return Err(RustraError::custom("math.divide_by_zero", "cannot divide by zero"));
     }
     Ok(DivideOutput { value: input.a / input.b })
 }
 ```
+
+### 커맨드별 에러 코드 선언 (타입화 에러)
+
+TypeScript 에서 `err.code` 를 문자열 비교로 분기하면 코드 오타가 컴파일 타임에
+잡히지 않는다. 커맨드가 반환할 수 있는 도메인 코드를 선언하면 `rustra codegen`이
+커맨드별 리터럴 유니언 + 타입 가드로 바꿔준다.
+
+속성 폼으로 선언한다(권장 — 선언이 핸들러 옆에 산다):
+
+```rust
+#[command(error("math.divide_by_zero"))]
+fn divide(input: DivideInput) -> Result<DivideOutput> { /* … */ }
+```
+
+빌더 체인으로도 가능하며, 메타데이터(생성 JSDoc/`retryable` — 문서 메타데이터로만
+소비되고 와이어 의미는 바꾸지 않는다)를 붙일 수 있다:
+
+```rust
+use rustra::CommandErrorVariant;
+
+let package = Package::builder("example.math")
+    .command_errors(
+        "divide",
+        &[CommandErrorVariant::new("math.divide_by_zero")
+            .describe("나누는 수가 0일 때")],
+    )
+    // …명령 등록 후 build…
+```
+
+`rustra codegen`을 다시 돌리면, 에러를 선언한 커맨드가 1건이라도 있을 때 생성
+`errors.ts`가 나타난다. TypeScript 측에서는 문자열 비교 대신 가드로 좁힌다:
+
+```ts
+import { isDivideError, DivideErrorCode } from './generated/errors.js';
+
+try {
+  await divide({ a: 10, b: 0 });
+} catch (e) {
+  if (isDivideError(e) && e.code === DivideErrorCode.MathDivideByZero) {
+    // 여기서 e 는 DivideError — e.code === 'math.divideBy_zero' 는 컴파일 에러.
+  }
+}
+```
+
+규칙:
+
+- 코드는 `^[a-z][a-z0-9_.]*$` 를 만족해야 한다 — 위반 시 빌더가 패닉한다(JSON
+  폴백 경로가 이런 코드를 Display 출력에서 되분할할 수 없기 때문).
+- 선언은 커맨드의 **도메인** 코드만 담는다. 프레임워크 코드(`cancelled`,
+  `transport.timeout`, `command.invalid_args`, …)는 어느 커맨드에서든 발생할 수
+  있어 공유 `RustraErrorCode` 표에 그대로 둔다 — 그쪽은 직접 비교한다.
+- 선언은 계약 문서이지 런타임 검증이 아니다. 핸들러가 미선언 코드를 반환해도
+  그대로 흐르고, 가드는 그런 코드에 false 를 반환한다(런타임은 개방 계약, 타입은
+  폐쇄 유니언). 선언 추가는 schema.json 과 계약 해시를 바꾼다 — 의도된 계약
+  진화이며 `rustra diff` 가 잡는다.
+- 와이어 에러 프레임과 `RustraCommandError`는 무변경 —
+  [wire-format.md](./wire-format.md) 참조.
 
 ### 에러 코드 분류
 
@@ -1044,7 +1101,7 @@ struct DivisionOutput {
 fn divide(input: DivisionInput) -> Result<DivisionOutput> {
     if input.divisor == 0 {
         return Err(RustraError::custom(
-            "division.by_zero",
+            "math.divide_by_zero",
             "cannot divide by zero",
         ));
     }
