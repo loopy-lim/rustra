@@ -11,8 +11,7 @@
       `ChannelHost::register_channel_bytes(_with_handle)/send_bytes`, drop 양쪽
       정리, `ChannelHandle::send_bytes`, FFI `rustra_ffi_channel_create_bytes`/
       `rustra_ffi_channel_send_bytes`(+bytes sink quiescence, guard 일반화로
-      transmute 제거), C++ `ChannelDispatcher::createBytes/onChannelPayloadBytes`
-      + `createChannelBytes` HostFunction, JS `createBytesChannel` + 테스트.
+      transmute 제거), C++ `ChannelDispatcher::createBytes/onChannelPayloadBytes` + `createChannelBytes` HostFunction, JS `createBytesChannel` + 테스트.
 - [x] Task 3 — folly::dynamic: `RustraTurboInterop.hpp` +
       `invokeTypedByNameDynamic/ByIdDynamic`(dynamicToValue 변환기 포함).
 - [x] Task 4 — 경쟁 격차 안정화 1차: RN 동기 호출 `invokeTypedSync`

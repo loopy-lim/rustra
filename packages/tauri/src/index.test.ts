@@ -825,3 +825,149 @@ test('createChannel discovers the Tauri global without explicit io', async () =>
     root.__TAURI__ = previous;
   }
 });
+
+// ── 바이너리 채널 어댑터 — rustra_channel_create_bytes + bytes 이벤트 ──
+
+test('createChannelBytes issues a handle via rustra_channel_create_bytes and listens on the bytes channel', async () => {
+  const { createChannelBytes } = await import('./index.js');
+  const calls: Array<{ command: string; args: unknown }> = [];
+  const channels = new Set<string>();
+  let fire: ((payload: unknown) => void) | null = null;
+  const fakeInvoke = async (command: string, args?: unknown) => {
+    calls.push({ command, args });
+    if (command === 'rustra_channel_create_bytes') return { handle: 11 };
+    if (command === 'rustra_channel_drop') return true;
+    throw new Error(`unexpected command: ${command}`);
+  };
+  const fakeListen = async (channel: string, handler: (e: { payload: unknown }) => void) => {
+    channels.add(channel);
+    fire = (payload: unknown) => handler({ payload });
+    return () => {};
+  };
+
+  const received: Uint8Array[] = [];
+  const channel = await createChannelBytes((p) => received.push(p), {
+    invoke: fakeInvoke,
+    listen: fakeListen,
+  });
+  assert.equal(channel.handle, 11);
+  assert.deepEqual(calls, [{ command: 'rustra_channel_create_bytes', args: undefined }]);
+  assert.ok(
+    channels.has('rustra://channel-bytes/11'),
+    'listener bound to rustra://channel-bytes/{handle} — JSON 경로(rustra://channel/)와 분리',
+  );
+
+  // Rust sender 가 Vec<u8> 를 serde 로 내보내므로 웹뷰는 숫자 배열을 받는다.
+  fire!([104, 105, 250]);
+  const frame = received[0];
+  assert.ok(frame instanceof Uint8Array, 'callback receives a Uint8Array');
+  assert.deepEqual(Array.from(frame), [104, 105, 250]);
+});
+
+test('createChannelBytes loud-fails with channel.unavailable when the Tauri global is missing', async () => {
+  const { createChannelBytes } = await import('./index.js');
+  const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
+  const previous = root.__TAURI__;
+  delete root.__TAURI__;
+  try {
+    await assert.rejects(
+      createChannelBytes(() => {}),
+      (err: unknown) =>
+        err instanceof RustraCommandError && err.code === 'channel.unavailable',
+    );
+  } finally {
+    root.__TAURI__ = previous;
+  }
+});
+
+test('createChannelBytes loud-fails on handle 0 (channel-space exhaustion)', async () => {
+  const { createChannelBytes } = await import('./index.js');
+  await assert.rejects(
+    createChannelBytes(() => {}, { invoke: async () => ({ handle: 0 }) }),
+    (err: unknown) =>
+      err instanceof RustraCommandError && err.code === 'channel.unavailable',
+  );
+});
+
+test('createChannelBytes close() invokes rustra_channel_drop once, unhooks, ignores late frames', async () => {
+  const { createChannelBytes } = await import('./index.js');
+  const calls: Array<{ command: string; args: unknown }> = [];
+  let unlistened = 0;
+  let fire: ((payload: unknown) => void) | null = null;
+  const received: Uint8Array[] = [];
+  const channel = await createChannelBytes((p) => received.push(p), {
+    invoke: async (command, args) => {
+      calls.push({ command, args });
+      if (command === 'rustra_channel_create_bytes') return { handle: 13 };
+      if (command === 'rustra_channel_drop') return true;
+      throw new Error('unexpected');
+    },
+    listen: async (_channel, handler) => {
+      fire = (payload: unknown) => handler({ payload });
+      return () => {
+        unlistened += 1;
+      };
+    },
+  });
+
+  fire!([1, 2, 3]);
+  assert.equal(received.length, 1);
+  assert.equal(await channel.close(), true);
+  const dropCalls = calls.filter((c) => c.command === 'rustra_channel_drop');
+  assert.deepEqual(dropCalls, [{ command: 'rustra_channel_drop', args: { handle: 13 } }]);
+  assert.equal(unlistened, 1, 'listener unhooked');
+  fire!([4]);
+  assert.equal(received.length, 1, 'late frames ignored after close');
+  assert.equal(await channel.close(), true, 'double close is idempotent');
+  assert.equal(
+    calls.filter((c) => c.command === 'rustra_channel_drop').length,
+    1,
+    'idempotent close does not drop twice',
+  );
+});
+
+test('createChannelBytes observes and skips payloads that are not byte arrays', async () => {
+  const { createChannelBytes } = await import('./index.js');
+  const events: RustraDebugEvent[] = [];
+  configureDebug((event) => events.push(event));
+  let fire: ((payload: unknown) => void) | null = null;
+  try {
+    const received: Uint8Array[] = [];
+    const channel = await createChannelBytes((p) => received.push(p), {
+      invoke: async () => ({ handle: 4 }),
+      listen: async (_channel, handler) => {
+        fire = (payload: unknown) => handler({ payload });
+        return () => {};
+      },
+    });
+
+    // 계약 밖 페이로드(문자열) — 콜백 계약(Uint8Array)을 지키기 위해 건너뛰되
+    // debug 싱크로 관측한다(조용한 드롭 아님).
+    fire!('garbage');
+    assert.equal(received.length, 0, 'non-array payload does not reach the callback');
+    const observed = events.filter((event) => event.kind === 'tauri.bytes_payload_error');
+    assert.equal(observed.length, 1, 'exactly one bytes_payload_error diagnostic');
+    assert.equal(observed[0]!.command, 'rustra://channel-bytes/4');
+    void channel;
+  } finally {
+    configureDebug(undefined);
+  }
+});
+
+test('createChannelBytes discovers the Tauri global without explicit io', async () => {
+  const { createChannelBytes } = await import('./index.js');
+  const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
+  const previous = root.__TAURI__;
+  root.__TAURI__ = {
+    core: { invoke: async () => ({ handle: 21 }) },
+    event: {
+      listen: async () => () => {},
+    },
+  };
+  try {
+    const channel = await createChannelBytes(() => {});
+    assert.equal(channel.handle, 21);
+  } finally {
+    root.__TAURI__ = previous;
+  }
+});

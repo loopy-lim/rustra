@@ -277,15 +277,14 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    let (real_inner, stub_inner): (TokenStream2, TokenStream2) =
-        if attr.platforms.is_some() {
-            (
-                quote! { #[cfg(#supported_cfg)] #inner_func },
-                quote! { #[cfg(#unsupported_cfg)] #[allow(unused_variables)] #stub_func },
-            )
-        } else {
-            (quote! { #inner_func }, quote! {} )
-        };
+    let (real_inner, stub_inner): (TokenStream2, TokenStream2) = if attr.platforms.is_some() {
+        (
+            quote! { #[cfg(#supported_cfg)] #inner_func },
+            quote! { #[cfg(#unsupported_cfg)] #[allow(unused_variables)] #stub_func },
+        )
+    } else {
+        (quote! { #inner_func }, quote! {})
+    };
 
     let expanded = quote! {
         #real_inner
