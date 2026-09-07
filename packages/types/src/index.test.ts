@@ -4154,11 +4154,16 @@ test('unconfigured invokeBatch and ensureConfigured reject with transport.unavai
       return true;
     });
 
-    // ensureConfigured (global-config.ts) — RN lazy entry 힌트 메시지 보존.
+    // ensureConfigured (global-config.ts) — 미구성 안내는 호스트 중립(감사 A8).
+    // Node/Bun/Tauri 사용자에게 "React Native entry" 를 지시하지 않는다.
     await assert.rejects(ensureConfigured(), (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
       assert.equal((err as RustraCommandError).code, 'transport.unavailable');
-      assert.match((err as Error).message, /React Native entry/);
+      assert.match((err as Error).message, /Rustra not configured/);
+      assert.match(
+        (err as Error).message,
+        /import your generated host entry \(node\.ts\/bun\.ts\/tauri\.ts\/react-native\.ts\)/,
+      );
       return true;
     });
   } finally {
