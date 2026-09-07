@@ -110,7 +110,60 @@ iOS는 Info.plist 사용 설명과 런타임 프롬프트로 하드웨어를 보
 
 ---
 
-## 8. 현재 예제들의 상태
+## 8. 디바이스 역량 계약 (rustra 측)
+
+OS 권한은 계속 호스트 소관이다. 대신 rustra 는 커맨드가 전제하는 디바이스
+역량을 **선언**하고 JS 에서 상태를 **조회**하는 표준 표면을 제공한다 —
+호스트 앱마다 ad-hoc 배선이 갈라지는 것을 막는다.
+
+**선언 (Rust)** — 요구 사항이 schema.json 과 코드젠 산출물의 일부가 된다:
+
+```rust
+#[command(device(camera, bluetooth))]
+fn scan_tags(input: ScanInput) -> Result<ScanOutput> { /* … */ }
+```
+
+토큰은 버전닝된 카탈로그(`DeviceCapability::ALL`)에서 온다: `camera`,
+`microphone`, `geolocation`, `notifications`, `clipboard-read`, `clipboard-write`,
+`wifi`, `bluetooth`, `battery`, `nfc`, `biometric`, `haptics`, `flashlight`,
+`contacts`, `calendar`, `photo-library`, `motion`, `usb`, `serial`,
+`network-state`, `screen-brightness`. W3C PermissionName 표기가 있는 것은 그
+철자를 유지한다. OS별 권한 문자열(Android `NEARBY_DEVICES`, iOS
+`NSCameraUsageDescription`, macOS entitlement)은 의도적으로 토큰 뒤에 숨긴다 —
+OS/플러그인/라이브러리 교차표는
+[docs/research/2026-09-08-device-capabilities.md](./research/2026-09-08-device-capabilities.md)에
+있다.
+
+선언은 계약 문서이지 런타임 게이팅이 아니다 — rustra 는 invoke 를 막지 않고
+프롬프트도 띄우지 않는다. `devices` 선언은 schema.json(따라서 계약 해시)을
+바꾼다 — 의도된 진화이며 `rustra diff` 가 잡는다.
+
+**조회 (TypeScript)** — 앱 전체에서 등록된 provider 1개가 응답한다:
+
+```ts
+import { registerDeviceStatusProvider, getDeviceStatus } from '@rustra/types';
+
+registerDeviceStatusProvider(async (capability) => {
+  if (capability === 'camera') return { availability: 'available', permission: 'granted' };
+  return { availability: 'unknown', permission: 'unknown' };
+});
+
+const status = await getDeviceStatus('camera');
+// → { availability: 'available' | 'unavailable' | 'unknown',
+//     permission:   'granted' | 'denied' | 'prompt' | 'unknown' }
+```
+
+provider 미등록 시 조회는 fail-open(`unknown`/`unknown`, 1회 debug 안내)이다 —
+이후 동작은 호스트 앱이 정한다. 강제하고 싶은 호스트는 스스로
+`device.unavailable` / `device.permission_denied` 를 발행한다 — rustra 코어는
+이 코드들을 반환하는 경로가 없다.
+
+**계층의 조합**: OS 는 하드웨어를 게이트하고(선언+런타임 프롬프트), Tauri ACL 은
+어떤 웹뷰가 플러그인을 호출할 수 있는지, rustra capability 는 누가 브릿지
+명령을 호출할 수 있는지를 게이팅하며, 디바이스 선언은 그 명령이 하드웨어를
+**왜** 필요로 하는지를 문서화한다 — §2 참조.
+
+## 9. 현재 예제들의 상태
 
 | 예제                               | 플랫폼   | 권한 선언                                                   | 이유                                                     |
 | ---------------------------------- | -------- | ----------------------------------------------------------- | -------------------------------------------------------- |
