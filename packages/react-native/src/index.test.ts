@@ -976,13 +976,11 @@ const A05_SLOT_ENGINE = {
 
 test('A05: createRustraBootstrap exposes the lifecycle state surface', async () => {
   const { configure } = await import('@rustra/types');
-  let installs = 0;
   const native = {} as RustraJSINative;
   configure(A05_SLOT_ENGINE);
   try {
     const bootstrap = createRustraBootstrap({
       install: async () => {
-        installs++;
         await Promise.resolve();
       },
       getNative: () => native,
