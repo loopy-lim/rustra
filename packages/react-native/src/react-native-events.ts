@@ -1,4 +1,4 @@
-import { RustraCommandError } from '@rustra/types';
+import { parseRustraErrorString, RustraCommandError } from '@rustra/types';
 import { getRustraNative } from './react-native-core.js';
 
 export type RustraEventNative = {
@@ -9,6 +9,8 @@ export type RustraEventNative = {
 };
 export type RustraChannelNative = {
   createChannel?(callback: (payloadJson: string) => void): number;
+  /** 바이너리 채널 — 콜백이 임의 바이트를 받는다(C++ createChannelBytes HostFunction). */
+  createChannelBytes?(callback: (payload: ArrayBuffer | Uint8Array) => void): number;
   dropChannel?(handle: number): boolean;
 };
 
@@ -35,6 +37,38 @@ export function createChannel(
     throw new RustraCommandError(
       'channel.unavailable',
       'native createChannel() returned an invalid handle; expected a non-negative safe integer',
+    );
+  return { handle, close: () => (closed ? false : ((closed = true), native.dropChannel!(handle))) };
+}
+
+/**
+ * 바이너리 채널 생성 — 콜백은 rkyv V2 프레임 등 임의 바이트(ArrayBuffer)를
+ * 받는다. JSON 경로(`createChannel`)와 동일한 핸들/close 계약, 한 핸들은 한
+ * 경로로만 동작한다. 네이티브가 `createChannelBytes` 를 노출하지 않으면
+ * `channel.unavailable` 로 loud-fail 한다.
+ */
+export function createBytesChannel(
+  callback: (payload: Uint8Array) => void,
+  native: RustraChannelNative = getRustraNative(),
+): { readonly handle: number; close(): boolean } {
+  if (
+    typeof native.createChannelBytes !== 'function' ||
+    typeof native.dropChannel !== 'function'
+  ) {
+    throw new RustraCommandError(
+      'channel.unavailable',
+      'native module must expose createChannelBytes() and dropChannel(); binary channel support is unavailable',
+    );
+  }
+  let closed = false;
+  const handle = native.createChannelBytes((payload) => {
+    if (closed) return;
+    callback(payload instanceof Uint8Array ? payload : new Uint8Array(payload));
+  });
+  if (!Number.isSafeInteger(handle) || handle < 0)
+    throw new RustraCommandError(
+      'channel.unavailable',
+      'native createChannelBytes() returned an invalid handle; expected a non-negative safe integer',
     );
   return { handle, close: () => (closed ? false : ((closed = true), native.dropChannel!(handle))) };
 }
@@ -135,4 +169,40 @@ export function subscribeEvent(
     const all = nativeListeners.get(native);
     if (all && Array.from(all.values()).every((set) => set.size === 0)) stopPollingDrain(native);
   };
+}
+
+/** 동기 invoke 표면의 최소 구조 — 네이티브 전체(RustraJSINative) 없이도 테스트/부분 목(mock)이 가능하다. */
+export type RustraSyncNative = {
+  invokeTyped?(name: string, args: unknown): unknown;
+};
+
+/**
+ * 동기 typed invoke — UI 핫패스 등 Promise 오버헤드를 제거하는 경로.
+ * C++ `invokeTyped` fast path(encode → FFI → decode)를 그대로 쓰며 반환값은
+ * 디코딩된 출력 그 자체다. 정적 코덱이 없는 명령/네이티브는
+ * `sync.unavailable` 로 loud-fail 한다(폴백 정책은 호출자 소관).
+ *
+ * 계약: JS 런타임 스레드에서만 호출(JSI 스레드 친화성 — 다른 네이티브 경로와
+ * 동일). 커맨드 에러는 `RustraCommandError`(code/message 유지)로 재발행된다.
+ */
+export function invokeTypedSync<T = unknown>(
+  name: string,
+  args?: unknown,
+  native: RustraSyncNative = getRustraNative(),
+): T {
+  if (typeof native.invokeTyped !== 'function') {
+    throw new RustraCommandError(
+      'sync.unavailable',
+      'native module does not expose invokeTyped(); synchronous invoke is unavailable',
+    );
+  }
+  try {
+    return native.invokeTyped(name, args ?? {}) as T;
+  } catch (error) {
+    if (error instanceof RustraCommandError) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    // C++ HostFunction 은 "code: message" 문자열 JSError 를 던진다 —
+    // 안정 코드로 복원한다(파서는 JSON/"code: message" 양쪽 계약 지원).
+    throw parseRustraErrorString(message);
+  }
 }

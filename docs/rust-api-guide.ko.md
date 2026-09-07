@@ -338,8 +338,8 @@ Rust 출력 allocation은 JSI `ArrayBuffer`가 수명 종료 시 해제합니다
 | 메서드                                  | 역할                                                            |
 | --------------------------------------- | --------------------------------------------------------------- |
 | `.require_capability(name, cap)`        | 명령에 capability 요구 부여 (deny-by-default Runtime Authority) |
-| `.platform_command::<I, O>(name, ps)`   | 플랫폼 특화 명령 선언 — **전 플랫폼**에 등록 (미지원은 스텁)     |
-| `.platform_command_impl(name, handler)` | 지원 플랫폼에서 실제 핸들러 주입                                  |
+| `.platform_command::<I, O>(name, ps)`   | 플랫폼 특화 명령 선언 — **전 플랫폼**에 등록 (미지원은 스텁)    |
+| `.platform_command_impl(name, handler)` | 지원 플랫폼에서 실제 핸들러 주입                                |
 | `.buffer_command_fn(handler)`           | 이름 추론 단일 `Vec<u8>` 직접 경로 등록                         |
 | `.buffer_command(name, handler)`        | 명시 이름 단일 `Vec<u8>` 직접 경로 등록                         |
 | `.alias_command_id(command, legacy_id)` | 구 cmd_id 별칭 등록 (하위호환 디스패치)                         |

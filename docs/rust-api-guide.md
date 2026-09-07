@@ -381,7 +381,7 @@ Contract:
   all").
 - `build()` panics if the current platform is declared but `platform_command_impl`
   was never called (a silent stub on a supported platform is a wiring bug), and
-  `platform_command_impl` panics if the current platform is *not* declared
+  `platform_command_impl` panics if the current platform is _not_ declared
   (misplaced `#[cfg]`).
 - `I`/`O` types must be identical in declaration and impl — the schema may not
   differ per platform.
