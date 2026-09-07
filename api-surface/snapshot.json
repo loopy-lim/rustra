@@ -10,6 +10,7 @@
     "pub mod platform",
     "pub mod prelude",
     "pub mod state",
+    "pub mod tauri_channels",
     "pub mod tauri_support",
     "pub use error::{Result, RustraError}",
     "pub use package::{GeneratedPackage, Package, PackageBuilder}",
