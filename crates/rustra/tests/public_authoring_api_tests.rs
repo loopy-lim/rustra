@@ -41,6 +41,35 @@ fn locked_add(input: AddNumbersInput) -> Result<AddNumbersOutput> {
     })
 }
 
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct DivideInput {
+    a: i64,
+    b: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct DivideOutput {
+    value: i64,
+}
+
+/// `#[command(error(...))]` — 커맨드별 도메인 에러 코드 선언을 매크로 시점에
+/// 심는다 (register!/build! 가 errors_meta_if 로 연결).
+#[command(error("math.divide_by_zero"))]
+fn divide_typed_errors(input: DivideInput) -> Result<DivideOutput> {
+    if input.b == 0 {
+        Err(RustraError::custom(
+            "math.divide_by_zero",
+            "0으로 나눌 수 없습니다",
+        ))
+    } else {
+        Ok(DivideOutput {
+            value: input.a / input.b,
+        })
+    }
+}
+
 fn mobile_package() -> Package {
     Package::builder("example.mobile").build()
 }
@@ -172,6 +201,28 @@ fn build_macro_also_applies_capability_attribute() {
         .invoke("lockedAdd", AddNumbersInput { a: 2, b: 2 })
         .unwrap();
     assert_eq!(out.value, 1004);
+}
+
+#[test]
+fn command_error_attr_declares_schema_errors() {
+    let package = rustra::register!(Package::builder("example.attr"), divide_typed_errors).build();
+    let schema = package.live_schema();
+    let entry = &schema["commands"][0];
+    let errors = entry["errors"]
+        .as_array()
+        .expect("error(...) attribute must flow into the schema entry");
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0]["code"], "math.divide_by_zero");
+
+    // 핸들러는 여전히 일반 RustraError 를 반환한다 — 선언은 계약 문서일 뿐
+    // 런타임 경로를 바꾸지 않는다.
+    assert_eq!(
+        package
+            .invoke::<_, DivideOutput>("divideTypedErrors", DivideInput { a: 10, b: 0 })
+            .unwrap_err()
+            .code(),
+        "math.divide_by_zero"
+    );
 }
 
 /// (감사 #5) capability 무음 드랍 차단 — `#[command(capability = "...")]` 함수를
