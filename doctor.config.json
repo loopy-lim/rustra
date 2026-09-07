@@ -39,7 +39,8 @@
       {
         "files": [
           "examples/calculator/apps/performance-stats.ts",
-          "examples/tauri-calculator/src/benchmark.ts"
+          "examples/tauri-calculator/src/benchmark.ts",
+          "packages/types/src/global-batch-settled.ts"
         ],
         "rules": ["react-doctor/async-await-in-loop"]
       },

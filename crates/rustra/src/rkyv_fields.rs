@@ -9,6 +9,8 @@ pub(crate) enum Tier {
     Tier3,
 }
 
+// U32/U16/VecU8 은 read/write arms(rkyv_decode/rkyv_response)가 소비하지만
+// wire_kind_from_schema 가 아직 생성하지 않는다 — 판정이 확장되면 소멸한다.
 #[derive(Clone, Copy, Debug)]
 #[allow(dead_code)]
 pub(crate) enum WireFieldKind {
@@ -29,7 +31,6 @@ pub(crate) enum WireFieldKind {
     VecBool,
 }
 
-#[allow(dead_code)]
 impl WireFieldKind {
     pub(crate) fn size(&self) -> usize {
         match self {
@@ -43,16 +44,6 @@ impl WireFieldKind {
             | Self::VecU8
             | Self::VecI32
             | Self::VecBool => 1,
-        }
-    }
-
-    fn element_size(&self) -> usize {
-        match self {
-            Self::VecI64 | Self::VecF64 => 8,
-            Self::VecI32 => 4,
-            Self::VecBool => 1,
-            Self::VecU8 => 1,
-            _ => 0,
         }
     }
 

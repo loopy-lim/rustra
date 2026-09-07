@@ -19,7 +19,7 @@
 /// 이벤트 푸시가 필요하면 [`register_with_events`] 를 대신 사용한다 —
 /// `Package::emit` 이 즉시 `app.emit("rustra://{name}", payload)` 로
 /// 전달된다(폴링 불필요).
-use crate::Package;
+use crate::{Package, PackageBuilder};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tauri::{Emitter, State};
@@ -147,21 +147,67 @@ fn run_batch(package: &Package, requests: Vec<BatchRequest>) -> Vec<BatchRespons
 ///
 /// 이벤트는 폴링으로만 전달됩니다(기존 동작). 푸시 배선이 필요하면
 /// [`register_with_events`]를 사용하세요.
+///
+/// 노출 커맨드는 프로덕션 경로인 [`rustra_dispatch`]·[`rustra_dispatch_batch`]
+/// 뿐이다 — 측정 전용 [`rustra_dispatch_profiled`] 은 기본 노출에서 제외된다
+/// (A07). 벤치 호스트는 [`register_profiled`] 을 사용한다.
 pub fn register<R: tauri::Runtime>(
     package: Package,
     builder: tauri::Builder<R>,
 ) -> tauri::Builder<R> {
-    builder
-        .manage(RustraState { package })
-        .invoke_handler(tauri::generate_handler![
-            rustra_dispatch,
-            rustra_dispatch_profiled,
-            rustra_dispatch_batch
-        ])
+    finish_registration(package, builder, |state, builder| {
+        builder
+            .manage(state)
+            .invoke_handler(tauri::generate_handler![
+                rustra_dispatch,
+                rustra_dispatch_batch
+            ])
+    })
+}
+
+/// [`register`] 의 벤치 변형 — 프로덕션 커맨드에 측정 전용
+/// [`rustra_dispatch_profiled`] 이 추가로 노출된다(A07). 프로덕션 앱은
+/// [`register`] 나 [`register_with_events`] 를 쓰고, 벤치 호스트만 이 함수를
+/// 쓴다.
+///
+/// [`rustra_dispatch_profiled`] 심볼 자체는 공용 API 로 유지된다 — 이미 이
+/// 커맨드를 소비하는 코드의 컴파일은 깨지지 않으며, 분리는 **노출**에만
+/// 적용된다. Tauri invoke 는 handler 목록에 등록된 커맨드에만 도달하므로
+/// production 등록에서 빠지면 노출이 꺼진다.
+pub fn register_profiled<R: tauri::Runtime>(
+    package: Package,
+    builder: tauri::Builder<R>,
+) -> tauri::Builder<R> {
+    finish_registration(package, builder, |state, builder| {
+        builder
+            .manage(state)
+            .invoke_handler(tauri::generate_handler![
+                rustra_dispatch,
+                rustra_dispatch_profiled,
+                rustra_dispatch_batch
+            ])
+    })
+}
+
+/// 등록 공통 — `RustraState` 를 만들어 배선 클로저에 넘긴다. `register` 와
+/// `register_profiled` 는 노출 커맨드 목록 하나로만 갈라진다.
+fn finish_registration<R, F>(
+    package: Package,
+    builder: tauri::Builder<R>,
+    wire: F,
+) -> tauri::Builder<R>
+where
+    R: tauri::Runtime,
+    F: FnOnce(RustraState, tauri::Builder<R>) -> tauri::Builder<R>,
+{
+    wire(RustraState { package }, builder)
 }
 
 /// [`register`] + 이벤트 푸시 배선 — `Package::emit` 이 즉시
 /// `app.emit("rustra://{name}", payload_json)` 로 전달된다.
+///
+/// `register` 의 노출 커맨드 목록을 그대로 따른다 —
+/// `rustra_dispatch_profiled` 미포함(A07).
 ///
 /// 싱크 설치는 Tauri **플러그인**의 setup 훅에서 일어난다. `tauri::Builder`
 /// 자체의 `.setup()` 은 단일 슬롯이라 우리가 등록하면 호스트가 나중에 자기
@@ -236,25 +282,29 @@ pub fn tauri_event_sink<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> crate::e
 /// 이벤트 이름 → Tauri 채널 이름 매핑 (`rustra://{sanitized}`).
 ///
 /// Tauri 가 채널 이름에 허용하는 문자는 영숫자, `-`, `/`, `:`, `_` 뿐이다.
-/// 그 외 문자(예: `.`)는 `_` 로 치환한다. 치환 후 충돌 가능성은 문서상
-/// 주의로만 다룬다 — 실제 이벤트 이름은 kebab/dot 구분 없이 rustra 관례
-/// (`progress.tick`) 를 따르므로, 동일 세트에서 충돌하려면 접두사만 다른
-/// 이름(`a.b-c` vs `a.b_c`)을 의도적으로 만들어야 한다.
+/// 그 외 문자(예: `.`)는 `_` 로 치환한다. 영숫자 판정은 Unicode 기준
+/// (`char::is_alphanumeric()`) 이라 한글·CJK 등 비 ASCII 이름도 그대로
+/// 보존된다(예: `진행.갱신` → `진행_갱신`).
+///
+/// # 충돌 정책 (R02)
+///
+/// 서로 다른 이름이 같은 채널로 수렴하면(`a.b` vs `a_b`) 조용한 오배선이므로,
+/// **선언된 이벤트**는 `Package::build` 시점에 거부한다 — 정규화 맵 검증은
+/// 빌더(`validate_event_channel_uniqueness`)가 담당하고, 선언 없이 emit 만
+/// 하는 이름은 등록 대상이 아니므로 검증 대상이 아니다. NFC 정규화는 하지
+/// 않는다 — 정규화 후 같아지는 이름(café의 분해형/합성형)도 다른 이름이며,
+/// 그런 이름끼리 충돌하면 마찬가지로 빌드가 거부된다. TS 구독 측
+/// `rustraEventChannel` 이 동일 알고리즘의 문자 단위 쌍생(twin)이다.
 pub fn event_channel(name: &str) -> String {
     format!("{EVENT_CHANNEL_PREFIX}{}", sanitize_event_name(name))
 }
 
-/// Tauri 채널 이름 규칙(영숫자/`-`/`/`/`:`/`_`)으로 이름을 정규화한다.
+/// Tauri 채널 이름 규칙으로 이름을 정규화한다 — 정규화 규칙의 단일 사본은
+/// 빌더 쪽([`crate::builder` 가 include 하는 `builder_events.rs`],
+/// `sanitize_event_name`)이 갖고 TS `rustraEventChannel` 과도 동일하다(R02).
+/// 여기서는 접두사 결합만 담당한다.
 fn sanitize_event_name(name: &str) -> String {
-    name.chars()
-        .map(|c| {
-            if c.is_alphanumeric() || matches!(c, '-' | '/' | ':' | '_') {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect()
+    PackageBuilder::sanitize_event_name(name)
 }
 
 #[cfg(test)]
@@ -281,6 +331,20 @@ mod tests {
         assert_eq!(event_channel("has space"), "rustra://has_space");
         assert_eq!(event_channel("a.b c"), "rustra://a_b_c");
         assert_eq!(event_channel("weird!*()"), "rustra://weird____");
+    }
+
+    #[test]
+    fn event_channel_preserves_unicode_alphanumerics_by_codepoint() {
+        // R02 — 코드포인트 순회 + Unicode 알파벳 보존. TS `rustraEventChannel`
+        // 과 공유하는 골든 테이블의 일부(twin: packages/tauri/src/index.test.ts
+        // GOLDEN_CASES, integration: examples/tauri-calculator
+        // tests/event_name_mapping.rs). 비 BMP 문자가 코드포인트 1개로 쳐지는지
+        // (surrogate 2개가 아니라) 함께 고정한다.
+        assert_eq!(event_channel("진행.갱신"), "rustra://진행_갱신");
+        assert_eq!(event_channel("a.b"), "rustra://a_b");
+        assert_eq!(event_channel("cafe\u{0301}"), "rustra://cafe_");
+        assert_eq!(event_channel("done\u{1F389}now"), "rustra://done_now");
+        assert_eq!(event_channel("n.𝕏"), "rustra://n_𝕏");
     }
 }
 

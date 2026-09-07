@@ -26,19 +26,25 @@ Rust #[command] definition → TypeScript client codegen → platform adapter ex
 Tools that bridge a single Rust core to multiple JS hosts each make different
 trade-offs:
 
-|                                 | **rustra**                           | napi-rs           | Nitro Modules | Tauri commands | tauri-specta |
-| ------------------------------- | ------------------------------------ | ----------------- | ------------- | -------------- | ------------ |
-| Single Rust core × multi-host   | ✅ Node/Bun/Tauri/RN                 | Node (+ Electron) | RN-centric    | Tauri only     | Tauri only   |
-| Type-safe codegen (both ways)   | ✅ commands+events                   | manual d.ts       | ✅            | ❌ (manual)    | ✅           |
-| Compact binary wire             | ✅ rkyv V2 (11.8× smaller than JSON) | JSON/Buffer       | JSI objects   | JSON IPC       | JSON IPC     |
-| Contract gate (breaking change) | ✅ `rustra diff` + contract hash     | ❌                | ❌            | ❌             | partial      |
-| Cancel/timeout/batch semantics  | ✅ documented as a matrix            | DIY               | DIY           | ❌             | ❌           |
+|                                 | **rustra**                                                             | napi-rs                                                 | Nitro Modules | Tauri commands | tauri-specta |
+| ------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------- | ------------- | -------------- | ------------ |
+| Single Rust core × multi-host   | ✅ Node/Bun/Tauri/RN                                                   | Node (+ Electron)                                       | RN-centric    | Tauri only     | Tauri only   |
+| Type-safe codegen (both ways)   | ✅ commands+events                                                     | TS defs generated from Rust structs (attribute macros)¹ | ✅            | ❌ (manual)    | ✅           |
+| Compact binary wire             | ✅ rkyv V2 ([11.8× smaller request wire vs JSON](docs/wire-format.md)) | JSON/Buffer                                             | JSI objects   | JSON IPC       | JSON IPC     |
+| Contract gate (breaking change) | ✅ `rustra diff` + contract hash                                       | ❌                                                      | ❌            | ❌             | partial      |
+| Cancel/timeout/batch semantics  | ✅ documented as a matrix                                              | DIY                                                     | DIY           | ❌             | ❌           |
 
 rustra's choice: **own the whole RPC surface (definition → codegen → wire →
 verification) as a single contract.** Command invocation and contract
 verification stay common across hosts, while capability differences such as
 cancellation, events, and channels are documented explicitly in the
 [compatibility matrix](docs/compatibility-matrix.md).
+
+¹ Verified against the napi-rs docs on 2026-09-05: napi-rs generates
+TypeScript definitions from Rust structs via attribute macros (`#[napi(object)]`);
+"manual" understated that. The rustra cell's distinct point is that types,
+events, and the verification gates come from one shared schema across all
+hosts, not that the others have no codegen.
 
 ## Roadmap
 
@@ -142,9 +148,11 @@ JS/native combination drift at runtime.
 
 ### Rust
 
+<!-- 발행 시 갱신: 0.7.0 라인 -->
+
 ```toml
 [dependencies]
-rustra = "0.4"
+rustra = "0.6"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -542,7 +550,8 @@ type RustraError = {
 
 | Rust                 | TypeScript                                         |
 | -------------------- | -------------------------------------------------- |
-| `i64`, `u32`, `f64`  | `number`                                           |
+| `i64`                | `number \| bigint`                                 |
+| `u32`, `f64`         | `number`                                           |
 | `String`             | `string`                                           |
 | `bool`               | `boolean`                                          |
 | `Vec<T>`             | `T[]`                                              |
@@ -561,8 +570,10 @@ identically regardless of platform.
 
 Enable the `tauri` feature:
 
+<!-- 발행 시 갱신: 0.7.0 라인 -->
+
 ```toml
-rustra = { version = "0.4", features = ["tauri"] }
+rustra = { version = "0.6", features = ["tauri"] }
 ```
 
 Rust side:
@@ -629,7 +640,11 @@ For native module setup (iOS JSI / Android C++), see the
 
 `bun run test:compat` verifies the JS contract and supported local runtimes,
 and the CI native jobs verify build and link. Neither should be equated with
-real-device install and screen-render evidence.
+real-device install and screen-render evidence. The checks that must be run
+and recorded by hand (real WebView, real device, emit timing) live in the
+[host verification manual checklist](docs/verification-checklist.md) — an
+evidence level in this table is backed by a filled checklist block, not by CI
+green alone.
 
 ## Performance
 

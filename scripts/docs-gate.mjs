@@ -60,8 +60,9 @@ export function collectDocs(root) {
  * (`// ──` 줄과 본문 사이가 `//`만 쓰는 블록이면) strip 된다. 헤더로 판정되지
  * 않으면 원문 전체(선행 빈 줄 포함)가 비교 대상.
  *
- * 과잉 strip 가능성(본문 첫 줄이 우연히 `// ──`로 시작하는 TS 파일 등)은
- * 알려진 트레이드오프 — 후속 판단 사항으로 기록하며 코드는 바꾸지 않는다.
+ * 과잉 strip 가능성은 알려진 트레이드오프로 **수용한다** — 마커 본문은 생성물
+ * 기준 byte-for-byte가 계약이며, 본문 첫 줄이 우연히 `// ──`로 시작하는 파일은
+ * docs:sync 대상으로 쓰지 않는 관례로 회피한다(결정 고정 — docs-gate.test.ts 참고).
  */
 export function stripGeneratedHeader(text) {
   const lines = text.split('\n');
@@ -229,9 +230,9 @@ function run() {
     return;
   }
   if (report.regions.length === 0) {
-    // 마커 채택 초기라 fail 전환이 아니라 명시적 상태 유지다. 다만 이 출력이
-    // "게이트가 실제로 docs를 봤는지"의 유일 증거이므로, 마커 0이 의도인지
-    // 확인하라는 안내를 붙인다(fail 전환은 후속 판단 사항).
+    // 결정 고정: 마커 0 허용은 점진 채택 정책 — fail 전환하지 않는다. 다만 이
+    // 출력이 "게이트가 실제로 docs를 봤는지"의 유일 증거이므로, 마커 0이
+    // 의도인지 확인하라는 안내는 유지한다(docs-gate.test.ts가 이 행동을 고정).
     console.log(
       'docs-gate: no docs:sync markers found (게이트 우회 없음 확인용 — 마커 0이 의도인지 확인하세요)',
     );

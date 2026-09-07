@@ -30,7 +30,7 @@ rustra.dispose();
 1. **타입 정의** — `AddNumbersInput`, `AddNumbersOutput`을 `Serialize + Deserialize + JsonSchema`로 정의
 2. **커맨드 등록** — `#[command]`로 핸들러 함수를 표시하고 `Package::builder(...).command_fn(...)`로 등록
 3. **로컬 invoke** — `package.invoke("addNumbers", ...)`로 타입 안전한 호출
-4. **TypeScript 생성** — `package.generate_typescript()` → `generated.write_to_dir(...)`로 파일 출력
+4. **TypeScript 생성** — 계약 프로브(`src/bin/generate.rs`)가 `schema.json`만 발행하면 `rustra codegen`이 TS/C++ 표면을 렌더링
 5. **Host 생성 진입점** — `node.ts`, `bun.ts`, `tauri.ts`, `react-native.ts`
 6. **네이티브 진입점** — `native_entry!` 한 줄로 stable C ABI와 RN staticlib 공유
 7. **고성능 선택지** — Node persistent loop/N-API와 Bun FFI rkyv V2 실측
@@ -39,11 +39,16 @@ rustra.dispose();
 
 `examples/calculator/generated/` 디렉토리에 다음 파일이 생성됩니다:
 
-- `schema.json` — 패키지 스키마
+- `schema.json` — 패키지 스키마 (`generate` bin이 발행)
 - `types.ts` — TypeScript 타입 정의
 - `commands.ts` — 커맨드 헬퍼 함수
 - `contract.ts` — 계약 해시
+- `rkyv-codecs.ts`, `rkyv-registry.ts` — rkyv V2 바이너리 fast-path 코덱
 - `node.ts`, `bun.ts`, `tauri.ts`, `react-native.ts` — host별 zero-config bootstrap
+
+`positional` 옵션을 켜면(React Native 예시가 그렇다) 추가로 `positional-facade.ts`가
+생성된다. `.rustra-generated.json`은 스키마 해시와 파일별 해시를 기록해 CI의
+`codegen:check`이 1바이트 드리프트도 감지한다.
 
 ## 생성된 커맨드 헬퍼
 
