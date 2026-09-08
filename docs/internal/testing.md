@@ -35,7 +35,7 @@ order from the top.
 
 ### File: `crates/rustra/tests/public_authoring_api_tests.rs`
 
-10 tests. Verifies rustra's public authoring API.
+48 tests. Verifies rustra's public authoring API.
 
 | Test function                                                   | What it verifies                                                                                                                                                                                                       |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -97,14 +97,14 @@ bun run bench:complex
 
 ### File: `examples/calculator/ts/adapter-compat.test.ts`
 
-6 tests. Verifies the behavior and integrity of the 4 adapter packages.
+5 tests. Verifies the behavior and integrity of the 4 adapter packages.
 
 | Test                                                                          | What it verifies                                                                                          |
 | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `node adapter forwards generated commands to injected Node transport`         | `createNodeEngine` calls the transport's invoke correctly                                                 |
 | `bun adapter forwards generated commands to injected Bun transport`           | `createBunEngine` calls the transport's invoke correctly                                                  |
-| `tauri adapter forwards generated commands to injected Tauri invoke`          | `createTauriEngine` wraps in `rustra_dispatch` and calls invoke. Confirms `RustraCommandError` conversion |
-| `react native adapter forwards generated commands to injected native module`  | `createReactNativeEngine` calls the native module's invoke correctly                                      |
+| `tauri adapter routes generated commands through rustra_dispatch`             | `createTauriEngine` wraps in `rustra_dispatch` and calls invoke. Confirms `RustraCommandError` conversion |
+| `react native adapter forwards generated commands through JSI native module`  | `createReactNativeEngine` calls the native module's invoke correctly                                      |
 | `adapter packages keep host-specific imports out of the shared contract path` | Confirms the 4 adapter sources contain none of `@tauri-apps`, `react-native`, `@expo/`, `expo-modules`    |
 
 Common pattern: `createRecordingTransport()` records the calls and the test
@@ -113,13 +113,13 @@ correct parameters.
 
 ### File: `examples/calculator/ts/runtime-contract.test.ts`
 
-2 tests. Verifies that host apps use the same generated commands and that the
-RN FFI wiring is correct.
+2 tests. Verifies that host apps use the generated zero-config entry points and
+that the RN FFI wiring is correct.
 
-| Test                                                                      | What it verifies                                                                                                                                                                                                                                                        |
-| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `host apps share generated commands and differ only by adapter transport` | The Node, Bun, Tauri, and RN apps all import `../generated/commands.js`. Each uses `createNodeEngine`, `createBunEngine`, `createTauriEngine`, `createReactNativeEngine`. The Tauri `main.rs` calls `invoke` directly from Rust and does not perform the addition in JS |
-| `react native runtime fixture exposes a native Rust-backed invoke module` | The Swift module registers as `RustraCalculator`, exposes the `invokeRaw` async function, and calls the `rustra_calculator_invoke` / `rustra_calculator_free_string` FFI functions. Confirms the FFI exports in the Rust lib.rs                                         |
+| Test                                                                             | What it verifies                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `host apps use generated zero-config entrypoints without local transport wiring` | The Node, Bun, Tauri, and RN apps all import the generated host entries (`node.ts`/`bun.ts`/`tauri.ts`/`react-native.ts`) with no local engine wiring (`createNodeEngine`, `configure` absent from the apps); each entry builds its `create*Bootstrap` engine. The Tauri `main.rs` registers the package in Rust and does not perform the addition in JS |
+| `react native runtime fixture exposes a native Rust-backed invoke module`        | The Swift module registers as `RustraCalculator`, exposes the `invokeRaw` async function, and calls the core `rustra_ffi_invoke_json` / `rustra_ffi_free` FFI pair directly (no legacy `rustra_calculator_*` symbols). Confirms the package invoke path in the Rust lib.rs                                                                               |
 
 ### Run
 
@@ -138,10 +138,11 @@ bun run test:ts:bun
 The test script chain defined in `package.json`:
 
 ```
-test:ts:node        → tsc --noEmit + node --test
+test:fast           → cargo check + calculator tsc + cli units (dev loop)
+test:ts:node        → tsc + node --test
 test:ts:bun         → bun test
 test:runtime:node   → cargo build + tsc + node node-app.js
-test:runtime:bun    → cargo build + bun bun-app.ts
+test:runtime:bun    → cargo build + bun bun-ffi-app.ts
 test:adapter:tauri  → bun tauri-app.ts
 test:adapter:react-native → bun react-native-app.ts
 test:app:react-native → cd react-native-calculator && bun run typecheck
@@ -226,6 +227,6 @@ bun run test:app:react-native
 To refresh the generated TS client after Rust code changes:
 
 ```bash
-cargo build
-# generated automatically into examples/calculator/generated/
+cargo run -p rustra-calculator-example --bin generate   # contract probe: schema.json
+bun run --cwd examples/calculator codegen                # render TS surfaces from schema.json
 ```

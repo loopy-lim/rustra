@@ -146,8 +146,9 @@ serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
 
-검증된 조합: npm `@rustra/*` 0.8.x ↔ Rust crate 0.8.x — npm과 Rust 버전 라인은
-함께 맞춘다([호환성 매트릭스](docs/compatibility-matrix.ko.md#매트릭스) 참고).
+검증된 조합: npm `@rustra/types` 0.8.x ↔ Rust crate 0.8.x. `@rustra/*` 패키지는
+독립 릴리스 라인이다 — 어댑터 패키지별 버전을 각각 확인한다
+([호환성 매트릭스](docs/compatibility-matrix.ko.md#매트릭스) 참고).
 
 ### TypeScript 어댑터 (필요한 환경만)
 
@@ -179,8 +180,8 @@ fn add_numbers(input: AddNumbersInput) -> Result<AddNumbersOutput> {
 fn main() -> Result<()> {
     let package = rustra::build!("example.calculator", add_numbers).done();
 
-    // TypeScript 클라이언트 생성 — rustra codegen이 schema와 TS/C++를 함께 처리한다.
-    package.generate_typescript()?.write_to_dir("generated")?;
+    // 계약 프로브: schema.json 발행 — `rustra codegen`이 이 파일에서 TS/C++를 렌더링한다.
+    package.generate_typescript()?.write_schema_to_dir("generated")?;
     Ok(())
 }
 ```
@@ -390,8 +391,11 @@ Expo API를 사용하지 않는 동일한 autolink 패키지이므로 앱 코드
 crates/
   rustra/          Rust 패키지 authoring API (core)
   rustra-macros/   #[command], #[bridge_type] proc macros, build! 매크로
+  rustra-naming/   Rust·proc-macro 코드젠 공용 식별자 네이밍 규칙
 
 packages/
+  types/           핵심 타입 (EngineClient, 에러, rkyv V2 코덱, invokeLoose)
+  cli/             rustra CLI (codegen, generate, dev, doctor, init, diff)
   node/            Node adapter
   bun/             Bun adapter
   tauri/           Tauri adapter
@@ -410,6 +414,7 @@ examples/
   streaming/               이벤트 스트리밍 예시 (Package::emit + subscribeEvent 어댑터)
   auth/                    세션/capability 게이트 예시 (deny-by-default)
   reference-app/           @rustra/react 훅 레퍼런스 앱 (useCommand/useMutation/useEvent)
+  react-native-bare-calculator/ bare RN zero-config 픽스처 (autolink 검증, Expo 없음)
 ```
 
 ## 로컬 저장공간 관리
@@ -465,7 +470,7 @@ fn main() -> Result<()> {
     // build! 매크로로 여러 커맨드를 한 번에 등록
     let package = rustra::build!("example.calculator", add_numbers).done();
 
-    package.generate_typescript()?.write_to_dir("generated")?;
+    package.generate_typescript()?.write_schema_to_dir("generated")?;
     Ok(())
 }
 ```
@@ -708,10 +713,11 @@ cargo test --workspace
 
 # calculator 예시 빌드 및 TS 생성
 cargo run -p rustra-calculator-example --bin generate   # 계약 프로브: schema.json
-bun run codegen                                          # TS 표면 렌더링
+bun run --cwd examples/calculator codegen                # TS 표면 렌더링
 
 # CRUD 예시 빌드 및 TS 생성
-cargo run -p rustra-crud-example --bin generate
+cargo run -p rustra-crud-example --bin generate               # 계약 프로브: schema.json
+bun packages/cli/src/index.ts generate --schema examples/crud/generated/schema.json --output examples/crud/generated
 
 # TypeScript 린트 / 포맷
 bun run lint

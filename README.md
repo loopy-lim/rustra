@@ -166,8 +166,9 @@ serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
 
-Verified combination: npm `@rustra/*` 0.8.x ↔ Rust crate 0.8.x — keep the npm
-and Rust version lines in lockstep (see the
+Verified combination: npm `@rustra/types` 0.8.x ↔ Rust crate 0.8.x. The
+`@rustra/*` packages are independent release lines — check each adapter
+package's own version (see the
 [compatibility matrix](docs/compatibility-matrix.md#matrix)).
 
 ### TypeScript adapters (only the environments you need)
@@ -420,8 +421,11 @@ are on the 0.5 line, follow
 crates/
   rustra/          Rust package authoring API (core)
   rustra-macros/   #[command], #[bridge_type] proc macros, build! macro
+  rustra-naming/   Shared identifier naming rules (Rust + proc-macro codegen)
 
 packages/
+  types/           Core types (EngineClient, errors, rkyv V2 codec, invokeLoose)
+  cli/             rustra CLI (codegen, generate, dev, doctor, init, diff)
   node/            Node adapter
   bun/             Bun adapter
   tauri/           Tauri adapter
@@ -440,6 +444,7 @@ examples/
   streaming/               Event streaming example (Package::emit + subscribeEvent adapter)
   auth/                    Session/capability gate example (deny-by-default)
   reference-app/           @rustra/react hooks reference app (useCommand/useMutation/useEvent)
+  react-native-bare-calculator/ Bare RN zero-config fixture (autolink verification, no Expo)
 ```
 
 ## Local Disk Management
@@ -757,11 +762,11 @@ cargo test --workspace
 
 # Build the calculator example and generate TS
 cargo run -p rustra-calculator-example --bin generate   # contract probe: schema.json
-bun run codegen                                          # render TS surfaces
+bun run --cwd examples/calculator codegen                # render TS surfaces
 
 # Build the CRUD example and generate TS
-cargo run -p rustra-crud-example --bin generate   # contract probe: schema.json
-bun run --cwd examples/crud codegen               # render TS surfaces
+cargo run -p rustra-crud-example --bin generate               # contract probe: schema.json
+bun packages/cli/src/index.ts generate --schema examples/crud/generated/schema.json --output examples/crud/generated
 
 # TypeScript lint / format
 bun run lint

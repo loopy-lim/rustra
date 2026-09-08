@@ -61,8 +61,9 @@ serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
 
-검증된 조합: npm `@rustra/*` 0.8.x ↔ Rust crate 0.8.x — npm과 Rust 버전 라인은
-함께 맞춘다([호환성 매트릭스](compatibility-matrix.ko.md#매트릭스) 참고).
+검증된 조합: npm `@rustra/types` 0.8.x ↔ Rust crate 0.8.x. `@rustra/*` 패키지는
+독립 릴리스 라인이다 — 어댑터 패키지별 버전을 각각 확인한다
+([호환성 매트릭스](compatibility-matrix.ko.md#매트릭스) 참고).
 
 TypeScript 어댑터는 사용할 환경만 설치하면 된다:
 
@@ -258,7 +259,7 @@ println!("2 + 3 = {}", output.value);
 ```bash
 cargo run -p rustra-calculator-example          # 데모: 2 + 3 = 5
 cargo run -p rustra-calculator-example --bin generate   # 계약 프로브: schema.json
-bun run codegen                                          # TS 표면 렌더링
+bun run --cwd examples/calculator codegen                # schema.json에서 TS 표면 렌더링
 ```
 
 출력:
@@ -673,7 +674,7 @@ export const SCHEMA_VERSION = 1;
 ```
 
 - schemars가 생성한 JSON Schema. 런타임 검증, 문서 자동화, 외부 도구 연동에 활용.
-- 첫 커맨드만 발췌했다 — 실제 파일은 29개 커맨드 전부를 담는다.
+- 첫 커맨드만 발췌했다 — 실제 파일은 32개 커맨드 전부를 담는다.
 
 ---
 
@@ -944,7 +945,7 @@ cargo test --workspace
 
 ```bash
 cargo run -p rustra-calculator-example --bin generate   # 계약 프로브: schema.json
-bun run codegen                                          # TS 표면 렌더링
+bun run --cwd examples/calculator codegen                # TS 표면 렌더링
 ```
 
 `generated/` 디렉토리에 TypeScript 파일이 생성되었는지 확인한다.

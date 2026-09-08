@@ -22,7 +22,7 @@ cargo build -p rustra-crud-example
 
 ```sh
 cargo run -p rustra-crud-example --bin generate   # 계약 프로브: schema.json
-bun run codegen                                   # schema.json 에서 TS 표면 렌더링
+bun ../../packages/cli/src/index.ts generate --schema generated/schema.json --output generated   # TS 표면 렌더링
 ```
 
 `examples/crud/generated/`에 생성됨:
