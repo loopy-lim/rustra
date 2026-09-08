@@ -107,7 +107,9 @@ function sortedCatalogTokens(
 
 /** 같은 토큰 집합은 선언 순서와 무관하게 같은 유니언을 만든다(미지 토큰은 맨 뒤). */
 function byCatalogOrder(catalogOrder: Map<string, number>): (a: string, b: string) => number {
-  return (a, b) => (catalogOrder.get(a) ?? Number.MAX_SAFE_INTEGER) - (catalogOrder.get(b) ?? Number.MAX_SAFE_INTEGER);
+  return (a, b) =>
+    (catalogOrder.get(a) ?? Number.MAX_SAFE_INTEGER) -
+    (catalogOrder.get(b) ?? Number.MAX_SAFE_INTEGER);
 }
 
 /** camelCase 함수명을 상수명용 UPPER_SNAKE로 — 'scanTags' → 'SCAN_TAGS'. */

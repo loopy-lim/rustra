@@ -1067,32 +1067,26 @@ test('doctor fails on device tokens outside the catalog', () => {
 });
 
 test('doctor warns when declared devices lack the catalog field', () => {
-  withDeviceProject(
-    { commands: [{ name: 'scan_tags', devices: ['camera'] }] },
-    (root) => {
-      const report = collectDoctorReport(
-        options(join(root, 'rustra.json')),
-        metadataRunner(root, []),
-      );
-      const verdict = report.checks.find((check) => check.id === 'codegen.device_catalog');
-      assert.equal(verdict?.status, 'warn');
-      assert.equal(verdict?.required, false);
-    },
-  );
+  withDeviceProject({ commands: [{ name: 'scan_tags', devices: ['camera'] }] }, (root) => {
+    const report = collectDoctorReport(
+      options(join(root, 'rustra.json')),
+      metadataRunner(root, []),
+    );
+    const verdict = report.checks.find((check) => check.id === 'codegen.device_catalog');
+    assert.equal(verdict?.status, 'warn');
+    assert.equal(verdict?.required, false);
+  });
 });
 
 test('doctor skips the catalog check without device declarations', () => {
-  withDeviceProject(
-    { deviceCapabilities: ['camera'], commands: [{ name: 'add' }] },
-    (root) => {
-      const report = collectDoctorReport(
-        options(join(root, 'rustra.json')),
-        metadataRunner(root, []),
-      );
-      const verdict = report.checks.find((check) => check.id === 'codegen.device_catalog');
-      assert.equal(verdict?.status, 'skip');
-    },
-  );
+  withDeviceProject({ deviceCapabilities: ['camera'], commands: [{ name: 'add' }] }, (root) => {
+    const report = collectDoctorReport(
+      options(join(root, 'rustra.json')),
+      metadataRunner(root, []),
+    );
+    const verdict = report.checks.find((check) => check.id === 'codegen.device_catalog');
+    assert.equal(verdict?.status, 'skip');
+  });
 });
 
 // ── registry 도달성 (registry.reachability) ──────────────────────────────────

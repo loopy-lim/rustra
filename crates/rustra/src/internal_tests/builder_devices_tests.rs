@@ -159,12 +159,7 @@ fn command_devices_accepts_unknown_token_in_debug_builds() {
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         assert_eq!(
-            state
-                .commands
-                .get("scan_tags")
-                .unwrap()
-                .device_requirements[0]
-                .as_str(),
+            state.commands.get("scan_tags").unwrap().device_requirements[0].as_str(),
             "nfc-legacy-reader"
         );
     }
