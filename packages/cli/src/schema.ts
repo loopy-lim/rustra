@@ -89,6 +89,12 @@ export type PackageSchema = {
    * 쓰인다. 선언이 없으면 섹션 자체가 없다(하위호환).
    */
   events?: EventSchema[];
+  /**
+   * (Dev Tier B절) Rust `DeviceCapability::ALL` 카탈로그 — 선언이 있는
+   * 패키지에 한해 기록된다. `devices.ts` 렌더러의 단일 소스(수동 미러
+   * 폐지). 선언이 없으면 섹션 자체가 없다(하위호환).
+   */
+  deviceCapabilities?: string[];
 };
 
 /**
