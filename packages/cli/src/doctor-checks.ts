@@ -346,6 +346,83 @@ export function collectConfigChecks(
         'Skipped freshness because schema.json is not generated yet',
       ),
     );
+  // Dev Tier C절 — 디바이스 토큰 릴리스 벽. debug 빌드가 수용한 카탈로그 밖
+  // 토큰을 릴리스 전에 보고한다(release 빌드는 등록 시점 패닉 — 이중 벽).
+  // schema.json 이 없으면 codegen.schema_output warn 이 이미 담당하므로 여기서는
+  // 침묵한다(이중 보고 금지 관례).
+  if (schemaPath && existsSync(schemaPath)) {
+    let verdict: DoctorCheck;
+    try {
+      const schema = JSON.parse(readFileSync(schemaPath, 'utf8')) as {
+        deviceCapabilities?: unknown;
+        commands?: Array<{ name?: unknown; devices?: unknown }>;
+      };
+      const declared = (schema.commands ?? []).filter(
+        (command) =>
+          Array.isArray(command.devices) && (command.devices as unknown[]).length > 0,
+      );
+      const catalog = schema.deviceCapabilities;
+      if (declared.length === 0) {
+        verdict = check(
+          'codegen.device_catalog',
+          'skip',
+          false,
+          'No device declarations — catalog check not applicable',
+        );
+      } else if (!Array.isArray(catalog)) {
+        verdict = check(
+          'codegen.device_catalog',
+          'warn',
+          false,
+          'schema.json lacks the deviceCapabilities catalog while commands declare devices',
+          undefined,
+          ['Run rustra codegen --config rustra.json with a current rustra'],
+        );
+      } else {
+        const known = new Set(
+          catalog.filter((token): token is string => typeof token === 'string'),
+        );
+        const unknown = [
+          ...new Set(
+            declared.flatMap((command) =>
+              (command.devices as unknown[]).filter(
+                (token): token is string => typeof token === 'string' && !known.has(token),
+              ),
+            ),
+          ),
+        ].sort();
+        verdict =
+          unknown.length === 0
+            ? check(
+                'codegen.device_catalog',
+                'pass',
+                false,
+                `All declared device tokens are in the rustra catalog (${known.size} tokens)`,
+              )
+            : check(
+                'codegen.device_catalog',
+                'fail',
+                true,
+                `Device tokens outside the rustra catalog: ${unknown
+                  .map((token) => `'${token}'`)
+                  .join(', ')}`,
+                'Debug builds accept catalog-outside tokens; release builds panic at registration',
+                [
+                  'Rename to a catalog token or extend the rustra catalog (crates/rustra/src/device_capabilities.rs)',
+                ],
+              );
+      }
+    } catch (error) {
+      verdict = check(
+        'codegen.device_catalog',
+        'fail',
+        true,
+        'schema.json could not be parsed for the device catalog check',
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    checks.push(verdict);
+  }
   if (config.dev?.target === 'wasm') {
     checks.push(
       check(
