@@ -2456,6 +2456,31 @@ test('generateFromSchema writes errors.ts only when declared', async () => {
  */
 const deviceSchema: PackageSchema = {
   packageId: 'example.scanner',
+  // Rust DeviceCapability::ALL 카탈로그가 schema.json deviceCapabilities로
+  // 기록된다 — 렌더러의 단일 소스(수동 미러 폐지, Dev Tier B절).
+  deviceCapabilities: [
+    'camera',
+    'microphone',
+    'geolocation',
+    'notifications',
+    'clipboard-read',
+    'clipboard-write',
+    'wifi',
+    'bluetooth',
+    'battery',
+    'nfc',
+    'biometric',
+    'haptics',
+    'flashlight',
+    'contacts',
+    'calendar',
+    'photo-library',
+    'motion',
+    'usb',
+    'serial',
+    'network-state',
+    'screen-brightness',
+  ],
   commands: [
     {
       name: 'scan_tags',
@@ -2561,24 +2586,48 @@ test('device declarations leave commands.ts/types.ts/errors.ts bytes unchanged',
   assert.equal(generateDevicesTs(withoutDevices), '');
 });
 
-test('generateDevicesTs fails loud on out-of-catalog tokens', async () => {
+test('generateDevicesTs renders out-of-catalog tokens with a dev marker', async () => {
   const { generateDevicesTs } = await import('./generate.js');
-  // Rust 카탈로그(DeviceCapability::ALL)가 이미 거부하는 오표기 — 손으로 편집한
-  // schema.json이 카탈로그 밖 토큰을 흘려보내면 코드젠에서 막는다.
-  for (const bad of ['Camera', 'nearby-devices', 'photo_library', '']) {
-    const invalid: PackageSchema = {
-      ...deviceSchema,
-      commands: [{ ...deviceSchema.commands[0]!, devices: [bad] }],
-    };
-    assert.throws(
-      () => generateDevicesTs(invalid),
-      (error: unknown) =>
-        error instanceof Error &&
-        error.message.includes(`'${bad}'`) &&
-        error.message.includes('device_capabilities.rs'),
-      `token '${bad}' must be rejected`,
-    );
-  }
+  // debug 빌드(Rust)가 수용한 카탈로그 밖 토큰 — throw 대신 렌더 대상.
+  // 정렬: 카탈로그 순(known) 뒤 미지 토큰 알파벳순 — 선언 순서와 무관하게 결정적.
+  const dev: PackageSchema = {
+    ...deviceSchema,
+    commands: [
+      {
+        ...deviceSchema.commands[0]!,
+        devices: ['bluetooth', 'nfc-legacy-reader', 'alpha-hw'],
+      },
+    ],
+  };
+  const out = generateDevicesTs(dev);
+  assert.ok(
+    out.includes(
+      "export type RustraDeviceCapability = 'bluetooth' | 'alpha-hw' | 'nfc-legacy-reader';",
+    ),
+    out,
+  );
+  assert.ok(
+    out.includes(
+      "export const SCAN_TAGS_DEVICES: readonly RustraDeviceCapability[] = ['bluetooth', 'alpha-hw', 'nfc-legacy-reader'];",
+    ),
+    out,
+  );
+  // 마커 주석 — 미지 토큰 목록 + doctor 릴리스 벽 안내.
+  assert.match(out, /카탈로그 밖 토큰 2개/u);
+  assert.match(out, /'alpha-hw', 'nfc-legacy-reader'/u);
+  assert.match(out, /codegen\.device_catalog/u);
+});
+
+test('generateDevicesTs throws when declared devices lack the schema catalog', async () => {
+  const { generateDevicesTs } = await import('./generate.js');
+  // 구버전 rustra 스키마(카탈로그 필드 없음) + 선언 — fail-closed 재생성 안내.
+  const legacy: PackageSchema = { ...deviceSchema, deviceCapabilities: undefined };
+  assert.throws(
+    () => generateDevicesTs(legacy),
+    (error: unknown) =>
+      error instanceof Error && error.message.includes('deviceCapabilities'),
+    'legacy schema without the catalog must fail loud',
+  );
 });
 
 test('generateDevicesTs fails loud on command symbol collision', async () => {
