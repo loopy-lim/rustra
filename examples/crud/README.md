@@ -24,7 +24,7 @@ cargo build -p rustra-crud-example
 
 ```sh
 cargo run -p rustra-crud-example --bin generate   # contract probe: schema.json
-bun run codegen                                   # render TS surfaces from schema.json
+bun ../../packages/cli/src/index.ts generate --schema generated/schema.json --output generated   # render TS surfaces
 ```
 
 Generated into `examples/crud/generated/`:

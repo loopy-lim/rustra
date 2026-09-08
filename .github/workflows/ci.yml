@@ -236,6 +236,18 @@ jobs:
         # check-criterion-regression.mjs 로직의 단위 테스트 — umbrella `test`
         # 스크립트에만 포함돼 CI가 놓치고 있었다.
         run: bun run test:bench-gate
+      - name: API surface snapshot gate
+        # Rust/TS 공개 export 를 api-surface/snapshot.json 에 고정하고 드리프트를
+        # 잡는다 — umbrella `test`에 없어 CI가 놓치고 있었다.
+        run: bun run test:api-surface
+      - name: Architecture boundaries gate
+        # 모듈 경계/파일 라인 상한 위반을 게이트한다.
+        run: bun run test:architecture
+      - name: Release tools unit tests
+        # release coherence·packed consumer·api-surface 스크립트 자체의 단위
+        # 테스트 — npm 발행은 버전 PR 승인 후 자동 진행되므로 머지 전에 걸러야
+        # 한다.
+        run: bun run test:release-tools
       - name: Full compatibility matrix (test:compat)
         # test:compat — ts:node/ts:bun/adapters/runtime 전체 체인. test:ts:bun 과
         # test:runtime:* 이 rustra-calculator-example 바이너리를 요구해 Rust
@@ -258,6 +270,22 @@ jobs:
         run: |
           bun run --cwd packages/types test
           bun run --cwd packages/react-native test
+      - name: Build calculator example debug bins
+        # packages/node 의 process transport 테스트는 bun test 에선 skip 되고
+        # node --test(test:node-runtime)에서만 실행된다 — target/debug 의
+        # rustra-calculator-example·loop-stdio 바이너리를 요구하므로 위 release
+        # dylib 와 프로파일이 다른 debug 빌드가 필요하다.
+        run: cargo build -p rustra-calculator-example
+      - name: Test node/tauri/testing/devtools/react package units
+        # test:packages 중 CI가 놓치던 나머지 패키지 유닛 테스트 — npm 발행이
+        # 버전 PR 승인 후 자동 진행되므로 PR 게이트로 승격한다.
+        run: |
+          bun run --cwd packages/node test
+          bun run --cwd packages/node test:node-runtime
+          bun run --cwd packages/tauri test
+          bun run --cwd packages/testing test
+          bun run --cwd packages/devtools test
+          bun run --cwd packages/react test
       - name: C++ generated codec tests
         # TS/Rust/C++ 3면 PINNED hex 게이트의 C++ 다리 — shim 테스트가 실제로
         # 실행돼야 생성 코덱과 fixture 간 드리프트를 PR 단계에서 잡는다.

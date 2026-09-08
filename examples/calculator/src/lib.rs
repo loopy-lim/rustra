@@ -1,7 +1,5 @@
 use rustra::ffi::FfiFormat;
 use rustra::prelude::*;
-use serde_json::{Value, json};
-use std::ffi::{CStr, CString, c_char};
 
 /// 루프형 stdio 런타임 코어 — `loop-stdio` bin 과 통합 테스트가 공유한다.
 pub mod loop_stdio;
@@ -255,7 +253,7 @@ pub struct DivideOutput {
     pub value: i64,
 }
 
-#[command]
+#[command(error("math.divide_by_zero"))]
 pub fn divide(input: DivideInput) -> Result<DivideOutput> {
     if input.b == 0 {
         return Err(RustraError::custom(
@@ -796,6 +794,18 @@ pub fn calculator_package() -> Package {
             .command_fn(wide_agg)
             .command_fn(tag_set)
             .require_capability("secureCompute", "compute:secure")
+            // 신규 커맨드는 id 시프트 방지를 위해 체인 맨 뒤에 붙인다(위 주석).
+            // #[command(platform(...))] 폼 — 등록은 전 플랫폼에서 동일하고
+            // 스텁/실구현 분기는 매크로가 cfg 로 소유한다. register! 밖 체인
+            // 등록은 매크로 메타(platforms)를 명시적으로 연결한다.
+            .command_fn(platform_native_info)
+            .platform_meta_if(
+                __RUstra_meta_platform_native_info,
+                __RUstra_platforms_platform_native_info,
+            )
+            .command_fn(channel_demo_bytes)
+            .command_fn(device_demo)
+            .devices_meta_if(__RUstra_meta_device_demo, __RUstra_devices_device_demo)
             .build();
 
             // Auto-register for generic FFI with JSON default
@@ -835,646 +845,14 @@ pub extern "C" fn rustra_calculator_init() {
     rustra_mobile_init();
 }
 
-/// 벤치마크용 최소 C ABI lower bound. 브리지/직렬화 비용은 포함하지 않으며
-/// `addNumbers`의 산술 연산과 동일한 값만 계산한다.
-#[unsafe(no_mangle)]
-pub extern "C" fn rustra_calculator_add_direct(a: i64, b: i64) -> i64 {
-    a + b
-}
-
-/// # Safety
-///
-/// `payload` must be a valid pointer to a null-terminated C string containing UTF-8 JSON.
-/// The caller must free the returned pointer with `rustra_calculator_free_string`.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_calculator_invoke(payload: *const c_char) -> *mut c_char {
-    if payload.is_null() {
-        return json_string(json!({ "ok": false, "error": "payload was null" }));
-    }
-
-    let payload = match unsafe { CStr::from_ptr(payload) }.to_str() {
-        Ok(payload) => payload,
-        Err(error) => {
-            return json_string(
-                json!({ "ok": false, "error": format!("payload was not UTF-8: {error}") }),
-            );
-        }
-    };
-
-    // 네이티브 동적 한도와 정렬(구현 완료) — 복제 상수 대신 공개 판독기를 읽는다.
-    // 에러 코드는 `payload.too_large` 로 통일 (JS 사전 검사와 동일 코드).
-    if payload.len() > rustra::ffi::max_payload_bytes() {
-        let e = RustraError::payload_too_large(payload.len(), rustra::ffi::max_payload_bytes());
-        return json_string(json!({ "ok": false, "error": e.to_string() }));
-    }
-
-    let request = match serde_json::from_str::<Value>(payload) {
-        Ok(request) => request,
-        Err(error) => {
-            return json_string(json!({ "ok": false, "error": format!("invalid json: {error}") }));
-        }
-    };
-
-    let Some(command) = request.get("command").and_then(Value::as_str) else {
-        return json_string(json!({ "ok": false, "error": "missing command" }));
-    };
-
-    let args = request.get("args").cloned().unwrap_or_else(|| json!({}));
-
-    match rustra::ffi::get_package()
-        .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
-        .and_then(|pkg| pkg.invoke_json(command, args))
-    {
-        Ok(result) => json_string(json!({ "ok": true, "result": result })),
-        Err(error) => json_string(json!({ "ok": false, "error": error.to_string() })),
-    }
-}
-
-/// # Safety
-///
-/// `ptr` must be a pointer previously returned by `rustra_calculator_invoke`,
-/// or null. Must not be called more than once for the same pointer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_calculator_free_string(ptr: *mut c_char) {
-    if !ptr.is_null() {
-        let _ = unsafe { CString::from_raw(ptr) };
-    }
-}
-
-fn json_string(value: Value) -> *mut c_char {
-    let text = serde_json::to_string(&value)
-        .unwrap_or_else(|error| format!(r#"{{"ok":false,"error":"json encode failed: {error}"}}"#));
-
-    CString::new(text)
-        .expect("JSON response should not contain interior null bytes")
-        .into_raw()
-}
-
-/// # Safety
-///
-/// Caller must ensure `payload` is valid for `payload_len` bytes and `out_len` is a valid pointer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_calculator_invoke_bytes(
-    payload: *const u8,
-    payload_len: usize,
-    out_len: *mut usize,
-) -> *mut u8 {
-    if payload.is_null() || out_len.is_null() {
-        return std::ptr::null_mut();
-    }
-
-    if payload_len > rustra::ffi::max_payload_bytes() {
-        let e = RustraError::payload_too_large(payload_len, rustra::ffi::max_payload_bytes());
-        let error = format!(r#"{{"ok":false,"error":"{e}"}}"#);
-        return alloc_response(error.into_bytes(), out_len);
-    }
-
-    let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
-
-    let payload_str = match std::str::from_utf8(bytes) {
-        Ok(s) => s,
-        Err(e) => {
-            let error = format!(r#"{{"ok":false,"error":"payload was not UTF-8: {e}"}}"#);
-            return alloc_response(error.into_bytes(), out_len);
-        }
-    };
-
-    let c_payload = match CString::new(payload_str) {
-        Ok(c) => c,
-        Err(_) => {
-            let error = r#"{"ok":false,"error":"payload contained null byte"}"#;
-            return alloc_response(error.as_bytes().to_vec(), out_len);
-        }
-    };
-
-    let result_ptr = unsafe { rustra_calculator_invoke(c_payload.as_ptr()) };
-    let result_cstr = unsafe { std::ffi::CStr::from_ptr(result_ptr) };
-    let result_bytes = result_cstr.to_bytes().to_vec();
-    unsafe { rustra_calculator_free_string(result_ptr) };
-
-    alloc_response(result_bytes, out_len)
-}
-
-/// # Safety
-///
-/// Caller must ensure `ptr` was previously returned by an invoke function and `len` matches the
-/// original output length. Must not be called more than once for the same pointer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_calculator_free_buffer(ptr: *mut u8, len: usize) {
-    if !ptr.is_null() && len > 0 {
-        unsafe {
-            let slice = std::slice::from_raw_parts_mut(ptr, len);
-            let _ = Box::from_raw(slice as *mut [u8]);
-        }
-    }
-}
-
-fn alloc_response(data: Vec<u8>, out_len: *mut usize) -> *mut u8 {
-    unsafe { *out_len = data.len() };
-    let boxed: Box<[u8]> = data.into_boxed_slice();
-    Box::into_raw(boxed) as *mut u8
-}
-
-/// Binary protocol:
-///   Request:  [cmd_id: u16 LE] [args...]
-///     cmd_id 1 = addNumbers => [a: f64 LE] [b: f64 LE]
-///   Response: [ok: u8] [payload...]
-///     ok=1 success => [value: f64 LE]
-///     ok=0 error   => [err_len: u16 LE] [err bytes...]
-///
-/// # Safety
-///
-/// Caller must ensure `payload` is valid for `payload_len` bytes and `out_len` is a valid pointer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_calculator_invoke_raw(
-    payload: *const u8,
-    payload_len: usize,
-    out_len: *mut usize,
-) -> *mut u8 {
-    if payload.is_null() || payload_len < 2 || out_len.is_null() {
-        let err = b"\x00\x03\x00err";
-        return alloc_response(err.to_vec(), out_len);
-    }
-
-    let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
-    let cmd_id = u16::from_le_bytes([bytes[0], bytes[1]]);
-
-    match cmd_id {
-        1 => {
-            // addNumbers: expects 2 + 8 + 8 = 18 bytes
-            if bytes.len() < 18 {
-                let err = b"\x00\x10\x00insufficient args";
-                return alloc_response(err.to_vec(), out_len);
-            }
-            let a = f64::from_le_bytes([
-                bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7], bytes[8], bytes[9],
-            ]);
-            let b = f64::from_le_bytes([
-                bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15], bytes[16],
-                bytes[17],
-            ]);
-            let result = (a as i64) + (b as i64);
-            let mut resp = vec![0x01u8];
-            resp.extend_from_slice(&(result as f64).to_le_bytes());
-            alloc_response(resp, out_len)
-        }
-        _ => {
-            let msg = format!("unknown cmd_id: {cmd_id}");
-            let mut resp = vec![0x00u8];
-            let msg_bytes = msg.as_bytes();
-            resp.extend_from_slice(&(msg_bytes.len() as u16).to_le_bytes());
-            resp.extend_from_slice(msg_bytes);
-            alloc_response(resp, out_len)
-        }
-    }
-}
-
-/// MessagePack-encoded FFI: same request/response structure as JSON, but msgpack.
-/// Request:  msgpack({ command: String, args: Value })
-/// Response: msgpack({ ok: bool, result: Option<Value>, error: Option<String> })
-///
-/// # Safety
-///
-/// Caller must ensure `payload` is valid for `payload_len` bytes and `out_len` is a valid pointer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_calculator_invoke_msgpack(
-    payload: *const u8,
-    payload_len: usize,
-    out_len: *mut usize,
-) -> *mut u8 {
-    if payload.is_null() || out_len.is_null() {
-        return std::ptr::null_mut();
-    }
-
-    let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
-
-    let request: serde_json::Value = match rmp_serde::from_slice(bytes) {
-        Ok(req) => req,
-        Err(e) => {
-            let resp =
-                serde_json::json!({"ok": false, "error": format!("msgpack decode failed: {e}")});
-            let resp_bytes = rmp_serde::to_vec(&resp).unwrap_or_default();
-            return alloc_response(resp_bytes, out_len);
-        }
-    };
-
-    let Some(command) = request.get("command").and_then(|v| v.as_str()) else {
-        let resp = serde_json::json!({"ok": false, "error": "missing command"});
-        let resp_bytes = rmp_serde::to_vec(&resp).unwrap_or_default();
-        return alloc_response(resp_bytes, out_len);
-    };
-
-    let args = request
-        .get("args")
-        .cloned()
-        .unwrap_or(serde_json::json!({}));
-
-    let result = match rustra::ffi::get_package()
-        .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
-        .and_then(|pkg| pkg.invoke_json(command, args))
-    {
-        Ok(result) => serde_json::json!({"ok": true, "result": result}),
-        Err(error) => serde_json::json!({"ok": false, "error": error.to_string()}),
-    };
-
-    let resp_bytes = rmp_serde::to_vec(&result).unwrap_or_default();
-    alloc_response(resp_bytes, out_len)
-}
-
-/// Bincode v2 `standard()` 호환 FFI using typed structs.
-///
-/// `bincode` crate 자체는 더 이상 유지보수되지 않으므로, 이 벤치마크 경로가 실제로
-/// 사용하는 String/i64/bool/Option<String> 와이어만 작고 명시적인 코덱으로 유지한다.
-/// JS 어댑터와 기존 바이트 계약은 그대로이며 중단된 런타임 의존성은 제거된다.
-#[derive(Serialize, Deserialize)]
-struct BincodeRequest {
-    command: String,
-    a: i64,
-    b: i64,
-}
-
-#[derive(Serialize, Deserialize)]
-struct BincodeResponse {
-    ok: bool,
-    value: i64,
-    error: Option<String>,
-}
-
-fn bincode_v2_encode_varint(value: u64, output: &mut Vec<u8>) {
-    if value < 251 {
-        output.push(value as u8);
-    } else if u16::try_from(value).is_ok() {
-        output.push(251);
-        output.extend_from_slice(&(value as u16).to_le_bytes());
-    } else if u32::try_from(value).is_ok() {
-        output.push(252);
-        output.extend_from_slice(&(value as u32).to_le_bytes());
-    } else {
-        output.push(253);
-        output.extend_from_slice(&value.to_le_bytes());
-    }
-}
-
-fn bincode_v2_decode_varint(bytes: &[u8], offset: &mut usize) -> std::result::Result<u64, String> {
-    let marker = *bytes
-        .get(*offset)
-        .ok_or_else(|| "truncated varint".to_string())?;
-    *offset += 1;
-
-    let width = match marker {
-        0..=250 => return Ok(u64::from(marker)),
-        251 => 2,
-        252 => 4,
-        253 => 8,
-        _ => return Err(format!("unsupported integer marker {marker}")),
-    };
-    let end = offset
-        .checked_add(width)
-        .filter(|end| *end <= bytes.len())
-        .ok_or_else(|| "truncated integer".to_string())?;
-    let mut raw = [0u8; 8];
-    raw[..width].copy_from_slice(&bytes[*offset..end]);
-    *offset = end;
-    Ok(u64::from_le_bytes(raw))
-}
-
-fn bincode_v2_encode_i64(value: i64, output: &mut Vec<u8>) {
-    let zigzag = ((value as u64) << 1) ^ ((value >> 63) as u64);
-    bincode_v2_encode_varint(zigzag, output);
-}
-
-fn bincode_v2_decode_i64(bytes: &[u8], offset: &mut usize) -> std::result::Result<i64, String> {
-    let zigzag = bincode_v2_decode_varint(bytes, offset)?;
-    Ok(((zigzag >> 1) as i64) ^ -((zigzag & 1) as i64))
-}
-
-fn bincode_v2_encode_string(value: &str, output: &mut Vec<u8>) {
-    bincode_v2_encode_varint(value.len() as u64, output);
-    output.extend_from_slice(value.as_bytes());
-}
-
-fn bincode_v2_decode_string(
-    bytes: &[u8],
-    offset: &mut usize,
-) -> std::result::Result<String, String> {
-    let length = usize::try_from(bincode_v2_decode_varint(bytes, offset)?)
-        .map_err(|_| "string length exceeds this platform".to_string())?;
-    let end = offset
-        .checked_add(length)
-        .filter(|end| *end <= bytes.len())
-        .ok_or_else(|| "truncated string".to_string())?;
-    let value = std::str::from_utf8(&bytes[*offset..end])
-        .map_err(|error| format!("invalid UTF-8 string: {error}"))?
-        .to_owned();
-    *offset = end;
-    Ok(value)
-}
-
-#[cfg(test)]
-fn bincode_v2_encode_request(request: &BincodeRequest) -> Vec<u8> {
-    let mut output = Vec::with_capacity(request.command.len() + 18);
-    bincode_v2_encode_string(&request.command, &mut output);
-    bincode_v2_encode_i64(request.a, &mut output);
-    bincode_v2_encode_i64(request.b, &mut output);
-    output
-}
-
-fn bincode_v2_decode_request(bytes: &[u8]) -> std::result::Result<BincodeRequest, String> {
-    let mut offset = 0;
-    Ok(BincodeRequest {
-        command: bincode_v2_decode_string(bytes, &mut offset)?,
-        a: bincode_v2_decode_i64(bytes, &mut offset)?,
-        b: bincode_v2_decode_i64(bytes, &mut offset)?,
-    })
-}
-
-fn bincode_v2_encode_response(response: &BincodeResponse) -> Vec<u8> {
-    let mut output = Vec::with_capacity(response.error.as_ref().map_or(3, |error| error.len() + 5));
-    output.push(u8::from(response.ok));
-    bincode_v2_encode_i64(response.value, &mut output);
-    match &response.error {
-        Some(error) => {
-            output.push(1);
-            bincode_v2_encode_string(error, &mut output);
-        }
-        None => output.push(0),
-    }
-    output
-}
-
-#[cfg(test)]
-fn bincode_v2_decode_response(bytes: &[u8]) -> std::result::Result<BincodeResponse, String> {
-    let mut offset = 0;
-    let ok = match bytes.get(offset).copied() {
-        Some(0) => false,
-        Some(1) => true,
-        Some(value) => return Err(format!("invalid bool marker {value}")),
-        None => return Err("truncated bool".to_string()),
-    };
-    offset += 1;
-    let value = bincode_v2_decode_i64(bytes, &mut offset)?;
-    let error = match bytes.get(offset).copied() {
-        Some(0) => None,
-        Some(1) => {
-            offset += 1;
-            Some(bincode_v2_decode_string(bytes, &mut offset)?)
-        }
-        Some(value) => return Err(format!("invalid option marker {value}")),
-        None => return Err("truncated option".to_string()),
-    };
-    Ok(BincodeResponse { ok, value, error })
-}
-
-/// # Safety
-///
-/// Caller must ensure `payload` is valid for `payload_len` bytes and `out_len` is a valid pointer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_calculator_invoke_bincode(
-    payload: *const u8,
-    payload_len: usize,
-    out_len: *mut usize,
-) -> *mut u8 {
-    if payload.is_null() || out_len.is_null() {
-        return std::ptr::null_mut();
-    }
-
-    let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
-
-    let request = match bincode_v2_decode_request(bytes) {
-        Ok(request) => request,
-        Err(error) => {
-            let resp = BincodeResponse {
-                ok: false,
-                value: 0,
-                error: Some(format!("bincode v2 decode failed: {error}")),
-            };
-            let resp_bytes = bincode_v2_encode_response(&resp);
-            return alloc_response(resp_bytes, out_len);
-        }
-    };
-
-    let result = match rustra::ffi::get_package()
-        .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
-        .and_then(|pkg| {
-            pkg.invoke_json(
-                &request.command,
-                serde_json::json!({"a": request.a, "b": request.b}),
-            )
-        }) {
-        Ok(result) => {
-            let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
-            BincodeResponse {
-                ok: true,
-                value,
-                error: None,
-            }
-        }
-        Err(error) => BincodeResponse {
-            ok: false,
-            value: 0,
-            error: Some(error.to_string()),
-        },
-    };
-
-    let resp_bytes = bincode_v2_encode_response(&result);
-    alloc_response(resp_bytes, out_len)
-}
-
-/// Postcard-encoded FFI (serde-compatible, actively maintained bincode alternative).
-///
-/// # Safety
-///
-/// Caller must ensure `payload` is valid for `payload_len` bytes and `out_len` is a valid pointer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_calculator_invoke_postcard(
-    payload: *const u8,
-    payload_len: usize,
-    out_len: *mut usize,
-) -> *mut u8 {
-    if payload.is_null() || out_len.is_null() {
-        return std::ptr::null_mut();
-    }
-
-    let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
-
-    let request: BincodeRequest = match postcard::from_bytes(bytes) {
-        Ok(req) => req,
-        Err(e) => {
-            let resp = BincodeResponse {
-                ok: false,
-                value: 0,
-                error: Some(format!("postcard decode failed: {e}")),
-            };
-            let resp_bytes = postcard::to_allocvec(&resp).unwrap_or_default();
-            return alloc_response(resp_bytes, out_len);
-        }
-    };
-
-    let result = match rustra::ffi::get_package()
-        .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
-        .and_then(|pkg| {
-            pkg.invoke_json(
-                &request.command,
-                serde_json::json!({"a": request.a, "b": request.b}),
-            )
-        }) {
-        Ok(result) => {
-            let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
-            BincodeResponse {
-                ok: true,
-                value,
-                error: None,
-            }
-        }
-        Err(error) => BincodeResponse {
-            ok: false,
-            value: 0,
-            error: Some(error.to_string()),
-        },
-    };
-
-    let resp_bytes = postcard::to_allocvec(&result).unwrap_or_default();
-    alloc_response(resp_bytes, out_len)
-}
-
-/// rkyv-encoded FFI (zero-copy deserialization).
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
-struct RkyvRequest {
-    command: String,
-    a: i64,
-    b: i64,
-}
-
-#[derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)]
-struct RkyvResponse {
-    ok: bool,
-    value: i64,
-    error: Option<String>,
-}
-
-/// # Safety
-///
-/// Caller must ensure `payload` is valid for `payload_len` bytes and `out_len` is a valid pointer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_calculator_invoke_rkyv(
-    payload: *const u8,
-    payload_len: usize,
-    out_len: *mut usize,
-) -> *mut u8 {
-    if payload.is_null() || out_len.is_null() {
-        return std::ptr::null_mut();
-    }
-
-    let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
-
-    let archived = match rkyv::access::<ArchivedRkyvRequest, rkyv::rancor::Error>(bytes) {
-        Ok(a) => a,
-        Err(_) => {
-            let resp = RkyvResponse {
-                ok: false,
-                value: 0,
-                error: Some("rkyv access failed".into()),
-            };
-            let resp_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&resp).unwrap_or_default();
-            return alloc_response(resp_bytes.to_vec(), out_len);
-        }
-    };
-
-    let command = archived.command.to_string();
-    let a: i64 = archived.a.into();
-    let b: i64 = archived.b.into();
-
-    let result = match rustra::ffi::get_package()
-        .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
-        .and_then(|pkg| pkg.invoke_json(&command, serde_json::json!({"a": a, "b": b})))
-    {
-        Ok(result) => {
-            let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
-            RkyvResponse {
-                ok: true,
-                value,
-                error: None,
-            }
-        }
-        Err(error) => RkyvResponse {
-            ok: false,
-            value: 0,
-            error: Some(error.to_string()),
-        },
-    };
-
-    let resp_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&result).unwrap_or_default();
-    alloc_response(resp_bytes.to_vec(), out_len)
-}
-
-/// Hybrid FFI: postcard-encoded request, rkyv-encoded response.
-/// Best of both worlds — simple TS-side encoding (LEB128), fast Rust-side response (zero-copy rkyv).
-///
-/// # Safety
-///
-/// Caller must ensure `payload` is valid for `payload_len` bytes and `out_len` is a valid pointer.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_calculator_invoke_hybrid(
-    payload: *const u8,
-    payload_len: usize,
-    out_len: *mut usize,
-) -> *mut u8 {
-    if payload.is_null() || out_len.is_null() {
-        return std::ptr::null_mut();
-    }
-
-    let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
-
-    let request: BincodeRequest = match postcard::from_bytes(bytes) {
-        Ok(req) => req,
-        Err(e) => {
-            let resp = RkyvResponse {
-                ok: false,
-                value: 0,
-                error: Some(format!("hybrid decode failed: {e}")),
-            };
-            let resp_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&resp).unwrap_or_default();
-            return alloc_response(resp_bytes.to_vec(), out_len);
-        }
-    };
-
-    let result = match rustra::ffi::get_package()
-        .ok_or_else(|| RustraError::custom("ffi.not_registered", "package not registered"))
-        .and_then(|pkg| {
-            pkg.invoke_json(
-                &request.command,
-                serde_json::json!({"a": request.a, "b": request.b}),
-            )
-        }) {
-        Ok(result) => {
-            let value = result.get("value").and_then(|v| v.as_i64()).unwrap_or(0);
-            RkyvResponse {
-                ok: true,
-                value,
-                error: None,
-            }
-        }
-        Err(error) => RkyvResponse {
-            ok: false,
-            value: 0,
-            error: Some(error.to_string()),
-        },
-    };
-
-    let resp_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&result).unwrap_or_default();
-    alloc_response(resp_bytes.to_vec(), out_len)
-}
-
 /// rkyv v2: command_id (u16) based request — 코어 `rustra_ffi_invoke_rkyv_v2`
 /// 심볼로 위임한다 (과거 이 파일에 복제되어 있던 패닉 가드+버퍼 프로토콜의
 /// 단일 구현). 심볼명만 calculator 네임스페이스로 재노출해 기존 C++/JSI 호스트
 /// 바인딩을 유지한다.
 ///
-/// 주의: 이 경로의 반환 버퍼는 **코어 FFI 할당 레이아웃**(8바이트 헤더)을
-/// 따르므로 해제도 코어 `rustra_ffi_free`로 해야 한다. 기존 JSON/바이너리
-/// 경로(`rustra_calculator_invoke_bytes` 등)의 버퍼는 예제 자체
-/// `alloc_response` 레이아웃이라 `rustra_calculator_free_buffer` 를 쓴다 —
-/// 두 해제 심볼은 서로 교환할 수 없다.
+/// 주의: 반환 버퍼는 **코어 FFI 할당 레이아웃**(8바이트 헤더)이므로 해제도
+/// 코어 `rustra_ffi_free`로 해야 한다 — `rustra_calculator_free_buffer` 같은
+/// 예제 레이아웃 해제 심볼과는 교환할 수 없다.
 ///
 /// # Safety
 ///
@@ -1489,9 +867,7 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2(
 }
 
 /// `rustra_calculator_invoke_rkyv_v2` 응답 버퍼 해제 — 코어 `rustra_ffi_free`
-/// 로 위임한다(할당이 코어 레이아웃이므로). JSI 호스트가 기존
-/// `rustra_calculator_free_buffer` 이름으로 바인딩하고 있어 재노출 심볼만
-/// 제공한다.
+/// 로 위임한다(할당이 코어 레이아웃이므로).
 ///
 /// # Safety
 ///
@@ -1614,6 +990,97 @@ pub fn channel_demo(input: ChannelDemoInput) -> Result<ChannelDemoOutput> {
     })
 }
 
+/// 바이너리 채널 데모 — `channel_demo` 의 바이트 경로 쌍둥이. 모든 호스트
+/// 어댑터의 createBytesChannel/createChannelBytes 패리티를 동일 명령으로
+/// e2e 검증한다(페이로드는 스텝 카운터 LE u64).
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelDemoBytesInput {
+    /// 바이너리 채널로 발급받은 핸들.
+    pub channel: rustra::channels::ChannelHandle,
+    /// 전송할 프레임 수.
+    pub ticks: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelDemoBytesOutput {
+    pub sent: u32,
+    pub dropped_sends: u32,
+}
+
+#[command]
+fn channel_demo_bytes(input: ChannelDemoBytesInput) -> Result<ChannelDemoBytesOutput> {
+    let mut sent = 0;
+    let mut dropped = 0;
+    for step in 0..input.ticks.max(0) {
+        let mut frame = Vec::with_capacity(8);
+        frame.extend_from_slice(&((step + 1) as u64).to_le_bytes());
+        if input.channel.send_bytes(&frame) {
+            sent += 1;
+        } else {
+            dropped += 1;
+        }
+    }
+    Ok(ChannelDemoBytesOutput {
+        sent,
+        dropped_sends: dropped,
+    })
+}
+
+/// 플랫폼 상호운용 — 플랫폼 특화 명령의 계약 안정화 예시.
+///
+/// `platformNativeInfo` 는 `#[command(platform(windows, macos))]` 로 macos/windows 에만 구현을
+/// 선언한다. 등록(id·스키마·계약 해시)은 전 플랫폼에서 동일하게 일어나고,
+/// Linux(및 기타)에서 호출하면 `platform.unavailable` 이 반환된다
+/// (`command.not_found` 와 구분된다). 실제 구현은 cfg 로 보호해 지원 OS 에서만
+/// 주입된다 — win32/objc2 호출을 하는 실명령의 뼈대가 되는 패턴이다.
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PlatformNativeInfoOutput {
+    /// std::env::consts::OS — 컴파일 대상 OS 문자열.
+    pub os: String,
+    /// 네이티브 윈도우 시스템 식별자 — 실제 예에서는 win32/objc2 API 조사값.
+    pub window_kind: String,
+}
+
+#[command(platform(windows, macos))]
+fn platform_native_info(_input: ()) -> Result<PlatformNativeInfoOutput> {
+    // 이 본문은 선언된 플랫폼(windows/macos)에서만 컴파일된다 — 매크로가 cfg
+    // 게이팅을 소유하고, 나머지 플랫폼은 같은 시그니처의 platform.unavailable
+    // 스텁을 자동 생성한다(스텁 경로는 Linux CI 가 검증).
+    #[cfg(target_os = "windows")]
+    let window_kind = "win32-hwnd";
+    #[cfg(target_os = "macos")]
+    let window_kind = "appkit-nswindow";
+    Ok(PlatformNativeInfoOutput {
+        os: std::env::consts::OS.to_string(),
+        window_kind: window_kind.to_string(),
+    })
+}
+
+/// 디바이스 역량 계약 — 커맨드가 전제하는 디바이스 역량 선언의 예시.
+///
+/// `device_demo` 는 `#[command(device(camera, bluetooth))]` 로 카메라·블루투스를
+/// 전제한다고 선언한다. 선언은 schema.json 의 조건부 `devices` 필드와 생성
+/// `devices.ts`(토큰 유니언 + 커맨드별 요구 상수)의 원천이 될 뿐 런타임
+/// 게이팅은 하지 않는다 — 하드웨어 접근·권한 확인은 호스트 앱이
+/// getDeviceStatus 로 사전 조회하는 패턴의 뼈대가 되는 예시다(여기서는
+/// 하드웨어에 접근하지 않는다).
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceDemoOutput {
+    /// std::env::consts::OS — 선언과 무관한 컴파일 대상 확인용.
+    pub os: String,
+}
+
+#[command(device(camera, bluetooth))]
+fn device_demo(_input: ()) -> Result<DeviceDemoOutput> {
+    Ok(DeviceDemoOutput {
+        os: std::env::consts::OS.to_string(),
+    })
+}
+
 /// Rust-소유 키-값 저장소 리소스 — resource_open 이 발급하고 read/write/close
 /// 가 핸들로 접근한다. JS 표면은 { handle: number } 뿐이다.
 /// Tauri Resource 와 동일하게 상태는 Mutex 안에 있다(핸들 접근은 &self).
@@ -1657,7 +1124,7 @@ pub struct ResourceReadOutput {
     pub value: Option<String>,
 }
 
-#[command]
+#[command(error("resource.not_found"))]
 pub fn resource_read(input: ResourceReadInput) -> Result<ResourceReadOutput> {
     let res = input
         .handle
@@ -1685,7 +1152,7 @@ pub struct ResourceWriteOutput {
     pub entries: usize,
 }
 
-#[command]
+#[command(error("resource.not_found"))]
 pub fn resource_write(input: ResourceWriteInput) -> Result<ResourceWriteOutput> {
     let res = input
         .handle
@@ -1766,6 +1233,78 @@ mod tests {
         assert_eq!(out.dropped_sends, 2);
     }
 
+    /// 플랫폼 특화 명령 계약 — (1) 전 플랫폼에서 계약상 존재해야 하고 (2) 지원
+    /// 플랫폼에서는 실구현, 미지원 플랫폼에서는 platform.unavailable 로 정확히
+    /// 구분되어야 한다. macOS/Windows 실행은 impl 경로, Linux CI 는 스텁 경로를
+    /// 각각 검증한다.
+    #[test]
+    fn platform_native_info_contract() {
+        let pkg = calculator_package();
+        let result = pkg.invoke_json("platformNativeInfo", serde_json::json!(null));
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
+        {
+            let out = result.expect("supported platform must run the real impl");
+            assert_eq!(
+                out["os"].as_str().unwrap(),
+                std::env::consts::OS,
+                "impl reports the compile-target OS"
+            );
+        }
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        {
+            let err = result.expect_err("unsupported platform must reject");
+            assert_eq!(err.code(), "platform.unavailable");
+            assert!(err.message().contains("platformNativeInfo"));
+            // command.not_found 와의 구분 — 계약에는 존재한다.
+            assert_ne!(err.code(), "command.not_found");
+        }
+        // 스키마 platforms 필드 — 플랫폼 무관하게 동일하게 기록된다.
+        let schema = pkg.live_schema().to_string();
+        assert!(
+            schema.contains("\"platforms\""),
+            "platforms recorded: {schema}"
+        );
+    }
+
+    /// 매크로 폼 회귀 — #[command(platform(...))] 는 cfg 게이팅을 매크로가
+    /// 소유한다. 이 테스트의 선언(linux, windows)은 macOS 를 제외하므로 여기서는
+    /// 자동 스텁 경로가 관측된다(register! 체인이 메타를 자동 연결하는지까지
+    /// 함께 검증).
+    #[test]
+    fn command_macro_platform_form_stub_path() {
+        #[command(platform(linux, windows))]
+        fn macro_platform_probe(_input: ()) -> Result<()> {
+            #[cfg(any(target_os = "linux", target_os = "windows"))]
+            {
+                Ok(())
+            }
+            #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+            {
+                unreachable!("macro stub replaces this body on unsupported platforms")
+            }
+        }
+        let pkg = register!(
+            Package::builder("test.platform.macro"),
+            macro_platform_probe
+        )
+        .build();
+        let err = pkg.invoke_json("macroPlatformProbe", serde_json::json!(null));
+        #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+        {
+            let err = err.expect_err("unsupported platform must reject");
+            assert_eq!(err.code(), "platform.unavailable");
+            assert!(err.message().contains("macroPlatformProbe"));
+        }
+        #[cfg(any(target_os = "linux", target_os = "windows"))]
+        {
+            err.expect("declared platform runs the real body");
+        }
+        assert!(
+            pkg.live_schema().to_string().contains("\"platforms\""),
+            "register! chains platform metadata automatically"
+        );
+    }
+
     /// 리소스 라이프사이클: open → write → read → close → close 후 not_found.
     /// JS 표면은 정수 핸들뿐이고 소유권은 Rust 테이블에 있다.
     #[test]
@@ -1822,51 +1361,6 @@ mod tests {
     /// macOS/Linux 는 constructor 가 이미 등록했으므로 idempotent no-op.
     fn ensure_registered() {
         let _ = calculator_package();
-    }
-
-    #[test]
-    fn test_invoke_bytes_round_trip() {
-        ensure_registered();
-        let input = r#"{"command":"addNumbers","args":{"a":42,"b":58}}"#;
-        let payload = input.as_bytes();
-        let mut out_len: usize = 0;
-
-        let result_ptr = unsafe {
-            rustra_calculator_invoke_bytes(payload.as_ptr(), payload.len(), &mut out_len)
-        };
-
-        assert!(!result_ptr.is_null());
-        assert!(out_len > 0);
-
-        let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
-        let result_str = std::str::from_utf8(result_bytes).unwrap();
-        let result: serde_json::Value = serde_json::from_str(result_str).unwrap();
-
-        assert_eq!(result["ok"], true);
-        assert_eq!(result["result"]["value"], 100);
-
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
-    }
-
-    #[test]
-    fn test_invoke_bytes_null_payload() {
-        let mut out_len: usize = 0;
-        let result = unsafe { rustra_calculator_invoke_bytes(std::ptr::null(), 0, &mut out_len) };
-        assert!(result.is_null());
-    }
-
-    #[test]
-    fn test_invoke_bytes_bad_json() {
-        let payload = b"not json";
-        let mut out_len: usize = 0;
-        let result_ptr = unsafe {
-            rustra_calculator_invoke_bytes(payload.as_ptr(), payload.len(), &mut out_len)
-        };
-        assert!(!result_ptr.is_null());
-        let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
-        let result_str = std::str::from_utf8(result_bytes).unwrap();
-        assert!(result_str.contains(r#""ok":false"#));
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
     }
 
     #[test]
@@ -1950,324 +1444,6 @@ mod tests {
 
         assert_eq!(rustra::ffi::rustra_ffi_has_buffer(bench_echo_bytes_id), 1);
         assert_eq!(rustra::ffi::rustra_ffi_has_buffer(14), 0);
-    }
-
-    #[test]
-    fn test_invoke_raw_add_numbers() {
-        let mut payload = vec![0u8; 18]; // need Vec for .as_ptr() + dynamic len
-        payload[0] = 0x01; // cmd_id = 1 (addNumbers)
-        payload[1] = 0x00;
-        payload[2..10].copy_from_slice(&42f64.to_le_bytes());
-        payload[10..18].copy_from_slice(&58f64.to_le_bytes());
-
-        let mut out_len: usize = 0;
-        let result_ptr =
-            unsafe { rustra_calculator_invoke_raw(payload.as_ptr(), payload.len(), &mut out_len) };
-
-        assert!(!result_ptr.is_null());
-        assert_eq!(out_len, 9); // ok(1) + f64(8)
-
-        let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
-        assert_eq!(result_bytes[0], 0x01); // ok
-        let value = f64::from_le_bytes(result_bytes[1..9].try_into().unwrap());
-        assert_eq!(value as i64, 100);
-
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
-    }
-
-    #[test]
-    fn test_invoke_bincode_round_trip() {
-        ensure_registered();
-        let request = BincodeRequest {
-            command: "addNumbers".to_string(),
-            a: 42,
-            b: 58,
-        };
-        let payload = bincode_v2_encode_request(&request);
-
-        let mut out_len: usize = 0;
-        let result_ptr = unsafe {
-            rustra_calculator_invoke_bincode(payload.as_ptr(), payload.len(), &mut out_len)
-        };
-
-        assert!(!result_ptr.is_null());
-        assert!(out_len > 0);
-
-        let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
-        let result = bincode_v2_decode_response(result_bytes).unwrap();
-
-        assert_eq!(result.ok, true);
-        assert_eq!(result.value, 100);
-
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
-    }
-
-    #[test]
-    fn test_bincode_wire_bytes() {
-        let request = BincodeRequest {
-            command: "addNumbers".to_string(),
-            a: 42,
-            b: 58,
-        };
-        let req_bytes = bincode_v2_encode_request(&request);
-        assert_eq!(
-            req_bytes,
-            [
-                &[10],
-                b"addNumbers".as_slice(),
-                &[84, 116], // zigzag(42), zigzag(58)
-            ]
-            .concat()
-        );
-        let decoded = bincode_v2_decode_request(&req_bytes).unwrap();
-        assert_eq!(decoded.command, "addNumbers");
-        assert_eq!((decoded.a, decoded.b), (42, 58));
-
-        let response = BincodeResponse {
-            ok: true,
-            value: 100,
-            error: None,
-        };
-        let resp_bytes = bincode_v2_encode_response(&response);
-        assert_eq!(resp_bytes, [1, 200, 0]);
-        let decoded = bincode_v2_decode_response(&resp_bytes).unwrap();
-        assert!(decoded.ok);
-        assert_eq!(decoded.value, 100);
-        assert_eq!(decoded.error, None);
-
-        let err_response = BincodeResponse {
-            ok: false,
-            value: 0,
-            error: Some("test error".to_string()),
-        };
-        let err_bytes = bincode_v2_encode_response(&err_response);
-        assert_eq!(
-            err_bytes,
-            [&[0, 0, 1, 10], b"test error".as_slice()].concat()
-        );
-        assert!(bincode_v2_decode_request(&req_bytes[..req_bytes.len() - 1]).is_err());
-    }
-
-    #[test]
-    fn test_invoke_msgpack_round_trip() {
-        ensure_registered();
-        let request = serde_json::json!({"command": "addNumbers", "args": {"a": 42, "b": 58}});
-        let payload = rmp_serde::to_vec(&request).unwrap();
-
-        let mut out_len: usize = 0;
-        let result_ptr = unsafe {
-            rustra_calculator_invoke_msgpack(payload.as_ptr(), payload.len(), &mut out_len)
-        };
-
-        assert!(!result_ptr.is_null());
-        assert!(out_len > 0);
-
-        let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
-        let result: serde_json::Value = rmp_serde::from_slice(result_bytes).unwrap();
-
-        assert_eq!(result["ok"], true);
-        assert_eq!(result["result"]["value"], 100);
-
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
-    }
-
-    #[test]
-    fn test_postcard_wire_format() {
-        let request = BincodeRequest {
-            command: "addNumbers".to_string(),
-            a: 42,
-            b: 58,
-        };
-        let req_bytes = postcard::to_allocvec(&request).unwrap();
-        println!(
-            "postcard request hex: {}",
-            req_bytes
-                .iter()
-                .map(|x| format!("{:02x}", x))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-
-        let response = BincodeResponse {
-            ok: true,
-            value: 100,
-            error: None,
-        };
-        let resp_bytes = postcard::to_allocvec(&response).unwrap();
-        println!(
-            "postcard response hex: {}",
-            resp_bytes
-                .iter()
-                .map(|x| format!("{:02x}", x))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-
-        let err_resp = BincodeResponse {
-            ok: false,
-            value: 0,
-            error: Some("test error".to_string()),
-        };
-        let err_bytes = postcard::to_allocvec(&err_resp).unwrap();
-        println!(
-            "postcard err resp hex: {}",
-            err_bytes
-                .iter()
-                .map(|x| format!("{:02x}", x))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-
-        // Field-by-field
-        for v in [0i64, 42, 58, 100, 127, 128, 256] {
-            let b = postcard::to_allocvec(&v).unwrap();
-            println!(
-                "postcard i64({:>4}) → {} bytes: {}",
-                v,
-                b.len(),
-                b.iter()
-                    .map(|x| format!("{:02x}", x))
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            );
-        }
-        let opt_none: Option<String> = None;
-        let b = postcard::to_allocvec(&opt_none).unwrap();
-        println!(
-            "postcard Opt None → {}",
-            b.iter()
-                .map(|x| format!("{:02x}", x))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-
-        // Round-trip
-        let decoded: BincodeRequest = postcard::from_bytes(&req_bytes).unwrap();
-        assert_eq!(decoded.command, "addNumbers");
-        assert_eq!(decoded.a, 42);
-        assert_eq!(decoded.b, 58);
-    }
-
-    #[test]
-    fn test_rkyv_wire_format() {
-        let request = RkyvRequest {
-            command: "addNumbers".to_string(),
-            a: 42,
-            b: 58,
-        };
-        let req_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&request).unwrap();
-        println!(
-            "rkyv request hex: {}",
-            req_bytes
-                .iter()
-                .map(|x| format!("{:02x}", x))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-        println!("rkyv request len: {}", req_bytes.len());
-
-        let response = RkyvResponse {
-            ok: true,
-            value: 100,
-            error: None,
-        };
-        let resp_bytes = rkyv::to_bytes::<rkyv::rancor::Error>(&response).unwrap();
-        println!(
-            "rkyv response hex: {}",
-            resp_bytes
-                .iter()
-                .map(|x| format!("{:02x}", x))
-                .collect::<Vec<_>>()
-                .join(" ")
-        );
-        println!("rkyv response len: {}", resp_bytes.len());
-
-        // Zero-copy access
-        let archived =
-            rkyv::access::<ArchivedRkyvRequest, rkyv::rancor::Error>(&req_bytes).unwrap();
-        assert_eq!(archived.command.as_str(), "addNumbers");
-        assert_eq!(i64::from(archived.a), 42);
-        assert_eq!(i64::from(archived.b), 58);
-    }
-
-    #[test]
-    fn test_invoke_postcard_round_trip() {
-        ensure_registered();
-        let request = BincodeRequest {
-            command: "addNumbers".to_string(),
-            a: 42,
-            b: 58,
-        };
-        let payload = postcard::to_allocvec(&request).unwrap();
-
-        let mut out_len: usize = 0;
-        let result_ptr = unsafe {
-            rustra_calculator_invoke_postcard(payload.as_ptr(), payload.len(), &mut out_len)
-        };
-
-        assert!(!result_ptr.is_null());
-        assert!(out_len > 0);
-
-        let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
-        let result: BincodeResponse = postcard::from_bytes(result_bytes).unwrap();
-
-        assert_eq!(result.ok, true);
-        assert_eq!(result.value, 100);
-
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
-    }
-
-    #[test]
-    fn test_invoke_rkyv_round_trip() {
-        ensure_registered();
-        let request = RkyvRequest {
-            command: "addNumbers".to_string(),
-            a: 42,
-            b: 58,
-        };
-        let payload = rkyv::to_bytes::<rkyv::rancor::Error>(&request).unwrap();
-
-        let mut out_len: usize = 0;
-        let result_ptr =
-            unsafe { rustra_calculator_invoke_rkyv(payload.as_ptr(), payload.len(), &mut out_len) };
-
-        assert!(!result_ptr.is_null());
-        assert!(out_len > 0);
-
-        let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
-        let archived =
-            rkyv::access::<ArchivedRkyvResponse, rkyv::rancor::Error>(result_bytes).unwrap();
-        assert_eq!(archived.ok, true);
-        assert_eq!(i64::from(archived.value), 100);
-
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
-    }
-
-    #[test]
-    fn test_invoke_hybrid_round_trip() {
-        ensure_registered();
-        let request = BincodeRequest {
-            command: "addNumbers".to_string(),
-            a: 42,
-            b: 58,
-        };
-        let payload = postcard::to_allocvec(&request).unwrap();
-
-        let mut out_len: usize = 0;
-        let result_ptr = unsafe {
-            rustra_calculator_invoke_hybrid(payload.as_ptr(), payload.len(), &mut out_len)
-        };
-
-        assert!(!result_ptr.is_null());
-        assert!(out_len > 0);
-
-        let result_bytes = unsafe { std::slice::from_raw_parts(result_ptr, out_len) };
-        let archived =
-            rkyv::access::<ArchivedRkyvResponse, rkyv::rancor::Error>(result_bytes).unwrap();
-        assert_eq!(archived.ok, true);
-        assert_eq!(i64::from(archived.value), 100);
-
-        unsafe { rustra_calculator_free_buffer(result_ptr, out_len) };
     }
 
     #[test]

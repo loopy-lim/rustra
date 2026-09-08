@@ -30,7 +30,8 @@ Package::generate_typescript()
        │
        └─ rustra codegen (TS CLI) reads schema.json and renders:
             types.ts, commands.ts, contract.ts, rkyv-codecs.ts,
-            rkyv-registry.ts, positional-facade.ts, host entries, C++ codecs
+            rkyv-registry.ts, events.ts/errors.ts/devices.ts (only when
+            declared), positional-facade.ts, host entries, C++ codecs
             + .rustra-generated.json (freshness sidecar)
 ```
 

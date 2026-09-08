@@ -1,3 +1,5 @@
+[English](./security-audit.md)
+
 # 보안 감사 (cargo audit) 상태
 
 최종 확인: 2026-08-23 — **취약점 0 / 처리 가능한 경고 0**

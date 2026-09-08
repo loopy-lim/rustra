@@ -33,19 +33,29 @@ export function createNodeEngine(transport: NodeInvokeTransport): NodeEngineClie
 
 ## 2. 현재 구현 현황
 
-| Host             | 현재 Transport                                 | Rust 진입점                                    | 대안                            |
-| ---------------- | ---------------------------------------------- | ---------------------------------------------- | ------------------------------- |
-| **Node**         | subprocess stdio (`spawnSync`)                 | `main.rs` → `run_invoke_stdio()`               | napi-rs 네이티브 모듈, WASM     |
-| **Bun**          | subprocess stdio (`spawnSync`)                 | `main.rs` → `run_invoke_stdio()`               | `bun:ffi` (C FFI 직접 호출)     |
-| **Tauri**        | `rustra_dispatch` 멀티플렉스 (프레임워크 내장) | `tauri_support::register()` (feature: `tauri`) | 없음                            |
-| **React Native** | C FFI (`extern "C"`)                           | `lib.rs` → `rustra_calculator_invoke`          | TurboModule, Nitro Modules, JSI |
+일반 앱은 transport를 직접 조립하지 않는다 — 생성된 호스트 진입점
+(`generated/node.ts`, `generated/bun.ts`, `generated/tauri.ts`,
+`generated/react-native.ts`)가 transport를 lazy하게 연결한다. 아래 표가 출발점
+기준선이고, 이 가이드의 나머지는 **수동 조립** — 커스텀 호스트, 커스텀
+transport, 기본 경로 교체 — 용이다.
 
-### Node / Bun — subprocess stdio
+| Host             | 기본 (생성 엔트리)                                                          | Rust 진입점                                                  | 수동 조립 대안                                                                       |
+| ---------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| **Node**         | one-shot Cargo binary + stdio, `__rustra_contract` 계약 검사                | `main.rs` → `run_invoke_stdio()`                             | 직접 `spawnSync` stdio, `createNodeLoopTransport`(서버), napi-rs 네이티브 모듈, WASM |
+| **Bun**          | cdylib + stable C ABI + rkyv V2 (`rustra_ffi_invoke_rkyv_v2`)               | `lib.rs` → `rustra::native_entry!` + `register_ffi(...)`     | `bun:ffi` 직접 C FFI 호출 (§4, JSON 경로)                                            |
+| **Tauri**        | `rustra_dispatch` 멀티플렉스 (프레임워크 내장)                              | `tauri_support::register[_with_events]()` (feature: `tauri`) | 커스텀 invoke 함수를 받는 `createTauriEngine({ invoke })`                            |
+| **React Native** | autolinked JSI + rkyv V2 (`invokeRkyvV2`), `@rustra/generated-react-native` | `rustra::native_entry!` (`rustra_mobile_init` export)        | 커스텀 JSON transport(`createReactNativeEngine`), TurboModule, Nitro Modules         |
+
+### Node — 수동 subprocess stdio
+
+기본 Node 엔트리는 one-shot stdio 프로토콜(`{command, args}` → `{ok, result}` +
+예약된 `__rustra_contract` 프로브)을 말하는 Cargo 바이너리를 spawn한다. 프로세스
+transport를 직접 조립한다면 형태는 다음과 같다:
 
 ```ts
-// examples/calculator/apps/node-app.ts
+// 수동 조립 — 예시. 생성 node.ts가 이 일을 대신한다
 import { spawnSync } from 'node:child_process';
-import { createNodeEngine } from '../../../packages/node/src/index.js';
+import { createNodeEngine } from '@rustra/node';
 
 const engine = createNodeEngine({
   invoke(command, args) {
@@ -88,56 +98,75 @@ fn run_invoke_stdio() -> rustra::Result<()> {
 }
 ```
 
-### React Native — C FFI
+### React Native — C FFI (수동 JSON 경로)
 
-Swift에서 Rust C FFI 함수를 직접 호출합니다:
+> 예전 개정판에 있던 예제 전용 심볼 `rustra_calculator_invoke`/
+> `rustra_calculator_free_string`은 제거되었다(2026-09-03 legacy 정리). 현재
+> 표면은 모든 패키지를 서빙하는 **코어 공개 C ABI**(`rustra_ffi_*`)다.
 
-```swift
-// examples/react-native-calculator/modules/rustra-calculator/ios/RustraCalculatorModule.swift
-@_silgen_name("rustra_calculator_invoke")
-func rustra_calculator_invoke(_ payload: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
-
-@_silgen_name("rustra_calculator_free_string")
-func rustra_calculator_free_string(_ ptr: UnsafeMutablePointer<CChar>?)
-
-public class RustraCalculatorModule: Module {
-  public func definition() -> ModuleDefinition {
-    Name("RustraCalculator")
-    AsyncFunction("invokeRaw") { (payload: String) -> String in
-      return payload.withCString { pointer in
-        decodeRustString(rustra_calculator_invoke(pointer))
-      }
-    }
-  }
-}
-```
-
-Rust C FFI 진입점:
+Rust 쪽에서는 패키지를 코어 FFI로 등록하고 zero-config init을 export한다 — 앱별
+심볼을 손으로 쓰지 않는다:
 
 ```rust
 // examples/calculator/src/lib.rs
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_calculator_invoke(payload: *const c_char) -> *mut c_char {
-    if payload.is_null() {
-        return json_string(json!({ "ok": false, "error": "payload was null" }));
-    }
-    let payload = match unsafe { CStr::from_ptr(payload) }.to_str() { ... };
-    let request = match serde_json::from_str::<Value>(payload) { ... };
-    let command = request.get("command").and_then(Value::as_str)...;
-    let args = request.get("args").cloned().unwrap_or_else(|| json!({}));
-    match calculator_package().invoke_json(command, args) {
-        Ok(result) => json_string(json!({ "ok": true, "result": result })),
-        Err(error) => json_string(json!({ "ok": false, "error": error.to_string() })),
-    }
+use rustra::ffi::FfiFormat;
+use rustra::prelude::*;
+
+pub fn calculator_package() -> Package {
+    let pkg = rustra::build!("examples.calculator", add_numbers /*, … */).done();
+    // rustra_ffi_invoke_json / rustra_ffi_invoke_postcard가 이 패키지를 서빙한다
+    pkg.register_ffi_with_default(FfiFormat::Json);
+    pkg
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_calculator_free_string(ptr: *mut c_char) {
-    if !ptr.is_null() {
-        let _ = unsafe { CString::from_raw(ptr) };
+// rustra_mobile_init() export — 호스트가 lazy bootstrap 중 호출한다
+rustra::native_entry!(calculator_package);
+```
+
+코어 진입점의 JSON-over-bytes 계약:
+
+```text
+rustra_ffi_invoke_json(payload: *const u8, payload_len: usize, out_len: *mut usize) -> *mut u8
+  요청:  JSON {"command":"...","args":{...}} raw bytes
+  응답:  JSON {"ok":bool,"result":...,"error":"..."} raw bytes
+  반환 버퍼는 rustra_ffi_free(ptr, len)으로 해제 — 정확한 짝으로
+```
+
+Swift는 같은 심볼을 직접 바인딩한다:
+
+```swift
+// 손으로 만든 JSI/모듈 브릿징 계층 (커스텀 호스트 전용 — 기본 RN 경로는
+// 생성된 @rustra/generated-react-native 패키지다)
+@_silgen_name("rustra_mobile_init")
+func rustra_mobile_init()
+
+@_silgen_name("rustra_ffi_invoke_json")
+func rustra_ffi_invoke_json(
+    _ payload: UnsafePointer<UInt8>, _ payloadLen: Int,
+    _ outLen: UnsafeMutablePointer<Int>
+) -> UnsafeMutablePointer<UInt8>?
+
+@_silgen_name("rustra_ffi_free")
+func rustra_ffi_free(_ ptr: UnsafeMutablePointer<UInt8>, _ len: Int)
+
+func invokeRawJSON(_ payload: String) throws -> String {
+    rustra_mobile_init() // 멱등 — 첫 호출에 패키지를 등록한다
+    let bytes = Array(payload.utf8)
+    let outLen = UnsafeMutablePointer<Int>.allocate(capacity: 1)
+    defer { outLen.deallocate() }
+    guard let raw = rustra_ffi_invoke_json(bytes, bytes.count, outLen) else {
+        throw NSError(domain: "rustra", code: 1, userInfo: [NSLocalizedDescriptionKey: "FFI invoke returned null"])
     }
+    defer { rustra_ffi_free(raw, outLen.pointee) } // 정확한 ptr/len 짝으로 해제
+    return String(decoding: UnsafeBufferPointer(start: raw, count: outLen.pointee), as: UTF8.self)
 }
 ```
+
+같은 cdylib/staticlib의 다른 코어 FFI 심볼: `rustra_ffi_invoke`(기본 포맷
+디스패치), `rustra_ffi_invoke_postcard`, `rustra_ffi_invoke_rkyv_v2`,
+`rustra_ffi_get_schema`, `rustra_ffi_contract_hash` — 안정 등급을 포함한 전체
+목록은 [Rust API 가이드 — FFI 부록](../rust-api-guide.ko.md)과
+[버전 정책](../versioning-policy.ko.md)에 있다.
 
 ### Tauri — rustra_dispatch 멀티플렉스 패턴
 
@@ -181,7 +210,9 @@ rustra = { path = "...", features = ["tauri"] }
 
 ### Step 1: Rust 쪽에 새 진입점 추가 (필요한 경우만)
 
-이미 C FFI 진입점(`rustra_*_invoke`, `rustra_*_free_string`)이 존재하면, FFI 기반 transport로 전환할 때 새 진입점이 필요 없습니다.
+코어 FFI에 패키지를 등록한 크레이트(`rustra::native_entry!` + `register_ffi(...)`,
+§2 참고)는 이미 코어 C ABI(`rustra_ffi_invoke_json`, `rustra_ffi_free`, …)를
+export한다 — FFI 기반 transport로 전환할 때 새 진입점이 필요 없다.
 
 새로운 통신 방식(napi-rs, WASM 등)이 필요하면, `lib.rs`에 해당 진입점을 추가합니다.
 
@@ -230,18 +261,22 @@ bun run test:runtime:bun
 
 ## 4. 예시: Bun FFI로 교체
 
-Bun은 `bun:ffi`로 `.dylib` / `.so`를 직접 로드할 수 있습니다. Rust C FFI 진입점이 이미 존재하므로, Rust 쪽 변경 없이 transport만 교체할 수 있습니다.
+Bun은 `bun:ffi`로 `.dylib` / `.so`를 직접 로드할 수 있다. **기본 생성 `bun.ts`
+엔트리**가 rkyv V2 심볼로 이미 이 일을 한다. 아래 JSON 경로는 커스텀 호스트용
+수동 조립 변형으로, 같은 코어 C ABI(`rustra_ffi_invoke_json`)를 쓴다.
 
 ### Rust 준비
 
-`examples/calculator/Cargo.toml`에 `cdylib`을 추가합니다 (`staticlib`은 RN iOS용으로 유지):
+크레이트의 `Cargo.toml`에 `cdylib`을 추가합니다 (`staticlib`은 RN iOS용으로 유지):
 
 ```toml
 [lib]
 crate-type = ["rlib", "cdylib", "staticlib"]
 ```
 
-빌드:
+`lib.rs`에서 코어 FFI용 패키지를 등록한다(전체 스니펫은 §2 React Native 참고) —
+`rustra::native_entry!(my_package)`와
+`pkg.register_ffi_with_default(FfiFormat::Json)`. 빌드:
 
 ```bash
 cargo build -p rustra-calculator-example
@@ -251,33 +286,42 @@ cargo build -p rustra-calculator-example
 
 ### Bun FFI transport 구현
 
-**주의**: `FFIType.cstring`을 리턴 타입으로 사용하면 메모리 누수가 발생합니다. Rust의 `CString::into_raw()`로 할당된 메모리는 반드시 `CString::from_raw()`로 해제해야 합니다. Bun의 `FFIType.cstring`은 C 문자열을 읽어 JS 문자열로 복사만 할 뿐 원본 메모리를 해제하지 않습니다. 따라서 `FFIType.ptr`로 포인터를 받은 뒤 수동으로 문자열을 읽고 `free_string`을 호출해야 합니다.
+요청/응답은 C 문자열이 아니라 raw bytes(`Buffer`/`ArrayBuffer`)다 — 반환값에
+Bun의 `FFIType.cstring`을 쓰면 안 된다. `FFIType.ptr`로 포인터를 받아 복사한 뒤
+정확한 짝으로 `rustra_ffi_free(ptr, len)`을 호출해 해제한다:
 
 ```ts
-import { dlopen, FFIType, suffix } from 'bun:ffi';
-import { createBunEngine } from '../../../packages/bun/src/index.js';
-import { addNumbers } from '../generated/commands.js';
+import { dlopen, FFIType, suffix, toArrayBuffer } from 'bun:ffi';
+import { createBunEngine } from '@rustra/bun';
 import { configure } from '@rustra/types';
+import { addNumbers } from '../generated/commands.js';
 
+const outLength = new BigUint64Array(1); // usize out-param
 const lib = dlopen(`target/debug/librustra_calculator_example.${suffix}`, {
-  rustra_calculator_invoke: {
-    args: [FFIType.cstring],
+  rustra_mobile_init: { args: [], returns: FFIType.void },
+  rustra_ffi_invoke_json: {
+    args: [FFIType.ptr, FFIType.u64, FFIType.ptr], // payload, payload_len, out_len
     returns: FFIType.ptr, // FFIType.cstring이 아님 — 수동 메모리 관리 필요
   },
-  rustra_calculator_free_string: {
-    args: [FFIType.ptr],
-    returns: FFIType.void,
-  },
+  rustra_ffi_free: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.void },
 });
+lib.symbols.rustra_mobile_init(); // 멱등 패키지 등록
 
 const engine = createBunEngine({
   invoke(command: string, args?: unknown): unknown {
-    const payload = JSON.stringify({ command, args });
-    const rawPtr = lib.symbols.rustra_calculator_invoke(payload);
-    const rawResponse = new CString(rawPtr);
-    lib.symbols.rustra_calculator_free_string(rawPtr); // Rust가 CString::from_raw로 해제
+    const payload = Buffer.from(JSON.stringify({ command, args }), 'utf8');
+    outLength[0] = 0n;
+    const rawPtr = lib.symbols.rustra_ffi_invoke_json(payload, BigInt(payload.length), outLength);
+    const len = Number(outLength[0]);
+    let responseText: string;
+    try {
+      // Rust 할당을 해제하기 전에 JS 소유 메모리로 복사한다
+      responseText = new TextDecoder().decode(toArrayBuffer(rawPtr, 0, len));
+    } finally {
+      lib.symbols.rustra_ffi_free(rawPtr, BigInt(len));
+    }
 
-    const response = JSON.parse(rawResponse) as {
+    const response = JSON.parse(responseText) as {
       ok: boolean;
       result?: unknown;
       error?: string;
@@ -296,17 +340,21 @@ const result = await addNumbers({ a: 20, b: 22 });
 console.log(`bun FFI result: ${result.value}`); // 42
 ```
 
-### 기존 Bun app과의 비교
+릴리스용 변형(계약 검증까지 포함, 수동 dlopen이 전혀 없는 rkyv V2
+caller-buffer 경로)은 생성 `bun.ts` 엔트리다 —
+[`bun-ffi-app.ts`](../../examples/calculator/apps/bun-ffi-app.ts) 참고.
+
+### subprocess stdio transport와의 비교
 
 ```ts
-// 기존: subprocess stdio (프로세스 스폰 오버헤드 있음)
+// subprocess stdio (호출마다 프로세스 스폰 오버헤드)
 const output = spawnSync('target/debug/rustra-calculator-example', ['invoke'], {
   input: JSON.stringify({ command, args }),
   encoding: 'utf8',
 });
 
-// 교체 후: 직접 FFI 호출 (프로세스 경계 없음, 더 빠름)
-const rawResponse = lib.symbols.rustra_calculator_invoke(payload);
+// 직접 FFI 호출 (프로세스 경계 없음, 더 빠름)
+const rawPtr = lib.symbols.rustra_ffi_invoke_json(payload, BigInt(payload.length), outLength);
 ```
 
 장점:
@@ -324,7 +372,8 @@ const rawResponse = lib.symbols.rustra_calculator_invoke(payload);
 ### Rust 구현
 
 ```rust
-// crates/calculator-napi/src/lib.rs
+// examples/calculator-napi/src/lib.rs — 일반 JSON 패턴
+// (실제 예제는 현재 rkyv V2 버퍼 경로를 바인딩한다 — 해당 README 참고)
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use rustra_calculator_example::calculator_package;
@@ -359,9 +408,9 @@ napi build --platform --release
 ### Node transport 구현
 
 ```ts
-import { createNodeEngine } from '../../../packages/node/src/index.js';
+import { createNodeEngine } from '@rustra/node';
 
-// napi-rs로 빌드한 네이티브 모듈 로드
+// napi-rs로 빌드한 네이티브 모듈 로드 (examples/calculator-napi)
 const native = require('./calculator-napi.node');
 
 const engine = createNodeEngine({
@@ -424,8 +473,8 @@ const rawResponse = native.rustra_invoke(command, argsJson);
 
 **권장사항:**
 
-- **빠른 프로토타이핑**: subprocess stdio로 시작
-- **프로덕션 (Node)**: napi-rs 또는 C FFI
-- **프로덕션 (Bun)**: `bun:ffi`
-- **프로덕션 (React Native)**: C FFI (현재 방식)
+- **빠른 프로토타이핑**: 생성 엔트리로 시작 (Node는 one-shot stdio, Bun은 cdylib FFI)
+- **프로덕션 (Node)**: 생성 엔트리; 핫 경로는 napi-rs 또는 C FFI
+- **프로덕션 (Bun)**: 생성 `bun.ts` FFI 엔트리
+- **프로덕션 (React Native)**: autolinked JSI 엔트리 (기본); 코어 `rustra_ffi_*` C ABI는 커스텀 네이티브 호스트 전용
 - **프로덕션 (Tauri)**: `rustra_dispatch` 멀티플렉스 패턴 (`tauri_support::register`)

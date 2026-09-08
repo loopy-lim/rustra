@@ -111,6 +111,17 @@ hosts, not that the others have no codegen.
       schema title and definitions keys. Parameterized templates (`Wrapper<T>`
       itself) are not emitted; see the
       [type guide](docs/rust-api-guide.md#user-defined-generic-types).
+- [x] Channel adapters on every JS host (2026-09-03): the
+      `{ handle, close() }` contract now works on Node (loop-stdio binary
+      reservation frames 0xfffb/0xfffa/0xfffc — background-thread send safe,
+      NDJSON loud-fails), Bun (`rustra_ffi_channel_*` FFI — JS-thread send
+      only), and Tauri (`rustra_channel_create/drop` commands + listen —
+      approximate unicast over `app.emit`), alongside the existing RN JSI
+      adapter. The RN JSON adapter's event gap is closed too: `subscribeEvent`
+      gained a `pollMs` option that drains the C++ dispatcher queue on
+      CallInvoker-less hosts. See the
+      [compatibility matrix](docs/compatibility-matrix.md) — no ❌ cells
+      remain.
 - [ ] Universal prebuilt application native binaries — depends on per-app Rust
       code and target; CI artifact/cache approach recommended instead
 
@@ -148,14 +159,17 @@ JS/native combination drift at runtime.
 
 ### Rust
 
-<!-- 발행 시 갱신: 0.7.0 라인 -->
-
 ```toml
 [dependencies]
-rustra = "0.6"
+rustra = "0.8"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
+
+Verified combination: npm `@rustra/types` 0.8.x ↔ Rust crate 0.8.x. The
+`@rustra/*` packages are independent release lines — check each adapter
+package's own version (see the
+[compatibility matrix](docs/compatibility-matrix.md#matrix)).
 
 ### TypeScript adapters (only the environments you need)
 
@@ -193,9 +207,33 @@ fn main() -> Result<()> {
 }
 ```
 
-To use the binary fast-path (rkyv V2, RN), also run the CLI codegen. Specifying
-the Rust generator in `rustra.json` processes schema generation through
+To use the binary fast-path (rkyv V2, RN), also run the CLI codegen. First create
+`rustra.json` at the project root — this minimal form points the CLI at the
+published schema, the output directory, and the hosts you use:
+
+```json
+{
+  "schema": "./generated/schema.json",
+  "output": "./generated",
+  "node": {}
+}
+```
+
+Specifying the Rust generator in `rustra.json` processes schema generation through
 `rkyv-codecs.ts`/`rkyv-registry.ts` in one shot:
+
+```json
+{
+  "schema": "./generated/schema.json",
+  "output": "./generated",
+  "codegen": {
+    "rustManifest": "./Cargo.toml",
+    "rustBinary": "generate"
+  }
+}
+```
+
+Then run:
 
 ```bash
 bunx --bun @rustra/cli codegen --config rustra.json
@@ -383,8 +421,11 @@ are on the 0.5 line, follow
 crates/
   rustra/          Rust package authoring API (core)
   rustra-macros/   #[command], #[bridge_type] proc macros, build! macro
+  rustra-naming/   Shared identifier naming rules (Rust + proc-macro codegen)
 
 packages/
+  types/           Core types (EngineClient, errors, rkyv V2 codec, invokeLoose)
+  cli/             rustra CLI (codegen, generate, dev, doctor, init, diff)
   node/            Node adapter
   bun/             Bun adapter
   tauri/           Tauri adapter
@@ -403,6 +444,7 @@ examples/
   streaming/               Event streaming example (Package::emit + subscribeEvent adapter)
   auth/                    Session/capability gate example (deny-by-default)
   reference-app/           @rustra/react hooks reference app (useCommand/useMutation/useEvent)
+  react-native-bare-calculator/ Bare RN zero-config fixture (autolink verification, no Expo)
 ```
 
 ## Local Disk Management
@@ -570,10 +612,8 @@ identically regardless of platform.
 
 Enable the `tauri` feature:
 
-<!-- 발행 시 갱신: 0.7.0 라인 -->
-
 ```toml
-rustra = { version = "0.6", features = ["tauri"] }
+rustra = { version = "0.8", features = ["tauri"] }
 ```
 
 Rust side:
@@ -722,11 +762,11 @@ cargo test --workspace
 
 # Build the calculator example and generate TS
 cargo run -p rustra-calculator-example --bin generate   # contract probe: schema.json
-bun run codegen                                          # render TS surfaces
+bun run --cwd examples/calculator codegen                # render TS surfaces
 
 # Build the CRUD example and generate TS
-cargo run -p rustra-crud-example --bin generate   # contract probe: schema.json
-bun run --cwd examples/crud codegen               # render TS surfaces
+cargo run -p rustra-crud-example --bin generate               # contract probe: schema.json
+bun packages/cli/src/index.ts generate --schema examples/crud/generated/schema.json --output examples/crud/generated
 
 # TypeScript lint / format
 bun run lint
@@ -753,15 +793,17 @@ bunx --bun @rustra/cli dev --config rustra.json
 
 Full documentation lives in [`docs/`](docs/).
 
-| Doc                                                              | Contents                                               |
-| ---------------------------------------------------------------- | ------------------------------------------------------ |
-| [Getting started](docs/getting-started.md)                       | Installation, first package, adapter choice            |
-| [Architecture overview](docs/architecture.md)                    | Data flow, EngineClient contract, transport separation |
-| [Transport swap guide](docs/extending/transport-guide.md)        | Bun FFI, Node napi-rs replacement                      |
-| [React Native setup guide](docs/extending/react-native-setup.md) | iOS JSI module setup, usage, troubleshooting           |
-| [Development hurdles guide](docs/development-hurdles.md)         | doctor, integrated codegen, drift, native boundary     |
-| [Adding a new host guide](docs/extending/adding-host.md)         | Adding new adapters like Electron, Deno                |
-| [Full doc index](docs/README.md)                                 | Reading paths for users / contributors                 |
+| Doc                                                              | Contents                                                        |
+| ---------------------------------------------------------------- | --------------------------------------------------------------- |
+| [Getting started](docs/getting-started.md)                       | Installation, first package, adapter choice                     |
+| [Events and channels guide](docs/events-and-channels.md)         | `subscribeEvent`/`createChannel` usage per host                 |
+| [Architecture overview](docs/architecture.md)                    | Data flow, EngineClient contract, transport separation          |
+| [Transport swap guide](docs/extending/transport-guide.md)        | Bun FFI, Node napi-rs replacement                               |
+| [React Native setup guide](docs/extending/react-native-setup.md) | iOS JSI module setup, usage, troubleshooting                    |
+| [Tauri setup guide](docs/extending/tauri-setup.md)               | Adding rustra to an existing Tauri app, file by file            |
+| [Development hurdles guide](docs/development-hurdles.md)         | doctor, integrated codegen, drift, native boundary, mock engine |
+| [Adding a new host guide](docs/extending/adding-host.md)         | Adding new adapters like Electron, Deno                         |
+| [Full doc index](docs/README.md)                                 | Reading paths for users / contributors                          |
 
 ## Contributing
 

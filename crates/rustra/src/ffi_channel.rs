@@ -13,6 +13,17 @@
 pub type FfiChannelCallback =
     unsafe extern "C" fn(user_data: *mut c_void, handle: u32, payload: *const c_char);
 
+/// 호스트 바이너리 채널 수신 콜백 — `rustra_ffi_channel_create_bytes` 로 등록한다.
+///
+/// `payload`/`payload_len` 은 콜백 반환 전까지만 유효하다(호스트는 복사한다).
+/// JSON 경로와 동일한 핸들 공간·quiescence 계약을 쓴다.
+pub type FfiChannelBytesCallback = unsafe extern "C" fn(
+    user_data: *mut c_void,
+    handle: u32,
+    payload: *const u8,
+    payload_len: usize,
+);
+
 /// FFI 채널 콜백 래퍼 — `FfiEventSink` 와 동일한 quiescence 계약으로
 /// drop 반환 뒤에는 host `user_data`를 참조하는 콜백이 남지 않게 한다.
 struct FfiChannelSinkInner {
@@ -30,18 +41,22 @@ struct FfiChannelSink(std::sync::Arc<FfiChannelSinkInner>);
 unsafe impl Send for FfiChannelSinkInner {}
 unsafe impl Sync for FfiChannelSinkInner {}
 
-struct FfiChannelCallGuard<'a>(&'a FfiChannelSinkInner);
+/// 진행 중 콜백 추적 guard — JSON/바이너리 sink 가 필드만 빌려 동일 계약으로
+/// 쓴다(구체 타입에 의존하지 않는다).
+struct FfiChannelCallGuard<'a> {
+    activity: &'a Mutex<FfiEventActivity>,
+    quiescent: &'a std::sync::Condvar,
+}
 
 impl Drop for FfiChannelCallGuard<'_> {
     fn drop(&mut self) {
         let mut activity = self
-            .0
             .activity
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         activity.active_calls = activity.active_calls.saturating_sub(1);
         if activity.active_calls == 0 {
-            self.0.quiescent.notify_all();
+            self.quiescent.notify_all();
         }
     }
 }
@@ -72,7 +87,10 @@ impl FfiChannelSink {
             }
             activity.active_calls += 1;
         }
-        let _active = FfiChannelCallGuard(&self.0);
+        let _active = FfiChannelCallGuard {
+            activity: &self.0.activity,
+            quiescent: &self.0.quiescent,
+        };
         let Ok(payload_c) = std::ffi::CString::new(payload) else {
             return; // 내부 NUL — 이벤트 싱크와 동일하게 소실(로그 없음, 채널은 유니캐스트)
         };
@@ -97,6 +115,81 @@ impl FfiChannelSink {
 }
 
 static FFI_CHANNEL_SINKS: Mutex<std::collections::BTreeMap<u32, FfiChannelSink>> =
+    Mutex::new(std::collections::BTreeMap::new());
+
+struct FfiChannelBytesSinkInner {
+    callback: FfiChannelBytesCallback,
+    handle: u32,
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    user_data: *mut c_void,
+    activity: Mutex<FfiEventActivity>,
+    quiescent: std::sync::Condvar,
+}
+
+#[derive(Clone)]
+struct FfiChannelBytesSink(std::sync::Arc<FfiChannelBytesSinkInner>);
+
+unsafe impl Send for FfiChannelBytesSinkInner {}
+unsafe impl Sync for FfiChannelBytesSinkInner {}
+
+impl FfiChannelBytesSink {
+    fn new(callback: FfiChannelBytesCallback, handle: u32, user_data: *mut c_void) -> Self {
+        Self(std::sync::Arc::new(FfiChannelBytesSinkInner {
+            callback,
+            handle,
+            user_data,
+            activity: Mutex::new(FfiEventActivity {
+                enabled: true,
+                active_calls: 0,
+            }),
+            quiescent: std::sync::Condvar::new(),
+        }))
+    }
+
+    fn invoke(&self, payload: &[u8]) {
+        {
+            let mut activity = self
+                .0
+                .activity
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if !activity.enabled {
+                return;
+            }
+            activity.active_calls += 1;
+        }
+        let _active = FfiChannelCallGuard {
+            activity: &self.0.activity,
+            quiescent: &self.0.quiescent,
+        };
+        unsafe {
+            (self.0.callback)(
+                self.0.user_data,
+                self.0.handle,
+                payload.as_ptr(),
+                payload.len(),
+            )
+        };
+    }
+
+    fn deactivate_and_wait(&self) {
+        let mut activity = self
+            .0
+            .activity
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        activity.enabled = false;
+        while activity.active_calls != 0 {
+            activity = self
+                .0
+                .quiescent
+                .wait(activity)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
+    }
+}
+
+static FFI_CHANNEL_BYTES_SINKS: Mutex<std::collections::BTreeMap<u32, FfiChannelBytesSink>> =
     Mutex::new(std::collections::BTreeMap::new());
 
 /// 호스트 채널을 등록하고 새 핸들(≥1, 단조 증가)을 반환한다.
@@ -134,7 +227,56 @@ pub unsafe extern "C" fn rustra_ffi_channel_create(
     handle
 }
 
-/// 채널로 JSON 페이로드를 흘린다. 핸들이 유효하면 1(도달), 만료/미등록이면 0.
+/// 바이너리 채널을 발급한다 — 계약은 `rustra_ffi_channel_create` 와 동일하되
+/// 콜백이 `const uint8_t*` + 길이를 받는다(rkyv V2 프레임 등 임의 바이트).
+///
+/// # Safety
+///
+/// `callback`/`user_data` 계약은 `rustra_ffi_channel_create` 와 동일하다.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_channel_create_bytes(
+    callback: FfiChannelBytesCallback,
+    user_data: *mut c_void,
+) -> u32 {
+    let host = crate::channels::host();
+    let handle = host.reserve_handle();
+    if handle == 0 {
+        return 0;
+    }
+    let sink = FfiChannelBytesSink::new(callback, handle, user_data);
+    FFI_CHANNEL_BYTES_SINKS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .insert(handle, sink.clone());
+    let sender: crate::channels::ChannelBytesSender =
+        std::sync::Arc::new(move |payload: &[u8]| sink.invoke(payload));
+    host.register_channel_bytes_with_handle(handle, sender);
+    handle
+}
+
+/// 바이너리 채널로 페이로드를 흘린다. 핸들이 유효하면 1, 만료/미등록/JSON
+/// 경로 핸들이면 0.
+///
+/// # Safety
+///
+/// `payload` 는 호출 기간 동안 유효한 읽기 가능 메모리다. 이 함수 자체는
+/// 안전하다(조용한 bool 반환).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rustra_ffi_channel_send_bytes(
+    handle: u32,
+    payload: *const u8,
+    payload_len: usize,
+) -> i32 {
+    let payload = if payload.is_null() || payload_len == 0 {
+        &[][..]
+    } else {
+        // Safety: caller guarantees readable `payload_len` bytes at `payload`.
+        unsafe { std::slice::from_raw_parts(payload, payload_len) }
+    };
+    i32::from(crate::channels::host().send_bytes(handle, payload))
+}
+
+/// 채널로 JSON 페이로드을 흘린다. 핸들이 유효하면 1(도달), 만료/미등록이면 0.
 ///
 /// # Safety
 ///
@@ -168,5 +310,12 @@ pub unsafe extern "C" fn rustra_ffi_channel_drop(handle: u32) -> i32 {
     if let Some(sink) = sink.as_ref() {
         sink.deactivate_and_wait();
     }
-    i32::from(host_removed || sink.is_some())
+    let bytes_sink = FFI_CHANNEL_BYTES_SINKS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .remove(&handle);
+    if let Some(sink) = bytes_sink.as_ref() {
+        sink.deactivate_and_wait();
+    }
+    i32::from(host_removed || sink.is_some() || bytes_sink.is_some())
 }

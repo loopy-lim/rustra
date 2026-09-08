@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createComplexCodec } from './complex-codec.js';
+import type { ComplexSchema } from './complex-codec-types.js';
 
 const profileSchema = {
   type: 'object',
@@ -205,4 +206,63 @@ test('complex codec pins the Rust data-enum wire independently of oneOf order', 
     ...new TextEncoder().encode('active:7'),
   ]);
   assert.deepEqual(codec.decode(response.buffer), { ok: true, result: { label: 'active:7' } });
+});
+
+const adjacentGateEvent: ComplexSchema = {
+  oneOf: [
+    {
+      title: 'Txt',
+      type: 'object',
+      required: ['c', 't'],
+      properties: { t: { type: 'string', enum: ['Txt'] }, c: { type: 'string' } },
+    },
+    {
+      title: 'Nums',
+      type: 'object',
+      required: ['c', 't'],
+      properties: {
+        t: { type: 'string', enum: ['Nums'] },
+        c: { type: 'object', additionalProperties: { type: 'integer', format: 'int64' } },
+      },
+    },
+    {
+      title: 'Off',
+      type: 'object',
+      required: ['t'],
+      properties: { t: { type: 'string', enum: ['Off'] } },
+    },
+  ],
+};
+
+const adjacentGateInput = {
+  type: 'object',
+  properties: {
+    event: { $ref: '#/definitions/GateEvent' },
+    tags: { type: 'array', items: { type: 'integer', format: 'int64' } },
+  },
+  required: ['event', 'tags'],
+};
+
+test('complex codec encodes every adjacent-tagged variant on its own wire', () => {
+  const codec = createComplexCodec({
+    commandId: 3,
+    inputSchema: adjacentGateInput,
+    outputSchema: adjacentGateInput,
+    definitions: { GateEvent: adjacentGateEvent },
+  });
+  const cases: [unknown, number[]][] = [
+    [{ event: { t: 'Nums', c: { a: -1 } }, tags: [] }, [3, 0, 0, 0, 1, 1, 97, 1, 0]],
+    [{ event: { t: 'Txt', c: 'hi' }, tags: [] }, [3, 0, 1, 0, 2, 104, 105, 0]],
+    [{ event: { t: 'Off' }, tags: [] }, [3, 0, 2, 0, 0]],
+  ];
+  for (const [value, wire] of cases) {
+    assert.deepEqual([...new Uint8Array(codec.encode(value))], wire);
+    const response = new Uint8Array(8 + wire.length - 2);
+    response[0] = 1;
+    response.set(wire.slice(2), 8);
+    assert.deepEqual(codec.decode(response.buffer), { ok: true, result: value });
+  }
+  for (const event of [{ t: 'Bogus' }, { c: 1 }, 3]) {
+    assert.throws(() => codec.encode({ event, tags: [] }), /does not match any enum variant/);
+  }
 });

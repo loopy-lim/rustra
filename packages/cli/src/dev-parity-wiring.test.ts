@@ -4,6 +4,7 @@ import { chmodSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runDev } from './dev.js';
+import { cliManifest } from './cli-runtime.js';
 
 // ── runConfigDev × parity gate 배선 계약 (Task A2) ──────────────────────────
 //
@@ -77,6 +78,24 @@ function seedProject(root: string, engineLib: EngineLibVariant = 'cdylib'): stri
   writeFileSync(
     join(project, 'package.json'),
     JSON.stringify({ name: 'proj', workspaces: [], dependencies: {} }),
+  );
+  // RN 스캐폴드 경로가 실제로 돈다 — 어댑터도 설치돼 있어야 한다(감사 A11: RN
+  // 코드젠은 bun install 선행이 계약). cliManifest range 를 만족하는 버전으로 심는다.
+  const adapterVersion = cliManifest.rustraTemplate.reactNativeRange.replace(/^[~^=]/, '');
+  const adapterNative = join(project, 'node_modules', '@rustra', 'react-native', 'native');
+  for (const file of [
+    'android/rustra-jsi-jni.cpp',
+    'cpp/RustraJSIBridge.cpp',
+    'cpp/RustraJSIBridge.hpp',
+    'cpp/rustra-codec.hpp',
+    'ios/RustraJSIModule.mm',
+  ]) {
+    mkdirSync(join(adapterNative, ...file.split('/').slice(0, -1)), { recursive: true });
+    writeFileSync(join(adapterNative, ...file.split('/')), 'adapter fixture');
+  }
+  writeFileSync(
+    join(project, 'node_modules', '@rustra', 'react-native', 'package.json'),
+    JSON.stringify({ name: '@rustra/react-native', version: adapterVersion }),
   );
   writeFileSync(
     join(project, 'rustra.json'),

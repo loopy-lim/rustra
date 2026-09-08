@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "schemaHash": "b9ec095fd83d9c67befb83277adbb988ca248f2c3c64dbefd06c65c5a7bc2121",
-  "generatorVersion": "0.7.0",
+  "schemaHash": "7279af1f50ca546411bb7be6476bb1f931b437ae53484d8ea9903eec07926039",
+  "generatorVersion": "0.8.0",
   "files": [
     {
       "path": "../modules/rustra-bridge/android/build-rust-android.sh",
@@ -9,11 +9,11 @@
     },
     {
       "path": "../modules/rustra-bridge/android/build.gradle",
-      "sha256": "40a7039b8523b90ed9c6816303ee59eb9c72dd19777b0a9bf339e0b71aa5abc1"
+      "sha256": "93186e3c6b9e97a502eab63b6efc2ff3d8571fa6e73f5e368ee9f02f9ff79601"
     },
     {
       "path": "../modules/rustra-bridge/android/CMakeLists.txt",
-      "sha256": "5ed79a976b5bd3f53d80209dce5e4a079984a35dac65709826ab06293a343535"
+      "sha256": "2ad3c4842a64ebd1535ba72184066b3ecc7b9f6e0ffa5993862b9916399a8854"
     },
     {
       "path": "../modules/rustra-bridge/android/src/main/AndroidManifest.xml",
@@ -29,7 +29,7 @@
     },
     {
       "path": "../modules/rustra-bridge/generated/rustra-generated-codecs.cpp",
-      "sha256": "e881a88d1ea80f564d05bd83dbf6a928e2ada2f86e85d01573aea8527052666b"
+      "sha256": "b981683cbf8fae09e4efc80c7af105b31ff889452099dca26d16a9f674133cfa"
     },
     {
       "path": "../modules/rustra-bridge/generated/rustra-generated-codecs.hpp",
@@ -49,7 +49,7 @@
     },
     {
       "path": "../modules/rustra-bridge/package.json",
-      "sha256": "b52d40dfd226cd6941689435ddc448d92033d59efa9a32c6fa87267f6cbed539"
+      "sha256": "fd1040dc80a43215c7290c062638da529381ba233863218b408bbac7aa9dedd5"
     },
     {
       "path": "../modules/rustra-bridge/react-native.config.js",
@@ -65,15 +65,23 @@
     },
     {
       "path": "commands.ts",
-      "sha256": "d93a1c1fbacdc3cbadda0848c02d8549c5a6e67fb8f562672ad6f9e3b879db24"
+      "sha256": "f95cada5f247d50bb0bc5ad2c7e9c1c08af8553fdf6c6b9ffc7fb3337f5603c0"
     },
     {
       "path": "contract.ts",
-      "sha256": "f7f779b20f9211bc9a5ec7c0f33c754fe8ab203d32399ae14558352bf4fcae89"
+      "sha256": "8147415a3764beb7bcb7f7a0e9a3ee5883749a87a40323f72f2c2aaa0aba1292"
+    },
+    {
+      "path": "devices.ts",
+      "sha256": "2be579d552f36a83114ff751934b58b2e8cf764ce2970f79b5273a045127a7e9"
+    },
+    {
+      "path": "errors.ts",
+      "sha256": "01de485660ff23d21fcd77009c5d23310ed8dae06da1b4b21be7576f57ef08b7"
     },
     {
       "path": "positional-facade.ts",
-      "sha256": "7118c20a5e73043a47a4d1f632eb76b66d6c6e5cc1d1e5aae716f21fa5ff6c0a"
+      "sha256": "fee0a2c6e92e6ffcda39e0ca9b7cd5361baa7736f3872d9e6eb25d5688b38649"
     },
     {
       "path": "react-native.ts",
@@ -81,15 +89,15 @@
     },
     {
       "path": "rkyv-codecs.ts",
-      "sha256": "95153172b6b57c26b0ad52e2ab1f82de6d3ad75e30694bad2a0a703f5ee57536"
+      "sha256": "9887016c80b73eedb2850d1eae55ab9ce129b6a01e5938b981cec02f224137d6"
     },
     {
       "path": "rkyv-registry.ts",
-      "sha256": "9a5406bc221de6a37e1125c6d0ff9698354e062076786ac12a1588bbc06b2a67"
+      "sha256": "1690c35c26f4d77c49559893c657f8408edbe97210754edc279f0e043c3925fd"
     },
     {
       "path": "types.ts",
-      "sha256": "b673c432823029bae720d86b4d2233572c3bfdba37c1a177b2bda8f57bf43af4"
+      "sha256": "123484d4e2a4761f959d0dc062c1deb156a8f822daba3494d4801b066a0b0ae0"
     }
   ]
 }

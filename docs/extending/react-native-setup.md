@@ -168,9 +168,50 @@ command results on a simulator/device before a product release.
 - Android library: `rustra_bridge`
 - stable Rust initializer: `rustra_mobile_init`
 
-The calculator-only benchmark ABI compiles only in the
-`legacyBenchmarks: true` fixture. It is never included in regular user
-generated output.
+## Calling rustra from C++ (TurboModule interop)
+
+Other C++ TurboModules (or any native code on the JS runtime thread) can invoke
+rustra directly with `jsi::Value` — no JS round-trip, no JSON marshalling. The
+public entry points in `RustraJSIBridge.hpp` share the exact path used by the
+JS-side `__rustraNative.invokeTyped*`:
+
+```cpp
+#include <RustraJSIBridge.hpp>
+
+// JS runtime thread only (same thread-affinity contract as installRustraJSI).
+// No installRustraJSI call required — only the FFI global package registration.
+rustra::TypedInvokeResult result =
+    rustra::invokeTypedById(runtime, commandId, argsValue);
+
+switch (result.status) {
+  case rustra::TypedInvokeStatus::Ok:            // result.value — decoded output
+    break;
+  case rustra::TypedInvokeStatus::NoStaticCodec: // fall back to invokeRkyvV2
+    break;
+  case rustra::TypedInvokeStatus::CommandError:  // result.value: {code, message}
+    break;                                       // (e.g. platform.unavailable)
+  case rustra::TypedInvokeStatus::MalformedResponse:
+    break;                                       // result.message has details
+}
+```
+
+The encoder reads fields via `getProperty`, so any `jsi::Value` shaped like the
+command input works — including objects produced by other C++ TurboModules.
+These functions never throw; classify outcomes by `TypedInvokeStatus`.
+
+Adjacent interop surfaces:
+
+- **folly::dynamic input** — `RustraTurboInterop.hpp` adds
+  `invokeTypedByNameDynamic`/`invokeTypedByIdDynamic` overloads that convert a
+  `folly::dynamic` to `jsi::Value` and reuse the same path (int64 beyond 2^53
+  loses precision — see the header contract).
+- **Binary channels** — `createChannelBytes(callback)` (JS: `createBytesChannel`)
+  delivers channel payloads as `ArrayBuffer` copies — rkyv V2 frames without
+  JSON serialization. Same handle/close contract as JSON channels; one handle
+  works on exactly one path.
+- **Synchronous invoke** — `invokeTypedSync(name, args)` (from
+  `@rustra/react-native`) calls the C++ typed fast path without a Promise hop
+  for UI hot paths; loud-fails with `sync.unavailable` where unavailable.
 
 ## Troubleshooting
 

@@ -6,6 +6,8 @@
  */
 export * from './generate-surface.js';
 export * from './generate-commands.js';
+export * from './generate-errors.js';
+export * from './generate-devices.js';
 export * from './generate-postcard.js';
 export * from './generate-cpp-output.js';
 export * from './generate-positional.js';

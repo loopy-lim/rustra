@@ -1,6 +1,6 @@
 import type { JsonSchema } from './schema.js';
 import type { CodecIrNode, CodecIrResult } from './codec-ir-types.js';
-import { codecVariantKey, discriminator, primitive } from './codec-ir-keys.js';
+import { codecVariantKey, discriminator, primitive, singleEnumTag } from './codec-ir-keys.js';
 import { buildIr } from './codec-ir-builder.js';
 
 export function variantNode(
@@ -30,6 +30,7 @@ export function variantNode(
       },
     };
   }
+  const exactTag = tag ?? singleEnumTag(schema);
   const properties = schema.properties;
   if (properties && Object.keys(properties).length === 1) {
     const [property, propertySchema] = Object.entries(properties)[0];
@@ -37,7 +38,14 @@ export function variantNode(
     if (!child.ok) return child;
     return {
       ok: true,
-      node: { kind: 'variant', key: property, wrapper: 'property', property, node: child.node },
+      node: {
+        kind: 'variant',
+        key: property,
+        wrapper: 'property',
+        property,
+        discriminator: exactTag,
+        node: child.node,
+      },
     };
   }
   if (schema.const !== undefined) {
@@ -73,6 +81,7 @@ export function variantNode(
       kind: 'variant',
       key: codecVariantKey(schema) ?? '',
       wrapper: 'direct',
+      discriminator: exactTag,
       node: child.node,
     },
   };

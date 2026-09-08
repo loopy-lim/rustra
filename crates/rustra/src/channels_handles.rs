@@ -22,6 +22,12 @@ impl ChannelHandle {
     pub fn send(&self, payload: &str) -> bool {
         host().send(self.0, payload)
     }
+
+    /// Rust→JS 로 바이너리 페이로드(rkyv V2 프레임 등)를 흘린다. 핸들은
+    /// 바이너리 경로로 발급된 것이어야 한다(JSON 핸들이면 `false`).
+    pub fn send_bytes(&self, payload: &[u8]) -> bool {
+        host().send_bytes(self.0, payload)
+    }
 }
 
 /// 커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.

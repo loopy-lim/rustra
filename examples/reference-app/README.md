@@ -10,7 +10,7 @@ shows how to compose CRUD and event flows.
 ```
 src/
   App.tsx     UI tree using the hooks (platform-agnostic — swap the engine only)
-  app.ts      Node entrypoint — renders/verifies App with a mock engine + RustraProvider
+  main.ts     Node entrypoint — runs the hook smoke against the real crud runtime
 ```
 
 `App.tsx` consumes the codegen output at `../../crud/generated/commands.js` — the crud
@@ -27,7 +27,8 @@ cargo build -p rustra-crud-example && \
   node examples/reference-app/dist/examples/reference-app/src/main.js
 ```
 
-The smoke test runs the real hook tree and verifies CRUD round-trips (via a mock engine).
+The smoke test runs the real hook tree and verifies CRUD round-trips against the real
+`rustra-crud-example` runtime over the Node process transport.
 
 ## Porting to Web/RN
 
@@ -46,6 +47,24 @@ const engine = createTauriEngine({ invoke: window.__TAURI__.core.invoke });
   <App />
 </RustraProvider>;
 ```
+
+### Channels are isomorphic across all 4 hosts
+
+The reverse stream (`createChannel`) exposes the same `{ handle, close() }`
+contract on all 4 hosts — inside a hook tree like `useMutation`, pass the
+handle as a command argument and Rust pushes replies back. Only the issuer
+differs per host:
+
+```ts
+// Node (loop-stdio) — createNodeChannel(loopTransport, cb)
+// Bun (FFI) — createBunChannelBridge(options)(cb)
+// Tauri — createChannel(cb) — approximate unicast (app.emit broadcast)
+// RN (JSI) — createChannel(cb) — native C++ dispatcher direct
+```
+
+See the Channels row of the
+[compatibility matrix](../../docs/compatibility-matrix.md) for per-host
+support levels and differences.
 
 ## What It Proves
 

@@ -1,3 +1,5 @@
+[English](./release-procedure.md)
+
 # 발행 절차 (canary → stable → rollback)
 
 감사 항목 8의 "canary 배포와 rollback 검증" 절차. 실제 실행은 별도 승인 후 진행한다.

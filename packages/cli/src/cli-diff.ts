@@ -22,10 +22,23 @@ export async function runDiff(args: string[]): Promise<void> {
     readFile(resolve(oldPath), 'utf-8'),
     readFile(resolve(newPath), 'utf-8'),
   ]);
-  const result = diffSchemas(
-    parsePackageSchema(JSON.parse(oldRaw)),
-    parsePackageSchema(JSON.parse(newRaw)),
-  );
+  // 입력 JSON 파싱 실패를 경로·재생성 힌트와 함께 래핑 — generate 경로
+  // (cli-generate-files.ts)와 동일한 패턴. 무경로 JSON.parse 는 "어느 파일을
+  // 고쳐야 하는지"를 알려주지 않는다(감사 A7).
+  const parseSchemaFile = (raw: string, path: string): ReturnType<typeof parsePackageSchema> => {
+    try {
+      return parsePackageSchema(JSON.parse(raw));
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `Invalid schema.json at ${resolve(path)}: ${detail}. ` +
+          `The file must be valid JSON; regenerate it with "cargo run" (the package's generate bin) ` +
+          `or fix it manually.`,
+        { cause: error },
+      );
+    }
+  };
+  const result = diffSchemas(parseSchemaFile(oldRaw, oldPath), parseSchemaFile(newRaw, newPath));
   // --format json 은 doctor 와 같은 schemaVersion: 1 보고를 내보낸다 — breaking
   // 배열은 DiffResult.breaking 그대로(event_removed / event_payload_changed
   // fold 구조 보존). exit 코드 계약은 출력 형식과 무관하게 불변이다.

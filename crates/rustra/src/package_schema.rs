@@ -136,6 +136,23 @@ impl Package {
                 .expect("root is an object")
                 .insert("events".into(), json!(events));
         }
+        // (Dev Tier B절) 디바이스 역량 카탈로그 단일소싱 — 선언이 있는 패키지에
+        // 한해 카탈로그 전체(ALL, 선언 순)를 최상위에 기록한다. CLI(generate-devices)
+        // 가 이 필드로 정렬·검증하며 수동 미러를 유지하지 않는다. 선언 없는
+        // 패키지는 미기록(events 관례 — 기존 schema.json 바이트 불변).
+        if state
+            .commands
+            .values()
+            .any(|command| !command.device_requirements.is_empty())
+        {
+            let catalog: Vec<&str> = crate::device_capabilities::DeviceCapability::ALL
+                .iter()
+                .map(|capability| capability.as_str())
+                .collect();
+            root.as_object_mut()
+                .expect("root is an object")
+                .insert("deviceCapabilities".into(), json!(catalog));
+        }
         root
     }
 }
@@ -158,6 +175,48 @@ pub(crate) fn command_schema_entry(name: &str, command: &Command) -> Value {
         "inputSchema": input_schema,
         "outputSchema": output_schema,
     });
+    // 플랫폼 특화 명령 — 지원 플랫폼 목록. 전 플랫폼에서 동일하게 기록되므로
+    // 계약 해시도 플랫폼 무관하게 안정이다(빈 목록=전 플랫폼은 미기록).
+    if !command.platforms.is_empty() {
+        let platforms: Vec<&str> = command.platforms.iter().map(|p| p.as_str()).collect();
+        entry
+            .as_object_mut()
+            .expect("command schema is an object")
+            .insert("platforms".into(), serde_json::json!(platforms));
+    }
+    // 커맨드별 도메인 에러 선언 — 원소는 항상 code/description/retryable 3키로
+    // 기록한다(description 은 null 허용 — 바이트 안정성). 선언 없으면 미기록
+    // (platforms 관례 — 기존 패키지의 계약 해시 불변).
+    if !command.error_variants.is_empty() {
+        let errors: Vec<Value> = command
+            .error_variants
+            .iter()
+            .map(|variant| {
+                json!({
+                    "code": variant.code(),
+                    "description": variant.description(),
+                    "retryable": variant.is_retryable(),
+                })
+            })
+            .collect();
+        entry
+            .as_object_mut()
+            .expect("command schema is an object")
+            .insert("errors".into(), json!(errors));
+    }
+    // 커맨드별 디바이스 역량 선언 — 단순 문자열 배열(메타데이터 없음, YAGNI).
+    // 선언 없으면 미기록(platforms/errors 관례 — 기존 패키지의 계약 해시 불변).
+    if !command.device_requirements.is_empty() {
+        let devices: Vec<&str> = command
+            .device_requirements
+            .iter()
+            .map(|capability| capability.as_str())
+            .collect();
+        entry
+            .as_object_mut()
+            .expect("command schema is an object")
+            .insert("devices".into(), json!(devices));
+    }
     if let Some(description) = &command.description {
         entry
             .as_object_mut()

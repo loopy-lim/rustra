@@ -21,6 +21,7 @@ import {
   safeResolve,
   selectGenerator,
 } from './doctor-support.js';
+import { deviceCatalogCheck } from './doctor-device-catalog.js';
 import { sha256 } from './hash.js';
 import { cliVersion } from './cli-runtime.js';
 
@@ -346,6 +347,11 @@ export function collectConfigChecks(
         'Skipped freshness because schema.json is not generated yet',
       ),
     );
+  // Dev Tier C절 — 디바이스 토큰 릴리스 벽. 구현은 doctor-device-catalog.ts
+  // (모듈 예산). schema.json 부재 시 undefined — codegen.schema_output 이 이미
+  // 담당한다(이중 보고 금지 관례).
+  const deviceCatalog = deviceCatalogCheck(schemaPath);
+  if (deviceCatalog) checks.push(deviceCatalog);
   if (config.dev?.target === 'wasm') {
     checks.push(
       check(

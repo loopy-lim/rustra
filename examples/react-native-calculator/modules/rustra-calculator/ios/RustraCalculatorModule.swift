@@ -16,26 +16,38 @@ private enum BenchmarkReceiptError: LocalizedError {
 }
 
 public class RustraCalculatorModule: Module {
-  private func encodePayload(command: String, args: Any) -> String? {
+  /// Core `rustra_ffi_invoke_json` contract: UTF-8 request bytes in
+  /// (`{"command":...,"args":...}`), JSON envelope bytes out
+  /// (`{"ok":Bool,"result":...,"error":...}`). Response buffers are allocated
+  /// by the core FFI allocator — release them only through `rustra_ffi_free`.
+  private func encodePayload(command: String, args: Any) -> [UInt8]? {
     guard JSONSerialization.isValidJSONObject(args),
           let data = try? JSONSerialization.data(
             withJSONObject: ["command": command, "args": args]
           )
     else { return nil }
-    return String(data: data, encoding: .utf8)
+    return Array(data)
+  }
+
+  /// Decodes an invoke_json response envelope into a UTF-8 string.
+  private func envelopeString(ptr: UnsafeMutablePointer<UInt8>, count: Int) -> String {
+    let bytes = UnsafeBufferPointer(start: ptr, count: count)
+    return String(decoding: bytes, as: UTF8.self)
   }
 
   public func definition() -> ModuleDefinition {
     Name("RustraCalculator")
 
     AsyncFunction("invokeRaw") { (payload: String, promise: Promise) in
-      let resultPtr = rustra_calculator_invoke(payload)
+      let data = Array(payload.utf8)
+      var outLen = 0
+      let resultPtr = rustra_ffi_invoke_json(data, data.count, &outLen)
       guard let ptr = resultPtr else {
         promise.reject("ERR_INVOKE", "Rust invoke returned nil")
         return
       }
-      defer { rustra_calculator_free_string(ptr) }
-      let result = String(cString: ptr)
+      defer { rustra_ffi_free(ptr, outLen) }
+      let result = self.envelopeString(ptr: ptr, count: outLen)
       promise.resolve(result)
     }
 
@@ -51,10 +63,11 @@ public class RustraCalculatorModule: Module {
               args: ["a": Int64(a), "b": Int64(b)]
             )
       else { return 0 }
-      let resultPtr = rustra_calculator_invoke(payload)
+      var outLen = 0
+      let resultPtr = rustra_ffi_invoke_json(payload, payload.count, &outLen)
       guard let ptr = resultPtr else { return 0 }
-      defer { rustra_calculator_free_string(ptr) }
-      let resultStr = String(cString: ptr)
+      defer { rustra_ffi_free(ptr, outLen) }
+      let resultStr = self.envelopeString(ptr: ptr, count: outLen)
       guard let data = resultStr.data(using: .utf8),
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let ok = json["ok"] as? Bool, ok,
@@ -70,10 +83,11 @@ public class RustraCalculatorModule: Module {
             let args = try? JSONSerialization.jsonObject(with: argsData),
             let payload = self.encodePayload(command: command, args: args)
       else { return "{\"ok\":false,\"error\":\"invalid arguments JSON\"}" }
-      let resultPtr = rustra_calculator_invoke(payload)
+      var outLen = 0
+      let resultPtr = rustra_ffi_invoke_json(payload, payload.count, &outLen)
       guard let ptr = resultPtr else { return "{\"ok\":false,\"error\":\"invoke returned nil\"}" }
-      defer { rustra_calculator_free_string(ptr) }
-      return String(cString: ptr)
+      defer { rustra_ffi_free(ptr, outLen) }
+      return self.envelopeString(ptr: ptr, count: outLen)
     }
 
     // Benchmark-only receipt export. The stable filename lets a Bun host
@@ -99,8 +113,12 @@ public class RustraCalculatorModule: Module {
   }
 }
 
-@_silgen_name("rustra_calculator_invoke")
-func rustra_calculator_invoke(_ payload: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>?
+@_silgen_name("rustra_ffi_invoke_json")
+func rustra_ffi_invoke_json(
+  _ payload: UnsafePointer<UInt8>,
+  _ len: Int,
+  _ outLen: UnsafeMutablePointer<Int>
+) -> UnsafeMutablePointer<UInt8>?
 
-@_silgen_name("rustra_calculator_free_string")
-func rustra_calculator_free_string(_ ptr: UnsafeMutablePointer<CChar>?)
+@_silgen_name("rustra_ffi_free")
+func rustra_ffi_free(_ ptr: UnsafeMutablePointer<UInt8>?, _ len: Int)

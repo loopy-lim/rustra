@@ -4,12 +4,10 @@
   "positional": true,
   "codegen": {
     "rustManifest": "../calculator/Cargo.toml",
-    "rustPackage": "rustra-calculator-example",
-    "rustBinary": "rustra-calculator-example"
+    "rustPackage": "rustra-calculator-example"
   },
   "reactNative": {
     "moduleDir": "./modules/rustra-jsi",
-    "rustManifest": "../calculator/Cargo.toml",
-    "legacyBenchmarks": true
+    "rustManifest": "../calculator/Cargo.toml"
   }
 }
