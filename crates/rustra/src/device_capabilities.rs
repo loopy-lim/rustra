@@ -11,8 +11,10 @@
 //!   표기를 따르고(`camera`, `clipboard-read`, …), 없는 것은 rustra 명명
 //!   (`wifi`, `photo-library`, …).
 //! - 카탈로그는 **버전닝된 닫힌 집합** — 새 토큰 추가는 rustra 릴리스를
-//!   수반하는 계약 진화다. 카탈로그 밖 토큰은 등록 시점에 패닉(loud-fail —
-//!   오타 방지 동기는 타입화 에러 트랙과 동일).
+//!   수반하는 계약 진화다. 카탈로그 밖 토큰은 release 빌드에서 등록 시점에
+//!   패닉하고(loud-fail — 오타 방지 동기는 타입화 에러 트랙과 동일) debug
+//!   빌드에서는 경고 후 수용한다(Dev Tier — 프로토타이핑. 릴리스 벽은
+//!   doctor `codegen.device_catalog` 검사와 이중).
 //! - OS 세부 권한 문자열(Android `NEARBY_DEVICES` 재편, iOS plist 키, macOS
 //!   entitlement)은 토큰 뒤에 숨는다 — 교차표는 문서로만 유지
 //!   (platform-permissions.md). 스키마·코드젠·와이어는 토큰만 안다.
