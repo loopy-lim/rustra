@@ -1677,7 +1677,7 @@ facebook::jsi::Value dynamicToValue(
       facebook::jsi::Object object(rt);
       for (const auto& [key, item] : value.items()) {
         object.setProperty(
-          rt, facebook::jsi::String::createFromUtf8(rt, key), dynamicToValue(rt, item));
+          rt, facebook::jsi::String::createFromUtf8(rt, key.getString()), dynamicToValue(rt, item));
       }
       return Value(rt, object);
     }
