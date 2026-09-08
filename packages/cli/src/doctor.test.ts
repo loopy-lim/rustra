@@ -1010,6 +1010,91 @@ test('freshness check is skipped when the schema itself is missing', () => {
   );
 });
 
+// ── 디바이스 토큰 릴리스 벽 (codegen.device_catalog) ──────────────────────────
+//
+// debug 빌드가 수용한 카탈로그 밖 토큰을 릴리스 전에 보고한다(Dev Tier C절).
+// release 빌드는 등록 시점 패닉 — doctor 가 JS 쪽 벽으로 이중화한다.
+
+function withDeviceProject(schema: object, callback: (root: string) => void): void {
+  withProject(
+    {
+      'rustra.json': JSON.stringify({
+        schema: './generated/schema.json',
+        output: './generated',
+        node: { rustManifest: './Cargo.toml' },
+      }),
+      'Cargo.toml': CARGO_TOML,
+      'generated/schema.json': JSON.stringify(schema),
+    },
+    callback,
+  );
+}
+
+test('doctor passes device tokens inside the catalog', () => {
+  withDeviceProject(
+    {
+      deviceCapabilities: ['camera', 'bluetooth'],
+      commands: [{ name: 'scan_tags', devices: ['camera'] }],
+    },
+    (root) => {
+      const report = collectDoctorReport(
+        options(join(root, 'rustra.json')),
+        metadataRunner(root, []),
+      );
+      const verdict = report.checks.find((check) => check.id === 'codegen.device_catalog');
+      assert.equal(verdict?.status, 'pass');
+    },
+  );
+});
+
+test('doctor fails on device tokens outside the catalog', () => {
+  withDeviceProject(
+    {
+      deviceCapabilities: ['camera', 'bluetooth'],
+      commands: [{ name: 'scan_tags', devices: ['camera', 'nfc-legacy-reader'] }],
+    },
+    (root) => {
+      const report = collectDoctorReport(
+        options(join(root, 'rustra.json')),
+        metadataRunner(root, []),
+      );
+      const verdict = report.checks.find((check) => check.id === 'codegen.device_catalog');
+      assert.equal(verdict?.status, 'fail');
+      assert.equal(verdict?.required, true);
+      assert.match(verdict?.summary ?? '', /nfc-legacy-reader/);
+    },
+  );
+});
+
+test('doctor warns when declared devices lack the catalog field', () => {
+  withDeviceProject(
+    { commands: [{ name: 'scan_tags', devices: ['camera'] }] },
+    (root) => {
+      const report = collectDoctorReport(
+        options(join(root, 'rustra.json')),
+        metadataRunner(root, []),
+      );
+      const verdict = report.checks.find((check) => check.id === 'codegen.device_catalog');
+      assert.equal(verdict?.status, 'warn');
+      assert.equal(verdict?.required, false);
+    },
+  );
+});
+
+test('doctor skips the catalog check without device declarations', () => {
+  withDeviceProject(
+    { deviceCapabilities: ['camera'], commands: [{ name: 'add' }] },
+    (root) => {
+      const report = collectDoctorReport(
+        options(join(root, 'rustra.json')),
+        metadataRunner(root, []),
+      );
+      const verdict = report.checks.find((check) => check.id === 'codegen.device_catalog');
+      assert.equal(verdict?.status, 'skip');
+    },
+  );
+});
+
 // ── registry 도달성 (registry.reachability) ──────────────────────────────────
 //
 // 프록시 뒤 사용자의 첫 cargo build 는 crates.io 도달 실패로 22초 무응답 + 원문
