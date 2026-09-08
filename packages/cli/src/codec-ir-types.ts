@@ -6,6 +6,14 @@
  * this IR: declaration-order structs, sorted map/variant keys, optional
  * presence tags, and recursive references.
  */
+export type CodecIrVariant = {
+  key: string;
+  node: CodecIrNode;
+  wrapper: 'value' | 'property' | 'discriminator' | 'direct';
+  property?: string;
+  discriminator?: { key: string; value: string | number | boolean | null } | null;
+};
+
 export type CodecIrNode =
   | { kind: 'boolean' }
   | { kind: 'integer'; format?: string }
@@ -23,23 +31,10 @@ export type CodecIrNode =
       kind: 'struct';
       fields: { name: string; node: CodecIrNode; optional: boolean }[];
     }
-  | {
-      kind: 'variant';
-      key: string;
-      node: CodecIrNode;
-      wrapper: 'value' | 'property' | 'discriminator' | 'direct';
-      property?: string;
-      discriminator?: { key: string; value: string | number | boolean | null };
-    }
+  | ({ kind: 'variant' } & CodecIrVariant)
   | {
       kind: 'oneOf';
-      variants: {
-        key: string;
-        node: CodecIrNode;
-        wrapper: 'value' | 'property' | 'discriminator' | 'direct';
-        property?: string;
-        discriminator?: { key: string; value: string | number | boolean | null };
-      }[];
+      variants: CodecIrVariant[];
     };
 
 export type CodecIrResult = { ok: true; node: CodecIrNode } | { ok: false; reason: string };

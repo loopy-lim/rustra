@@ -73,14 +73,14 @@ export function discriminator(
 /** Exact tag carried by a one-value enum property (schemars inline serde tags). */
 export function singleEnumTag(
   schema: JsonSchema,
-): { key: string; value: string | number | boolean | null } | null {
+): { key: string; value: string | number | boolean | null } | undefined {
   for (const [key, property] of Object.entries(schema.properties ?? {})) {
     const values = property.enum;
     if (Array.isArray(values) && values.length === 1 && primitive(values[0])) {
       return { key, value: values[0] };
     }
   }
-  return null;
+  return undefined;
 }
 
 export function optionalInner(schema: JsonSchema): JsonSchema | null {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createComplexCodec } from './complex-codec.js';
+import type { ComplexSchema } from './complex-codec-types.js';
 
 const profileSchema = {
   type: 'object',
@@ -207,7 +208,7 @@ test('complex codec pins the Rust data-enum wire independently of oneOf order', 
   assert.deepEqual(codec.decode(response.buffer), { ok: true, result: { label: 'active:7' } });
 });
 
-const adjacentGateEvent = {
+const adjacentGateEvent: ComplexSchema = {
   oneOf: [
     {
       title: 'Txt',
