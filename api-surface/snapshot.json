@@ -309,6 +309,7 @@
       "encodeUtf8",
       "exactArrayBuffer",
       "invokeCallbackWithAbort",
+      "invokeLoose",
       "invokeWithTimeout",
       "invokeWithTimeoutHandledSignal",
       "raceAbort"
