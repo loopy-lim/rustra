@@ -53,8 +53,8 @@ versioned closed set. To experiment before a token lands in a rustra release:
    `#[command(device("nfc-legacy-reader"))]` prints a warning and is accepted in
    debug builds. The declaration flows into the schema.json `devices` array.
 2. **Codegen renders it with a marker** — the generated `devices.ts` union and
-   constants include the unknown token, and the file header carries a
-   "catalog-outside tokens" marker comment.
+   constants include the unknown token, and the file carries a
+   "catalog-outside tokens" marker comment below the union.
 3. **The release wall is double** — the `rustra doctor` `codegen.device_catalog`
    check reports unknown tokens as **fail**, and release builds panic at
    registration. To ship, either rename to a catalog token or wait for a rustra
@@ -67,12 +67,12 @@ manual mirror exists.
 
 ## Gate profiles
 
-| Stage    | What runs                                             | Command                                   |
-| -------- | ----------------------------------------------------- | ----------------------------------------- |
-| Dev loop | cargo check + calculator tsc + cli units              | `bun run test:fast`                       |
-| Commit   | eslint/prettier/rustfmt (staged only)                 | lefthook pre-commit, automatic            |
-| PR/CI    | full 10-job battery + docs·api-surface·codegen checks | `scripts/ci-gate.sh`                      |
-| Release  | release-coherence·package verification·changeset      | [release procedure](release-procedure.md) |
+| Stage    | What runs                                        | Command                                   |
+| -------- | ------------------------------------------------ | ----------------------------------------- |
+| Dev loop | cargo check + calculator tsc + cli units         | `bun run test:fast`                       |
+| Commit   | eslint/prettier/rustfmt (staged only)            | lefthook pre-commit, automatic            |
+| PR/CI    | full 10-job battery + docs·codegen checks        | `scripts/ci-gate.sh`                      |
+| Release  | release-coherence·package verification·changeset | [release procedure](release-procedure.md) |
 
 For Rust behavior during development, run `cargo test -p rustra <filter>` ad hoc
 as needed. Drift (codegen checks, docs regions) is caught by the full battery —

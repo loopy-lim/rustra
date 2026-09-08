@@ -19,25 +19,40 @@ The root `Cargo.toml` configures the workspace.
 
 ### Workspace Members
 
-| Member path                           | Package name                | Role                                                                    |
-| ------------------------------------- | --------------------------- | ----------------------------------------------------------------------- |
-| `crates/rustra`                       | `rustra`                    | Core library. Package builder, TypeScript codegen, command registration |
-| `crates/rustra-macros`                | `rustra-macros`             | `#[command]` proc macro. Compile-time signature verification            |
-| `examples/calculator`                 | `rustra-calculator-example` | Calculator example. Built as cdylib/staticlib and used from RN/FFI      |
-| `examples/tauri-calculator/src-tauri` | (Tauri app)                 | Tauri backend. Uses rustra's `tauri` feature                            |
+| Member path                           | Package name                | Role                                                                         |
+| ------------------------------------- | --------------------------- | ---------------------------------------------------------------------------- |
+| `crates/rustra-naming`                | `rustra-naming`             | Shared identifier naming rules used by the Rust and proc-macro codegen paths |
+| `crates/rustra`                       | `rustra`                    | Core library. Package builder, TypeScript codegen, command registration      |
+| `crates/rustra-macros`                | `rustra-macros`             | `#[command]` proc macro. Compile-time signature verification                 |
+| `examples/calculator`                 | `rustra-calculator-example` | Calculator example. Built as rlib/cdylib/staticlib and used from RN/FFI      |
+| `examples/crud`                       | `rustra-crud-example`       | CRUD pattern example (create/get/list/update/delete)                         |
+| `examples/calculator-napi`            | `rustra-calculator-napi`    | napi-rs transport example                                                    |
+| `examples/tauri-calculator/src-tauri` | (Tauri app)                 | Tauri backend. Uses rustra's `tauri` feature (macOS-only build)              |
+| `examples/benchmark`                  | `rustra-benchmark`          | Performance benchmark example                                                |
+| `examples/streaming`                  | `rustra-streaming-example`  | Event streaming example                                                      |
+| `examples/auth`                       | `rustra-auth-example`       | Session/capability gate example                                              |
+
+`default-members` (what bare `cargo build`/`test` builds) excludes
+`crates/rustra-naming` and the macOS-only `examples/tauri-calculator/src-tauri`
+— use `--workspace` to build all members.
 
 ### Workspace Dependencies
 
 ```toml
 [workspace.dependencies]
+rustra-naming = { path = "crates/rustra-naming" }
 rustra-macros = { path = "crates/rustra-macros" }
 rustra = { path = "crates/rustra" }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-schemars = { version = "0.8", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+schemars = { version = "0.8", features = ["derive", "preserve_order"] }
 sha2 = "0.10"
 hex = "0.4"
+postcard = { version = "1", default-features = false, features = ["alloc"] }
 ```
+
+(Path dependencies also carry the workspace version; this document does not
+pin versions.)
 
 ---
 
@@ -47,16 +62,19 @@ hex = "0.4"
 rustra-macros (proc-macro)
   ├─ syn 2 (full)
   ├─ quote 1
-  └─ proc-macro2 1
+  ├─ proc-macro2 1
+  └─ rustra-naming (workspace)
         │
         ▼
 rustra
   ├─ rustra-macros (workspace)
+  ├─ rustra-naming (workspace)
   ├─ schemars 0.8 (derive)
   ├─ serde 1 (derive)
   ├─ serde_json 1
   ├─ sha2 0.10
   ├─ hex 0.4
+  ├─ postcard 1 (alloc)
   └─ tauri 2 (optional, feature = "tauri")
         │
         ▼
@@ -194,13 +212,13 @@ The core example. Contains a Rust crate + TypeScript tests + generated clients
 
 ```
 examples/calculator/
-├── Cargo.toml          # rustra-calculator-example (rlib + staticlib)
+├── Cargo.toml          # rustra-calculator-example (rlib + cdylib + staticlib)
 ├── src/lib.rs          # add_numbers command + calculator_package() + FFI export
 ├── ts/
 │   ├── adapter-compat.test.ts    # 4 adapter behaviors + no host-specific imports
 │   ├── generated-client.test.ts  # command helper behavior + banned import check
-│   └── runtime-contract.test.ts  # host apps share generated commands + RN FFI
-├── generated/          # codegen output (schema.json, types.ts, commands.ts, contract.ts)
+│   └── runtime-contract.test.ts  # host apps use generated zero-config entries + RN FFI
+├── generated/          # codegen output (schema.json, types.ts, commands.ts, contract.ts, rkyv-codecs.ts, rkyv-registry.ts, errors.ts, devices.ts, host entries, .rustra-generated.json)
 ├── apps/
 │   ├── node-app.ts     # Node.js runtime app
 │   └── bun-app.ts      # Bun runtime app

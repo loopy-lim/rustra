@@ -17,23 +17,37 @@
 
 | Member 경로                           | 패키지명                    | 역할                                                             |
 | ------------------------------------- | --------------------------- | ---------------------------------------------------------------- |
+| `crates/rustra-naming`                | `rustra-naming`             | Rust·proc-macro 코드젠이 공유하는 식별자 네이밍 규칙             |
 | `crates/rustra`                       | `rustra`                    | 핵심 라이브러리. Package 빌더, TypeScript 코드생성, command 등록 |
 | `crates/rustra-macros`                | `rustra-macros`             | `#[command]` proc macro. 컴파일 타임 시그니처 검증               |
-| `examples/calculator`                 | `rustra-calculator-example` | 예제 계산기. cdylib/staticlib으로 빌드하여 RN/FFI에서 사용       |
-| `examples/tauri-calculator/src-tauri` | (Tauri 앱)                  | Tauri 백엔드. rustra의 `tauri` feature 사용                      |
+| `examples/calculator`                 | `rustra-calculator-example` | 예제 계산기. rlib/cdylib/staticlib으로 빌드하여 RN/FFI에서 사용  |
+| `examples/crud`                       | `rustra-crud-example`       | CRUD 패턴 예시 (create/get/list/update/delete)                   |
+| `examples/calculator-napi`            | `rustra-calculator-napi`    | napi-rs transport 예시                                           |
+| `examples/tauri-calculator/src-tauri` | (Tauri 앱)                  | Tauri 백엔드. rustra의 `tauri` feature 사용 (macOS 전용 빌드)    |
+| `examples/benchmark`                  | `rustra-benchmark`          | 성능 벤치마크 예시                                               |
+| `examples/streaming`                  | `rustra-streaming-example`  | 이벤트 스트리밍 예시                                             |
+| `examples/auth`                       | `rustra-auth-example`       | 세션/capability 게이트 예시                                      |
+
+`default-members`(기본 `cargo build`/`test`가 빌드하는 범위)는
+`crates/rustra-naming`과 macOS 전용 `examples/tauri-calculator/src-tauri`를
+제외한다 — 전체 멤버는 `--workspace`로 빌드한다.
 
 ### Workspace Dependencies
 
 ```toml
 [workspace.dependencies]
+rustra-naming = { path = "crates/rustra-naming" }
 rustra-macros = { path = "crates/rustra-macros" }
 rustra = { path = "crates/rustra" }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-schemars = { version = "0.8", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+schemars = { version = "0.8", features = ["derive", "preserve_order"] }
 sha2 = "0.10"
 hex = "0.4"
+postcard = { version = "1", default-features = false, features = ["alloc"] }
 ```
+
+(path 의존성은 workspace 버전을 함께 갖는다 — 이 문서는 버전을 고정하지 않는다.)
 
 ---
 
@@ -43,16 +57,19 @@ hex = "0.4"
 rustra-macros (proc-macro)
   ├─ syn 2 (full)
   ├─ quote 1
-  └─ proc-macro2 1
+  ├─ proc-macro2 1
+  └─ rustra-naming (workspace)
         │
         ▼
 rustra
   ├─ rustra-macros (workspace)
+  ├─ rustra-naming (workspace)
   ├─ schemars 0.8 (derive)
   ├─ serde 1 (derive)
   ├─ serde_json 1
   ├─ sha2 0.10
   ├─ hex 0.4
+  ├─ postcard 1 (alloc)
   └─ tauri 2 (optional, feature = "tauri")
         │
         ▼
@@ -178,13 +195,13 @@ Tauri adapter는 추가로 `RustraError` 타입과 `RustraCommandError` 클래�
 
 ```
 examples/calculator/
-├── Cargo.toml          # rustra-calculator-example (rlib + staticlib)
+├── Cargo.toml          # rustra-calculator-example (rlib + cdylib + staticlib)
 ├── src/lib.rs          # add_numbers command + calculator_package() + FFI export
 ├── ts/
 │   ├── adapter-compat.test.ts    # 4개 adapter 동작 + host-specific import 없음
 │   ├── generated-client.test.ts  # command helper 동작 + banned import 체크
-│   └── runtime-contract.test.ts  # host 앱들이 같은 generated commands 사용 + RN FFI
-├── generated/          # codegen 출력 (schema.json, types.ts, commands.ts, contract.ts)
+│   └── runtime-contract.test.ts  # host 앱들의 zero-config 엔트리 사용 + RN FFI
+├── generated/          # codegen 출력 (schema.json, types.ts, commands.ts, contract.ts, rkyv-codecs.ts, rkyv-registry.ts, errors.ts, devices.ts, 호스트 엔트리, .rustra-generated.json)
 ├── apps/
 │   ├── node-app.ts     # Node.js 런타임 앱
 │   └── bun-app.ts      # Bun 런타임 앱

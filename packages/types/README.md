@@ -33,6 +33,10 @@ Key exports:
 - `RkyvV2EngineOptions` — engine options: `onContractMismatch` (opt-in degraded mode on
   hash mismatch), `schemaVersion`/`onSchemaStale` (warning when JS is staler than native),
   `maxPayloadBytes` (size pre-check of the payload right after encoding)
+- `invokeLoose()` — name-based loose invoke without the generated client (dynamic
+  development tier)
+- `registerDeviceStatusProvider()` / `getDeviceStatus()` — fail-open device
+  availability/permission lookup backed by a host-registered provider
 
 ## Related docs
 

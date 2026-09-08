@@ -29,6 +29,9 @@ const result = await addNumbers({ a: 42, b: 58 });
 - `RkyvV2EngineOptions` — 엔진 옵션: `onContractMismatch`(해시 불일치 시
   degraded 모드 opt-in), `schemaVersion`/`onSchemaStale`(JS > native stale 경고),
   `maxPayloadBytes`(인코딩 직후 페이로드 크기 사전 검사)
+- `invokeLoose()` — 생성 클라이언트 없이 이름으로 호출하는 동적 개발 티어 표면
+- `registerDeviceStatusProvider()` / `getDeviceStatus()` — 호스트 등록 provider 기반
+  fail-open 디바이스 가용성/권한 조회
 
 ## 관련 문서
 
