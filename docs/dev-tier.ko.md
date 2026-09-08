@@ -7,12 +7,12 @@ rustra의 계약은 릴리스 시점에 얼어붙는다 — schema.json, 생성 
 "개발 중 동적 / 릴리스 정적"을 지탱하는 4가지 장치와, 동적으로 실험한 것을 정적
 계약으로 승격하는 시점을 다룬다.
 
-| 장치 | 개발 중 | 릴리스 벽 |
-| --- | --- | --- |
+| 장치                                                                    | 개발 중                        | 릴리스 벽                                                           |
+| ----------------------------------------------------------------------- | ------------------------------ | ------------------------------------------------------------------- |
 | [`invokeLoose`](#invokeloose-커맨드-프로토타이핑) — 이름 기반 즉석 호출 | 어떤 커맨드든 문자열 키로 호출 | 고빈도 명령은 `rustra codegen`으로 정적 승격 권장(Tier 3 JSON 비용) |
-| 런타임 커맨드 등록 — `Package::register` (debug 빌드) | Rust 핸들러를 즉석 등록 | release 빌드는 freeze — 선언 기반 재작성 |
-| [디바이스 토큰 실험](#디바이스-토큰-실험) — 카탈로그 밖 토큰 | debug 빌드는 경고 후 수용 | release 빌드는 등록 시점 패닉 + `rustra doctor` fail 검사 (이중 벽) |
-| [`test:fast`](#게이트-프로파일) — 빠른 검증 루프 | 컴파일 정합 + 코드젱 유닛 | 풀 배터리는 CI/PR 그대로 |
+| 런타임 커맨드 등록 — `Package::register` (debug 빌드)                   | Rust 핸들러를 즉석 등록        | release 빌드는 freeze — 선언 기반 재작성                            |
+| [디바이스 토큰 실험](#디바이스-토큰-실험) — 카탈로그 밖 토큰            | debug 빌드는 경고 후 수용      | release 빌드는 등록 시점 패닉 + `rustra doctor` fail 검사 (이중 벽) |
+| [`test:fast`](#게이트-프로파일) — 빠른 검증 루프                        | 컴파일 정합 + 코드젱 유닛      | 풀 배터리는 CI/PR 그대로                                            |
 
 ## invokeLoose 커맨드 프로토타이핑
 
@@ -62,12 +62,12 @@ const info = await invokeLoose<{ os: string }>(engine, 'platformNativeInfo');
 
 ## 게이트 프로파일
 
-| 시점 | 무엇을 돌리나 | 커맨드 |
-| --- | --- | --- |
-| 개발 루프 | cargo check + calculator tsc + cli 유닛 | `bun run test:fast` |
-| 커밋 | eslint/prettier/rustfmt (staged만) | lefthook pre-commit 자동 |
-| PR/CI | 풀 배터리 10잡 + docs·api-surface·codegen 체크 | `scripts/ci-gate.sh` |
-| 발행 | release-coherence·패키지 검증·changeset | [발행 절차](release-procedure.md) |
+| 시점      | 무엇을 돌리나                                  | 커맨드                            |
+| --------- | ---------------------------------------------- | --------------------------------- |
+| 개발 루프 | cargo check + calculator tsc + cli 유닛        | `bun run test:fast`               |
+| 커밋      | eslint/prettier/rustfmt (staged만)             | lefthook pre-commit 자동          |
+| PR/CI     | 풀 배터리 10잡 + docs·api-surface·codegen 체크 | `scripts/ci-gate.sh`              |
+| 발행      | release-coherence·패키지 검증·changeset        | [발행 절차](release-procedure.md) |
 
 Rust 동작 검증은 개발 중 `cargo test -p rustra <필터>`로 필요한 만큼만 ad-hoc로
 돌린다. 드리프트(코드젱 체크·docs 리전)는 풀 배터리가 잡는다 — 개발 루프에서

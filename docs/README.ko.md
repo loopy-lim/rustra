@@ -38,7 +38,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 | [React Native 셋업](extending/react-native-setup.md)                               | 사용자 | JSI 네이티브 모듈, iOS/Android 빌드, BenchmarkApp                                 |
 | [Tauri 셋업](extending/tauri-setup.md)                                             | 사용자 | 기존 Tauri 앱에 rustra 얹기 — 변경 5개 파일을 순서대로                            |
 | [새 Host 추가 가이드](extending/adding-host.md)                                    | 사용자 | adapter 만들기, Rust 진입점 선택, 테스트 추가                                     |
-| [동적 개발 티어](dev-tier.ko.md) ([English](dev-tier.md))                           | 사용자 | `invokeLoose` 프로토타이핑, 카탈로그 밖 토큰 실험, 게이트 프로파일                  |
+| [동적 개발 티어](dev-tier.ko.md) ([English](dev-tier.md))                          | 사용자 | `invokeLoose` 프로토타이핑, 카탈로그 밖 토큰 실험, 게이트 프로파일                |
 | [Crate 및 Package 구조](internal/crate-structure.md)                               | 기여자 | 각 crate/package 책임, 빌드 의존성                                                |
 | [TypeScript 코드 생성](internal/codegen.md)                                        | 기여자 | codegen 파이프라인, 타입 매핑, 제한사항                                           |
 | [테스트 구조](internal/testing.md)                                                 | 기여자 | 테스트 계층, 스크립트 체인, host별 상태                                           |

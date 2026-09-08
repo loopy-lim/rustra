@@ -2624,8 +2624,7 @@ test('generateDevicesTs throws when declared devices lack the schema catalog', a
   const legacy: PackageSchema = { ...deviceSchema, deviceCapabilities: undefined };
   assert.throws(
     () => generateDevicesTs(legacy),
-    (error: unknown) =>
-      error instanceof Error && error.message.includes('deviceCapabilities'),
+    (error: unknown) => error instanceof Error && error.message.includes('deviceCapabilities'),
     'legacy schema without the catalog must fail loud',
   );
 });

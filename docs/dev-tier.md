@@ -8,12 +8,12 @@ walls can stay open.** This guide covers the four mechanisms behind "dynamic in
 dev, static in release" and when to promote dynamic experiments into the static
 contract.
 
-| Mechanism | During development | Release wall |
-| --- | --- | --- |
-| [`invokeLoose`](#invokeloose-command-prototyping) — name-based loose invoke | call any command by string key | promote hot commands via `rustra codegen` (Tier 3 JSON cost) |
-| Runtime command registration — `Package::register` (debug builds) | register Rust handlers on the spot | release builds freeze — rewrite declaratively |
-| [Device token experiments](#device-token-experiments) — catalog-outside tokens | debug builds warn and accept | release builds panic at registration + `rustra doctor` fail (double wall) |
-| [`test:fast`](#gate-profiles) — fast verification loop | compile parity + codegen units | full battery stays in CI/PR |
+| Mechanism                                                                      | During development                 | Release wall                                                              |
+| ------------------------------------------------------------------------------ | ---------------------------------- | ------------------------------------------------------------------------- |
+| [`invokeLoose`](#invokeloose-command-prototyping) — name-based loose invoke    | call any command by string key     | promote hot commands via `rustra codegen` (Tier 3 JSON cost)              |
+| Runtime command registration — `Package::register` (debug builds)              | register Rust handlers on the spot | release builds freeze — rewrite declaratively                             |
+| [Device token experiments](#device-token-experiments) — catalog-outside tokens | debug builds warn and accept       | release builds panic at registration + `rustra doctor` fail (double wall) |
+| [`test:fast`](#gate-profiles) — fast verification loop                         | compile parity + codegen units     | full battery stays in CI/PR                                               |
 
 ## invokeLoose command prototyping
 
@@ -67,12 +67,12 @@ manual mirror exists.
 
 ## Gate profiles
 
-| Stage | What runs | Command |
-| --- | --- | --- |
-| Dev loop | cargo check + calculator tsc + cli units | `bun run test:fast` |
-| Commit | eslint/prettier/rustfmt (staged only) | lefthook pre-commit, automatic |
-| PR/CI | full 10-job battery + docs·api-surface·codegen checks | `scripts/ci-gate.sh` |
-| Release | release-coherence·package verification·changeset | [release procedure](release-procedure.md) |
+| Stage    | What runs                                             | Command                                   |
+| -------- | ----------------------------------------------------- | ----------------------------------------- |
+| Dev loop | cargo check + calculator tsc + cli units              | `bun run test:fast`                       |
+| Commit   | eslint/prettier/rustfmt (staged only)                 | lefthook pre-commit, automatic            |
+| PR/CI    | full 10-job battery + docs·api-surface·codegen checks | `scripts/ci-gate.sh`                      |
+| Release  | release-coherence·package verification·changeset      | [release procedure](release-procedure.md) |
 
 For Rust behavior during development, run `cargo test -p rustra <filter>` ad hoc
 as needed. Drift (codegen checks, docs regions) is caught by the full battery —
