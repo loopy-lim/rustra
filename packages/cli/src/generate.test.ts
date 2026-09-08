@@ -17,6 +17,7 @@ import {
 import { collectDefinitions, postcardHelperSource } from './codegen.js';
 import { readConfigSync } from './config.js';
 import { buildCodecIr } from './codec-ir.js';
+import type { CodecIrVariant } from './codec-ir.js';
 import { cppComplexVariantPredicate } from './generate-cpp-complex-literals.js';
 import {
   generateBunEntryTs,
@@ -2954,7 +2955,7 @@ test('generated C++ oneOf variants commit only on their exact inline enum tag', 
     required: ['c', 't'],
     properties: { t: { type: 'string', enum: [tag] }, c: content },
   });
-  const adjacentEvent = {
+  const adjacentEvent: import('./schema.js').JsonSchema = {
     oneOf: [
       inlineTag('Txt', { type: 'string' }),
       inlineTag('Nums', {
@@ -2984,7 +2985,7 @@ test('generated C++ oneOf variants commit only on their exact inline enum tag', 
     cases.map(([key]) => key),
   );
   for (const [index, [key, tag, wrapper]] of cases.entries()) {
-    const variant = result.node.variants[index];
+    const variant: CodecIrVariant = result.node.variants[index];
     assert.equal(variant.wrapper, wrapper, key);
     assert.deepEqual(variant.discriminator, { key: 't', value: tag }, key);
     const predicate = cppComplexVariantPredicate(variant, 'value');
