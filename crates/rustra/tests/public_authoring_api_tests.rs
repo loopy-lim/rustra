@@ -1,8 +1,14 @@
 use rustra::prelude::*;
 use std::fs;
 use std::process::Command;
+use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
+
+/// `RUSTRA_SCHEMA_OUT` 는 프로세스 전역 env — 이 env 를 읽는 write_to_dir/
+/// write_schema_to_dir 를 쓰는 테스트는 이 락으로 직렬화한다(병렬 실행 시
+/// 남의 쓰기가 override 디렉토리로 리다이렉트되어 파일 수 단언이 깨진다).
+static SCHEMA_OUT_SERIAL: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -490,6 +496,7 @@ fn package_generates_host_neutral_typescript_client() {
 
 #[test]
 fn generated_package_can_be_written_to_a_directory() {
+    let _serial = SCHEMA_OUT_SERIAL.lock().unwrap();
     let output_dir = std::env::temp_dir().join(format!("rustra-generated-{}", std::process::id()));
 
     let _ = std::fs::remove_dir_all(&output_dir);
@@ -512,6 +519,7 @@ fn generated_package_can_be_written_to_a_directory() {
 /// 별도 테스트로 나누면 카고 병렬 실행 시 서로의 env 를 오염시켜 간헐적으로 깨진다.
 #[test]
 fn write_schema_to_dir_emits_schema_only_and_honors_rustra_schema_out() {
+    let _serial = SCHEMA_OUT_SERIAL.lock().unwrap();
     let output_dir = std::env::temp_dir().join(format!("rustra-probe-{}", std::process::id()));
     let override_dir =
         std::env::temp_dir().join(format!("rustra-probe-override-{}", std::process::id()));
@@ -1272,6 +1280,7 @@ fn build_api_scalar_command_with_result() {
 
 #[test]
 fn build_api_generates_typescript() {
+    let _serial = SCHEMA_OUT_SERIAL.lock().unwrap();
     #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
     #[serde(rename_all = "camelCase")]
     struct GreetInput {
@@ -1305,6 +1314,7 @@ fn build_api_generates_typescript() {
 
 #[test]
 fn generated_output_skips_unchanged_writes() {
+    let _serial = SCHEMA_OUT_SERIAL.lock().unwrap();
     let dir = tempfile::tempdir().unwrap();
     let generated = register!(Package::builder("test.write-stability"), add_numbers)
         .build()
