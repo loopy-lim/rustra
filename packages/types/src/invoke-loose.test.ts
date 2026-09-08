@@ -31,9 +31,14 @@ test('invokeLoose forwards args and options untouched', async () => {
       return 42 as T;
     },
   };
-  const value = await invokeLoose<number>(client, 'clamp', { value: 1 }, {
-    signal: controller.signal,
-  });
+  const value = await invokeLoose<number>(
+    client,
+    'clamp',
+    { value: 1 },
+    {
+      signal: controller.signal,
+    },
+  );
   assert.equal(value, 42);
   assert.deepEqual(seen[0]?.args, { value: 1 });
   assert.equal(seen[0]?.signal, controller.signal);
@@ -41,7 +46,7 @@ test('invokeLoose forwards args and options untouched', async () => {
 
 test('invokeLoose defaults the result type to unknown', async () => {
   const client: EngineClient = {
-    async invoke<T>(command: string): Promise<T> {
+    async invoke<T>(_command: string): Promise<T> {
       return { anything: true } as T;
     },
   };
