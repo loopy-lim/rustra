@@ -1337,5 +1337,28 @@
         }
       }
     }
+  ],
+  "deviceCapabilities": [
+    "camera",
+    "microphone",
+    "geolocation",
+    "notifications",
+    "clipboard-read",
+    "clipboard-write",
+    "wifi",
+    "bluetooth",
+    "battery",
+    "nfc",
+    "biometric",
+    "haptics",
+    "flashlight",
+    "contacts",
+    "calendar",
+    "photo-library",
+    "motion",
+    "usb",
+    "serial",
+    "network-state",
+    "screen-brightness"
   ]
 }
