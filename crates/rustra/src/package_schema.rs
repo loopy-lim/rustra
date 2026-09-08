@@ -136,6 +136,23 @@ impl Package {
                 .expect("root is an object")
                 .insert("events".into(), json!(events));
         }
+        // (Dev Tier B절) 디바이스 역량 카탈로그 단일소싱 — 선언이 있는 패키지에
+        // 한해 카탈로그 전체(ALL, 선언 순)를 최상위에 기록한다. CLI(generate-devices)
+        // 가 이 필드로 정렬·검증하며 수동 미러를 유지하지 않는다. 선언 없는
+        // 패키지는 미기록(events 관례 — 기존 schema.json 바이트 불변).
+        if state
+            .commands
+            .values()
+            .any(|command| !command.device_requirements.is_empty())
+        {
+            let catalog: Vec<&str> = crate::device_capabilities::DeviceCapability::ALL
+                .iter()
+                .map(|capability| capability.as_str())
+                .collect();
+            root.as_object_mut()
+                .expect("root is an object")
+                .insert("deviceCapabilities".into(), json!(catalog));
+        }
         root
     }
 }
