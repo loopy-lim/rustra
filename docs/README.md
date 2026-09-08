@@ -17,6 +17,7 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
 7. [Tauri Setup](extending/tauri-setup.md) — adding rustra to an existing Tauri app
 8. [Transport Replacement Guide](extending/transport-guide.md) — replacing transports such as Bun FFI, Node napi-rs
 9. [Adding a New Host Guide](extending/adding-host.md) — adding new host adapters such as Electron, Deno
+10. [Dynamic Development Tier](dev-tier.md) — loose invoke prototyping, device token experiments, `test:fast`
 
 ### Project Contributors
 
@@ -37,6 +38,7 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
 | [React Native Setup](extending/react-native-setup.md)                                        | Users        | JSI native module, iOS/Android builds, BenchmarkApp                                                |
 | [Tauri Setup](extending/tauri-setup.md)                                                      | Users        | Adding rustra to an existing Tauri app — the five files, in order                                  |
 | [Adding a New Host Guide](extending/adding-host.md)                                          | Users        | Writing an adapter, choosing a Rust entry point, adding tests                                      |
+| [Dynamic Development Tier](dev-tier.md) ([한국어](dev-tier.ko.md))                           | Users        | `invokeLoose` prototyping, catalog-outside token experiments, gate profiles                         |
 | [Crate and Package Structure](internal/crate-structure.md)                                   | Contributors | Responsibilities of each crate/package, build dependencies                                         |
 | [TypeScript Code Generation](internal/codegen.md)                                            | Contributors | Codegen pipeline, type mapping, limitations                                                        |
 | [Testing Structure](internal/testing.md)                                                     | Contributors | Test layers, script chain, per-host status                                                         |
