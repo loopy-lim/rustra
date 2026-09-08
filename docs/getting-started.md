@@ -637,7 +637,7 @@ export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutp
 
 <!-- prettier-ignore -->
 ```ts
-export const GENERATED_CONTRACT_HASH = '01bec0c77aecaf313ce30bafb93c95d788162dc1e6f661a62e9ddd8d964337be';
+export const GENERATED_CONTRACT_HASH = '7279af1f50ca546411bb7be6476bb1f931b437ae53484d8ea9903eec07926039';
 export const SCHEMA_VERSION = 1;
 ```
 
