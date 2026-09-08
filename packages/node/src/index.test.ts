@@ -858,14 +858,22 @@ processTest(
     const flag = resolve(join(tmpdir(), `rustra-quiet-flag-${process.pid}-${Date.now()}`));
     const staleLine = `stale-${'x'.repeat(4_000)}`;
     const blob = Array.from({ length: 256 }, () => staleLine).join('\n') + '\n';
-    const script = [
-      'process.stdin.resume();',
-      `if (!require('fs').existsSync(${JSON.stringify(flag)})) {`,
-      `  process.stdout.write(${JSON.stringify(blob)});`,
-      '}',
-      'setTimeout(() => process.exit(0), 40);',
-    ].join(' ');
-    const transport = createNodeLoopTransport({ command: process.execPath, args: ['-e', script] });
+    // ~1MB blob 은 argv 에 못 넣는다 — Linux 단일 인자 한도 128KB(MAX_ARG_STRLEN,
+    // spawn E2BIG). 스크립트를 파일로 미룬다.
+    const scriptPath = resolve(
+      join(tmpdir(), `rustra-backlog-script-${process.pid}-${Date.now()}.cjs`),
+    );
+    writeFileSync(
+      scriptPath,
+      [
+        'process.stdin.resume();',
+        `if (!require('fs').existsSync(${JSON.stringify(flag)})) {`,
+        `  process.stdout.write(${JSON.stringify(blob)});`,
+        '}',
+        'setTimeout(() => process.exit(0), 40);',
+      ].join('\n'),
+    );
+    const transport = createNodeLoopTransport({ command: process.execPath, args: [scriptPath] });
     try {
       // 1 라이프 — 응답 없는 exit. reject 메시지 내용은 타이밍(플러시 경합)에
       // 따라 달라지므로 단정하지 않는다.
@@ -892,6 +900,7 @@ processTest(
     } finally {
       transport.dispose();
       rmSync(flag, { force: true });
+      rmSync(scriptPath, { force: true });
     }
   },
 );
