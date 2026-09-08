@@ -240,7 +240,9 @@ impl<'a> Context<'a> {
         // 단일 enum → type 폴백(string/object) → Never. 판별자는 const
         // 프로퍼티 태그에 단일 enum 프로퍼티 태그를 더한 정확 태그다 —
         // 폴백 매처가 정확 매처 변형의 값을 선취하지 못게 한다.
-        let exact_tag = discriminator.clone().or_else(|| single_enum_tag(properties));
+        let exact_tag = discriminator
+            .clone()
+            .or_else(|| single_enum_tag(properties));
         let matcher = if let Some((key, tag)) = exact_tag {
             IrMatcher::Discriminator { key, tag }
         } else if let Some(properties) = properties.filter(|properties| properties.len() == 1) {
