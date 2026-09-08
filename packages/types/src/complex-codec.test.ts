@@ -262,5 +262,7 @@ test('complex codec encodes every adjacent-tagged variant on its own wire', () =
     response.set(wire.slice(2), 8);
     assert.deepEqual(codec.decode(response.buffer), { ok: true, result: value });
   }
-  assert.throws(() => codec.encode({ event: { t: 'Bogus' }, tags: [] }), /enum/);
+  for (const event of [{ t: 'Bogus' }, { c: 1 }, 3]) {
+    assert.throws(() => codec.encode({ event, tags: [] }), /does not match any enum variant/);
+  }
 });

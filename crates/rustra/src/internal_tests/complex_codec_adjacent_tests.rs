@@ -64,5 +64,9 @@ fn adjacent_tagged_non_members_stay_rejected() {
     ] {
         let error = codec.encode(&input(event), limits).expect_err(name);
         assert_eq!(error.code(), "command.invalid_args", "{name}");
+        assert!(
+            error.message().contains("does not match any enum variant"),
+            "{name}: {error}"
+        );
     }
 }
