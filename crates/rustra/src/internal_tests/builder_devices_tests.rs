@@ -219,3 +219,34 @@ fn devices_meta_if_none_keeps_schema_bytes_identical() {
         without_call.generate_typescript().unwrap().schema_json
     );
 }
+
+// ── 카탈로그 단일소싱 — 최상위 deviceCapabilities (Dev Tier B절) ──
+
+/// 선언이 있으면 카탈로그 전체(ALL)가 최상위에 기록된다 — CLI 가 이 필드를
+/// 단일 소싱해 수동 미러 없이 정렬·검증한다.
+#[test]
+fn schema_records_device_catalog_when_declared() {
+    let schema = devices_package().live_schema();
+    let catalog = schema["deviceCapabilities"]
+        .as_array()
+        .expect("declared package records the catalog");
+    assert_eq!(catalog.len(), 21);
+    assert_eq!(catalog[0], "camera");
+    assert!(catalog.iter().any(|token| token == "bluetooth"));
+}
+
+/// 선언이 없으면 미기록 — 기존 패키지의 schema.json/계약 해시 불변(events 관례).
+#[test]
+fn schema_omits_device_catalog_when_undeclared() {
+    let package = Package::builder("example.devices")
+        .command("scan_tags", |input: serde_json::Value| {
+            Ok::<_, RustraError>(input)
+        })
+        .build();
+    let schema = package.live_schema();
+    assert!(
+        schema.get("deviceCapabilities").is_none(),
+        "undeclared package must not record a catalog: {}",
+        schema
+    );
+}
