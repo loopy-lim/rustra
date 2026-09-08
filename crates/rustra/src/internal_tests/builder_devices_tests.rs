@@ -140,11 +140,52 @@ fn command_devices_panics_on_empty_slice() {
         .build();
 }
 
+/// Dev Tier C절 — debug 빌드는 카탈로그 밖 토큰을 경고와 함께 수용한다
+/// (프로토타이핑). 선언은 스키마 devices 로 흐르고 doctor 가 릴리스 벽이 된다.
 #[test]
+#[cfg(debug_assertions)]
+fn command_devices_accepts_unknown_token_in_debug_builds() {
+    let package = Package::builder("example.devices")
+        .command("scan_tags", |input: serde_json::Value| {
+            Ok::<_, RustraError>(input)
+        })
+        .command_devices("scan_tags", &[DeviceCapability::new("nfc-legacy-reader")])
+        .build();
+    // read 락은 live_schema() (write 락 시도) 전에 반납한다 — 잡은 채 호출하면
+    // 자기 자신과 교착한다.
+    {
+        let state = package
+            .state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        assert_eq!(
+            state
+                .commands
+                .get("scan_tags")
+                .unwrap()
+                .device_requirements[0]
+                .as_str(),
+            "nfc-legacy-reader"
+        );
+    }
+    // 카탈로그는 ALL 그대로 — 미지 토큰이 카탈로그에 섞이지 않는다.
+    let schema = package.live_schema();
+    assert_eq!(
+        schema["deviceCapabilities"]
+            .as_array()
+            .expect("catalog recorded")
+            .len(),
+        21
+    );
+    assert_eq!(schema["commands"][0]["devices"][0], "nfc-legacy-reader");
+}
+
+/// 릴리스 빌드 벽 — 카탈로그 밖 토큰은 등록 시점 패닉(doctor 검사와 이중).
+#[test]
+#[cfg(not(debug_assertions))]
 #[should_panic(expected = "unknown device capability 'camra'")]
 fn command_devices_panics_on_catalog_outside_token() {
-    // "camra" — 오타. 카탈로그 밖 토큰은 등록 시점 loud-fail(타입화 에러 트랙
-    // 과 같은 동기 — 조용한 미기록보다 빌드 시점 발견).
+    // "camra" — 오타. 릴리스 빌드는 loud-fail(타입화 에러 트랙과 같은 동기).
     let _ = Package::builder("example.devices")
         .command("scan_tags", |input: serde_json::Value| {
             Ok::<_, RustraError>(input)

@@ -21,7 +21,9 @@ impl PackageBuilder {
     ///
     /// - 명령이 등록되어 있지 않은 경우 (빌더 체인 오류 은폐 방지)
     /// - `devices` 가 빈 슬라이스인 경우
-    /// - 토큰이 카탈로그(`DeviceCapability::ALL`) 밖인 경우 (오타 loud-fail)
+    /// - 토큰이 카탈로그(`DeviceCapability::ALL`) 밖인 경우 — **release 빌드
+    ///   한정**. debug 빌드는 경고 후 수용한다(Dev Tier — 프로토타이핑.
+    ///   릴리스 벽은 doctor `codegen.device_catalog` 검사와 이중)
     /// - 같은 명령 내 중복 토큰
     pub fn command_devices(
         mut self,
@@ -37,6 +39,19 @@ impl PackageBuilder {
         }
         for (index, capability) in devices.iter().enumerate() {
             if !crate::device_capabilities::DeviceCapability::is_valid(capability.as_str()) {
+                // Dev Tier C절 — debug 빌드는 프로토타이핑을 위해 경고 후 수용,
+                // release 빌드는 패닉(계약 벽). 릴리스 벽은 doctor
+                // codegen.device_catalog 검사와 이중으로 유지된다.
+                #[cfg(debug_assertions)]
+                {
+                    eprintln!(
+                        "rustra: command_devices('{name}'): device capability '{}' is outside the \
+                         DeviceCapability::ALL catalog — accepted in debug builds only (release \
+                         builds panic; rustra doctor reports it)",
+                        capability.as_str()
+                    );
+                }
+                #[cfg(not(debug_assertions))]
                 panic!(
                     "command_devices('{name}'): unknown device capability '{}' — must be one of \
                      DeviceCapability::ALL",
