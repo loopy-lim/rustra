@@ -356,6 +356,17 @@ static jsi::Value decode_createItem(jsi::Runtime& rt, rc::Reader& r) {
   return std::move(resultObj);
 }
 
+static void encode_deviceDemo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(32); w.push_u8(0); // cmd_id = 32 LE
+  auto argsObj = args.asObject(rt);
+}
+
+static jsi::Value decode_deviceDemo(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "os"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  return std::move(resultObj);
+}
+
 static void encode_divide(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(10); w.push_u8(0); // cmd_id = 10 LE
   auto argsObj = args.asObject(rt);
@@ -786,6 +797,7 @@ bool encode_by_name(Runtime& rt, const std::string& name, const Value& args, rc:
   if (name == "channelDemoBytes") { encode_channelDemoBytes(rt, args, w); return true; }
   if (name == "clamp") { encode_clamp(rt, args, w); return true; }
   if (name == "createItem") { encode_createItem(rt, args, w); return true; }
+  if (name == "deviceDemo") { encode_deviceDemo(rt, args, w); return true; }
   if (name == "divide") { encode_divide(rt, args, w); return true; }
   if (name == "emitDemo") { encode_emitDemo(rt, args, w); return true; }
   if (name == "gauge") { encode_gauge(rt, args, w); return true; }
@@ -821,6 +833,7 @@ Value decode_by_name(Runtime& rt, const std::string& name, rc::Reader& r) {
   if (name == "channelDemoBytes") return decode_channelDemoBytes(rt, r);
   if (name == "clamp") return decode_clamp(rt, r);
   if (name == "createItem") return decode_createItem(rt, r);
+  if (name == "deviceDemo") return decode_deviceDemo(rt, r);
   if (name == "divide") return decode_divide(rt, r);
   if (name == "emitDemo") return decode_emitDemo(rt, r);
   if (name == "gauge") return decode_gauge(rt, r);
@@ -857,6 +870,7 @@ bool encode_by_id(Runtime& rt, uint16_t cmd_id, const Value& args, rc::Writer& w
     case 31: encode_channelDemoBytes(rt, args, w); return true;
     case 4: encode_clamp(rt, args, w); return true;
     case 8: encode_createItem(rt, args, w); return true;
+    case 32: encode_deviceDemo(rt, args, w); return true;
     case 10: encode_divide(rt, args, w); return true;
     case 11: encode_emitDemo(rt, args, w); return true;
     case 17: encode_gauge(rt, args, w); return true;
@@ -894,6 +908,7 @@ Value decode_by_id(Runtime& rt, uint16_t cmd_id, rc::Reader& r) {
     case 31: return decode_channelDemoBytes(rt, r);
     case 4: return decode_clamp(rt, r);
     case 8: return decode_createItem(rt, r);
+    case 32: return decode_deviceDemo(rt, r);
     case 10: return decode_divide(rt, r);
     case 11: return decode_emitDemo(rt, r);
     case 17: return decode_gauge(rt, r);
@@ -930,6 +945,7 @@ bool has_static_codec(const std::string& name) {
   if (name == "channelDemoBytes") return true;
   if (name == "clamp") return true;
   if (name == "createItem") return true;
+  if (name == "deviceDemo") return true;
   if (name == "divide") return true;
   if (name == "emitDemo") return true;
   if (name == "gauge") return true;
@@ -966,6 +982,7 @@ bool has_static_codec_id(uint16_t cmd_id) {
     case 31: return true;
     case 4: return true;
     case 8: return true;
+    case 32: return true;
     case 10: return true;
     case 11: return true;
     case 17: return true;
