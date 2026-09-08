@@ -2,7 +2,7 @@ import type { ComplexSchema } from './complex-codec-types.js';
 import { ComplexCodecError, DEFAULT_MAX_DEPTH } from './complex-codec-types.js';
 import { compareUtf8 } from './complex-codec-wire.js';
 import { isUnsigned, optionInner, refName } from './complex-codec-schema.js';
-import { discriminator, variantKey } from './complex-codec-variants.js';
+import { discriminator, singleEnumTag, variantKey } from './complex-codec-variants.js';
 
 /**
  * 컴파일된 complex 스키마 노드 — Rust `complex_schema_ir` 의 JS 미러.
@@ -39,7 +39,7 @@ export type CompiledNode =
 export type CompiledVariant = {
   tag: { key: string; value: unknown } | null;
   matcher:
-    | { kind: 'discriminator' }
+    | { kind: 'discriminator'; key: string; value: unknown }
     | { kind: 'singleProperty'; key: string }
     | { kind: 'constEq'; value: unknown }
     | { kind: 'enumSingle'; value: unknown }
@@ -196,11 +196,16 @@ function compileVariant(
   // O(1) 조회 — required 배열을 필드 순회마다 includes 로 훑지 않는다.
   const requiredSet = new Set(variant.required ?? []);
   // matchesVariant 순서: discriminator → 단일 프로퍼티 → const → 단일 enum →
-  // type 폴백(string/object) → never.
-  const matcher: CompiledVariant['matcher'] = tag
-    ? { kind: 'discriminator' }
-    : properties && Object.keys(properties).length === 1
-      ? { kind: 'singleProperty', key: Object.keys(properties)[0] }
+  // type 폴백(string/object) → never. 판별자는 const 프로퍼티 태그에 단일
+  // enum 프로퍼티 태그를 더한 정확 태그다 — 폴백 매처가 정확 매처 변형의
+  // 값을 선취하지 못게 한다.
+  const exactTag = tag ?? singleEnumTag(variant);
+  const singleKey =
+    properties && Object.keys(properties).length === 1 ? Object.keys(properties)[0] : null;
+  const matcher: CompiledVariant['matcher'] = exactTag
+    ? { kind: 'discriminator', key: exactTag.key, value: exactTag.value }
+    : singleKey
+      ? { kind: 'singleProperty', key: singleKey }
       : variant.const !== undefined
         ? { kind: 'constEq', value: variant.const }
         : variant.enum?.length === 1
@@ -226,11 +231,11 @@ function compileVariant(
             })),
           },
         }
-      : properties && Object.keys(properties).length === 1
+      : properties && singleKey
         ? {
             kind: 'unwrapSingle',
-            key: Object.keys(properties)[0],
-            node: compileNode(properties[Object.keys(properties)[0]], definitions, refs, depth + 1),
+            key: singleKey,
+            node: compileNode(properties[singleKey], definitions, refs, depth + 1),
           }
         : variant.const !== undefined
           ? { kind: 'constValue', value: variant.const }

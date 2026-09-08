@@ -17,6 +17,7 @@ import {
 import { collectDefinitions, postcardHelperSource } from './codegen.js';
 import { readConfigSync } from './config.js';
 import { buildCodecIr } from './codec-ir.js';
+import { cppComplexVariantPredicate } from './generate-cpp-complex-literals.js';
 import {
   generateBunEntryTs,
   generateNodeEntryTs,
@@ -2943,5 +2944,51 @@ test('generateFromSchema names the schema file when its JSON is broken', async (
     });
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('generated C++ oneOf variants commit only on their exact inline enum tag', () => {
+  const inlineTag = (tag: string, content: import('./schema.js').JsonSchema) => ({
+    title: tag,
+    type: 'object',
+    required: ['c', 't'],
+    properties: { t: { type: 'string', enum: [tag] }, c: content },
+  });
+  const adjacentEvent = {
+    oneOf: [
+      inlineTag('Txt', { type: 'string' }),
+      inlineTag('Nums', {
+        type: 'object',
+        additionalProperties: { type: 'integer', format: 'int64' },
+      }),
+      {
+        title: 'Off',
+        type: 'object',
+        required: ['t'],
+        properties: { t: { type: 'string', enum: ['Off'] } },
+      },
+    ],
+  };
+  const result = buildCodecIr(adjacentEvent, {});
+  assert.ok(result.ok);
+  if (!result.ok) return;
+  assert.equal(result.node.kind, 'oneOf');
+  if (result.node.kind !== 'oneOf') return;
+  const cases: [string, string, 'direct' | 'property'][] = [
+    ['Nums', 'Nums', 'direct'],
+    ['Txt', 'Txt', 'direct'],
+    ['t', 'Off', 'property'],
+  ];
+  assert.deepEqual(
+    result.node.variants.map((variant) => variant.key),
+    cases.map(([key]) => key),
+  );
+  for (const [index, [key, tag, wrapper]] of cases.entries()) {
+    const variant = result.node.variants[index];
+    assert.equal(variant.wrapper, wrapper, key);
+    assert.deepEqual(variant.discriminator, { key: 't', value: tag }, key);
+    const predicate = cppComplexVariantPredicate(variant, 'value');
+    assert.match(predicate, /getProperty\(rt, "t"\)/, key);
+    assert.ok(predicate.includes(`"${tag}"`), key);
   }
 });

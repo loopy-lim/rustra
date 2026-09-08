@@ -91,8 +91,10 @@ pub(crate) struct IrField {
 /// 고정한 것. 런타임은 이 결정만 값에 적용한다.
 #[derive(Debug)]
 pub(crate) enum IrMatcher {
-    /// 판별자 일치 — `IrVariant::discriminator` 의 (필드명, 태그).
-    Discriminator,
+    /// 판별자 프로퍼티 정확 일치 — 동반한 (필드명, 태그) 가 값에 그대로
+    /// 성립할 때만 변형을 선택한다. 태그는 const 프로퍼티 아니면 단일 enum
+    /// 프로퍼티(schemars 직렬 태그)에서 온다.
+    Discriminator { key: String, tag: Value },
     /// 단일 프로퍼티 키 존재 여부.
     SingleProperty { key: String },
     /// const 값 일치.

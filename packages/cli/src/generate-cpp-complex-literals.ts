@@ -66,12 +66,12 @@ export function cppComplexNodePredicate(node: CodecIrNode, value: string): strin
 }
 
 export function cppComplexVariantPredicate(variant: ComplexVariantIr, value: string): string {
-  if (variant.wrapper === 'value') return cppComplexNodePredicate(variant.node, value);
-  if (variant.wrapper === 'property')
-    return `${value}.isObject() && ${value}.asObject(rt).hasProperty(rt, ${JSON.stringify(variant.property)})`;
-  if (variant.wrapper === 'discriminator' && variant.discriminator) {
+  if (variant.discriminator) {
     const property = `${value}.asObject(rt).getProperty(rt, ${JSON.stringify(variant.discriminator.key)})`;
     return `${value}.isObject() && ${cppLiteralPredicate(property, variant.discriminator.value)}`;
   }
+  if (variant.wrapper === 'value') return cppComplexNodePredicate(variant.node, value);
+  if (variant.wrapper === 'property')
+    return `${value}.isObject() && ${value}.asObject(rt).hasProperty(rt, ${JSON.stringify(variant.property)})`;
   return cppComplexNodePredicate(variant.node, value);
 }

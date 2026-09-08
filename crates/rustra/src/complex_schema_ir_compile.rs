@@ -237,9 +237,12 @@ impl<'a> Context<'a> {
                 .find_map(|(key, value)| value.get("const").map(|tag| (key.clone(), tag.clone())))
         });
         // matches_variant 순서: discriminator → 단일 프로퍼티 → const →
-        // 단일 enum → type 폴백(string/object) → Never.
-        let matcher = if discriminator.is_some() {
-            IrMatcher::Discriminator
+        // 단일 enum → type 폴백(string/object) → Never. 판별자는 const
+        // 프로퍼티 태그에 단일 enum 프로퍼티 태그를 더한 정확 태그다 —
+        // 폴백 매처가 정확 매처 변형의 값을 선취하지 못게 한다.
+        let exact_tag = discriminator.clone().or_else(|| single_enum_tag(properties));
+        let matcher = if let Some((key, tag)) = exact_tag {
+            IrMatcher::Discriminator { key, tag }
         } else if let Some(properties) = properties.filter(|properties| properties.len() == 1) {
             IrMatcher::SingleProperty {
                 key: properties.keys().next().unwrap().clone(),
@@ -293,4 +296,18 @@ impl<'a> Context<'a> {
             body,
         })
     }
+}
+
+/// 변형 프로퍼티 중 값이 하나뿐인 enum 태그 — schemars 직렬 태그
+/// (`{"type":"string","enum":[...]}`) 의 정확 판별자.
+fn single_enum_tag(properties: Option<&serde_json::Map<String, Value>>) -> Option<(String, Value)> {
+    let properties = properties?;
+    properties.iter().find_map(|(key, property)| {
+        let values = property.get("enum").and_then(Value::as_array)?;
+        if values.len() == 1 {
+            Some((key.clone(), values[0].clone()))
+        } else {
+            None
+        }
+    })
 }

@@ -19,3 +19,12 @@ export function discriminator(schema: ComplexSchema): { key: string; value: unkn
   }
   return null;
 }
+
+export function singleEnumTag(schema: ComplexSchema): { key: string; value: unknown } | null {
+  for (const [key, property] of Object.entries(schema.properties ?? {})) {
+    if (Array.isArray(property.enum) && property.enum.length === 1) {
+      return { key, value: property.enum[0] };
+    }
+  }
+  return null;
+}

@@ -7,6 +7,7 @@ mod buffer_invoke_tests;
 mod builder_devices_tests;
 mod builder_errors_tests;
 mod builder_platform_tests;
+mod complex_codec_adjacent_tests;
 mod complex_codec_malformed_tests;
 mod complex_into_tests;
 mod raw_invoke_tests;
