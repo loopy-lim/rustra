@@ -144,15 +144,10 @@ pub(crate) fn encode_node_ir(
 /// `IrMatcher` 를 값에 적용한다.
 fn variant_matches(variant: &IrVariant, value: &Value) -> bool {
     match &variant.matcher {
-        IrMatcher::Discriminator => {
-            let Some((key, tag)) = &variant.discriminator else {
-                return false;
-            };
-            value
-                .as_object()
-                .and_then(|object| object.get(key))
-                .is_some_and(|candidate| candidate == tag)
-        }
+        IrMatcher::Discriminator { key, tag } => value
+            .as_object()
+            .and_then(|object| object.get(key))
+            .is_some_and(|candidate| candidate == tag),
         IrMatcher::SingleProperty { key } => value
             .as_object()
             .is_some_and(|object| object.contains_key(key)),

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import test from 'node:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,6 +17,8 @@ import {
 import { collectDefinitions, postcardHelperSource } from './codegen.js';
 import { readConfigSync } from './config.js';
 import { buildCodecIr } from './codec-ir.js';
+import type { CodecIrVariant } from './codec-ir.js';
+import { cppComplexVariantPredicate } from './generate-cpp-complex-literals.js';
 import {
   generateBunEntryTs,
   generateNodeEntryTs,
@@ -1738,6 +1740,10 @@ test('init scaffold has a real shared package and executable codegen bin', () =>
   assert.match(files.packageJson, /"packageManager": "bun@1\.4\.0"/);
   assert.match(files.libRs, /pub fn package\(\) -> Package/);
   assert.match(files.generateRs, /rustra_app::package\(\)\.generate_typescript\(\)/);
+  // 스타 스캔폴드 계약: schema.json 만 기록(TS 표면은 rustra codegen 소관) + 발행된
+  // rustra 에 존재하는 API만 사용(write_schema_to_dir 는 미발행 — 온보딩 게이트 red 사례).
+  assert.match(files.generateRs, /schema\.json/);
+  assert.doesNotMatch(files.generateRs, /write_schema_to_dir|write_to_dir/);
   assert.match(files.mainRs, /__rustra_contract/);
   assert.match(files.appTs, /generated\/node\.js/);
   assert.doesNotMatch(files.generateRs, /see src\/main\.rs/);
@@ -2008,23 +2014,80 @@ test('React Native Cargo target inference never substitutes a different requeste
   );
 });
 
+/** RN 어댑터 설치 픽스처 — native 소스 5파일 + 버전 매니페스트를 root 에 심는다. */
+function seedReactNativeAdapter(root: string, version: string): void {
+  const packageRoot = join(root, 'node_modules', '@rustra', 'react-native');
+  mkdirSync(join(packageRoot, 'native'), { recursive: true });
+  writeFileSync(
+    join(packageRoot, 'package.json'),
+    JSON.stringify({ name: '@rustra/react-native', version }),
+  );
+  for (const file of [
+    'android/rustra-jsi-jni.cpp',
+    'cpp/RustraJSIBridge.cpp',
+    'cpp/RustraJSIBridge.hpp',
+    'cpp/rustra-codec.hpp',
+    'ios/RustraJSIModule.mm',
+  ]) {
+    const target = join(packageRoot, 'native', file);
+    mkdirSync(join(target, '..'), { recursive: true });
+    writeFileSync(target, `${version} adapter fixture`);
+  }
+}
+
 test('React Native scaffold is Expo-independent and collision-resistant', () => {
-  const files = renderReactNativeModule({
-    appRoot: '/app',
-    moduleDir: '/app/modules/rustra-bridge',
-    cppOutputPath: '/app/modules/rustra-bridge/generated',
-    rustManifestPath: '/workspace/Cargo.toml',
-    rustPackage: 'my-rust-app',
-    rustLibrary: 'my_rust_app',
-    adapterRange: '^0.3.0',
-  });
-  assert.equal(JSON.parse(files['package.json']!).name, '@rustra/generated-react-native');
-  assert.match(files['react-native.config.js']!, /dev\.rustra\.bridge\.RustraBridgePackage/);
-  assert.match(files['src/index.ts']!, /NativeModules\.RustraBridge/);
-  assert.ok(!Object.keys(files).some((name) => name.includes('expo')));
-  assert.ok(!Object.values(files).some((content) => content.includes('expo-modules-core')));
-  assert.match(files['RustraBridge.podspec']!, /RustraBridge/);
-  assert.match(files['android/CMakeLists.txt']!, /rustra_bridge/);
+  const root = mkdtempSync(join(tmpdir(), 'rustra-rn-expo-independent-'));
+  try {
+    seedReactNativeAdapter(root, '0.3.0');
+    const files = renderReactNativeModule({
+      appRoot: root,
+      moduleDir: join(root, 'modules', 'rustra-bridge'),
+      cppOutputPath: join(root, 'modules', 'rustra-bridge', 'generated'),
+      rustManifestPath: '/workspace/Cargo.toml',
+      rustPackage: 'my-rust-app',
+      rustLibrary: 'my_rust_app',
+      adapterRange: '^0.3.0',
+    });
+    assert.equal(JSON.parse(files['package.json']!).name, '@rustra/generated-react-native');
+    assert.match(files['react-native.config.js']!, /dev\.rustra\.bridge\.RustraBridgePackage/);
+    assert.match(files['src/index.ts']!, /NativeModules\.RustraBridge/);
+    assert.ok(!Object.keys(files).some((name) => name.includes('expo')));
+    assert.ok(!Object.values(files).some((content) => content.includes('expo-modules-core')));
+    assert.match(files['RustraBridge.podspec']!, /RustraBridge/);
+    assert.match(files['android/CMakeLists.txt']!, /rustra_bridge/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('React Native scaffold loud-fails when the adapter is not installed', () => {
+  // 감사 A11 — 미설치(경로 자체가 없음)가 조용히 기본 경로 폴백하면 생성된
+  // podspec/gradle 이 존재하지 않는 경로를 가리키고 첫 loud 실패는 pod install
+  // 시점으로 미뤄진다. codegen 시점에 bun install 안내로 실패해야 한다.
+  const root = mkdtempSync(join(tmpdir(), 'rustra-rn-uninstalled-'));
+  try {
+    assert.throws(
+      () =>
+        renderReactNativeModule({
+          appRoot: root,
+          moduleDir: join(root, 'modules', 'rustra-bridge'),
+          cppOutputPath: join(root, 'modules', 'rustra-bridge', 'generated'),
+          rustManifestPath: join(root, 'Cargo.toml'),
+          rustPackage: 'uninstalled',
+          rustLibrary: 'uninstalled',
+          adapterRange: '^0.4.0',
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /@rustra\/react-native adapter not installed/);
+        assert.match(error.message, /bun install/);
+        assert.match(error.message, /node_modules\/@rustra\/react-native\/native/);
+        return true;
+      },
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('React Native scaffold resolves a hoisted adapter with native sources', () => {
@@ -2166,21 +2229,25 @@ test('React Native scaffold reports when only a stale complete adapter is instal
   }
 });
 
-test('React Native scaffold keeps calculator-only ABI behind the fixture flag', () => {
-  const base = {
-    appRoot: '/app',
-    moduleDir: '/app/modules/rustra-bridge',
-    cppOutputPath: '/app/modules/rustra-bridge/generated',
-    rustManifestPath: '/workspace/Cargo.toml',
-    rustPackage: 'calculator',
-    rustLibrary: 'calculator',
-    adapterRange: '^0.3.0',
-  };
-  const production = renderReactNativeModule(base);
-  const fixture = renderReactNativeModule({ ...base, legacyBenchmarks: true });
-  assert.doesNotMatch(production['RustraBridge.podspec']!, /RUSTRA_ENABLE_LEGACY_BENCHMARKS/);
-  assert.match(fixture['RustraBridge.podspec']!, /RUSTRA_ENABLE_LEGACY_BENCHMARKS/);
-  assert.match(fixture['android/build.gradle']!, /RUSTRA_LEGACY_BENCHMARKS=ON/);
+test('React Native scaffold no longer carries the legacy benchmark flag', () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-rn-legacy-flag-'));
+  try {
+    seedReactNativeAdapter(root, '0.3.0');
+    const output = renderReactNativeModule({
+      appRoot: root,
+      moduleDir: join(root, 'modules', 'rustra-bridge'),
+      cppOutputPath: join(root, 'modules', 'rustra-bridge', 'generated'),
+      rustManifestPath: '/workspace/Cargo.toml',
+      rustPackage: 'calculator',
+      rustLibrary: 'calculator',
+      adapterRange: '^0.3.0',
+    });
+    const joined = Object.values(output).join('\n');
+    assert.doesNotMatch(joined, /RUSTRA_ENABLE_LEGACY_BENCHMARKS/);
+    assert.doesNotMatch(joined, /RUSTRA_LEGACY_BENCHMARKS/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('generateEventsTs emits payload types, name union, and subscribe helper', async () => {
@@ -2214,6 +2281,389 @@ test('generateEventsTs returns empty string without events (backcompat)', async 
     typeof generateEventsTs
   >[0];
   assert.equal(generateEventsTs(schema), '');
+});
+
+// ── 커맨드별 타입화 에러 (errors.ts 렌더러) ──────────────────
+
+/** divide가 도메인 에러 2종(설명 있/없 + retryable 혼합)을 선언한 최소 스키마. */
+const typedErrorSchema: PackageSchema = {
+  packageId: 'example.math',
+  commands: [
+    {
+      name: 'divide',
+      commandId: 1,
+      inputType: 'DivideInput',
+      outputType: 'DivideOutput',
+      inputSchema: {
+        type: 'object',
+        properties: { a: { type: 'integer' }, b: { type: 'integer' } },
+        required: ['a', 'b'],
+        title: 'DivideInput',
+      },
+      outputSchema: {
+        type: 'object',
+        properties: { value: { type: 'integer' } },
+        required: ['value'],
+        title: 'DivideOutput',
+      },
+      errors: [
+        { code: 'math.divide_by_zero', description: '0으로 나눌 때', retryable: false },
+        { code: 'math.overflow', retryable: true },
+      ],
+    },
+  ],
+};
+
+test('generateErrorsTs emits per-command code unions and type guards', async () => {
+  const { generateErrorsTs } = await import('./generate.js');
+  const out = generateErrorsTs(typedErrorSchema);
+  // import는 선언 커맨드가 있을 때만.
+  assert.ok(out.startsWith("import { RustraCommandError } from '@rustra/types';"));
+  // 가드의 원천이 되는 내부 코드 집합.
+  assert.ok(
+    out.includes(
+      "const divideErrorCodes: ReadonlySet<string> = new Set(['math.divide_by_zero', 'math.overflow']);",
+    ),
+  );
+  // 코드→PascalCase 키 매핑(RustraErrorCode.TransportTimeout 관례).
+  assert.ok(out.includes('export const DivideErrorCode = {'));
+  assert.ok(out.includes("MathDivideByZero: 'math.divide_by_zero',"));
+  assert.ok(out.includes("MathOverflow: 'math.overflow',"));
+  assert.ok(out.includes('} as const;'));
+  // variant JSDoc — description + retryable 메타데이터.
+  assert.ok(out.includes('/** 0으로 나눌 때 — non-retryable. */'));
+  assert.ok(out.includes('/** retryable. */'), 'description 없는 variant는 retryable만');
+  // 타입 표면 — 리터럴 유니언 + RustraCommandError 교차.
+  assert.ok(
+    out.includes(
+      'export type DivideErrorCode = (typeof DivideErrorCode)[keyof typeof DivideErrorCode];',
+    ),
+  );
+  assert.ok(
+    out.includes(
+      'export type DivideError = RustraCommandError & { readonly code: DivideErrorCode };',
+    ),
+  );
+  // 가드 — instanceof + Set.has.
+  assert.ok(out.includes('export function isDivideError(error: unknown): error is DivideError {'));
+  assert.ok(
+    out.includes('return error instanceof RustraCommandError && divideErrorCodes.has(error.code);'),
+  );
+});
+
+test('generateErrorsTs guard JSDoc declares the open runtime contract', async () => {
+  const { generateErrorsTs } = await import('./generate.js');
+  const out = generateErrorsTs(typedErrorSchema);
+  // 미선언 코드는 false + 폴백 안내(설계 E-3 — 런타임 개방 계약, 타입 폐쇄 유니언).
+  assert.match(out, /미선언 코드.*false/su);
+  assert.match(out, /err\.code 문자열 분기/u);
+});
+
+test('generateErrorsTs returns empty string without declarations (backcompat)', async () => {
+  const { generateErrorsTs } = await import('./generate.js');
+  assert.equal(generateErrorsTs(simpleSchema), '');
+  // 선언/미선언 커맨드 혼합 — 선언된 커맨드만 가드를 받는다.
+  const mixed: PackageSchema = {
+    ...typedErrorSchema,
+    commands: [typedErrorSchema.commands[0]!, { ...simpleSchema.commands[0]!, commandId: 2 }],
+  };
+  const out = generateErrorsTs(mixed);
+  assert.ok(out.includes('export function isDivideError'));
+  assert.ok(!out.includes('isAddError'), '미선언 커맨드에는 가드가 없다');
+});
+
+test('errors declarations leave commands.ts/types.ts bytes unchanged', async () => {
+  const { generateErrorsTs } = await import('./generate.js');
+  const withoutErrors: PackageSchema = {
+    ...typedErrorSchema,
+    commands: [{ ...typedErrorSchema.commands[0]!, errors: undefined }],
+  };
+  // 에러 표면은 errors.ts로만 흘러간다 — 기존 렌더러 출력은 바이트 불변.
+  assert.equal(generateCommandsTs(typedErrorSchema), generateCommandsTs(withoutErrors));
+  assert.equal(generateTypesTs(typedErrorSchema), generateTypesTs(withoutErrors));
+  assert.notEqual(generateErrorsTs(typedErrorSchema), '');
+  assert.equal(generateErrorsTs(withoutErrors), '');
+});
+
+test('generateErrorsTs fails loud on PascalCase key collision', async () => {
+  const { generateErrorsTs } = await import('./generate.js');
+  const colliding: PackageSchema = {
+    ...typedErrorSchema,
+    commands: [
+      {
+        ...typedErrorSchema.commands[0]!,
+        // 패턴은 둘 다 유효하지만 구분자 위치 차이가 같은 키로 수렴한다
+        // ('MathOverflow2'). 혼합 대소문자 코드(math.divideByZero)는 패턴
+        // 위반으로 아래 invalid token 테스트가 잡는다.
+        errors: [{ code: 'math.overflow_2' }, { code: 'math.overflow2' }],
+      },
+    ],
+  };
+  assert.throws(() => generateErrorsTs(colliding), /MathOverflow2/u);
+});
+
+test('generateErrorsTs fails loud on command symbol collision', async () => {
+  const { generateErrorsTs } = await import('./generate.js');
+  // 'divide'와 'Divide'는 다른 명령이지만 같은 Divide 심볼로 수렴한다.
+  const colliding: PackageSchema = {
+    ...typedErrorSchema,
+    commands: [
+      typedErrorSchema.commands[0]!,
+      { ...typedErrorSchema.commands[0]!, name: 'Divide', commandId: 2 },
+    ],
+  };
+  assert.throws(() => generateErrorsTs(colliding), /DivideErrorCode/u);
+});
+
+test('generateErrorsTs fails loud on invalid error code tokens', async () => {
+  const { generateErrorsTs } = await import('./generate.js');
+  // Rust 빌더가 이미 거부하는 패턴(^[a-z][a-z0-9_.]*$) — 손으로 편집한
+  // schema.json이 같은 위반(대문자/슬래시)을 코드젠까지 흘려보내면 여기서 막는다.
+  for (const bad of ['Math/Divide', 'math.divideByZero']) {
+    const colliding: PackageSchema = {
+      ...typedErrorSchema,
+      commands: [{ ...typedErrorSchema.commands[0]!, errors: [{ code: bad }] }],
+    };
+    assert.throws(() => generateErrorsTs(colliding), new RegExp(bad.replace('/', '\\/')));
+  }
+});
+
+test('generateFromSchema writes errors.ts only when declared', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-errors-codegen-'));
+  try {
+    const schemaPath = join(root, 'schema.json');
+    writeFileSync(schemaPath, JSON.stringify(typedErrorSchema));
+    const written = await generateFromSchema(schemaPath, join(root, 'out'));
+    assert.ok(written.includes('errors.ts'), `errors.ts must be written: ${written.join(', ')}`);
+    const onDisk = readFileSync(join(root, 'out', 'errors.ts'), 'utf-8');
+    assert.match(onDisk, /Stage: {2}schema → ts error renderer/u);
+    assert.match(onDisk, /export function isDivideError/u);
+
+    // 선언 없는 스키마는 errors.ts를 만들지 않는다 — 기존 파일 배터리 불변.
+    const plainPath = join(root, 'plain.json');
+    writeFileSync(plainPath, JSON.stringify(simpleSchema));
+    const plainWritten = await generateFromSchema(plainPath, join(root, 'out-plain'));
+    assert.ok(!plainWritten.includes('errors.ts'));
+    assert.ok(!existsSync(join(root, 'out-plain', 'errors.ts')));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── 디바이스 역량 선언 (devices.ts 렌더러) ──────────────────
+
+/**
+ * scan_tags·read_barcode가 역량을 선언한 최소 스키마 — 토큰은 카탈로그 역순으로
+ * 섞어 카탈로그 순 정렬과 교차 커맨드 유니언 합집합을 함께 검증한다.
+ */
+const deviceSchema: PackageSchema = {
+  packageId: 'example.scanner',
+  // Rust DeviceCapability::ALL 카탈로그가 schema.json deviceCapabilities로
+  // 기록된다 — 렌더러의 단일 소스(수동 미러 폐지, Dev Tier B절).
+  deviceCapabilities: [
+    'camera',
+    'microphone',
+    'geolocation',
+    'notifications',
+    'clipboard-read',
+    'clipboard-write',
+    'wifi',
+    'bluetooth',
+    'battery',
+    'nfc',
+    'biometric',
+    'haptics',
+    'flashlight',
+    'contacts',
+    'calendar',
+    'photo-library',
+    'motion',
+    'usb',
+    'serial',
+    'network-state',
+    'screen-brightness',
+  ],
+  commands: [
+    {
+      name: 'scan_tags',
+      commandId: 1,
+      inputType: 'ScanInput',
+      outputType: 'ScanOutput',
+      inputSchema: {
+        type: 'object',
+        properties: { tags: { type: 'array', items: { type: 'string' } } },
+        required: ['tags'],
+        title: 'ScanInput',
+      },
+      outputSchema: {
+        type: 'object',
+        properties: { count: { type: 'integer' } },
+        required: ['count'],
+        title: 'ScanOutput',
+      },
+      devices: ['bluetooth', 'camera'],
+    },
+    {
+      name: 'read_barcode',
+      commandId: 2,
+      inputType: 'BarcodeInput',
+      outputType: 'BarcodeOutput',
+      inputSchema: {
+        type: 'object',
+        properties: { image: { type: 'string' } },
+        required: ['image'],
+        title: 'BarcodeInput',
+      },
+      outputSchema: {
+        type: 'object',
+        properties: { text: { type: 'string' } },
+        required: ['text'],
+        title: 'BarcodeOutput',
+      },
+      devices: ['wifi', 'camera'],
+    },
+  ],
+};
+
+test('generateDevicesTs emits package union and per-command constants', async () => {
+  const { generateDevicesTs } = await import('./generate.js');
+  const out = generateDevicesTs(deviceSchema);
+  // 패키지 유니언 — 선언은 bluetooth 먼저지만 카탈로그 순(camera, wifi, bluetooth).
+  assert.ok(
+    out.includes("export type RustraDeviceCapability = 'camera' | 'wifi' | 'bluetooth';"),
+    out,
+  );
+  // 커맨드 상수 — commandFunctionName('scan_tags') → scanTags → SCAN_TAGS_DEVICES.
+  assert.ok(
+    out.includes(
+      "export const SCAN_TAGS_DEVICES: readonly RustraDeviceCapability[] = ['camera', 'bluetooth'];",
+    ),
+  );
+  assert.ok(
+    out.includes(
+      "export const READ_BARCODE_DEVICES: readonly RustraDeviceCapability[] = ['camera', 'wifi'];",
+    ),
+  );
+  // JSDoc 안내 — Rust 선언 기준 + getDeviceStatus 사전 조회.
+  assert.match(out, /scanTags 가 전제하는/u);
+  assert.match(out, /Rust 선언 기준 — getDeviceStatus\(토큰\)로 사전 조회/u);
+});
+
+test('generateDevicesTs returns empty string without declarations (backcompat)', async () => {
+  const { generateDevicesTs } = await import('./generate.js');
+  assert.equal(generateDevicesTs(simpleSchema), '');
+  // 선언/미선언 커맨드 혼합 — 선언된 커맨드만 상수를 받고 유니언도 그 토큰만.
+  const mixed: PackageSchema = {
+    ...deviceSchema,
+    commands: [deviceSchema.commands[0]!, { ...simpleSchema.commands[0]!, commandId: 3 }],
+  };
+  const out = generateDevicesTs(mixed);
+  assert.ok(out.includes('SCAN_TAGS_DEVICES'));
+  assert.ok(!out.includes('ADD_DEVICES'), '미선언 커맨드에는 상수가 없다');
+  assert.ok(!out.includes("'wifi'"), '선언 커맨드의 토큰만 유니언에 들어간다');
+});
+
+test('device declarations leave commands.ts/types.ts/errors.ts bytes unchanged', async () => {
+  const { generateDevicesTs, generateErrorsTs } = await import('./generate.js');
+  const withBoth: PackageSchema = {
+    ...deviceSchema,
+    commands: [
+      { ...deviceSchema.commands[0]!, errors: typedErrorSchema.commands[0]!.errors },
+      deviceSchema.commands[1]!,
+    ],
+  };
+  const withoutDevices: PackageSchema = {
+    ...withBoth,
+    commands: [
+      { ...withBoth.commands[0]!, devices: undefined },
+      { ...withBoth.commands[1]!, devices: undefined },
+    ],
+  };
+  // 디바이스 표면은 devices.ts로만 흘러간다 — 기존 렌더러 출력은 바이트 불변.
+  assert.equal(generateCommandsTs(withBoth), generateCommandsTs(withoutDevices));
+  assert.equal(generateTypesTs(withBoth), generateTypesTs(withoutDevices));
+  assert.notEqual(generateErrorsTs(withBoth), '');
+  assert.equal(generateErrorsTs(withBoth), generateErrorsTs(withoutDevices));
+  assert.notEqual(generateDevicesTs(withBoth), '');
+  assert.equal(generateDevicesTs(withoutDevices), '');
+});
+
+test('generateDevicesTs renders out-of-catalog tokens with a dev marker', async () => {
+  const { generateDevicesTs } = await import('./generate.js');
+  // debug 빌드(Rust)가 수용한 카탈로그 밖 토큰 — throw 대신 렌더 대상.
+  // 정렬: 카탈로그 순(known) 뒤 미지 토큰 알파벳순 — 선언 순서와 무관하게 결정적.
+  const dev: PackageSchema = {
+    ...deviceSchema,
+    commands: [
+      {
+        ...deviceSchema.commands[0]!,
+        devices: ['bluetooth', 'nfc-legacy-reader', 'alpha-hw'],
+      },
+    ],
+  };
+  const out = generateDevicesTs(dev);
+  assert.ok(
+    out.includes(
+      "export type RustraDeviceCapability = 'bluetooth' | 'alpha-hw' | 'nfc-legacy-reader';",
+    ),
+    out,
+  );
+  assert.ok(
+    out.includes(
+      "export const SCAN_TAGS_DEVICES: readonly RustraDeviceCapability[] = ['bluetooth', 'alpha-hw', 'nfc-legacy-reader'];",
+    ),
+    out,
+  );
+  // 마커 주석 — 미지 토큰 목록 + doctor 릴리스 벽 안내.
+  assert.match(out, /카탈로그 밖 토큰 2개/u);
+  assert.match(out, /'alpha-hw', 'nfc-legacy-reader'/u);
+  assert.match(out, /codegen\.device_catalog/u);
+});
+
+test('generateDevicesTs throws when declared devices lack the schema catalog', async () => {
+  const { generateDevicesTs } = await import('./generate.js');
+  // 구버전 rustra 스키마(카탈로그 필드 없음) + 선언 — fail-closed 재생성 안내.
+  const legacy: PackageSchema = { ...deviceSchema, deviceCapabilities: undefined };
+  assert.throws(
+    () => generateDevicesTs(legacy),
+    (error: unknown) => error instanceof Error && error.message.includes('deviceCapabilities'),
+    'legacy schema without the catalog must fail loud',
+  );
+});
+
+test('generateDevicesTs fails loud on command symbol collision', async () => {
+  const { generateDevicesTs } = await import('./generate.js');
+  // 'scan_tags'와 'scanTags'는 다른 명령이지만 같은 SCAN_TAGS 상수로 수렴한다.
+  const colliding: PackageSchema = {
+    ...deviceSchema,
+    commands: [
+      deviceSchema.commands[0]!,
+      { ...deviceSchema.commands[0]!, name: 'scanTags', commandId: 3 },
+    ],
+  };
+  assert.throws(() => generateDevicesTs(colliding), /SCAN_TAGS_DEVICES/u);
+});
+
+test('generateFromSchema writes devices.ts only when declared', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-devices-codegen-'));
+  try {
+    const schemaPath = join(root, 'schema.json');
+    writeFileSync(schemaPath, JSON.stringify(deviceSchema));
+    const written = await generateFromSchema(schemaPath, join(root, 'out'));
+    assert.ok(written.includes('devices.ts'), `devices.ts must be written: ${written.join(', ')}`);
+    const onDisk = readFileSync(join(root, 'out', 'devices.ts'), 'utf-8');
+    assert.match(onDisk, /Stage: {2}schema → ts device renderer/u);
+    assert.match(onDisk, /export const SCAN_TAGS_DEVICES/u);
+
+    // 선언 없는 스키마는 devices.ts를 만들지 않는다 — 기존 파일 배터리 불변.
+    const plainPath = join(root, 'plain.json');
+    writeFileSync(plainPath, JSON.stringify(simpleSchema));
+    const plainWritten = await generateFromSchema(plainPath, join(root, 'out-plain'));
+    assert.ok(!plainWritten.includes('devices.ts'));
+    assert.ok(!existsSync(join(root, 'out-plain', 'devices.ts')));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 // ── 64-bit varint/zigzag runtime helpers (postcardHelperSource) ────────────
@@ -2495,5 +2945,51 @@ test('generateFromSchema names the schema file when its JSON is broken', async (
     });
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('generated C++ oneOf variants commit only on their exact inline enum tag', () => {
+  const inlineTag = (tag: string, content: import('./schema.js').JsonSchema) => ({
+    title: tag,
+    type: 'object',
+    required: ['c', 't'],
+    properties: { t: { type: 'string', enum: [tag] }, c: content },
+  });
+  const adjacentEvent: import('./schema.js').JsonSchema = {
+    oneOf: [
+      inlineTag('Txt', { type: 'string' }),
+      inlineTag('Nums', {
+        type: 'object',
+        additionalProperties: { type: 'integer', format: 'int64' },
+      }),
+      {
+        title: 'Off',
+        type: 'object',
+        required: ['t'],
+        properties: { t: { type: 'string', enum: ['Off'] } },
+      },
+    ],
+  };
+  const result = buildCodecIr(adjacentEvent, {});
+  assert.ok(result.ok);
+  if (!result.ok) return;
+  assert.equal(result.node.kind, 'oneOf');
+  if (result.node.kind !== 'oneOf') return;
+  const cases: [string, string, 'direct' | 'property'][] = [
+    ['Nums', 'Nums', 'direct'],
+    ['Txt', 'Txt', 'direct'],
+    ['t', 'Off', 'property'],
+  ];
+  assert.deepEqual(
+    result.node.variants.map((variant) => variant.key),
+    cases.map(([key]) => key),
+  );
+  for (const [index, [key, tag, wrapper]] of cases.entries()) {
+    const variant: CodecIrVariant = result.node.variants[index];
+    assert.equal(variant.wrapper, wrapper, key);
+    assert.deepEqual(variant.discriminator, { key: 't', value: tag }, key);
+    const predicate = cppComplexVariantPredicate(variant, 'value');
+    assert.match(predicate, /getProperty\(rt, "t"\)/, key);
+    assert.ok(predicate.includes(`"${tag}"`), key);
   }
 });

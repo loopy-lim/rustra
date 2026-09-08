@@ -17,7 +17,7 @@ Pod::Spec.new do |s|
   s.source = { :path => '.' }
   s.static_framework = true
 
-  adapter_root = File.expand_path('../../../../node_modules/@rustra/react-native/native', __dir__)
+  adapter_root = File.expand_path('../../node_modules/@rustra/react-native/native', __dir__)
   generated_root = File.expand_path('generated', __dir__)
   rust_archive = 'ios/rust/lib/librustra_calculator_example.a'
 
@@ -31,7 +31,6 @@ Pod::Spec.new do |s|
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
     'HEADER_SEARCH_PATHS' => "$(inherited) #{adapter_root}/cpp #{adapter_root}/ios #{generated_root}",
-    'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) RUSTRA_ENABLE_LEGACY_BENCHMARKS=1',
     'OTHER_LDFLAGS' => "$(inherited) -force_load $(PODS_TARGET_SRCROOT)/#{rust_archive}",
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++20',
   }

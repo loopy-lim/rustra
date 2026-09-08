@@ -38,7 +38,9 @@ function generatePostcardCodec(
 ): string | null {
   if (!commandCodecSupported(command, definitions)) return null;
   const fnName = commandFunctionName(command.name);
-  const inType = command.inputType;
+  // unit 입력 센티넬 "()" 은 TS 타입으로 쓸 수 없다 — outType 과 동일하게 void
+  // 로 매핑한다(호출부는 undefined 를 전달, 인코더는 필드가 없어 무시한다).
+  const inType = command.inputType === '()' ? 'void' : command.inputType;
   const outType = command.outputType === '()' ? 'void' : command.outputType;
   const inResult = collectPostcardFields(command.inputSchema, definitions);
   const outResult = collectPostcardFields(command.outputSchema, definitions);

@@ -33,6 +33,9 @@ function fakeTransport(eventsByPoll: Array<Array<{ name: string; payload: unknow
     drain() {
       return Promise.resolve();
     },
+    onChannelFrame() {
+      return () => {};
+    },
   } satisfies NodeLoopTransport;
   return { transport, drains };
 }
@@ -164,6 +167,9 @@ test('subscribeEvent survives a synchronous drainEvents throw', async () => {
       },
       drain() {
         return Promise.resolve();
+      },
+      onChannelFrame() {
+        return () => {};
       },
     } satisfies NodeLoopTransport;
     const got: unknown[] = [];

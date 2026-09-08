@@ -25,7 +25,8 @@ Package::generate_typescript()
        │
        └─ rustra codegen (TS CLI) 가 schema.json 읽어 렌더링:
             types.ts, commands.ts, contract.ts, rkyv-codecs.ts,
-            rkyv-registry.ts, positional-facade.ts, 호스트 엔트리, C++ 코덱
+            rkyv-registry.ts, events.ts/errors.ts/devices.ts (선언된 경우만),
+            positional-facade.ts, 호스트 엔트리, C++ 코덱
             + .rustra-generated.json (신선도 사이드카)
 ```
 

@@ -6,6 +6,64 @@ Rustra connects Rust commands to native code, so it cannot remove every environm
 
 This document is based on the behavior of the current checkout without version changes. Because the CLI, JS packages, and Rust crate have independent version ranges, actual compatibility must be confirmed against the project's lockfile together with the generated manifest.
 
+## Running the CLI — three standard forms
+
+| Form                                                 | When                                                  |
+| ---------------------------------------------------- | ----------------------------------------------------- |
+| `bunx --bun @rustra/cli <cmd>`                       | recommended one-off form (no install, pinned by bunx) |
+| `bun add -d @rustra/cli` + `bunx --bun rustra <cmd>` | projects running CLI commands as package scripts      |
+| `bun i -g @rustra/cli` + `rustra <cmd>`              | rarely — only for machines that need a global binary  |
+
+`rustra init` scaffolds package scripts (`bun run doctor`, `bun run codegen`, …)
+that use the dependency form; CI and docs examples use the `bunx` form. All
+commands accept `--config rustra.json` explicitly.
+
+## Starting without Rust: the mock engine
+
+The UI does not have to wait for a native build. `@rustra/testing`'s
+`createMockEngine` is a real `EngineClient` — install it once with `configure()`
+and the generated command helpers run unchanged, no Rust toolchain involved:
+
+```bash
+bun add @rustra/testing @rustra/types
+```
+
+```ts
+// src/mock.ts — import early while the UI is still under construction
+import { createMockEngine } from '@rustra/testing';
+import { configure } from '@rustra/types';
+import { addNumbers } from './generated/commands.js';
+
+const engine = createMockEngine()
+  // string form — any command name
+  .on('addNumbers', ({ a, b }) => ({ value: a + b }))
+  // typed form — resolves the name from the generated function, typos fail fast
+  .mock(addNumbers, ({ a, b }) => ({ value: a + b }))
+  // simulate failures: {code,message} becomes a structured RustraCommandError
+  .fail('secureCompute', { code: 'capability.denied', message: 'not granted in mock' });
+
+configure(engine); // installs into the global invoke
+
+const result = await addNumbers({ a: 20, b: 22 }); // 42 — no Rust involved
+engine.calls(); // [{ command: 'addNumbers', args: { a: 20, b: 22 } }]
+```
+
+The mock also covers the non-happy paths:
+
+- `createMockEngine({ delayMs: 50 })` or `.delay('addNumbers', 50)` — latency for
+  cancellation/loading-state tests (an aborted `signal` rejects with the same
+  `CancelledError` contract as the real adapters).
+- `.emit('progress.tick', payload)` + `engine.subscribeEvent(name, cb)` — drive
+  event-driven UIs and inspect the emitted history with `.events()`.
+- `.reset()` between test cases; `.calls()` records every invoke for order and
+  argument assertions.
+- The package also exports contract gates (`assertContractCurrent`,
+  `expectContractCurrent`, …) that fail when `generated/` drifts from the
+  committed schema — see `packages/testing/src/contract-gate.ts`.
+
+Swap the mock for the generated host entry by removing the `configure()` call —
+nothing else in app code changes.
+
 ## First-run path
 
 A new project starts in the following order.

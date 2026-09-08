@@ -25,8 +25,38 @@ export type CommandSchema = {
   outputSchema: JsonSchema;
   /** Rust `///` command documentation, if present. */
   description?: string;
+  /**
+   * (커맨드별 타입화 에러) 이 명령이 반환할 수 있는 도메인 에러 코드 선언 —
+   * `errors.ts`(코드 리터럴 유니언 + 타입 가드) 생성에 쓰인다. 선언이 없으면
+   * 키 자체가 없다(platforms·events 관례 — 기존 계약 해시 불변).
+   */
+  errors?: CommandErrorVariantSchema[];
+  /**
+   * (디바이스 역량 계약) 이 명령이 전제하는 디바이스 역량 토큰 선언(Rust
+   * `DeviceCapability` 카탈로그의 kebab-case 토큰) — `devices.ts`(패키지 토큰
+   * 유니언 + 커맨드별 상수) 생성에 쓰인다. 선언이 없으면 키 자체가 없다
+   * (platforms·errors 관례 — 기존 계약 해시 불변).
+   */
+  devices?: string[];
   /** 명명된 타입 정의 (schemars가 생성한 $ref 대상) */
   definitions?: Record<string, JsonSchema>;
+};
+
+/**
+ * 커맨드가 반환할 수 있는 도메인 에러 코드의 선언 — schema.json 명령 항목의
+ * `errors` 배열 원소. Rust `CommandErrorVariant`(`command_errors` 빌더 /
+ * `#[command(error(...))]` 매크로)가 원천이다.
+ */
+export type CommandErrorVariantSchema = {
+  /** dot-notation 에러 코드 (예: "math.divide_by_zero") */
+  code: string;
+  /** Rust 선언 설명 — 생성 JSDoc으로 소비된다 (null 허용) */
+  description?: string | null;
+  /**
+   * 재시도 의사 여부 — JSDoc/문서 메타데이터로만 소비된다. 런타임
+   * `isRetryableCode`의 코드 기반 도출은 무변경.
+   */
+  retryable?: boolean;
 };
 
 /**
@@ -59,6 +89,12 @@ export type PackageSchema = {
    * 쓰인다. 선언이 없으면 섹션 자체가 없다(하위호환).
    */
   events?: EventSchema[];
+  /**
+   * (Dev Tier B절) Rust `DeviceCapability::ALL` 카탈로그 — 선언이 있는
+   * 패키지에 한해 기록된다. `devices.ts` 렌더러의 단일 소스(수동 미러
+   * 폐지). 선언이 없으면 섹션 자체가 없다(하위호환).
+   */
+  deviceCapabilities?: string[];
 };
 
 /**

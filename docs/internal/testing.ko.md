@@ -30,7 +30,7 @@ Compat 테스트 (전체 파이프라인 통합)
 
 ### 파일: `crates/rustra/tests/public_authoring_api_tests.rs`
 
-10개 테스트. rustra의 공개 저작 API(authoring API)를 검증한다.
+48개 테스트. rustra의 공개 저작 API(authoring API)를 검증한다.
 
 | 테스트 함수                                                     | 검증 내용                                                                                                                                                                          |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -90,26 +90,26 @@ bun run bench:complex
 
 ### 파일: `examples/calculator/ts/adapter-compat.test.ts`
 
-6개 테스트. 4개 adapter 패키지의 동작과 무결성을 검증한다.
+5개 테스트. 4개 adapter 패키지의 동작과 무결성을 검증한다.
 
 | 테스트                                                                        | 검증 내용                                                                                                |
 | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `node adapter forwards generated commands to injected Node transport`         | `createNodeEngine`이 transport의 invoke를 올바르게 호출                                                  |
 | `bun adapter forwards generated commands to injected Bun transport`           | `createBunEngine`이 transport의 invoke를 올바르게 호출                                                   |
-| `tauri adapter forwards generated commands to injected Tauri invoke`          | `createTauriEngine`이 `rustra_dispatch`로 래핑하여 invoke 호출. `RustraCommandError` 에러 변환 동작 확인 |
-| `react native adapter forwards generated commands to injected native module`  | `createReactNativeEngine`이 native module의 invoke를 올바르게 호출                                       |
+| `tauri adapter routes generated commands through rustra_dispatch`             | `createTauriEngine`이 `rustra_dispatch`로 래핑하여 invoke 호출. `RustraCommandError` 에러 변환 동작 확인 |
+| `react native adapter forwards generated commands through JSI native module`  | `createReactNativeEngine`이 native module의 invoke를 올바르게 호출                                       |
 | `adapter packages keep host-specific imports out of the shared contract path` | 4개 adapter 소스에 `@tauri-apps`, `react-native`, `@expo/`, `expo-modules`가 없는지 확인                 |
 
 공통 패턴: `createRecordingTransport()`로 호출을 기록하고, `addNumbers` generated command가 올바른 파라미터로 transport에 도달하는지 확인.
 
 ### 파일: `examples/calculator/ts/runtime-contract.test.ts`
 
-2개 테스트. host 앱들이 동일한 generated commands를 사용하는지, RN FFI 연결이 올바른지 검증한다.
+2개 테스트. host 앱들이 생성된 zero-config 엔트리를 사용하는지, RN FFI 연결이 올바른지 검증한다.
 
-| 테스트                                                                    | 검증 내용                                                                                                                                                                                                                                        |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `host apps share generated commands and differ only by adapter transport` | Node, Bun, Tauri, RN 앱이 모두 `../generated/commands.js`를 import. 각각 `createNodeEngine`, `createBunEngine`, `createTauriEngine`, `createReactNativeEngine` 사용. Tauri `main.rs`는 Rust에서 직접 `invoke` 호출하며 JS로 덧셈을 수행하지 않음 |
-| `react native runtime fixture exposes a native Rust-backed invoke module` | Swift 모듈이 `RustraCalculator` 이름으로 등록, `invokeRaw` async function 노출, `rustra_calculator_invoke` / `rustra_calculator_free_string` FFI 함수 호출. Rust lib.rs에서 FFI export 확인                                                      |
+| 테스트                                                                           | 검증 내용                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `host apps use generated zero-config entrypoints without local transport wiring` | Node, Bun, Tauri, RN 앱이 모두 생성 호스트 엔트리(`node.ts`/`bun.ts`/`tauri.ts`/`react-native.ts`)를 import하고 앱에는 엔진 연결이 없음(`createNodeEngine`, `configure` 부재). 각 엔트리가 `create*Bootstrap` 엔진을 구성. Tauri `main.rs`는 Rust에서 패키지를 등록하며 JS로 덧셈을 수행하지 않음 |
+| `react native runtime fixture exposes a native Rust-backed invoke module`        | Swift 모듈이 `RustraCalculator` 이름으로 등록, `invokeRaw` async function 노출, 코어 `rustra_ffi_invoke_json` / `rustra_ffi_free` FFI 짝으로 직결(레거시 `rustra_calculator_*` 심볼 없음). Rust lib.rs의 패키지 invoke 경로 확인                                                                  |
 
 ### 실행
 
@@ -128,10 +128,11 @@ bun run test:ts:bun
 `package.json`에 정의된 테스트 스크립트 체인:
 
 ```
-test:ts:node        → tsc --noEmit + node --test
+test:fast           → cargo check + calculator tsc + cli 유닛 (개발 루프)
+test:ts:node        → tsc + node --test
 test:ts:bun         → bun test
 test:runtime:node   → cargo build + tsc + node node-app.js
-test:runtime:bun    → cargo build + bun bun-app.ts
+test:runtime:bun    → cargo build + bun bun-ffi-app.ts
 test:adapter:tauri  → bun tauri-app.ts
 test:adapter:react-native → bun react-native-app.ts
 test:app:react-native → cd react-native-calculator && bun run typecheck
@@ -214,6 +215,6 @@ bun run test:app:react-native
 Rust 코드 변경 시 생성된 TS 클라이언트를 갱신하려면:
 
 ```bash
-cargo build
-# examples/calculator/generated/ 디렉토리에 자동 생성됨
+cargo run -p rustra-calculator-example --bin generate   # 계약 프로브: schema.json
+bun run --cwd examples/calculator codegen                # schema.json에서 TS 표면 렌더링
 ```

@@ -133,3 +133,52 @@ test('codegen text mode prints the stale runtime binary hint only when regenerat
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('codegen text mode lists written files with (unchanged)/(updated) markers like generate', async () => {
+  // 감사 A3 — codegen 은 주력 경로인데 quiet 로 목록을 삼키면 drift 표기가
+  // stale 힌트에만 의존한다. generate 와 동일한 파일 목록·표기를 출력해야 한다.
+  const root = mkdtempSync(join(tmpdir(), 'rustra-codegen-files-'));
+  const originalPath = process.env.PATH;
+  const stdout: string[] = [];
+  const restore = (() => {
+    const originalLog = console.log;
+    console.log = (line: unknown) => stdout.push(String(line));
+    return () => {
+      console.log = originalLog;
+    };
+  })();
+  try {
+    const project = seedProject(root);
+    process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+    process.env.FAKE_SCHEMA_FILE = join(root, 'schema.json');
+
+    // 1차 — 신규 생성이어도 무엇을 썼는지 목록이 나와야 한다.
+    stdout.length = 0;
+    await runCodegen(['--config', join(project, 'rustra.json')]);
+    assert.ok(
+      stdout.some((line) => /^Generated TypeScript files in /.test(line)),
+      `header line expected, got: ${JSON.stringify(stdout)}`,
+    );
+    assert.ok(
+      stdout.some((line) => /^\s+types\.ts/.test(line)),
+      `types.ts entry expected, got: ${JSON.stringify(stdout)}`,
+    );
+    assert.ok(
+      stdout.some((line) => /^\s+node\.ts/.test(line)),
+      `node.ts entry expected, got: ${JSON.stringify(stdout)}`,
+    );
+
+    // 2차 — 동일 스키마 재생성은 (unchanged) 표기로 무음 드리프트를 없앤다.
+    stdout.length = 0;
+    await runCodegen(['--config', join(project, 'rustra.json')]);
+    assert.ok(
+      stdout.some((line) => /^\s+types\.ts \(unchanged\)/.test(line)),
+      `(unchanged) marker expected, got: ${JSON.stringify(stdout)}`,
+    );
+  } finally {
+    restore();
+    delete process.env.FAKE_SCHEMA_FILE;
+    process.env.PATH = originalPath;
+    rmSync(root, { recursive: true, force: true });
+  }
+});

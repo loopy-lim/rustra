@@ -57,13 +57,17 @@ the interaction steps. macOS first; Linux Tauri is build+smoke evidence only.
 
 ```text
 - Item: 1. Tauri real WebView (R01/R02/R03 + profiled non-exposure)
-- Host:
-- OS:
-- Build:
-- SHA:
-- Date:
-- Result:
-- Evidence:
+- Host: tauri-calculator
+- OS: macOS (darwin 25.6.0) arm64
+- Build: release (tauri build)
+- SHA: 255ec1b1
+- Date: 2026-09-08
+- Result: PARTIAL — build+smoke green on the real Wry WebView
+  (`tauri runtime probe result: 42`, probe-file handshake, clean exit).
+  The R01/R02/R03 interaction steps and the profiled non-exposure check
+  still need a manual `tauri dev` session.
+- Evidence: full gate battery step 9 — `bun run test:runtime:tauri`
+  (release build 35.9s + runtime-smoke.mjs PASS)
 ```
 
 ## 2. React Native real host (event shapes, listener exceptions, resubscription)

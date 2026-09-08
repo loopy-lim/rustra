@@ -19,14 +19,17 @@
 /// 이벤트 푸시가 필요하면 [`register_with_events`] 를 대신 사용한다 —
 /// `Package::emit` 이 즉시 `app.emit("rustra://{name}", payload)` 로
 /// 전달된다(폴링 불필요).
-use crate::{Package, PackageBuilder};
+use crate::Package;
 use serde_json::{Value, json};
-use std::sync::Arc;
-use tauri::{Emitter, State};
+use tauri::State;
 
-/// rustra 이벤트 채널의 접두사. 이벤트 `name` 은 `rustra://{name}` 채널로
-/// emit 된다.
-pub const EVENT_CHANNEL_PREFIX: &str = "rustra://";
+/// 채널·이벤트 배선 — [`crate::tauri_channels`] 모듈로 분리된 항목을 기존
+/// 공개 경로(`rustra::tauri_support::*`)로 그대로 노출하기 위한 재수출이다.
+pub use crate::tauri_channels::{
+    CHANNEL_BYTES_EVENT_PREFIX, CHANNEL_EVENT_PREFIX, EVENT_CHANNEL_PREFIX,
+    create_bytes_channel_for, create_channel_for, drop_channel_for, event_channel,
+    rustra_channel_create, rustra_channel_create_bytes, rustra_channel_drop, tauri_event_sink,
+};
 
 /// Tauri의 managed state로 보관되는 rustra 패키지입니다.
 pub struct RustraState {
@@ -160,7 +163,10 @@ pub fn register<R: tauri::Runtime>(
             .manage(state)
             .invoke_handler(tauri::generate_handler![
                 rustra_dispatch,
-                rustra_dispatch_batch
+                rustra_dispatch_batch,
+                crate::tauri_channels::rustra_channel_create,
+                crate::tauri_channels::rustra_channel_create_bytes,
+                crate::tauri_channels::rustra_channel_drop
             ])
     })
 }
@@ -184,7 +190,10 @@ pub fn register_profiled<R: tauri::Runtime>(
             .invoke_handler(tauri::generate_handler![
                 rustra_dispatch,
                 rustra_dispatch_profiled,
-                rustra_dispatch_batch
+                rustra_dispatch_batch,
+                crate::tauri_channels::rustra_channel_create,
+                crate::tauri_channels::rustra_channel_create_bytes,
+                crate::tauri_channels::rustra_channel_drop
             ])
     })
 }
@@ -220,7 +229,7 @@ where
 /// Tauri `listen()` 이 채널 이름으로 필터링하므로 JS 쪽에서 이름 기반
 /// 구독이 한 번에 된다(단일 와일드카드 채널 + JS 측 필터보다 낫다).
 /// Tauri 는 채널 이름에 영숫자/`-`/`/`/`:`/`_` 만 허용하므로 그 외 문자는
-/// [`sanitize_event_name`] 규칙으로 치환한다(예: `a.b` → `a_b`).
+/// `sanitize_event_name` 규칙으로 치환한다(예: `a.b` → `a_b`).
 ///
 /// # 페이로드 형태
 ///
@@ -248,104 +257,6 @@ pub fn register_with_events<R: tauri::Runtime>(
         })
         .build();
     register(package, builder).plugin(push_plugin)
-}
-
-/// `AppHandle` 로 이벤트를 emit 하는 [`crate::events::EventSink`] 를 만든다.
-///
-/// `register_with_events` 가 내부적으로 사용하는 것과 동일한 싱크를, 호스트가
-/// 자체 setup 흐름에서 직접 설치할 때 쓸 수 있다(예: 자체 플러그인/명령에서
-/// `app.handle().clone()` 을 이미 들고 있는 경우):
-///
-/// ```rust,ignore
-/// use rustra::tauri_support::tauri_event_sink;
-///
-/// tauri::Builder::default()
-///     .setup(|app| {
-///         let package = build_my_package();
-///         package.set_event_sink(Some(tauri_event_sink(app.handle().clone())));
-///         app.manage(RustraState { package });
-///         Ok(())
-///     })
-/// ```
-///
-/// `AppHandle::emit` 은 내부적으로 스레드 안전이므로 emit 을 호출하는
-/// 어떤 스레드에서도 이 싱크를 안전하게 호출할 수 있다.
-pub fn tauri_event_sink<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> crate::events::EventSink {
-    Arc::new(move |name: &str, payload: &str| {
-        let channel = event_channel(name);
-        if let Err(error) = app.emit_str(&channel, payload.to_string()) {
-            eprintln!("rustra: tauri emit failed on channel '{channel}' (event '{name}'): {error}");
-        }
-    })
-}
-
-/// 이벤트 이름 → Tauri 채널 이름 매핑 (`rustra://{sanitized}`).
-///
-/// Tauri 가 채널 이름에 허용하는 문자는 영숫자, `-`, `/`, `:`, `_` 뿐이다.
-/// 그 외 문자(예: `.`)는 `_` 로 치환한다. 영숫자 판정은 Unicode 기준
-/// (`char::is_alphanumeric()`) 이라 한글·CJK 등 비 ASCII 이름도 그대로
-/// 보존된다(예: `진행.갱신` → `진행_갱신`).
-///
-/// # 충돌 정책 (R02)
-///
-/// 서로 다른 이름이 같은 채널로 수렴하면(`a.b` vs `a_b`) 조용한 오배선이므로,
-/// **선언된 이벤트**는 `Package::build` 시점에 거부한다 — 정규화 맵 검증은
-/// 빌더(`validate_event_channel_uniqueness`)가 담당하고, 선언 없이 emit 만
-/// 하는 이름은 등록 대상이 아니므로 검증 대상이 아니다. NFC 정규화는 하지
-/// 않는다 — 정규화 후 같아지는 이름(café의 분해형/합성형)도 다른 이름이며,
-/// 그런 이름끼리 충돌하면 마찬가지로 빌드가 거부된다. TS 구독 측
-/// `rustraEventChannel` 이 동일 알고리즘의 문자 단위 쌍생(twin)이다.
-pub fn event_channel(name: &str) -> String {
-    format!("{EVENT_CHANNEL_PREFIX}{}", sanitize_event_name(name))
-}
-
-/// Tauri 채널 이름 규칙으로 이름을 정규화한다 — 정규화 규칙의 단일 사본은
-/// 빌더 쪽([`crate::builder` 가 include 하는 `builder_events.rs`],
-/// `sanitize_event_name`)이 갖고 TS `rustraEventChannel` 과도 동일하다(R02).
-/// 여기서는 접두사 결합만 담당한다.
-fn sanitize_event_name(name: &str) -> String {
-    PackageBuilder::sanitize_event_name(name)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn event_channel_uses_per_name_rustra_namespace() {
-        assert_eq!(
-            event_channel("llm.stream-token"),
-            "rustra://llm_stream-token"
-        );
-        assert_eq!(event_channel("progress.tick"), "rustra://progress_tick");
-        assert_eq!(event_channel("plain"), "rustra://plain");
-        assert_eq!(event_channel("a:b/c-d_e"), "rustra://a:b/c-d_e");
-    }
-
-    #[test]
-    fn event_channel_sanitizes_characters_tauri_rejects() {
-        // Tauri EventName::new 은 영숫자/-,/, :, _ 외 문자를 가진 이름을
-        // 에러로 거부한다 — emit 실패(=이벤트 유실)가 되지 않게 미리 치환.
-        // (Tauri 검증이 char::is_alphanumeric() 을 쓰므로 한글 등 비ASCII
-        // 영숫자는 그대로 통과한다 — 우리 치환 규칙과 동일 기준.)
-        assert_eq!(event_channel("has space"), "rustra://has_space");
-        assert_eq!(event_channel("a.b c"), "rustra://a_b_c");
-        assert_eq!(event_channel("weird!*()"), "rustra://weird____");
-    }
-
-    #[test]
-    fn event_channel_preserves_unicode_alphanumerics_by_codepoint() {
-        // R02 — 코드포인트 순회 + Unicode 알파벳 보존. TS `rustraEventChannel`
-        // 과 공유하는 골든 테이블의 일부(twin: packages/tauri/src/index.test.ts
-        // GOLDEN_CASES, integration: examples/tauri-calculator
-        // tests/event_name_mapping.rs). 비 BMP 문자가 코드포인트 1개로 쳐지는지
-        // (surrogate 2개가 아니라) 함께 고정한다.
-        assert_eq!(event_channel("진행.갱신"), "rustra://진행_갱신");
-        assert_eq!(event_channel("a.b"), "rustra://a_b");
-        assert_eq!(event_channel("cafe\u{0301}"), "rustra://cafe_");
-        assert_eq!(event_channel("done\u{1F389}now"), "rustra://done_now");
-        assert_eq!(event_channel("n.𝕏"), "rustra://n_𝕏");
-    }
 }
 
 #[cfg(test)]

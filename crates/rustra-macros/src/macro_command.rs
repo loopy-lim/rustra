@@ -133,6 +133,117 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
+    // 플랫폼 속성 — 지원 플랫폼 cfg 조건과 Platform 상수를 파생한다. 매크로가
+    // cfg 게이팅을 소유한다: 사용자 fn 에 #[cfg] 를 직접 붙이면 속성 매크로보다
+    // 먼저 strip 돼 이 전개가 일어나지 않는다(platform 절의 문서 참고).
+    let (supported_cfg, unsupported_cfg, platform_paths, platforms_const): (
+        TokenStream2,
+        TokenStream2,
+        Vec<TokenStream2>,
+        TokenStream2,
+    ) = if let Some(platforms) = &attr.platforms {
+        let mut os_checks = Vec::new();
+        let mut paths = Vec::new();
+        for platform in platforms {
+            let (os, variant_name) = match platform.as_str() {
+                "windows" => ("windows", "Windows"),
+                "macos" => ("macos", "Macos"),
+                "linux" => ("linux", "Linux"),
+                "android" => ("android", "Android"),
+                "ios" => ("ios", "Ios"),
+                other => {
+                    return syn::Error::new_spanned(
+                        &func.sig.ident,
+                        format!(
+                            "unknown platform '{other}'; supported: windows, macos, linux, android, ios"
+                        ),
+                    )
+                    .to_compile_error()
+                    .into();
+                }
+            };
+            os_checks.push(quote! { target_os = #os });
+            // Platform variant 식별자 — quote 가 String 을 문자열 리터럴로
+            // 렌더링하지 않도록 Ident 로 변환한다.
+            let variant = Ident::new(variant_name, proc_macro2::Span::call_site());
+            paths.push(quote! { rustra::platform::Platform::#variant });
+        }
+        let platforms_ident = Ident::new(
+            &format!("__RUstra_platforms_{}", fn_name),
+            proc_macro2::Span::call_site(),
+        );
+        (
+            quote! { any(#(#os_checks),*) },
+            quote! { not(any(#(#os_checks),*)) },
+            paths.clone(),
+            quote! {
+                #[allow(non_upper_case_globals, dead_code)]
+                const #platforms_ident: Option<&'static [rustra::platform::Platform]> =
+                    Some(&[#(#paths),*]);
+            },
+        )
+    } else {
+        let platforms_ident = Ident::new(
+            &format!("__RUstra_platforms_{}", fn_name),
+            proc_macro2::Span::call_site(),
+        );
+        (
+            quote! {},
+            quote! {},
+            Vec::new(),
+            quote! {
+                #[allow(non_upper_case_globals, dead_code)]
+                const #platforms_ident: Option<&'static [rustra::platform::Platform]> = None;
+            },
+        )
+    };
+
+    // 에러 속성 — 커맨드별 도메인 에러 코드 선언. const 생성자 체인으로 상수를
+    // 구성하고 register!/build! 가 errors_meta_if 로 연결한다(capability/platforms
+    // 메타 상수 관례 — None 이면 선언 없는 명령도 체인을 그대로 통과).
+    let errors_ident = Ident::new(
+        &format!("__RUstra_errors_{}", fn_name),
+        proc_macro2::Span::call_site(),
+    );
+    let errors_const: TokenStream2 = if let Some(errors) = &attr.errors {
+        let variants = errors
+            .iter()
+            .map(|code| quote! { rustra::CommandErrorVariant::new(#code) });
+        quote! {
+            #[allow(non_upper_case_globals, dead_code)]
+            const #errors_ident: Option<&'static [rustra::CommandErrorVariant]> =
+                Some(&[#(#variants),*]);
+        }
+    } else {
+        quote! {
+            #[allow(non_upper_case_globals, dead_code)]
+            const #errors_ident: Option<&'static [rustra::CommandErrorVariant]> = None;
+        }
+    };
+
+    // 디바이스 역량 속성 — 커맨드가 전제하는 역량 토큰 선언. 카탈로그 검증은
+    // 등록 시점(command_devices)에 loud-fail 한다 — 매크로 크레이트는 카탈로그를
+    // 모르므로 토큰 목록만 상수로 싣는다(platforms/errors 메타 상수 관례).
+    let devices_ident = Ident::new(
+        &format!("__RUstra_devices_{}", fn_name),
+        proc_macro2::Span::call_site(),
+    );
+    let devices_const: TokenStream2 = if let Some(devices) = &attr.devices {
+        let capabilities = devices
+            .iter()
+            .map(|token| quote! { rustra::device_capabilities::DeviceCapability::new(#token) });
+        quote! {
+            #[allow(non_upper_case_globals, dead_code)]
+            const #devices_ident: Option<&'static [rustra::device_capabilities::DeviceCapability]> =
+                Some(&[#(#capabilities),*]);
+        }
+    } else {
+        quote! {
+            #[allow(non_upper_case_globals, dead_code)]
+            const #devices_ident: Option<&'static [rustra::device_capabilities::DeviceCapability]> = None;
+        }
+    };
+
     // (감사 #5) capability 무음 드랍 차단: capability 가 있으면 래퍼를 `unsafe fn`
     // 으로 생성한다. `unsafe fn` 아이템 타입은 `Fn` 을 구현하지 않으므로
     // `.command_fn(f)`/`.command(name, f)`/`buffer_command_fn`/`register_fn` 등
@@ -197,8 +308,33 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
+    // 미지원 플랫폼용 스텁 inner — 같은 시그니처(파라미터는 unused 허용)로
+    // platform.unavailable 을 반환한다. cfg 배타성으로 지원 플랫폼의 진짜 inner
+    // 와 정확히 하나만 컴파일된다. I/O 타입은 전 플랫폼에 존재해야 한다.
+    let mut stub_func = func.clone();
+    stub_func.sig.ident = inner_fn_name.clone();
+    stub_func.vis = syn::Visibility::Inherited;
+    stub_func.block = syn::parse_quote! {
+        {
+            Err(rustra::RustraError::platform_unavailable(
+                #command_name,
+                &[#(#platform_paths),*],
+            ))
+        }
+    };
+
+    let (real_inner, stub_inner): (TokenStream2, TokenStream2) = if attr.platforms.is_some() {
+        (
+            quote! { #[cfg(#supported_cfg)] #inner_func },
+            quote! { #[cfg(#unsupported_cfg)] #[allow(unused_variables)] #stub_func },
+        )
+    } else {
+        (quote! { #inner_func }, quote! {})
+    };
+
     let expanded = quote! {
-        #inner_func
+        #real_inner
+        #stub_inner
 
         #vis #wrapper_unsafety fn #fn_name(#outer_input_arg) -> rustra::Result<#output_type> {
             #(#state_bindings)*
@@ -206,6 +342,12 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         }
 
         #capability_const
+
+        #platforms_const
+
+        #errors_const
+
+        #devices_const
 
         #[doc(hidden)]
         fn #register_ident(__rustra_input: #input_type) -> rustra::Result<#output_type> {

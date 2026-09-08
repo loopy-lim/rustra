@@ -22,3 +22,17 @@ path = "fuzz_targets/invoke_rkyv_v2.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "invoke_complex_value"
+path = "fuzz_targets/invoke_complex_value.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "invoke_complex_serde"
+path = "fuzz_targets/invoke_complex_serde.rs"
+test = false
+doc = false
+bench = false

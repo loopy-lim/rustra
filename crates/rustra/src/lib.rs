@@ -88,6 +88,7 @@ pub use rustra_macros::build;
 /// ```
 pub use rustra_macros::command;
 
+pub use rkyv_codec::encode_rkyv_v2_error;
 /// 패키지 빌더에 `#[command]` 함수들을 등록하는 매크로입니다.
 ///
 /// ```rust
@@ -108,8 +109,6 @@ pub use rustra_macros::command;
 /// ```
 pub use rustra_macros::register;
 
-pub use rkyv_codec::encode_rkyv_v2_error;
-
 /// Proc-macro support surface — blanket-impl command type constraints. Internal;
 /// excluded from stability guarantees (see docs/versioning-policy.md).
 #[doc(hidden)]
@@ -122,6 +121,7 @@ pub mod channels;
 mod codegen;
 mod command;
 mod complex_codec;
+pub mod device_capabilities;
 mod entry;
 mod error;
 pub mod events;
@@ -131,20 +131,33 @@ mod invoke;
 mod limits;
 mod package;
 mod package_codegen;
+pub mod platform;
 pub mod prelude;
 mod registry;
 mod rkyv_codec;
 mod schema;
 pub mod state;
 #[cfg(feature = "tauri")]
+pub mod tauri_channels;
+#[cfg(feature = "tauri")]
 pub mod tauri_support;
 
 pub(crate) use command::{
     Command, build_command, generated_byte_field_name, generated_field_names,
 };
+pub(crate) use complex_codec::{
+    CompiledComplex, ComplexCodecLimits, annotate_variant_order, complex_schema_supported,
+};
 pub(crate) use package::{FrozenRegistry, RegistryState};
 pub use package::{GeneratedPackage, Package, PackageBuilder};
-
+/// caller-buffer dispatch 결과 — 바이너리 호스트(loop-stdio 등)가
+/// `invoke_rkyv_v2_into` 의 반환을 해석하기 위해 공개한다.
+pub use rkyv_codec::DirectResponse;
+pub(crate) use rkyv_codec::{
+    BinHandler, BinIntoHandler, DecodeFn, EncodeFn, RawHandler, build_rkyv_v2_decoder,
+    build_rkyv_v2_response_encoder, build_tier3_json_decoder,
+    js_postcard_codec_supported_with_defs,
+};
 pub(crate) use schemars::JsonSchema;
 pub(crate) use serde::{Serialize, de::DeserializeOwned};
 pub(crate) use serde_json::{Value, json};
@@ -154,23 +167,11 @@ pub(crate) use std::path::{Path, PathBuf};
 pub(crate) use std::sync::atomic::{AtomicBool, Ordering};
 pub(crate) use std::sync::{Arc, OnceLock, RwLock};
 
-pub(crate) use complex_codec::{
-    CompiledComplex, ComplexCodecLimits, annotate_variant_order, complex_schema_supported,
-};
-/// caller-buffer dispatch 결과 — 바이너리 호스트(loop-stdio 등)가
-/// `invoke_rkyv_v2_into` 의 반환을 해석하기 위해 공개한다.
-pub use rkyv_codec::DirectResponse;
-pub(crate) use rkyv_codec::{
-    BinHandler, BinIntoHandler, DecodeFn, EncodeFn, RawHandler, build_rkyv_v2_decoder,
-    build_rkyv_v2_response_encoder, build_tier3_json_decoder,
-    js_postcard_codec_supported_with_defs,
-};
-
 pub(crate) use codegen::{
     clear_codegen_warnings, command_function_name, contract_hash, set_codegen_command_context,
     take_codegen_warnings, ts_type_from_schema,
 };
-pub use error::{Result, RustraError};
+pub use error::{CommandErrorVariant, Result, RustraError};
 pub(crate) use schema::{command_name_from_handler, contract_type_name, schema_value};
 pub use state::{State, get_state, with_state_context};
 
@@ -188,10 +189,4 @@ pub trait BufferCommandOutput: Serialize + JsonSchema + 'static {
 }
 
 #[cfg(test)]
-mod buffer_invoke_tests;
-#[cfg(test)]
-mod complex_into_tests;
-#[cfg(test)]
-mod raw_invoke_tests;
-#[cfg(test)]
-mod runtime_registry_tests;
+mod internal_tests;

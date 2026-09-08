@@ -30,9 +30,18 @@ export type RustraJSINative = RkyvV2SchemaNative & {
   invoke(payload: ArrayBuffer): ArrayBuffer;
   onEvent?(name: string, callback: (payloadJson: string) => void): void;
   offEvent?(name: string): void;
+  /** JS 폴링 drain(CallInvoker 없는 호스트). 처리된 이벤트+채널 프레임 수 반환. */
   drainEvents?(): number;
   createChannel?(callback: (payloadJson: string) => void): number;
+  /** 바이너리 채널 — 콜백이 rkyv V2 프레임 등 임의 바이트를 받는다. */
+  createChannelBytes?(callback: (payload: ArrayBuffer | Uint8Array) => void): number;
   dropChannel?(handle: number): boolean;
+  /**
+   * C++ typed fast path(동기) — HostFunction `invokeTyped` 과 동일 계약.
+   * 동기 invoke 표면(`invokeTypedSync`) 이 이 함수를 직접 쓴다. 에러는
+   * `"code: message"` 문자열 JSError 로 던져진다(변환은 어댑터가 담당).
+   */
+  invokeTyped?(name: string, args: unknown): unknown;
 };
 
 /**

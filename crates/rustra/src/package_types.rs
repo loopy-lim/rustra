@@ -108,6 +108,11 @@ pub struct PackageBuilder {
     /// `RegistryState.schema_version` 로 이동한다.
     pub(crate) schema_version: u32,
     pub(crate) states: state::StateMap,
+    /// (플랫폼 상호운용) platform_command 으로 선언된 명령 → 지원 플랫폼.
+    /// 빌더 체인 검증(platform_impl 누락 패닉)과 Command.platforms 정규화에 쓴다.
+    pub(crate) platform_command_declarations: BTreeMap<String, Vec<crate::platform::Platform>>,
+    /// platform_impl 이 주입된 명령 이름 — build() 정합 검증용.
+    pub(crate) implemented_platform_commands: BTreeSet<String>,
 }
 
 /// TypeScript 코드 생성 결과입니다.

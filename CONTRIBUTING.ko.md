@@ -57,7 +57,8 @@ Rust 코드를 변경하면:
 cargo test --workspace
 
 # 생성된 TS 갱신 (calculator 예시)
-cargo run -p rustra-calculator-example --bin rustra-calculator-example
+cargo run -p rustra-calculator-example --bin generate   # 계약 프로브: schema.json
+bun run --cwd examples/calculator codegen                # TS 표면 렌더링
 
 # 전체 호환성 테스트
 bun run test:compat
@@ -136,10 +137,10 @@ bun run test:runtime:tauri
 
 | 파일                                                | 역할                        |
 | --------------------------------------------------- | --------------------------- |
-| `crates/rustra/tests/public_authoring_api_tests.rs` | Rust 공개 API 테스트 (10개) |
+| `crates/rustra/tests/public_authoring_api_tests.rs` | Rust 공개 API 테스트 (48개) |
 | `examples/calculator/tests/example_contract.rs`     | 종단 간 계약 테스트 (1개)   |
 | `examples/calculator/ts/generated-client.test.ts`   | TS 클라이언트 동작 (2개)    |
-| `examples/calculator/ts/adapter-compat.test.ts`     | 4개 어댑터 호환성 (6개)     |
+| `examples/calculator/ts/adapter-compat.test.ts`     | 4개 어댑터 호환성 (5개)     |
 | `examples/calculator/ts/runtime-contract.test.ts`   | 런타임 계약 (2개)           |
 
 ### 문서 동기화 게이트
@@ -207,10 +208,11 @@ bun run test:runtime:tauri
 
 ```bash
 # 재생성
-cargo run -p rustra-calculator-example --bin rustra-calculator-example
+cargo run -p rustra-calculator-example --bin generate   # 계약 프로브: schema.json
+bun run --cwd examples/calculator codegen                # TS 표면 렌더링
 
 # diff로 확인
-git diff generated/contract.ts
+git diff examples/calculator/generated/contract.ts
 ```
 
 ### command 이름이 예상과 다를 때

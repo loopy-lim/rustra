@@ -59,7 +59,8 @@ When changing Rust code:
 cargo test --workspace
 
 # Regenerate the generated TS (calculator example)
-cargo run -p rustra-calculator-example --bin rustra-calculator-example
+cargo run -p rustra-calculator-example --bin generate   # contract probe: schema.json
+bun run --cwd examples/calculator codegen                # render TS surfaces
 
 # Full compatibility test
 bun run test:compat
@@ -138,10 +139,10 @@ bun run test:runtime:tauri
 
 | File                                                | Role                         |
 | --------------------------------------------------- | ---------------------------- |
-| `crates/rustra/tests/public_authoring_api_tests.rs` | Rust public API tests (10)   |
+| `crates/rustra/tests/public_authoring_api_tests.rs` | Rust public API tests (48)   |
 | `examples/calculator/tests/example_contract.rs`     | End-to-end contract test (1) |
 | `examples/calculator/ts/generated-client.test.ts`   | TS client behavior (2)       |
-| `examples/calculator/ts/adapter-compat.test.ts`     | 4-adapter compatibility (6)  |
+| `examples/calculator/ts/adapter-compat.test.ts`     | 4-adapter compatibility (5)  |
 | `examples/calculator/ts/runtime-contract.test.ts`   | Runtime contract (2)         |
 
 ### Docs Sync Gate
@@ -208,10 +209,11 @@ Every change must satisfy the [compatibility contract](docs/compatibility-contra
 
 ```bash
 # Regenerate
-cargo run -p rustra-calculator-example --bin rustra-calculator-example
+cargo run -p rustra-calculator-example --bin generate   # contract probe: schema.json
+bun run --cwd examples/calculator codegen                # render TS surfaces
 
 # Verify with a diff
-git diff generated/contract.ts
+git diff examples/calculator/generated/contract.ts
 ```
 
 ### When a Command Name Differs from Expectations

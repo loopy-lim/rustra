@@ -3,7 +3,6 @@ export function renderGradle(options: {
   generatedFromAndroid: string;
   manifestFromModule: string;
   rustLibrary: string;
-  cmakeLegacy: string;
 }): string {
   return `import javax.inject.Inject
 import org.gradle.process.ExecOperations
@@ -39,7 +38,7 @@ android {
     targetSdk = extOr("targetSdkVersion", 36)
     externalNativeBuild.cmake {
       cppFlags "-std=c++20"
-      arguments "-DANDROID_STL=c++_shared", "-DRUSTRA_ADAPTER_ROOT=$adapterRoot", "-DRUSTRA_GENERATED_ROOT=$generatedRoot", "-DRUSTRA_LIB_NAME=${options.rustLibrary}", "-DRUSTRA_LEGACY_BENCHMARKS=${options.cmakeLegacy}"
+      arguments "-DANDROID_STL=c++_shared", "-DRUSTRA_ADAPTER_ROOT=$adapterRoot", "-DRUSTRA_GENERATED_ROOT=$generatedRoot", "-DRUSTRA_LIB_NAME=${options.rustLibrary}"
     }
     ndk { abiFilters "x86_64", "arm64-v8a" }
   }
@@ -75,9 +74,7 @@ add_library(rustra_static STATIC IMPORTED)
 set_target_properties(rustra_static PROPERTIES IMPORTED_LOCATION \${CMAKE_CURRENT_SOURCE_DIR}/src/main/cpp/libs/\${ANDROID_ABI}/lib\${RUSTRA_LIB_NAME}.a)
 add_library(rustra_bridge SHARED \${RUSTRA_ADAPTER_ROOT}/android/rustra-jsi-jni.cpp \${RUSTRA_ADAPTER_ROOT}/cpp/RustraJSIBridge.cpp \${RUSTRA_GENERATED_ROOT}/rustra-generated-codecs.cpp)
 target_include_directories(rustra_bridge PRIVATE \${RUSTRA_ADAPTER_ROOT}/cpp \${RUSTRA_GENERATED_ROOT})
-if(RUSTRA_LEGACY_BENCHMARKS)
-  target_compile_definitions(rustra_bridge PRIVATE RUSTRA_ENABLE_LEGACY_BENCHMARKS=1)
-endif()
+target_compile_definitions(rustra_bridge PRIVATE FOLLY_NO_CONFIG=1 FOLLY_HAVE_CLOCK_GETTIME=1 FOLLY_USE_LIBCPP=1 FOLLY_CFG_NO_COROUTINES=1 FOLLY_MOBILE=1 FOLLY_HAVE_RECVMMSG=1 FOLLY_HAVE_PTHREAD=1 FOLLY_HAVE_XSI_STRERROR_R=1)
 target_link_libraries(rustra_bridge PRIVATE rustra_static fbjni::fbjni ReactAndroid::jsi ReactAndroid::reactnative android log)
 `;
 }

@@ -137,9 +137,7 @@ a compile error (zero is allowed as a `()` input — see §2-2):
 - Input type: `DeserializeOwned + JsonSchema`
 - Output type: `Serialize + JsonSchema`
 
-Currently, an unsatisfied trait bound produces the standard Rust E0277 diagnostic. A
-`#[diagnostic::on_unimplemented]`-based custom message is planned but not implemented — do not
-rely on a custom error text yet.
+Currently, an unsatisfied trait bound produces the standard Rust E0277 diagnostic:
 
 ```text
 error[E0277]: the trait bound `MyType: CommandInput` is not satisfied
@@ -152,15 +150,9 @@ note: required for `MyType` to implement `CommandInput`
     (unsatisfied trait bound introduced by the blanket `impl<T> CommandInput for T`)
 ```
 
-A `#[diagnostic::on_unimplemented]` attribute on `CommandInput`/`CommandOutput` would turn this
-into a friendlier message (planned, not yet implemented):
-
-```text
-error: `MyType` cannot be used as a command parameter
-   |
-   = note: command parameters require Serialize + Deserialize + JsonSchema
-   = note: add `#[rustra::bridge_type]` to `MyType`
-```
+Roadmap: a `#[diagnostic::on_unimplemented]` attribute on `CommandInput`/`CommandOutput`
+may one day turn this into a friendlier message (e.g. suggesting `#[bridge_type]`), but
+it is not implemented — always read the E0277 text above.
 
 ---
 
@@ -330,23 +322,113 @@ let pkg = Package::builder("example.bytes")
     .build();
 ```
 
-If the schema is not exactly one required `uint8` array field, the build stage panics so
-the direct ABI is never advertised incorrectly. Input JS memory is borrowed only for the
-duration of the synchronous call, and the Rust output allocation is freed by the JSI
-`ArrayBuffer` at end of life. For the detailed contract see the
+Contract essentials (what you rely on as a user):
+
+- **Schema condition** — the command's input and output must each be exactly one
+  required `uint8` array (`Vec<u8>`) field; anything else panics at the `build()`
+  stage so the direct ABI is never advertised incorrectly.
+- **Memory ownership** — input JS memory is borrowed only for the duration of the
+  synchronous call; the Rust output allocation is copied into a JS-owned
+  `ArrayBuffer` and freed by the JSI `ArrayBuffer` at end of life (no manual
+  pointer management on the JS side).
+- The ordinary postcard/JSON command contracts are kept as well — other hosts and
+  the legacy native module keep working through the existing paths.
+
+Design rationale and the full C++/JSI boundary discussion:
 [direct byte-buffer design](plans/2026-08-24-rn-byte-buffer-native-path.md).
 
 ### Other Builder Methods
 
-| Method                                  | Role                                                                    |
-| --------------------------------------- | ----------------------------------------------------------------------- |
-| `.require_capability(name, cap)`        | Requires a capability for a command (deny-by-default Runtime Authority) |
-| `.buffer_command_fn(handler)`           | Registers the name-inferred single `Vec<u8>` direct path                |
-| `.buffer_command(name, handler)`        | Registers the explicitly named single `Vec<u8>` direct path             |
-| `.alias_command_id(command, legacy_id)` | Registers a legacy cmd_id alias (backward-compatible dispatch)          |
-| `.event_capacity(capacity)`             | Sets the event bus ring buffer capacity                                 |
-| `.schema_version(version)`              | Declares the schema negotiation version (T2, OTA)                       |
-| `.manage(state)`                        | Registers shared state (accessed via `Package::state::<T>()`)           |
+| Method                                  | Role                                                                                                                                                                                           |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.require_capability(name, cap)`        | Requires a capability for a command (deny-by-default Runtime Authority)                                                                                                                        |
+| `.platform_command::<I, O>(name, ps)`   | Declares a platform-specific command (registered on **all** platforms)                                                                                                                         |
+| `.platform_command_impl(name, handler)` | Injects the real handler on a platform the command supports                                                                                                                                    |
+| `.buffer_command_fn(handler)`           | Registers the name-inferred single `Vec<u8>` direct path                                                                                                                                       |
+| `.buffer_command(name, handler)`        | Registers the explicitly named single `Vec<u8>` direct path                                                                                                                                    |
+| `.alias_command_id(command, legacy_id)` | Registers a legacy cmd_id alias (backward-compatible dispatch)                                                                                                                                 |
+| `.event::<T>(name)`                     | Declares an event contract — payload type `T` for `name`; recorded in schema.json `events` and rendered to `generated/events.ts` (see the [events and channels guide](events-and-channels.md)) |
+| `.event_capacity(capacity)`             | Sets the event bus ring buffer capacity                                                                                                                                                        |
+| `.schema_version(version)`              | Declares the schema negotiation version (T2, OTA)                                                                                                                                              |
+| `.manage(state)`                        | Registers shared state (accessed via `State<T>` parameters and `Package::state::<T>()`)                                                                                                        |
+
+### State injection: `State<T>` parameters
+
+A `#[command]` function may take additional `State<T>` parameters besides the single
+input struct. Register the state with `.manage(state)`; the macro injects it into the
+handler via `rustra::get_state::<T>()`. Calling a command whose `State<T>` was never
+managed fails with the `internal` error `State<T> not managed in package`.
+
+```rust
+use rustra::prelude::*;
+
+#[bridge_type]
+struct QueryInput { user_id: String }
+
+#[bridge_type]
+struct QueryOutput { display_name: String }
+
+struct Db { /* your connection pool, caches, ... */ }
+
+#[command]
+fn query_user(input: QueryInput, db: State<Db>) -> Result<QueryOutput> {
+    let _db: &Db = &db.0; // State<T>(pub Arc<T>) — cheap shared handle
+    Ok(QueryOutput { display_name: input.user_id })
+}
+```
+
+```rust
+let pkg = Package::builder("app.users")
+    .command_fn(query_user)
+    .manage(Db { /* ... */ })
+    .build();
+```
+
+`State<T>` parameters are never part of the wire contract — they do not appear in
+schema.json, so adding or removing them is not a breaking change.
+
+### Platform-specific commands (`.platform_command` / `.platform_command_impl`)
+
+Platform-specific commands (Win32/AppKit calls, native window handles, ...) stay
+contract-stable across platforms. `platform_command` registers the command —
+command_id, schema.json and the contract hash — on **every** platform with a stub
+that returns `platform.unavailable`; `platform_command_impl` replaces the stub with
+the real handler on the platforms you support:
+
+```rust
+use rustra::platform::Platform;
+
+let builder = Package::builder("app.native")
+    .platform_command::<(), NativeWindowInfo>(
+        "nativeWindowInfo",
+        &[Platform::Windows, Platform::Macos],
+    );
+// Guard the real implementation so it only compiles where it exists.
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+let builder = builder.platform_command_impl("nativeWindowInfo", native_window_info_impl);
+let pkg = builder.build();
+```
+
+Contract:
+
+- The command set (ids, schema, hash) is identical on every platform — by-id
+  dispatch and cross-validation never shift.
+- Calling a stub on an unsupported platform returns `platform.unavailable`
+  (non-retryable) — distinct from `command.not_found` ("not in the contract at
+  all").
+- `build()` panics if the current platform is declared but `platform_command_impl`
+  was never called (a silent stub on a supported platform is a wiring bug), and
+  `platform_command_impl` panics if the current platform is _not_ declared
+  (misplaced `#[cfg]`).
+- `I`/`O` types must be identical in declaration and impl — the schema may not
+  differ per platform.
+- schema.json records `"platforms": [...]` on such commands; unsupported callers
+  can branch before invoking.
+
+Opaque native resources (Win32 `HANDLE`, `NSView*`, ...) follow the existing
+`ResourceHandle` pattern: the host stores the resource in the Rust-side resource
+table (`ResourceHandle`, see the channels module) and JS only ever passes the
+`u32` id. Never expose raw 64-bit pointers to JS.
 
 ### `.build()` / `.done()`
 
@@ -438,9 +520,9 @@ generated/
   ...              # codecs, positional facade, host entries
 ```
 
-> Deprecated: `.write_to_dir(dir)` also wrote `types.ts`/`commands.ts`/`contract.ts`
-> from Rust. That dual pass is the stale-file trap the single arrow removes; keep it
-> only for reference output in Node-less environments.
+> `.write_schema_to_dir(dir)` publishes only `schema.json`. The TS surfaces
+> (`types.ts` etc.) are owned by `rustra codegen` — never regenerate them from Rust.
+> The old `.write_to_dir(dir)` dual pass is deprecated for this reason.
 
 ---
 
@@ -459,14 +541,72 @@ struct DivideInput { a: i64, b: i64 }
 #[bridge_type]
 struct DivideOutput { value: i64 }
 
-#[command]
+#[command(error("math.divide_by_zero"))]
 fn divide(input: DivideInput) -> Result<DivideOutput> {
     if input.b == 0 {
-        return Err(RustraError::custom("division.by_zero", "cannot divide by zero"));
+        return Err(RustraError::custom("math.divide_by_zero", "cannot divide by zero"));
     }
     Ok(DivideOutput { value: input.a / input.b })
 }
 ```
+
+### Command-scoped Error Declarations (typed errors)
+
+String-comparing `err.code` in TypeScript works, but typos in codes compile fine and
+fail silently. Declare the domain codes a command may return, and `rustra codegen`
+turns them into a per-command literal union plus a type guard.
+
+Declare with the attribute (recommended — the declaration lives next to the handler):
+
+```rust
+#[command(error("math.divide_by_zero"))]
+fn divide(input: DivideInput) -> Result<DivideOutput> { /* … */ }
+```
+
+or with the builder chain, where you can also attach metadata (JSDoc/`retryable` —
+documentation only, it does not change wire semantics):
+
+```rust
+use rustra::CommandErrorVariant;
+
+let package = Package::builder("example.math")
+    .command_errors(
+        "divide",
+        &[CommandErrorVariant::new("math.divide_by_zero")
+            .describe("raised when the divisor is zero")],
+    )
+    // …register commands and build…
+```
+
+After `rustra codegen`, a generated `errors.ts` appears whenever at least one command
+declares errors. On the TypeScript side, catch and narrow instead of string-matching:
+
+```ts
+import { isDivideError, DivideErrorCode } from './generated/errors.js';
+
+try {
+  await divide({ a: 10, b: 0 });
+} catch (e) {
+  if (isDivideError(e) && e.code === DivideErrorCode.MathDivideByZero) {
+    // e is DivideError here — `e.code === 'math.divideBy_zero'` would not compile.
+  }
+}
+```
+
+Rules:
+
+- Codes must match `^[a-z][a-z0-9_.]*$` — the builder panics otherwise (the JSON
+  fallback path could not split such a code back out of `Display` output).
+- Declarations cover the command's **domain** codes only. Framework codes
+  (`cancelled`, `transport.timeout`, `command.invalid_args`, …) can occur on any
+  command and stay in the shared `RustraErrorCode` table — compare those directly.
+- A declaration is a contract document, not runtime validation: handlers may still
+  return undeclared codes, and the guard returns `false` for them (the runtime is an
+  open contract; the union is closed). Adding declarations changes schema.json and
+  therefore the contract hash — intended contract evolution, caught by
+  `rustra diff`.
+- The wire error frame and `RustraCommandError` are unchanged — see
+  [wire-format.md](./wire-format.md).
 
 ### Error Code Classification
 
@@ -494,6 +634,35 @@ The TypeScript-side `RustraCommandError` exposes the same value as the `.retryab
 field (on JSON paths without the flag on the wire, it is inferred from the
 `transport.*` codes). The JS-side `invoke` `options.timeoutMs` rejects with this
 `transport.timeout` (retryable) on expiry — the JS-side escape hatch from a hung native.
+
+### JS call semantics: signal, timeoutMs, invokeBatch
+
+Every generated helper accepts `InvokeOptions` as its last parameter, and
+`@rustra/types` exports the same options for raw `invoke`/`invokeBatch`:
+
+```ts
+import { invokeBatch } from '@rustra/types';
+import { addNumbers, slowCompute } from './generated/commands.js';
+
+// cancellation — AbortSignal rejects the promise immediately (`cancelled`); on
+// hosts without invokeCancel propagation this is a shallow cancel
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 100);
+await addNumbers({ a: 20, b: 22 }, { signal: controller.signal });
+
+// timeout — rejects with `transport.timeout` (retryable) after the deadline
+await slowCompute({ workload: 'heavy' }, { timeoutMs: 500 });
+
+// batch — one array, order preserved; entries without a signal can take a
+// single native crossing on the rkyv V2 engine
+const [sum, echo] = await invokeBatch([
+  { command: 'addNumbers', args: { a: 20, b: 22 } },
+  { command: 'echo', args: { message: 'hi' }, options: { timeoutMs: 1000 } },
+]);
+```
+
+Per-adapter behavior of each option (which cancellation is shallow, which batch
+takes a single crossing) is the [compatibility matrix](compatibility-matrix.md).
 
 ### Error Methods
 
@@ -532,19 +701,20 @@ fn write_output() -> Result<()> {
 
 ### Type Mapping
 
-| Rust type                        | TypeScript type                      |
-| -------------------------------- | ------------------------------------ |
-| `i64`, `i32`, `u32`, `f64`, etc. | `number`                             |
-| `String`                         | `string`                             |
-| `bool`                           | `boolean`                            |
-| `Option<T>`                      | `T \| null` (struct fields use `?:`) |
-| `Vec<T>`                         | `T[]`                                |
-| `Vec<Vec<T>>`                    | `T[][]` (nesting supported)          |
-| `HashMap<String, V>`             | `Record<string, V>`                  |
-| `BTreeSet<T>` / `HashSet<T>`     | `Set<T>` (`uniqueItems` mapping)     |
-| `(A, B, C)`                      | `[A, B, C]` (tuple)                  |
-| Simple `enum`                    | `'Variant1' \| 'Variant2'`           |
-| Data-carrying `enum`             | Object union type                    |
+| Rust type                    | TypeScript type                                               |
+| ---------------------------- | ------------------------------------------------------------- |
+| `i64`, `u64`                 | `number \| bigint` (values outside ±2^53 restore as `bigint`) |
+| `i32`, `u32`, `f64`, etc.    | `number`                                                      |
+| `String`                     | `string`                                                      |
+| `bool`                       | `boolean`                                                     |
+| `Option<T>`                  | `T \| null` (struct fields use `?:`)                          |
+| `Vec<T>`                     | `T[]`                                                         |
+| `Vec<Vec<T>>`                | `T[][]` (nesting supported)                                   |
+| `HashMap<String, V>`         | `Record<string, V>`                                           |
+| `BTreeSet<T>` / `HashSet<T>` | `Set<T>` (`uniqueItems` mapping)                              |
+| `(A, B, C)`                  | `[A, B, C]` (tuple)                                           |
+| Simple `enum`                | `'Variant1' \| 'Variant2'`                                    |
+| Data-carrying `enum`         | Object union type                                             |
 
 ### User-Defined Generic Types
 
@@ -645,7 +815,7 @@ export type AddNumbersOutput = {
 
 <!-- prettier-ignore -->
 ```typescript
-import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoBytesInput, ChannelDemoBytesOutput, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DeviceDemoOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
 import { createGeneratedFields2, invokeGenerated, invokeGeneratedBytes, invokeGeneratedFields1, invokeGeneratedFields3 } from '@rustra/types';
 import type { InvokeOptions } from '@rustra/types';
 
@@ -667,12 +837,22 @@ benchEchoString.commandId = 'benchEchoString';
 
 export const channelDemo = createGeneratedFields2<ChannelDemoInput, ChannelDemoOutput>(18, 'channelDemo', "channel", "ticks", 'channelDemo');
 
+/**
+ * 바이너리 채널 데모 — `channel_demo` 의 바이트 경로 쌍둥이. 모든 호스트 어댑터의 createBytesChannel/createChannelBytes 패리티를 동일 명령으로 e2e 검증한다(페이로드는 스텝 카운터 LE u64).
+ */
+export const channelDemoBytes = createGeneratedFields2<ChannelDemoBytesInput, ChannelDemoBytesOutput>(31, 'channelDemoBytes', "channel", "ticks", 'channelDemoBytes');
+
 export function clamp(input: ClampInput, options?: InvokeOptions): Promise<ClampOutput> {
   return invokeGeneratedFields3<ClampOutput>(4, 'clamp', input, input["max"], input["min"], input["value"], options);
 }
 clamp.commandId = 'clamp';
 
 export const createItem = createGeneratedFields2<CreateItemInput, CreateItemOutput>(8, 'createItem', "name", "value", 'createItem');
+
+export function deviceDemo(options?: InvokeOptions): Promise<DeviceDemoOutput> {
+  return invokeGenerated<DeviceDemoOutput>(32, 'deviceDemo', undefined, options);
+}
+deviceDemo.commandId = 'deviceDemo';
 
 export const divide = createGeneratedFields2<DivideInput, DivideOutput>(10, 'divide', "a", "b", 'divide');
 
@@ -699,6 +879,11 @@ export function isEven(input: IsEvenInput, options?: InvokeOptions): Promise<IsE
 isEven.commandId = 'isEven';
 
 export const multiply = createGeneratedFields2<MultiplyInput, MultiplyOutput>(2, 'multiply', "a", "b", 'multiply');
+
+export function platformNativeInfo(options?: InvokeOptions): Promise<PlatformNativeInfoOutput> {
+  return invokeGenerated<PlatformNativeInfoOutput>(30, 'platformNativeInfo', undefined, options);
+}
+platformNativeInfo.commandId = 'platformNativeInfo';
 
 export function processItem(input: ProcessItemInput, options?: InvokeOptions): Promise<ProcessItemOutput> {
   return invokeGenerated<ProcessItemOutput>(9, 'processItem', input, options);
@@ -828,6 +1013,33 @@ pkg.emit("item.created", serde_json::json!({ "id": "x1" }));
 // Attach a native sink (e.g. RN JSI drain)
 pkg.set_event_sink(Some(sink));
 let bus = pkg.event_bus(); // direct EventBus access
+```
+
+Declare typed event contracts with `.event::<T>(name)` so codegen renders
+`generated/events.ts` and the JS side subscribes type-safely. The full flow —
+declaration → generated `events.ts` → per-host `subscribeEvent`/channels — is the
+[events and channels guide](events-and-channels.md), with a working example in
+[`examples/streaming`](../examples/streaming).
+
+**Channels** — Rust → JS unicast reply streams (invocation-scoped; see
+[compatibility matrix](compatibility-matrix.md#channel-delivery-path) for
+per-host issuance):
+
+```rust
+use rustra::channels;
+
+// Reserve a handle and install a sender (host adapters do this for you —
+// this is the escape hatch for custom hosts)
+let host = channels::host();
+let handle = host.reserve_handle();
+host.register_channel_with_handle(handle, std::sync::Arc::new(move |payload: &str| {
+    // deliver `payload` to the JS side (emit, stdout frame, FFI callback, …)
+}));
+
+// A command's ChannelHandle argument sends replies back to the caller
+assert!(channels::ChannelHandle(input.channel).send(r#"{"progress": 1}"#));
+// Stale/dropped handles return false (silent-ignore contract made visible)
+host.drop_channel(handle); // later sends report false
 ```
 
 **Runtime Authority (capabilities)** — deny-by-default permissions:
@@ -982,7 +1194,7 @@ struct DivisionOutput {
 fn divide(input: DivisionInput) -> Result<DivisionOutput> {
     if input.divisor == 0 {
         return Err(RustraError::custom(
-            "division.by_zero",
+            "math.divide_by_zero",
             "cannot divide by zero",
         ));
     }

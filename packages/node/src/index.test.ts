@@ -130,10 +130,11 @@ test('createNodeEngine parses Display-style "code: message" Error message', asyn
 // ── createNodeProcessTransport — subprocess stdio 프로토콜 ──
 
 import { createNodeProcessTransport } from './index.js';
+import { nodeRuntimeCandidates, selectVerifiedRuntime } from './node-bootstrap.js';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 
 // 저장소 루트 기준 절대경로 — 테스트는 packages/node/dist 에서 실행된다.
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -199,6 +200,194 @@ test('createNodeBootstrap reports the exact runtime override when discovery fail
     else process.env.RUSTRA_NODE_BINARY = previous;
   }
 });
+
+// ── 계약 검증 기반 후보 선택(감사 A1) — stale release 함정 ──────────────────
+//
+// release→debug 순 "첫 존재 후보" 채택은 target/release 에 오래된 산출물이 남은
+// 상태(한 번이라도 --release 빌드를 돈 이후)에서 방금 debug 빌드한 사용자를
+// contract.mismatch 로 죽인다. 계약: (1) 후보는 mtime 최신 빌드 우선, (2) mismatch/
+// unenforceable 은 fatal 이 아니라 후보 기각 사유 — 다음 후보 시도, (3) 전부 기각될
+// 때만 오류, 그때 시도한 전체 경로+mtime 보고.
+
+function writeRuntimeScript(directory: string, name: string, contractHash: string): string {
+  const script = [
+    '#!/usr/bin/env node',
+    'let input = "";',
+    "process.stdin.setEncoding('utf8');",
+    "process.stdin.on('data', (chunk) => { input += chunk; });",
+    'process.stdin.on("end", () => {',
+    '  const request = JSON.parse(input);',
+    '  if (request.command === "__rustra_contract") {',
+    `    process.stdout.write(JSON.stringify({ ok: true, result: ${JSON.stringify(contractHash)} }));`,
+    '    return;',
+    '  }',
+    '  process.stdout.write(JSON.stringify({ ok: true, result: { value: 42 } }));',
+    '});',
+  ].join('\n');
+  const path = join(directory, name);
+  writeFileSync(path, script);
+  chmodSync(path, 0o755);
+  return path;
+}
+
+/** 후보 2개 픽스처 — 첫 후보가 stale release(오래된 mtime), 둘째가 최신 debug 빌드. */
+function seedStaleReleaseFixture(prefix: string): { root: string; stale: string; fresh: string } {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  const stale = join(root, 'release', 'app-runtime');
+  const fresh = join(root, 'debug', 'app-runtime');
+  mkdirSync(join(root, 'release'), { recursive: true });
+  mkdirSync(join(root, 'debug'), { recursive: true });
+  writeFileSync(stale, 'stale release artifact');
+  writeFileSync(fresh, 'fresh debug artifact');
+  const older = new Date(Date.now() - 60_000);
+  utimesSync(stale, older, older);
+  return { root, stale, fresh };
+}
+
+test('nodeRuntimeCandidates orders existing candidates newest-build-first', () => {
+  const { root, stale, fresh } = seedStaleReleaseFixture('rustra-node-candidates-');
+  const previous = process.env.RUSTRA_NODE_BINARY;
+  delete process.env.RUSTRA_NODE_BINARY;
+  try {
+    // 최신 빌드(debug) 우선 + 부재 후보 제거 — stale release 가 첫 존재 후보로
+    // 잡히는 함정이 후보 열거 단계에서부터 해소된다.
+    assert.deepEqual(
+      nodeRuntimeCandidates({
+        commandCandidates: [stale, fresh, join(root, 'missing-runtime')],
+      }),
+      [fresh, stale],
+    );
+    // 명시 지정(command/RUSTRA_NODE_BINARY)은 존재 검사·정렬 없이 단일 후보.
+    assert.deepEqual(nodeRuntimeCandidates({ command: './anywhere' }), ['./anywhere']);
+    process.env.RUSTRA_NODE_BINARY = fresh;
+    assert.deepEqual(nodeRuntimeCandidates({}), [fresh]);
+  } finally {
+    if (previous === undefined) delete process.env.RUSTRA_NODE_BINARY;
+    else process.env.RUSTRA_NODE_BINARY = previous;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('selectVerifiedRuntime treats contract mismatch as candidate rejection, not fatal', async () => {
+  const { root, stale, fresh } = seedStaleReleaseFixture('rustra-node-select-');
+  try {
+    const attempts: string[] = [];
+    const selected = await selectVerifiedRuntime([stale, fresh], async (candidate) => {
+      attempts.push(candidate);
+      if (candidate === stale)
+        throw new RustraCommandError('contract.mismatch', 'contract hash mismatch: stale');
+      return `engine@${candidate}`;
+    });
+    assert.equal(selected.value, `engine@${fresh}`);
+    assert.deepEqual(attempts, [stale, fresh], 'stale 기각 후 다음 후보를 시도한다');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('selectVerifiedRuntime reports every attempted candidate with mtime when all are stale', async () => {
+  const { root, stale, fresh } = seedStaleReleaseFixture('rustra-node-allstale-');
+  try {
+    await assert.rejects(
+      selectVerifiedRuntime([stale, fresh], async () => {
+        throw new RustraCommandError('contract.mismatch', 'contract hash mismatch: stale');
+      }),
+      (error: unknown) => {
+        if (!(error instanceof RustraCommandError)) return false;
+        assert.equal(error.code, 'contract.mismatch');
+        assert.match(error.message, /Tried 2 runtime candidates \(newest first\)/);
+        assert.ok(error.message.includes(stale), `보고에 stale 경로 포함: ${error.message}`);
+        assert.ok(error.message.includes(fresh), `보고에 fresh 경로 포함: ${error.message}`);
+        assert.match(error.message, /\(modified [^)]+\): contract\.mismatch/);
+        return true;
+      },
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('selectVerifiedRuntime rethrows non-contract failures without trying further candidates', async () => {
+  const { root, stale, fresh } = seedStaleReleaseFixture('rustra-node-fatal-');
+  try {
+    const attempts: string[] = [];
+    await assert.rejects(
+      selectVerifiedRuntime([stale, fresh], async (candidate) => {
+        attempts.push(candidate);
+        throw new Error('spawn failed');
+      }),
+      /spawn failed/,
+    );
+    assert.deepEqual(attempts, [stale], '폴백은 계약 기각에만 — 그 외 실패는 즉시 전파');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+processTest(
+  'createNodeBootstrap skips a stale release candidate and adopts the fresh build',
+  { timeout: 30_000 },
+  async () => {
+    // 스테일 release 함정의 종단 재현 — stale 해시를 내놓는 release 후보가
+    // 후보 목록 앞에 있어도 fresh 후보로 폴백해 부트스트랩이 성공해야 한다.
+    const root = mkdtempSync(join(tmpdir(), 'rustra-node-stale-release-'));
+    const previous = process.env.RUSTRA_NODE_BINARY;
+    delete process.env.RUSTRA_NODE_BINARY;
+    try {
+      const stale = writeRuntimeScript(root, 'stale-runtime', 'stale-contract-hash');
+      const fresh = writeRuntimeScript(root, 'fresh-runtime', 'fresh-contract-hash');
+      const bootstrap = createNodeBootstrap({
+        commandCandidates: [stale, fresh],
+        args: ['invoke'],
+        contractHash: 'fresh-contract-hash',
+      });
+      try {
+        const engine = await bootstrap.ready();
+        const result = await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
+        assert.equal(result.value, 42, 'fresh 후보가 invoke 를 서브한다');
+      } finally {
+        bootstrap.dispose();
+      }
+    } finally {
+      if (previous === undefined) delete process.env.RUSTRA_NODE_BINARY;
+      else process.env.RUSTRA_NODE_BINARY = previous;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+processTest(
+  'createNodeBootstrap reports fix guidance and all candidate paths when every runtime is stale',
+  { timeout: 30_000 },
+  async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rustra-node-all-stale-'));
+    const previous = process.env.RUSTRA_NODE_BINARY;
+    delete process.env.RUSTRA_NODE_BINARY;
+    try {
+      const stale = writeRuntimeScript(root, 'stale-release', 'stale-contract-hash');
+      const alsoStale = writeRuntimeScript(root, 'stale-debug', 'another-stale-hash');
+      const bootstrap = createNodeBootstrap({
+        commandCandidates: [stale, alsoStale],
+        args: ['invoke'],
+        contractHash: 'fresh-contract-hash',
+      });
+      await assert.rejects(bootstrap.ready(), (error: unknown) => {
+        if (!(error instanceof RustraCommandError)) return false;
+        assert.equal(error.code, 'contract.mismatch');
+        // A6 — Bun 선례와 동일한 fix 안내가 Node mismatch 에도 붙는다.
+        assert.match(error.message, /regenerate the TypeScript and native codecs/);
+        assert.match(error.message, /Tried 2 runtime candidates \(newest first\)/);
+        assert.ok(error.message.includes(stale));
+        assert.ok(error.message.includes(alsoStale));
+        return true;
+      });
+    } finally {
+      if (previous === undefined) delete process.env.RUSTRA_NODE_BINARY;
+      else process.env.RUSTRA_NODE_BINARY = previous;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
 
 processTest('createNodeProcessTransport surfaces spawn failures as transport.error', async () => {
   const transport = createNodeProcessTransport({
@@ -669,14 +858,22 @@ processTest(
     const flag = resolve(join(tmpdir(), `rustra-quiet-flag-${process.pid}-${Date.now()}`));
     const staleLine = `stale-${'x'.repeat(4_000)}`;
     const blob = Array.from({ length: 256 }, () => staleLine).join('\n') + '\n';
-    const script = [
-      'process.stdin.resume();',
-      `if (!require('fs').existsSync(${JSON.stringify(flag)})) {`,
-      `  process.stdout.write(${JSON.stringify(blob)});`,
-      '}',
-      'setTimeout(() => process.exit(0), 40);',
-    ].join(' ');
-    const transport = createNodeLoopTransport({ command: process.execPath, args: ['-e', script] });
+    // ~1MB blob 은 argv 에 못 넣는다 — Linux 단일 인자 한도 128KB(MAX_ARG_STRLEN,
+    // spawn E2BIG). 스크립트를 파일로 미룬다.
+    const scriptPath = resolve(
+      join(tmpdir(), `rustra-backlog-script-${process.pid}-${Date.now()}.cjs`),
+    );
+    writeFileSync(
+      scriptPath,
+      [
+        'process.stdin.resume();',
+        `if (!require('fs').existsSync(${JSON.stringify(flag)})) {`,
+        `  process.stdout.write(${JSON.stringify(blob)});`,
+        '}',
+        'setTimeout(() => process.exit(0), 40);',
+      ].join('\n'),
+    );
+    const transport = createNodeLoopTransport({ command: process.execPath, args: [scriptPath] });
     try {
       // 1 라이프 — 응답 없는 exit. reject 메시지 내용은 타이밍(플러시 경합)에
       // 따라 달라지므로 단정하지 않는다.
@@ -703,6 +900,7 @@ processTest(
     } finally {
       transport.dispose();
       rmSync(flag, { force: true });
+      rmSync(scriptPath, { force: true });
     }
   },
 );
@@ -1200,10 +1398,8 @@ test('A05: dispose during reload re-init on the one-shot path leaves no TypeErro
         getContractHash: async () => '0'.repeat(64),
         dispose() {},
       }) as unknown as NodeProcessTransport;
-    let spawns = 0;
     const bootstrap = createNodeBootstrap({
       createTransport: async () => {
-        spawns++;
         // 원샷 스폰(게이트 없음) — 두 번째 스폰(reload 재초기화)의 await 도중에
         // dispose 가 착지하게 setImmediate 로 마이크로태스크 경계를 만든다.
         await new Promise<void>((resolve) => setImmediate(resolve));
@@ -1227,3 +1423,356 @@ test('A05: dispose during reload re-init on the one-shot path leaves no TypeErro
     configure(cleanSlotEngine);
   }
 });
+
+// ── 채널 e2e — 실제 스폰 → 발급(0xfffb) → channelDemo → 0xfffc 프레임 ──────
+// Rust 통합 테스트(loop_stdio_channels.rs)와 단위 테스트(node-loop.test.ts)가
+// 각 절반을 검증하므로, 이 테스트는 발급 invoke → ChannelHandle::send → stdout
+// 0xfffc 프레임 → demultiplexBinaryFrame → 채널 콜백 사슬 전체를 연결해
+// 매트릭스 "Node 채널" 셀의 증거가 된다. Bun FFI 브릿지와 달리 백그라운드
+// 스레드 send(stdout 프레임은 JS 턴 데이터 이벤트로 도달)도 이 사슬에서 안전하다.
+
+processTest(
+  'createNodeChannel round-trips channelDemo frames from a spawned loop-stdio runtime',
+  { timeout: 30_000 },
+  async () => {
+    const { createNodeLoopTransport, createNodeChannel } = await import('./index.js');
+    const { rkyvV2Registry } = await import(
+      resolve(repoRoot, 'dist-ts/examples/calculator/generated/rkyv-registry.js')
+    );
+    const transport = createNodeLoopTransport({
+      command: resolve(repoRoot, 'target/debug/loop-stdio'),
+      args: [],
+      codecs: rkyvV2Registry as never,
+    });
+    try {
+      await transport.ready();
+      assert.equal(transport.mode, 'binary', 'channels need binary mode');
+
+      // (1) 발급 — 핸들은 양의 정수.
+      const received: unknown[] = [];
+      const channel = await createNodeChannel(transport, (payload) => received.push(payload));
+      const channelHandle = channel.handle;
+      assert.ok(
+        Number.isSafeInteger(channelHandle) && channelHandle > 0,
+        'issued handle is a positive safe integer',
+      );
+
+      // (2) 왕복 — channelDemo(channel, ticks:3)이 같은 invoke 왕복 안에서
+      // 채널로 3회 send 한다(응답과 0xfffc 프레임이 같은 stdout 스트림을
+      // 공유 — 디멀티플렉서 분기가 실경합에서 정확히 동작함을 함께 검증).
+      // channelDemo 의 send 는 핸들러(동기) 안에서 일어나므로 프레임은 응답
+      // 전/후 어느 쪽이든 stdout 에 착지할 수 있다 — 3프레임 정착을 기다린다.
+      const allFrames = new Promise<void>((resolve, reject) => {
+        const deadline = setTimeout(
+          () =>
+            reject(new Error(`channel frames did not arrive in time; got ${received.length}/3`)),
+          15_000,
+        );
+        const timer = setInterval(() => {
+          if (received.length >= 3) {
+            clearTimeout(deadline);
+            clearInterval(timer);
+            resolve();
+          }
+        }, 5);
+      });
+      const result = (await transport.invoke('channelDemo', {
+        channel: channelHandle,
+        ticks: 3,
+      })) as { sent: number; droppedSends: number };
+      assert.equal(result.sent, 3);
+      assert.equal(result.droppedSends, 0);
+      await allFrames;
+      assert.equal(received.length, 3, 'all 3 channel frames must reach the callback');
+      assert.deepEqual(received, [
+        { step: 1, of: 3 },
+        { step: 2, of: 3 },
+        { step: 3, of: 3 },
+      ]);
+
+      // (3) close — 이후 send 는 droppedSends 로 보고되고 콜백에 도달하지 않는다.
+      assert.equal(await channel.close(), true, 'first close drops a live handle');
+      assert.equal(await channel.close(), false, 'double close reports staleness');
+      const after = (await transport.invoke('channelDemo', {
+        channel: channelHandle,
+        ticks: 1,
+      })) as { sent: number; droppedSends: number };
+      assert.equal(after.sent, 0);
+      assert.equal(after.droppedSends, 1, 'stale send is dropped, not delivered');
+      assert.equal(received.length, 3, 'no frames after close');
+    } finally {
+      transport.dispose();
+    }
+  },
+);
+
+processTest(
+  'createNodeChannel loud-fails on an NDJSON transport instead of hanging',
+  { timeout: 30_000 },
+  async () => {
+    const { createNodeLoopTransport, createNodeChannel } = await import('./index.js');
+    // codecs 미제공 — 핸드셰이크가 없어 NDJSON 에 머문다(구 런타임 동일 위상).
+    const transport = createNodeLoopTransport({
+      command: resolve(repoRoot, 'target/debug/loop-stdio'),
+      args: [],
+    });
+    try {
+      await transport.ready();
+      assert.equal(transport.mode, 'ndjson');
+      await assert.rejects(
+        createNodeChannel(transport as never, () => {}),
+        (err: unknown) => err instanceof RustraCommandError && err.code === 'channel.unavailable',
+      );
+    } finally {
+      transport.dispose();
+    }
+  },
+);
+
+// ── 바이너리 채널 (createNodeBytesChannel) ────────────────────────────────
+// 0xfffb 모드 플래그(0x01) 발급 → ChannelHandle::send_bytes → stdout 0xfff9
+// 프레임 → demultiplexBinaryFrame → Uint8Array 콜백 사슬. 매직 모의(스폰 없음)
+// 유닛 테스트는 Bun 러너에서도 실행되고, 실제 런타임 왕복은 아래 processTest
+// (node 러너 전용 — channelDemoBytes 로 LE u64 프레임 왕복).
+
+test('createNodeBytesChannel loud-fails without a bytes frame path', async () => {
+  const { createNodeBytesChannel } = await import('./index.js');
+  // 원샷 invoke transport — onChannelBytesFrame 노출 없음(경로 자체 부재).
+  const transport = { invoke: async () => ({ handle: 1 }) };
+  await assert.rejects(
+    createNodeBytesChannel(transport as never, () => {}),
+    (err: unknown) =>
+      err instanceof RustraCommandError &&
+      err.code === 'channel.unavailable' &&
+      /onChannelBytesFrame/.test(err.message),
+  );
+});
+
+test('createNodeBytesChannel loud-fails on an NDJSON transport', async () => {
+  const { createNodeBytesChannel } = await import('./index.js');
+  const transport = {
+    invoke: async () => ({ handle: 1 }),
+    onChannelBytesFrame: () => () => {},
+    ready: async () => {},
+    mode: 'ndjson' as const,
+  };
+  await assert.rejects(
+    createNodeBytesChannel(transport as never, () => {}),
+    (err: unknown) =>
+      err instanceof RustraCommandError &&
+      err.code === 'channel.unavailable' &&
+      /NDJSON/.test(err.message),
+  );
+});
+
+test('createNodeBytesChannel loud-fails when the runtime lacks the channelBytes capability', async () => {
+  const { createNodeBytesChannel } = await import('./index.js');
+  // 구 런타임 매트릭스 — 바이너리 모드는 협상됐지만 channelBytes capability 가
+  // 없다(모드 바이트를 무시하고 JSON 채널을 파는 위상). 프레임을 보내기 전에
+  // 끊어야 한다: invoke 자체가 일어나지 않는다.
+  const invokes: string[] = [];
+  const transport = {
+    async invoke(command: string) {
+      invokes.push(command);
+      return { handle: 1 };
+    },
+    onChannelBytesFrame: () => () => {},
+    ready: async () => {},
+    mode: 'binary' as const,
+    channelBytesCapable: false,
+  };
+  await assert.rejects(
+    createNodeBytesChannel(transport as never, () => {}),
+    (err: unknown) =>
+      err instanceof RustraCommandError &&
+      err.code === 'channel.unavailable' &&
+      /channelBytes/.test(err.message),
+  );
+  assert.deepEqual(invokes, [], 'capability gate must fire before any wire frame is sent');
+});
+
+test('createNodeBytesChannel issues, delivers copied bytes, and drops on close', async () => {
+  const { createNodeBytesChannel } = await import('./index.js');
+  // 최소 바이너리 모드 모의 — 발급 invoke 는 모드 플래그 프레임을 보내는
+  // 내부 커맨드(__createChannelBytes), 프레임은 등록된 핸들러로 시뮬레이션.
+  // detach 는 고의로 no-op: close 이후의 late frame 무시가 구독 해지가 아니라
+  // 어댑터의 closed 플래그(실계약)에서 일어나는지를 보기 위해서다.
+  const invokes: Array<{ command: string; args?: unknown }> = [];
+  let handler: ((frame: { handle: number; payload: Uint8Array }) => void) | null = null;
+  const transport = {
+    async invoke(command: string, args?: unknown) {
+      invokes.push({ command, args });
+      if (command === '__createChannelBytes') return { handle: 42 };
+      if (command === '__dropChannel') return true;
+      throw new Error(`unexpected invoke: ${command}`);
+    },
+    onChannelBytesFrame(h: (frame: { handle: number; payload: Uint8Array }) => void) {
+      handler = h;
+      return () => {};
+    },
+    ready: async () => {},
+    mode: 'binary' as const,
+    channelBytesCapable: true,
+  };
+  const received: Uint8Array[] = [];
+  const channel = await createNodeBytesChannel(transport as never, (payload) =>
+    received.push(payload),
+  );
+  assert.equal(channel.handle, 42);
+  assert.deepEqual(invokes, [{ command: '__createChannelBytes', args: undefined }]);
+
+  // 프레임 도달 — 타 핸들 프레임은 무시되고 자기 핸들만 콜백으로 간다.
+  handler!({ handle: 41, payload: Uint8Array.from([9]) });
+  const raw = Uint8Array.from([1, 0, 0, 0, 0, 0, 0, 0]);
+  handler!({ handle: 42, payload: raw });
+  assert.equal(received.length, 1);
+  assert.deepEqual([...received[0]!], [...raw]);
+  // 복사 계약 — 콜백이 받은 바이트는 원본 뷰와 분리된다(전달 후 변형 무영향).
+  raw[0] = 0xff;
+  assert.equal(received[0]![0], 1);
+
+  // close — 이후 프레임은 closed 플래그로 무시되고 0xfffa drop invoke 가 간다.
+  assert.equal(await channel.close(), true);
+  assert.equal(await channel.close(), false, 'double close is idempotent');
+  handler!({ handle: 42, payload: Uint8Array.from([2]) });
+  assert.equal(received.length, 1, 'late frames after close are ignored');
+  assert.deepEqual(invokes[invokes.length - 1], {
+    command: '__dropChannel',
+    args: { handle: 42 },
+  });
+});
+
+processTest(
+  'createNodeBytesChannel round-trips channelDemoBytes frames from a spawned loop-stdio runtime',
+  { timeout: 30_000 },
+  async () => {
+    const { createNodeLoopTransport, createNodeBytesChannel, createNodeChannel } =
+      await import('./index.js');
+    const { rkyvV2Registry } = await import(
+      resolve(repoRoot, 'dist-ts/examples/calculator/generated/rkyv-registry.js')
+    );
+    const transport = createNodeLoopTransport({
+      command: resolve(repoRoot, 'target/debug/loop-stdio'),
+      args: [],
+      codecs: rkyvV2Registry as never,
+    });
+    try {
+      await transport.ready();
+      assert.equal(transport.mode, 'binary', 'binary channels need binary mode');
+      assert.equal(
+        transport.channelBytesCapable,
+        true,
+        'fresh runtime echoes the channelBytes capability',
+      );
+
+      // (1) 발급 — 0xfffb 모드 0x01. 핸들은 양의 정수(JSON 경로와 공유 공간).
+      const received: Uint8Array[] = [];
+      const channel = await createNodeBytesChannel(transport, (payload) => received.push(payload));
+      assert.ok(
+        Number.isSafeInteger(channel.handle) && channel.handle > 0,
+        'issued handle is a positive safe integer',
+      );
+
+      // (2) 왕복 — channelDemoBytes(channel, ticks:3)이 스텝 카운터 LE u64 를
+      // 8바이트 프레임 3개로 흘린다(응답과 0xfff9 프레임이 같은 stdout 스트림을
+      // 공유 — 디멀티플렉서 분기가 실경합에서 정확히 동작함을 함께 검증).
+      const allFrames = new Promise<void>((resolve, reject) => {
+        const deadline = setTimeout(
+          () =>
+            reject(
+              new Error(`bytes channel frames did not arrive in time; got ${received.length}/3`),
+            ),
+          15_000,
+        );
+        const timer = setInterval(() => {
+          if (received.length >= 3) {
+            clearTimeout(deadline);
+            clearInterval(timer);
+            resolve();
+          }
+        }, 5);
+      });
+      const result = (await transport.invoke('channelDemoBytes', {
+        channel: channel.handle,
+        ticks: 3,
+      })) as { sent: number; droppedSends: number };
+      assert.equal(result.sent, 3);
+      assert.equal(result.droppedSends, 0);
+      await allFrames;
+      assert.equal(received.length, 3, 'all 3 bytes frames must reach the callback');
+      // 페이로드는 1..3 의 LE u64 (channelDemoBytes 계약) — JSON 파싱 없이 디코딩.
+      const steps = received.map((bytes) =>
+        Number(new DataView(bytes.buffer, bytes.byteOffset, 8).getBigUint64(0, true)),
+      );
+      assert.deepEqual(steps, [1, 2, 3]);
+
+      // (3) close — 이후 send_bytes 는 droppedSends 로 보고되고 콜백에 도달하지
+      // 않는다(0xfffa drop 이 bytes 테이블도 내린다).
+      assert.equal(await channel.close(), true, 'first close drops a live bytes handle');
+      assert.equal(await channel.close(), false, 'double close reports staleness');
+      const after = (await transport.invoke('channelDemoBytes', {
+        channel: channel.handle,
+        ticks: 1,
+      })) as { sent: number; droppedSends: number };
+      assert.equal(after.sent, 0);
+      assert.equal(after.droppedSends, 1, 'stale send_bytes is dropped, not delivered');
+      assert.equal(received.length, 3, 'no frames after close');
+
+      // (4) JSON 채널 공존 — 같은 세션에서 legacy 발급(본문 없음)이 그대로
+      // 동작한다(모드 가로채기 리더의 통과 경로 — 무중단 호환 증거).
+      const jsonReceived: unknown[] = [];
+      const jsonChannel = await createNodeChannel(transport, (payload) =>
+        jsonReceived.push(payload),
+      );
+      const jsonResult = (await transport.invoke('channelDemo', {
+        channel: jsonChannel.handle,
+        ticks: 2,
+      })) as { sent: number; droppedSends: number };
+      assert.equal(jsonResult.sent, 2);
+      await new Promise<void>((resolve, reject) => {
+        const deadline = setTimeout(
+          () => reject(new Error(`JSON channel frames late; got ${jsonReceived.length}/2`)),
+          15_000,
+        );
+        const timer = setInterval(() => {
+          if (jsonReceived.length >= 2) {
+            clearTimeout(deadline);
+            clearInterval(timer);
+            resolve();
+          }
+        }, 5);
+      });
+      assert.deepEqual(jsonReceived, [
+        { step: 1, of: 2 },
+        { step: 2, of: 2 },
+      ]);
+      assert.equal(received.length, 3, 'JSON channel frames must not reach the bytes callback');
+      assert.equal(await jsonChannel.close(), true);
+    } finally {
+      transport.dispose();
+    }
+  },
+);
+
+processTest(
+  'createNodeBytesChannel loud-fails on an NDJSON transport instead of hanging',
+  { timeout: 30_000 },
+  async () => {
+    const { createNodeLoopTransport, createNodeBytesChannel } = await import('./index.js');
+    // codecs 미제공 — 핸드셰이크가 없어 NDJSON 에 머문다(구 런타임 동일 위상).
+    const transport = createNodeLoopTransport({
+      command: resolve(repoRoot, 'target/debug/loop-stdio'),
+      args: [],
+    });
+    try {
+      await transport.ready();
+      assert.equal(transport.mode, 'ndjson');
+      await assert.rejects(
+        createNodeBytesChannel(transport as never, () => {}),
+        (err: unknown) => err instanceof RustraCommandError && err.code === 'channel.unavailable',
+      );
+    } finally {
+      transport.dispose();
+    }
+  },
+);

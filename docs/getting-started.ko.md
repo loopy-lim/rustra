@@ -1,8 +1,26 @@
+[English](./getting-started.md)
+
 # rustra 시작하기
 
 rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 어디에서나 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크다.
 
 이 가이드는 rustra를 처음 사용하는 개발자가 10분 안에 첫 패키지를 만들고 TypeScript 클라이언트를 생성하는 것을 목표로 한다.
+
+> 용어: **rustra**는 Rust 크레이트와 npm 스코프(`@rustra/*`), **rustra-bridge**는
+> 이 저장소를 가리킨다. 같은 프로젝트의 두 이름이다.
+
+## 전제 조건
+
+| 도구                         | 버전         | 확인 위치                                                                 |
+| ---------------------------- | ------------ | ------------------------------------------------------------------------- |
+| Rust 툴체인                  | 1.88+ (MSRV) | 루트 `Cargo.toml` `rust-version` / [버전 정책](versioning-policy.ko.md)   |
+| Bun                          | 1.4+         | 모든 JS 쪽 명령(`rustra init`, codegen, doctor)                           |
+| Node.js                      | 22.x         | Node 어댑터 런타임 (v22.21.1로 측정)                                      |
+| Cargo + 링커                 | 호스트별     | 네이티브 빌드에 C/C++ 컴파일러 필요                                       |
+| Xcode / CocoaPods            | iOS 전용     | React Native iOS ([RN 설정 가이드](extending/react-native-setup.md) 참고) |
+| Android SDK/NDK 27+, Java 17 | Android 전용 | React Native Android                                                      |
+
+`rustra doctor`가 설정에 적용되는 행을 전부 검사한다 — [개발 허들 가이드](development-hurdles.ko.md) 참고.
 
 ---
 
@@ -36,14 +54,16 @@ bunx --bun @rustra/cli init my-project --force
 
 ### 외부 프로젝트에서 사용
 
-<!-- 발행 시 갱신: 0.7.0 라인 -->
-
 ```toml
 [dependencies]
-rustra = "0.6"
+rustra = "0.8"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
+
+검증된 조합: npm `@rustra/types` 0.8.x ↔ Rust crate 0.8.x. `@rustra/*` 패키지는
+독립 릴리스 라인이다 — 어댑터 패키지별 버전을 각각 확인한다
+([호환성 매트릭스](compatibility-matrix.ko.md#매트릭스) 참고).
 
 TypeScript 어댑터는 사용할 환경만 설치하면 된다:
 
@@ -239,7 +259,7 @@ println!("2 + 3 = {}", output.value);
 ```bash
 cargo run -p rustra-calculator-example          # 데모: 2 + 3 = 5
 cargo run -p rustra-calculator-example --bin generate   # 계약 프로브: schema.json
-bun run codegen                                          # TS 표면 렌더링
+bun run --cwd examples/calculator codegen                # schema.json에서 TS 표면 렌더링
 ```
 
 출력:
@@ -329,6 +349,21 @@ export type ChannelDemoOutput = {
   droppedSends: number;
 };
 
+/**
+ * 바이너리 채널 데모 — `channel_demo` 의 바이트 경로 쌍둥이. 모든 호스트 어댑터의 createBytesChannel/createChannelBytes 패리티를 동일 명령으로 e2e 검증한다(페이로드는 스텝 카운터 LE u64).
+ */
+export type ChannelDemoBytesInput = {
+  /** 바이너리 채널로 발급받은 핸들. */
+  channel: ChannelHandle;
+  /** 전송할 프레임 수. */
+  ticks: number;
+};
+
+export type ChannelDemoBytesOutput = {
+  sent: number;
+  droppedSends: number;
+};
+
 export type ClampInput = {
   max: number;
   min: number;
@@ -346,6 +381,16 @@ export type CreateItemInput = {
 
 export type CreateItemOutput = {
   item: Item;
+};
+
+/**
+ * 디바이스 역량 계약 — 커맨드가 전제하는 디바이스 역량 선언의 예시.
+ *
+ * `device_demo` 는 `#[command(device(camera, bluetooth))]` 로 카메라·블루투스를 전제한다고 선언한다. 선언은 schema.json 의 조건부 `devices` 필드와 생성 `devices.ts`(토큰 유니언 + 커맨드별 요구 상수)의 원천이 될 뿐 런타임 게이팅은 하지 않는다 — 하드웨어 접근·권한 확인은 호스트 앱이 getDeviceStatus 로 사전 조회하는 패턴의 뼈대가 되는 예시다(여기서는 하드웨어에 접근하지 않는다).
+ */
+export type DeviceDemoOutput = {
+  /** std::env::consts::OS — 선언과 무관한 컴파일 대상 확인용. */
+  os: string;
 };
 
 export type DivideInput = {
@@ -408,6 +453,18 @@ export type MultiplyInput = {
 
 export type MultiplyOutput = {
   value: number;
+};
+
+/**
+ * 플랫폼 상호운용 — 플랫폼 특화 명령의 계약 안정화 예시.
+ *
+ * `platformNativeInfo` 는 `#[command(platform(windows, macos))]` 로 macos/windows 에만 구현을 선언한다. 등록(id·스키마·계약 해시)은 전 플랫폼에서 동일하게 일어나고, Linux(및 기타)에서 호출하면 `platform.unavailable` 이 반환된다 (`command.not_found` 와 구분된다). 실제 구현은 cfg 로 보호해 지원 OS 에서만 주입된다 — win32/objc2 호출을 하는 실명령의 뼈대가 되는 패턴이다.
+ */
+export type PlatformNativeInfoOutput = {
+  /** std::env::consts::OS — 컴파일 대상 OS 문자열. */
+  os: string;
+  /** 네이티브 윈도우 시스템 식별자 — 실제 예에서는 win32/objc2 API 조사값. */
+  windowKind: string;
 };
 
 export type ProcessItemInput = {
@@ -573,7 +630,7 @@ export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutp
 
 <!-- prettier-ignore -->
 ```ts
-export const GENERATED_CONTRACT_HASH = 'b9ec095fd83d9c67befb83277adbb988ca248f2c3c64dbefd06c65c5a7bc2121';
+export const GENERATED_CONTRACT_HASH = '7279af1f50ca546411bb7be6476bb1f931b437ae53484d8ea9903eec07926039';
 export const SCHEMA_VERSION = 1;
 ```
 
@@ -617,7 +674,7 @@ export const SCHEMA_VERSION = 1;
 ```
 
 - schemars가 생성한 JSON Schema. 런타임 검증, 문서 자동화, 외부 도구 연동에 활용.
-- 첫 커맨드만 발췌했다 — 실제 파일은 29개 커맨드 전부를 담는다.
+- 첫 커맨드만 발췌했다 — 실제 파일은 32개 커맨드 전부를 담는다.
 
 ---
 
@@ -646,7 +703,46 @@ Cargo target을 찾는다. 배포 디렉터리가 다르면 `RUSTRA_NODE_BINARY`
 표준 runtime은 `{command, args}` → `{ok, result}` one-shot stdio protocol을 구현해야
 한다. 여기에 `__rustra_contract` 예약 명령이 현재 계약 해시를 문자열로 반환해야
 생성 Node 진입점의 fail-fast 검사가 통과한다. calculator와 `rustra init` 스캐폴드의
-`run_invoke_stdio`가 참조 구현이다.
+`run_invoke_stdio`가 참조 구현이다 — 아래가 그 스캐폴드를 일반화한 완전한 최소
+`src/main.rs`다(약 30줄):
+
+```rust
+use serde_json::{json, Value};
+use std::io::{Read, Write};
+
+fn main() -> rustra::Result<()> {
+    if std::env::args().nth(1).as_deref() == Some("invoke") {
+        return run_invoke_stdio();
+    }
+    // 평범한 `cargo run` 데모 호출은 여기에
+    Ok(())
+}
+
+fn run_invoke_stdio() -> rustra::Result<()> {
+    let mut input = String::new();
+    std::io::stdin().read_to_string(&mut input)?;
+    let request: Value = serde_json::from_str(&input).map_err(rustra::RustraError::invalid_args)?;
+    let command = request.get("command").and_then(Value::as_str)
+        .ok_or_else(|| rustra::RustraError::invalid_args("missing command"))?;
+    if command == "__rustra_contract" {
+        // 생성 Node 진입점이 Rust와 TS가 같은 계약을 공유하는지 검증한다
+        let hash = my_package().generate_typescript()?.contract_hash;
+        let response = serde_json::to_vec(&json!({ "ok": true, "result": hash }))
+            .map_err(rustra::RustraError::internal)?;
+        std::io::stdout().write_all(&response)?;
+        return Ok(());
+    }
+    let args = request.get("args").cloned().unwrap_or_else(|| json!({}));
+    let result = my_package().invoke_json(command, args)?;
+    let response = serde_json::to_vec(&json!({ "ok": true, "result": result }))?;
+    std::io::stdout().write_all(&response)?;
+    Ok(())
+}
+```
+
+생성 진입점은 호출마다 이 바이너리를 stdin에 JSON 엔벨로프를 실어 한 번 spawn한다
+(one-shot). 요청이 계속 흐르는 서버라면 `createNodeLoopTransport`를 쓴다 —
+[`node-performance.ts`](../examples/calculator/apps/node-performance.ts) 참고.
 
 **커스텀 transport (napi-rs 등):**
 
@@ -750,6 +846,11 @@ rustra::native_entry!(my_package);
 }
 ```
 
+`"positional": true`는 `generated/positional-facade.ts`를 추가로 발행한다 — 입력
+필드가 0~3개인 정적 명령을 필드-위치 인자 헬퍼(`addNumbers(a, b)`) 형태로 만들어
+RN JSI `invokeTyped` 진입을 직접 호출한다. 해당 형태 밖의 명령은 객체 인자
+`commands.ts` 경로를 유지한다.
+
 ```bash
 bunx --bun @rustra/cli doctor --config rustra.json
 bunx --bun @rustra/cli codegen --config rustra.json
@@ -808,17 +909,18 @@ const result = await addNumbers({ a: 20, b: 22 });
 
 ### 요약
 
-| 환경         | 기본 생성 진입점                     | 자동 연결                           | 성능 (release)                      |
-| ------------ | ------------------------------------ | ----------------------------------- | ----------------------------------- |
-| Node         | `generated/node.ts`                  | Cargo binary + stdio                | ~3.4 ms historical; N-API는 ~1.5 µs |
-| Bun          | `generated/bun.ts`                   | Cargo cdylib + stable FFI + rkyv V2 | ~1.7 µs FFI                         |
-| Tauri        | `generated/tauri.ts`                 | global invoke/event                 | IPC 종속                            |
-| React Native | generated `react-native.ts`          | autolinked JSI + postcard codecs    | Nitro 근접; 최신 receipt 확인       |
-| React Native | `createReactNativeEngine(transport)` | custom JSON transport               | transport 구현 종속                 |
+| 환경         | 기본 생성 진입점                     | 자동 연결                           | 성능 (release, 2026-08-24)                             |
+| ------------ | ------------------------------------ | ----------------------------------- | ------------------------------------------------------ |
+| Node         | `generated/node.ts`                  | Cargo binary + stdio                | one-shot 2.76 ms; loop 16.86 µs; N-API rkyv V2 1.26 µs |
+| Bun          | `generated/bun.ts`                   | Cargo cdylib + stable FFI + rkyv V2 | FFI rkyv V2 2.27 µs                                    |
+| Tauri        | `generated/tauri.ts`                 | global invoke/event                 | WebView IPC 279.04 µs                                  |
+| React Native | `generated/react-native.ts`          | autolinked JSI + postcard codecs    | p50 2.71 µs (iOS Simulator receipt)                    |
+| React Native | `createReactNativeEngine(transport)` | custom JSON transport               | transport 구현 종속                                    |
 
-> Node/Bun의 ~24/27µs는 debug 네이티브 라이브러리를 로드했을 때 값이다 —
-> release 빌드에서는 single-digit µs 범위로 좁혀진다. 측정 세션별 수치는
-> [벤치마크 문서](benchmarks.md) 참고 (2026-08-23 RN 재측정).
+> `addNumbers({ a: 20, b: 22 })`의 end-to-end Release 실측이다 — 2026-08-24
+> Apple Silicon에서 처음 확인했고 README 성능 표와 동일한 값이다. 평균은 양끝
+> 5% trimmed mean이며, 레이어별 오버헤드·페이로드 확장·재현 명령은
+> [벤치마크 문서](benchmarks.ko.md)에 있다.
 
 모든 어댑터가 `EngineClient`를 반환하므로, 이후 코드는 환경에 상관없이 동일하다.
 
@@ -843,7 +945,7 @@ cargo test --workspace
 
 ```bash
 cargo run -p rustra-calculator-example --bin generate   # 계약 프로브: schema.json
-bun run codegen                                          # TS 표면 렌더링
+bun run --cwd examples/calculator codegen                # TS 표면 렌더링
 ```
 
 `generated/` 디렉토리에 TypeScript 파일이 생성되었는지 확인한다.
@@ -989,7 +1091,7 @@ use rustra::prelude::*;
 #[command]
 fn divide(input: DivideInput) -> Result<DivideOutput> {
     if input.b == 0 {
-        return Err(RustraError::custom("division.by_zero", "cannot divide by zero"));
+        return Err(RustraError::custom("math.divide_by_zero", "cannot divide by zero"));
     }
     Ok(DivideOutput { value: input.a / input.b })
 }
@@ -1017,7 +1119,7 @@ try {
   const result = await divide({ a: 10, b: 0 });
 } catch (e) {
   if (e instanceof RustraCommandError) {
-    console.log(e.code); // "division.by_zero"
+    console.log(e.code); // "math.divide_by_zero"
     console.log(e.message); // "cannot divide by zero"
   }
 }
@@ -1026,6 +1128,32 @@ try {
 `RustraCommandError`는 `err.code`, `err.retryable`을 노출하고, 타임아웃/취소는 각각
 `TimeoutError`/`CancelledError` 서브클래스로도 잡을 수 있다. 원본 transport 에러는
 `err.cause`에 보존된다.
+
+#### 타입화 에러 가드 (Rust 측에서 에러 코드를 선언한 경우)
+
+문자열 비교는 오타를 못 잡는다. Rust 커맨드가 도메인 에러 코드를 선언하면(참조:
+[Rust API 가이드 — 커맨드별 에러 코드 선언](./rust-api-guide.ko.md)) `rustra codegen`이
+`generated/errors.ts`에 커맨드별 가드도 함께 생성한다. 가드로 잡으면 code가 리터럴
+유니언으로 좁혀져 코드 오타가 컴파일 에러로 바뀐다:
+
+```ts
+import { isDivideError, DivideErrorCode } from '../generated/errors.js';
+
+try {
+  await divide({ a: 10, b: 0 });
+} catch (e) {
+  if (isDivideError(e)) {
+    if (e.code === DivideErrorCode.MathDivideByZero) {
+      // 좁혀짐: e.code 는 'math.divide_by_zero' — 오타는 컴파일되지 않는다
+    }
+  }
+  // 미선언 코드(예: 신규 네이티브가 새 코드를 반환)는 여기로 흐른다:
+  // 폴백은 e instanceof RustraCommandError + e.code 문자열 분기.
+}
+```
+
+선언하지 않은 커맨드에는 가드가 없을 뿐 — 위의 일반 `RustraCommandError` 패턴은
+어디서나 그대로 동작한다.
 
 ---
 
@@ -1094,5 +1222,12 @@ generated/
   schema.json    -- JSON Schema (Rust 프로브가 발행)
         |
         v
-TypeScript에서 createXxxEngine(transport) + configure(engine) + addNumbers(input) 호출
+import { addNumbers } from './generated/node.js'   (호스트 엔트리가 엔진을 lazy 설치)
+        |
+        v
+await addNumbers({ a: 20, b: 22 })
 ```
+
+> 생성 호스트 엔트리(`node.js` / `bun.js` / `tauri.js` / `react-native.ts`)는 import 시점에
+> `configureLazy()`를 등록한다 — 일반 앱은 엔진을 직접 만들거나 `configure()`하지 않는다.
+> 수동 `configure(engine)`는 §4의 탈출구다(커스텀 transport, 다중 런타임, custom N-API).

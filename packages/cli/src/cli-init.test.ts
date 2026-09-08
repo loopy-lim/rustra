@@ -17,10 +17,32 @@ import { UsageError } from './cli-usage-error.js';
 import { readConfigSync } from './config.js';
 import { INIT_CONFIG_SCHEMA_PATH } from './init-template.js';
 import { runGenerate } from './cli-generate.js';
+import { cliManifest } from './cli-runtime.js';
 
 function withTempDir(fn: (root: string) => void | Promise<void>): Promise<void> {
   const root = mkdtempSync(join(tmpdir(), 'rustra-init-'));
   return Promise.resolve(fn(root)).finally(() => rmSync(root, { recursive: true, force: true }));
+}
+
+/** RN 어댑터 설치 픽스처 — 감사 A11 이후 RN 코드젠은 어댑터 설치(bun install)가
+ * 선행해야 loud-fail 하지 않는다. cliManifest 의 range 를 만족하는 버전으로 심는다. */
+function seedReactNativeAdapter(project: string): void {
+  const version = cliManifest.rustraTemplate.reactNativeRange.replace(/^[~^=]/, '');
+  const nativeRoot = join(project, 'node_modules', '@rustra', 'react-native', 'native');
+  for (const file of [
+    'android/rustra-jsi-jni.cpp',
+    'cpp/RustraJSIBridge.cpp',
+    'cpp/RustraJSIBridge.hpp',
+    'cpp/rustra-codec.hpp',
+    'ios/RustraJSIModule.mm',
+  ]) {
+    mkdirSync(join(nativeRoot, ...file.split('/').slice(0, -1)), { recursive: true });
+    writeFileSync(join(nativeRoot, ...file.split('/')), 'adapter fixture');
+  }
+  writeFileSync(
+    join(project, 'node_modules', '@rustra', 'react-native', 'package.json'),
+    JSON.stringify({ name: '@rustra/react-native', version }),
+  );
 }
 
 test('runInit refuses to overwrite an existing scaffold and --force replaces it', async () => {
@@ -305,6 +327,8 @@ test(
         /crate-type\s*=\s*\["rlib", "staticlib"\]/,
       );
       writeMinimalSchema(project);
+      // RN 코드젠 계약 — 어댑터는 bun install 로 먼저 설치돼 있다(감사 A11).
+      seedReactNativeAdapter(project);
       // cargo metadata --no-deps (오프라인 OK) → resolveReactNativeScaffold → RN 모듈 렌더까지 전 경로.
       const written = await runGenerate(['--config', join(project, 'rustra.json')], undefined, {
         quiet: true,

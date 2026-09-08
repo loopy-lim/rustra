@@ -286,6 +286,28 @@ static jsi::Value decode_channelDemo(jsi::Runtime& rt, rc::Reader& r) {
   return std::move(resultObj);
 }
 
+static void encode_channelDemoBytes(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(31); w.push_u8(0); // cmd_id = 31 LE
+  auto argsObj = args.asObject(rt);
+  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, "channel"), "channel"));
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, "ticks"), "ticks"));
+}
+
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
+static void encode_pos_channelDemoBytes(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  if (argc != 2) throw jsi::JSError(rt, "rustra: channelDemoBytes expects 2 positional argument(s), got " + std::to_string(argc));
+  w.push_u8(31); w.push_u8(0); // cmd_id = 31 LE
+  w.push_uvar(rustra_u64(rt, argv[0], "channel"));
+  w.push_i64(rustra_i64(rt, argv[1], "ticks"));
+}
+
+static jsi::Value decode_channelDemoBytes(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "sent"), (double)r.read_uvar());
+  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "droppedSends"), (double)r.read_uvar());
+  return std::move(resultObj);
+}
+
 static void encode_clamp(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(4); w.push_u8(0); // cmd_id = 4 LE
   auto argsObj = args.asObject(rt);
@@ -331,6 +353,17 @@ static jsi::Value decode_createItem(jsi::Runtime& rt, rc::Reader& r) {
     { auto _s = r.read_string_view(); _obj.setProperty(rt, rustra::generated::cachedProp(rt, "name"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
     _obj.setProperty(rt, rustra::generated::cachedProp(rt, "value"), [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
     resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "item"), _obj); }
+  return std::move(resultObj);
+}
+
+static void encode_deviceDemo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(32); w.push_u8(0); // cmd_id = 32 LE
+  auto argsObj = args.asObject(rt);
+}
+
+static jsi::Value decode_deviceDemo(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "os"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   return std::move(resultObj);
 }
 
@@ -453,6 +486,18 @@ static void encode_pos_multiply(jsi::Runtime& rt, const jsi::Value* argv, size_t
 static jsi::Value decode_multiply(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
   resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "value"), r.read_f64());
+  return std::move(resultObj);
+}
+
+static void encode_platformNativeInfo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(30); w.push_u8(0); // cmd_id = 30 LE
+  auto argsObj = args.asObject(rt);
+}
+
+static jsi::Value decode_platformNativeInfo(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "os"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "windowKind"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   return std::move(resultObj);
 }
 
@@ -749,14 +794,17 @@ bool encode_by_name(Runtime& rt, const std::string& name, const Value& args, rc:
   if (name == "benchEchoPair") { encode_benchEchoPair(rt, args, w); return true; }
   if (name == "benchEchoString") { encode_benchEchoString(rt, args, w); return true; }
   if (name == "channelDemo") { encode_channelDemo(rt, args, w); return true; }
+  if (name == "channelDemoBytes") { encode_channelDemoBytes(rt, args, w); return true; }
   if (name == "clamp") { encode_clamp(rt, args, w); return true; }
   if (name == "createItem") { encode_createItem(rt, args, w); return true; }
+  if (name == "deviceDemo") { encode_deviceDemo(rt, args, w); return true; }
   if (name == "divide") { encode_divide(rt, args, w); return true; }
   if (name == "emitDemo") { encode_emitDemo(rt, args, w); return true; }
   if (name == "gauge") { encode_gauge(rt, args, w); return true; }
   if (name == "greet") { encode_greet(rt, args, w); return true; }
   if (name == "isEven") { encode_isEven(rt, args, w); return true; }
   if (name == "multiply") { encode_multiply(rt, args, w); return true; }
+  if (name == "platformNativeInfo") { encode_platformNativeInfo(rt, args, w); return true; }
   if (name == "processItem") { encode_processItem(rt, args, w); return true; }
   if (name == "resourceClose") { encode_resourceClose(rt, args, w); return true; }
   if (name == "resourceOpen") { encode_resourceOpen(rt, args, w); return true; }
@@ -782,14 +830,17 @@ Value decode_by_name(Runtime& rt, const std::string& name, rc::Reader& r) {
   if (name == "benchEchoPair") return decode_benchEchoPair(rt, r);
   if (name == "benchEchoString") return decode_benchEchoString(rt, r);
   if (name == "channelDemo") return decode_channelDemo(rt, r);
+  if (name == "channelDemoBytes") return decode_channelDemoBytes(rt, r);
   if (name == "clamp") return decode_clamp(rt, r);
   if (name == "createItem") return decode_createItem(rt, r);
+  if (name == "deviceDemo") return decode_deviceDemo(rt, r);
   if (name == "divide") return decode_divide(rt, r);
   if (name == "emitDemo") return decode_emitDemo(rt, r);
   if (name == "gauge") return decode_gauge(rt, r);
   if (name == "greet") return decode_greet(rt, r);
   if (name == "isEven") return decode_isEven(rt, r);
   if (name == "multiply") return decode_multiply(rt, r);
+  if (name == "platformNativeInfo") return decode_platformNativeInfo(rt, r);
   if (name == "processItem") return decode_processItem(rt, r);
   if (name == "resourceClose") return decode_resourceClose(rt, r);
   if (name == "resourceOpen") return decode_resourceOpen(rt, r);
@@ -816,14 +867,17 @@ bool encode_by_id(Runtime& rt, uint16_t cmd_id, const Value& args, rc::Writer& w
     case 26: encode_benchEchoPair(rt, args, w); return true;
     case 24: encode_benchEchoString(rt, args, w); return true;
     case 18: encode_channelDemo(rt, args, w); return true;
+    case 31: encode_channelDemoBytes(rt, args, w); return true;
     case 4: encode_clamp(rt, args, w); return true;
     case 8: encode_createItem(rt, args, w); return true;
+    case 32: encode_deviceDemo(rt, args, w); return true;
     case 10: encode_divide(rt, args, w); return true;
     case 11: encode_emitDemo(rt, args, w); return true;
     case 17: encode_gauge(rt, args, w); return true;
     case 5: encode_greet(rt, args, w); return true;
     case 3: encode_isEven(rt, args, w); return true;
     case 2: encode_multiply(rt, args, w); return true;
+    case 30: encode_platformNativeInfo(rt, args, w); return true;
     case 9: encode_processItem(rt, args, w); return true;
     case 22: encode_resourceClose(rt, args, w); return true;
     case 19: encode_resourceOpen(rt, args, w); return true;
@@ -851,14 +905,17 @@ Value decode_by_id(Runtime& rt, uint16_t cmd_id, rc::Reader& r) {
     case 26: return decode_benchEchoPair(rt, r);
     case 24: return decode_benchEchoString(rt, r);
     case 18: return decode_channelDemo(rt, r);
+    case 31: return decode_channelDemoBytes(rt, r);
     case 4: return decode_clamp(rt, r);
     case 8: return decode_createItem(rt, r);
+    case 32: return decode_deviceDemo(rt, r);
     case 10: return decode_divide(rt, r);
     case 11: return decode_emitDemo(rt, r);
     case 17: return decode_gauge(rt, r);
     case 5: return decode_greet(rt, r);
     case 3: return decode_isEven(rt, r);
     case 2: return decode_multiply(rt, r);
+    case 30: return decode_platformNativeInfo(rt, r);
     case 9: return decode_processItem(rt, r);
     case 22: return decode_resourceClose(rt, r);
     case 19: return decode_resourceOpen(rt, r);
@@ -885,14 +942,17 @@ bool has_static_codec(const std::string& name) {
   if (name == "benchEchoPair") return true;
   if (name == "benchEchoString") return true;
   if (name == "channelDemo") return true;
+  if (name == "channelDemoBytes") return true;
   if (name == "clamp") return true;
   if (name == "createItem") return true;
+  if (name == "deviceDemo") return true;
   if (name == "divide") return true;
   if (name == "emitDemo") return true;
   if (name == "gauge") return true;
   if (name == "greet") return true;
   if (name == "isEven") return true;
   if (name == "multiply") return true;
+  if (name == "platformNativeInfo") return true;
   if (name == "processItem") return true;
   if (name == "resourceClose") return true;
   if (name == "resourceOpen") return true;
@@ -919,14 +979,17 @@ bool has_static_codec_id(uint16_t cmd_id) {
     case 26: return true;
     case 24: return true;
     case 18: return true;
+    case 31: return true;
     case 4: return true;
     case 8: return true;
+    case 32: return true;
     case 10: return true;
     case 11: return true;
     case 17: return true;
     case 5: return true;
     case 3: return true;
     case 2: return true;
+    case 30: return true;
     case 9: return true;
     case 22: return true;
     case 19: return true;
@@ -954,6 +1017,7 @@ bool has_pos_codec(uint16_t cmd_id) {
   if (cmd_id == 26) return true;
   if (cmd_id == 24) return true;
   if (cmd_id == 18) return true;
+  if (cmd_id == 31) return true;
   if (cmd_id == 4) return true;
   if (cmd_id == 8) return true;
   if (cmd_id == 10) return true;
@@ -981,6 +1045,7 @@ void encode_pos_by_id(jsi::Runtime& rt, uint16_t cmd_id, const jsi::Value* argv,
     case 26: encode_pos_benchEchoPair(rt, argv, argc, w); return;
     case 24: encode_pos_benchEchoString(rt, argv, argc, w); return;
     case 18: encode_pos_channelDemo(rt, argv, argc, w); return;
+    case 31: encode_pos_channelDemoBytes(rt, argv, argc, w); return;
     case 4: encode_pos_clamp(rt, argv, argc, w); return;
     case 8: encode_pos_createItem(rt, argv, argc, w); return;
     case 10: encode_pos_divide(rt, argv, argc, w); return;

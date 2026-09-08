@@ -147,8 +147,11 @@ export function encodeNode(
 function variantMatches(variant: CompiledVariant, value: unknown): boolean {
   switch (variant.matcher.kind) {
     case 'discriminator': {
-      if (!variant.tag || typeof value !== 'object' || value === null) return false;
-      return Object.is((value as Record<string, unknown>)[variant.tag.key], variant.tag.value);
+      if (typeof value !== 'object' || value === null) return false;
+      return Object.is(
+        (value as Record<string, unknown>)[variant.matcher.key],
+        variant.matcher.value,
+      );
     }
     case 'singleProperty':
       return (
@@ -157,7 +160,6 @@ function variantMatches(variant: CompiledVariant, value: unknown): boolean {
         Object.prototype.hasOwnProperty.call(value, variant.matcher.key)
       );
     case 'constEq':
-      return Object.is(variant.matcher.value, value);
     case 'enumSingle':
       return Object.is(variant.matcher.value, value);
     case 'anyString':

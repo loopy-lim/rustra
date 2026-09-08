@@ -27,12 +27,7 @@ import {
 // ── Benchmark internals (not part of user-facing API) ───────
 import { installRustraJSI, getRustraNative } from '@rustra/generated-react-native';
 import RustraCalculator, { invokeCommand as invokeFfiCommand } from 'rustra-calculator';
-import { createBincodeEngine, bincodeRegistry } from './src/adapters/bincode-adapter';
 import { createJsonEngine } from './src/adapters/json-adapter';
-import { createMsgpackEngine } from './src/adapters/msgpack-adapter';
-import { createPostcardEngine, postcardRegistry } from './src/adapters/postcard-adapter';
-import { createRkyvEngine } from './src/adapters/rkyv-adapter';
-import { createHybridEngine, hybridRegistry } from './src/adapters/hybrid-adapter';
 import { createRkyvV2Engine, rkyvV2Registry } from './src/adapters/rkyv-v2-adapter';
 import {
   analyzeRouteBottlenecks,
@@ -164,11 +159,6 @@ async function runBenchmarks(): Promise<string[]> {
   // ══════════════════════════════════════════════════════
 
   const jsonEngine = createJsonEngine(native);
-  const msgpackEngine = createMsgpackEngine(native);
-  const postcardEngine = createPostcardEngine(native, postcardRegistry);
-  const rkyvEngine = createRkyvEngine(native);
-  const hybridEngine = createHybridEngine(native, hybridRegistry);
-  const bincodeEngine = createBincodeEngine(native, bincodeRegistry);
   const rkyvV2Engine = createRkyvV2Engine(native);
 
   const nitroBench = NitroModules.createHybridObject<NitroBench>('NitroBench');
@@ -185,11 +175,6 @@ async function runBenchmarks(): Promise<string[]> {
   log('┌─ Tier 1: Fixed-width primitives ─────────────┐');
   const adapters = [
     { name: 'JSON', engine: jsonEngine },
-    { name: 'Msgpack', engine: msgpackEngine },
-    { name: 'Postcard', engine: postcardEngine },
-    { name: 'rkyv', engine: rkyvEngine },
-    { name: 'Hybrid', engine: hybridEngine },
-    { name: 'Bincode', engine: bincodeEngine },
     { name: 'rkyvV2', engine: rkyvV2Engine },
   ];
 

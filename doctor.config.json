@@ -32,7 +32,11 @@
         "files": [
           "generated/positional-facade.ts",
           "examples/react-native-bare-calculator/generated/positional-facade.ts",
-          "examples/react-native-calculator/generated/positional-facade.ts"
+          "examples/react-native-calculator/generated/positional-facade.ts",
+          "examples/react-native-bare-calculator/generated/errors.ts",
+          "examples/react-native-calculator/generated/errors.ts",
+          "examples/react-native-bare-calculator/generated/devices.ts",
+          "examples/react-native-calculator/generated/devices.ts"
         ],
         "rules": ["deslop/unused-file"]
       },

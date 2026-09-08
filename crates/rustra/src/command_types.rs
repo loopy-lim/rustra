@@ -27,6 +27,19 @@ pub(crate) struct Command {
     /// `Some(cap)` 면 `cap` 이 `grant_capability` 로 부여되기 전까지 deny-by-default.
     /// `None` 이면 항상 허용 (기본 명령).
     pub(crate) required_capability: Option<&'static str>,
+    /// 플랫폼 특화 명령의 지원 플랫폼 — 빈 벡터는 "전 플랫폼" (기본 명령).
+    /// [`crate::PackageBuilder::platform_command`] 참고. command_id·스키마는
+    /// 전 플랫폼에서 동일하게 등록되고, 미지원 플랫폼의 핸들러는
+    /// `platform.unavailable` 스텁이다.
+    pub(crate) platforms: Vec<crate::platform::Platform>,
+    /// 이 명령이 반환할 수 있는 도메인 에러 코드 선언 — 빈 벡터는 "선언 없음".
+    /// schema.json `errors` 필드와 TS 코드젠(타입 가드)의 원천이며 런타임
+    /// 와이어는 무변경이다. 선언 경로는 `command_errors` 참고.
+    pub(crate) error_variants: Vec<CommandErrorVariant>,
+    /// 이 명령이 전제하는 디바이스 역량 선언 — 빈 벡터는 "선언 없음".
+    /// schema.json `devices` 필드의 원천이며 런타임 자동 게이팅은 없다(선언은
+    /// 계약 문서). 선언 경로는 `command_devices` 참고.
+    pub(crate) device_requirements: Vec<crate::device_capabilities::DeviceCapability>,
 }
 
 pub(crate) type BufferHandler = Arc<dyn Fn(&[u8]) -> crate::Result<Vec<u8>> + Send + Sync>;

@@ -4,8 +4,7 @@
   "positional": true,
   "codegen": {
     "rustManifest": "../calculator/Cargo.toml",
-    "rustPackage": "rustra-calculator-example",
-    "rustBinary": "rustra-calculator-example"
+    "rustPackage": "rustra-calculator-example"
   },
   "reactNative": {
     "rustManifest": "../calculator/Cargo.toml"

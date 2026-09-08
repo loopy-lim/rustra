@@ -70,6 +70,21 @@ export type ChannelDemoOutput = {
   droppedSends: number;
 };
 
+/**
+ * 바이너리 채널 데모 — `channel_demo` 의 바이트 경로 쌍둥이. 모든 호스트 어댑터의 createBytesChannel/createChannelBytes 패리티를 동일 명령으로 e2e 검증한다(페이로드는 스텝 카운터 LE u64).
+ */
+export type ChannelDemoBytesInput = {
+  /** 바이너리 채널로 발급받은 핸들. */
+  channel: ChannelHandle;
+  /** 전송할 프레임 수. */
+  ticks: number;
+};
+
+export type ChannelDemoBytesOutput = {
+  sent: number;
+  droppedSends: number;
+};
+
 export type ClampInput = {
   max: number;
   min: number;
@@ -87,6 +102,16 @@ export type CreateItemInput = {
 
 export type CreateItemOutput = {
   item: Item;
+};
+
+/**
+ * 디바이스 역량 계약 — 커맨드가 전제하는 디바이스 역량 선언의 예시.
+ *
+ * `device_demo` 는 `#[command(device(camera, bluetooth))]` 로 카메라·블루투스를 전제한다고 선언한다. 선언은 schema.json 의 조건부 `devices` 필드와 생성 `devices.ts`(토큰 유니언 + 커맨드별 요구 상수)의 원천이 될 뿐 런타임 게이팅은 하지 않는다 — 하드웨어 접근·권한 확인은 호스트 앱이 getDeviceStatus 로 사전 조회하는 패턴의 뼈대가 되는 예시다(여기서는 하드웨어에 접근하지 않는다).
+ */
+export type DeviceDemoOutput = {
+  /** std::env::consts::OS — 선언과 무관한 컴파일 대상 확인용. */
+  os: string;
 };
 
 export type DivideInput = {
@@ -149,6 +174,18 @@ export type MultiplyInput = {
 
 export type MultiplyOutput = {
   value: number;
+};
+
+/**
+ * 플랫폼 상호운용 — 플랫폼 특화 명령의 계약 안정화 예시.
+ *
+ * `platformNativeInfo` 는 `#[command(platform(windows, macos))]` 로 macos/windows 에만 구현을 선언한다. 등록(id·스키마·계약 해시)은 전 플랫폼에서 동일하게 일어나고, Linux(및 기타)에서 호출하면 `platform.unavailable` 이 반환된다 (`command.not_found` 와 구분된다). 실제 구현은 cfg 로 보호해 지원 OS 에서만 주입된다 — win32/objc2 호출을 하는 실명령의 뼈대가 되는 패턴이다.
+ */
+export type PlatformNativeInfoOutput = {
+  /** std::env::consts::OS — 컴파일 대상 OS 문자열. */
+  os: string;
+  /** 네이티브 윈도우 시스템 식별자 — 실제 예에서는 win32/objc2 API 조사값. */
+  windowKind: string;
 };
 
 export type ProcessItemInput = {

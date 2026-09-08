@@ -1,3 +1,5 @@
+[English](./architecture.md)
+
 # rustra-bridge 아키텍처
 
 ## 개요
@@ -18,7 +20,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
  │         │                                                           │
  │         ▼                                                           │
  │  Package::builder("examples.calculator")                            │
- │      .register(add_numbers)                                         │
+ │      .command_fn(add_numbers)                                       │
  │      .build()                                          Package      │
  │                                                             │       │
  │         ┌───────────────────────────────────────────────────┘       │
@@ -143,24 +145,26 @@ crates/
 
 핵심 타입과 로직을 제공한다.
 
-| 구성 요소          | 설명                                                                                                                                                                           |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `Package`          | 등록된 command들의 컬렉션. `invoke_json()`으로 런타임 디스패치, `generate_typescript()`로 코드 생성                                                                            |
-| `PackageBuilder`   | `Package::builder(id)`로 생성. `.command_fn(handler)` / `.command(name, handler)`로 command 등록 후 `.build()`                                                                 |
-| `GeneratedPackage` | `generate_typescript()`의 결과. `schema_json`, `types_ts`, `commands_ts`, `contract_hash` 필드 보유. `write_schema_to_dir()`로 schema.json 발행 (deprecated: `write_to_dir()`) |
-| `RustraError`      | `Serialize` 구현. `command.not_found`, `command.invalid_args`, `internal` 에러 코드 + `custom(code, message)` 생성자 + `code()`, `message()` getter                            |
-| `build!`           | `rustra-macros`에서 제공. `rustra::build!("id", fn1, fn2).done()` 형태로 다중 command 일괄 등록                                                                                |
-| `tauri_support`    | `cfg(feature = "tauri")` 활성화 시 제공. `RustraState`, `rustra_dispatch` 단일 Tauri command, `register()` 빌더 주입 함수                                                      |
-| `__private` 모듈   | `CommandInput`, `CommandOutput` sealed 트레이트. proc macro가 컴파일 타임에 command 타입 제약을 검증하는 데 사용. public API로 노출되지 않음                                   |
+| 구성 요소          | 설명                                                                                                                                                                                                                                                            |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Package`          | 등록된 command들의 컬렉션. `invoke_json()`으로 런타임 디스패치, `generate_typescript()`로 코드 생성                                                                                                                                                             |
+| `PackageBuilder`   | `Package::builder(id)`로 생성. `.command_fn(handler)` / `.command(name, handler)`로 command 등록 후 `.build()`                                                                                                                                                  |
+| `GeneratedPackage` | `generate_typescript()`의 결과. `schema_json`, `types_ts`, `commands_ts`, `contract_hash` 필드 보유. `write_schema_to_dir()`로 schema.json 발행 (deprecated: `write_to_dir()` — Rust에서 TS 표면까지 재생성하던 구(舊) 듀얼 패스, 이제 `rustra codegen`의 소관) |
+| `RustraError`      | `Serialize` 구현. `command.not_found`, `command.invalid_args`, `internal` 에러 코드 + `custom(code, message)` 생성자 + `code()`, `message()` getter                                                                                                             |
+| `build!`           | `rustra-macros`에서 제공. `rustra::build!("id", fn1, fn2).done()` 형태로 다중 command 일괄 등록                                                                                                                                                                 |
+| `tauri_support`    | `cfg(feature = "tauri")` 활성화 시 제공. `RustraState`, `rustra_dispatch` 단일 Tauri command, `register()` 빌더 주입 함수                                                                                                                                       |
+| `__private` 모듈   | `CommandInput`, `CommandOutput` sealed 트레이트. proc macro가 컴파일 타임에 command 타입 제약을 검증하는 데 사용. public API로 노출되지 않음                                                                                                                    |
 
 #### `crates/rustra-macros` (proc-macro)
 
 `#[command]` attribute macro를 제공한다. 적용된 함수에 대해:
 
-1. 함수가 최소 1개의 파라미터를 가지는지 검증
-2. 스칼라 파라미터(2개 이상) 또는 구조체 파라미터(1개) 모드를 자동 감지
-3. `rustra::__private::CommandInput` / `CommandOutput` 트레이트 바운드를 만족하는지 컴파일 타임에 정적 검증
-4. `#[command(name = "customName")]` 속성으로 명시적 command 이름 지정 가능. 생략 시 함수명을 snake_to_lower_camel 변환하여 자동 생성
+1. **데이터 파라미터는 최대 1개**인지 검증한다(0개는 `()` 입력으로 허용). 2개 이상은 컴파일 에러다. 추가 `State<T>` 파라미터는 별도로 주입된다([Rust API 가이드](rust-api-guide.ko.md#5-packagebuilder-메서드) 참고)
+2. `rustra::__private::CommandInput` / `CommandOutput` 트레이트 바운드를 만족하는지 컴파일 타임에 정적 검증
+3. 반환 타입은 명시적 `Result<O>`여야 한다 — bare 반환(`-> i64`)과 unit 반환 생략은 컴파일 에러
+4. `#[command(name = "customName")]` 속성으로 명시적 command 이름 지정 가능. 생략 시 함수명을 snake_to_lower_camel 변환해 자동 생성(`_command` 접미사 제거)
+
+같은 규칙을 예제와 함께 설명한 정본은 [Rust API 가이드 — `#[command]` 매크로](rust-api-guide.ko.md#2-command-매크로)다 — 두 문서가 어긋나면 이쪽을 따른다.
 
 함수 본문은 그대로 통과시키며 (identity passthrough), 컴파일 타임 타입 체크만 수행한다. 또한 `const __RUstra_meta_{fn_name}: &str = "commandName"` 상수를 생성하여 `build!` 매크로에서 command 이름을 참조할 수 있게 한다.
 
@@ -249,16 +253,20 @@ pub fn calculator_package() -> Package {
 
 타입 변환 규칙 (`ts_type_from_schema`):
 
-| JSON Schema type     | TypeScript                |
-| -------------------- | ------------------------- |
-| `object`             | `{ property: type; ... }` |
-| `integer` / `number` | `number`                  |
-| `string`             | `string`                  |
-| `boolean`            | `boolean`                 |
-| `array`              | `itemType[]`              |
-| 기타                 | `unknown`                 |
+| JSON Schema type             | TypeScript                                       |
+| ---------------------------- | ------------------------------------------------ |
+| `object`                     | `{ property: type; ... }`                        |
+| `integer` (`int64`/`uint64`) | `number \| bigint` (±2^53 밖 값은 `bigint` 복원) |
+| `integer` / `number` (기타)  | `number`                                         |
+| `string`                     | `string`                                         |
+| `boolean`                    | `boolean`                                        |
+| `array`                      | `itemType[]`                                     |
+| 기타                         | `unknown`                                        |
 
-`$defs` (공유 정의)는 모든 command의 정의를 병합한 뒤 인라인으로 전개한다. 현재는 별도의 named 타입 추출 없이 전체 스키마 트리를 직접 변환한다.
+`$defs`(공유 정의)는 모든 command의 정의를 병합해 **명명 타입으로 발행**한다 —
+예를 들어 구조체 `AddNumbersInput`은 `types.ts`에
+`export type AddNumbersInput = { a: number | bigint; b: number | bigint }`로
+나오고, 중첩/참조 타입은 정의 이름(`$ref`)으로 해석된다.
 
 ### 생성 결과물의 파일 구조
 
@@ -519,8 +527,10 @@ Tauri에서 `rustra_dispatch`는 `RustraError`를 JSON 값(`{ code, message }`)�
    #   rustra codegen --config rustra.json
 
 4. TypeScript 측에서 생성된 코드 사용
-   import { myCommand } from './generated/commands.js';
-   const result = await myCommand(engine, { ... });
+   import { addNumbers } from './generated/node.js';   # commands.js 가 아닌 호스트 엔트리
+   const result = await addNumbers({ a: 20, b: 22 });
+   # 생성 호스트 엔트리가 configureLazy()로 엔진을 lazy 설치한다 —
+   # 엔진 인자도, 수동 configure()도 없다
 ```
 
 `examples/calculator/src/bin/generate.rs`는 계약 프로브의 예시다:
@@ -536,10 +546,9 @@ generated.write_schema_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))
 
 `#[command]` macro는 함수 시그니처에 대한 컴파일 타임 검증을 수행한다:
 
-1. 입력 파라미터가 최소 1개인지 확인
-2. 입력 파라미터가 typed parameter인지 확인
-3. 반환 타입이 `Result<O>`, bare value, 또는 `()` 형태인지 확인
-4. 입력 타입이 `CommandInput` (`DeserializeOwned + JsonSchema + 'static`)을 만족하는지 정적 검증
-5. 출력 타입이 `CommandOutput` (`Serialize + JsonSchema + 'static`)을 만족하는지 정적 검증
+1. 입력 데이터 파라미터가 최대 1개인지 확인(0개는 `()` 입력으로 허용, 2개 이상은 컴파일 에러)
+2. 반환 타입이 명시적 `Result<O>`인지 확인(bare value와 unit 반환 생략은 컴파일 에러)
+3. 입력 타입이 `CommandInput` (`DeserializeOwned + JsonSchema + 'static`)을 만족하는지 정적 검증
+4. 출력 타입이 `CommandOutput` (`Serialize + JsonSchema + 'static`)을 만족하는지 정적 검증
 
 이 검증은 `__private` 모듈의 sealed 트레이트를 통해 이루어지며, public API로 노출되지 않는다. `#[command]`는 검증 외에도 `const __RUstra_meta_{fn_name}: &str` 상수를 생성하여 command 이름을 저장하며, 이 상수는 `build!` 매크로에서 참조된다.

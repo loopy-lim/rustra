@@ -1,8 +1,14 @@
 use rustra::prelude::*;
 use std::fs;
 use std::process::Command;
+use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
+
+/// `RUSTRA_SCHEMA_OUT` 는 프로세스 전역 env — 이 env 를 읽는 write_to_dir/
+/// write_schema_to_dir 를 쓰는 테스트는 이 락으로 직렬화한다(병렬 실행 시
+/// 남의 쓰기가 override 디렉토리로 리다이렉트되어 파일 수 단언이 깨진다).
+static SCHEMA_OUT_SERIAL: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -39,6 +45,50 @@ fn locked_add(input: AddNumbersInput) -> Result<AddNumbersOutput> {
     Ok(AddNumbersOutput {
         value: input.a + input.b + 1000,
     })
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct DivideInput {
+    a: i64,
+    b: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct DivideOutput {
+    value: i64,
+}
+
+/// `#[command(error(...))]` — 커맨드별 도메인 에러 코드 선언을 매크로 시점에
+/// 심는다 (register!/build! 가 errors_meta_if 로 연결).
+#[command(error("math.divide_by_zero"))]
+fn divide_typed_errors(input: DivideInput) -> Result<DivideOutput> {
+    if input.b == 0 {
+        Err(RustraError::custom(
+            "math.divide_by_zero",
+            "0으로 나눌 수 없습니다",
+        ))
+    } else {
+        Ok(DivideOutput {
+            value: input.a / input.b,
+        })
+    }
+}
+
+/// `#[command(device(...))]` — 커맨드가 전제하는 디바이스 역량 선언을 매크로
+/// 시점에 심는다 (register!/build! 가 devices_meta_if 로 연결). 식별자와
+/// 문자열 리터럴을 함께 쓸 수 있다 — kebab-case 토큰(clipboard-read)은
+/// 식별자로 쓸 수 없어 문자열 리터럴 경로가 필요하다.
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct ScanTagsOutput {
+    found: i64,
+}
+
+#[command(device(camera, "clipboard-read"))]
+fn scan_tags() -> Result<ScanTagsOutput> {
+    Ok(ScanTagsOutput { found: 0 })
 }
 
 fn mobile_package() -> Package {
@@ -172,6 +222,46 @@ fn build_macro_also_applies_capability_attribute() {
         .invoke("lockedAdd", AddNumbersInput { a: 2, b: 2 })
         .unwrap();
     assert_eq!(out.value, 1004);
+}
+
+#[test]
+fn command_error_attr_declares_schema_errors() {
+    let package = rustra::register!(Package::builder("example.attr"), divide_typed_errors).build();
+    let schema = package.live_schema();
+    let entry = &schema["commands"][0];
+    let errors = entry["errors"]
+        .as_array()
+        .expect("error(...) attribute must flow into the schema entry");
+    assert_eq!(errors.len(), 1);
+    assert_eq!(errors[0]["code"], "math.divide_by_zero");
+
+    // 핸들러는 여전히 일반 RustraError 를 반환한다 — 선언은 계약 문서일 뿐
+    // 런타임 경로를 바꾸지 않는다.
+    assert_eq!(
+        package
+            .invoke::<_, DivideOutput>("divideTypedErrors", DivideInput { a: 10, b: 0 })
+            .unwrap_err()
+            .code(),
+        "math.divide_by_zero"
+    );
+}
+
+#[test]
+fn command_device_attr_declares_schema_devices() {
+    let package = rustra::register!(Package::builder("example.attr"), scan_tags).build();
+    let schema = package.live_schema();
+    let entry = &schema["commands"][0];
+    let devices = entry["devices"]
+        .as_array()
+        .expect("device(...) attribute must flow into the schema entry");
+    assert_eq!(devices.len(), 2);
+    assert_eq!(devices[0], "camera");
+    assert_eq!(devices[1], "clipboard-read");
+
+    // 선언은 계약 문서일 뿐 — 런타임 자동 게이팅은 없으므로 호출 경로가
+    // 그대로 동작한다(설계 F절).
+    let out: ScanTagsOutput = package.invoke("scanTags", ()).unwrap();
+    assert_eq!(out.found, 0);
 }
 
 /// (감사 #5) capability 무음 드랍 차단 — `#[command(capability = "...")]` 함수를
@@ -406,6 +496,7 @@ fn package_generates_host_neutral_typescript_client() {
 
 #[test]
 fn generated_package_can_be_written_to_a_directory() {
+    let _serial = SCHEMA_OUT_SERIAL.lock().unwrap();
     let output_dir = std::env::temp_dir().join(format!("rustra-generated-{}", std::process::id()));
 
     let _ = std::fs::remove_dir_all(&output_dir);
@@ -428,6 +519,7 @@ fn generated_package_can_be_written_to_a_directory() {
 /// 별도 테스트로 나누면 카고 병렬 실행 시 서로의 env 를 오염시켜 간헐적으로 깨진다.
 #[test]
 fn write_schema_to_dir_emits_schema_only_and_honors_rustra_schema_out() {
+    let _serial = SCHEMA_OUT_SERIAL.lock().unwrap();
     let output_dir = std::env::temp_dir().join(format!("rustra-probe-{}", std::process::id()));
     let override_dir =
         std::env::temp_dir().join(format!("rustra-probe-override-{}", std::process::id()));
@@ -1188,6 +1280,7 @@ fn build_api_scalar_command_with_result() {
 
 #[test]
 fn build_api_generates_typescript() {
+    let _serial = SCHEMA_OUT_SERIAL.lock().unwrap();
     #[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
     #[serde(rename_all = "camelCase")]
     struct GreetInput {
@@ -1221,6 +1314,7 @@ fn build_api_generates_typescript() {
 
 #[test]
 fn generated_output_skips_unchanged_writes() {
+    let _serial = SCHEMA_OUT_SERIAL.lock().unwrap();
     let dir = tempfile::tempdir().unwrap();
     let generated = register!(Package::builder("test.write-stability"), add_numbers)
         .build()

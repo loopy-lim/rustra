@@ -35,19 +35,29 @@ export function createNodeEngine(transport: NodeInvokeTransport): NodeEngineClie
 
 ## 2. Current Implementation Status
 
-| Host             | Current Transport                                   | Rust Entry Point                               | Alternatives                    |
-| ---------------- | --------------------------------------------------- | ---------------------------------------------- | ------------------------------- |
-| **Node**         | subprocess stdio (`spawnSync`)                      | `main.rs` → `run_invoke_stdio()`               | napi-rs native module, WASM     |
-| **Bun**          | subprocess stdio (`spawnSync`)                      | `main.rs` → `run_invoke_stdio()`               | `bun:ffi` (direct C FFI call)   |
-| **Tauri**        | `rustra_dispatch` multiplexing (framework built-in) | `tauri_support::register()` (feature: `tauri`) | None                            |
-| **React Native** | C FFI (`extern "C"`)                                | `lib.rs` → `rustra_calculator_invoke`          | TurboModule, Nitro Modules, JSI |
+Ordinary apps do not assemble transports at all — the generated host entry points
+(`generated/node.ts`, `generated/bun.ts`, `generated/tauri.ts`,
+`generated/react-native.ts`) wire the transport lazily. The table below is the
+baseline you start from; everything after it in this guide is for **manual
+assembly** — custom hosts, custom transports, or replacing the default.
 
-### Node / Bun — subprocess stdio
+| Host             | Default (generated entry)                                                      | Rust entry point                                             | Manual-assembly alternatives                                                                 |
+| ---------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| **Node**         | one-shot Cargo binary + stdio, contract check via `__rustra_contract`          | `main.rs` → `run_invoke_stdio()`                             | your own `spawnSync` stdio, `createNodeLoopTransport` (servers), napi-rs native module, WASM |
+| **Bun**          | cdylib + stable C ABI + rkyv V2 (`rustra_ffi_invoke_rkyv_v2`)                  | `lib.rs` → `rustra::native_entry!` + `register_ffi(...)`     | `bun:ffi` direct C FFI call (§4, JSON path)                                                  |
+| **Tauri**        | `rustra_dispatch` multiplexing (framework built-in)                            | `tauri_support::register[_with_events]()` (feature: `tauri`) | `createTauriEngine({ invoke })` with a custom invoke function                                |
+| **React Native** | autolinked JSI + rkyv V2 (`invokeRkyvV2`) via `@rustra/generated-react-native` | `rustra::native_entry!` (exports `rustra_mobile_init`)       | custom JSON transport (`createReactNativeEngine`), TurboModule, Nitro Modules                |
+
+### Node — manual subprocess stdio
+
+The default Node entry spawns a Cargo binary that speaks the one-shot stdio
+protocol (`{command, args}` → `{ok, result}` + the reserved `__rustra_contract`
+probe). If you assemble the process transport yourself, the shape is:
 
 ```ts
-// examples/calculator/apps/node-app.ts
+// manual assembly — illustrative; the generated node.ts does this for you
 import { spawnSync } from 'node:child_process';
-import { createNodeEngine } from '../../../packages/node/src/index.js';
+import { createNodeEngine } from '@rustra/node';
 
 const engine = createNodeEngine({
   invoke(command, args) {
@@ -90,56 +100,75 @@ fn run_invoke_stdio() -> rustra::Result<()> {
 }
 ```
 
-### React Native — C FFI
+### React Native — C FFI (manual JSON path)
 
-Swift calls the Rust C FFI functions directly:
+> The example-local symbols `rustra_calculator_invoke`/`rustra_calculator_free_string`
+> shown here in older revisions were removed (2026-09-03 legacy cleanup). The current
+> surface is the **core public C ABI** (`rustra_ffi_*`), which serves any package.
 
-```swift
-// examples/react-native-calculator/modules/rustra-calculator/ios/RustraCalculatorModule.swift
-@_silgen_name("rustra_calculator_invoke")
-func rustra_calculator_invoke(_ payload: UnsafePointer<CChar>?) -> UnsafeMutablePointer<CChar>?
-
-@_silgen_name("rustra_calculator_free_string")
-func rustra_calculator_free_string(_ ptr: UnsafeMutablePointer<CChar>?)
-
-public class RustraCalculatorModule: Module {
-  public func definition() -> ModuleDefinition {
-    Name("RustraCalculator")
-    AsyncFunction("invokeRaw") { (payload: String) -> String in
-      return payload.withCString { pointer in
-        decodeRustString(rustra_calculator_invoke(pointer))
-      }
-    }
-  }
-}
-```
-
-Rust C FFI entry point:
+On the Rust side, register the package for the core FFI and export the zero-config
+init — no hand-written per-app symbols:
 
 ```rust
 // examples/calculator/src/lib.rs
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_calculator_invoke(payload: *const c_char) -> *mut c_char {
-    if payload.is_null() {
-        return json_string(json!({ "ok": false, "error": "payload was null" }));
-    }
-    let payload = match unsafe { CStr::from_ptr(payload) }.to_str() { ... };
-    let request = match serde_json::from_str::<Value>(payload) { ... };
-    let command = request.get("command").and_then(Value::as_str)...;
-    let args = request.get("args").cloned().unwrap_or_else(|| json!({}));
-    match calculator_package().invoke_json(command, args) {
-        Ok(result) => json_string(json!({ "ok": true, "result": result })),
-        Err(error) => json_string(json!({ "ok": false, "error": error.to_string() })),
-    }
+use rustra::ffi::FfiFormat;
+use rustra::prelude::*;
+
+pub fn calculator_package() -> Package {
+    let pkg = rustra::build!("examples.calculator", add_numbers /*, … */).done();
+    // rustra_ffi_invoke_json / rustra_ffi_invoke_postcard now serve this package
+    pkg.register_ffi_with_default(FfiFormat::Json);
+    pkg
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_calculator_free_string(ptr: *mut c_char) {
-    if !ptr.is_null() {
-        let _ = unsafe { CString::from_raw(ptr) };
+// exports rustra_mobile_init() — hosts call it during lazy bootstrap
+rustra::native_entry!(calculator_package);
+```
+
+The JSON-over-bytes contract of the core entry point:
+
+```text
+rustra_ffi_invoke_json(payload: *const u8, payload_len: usize, out_len: *mut usize) -> *mut u8
+  request:  JSON {"command":"...","args":{...}} as raw bytes
+  response: JSON {"ok":bool,"result":...,"error":"..."} as raw bytes
+  the returned buffer must be freed with rustra_ffi_free(ptr, len) — the exact pair
+```
+
+Swift binds the same symbols directly:
+
+```swift
+// a hand-rolled JSI/module bridging layer (custom hosts only — the default RN
+// path is the generated @rustra/generated-react-native package)
+@_silgen_name("rustra_mobile_init")
+func rustra_mobile_init()
+
+@_silgen_name("rustra_ffi_invoke_json")
+func rustra_ffi_invoke_json(
+    _ payload: UnsafePointer<UInt8>, _ payloadLen: Int,
+    _ outLen: UnsafeMutablePointer<Int>
+) -> UnsafeMutablePointer<UInt8>?
+
+@_silgen_name("rustra_ffi_free")
+func rustra_ffi_free(_ ptr: UnsafeMutablePointer<UInt8>, _ len: Int)
+
+func invokeRawJSON(_ payload: String) throws -> String {
+    rustra_mobile_init() // idempotent — registers the package on first call
+    let bytes = Array(payload.utf8)
+    let outLen = UnsafeMutablePointer<Int>.allocate(capacity: 1)
+    defer { outLen.deallocate() }
+    guard let raw = rustra_ffi_invoke_json(bytes, bytes.count, outLen) else {
+        throw NSError(domain: "rustra", code: 1, userInfo: [NSLocalizedDescriptionKey: "FFI invoke returned null"])
     }
+    defer { rustra_ffi_free(raw, outLen.pointee) } // free with the exact ptr/len pair
+    return String(decoding: UnsafeBufferPointer(start: raw, count: outLen.pointee), as: UTF8.self)
 }
 ```
+
+Other core FFI symbols on the same cdylib/staticlib: `rustra_ffi_invoke` (default
+format dispatch), `rustra_ffi_invoke_postcard`, `rustra_ffi_invoke_rkyv_v2`,
+`rustra_ffi_get_schema`, `rustra_ffi_contract_hash` — the full list with stability
+tiers is in the [Rust API guide — FFI appendix](../rust-api-guide.md) and the
+[versioning policy](../versioning-policy.md).
 
 ### Tauri — the `rustra_dispatch` multiplexing pattern
 
@@ -183,7 +212,10 @@ rustra = { path = "...", features = ["tauri"] }
 
 ### Step 1: Add a new Rust entry point (only if needed)
 
-If C FFI entry points (`rustra_*_invoke`, `rustra_*_free_string`) already exist, switching to an FFI-based transport needs no new entry point.
+A crate that registers its package for the core FFI (`rustra::native_entry!` +
+`register_ffi(...)`, see §2) already exports the core C ABI
+(`rustra_ffi_invoke_json`, `rustra_ffi_free`, …) — switching to an FFI-based
+transport then needs no new entry point.
 
 If you need a new communication mechanism (napi-rs, WASM, etc.), add the corresponding entry point to `lib.rs`.
 
@@ -232,18 +264,23 @@ The tests call `configure(engine)` and then check that `addNumbers({ a: 20, b: 2
 
 ## 4. Example: Replacing with Bun FFI
 
-Bun can load `.dylib` / `.so` files directly via `bun:ffi`. Since the Rust C FFI entry points already exist, you can replace only the transport with no Rust-side changes.
+Bun can load `.dylib` / `.so` files directly via `bun:ffi`. The **default generated
+`bun.ts` entry** already does this over the rkyv V2 symbols; the JSON path below is
+the manual-assembly variant for custom hosts, using the same core C ABI
+(`rustra_ffi_invoke_json`).
 
 ### Rust preparation
 
-Add `cdylib` to `examples/calculator/Cargo.toml` (keep `staticlib` for RN iOS):
+Add `cdylib` to the crate's `Cargo.toml` (keep `staticlib` for RN iOS):
 
 ```toml
 [lib]
 crate-type = ["rlib", "cdylib", "staticlib"]
 ```
 
-Build:
+Register the package for the core FFI in `lib.rs` (see §2 React Native for the full
+snippet) — `rustra::native_entry!(my_package)` plus
+`pkg.register_ffi_with_default(FfiFormat::Json)`. Build:
 
 ```bash
 cargo build -p rustra-calculator-example
@@ -253,33 +290,43 @@ This produces `target/debug/librustra_calculator_example.dylib` (macOS) or `.so`
 
 ### Bun FFI transport implementation
 
-**Caution**: using `FFIType.cstring` as the return type leaks memory. Memory allocated by Rust's `CString::into_raw()` must be freed with `CString::from_raw()`. Bun's `FFIType.cstring` only copies the C string into a JS string and never frees the original memory. Therefore you must receive the pointer as `FFIType.ptr`, read the string manually, and call `free_string`.
+The request/response are raw bytes (`Buffer`/`ArrayBuffer`), not C strings — Bun's
+`FFIType.cstring` must not be used for the return value. Receive the pointer as
+`FFIType.ptr`, copy it, and free it with `rustra_ffi_free(ptr, len)` using the exact
+pair:
 
 ```ts
-import { dlopen, FFIType, suffix } from 'bun:ffi';
-import { createBunEngine } from '../../../packages/bun/src/index.js';
-import { addNumbers } from '../generated/commands.js';
+import { dlopen, FFIType, suffix, toArrayBuffer } from 'bun:ffi';
+import { createBunEngine } from '@rustra/bun';
 import { configure } from '@rustra/types';
+import { addNumbers } from '../generated/commands.js';
 
+const outLength = new BigUint64Array(1); // usize out-param
 const lib = dlopen(`target/debug/librustra_calculator_example.${suffix}`, {
-  rustra_calculator_invoke: {
-    args: [FFIType.cstring],
+  rustra_mobile_init: { args: [], returns: FFIType.void },
+  rustra_ffi_invoke_json: {
+    args: [FFIType.ptr, FFIType.u64, FFIType.ptr], // payload, payload_len, out_len
     returns: FFIType.ptr, // not FFIType.cstring — manual memory management required
   },
-  rustra_calculator_free_string: {
-    args: [FFIType.ptr],
-    returns: FFIType.void,
-  },
+  rustra_ffi_free: { args: [FFIType.ptr, FFIType.u64], returns: FFIType.void },
 });
+lib.symbols.rustra_mobile_init(); // idempotent package registration
 
 const engine = createBunEngine({
   invoke(command: string, args?: unknown): unknown {
-    const payload = JSON.stringify({ command, args });
-    const rawPtr = lib.symbols.rustra_calculator_invoke(payload);
-    const rawResponse = new CString(rawPtr);
-    lib.symbols.rustra_calculator_free_string(rawPtr); // Rust frees via CString::from_raw
+    const payload = Buffer.from(JSON.stringify({ command, args }), 'utf8');
+    outLength[0] = 0n;
+    const rawPtr = lib.symbols.rustra_ffi_invoke_json(payload, BigInt(payload.length), outLength);
+    const len = Number(outLength[0]);
+    let responseText: string;
+    try {
+      // copy into JS-owned memory before freeing the Rust allocation
+      responseText = new TextDecoder().decode(toArrayBuffer(rawPtr, 0, len));
+    } finally {
+      lib.symbols.rustra_ffi_free(rawPtr, BigInt(len));
+    }
 
-    const response = JSON.parse(rawResponse) as {
+    const response = JSON.parse(responseText) as {
       ok: boolean;
       result?: unknown;
       error?: string;
@@ -298,17 +345,21 @@ const result = await addNumbers({ a: 20, b: 22 });
 console.log(`bun FFI result: ${result.value}`); // 42
 ```
 
-### Comparison with the existing Bun app
+The release-ready variant (rkyv V2 caller-buffer path with contract verification,
+no manual dlopen at all) is the generated `bun.ts` entry — see
+[`bun-ffi-app.ts`](../../examples/calculator/apps/bun-ffi-app.ts).
+
+### Comparison with the subprocess stdio transport
 
 ```ts
-// before: subprocess stdio (process spawn overhead)
+// subprocess stdio (process spawn overhead per call)
 const output = spawnSync('target/debug/rustra-calculator-example', ['invoke'], {
   input: JSON.stringify({ command, args }),
   encoding: 'utf8',
 });
 
-// after: direct FFI call (no process boundary, faster)
-const rawResponse = lib.symbols.rustra_calculator_invoke(payload);
+// direct FFI call (no process boundary, faster)
+const rawPtr = lib.symbols.rustra_ffi_invoke_json(payload, BigInt(payload.length), outLength);
 ```
 
 Advantages:
@@ -326,7 +377,8 @@ Advantages:
 ### Rust implementation
 
 ```rust
-// crates/calculator-napi/src/lib.rs
+// examples/calculator-napi/src/lib.rs — generic JSON pattern
+// (the shipped example now binds the rkyv V2 buffer path instead; see its README)
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use rustra_calculator_example::calculator_package;
@@ -361,9 +413,9 @@ napi build --platform --release
 ### Node transport implementation
 
 ```ts
-import { createNodeEngine } from '../../../packages/node/src/index.js';
+import { createNodeEngine } from '@rustra/node';
 
-// load the native module built with napi-rs
+// load the native module built with napi-rs (examples/calculator-napi)
 const native = require('./calculator-napi.node');
 
 const engine = createNodeEngine({
@@ -426,8 +478,8 @@ Advantages:
 
 **Recommendations:**
 
-- **Rapid prototyping**: start with subprocess stdio
-- **Production (Node)**: napi-rs or C FFI
-- **Production (Bun)**: `bun:ffi`
-- **Production (React Native)**: C FFI (current approach)
+- **Rapid prototyping**: start with the generated entries (one-shot stdio on Node, cdylib FFI on Bun)
+- **Production (Node)**: the generated entry; napi-rs or C FFI for hot paths
+- **Production (Bun)**: the generated `bun.ts` FFI entry
+- **Production (React Native)**: the autolinked JSI entry (default); core `rustra_ffi_*` C ABI only for custom native hosts
 - **Production (Tauri)**: the `rustra_dispatch` multiplexing pattern (`tauri_support::register`)

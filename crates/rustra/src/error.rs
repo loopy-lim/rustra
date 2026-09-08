@@ -19,6 +19,7 @@ pub type Result<T> = std::result::Result<T, RustraError>;
 /// | `command.not_found` | [`command_not_found`] | 등록되지 않은 명령 호출 |
 /// | `command.invalid_args` | [`invalid_args`] | 입력 인자 역직렬화 실패 |
 /// | `capability.denied` | [`capability_denied`] | 필요 capability 미부여 (deny-by-default) |
+/// | `platform.unavailable` | [`platform_unavailable`] | 플랫폼 특화 명령의 이 플랫폼 미구현 |
 /// | `payload.too_large` | [`payload_too_large`] | 페이로드가 동적 크기 한도 초과 |
 /// | `internal` | [`internal`] | 내부 오류 (직렬화, I/O 등) |
 /// | `cancelled` | [`cancelled`] | 호출 취소 (AbortSignal 등) |
@@ -27,6 +28,7 @@ pub type Result<T> = std::result::Result<T, RustraError>;
 /// [`command_not_found`]: RustraError::command_not_found
 /// [`invalid_args`]: RustraError::invalid_args
 /// [`capability_denied`]: RustraError::capability_denied
+/// [`platform_unavailable`]: RustraError::platform_unavailable
 /// [`payload_too_large`]: RustraError::payload_too_large
 /// [`internal`]: RustraError::internal
 /// [`cancelled`]: RustraError::cancelled
@@ -92,6 +94,29 @@ impl RustraError {
         Self {
             code: "capability.denied",
             message: detail.to_string(),
+            retryable: false,
+        }
+    }
+
+    /// 플랫폼 특화 명령이 현재 플랫폼용 구현 없이 호출됨.
+    ///
+    /// `command_platform` 으로 선언된 명령이 지원 목록에 없는 플랫폼에서 호출되면
+    /// 이 에러가 반환된다. `command.not_found` 와 구분된다 — 계약(스키마/id)에는
+    /// 존재하지만 이 플랫폼에서는 구현이 없다는 신호다. Code: `platform.unavailable`.
+    pub fn platform_unavailable(command: &str, platforms: &[crate::platform::Platform]) -> Self {
+        let supported = platforms
+            .iter()
+            .map(|p| p.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let current = crate::platform::Platform::current()
+            .map(|p| p.as_str().to_string())
+            .unwrap_or_else(|| "unknown".to_string());
+        Self {
+            code: "platform.unavailable",
+            message: format!(
+                "command '{command}' is declared for platforms [{supported}] but the current platform is '{current}'"
+            ),
             retryable: false,
         }
     }
@@ -174,3 +199,73 @@ impl From<std::io::Error> for RustraError {
 #[cfg(test)]
 #[path = "error_tests.rs"]
 mod cancelled_tests;
+
+/// 커맨드가 반환할 수 있는 도메인 에러 코드의 선언 — const 문맥에서 구성 가능.
+///
+/// [`PackageBuilder::command_errors`](crate::PackageBuilder::command_errors) 빌더와
+/// `#[command(error(...))]` 속성의 원재료다. 선언은 schema.json `errors` 필드와
+/// TS 코드젠(타입 가드)의 원천이며, 런타임 에러 와이어(`{code, message}`)는
+/// 바꾸지 않는다.
+///
+/// [`RustraError`]의 프레임워크 코드(`transport.timeout` 등)와 달리 도메인 코드는
+/// 어느 커맨드에서 발생할지 선언으로만 알 수 있으므로 이 타입이 계약을 담는다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CommandErrorVariant {
+    code: &'static str,
+    description: Option<&'static str>,
+    retryable: bool,
+}
+
+impl CommandErrorVariant {
+    /// dot-notation 도메인 에러 코드로 variant 를 만든다.
+    pub const fn new(code: &'static str) -> Self {
+        Self {
+            code,
+            description: None,
+            retryable: false,
+        }
+    }
+
+    /// 생성 JSDoc 으로 흐르는 한 줄 설명을 붙인다.
+    pub const fn describe(mut self, text: &'static str) -> Self {
+        self.description = Some(text);
+        self
+    }
+
+    /// 재시도 가능 표시 — 코드젠 문서 메타데이터로만 소비되고, 런타임
+    /// retryable 판정은 여전히 인스턴스의 코드 기반 도출이다.
+    pub const fn retryable(mut self) -> Self {
+        self.retryable = true;
+        self
+    }
+
+    /// 도메인 에러 코드.
+    pub const fn code(&self) -> &'static str {
+        self.code
+    }
+
+    /// 선언 시 붙인 설명 — 없으면 `None`.
+    pub const fn description(&self) -> Option<&'static str> {
+        self.description
+    }
+
+    /// 선언의 재시도 가능 표시.
+    pub const fn is_retryable(&self) -> bool {
+        self.retryable
+    }
+}
+
+/// 도메인 에러 코드 패턴 검증 — `^[a-z][a-z0-9_.]*$`.
+///
+/// TS 파서(errors.ts)의 코드 토큰 판정과 동일 집합이다. 위반 코드는 JSON 폴백
+/// 경로의 code/message 재분할에 실패해 `invoke.failed` 로 뭉개지므로 선언
+/// 단계에서 거부한다. 정규식 크레이트 없이 수동 스캔한다.
+pub(crate) fn validate_error_code(code: &str) {
+    let mut chars = code.chars();
+    let first_ok = matches!(chars.next(), Some(c) if c.is_ascii_lowercase());
+    let rest_ok =
+        chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '_' | '.'));
+    if !first_ok || !rest_ok {
+        panic!("invalid error code '{code}': must match ^[a-z][a-z0-9_.]*$");
+    }
+}
