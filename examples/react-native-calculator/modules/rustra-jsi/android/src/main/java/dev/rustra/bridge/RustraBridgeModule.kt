@@ -22,9 +22,17 @@ class RustraBridgeModule(context: ReactApplicationContext) : ReactContextBaseJav
   fun install(promise: Promise) {
     val pointer = reactApplicationContext.javaScriptContextHolder?.get()
     if (pointer == null || pointer == 0L) { promise.reject("ERR_NO_RUNTIME", "JavaScript context pointer is null"); return }
-    if (nativeInstall(pointer, reactApplicationContext.jsCallInvokerHolder)) promise.resolve(true)
-    else promise.reject("ERR_INSTALL", "Failed to install Rustra onto the JSI runtime")
+    if (!nativeInstall(pointer, reactApplicationContext.jsCallInvokerHolder)) {
+      promise.reject("ERR_INSTALL", "Failed to install Rustra onto the JSI runtime")
+      return
+    }
+    // Android 핫 디렉터 관례: <filesDir>/rustra/hot — dev 흐름에서 CLI 가 발행하는
+    // *-hot-live.so 를 코어가 감시한다. 파일이 없으면 정적 코어로 머무르므로
+    // 릴리스 동작은 불변이며, 설치 실패로 install 을 거절하지 않는다(dev 전용 표면).
+    nativeConfigureHotCore(reactApplicationContext.filesDir.resolve("rustra/hot").toString())
+    promise.resolve(true)
   }
   private external fun nativeInstall(pointer: Long, holder: CallInvokerHolder?): Boolean
+  private external fun nativeConfigureHotCore(path: String?)
   private external fun nativeInvalidate()
 }
