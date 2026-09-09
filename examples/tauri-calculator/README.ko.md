@@ -23,6 +23,33 @@ bun run smoke
 bun run bench
 ```
 
+### 핫코어 dev 모드 (실험적)
+
+`tauri dev`를 다시 돌리지 않고도 Rust 핸들러 수정이 실행 중인 앱에 스왑됩니다.
+브리지 크레이트는 `examples/calculator`이지만 dev 설정은 이 예시 전용
+(`rustra.hot.json`)으로 둡니다 — 공유하는 calculator 설정이 기본 `native`
+타깃을 유지해야 하기 때문입니다:
+
+```bash
+# 터미널 1 — 감시 + codegen + cdylib 빌드 + parity 게이트 + 게이트 발행
+rustra dev --config rustra.hot.json
+
+# 터미널 2 — 앱이 정적 링크 대신 게이트를 통과한 라이브 아티팩트를 로드하고 감시합니다.
+# RUSTRA_HOT_CORE 경로는 rustra dev 가 출력하는 그대로를 쓰세요
+# (이 워크스페이스 기준 target/debug/librustra_calculator_example-hot-live.dylib).
+RUSTRA_HOT_CORE=../../target/debug/librustra_calculator_example-hot-live.dylib bunx tauri dev
+```
+
+스왑은 stderr로 구·신 컨트랙트 해시와 함께 보고됩니다. 채널·리소스 테이블은
+스왑되는 코어 안에 살아 있으므로 스왑 뒤 재수립이 필요합니다.
+`docs/plans/2026-09-09-native-hot-core-design.md` 참고. 현재 macOS, 이후
+iOS 시뮬레이터급 타깃 확장.
+
+자동화 스모크(`bun run smoke`)는 파이프라인을 headless로 검증합니다 — 핫 설정
+해석, cdylib 빌드, 게이트 발행, 발행된 dylib을 실제 호스트가 열어 감시 스레드를
+띄우는 부팅까지. 실제 스왑 이벤트는 재빌드된 아티팩트가 필요하므로 전체 스왑
+루프는 위 두 터미널 조합으로 직접 확인하세요.
+
 ## 예시가 보여주는 것
 
 1. **Tauri 연동** — `tauri_support::register(package, builder)`로 커맨드 자동 등록
@@ -37,6 +64,7 @@ bun run bench
 | `src-tauri/src/main.rs` | Tauri 빌더에 rustra 패키지 등록 + 프로브 모드 |
 | `src-tauri/Cargo.toml`  | `rustra` crate `tauri` feature 활성화         |
 | `src/app.ts`            | generated command와 event를 사용하는 화면     |
+| `rustra.hot.json`       | 핫코어(dylib) dev 루프용 설정                 |
 | `runtime-smoke.mjs`     | 자동화 런타임 스모크 테스트                   |
 | `src/benchmark.ts`      | 실제 WebView IPC 정확성·지연 측정             |
 | `benchmark.mjs`         | 숨은 앱 실행 + 로컬 영수증 수집               |
