@@ -191,9 +191,7 @@ export function subscribeTauriEvent<T = unknown>(
  *   한 판단의 근거).
  * - 스왑 실패: `{ error }` — 실패도 조용히 유실되지 않고 보고된다.
  */
-export type HotSwapEvent =
-  | { oldContractHash: string; newContractHash: string }
-  | { error: string };
+export type HotSwapEvent = { oldContractHash: string; newContractHash: string } | { error: string };
 
 /**
  * dylib 핫스왑 결과를 구독한다 — Rust 측 `register_dispatch_with_swap_events`
