@@ -11,6 +11,9 @@ members = [
   "examples/streaming",
   "examples/auth",
   "examples/hot-core-probe",
+  # hot-core 스왑 시나리오 변형 cdylib — 감시 스왑 실측 전용 유닛이라 bare
+  # cargo/clippy 대상(default-members)에는 넣지 않는다.
+  "examples/hot-core-variant",
 ]
 # bare cargo/clippy/test 가 macOS 전용 크레이트(tauri-calculator)를 빌드하지 않게
 # 한다 — Linux CI 는 물론, Tauri 시스템 라이브러리가 없는 macOS 환경에서도 bare
