@@ -172,6 +172,55 @@ export function subscribeTauriEvent<T = unknown>(
   return subscribeEvent(name, callback, listen);
 }
 
+// ── 핫코어 스왑 보고 (Rust → JS push, 예약 채널) ─────────────
+// Rust 측 `tauri_support::register_dispatch_with_swap_events` 가 dylib 핫스왑
+// 결과를 `HotSwapReporter` 로 웹뷰에 푸시한다(design:
+// docs/plans/2026-09-09-native-hot-core-design.md 의 "웹뷰 스왑 보고"). 채널은
+// 패키지 이벤트 이름공간이 아닌 **예약 경로 세그먼트**(`rustra://channel/{h}` 와
+// 같은 계열)다 — `hot-core/swapped` 에는 Tauri 가 거부하는 문자가 없어 치환 없이
+// `rustraEventChannel('hot-core/swapped')` 와 정확히 같은 채널로 수렴하므로, 아래
+// 구독은 `subscribeEvent` 의 채널 유도와 R01/R03 경계를 그대로 재사용한다.
+
+/**
+ * 핫코어 스왑 보고 이벤트 페이로드.
+ *
+ * - 스왑 성공: `{ oldContractHash, newContractHash }` — 구·신 컨트랙트 해시(16진
+ *   문자열). 두 해시를 모두 실으므로 이 이벤트가 **JS 캐시 재동기화 신호를
+ *   대행한다**: 수신 측은 해시 비교로 스키마 의존 캐시의 재호출 여부를 판단할 수
+ *   있다(design 문서의 `rustra_ffi_schema_generation` 카운터는 도입하지 않기로
+ *   한 판단의 근거).
+ * - 스왑 실패: `{ error }` — 실패도 조용히 유실되지 않고 보고된다.
+ */
+export type HotSwapEvent =
+  | { oldContractHash: string; newContractHash: string }
+  | { error: string };
+
+/**
+ * dylib 핫스왑 결과를 구독한다 — Rust 측 `register_dispatch_with_swap_events`
+ * (hot-core 모드)가 설치한 싱크가 emit 하는 `rustra://hot-core/swapped` 채널의
+ * 래퍼다. 패키지 이벤트 구독(`subscribeEvent`)과 같은 payload 파싱·콜백 예외
+ * 경계를 지난다 — 실제 WebView 에서는 이미 파싱된 객체, 문자열 모드 transport 에서는
+ * 1회 parse 로 수렴한다(R03).
+ *
+ * 이 채널은 정적 등록(`register`/`register_with_events`)에서는 발화하지 않는다 —
+ * hot-core 스왑 보고 전용이다.
+ *
+ * @example
+ * ```ts
+ * const unsubscribe = await subscribeHotSwap((event) => {
+ *   if ('error' in event) console.error('swap failed:', event.error);
+ *   else console.log('swapped', event.oldContractHash.slice(0, 8), '->', event.newContractHash.slice(0, 8));
+ * });
+ * // 정리 시: unsubscribe()
+ * ```
+ */
+export function subscribeHotSwap(
+  callback: (event: HotSwapEvent) => void,
+  listen?: TauriListen,
+): Promise<() => void> {
+  return subscribeEvent<HotSwapEvent>('hot-core/swapped', callback, listen);
+}
+
 // ── 코드젠 SubscribeFn 정합 (컴파일 타임 고정) ─────────────────
 // 코드젠(generateEventsTs)이 생성하는 `SubscribeFn` 계약:
 //   <N extends RustraEventName>(name: N, cb: (payload: RustraEventPayloads[N]) => void)

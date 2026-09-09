@@ -42,9 +42,15 @@ rustra dev --config rustra.hot.json
 RUSTRA_HOT_CORE=../../target/debug/librustra_calculator_example-hot-live.dylib bunx tauri dev
 ```
 
-A swap is reported on stderr with the old/new contract hashes. Channel and
-resource tables live in the swapped core, so they are re-established after a
-swap. See `docs/plans/2026-09-09-native-hot-core-design.md`.
+A swap is reported on stderr with the old/new contract hashes. It is also
+pushed to the webview as a `rustra://hot-core/swapped` event —
+`{ oldContractHash, newContractHash }` on success, `{ error }` on failure.
+Subscribe with `subscribeHotSwap` from `@rustra/tauri` (this example renders
+the swap time plus 8-char hashes in `src/app.ts`). Both hashes travel in the
+payload, so the event doubles as the JS cache resynchronization signal — no
+separate schema-generation counter. Channel and resource tables live in the
+swapped core, so they are re-established after a swap.
+See `docs/plans/2026-09-09-native-hot-core-design.md`.
 
 The automated smoke (`bun run smoke`) verifies the pipeline headlessly — hot
 config resolution, cdylib build, gated publish, and a real host boot that opens
