@@ -4,6 +4,13 @@ edition = "2021"
 version = "0.1.0"
 publish = false
 
+# lib/bin 분리 — Tauri 2 모바일(iOS/Android)은 앱 본체를 라이브러리 타깃으로
+# 빌드해 플랫폼 셸이 로드한다(staticlib: iOS, cdylib: Android). bin 은 데스크톱
+# 전용 얇은 래퍼가 된다.
+[lib]
+name = "rustra_tauri_calculator_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
