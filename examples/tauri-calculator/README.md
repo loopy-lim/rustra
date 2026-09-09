@@ -93,16 +93,16 @@ devices remain out of scope (library validation), per the design doc.
 
 ## Key Files
 
-| File                    | Description                                                      |
-| ----------------------- | ---------------------------------------------------------------- |
-| `src-tauri/src/lib.rs`  | App body — registration branches + `mobile_entry_point` for iOS/Android |
-| `src-tauri/src/main.rs` | Desktop wrapper calling `run()` (Tauri 2 mobile requires the lib target) |
+| File                    | Description                                                               |
+| ----------------------- | ------------------------------------------------------------------------- |
+| `src-tauri/src/lib.rs`  | App body — registration branches + `mobile_entry_point` for iOS/Android   |
+| `src-tauri/src/main.rs` | Desktop wrapper calling `run()` (Tauri 2 mobile requires the lib target)  |
 | `src-tauri/Cargo.toml`  | lib/bin split (`staticlib`/`cdylib`/`rlib`) + `tauri`/`hot-core` features |
-| `src/app.ts`            | Screen using generated commands and events                       |
-| `rustra.hot.json`       | Dev config for the hot-core (dylib) loop                         |
-| `runtime-smoke.mjs`     | Automated runtime smoke test                                     |
-| `src/benchmark.ts`      | Measures real WebView IPC accuracy and latency                   |
-| `benchmark.mjs`         | Runs the hidden app + collects local receipts                    |
+| `src/app.ts`            | Screen using generated commands and events                                |
+| `rustra.hot.json`       | Dev config for the hot-core (dylib) loop                                  |
+| `runtime-smoke.mjs`     | Automated runtime smoke test                                              |
+| `src/benchmark.ts`      | Measures real WebView IPC accuracy and latency                            |
+| `benchmark.mjs`         | Runs the hidden app + collects local receipts                             |
 
 ## Rust-Side Setup
 
