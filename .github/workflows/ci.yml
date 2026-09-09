@@ -75,6 +75,14 @@ jobs:
       - name: Test release (Linux — full workspace)
         if: runner.os == 'Linux'
         run: cargo test --workspace --release
+      # hot-core(dylib 핫스왑) 테스트는 feature 게이트라 위 cargo test 로는 실행되지
+      # 않는다. codesign 재서명 경로는 macOS cfg 게이트라(hot_core_dylib.rs 의
+      # prepare_swap_copy) Linux 는 무서명 경로로 결정적으로 통과한다 — Linux leg 에서만
+      # 실행해 3-OS 매트릭스 중복을 피한다. 통합 테스트가 calculator cdylib 를 스스로
+      # 빌드하므로(테스트 내 cargo build) 선행 워크스페이스 빌드 뒤면 증분 비용은 소.
+      - name: Test hot-core feature (Linux)
+        if: runner.os == 'Linux'
+        run: cargo test -p rustra --features hot-core
       - name: Test (macOS/Windows — core crates)
         if: runner.os != 'Linux'
         shell: bash
