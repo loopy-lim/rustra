@@ -142,6 +142,14 @@ Rust `#[command]` 로직을 고치면 호스트별로 전부 정체 상태가 �
   단, `RUSTRA_BUN_LIBRARY` 환경변수로 live 아티팩트 경로 지정이 이미 가능해
   실질 블로커는 아니다(2026-09-09 재확인). Node 는 기존 respawn
   (`NodeBootstrap.reload()`) 유지.
+- **웜루프 실측 (2026-09-09, `docs/plans/2026-09-09-hot-core-loop-bench.md`)** —
+  수정→발행→스왑 전체 p50 **≈3.5초**(n=40, M1 Max, 웜 캐시)로 목표 0.5~2초
+  미달. 병목: codegen 의 cargo 단계 ≈2.1초(60%), 스왑 ≈0.93초(폴링 평균
+  150ms + dlopen/초기화) — 폴링 간격 축소의 수득은 작다. 실측 과정에서 정식
+  `rustra.hot.json` 흐름의 codegen 버그 2건이 발견돼 수선됐다(node/bun 호스트
+  섹션의 `codegen.rustManifest` 폴백 + Rust bin 의 `RUSTRA_SCHEMA_OUT` 을
+  config 스키마 디렉터리로 고정 — 수선 전엔 이 레이아웃에서 패리티 게이트가
+  stale 스키마를 읽어 무력화됐다).
 - Phase 3(RN 변형 템플릿)·Phase 4(subsecond/cranelift 재평가)는 미착지.
   Phase 3 전제(앱 도메인 dlopen·duplicate SONAME 병존)는 아래 시뮬레이터
   실측으로 입증됐다.
