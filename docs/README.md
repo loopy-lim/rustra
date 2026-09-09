@@ -62,7 +62,7 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
 
 ## Example Gallery
 
-Ten runnable examples live in [`examples/`](../examples/) — each has its own README
+Eleven runnable examples live in [`examples/`](../examples/) — each has its own README
 (en/ko) with prerequisites and run commands.
 
 | Example                                                                     | What you learn                                                                    |
@@ -77,6 +77,7 @@ Ten runnable examples live in [`examples/`](../examples/) — each has its own R
 | [`calculator-napi`](../examples/calculator-napi/)                           | replacing the transport with napi-rs (source of the release transport benchmark)  |
 | [`benchmark`](../examples/benchmark/)                                       | payload scaling and throughput measurement harness                                |
 | [`reference-app`](../examples/reference-app/)                               | `@rustra/react` hooks in a real app: useCommand/useMutation/useEvent              |
+| [`hot-core-probe`](../examples/hot-core-probe/)                             | standalone verifier for the experimental dylib hot-swap core on host/iOS sim/Android emulator |
 
 `examples/rn-wasm-spike/` is an experimental wasm32-in-wasm3 spike — evidence and
 scope caveats are in the [compatibility matrix](compatibility-matrix.md), not a

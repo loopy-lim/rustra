@@ -132,3 +132,28 @@ Rust `#[command]` 로직을 고치면 호스트별로 전부 정체 상태가 �
 - **미연결 (Phase 2로 이월)** — webview 이벤트 스왑 보고(예제는 현재 stderr
   출력만), JS 캐시 재동기화 신호로서의 `rustra_ffi_schema_generation` 카운터.
 - Phase 2~4는 변함없다(미착지).
+
+### 시뮬레이터 실측 (2026-09-09, `examples/hot-core-probe`)
+
+본 문서의 플랫폼 규거 표를 같은 날 실측으로 재확인했다. 검증기는 단독 실행
+바이너리 `rustra-hot-core-probe`(동기: open→invoke→에러 분할→해시→버전 카피→
+스왑→구 코어 생존 / `--watch N`: sha256 폴링 스왑)다.
+
+| 타깃 | dlopen+디스패치 | 버전 카피+스왑 | 감시 스왑 | 비고 |
+| --- | --- | --- | --- | --- |
+| macOS arm64 (호스트) | ✅ | ✅ | ✅ | ad-hoc 재서명 경로 |
+| iOS 시뮬레이터 (aarch64-apple-ios-sim, iOS 26.2) | ✅ | ✅ | ✅ | 앱 내 재서명 불필요 — `cfg(target_os="macos")` codesign 단계는 시뮬레이터에서 시도되지 않으며 linker-signed/호스트 재서명 카피 모두 로드된다 |
+| Android 에뮬레이터 (aarch64-linux-android, API 36.1) | ✅ | ✅ | ✅ | shell 도메인(`/data/local/tmp`) |
+| Android 앱 도메인 (`untrusted_app`, targetSdk 35) | ✅ | ✅ | — | 앱 `filesDir` 복사본 `System.load` 성공 + **duplicate SONAME 동시 로드 성공** — bionic 은 경로 기준 로드라 버전 카피의 공유 SONAME 이 충돌하지 않는다 (Phase 3 전제 실증) |
+
+- **Tauri 예제 모바일 레이아웃** — tauri-calculator 를 lib/bin 분리
+  (`lib.rs` + `mobile_entry_point`, `staticlib`/`cdylib`/`rlib`)으로 전환하면
+  iOS 시뮬레이터 빌드·설치·핫 모드 진입(`SIMCTL_CHILD_RUSTRA_HOT_CORE`)·앱 내
+  감시 스왑이 모두 동작한다. bin 전용 레이아웃은 `no library targets found`
+  로 모바일 빌드 자체가 실패한다(전환 전 실측).
+- **매핑 파일 제자리 덮어쓰기 금지(실측)** — 프로세스가 dlopen 한 dylib 파일을
+  같은 경로로 덮어쓰면 macOS/iOS 는 `SIGKILL`(서명 코드 변조), Android 는
+  `SIGSEGV`(수정된 파일 페이지 재로딩)다. 정상 흐름은 안전하다 — CLI 발행은
+  rename(기존 inode 보존)이고 감시 카피는 고유 경로다. 모바일 전달 계약도
+  동일하게 **tmp push + rename** 이어야 한다(README 에 기록).
+- `simctl spawn` 에서의 env 전달은 `SIMCTL_CHILD_` 접두사가 필요하다.
