@@ -146,6 +146,10 @@ pub fn channel_demo(input: ChannelDemoInput) -> Result<ChannelDemoOutput> {
 }
 ```
 
+`ChannelHandle::send(&str) -> bool`은 JSON 페이로드를 흘린다. `send_bytes(&[u8]) -> bool`은
+바이너리 페이로드(예: rkyv V2 프레임)를 흘리며 바이너리 경로로 발급된 핸들이어야 한다 —
+JSON 핸들이면 `false`를 돌려주는데, 호출 종료로 만료된 핸들에 send 할 때와 똑같다.
+
 핸들 발급과 sender 배선은 호스트 어댑터가 한다 — 앱의 Rust 코드는 `send`만
 부른다. Rust 소유 객체에는 `ResourceHandle`이 같은 패턴을 따른다.
 
@@ -178,8 +182,9 @@ channel.close();
 **Node** — 루프 transport에서 `await createNodeChannel(transport, cb)`(loop-stdio
 예약 프레임, 백그라운드 스레드 send 안전). **Bun** — `rustra_ffi_channel_*` FFI
 심볼 위의 `createBunChannelBridge(options)(cb)`(JS 스레드 send 전용). 바이너리
-프레임 변형은 모든 곳에 `createBytesChannel`/`createChannelBytes`/
-`createNodeBytesChannel`로 존재한다.
+프레임 변형은 모든 호스트에 존재한다: `createBytesChannel`(React Native),
+`createChannelBytes`(Tauri), `createNodeBytesChannel`(Node),
+`createBunChannelBytesBridge`(Bun).
 
 호스트별 발급 경로와 정확한 capability 셀:
 [호환성 매트릭스 — 채널 전달 경로](compatibility-matrix.ko.md#채널-전달-경로).
