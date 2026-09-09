@@ -26,10 +26,11 @@ export const REACT_NATIVE_CONFIG_KEYS = [
 ] as const;
 export const NODE_CONFIG_KEYS = ['rustManifest', 'rustPackage', 'rustBinary', 'args'] as const;
 export const BUN_CONFIG_KEYS = ['rustManifest', 'rustPackage', 'rustLibrary'] as const;
-export const DEV_CONFIG_KEYS = ['target', 'wasm'] as const;
+export const DEV_CONFIG_KEYS = ['target', 'wasm', 'dylib'] as const;
 export const DEV_WASM_CONFIG_KEYS = ['engine', 'parityGate'] as const;
+export const DEV_DYLIB_CONFIG_KEYS = ['parityGate'] as const;
 export const INSPECTOR_CONFIG_KEYS = ['onMismatch'] as const;
-export const DEV_TARGETS = ['native', 'wasm'] as const;
+export const DEV_TARGETS = ['native', 'wasm', 'dylib'] as const;
 export const WASM_ENGINES = ['wasm3'] as const;
 export const ON_MISMATCH_VALUES = ['diagnose', 'ignore'] as const;
 
@@ -43,9 +44,14 @@ export interface DevWasmConfig {
   parityGate?: boolean;
 }
 
+export interface DevDylibConfig {
+  parityGate?: boolean;
+}
+
 export interface DevConfig {
   target?: DevTarget;
   wasm?: DevWasmConfig;
+  dylib?: DevDylibConfig;
 }
 
 export interface InspectorConfig {
@@ -266,10 +272,18 @@ function assertDevSection(dev: DevConfig | undefined): void {
     throw new Error(unknownValueError('dev.target', dev.target, [...DEV_TARGETS]));
   }
   const wasm = dev.wasm;
-  if (wasm === undefined) return;
-  assertKnownKeys(wasm, DEV_WASM_CONFIG_KEYS, 'config dev.wasm');
-  if (wasm.parityGate !== undefined && typeof wasm.parityGate !== 'boolean') {
-    throw new Error(`Config dev.wasm.parityGate ${BOOL_ERROR}`);
+  if (wasm !== undefined) {
+    assertKnownKeys(wasm, DEV_WASM_CONFIG_KEYS, 'config dev.wasm');
+    if (wasm.parityGate !== undefined && typeof wasm.parityGate !== 'boolean') {
+      throw new Error(`Config dev.wasm.parityGate ${BOOL_ERROR}`);
+    }
+  }
+  const dylib = dev.dylib;
+  if (dylib !== undefined) {
+    assertKnownKeys(dylib, DEV_DYLIB_CONFIG_KEYS, 'config dev.dylib');
+    if (dylib.parityGate !== undefined && typeof dylib.parityGate !== 'boolean') {
+      throw new Error(`Config dev.dylib.parityGate ${BOOL_ERROR}`);
+    }
   }
 }
 
@@ -299,8 +313,8 @@ function unknownValueError(field: string, value: string, allowed: readonly strin
 /**
  * L2 — 교차 필드 의미 검사. config 로드 경로에서 L1 통과 후 호출되며,
  * 위반을 하나도 놓치지 않고 전부 수집해 한 번에 나열한다(첫 위반에서 중단 않음).
- * 수집 순서는 고정 — reactNative 필요성, 잘못된 wasm 섹션 위치, parityGate, engine.
- * doctor 영역 환경 검사(devtools 설치 여부 등)는 여기 넣지 않는다 — 로드는 순수 함수.
+ * 수집 순서는 고정 — reactNative 필요성, 잘못된 wasm/dylib 섹션 위치, parityGate,
+ * engine. doctor 영역 환경 검사(devtools 설치 여부 등)는 여기 넣지 않는다 — 로드는 순수 함수.
  */
 export function collectSemanticErrors(config: RustraConfig): string[] {
   const errors: string[] = [];
@@ -316,6 +330,12 @@ export function collectSemanticErrors(config: RustraConfig): string[] {
   }
   if (target !== 'wasm' && dev?.wasm?.parityGate !== undefined) {
     errors.push('dev.wasm.parityGate is only valid when dev.target is "wasm"');
+  }
+  if (target !== 'dylib' && dev?.dylib !== undefined) {
+    errors.push('dev.dylib is only valid when dev.target is "dylib"');
+  }
+  if (target !== 'dylib' && dev?.dylib?.parityGate !== undefined) {
+    errors.push('dev.dylib.parityGate is only valid when dev.target is "dylib"');
   }
   if (dev?.wasm?.engine !== undefined && !WASM_ENGINES.includes(dev.wasm.engine)) {
     // engine 미지 값이 L2 수집인 이유 — reactNative 요구 위반과 동시에 발생할 수 있어
