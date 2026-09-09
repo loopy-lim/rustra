@@ -3006,6 +3006,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustra-hot-core-variant"
+version = "0.8.0"
+dependencies = [
+ "rustra",
+ "schemars 0.8.22",
+ "serde",
+]
+
+[[package]]
 name = "rustra-macros"
 version = "0.8.0"
 dependencies = [

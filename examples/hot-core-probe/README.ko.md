@@ -18,7 +18,8 @@
 5. `HotCoreHandle::swap` — 새 호출은 새 코어로 향한다
 6. 구 코어 생존 — dlclose 없음, 스왑으로 밀려난 코어도 계속 호출 가능
 7. `--watch N` — sha256 폴링 감시 스레드가 외부 발행자의 아티팩트 바이트 교체를
-   감지해 스왑한다(stdout 으로 `PROBE SWAP` 보고)
+   감지해 스왑하고(stdout 으로 `PROBE SWAP` 보고), 감시 종료 뒤 스왑된 코어에
+   고정 커맨드 목록을 invoke 해 그 와이어를 그대로 보고한다(`PROBE OBS`)
 
 ## 사용법
 
@@ -64,8 +65,48 @@ rustra-hot-core-probe <artifact> --watch 10
 맥락이다 — `rustra dev` 는 게이트 통과 `-hot-live` 아티팩트를 tmp 파일 + rename
 으로 발행해 살아있는 매핑의 기존 inode 를 보존한다.
 
-성공 출력은 `PROBE SWAP <old> -> <new>` 라인(스왑 발생)과 `PROBE WATCH DONE
-<hash>`(스왑된 코어가 계속 서비스)다.
+동기 모드와 달리 감시 모드는 값 단정(`addNumbers(2,3) == 5` 등)을 하지 않는다:
+시작 아티팩트는 시나리오의 스왑 유닛이고 그 `addNumbers` 의미는 feature 조합마다
+달라질 수 있기 때문이다(스왑 유닛은 `examples/hot-core-variant` — cargo
+feature 조합이 곧 시나리오다). 단정하는 것은 초기/최종 계약 해시가 64자 SHA-256
+hex 라는 것까지다.
+
+출력 계약:
+
+```
+PROBE CONTRACT <해시>            # 연 아티팩트의 기준 해시
+PROBE SWAP <old> -> <new>        # 적용된 스왑마다 1행(감시 스레드)
+PROBE SWAP FAILED <error>        # 거부/실패한 스왑 시도
+PROBE WATCH DONE <해시>          # 스왑된 코어가 계속 서비스
+PROBE OBS <명령> ok <json>       # 관측 단계, 성공 와이어
+PROBE OBS <명령> err <코드>      # 관측 단계, 에러 와이어(코드만)
+```
+
+관측 단계는 고정 목록 `addNumbers`, `multiplyNumbers`, `addNumbersV2`(공통
+인자 `{"a":2,"b":3}`)를 스왑 뒤 코어에 invoke 하고 그 와이어를 그대로
+보고한다. hard assert 는 없다 — 시나리오에 따라 어느 쪽이든 정답이 될 수
+있기 때문이다(rename 스왑 뒤 `addNumbers` 의 `command.not_found` 가 곧 통과
+조건인 식).
+
+#### 스왑 시나리오 (`examples/hot-core-variant`)
+
+```bash
+# 시나리오별 스왑 유닛을 빌드해 스테이징하고, rename 으로 발행한다:
+cargo build --release -p rustra-hot-core-variant                    # 기본
+cargo build --release -p rustra-hot-core-variant --features behavior
+cp target/release/librustra_hot_core_variant.dylib publish.tmp.dylib
+mv -f publish.tmp.dylib /path/to/live.dylib
+```
+
+macOS arm64 실측(2026-09-09) — 각 시나리오는 feature 하나의 변화 + 감시 중
+원자적 rename 1회다:
+
+| 시나리오          | feature 변화                    | 계약 해시 | 관측(`PROBE OBS`)                                                            |
+| ----------------- | ------------------------------- | --------- | ---------------------------------------------------------------------------- |
+| 1. 로직만 변경    | 기본 → `behavior`               | 불변      | `addNumbers ok {"value":105}` (이전 `5`) — 해시가 그대로인데 데이터가 변했다 |
+| 2. 명령 추가      | → `add-cmd behavior`            | 변함      | `multiplyNumbers ok {"value":6}`                                             |
+| 3. 명령 이름 변경 | → `rename-cmd add-cmd behavior` | 변함      | `addNumbers err command.not_found` + `addNumbersV2 ok {"value":105}`         |
+| 4. 시그니처 변화  | → `sig-change behavior`         | 변함      | `addNumbers err command.invalid_args` (`{a,b}` 호출에 `c` 가 없다)           |
 
 ## 검증 매트릭스 (2026-09-09)
 
@@ -85,6 +126,6 @@ iOS 실기기는 설계상 스코프 외다(라이브러리 검증 상시 — �
 
 ## 주요 파일
 
-| 파일          | 설명                                                |
-| ------------- | --------------------------------------------------- |
-| `src/main.rs` | 프로브 본체: 동기 검증 1–6, 감시 모드는 `run_watch` |
+| 파일          | 설명                                                           |
+| ------------- | -------------------------------------------------------------- |
+| `src/main.rs` | 프로브 본체: 동기 검증 1–7, 감시 모드는 `run_watch`(스왑+관측) |

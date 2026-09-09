@@ -19,7 +19,9 @@ launching a full host app is inconvenient.
 5. `HotCoreHandle::swap` — new calls reach the new core
 6. Old-core survival — no `dlclose`, swapped-out cores stay callable
 7. `--watch N` — the sha256 polling watch thread swaps when an external
-   publisher replaces the artifact bytes (reported as `PROBE SWAP` on stdout)
+   publisher replaces the artifact bytes (reported as `PROBE SWAP` on stdout),
+   then observes a fixed command list against the swapped-in core
+   (`PROBE OBS ...` on stdout)
 
 ## Usage
 
@@ -66,8 +68,48 @@ macOS/iOS, `SIGSEGV` on Android). This mirrors the CLI contract: `rustra dev`
 publishes the gated `-hot-live` artifact through temp-file + rename, which
 preserves the old inode for live mappings.
 
-Success output is a `PROBE SWAP <old> -> <new>` line (the swap happened) and
-`PROBE WATCH DONE <hash>` (the swapped-in core keeps serving).
+Unlike sync mode, watch mode skips the value asserts (`addNumbers(2,3) == 5`
+etc.): the starting artifact is the swap unit of a scenario, and its
+`addNumbers` semantics legitimately vary per feature set (see
+`examples/hot-core-variant` — the cargo features _are_ the scenarios). Only
+the initial/final contract hash (64-char SHA-256 hex) is asserted.
+
+Output contract:
+
+```
+PROBE CONTRACT <hash>            # baseline hash of the opened artifact
+PROBE SWAP <old> -> <new>        # one line per applied swap (watch thread)
+PROBE SWAP FAILED <error>        # a rejected/failed swap attempt
+PROBE WATCH DONE <hash>          # the swapped-in core keeps serving
+PROBE OBS <command> ok <json>    # observation phase, success wire
+PROBE OBS <command> err <code>   # observation phase, error wire (code only)
+```
+
+The observation phase invokes the fixed list `addNumbers`, `multiplyNumbers`,
+`addNumbersV2` (each with `{"a":2,"b":3}`) against the swapped-in core and
+reports the wire verbatim — no hard asserts, since per scenario either
+outcome can be the correct one (after a rename swap, `addNumbers` returning
+`command.not_found` _is_ the pass condition).
+
+#### Swap scenarios (`examples/hot-core-variant`)
+
+```bash
+# Build each scenario's swap unit, stage it, then publish with rename:
+cargo build --release -p rustra-hot-core-variant                    # base
+cargo build --release -p rustra-hot-core-variant --features behavior
+cp target/release/librustra_hot_core_variant.dylib publish.tmp.dylib
+mv -f publish.tmp.dylib /path/to/live.dylib
+```
+
+Measured on macOS arm64 (2026-09-09), each scenario = one feature flip plus
+one atomic rename while the probe watches:
+
+| Scenario             | feature flip                    | contract hash | observation (`PROBE OBS`)                                                      |
+| -------------------- | ------------------------------- | ------------- | ------------------------------------------------------------------------------ |
+| 1. logic-only change | base → `behavior`               | unchanged     | `addNumbers ok {"value":105}` (was `5`) — the data changed under a stable hash |
+| 2. command added     | → `add-cmd behavior`            | changed       | `multiplyNumbers ok {"value":6}`                                               |
+| 3. command renamed   | → `rename-cmd add-cmd behavior` | changed       | `addNumbers err command.not_found` + `addNumbersV2 ok {"value":105}`           |
+| 4. signature change  | → `sig-change behavior`         | changed       | `addNumbers err command.invalid_args` (the `{a,b}` call misses `c`)            |
 
 ## Verified matrix (2026-09-09)
 
@@ -88,6 +130,6 @@ see the design doc).
 
 ## Key files
 
-| File          | Description                                                 |
-| ------------- | ----------------------------------------------------------- |
-| `src/main.rs` | the probe: sync checks 1–6, plus `run_watch` for watch mode |
+| File          | Description                                                             |
+| ------------- | ----------------------------------------------------------------------- |
+| `src/main.rs` | the probe: sync checks 1–7, plus `run_watch` (swap + observation phase) |
