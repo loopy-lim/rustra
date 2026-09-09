@@ -151,7 +151,7 @@ adb logcat -v time | grep '[RustraHotCore]'
 - iOS 어댑터는 JSI 모듈 설치 시 env `RUSTRA_HOT_CORE_DIR`(디렉터)을 읽고 그
   디렉터의 `*-hot-live.*` 를 폴링합니다. 스모크는 `SIMCTL_CHILD_` 접두사로
   경로를 주입합니다(`SIMCTL_CHILD_RUSTRA_HOT_CORE_DIR=<디렉터> xcrun simctl
-  launch …`) — `simctl` 이 이 환경변수를 앱 프로세스에 전파합니다(실측 확인).
+launch …`) — `simctl` 이 이 환경변수를 앱 프로세스에 전파합니다(실측 확인).
   디렉터가 비어 있으면 정적 코어로 부팅됩니다. baseline(`READY value=5`)을
   정적 코어에서 관측해야 하므로 런치 전에 stale live 파일을 확실히 지웁니다.
 - 핫 디렉터는 앱 data 컨테이너 안의 `Documents/rustra/hot` 입니다. 런치 시와
