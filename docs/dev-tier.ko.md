@@ -75,6 +75,11 @@ Rust 동작 검증은 개발 중 `cargo test -p rustra <필터>`로 필요한 �
 
 ## 범위 밖
 
+- **네이티브 hot-core** — 네이티브(wasm 아님) dev 경로는 별개의 실험
+  메커니즘이다: `rustra dev`가 코어를 cdylib 으로 빌드하고 실행 중인 호스트가
+  재시작 없이 스왑한다
+  ([hot-core 설계](plans/2026-09-09-native-hot-core-design.md),
+  [용어집](glossary.ko.md)).
 - **`rustra codegen --from-live`** — live 레지스트리 덤프에서 `#[command]` 골격을
   뽑아주는 승격 스캐폴딩은 후속 슬라이스다(설계:
   [dev-tier 설계](plans/2026-09-08-dev-tier-design.md) G절).

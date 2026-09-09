@@ -173,7 +173,7 @@ reload 만 중단)하고, 없으면 즉시 진행한다(원샷 stdio transport �
 하면 reload 는 부활 없이 중단되고, 재초기화 실패는 `disposed` 벽돌 대신
 `initializing`(원본 에러 전파)으로 남는다. `draining` 상태는 의도적으로
 모델링하지 않는다 — drain 은 3상태 수명 주기에 투명하다. reload 계약의 기반은
-아래 핫스왕 절 참고.
+아래 핫스왑 절 참고.
 
 ## 스파이크: wasm3 안의 wasm32 엔진 (React Native) — 판정: PASS (스파이크)
 
@@ -194,6 +194,10 @@ Task A0 스파이크(`examples/rn-wasm-spike/`, 2026-08-31)는 `wasm32-unknown-u
 스테이징 프로토콜은 스파이크 전용 `spike_alloc`/`spike_unstage` 익스포트 사용,
 증거는 에뮬레이터/시뮬레이터 캡처 — 실물 디바이스는 미검증. 전체 hex
 트랜스크립트: `examples/rn-wasm-spike/evidence/{ios,android}.md`.
+
+> Superseded (2026-09-09): 네이티브 dlopen 스왑이 `hot-core` 피처로 실험적
+> 채택됐다 — [plans/2026-09-09-native-hot-core-design.md](plans/2026-09-09-native-hot-core-design.md)
+> 참고. 아래는 의사결정 기록으로 보존한다.
 
 ## 핫스왑 후속 (Task A1): 프로세스 내 리셋 채택 — dlopen 스왑 미채택
 

@@ -186,7 +186,11 @@ fn main() -> Result<()> {
 }
 ```
 
-바이너리 fast-path(rkyv V2, RN)를 쓰려면 CLI codegen도 실행한다. 먼저 프로젝트
+바이너리 fast-path(rkyv V2, RN)를 쓰려면 CLI codegen도 실행한다. 참고:
+"rkyv V2"는 Rustra 자체 바이너리 프레임 프로토콜 이름이지 업스트림 `rkyv`
+crate가 아니다 — 페이로드는 postcard로 인코딩된다
+([와이어 포맷](docs/wire-format.ko.md)과
+[용어집](docs/glossary.ko.md#rkyv-vs-rkyv-v2) 참고). 먼저 프로젝트
 루트에 `rustra.json`을 만든다 — 이 최소형은 CLI에 발행된 schema, 출력 디렉터리,
 사용할 호스트를 알려준다:
 
@@ -653,6 +657,9 @@ warm-up 뒤 3회 반복했다.
 | Bun 생성 FFI rkyv V2            |   2.27 µs |   2.21 µs | 439,961 ops/s | 서비스, CLI      |
 | Tauri 생성 WebView IPC          | 279.04 µs | 300.00 µs |   3,584 ops/s | 데스크톱 UI 명령 |
 | RN 생성 JSI, iOS Simulator      |         — |   2.71 µs |             — | 모바일 hot path  |
+
+rkyv V2 행은 Rustra 자체 바이너리 프레임 프로토콜(postcard 페이로드 코덱)이며
+업스트림 rkyv crate가 아니다 — [와이어 포맷](docs/wire-format.ko.md) 참고.
 
 평균과 처리량은 OS 스케줄링 꼬리값을 줄인 양끝 5% trimmed mean이다. Tauri는
 WKWebView 타이머 정밀도 때문에 20호출 배치의 호출당 값을 사용했다. RN 행은

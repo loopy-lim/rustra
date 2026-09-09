@@ -143,6 +143,11 @@ wasm32 without atomics), staging protocol uses spike-local
 emulators/simulator — not yet on physical devices. Full hex transcripts:
 `examples/rn-wasm-spike/evidence/{ios,android}.md`.
 
+> Superseded (2026-09-09): the native dlopen swap described below was later
+> adopted experimentally as the `hot-core` feature — see
+> [plans/2026-09-09-native-hot-core-design.md](plans/2026-09-09-native-hot-core-design.md).
+> The section is preserved as a decision record.
+
 ## Hot-swap follow-up (Task A1): process-internal reset selected — dlopen swap NOT adopted
 
 Task A1 (dev-loop reload orchestration, 2026-08-31) adopted the
