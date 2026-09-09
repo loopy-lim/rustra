@@ -8,6 +8,7 @@
     "pub mod device_capabilities",
     "pub mod events",
     "pub mod ffi",
+    "pub mod hot_core",
     "pub mod platform",
     "pub mod prelude",
     "pub mod state",

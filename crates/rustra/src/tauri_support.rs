@@ -1,3 +1,4 @@
+use crate::Package;
 /// Tauri 2와의 통합을 위한 헬퍼 모듈입니다.
 ///
 /// `tauri` feature가 활성화되어야 사용할 수 있습니다.
@@ -18,9 +19,10 @@
 ///
 /// 이벤트 푸시가 필요하면 [`register_with_events`] 를 대신 사용한다 —
 /// `Package::emit` 이 즉시 `app.emit("rustra://{name}", payload)` 로
-/// 전달된다(폴링 불필요).
-use crate::Package;
+/// 전달된다(폴링 불필요). dylib 핫스왑 모드는 [`register_dispatch`] 를 쓴다.
+use crate::hot_core::JsonDispatch;
 use serde_json::{Value, json};
+use std::sync::Arc;
 use tauri::State;
 
 /// 채널·이벤트 배선 — [`crate::tauri_channels`] 모듈로 분리된 항목을 기존
@@ -31,10 +33,20 @@ pub use crate::tauri_channels::{
     rustra_channel_create, rustra_channel_create_bytes, rustra_channel_drop, tauri_event_sink,
 };
 
-/// Tauri의 managed state로 보관되는 rustra 패키지입니다.
+/// Tauri의 managed state로 보관되는 rustra 디스패치입니다.
+///
+/// 정적 모드에서는 `Package` 를 [`JsonDispatch`] 로 감싸고, 핫 모드에서는
+/// `hot_core::HotCoreHandle` 을 넣는다 — 커맨드 핸들러는 트레잇 뒤에만 의존하므로
+/// 코어 스왑이 공개 커맨드 시그니처(`rustra_dispatch` 등)를 흔들지 않는다.
 pub struct RustraState {
-    /// 등록된 rustra 명령 패키지입니다.
-    pub package: Package,
+    dispatch: Arc<dyn JsonDispatch>,
+}
+
+impl RustraState {
+    /// 디스패치 구현을 감싼 state를 만든다 — 호스트가 직접 `manage` 할 때 쓴다.
+    pub fn new(dispatch: Arc<dyn JsonDispatch>) -> Self {
+        Self { dispatch }
+    }
 }
 
 /// 모든 rustra 커맨드를 디스패치하는 Tauri 커맨드 핸들러입니다.
@@ -44,10 +56,7 @@ pub fn rustra_dispatch(
     command: String,
     args: Value,
 ) -> Result<Value, Value> {
-    state.package.invoke_json(&command, args).map_err(|e| {
-        serde_json::to_value(&e)
-            .unwrap_or_else(|_| json!({"code": "unknown", "message": "unknown error"}))
-    })
+    state.dispatch.invoke_json(&command, args)
 }
 
 /// 벤치 전용 profiled dispatch — `rustra_dispatch` 와 동일한 왕복이지만 응답에
@@ -75,7 +84,7 @@ pub fn rustra_dispatch_profiled(
     args: Value,
 ) -> ProfiledResponse {
     let started = std::time::Instant::now();
-    let (result, ok) = match state.package.invoke_json(&command, args) {
+    let (result, ok) = match state.dispatch.invoke_json(&command, args) {
         Ok(value) => (value, true),
         Err(error) => (
             serde_json::to_value(&error)
@@ -119,16 +128,16 @@ pub fn rustra_dispatch_batch(
     state: State<'_, RustraState>,
     requests: Vec<BatchRequest>,
 ) -> Vec<BatchResponse> {
-    run_batch(&state.package, requests)
+    run_batch(state.dispatch.as_ref(), requests)
 }
 
 /// 배치 실행 본체 — Tauri `State` 없이 검증 가능한 순수 함수로 추출
 /// (코어 단위 테스트 대상).
-fn run_batch(package: &Package, requests: Vec<BatchRequest>) -> Vec<BatchResponse> {
+fn run_batch(dispatch: &dyn JsonDispatch, requests: Vec<BatchRequest>) -> Vec<BatchResponse> {
     requests
         .into_iter()
         .map(
-            |request| match package.invoke_json(&request.command, request.args) {
+            |request| match dispatch.invoke_json(&request.command, request.args) {
                 Ok(result) => BatchResponse {
                     ok: true,
                     result: Some(result),
@@ -199,7 +208,9 @@ pub fn register_profiled<R: tauri::Runtime>(
 }
 
 /// 등록 공통 — `RustraState` 를 만들어 배선 클로저에 넘긴다. `register` 와
-/// `register_profiled` 는 노출 커맨드 목록 하나로만 갈라진다.
+/// `register_profiled` 는 노출 커맨드 목록 하나로만 갈라진다. `Package` 는
+/// [`JsonDispatch`] 로 감싸 넣는다 — 정적 모드와 핫 모드(`register_dispatch`)가
+/// 같은 state 모양을 공유한다.
 fn finish_registration<R, F>(
     package: Package,
     builder: tauri::Builder<R>,
@@ -209,7 +220,35 @@ where
     R: tauri::Runtime,
     F: FnOnce(RustraState, tauri::Builder<R>) -> tauri::Builder<R>,
 {
-    wire(RustraState { package }, builder)
+    wire(
+        RustraState {
+            dispatch: Arc::new(package),
+        },
+        builder,
+    )
+}
+
+/// 핫 모드 등록 — 이미 구성된 [`JsonDispatch`] 구현(예: `hot_core::HotCoreHandle`)
+/// 을 그대로 manage 한다. 정적 코어와 dylib 코어의 스왑이 공개 커맨드 시그니처를
+/// 바꾸지 않는다.
+///
+/// 노출 커맨드는 [`register`] 와 동일하다(프로덕션 경로 + 채널 3종).
+/// 이벤트 푸시 배선([`register_with_events`] 의 플러그인)은 여기에 없다 —
+/// 스왑이 코어 내부 상태(이벤트 싱크 포함)를 버리는 설계라
+/// docs/plans/2026-09-09-native-hot-core-design.md 의 상태 소실 정책을 따른다.
+pub fn register_dispatch<R: tauri::Runtime>(
+    dispatch: Arc<dyn JsonDispatch>,
+    builder: tauri::Builder<R>,
+) -> tauri::Builder<R> {
+    builder
+        .manage(RustraState { dispatch })
+        .invoke_handler(tauri::generate_handler![
+            rustra_dispatch,
+            rustra_dispatch_batch,
+            crate::tauri_channels::rustra_channel_create,
+            crate::tauri_channels::rustra_channel_create_bytes,
+            crate::tauri_channels::rustra_channel_drop
+        ])
 }
 
 /// [`register`] + 이벤트 푸시 배선 — `Package::emit` 이 즉시

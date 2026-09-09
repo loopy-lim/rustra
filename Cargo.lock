@@ -2927,6 +2927,7 @@ version = "0.8.0"
 dependencies = [
  "criterion",
  "hex",
+ "libloading 0.9.0",
  "postcard",
  "proptest",
  "rustra-macros",

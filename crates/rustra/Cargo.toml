@@ -14,6 +14,9 @@ version.workspace = true
 
 [features]
 tauri = ["dep:tauri"]
+# dev 전용 네이티브 dylib 핫스왑 표면(hot_core) — 릴리스 빌드는 정적 링크 경로를
+# 그대로 쓰므로 기본 기능 집합에 들지 않는다.
+hot-core = ["dep:libloading"]
 
 [dependencies]
 rustra-naming.workspace = true
@@ -24,6 +27,9 @@ serde_json.workspace = true
 sha2.workspace = true
 hex.workspace = true
 postcard.workspace = true
+# hot-core 전용 — tauri 와 마찬가지로 워크스페이스 공용 의존이 아닌 크레이트
+# 로컬 optional 의존으로 둔다(호스트 측 dlopen 프리미티브).
+libloading = { version = "0.9", optional = true }
 tauri = { version = "2", optional = true }
 
 [dev-dependencies]
