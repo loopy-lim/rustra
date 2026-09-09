@@ -24,6 +24,8 @@
     "test:reload:ios": "bun scripts/reload-stress.mjs",
     "push:hot-core:android": "bun scripts/hot-core-push-android.mjs",
     "test:hot-core:android": "bun scripts/hot-core-smoke-android.mjs",
+    "push:hot-core:ios": "bun scripts/hot-core-push-ios.mjs",
+    "test:hot-core:ios": "bun scripts/hot-core-smoke-ios.mjs",
     "bench:serialization": "bun serialization-bench.mjs",
     "bench:ios:receipt": "bun scripts/extract-benchmark-receipt.mjs",
     "rust:android": "sh modules/rustra-jsi/android/build-rust-android.sh",
