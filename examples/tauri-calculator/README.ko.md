@@ -40,8 +40,13 @@ rustra dev --config rustra.hot.json
 RUSTRA_HOT_CORE=../../target/debug/librustra_calculator_example-hot-live.dylib bunx tauri dev
 ```
 
-스왑은 stderr로 구·신 컨트랙트 해시와 함께 보고됩니다. 채널·리소스 테이블은
-스왑되는 코어 안에 살아 있으므로 스왑 뒤 재수립이 필요합니다.
+스왑은 stderr로 구·신 컨트랙트 해시와 함께 보고됩니다. 동시에 웹뷰에는
+`rustra://hot-core/swapped` 이벤트로도 푸시됩니다 — 성공은
+`{ oldContractHash, newContractHash }`, 실패는 `{ error }`. `@rustra/tauri` 의
+`subscribeHotSwap` 으로 구독합니다(이 예제는 `src/app.ts` 에 스왑 시각과 해시
+앞 8자를 표시합니다). 페이로드에 구·신 해시가 함께 실리므로 이 이벤트가 JS 캐시
+재동기화 신호를 대행합니다 — 별도의 스키마 세대 카운터는 두지 않습니다. 채널·
+리소스 테이블은 스왑되는 코어 안에 살아 있으므로 스왑 뒤 재수립이 필요합니다.
 `docs/plans/2026-09-09-native-hot-core-design.md` 참고.
 
 자동화 스모크(`bun run smoke`)는 파이프라인을 headless로 검증합니다 — 핫 설정
