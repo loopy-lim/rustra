@@ -140,6 +140,52 @@ adb logcat -v time | grep '[RustraHotCore]'
 `android/app/build.gradle`)를 재정의합니다. push 스크립트는 전달 바이트 수를
 검증해 파이프 절단을 조용히 넘기지 않습니다.
 
+## iOS 시뮬레이터 핫 코어 스모크 (dev)
+
+같은 스왑 계약을 iOS 시뮬레이터에서 수행합니다. 전달 메커니즘만 iOS에 맞게
+다릅니다. 실기기는 스코프 외입니다(샌드박스를 호스트 FS 에서 직접 만질 수
+없습니다).
+
+전달 계약 — env 로 디렉터 주입, tmp + rename, 제자리 덮어쓰기 금지:
+
+- iOS 어댑터는 JSI 모듈 설치 시 env `RUSTRA_HOT_CORE_DIR`(디렉터)을 읽고 그
+  디렉터의 `*-hot-live.*` 를 폴링합니다. 스모크는 `SIMCTL_CHILD_` 접두사로
+  경로를 주입합니다(`SIMCTL_CHILD_RUSTRA_HOT_CORE_DIR=<디렉터> xcrun simctl
+  launch …`) — `simctl` 이 이 환경변수를 앱 프로세스에 전파합니다(실측 확인).
+  디렉터가 비어 있으면 정적 코어로 부팅됩니다. baseline(`READY value=5`)을
+  정적 코어에서 관측해야 하므로 런치 전에 stale live 파일을 확실히 지웁니다.
+- 핫 디렉터는 앱 data 컨테이너 안의 `Documents/rustra/hot` 입니다. 런치 시와
+  push 시 모두 `xcrun simctl get_app_container <udid> <bundle-id> data` 로
+  조회합니다 — 앱을 재설치하면 컨테이너 경로가 바뀔 수 있고, env 경로와 push
+  대상이 어긋나면 스왑이 영원히 관측되지 않습니다.
+- 시뮬레이터 컨테이너는 호스트 FS 위에 있어 push 스크립트가 직접 기록할 수
+  있습니다. 하지만 프로세스가 이미 `dlopen` 한 dylib 를 같은 경로로 제자리
+  덮어쓰면 iOS 에서는 SIGKILL 이 떨어집니다. 그래서 모든 전달은
+  `live-tmp.dylib` 로 기록한 뒤 동일 디렉터 rename(2) 로 교체합니다 — 원자적이고
+  기존 inode 가 보존됩니다. 기록된 바이트 수는 rename 전에 검증합니다.
+
+최초 1회 준비물: 부팅된 시뮬레이터(없으면 스모크가 기본 iPhone 17 을 부팅합니다.
+`--udid` 또는 `RUSTRA_SIM_UDID` 로 재정의), 핫 코어 분기를 서빙하는 Metro.
+
+```bash
+# 터미널 1 — 핫 코어 앱 분기를 서빙합니다
+bun run demo:hot-core
+
+# 터미널 2 — 전체 스모크: cargo ios-sim cdylib → xcodebuild + 설치
+# → 부팅 → [RustraHotCore] READY value=5 → push → addNumbers 5→105 관측
+bun run test:hot-core:ios
+
+# 또는 미리 빌드한 cdylib 를 수동 전달하고 로그 스트림을 감시합니다
+bun run push:hot-core:ios -- <경로>/librustra_hot_core_variant.dylib
+xcrun simctl spawn booted log stream --style compact \
+  --predicate 'eventMessage CONTAINS "[RustraHotCore]"'
+```
+
+유용한 플래그: `--skip-cargo` / `--skip-xcodebuild` 은 기존 산출물과 설치된 앱을
+재사용합니다. `--ready-timeout-ms` / `--swap-timeout-ms` 은 관측 대기 시간을
+조정합니다. `--bundle-id` 는 자동 감지된 bundle id(`app.json` →
+`expo.ios.bundleIdentifier`)를 재정의합니다.
+
 ## 성능 비교 계약
 
 Nitro, Rustra, FFI는 동일 입력과 결과 shape를 먼저 검증한 뒤 호출 단위로 순환
