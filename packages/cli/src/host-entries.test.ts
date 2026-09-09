@@ -99,7 +99,12 @@ test('node section still fails loud when neither section nor codegen names a man
       node: {},
     } as RustraConfig);
     assert.throws(
-      () => resolveHostEntries({ schema: 'schema.json', output: 'generated', node: {} }, configPath, join(appRoot, 'generated')),
+      () =>
+        resolveHostEntries(
+          { schema: 'schema.json', output: 'generated', node: {} },
+          configPath,
+          join(appRoot, 'generated'),
+        ),
       /Node setup could not find Cargo\.toml/,
     );
   } finally {
