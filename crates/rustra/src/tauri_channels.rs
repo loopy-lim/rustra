@@ -80,7 +80,7 @@ pub fn rustra_channel_drop<R: tauri::Runtime>(app: tauri::AppHandle<R>, handle: 
 ///     .setup(|app| {
 ///         let package = build_my_package();
 ///         package.set_event_sink(Some(tauri_event_sink(app.handle().clone())));
-///         app.manage(RustraState { package });
+///         app.manage(RustraState::new(Arc::new(package)));
 ///         Ok(())
 ///     })
 /// ```
