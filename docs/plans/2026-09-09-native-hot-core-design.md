@@ -150,9 +150,28 @@ Rust `#[command]` 로직을 고치면 호스트별로 전부 정체 상태가 �
   섹션의 `codegen.rustManifest` 폴백 + Rust bin 의 `RUSTRA_SCHEMA_OUT` 을
   config 스키마 디렉터리로 고정 — 수선 전엔 이 레이아웃에서 패리티 게이트가
   stale 스키마를 읽어 무력화됐다).
-- Phase 3(RN 변형 템플릿)·Phase 4(subsecond/cranelift 재평가)는 미착지.
-  Phase 3 전제(앱 도메인 dlopen·duplicate SONAME 병존)는 아래 시뮬레이터
-  실측으로 입증됐다.
+- **Phase 3 착지 (2026-09-10) — RN dev 변형** — 어댑터 C++ 셸
+  (`packages/react-native/native/cpp/RustraJSIBridge.*`)에
+  `rustra::core::CoreTable`(23개 C ABI fn 포인터, atomic release/acquire
+  publish, 호출 시점 로드 — makeInvoke 람다 캡처 제거)을 신설하고
+  `configureHotCore`/`pollHotCoreOnce`/`startHotCorePolling` 계약으로 감시를
+  제공한다: `*-hot-live.*` dirent 스캔 → 자체 구현 sha256(FIPS 자체검증) →
+  버전 카피 → dlopen(RTLD_LOCAL) → 23심볼 dlsym → 신 코어
+  `rustra_mobile_init` → 계약 해시 조회(빈 해시 fail-closed) → publish →
+  **구 핸들 dlclose 금지 leak** → 리스너 존재 시 event sink 재바인딩. JSI
+  HostFunction은 C++ 셸 소유 유지 — 스왑은 테이블 재지향만으로 JS 재바인딩
+  없음(설계 그대로). 경로: Android `<filesDir>/rustra/hot`(Kotlin 템플릿이
+  `nativeConfigureHotCore` 전달), iOS 시뮬레이터 `RUSTRA_HOT_CORE_DIR`
+  env(Tauri `RUSTRA_HOT_CORE` 파일 경로와 의미 구분). 전달은 tmp+rename
+  필수. 스왑 단위는 시그니처 불변 로직 변경 한정(생성 C++ 코덱스는 앱에
+  정적 — 설계 전제 유지). 검증: 어댑터 cpp/mm iOS 시뮬레이터 타깃 컴파일,
+  RN 패키지 테스트 61 pass, Android 에뮬레이터 스모크
+  (`test:hot-core:android` — 정적 코어 5 → behavior cdylib push 105,
+  재로드 없음). RN 실기기는 스코프 외(정적 루프 유지).
+- **Phase 4 재평가 (2026-09-10)** — subsecond dioxus#5778 여전히 오픈(수정
+  PR #5779 미머지), cranelift unwinding 미지원 지속 + macOS ctor 버그
+  (rustc_codegen_cranelift#1588 — `native_entry!` 생성자와 충돌)로 조건
+  미충족. 두 트랙 모두 대기 유지.
 
 ### 스왑 시나리오 실측 (2026-09-09, `examples/hot-core-variant`)
 
