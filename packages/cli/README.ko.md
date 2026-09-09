@@ -30,6 +30,14 @@ rustra init my-app
 
 전체 옵션은 `rustra --help`로 확인하세요.
 
+**실험적 dylib dev 타깃**: `rustra dev`에서 `dev.target: "dylib"`를 쓰면 엔진
+코어를 cdylib 으로 빌드해 네이티브 hot-core 스왑 루프에 쓸 수 있습니다 — 호스트가
+`RUSTRA_HOT_CORE`로 아티팩트를 받아 재시작 없이 반영합니다(parity 게이트는 wasm
+타깃과 동일하게 결합). 동작 예제는
+[tauri-calculator 예제](../../examples/tauri-calculator/README.ko.md)와
+[hot-core 설계](../../docs/plans/2026-09-09-native-hot-core-design.md)를
+참고하세요.
+
 ## 라이브러리 API
 
 CLI와 동일한 생성기를 프로그램에서 직접 사용할 수 있습니다:

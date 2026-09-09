@@ -207,7 +207,11 @@ fn main() -> Result<()> {
 }
 ```
 
-To use the binary fast-path (rkyv V2, RN), also run the CLI codegen. First create
+To use the binary fast-path (rkyv V2, RN), also run the CLI codegen. Note:
+"rkyv V2" is Rustra's own binary frame protocol name, not the upstream `rkyv`
+crate — payloads are postcard-encoded (see the
+[wire format](docs/wire-format.md) and the
+[glossary](docs/glossary.md#rkyv-vs-rkyv-v2)). First create
 `rustra.json` at the project root — this minimal form points the CLI at the
 published schema, the output directory, and the hosts you use:
 
@@ -701,6 +705,10 @@ Silicon, then repeated 3 times after warm-up.
 | Bun generated FFI rkyv V2       |      2.27 µs |   2.21 µs | 439,961 ops/s | Services, CLI       |
 | Tauri generated WebView IPC     |    279.04 µs | 300.00 µs |   3,584 ops/s | Desktop UI commands |
 | RN generated JSI, iOS Simulator |            — |   2.71 µs |             — | Mobile hot path     |
+
+The rkyv V2 rows are Rustra's own binary frame protocol (postcard payload
+codec), not the upstream rkyv crate — see the
+[wire format](docs/wire-format.md).
 
 Mean and throughput are 5% two-sided trimmed means to reduce OS scheduling
 tail values. Tauri used per-call values from a 20-call batch due to WKWebView
