@@ -156,6 +156,46 @@ note: required for `MyType` to implement `CommandInput`
 
 ---
 
+### 2-6. 비동기 커맨드와 실행기
+
+`#[command]`는 `async fn`을 받습니다. 비동기 커맨드도 동기 커맨드와 똑같이 등록·스키마
+생성·디스패치됩니다:
+
+```rust
+#[command]
+async fn find_user(input: UserQuery) -> Result<User> {
+    let user = slow_lookup(&input.id).await;
+    Ok(user)
+}
+```
+
+async 문법 지원은 범용 비동기 런타임 제공이 **아닙니다**. 생성된 래퍼는 호출 스레드에서
+park 기반 실행기로 future를 구동합니다(waker는 `Thread::unpark`;
+`crates/rustra/src/executor.rs` 참고). 호스트 통합자가 알아야 할 귀결은 네 가지입니다:
+
+1. **실행기는 현재 스레드를 park 합니다.** 멀티스레드 호스트 런타임(예: tokio) 안에서
+   park된 워커 스레드는 굶은 워커입니다 — 비동기 커맨드 디스패치를 `spawn_blocking`
+   (또는 동등한 전용 풀)으로 돌리거나, 완전한 비동기 dispatch 경로를 기다리세요. FFI
+   async 경로에서는 핸들러가 rustra 고정 워커 풀(아래)에서 실행되므로 느린 비동기
+   커맨드 하나가 워커 2개 중 하나를 점유합니다.
+2. **`State<T>`는 thread-local이라 spawned task에서 보이지 않습니다.** 상태 주입은
+   thread-local 컨텍스트로 전달되어 디스패치가 시작된 스레드에서만 유효합니다. 핸들러가
+   다른 워커로 옮긴 태스크에서 `State` 조회는 `None`입니다. spawn 전에 필요한 값을
+   미리 캡처하세요(`Arc` 클론).
+3. **FFI async 호출은 고정 풀 — 워커 2개, 큐 깊이 256 — 에서 실행됩니다.** 풀은
+   fail-fast입니다. 큐가 가득 차면 hang하지 않고 즉시 `invoke.backpressure`로
+   거부합니다(`crates/rustra/src/ffi_pool.rs`). 백프레셔로 다뤄 drain 후 재시도하세요.
+   상수는 고정값이며 설정할 수 없습니다.
+4. **I/O 리액터나 타이머 드라이버는 제공하지 않습니다.** 런타임 컨텍스트와 무관하게
+   완료되는 future라면 무엇이든 동작합니다 — 어떤 스레드에서 깨워도 park된 스레드가
+   unpark 됩니다. 리액터나 타이머를 요구하는 future(tokio 리소스, `tokio::time`)는
+   디스패치 주위에 호스트의 런타임 진입이 필요합니다. rustra는 만들어주지 않습니다.
+
+실행기 주입(자체 `block_on` 끼워 넣기)은 지원하지 않습니다. 필요성을 느낀다면 먼저
+측정하세요 — 의도적으로 범위 밖입니다.
+
+---
+
 ## 3. `#[bridge_type]` 속성
 
 구조체나 열거형에 필요한 derive와 serde 설정을 한 줄로 추가합니다.
@@ -336,18 +376,20 @@ let pkg = Package::builder("example.bytes")
 
 ### 기타 빌더 메서드
 
-| 메서드                                  | 역할                                                                                                                                                                 |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.require_capability(name, cap)`        | 명령에 capability 요구 부여 (deny-by-default Runtime Authority)                                                                                                      |
-| `.platform_command::<I, O>(name, ps)`   | 플랫폼 특화 명령 선언 — **전 플랫폼**에 등록 (미지원은 스텁)                                                                                                         |
-| `.platform_command_impl(name, handler)` | 지원 플랫폼에서 실제 핸들러 주입                                                                                                                                     |
-| `.buffer_command_fn(handler)`           | 이름 추론 단일 `Vec<u8>` 직접 경로 등록                                                                                                                              |
-| `.buffer_command(name, handler)`        | 명시 이름 단일 `Vec<u8>` 직접 경로 등록                                                                                                                              |
-| `.alias_command_id(command, legacy_id)` | 구 cmd_id 별칭 등록 (하위호환 디스패치)                                                                                                                              |
-| `.event::<T>(name)`                     | 이벤트 계약 선언 — `name`의 페이로드 타입 `T`. schema.json `events`에 기록되고 `generated/events.ts`로 렌더링 ([이벤트·채널 가이드](events-and-channels.ko.md) 참고) |
-| `.event_capacity(capacity)`             | 이벤트 버스 링 버퍼 용량 설정                                                                                                                                        |
-| `.schema_version(version)`              | (T2, OTA) 스키마 협상 버전 명시                                                                                                                                      |
-| `.manage(state)`                        | 공유 상태 등록 (`State<T>` 파라미터와 `Package::state::<T>()`로 접근)                                                                                                |
+| 메서드                                  | 역할                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.require_capability(name, cap)`        | 명령에 capability 요구 부여 (deny-by-default Runtime Authority)                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `.platform_command::<I, O>(name, ps)`   | 플랫폼 특화 명령 선언 — **전 플랫폼**에 등록 (미지원은 스텁)                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `.platform_command_impl(name, handler)` | 지원 플랫폼에서 실제 핸들러 주입                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `.buffer_command_fn(handler)`           | 이름 추론 단일 `Vec<u8>` 직접 경로 등록                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `.buffer_command(name, handler)`        | 명시 이름 단일 `Vec<u8>` 직접 경로 등록                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `.alias_command_id(command, legacy_id)` | 구 cmd_id 별칭 등록 (하위호환 디스패치)                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `.event::<T>(name)`                     | 이벤트 계약 선언 — `name`의 페이로드 타입 `T`. schema.json `events`에 기록되고 `generated/events.ts`로 렌더링 ([이벤트·채널 가이드](events-and-channels.ko.md) 참고)                                                                                                                                                                                                                                                                                                |
+| `.event_capacity(capacity)`             | 이벤트 버스 링 버퍼 용량 설정                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `.schema_version(version)`              | (T2, OTA) 스키마 협상 버전 명시                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `.manage(state)`                        | 공유 상태 등록 (`State<T>` 파라미터와 `Package::state::<T>()`로 접근)                                                                                                                                                                                                                                                                                                                                                                                               |
+| `.command_errors(name, variants)`       | 커맨드의 도메인 에러 코드 선언 (`&[CommandErrorVariant]`; `#[command(error(...))]`의 빌더 형태) — schema.json `errors`에 기록되고 `generated/errors.ts`로 렌더된다(아래 "커맨드별 에러 코드 선언" 절 참고)                                                                                                                                                                                                                                                          |
+| `.command_devices(name, devices)`       | 커맨드가 전제하는 디바이스 역량 선언 (`&[DeviceCapability]`; `#[command(device(camera, bluetooth))]`의 빌더 형태) — schema.json `devices`와 최상위 `deviceCapabilities` 카탈로그에 기록되고 `generated/devices.ts`로 렌더된다; 런타임 게이팅은 없다. 미등록 커맨드·빈 목록·중복 토큰, 그리고 **release 빌드 한정** 카탈로그 밖 토큰에 패닉한다(debug 빌드는 경고 후 수용; [dev-tier.ko.md](dev-tier.ko.md)와 [플랫폼 권한 가이드](platform-permissions.ko.md) 참고) |
 
 ### 상태 주입: `State<T>` 파라미터
 
@@ -655,6 +697,49 @@ const [sum, echo] = await invokeBatch([
 
 옵션별 어댑터 동작(어느 취소가 얕은지, 어느 배치가 단일 횡단인지)은
 [호환성 매트릭스](compatibility-matrix.ko.md)에 있다.
+
+### 타임아웃·취소·재시도 의미 (플래그가 뜻하는 것과 뜻하지 않는 것)
+
+`retryable: true`는 transport가 *재시도 가능 부류의 실패*를 관측했다는 뜻이지,
+명령이 재실행해도 안전하다는 뜻이 **아니다**.
+
+**응답을 받지 못함 ≠ 명령이 실행되지 않음.** 얕은 취소(`invokeCancel`이 없는 어댑터의
+`options.signal`)와 `options.timeoutMs`는 모두 JS 프라미스를 버릴 뿐, Rust 측은 계속
+간다. 둘 중 하나가 발화한 뒤에도 명령은 실행 중일 수 있고 — 이미 완료해 결과가
+버려졌을 수도 있다. retryable 플래그만 보고 비멱등 명령을 재실행하면 이중 청구,
+이중 발송, 이중 insert가 생긴다. 일반 transport 실패에서 재시도하기 전에 효과부터
+확인하라:
+
+```ts
+import { withRetry } from '@rustra/types';
+
+// 안전: 읽기 커맨드 — 재시도해도 부작용이 중복되지 않는다.
+const user = await withRetry((attempt) => invoke('getUser', { id }), {
+  retries: 2,
+  baseDelayMs: 100,
+});
+
+// 가드 없이는 안전하지 않다: 비멱등 명령을 무조건 재시도하지 마라.
+// retryIf 로 재시도 판정을 좁혀라 — 기본 판정(isRetryableCode:
+// transport.error / transport.timeout / cancelled)을 완전히 대체한다:
+await withRetry((attempt) => invoke('chargeCard', { id, amountCents: 500 }), {
+  retryIf: (err) => err.code === 'transport.error', // 연결 수준 실패만
+});
+// 성공 여부를 관측할 수 없는 쓰기라면 추측하지 말고 대조하라:
+//   상태 재조회로 쓰기가 자리 잡지 않았음이 확인된 뒤에만 재시도한다.
+```
+
+배치 reject는 rollback이 아니다. `invokeBatch`는 항목이 실패하면 전체 프라미스를
+거부하지만, 디스패치된 항목은 실행됐고 그 효과는 남는다 — all-or-nothing
+트랜잭션이 없다. 항목별 폴백은 모든 항목을 동시에 시작하고, RN 단일 횡단 배치는
+첫 실패 항목에서 멈추며, Tauri wire 배치는 전부 실행한 뒤 거부한다. `invokeBatch`
+자체에 settled 형태는 없다 — 부분 결과를 관측하려면 `invokeBatchSettled`
+(`@rustra/types`)를 쓰라: 항상 per-entry 순차 실행(원자적 와이어 배치는 사용하지
+않음)이라 실패한 항목과 그 이후 항목이 구별된다 — 항목별로
+`{ status: 'fulfilled', value }`, `{ status: 'rejected', reason }`,
+`{ status: 'unexecuted' }` 중 하나로 settle 되며, `unexecuted`는 dispatch 자체가
+일어나지 않았음을 뜻한다. 항목별 `signal`/`timeoutMs`는 단건 `invoke`와 동일하게
+적용된다.
 
 ### 에러 메서드
 
@@ -1057,6 +1142,7 @@ assert!(pkg.is_frozen());
 
 - `tauri_support::register(app, pkg)` — invoke 핸들러 등록
 - `tauri_support::register_with_events(...)` — 이벤트 푸시 포함
+- `tauri_support::register_profiled(...)` — 벤치 전용, `rustra_dispatch_profiled` 노출
 - `tauri_support::rustra_dispatch(...)` — 커맨드 디스패치
 
 **스키마/버전** — `pkg.schema()` (전체 스키마 JSON), `pkg.live_schema()`

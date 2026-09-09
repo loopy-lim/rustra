@@ -18,6 +18,17 @@ This document is based on the behavior of the current checkout without version c
 that use the dependency form; CI and docs examples use the `bunx` form. All
 commands accept `--config rustra.json` explicitly.
 
+Exit codes are uniform across commands: `2` means the CLI was invoked wrong (a usage
+error — unknown command, unknown flag, or a missing required argument such as
+`codegen` without `--config` or `diff` without `--old`/`--new`); `1` means the command
+ran and failed (a codegen error, a `doctor` failure, a breaking `diff`); `0` is
+success. `--help` is handled once in the entry point for every command, so
+`rustra dev --help` prints usage without entering watch mode. `doctor`, `codegen`,
+`codegen --explain`, and `diff` accept `--format json` and share one envelope,
+`{ "schemaVersion": 1, ... }`: `codegen` reports `{ written, drift, durationMs }`,
+`--explain` reports `{ explain }`, and `diff` reports `{ breaking, clean }` with the
+exit code unchanged (`1` when breaking). `dev` is text-only.
+
 ## Starting without Rust: the mock engine
 
 The UI does not have to wait for a native build. `@rustra/testing`'s
@@ -99,6 +110,8 @@ bunx --bun @rustra/cli doctor --config rustra.json --strict
 
 It commonly checks Rust MSRV 1.88+, Cargo, Node/Bun, a C/C++ compiler, CMake, the Cargo manifest, and the configured Rust target. Only when React Native is configured does it additionally check Xcode/CocoaPods on macOS, and on Android Java 17, `ANDROID_NDK_ROOT` or the NDK `27.1.12297006` in the SDK, and the default Rust Android targets. Tauri configuration also includes per-host native build tools.
 
+Two checks look past the local toolchain. `registry.reachability` fetches `https://index.crates.io/config.json` with a 3-second timeout and reports `warn` — never `fail`, so an offline CI stays green — when crates.io is unreachable, with proxy (`HTTPS_PROXY`/`HTTP_PROXY`) and offline (`CARGO_NET_OFFLINE=true`) hints; it is skipped when Cargo itself is missing. `codegen.device_catalog` reads the generated `schema.json`: `skip` when no command declares devices, `warn` when commands declare devices but the schema has no `deviceCapabilities` catalog (regenerate with a current rustra), `pass` when every declared token is in the catalog, and `fail` for tokens outside it — debug builds accept such tokens with a warning while release builds panic at registration (see [dev-tier.md](dev-tier.md)).
+
 Each failure prints the checked value together with a copyable next action. `--format json` can be used for CI annotations or IDE integration, and `--strict` treats warnings as failures too. `doctor` performs no automatic installation.
 
 ## Unified codegen and dev loop
@@ -129,6 +142,8 @@ Select a target via Cargo metadata
 
 If the binary is omitted, a binary named `generate`, or the single binary, is used. With two or more candidates it does not guess automatically; it prints `codegen.rust_binary_ambiguous` together with the candidates.
 
+Without `--config`, `codegen` falls back to `./rustra.json` when that file exists (the same default as `doctor`). In text mode it prints the same file list as `generate`, each line suffixed `(unchanged)` or `(updated)`. Any `(updated)` line means a committed artifact changed, and because codegen never rebuilds the runtime binary that serves `invoke`, the CLI appends a hint to run `cargo build` — until then invokes can fail with `contract.mismatch`. If `cargo` itself is not on `PATH`, the codegen error names that directly and points to <https://rustup.rs> instead of surfacing a bare `ENOENT`.
+
 To keep generating while editing Rust, use the following.
 
 ```bash
@@ -146,6 +161,19 @@ bun run codegen:check
 ```
 
 `generate --check` compares the bytes, schema hash, and generator version of every file expected from the current schema against the manifest and writes no files. It reports on-disk content changes and a stale manifest as distinct errors, and treats missing, changed, or unexpected files as failures. `codegen --check` passes an `RUSTRA_SCHEMA_OUT` temporary directory to the Rust generator so the Cargo stage does not write to the working tree either, then verifies TS/C++/RN. Generated Rust files are not rewritten when the content is identical.
+
+Every generated file carries a self-describing header (file name, source, regen command, stage) in the comment syntax of its file type: `//` for TypeScript, C++, Swift, Kotlin, Gradle, and every other slash-comment file; `#` for `CMakeLists.txt`/`.cmake`, `.podspec`, `.rb`, `.py`, `.sh`, `.yml`/`.yaml`, `.toml`, `.properties`, `.gitignore`, and `.env`; `<!-- -->` for `.xml`/`.html`, where the `--config rustra.json` flag is written as `[config: rustra.json]` because an XML comment cannot contain `--`. A shebang line stays first and the header follows it. JSON files carry no header at all — JSON has no comment syntax — so `.rustra-generated.json` is the only provenance record for them. The header is part of the bytes that `--check` and the manifest hashes compare, so editing it is drift like any other edit.
+
+## Runtime diagnostics: `RUSTRA_DEBUG`
+
+Set `RUSTRA_DEBUG=1` (also `true` or `verbose`) in the process environment to turn on the opt-in diagnostics every adapter shares through `@rustra/types`. The value is read once per process at first use.
+
+- Every wire round trip is logged through `console.debug` as a `[rustra:debug]` event carrying `direction` (`request`/`response`/`error`), `transport` (`json`/`rkyv`/`typed`), `command`, a bounded hex `bytes` preview with `byteLength`, and a truncated `value` snapshot (depth 3, 32 entries, 2 KB budget). Nothing is logged unless debug is on, so secrets stay out of logs by default.
+- The raw wire bytes are additionally hex-dumped to stderr as `[rustra:wire] <direction> <hex>` (first 256 bytes).
+- The JSON engine emits a `kind: 'response.shape'` warning event when a resolved response looks like a wire-envelope anomaly — `reason` is one of `double_envelope`, `failed_without_error`, `envelope_missing_payload`, `resolved_error_envelope` — the usual symptom of a JS/native version skew. The warning never throws and never changes the result.
+- `@rustra/node` emits `kind: 'ndjson.unparsed'` for every stdout line the NDJSON loop could not parse and warns on stderr once. Without debug mode it instead keeps the last 32 unparsed lines (each cut at 4 096 characters) and attaches them to the error of requests still pending when the child process exits; in debug mode an 8 KB stderr tail is attached as well.
+
+React Native has no `process.env` — set `globalThis.__RUSTRA_DEBUG__ = true` instead (this enables the event log; the stderr hex dump is env-only). For a structured consumer, install a sink with `configureDebug(sink)` from `@rustra/types`: the sink receives every `RustraDebugEvent` even when `RUSTRA_DEBUG` is unset, and `configureDebug(undefined)` removes it.
 
 ## Realistic per-platform boundaries
 

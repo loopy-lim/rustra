@@ -187,17 +187,52 @@ The 4 files produced by `GeneratedPackage`:
 ```json
 {
   "packageId": "example.calculator",
+  "schemaVersion": 1,
+  "fieldOrder": "declaration",
   "commands": [
     {
       "name": "addNumbers",
+      "commandId": 1,
       "inputType": "AddNumbersInput",
       "outputType": "AddNumbersOutput",
       "inputSchema": { ... },
       "outputSchema": { ... }
+    },
+    {
+      "name": "divide",
+      "commandId": 10,
+      "inputType": "DivideInput",
+      "outputType": "DivideOutput",
+      "inputSchema": { ... },
+      "outputSchema": { ... },
+      "errors": [{ "code": "math.divide_by_zero", "description": null, "retryable": false }]
+    },
+    {
+      "name": "deviceDemo",
+      "commandId": 32,
+      "inputType": "()",
+      "outputType": "DeviceDemoOutput",
+      "outputSchema": { ... },
+      "devices": ["camera", "bluetooth"]
     }
-  ]
+  ],
+  "deviceCapabilities": ["camera", "microphone", "geolocation", "..."]
 }
 ```
+
+Four fields are conditional — written only when something is declared, so packages
+without declarations keep byte-identical schemas and an unchanged contract hash:
+
+- per-command `errors` (`[{ code, description, retryable }]`) from
+  `#[command(error(...))]` / the `command_errors` builder → rendered as `errors.ts`
+  (`{Fn}ErrorCode` literal unions, `{Fn}Error` intersection types, `is{Fn}Error` guards);
+- per-command `devices` (`["camera", ...]`) from `#[command(device(...))]` / the
+  `command_devices` builder → rendered as `devices.ts`;
+- per-command `platforms` (`["windows", "macos"]`) from `.platform_command`;
+- top-level `deviceCapabilities`, the rustra device-token catalog, present whenever at
+  least one command declares devices. It is the CLI's single source for token ordering,
+  the `devices.ts` union, and the `codegen.device_catalog` doctor check — there is no
+  hand-maintained mirror.
 
 ### types.ts
 

@@ -52,6 +52,23 @@ deprecated as of 0.6.0 and removed under the pre-1.0 rule above — in the
 replacement is a host-specific adapter boundary — each embedding host
 bridges its own renderer/events via the published channel and FFI surfaces.
 
+Removed under the same rule in the 0.7.0 `@rustra/tauri` and
+`@rustra/react-native` packages: the legacy `subscribeEvent(listen, name, callback)`
+(Tauri) and `subscribeEvent(native, name, callback[, options])` (React Native)
+overloads, deprecated in 0.6.0. Only `subscribeEvent(name, callback[, listen])` and
+`subscribeEvent(name, callback[, options])` remain; React Native resolves the native
+module from `globalThis.__rustraNative`.
+
+Landed on `main` and shipping with the next npm release (pending changesets):
+the `reactNative.legacyBenchmarks` config key together with the
+`RUSTRA_LEGACY_BENCHMARKS`/`RUSTRA_ENABLE_LEGACY_BENCHMARKS` build flags in
+generated modules (`@rustra/cli`), and the calculator-only legacy wire functions
+on `RustraNative` and the JSI host object — `invokeMsgpack`, `invokeBincode`,
+`invokePostcard`, `invokeRkyv`, `invokeHybrid`, `invokeRaw`, plus `invokeBytes` and
+`invokeLegacyPostcard` on the JSI side (`@rustra/types`, `@rustra/react-native`).
+The generic transport (`invoke`, `invokeRkyvV2`) and the typed fast paths
+(`invokeTyped*`, `getCodecCapabilities`) are the replacement and are unchanged.
+
 ## Experimental surface
 
 Experimental items may change or break in any release until they stabilize.

@@ -60,6 +60,9 @@ cargo test --workspace
 cargo run -p rustra-calculator-example --bin generate   # 계약 프로브: schema.json
 bun run --cwd examples/calculator codegen                # TS 표면 렌더링
 
+# 빠른 개발 루프: cargo check + calculator tsc + cli 유닛 테스트
+bun run test:fast
+
 # 전체 호환성 테스트
 bun run test:compat
 ```
