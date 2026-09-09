@@ -156,7 +156,9 @@ impl GeneratedPackage {
     ///
     /// `RUSTRA_SCHEMA_OUT` 환경 변수를 [`GeneratedPackage::write_to_dir`] 과
     /// 동일하게 존중한다 — CLI의 `codegen --check` 가 임시 디렉토리에서
-    /// Rust 산출물을 검증할 때 사용하는 우회 경로다.
+    /// Rust 산출물을 검증할 때 사용하는 우회 경로다. 프로세스 전역
+    /// 환경 변수라 서로 다른 값을 든 동시 호출은 상대 출력을 자기 디렉토리로
+    /// 리다이렉트한다 — 빌드타임 1회 용도 계약(테스트는 SCHEMA_OUT_SERIAL 로 직렬화).
     pub fn write_schema_to_dir(&self, output_dir: impl AsRef<Path>) -> crate::Result<()> {
         let output_dir = resolve_output_dir(output_dir.as_ref())?;
         write_if_changed(output_dir.join("schema.json"), &self.schema_json)?;
@@ -173,7 +175,9 @@ impl GeneratedPackage {
     ///
     /// `RUSTRA_SCHEMA_OUT` 환경 변수가 있으면 해당 디렉토리를 사용합니다.
     /// CLI의 `codegen --check`가 작업 트리를 건드리지 않고 Rust 산출물을
-    /// 임시 디렉토리에서 검증할 때 사용하는 우회 경로입니다.
+    /// 임시 디렉토리에서 검증할 때 사용하는 우회 경로입니다. 프로세스 전역
+    /// 환경 변수이므로 서로 다른 값을 든 동시 호출은 상대 출력을 자기
+    /// 디렉토리로 리다이렉트합니다 — 빌드타임 1회 용도 계약입니다.
     ///
     /// 디렉토리가 없으면 생성합니다:
     /// - `schema.json` — 전체 명령 스키마
