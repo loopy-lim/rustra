@@ -878,7 +878,10 @@ test(
         await triggerUntil(
           () => errors,
           () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed() {}\n'),
-          () => errors.some((line) => line.includes('[dev] reload rejected —') && line.includes('drift')),
+          () =>
+            errors.some(
+              (line) => line.includes('[dev] reload rejected —') && line.includes('drift'),
+            ),
           'the loud drift rejection',
         );
         await sleep(300);
@@ -904,7 +907,8 @@ test(
           'the settled run must atomically republish the new contract core to the live path',
         );
         const hints = errors.filter(
-          (line) => line.includes('RUSTRA_HOT_CORE=') && line.includes(liveDylibFileName('rustra_bridge')),
+          (line) =>
+            line.includes('RUSTRA_HOT_CORE=') && line.includes(liveDylibFileName('rustra_bridge')),
         );
         assert.ok(
           hints.length >= 2,
