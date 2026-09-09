@@ -75,6 +75,18 @@ const unsubscribe = await subscribeEvent('progress.tick', (payload) => {
 });
 ```
 
+Tauri 전용 규칙 둘이 모든 구독에 적용된다. 리스너 콜백이 던지면
+`kind: 'tauri.listener_error'` debug 이벤트로 한 번 보고되고(스택 보존; `configureDebug`
+싱크에는 항상 도달하고 콘솔에는 `RUSTRA_DEBUG`가 있을 때만 찍힌다) 그 뒤 삼켜진다 —
+콜백은 재호출되지 **않고** 형제 리스너는 계속 돈다. 브라우저 `EventTarget`과 같은
+정책이다. 구독이 듣는 채널은 `rustra://` + 정규화된 이벤트 이름이다: 코드포인트를 하나씩
+순회하며 `-` `/` `:` `_`와 Unicode 문자·숫자는 보존하고(`진행.갱신`은
+`rustra://진행_갱신`이 된다) 그 외 코드포인트는 각각 `_` 하나가 되며, NFC 정규화는 하지
+않는다. Rust(`sanitize_event_name`)와 TypeScript(`rustraEventChannel`)가 같은 알고리즘을
+문자 단위로 똑같이 돌리고, _선언된_ 이벤트 이름 둘이 같은 채널로 수렴하면(`a.b` vs `a_b`)
+`Package::build()`가 `event channel collision` 패닉으로 거부하므로 그런 오배선은
+런타임에 도달하지 못한다.
+
 **React Native** — RN의 `subscribeEvent(name, cb, options?)`는 JSI 싱크 푸시다.
 CallInvoker 없는 호스트에서는 `pollMs`를 넘겨 C++ 디스패처 큐를 당기는 JS 폴링
 드레인 루프를 돌린다:

@@ -22,6 +22,17 @@ lockfile과 생성된 manifest를 함께 확인해야 합니다.
 디펜던시 형태를 쓰고, CI와 문서 예제는 `bunx` 형태를 쓴다. 모든 명령은
 `--config rustra.json`을 명시적으로 받는다.
 
+종료 코드는 모든 명령에 공통이다: `2`는 CLI를 잘못 호출했다는 뜻(usage 오류 — 알 수
+없는 명령·플래그, `--config` 없는 `codegen`이나 `--old`/`--new` 없는 `diff` 같은
+필수 인자 누락)이고, `1`은 명령이 실행됐지만 실패했다는 뜻(codegen 오류, `doctor`
+실패, breaking `diff`)이며, `0`은 성공이다. `--help`는 진입점에서 모든 명령에 대해
+한 번 처리되므로 `rustra dev --help`는 watch 모드에 들어가지 않고 사용법만 출력한다.
+`doctor`, `codegen`, `codegen --explain`, `diff`는 `--format json`을 받고
+`{ "schemaVersion": 1, ... }` 봉투 하나를 공유한다: `codegen`은
+`{ written, drift, durationMs }`, `--explain`은 `{ explain }`, `diff`는
+`{ breaking, clean }`을 보고하며 종료 코드는 그대로다(breaking이면 `1`). `dev`는
+텍스트 전용이다.
+
 ## Rust 없이 시작하기: mock 엔진
 
 UI가 네이티브 빌드를 기다릴 필요는 없다. `@rustra/testing`의
@@ -107,6 +118,17 @@ Xcode/CocoaPods와 Android의 Java 17, `ANDROID_NDK_ROOT` 또는 SDK의 NDK
 `27.1.12297006`, 기본 Rust Android target을 추가로 확인합니다. Tauri 설정에는
 호스트별 native build 도구도 포함됩니다.
 
+로컬 toolchain 너머를 보는 검사가 둘 있습니다. `registry.reachability`는
+`https://index.crates.io/config.json`을 3초 타임아웃으로 가져와, crates.io에 닿지 않으면
+프록시(`HTTPS_PROXY`/`HTTP_PROXY`)·오프라인(`CARGO_NET_OFFLINE=true`) 힌트와 함께
+`warn`을 보고합니다 — `fail`은 절대 아니라서 오프라인 CI가 빨개지지 않으며, Cargo
+자체가 없으면 건너뜁니다. `codegen.device_catalog`는 생성된 `schema.json`을 읽습니다:
+디바이스를 선언한 명령이 없으면 `skip`, 명령은 디바이스를 선언했는데 스키마에
+`deviceCapabilities` 카탈로그가 없으면 `warn`(최신 rustra로 재생성), 선언된 토큰이
+전부 카탈로그 안이면 `pass`, 카탈로그 밖 토큰이 있으면 `fail`입니다 — debug 빌드는
+그런 토큰을 경고와 함께 수용하지만 release 빌드는 등록 시 패닉합니다
+([dev-tier.ko.md](dev-tier.ko.md) 참고).
+
 각 실패에는 확인한 값과 복사 가능한 다음 조치가 함께 출력됩니다. `--format json`은
 CI annotation이나 IDE 연동에 사용할 수 있고, `--strict`는 경고도 실패로 처리합니다.
 `doctor`는 자동 설치를 수행하지 않습니다.
@@ -142,6 +164,14 @@ binary를 생략하면 이름이 `generate`인 binary, 또는 유일한 binary�
 이상 후보가 있으면 자동으로 추측하지 않고 `codegen.rust_binary_ambiguous`와 후보를
 출력합니다.
 
+`--config`가 없으면 `codegen`은 `./rustra.json`이 존재할 때 그 파일을 기본으로 채택합니다(`doctor`와 같은 기본값).
+텍스트 모드에서는 `generate`와 같은 파일 목록을 출력하며 각 줄에 `(unchanged)` 또는
+`(updated)`가 붙습니다. `(updated)` 줄이 하나라도 있으면 커밋된 생성물이 바뀐 것이고,
+codegen은 `invoke`를 서브하는 런타임 바이너리를 재빌드하지 않으므로 CLI가 `cargo build`
+안내를 덧붙입니다 — 그 전까지 invoke는 `contract.mismatch`로 실패할 수 있습니다.
+`cargo` 자체가 `PATH`에 없으면 codegen 오류가 맨몸의 `ENOENT` 대신 그 사실을 명시하고
+<https://rustup.rs>를 안내합니다.
+
 Rust를 수정하면서 계속 생성하려면 다음을 사용합니다.
 
 ```bash
@@ -170,6 +200,43 @@ bun run codegen:check
 Rust generator에 `RUSTRA_SCHEMA_OUT` 임시 디렉터리를 전달해 Cargo 단계도 작업 트리를
 쓰지 않게 한 뒤 TS/C++/RN 검증을 수행합니다. 생성된 Rust 파일은 내용이 같으면 재작성하지
 않습니다.
+
+모든 생성 파일에는 파일 종류의 주석 문법으로 자기서술 헤더(파일명·출처·재생성 명령·단계)가
+붙습니다: TypeScript, C++, Swift, Kotlin, Gradle 등 슬래시 주석 파일은 `//`,
+`CMakeLists.txt`/`.cmake`, `.podspec`, `.rb`, `.py`, `.sh`, `.yml`/`.yaml`, `.toml`,
+`.properties`, `.gitignore`, `.env`는 `#`, `.xml`/`.html`은 `<!-- -->`이며 XML 주석에는
+`--`를 쓸 수 없어 `--config rustra.json` 플래그를 `[config: rustra.json]`으로 적습니다.
+shebang 줄은 첫 줄에 남고 헤더는 그 뒤에 붙습니다. JSON 파일에는 헤더가 전혀 없습니다 —
+JSON에 주석 문법이 없기 때문 — 그래서 `.rustra-generated.json`이 JSON 생성물의 유일한
+출처 기록입니다. 헤더는 `--check`와 매니페스트 해시가 비교하는 바이트의 일부이므로 헤더를
+손으로 고치는 것도 다른 수정과 똑같이 drift입니다.
+
+## 런타임 진단: `RUSTRA_DEBUG`
+
+프로세스 환경에 `RUSTRA_DEBUG=1`(`true`, `verbose`도 가능)을 설정하면 모든 어댑터가
+`@rustra/types`를 통해 공유하는 opt-in 진단이 켜집니다. 값은 프로세스당 첫 사용 시 한 번
+읽습니다.
+
+- 모든 와이어 왕복이 `console.debug`로 `[rustra:debug]` 이벤트로 기록됩니다 —
+  `direction`(`request`/`response`/`error`), `transport`(`json`/`rkyv`/`typed`), `command`,
+  길이가 제한된 hex `bytes` 미리보기와 `byteLength`, 절단된 `value` 스냅숏(깊이 3, 항목
+  32개, 2 KB 예산). debug가 꺼져 있으면 아무것도 기록하지 않으므로 기본적으로 비밀 값이
+  로그에 남지 않습니다.
+- 원시 와이어 바이트는 추가로 stderr에 `[rustra:wire] <direction> <hex>`(앞 256바이트)로
+  hex 덤프됩니다.
+- JSON 엔진은 resolve된 응답이 와이어 봉투 이상으로 보이면 `kind: 'response.shape'` 경고
+  이벤트를 냅니다 — `reason`은 `double_envelope`, `failed_without_error`,
+  `envelope_missing_payload`, `resolved_error_envelope` 중 하나로, JS/native 버전
+  스큐의 전형적 증상입니다. 이 경고는 던지지도, 결과를 바꾸지도 않습니다.
+- `@rustra/node`는 NDJSON 루프가 파싱하지 못한 stdout 줄마다 `kind: 'ndjson.unparsed'`를
+  내고 stderr에 최초 1회만 경고합니다. debug 모드가 아니면 대신 최근 32줄(각 4 096자에서
+  절단)을 보존해 자식 프로세스가 종료될 때 대기 중 요청의 에러에 첨부하고, debug 모드에서는
+  8 KB stderr 꼬리도 함께 첨부합니다.
+
+React Native에는 `process.env`가 없으므로 대신 `globalThis.__RUSTRA_DEBUG__ = true`를
+설정합니다(이벤트 로그가 켜지며 stderr hex 덤프는 env 전용). 구조화된 소비자가 필요하면
+`@rustra/types`의 `configureDebug(sink)`로 싱크를 설치하세요: 싱크는 `RUSTRA_DEBUG`가
+없어도 모든 `RustraDebugEvent`를 받고, `configureDebug(undefined)`가 제거합니다.
 
 ## 플랫폼별 현실적인 경계
 

@@ -62,6 +62,9 @@ cargo test --workspace
 cargo run -p rustra-calculator-example --bin generate   # contract probe: schema.json
 bun run --cwd examples/calculator codegen                # render TS surfaces
 
+# Fast dev loop: cargo check + calculator tsc + cli unit tests
+bun run test:fast
+
 # Full compatibility test
 bun run test:compat
 ```

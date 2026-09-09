@@ -78,6 +78,20 @@ const unsubscribe = await subscribeEvent('progress.tick', (payload) => {
 });
 ```
 
+Two Tauri-specific rules apply to every subscription. A listener callback that
+throws is reported once as a `kind: 'tauri.listener_error'` debug event (stack
+preserved; it always reaches the `configureDebug` sink and hits the console only
+under `RUSTRA_DEBUG`) and is then swallowed — the callback is **not** re-invoked and
+sibling listeners keep running, the same policy as a browser `EventTarget`. The
+channel a subscription listens on is `rustra://` plus the sanitized event name:
+code points are walked one at a time, `-` `/` `:` `_` and Unicode letters/digits
+are kept (so `진행.갱신` becomes `rustra://진행_갱신`), every other code point turns
+into one `_`, and no NFC normalization is applied. Rust (`sanitize_event_name`) and
+TypeScript (`rustraEventChannel`) run the same algorithm character for character,
+and `Package::build()` panics with `event channel collision` when two _declared_
+event names would map to the same channel (`a.b` vs `a_b`), so that misrouting
+cannot reach runtime.
+
 **React Native** — the RN `subscribeEvent(name, cb, options?)` is push via the
 JSI sink. On CallInvoker-less hosts, pass `pollMs` to run the client-side drain
 loop that pulls the C++ dispatcher queue:

@@ -675,6 +675,7 @@ export const SCHEMA_VERSION = 1;
 
 - schemars가 생성한 JSON Schema. 런타임 검증, 문서 자동화, 외부 도구 연동에 활용.
 - 첫 커맨드만 발췌했다 — 실제 파일은 32개 커맨드 전부를 담는다.
+- 네 필드는 선언됐을 때만 나타나므로 선언 없는 패키지는 바이트 동일 스키마를 유지한다: 커맨드별 `errors`(`[{ code, description, retryable }]`, `#[command(error(...))]`에서 → `errors.ts`), `devices`(`["camera", ...]`, `#[command(device(...))]`에서 → `devices.ts`), `platforms`(`.platform_command`에서), 그리고 CLI가 `devices.ts` 유니언과 `codegen.device_catalog` doctor 검사에 읽는 최상위 `deviceCapabilities` 카탈로그. 전체 셰이프는 [docs/internal/codegen.ko.md](internal/codegen.ko.md) 참고.
 
 ---
 
@@ -759,6 +760,11 @@ const engine = createNodeEngine({
 
 `createNodeEngine`, `createNodeProcessTransport`, `createNodeLoopTransport`는 custom
 N-API와 다중 runtime을 위한 명시적 escape hatch다.
+
+Node의 이벤트: 스키마가 이벤트를 선언하면 생성된 `node.ts` 엔트리가 `subscribeEvent`도
+export한다(loop-stdio 런타임이 `events:"push"` 핸드셰이크를 받으면 stdout 프레임 푸시,
+아니면 폴링 폴백). 모든 호스트의 구독·채널 표면은
+[events-and-channels.ko.md](events-and-channels.ko.md)에 있다.
 
 ### Bun
 
@@ -1037,6 +1043,11 @@ my-app/
 `dev` 스크립트는 `rustra dev --config rustra.json`을 쓴다 — `rustra init`이 만드는
 스캐폴드와 동일하며, Rust 소스 변경까지 감시해 schema 재생성 + TS 재생성을 한 번에
 처리한다. 타입 검사만 반복하고 싶다면 `tsc --watch`를 별도 스크립트로 추가한다.
+
+debug 빌드에서 프로토타이핑하는 동안에는 생성 클라이언트에 아직 없는 Rust 핸들러를
+`@rustra/types`의 `invokeLoose(engine, 'commandName', args?)`로 호출할 수 있다 — 동적
+개발 티어와 미지 디바이스 토큰 벽, 릴리스 시점 게이트는 [dev-tier.ko.md](dev-tier.ko.md)에
+있다.
 
 `rustra.json`은 Rust generator를 명시한다:
 
