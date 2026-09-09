@@ -843,6 +843,90 @@ test(
 );
 
 test(
+  'runConfigDev dylib target publishes the new core once the re-armed baseline accepts the settled state',
+  { timeout: 30_000 },
+  async () => {
+    // (b)→(c) 경계의 후반부 — 거부는 기준을 관찴된(코드젠된) 상태로 재무장하므로,
+    // 스키마가 안정된 다음 런은 게이트를 통과하고 새 계약의 코어가 라이브로 발행된다
+    // (reload 도 이때 처음 방출된다). 기존 drift 테스트가 거부에서 끝나고 통과
+    // 테스트는 애초 안정 계약뿐이라, "거부 후 재발행" 절반이 갭이었다.
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-dylib-rearm-'));
+    const originalPath = process.env.PATH;
+    try {
+      const project = seedDylibProject(root);
+      writeSchema(join(project, 'generated', 'schema.json'), 'string');
+      writeSchema(join(root, 'schema-string.json'), 'string');
+      writeSchema(join(root, 'schema-integer.json'), 'integer');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+
+      const errors: string[] = [];
+      const restore = captureConsole(errors);
+      try {
+        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        const reloads: string[] = [];
+        handle.onReload((reason) => void reloads.push(reason));
+
+        // 시작점 — initial 런(게이트 통과)이 라이브에 발행한 상태다.
+        const liveAbs = join(project, 'target', 'debug', liveDylibFileName('rustra_bridge'));
+        assert.equal(readFileSync(liveAbs, 'utf8'), 'fake dylib core');
+
+        // (b) 드리프트 런 — integer 계약 + 새 바이트의 코어 → 거부. 라이브는 구
+        // 발행물을 유지하고 reload 는 방출되지 않는다(앞 테스트와 같은 절반).
+        process.env.FAKE_SCHEMA_FILE = join(root, 'schema-integer.json');
+        process.env.FAKE_DYLIB_CONTENT = 'drifted core bytes';
+        await triggerUntil(
+          () => errors,
+          () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed() {}\n'),
+          () => errors.some((line) => line.includes('[dev] reload rejected —') && line.includes('drift')),
+          'the loud drift rejection',
+        );
+        await sleep(300);
+        assert.deepEqual(reloads, [], 'the drifted run must not emit reload');
+        assert.equal(
+          readFileSync(liveAbs, 'utf8'),
+          'fake dylib core',
+          'the rejection must leave the previously published core in place',
+        );
+
+        // (c) 코드젠이 따라잡은 뒤의 다음 런 — 스키마(integer)는 이제 (b) 거부에서
+        // 재무장된 기준과 같고 코어 바이트도 같은 새 계약 → 통과 + 재발행 + reload.
+        await triggerUntil(
+          () => errors,
+          () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn caughtUp() {}\n'),
+          () => reloads.length >= 1,
+          'the re-armed passing run',
+        );
+        handle.dispose();
+        assert.equal(
+          readFileSync(liveAbs, 'utf8'),
+          'drifted core bytes',
+          'the settled run must atomically republish the new contract core to the live path',
+        );
+        const hints = errors.filter(
+          (line) => line.includes('RUSTRA_HOT_CORE=') && line.includes(liveDylibFileName('rustra_bridge')),
+        );
+        assert.ok(
+          hints.length >= 2,
+          `the stable run must re-announce RUSTRA_HOT_CORE for the live path, got:\n${errors.join('\n')}`,
+        );
+        assert.ok(
+          !readdirSync(join(project, 'target', 'debug')).some((entry) => entry.includes('-tmp-')),
+          'the republish must not leave tmp files behind',
+        );
+      } finally {
+        restore();
+        delete process.env.FAKE_SCHEMA_FILE;
+        delete process.env.FAKE_DYLIB_CONTENT;
+      }
+    } finally {
+      process.env.PATH = originalPath;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
   'runConfigDev dylib target leaves no live artifact when the gate rejects before the first publish',
   { timeout: 30_000 },
   async () => {
