@@ -62,7 +62,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 
 ## 예제 갤러리
 
-실행 가능한 예제 10개가 [`examples/`](../examples/)에 있다 — 각자 README(en/ko)에
+실행 가능한 예제 11개가 [`examples/`](../examples/)에 있다 — 각자 README(en/ko)에
 전제 조건과 실행 명령이 있다.
 
 | 예제                                                                        | 무엇을 배우는지                                                                 |
@@ -77,6 +77,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 | [`calculator-napi`](../examples/calculator-napi/)                           | transport를 napi-rs로 교체(release transport 벤치마크의 소스)                   |
 | [`benchmark`](../examples/benchmark/)                                       | 페이로드 확장·처리량 측정 하니스                                                |
 | [`reference-app`](../examples/reference-app/)                               | 실제 앱에서 `@rustra/react` 훅: useCommand/useMutation/useEvent                 |
+| [`hot-core-probe`](../examples/hot-core-probe/)                             | 실험적 dylib 핫스왑 코어의 단독 검증기 — 호스트/iOS 시뮬레이터/Android 에뮬레이터 |
 
 `examples/rn-wasm-spike/`는 실험적 wasm32-in-wasm3 스파이크다 — 증거와 범위 주의는
 [호환성 매트릭스](compatibility-matrix.ko.md)에 있고 지원 경로가 아니다.
