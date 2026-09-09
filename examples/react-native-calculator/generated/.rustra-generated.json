@@ -13,7 +13,7 @@
     },
     {
       "path": "../modules/rustra-jsi/android/CMakeLists.txt",
-      "sha256": "2ad3c4842a64ebd1535ba72184066b3ecc7b9f6e0ffa5993862b9916399a8854"
+      "sha256": "9ca4eccc6db13c1d584551c4901847c84188eb7e7d74765e7884770b51501656"
     },
     {
       "path": "../modules/rustra-jsi/android/src/main/AndroidManifest.xml",
