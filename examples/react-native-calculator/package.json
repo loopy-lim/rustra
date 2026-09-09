@@ -15,6 +15,7 @@
     "build:fingerprint": "bun scripts/generate-build-fingerprint.mjs",
     "codegen": "bun ../../packages/cli/src/index.ts codegen --config rustra.json && bun run build:fingerprint",
     "codegen:check": "bun ../../packages/cli/src/index.ts codegen --config rustra.json --check",
+    "postinstall": "node scripts/link-live-packages.mjs",
     "doctor": "bun scripts/doctor.mjs",
     "check": "bun run doctor && bun run typecheck && bun run test && bun run test:cpp-codec",
     "web": "expo start --web",
