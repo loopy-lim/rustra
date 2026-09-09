@@ -129,9 +129,42 @@ Rust `#[command]` 로직을 고치면 호스트별로 전부 정체 상태가 �
   — CLI는 `<stem>-hot-live<ext>`를 temp+원자적 rename 으로 발행하며, 이는
   parity 게이트 통과 **이후에만** 일어난다. 게이트 reject 시 기존 live
   아티팩트는 그대로 남아 호스트가 구 엔진을 유지한다.
-- **미연결 (Phase 2로 이월)** — webview 이벤트 스왑 보고(예제는 현재 stderr
-  출력만), JS 캐시 재동기화 신호로서의 `rustra_ffi_schema_generation` 카운터.
-- Phase 2~4는 변함없다(미착지).
+- **Phase 2 착지(부분) — 웹뷰 스왑 보고** —
+  `tauri_support::register_dispatch_with_swap_events(dispatch, reporter, builder)`
+  - `HotSwapReporter`: 감시 스레드의 스왑 결과(성공/실패 모두)가
+    `rustra://hot-core/swapped` 예약 채널로 웹뷰에 push 된다(싱크는 코어 바깥
+    호스트 측에 살아 스왑을 생존 — 상태 소실 정책과 무충돌). JS 측은
+    `@rustra/tauri` 의 `subscribeHotSwap`. 페이로드에 구·신 컨트랙트 해시를
+    함께 실으므로 **JS 캐시 재동기화 신호를 이벤트가 대행**한다 —
+    `rustra_ffi_schema_generation` 카운터는 도입하지 않기로 확정(수신 측이 해시
+    비교로 재호출 여부를 판단).
+- **미착지(Phase 2 잔여)** — Bun 어댑터 버전 경로의 1급 파라미터화.
+  단, `RUSTRA_BUN_LIBRARY` 환경변수로 live 아티팩트 경로 지정이 이미 가능해
+  실질 블로커는 아니다(2026-09-09 재확인). Node 는 기존 respawn
+  (`NodeBootstrap.reload()`) 유지.
+- Phase 3(RN 변형 템플릿)·Phase 4(subsecond/cranelift 재평가)는 미착지.
+  Phase 3 전제(앱 도메인 dlopen·duplicate SONAME 병존)는 아래 시뮬레이터
+  실측으로 입증됐다.
+
+### 스왑 시나리오 실측 (2026-09-09, `examples/hot-core-variant`)
+
+"스왑 가능 변경의 경계" 절을 변형 cdylib(`examples/hot-core-variant`,
+feature 조합이 곧 시나리오)로 3 플랫폼에서 실측했다 — macOS 호스트와 iOS
+시뮬레이터(`simctl spawn`), Android 에뮬레이터(`adb shell`)에서 **완전히 동일한
+관측**:
+
+| 시나리오 (feature)                                | 계약 해시 | 스왑 후 관측 (`PROBE OBS`)                                                                         |
+| ------------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------- |
+| 로직만 변경 (`behavior`, 본문 +100)               | **불변**  | 스왑 즉시 `addNumbers` 값 5→**105** — 시그니처 불변 로직 변경은 자유 스왑이며 실제 데이터가 변한다 |
+| 명령 추가 (`add-cmd`)                             | 변함      | `multiplyNumbers ok` — 새 명령이 같은 스왑 1회에 서비스된다                                        |
+| 이름 변경 (`rename-cmd`, addNumbers→addNumbersV2) | 변함      | `addNumbers err command.not_found` + `addNumbersV2 ok` — 구 이름 소멸과 신 이름 등장이 동시 반영   |
+| 시그니처 변화 (`sig-change`, 인자 `c` 추가)       | 변함      | 구 시그니처(`{a,b}`) 호출은 크래시/기본값 없이 `command.invalid_args` 로 와이어 거부               |
+
+해석: **코어 레벨은 모든 변경을 스왑으로 반영**하고(앱은 판정하지 않는 설계),
+계약이 변하는 시나리오(2~4)의 정합 보장은 CLI parity 게이트의 몫이다 —
+코드젠이 TS를 갱신하기 전의 계약 변경 빌드는 게이트가 발행을 거부해 실행 중
+호스트가 구 코어를 유지한다(fail-closed). 계약 해시는 스키마에서만 나오므로
+파일 바이트 해시와 분리돼 있다(시나리오 1에서 바이트는 다르지만 해시 동일).
 
 ### 시뮬레이터 실측 (2026-09-09, `examples/hot-core-probe`)
 
