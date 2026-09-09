@@ -10,6 +10,7 @@ members = [
   "examples/benchmark",
   "examples/streaming",
   "examples/auth",
+  "examples/hot-core-probe",
 ]
 # bare cargo/clippy/test 가 macOS 전용 크레이트(tauri-calculator)를 빌드하지 않게
 # 한다 — Linux CI 는 물론, Tauri 시스템 라이브러리가 없는 macOS 환경에서도 bare

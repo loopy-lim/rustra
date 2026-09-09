@@ -2998,6 +2998,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustra-hot-core-probe"
+version = "0.8.0"
+dependencies = [
+ "rustra",
+ "serde_json",
+]
+
+[[package]]
 name = "rustra-macros"
 version = "0.8.0"
 dependencies = [
