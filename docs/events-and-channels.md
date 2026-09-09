@@ -153,6 +153,11 @@ pub fn channel_demo(input: ChannelDemoInput) -> Result<ChannelDemoOutput> {
 }
 ```
 
+`ChannelHandle::send(&str) -> bool` streams a JSON payload. `send_bytes(&[u8]) -> bool`
+streams a binary payload (an rkyv V2 frame, for example) and needs a handle issued
+through the binary path — on a JSON handle it returns `false`, exactly like sending on
+a handle that expired when the call ended.
+
 The host adapter issues the handle and wires the sender — app Rust code only
 calls `send`. Resource-style handles (`ResourceHandle`) follow the same pattern
 for Rust-owned objects.
@@ -186,8 +191,9 @@ channel.close();
 **Node** — `await createNodeChannel(transport, cb)` on a loop transport
 (loop-stdio reservation frames; background-thread send is safe). **Bun** —
 `createBunChannelBridge(options)(cb)` over the `rustra_ffi_channel_*` FFI symbols
-(JS-thread send only). Binary frame variants exist everywhere as
-`createBytesChannel`/`createChannelBytes`/`createNodeBytesChannel`.
+(JS-thread send only). Binary frame variants exist on every host:
+`createBytesChannel` (React Native), `createChannelBytes` (Tauri),
+`createNodeBytesChannel` (Node), and `createBunChannelBytesBridge` (Bun).
 
 Per-host issuance paths and the exact capability cells:
 [compatibility matrix — channel delivery path](compatibility-matrix.md#channel-delivery-path).
