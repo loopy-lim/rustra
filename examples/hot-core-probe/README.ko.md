@@ -69,12 +69,12 @@ rustra-hot-core-probe <artifact> --watch 10
 
 ## 검증 매트릭스 (2026-09-09)
 
-| 타깃 | dlopen + 디스패치 | 버전 카피 + 스왑 | 감시 스왑 | 비고 |
-| --- | --- | --- | --- | --- |
-| macOS arm64 (호스트) | ✅ | ✅ | ✅ | ad-hoc 재서명 경로 |
-| iOS 시뮬레이터 (aarch64-apple-ios-sim, iOS 26.2) | ✅ | ✅ | ✅ | 앱 내 codesign 불필요 |
-| Android 에뮬레이터 (aarch64-linux-android, API 36.1) | ✅ | ✅ | ✅ | shell 도메인 |
-| Android 앱 도메인 (`untrusted_app`, targetSdk 35) | ✅ | ✅ (duplicate SONAME 동시 로드) | — | `filesDir` 의 `System.load` |
+| 타깃                                                 | dlopen + 디스패치 | 버전 카피 + 스왑                | 감시 스왑 | 비고                        |
+| ---------------------------------------------------- | ----------------- | ------------------------------- | --------- | --------------------------- |
+| macOS arm64 (호스트)                                 | ✅                | ✅                              | ✅        | ad-hoc 재서명 경로          |
+| iOS 시뮬레이터 (aarch64-apple-ios-sim, iOS 26.2)     | ✅                | ✅                              | ✅        | 앱 내 codesign 불필요       |
+| Android 에뮬레이터 (aarch64-linux-android, API 36.1) | ✅                | ✅                              | ✅        | shell 도메인                |
+| Android 앱 도메인 (`untrusted_app`, targetSdk 35)    | ✅                | ✅ (duplicate SONAME 동시 로드) | —         | `filesDir` 의 `System.load` |
 
 Android 앱 도메인 행이 Phase 3의 전제가 실제로 성립함을 보여준다 — 앱은
 자신에게 복사된 `app_data_file` 을 dlopen 할 수 있고, 첫 로드와 함께 두 번째
@@ -85,6 +85,6 @@ iOS 실기기는 설계상 스코프 외다(라이브러리 검증 상시 — �
 
 ## 주요 파일
 
-| 파일          | 설명                                                   |
-| ------------- | ------------------------------------------------------ |
-| `src/main.rs` | 프로브 본체: 동기 검증 1–6, 감시 모드는 `run_watch`     |
+| 파일          | 설명                                                |
+| ------------- | --------------------------------------------------- |
+| `src/main.rs` | 프로브 본체: 동기 검증 1–6, 감시 모드는 `run_watch` |

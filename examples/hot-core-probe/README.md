@@ -71,12 +71,12 @@ Success output is a `PROBE SWAP <old> -> <new>` line (the swap happened) and
 
 ## Verified matrix (2026-09-09)
 
-| Target | dlopen + dispatch | version copy + swap | watch swap | note |
-| --- | --- | --- | --- | --- |
-| macOS arm64 (host) | ✅ | ✅ | ✅ | ad-hoc re-sign path |
-| iOS simulator (aarch64-apple-ios-sim, iOS 26.2) | ✅ | ✅ | ✅ | no in-app codesign needed |
-| Android emulator (aarch64-linux-android, API 36.1) | ✅ | ✅ | ✅ | shell domain |
-| Android app domain (`untrusted_app`, targetSdk 35) | ✅ | ✅ (concurrent duplicate-SONAME load) | — | `System.load` from `filesDir` |
+| Target                                             | dlopen + dispatch | version copy + swap                   | watch swap | note                          |
+| -------------------------------------------------- | ----------------- | ------------------------------------- | ---------- | ----------------------------- |
+| macOS arm64 (host)                                 | ✅                | ✅                                    | ✅         | ad-hoc re-sign path           |
+| iOS simulator (aarch64-apple-ios-sim, iOS 26.2)    | ✅                | ✅                                    | ✅         | no in-app codesign needed     |
+| Android emulator (aarch64-linux-android, API 36.1) | ✅                | ✅                                    | ✅         | shell domain                  |
+| Android app domain (`untrusted_app`, targetSdk 35) | ✅                | ✅ (concurrent duplicate-SONAME load) | —          | `System.load` from `filesDir` |
 
 The Android app-domain row means the Phase 3 prerequisite holds: an app can
 dlopen its own copied-in `app_data_file` and load a second version copy
@@ -88,6 +88,6 @@ see the design doc).
 
 ## Key files
 
-| File       | Description                                                        |
-| ---------- | ------------------------------------------------------------------ |
-| `src/main.rs` | the probe: sync checks 1–6, plus `run_watch` for watch mode      |
+| File          | Description                                                 |
+| ------------- | ----------------------------------------------------------- |
+| `src/main.rs` | the probe: sync checks 1–6, plus `run_watch` for watch mode |

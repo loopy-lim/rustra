@@ -65,18 +65,18 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
 Eleven runnable examples live in [`examples/`](../examples/) — each has its own README
 (en/ko) with prerequisites and run commands.
 
-| Example                                                                     | What you learn                                                                    |
-| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| [`calculator`](../examples/calculator/)                                     | the baseline: commands, contract probe, stdio/FFI binaries, all generated entries |
-| [`crud`](../examples/crud/)                                                 | a resource pattern: create/get/list/update/delete over one schema                 |
-| [`streaming`](../examples/streaming/)                                       | Rust → JS events: `.event::<T>()` + `Package::emit` + `subscribeEvent` per host   |
-| [`auth`](../examples/auth/)                                                 | deny-by-default capability gates (`require_capability` + runtime grants)          |
-| [`tauri-calculator`](../examples/tauri-calculator/)                         | a real Tauri WebView build with IPC, push events, and a performance receipt       |
-| [`react-native-calculator`](../examples/react-native-calculator/)           | Expo development build on the autolinked JSI package (iOS/Android)                |
-| [`react-native-bare-calculator`](../examples/react-native-bare-calculator/) | bare React Native without Expo — identical app code to the Expo example           |
-| [`calculator-napi`](../examples/calculator-napi/)                           | replacing the transport with napi-rs (source of the release transport benchmark)  |
-| [`benchmark`](../examples/benchmark/)                                       | payload scaling and throughput measurement harness                                |
-| [`reference-app`](../examples/reference-app/)                               | `@rustra/react` hooks in a real app: useCommand/useMutation/useEvent              |
+| Example                                                                     | What you learn                                                                                |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| [`calculator`](../examples/calculator/)                                     | the baseline: commands, contract probe, stdio/FFI binaries, all generated entries             |
+| [`crud`](../examples/crud/)                                                 | a resource pattern: create/get/list/update/delete over one schema                             |
+| [`streaming`](../examples/streaming/)                                       | Rust → JS events: `.event::<T>()` + `Package::emit` + `subscribeEvent` per host               |
+| [`auth`](../examples/auth/)                                                 | deny-by-default capability gates (`require_capability` + runtime grants)                      |
+| [`tauri-calculator`](../examples/tauri-calculator/)                         | a real Tauri WebView build with IPC, push events, and a performance receipt                   |
+| [`react-native-calculator`](../examples/react-native-calculator/)           | Expo development build on the autolinked JSI package (iOS/Android)                            |
+| [`react-native-bare-calculator`](../examples/react-native-bare-calculator/) | bare React Native without Expo — identical app code to the Expo example                       |
+| [`calculator-napi`](../examples/calculator-napi/)                           | replacing the transport with napi-rs (source of the release transport benchmark)              |
+| [`benchmark`](../examples/benchmark/)                                       | payload scaling and throughput measurement harness                                            |
+| [`reference-app`](../examples/reference-app/)                               | `@rustra/react` hooks in a real app: useCommand/useMutation/useEvent                          |
 | [`hot-core-probe`](../examples/hot-core-probe/)                             | standalone verifier for the experimental dylib hot-swap core on host/iOS sim/Android emulator |
 
 `examples/rn-wasm-spike/` is an experimental wasm32-in-wasm3 spike — evidence and

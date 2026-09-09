@@ -139,12 +139,12 @@ Rust `#[command]` 로직을 고치면 호스트별로 전부 정체 상태가 �
 바이너리 `rustra-hot-core-probe`(동기: open→invoke→에러 분할→해시→버전 카피→
 스왑→구 코어 생존 / `--watch N`: sha256 폴링 스왑)다.
 
-| 타깃 | dlopen+디스패치 | 버전 카피+스왑 | 감시 스왑 | 비고 |
-| --- | --- | --- | --- | --- |
-| macOS arm64 (호스트) | ✅ | ✅ | ✅ | ad-hoc 재서명 경로 |
-| iOS 시뮬레이터 (aarch64-apple-ios-sim, iOS 26.2) | ✅ | ✅ | ✅ | 앱 내 재서명 불필요 — `cfg(target_os="macos")` codesign 단계는 시뮬레이터에서 시도되지 않으며 linker-signed/호스트 재서명 카피 모두 로드된다 |
-| Android 에뮬레이터 (aarch64-linux-android, API 36.1) | ✅ | ✅ | ✅ | shell 도메인(`/data/local/tmp`) |
-| Android 앱 도메인 (`untrusted_app`, targetSdk 35) | ✅ | ✅ | — | 앱 `filesDir` 복사본 `System.load` 성공 + **duplicate SONAME 동시 로드 성공** — bionic 은 경로 기준 로드라 버전 카피의 공유 SONAME 이 충돌하지 않는다 (Phase 3 전제 실증) |
+| 타깃                                                 | dlopen+디스패치 | 버전 카피+스왑 | 감시 스왑 | 비고                                                                                                                                                                      |
+| ---------------------------------------------------- | --------------- | -------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS arm64 (호스트)                                 | ✅              | ✅             | ✅        | ad-hoc 재서명 경로                                                                                                                                                        |
+| iOS 시뮬레이터 (aarch64-apple-ios-sim, iOS 26.2)     | ✅              | ✅             | ✅        | 앱 내 재서명 불필요 — `cfg(target_os="macos")` codesign 단계는 시뮬레이터에서 시도되지 않으며 linker-signed/호스트 재서명 카피 모두 로드된다                              |
+| Android 에뮬레이터 (aarch64-linux-android, API 36.1) | ✅              | ✅             | ✅        | shell 도메인(`/data/local/tmp`)                                                                                                                                           |
+| Android 앱 도메인 (`untrusted_app`, targetSdk 35)    | ✅              | ✅             | —         | 앱 `filesDir` 복사본 `System.load` 성공 + **duplicate SONAME 동시 로드 성공** — bionic 은 경로 기준 로드라 버전 카피의 공유 SONAME 이 충돌하지 않는다 (Phase 3 전제 실증) |
 
 - **Tauri 예제 모바일 레이아웃** — tauri-calculator 를 lib/bin 분리
   (`lib.rs` + `mobile_entry_point`, `staticlib`/`cdylib`/`rlib`)으로 전환하면

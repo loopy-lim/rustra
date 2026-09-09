@@ -91,16 +91,16 @@ targetSdk 35) 양쪽 모두 통과 — 프로브 README 매트릭스 참고. iOS
 
 ## 핵심 파일
 
-| 파일                    | 설명                                            |
-| ----------------------- | ----------------------------------------------- |
-| `src-tauri/src/lib.rs`  | 앱 본체 — 등록 분기 + iOS/Android `mobile_entry_point` |
-| `src-tauri/src/main.rs` | `run()` 을 호출하는 데스크톱 래퍼 (Tauri 2 모바일은 lib 타깃 필수) |
+| 파일                    | 설명                                                                   |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `src-tauri/src/lib.rs`  | 앱 본체 — 등록 분기 + iOS/Android `mobile_entry_point`                 |
+| `src-tauri/src/main.rs` | `run()` 을 호출하는 데스크톱 래퍼 (Tauri 2 모바일은 lib 타깃 필수)     |
 | `src-tauri/Cargo.toml`  | lib/bin 분리(`staticlib`/`cdylib`/`rlib`) + `tauri`/`hot-core` feature |
-| `src/app.ts`            | generated command와 event를 사용하는 화면       |
-| `rustra.hot.json`       | 핫코어(dylib) dev 루프용 설정                   |
-| `runtime-smoke.mjs`     | 자동화 런타임 스모크 테스트                     |
-| `src/benchmark.ts`      | 실제 WebView IPC 정확성·지연 측정               |
-| `benchmark.mjs`         | 숨은 앱 실행 + 로컬 영수증 수집                 |
+| `src/app.ts`            | generated command와 event를 사용하는 화면                              |
+| `rustra.hot.json`       | 핫코어(dylib) dev 루프용 설정                                          |
+| `runtime-smoke.mjs`     | 자동화 런타임 스모크 테스트                                            |
+| `src/benchmark.ts`      | 실제 WebView IPC 정확성·지연 측정                                      |
+| `benchmark.mjs`         | 숨은 앱 실행 + 로컬 영수증 수집                                        |
 
 ## Rust 측 설정
 
