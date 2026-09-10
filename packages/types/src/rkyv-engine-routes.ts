@@ -26,47 +26,47 @@ export function createRkyvRouteRuntime(
 
     let fallback: GeneratedFieldsRoute | undefined;
     if (hasPositionalPath && (capabilities & CODEC_POSITIONAL) !== 0) {
-      fallback =
-        fieldCount === 1
-          ? (_args, field0) => native.invokeTypedPos!(commandId, field0)
-          : fieldCount === 2
-            ? (_args, field0, field1) => native.invokeTypedPos!(commandId, field0, field1)
-            : (_args, field0, field1, field2) =>
-                native.invokeTypedPos!(commandId, field0, field1, field2);
+      if (fieldCount === 1) fallback = (_args, field0) => native.invokeTypedPos!(commandId, field0);
+      else if (fieldCount === 2)
+        fallback = (_args, field0, field1) => native.invokeTypedPos!(commandId, field0, field1);
+      else
+        fallback = (_args, field0, field1, field2) =>
+          native.invokeTypedPos!(commandId, field0, field1, field2);
     } else if (hasByIdPath) {
       fallback = (args) => native.invokeTypedById!(commandId, args);
     }
 
     if (hasRawPath && (capabilities & CODEC_RAW) !== 0) {
       if (!fallback) {
-        return fieldCount === 1
-          ? (_args, field0) => native.invokeTypedRaw!(commandId, field0)
-          : fieldCount === 2
-            ? (_args, field0, field1) => native.invokeTypedRaw!(commandId, field0, field1)
-            : (_args, field0, field1, field2) =>
-                native.invokeTypedRaw!(commandId, field0, field1, field2);
+        if (fieldCount === 1) return (_args, field0) => native.invokeTypedRaw!(commandId, field0);
+        if (fieldCount === 2)
+          return (_args, field0, field1) => native.invokeTypedRaw!(commandId, field0, field1);
+        return (_args, field0, field1, field2) =>
+          native.invokeTypedRaw!(commandId, field0, field1, field2);
       }
       const rawFallback = fallback;
-      return fieldCount === 1
-        ? (args, field0) => {
-            const result = native.invokeTypedRaw!(commandId, field0);
-            return typeof result === 'number' && Number.isNaN(result)
-              ? rawFallback(args, field0)
-              : result;
-          }
-        : fieldCount === 2
-          ? (args, field0, field1) => {
-              const result = native.invokeTypedRaw!(commandId, field0, field1);
-              return typeof result === 'number' && Number.isNaN(result)
-                ? rawFallback(args, field0, field1)
-                : result;
-            }
-          : (args, field0, field1, field2) => {
-              const result = native.invokeTypedRaw!(commandId, field0, field1, field2);
-              return typeof result === 'number' && Number.isNaN(result)
-                ? rawFallback(args, field0, field1, field2)
-                : result;
-            };
+      if (fieldCount === 1) {
+        return (args, field0) => {
+          const result = native.invokeTypedRaw!(commandId, field0);
+          return typeof result === 'number' && Number.isNaN(result)
+            ? rawFallback(args, field0)
+            : result;
+        };
+      }
+      if (fieldCount === 2) {
+        return (args, field0, field1) => {
+          const result = native.invokeTypedRaw!(commandId, field0, field1);
+          return typeof result === 'number' && Number.isNaN(result)
+            ? rawFallback(args, field0, field1)
+            : result;
+        };
+      }
+      return (args, field0, field1, field2) => {
+        const result = native.invokeTypedRaw!(commandId, field0, field1, field2);
+        return typeof result === 'number' && Number.isNaN(result)
+          ? rawFallback(args, field0, field1, field2)
+          : result;
+      };
     }
     return fallback;
   };
@@ -79,12 +79,11 @@ export function createRkyvRouteRuntime(
     const capabilities = getStaticCommandCapabilities(commandId);
     const fallback = resolveGeneratedFieldsRoute(commandId, command, 1);
     if (!hasBufferPath || (capabilities & CODEC_BUFFER) === 0) return fallback;
-    return (args, value) =>
-      isNativeByteBuffer(value)
-        ? native.invokeTypedBuffer!(commandId, value)
-        : fallback
-          ? fallback(args, value)
-          : dispatchById(commandId, command, args);
+    return (args, value) => {
+      if (isNativeByteBuffer(value)) return native.invokeTypedBuffer!(commandId, value);
+      if (fallback) return fallback(args, value);
+      return dispatchById(commandId, command, args);
+    };
   };
 
   ensureStaticIds();

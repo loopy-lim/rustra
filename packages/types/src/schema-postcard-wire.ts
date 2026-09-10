@@ -119,14 +119,8 @@ function concatBytes(arrays: Uint8Array[]): Uint8Array {
   return result;
 }
 
-function utf8Encode(s: string): Uint8Array {
-  return encodeUtf8(s);
-}
-function utf8Decode(bytes: Uint8Array): string {
-  return decodeUtf8(bytes);
-}
 function encString(s: string): Uint8Array {
-  const bytes = utf8Encode(s);
+  const bytes = encodeUtf8(s);
   return concatBytes([encVarint(bytes.length), bytes]);
 }
 function decString(buf: Uint8Array, offset: number): { value: string; bytesRead: number } {
@@ -134,7 +128,7 @@ function decString(buf: Uint8Array, offset: number): { value: string; bytesRead:
   const start = offset + len.bytesRead;
   const end = start + len.value;
   return {
-    value: utf8Decode(buf.slice(start, end)),
+    value: decodeUtf8(buf.slice(start, end)),
     bytesRead: len.bytesRead + len.value,
   };
 }

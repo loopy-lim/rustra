@@ -5,6 +5,7 @@ import { traceWire } from './debug.js';
 import { tier2Outcome, payloadTooLargeError } from './rkyv-engine-contract.js';
 import { createDynamicCodecRuntime } from './rkyv-engine-dynamic-codec.js';
 import type { RkyvDispatchRuntime, RkyvEngineContext } from './rkyv-engine-context.js';
+import type { RkyvV2Codec } from './public.js';
 
 export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispatchRuntime {
   const { native, registry, schema, payloadLimit } = context;
@@ -22,6 +23,23 @@ export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispa
   // encodeInto 재사용 버퍼 풀 — 커맨드 이름별 최근 버퍼 1개(단일 진입 dispatch
   // 의 직렬 인코딩 전제). 미사용 시 맵은 비어 있어 오버헤드 0이다.
   const encodeIntoBuffers = new Map<string, Uint8Array>();
+  const roundTrip = <T>(
+    command: string,
+    encoded: ArrayBuffer,
+    codec: RkyvV2Codec<unknown, unknown>,
+  ): T => {
+    // (T3) 네이티브 왕복 전에 크기 검사 — 초과면 invokeRkyvV2 를 부르지 않는다.
+    const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
+    if (tooLarge) throw tooLarge;
+    traceWire('request', command, encoded);
+    const resultBytes = native.invokeRkyvV2(encoded);
+    traceWire('response', command, resultBytes);
+    // Reject (do not throw) so the declared Promise<T> contract holds and
+    // callers can use .catch() / await-try-consistently for command errors.
+    const outcome = tier2Outcome<T>(codec, resultBytes);
+    if (!outcome.ok) throw outcome.error;
+    return outcome.value;
+  };
   const dispatch = <T>(command: string, args?: unknown): T => {
     // 1순위: C++ fast path (RN JSI). 정적 명령만. JS 측 인코딩이 없어
     // maxPayloadBytes 검사를 건너뛴다 — 네이티브 한도가 그대로 적용된다.
@@ -56,17 +74,7 @@ export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispa
       } else {
         encoded = codec.encode(args);
       }
-      // (T3) 네이티브 왕복 전에 크기 검사 — 초과면 invokeRkyvV2 를 부르지 않는다.
-      const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
-      if (tooLarge) throw tooLarge;
-      traceWire('request', command, encoded);
-      const resultBytes = native.invokeRkyvV2(encoded);
-      traceWire('response', command, resultBytes);
-      // Reject (do not throw) so the declared Promise<T> contract holds and
-      // callers can use .catch() / await-try-consistently for command errors.
-      const outcome = tier2Outcome<T>(codec, resultBytes);
-      if (!outcome.ok) throw outcome.error;
-      return outcome.value;
+      return roundTrip<T>(command, encoded, codec);
     }
     // 3순위: 동적 명령 → live schema 의 commandId 사용. (T2-3) Rust registry 의
     // 3-way 판정을 미러해 binary 코덱(postcard → complex)이 가능한 스키마는
@@ -84,15 +92,7 @@ export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispa
     const dynamicCodec = dynamicCodecs.lookupBinaryCodec(entry);
     if (dynamicCodec) {
       // tier 2(정적 코덱)와 동일한 왕복 계약 — encode/검사/invoke/decode.
-      const encoded = dynamicCodec.encode(args);
-      const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
-      if (tooLarge) throw tooLarge;
-      traceWire('request', command, encoded);
-      const resultBytes = native.invokeRkyvV2(encoded);
-      traceWire('response', command, resultBytes);
-      const outcome = tier2Outcome<T>(dynamicCodec, resultBytes);
-      if (!outcome.ok) throw outcome.error;
-      return outcome.value;
+      return roundTrip<T>(command, dynamicCodec.encode(args), dynamicCodec);
     }
     const tier3Request = encodeTier3Request(entry.commandId, args);
     // (T3) tier 2 와 동일한 사전 검사 — 네이티브 호출 전에 조기 실패.
@@ -140,25 +140,19 @@ export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispa
     if (isVerifiedStaticId(commandId, command)) {
       const capabilities = getStaticCommandCapabilities(commandId);
       if (hasRawPath && (capabilities & CODEC_RAW) !== 0) {
-        const result =
-          fieldCount === 1
-            ? native.invokeTypedRaw!(commandId, field0)
-            : fieldCount === 2
-              ? native.invokeTypedRaw!(commandId, field0, field1)
-              : native.invokeTypedRaw!(commandId, field0, field1, field2);
+        let result: unknown;
+        if (fieldCount === 1) result = native.invokeTypedRaw!(commandId, field0);
+        else if (fieldCount === 2) result = native.invokeTypedRaw!(commandId, field0, field1);
+        else result = native.invokeTypedRaw!(commandId, field0, field1, field2);
         // New hosts return the declared output shape. NaN is the defensive
         // fallback marker used when the Rust registry cannot service raw even
         // though generated metadata advertised it.
         if (!(typeof result === 'number' && Number.isNaN(result))) return result as T;
       }
       if (hasPositionalPath && (capabilities & CODEC_POSITIONAL) !== 0) {
-        return (
-          fieldCount === 1
-            ? native.invokeTypedPos!(commandId, field0)
-            : fieldCount === 2
-              ? native.invokeTypedPos!(commandId, field0, field1)
-              : native.invokeTypedPos!(commandId, field0, field1, field2)
-        ) as T;
+        if (fieldCount === 1) return native.invokeTypedPos!(commandId, field0) as T;
+        if (fieldCount === 2) return native.invokeTypedPos!(commandId, field0, field1) as T;
+        return native.invokeTypedPos!(commandId, field0, field1, field2) as T;
       }
     }
     return dispatchById<T>(commandId, command, args);

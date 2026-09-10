@@ -1,6 +1,6 @@
 import type { GeneratedBytesRoute, GeneratedFieldsRoute } from './global.js';
 import type { LiveSchemaDocument, LiveSchemaEntry, RkyvV2SchemaNative } from './live-schema.js';
-import type { BatchEntry, InvokeOptions, RkyvV2Codec } from './public.js';
+import type { RkyvV2Codec } from './public.js';
 
 export type RkyvSchemaRuntime = {
   refreshLiveSchema(): Map<string, LiveSchemaEntry>;
@@ -62,6 +62,3 @@ export type RkyvRouteRuntime = {
   ): GeneratedFieldsRoute | undefined;
   resolveGeneratedBytesRoute(commandId: number, command: string): GeneratedBytesRoute | undefined;
 };
-
-export type RkyvBatchEntry = BatchEntry;
-export type RkyvInvokeOptions = InvokeOptions;

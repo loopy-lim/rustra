@@ -120,10 +120,7 @@ function compileNode(
     if (schema.format === 'uint64') {
       return {
         encode: (v) => encVarint64(v as number | bigint),
-        decode: (buf, offset) => {
-          const v = decVarint64(buf, offset);
-          return { value: v.value, bytesRead: v.bytesRead };
-        },
+        decode: (buf, offset) => decVarint64(buf, offset),
       };
     }
     if (schema.format === 'int64') {
@@ -139,18 +136,12 @@ function compileNode(
     if (unsigned) {
       return {
         encode: (v) => encVarint(v as number),
-        decode: (buf, offset) => {
-          const v = decVarint(buf, offset);
-          return { value: v.value, bytesRead: v.bytesRead };
-        },
+        decode: (buf, offset) => decVarint(buf, offset),
       };
     }
     return {
       encode: (v) => encZigzagVarint(v as number),
-      decode: (buf, offset) => {
-        const v = decZigzagVarint(buf, offset);
-        return { value: v.value, bytesRead: v.bytesRead };
-      },
+      decode: (buf, offset) => decZigzagVarint(buf, offset),
     };
   }
 
@@ -158,27 +149,18 @@ function compileNode(
     return schema.format === 'float'
       ? {
           encode: (v) => encF32(v as number),
-          decode: (buf, offset) => {
-            const v = decF32(buf, offset);
-            return { value: v.value, bytesRead: v.bytesRead };
-          },
+          decode: (buf, offset) => decF32(buf, offset),
         }
       : {
           encode: (v) => encF64(v as number),
-          decode: (buf, offset) => {
-            const v = decF64(buf, offset);
-            return { value: v.value, bytesRead: v.bytesRead };
-          },
+          decode: (buf, offset) => decF64(buf, offset),
         };
   }
 
   if (schema.type === 'string') {
     return {
       encode: (v) => encString(v as string),
-      decode: (buf, offset) => {
-        const v = decString(buf, offset);
-        return { value: v.value, bytesRead: v.bytesRead };
-      },
+      decode: (buf, offset) => decString(buf, offset),
     };
   }
 

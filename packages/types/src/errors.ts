@@ -72,7 +72,7 @@ export function parseRustraErrorString(error: string | undefined | null): Rustra
       return new RustraCommandError(code, raw.slice(idx + 2), isRetryableCode(code));
     }
   }
-  return new RustraCommandError('invoke.failed', raw);
+  return new RustraCommandError(RustraErrorCode.InvokeFailed, raw);
 }
 
 /**
@@ -106,7 +106,9 @@ export function normalizeRustraError(error: unknown): RustraCommandError {
     // `unknown` adapter contract. Structured Rustra JSON and Display strings
     // still go through the parser so retryable metadata is not lost.
     const parsed = parseRustraErrorString(error);
-    return parsed.code === 'invoke.failed' ? new RustraCommandError('unknown', error) : parsed;
+    return parsed.code === RustraErrorCode.InvokeFailed
+      ? new RustraCommandError(RustraErrorCode.Unknown, error)
+      : parsed;
   }
   return new RustraCommandError('unknown', String(error));
 }
@@ -119,7 +121,11 @@ export function normalizeRustraError(error: unknown): RustraCommandError {
  * 미러링한다 (T1 — JSON fallback 경로의 취소 에러 정합).
  */
 export function isRetryableCode(code: string): boolean {
-  return code === 'transport.error' || code === 'transport.timeout' || code === 'cancelled';
+  return (
+    code === RustraErrorCode.TransportError ||
+    code === RustraErrorCode.TransportTimeout ||
+    code === RustraErrorCode.Cancelled
+  );
 }
 
 /**
