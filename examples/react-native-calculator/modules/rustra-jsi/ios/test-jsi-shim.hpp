@@ -212,6 +212,13 @@ public:
   Value getProperty(Runtime& rt, const String& name) const {
     return getProperty(rt, name.utf8(rt));
   }
+  // A5: oneOf 변형 판별 생성 코드가 쓰는 실 jsi 계약 — 프로퍼티 존재 검사.
+  bool hasProperty(Runtime&, const std::string& name) const {
+    return data_->props.find(name) != data_->props.end();
+  }
+  bool hasProperty(Runtime& rt, const char* name) const {
+    return hasProperty(rt, std::string(name));
+  }
 
   void setProperty(Runtime&, const std::string& name, Value v) {
     data_->props[name] = std::move(v);

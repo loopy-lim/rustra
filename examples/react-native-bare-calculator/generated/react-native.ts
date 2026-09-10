@@ -19,5 +19,6 @@ export const rustra = createRustraBootstrap({
   getNative: getRustraNative,
   rkyvV2Codecs: rkyvV2Registry,
   contractHash: GENERATED_CONTRACT_HASH,
+  contractVerification: 'strict',
   schemaVersion: SCHEMA_VERSION,
 });

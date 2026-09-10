@@ -16,8 +16,9 @@
 //! 한쪽만 바뀌면 교차 테스트가 실패한다.
 
 use rustra_calculator_example::{
-    AddNumbersInput, DivideInput, GaugeInput, GreetInput, ScoreTotalInput, SizeOfInput, SpanInput,
-    TagSetInput, WideAggInput, calculator_package,
+    AddNumbersInput, DivideInput, EchoGroupsInput, GaugeInput, GreetInput, Item, KindEchoInput,
+    OpKind, ProcessItemInput, ScoreTotalInput, SizeOfInput, SpanInput, TagSetInput, WideAggInput,
+    calculator_package,
 };
 
 fn request_for<I: serde::Serialize>(cmd_id: u16, input: &I) -> Vec<u8> {
@@ -303,4 +304,122 @@ fn tag_set_primitive_elements_wire_is_stable() {
     let resp = invoke_with_frame(&pkg, &req);
     assert_eq!(hexlify(&req), TAGSET_REQUEST);
     assert_eq!(hexlify(&resp), TAGSET_RESPONSE);
+}
+
+// ── 2026-09-11 A5: 기능 타입 매트릭스 확장 — 태그 enum/중첩 구조체/결정론 맵/
+// 대용량 페이로드 와이어 고정. TS cross-wire.test.ts 신규 블록, C++
+// test-rustra-generated-codecs.cpp 공유 서브셋과 짝이다.
+
+// kindEcho (cmd 33) — serde 외부 태그 enum OpKind{Clear, Set{value}} 의
+// postcard 와이어: [변형 인덱스 u32 varint][변형 본문]. unit 변형은 인덱스
+// 한 바이트, struct 변형은 인덱스 + 필드 선언순(zigzag i64). TS complex
+// codec(oneOf)·C++ complex codec 이 동일 인덱스 와이어를 만들어낸다.
+const KINDECHO_UNIT_REQUEST: &str = "210000";
+const KINDECHO_UNIT_RESPONSE: &str = "010000000000000000";
+const KINDECHO_SET_REQUEST: &str = "21000109";
+const KINDECHO_SET_RESPONSE: &str = "01000000000000000109";
+
+// processItem (cmd 9) — 중첩 구조체(Item{active,name,value}) 와이어. 응답은
+// ProcessItemOutput 선언순(doubled, item) — field-order 드리프트 감지까지 겸한다.
+const PROCESSITEM_REQUEST: &str = "0900010370656e78";
+const PROCESSITEM_RESPONSE: &str = "010000000000000000000d70726f6365737365645f70656ef001";
+
+// echoGroups (cmd 27) — BTreeMap<String, Vec<String>> 은 정렬 순서로
+// 직렬화되므로 HashMap 과 달리 요청 hex 도 결정론적으로 고정 가능하다.
+// 맵 → 시퀀스 중첩 와이어(count + (key, len + elements)*).
+const ECHOGROUPS_REQUEST: &str = "1b000201610101780162020179017a";
+const ECHOGROUPS_RESPONSE: &str = "01000000000000000201610101780162020179017a";
+
+// sizeOf 2KB 페이로드(0x5A x 2048) 응답 — checksum 184320(0x2D000 → 80 a0 0b)
+// + len 2048(80 10).
+const SIZEOF_LARGE_RESPONSE: &str = "010000000000000080a00b8010";
+
+#[test]
+fn kind_echo_unit_variant_wire_is_stable() {
+    let pkg = calculator_package();
+    // OpKind::Clear — 변형 인덱스 0 한 바이트. unit 변형은 본문이 없다.
+    let req = request_for(
+        33,
+        &KindEchoInput {
+            kind: OpKind::Clear,
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), KINDECHO_UNIT_REQUEST);
+    assert_eq!(hexlify(&resp), KINDECHO_UNIT_RESPONSE);
+}
+
+#[test]
+fn kind_echo_data_variant_wire_is_stable() {
+    let pkg = calculator_package();
+    // OpKind::Set{value:-5} — 변형 인덱스 1 + zigzag(-5)=9. 요청/응답 모두
+    // 동일 인덱스 와이어 — enum 입력·출력 양방향을 고정한다.
+    let req = request_for(
+        33,
+        &KindEchoInput {
+            kind: OpKind::Set { value: -5 },
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), KINDECHO_SET_REQUEST);
+    assert_eq!(hexlify(&resp), KINDECHO_SET_RESPONSE);
+}
+
+#[test]
+fn process_item_nested_struct_wire_is_stable() {
+    let pkg = calculator_package();
+    // Item{active:true, name:"pen", value:60} — value 60 → doubled=false,
+    // active = true && false = false, "processed_pen", 120(zigzag f0 01).
+    let req = request_for(
+        9,
+        &ProcessItemInput {
+            item: Item {
+                active: true,
+                name: "pen".to_string(),
+                value: 60,
+            },
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), PROCESSITEM_REQUEST);
+    assert_eq!(hexlify(&resp), PROCESSITEM_RESPONSE);
+}
+
+#[test]
+fn echo_groups_deterministic_map_wire_is_stable() {
+    let pkg = calculator_package();
+    // BTreeMap 정렬 순서(a < b) 덕에 HashMap(scoreTotal) 과 달리 요청 hex 도
+    // 고정된다. C++ 정적 코덱 테스트가 같은 바이트를 이미 직접 고정하고 있다.
+    let req = request_for(
+        27,
+        &EchoGroupsInput {
+            groups: std::collections::BTreeMap::from([
+                ("a".to_string(), vec!["x".to_string()]),
+                ("b".to_string(), vec!["y".to_string(), "z".to_string()]),
+            ]),
+        },
+    );
+    let resp = invoke_with_frame(&pkg, &req);
+    assert_eq!(hexlify(&req), ECHOGROUPS_REQUEST);
+    assert_eq!(hexlify(&resp), ECHOGROUPS_RESPONSE);
+}
+
+#[test]
+fn size_of_large_payload_wire_is_stable() {
+    let pkg = calculator_package();
+    // 2KB 페이로드(0x5A x 2048) — 길이 varint 2048→[80 10], 원시 복사,
+    // checksum 184320→[80 a0 0b]. 페이로드 내용은 상수이므로 요청 와이어는
+    // 프레이밍 접두/접미와 전체 길이로 고정한다(전체 literal 대신 동일
+    // 공식 — TS 측과 같은 정의로 바이트 일치를 비교한다).
+    let data = vec![0x5Au8; 2048];
+    let req = request_for(14, &SizeOfInput { data });
+    let resp = invoke_with_frame(&pkg, &req);
+    let req_hex = hexlify(&req);
+    assert_eq!(&req_hex[..8], "0e008010", "cmd 14 LE + len varint 2048");
+    assert_eq!(req_hex.len(), 4104, "2 cmd + 2 len + 2048 payload bytes");
+    assert!(
+        req_hex[8..].chars().all(|c| c == '5' || c == 'a'),
+        "payload must be a raw 0x5A copy"
+    );
+    assert_eq!(hexlify(&resp), SIZEOF_LARGE_RESPONSE);
 }

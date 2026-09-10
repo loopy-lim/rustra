@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "schemaHash": "73afb8cbfb541f442828e70ec9e0ab678000b9a944ef10f0bb079318b27d022d",
-  "generatorVersion": "0.6.0",
+  "generatorVersion": "0.9.0",
   "files": [
     {
       "path": "commands.ts",

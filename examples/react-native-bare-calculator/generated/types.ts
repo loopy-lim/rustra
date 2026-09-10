@@ -22,6 +22,12 @@ export type Item = {
   value: number | bigint;
 };
 
+export type OpKind = 'Clear' | {
+  Set: {
+  value: number | bigint;
+};
+};
+
 /**
  * 커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.
  */
@@ -165,6 +171,14 @@ export type IsEvenInput = {
 
 export type IsEvenOutput = {
   result: boolean;
+};
+
+export type KindEchoInput = {
+  kind: OpKind;
+};
+
+export type KindEchoOutput = {
+  echoed: OpKind;
 };
 
 export type MultiplyInput = {

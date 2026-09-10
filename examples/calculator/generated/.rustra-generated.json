@@ -1,19 +1,19 @@
 {
   "schemaVersion": 1,
-  "schemaHash": "7279af1f50ca546411bb7be6476bb1f931b437ae53484d8ea9903eec07926039",
-  "generatorVersion": "0.8.0",
+  "schemaHash": "7c07f78e1f38dc37f251920c7c453ec5b6d65a817f95a1b51b5b4649f63a2ae3",
+  "generatorVersion": "0.9.0",
   "files": [
     {
       "path": "bun.ts",
-      "sha256": "5ef9039924533a982e950e624d2d8500dadd9a458bbe33f2c2549c488d407a03"
+      "sha256": "e8e8bb795a34ac0a2e8800ae3eb97b10f425be31a7ca23d2eb732902e5c19ec4"
     },
     {
       "path": "commands.ts",
-      "sha256": "f95cada5f247d50bb0bc5ad2c7e9c1c08af8553fdf6c6b9ffc7fb3337f5603c0"
+      "sha256": "a75e1524f334ec412a9d6dc02ff4019004b600c4f8c51a4c574c3f76fdb6d04b"
     },
     {
       "path": "contract.ts",
-      "sha256": "8147415a3764beb7bcb7f7a0e9a3ee5883749a87a40323f72f2c2aaa0aba1292"
+      "sha256": "551f56821ab6bb1dbec713402c8fe27978a9be523d9346e9ff3d137220a0349a"
     },
     {
       "path": "devices.ts",
@@ -25,15 +25,15 @@
     },
     {
       "path": "node.ts",
-      "sha256": "11f7dfa4898799b35871f5a6bd9c29245a1f22614c1351061195e32733b46c5f"
+      "sha256": "213f340d155cda5da00000378ce2ee1b8ef90a4892d26084178c9124da37a657"
     },
     {
       "path": "rkyv-codecs.ts",
-      "sha256": "9887016c80b73eedb2850d1eae55ab9ce129b6a01e5938b981cec02f224137d6"
+      "sha256": "f63440e663137f2cea8a615651cb512ba1799e5b7c626b7e0a11f0d721cab5b6"
     },
     {
       "path": "rkyv-registry.ts",
-      "sha256": "1690c35c26f4d77c49559893c657f8408edbe97210754edc279f0e043c3925fd"
+      "sha256": "8cae01e54d437f667c8f41dd327de5e9d63d0d30639dfb2ab3ac54df602ecf21"
     },
     {
       "path": "tauri.ts",
@@ -41,7 +41,7 @@
     },
     {
       "path": "types.ts",
-      "sha256": "123484d4e2a4761f959d0dc062c1deb156a8f822daba3494d4801b066a0b0ae0"
+      "sha256": "74c4a06e44adbecb16acea5cf58fff797f425e6b04a4d7bf32c0367af7491678"
     }
   ]
 }
