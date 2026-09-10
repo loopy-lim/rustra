@@ -54,20 +54,20 @@ rustra-bridge 는 로컬 저장소 코드/CI/문서 직접 감사. 문서에 없
 
 ## 2. rustra 현재 성숙도 인벤토리 (강제 수준 표기: CI-hard/test/script/doc-only/absent)
 
-| 차원 | rustra 현재 | 강제 |
-|---|---|---|
-| ABI 계약 | api-surface snapshot(32 심볼 **이름만**), 전역 contract_hash(SHA-256 of schema JSON), schema_generation 카운터 | 이름 세트 CI-hard |
-| 심볼별 체크섬 | `command_wire_signature` 존재(`package_schema.rs:243`)하나 **핫리로드 게이팅 전용** — 발행된 체크섬 표면 없음 | test |
-| 런타임 검증 | `contract.mismatch` fail-fast — **opt-in**(소비자가 contractHash 직접 전달 시에만), 미설치 시 `unenforceable`, schemaVersion stale 은 warn | test(opt-in) |
-| 코드젠 신선도 | committed `generated/` 재생성+diff CI 없음, doctor `codegen.generated_freshness` warn 레벨 | warn |
-| 크로스언어 적합성 | 3코너 pinned hex(Rust↔TS↔C++) — **calculator 1개 픽스처만**, 예제=애드혹 | test |
-| 부정경로 | trust_baseline_ffi, payload_robustness, rkyv_v2_panic/concurrency, ota_compat — 강함 | test |
-| 퍼징/새니타이저 | fuzz 3타깃+시드, miri, sanitizer — **주간 non-gating**(continue-on-error) | absent(gating) |
-| CI 매트릭스 | rust 3-OS+MSRV 1.88+wasm, rn-android/rn-ios **빌드만(실행 없음)**, TS ubuntu 1-OS, consumer-smoke 강함, aggregate gate | 부분 |
-| 버저닝 | versioning-policy.md(표면별 보장표+폐기 주기), changesets+9패키지, check-release-coherence CI-hard, crates 수동 SHA 재검 | 상/일부 doc-only |
-| 문서 | en/ko 미러 100%(수동, 자동검사 없음), docs-gate=sync 마커만, ADR absent, typedoc 수동 | 부분 |
-| 역방향 | events/channels/cancellation 테스트 됨, reverse-callbacks 설계완료 미착지 | test/absent |
-| 비-JS 언어 | **전무**(swift-ffi-bench 는 벤치 하네스) | absent |
+| 차원              | rustra 현재                                                                                                                                | 강제              |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------- |
+| ABI 계약          | api-surface snapshot(32 심볼 **이름만**), 전역 contract_hash(SHA-256 of schema JSON), schema_generation 카운터                             | 이름 세트 CI-hard |
+| 심볼별 체크섬     | `command_wire_signature` 존재(`package_schema.rs:243`)하나 **핫리로드 게이팅 전용** — 발행된 체크섬 표면 없음                              | test              |
+| 런타임 검증       | `contract.mismatch` fail-fast — **opt-in**(소비자가 contractHash 직접 전달 시에만), 미설치 시 `unenforceable`, schemaVersion stale 은 warn | test(opt-in)      |
+| 코드젠 신선도     | committed `generated/` 재생성+diff CI 없음, doctor `codegen.generated_freshness` warn 레벨                                                 | warn              |
+| 크로스언어 적합성 | 3코너 pinned hex(Rust↔TS↔C++) — **calculator 1개 픽스처만**, 예제=애드혹                                                                   | test              |
+| 부정경로          | trust_baseline_ffi, payload_robustness, rkyv_v2_panic/concurrency, ota_compat — 강함                                                       | test              |
+| 퍼징/새니타이저   | fuzz 3타깃+시드, miri, sanitizer — **주간 non-gating**(continue-on-error)                                                                  | absent(gating)    |
+| CI 매트릭스       | rust 3-OS+MSRV 1.88+wasm, rn-android/rn-ios **빌드만(실행 없음)**, TS ubuntu 1-OS, consumer-smoke 강함, aggregate gate                     | 부분              |
+| 버저닝            | versioning-policy.md(표면별 보장표+폐기 주기), changesets+9패키지, check-release-coherence CI-hard, crates 수동 SHA 재검                   | 상/일부 doc-only  |
+| 문서              | en/ko 미러 100%(수동, 자동검사 없음), docs-gate=sync 마커만, ADR absent, typedoc 수동                                                      | 부분              |
+| 역방향            | events/channels/cancellation 테스트 됨, reverse-callbacks 설계완료 미착지                                                                  | test/absent       |
+| 비-JS 언어        | **전무**(swift-ffi-bench 는 벤치 하네스)                                                                                                   | absent            |
 
 가장 약한 강제 지점 Top-5(성숙 프레임워크 주장에 하중을 받치는 것들):
 ① FFI **서명** 변경이 api-surface 게이트를 통과(이름만 비교), ② committed 생성물
@@ -76,20 +76,20 @@ rustra-bridge 는 로컬 저장소 코드/CI/문서 직접 감사. 문서에 없
 
 ## 3. 갭 분석 — uniffi 관행 ↔ rustra
 
-| uniffi 관행 | rustra 상태 | 갭 크기 | 복사 비용 |
-|---|---|---|---|
-| 1. 심볼별 체크섬+로드시 검증 | 전역 hash+이름 스냅샷, 검증 opt-in | **큼(최우선)** | 소 — `command_wire_signature` 승격 경로 존재 |
-| 2. mismatch 실패주입 픽스처 | mismatch 경로 테스트 부분 | 중 | 소 |
-| 3. 산출물 기준 코드젠 | 스키마 기준이나 신선도 무게이트 | 중 | 소 — regenerate+`git diff --exit-code` |
-| 4. 결정적 생성물 | preserve_order+BTreeMap, pinned hex 로 실질 보장 | 소 | 소 — 2회 생성 테스트 명문화 |
-| 5. 언어별 관용구+생성코드 타입검사 | TS 강함(tsc/consumer-smoke), C++ 컴파일 테스트 | 중(TS 한정 양호) | 중 |
-| 6. 서면 안전 계약 | 불변식이 문서에 산재(panic guard, 포이즌, abort 계약) | 중 | 소 — 통합 문서 1장 |
-| 7. 픽스처 매트릭스+회귀 규율 | 애드혹 예제, pinned hex 1개 | **큼** | 중 |
-| 8. 실실행 CI(2-러스트, 생성코드 타입검사, 디바이스) | MSRV 잡 있음, 모바일 빌드만 | 중 | 중(에뮬 E2E 인프라는 핫코어에서 실증됨) |
-| 9. exact pin+버저닝 문서 | ranges+coherence 스크립트로 대체 실현 | 소 | — |
-| 10. regressions 루프 | 부분(trust_baseline) | 소 | 규율화 |
-| 11. internals/ADR 문서층 | internal/ 있음, ADR absent | 중 | 중 |
-| 12. 언어 커버리지(Kotlin/Swift/Python) | absent | **가장 큼** | 별도 의사결정(Track B) |
+| uniffi 관행                                         | rustra 상태                                           | 갭 크기          | 복사 비용                                    |
+| --------------------------------------------------- | ----------------------------------------------------- | ---------------- | -------------------------------------------- |
+| 1. 심볼별 체크섬+로드시 검증                        | 전역 hash+이름 스냅샷, 검증 opt-in                    | **큼(최우선)**   | 소 — `command_wire_signature` 승격 경로 존재 |
+| 2. mismatch 실패주입 픽스처                         | mismatch 경로 테스트 부분                             | 중               | 소                                           |
+| 3. 산출물 기준 코드젠                               | 스키마 기준이나 신선도 무게이트                       | 중               | 소 — regenerate+`git diff --exit-code`       |
+| 4. 결정적 생성물                                    | preserve_order+BTreeMap, pinned hex 로 실질 보장      | 소               | 소 — 2회 생성 테스트 명문화                  |
+| 5. 언어별 관용구+생성코드 타입검사                  | TS 강함(tsc/consumer-smoke), C++ 컴파일 테스트        | 중(TS 한정 양호) | 중                                           |
+| 6. 서면 안전 계약                                   | 불변식이 문서에 산재(panic guard, 포이즌, abort 계약) | 중               | 소 — 통합 문서 1장                           |
+| 7. 픽스처 매트릭스+회귀 규율                        | 애드혹 예제, pinned hex 1개                           | **큼**           | 중                                           |
+| 8. 실실행 CI(2-러스트, 생성코드 타입검사, 디바이스) | MSRV 잡 있음, 모바일 빌드만                           | 중               | 중(에뮬 E2E 인프라는 핫코어에서 실증됨)      |
+| 9. exact pin+버저닝 문서                            | ranges+coherence 스크립트로 대체 실현                 | 소               | —                                            |
+| 10. regressions 루프                                | 부분(trust_baseline)                                  | 소               | 규율화                                       |
+| 11. internals/ADR 문서층                            | internal/ 있음, ADR absent                            | 중               | 중                                           |
+| 12. 언어 커버리지(Kotlin/Swift/Python)              | absent                                                | **가장 큼**      | 별도 의사결정(Track B)                       |
 
 ## 4. rustra 가 이미 앞선 축 (복사할 필요 없음)
 

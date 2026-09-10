@@ -50,7 +50,10 @@ test('discoverCodegenExamples collects only rustra.json examples, sorted by name
       examples.map((example) => example.name),
       ['calc', 'stream'],
     );
-    assert.equal(examples[0].manifestPath, join(root, 'examples', 'calc', 'generated', '.rustra-generated.json'));
+    assert.equal(
+      examples[0].manifestPath,
+      join(root, 'examples', 'calc', 'generated', '.rustra-generated.json'),
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -68,12 +71,7 @@ test('resolveCheckCommand prefers the example codegen:check script, falls back t
     const fallback = resolveCheckCommand(stream, root);
     assert.equal(fallback.file, 'bun');
     assert.equal(fallback.cwd, stream.dir);
-    assert.deepEqual(fallback.args.slice(-4), [
-      'codegen',
-      '--config',
-      'rustra.json',
-      '--check',
-    ]);
+    assert.deepEqual(fallback.args.slice(-4), ['codegen', '--config', 'rustra.json', '--check']);
     assert.match(fallback.args[0], /packages[\\/]cli[\\/]src[\\/]index\.ts$/);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -84,7 +82,11 @@ test('runCodegenFreshChecks runs every example and passes when exec reports succ
   const root = makeFixture();
   try {
     const ran: string[] = [];
-    const { ok, failures, ran: count } = runCodegenFreshChecks({
+    const {
+      ok,
+      failures,
+      ran: count,
+    } = runCodegenFreshChecks({
       root,
       exec: (command) => {
         ran.push(basename(command.cwd));
@@ -104,7 +106,11 @@ test('runCodegenFreshChecks stops at the first drift with captured diagnostics',
   const root = makeFixture();
   try {
     const ran: string[] = [];
-    const { ok, failures, ran: count } = runCodegenFreshChecks({
+    const {
+      ok,
+      failures,
+      ran: count,
+    } = runCodegenFreshChecks({
       root,
       exec: (command) => {
         ran.push(basename(command.cwd));

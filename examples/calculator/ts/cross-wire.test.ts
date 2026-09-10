@@ -362,7 +362,11 @@ test('cross-wire kindEcho data variant: index + struct body on request and respo
 // (doubled, item). 코드젠이 알파벳순으로 드리프트하면 이 디코드가 깨진다.
 test('cross-wire processItem: nested struct wire + declaration-order output', () => {
   const req = processItemCodec.encode({ item: { active: true, name: 'pen', value: 60 } });
-  assert.equal(bytesToHex(req), PROCESSITEM_REQUEST, 'bool + str len + zigzag in declaration order');
+  assert.equal(
+    bytesToHex(req),
+    PROCESSITEM_REQUEST,
+    'bool + str len + zigzag in declaration order',
+  );
   const r = processItemCodec.decode(hexToBytes(PROCESSITEM_RESPONSE));
   assert.equal(r.ok, true);
   assert.equal(r.result?.doubled, false, '60 is not > 100');
@@ -390,10 +394,7 @@ test('cross-wire sizeOf 2KB payload: length varint framing and raw copy', () => 
   const hex = bytesToHex(req);
   assert.equal(hex.slice(0, 8), '0e008010', 'cmd 14 LE + len varint 2048');
   assert.equal(hex.length, 4104, '2 cmd + 2 len + 2048 payload bytes');
-  assert.ok(
-    /^(5a)*$/.test(hex.slice(8)),
-    'payload must be a raw 0x5A copy (no re-framing inside)',
-  );
+  assert.ok(/^(5a)*$/.test(hex.slice(8)), 'payload must be a raw 0x5A copy (no re-framing inside)');
   const r = sizeOfCodec.decode(hexToBytes(SIZEOF_LARGE_RESPONSE));
   assert.equal(r.ok, true);
   assert.equal(r.result?.checksum, 184320, '0x5A * 2048');
