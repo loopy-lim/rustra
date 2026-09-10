@@ -1,5 +1,60 @@
 # @rustra/cli
 
+## 0.9.0
+
+### Minor Changes
+
+- 5032afd: `rustra dev` gains `dev.target: "dylib"` — an experimental native hot-core dev
+  loop. The Rust core is built as a cdylib and the running host swaps it without
+  restart (the host is launched with the `RUSTRA_HOT_CORE` artifact path; see the
+  tauri-calculator example). The schema parity gate that guards wasm reloads now
+  also guards dylib swaps, fail-closed: builds land on a scratch cargo target
+  path, and only a gate-passing build is published — via temp-file + atomic
+  rename — to the `<stem>-hot-live<ext>` path the host watches. A gate rejection
+  leaves the previously published core untouched; before the first successful
+  publish nothing is written, so the host must not be launched. New config keys:
+  `dev.target: "native" | "wasm" | "dylib"` and `dev.dylib.parityGate`
+  (default `true`).
+
+  Generated apps now require Rust crate `rustra` ^0.9.0
+  (`rustraTemplate.cargoRange` updated with the workspace bump). The RN Android
+  template passes a `filesDir` hot-core path via `nativeConfigureHotCore`
+  (debuggable builds only — release builds never gain an appdata dlopen
+  surface), which needs the adapter's hot-core native surface;
+  `rustraTemplate.reactNativeRange` is now synced to the adapter version in the
+  version PR itself (`scripts/version-packages.mjs`), so it can no longer lag
+  behind an adapter release and break generated-app installs or repo codegen.
+
+- 88fd00b: `rustra codegen` now emits `devices.ts` — a device token union plus
+  required-capability constants per command — single-sourced from the schema's
+  `deviceCapabilities` catalog instead of a hand-maintained mirror (tokens
+  outside the catalog render with dev markers). `rustra doctor` gains a
+  `codegen.device_catalog` check that walls off out-of-catalog device tokens
+  before release: `skip` when no command declares devices, `warn` when the
+  schema lacks the catalog (regenerate with a current rustra), and `fail` when
+  declared commands use tokens the catalog does not know — release builds of
+  the Rust engine panic on such tokens at registration time, so the check
+  surfaces them earlier from the JS side.
+- 88fd00b: Code generation now emits `errors.ts` when commands declare `errors`
+  (sourced from `#[command(error(...))]` / the `command_errors` builder):
+  per-command error-code literal unions (`{Fn}ErrorCode`), `RustraCommandError`
+  intersection types (`{Fn}Error`), and type guards (`is{Fn}Error`). This only
+  narrows the generated TS surface — the runtime error contract is unchanged,
+  and packages with no declared errors get byte-identical output as before.
+- 1f99eca: The `reactNative.legacyBenchmarks` config key is removed, along with the
+  `RUSTRA_LEGACY_BENCHMARKS` / `RUSTRA_ENABLE_LEGACY_BENCHMARKS` build flags from
+  generated modules. `rustra init` scaffolds now write `schema.json` only
+  (`write_schema_to_dir`) instead of the stale dual pass that also regenerated
+  TS surfaces from Rust.
+
+### Patch Changes
+
+- Updated dependencies [4c101c8]
+- Updated dependencies [1f99eca]
+- Updated dependencies [88fd00b]
+- Updated dependencies [88fd00b]
+  - @rustra/types@0.9.0
+
 ## 0.8.0
 
 ### Minor Changes
