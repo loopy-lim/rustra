@@ -3,10 +3,12 @@ name: Sanitizer
 # A09 — AddressSanitizer/LeakSanitizer 야간 검증.
 #
 # 안정화 통합 문서(2026-09-05)의 A09 정의는 "sanitizer — native 환경, 수동
-# 체크리스트로만"(실행 검증 보류)이므로 이 잡은 **게이트가 아니다**
-# (continue-on-error). miri(UB)·fuzz(디코드 신뢰 경계)가 이미 실험 트랙으로
-# 존재하고, 이 잡은 그 사이의 메모리 오염·누수(할당 경계, 버퍼 재구성,
-# FFI 해제 경로)를 잡는 보완 트랙이다. 실기기(RN) 검증은 여전히 수동
+# 체크리스트로만"(실행 검증 보류)이었으나 A9 안전망 게이팅으로 격상됐다:
+# miri(UB)·fuzz(디코드 신뢰 경계)와 함께 메모리 오염·누수(할당 경계, 버퍼
+# 재구성, FFI 해제 경로)를 잡는 보완 트랙으로, 주간 스케줄 실패가 red 로
+# 보인다. 다만 이 워크플로는 schedule/workflow_dispatch 전용이라 PR gate 에는
+# 일절 참여하지 않는다(ci.yml gate 의 needs 목록 밖). 실패 처리는 repo 관례:
+# 내 diff 귀속 전에 red baseline 부터 확인한다. 실기기(RN) 검증은 여전히 수동
 # 체크리스트 영역 — 안정화 통합 트랙 Task 15 가 작성할
 # docs/verification-checklist.md 참조.
 #
@@ -28,7 +30,8 @@ jobs:
   asan:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    continue-on-error: true # 실험 트랙 — 발견은 수확, 실패는 게이트 아님
+    # continue-on-error 없음 — 주간 가시성 게이트. 누수/오염 발견은 즉시
+    # triage 대상이지 조용한 green 이 아니다.
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly

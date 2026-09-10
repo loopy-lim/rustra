@@ -32,6 +32,7 @@
     "test:release-coherence": "bun scripts/check-release-coherence.mjs",
     "test:architecture": "bun test scripts/architecture-boundaries.test.ts",
     "test:api-surface": "node scripts/api-surface.mjs",
+    "test:codegen-fresh": "bun test scripts/check-codegen-fresh.test.ts && node scripts/check-codegen-fresh.mjs",
     "test:onboarding": "bun test scripts/onboarding-gate.test.ts && node scripts/onboarding-gate.mjs",
     "test:docs": "bun test scripts/docs-gate.test.ts && node scripts/docs-gate.mjs",
     "verify:package:react-native": "node scripts/check-react-native-package.mjs",
