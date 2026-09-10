@@ -1,5 +1,9 @@
 // API 표면 스냅샷 게이트 — Rust/TS 공개 export 를 api-surface/snapshot.json 에 고정하고
-// 드리프트(추가/삭제)를 감지한다. `node scripts/api-surface.mjs` (비교) 또는 `--update`(갱신).
+// 드리프트(추가/삭제/변경)를 감지한다. `node scripts/api-surface.mjs` (비교) 또는 `--update`(갱신).
+//
+// FFI 시그니처는 blind spot 이 아니다 — ffiSignatures 섹션이 각 `rustra_ffi_*` 함수의
+// `fn 이름`부터 `{`/`;` 직전까지의 시그니처(매개변수·반환형 포함, 여러 줄은 공백 하나로
+// 정규화)를 이름별로 고정하므로, 이름을 유지한 채 시그니처만 바꾸면 드리프트로 실패한다.
 //
 // 감지 범위 / known blind spots (이 형태로 export 를 추가하면 게이트가 조용히 통과한다):
 // - 여러 줄 `pub use x::{ A, B, };` 그룹 (현재 lib.rs의 공개 use는 전부 한 줄)
@@ -12,7 +16,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /** 스냅샷 형식 버전 — compare 시 불일치하면 --update 재실행을 요구한다. */
-const SNAPSHOT_VERSION = 1;
+const SNAPSHOT_VERSION = 2;
 
 const SNAPSHOT_DIR = 'api-surface';
 const SNAPSHOT_FILE = 'snapshot.json';
@@ -38,17 +42,27 @@ export function collectRustModules(libRsText) {
   return uniqueSorted(items);
 }
 
-/** ffi*.rs 의 C-ABI 함수 이름 (`pub unsafe extern "C" fn` 과 `pub extern "C" fn` 모두). */
+/**
+ * ffi*.rs 의 C-ABI 함수 export (`pub unsafe extern "C" fn` 과 `pub extern "C" fn` 모두).
+ * 이름 배열과 이름→정규화 시그니처 맵을 함께 돌려준다. 시그니처는 `fn 이름`부터
+ * `{`/`;` 직전까지(여러 줄 포함)를 잡아 공백 runs를 하나로 폈고 앞뒤를 trim 한다.
+ */
 export function collectFfiExports(sourceTexts) {
-  const names = [];
+  const signatures = {};
   for (const text of sourceTexts) {
     for (const match of text.matchAll(
-      /(^|\n)\s*pub (?:unsafe )?extern "C" fn (rustra_[a-z_0-9]+)/g,
+      /(^|\n)\s*pub (?:unsafe )?extern "C" fn (rustra_[a-z_0-9]+)([^{;]*)/g,
     )) {
-      names.push(match[2]);
+      const name = match[2];
+      // 같은 이름이 여러 번 정의되는 비정상 상황에서도 파일 순서에 의존하지 않도록 사전순 최솟값을 고른다.
+      const normalized = match[3].replace(/\s+/g, ' ').trim();
+      if (signatures[name] === undefined || signatures[name] > normalized) {
+        signatures[name] = normalized;
+      }
     }
   }
-  return uniqueSorted(names);
+  const names = uniqueSorted(Object.keys(signatures));
+  return { names, signatures: Object.fromEntries(names.map((name) => [name, signatures[name]])) };
 }
 
 /** rustra-macros 의 proc-macro export 이름. */
@@ -192,9 +206,11 @@ export function collectTsExports(indexTsText) {
 }
 
 function collectSurfaceFromFiles({ rustLibRs, rustSourceTexts, macroSourceTexts, packageIndexes }) {
+  const ffi = collectFfiExports(rustSourceTexts);
   return {
     rustModules: collectRustModules(rustLibRs),
-    ffiExports: collectFfiExports(rustSourceTexts),
+    ffiExports: ffi.names,
+    ffiSignatures: ffi.signatures,
     macros: collectMacros(macroSourceTexts),
     tsExports: Object.fromEntries(
       Object.entries(packageIndexes).map(([pkg, text]) => [pkg, collectTsExports(text)]),
@@ -202,7 +218,7 @@ function collectSurfaceFromFiles({ rustLibRs, rustSourceTexts, macroSourceTexts,
   };
 }
 
-/** 저장소 전체의 공개 표면을 수집한다 (모든 배열은 정렬·중복 제거됨). */
+/** 저장소 전체의 공개 표면을 수집한다 (배열은 정렬·중복 제거, ffiSignatures 맵은 이름 정렬). */
 export function collectSurface(root = process.cwd()) {
   const rustraSrc = join(root, 'crates', 'rustra', 'src');
   const rustSourceTexts = readdirSync(rustraSrc)
@@ -230,6 +246,7 @@ export function serializeSurface(surface) {
     version: SNAPSHOT_VERSION,
     rustModules: surface.rustModules,
     ffiExports: surface.ffiExports,
+    ffiSignatures: surface.ffiSignatures,
     macros: surface.macros,
     tsExports: surface.tsExports,
   };
@@ -240,10 +257,11 @@ export function serializeSurface(surface) {
   return `${JSON.stringify(ordered, null, 2)}\n`;
 }
 
-/** 스냅샷 대비 추가/삭제 항목을 섹션별로 묶어 반환한다. */
+/** 스냅샷 대비 추가/삭제/변경 항목을 섹션별로 묶어 반환한다. */
 export function compareSurface(current, snapshot) {
   const added = {};
   const removed = {};
+  const changed = {};
   const TS_PREFIX = 'tsExports[';
   // 섹션 키는 스냅샷 ∪ 현재 — 패키지 통째로 추가/삭제된 경우도 양쪽에서 잡힌다.
   const currentPackageKeys = Object.keys(current.tsExports ?? {});
@@ -269,13 +287,27 @@ export function compareSurface(current, snapshot) {
     if (addedItems.length > 0) added[section] = addedItems;
     if (removedItems.length > 0) removed[section] = removedItems;
   }
-  return { added, removed };
+  // 맵 섹션(ffiSignatures): 이름→시그니처. 시그니처 변경은 `name: old → new` 로,
+  // 이름 추가/삭제는 이름 그대로 잡는다. 이름 추가/삭제는 ffiExports 에서도 발화한다
+  // (양쪽 섹션이 함께 보고되는 중복은 의도된 동작).
+  const currentSigs = current.ffiSignatures ?? {};
+  const snapshotSigs = snapshot.ffiSignatures ?? {};
+  for (const name of uniqueSorted([...Object.keys(snapshotSigs), ...Object.keys(currentSigs)])) {
+    const oldSig = snapshotSigs[name];
+    const newSig = currentSigs[name];
+    if (oldSig === newSig) continue;
+    if (oldSig === undefined) (added.ffiSignatures ??= []).push(name);
+    else if (newSig === undefined) (removed.ffiSignatures ??= []).push(name);
+    else (changed.ffiSignatures ??= []).push(`${name}: ${oldSig} → ${newSig}`);
+  }
+  return { added, removed, changed };
 }
 
-function driftCount({ added, removed }) {
+function driftCount({ added, removed, changed }) {
   return (
     Object.values(added).reduce((sum, items) => sum + items.length, 0) +
-    Object.values(removed).reduce((sum, items) => sum + items.length, 0)
+    Object.values(removed).reduce((sum, items) => sum + items.length, 0) +
+    Object.values(changed).reduce((sum, items) => sum + items.length, 0)
   );
 }
 
@@ -302,6 +334,9 @@ function run() {
     console.error('API surface drift detected — update intentionally via --update:');
     for (const [section, items] of Object.entries(drift.added)) {
       for (const item of items) console.error(`  + ${section}: ${item}`);
+    }
+    for (const [section, items] of Object.entries(drift.changed)) {
+      for (const item of items) console.error(`  ~ ${section}: ${item}`);
     }
     for (const [section, items] of Object.entries(drift.removed)) {
       for (const item of items) console.error(`  - ${section}: ${item}`);
