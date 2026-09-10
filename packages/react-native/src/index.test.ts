@@ -507,6 +507,30 @@ test('createFastEngine forwards schemaVersion/onSchemaStale (stale warning path)
   assert.deepEqual(stale, [{ nativeVersion: 1, jsVersion: 4 }]);
 });
 
+test('createFastEngine forwards contractVerification (warn accepts hash mismatch)', () => {
+  const warnings: unknown[][] = [];
+  const originalWarn = console.warn;
+  console.warn = (...args: unknown[]) => warnings.push(args);
+  try {
+    const native: RustraJSINative = {
+      invoke: () => new ArrayBuffer(0),
+      invokeRkyvV2: () => new ArrayBuffer(0),
+      getContractHash: () => encoder.encode('native-hash-AAAA').buffer as ArrayBuffer,
+    };
+    // 'warn' — 불일치해도 엔진은 생성된다(degraded). 포워딩이 끊기면 strict
+    // 기본으로 되돌아가 throw 하므로 생성 성공 자체가 전달 증거다.
+    const engine = createFastEngine(native, {
+      rkyvV2Codecs: new Map(),
+      contractHash: 'different-hash-BBBB',
+      contractVerification: 'warn',
+    });
+    assert.ok(engine, 'engine is created in warn mode');
+    assert.ok(warnings.length > 0, 'mismatch surfaces as console.warn');
+  } finally {
+    console.warn = originalWarn;
+  }
+});
+
 test('createFastEngine forwards onContractMismatch (degraded mode entry)', () => {
   const mismatches: unknown[] = [];
   const native: RustraJSINative = {

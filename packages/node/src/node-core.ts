@@ -134,6 +134,16 @@ export type NodeBootstrapOptions = {
   spawnOptions?: Parameters<typeof spawn>[2];
   contractHash?: string;
   /**
+   * (A2) 계약 검증 정책 — rkyv 엔진의 `contractVerification`(@rustra/types)과
+   * 같은 3모드. `contractHash` 미설정 시 검증 자체가 없으므로 정책도 무의미하다.
+   * - `'strict'`(미설정 포함 기본): 후보 선택과 채택 모두에서 불일치는 기각/
+   *   throw (`contract.mismatch`).
+   * - `'warn'`: 불일치 후보를 기각하지 않고 console.warn 후 채택 — 전 후보가
+   *   불일치면 첫 후보가 degraded 로 채택된다(OTA 롤백/지연 배포 탈출구).
+   * - `'off'`: 검증 생략 — 후보 선택도 해시로 하지 않고 열거 순서 첫 후보 채택.
+   */
+  contractVerification?: 'strict' | 'warn' | 'off';
+  /**
    * (A05) 테스트 관측 seam — bootstrap 이 소유한 transport 를 대체 주입한다.
    * 기본은 `createNodeProcessTransport` 스폰 경로. loop transport 등 drain 이
    * 있는 transport 를 주입하면 reload 의 duck-typed drain 이 그 drain 을 쓴다.

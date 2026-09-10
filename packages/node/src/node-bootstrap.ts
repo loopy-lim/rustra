@@ -144,11 +144,23 @@ export function createNodeBootstrap(options: NodeBootstrapOptions = {}): NodeBoo
   let transport: NodeProcessTransport | undefined;
   let state: BootstrapState = 'initializing';
   // 계약 검증 — mismatch 는 이 스폰의 기각 사유(후보 선택으로 승격, 감사 A1).
+  // (A2) 정책: 'warn' 은 기각 대신 warn 후 채택(degraded), 'off' 는 검증 생략 —
+  // 두 탈출구 모두 해시 기반 후보 선택도 함께 풀린다(열거 순서 첫 후보).
   const verifyContract = async (spawned: NodeProcessTransport): Promise<void> => {
     if (options.contractHash === undefined) return;
+    if (options.contractVerification === 'off') return;
     const nativeHash = await spawned.getContractHash();
-    if (nativeHash !== options.contractHash)
+    if (nativeHash !== options.contractHash) {
+      if (options.contractVerification === 'warn') {
+        console.warn(
+          `[rustra] contract hash mismatch: native="${nativeHash.slice(0, 16)}…" vs ` +
+            `expected="${options.contractHash.slice(0, 16)}…" — continuing in degraded mode ` +
+            `(contractVerification: 'warn'); regenerate the client or rebuild the Rust host`,
+        );
+        return;
+      }
       throw nodeContractMismatchError(nativeHash, options.contractHash);
+    }
   };
   // handshake 중 비계약 실패(spawn 오류 등)의 기존 래핑 — 엔드포인트 자체가 없는
   // stale 바이너리도 unenforceable 기각으로 취급해 다음 후보를 시도한다.

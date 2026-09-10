@@ -389,6 +389,78 @@ processTest(
   },
 );
 
+processTest(
+  'createNodeBootstrap contractVerification warn adopts the mismatched candidate with a warning',
+  { timeout: 30_000 },
+  async () => {
+    // (A2) warn 탈출구 — 불일치 후보를 기각하지 않고 console.warn 후 degraded
+    // 채택한다(OTA 롤백/지연 배포에서 앱 전체 마비를 피하는 정책).
+    const root = mkdtempSync(join(tmpdir(), 'rustra-node-warn-'));
+    const previous = process.env.RUSTRA_NODE_BINARY;
+    delete process.env.RUSTRA_NODE_BINARY;
+    const originalWarn = console.warn;
+    const warnings: string[] = [];
+    console.warn = (...args: unknown[]) => warnings.push(args.join(' '));
+    try {
+      const stale = writeRuntimeScript(root, 'stale-runtime', 'stale-contract-hash');
+      const bootstrap = createNodeBootstrap({
+        commandCandidates: [stale],
+        args: ['invoke'],
+        contractHash: 'fresh-contract-hash',
+        contractVerification: 'warn',
+      });
+      try {
+        const engine = await bootstrap.ready();
+        const result = await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
+        assert.equal(result.value, 42, 'warn 은 불일치 후보로도 invoke 를 서브한다');
+        assert.ok(
+          warnings.some((w) => w.includes('contract hash mismatch')),
+          '불일치가 console.warn 으로 표면화된다',
+        );
+      } finally {
+        bootstrap.dispose();
+      }
+    } finally {
+      console.warn = originalWarn;
+      if (previous === undefined) delete process.env.RUSTRA_NODE_BINARY;
+      else process.env.RUSTRA_NODE_BINARY = previous;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+processTest(
+  'createNodeBootstrap contractVerification off skips the contract handshake',
+  { timeout: 30_000 },
+  async () => {
+    // (A2) off 탈출구 — 검증 자체를 생략한다. `__rustra_contract` 엔드포인트가
+    // 없는 런타임으로도 부트스트랩이 진행된다(생성 파일 한 줄 수정으로 끈다).
+    const root = mkdtempSync(join(tmpdir(), 'rustra-node-off-'));
+    const previous = process.env.RUSTRA_NODE_BINARY;
+    delete process.env.RUSTRA_NODE_BINARY;
+    try {
+      const stale = writeRuntimeScript(root, 'stale-runtime', 'stale-contract-hash');
+      const bootstrap = createNodeBootstrap({
+        commandCandidates: [stale],
+        args: ['invoke'],
+        contractHash: 'fresh-contract-hash',
+        contractVerification: 'off',
+      });
+      try {
+        const engine = await bootstrap.ready();
+        const result = await engine.invoke<{ value: number }>('addNumbers', { a: 1, b: 2 });
+        assert.equal(result.value, 3, 'off 는 검증 없이 첫 후보를 채택한다');
+      } finally {
+        bootstrap.dispose();
+      }
+    } finally {
+      if (previous === undefined) delete process.env.RUSTRA_NODE_BINARY;
+      else process.env.RUSTRA_NODE_BINARY = previous;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
 processTest('createNodeProcessTransport surfaces spawn failures as transport.error', async () => {
   const transport = createNodeProcessTransport({
     command: './definitely-not-a-real-binary',

@@ -17,6 +17,7 @@ export const rustra = createRustraBootstrap({
   getNative: getRustraNative,
   rkyvV2Codecs: rkyvV2Registry,
   contractHash: GENERATED_CONTRACT_HASH,
+  contractVerification: 'strict',
   schemaVersion: SCHEMA_VERSION,
 });
 `;
@@ -55,6 +56,7 @@ export const rustra = createNodeBootstrap({
   ],
   args: ${JSON.stringify(entry.args ?? ['invoke'])},
   contractHash: GENERATED_CONTRACT_HASH,
+  contractVerification: 'strict',
 });
 
 export const events = createNodeEventSubscription({
@@ -84,6 +86,7 @@ export const rustra = createNodeBootstrap({
   ],
   args: ${JSON.stringify(entry.args ?? ['invoke'])},
   contractHash: GENERATED_CONTRACT_HASH,
+  contractVerification: 'strict',
 });
 `;
 }
@@ -112,6 +115,7 @@ export const rustra = createBunBootstrap({
   ],
   rkyvV2Codecs: rkyvV2Registry,
   contractHash: GENERATED_CONTRACT_HASH,
+  contractVerification: 'strict',
   schemaVersion: SCHEMA_VERSION,
 });
 
@@ -146,6 +150,7 @@ export const rustra = createBunBootstrap({
   ],
   rkyvV2Codecs: rkyvV2Registry,
   contractHash: GENERATED_CONTRACT_HASH,
+  contractVerification: 'strict',
   schemaVersion: SCHEMA_VERSION,
 });
 `;
