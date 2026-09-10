@@ -54,15 +54,13 @@ where
                 max_payload_bytes: crate::limits::max_payload_bytes(),
                 ..ComplexCodecLimits::DEFAULT
             };
-            let output = if direct {
-                let input: I = input_codec.decode_direct(&payload[2..], limits)?;
-                handler_complex(input)?
-            } else {
-                let input_value = input_codec.decode(&payload[2..], limits)?;
-                let input: I = serde_json::from_value(input_value)
-                    .map_err(|e| RustraError::invalid_args(format!("complex decode: {e}")))?;
-                handler_complex(input)?
-            };
+            let output = complex_decode_input::<I, O, F>(
+                &input_codec,
+                direct,
+                payload,
+                limits,
+                &handler_complex,
+            )?;
             let body = if direct {
                 output_codec.encode_direct(&output, limits)?
             } else {
@@ -70,20 +68,47 @@ where
                     .map_err(|e| RustraError::internal(format!("complex encode: {e}")))?;
                 output_codec.encode(&output_value, limits)?
             };
-            let response_len = 8usize.saturating_add(body.len());
-            if response_len > limits.max_payload_bytes {
-                return Err(RustraError::payload_too_large(
-                    response_len,
-                    limits.max_payload_bytes,
-                ));
-            }
-            let mut response = Vec::with_capacity(response_len);
-            response.resize(8, 0);
-            response[0] = 1;
-            response.extend_from_slice(&body);
-            Ok(response)
+            rkyv_v2_frame_from_body(body, limits.max_payload_bytes)
         }))
     };
 
     rkyv_v2_handler
+}
+
+fn complex_decode_input<I, O, F>(
+    input_codec: &CompiledComplex,
+    direct: bool,
+    payload: &[u8],
+    limits: ComplexCodecLimits,
+    handler: &F,
+) -> crate::Result<O>
+where
+    I: DeserializeOwned + 'static,
+    O: Serialize + 'static,
+    F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+{
+    if direct {
+        let input: I = input_codec.decode_direct(&payload[2..], limits)?;
+        handler(input)
+    } else {
+        let input_value = input_codec.decode(&payload[2..], limits)?;
+        let input: I = serde_json::from_value(input_value)
+            .map_err(|e| RustraError::invalid_args(format!("complex decode: {e}")))?;
+        handler(input)
+    }
+}
+
+fn rkyv_v2_frame_from_body(body: Vec<u8>, max_payload_bytes: usize) -> crate::Result<Vec<u8>> {
+    let response_len = 8usize.saturating_add(body.len());
+    if response_len > max_payload_bytes {
+        return Err(RustraError::payload_too_large(
+            response_len,
+            max_payload_bytes,
+        ));
+    }
+    let mut response = Vec::with_capacity(response_len);
+    response.resize(8, 0);
+    response[0] = 1;
+    response.extend_from_slice(&body);
+    Ok(response)
 }

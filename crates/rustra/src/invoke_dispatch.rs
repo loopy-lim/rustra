@@ -30,13 +30,7 @@ impl Package {
                 Ok((command.rkyv_v2_encode_response)(&result))
             })
         }));
-        match outcome {
-            Ok(result) => result,
-            Err(panic) => Err(RustraError::internal(format!(
-                "panic in handler: {}",
-                crate::ffi::panic_message(&panic)
-            ))),
-        }
+        catch_handler_panic(outcome)
     }
 
     /// rkyv V2 caller-buffer 경로. 정적 postcard command는 호스트가 제공한
@@ -94,12 +88,18 @@ impl Package {
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             with_state_context(&self.states, || handler(payload, target))
         }));
-        match outcome {
-            Ok(result) => result,
-            Err(panic) => Err(RustraError::internal(format!(
-                "panic in handler: {}",
-                crate::ffi::panic_message(&panic)
-            ))),
-        }
+        catch_handler_panic(outcome)
+    }
+}
+
+fn catch_handler_panic<R>(
+    outcome: std::result::Result<crate::Result<R>, Box<dyn std::any::Any + Send>>,
+) -> crate::Result<R> {
+    match outcome {
+        Ok(result) => result,
+        Err(panic) => Err(RustraError::internal(format!(
+            "panic in handler: {}",
+            crate::ffi::panic_message(&panic)
+        ))),
     }
 }

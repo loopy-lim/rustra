@@ -24,6 +24,20 @@ fn resolve_generated_field_schema<'a>(schema: &'a Value, definitions: &'a Value)
     current
 }
 
+fn is_byte_buffer_schema(schema: &Value) -> bool {
+    schema.get("type").and_then(Value::as_str) == Some("array")
+        && schema
+            .get("items")
+            .and_then(|items| items.get("type"))
+            .and_then(Value::as_str)
+            == Some("integer")
+        && schema
+            .get("items")
+            .and_then(|items| items.get("format"))
+            .and_then(Value::as_str)
+            == Some("uint8")
+}
+
 pub(crate) fn generated_field_names(
     input_schema: &Value,
     definitions: &Value,
@@ -52,17 +66,7 @@ pub(crate) fn generated_field_names(
             schema.get("type").and_then(Value::as_str),
             Some("integer" | "number" | "boolean" | "string")
         );
-        let byte_buffer = schema.get("type").and_then(Value::as_str) == Some("array")
-            && schema
-                .get("items")
-                .and_then(|items| items.get("type"))
-                .and_then(Value::as_str)
-                == Some("integer")
-            && schema
-                .get("items")
-                .and_then(|items| items.get("format"))
-                .and_then(Value::as_str)
-                == Some("uint8");
+        let byte_buffer = is_byte_buffer_schema(schema);
         if !scalar && !byte_buffer {
             return None;
         }
@@ -81,16 +85,5 @@ pub(crate) fn generated_byte_field_name(input_schema: &Value) -> Option<String> 
     if required.len() != 1 || required[0].as_str() != Some(name) {
         return None;
     }
-    let is_bytes = schema.get("type").and_then(Value::as_str) == Some("array")
-        && schema
-            .get("items")
-            .and_then(|items| items.get("type"))
-            .and_then(Value::as_str)
-            == Some("integer")
-        && schema
-            .get("items")
-            .and_then(|items| items.get("format"))
-            .and_then(Value::as_str)
-            == Some("uint8");
-    is_bytes.then(|| name.clone())
+    is_byte_buffer_schema(schema).then(|| name.clone())
 }

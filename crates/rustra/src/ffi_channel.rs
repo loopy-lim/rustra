@@ -31,8 +31,7 @@ struct FfiChannelSinkInner {
     handle: u32,
     #[allow(clippy::trivially_copy_pass_by_ref)]
     user_data: *mut c_void,
-    activity: Mutex<FfiEventActivity>,
-    quiescent: std::sync::Condvar,
+    gate: FfiActivityGate,
 }
 
 #[derive(Clone)]
@@ -41,56 +40,27 @@ struct FfiChannelSink(std::sync::Arc<FfiChannelSinkInner>);
 unsafe impl Send for FfiChannelSinkInner {}
 unsafe impl Sync for FfiChannelSinkInner {}
 
-/// 진행 중 콜백 추적 guard — JSON/바이너리 sink 가 필드만 빌려 동일 계약으로
-/// 쓴다(구체 타입에 의존하지 않는다).
-struct FfiChannelCallGuard<'a> {
-    activity: &'a Mutex<FfiEventActivity>,
-    quiescent: &'a std::sync::Condvar,
-}
-
-impl Drop for FfiChannelCallGuard<'_> {
-    fn drop(&mut self) {
-        let mut activity = self
-            .activity
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        activity.active_calls = activity.active_calls.saturating_sub(1);
-        if activity.active_calls == 0 {
-            self.quiescent.notify_all();
-        }
-    }
-}
-
 impl FfiChannelSink {
     fn new(callback: FfiChannelCallback, handle: u32, user_data: *mut c_void) -> Self {
         Self(std::sync::Arc::new(FfiChannelSinkInner {
             callback,
             handle,
             user_data,
-            activity: Mutex::new(FfiEventActivity {
-                enabled: true,
-                active_calls: 0,
-            }),
-            quiescent: std::sync::Condvar::new(),
+            gate: FfiActivityGate {
+                activity: Mutex::new(FfiEventActivity {
+                    enabled: true,
+                    active_calls: 0,
+                }),
+                quiescent: std::sync::Condvar::new(),
+            },
         }))
     }
 
     fn invoke(&self, payload: &str) {
-        {
-            let mut activity = self
-                .0
-                .activity
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            if !activity.enabled {
-                return;
-            }
-            activity.active_calls += 1;
+        if !self.0.gate.enter() {
+            return;
         }
-        let _active = FfiChannelCallGuard {
-            activity: &self.0.activity,
-            quiescent: &self.0.quiescent,
-        };
+        let _active = FfiActivityGuard { gate: &self.0.gate };
         let Ok(payload_c) = std::ffi::CString::new(payload) else {
             return; // 내부 NUL — 이벤트 싱크와 동일하게 소실(로그 없음, 채널은 유니캐스트)
         };
@@ -98,19 +68,7 @@ impl FfiChannelSink {
     }
 
     fn deactivate_and_wait(&self) {
-        let mut activity = self
-            .0
-            .activity
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        activity.enabled = false;
-        while activity.active_calls != 0 {
-            activity = self
-                .0
-                .quiescent
-                .wait(activity)
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-        }
+        self.0.gate.wait_quiescent();
     }
 }
 
@@ -122,8 +80,7 @@ struct FfiChannelBytesSinkInner {
     handle: u32,
     #[allow(clippy::trivially_copy_pass_by_ref)]
     user_data: *mut c_void,
-    activity: Mutex<FfiEventActivity>,
-    quiescent: std::sync::Condvar,
+    gate: FfiActivityGate,
 }
 
 #[derive(Clone)]
@@ -138,30 +95,21 @@ impl FfiChannelBytesSink {
             callback,
             handle,
             user_data,
-            activity: Mutex::new(FfiEventActivity {
-                enabled: true,
-                active_calls: 0,
-            }),
-            quiescent: std::sync::Condvar::new(),
+            gate: FfiActivityGate {
+                activity: Mutex::new(FfiEventActivity {
+                    enabled: true,
+                    active_calls: 0,
+                }),
+                quiescent: std::sync::Condvar::new(),
+            },
         }))
     }
 
     fn invoke(&self, payload: &[u8]) {
-        {
-            let mut activity = self
-                .0
-                .activity
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            if !activity.enabled {
-                return;
-            }
-            activity.active_calls += 1;
+        if !self.0.gate.enter() {
+            return;
         }
-        let _active = FfiChannelCallGuard {
-            activity: &self.0.activity,
-            quiescent: &self.0.quiescent,
-        };
+        let _active = FfiActivityGuard { gate: &self.0.gate };
         unsafe {
             (self.0.callback)(
                 self.0.user_data,
@@ -173,19 +121,7 @@ impl FfiChannelBytesSink {
     }
 
     fn deactivate_and_wait(&self) {
-        let mut activity = self
-            .0
-            .activity
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        activity.enabled = false;
-        while activity.active_calls != 0 {
-            activity = self
-                .0
-                .quiescent
-                .wait(activity)
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-        }
+        self.0.gate.wait_quiescent();
     }
 }
 

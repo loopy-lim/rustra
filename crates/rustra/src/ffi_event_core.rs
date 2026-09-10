@@ -1,16 +1,68 @@
+#[derive(Default)]
+struct FfiEventActivity {
+    enabled: bool,
+    active_calls: usize,
+}
+
+struct FfiActivityGate {
+    activity: Mutex<FfiEventActivity>,
+    quiescent: std::sync::Condvar,
+}
+
+impl FfiActivityGate {
+    fn enter(&self) -> bool {
+        let mut activity = self
+            .activity
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if !activity.enabled {
+            return false;
+        }
+        activity.active_calls += 1;
+        true
+    }
+
+    fn wait_quiescent(&self) {
+        let mut activity = self
+            .activity
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        activity.enabled = false;
+        while activity.active_calls != 0 {
+            activity = self
+                .quiescent
+                .wait(activity)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+        }
+    }
+}
+
+/// 진행 중 콜백 추적 guard — JSON/바이너리 sink 가 필드만 빌려 동일 계약으로
+/// 쓴다(구체 타입에 의존하지 않는다).
+struct FfiActivityGuard<'a> {
+    gate: &'a FfiActivityGate,
+}
+
+impl Drop for FfiActivityGuard<'_> {
+    fn drop(&mut self) {
+        let mut activity = self
+            .gate
+            .activity
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        activity.active_calls = activity.active_calls.saturating_sub(1);
+        if activity.active_calls == 0 {
+            self.gate.quiescent.notify_all();
+        }
+    }
+}
+
 /// 등록된 C 콜백 + 호스트 소유 `user_data`와 quiescence 상태.
 struct FfiEventSinkInner {
     callback: FfiEventCallback,
     #[allow(clippy::trivially_copy_pass_by_ref)]
     user_data: *mut c_void,
-    activity: Mutex<FfiEventActivity>,
-    quiescent: std::sync::Condvar,
-}
-
-#[derive(Default)]
-struct FfiEventActivity {
-    enabled: bool,
-    active_calls: usize,
+    gate: FfiActivityGate,
 }
 
 #[derive(Clone)]
@@ -22,32 +74,18 @@ struct FfiEventSink(std::sync::Arc<FfiEventSinkInner>);
 unsafe impl Send for FfiEventSinkInner {}
 unsafe impl Sync for FfiEventSinkInner {}
 
-struct FfiEventCallGuard<'a>(&'a FfiEventSinkInner);
-
-impl Drop for FfiEventCallGuard<'_> {
-    fn drop(&mut self) {
-        let mut activity = self
-            .0
-            .activity
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        activity.active_calls = activity.active_calls.saturating_sub(1);
-        if activity.active_calls == 0 {
-            self.0.quiescent.notify_all();
-        }
-    }
-}
-
 impl FfiEventSink {
     fn new(callback: FfiEventCallback, user_data: *mut c_void) -> Self {
         Self(std::sync::Arc::new(FfiEventSinkInner {
             callback,
             user_data,
-            activity: Mutex::new(FfiEventActivity {
-                enabled: true,
-                active_calls: 0,
-            }),
-            quiescent: std::sync::Condvar::new(),
+            gate: FfiActivityGate {
+                activity: Mutex::new(FfiEventActivity {
+                    enabled: true,
+                    active_calls: 0,
+                }),
+                quiescent: std::sync::Condvar::new(),
+            },
         }))
     }
 
@@ -59,18 +97,10 @@ impl FfiEventSink {
     /// "콘텐츠 문제로 소실"과 구분되며 상위 버스-우회 계약(싱크가 설치되어
     /// 있었으므로 폴링 버스로도 전달하지 않음)에는 그대로 부합한다.
     fn invoke(&self, name: &str, payload: &str) -> bool {
-        {
-            let mut activity = self
-                .0
-                .activity
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            if !activity.enabled {
-                return true; // 해제와 경합한 stale EventSink snapshot — 조용히 폐기
-            }
-            activity.active_calls += 1;
+        if !self.0.gate.enter() {
+            return true; // 해제와 경합한 stale EventSink snapshot — 조용히 폐기
         }
-        let _active = FfiEventCallGuard(&self.0);
+        let _active = FfiActivityGuard { gate: &self.0.gate };
         let Ok(name_c) = std::ffi::CString::new(name) else {
             return false;
         };
@@ -83,19 +113,7 @@ impl FfiEventSink {
 
     /// 새 호출을 차단하고 이미 시작한 콜백이 모두 반환할 때까지 기다린다.
     fn deactivate_and_wait(&self) {
-        let mut activity = self
-            .0
-            .activity
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        activity.enabled = false;
-        while activity.active_calls != 0 {
-            activity = self
-                .0
-                .quiescent
-                .wait(activity)
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-        }
+        self.0.gate.wait_quiescent();
     }
 }
 

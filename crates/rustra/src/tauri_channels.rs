@@ -199,15 +199,10 @@ pub fn create_bytes_channel_for<R: tauri::Runtime>(app: &tauri::AppHandle<R>) ->
 /// 그런 이름끼리 충돌하면 마찬가지로 빌드가 거부된다. TS 구독 측
 /// `rustraEventChannel` 이 동일 알고리즘의 문자 단위 쌍생(twin)이다.
 pub fn event_channel(name: &str) -> String {
-    format!("{EVENT_CHANNEL_PREFIX}{}", sanitize_event_name(name))
-}
-
-/// Tauri 채널 이름 규칙으로 이름을 정규화한다 — 정규화 규칙의 단일 사본은
-/// 빌더 쪽([`crate::builder` 가 include 하는 `builder_events.rs`],
-/// `sanitize_event_name`)이 갖고 TS `rustraEventChannel` 과도 동일하다(R02).
-/// 여기서는 접두사 결합만 담당한다.
-fn sanitize_event_name(name: &str) -> String {
-    PackageBuilder::sanitize_event_name(name)
+    format!(
+        "{EVENT_CHANNEL_PREFIX}{}",
+        PackageBuilder::sanitize_event_name(name)
+    )
 }
 
 #[cfg(test)]
