@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "schemaHash": "7279af1f50ca546411bb7be6476bb1f931b437ae53484d8ea9903eec07926039",
-  "generatorVersion": "0.8.0",
+  "schemaHash": "7c07f78e1f38dc37f251920c7c453ec5b6d65a817f95a1b51b5b4649f63a2ae3",
+  "generatorVersion": "0.9.0",
   "files": [
     {
       "path": "../modules/rustra-jsi/android/build-rust-android.sh",
@@ -29,7 +29,7 @@
     },
     {
       "path": "../modules/rustra-jsi/generated/rustra-generated-codecs.cpp",
-      "sha256": "b981683cbf8fae09e4efc80c7af105b31ff889452099dca26d16a9f674133cfa"
+      "sha256": "914b1b5156edf43e9441f85e407f329715a8e5cd6232a19137adbc51980f1202"
     },
     {
       "path": "../modules/rustra-jsi/generated/rustra-generated-codecs.hpp",
@@ -49,7 +49,7 @@
     },
     {
       "path": "../modules/rustra-jsi/package.json",
-      "sha256": "fd1040dc80a43215c7290c062638da529381ba233863218b408bbac7aa9dedd5"
+      "sha256": "47eea6fbe9c913d32b6f68790a8861f114194080bfcf07af70577a6c725bcfdd"
     },
     {
       "path": "../modules/rustra-jsi/react-native.config.js",
@@ -65,11 +65,11 @@
     },
     {
       "path": "commands.ts",
-      "sha256": "f95cada5f247d50bb0bc5ad2c7e9c1c08af8553fdf6c6b9ffc7fb3337f5603c0"
+      "sha256": "a75e1524f334ec412a9d6dc02ff4019004b600c4f8c51a4c574c3f76fdb6d04b"
     },
     {
       "path": "contract.ts",
-      "sha256": "8147415a3764beb7bcb7f7a0e9a3ee5883749a87a40323f72f2c2aaa0aba1292"
+      "sha256": "551f56821ab6bb1dbec713402c8fe27978a9be523d9346e9ff3d137220a0349a"
     },
     {
       "path": "devices.ts",
@@ -85,19 +85,19 @@
     },
     {
       "path": "react-native.ts",
-      "sha256": "ab71eed28455e6acb0c2a169782122e0708435743d97d648247cb13df4c181a6"
+      "sha256": "3e16137774d79c5d53a7c0e1bdaa8c7727a98842177500ee5c4370914a3f3aca"
     },
     {
       "path": "rkyv-codecs.ts",
-      "sha256": "9887016c80b73eedb2850d1eae55ab9ce129b6a01e5938b981cec02f224137d6"
+      "sha256": "f63440e663137f2cea8a615651cb512ba1799e5b7c626b7e0a11f0d721cab5b6"
     },
     {
       "path": "rkyv-registry.ts",
-      "sha256": "1690c35c26f4d77c49559893c657f8408edbe97210754edc279f0e043c3925fd"
+      "sha256": "8cae01e54d437f667c8f41dd327de5e9d63d0d30639dfb2ab3ac54df602ecf21"
     },
     {
       "path": "types.ts",
-      "sha256": "123484d4e2a4761f959d0dc062c1deb156a8f822daba3494d4801b066a0b0ae0"
+      "sha256": "74c4a06e44adbecb16acea5cf58fff797f425e6b04a4d7bf32c0367af7491678"
     }
   ]
 }

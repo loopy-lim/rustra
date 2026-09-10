@@ -25,5 +25,6 @@ export const rustra = createBunBootstrap({
   ],
   rkyvV2Codecs: rkyvV2Registry,
   contractHash: GENERATED_CONTRACT_HASH,
+  contractVerification: 'strict',
   schemaVersion: SCHEMA_VERSION,
 });

@@ -184,6 +184,25 @@ async function runBenchmarks(): Promise<string[]> {
     }
   }
 
+  // A6 런타임 스모크 마커 — CI(rn-android/rn-ios)가 에뮬레이터/시뮬레이터에서 앱을
+  // 실제 기동시키고 이 토큰으로 "JS 번들 로드 + 첫 엔진 호출 성공"을 단언한다.
+  // console.warn 을 쓰는 이유: Release 빌드에서 RN 의 console.log 는 네이티브 로그
+  // 전달 임계값(warning) 아래로 잘려 logcat/os_log 에 보이지 않는다(iOS 벤치마크
+  // receipt 를 파일로 우회하는 것과 같은 이유). __DEV__ 조기 반환(Debug 빌드)에서는
+  // runBenchmarks 가 생략되므로 마커도 없다 — CI 스모크는 Release 빌드
+  // (assembleRelease / Release 구성) 전용 계약이다.
+  configure(rkyvV2Engine);
+  try {
+    const smoke = await addNumbers(INPUT);
+    if (smoke.value === 100) {
+      console.warn('__RUSTRA_SMOKE_OK__ addNumbers(42,58)=100');
+    } else {
+      console.warn(`__RUSTRA_SMOKE_FAIL__ addNumbers returned ${smoke.value}`);
+    }
+  } catch (e: any) {
+    console.warn(`__RUSTRA_SMOKE_FAIL__ ${String(e).slice(0, 80)}`);
+  }
+
   configure(rkyvV2Engine);
   try {
     const even = await isEven({ n: 42 });

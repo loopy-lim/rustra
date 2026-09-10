@@ -543,6 +543,35 @@ pub fn tag_set(input: TagSetInput) -> Result<TagSetOutput> {
     })
 }
 
+// ── A5 태그 enum 표본 — unit + data 변형 커맨드 ────────────────────
+// serde 외부 태그(기본 표현) enum: postcard 와이어는 [변형 인덱스 u32
+// varint][변형 본문] 다. unit 변형(Clear)은 인덱스 한 바이트, struct 변형
+// (Set{value})은 인덱스 + 필드 선언순. generated TS/C++ complex codec 이
+// oneOf 변형 인덱스 와이어를 동일하게 만들어내는지 cross-wire 픽스처로 고정한다.
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+pub enum OpKind {
+    Clear,
+    Set { value: i64 },
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct KindEchoInput {
+    pub kind: OpKind,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct KindEchoOutput {
+    pub echoed: OpKind,
+}
+
+/// enum 에코 — unit/data 변형 왕복(와이어는 변형 인덱스 varint).
+#[command]
+pub fn kind_echo(input: KindEchoInput) -> Result<KindEchoOutput> {
+    Ok(KindEchoOutput { echoed: input.kind })
+}
+
 // `rustraRegistryDemo` 는 빌드 시점에 등록되어 항상 호출 가능하며, 런타임에 live
 // package 를 mutate 한다. RN 이 사용하는 동일 FFI 경로(invoke_json)를 통해 동작하며,
 // mutation 사이에 rebuild 가 필요 없다. release 빌드에서는 frozen 이다.
@@ -806,6 +835,8 @@ pub fn calculator_package() -> Package {
             .command_fn(channel_demo_bytes)
             .command_fn(device_demo)
             .devices_meta_if(__RUstra_meta_device_demo, __RUstra_devices_device_demo)
+            // A5: 태그 enum 표본 — 신규 커맨드는 id 시프트 방지를 위해 체인 맨 뒤에.
+            .command_fn(kind_echo)
             .build();
 
             // Auto-register for generic FFI with JSON default
