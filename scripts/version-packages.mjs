@@ -14,6 +14,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { PUBLISHED_PACKAGES } from './check-release-coherence.mjs';
 
 /** caret 마이너 범위 — 0.x 에서는 ^0.N.0 (0.N.x 허용). */
 export function caretMinorRange(version) {
@@ -39,6 +40,46 @@ export function syncReactNativeRange(cliManifestPath, reactNativeVersion) {
   return true;
 }
 
+/**
+ * bun.lock 워크스페이스 블록의 메타데이터(version, @rustra/* 내부 의존 범위)를
+ * manifest 로 맞춘다. bun install 은 이 필드들을 다시 쓰지 않는다(2026-09-10
+ * 실측 — workspace 패키지의 version 이 올라가도 잠금은 그대로다) 그래서
+ * changeset version 직후엔 manifest=0.9.0 / lock=0.8.0 어긋남이 남고
+ * test:release-coherence 가 version PR CI 를 깨뜨린다. 워크스페이스 블록
+ * 안의 두 종류 값만 치환한다 — 레지스트리 패키지 해석 영역은 건드리지 않는다.
+ */
+export function syncLockWorkspaceMetadata(lockPath, manifests) {
+  let text = readFileSync(lockPath, 'utf8');
+  let changed = false;
+  for (const [packageDir, manifest] of Object.entries(manifests)) {
+    const blockPattern = new RegExp(`("${packageDir.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}"\\s*:\\s*\\{)([\\s\\S]*?)(\\n    \\},)`);
+    const blockMatch = blockPattern.exec(text);
+    if (!blockMatch) continue;
+    let block = blockMatch[2];
+    const rewritten = block.replace(
+      /("(?<depKey>@rustra\/[a-z-]+)"\s*:\s*")(?<depRange>[^"]+)(")|("version"\s*:\s*")(?<versionValue>[^"]+)(")/g,
+      (whole, ...groups) => {
+        const named = groups[groups.length - 1];
+        if (named.depKey !== undefined) {
+          const range = manifest.dependencies?.[named.depKey];
+          return range !== undefined && range !== named.depRange
+            ? `${groups[0]}${range}${groups[3]}`
+            : whole;
+        }
+        return manifest.version !== undefined && manifest.version !== named.versionValue
+          ? `${groups[4]}${manifest.version}${groups[6]}`
+          : whole;
+      },
+    );
+    if (rewritten !== block) {
+      text = text.replace(blockMatch[0], `${blockMatch[1]}${rewritten}${blockMatch[3]}`);
+      changed = true;
+    }
+  }
+  if (changed) writeFileSync(lockPath, text);
+  return changed;
+}
+
 function main() {
   const args = process.argv.slice(2);
   const root = join(import.meta.dirname, '..');
@@ -53,10 +94,19 @@ function main() {
   if (syncReactNativeRange(join(root, 'packages/cli/package.json'), reactNativeVersion)) {
     console.log(`[version] rustraTemplate.reactNativeRange synced to ${reactNativeVersion}`);
   }
-  // 버전이 오른 manifest 와 bun.lock 이 어긋나면 release-coherence 가 version PR
-  // CI 를 깨뜨린다(manifest=0.9.0, lock=0.8.0 — 2026-09-10 첫 버전 PR 실측).
-  // changeset version 은 lock 을 안 고치므로 여기서 맞춘다.
-  execFileSync('bun', ['install'], { stdio: 'inherit', cwd: root });
+  // 버전이 오른 manifest 와 bun.lock 워크스페이스 메타데이터가 어긋나면
+  // release-coherence 가 version PR CI 를 깨뜨린다(manifest=0.9.0, lock=0.8.0 —
+  // 2026-09-10 첫 버전 PR 실측). bun install 은 이 필드들을 안 고치므로
+  // 직접 맞춘다.
+  const manifests = {};
+  for (const name of PUBLISHED_PACKAGES) {
+    manifests[`packages/${name}`] = JSON.parse(
+      readFileSync(join(root, 'packages', name, 'package.json'), 'utf8'),
+    );
+  }
+  if (syncLockWorkspaceMetadata(join(root, 'bun.lock'), manifests)) {
+    console.log('[version] bun.lock workspace metadata synced to manifests');
+  }
 }
 
 if (process.argv[1] === import.meta.filename || process.argv[1]?.endsWith('version-packages.mjs')) {
