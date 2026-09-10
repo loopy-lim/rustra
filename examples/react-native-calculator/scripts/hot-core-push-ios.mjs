@@ -69,11 +69,13 @@ export async function detectIosBundleId(appRoot = APP_ROOT) {
   return { bundleId: DEFAULT_IOS_BUNDLE_ID, source: 'default' };
 }
 
-function runSimctl(args) {
+/** simctl 실행 — xcodebuild/시뮬레이터가 멈춰 서면 무한 대기하지 않게 타임아웃. */
+function runSimctl(args, timeoutMs = 30_000) {
   const result = Bun.spawnSync({
     cmd: ['xcrun', 'simctl', ...args],
     stdout: 'pipe',
     stderr: 'pipe',
+    timeout: timeoutMs,
   });
   return {
     exitCode: result.exitCode,

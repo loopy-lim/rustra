@@ -92,11 +92,7 @@ const PLAIN_SO = resolve(CARGO_TARGET_OUT, 'librustra_calculator_example.so');
 const BEHAVIOR_SO = resolve(CARGO_TARGET_OUT, 'librustra_hot_core_variant.so');
 
 function buildCdylibs() {
-  if (
-    !process.env.ANDROID_NDK_HOME &&
-    !process.env.ANDROID_HOME &&
-    !process.env.ANDROID_SDK_ROOT
-  ) {
+  if (!process.env.ANDROID_NDK_HOME && !process.env.ANDROID_HOME && !process.env.ANDROID_SDK_ROOT) {
     fail(
       'ANDROID_NDK_HOME/ANDROID_HOME is not set',
       'hint: export ANDROID_HOME=<sdk 경로> — cargo ndk 와 gradle 이 모두 필요로 한다.',
@@ -133,22 +129,18 @@ function buildCdylibs() {
   }
 }
 
-function buildAndInstallApp({ adb, serial }) {
+function buildAndInstallApp({ adb, serial, pkg }) {
   // (b) 핫 분기 앱 빌드 — 생성된 Kotlin 모듈이 install 시 nativeConfigureHotCore
   // (filesDir/rustra/hot)를 호출한다. universal debug APK는 4 ABI 전부 담아
   // 130M+ 라 작은 /data 파티션 설치가 실패할 수 있어, 기본은 에뮬레이터 ABI
   // (arm64-v8a)만 빌드한다 — RN 표준 gradle 속성(RUSTRA_ARCHS로 덮어쓸 수 있음).
   const archs = process.env.RUSTRA_ARCHS ?? 'arm64-v8a';
   const gradlew = resolve(EXAMPLE_ROOT, 'android', 'gradlew');
-  run(
-    'sh',
-    [gradlew, ':app:assembleDebug', '--no-daemon', `-PreactNativeArchitectures=${archs}`],
-    {
-      cwd: resolve(EXAMPLE_ROOT, 'android'),
-      timeoutMs: 1_500_000,
-      stream: true,
-    },
-  );
+  run('sh', [gradlew, ':app:assembleDebug', '--no-daemon', `-PreactNativeArchitectures=${archs}`], {
+    cwd: resolve(EXAMPLE_ROOT, 'android'),
+    timeoutMs: 1_500_000,
+    stream: true,
+  });
   const apk = resolve(EXAMPLE_ROOT, 'android/app/build/outputs/apk/debug/app-debug.apk');
   if (!existsSync(apk)) fail(`debug APK missing after assembleDebug: ${apk}`);
   // install -r(업데이트)는 이전 설치분과 새 APK 를 잠깐 함께 담아야 해서 작은
@@ -169,11 +161,13 @@ function buildAndInstallApp({ adb, serial }) {
       installed = true;
     } catch {
       if (attempt === 3) {
-        const appPackage = detectAndroidPackage().package;
+        // 파괴적 폴백(uninstall = 앱 데이터 소멸)은 main 이 해석한 pkg 를
+        // 그대로 쓴다 — 감지 폴백 기본값이 다른 앱을 가리키는 기기에서 엉뚱한
+        // 앱을 지우는 사고를 막는다.
         console.log(
-          `  install -r retries exhausted — falling back to uninstall + fresh install of ${appPackage}`,
+          `  install -r retries exhausted — falling back to uninstall + fresh install of ${pkg}`,
         );
-        run(adb, ['-s', serial, 'uninstall', appPackage], { timeoutMs: 120_000 });
+        run(adb, ['-s', serial, 'uninstall', pkg], { timeoutMs: 120_000 });
         installOnce([]);
         installed = true;
       } else {
@@ -201,22 +195,6 @@ async function checkMetro() {
       'hint: bun run demo:hot-core 로 핫 분기 번들을 서빙하세요.',
     );
   }
-}
-
-/** logcat 스트림 래퍼 — [RustraHotCore] 라인 파싱 + 종료 통지를 제공한다. */
-function startLogcat(adb, serial) {
-  const child = spawn(adb, ['-s', serial, 'logcat', '-v', 'time'], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-  let closeCallback = null;
-  child.on('close', () => closeCallback?.());
-  return {
-    stdout: child.stdout,
-    kill: () => child.kill(),
-    onClose: (callback) => {
-      closeCallback = callback;
-    },
-  };
 }
 
 // 단일 소비자 디스패치 — 하나의 스트림에 for-await 소비자를 2개 붙이면 청크가
@@ -323,7 +301,10 @@ function waitSwapToken(logcat, swappedValue, timeoutMs) {
       if (value) {
         seen.add(Number(value[1]));
         if (Number(value[1]) === swappedValue) {
-          settle(undefined, [...seen].sort((left, right) => left - right));
+          settle(
+            undefined,
+            [...seen].sort((left, right) => left - right),
+          );
         }
       }
     });
@@ -335,7 +316,7 @@ export async function main(argv = Bun.argv.slice(2)) {
   const { adb, serial } = options;
   const detected = options.pkgOverride
     ? { package: options.pkgOverride, source: 'flag/env' }
-    : detectAndroidPackage();
+    : await detectAndroidPackage();
   const pkg = detected.package;
 
   // get-state 는 원격 셸이 아니라 호스트 adb 명령이다.
@@ -343,11 +324,9 @@ export async function main(argv = Bun.argv.slice(2)) {
     cmd: [adb, '-s', serial, 'get-state'],
     stdout: 'pipe',
     stderr: 'pipe',
+    timeout: 15_000,
   });
-  if (
-    deviceState.exitCode !== 0 ||
-    cleanShellOutput(deviceState.stdout.toString()) !== 'device'
-  ) {
+  if (deviceState.exitCode !== 0 || cleanShellOutput(deviceState.stdout.toString()) !== 'device') {
     fail(`adb device "${serial}" is not ready`, 'hint: adb devices 로 직렬을 확인하세요.');
   }
 
@@ -365,12 +344,17 @@ export async function main(argv = Bun.argv.slice(2)) {
     console.log('[2/5] skipping gradle build (assumes the app is already installed)');
   } else {
     console.log('[2/5] building + installing the hot-core app (gradle assembleDebug)…');
-    buildAndInstallApp({ adb, serial });
+    buildAndInstallApp({ adb, serial, pkg });
   }
 
   console.log('[3/5] checking Metro, clearing stale live artifacts, launching the app…');
   await checkMetro();
-  run(adb, ['-s', serial, 'reverse', 'tcp:8081', 'tcp:8081']);
+  // reverse 터널 포트는 METRO_URL 에서 읽는다 — 하드코딩하면 RUSTRA_METRO_URL
+  // 로 포트를 바꾼 환경에서 checkMetro 는 통과하고 앱만 8081 로 향한다.
+  const metroPort = new URL(METRO_URL).port || '8081';
+  run(adb, ['-s', serial, 'reverse', `tcp:${metroPort}`, `tcp:${metroPort}`], {
+    timeoutMs: 30_000,
+  });
   // 시작 전 stale live 아티팩트를 치운다 — 남아 있으면 부팅 직후 스왑이 일어나
   // baseline(5) 관측이 무효화된다. sh 인용이 adbd 에 분해되는 문제를 피하려
   // 호스트에서 목록을 읽어 개별 rm 으로 지운다(셸 메타문자 0 개 계약).
@@ -379,19 +363,24 @@ export async function main(argv = Bun.argv.slice(2)) {
     cmd: [adb, '-s', serial, 'shell', `run-as ${pkg} ls -a ${hotDir}`],
     stdout: 'pipe',
     stderr: 'pipe',
+    timeout: 30_000,
   });
   const staleNames = cleanShellOutput(listing.stdout.toString())
     .split('\n')
     .map((name) => name.trim())
     .filter((name) => name.endsWith('-hot-live.so') || name === TMP_LIVE_NAME);
   for (const name of staleNames) {
-    run(adb, ['-s', serial, 'shell', `run-as ${pkg} rm -f ${hotDir}/${name}`]);
+    run(adb, ['-s', serial, 'shell', `run-as ${pkg} rm -f ${hotDir}/${name}`], {
+      timeoutMs: 30_000,
+    });
   }
 
   const logcat = startLogcat(adb, serial);
   try {
-    run(adb, ['-s', serial, 'shell', 'am', 'force-stop', pkg]);
-    run(adb, ['-s', serial, 'shell', 'am', 'start', '-n', `${pkg}/.MainActivity`]);
+    run(adb, ['-s', serial, 'shell', 'am', 'force-stop', pkg], { timeoutMs: 30_000 });
+    run(adb, ['-s', serial, 'shell', 'am', 'start', '-n', `${pkg}/.MainActivity`], {
+      timeoutMs: 30_000,
+    });
 
     console.log(`[4/5] waiting for ${LOG_PREFIX} READY value=${BASELINE_VALUE}…`);
     const baseline = await waitReadyToken(logcat, options.readyTimeoutMs);
@@ -408,6 +397,11 @@ export async function main(argv = Bun.argv.slice(2)) {
     // 관측 싱크를 push **이전에** 붙인다 — 스왑은 push 뒤 수백 ms 만에 일어나고
     // 첫 105 로그가 대기자 등록을 앞설 수 있다(실측).
     const swapObserved = waitSwapToken(logcat, SWAPPED_VALUE, options.swapTimeoutMs);
+    // push 가 먼저 실패해 await 에 도달하지 못하면 이 프로미스는 나중에
+    // stream-close/타임아웃으로 거부된다 — 미처리 거부로 프로세스가 죽는
+    // 이중 장애를 막기 위해 no-op catch 를 미리 붙인다(실제 오류 전파는
+    // await 지점에서 그대로 일어난다).
+    swapObserved.catch(() => {});
     run(
       'bun',
       [

@@ -56,8 +56,6 @@ const LOG_PREFIX = '[RustraHotCore]';
 const BASELINE_VALUE = 5; // addNumbers(2,3) — 정적 코어(plain) 기준값
 const SWAPPED_VALUE = 105; // behavior 변형 스왑 후 — 2+3+100
 const METRO_URL = process.env.RUSTRA_METRO_URL || 'http://127.0.0.1:8081';
-// 부팅된 기기가 전혀 없을 때 부팅하는 기본 시뮬레이터(실측 환경의 iPhone 17).
-const FALLBACK_UDID = '99B087B5-DEF6-4CF1-9177-81A5DE564CFC';
 const APP_RELATIVE_PATH =
   'ios/build/rustra-derived-data/Build/Products/Debug-iphonesimulator/reactnativecalculator.app';
 
@@ -76,12 +74,13 @@ function run(command, args, options = {}) {
     stderr: 'pipe',
     timeout: options.timeoutMs,
   });
-  const output = [
-    cleanSimctlOutput(result.stdout.toString()),
-    cleanSimctlOutput(result.stderr.toString()),
-  ]
-    .filter(Boolean)
-    .join('\n');
+  // stdoutOnly — 경로처럼 stdout 이 계약인 명령에서 stderr 잡음(경고 등)이
+  // 출력을 오염시키지 않게 분리한다. 기본은 진단 편의를 위해 둘을 합친다.
+  const output = options.stdoutOnly
+    ? cleanSimctlOutput(result.stdout.toString())
+    : [cleanSimctlOutput(result.stdout.toString()), cleanSimctlOutput(result.stderr.toString())]
+        .filter(Boolean)
+        .join('\n');
   if (options.stream && output.length > 0) console.log(output);
   if (result.exitCode !== 0 && !options.allowFailure) {
     fail(`command failed (${result.exitCode}): ${label}`, output);
@@ -113,11 +112,15 @@ function buildCdylibs() {
   // 동일해 계약 해시가 같다(시나리오 1 전제). parity 게이트가 없으므로 이 전제는
   // READY value=5 관측 + 105 전환으로 스모크가 직접 증명한다.
   console.log('  building plain rustra-hot-core-variant cdylib (aarch64-apple-ios-sim)…');
-  run('cargo', ['build', '--release', '--target', 'aarch64-apple-ios-sim', '-p', 'rustra-hot-core-variant'], {
-    cwd: REPO_ROOT,
-    timeoutMs: 600_000,
-    stream: true,
-  });
+  run(
+    'cargo',
+    ['build', '--release', '--target', 'aarch64-apple-ios-sim', '-p', 'rustra-hot-core-variant'],
+    {
+      cwd: REPO_ROOT,
+      timeoutMs: 600_000,
+      stream: true,
+    },
+  );
   run('mkdir', ['-p', resolve(STAGING_ROOT, 'plain')]);
   run('cp', [RAW_DYLIB, PLAIN_DYLIB]);
   // (a-2) 관측 가능한 스왑 유닛 — addNumbers 본문만 +100(시그니처 불변 로직 변경).
@@ -144,9 +147,27 @@ function buildCdylibs() {
   }
 }
 
-/** 부팅된 시뮬레이터 UDID 해석 — 없으면 기본 기기(iPhone 17)를 부팅하고 대기. */
+/** 부팅된 기기가 전혀 없을 때 부팅할 기본 기기 — "available" 목록의 첫 iPhone.
+ *  특정 기기의 UDID 를 하드코딩하지 않는다(다른 머신에 없는 UDID 는 boot 실패).
+ *  env RUSTRA_SIM_FALLBACK_DEVICE 로 이름(부분 일치)을 지정할 수 있다. */
+function pickDefaultDeviceUdid() {
+  const available = run('xcrun', ['simctl', 'list', 'devices', 'available'], {
+    timeoutMs: 30_000,
+  });
+  const nameFilter = process.env.RUSTRA_SIM_FALLBACK_DEVICE;
+  for (const line of available.output.split('\n')) {
+    const match = /^\s*(.+?)\s*\(([0-9A-Fa-f-]{36})\)/.exec(line);
+    if (!match) continue;
+    if (nameFilter ? line.includes(nameFilter) : /iPhone/i.test(match[1])) {
+      return { name: match[1].trim(), udid: match[2] };
+    }
+  }
+  return null;
+}
+
+/** 부팅된 시뮬레이터 UDID 해석 — 없으면 기본 기기(available 첫 iPhone)를 부팅하고 대기. */
 function ensureBootedDevice(udidInput) {
-  const list = run('xcrun', ['simctl', 'list', 'devices']);
+  const list = run('xcrun', ['simctl', 'list', 'devices'], { timeoutMs: 30_000 });
   const booted = [];
   for (const line of list.output.split('\n')) {
     const match = /\(([0-9A-Fa-f-]{36})\).*\(Booted\)/.exec(line);
@@ -158,11 +179,19 @@ function ensureBootedDevice(udidInput) {
   } else if (booted.length > 0) {
     return booted[0];
   } else {
-    udid = FALLBACK_UDID;
+    const fallback = pickDefaultDeviceUdid();
+    if (!fallback) {
+      fail(
+        'no booted simulator and no available iPhone to boot',
+        'hint: Xcode → Settings → Components 에서 시뮬레이터 런타임을 설치하거나 --udid 로 지정하세요.',
+      );
+    }
+    console.log(`  no booted simulator — defaulting to ${fallback.name}`);
+    udid = fallback.udid;
   }
   if (!booted.includes(udid)) {
     console.log(`  booting simulator ${udid}…`);
-    run('xcrun', ['simctl', 'boot', udid]);
+    run('xcrun', ['simctl', 'boot', udid], { timeoutMs: 60_000 });
   }
   // bootstatus -b 는 부팅이 끝날 때까지(필요하면 부팅까지) 호스트에서 대기한다.
   run('xcrun', ['simctl', 'bootstatus', udid, '-b'], { timeoutMs: 300_000 });
@@ -357,7 +386,10 @@ function waitSwapToken(logStream, swappedValue, timeoutMs) {
           // 원문 라인(로그 타임스탬프 포함)을 그대로 남긴다 — push→관측 구간의
           // 스왑 레이턴시 증적이 된다.
           console.log(`  observed: ${line.trim()}`);
-          settle(undefined, [...seen].sort((left, right) => left - right));
+          settle(
+            undefined,
+            [...seen].sort((left, right) => left - right),
+          );
         }
       }
     });
@@ -390,7 +422,9 @@ export async function main(argv = Bun.argv.slice(2)) {
   if (options.skipXcodebuild) {
     console.log('[2/5] skipping xcodebuild (assumes the app is already installed)');
   } else {
-    console.log('[2/5] building + installing the hot-core app (xcodebuild, Debug-iphonesimulator)…');
+    console.log(
+      '[2/5] building + installing the hot-core app (xcodebuild, Debug-iphonesimulator)…',
+    );
     buildAndInstallApp({ udid, bundleId });
   }
 
@@ -399,8 +433,11 @@ export async function main(argv = Bun.argv.slice(2)) {
 
   // 런치 전 컨테이너를 확보해 env 경로와 push 경로가 같은 문자열이 되게 한다 —
   // 재설치 시 컨테이너 경로가 바뀌면 앱이 보는 디렉터와 push 대상이 어긋난다.
+  // stdoutOnly — 경로 계약은 stdout 이다. stderr 잡음이 섞이면 push 스크립트가
+  // 계산한 컨테이너와 조용히 어긋나 스왑이 영원히 관측되지 않는다.
   const container = run('xcrun', ['simctl', 'get_app_container', udid, bundleId, 'data'], {
     timeoutMs: 60_000,
+    stdoutOnly: true,
   }).output.trim();
   if (container.length === 0) {
     fail(
@@ -429,6 +466,7 @@ export async function main(argv = Bun.argv.slice(2)) {
       env: { ...process.env, SIMCTL_CHILD_RUSTRA_HOT_CORE_DIR: hotDir },
       stdout: 'pipe',
       stderr: 'pipe',
+      timeout: 60_000,
     });
     if (launch.exitCode !== 0) {
       fail(
@@ -452,6 +490,10 @@ export async function main(argv = Bun.argv.slice(2)) {
     // 관측 싱크를 push **이전에** 붙인다 — 스왑은 push 뒤 수백 ms 만에 일어나고
     // 첫 105 로그가 대기자 등록을 앞설 수 있다(Android 실측과 동일).
     const swapObserved = waitSwapToken(logStream, SWAPPED_VALUE, options.swapTimeoutMs);
+    // push 가 먼저 실패해 await 에 도달하지 못하면 이 프로미스는 나중에
+    // stream-close/타임아웃으로 거부된다 — 미처리 거부 이중 장애를 막는 no-op
+    // catch 다(실제 오류 전파는 await 지점에서 그대로 일어난다).
+    swapObserved.catch(() => {});
     const pushStartedAt = Date.now();
     run(
       'bun',
