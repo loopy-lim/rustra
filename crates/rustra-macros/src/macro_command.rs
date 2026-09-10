@@ -121,21 +121,20 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         &format!("__RUstra_cap_{}", fn_name),
         proc_macro2::Span::call_site(),
     );
-    let capability_const: TokenStream2 = if let Some(cap) = &attr.capability {
-        quote! {
-            #[allow(non_upper_case_globals, dead_code)]
-            const #capability_ident: Option<&str> = Some(#cap);
-        }
-    } else {
-        quote! {
-            #[allow(non_upper_case_globals, dead_code)]
-            const #capability_ident: Option<&str> = None;
-        }
-    };
+    let capability_const = meta_opt_const(
+        &capability_ident,
+        quote! { Option<&str> },
+        attr.capability.as_ref().map(|cap| quote! { #cap }),
+    );
 
     // 플랫폼 속성 — 지원 플랫폼 cfg 조건과 Platform 상수를 파생한다. 매크로가
     // cfg 게이팅을 소유한다: 사용자 fn 에 #[cfg] 를 직접 붙이면 속성 매크로보다
     // 먼저 strip 돼 이 전개가 일어나지 않는다(platform 절의 문서 참고).
+    let platforms_ident = Ident::new(
+        &format!("__RUstra_platforms_{}", fn_name),
+        proc_macro2::Span::call_site(),
+    );
+    let platforms_const_ty = quote! { Option<&'static [rustra::platform::Platform]> };
     let (supported_cfg, unsupported_cfg, platform_paths, platforms_const): (
         TokenStream2,
         TokenStream2,
@@ -168,33 +167,22 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
             let variant = Ident::new(variant_name, proc_macro2::Span::call_site());
             paths.push(quote! { rustra::platform::Platform::#variant });
         }
-        let platforms_ident = Ident::new(
-            &format!("__RUstra_platforms_{}", fn_name),
-            proc_macro2::Span::call_site(),
-        );
         (
             quote! { any(#(#os_checks),*) },
             quote! { not(any(#(#os_checks),*)) },
             paths.clone(),
-            quote! {
-                #[allow(non_upper_case_globals, dead_code)]
-                const #platforms_ident: Option<&'static [rustra::platform::Platform]> =
-                    Some(&[#(#paths),*]);
-            },
+            meta_opt_const(
+                &platforms_ident,
+                platforms_const_ty.clone(),
+                Some(quote! { &[#(#paths),*] }),
+            ),
         )
     } else {
-        let platforms_ident = Ident::new(
-            &format!("__RUstra_platforms_{}", fn_name),
-            proc_macro2::Span::call_site(),
-        );
         (
             quote! {},
             quote! {},
             Vec::new(),
-            quote! {
-                #[allow(non_upper_case_globals, dead_code)]
-                const #platforms_ident: Option<&'static [rustra::platform::Platform]> = None;
-            },
+            meta_opt_const(&platforms_ident, platforms_const_ty, None),
         )
     };
 
@@ -205,21 +193,16 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         &format!("__RUstra_errors_{}", fn_name),
         proc_macro2::Span::call_site(),
     );
-    let errors_const: TokenStream2 = if let Some(errors) = &attr.errors {
-        let variants = errors
-            .iter()
-            .map(|code| quote! { rustra::CommandErrorVariant::new(#code) });
-        quote! {
-            #[allow(non_upper_case_globals, dead_code)]
-            const #errors_ident: Option<&'static [rustra::CommandErrorVariant]> =
-                Some(&[#(#variants),*]);
-        }
-    } else {
-        quote! {
-            #[allow(non_upper_case_globals, dead_code)]
-            const #errors_ident: Option<&'static [rustra::CommandErrorVariant]> = None;
-        }
-    };
+    let errors_const = meta_opt_const(
+        &errors_ident,
+        quote! { Option<&'static [rustra::CommandErrorVariant]> },
+        attr.errors.as_ref().map(|errors| {
+            let variants = errors
+                .iter()
+                .map(|code| quote! { rustra::CommandErrorVariant::new(#code) });
+            quote! { &[#(#variants),*] }
+        }),
+    );
 
     // 디바이스 역량 속성 — 커맨드가 전제하는 역량 토큰 선언. 카탈로그 검증은
     // 등록 시점(command_devices)에 loud-fail 한다 — 매크로 크레이트는 카탈로그를
@@ -228,21 +211,16 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         &format!("__RUstra_devices_{}", fn_name),
         proc_macro2::Span::call_site(),
     );
-    let devices_const: TokenStream2 = if let Some(devices) = &attr.devices {
-        let capabilities = devices
-            .iter()
-            .map(|token| quote! { rustra::device_capabilities::DeviceCapability::new(#token) });
-        quote! {
-            #[allow(non_upper_case_globals, dead_code)]
-            const #devices_ident: Option<&'static [rustra::device_capabilities::DeviceCapability]> =
-                Some(&[#(#capabilities),*]);
-        }
-    } else {
-        quote! {
-            #[allow(non_upper_case_globals, dead_code)]
-            const #devices_ident: Option<&'static [rustra::device_capabilities::DeviceCapability]> = None;
-        }
-    };
+    let devices_const = meta_opt_const(
+        &devices_ident,
+        quote! { Option<&'static [rustra::device_capabilities::DeviceCapability]> },
+        attr.devices.as_ref().map(|devices| {
+            let capabilities = devices
+                .iter()
+                .map(|token| quote! { rustra::device_capabilities::DeviceCapability::new(#token) });
+            quote! { &[#(#capabilities),*] }
+        }),
+    );
 
     // (감사 #5) capability 무음 드랍 차단: capability 가 있으면 래퍼를 `unsafe fn`
     // 으로 생성한다. `unsafe fn` 아이템 타입은 `Fn` 을 구현하지 않으므로

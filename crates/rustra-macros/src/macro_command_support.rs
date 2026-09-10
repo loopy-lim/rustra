@@ -148,7 +148,7 @@ fn extract_state_inner(ty: &Type) -> Option<Type> {
 /// `Result<O>` 타입에서 내부 `O` 타입을 추출합니다.
 ///
 /// `Result<O>`가 아니면 `None`을 반환합니다.
-fn extract_result_inner(ty: &Type) -> Option<TokenStream2> {
+fn extract_result_inner(ty: &Type) -> Option<&Type> {
     let Type::Path(type_path) = ty else {
         return None;
     };
@@ -162,7 +162,22 @@ fn extract_result_inner(ty: &Type) -> Option<TokenStream2> {
     let GenericArgument::Type(inner_ty) = args.args.first()? else {
         return None;
     };
-    Some(quote! { #inner_ty })
+    Some(inner_ty)
+}
+
+fn meta_opt_const(
+    ident: &Ident,
+    const_ty: TokenStream2,
+    value: Option<TokenStream2>,
+) -> TokenStream2 {
+    let init = match value {
+        Some(value) => quote! { Some(#value) },
+        None => quote! { None },
+    };
+    quote! {
+        #[allow(non_upper_case_globals, dead_code)]
+        const #ident: #const_ty = #init;
+    }
 }
 
 fn command_doc_comment(func: &ItemFn) -> String {
