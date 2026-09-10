@@ -47,6 +47,93 @@ fn prepare_swap_copy_handles_extension_less_artifacts() {
     assert_eq!(copy.file_name().unwrap(), "demo-hot-1");
 }
 
+// ── FailureTracker: 같은 바이트 연속 실패 포이즌 정책 ──────────
+//
+// 열리지 않는 아티팩트가 폴링 주기(300ms)마다 prepare_swap_copy(macOS codesign
+// spawn)와 on_swap(Err)을 무한 반복하는 폭주로 퇴화하지 않게 하는 상한이다.
+// 순수 상태 조각이라 스레드 없이 결정적으로 검증한다.
+
+#[test]
+fn failure_tracker_poisons_after_cap_and_waits_for_new_bytes() {
+    let mut failures = FailureTracker::default();
+    let bad = "a".repeat(64);
+
+    // 상한 직전까지는 포이즌되지 않는다 — 반쯤 쓰인 아티팩트의 재시도 창.
+    for i in 1..5 {
+        assert!(
+            !failures.note_failure(&bad),
+            "{i}번째 실패에서는 포이즌되지 않는다"
+        );
+    }
+    assert!(!failures.is_poisoned(&bad));
+
+    // 상한 도달 실패 — 이 바이트는 포이즌.
+    assert!(
+        failures.note_failure(&bad),
+        "5번째 연속 실패에서 포이즌된다"
+    );
+    assert!(failures.is_poisoned(&bad));
+
+    // 포이즌 후 같은 바이트는 재시도 대상에서 제외된다(run_watch_loop 의
+    // is_poisoned 조건). 새 바이트는 즉시 재시도 대상이 된다.
+    let fresh = "b".repeat(64);
+    assert!(!failures.is_poisoned(&fresh));
+
+    // 새 바이트가 성공하면 포이즌이 해제된다 — 다음 불량 아티팩트도
+    // 동일하게 상한만큼 재시도 창을 갖는다.
+    failures.note_success();
+    assert!(!failures.is_poisoned(&bad));
+    for _ in 0..4 {
+        assert!(!failures.note_failure(&bad));
+    }
+    assert!(
+        !failures.is_poisoned(&bad),
+        "성공 후 streak 은 0부터 다시 센다"
+    );
+}
+
+#[test]
+fn failure_tracker_reset_by_interleaved_success() {
+    let mut failures = FailureTracker::default();
+    let bad = "c".repeat(64);
+
+    for _ in 0..4 {
+        assert!(!failures.note_failure(&bad));
+    }
+    // 같은 바이트라도 중간에 성공이 끼면 streak 이 초기화된다 — 바이트가
+    // 살아 다시 죽는 진동 상태는 무한 재시도가 아니다(매번 새 상한 창).
+    failures.note_success();
+    assert!(!failures.note_failure(&bad));
+    assert!(!failures.is_poisoned(&bad));
+}
+
+#[test]
+fn failure_tracker_streak_is_per_bytes() {
+    let mut failures = FailureTracker::default();
+    let a = "d".repeat(64);
+    let b = "e".repeat(64);
+
+    // A 바이트가 상한 직전까지 실패한 뒤 B 로 바이트가 바뀌면 — streak 은
+    // 바이트 단위로만 센다. B 의 첫 실패가 A 의 실패를 이어받아 즉시 포이즌
+    // 되는 일이 없어야 한다(새 바이트는 언제나 새 재시도 창).
+    for _ in 0..4 {
+        assert!(!failures.note_failure(&a));
+    }
+    assert!(!failures.note_failure(&b));
+    assert!(!failures.is_poisoned(&b));
+
+    // B 가 자기 상한만큼 실패하면 그제야 포이즌된다.
+    for _ in 0..3 {
+        assert!(!failures.note_failure(&b));
+    }
+    assert!(
+        failures.note_failure(&b),
+        "B 의 5번째 연속 실패에서 포이즌된다"
+    );
+    assert!(failures.is_poisoned(&b));
+    assert!(!failures.is_poisoned(&a));
+}
+
 // ── JsonDispatch for Package — rustra_dispatch 의 에러 매핑 동일성 ──
 
 #[test]
