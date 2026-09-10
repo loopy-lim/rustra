@@ -1055,6 +1055,63 @@ test('A05: concurrent ready calls share one initialization promise (react-native
   }
 });
 
+// ── dev 핫코어 상태 표면(hotCoreStatus) ─────────────────────
+// 네이티브 HostFunction 이 구현한다 — JS 표면은 __rustraNative 슬롯 통과 계약
+// (정적 모드 = null, 핫 모드 = 마지막 스왑 해시/오류)만 고정한다.
+
+test('hotCoreStatus passes the native swap report through __rustraNative', () => {
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  try {
+    // 정적 모드 — 네이티브가 null 을 돌려준다(스왑 표면 없음).
+    root.__rustraNative = { hotCoreStatus: () => null };
+    assert.equal(getRustraNative().hotCoreStatus?.(), null);
+
+    // 핫 모드 — 마지막 성공 스왑의 구/신 계약 해시를 관측한다.
+    root.__rustraNative = {
+      hotCoreStatus: () => ({
+        enabled: true,
+        swapped: true,
+        oldHash: 'deadbeef00000000',
+        newHash: 'cafebabe11111111',
+        error: '',
+      }),
+    };
+    const status = getRustraNative().hotCoreStatus?.();
+    assert.ok(status, 'hot mode must report a status object');
+    assert.equal(status.enabled, true);
+    assert.equal(status.swapped, true);
+    assert.equal(status.oldHash, 'deadbeef00000000');
+    assert.equal(status.newHash, 'cafebabe11111111');
+    assert.equal(status.error, '');
+  } finally {
+    root.__rustraNative = previous;
+  }
+});
+
+test('hotCoreStatus reports the last swap error through __rustraNative', () => {
+  // 실패 스왑 — CLI 게이트 reject 등으로 dlopen 이 거절된 개발자 관측 경로.
+  const root = globalThis as typeof globalThis & { __rustraNative?: unknown };
+  const previous = root.__rustraNative;
+  try {
+    root.__rustraNative = {
+      hotCoreStatus: () => ({
+        enabled: true,
+        swapped: false,
+        oldHash: '',
+        newHash: '',
+        error: 'dlopen failed: symbol missing in hot dylib',
+      }),
+    };
+    const status = getRustraNative().hotCoreStatus?.();
+    assert.ok(status, 'failed swap must stay observable');
+    assert.equal(status.swapped, false);
+    assert.match(status.error, /dlopen failed/);
+  } finally {
+    root.__rustraNative = previous;
+  }
+});
+
 // ── subscribeEvent pollMs — CallInvoker 없는 호스트의 JS 폴링 drain ─────────
 
 test('subscribeEvent pollMs drains queued events from a CallInvoker-less native', async () => {

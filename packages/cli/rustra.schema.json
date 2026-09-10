@@ -137,8 +137,8 @@
       "additionalProperties": false,
       "properties": {
         "target": {
-          "description": "Backend the dev loop rebuilds. wasm requires a reactNative section and is dev-only.",
-          "enum": ["native", "wasm"],
+          "description": "Backend the dev loop rebuilds. wasm requires a reactNative section and is dev-only. dylib builds a native cdylib hot core.",
+          "enum": ["native", "wasm", "dylib"],
           "default": "native"
         },
         "wasm": {
@@ -152,6 +152,18 @@
             },
             "parityGate": {
               "description": "Compare native and wasm32 responses byte-for-byte on every reload (default true).",
+              "type": "boolean",
+              "default": true
+            }
+          }
+        },
+        "dylib": {
+          "description": "Options for dev.target = \"dylib\" only.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "parityGate": {
+              "description": "Refuse contract-drifting hot-core swaps by comparing the schema hash across reloads (default true).",
               "type": "boolean",
               "default": true
             }

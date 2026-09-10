@@ -35,7 +35,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
  │  generated.write_schema_to_dir("./generated")                       │
  │                                                                     │
  │  rustra codegen  →  types.ts / commands.ts / contract.ts 렌더링      │
- │                     (+ rkyv 코덱, positional facade, 호스트 엔트리)   │
+ │                   (+ rkyv V2 코덱: 자체 프레임, 페이로드는 postcard)│
  └─────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -539,6 +539,17 @@ Tauri에서 `rustra_dispatch`는 `RustraError`를 JSON 값(`{ code, message }`)�
 let generated = calculator_package().generate_typescript()?;
 generated.write_schema_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
 ```
+
+### 실험: 네이티브 hot-core dev 루프 (dylib 스왑)
+
+위 재빌드 루프에는 실험적 네이티브 지름길이 있다: `hot-core` cargo feature 가
+있으면 `rustra dev`(dylib 타깃)가 코어를 cdylib 으로 빌드하고 실행 중인 호스트가
+재시작 없이 스왑한다 — wasm dev 타깃과 상보적인 네이티브(wasm 아님) dev 경로다.
+동작 셋업은 [tauri-calculator 예제](../examples/tauri-calculator/README.md)에,
+설계와 상태는
+[plans/2026-09-09-native-hot-core-design.md](plans/2026-09-09-native-hot-core-design.md)에
+있다. [버전 정책](versioning-policy.ko.md) 기준 실험이며 릴리스 빌드는 영향
+없다.
 
 ---
 

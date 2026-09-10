@@ -969,3 +969,55 @@ test('createChannelBytes discovers the Tauri global without explicit io', async 
     root.__TAURI__ = previous;
   }
 });
+
+// ── 핫코어 스왑 보고 구독 (예약 채널 rustra://hot-core/swapped) ──
+// Rust 측 tauri_support::register_dispatch_with_swap_events 가 emit 하는
+// 스왑 보고 채널의 래퍼 계약. 예약 세그먼트 이름('hot-core/swapped')은 치환
+// 대상 문자가 없으므로 rustraEventChannel 유도와 정확히 일치해야 한다.
+
+test('subscribeHotSwap listens on the reserved swap channel and delivers both payload shapes', async () => {
+  const { subscribeHotSwap, rustraEventChannel } = await import('./index.js');
+  let captured: { channel: string } | null = null;
+  let fire: ((payload: unknown) => void) | null = null;
+  const fakeListen = async (channel: string, handler: (e: { payload: unknown }) => void) => {
+    captured = { channel };
+    fire = (payload: unknown) => handler({ payload });
+    return () => {};
+  };
+
+  const seen: unknown[] = [];
+  await subscribeHotSwap((event) => seen.push(event), fakeListen);
+
+  // 채널 고정 — Rust 단위 테스트 hot_swap_tests::hot_swap_event_maps_to_reserved_channel
+  // 과 문자 단위까지 쌍생이다(치환 대상 문자가 없음을 양쪽에서 게이트).
+  assert.equal(captured!.channel, 'rustra://hot-core/swapped');
+  assert.equal(captured!.channel, rustraEventChannel('hot-core/swapped'));
+
+  // 실제 WebView 경계 — emit_str JSON 이 이미 파싱된 객체로 도달한다(무손실 통과).
+  fire!({ oldContractHash: '0123456789abcdef', newContractHash: 'fedcba9876543210' });
+  // 문자열 모드 transport — R03 단일 parse 로 같은 값으로 수렴한다.
+  fire!('{"oldContractHash":"aaaaaaaaaaaaaaaa","newContractHash":"bbbbbbbbbbbbbbbb"}');
+  // 실패 보고 — {error} 모양도 그대로 전달된다.
+  fire!({ error: 'dylib open failed' });
+
+  assert.deepEqual(seen, [
+    { oldContractHash: '0123456789abcdef', newContractHash: 'fedcba9876543210' },
+    { oldContractHash: 'aaaaaaaaaaaaaaaa', newContractHash: 'bbbbbbbbbbbbbbbb' },
+    { error: 'dylib open failed' },
+  ]);
+});
+
+test('subscribeHotSwap rejects loudly when the Tauri global listen API is missing', async () => {
+  const { subscribeHotSwap } = await import('./index.js');
+  const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
+  const previous = root.__TAURI__;
+  delete root.__TAURI__;
+  try {
+    await assert.rejects(
+      subscribeHotSwap(() => {}),
+      (err: unknown) => err instanceof RustraCommandError && err.code === 'transport.unavailable',
+    );
+  } finally {
+    root.__TAURI__ = previous;
+  }
+});

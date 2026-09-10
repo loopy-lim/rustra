@@ -18,7 +18,16 @@
 npm package 버전과 일치할 필요는 없습니다. `@rustra/cli`의 `rustraTemplate`에는
 생성할 Rust crate와 RN adapter의 명시적 semver 범위가 들어갑니다.
 `bun run test:release-coherence`는 package별 버전, lockfile, 내부 의존성 범위,
-CLI의 Rust 범위, LICENSE 및 fixed group을 검사합니다.
+CLI의 Rust·RN adapter 범위, LICENSE 및 fixed group을 검사합니다.
+
+두 `rustraTemplate` 범위는 움직이는 시점이 다르고, 둘 다 coherence 검사가
+지킵니다. `cargoRange`는 Cargo workspace 버전을 올리는 기능 커밋에서 함께
+움직입니다(Rust 라인은 changesets 관리 대상이 아니다). `reactNativeRange`는
+버전 PR 안에서(`bun run version` → `scripts/version-packages.mjs`) 새로 올라간
+`@rustra/react-native` 버전에 맞춰 동기화됩니다. `reactNativeRange`를 기능
+브랜치에서 adapter 버전보다 먼저 올리면 안 됩니다 — 코드젠의 adapter 버전
+게이트가 저장소 안 예제를 거부해서 기능 머지와 버전 PR 사이 main CI 가
+깨집니다(2026-09-10 첫 RN minor 발행에서 실측).
 
 소비자에게 breaking DX 변경이 생긴 minor 릴리스는 버전 PR에
 `docs/migrations/<from>-to-<to>.md`를 포함하고 README에서 연결합니다. 자동

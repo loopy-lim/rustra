@@ -1,5 +1,6 @@
 /**
- * Parity gate (Task A2, dev-tooling) — `dev.wasm.parityGate: true`(기본)일 때
+ * Parity gate (Task A2, dev-tooling) — `dev.wasm.parityGate`·`dev.dylib.parityGate`가
+ * true(기본)일 때
  * dev 루프가 reload 전후의 계약 상태를 대조해 불일치 시 리로드를 거부한다.
  *
  * 비교 대상은 두 가지다:

@@ -9,6 +9,12 @@ export interface ResolvedDevWasm {
   rustPackage?: string;
 }
 
+/** dylib dev 타깃 핫 코어 빌드에 필요한 해석된 설정 — wasm 과 같은 최소 쌍. */
+export interface ResolvedDevDylib {
+  manifestPath: string;
+  rustPackage?: string;
+}
+
 export interface ResolvedDevConfig {
   root: string;
   schemaPath: string;
@@ -17,6 +23,8 @@ export interface ResolvedDevConfig {
   dev?: ReturnType<typeof resolveDevSection>;
   /** target=wasm 일 때만 존재 — wasm32 엔진 빌드의 매니페스트·패키지 해석값. */
   devWasm?: ResolvedDevWasm;
+  /** target=dylib 일 때만 존재 — 네이티브 cdylib 핫 코어 빌드의 매니페스트·패키지 해석값. */
+  devDylib?: ResolvedDevDylib;
 }
 
 function resolveDevSection(config: ReturnType<typeof readConfigSync>) {
@@ -28,7 +36,16 @@ function resolveDevSection(config: ReturnType<typeof readConfigSync>) {
         ? { parityGate: true }
         : undefined
       : { ...wasm, parityGate: wasm.parityGate ?? true };
-  return dev === undefined ? undefined : { ...dev, wasm: resolved };
+  // dylib 도 같은 대상별 정규화를 한다 — 섹션 생략이 게이트 무음 스킵으로 이어지는
+  // fail-open 은 wasm 에서 이미 고쳤고, dylib 스왑 거부가 같은 구멍을 다시 만들면 안 된다.
+  const dylib = dev?.dylib;
+  const dylibResolved =
+    dylib === undefined
+      ? dev?.target === 'dylib'
+        ? { parityGate: true }
+        : undefined
+      : { ...dylib, parityGate: dylib.parityGate ?? true };
+  return dev === undefined ? undefined : { ...dev, wasm: resolved, dylib: dylibResolved };
 }
 
 /**
@@ -51,6 +68,27 @@ function resolveDevWasm(
   };
 }
 
+/**
+ * dylib dev 타깃의 핫 코어 매니페스트 해석 — wasm 엔진과 같은 우선순위
+ * (reactNative.rustManifest → codegen.rustManifest → 상위 탐색)를 그대로 쓴다.
+ * tauri 전용 레이아웃은 reactNative 섹션이 없으므로 codegen.rustManifest 경로가
+ * 주가 된다. 탐색 실패 시 codegen 매니페스트 폴백까지 wasm 과 동일 — 실패는
+ * buildDylibCore 의 cargo 단계에서 loud 하게 표면화된다.
+ */
+function resolveDevDylib(
+  config: ReturnType<typeof readConfigSync>,
+  root: string,
+  manifestPath: string,
+): ResolvedDevDylib | undefined {
+  if (config.dev?.target !== 'dylib') return undefined;
+  const manifest = config.reactNative?.rustManifest ?? config.codegen?.rustManifest;
+  const rustPackage = config.reactNative?.rustPackage ?? config.codegen?.rustPackage;
+  return {
+    manifestPath: manifest === undefined ? manifestPath : resolve(root, manifest),
+    rustPackage,
+  };
+}
+
 export function readDevConfig(configPath: string): ResolvedDevConfig {
   const path = resolve(configPath);
   const root = dirname(path);
@@ -65,7 +103,7 @@ export function readDevConfig(configPath: string): ResolvedDevConfig {
   // 재판정 없이 곧장 읽을 수 있게 기본값을 채운다. 대상별 정규화: target=wasm 이면
   // wasm 섹션 자체가 없어도 `parityGate: true` 를 채운다(게이트 기본 on — 섹션
   // 생략이 게이트 무음 스킵으로 이어지는 fail-open 을 막는다). wasm 섹션이 있으면
-  // parityGate 기본값(true)만 채운다.
+  // parityGate 기본값(true)만 채운다. target=dylib 도 같은 규칙을 따른다.
   const dev = resolveDevSection(config);
   return {
     root,
@@ -74,6 +112,7 @@ export function readDevConfig(configPath: string): ResolvedDevConfig {
     manifestPath,
     dev,
     devWasm: resolveDevWasm(config, root, manifestPath),
+    devDylib: resolveDevDylib(config, root, manifestPath),
   };
 }
 

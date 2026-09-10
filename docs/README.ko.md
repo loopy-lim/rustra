@@ -45,6 +45,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 | [호환성 계약](compatibility-contract.ko.md) ([English](compatibility-contract.md)) | 기여자 | EngineClient 안정 계약, runtime acceptance gates                                                                                                   |
 | [호환성 매트릭스](compatibility-matrix.md)                                         | 사용자 | 기능(signal/취소/배치/이벤트) × 어댑터 지원 표                                                                                                     |
 | [와이어 포맷](wire-format.ko.md)                                                   | 전체   | "rkyv V2/postcard"의 실체, 티어별 바이트, 수치 인용 규칙                                                                                           |
+| [용어집](glossary.ko.md) ([English](glossary.md))                                  | 전체   | 과적합 용어의 표기 표준·의미 구분(rkyv V2, 와이어/dev 티어, hot-core, host, snapshot, gate)                                                        |
 | [검증 체크리스트](verification-checklist.ko.md)                                    | 기여자 | 증거 수준 표를 뒷받침하는 호스트별 수동 검증 기록 양식                                                                                             |
 | [계약 마이그레이션 가이드](migration-guide.md)                                     | 전체   | 스키마 breaking change 검출(rustra diff)·해결 레시피·롤아웃 순서                                                                                   |
 | [마이그레이션 노트](migrations/0.3-to-0.4.md), [0.5→0.6](migrations/0.5-to-0.6.md) | 사용자 | rustra 마이너 버전을 건너뛸 때의 단계별 노트                                                                                                       |
@@ -61,21 +62,22 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 
 ## 예제 갤러리
 
-실행 가능한 예제 10개가 [`examples/`](../examples/)에 있다 — 각자 README(en/ko)에
+실행 가능한 예제 11개가 [`examples/`](../examples/)에 있다 — 각자 README(en/ko)에
 전제 조건과 실행 명령이 있다.
 
-| 예제                                                                        | 무엇을 배우는지                                                                 |
-| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| [`calculator`](../examples/calculator/)                                     | 기준선: 명령, 계약 프로브, stdio/FFI 바이너리, 전체 생성 엔트리                 |
-| [`crud`](../examples/crud/)                                                 | 리소스 패턴: 하나의 스키마로 create/get/list/update/delete                      |
-| [`streaming`](../examples/streaming/)                                       | Rust → JS 이벤트: `.event::<T>()` + `Package::emit` + 호스트별 `subscribeEvent` |
-| [`auth`](../examples/auth/)                                                 | deny-by-default capability 게이트(`require_capability` + 런타임 부여)           |
-| [`tauri-calculator`](../examples/tauri-calculator/)                         | 실제 Tauri WebView 빌드 — IPC, 푸시 이벤트, 성능 영수증                         |
-| [`react-native-calculator`](../examples/react-native-calculator/)           | autolinked JSI 패키지의 Expo development build (iOS/Android)                    |
-| [`react-native-bare-calculator`](../examples/react-native-bare-calculator/) | Expo 없는 bare React Native — Expo 예제와 동일한 앱 코드                        |
-| [`calculator-napi`](../examples/calculator-napi/)                           | transport를 napi-rs로 교체(release transport 벤치마크의 소스)                   |
-| [`benchmark`](../examples/benchmark/)                                       | 페이로드 확장·처리량 측정 하니스                                                |
-| [`reference-app`](../examples/reference-app/)                               | 실제 앱에서 `@rustra/react` 훅: useCommand/useMutation/useEvent                 |
+| 예제                                                                        | 무엇을 배우는지                                                                   |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| [`calculator`](../examples/calculator/)                                     | 기준선: 명령, 계약 프로브, stdio/FFI 바이너리, 전체 생성 엔트리                   |
+| [`crud`](../examples/crud/)                                                 | 리소스 패턴: 하나의 스키마로 create/get/list/update/delete                        |
+| [`streaming`](../examples/streaming/)                                       | Rust → JS 이벤트: `.event::<T>()` + `Package::emit` + 호스트별 `subscribeEvent`   |
+| [`auth`](../examples/auth/)                                                 | deny-by-default capability 게이트(`require_capability` + 런타임 부여)             |
+| [`tauri-calculator`](../examples/tauri-calculator/)                         | 실제 Tauri WebView 빌드 — IPC, 푸시 이벤트, 성능 영수증                           |
+| [`react-native-calculator`](../examples/react-native-calculator/)           | autolinked JSI 패키지의 Expo development build (iOS/Android)                      |
+| [`react-native-bare-calculator`](../examples/react-native-bare-calculator/) | Expo 없는 bare React Native — Expo 예제와 동일한 앱 코드                          |
+| [`calculator-napi`](../examples/calculator-napi/)                           | transport를 napi-rs로 교체(release transport 벤치마크의 소스)                     |
+| [`benchmark`](../examples/benchmark/)                                       | 페이로드 확장·처리량 측정 하니스                                                  |
+| [`reference-app`](../examples/reference-app/)                               | 실제 앱에서 `@rustra/react` 훅: useCommand/useMutation/useEvent                   |
+| [`hot-core-probe`](../examples/hot-core-probe/)                             | 실험적 dylib 핫스왑 코어의 단독 검증기 — 호스트/iOS 시뮬레이터/Android 에뮬레이터 |
 
 `examples/rn-wasm-spike/`는 실험적 wasm32-in-wasm3 스파이크다 — 증거와 범위 주의는
 [호환성 매트릭스](compatibility-matrix.ko.md)에 있고 지원 경로가 아니다.

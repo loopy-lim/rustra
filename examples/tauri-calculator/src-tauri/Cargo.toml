@@ -4,11 +4,20 @@ edition = "2021"
 version = "0.1.0"
 publish = false
 
+# lib/bin 분리 — Tauri 2 모바일(iOS/Android)은 앱 본체를 라이브러리 타깃으로
+# 빌드해 플랫폼 셸이 로드한다(staticlib: iOS, cdylib: Android). bin 은 데스크톱
+# 전용 얇은 래퍼가 된다.
+[lib]
+name = "rustra_tauri_calculator_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-rustra = { path = "../../../crates/rustra", features = ["tauri"] }
+# hot-core — RUSTRA_HOT_CORE 환경변수 핫 모드(dylib 스왑)용. dev 전용 표면이지만
+# 이 예제는 해당 모드를 데모하는 자체가 목적이라 항상 켠다.
+rustra = { path = "../../../crates/rustra", features = ["tauri", "hot-core"] }
 rustra-calculator-example = { path = "../../calculator" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

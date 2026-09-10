@@ -35,7 +35,7 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
  │  generated.write_schema_to_dir("./generated")                       │
  │                                                                     │
  │  rustra codegen  →  renders types.ts / commands.ts / contract.ts    │
- │                     (+ rkyv codecs, positional facade, host entries)│
+ │                    (+ rkyv V2 codecs: own frames, postcard payloads)│
  └─────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -540,6 +540,18 @@ The typical development workflow:
 let generated = calculator_package().generate_typescript()?;
 generated.write_schema_to_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/generated"))?;
 ```
+
+### Experimental: native hot-core dev loop (dylib swap)
+
+The rebuild loop above has an experimental native shortcut: with the `hot-core`
+cargo feature, `rustra dev` (dylib target) builds the core as a cdylib and a
+running host swaps it in without restart — the native (non-wasm) dev path,
+complementary to the wasm dev target. A working setup lives in the
+[tauri-calculator example](../examples/tauri-calculator/README.md); design and
+status are in
+[plans/2026-09-09-native-hot-core-design.md](plans/2026-09-09-native-hot-core-design.md).
+Experimental per the [versioning policy](versioning-policy.md); release builds
+are unaffected.
 
 ---
 
