@@ -27,9 +27,12 @@ coherence check: `cargoRange` moves in the same feature commit that bumps the
 Cargo workspace version (the Rust line is not changesets-managed), while
 `reactNativeRange` is synced to the freshly bumped `@rustra/react-native`
 version inside the version PR (`bun run version` → `scripts/version-packages.mjs`).
-Never bump `reactNativeRange` on a feature branch ahead of the adapter version —
-codegen's adapter-version gate would reject the in-repo examples and break CI on
-main between the feature merge and the version PR (first observed 2026-09-10).
+The same script refreshes `bun.lock` after `changeset version` — version bumps
+that leave the lock stale fail `test:release-coherence` on the version PR
+(first observed 2026-09-10). Never bump `reactNativeRange` on a feature branch
+ahead of the adapter version — codegen's adapter-version gate would reject the
+in-repo examples and break CI on main between the feature merge and the
+version PR (first observed 2026-09-10).
 
 A minor release with a breaking DX change for consumers includes
 `docs/migrations/<from>-to-<to>.md` in the version PR and links it from the README.

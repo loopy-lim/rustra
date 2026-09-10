@@ -41,18 +41,22 @@ export function syncReactNativeRange(cliManifestPath, reactNativeVersion) {
 
 function main() {
   const args = process.argv.slice(2);
+  const root = join(import.meta.dirname, '..');
   execFileSync(
     process.platform === 'win32' ? 'bunx.cmd' : 'bunx',
     ['changeset', 'version', ...args],
-    { stdio: 'inherit' },
+    { stdio: 'inherit', cwd: root },
   );
-  const root = join(import.meta.dirname, '..');
   const reactNativeVersion = JSON.parse(
     readFileSync(join(root, 'packages/react-native/package.json'), 'utf8'),
   ).version;
   if (syncReactNativeRange(join(root, 'packages/cli/package.json'), reactNativeVersion)) {
     console.log(`[version] rustraTemplate.reactNativeRange synced to ${reactNativeVersion}`);
   }
+  // 버전이 오른 manifest 와 bun.lock 이 어긋나면 release-coherence 가 version PR
+  // CI 를 깨뜨린다(manifest=0.9.0, lock=0.8.0 — 2026-09-10 첫 버전 PR 실측).
+  // changeset version 은 lock 을 안 고치므로 여기서 맞춘다.
+  execFileSync('bun', ['install'], { stdio: 'inherit', cwd: root });
 }
 
 if (process.argv[1] === import.meta.filename || process.argv[1]?.endsWith('version-packages.mjs')) {
