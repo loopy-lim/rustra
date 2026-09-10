@@ -24,10 +24,12 @@ CLI의 Rust·RN adapter 범위, LICENSE 및 fixed group을 검사합니다.
 지킵니다. `cargoRange`는 Cargo workspace 버전을 올리는 기능 커밋에서 함께
 움직입니다(Rust 라인은 changesets 관리 대상이 아니다). `reactNativeRange`는
 버전 PR 안에서(`bun run version` → `scripts/version-packages.mjs`) 새로 올라간
-`@rustra/react-native` 버전에 맞춰 동기화됩니다. `reactNativeRange`를 기능
-브랜치에서 adapter 버전보다 먼저 올리면 안 됩니다 — 코드젠의 adapter 버전
-게이트가 저장소 안 예제를 거부해서 기능 머지와 버전 PR 사이 main CI 가
-깨집니다(2026-09-10 첫 RN minor 발행에서 실측).
+`@rustra/react-native` 버전에 맞춰 동기화됩니다. 같은 스크립트가
+`changeset version` 뒤 `bun.lock`도 다시 맞춘다 — 버전만 올리고 lock 이
+뒤처지면 version PR 의 `test:release-coherence` 가 실패한다(2026-09-10 첫
+버전 PR 실측). `reactNativeRange`를 기능 브랜치에서 adapter 버전보다 먼저
+올리면 안 됩니다 — 코드젠의 adapter 버전 게이트가 저장소 안 예제를 거부해서
+기능 머지와 버전 PR 사이 main CI 가 깨집니다(같은 날 실측).
 
 소비자에게 breaking DX 변경이 생긴 minor 릴리스는 버전 PR에
 `docs/migrations/<from>-to-<to>.md`를 포함하고 README에서 연결합니다. 자동
