@@ -134,9 +134,6 @@ export function readConfigSync(configPath: string): RustraConfig {
   const codegen = config.codegen;
   if (codegen !== undefined) {
     assertKnownKeys(codegen, CODEGEN_CONFIG_KEYS, 'config codegen');
-    if (typeof codegen !== 'object' || codegen === null || Array.isArray(codegen)) {
-      throw new Error('Config codegen must be an object');
-    }
     if (
       codegen.rustManifest !== undefined &&
       (typeof codegen.rustManifest !== 'string' ||
@@ -155,9 +152,6 @@ export function readConfigSync(configPath: string): RustraConfig {
   const rn = config.reactNative;
   if (rn !== undefined) {
     assertKnownKeys(rn, REACT_NATIVE_CONFIG_KEYS, 'config reactNative');
-    if (typeof rn !== 'object' || rn === null || Array.isArray(rn)) {
-      throw new Error('Config reactNative must be an object');
-    }
     if ('nativeModule' in rn) {
       throw new Error(
         'Config reactNative.nativeModule was removed. Use the generated @rustra/generated-react-native module.',
