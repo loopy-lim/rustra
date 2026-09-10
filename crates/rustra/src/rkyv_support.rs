@@ -37,6 +37,18 @@ fn resolve_ref<'a>(
     defs.and_then(|d| d.get(key)).unwrap_or(schema)
 }
 
+fn resolved_ref<'a>(
+    schema: &'a Value,
+    defs: Option<&'a serde_json::Map<String, Value>>,
+) -> Option<&'a Value> {
+    let resolved = resolve_ref(schema, defs);
+    if std::ptr::eq(resolved, schema) {
+        None
+    } else {
+        Some(resolved)
+    }
+}
+
 fn js_field_supported_with_defs(
     schema: &Value,
     defs: Option<&serde_json::Map<String, Value>>,
@@ -65,11 +77,10 @@ fn js_field_supported_with_defs(
     // $ref → 정의 스키마를 따라가 판정한다. 정의를 못 찾으면 원본 스키마로
     // 폴백해 아래 규칙이 그대로 적용된다(과거 동작과 동일하게 안전 실패).
     if schema.get("$ref").is_some() {
-        let resolved = resolve_ref(schema, defs);
-        if !std::ptr::eq(resolved, schema) {
-            return js_field_supported_with_defs(resolved, defs, depth + 1);
-        }
-        return true; // 정의 미발견 — 기존 "struct 로 취급" 동작 유지
+        let Some(resolved) = resolved_ref(schema, defs) else {
+            return true; // 정의 미발견 — 기존 "struct 로 취급" 동작 유지
+        };
+        return js_field_supported_with_defs(resolved, defs, depth + 1);
     }
     // anyOf 의 [{$ref}, null] 형태(Option<Struct>)도 정의를 따라간다.
     if let Some(any_of) = schema.get("anyOf").and_then(Value::as_array) {
@@ -78,11 +89,10 @@ fn js_field_supported_with_defs(
             .any(|s| s.get("type") == Some(&Value::String("null".into())));
         let ref_schemas: Vec<&Value> = any_of.iter().filter(|s| s.get("$ref").is_some()).collect();
         if has_null && ref_schemas.len() == 1 && any_of.len() == 2 {
-            let resolved = resolve_ref(ref_schemas[0], defs);
-            if !std::ptr::eq(resolved, ref_schemas[0]) {
-                return js_field_supported_with_defs(resolved, defs, depth + 1);
-            }
-            return true;
+            let Some(resolved) = resolved_ref(ref_schemas[0], defs) else {
+                return true;
+            };
+            return js_field_supported_with_defs(resolved, defs, depth + 1);
         }
         return false;
     }
@@ -96,11 +106,10 @@ fn js_field_supported_with_defs(
         }
         if let Some(items) = schema.get("items") {
             if items.get("$ref").is_some() {
-                let resolved = resolve_ref(items, defs);
-                if !std::ptr::eq(resolved, items) {
-                    return js_field_supported_with_defs(resolved, defs, depth + 1);
-                }
-                return true;
+                let Some(resolved) = resolved_ref(items, defs) else {
+                    return true;
+                };
+                return js_field_supported_with_defs(resolved, defs, depth + 1);
             }
             // Vec<u8> 등 원시 벡터 — scalar 지원 여부와 int64 범위를 함께 검사한다.
             return js_field_supported_with_defs(items, defs, depth + 1);

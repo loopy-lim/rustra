@@ -35,27 +35,16 @@ pub(crate) fn build_rkyv_v2_response_encoder(output_schema: &Value, is_tier3: bo
         }
     };
 
-    let required: BTreeSet<String> = output_schema
-        .get("required")
-        .and_then(Value::as_array)
-        .map(|arr| {
-            arr.iter()
-                .filter_map(Value::as_str)
-                .map(String::from)
-                .collect()
-        })
-        .unwrap_or_default();
+    let required = required_names(output_schema);
 
     let mut fixed_fields: Vec<(String, usize, WireFieldKind)> = Vec::new();
     let mut var_fields: Vec<(String, WireFieldKind)> = Vec::new();
     let mut offset: usize = 8;
 
-    let ordered: Vec<_> = props
+    for (name, prop_schema) in props
         .iter()
         .filter(|(name, _)| required.contains(name.as_str()))
-        .collect();
-
-    for (name, prop_schema) in &ordered {
+    {
         if let Some(kind) = wire_kind_from_schema(prop_schema) {
             if kind.is_fixed() {
                 let size = kind.size();
@@ -122,37 +111,19 @@ pub(crate) fn build_rkyv_v2_response_encoder(output_schema: &Value, is_tier3: bo
                     buf.extend_from_slice(s_bytes);
                 }
                 WireFieldKind::VecI64 => {
-                    encode_vec_fixed(&mut buf, val, 8, |v| v.as_i64().unwrap_or(0).to_le_bytes())
+                    encode_vec_fixed(&mut buf, val, |v| v.as_i64().unwrap_or(0).to_le_bytes())
                 }
-                WireFieldKind::VecF64 => encode_vec_fixed(&mut buf, val, 8, |v| {
+                WireFieldKind::VecF64 => encode_vec_fixed(&mut buf, val, |v| {
                     v.as_f64().unwrap_or(0.0).to_le_bytes()
                 }),
-                WireFieldKind::VecI32 => encode_vec_fixed(&mut buf, val, 4, |v| {
+                WireFieldKind::VecI32 => encode_vec_fixed(&mut buf, val, |v| {
                     (v.as_i64().unwrap_or(0) as i32).to_le_bytes()
                 }),
                 WireFieldKind::VecBool => {
-                    let arr = val
-                        .and_then(Value::as_array)
-                        .map(|a| a.as_slice())
-                        .unwrap_or(&[]);
-                    buf.extend_from_slice(&(arr.len() as u32).to_le_bytes());
-                    for item in arr {
-                        buf.push(if item.as_bool().unwrap_or(false) {
-                            1
-                        } else {
-                            0
-                        });
-                    }
+                    encode_vec_fixed(&mut buf, val, |v| [u8::from(v.as_bool().unwrap_or(false))])
                 }
                 WireFieldKind::VecU8 => {
-                    let arr = val
-                        .and_then(Value::as_array)
-                        .map(|a| a.as_slice())
-                        .unwrap_or(&[]);
-                    buf.extend_from_slice(&(arr.len() as u32).to_le_bytes());
-                    for item in arr {
-                        buf.push(item.as_u64().unwrap_or(0) as u8);
-                    }
+                    encode_vec_fixed(&mut buf, val, |v| [v.as_u64().unwrap_or(0) as u8])
                 }
                 _ => unreachable!("fixed kind in var_fields"),
             }

@@ -17,16 +17,7 @@ pub(crate) fn build_rkyv_v2_decoder(input_schema: &Value) -> (DecodeFn, Tier) {
             );
         }
     };
-    let required: BTreeSet<String> = input_schema
-        .get("required")
-        .and_then(Value::as_array)
-        .map(|arr| {
-            arr.iter()
-                .filter_map(Value::as_str)
-                .map(String::from)
-                .collect()
-        })
-        .unwrap_or_default();
+    let required = required_names(input_schema);
 
     let mut fixed_fields: Vec<(String, usize, WireFieldKind)> = Vec::new();
     let mut var_fields: Vec<(String, WireFieldKind)> = Vec::new();
