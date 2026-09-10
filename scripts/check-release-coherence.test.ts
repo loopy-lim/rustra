@@ -37,7 +37,7 @@ function makeFixture(): string {
       files: ['LICENSE'],
     };
     if (name === 'cli') {
-      manifest.rustraTemplate = { cargoRange: '^0.4.0' };
+      manifest.rustraTemplate = { cargoRange: '^0.4.0', reactNativeRange: '^0.4.0' };
     }
     if (name !== 'types') {
       manifest.dependencies = { '@rustra/types': '^0.4.0' };
@@ -112,6 +112,29 @@ test('wasm backend guard tolerates unrelated native paths and conventional files
       writeFileSync(manifestPath, JSON.stringify(manifest));
     }
     assert.deepEqual(checkReleaseCoherence(root), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// ── reactNativeRange 불변식 (2026-09-10 RN 마이너 발행 교훈) ────────────────────
+//
+// 어댑터 버전이 version PR 로 먼저 움직이고 reactNativeRange 가 뒤처지면,
+// 코드젠의 어댑터 버전 게이트가 새 버전을 거부해 main CI 가 깨진다. 범위는
+// 항상 워크스페이스 어댑터 버전을 포함해야 한다.
+
+test('reports a reactNativeRange that no longer contains the adapter version', () => {
+  const root = makeFixture();
+  try {
+    const manifestPath = join(root, 'packages', 'react-native', 'package.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { version: string };
+    manifest.version = '0.5.0';
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    const failures = checkReleaseCoherence(root);
+    assert.match(
+      failures.join('\n'),
+      /reactNativeRange=\^0\.4\.0 does not contain @rustra\/react-native 0\.5\.0/,
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

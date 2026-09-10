@@ -148,6 +148,21 @@ export function checkReleaseCoherence(root = process.cwd()) {
     );
   }
 
+  // RN 어댑터 범위는 워크스페이스 버전을 포함해야 한다 — 코드젠의 어댑터 버전
+  // 게이트(react-native.ts)가 설치된 어댑터를 이 범위로 판정하므로, 범위가
+  // 버전보다 먼저 움직이면 저장소 안 예제 코드젠이 깨진다(버전은 version PR 이,
+  // 범위는 version-packages.mjs 가 같은 커밋에서 움직인다).
+  const reactNativeVersion = readJson(root, 'packages/react-native/package.json').version;
+  const reactNativeRange = cli.rustraTemplate?.reactNativeRange;
+  if (
+    typeof reactNativeRange !== 'string' ||
+    !rangeContainsVersion(reactNativeRange, reactNativeVersion)
+  ) {
+    failures.push(
+      `@rustra/cli rustraTemplate.reactNativeRange=${reactNativeRange} does not contain @rustra/react-native ${reactNativeVersion}`,
+    );
+  }
+
   const typesVersion = types.version;
   for (const name of PUBLISHED_PACKAGES) {
     const packagePath = `packages/${name}`;
