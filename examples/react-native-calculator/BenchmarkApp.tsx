@@ -13,7 +13,6 @@ import {
   processItem,
   echoGroups,
   multiply,
-  clamp,
   benchAdd,
   benchEchoString,
   benchEchoBytes,
@@ -38,14 +37,10 @@ import {
 } from './src/benchmark-stats';
 import { decodeUtf8, encodeUtf8, exactArrayBuffer } from './src/utf8';
 import { RUSTRA_BUILD_FINGERPRINT } from './src/build-fingerprint';
+import { formatError } from './src/format-error';
 // ── End benchmark internals ─────────────────────────────────
 
 // ── Helpers ──────────────────────────────────────────────
-
-function bar(value: number, max: number, width = 25): string {
-  const filled = Math.max(1, Math.round((value / max) * width));
-  return '█'.repeat(filled) + '░'.repeat(width - filled);
-}
 
 function formatNs(ns: number): string {
   if (ns >= 1_000_000) return `${(ns / 1_000_000).toFixed(2)} ms`;
@@ -437,7 +432,7 @@ async function runBenchmarks(): Promise<string[]> {
       );
       log('│  FFI async: included in the interleaved equivalent-op suite below');
     } catch (error: unknown) {
-      log(`│  Swift FFI unavailable: ${error instanceof Error ? error.message : String(error)}`);
+      log(`│  Swift FFI unavailable: ${formatError(error)}`);
     }
   } else {
     log('│  Swift FFI skipped: iOS-only comparison module');
@@ -534,9 +529,7 @@ async function runBenchmarks(): Promise<string[]> {
       };
     } catch (error: unknown) {
       ffiSuiteAvailable = false;
-      log(
-        `│  Swift FFI correctness failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      log(`│  Swift FFI correctness failed: ${formatError(error)}`);
     }
   }
 
@@ -748,9 +741,10 @@ async function runBenchmarks(): Promise<string[]> {
       ),
       pair: await routeCases(
         'pair',
-        () => Promise.resolve(
-          native.invokeTypedPos!(benchEchoPairId, pairPayload.name, pairPayload.value),
-        ),
+        () =>
+          Promise.resolve(
+            native.invokeTypedPos!(benchEchoPairId, pairPayload.name, pairPayload.value),
+          ),
         () => benchEchoPair(pairPayload),
       ),
     };
@@ -962,9 +956,7 @@ async function runBenchmarks(): Promise<string[]> {
       );
       lines.unshift(`RECEIPT ${filename}`, '');
     } catch (error: unknown) {
-      throw new Error(
-        `benchmark receipt export failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      throw new Error(`benchmark receipt export failed: ${formatError(error)}`);
     }
   }
   console.log(`RUSTRA_NITRO_JSON=${JSON.stringify(equivalentBenchmarkReceipt)}`);
@@ -1023,7 +1015,6 @@ async function runBenchmarks(): Promise<string[]> {
     log('╔════════════════════════════════════════════════╗');
     log('║  Channels & Resources (Tauri v2 model)        ║');
     log('╠════════════════════════════════════════════════╣');
-    const native = getRustraNative();
     if (native?.createChannel) {
       const received: string[] = [];
       const handle = native.createChannel((payloadJson: string) => {
@@ -1122,7 +1113,7 @@ export default function App() {
         setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: true }), 100);
       })
       .catch((e) => {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = formatError(e);
         setOutput(['Benchmark failed:', msg]);
       });
   }, []);
