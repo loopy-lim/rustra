@@ -42,6 +42,18 @@ export type RustraJSINative = RkyvV2SchemaNative & {
    * `"code: message"` 문자열 JSError 로 던져진다(변환은 어댑터가 담당).
    */
   invokeTyped?(name: string, args: unknown): unknown;
+  /**
+   * dev 핫코어 상태 — dylib 스왑 관측(dev 전용, iOS 시뮬레이터 스코프).
+   * 정적 모드(비활성 또는 구형 네이티브)는 null. 핫 모드는 마지막 성공 스왑의
+   * 구/신 코어 계약 해시와 마지막 실패 사유를 실는다.
+   */
+  hotCoreStatus?(): {
+    enabled: boolean;
+    swapped: boolean;
+    oldHash: string;
+    newHash: string;
+    error: string;
+  } | null;
 };
 
 /**

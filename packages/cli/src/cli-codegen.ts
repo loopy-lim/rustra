@@ -80,6 +80,15 @@ export async function runCodegen(args: string[]): Promise<void> {
     ? await mkdtemp(resolve(tmpdir(), 'rustra-codegen-check-'))
     : null;
   try {
+    // Rust bin 의 스키마 발행 위치를 config.schema 가 선언한 디렉터리로 고정한다.
+    // bin 의 기본값("generated/schema.json")은 **스폰 CWD 상대**라, config 디렉터리에서
+    // 스폰되는 이 흐름에서는 config.schema 바깥에 사본을 만든다 — dev 패리티 게이트가
+    // 읽는 config.schemaPath 는 갱신되지 않아 게이트가 stale 비교로 무력화된다
+    // (tauri-calculator rustra.hot.json 레이아웃, 2026-09-10 실측). check 모드는
+    // 기존대로 임시 디렉터리로 우회한다.
+    const schemaOutDir = checkRoot
+      ? checkRoot
+      : dirname(resolve(dirname(configPath), config.schema));
     try {
       await spawnInherit(
         'cargo',
@@ -94,7 +103,7 @@ export async function runCodegen(args: string[]): Promise<void> {
         ],
         target.cwd,
         {
-          ...(checkRoot ? { env: { RUSTRA_SCHEMA_OUT: checkRoot } } : {}),
+          env: { RUSTRA_SCHEMA_OUT: schemaOutDir },
           progressLabel: `Rust schema generation (${target.packageName}/${target.binaryName})`,
           progressStream: options.format === 'json' ? 'stderr' : 'stdout',
           childOutput: options.format === 'json' ? 'stderr' : 'inherit',

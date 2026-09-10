@@ -8,6 +8,7 @@
     "pub mod device_capabilities",
     "pub mod events",
     "pub mod ffi",
+    "pub mod hot_core",
     "pub mod platform",
     "pub mod prelude",
     "pub mod state",
@@ -248,6 +249,7 @@
       "BootstrapState",
       "EngineClient",
       "EngineSupports",
+      "HotSwapEvent",
       "InvokeOptions",
       "RkyvV2Codec",
       "RkyvV2Native",
@@ -275,6 +277,7 @@
       "rustraChannelEventChannel",
       "rustraEventChannel",
       "subscribeEvent",
+      "subscribeHotSwap",
       "subscribeTauriEvent"
     ],
     "packages/testing": [

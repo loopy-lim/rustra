@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { chmodSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runDev } from './dev.js';
@@ -539,6 +548,506 @@ test(
         restore();
         delete process.env.FAKE_SCHEMA_FILE;
         delete process.env.FAKE_WASM_NO_ARTIFACT;
+      }
+    } finally {
+      process.env.PATH = originalPath;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+// ── dylib 타깃 오케스트레이션 (native hot-core 설계 2026-09-09) ──────────────
+//
+// wasm 과 같은 runConfigDev 배선(codegen → 빌드 → 게이트 → 발행 → reload)이 dylib
+// 타깃에서도 성립함을 증명한다. tauri 레이아웃(seedDylibProject — reactNative 섹션
+// 없음)으로 심는다: dylib 의 주 고객은 tauri 앱이고, codegen 기본 경로(단일 패키지 +
+// generate bin)만 요구하면 충분하다. fake cargo 의 build 는 --message-format=json
+// 모드에서 compiler-artifact 줄을 stdout 으로 낸다 — 헬퍼가 산출물 경로를 "수신"하는
+// 계약의 대역이다.
+//
+// 발행 계약: 빌드는 cargo 타깃 경로(스크래치)에만 닿고, 감시자가 폴링하는 라이브
+// 경로(<stem>-hot-live<ext>)는 게이트 통과 빌드만 원자적으로 발행된다. RUSTRA_HOT_CORE
+// 힌트는 라이브 경로만 가리킨다. $FAKE_DYLIB_CONTENT 로 빌드 바이트를 바꿀 수 있어
+// "드리프트된 빌드가 라이브에 닿지 않았다"를 바이트 단위로 증명한다.
+
+function hostDylibFileName(libName: string): string {
+  if (process.platform === 'win32') return `${libName}.dll`;
+  if (process.platform === 'linux') return `lib${libName}.so`;
+  return `lib${libName}.dylib`;
+}
+
+/** 게이트 통과 발행 대상 라이브 파일명 — stem + `-hot-live` + 같은 확장자. */
+function liveDylibFileName(libName: string): string {
+  const base = hostDylibFileName(libName);
+  const dot = base.lastIndexOf('.');
+  return `${base.slice(0, dot)}-hot-live${base.slice(dot)}`;
+}
+
+function seedDylibProject(root: string): string {
+  const project = join(root, 'proj');
+  mkdirSync(join(project, 'src'), { recursive: true });
+  mkdirSync(join(project, 'generated'), { recursive: true });
+  mkdirSync(join(root, FAKE_BIN), { recursive: true });
+  writeFileSync(join(project, 'Cargo.toml'), '[package]\nname = "x"\nversion = "0.1.0"\n');
+  writeFileSync(join(project, 'src', 'lib.rs'), 'fn main() {}\n');
+  writeFileSync(
+    join(project, 'package.json'),
+    JSON.stringify({ name: 'proj', workspaces: [], dependencies: {} }),
+  );
+  writeFileSync(
+    join(project, 'rustra.json'),
+    JSON.stringify({
+      schema: './generated/schema.json',
+      output: './generated',
+      tauri: {},
+      dev: { target: 'dylib' },
+    }),
+  );
+  const fakeCargo = [
+    '#!/bin/bash',
+    'if [ "$1" = "metadata" ]; then',
+    '  manifest=""; prev=""',
+    '  for a in "$@"; do [ "$prev" = "--manifest-path" ] && manifest="$a"; prev="$a"; done',
+    '  dir=$(dirname "$manifest")',
+    '  printf \'{"target_directory":"%s/target","packages":[{"name":"x","manifest_path":"%s",',
+    '  "targets":[{"name":"generate","crate_types":["bin"],"kind":["bin"]},',
+    '  {"name":"rustra_bridge","crate_types":["staticlib","cdylib"],"kind":["lib"]}]}]}\\n\' "$dir" "$manifest"',
+    '  exit 0',
+    'fi',
+    'if [ "$1" = "run" ]; then',
+    '  manifest=""; prev=""',
+    '  for a in "$@"; do [ "$prev" = "--manifest-path" ] && manifest="$a"; prev="$a"; done',
+    '  dir=$(dirname "$manifest")',
+    '  mkdir -p "$dir/generated"',
+    '  cp "$FAKE_SCHEMA_FILE" "$dir/generated/schema.json"',
+    '  exit 0',
+    'fi',
+    'if [ "$1" = "build" ]; then',
+    '  [ -n "$FAKE_DYLIB_LOG" ] && printf \'%s\\n\' "$*" >> "$FAKE_DYLIB_LOG"',
+    '  if [ -n "$FAKE_DYLIB_FAIL" ]; then echo "fake dylib build failure" >&2; exit 3; fi',
+    '  manifest=""; prev=""',
+    '  for a in "$@"; do [ "$prev" = "--manifest-path" ] && manifest="$a"; prev="$a"; done',
+    '  dir=$(dirname "$manifest")',
+    '  out="$dir/target/debug"',
+    '  mkdir -p "$out"',
+    '  if [ -n "$FAKE_DYLIB_NO_ARTIFACT" ]; then',
+    '    printf \'%s\\n\' "{\\"reason\\":\\"compiler-artifact\\",\\"filenames\\":[\\"$out/librustra_bridge.rmeta\\"],\\"target\\":{\\"kind\\":[\\"lib\\"]}}"',
+    '    exit 0',
+    '  fi',
+    '  printf \'%s\\n\' "{\\"reason\\":\\"compiler-artifact\\",\\"filenames\\":[\\"$out/librustra_bridge.dylib\\",\\"$out/librustra_bridge.so\\",\\"$out/rustra_bridge.dll\\"],\\"target\\":{\\"kind\\":[\\"cdylib\\"]}}"',
+    '  core="${FAKE_DYLIB_CONTENT:-fake dylib core}"',
+    '  printf \'%s\' "$core" > "$out/librustra_bridge.dylib"',
+    '  printf \'%s\' "$core" > "$out/librustra_bridge.so"',
+    '  printf \'%s\' "$core" > "$out/rustra_bridge.dll"',
+    '  exit 0',
+    'fi',
+    'echo "unexpected cargo invocation: $*" >&2',
+    'exit 1',
+  ].join('\n');
+  const fakePath = join(root, FAKE_BIN, 'cargo');
+  writeFileSync(fakePath, fakeCargo);
+  chmodSync(fakePath, 0o755);
+  return project;
+}
+
+test(
+  'runConfigDev dylib target builds the cdylib core, announces RUSTRA_HOT_CORE, and reloads',
+  { timeout: 30_000 },
+  async () => {
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-dylib-'));
+    const originalPath = process.env.PATH;
+    try {
+      const project = seedDylibProject(root);
+      writeSchema(join(project, 'generated', 'schema.json'), 'string');
+      writeSchema(join(root, 'schema-string.json'), 'string');
+      const dylibLog = join(root, 'dylib-build.log');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+      process.env.FAKE_DYLIB_LOG = dylibLog;
+
+      const errors: string[] = [];
+      const restore = captureConsole(errors);
+      try {
+        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        const reloads: string[] = [];
+        handle.onReload((reason) => void reloads.push(reason));
+
+        // initial 강제 런이 codegen(cargo run)에 이어 cdylib 빌드(cargo build)를
+        // 오케스트레이션한다 — runDev 반환 시점에 빌드 기록·아티팩트 안내·호스트
+        // 실행 안내(RUSTRA_HOT_CORE)가 모두 있어야 한다. 산출물은 cargo 메시지가
+        // 알려준 target/debug 경로 그대로다.
+        const artifactPath = join('target', 'debug', hostDylibFileName('rustra_bridge'));
+        const livePath = join('target', 'debug', liveDylibFileName('rustra_bridge'));
+        const builds = readFileSync(dylibLog, 'utf8');
+        assert.ok(
+          builds.split('\n').some((line) => line.includes('--lib')),
+          `cargo build must target the lib (cdylib), got:\n${builds}`,
+        );
+        assert.ok(
+          builds.split('\n').some((line) => line.includes('--message-format=json')),
+          `the artifact path is discovered from compiler-artifact JSON, got:\n${builds}`,
+        );
+        assert.ok(
+          errors.some(
+            (line) => line.includes('[dev:dylib] core artifact:') && line.includes(artifactPath),
+          ),
+          `the core artifact path must be announced, got:\n${errors.join('\n')}`,
+        );
+        // RUSTRA_HOT_CORE 힌트는 게이트 통과 발행 대상인 라이브 경로만 가리킨다 —
+        // 무게이트 cargo 타깃 경로(스크래치)를 가리키면 드리프트 빌드가 그대로 스왑
+        // 되는 구멍이 다시 열린다.
+        assert.ok(
+          errors.some((line) => line.includes('RUSTRA_HOT_CORE=') && line.includes(livePath)),
+          `the host launch hint must carry the gated live path, got:\n${errors.join('\n')}`,
+        );
+        assert.ok(
+          !errors.some((line) => line.includes('RUSTRA_HOT_CORE=') && line.includes(artifactPath)),
+          'the hint must never point at the ungated cargo artifact path',
+        );
+        // 발행 계약 — initial 런(게이트 통과)이 라이브 경로에 원자적 발행돼 있고
+        // tmp 잔여물이 없어야 한다.
+        assert.equal(
+          readFileSync(join(project, livePath), 'utf8'),
+          'fake dylib core',
+          'the gated publish must land the built bytes at the live path',
+        );
+        assert.deepEqual(
+          readdirSync(join(project, 'target', 'debug')).filter((entry) => entry.includes('-tmp-')),
+          [],
+          'the atomic publish must not leave tmp files behind',
+        );
+
+        // 이어지는 변경도 codegen → dylib 빌드 → reload 순서로 계속된다(게이트가
+        // 같은 계약을 유지하므로 reload 는 통과한다 — dylib 도 게이트 기본 on).
+        await triggerUntil(
+          () => errors,
+          () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed() {}\n'),
+          () => reloads.length >= 1,
+          'a reload after the dylib build',
+        );
+        handle.dispose();
+        assert.ok(
+          reloads.length >= 1,
+          `reload must still fire after a successful dylib build, captured:\n${errors.join('\n')}`,
+        );
+        const buildsAfter = readFileSync(dylibLog, 'utf8');
+        assert.ok(
+          buildsAfter.split('\n').filter((line) => line.includes('--lib')).length >= 2,
+          'every dirty run rebuilds the hot core, not just the initial one',
+        );
+      } finally {
+        restore();
+        delete process.env.FAKE_SCHEMA_FILE;
+        delete process.env.FAKE_DYLIB_LOG;
+      }
+    } finally {
+      process.env.PATH = originalPath;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'runConfigDev dylib target rejects a drifted contract without emitting reload',
+  { timeout: 30_000 },
+  async () => {
+    // dylib 도 wasm 과 같은 게이트다(2026-09-09 설계 — 무조정 스왑 거부는 CLI
+    // 소재를 유지). 스키마 드리프트 시 reload 자체가 방출되지 않는다 — 앱이 구
+    // 엔진을 유지하는 fail-closed. dylib + parityGate 기본값에서의 거부 배선이 이
+    // 테스트의 대상이다.
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-dylib-parity-'));
+    const originalPath = process.env.PATH;
+    try {
+      const project = seedDylibProject(root);
+      writeSchema(join(project, 'generated', 'schema.json'), 'string');
+      writeSchema(join(root, 'schema-string.json'), 'string');
+      writeSchema(join(root, 'schema-integer.json'), 'integer');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+
+      const errors: string[] = [];
+      const restore = captureConsole(errors);
+      try {
+        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        const reloads: string[] = [];
+        handle.onReload((reason) => void reloads.push(reason));
+
+        // 시작점 — initial 런(게이트 통과)이 라이브에 발행한 상태다.
+        const liveAbs = join(project, 'target', 'debug', liveDylibFileName('rustra_bridge'));
+        assert.equal(readFileSync(liveAbs, 'utf8'), 'fake dylib core');
+
+        // 트리거 — fake cargo 가 integer 계약과 **다른 바이트**의 코어를 빌드한다 →
+        // 게이트가 거부해야 한다.
+        process.env.FAKE_SCHEMA_FILE = join(root, 'schema-integer.json');
+        process.env.FAKE_DYLIB_CONTENT = 'drifted core bytes';
+        await triggerUntil(
+          () => errors,
+          () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed() {}\n'),
+          () =>
+            errors.some(
+              (line) => line.includes('[dev] reload rejected —') && line.includes('drift'),
+            ),
+          'the loud drift rejection on the dylib target',
+        );
+        await sleep(300);
+        handle.dispose();
+        assert.deepEqual(
+          reloads,
+          [],
+          'a drifted dylib swap must not emit reload — the host keeps the old core',
+        );
+        // fail-closed 발행 — 드리프트된 빌드는 cargo 타깃 경로(스크래치)에 기록됐지만
+        // 라이브 경로는 건드리지 않는다. 이전 발행물이 계속 스왑 대상이다.
+        assert.equal(
+          readFileSync(liveAbs, 'utf8'),
+          'fake dylib core',
+          'the drifted build must not reach the live path — the previously published core stays',
+        );
+        assert.equal(
+          readFileSync(
+            join(project, 'target', 'debug', hostDylibFileName('rustra_bridge')),
+            'utf8',
+          ),
+          'drifted core bytes',
+          'the drifted build did run — it only ever landed on the cargo scratch path',
+        );
+        assert.ok(
+          errors.some(
+            (line) =>
+              line.includes('[dev:dylib] gated live artifact untouched') &&
+              line.includes(liveDylibFileName('rustra_bridge')),
+          ),
+          `the rejection must state the live artifact was left untouched, got:\n${errors.join('\n')}`,
+        );
+        assert.ok(
+          errors.some((line) =>
+            line.includes('the host keeps running the previously published core'),
+          ),
+          `the rejection must state the consequence (the host keeps the old core), got:\n${errors.join('\n')}`,
+        );
+        assert.deepEqual(
+          readdirSync(join(project, 'target', 'debug')).filter((entry) => entry.includes('-tmp-')),
+          [],
+          'the rejected run must not leave tmp files behind',
+        );
+      } finally {
+        restore();
+        delete process.env.FAKE_SCHEMA_FILE;
+        delete process.env.FAKE_DYLIB_CONTENT;
+      }
+    } finally {
+      process.env.PATH = originalPath;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'runConfigDev dylib target publishes the new core once the re-armed baseline accepts the settled state',
+  { timeout: 30_000 },
+  async () => {
+    // (b)→(c) 경계의 후반부 — 거부는 기준을 관찴된(코드젠된) 상태로 재무장하므로,
+    // 스키마가 안정된 다음 런은 게이트를 통과하고 새 계약의 코어가 라이브로 발행된다
+    // (reload 도 이때 처음 방출된다). 기존 drift 테스트가 거부에서 끝나고 통과
+    // 테스트는 애초 안정 계약뿐이라, "거부 후 재발행" 절반이 갭이었다.
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-dylib-rearm-'));
+    const originalPath = process.env.PATH;
+    try {
+      const project = seedDylibProject(root);
+      writeSchema(join(project, 'generated', 'schema.json'), 'string');
+      writeSchema(join(root, 'schema-string.json'), 'string');
+      writeSchema(join(root, 'schema-integer.json'), 'integer');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+
+      const errors: string[] = [];
+      const restore = captureConsole(errors);
+      try {
+        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        const reloads: string[] = [];
+        handle.onReload((reason) => void reloads.push(reason));
+
+        // 시작점 — initial 런(게이트 통과)이 라이브에 발행한 상태다.
+        const liveAbs = join(project, 'target', 'debug', liveDylibFileName('rustra_bridge'));
+        assert.equal(readFileSync(liveAbs, 'utf8'), 'fake dylib core');
+
+        // (b) 드리프트 런 — integer 계약 + 새 바이트의 코어 → 거부. 라이브는 구
+        // 발행물을 유지하고 reload 는 방출되지 않는다(앞 테스트와 같은 절반).
+        process.env.FAKE_SCHEMA_FILE = join(root, 'schema-integer.json');
+        process.env.FAKE_DYLIB_CONTENT = 'drifted core bytes';
+        await triggerUntil(
+          () => errors,
+          () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed() {}\n'),
+          () =>
+            errors.some(
+              (line) => line.includes('[dev] reload rejected —') && line.includes('drift'),
+            ),
+          'the loud drift rejection',
+        );
+        await sleep(300);
+        assert.deepEqual(reloads, [], 'the drifted run must not emit reload');
+        assert.equal(
+          readFileSync(liveAbs, 'utf8'),
+          'fake dylib core',
+          'the rejection must leave the previously published core in place',
+        );
+
+        // (c) 코드젠이 따라잡은 뒤의 다음 런 — 스키마(integer)는 이제 (b) 거부에서
+        // 재무장된 기준과 같고 코어 바이트도 같은 새 계약 → 통과 + 재발행 + reload.
+        await triggerUntil(
+          () => errors,
+          () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn caughtUp() {}\n'),
+          () => reloads.length >= 1,
+          'the re-armed passing run',
+        );
+        handle.dispose();
+        assert.equal(
+          readFileSync(liveAbs, 'utf8'),
+          'drifted core bytes',
+          'the settled run must atomically republish the new contract core to the live path',
+        );
+        const hints = errors.filter(
+          (line) =>
+            line.includes('RUSTRA_HOT_CORE=') && line.includes(liveDylibFileName('rustra_bridge')),
+        );
+        assert.ok(
+          hints.length >= 2,
+          `the stable run must re-announce RUSTRA_HOT_CORE for the live path, got:\n${errors.join('\n')}`,
+        );
+        assert.ok(
+          !readdirSync(join(project, 'target', 'debug')).some((entry) => entry.includes('-tmp-')),
+          'the republish must not leave tmp files behind',
+        );
+      } finally {
+        restore();
+        delete process.env.FAKE_SCHEMA_FILE;
+        delete process.env.FAKE_DYLIB_CONTENT;
+      }
+    } finally {
+      process.env.PATH = originalPath;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'runConfigDev dylib target leaves no live artifact when the gate rejects before the first publish',
+  { timeout: 30_000 },
+  async () => {
+    // 첫 발행 전 거부 — 라이브 파일이 아직 없다. initial 런의 빌드를 실패시켜
+    // (FAKE_DYLIB_FAIL) 발행 없이 게이트만 무장한 상태를 만든 뒤, 드리프트 트리거로
+    // 거부를 유도한다. 이 상태의 거부는 "라이브가 발행된 적 없다"와 "호스트를 띄우면
+    // 안 된다"를 loud 하게 말해야 하고, 어떤 발행·reload 도 일어나지 않는다.
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-dylib-firstrej-'));
+    const originalPath = process.env.PATH;
+    try {
+      const project = seedDylibProject(root);
+      writeSchema(join(project, 'generated', 'schema.json'), 'string');
+      writeSchema(join(root, 'schema-string.json'), 'string');
+      writeSchema(join(root, 'schema-integer.json'), 'integer');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+      process.env.FAKE_DYLIB_FAIL = '1';
+
+      const errors: string[] = [];
+      const restore = captureConsole(errors);
+      try {
+        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        const reloads: string[] = [];
+        handle.onReload((reason) => void reloads.push(reason));
+
+        const liveAbs = join(project, 'target', 'debug', liveDylibFileName('rustra_bridge'));
+        // 시작점 — initial 런은 빌드 실패로 발행 없이 끝났다.
+        assert.ok(
+          !existsSync(liveAbs),
+          'the failed initial build must not publish a live artifact',
+        );
+
+        // 트리거 — 빌드는 이제 성공하지만 계약이 드리프트됐다 → 첫 발행 전 거부.
+        delete process.env.FAKE_DYLIB_FAIL;
+        process.env.FAKE_SCHEMA_FILE = join(root, 'schema-integer.json');
+        await triggerUntil(
+          () => errors,
+          () => writeFileSync(join(project, 'src', 'lib.rs'), 'fn changed() {}\n'),
+          () =>
+            errors.some(
+              (line) => line.includes('[dev] reload rejected —') && line.includes('drift'),
+            ),
+          'the first-publish drift rejection',
+        );
+        await sleep(300);
+        handle.dispose();
+        assert.ok(
+          !existsSync(liveAbs),
+          'a gate rejection before the first publish must not create the live artifact',
+        );
+        assert.ok(
+          errors.some(
+            (line) =>
+              line.includes('[dev:dylib] no gated live artifact was published') &&
+              line.includes('do not launch the host'),
+          ),
+          `the rejection must state no live artifact exists and the host must not be launched, ` +
+            `got:\n${errors.join('\n')}`,
+        );
+        assert.deepEqual(
+          reloads,
+          [],
+          'no reload may be emitted when the first publish never happened',
+        );
+      } finally {
+        restore();
+        delete process.env.FAKE_SCHEMA_FILE;
+        delete process.env.FAKE_DYLIB_FAIL;
+      }
+    } finally {
+      process.env.PATH = originalPath;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'runConfigDev dylib target fails loudly when the crate declares no cdylib',
+  { timeout: 30_000 },
+  async () => {
+    // crate-type "cdylib" 강제 — 핫스왑 단위가 없으면 빌드 "성공"이어도 reload 는
+    // 없어야 한다. 에러는 cdylib 원인과 crate-type 힌트를 함께 말한다.
+    const root = mkdtempSync(join(tmpdir(), 'rustra-dev-dylib-nocdylib-'));
+    const originalPath = process.env.PATH;
+    try {
+      const project = seedDylibProject(root);
+      writeSchema(join(project, 'generated', 'schema.json'), 'string');
+      writeSchema(join(root, 'schema-string.json'), 'string');
+      process.env.PATH = `${join(root, FAKE_BIN)}:${originalPath}`;
+      process.env.FAKE_SCHEMA_FILE = join(root, 'schema-string.json');
+      process.env.FAKE_DYLIB_NO_ARTIFACT = '1';
+
+      const errors: string[] = [];
+      const restore = captureConsole(errors);
+      try {
+        const handle = await runDev(['--config', join(project, 'rustra.json')]);
+        const reloads: string[] = [];
+        handle.onReload((reason) => void reloads.push(reason));
+        await sleep(300);
+        handle.dispose();
+        const failure = errors.find((line) => line.includes('[dev] regeneration failed'));
+        assert.ok(failure, `the missing-cdylib case must be loud, got:\n${errors.join('\n')}`);
+        assert.match(failure, /cdylib/, 'the error must name cdylib as the cause');
+        assert.match(
+          failure,
+          /crate-type/,
+          'the error must include the crate-type "cdylib" fix hint',
+        );
+        assert.ok(
+          !errors.some((line) => line.includes('[dev:dylib] core artifact:')),
+          'no artifact announcement without a cdylib target',
+        );
+        assert.deepEqual(reloads, [], 'no reload when the hot core cannot be built');
+      } finally {
+        restore();
+        delete process.env.FAKE_SCHEMA_FILE;
+        delete process.env.FAKE_DYLIB_NO_ARTIFACT;
       }
     } finally {
       process.env.PATH = originalPath;

@@ -127,6 +127,11 @@ mod error;
 pub mod events;
 mod executor;
 pub mod ffi;
+// hot-core 는 tauri_support 의 디스패치 간접화(JsonDispatch)가 tauri feature
+// 만으로도 성립해야 하므로 두 feature 중 하나라도 켜지면 컴파일된다. dylib
+// 로딩 본체(libloading)는 모듈 내부에서 `hot-core` feature 로 게이트된다.
+#[cfg(any(feature = "hot-core", feature = "tauri"))]
+pub mod hot_core;
 mod invoke;
 mod limits;
 mod package;

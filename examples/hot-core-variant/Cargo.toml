@@ -1,0 +1,38 @@
+[package]
+name = "rustra-hot-core-variant"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish = false
+
+# hot-core 감시 스왑의 교체 단위(스왑 유닛) 전용 cdylib 다. rlib/staticlib 가
+# 필요 없는 이유는 이 크레이트를 링크하는 호스트가 없기 때문이다 — 항상
+# DylibCore(libloading dlopen)로만 열린다. FFI 심볼(rustra_ffi_invoke_json 등)은
+# rustra rlib 의 `#[no_mangle]` 표면이 cdylib 로 그대로 재노출되는 메커니즘을
+# 쓴다(calculator 예제와 동일 — crates/rustra/src/ffi_sync_entries.rs 참고).
+[lib]
+crate-type = ["cdylib"]
+
+# 스왑 시나리오 feature — 전부 상호 배타적이지 않지만 검증은 한 번에 하나의
+# 조합으로 진행한다(hot-core-probe --watch 와 짝을 이룬다).
+#
+# - (없음)        : 기본. addNumbers = a+b
+# - behavior      : addNumbers 본문만 a+b+100. 스키마 무변화 → 계약 해시도
+#                   기본 빌드와 동일해야 한다("시그니처 불변 로직 변경은 자유
+#                   스왑"의 증거 유닛).
+# - add-cmd       : multiplyNumbers 추가. 스키마 변화 → 해시 변화.
+# - rename-cmd    : addNumbers 대신 addNumbersV2 를 등록한다(구 이름 소멸).
+# - sig-change    : addNumbers 입력에 c: i64 를 추가한다(시그니처 변화).
+[features]
+behavior = []
+add-cmd = []
+rename-cmd = []
+sig-change = []
+
+[dependencies]
+# prelude 가 Serialize/Deserialize/JsonSchema/register!/command 를 모두
+# 재노출하지만, derive 매크로 전개가 `serde::`/`schemars::` 경로를 직접
+# 참조하므로 calculator 예제와 같이 크레이트 의존이 필요하다.
+rustra.workspace = true
+serde.workspace = true
+schemars.workspace = true

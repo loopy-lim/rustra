@@ -1,0 +1,11 @@
+[package]
+name = "rustra-hot-core-probe"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+# hot-core — 이 바이너리의 목적 자체가 dylib open/스왑 검증이라 항상 켠다.
+rustra = { workspace = true, features = ["hot-core"] }
+serde_json.workspace = true

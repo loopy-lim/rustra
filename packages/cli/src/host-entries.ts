@@ -94,10 +94,18 @@ export function resolveHostEntries(
   if (!config.node && !config.bun && !config.tauri) return undefined;
   const appRoot = dirname(resolve(configPath));
   const entries: HostEntries = { appRoot };
+  // 호스트 섹션(node/bun)의 매니페스트 해석도 codegen.rustManifest 를 폴백으로
+  // 쓴다 — wasm/dylib dev 타깃(dev-config)과 같은 우선순위다. 앱 루트에 자체
+  // Cargo.toml 이 없는 레이아웃(예: tauri-calculator — Rust 코어가 ../calculator)
+  // 에서 상위 탐색이 워크스페이스 가상 매니페스트에 닿아 후보 0개가 되는 것을
+  // 막는다.
+  const codegenManifest = config.codegen?.rustManifest
+    ? resolve(appRoot, config.codegen.rustManifest)
+    : undefined;
   if (config.node) {
     const manifest = config.node.rustManifest
       ? resolve(appRoot, config.node.rustManifest)
-      : findCargoManifest(appRoot);
+      : (codegenManifest ?? findCargoManifest(appRoot));
     if (!manifest) throw new Error('Node setup could not find Cargo.toml. Set node.rustManifest.');
     const metadata = readCargoMetadata(manifest);
     const cargoPackage = selectHostPackage(metadata, manifest, config.node.rustPackage);
@@ -117,7 +125,7 @@ export function resolveHostEntries(
   if (config.bun) {
     const manifest = config.bun.rustManifest
       ? resolve(appRoot, config.bun.rustManifest)
-      : findCargoManifest(appRoot);
+      : (codegenManifest ?? findCargoManifest(appRoot));
     if (!manifest) throw new Error('Bun setup could not find Cargo.toml. Set bun.rustManifest.');
     const metadata = readCargoMetadata(manifest);
     const cargoPackage = selectHostPackage(metadata, manifest, config.bun.rustPackage);

@@ -5,6 +5,20 @@
 
 ## Unreleased
 
+### Added
+
+- 실험적 `hot-core` 피처(네이티브 dylib 핫스왑 dev 코어): `crates/rustra`에
+  `DylibCore`·`HotCoreHandle`·sha256 폴링 감시를 신설하고(feature `hot-core`,
+  libloading 의존 — 릴리스 빌드 정적 링크 경로 불변),
+  `tauri_support::register_dispatch_with_swap_events`가 스왑 결과를
+  `rustra://hot-core/swapped` 웹뷰 이벤트로 보고한다(구·신 컨트랙트 해시 포함).
+  `@rustra/cli`의 `rustra dev` `dev.target: "dylib"`가 코드젠→cdylib 빌드를
+  오케스트레이션하고 패리티 게이트 통과분만 `<stem>-hot-live<ext>`로 원자
+  발행한다(fail-closed). `@rustra/react-native` 어댑터 C++ 셸의 `CoreTable`
+  재지향으로 JS 재바인딩 없이 스왑된다(Android debuggable 빌드 한정 filesDir
+  경로, iOS 시뮬레이터 env 경로). macOS·iOS 시뮬·Android 에뮬/실기기 앱
+  도메인에서 스왑 실측 통과(문서: `docs/plans/2026-09-09-native-hot-core-design.md`).
+
 ### Removed
 
 - deprecated `RendererHost` 표면을 제거한다(0.6.0에서 폐기, pre-1.0 규칙에 따른

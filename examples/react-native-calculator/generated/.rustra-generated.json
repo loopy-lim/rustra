@@ -21,7 +21,7 @@
     },
     {
       "path": "../modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt",
-      "sha256": "45dc70c38559e8f9ac1b50ce5f21fe8fe81327535018669cc5ca8a86f5364e26"
+      "sha256": "00a18821f535a84b030efa59a1ab753e95095a9c86756395cce238fceed55921"
     },
     {
       "path": "../modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgePackage.kt",
