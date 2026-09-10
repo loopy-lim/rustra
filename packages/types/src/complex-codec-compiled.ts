@@ -202,45 +202,42 @@ function compileVariant(
   const exactTag = tag ?? singleEnumTag(variant);
   const singleKey =
     properties && Object.keys(properties).length === 1 ? Object.keys(properties)[0] : null;
-  const matcher: CompiledVariant['matcher'] = exactTag
-    ? { kind: 'discriminator', key: exactTag.key, value: exactTag.value }
-    : singleKey
-      ? { kind: 'singleProperty', key: singleKey }
-      : variant.const !== undefined
-        ? { kind: 'constEq', value: variant.const }
-        : variant.enum?.length === 1
-          ? { kind: 'enumSingle', value: variant.enum[0] }
-          : variant.type === 'string'
-            ? { kind: 'anyString' }
-            : variant.type === 'object'
-              ? { kind: 'anyObject' }
-              : { kind: 'never' };
+  let matcher: CompiledVariant['matcher'];
+  if (exactTag) matcher = { kind: 'discriminator', key: exactTag.key, value: exactTag.value };
+  else if (singleKey) matcher = { kind: 'singleProperty', key: singleKey };
+  else if (variant.const !== undefined) matcher = { kind: 'constEq', value: variant.const };
+  else if (variant.enum?.length === 1) matcher = { kind: 'enumSingle', value: variant.enum[0] };
+  else if (variant.type === 'string') matcher = { kind: 'anyString' };
+  else if (variant.type === 'object') matcher = { kind: 'anyObject' };
+  else matcher = { kind: 'never' };
   // encodeVariant/decodeVariant 순서: discriminator(tag+object) → 단일 프로퍼티
   // → const/enum → 폴스루.
-  const body: CompiledVariant['body'] =
-    tag && variant.type === 'object'
-      ? {
-          kind: 'tagged',
-          skipKey: tag.key,
-          node: {
-            kind: 'struct',
-            fields: Object.entries(properties ?? {}).map(([key, fieldSchema]) => ({
-              key,
-              node: compileNode(fieldSchema, definitions, refs, depth + 1),
-              required: requiredSet.has(key),
-            })),
-          },
-        }
-      : properties && singleKey
-        ? {
-            kind: 'unwrapSingle',
-            key: singleKey,
-            node: compileNode(properties[singleKey], definitions, refs, depth + 1),
-          }
-        : variant.const !== undefined
-          ? { kind: 'constValue', value: variant.const }
-          : variant.enum
-            ? { kind: 'enumFirst', value: variant.enum[0] }
-            : { kind: 'node', node: compileNode(variant, definitions, refs, depth + 1) };
+  let body: CompiledVariant['body'];
+  if (tag && variant.type === 'object') {
+    body = {
+      kind: 'tagged',
+      skipKey: tag.key,
+      node: {
+        kind: 'struct',
+        fields: Object.entries(properties ?? {}).map(([key, fieldSchema]) => ({
+          key,
+          node: compileNode(fieldSchema, definitions, refs, depth + 1),
+          required: requiredSet.has(key),
+        })),
+      },
+    };
+  } else if (properties && singleKey) {
+    body = {
+      kind: 'unwrapSingle',
+      key: singleKey,
+      node: compileNode(properties[singleKey], definitions, refs, depth + 1),
+    };
+  } else if (variant.const !== undefined) {
+    body = { kind: 'constValue', value: variant.const };
+  } else if (variant.enum) {
+    body = { kind: 'enumFirst', value: variant.enum[0] };
+  } else {
+    body = { kind: 'node', node: compileNode(variant, definitions, refs, depth + 1) };
+  }
   return { tag, matcher, body };
 }

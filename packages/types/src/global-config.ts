@@ -110,17 +110,19 @@ export function resolveCommandId(commandFn: (...args: never[]) => unknown): stri
   );
 }
 
+function lazyRetryOrLoudReject<T>(retry: () => Promise<T>): Promise<T> {
+  if (isLazyConfigured()) return ensureConfigured().then(retry);
+  return Promise.reject(
+    new RustraCommandError(
+      RustraErrorCode.TransportUnavailable,
+      'Rustra not configured. Call configure(engine) first.',
+    ),
+  );
+}
+
 export function invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T> {
   const engine = runtime.engine;
-  if (!engine) {
-    if (isLazyConfigured()) return ensureConfigured().then(() => invoke<T>(command, args, options));
-    return Promise.reject(
-      new RustraCommandError(
-        RustraErrorCode.TransportUnavailable,
-        'Rustra not configured. Call configure(engine) first.',
-      ),
-    );
-  }
+  if (!engine) return lazyRetryOrLoudReject(() => invoke<T>(command, args, options));
   return invokeWithTimeout(engine, command, args, options);
 }
 
@@ -132,16 +134,8 @@ export function invokeGenerated<T>(
   options?: InvokeOptions,
 ): Promise<T> {
   const engine = runtime.engine;
-  if (!engine) {
-    if (isLazyConfigured())
-      return ensureConfigured().then(() => invokeGenerated<T>(commandId, command, args, options));
-    return Promise.reject(
-      new RustraCommandError(
-        RustraErrorCode.TransportUnavailable,
-        'Rustra not configured. Call configure(engine) first.',
-      ),
-    );
-  }
+  if (!engine)
+    return lazyRetryOrLoudReject(() => invokeGenerated<T>(commandId, command, args, options));
   const syncInvoke = engine[invokeByIdSync];
   if (options === undefined && syncInvoke) {
     try {
