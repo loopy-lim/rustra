@@ -51,12 +51,14 @@ export function readFlag(argv, name, fallback) {
   return value;
 }
 
-/** adb shell 원격 명령 — 메타문자 없는 단순 인자만 쓴다(인용 금지 계약). */
-export function runAdb(adb, serial, remoteCommand) {
+/** adb shell 원격 명령 — 메타문자 없는 단순 인자만 쓴다(인용 금지 계약).
+ * 기기/adb 가 멈춰 서면 스크립트가 무한 대기하지 않게 기본 타임아웃을 둔다. */
+export function runAdb(adb, serial, remoteCommand, timeoutMs = 30_000) {
   const result = Bun.spawnSync({
     cmd: [adb, '-s', serial, 'shell', remoteCommand],
     stdout: 'pipe',
     stderr: 'pipe',
+    timeout: timeoutMs,
   });
   return {
     exitCode: result.exitCode,
@@ -70,10 +72,12 @@ export function cleanShellOutput(value) {
   return value.replaceAll('\r', '').trim();
 }
 
-/** app.json(expo.android.package) → build.gradle(applicationId) 순 감지. */
-export function detectAndroidPackage(appRoot = APP_ROOT) {
+/** app.json(expo.android.package) → build.gradle(applicationId) 순 감지.
+ * Bun.file().text() 는 Promise 다 — 반드시 await 해야 한다(await 누락 시
+ * JSON.parse(Promise) 가 항상 throw 로 잡혀 감지가 전부 dead code 가 된다). */
+export async function detectAndroidPackage(appRoot = APP_ROOT) {
   try {
-    const appJson = JSON.parse(Bun.file(resolve(appRoot, 'app.json')).text());
+    const appJson = JSON.parse(await Bun.file(resolve(appRoot, 'app.json')).text());
     const detected = appJson?.expo?.android?.package;
     if (typeof detected === 'string' && detected.length > 0) {
       return { package: detected, source: 'app.json' };
@@ -82,7 +86,7 @@ export function detectAndroidPackage(appRoot = APP_ROOT) {
     // app.json 이 없거나 깨진 경우 gradle 로 폴백한다.
   }
   try {
-    const gradle = Bun.file(resolve(appRoot, 'android/app/build.gradle')).text();
+    const gradle = await Bun.file(resolve(appRoot, 'android/app/build.gradle')).text();
     const match = /applicationId\s*=\s*['"]([^'"]+)['"]/.exec(gradle);
     if (match) return { package: match[1], source: 'android/app/build.gradle' };
   } catch {
@@ -129,11 +133,9 @@ export async function main(argv = Bun.argv.slice(2)) {
     cmd: [adb, '-s', serial, 'get-state'],
     stdout: 'pipe',
     stderr: 'pipe',
+    timeout: 15_000,
   });
-  if (
-    deviceState.exitCode !== 0 ||
-    cleanShellOutput(deviceState.stdout.toString()) !== 'device'
-  ) {
+  if (deviceState.exitCode !== 0 || cleanShellOutput(deviceState.stdout.toString()) !== 'device') {
     failWith(
       `adb device "${serial}" is not ready`,
       `hint: adb devices 로 직렬을 확인하거나 --serial / ADB_SERIAL 로 지정하세요.\n${[
@@ -148,7 +150,7 @@ export async function main(argv = Bun.argv.slice(2)) {
 
   const detected = explicitPackage
     ? { package: explicitPackage, source: 'flag/env' }
-    : detectAndroidPackage();
+    : await detectAndroidPackage();
   const pkg = detected.package;
   const hotDir = hotDirAbsolute(pkg);
   const tmpPath = `${hotDir}/${TMP_LIVE_NAME}`;
@@ -175,15 +177,24 @@ export async function main(argv = Bun.argv.slice(2)) {
 
   const mkdir = runAdb(adb, serial, `run-as ${pkg} mkdir -p ${hotDir}`);
   if (mkdir.exitCode !== 0) {
-    failWith(`failed to create ${hotDir} for ${pkg}`, cleanShellOutput(mkdir.stderr || mkdir.stdout));
+    failWith(
+      `failed to create ${hotDir} for ${pkg}`,
+      cleanShellOutput(mkdir.stderr || mkdir.stdout),
+    );
   }
 
   // 1) dd of=<절대경로> 로 tmp 파일 기록 — 셸 메타문자 0 개, stdin 파이프만 쓴다.
+  //    adb 연결이 멈춰 서면 무한 파이프 대기가 되지 않게 타임아웃을 건다.
+  const removeTmp = () => {
+    // 실패 경로의 tmp 잔여물 정리 — 다음 실행의 dd 가 덮어쓰지만 남겨두지 않는다.
+    runAdb(adb, serial, `run-as ${pkg} rm -f ${tmpPath}`);
+  };
   const write = Bun.spawn({
     cmd: [adb, '-s', serial, 'shell', `run-as ${pkg} dd of=${tmpPath}`],
     stdin: 'pipe',
     stdout: 'pipe',
     stderr: 'pipe',
+    timeout: 120_000,
   });
   try {
     write.stdin.write(localBytes);
@@ -201,6 +212,7 @@ export async function main(argv = Bun.argv.slice(2)) {
     Bun.readableStreamToText(write.stdout),
   ]);
   if (writeExit !== 0) {
+    removeTmp();
     failWith(
       `stdin pipe (dd) to ${tmpPath} failed (adb exit ${writeExit})`,
       cleanShellOutput(`${writeErr}\n${writeOut}`) ||
@@ -213,9 +225,11 @@ export async function main(argv = Bun.argv.slice(2)) {
   const wc = runAdb(adb, serial, `run-as ${pkg} wc -c ${tmpPath}`);
   const remoteSize = Number(cleanShellOutput(wc.stdout).split(/\s+/)[0]);
   if (wc.exitCode !== 0 || !Number.isFinite(remoteSize)) {
+    removeTmp();
     failWith(`failed to stat ${tmpPath} on device`, cleanShellOutput(wc.stderr || wc.stdout));
   }
   if (remoteSize !== localBytes.length) {
+    removeTmp();
     failWith(
       `truncated transfer: local=${localBytes.length} bytes, remote=${remoteSize} bytes`,
       'hint: adb 연결이 불안정하다 — 스크립트를 다시 실행하세요.',
@@ -225,7 +239,11 @@ export async function main(argv = Bun.argv.slice(2)) {
   // 3) run-as mv = 동일 디렉터 rename(2) — 감시 중인 코어에 원자적으로 노출.
   const mv = runAdb(adb, serial, `run-as ${pkg} mv ${tmpPath} ${finalPath}`);
   if (mv.exitCode !== 0) {
-    failWith(`atomic mv ${tmpPath} -> ${finalPath} failed`, cleanShellOutput(mv.stderr || mv.stdout));
+    removeTmp();
+    failWith(
+      `atomic mv ${tmpPath} -> ${finalPath} failed`,
+      cleanShellOutput(mv.stderr || mv.stdout),
+    );
   }
 
   console.log(

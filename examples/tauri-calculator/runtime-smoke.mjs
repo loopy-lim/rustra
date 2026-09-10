@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
@@ -13,6 +13,11 @@ import { readDevConfig } from '../../packages/cli/src/dev-config.ts';
 const root = resolve(new URL('../..', import.meta.url).pathname);
 const binary = join(root, 'target/release/rustra-tauri-calculator');
 const tempDir = await mkdtemp(join(tmpdir(), 'rustra-tauri-'));
+// 스모크가 어떤 경로로 끝나도 임시 디렉터를 치운다 — 매 실행마다 /tmp 에
+// rustra-tauri-* 디렉터가 누적되지 않게 한다(예외 경로 포함, 동기 exit 훅).
+process.on('exit', () => {
+  rmSync(tempDir, { recursive: true, force: true });
+});
 
 const wait = (ms) => new Promise((resolveWait) => setTimeout(resolveWait, ms));
 
@@ -31,6 +36,11 @@ async function bootWithProbe(extraEnv, label, expectedStderr) {
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+  // 바이너리가 없으면 spawn 이 'error' 이벤트로 실패한다 — resolve 로 바꿔 반드시
+  // 소비하게 하고(무처리 'error' 는 프로세스를 즉시 죽인다) 원인과 함께 loud 실패.
+  const spawnFailure = new Promise((resolveFailure) => {
+    app.on('error', (error) => resolveFailure(error));
+  });
 
   let stderr = '';
   app.stderr.setEncoding('utf8');
@@ -42,13 +52,15 @@ async function bootWithProbe(extraEnv, label, expectedStderr) {
   // 기다렸다 끊는다. main.rs 는 프로브를 먼저 쓰고 핫코어 초기화(open + 감시 스레드
   // 보고)를 나중에 하므로, 프로브만 보고 끊으면 보고 라인을 흘려보내게 된다.
   for (let i = 0; i < 40; i += 1) {
+    const failure = await Promise.race([wait(250).then(() => null), spawnFailure]);
+    if (failure) {
+      throw new Error(`failed to launch ${binary}: ${failure.message}`);
+    }
     const probeReady = existsSync(probeFile);
     const stderrReady = expectedStderr === undefined || stderr.includes(expectedStderr);
     if (probeReady && stderrReady) {
       break;
     }
-
-    await wait(250);
   }
 
   app.kill();
