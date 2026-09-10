@@ -177,6 +177,8 @@ void configureHotCore(const char* hotDirPath);
 /// 폴링 1회. 1=스왑 발생, 0=변화 없음, 음수=오류. 스레드 안전.
 /// 오류 표면: 이 함수는 어떤 입력/실패에서도 예외를 밖으로 던지지 않고
 /// 프로세스를 죽이지 않는다 — 모든 실패는 음수 반환 + stderr 로그다.
+/// 같은 바이트(sha256)의 연속 실패가 상한(5회)에 도달하면 그 바이트를
+/// 포이즌해 바이트가 바뀔 때까지 0을 반환한다(실패 재시도 폭주 방지).
 int pollHotCoreOnce();
 
 /// 300ms 폴링 스레드 기동(`configureHotCore` 로 활성화된 경우에만 실동작).
@@ -274,6 +276,14 @@ private:
 /// 쓰지만, JS 콜백이 핸들별로 분리돼 있고 리로드 시 채널 테이블째
 /// 폐기된다(채널은 호출 귀속 — 이전 런타임 대상 핸들은 무의미).
 ///
+/// 핫코어 스왑 대응: 채널 핸들은 발급 코어에 귀속된다(새 dylib 의 핸들
+/// 발급기는 새로 시작해 번호가 겹친다). drop 은 발급 코어의 channel_drop
+/// 로 라우팅하고(`channelCores_` 소유권 기록), 스왑 직후에는 구 코어 발급
+/// 채널의 레지스트리를 폐기한다 — 교차 코어 drop 오발(같은 번호의 신규
+/// 채널을 해제하는 사고)을 원천 차단한다. 폐기는 "스왑 시 코어 내 상태
+/// 소실" 설계 정책과 동일 선에서, 이벤트 싱크 재등록(rebindEventSink)의
+/// 채널 대응이다.
+///
 /// createChannel(cb) 이 u32 핸들을 발급하면 JS 는 그 값을 커맨드 인자
 /// `channel` 로 그대로 전달한다(TS 타입 ChannelHandle = number).
 /// CallInvoker 가 없는 호스트는 `drainEvents()` 폴링으로 이 큐도 소비한다
@@ -309,9 +319,21 @@ public:
   /// 리로드 대응: 보유 콜백·큐 폐기 및 Rust 채널 전부 drop. JS 스레드 호출.
   void reset();
 
+  /// 핫코어 스왑 직후(폴링 스레드) 호출 — 구 코어 발급 채널의 폐기를
+  /// 요청한다. 레지스트리(callbacks_/channelCores_)는 JS 스레드 전용이므로
+  /// 여기서는 플래그만 세우고 drain 을 예약한다(실제 폐기는 drain 안에서).
+  void requestResetAfterSwap();
+
 private:
   void scheduleDrainLocked();
 
+  /// 스왑 리셋의 실제 폐기 — drain(JS 스레드) 안에서 소비된다. 발급 코어가
+  /// 현재 코어가 아닌(스왑으로 은퇴한) 채널만 drop 하고, 스왑 뒤 새 코어로
+  /// 새로 만든 채널은 유지한다. FFI channel_drop 은 락 밖에서 호출된다.
+  void dropStaleChannelsAfterSwap();
+
+  /// 스왑 리셋 지연 플래그 — 폴링 스레드가 세우고 drain(JS 스레드)이 소비.
+  std::atomic<bool> resetQueued_{false};
   std::mutex mutex_;
   /// (handle, payload) 큐 — onChannelPayload 가 적재, drain 이 소비.
   std::deque<std::pair<uint32_t, std::string>> queue_;
@@ -324,6 +346,10 @@ private:
   std::shared_ptr<void> callInvoker_;
   /// 핸들별 JS 콜백 — drain 에서만 접근(JS 스레드).
   std::unordered_map<uint32_t, facebook::jsi::Function> callbacks_;
+  /// 핸들 → 발급 코어 테이블 — drop/폐기를 올바른 코어의 channel_drop 로
+  /// 라우팅하기 위한 소유권 기록. CoreTable 은 불변·무폐기라 스왑 뒤에도
+  /// 포인터가 유효하다. callbacks_ 와 동일 수명주기로 함께 수정된다(JS 스레드).
+  std::unordered_map<uint32_t, const core::CoreTable*> channelCores_;
 };
 
 /// Optimized HostObject that caches all JSI functions on first access.
