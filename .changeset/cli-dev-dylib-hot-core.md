@@ -13,3 +13,10 @@ leaves the previously published core untouched; before the first successful
 publish nothing is written, so the host must not be launched. New config keys:
 `dev.target: "native" | "wasm" | "dylib"` and `dev.dylib.parityGate`
 (default `true`).
+
+Generated apps now require `rustra` ^0.9.0 (crate) and
+`@rustra/react-native` ^0.8.0 (`rustraTemplate` ranges updated): the RN
+Android template passes a `filesDir` hot-core path via
+`nativeConfigureHotCore` (debuggable builds only — release builds never gain
+an appdata dlopen surface), which needs the adapter's hot-core native
+surface.
