@@ -8,13 +8,8 @@ impl PackageBuilder {
     /// # 패닉
     ///
     /// `name` 이 등록되어 있지 않으면 패닉한다.
-    pub fn require_capability(mut self, name: &str, cap: &'static str) -> Self {
-        let command = self
-            .commands
-            .get_mut(name)
-            .unwrap_or_else(|| panic!("require_capability: command '{name}' not registered"));
-        command.required_capability = Some(cap);
-        self
+    pub fn require_capability(self, name: &str, cap: &'static str) -> Self {
+        self.require_capability_if(name, Some(cap))
     }
 
     /// `#[command(capability = "...")]` 메타 상수를 받아 조건부 require 로 이어

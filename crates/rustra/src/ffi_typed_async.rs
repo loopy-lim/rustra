@@ -16,46 +16,15 @@ pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2_async(
     on_complete: Option<unsafe extern "C" fn(*mut c_void, *mut u8, usize)>,
     invocation_id: *mut u64,
 ) {
-    let id = crate::cancel::register_invocation();
-    if !invocation_id.is_null() {
-        unsafe { *invocation_id = id };
-    }
-    let user_data_raw = user_data as usize;
-    if payload_len > max_payload_bytes() {
-        let e = crate::RustraError::payload_too_large(payload_len, max_payload_bytes());
-        deliver_spawn_failure(
-            id,
-            user_data_raw,
-            on_complete,
-            rkyv_error_bytes,
-            &e.to_string(),
-        );
-        return;
-    }
-    let bytes = if payload.is_null() || payload_len == 0 {
-        Vec::new()
-    } else {
-        unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
-    };
-
-    if async_pool_submit(AsyncTask::Alloc((
-        id,
-        bytes,
-        user_data_raw,
+    submit_alloc_async(
+        payload,
+        payload_len,
+        user_data,
         on_complete,
+        invocation_id,
         rustra_ffi_invoke_rkyv_v2,
         rkyv_error_bytes,
-    )))
-    .is_err()
-    {
-        deliver_spawn_failure(
-            id,
-            user_data_raw,
-            on_complete,
-            rkyv_error_bytes,
-            "invoke.backpressure: async worker queue is full — retry after drain",
-        );
-    }
+    );
 }
 
 /// rkyv V2 비동기 caller-buffer 변형 — [`rustra_ffi_invoke_rkyv_v2_async`] 와

@@ -1,3 +1,23 @@
+fn raw_scalar_kind(schema: &Value) -> Option<crate::rkyv_codec::RawFieldKind> {
+    use crate::rkyv_codec::RawFieldKind;
+
+    let kind_str = schema.get("type").and_then(Value::as_str)?;
+    // integer 형식 정보로 zigzag/uvar 를 가린다 — postcard 는 signed 는
+    // zigzag, unsigned 는 plain varint. format 미지정 signed 정수는 zigzag.
+    Some(match kind_str {
+        "integer" => {
+            let format = schema.get("format").and_then(Value::as_str).unwrap_or("");
+            match format {
+                "uint8" | "uint16" | "uint32" | "uint64" => RawFieldKind::Uvar,
+                _ => RawFieldKind::Zigzag,
+            }
+        }
+        "number" => RawFieldKind::F64,
+        "boolean" => RawFieldKind::Bool,
+        _ => return None,
+    })
+}
+
 /// 입력/출력 스키마에서 raw 직결 가능성을 판정하고 핸들러를 조립한다.
 /// 슬롯 ↔ 타입 변환은 JSON Value 경유로 수행한다(I/O 타입이 제네릭이라
 /// 개별 스칼라 타입에 특화할 수 없기 때문) — postcard 왕복 대비 Value 1회
@@ -13,8 +33,6 @@ where
     O: Serialize + 'static,
     F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
 {
-    use crate::rkyv_codec::RawFieldKind;
-
     // 입력: object 프로퍼티 1..3개 전부 스칼라.
     let Some(props) = input_schema.get("properties").and_then(Value::as_object) else {
         return (None, Vec::new());
@@ -25,22 +43,8 @@ where
     let mut input_kinds = Vec::with_capacity(props.len());
     let mut field_names = Vec::with_capacity(props.len());
     for (name, schema) in props {
-        let Some(kind_str) = schema.get("type").and_then(Value::as_str) else {
+        let Some(kind) = raw_scalar_kind(schema) else {
             return (None, Vec::new());
-        };
-        // integer 형식 정보로 zigzag/uvar 를 가린다 — postcard 는 signed 는
-        // zigzag, unsigned 는 plain varint. format 미지정 signed 정수는 zigzag.
-        let kind = match kind_str {
-            "integer" => {
-                let format = schema.get("format").and_then(Value::as_str).unwrap_or("");
-                match format {
-                    "uint8" | "uint16" | "uint32" | "uint64" => RawFieldKind::Uvar,
-                    _ => RawFieldKind::Zigzag,
-                }
-            }
-            "number" => RawFieldKind::F64,
-            "boolean" => RawFieldKind::Bool,
-            _ => return (None, Vec::new()),
         };
         // f32 판별: number + format "float"(schemars 관례).
         if kind == RawFieldKind::F64
@@ -63,20 +67,8 @@ where
         None
     } else if out_props.len() == 1 {
         let (_name, schema) = out_props.iter().next().expect("len==1");
-        let Some(kind_str) = schema.get("type").and_then(Value::as_str) else {
+        let Some(kind) = raw_scalar_kind(schema) else {
             return (None, Vec::new());
-        };
-        let kind = match kind_str {
-            "integer" => {
-                let format = schema.get("format").and_then(Value::as_str).unwrap_or("");
-                match format {
-                    "uint8" | "uint16" | "uint32" | "uint64" => RawFieldKind::Uvar,
-                    _ => RawFieldKind::Zigzag,
-                }
-            }
-            "number" => RawFieldKind::F64,
-            "boolean" => RawFieldKind::Bool,
-            _ => return (None, Vec::new()),
         };
         Some(kind)
     } else {

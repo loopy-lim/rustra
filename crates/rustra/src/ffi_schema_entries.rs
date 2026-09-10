@@ -6,9 +6,7 @@
 /// 전달하므로 이 어댑터는 에러 프레임만 만들면 된다.
 fn rkyv_error_bytes(resp: &FfiResponse) -> Vec<u8> {
     let raw = resp.error.as_deref().unwrap_or("invoke failed");
-    let (code, message) = raw
-        .split_once(": ")
-        .map_or(("invoke.failed", raw), |(code, message)| (code, message));
+    let (code, message) = raw.split_once(": ").unwrap_or(("invoke.failed", raw));
     // FFI Display 문자열을 rkyv typed error로 다시 만들 때 안정 코드와
     // retryable 기본 의미를 보존한다. 임의 사용자 코드는 &'static str 계약상
     // 재구성할 수 없으므로 invoke.failed로 안전하게 폴백한다.

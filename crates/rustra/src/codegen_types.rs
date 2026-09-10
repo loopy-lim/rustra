@@ -21,16 +21,12 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
         return parts.join(" & ");
     }
 
-    if let Some(any_of) = schema.get("anyOf").and_then(Value::as_array) {
+    if let Some(any_of) = schema
+        .get("anyOf")
+        .or_else(|| schema.get("oneOf"))
+        .and_then(Value::as_array)
+    {
         let parts: Vec<String> = any_of
-            .iter()
-            .map(|s| ts_type_from_schema(s, definitions))
-            .collect();
-        return parts.join(" | ");
-    }
-
-    if let Some(one_of) = schema.get("oneOf").and_then(Value::as_array) {
-        let parts: Vec<String> = one_of
             .iter()
             .map(|s| ts_type_from_schema(s, definitions))
             .collect();
@@ -83,15 +79,11 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
             }
             "boolean" => "boolean".to_string(),
             "array" => {
-                if let Some(items) = schema.get("items").and_then(Value::as_array) {
-                    let element_types: Vec<String> = items
-                        .iter()
-                        .map(|s| ts_type_from_schema(s, definitions))
-                        .collect();
-                    return format!("[{}]", element_types.join(", "));
-                }
-                let prefix = schema.get("prefixItems").and_then(Value::as_array);
-                if let Some(items) = prefix {
+                if let Some(items) = schema
+                    .get("items")
+                    .or_else(|| schema.get("prefixItems"))
+                    .and_then(Value::as_array)
+                {
                     let element_types: Vec<String> = items
                         .iter()
                         .map(|s| ts_type_from_schema(s, definitions))
