@@ -20,7 +20,16 @@ compatible with each other inside the Cargo workspace, but it does not need to
 match the npm package versions. `@rustra/cli`'s `rustraTemplate` carries explicit
 semver ranges for the generated Rust crate and the RN adapter.
 `bun run test:release-coherence` checks per-package versions, lockfiles, internal
-dependency ranges, the CLI's Rust range, LICENSE, and fixed groups.
+dependency ranges, the CLI's Rust and RN-adapter ranges, LICENSE, and fixed groups.
+
+The two `rustraTemplate` ranges move at different points, both enforced by the
+coherence check: `cargoRange` moves in the same feature commit that bumps the
+Cargo workspace version (the Rust line is not changesets-managed), while
+`reactNativeRange` is synced to the freshly bumped `@rustra/react-native`
+version inside the version PR (`bun run version` → `scripts/version-packages.mjs`).
+Never bump `reactNativeRange` on a feature branch ahead of the adapter version —
+codegen's adapter-version gate would reject the in-repo examples and break CI on
+main between the feature merge and the version PR (first observed 2026-09-10).
 
 A minor release with a breaking DX change for consumers includes
 `docs/migrations/<from>-to-<to>.md` in the version PR and links it from the README.

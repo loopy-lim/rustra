@@ -14,9 +14,11 @@ publish nothing is written, so the host must not be launched. New config keys:
 `dev.target: "native" | "wasm" | "dylib"` and `dev.dylib.parityGate`
 (default `true`).
 
-Generated apps now require `rustra` ^0.9.0 (crate) and
-`@rustra/react-native` ^0.8.0 (`rustraTemplate` ranges updated): the RN
-Android template passes a `filesDir` hot-core path via
-`nativeConfigureHotCore` (debuggable builds only — release builds never gain
-an appdata dlopen surface), which needs the adapter's hot-core native
-surface.
+Generated apps now require Rust crate `rustra` ^0.9.0
+(`rustraTemplate.cargoRange` updated with the workspace bump). The RN Android
+template passes a `filesDir` hot-core path via `nativeConfigureHotCore`
+(debuggable builds only — release builds never gain an appdata dlopen
+surface), which needs the adapter's hot-core native surface;
+`rustraTemplate.reactNativeRange` is now synced to the adapter version in the
+version PR itself (`scripts/version-packages.mjs`), so it can no longer lag
+behind an adapter release and break generated-app installs or repo codegen.
