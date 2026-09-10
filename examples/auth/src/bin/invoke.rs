@@ -51,11 +51,10 @@ fn handle(input: &str) -> rustra::Result<Vec<u8>> {
 
     // 에러도 JSON 응답으로 — Debug 프린트가 아니라 { code, message } 를 내려
     // JS 측 RustraCommandError 로 복원되게 한다.
-    let body = match auth_package().invoke_json(&command, args) {
+    let mut body = match auth_package().invoke_json(&command, args) {
         Ok(result) => json!({ "ok": true, "result": result }),
         Err(e) => json!({ "ok": false, "error": { "code": e.code(), "message": e.message() } }),
     };
-    let mut body = body;
     if let Some(id) = id {
         body["id"] = id;
     }

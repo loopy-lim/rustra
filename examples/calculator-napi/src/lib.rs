@@ -50,21 +50,31 @@ fn napi_error(e: rustra::RustraError) -> Error {
     Error::from_reason(wire)
 }
 
-#[napi]
-pub fn rustra_invoke(command: String, args_json: Option<String>) -> Result<String> {
+/// 공용 파이프라인 — args JSON 파싱 → calculator 패키지 invoke →
+/// `{ok, result}` JSON 프레임(Vec<u8>) 직렬화. 두 #[napi] 진입점은 반환
+/// 변형만 담당한다. 에러 메시지와 와이어 JSON 바이트는 기존 각각의
+/// 구현과 동일하다.
+fn invoke_to_frame(command: &str, args_json: Option<&String>) -> Result<Vec<u8>> {
     let args_value = match args_json {
-        Some(ref s) => {
+        Some(s) => {
             serde_json::from_str(s).map_err(|e| Error::from_reason(format!("invalid args: {e}")))?
         }
         None => json!({}),
     };
 
     let result = rustra_calculator_example::calculator_package()
-        .invoke_json(&command, args_value)
+        .invoke_json(command, args_value)
         .map_err(napi_error)?;
 
-    serde_json::to_string(&json!({ "ok": true, "result": result }))
+    serde_json::to_vec(&json!({ "ok": true, "result": result }))
         .map_err(|e| Error::from_reason(format!("json encode: {e}")))
+}
+
+#[napi]
+pub fn rustra_invoke(command: String, args_json: Option<String>) -> Result<String> {
+    let frame = invoke_to_frame(&command, args_json.as_ref())?;
+    // serde_json::to_vec 출력은 항상 UTF-8 — 이 변환은 사실상 무조건 성공한다.
+    String::from_utf8(frame).map_err(|e| Error::from_reason(format!("json encode: {e}")))
 }
 
 /// Buffer 반환 변형 — String 왕복의 이중 할당(napi가 UTF-16 문자열로 복사)을
@@ -73,18 +83,6 @@ pub fn rustra_invoke(command: String, args_json: Option<String>) -> Result<Strin
 /// 동일한 JSON — JS 측에서 Buffer.toString()/직접 파싱 어느 쪽이든 소비 가능.
 #[napi]
 pub fn rustra_invoke_buffer(command: String, args_json: Option<String>) -> Result<Buffer> {
-    let args_value = match args_json {
-        Some(ref s) => {
-            serde_json::from_str(s).map_err(|e| Error::from_reason(format!("invalid args: {e}")))?
-        }
-        None => json!({}),
-    };
-
-    let result = rustra_calculator_example::calculator_package()
-        .invoke_json(&command, args_value)
-        .map_err(napi_error)?;
-
-    let frame = serde_json::to_vec(&json!({ "ok": true, "result": result }))
-        .map_err(|e| Error::from_reason(format!("json encode: {e}")))?;
+    let frame = invoke_to_frame(&command, args_json.as_ref())?;
     Ok(Buffer::from(frame))
 }
