@@ -9,8 +9,8 @@
   },
   "sideEffects": false,
   "rustraTemplate": {
-    "cargoRange": "^0.8.0",
-    "reactNativeRange": "^0.7.0"
+    "cargoRange": "^0.9.0",
+    "reactNativeRange": "^0.8.0"
   },
   "engines": {
     "node": ">=18"
