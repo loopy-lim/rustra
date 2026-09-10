@@ -1,5 +1,51 @@
 # @rustra/react-native
 
+## 0.8.0
+
+### Minor Changes
+
+- 1f99eca: The JSI host object drops the calculator-only legacy benchmark functions
+  (`invokeBytes`, `invokeMsgpack`, `invokeBincode`, `invokePostcard`,
+  `invokeLegacyPostcard`, `invokeRkyv`, `invokeHybrid`, `invokeRaw`). Defect fix:
+  `invokeRkyvV2` is now registered outside the legacy ifdef and binds to the core
+  generic symbols (`rustra_ffi_invoke_rkyv_v2` + `rustra_ffi_free`), so
+  legacy-OFF builds no longer crash the engine's tier-2/3 fallbacks.
+- 61d9d3c: Native hot-core dev core for React Native: the adapter's C++ shell now owns a
+  `CoreTable` (23 C ABI function pointers, atomic release/acquire publish,
+  load-at-call-site) and exposes `configureHotCore` / `pollHotCoreOnce` /
+  `startHotCorePolling`. A swap builds the new core from the watched
+  `*-hot-live.*` artifact (self-contained FIPS-verified sha256 scan → unique
+  versioned copy → `dlopen(RTLD_LOCAL)` → symbol bind → contract-hash check,
+  fail-closed on empty hash → table publish); the old library handle is
+  deliberately leaked (never `dlclose`d). JSI HostFunctions stay owned by the
+  C++ shell — a swap only re-points the table, so JS rebinding and reload are
+  not needed (verified on Android emulator and iOS simulator: logic change
+  served at 5 → 105 across a single swap, no reload). Paths: Android
+  `<filesDir>/rustra/hot` passed by the CLI's Kotlin template
+  (`nativeConfigureHotCore`, debuggable builds only), iOS simulator
+  `RUSTRA_HOT_CORE_DIR`. Hot-swap polling has a retry cap — a byte-identical
+  artifact that fails 5 times poisons it — and channel handles route through the
+  core that owns them. Swap unit is signature-invariant logic change; generated
+  C++ codecs are static in the app, so contract changes must pass the CLI parity
+  gate (codegen) before the artifact is ever published.
+- 4c101c8: RN JSON adapter (`createReactNativeEngine`) now has a complete event surface.
+  The C++ dispatcher (`RustraJSIBridge.cpp`) already queues `emit`s on
+  CallInvoker-less hosts and waits for JS to call `drainEvents()` — but the TS
+  wrapper never polled, so those queues were never consumed. `subscribeEvent`
+  gains a `pollMs` option that runs a JS polling-drain loop (one per native
+  instance, stopped by the last unsubscribe); it is harmless alongside the
+  `onEvent` push path (an empty drain returns 0) and is silently ignored on
+  natives that don't expose `drainEvents`. `RustraEventNative` now declares the
+  optional `drainEvents()` method matching the existing C++/JNI host function.
+
+### Patch Changes
+
+- Updated dependencies [4c101c8]
+- Updated dependencies [1f99eca]
+- Updated dependencies [88fd00b]
+- Updated dependencies [88fd00b]
+  - @rustra/types@0.9.0
+
 ## 0.7.0
 
 ### Minor Changes
