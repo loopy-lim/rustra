@@ -1,35 +1,12 @@
-import {
-  debugRustra,
-  RustraCommandError,
-  RustraErrorCode,
-  type RustraDebugEvent,
-} from '@rustra/types';
+import { debugRustra, type RustraDebugEvent } from '@rustra/types';
 import type { TauriListen } from './index.js';
-
-type TauriGlobal = {
-  __TAURI__?: { event?: { listen?: TauriListen } };
-};
-
-function tauriGlobal(): TauriGlobal {
-  return globalThis as TauriGlobal;
-}
+import { requireTauriListen } from './tauri-globals.js';
 
 // ── 이벤트 구독 (Rust → JS push) ──────────────────────────
 // Rust 측 `tauri_support::register_with_events` 가 `Package::emit` 을
 // `app.emit("rustra://{sanitized}", payload_json)` 로 전달한다 — 이 섹션은 그
 // 채널을 JS 에서 구독하는 래퍼다. 과거엔 Rust 푸시만 있고 JS 구독 API 가 없어
 // 사용자가 채널 규약을 문서에서 해석해 직접 listen 배선해야 했다.
-
-function requireTauriListen(): TauriListen {
-  const events = tauriGlobal().__TAURI__?.event;
-  if (typeof events?.listen !== 'function') {
-    throw new RustraCommandError(
-      RustraErrorCode.TransportUnavailable,
-      'Tauri event.listen was not found. Enable app.withGlobalTauri, or pass a listen function.',
-    );
-  }
-  return events.listen.bind(events);
-}
 
 /**
  * rustra 이벤트명 → Tauri 채널명 (`rustra://{sanitized}`).

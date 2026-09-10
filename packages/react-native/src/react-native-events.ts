@@ -17,31 +17,22 @@ export type RustraChannelNative = {
   drainEvents?(): number;
 };
 
-export function createChannel(
-  callback: (payload: unknown) => void,
-  native: RustraChannelNative = getRustraNative(),
-  options?: PollingDrainOptions,
-): { readonly handle: number; close(): boolean } {
-  if (typeof native.createChannel !== 'function' || typeof native.dropChannel !== 'function') {
-    throw new RustraCommandError(
-      'channel.unavailable',
-      'native module must expose createChannel() and dropChannel(); channel support is unavailable',
-    );
+function assertChannelNative(valid: boolean, message: string): void {
+  if (!valid) {
+    throw new RustraCommandError('channel.unavailable', message);
   }
+}
+
+function bindChannelLifecycle(
+  native: RustraChannelNative,
+  options: PollingDrainOptions | undefined,
+  invalidHandleMessage: string,
+  register: (isClosed: () => boolean) => number,
+): { readonly handle: number; close(): boolean } {
   let closed = false;
-  const handle = native.createChannel((payloadJson) => {
-    if (closed) return;
-    try {
-      callback(JSON.parse(payloadJson));
-    } catch {
-      callback(null);
-    }
-  });
+  const handle = register(() => closed);
   if (!Number.isSafeInteger(handle) || handle < 0)
-    throw new RustraCommandError(
-      'channel.unavailable',
-      'native createChannel() returned an invalid handle; expected a non-negative safe integer',
-    );
+    throw new RustraCommandError('channel.unavailable', invalidHandleMessage);
   // 폴링 drain — CallInvoker 없는 호스트의 채널 큐 소비(SubscribeOptions.pollMs
   // 와 동일 계약). 수명은 채널에 귀속 — close 가 수요를 해제한다.
   const pollMs = options?.pollMs;
@@ -57,6 +48,31 @@ export function createChannel(
   };
 }
 
+export function createChannel(
+  callback: (payload: unknown) => void,
+  native: RustraChannelNative = getRustraNative(),
+  options?: PollingDrainOptions,
+): { readonly handle: number; close(): boolean } {
+  assertChannelNative(
+    typeof native.createChannel === 'function' && typeof native.dropChannel === 'function',
+    'native module must expose createChannel() and dropChannel(); channel support is unavailable',
+  );
+  return bindChannelLifecycle(
+    native,
+    options,
+    'native createChannel() returned an invalid handle; expected a non-negative safe integer',
+    (isClosed) =>
+      native.createChannel!((payloadJson) => {
+        if (isClosed()) return;
+        try {
+          callback(JSON.parse(payloadJson));
+        } catch {
+          callback(null);
+        }
+      }),
+  );
+}
+
 /**
  * 바이너리 채널 생성 — 콜백은 rkyv V2 프레임 등 임의 바이트(ArrayBuffer)를
  * 받는다. JSON 경로(`createChannel`)와 동일한 핸들/close 계약, 한 핸들은 한
@@ -68,34 +84,20 @@ export function createBytesChannel(
   native: RustraChannelNative = getRustraNative(),
   options?: PollingDrainOptions,
 ): { readonly handle: number; close(): boolean } {
-  if (typeof native.createChannelBytes !== 'function' || typeof native.dropChannel !== 'function') {
-    throw new RustraCommandError(
-      'channel.unavailable',
-      'native module must expose createChannelBytes() and dropChannel(); binary channel support is unavailable',
-    );
-  }
-  let closed = false;
-  const handle = native.createChannelBytes((payload) => {
-    if (closed) return;
-    callback(payload instanceof Uint8Array ? payload : new Uint8Array(payload));
-  });
-  if (!Number.isSafeInteger(handle) || handle < 0)
-    throw new RustraCommandError(
-      'channel.unavailable',
-      'native createChannelBytes() returned an invalid handle; expected a non-negative safe integer',
-    );
-  // 폴링 drain — JSON 경로와 동일 계약/수명(close 가 수요를 해제한다).
-  const pollMs = options?.pollMs;
-  if (pollMs !== undefined) acquirePollingDemand(native, pollMs);
-  return {
-    handle,
-    close: () => {
-      if (closed) return false;
-      closed = true;
-      if (pollMs !== undefined) releasePollingDemand(native);
-      return native.dropChannel!(handle);
-    },
-  };
+  assertChannelNative(
+    typeof native.createChannelBytes === 'function' && typeof native.dropChannel === 'function',
+    'native module must expose createChannelBytes() and dropChannel(); binary channel support is unavailable',
+  );
+  return bindChannelLifecycle(
+    native,
+    options,
+    'native createChannelBytes() returned an invalid handle; expected a non-negative safe integer',
+    (isClosed) =>
+      native.createChannelBytes!((payload) => {
+        if (isClosed()) return;
+        callback(payload instanceof Uint8Array ? payload : new Uint8Array(payload));
+      }),
+  );
 }
 
 const nativeListeners = new WeakMap<

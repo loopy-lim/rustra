@@ -152,7 +152,7 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
       return callerBuffer.buffer;
     };
     const native = {
-      invokeRkyvV2: (payload: ArrayBuffer) => invokeRkyvV2Into(payload),
+      invokeRkyvV2: invokeRkyvV2Into,
       getSchema: () => {
         outLength[0] = 0n;
         return copyOwned(handle.symbols.rustra_ffi_get_schema(outLength));
