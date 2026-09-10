@@ -314,10 +314,9 @@ fn bench_command_invocation(package: &rustra::Package) -> f64 {
     avg_ns
 }
 
-fn bench_serialization() {
-    println!("┌─ Serialization (serde_json to_value) ──────────────────┐");
-
-    let cases = [
+/// 직렬화/역직렬화 벤치 공용 케이스 — (라벨, 직렬화된 JSON 값).
+fn bench_cases() -> Vec<(&'static str, Value)> {
+    vec![
         (
             "Simple struct",
             serde_json::to_value(SimpleInput { a: 1, b: 2 }).unwrap(),
@@ -343,7 +342,13 @@ fn bench_serialization() {
             })
             .unwrap(),
         ),
-    ];
+    ]
+}
+
+fn bench_serialization() {
+    println!("┌─ Serialization (serde_json to_value) ──────────────────┐");
+
+    let cases = bench_cases();
 
     let iterations = 50_000;
     let mut results: Vec<(&str, f64)> = Vec::new();
@@ -370,33 +375,7 @@ fn bench_serialization() {
 fn bench_deserialization() {
     println!("┌─ Deserialization (serde_json from_value) ──────────────┐");
 
-    let cases: Vec<(&str, Value)> = vec![
-        (
-            "Simple struct",
-            serde_json::to_value(SimpleInput { a: 1, b: 2 }).unwrap(),
-        ),
-        (
-            "10 items",
-            serde_json::to_value(PayloadInput {
-                items: make_items(10),
-            })
-            .unwrap(),
-        ),
-        (
-            "100 items",
-            serde_json::to_value(PayloadInput {
-                items: make_items(100),
-            })
-            .unwrap(),
-        ),
-        (
-            "1000 items",
-            serde_json::to_value(PayloadInput {
-                items: make_items(1000),
-            })
-            .unwrap(),
-        ),
-    ];
+    let cases = bench_cases();
 
     let iterations = 50_000;
     let mut results: Vec<(&str, f64)> = Vec::new();
@@ -593,12 +572,6 @@ fn bench_concurrent_invocation(package: &rustra::Package) {
 
     // Throughput bar
     let bar_width = 50;
-    let _segments = [
-        (100_000.0, "░"),
-        (500_000.0, "▒"),
-        (1_000_000.0, "▓"),
-        (5_000_000.0, "█"),
-    ];
 
     let filled = (ops_per_sec / 10_000_000.0 * bar_width as f64).min(bar_width as f64) as usize;
     let bar: String = "█".repeat(filled) + &"░".repeat(bar_width - filled);

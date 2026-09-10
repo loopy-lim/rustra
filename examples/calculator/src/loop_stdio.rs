@@ -119,6 +119,15 @@ pub fn issue_channel() -> u32 {
     handle
 }
 
+/// 바이너리 모드 성공 응답 프레임 조립 공용 — `[ok=1][pad 3][len u32 LE][body]`.
+fn ok_frame(body: &[u8]) -> Vec<u8> {
+    let mut frame = vec![0u8; 8 + body.len()];
+    frame[0] = 1; // ok = true
+    frame[4..8].copy_from_slice(&(body.len() as u32).to_le_bytes());
+    frame[8..].copy_from_slice(body);
+    frame
+}
+
 /// 채널 발급 요청의 응답 프레임 — `[ok=1][pad 3][len u32][{"handle": u32}]`.
 /// 핸들 소진(0)은 ok=0(본문 없음)으로 응답한다.
 fn channel_create_response(handle: u32) -> Vec<u8> {
@@ -126,11 +135,7 @@ fn channel_create_response(handle: u32) -> Vec<u8> {
         return vec![0u8, 0, 0, 0, 0, 0, 0, 0];
     }
     let body = json!({ "handle": handle }).to_string();
-    let mut frame = vec![0u8; 8 + body.len()];
-    frame[0] = 1; // ok = true
-    frame[4..8].copy_from_slice(&(body.len() as u32).to_le_bytes());
-    frame[8..].copy_from_slice(body.as_bytes());
-    frame
+    ok_frame(body.as_bytes())
 }
 
 /// 채널을 해제한다 — 코어 `drop_channel` 계약(이후 동일 핸들 send 는 false).
@@ -239,27 +244,29 @@ pub fn run_binary<R: Read, W: Write>(
             return Err(rustra::RustraError::internal(e.to_string()));
         }
 
-        let response: Vec<u8> = if len >= 2
-            && u16::from_le_bytes([payload[0], payload[1]]) == BINARY_DRAIN_EVENTS_CMD
-        {
-            drain_events_binary(package)
-        } else if len >= 2
-            && u16::from_le_bytes([payload[0], payload[1]]) == BINARY_CHANNEL_CREATE_CMD
-        {
-            // 채널 발급 — 본문 없음. sender 는 0xfffc 프레임으로 stdout 직행한다.
-            channel_create_response(issue_channel())
-        } else if len >= 2
-            && u16::from_le_bytes([payload[0], payload[1]]) == BINARY_CHANNEL_DROP_CMD
-        {
-            // 채널 해제 — 본문은 postcard varint u32 핸들. 잘린 본문은 ok=0.
-            let ok = decode_postcard_u32(&payload[2..]).is_some_and(channel_drop);
-            vec![u8::from(ok), 0, 0, 0]
+        // 예약 cmd 분기용 head — 1회만 계산한다. len<2 프레임은 0 으로 두어
+        // 어떤 예약 cmd 와도 매치하지 않는다(예약 id 는 모두 0xffNx 상한부).
+        let head = if len >= 2 {
+            u16::from_le_bytes([payload[0], payload[1]])
         } else {
-            match package.invoke_rkyv_v2_into(&payload, &mut out_buffer) {
+            0
+        };
+        let response: Vec<u8> = match head {
+            BINARY_DRAIN_EVENTS_CMD => drain_events_binary(package),
+            BINARY_CHANNEL_CREATE_CMD => {
+                // 채널 발급 — 본문 없음. sender 는 0xfffc 프레임으로 stdout 직행한다.
+                channel_create_response(issue_channel())
+            }
+            BINARY_CHANNEL_DROP_CMD => {
+                // 채널 해제 — 본문은 postcard varint u32 핸들. 잘린 본문은 ok=0.
+                let ok = decode_postcard_u32(&payload[2..]).is_some_and(channel_drop);
+                vec![u8::from(ok), 0, 0, 0]
+            }
+            _ => match package.invoke_rkyv_v2_into(&payload, &mut out_buffer) {
                 Ok(rustra::DirectResponse::Written(n)) => out_buffer[..n].to_vec(),
                 Ok(rustra::DirectResponse::Buffered(bytes)) => bytes,
                 Err(error) => rustra::encode_rkyv_v2_error(&error),
-            }
+            },
         };
 
         // 응답 쓰기도 STDOUT_LOCK 임계구역 — 백그라운드 스레드 emit 의 푸시
@@ -290,9 +297,5 @@ fn drain_events_binary(package: &Package) -> Vec<u8> {
         })
         .collect();
     let json = serde_json::to_vec(&events).unwrap_or_default();
-    let mut frame = vec![0u8; 8 + json.len()];
-    frame[0] = 1; // ok = true
-    frame[4..8].copy_from_slice(&(json.len() as u32).to_le_bytes());
-    frame[8..].copy_from_slice(&json);
-    frame
+    ok_frame(&json)
 }
