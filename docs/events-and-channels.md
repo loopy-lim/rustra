@@ -92,6 +92,14 @@ and `Package::build()` panics with `event channel collision` when two _declared_
 event names would map to the same channel (`a.b` vs `a_b`), so that misrouting
 cannot reach runtime.
 
+**Reserved channel** — `rustra://hot-core/swapped`: the hot-core swap report. A Rust host
+registered with `tauri_support::register_dispatch_with_swap_events` (hot-core dylib mode)
+pushes every swap outcome here — `{ oldContractHash, newContractHash }` on success,
+`{ error }` on failure; the channel stays silent under the static `register` /
+`register_with_events` registrations. Subscribe from TypeScript with `subscribeHotSwap`
+from `@rustra/tauri`. The event name passes the sanitizer unchanged (`/` is a kept
+code point), so the channel is exactly `rustra://hot-core/swapped`.
+
 **React Native** — the RN `subscribeEvent(name, cb, options?)` is push via the
 JSI sink. On CallInvoker-less hosts, pass `pollMs` to run the client-side drain
 loop that pulls the C++ dispatcher queue:

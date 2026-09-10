@@ -36,6 +36,26 @@ type TauriEngineClient = {
 function createTauriEngine(options: { invoke: TauriInvoke }): TauriEngineClient;
 ```
 
+### hot-core 스왑 이벤트 (실험적)
+
+`subscribeHotSwap`는 예약 채널 `rustra://hot-core/swapped`를 구독한다 — Rust 쪽이
+`tauri_support::register_dispatch_with_swap_events`(hot-core dylib 루프)로 등록했을 때만
+발생하며, 정적 등록 아래에서는 채널이 침묵한다.
+
+```ts
+type HotSwapEvent = { oldContractHash: string; newContractHash: string } | { error: string };
+
+function subscribeHotSwap(
+  callback: (event: HotSwapEvent) => void,
+  listen?: TauriListen,
+): Promise<() => void>;
+```
+
+성공 페이로드에는 이전과 새 contract hash가 둘 다 실려 있어 캐시 재동기화 신호를 겸할
+수 있다: 해시를 비교해 스키마 의존 캐시를 다시 가져올지 정한다. 실패는 버려지지 않고
+보고된다. 예약 채널 규칙은
+[events-and-channels](../../docs/events-and-channels.ko.md)를 참고한다.
+
 ## 사용 예시
 
 ```ts

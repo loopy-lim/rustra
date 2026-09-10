@@ -76,7 +76,9 @@ manifest/dispatch 경로에서 실제로 쓰는 페이로드 직렬화기(`crate
 네이티브 dylib 핫스왑 개발 메커니즘: Rust 코어를 cdylib 으로 빌드해 실행 중인
 호스트에 재시작 없이 스왑한다. `hot-core` cargo feature, `DylibCore`/
 `HotCoreHandle` 프리미티브, sha256 폴링 감시자, 아티팩트 경로를 호스트에 알리는
-`RUSTRA_HOT_CORE` 환경변수로 구성된다. **실험**
+`RUSTRA_HOT_CORE` 환경변수로 구성된다(React Native 어댑터는 대신
+`RUSTRA_HOT_CORE_DIR`가 지정한 디렉터리를 폴링한다 — 파일 경로와 디렉터리는
+서로 다른 두 변수다). **실험**
 ([versioning-policy.md](versioning-policy.md) 실험 표면 표 참고). 설계와 상태:
 [plans/2026-09-09-native-hot-core-design.md](plans/2026-09-09-native-hot-core-design.md).
 

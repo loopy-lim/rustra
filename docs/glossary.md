@@ -82,8 +82,10 @@ The native dylib hot-swap development mechanism: the Rust core is built as a
 cdylib and swapped into a running host without restart. Consists of the
 `hot-core` cargo feature, the `DylibCore`/`HotCoreHandle` primitives, the
 sha256 poll watcher, and the `RUSTRA_HOT_CORE` environment variable pointing
-the host at the artifact. **Experimental** (see the experimental-surface table
-in [versioning-policy.md](versioning-policy.md)). Design and status:
+the host at the artifact (the React Native adapter instead polls a directory
+named by `RUSTRA_HOT_CORE_DIR` — a file path and a directory are two different
+variables). **Experimental** (see the experimental-surface table in
+[versioning-policy.md](versioning-policy.md)). Design and status:
 [plans/2026-09-09-native-hot-core-design.md](plans/2026-09-09-native-hot-core-design.md).
 
 Canonical spelling: `hot-core` in both languages. In Korean prose, concept

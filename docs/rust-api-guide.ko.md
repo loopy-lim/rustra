@@ -1071,6 +1071,104 @@ use rustra::prelude::*;
 
 ---
 
+## 11. 핫코어 (`hot-core` feature, experimental)
+
+dev 타임 네이티브 핫스왑 — 호스트가 cdylib 코어를 열고, 감시 스레드가 아티팩트를
+폴링하며, 재빌드된 바이트를 프로세스 재시작 없이 스왑한다. `hot-core` cargo
+feature는 `libloading` 의존을 추가할 뿐 나머지는 움직이지 않는다 — 릴리스 빌드의
+정적 링크 경로는 그대로다. 표면 전체가 experimental이다
+([versioning-policy.ko.md](versioning-policy.ko.md)의 experimental 표) — 1.0 전에는
+계약이 깨질 수 있다.
+
+### 타입 목록 (`rustra::hot_core`)
+
+- `JsonDispatch` — `pub trait JsonDispatch: Send + Sync`. 단일 메서드
+  `fn invoke_json(&self, command: &str, args: serde_json::Value)` 는
+  `Result<serde_json::Value, serde_json::Value>` 를 반환하고, 에러는 rustra 에러
+  와이어 모양 `{"code": ..., "message": ...}` 로 돌아온다. `Package`(정적 경로)와
+  `HotCoreHandle` 이 구현한다. `Send + Sync` 는 `Arc<dyn JsonDispatch>` 를 Tauri
+  managed state 에 두기 위한 요구다(`JsonDispatch` 자체는 `hot-core` 없이도
+  컴파일된다 — `tauri` 만 켠 호스트도 디스패치 간젡화를 잃지 않는다).
+- `DylibCore` — `DylibCore::open(artifact: &Path) -> Result<Self, DylibCoreError>`
+  (dlopen `RTLD_LOCAL`, 필수 심볼 바인딩, 계약 해시 조회);
+  `.invoke_json(command, args)`; `.contract_hash()` 는
+  `Result<String, DylibCoreError>` 를 반환.
+- `DylibCoreError` — 변형 `Open`, `Symbol`, `ContractHash`, `Dispatch`,
+  `Prepare`, `Codesign`, `Panic`. `Codesign` 은 macOS ad-hoc 재서명 실패를
+  loudly 전파한다(조용한 스킵 없음). `Panic` 은 open/swap 경로의 패닉을 걸러
+  감시 스레드와 호스트를 살려둔다.
+- `HotCoreHandle` — `.new(core)`; `.swap(new: DylibCore) -> DylibCore` 는 구 코어를
+  돌려준다 — 구 라이브러리는 의도적으로 절대 `dlclose` 하지 않는다;
+  `.contract_hash()`; `JsonDispatch` 를 현재 코어로 라우팅해 구현한다.
+- `prepare_swap_copy(artifact: &Path, counter: u64)` 는
+  `Result<PathBuf, DylibCoreError>` 를 반환 — 아티팩트의 유일한 버전 카피를
+  만들고(macOS에서 ad-hoc 재서명) 매핑된 원본을 덮어쓰지 않게 한다. 같은 경로를
+  다시 dlopen 하면 stale 매핑이 돌아오기 때문이다.
+- `SwapOutcome = Result<(String, String), DylibCoreError>` — Ok 는
+  `(old_contract_hash, new_contract_hash)` 를 실운다. 콜백 타입은
+  `Arc<dyn Fn(SwapOutcome) + Send + Sync>` (`on_swap` 의 원형).
+- `DylibWatchConfig` — 필드 `artifact: PathBuf`, `poll: Duration`(기본 300ms),
+  `handle: Arc<HotCoreHandle>`, `on_swap: SwapCallback`(기본 no-op); 생성자는
+  `DylibWatchConfig::new(artifact, handle)`.
+- `spawn_dylib_watch(config) -> std::thread::JoinHandle<()>` — sleep 폴링을 하는
+  std 스레드(notify 계열 파일 감시 의존 없음). 아티팩트 sha256 을 폴링하고
+  스왑을 원자적으로 적용한다.
+
+### 재시도 상한
+
+같은 아티팩트 바이트가 연속 5회 스왑에 실패하면 포이즌으로 표시되어 다른 바이트가
+발행될 때까지 건너뛴다 — 각 실패는 여전히 `on_swap(Err(..))` 로 보고되고, 새
+바이트는 언제나 새 재시도 창을 얻는다. 실패한 스왑이 기준선 해시를 갱신하지
+않으므로, 빌드 중 반쯤 쓰인 아티팩트도 루프를 죽이지 않는다.
+
+### Tauri 글루 (`tauri` + `hot-core`)
+
+`tauri_support::HotSwapReporter`(`.new()`, `.report(outcome)`; `.install(sink)`
+단계는 플러그인 내부라 공개 API 가 아니다)가 예약 채널 상수
+`HOT_SWAP_EVENT = "hot-core/swapped"` 로 결과를 보고한다 — 웹뷰 채널은
+`rustra://hot-core/swapped` 다. `tauri_support::register_dispatch_with_swap_events`
+— 파라미터 `dispatch: Arc<dyn JsonDispatch>`, `reporter: HotSwapReporter`,
+`builder: tauri::Builder<R>` (반환 `tauri::Builder<R>`) — 는 정적 디스패치에
+`rustra-hot-swap` 플러그인을 얹어 리포터를 Tauri 이벤트 싱크에 설치한다.
+`register_with_events` 와 달리 **패키지 이벤트는 배선되지 않는다**(스왑이 코어
+내부 이벤트 싱크를 버리는 상태 소실 정책은 그대로) — 이 함수가 추가하는
+emission 은 스왑 결과 1종뿐이다. JS 쪽에서 이 채널은 `@rustra/tauri` 의
+`subscribeHotSwap` 가 소비한다
+([events-and-channels.ko.md](events-and-channels.ko.md) 참고).
+
+### 예제
+
+```rust
+use std::sync::Arc;
+use rustra::hot_core::{self, DylibCore, DylibWatchConfig, HotCoreHandle};
+use rustra::tauri_support::{self, HotSwapReporter};
+
+// 1) 새로 빌드된 cdylib 을 열고 공유 스왑 지점으로 감싼다
+let core = DylibCore::open(artifact)?;            // dlopen + 심볼 바인딩 + init
+let handle = Arc::new(HotCoreHandle::new(core));  // Arc<dyn JsonDispatch> → Tauri state
+
+// 2) 아티팩트를 감시; 모든 스왑 결과를 웹뷰 채널로 보고한다
+let reporter = HotSwapReporter::new();
+let mut config = DylibWatchConfig::new(artifact, handle.clone());
+config.poll = std::time::Duration::from_millis(300); // 기본값 — 튜닝 지점 표시
+let sink = reporter.clone();
+config.on_swap = Arc::new(move |outcome| {
+    eprintln!("rustra hot-core: swap {outcome:?}");
+    sink.report(outcome.map_err(|e| e.to_string()));
+});
+hot_core::spawn_dylib_watch(config);              // std 스레드, sha256 폴링
+
+// 3) 정적 디스패치 + rustra-hot-swap 플러그인
+tauri_support::register_dispatch_with_swap_events(handle, reporter, builder)
+```
+
+설계·상태 문서:
+[2026-09-09 네이티브 핫코어 설계](plans/2026-09-09-native-hot-core-design.md).
+같은 루프의 React Native 쪽은
+[`packages/react-native/README.md`](../packages/react-native/README.md).
+
+---
+
 ## 부록: 전체 예제
 
 ### 고급 API 요약 (문서 본문에서 다루지 않은 공개 API)
@@ -1144,6 +1242,8 @@ assert!(pkg.is_frozen());
 - `tauri_support::register_with_events(...)` — 이벤트 푸시 포함
 - `tauri_support::register_profiled(...)` — 벤치 전용, `rustra_dispatch_profiled` 노출
 - `tauri_support::rustra_dispatch(...)` — 커맨드 디스패치
+- `tauri_support::register_dispatch_with_swap_events(...)` — 핫코어 스왑 보고
+  (`rustra://hot-core/swapped` 채널, §11 참고)
 
 **스키마/버전** — `pkg.schema()` (전체 스키마 JSON), `pkg.live_schema()`
 (동적 명령 포함), `.schema_version(v)` 빌더 (T2/OTA 협상).

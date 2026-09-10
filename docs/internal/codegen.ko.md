@@ -273,6 +273,25 @@ export function addNumbers(
 export const GENERATED_CONTRACT_HASH = '<sha256-hex>';
 ```
 
+### 발행 경로 (fail-closed)
+
+Rust schema bin의 기본 발행 위치(`generated/schema.json`)는 스폰 CWD 상대다.
+일반 `rustra codegen`(check 아님 모드)에서 CLI는 `RUSTRA_SCHEMA_OUT`을
+`config.schema`가 선언한 디렉터리로 고정하므로, schema 바이너리의 발행물이
+config가 선언한 경로 바깥에 생기는 일은 없다. 이 고정이 없으면 config
+디렉터리에서 스폰할 때 다른 곳에 사본이 발행되는 동안 dev 패리티 게이트가
+읽는 `config.schemaPath`는 갱신되지 않아, 게이트가 조용히 stale 비교로
+무력화된다(tauri-calculator `rustra.hot.json` 레이아웃에서 실측, 2026-09-10).
+`rustra codegen --check`는 대신 발행을 버리는 임시 디렉터리로 우회한다 —
+check는 선언된 트리를 건드리지 않고 비교한다.
+
+호스트 엔트리(node/bun/tauri 섹션)의 Cargo 매니페스트 해석 우선순위: 섹션
+자신의 `rustManifest` → 공용 `codegen.rustManifest` → 상위 `Cargo.toml`
+탐색. 아무것도 해석되지 않으면 CLI는 워크스페이스 가상 매니페스트에 상위
+탐색이 닿아 metadata가 후보 0개로 해석되는 상황을 두고 조용히 넘기는 대신
+(`Node setup could not find Cargo.toml. Set node.rustManifest.` / bun 동등
+메시지) 크게 실패한다.
+
 ---
 
 ## 6. 현재 제한사항
