@@ -5,27 +5,8 @@ import {
   type RustraDebugEvent,
   type RustraErrorCodeValue,
 } from '@rustra/types';
-import type { TauriInvoke } from './index.js';
-
-type TauriGlobal = {
-  __TAURI__?: {
-    core?: { invoke?: TauriInvoke };
-    event?: { listen?: TauriListenType };
-  };
-};
-
-// payload 는 `unknown` 이다 — index.ts 의 TauriListen 이 문서화한 것과 동일
-// 이유(R03): 실제 WebView 경계는 이미 해석된 값을 주고(채널 프레임의 JSON
-// 경로는 객체, 바이너리 경로는 숫자 배열), 목/레거시 transport 는 문자열을
-// 준다. 좁히지 않고 각 경로의 핸들러에서 값의 형태로 정규화한다.
-type TauriListenType = (
-  event: string,
-  handler: (event: { payload: unknown }) => void,
-) => Promise<() => void>;
-
-function tauriGlobal(): TauriGlobal {
-  return globalThis as TauriGlobal;
-}
+import type { TauriInvoke, TauriListen } from './index.js';
+import { requireTauriInvoke, requireTauriListen } from './tauri-globals.js';
 
 /**
  * rustra 채널 — Rust `ChannelHandle::send` 가 웹뷰로 푸시하는 역방향
@@ -44,39 +25,8 @@ export type TauriChannelIo = {
   /** Tauri IPC invoke — 미전달 시 `globalThis.__TAURI__.core.invoke` 사용. */
   invoke?: TauriInvoke;
   /** Tauri event listen — 미전달 시 `globalThis.__TAURI__.event.listen` 사용. */
-  listen?: (event: string, handler: (event: { payload: unknown }) => void) => Promise<() => void>;
+  listen?: TauriListen;
 };
-
-// JSON 경로(createChannel)는 전송 부재를 transport.unavailable 로 알린다.
-// 바이너리 경로(createChannelBytes)는 RN 참조 계약(createBytesChannel)에
-// 맞춰 channel.unavailable 로 알린다 — 가드 구조는 동일하고 코드만 다르므로
-// 헬퍼가 코드를 받는다.
-function requireTauriInvoke(
-  code: RustraErrorCodeValue = RustraErrorCode.TransportUnavailable,
-  api = 'createChannel()',
-): TauriInvoke {
-  const invoke = tauriGlobal().__TAURI__?.core?.invoke;
-  if (typeof invoke !== 'function') {
-    throw new RustraCommandError(
-      code,
-      `Tauri IPC was not found. Enable app.withGlobalTauri, or pass { invoke } to ${api}.`,
-    );
-  }
-  return invoke.bind(tauriGlobal().__TAURI__!.core);
-}
-
-function requireTauriListen(
-  code: RustraErrorCodeValue = RustraErrorCode.TransportUnavailable,
-): TauriListenType {
-  const listen = tauriGlobal().__TAURI__?.event?.listen;
-  if (typeof listen !== 'function') {
-    throw new RustraCommandError(
-      code,
-      'Tauri event.listen was not found. Enable app.withGlobalTauri, or pass a listen function.',
-    );
-  }
-  return listen.bind(tauriGlobal().__TAURI__!.event);
-}
 
 /**
  * 채널 이벤트 채널명 — Rust `CHANNEL_EVENT_PREFIX` 와 동일 규칙
@@ -105,6 +55,54 @@ function parseJsonOrRaw(raw: string): unknown {
   }
 }
 
+async function issueTauriChannel(
+  invoke: TauriInvoke,
+  createCommand: string,
+  invalidHandleMessage: string,
+): Promise<number> {
+  // IPC 경계의 unknown — 발급 검증에서 1회 좁힌다.
+  const raw = (await invoke(createCommand)) as { handle?: unknown };
+  const handle = Number(raw?.handle);
+  if (!Number.isSafeInteger(handle) || handle < 1) {
+    throw new RustraCommandError(RustraErrorCode.ChannelUnavailable, invalidHandleMessage);
+  }
+  return handle;
+}
+
+async function wireTauriChannel(
+  invoke: TauriInvoke,
+  handle: number,
+  channelName: string,
+  listen: TauriListen | undefined,
+  listenCode: RustraErrorCodeValue,
+  onFrame: (payload: unknown) => void,
+): Promise<RustraTauriChannel> {
+  let unlisten: () => void;
+  let closed = false;
+  try {
+    const resolvedListen = listen ?? requireTauriListen(listenCode);
+    unlisten = await resolvedListen(channelName, (event) => {
+      if (closed) return;
+      onFrame(event.payload);
+    });
+  } catch (listenError) {
+    // 정리 drop 은 절대 원래 listen 에러를 가리지 않는다 — 실패해도 무시.
+    await Promise.resolve(invoke('rustra_channel_drop', { handle })).catch(() => {});
+    throw listenError;
+  }
+
+  return {
+    handle,
+    async close(): Promise<boolean> {
+      if (closed) return true;
+      closed = true;
+      unlisten();
+      const result = (await invoke('rustra_channel_drop', { handle })) as unknown;
+      return result === true;
+    },
+  };
+}
+
 /**
  * Tauri 어댑터의 채널을 발급한다 — Rust `ChannelHost` 에 AppHandle 캡처
  * sender(`rustra://channel/{handle}` emit)를 등록하고, 같은 채널을 listen 해
@@ -131,46 +129,26 @@ export async function createChannel(
   // 발급이 먼저다 — listen 부재는 배선 에러고 invoke 실패는 발급 에러다.
   // 발급 성공 후 listen 이 실패하면 발급된 핸들을 drop 으로 정리한다
   // (리스너 없는 채널은 프레임을 받을 수 없으므로 누수다).
-  const raw = (await invoke('rustra_channel_create')) as { handle?: unknown };
-  // IPC 경계의 unknown — 발급 검증에서 1회 좁힌다.
-  const handle = Number(raw?.handle);
-  if (!Number.isSafeInteger(handle) || handle < 1) {
-    throw new RustraCommandError(
-      RustraErrorCode.ChannelUnavailable,
-      'rustra_channel_create returned an invalid handle; expected a positive safe integer',
-    );
-  }
-
-  let unlisten: () => void;
-  let closed = false;
-  try {
-    const listen = io.listen ?? requireTauriListen();
-    unlisten = await listen(rustraChannelEventChannel(handle), (event) => {
-      if (closed) return;
+  const handle = await issueTauriChannel(
+    invoke,
+    'rustra_channel_create',
+    'rustra_channel_create returned an invalid handle; expected a positive safe integer',
+  );
+  return wireTauriChannel(
+    invoke,
+    handle,
+    rustraChannelEventChannel(handle),
+    io.listen,
+    RustraErrorCode.TransportUnavailable,
+    (payload) => {
       // Rust sender 가 JSON 문자열을 그대로 emit 한다 — 실제 WebView 경계는
       // 이미 파싱된 값으로 도착하고(R03, index.ts TauriListen 참고) 목/레거시
       // transport 는 문자열을 준다. 문자열일 때만 1회 파싱하고 실패 시 원본을
       // 전달한다(조용한 드롭 방지).
-      const payload =
-        typeof event.payload === 'string' ? parseJsonOrRaw(event.payload) : event.payload;
-      callback(payload);
-    });
-  } catch (listenError) {
-    // 정리 drop 은 절대 원래 listen 에러를 가리지 않는다 — 실패해도 무시.
-    await Promise.resolve(invoke('rustra_channel_drop', { handle })).catch(() => {});
-    throw listenError;
-  }
-
-  return {
-    handle,
-    async close(): Promise<boolean> {
-      if (closed) return true;
-      closed = true;
-      unlisten();
-      const result = (await invoke('rustra_channel_drop', { handle })) as unknown;
-      return result === true;
+      const resolved = typeof payload === 'string' ? parseJsonOrRaw(payload) : payload;
+      callback(resolved);
     },
-  };
+  );
 }
 
 // ── 바이너리 채널 (Rust create_bytes_channel_for 와 짝) ──────────────
@@ -252,44 +230,26 @@ export async function createChannelBytes(
   const invoke =
     io.invoke ?? requireTauriInvoke(RustraErrorCode.ChannelUnavailable, 'createChannelBytes()');
   // 발급이 먼저다 — createChannel 과 동일 배선 순서/정리 계약.
-  const raw = (await invoke('rustra_channel_create_bytes')) as { handle?: unknown };
-  const handle = Number(raw?.handle);
-  if (!Number.isSafeInteger(handle) || handle < 1) {
-    throw new RustraCommandError(
-      RustraErrorCode.ChannelUnavailable,
-      'rustra_channel_create_bytes returned an invalid handle; expected a positive safe integer',
-    );
-  }
-
-  let unlisten: () => void;
-  let closed = false;
-  try {
-    const listen = io.listen ?? requireTauriListen(RustraErrorCode.ChannelUnavailable);
-    unlisten = await listen(rustraChannelBytesEventChannel(handle), (event) => {
-      if (closed) return;
-      const bytes = toUint8Array(event.payload);
+  const handle = await issueTauriChannel(
+    invoke,
+    'rustra_channel_create_bytes',
+    'rustra_channel_create_bytes returned an invalid handle; expected a positive safe integer',
+  );
+  return wireTauriChannel(
+    invoke,
+    handle,
+    rustraChannelBytesEventChannel(handle),
+    io.listen,
+    RustraErrorCode.ChannelUnavailable,
+    (payload) => {
+      const bytes = toUint8Array(payload);
       if (bytes === null) {
-        observeBytesPayloadError(handle, event.payload);
+        observeBytesPayloadError(handle, payload);
         return;
       }
       callback(bytes);
-    });
-  } catch (listenError) {
-    // 정리 drop 은 절대 원래 listen 에러를 가리지 않는다 — 실패해도 무시.
-    await Promise.resolve(invoke('rustra_channel_drop', { handle })).catch(() => {});
-    throw listenError;
-  }
-
-  return {
-    handle,
-    async close(): Promise<boolean> {
-      if (closed) return true;
-      closed = true;
-      unlisten();
-      const result = (await invoke('rustra_channel_drop', { handle })) as unknown;
-      return result === true;
     },
-  };
+  );
 }
 
 // ── 코드젠 계약 정합(컴파일 타임 고정) ──────────────────────

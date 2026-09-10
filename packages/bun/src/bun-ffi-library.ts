@@ -59,8 +59,14 @@ export function bunLibraryCandidates(options: BunLibraryOptions): string[] {
   if (explicit) return [explicit];
   const candidates = [...(options.libraryCandidates ?? [])];
   if (options.libraryName) {
-    const extension =
-      process.platform === 'darwin' ? 'dylib' : process.platform === 'win32' ? 'dll' : 'so';
+    let extension: string;
+    if (process.platform === 'darwin') {
+      extension = 'dylib';
+    } else if (process.platform === 'win32') {
+      extension = 'dll';
+    } else {
+      extension = 'so';
+    }
     const prefix = process.platform === 'win32' ? '' : 'lib';
     const filename = `${prefix}${options.libraryName}.${extension}`;
     let current = resolve(process.cwd());
