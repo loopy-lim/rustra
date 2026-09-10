@@ -34,11 +34,7 @@ function isHexText(normalized: string): boolean {
 
 /** hex 텍스트를 바이트로 만든다 — 판정기를 통과한 입력만 들어온다. */
 function hexToBytes(compact: string): Uint8Array {
-  const bytes = new Uint8Array(compact.length / 2);
-  for (let index = 0; index < bytes.length; index += 1) {
-    bytes[index] = Number.parseInt(compact.slice(index * 2, index * 2 + 2), 16);
-  }
-  return bytes;
+  return new Uint8Array(Buffer.from(compact, 'hex'));
 }
 
 /**
@@ -125,17 +121,10 @@ export async function runInspect(args: string[]): Promise<void> {
     throw new UsageError('Provide one snapshot dump file. Usage: rustra inspect dump.hex');
   // cli-diff 관례 — 사용자 경로를 resolve 해서 읽고, 에러 메시지도 절대 경로로 보인다.
   const path = resolve(files[0]!);
-  let raw: Uint8Array;
-  try {
-    raw = new Uint8Array(await readFile(path));
-  } catch (error) {
-    throw new Error(`inspect: ${path}: ${error instanceof Error ? error.message : String(error)}`, {
-      cause: error,
-    });
-  }
   // parseSnapshot 의 위치·필드 경로 메시지를 접지 않고 경로 접두만 얹는다(loud 계약).
   let dumped: DumpedWire;
   try {
+    const raw = new Uint8Array(await readFile(path));
     dumped = parseSnapshot(decodeDump(raw));
   } catch (error) {
     throw new Error(`inspect: ${path}: ${error instanceof Error ? error.message : String(error)}`, {

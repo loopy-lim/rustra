@@ -25,12 +25,15 @@ export interface ExplainJsonReport {
   explain: ExplainRow[];
 }
 
+function stringifyV1(payload: object): string {
+  return JSON.stringify({ schemaVersion: 1 as const, ...payload }, null, 2);
+}
+
 /**
  * `codegen --explain` 의 JSON 표면 — doctor/diff 와 같은 schemaVersion:1 관례.
  * 구형 `{command:'codegen', explain}` 임의 shape 는 소비자 0건을 확인하고 통일했다.
  */
-export const formatExplainJson = (report: ExplainJsonReport): string =>
-  JSON.stringify({ schemaVersion: 1 as const, ...report }, null, 2);
+export const formatExplainJson = (report: ExplainJsonReport): string => stringifyV1(report);
 
 /**
  * `codegen --format json` 보고 입력 — written 은 runGenerate 의 진행 표기
@@ -48,12 +51,7 @@ export interface CodegenJsonReport {
 }
 
 /** schemaVersion 은 포매터가 단일 지점에서 주입한다 — 호출자가 잊을 수 없다. */
-export const formatCodegenJson = (report: CodegenJsonReport): string =>
-  JSON.stringify({ schemaVersion: 1 as const, ...report }, null, 2);
+export const formatCodegenJson = (report: CodegenJsonReport): string => stringifyV1(report);
 
 export const formatDiffJson = (result: DiffResult): string =>
-  JSON.stringify(
-    { schemaVersion: 1, breaking: result.breaking, clean: result.breaking.length === 0 },
-    null,
-    2,
-  );
+  stringifyV1({ breaking: result.breaking, clean: result.breaking.length === 0 });
