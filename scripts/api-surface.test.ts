@@ -43,6 +43,16 @@ function makeFixture(): string {
       '    x',
       '}',
       '',
+      // 여러 줄에 걸친 시그니처 — 공백 하나로 정규화돼 ffiSignatures 로 고정돼야 한다.
+      '#[unsafe(no_mangle)]',
+      'pub unsafe extern "C" fn rustra_ffi_gamma(',
+      '    payload: *const u8,',
+      '    payload_len: usize,',
+      '    out_len: *mut usize,',
+      ') -> *mut u8 {',
+      '    std::ptr::null_mut()',
+      '}',
+      '',
     ].join('\n'),
   );
   // macro_rules! 내부의 extern "C" fn 은 크레이트 자체 export 가 아니므로 제외돼야 한다.
@@ -112,7 +122,18 @@ test('collectSurface extracts rust modules, ffi exports, macros, and ts exports'
       'pub use hidden::{ThingOne, ThingTwo}',
       'pub use other_crate::reexported',
     ]);
-    assert.deepEqual(surface.ffiExports, ['rustra_ffi_alpha', 'rustra_ffi_beta']);
+    assert.deepEqual(surface.ffiExports, [
+      'rustra_ffi_alpha',
+      'rustra_ffi_beta',
+      'rustra_ffi_gamma',
+    ]);
+    // 여러 줄 시그니처도 공백 하나로 정규화된다.
+    assert.deepEqual(surface.ffiSignatures, {
+      rustra_ffi_alpha: '() -> u32',
+      rustra_ffi_beta: '(x: u8) -> u8',
+      rustra_ffi_gamma:
+        '( payload: *const u8, payload_len: usize, out_len: *mut usize, ) -> *mut u8',
+    });
     assert.deepEqual(surface.macros, ['bridge_type', 'build']);
     assert.deepEqual(surface.tsExports['packages/demo'], [
       "* as extras from './extras.js'",
@@ -197,6 +218,108 @@ test('compareSurface detects a whole package removal and a whole package additio
   }
 });
 
+test('compareSurface detects in-place FFI signature drift even when export names are unchanged', () => {
+  const root = makeFixture();
+  try {
+    const snapshot = JSON.parse(serializeSurface(collectSurface(root)));
+    // 이름 집합은 그대로 두고 rustra_ffi_beta 의 매개변수 타입만 바꾼다 — ffiExports 만으로는
+    // 잡히지 않는 in-place 시그니처 변경으로, ffiSignatures 섹션이 막는 회귀다.
+    writeFileSync(
+      join(root, 'crates', 'rustra', 'src', 'ffi_core.rs'),
+      [
+        '#[unsafe(no_mangle)]',
+        'pub unsafe extern "C" fn rustra_ffi_alpha() -> u32 {',
+        '    0',
+        '}',
+        '',
+        'pub extern "C" fn rustra_ffi_beta(x: u16) -> u8 {',
+        '    x as u8',
+        '}',
+        '',
+        '#[unsafe(no_mangle)]',
+        'pub unsafe extern "C" fn rustra_ffi_gamma(',
+        '    payload: *const u8,',
+        '    payload_len: usize,',
+        '    out_len: *mut usize,',
+        ') -> *mut u8 {',
+        '    std::ptr::null_mut()',
+        '}',
+        '',
+      ].join('\n'),
+    );
+    const drift = compareSurface(collectSurface(root), snapshot);
+    assert.deepEqual(drift.added, {});
+    assert.deepEqual(drift.removed, {});
+    assert.deepEqual(drift.changed, {
+      ffiSignatures: ['rustra_ffi_beta: (x: u8) -> u8 → (x: u16) -> u8'],
+    });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('compareSurface reports FFI symbol add/remove in both ffiExports and ffiSignatures', () => {
+  const root = makeFixture();
+  try {
+    const snapshot = JSON.parse(serializeSurface(collectSurface(root)));
+    // beta 를 삭제하고 delta 를 추가 — 이름 추가/삭제는 두 섹션 모두에서 발화한다.
+    writeFileSync(
+      join(root, 'crates', 'rustra', 'src', 'ffi_core.rs'),
+      [
+        '#[unsafe(no_mangle)]',
+        'pub unsafe extern "C" fn rustra_ffi_alpha() -> u32 {',
+        '    0',
+        '}',
+        '',
+        '#[unsafe(no_mangle)]',
+        'pub unsafe extern "C" fn rustra_ffi_delta(y: i32) {',
+        '    let _ = y;',
+        '}',
+        '',
+        '#[unsafe(no_mangle)]',
+        'pub unsafe extern "C" fn rustra_ffi_gamma(',
+        '    payload: *const u8,',
+        '    payload_len: usize,',
+        '    out_len: *mut usize,',
+        ') -> *mut u8 {',
+        '    std::ptr::null_mut()',
+        '}',
+        '',
+      ].join('\n'),
+    );
+    const drift = compareSurface(collectSurface(root), snapshot);
+    assert.deepEqual(drift.added, {
+      ffiExports: ['rustra_ffi_delta'],
+      ffiSignatures: ['rustra_ffi_delta'],
+    });
+    assert.deepEqual(drift.removed, {
+      ffiExports: ['rustra_ffi_beta'],
+      ffiSignatures: ['rustra_ffi_beta'],
+    });
+    assert.deepEqual(drift.changed, {});
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('snapshot with an old format version fails and points at --update', () => {
+  const root = makeFixture();
+  try {
+    const created = runCli(['--update'], root);
+    assert.equal(created.status, 0, created.stderr);
+    // 스냅샷을 과거 포맷 버전으로 되돌린다 — 미래의 어떤 버전과도 어긋나는 값.
+    const snapshotPath = join(root, 'api-surface', 'snapshot.json');
+    const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8'));
+    snapshot.version = 0;
+    writeFileSync(snapshotPath, `${JSON.stringify(snapshot, null, 2)}\n`);
+    const result = runCli([], root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /snapshot version 0 != \d+ — re-run with --update/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 function runCli(args: string[], cwd: string) {
   return spawnSync(process.execPath, [join(REPO_ROOT, 'scripts', 'api-surface.mjs'), ...args], {
     cwd,
@@ -233,6 +356,7 @@ test('real repo snapshot exists and matches a fresh collection', () => {
   assert.deepEqual(surface, {
     rustModules: snapshot.rustModules,
     ffiExports: snapshot.ffiExports,
+    ffiSignatures: snapshot.ffiSignatures,
     macros: snapshot.macros,
     tsExports: snapshot.tsExports,
   });
