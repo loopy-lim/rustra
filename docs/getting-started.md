@@ -309,6 +309,12 @@ export type Item = {
   value: number | bigint;
 };
 
+export type OpKind = 'Clear' | {
+  Set: {
+  value: number | bigint;
+};
+};
+
 /**
  * 커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.
  */
@@ -452,6 +458,14 @@ export type IsEvenInput = {
 
 export type IsEvenOutput = {
   result: boolean;
+};
+
+export type KindEchoInput = {
+  kind: OpKind;
+};
+
+export type KindEchoOutput = {
+  echoed: OpKind;
 };
 
 export type MultiplyInput = {
@@ -638,7 +652,7 @@ export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutp
 
 <!-- prettier-ignore -->
 ```ts
-export const GENERATED_CONTRACT_HASH = '7279af1f50ca546411bb7be6476bb1f931b437ae53484d8ea9903eec07926039';
+export const GENERATED_CONTRACT_HASH = '7c07f78e1f38dc37f251920c7c453ec5b6d65a817f95a1b51b5b4649f63a2ae3';
 export const SCHEMA_VERSION = 1;
 ```
 

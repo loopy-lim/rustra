@@ -22,9 +22,10 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 ### 프로젝트 기여자
 
 1. [아키텍처 개요](architecture.md) — 전체 구조와 핵심 개념 파악
-2. [Crate 및 Package 구조](internal/crate-structure.md) — 각 crate/package의 책임과 의존성
-3. [TypeScript 코드 생성](internal/codegen.md) — schema → TS 타입 매핑, command 이름 변환
-4. [테스트 구조](internal/testing.md) — 테스트 계층, 파일별 역할, 실행 명령어
+2. [안전 계약](safety-contract.ko.md) — 총괄 FFI 불변식과 코드 근거가 붙은 항목별 계약
+3. [Crate 및 Package 구조](internal/crate-structure.md) — 각 crate/package의 책임과 의존성
+4. [TypeScript 코드 생성](internal/codegen.md) — schema → TS 타입 매핑, command 이름 변환
+5. [테스트 구조](internal/testing.md) — 테스트 계층, 파일별 역할, 실행 명령어
 
 ## 전체 문서 목록
 
@@ -57,6 +58,8 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 | [보안 감사](security-audit.md)                                                     | 기여자 | lockfile 취약점/경고 상태, 해소 이력                                                                                                               |
 | [릴리즈 절차](release-procedure.md)                                                | 기여자 | changeset 발행 절차, 버전 관리                                                                                                                     |
 | [버전 정책](versioning-policy.md)                                                  | 전체   | 표면별 호환성 보장, 폐기 절차, MSRV, 실험 표면                                                                                                     |
+| [안전 계약](safety-contract.ko.md) ([English](safety-contract.md))                 | 기여자 | 총괄 FFI 불변식, 항목별 계약(패닉 차단, 외래 예외 abort, 버퍼 소유, 페이로드 한도, 핫코어 포이즌, 에러 봉투, fail-closed 게이트) — 코드 근거 첨부  |
+| [아키텍처 결정 기록](adr/)                                                         | 기여자 | 계약이나 강제 방식을 바꾸는 번호 결정 기록 (ADR 0001: Track A 계약의 기계화)                                                                       |
 | [보안 정책](../.github/SECURITY.md)                                                | 전체   | 취약점 신고 채널, 지원 버전, 스코프                                                                                                                |
 | [기여 가이드](../CONTRIBUTING.md)                                                  | 기여자 | 개발 환경, 커밋 규칙, 디버깅, 릴리즈                                                                                                               |
 
@@ -91,3 +94,4 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 - [docs/specs/](specs/) — 기능별 설계 사양(spec)
 - [docs/plans/](plans/) — 구현 계획 및 스파이크 기록 (역사 문서 포함)
 - [docs/prs/](prs/) — 병합된 트랙의 PR 보고서
+- [docs/adr/](adr/) — 계약·강제 변경의 번호 결정 기록(안전 계약 변경은 ADR 필요)
