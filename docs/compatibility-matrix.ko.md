@@ -39,6 +39,10 @@ JSON 엔진), `generated/bun.ts` → **Bun** 열(기본값은 FFI rkyv V2 엔진
 - **타임아웃**(`options.timeoutMs`): 모든 엔진 공통 — 글로벌 `invoke`가 settle 레이스를
   건다. 만료 시 `transport.timeout`(retryable)으로 거부하며 지각 응답은 무시된다.
   배치(`invokeBatch`)는 항목별 `timeoutMs`의 **최솟값**으로 배치 전체에 레이스를 건다.
+  와이어 배치(단일 횡단) 경로는 단건 `invoke`와 같은 항목별 계약을 적용한다:
+  `timeoutMs: 0`도 마감으로 친다(`!== undefined` 판정이라 0 마감이 단일 횡단 경로로
+  조용히 흘러가지 않는다), 항목 `args`는 같은 정규화기를 거치며, transport나 커스텀
+  정규화기의 동기 throw는 호출자의 `await`를 우회하지 않고 rejected Promise로 나타난다.
 - **얕은 취소/타임아웃 ≠ 명령이 실행되지 않음**: 위 얕은 취소·타임아웃 ⚠️ 셀들은
   *JS 쪽 관측*을 표시할 뿐, Rust 실행을 표시하지 않는다. 얕은 취소 어댑터
   (`invokeCancel` 전파가 없는 `signal`)나 타임아웃 발화 뒤에도 Rust 명령은 계속
@@ -47,9 +51,11 @@ JSON 엔진), `generated/bun.ts` → **Bun** 열(기본값은 FFI rkyv V2 엔진
   실패 부류"일 뿐, "명령을 재실행해도 안전하다"를 뜻하지 않는다. 비멱등 명령은 상태
   재조회로 이전 시도가 자리 잡지 않았음이 확인된 뒤에만 재시도하라 —
   [rust-api-guide.ko.md](rust-api-guide.ko.md)의 "타임아웃·취소·재시도 의미" 절 참고.
-- **이벤트 구독 호출형**: 생성된 이벤트 계약은 `(name, callback)`을 사용한다. RN은
-  이 canonical 형식과 기존 `(native, name, callback)`을 모두 받고, Tauri는 선택적
-  `listen` 주입 또는 global Tauri 이벤트 API를 사용한다.
+- **이벤트 구독 호출형**: 모든 어댑터가 `(name, callback[, ...])`을 사용한다. RN은
+  `subscribeEvent(name, callback[, options])`만 받고 native 모듈은
+  `globalThis.__rustraNative`에서 해결한다(기존 `(native, name, callback)` 오버로드는
+  0.7.0에서 제거됨). Tauri는 `subscribeEvent(name, callback[, listen])`로 선택적 `listen`
+  주입 또는 global Tauri 이벤트 API를 사용한다.
 - **이벤트 전달 경로**: Tauri는 Rust `app.emit` **푸시**, RN은 JSI 싱크 **푸시**,
   Bun은 FFI C 콜백 싱크 **푸시**(`rustra_ffi_event_sink_register` — 백그라운드
   스레드 emit 호스트는 `poll` 옵션 폴링 폴백), Node는 2-모드이다: `subscribeEvent`

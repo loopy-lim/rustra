@@ -14,24 +14,32 @@ When the contract (schema) shared by the Rust backend and TypeScript clients cha
 
 ### `rustra diff`
 
-Compares two schema versions and detects breaking changes. It returns exit 1 when there is a breaking change so it can be used as a CI gate.
+Compares two schema versions and detects breaking changes. It returns exit 1 when there is a breaking change so it can be used as a CI gate; exit 2 means the command itself was invoked wrong (for example a missing `--old`/`--new`), so a CI job can tell a misconfigured step from a real breaking change.
 
 ```bash
 # text output
 rustra diff --old ./generated/schema.v1.json --new ./generated/schema.json
 
-# machine-readable (DiffResult JSON)
+# machine-readable — { "schemaVersion": 1, "breaking": [...], "clean": boolean }
 rustra diff --old ./generated/schema.v1.json --new ./generated/schema.json --format json
 ```
 
-### The 4 detected breaking change types
+### Detected breaking change types
 
-| Type                   | Meaning                    |
-| ---------------------- | -------------------------- |
-| `command_removed`      | Command deleted            |
-| `field_removed`        | input/output field deleted |
-| `field_type_changed`   | Field type changed         |
-| `required_field_added` | Required field newly added |
+| Type                    | Meaning                                                                                                                                                                                                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `command_removed`       | Command deleted                                                                                                                                                                                                                                              |
+| `command_id_changed`    | The command's numeric id moved (`from` → `to`) — every by-id call diverges                                                                                                                                                                                   |
+| `field_removed`         | input/output field deleted                                                                                                                                                                                                                                   |
+| `field_type_changed`    | Field type changed (`from` → `to`)                                                                                                                                                                                                                           |
+| `required_field_added`  | Required field newly added (the old payload never had it)                                                                                                                                                                                                    |
+| `field_became_required` | An existing optional field became required                                                                                                                                                                                                                   |
+| `field_became_optional` | An existing required field became optional                                                                                                                                                                                                                   |
+| `definition_removed`    | A nested type definition (`definitions`/`$defs`) the schema referenced was removed                                                                                                                                                                           |
+| `event_removed`         | Event deleted                                                                                                                                                                                                                                                |
+| `event_payload_changed` | Event payload changed. Field-level findings inside a payload are folded into one entry each with `path`, `before`, `after` — `(absent)` → `(required)` for a newly required field, `(present)` → `(removed)`, `(optional)` → `(required)`, or the type names |
+
+The recipes below cover the four command-side types you will meet most often; the event and definition entries follow the same rollout order (see [events-and-channels.md](events-and-channels.md) for the event contract).
 
 ## Recipes per breaking change
 

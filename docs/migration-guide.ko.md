@@ -16,24 +16,34 @@ Rust 백엔드와 TypeScript 클라이언트가 공유하는 계약(schema)이 �
 ### `rustra diff`
 
 두 스키마 버전을 비교해 breaking change를 검출한다. CI 게이트로 쓸 수 있게
-breaking이 있으면 exit 1을 반환한다.
+breaking이 있으면 exit 1을 반환한다. exit 2는 명령 자체를 잘못 호출했다는
+뜻(예: `--old`/`--new` 누락)이므로 CI job이 설정 실수와 실제 breaking을 구분할 수 있다.
 
 ```bash
 # 텍스트 출력
 rustra diff --old ./generated/schema.v1.json --new ./generated/schema.json
 
-# 기계 판독 (DiffResult JSON)
+# 기계 판독 — { "schemaVersion": 1, "breaking": [...], "clean": boolean }
 rustra diff --old ./generated/schema.v1.json --new ./generated/schema.json --format json
 ```
 
-### 감지되는 breaking change 4종
+### 감지되는 breaking change 타입
 
-| 타입                   | 의미                   |
-| ---------------------- | ---------------------- |
-| `command_removed`      | 커맨드 삭제            |
-| `field_removed`        | input/output 필드 삭제 |
-| `field_type_changed`   | 필드 타입 변경         |
-| `required_field_added` | 필수 필드 신규 추가    |
+| 타입                    | 의미                                                                                                                                                                                                                               |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `command_removed`       | 커맨드 삭제                                                                                                                                                                                                                        |
+| `command_id_changed`    | 커맨드의 숫자 id가 이동(`from` → `to`) — by-id 호출이 전부 갈라진다                                                                                                                                                                |
+| `field_removed`         | input/output 필드 삭제                                                                                                                                                                                                             |
+| `field_type_changed`    | 필드 타입 변경(`from` → `to`)                                                                                                                                                                                                      |
+| `required_field_added`  | 필수 필드 신규 추가(구 페이로드에 없던 필드)                                                                                                                                                                                       |
+| `field_became_required` | 기존 선택 필드가 필수로 바뀜                                                                                                                                                                                                       |
+| `field_became_optional` | 기존 필수 필드가 선택으로 바뀜                                                                                                                                                                                                     |
+| `definition_removed`    | 스키마가 참조하던 중첩 타입 정의(`definitions`/`$defs`) 삭제                                                                                                                                                                       |
+| `event_removed`         | 이벤트 삭제                                                                                                                                                                                                                        |
+| `event_payload_changed` | 이벤트 페이로드 변경. 페이로드 내부의 필드 수준 발견은 각각 `path`, `before`, `after`를 가진 항목 하나로 접힌다 — 새 필수 필드는 `(absent)` → `(required)`, `(present)` → `(removed)`, `(optional)` → `(required)`, 또는 타입 이름 |
+
+아래 레시피는 가장 자주 만나는 커맨드 측 4종을 다룬다. 이벤트·정의 항목도 같은 롤아웃
+순서를 따른다(이벤트 계약은 [events-and-channels.ko.md](events-and-channels.ko.md) 참고).
 
 ## Breaking change별 해결 레시피
 
