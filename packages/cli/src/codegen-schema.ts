@@ -39,18 +39,13 @@ export function tsTypeFromSchema(
       case 'boolean':
         return 'boolean';
       case 'array': {
-        if (Array.isArray(schema.items))
-          return `[${schema.items.map((item) => tsTypeFromSchema(item, definitions)).join(', ')}]`;
+        if (Array.isArray(schema.items)) return arrayItemType(schema, definitions);
         if (schema.items?.type === 'integer' && schema.items.format === 'uint8')
           return 'Uint8Array | ArrayBuffer | number[]';
-        const itemType = schema.items
-          ? tsTypeFromSchema(schema.items, definitions)
-          : recordUnknownFallback(schema);
-        return schema.uniqueItems
-          ? `Set<${itemType}>`
-          : itemType.includes(' | ')
-            ? `(${itemType})[]`
-            : `${itemType}[]`;
+        const itemType = arrayItemType(schema, definitions);
+        if (schema.uniqueItems) return `Set<${itemType}>`;
+        if (itemType.includes(' | ')) return `(${itemType})[]`;
+        return `${itemType}[]`;
       }
       case 'null':
         return 'null';
@@ -84,16 +79,18 @@ function unionMemberType(
     case 'object':
       return tsObjectFromSchema(schema, definitions);
     case 'array': {
-      if (Array.isArray(schema.items))
-        return `[${schema.items.map((item) => tsTypeFromSchema(item, definitions)).join(', ')}]`;
-      const itemType = schema.items
-        ? tsTypeFromSchema(schema.items, definitions)
-        : recordUnknownFallback(schema);
+      const itemType = arrayItemType(schema, definitions);
       return itemType.includes(' | ') ? `(${itemType})[]` : `${itemType}[]`;
     }
     default:
       return recordUnknownFallback(schema);
   }
+}
+
+function arrayItemType(schema: JsonSchema, definitions: Record<string, JsonSchema>): string {
+  if (Array.isArray(schema.items))
+    return `[${schema.items.map((item) => tsTypeFromSchema(item, definitions)).join(', ')}]`;
+  return schema.items ? tsTypeFromSchema(schema.items, definitions) : recordUnknownFallback(schema);
 }
 
 export function tsObjectFromSchema(

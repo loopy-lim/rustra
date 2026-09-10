@@ -48,10 +48,6 @@ export function cppComplexRefFunctions(
       `static void ${cppComplexEncodeName(name)}(jsi::Runtime&, const jsi::Value&, rc::Writer&, size_t);`,
       `static jsi::Value ${cppComplexDecodeName(name)}(jsi::Runtime&, rc::Reader&, size_t);`,
     );
-  }
-  for (const name of names) {
-    const result = buildCodecIr(definitions[name], definitions);
-    if (!result.ok) continue;
     const encodeState: CppComplexState = { counter: 0 };
     const decodeState: CppComplexState = { counter: 0 };
     bodies.push(

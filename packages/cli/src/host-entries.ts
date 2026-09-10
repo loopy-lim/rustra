@@ -102,10 +102,13 @@ export function resolveHostEntries(
   const codegenManifest = config.codegen?.rustManifest
     ? resolve(appRoot, config.codegen.rustManifest)
     : undefined;
-  if (config.node) {
-    const manifest = config.node.rustManifest
-      ? resolve(appRoot, config.node.rustManifest)
+  function resolveSectionManifest(section: { rustManifest?: string }): string | undefined {
+    return section.rustManifest
+      ? resolve(appRoot, section.rustManifest)
       : (codegenManifest ?? findCargoManifest(appRoot));
+  }
+  if (config.node) {
+    const manifest = resolveSectionManifest(config.node);
     if (!manifest) throw new Error('Node setup could not find Cargo.toml. Set node.rustManifest.');
     const metadata = readCargoMetadata(manifest);
     const cargoPackage = selectHostPackage(metadata, manifest, config.node.rustPackage);
@@ -123,20 +126,17 @@ export function resolveHostEntries(
     };
   }
   if (config.bun) {
-    const manifest = config.bun.rustManifest
-      ? resolve(appRoot, config.bun.rustManifest)
-      : (codegenManifest ?? findCargoManifest(appRoot));
+    const manifest = resolveSectionManifest(config.bun);
     if (!manifest) throw new Error('Bun setup could not find Cargo.toml. Set bun.rustManifest.');
     const metadata = readCargoMetadata(manifest);
     const cargoPackage = selectHostPackage(metadata, manifest, config.bun.rustPackage);
     const libraries = cargoPackage.targets.filter((target) =>
       target.crate_types.includes('cdylib'),
     );
-    const selected = config.bun.rustLibrary
-      ? libraries.find((target) => target.name === config.bun!.rustLibrary)
-      : libraries.length === 1
-        ? libraries[0]
-        : undefined;
+    let selected = libraries.length === 1 ? libraries[0] : undefined;
+    if (config.bun.rustLibrary) {
+      selected = libraries.find((target) => target.name === config.bun!.rustLibrary);
+    }
     if (!selected)
       throw new Error(
         `Bun setup requires one Cargo cdylib (${libraries

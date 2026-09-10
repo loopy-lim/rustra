@@ -1,5 +1,3 @@
-import type { JsonSchema } from './schema.js';
-
 export type PostcardFieldKind =
   | 'zigzag'
   | 'uvar'
@@ -33,7 +31,6 @@ export type PostcardFieldKind =
   | 'map_bool'
   | 'map_string'
   | 'tuple'
-  | 'data_enum'
   | 'option_zigzag'
   | 'option_uvar'
   | 'option_zigzag64'
@@ -65,7 +62,4 @@ export type PostcardField = {
   refType?: string;
   enumVariants?: string[];
   tupleItems?: PostcardField[];
-  enumVariantsData?: { tag: string; fields: PostcardField[] }[];
 };
-
-export type Schema = JsonSchema;

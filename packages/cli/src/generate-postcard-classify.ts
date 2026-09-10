@@ -2,6 +2,21 @@ import type { JsonSchema } from './schema.js';
 import { refTypeName, unwrapOptionSchema } from './generate-postcard-graph.js';
 import type { PostcardFieldKind } from './generate-postcard-types.js';
 
+const UNSIGNED_FORMATS = ['uint8', 'uint16', 'uint32'];
+
+const OPTION_KIND: Partial<Record<PostcardFieldKind, PostcardFieldKind>> = {
+  zigzag: 'option_zigzag',
+  uvar: 'option_uvar',
+  zigzag64: 'option_zigzag64',
+  uvar64: 'option_uvar64',
+  f64: 'option_f64',
+  f32: 'option_f32',
+  bool: 'option_bool',
+  string: 'option_string',
+  struct: 'option_struct',
+  bytes: 'option_bytes',
+};
+
 /** Classify one schema property into its postcard wire encoding kind. */
 export function classifyPostcardField(
   schema: JsonSchema,
@@ -27,7 +42,7 @@ export function classifyPostcardField(
   if (schema.type === 'integer') {
     if (schema.format === 'uint64') return 'uvar64';
     if (schema.format === 'int64') return 'zigzag64';
-    const unsigned = ['uint8', 'uint16', 'uint32'].includes(schema.format ?? '');
+    const unsigned = UNSIGNED_FORMATS.includes(schema.format ?? '');
     return unsigned ? 'uvar' : 'zigzag';
   }
   if (schema.type === 'number') return schema.format === 'float' ? 'f32' : 'f64';
@@ -36,26 +51,14 @@ export function classifyPostcardField(
   const optionInner = unwrapOptionSchema(schema);
   if (optionInner) {
     const inner = classifyPostcardField(optionInner, definitions);
-    const optionKind: Partial<Record<PostcardFieldKind, PostcardFieldKind>> = {
-      zigzag: 'option_zigzag',
-      uvar: 'option_uvar',
-      zigzag64: 'option_zigzag64',
-      uvar64: 'option_uvar64',
-      f64: 'option_f64',
-      f32: 'option_f32',
-      bool: 'option_bool',
-      string: 'option_string',
-      struct: 'option_struct',
-      bytes: 'option_bytes',
-    };
-    return inner ? (optionKind[inner] ?? null) : null;
+    return inner ? (OPTION_KIND[inner] ?? null) : null;
   }
 
   if (schema.type === 'array' && schema.items && !Array.isArray(schema.items)) {
     const items = schema.items;
     if (items.type === 'integer' && items.format === 'uint8') return 'bytes';
     if (items.type === 'integer') {
-      const unsigned = ['uint8', 'uint16', 'uint32'].includes(items.format ?? '');
+      const unsigned = UNSIGNED_FORMATS.includes(items.format ?? '');
       if (items.format === 'uint64') return schema.uniqueItems ? 'set_u64' : 'vec_u64';
       if (items.format === 'int64') return schema.uniqueItems ? 'set_i64' : 'vec_i64';
       if (unsigned) return schema.uniqueItems ? 'set_uvar' : 'vec_uvar';
@@ -71,7 +74,9 @@ export function classifyPostcardField(
         return 'vec_struct';
       }
       const inner = classifyPostcardField(resolved, definitions, depth + 1);
-      return inner === 'struct' ? 'vec_struct' : inner === 'string' ? 'vec_string' : null;
+      if (inner === 'struct') return 'vec_struct';
+      if (inner === 'string') return 'vec_string';
+      return null;
     }
     return null;
   }
@@ -103,7 +108,7 @@ function classifyMap(schema: JsonSchema): PostcardFieldKind | null {
   if (value.type === 'integer') {
     if (value.format === 'uint64') return 'map_u64';
     if (value.format === 'int64') return 'map_i64';
-    return ['uint8', 'uint16', 'uint32'].includes(value.format ?? '') ? 'map_uvar' : 'map_zigzag';
+    return UNSIGNED_FORMATS.includes(value.format ?? '') ? 'map_uvar' : 'map_zigzag';
   }
   if (value.type === 'number') return 'map_f64';
   if (value.type === 'boolean') return 'map_bool';

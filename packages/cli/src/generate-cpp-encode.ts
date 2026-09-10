@@ -2,6 +2,16 @@ import type { PostcardField } from './generate-postcard-types.js';
 import { OPTION_INNER_KIND } from './generate-postcard-types.js';
 import { collectPostcardFields } from './generate-postcard-graph.js';
 
+const MAP_VALUE_PUSHER: Record<string, (name: string) => string> = {
+  map_zigzag: (name) => `w.push_i64(rustra_i64(rt, _e, "${name}{}"));`,
+  map_i64: (name) => `w.push_i64(rustra_i64(rt, _e, "${name}{}"));`,
+  map_uvar: (name) => `w.push_uvar(rustra_u64(rt, _e, "${name}{}"));`,
+  map_u64: (name) => `w.push_uvar(rustra_u64(rt, _e, "${name}{}"));`,
+  map_f64: (name) => `w.push_f64(rustra_f64(rt, _e, "${name}{}"));`,
+  map_bool: () => 'w.push_bool(_e.getBool());',
+  map_string: () => 'w.push_string(_e.getString(rt).utf8(rt));',
+};
+
 export function cppFieldEncodeExpr(
   field: PostcardField,
   objExpr: string,
@@ -74,16 +84,9 @@ export function cppEncodeWithGetter(
     case 'map_f64':
     case 'map_bool':
     case 'map_string': {
+      const push = MAP_VALUE_PUSHER[field.kind];
       const pushVal =
-        field.kind === 'map_zigzag' || field.kind === 'map_i64'
-          ? `w.push_i64(rustra_i64(rt, _e, "${field.name}{}"));`
-          : field.kind === 'map_uvar' || field.kind === 'map_u64'
-            ? `w.push_uvar(rustra_u64(rt, _e, "${field.name}{}"));`
-            : field.kind === 'map_f64'
-              ? `w.push_f64(rustra_f64(rt, _e, "${field.name}{}"));`
-              : field.kind === 'map_bool'
-                ? 'w.push_bool(_e.getBool());'
-                : 'w.push_string(_e.getString(rt).utf8(rt));';
+        push !== undefined ? push(field.name) : 'w.push_string(_e.getString(rt).utf8(rt));';
       return `${indent}{ auto _o = ${get}.asObject(rt); std::vector<std::pair<std::string, jsi::Value>> _entries; auto _names = _o.getPropertyNames(rt); for (size_t _j = 0; _j < _names.length(rt); _j++) { auto _k = _names.getValueAtIndex(rt, _j).getString(rt).utf8(rt); _entries.push_back({std::move(_k), _o.getProperty(rt, jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_k.data()), _k.size()))}); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; ${pushVal} } }`;
     }
     case 'tuple': {

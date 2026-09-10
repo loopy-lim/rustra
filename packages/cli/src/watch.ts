@@ -60,14 +60,6 @@ export type WatchHandle = {
   dispose(): void;
 };
 
-export function combineWatchHandles(...handles: readonly WatchHandle[]): WatchHandle {
-  return {
-    dispose() {
-      for (const handle of handles) handle.dispose();
-    },
-  };
-}
-
 /**
  * One queued, disposable state machine for every codegen watch mode.
  *

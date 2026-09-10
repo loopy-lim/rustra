@@ -49,8 +49,8 @@ export function codecVariantKey(schema: JsonSchema): string | null {
     return String(schema.enum[0]);
   }
   if (schema.properties) {
-    const discriminator = Object.entries(schema.properties).find(
-      ([, value]) => primitive(value.const) && value.const !== undefined,
+    const discriminator = Object.entries(schema.properties).find(([, value]) =>
+      primitive(value.const),
     );
     if (discriminator) return String(discriminator[1].const);
     const keys = Object.keys(schema.properties);
@@ -63,7 +63,7 @@ export function discriminator(
   schema: JsonSchema,
 ): { key: string; value: string | number | boolean | null } | null {
   for (const [key, value] of Object.entries(schema.properties ?? {})) {
-    if (primitive(value.const) && value.const !== undefined) {
+    if (primitive(value.const)) {
       return { key, value: value.const as string | number | boolean | null };
     }
   }
