@@ -30,13 +30,12 @@ export function parseCodegenArgs(args: string[]): CodegenOptions {
   const format = cliFormat(parsed.values.get('format'), 'codegen');
   const help = parsed.flags.has('help');
   const configPath = parsed.values.get('config');
-  const options: CodegenOptions = {
-    ...(configPath ? { configPath } : {}),
-    ...(parsed.flags.has('check') ? { check: true } : {}),
-    ...(parsed.flags.has('explain') ? { explain: true } : {}),
-    ...(format ? { format } : {}),
-    ...(help ? { help: true } : {}),
-  };
+  const options: CodegenOptions = {};
+  if (configPath) options.configPath = configPath;
+  if (parsed.flags.has('check')) options.check = true;
+  if (parsed.flags.has('explain')) options.explain = true;
+  if (format) options.format = format;
+  if (help) options.help = true;
   // 커맨드 레벨 필수 인자 누락도 usage — 파서 레벨과 같은 exit-2 계약. 단 doctor
   // 관례와 대칭으로 ./rustra.json 이 있으면 기본 채택한다(감사 A10) — 무인자
   // `rustra codegen` 이 관례화된 파일명에서 동작해야 첫 사용 흐름이 짧아진다.
@@ -55,14 +54,18 @@ export function parseGenerateArgs(args: string[]): GenerateOptions {
   });
   const format = cliFormat(parsed.values.get('format'), 'generate');
   const help = parsed.flags.has('help');
-  return {
-    ...(parsed.values.get('schema') ? { schemaPath: parsed.values.get('schema') } : {}),
-    ...(parsed.values.get('output') ? { outputPath: parsed.values.get('output') } : {}),
-    ...(parsed.values.get('cpp-output') ? { cppOutputPath: parsed.values.get('cpp-output') } : {}),
-    ...(parsed.values.get('config') ? { configPath: parsed.values.get('config') } : {}),
-    ...(parsed.flags.has('positional') ? { positional: true } : {}),
-    ...(parsed.flags.has('check') ? { check: true } : {}),
-    ...(format ? { format } : {}),
-    ...(help ? { help: true } : {}),
-  };
+  const schema = parsed.values.get('schema');
+  const output = parsed.values.get('output');
+  const cppOutput = parsed.values.get('cpp-output');
+  const configPath = parsed.values.get('config');
+  const options: GenerateOptions = {};
+  if (schema) options.schemaPath = schema;
+  if (output) options.outputPath = output;
+  if (cppOutput) options.cppOutputPath = cppOutput;
+  if (configPath) options.configPath = configPath;
+  if (parsed.flags.has('positional')) options.positional = true;
+  if (parsed.flags.has('check')) options.check = true;
+  if (format) options.format = format;
+  if (help) options.help = true;
+  return options;
 }

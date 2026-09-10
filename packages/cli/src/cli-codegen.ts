@@ -14,6 +14,12 @@ function status(format: CliOutputFormat | undefined, message: string): void {
   (format === 'json' ? console.error : console.log)(message);
 }
 
+function wrapError(message: string, error: unknown): Error {
+  return new Error(`${message}: ${error instanceof Error ? error.message : String(error)}`, {
+    cause: error,
+  });
+}
+
 /** runGenerate 진행 표기의 drift 신호 — "(updated)" 접미어가 하나라도 있으면 갱신. */
 const hasUpdatedMarker = (files: string[]): boolean =>
   files.some((file) => file.endsWith('(updated)'));
@@ -86,9 +92,7 @@ export async function runCodegen(args: string[]): Promise<void> {
     // 읽는 config.schemaPath 는 갱신되지 않아 게이트가 stale 비교로 무력화된다
     // (tauri-calculator rustra.hot.json 레이아웃, 2026-09-10 실측). check 모드는
     // 기존대로 임시 디렉터리로 우회한다.
-    const schemaOutDir = checkRoot
-      ? checkRoot
-      : dirname(resolve(dirname(configPath), config.schema));
+    const schemaOutDir = checkRoot ?? dirname(resolve(dirname(configPath), config.schema));
     try {
       await spawnInherit(
         'cargo',
@@ -110,9 +114,9 @@ export async function runCodegen(args: string[]): Promise<void> {
         },
       );
     } catch (error) {
-      throw new Error(
-        `Rust schema generation failed for ${target.packageName}/${target.binaryName} (${target.manifestPath}): ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error },
+      throw wrapError(
+        `Rust schema generation failed for ${target.packageName}/${target.binaryName} (${target.manifestPath})`,
+        error,
       );
     }
     if (checkRoot) {
@@ -134,9 +138,9 @@ export async function runCodegen(args: string[]): Promise<void> {
           { quiet: true },
         );
       } catch (error) {
-        throw new Error(
-          `TypeScript/C++ generation check failed for ${configPath} (schema ${temporarySchema}): ${error instanceof Error ? error.message : String(error)}`,
-          { cause: error },
+        throw wrapError(
+          `TypeScript/C++ generation check failed for ${configPath} (schema ${temporarySchema})`,
+          error,
         );
       }
     }
@@ -181,9 +185,6 @@ export async function runCodegen(args: string[]): Promise<void> {
       if (hint) console.log(hint);
     }
   } catch (error) {
-    throw new Error(
-      `TypeScript/C++ generation failed for ${configPath}: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
-    );
+    throw wrapError(`TypeScript/C++ generation failed for ${configPath}`, error);
   }
 }
