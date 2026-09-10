@@ -91,6 +91,11 @@ function spawnCapturingStdout(args: string[], cwd: string, progressLabel: string
   });
 }
 
+/** cargo 빌드 단위의 kind 배열은 메시지당 1~2개('cdylib', 'rlib' 등)라 선형 판정으로 충분하다. */
+function isCdylibArtifact(message: CargoArtifactMessage): boolean {
+  return message.target?.kind?.includes('cdylib') ?? false;
+}
+
 /**
  * compiler-artifact 메시지들에서 cdylib 산출물을 고른다. 판정 규칙:
  * reason === "compiler-artifact" 이고 target.kind 에 cdylib 가 있어야 하며,
@@ -112,7 +117,7 @@ export function pickCdylibArtifact(stdout: string): string | undefined {
       continue;
     }
     if (message.reason !== 'compiler-artifact') continue;
-    if (!message.target?.kind?.includes('cdylib')) continue;
+    if (!isCdylibArtifact(message)) continue;
     const candidates = (message.filenames ?? []).filter((file) =>
       DYLIB_EXTENSIONS.some((extension) => file.endsWith(extension)),
     );
