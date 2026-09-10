@@ -22,6 +22,16 @@ declare `x-rustra-variant-order: ["key-for-first", "key-for-second"]` in the
 schema. The actual wire index is computed by sorting these stable keys in UTF-8
 byte order.
 
+Variant identification is a compiled per-variant matcher, in precedence order: an exact
+discriminator (a property that must equal a tag — the tag is a `const` property or a
+single-value `enum` property, the shape schemars emits for serde's adjacent/internal
+tags), then single-property key presence, then const value, then a single-enum value,
+then the type fallback (string/object). Encoder and decoder compile the same matcher on
+all three faces (Rust, TS, C++), and the encoder takes the exact-tag matcher first, so a
+looser fallback matcher cannot claim a value that belongs to an exact-tag variant — a
+mis-tagged value fails loudly at encode instead of producing a frame the decoder would
+route to a different variant.
+
 The default limits are depth 32, payload 1 MiB, and collection/string length 100,000.
 Truncated frames, duplicate map keys, invalid variants, and trailing bytes are
 handled as `command.invalid_args`/`invoke.malformed`, not as success results.

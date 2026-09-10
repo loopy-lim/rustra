@@ -87,6 +87,14 @@ Tauri 전용 규칙 둘이 모든 구독에 적용된다. 리스너 콜백이 �
 `Package::build()`가 `event channel collision` 패닉으로 거부하므로 그런 오배선은
 런타임에 도달하지 못한다.
 
+**예약 채널** — `rustra://hot-core/swapped`: hot-core 스왑 보고.
+`tauri_support::register_dispatch_with_swap_events`(hot-core dylib 모드)로 등록된 Rust
+호스트가 모든 스왑 결과를 여기로 민다 — 성공이면 `{ oldContractHash, newContractHash }`,
+실패면 `{ error }`; 정적 `register` / `register_with_events` 등록 아래에서는 이 채널이
+침묵한다. TypeScript에서는 `@rustra/tauri`의 `subscribeHotSwap`로 구독한다. 이벤트
+이름은 정규화를 그대로 통과한다(`/`는 보존 코드포인트) — 채널은 정확히
+`rustra://hot-core/swapped`다.
+
 **React Native** — RN의 `subscribeEvent(name, cb, options?)`는 JSI 싱크 푸시다.
 CallInvoker 없는 호스트에서는 `pollMs`를 넘겨 C++ 디스패처 큐를 당기는 JS 폴링
 드레인 루프를 돌린다:

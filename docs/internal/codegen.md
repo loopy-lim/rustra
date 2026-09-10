@@ -289,6 +289,26 @@ export function addNumbers(
 export const GENERATED_CONTRACT_HASH = '<sha256-hex>';
 ```
 
+### Emission paths (fail-closed)
+
+The Rust schema bin's default output location (`generated/schema.json`) is
+relative to the spawn CWD. In normal `rustra codegen` (non-check mode) the CLI
+pins `RUSTRA_SCHEMA_OUT` to the directory declared by `config.schema`, so the
+schema binary's emission can never land outside the config-declared path.
+Without the pin, spawning from the config directory would publish a second copy
+elsewhere while `config.schemaPath` — the file the dev parity gate reads — goes
+stale, silently weakening the gate to a stale comparison (measured on the
+tauri-calculator `rustra.hot.json` layout, 2026-09-10). `rustra codegen --check`
+instead redirects emission to a throwaway temp directory — check compares
+without touching the declared tree.
+
+Host-entry (node/bun/tauri section) Cargo manifest resolution priority: the
+section's own `rustManifest` → the shared `codegen.rustManifest` → upward
+`Cargo.toml` search. If nothing resolves, the CLI fails loudly (`Node setup
+could not find Cargo.toml. Set node.rustManifest.` / the bun equivalent) rather
+than letting the upward search reach a workspace virtual manifest, where
+metadata resolves to zero candidate packages.
+
 ---
 
 ## 6. Current Limitations

@@ -36,7 +36,10 @@ rustra init my-app
 타깃과 동일하게 결합). 동작 예제는
 [tauri-calculator 예제](../../examples/tauri-calculator/README.ko.md)와
 [hot-core 설계](../../docs/plans/2026-09-09-native-hot-core-design.md)를
-참고하세요.
+참고하세요. dylib 루프는 별도 config 파일로 유지하고(예: `dev.target: "dylib"`를
+넣은 `rustra.hot.json`) `rustra dev --config rustra.hot.json`으로 실행하세요 —
+공유 config는 기본 `native` 타깃을 유지합니다(tauri-calculator 예제가 쓰는
+패턴).
 
 ## 라이브러리 API
 

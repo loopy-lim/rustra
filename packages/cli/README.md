@@ -45,7 +45,11 @@ builds the engine core as a cdylib for the native hot-core swap loop — the hos
 picks the artifact up via `RUSTRA_HOT_CORE` without a restart (the parity gate
 composes as with the wasm target). See the
 [tauri-calculator example](../../examples/tauri-calculator/README.md) and the
-[hot-core design](../../docs/plans/2026-09-09-native-hot-core-design.md).
+[hot-core design](../../docs/plans/2026-09-09-native-hot-core-design.md). Keep
+the dylib loop in its own config file (for example `rustra.hot.json` with
+`dev.target: "dylib"`) and run `rustra dev --config rustra.hot.json`, so the
+shared config keeps its default `native` target — the pattern the
+tauri-calculator example uses.
 
 ## Library API
 

@@ -41,6 +41,27 @@ type TauriEngineClient = {
 function createTauriEngine(options: { invoke: TauriInvoke }): TauriEngineClient;
 ```
 
+### Hot-core swap events (experimental)
+
+`subscribeHotSwap` subscribes to the reserved `rustra://hot-core/swapped` channel — it
+fires only when the Rust side registers with
+`tauri_support::register_dispatch_with_swap_events` (the hot-core dylib loop); under the
+static registrations the channel is silent.
+
+```ts
+type HotSwapEvent = { oldContractHash: string; newContractHash: string } | { error: string };
+
+function subscribeHotSwap(
+  callback: (event: HotSwapEvent) => void,
+  listen?: TauriListen,
+): Promise<() => void>;
+```
+
+The success payload carries both the old and the new contract hash, so it can double as
+a cache-resync signal: compare the hashes to decide whether schema-dependent caches need
+refetching. Failures are reported, never dropped. See
+[events-and-channels](../../docs/events-and-channels.md) for the reserved-channel rules.
+
 ## Usage examples
 
 ```ts

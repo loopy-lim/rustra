@@ -3,7 +3,11 @@
 이 프로젝트의 주요 변경사항을 기록합니다. 세부 내역은 git history와
 `docs/plans/`의 계획/결과 문서를 참고하세요.
 
-## Unreleased
+## 0.9.0 (2026-09-10)
+
+0.9.0 라인 요약이다 — npm 패키지 0.7.0~0.9.0(패키지별 상이)과 Rust crate
+0.9.0(`rustra`·`rustra-macros`) 발행을 한데 묶는다. 세부 내역은
+packages/*/CHANGELOG.md.
 
 ### Added
 
@@ -18,6 +22,9 @@
   재지향으로 JS 재바인딩 없이 스왑된다(Android debuggable 빌드 한정 filesDir
   경로, iOS 시뮬레이터 env 경로). macOS·iOS 시뮬·Android 에뮬/실기기 앱
   도메인에서 스왑 실측 통과(문서: `docs/plans/2026-09-09-native-hot-core-design.md`).
+  감시 실패에는 재시도 상한이 있다 — 같은 바이트(sha256)가 5회 연속 실패하면 그
+  바이트를 포이즌해 새 바이트가 발행될 때까지 건너뛴다(Rust 감시 스레드와 RN
+  C++ 폴링이 같은 정책).
 
 ### Removed
 
@@ -26,7 +33,7 @@
   (`RendererHost`, `HostMessage`, `MessageKind`, `RendererCapabilities`, `Size`,
   `SurfaceOptions`, `host_supports_eval`). 대체재는 호스트별 어댑터 경계 —
   채널·FFI 공개 표면으로 임베딩 호스트가 자체 렌더러/이벤트를 연결한다. npm
-  0.7.0 라인과 다음 `rustra` crate 발행에 반영된다.
+  0.7.0 라인과 `rustra` crate 0.9.0 발행에 반영됐다.
 
 ### Changed
 
