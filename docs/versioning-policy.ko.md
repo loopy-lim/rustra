@@ -49,6 +49,21 @@ Rust crate는 다음 발행에서 제거된다(crates.io 발행은 수동이라 
 npm 라인을 따라간다). 대체재는 호스트별 어댑터 경계다 — 각 임베딩 호스트는
 공개된 채널·FFI 표면으로 자체 렌더러/이벤트를 연결한다.
 
+같은 규칙으로 0.7.0 `@rustra/tauri`·`@rustra/react-native` 패키지에서 제거된 것:
+0.6.0에서 deprecated 된 레거시 `subscribeEvent(listen, name, callback)`(Tauri)과
+`subscribeEvent(native, name, callback[, options])`(React Native) 오버로드.
+`subscribeEvent(name, callback[, listen])`과 `subscribeEvent(name, callback[, options])`만
+남고, React Native는 native 모듈을 `globalThis.__rustraNative`에서 해결한다.
+
+`main`에 착지했고 다음 npm 릴리스에 실리는 것(changeset 대기): 생성 모듈의
+`RUSTRA_LEGACY_BENCHMARKS`/`RUSTRA_ENABLE_LEGACY_BENCHMARKS` 빌드 플래그와 함께
+`reactNative.legacyBenchmarks` 설정 키(`@rustra/cli`), 그리고 `RustraNative`와 JSI
+호스트 객체의 calculator 전용 레거시 와이어 함수 — `invokeMsgpack`, `invokeBincode`,
+`invokePostcard`, `invokeRkyv`, `invokeHybrid`, `invokeRaw`, JSI 측의 `invokeBytes`와
+`invokeLegacyPostcard`(`@rustra/types`, `@rustra/react-native`). 대체재는 제네릭
+transport(`invoke`, `invokeRkyvV2`)와 타입드 고속 경로(`invokeTyped*`,
+`getCodecCapabilities`)이며 이들은 변경되지 않았다.
+
 ## 실험 표면
 
 실험 항목은 안정화될 때까지 어떤 릴리즈에서든 변경되거나 깨질 수 있다. 표시는

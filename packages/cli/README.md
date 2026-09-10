@@ -28,9 +28,17 @@ rustra diff --old ./schema.v1.json --new ./schema.v2.json
 
 # 7. initialize a new project scaffold
 rustra init my-app
+
+# 8. diagnose the host — toolchain, Cargo manifest, crates.io reachability
+#    (registry.reachability, warn-only), device-token catalog
+#    (codegen.device_catalog: skip/warn/pass/fail); --format json, --strict
+rustra doctor --config rustra.json
 ```
 
-See `rustra --help` for the full list of options.
+See `rustra --help` for the full list of options. Exit code `2` means a usage error
+(unknown command/flag or a missing required argument), `1` a runtime failure or a
+breaking `diff`; `doctor`, `codegen`, `codegen --explain`, and `diff` share the
+`--format json` envelope `{ "schemaVersion": 1, ... }`.
 
 ## Library API
 

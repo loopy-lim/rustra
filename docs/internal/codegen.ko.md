@@ -172,17 +172,51 @@ fn contract_hash(input: impl AsRef<[u8]>) -> String {
 ```json
 {
   "packageId": "example.calculator",
+  "schemaVersion": 1,
+  "fieldOrder": "declaration",
   "commands": [
     {
       "name": "addNumbers",
+      "commandId": 1,
       "inputType": "AddNumbersInput",
       "outputType": "AddNumbersOutput",
       "inputSchema": { ... },
       "outputSchema": { ... }
+    },
+    {
+      "name": "divide",
+      "commandId": 10,
+      "inputType": "DivideInput",
+      "outputType": "DivideOutput",
+      "inputSchema": { ... },
+      "outputSchema": { ... },
+      "errors": [{ "code": "math.divide_by_zero", "description": null, "retryable": false }]
+    },
+    {
+      "name": "deviceDemo",
+      "commandId": 32,
+      "inputType": "()",
+      "outputType": "DeviceDemoOutput",
+      "outputSchema": { ... },
+      "devices": ["camera", "bluetooth"]
     }
-  ]
+  ],
+  "deviceCapabilities": ["camera", "microphone", "geolocation", "..."]
 }
 ```
+
+네 필드는 조건부다 — 무언가 선언됐을 때만 기록되므로 선언이 없는 패키지는 바이트 동일
+스키마와 불변 contract hash를 유지한다:
+
+- 커맨드별 `errors`(`[{ code, description, retryable }]`) — `#[command(error(...))]` /
+  `command_errors` 빌더에서 옴 → `errors.ts`로 렌더(`{Fn}ErrorCode` 리터럴 유니언,
+  `{Fn}Error` 교차 타입, `is{Fn}Error` 가드);
+- 커맨드별 `devices`(`["camera", ...]`) — `#[command(device(...))]` / `command_devices`
+  빌더에서 옴 → `devices.ts`로 렌더;
+- 커맨드별 `platforms`(`["windows", "macos"]`) — `.platform_command`에서 옴;
+- 최상위 `deviceCapabilities` — rustra 디바이스 토큰 카탈로그로, 디바이스를 선언한 커맨드가
+  하나라도 있으면 기록된다. CLI가 토큰 순서·`devices.ts` 유니언·`codegen.device_catalog`
+  doctor 검사의 단일 출처로 읽으며, 수동 미러는 없다.
 
 ### types.ts
 

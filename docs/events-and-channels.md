@@ -78,6 +78,20 @@ const unsubscribe = await subscribeEvent('progress.tick', (payload) => {
 });
 ```
 
+Two Tauri-specific rules apply to every subscription. A listener callback that
+throws is reported once as a `kind: 'tauri.listener_error'` debug event (stack
+preserved; it always reaches the `configureDebug` sink and hits the console only
+under `RUSTRA_DEBUG`) and is then swallowed — the callback is **not** re-invoked and
+sibling listeners keep running, the same policy as a browser `EventTarget`. The
+channel a subscription listens on is `rustra://` plus the sanitized event name:
+code points are walked one at a time, `-` `/` `:` `_` and Unicode letters/digits
+are kept (so `진행.갱신` becomes `rustra://진행_갱신`), every other code point turns
+into one `_`, and no NFC normalization is applied. Rust (`sanitize_event_name`) and
+TypeScript (`rustraEventChannel`) run the same algorithm character for character,
+and `Package::build()` panics with `event channel collision` when two _declared_
+event names would map to the same channel (`a.b` vs `a_b`), so that misrouting
+cannot reach runtime.
+
 **React Native** — the RN `subscribeEvent(name, cb, options?)` is push via the
 JSI sink. On CallInvoker-less hosts, pass `pollMs` to run the client-side drain
 loop that pulls the C++ dispatcher queue:
@@ -139,6 +153,11 @@ pub fn channel_demo(input: ChannelDemoInput) -> Result<ChannelDemoOutput> {
 }
 ```
 
+`ChannelHandle::send(&str) -> bool` streams a JSON payload. `send_bytes(&[u8]) -> bool`
+streams a binary payload (an rkyv V2 frame, for example) and needs a handle issued
+through the binary path — on a JSON handle it returns `false`, exactly like sending on
+a handle that expired when the call ended.
+
 The host adapter issues the handle and wires the sender — app Rust code only
 calls `send`. Resource-style handles (`ResourceHandle`) follow the same pattern
 for Rust-owned objects.
@@ -172,8 +191,9 @@ channel.close();
 **Node** — `await createNodeChannel(transport, cb)` on a loop transport
 (loop-stdio reservation frames; background-thread send is safe). **Bun** —
 `createBunChannelBridge(options)(cb)` over the `rustra_ffi_channel_*` FFI symbols
-(JS-thread send only). Binary frame variants exist everywhere as
-`createBytesChannel`/`createChannelBytes`/`createNodeBytesChannel`.
+(JS-thread send only). Binary frame variants exist on every host:
+`createBytesChannel` (React Native), `createChannelBytes` (Tauri),
+`createNodeBytesChannel` (Node), and `createBunChannelBytesBridge` (Bun).
 
 Per-host issuance paths and the exact capability cells:
 [compatibility matrix — channel delivery path](compatibility-matrix.md#channel-delivery-path).
