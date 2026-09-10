@@ -74,3 +74,8 @@ pub use watch::{DylibWatchConfig, SwapCallback, SwapOutcome, spawn_dylib_watch};
 #[cfg(all(test, feature = "hot-core"))]
 #[path = "hot_core_tests.rs"]
 mod tests;
+
+// 감시 재시도 정책(FailureTracker)은 비공개 구현 세부다 — test cfg 에만 노출해
+// 정책 단위 테스트가 가능하게 한다(공개 API 표면에는 영향 없음).
+#[cfg(all(test, feature = "hot-core"))]
+pub use watch::FailureTracker;

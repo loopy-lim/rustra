@@ -49,13 +49,65 @@ pub fn spawn_dylib_watch(config: DylibWatchConfig) -> std::thread::JoinHandle<()
         .expect("rustra hot-core: failed to spawn watch thread")
 }
 
+/// 같은 아티팩트 바이트(sha256)에 대한 연속 스왑 실패 허용치 — 초과하면 그
+/// 바이트 상태를 "포이즌"으로 표시해 바이트가 바뀔 때까지 재시도하지 않는다.
+/// 실패 재시도 자체는 폴링 주기(300ms)마다 `prepare_swap_copy`(macOS 에서는
+/// codesign spawn)와 `on_swap(Err)` 콜백을 반복하므로, 열리지 않는 아티팩트가
+/// 이벤트 폭주·서브프로세스 낭비로 퇴화하지 않게 하는 상한이다. 포이즌은
+/// 바이트(해시) 단위로 판정된다 — 새 바이트는 언제나 새 재시도 창을 갖는다.
+const MAX_SWAP_FAILURES_PER_BYTES: u32 = 5;
+
+/// 같은 바이트 연속 실패 추적기 — 상한 도달 시 그 바이트를 포이즌으로
+/// 표시한다. [`run_watch_loop`] 의 상태 조각을 뽑아낸 순수 구조라 스레드·
+/// sleep 없이 재시도 정책만 결정적으로 단위 테스트할 수 있다.
+/// private 모듈 안의 `pub` 다 — test cfg 재수출 경로로만 보인다.
+#[derive(Default)]
+pub struct FailureTracker {
+    streak: u32,
+    streak_hash: Option<String>,
+    poisoned: Option<String>,
+}
+
+impl FailureTracker {
+    pub(super) fn note_success(&mut self) {
+        self.streak = 0;
+        self.streak_hash = None;
+        self.poisoned = None;
+    }
+
+    /// 실패 1회 기록. 상한에 도달해 이 바이트를 새로 포이즌했으면 true.
+    pub(super) fn note_failure(&mut self, hash: &str) -> bool {
+        if self.streak_hash.as_deref() != Some(hash) {
+            // 바이트가 바뀌었으면 이전 실패 streak 은 무관 — 새 바이트의
+            // 재시도 창부터 다시 센다(포이즌도 바이트 단위로만 대조된다).
+            self.streak = 0;
+            self.streak_hash = Some(hash.to_string());
+        }
+        self.streak += 1;
+        if self.streak >= MAX_SWAP_FAILURES_PER_BYTES {
+            self.streak = 0;
+            self.poisoned = Some(hash.to_string());
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(super) fn is_poisoned(&self, hash: &str) -> bool {
+        self.poisoned.as_deref() == Some(hash)
+    }
+}
+
 /// 변경 감지는 sha256(파일 바이트) 기준이다. 실패한 스왑은 last_hash 를
 /// 갱신하지 않으므로(같은 바이트 상태를 다음 폴링에서 재시도 — 빌드 중
 /// 반쯤 쓰인 아티팩트가 스레드를 죽이지 않는다) 성공한 바이트 상태만
-/// 기준선이 된다.
+/// 기준선이 된다. 단 같은 바이트의 연속 실패가 [`MAX_SWAP_FAILURES_PER_BYTES`]
+/// 에 도달하면 그 바이트를 포이즌으로 표시하고 바이트가 바뀔 때까지 재시도를
+/// 멈춘다(실패 폭주 방지).
 fn run_watch_loop(config: DylibWatchConfig) {
     let mut counter: u64 = 0;
     let mut last_hash = file_sha256_hex(&config.artifact).ok();
+    let mut failures = FailureTracker::default();
     loop {
         std::thread::sleep(config.poll);
         let hash = match file_sha256_hex(&config.artifact) {
@@ -66,13 +118,28 @@ fn run_watch_loop(config: DylibWatchConfig) {
         if last_hash.as_deref() == Some(hash.as_str()) {
             continue;
         }
+        if failures.is_poisoned(&hash) {
+            // 포이즌된 바이트 — 새 바이트가 발행될 때까지 조용히 기다린다.
+            continue;
+        }
         counter += 1;
         match attempt_swap(&config, counter) {
             Ok((old, new)) => {
                 last_hash = Some(hash);
+                failures.note_success();
                 (config.on_swap)(Ok((old, new)));
             }
-            Err(error) => (config.on_swap)(Err(error)),
+            Err(error) => {
+                (config.on_swap)(Err(error));
+                if failures.note_failure(&hash) {
+                    eprintln!(
+                        "rustra hot-core: giving up on artifact bytes {} after \
+                         {MAX_SWAP_FAILURES_PER_BYTES} failed swaps — retrying when new \
+                         bytes are published",
+                        &hash[..8.min(hash.len())]
+                    );
+                }
+            }
         }
     }
 }
