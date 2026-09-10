@@ -6,8 +6,8 @@
 //   node scripts/transport-bench.mjs       # Node subprocess + napi-rs
 //   bun scripts/transport-bench.mjs        # Bun subprocess + Bun FFI
 
-import { execSync, spawnSync } from 'child_process';
-import { readFileSync, existsSync } from 'fs';
+import { spawnSync } from 'child_process';
+import { existsSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
@@ -40,6 +40,30 @@ function percentile(sorted, pct) {
   return sorted[idx];
 }
 
+const NAPI_ADDON_PATH = join(
+  ROOT,
+  `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`,
+);
+
+function loadNapi() {
+  return createRequire(__dirname)(NAPI_ADDON_PATH);
+}
+
+// release 우선 — debug 라이브러리는 최적화가 꺼져 브릿지 비용이 ~7x 부풀어
+// 오른다. release 가 없을 때만 debug 로 폴백하고 프로필을 이름에 노출한다.
+function findCalculatorDylib(suffix) {
+  const candidates = [
+    { dir: 'release', label: '' },
+    { dir: 'debug', label: ' (debug)' },
+  ];
+  return candidates
+    .map((c) => ({
+      ...c,
+      path: join(ROOT, `target/${c.dir}/librustra_calculator_example.${suffix}`),
+    }))
+    .find((c) => existsSync(c.path));
+}
+
 // ── Transport implementations ────────────────────────────
 
 function createSubprocessTransport(binPath) {
@@ -61,18 +85,7 @@ function createSubprocessTransport(binPath) {
 
 function createBunFfiTransport() {
   const { dlopen, FFIType, suffix, CString } = require('bun:ffi');
-  // release 우선 — debug 라이브러리는 최적화가 꺼져 브릿지 비용이 ~7x 부풀어
-  // 오른다. release 가 없을 때만 debug 로 폴백하고 프로필을 이름에 노출한다.
-  const candidates = [
-    { dir: 'release', label: '' },
-    { dir: 'debug', label: ' (debug)' },
-  ];
-  const found = candidates
-    .map((c) => ({
-      ...c,
-      path: join(ROOT, `target/${c.dir}/librustra_calculator_example.${suffix}`),
-    }))
-    .find((c) => existsSync(c.path));
+  const found = findCalculatorDylib(suffix);
   if (!found) {
     throw new Error(
       'no librustra_calculator_example dylib in target/release|debug — run cargo build --release -p rustra-calculator-example',
@@ -107,11 +120,7 @@ function createBunFfiTransport() {
 }
 
 function createNapiBufferTransport() {
-  const napiPath = join(
-    ROOT,
-    `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`,
-  );
-  const native = createRequire(__dirname)(napiPath);
+  const native = loadNapi();
   return {
     name: 'Node napi Buffer',
     invoke(command, args) {
@@ -126,11 +135,7 @@ function createNapiBufferTransport() {
 }
 
 function createNapiTransport() {
-  const napiPath = join(
-    ROOT,
-    `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`,
-  );
-  const native = createRequire(__dirname)(napiPath);
+  const native = loadNapi();
   return {
     name: 'Node napi-rs',
     invoke(command, args) {
@@ -178,11 +183,7 @@ function decodeRkyvV2Result(frame) {
 }
 
 function createNapiRkyvTransport() {
-  const napiPath = join(
-    ROOT,
-    `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`,
-  );
-  const native = createRequire(__dirname)(napiPath);
+  const native = loadNapi();
   if (typeof native.rustraInvokeRkyvV2 !== 'function') {
     throw new Error('napi addon predates rustraInvokeRkyvV2 — rebuild with napi build');
   }
@@ -206,16 +207,7 @@ function createBunRkyvTransport() {
   const { dlopen, FFIType, suffix, toArrayBuffer } = Bun
     ? require('bun:ffi')
     : { dlopen: undefined, FFIType: undefined, suffix: undefined, toArrayBuffer: undefined };
-  const candidates = [
-    { dir: 'release', label: '' },
-    { dir: 'debug', label: ' (debug)' },
-  ];
-  const found = candidates
-    .map((c) => ({
-      ...c,
-      path: join(ROOT, `target/${c.dir}/librustra_calculator_example.${suffix}`),
-    }))
-    .find((c) => existsSync(c.path));
+  const found = findCalculatorDylib(suffix);
   if (!found) throw new Error('no librustra_calculator_example dylib');
   const lib = dlopen(found.path, {
     rustra_calculator_invoke_rkyv_v2: {
@@ -315,14 +307,7 @@ if (isBun) {
 if (!isBun) {
   try {
     transports.push(createNapiTransport());
-    if (
-      typeof createRequire(__dirname)(
-        join(
-          ROOT,
-          `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`,
-        ),
-      ).rustraInvokeBuffer === 'function'
-    ) {
+    if (typeof loadNapi().rustraInvokeBuffer === 'function') {
       transports.push(createNapiBufferTransport());
     }
   } catch (e) {
@@ -513,11 +498,7 @@ if (nativeResult && subprocessResult) {
 // 작은 응답(addNumbers)에선 Buffer 할당+toString 비용으로 오히려 느릴 수 있다.
 if (!isBun) {
   try {
-    const napiPath = join(
-      ROOT,
-      `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`,
-    );
-    const native = createRequire(__dirname)(napiPath);
+    const native = loadNapi();
     if (typeof native.rustraInvokeBuffer === 'function') {
       console.log('┌─ 4) Response Size Scaling — String vs Buffer (napi) ──┐');
       console.log(`│`);

@@ -40,7 +40,7 @@ function lineCount(source) {
   return source.split(/\r?\n/).length;
 }
 
-function rustSourceFiles(root) {
+function collectFiles(roots, include) {
   const files = [];
   const visit = (directory) => {
     if (!existsSync(directory)) return;
@@ -48,34 +48,27 @@ function rustSourceFiles(root) {
       const path = join(directory, entry);
       const stats = statSync(path);
       if (stats.isDirectory()) visit(path);
-      else if (entry.endsWith('.rs')) files.push(path);
+      else if (include(entry, path)) files.push(path);
     }
   };
 
-  visit(join(root, 'crates'));
+  for (const root of roots) visit(root);
   return files;
 }
 
-function productionSourceFiles(root) {
-  const files = [];
-  const visit = (directory) => {
-    if (!existsSync(directory)) return;
-    for (const entry of readdirSync(directory)) {
-      const path = join(directory, entry);
-      const stats = statSync(path);
-      if (stats.isDirectory()) visit(path);
-      else if (
-        (entry.endsWith('.ts') || entry.endsWith('.rs')) &&
-        !entry.endsWith('.test.ts') &&
-        !entry.endsWith('_tests.rs') &&
-        !path.includes('/tests/')
-      ) files.push(path);
-    }
-  };
+function rustSourceFiles(root) {
+  return collectFiles([join(root, 'crates')], (entry) => entry.endsWith('.rs'));
+}
 
-  visit(join(root, 'packages'));
-  visit(join(root, 'crates'));
-  return files;
+function productionSourceFiles(root) {
+  return collectFiles(
+    [join(root, 'packages'), join(root, 'crates')],
+    (entry, path) =>
+      (entry.endsWith('.ts') || entry.endsWith('.rs')) &&
+      !entry.endsWith('.test.ts') &&
+      !entry.endsWith('_tests.rs') &&
+      !path.includes('/tests/'),
+  );
 }
 
 function error(rule, path, message) {
