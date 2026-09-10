@@ -63,33 +63,65 @@ export function validateRkyvEngineOptions(
   options: RkyvV2EngineOptions | undefined,
   schema: RkyvSchemaRuntime,
 ): void {
-  // F5 (opt-in): 계약 해시 검증. 빌드 시점 hash 와 네이티브 실시간 hash 가 다르면
-  // 기본적으로 엔진을 만들지 않고 즉시 실패(fail-fast)한다. T2 onContractMismatch
-  // 콜백을 설정하면 불일치 시 throw 대신 콜백 호출 후 degraded 모드로 계속 생성한다.
-  if (options?.contractHash !== undefined) {
+  // F5 (opt-in) + A2 (정책): 계약 해시 검증. 빌드 시점 hash 와 네이티브 실시간
+  // hash 가 다르면 기본적으로 엔진을 만들지 않고 즉시 실패(fail-fast)한다. T2
+  // onContractMismatch 콜백을 설정하면 불일치 시 throw 대신 콜백 호출 후
+  // degraded 모드로 계속 생성한다. A2 contractVerification 은 이 실패 처리의
+  // 정책 노브다 — 'warn' 은 throw 를 경고로 강등해 엔진 생성을 항상 보장하고
+  // (OTA/degraded 배포), 'off' 는 contractHash 설정 여부와 무관하게 검증 자체를
+  // 생략한다(생성 엔트리의 탈출구). 미설정은 'strict' 와 동일 — 기존 동작
+  // 그대로다(하위 호환).
+  const verification = options?.contractVerification;
+  if (options?.contractHash !== undefined && verification !== 'off') {
     if (typeof native.getContractHash !== 'function') {
-      // unenforceable 은 콜백과 무관하게 항상 throw — native hash 가 없으면
-      // degraded 모드가 무의미하다 (검증 가능한 것이 아무것도 없다).
-      throw new RustraCommandError(
-        'contract.unenforceable',
-        'contractHash option was set but the native module does not expose ' +
-          'getContractHash(); cannot verify schema drift. Check that the current generated codecs ' +
-          'and Rust native archive were both compiled into the installed app.',
-      );
-    }
-    const hashBytes = new Uint8Array(native.getContractHash());
-    const nativeHash = decodeUtf8(hashBytes, 0, hashBytes.length).trim();
-    if (nativeHash !== options.contractHash) {
-      if (!options.onContractMismatch) {
+      if (verification === 'warn') {
+        // 'warn' 은 unenforceable 도 치명적이지 않게 강등한다 — 검증 불가
+        // 상태에서도 앱은 동작해야 한다는 것이 이 정책의 요점이다(schemaVersion
+        // stale 경고와 같은 non-fatal 계약). 콜백은 여기서 만지지 않는다 —
+        // native hash 를 읽을 방법이 없어 콜백 info 를 채울 수 없기 때문이다.
+        console.warn(
+          '[rustra] contract verification skipped: contractHash option was set but the native ' +
+            'module does not expose getContractHash(); cannot verify schema drift ' +
+            "(contractVerification: 'warn' — continuing without verification). Check that the " +
+            'current generated codecs and Rust native archive were both compiled into the ' +
+            'installed app.',
+        );
+      } else {
+        // strict(기본)은 콜백과 무관하게 항상 throw — native hash 가 없으면
+        // degraded 모드가 무의미하다 (검증 가능한 것이 아무것도 없다).
         throw new RustraCommandError(
-          'contract.mismatch',
-          `contract hash mismatch: native="${nativeHash.slice(0, 16)}…" vs ` +
-            `expected="${options.contractHash.slice(0, 16)}…" — generated client ` +
-            `and native binary are out of sync; regenerate the TypeScript and native codecs, ` +
-            `rebuild the Rust archive, then rebuild the native app`,
+          'contract.unenforceable',
+          'contractHash option was set but the native module does not expose ' +
+            'getContractHash(); cannot verify schema drift. Check that the current generated codecs ' +
+            'and Rust native archive were both compiled into the installed app.',
         );
       }
-      options.onContractMismatch({ nativeHash, expectedHash: options.contractHash });
+    } else {
+      const hashBytes = new Uint8Array(native.getContractHash());
+      const nativeHash = decodeUtf8(hashBytes, 0, hashBytes.length).trim();
+      if (nativeHash !== options.contractHash) {
+        if (options.onContractMismatch) {
+          // 콜백 우선순위는 정책과 무관하다 — 기본(strict)과 'warn' 모두
+          // 콜백이 있으면 console.warn 폴백 대신 콜백을 탄다.
+          options.onContractMismatch({ nativeHash, expectedHash: options.contractHash });
+        } else if (verification === 'warn') {
+          console.warn(
+            `[rustra] contract hash mismatch: native="${nativeHash.slice(0, 16)}…" vs ` +
+              `expected="${options.contractHash.slice(0, 16)}…" — generated client ` +
+              `and native binary are out of sync; regenerate the TypeScript and native codecs, ` +
+              `rebuild the Rust archive, then rebuild the native app ` +
+              `(contractVerification: 'warn' — continuing with a degraded engine)`,
+          );
+        } else {
+          throw new RustraCommandError(
+            'contract.mismatch',
+            `contract hash mismatch: native="${nativeHash.slice(0, 16)}…" vs ` +
+              `expected="${options.contractHash.slice(0, 16)}…" — generated client ` +
+              `and native binary are out of sync; regenerate the TypeScript and native codecs, ` +
+              `rebuild the Rust archive, then rebuild the native app`,
+          );
+        }
+      }
     }
   }
 

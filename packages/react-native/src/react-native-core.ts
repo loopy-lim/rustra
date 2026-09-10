@@ -198,6 +198,7 @@ export function createFastEngine(
 ): RkyvV2Engine {
   const engineOptions = {
     contractHash: options.contractHash,
+    contractVerification: options.contractVerification,
     onContractMismatch: options.onContractMismatch,
     schemaVersion: options.schemaVersion,
     onSchemaStale: options.onSchemaStale,

@@ -1892,6 +1892,9 @@ test('React Native entry owns lazy native setup and re-exports generated command
   assert.match(source, /from "@rustra\/generated-react-native"/);
   assert.match(source, /export \* from '\.\/commands\.js'/);
   assert.match(source, /contractHash: GENERATED_CONTRACT_HASH/);
+  // (A2) 계약 검증 정책이 생성 엔트리에 명시된다 — strict 가 기본이며 생성
+  // 파일에서 이 한 줄을 바꾸는 것이 OTA 상황의 공식 탈출구다.
+  assert.match(source, /contractVerification: 'strict'/);
   assert.match(source, /schemaVersion: SCHEMA_VERSION/);
   assert.match(source, /export \{ subscribeEvent \} from '@rustra\/react-native'/);
 });
@@ -1904,6 +1907,10 @@ test('desktop host entries own lazy setup and preserve explicit escape hatches',
   assert.match(node, /createNodeBootstrap/);
   assert.match(node, /GENERATED_CONTRACT_HASH/);
   assert.match(node, /contractHash: GENERATED_CONTRACT_HASH/);
+  // (A2) node 템플릿도 계약 검증 정책을 명시한다 — NodeBootstrapOptions 가
+  // contractVerification 을 수용하며, 생성 파일에서 이 한 줄을 바꾸는 것이
+  // OTA 상황의 공식 탈출구다(rn/bun 템플릿과 동일한 계약).
+  assert.match(node, /contractVerification: 'strict'/);
   assert.match(node, /release\/\$\{executable\}/);
   assert.match(node, /args: \["invoke"\]/);
   assert.match(node, /RUSTRA_NODE_BINARY|commandCandidates/);
@@ -1915,6 +1922,7 @@ test('desktop host entries own lazy setup and preserve explicit escape hatches',
   assert.match(bun, /createBunBootstrap/);
   assert.match(bun, /rkyvV2Codecs: rkyvV2Registry/);
   assert.match(bun, /GENERATED_CONTRACT_HASH/);
+  assert.match(bun, /contractVerification: 'strict'/);
 
   const tauri = generateTauriEntryTs();
   assert.match(tauri, /createTauriBootstrap\(\)/);
@@ -1937,6 +1945,8 @@ test('host entries wire subscribeEvent when the schema declares events', () => {
     { events: true },
   );
   assert.match(bun, /createBunEventSubscription/);
+  // (A2) events 변형 부트스트랩도 동일하게 계약 검증 정책을 명시한다.
+  assert.match(bun, /contractVerification: 'strict'/);
   assert.match(bun, /export const subscribeEvent = events\.subscribeEvent/);
   // 팩토리가 부트스트랩과 같은 옵션 집합(libraryName + libraryCandidates)을 받는다 —
   // 후보 경로 부재 시에도 cwd 체인 추론 폴백이 부트스트랩과 동일하게 작동한다.

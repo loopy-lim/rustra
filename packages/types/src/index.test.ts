@@ -1550,6 +1550,157 @@ test('B4: ContractMismatchDiagnosis round-trips as a plain object', () => {
   assert.equal(json.diagnoses[0].detail.includes('command id changed'), true);
 });
 
+// ── A2/A3: contractVerification 정책 — failure-injection 매트릭스 ──────────
+// 계약 검증의 고장 주입(injection) 행렬: 정책('strict'/'warn'/'off'/미설정) ×
+// 고장(해시 불일치 / getContractHash 미노출) 조합이 계약대로 동작하는지 한
+// 곳에 모은다. strict(및 미설정)은 fail-fast, warn 은 절대 throw 하지 않고
+// 경고로 강등해 엔진 생성을 항상 보장하고(OTA degraded 배포), off 는 검증
+// 자체를 생략한다(생성 엔트리의 탈출구). 에러 코드는 기존 두 개만 재사용한다
+// — 새 RustraError 코드 없음(A3 제약).
+
+test('contract verification injection: strict + wrong hash throws contract.mismatch with the actionable message', () => {
+  const native = makeNative({ contractHash: 'a'.repeat(64) });
+  assert.throws(
+    () =>
+      createRkyvV2Engine(native, new Map(), {
+        contractHash: 'b'.repeat(64),
+        contractVerification: 'strict',
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError, 'must be RustraCommandError');
+      assert.equal((err as RustraCommandError).code, 'contract.mismatch');
+      // 실행 가능한 메시지 — 상태(양쪽 해시)와 처방(재생성·재빌드)을 함께 쓴다.
+      assert.match((err as Error).message, /native="a{16}…"/);
+      assert.match((err as Error).message, /expected="b{16}…"/);
+      assert.match((err as Error).message, /out of sync/);
+      assert.match((err as Error).message, /regenerate the TypeScript and native codecs/);
+      return true;
+    },
+  );
+});
+
+test('contract verification injection: warn + wrong hash creates the engine and warns instead of throwing', () => {
+  // OTA degraded 배포 계약 — warn 정책은 절대 throw 하지 않는다.
+  const nativeHash = 'a'.repeat(64);
+  const expectedHash = 'b'.repeat(64);
+  const native = makeNative({ contractHash: nativeHash });
+  const warns = mockConsoleWarn();
+  try {
+    const engine = createRkyvV2Engine(native, new Map(), {
+      contractHash: expectedHash,
+      contractVerification: 'warn',
+    });
+    assert.ok(engine, 'warn policy must never block engine creation');
+    assert.equal(typeof engine.invoke, 'function');
+    assert.equal(warns.calls.length, 1, 'console.warn fallback must fire exactly once');
+    assert.match(warns.calls[0] ?? '', /contract hash mismatch/);
+    assert.match(warns.calls[0] ?? '', new RegExp(`native="${nativeHash.slice(0, 16)}`));
+    assert.match(warns.calls[0] ?? '', new RegExp(`expected="${expectedHash.slice(0, 16)}`));
+    assert.match(warns.calls[0] ?? '', /continuing with a degraded engine/);
+  } finally {
+    warns.restore();
+  }
+});
+
+test('contract verification injection: warn + missing native getContractHash warns without throwing', () => {
+  // 미노출(unenforceable)도 warn 정책 아래에서는 치명적이지 않다 — 검증 불가
+  // 상태에서도 앱은 동작해야 한다(non-fatal 계약).
+  const native = makeNative({}); // contractHash undefined → getContractHash 미노출
+  const warns = mockConsoleWarn();
+  try {
+    const engine = createRkyvV2Engine(native, new Map(), {
+      contractHash: 'd'.repeat(64),
+      contractVerification: 'warn',
+    });
+    assert.ok(engine, 'unenforceable must degrade to a warning under the warn policy');
+    assert.equal(typeof engine.invoke, 'function');
+    assert.equal(warns.calls.length, 1, 'console.warn fallback must fire exactly once');
+    assert.match(warns.calls[0] ?? '', /contract verification skipped/);
+    assert.match(warns.calls[0] ?? '', /getContractHash/);
+    assert.match(warns.calls[0] ?? '', /continuing without verification/);
+  } finally {
+    warns.restore();
+  }
+});
+
+test('contract verification injection: strict + missing native getContractHash throws contract.unenforceable', () => {
+  const native = makeNative({}); // contractHash undefined → getContractHash 미노출
+  assert.throws(
+    () =>
+      createRkyvV2Engine(native, new Map(), {
+        contractHash: 'd'.repeat(64),
+        contractVerification: 'strict',
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'contract.unenforceable');
+      return true;
+    },
+  );
+});
+
+test('contract verification injection: off skips verification entirely even with a wrong hash and the getter present', () => {
+  // 'off' 는 네이티브 해시를 읽지도 않는다 — getter 호출 0 회가 증거다.
+  let getterCalls = 0;
+  const native = makeNative({ contractHash: 'a'.repeat(64) });
+  const originalGetter = native.getContractHash!;
+  native.getContractHash = () => {
+    getterCalls++;
+    return originalGetter();
+  };
+  const warns = mockConsoleWarn();
+  try {
+    const engine = createRkyvV2Engine(native, new Map(), {
+      contractHash: 'b'.repeat(64),
+      contractVerification: 'off',
+    });
+    assert.ok(engine, "'off' must create the engine despite the hash mismatch");
+    assert.equal(getterCalls, 0, "'off' must not even read the native hash");
+    assert.equal(warns.calls.length, 0, "'off' must stay silent — verification is skipped");
+  } finally {
+    warns.restore();
+  }
+});
+
+test('contract verification injection: warn + onContractMismatch prefers the callback over console.warn', () => {
+  const nativeHash = 'a'.repeat(64);
+  const expectedHash = 'b'.repeat(64);
+  const native = makeNative({ contractHash: nativeHash });
+  const calls: Array<{ nativeHash: string; expectedHash: string }> = [];
+  const warns = mockConsoleWarn();
+  try {
+    const engine = createRkyvV2Engine(native, new Map(), {
+      contractHash: expectedHash,
+      contractVerification: 'warn',
+      onContractMismatch: (info) => calls.push(info),
+    });
+    assert.ok(engine, 'engine must be created in degraded mode');
+    assert.equal(calls.length, 1, 'callback must be called exactly once');
+    assert.deepEqual(calls[0], { nativeHash, expectedHash });
+    assert.equal(warns.calls.length, 0, 'callback set → console.warn fallback must stay silent');
+  } finally {
+    warns.restore();
+  }
+});
+
+test('contract verification injection: undefined policy keeps the exact legacy fail-fast behavior (back-compat pin)', () => {
+  // A2 이전 동작 고정 — 정책 미설정은 'strict' 와 동일하다. 이 테스트가 깨진다면
+  // 기본 동작이 시프트한 것(A2 의 하위 호환 계약 위반).
+  const mismatchNative = makeNative({ contractHash: 'a'.repeat(64) });
+  assert.throws(
+    () => createRkyvV2Engine(mismatchNative, new Map(), { contractHash: 'b'.repeat(64) }),
+    (err: unknown) =>
+      err instanceof RustraCommandError && (err as RustraCommandError).code === 'contract.mismatch',
+  );
+  const unenforceableNative = makeNative({}); // getContractHash 미노출
+  assert.throws(
+    () => createRkyvV2Engine(unenforceableNative, new Map(), { contractHash: 'd'.repeat(64) }),
+    (err: unknown) =>
+      err instanceof RustraCommandError &&
+      (err as RustraCommandError).code === 'contract.unenforceable',
+  );
+});
+
 test('T2: schemaVersion equal → no staleness warning', () => {
   const native = makeNative({ schema: schemaBytes([{ name: 'add', commandId: 1 }], 3) });
   const stale = mockSchemaStale();

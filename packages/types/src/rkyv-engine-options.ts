@@ -30,8 +30,38 @@ export type RkyvV2EngineOptions = {
    * 설정하면 엔진 생성 시 네이티브의 실시간 해시(`getContractHash`)와 비교해
    * 불일치면 즉시 throw 한다 — 생성된 클라이언트와 네이티브 바이너리의 스키마
    * 드리프트를 시작 시점에 잡는다. 미설정 시 검증하지 않는다(기본값).
+   * 불일치·미노출 시의 처리는 `contractVerification` 정책을 따른다.
    */
   contractHash?: string;
+  /**
+   * (A2, OTA) 계약 검증 정책 — `contractHash` 가 설정된 경우 네이티브 해시
+   * 대조의 실패 처리를 고른다. 미설정(기본값)은 기존 동작 그대로다.
+   *
+   * - `undefined`(기본값) / `'strict'` — fail-fast. 불일치 시
+   *   onContractMismatch 콜백(설정 시)을 호출한 뒤 degraded 모드로 계속
+   *   생성하고, 콜백이 없으면 `contract.mismatch` 를 throw 한다.
+   *   `getContractHash` 미노출 네이티브는 검증 가능한 것이 아무것도 없어
+   *   정책·콜백과 무관하게 `contract.unenforceable` 을 throw 한다.
+   * - `'warn'` — OTA/degraded 배포 탈출구. 구 JS + 신 네이티브(또는 그 반대)
+   *   조합이 걸린 OTA 롤아웃에서 앱 전체 마비 대신 부분 동작을 택한다.
+   *   불일치 시 콜백(설정 시) 또는 console.warn 으로 경고하고 **엔진은 항상
+   *   생성한다**(throw 없음). `getContractHash` 미노출도 throw 대신
+   *   console.warn 으로 강등한다 — 경고 기능은 절대 치명적이지 않다는
+   *   schemaVersion stale 검사와 같은 non-fatal 계약이다.
+   * - `'off'` — 검증 자체를 생략한다. `contractHash` 가 설정돼 있어도 네이티브
+   *   해시를 읽지 않는다(미노출 판정조차 하지 않는다). 생성된 호스트 엔트리의
+   *   이 값을 한 줄 바꾸는 것이 코드젠 재생성 전까지 유효한 공식 탈출구다.
+   *
+   * `contractHash` 가 미설정이면 정책과 무관하게 검증하지 않는다(기존 계약 —
+   * 정책은 검증의 강도를 고르는 노브이지 검증을 켜는 스위치가 아니다).
+   *
+   * (한계) 이 정책은 네이티브 rkyv V2 엔진(`createRkyvV2Engine`) 경로에만
+   * 적용된다. JSON 엔진(`createJsonEngine`)은 transport 클로저만 받는 순수 JS
+   * 경로라 네이티브 핸들·`getContractHash` 가 없어 계약 해시 검증 자체가 이
+   * 경로에는 존재하지 않는다 — Node JSON 부트스트랩은 `@rustra/node` 의 스폰
+   * handshake(`__rustra_contract` 엔드포인트)에서 별도로 검증한다.
+   */
+  contractVerification?: 'strict' | 'warn' | 'off';
   /**
    * (T2, OTA) 계약 해시 불일치 시의 정책. 미설정 시 기존대로 throw
    * (fail-fast). 콜백을 설정하면 throw 대신 호출 후 **degraded 모드**로
