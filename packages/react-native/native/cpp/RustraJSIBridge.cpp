@@ -577,20 +577,23 @@ static std::shared_ptr<ChannelDispatcher> getChannelDispatcher() {
 void ChannelDispatcher::setCallInvoker(std::shared_ptr<void> invoker) {
   // mutex_ 없이 콜백 맵 정리(레지스트리는 JS 스레드 전용) 후 락 내부에서
   // invoker 교체·채널 drop. drop 이 FFI 를 호출하므로 reset() 은 락 밖 실행.
-  std::vector<uint32_t> toDrop;
+  std::vector<std::pair<uint32_t, const core::CoreTable*>> toDrop;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     callInvoker_ = std::move(invoker);
-    for (auto& [h, _cb] : callbacks_) toDrop.push_back(h);
+    for (auto& [handle, owner] : channelCores_) toDrop.emplace_back(handle, owner);
     callbacks_.clear();
+    channelCores_.clear();
     queue_.clear();
     bytesQueue_.clear();
     bytesHandles_.clear();
     drainScheduled_ = false;
   }
-  // 리로드 대응: 귀속 채널 전부를 Rust 쪽에서도 drop(락 밖 — FFI 재진입 방지).
-  for (uint32_t h : toDrop) {
-    core::currentCoreTable()->channel_drop(h);
+  // 리로드 대응: 귀속 채널 전부를 발급 코어에서 drop(락 밖 — FFI 재진입 방지).
+  // 소유 코어로 라우팅한다 — 핸들은 코어 귀속이라 스왑 뒤 현재 코어에 같은
+  // 번호가 새로 발급돼 있어도 그것을 오해제하는 일이 없다.
+  for (auto& [handle, owner] : toDrop) {
+    owner->channel_drop(handle);
   }
 }
 
@@ -598,11 +601,14 @@ uint32_t ChannelDispatcher::create(facebook::jsi::Runtime& rt,
                                     facebook::jsi::Function callback) {
   // JS 스레드에서만 호출됨(HostFunction 경유). FFI 가 핸들을 선발급하고
   // 콜백이 그 핸들을 캡처해 회신하므로, 여기선 JS 콜백만 핸들 키로 등록.
+  // 발급 코어를 기록한다 — drop/폐기 라우팅의 소유권 원천.
   (void)rt;
+  const core::CoreTable* owner = core::currentCoreTable();
   uint32_t handle =
-    core::currentCoreTable()->channel_create(&ChannelDispatcher::onChannelPayload, this);
+    owner->channel_create(&ChannelDispatcher::onChannelPayload, this);
   if (handle == 0) return 0; // 발급 실패 sentinel — 사실상 도달하지 않는다.
   callbacks_.insert_or_assign(handle, std::move(callback));
+  channelCores_.insert_or_assign(handle, owner);
   return handle;
 }
 
@@ -611,10 +617,12 @@ uint32_t ChannelDispatcher::createBytes(facebook::jsi::Runtime& rt,
   // JSON 경로와 동일한 등록 + 바이너리 경로 FFI 발급. bytesHandles_ 표시로
   // drain 이 ArrayBuffer 로 전달한다.
   (void)rt;
+  const core::CoreTable* owner = core::currentCoreTable();
   uint32_t handle =
-    core::currentCoreTable()->channel_create_bytes(&ChannelDispatcher::onChannelPayloadBytes, this);
+    owner->channel_create_bytes(&ChannelDispatcher::onChannelPayloadBytes, this);
   if (handle == 0) return 0;
   callbacks_.insert_or_assign(handle, std::move(callback));
+  channelCores_.insert_or_assign(handle, owner);
   {
     std::lock_guard<std::mutex> lock(mutex_);
     bytesHandles_.insert(handle);
@@ -623,10 +631,16 @@ uint32_t ChannelDispatcher::createBytes(facebook::jsi::Runtime& rt,
 }
 
 bool ChannelDispatcher::drop(uint32_t handle) {
-  // JS 스레드 호출. Rust 채널 해제 후 콜백 제거. 해제 후 drain 에 이미
-  // 적재된 해당 핸들 페이로드는 콜백 부재로 무시된다(유니캐스트 만료).
-  int dropped = core::currentCoreTable()->channel_drop(handle);
+  // JS 스레드 호출. 발급 코어에서 Rust 채널 해제 후 콜백 제거. 해제 후 drain 에
+  // 이미 적재된 해당 핸들 페이로드는 콜백 부재로 무시된다(유니캐스트 만료).
+  // 발급 코어로 라우팅한다 — 스왑 뒤 새 코어에 같은 번호가 재발급돼 있어도
+  // 발급 주체를 해제한다(코어 귀속 계약).
+  auto ownerIt = channelCores_.find(handle);
+  const core::CoreTable* owner =
+    ownerIt != channelCores_.end() ? ownerIt->second : core::currentCoreTable();
+  int dropped = owner->channel_drop(handle);
   callbacks_.erase(handle);
+  channelCores_.erase(handle);
   {
     std::lock_guard<std::mutex> lock(mutex_);
     bytesHandles_.erase(handle);
@@ -667,7 +681,11 @@ void ChannelDispatcher::onChannelPayloadBytes(
 }
 
 void ChannelDispatcher::drain(facebook::jsi::Runtime& rt) {
-  // JS 런타임 스레드에서만 호출(CallInvoker 콜백 또는 폴링).
+  // JS 런타임 스레드에서만 호출(CallInvoker 콜백 또는 폴링). 스왑 리셋
+  // 요청이 쌓여 있으면 먼저 소비한다 — 레지스트리 폐기는 이 스레드에서만.
+  if (resetQueued_.exchange(false, std::memory_order_acq_rel)) {
+    dropStaleChannelsAfterSwap();
+  }
   std::deque<std::pair<uint32_t, std::string>> items;
   std::deque<std::pair<uint32_t, std::vector<uint8_t>>> byteItems;
   {
@@ -721,17 +739,58 @@ void ChannelDispatcher::scheduleDrainLocked() {
 }
 
 void ChannelDispatcher::reset() {
-  // 리로드 대응 전체 폐기 — JS 콜백 맵·큐 클리어 후 Rust 채널 drop(락 밖).
-  std::vector<uint32_t> toDrop;
+  // 리로드 대응 전체 폐기 — JS 콜백 맵·큐 클리어 후 발급 코어에서 채널
+  // drop(락 밖). 전체 폐기이므로 바이너리 큐/핸들 표시도 함께 비운다.
+  std::vector<std::pair<uint32_t, const core::CoreTable*>> toDrop;
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    for (auto& [h, _cb] : callbacks_) toDrop.push_back(h);
+    for (auto& [handle, owner] : channelCores_) toDrop.emplace_back(handle, owner);
     callbacks_.clear();
+    channelCores_.clear();
     queue_.clear();
+    bytesQueue_.clear();
+    bytesHandles_.clear();
     drainScheduled_ = false;
   }
-  for (uint32_t h : toDrop) {
-    core::currentCoreTable()->channel_drop(h);
+  for (auto& [handle, owner] : toDrop) {
+    owner->channel_drop(handle);
+  }
+}
+
+void ChannelDispatcher::requestResetAfterSwap() {
+  // 폴링 스레드 — 레지스트리(callbacks_/channelCores_)는 JS 스레드 전용이므로
+  // 플래그 + drain 예약만 한다. 실제 폐기는 drain 안의
+  // dropStaleChannelsAfterSwap(JS 스레드)이 수행한다.
+  std::lock_guard<std::mutex> lock(mutex_);
+  resetQueued_.store(true, std::memory_order_release);
+  scheduleDrainLocked();
+}
+
+void ChannelDispatcher::dropStaleChannelsAfterSwap() {
+  // drain(JS 스레드) 안에서만 호출 — 레지스트리 수정은 이 스레드로 국한.
+  // 발급 코어가 현재 코어가 아닌(스왑으로 은퇴한) 채널만 폐기한다: 스왑
+  // 발행 뒤 새 코어로 새로 만든 채널은 유지한다(발행→drain 사이 창의
+  // 신규 생성 보호). 채널은 "스왑 시 코어 내 상태 소실" 설계 정책에 따라
+  // 구 코어 발급분은 만료다 — 새 코어의 같은 번호 채널 오해제 창을 닫는다.
+  const core::CoreTable* current = core::currentCoreTable();
+  std::vector<std::pair<uint32_t, const core::CoreTable*>> toDrop;
+  for (auto it = channelCores_.begin(); it != channelCores_.end();) {
+    if (it->second != current) {
+      toDrop.emplace_back(it->first, it->second);
+      callbacks_.erase(it->first);
+      it = channelCores_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+  if (toDrop.empty()) return;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    for (auto& [handle, _owner] : toDrop) bytesHandles_.erase(handle);
+  }
+  // FFI 는 락 밖 — owner 테이블은 불변·무폐기라 맵에서 지운 뒤에도 안전하다.
+  for (auto& [handle, owner] : toDrop) {
+    owner->channel_drop(handle);
   }
 }
 
@@ -1796,7 +1855,10 @@ void installRustraJSI(Runtime& rt) {
 //   leak 한다(스왑별 소량 누수는 dev 감수).
 // - 실패한 스왑은 lastHash 를 갱신하지 않는다(Rust watch 와 동일 — 빌드 중
 //   반쯤 쓰인 아티팩트가 다음 폴링에서 재시도되고, 게이트 reject 로 라이브
-//   파일이 구 바이트로 남으면 구 코어가 유지된다: fail-closed).
+//   파일이 구 바이트로 남으면 구 코어가 유지된다: fail-closed). 단 같은
+//   바이트의 연속 실패가 상한(kMaxSwapFailuresPerBytes)에 도달하면 그
+//   바이트를 포이즌해 바이트가 바뀔 때까지 재시도하지 않는다 — 매 폴링마다
+//   카피+dlopen 이 반복되는 실패 폭주 방지(Rust watch 와 동일 정책).
 // - 오류 표면: 아래 함수들은 어떤 입력/실패에서도 예외를 밖으로 던지지 않고
 //   프로세스를 죽이지 않는다 — 폴링 스레드의 모든 실패는 음수 반환/stderr
 //   로그/상태 스냅샷의 error 필드로 흡수된다.
@@ -1818,6 +1880,10 @@ struct HotCoreState {
   std::string oldHash;
   std::string newHash;
   std::string error;
+  // 실패 재시도 상한(폭주 방지) — streak 는 바이트(해시) 단위로 집계된다.
+  std::string streakHash;    // 실패 streak 집계 중인 바이트 상태
+  uint32_t failureStreak = 0; // streakHash 바이트의 연속 실패 횟수
+  std::string poisonHash;    // 상한 실패로 재시도 중단된 바이트 — 변화까지 대기
 };
 
 HotCoreState& hotState() {
@@ -1833,8 +1899,39 @@ void recordHotCoreError(const std::string& message) {
   fprintf(stderr, "[rustra] hot-core: %s\n", message.c_str());
 }
 
+/// 같은 바이트 연속 스왑 실패 허용치 — Rust watch(FailureTracker)와 동일 값·정책.
+constexpr uint32_t kMaxSwapFailuresPerBytes = 5;
+
 std::string hashToShort8(const std::string& hash) {
   return hash.size() > 8 ? hash.substr(0, 8) : hash;
+}
+
+/// 스왑 실패 기록 — 같은 바이트의 연속 실패를 세고 상한 도달 시 그 바이트를
+/// 포이즌해 바이트가 바뀔 때까지 재시도를 멈춘다. 열리지 않는 아티팩트가
+/// 폴링 주기(300ms)마다 카피+dlopen 재시도와 오류 로그를 무한 반복하는
+/// 폭주를 끊는다. 바이트가 바뀌면 streak 은 새 바이트 기준으로 다시 센다.
+void noteSwapFailure(const std::string& hash) {
+  if (hash.empty()) return;
+  bool poisoned = false;
+  {
+    auto& state = hotState();
+    std::lock_guard<std::mutex> lock(state.statusMutex);
+    if (state.streakHash != hash) {
+      state.streakHash = hash;
+      state.failureStreak = 0;
+    }
+    ++state.failureStreak;
+    if (state.failureStreak >= kMaxSwapFailuresPerBytes) {
+      state.failureStreak = 0;
+      state.poisonHash = hash;
+      poisoned = true;
+    }
+  }
+  if (poisoned) {
+    recordHotCoreError("giving up on artifact bytes " + hashToShort8(hash) +
+                       " after " + std::to_string(kMaxSwapFailuresPerBytes) +
+                       " failed swaps — retrying when new bytes are published");
+  }
 }
 
 std::string joinHotPath(const std::string& dir, const std::string& name) {
@@ -2026,9 +2123,15 @@ void configureHotCore(const char* hotDirPath) {
   state.oldHash.clear();
   state.newHash.clear();
   state.error.clear();
+  state.streakHash.clear();
+  state.failureStreak = 0;
+  state.poisonHash.clear();
 }
 
 int pollHotCoreOnce() {
+  // 스왑 시도 대상 바이트 상태 — catch 경로의 실패 집계가 접근한다(try 안
+  // 변수는 catch 에서 보이지 않으므로 try 밖에서 선언).
+  std::string attemptedHash;
   try {
     std::string dir;
     {
@@ -2051,7 +2154,10 @@ int pollHotCoreOnce() {
       auto& state = hotState();
       std::lock_guard<std::mutex> lock(state.statusMutex);
       if (hash == state.lastHash) return 0; // 변화 없음.
+      // 상한 실패로 포이즌된 바이트 — 새 바이트가 발행될 때까지 재시도 없음.
+      if (hash == state.poisonHash) return 0;
     }
+    attemptedHash = hash;
 
     // ── 스왑 시퀀스(설계 문서) ──
     // 1) 버전 카피 `<stem>-hot-<counter><ext>` — 같은 경로 재 dlopen 은 캐시
@@ -2066,6 +2172,7 @@ int pollHotCoreOnce() {
         joinHotPath(dir, stem + "-hot-" + std::to_string(counter) + ext);
     if (!copyFileContents(livePath, copyPath)) {
       recordHotCoreError("version copy failed: " + copyPath);
+      noteSwapFailure(hash);
       return -1;
     }
 
@@ -2079,6 +2186,7 @@ int pollHotCoreOnce() {
       recordHotCoreError(std::string("dlopen failed: ") +
                          (dlError != nullptr ? dlError : "unknown"));
       remove(copyPath.c_str());
+      noteSwapFailure(hash);
       return -1;
     }
     auto* table = new CoreTable(); // value-init — 모든 fn 포인터 0
@@ -2122,6 +2230,7 @@ int pollHotCoreOnce() {
                          (missing != nullptr ? missing : "?"));
       remove(copyPath.c_str());
       delete table;
+      noteSwapFailure(hash);
       return -1;
     }
 
@@ -2137,6 +2246,7 @@ int pollHotCoreOnce() {
       recordHotCoreError("hot dylib did not report a contract hash — not swapped");
       remove(copyPath.c_str());
       delete table;
+      noteSwapFailure(hash);
       return -1;
     }
 
@@ -2154,6 +2264,13 @@ int pollHotCoreOnce() {
     //    dev 감수(설계 "상태 소실" 정책).
     getEventDispatcher()->rebindEventSink();
 
+    // 6b) 구 코어 발급 채널 폐기 요청 — 채널 핸들은 발급 코어에 귀속되고
+    //     새 dylib 의 핸들 발급기는 번호를 처음부터 재사용하므로, 스왑 뒤
+    //     레지스트리를 비우지 않으면 같은 번호의 신규 채널을 오해제하는
+    //     창이 있다. 폐기는 drain(JS 스레드)에서 수행 — 이벤트 재등록과
+    //     같은 마샬링 규약("상태 소실" 정책의 채널 대응).
+    getChannelDispatcher()->requestResetAfterSwap();
+
     {
       std::lock_guard<std::mutex> lock(state.statusMutex);
       state.lastHash = hash;
@@ -2161,17 +2278,23 @@ int pollHotCoreOnce() {
       state.oldHash = oldHash;
       state.newHash = newHash;
       state.error.clear();
+      state.streakHash.clear();
+      state.failureStreak = 0;
+      state.poisonHash.clear();
     }
     fprintf(stderr, "[rustra] hot-core: swapped %s -> %s\n",
             hashToShort8(oldHash).c_str(), hashToShort8(newHash).c_str());
     return 1;
   } catch (const std::exception& error) {
     // 어떤 실패도 폴링 스레드(나아가 앱 프로세스)를 죽이지 않는다 — lastHash
-    // 는 갱신되지 않아 같은 바이트 상태를 다음 폴링이 재시도한다.
+    // 는 갱신되지 않아 같은 바이트 상태를 다음 폴링이 재시도한다(단 같은
+    // 바이트의 연속 실패는 noteSwapFailure 의 상한이 포이즌한다).
     recordHotCoreError(std::string("swap failed: ") + error.what());
+    noteSwapFailure(attemptedHash);
     return -1;
   } catch (...) {
     recordHotCoreError("swap failed: unknown error");
+    noteSwapFailure(attemptedHash);
     return -1;
   }
 }
