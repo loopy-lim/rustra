@@ -7,6 +7,7 @@ test('host apps use generated zero-config entrypoints without local transport wi
   const bunApp = await readFile('examples/calculator/apps/bun-ffi-app.ts', 'utf8');
   const tauriApp = await readFile('examples/tauri-calculator/src/app.ts', 'utf8');
   const tauriMain = await readFile('examples/tauri-calculator/src-tauri/src/main.rs', 'utf8');
+  const tauriLib = await readFile('examples/tauri-calculator/src-tauri/src/lib.rs', 'utf8');
   const reactNativeApp = await readFile('examples/react-native-calculator/App.tsx', 'utf8');
   const reactNativeEntry = await readFile('examples/calculator/generated/react-native.ts', 'utf8');
   const nodeEntry = await readFile('examples/calculator/generated/node.ts', 'utf8');
@@ -34,9 +35,13 @@ test('host apps use generated zero-config entrypoints without local transport wi
   assert.match(reactNativeMetro, /watchFolders = \[repoRoot\]/);
   assert.match(reactNativeMetro, /nodeModulesPaths/);
 
-  assert.match(tauriMain, /rustra_calculator_example::calculator_package/);
-  assert.match(tauriMain, /tauri_support::register/);
-  assert.doesNotMatch(tauriMain, /value:\s*a\s*\+\s*b/);
+  // lib/bin 분리 레이아웃(Tauri 2 모바일) — 생성 패키지 등록은 lib.rs 의
+  // run()에 살고, main.rs 는 rustra_tauri_calculator_lib::run() 만 부르는 얇은 래퍼다.
+  assert.match(tauriLib, /rustra_calculator_example::calculator_package/);
+  assert.match(tauriLib, /tauri_support::register/);
+  assert.doesNotMatch(tauriLib, /value:\s*a\s*\+\s*b/);
+  assert.match(tauriMain, /rustra_tauri_calculator_lib::run\(\)/);
+  assert.doesNotMatch(tauriMain, /calculator_package|tauri_support/);
 });
 
 test('react native runtime fixture exposes a native Rust-backed invoke module', async () => {
