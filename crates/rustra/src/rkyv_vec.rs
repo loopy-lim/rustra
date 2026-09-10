@@ -24,7 +24,6 @@ fn read_vec_fixed<const N: usize>(
 fn encode_vec_fixed<const N: usize>(
     buf: &mut Vec<u8>,
     val: Option<&Value>,
-    _elem_size: usize,
     encode_elem: impl Fn(&Value) -> [u8; N],
 ) {
     let arr = val

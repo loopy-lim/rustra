@@ -49,7 +49,7 @@ pub(crate) fn complex_schema_supported(schema: &Value, definitions: &Value) -> b
             return false;
         }
         if let Some(reference) = schema.get("$ref").and_then(Value::as_str) {
-            let name = super::complex_codec_schema::ref_name(reference).to_string();
+            let name = ref_name(reference).to_string();
             let Some(definition) = definitions.get(&name) else {
                 return false;
             };

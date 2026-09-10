@@ -72,12 +72,7 @@ impl<'s, 'w, 'b> SerializeStruct for SerStruct<'s, 'w, 'b> {
 /// 기록한다(원본 encode_struct 의 skip_key 와 동일). presence 보충은
 /// [`SerStruct`] 와 동일하다.
 struct SerStructVariant<'s, 'w, 'b> {
-    writer: &'s mut Writer<'w>,
-    fields: &'b [IrField],
-    required: &'b [bool],
-    next: usize,
-    limits: ComplexCodecLimits,
-    depth: usize,
+    inner: SerStruct<'s, 'w, 'b>,
 }
 
 impl<'s, 'w, 'b> SerializeStructVariant for SerStructVariant<'s, 'w, 'b> {
@@ -89,47 +84,10 @@ impl<'s, 'w, 'b> SerializeStructVariant for SerStructVariant<'s, 'w, 'b> {
         key: &'static str,
         value: &T,
     ) -> Result<()> {
-        let Some(index) = self.fields.iter().position(|field| field.name == key) else {
-            return Ok(());
-        };
-        while self.next < index {
-            if !self.required[self.next] {
-                self.writer.byte(0)?;
-            }
-            self.next += 1;
-        }
-        self.next = index + 1;
-        if self.required[index] {
-            return value.serialize(Ser {
-                writer: self.writer,
-                ir: &self.fields[index].node,
-                limits: self.limits,
-                depth: self.depth,
-            });
-        }
-        let mut buffer = Writer::new(self.limits);
-        value.serialize(Ser {
-            writer: &mut buffer,
-            ir: &self.fields[index].node,
-            limits: self.limits,
-            depth: self.depth,
-        })?;
-        self.writer.byte(1)?;
-        self.writer.push(&buffer.finish())
+        SerializeStruct::serialize_field(&mut self.inner, key, value)
     }
 
-    fn end(mut self) -> Result<()> {
-        while self.next < self.fields.len() {
-            let index = self.next;
-            self.next += 1;
-            if self.required[index] {
-                return Err(error(format!(
-                    "missing required field {}",
-                    self.fields[index].name
-                )));
-            }
-            self.writer.byte(0)?;
-        }
-        Ok(())
+    fn end(self) -> Result<()> {
+        SerializeStruct::end(self.inner)
     }
 }

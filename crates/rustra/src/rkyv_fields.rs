@@ -92,6 +92,19 @@ pub(crate) fn align_up(offset: usize, alignment: usize) -> usize {
     offset.div_ceil(alignment) * alignment
 }
 
+pub(crate) fn required_names(schema: &Value) -> BTreeSet<String> {
+    schema
+        .get("required")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(Value::as_str)
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 pub(crate) fn read_wire_field(payload: &[u8], offset: usize, kind: WireFieldKind) -> Result<Value> {
     if offset + kind.size() > payload.len() {
         return Err(RustraError::invalid_args("rkyv v2: payload truncated"));
