@@ -16,8 +16,11 @@ export const CONFIG_ROOT_KEYS = [
   'tauri',
   'dev',
   'inspector',
+  'uniffi',
 ] as const;
 export const CODEGEN_CONFIG_KEYS = ['rustManifest', 'rustPackage', 'rustBinary'] as const;
+export const UNIFFI_CONFIG_KEYS = ['output', 'srcOut', 'dylibProfile'] as const;
+export const DYLIB_PROFILES = ['debug', 'release'] as const;
 export const REACT_NATIVE_CONFIG_KEYS = [
   'moduleDir',
   'rustManifest',
@@ -38,6 +41,7 @@ export const ON_MISMATCH_VALUES = ['diagnose', 'ignore'] as const;
 export type DevTarget = (typeof DEV_TARGETS)[number];
 export type WasmEngine = (typeof WASM_ENGINES)[number];
 export type OnMismatch = (typeof ON_MISMATCH_VALUES)[number];
+export type DylibProfile = (typeof DYLIB_PROFILES)[number];
 
 export interface DevWasmConfig {
   engine?: WasmEngine;
@@ -56,6 +60,24 @@ export interface DevConfig {
 
 export interface InspectorConfig {
   onMismatch?: OnMismatch;
+}
+
+/**
+ * uniffi 섹션 — UniFFI Kotlin/Swift 바인딩 코드젠. 존재 자체가 기능 스위치다
+ * (없으면 코드젠 흐름은 이전과 바이트 동일). 최소 옵션만 — 필요가 생기면 키를
+ * 추가한다(선제적 옵션 금지).
+ */
+export interface RustraUniffiConfig {
+  /** Kotlin/Swift 바인딩이 출력되는 디렉터리 — config 파일 위치 기준 상대경로. */
+  output: string;
+  /**
+   * Rust 프로브가 uniffi_generated.rs 를 쓰는(그리고 커밋되는) 디렉터리 —
+   * config 파일 위치 기준 상대경로로 schema/output 과 같은 관례를 따른다.
+   * 하드코딩된 "src" 를 금지하기 위한 키다. 기본값 "src".
+   */
+  srcOut?: string;
+  /** 바인딩 생성에 쓰이는 cdylib 빌드 프로필. 기본값 "debug". */
+  dylibProfile?: DylibProfile;
 }
 
 export interface RustraConfig {
@@ -90,6 +112,7 @@ export interface RustraConfig {
   tauri?: Record<string, never>;
   dev?: DevConfig;
   inspector?: InspectorConfig;
+  uniffi?: RustraUniffiConfig;
 }
 
 export function readConfigSync(configPath: string): RustraConfig {
@@ -244,6 +267,7 @@ export function readConfigSync(configPath: string): RustraConfig {
   }
   assertDevSection(config.dev);
   assertInspectorSection(config.inspector);
+  assertUniffiSection(config.uniffi);
 
   const semanticErrors = collectSemanticErrors(config);
   if (semanticErrors.length > 0) {
@@ -288,6 +312,36 @@ function assertInspectorSection(inspector: InspectorConfig | undefined): void {
   if (inspector.onMismatch !== undefined && !ON_MISMATCH_VALUES.includes(inspector.onMismatch)) {
     throw new Error(
       unknownValueError('inspector.onMismatch', inspector.onMismatch, [...ON_MISMATCH_VALUES]),
+    );
+  }
+}
+
+/**
+ * L1 — uniffi 섹션: fail-closed 키 검사 + 리프 값 타입/허용값 검사. output 은
+ * 필수(schema/output 과 같은 비어있지 않은 안전 경로 계약)이고, srcOut/dylibProfile
+ * 은 선택 — 기본값은 소비자(cli-codegen)가 채운다.
+ */
+function assertUniffiSection(uniffi: RustraUniffiConfig | undefined): void {
+  if (uniffi === undefined) return;
+  assertKnownKeys(uniffi, UNIFFI_CONFIG_KEYS, 'config uniffi');
+  if (
+    typeof uniffi.output !== 'string' ||
+    uniffi.output.length === 0 ||
+    /[\0\r\n]/.test(uniffi.output)
+  ) {
+    throw new Error('Config uniffi.output must be a non-empty safe path');
+  }
+  if (
+    uniffi.srcOut !== undefined &&
+    (typeof uniffi.srcOut !== 'string' ||
+      uniffi.srcOut.length === 0 ||
+      /[\0\r\n]/.test(uniffi.srcOut))
+  ) {
+    throw new Error('Config uniffi.srcOut must be a non-empty safe path');
+  }
+  if (uniffi.dylibProfile !== undefined && !DYLIB_PROFILES.includes(uniffi.dylibProfile)) {
+    throw new Error(
+      unknownValueError('uniffi.dylibProfile', uniffi.dylibProfile, [...DYLIB_PROFILES]),
     );
   }
 }
