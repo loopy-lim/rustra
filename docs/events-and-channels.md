@@ -162,7 +162,7 @@ pub fn channel_demo(input: ChannelDemoInput) -> Result<ChannelDemoOutput> {
 ```
 
 `ChannelHandle::send(&str) -> bool` streams a JSON payload. `send_bytes(&[u8]) -> bool`
-streams a binary payload (an rkyv V2 frame, for example) and needs a handle issued
+streams a binary payload (a Frame protocol frame, for example) and needs a handle issued
 through the binary path — on a JSON handle it returns `false`, exactly like sending on
 a handle that expired when the call ended.
 

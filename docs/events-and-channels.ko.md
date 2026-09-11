@@ -155,7 +155,7 @@ pub fn channel_demo(input: ChannelDemoInput) -> Result<ChannelDemoOutput> {
 ```
 
 `ChannelHandle::send(&str) -> bool`은 JSON 페이로드를 흘린다. `send_bytes(&[u8]) -> bool`은
-바이너리 페이로드(예: rkyv V2 프레임)를 흘리며 바이너리 경로로 발급된 핸들이어야 한다 —
+바이너리 페이로드(예: Frame 프로토콜 프레임)를 흘리며 바이너리 경로로 발급된 핸들이어야 한다 —
 JSON 핸들이면 `false`를 돌려주는데, 호출 종료로 만료된 핸들에 send 할 때와 똑같다.
 
 핸들 발급과 sender 배선은 호스트 어댑터가 한다 — 앱의 Rust 코드는 `send`만

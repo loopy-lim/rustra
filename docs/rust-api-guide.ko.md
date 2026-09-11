@@ -687,7 +687,7 @@ await addNumbers({ a: 20, b: 22 }, { signal: controller.signal });
 // 타임아웃 — deadline 후 `transport.timeout`(retryable)으로 거부
 await slowCompute({ workload: 'heavy' }, { timeoutMs: 500 });
 
-// 배치 — 하나의 배열, 순서 보존; signal 없는 항목은 rkyv V2 엔진에서
+// 배치 — 하나의 배열, 순서 보존; signal 없는 항목은 Frame 엔진에서
 // 단일 native crossing으로 묶일 수 있다
 const [sum, echo] = await invokeBatch([
   { command: 'addNumbers', args: { a: 20, b: 22 } },

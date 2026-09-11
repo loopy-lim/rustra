@@ -14,7 +14,7 @@ rustra 내부에서 여러 뜻으로 쓰이거나, 같은 이름의 외부 개�
 
 | 용어                    | 한 줄 정의                                                                         |
 | ----------------------- | ---------------------------------------------------------------------------------- |
-| rkyv vs rkyv V2         | 업스트림 crate(미사용) vs Rustra 자체 바이너리 프레임 프로토콜 이름                |
+| Frame                   | Rustra의 바이너리 프레임 프로토콜 — V2 프레이밍 + command id + postcard 페이로드 코덱(구칭 rkyv V2) |
 | postcard                | 실제 페이로드 코덱(serde 호환 compact 포맷)                                        |
 | Tier 1 / 2 / 3          | 와이어 코덱 티어: 정적 postcard / complex 스키마 / JSON-in-binary 폴백             |
 | dev tier                | "개발 중 동적 / 릴리스 정적" 개발 장치 — 와이어 티어와 무관                        |
@@ -31,32 +31,32 @@ rustra 내부에서 여러 뜻으로 쓰이거나, 같은 이름의 외부 개�
 | mirror                  | 3개 의미: en/ko 문서 쌍 / 수동 관리 중복 / "X를 따른다" 동사 용법                  |
 | subsecond               | dioxus 핫리로드 기술 — 검토 후 보류; 아키텍처의 일부 아님                          |
 
-## rkyv vs rkyv V2
+## Frame
 
-**rkyv V2**는 Rustra 자체 바이너리 프레임 프로토콜(V2 프레이밍 + command id +
-postcard 페이로드 코덱)의 이름이다. 업스트림 `rkyv` crate가 **아니다**: 그
-crate는 `Cargo.lock`에 없고, 페이로드 코덱은 postcard다. 표준 와이어 형태 —
+**Frame**은 Rustra의 바이너리 프레임 프로토콜(V2 프레이밍 + command id +
+postcard 페이로드 코덱)의 이름이며, 구칭은 "rkyv V2"였다. 페이로드 코덱은
+postcard이고 업스트림 `rkyv` crate가 아니다 — 그 crate는 `Cargo.lock`에 없다.
+표준 와이어 형태 —
 요청 `[cmd_id u16 LE][postcard body]`, 응답 `[ok u8][pad][...]`(본문은 경로별
 상이), 에러 프레임 `[ok=0][pad][err_len u16 LE][postcard {code, message}]`.
 와이어 레벨의 권위는 [wire-format.md](wire-format.md)의 "Names" 표다. 생성
-산출물·심볼은 rkyv 이름을 유지한다(`rkyv-codecs.ts`, `invokeRkyvV2`) — 이는
-crate 의존이 아니라 프로토콜 이름이다.
+산출물·심볼은 Frame 이름을 쓴다(`frame-codecs.ts`, `invokeFrame`).
 
 ## postcard
 
 manifest/dispatch 경로에서 실제로 쓰는 페이로드 직렬화기(`crates/rustra/Cargo.toml`
 의 `postcard` 의존성). serde 호환 compact 바이너리 포맷이다. 문서가 어떤 명령을
-"postcard 인코딩"이라고 하면 그 rkyv V2 프레임 안의 구체 코덱이 이것이다.
+"postcard 인코딩"이라고 하면 그 Frame 안의 구체 코덱이 이것이다.
 
 ## Tier 1 / Tier 2 / Tier 3 (와이어 코덱 티어)
 
-명령 페이로드가 rkyv V2 프레임 안에서 취하는 세 가지 코덱 경로:
+명령 페이로드가 Frame 안에서 취하는 세 가지 코덱 경로:
 
 - **Tier 1** — 정적 postcard: 스키마로 아는 단순 필드, postcard 인코딩.
 - **Tier 2** — complex 스키마: 재귀 map/enum/Option/Set/BigInt 형태를
   스키마 기반 complex codec 으로 처리.
 - **Tier 3** — JSON-in-binary 폴백: `[cmd_id u16 LE][JSON]`, 어느 바이너리
-  코덱도 지원하지 않는 스키마용. 구현: `crates/rustra/src/rkyv_tier3.rs`.
+  코덱도 지원하지 않는 스키마용. 구현: `crates/rustra/src/frame_tier3.rs`.
 
 [architecture.md](architecture.md)("동적 명령의 호출 경로")와
 [complex-codecs.md](complex-codecs.md) 참고.
@@ -150,7 +150,7 @@ Rust 동적 라이브러리: `crate-type = ["cdylib"]`(C ABI 동적 라이브러
 2. **`ChannelHost`** — 코어 측 채널/리소스 발신 레지스트리
    (`crates/rustra/src/channels_host.rs`). 의미 1과 거의 **반대**다: 이 host는
    코어 안에 살며 임베딩 앱에 핸들을 발급한다.
-3. **JSI host 객체 / host function** — RN 네이티브 측: `invokeRkyvV2` 등을
+3. **JSI host 객체 / host function** — RN 네이티브 측: `invokeFrame` 등을
    JavaScript에 노출하는 C++/TurboModule 객체.
 4. **host promotions (호스트 승격)** — 와이어 에러가 JS throw 로 승격되는
    어댑터 측 지점들([wire-format.md](wire-format.md) 참고).

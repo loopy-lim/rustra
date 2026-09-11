@@ -40,8 +40,8 @@ After completing the three remaining caller-buffer roadmap items (the Bun adapte
 `_into`, async response caller-buffer, and the complex-route core into-handler),
 before/after was measured on the same machine. Method: against the same integrated
 release dylib (`examples/calculator`), (a) the malloc path = base adapter behavior
-(`rustra_ffi_invoke_rkyv_v2` + copy then free) and (b) the into path =
-`rustra_ffi_invoke_rkyv_v2_into` + a reused 512B caller buffer were alternated within
+(`rustra_ffi_invoke_frame` + copy then free) and (b) the into path =
+`rustra_ffi_invoke_frame_into` + a reused 512B caller buffer were alternated within
 the same process (best-of-5 rounds). The full round trip of the base adapter
 (98cdb689 `@rustra/bun`) and the integrated adapter was also cross-run against the
 same dylib to produce 4-pair medians. Environment: macOS arm64 (Apple M-series,
@@ -106,7 +106,7 @@ pre-F1 Buffered fallback, so wire compatibility is OTA-safe.
 ### Async response caller-buffer (F3)
 
 F3 removes the `std::vector frame` copy in the RN C++ async response and makes the core
-`rustra_ffi_invoke_rkyv_v2_async_into` write directly into the caller buffer. RN
+`rustra_ffi_invoke_frame_async_into` write directly into the caller buffer. RN
 simulator benches are not covered in this section (the C++ gate is not in CI, so
 device smoke is the actual measuring party). Facts verified at the core level:
 
@@ -181,8 +181,8 @@ are preserved in
 | ------------------------------- | ------: | ---------------- | ---------: | ---------: | ---------: | ---------: | ------: |
 | Node generated one-shot         |      10 | 200 × 3          |   2.758 ms |   2.760 ms |   3.119 ms |   3.295 ms |     363 |
 | Node persistent loop            |     100 | 2,000 × 3        |  16.863 µs |  16.666 µs |  26.917 µs |  44.084 µs |  59,301 |
-| Node N-API rkyv V2              |     500 | 10,000 × 3       |   1.261 µs |   1.167 µs |   2.125 µs |   4.292 µs | 793,185 |
-| Bun generated FFI rkyv V2       |     500 | 10,000 × 3       |   2.273 µs |   2.208 µs |   3.917 µs |   6.292 µs | 439,961 |
+| Node N-API Frame               |     500 | 10,000 × 3       |   1.261 µs |   1.167 µs |   2.125 µs |   4.292 µs | 793,185 |
+| Bun generated FFI Frame        |     500 | 10,000 × 3       |   2.273 µs |   2.208 µs |   3.917 µs |   6.292 µs | 439,961 |
 | Tauri generated WebView IPC     |     100 | 1,000 × 3        | 279.044 µs | 300.000 µs | 350.000 µs | 550.000 µs |   3,584 |
 | RN generated JSI, iOS Simulator |     500 | 10,000 × 1 check |          — |   2.750 µs |          — |          — |       — |
 
@@ -195,8 +195,8 @@ differs from Node/Bun/Tauri, no direct ranking is claimed.
 The design conclusions from this table:
 
 - Node's zero-config one-shot is for CLIs and low-frequency batches. A server hot path
-  cut mean latency ~164x with the persistent loop and ~2,188x with N-API rkyv V2.
-- Bun's default generated path is already stable C ABI rkyv V2, so there is no separate
+  cut mean latency ~164x with the persistent loop and ~2,188x with N-API Frame.
+- Bun's default generated path is already stable C ABI Frame, so there is no separate
   high-performance configuration.
 - Tauri UI commands are dominated by WebView IPC. Several hundred µs suffices for user
   interaction, but per-frame bulk calls should be merged into a single Rust batch command.
@@ -221,8 +221,8 @@ The 2026-08-18 session's wire/napi/core tables are replaced by these values.
 `cargo run -p rustra-calculator-example --bin wire-bench --release`
 
 The command is unchanged, but since the legacy protocol removal (2026-09-03) the
-benchmark calls `Package` methods directly (`invoke_json` / `invoke_rkyv_v2` /
-`invoke_rkyv_v2_into`) instead of going through the removed calculator-specific C
+benchmark calls `Package` methods directly (`invoke_json` / `invoke_frame` /
+`invoke_frame_into`) instead of going through the removed calculator-specific C
 symbols. Re-run the command to refresh the table — the figures below are from the
 2026-08-22 measurement and no longer describe the current measurement path.
 
@@ -230,15 +230,15 @@ symbols. Re-run the command to refresh the table — the figures below are from 
 | -------------------------- | ------: | -------: | ---------: | ---------: | ------------------: |
 | JSON `invoke`              |    47 B |     34 B |    1.19 µs |    1.17 µs |       842,640 ops/s |
 | postcard `invoke_postcard` |    13 B |      4 B |     433 ns |     417 ns |     2,307,438 ops/s |
-| rkyv V2 `invoke_rkyv_v2`   |     4 B |     10 B | **134 ns** | **125 ns** | **7,442,853 ops/s** |
+| Frame `invoke_frame`       |     4 B |     10 B | **134 ns** | **125 ns** | **7,442,853 ops/s** |
 
-→ rkyv V2 is ~8.9x faster than JSON and ~3.2x faster than postcard, with a request wire
+→ Frame is ~8.9x faster than JSON and ~3.2x faster than postcard, with a request wire
 ~11.8x smaller than JSON.
 
 ```mermaid
 xychart-beta
     title "Average latency by wire format (release, 2026-08-22)"
-    x-axis ["JSON", "postcard", "rkyv V2"]
+    x-axis ["JSON", "postcard", "Frame"]
     y-axis "Average latency (µs)" 0 --> 1.4
     bar [1.19, 0.43, 0.13]
 ```
@@ -249,7 +249,7 @@ xychart-beta
 
 | transport           |        mean |       throughput |
 | ------------------- | ----------: | ---------------: |
-| Node N-API rkyv V2  | **~0.6 µs** | ~1,600,000 ops/s |
+| Node N-API Frame    | **~0.6 µs** | ~1,600,000 ops/s |
 | Node N-API (String) |      1.5 µs |    654,817 ops/s |
 | Node N-API (Buffer) |      2.0 µs |   ~500,000 ops/s |
 | Node.js subprocess  |     3.40 ms |       ~294 ops/s |
@@ -258,7 +258,7 @@ xychart-beta
 (the Buffer-returning variant) removes the UTF-16 double copy of the String round trip,
 but at this size (47B request) the Buffer wrapping cost grows instead, measuring 2.0 µs —
 it benefits large responses (without the variant, String is the faster range).
-`rustraInvokeRkyvV2` (added 2026-08-23) round-trips the postcard frame over a direct
+`rustraInvokeFrame` (added 2026-08-23) round-trips the postcard frame over a direct
 Buffer — 596ns on a quiet machine (it swells to 2.8µs at a system load average of 8+,
 so record session conditions). The napi ABI's entry+Buffer fixed cost (~530ns) sets the
 floor.
@@ -269,12 +269,12 @@ floor.
 
 | profile                   |        mean |       throughput |
 | ------------------------- | ----------: | ---------------: |
-| Bun FFI rkyv V2 (release) | **~0.5 µs** | ~1,890,000 ops/s |
+| Bun FFI Frame (release)    | **~0.5 µs** | ~1,890,000 ops/s |
 | Bun FFI JSON (release)    |      1.7 µs |   ~580,000 ops/s |
 | Bun subprocess            |     5.73 ms |       ~175 ops/s |
 
-> The rkyv V2 direct path (added 2026-08-23) calls the core
-> `rustra_ffi_invoke_rkyv_v2` over a direct buffer — only postcard frames cross, with no
+> The Frame direct path (added 2026-08-23) calls the core
+> `rustra_ffi_invoke_frame` over a direct buffer — only postcard frames cross, with no
 > JSON/UTF-16 round trip. The response's toArrayBuffer view references Rust memory, so
 > materialize it as a value copy before freeing (a second copy is mandatory).
 
@@ -318,11 +318,11 @@ cold-start separation. Per the 2026-08-22 re-measurement:
 | First invoke (incl. tier resolution)       | ~1.8 µs (5.0–6.5x steady-state) |
 | steady-state mean (1000 runs)              | 341–347 ns                      |
 | `invoke_json` heap allocations per call    | 9 allocs / 9 deallocs           |
-| `invoke_rkyv_v2` heap allocations per call | 4 allocs / 4 deallocs           |
+| `invoke_frame` heap allocations per call  | 4 allocs / 4 deallocs           |
 
 Allocation counts are a more stable comparison metric than nanoseconds — copy-elimination
-optimizations such as caller-buffer/Arc are validated as "reduced allocations" (the rkyv
-V2 path halves the allocation count versus JSON).
+optimizations such as caller-buffer/Arc are validated as "reduced allocations" (the Frame
+path halves the allocation count versus JSON).
 
 ## Rust Core Performance (`cargo run --release -p rustra-benchmark`)
 
@@ -354,7 +354,7 @@ package.invoke::<SimpleInput, SimpleOutput>("addNumbers", input)
 | ------ | ------------ |
 | mean   | 30.1–30.9 µs |
 
-### Ser/de overhead (by data size, rkyv V2)
+### Ser/de overhead (by data size, Frame)
 
 | Payload    | mean (invoke_json) |
 | ---------- | -----------------: |
@@ -436,7 +436,7 @@ Bun FFI (release, 2026-08-23):
 ```
 
 The breakdown is computed by subtracting the `wire-bench` values of the same JSON invoke
-path. The rkyv V2 ~0.13µs is not substituted as the core cost of the JSON transport.
+path. The Frame ~0.13µs is not substituted as the core cost of the JSON transport.
 
 Under the debug profile these bridge costs inflate substantially — napi ~24.3 µs, Bun FFI
 ~15.5 µs (2026-08-18 debug session records). Only release measurements serve as the
@@ -586,7 +586,7 @@ over large work in one call.
 The single verification run of the 0.4 final fingerprint also kept the same conclusion,
 with FFI/Nitro of add 11.1423x, string 10.8161x, bytes64 2.1113x, pair 10.9772x.
 
-### JSI + rkyv V2 postcard (2026-08-18 record)
+### JSI + Frame postcard (2026-08-18 record)
 
 JSI synchronous calls + postcard binary serialization eliminate the async bridge overhead entirely:
 
@@ -672,7 +672,7 @@ the installed Nitro 0.35.10 (`cpp/jsi/JSIConverter*`) and the rustra codegen/cod
 
 #### Type System
 
-| Type                     | Nitro 0.35.10                                  | rustra (postcard/rkyv V2 fast path)                                                                                                                                           | rustra fallback (Tier 3 JSON) |
+| Type                     | Nitro 0.35.10                                  | rustra (postcard/Frame fast path)                                                                                                                                             | rustra fallback (Tier 3 JSON) |
 | ------------------------ | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
 | Integer/float primitives | ✅ int/float/double + **bigint(Int64/UInt64)** | ✅ f64/f32/zigzag integers + **uvar(u8–u64) plain varint** + `number                                                                                                          | bigint` wide-int restore      | ✅ (serde JSON) |
 | string                   | ✅                                             | ✅                                                                                                                                                                            | ✅                            |
@@ -699,7 +699,7 @@ the installed Nitro 0.35.10 (`cpp/jsi/JSIConverter*`) and the rustra codegen/cod
 | Codegen                          | nitrogen (interface → native bindings) | Schema → **bidirectional** (commands + events + TS client)       |
 | Contract gates                   | ❌                                     | ✅ `rustra diff` + contract hash + wire round-trip gates         |
 | Runtime command registration     | ❌                                     | ⚠️ dev only (register → frozen)                                  |
-| Cancellation (AbortSignal)       | roll your own                          | ✅ RN rkyvV2 propagates to native checkpoints                    |
+| Cancellation (AbortSignal)       | roll your own                          | ✅ RN Frame propagates to native checkpoints                     |
 | Timeout                          | roll your own                          | ✅ timeoutMs (all adapters)                                      |
 | Batch                            | roll your own                          | ✅ invokeBatch single JSI crossing (fail-fast)                   |
 | Events (Rust→JS push)            | roll your own (possible via callbacks) | ✅ subscribeEvent/drainEvents (RN), register_with_events (Tauri) |
@@ -736,7 +736,7 @@ In the matrix, a ❌ for rustra is not "unsupported" but falls into **3 classes*
    recursive structures remains on the JS complex codec path.
 2. **Schema-driven complex binary** (2026-08-27) — recursive structs, struct-valued
    maps, data enums, and nested Option/Set are handled with TS/Rust golden wires. On RN,
-   the JS codec currently carries these to the Rust `invokeRkyvV2`; the C++ direct path
+   the JS codec currently carries these to the Rust `invokeFrame`; the C++ direct path
    has been extended to primitive-element Set and int64/uint64 (Track B, 2026-08-29),
    and the 2026-08-28 caller-buffer residual track completed the core into-handler plus
    the Bun/async response caller buffers, converging host copies to a single response
@@ -762,7 +762,7 @@ In the matrix, a ❌ for rustra is not "unsupported" but falls into **3 classes*
 
 ## Dynamic Command (runtime register, Tier 3) Performance
 
-Performance of dynamic commands (registered at runtime via `register`, with the rkyv V2
+Performance of dynamic commands (registered at runtime via `register`, with the Frame
 **Tier 3 JSON-in-binary** fallback). Measured with criterion benchmarks
 (`crates/rustra/benches/`).
 
@@ -811,8 +811,8 @@ care when citing.
 | ------------------------------------------- | -------- | -------------------------------------- |
 | `register()` once (incl. schema generation) | 30.51 µs | not a hot path (once, at registration) |
 | `live_schema()` lookup (3 commands)         | 48.92 µs | read-only, in both debug/release       |
-| `invoke_rkyv_v2` (mutable package)          | 3.95 µs  | RwLock read path                       |
-| `invoke_rkyv_v2` (frozen package)           | 3.94 µs  | **under 0.2% difference** from mutable |
+| `invoke_frame` (mutable package)           | 3.95 µs  | RwLock read path                       |
+| `invoke_frame` (frozen package)            | 3.94 µs  | **under 0.2% difference** from mutable |
 
 ### Dynamic command payload scaling (debug, 2026-08-30)
 

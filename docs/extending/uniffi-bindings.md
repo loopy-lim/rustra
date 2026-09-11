@@ -6,7 +6,7 @@ English | [한국어](./uniffi-bindings.ko.md)
 
 UniFFI is rustra's fourth host surface, and it **coexists** with the existing
 tiers (JSI/Tauri/Bun/Node). Where the existing tiers have a TS engine round-trip
-postcard/rkyv V2 blobs, UniFFI is a **native value transfer**: bindings generated
+postcard/Frame blobs, UniFFI is a **native value transfer**: bindings generated
 by Mozilla UniFFI move values across with uniffi's own RustBuffer lift/lower, and
 one typed function is generated per command
 (`addNumbers(input: AddNumbersInput) -> AddNumbersOutput`). No postcard codec is
@@ -17,7 +17,7 @@ When to choose it:
 
 | Situation                                                         | Recommendation                                               |
 | ----------------------------------------------------------------- | ------------------------------------------------------------ |
-| React Native app — calling from TS via `engine.invoke`            | The existing JSI/rkyv V2 path (this guide is unnecessary)    |
+| React Native app — calling from TS via `engine.invoke`            | The existing JSI/Frame path (this guide is unnecessary)      |
 | Pure Android (Kotlin) / iOS (Swift) app — Rust without a TS layer | UniFFI (this guide)                                          |
 | Tauri app — webview calling Rust                                  | The Tauri adapter ([Tauri setup](tauri-setup.md))            |
 | Node/Bun backends                                                 | Generated entries ([Getting Started](../getting-started.md)) |
@@ -36,18 +36,18 @@ plain-Rust pieces:
 
 - `Package::invoke_typed<I: Serialize, O: DeserializeOwned>(name, &input)`
   (`crates/rustra/src/invoke_typed.rs`) — looks the command up by name,
-  assembles an rkyv V2 request frame from commandId + postcard, and executes it
-  through the **single dispatch path** of `invoke_rkyv_v2`. No second JSON
+  assembles a Frame request frame from commandId + postcard, and executes it
+  through the **single dispatch path** of `invoke_frame`. No second JSON
   execution path is forked, so the wire the TS codec sees and the wire an
   in-Rust call sees come from the same source, byte for byte.
-- `decode_rkyv_v2_response(frame)` / `decode_rkyv_v2_error_parts(frame)`
-  (`crates/rustra/src/rkyv_error.rs`) — shared helpers that split a response
+- `decode_frame_response(frame)` / `decode_frame_error_parts(frame)`
+  (`crates/rustra/src/frame_error.rs`) — shared helpers that split a response
   frame into a success body / an error `{code, message}`. Known limitation:
   `RustraError.code` is a `&'static str`, so the dynamic code on the wire cannot
   be reconstructed without allocating; the merged decoder
-  (`decode_rkyv_v2_response`) therefore surfaces errors as
+  (`decode_frame_response`) therefore surfaces errors as
   `internal: "<code>: <message>"` — parsers that need the exact parts use the
-  structured variant (`decode_rkyv_v2_error_parts`).
+  structured variant (`decode_frame_error_parts`).
 
 The uniffi derives all live in the **generated mirror layer of the app crate**.
 The codegen-rendered `uniffi_generated.rs` consists of mirror types

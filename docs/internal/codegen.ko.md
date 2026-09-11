@@ -24,8 +24,8 @@ Package::generate_typescript()
        ├─ write_schema_to_dir() → schema.json                    (Rust 프로브는 여기까지)
        │
        └─ rustra codegen (TS CLI) 가 schema.json 읽어 렌더링:
-            types.ts, commands.ts, contract.ts, rkyv-codecs.ts,
-            rkyv-registry.ts, events.ts/errors.ts/devices.ts (선언된 경우만),
+            types.ts, commands.ts, contract.ts, frame-codecs.ts,
+            frame-registry.ts, events.ts/errors.ts/devices.ts (선언된 경우만),
             positional-facade.ts, 호스트 엔트리, C++ 코덱
             + .rustra-generated.json (신선도 사이드카)
 ```
@@ -301,7 +301,7 @@ literal enum, map/set/tuple/$ref 재귀 표면을 지원한다. JSON Schema의 �
 키워드(`if`/`then`/`else`)나 `patternProperties`처럼 Rust 타입 계약에서 생성하지
 않는 임의 스키마는 안전하게 `unknown`으로 폴백한다.
 
-**postcard 코덱(rkyv-codecs.ts/C++) 지원 정책**: 미지원 필드를 가진 명령은 부분
+**postcard 코덱(frame-codecs.ts/C++) 지원 정책**: 미지원 필드를 가진 명령은 부분
 postcard 코덱을 만들지 않는다. 대신 complex codec이 전체 schema를 지원하면 TS
 registry에 complex route로 등록한다. C++는 공용 Codec IR이 native-safe로 판정한
 complex subset만 정적 registry에 포함하고, 나머지는 제외한다. 두

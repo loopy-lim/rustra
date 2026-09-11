@@ -13,7 +13,7 @@ detection lives in the [contract migration guide](migration-guide.md).
 
 | Surface                                                      | Guarantee within a minor release                                                                   | Breaking change requires                                                                                                                                                                          |
 | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Wire format (rkyv V2 / postcard bytes for a released schema) | Stable once a schema is released: bytes produced for a given schema + contract hash keep decoding. | Major version. Pre-1.0: a minor with explicit migration notes.                                                                                                                                    |
+| Wire format (Frame / postcard bytes for a released schema) | Stable once a schema is released: bytes produced for a given schema + contract hash keep decoding. | Major version. Pre-1.0: a minor with explicit migration notes.                                                                                                                                    |
 | Contract hash algorithm                                      | Compatibility-critical: the hash-of-schema input definition is frozen per release.                 | Major version. Pre-1.0: a minor with explicit migration notes.                                                                                                                                    |
 | FFI symbol signatures (`rustra_ffi_*` C ABI)                 | Additive only. Existing symbols keep name, parameter list, and calling convention.                 | Removals and signature changes go through the deprecation cycle below, then a major. Pre-1.0: the deprecation rule applies — a symbol deprecated in a previous release may be removed in a minor. |
 | Generated output (TypeScript / C++ / RN generated files)     | Regenerated output stays drop-in for the same configuration.                                       | Major version. Pre-1.0: a minor with explicit migration notes.                                                                                                                                    |
@@ -64,9 +64,9 @@ the `reactNative.legacyBenchmarks` config key together with the
 `RUSTRA_LEGACY_BENCHMARKS`/`RUSTRA_ENABLE_LEGACY_BENCHMARKS` build flags in
 generated modules (`@rustra/cli`), and the calculator-only legacy wire functions
 on `RustraNative` and the JSI host object — `invokeMsgpack`, `invokeBincode`,
-`invokePostcard`, `invokeRkyv`, `invokeHybrid`, `invokeRaw`, plus `invokeBytes` and
+`invokePostcard`, `invokeHybrid`, `invokeRaw`, plus `invokeBytes` and
 `invokeLegacyPostcard` on the JSI side (`@rustra/types`, `@rustra/react-native`).
-The generic transport (`invoke`, `invokeRkyvV2`) and the typed fast paths
+The generic transport (`invoke`, `invokeFrame`) and the typed fast paths
 (`invokeTyped*`, `getCodecCapabilities`) are the replacement and are unchanged.
 
 ## Experimental surface

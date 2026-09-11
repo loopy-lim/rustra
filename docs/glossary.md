@@ -16,7 +16,7 @@ hash`) is not transliterated.
 
 | Term                    | In one line                                                                          |
 | ----------------------- | ------------------------------------------------------------------------------------ |
-| rkyv vs rkyv V2         | upstream crate (not used) vs Rustra's own binary frame protocol name                 |
+| Frame                   | Rustra's binary frame protocol — V2 framing + command ids + postcard payload codec (formerly "rkyv V2") |
 | postcard                | the actual payload codec (serde-compatible compact format)                           |
 | Tier 1 / 2 / 3          | wire codec tiers: static postcard / complex schema / JSON-in-binary fallback         |
 | dev tier                | "dynamic in dev, static in release" development mechanisms — unrelated to wire tiers |
@@ -33,35 +33,33 @@ hash`) is not transliterated.
 | mirror                  | three senses: en/ko document pair / hand-maintained duplicate / verb "to mirror"     |
 | subsecond               | dioxus hot-reload tech — evaluated and deferred; not part of the architecture        |
 
-## rkyv vs rkyv V2
+## Frame
 
-**rkyv V2** is Rustra's own name for its binary frame protocol (V2 framing +
-command ids + postcard payload codec). It is **not** the upstream `rkyv` crate:
-the crate is absent from `Cargo.lock`, and the payload codec is postcard.
-Canonical wire shape — request `[cmd_id u16 LE][postcard body]`, response
-`[ok u8][pad][...]` with a path-specific body, error frame
+**Frame** is the name of Rustra's binary frame protocol (V2 framing + command
+ids + postcard payload codec); it was formerly named "rkyv V2". The payload
+codec is postcard, not the upstream `rkyv` crate — that crate is absent from
+`Cargo.lock`. Canonical wire shape — request `[cmd_id u16 LE][postcard body]`,
+response `[ok u8][pad][...]` with a path-specific body, error frame
 `[ok=0][pad][err_len u16 LE][postcard {code, message}]`. The wire-level
 authority is the "Names" table in [wire-format.md](wire-format.md). Generated
-artifacts and symbols keep the rkyv name (`rkyv-codecs.ts`, `invokeRkyvV2`) —
-they are protocol names, not crate dependencies.
+artifacts and symbols carry the Frame name (`frame-codecs.ts`, `invokeFrame`).
 
 ## postcard
 
 The payload serializer actually used on the manifest/dispatch paths
 (`postcard` dependency in `crates/rustra/Cargo.toml`). A serde-compatible
 compact binary format. When a document says a command is "postcard-encoded",
-that is the concrete codec behind an rkyv V2 frame.
+that is the concrete codec behind a Frame.
 
 ## Tier 1 / Tier 2 / Tier 3 (wire codec tiers)
 
-The three wire codec routes a command's payload can take inside an rkyv V2
-frame:
+The three wire codec routes a command's payload can take inside a Frame:
 
 - **Tier 1** — static postcard: schema-known simple fields, encoded postcard.
 - **Tier 2** — complex schema: recursive map/enum/Option/Set/BigInt shapes via
   the schema-driven complex codec.
 - **Tier 3** — JSON-in-binary fallback: `[cmd_id u16 LE][JSON]`, for schemas
-  neither binary codec supports. Implementation: `crates/rustra/src/rkyv_tier3.rs`.
+  neither binary codec supports. Implementation: `crates/rustra/src/frame_tier3.rs`.
 
 See [architecture.md](architecture.md) ("Invocation Path for Dynamic
 Commands") and [complex-codecs.md](complex-codecs.md).
@@ -160,7 +158,7 @@ Four senses, ranked by how often each appears:
    (`crates/rustra/src/channels_host.rs`). Nearly the **inverse** of sense 1:
    this host lives inside the core and hands handles out to the embedding app.
 3. **JSI host object / host function** — the RN native side: the C++/TurboModule
-   object exposing `invokeRkyvV2` etc. to JavaScript.
+   object exposing `invokeFrame` etc. to JavaScript.
 4. **Host promotions** (host promotions / 호스트 승격) — the adapter-side error
    promotion points where a wire error becomes a thrown JS error (see
    [wire-format.md](wire-format.md)).

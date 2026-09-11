@@ -35,7 +35,7 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
  │  generated.write_schema_to_dir("./generated")                       │
  │                                                                     │
  │  rustra codegen  →  renders types.ts / commands.ts / contract.ts    │
- │                    (+ rkyv V2 codecs: own frames, postcard payloads)│
+ │                      (+ Frame codecs: own frames, postcard payloads)│
  └─────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -86,12 +86,12 @@ Each host adapter takes an injected transport and returns an object implementing
 | `packages/node`         | `createNodeBootstrap(options)`           | lazy `EngineClient`                 | `packages/node/src/index.ts`         |
 | `packages/bun`          | `createBunBootstrap(options)`            | lazy `EngineClient`                 | `packages/bun/src/index.ts`          |
 | `packages/tauri`        | `createTauriBootstrap()`                 | lazy `EngineClient`                 | `packages/tauri/src/index.ts`        |
-| `packages/react-native` | generated bootstrap + `createFastEngine` | `RkyvV2Engine`                      | `packages/react-native/src/index.ts` |
+| `packages/react-native` | generated bootstrap + `createFastEngine` | `FrameEngine`                       | `packages/react-native/src/index.ts` |
 | `packages/react-native` | `createReactNativeEngine(native)`        | JSON `EngineClient` + `invokeBatch` | `packages/react-native/src/index.ts` |
 
 All return types structurally provide `EngineClient`'s `invoke<T>`, and the adapter
 factories also guarantee a Promise-based `invokeBatch`. An `AbortSignal` in flight is
-a shallow cancellation on the JSON/synchronous paths; only on the RN async rkyv path,
+a shallow cancellation on the JSON/synchronous paths; only on the RN async Frame path,
 and only when a native cancellation handle exists, does it propagate into Rust.
 
 ### Command Helper Usage Example
@@ -314,7 +314,7 @@ pub fn invoke_json(&self, name: &str, params: Value) -> Result<Value>
  │  - Node:      transport.invoke(command, args)            │
  │  - Bun:       transport.invoke(command, args)            │
  │  - Tauri:     invoke('rustra_dispatch', {command, args}) │
- │  - RN:        generated bootstrap → native.invokeRkyvV2(buf) │
+ │  - RN:        generated bootstrap → native.invokeFrame(buf)  │
  │          │                                               │
  │          ▼                                               │
  │  transport (created at app level)                         │
@@ -420,17 +420,17 @@ At `build()` time, `frozen = !cfg!(debug_assertions)`:
 
 ### Concurrency
 
-- Reads (`invoke_json`, `invoke_rkyv_v2`, `generate_typescript`) take the read lock; mutations take the write lock.
+- Reads (`invoke_json`, `invoke_frame`, `generate_typescript`) take the read lock; mutations take the write lock.
 - No lock is held while a handler runs (the `Command` is cloned out and the lock released). This prevents **re-entrant deadlock** where a handler calls `register`/`unregister` again.
 - The prod read fast-path (uncontended `RwLock` read ≈ 10ns) is negligible next to the benchmark figure (3.8µs).
 
-### Invocation Path for Dynamic Commands (single rkyvV2 engine + live schema)
+### Invocation Path for Dynamic Commands (single Frame engine + live schema)
 
-- **Static postcard commands** (present in the C++/TS codec registry) → rkyv V2 postcard fast-path.
+- **Static postcard commands** (present in the C++/TS codec registry) → Frame postcard fast-path.
 - **Static complex commands** (present in the TS registry and the native-safe C++ registry) →
   schema-driven complex binary `[command_id][body]` is marshalled in C++ JSI.
   Commands requiring Set or BigInt ranges do not advertise themselves as C++ static
-  and use the same `invokeRkyvV2` boundary through the JS complex codec.
+  and use the same `invokeFrame` boundary through the JS complex codec.
 - **Runtime-registered commands** (not in the registry) → the TS engine **decides at
   runtime** (T2-3) which binary codec to use from the live schema: postcard-supported
   schemas use the schema interpreter codec (`createSchemaPostcardCodec`) as `[id][postcard]`,
@@ -438,7 +438,7 @@ At `build()` time, `frozen = !cfg!(debug_assertions)`:
   schemas rejected by both postcard and complex (e.g. 3-arm untagged anyOf) fall back
   to **Tier 3 (JSON-in-binary)** as `[id][JSON]`. The Rust-side `register` picks the
   handler with the same 3-way decision, so both wire sides agree.
-- A **single `createRkyvV2Engine`** handles postcard/complex/Tier 3 commands together.
+- A **single `createFrameEngine`** handles postcard/complex/Tier 3 commands together.
   The codec decision is cached per live schema entry object, and when the generation
   gate re-checks (first call after a swap) commands whose schema changed are re-decided.
 
@@ -450,12 +450,12 @@ At `build()` time, `frozen = !cfg!(debug_assertions)`:
 
 The dynamic import (Tier 3) + runtime registry path is covered by dedicated verification/measurement infrastructure across the full stack.
 
-- **Per-type Rust wire tests** — `crates/rustra/tests/rkyv_v2_wire.rs`: round-trip verification of the static (postcard) Tier 1/2 and dynamic (Tier 3) paths over i64/f64/bool/String/Vec/HashMap/tuple/enum-with-data/Option/nested types + edge cases (empty collections, unicode, 10K payloads) + errors (truncated payload, unknown id, malformed JSON, frozen, invoke after unregister).
-- **Property-based fuzzing** — `crates/rustra/tests/rkyv_v2_fuzz.rs` (proptest): round-trip preservation of random payloads.
-- **Concurrency smoke** — `crates/rustra/tests/rkyv_v2_concurrency.rs`: no panics/deadlocks under mixed multi-threaded register/invoke/live_schema.
+- **Per-type Rust wire tests** — `crates/rustra/tests/frame_wire.rs`: round-trip verification of the static (postcard) Tier 1/2 and dynamic (Tier 3) paths over i64/f64/bool/String/Vec/HashMap/tuple/enum-with-data/Option/nested types + edge cases (empty collections, unicode, 10K payloads) + errors (truncated payload, unknown id, malformed JSON, frozen, invoke after unregister).
+- **Property-based fuzzing** — `crates/rustra/tests/frame_fuzz.rs` (proptest): round-trip preservation of random payloads.
+- **Concurrency smoke** — `crates/rustra/tests/frame_concurrency.rs`: no panics/deadlocks under mixed multi-threaded register/invoke/live_schema.
 - **Performance benchmarks** — `crates/rustra/benches/` (criterion): `tier_compare` (static/dynamic postcard vs Tier 3 JSON — operation-controlled), `dynamic_registry` (register/live_schema/frozen costs), `type_scaling` (dynamic postcard payload scaling). Dynamic commands are dev-only, so measured with `--profile dev`. Figures are in the "dynamic commands" section of `docs/benchmarks.md`.
-- **TS unit tests** — `packages/types/src/index.test.ts`: `createRkyvV2Engine` Tier 3 fallback + `getLiveSchema` (`bun run test:types`).
-- **RN E2E** — `examples/react-native-calculator/DynamicRegistryApp.tsx` invokes four kinds of dynamic commands (Vec/String/Map/Nested) through the single rkyvV2 engine and shows live schema commandIds. For the run procedure see `docs/plans/2026-07-05-rn-verification-checklist.md`.
+- **TS unit tests** — `packages/types/src/index.test.ts`: `createFrameEngine` Tier 3 fallback + `getLiveSchema` (`bun run test:types`).
+- **RN E2E** — `examples/react-native-calculator/DynamicRegistryApp.tsx` invokes four kinds of dynamic commands (Vec/String/Map/Nested) through the single Frame engine and shows live schema commandIds. For the run procedure see `docs/plans/2026-07-05-rn-verification-checklist.md`.
 
 ---
 

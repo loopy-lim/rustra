@@ -5,7 +5,7 @@
 ## 1. UniFFI 전송이란?
 
 UniFFI 는 rustra 의 네 번째 호스트 표면으로, 기존 tier(JSI/Tauri/Bun/Node)와
-**병존**한다. 기존 tier 가 TS 엔진이 postcard/rkyv V2 blob 을 왕복시키는 모델이라면,
+**병존**한다. 기존 tier 가 TS 엔진이 postcard/Frame blob 을 왕복시키는 모델이라면,
 UniFFI 는 **native value transfer** 다: Mozilla UniFFI 가 생성한 Kotlin/Swift
 바인딩이 uniffi 자체의 RustBuffer lift/lower 로 값을 건네고, 커맨드 하나당 타입
 함수(`addNumbers(input: AddNumbersInput) -> AddNumbersOutput`)가 생성된다.
@@ -16,7 +16,7 @@ uniffi 가 생성하기 때문이다.
 
 | 상황                                                               | 권장                                              |
 | ------------------------------------------------------------------ | ------------------------------------------------- |
-| React Native 앱 — TS 에서 `engine.invoke`                          | 기존 JSI/rkyv V2 경로(이 가이드 불필요)           |
+| React Native 앱 — TS 에서 `engine.invoke`                          | 기존 JSI/Frame 경로(이 가이드 불필요)             |
 | 순수 Android(Kotlin)/iOS(Swift) 앱 — TS 레이어 없이 Rust 직접 호출 | UniFFI(이 가이드)                                 |
 | Tauri 앱 — 웹뷰가 Rust 호출                                        | Tauri adapter([Tauri 셋업](tauri-setup.ko.md))    |
 | Node/Bun 백엔드                                                    | 생성 엔트리([시작하기](../getting-started.ko.md)) |
@@ -34,17 +34,17 @@ rustra 의 `contract_hash`/`contract.mismatch` 게이트는 blob 전송
 
 - `Package::invoke_typed<I: Serialize, O: DeserializeOwned>(name, &input)`
   (`crates/rustra/src/invoke_typed.rs`) — 이름으로 커맨드를 조회해
-  commandId + postcard 로 rkyv V2 요청 프레임을 조립하고
-  `invoke_rkyv_v2` 의 **단일 dispatch 경로**로 실행한다. 별도의 JSON 실행
+  commandId + postcard 로 Frame 요청 프레임을 조립하고
+  `invoke_frame` 의 **단일 dispatch 경로**로 실행한다. 별도의 JSON 실행
   경로를 이원화하지 않으므로, TS 코덱이 보는 와이어와 Rust 내부 호출 와이어가
   바이트 수준에서 같은 원천이다.
-- `decode_rkyv_v2_response(frame)` / `decode_rkyv_v2_error_parts(frame)`
-  (`crates/rustra/src/rkyv_error.rs`) — 응답 프레임을 성공 본문/에러
+- `decode_frame_response(frame)` / `decode_frame_error_parts(frame)`
+  (`crates/rustra/src/frame_error.rs`) — 응답 프레임을 성공 본문/에러
   `{code, message}` 로 분리하는 공용 헬퍼. 알려진 한계: `RustraError` 의
   `code` 는 `&'static str` 이라 와이어의 동적 코드를 무할당 재구성할 수
-  없으므로, 통합 디코더(`decode_rkyv_v2_response`)는 에러를
+  없으므로, 통합 디코더(`decode_frame_response`)는 에러를
   `internal: "<code>: <message>"` 형태로 합쳐 전달한다 — 정확한 부분이 필요한
-  파서는 구조화 변형(`decode_rkyv_v2_error_parts`)을 쓴다.
+  파서는 구조화 변형(`decode_frame_error_parts`)을 쓴다.
 
 uniffi derive 는 전부 **앱 크레이트 쪽 생성 미러 계층**에 놓인다. 코드젠이
 렌더링한 `uniffi_generated.rs` 는 미러 타입(record/enum) + 커맨드별
@@ -182,7 +182,7 @@ do {
 
 그 외 Phase 1 제한:
 
-- **에러** — 단일 변형 record(§5). `decode_rkyv_v2_response` 통합 디코더의
+- **에러** — 단일 변형 record(§5). `decode_frame_response` 통합 디코더의
   `internal: "<code>: <message>"` 합침 한계(§2).
 - **비동기 미지원** — Rust 커맨드 API 가 현재 sync 이므로 생성 함수도 전부
   sync 다. `signal`/`timeoutMs` 같은 TS 옵션 표면은 이 경로에 없다.

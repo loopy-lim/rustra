@@ -218,7 +218,7 @@ JSON에 주석 문법이 없기 때문 — 그래서 `.rustra-generated.json`이
 읽습니다.
 
 - 모든 와이어 왕복이 `console.debug`로 `[rustra:debug]` 이벤트로 기록됩니다 —
-  `direction`(`request`/`response`/`error`), `transport`(`json`/`rkyv`/`typed`), `command`,
+  `direction`(`request`/`response`/`error`), `transport`(`json`/`frame`/`typed`), `command`,
   길이가 제한된 hex `bytes` 미리보기와 `byteLength`, 절단된 `value` 스냅숏(깊이 3, 항목
   32개, 2 KB 예산). debug가 꺼져 있으면 아무것도 기록하지 않으므로 기본적으로 비밀 값이
   로그에 남지 않습니다.
@@ -277,7 +277,7 @@ bunx --bun expo run:android
 
 ### 성능 계층
 
-평탄한 원시 타입, 고정 tuple, 단순 구조체는 postcard/rkyv fast path를 사용합니다.
+평탄한 원시 타입, 고정 tuple, 단순 구조체는 Frame postcard fast path를 사용합니다.
 중첩 구조체, 구조체 값 map, data enum 등은 schema-driven complex codec으로 처리하고,
 지원하지 않는 형태는 Tier 3 JSON fallback으로 내려갑니다. 따라서 성능 주장은 타입별
 경로를 구분해야 하며, 복합 payload는 실제 schema로 벤치마크해야 합니다.

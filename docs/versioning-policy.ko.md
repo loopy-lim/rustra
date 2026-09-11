@@ -12,7 +12,7 @@
 
 | 표면                                                      | 마이너 릴리즈 내 보장                                                                                  | Breaking change 요구 조건                                                                                                                                               |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Wire format (릴리즈된 스키마의 rkyv V2 / postcard 바이트) | 스키마가 릴리즈되는 순간부터 안정: 동일 스키마 + contract hash에 대해 생성된 바이트는 계속 디코딩된다. | 메이저 버전. pre-1.0에서는 마이그레이션 노트를 동반한 마이너.                                                                                                           |
+| Wire format (릴리즈된 스키마의 Frame / postcard 바이트) | 스키마가 릴리즈되는 순간부터 안정: 동일 스키마 + contract hash에 대해 생성된 바이트는 계속 디코딩된다. | 메이저 버전. pre-1.0에서는 마이그레이션 노트를 동반한 마이너.                                                                                                           |
 | Contract hash 알고리즘                                    | 호환성 핵심: 스키마 해시 입력 정의는 릴리즈별로 고정된다.                                              | 메이저 버전. pre-1.0에서는 마이그레이션 노트를 동반한 마이너.                                                                                                           |
 | FFI 심볼 시그니처 (`rustra_ffi_*` C ABI)                  | 추가만 허용. 기존 심볼은 이름·파라미터 목록·호출 규약을 유지한다.                                      | 제거와 시그니처 변경은 아래 폐기 절차를 거친 뒤 메이저로. pre-1.0에서는 위 폐기 규칙이 그대로 적용된다 — 이전 릴리즈에서 deprecated된 심볼은 마이너에서 제거할 수 있다. |
 | 생성 산출물 (TypeScript / C++ / RN 생성 파일)             | 동일 설정으로 재생성하면 drop-in으로 교체된다.                                                         | 메이저 버전. pre-1.0에서는 마이그레이션 노트를 동반한 마이너.                                                                                                           |
@@ -59,9 +59,9 @@ npm 라인을 따라간다). 대체재는 호스트별 어댑터 경계다 — �
 `RUSTRA_LEGACY_BENCHMARKS`/`RUSTRA_ENABLE_LEGACY_BENCHMARKS` 빌드 플래그와 함께
 `reactNative.legacyBenchmarks` 설정 키(`@rustra/cli`), 그리고 `RustraNative`와 JSI
 호스트 객체의 calculator 전용 레거시 와이어 함수 — `invokeMsgpack`, `invokeBincode`,
-`invokePostcard`, `invokeRkyv`, `invokeHybrid`, `invokeRaw`, JSI 측의 `invokeBytes`와
+`invokePostcard`, `invokeHybrid`, `invokeRaw`, JSI 측의 `invokeBytes`와
 `invokeLegacyPostcard`(`@rustra/types`, `@rustra/react-native`). 대체재는 제네릭
-transport(`invoke`, `invokeRkyvV2`)와 타입드 고속 경로(`invokeTyped*`,
+transport(`invoke`, `invokeFrame`)와 타입드 고속 경로(`invokeTyped*`,
 `getCodecCapabilities`)이며 이들은 변경되지 않았다.
 
 ## 실험 표면
