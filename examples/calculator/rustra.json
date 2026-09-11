@@ -8,5 +8,8 @@
   },
   "node": {},
   "bun": {},
-  "tauri": {}
+  "tauri": {},
+  "uniffi": {
+    "output": "uniffi"
+  }
 }

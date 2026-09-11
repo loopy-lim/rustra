@@ -53,6 +53,9 @@ schemars = { version = "0.8", features = ["derive", "preserve_order"] }
 sha2 = "0.10"
 hex = "0.4"
 postcard = { version = "1", default-features = false, features = ["alloc"] }
+# UniFFI 미러 코드젠(Track B1-2) — 예제 calculator 의 uniffi 피처 전용.
+# 버전 핀: 0.32.1 (proc-macro + library 모드 bindgen 동작 검증 스파이크 기준).
+uniffi = "=0.32.1"
 
 # Rustra builds several native hosts and target triples. Full dependency debug
 # info plus incremental caches grows into tens of GiB without a size limit.

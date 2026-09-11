@@ -8,9 +8,22 @@ publish = false
 [lib]
 crate-type = ["rlib", "cdylib", "staticlib"]
 
+[features]
+# UniFFI 미러 계층(src/uniffi_generated.rs) — 기본 빌드에는 없다(스파이크→제품
+# 코드젠, Track B1-2). 켜면 cdylib 에 uniffi 스캐폴딩이 얹혀 library 모드
+# uniffi-bindgen 으로 Kotlin/Swift 바인딩을 뽑을 수 있다.
+uniffi = ["dep:uniffi"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+required-features = ["uniffi"]
+
 [dependencies]
 rustra.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 postcard.workspace = true
+# cli 피처 — uniffi_bindgen_main() 바인딩 생성기 진입용(라이브러리 모드 스캔).
+uniffi = { workspace = true, optional = true, features = ["cli"] }
