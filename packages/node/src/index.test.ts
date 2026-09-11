@@ -221,7 +221,9 @@ function writeRuntimeScript(directory: string, name: string, contractHash: strin
     `    process.stdout.write(JSON.stringify({ ok: true, result: ${JSON.stringify(contractHash)} }));`,
     '    return;',
     '  }',
-    '  process.stdout.write(JSON.stringify({ ok: true, result: { value: 42 } }));',
+    '  process.stdout.write(',
+    '    JSON.stringify({ ok: true, result: { value: request.args.a + request.args.b } }),',
+    '  );',
     '});',
   ].join('\n');
   const path = join(directory, name);
