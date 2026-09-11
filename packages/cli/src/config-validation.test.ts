@@ -11,10 +11,12 @@ import {
   DEV_CONFIG_KEYS,
   DEV_TARGETS,
   DEV_WASM_CONFIG_KEYS,
+  DYLIB_PROFILES,
   INSPECTOR_CONFIG_KEYS,
   NODE_CONFIG_KEYS,
   ON_MISMATCH_VALUES,
   REACT_NATIVE_CONFIG_KEYS,
+  UNIFFI_CONFIG_KEYS,
   WASM_ENGINES,
   collectSemanticErrors,
   readConfigSync,
@@ -192,6 +194,77 @@ test('a complete wasm dev config with reactNative is accepted', () => {
   );
 });
 
+test('uniffi section with only the required output is accepted and defaults stay unset', () => {
+  const result = loadConfig({ ...baseConfig, uniffi: { output: './bindings/uniffi' } });
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.config?.uniffi, { output: './bindings/uniffi' });
+  assert.deepEqual(collectSemanticErrors({ ...baseConfig, uniffi: { output: './b' } }), []);
+});
+
+test('a complete uniffi section with srcOut and dylibProfile is accepted', () => {
+  const result = loadConfig({
+    ...baseConfig,
+    uniffi: { output: './bindings/uniffi', srcOut: 'rust-src', dylibProfile: 'release' },
+  });
+  assert.equal(result.error, undefined);
+  assert.deepEqual(result.config?.uniffi, {
+    output: './bindings/uniffi',
+    srcOut: 'rust-src',
+    dylibProfile: 'release',
+  });
+});
+
+test('uniffi fail-closed shapes are rejected with the offending key in the message', () => {
+  const cases: readonly (readonly [label: string, body: unknown, labelPattern: RegExp])[] = [
+    [
+      'unknown subkey',
+      { ...baseConfig, uniffi: { output: './b', out: './x' } },
+      /unknown config uniffi key "out"/i,
+    ],
+    [
+      'missing output',
+      { ...baseConfig, uniffi: {} },
+      /config uniffi\.output must be a non-empty safe path/i,
+    ],
+    [
+      'empty output',
+      { ...baseConfig, uniffi: { output: '' } },
+      /config uniffi\.output must be a non-empty safe path/i,
+    ],
+    [
+      'non-string output',
+      { ...baseConfig, uniffi: { output: 42 } },
+      /config uniffi\.output must be a non-empty safe path/i,
+    ],
+    [
+      'empty srcOut',
+      { ...baseConfig, uniffi: { output: './b', srcOut: '' } },
+      /config uniffi\.srcOut must be a non-empty safe path/i,
+    ],
+    ['uniffi as string', { ...baseConfig, uniffi: 'yes' }, /config uniffi must be an object/],
+    ['uniffi as array', { ...baseConfig, uniffi: ['./b'] }, /config uniffi must be an object/],
+  ];
+  for (const [label, body, expected] of cases) {
+    assert.match(loadConfigError(body), expected, label);
+  }
+});
+
+test('uniffi.dylibProfile outside debug/release fails L1 listing the allowed values', () => {
+  const error = loadConfigError({
+    ...baseConfig,
+    uniffi: { output: './b', dylibProfile: 'nightly' },
+  });
+  assert.match(error, /unknown config uniffi\.dylibProfile value "nightly"/i);
+  assert.match(error, /debug/i);
+  assert.match(error, /release/i);
+});
+
+test('a config without a uniffi section loads exactly as before (feature switch off)', () => {
+  const result = loadConfig(baseConfig);
+  assert.equal(result.error, undefined);
+  assert.equal(result.config?.uniffi, undefined);
+});
+
 test('a missing config file points at rustra init instead of a raw ENOENT', () => {
   const missing = join(mkdtempSync(join(tmpdir(), 'rustra-config-missing-')), 'nope.json');
   try {
@@ -241,6 +314,7 @@ test('rustra.schema.json stays in sync with the config field lists', () => {
   assert.deepEqual(section('tauri'), []);
   assert.deepEqual(section('dev'), [...DEV_CONFIG_KEYS].sort());
   assert.deepEqual(section('inspector'), [...INSPECTOR_CONFIG_KEYS].sort());
+  assert.deepEqual(section('uniffi'), [...UNIFFI_CONFIG_KEYS].sort());
 
   const devProperties = schema.properties.dev as {
     properties: {
@@ -262,6 +336,10 @@ test('rustra.schema.json stays in sync with the config field lists', () => {
     properties: { onMismatch: { enum?: string[] } };
   };
   assert.deepEqual(inspector.properties.onMismatch.enum, [...ON_MISMATCH_VALUES]);
+  const uniffi = schema.properties.uniffi as {
+    properties: { dylibProfile: { enum?: string[] } };
+  };
+  assert.deepEqual(uniffi.properties.dylibProfile.enum, [...DYLIB_PROFILES]);
 
   const packageJson = JSON.parse(
     readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'),
