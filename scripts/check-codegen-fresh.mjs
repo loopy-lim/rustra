@@ -1,6 +1,8 @@
 // 코드젠 신선도 게이트 — examples/ 아래 rustra.json 을 가진 모든 예제의 committed
-// generated/ 디렉터리가 실제 재생성 결과와 일치하는지 단언한다. 각 예제의
-// `codegen:check`(CLI `codegen --config rustra.json --check`)은 임시 디렉터리에
+// generated/ 디렉터리가 실제 재생성 결과와 일치하는지 단언한다. 검사는 repo CLI
+// `codegen --config rustra.json --check` 을 고정 호출한다 — 예제 package.json 의
+// `codegen:check` 같은 diff 내 가변 스크립트는 신뢰 앵커가 못 된다(스크립트를
+// exit 0 으로 바꾸면 게이트가 통과해버린다). `--check` 은 임시 디렉터리에
 // 렌더링해 비교하므로 검사 자체는 기존 생성물을 더럽히지 않는다.
 //
 // 드리프트 해결 방법: 해당 예제 디렉터리에서 `bun run codegen` 을 실행해 committed
@@ -14,8 +16,8 @@
 // - rustra.json 이 없는 예제(calculator-napi, tauri-calculator 등)와 generated/ 만
 //   커밋돼 있고 설정이 없는 예제(auth, crud)는 이 게이트 밖이다 — 설정이 생기면
 //   자동으로 편입된다.
-// - react-native-calculator 의 `codegen` 은 build:fingerprint 도 돌리지만 check
-//   모드는 fingerprint 를 검사하지 않는다(스크립트 codegen:check 정의를 따른다).
+// - react-native-calculator 의 `codegen` 은 build:fingerprint 도 돌리지만 고정
+//   `--check` 호출은 fingerprint 를 검사하지 않는다(check 모드의 원래 범위).
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
@@ -47,17 +49,12 @@ export function discoverCodegenExamples(root) {
 }
 
 /**
- * 예제별 검사 커맨드 — 예제 package.json 에 codegen:check 가 있으면 그것을
- * 사용하고(bun run), 없으면 repo CLI 를 직접 --check 로 호출한다.
+ * 검사 커맨드 — 항상 repo CLI 를 직접 --check 로 호출한다. 예제 package.json 의
+ * `codegen:check` 은 참조하지 않는다: 그 스크립트는 PR diff 에서 수정 가능하므로,
+ * 게이트가 그것을 실행하면 스크립트를 `exit 0` 으로 바꾸는 것만으로 게이트가
+ * 무력화된다. 신뢰 앵커는 게이트 밖(이 스크립트 + repo CLI)에 고정돼야 한다.
  */
 export function resolveCheckCommand(example, root) {
-  const packageJsonPath = join(example.dir, 'package.json');
-  if (existsSync(packageJsonPath)) {
-    const scripts = JSON.parse(readFileSync(packageJsonPath, 'utf8')).scripts ?? {};
-    if (typeof scripts['codegen:check'] === 'string') {
-      return { file: 'bun', args: ['run', 'codegen:check'], cwd: example.dir };
-    }
-  }
   return {
     file: 'bun',
     args: [
