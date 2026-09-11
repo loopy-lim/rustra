@@ -238,9 +238,7 @@ pub mod uniffi_api {
     #[derive(Debug, uniffi::Enum)]
     pub enum OpKind {
         Clear,
-        Set {
-            value: i64,
-        },
+        Set { value: i64 },
     }
 
     /// `KindEchoOutput` 미러 — 실제 타입 `crate::KindEchoOutput`.
@@ -479,17 +477,13 @@ pub mod uniffi_api {
 
     impl From<AddNumbersOutput> for crate::AddNumbersOutput {
         fn from(input: AddNumbersOutput) -> Self {
-            Self {
-                value: input.value,
-            }
+            Self { value: input.value }
         }
     }
 
     impl From<crate::AddNumbersOutput> for AddNumbersOutput {
         fn from(input: crate::AddNumbersOutput) -> Self {
-            Self {
-                value: input.value,
-            }
+            Self { value: input.value }
         }
     }
 
@@ -513,33 +507,25 @@ pub mod uniffi_api {
 
     impl From<BenchAddOutput> for crate::BenchAddOutput {
         fn from(input: BenchAddOutput) -> Self {
-            Self {
-                value: input.value,
-            }
+            Self { value: input.value }
         }
     }
 
     impl From<crate::BenchAddOutput> for BenchAddOutput {
         fn from(input: crate::BenchAddOutput) -> Self {
-            Self {
-                value: input.value,
-            }
+            Self { value: input.value }
         }
     }
 
     impl From<BenchBytesPayload> for crate::BenchBytesPayload {
         fn from(input: BenchBytesPayload) -> Self {
-            Self {
-                data: input.data,
-            }
+            Self { data: input.data }
         }
     }
 
     impl From<crate::BenchBytesPayload> for BenchBytesPayload {
         fn from(input: crate::BenchBytesPayload) -> Self {
-            Self {
-                data: input.data,
-            }
+            Self { data: input.data }
         }
     }
 
@@ -563,17 +549,13 @@ pub mod uniffi_api {
 
     impl From<BenchStringPayload> for crate::BenchStringPayload {
         fn from(input: BenchStringPayload) -> Self {
-            Self {
-                value: input.value,
-            }
+            Self { value: input.value }
         }
     }
 
     impl From<crate::BenchStringPayload> for BenchStringPayload {
         fn from(input: crate::BenchStringPayload) -> Self {
-            Self {
-                value: input.value,
-            }
+            Self { value: input.value }
         }
     }
 
@@ -671,17 +653,13 @@ pub mod uniffi_api {
 
     impl From<ClampOutput> for crate::ClampOutput {
         fn from(input: ClampOutput) -> Self {
-            Self {
-                value: input.value,
-            }
+            Self { value: input.value }
         }
     }
 
     impl From<crate::ClampOutput> for ClampOutput {
         fn from(input: crate::ClampOutput) -> Self {
-            Self {
-                value: input.value,
-            }
+            Self { value: input.value }
         }
     }
 
@@ -741,17 +719,13 @@ pub mod uniffi_api {
 
     impl From<DeviceDemoOutput> for crate::DeviceDemoOutput {
         fn from(input: DeviceDemoOutput) -> Self {
-            Self {
-                os: input.os,
-            }
+            Self { os: input.os }
         }
     }
 
     impl From<crate::DeviceDemoOutput> for DeviceDemoOutput {
         fn from(input: crate::DeviceDemoOutput) -> Self {
-            Self {
-                os: input.os,
-            }
+            Self { os: input.os }
         }
     }
 
@@ -775,17 +749,13 @@ pub mod uniffi_api {
 
     impl From<DivideOutput> for crate::DivideOutput {
         fn from(input: DivideOutput) -> Self {
-            Self {
-                value: input.value,
-            }
+            Self { value: input.value }
         }
     }
 
     impl From<crate::DivideOutput> for DivideOutput {
         fn from(input: crate::DivideOutput) -> Self {
-            Self {
-                value: input.value,
-            }
+            Self { value: input.value }
         }
     }
 
@@ -875,33 +845,25 @@ pub mod uniffi_api {
 
     impl From<GaugeOutput> for crate::GaugeOutput {
         fn from(input: GaugeOutput) -> Self {
-            Self {
-                next: input.next,
-            }
+            Self { next: input.next }
         }
     }
 
     impl From<crate::GaugeOutput> for GaugeOutput {
         fn from(input: crate::GaugeOutput) -> Self {
-            Self {
-                next: input.next,
-            }
+            Self { next: input.next }
         }
     }
 
     impl From<GreetInput> for crate::GreetInput {
         fn from(input: GreetInput) -> Self {
-            Self {
-                name: input.name,
-            }
+            Self { name: input.name }
         }
     }
 
     impl From<crate::GreetInput> for GreetInput {
         fn from(input: crate::GreetInput) -> Self {
-            Self {
-                name: input.name,
-            }
+            Self { name: input.name }
         }
     }
 
@@ -923,17 +885,13 @@ pub mod uniffi_api {
 
     impl From<IsEvenInput> for crate::IsEvenInput {
         fn from(input: IsEvenInput) -> Self {
-            Self {
-                n: input.n,
-            }
+            Self { n: input.n }
         }
     }
 
     impl From<crate::IsEvenInput> for IsEvenInput {
         fn from(input: crate::IsEvenInput) -> Self {
-            Self {
-                n: input.n,
-            }
+            Self { n: input.n }
         }
     }
 
@@ -1023,17 +981,13 @@ pub mod uniffi_api {
 
     impl From<MultiplyOutput> for crate::MultiplyOutput {
         fn from(input: MultiplyOutput) -> Self {
-            Self {
-                value: input.value,
-            }
+            Self { value: input.value }
         }
     }
 
     impl From<crate::MultiplyOutput> for MultiplyOutput {
         fn from(input: crate::MultiplyOutput) -> Self {
-            Self {
-                value: input.value,
-            }
+            Self { value: input.value }
         }
     }
 
@@ -1227,17 +1181,13 @@ pub mod uniffi_api {
 
     impl From<RegistryDemoInput> for crate::RegistryDemoInput {
         fn from(input: RegistryDemoInput) -> Self {
-            Self {
-                op: input.op,
-            }
+            Self { op: input.op }
         }
     }
 
     impl From<crate::RegistryDemoInput> for RegistryDemoInput {
         fn from(input: crate::RegistryDemoInput) -> Self {
-            Self {
-                op: input.op,
-            }
+            Self { op: input.op }
         }
     }
 
@@ -1315,33 +1265,25 @@ pub mod uniffi_api {
 
     impl From<SecureComputeOutput> for crate::SecureComputeOutput {
         fn from(input: SecureComputeOutput) -> Self {
-            Self {
-                value: input.value,
-            }
+            Self { value: input.value }
         }
     }
 
     impl From<crate::SecureComputeOutput> for SecureComputeOutput {
         fn from(input: crate::SecureComputeOutput) -> Self {
-            Self {
-                value: input.value,
-            }
+            Self { value: input.value }
         }
     }
 
     impl From<SizeOfInput> for crate::SizeOfInput {
         fn from(input: SizeOfInput) -> Self {
-            Self {
-                data: input.data,
-            }
+            Self { data: input.data }
         }
     }
 
     impl From<crate::SizeOfInput> for SizeOfInput {
         fn from(input: crate::SizeOfInput) -> Self {
-            Self {
-                data: input.data,
-            }
+            Self { data: input.data }
         }
     }
 
@@ -1480,17 +1422,13 @@ pub mod uniffi_api {
 
     impl From<ToUpperInput> for crate::ToUpperInput {
         fn from(input: ToUpperInput) -> Self {
-            Self {
-                s: input.s,
-            }
+            Self { s: input.s }
         }
     }
 
     impl From<crate::ToUpperInput> for ToUpperInput {
         fn from(input: crate::ToUpperInput) -> Self {
-            Self {
-                s: input.s,
-            }
+            Self { s: input.s }
         }
     }
 
@@ -1557,7 +1495,10 @@ pub mod uniffi_api {
     #[allow(non_snake_case)]
     pub fn addNumbers(input: AddNumbersInput) -> Result<AddNumbersOutput, RustraCommandFailure> {
         let out: crate::AddNumbersOutput = package()
-            .invoke_typed::<crate::AddNumbersInput, crate::AddNumbersOutput>("addNumbers", &input.into())?;
+            .invoke_typed::<crate::AddNumbersInput, crate::AddNumbersOutput>(
+                "addNumbers",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
@@ -1566,34 +1507,52 @@ pub mod uniffi_api {
     #[allow(non_snake_case)]
     pub fn benchAdd(input: BenchAddInput) -> Result<BenchAddOutput, RustraCommandFailure> {
         let out: crate::BenchAddOutput = package()
-            .invoke_typed::<crate::BenchAddInput, crate::BenchAddOutput>("benchAdd", &input.into())?;
+            .invoke_typed::<crate::BenchAddInput, crate::BenchAddOutput>(
+                "benchAdd",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
     /// `benchEchoBytes` — `crate::bench_echo_bytes` 커맨드의 UniFFI 타입 래퍼.
     #[uniffi::export]
     #[allow(non_snake_case)]
-    pub fn benchEchoBytes(input: BenchBytesPayload) -> Result<BenchBytesPayload, RustraCommandFailure> {
+    pub fn benchEchoBytes(
+        input: BenchBytesPayload,
+    ) -> Result<BenchBytesPayload, RustraCommandFailure> {
         let out: crate::BenchBytesPayload = package()
-            .invoke_typed::<crate::BenchBytesPayload, crate::BenchBytesPayload>("benchEchoBytes", &input.into())?;
+            .invoke_typed::<crate::BenchBytesPayload, crate::BenchBytesPayload>(
+                "benchEchoBytes",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
     /// `benchEchoPair` — `crate::bench_echo_pair` 커맨드의 UniFFI 타입 래퍼.
     #[uniffi::export]
     #[allow(non_snake_case)]
-    pub fn benchEchoPair(input: BenchPairPayload) -> Result<BenchPairPayload, RustraCommandFailure> {
+    pub fn benchEchoPair(
+        input: BenchPairPayload,
+    ) -> Result<BenchPairPayload, RustraCommandFailure> {
         let out: crate::BenchPairPayload = package()
-            .invoke_typed::<crate::BenchPairPayload, crate::BenchPairPayload>("benchEchoPair", &input.into())?;
+            .invoke_typed::<crate::BenchPairPayload, crate::BenchPairPayload>(
+                "benchEchoPair",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
     /// `benchEchoString` — `crate::bench_echo_string` 커맨드의 UniFFI 타입 래퍼.
     #[uniffi::export]
     #[allow(non_snake_case)]
-    pub fn benchEchoString(input: BenchStringPayload) -> Result<BenchStringPayload, RustraCommandFailure> {
+    pub fn benchEchoString(
+        input: BenchStringPayload,
+    ) -> Result<BenchStringPayload, RustraCommandFailure> {
         let out: crate::BenchStringPayload = package()
-            .invoke_typed::<crate::BenchStringPayload, crate::BenchStringPayload>("benchEchoString", &input.into())?;
+            .invoke_typed::<crate::BenchStringPayload, crate::BenchStringPayload>(
+                "benchEchoString",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
@@ -1602,16 +1561,24 @@ pub mod uniffi_api {
     #[allow(non_snake_case)]
     pub fn channelDemo(input: ChannelDemoInput) -> Result<ChannelDemoOutput, RustraCommandFailure> {
         let out: crate::ChannelDemoOutput = package()
-            .invoke_typed::<crate::ChannelDemoInput, crate::ChannelDemoOutput>("channelDemo", &input.into())?;
+            .invoke_typed::<crate::ChannelDemoInput, crate::ChannelDemoOutput>(
+                "channelDemo",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
     /// `channelDemoBytes` — `crate::channel_demo_bytes` 커맨드의 UniFFI 타입 래퍼.
     #[uniffi::export]
     #[allow(non_snake_case)]
-    pub fn channelDemoBytes(input: ChannelDemoBytesInput) -> Result<ChannelDemoBytesOutput, RustraCommandFailure> {
+    pub fn channelDemoBytes(
+        input: ChannelDemoBytesInput,
+    ) -> Result<ChannelDemoBytesOutput, RustraCommandFailure> {
         let out: crate::ChannelDemoBytesOutput = package()
-            .invoke_typed::<crate::ChannelDemoBytesInput, crate::ChannelDemoBytesOutput>("channelDemoBytes", &input.into())?;
+            .invoke_typed::<crate::ChannelDemoBytesInput, crate::ChannelDemoBytesOutput>(
+                "channelDemoBytes",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
@@ -1629,7 +1596,10 @@ pub mod uniffi_api {
     #[allow(non_snake_case)]
     pub fn createItem(input: CreateItemInput) -> Result<CreateItemOutput, RustraCommandFailure> {
         let out: crate::CreateItemOutput = package()
-            .invoke_typed::<crate::CreateItemInput, crate::CreateItemOutput>("createItem", &input.into())?;
+            .invoke_typed::<crate::CreateItemInput, crate::CreateItemOutput>(
+                "createItem",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
@@ -1656,7 +1626,10 @@ pub mod uniffi_api {
     #[allow(non_snake_case)]
     pub fn echoGroups(input: EchoGroupsInput) -> Result<EchoGroupsOutput, RustraCommandFailure> {
         let out: crate::EchoGroupsOutput = package()
-            .invoke_typed::<crate::EchoGroupsInput, crate::EchoGroupsOutput>("echoGroups", &input.into())?;
+            .invoke_typed::<crate::EchoGroupsInput, crate::EchoGroupsOutput>(
+                "echoGroups",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
@@ -1665,7 +1638,10 @@ pub mod uniffi_api {
     #[allow(non_snake_case)]
     pub fn emitDemo(input: EmitDemoInput) -> Result<EmitDemoOutput, RustraCommandFailure> {
         let out: crate::EmitDemoOutput = package()
-            .invoke_typed::<crate::EmitDemoInput, crate::EmitDemoOutput>("emitDemo", &input.into())?;
+            .invoke_typed::<crate::EmitDemoInput, crate::EmitDemoOutput>(
+                "emitDemo",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
@@ -1701,7 +1677,10 @@ pub mod uniffi_api {
     #[allow(non_snake_case)]
     pub fn kindEcho(input: KindEchoInput) -> Result<KindEchoOutput, RustraCommandFailure> {
         let out: crate::KindEchoOutput = package()
-            .invoke_typed::<crate::KindEchoInput, crate::KindEchoOutput>("kindEcho", &input.into())?;
+            .invoke_typed::<crate::KindEchoInput, crate::KindEchoOutput>(
+                "kindEcho",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
@@ -1710,7 +1689,10 @@ pub mod uniffi_api {
     #[allow(non_snake_case)]
     pub fn multiply(input: MultiplyInput) -> Result<MultiplyOutput, RustraCommandFailure> {
         let out: crate::MultiplyOutput = package()
-            .invoke_typed::<crate::MultiplyInput, crate::MultiplyOutput>("multiply", &input.into())?;
+            .invoke_typed::<crate::MultiplyInput, crate::MultiplyOutput>(
+                "multiply",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
@@ -1718,8 +1700,8 @@ pub mod uniffi_api {
     #[uniffi::export]
     #[allow(non_snake_case)]
     pub fn platformNativeInfo() -> Result<PlatformNativeInfoOutput, RustraCommandFailure> {
-        let out: crate::PlatformNativeInfoOutput =
-            package().invoke_typed::<(), crate::PlatformNativeInfoOutput>("platformNativeInfo", &())?;
+        let out: crate::PlatformNativeInfoOutput = package()
+            .invoke_typed::<(), crate::PlatformNativeInfoOutput>("platformNativeInfo", &())?;
         Ok(out.into())
     }
 
@@ -1728,52 +1710,80 @@ pub mod uniffi_api {
     #[allow(non_snake_case)]
     pub fn processItem(input: ProcessItemInput) -> Result<ProcessItemOutput, RustraCommandFailure> {
         let out: crate::ProcessItemOutput = package()
-            .invoke_typed::<crate::ProcessItemInput, crate::ProcessItemOutput>("processItem", &input.into())?;
+            .invoke_typed::<crate::ProcessItemInput, crate::ProcessItemOutput>(
+                "processItem",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
     /// `resourceClose` — `crate::resource_close` 커맨드의 UniFFI 타입 래퍼.
     #[uniffi::export]
     #[allow(non_snake_case)]
-    pub fn resourceClose(input: ResourceCloseInput) -> Result<ResourceCloseOutput, RustraCommandFailure> {
+    pub fn resourceClose(
+        input: ResourceCloseInput,
+    ) -> Result<ResourceCloseOutput, RustraCommandFailure> {
         let out: crate::ResourceCloseOutput = package()
-            .invoke_typed::<crate::ResourceCloseInput, crate::ResourceCloseOutput>("resourceClose", &input.into())?;
+            .invoke_typed::<crate::ResourceCloseInput, crate::ResourceCloseOutput>(
+                "resourceClose",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
     /// `resourceOpen` — `crate::resource_open` 커맨드의 UniFFI 타입 래퍼.
     #[uniffi::export]
     #[allow(non_snake_case)]
-    pub fn resourceOpen(input: ResourceOpenInput) -> Result<ResourceHandleOutput, RustraCommandFailure> {
+    pub fn resourceOpen(
+        input: ResourceOpenInput,
+    ) -> Result<ResourceHandleOutput, RustraCommandFailure> {
         let out: crate::ResourceHandleOutput = package()
-            .invoke_typed::<crate::ResourceOpenInput, crate::ResourceHandleOutput>("resourceOpen", &input.into())?;
+            .invoke_typed::<crate::ResourceOpenInput, crate::ResourceHandleOutput>(
+                "resourceOpen",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
     /// `resourceRead` — `crate::resource_read` 커맨드의 UniFFI 타입 래퍼.
     #[uniffi::export]
     #[allow(non_snake_case)]
-    pub fn resourceRead(input: ResourceReadInput) -> Result<ResourceReadOutput, RustraCommandFailure> {
+    pub fn resourceRead(
+        input: ResourceReadInput,
+    ) -> Result<ResourceReadOutput, RustraCommandFailure> {
         let out: crate::ResourceReadOutput = package()
-            .invoke_typed::<crate::ResourceReadInput, crate::ResourceReadOutput>("resourceRead", &input.into())?;
+            .invoke_typed::<crate::ResourceReadInput, crate::ResourceReadOutput>(
+                "resourceRead",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
     /// `resourceWrite` — `crate::resource_write` 커맨드의 UniFFI 타입 래퍼.
     #[uniffi::export]
     #[allow(non_snake_case)]
-    pub fn resourceWrite(input: ResourceWriteInput) -> Result<ResourceWriteOutput, RustraCommandFailure> {
+    pub fn resourceWrite(
+        input: ResourceWriteInput,
+    ) -> Result<ResourceWriteOutput, RustraCommandFailure> {
         let out: crate::ResourceWriteOutput = package()
-            .invoke_typed::<crate::ResourceWriteInput, crate::ResourceWriteOutput>("resourceWrite", &input.into())?;
+            .invoke_typed::<crate::ResourceWriteInput, crate::ResourceWriteOutput>(
+                "resourceWrite",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
     /// `rustraRegistryDemo` — `crate::rustra_registry_demo` 커맨드의 UniFFI 타입 래퍼.
     #[uniffi::export]
     #[allow(non_snake_case)]
-    pub fn rustraRegistryDemo(input: RegistryDemoInput) -> Result<RegistryDemoOutput, RustraCommandFailure> {
+    pub fn rustraRegistryDemo(
+        input: RegistryDemoInput,
+    ) -> Result<RegistryDemoOutput, RustraCommandFailure> {
         let out: crate::RegistryDemoOutput = package()
-            .invoke_typed::<crate::RegistryDemoInput, crate::RegistryDemoOutput>("rustraRegistryDemo", &input.into())?;
+            .invoke_typed::<crate::RegistryDemoInput, crate::RegistryDemoOutput>(
+                "rustraRegistryDemo",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
@@ -1782,16 +1792,24 @@ pub mod uniffi_api {
     #[allow(non_snake_case)]
     pub fn scoreTotal(input: ScoreTotalInput) -> Result<ScoreTotalOutput, RustraCommandFailure> {
         let out: crate::ScoreTotalOutput = package()
-            .invoke_typed::<crate::ScoreTotalInput, crate::ScoreTotalOutput>("scoreTotal", &input.into())?;
+            .invoke_typed::<crate::ScoreTotalInput, crate::ScoreTotalOutput>(
+                "scoreTotal",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
     /// `secureCompute` — `crate::secure_compute` 커맨드의 UniFFI 타입 래퍼.
     #[uniffi::export]
     #[allow(non_snake_case)]
-    pub fn secureCompute(input: SecureComputeInput) -> Result<SecureComputeOutput, RustraCommandFailure> {
+    pub fn secureCompute(
+        input: SecureComputeInput,
+    ) -> Result<SecureComputeOutput, RustraCommandFailure> {
         let out: crate::SecureComputeOutput = package()
-            .invoke_typed::<crate::SecureComputeInput, crate::SecureComputeOutput>("secureCompute", &input.into())?;
+            .invoke_typed::<crate::SecureComputeInput, crate::SecureComputeOutput>(
+                "secureCompute",
+                &input.into(),
+            )?;
         Ok(out.into())
     }
 
@@ -1808,8 +1826,8 @@ pub mod uniffi_api {
     #[uniffi::export]
     #[allow(non_snake_case)]
     pub fn span(input: SpanInput) -> Result<SpanOutput, RustraCommandFailure> {
-        let out: crate::SpanOutput = package()
-            .invoke_typed::<crate::SpanInput, crate::SpanOutput>("span", &input.into())?;
+        let out: crate::SpanOutput =
+            package().invoke_typed::<crate::SpanInput, crate::SpanOutput>("span", &input.into())?;
         Ok(out.into())
     }
 
@@ -1857,12 +1875,10 @@ pub mod uniffi_api {
         let args: serde_json::Value = if args_json.is_empty() {
             serde_json::Value::Null
         } else {
-            serde_json::from_str(&args_json).map_err(|error| {
-                RustraCommandFailure::Failure {
-                    code: "uniffi.invalid_json".to_string(),
-                    detail: error.to_string(),
-                    retryable: false,
-                }
+            serde_json::from_str(&args_json).map_err(|error| RustraCommandFailure::Failure {
+                code: "uniffi.invalid_json".to_string(),
+                detail: error.to_string(),
+                retryable: false,
             })?
         };
         package()
@@ -1896,12 +1912,10 @@ pub mod uniffi_api {
         }
         let bytes = unsafe { std::slice::from_raw_parts(ptr, len) }.to_vec();
         unsafe { rustra_ffi_free(ptr, len) };
-        String::from_utf8(bytes).map_err(|error| {
-            RustraCommandFailure::Failure {
-                code: "uniffi.contract_hash".to_string(),
-                detail: error.to_string(),
-                retryable: false,
-            }
+        String::from_utf8(bytes).map_err(|error| RustraCommandFailure::Failure {
+            code: "uniffi.contract_hash".to_string(),
+            detail: error.to_string(),
+            retryable: false,
         })
     }
 

@@ -121,7 +121,11 @@ test('unknown job name is a hard error, not a silent pass', () => {
   // 즉시 드러나야 한다.
   const r = spawnSync(
     'bash',
-    [gatePath, ...MANDATORY_JOBS.slice(0, 11).map((j) => `${j}=success`), 'nonexistent-job=success'],
+    [
+      gatePath,
+      ...MANDATORY_JOBS.slice(0, 11).map((j) => `${j}=success`),
+      'nonexistent-job=success',
+    ],
     { encoding: 'utf8' },
   );
   assert.notEqual(r.status, 0);

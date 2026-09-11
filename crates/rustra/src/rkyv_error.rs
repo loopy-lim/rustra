@@ -85,7 +85,9 @@ fn split_rkyv_v2_response(frame: &[u8]) -> crate::Result<SplitResponse<'_>> {
             // err_len ≤ u16::MAX 이므로 10 + err_len 은 usize 에서 절대 넘치지 않는다.
             let err_len = u16::from_le_bytes([frame[8], frame[9]]) as usize;
             if frame.len() < 10 + err_len {
-                return Err(RustraError::invalid_args("rkyv v2: error frame body truncated"));
+                return Err(RustraError::invalid_args(
+                    "rkyv v2: error frame body truncated",
+                ));
             }
             let wire: RustraErrorWireOwned = postcard::from_bytes(&frame[10..10 + err_len])
                 .map_err(|error| {
