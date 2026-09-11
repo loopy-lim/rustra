@@ -1,5 +1,5 @@
 /// Builds a response encoder that turns a JSON Value (output from invoke_json)
-/// into the rkyv V2 binary response format.
+/// into the Frame binary response format.
 ///
 /// Tier 1/2 wire format:
 /// ```text
@@ -11,7 +11,7 @@
 /// ```text
 /// [ok: u8 @0][pad 3B][json_len: u32 @4 LE][json_bytes @8...]
 /// ```
-pub(crate) fn build_rkyv_v2_response_encoder(output_schema: &Value, is_tier3: bool) -> EncodeFn {
+pub(crate) fn build_frame_response_encoder(output_schema: &Value, is_tier3: bool) -> EncodeFn {
     if is_tier3 {
         return Arc::new(move |value: &Value| {
             let json_str = serde_json::to_string(value).unwrap_or_default();

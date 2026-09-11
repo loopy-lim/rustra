@@ -1,8 +1,8 @@
-/// rkyv V2 바이너리 와이어 진입점 — command_id(u16) 기반 dispatch.
+/// Frame 바이너리 와이어 진입점 — command_id(u16) 기반 dispatch.
 ///
 /// 소비자마다 패닉 가드+버퍼 프로토콜을 복제해 구현하던 것(examples/calculator 의
-/// `rustra_calculator_invoke_rkyv_v2` 등)을 코어가 대신 제공한다. 응답은
-/// [`crate::encode_rkyv_v2_error`] 와 동일한 와이어(성공 시 ok=1 + postcard body).
+/// `rustra_calculator_invoke_frame` 등)을 코어가 대신 제공한다. 응답은
+/// [`crate::encode_frame_error`] 와 동일한 와이어(성공 시 ok=1 + postcard body).
 /// 패닉은 `with_panic_guard` 계약대로 internal 에러 프레임으로 정규화된다.
 ///
 /// # Safety
@@ -11,7 +11,7 @@
 /// `out_len` must be a valid write pointer.
 /// Caller must free the returned buffer with `rustra_ffi_free`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2(
+pub unsafe extern "C" fn rustra_ffi_invoke_frame(
     payload: *const u8,
     payload_len: usize,
     out_len: *mut usize,
@@ -20,16 +20,16 @@ pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2(
         return std::ptr::null_mut();
     }
     let bytes = unsafe { std::slice::from_raw_parts(payload, payload_len) };
-    // 패닉 가드는 한 겹이다 — 코어 invoke_rkyv_v2_command 가 핸들러 패닉을
+    // 패닉 가드는 한 겹이다 — 코어 invoke_frame_command 가 핸들러 패닉을
     // internal 에러로 정규화한다. 이전의 바깥 catch_unwind 은 같은 패닉을
     // 두 번 가두며 unwind 테이블 세팅 비용만 핫패스에 남겼다. 레지스트리
     // 조회(BTreeMap get)와 슬라이스 생성은 패닉 불가능한 코어 제어 코드다.
     let resp = match get_package()
         .ok_or_else(|| crate::RustraError::custom("ffi.not_registered", "package not registered"))
-        .and_then(|pkg| pkg.invoke_rkyv_v2(bytes))
+        .and_then(|pkg| pkg.invoke_frame(bytes))
     {
         Ok(bytes) => bytes,
-        Err(error) => crate::encode_rkyv_v2_error(&error),
+        Err(error) => crate::encode_frame_error(&error),
     };
     alloc_response(resp, out_len)
 }
@@ -87,7 +87,7 @@ pub extern "C" fn rustra_ffi_has_buffer(command_id: u16) -> u32 {
 /// JSI 호스트의 `invokeTypedRaw(cmdId, ...args)` 진입과 짝을 이룬다. 슬롯
 /// 배열은 인자 선언순 그대로(f64는 IEEE-754 비트 재해석, bool은 0/1). 결과
 /// 슬롯은 `out_slot` 에 기록되고 반환값은 에러 코드다(0=성공, 그 외=에러).
-/// 에러 상세는 기존 rkyv V2 에러 와이어([`crate::encode_rkyv_v2_error`])를
+/// 에러 상세는 기존 Frame 에러 와이어([`crate::encode_frame_error`])를
 /// `err_buf`/`err_buf_cap` 에 복사하고 필요 크기를 `err_len` 에 쓴다 —
 /// 부족하면 잘린 메시지라도 싣고 0이 아닌 코드를 반환한다.
 ///
@@ -133,7 +133,7 @@ pub unsafe extern "C" fn rustra_ffi_invoke_raw(
             0
         }
         Err(error) => {
-            let wire = crate::encode_rkyv_v2_error(&error);
+            let wire = crate::encode_frame_error(&error);
             let needed = wire.len();
             let copy = needed.min(err_buf_cap);
             if !err_buf.is_null() && copy > 0 {

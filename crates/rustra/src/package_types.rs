@@ -36,7 +36,7 @@ pub(crate) struct RegistryState {
     pub(crate) commands: BTreeMap<String, Arc<Command>>,
     pub(crate) id_to_name: BTreeMap<u16, String>,
     pub(crate) next_command_id: u16,
-    /// (성능) command_id → 핸들러 직접 캐시 — `invoke_rkyv_v2` 의 핫패스가
+    /// (성능) command_id → 핸들러 직접 캐시 — `invoke_frame` 의 핫패스가
     /// `id_to_name` → `commands` 이중 조회 + Arc 클론을 거치지 않게 한다.
     /// 등록/교체/해제 시점에 함께 유지된다(불변식: 값은 항상 `commands` 의
     /// 동일 명령과 같은 Arc 를 가리킨다).

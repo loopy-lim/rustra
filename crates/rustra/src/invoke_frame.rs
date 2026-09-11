@@ -1,7 +1,7 @@
 impl Package {
-    pub fn invoke_rkyv_v2(&self, payload: &[u8]) -> crate::Result<Vec<u8>> {
+    pub fn invoke_frame(&self, payload: &[u8]) -> crate::Result<Vec<u8>> {
         if payload.len() < 2 {
-            return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+            return Err(RustraError::invalid_args("frame: payload too short"));
         }
         let limit = crate::limits::max_payload_bytes();
         if payload.len() > limit {
@@ -15,7 +15,7 @@ impl Package {
                 .and_then(|registry| registry.id_to_command.get(command_id as usize))
                 .and_then(Option::as_ref)
                 .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?;
-            return self.invoke_rkyv_v2_command(command, payload);
+            return self.invoke_frame_command(command, payload);
         }
 
         // Mutable dev registry: clone out before running user code so registry
@@ -33,7 +33,7 @@ impl Package {
                 .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
                 .clone()
         };
-        self.invoke_rkyv_v2_command(command.as_ref(), payload)
+        self.invoke_frame_command(command.as_ref(), payload)
     }
 
     /// 스칼라 직결(raw) invoke — postcard 왕복 없이 u64 슬롯으로 주고받는다.

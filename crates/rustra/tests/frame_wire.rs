@@ -1,4 +1,4 @@
-//! rkyv V2 wire path 종합 테스트 — dynamic import(Tier 3) + 정적 binary 경로.
+//! Frame wire path 종합 테스트 — dynamic import(Tier 3) + 정적 binary 경로.
 //!
 //! 도달 가능한 두 wire 를 다양한 타입으로 검증:
 //! - 정적 binary: `[cmd_id u16][postcard 또는 complex(I)]` → `[ok u8][body@8]`
@@ -239,7 +239,7 @@ fn static_invoke<I: Serialize, O: serde::de::DeserializeOwned>(
 ) -> O {
     let id = common::command_id_of(pkg, name);
     let req = common::postcard_request(id, input);
-    let resp = pkg.invoke_rkyv_v2(&req).expect("static invoke ok");
+    let resp = pkg.invoke_frame(&req).expect("static invoke ok");
     common::decode_postcard_response::<O>(&resp)
 }
 
@@ -256,7 +256,7 @@ fn dyn_invoke<I: Serialize, O: serde::de::DeserializeOwned>(
 ) -> O {
     let id = common::command_id_of(pkg, name);
     let req = common::postcard_request(id, input);
-    let resp = pkg.invoke_rkyv_v2(&req).expect("dyn invoke ok");
+    let resp = pkg.invoke_frame(&req).expect("dyn invoke ok");
     common::decode_postcard_response::<O>(&resp)
 }
 
@@ -657,9 +657,9 @@ fn truncated_payload_errors() {
         .command("add", common::add)
         .build();
     // 0바이트
-    assert!(pkg.invoke_rkyv_v2(&[]).is_err());
+    assert!(pkg.invoke_frame(&[]).is_err());
     // 1바이트 (command_id 도 불충분)
-    assert!(pkg.invoke_rkyv_v2(&[1]).is_err());
+    assert!(pkg.invoke_frame(&[1]).is_err());
 }
 
 #[test]
@@ -669,7 +669,7 @@ fn unknown_command_id_errors() {
         .build();
     // 존재하지 않는 command_id (999)
     let req = common::postcard_request(999, &common::AddInput { a: 1, b: 2 });
-    let err = pkg.invoke_rkyv_v2(&req).unwrap_err();
+    let err = pkg.invoke_frame(&req).unwrap_err();
     assert_eq!(err.code(), "command.not_found");
 }
 
@@ -686,14 +686,12 @@ fn dynamic_promoted_command_no_longer_parses_tier3_json() {
     // "{not valid json" → postcard varint 0x7B = zigzag(-62) → Ok(EchoIn{v:-62}).
     // tier3 JSON 파서였다면 parse 실패 에러를 반환했을 것이다 — Ok 가 승격 증명.
     let req = common::tier3_request(id, "{not valid json");
-    let resp = pkg
-        .invoke_rkyv_v2(&req)
-        .expect("postcard decode of garbage");
+    let resp = pkg.invoke_frame(&req).expect("postcard decode of garbage");
     let out: common::EchoOutput = common::decode_postcard_response(&resp);
     assert_eq!(out.v, -62);
     // 정상 postcard 프레임도 그대로 동작.
     let postcard_req = common::postcard_request(id, &common::EchoInput { v: 5 });
-    let resp = pkg.invoke_rkyv_v2(&postcard_req).expect("postcard invoke");
+    let resp = pkg.invoke_frame(&postcard_req).expect("postcard invoke");
     let out: common::EchoOutput = common::decode_postcard_response(&resp);
     assert_eq!(out.v, 5);
 }
@@ -704,7 +702,7 @@ fn dynamic_tier3_unknown_command_id_errors() {
     let pkg = dyn_pkg();
     // 어떤 commandId 도 존재하지 않음
     let req = common::tier3_request(9999, r#"{"v":1}"#);
-    let err = pkg.invoke_rkyv_v2(&req).unwrap_err();
+    let err = pkg.invoke_frame(&req).unwrap_err();
     assert_eq!(err.code(), "command.not_found");
 }
 
@@ -717,7 +715,7 @@ fn unregister_then_invoke_errors() {
     let _ = id_after;
     // echo 호출 → not_found (JSON 엔진 경로도 동일)
     let req = common::tier3_request(1, r#"{"v":1}"#);
-    let err = pkg.invoke_rkyv_v2(&req).unwrap_err();
+    let err = pkg.invoke_frame(&req).unwrap_err();
     assert_eq!(err.code(), "command.not_found");
 }
 
@@ -789,10 +787,10 @@ fn live_schema_lists_all_dynamic_commands() {
 }
 
 #[test]
-fn encode_rkyv_v2_error_wire_format() {
+fn encode_frame_error_wire_format() {
     // `[ok: u8 @0=0][pad to @8][err_len: u16 LE @8][postcard({code,message}) @10]`
     let error = rustra::RustraError::custom("math.divide_by_zero", "boom 💥");
-    let buf = rustra::encode_rkyv_v2_error(&error);
+    let buf = rustra::encode_frame_error(&error);
     assert_eq!(buf[0], 0, "ok flag must be 0 for error");
     let len = u16::from_le_bytes(buf[8..10].try_into().unwrap()) as usize;
     assert_eq!(buf.len(), 10 + len);
@@ -844,7 +842,7 @@ fn map_command_uses_postcard_fast_path() {
     };
     let req = common::postcard_request(1, &input);
     let resp = pkg
-        .invoke_rkyv_v2(&req)
+        .invoke_frame(&req)
         .expect("postcard invoke must succeed");
 
     // postcard 응답: [ok:1][pad 7B][postcard(total i64)] — @8 이 zigzag(42)=84 1바이트.
@@ -879,9 +877,7 @@ fn oneof_command_uses_complex_binary_wire() {
         .build();
     // [command_id u16][variant index][active.level zigzag varint]
     let req = [1, 0, 0, 14];
-    let resp = pkg
-        .invoke_rkyv_v2(&req)
-        .expect("complex invoke must succeed");
+    let resp = pkg.invoke_frame(&req).expect("complex invoke must succeed");
     assert_eq!(resp[0], 1, "ok");
     // Output is the same data enum: [variant index][active.level zigzag varint].
     assert_eq!(&resp[8..], &[0, 14]);

@@ -75,7 +75,7 @@ fn bench_complex_route(c: &mut Criterion) {
     let groups_id = common::command_id_of(&pkg, "groupsEcho");
 
     // oneOf 와이어: [variant index][active.level zigzag varint] — wire fixture
-    // 와 동일 인코딩(rkyv_v2_wire::oneof_command_uses_complex_binary_wire).
+    // 와 동일 인코딩(frame_wire::oneof_command_uses_complex_binary_wire).
     let oneof_req = [oneof_id as u8, (oneof_id >> 8) as u8, 0, 14];
 
     // groups 와이어: map count(1) + key "g"(len 1) + seq count(2) + zigzag 원소.
@@ -92,26 +92,26 @@ fn bench_complex_route(c: &mut Criterion) {
 
     // smoke — 와이어가 틀리면 벤치가 무의미해지므로 즉시 실패시킨다.
     let resp = pkg
-        .invoke_rkyv_v2(&oneof_req)
+        .invoke_frame(&oneof_req)
         .expect("oneof complex invoke must succeed");
     assert_eq!(resp[0], 1, "oneof ok");
     assert_eq!(&resp[8..], &[0, 14], "oneof echo body");
     let resp = pkg
-        .invoke_rkyv_v2(&groups_req)
+        .invoke_frame(&groups_req)
         .expect("groups complex invoke must succeed");
     assert_eq!(resp[0], 1, "groups ok");
 
     let mut group = c.benchmark_group("complex_route");
     group.sample_size(500);
-    group.bench_function(BenchmarkId::new("invoke_rkyv_v2", "oneof_data_enum"), |b| {
+    group.bench_function(BenchmarkId::new("invoke_frame", "oneof_data_enum"), |b| {
         b.iter(|| {
-            let resp = pkg.invoke_rkyv_v2(&oneof_req).unwrap();
+            let resp = pkg.invoke_frame(&oneof_req).unwrap();
             std::hint::black_box(&resp);
         });
     });
-    group.bench_function(BenchmarkId::new("invoke_rkyv_v2", "map_of_seqs"), |b| {
+    group.bench_function(BenchmarkId::new("invoke_frame", "map_of_seqs"), |b| {
         b.iter(|| {
-            let resp = pkg.invoke_rkyv_v2(&groups_req).unwrap();
+            let resp = pkg.invoke_frame(&groups_req).unwrap();
             std::hint::black_box(&resp);
         });
     });

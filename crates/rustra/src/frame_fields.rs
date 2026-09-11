@@ -9,7 +9,7 @@ pub(crate) enum Tier {
     Tier3,
 }
 
-// U32/U16/VecU8 은 read/write arms(rkyv_decode/rkyv_response)가 소비하지만
+// U32/U16/VecU8 은 read/write arms(frame_decode/frame_response)가 소비하지만
 // wire_kind_from_schema 가 아직 생성하지 않는다 — 판정이 확장되면 소멸한다.
 #[derive(Clone, Copy, Debug)]
 #[allow(dead_code)]
@@ -107,7 +107,7 @@ pub(crate) fn required_names(schema: &Value) -> BTreeSet<String> {
 
 pub(crate) fn read_wire_field(payload: &[u8], offset: usize, kind: WireFieldKind) -> Result<Value> {
     if offset + kind.size() > payload.len() {
-        return Err(RustraError::invalid_args("rkyv v2: payload truncated"));
+        return Err(RustraError::invalid_args("frame: payload truncated"));
     }
     Ok(match kind {
         WireFieldKind::I64 => {

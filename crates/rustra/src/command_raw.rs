@@ -1,5 +1,5 @@
-fn raw_scalar_kind(schema: &Value) -> Option<crate::rkyv_codec::RawFieldKind> {
-    use crate::rkyv_codec::RawFieldKind;
+fn raw_scalar_kind(schema: &Value) -> Option<crate::frame_codec::RawFieldKind> {
+    use crate::frame_codec::RawFieldKind;
 
     let kind_str = schema.get("type").and_then(Value::as_str)?;
     // integer 형식 정보로 zigzag/uvar 를 가린다 — postcard 는 signed 는
@@ -27,7 +27,7 @@ fn build_raw_handler<I, O, F>(
     input_schema: &Value,
     output_schema: &Value,
     handler: &Arc<F>,
-) -> (Option<RawHandler>, Vec<crate::rkyv_codec::RawFieldKind>)
+) -> (Option<RawHandler>, Vec<crate::frame_codec::RawFieldKind>)
 where
     I: DeserializeOwned + 'static,
     O: Serialize + 'static,
@@ -122,7 +122,7 @@ where
                 }
                 RawFieldKind::F32 => {
                     // f32 정밀도로 반올림한 뒤 4바이트 LE — postcard f32 와이어.
-                    let f = crate::rkyv_codec::f64_from_u64(slots[i]) as f32;
+                    let f = crate::frame_codec::f64_from_u64(slots[i]) as f32;
                     body[w..w + 4].copy_from_slice(&f.to_le_bytes());
                     w += 4;
                 }
@@ -132,7 +132,7 @@ where
                 }
             }
         }
-        // 2) postcard 디코딩 — 기존 rkyv V2 경로와 동일한 저비용 디코더.
+        // 2) postcard 디코딩 — 기존 Frame 경로와 동일한 저비용 디코더.
         let input: I = postcard::from_bytes(&body[..w])
             .map_err(|e| RustraError::invalid_args(format!("raw invoke decode: {e}")))?;
         let output = handler(input)?;

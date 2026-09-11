@@ -62,13 +62,13 @@ fuzz_target!(|data: &[u8]| {
     let mut frame = Vec::with_capacity(data.len().min(1024) + 2);
     frame.extend_from_slice(&1u16.to_le_bytes());
     frame.extend_from_slice(&data[..data.len().min(1024)]);
-    deny_panic_guard(pkg.invoke_rkyv_v2(&frame));
+    deny_panic_guard(pkg.invoke_frame(&frame));
 
     let mut target = [0u8; 1024];
-    deny_panic_guard(pkg.invoke_rkyv_v2_into(&frame, &mut target));
+    deny_panic_guard(pkg.invoke_frame_into(&frame, &mut target));
 
     // 원본 그대로 — 앞 2바이트가 command_id 로 재해석되는 경로(unknown id,
     // too short 포함).
     let clipped = &data[..data.len().min(1024)];
-    deny_panic_guard(pkg.invoke_rkyv_v2(clipped));
+    deny_panic_guard(pkg.invoke_frame(clipped));
 });

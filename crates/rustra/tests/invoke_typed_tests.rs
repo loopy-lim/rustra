@@ -1,7 +1,7 @@
-//! invoke_typed + decode_rkyv_v2_response 통합 테스트.
+//! invoke_typed + decode_frame_response 통합 테스트.
 //!
-//! typed invoke 가 invoke_rkyv_v2 의 단일 dispatch 경로를 타는지(같은 와이어,
-//! 같은 에러 전파 계약)와 프레임 디코더가 encode_rkyv_v2_error 가 만드는
+//! typed invoke 가 invoke_frame 의 단일 dispatch 경로를 타는지(같은 와이어,
+//! 같은 에러 전파 계약)와 프레임 디코더가 encode_frame_error 가 만드는
 //! 에러 프레임을 정확히 되읽는지 검증한다. 프레임 포맷 정의는
 //! examples/calculator/tests/wire_fixtures.rs 헤더 참고.
 
@@ -148,10 +148,10 @@ fn invoke_typed_unknown_command_name() {
     );
 }
 
-// ── 3. decode_rkyv_v2_response — 실제 dispatch 와이어와 정합 ──
+// ── 3. decode_frame_response — 실제 dispatch 와이어와 정합 ──
 
 #[test]
-fn decode_rkyv_v2_response_matches_real_dispatch_wire() {
+fn decode_frame_response_matches_real_dispatch_wire() {
     let pkg = static_pkg();
     // builder 선언이 부여한 실제 command_id 를 live_schema 로 조회한다.
     let id = pkg.live_schema()["commands"]
@@ -164,86 +164,86 @@ fn decode_rkyv_v2_response_matches_real_dispatch_wire() {
         .unwrap() as u16;
     let mut req = id.to_le_bytes().to_vec();
     req.extend_from_slice(&postcard::to_allocvec(&AddInput { a: 40, b: 2 }).unwrap());
-    let frame = pkg.invoke_rkyv_v2(&req).expect("dispatch ok");
+    let frame = pkg.invoke_frame(&req).expect("dispatch ok");
     assert_eq!(frame[0], 1, "성공 프레임 ok 플래그");
 
-    let body = rustra::decode_rkyv_v2_response(&frame).expect("success frame decodes");
+    let body = rustra::decode_frame_response(&frame).expect("success frame decodes");
     // 본문 슬라이스가 @8 offset 부터 시작함을 고정(7B reserved 존중).
     assert_eq!(body.len(), frame.len() - 8);
     let out: AddOutput = postcard::from_bytes(body).expect("postcard decode");
     assert_eq!(out.value, 42);
 }
 
-// ── 4. decode_rkyv_v2_response — 에러 프레임(encode 와 교차 검증) ──
+// ── 4. decode_frame_response — 에러 프레임(encode 와 교차 검증) ──
 
 #[test]
-fn decode_rkyv_v2_response_error_frame_from_encoder() {
+fn decode_frame_response_error_frame_from_encoder() {
     let error = RustraError::custom("math.divide_by_zero", "cannot divide by zero");
-    let frame = rustra::encode_rkyv_v2_error(&error);
+    let frame = rustra::encode_frame_error(&error);
 
     // 고정 시그니처 디코더 — 동적 코드는 RustraError.code(&'static str) 에 못 들어가므로
     // internal 에 code: message 텍스트로 통합해 전달한다(문서화된 한계).
-    let err = rustra::decode_rkyv_v2_response(&frame).unwrap_err();
+    let err = rustra::decode_frame_response(&frame).unwrap_err();
     assert_eq!(err.code(), "internal");
     assert_eq!(err.message(), "math.divide_by_zero: cannot divide by zero");
 
     // 구조화 변형 — (code, message) 가 정확히 보존된다.
-    let (code, message) = rustra::decode_rkyv_v2_error_parts(&frame).expect("parts decode");
+    let (code, message) = rustra::decode_frame_error_parts(&frame).expect("parts decode");
     assert_eq!(code, "math.divide_by_zero");
     assert_eq!(message, "cannot divide by zero");
 }
 
 #[test]
-fn decode_rkyv_v2_error_parts_rejects_success_frame() {
+fn decode_frame_error_parts_rejects_success_frame() {
     // add 의 실제 성공 프레임과 동일한 최소 프레임: ok=1 + 본문 1바이트.
     let frame = [1u8, 0, 0, 0, 0, 0, 0, 0, 84];
-    let err = rustra::decode_rkyv_v2_error_parts(&frame).unwrap_err();
+    let err = rustra::decode_frame_error_parts(&frame).unwrap_err();
     assert_eq!(err.code(), "command.invalid_args");
     assert!(err.message().contains("not an error frame"));
     // 고정 시그니처 디코더는 같은 프레임을 본문 슬라이스로 반환한다.
-    assert_eq!(rustra::decode_rkyv_v2_response(&frame).unwrap(), &[84]);
+    assert_eq!(rustra::decode_frame_response(&frame).unwrap(), &[84]);
 }
 
-// ── 5. decode_rkyv_v2_response — malformed 프레임 거절 ─────
+// ── 5. decode_frame_response — malformed 프레임 거절 ─────
 
 #[test]
-fn decode_rkyv_v2_response_rejects_malformed_frames() {
+fn decode_frame_response_rejects_malformed_frames() {
     // 8바이트 미만 — 헤더 불충분.
     let short_frames: [&[u8]; 3] = [&[], &[1u8], &[0u8; 7]];
     for short in short_frames {
-        let err = rustra::decode_rkyv_v2_response(short).unwrap_err();
+        let err = rustra::decode_frame_response(short).unwrap_err();
         assert_eq!(err.code(), "command.invalid_args");
-        assert_eq!(err.message(), "rkyv v2: response frame too short");
+        assert_eq!(err.message(), "frame: response frame too short");
     }
     // ok 바이트가 {0,1} 밖.
     let frame = [2u8, 0, 0, 0, 0, 0, 0, 0];
-    let err = rustra::decode_rkyv_v2_response(&frame).unwrap_err();
+    let err = rustra::decode_frame_response(&frame).unwrap_err();
     assert_eq!(err.code(), "command.invalid_args");
-    assert_eq!(err.message(), "rkyv v2: unknown ok byte 2");
+    assert_eq!(err.message(), "frame: unknown ok byte 2");
     // ok=0 인데 err_len(u16 @8) 자리가 비어 있음.
     let frame = [0u8, 0, 0, 0, 0, 0, 0, 0, 5];
-    let err = rustra::decode_rkyv_v2_response(&frame).unwrap_err();
+    let err = rustra::decode_frame_response(&frame).unwrap_err();
     assert_eq!(err.code(), "command.invalid_args");
-    assert_eq!(err.message(), "rkyv v2: error frame too short for err_len");
+    assert_eq!(err.message(), "frame: error frame too short for err_len");
     // err_len 이 프레임 끝을 넘는다.
     let frame = [0u8, 0, 0, 0, 0, 0, 0, 0, 100, 0];
-    let err = rustra::decode_rkyv_v2_response(&frame).unwrap_err();
+    let err = rustra::decode_frame_response(&frame).unwrap_err();
     assert_eq!(err.code(), "command.invalid_args");
-    assert_eq!(err.message(), "rkyv v2: error frame body truncated");
+    assert_eq!(err.message(), "frame: error frame body truncated");
     // err_len 은 유효하지만 본문이 postcard {code, message} 가 아님(빈 본문).
     let frame = [0u8, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-    let err = rustra::decode_rkyv_v2_response(&frame).unwrap_err();
+    let err = rustra::decode_frame_response(&frame).unwrap_err();
     assert_eq!(err.code(), "command.invalid_args");
     assert!(
         err.message()
-            .starts_with("rkyv v2: error frame body decode failed")
+            .starts_with("frame: error frame body decode failed")
     );
 }
 
 #[test]
-fn decode_rkyv_v2_response_parts_malformed_matches_fixed_signature() {
+fn decode_frame_response_parts_malformed_matches_fixed_signature() {
     // 구조화 변형도 동일한 검증 게이트를 통과한다(빈 프레임).
-    let err = rustra::decode_rkyv_v2_error_parts(&[]).unwrap_err();
+    let err = rustra::decode_frame_error_parts(&[]).unwrap_err();
     assert_eq!(err.code(), "command.invalid_args");
-    assert_eq!(err.message(), "rkyv v2: response frame too short");
+    assert_eq!(err.message(), "frame: response frame too short");
 }

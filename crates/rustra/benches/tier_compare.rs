@@ -4,7 +4,7 @@
 //! 6.55x 같은 수치를 wire 차이로 오독하기 쉬웠다. 이 벤치는 연산을 통제해
 //! wire 차이만 남긴다:
 //!
-//! (a) 정적 postcard — 빌더로 등록된 `echo` (rkyv V2 postcard fast-path)
+//! (a) 정적 postcard — 빌더로 등록된 `echo` (Frame postcard fast-path)
 //! (b) 동적 postcard — 런타임 `register` 로 등록된 `echo_dyn` (T2-1: 지원
 //!     스키마 동적 명령도 postcard 핸들러를 받는다)
 //! (c) 동적 Tier 3 JSON — 런타임 `register` 로 등록된 `echo_any` (anyOf 3항
@@ -54,7 +54,7 @@ fn bench_tier_compare(c: &mut Criterion) {
 
     group.bench_function(BenchmarkId::new("echo", "static_postcard"), |b| {
         b.iter(|| {
-            let resp = pkg.invoke_rkyv_v2(&static_req).unwrap();
+            let resp = pkg.invoke_frame(&static_req).unwrap();
             let out: common::EchoOutput = common::decode_postcard_response(&resp);
             out
         });
@@ -62,7 +62,7 @@ fn bench_tier_compare(c: &mut Criterion) {
 
     group.bench_function(BenchmarkId::new("echo", "dynamic_postcard"), |b| {
         b.iter(|| {
-            let resp = pkg.invoke_rkyv_v2(&dynamic_req).unwrap();
+            let resp = pkg.invoke_frame(&dynamic_req).unwrap();
             let out: common::EchoOutput = common::decode_postcard_response(&resp);
             out
         });
@@ -70,7 +70,7 @@ fn bench_tier_compare(c: &mut Criterion) {
 
     group.bench_function(BenchmarkId::new("echo", "dynamic_tier3_json"), |b| {
         b.iter(|| {
-            let resp = pkg.invoke_rkyv_v2(&tier3_req).unwrap();
+            let resp = pkg.invoke_frame(&tier3_req).unwrap();
             common::decode_tier3_response(&resp)
         });
     });

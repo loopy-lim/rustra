@@ -11,15 +11,15 @@ func rustra_calculator_invoke(_ payload: UnsafePointer<CChar>?) -> UnsafeMutable
 @_silgen_name("rustra_calculator_free_string")
 func rustra_calculator_free_string(_ ptr: UnsafeMutablePointer<CChar>?)
 
-@_silgen_name("rustra_ffi_invoke_rkyv_v2")
-func rustra_ffi_invoke_rkyv_v2(
+@_silgen_name("rustra_ffi_invoke_frame")
+func rustra_ffi_invoke_frame(
     _ payload: UnsafePointer<UInt8>?,
     _ payloadLen: UInt,
     _ outLen: UnsafeMutablePointer<UInt>?
 ) -> UnsafeMutablePointer<UInt8>?
 
-@_silgen_name("rustra_ffi_invoke_rkyv_v2_into")
-func rustra_ffi_invoke_rkyv_v2_into(
+@_silgen_name("rustra_ffi_invoke_frame_into")
+func rustra_ffi_invoke_frame_into(
     _ payload: UnsafePointer<UInt8>?,
     _ payloadLen: UInt,
     _ buffer: UnsafeMutablePointer<UInt8>?,
@@ -80,7 +80,7 @@ func decodeZigzag(_ bytes: ArraySlice<UInt8>) -> Int64 {
 
 let jsonRequest = "{\"command\":\"addNumbers\",\"args\":{\"a\":42,\"b\":58}}"
 // [command_id=1 LE][postcard zigzag(42)][postcard zigzag(58)]
-let rkyvRequest: [UInt8] = [0x01, 0x00, 0x54, 0x74]
+let frameRequest: [UInt8] = [0x01, 0x00, 0x54, 0x74]
 
 func legacyJSONCall() {
     jsonRequest.withCString { request in
@@ -90,10 +90,10 @@ func legacyJSONCall() {
     }
 }
 
-func rkyvAllocCall() {
-    rkyvRequest.withUnsafeBytes { raw in
+func frameAllocCall() {
+    frameRequest.withUnsafeBytes { raw in
         var outLen: UInt = 0
-        let response = rustra_ffi_invoke_rkyv_v2(
+        let response = rustra_ffi_invoke_frame(
             raw.bindMemory(to: UInt8.self).baseAddress,
             UInt(raw.count),
             &outLen
@@ -104,14 +104,14 @@ func rkyvAllocCall() {
 }
 
 var reusable = [UInt8](repeating: 0, count: 64)
-func rkyvIntoCall(probe: Bool) {
-    rkyvRequest.withUnsafeBytes { requestRaw in
+func frameIntoCall(probe: Bool) {
+    frameRequest.withUnsafeBytes { requestRaw in
         reusable.withUnsafeMutableBytes { outputRaw in
             let request = requestRaw.bindMemory(to: UInt8.self)
             let output = outputRaw.bindMemory(to: UInt8.self)
             var outLen: UInt = 0
             if probe {
-                let result = rustra_ffi_invoke_rkyv_v2_into(
+                let result = rustra_ffi_invoke_frame_into(
                     request.baseAddress,
                     UInt(request.count),
                     nil,
@@ -120,7 +120,7 @@ func rkyvIntoCall(probe: Bool) {
                 )
                 precondition(result == 0 && outLen <= UInt(output.count))
             }
-            let written = rustra_ffi_invoke_rkyv_v2_into(
+            let written = rustra_ffi_invoke_frame_into(
                 request.baseAddress,
                 UInt(request.count),
                 output.baseAddress,
@@ -137,13 +137,13 @@ func rkyvIntoCall(probe: Bool) {
 // is too small. The Rust FFI caches that oversized response, so the handler is
 // still executed exactly once.
 var stackFirstBuffer = [UInt8](repeating: 0, count: 512)
-func rkyvStackFirstCall() {
-    rkyvRequest.withUnsafeBytes { requestRaw in
+func frameStackFirstCall() {
+    frameRequest.withUnsafeBytes { requestRaw in
         let request = requestRaw.bindMemory(to: UInt8.self)
         var outLen: UInt = 0
         let written = stackFirstBuffer.withUnsafeMutableBytes { outputRaw in
             let output = outputRaw.bindMemory(to: UInt8.self)
-            return rustra_ffi_invoke_rkyv_v2_into(
+            return rustra_ffi_invoke_frame_into(
                 request.baseAddress,
                 UInt(request.count),
                 output.baseAddress,
@@ -160,7 +160,7 @@ func rkyvStackFirstCall() {
         var exactBuffer = [UInt8](repeating: 0, count: Int(outLen))
         let retried = exactBuffer.withUnsafeMutableBytes { outputRaw in
             let output = outputRaw.bindMemory(to: UInt8.self)
-            return rustra_ffi_invoke_rkyv_v2_into(
+            return rustra_ffi_invoke_frame_into(
                 request.baseAddress,
                 UInt(request.count),
                 output.baseAddress,
@@ -180,20 +180,20 @@ let legacyResponse = jsonRequest.withCString { request -> String in
     return String(cString: response)
 }
 precondition(legacyResponse.contains("\"value\":100"))
-rkyvIntoCall(probe: true)
+frameIntoCall(probe: true)
 precondition(reusable[0] == 1 && decodeZigzag(reusable[8...]) == 100)
-rkyvStackFirstCall()
+frameStackFirstCall()
 precondition(stackFirstBuffer[0] == 1 && decodeZigzag(stackFirstBuffer[8...]) == 100)
 
 let direct = measure("primitive C ABI lower bound") {
     precondition(rustra_calculator_add_direct(42, 58) == 100)
 }
 let legacy = measure("legacy JSON CString alloc/free") { legacyJSONCall() }
-let rkyvAlloc = measure("rkyv V2 alloc/free") { rkyvAllocCall() }
-let rkyvInto = measure("rkyv V2 caller buffer (reused)") { rkyvIntoCall(probe: false) }
-let rkyvProbeInto = measure("rkyv V2 probe + caller buffer") { rkyvIntoCall(probe: true) }
-let rkyvStackFirst = measure("rkyv V2 stack-first caller buffer (actual JSI protocol)") {
-    rkyvStackFirstCall()
+let frameAlloc = measure("Frame alloc/free") { frameAllocCall() }
+let frameInto = measure("Frame caller buffer (reused)") { frameIntoCall(probe: false) }
+let frameProbeInto = measure("Frame probe + caller buffer") { frameIntoCall(probe: true) }
+let frameStackFirst = measure("Frame stack-first caller buffer (actual JSI protocol)") {
+    frameStackFirstCall()
 }
 let fullJSON = measure("Swift JSON encode + FFI + decode") {
     let payload: [String: Any] = ["command": "addNumbers", "args": ["a": 42, "b": 58]]
@@ -208,7 +208,7 @@ let fullJSON = measure("Swift JSON encode + FFI + decode") {
     precondition(parsed["ok"] as? Bool == true)
 }
 
-let results = [direct, legacy, rkyvAlloc, rkyvInto, rkyvProbeInto, rkyvStackFirst, fullJSON]
+let results = [direct, legacy, frameAlloc, frameInto, frameProbeInto, frameStackFirst, fullJSON]
 let report: [String: Any] = [
     "schemaVersion": 1,
     "benchmark": "swift-rust-ffi-addNumbers",

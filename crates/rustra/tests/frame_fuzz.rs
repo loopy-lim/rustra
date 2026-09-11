@@ -34,7 +34,7 @@ proptest! {
             .build();
         let id = common::command_id_of(&pkg, "add");
         let req = common::postcard_request(id, &common::AddInput { a, b });
-        let resp = pkg.invoke_rkyv_v2(&req).unwrap();
+        let resp = pkg.invoke_frame(&req).unwrap();
         let out: common::AddOutput = common::decode_postcard_response(&resp);
         prop_assert_eq!(out.value, a + b);
     }
@@ -49,7 +49,7 @@ proptest! {
             .build();
         let id = common::command_id_of(&pkg, "greet");
         let req = common::postcard_request(id, &common::GreetInput { name: name.clone() });
-        let resp = pkg.invoke_rkyv_v2(&req).unwrap();
+        let resp = pkg.invoke_frame(&req).unwrap();
         let out: common::GreetOutput = common::decode_postcard_response(&resp);
         prop_assert_eq!(out.message, format!("hello {name}"));
     }
@@ -64,7 +64,7 @@ proptest! {
             .build();
         let id = common::command_id_of(&pkg, "sumList");
         let req = common::postcard_request(id, &common::SumListInput { numbers: nums.clone() });
-        let resp = pkg.invoke_rkyv_v2(&req).unwrap();
+        let resp = pkg.invoke_frame(&req).unwrap();
         let out: common::SumListOutput = common::decode_postcard_response(&resp);
         let expected_sum: i64 = nums.iter().sum();
         prop_assert_eq!(out.sum, expected_sum);
@@ -83,7 +83,7 @@ proptest! {
         let pkg = Package::builder("fuzz.echo").command("echo", common::echo).build();
         let id = common::command_id_of(&pkg, "echo");
         let req = common::postcard_request(id, &common::EchoInput { v });
-        let resp = pkg.invoke_rkyv_v2(&req).unwrap();
+        let resp = pkg.invoke_frame(&req).unwrap();
         let out: common::EchoOutput = common::decode_postcard_response(&resp);
         prop_assert_eq!(out.v, v);
     }
@@ -115,7 +115,7 @@ fn static_postcard_echo_preserves_i64_precision_boundaries() {
     ];
     for v in boundaries {
         let req = common::postcard_request(id, &common::EchoInput { v });
-        let resp = pkg.invoke_rkyv_v2(&req).unwrap();
+        let resp = pkg.invoke_frame(&req).unwrap();
         let out: common::EchoOutput = common::decode_postcard_response(&resp);
         assert_eq!(out.v, v, "i64 boundary {v} must round-trip losslessly");
     }
@@ -132,7 +132,7 @@ proptest! {
             .build();
         let id = common::command_id_of(&pkg, "greet");
         let req = common::postcard_request(id, &common::GreetInput { name: name.clone() });
-        let resp = pkg.invoke_rkyv_v2(&req).unwrap();
+        let resp = pkg.invoke_frame(&req).unwrap();
         let out: common::GreetOutput = common::decode_postcard_response(&resp);
         // name 이 응답 안에 바이트-동일하게 보존되는지(접두/접미 외 부분) 확인.
         prop_assert_eq!(&out.message, &format!("hello {name}"));
@@ -162,7 +162,7 @@ fn static_postcard_greet_preserves_known_tricky_unicode() {
                 name: name.to_string(),
             },
         );
-        let resp = pkg.invoke_rkyv_v2(&req).unwrap();
+        let resp = pkg.invoke_frame(&req).unwrap();
         let out: common::GreetOutput = common::decode_postcard_response(&resp);
         assert_eq!(
             out.message,
@@ -210,7 +210,7 @@ proptest! {
         let id = common::command_id_of(&pkg, "echoNested");
         let inner = NestedInner { active, name: name.clone(), value };
         let req = common::postcard_request(id, &NestedEchoInput { item: inner.clone() });
-        let resp = pkg.invoke_rkyv_v2(&req).unwrap();
+        let resp = pkg.invoke_frame(&req).unwrap();
         let out: NestedEchoOutput = common::decode_postcard_response(&resp);
         prop_assert_eq!(out.item, inner);
     }
@@ -270,7 +270,7 @@ proptest! {
             score,
         };
         let req = common::postcard_request(id, &input);
-        let resp = pkg.invoke_rkyv_v2(&req).unwrap();
+        let resp = pkg.invoke_frame(&req).unwrap();
         let out: FuzzOut = common::decode_postcard_response(&resp);
         prop_assert_eq!(out.n, n);
         prop_assert_eq!(out.s, s);
@@ -302,7 +302,7 @@ proptest! {
         let id = common::command_id_of(&pkg, "sumList");
         let input = common::SumListInput { numbers: nums.clone() };
         let req = common::postcard_request(id, &input);
-        let resp = pkg.invoke_rkyv_v2(&req).unwrap();
+        let resp = pkg.invoke_frame(&req).unwrap();
         let out: common::SumListOutput = common::decode_postcard_response(&resp);
         let expected: i64 = nums.iter().sum();
         prop_assert_eq!(out.sum, expected);

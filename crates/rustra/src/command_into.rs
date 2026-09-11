@@ -1,4 +1,4 @@
-fn build_rkyv_v2_into_handler<I, O, F>(
+fn build_frame_into_handler<I, O, F>(
     input_schema: &Value,
     output_schema: &Value,
     definitions: &Value,
@@ -14,9 +14,9 @@ where
     // caller-buffer into-handler — postcard 코덱 명령에 더해 complex binary
     // 라우트 명령도 생성한다. complex 출력은 bounded writer로 caller 버퍼에
     // 직접 기록되고, 버퍼 부족은 기존 `DirectResponse::Buffered` 폴백(할당 경로)
-    // 으로 흘러간다. 와이어는 `rkyv_v2_handler` complex 분기와 동일한 바이트다.
+    // 으로 흘러간다. 와이어는 `frame_handler` complex 분기와 동일한 바이트다.
     // Tier 3 명령은 애초에 binary fast-path 가 없으므로 여전히 None.
-    let rkyv_v2_into_handler: Option<BinIntoHandler> = if !js_codec_supported
+    let frame_into_handler: Option<BinIntoHandler> = if !js_codec_supported
         && !complex_codec_supported
     {
         None
@@ -24,7 +24,7 @@ where
         let handler_into = handler.clone();
         Some(Arc::new(move |payload: &[u8], target: &mut [u8]| {
             if payload.len() < 2 {
-                return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+                return Err(RustraError::invalid_args("frame: payload too short"));
             }
             let input: I = postcard::from_bytes(&payload[2..])
                 .map_err(|e| RustraError::invalid_args(format!("postcard decode: {e}")))?;
@@ -58,7 +58,7 @@ where
             Ok(DirectResponse::Buffered(response))
         }))
     } else {
-        // complex binary 라우트 — 입력 디코드/출력 인코딩은 rkyv_v2_handler 의
+        // complex binary 라우트 — 입력 디코드/출력 인코딩은 frame_handler 의
         // complex 분기와 같은 스키마 같은 와이어. 스키마 IR 을 빌드 시점에 1회
         // 컴파일해 캡처한다(트랙 A). 출력만 bounded writer로 caller 버퍼에
         // 직접 기록한다. 트랙 B: 직결 안전 IR 은 serde 로 바로 구동해 Value
@@ -69,7 +69,7 @@ where
         let handler_into = handler.clone();
         Some(Arc::new(move |payload: &[u8], target: &mut [u8]| {
             if payload.len() < 2 {
-                return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+                return Err(RustraError::invalid_args("frame: payload too short"));
             }
             let limits = ComplexCodecLimits {
                 max_payload_bytes: crate::limits::max_payload_bytes(),
@@ -116,10 +116,10 @@ where
                     .map_err(|e| RustraError::internal(format!("complex encode: {e}")))?;
                 output_codec.encode(&output_value, limits)?
             };
-            let response = rkyv_v2_frame_from_body(body, limits.max_payload_bytes)?;
+            let response = frame_frame_from_body(body, limits.max_payload_bytes)?;
             Ok(DirectResponse::Buffered(response))
         }))
     };
 
-    rkyv_v2_into_handler
+    frame_into_handler
 }
