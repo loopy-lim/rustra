@@ -17,7 +17,8 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 7. [Tauri 셋업](extending/tauri-setup.md) — 기존 Tauri 앱에 rustra 얹기
 8. [Transport 교체 가이드](extending/transport-guide.md) — Bun FFI, Node napi-rs 등 transport 교체
 9. [새 Host 추가 가이드](extending/adding-host.md) — Electron, Deno 등 새 host adapter 추가
-10. [동적 개발 티어](dev-tier.ko.md) — loose invoke 프로토타이핑, 디바이스 토큰 실험, `test:fast`
+10. [UniFFI 바인딩 가이드](extending/uniffi-bindings.ko.md) — UniFFI 로 만드는 타입 안전 Kotlin/Swift 바인딩 (Android/iOS)
+11. [동적 개발 티어](dev-tier.ko.md) — loose invoke 프로토타이핑, 디바이스 토큰 실험, `test:fast`
 
 ### 프로젝트 기여자
 
@@ -39,6 +40,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 | [React Native 셋업](extending/react-native-setup.md)                               | 사용자 | JSI 네이티브 모듈, iOS/Android 빌드, BenchmarkApp                                                                                                  |
 | [Tauri 셋업](extending/tauri-setup.md)                                             | 사용자 | 기존 Tauri 앱에 rustra 얹기 — 변경 5개 파일을 순서대로                                                                                             |
 | [새 Host 추가 가이드](extending/adding-host.md)                                    | 사용자 | adapter 만들기, Rust 진입점 선택, 테스트 추가                                                                                                      |
+| [UniFFI 바인딩 가이드](extending/uniffi-bindings.ko.md)                            | 사용자 | UniFFI 로 만드는 타입 안전 Kotlin/Swift 바인딩 — transport 선택, `uniffi` 설정, 코드젠 흐름, 에러 모델, 갈림, 버전 고정                            |
 | [동적 개발 티어](dev-tier.ko.md) ([English](dev-tier.md))                          | 사용자 | `invokeLoose` 프로토타이핑, 카탈로그 밖 토큰 실험, 게이트 프로파일                                                                                 |
 | [Crate 및 Package 구조](internal/crate-structure.md)                               | 기여자 | 각 crate/package 책임, 빌드 의존성                                                                                                                 |
 | [TypeScript 코드 생성](internal/codegen.md)                                        | 기여자 | codegen 파이프라인, 타입 매핑, 제한사항                                                                                                            |
@@ -59,7 +61,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 | [릴리즈 절차](release-procedure.md)                                                | 기여자 | changeset 발행 절차, 버전 관리                                                                                                                     |
 | [버전 정책](versioning-policy.md)                                                  | 전체   | 표면별 호환성 보장, 폐기 절차, MSRV, 실험 표면                                                                                                     |
 | [안전 계약](safety-contract.ko.md) ([English](safety-contract.md))                 | 기여자 | 총괄 FFI 불변식, 항목별 계약(패닉 차단, 외래 예외 abort, 버퍼 소유, 페이로드 한도, 핫코어 포이즌, 에러 봉투, fail-closed 게이트) — 코드 근거 첨부  |
-| [아키텍처 결정 기록](adr/)                                                         | 기여자 | 계약이나 강제 방식을 바꾸는 번호 결정 기록 (ADR 0001: Track A 계약의 기계화)                                                                       |
+| [아키텍처 결정 기록](adr/)                                                         | 기여자 | 계약이나 강제 방식을 바꾸는 번호 결정 기록 (ADR 0001: Track A 계약의 기계화, ADR 0002: UniFFI Kotlin/Swift 캐리어)                                 |
 | [보안 정책](../.github/SECURITY.md)                                                | 전체   | 취약점 신고 채널, 지원 버전, 스코프                                                                                                                |
 | [기여 가이드](../CONTRIBUTING.md)                                                  | 기여자 | 개발 환경, 커밋 규칙, 디버깅, 릴리즈                                                                                                               |
 

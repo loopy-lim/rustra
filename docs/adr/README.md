@@ -7,6 +7,7 @@ worth recording too — write down why it was rejected.
 | Number                                                | Title                                                                | Status   | Date       |
 | ----------------------------------------------------- | -------------------------------------------------------------------- | -------- | ---------- |
 | [0001](0001-record-track-a-contract-mechanization.md) | Track A: contract mechanization (adopting UniFFI maturity practices) | Accepted | 2026-09-11 |
+| [0002](0002-uniffi-track-b1-carrier.md)               | Track B1: UniFFI as the Kotlin/Swift language carrier                | Accepted | 2026-09-11 |
 
 ## Conventions
 
