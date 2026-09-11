@@ -29,6 +29,28 @@ fn main() -> rustra::Result<()> {
             std::fs::create_dir_all(parent)?;
         }
         std::fs::write(&out, source)?;
+        // rustfmt 정규화 — lefthook 이 커밋 시점에 `rustfmt -- <file>` 로 제자리
+        // 포맷하므로 정규화 없이는 커밋된 산출과 check 모드의 임시 렌더가 어긋나
+        // 신선도 게이트가 항상 깨진다. 렌더러가 직접 동일 방식(제자리)으로 포맷해
+        // 두 모드가 동일한 바이트를 내게 한다. 실패 시 fail-closed.
+        let status = std::process::Command::new("rustfmt")
+            .arg("--edition")
+            .arg("2024")
+            .arg("--")
+            .arg(&out)
+            .status()
+            .map_err(|error| {
+                rustra::RustraError::custom(
+                    "codegen.uniffi_rustfmt_failed",
+                    format!("rustfmt spawn failed: {error}"),
+                )
+            })?;
+        if !status.success() {
+            return Err(rustra::RustraError::custom(
+                "codegen.uniffi_rustfmt_failed",
+                format!("rustfmt failed on {}", out.display()),
+            ));
+        }
         println!("{} written", out.display());
     }
     Ok(())
