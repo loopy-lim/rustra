@@ -1,0 +1,7 @@
+module rustra_calculator_exampleFFI {
+    header "rustra_calculator_exampleFFI.h"
+    export *
+    use "Darwin"
+    use "_Builtin_stdbool"
+    use "_Builtin_stdint"
+}

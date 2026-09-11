@@ -2221,3 +2221,15 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
 }
+
+// ── Track B1-2 — UniFFI 미러 계층 ────────────────────────────
+// 스키마 문서 → 미러 Rust 소스 렌더러. 코드젠(generate bin) 전용이지만 런타임
+// 의존이 없어 전 빌드에서 컴파일된다(단위 테스트는 uniffi 피처 불필요).
+pub mod uniffi_render;
+
+// `--features uniffi` 빌드에서만 코드젠 산출물을 붙인다. 파일 안의 모든 항목은
+// `pub mod uniffi_api`(미러 타입 + 커맨드별 `#[uniffi::export]` 래퍼)와 크레이트
+// 루트의 `uniffi::setup_scaffolding!()` 로 이루어진다. 재생성:
+//   RUSTRA_UNIFFI_OUT=src cargo run -p rustra-calculator-example --bin generate
+#[cfg(feature = "uniffi")]
+include!("uniffi_generated.rs");
