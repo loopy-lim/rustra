@@ -26,13 +26,13 @@ Rust #[command] definition → TypeScript client codegen → platform adapter ex
 Tools that bridge a single Rust core to multiple JS hosts each make different
 trade-offs:
 
-|                                 | **rustra**                                                             | napi-rs                                                 | Nitro Modules | Tauri commands | tauri-specta |
-| ------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------- | ------------- | -------------- | ------------ |
-| Single Rust core × multi-host   | ✅ Node/Bun/Tauri/RN                                                   | Node (+ Electron)                                       | RN-centric    | Tauri only     | Tauri only   |
-| Type-safe codegen (both ways)   | ✅ commands+events                                                     | TS defs generated from Rust structs (attribute macros)¹ | ✅            | ❌ (manual)    | ✅           |
+|                                 | **rustra**                                                           | napi-rs                                                 | Nitro Modules | Tauri commands | tauri-specta |
+| ------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------- | ------------- | -------------- | ------------ |
+| Single Rust core × multi-host   | ✅ Node/Bun/Tauri/RN                                                 | Node (+ Electron)                                       | RN-centric    | Tauri only     | Tauri only   |
+| Type-safe codegen (both ways)   | ✅ commands+events                                                   | TS defs generated from Rust structs (attribute macros)¹ | ✅            | ❌ (manual)    | ✅           |
 | Compact binary wire             | ✅ Frame ([11.8× smaller request wire vs JSON](docs/wire-format.md)) | JSON/Buffer                                             | JSI objects   | JSON IPC       | JSON IPC     |
-| Contract gate (breaking change) | ✅ `rustra diff` + contract hash                                       | ❌                                                      | ❌            | ❌             | partial      |
-| Cancel/timeout/batch semantics  | ✅ documented as a matrix                                              | DIY                                                     | DIY           | ❌             | ❌           |
+| Contract gate (breaking change) | ✅ `rustra diff` + contract hash                                     | ❌                                                      | ❌            | ❌             | partial      |
+| Cancel/timeout/batch semantics  | ✅ documented as a matrix                                            | DIY                                                     | DIY           | ❌             | ❌           |
 
 rustra's choice: **own the whole RPC surface (definition → codegen → wire →
 verification) as a single contract.** Command invocation and contract

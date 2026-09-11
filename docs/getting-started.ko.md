@@ -929,13 +929,13 @@ const result = await addNumbers({ a: 20, b: 22 });
 
 ### 요약
 
-| 환경         | 기본 생성 진입점                     | 자동 연결                           | 성능 (release, 2026-08-24)                             |
-| ------------ | ------------------------------------ | ----------------------------------- | ------------------------------------------------------ |
-| Node         | `generated/node.ts`                  | Cargo binary + stdio                | one-shot 2.76 ms; loop 16.86 µs; N-API Frame 1.26 µs   |
-| Bun          | `generated/bun.ts`                   | Cargo cdylib + stable FFI + Frame   | FFI Frame 2.27 µs                                      |
-| Tauri        | `generated/tauri.ts`                 | global invoke/event                 | WebView IPC 279.04 µs                                  |
-| React Native | `generated/react-native.ts`          | autolinked JSI + postcard codecs    | p50 2.71 µs (iOS Simulator receipt)                    |
-| React Native | `createReactNativeEngine(transport)` | custom JSON transport               | transport 구현 종속                                    |
+| 환경         | 기본 생성 진입점                     | 자동 연결                         | 성능 (release, 2026-08-24)                           |
+| ------------ | ------------------------------------ | --------------------------------- | ---------------------------------------------------- |
+| Node         | `generated/node.ts`                  | Cargo binary + stdio              | one-shot 2.76 ms; loop 16.86 µs; N-API Frame 1.26 µs |
+| Bun          | `generated/bun.ts`                   | Cargo cdylib + stable FFI + Frame | FFI Frame 2.27 µs                                    |
+| Tauri        | `generated/tauri.ts`                 | global invoke/event               | WebView IPC 279.04 µs                                |
+| React Native | `generated/react-native.ts`          | autolinked JSI + postcard codecs  | p50 2.71 µs (iOS Simulator receipt)                  |
+| React Native | `createReactNativeEngine(transport)` | custom JSON transport             | transport 구현 종속                                  |
 
 > `addNumbers({ a: 20, b: 22 })`의 end-to-end Release 실측이다 — 2026-08-24
 > Apple Silicon에서 처음 확인했고 README 성능 표와 동일한 값이다. 평균은 양끝

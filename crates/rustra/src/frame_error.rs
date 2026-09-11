@@ -70,9 +70,7 @@ enum SplitResponse<'a> {
 /// 관례(`frame: …` 접두사)를 유지.
 fn split_frame_response(frame: &[u8]) -> crate::Result<SplitResponse<'_>> {
     if frame.len() < 8 {
-        return Err(RustraError::invalid_args(
-            "frame: response frame too short",
-        ));
+        return Err(RustraError::invalid_args("frame: response frame too short"));
     }
     match frame[0] {
         1 => Ok(SplitResponse::Success(&frame[8..])),

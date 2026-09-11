@@ -12,24 +12,24 @@ rustra 내부에서 여러 뜻으로 쓰이거나, 같은 이름의 외부 개�
 개념 어설을 식별자와 병기할 수는 있지만, 식별자 자체(`hot-core`, `parity gate`,
 `contract hash`)를 음역하지 않는다.
 
-| 용어                    | 한 줄 정의                                                                         |
-| ----------------------- | ---------------------------------------------------------------------------------- |
+| 용어                    | 한 줄 정의                                                                                          |
+| ----------------------- | --------------------------------------------------------------------------------------------------- |
 | Frame                   | Rustra의 바이너리 프레임 프로토콜 — V2 프레이밍 + command id + postcard 페이로드 코덱(구칭 rkyv V2) |
-| postcard                | 실제 페이로드 코덱(serde 호환 compact 포맷)                                        |
-| Tier 1 / 2 / 3          | 와이어 코덱 티어: 정적 postcard / complex 스키마 / JSON-in-binary 폴백             |
-| dev tier                | "개발 중 동적 / 릴리스 정적" 개발 장치 — 와이어 티어와 무관                        |
-| hot-core                | 네이티브 dylib 핫스왑 dev 메커니즘(실험)                                           |
-| `rustra_ffi_hot_reload` | 구 hot-* 메커니즘: replace 의미론 리로드 주입                                      |
-| parity gate             | `rustra dev`가 reload 방출 전 contract hash 를 비교하는 재빌드 게이트              |
-| contract hash           | 스키마 JSON만의 SHA-256                                                            |
-| dylib / cdylib          | Rust 동적 라이브러리 crate-type — 핫스왑 단위                                      |
-| 채널 계열               | `ChannelHandle` + 호스트별 4종 바이너리 채널 팩토리                                |
-| host                    | 4개 의미: 임베딩 앱 / `ChannelHost` / JSI host 객체 / host promotions              |
-| snapshot                | 4개 의미: API 스냅샷 / 인스펙터 덤프 / 디버그 로그 값 / changeset canary           |
-| gate (단독)             | 과적합 단어: 프로파일·capability·drift·릴리스·acceptance·api-surface·스크립트 이름 |
-| codec / Codec IR        | 페이로드 직렬화기 / complex codec 뒤의 공유 스키마 IR                              |
-| mirror                  | 3개 의미: en/ko 문서 쌍 / 수동 관리 중복 / "X를 따른다" 동사 용법                  |
-| subsecond               | dioxus 핫리로드 기술 — 검토 후 보류; 아키텍처의 일부 아님                          |
+| postcard                | 실제 페이로드 코덱(serde 호환 compact 포맷)                                                         |
+| Tier 1 / 2 / 3          | 와이어 코덱 티어: 정적 postcard / complex 스키마 / JSON-in-binary 폴백                              |
+| dev tier                | "개발 중 동적 / 릴리스 정적" 개발 장치 — 와이어 티어와 무관                                         |
+| hot-core                | 네이티브 dylib 핫스왑 dev 메커니즘(실험)                                                            |
+| `rustra_ffi_hot_reload` | 구 hot-* 메커니즘: replace 의미론 리로드 주입                                                       |
+| parity gate             | `rustra dev`가 reload 방출 전 contract hash 를 비교하는 재빌드 게이트                               |
+| contract hash           | 스키마 JSON만의 SHA-256                                                                             |
+| dylib / cdylib          | Rust 동적 라이브러리 crate-type — 핫스왑 단위                                                       |
+| 채널 계열               | `ChannelHandle` + 호스트별 4종 바이너리 채널 팩토리                                                 |
+| host                    | 4개 의미: 임베딩 앱 / `ChannelHost` / JSI host 객체 / host promotions                               |
+| snapshot                | 4개 의미: API 스냅샷 / 인스펙터 덤프 / 디버그 로그 값 / changeset canary                            |
+| gate (단독)             | 과적합 단어: 프로파일·capability·drift·릴리스·acceptance·api-surface·스크립트 이름                  |
+| codec / Codec IR        | 페이로드 직렬화기 / complex codec 뒤의 공유 스키마 IR                                               |
+| mirror                  | 3개 의미: en/ko 문서 쌍 / 수동 관리 중복 / "X를 따른다" 동사 용법                                   |
+| subsecond               | dioxus 핫리로드 기술 — 검토 후 보류; 아키텍처의 일부 아님                                           |
 
 ## Frame
 

@@ -943,13 +943,13 @@ caller-buffer fast path of the generated `react-native.ts`.
 
 ### Summary
 
-| Environment  | Default generated entry point        | Auto wiring                         | Performance (release, 2026-08-24)                      |
-| ------------ | ------------------------------------ | ----------------------------------- | ------------------------------------------------------ |
-| Node         | `generated/node.ts`                  | Cargo binary + stdio                | 2.76 ms one-shot; loop 16.86 µs; N-API Frame 1.26 µs   |
-| Bun          | `generated/bun.ts`                   | Cargo cdylib + stable FFI + Frame   | 2.27 µs FFI Frame                                      |
-| Tauri        | `generated/tauri.ts`                 | global invoke/event                 | 279.04 µs WebView IPC                                  |
-| React Native | `generated/react-native.ts`          | autolinked JSI + postcard codecs    | p50 2.71 µs (iOS Simulator receipt)                    |
-| React Native | `createReactNativeEngine(transport)` | custom JSON transport               | Depends on transport implementation                    |
+| Environment  | Default generated entry point        | Auto wiring                       | Performance (release, 2026-08-24)                    |
+| ------------ | ------------------------------------ | --------------------------------- | ---------------------------------------------------- |
+| Node         | `generated/node.ts`                  | Cargo binary + stdio              | 2.76 ms one-shot; loop 16.86 µs; N-API Frame 1.26 µs |
+| Bun          | `generated/bun.ts`                   | Cargo cdylib + stable FFI + Frame | 2.27 µs FFI Frame                                    |
+| Tauri        | `generated/tauri.ts`                 | global invoke/event               | 279.04 µs WebView IPC                                |
+| React Native | `generated/react-native.ts`          | autolinked JSI + postcard codecs  | p50 2.71 µs (iOS Simulator receipt)                  |
+| React Native | `createReactNativeEngine(transport)` | custom JSON transport             | Depends on transport implementation                  |
 
 > End-to-end Release measurements of `addNumbers({ a: 20, b: 22 })`, first
 > confirmed 2026-08-24 on Apple Silicon and identical to the README performance

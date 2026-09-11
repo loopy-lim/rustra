@@ -13,8 +13,7 @@ pub(crate) fn build_tier3_json_decoder() -> DecodeFn {
         }
         let json_str = std::str::from_utf8(&payload[2..])
             .map_err(|_| RustraError::invalid_args("frame tier3: invalid UTF-8"))?;
-        serde_json::from_str(json_str).map_err(|e| {
-            RustraError::invalid_args(format!("frame tier3: JSON parse failed: {e}"))
-        })
+        serde_json::from_str(json_str)
+            .map_err(|e| RustraError::invalid_args(format!("frame tier3: JSON parse failed: {e}")))
     })
 }

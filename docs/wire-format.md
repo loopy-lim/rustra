@@ -10,12 +10,12 @@ names from the measured numbers so neither is quoted beyond its scope.
 
 ## Names
 
-| Name                 | What it actually is                                                                                   |
-| -------------------- | ----------------------------------------------------------------------------------------------------- |
-| Frame                | Rustra's binary frame protocol (V2 framing + command ids + postcard payload codec).                   |
-| postcard             | The payload codec used on the manifest/dispatch paths (serde-compatible compact format).              |
-| JSON wire            | The `invoke_json`/stdio line protocol used by adapters without codecs injected.                       |
-| zero-copy (JSI path) | The RN JSI fast path hands a native buffer view to the JS codec without an intermediate JS copy.      |
+| Name                 | What it actually is                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------ |
+| Frame                | Rustra's binary frame protocol (V2 framing + command ids + postcard payload codec).              |
+| postcard             | The payload codec used on the manifest/dispatch paths (serde-compatible compact format).         |
+| JSON wire            | The `invoke_json`/stdio line protocol used by adapters without codecs injected.                  |
+| zero-copy (JSI path) | The RN JSI fast path hands a native buffer view to the JS codec without an intermediate JS copy. |
 
 "Zero-copy" means one specific copy is removed: the extra JS-side buffer copy
 between the native call boundary and the codec. It does not mean the whole

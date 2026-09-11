@@ -19,20 +19,20 @@ Rust 백엔드와 TypeScript 클라이언트가 공유하는 계약(schema)이 �
 postcard 페이로드 코덱은 불변이므로 구·신 빌드는 상호 운용된다. 참조하는
 식별자를 다음처럼 갱신한다:
 
-| 구(≤0.8)                            | 신(0.9+)                              |
-| ----------------------------------- | ------------------------------------- |
-| `createRkyvV2Engine`                | `createFrameEngine`                   |
-| `RkyvV2Engine`                      | `FrameEngine`                         |
-| `RkyvV2Codec`                       | `FrameCodec`                          |
-| `RkyvV2Native`                      | `FrameNative`                         |
-| `invokeRkyvV2`                      | `invokeFrame`                         |
-| `rkyv-codecs.ts`                    | `frame-codecs.ts`                     |
-| `rkyv-registry.ts`                  | `frame-registry.ts`                   |
-| `rkyv-engine`                       | `frame-engine`                        |
-| `rustra_ffi_invoke_rkyv_v2*`        | `rustra_ffi_invoke_frame*`            |
-| `BUN_RKYV_V2_ENGINE_SUPPORTS`       | `BUN_FRAME_ENGINE_SUPPORTS`           |
+| 구(≤0.8)                               | 신(0.9+)                             |
+| -------------------------------------- | ------------------------------------ |
+| `createRkyvV2Engine`                   | `createFrameEngine`                  |
+| `RkyvV2Engine`                         | `FrameEngine`                        |
+| `RkyvV2Codec`                          | `FrameCodec`                         |
+| `RkyvV2Native`                         | `FrameNative`                        |
+| `invokeRkyvV2`                         | `invokeFrame`                        |
+| `rkyv-codecs.ts`                       | `frame-codecs.ts`                    |
+| `rkyv-registry.ts`                     | `frame-registry.ts`                  |
+| `rkyv-engine`                          | `frame-engine`                       |
+| `rustra_ffi_invoke_rkyv_v2*`           | `rustra_ffi_invoke_frame*`           |
+| `BUN_RKYV_V2_ENGINE_SUPPORTS`          | `BUN_FRAME_ENGINE_SUPPORTS`          |
 | `REACT_NATIVE_RKYV_V2_ENGINE_SUPPORTS` | `REACT_NATIVE_FRAME_ENGINE_SUPPORTS` |
-| 에러 접두어 `"rkyv v2: ..."`        | `"frame: ..."`                        |
+| 에러 접두어 `"rkyv v2: ..."`           | `"frame: ..."`                       |
 
 RN JSI 호스트 메서드도 같은 리네임을 따른다(`invokeRkyvV2` → `invokeFrame`),
 그리고 codegen 산출 파일도 새 이름(`frame-codecs.ts`, `frame-registry.ts`)으로
