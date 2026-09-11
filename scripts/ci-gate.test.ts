@@ -21,6 +21,8 @@ const MANDATORY_JOBS = [
   'typescript',
   'rn-android',
   'rn-ios',
+  'uniffi-android',
+  'uniffi-ios',
   'consumer-smoke',
 ] as const;
 
@@ -37,7 +39,7 @@ const success: Record<string, string> = Object.fromEntries(
   MANDATORY_JOBS.map((job) => [job, 'success']),
 );
 
-test('all ten jobs success exits 0 with a green summary', () => {
+test('all twelve jobs success exits 0 with a green summary', () => {
   const r = runGate(success);
   assert.equal(r.status, 0);
   assert.match(r.stdout, /gate: PASS/);
@@ -103,7 +105,7 @@ test('an unknown result value fails loudly instead of passing silently', () => {
 test('wrong argument count is a hard error, not a pass', () => {
   const r = spawnSync('bash', [gatePath, 'rust=success'], { encoding: 'utf8' });
   assert.notEqual(r.status, 0);
-  assert.match(r.stderr, /exactly 10/);
+  assert.match(r.stderr, /exactly 12/);
 });
 
 test('malformed argument (no = separator) is a hard error', () => {
@@ -119,7 +121,7 @@ test('unknown job name is a hard error, not a silent pass', () => {
   // 즉시 드러나야 한다.
   const r = spawnSync(
     'bash',
-    [gatePath, ...MANDATORY_JOBS.slice(0, 9).map((j) => `${j}=success`), 'nonexistent-job=success'],
+    [gatePath, ...MANDATORY_JOBS.slice(0, 11).map((j) => `${j}=success`), 'nonexistent-job=success'],
     { encoding: 'utf8' },
   );
   assert.notEqual(r.status, 0);
@@ -127,14 +129,14 @@ test('unknown job name is a hard error, not a silent pass', () => {
 });
 
 test('duplicate job argument is a hard error even when all results are success', () => {
-  // 10개 인자가 중복을 포함하면(consumer-smoke 대신 rust 2회) 한 잡이 검사되지
+  // 12개 인자가 중복을 포함하면(consumer-smoke 대신 rust 2회) 한 잡이 검사되지
   // 않은 채 PASS 로 빠진다 — 전부 success 여도 계약 위반이다.
   const r = spawnSync(
     'bash',
     [
       gatePath,
       'rust=success',
-      ...MANDATORY_JOBS.slice(1, 9).map((j) => `${j}=success`),
+      ...MANDATORY_JOBS.slice(1, 11).map((j) => `${j}=success`),
       'rust=success', // consumer-smoke 누락, rust 중복
     ],
     { encoding: 'utf8' },

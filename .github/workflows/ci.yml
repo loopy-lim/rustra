@@ -594,6 +594,142 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+  # UniFFI Kotlin 바인딩 런타임 스모크 — examples/uniffi-android-smoke 최소
+  # Gradle 앱으로 생성 바인딩(uniffi.rustra_calculator_example, JNA 기반)과
+  # Rust .so 가 실제 에뮬레이터에서 로드·실행되는지 단언한다. 앱은
+  # addNumbers(20,22)==42 (행복 경로)와 divide(10,0) 의 타입 에러 코드
+  # "math.divide_by_zero" (에러 경로)를 모두 증명한 뒤에만
+  # __RUSTRA_UNIFFI_OK__ addNumbers(20,22)=42 마커를 Log.w 로 찍는다.
+  # 도구 체인은 rn-android 잡과 동일(cargo-ndk + NDK 27.1.12297006).
+  uniffi-android:
+    runs-on: ubuntu-latest
+    needs: rust
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: aarch64-linux-android, x86_64-linux-android
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v4
+      - name: Install NDK 27.1.12297006
+        run: sdkmanager "ndk;27.1.12297006" "platforms;android-34" "build-tools;34.0.0"
+      - name: Export NDK_HOME for cargo-ndk
+        run: echo "NDK_HOME=$ANDROID_HOME/ndk/27.1.12297006" >> "$GITHUB_ENV"
+      # 에뮬레이터가 x86_64라 실제 로드되는 것은 x86_64 .so 다. arm64-v8a 는
+      # 실기기 호환 산출을 함께 검증하는 부가 빌드(증분 비용이 작다) — JNA 로드
+      # 계약(soname dlopen)은 ABI 무관하게 동일하므로 두 ABI 모두 jniLibs 에
+      # 패킹해도 에뮬레이터 스모크에는 영향이 없다.
+      - name: Build Rust .so (x86_64 + arm64-v8a)
+        run: cargo ndk -t x86_64 -t arm64-v8a --platform 21 -- build -p rustra-calculator-example --features uniffi
+      # 커밋된 생성 바인딩(.kt)과 빌드된 .so 를 앱 소스 트리로 동기화한다.
+      # 바인딩 사본/jniLibs 는 커밋 금지 — 이 스크립트 산출물이다.
+      - name: Sync generated bindings into the smoke app
+        run: bash examples/uniffi-android-smoke/sync-bindings.sh
+      - name: Assemble debug APK
+        working-directory: examples/uniffi-android-smoke
+        shell: bash
+        run: set -o pipefail && ./gradlew assembleDebug --no-daemon 2>&1 | tee "$RUNNER_TEMP/rustra-uniffi-gradle.log"
+
+      # 런타임 스모크 — rn-android 잡과 동일한 에뮬레이터/마커 폴링 방식.
+      # OK 마커는 앱이 행복 경로와 타입 에러 경로를 모두 통과한 뒤에만 찍히므로
+      # OK 관측 = 두 경로 모두 증명. FAIL 마커는 즉시 red.
+      - name: Emulator runtime smoke (install, launch, assert uniffi marker)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: |
+            set -u
+            APP_ID="dev.rustra.uniffi.smoke"
+            adb install -r examples/uniffi-android-smoke/app/build/outputs/apk/debug/app-debug.apk
+            adb logcat -c
+            adb shell monkey -p "$APP_ID" -c android.intent.category.LAUNCHER 1
+            # 바인딩 초기화 + 두 호출 완료까지 마커를 폴링한다(상한 5분).
+            found=0
+            for i in $(seq 1 60); do
+              adb logcat -d > "$RUNNER_TEMP/rustra-uniffi-logcat.txt" || true
+              if grep -q '__RUSTRA_UNIFFI_FAIL__' "$RUNNER_TEMP/rustra-uniffi-logcat.txt"; then
+                break
+              fi
+              if grep -q '__RUSTRA_UNIFFI_OK__ addNumbers(20,22)=42' "$RUNNER_TEMP/rustra-uniffi-logcat.txt"; then
+                found=1
+                break
+              fi
+              sleep 5
+            done
+            # 단언 1: OK 마커 관측(실패 마커가 먼저 찍히면 여기서 red).
+            if [ "$found" -ne 1 ]; then
+              echo "::error::__RUSTRA_UNIFFI_OK__ 마커를 logcat 에서 관측하지 못했다"
+              tail -n 200 "$RUNNER_TEMP/rustra-uniffi-logcat.txt" || true
+              exit 1
+            fi
+            if grep -q '__RUSTRA_UNIFFI_FAIL__' "$RUNNER_TEMP/rustra-uniffi-logcat.txt"; then
+              echo "::error::__RUSTRA_UNIFFI_FAIL__ 마커 관측 — 바인딩 실행 실패"
+              exit 1
+            fi
+            # 단언 2: 프로세스 생존 — 기동 직후 크래시(JNA/.so 로드 실패 등)가
+            # 아니라는 뜻. pidof 출력이 비면(원격 실패 포함) 실패로 본다.
+            PID="$(adb shell pidof "$APP_ID" | tr -d '[:space:]\r')"
+            if [ -z "$PID" ]; then
+              echo "::error::앱 프로세스가 생존하지 않는다 (pidof $APP_ID 비었음)"
+              exit 1
+            fi
+            echo "smoke OK: pid=$PID, __RUSTRA_UNIFFI_OK__ 관측"
+
+      # 실패 로그 보존 — gradle 로그와 스모크 실패 진단용 logcat 덤프. 성공 시
+      # 업로드하지 않는다(if: failure()).
+      - name: Upload failure logs (uniffi-android)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failure-logs-uniffi-android
+          path: |
+            ${{ runner.temp }}/rustra-uniffi-gradle.log
+            ${{ runner.temp }}/rustra-uniffi-logcat.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # UniFFI Swift 바인딩 런타임 스모크 — examples/uniffi-ios-smoke 의
+  # 커맨드라인 바이너리(.app 번들 아님)를 시뮬레이터에서 직접 구동한다.
+  # staticlib 를 정적 링크한 자체 포함 바이너리이므로 xcrun simctl spawn 으로
+  # 실행 가능하다(로컬 실측 — spawn 이 임의 실행 파일을 시뮬레이터 런타임에서
+  # 구동하고 stdout 이 그대로 회수된다). 마커 계약은 uniffi-android 와 동일.
+  uniffi-ios:
+    runs-on: macos-latest
+    needs: rust
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          targets: aarch64-apple-ios-sim
+      # 스크립트가 staticlib 빌드 → swiftc 링크(-Xcc -fmodule-map-file 로 FFI
+      # 모듈 등록) → 시뮬레이터 부팅 → simctl spawn → 마커 단언까지 수행한다.
+      - name: Build + spawn smoke on iOS simulator (uniffi marker assert)
+        shell: bash
+        run: set -o pipefail && bash examples/uniffi-ios-smoke/build-and-run.sh 2>&1 | tee "$RUNNER_TEMP/rustra-uniffi-ios-smoke.log"
+
+      # 실패 로그 보존 — 스모크 캡처(stdout)와 swiftc 에러 로그. 성공 시
+      # 업로드하지 않는다(if: failure()).
+      - name: Upload failure logs (uniffi-ios)
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failure-logs-uniffi-ios
+          path: |
+            ${{ runner.temp }}/rustra-uniffi-ios-smoke.log
+            examples/uniffi-ios-smoke/build/*.log
+          if-no-files-found: ignore
+          retention-days: 14
+
   # 소비자 설치 smoke — 실제 npm tarball을 빈 디렉터리에 설치해 배포물이
   # 스스로 동작하는지 검증 (감사: '소비자 설치 후 smoke test' 없음).
   consumer-smoke:
@@ -684,7 +820,7 @@ jobs:
   # 가능하다. 그럼에도 env-var fan-out 을 쓰는 이유: (1) 판정 로직을 유닛테스트된
   # 셸 스크립트(scripts/ci-gate.test.ts)로 추출해야 한다 — if: 표현식은 로컬
   # 단위 테스트가 불가능하다. (2) rust 는 매트릭스 job 이라 per-leg outputs 노출
-  # 자체가 불가능하다. 잡은 10개 result 를 그대로 전달만 한다.
+  # 자체가 불가능하다. 잡은 12개 result 를 그대로 전달만 한다.
   #
   # if: always() 필수 — 선행 잡이 실패하면 기본 조건에서는 gate 자체가 skip 되어
   # "gate green = 전체 green" 계약이 깨진다. always() 로 항상 실행해 판정한다.
@@ -708,6 +844,8 @@ jobs:
         typescript,
         rn-android,
         rn-ios,
+        uniffi-android,
+        uniffi-ios,
         consumer-smoke,
       ]
     if: always() && github.event_name != 'schedule'
@@ -730,6 +868,8 @@ jobs:
           GATE_TYPESCRIPT: ${{ needs.typescript.result }}
           GATE_RN_ANDROID: ${{ needs.rn-android.result }}
           GATE_RN_IOS: ${{ needs.rn-ios.result }}
+          GATE_UNIFFI_ANDROID: ${{ needs.uniffi-android.result }}
+          GATE_UNIFFI_IOS: ${{ needs.uniffi-ios.result }}
           GATE_CONSUMER_SMOKE: ${{ needs.consumer-smoke.result }}
         # 주의: run 에 | 리터럴 블록을 쓴다. 폴딩 스칼라(기본)는 줄바꿈을 공백으로
         # 접어 `\<space>` 가 이스케이프 공백이 돼 인자가 " rust=..." 로 합쳐지고
@@ -745,4 +885,6 @@ jobs:
             "typescript=$GATE_TYPESCRIPT" \
             "rn-android=$GATE_RN_ANDROID" \
             "rn-ios=$GATE_RN_IOS" \
+            "uniffi-android=$GATE_UNIFFI_ANDROID" \
+            "uniffi-ios=$GATE_UNIFFI_IOS" \
             "consumer-smoke=$GATE_CONSUMER_SMOKE"

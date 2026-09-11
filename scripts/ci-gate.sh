@@ -2,7 +2,7 @@
 set -u
 
 # CI 필수 잡 집계 gate — .github/workflows/ci.yml 의 `gate` 잡이 호출한다.
-# 스크립트는 <job>=<result> 인자 10개를 받아 전부 정확히 "success"일 때만 0으로
+# 스크립트는 <job>=<result> 인자 12개를 받아 전부 정확히 "success"일 때만 0으로
 # 종료한다. skipped/cancelled 는 실패로 취급한다: consumer-smoke 는 typescript
 # 실패 시 skip 되므로, skip 을 통과로 치면 체인 실패를 gate 가 놓친다.
 #
@@ -16,13 +16,13 @@ usage() {
 ci-gate.sh — CI 필수 잡 집계 gate
 
 사용법:
-  ci-gate.sh <job>=<result> ...   (필수 10개 인자)
+  ci-gate.sh <job>=<result> ...   (필수 12개 인자)
 
 <result> 값은 GitHub Actions needs.<job_id>.result 값 중 하나여야 한다:
   success | failure | cancelled | skipped
 
 예시:
-  ci-gate.sh rust=success rust-msrv=success ... consumer-smoke=success
+  ci-gate.sh rust=success rust-msrv=success ... uniffi-ios=success
 EOF
 }
 
@@ -38,11 +38,13 @@ expected_jobs=(
   typescript
   rn-android
   rn-ios
+  uniffi-android
+  uniffi-ios
   consumer-smoke
 )
 
-if [ "$#" -ne 10 ]; then
-  echo "ci-gate.sh: exactly 10 job=result arguments required, got $#" >&2
+if [ "$#" -ne 12 ]; then
+  echo "ci-gate.sh: exactly 12 job=result arguments required, got $#" >&2
   usage
   exit 2
 fi
@@ -79,7 +81,7 @@ for arg in "$@"; do
     exit 2
   fi
 
-  # 중복 금지 — 10개 인자가 중복을 포함하면 어떤 필수 잡이 검사되지 않은 채
+  # 중복 금지 — 12개 인자가 중복을 포함하면 어떤 필수 잡이 검사되지 않은 채
   # PASS 로 빠진다(전부 success 여도 계약 위반이다).
   case $seen_jobs in
     *" $job "*)
@@ -94,7 +96,7 @@ for arg in "$@"; do
   fi
 done
 
-# 누락 금지 — 인자 개수가 10개여도 중복 없이 잡이 빠지는 조합은 없지만, 스크립트
+# 누락 금지 — 인자 개수가 12개여도 중복 없이 잡이 빠지는 조합은 없지만, 스크립트
 # 계약을 자체 완결적으로 유지하기 위해 커버리지를 다시 단언한다.
 for j in "${expected_jobs[@]}"; do
   case $seen_jobs in
@@ -107,7 +109,7 @@ for j in "${expected_jobs[@]}"; do
 done
 
 if [ -z "$violations" ]; then
-  echo "gate: PASS — 모든 필수 잡 success (10/10)"
+  echo "gate: PASS — 모든 필수 잡 success (12/12)"
   for job in "$@"; do
     echo "  ok   ${job%%=*}"
   done
