@@ -181,8 +181,8 @@ are preserved in
 | ------------------------------- | ------: | ---------------- | ---------: | ---------: | ---------: | ---------: | ------: |
 | Node generated one-shot         |      10 | 200 × 3          |   2.758 ms |   2.760 ms |   3.119 ms |   3.295 ms |     363 |
 | Node persistent loop            |     100 | 2,000 × 3        |  16.863 µs |  16.666 µs |  26.917 µs |  44.084 µs |  59,301 |
-| Node N-API Frame               |     500 | 10,000 × 3       |   1.261 µs |   1.167 µs |   2.125 µs |   4.292 µs | 793,185 |
-| Bun generated FFI Frame        |     500 | 10,000 × 3       |   2.273 µs |   2.208 µs |   3.917 µs |   6.292 µs | 439,961 |
+| Node N-API Frame                |     500 | 10,000 × 3       |   1.261 µs |   1.167 µs |   2.125 µs |   4.292 µs | 793,185 |
+| Bun generated FFI Frame         |     500 | 10,000 × 3       |   2.273 µs |   2.208 µs |   3.917 µs |   6.292 µs | 439,961 |
 | Tauri generated WebView IPC     |     100 | 1,000 × 3        | 279.044 µs | 300.000 µs | 350.000 µs | 550.000 µs |   3,584 |
 | RN generated JSI, iOS Simulator |     500 | 10,000 × 1 check |          — |   2.750 µs |          — |          — |       — |
 
@@ -267,11 +267,11 @@ floor.
 
 `bun scripts/transport-bench.mjs`
 
-| profile                   |        mean |       throughput |
-| ------------------------- | ----------: | ---------------: |
-| Bun FFI Frame (release)    | **~0.5 µs** | ~1,890,000 ops/s |
-| Bun FFI JSON (release)    |      1.7 µs |   ~580,000 ops/s |
-| Bun subprocess            |     5.73 ms |       ~175 ops/s |
+| profile                 |        mean |       throughput |
+| ----------------------- | ----------: | ---------------: |
+| Bun FFI Frame (release) | **~0.5 µs** | ~1,890,000 ops/s |
+| Bun FFI JSON (release)  |      1.7 µs |   ~580,000 ops/s |
+| Bun subprocess          |     5.73 ms |       ~175 ops/s |
 
 > The Frame direct path (added 2026-08-23) calls the core
 > `rustra_ffi_invoke_frame` over a direct buffer — only postcard frames cross, with no
@@ -313,12 +313,12 @@ xychart-beta
 `rustra-benchmark` gained global_allocator counting (atomic alloc/dealloc counters) and
 cold-start separation. Per the 2026-08-22 re-measurement:
 
-| Metric                                     | Value                           |
-| ------------------------------------------ | ------------------------------- |
-| First invoke (incl. tier resolution)       | ~1.8 µs (5.0–6.5x steady-state) |
-| steady-state mean (1000 runs)              | 341–347 ns                      |
-| `invoke_json` heap allocations per call    | 9 allocs / 9 deallocs           |
-| `invoke_frame` heap allocations per call  | 4 allocs / 4 deallocs           |
+| Metric                                   | Value                           |
+| ---------------------------------------- | ------------------------------- |
+| First invoke (incl. tier resolution)     | ~1.8 µs (5.0–6.5x steady-state) |
+| steady-state mean (1000 runs)            | 341–347 ns                      |
+| `invoke_json` heap allocations per call  | 9 allocs / 9 deallocs           |
+| `invoke_frame` heap allocations per call | 4 allocs / 4 deallocs           |
 
 Allocation counts are a more stable comparison metric than nanoseconds — copy-elimination
 optimizations such as caller-buffer/Arc are validated as "reduced allocations" (the Frame
@@ -811,8 +811,8 @@ care when citing.
 | ------------------------------------------- | -------- | -------------------------------------- |
 | `register()` once (incl. schema generation) | 30.51 µs | not a hot path (once, at registration) |
 | `live_schema()` lookup (3 commands)         | 48.92 µs | read-only, in both debug/release       |
-| `invoke_frame` (mutable package)           | 3.95 µs  | RwLock read path                       |
-| `invoke_frame` (frozen package)            | 3.94 µs  | **under 0.2% difference** from mutable |
+| `invoke_frame` (mutable package)            | 3.95 µs  | RwLock read path                       |
+| `invoke_frame` (frozen package)             | 3.94 µs  | **under 0.2% difference** from mutable |
 
 ### Dynamic command payload scaling (debug, 2026-08-30)
 

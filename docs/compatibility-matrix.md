@@ -75,13 +75,13 @@ Each adapter's engine factory exposes a `supports` object (`@rustra/types`
 claims. Apps can branch before any side effect, e.g.
 `engine.supports?.cancellation === 'cooperative'`. The mapping per column:
 
-| `supports` field    | Node        | Bun JSON / Bun FFI Frame   | Tauri       | RN JSON     | RN Frame          |
-| ------------------- | ----------- | -------------------------- | ----------- | ----------- | ----------------- |
-| `cancellation`      | `shallow`   | `shallow` / `shallow`      | `shallow`   | `shallow`   | `cooperative`     |
-| `batch`             | `per-entry` | `per-entry` / `per-entry`  | `per-entry` | `per-entry` | `single-crossing` |
-| `events`            | `push`      | `push` / `push`            | `push`      | `none`      | `push`            |
-| `channels`          | `false`     | `false` / `false`          | `false`     | `true`      | `true`            |
-| `timeoutPreemption` | `true`      | `true` / `true`            | `true`      | `false`     | `true`            |
+| `supports` field    | Node        | Bun JSON / Bun FFI Frame  | Tauri       | RN JSON     | RN Frame          |
+| ------------------- | ----------- | ------------------------- | ----------- | ----------- | ----------------- |
+| `cancellation`      | `shallow`   | `shallow` / `shallow`     | `shallow`   | `shallow`   | `cooperative`     |
+| `batch`             | `per-entry` | `per-entry` / `per-entry` | `per-entry` | `per-entry` | `single-crossing` |
+| `events`            | `push`      | `push` / `push`           | `push`      | `none`      | `push`            |
+| `channels`          | `false`     | `false` / `false`         | `false`     | `true`      | `true`            |
+| `timeoutPreemption` | `true`      | `true` / `true`           | `true`      | `false`     | `true`            |
 
 Nuances that do not fit one enum value stay in the matrix prose, not the enum:
 RN Frame `cancellation: 'cooperative'` means the matrix's "conditional

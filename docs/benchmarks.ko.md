@@ -174,8 +174,8 @@ bun run bench:hosts -- --output /tmp/rustra-host-matrix.json
 | ------------------------------- | ------: | --------------- | ---------: | ---------: | ---------: | ---------: | ------: |
 | Node generated one-shot         |      10 | 200 × 3         |   2.758 ms |   2.760 ms |   3.119 ms |   3.295 ms |     363 |
 | Node persistent loop            |     100 | 2,000 × 3       |  16.863 µs |  16.666 µs |  26.917 µs |  44.084 µs |  59,301 |
-| Node N-API Frame               |     500 | 10,000 × 3      |   1.261 µs |   1.167 µs |   2.125 µs |   4.292 µs | 793,185 |
-| Bun generated FFI Frame        |     500 | 10,000 × 3      |   2.273 µs |   2.208 µs |   3.917 µs |   6.292 µs | 439,961 |
+| Node N-API Frame                |     500 | 10,000 × 3      |   1.261 µs |   1.167 µs |   2.125 µs |   4.292 µs | 793,185 |
+| Bun generated FFI Frame         |     500 | 10,000 × 3      |   2.273 µs |   2.208 µs |   3.917 µs |   6.292 µs | 439,961 |
 | Tauri generated WebView IPC     |     100 | 1,000 × 3       | 279.044 µs | 300.000 µs | 350.000 µs | 550.000 µs |   3,584 |
 | RN generated JSI, iOS Simulator |     500 | 10,000 × 1 확인 |          — |   2.750 µs |          — |          — |       — |
 
@@ -257,11 +257,11 @@ xychart-beta
 
 `bun scripts/transport-bench.mjs`
 
-| 프로필                    |        평균 |           처리량 |
-| ------------------------- | ----------: | ---------------: |
-| Bun FFI Frame (release)    | **~0.5 µs** | ~1,890,000 ops/s |
-| Bun FFI JSON (release)    |      1.7 µs |   ~580,000 ops/s |
-| Bun subprocess            |     5.73 ms |       ~175 ops/s |
+| 프로필                  |        평균 |           처리량 |
+| ----------------------- | ----------: | ---------------: |
+| Bun FFI Frame (release) | **~0.5 µs** | ~1,890,000 ops/s |
+| Bun FFI JSON (release)  |      1.7 µs |   ~580,000 ops/s |
+| Bun subprocess          |     5.73 ms |       ~175 ops/s |
 
 > Frame 직결 경로(2026-08-23 추가)는 코어 `rustra_ffi_invoke_frame`를
 > 버퍼 직결로 호출한다 — JSON/UTF-16 왕복 없이 postcard 프레임만 오간다.
@@ -302,12 +302,12 @@ xychart-beta
 `rustra-benchmark` 에 global_allocator 카운팅(할당/해제 원자 카운터)과
 콜드스타트 구분이 추가됐다. 2026-08-22 재측정 기준:
 
-| 지표                            | 값                                 |
-| ------------------------------- | ---------------------------------- |
-| 최초 invoke (tier 해결 포함)    | ~1.8 µs (steady-state의 5.0–6.5배) |
-| steady-state 평균 (1000회)      | 341–347 ns                         |
-| `invoke_json` 호출당 힙 할당    | 9 allocs / 9 deallocs              |
-| `invoke_frame` 호출당 힙 할당  | 4 allocs / 4 deallocs              |
+| 지표                          | 값                                 |
+| ----------------------------- | ---------------------------------- |
+| 최초 invoke (tier 해결 포함)  | ~1.8 µs (steady-state의 5.0–6.5배) |
+| steady-state 평균 (1000회)    | 341–347 ns                         |
+| `invoke_json` 호출당 힙 할당  | 9 allocs / 9 deallocs              |
+| `invoke_frame` 호출당 힙 할당 | 4 allocs / 4 deallocs              |
 
 할당 수는 나노초보다 안정적인 비교 지표다 — caller-buffer/Arc 같은 복사 제거
 최적화의 효과를 "할당 감소"로 검증한다(Frame 경로가 JSON 대비 할당 수 절반).
@@ -672,7 +672,7 @@ RPC 계약"으로 설계 목표가 다르다. 같은 문제만 겹친다(RN에�
 | 코드젠                       | nitrogen (인터페이스→네이티브 바인딩) | 스키마→**양방향**(커맨드+이벤트+TS 클라이언트)                 |
 | 계약 게이트                  | ❌                                    | ✅ `rustra diff` + contract hash + wire round-trip 게이트      |
 | 런타임 명령 등록             | ❌                                    | ⚠️ dev 전용(register→frozen)                                   |
-| 취소(AbortSignal)            | 직접 구현                             | ✅ RN Frame은 네이티브 전파(체크포인트)까지                      |
+| 취소(AbortSignal)            | 직접 구현                             | ✅ RN Frame은 네이티브 전파(체크포인트)까지                    |
 | 타임아웃                     | 직접 구현                             | ✅ timeoutMs(모든 어댑터)                                      |
 | 배치                         | 직접 구현                             | ✅ invokeBatch 단일 JSI 횡단(fail-fast)                        |
 | 이벤트 (Rust→JS 푸시)        | 직접 구현(콜백로 가능)                | ✅ subscribeEvent/drainEvents(RN), register_with_events(Tauri) |

@@ -27,9 +27,8 @@ mod frame {
         // SAFETY: payload 는 napi Buffer 로 JS 힙에 살아 있고 out_len 는 지역
         // 변수다. 반환 포인터는 코어 할당 레이아웃이므로 해제 짝은
         // rustra_ffi_free 다 — 아래에서 즉시 복사 후 해제한다.
-        let ptr = unsafe {
-            rustra::ffi::rustra_ffi_invoke_frame(req.as_ptr(), req.len(), &mut out_len)
-        };
+        let ptr =
+            unsafe { rustra::ffi::rustra_ffi_invoke_frame(req.as_ptr(), req.len(), &mut out_len) };
         if ptr.is_null() {
             return Err(Error::from_reason("invoke.frame: native invoke failed"));
         }

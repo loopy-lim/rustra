@@ -113,9 +113,9 @@ pub(crate) fn build_frame_response_encoder(output_schema: &Value, is_tier3: bool
                 WireFieldKind::VecI64 => {
                     encode_vec_fixed(&mut buf, val, |v| v.as_i64().unwrap_or(0).to_le_bytes())
                 }
-                WireFieldKind::VecF64 => encode_vec_fixed(&mut buf, val, |v| {
-                    v.as_f64().unwrap_or(0.0).to_le_bytes()
-                }),
+                WireFieldKind::VecF64 => {
+                    encode_vec_fixed(&mut buf, val, |v| v.as_f64().unwrap_or(0.0).to_le_bytes())
+                }
                 WireFieldKind::VecI32 => encode_vec_fixed(&mut buf, val, |v| {
                     (v.as_i64().unwrap_or(0) as i32).to_le_bytes()
                 }),

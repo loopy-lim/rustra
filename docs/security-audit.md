@@ -28,15 +28,15 @@ entries were removed when runner/ was deleted along with Lynx — 2026-08-20.)
 
 ## Resolution history
 
-| Item            | Before  | After    | RUSTSEC                                                 |
-| --------------- | ------- | -------- | ------------------------------------------------------- |
+| Item                                  | Before  | After    | RUSTSEC                                                 |
+| ------------------------------------- | ------- | -------- | ------------------------------------------------------- |
 | legacy wire dep (crate since removed) | 0.8.16  | 0.8.18   | 2026-0233, 2026-0234, 2026-0235 (3 memory safety)       |
-| quick-xml       | 0.39.4  | 0.41.0   | 2026-0194, 2026-0195 (2 DoS)                            |
-| crossbeam-epoch | 0.9.18  | 0.9.20   | 2026-0204 (pointer dereference)                         |
-| plist           | 1.9.0   | 1.10.0   | prerequisite of the quick-xml bump                      |
-| anyhow          | 1.0.102 | 1.0.103+ | 2026-0190 (downcast_mut soundness)                      |
-| atomic-polyfill | present | removed  | 2023-0089 (Postcard default heapless-cas disabled)      |
-| bincode         | 2.0.1   | removed  | 2025-0141 (required v2 wire preserved in our own codec) |
+| quick-xml                             | 0.39.4  | 0.41.0   | 2026-0194, 2026-0195 (2 DoS)                            |
+| crossbeam-epoch                       | 0.9.18  | 0.9.20   | 2026-0204 (pointer dereference)                         |
+| plist                                 | 1.9.0   | 1.10.0   | prerequisite of the quick-xml bump                      |
+| anyhow                                | 1.0.102 | 1.0.103+ | 2026-0190 (downcast_mut soundness)                      |
+| atomic-polyfill                       | present | removed  | 2023-0089 (Postcard default heapless-cas disabled)      |
+| bincode                               | 2.0.1   | removed  | 2025-0141 (required v2 wire preserved in our own codec) |
 
 The dependency in that row (`examples/calculator`, the RN native path) was the
 only direct one, and it has since been dropped outright together with the legacy

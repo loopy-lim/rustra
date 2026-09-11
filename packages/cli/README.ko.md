@@ -49,12 +49,12 @@ CLI와 동일한 생성기를 프로그램에서 직접 사용할 수 있습니�
 import { generateTypesTs, generateCommandsTs, diffSchemas } from '@rustra/cli';
 ```
 
-| 모듈              | 내용                                                    |
-| ----------------- | ------------------------------------------------------- |
+| 모듈              | 내용                                                     |
+| ----------------- | -------------------------------------------------------- |
 | `generate`        | types/commands/contract/frame codec/registry 생성 함수군 |
-| `schema`          | `PackageSchema` 파싱·검증                               |
-| `schema-diff`     | 스키마 버전 간 breaking change 검출 (`diffSchemas`)     |
-| `validate-engine` | 런타임 invoke 검증 엔진 래퍼 (`createValidatedEngine`)  |
+| `schema`          | `PackageSchema` 파싱·검증                                |
+| `schema-diff`     | 스키마 버전 간 breaking change 검출 (`diffSchemas`)      |
+| `validate-engine` | 런타임 invoke 검증 엔진 래퍼 (`createValidatedEngine`)   |
 
 ## 관련 문서
 

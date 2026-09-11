@@ -28,13 +28,13 @@ Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플�
 
 단일 Rust 코어를 여러 JS 호스트에 잇는 도구는 각자 다른 지점을 타협한다:
 
-|                               | **rustra**                                                              | napi-rs                                           | Nitro Modules | Tauri commands | tauri-specta |
-| ----------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------- | ------------- | -------------- | ------------ |
-| 단일 Rust 코어 × 멀티 호스트  | ✅ Node/Bun/Tauri/RN                                                    | Node (+ Electron)                                 | RN 중심       | Tauri 전용     | Tauri 전용   |
-| 타입 안전 코드젠 (양방향)     | ✅ 커맨드+이벤트                                                        | Rust 구조체에서 TS 정의 생성 (어트리뷰트 매크로)² | ✅            | ❌ (수동)      | ✅           |
+|                               | **rustra**                                                            | napi-rs                                           | Nitro Modules | Tauri commands | tauri-specta |
+| ----------------------------- | --------------------------------------------------------------------- | ------------------------------------------------- | ------------- | -------------- | ------------ |
+| 단일 Rust 코어 × 멀티 호스트  | ✅ Node/Bun/Tauri/RN                                                  | Node (+ Electron)                                 | RN 중심       | Tauri 전용     | Tauri 전용   |
+| 타입 안전 코드젠 (양방향)     | ✅ 커맨드+이벤트                                                      | Rust 구조체에서 TS 정의 생성 (어트리뷰트 매크로)² | ✅            | ❌ (수동)      | ✅           |
 | compact 바이너리 와이어       | ✅ Frame ([JSON 대비 요청 와이어 11.8× 작음](docs/wire-format.ko.md)) | JSON/Buffer                                       | JSI 객체      | JSON IPC       | JSON IPC     |
-| 계약 게이트 (breaking change) | ✅ `rustra diff` + contract hash                                        | ❌                                                | ❌            | ❌             | 부분         |
-| 취소/타임아웃/배치 시맨틱     | ✅ 매트릭스로 문서화                                                    | 직접 구현                                         | 직접 구현     | ❌             | ❌           |
+| 계약 게이트 (breaking change) | ✅ `rustra diff` + contract hash                                      | ❌                                                | ❌            | ❌             | 부분         |
+| 취소/타임아웃/배치 시맨틱     | ✅ 매트릭스로 문서화                                                  | 직접 구현                                         | 직접 구현     | ❌             | ❌           |
 
 rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)를 하나의 계약으로
 소유**한다. 명령 호출과 계약 검증은 호스트 간 공통으로 유지하고, 취소·이벤트·채널
@@ -645,14 +645,14 @@ const result = await addNumbers({ a: 20, b: 22 });
 end-to-end Release 실측이다. 2026-08-24 Apple Silicon에서 정확성을 먼저 확인하고
 warm-up 뒤 3회 반복했다.
 
-| 실제 사용자 경로                | 평균 지연 |       p50 |        처리량 | 권장 용도        |
-| ------------------------------- | --------: | --------: | ------------: | ---------------- |
-| Node 생성 one-shot              |   2.76 ms |   2.76 ms |     363 ops/s | CLI, 저빈도 배치 |
-| Node persistent loop            |  16.86 µs |  16.67 µs |  59,301 ops/s | 일반 서버        |
-| Node N-API Frame escape hatch   |   1.26 µs |   1.17 µs | 793,185 ops/s | 고빈도 hot path  |
-| Bun 생성 FFI Frame              |   2.27 µs |   2.21 µs | 439,961 ops/s | 서비스, CLI      |
-| Tauri 생성 WebView IPC          | 279.04 µs | 300.00 µs |   3,584 ops/s | 데스크톱 UI 명령 |
-| RN 생성 JSI, iOS Simulator      |         — |   2.71 µs |             — | 모바일 hot path  |
+| 실제 사용자 경로              | 평균 지연 |       p50 |        처리량 | 권장 용도        |
+| ----------------------------- | --------: | --------: | ------------: | ---------------- |
+| Node 생성 one-shot            |   2.76 ms |   2.76 ms |     363 ops/s | CLI, 저빈도 배치 |
+| Node persistent loop          |  16.86 µs |  16.67 µs |  59,301 ops/s | 일반 서버        |
+| Node N-API Frame escape hatch |   1.26 µs |   1.17 µs | 793,185 ops/s | 고빈도 hot path  |
+| Bun 생성 FFI Frame            |   2.27 µs |   2.21 µs | 439,961 ops/s | 서비스, CLI      |
+| Tauri 생성 WebView IPC        | 279.04 µs | 300.00 µs |   3,584 ops/s | 데스크톱 UI 명령 |
+| RN 생성 JSI, iOS Simulator    |         — |   2.71 µs |             — | 모바일 hot path  |
 
 평균과 처리량은 OS 스케줄링 꼬리값을 줄인 양끝 5% trimmed mean이다. Tauri는
 WKWebView 타이머 정밀도 때문에 20호출 배치의 호출당 값을 사용했다. RN 행은

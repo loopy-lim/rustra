@@ -18,20 +18,20 @@ The 0.9 series renames the binary protocol formerly called "rkyv V2" to
 framing, and postcard payload codec are unchanged, so old and new builds stay
 interoperable. Update the identifiers you reference:
 
-| Old (≤0.8)                          | New (0.9+)                            |
-| ----------------------------------- | ------------------------------------- |
-| `createRkyvV2Engine`                | `createFrameEngine`                   |
-| `RkyvV2Engine`                      | `FrameEngine`                         |
-| `RkyvV2Codec`                       | `FrameCodec`                          |
-| `RkyvV2Native`                      | `FrameNative`                         |
-| `invokeRkyvV2`                      | `invokeFrame`                         |
-| `rkyv-codecs.ts`                    | `frame-codecs.ts`                     |
-| `rkyv-registry.ts`                  | `frame-registry.ts`                   |
-| `rkyv-engine`                       | `frame-engine`                        |
-| `rustra_ffi_invoke_rkyv_v2*`        | `rustra_ffi_invoke_frame*`            |
-| `BUN_RKYV_V2_ENGINE_SUPPORTS`       | `BUN_FRAME_ENGINE_SUPPORTS`           |
+| Old (≤0.8)                             | New (0.9+)                           |
+| -------------------------------------- | ------------------------------------ |
+| `createRkyvV2Engine`                   | `createFrameEngine`                  |
+| `RkyvV2Engine`                         | `FrameEngine`                        |
+| `RkyvV2Codec`                          | `FrameCodec`                         |
+| `RkyvV2Native`                         | `FrameNative`                        |
+| `invokeRkyvV2`                         | `invokeFrame`                        |
+| `rkyv-codecs.ts`                       | `frame-codecs.ts`                    |
+| `rkyv-registry.ts`                     | `frame-registry.ts`                  |
+| `rkyv-engine`                          | `frame-engine`                       |
+| `rustra_ffi_invoke_rkyv_v2*`           | `rustra_ffi_invoke_frame*`           |
+| `BUN_RKYV_V2_ENGINE_SUPPORTS`          | `BUN_FRAME_ENGINE_SUPPORTS`          |
 | `REACT_NATIVE_RKYV_V2_ENGINE_SUPPORTS` | `REACT_NATIVE_FRAME_ENGINE_SUPPORTS` |
-| error prefix `"rkyv v2: ..."`       | `"frame: ..."`                        |
+| error prefix `"rkyv v2: ..."`          | `"frame: ..."`                       |
 
 The RN JSI host method follows the same rename (`invokeRkyvV2` → `invokeFrame`),
 and codegen output files land under the new names (`frame-codecs.ts`,

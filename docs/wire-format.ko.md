@@ -9,12 +9,12 @@ postcard이며, upstream `rkyv` 아카이브 포맷과는 무관하고 호환을
 
 ## 명칭
 
-| 이름                 | 실제 의미                                                                                       |
-| -------------------- | ----------------------------------------------------------------------------------------------- |
-| Frame                | Rustra의 바이너리 프레임 프로토콜(V2 프레이밍 + command id + postcard payload 코덱).            |
-| postcard             | manifest/dispatch 경로에서 쓰이는 payload 코덱(serde 호환 컴팩트 포맷).                         |
-| JSON 와이어          | codecs 미주입 어댑터가 쓰는 `invoke_json`/stdio 라인 프로토콜.                                  |
-| zero-copy (JSI 경로) | RN JSI 패스트패스가 네이티브 버퍼 뷰를 JS 사본 없이 JS 코덱에 전달.                             |
+| 이름                 | 실제 의미                                                                            |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| Frame                | Rustra의 바이너리 프레임 프로토콜(V2 프레이밍 + command id + postcard payload 코덱). |
+| postcard             | manifest/dispatch 경로에서 쓰이는 payload 코덱(serde 호환 컴팩트 포맷).              |
+| JSON 와이어          | codecs 미주입 어댑터가 쓰는 `invoke_json`/stdio 라인 프로토콜.                       |
+| zero-copy (JSI 경로) | RN JSI 패스트패스가 네이티브 버퍼 뷰를 JS 사본 없이 JS 코덱에 전달.                  |
 
 "zero-copy"는 특정 한 번의 복사가 제거된다는 뜻이다: 네이티브 호출 경계와 코덱
 사이의 JS 측 버퍼 사본. 왕복 전체가 할당 없다는 의미가 아니며 JSON 와이어에는

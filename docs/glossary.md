@@ -14,24 +14,24 @@ In Korean prose, a descriptive gloss such as 핫코어/핫스왑 may accompany t
 identifier, but the identifier itself (`hot-core`, `parity gate`, `contract
 hash`) is not transliterated.
 
-| Term                    | In one line                                                                          |
-| ----------------------- | ------------------------------------------------------------------------------------ |
+| Term                    | In one line                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- |
 | Frame                   | Rustra's binary frame protocol — V2 framing + command ids + postcard payload codec (formerly "rkyv V2") |
-| postcard                | the actual payload codec (serde-compatible compact format)                           |
-| Tier 1 / 2 / 3          | wire codec tiers: static postcard / complex schema / JSON-in-binary fallback         |
-| dev tier                | "dynamic in dev, static in release" development mechanisms — unrelated to wire tiers |
-| hot-core                | native dylib hot-swap dev mechanism (experimental)                                   |
-| `rustra_ffi_hot_reload` | the older hot-* mechanism: replace-semantics reload injection                        |
-| parity gate             | `rustra dev` rebuild gate comparing the contract hash before announcing a reload     |
-| contract hash           | SHA-256 of the schema JSON only                                                      |
-| dylib / cdylib          | Rust dynamic-library crate-type — the hot-swap unit                                  |
-| channel family          | `ChannelHandle` + the four per-host binary-channel factories                         |
-| host                    | four senses: embedding app / `ChannelHost` / JSI host object / host promotions       |
-| snapshot                | four senses: API snapshot / inspector dump / debug-log value / changeset canary      |
-| gate (standalone)       | overloaded: profiles, capability, drift, release, acceptance, api-surface, scripts   |
-| codec / Codec IR        | payload serializer / the shared schema IR behind complex codecs                      |
-| mirror                  | three senses: en/ko document pair / hand-maintained duplicate / verb "to mirror"     |
-| subsecond               | dioxus hot-reload tech — evaluated and deferred; not part of the architecture        |
+| postcard                | the actual payload codec (serde-compatible compact format)                                              |
+| Tier 1 / 2 / 3          | wire codec tiers: static postcard / complex schema / JSON-in-binary fallback                            |
+| dev tier                | "dynamic in dev, static in release" development mechanisms — unrelated to wire tiers                    |
+| hot-core                | native dylib hot-swap dev mechanism (experimental)                                                      |
+| `rustra_ffi_hot_reload` | the older hot-* mechanism: replace-semantics reload injection                                           |
+| parity gate             | `rustra dev` rebuild gate comparing the contract hash before announcing a reload                        |
+| contract hash           | SHA-256 of the schema JSON only                                                                         |
+| dylib / cdylib          | Rust dynamic-library crate-type — the hot-swap unit                                                     |
+| channel family          | `ChannelHandle` + the four per-host binary-channel factories                                            |
+| host                    | four senses: embedding app / `ChannelHost` / JSI host object / host promotions                          |
+| snapshot                | four senses: API snapshot / inspector dump / debug-log value / changeset canary                         |
+| gate (standalone)       | overloaded: profiles, capability, drift, release, acceptance, api-surface, scripts                      |
+| codec / Codec IR        | payload serializer / the shared schema IR behind complex codecs                                         |
+| mirror                  | three senses: en/ko document pair / hand-maintained duplicate / verb "to mirror"                        |
+| subsecond               | dioxus hot-reload tech — evaluated and deferred; not part of the architecture                           |
 
 ## Frame
 
