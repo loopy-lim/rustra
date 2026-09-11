@@ -88,6 +88,8 @@ pub use rustra_macros::build;
 /// ```
 pub use rustra_macros::command;
 
+pub use rkyv_codec::decode_rkyv_v2_error_parts;
+pub use rkyv_codec::decode_rkyv_v2_response;
 pub use rkyv_codec::encode_rkyv_v2_error;
 /// 패키지 빌더에 `#[command]` 함수들을 등록하는 매크로입니다.
 ///
