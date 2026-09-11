@@ -269,7 +269,7 @@ bun run --cwd examples/calculator codegen                # schema.json에서 TS 
 ```
 
 그리고 `generated/` 디렉토리에 기본 파일(`types.ts`, `commands.ts`, `contract.ts`,
-`rkyv-codecs.ts`, `rkyv-registry.ts`, `schema.json`)과 설정된 호스트 진입점이 생성된다.
+`frame-codecs.ts`, `frame-registry.ts`, `schema.json`)과 설정된 호스트 진입점이 생성된다.
 
 ---
 
@@ -277,7 +277,7 @@ bun run --cwd examples/calculator codegen                # schema.json에서 TS 
 
 `generated/` 디렉토리에는 다음 기본 파일이 생성된다. `node`, `bun`, `tauri`,
 `reactNative`를 설정하면 해당 호스트 진입점도 추가되고, `codegen.rustBinary`로 구동되는
-rkyv V2 fast path는 `rkyv-codecs.ts`/`rkyv-registry.ts`를 추가한다.
+Frame fast path는 `frame-codecs.ts`/`frame-registry.ts`를 추가한다.
 
 ### types.ts — 타입 정의
 
@@ -796,7 +796,7 @@ const result = await addNumbers({ a: 20, b: 22 });
 ```
 
 생성 진입점은 Release/Debug cdylib 후보를 실제 ABI 심볼까지 검사하고 Bun FFI의 stable
-C ABI를 rkyv V2 engine에 연결한다. Rust 응답은 JS 소유 `ArrayBuffer`로 복사한 뒤
+C ABI를 Frame engine에 연결한다. Rust 응답은 JS 소유 `ArrayBuffer`로 복사한 뒤
 정확한 pointer/length로 해제한다. 다른 배포 레이아웃은 `RUSTRA_BUN_LIBRARY`로 지정한다.
 
 ### Tauri
@@ -832,7 +832,7 @@ fn main() {
 
 ### React Native
 
-#### rkyv V2 (권장 — postcard 바이너리 + JSI 동기 호출)
+#### Frame (권장 — postcard 바이너리 + JSI 동기 호출)
 
 JSI 동기 호출과 postcard 바이너리 직렬화를 사용한다. Rust 측에는 앱 package와
 native entry를 한 번 선언한다.
@@ -885,7 +885,7 @@ const result = await addNumbers({ a: 20, b: 22 }); // JSI fast path
 ```
 
 생성된 진입점이 첫 호출에서 JSI 설치, contract hash/schema version 검증,
-`rkyvV2Registry` 고속 엔진 설정을 동시 호출에도 한 번만 수행한다. 실패한 설치는 다음
+`frameRegistry` 고속 엔진 설정을 동시 호출에도 한 번만 수행한다. 실패한 설치는 다음
 호출에서 재시도하고, 앱이 명시적으로 `configure()`한 엔진은 늦게 끝난 설치가 덮어쓰지
 않는다. 생성기는 Cargo package/library를 추론하고 앱 전용
 `@rustra/generated-react-native` package에 Podspec, Gradle/CMake/JNI와 공유 C++
@@ -931,8 +931,8 @@ const result = await addNumbers({ a: 20, b: 22 });
 
 | 환경         | 기본 생성 진입점                     | 자동 연결                           | 성능 (release, 2026-08-24)                             |
 | ------------ | ------------------------------------ | ----------------------------------- | ------------------------------------------------------ |
-| Node         | `generated/node.ts`                  | Cargo binary + stdio                | one-shot 2.76 ms; loop 16.86 µs; N-API rkyv V2 1.26 µs |
-| Bun          | `generated/bun.ts`                   | Cargo cdylib + stable FFI + rkyv V2 | FFI rkyv V2 2.27 µs                                    |
+| Node         | `generated/node.ts`                  | Cargo binary + stdio                | one-shot 2.76 ms; loop 16.86 µs; N-API Frame 1.26 µs   |
+| Bun          | `generated/bun.ts`                   | Cargo cdylib + stable FFI + Frame   | FFI Frame 2.27 µs                                      |
 | Tauri        | `generated/tauri.ts`                 | global invoke/event                 | WebView IPC 279.04 µs                                  |
 | React Native | `generated/react-native.ts`          | autolinked JSI + postcard codecs    | p50 2.71 µs (iOS Simulator receipt)                    |
 | React Native | `createReactNativeEngine(transport)` | custom JSON transport               | transport 구현 종속                                    |
@@ -1201,7 +1201,7 @@ try {
 | `anyOf` / `oneOf`                   | `A \| B` (union join)           |                                              |
 
 `allOf`는 `A & B`, integer enum은 숫자 리터럴 union, `oneOf`+`const`는 판별
-union으로 생성된다. postcard fast path(rkyv V2 코덱)는 primitive,
+union으로 생성된다. postcard fast path(Frame 코덱)는 primitive,
 Vec/Set/tuple, 원시값 map, string enum, 중첩 구조체, 그리고 single-entry
 `allOf` newtype 핸들을 지원한다. 선언순을 스키마의
 `fieldOrder: "declaration"`로 보증할 수 없는 레거시 스키마는 코드젠이 경고한다.
@@ -1216,7 +1216,7 @@ variant key와 depth/payload/collection limits를 사용한다. 생성기와 Rus
 복잡 명령은 native-safe schema라면 RN C++ complex codec으로 직접 마샬링되고,
 원시 요소 `Set`과 `int64`/`uint64`를 포함한 native-safe wide-int 경로도 이 범위에
 포함된다. 객체/배열 요소 Set처럼 native-safe 판정 밖인 명령은 JS complex codec이
-네이티브 `invokeRkyvV2`를 통해 Rust handler로 전달한다. 두 경로는 같은 complex
+네이티브 `invokeFrame`을 통해 Rust handler로 전달한다. 두 경로는 같은 complex
 wire를 사용한다.
 
 ---

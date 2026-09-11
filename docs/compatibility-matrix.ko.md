@@ -9,14 +9,14 @@
 
 열 이름은 저수준 엔진 팩토리를 기준으로 한다. 생성된 호스트 진입점(기본 경로)을
 쓴다면 열 대응은 다음과 같다: `generated/node.ts` → **Node** 열(one-shot stdio
-JSON 엔진), `generated/bun.ts` → **Bun** 열(기본값은 FFI rkyv V2 엔진 — 아래 rkyv V2
+JSON 엔진), `generated/bun.ts` → **Bun** 열(기본값은 FFI Frame 엔진 — 아래 Frame
 행과 `supports` 표 참고), `generated/tauri.ts` → **Tauri** 열,
-`generated/react-native.ts` → RN **`createRkyvV2Engine`** 열. RN JSON 열은 직접
+`generated/react-native.ts` → RN **`createFrameEngine`** 열. RN JSON 열은 직접
 커스텀 transport를 `createReactNativeEngine`에 넘길 때만 해당한다. UniFFI
 (Kotlin/Swift) 표면은 `EngineClient` 열이 아니므로 아래
 [별도 절](#uniffi-바인딩-track-b1-타입-kotlinswift-표면)에서 다룬다.
 
-| 기능                                    | Node (`createNodeEngine`)                                                                                                                                                             | Bun (`createBunEngine`)                                                                                                | Tauri (`createTauriEngine`)                                                                                                       | RN (`createReactNativeEngine`)                                                        | RN (`createRkyvV2Engine`)                                                                     |
+| 기능                                    | Node (`createNodeEngine`)                                                                                                                                                             | Bun (`createBunEngine`)                                                                                                | Tauri (`createTauriEngine`)                                                                                                       | RN (`createReactNativeEngine`)                                                        | RN (`createFrameEngine`)                                                                      |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `options.signal` (사전 abort)           | ✅ 즉시 `cancelled`                                                                                                                                                                   | ✅ 즉시 `cancelled`                                                                                                    | ✅ 즉시 `cancelled`                                                                                                               | ✅ 즉시 `cancelled`                                                                   | ✅ 즉시 `cancelled`                                                                           |
 | `options.signal` (진행 중 취소)         | ⚠️ 얕은 취소 (미abort signal 은 정상 실행, 실행 중 abort 는 결과 무시)                                                                                                                | ⚠️ 얕은 취소 (동일)                                                                                                    | ⚠️ 얕은 취소 (동일)                                                                                                               | ⚠️ 얕은 취소 (JS 프라미스만 거부)                                                     | ⚠️ 조건부 전파 — JS 코덱 + `invokeAsync`/`invokeCancel` 확인 시만 Rust 체크포인트까지         |
@@ -26,7 +26,7 @@ JSON 엔진), `generated/bun.ts` → **Bun** 열(기본값은 FFI rkyv V2 엔진
 | 이벤트 (`subscribeEvent`/`onEvent`)     | ✅ `subscribeEvent(transport, name, cb)` — 0xfffd 푸시 프레임 (폴백 폴링; 이벤트 불능 transport 는 loud-fail)                                                                         | ✅ `createBunEventBridge` — FFI 푸시 싱크 (폴백 폴링)                                                                  | ✅ `subscribeEvent`/`subscribeTauriEvent`                                                                                         | ✅ JSI 싱크 푸시; `pollMs` 옵션으로 CallInvoker 없는 호스트용 JS 폴링 drain 루프 추가 | ✅ `subscribeEvent`/`drainEvents` (CallInvoker 자동 drain)                                    |
 | 채널 (`createChannel`)                  | ✅ `createNodeChannel(transport, cb)` — loop-stdio 채널 예약 프레임 0xfffb/0xfffa/0xfffc (바이너리 모드 전용; NDJSON 은 `channel.unavailable` loud-fail; 백그라운드 스레드 send 안전) | ✅ `createBunChannelBridge(options)(cb)` — FFI `rustra_ffi_channel_*` (JS 스레드 send 만 — `threadsafe:false` 계약)    | ✅ `createChannel(cb)` — Tauri 커맨드 + listen (근사 유니캐스트: 핸들별 `app.emit` 브로드캐스트)                                  | ✅ JSI handle + `close()`                                                             | ✅ JSI native channel handle + `{ pollMs }` 폴링 폴백 (CallInvoker-less)                      |
 | 바이너리 채널 (`createBytesChannel`)    | ✅ `createNodeBytesChannel` — 0xfff9 프레임 (능력 협상 게이트; 구 런타임은 `channel.unavailable` loud-fail)                                                                           | ✅ `createBunChannelBytesBridge` — FFI `rustra_ffi_channel_create_bytes` (JS 스레드 send 만 — `threadsafe:false` 계약) | ✅ `createChannelBytes` — `rustra://channel-bytes/{handle}` emit (바이트는 JSON 숫자 배열 직렬화 — ~4배 와이어 비용, 기능 패리티) | ✅ JSI `createChannelBytes` — ArrayBuffer 복사본                                      | ✅ 동일 JSI 바이트 경로 + `{ pollMs }` 폴백                                                   |
-| rkyv V2 바이너리 (`createRkyvV2Engine`) | ✅ (napi/FFI 네이티브 필요)                                                                                                                                                           | ✅ (FFI 네이티브 필요)                                                                                                 | ✅ (`rustra_dispatch` 바이너리 경로)                                                                                              | —                                                                                     | ✅ JSI                                                                                        |
+| Frame 바이너리 (`createFrameEngine`)    | ✅ (napi/FFI 네이티브 필요)                                                                                                                                                           | ✅ (FFI 네이티브 필요)                                                                                                 | ✅ (`rustra_dispatch` 바이너리 경로)                                                                                              | —                                                                                     | ✅ JSI                                                                                        |
 
 ## 시그널 시맨틱 상세
 
@@ -35,7 +35,7 @@ JSON 엔진), `generated/bun.ts` → **Bun** 열(기본값은 FFI rkyv V2 엔진
   - JSON transport(Node/Bun/Tauri 및 RN JSON adapter)는 왕복을 네이티브에 전달한 뒤
     실행 자체를 중단할 수 없다. **얕은 취소 정책**으로 JS Promise만 `cancelled`로
     거부하고 늦은 결과는 무시한다.
-  - RN rkyv V2 엔진은 `invokeAsync`+`invokeCancel`이 있고 commandId/코덱 경로가
+  - RN Frame 엔진은 `invokeAsync`+`invokeCancel`이 있고 commandId/코덱 경로가
     확인되는 경우 Rust 체크포인트까지 **전파**한다. 정적 typed 경로, 구형 native,
     commandId를 확인할 수 없는 경로는 얕은 취소로 폴백한다.
 - **타임아웃**(`options.timeoutMs`): 모든 엔진 공통 — 글로벌 `invoke`가 settle 레이스를
@@ -107,7 +107,7 @@ function 으로 발급한다(진짜 유니캐스트). CallInvoker 가 있으면 
 ## invokeBatch 시맨틱
 
 - 모든 어댑터가 Promise 기반 `invokeBatch`를 노출한다. Node/Bun/Tauri/RN JSON은
-  각 항목을 공통 `invoke`로 실행하고 순서를 보존한다. rkyv V2 엔진은 지원되는
+  각 항목을 공통 `invoke`로 실행하고 순서를 보존한다. Frame 엔진은 지원되는
   정적 명령만 단일 native crossing으로 묶는다.
 - 정적 명령 + signal 없음 → 단일 JSI 횡단(`invokeTypedBatchById` 우선).
 - 동적 명령 혼합 또는 signal 포함 → 항목별 `invoke`로 라우팅(각 항목의 취소 정책 적용).
@@ -134,7 +134,7 @@ function 으로 발급한다(진짜 유니캐스트). CallInvoker 가 있으면 
 부작용 이전에 분기할 수 있다(예:
 `engine.supports?.cancellation === 'cooperative'`). 열별 매핑:
 
-| `supports` 필드     | Node        | Bun JSON / Bun FFI rkyv V2 | Tauri       | RN JSON     | RN rkyv V2        |
+| `supports` 필드     | Node        | Bun JSON / Bun FFI Frame   | Tauri       | RN JSON     | RN Frame          |
 | ------------------- | ----------- | -------------------------- | ----------- | ----------- | ----------------- |
 | `cancellation`      | `shallow`   | `shallow` / `shallow`      | `shallow`   | `shallow`   | `cooperative`     |
 | `batch`             | `per-entry` | `per-entry` / `per-entry`  | `per-entry` | `per-entry` | `single-crossing` |
@@ -143,11 +143,11 @@ function 으로 발급한다(진짜 유니캐스트). CallInvoker 가 있으면 
 | `timeoutPreemption` | `true`      | `true` / `true`            | `true`      | `false`     | `true`            |
 
 엔벌레 하나에 담지 않는 뉘앙스는 열거값이 아니라 매트릭스 산문에 남아 있다:
-RN rkyv V2 의 `cancellation: 'cooperative'` 는 매트릭스의 "조건부 전파" 셀을
+RN Frame 의 `cancellation: 'cooperative'` 는 매트릭스의 "조건부 전파" 셀을
 뜻한다(`invokeAsync`+`invokeCancel` 이 노출되고 commandId/코덱 경로가 확인될
 때만 Rust 체크포인트에 닿고, 정적 typed 경로와 구형 네이티브는 얕은 취소로
-폴백). Bun FFI rkyv V2 엔진은 같은 `createRkyvV2Engine` 코어를 공유하지만 FFI
-네이티브는 `invokeRkyvV2`/`getSchema`/`getContractHash`/`getSchemaGeneration`
+폴백). Bun FFI Frame 엔진은 같은 `createFrameEngine` 코어를 공유하지만 FFI
+네이티브는 `invokeFrame`/`getSchema`/`getContractHash`/`getSchemaGeneration`
 만 바인딩한다 — `invokeAsync`/`invokeCancel`·`invokeTypedBatch` 심볼은
 바인딩되지 않아 조건부 전파와 단일 횡단 조건이 도달 불가이며, 엔진은
 `shallow`/`per-entry` 로 관측된다. RN async 엔진(`createAsyncEngine`)은
@@ -194,7 +194,7 @@ UniFFI 표면은 위 매트릭스에 **열로 넣지 않기로 한다**: 매트�
 | `options.timeoutMs`                   | — 동기 native 호출은 호출 중 선점 불가                                                                                                                   |
 | 이벤트 (`subscribeEvent`/`onEvent`)   | — Phase 2 (uniffi callback interface / foreign trait)                                                                                                    |
 | 채널 (`createChannel`/바이트)         | — Phase 2                                                                                                                                                |
-| rkyv V2 바이너리 와이어               | ✅ 단일 dispatch 경로 — 생성 래퍼가 `Package::invoke_typed` 를 호출하고, 이것이 postcard 요청을 `invoke_rkyv_v2` 로 보낸다(제2 와이어 없음)              |
+| Frame 바이너리 와이어                 | ✅ 단일 dispatch 경로 — 생성 래퍼가 `Package::invoke_typed` 를 호출하고, 이것이 postcard 요청을 `invoke_frame` 로 보낸다(제2 와이어 없음)              |
 | 계약 정합성                           | ✅ 이 표면은 uniffi 자체의 체크섬 + 계약 버전이 담당; rustra 의 `contract_hash`/`contract.mismatch` 게이트는 blob 전송(Node/Bun/Tauri/JSI)에 스코프 유지 |
 | 핫스왑                                | — uniffi 호스트는 로드 시점 심볼 고정 — 정적/릴리스 빌드 전용; dev 루프는 TS/JSI 유지                                                                    |
 
@@ -220,7 +220,7 @@ UniFFI 표면은 위 매트릭스에 **열로 넣지 않기로 한다**: 매트�
 
 Task A0 스파이크(`examples/rn-wasm-spike/`, 2026-08-31)는 `wasm32-unknown-unknown`으로
 컴파일한 rustra 엔진이 React Native 앱에 내장된 wasm3 인터프리터 안에서 구동됨을
-증명했다. JSON 어댑터와 rkyv V2 JSI에 이은 세 번째 실행 모드:
+증명했다. JSON 어댑터와 Frame JSI에 이은 세 번째 실행 모드:
 
 | 항목                | 결과                                                                                                                                                                                                                                                            |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

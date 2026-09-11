@@ -276,7 +276,7 @@ Output:
 ```
 
 The `generated/` directory then contains the base files (`types.ts`, `commands.ts`,
-`contract.ts`, `rkyv-codecs.ts`, `rkyv-registry.ts`, `schema.json`) plus any configured
+`contract.ts`, `frame-codecs.ts`, `frame-registry.ts`, `schema.json`) plus any configured
 host entry points.
 
 ---
@@ -285,7 +285,7 @@ host entry points.
 
 The `generated/` directory contains the following base files. Configuring `node`,
 `bun`, `tauri`, or `reactNative` adds the corresponding host entry point, and the
-`codegen.rustBinary`-driven rkyv V2 fast path adds `rkyv-codecs.ts`/`rkyv-registry.ts`.
+`codegen.rustBinary`-driven Frame fast path adds `frame-codecs.ts`/`frame-registry.ts`.
 
 ### types.ts — Type Definitions
 
@@ -806,7 +806,7 @@ const result = await addNumbers({ a: 20, b: 22 });
 ```
 
 The generated entry point inspects Release/Debug cdylib candidates down to the actual ABI
-symbols and wires Bun FFI's stable C ABI into the rkyv V2 engine. The Rust response is
+symbols and wires Bun FFI's stable C ABI into the Frame engine. The Rust response is
 copied into a JS-owned `ArrayBuffer` and freed with the exact pointer/length. Specify a
 different deployment layout with `RUSTRA_BUN_LIBRARY`.
 
@@ -843,7 +843,7 @@ fn main() {
 
 ### React Native
 
-#### rkyv V2 (recommended — postcard binary + JSI synchronous calls)
+#### Frame (recommended — postcard binary + JSI synchronous calls)
 
 Uses JSI synchronous calls and postcard binary serialization. On the Rust side, declare
 the app package and native entry once.
@@ -896,7 +896,7 @@ const result = await addNumbers({ a: 20, b: 22 }); // JSI fast path
 ```
 
 On the first call, the generated entry point performs JSI installation, contract
-hash/schema version verification, and `rkyvV2Registry` fast-engine setup exactly once
+hash/schema version verification, and `frameRegistry` fast-engine setup exactly once
 even under concurrent calls. Failed installs are retried on the next call, and an engine
 explicitly `configure()`d by the app is never overwritten by a late-finishing install.
 The generator infers the Cargo package/library and builds the Podspec, Gradle/CMake/JNI,
@@ -945,8 +945,8 @@ caller-buffer fast path of the generated `react-native.ts`.
 
 | Environment  | Default generated entry point        | Auto wiring                         | Performance (release, 2026-08-24)                      |
 | ------------ | ------------------------------------ | ----------------------------------- | ------------------------------------------------------ |
-| Node         | `generated/node.ts`                  | Cargo binary + stdio                | 2.76 ms one-shot; loop 16.86 µs; N-API rkyv V2 1.26 µs |
-| Bun          | `generated/bun.ts`                   | Cargo cdylib + stable FFI + rkyv V2 | 2.27 µs FFI rkyv V2                                    |
+| Node         | `generated/node.ts`                  | Cargo binary + stdio                | 2.76 ms one-shot; loop 16.86 µs; N-API Frame 1.26 µs   |
+| Bun          | `generated/bun.ts`                   | Cargo cdylib + stable FFI + Frame   | 2.27 µs FFI Frame                                      |
 | Tauri        | `generated/tauri.ts`                 | global invoke/event                 | 279.04 µs WebView IPC                                  |
 | React Native | `generated/react-native.ts`          | autolinked JSI + postcard codecs    | p50 2.71 µs (iOS Simulator receipt)                    |
 | React Native | `createReactNativeEngine(transport)` | custom JSON transport               | Depends on transport implementation                    |
@@ -1218,7 +1218,7 @@ Most Rust types convert correctly to TypeScript:
 | `anyOf` / `oneOf`                             | `A \| B` (union join)              |                                                            |
 
 `allOf` generates `A & B`, integer enums generate numeric literal unions, and
-`oneOf`+`const` generates discriminated unions. The postcard fast path (rkyv V2 codec)
+`oneOf`+`const` generates discriminated unions. The postcard fast path (Frame codec)
 supports primitives, Vec/Set/tuples, maps of primitive values, string enums, nested
 structs, and single-entry `allOf` newtype handles. Legacy schemas that cannot guarantee
 declaration order via the schema's `fieldOrder: "declaration"` produce a codegen warning.
@@ -1234,7 +1234,7 @@ Complex commands with a native-safe schema are marshalled directly by the RN C++
 codec, and native-safe wide-int paths including primitive-element `Set` and
 `int64`/`uint64` are also in that scope. Commands outside the native-safe determination,
 such as Sets of object/array elements, are carried by the JS complex codec through the
-native `invokeRkyvV2` to the Rust handler. Both paths use the same complex wire.
+native `invokeFrame` to the Rust handler. Both paths use the same complex wire.
 
 ---
 

@@ -698,7 +698,7 @@ await addNumbers({ a: 20, b: 22 }, { signal: controller.signal });
 await slowCompute({ workload: 'heavy' }, { timeoutMs: 500 });
 
 // batch — one array, order preserved; entries without a signal can take a
-// single native crossing on the rkyv V2 engine
+// single native crossing on the Frame engine
 const [sum, echo] = await invokeBatch([
   { command: 'addNumbers', args: { a: 20, b: 22 } },
   { command: 'echo', args: { message: 'hi' }, options: { timeoutMs: 1000 } },

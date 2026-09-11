@@ -27,7 +27,7 @@ loud abort 로 **fail-closed** 수렴한다 — 조용한 타협은 없다. 실�
   `catch_unwind(AssertUnwindSafe)` → `FfiResponse { ok:false }`),
   `crates/rustra/src/ffi_buffer_entries.rs:34-40` (`panic_frame_message` — 단일 포맷),
   `crates/rustra/src/ffi_buffer_entries.rs:12-18` (caller-buffer 경로의 동일 가드),
-  `crates/rustra/src/ffi_typed_buffer.rs:67,103` (rkyv V2 버퍼 경로 → `RustraError::internal`),
+  `crates/rustra/src/ffi_typed_buffer.rs:67,103` (Frame 버퍼 경로 → `RustraError::internal`),
   `crates/rustra/src/ffi_event_entries.rs:44,77` (이벤트 싱크 등록/해제 경로).
 - **위반 시 동작**: 호스트는 정상 반환된 에러 프레임(`internal: panic — …`)을 받는다.
   프로세스 상태는 보존된다 — 패닉 하나로 호스트가 죽지 않는다.
@@ -93,7 +93,7 @@ loud abort 로 **fail-closed** 수렴한다 — 조용한 타협은 없다. 실�
   `crates/rustra/src/ffi_buffer_entries.rs:4-6,122-125` (Rust 측 게이트 →
   `RustraError::payload_too_large`), `crates/rustra/src/error.rs:127-130` (코드·non-retryable),
   `crates/rustra/src/ffi_lifecycle_entries.rs:80-94` (한도 FFI 심볼),
-  `packages/types/src/rkyv-engine-contract.ts:39-54` (`payloadTooLargeError` TS 사전 게이트).
+  `packages/types/src/frame-engine-contract.ts:39-54` (`payloadTooLargeError` TS 사전 게이트).
 - **위반 시 동작**: 초과 페이로드는 `payload.too_large: payload NB exceeds max payload MB`
   에러 프레임으로 거부된다 — 핸들러 실행 없음.
 - **검증 위치**: `crates/rustra/tests/payload_robustness.rs`, `crates/rustra/src/error_tests.rs:15`
@@ -133,7 +133,7 @@ loud abort 로 **fail-closed** 수렴한다 — 조용한 타협은 없다. 실�
 
 - **불변식**: FFI 응답은 경로와 무관하게 정의된 봉투 중 하나로 직렬화된다 — JSON
   `{"ok":bool,"result":...,"error":string|null}`, postcard `FfiPostcardResponse`
-  (`result_json`/`error` 는 JSON 문자열 임베드), rkyv V2 는
+  (`result_json`/`error` 는 JSON 문자열 임베드), Frame 은
   `[ok][pad][len u16][postcard {code, message}]` 프레이밍(에러는 `ok=0`, payload 필드 없음).
   JSON fallback 은 Rust `Display` 문자열을 첫 `": "` 기준으로 `{code, message}` 재분할한다.
   직렬화조차 실패하면 하드코딩된 최소 에러 바이트로 수렴한다 — 응답 없음이 없다.
@@ -143,7 +143,7 @@ loud abort 로 **fail-closed** 수렴한다 — 조용한 타협은 없다. 실�
   `docs/wire-format.md:84-94`, 코드 체계는 `crates/rustra/src/error.rs:23` 표 +
   `packages/types/src/errors.ts:156`.
 - **위반 시 동작**: 디코드 불가 프레임은 호스트에서 `invoke.failed` 로 정규화된다
-  (`crates/rustra/src/hot_core_dylib.rs:159-175`, `packages/types/src/rkyv-engine-contract.ts:12-34`
+  (`crates/rustra/src/hot_core_dylib.rs:159-175`, `packages/types/src/frame-engine-contract.ts:12-34`
   `tier2Outcome` — codec throw 도 reject 로 수렴, 프라미스 미정찰 없음).
 - **검증 위치**: `crates/rustra/tests/trust_baseline_ffi.rs` (3코너 pinned hex),
   `docs/wire-format.md` (바이트 계약 문서), `packages/types/src/index.test.ts` (에러 코드
@@ -159,8 +159,8 @@ loud abort 로 **fail-closed** 수렴한다 — 조용한 타협은 없다. 실�
   (c) Android 핫 코어 감시는 `FLAG_DEBUGGABLE` 빌드에서만 활성화 — 릴리스 빌드에는 감시
   스레드 자체가 존재하지 않는다. (d) `scripts/docs-gate.mjs` 는 마커 규약 위반·드리프트를
   fail-closed 로 모아 보고하고, ko 미러 완전성도 게이트가 강제한다.
-- **근거 코드**: `packages/types/src/rkyv-engine-contract.ts:61-163`
-  (`validateRkyvEngineOptions` — mismatch/unenforceable), `packages/cli/src/dev.ts:233-330`
+- **근거 코드**: `packages/types/src/frame-engine-contract.ts:61-163`
+  (`validateFrameEngineOptions` — mismatch/unenforceable), `packages/cli/src/dev.ts:233-330`
   (parity 게이트 fail-closed 발행), Android 게이트:
   `examples/react-native-calculator/modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt:35`
   (iOS 는 `RUSTRA_HOT_CORE_DIR` env 게이트와 대칭), `scripts/docs-gate.mjs`.

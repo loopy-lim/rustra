@@ -81,7 +81,7 @@ By default, generation produces the following layout.
 generated/
   react-native.ts
   commands.ts
-  rkyv-registry.ts
+  frame-registry.ts
 modules/rustra-bridge/
   package.json
   react-native.config.js
@@ -186,7 +186,7 @@ rustra::TypedInvokeResult result =
 switch (result.status) {
   case rustra::TypedInvokeStatus::Ok:            // result.value — decoded output
     break;
-  case rustra::TypedInvokeStatus::NoStaticCodec: // fall back to invokeRkyvV2
+  case rustra::TypedInvokeStatus::NoStaticCodec: // fall back to invokeFrame
     break;
   case rustra::TypedInvokeStatus::CommandError:  // result.value: {code, message}
     break;                                       // (e.g. platform.unavailable)
@@ -206,7 +206,7 @@ Adjacent interop surfaces:
   `folly::dynamic` to `jsi::Value` and reuse the same path (int64 beyond 2^53
   loses precision — see the header contract).
 - **Binary channels** — `createChannelBytes(callback)` (JS: `createBytesChannel`)
-  delivers channel payloads as `ArrayBuffer` copies — rkyv V2 frames without
+  delivers channel payloads as `ArrayBuffer` copies — Frame frames without
   JSON serialization. Same handle/close contract as JSON channels; one handle
   works on exactly one path.
 - **Synchronous invoke** — `invokeTypedSync(name, args)` (from

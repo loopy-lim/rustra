@@ -38,8 +38,8 @@ request 47 B, response 53 B, encode 5.678 µs, decode 5.556 µs였다. 이 수�
 로드맵의 caller-buffer 잔여 3항목(Bun 어댑터 `_into`, async 응답 caller-buffer,
 complex-route core into-handler)을 완성한 뒤 같은 머신에서 before/after를
 측정했다. 방법: 동일한 integrated release dylib(`examples/calculator`)에 대해
-(a) malloc 경로 = base 어댑터 동작(`rustra_ffi_invoke_rkyv_v2` + 복사 후 free),
-(b) into 경로 = `rustra_ffi_invoke_rkyv_v2_into` + 재사용 512B caller 버퍼를
+(a) malloc 경로 = base 어댑터 동작(`rustra_ffi_invoke_frame` + 복사 후 free),
+(b) into 경로 = `rustra_ffi_invoke_frame_into` + 재사용 512B caller 버퍼를
 같은 프로세스에서 번갈아 측정했다(best-of-5 rounds). base 어댑터
 (98cdb689 `@rustra/bun`)와 integrated 어댑터의 전체 왕복도 같은 dylib으로
 교차 실행해 4쌍 중앙값을 냈다. 환경: macOS arm64 (Apple M-series, 10 core),
@@ -102,7 +102,7 @@ Buffered 폴백으로 같은 와이어를 만들었으므로 wire 호환성은 O
 ### async 응답 caller-buffer (F3)
 
 F3은 RN C++ async 응답의 `std::vector frame` 복사를 제거하고 코어
-`rustra_ffi_invoke_rkyv_v2_async_into`가 caller 버퍼에 직접 쓰게 한다.
+`rustra_ffi_invoke_frame_async_into`가 caller 버퍼에 직접 쓰게 한다.
 RN 시뮬레이터 벤치는 이 섹션에서 다루지 않는다(C++ 게이트가 CI에 없어 실측
 주체는 기기 스모크). 코어 수준에서 확인한 사실:
 
@@ -174,8 +174,8 @@ bun run bench:hosts -- --output /tmp/rustra-host-matrix.json
 | ------------------------------- | ------: | --------------- | ---------: | ---------: | ---------: | ---------: | ------: |
 | Node generated one-shot         |      10 | 200 × 3         |   2.758 ms |   2.760 ms |   3.119 ms |   3.295 ms |     363 |
 | Node persistent loop            |     100 | 2,000 × 3       |  16.863 µs |  16.666 µs |  26.917 µs |  44.084 µs |  59,301 |
-| Node N-API rkyv V2              |     500 | 10,000 × 3      |   1.261 µs |   1.167 µs |   2.125 µs |   4.292 µs | 793,185 |
-| Bun generated FFI rkyv V2       |     500 | 10,000 × 3      |   2.273 µs |   2.208 µs |   3.917 µs |   6.292 µs | 439,961 |
+| Node N-API Frame               |     500 | 10,000 × 3      |   1.261 µs |   1.167 µs |   2.125 µs |   4.292 µs | 793,185 |
+| Bun generated FFI Frame        |     500 | 10,000 × 3      |   2.273 µs |   2.208 µs |   3.917 µs |   6.292 µs | 439,961 |
 | Tauri generated WebView IPC     |     100 | 1,000 × 3       | 279.044 µs | 300.000 µs | 350.000 µs | 550.000 µs |   3,584 |
 | RN generated JSI, iOS Simulator |     500 | 10,000 × 1 확인 |          — |   2.750 µs |          — |          — |       — |
 
@@ -188,8 +188,8 @@ Node/Bun/Tauri와 실행 환경이 다르므로 직접 순위를 매기지 않�
 이 표의 설계 결론은 다음과 같다.
 
 - Node zero-config one-shot은 CLI·저빈도 배치용이다. 서버 hot path는 persistent
-  loop로 약 164배, N-API rkyv V2로 약 2,188배 평균 지연을 줄였다.
-- Bun의 기본 generated 경로 자체가 stable C ABI rkyv V2라 별도 고성능 설정이 없다.
+  loop로 약 164배, N-API Frame으로 약 2,188배 평균 지연을 줄였다.
+- Bun의 기본 generated 경로 자체가 stable C ABI Frame이라 별도 고성능 설정이 없다.
 - Tauri UI command는 WebView IPC가 지배한다. 수백 µs는 사용자 상호작용에는 충분하지만
   프레임별 대량 호출은 Rust 측 batch command 하나로 합쳐야 한다.
 - Expo development build와 bare RN은 같은 generated JSI/autolinking package를 쓴다.
@@ -213,7 +213,7 @@ Node/Bun/Tauri와 실행 환경이 다르므로 직접 순위를 매기지 않�
 `cargo run -p rustra-calculator-example --bin wire-bench --release`
 
 명령은 동일하나, legacy 프로토콜 제거(2026-09-03) 이후 벤치가 계산기 전용 C 심볼이
-아니라 `Package` 메서드(`invoke_json` / `invoke_rkyv_v2` / `invoke_rkyv_v2_into`)를
+아니라 `Package` 메서드(`invoke_json` / `invoke_frame` / `invoke_frame_into`)를
 직접 호출한다. 명령을 재실행하면 표가 갱신된다 — 아래 수치는 2026-08-22 측정값으로
 현재 측정 경로를 더 이상 묘사하지 않는다.
 
@@ -221,15 +221,15 @@ Node/Bun/Tauri와 실행 환경이 다르므로 직접 순위를 매기지 않�
 | -------------------------- | ---: | ---: | ---------: | ---------: | ------------------: |
 | JSON `invoke`              | 47 B | 34 B |    1.19 µs |    1.17 µs |       842,640 ops/s |
 | postcard `invoke_postcard` | 13 B |  4 B |     433 ns |     417 ns |     2,307,438 ops/s |
-| rkyv V2 `invoke_rkyv_v2`   |  4 B | 10 B | **134 ns** | **125 ns** | **7,442,853 ops/s** |
+| Frame `invoke_frame`       |  4 B | 10 B | **134 ns** | **125 ns** | **7,442,853 ops/s** |
 
-→ rkyv V2는 JSON보다 약 8.9배, postcard보다 약 3.2배 빠르며 요청 wire는
+→ Frame은 JSON보다 약 8.9배, postcard보다 약 3.2배 빠르며 요청 wire는
 JSON 대비 약 11.8배 작다.
 
 ```mermaid
 xychart-beta
     title "Wire 포맷별 평균 지연 (release, 2026-08-22)"
-    x-axis ["JSON", "postcard", "rkyv V2"]
+    x-axis ["JSON", "postcard", "Frame"]
     y-axis "평균 지연 (µs)" 0 --> 1.4
     bar [1.19, 0.43, 0.13]
 ```
@@ -240,7 +240,7 @@ xychart-beta
 
 | transport           |        평균 |           처리량 |
 | ------------------- | ----------: | ---------------: |
-| Node N-API rkyv V2  | **~0.6 µs** | ~1,600,000 ops/s |
+| Node N-API Frame    | **~0.6 µs** | ~1,600,000 ops/s |
 | Node N-API (String) |      1.5 µs |    654,817 ops/s |
 | Node N-API (Buffer) |      2.0 µs |   ~500,000 ops/s |
 | Node.js subprocess  |     3.40 ms |       ~294 ops/s |
@@ -248,7 +248,7 @@ xychart-beta
 → 동일 실행에서 N-API가 subprocess보다 약 2,270배 빠르다. `rustraInvokeBuffer`
 (Buffer 반환 변형)는 String 왕복의 UTF-16 이중 복사를 제거하지만, 이 크기
 (47 B 요청)에서는 오히려 Buffer 래핑 비용이 커져 2.0 µs로 측정됐다 — 대형
-응답에서 이점이 있다(변형이 없으면 String이 빠른 구간). `rustraInvokeRkyvV2`
+응답에서 이점이 있다(변형이 없으면 String이 빠른 구간). `rustraInvokeFrame`
 (2026-08-23 추가)는 postcard 프레임을 Buffer 직결로 왕복한다 — 조용한
 머신 실측 596ns(시스템 로드 평균 8+에서는 2.8µs까지 부풀므로 세션 조건을
 기재할 것). napi ABI의 진입+Buffer 고정비(~530ns)가 하한을 만든다.
@@ -259,11 +259,11 @@ xychart-beta
 
 | 프로필                    |        평균 |           처리량 |
 | ------------------------- | ----------: | ---------------: |
-| Bun FFI rkyv V2 (release) | **~0.5 µs** | ~1,890,000 ops/s |
+| Bun FFI Frame (release)    | **~0.5 µs** | ~1,890,000 ops/s |
 | Bun FFI JSON (release)    |      1.7 µs |   ~580,000 ops/s |
 | Bun subprocess            |     5.73 ms |       ~175 ops/s |
 
-> rkyv V2 직결 경로(2026-08-23 추가)는 코어 `rustra_ffi_invoke_rkyv_v2`를
+> Frame 직결 경로(2026-08-23 추가)는 코어 `rustra_ffi_invoke_frame`를
 > 버퍼 직결로 호출한다 — JSON/UTF-16 왕복 없이 postcard 프레임만 오간다.
 > 응답의 toArrayBuffer 뷰는 Rust 메모리를 참조하므로 free 전에 값 복사로
 > materialize 한다(2차 복사 필수).
@@ -307,10 +307,10 @@ xychart-beta
 | 최초 invoke (tier 해결 포함)    | ~1.8 µs (steady-state의 5.0–6.5배) |
 | steady-state 평균 (1000회)      | 341–347 ns                         |
 | `invoke_json` 호출당 힙 할당    | 9 allocs / 9 deallocs              |
-| `invoke_rkyv_v2` 호출당 힙 할당 | 4 allocs / 4 deallocs              |
+| `invoke_frame` 호출당 힙 할당  | 4 allocs / 4 deallocs              |
 
 할당 수는 나노초보다 안정적인 비교 지표다 — caller-buffer/Arc 같은 복사 제거
-최적화의 효과를 "할당 감소"로 검증한다(rkyv V2 경로가 JSON 대비 할당 수 절반).
+최적화의 효과를 "할당 감소"로 검증한다(Frame 경로가 JSON 대비 할당 수 절반).
 
 ## Rust 코어 성능 (`cargo run --release -p rustra-benchmark`)
 
@@ -342,7 +342,7 @@ package.invoke::<SimpleInput, SimpleOutput>("addNumbers", input)
 | ---- | ------------ |
 | 평균 | 30.1–30.9 µs |
 
-### Ser/de 오버헤드 (데이터 크기별, rkyv V2)
+### Ser/de 오버헤드 (데이터 크기별, Frame)
 
 | 페이로드   | 평균 (invoke_json) |
 | ---------- | -----------------: |
@@ -422,7 +422,7 @@ Bun FFI (release, 2026-08-23):
   총 실측                 ~1.7 µs
 ```
 
-분해는 같은 JSON invoke 경로의 `wire-bench` 값을 빼서 계산한다. rkyv V2
+분해는 같은 JSON invoke 경로의 `wire-bench` 값을 빼서 계산한다. Frame
 ~0.13µs를 JSON transport의 core 비용으로 대입하지 않는다.
 
 debug 프로필에서는 이 브릿지 비용이 크게 부풀어난다 — napi ~24.3 µs, Bun FFI
@@ -562,7 +562,7 @@ Expo async FFI가 아니라 direct JSI여야 한다. FFI는 호환/제어 경로
 0.4 최종 fingerprint의 단일 확인 실행도 FFI/Nitro가 add 11.1423x, string
 10.8161x, bytes64 2.1113x, pair 10.9772x로 같은 결론을 유지했다.
 
-### JSI + rkyv V2 postcard (2026-08-18 기록)
+### JSI + Frame postcard (2026-08-18 기록)
 
 JSI 동기 호출 + postcard 바이너리 직렬화로 async bridge 오버헤드를 완전히 제거:
 
@@ -645,7 +645,7 @@ RPC 계약"으로 설계 목표가 다르다. 같은 문제만 겹친다(RN에�
 
 #### 타입 시스템
 
-| 타입                   | Nitro 0.35.10                                  | rustra (postcard/rkyv V2 fast path)                                                                                                                       | rustra 폴백(Tier 3 JSON) |
+| 타입                   | Nitro 0.35.10                                  | rustra (postcard/Frame fast path)                                                                                                                         | rustra 폴백(Tier 3 JSON) |
 | ---------------------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
 | 정수/실수 프리미티브   | ✅ int/float/double + **bigint(Int64/UInt64)** | ✅ f64/f32/zigzag 정수 + **uvar(u8–u64) plain varint** + `number                                                                                          | bigint` wide-int 복원    | ✅ (serde JSON) |
 | string                 | ✅                                             | ✅                                                                                                                                                        | ✅                       |
@@ -672,7 +672,7 @@ RPC 계약"으로 설계 목표가 다르다. 같은 문제만 겹친다(RN에�
 | 코드젠                       | nitrogen (인터페이스→네이티브 바인딩) | 스키마→**양방향**(커맨드+이벤트+TS 클라이언트)                 |
 | 계약 게이트                  | ❌                                    | ✅ `rustra diff` + contract hash + wire round-trip 게이트      |
 | 런타임 명령 등록             | ❌                                    | ⚠️ dev 전용(register→frozen)                                   |
-| 취소(AbortSignal)            | 직접 구현                             | ✅ RN rkyvV2는 네이티브 전파(체크포인트)까지                   |
+| 취소(AbortSignal)            | 직접 구현                             | ✅ RN Frame은 네이티브 전파(체크포인트)까지                      |
 | 타임아웃                     | 직접 구현                             | ✅ timeoutMs(모든 어댑터)                                      |
 | 배치                         | 직접 구현                             | ✅ invokeBatch 단일 JSI 횡단(fail-fast)                        |
 | 이벤트 (Rust→JS 푸시)        | 직접 구현(콜백로 가능)                | ✅ subscribeEvent/drainEvents(RN), register_with_events(Tauri) |
@@ -706,7 +706,7 @@ RPC 계약"으로 설계 목표가 다르다. 같은 문제만 겹친다(RN에�
    C++ 전개는 여전히 JS complex codec 경로다.
 2. **schema-driven complex binary** (2026-08-27) — recursive struct,
    struct-valued map, data enum, nested Option/Set을 TS/Rust golden wire로
-   처리한다. RN에서는 현재 JS codec이 Rust `invokeRkyvV2`까지 전달하며, C++
+   처리한다. RN에서는 현재 JS codec이 Rust `invokeFrame`까지 전달하며, C++
    direct path는 원시 요소 Set·int64/uint64 까지 확장됐고(트랙 B, 2026-08-29),
    2026-08-28 caller-buffer 잔여 트랙에서 코어 into-handler와 Bun/async 응답
    caller-buffer가 완료돼 호스트 복사는 응답 경계 1회로 수렴했다. 객체/배열
@@ -731,7 +731,7 @@ RPC 계약"으로 설계 목표가 다르다. 같은 문제만 겹친다(RN에�
 
 ## 동적 명령 (런타임 register, Tier 3) 성능
 
-동적 명령(런타임 `register` 로 등록, rkyv V2 **Tier 3 JSON-in-binary** fallback)의 성능.
+동적 명령(런타임 `register` 로 등록, Frame **Tier 3 JSON-in-binary** fallback)의 성능.
 criterion 벤치마크(`crates/rustra/benches/`)로 측정.
 
 > **측정 환경 주의**: 동적 명령은 설계상 **dev-only**(release 빌드는 frozen → `register` 차단).
@@ -776,8 +776,8 @@ postcard 488 ns — 정적 478 ns 대비 1.02x** (목표 2x 이내 달성, 격�
 | ----------------------------------- | -------- | ----------------------------- |
 | `register()` 1회 (스키마 생성 포함) | 30.51 µs | 핫패스 아님(등록 시 1회)      |
 | `live_schema()` 조회 (3 명령)       | 48.92 µs | 읽기 전용, 디버그/릴리스 모두 |
-| `invoke_rkyv_v2` (mutable 패키지)   | 3.95 µs  | RwLock read 경로              |
-| `invoke_rkyv_v2` (frozen 패키지)    | 3.94 µs  | mutable 과 **차이 0.2% 미만** |
+| `invoke_frame` (mutable 패키지)     | 3.95 µs  | RwLock read 경로              |
+| `invoke_frame` (frozen 패키지)      | 3.94 µs  | mutable 과 **차이 0.2% 미만** |
 
 ### 동적 명령 payload scaling (debug, 2026-08-30)
 

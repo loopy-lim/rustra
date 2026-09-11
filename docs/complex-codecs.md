@@ -7,7 +7,7 @@ Rustra selects a wire route per command.
 | Route          | Targets                                                                                      | RN path                                                                              |
 | -------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | postcard       | primitives, Vec/Set/tuple, primitive maps, string enums, and the rest of the verified subset | C++ JSI or JS codec                                                                  |
-| complex binary | recursive structs, struct-valued maps, data enums, combinational Options                     | native-safe schemas go through C++ JSI; the rest go JS codec → `invokeRkyvV2` → Rust |
+| complex binary | recursive structs, struct-valued maps, data enums, combinational Options                     | native-safe schemas go through C++ JSI; the rest go JS codec → `invokeFrame` → Rust |
 | Tier 3 JSON    | schemas neither binary codec supports, or runtime-registered commands                        | JSON-in-binary                                                                       |
 
 A complex request is `[command_id: u16 LE][body]`; a success response is the

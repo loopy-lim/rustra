@@ -31,7 +31,7 @@ diagnostic, or a gate rejection.
   `catch_unwind(AssertUnwindSafe)` → `FfiResponse { ok:false }`),
   `crates/rustra/src/ffi_buffer_entries.rs:34-40` (`panic_frame_message` — single format),
   `crates/rustra/src/ffi_buffer_entries.rs:12-18` (same guard on the caller-buffer path),
-  `crates/rustra/src/ffi_typed_buffer.rs:67,103` (rkyv V2 buffer path →
+  `crates/rustra/src/ffi_typed_buffer.rs:67,103` (Frame buffer path →
   `RustraError::internal`), `crates/rustra/src/ffi_event_entries.rs:44,77`
   (event sink register/unregister paths).
 - **On violation**: the host receives a normally returned error frame
@@ -101,7 +101,7 @@ diagnostic, or a gate rejection.
   `crates/rustra/src/ffi_buffer_entries.rs:4-6,122-125` (Rust-side gates →
   `RustraError::payload_too_large`), `crates/rustra/src/error.rs:127-130` (code ·
   non-retryable), `crates/rustra/src/ffi_lifecycle_entries.rs:80-94` (limit FFI symbols),
-  `packages/types/src/rkyv-engine-contract.ts:39-54` (`payloadTooLargeError` TS pre-gate).
+  `packages/types/src/frame-engine-contract.ts:39-54` (`payloadTooLargeError` TS pre-gate).
 - **On violation**: oversized payloads get
   `payload.too_large: payload NB exceeds max payload MB` — the handler never runs.
 - **Verified by**: `crates/rustra/tests/payload_robustness.rs`, `crates/rustra/src/error_tests.rs:15`
@@ -147,7 +147,7 @@ diagnostic, or a gate rejection.
 
 - **Invariant**: FFI responses serialize into one of the defined envelopes regardless of
   path — JSON `{"ok":bool,"result":...,"error":string|null}`, postcard `FfiPostcardResponse`
-  (`result_json`/`error` embed JSON strings), and rkyv V2 uses the
+  (`result_json`/`error` embed JSON strings), and Frame uses the
   `[ok][pad][len u16][postcard {code, message}]` framing (errors are `ok=0`, no payload
   field). The JSON fallback re-splits a Rust `Display` string into `{code, message}` at the
   first `": "`. Even serialization itself failing converges into hardcoded minimal error
@@ -159,7 +159,7 @@ diagnostic, or a gate rejection.
   `crates/rustra/src/error.rs:23` (table) + `packages/types/src/errors.ts:156`.
 - **On violation**: an undecodable frame normalizes to `invoke.failed` on the host side
   (`crates/rustra/src/hot_core_dylib.rs:159-175`,
-  `packages/types/src/rkyv-engine-contract.ts:12-34` `tier2Outcome` — even a codec throw
+  `packages/types/src/frame-engine-contract.ts:12-34` `tier2Outcome` — even a codec throw
   converges into a rejection; a promise never stays unsettled).
 - **Verified by**: `crates/rustra/tests/trust_baseline_ffi.rs` (3-corner pinned hex),
   `docs/wire-format.md` (the byte-level contract document), `packages/types/src/index.test.ts`
@@ -177,8 +177,8 @@ diagnostic, or a gate rejection.
   `FLAG_DEBUGGABLE` builds — release builds never spawn a watch thread. (d)
   `scripts/docs-gate.mjs` reports marker-contract violations and drift fail-closed, and
   also enforces ko mirror completeness.
-- **Evidence**: `packages/types/src/rkyv-engine-contract.ts:61-163`
-  (`validateRkyvEngineOptions` — mismatch/unenforceable), `packages/cli/src/dev.ts:233-330`
+- **Evidence**: `packages/types/src/frame-engine-contract.ts:61-163`
+  (`validateFrameEngineOptions` — mismatch/unenforceable), `packages/cli/src/dev.ts:233-330`
   (parity-gate fail-closed publish), Android gate:
   `examples/react-native-calculator/modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt:35`
   (iOS is symmetric via the `RUSTRA_HOT_CORE_DIR` env gate), `scripts/docs-gate.mjs`.

@@ -7,7 +7,7 @@ Rustra는 명령마다 wire route를 선택한다.
 | Route          | 대상                                                                  | RN 경로                                                                 |
 | -------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | postcard       | primitive, Vec/Set/tuple, primitive map, string enum 등 검증된 subset | C++ JSI 또는 JS codec                                                   |
-| complex binary | recursive struct, struct-valued map, data enum, 조합형 Option         | native-safe schema는 C++ JSI, 나머지는 JS codec → `invokeRkyvV2` → Rust |
+| complex binary | recursive struct, struct-valued map, data enum, 조합형 Option         | native-safe schema는 C++ JSI, 나머지는 JS codec → `invokeFrame` → Rust |
 | Tier 3 JSON    | 두 binary codec이 모두 지원하지 않는 schema 또는 runtime 등록 명령    | JSON-in-binary                                                          |
 
 Complex request는 `[command_id: u16 LE][body]`, success response는 기존 8-byte

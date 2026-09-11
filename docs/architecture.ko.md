@@ -35,7 +35,7 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
  │  generated.write_schema_to_dir("./generated")                       │
  │                                                                     │
  │  rustra codegen  →  types.ts / commands.ts / contract.ts 렌더링      │
- │                   (+ rkyv V2 코덱: 자체 프레임, 페이로드는 postcard)│
+ │                     (+ Frame 코덱: 자체 프레임, 페이로드는 postcard)│
  └─────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -86,12 +86,12 @@ export type EngineClient = {
 | `packages/node`         | `createNodeBootstrap(options)`           | lazy `EngineClient`                 | `packages/node/src/index.ts`         |
 | `packages/bun`          | `createBunBootstrap(options)`            | lazy `EngineClient`                 | `packages/bun/src/index.ts`          |
 | `packages/tauri`        | `createTauriBootstrap()`                 | lazy `EngineClient`                 | `packages/tauri/src/index.ts`        |
-| `packages/react-native` | generated bootstrap + `createFastEngine` | `RkyvV2Engine`                      | `packages/react-native/src/index.ts` |
+| `packages/react-native` | generated bootstrap + `createFastEngine` | `FrameEngine`                       | `packages/react-native/src/index.ts` |
 | `packages/react-native` | `createReactNativeEngine(native)`        | JSON `EngineClient` + `invokeBatch` | `packages/react-native/src/index.ts` |
 
 모든 반환 타입은 구조적으로 `EngineClient`의 `invoke<T>`를 제공하며, 어댑터 팩토리는
 Promise 기반 `invokeBatch`도 보장한다. 진행 중 `AbortSignal`은 JSON/동기 경로에서
-얕은 취소이고, RN async rkyv 경로에서만 네이티브 취소 핸들이 있을 때 Rust까지 전파된다.
+얕은 취소이고, RN async Frame 경로에서만 네이티브 취소 핸들이 있을 때 Rust까지 전파된다.
 
 ### command helper 사용 예시
 
@@ -313,7 +313,7 @@ pub fn invoke_json(&self, name: &str, params: Value) -> Result<Value>
  │  - Node:      transport.invoke(command, args)            │
  │  - Bun:       transport.invoke(command, args)            │
  │  - Tauri:     invoke('rustra_dispatch', {command, args}) │
- │  - RN:        generated bootstrap → native.invokeRkyvV2(buf) │
+ │  - RN:        generated bootstrap → native.invokeFrame(buf)  │
  │          │                                               │
  │          ▼                                               │
  │  transport (앱 레벨에서 생성/주입)                        │
@@ -419,17 +419,17 @@ struct RegistryState {
 
 ### 동시성
 
-- 읽기(`invoke_json`, `invoke_rkyv_v2`, `generate_typescript`) = 읽기 잠금, mutation = 쓰기 잠금.
+- 읽기(`invoke_json`, `invoke_frame`, `generate_typescript`) = 읽기 잠금, mutation = 쓰기 잠금.
 - 핸들러 실행 중에는 잠금을 hold 하지 않는다(`Command`를 clone-out 후 락 해제). 핸들러가 다시 `register`/`unregister`를 호출하는 **재진입 교착**을 방지한다.
 - prod 읽기 fast-path(무경쟁 `RwLock` read ≈ 10ns)는 벤치마크(3.8µs) 대비 무시 가능한 수준이다.
 
-### 동적 명령의 호출 경로 (단일 rkyvV2 엔진 + live schema)
+### 동적 명령의 호출 경로 (단일 Frame 엔진 + live schema)
 
-- **정적 postcard 명령**(C++/TS codec registry에 있음) → rkyv V2 postcard fast-path.
+- **정적 postcard 명령**(C++/TS codec registry에 있음) → Frame postcard fast-path.
 - **정적 complex 명령**(TS registry와 native-safe C++ registry에 있음) →
   schema-driven complex binary `[command_id][body]`를 C++ JSI에서 마샬링한다.
   Set 또는 BigInt 범위가 필요한 명령은 C++ 정적 광고를 하지 않고 JS complex
-  codec으로 같은 `invokeRkyvV2` 경계를 사용한다.
+  codec으로 같은 `invokeFrame` 경계를 사용한다.
 - **런타임 등록 명령**(registry에 없음) → TS 엔진이 live schema 의 스키마로
   binary 코덱을 **런타임 판정**한다 (T2-3): postcard 지원 스키마는 스키마
   인터프리터 코덱(`createSchemaPostcardCodec`)으로 `[id][postcard]`, oneOf
@@ -437,7 +437,7 @@ struct RegistryState {
   complex 둘 다 거부하는 스키마(anyOf 3항 untagged 등)만 **Tier 3(JSON-in-
   binary)** 로 `[id][JSON]` 호출. Rust 쪽 `register`도 동일 3-way 판정으로
   핸들러를 고르므로 양쪽 와이어가 정합한다.
-- **단일 `createRkyvV2Engine`** 이 postcard/complex/Tier 3 명령을 함께 처리한다.
+- **단일 `createFrameEngine`** 이 postcard/complex/Tier 3 명령을 함께 처리한다.
   코덱 판정 결과는 live schema entry 객체별로 캐시되고, generation 게이트가
   재조회하면(치환 후 첫 호출) 스키마가 바뀐 명령을 다시 판정한다.
 
@@ -449,12 +449,12 @@ struct RegistryState {
 
 동적 import(Tier 3) + 런타임 레지스트리 경로는 전체 스택에서 별도 검증/측정 인프라로 커버한다.
 
-- **Rust 타입별 와이어 테스트** — `crates/rustra/tests/rkyv_v2_wire.rs`: 정적(postcard) Tier 1/2 + 동적(Tier 3) 경로를 i64/f64/bool/String/Vec/HashMap/tuple/enum-with-data/Option/중첩 타입으로 round-trip 검증 + edge(빈 컬렉션·유니코드·10K payload) + error(잘린 payload·알 수 없는 id·malformed JSON·frozen·unregister 후 호출).
-- **속성 기반 fuzz** — `crates/rustra/tests/rkyv_v2_fuzz.rs` (proptest): 무작위 페이로드 round-trip 보존.
-- **동시성 스모크** — `crates/rustra/tests/rkyv_v2_concurrency.rs`: 다중 스레드 register/invoke/live_schema 혼합 시 패닉/교착 없음.
+- **Rust 타입별 와이어 테스트** — `crates/rustra/tests/frame_wire.rs`: 정적(postcard) Tier 1/2 + 동적(Tier 3) 경로를 i64/f64/bool/String/Vec/HashMap/tuple/enum-with-data/Option/중첩 타입으로 round-trip 검증 + edge(빈 컬렉션·유니코드·10K payload) + error(잘린 payload·알 수 없는 id·malformed JSON·frozen·unregister 후 호출).
+- **속성 기반 fuzz** — `crates/rustra/tests/frame_fuzz.rs` (proptest): 무작위 페이로드 round-trip 보존.
+- **동시성 스모크** — `crates/rustra/tests/frame_concurrency.rs`: 다중 스레드 register/invoke/live_schema 혼합 시 패닉/교착 없음.
 - **성능 벤치마크** — `crates/rustra/benches/` (criterion): `tier_compare`(정적/동적 postcard vs Tier 3 JSON — 동일 연산 통제), `dynamic_registry`(register/live_schema/frozen 비용), `type_scaling`(동적 postcard payload 확장성). 동적 명령은 dev-only이므로 `--profile dev`로 측정. 수치는 `docs/benchmarks.md` "동적 명령" 섹션.
-- **TS 단위 테스트** — `packages/types/src/index.test.ts`: `createRkyvV2Engine` Tier 3 fallback + `getLiveSchema` (`bun run test:types`).
-- **RN E2E** — `examples/react-native-calculator/DynamicRegistryApp.tsx` 가 4종 타입(Vec/String/Map/Nested) 동적 명령을 단일 rkyvV2 엔진으로 호출 + live schema commandId 표시. 실행 절차는 `docs/plans/2026-07-05-rn-verification-checklist.md`.
+- **TS 단위 테스트** — `packages/types/src/index.test.ts`: `createFrameEngine` Tier 3 fallback + `getLiveSchema` (`bun run test:types`).
+- **RN E2E** — `examples/react-native-calculator/DynamicRegistryApp.tsx` 가 4종 타입(Vec/String/Map/Nested) 동적 명령을 단일 Frame 엔진으로 호출 + live schema commandId 표시. 실행 절차는 `docs/plans/2026-07-05-rn-verification-checklist.md`.
 
 ---
 

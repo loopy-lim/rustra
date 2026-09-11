@@ -29,8 +29,8 @@ Package::generate_typescript()
        ├─ write_schema_to_dir() → schema.json                    (Rust probe stops here)
        │
        └─ rustra codegen (TS CLI) reads schema.json and renders:
-            types.ts, commands.ts, contract.ts, rkyv-codecs.ts,
-            rkyv-registry.ts, events.ts/errors.ts/devices.ts (only when
+            types.ts, commands.ts, contract.ts, frame-codecs.ts,
+            frame-registry.ts, events.ts/errors.ts/devices.ts (only when
             declared), positional-facade.ts, host entries, C++ codecs
             + .rustra-generated.json (freshness sidecar)
 ```
@@ -319,7 +319,7 @@ rustra emits. Arbitrary schemas that a Rust type contract never generates,
 such as JSON Schema conditional keywords (`if`/`then`/`else`) or
 `patternProperties`, fall back safely to `unknown`.
 
-**postcard codec (rkyv-codecs.ts/C++) support policy**: commands with
+**postcard codec (frame-codecs.ts/C++) support policy**: commands with
 unsupported fields do not get a partial postcard codec. Instead, when the
 complex codec supports the full schema, the command is registered in the TS
 registry as a complex route. C++ includes only the complex subset that the

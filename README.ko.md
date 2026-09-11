@@ -11,7 +11,7 @@ Rust에서 명령을 한 번 정의하면, Node / Bun / Tauri / React Native 어
 
 > **English** — Define commands once in Rust, get type-safe TypeScript clients
 > for Node, Bun, Tauri, and React Native. Single Rust core, four host surfaces,
-> compact caller-buffer optimized binary wire (rkyv V2). Quick start: `cargo add rustra` +
+> compact caller-buffer optimized binary wire (Frame). Quick start: `cargo add rustra` +
 > `bunx --bun @rustra/cli init my-project`. Full docs (Korean) below.
 
 ## 작동 방식
@@ -32,7 +32,7 @@ Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플�
 | ----------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------- | ------------- | -------------- | ------------ |
 | 단일 Rust 코어 × 멀티 호스트  | ✅ Node/Bun/Tauri/RN                                                    | Node (+ Electron)                                 | RN 중심       | Tauri 전용     | Tauri 전용   |
 | 타입 안전 코드젠 (양방향)     | ✅ 커맨드+이벤트                                                        | Rust 구조체에서 TS 정의 생성 (어트리뷰트 매크로)² | ✅            | ❌ (수동)      | ✅           |
-| compact 바이너리 와이어       | ✅ rkyv V2 ([JSON 대비 요청 와이어 11.8× 작음](docs/wire-format.ko.md)) | JSON/Buffer                                       | JSI 객체      | JSON IPC       | JSON IPC     |
+| compact 바이너리 와이어       | ✅ Frame ([JSON 대비 요청 와이어 11.8× 작음](docs/wire-format.ko.md)) | JSON/Buffer                                       | JSI 객체      | JSON IPC       | JSON IPC     |
 | 계약 게이트 (breaking change) | ✅ `rustra diff` + contract hash                                        | ❌                                                | ❌            | ❌             | 부분         |
 | 취소/타임아웃/배치 시맨틱     | ✅ 매트릭스로 문서화                                                    | 직접 구현                                         | 직접 구현     | ❌             | ❌           |
 
@@ -48,7 +48,7 @@ rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)�
 ## 로드맵
 
 - [x] 4호스트 어댑터 (Node/Bun/Tauri/RN iOS+Android) — 0.1
-- [x] rkyv V2 바이너리 fast-path + 취소/타임아웃/배치 — 0.1~0.2
+- [x] Frame 바이너리 fast-path + 취소/타임아웃/배치 — 0.1~0.2
 - [x] 이벤트 계약 코드젠 (`PackageBuilder::event`) — 0.2.x
 - [x] persistent 루프 런타임 + Node loop transport — 0.2.x
 - [x] 타입 패리티 1단계 — fast path 타입 확장 (2026-08-22): u8–u64 plain
@@ -186,11 +186,7 @@ fn main() -> Result<()> {
 }
 ```
 
-바이너리 fast-path(rkyv V2, RN)를 쓰려면 CLI codegen도 실행한다. 참고:
-"rkyv V2"는 Rustra 자체 바이너리 프레임 프로토콜 이름이지 업스트림 `rkyv`
-crate가 아니다 — 페이로드는 postcard로 인코딩된다
-([와이어 포맷](docs/wire-format.ko.md)과
-[용어집](docs/glossary.ko.md#rkyv-vs-rkyv-v2) 참고). 먼저 프로젝트
+바이너리 fast-path(Frame, RN)를 쓰려면 CLI codegen도 실행한다. 먼저 프로젝트
 루트에 `rustra.json`을 만든다 — 이 최소형은 CLI에 발행된 schema, 출력 디렉터리,
 사용할 호스트를 알려준다:
 
@@ -203,7 +199,7 @@ crate가 아니다 — 페이로드는 postcard로 인코딩된다
 ```
 
 `rustra.json`에 Rust generator를 지정하면 schema 생성부터
-`rkyv-codecs.ts`/`rkyv-registry.ts`까지 한 번에 처리한다:
+`frame-codecs.ts`/`frame-registry.ts`까지 한 번에 처리한다:
 
 ```json
 {
@@ -317,7 +313,7 @@ try {
 
 기본 생성 경로는 설치가 단순한 one-shot 프로세스라 저빈도 CLI와 배치에 적합하다.
 요청이 계속 들어오는 서버에서는 `createNodeLoopTransport`를, 마이크로초 단위 호출이
-필요하면 N-API rkyv V2를 선택한다. 실제 코드는
+필요하면 N-API Frame fast-path를 선택한다. 실제 코드는
 [`node-app.ts`](examples/calculator/apps/node-app.ts), 성능별 선택은
 [`node-performance.ts`](examples/calculator/apps/node-performance.ts)에 있다.
 
@@ -338,7 +334,7 @@ process.on('SIGTERM', () => {
 });
 ```
 
-이 경로는 생성된 stable C ABI와 rkyv V2 codec을 바로 사용한다. 별도 `dlopen`, pointer
+이 경로는 생성된 stable C ABI와 Frame codec을 바로 사용한다. 별도 `dlopen`, pointer
 해제, contract 검증 코드는 앱에 필요 없다. 실행 가능한 최소 예제는
 [`bun-ffi-app.ts`](examples/calculator/apps/bun-ffi-app.ts)다.
 
@@ -398,7 +394,7 @@ crates/
   rustra-naming/   Rust·proc-macro 코드젠 공용 식별자 네이밍 규칙
 
 packages/
-  types/           핵심 타입 (EngineClient, 에러, rkyv V2 코덱, invokeLoose)
+  types/           핵심 타입 (EngineClient, 에러, Frame 코덱, invokeLoose)
   cli/             rustra CLI (codegen, generate, dev, doctor, init, diff)
   node/            Node adapter
   bun/             Bun adapter
@@ -524,7 +520,7 @@ Rust FFI: `rustra_ffi_invoke_cancel(id)` / `rustra_ffi_cancellation_status(id)` 
 JS 번들만 갱신되는 배포(구 JS + 신 네이티브)에서 스키마 드리프트를 흡수한다:
 
 - `PackageBuilder::alias_command_id(name, legacy_id)` — 구 JS 코드젠이 구운
-  command_id를 신 네이티브가 alias로 수용한다 (rkyv V2 와이어에는 이름이 없다).
+  command_id를 신 네이티브가 alias로 수용한다 (Frame 와이어에는 이름이 없다).
 - `schema_version(n)` — schema.json의 버전. 코드젠은 `SCHEMA_VERSION`으로 노출.
 - 엔진 옵션 `onContractMismatch` — 계약 해시 불일치 시 throw 대신 degraded 모드로
   계속(opt-in). `schemaVersion`/`onSchemaStale` — JS > native 조합(OTA 롤백 등)의
@@ -613,10 +609,10 @@ Node는 Cargo binary, Bun은 stable C ABI cdylib, React Native는 autolinked JSI
 
 #### React Native
 
-React Native는 rkyv V2 바이너리 fast-path를 기본으로 사용한다. JSI 네이티브 모듈이
-`invokeRkyvV2`를 노출해야 한다. 입력과 출력이 각각 하나의 필수 `Vec<u8>` 필드인
+React Native는 Frame 바이너리 fast-path를 기본으로 사용한다. JSI 네이티브 모듈이
+`invokeFrame`을 노출해야 한다. 입력과 출력이 각각 하나의 필수 `Vec<u8>` 필드인
 명령은 명시적 Rust 등록 시 `Uint8Array`/`ArrayBuffer` 전용 네이티브 경로도 사용할
-수 있다. complex schema 명령은 JS codec registry를 통해 같은 `invokeRkyvV2`로
+수 있다. complex schema 명령은 JS codec registry를 통해 같은 `invokeFrame`으로
 전달되며, C++ 직접 마샬링은 별도 성능 확장이다.
 
 ```ts
@@ -653,13 +649,10 @@ warm-up 뒤 3회 반복했다.
 | ------------------------------- | --------: | --------: | ------------: | ---------------- |
 | Node 생성 one-shot              |   2.76 ms |   2.76 ms |     363 ops/s | CLI, 저빈도 배치 |
 | Node persistent loop            |  16.86 µs |  16.67 µs |  59,301 ops/s | 일반 서버        |
-| Node N-API rkyv V2 escape hatch |   1.26 µs |   1.17 µs | 793,185 ops/s | 고빈도 hot path  |
-| Bun 생성 FFI rkyv V2            |   2.27 µs |   2.21 µs | 439,961 ops/s | 서비스, CLI      |
+| Node N-API Frame escape hatch   |   1.26 µs |   1.17 µs | 793,185 ops/s | 고빈도 hot path  |
+| Bun 생성 FFI Frame              |   2.27 µs |   2.21 µs | 439,961 ops/s | 서비스, CLI      |
 | Tauri 생성 WebView IPC          | 279.04 µs | 300.00 µs |   3,584 ops/s | 데스크톱 UI 명령 |
 | RN 생성 JSI, iOS Simulator      |         — |   2.71 µs |             — | 모바일 hot path  |
-
-rkyv V2 행은 Rustra 자체 바이너리 프레임 프로토콜(postcard 페이로드 코덱)이며
-업스트림 rkyv crate가 아니다 — [와이어 포맷](docs/wire-format.ko.md) 참고.
 
 평균과 처리량은 OS 스케줄링 꼬리값을 줄인 양끝 5% trimmed mean이다. Tauri는
 WKWebView 타이머 정밀도 때문에 20호출 배치의 호출당 값을 사용했다. RN 행은
