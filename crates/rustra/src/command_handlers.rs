@@ -1,4 +1,4 @@
-fn build_rkyv_v2_handler<I, O, F>(
+fn build_frame_handler<I, O, F>(
     input_schema: &Value,
     output_schema: &Value,
     definitions: &Value,
@@ -14,13 +14,13 @@ where
     // Generate fast postcard-based binary handler that bypasses JSON Value.
     // 어느 바이너리 라우트도 지원하지 않으면(Tier 3) postcard fast-path 를 끄고
     // JSON fallback 으로 보낸다.
-    let rkyv_v2_handler: Option<BinHandler> = if !js_codec_supported && !complex_codec_supported {
+    let frame_handler: Option<BinHandler> = if !js_codec_supported && !complex_codec_supported {
         None
     } else if js_codec_supported {
         let handler_bin = handler.clone();
         Some(Arc::new(move |payload: &[u8]| {
             if payload.len() < 2 {
-                return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+                return Err(RustraError::invalid_args("frame: payload too short"));
             }
             let input: I = postcard::from_bytes(&payload[2..])
                 .map_err(|e| RustraError::invalid_args(format!("postcard decode: {e}")))?;
@@ -48,7 +48,7 @@ where
         let handler_complex = handler.clone();
         Some(Arc::new(move |payload: &[u8]| {
             if payload.len() < 2 {
-                return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+                return Err(RustraError::invalid_args("frame: payload too short"));
             }
             let limits = ComplexCodecLimits {
                 max_payload_bytes: crate::limits::max_payload_bytes(),
@@ -68,11 +68,11 @@ where
                     .map_err(|e| RustraError::internal(format!("complex encode: {e}")))?;
                 output_codec.encode(&output_value, limits)?
             };
-            rkyv_v2_frame_from_body(body, limits.max_payload_bytes)
+            frame_frame_from_body(body, limits.max_payload_bytes)
         }))
     };
 
-    rkyv_v2_handler
+    frame_handler
 }
 
 fn complex_decode_input<I, O, F>(
@@ -98,7 +98,7 @@ where
     }
 }
 
-fn rkyv_v2_frame_from_body(body: Vec<u8>, max_payload_bytes: usize) -> crate::Result<Vec<u8>> {
+fn frame_frame_from_body(body: Vec<u8>, max_payload_bytes: usize) -> crate::Result<Vec<u8>> {
     let response_len = 8usize.saturating_add(body.len());
     if response_len > max_payload_bytes {
         return Err(RustraError::payload_too_large(

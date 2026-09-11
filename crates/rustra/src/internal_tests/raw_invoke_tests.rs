@@ -70,9 +70,9 @@ fn raw_invoke_adds_scalars_without_postcard() {
 #[test]
 fn raw_invoke_f64_bit_roundtrip() {
     let pkg = Package::builder("test.rawf64").command_fn(dbl).build();
-    let bits = crate::rkyv_codec::u64_from_f64(3.5f64);
+    let bits = crate::frame_codec::u64_from_f64(3.5f64);
     let result = pkg.invoke_raw(1, &[bits]).expect("raw invoke f64");
-    assert_eq!(crate::rkyv_codec::f64_from_u64(result), 7.0);
+    assert_eq!(crate::frame_codec::f64_from_u64(result), 7.0);
 }
 
 #[test]

@@ -49,7 +49,7 @@ fn panic_frame_message(payload: &(dyn std::any::Any + Send)) -> String {
 /// 덮어써진다(잘못된 응답 재사용 없음).
 ///
 /// 보관된 probe 결과를 꺼낸다(소비). 해시가 아니라 요청 바이트 전체를 비교해
-/// 충돌로 다른 명령의 응답이 전달될 가능성을 없앤다. JSON/rkyv V2 슬롯도
+/// 충돌로 다른 명령의 응답이 전달될 가능성을 없앤다. JSON/Frame 슬롯도
 /// 분리해 한 API의 probe가 다른 API의 캐시를 덮어쓰지 않는다.
 struct ProbeCacheEntry {
     request: Vec<u8>,
@@ -87,17 +87,17 @@ fn json_probe_cache_store(payload: &[u8], response: Vec<u8>) {
     probe_cache_store(&JSON_PROBE_CACHE, payload, response);
 }
 
-fn rkyv_probe_cache_take(payload: &[u8]) -> Option<Vec<u8>> {
-    probe_cache_take(&RKYV_V2_PROBE_CACHE, payload)
+fn frame_probe_cache_take(payload: &[u8]) -> Option<Vec<u8>> {
+    probe_cache_take(&FRAME_PROBE_CACHE, payload)
 }
 
-fn rkyv_probe_cache_store(payload: &[u8], response: Vec<u8>) {
-    probe_cache_store(&RKYV_V2_PROBE_CACHE, payload, response);
+fn frame_probe_cache_store(payload: &[u8], response: Vec<u8>) {
+    probe_cache_store(&FRAME_PROBE_CACHE, payload, response);
 }
 
 thread_local! {
     static JSON_PROBE_CACHE: std::cell::RefCell<Option<ProbeCacheEntry>> = const { std::cell::RefCell::new(None) };
-    static RKYV_V2_PROBE_CACHE: std::cell::RefCell<Option<ProbeCacheEntry>> = const { std::cell::RefCell::new(None) };
+    static FRAME_PROBE_CACHE: std::cell::RefCell<Option<ProbeCacheEntry>> = const { std::cell::RefCell::new(None) };
 }
 
 /// Postcard binary path.

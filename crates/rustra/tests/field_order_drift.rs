@@ -57,13 +57,13 @@ fn drift_cmd(_input: DriftInput) -> rustra::Result<DriftOutput> {
 const PINNED_BODY: &[u8] = &[0x01, 0x01, 0x05, b'd', b'r', b'i', b'f', b't'];
 
 #[test]
-fn rkyv_v2_response_body_pins_non_alphabetical_field_order() {
+fn frame_response_body_pins_non_alphabetical_field_order() {
     let pkg = Package::builder("drift.test")
         .command("drift", drift_cmd)
         .build();
     let id = common::command_id_of(&pkg, "drift");
     let req = common::postcard_request(id, &DriftInput);
-    let resp = pkg.invoke_rkyv_v2(&req).expect("drift command must invoke");
+    let resp = pkg.invoke_frame(&req).expect("drift command must invoke");
 
     // 본체(오프셋 8~) 가 선언순 pinned 바이트와 정확히 일치해야 한다.
     let body = &resp[8..];

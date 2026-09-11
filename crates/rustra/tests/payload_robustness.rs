@@ -3,7 +3,7 @@
 //! 호스트가 Rust 경계로 보낼 수 있는 비정상 페이로드가 **절대 abort / panic 을
 //! 일으키지 않고** clean 한 `RustraError` 로 정규화되는지 검증한다. 두 표면:
 //!
-//! 1. `Package::invoke_rkyv_v2` (Rust API):
+//! 1. `Package::invoke_frame` (Rust API):
 //!    - 0바이트 / 1바이트 (cmd_id 미만) → `invalid_args`
 //!    - 정상 cmd_id + 잘린/쓰레기 binary 본체 → clean `invalid_args`
 //!    - 알 수 없는 cmd_id → `command_not_found`
@@ -21,7 +21,7 @@
 //!    - 한도 변경 테스트는 전부 [`LIMIT_MUTEX`] 로 직렬화 + guard drop 에서
 //!      1 MiB 원복 — 위 (2) 의 1 MiB 가정 테스트와의 병렬 경합을 없앤다.
 //!
-//! 4. rkyv V2 경로 크기 게이트 — `Package::invoke_rkyv_v2`:
+//! 4. Frame 경로 크기 게이트 — `Package::invoke_frame`:
 //!    - over-limit → `payload.too_large` 코드 + 바이트 컨텍스트
 //!    - 한도 하향이 V2 경로에도 즉시 반영
 //!    - ==limit → 게이트 통과 (정상 파이프라인에서 실패)
@@ -37,20 +37,20 @@ use serde_json::Value;
 #[path = "../benches/common.rs"]
 mod common;
 
-/// rkyv V2 Rust-API 테스트용 패키지: `add` 정적(postcard) 명령 하나.
+/// Frame Rust-API 테스트용 패키지: `add` 정적(postcard) 명령 하나.
 fn robustness_package() -> Package {
     Package::builder("robust.test")
         .command("add", common::add)
         .build()
 }
 
-// ── (1) Package::invoke_rkyv_v2 — 비정상 페이로드는 clean Err ────
+// ── (1) Package::invoke_frame — 비정상 페이로드는 clean Err ────
 
 #[test]
-fn invoke_rkyv_v2_empty_payload_returns_clean_error() {
+fn invoke_frame_empty_payload_returns_clean_error() {
     let pkg = robustness_package();
     let err = pkg
-        .invoke_rkyv_v2(&[])
+        .invoke_frame(&[])
         .expect_err("empty payload must error, not abort");
     // invalid_args 분류 — 패닉/abort 가 아님.
     assert!(
@@ -60,11 +60,11 @@ fn invoke_rkyv_v2_empty_payload_returns_clean_error() {
 }
 
 #[test]
-fn invoke_rkyv_v2_one_byte_payload_returns_clean_error() {
+fn invoke_frame_one_byte_payload_returns_clean_error() {
     let pkg = robustness_package();
     // cmd_id 1바이트만 — u16 cmd_id 를 읽으려면 최소 2바이트 필요.
     let err = pkg
-        .invoke_rkyv_v2(&[0x01])
+        .invoke_frame(&[0x01])
         .expect_err("1-byte payload must error, not abort");
     assert!(
         err.to_string().to_lowercase().contains("too short"),
@@ -73,7 +73,7 @@ fn invoke_rkyv_v2_one_byte_payload_returns_clean_error() {
 }
 
 #[test]
-fn invoke_rkyv_v2_garbage_postcard_body_returns_clean_error() {
+fn invoke_frame_garbage_postcard_body_returns_clean_error() {
     let pkg = robustness_package();
     let id = common::command_id_of(&pkg, "add");
     // [cmd_id u16 LE][쓰레기 — 모두 continuation 비트가 켜진 varint]
@@ -90,7 +90,7 @@ fn invoke_rkyv_v2_garbage_postcard_body_returns_clean_error() {
         0xff,
     ];
     let err = pkg
-        .invoke_rkyv_v2(&req)
+        .invoke_frame(&req)
         .expect_err("garbage postcard body must error, not abort");
     let msg = err.to_string().to_lowercase();
     assert!(
@@ -100,14 +100,14 @@ fn invoke_rkyv_v2_garbage_postcard_body_returns_clean_error() {
 }
 
 #[test]
-fn invoke_rkyv_v2_truncated_valid_postcard_prefix_returns_clean_error() {
+fn invoke_frame_truncated_valid_postcard_prefix_returns_clean_error() {
     let pkg = robustness_package();
     let id = common::command_id_of(&pkg, "add");
     // 정상 인코딩의 *접두* 만 전송: AddInput{a:5} 의 `a` 하나(varint 0x0a)만.
     // 두 번째 필드 b 가 없으므로 binary decoder는 unexpected-end-of-input 에러.
     let req = [(id & 0xff) as u8, ((id >> 8) & 0xff) as u8, 0x0a];
     let err = pkg
-        .invoke_rkyv_v2(&req)
+        .invoke_frame(&req)
         .expect_err("truncated postcard prefix must error, not abort");
     let msg = err.to_string().to_lowercase();
     assert!(
@@ -117,12 +117,12 @@ fn invoke_rkyv_v2_truncated_valid_postcard_prefix_returns_clean_error() {
 }
 
 #[test]
-fn invoke_rkyv_v2_unknown_command_id_returns_clean_error() {
+fn invoke_frame_unknown_command_id_returns_clean_error() {
     let pkg = robustness_package();
     // 등록되지 않은 cmd_id (0xffff — 실제 add 의 id 와 충돌하지 않는 큰 값).
     let req = [0xff, 0xff, 0x0a, 0x0a];
     let err = pkg
-        .invoke_rkyv_v2(&req)
+        .invoke_frame(&req)
         .expect_err("unknown command id must error, not abort");
     let msg = err.to_string().to_lowercase();
     assert!(
@@ -135,12 +135,12 @@ fn invoke_rkyv_v2_unknown_command_id_returns_clean_error() {
 /// 같은 cmd_id 로 *정상* binary payload 를 보내면 성공해야 한다. 위 malformed 테스트들이
 /// "항상 실패" 가 되는 위양성(false-positive) 을 잡는다.
 #[test]
-fn invoke_rkyv_v2_well_formed_payload_succeeds_for_contrast() {
+fn invoke_frame_well_formed_payload_succeeds_for_contrast() {
     let pkg = robustness_package();
     let id = common::command_id_of(&pkg, "add");
     let req = common::postcard_request(id, &common::AddInput { a: 2, b: 3 });
     let resp = pkg
-        .invoke_rkyv_v2(&req)
+        .invoke_frame(&req)
         .expect("well-formed payload must succeed");
     let out: common::AddOutput = common::decode_postcard_response(&resp);
     assert_eq!(out.value, 5);
@@ -340,7 +340,7 @@ fn lowered_limit_rejects_with_size_error() {
     unsafe { rustra_ffi_free(ptr, out_len) };
 }
 
-// ── rkyv V2 경로 크기 게이트 ───────────────────────
+// ── Frame 경로 크기 게이트 ───────────────────────
 
 /// V2 게이트 테스트 공용 — `robustness_package()` 의 `add` 명령(cmd_id 조회).
 /// 바디는 0xff 로 채운다 — continuation 비트가 켜진 varint 라 postcard 디코드가
@@ -352,14 +352,14 @@ fn v2_request(id: u16, body_len: usize) -> Vec<u8> {
 }
 
 #[test]
-fn invoke_rkyv_v2_over_limit_returns_payload_too_large_code() {
+fn invoke_frame_over_limit_returns_payload_too_large_code() {
     let _guard = limit_guard();
     let pkg = robustness_package();
     let id = common::command_id_of(&pkg, "add");
     // 기본 1 MiB + 1 바이트 — V2 게이트가 디스패치 전에 거부해야 한다.
     let req = v2_request(id, 1024 * 1024 - 1);
     let err = pkg
-        .invoke_rkyv_v2(&req)
+        .invoke_frame(&req)
         .expect_err("over-limit V2 payload must error");
     assert_eq!(err.code(), "payload.too_large");
     assert_eq!(
@@ -370,13 +370,13 @@ fn invoke_rkyv_v2_over_limit_returns_payload_too_large_code() {
             1024 * 1024
         )
     );
-    // rkyv V2 에러 와이어로 인코딩해도 코드가 살아남는다 — JS codec 이 복원하는 형태.
-    let frame = rustra::encode_rkyv_v2_error(&err);
+    // Frame 에러 와이어로 인코딩해도 코드가 살아남는다 — JS codec 이 복원하는 형태.
+    let frame = rustra::encode_frame_error(&err);
     assert_eq!(frame[0], 0, "error frame ok flag must be 0");
 }
 
 #[test]
-fn invoke_rkyv_v2_lowered_limit_applies_immediately() {
+fn invoke_frame_lowered_limit_applies_immediately() {
     let _guard = limit_guard();
     let pkg = robustness_package();
     let id = common::command_id_of(&pkg, "add");
@@ -385,7 +385,7 @@ fn invoke_rkyv_v2_lowered_limit_applies_immediately() {
     // 후에는 V2 게이트가 먼저 거부한다.
     let req = v2_request(id, 2048);
     let err = pkg
-        .invoke_rkyv_v2(&req)
+        .invoke_frame(&req)
         .expect_err("lowered limit must reject");
     assert_eq!(
         err.code(),
@@ -396,7 +396,7 @@ fn invoke_rkyv_v2_lowered_limit_applies_immediately() {
     // 실패)으로 간다 — 게이트가 아니라 디코더에서 실패한 것이다.
     unsafe { rustra_ffi_set_max_payload(4096) };
     let err2 = pkg
-        .invoke_rkyv_v2(&req)
+        .invoke_frame(&req)
         .expect_err("garbage body must still error");
     assert_ne!(
         err2.code(),
@@ -406,7 +406,7 @@ fn invoke_rkyv_v2_lowered_limit_applies_immediately() {
 }
 
 #[test]
-fn invoke_rkyv_v2_at_limit_passes_gate_into_pipeline() {
+fn invoke_frame_at_limit_passes_gate_into_pipeline() {
     let _guard = limit_guard();
     let pkg = robustness_package();
     let id = common::command_id_of(&pkg, "add");
@@ -414,7 +414,7 @@ fn invoke_rkyv_v2_at_limit_passes_gate_into_pipeline() {
     // 파이프라인에서 invalid_args 로 실패한다 (게이트가 아닌 디코더 실패).
     let req = v2_request(id, 1024 * 1024 - 2);
     let err = pkg
-        .invoke_rkyv_v2(&req)
+        .invoke_frame(&req)
         .expect_err("at-limit garbage body must fail in the pipeline");
     assert_ne!(
         err.code(),

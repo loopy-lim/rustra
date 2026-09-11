@@ -1,9 +1,9 @@
 // typed invoke — 이름 기반 조회 + postcard 타입 입출력 래퍼.
 //
 // 의도적으로 dispatch/wire 경로를 이원화하지 않는다. invoke_json 처럼 별도의
-// JSON 실행 경로를 두는 대신, 조회한 Command 의 command_id 로 rkyv V2 요청
-// 프레임 `[id: u16 LE @0][postcard(I) @2]` 을 조립해 invoke_rkyv_v2 의 단일
-// dispatch 경로로 보낸다. 즉 dispatch 진실의 원천은 invoke_rkyv_v2 하나며,
+// JSON 실행 경로를 두는 대신, 조회한 Command 의 command_id 로 Frame 요청
+// 프레임 `[id: u16 LE @0][postcard(I) @2]` 을 조립해 invoke_frame 의 단일
+// dispatch 경로로 보낸다. 즉 dispatch 진실의 원천은 invoke_frame 하나며,
 // 응답도 JS 코덱이 보는 것과 완전히 동일한 `[ok:1][7B reserved][postcard(O) @8]`
 // 프레임이라 Rust↔TS 바이너리 호환이 코드 중복 없이 자동 유지된다.
 impl Package {
@@ -11,9 +11,9 @@ impl Package {
     ///
     /// 명령 조회는 [`invoke_json`](Package::invoke_json) 과 동일한 frozen/mutable
     /// 이중 경로를 따릅니다(제품 경로는 snapshot borrow, 개발 경로는 clone-out).
-    /// 실행은 `command_id` 로 만든 rkyv V2 요청을
-    /// [`invoke_rkyv_v2`](Package::invoke_rkyv_v2) 로 돌리는 단일 dispatch 경로이며,
-    /// 응답 프레임은 [`decode_rkyv_v2_response`](crate::decode_rkyv_v2_response) 로
+    /// 실행은 `command_id` 로 만든 Frame 요청을
+    /// [`invoke_frame`](Package::invoke_frame) 로 돌리는 단일 dispatch 경로이며,
+    /// 응답 프레임은 [`decode_frame_response`](crate::decode_frame_response) 로
     /// 벗겨 postcard 역직렬화합니다.
     ///
     /// 핸들러가 반환한 [`RustraError`](crate::RustaError) 는 프레임으로 감싸지지
@@ -66,8 +66,8 @@ impl Package {
             })?;
 
         // 단일 dispatch 경로로 실행하고 응답 프레임 헤더(ok + 7B reserved)를 벗긴다.
-        let frame = self.invoke_rkyv_v2(&request)?;
-        let body = decode_rkyv_v2_response(&frame)?;
+        let frame = self.invoke_frame(&request)?;
+        let body = decode_frame_response(&frame)?;
         postcard::from_bytes::<O>(body).map_err(|error| {
             RustraError::invalid_args(format!("invoke_typed: output decode failed: {error}"))
         })

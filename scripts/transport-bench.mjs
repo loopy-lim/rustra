@@ -148,10 +148,10 @@ function createNapiTransport() {
   };
 }
 
-// ── rkyv V2 direct transports (postcard 왕복 — JSON/UTF-16 없음) ──
+// ── Frame direct transports (postcard 왕복 — JSON/UTF-16 없음) ──
 //
-// 코어 FFI(rustra_ffi_invoke_rkyv_v2, wire-bench 61.5ns)를 버퍼 직결로 태운다.
-// napi는 rustraInvokeRkyvV2 바인딩, Bun은 dlopen 심볼 직접 바인딩. JS 코덱
+// 코어 FFI(rustra_ffi_invoke_frame, wire-bench 61.5ns)를 버퍼 직결로 태운다.
+// napi는 rustraInvokeFrame 바인딩, Bun은 dlopen 심볼 직접 바인딩. JS 코덱
 // 인코딩은 bench harness에서 고정 프레임을 재사용해 측정한다(코덱 자체 비용은
 // adapter-bench/JS codec 벤치가 담당) — 여기선 transport 비용만 격리한다.
 
@@ -167,9 +167,9 @@ function zigzagVarint(n) {
   return bytes;
 }
 
-function decodeRkyvV2Result(frame) {
+function decodeFrameResult(frame) {
   // [ok:1][pad3][len u32 LE @4][postcard body @8]
-  if (frame[0] !== 1) throw new Error('rkyv V2 bench: error frame');
+  if (frame[0] !== 1) throw new Error('Frame bench: error frame');
   let v = 0;
   let shift = 0;
   let i = 8;
@@ -182,25 +182,25 @@ function decodeRkyvV2Result(frame) {
   return (v >>> 1) ^ -(v & 1);
 }
 
-function createNapiRkyvTransport() {
+function createNapiFrameTransport() {
   const native = loadNapi();
-  if (typeof native.rustraInvokeRkyvV2 !== 'function') {
-    throw new Error('napi addon predates rustraInvokeRkyvV2 — rebuild with napi build');
+  if (typeof native.rustraInvokeFrame !== 'function') {
+    throw new Error('napi addon predates rustraInvokeFrame — rebuild with napi build');
   }
   // addNumbers(cmd_id=1) 고정 프레임 — { a: 42, b: 58 }의 postcard 인코딩.
   const frame = Buffer.from([1, 0, ...zigzagVarint(42), ...zigzagVarint(58)]);
   return {
-    name: 'Node napi rkyv V2',
+    name: 'Node napi Frame',
     invoke(command, args) {
       void command;
       void args;
-      const resp = native.rustraInvokeRkyvV2(frame);
-      return decodeRkyvV2Result(resp);
+      const resp = native.rustraInvokeFrame(frame);
+      return decodeFrameResult(resp);
     },
   };
 }
 
-function createBunRkyvTransport() {
+function createBunFrameTransport() {
   // createBunFfiTransport 와 동일한 release-우선 탐색을 공유한다. bun:ffi 는
   // 이 스크립트가 Bun 으로 실행될 때만 존재한다(호출부가 isBun 으로 게이트).
   // eslint-disable-next-line import/no-extraneous-dependencies
@@ -210,11 +210,11 @@ function createBunRkyvTransport() {
   const found = findCalculatorDylib(suffix);
   if (!found) throw new Error('no librustra_calculator_example dylib');
   const lib = dlopen(found.path, {
-    rustra_calculator_invoke_rkyv_v2: {
+    rustra_calculator_invoke_frame: {
       args: [FFIType.ptr, FFIType.usize, FFIType.ptr],
       returns: FFIType.ptr,
     },
-    rustra_calculator_free_rkyv_v2_buffer: {
+    rustra_calculator_free_frame_buffer: {
       args: [FFIType.ptr, FFIType.usize],
       returns: FFIType.void,
     },
@@ -222,22 +222,22 @@ function createBunRkyvTransport() {
   const frame = Buffer.from([1, 0, ...zigzagVarint(42), ...zigzagVarint(58)]);
   const outLen = new BigUint64Array(1);
   return {
-    name: `Bun FFI rkyv V2${found.label}`,
+    name: `Bun FFI Frame${found.label}`,
     invoke(command, args) {
       void command;
       void args;
-      const ptr = lib.symbols.rustra_calculator_invoke_rkyv_v2(
+      const ptr = lib.symbols.rustra_calculator_invoke_frame(
         frame,
         BigInt(frame.byteLength),
         outLen,
       );
-      if (ptr === 0) throw new Error('Bun FFI rkyv V2 returned null');
+      if (ptr === 0) throw new Error('Bun FFI Frame returned null');
       const len = Number(outLen[0]);
       // toArrayBuffer 는 Rust 메모리를 참조하는 뷰고 new Uint8Array(뷰) 도
       // 버퍼를 공유한다 — free 전에 값 복사로 materialize 해야 한다.
       const copied = Array.from(new Uint8Array(toArrayBuffer(ptr, 0, len)));
-      lib.symbols.rustra_calculator_free_rkyv_v2_buffer(ptr, BigInt(len));
-      return decodeRkyvV2Result(copied);
+      lib.symbols.rustra_calculator_free_frame_buffer(ptr, BigInt(len));
+      return decodeFrameResult(copied);
     },
   };
 }
@@ -297,9 +297,9 @@ if (isBun) {
     console.log(`  (Bun FFI unavailable: ${e.message})`);
   }
   try {
-    transports.push(createBunRkyvTransport());
+    transports.push(createBunFrameTransport());
   } catch (e) {
-    console.log(`  (Bun FFI rkyv V2 unavailable: ${e.message})`);
+    console.log(`  (Bun FFI Frame unavailable: ${e.message})`);
   }
 }
 
@@ -314,9 +314,9 @@ if (!isBun) {
     console.log(`  (napi-rs unavailable: ${e.message})`);
   }
   try {
-    transports.push(createNapiRkyvTransport());
+    transports.push(createNapiFrameTransport());
   } catch (e) {
-    console.log(`  (napi rkyv V2 unavailable: ${e.message})`);
+    console.log(`  (napi Frame unavailable: ${e.message})`);
   }
 }
 

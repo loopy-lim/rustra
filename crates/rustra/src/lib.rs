@@ -88,9 +88,9 @@ pub use rustra_macros::build;
 /// ```
 pub use rustra_macros::command;
 
-pub use rkyv_codec::decode_rkyv_v2_error_parts;
-pub use rkyv_codec::decode_rkyv_v2_response;
-pub use rkyv_codec::encode_rkyv_v2_error;
+pub use frame_codec::decode_frame_error_parts;
+pub use frame_codec::decode_frame_response;
+pub use frame_codec::encode_frame_error;
 /// 패키지 빌더에 `#[command]` 함수들을 등록하는 매크로입니다.
 ///
 /// ```rust
@@ -132,6 +132,7 @@ pub mod ffi;
 // hot-core 는 tauri_support 의 디스패치 간접화(JsonDispatch)가 tauri feature
 // 만으로도 성립해야 하므로 두 feature 중 하나라도 켜지면 컴파일된다. dylib
 // 로딩 본체(libloading)는 모듈 내부에서 `hot-core` feature 로 게이트된다.
+mod frame_codec;
 #[cfg(any(feature = "hot-core", feature = "tauri"))]
 pub mod hot_core;
 mod invoke;
@@ -141,7 +142,6 @@ mod package_codegen;
 pub mod platform;
 pub mod prelude;
 mod registry;
-mod rkyv_codec;
 mod schema;
 pub mod state;
 #[cfg(feature = "tauri")]
@@ -155,16 +155,15 @@ pub(crate) use command::{
 pub(crate) use complex_codec::{
     CompiledComplex, ComplexCodecLimits, annotate_variant_order, complex_schema_supported,
 };
+/// caller-buffer dispatch 결과 — 바이너리 호스트(loop-stdio 등)가
+/// `invoke_frame_into` 의 반환을 해석하기 위해 공개한다.
+pub use frame_codec::DirectResponse;
+pub(crate) use frame_codec::{
+    BinHandler, BinIntoHandler, DecodeFn, EncodeFn, RawHandler, build_frame_decoder,
+    build_frame_response_encoder, build_tier3_json_decoder, js_postcard_codec_supported_with_defs,
+};
 pub(crate) use package::{FrozenRegistry, RegistryState};
 pub use package::{GeneratedPackage, Package, PackageBuilder};
-/// caller-buffer dispatch 결과 — 바이너리 호스트(loop-stdio 등)가
-/// `invoke_rkyv_v2_into` 의 반환을 해석하기 위해 공개한다.
-pub use rkyv_codec::DirectResponse;
-pub(crate) use rkyv_codec::{
-    BinHandler, BinIntoHandler, DecodeFn, EncodeFn, RawHandler, build_rkyv_v2_decoder,
-    build_rkyv_v2_response_encoder, build_tier3_json_decoder,
-    js_postcard_codec_supported_with_defs,
-};
 pub(crate) use schemars::JsonSchema;
 pub(crate) use serde::{Serialize, de::DeserializeOwned};
 pub(crate) use serde_json::{Value, json};

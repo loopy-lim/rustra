@@ -15,7 +15,7 @@ name: Sanitizer
 # 제외 범위(--lib): miri 와 동일한 선택. FFI 진입점 통합 테스트는 extern "C"
 # 경계에서 호스트 콜백 포인터를 실제로 호출하므로 ASan 하에서 비협조적
 # (콜백 스택이 샌드위치된 스택 프레임을 침범 보고할 수 있음). 코어 로직의
-# 힙 경계 검증이 1차 대상이다. 확장은 필요 시 --test rkyv_v2_wire 부터.
+# 힙 경계 검증이 1차 대상이다. 확장은 필요 시 --test frame_wire 부터.
 #
 # nightly 필수: `-Zsanitizer=address` 는 nightly 전용 플래그. 도구체인 결정은
 # miri.yml 과 동일한 dtolnay/rust-toolchain@nightly 패턴을 따른다(별도

@@ -17,8 +17,8 @@ serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive", "preserve_order"] }
 
 [[bin]]
-name = "invoke_rkyv_v2"
-path = "fuzz_targets/invoke_rkyv_v2.rs"
+name = "invoke_frame"
+path = "fuzz_targets/invoke_frame.rs"
 test = false
 doc = false
 bench = false

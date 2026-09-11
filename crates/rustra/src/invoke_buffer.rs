@@ -69,7 +69,7 @@ impl Package {
     pub fn raw_invoke_shape(
         &self,
         command_id: u16,
-    ) -> Option<Vec<crate::rkyv_codec::RawFieldKind>> {
+    ) -> Option<Vec<crate::frame_codec::RawFieldKind>> {
         let command = self.command_by_id(command_id).ok()?;
         if command.raw_handler.is_some() {
             Some(command.raw_input_kinds.clone())

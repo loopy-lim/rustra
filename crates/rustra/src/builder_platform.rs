@@ -2,7 +2,7 @@
 //
 // 설계(`docs/plans/2026-09-07-platform-interop-stabilization-design.md`):
 // 등록은 **전 플랫폼에서 무조건** 일어난다. command_id·schema.json·계약 해시가
-// 플랫폼 무관하게 동일해야 rkyv V2 by-id 디스패치와 교차 검증이 살아있기 때문이다.
+// 플랫폼 무관하게 동일해야 Frame by-id 디스패치와 교차 검증이 살아있기 때문이다.
 // 미지원 플랫폼에는 `platform.unavailable` 을 반환하는 스텁 핸들러가 등록되고,
 // 지원 플랫폼은 [`PackageBuilder::platform_command_impl`] 로 스텁을 실제 구현으로 교체한다.
 

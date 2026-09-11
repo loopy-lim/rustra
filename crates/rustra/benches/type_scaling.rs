@@ -2,7 +2,7 @@
 //!
 //! 동적 `processPayload` 명령(register)을 1/10/100/1000 items 로 호출.
 //! (T2-1 이후) PayloadInput 은 postcard 지원 형태라 동적 등록이라도 postcard
-//! 핸들러를 받는다 — 측정: invoke_rkyv_v2 (postcard 디코드 → 핸들러 → postcard
+//! 핸들러를 받는다 — 측정: invoke_frame (postcard 디코드 → 핸들러 → postcard
 //! 인코드) end-to-end. Tier 3 비교선이 필요하면 tier_compare 벤치를 병기한다.
 //!
 //! 실행: `cargo bench -p rustra --profile dev -- type_scaling`
@@ -30,11 +30,11 @@ fn bench_type_scaling(c: &mut Criterion) {
         let req = common::postcard_request(id, &input);
 
         group.bench_with_input(
-            BenchmarkId::new("invoke_rkyv_v2_dynamic_postcard", format!("{size}_items")),
+            BenchmarkId::new("invoke_frame_dynamic_postcard", format!("{size}_items")),
             &req,
             |b, req| {
                 b.iter(|| {
-                    let resp = pkg.invoke_rkyv_v2(req).unwrap();
+                    let resp = pkg.invoke_frame(req).unwrap();
                     let out: common::PayloadOutput = common::decode_postcard_response(&resp);
                     out
                 });

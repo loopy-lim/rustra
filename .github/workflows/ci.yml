@@ -811,7 +811,7 @@ jobs:
           sed -i "s#rustra-macros = \"[^\"]*\"#rustra-macros = { path = \"$GITHUB_WORKSPACE/crates/rustra-macros\" }#" Cargo.toml
           bun run codegen
           test -f generated/schema.json
-          test -f src/generated/rkyv-codecs.ts
+          test -f src/generated/frame-codecs.ts
           cargo run | grep "hello from rustra"
 
   # 필수 잡 집계 gate — branch protection 이 이 단일 체크만 요구하면 된다.

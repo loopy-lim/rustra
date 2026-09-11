@@ -1,6 +1,6 @@
 name: Fuzz
 
-# rkyv V2 디코드 경로(신뢰 경계) 무작위 입력 검증 — 10분 타임박스 (배경 트랙 B2).
+# Frame 디코드 경로(신뢰 경계) 무작위 입력 검증 — 10분 타임박스 (배경 트랙 B2).
 # cargo-fuzz 는 nightly + 별도 crate (fuzz/, 메인 workspace 비멤버) 로 격리.
 # 크래시 아티팩트는 업로드 후 이슈로 수동 등록한다.
 #
@@ -31,9 +31,9 @@ jobs:
       # 시드 corpus(git 추적, 대표 100개)를 먼저 재생 — 주간 실행이 매번 0시드로
       # 시작하던 것을 개선한다. 발견한 새 커버리지는 아티팩트로 남는다.
       - name: Replay seed corpus
-        run: cd fuzz && cargo fuzz run invoke_rkyv_v2 fuzz/seeds/ -- -runs=0
-      - name: Fuzz invoke_rkyv_v2 (10min)
-        run: cd fuzz && cargo fuzz run invoke_rkyv_v2 -- -max_total_time=600 -max_len=1024
+        run: cd fuzz && cargo fuzz run invoke_frame fuzz/seeds/ -- -runs=0
+      - name: Fuzz invoke_frame (10min)
+        run: cd fuzz && cargo fuzz run invoke_frame -- -max_total_time=600 -max_len=1024
       - name: Upload crash artifacts
         if: failure()
         uses: actions/upload-artifact@v7

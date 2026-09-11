@@ -1,7 +1,7 @@
 // ── (Tier 3 정합) JS postcard 코덱 지원 판정 미러 ─────────────
 //
 // @rustra/cli 의 classifyPostcardField(generate.ts)와 동일한 타입 집합을
-// Rust 쪽에서 판정한다. JS 코드젠은 미지원 필드를 가진 명령을 rkyv-registry
+// Rust 쪽에서 판정한다. JS 코드젠은 미지원 필드를 가진 명령을 frame-registry
 // 에서 제외하고, 엔진은 그 명령을 Tier 3(JSON-in-binary) 로 라우팅한다.
 // Rust 도 같은 판정으로 typed postcard fast-path 를 끄면 양쪽 와이어가
 // 일치한다. 집합이 어긋나면 JS postcard ↔ Rust JSON 프레임 불일치가 되므로,

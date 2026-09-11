@@ -1,4 +1,4 @@
-/// JSON Schema에서 rkyv V2 디코더를 자동 생성합니다.
+/// JSON Schema에서 Frame 디코더를 자동 생성합니다.
 ///
 /// 입력 스키마의 프로퍼티를 분석하여 고정폭 필드와 가변폭 필드를 분리하고,
 /// 바이트에서 직접 값을 읽어 JSON Value를 재구성하는 클로저를 반환합니다.
@@ -7,7 +7,7 @@
 /// Tier 2: String 또는 Vec<primitive> 필드 포함
 /// Tier 3: map 필드, 데이터를 가진 enum 등 — JSON-in-binary 폴백
 /// (Option<T>/Vec<String>/Vec<Struct>/string enum 은 2026-08-20 JS 코덱 확장으로 지원)
-pub(crate) fn build_rkyv_v2_decoder(input_schema: &Value) -> (DecodeFn, Tier) {
+pub(crate) fn build_frame_decoder(input_schema: &Value) -> (DecodeFn, Tier) {
     let props = match input_schema.get("properties").and_then(Value::as_object) {
         Some(p) => p,
         None => {
@@ -69,7 +69,7 @@ pub(crate) fn build_rkyv_v2_decoder(input_schema: &Value) -> (DecodeFn, Tier) {
             for (name, kind) in &var_fields {
                 if cursor + 4 > payload.len() {
                     return Err(RustraError::invalid_args(
-                        "rkyv v2: payload truncated at var-field length",
+                        "frame: payload truncated at var-field length",
                     ));
                 }
                 let len_bytes: [u8; 4] = payload[cursor..cursor + 4].try_into().unwrap();
@@ -78,14 +78,14 @@ pub(crate) fn build_rkyv_v2_decoder(input_schema: &Value) -> (DecodeFn, Tier) {
 
                 if cursor + field_len > payload.len() {
                     return Err(RustraError::invalid_args(
-                        "rkyv v2: payload truncated at var-field data",
+                        "frame: payload truncated at var-field data",
                     ));
                 }
 
                 let val = match kind {
                     WireFieldKind::String => {
                         let s = std::str::from_utf8(&payload[cursor..cursor + field_len]).map_err(
-                            |_| RustraError::invalid_args("rkyv v2: invalid UTF-8 in string field"),
+                            |_| RustraError::invalid_args("frame: invalid UTF-8 in string field"),
                         )?;
                         json!(s)
                     }

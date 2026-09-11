@@ -1,8 +1,8 @@
-//! `Package::invoke_rkyv_v2` 의 핸들러 패닉 전파 검증 — 패닉은 `Err(RustraError)`
+//! `Package::invoke_frame` 의 핸들러 패닉 전파 검증 — 패닉은 `Err(RustraError)`
 //! 로 정규화되어야 하고 절대 unwinding 을 호출자에게 새어나가지 않는다
-//! (FFI 진입점 — `rustra_calculator_invoke_rkyv_v2` 등 extern "C" — 에서
+//! (FFI 진입점 — `rustra_calculator_invoke_frame` 등 extern "C" — 에서
 //! abort 로 이어지기 때문). JSON/postcard FFI 의 `ffi::with_panic_guard` 와
-//! 동일한 계약을 rkyv V2 바이너리 경로에도 적용하는지 확인한다.
+//! 동일한 계약을 Frame 바이너리 경로에도 적용하는지 확인한다.
 
 use rustra::prelude::*;
 
@@ -38,14 +38,13 @@ fn handler_panic_is_contained_as_internal_error() {
     // 디코드에 성공해 핸들러까지 가야 한다 (디코드 실패는 invalid_args 로,
     // 패닉 경로를 건드리지 않는다).
     let req = common::postcard_request(id, &BoomInput { n: 1 });
-    let result =
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| pkg.invoke_rkyv_v2(&req)));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| pkg.invoke_frame(&req)));
     match result {
         Ok(Err(e)) => assert!(
             e.to_string().starts_with("internal"),
             "panic must be normalized to an internal error frame, got: {e}"
         ),
         Ok(Ok(_)) => panic!("panicking handler must not succeed"),
-        Err(_) => panic!("panic escaped invoke_rkyv_v2 — would abort at extern C"),
+        Err(_) => panic!("panic escaped invoke_frame — would abort at extern C"),
     }
 }

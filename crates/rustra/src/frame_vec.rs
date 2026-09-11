@@ -8,7 +8,7 @@ fn read_vec_fixed<const N: usize>(
 ) -> Result<Value> {
     if !field_len.is_multiple_of(N) {
         return Err(RustraError::invalid_args(format!(
-            "rkyv v2: data length not a multiple of {N}"
+            "frame: data length not a multiple of {N}"
         )));
     }
     let count = field_len / N;

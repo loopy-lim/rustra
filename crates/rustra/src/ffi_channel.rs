@@ -164,7 +164,7 @@ pub unsafe extern "C" fn rustra_ffi_channel_create(
 }
 
 /// 바이너리 채널을 발급한다 — 계약은 `rustra_ffi_channel_create` 와 동일하되
-/// 콜백이 `const uint8_t*` + 길이를 받는다(rkyv V2 프레임 등 임의 바이트).
+/// 콜백이 `const uint8_t*` + 길이를 받는다(Frame 프레임 등 임의 바이트).
 ///
 /// # Safety
 ///

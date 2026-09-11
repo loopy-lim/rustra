@@ -1,13 +1,13 @@
-/// rkyv V2 에러를 postcard 가 아닌 코어 에러 인코더로 감싸는 serialize 어댑터 —
+/// Frame 에러를 postcard 가 아닌 코어 에러 인코더로 감싸는 serialize 어댑터 —
 /// `run_worker`/`deliver_spawn_failure` 는 `fn(&FfiResponse) -> Vec<u8>` 를
-/// 기대하지만 rkyv V2 경로는 RustraError 를 직접 인코딩한다. 에러 문자열을
-/// FfiResponse.error 에 실으면 수신측(JSON 파서)이 아니라 rkyv V2 디코더가
+/// 기대하지만 Frame 경로는 RustraError 를 직접 인코딩한다. 에러 문자열을
+/// FfiResponse.error 에 실으면 수신측(JSON 파서)이 아니라 Frame 디코더가
 /// 읽는다 — run_worker 는 `invoke_fn` 이 반환한 버퍼를 그대로 on_complete 로
 /// 전달하므로 이 어댑터는 에러 프레임만 만들면 된다.
-fn rkyv_error_bytes(resp: &FfiResponse) -> Vec<u8> {
+fn frame_error_bytes(resp: &FfiResponse) -> Vec<u8> {
     let raw = resp.error.as_deref().unwrap_or("invoke failed");
     let (code, message) = raw.split_once(": ").unwrap_or(("invoke.failed", raw));
-    // FFI Display 문자열을 rkyv typed error로 다시 만들 때 안정 코드와
+    // FFI Display 문자열을 frame typed error로 다시 만들 때 안정 코드와
     // retryable 기본 의미를 보존한다. 임의 사용자 코드는 &'static str 계약상
     // 재구성할 수 없으므로 invoke.failed로 안전하게 폴백한다.
     let error = match code {
@@ -24,7 +24,7 @@ fn rkyv_error_bytes(resp: &FfiResponse) -> Vec<u8> {
         }
         _ => crate::RustraError::custom("invoke.failed", raw),
     };
-    crate::encode_rkyv_v2_error(&error)
+    crate::encode_frame_error(&error)
 }
 ///
 /// # Safety
