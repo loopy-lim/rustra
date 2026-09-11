@@ -68,7 +68,10 @@ impl Package {
             .collect()
     }
 
-    fn command_not_found(&self, name: &str) -> RustraError {
+    // invoke_typed(invoke.rs) 도 이름 미발견 시 동일한 제안 메시지를 쓰므로
+    // crate 공개로 올린다 — include! 텍스트 결합과 무관하게 모듈 경계(package ↔
+    // invoke)에서는 비공개 메서드 접근이 막힌다.
+    pub(crate) fn command_not_found(&self, name: &str) -> RustraError {
         let names = self.command_names();
         let available = if names.is_empty() {
             "none".to_owned()
