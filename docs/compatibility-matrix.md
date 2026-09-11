@@ -13,7 +13,9 @@ host entry points (the default path), map them to columns like this:
 see the rkyv V2 row and the `supports` table below), `generated/tauri.ts` → the
 **Tauri** column, and `generated/react-native.ts` → the RN **`createRkyvV2Engine`**
 column. The RN JSON column applies only when you pass a custom transport to
-`createReactNativeEngine` yourself.
+`createReactNativeEngine` yourself. The UniFFI (Kotlin/Swift) surface is
+covered in its [own section](#uniffi-bindings-track-b1-typed-kotlinswift-surface)
+below — it is not an `EngineClient` column.
 
 | Feature                                   | Node (`createNodeEngine`)                                                                                                                                                             | Bun (`createBunEngine`)                                                                                                      | Tauri (`createTauriEngine`)                                                                                                                  | RN (`createReactNativeEngine`)                                                            | RN (`createRkyvV2Engine`)                                                                                                                   |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -120,6 +122,44 @@ original error propagates) rather than bricking the bootstrap as `disposed`.
 A `draining` state is deliberately not modeled: drain is transparent to the
 three-state lifecycle. See the hot-swap section below for the reload contract
 this builds on.
+
+## UniFFI bindings (Track B1): typed Kotlin/Swift surface
+
+The UniFFI surface is deliberately **not a column above**: the matrix keys TS
+`EngineClient` adapters, while UniFFI bypasses the TS layer entirely — Kotlin
+or Swift host code calls generated per-command functions over uniffi's own
+RustBuffer transfer. The setup, codegen flow, and consumption are in the
+[UniFFI bindings guide](extending/uniffi-bindings.md); this section transcribes
+its coverage into the row grammar used above:
+
+| Feature                                | UniFFI (Kotlin/Swift)                                                                                                                                                        |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Per-command typed invoke               | ✅ one generated function per command (`addNumbers(input:)` …) plus the generic `invokeJson`/`getSchema`/`contractHash`                                                      |
+| `options.signal` (pre-abort/in-flight) | — no TS options surface; generated functions are synchronous (the Rust command API is sync today), so interruption is the host's concern                                     |
+| `invokeBatch`                          | — not generated in Phase 1 (per-command surface only)                                                                                                                        |
+| `options.timeoutMs`                    | — synchronous native calls cannot be preempted mid-call                                                                                                                      |
+| Events (`subscribeEvent`/`onEvent`)    | — Phase 2 (uniffi callback interfaces / foreign traits)                                                                                                                      |
+| Channels (`createChannel`/bytes)       | — Phase 2                                                                                                                                                                    |
+| rkyv V2 binary wire                    | ✅ single dispatch path — the generated wrapper calls `Package::invoke_typed`, which posts a postcard request through `invoke_rkyv_v2` (no second wire)                      |
+| Contract integrity                     | ✅ uniffi's own checksums + contract version govern this surface; rustra's `contract_hash`/`contract.mismatch` gate stays scoped to the blob transports (Node/Bun/Tauri/JSI) |
+| Hot swap                               | — uniffi hosts bind symbols at load time — static/release builds only; the dev loop stays on TS/JSI                                                                          |
+
+Notes:
+
+- **Error model**: a single-variant failure record
+  `RustraCommandFailure.Failure { code, message, retryable }` — the same shape
+  as the TS `RustraCommandError`. A uniffi enum mapping was rejected by design:
+  rustra's error code space is open (custom string codes), and an enum would
+  close it. Decision record: [ADR 0002](adr/0002-uniffi-track-b1-carrier.md).
+- **Mirror layer is generated, not hand-written**: the schema probe renders the
+  feature-gated `uniffi_generated.rs` (fail-closed renderer). Its mechanical
+  divergences are documented in the guide: sets → `Vec` mirrors collected into
+  real `BTreeSet`s, fixed tuples → synthetic records, maps by inference-based
+  collect, `getSchema()` returns the live schema (generation counter included),
+  and channel/resource handle newtypes map to `u32` via an explicit path table.
+- **Freshness**: the committed `uniffi_generated.rs` is guarded by a byte
+  comparison in `codegen --check` (no cargo build in check mode); the committed
+  Kotlin/Swift bindings regenerate with the same flow.
 
 ## Spike: wasm32 engine in wasm3 (React Native) — VERDICT: PASS (spike)
 

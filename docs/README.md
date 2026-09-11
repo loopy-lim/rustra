@@ -17,7 +17,8 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
 7. [Tauri Setup](extending/tauri-setup.md) — adding rustra to an existing Tauri app
 8. [Transport Replacement Guide](extending/transport-guide.md) — replacing transports such as Bun FFI, Node napi-rs
 9. [Adding a New Host Guide](extending/adding-host.md) — adding new host adapters such as Electron, Deno
-10. [Dynamic Development Tier](dev-tier.md) — loose invoke prototyping, device token experiments, `test:fast`
+10. [UniFFI Bindings Guide](extending/uniffi-bindings.md) — typed Kotlin/Swift bindings via UniFFI (Android/iOS)
+11. [Dynamic Development Tier](dev-tier.md) — loose invoke prototyping, device token experiments, `test:fast`
 
 ### Project Contributors
 
@@ -39,6 +40,7 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
 | [React Native Setup](extending/react-native-setup.md)                                        | Users        | JSI native module, iOS/Android builds, BenchmarkApp                                                                                                                                                  |
 | [Tauri Setup](extending/tauri-setup.md)                                                      | Users        | Adding rustra to an existing Tauri app — the five files, in order                                                                                                                                    |
 | [Adding a New Host Guide](extending/adding-host.md)                                          | Users        | Writing an adapter, choosing a Rust entry point, adding tests                                                                                                                                        |
+| [UniFFI Bindings Guide](extending/uniffi-bindings.md)                                        | Users        | Typed Kotlin/Swift bindings via UniFFI — transport choice, the `uniffi` config, codegen flow, error model, divergences, version pin                                                                  |
 | [Dynamic Development Tier](dev-tier.md) ([한국어](dev-tier.ko.md))                           | Users        | `invokeLoose` prototyping, catalog-outside token experiments, gate profiles                                                                                                                          |
 | [Crate and Package Structure](internal/crate-structure.md)                                   | Contributors | Responsibilities of each crate/package, build dependencies                                                                                                                                           |
 | [TypeScript Code Generation](internal/codegen.md)                                            | Contributors | Codegen pipeline, type mapping, limitations                                                                                                                                                          |
@@ -59,7 +61,7 @@ rustra is a bridge framework that automatically generates a host-neutral TypeScr
 | [Release Procedure](release-procedure.md)                                                    | Contributors | Changeset publishing procedure, version management                                                                                                                                                   |
 | [Versioning Policy](versioning-policy.md)                                                    | All          | Compatibility guarantees per surface, deprecation cycle, MSRV, experimental surface                                                                                                                  |
 | [Safety Contract](safety-contract.md) ([한국어](safety-contract.ko.md))                      | Contributors | Umbrella FFI safety invariant, per-item contracts (panic containment, foreign unwind abort, buffer ownership, payload limits, hot-core poison, error envelope, fail-closed gates) with code evidence |
-| [Architecture Decision Records](adr/)                                                        | Contributors | Numbered decisions that change a contract or its enforcement (ADR 0001: Track A contract mechanization)                                                                                              |
+| [Architecture Decision Records](adr/)                                                        | Contributors | Numbered decisions that change a contract or its enforcement (ADR 0001: Track A contract mechanization, ADR 0002: UniFFI Kotlin/Swift carrier)                                                       |
 | [Security Policy](../.github/SECURITY.md)                                                    | All          | Vulnerability reporting channels, supported versions, scope                                                                                                                                          |
 | [Contributing Guide](../CONTRIBUTING.md)                                                     | Contributors | Development environment, commit rules, debugging, releases                                                                                                                                           |
 

@@ -9,6 +9,7 @@ Status / Context / Decision / Consequences. 거부된 선택지도 기록할 가
 | 번호                                                     | 제목                                             | 상태     | 날짜       |
 | -------------------------------------------------------- | ------------------------------------------------ | -------- | ---------- |
 | [0001](0001-record-track-a-contract-mechanization.ko.md) | Track A: 계약의 기계화 (UniFFI 성숙도 관행 채택) | Accepted | 2026-09-11 |
+| [0002](0002-uniffi-track-b1-carrier.ko.md)               | Track B1: UniFFI 를 Kotlin/Swift 언어 캐리어로   | Accepted | 2026-09-11 |
 
 ## 규약
 

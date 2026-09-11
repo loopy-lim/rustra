@@ -12,7 +12,9 @@
 JSON 엔진), `generated/bun.ts` → **Bun** 열(기본값은 FFI rkyv V2 엔진 — 아래 rkyv V2
 행과 `supports` 표 참고), `generated/tauri.ts` → **Tauri** 열,
 `generated/react-native.ts` → RN **`createRkyvV2Engine`** 열. RN JSON 열은 직접
-커스텀 transport를 `createReactNativeEngine`에 넘길 때만 해당한다.
+커스텀 transport를 `createReactNativeEngine`에 넘길 때만 해당한다. UniFFI
+(Kotlin/Swift) 표면은 `EngineClient` 열이 아니므로 아래
+[별도 절](#uniffi-바인딩-track-b1-타입-kotlinswift-표면)에서 다룬다.
 
 | 기능                                    | Node (`createNodeEngine`)                                                                                                                                                             | Bun (`createBunEngine`)                                                                                                | Tauri (`createTauriEngine`)                                                                                                       | RN (`createReactNativeEngine`)                                                        | RN (`createRkyvV2Engine`)                                                                     |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
@@ -174,6 +176,45 @@ reload 만 중단)하고, 없으면 즉시 진행한다(원샷 stdio transport �
 `initializing`(원본 에러 전파)으로 남는다. `draining` 상태는 의도적으로
 모델링하지 않는다 — drain 은 3상태 수명 주기에 투명하다. reload 계약의 기반은
 아래 핫스왑 절 참고.
+
+## UniFFI 바인딩 (Track B1): 타입 Kotlin/Swift 표면
+
+UniFFI 표면은 위 매트릭스에 **열로 넣지 않기로 한다**: 매트릭스는 TS
+`EngineClient` 어댑터를 기준으로 하지만, UniFFI 는 TS 레이어를 완전히 우회한다
+— Kotlin/Swift 호스트 코드가 uniffi 자체의 RustBuffer 전송으로 생성된
+커맨드별 함수를 직접 호출한다. 설정·코드젠 흐름·소비는
+[UniFFI 바인딩 가이드](extending/uniffi-bindings.ko.md)에 있고, 이 절은 그
+커버리지를 위 표의 행 문법으로 옮긴 것이다:
+
+| 기능                                  | UniFFI (Kotlin/Swift)                                                                                                                                    |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 커맨드별 타입 invoke                  | ✅ 커맨드당 생성 함수(`addNumbers(input:)` …) + 제네릭 `invokeJson`/`getSchema`/`contractHash`                                                           |
+| `options.signal` (사전 abort/진행 중) | — TS 옵션 표면이 없다; 생성 함수는 동기(Rust 커맨드 API 가 현재 sync)이므로 중단은 호스트의 몫                                                           |
+| `invokeBatch`                         | — Phase 1 에서 생성하지 않는다(커맨드별 표면만)                                                                                                          |
+| `options.timeoutMs`                   | — 동기 native 호출은 호출 중 선점 불가                                                                                                                   |
+| 이벤트 (`subscribeEvent`/`onEvent`)   | — Phase 2 (uniffi callback interface / foreign trait)                                                                                                    |
+| 채널 (`createChannel`/바이트)         | — Phase 2                                                                                                                                                |
+| rkyv V2 바이너리 와이어               | ✅ 단일 dispatch 경로 — 생성 래퍼가 `Package::invoke_typed` 를 호출하고, 이것이 postcard 요청을 `invoke_rkyv_v2` 로 보낸다(제2 와이어 없음)              |
+| 계약 정합성                           | ✅ 이 표면은 uniffi 자체의 체크섬 + 계약 버전이 담당; rustra 의 `contract_hash`/`contract.mismatch` 게이트는 blob 전송(Node/Bun/Tauri/JSI)에 스코프 유지 |
+| 핫스왑                                | — uniffi 호스트는 로드 시점 심볼 고정 — 정적/릴리스 빌드 전용; dev 루프는 TS/JSI 유지                                                                    |
+
+참고:
+
+- **에러 모델**: 단일 변형 실패 record
+  `RustraCommandFailure.Failure { code, message, retryable }` — TS
+  `RustraCommandError` 와 동일 형태. uniffi enum 매핑은 설계상 기각됐다:
+  rustra 의 에러 코드 공간은 열려 있고(커스텀 문자열 코드), enum 은 그걸
+  폐쇄해야 한다. 결정 기록:
+  [ADR 0002](adr/0002-uniffi-track-b1-carrier.ko.md).
+- **미러 계층은 생성물** — 손으로 쓰지 않는다: 스키마 프로브가 feature
+  게이트된 `uniffi_generated.rs` 를 렌더링한다(fail-closed 렌더러). 기계적
+  갈림은 가이드에 문서화돼 있다: set→`Vec` 미러 + 변환 시 실제 `BTreeSet`
+  수집, 고정 튜플→합성 record, map→추론 기반 collect, `getSchema()` 는
+  live_schema 반환(세대 카운터 포함), 채널/리소스 핸들 newtype→명시적 경로
+  표의 `u32`.
+- **신선도**: 커밋된 `uniffi_generated.rs` 는 `codegen --check` 의 바이트
+  비교가 지킨다(check 모드에서 cargo build 없음); 커밋된 Kotlin/Swift
+  바인딩은 같은 흐름으로 재생성한다.
 
 ## 스파이크: wasm3 안의 wasm32 엔진 (React Native) — 판정: PASS (스파이크)
 
