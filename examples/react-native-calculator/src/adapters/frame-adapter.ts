@@ -1,13 +1,13 @@
-import { createRkyvV2Engine as createBaseEngine } from '@rustra/types';
+import { createFrameEngine as createBaseEngine } from '@rustra/types';
 import type { EngineClient, RustraNative } from '@rustra/types';
 import { GENERATED_CONTRACT_HASH, SCHEMA_VERSION } from '../../../calculator/generated/contract';
-import { rkyvV2Registry } from '../../../calculator/generated/rkyv-registry';
+import { frameRegistry } from '../../../calculator/generated/frame-registry';
 
-export { rkyvV2Registry };
+export { frameRegistry };
 
-export const createRkyvV2Engine = (
+export const createFrameEngine = (
   native: RustraNative,
-  registry: Map<string, import('@rustra/types').RkyvV2Codec<any, any>> = rkyvV2Registry,
+  registry: Map<string, import('@rustra/types').FrameCodec<any, any>> = frameRegistry,
 ): EngineClient =>
   createBaseEngine(native, registry, {
     contractHash: GENERATED_CONTRACT_HASH,

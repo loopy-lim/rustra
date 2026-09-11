@@ -20,8 +20,8 @@
 //! 프레이밍으로 전환한다(`"binary":true` capability 로 응답). 전환 후 프레임은:
 //!
 //! ```text
-//! 요청  [len: u32 LE][rkyv V2 요청 프레임: cmd_id u16 LE + postcard 본문]
-//! 응답  [len: u32 LE][rkyv V2 응답 프레임: [ok u8][pad 3B][len u32 LE][body]]
+//! 요청  [len: u32 LE][Frame 요청 프레임: cmd_id u16 LE + postcard 본문]
+//! 응답  [len: u32 LE][Frame 응답 프레임: [ok u8][pad 3B][len u32 LE][body]]
 //! ```
 //!
 //! `len`은 항상 프레임 본문 길이(접두 제외)다. 응답은 호출 순서대로
@@ -58,7 +58,7 @@
 //! 푸시  [len: u32 LE][cmd: u16 LE = 0xFFF9][handle: u32 LE][payload bytes]
 //! ```
 //!
-//! 페이로드는 rkyv V2 프레임 등 임의 바이트를 그대로 실으며 길이 접두가 없다
+//! 페이로드는 Frame 프레임 등 임의 바이트를 그대로 실으며 길이 접두가 없다
 //! — 프레임 래퍼의 `len` 이 이미 경계를 제공한다. 발급(0xfffb)은 기존 프레임을
 //! 재사용하되 본문에 1바이트 모드 플래그를 추가한다: 본문 없음(또는 `0x00`)은
 //! JSON 경로(기존과 바이트 동일), `0x01` 은 바이트 경로, 그 외 값은 ok=0 으로

@@ -5,7 +5,7 @@
   "files": [
     {
       "path": "bun.ts",
-      "sha256": "e8e8bb795a34ac0a2e8800ae3eb97b10f425be31a7ca23d2eb732902e5c19ec4"
+      "sha256": "2a15c00390992b0d802402e4b457cfbe908112724bccaf29227e3ac7cc56a7a8"
     },
     {
       "path": "commands.ts",
@@ -24,16 +24,16 @@
       "sha256": "01de485660ff23d21fcd77009c5d23310ed8dae06da1b4b21be7576f57ef08b7"
     },
     {
+      "path": "frame-codecs.ts",
+      "sha256": "b3d4d8a6f3530d4d8cc56a9595519c2dec654b3adced69f50af3a133e015ec43"
+    },
+    {
+      "path": "frame-registry.ts",
+      "sha256": "60e7ace49b6e4b7b55593304388ef324382047af16bc571b55e0aa5850e9736c"
+    },
+    {
       "path": "node.ts",
       "sha256": "213f340d155cda5da00000378ce2ee1b8ef90a4892d26084178c9124da37a657"
-    },
-    {
-      "path": "rkyv-codecs.ts",
-      "sha256": "f63440e663137f2cea8a615651cb512ba1799e5b7c626b7e0a11f0d721cab5b6"
-    },
-    {
-      "path": "rkyv-registry.ts",
-      "sha256": "8cae01e54d437f667c8f41dd327de5e9d63d0d30639dfb2ab3ac54df602ecf21"
     },
     {
       "path": "tauri.ts",

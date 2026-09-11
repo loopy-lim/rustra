@@ -104,7 +104,7 @@ fn bench_cold_start(package: &Package) {
     println!("└───────────────────────────────────────────────┘\n");
 }
 
-/// 호출당 할당 수 — invoke_json / invoke_rkyv_v2 경로의 힙 압력.
+/// 호출당 할당 수 — invoke_json / invoke_frame 경로의 힙 압력.
 fn bench_allocations_per_invoke(package: &Package) {
     println!("┌─ Heap Allocations per Invoke ────────────────┐");
 
@@ -133,20 +133,20 @@ fn bench_allocations_per_invoke(package: &Package) {
         json_deallocs
     );
 
-    // rkyv V2 typed 프레임: command_id(u16) + postcard(SimpleInput).
+    // Frame typed 프레임: command_id(u16) + postcard(SimpleInput).
     let v2_req = add_numbers_v2_request(package, 1, 2);
 
     let (_, v2_allocs, v2_deallocs) = alloc_delta(|| {
         for _ in 0..1000 {
             std::hint::black_box(
                 package
-                    .invoke_rkyv_v2(&v2_req)
-                    .expect("rkyv allocation benchmark command must succeed"),
+                    .invoke_frame(&v2_req)
+                    .expect("frame allocation benchmark command must succeed"),
             );
         }
     });
     println!(
-        "│  invoke_rkyv_v2 (1000 calls): {:>6} allocs ({:>3}/call), {:>6} deallocs",
+        "│  invoke_frame (1000 calls): {:>6} allocs ({:>3}/call), {:>6} deallocs",
         v2_allocs,
         v2_allocs / 1000,
         v2_deallocs
@@ -157,7 +157,7 @@ fn bench_allocations_per_invoke(package: &Package) {
         for _ in 0..1000 {
             let mut out_len = 0usize;
             let written = unsafe {
-                rustra::ffi::rustra_ffi_invoke_rkyv_v2_into(
+                rustra::ffi::rustra_ffi_invoke_frame_into(
                     v2_req.as_ptr(),
                     v2_req.len(),
                     caller_buffer.as_mut_ptr(),
@@ -583,8 +583,8 @@ fn bench_concurrent_invocation(package: &rustra::Package) {
 }
 
 /// 실제 병렬 invoke — N 스레드 × iterations. 일반 typed(JSON Value) 경로와 RN
-/// JSI가 쓰는 rkyv V2 binary 경로를 함께 측정한다. 안전성은
-/// tests/rkyv_v2_concurrency.rs가 증명하고 여기서는 확장성만 본다.
+/// JSI가 쓰는 Frame binary 경로를 함께 측정한다. 안전성은
+/// tests/frame_concurrency.rs가 증명하고 여기서는 확장성만 본다.
 fn bench_parallel_invocation(package: &rustra::Package) {
     println!("┌─ Throughput (multi-threaded, std::thread::scope) ───────┐");
 
@@ -621,8 +621,8 @@ fn bench_parallel_invocation(package: &rustra::Package) {
                     for _ in 0..iterations_per_thread {
                         std::hint::black_box(
                             package
-                                .invoke_rkyv_v2(request)
-                                .expect("parallel rkyv V2 command must succeed"),
+                                .invoke_frame(request)
+                                .expect("parallel Frame command must succeed"),
                         );
                     }
                 });
@@ -631,7 +631,7 @@ fn bench_parallel_invocation(package: &rustra::Package) {
         let elapsed = start.elapsed();
         let ops_per_sec = total / elapsed.as_secs_f64();
         println!(
-            "│  rkyvV2 {thread_count}t × {iterations_per_thread}: {elapsed:.2?} — {}",
+            "│  frame {thread_count}t × {iterations_per_thread}: {elapsed:.2?} — {}",
             format_ops(ops_per_sec)
         );
 
@@ -644,7 +644,7 @@ fn bench_parallel_invocation(package: &rustra::Package) {
                     for _ in 0..iterations_per_thread {
                         let mut out_len = 0usize;
                         let written = unsafe {
-                            rustra::ffi::rustra_ffi_invoke_rkyv_v2_into(
+                            rustra::ffi::rustra_ffi_invoke_frame_into(
                                 request.as_ptr(),
                                 request.len(),
                                 caller_buffer.as_mut_ptr(),

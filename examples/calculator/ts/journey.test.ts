@@ -32,7 +32,7 @@ import { CancelledError, RustraCommandError } from '@rustra/types';
 import { createNodeEngine, createNodeLoopTransport, subscribeEvent } from '@rustra/node';
 // 같은 dist-ts 트리의 generated registry — codecs 주입으로 바이너리 모드 +
 // events:"push" 핸드셰이크가 협상된다(node 패키지 e2e와 동일 패턴).
-import { rkyvV2Registry } from '../generated/rkyv-registry.js';
+import { frameRegistry } from '../generated/frame-registry.js';
 import { isDivideError } from '../generated/errors.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -65,12 +65,12 @@ journeyTest(journeyName, { timeout: 30_000 }, async () => {
   const transport = createNodeLoopTransport({
     command: resolve(ROOT, 'target/debug/loop-stdio'),
     args: [],
-    codecs: rkyvV2Registry as never,
+    codecs: frameRegistry as never,
   });
   const engine = createNodeEngine(transport);
 
   try {
-    // ── 1. invoke 성공 — 바이너리 rkyv V2 왕복 ──────────────────
+    // ── 1. invoke 성공 — 바이너리 Frame 왕복 ──────────────────
     const added = await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
     assert.equal(added.value, 42);
 

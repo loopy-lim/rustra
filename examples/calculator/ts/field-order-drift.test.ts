@@ -10,7 +10,7 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { rustraRegistryDemoCodec } from '../generated/rkyv-codecs.js';
+import { rustraRegistryDemoCodec } from '../generated/frame-codecs.js';
 
 function hexToBytes(hex: string): ArrayBuffer {
   const u = new Uint8Array(hex.length / 2);

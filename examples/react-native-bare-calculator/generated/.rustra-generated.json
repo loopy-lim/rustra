@@ -33,7 +33,7 @@
     },
     {
       "path": "../modules/rustra-bridge/generated/rustra-generated-codecs.hpp",
-      "sha256": "0aa9c0a4c5852ff55358267ae9f65e855b0af47438a72ae891b67b57a7b421a7"
+      "sha256": "d901bf617faebfde8609d5c28150086929aa3d419f29b7468307c3401344dfa8"
     },
     {
       "path": "../modules/rustra-bridge/ios/build-rust-ios.sh",
@@ -80,20 +80,20 @@
       "sha256": "01de485660ff23d21fcd77009c5d23310ed8dae06da1b4b21be7576f57ef08b7"
     },
     {
+      "path": "frame-codecs.ts",
+      "sha256": "b3d4d8a6f3530d4d8cc56a9595519c2dec654b3adced69f50af3a133e015ec43"
+    },
+    {
+      "path": "frame-registry.ts",
+      "sha256": "60e7ace49b6e4b7b55593304388ef324382047af16bc571b55e0aa5850e9736c"
+    },
+    {
       "path": "positional-facade.ts",
       "sha256": "fee0a2c6e92e6ffcda39e0ca9b7cd5361baa7736f3872d9e6eb25d5688b38649"
     },
     {
       "path": "react-native.ts",
-      "sha256": "3e16137774d79c5d53a7c0e1bdaa8c7727a98842177500ee5c4370914a3f3aca"
-    },
-    {
-      "path": "rkyv-codecs.ts",
-      "sha256": "f63440e663137f2cea8a615651cb512ba1799e5b7c626b7e0a11f0d721cab5b6"
-    },
-    {
-      "path": "rkyv-registry.ts",
-      "sha256": "8cae01e54d437f667c8f41dd327de5e9d63d0d30639dfb2ab3ac54df602ecf21"
+      "sha256": "82dba0c52d0d216c32194413ae473d8260f38e462cc93a2dee4565244ab7fbc8"
     },
     {
       "path": "types.ts",

@@ -1,12 +1,12 @@
-//! rkyv V2 sync/async FFI 진입점의 panic guard 회귀 테스트.
+//! Frame sync/async FFI 진입점의 panic guard 회귀 테스트.
 //!
 //! 핸들러 패닉의 직접 유도는 전역 FFI 패키지 스왑이 필요해 예제 크레이트에서
 //! 불가능하다 — 패닉→internal 에러 정규화 자체는 코어 통합 테스트
-//! `crates/rustra/tests/rkyv_v2_panic.rs` 가 담보한다. 여기서는 guard 추가가
+//! `crates/rustra/tests/frame_panic.rs` 가 담보한다. 여기서는 guard 추가가
 //! 정상 경로를 오염하지 않는지 확인한다: (1) 정상 왕복이 여전히 성공 프레임,
 //! (2) 잘린 페이로드가 여전히 clean 한 에러 프레임(ok=0) — abort 아님.
 //!
-//! async 진입점(`rustra_ffi_invoke_rkyv_v2_async`)은 on-complete 계약을
+//! async 진입점(`rustra_ffi_invoke_frame_async`)은 on-complete 계약을
 //! 핀한다: 워커가 어떤 경로로 끝나도 (1) `on_complete` 가 정확히 1회 발화
 //! (JS 프라미스 hang 방지), (2) 취소 레지스트리 엔트리가 정리됨(Unknown).
 //! 패닉 유도가 불가능하므로 정상 경로 계약 고정이 곧 구조 보장의 기준선이다.
@@ -23,13 +23,13 @@ use std::time::{Duration, Instant};
 use rustra_calculator_example::{AddNumbersInput, AddNumbersOutput, calculator_package};
 
 unsafe extern "C" {
-    fn rustra_ffi_invoke_rkyv_v2(
+    fn rustra_ffi_invoke_frame(
         payload: *const u8,
         payload_len: usize,
         out_len: *mut usize,
     ) -> *mut u8;
     fn rustra_ffi_free(ptr: *mut u8, len: usize);
-    fn rustra_ffi_invoke_rkyv_v2_async(
+    fn rustra_ffi_invoke_frame_async(
         payload: *const u8,
         payload_len: usize,
         user_data: *mut c_void,
@@ -60,9 +60,9 @@ fn add_numbers_id() -> u16 {
 
 /// FFI 진입 → 응답 바이트. 패닉 가드가 없으면 abort/handle 되지 않은 패닉으로
 /// 테스트 프로세스가 죽는다 — 정상 복귀 자체가 계약의 일부다.
-fn invoke_rkyv_v2(payload: &[u8]) -> Vec<u8> {
+fn invoke_frame(payload: &[u8]) -> Vec<u8> {
     let mut out_len = 0usize;
-    let ptr = unsafe { rustra_ffi_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len) };
+    let ptr = unsafe { rustra_ffi_invoke_frame(payload.as_ptr(), payload.len(), &mut out_len) };
     assert!(
         !ptr.is_null(),
         "FFI must return a response buffer, not null"
@@ -78,7 +78,7 @@ fn normal_roundtrip_still_works() {
     req.extend_from_slice(
         &postcard::to_allocvec(&AddNumbersInput { a: 42, b: 58 }).expect("postcard encode"),
     );
-    let resp = invoke_rkyv_v2(&req);
+    let resp = invoke_frame(&req);
     // 성공 프레임: [ok=1 @0][7B reserved][postcard(AddNumbersOutput) @8]
     assert_eq!(resp.first(), Some(&1), "ok flag");
     let out: AddNumbersOutput = postcard::from_bytes(&resp[8..]).expect("postcard decode response");
@@ -88,7 +88,7 @@ fn normal_roundtrip_still_works() {
 #[test]
 fn truncated_payload_is_clean_error_frame() {
     // cmd_id 만 있고 본문 없음 — postcard 디코드가 clean 하게 실패해야 한다.
-    let resp = invoke_rkyv_v2(&add_numbers_id().to_le_bytes());
+    let resp = invoke_frame(&add_numbers_id().to_le_bytes());
     assert_eq!(
         resp.first(),
         Some(&0),
@@ -122,7 +122,7 @@ fn async_invoke_completes_exactly_once_and_cleans_registry() {
 
     let mut id: u64 = 0;
     unsafe {
-        rustra_ffi_invoke_rkyv_v2_async(
+        rustra_ffi_invoke_frame_async(
             req.as_ptr(),
             req.len(),
             std::ptr::null_mut(),

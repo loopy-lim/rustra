@@ -4,11 +4,11 @@
       {
         "files": [
           "examples/auth/generated/contract.ts",
-          "examples/auth/generated/rkyv-codecs.ts",
-          "examples/auth/generated/rkyv-registry.ts",
+          "examples/auth/generated/frame-codecs.ts",
+          "examples/auth/generated/frame-registry.ts",
           "examples/streaming/generated/contract.ts",
-          "examples/streaming/generated/rkyv-codecs.ts",
-          "examples/streaming/generated/rkyv-registry.ts",
+          "examples/streaming/generated/frame-codecs.ts",
+          "examples/streaming/generated/frame-registry.ts",
           "examples/react-native-calculator/modules/nitro-bench/nitro-bench/src/index.ts",
           "examples/react-native-calculator/modules/nitro-bench/nitro-bench/src/specs/NitroBench.nitro.ts",
           "examples/react-native-bare-calculator/modules/rustra-bridge/src/index.ts",
@@ -21,10 +21,10 @@
         "files": [
           "examples/react-native-bare-calculator/generated/commands.ts",
           "examples/react-native-bare-calculator/generated/react-native.ts",
-          "examples/react-native-bare-calculator/generated/rkyv-codecs.ts",
+          "examples/react-native-bare-calculator/generated/frame-codecs.ts",
           "examples/react-native-calculator/generated/commands.ts",
           "examples/react-native-calculator/generated/react-native.ts",
-          "examples/react-native-calculator/generated/rkyv-codecs.ts"
+          "examples/react-native-calculator/generated/frame-codecs.ts"
         ],
         "rules": ["deslop/unused-export"]
       },
