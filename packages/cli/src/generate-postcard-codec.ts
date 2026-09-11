@@ -11,7 +11,7 @@ import { generateFieldDecodeExpr } from './generate-postcard-decode.js';
 import { commandCodecSupported, complexCodecSupported } from './generate-postcard-support.js';
 import { generateComplexCodec } from './generate-complex-codec.js';
 
-export function generateRkyvCodecsTs(schema: PackageSchema): string {
+export function generateFrameCodecsTs(schema: PackageSchema): string {
   const allTypes = new Set<string>();
   for (const command of schema.commands) {
     if (command.inputType !== '()') allTypes.add(command.inputType);
@@ -21,7 +21,7 @@ export function generateRkyvCodecsTs(schema: PackageSchema): string {
   const importTypes = [...new Set([...allTypes, ...Object.keys(definitions)])].sort();
   let output = postcardHelperSource();
   output += "import { createComplexCodec } from '@rustra/types';\n";
-  output += "import type { RkyvV2Codec, RustraError, ComplexSchema } from '@rustra/types';\n";
+  output += "import type { FrameCodec, RustraError, ComplexSchema } from '@rustra/types';\n";
   output += `import type { ${importTypes.join(', ')} } from './types.js';\n\n`;
   for (const command of schema.commands) {
     const codec = generatePostcardCodec(command, definitions);
@@ -48,7 +48,7 @@ function generatePostcardCodec(
   const inFields = inResult.fields;
   const outFields = outResult.fields;
   const lines: string[] = [
-    `export const ${fnName}Codec: RkyvV2Codec<${inType}, ${outType}> = {`,
+    `export const ${fnName}Codec: FrameCodec<${inType}, ${outType}> = {`,
     `  commandId: ${command.commandId},`,
     '',
     `  encode(args: ${inType}): ArrayBuffer {`,

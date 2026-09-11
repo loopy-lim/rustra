@@ -9,10 +9,10 @@ import {
   generateErrorsTs,
   generateDevicesTs,
   generateContractTs,
-  generateRkyvCodecsTs,
-  generateRkyvRegistryTs,
-  generateRkyvCodecsHpp,
-  generateRkyvCodecsCpp,
+  generateFrameCodecsTs,
+  generateFrameRegistryTs,
+  generateFrameCodecsHpp,
+  generateFrameCodecsCpp,
   generatePositionalFacadeTs,
 } from './generate.js';
 import { renderReactNativeModule, type ReactNativeScaffoldOptions } from './react-native.js';
@@ -41,7 +41,7 @@ import {
 /** 파일명 → 생성 단계 표기. 헤더의 "Stage:" 행이 다중 표면 출처를 대답한다. */
 function stageFor(fileName: string): string {
   if (fileName.endsWith('.hpp') || fileName.endsWith('.cpp')) return 'schema → cpp codec renderer';
-  if (fileName === 'rkyv-codecs.ts' || fileName === 'rkyv-registry.ts')
+  if (fileName === 'frame-codecs.ts' || fileName === 'frame-registry.ts')
     return 'schema → ts codec renderer';
   if (fileName === 'positional-facade.ts') return 'schema → positional facade';
   if (fileName === 'errors.ts') return 'schema → ts error renderer';
@@ -94,8 +94,8 @@ export async function generateFromSchema(
   addFile(outputPath, 'types.ts', generateTypesTs(schema));
   addFile(outputPath, 'commands.ts', generateCommandsTs(schema));
   addFile(outputPath, 'contract.ts', generateContractTs(schemaContent));
-  addFile(outputPath, 'rkyv-codecs.ts', generateRkyvCodecsTs(schema));
-  addFile(outputPath, 'rkyv-registry.ts', generateRkyvRegistryTs(schema));
+  addFile(outputPath, 'frame-codecs.ts', generateFrameCodecsTs(schema));
+  addFile(outputPath, 'frame-registry.ts', generateFrameRegistryTs(schema));
   const events = generateEventsTs(schema);
   if (events) addFile(outputPath, 'events.ts', events);
   const errors = generateErrorsTs(schema);
@@ -113,8 +113,8 @@ export async function generateFromSchema(
     addFile(outputPath, 'bun.ts', generateBunEntryTs(hostEntries.bun, { events: hasEvents }));
   if (hostEntries?.tauri) addFile(outputPath, 'tauri.ts', generateTauriEntryTs());
   if (cppOutputPath) {
-    addFile(cppOutputPath, 'rustra-generated-codecs.hpp', generateRkyvCodecsHpp(schema));
-    addFile(cppOutputPath, 'rustra-generated-codecs.cpp', generateRkyvCodecsCpp(schema));
+    addFile(cppOutputPath, 'rustra-generated-codecs.hpp', generateFrameCodecsHpp(schema));
+    addFile(cppOutputPath, 'rustra-generated-codecs.cpp', generateFrameCodecsCpp(schema));
   }
   if (reactNativeScaffold) {
     for (const [name, content] of Object.entries(renderReactNativeModule(reactNativeScaffold)))

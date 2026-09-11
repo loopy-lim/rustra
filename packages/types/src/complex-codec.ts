@@ -1,4 +1,4 @@
-import type { RkyvV2Codec } from './index.js';
+import type { FrameCodec } from './index.js';
 import {
   ComplexCodecError,
   DEFAULT_MAX_COLLECTION_LENGTH,
@@ -13,7 +13,7 @@ import { decodeNode } from './complex-codec-decode-node.js';
 import { encodeNode } from './complex-codec-encode-node.js';
 import { compileSchema } from './complex-codec-compiled.js';
 
-export function createComplexCodec<I, O>(options: ComplexCodecOptions): RkyvV2Codec<I, O> {
+export function createComplexCodec<I, O>(options: ComplexCodecOptions): FrameCodec<I, O> {
   const definitions = options.definitions ?? {};
   const maxDepth = options.maxDepth ?? DEFAULT_MAX_DEPTH;
   const maxPayloadBytes = options.maxPayloadBytes ?? DEFAULT_MAX_PAYLOAD_BYTES;

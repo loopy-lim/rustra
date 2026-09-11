@@ -348,4 +348,4 @@ function compileStruct(
 
 export { compileNode };
 
-// ── RkyvV2Codec 조립 ────────────────────────────────────────
+// ── FrameCodec 조립 ────────────────────────────────────────

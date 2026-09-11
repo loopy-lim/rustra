@@ -5,9 +5,9 @@ export type {
   BootstrapState,
   InvokeOptions,
   RustraError,
-  RkyvV2Codec,
-  RkyvV2Native,
-  RkyvV2SchemaNative,
+  FrameCodec,
+  FrameNative,
+  FrameSchemaNative,
 } from '@rustra/types';
 export {
   CancelledError,
@@ -16,7 +16,7 @@ export {
   configure,
   disposedBootstrapError,
   invoke,
-  createRkyvV2Engine,
+  createFrameEngine,
   parseRustraErrorString,
 } from '@rustra/types';
 export {
@@ -25,7 +25,7 @@ export {
   getRustraNative,
   createFastEngine,
   REACT_NATIVE_JSON_ENGINE_SUPPORTS,
-  REACT_NATIVE_RKYV_V2_ENGINE_SUPPORTS,
+  REACT_NATIVE_FRAME_ENGINE_SUPPORTS,
 } from './react-native-core.js';
 export type {
   ReactNativeEngine,

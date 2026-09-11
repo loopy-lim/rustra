@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { RustraCommandError, type RkyvV2Codec, type RkyvV2EngineOptions } from '@rustra/types';
+import { RustraCommandError, type FrameCodec, type FrameEngineOptions } from '@rustra/types';
 
 /** cdylib 후보 해상에 필요한 필드 — 이벤트 구독 팩토리(bun-event-subscription)가
  * 부트스트랩과 동일한 해상을 재사용할 수 있게 분리한 하위 집합이다. */
@@ -10,12 +10,12 @@ export type BunLibraryOptions = {
   libraryName?: string;
 };
 
-export type BunFfiEngineOptions = Omit<RkyvV2EngineOptions, 'rkyvV2Codecs'> & {
-  rkyvV2Codecs: Map<string, RkyvV2Codec<unknown, unknown>>;
+export type BunFfiEngineOptions = Omit<FrameEngineOptions, 'frameCodecs'> & {
+  frameCodecs: Map<string, FrameCodec<unknown, unknown>>;
 } & BunLibraryOptions;
 
 export type BunFfiRuntime = {
-  engine: import('@rustra/types').RkyvV2Engine;
+  engine: import('@rustra/types').FrameEngine;
   library: string;
   usesCallerBufferInto: boolean;
   close(): void;

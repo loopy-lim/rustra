@@ -1,11 +1,11 @@
 import { CODEC_BUFFER, CODEC_POSITIONAL, CODEC_RAW, isNativeByteBuffer } from './global.js';
 import type { GeneratedBytesRoute, GeneratedFieldsRoute } from './global.js';
-import type { RkyvRouteRuntime, RkyvEngineContext } from './rkyv-engine-context.js';
+import type { FrameRouteRuntime, FrameEngineContext } from './frame-engine-context.js';
 
-export function createRkyvRouteRuntime(
-  context: RkyvEngineContext,
+export function createFrameRouteRuntime(
+  context: FrameEngineContext,
   dispatchById: <T>(commandId: number, command: string, args?: unknown) => T,
-): RkyvRouteRuntime {
+): FrameRouteRuntime {
   const { native } = context;
   const {
     hasBufferPath,

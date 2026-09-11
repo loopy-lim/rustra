@@ -35,7 +35,7 @@ function pushBody(name: string, payloadJson: string, seq: number): Buffer {
   return body;
 }
 
-/** rkyv V2 응답 프레임 본문 — [ok u8][pad 3][len u32][json @8]. */
+/** Frame 응답 프레임 본문 — [ok u8][pad 3][len u32][json @8]. */
 function responseBody(result: unknown): Buffer {
   const json = Buffer.from(JSON.stringify(result));
   const body = Buffer.allocUnsafe(8 + json.length);

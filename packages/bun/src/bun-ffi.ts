@@ -1,13 +1,13 @@
 import {
   configureLazy,
-  createRkyvV2Engine,
+  createFrameEngine,
   disposedBootstrapError,
   ensureConfigured,
   RustraErrorCode,
   RustraCommandError,
   type BootstrapState,
   type EngineSupports,
-  type RkyvV2Engine,
+  type FrameEngine,
 } from '@rustra/types';
 import type { Pointer } from 'bun:ffi';
 import {
@@ -31,15 +31,15 @@ export const BUN_ENGINE_SUPPORTS: EngineSupports = {
 };
 
 /**
- * Bun FFI rkyv V2 엔진의 기술적 지표(A02) — 동일 createRkyvV2Engine 코어라도
- * Bun FFI 네이티브 바인딩은 invokeRkyvV2/getSchema/getContractHash/
+ * Bun FFI Frame 엔진의 기술적 지표(A02) — 동일 createFrameEngine 코어라도
+ * Bun FFI 네이티브 바인딩은 invokeFrame/getSchema/getContractHash/
  * getSchemaGeneration 뿐이다(invokeAsync/invokeCancel·invokeTypedBatch 심볼
- * 미바인딩). 따라서 rkyv 코어의 조건부 취소 전파와 정적 명령 단일 횡단 조건이
+ * 미바인딩). 따라서 frame 코어의 조건부 취소 전파와 정적 명령 단일 횡단 조건이
  * 도달 불가 — 관측값은 얕은 취소(`shallow`)와 항목별 폴백(`per-entry`)이다.
  * 이벤트는 FFI 푸시 싱크(폴링 폴백). 채널은 Bun FFI 네이티브에 소스가 없으므로
  * RN JSI 열과 달리 false 다.
  */
-export const BUN_RKYV_V2_ENGINE_SUPPORTS: EngineSupports = {
+export const BUN_FRAME_ENGINE_SUPPORTS: EngineSupports = {
   cancellation: 'shallow',
   batch: 'per-entry',
   events: 'push',
@@ -51,11 +51,11 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
   const { dlopen, FFIType, toArrayBuffer } = await import('bun:ffi');
   const definitions = {
     rustra_mobile_init: { args: [], returns: FFIType.void },
-    rustra_ffi_invoke_rkyv_v2: {
+    rustra_ffi_invoke_frame: {
       args: [FFIType.ptr, FFIType.u64, FFIType.ptr],
       returns: FFIType.ptr,
     },
-    rustra_ffi_invoke_rkyv_v2_into: {
+    rustra_ffi_invoke_frame_into: {
       args: [FFIType.ptr, 'usize' as const, FFIType.ptr, 'usize' as const, FFIType.ptr],
       returns: 'usize' as const,
     },
@@ -67,7 +67,7 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
   } as const;
   const open = (library: string) => dlopen(library, definitions);
   const {
-    rkyvV2Codecs,
+    frameCodecs,
     library: _library,
     libraryCandidates: _candidates,
     libraryName: _libraryName,
@@ -98,10 +98,10 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
     const callerBufferCapacity = 512;
     const callerBuffer = new Uint8Array(callerBufferCapacity);
     const statusOverflow = 0xffff_ffff_ffff_ffffn;
-    const invokeRkyvV2Into = (payload: ArrayBuffer): ArrayBuffer | ArrayBufferView => {
+    const invokeFrameInto = (payload: ArrayBuffer): ArrayBuffer | ArrayBufferView => {
       const request = new Uint8Array(payload);
       outLength[0] = 0n;
-      const status = handle.symbols.rustra_ffi_invoke_rkyv_v2_into(
+      const status = handle.symbols.rustra_ffi_invoke_frame_into(
         request,
         BigInt(request.byteLength),
         callerBuffer,
@@ -118,7 +118,7 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
         }
         const large = new Uint8Array(needed);
         outLength[0] = 0n;
-        const retried = handle.symbols.rustra_ffi_invoke_rkyv_v2_into(
+        const retried = handle.symbols.rustra_ffi_invoke_frame_into(
           request,
           BigInt(request.byteLength),
           large,
@@ -152,7 +152,7 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
       return callerBuffer.buffer;
     };
     const native = {
-      invokeRkyvV2: invokeRkyvV2Into,
+      invokeFrame: invokeFrameInto,
       getSchema: () => {
         outLength[0] = 0n;
         return copyOwned(handle.symbols.rustra_ffi_get_schema(outLength));
@@ -164,11 +164,11 @@ export async function createBunFfiEngine(options: BunFfiEngineOptions): Promise<
       // (T0-3) 치환 재동기화 게이트용 세대 폴링 — u64 → JS number (안전 범위).
       getSchemaGeneration: () => Number(handle.symbols.rustra_ffi_schema_generation()),
     };
-    const engine = createRkyvV2Engine(native, rkyvV2Codecs, engineOptions);
-    // A02 — Bun FFI rkyv V2 엔진의 지표. FFI 바인딩에 invokeAsync/invokeCancel·
+    const engine = createFrameEngine(native, frameCodecs, engineOptions);
+    // A02 — Bun FFI Frame 엔진의 지표. FFI 바인딩에 invokeAsync/invokeCancel·
     // invokeTypedBatch 심볼이 없어 코어의 전파/단일 횡단 조건은 도달 불가 —
     // 관측값은 shallow 취소 + per-entry 배치(상수 주석 참고).
-    engine.supports = { ...BUN_RKYV_V2_ENGINE_SUPPORTS };
+    engine.supports = { ...BUN_FRAME_ENGINE_SUPPORTS };
     return {
       engine,
       library,
@@ -205,7 +205,7 @@ export type BunBootstrap = {
    * dispose 는 멱등이고 dispose 후 ready 는 loud-fail 한다.
    */
   readonly state: BootstrapState;
-  ready(): Promise<RkyvV2Engine>;
+  ready(): Promise<FrameEngine>;
   dispose(): void;
   /**
    * Dev-loop reload hook target (Task A1). Empirically (macOS, Bun 1.4.0),
@@ -227,7 +227,7 @@ export function createBunBootstrap(options: BunFfiEngineOptions): BunBootstrap {
   // await 경계 재검사용 — 클로저 변수를 직접 비교하면 TS 제어 흐름 분석이
   // dispose() 의 부수 효과를 추적하지 못해 비교를 데드 코드로 지워버린다.
   const readState = (): BootstrapState => state;
-  const bootstrap = async (): Promise<RkyvV2Engine> => {
+  const bootstrap = async (): Promise<FrameEngine> => {
     runtime = await createBunFfiEngine(options);
     // (I-NEW) 재초기화 클로저의 dispose 경계 — dlopen await 중 dispose 되면 이
     // 엔진(이미 닫힌 핸들이거나 곧 닫힐 핸들 위)은 전역 슬롯에 설치되면 안 된다.
@@ -261,7 +261,7 @@ export function createBunBootstrap(options: BunFfiEngineOptions): BunBootstrap {
     },
     ready: () => {
       if (state === 'disposed') return Promise.reject(disposedBootstrapError('Bun'));
-      return (ensureConfigured() as Promise<RkyvV2Engine>).then((engine) => {
+      return (ensureConfigured() as Promise<FrameEngine>).then((engine) => {
         if (state === 'disposed') throw disposedBootstrapError('Bun');
         state = 'ready';
         return engine;
@@ -276,7 +276,7 @@ export function createBunBootstrap(options: BunFfiEngineOptions): BunBootstrap {
       // (I-2) 재초기화 실패는 'initializing'(재시도 가능)을 유지 — disposed
       // 벽돌 없음. 원본 에러는 그대로 전파된다(N-2: rethrow 만 하던 try/catch 는
       // 제거 — 삼키면 false success 가 된다).
-      await (ensureConfigured() as Promise<RkyvV2Engine>);
+      await (ensureConfigured() as Promise<FrameEngine>);
       // (I-1) await 경계 재검사 — 재초기화 중 dispose 되면 'ready' 기록 금지.
       if (readState() === 'disposed') throw disposedBootstrapError('Bun');
       state = 'ready';

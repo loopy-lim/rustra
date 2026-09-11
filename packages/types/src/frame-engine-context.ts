@@ -1,8 +1,8 @@
 import type { GeneratedBytesRoute, GeneratedFieldsRoute } from './global.js';
-import type { LiveSchemaDocument, LiveSchemaEntry, RkyvV2SchemaNative } from './live-schema.js';
-import type { RkyvV2Codec } from './public.js';
+import type { LiveSchemaDocument, LiveSchemaEntry, FrameSchemaNative } from './live-schema.js';
+import type { FrameCodec } from './public.js';
 
-export type RkyvSchemaRuntime = {
+export type FrameSchemaRuntime = {
   refreshLiveSchema(): Map<string, LiveSchemaEntry>;
   readLiveSchemaDocument(): LiveSchemaDocument;
   lookupCachedLiveSchemaEntry(command: string): LiveSchemaEntry | undefined;
@@ -15,7 +15,7 @@ export type RkyvSchemaRuntime = {
   readonly resyncEpoch: number;
 };
 
-export type RkyvCapabilityRuntime = {
+export type FrameCapabilityRuntime = {
   hasCapabilityPath: boolean;
   hasTypedPath: boolean;
   hasByIdPath: boolean;
@@ -30,15 +30,15 @@ export type RkyvCapabilityRuntime = {
   isVerifiedStaticId(commandId: number, command: string): boolean;
 };
 
-export type RkyvEngineContext = {
-  native: RkyvV2SchemaNative;
-  registry: Map<string, RkyvV2Codec<unknown, unknown>>;
-  schema: RkyvSchemaRuntime;
-  capabilities: RkyvCapabilityRuntime;
+export type FrameEngineContext = {
+  native: FrameSchemaNative;
+  registry: Map<string, FrameCodec<unknown, unknown>>;
+  schema: FrameSchemaRuntime;
+  capabilities: FrameCapabilityRuntime;
   payloadLimit: number | undefined;
 };
 
-export type RkyvDispatchRuntime = {
+export type FrameDispatchRuntime = {
   dispatch<T>(command: string, args?: unknown): T;
   dispatchPromise<T>(command: string, args?: unknown): Promise<T>;
   dispatchById<T>(commandId: number, command: string, args?: unknown): T;
@@ -54,7 +54,7 @@ export type RkyvDispatchRuntime = {
   ): T;
 };
 
-export type RkyvRouteRuntime = {
+export type FrameRouteRuntime = {
   resolveGeneratedFieldsRoute(
     commandId: number,
     command: string,

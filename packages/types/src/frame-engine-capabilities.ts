@@ -1,12 +1,12 @@
 import { CODEC_TYPED } from './global.js';
-import type { RkyvV2SchemaNative } from './live-schema.js';
-import type { RkyvV2Codec } from './public.js';
-import type { RkyvCapabilityRuntime } from './rkyv-engine-context.js';
+import type { FrameSchemaNative } from './live-schema.js';
+import type { FrameCodec } from './public.js';
+import type { FrameCapabilityRuntime } from './frame-engine-context.js';
 
-export function createRkyvCapabilityRuntime(
-  native: RkyvV2SchemaNative,
-  registry: Map<string, RkyvV2Codec<unknown, unknown>>,
-): RkyvCapabilityRuntime {
+export function createFrameCapabilityRuntime(
+  native: FrameSchemaNative,
+  registry: Map<string, FrameCodec<unknown, unknown>>,
+): FrameCapabilityRuntime {
   // B1 fast path: 네이티브가 C++ typed 코덱(invokeTyped + hasStaticCodec)을 노출하면
   // 정적 명령을 C++에서 postcard 인코딩/디코딩한다 (JS codec 왕복 ~3.4µs 제거).
   const hasLegacyTypedPath = !!(native.invokeTyped && native.hasStaticCodec);

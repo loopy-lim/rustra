@@ -1,11 +1,11 @@
 import {
   parseLiveSchemaDocument,
   type LiveSchemaEntry,
-  type RkyvV2SchemaNative,
+  type FrameSchemaNative,
 } from './live-schema.js';
-import type { RkyvSchemaRuntime } from './rkyv-engine-context.js';
+import type { FrameSchemaRuntime } from './frame-engine-context.js';
 
-export function createRkyvSchemaRuntime(native: RkyvV2SchemaNative): RkyvSchemaRuntime {
+export function createFrameSchemaRuntime(native: FrameSchemaNative): FrameSchemaRuntime {
   let liveSchemaCache: Map<string, LiveSchemaEntry> | undefined;
   /** (T0-3) 캐시가 빌드된 시점의 세대 — 네이티브 폴링 값과 비교한다. */
   let cachedGeneration: number | undefined;

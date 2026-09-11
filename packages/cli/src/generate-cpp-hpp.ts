@@ -1,13 +1,13 @@
 import type { PackageSchema } from './schema.js';
 import { generatedFileHeader } from './generated-header.js';
 
-export function generateRkyvCodecsHpp(_schema: PackageSchema): string {
+export function generateFrameCodecsHpp(_schema: PackageSchema): string {
   return (
     generatedFileHeader('rustra-generated-codecs.hpp', 'schema → cpp codec renderer').trimEnd() +
     '\n' +
     `// C++ postcard codec for the RN JSI fast path (B1).\n` +
     `// C++는 postcard subset과 Set을 제외한 complex subset을 직접 인코딩/디코딩한다.\n` +
-    `// Set을 포함한 complex 명령은 JS codec이 invokeRkyvV2로 전달하고, 동적 명령은\n` +
+    `// Set을 포함한 complex 명령은 JS codec이 invokeFrame로 전달하고, 동적 명령은\n` +
     `// JS Tier 3 fallback을 사용한다.\n` +
     `#pragma once\n\n` +
     `#include <cstddef>\n#include <cstdint>\n#include <jsi/jsi.h>\n#include <string>\n#include "rustra-codec.hpp"\n\n` +

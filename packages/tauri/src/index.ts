@@ -26,8 +26,8 @@ export type {
   EngineClient,
   EngineSupports,
   RustraError,
-  RkyvV2Codec,
-  RkyvV2Native,
+  FrameCodec,
+  FrameNative,
   InvokeOptions,
 } from '@rustra/types';
 export {
@@ -36,7 +36,7 @@ export {
   configureLazy,
   ensureConfigured,
   invoke,
-  createRkyvV2Engine,
+  createFrameEngine,
 } from '@rustra/types';
 
 import {

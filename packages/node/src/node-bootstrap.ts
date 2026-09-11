@@ -87,7 +87,7 @@ export function resolveNodeRuntime(options: NodeBootstrapOptions): string {
   throw noNodeRuntimeError();
 }
 
-/** (A6) Node 계약 불일치 — Bun 구현(rkyv-engine-contract)과 동일한 fix 안내. */
+/** (A6) Node 계약 불일치 — Bun 구현(frame-engine-contract)과 동일한 fix 안내. */
 function nodeContractMismatchError(nativeHash: string, expectedHash: string): RustraCommandError {
   return new RustraCommandError(
     'contract.mismatch',

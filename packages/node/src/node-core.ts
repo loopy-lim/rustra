@@ -134,7 +134,7 @@ export type NodeBootstrapOptions = {
   spawnOptions?: Parameters<typeof spawn>[2];
   contractHash?: string;
   /**
-   * (A2) 계약 검증 정책 — rkyv 엔진의 `contractVerification`(@rustra/types)과
+   * (A2) 계약 검증 정책 — frame 엔진의 `contractVerification`(@rustra/types)과
    * 같은 3모드. `contractHash` 미설정 시 검증 자체가 없으므로 정책도 무의미하다.
    * - `'strict'`(미설정 포함 기본): 후보 선택과 채택 모두에서 불일치는 기각/
    *   throw (`contract.mismatch`).

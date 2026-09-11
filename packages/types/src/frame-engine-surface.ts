@@ -9,19 +9,19 @@ import {
   resolveGeneratedFieldsSync,
 } from './global.js';
 import type { GeneratedBytesRoute, GeneratedFieldsRoute, InternalEngineClient } from './global.js';
-import type { BatchEntry, EngineClient, InvokeOptions, RkyvV2Engine } from './public.js';
+import type { BatchEntry, EngineClient, InvokeOptions, FrameEngine } from './public.js';
 import type {
-  RkyvDispatchRuntime,
-  RkyvEngineContext,
-  RkyvRouteRuntime,
-} from './rkyv-engine-context.js';
+  FrameDispatchRuntime,
+  FrameEngineContext,
+  FrameRouteRuntime,
+} from './frame-engine-context.js';
 
-export function createRkyvEngineSurface(
-  context: RkyvEngineContext,
-  dispatch: RkyvDispatchRuntime,
-  routes: RkyvRouteRuntime,
+export function createFrameEngineSurface(
+  context: FrameEngineContext,
+  dispatch: FrameDispatchRuntime,
+  routes: FrameRouteRuntime,
   invokeRaw: <T>(command: string, args?: unknown, options?: InvokeOptions) => Promise<T>,
-): RkyvV2Engine & InternalEngineClient {
+): FrameEngine & InternalEngineClient {
   const { native, schema, capabilities } = context;
   const { dispatchById, dispatchPromiseById, dispatchGeneratedFields } = dispatch;
   const { resolveGeneratedFieldsRoute, resolveGeneratedBytesRoute } = routes;
@@ -162,5 +162,5 @@ export function createRkyvEngineSurface(
       // 취소 정책(전파/얕은)을 따르게 한다 (T1 후속).
       return Promise.all(entries.map((e) => this.invoke<T>(e.command, e.args, e.options)));
     },
-  } as RkyvV2Engine & InternalEngineClient;
+  } as FrameEngine & InternalEngineClient;
 }

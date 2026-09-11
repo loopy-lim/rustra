@@ -9,7 +9,7 @@ describe('generatedFileHeader', () => {
   });
 
   test('contains source, regen command, do-not-edit, and stage', () => {
-    const header = generatedFileHeader('rkyv-codecs.ts', 'rust-probe schema → ts renderer');
+    const header = generatedFileHeader('frame-codecs.ts', 'rust-probe schema → ts renderer');
     expect(header).toContain('// ── rustra generated');
     expect(header).toContain('Source: schema.json');
     expect(header).toContain('Regen:  rustra codegen --config rustra.json');
