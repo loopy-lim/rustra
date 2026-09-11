@@ -302,6 +302,23 @@ test('compareSurface reports FFI symbol add/remove in both ffiExports and ffiSig
   }
 });
 
+test('missing snapshot in compare mode fails instead of regenerating (bypass pin)', () => {
+  // 감사 수정 — 스냅샷 삭제 PR 이 "재생성 후 통과"로 드리프트 게이트를
+  // 무력화하지 못하게 고정한다. 실패 경로는 파일을 만들지 않는다.
+  const root = makeFixture();
+  try {
+    const result = runCli([], root);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /snapshot missing: api-surface\/snapshot\.json/);
+    assert.ok(
+      !existsSync(join(root, 'api-surface', 'snapshot.json')),
+      '실패 경로에서 스냅샷을 재생성하면 안 된다',
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('snapshot with an old format version fails and points at --update', () => {
   const root = makeFixture();
   try {
