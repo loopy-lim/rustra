@@ -3,6 +3,32 @@
 이 프로젝트의 주요 변경사항을 기록합니다. 세부 내역은 git history와
 `docs/plans/`의 계획/결과 문서를 참고하세요.
 
+## Unreleased
+
+### Breaking
+
+- 바이너리 프로토콜 명칭을 "rkyv V2"에서 "Frame"으로 전면 교체한다. rkyv 크레이트는
+  한 번도 의존성으로 존재한 적이 없고(페이로드 코덱은 postcard), 와이어 바이트에
+  이름이 없어 저장·통신 호환은 무영향이다. 다만 공개 심볼과 산출물 이름이 바뀐다:
+  - Rust FFI: `rustra_ffi_invoke_rkyv_v2{,_into,_async,_async_into}` →
+    `rustra_ffi_invoke_frame{,_into,_async,_async_into}`, `decode_rkyv_v2_response` →
+    `decode_frame_response`, `encode_rkyv_v2_error` → `encode_frame_error`,
+    `decode_rkyv_v2_error_parts` → `decode_frame_error_parts`
+  - TS: `createRkyvV2Engine` → `createFrameEngine`, `RkyvV2Engine`/`RkyvV2Codec`/
+    `RkyvV2Native`/`RkyvV2SchemaNative` → `Frame*` 계열, 모듈 경로 `rkyv-engine` →
+    `frame-engine`, `BUN_RKYV_V2_ENGINE_SUPPORTS`/`REACT_NATIVE_RKYV_V2_ENGINE_SUPPORTS` →
+    `BUN_FRAME_ENGINE_SUPPORTS`/`REACT_NATIVE_FRAME_ENGINE_SUPPORTS`, debug transport
+    리터럴 `'rkyv'` → `'frame'`. `RustraNative` 의 legacy `invokeRkyv` 타입 멤버는
+    이미 구현이 없던 죽은 멤버라서 부활 없이 제거한다(그 자리의 `invokeRkyvV2` →
+    `invokeFrame` 만 남음).
+  - 코드젠 산출물: `rkyv-codecs.ts`/`rkyv-registry.ts` → `frame-codecs.ts`/
+    `frame-registry.ts` — `rustra codegen` 재실행 후 임포트 경로 갱신 필요
+  - React Native JSI: `invokeRkyvV2` → `invokeFrame`(네이티브 모듈 동반 교체)
+  - 에러 메시지 접두사 `"rkyv v2: ..."` → `"frame: ..."`(에러 코드는 불변)
+  - 내부 파일명 `crates/rustra/src/rkyv_*.rs` → `frame_*.rs`, 테스트(`rkyv_v2_*` →
+    `frame_*`)·fuzz 타깃(`invoke_rkyv_v2` → `invoke_frame`)·CI 경로 동반 갱신.
+    마이그레이션 표는 docs/migration-guide.md 참고.
+
 ## 0.9.0 (2026-09-10)
 
 0.9.0 라인 요약이다 — npm 패키지 0.7.0~0.9.0(패키지별 상이)과 Rust crate
