@@ -1,5 +1,6 @@
 // API 표면 스냅샷 게이트 — Rust/TS 공개 export 를 api-surface/snapshot.json 에 고정하고
-// 드리프트(추가/삭제/변경)를 감지한다. `node scripts/api-surface.mjs` (비교) 또는 `--update`(갱신).
+// 드리프트(추가/삭제/변경)를 감지한다. `node scripts/api-surface.mjs` (비교 — 스냅샷
+// 부재는 실패) 또는 `--update`(갱신/생성).
 //
 // FFI 시그니처는 blind spot 이 아니다 — ffiSignatures 섹션이 각 `rustra_ffi_*` 함수의
 // `fn 이름`부터 `{`/`;` 직전까지의 시그니처(매개변수·반환형 포함, 여러 줄은 공백 하나로
@@ -315,10 +316,20 @@ function run() {
   const root = process.cwd();
   const snapshotPath = join(root, SNAPSHOT_DIR, SNAPSHOT_FILE);
   const update = process.argv.includes('--update');
-  if (update || !existsSync(snapshotPath)) {
+  if (update) {
     mkdirSync(join(root, SNAPSHOT_DIR), { recursive: true });
     writeFileSync(snapshotPath, serializeSurface(collectSurface(root)));
-    console.log(update ? `snapshot updated: ${SNAPSHOT_DIR}/${SNAPSHOT_FILE}` : 'snapshot created');
+    console.log(`snapshot updated: ${SNAPSHOT_DIR}/${SNAPSHOT_FILE}`);
+    return;
+  }
+  // 스냅샷 부재는 비교 대상이 없는 게이트 우회다 — 현재 코드로 베이스라인을
+  // 재생성해서 "통과"시키면 snapshot.json 을 지우는 PR 로 드리프트 게이트가
+  // 무력화된다. 명시적 --update(의도 갱신)에서만 생성한다.
+  if (!existsSync(snapshotPath)) {
+    console.error(
+      `snapshot missing: ${SNAPSHOT_DIR}/${SNAPSHOT_FILE} — restore it from git, or run with --update to (re)generate it intentionally and commit the result`,
+    );
+    process.exitCode = 1;
     return;
   }
   const snapshot = JSON.parse(readFileSync(snapshotPath, 'utf8'));
