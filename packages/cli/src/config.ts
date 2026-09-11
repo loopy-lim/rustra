@@ -1,119 +1,27 @@
+// rustra.json 로더 — 파일 적기 + L1 fail-closed 검증(config-sections.ts) + L2 의미
+// 수집(config-semantic.ts)으로 구성된 진입점. 계약 데이터(허용 키·타입)는
+// config-schema.ts 에서 재수출해 기존 './config.js' 임포트 경로를 유지한다.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { closestMatch } from './cli-suggest.js';
 
-/** rustra.json 루트 허용 키 — L1 fail-closed의 단일 출처(스키마 대조 테스트가 함께 읽는다). */
-export const CONFIG_ROOT_KEYS = [
-  '$schema',
-  'schema',
-  'output',
-  'cppOutput',
-  'positional',
-  'codegen',
-  'reactNative',
-  'node',
-  'bun',
-  'tauri',
-  'dev',
-  'inspector',
-  'uniffi',
-] as const;
-export const CODEGEN_CONFIG_KEYS = ['rustManifest', 'rustPackage', 'rustBinary'] as const;
-export const UNIFFI_CONFIG_KEYS = ['output', 'srcOut', 'dylibProfile'] as const;
-export const DYLIB_PROFILES = ['debug', 'release'] as const;
-export const REACT_NATIVE_CONFIG_KEYS = [
-  'moduleDir',
-  'rustManifest',
-  'rustPackage',
-  'rustLibrary',
-] as const;
-export const NODE_CONFIG_KEYS = ['rustManifest', 'rustPackage', 'rustBinary', 'args'] as const;
-export const BUN_CONFIG_KEYS = ['rustManifest', 'rustPackage', 'rustLibrary'] as const;
-export const DEV_CONFIG_KEYS = ['target', 'wasm', 'dylib'] as const;
-export const DEV_WASM_CONFIG_KEYS = ['engine', 'parityGate'] as const;
-export const DEV_DYLIB_CONFIG_KEYS = ['parityGate'] as const;
-export const INSPECTOR_CONFIG_KEYS = ['onMismatch'] as const;
-export const DEV_TARGETS = ['native', 'wasm', 'dylib'] as const;
-export const WASM_ENGINES = ['wasm3'] as const;
-export const ON_MISMATCH_VALUES = ['diagnose', 'ignore'] as const;
+import {
+  assertDevSection,
+  assertInspectorSection,
+  assertKnownKeys,
+  assertUniffiSection,
+} from './config-sections.js';
+import { collectSemanticErrors } from './config-semantic.js';
+import {
+  BUN_CONFIG_KEYS,
+  CODEGEN_CONFIG_KEYS,
+  CONFIG_ROOT_KEYS,
+  NODE_CONFIG_KEYS,
+  REACT_NATIVE_CONFIG_KEYS,
+  type RustraConfig,
+} from './config-schema.js';
 
-// 열거형 타입은 상수 배열에서 파생 — 배열만 고치면 타입·검증·스키마가 함께 따라간다.
-export type DevTarget = (typeof DEV_TARGETS)[number];
-export type WasmEngine = (typeof WASM_ENGINES)[number];
-export type OnMismatch = (typeof ON_MISMATCH_VALUES)[number];
-export type DylibProfile = (typeof DYLIB_PROFILES)[number];
-
-export interface DevWasmConfig {
-  engine?: WasmEngine;
-  parityGate?: boolean;
-}
-
-export interface DevDylibConfig {
-  parityGate?: boolean;
-}
-
-export interface DevConfig {
-  target?: DevTarget;
-  wasm?: DevWasmConfig;
-  dylib?: DevDylibConfig;
-}
-
-export interface InspectorConfig {
-  onMismatch?: OnMismatch;
-}
-
-/**
- * uniffi 섹션 — UniFFI Kotlin/Swift 바인딩 코드젠. 존재 자체가 기능 스위치다
- * (없으면 코드젠 흐름은 이전과 바이트 동일). 최소 옵션만 — 필요가 생기면 키를
- * 추가한다(선제적 옵션 금지).
- */
-export interface RustraUniffiConfig {
-  /** Kotlin/Swift 바인딩이 출력되는 디렉터리 — config 파일 위치 기준 상대경로. */
-  output: string;
-  /**
-   * Rust 프로브가 uniffi_generated.rs 를 쓰는(그리고 커밋되는) 디렉터리 —
-   * config 파일 위치 기준 상대경로로 schema/output 과 같은 관례를 따른다.
-   * 하드코딩된 "src" 를 금지하기 위한 키다. 기본값 "src".
-   */
-  srcOut?: string;
-  /** 바인딩 생성에 쓰이는 cdylib 빌드 프로필. 기본값 "debug". */
-  dylibProfile?: DylibProfile;
-}
-
-export interface RustraConfig {
-  /** JSON Schema 참조(init이 삽입) — 에디터 검증 전용이며 런타임은 읽지 않는다. */
-  $schema?: string;
-  schema: string;
-  output: string;
-  cppOutput?: string;
-  positional?: boolean;
-  codegen?: {
-    rustManifest?: string;
-    rustPackage?: string;
-    rustBinary?: string;
-  };
-  reactNative?: {
-    moduleDir?: string;
-    rustManifest?: string;
-    rustPackage?: string;
-    rustLibrary?: string;
-  };
-  node?: {
-    rustManifest?: string;
-    rustPackage?: string;
-    rustBinary?: string;
-    args?: string[];
-  };
-  bun?: {
-    rustManifest?: string;
-    rustPackage?: string;
-    rustLibrary?: string;
-  };
-  tauri?: Record<string, never>;
-  dev?: DevConfig;
-  inspector?: InspectorConfig;
-  uniffi?: RustraUniffiConfig;
-}
+export * from './config-schema.js';
+export { collectSemanticErrors } from './config-semantic.js';
 
 export function readConfigSync(configPath: string): RustraConfig {
   const resolvedPath = resolve(configPath);
@@ -278,145 +186,4 @@ export function readConfigSync(configPath: string): RustraConfig {
   }
 
   return config;
-}
-
-const BOOL_ERROR = 'must be a boolean';
-
-/** L1 — dev 섹션: fail-closed 키 검사 + 리프 값 타입/허용값 검사. */
-function assertDevSection(dev: DevConfig | undefined): void {
-  if (dev === undefined) return;
-  assertKnownKeys(dev, DEV_CONFIG_KEYS, 'config dev');
-  if (dev.target !== undefined && !DEV_TARGETS.includes(dev.target)) {
-    throw new Error(unknownValueError('dev.target', dev.target, [...DEV_TARGETS]));
-  }
-  const wasm = dev.wasm;
-  if (wasm !== undefined) {
-    assertKnownKeys(wasm, DEV_WASM_CONFIG_KEYS, 'config dev.wasm');
-    if (wasm.parityGate !== undefined && typeof wasm.parityGate !== 'boolean') {
-      throw new Error(`Config dev.wasm.parityGate ${BOOL_ERROR}`);
-    }
-  }
-  const dylib = dev.dylib;
-  if (dylib !== undefined) {
-    assertKnownKeys(dylib, DEV_DYLIB_CONFIG_KEYS, 'config dev.dylib');
-    if (dylib.parityGate !== undefined && typeof dylib.parityGate !== 'boolean') {
-      throw new Error(`Config dev.dylib.parityGate ${BOOL_ERROR}`);
-    }
-  }
-}
-
-/** L1 — inspector 섹션: fail-closed 키 검사 + onMismatch 허용값 검사. */
-function assertInspectorSection(inspector: InspectorConfig | undefined): void {
-  if (inspector === undefined) return;
-  assertKnownKeys(inspector, INSPECTOR_CONFIG_KEYS, 'config inspector');
-  if (inspector.onMismatch !== undefined && !ON_MISMATCH_VALUES.includes(inspector.onMismatch)) {
-    throw new Error(
-      unknownValueError('inspector.onMismatch', inspector.onMismatch, [...ON_MISMATCH_VALUES]),
-    );
-  }
-}
-
-/**
- * L1 — uniffi 섹션: fail-closed 키 검사 + 리프 값 타입/허용값 검사. output 은
- * 필수(schema/output 과 같은 비어있지 않은 안전 경로 계약)이고, srcOut/dylibProfile
- * 은 선택 — 기본값은 소비자(cli-codegen)가 채운다.
- */
-function assertUniffiSection(uniffi: RustraUniffiConfig | undefined): void {
-  if (uniffi === undefined) return;
-  assertKnownKeys(uniffi, UNIFFI_CONFIG_KEYS, 'config uniffi');
-  if (
-    typeof uniffi.output !== 'string' ||
-    uniffi.output.length === 0 ||
-    /[\0\r\n]/.test(uniffi.output)
-  ) {
-    throw new Error('Config uniffi.output must be a non-empty safe path');
-  }
-  if (
-    uniffi.srcOut !== undefined &&
-    (typeof uniffi.srcOut !== 'string' ||
-      uniffi.srcOut.length === 0 ||
-      /[\0\r\n]/.test(uniffi.srcOut))
-  ) {
-    throw new Error('Config uniffi.srcOut must be a non-empty safe path');
-  }
-  if (uniffi.dylibProfile !== undefined && !DYLIB_PROFILES.includes(uniffi.dylibProfile)) {
-    throw new Error(
-      unknownValueError('uniffi.dylibProfile', uniffi.dylibProfile, [...DYLIB_PROFILES]),
-    );
-  }
-}
-
-/**
- * 허용값 벗어남 L1 에러 — nearest 후보 did-you-mean(hoge 처럼 거리가 먼 값은 생략)에
- * 더해 허용값 전체를 항상 나열해 2값 열거형에서도 수정명령이 한 줄로 끝나게 한다.
- */
-function unknownValueError(field: string, value: string, allowed: readonly string[]): string {
-  const suggestion = closestMatch(value, allowed);
-  const hint = suggestion
-    ? ` Did you mean "${suggestion}"? Allowed values: ${allowed.join(', ')}.`
-    : ` Allowed values: ${allowed.join(', ')}.`;
-  return `Unknown config ${field} value "${value}".${hint}`;
-}
-
-/**
- * L2 — 교차 필드 의미 검사. config 로드 경로에서 L1 통과 후 호출되며,
- * 위반을 하나도 놓치지 않고 전부 수집해 한 번에 나열한다(첫 위반에서 중단 않음).
- * 수집 순서는 고정 — reactNative 필요성, 잘못된 wasm/dylib 섹션 위치, parityGate,
- * engine. doctor 영역 환경 검사(devtools 설치 여부 등)는 여기 넣지 않는다 — 로드는 순수 함수.
- */
-export function collectSemanticErrors(config: RustraConfig): string[] {
-  const errors: string[] = [];
-  const dev = config.dev;
-  const target = dev?.target ?? 'native';
-
-  if (target === 'wasm' && config.reactNative === undefined) {
-    // wasm dev-target은 RN 어댑터의 staticlib 경로를 탄다 — RN 섹션이 필요하다.
-    errors.push('dev.target "wasm" requires a reactNative section');
-  }
-  if (target !== 'wasm' && dev?.wasm !== undefined) {
-    errors.push('dev.wasm is only valid when dev.target is "wasm"');
-  }
-  if (target !== 'wasm' && dev?.wasm?.parityGate !== undefined) {
-    errors.push('dev.wasm.parityGate is only valid when dev.target is "wasm"');
-  }
-  if (target !== 'dylib' && dev?.dylib !== undefined) {
-    errors.push('dev.dylib is only valid when dev.target is "dylib"');
-  }
-  if (target !== 'dylib' && dev?.dylib?.parityGate !== undefined) {
-    errors.push('dev.dylib.parityGate is only valid when dev.target is "dylib"');
-  }
-  if (dev?.wasm?.engine !== undefined && !WASM_ENGINES.includes(dev.wasm.engine)) {
-    // engine 미지 값이 L2 수집인 이유 — reactNative 요구 위반과 동시에 발생할 수 있어
-    // 전부 나열해야 한다. 반면 dev.target/onMismatch 는 섹션 자체의 유효성이라 L1 fail-fast.
-    // (신규 엔진 편성 시 WASM_ENGINES 만 갱신하면 타입·검증·메시지가 함께 따라간다.)
-    // 문구는 L1 unknownValueError 와 동일하게 — did-you-mean + 허용값 표시를 통일한다.
-    errors.push(unknownValueError('dev.wasm.engine', dev.wasm.engine, [...WASM_ENGINES]));
-  }
-
-  return errors;
-}
-
-function assertKnownKeys(value: unknown, allowed: readonly string[], label: string): void {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new Error(`${label} must be an object`);
-  }
-  // O(1) 조회 — allowed 배열을 루프 안에서 includes 로 훑지 않는다.
-  const allowedSet = new Set(allowed);
-  for (const key of Object.keys(value)) {
-    if (!allowedSet.has(key)) {
-      const suggestion = closestKey(key, allowed);
-      const hint = suggestion
-        ? ` Did you mean "${suggestion}"?`
-        : ` Known keys: ${allowed.join(', ')}.`;
-      throw new Error(`Unknown ${label} key "${key}".${hint}`);
-    }
-  }
-}
-
-/** config 키 제안 — 키 비교만 소문자로 맞추는 기존 드리프트를 유지한다. */
-function closestKey(input: string, allowed: readonly string[]): string | undefined {
-  return closestMatch(
-    input.toLowerCase(),
-    allowed.map((key) => key.toLowerCase()),
-  );
 }
