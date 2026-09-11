@@ -91,6 +91,44 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    /// 감사 후속 — 구현 통합(6d9f3257) 때 깎인 폴백 복원 검증. items 키가
+    /// 비배열(`items: false`, 2020-12 폐쇄 튜플 관례)로 존재해도 prefixItems
+    /// 배열이 튜플로 매핑돼야 하며, `unknown` 강등되면 안 된다.
+    #[test]
+    fn closed_tuple_prefix_items_survive_non_array_items() {
+        clear_codegen_warnings();
+        set_codegen_command_context("kindEcho");
+        let schema = json!({
+            "type": "array",
+            "items": false,
+            "prefixItems": [{ "type": "string" }, { "type": "integer" }]
+        });
+        assert_eq!(ts_type_from_schema(&schema, &json!({})), "[string, number]");
+        assert!(take_codegen_warnings().is_empty());
+    }
+
+    /// 같은 통합으로 anyOf 쪽도 깎였다 — anyOf 키가 비배열로 존재하면 oneOf
+    /// 배열로 폴백해야 한다(통합 전 두 분기 시맨틱).
+    #[test]
+    fn one_of_array_falls_back_when_any_of_key_is_not_an_array() {
+        let schema = json!({
+            "anyOf": false,
+            "oneOf": [{ "type": "string" }, { "type": "null" }]
+        });
+        assert_eq!(ts_type_from_schema(&schema, &json!({})), "string | null");
+    }
+
+    /// 정상 우선순위 핀 — items 배열이 prefixItems 보다 우선한다.
+    #[test]
+    fn items_tuple_takes_priority_over_prefix_items() {
+        let schema = json!({
+            "type": "array",
+            "items": [{ "type": "string" }],
+            "prefixItems": [{ "type": "integer" }]
+        });
+        assert_eq!(ts_type_from_schema(&schema, &json!({})), "[string]");
+    }
+
     /// 감사 HIGH 항목 — 매핑 불가 스키마가 조용히 `"unknown"`으로 폴백하며
     /// 타입명/명령명을 잃는 결함. 폴백이 경고를 남기는지 검증한다.
     #[test]
