@@ -216,9 +216,9 @@ pub fn hello_response(echo_id: Value, events_mode: Option<&str>) -> Value {
     response
 }
 
-/// 바이너리 모드 루프 — 4B len 프레임을 read_exact 으로 읽고 rkyv V2 로
+/// 바이너리 모드 루프 — 4B len 프레임을 read_exact 으로 읽고 Frame 로
 /// 직결 dispatch 한다. 응답 복사를 줄이기 위해 재사용 출력 버퍼에
-/// `invoke_rkyv_v2_into` 로 기록하고(플러시 전까지 유지), 초과 응답만
+/// `invoke_frame_into` 로 기록하고(플러시 전까지 유지), 초과 응답만
 /// core 의 probe 캐시 경유 Vec 으로 받는다.
 pub fn run_binary<R: Read, W: Write>(
     package: &Package,
@@ -262,10 +262,10 @@ pub fn run_binary<R: Read, W: Write>(
                 let ok = decode_postcard_u32(&payload[2..]).is_some_and(channel_drop);
                 vec![u8::from(ok), 0, 0, 0]
             }
-            _ => match package.invoke_rkyv_v2_into(&payload, &mut out_buffer) {
+            _ => match package.invoke_frame_into(&payload, &mut out_buffer) {
                 Ok(rustra::DirectResponse::Written(n)) => out_buffer[..n].to_vec(),
                 Ok(rustra::DirectResponse::Buffered(bytes)) => bytes,
-                Err(error) => rustra::encode_rkyv_v2_error(&error),
+                Err(error) => rustra::encode_frame_error(&error),
             },
         };
 

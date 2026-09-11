@@ -1,6 +1,6 @@
 // Phase 2 — Rust↔TS 교차 와이어 증명 (Task 2.2 + 2.3 + 2.6).
 //
-// Rust 측 `examples/calculator/tests/wire_fixtures.rs` 가 실제 `invoke_rkyv_v2`
+// Rust 측 `examples/calculator/tests/wire_fixtures.rs` 가 실제 `invoke_frame`
 // 로 만들어낸 canonical hex 를, **generated codec**(stub 아님)으로 양방향
 // 교차 검증한다:
 //   - Rust→TS : Rust 가 낸 response hex → TS codec.decode → 값 일치
@@ -11,7 +11,7 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { addNumbersCodec, divideCodec, greetCodec } from '../generated/rkyv-codecs.js';
+import { addNumbersCodec, divideCodec, greetCodec } from '../generated/frame-codecs.js';
 
 // ── canonical hex (Rust wire_fixtures.rs 와 공유) ────────────
 const ADDNUMBERS_REQUEST = '01000406';
@@ -131,7 +131,7 @@ test('cross-wire frame layout: error has ok=0, err_len u16 LE @8, body @10', () 
 // Rust wire_fixtures.rs 신규 4종과 짝. probe 계약: u32/u64 plain varint,
 // map count+(k,v)*, tuple 은 A2부터 postcard prefix-free(len + elements).
 
-import { gaugeCodec, scoreTotalCodec, sizeOfCodec, spanCodec } from '../generated/rkyv-codecs.js';
+import { gaugeCodec, scoreTotalCodec, sizeOfCodec, spanCodec } from '../generated/frame-codecs.js';
 
 const SIZEOF_REQUEST = '0e0004010203fa';
 const SIZEOF_RESPONSE = '0100000000000000800204';
@@ -240,7 +240,7 @@ test('cross-wire span 2^53+1: decode restores bigint beyond number precision', (
 // 참고: span 튜플과 마찬가지로 와이드 정수 명령은 0.4.1 complex-codec 와이어
 // (count + elements)와 호환되지 않는다 — 구/신 코덱 혼용 금지.
 
-import { wideAggCodec } from '../generated/rkyv-codecs.js';
+import { wideAggCodec } from '../generated/frame-codecs.js';
 
 const WIDEAGG_BOUNDARY_REQUEST =
   '1c0005017f80018180808080808010ffffffffffffffffff0101ffffffffffffffffff01';
@@ -294,7 +294,7 @@ test('cross-wire wideAgg: multi-element 5/9/10-byte varints across mid-stream bo
 // Rust BTreeSet 은 정렬 순서로 직렬화하지만 디코딩은 Set 이므로 순서 차이는
 // 관측되지 않는다.
 
-import { tagSetCodec } from '../generated/rkyv-codecs.js';
+import { tagSetCodec } from '../generated/frame-codecs.js';
 
 const TAGSET_REQUEST = '1d00030d1ed00f';
 const TAGSET_RESPONSE = '01000000000000000303742d3705743130303003743135';
@@ -327,7 +327,7 @@ test('cross-wire tagSet: Rust response → TS decode restores a real Set<string>
 // 중첩 구조체, 결정론 맵(BTreeMap → Vec<string>), 대용량 페이로드를
 // Rust 실측 hex 와 byte-exact 로 고정한다.
 
-import { echoGroupsCodec, kindEchoCodec, processItemCodec } from '../generated/rkyv-codecs.js';
+import { echoGroupsCodec, kindEchoCodec, processItemCodec } from '../generated/frame-codecs.js';
 
 const KINDECHO_UNIT_REQUEST = '210000';
 const KINDECHO_UNIT_RESPONSE = '010000000000000000';

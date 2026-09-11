@@ -1,19 +1,19 @@
 // Self-contained Dynamic Command Registry demo.
 // 런타임에 명령을 register / replace / unregister 하고 변경을 live 로 관찰한다.
 // debug 빌드(rust lib)에서만 동작. release 는 frozen.
-// 벤치마크나 rkyv-registry 의존성 없이 JSON 경로(createJsonEngine)만 사용한다.
+// 벤치마크나 frame-registry 의존성 없이 JSON 경로(createJsonEngine)만 사용한다.
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View, ScrollView } from 'react-native';
 import { installRustraJSI, getRustraNative } from '@rustra/generated-react-native';
 import { createJsonEngine } from './src/adapters/json-adapter';
-import { createRkyvV2Engine, getLiveSchema } from '@rustra/types';
+import { createFrameEngine, getLiveSchema } from '@rustra/types';
 import { subscribeEvent } from '../../packages/react-native/src';
 import { GENERATED_CONTRACT_HASH, SCHEMA_VERSION } from '../calculator/generated/contract';
 import { formatError } from './src/format-error';
 
 type Engine = ReturnType<typeof createJsonEngine>;
 
-// 엔진 호출(JSON/rkyvV2 공용)을 안전하게 래핑한다(에러도 화면에 표시).
+// 엔진 호출(JSON/frame 공용)을 안전하게 래핑한다(에러도 화면에 표시).
 async function invokeSafe<T>(
   engine: { invoke: <U>(command: string, args?: unknown) => Promise<U> },
   command: string,
@@ -84,20 +84,20 @@ async function runSingleEngineDemo(
   native: ReturnType<typeof getRustraNative>,
   log: (s: string) => void,
 ): Promise<void> {
-  // 단일 rkyvV2 엔진: codec registry 가 비어있으므로 동적 명령은 Tier 3 fallback.
+  // 단일 frame 엔진: codec registry 가 비어있으므로 동적 명령은 Tier 3 fallback.
   const jsonEngine = createJsonEngine(native); // control(setup) 용
-  const rkyvEngine = createRkyvV2Engine(native, new Map<string, any>(), {
+  const frameEngine = createFrameEngine(native, new Map<string, any>(), {
     contractHash: GENERATED_CONTRACT_HASH,
     schemaVersion: SCHEMA_VERSION,
   });
 
   log('╔══════════════════════════════════════════════╗');
-  log('║  Single rkyvV2 engine + live schema (Tier 3) ║');
+  log('║  Single frame engine + live schema (Tier 3) ║');
   log('╚══════════════════════════════════════════════╝');
 
   const control = (op: string) => jsonEngine.invoke('rustraRegistryDemo', { op });
 
-  // 다양한 타입의 동적 명령을 등록하고 단일 rkyvV2 엔진으로(Tier 3 fallback) 호출.
+  // 다양한 타입의 동적 명령을 등록하고 단일 frame 엔진으로(Tier 3 fallback) 호출.
   // 각 단계에서 live schema 의 commandId/types 를 확인한다.
 
   // (a) Vec<f64> 입력
@@ -106,7 +106,7 @@ async function runSingleEngineDemo(
   let entry = schema.get('average');
   log(`[Vec]   live schema 'average' commandId=${entry?.commandId}`);
   {
-    const out = await rkyvEngine.invoke<{ average: number; count: number }>('average', {
+    const out = await frameEngine.invoke<{ average: number; count: number }>('average', {
       numbers: [10, 20, 30, 40],
     });
     log(`  engine.invoke('average') → avg=${out.average} count=${out.count}`);
@@ -119,7 +119,7 @@ async function runSingleEngineDemo(
   entry = schema.get('greetDyn');
   log(`[String] live schema 'greetDyn' commandId=${entry?.commandId}`);
   {
-    const out = await rkyvEngine.invoke<{ message: string }>('greetDyn', {
+    const out = await frameEngine.invoke<{ message: string }>('greetDyn', {
       name: 'rust 🦀',
     });
     log(`  engine.invoke('greetDyn') → ${out.message}`);
@@ -132,7 +132,7 @@ async function runSingleEngineDemo(
   entry = schema.get('scoreMap');
   log(`[Map]   live schema 'scoreMap' commandId=${entry?.commandId}`);
   {
-    const out = await rkyvEngine.invoke<{ total: number; keys: number }>('scoreMap', {
+    const out = await frameEngine.invoke<{ total: number; keys: number }>('scoreMap', {
       scores: { a: 10, b: 32 },
     });
     log(`  engine.invoke('scoreMap') → total=${out.total} keys=${out.keys}`);
@@ -148,7 +148,7 @@ async function runSingleEngineDemo(
     const out = await invokeSafe<{
       count: number;
       sum_x: number;
-    }>(rkyvEngine, 'nestedEcho', {
+    }>(frameEngine, 'nestedEcho', {
       p: { x: 1, y: 2 },
       items: [
         { x: 10, y: 0 },
@@ -161,7 +161,7 @@ async function runSingleEngineDemo(
   }
   await control('unregisterNested');
   log('');
-  log('✅ 4 dynamic command types (Vec/String/Map/Nested) via single rkyvV2 engine (Tier 3)');
+  log('✅ 4 dynamic command types (Vec/String/Map/Nested) via single frame engine (Tier 3)');
 }
 
 // ── Event push demo (Rust → JS) ───────────────────────────

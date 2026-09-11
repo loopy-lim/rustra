@@ -1,0 +1,4 @@
+{
+  "schema": "./generated/schema.json",
+  "output": "./generated"
+}

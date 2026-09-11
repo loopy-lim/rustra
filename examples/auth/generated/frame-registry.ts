@@ -1,10 +1,20 @@
 // ── rustra generated ────────────────────────────────────────
-// File:   contract.ts
+// File:   frame-registry.ts
 // Source: schema.json (single source of truth for this file)
 // Regen:  rustra codegen --config rustra.json
-// Stage:  rust-probe schema → ts renderer
+// Stage:  schema → ts codec renderer
 // DO NOT EDIT — changes will be overwritten and fail codegen --check.
 // ────────────────────────────────────────────────────────────
 
-export const GENERATED_CONTRACT_HASH = 'e3e75d2b336d5d0fb55c8bdbfd77d4e57feeeba2129e01a6e4399eeb3bff0a19';
-export const SCHEMA_VERSION = 1;
+import { adminStatsCodec, grantCodec, signInCodec, signOutCodec } from './frame-codecs.js';
+
+export const frameRegistry = new Map<string, import('@rustra/types').FrameCodec<any, any>>([
+  // route: postcard
+  ['adminStats', adminStatsCodec],
+  // route: postcard
+  ['grant', grantCodec],
+  // route: postcard
+  ['signIn', signInCodec],
+  // route: postcard
+  ['signOut', signOutCodec],
+]);

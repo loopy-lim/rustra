@@ -33,7 +33,7 @@ The executables live in [`apps/node-app.ts`](apps/node-app.ts) and
 4. **TypeScript generation** — contract probe publishes `schema.json` (`generate` bin), then `rustra codegen` renders the TS/C++ surfaces from it
 5. **Host generated entrypoints** — `node.ts`, `bun.ts`, `tauri.ts`, `react-native.ts`
 6. **Native entrypoint** — `native_entry!` in one line shares the stable C ABI and the RN staticlib
-7. **High-performance options** — measured Node persistent loop/N-API and Bun FFI rkyv V2
+7. **High-performance options** — measured Node persistent loop/N-API and Bun FFI Frame
 
 ## Generated Files
 
@@ -43,7 +43,7 @@ The following files are generated in the `examples/calculator/generated/` direct
 - `types.ts` — TypeScript type definitions
 - `commands.ts` — command helper functions
 - `contract.ts` — contract hash
-- `rkyv-codecs.ts`, `rkyv-registry.ts` — rkyv V2 binary fast-path codecs
+- `frame-codecs.ts`, `frame-registry.ts` — Frame binary fast-path codecs
 - `node.ts`, `bun.ts`, `tauri.ts`, `react-native.ts` — zero-config bootstrap per host
 
 Enabling the `positional` option (as the React Native examples do) additionally
@@ -68,7 +68,7 @@ bun run bench:hosts
 ```
 
 [`apps/node-performance.ts`](apps/node-performance.ts) measures the Node default one-shot,
-persistent loop, and N-API rkyv V2 respectively, and
+persistent loop, and N-API Frame respectively, and
 [`apps/bun-performance.ts`](apps/bun-performance.ts) times the generated Bun FFI path.
 The default Node path is a CLI/low-frequency path for simple deployment. On server hot
 paths you must explicitly choose the loop or N-API so that a process is not started

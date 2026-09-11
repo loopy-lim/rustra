@@ -2,7 +2,7 @@ import { addNumbers, rustra } from '../generated/bun.js';
 import { benchmarkCommand } from './performance-stats.js';
 
 const result = await benchmarkCommand({
-  name: 'bun-generated-ffi-rkyv-v2',
+  name: 'bun-generated-ffi-frame',
   invoke: () => addNumbers({ a: 20, b: 22 }),
   validate: (output) => output.value === 42,
   warmup: 500,

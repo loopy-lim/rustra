@@ -1,7 +1,7 @@
 //! Phase 2 — 교차 와이어(cross-wire) fixture snapshot (Rust 측, Task 2.1 + 2.4).
 //!
 //! calculator 패키지의 대표 명령(addNumbers/greet/divide)에 대해 **실제**
-//! `invoke_rkyv_v2` 와이어를 hex 로 고정한다. 이 hex 는
+//! `invoke_frame` 와이어를 hex 로 고정한다. 이 hex 는
 //! `packages/types/src/cross-wire.test.ts` 의 TS 교차 테스트가 generated
 //! codec 으로 decode/encode 하는 것과 짝을 이뤄 Rust↔TS 바이너리 호환을 증명한다.
 //!
@@ -31,13 +31,13 @@ fn hexlify(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// invoke_rkyv_v2 의 Err 를 error frame 으로 변환한다 — 실제 FFI 경계
-/// (`rustra_calculator_invoke_rkyv_v2`) 와 동일하게. TS codec.decode 가 보는
+/// invoke_frame 의 Err 를 error frame 으로 변환한다 — 실제 FFI 경계
+/// (`rustra_calculator_invoke_frame`) 와 동일하게. TS codec.decode 가 보는
 /// 진짜 와이어(성공 프레임 / 에러 프레임)를 낸다.
 fn invoke_with_frame(pkg: &rustra::Package, req: &[u8]) -> Vec<u8> {
-    match pkg.invoke_rkyv_v2(req) {
+    match pkg.invoke_frame(req) {
         Ok(bytes) => bytes,
-        Err(error) => rustra::encode_rkyv_v2_error(&error),
+        Err(error) => rustra::encode_frame_error(&error),
     }
 }
 
