@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +16,7 @@ const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 /**
  * 가짜 examples 트리 — api-surface.test.ts 의 makeFixture 와 같은 mkdtemp 패턴.
  * codegen:check 가 있는 예제와 없는 예제, rustra.json 이 없는 예제를 섞는다.
+ * calc 은 codegen:check 를 갖고도 게이트가 실행하지 않음을 검증하는 용도다.
  */
 function makeFixture(): string {
   const root = mkdtempSync(join(tmpdir(), 'rustra-codegen-fresh-'));
@@ -59,22 +60,44 @@ test('discoverCodegenExamples collects only rustra.json examples, sorted by name
   }
 });
 
-test('resolveCheckCommand prefers the example codegen:check script, falls back to the repo CLI', () => {
+test('resolveCheckCommand ignores example codegen:check scripts and always uses the repo CLI', () => {
+  // 감사 수정 — 예제 스크립트는 diff 내 가변 코드라 신뢰 앵커가 못 된다.
+  // 스크립트가 있어도 없어도 커맨드는 repo CLI 고정 호출이어야 한다.
   const root = makeFixture();
   try {
     const [calc, stream] = discoverCodegenExamples(root);
-    assert.deepEqual(resolveCheckCommand(calc, root), {
+    const expected = {
       file: 'bun',
-      args: ['run', 'codegen:check'],
-      cwd: calc.dir,
-    });
-    const fallback = resolveCheckCommand(stream, root);
-    assert.equal(fallback.file, 'bun');
-    assert.equal(fallback.cwd, stream.dir);
-    assert.deepEqual(fallback.args.slice(-4), ['codegen', '--config', 'rustra.json', '--check']);
-    assert.match(fallback.args[0], /packages[\\/]cli[\\/]src[\\/]index\.ts$/);
+      args: [
+        join(root, 'packages', 'cli', 'src', 'index.ts'),
+        'codegen',
+        '--config',
+        'rustra.json',
+        '--check',
+      ],
+    };
+    assert.deepEqual(resolveCheckCommand(calc, root), { ...expected, cwd: calc.dir });
+    assert.deepEqual(resolveCheckCommand(stream, root), { ...expected, cwd: stream.dir });
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('real examples with codegen:check wire the same underlying command the gate runs', () => {
+  // 게이트는 스크립트를 실행하지 않지만, 로컬 개발자가 bun run codegen:check 로
+  // 게이트와 다른 결과를 보는 사고는 여전히 가능하다 — 스크립트가 게이트의 고정
+  // 커맨드와 동일한 CLI 호출로 남아 있는지 고정한다.
+  for (const example of discoverCodegenExamples(REPO_ROOT)) {
+    const packageJsonPath = join(example.dir, 'package.json');
+    if (!existsSync(packageJsonPath)) continue;
+    const scripts = JSON.parse(readFileSync(packageJsonPath, 'utf8')).scripts ?? {};
+    const check = scripts['codegen:check'];
+    if (typeof check !== 'string') continue;
+    assert.match(
+      check,
+      /packages[\\/]cli[\\/]src[\\/]index\.ts codegen --config rustra\.json --check$/,
+      `${example.name} 의 codegen:check 이 게이트 커맨드와 어긋난다: ${check}`,
+    );
   }
 });
 
