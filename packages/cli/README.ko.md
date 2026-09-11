@@ -1,7 +1,7 @@
 # @rustra/cli
 
 rustra-bridge의 TypeScript 코드 제너레이션 CLI입니다. Rust 백엔드가 내보낸
-`schema.json`으로부터 타입 안전 클라이언트(commands/types/contract/rkyv codec)를 생성합니다.
+`schema.json`으로부터 타입 안전 클라이언트(commands/types/contract/frame codec)를 생성합니다.
 
 ## 사용법
 
@@ -51,7 +51,7 @@ import { generateTypesTs, generateCommandsTs, diffSchemas } from '@rustra/cli';
 
 | 모듈              | 내용                                                    |
 | ----------------- | ------------------------------------------------------- |
-| `generate`        | types/commands/contract/rkyv codec/registry 생성 함수군 |
+| `generate`        | types/commands/contract/frame codec/registry 생성 함수군 |
 | `schema`          | `PackageSchema` 파싱·검증                               |
 | `schema-diff`     | 스키마 버전 간 breaking change 검출 (`diffSchemas`)     |
 | `validate-engine` | 런타임 invoke 검증 엔진 래퍼 (`createValidatedEngine`)  |

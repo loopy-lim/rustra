@@ -1,14 +1,14 @@
 import { CancelledError, RustraCommandError } from './errors.js';
 import { invokeCallbackWithAbort, raceAbort } from './cancel.js';
 import { encodeTier3Request, decodeTier3Response } from './json-wire.js';
-import { tier2Outcome, payloadTooLargeError } from './rkyv-engine-contract.js';
-import { createDynamicCodecRuntime } from './rkyv-engine-dynamic-codec.js';
-import type { RkyvDispatchRuntime, RkyvEngineContext } from './rkyv-engine-context.js';
-import type { InvokeOptions, RkyvV2Codec } from './public.js';
+import { tier2Outcome, payloadTooLargeError } from './frame-engine-contract.js';
+import { createDynamicCodecRuntime } from './frame-engine-dynamic-codec.js';
+import type { FrameDispatchRuntime, FrameEngineContext } from './frame-engine-context.js';
+import type { InvokeOptions, FrameCodec } from './public.js';
 
-export function createRkyvInvokeRaw(
-  context: RkyvEngineContext,
-  dispatch: RkyvDispatchRuntime,
+export function createFrameInvokeRaw(
+  context: FrameEngineContext,
+  dispatch: FrameDispatchRuntime,
 ): <T>(
   command: string,
   args?: unknown,
@@ -24,7 +24,7 @@ export function createRkyvInvokeRaw(
     command: string,
     signal: AbortSignal,
     args: unknown,
-    codec: RkyvV2Codec<unknown, unknown>,
+    codec: FrameCodec<unknown, unknown>,
   ): Promise<T> =>
     invokeCallbackWithAbort(
       command,
@@ -84,7 +84,7 @@ export function createRkyvInvokeRaw(
               else {
                 const e =
                   outcome.error ??
-                  ({ code: 'invoke.failed', message: 'RkyvV2 (tier3) invoke failed' } as const);
+                  ({ code: 'invoke.failed', message: 'Frame (tier3) invoke failed' } as const);
                 reject(new RustraCommandError(e.code, e.message, e.retryable ?? false));
               }
             });

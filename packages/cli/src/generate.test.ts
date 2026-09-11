@@ -8,10 +8,10 @@ import {
   generateTypesTs,
   generateCommandsTs,
   generateContractTs,
-  generateRkyvCodecsCpp,
-  generateRkyvCodecsHpp,
-  generateRkyvCodecsTs,
-  generateRkyvRegistryTs,
+  generateFrameCodecsCpp,
+  generateFrameCodecsHpp,
+  generateFrameCodecsTs,
+  generateFrameRegistryTs,
   generatePositionalFacadeTs,
 } from './generate.js';
 import { collectDefinitions, postcardHelperSource } from './codegen.js';
@@ -171,11 +171,11 @@ test('generateTypesTs exposes all byte-buffer runtime representations', () => {
   assert.ok(
     commands.includes('invokeGeneratedBytes<BytesOutput>(1, \'echoBytes\', input, input["data"]'),
   );
-  const hpp = generateRkyvCodecsHpp(schema);
+  const hpp = generateFrameCodecsHpp(schema);
   assert.ok(hpp.includes('bool has_buffer_codec(uint16_t cmd_id)'));
   assert.ok(hpp.includes('void encode_buffer_by_id(uint16_t cmd_id'));
   assert.ok(hpp.includes('decode_buffer_result_by_id'));
-  const cpp = generateRkyvCodecsCpp(schema);
+  const cpp = generateFrameCodecsCpp(schema);
   assert.ok(cpp.includes('w.push_uvar(size)'));
   assert.ok(cpp.includes('if (size > 0) w.push_bytes(data, size)'));
   assert.ok(cpp.includes('static void encode_pos_echoBytes'));
@@ -214,7 +214,7 @@ test('direct byte capability fails closed for optional or extra-required fields'
 
   const commands = generateCommandsTs(schema);
   assert.ok(!commands.includes('invokeGeneratedBytes'));
-  const cpp = generateRkyvCodecsCpp(schema);
+  const cpp = generateFrameCodecsCpp(schema);
   const bufferCapability = cpp.slice(
     cpp.indexOf('bool has_buffer_codec'),
     cpp.indexOf('void encode_buffer_by_id'),
@@ -411,7 +411,7 @@ test('generated TypeScript has clean JSDoc blank lines and one final newline', (
   for (const generated of [
     generateTypesTs(schema),
     generateCommandsTs(schema),
-    generateRkyvCodecsTs(schema),
+    generateFrameCodecsTs(schema),
   ]) {
     assert.doesNotMatch(generated, /[ \t]+\n/u);
     assert.ok(generated.endsWith('\n'));
@@ -513,8 +513,8 @@ const cppSchema: PackageSchema = {
   ],
 };
 
-test('generateRkyvCodecsHpp declares dispatch API', () => {
-  const hpp = generateRkyvCodecsHpp(cppSchema);
+test('generateFrameCodecsHpp declares dispatch API', () => {
+  const hpp = generateFrameCodecsHpp(cppSchema);
   assert.ok(hpp.includes('#pragma once'));
   assert.ok(hpp.includes('namespace rustra::generated'));
   assert.ok(hpp.includes('bool encode_by_name('));
@@ -531,8 +531,8 @@ test('generateRkyvCodecsHpp declares dispatch API', () => {
   assert.ok(hpp.includes('uint16_t cmd_id'));
 });
 
-test('generateRkyvCodecsCpp emits per-command encode/decode + dispatch', () => {
-  const cpp = generateRkyvCodecsCpp(cppSchema);
+test('generateFrameCodecsCpp emits per-command encode/decode + dispatch', () => {
+  const cpp = generateFrameCodecsCpp(cppSchema);
 
   // per-command encode/decode (lowerCamelCase 함수명)
   assert.ok(cpp.includes('static void encode_createItem('));
@@ -551,7 +551,7 @@ test('generateRkyvCodecsCpp emits per-command encode/decode + dispatch', () => {
   assert.ok(cpp.includes('w.push_u8(6); w.push_u8(0);'));
 });
 
-test('generateRkyvCodecsCpp assigns tuple decode values to array slots', () => {
+test('generateFrameCodecsCpp assigns tuple decode values to array slots', () => {
   const schema: PackageSchema = {
     packageId: 'test.tuple.cpp',
     commands: [
@@ -583,7 +583,7 @@ test('generateRkyvCodecsCpp assigns tuple decode values to array slots', () => {
     ],
   };
 
-  const cpp = generateRkyvCodecsCpp(schema);
+  const cpp = generateFrameCodecsCpp(schema);
   assert.ok(cpp.includes('static jsi::Value decode_pair'));
   assert.ok(cpp.includes('_arr.setValueAtIndex(rt, 0'));
   assert.ok(cpp.includes('_arr.setValueAtIndex(rt, 1'));
@@ -591,9 +591,9 @@ test('generateRkyvCodecsCpp assigns tuple decode values to array slots', () => {
   assert.ok(!cpp.includes('_arr_tmp_1'));
 });
 
-test('generateRkyvCodecsCpp binds PropNameID cache lifetime to its JSI Runtime', () => {
-  const hpp = generateRkyvCodecsHpp(cppSchema);
-  const cpp = generateRkyvCodecsCpp(cppSchema);
+test('generateFrameCodecsCpp binds PropNameID cache lifetime to its JSI Runtime', () => {
+  const hpp = generateFrameCodecsHpp(cppSchema);
+  const cpp = generateFrameCodecsCpp(cppSchema);
 
   assert.ok(cpp.includes('class RuntimePropNameCache final : public jsi::NativeState'));
   assert.ok(cpp.includes('std::weak_ptr<RuntimePropNameCache>'));
@@ -603,8 +603,8 @@ test('generateRkyvCodecsCpp binds PropNameID cache lifetime to its JSI Runtime',
   assert.ok(!hpp.includes('void resetPropNameCache()'));
 });
 
-test('generateRkyvCodecsCpp emits by_id switch dispatch (P0-3)', () => {
-  const cpp = generateRkyvCodecsCpp(cppSchema);
+test('generateFrameCodecsCpp emits by_id switch dispatch (P0-3)', () => {
+  const cpp = generateFrameCodecsCpp(cppSchema);
 
   // switch 기반 by_id 디스패치 — per-command 함수를 cmd_id 케이스로 재사용
   assert.ok(
@@ -622,8 +622,8 @@ test('generateRkyvCodecsCpp emits by_id switch dispatch (P0-3)', () => {
   assert.ok(cpp.includes('std::to_string(cmd_id)'));
 });
 
-test('generateRkyvCodecsCpp emits raw capability and public result-shape restoration', () => {
-  const cpp = generateRkyvCodecsCpp(simpleSchema);
+test('generateFrameCodecsCpp emits raw capability and public result-shape restoration', () => {
+  const cpp = generateFrameCodecsCpp(simpleSchema);
   assert.ok(cpp.includes('bool has_raw_codec(uint16_t cmd_id)'));
   assert.ok(cpp.includes('case 1: return true;'));
   assert.ok(cpp.includes('void encode_raw_slots(Runtime& rt, uint16_t cmd_id'));
@@ -634,8 +634,8 @@ test('generateRkyvCodecsCpp emits raw capability and public result-shape restora
   assert.ok(cpp.includes('return std::move(result);'));
 });
 
-test('generateRkyvCodecsCpp maps each postcard field kind to the right push/read', () => {
-  const cpp = generateRkyvCodecsCpp(cppSchema);
+test('generateFrameCodecsCpp maps each postcard field kind to the right push/read', () => {
+  const cpp = generateFrameCodecsCpp(cppSchema);
 
   // integer → safe-integer 검증 후 push_i64 / read_i64
   assert.ok(cpp.includes('w.push_i64(rustra_i64(rt,'));
@@ -653,8 +653,8 @@ test('generateRkyvCodecsCpp maps each postcard field kind to the right push/read
   assert.ok(cpp.includes('auto _obj = jsi::Object(rt);'));
 });
 
-test('generateRkyvCodecsCpp is pure C++ (no TS leakage)', () => {
-  const cpp = generateRkyvCodecsCpp(cppSchema);
+test('generateFrameCodecsCpp is pure C++ (no TS leakage)', () => {
+  const cpp = generateFrameCodecsCpp(cppSchema);
   assert.ok(!cpp.includes('Uint8Array'));
   assert.ok(!cpp.includes('DataView'));
   assert.ok(!cpp.includes('TextEncoder'));
@@ -860,8 +860,8 @@ test('generateTypesTs exposes bigint for int64 and C++ joins with BigInt decode'
   };
   assert.match(generateTypesTs(schema), /value: number \| bigint;/);
   // B1: C++ 정적 코덱도 와이드 정수를 직접 처리한다 — 광고 제외 해제.
-  assert.match(generateRkyvCodecsCpp(schema), /readCounter/);
-  assert.match(generateRkyvRegistryTs(schema), /\['readCounter', readCounterCodec\]/);
+  assert.match(generateFrameCodecsCpp(schema), /readCounter/);
+  assert.match(generateFrameRegistryTs(schema), /\['readCounter', readCounterCodec\]/);
 });
 
 test('int64/uint64 fields join the postcard fast path with 64-bit helpers', () => {
@@ -891,8 +891,8 @@ test('int64/uint64 fields join the postcard fast path with 64-bit helpers', () =
     ],
   };
 
-  const codecs = generateRkyvCodecsTs(schema);
-  const registry = generateRkyvRegistryTs(schema);
+  const codecs = generateFrameCodecsTs(schema);
+  const registry = generateFrameRegistryTs(schema);
 
   // 와이드 정수 필드가 64-bit 헬퍼로 emit 된다(zigzag64 → _pcEncodeZigzag64,
   // uvar64 → _pcEncodeVarint64).
@@ -904,7 +904,7 @@ test('int64/uint64 fields join the postcard fast path with 64-bit helpers', () =
   assert.match(registry, /route: postcard/);
   assert.doesNotMatch(registry, /route: complex/);
   // B1: C++ 정적 코덱도 64-bit 헬퍼(push_i64/push_uvar)로 와이드 정수를 emit.
-  const cpp = generateRkyvCodecsCpp(schema);
+  const cpp = generateFrameCodecsCpp(schema);
   assert.match(cpp, /readCounter/);
   assert.match(
     cpp,
@@ -916,8 +916,8 @@ test('int64/uint64 fields join the postcard fast path with 64-bit helpers', () =
   );
 });
 
-test('generateRkyvCodecsTs encodes Option fields (no silent drop)', () => {
-  const codecs = generateRkyvCodecsTs(richSchema);
+test('generateFrameCodecsTs encodes Option fields (no silent drop)', () => {
+  const codecs = generateFrameCodecsTs(richSchema);
   const update = codecs.split('updateItemCodec')[1];
   assert.ok(update.includes('args.name'), 'Option<string> name must be encoded');
   assert.ok(update.includes('args.value'), 'Option<i64> value must be encoded');
@@ -926,8 +926,8 @@ test('generateRkyvCodecsTs encodes Option fields (no silent drop)', () => {
   assert.ok(update.includes('new Uint8Array([1])'));
 });
 
-test('generateRkyvCodecsTs encodes Vec<String> and Vec<Struct>', () => {
-  const codecs = generateRkyvCodecsTs(richSchema);
+test('generateFrameCodecsTs encodes Vec<String> and Vec<Struct>', () => {
+  const codecs = generateFrameCodecsTs(richSchema);
   const list = codecs.split('listItemsCodec')[1].split('export const')[0];
   assert.ok(list.includes('args.tags'), 'Vec<String> tags must be encoded');
   assert.ok(
@@ -937,15 +937,15 @@ test('generateRkyvCodecsTs encodes Vec<String> and Vec<Struct>', () => {
   assert.ok(list.includes('result.items'), 'Vec<Struct> items must be decoded');
 });
 
-test('generateRkyvCodecsTs encodes string enums as variant index', () => {
-  const codecs = generateRkyvCodecsTs(richSchema);
+test('generateFrameCodecsTs encodes string enums as variant index', () => {
+  const codecs = generateFrameCodecsTs(richSchema);
   const sort = codecs.split('sortByCodec')[1].split('export const')[0];
   assert.ok(sort.includes('["asc","desc"]'), 'enum variants must be embedded');
   assert.ok(sort.includes('_variants.indexOf'), 'enum index lookup must be generated');
 });
 
-test('generateRkyvCodecsTs encodes primitive-valued dynamic maps deterministically', () => {
-  const codecs = generateRkyvCodecsTs(richSchema);
+test('generateFrameCodecsTs encodes primitive-valued dynamic maps deterministically', () => {
+  const codecs = generateFrameCodecsTs(richSchema);
   const map = codecs.split('mapScoresCodec')[1].split('export const')[0];
   assert.ok(map.includes('const _map = args.scores'));
   assert.ok(map.includes('Object.keys(_map).sort()'));
@@ -953,7 +953,7 @@ test('generateRkyvCodecsTs encodes primitive-valued dynamic maps deterministical
   assert.ok(map.includes('result.total'));
 });
 
-test('generateRkyvCodecsTs promotes complex maps and data enums to the complex codec', () => {
+test('generateFrameCodecsTs promotes complex maps and data enums to the complex codec', () => {
   const schema: PackageSchema = {
     packageId: 'complex.codec',
     commands: [
@@ -1001,8 +1001,8 @@ test('generateRkyvCodecsTs promotes complex maps and data enums to the complex c
       },
     ],
   };
-  const codecs = generateRkyvCodecsTs(schema);
-  const registry = generateRkyvRegistryTs(schema);
+  const codecs = generateFrameCodecsTs(schema);
+  const registry = generateFrameRegistryTs(schema);
   assert.match(codecs, /createComplexCodec/);
   assert.match(codecs, /processComplexCodec/);
   assert.match(codecs, /export const processCodec = processComplexCodec/);
@@ -1010,13 +1010,13 @@ test('generateRkyvCodecsTs promotes complex maps and data enums to the complex c
   assert.match(registry, /route: complex/);
 });
 
-test('generateRkyvRegistryTs routes supported complex commands to the complex codec', () => {
+test('generateFrameRegistryTs routes supported complex commands to the complex codec', () => {
   const warnings: string[] = [];
   const originalWarn = console.warn;
   console.warn = (message?: unknown) => warnings.push(String(message));
   let registry: string;
   try {
-    registry = generateRkyvRegistryTs(richSchema);
+    registry = generateFrameRegistryTs(richSchema);
   } finally {
     console.warn = originalWarn;
   }
@@ -1056,7 +1056,7 @@ test('ambiguous oneOf schemas stay on the Tier 3 fallback', () => {
   console.warn = (message?: unknown) => warnings.push(String(message));
   let registry: string;
   try {
-    registry = generateRkyvRegistryTs(schema);
+    registry = generateFrameRegistryTs(schema);
   } finally {
     console.warn = originalWarn;
   }
@@ -1114,8 +1114,8 @@ test('single-entry allOf newtype handles stay on the postcard fast path', () => 
     ],
   };
 
-  const registry = generateRkyvRegistryTs(schema);
-  const codecs = generateRkyvCodecsTs(schema);
+  const registry = generateFrameRegistryTs(schema);
+  const codecs = generateFrameCodecsTs(schema);
   const commands = generateCommandsTs(schema);
   assert.match(registry, /\['sendChannel', sendChannelCodec\]/);
   assert.match(codecs, /_pcEncodeVarint\(args\.channel\)/);
@@ -1126,8 +1126,8 @@ test('single-entry allOf newtype handles stay on the postcard fast path', () => 
   );
 });
 
-test('generateRkyvCodecsCpp promotes supported complex commands to native static codec', () => {
-  const cpp = generateRkyvCodecsCpp(richSchema);
+test('generateFrameCodecsCpp promotes supported complex commands to native static codec', () => {
+  const cpp = generateFrameCodecsCpp(richSchema);
   assert.ok(cpp.includes('if (name == "updateItem") { encode_updateItem'));
   assert.ok(cpp.includes('if (name == "mapScores") { encode_mapScores'));
   assert.ok(
@@ -1136,7 +1136,7 @@ test('generateRkyvCodecsCpp promotes supported complex commands to native static
   );
 });
 
-test('generateRkyvCodecsCpp promotes primitive-element Sets to the native complex codec', () => {
+test('generateFrameCodecsCpp promotes primitive-element Sets to the native complex codec', () => {
   const schema: PackageSchema = {
     packageId: 'native-complex-boundaries',
     commands: [
@@ -1173,8 +1173,8 @@ test('generateRkyvCodecsCpp promotes primitive-element Sets to the native comple
       },
     ],
   };
-  const cpp = generateRkyvCodecsCpp(schema);
-  const registry = generateRkyvRegistryTs(schema);
+  const cpp = generateFrameCodecsCpp(schema);
+  const registry = generateFrameRegistryTs(schema);
   // B2: 원시 요소 Set 은 C++ complex 경로로 직결 — Set 안의 정수는 순서 보존
   // postcard seq 로 인코딩하고 디코드는 전역 Set 생성자로 복원한다(TS
   // complex-codec 계약 동일: [...set] 순서 보존 encode, new Set(values) decode).
@@ -1198,7 +1198,7 @@ test('generateRkyvCodecsCpp promotes primitive-element Sets to the native comple
   assert.doesNotMatch(registry, /wideValueComplexCodec/);
 });
 
-test('generateRkyvCodecsCpp keeps object-element Sets on the JS complex route', () => {
+test('generateFrameCodecsCpp keeps object-element Sets on the JS complex route', () => {
   const schema: PackageSchema = {
     packageId: 'native-complex-object-set',
     commands: [
@@ -1226,14 +1226,14 @@ test('generateRkyvCodecsCpp keeps object-element Sets on the JS complex route', 
       },
     ],
   };
-  const cpp = generateRkyvCodecsCpp(schema);
-  const registry = generateRkyvRegistryTs(schema);
+  const cpp = generateFrameCodecsCpp(schema);
+  const registry = generateFrameRegistryTs(schema);
   // 객체 요소 Set 은 IR 정규화 한계로 여전히 JS complex 경로 소속이다.
   assert.doesNotMatch(cpp, /encode_complex_objectSet/);
   assert.match(registry, /objectSetComplexCodec/);
 });
 
-test('generateRkyvCodecsCpp promotes wide-int complex commands with BigInt safe-range decode', () => {
+test('generateFrameCodecsCpp promotes wide-int complex commands with BigInt safe-range decode', () => {
   const schema: PackageSchema = {
     packageId: 'cpp-bigint-complex',
     commands: [
@@ -1261,7 +1261,7 @@ test('generateRkyvCodecsCpp promotes wide-int complex commands with BigInt safe-
       },
     ],
   };
-  const cpp = generateRkyvCodecsCpp(schema);
+  const cpp = generateFrameCodecsCpp(schema);
   // 광고 — 정적 postcard 코덱 승격(A2 이후 와이드 정수는 fast-path 소속).
   assert.match(cpp, /name == "wideAgg"/);
   assert.match(cpp, /static void encode_wideAgg/);
@@ -1281,7 +1281,7 @@ test('generateRkyvCodecsCpp promotes wide-int complex commands with BigInt safe-
   assert.match(cpp, /asBigInt\(rt\)\.asInt64\(rt\)/);
 });
 
-test('generateRkyvCodecsCpp emits bounded recursive reference functions', () => {
+test('generateFrameCodecsCpp emits bounded recursive reference functions', () => {
   const schema: PackageSchema = {
     packageId: 'recursive-native-complex',
     commands: [
@@ -1313,15 +1313,15 @@ test('generateRkyvCodecsCpp emits bounded recursive reference functions', () => 
       },
     ],
   };
-  const cpp = generateRkyvCodecsCpp(schema);
+  const cpp = generateFrameCodecsCpp(schema);
   assert.match(cpp, /complex_encode_ref_Node/);
   assert.match(cpp, /complex_decode_ref_Node/);
   assert.match(cpp, /complex value depth exceeds 32/);
   assert.match(cpp, /encode_complex_walk/);
 });
 
-test('generateRkyvCodecsCpp positional codecs enforce arity and preserve enum wire', () => {
-  const cpp = generateRkyvCodecsCpp(richSchema);
+test('generateFrameCodecsCpp positional codecs enforce arity and preserve enum wire', () => {
+  const cpp = generateFrameCodecsCpp(richSchema);
   const sort = cpp.split('static void encode_pos_sortBy')[1]?.split('static ')[0] ?? '';
   assert.ok(sort.includes('if (argc != 1)'), 'positional codec must reject missing/extra argv');
   assert.ok(sort.includes('const char* _variants[] = {"asc","desc"}'));
@@ -1329,7 +1329,7 @@ test('generateRkyvCodecsCpp positional codecs enforce arity and preserve enum wi
   assert.ok(!sort.includes('w.push_string(_s)'), 'enum must not use string postcard wire');
 });
 
-test('generateRkyvCodecsCpp positional f32 uses four-byte postcard wire', () => {
+test('generateFrameCodecsCpp positional f32 uses four-byte postcard wire', () => {
   const schema: PackageSchema = {
     packageId: 'test.f32',
     commands: [
@@ -1351,14 +1351,14 @@ test('generateRkyvCodecsCpp positional f32 uses four-byte postcard wire', () => 
       },
     ],
   };
-  const cpp = generateRkyvCodecsCpp(schema);
+  const cpp = generateFrameCodecsCpp(schema);
   const positional = cpp.split('static void encode_pos_scaleFloat')[1]?.split('static ')[0] ?? '';
   assert.ok(positional.includes('w.push_f32(rustra_f32(rt, argv[0], "value"))'));
   assert.ok(!positional.includes('w.push_f64'));
 });
 
-test('generateRkyvCodecsCpp validates numeric inputs before native casts', () => {
-  const cpp = generateRkyvCodecsCpp(cppSchema);
+test('generateFrameCodecsCpp validates numeric inputs before native casts', () => {
+  const cpp = generateFrameCodecsCpp(cppSchema);
   assert.ok(cpp.includes('std::isfinite(number)'));
   assert.ok(cpp.includes('std::trunc(number) != number'));
   assert.ok(cpp.includes('number < 0.0 || number > maxSafe'));
@@ -1396,7 +1396,7 @@ test('facade callPos command set exactly matches C++ positional codec set', () =
   // facade가 callPos 로 노출한 명령이 C++ encode_pos_by_id 에 없어
   // 런타임 JSError("no positional codec for cmd_id")로 즉시 실패한다.
   // 두 생성기가 같은 커맨드 집합에 대해 내리는 판정을 전수 비교한다.
-  const cpp = generateRkyvCodecsCpp(richSchema);
+  const cpp = generateFrameCodecsCpp(richSchema);
   const facade = generatePositionalFacadeTs(richSchema);
 
   const cppCases = new Set([...cpp.matchAll(/case (\d+): encode_pos_/g)].map((m) => Number(m[1])));
@@ -1623,7 +1623,7 @@ test('parsePackageSchema rejects hostile nested definitions keys', () => {
 
 test('parsePackageSchema rejects hostile property names and $ref targets', () => {
   // 속성명은 생성 TS/C++ 에 따옴표 없이 삽입된다(codegen.ts `${name}:`,
-  // rkyv 코덱 `args.${name}`, C++ `getProperty(rt, "${name}")`) — 식별자만 허용.
+  // frame 코덱 `args.${name}`, C++ `getProperty(rt, "${name}")`) — 식별자만 허용.
   assert.throws(
     () =>
       parsePackageSchema({
@@ -1920,7 +1920,7 @@ test('desktop host entries own lazy setup and preserve explicit escape hatches',
     targetName: 'my_app',
   });
   assert.match(bun, /createBunBootstrap/);
-  assert.match(bun, /rkyvV2Codecs: rkyvV2Registry/);
+  assert.match(bun, /frameCodecs: frameRegistry/);
   assert.match(bun, /GENERATED_CONTRACT_HASH/);
   assert.match(bun, /contractVerification: 'strict'/);
 
@@ -2809,7 +2809,7 @@ test('generated composite 64-bit codecs (vec_u64/map_i64/option_i64) encode and 
     ],
   };
 
-  const codecs = generateRkyvCodecsTs(schema);
+  const codecs = generateFrameCodecsTs(schema);
   // 분류 확인: 원소/값/옵션 레벨 64-bit 헬퍼.
   assert.match(codecs, /_pcEncodeVarint64\(_arr\[_i\]\)/, 'vec_u64 element encode');
   assert.match(codecs, /_pcEncodeZigzag64\(_v\)/, 'map_i64 value encode');
@@ -2819,7 +2819,7 @@ test('generated composite 64-bit codecs (vec_u64/map_i64/option_i64) encode and 
   const dir = mkdtempSync(join(tmpdir(), 'rustra-wide-composite-'));
   const stub =
     `type RustraError = { code: string; message: string };\n` +
-    `export type RkyvV2Codec<TIn, TOut> = {\n` +
+    `export type FrameCodec<TIn, TOut> = {\n` +
     `  commandId: number;\n` +
     `  encode(args: TIn): ArrayBuffer;\n` +
     `  decode(buf: ArrayBuffer): { ok: boolean; result?: TOut; error?: RustraError };\n` +

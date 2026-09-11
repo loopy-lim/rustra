@@ -218,7 +218,7 @@ function observeBytesPayloadError(handle: number, payload: unknown): void {
  *
  * @example
  * ```ts
- * const channel = await createChannelBytes((frame) => decodeRkyv(frame));
+ * const channel = await createChannelBytes((frame) => decodeFrame(frame));
  * await channelBytesDemo(engine, { channel: channel.handle });
  * await channel.close();
  * ```

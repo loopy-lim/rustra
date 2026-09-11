@@ -1,7 +1,7 @@
 // ── T2-2: 스키마→postcard 코덱 인터프리터 ────────────────────
 //
 // live_schema 의 inputSchema/outputSchema(JSON Schema 노드)로부터 런타임에
-// RkyvV2Codec 을 생성한다 — 코드젠(@rustra/cli)이 하는 일을 스키마 인터프리터로
+// FrameCodec 을 생성한다 — 코드젠(@rustra/cli)이 하는 일을 스키마 인터프리터로
 // 재현해, **동적 명령**(register/replace)도 postcard fast-path 를 쓸 수 있게 한다.
 //
 // 와이어 패리티 계약:
@@ -24,7 +24,7 @@ import type { ComplexSchema } from './complex-codec-types.js';
 import { compileNode } from './schema-postcard-node.js';
 import { concatBytes, decString } from './schema-postcard-wire.js';
 import type { RustraError } from './errors.js';
-import type { RkyvV2Codec } from './public.js';
+import type { FrameCodec } from './public.js';
 
 function decodeErrorFrame(u8: Uint8Array, view: DataView): { ok: false; error: RustraError } {
   const errLen = view.getUint16(8, true);
@@ -48,7 +48,7 @@ export function createSchemaPostcardCodec(
   inputSchema: ComplexSchema,
   outputSchema: ComplexSchema,
   definitions: Record<string, ComplexSchema> = {},
-): RkyvV2Codec<unknown, unknown> | null {
+): FrameCodec<unknown, unknown> | null {
   const input = compileNode(inputSchema, definitions, 0);
   if (!input) return null;
   const output = compileNode(outputSchema, definitions, 0);

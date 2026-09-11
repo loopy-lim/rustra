@@ -44,7 +44,7 @@ export type BinaryLoopSession = {
 
 /** 바이너리 모드 세션 생성 — 상태는 반환 객체 클로저가 소유한다. */
 export function createBinaryLoopSession(options: {
-  /** 커맨드명 → rkyv V2 코덱 표면(createNodeLoopTransport 의 codecs). */
+  /** 커맨드명 → Frame 코덱 표면(createNodeLoopTransport 의 codecs). */
   codecs?: NodeLoopBinaryCodecs;
   /** stdin 소유 프로세스 확보 — transport 의 ensureProcess(스폰 실패 시 throw). */
   acquireStdin(): ChildProcessWithoutNullStreams;

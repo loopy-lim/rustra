@@ -162,7 +162,7 @@ test('createBunFfiEngine reports all attempted cdylib paths when the contract ma
   if (!existsSync(release) || !existsSync(debug)) return; // 빌드되지 않은 트리 — 스킵
   const runtime = createBunFfiEngine({
     libraryCandidates: [release, debug],
-    rkyvV2Codecs: new Map(),
+    frameCodecs: new Map(),
     contractHash: '0'.repeat(64),
   });
   await assert.rejects(runtime, (error: unknown) => {
@@ -172,7 +172,7 @@ test('createBunFfiEngine reports all attempted cdylib paths when the contract ma
     assert.match(error.message, /Tried 2 cdylib candidates \(newest first\)/);
     assert.ok(error.message.includes(release));
     assert.ok(error.message.includes(debug));
-    // 공유 mismatch 문구(rkyv-engine-contract)의 fix 안내가 그대로 살아있다.
+    // 공유 mismatch 문구(frame-engine-contract)의 fix 안내가 그대로 살아있다.
     assert.match(error.message, /regenerate the TypeScript and native codecs/);
     return true;
   });

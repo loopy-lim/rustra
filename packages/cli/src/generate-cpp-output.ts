@@ -5,9 +5,9 @@ import { appendCppRuntimeHelpers } from './generate-cpp-runtime-helpers.js';
 import { appendCppGeneratedFunctions } from './generate-cpp-functions.js';
 import { appendCppDispatchCore } from './generate-cpp-dispatch-core.js';
 import { appendCppBufferDispatch } from './generate-cpp-dispatch-buffer.js';
-export { generateRkyvCodecsHpp } from './generate-cpp-hpp.js';
+export { generateFrameCodecsHpp } from './generate-cpp-hpp.js';
 
-export function generateRkyvCodecsCpp(schema: PackageSchema): string {
+export function generateFrameCodecsCpp(schema: PackageSchema): string {
   const sets = analyzeCppCommands(schema);
   const lines: string[] = [
     generatedFileHeader('rustra-generated-codecs.cpp', 'schema → cpp codec renderer').trimEnd(),

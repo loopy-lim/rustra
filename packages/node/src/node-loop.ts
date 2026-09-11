@@ -51,7 +51,7 @@ export type NodeLoopTransport = NodeInvokeTransport & {
   drainEvents(): Promise<Array<{ name: string; payload: unknown }>>;
   dispose(): void;
   readonly pid: number | null;
-  /** 'ndjson' = 레거시 라인 프로토콜, 'binary' = length-prefixed rkyv V2 (트랙 D). */
+  /** 'ndjson' = 레거시 라인 프로토콜, 'binary' = length-prefixed Frame (트랙 D). */
   readonly mode: 'ndjson' | 'binary';
   /**
    * 런타임이 `events:"push"` 핸드셰이크 capability 를 수용했는지 — ready() 정착

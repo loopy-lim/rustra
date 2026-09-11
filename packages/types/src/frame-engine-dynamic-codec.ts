@@ -1,9 +1,9 @@
 import { createSchemaPostcardCodec } from './schema-postcard-codec.js';
 import { createComplexCodec } from './complex-codec.js';
 import type { ComplexSchema } from './complex-codec-types.js';
-import type { RkyvV2Codec } from './public.js';
+import type { FrameCodec } from './public.js';
 import type { LiveSchemaEntry } from './live-schema.js';
-import type { RkyvSchemaRuntime } from './rkyv-engine-context.js';
+import type { FrameSchemaRuntime } from './frame-engine-context.js';
 
 /**
  * (T2-3) 동적 명령 binary 코덱 캐시 — Rust registry 의 3-way 판정
@@ -15,7 +15,7 @@ import type { RkyvSchemaRuntime } from './rkyv-engine-context.js';
  *      `createComplexCodec` (Rust complex binary 라우트와 동일 와이어 —
  *      dynamic_oneof_schema_gets_complex_binary_handler 계약).
  *   3. 둘 다 거부(anyOf 3항 untagged 등) → null — 호출자가 기존 Tier 3
- *      (JSON-in-binary) 경로로 폴백한다. Rust `rkyv_v2_tier3=true` 와 정합.
+ *      (JSON-in-binary) 경로로 폴백한다. Rust `frame_tier3=true` 와 정합.
  *
  * 캐시는 **entry 객체 식별**으로 무효화한다. generation 게이트(T0-3)가 live
  * schema 를 재조회하면 entry 도 새 객체가 되어 compute-if-absent 가 자연히
@@ -27,15 +27,15 @@ import type { RkyvSchemaRuntime } from './rkyv-engine-context.js';
  */
 export type DynamicCodecRuntime = {
   /** 동적 명령의 binary 코덱 — postcard/complex 순 판정, 미지원 null. */
-  lookupBinaryCodec(entry: LiveSchemaEntry): RkyvV2Codec<unknown, unknown> | null;
+  lookupBinaryCodec(entry: LiveSchemaEntry): FrameCodec<unknown, unknown> | null;
   /** 캐시된 코덱 수 — 세대 prune 검증용 관찰 지점. */
   readonly size: number;
 };
 
-export function createDynamicCodecRuntime(schema: RkyvSchemaRuntime): DynamicCodecRuntime {
-  const cache = new Map<LiveSchemaEntry, RkyvV2Codec<unknown, unknown> | null>();
+export function createDynamicCodecRuntime(schema: FrameSchemaRuntime): DynamicCodecRuntime {
+  const cache = new Map<LiveSchemaEntry, FrameCodec<unknown, unknown> | null>();
   let builtAtEpoch = schema.resyncEpoch;
-  const lookupBinaryCodec = (entry: LiveSchemaEntry): RkyvV2Codec<unknown, unknown> | null => {
+  const lookupBinaryCodec = (entry: LiveSchemaEntry): FrameCodec<unknown, unknown> | null => {
     if (builtAtEpoch !== schema.resyncEpoch) {
       cache.clear();
       builtAtEpoch = schema.resyncEpoch;
@@ -53,7 +53,7 @@ export function createDynamicCodecRuntime(schema: RkyvSchemaRuntime): DynamicCod
   };
 }
 
-function compileDynamicCodec(entry: LiveSchemaEntry): RkyvV2Codec<unknown, unknown> | null {
+function compileDynamicCodec(entry: LiveSchemaEntry): FrameCodec<unknown, unknown> | null {
   const inputSchema = entry.inputSchema as ComplexSchema | undefined;
   const outputSchema = entry.outputSchema as ComplexSchema | undefined;
   if (!inputSchema || !outputSchema) return null;

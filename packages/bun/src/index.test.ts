@@ -4,10 +4,10 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { suffix } from 'bun:ffi';
 import { createBunBootstrap, createBunEngine, createBunFfiEngine } from './index.js';
-import { RustraCommandError, type RkyvV2Codec } from '@rustra/types';
+import { RustraCommandError, type FrameCodec } from '@rustra/types';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
-const addNumbersCodec: RkyvV2Codec<{ a: number; b: number }, { value: number }> = {
+const addNumbersCodec: FrameCodec<{ a: number; b: number }, { value: number }> = {
   commandId: 1,
   encode({ a, b }) {
     const zigzag = (value: number) => value * 2;
@@ -26,7 +26,7 @@ const addNumbersCodec: RkyvV2Codec<{ a: number; b: number }, { value: number }> 
 // [postcard: varint(len)+bytes]. 응답은 [ok u8][pad3][len u32 LE @4]
 // [postcard body @8]. 512B 초과 응답으로 caller-buffer overflow 재시도 경로를
 // 검증한다(Rust 핸들러는 bench_echo_bytes = echo).
-const benchEchoBytesCodec = (): RkyvV2Codec<Uint8Array, Uint8Array> => ({
+const benchEchoBytesCodec = (): FrameCodec<Uint8Array, Uint8Array> => ({
   commandId: 25,
   encode(args) {
     const out = new Uint8Array(2 + 5 + args.length);
@@ -62,9 +62,9 @@ const benchEchoBytesCodec = (): RkyvV2Codec<Uint8Array, Uint8Array> => ({
 });
 const benchEchoBytes = (length: number) => Uint8Array.from({ length }, (_, i) => i % 251);
 
-const testRegistry = new Map<string, RkyvV2Codec<unknown, unknown>>([
-  ['addNumbers', addNumbersCodec as RkyvV2Codec<unknown, unknown>],
-  ['benchEchoBytes', benchEchoBytesCodec() as RkyvV2Codec<unknown, unknown>],
+const testRegistry = new Map<string, FrameCodec<unknown, unknown>>([
+  ['addNumbers', addNumbersCodec as FrameCodec<unknown, unknown>],
+  ['benchEchoBytes', benchEchoBytesCodec() as FrameCodec<unknown, unknown>],
 ]);
 
 test('createBunEngine routes invoke to transport', async () => {
@@ -193,7 +193,7 @@ test('createBunBootstrap loads the stable Rustra ABI without transport boilerpla
       resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`),
       resolve(repoRoot, `target/debug/librustra_calculator_example.${suffix}`),
     ],
-    rkyvV2Codecs: testRegistry,
+    frameCodecs: testRegistry,
   });
   try {
     const engine = await bootstrap.ready();
@@ -209,7 +209,7 @@ test('createBunBootstrap gives an actionable library override hint', async () =>
   delete process.env.RUSTRA_BUN_LIBRARY;
   const bootstrap = createBunBootstrap({
     libraryCandidates: ['./missing-rustra-library'],
-    rkyvV2Codecs: new Map(),
+    frameCodecs: new Map(),
   });
   try {
     await assert.rejects(bootstrap.ready(), /RUSTRA_BUN_LIBRARY/);
@@ -234,7 +234,7 @@ test('createBunBootstrap reload re-initializes engine state and warns loudly', a
       resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`),
       resolve(repoRoot, `target/debug/librustra_calculator_example.${suffix}`),
     ],
-    rkyvV2Codecs: testRegistry,
+    frameCodecs: testRegistry,
   });
   const warnings: string[] = [];
   const originalWarn = console.warn;
@@ -264,22 +264,22 @@ test('createBunBootstrap reload re-initializes engine state and warns loudly', a
   }
 });
 
-// ── rkyv V2 caller-buffer (`_into`) 바인딩 ──────────────────────────────────
+// ── Frame caller-buffer (`_into`) 바인딩 ──────────────────────────────────
 //
 // C++ typedInvokeTail(RustraJSIBridge.cpp)과 동일한 계약: 512B 재사용 버퍼로
 // 바로 dispatch+write, 부족하면 usize::MAX 상태 + 필요 크기 → 정확한 크기로
 // 1회 재시도. Rust 는 응답을 malloc 하지 않으므로 free 짝이 필요 없다.
 
-test('rustra_ffi_invoke_rkyv_v2_into honors the caller-buffer status contract', async () => {
+test('rustra_ffi_invoke_frame_into honors the caller-buffer status contract', async () => {
   const { dlopen, FFIType, suffix } = await import('bun:ffi');
   const dylib = resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`);
   const lib = dlopen(dylib, {
-    rustra_ffi_invoke_rkyv_v2_into: {
+    rustra_ffi_invoke_frame_into: {
       args: [FFIType.ptr, 'usize' as const, FFIType.ptr, 'usize' as const, FFIType.ptr],
       returns: 'usize' as const,
     },
   });
-  const into = lib.symbols.rustra_ffi_invoke_rkyv_v2_into;
+  const into = lib.symbols.rustra_ffi_invoke_frame_into;
   // addNumbers(cmd_id=1) 프레임 — [1,0,zigzag(20),zigzag(22)], 응답 9B.
   const request = new Uint8Array([1, 0, 40, 44]);
   const outLength = new BigUint64Array(1);
@@ -310,10 +310,10 @@ test('rustra_ffi_invoke_rkyv_v2_into honors the caller-buffer status contract', 
   assert.equal(buffer[8], 84);
 });
 
-test('createBunFfiEngine dispatches rkyv V2 through the caller-buffer into binding', async () => {
+test('createBunFfiEngine dispatches Frame through the caller-buffer into binding', async () => {
   const runtime = await createBunFfiEngine({
     libraryCandidates: [resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`)],
-    rkyvV2Codecs: testRegistry,
+    frameCodecs: testRegistry,
   });
   try {
     // 어댑터가 malloc 변형이 아닌 _into 바인딩을 사용해야 한다.
@@ -343,7 +343,7 @@ test('createBunFfiEngine dispatches rkyv V2 through the caller-buffer into bindi
 test('createBunFfiEngine decodes caller-buffer responses without a copy', async () => {
   const runtime = await createBunFfiEngine({
     libraryCandidates: [resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`)],
-    rkyvV2Codecs: testRegistry,
+    frameCodecs: testRegistry,
   });
   try {
     const engine = runtime.engine;
@@ -395,7 +395,7 @@ test('A05: createBunBootstrap exposes the lifecycle state surface', async () => 
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   try {
-    const bootstrap = createBunBootstrap({ libraryCandidates: [], rkyvV2Codecs: testRegistry });
+    const bootstrap = createBunBootstrap({ libraryCandidates: [], frameCodecs: testRegistry });
     assert.equal(bootstrap.state, 'initializing');
     await assert.rejects(bootstrap.ready(), /RUSTRA_BUN_LIBRARY|No compatible/);
     assert.equal(bootstrap.state, 'initializing');
@@ -410,7 +410,7 @@ test('A05: ready after dispose rejects loudly (bun)', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   try {
-    const bootstrap = createBunBootstrap({ libraryCandidates: [], rkyvV2Codecs: testRegistry });
+    const bootstrap = createBunBootstrap({ libraryCandidates: [], frameCodecs: testRegistry });
     bootstrap.dispose();
     await assert.rejects(bootstrap.ready(), (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
@@ -426,7 +426,7 @@ test('A05: dispose is idempotent — second dispose is a no-op (bun)', async () 
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
   try {
-    const bootstrap = createBunBootstrap({ libraryCandidates: [], rkyvV2Codecs: testRegistry });
+    const bootstrap = createBunBootstrap({ libraryCandidates: [], frameCodecs: testRegistry });
     bootstrap.dispose();
     bootstrap.dispose(); // no-op — must not throw
     assert.equal(bootstrap.state, 'disposed');
@@ -446,7 +446,7 @@ test('A05: failed reload keeps the original error and stays retryable, not dispo
   const realDylib = resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`);
   const bootstrap = createBunBootstrap({
     libraryCandidates: [realDylib],
-    rkyvV2Codecs: testRegistry,
+    frameCodecs: testRegistry,
   });
   try {
     configure(A05_SLOT_ENGINE);
@@ -481,7 +481,7 @@ test('A05: dispose during reload re-init is honored at the await boundary (bun I
   const realDylib = resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`);
   const bootstrap = createBunBootstrap({
     libraryCandidates: [realDylib],
-    rkyvV2Codecs: testRegistry,
+    frameCodecs: testRegistry,
   });
   try {
     configure(A05_SLOT_ENGINE);
@@ -515,7 +515,7 @@ test('A05: dispose during reload re-init is honored at the await boundary (bun I
 test('A05: concurrent ready calls share one initialization promise (bun)', async () => {
   const { configure } = await import('@rustra/types');
   configure(A05_SLOT_ENGINE);
-  const bootstrap = createBunBootstrap({ libraryCandidates: [], rkyvV2Codecs: testRegistry });
+  const bootstrap = createBunBootstrap({ libraryCandidates: [], frameCodecs: testRegistry });
   // dlopen 실패라도 두 ready 는 같은 초기화 프라미스를 공유한다 — 실패가 1회
   // 기록되고 두 프라미스가 같은 rejection 으로 정착하면 계약 충족.
   const [a, b] = await Promise.allSettled([bootstrap.ready(), bootstrap.ready()]);
@@ -531,13 +531,13 @@ test('A05: concurrent ready calls share one initialization promise (bun)', async
 });
 
 test('A02: createBunFfiEngine exposes supports reflecting the actual FFI bindings (real dylib)', async () => {
-  // 리뷰 정정 — bun FFI native 는 invokeRkyvV2/getSchema/getContractHash/
+  // 리뷰 정정 — bun FFI native 는 invokeFrame/getSchema/getContractHash/
   // getSchemaGeneration 만 바인딩한다. invokeAsync/invokeCancel·invokeTypedBatch
-  // 심볼은 바인딩되지 않으므로 rkyv V2 코어의 전파/단일 횡단 조건이 도달 불가:
+  // 심볼은 바인딩되지 않으므로 Frame 코어의 전파/단일 횡단 조건이 도달 불가:
   // 취소는 얕은 취소, 배치는 항목별 폴백으로 관측된다.
   const runtime = await createBunFfiEngine({
     libraryCandidates: [resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`)],
-    rkyvV2Codecs: testRegistry,
+    frameCodecs: testRegistry,
   });
   try {
     assert.deepEqual(runtime.engine.supports, {

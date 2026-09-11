@@ -1,5 +1,5 @@
 /**
- * `createRkyvV2Engine` 옵션. 모두 opt-in 이며 생략 시 하위 호환 동작을 유지한다.
+ * `createFrameEngine` 옵션. 모두 opt-in 이며 생략 시 하위 호환 동작을 유지한다.
  */
 
 /**
@@ -24,7 +24,7 @@ export type ContractMismatchDiagnosis = {
   occupiedBy?: string;
 };
 
-export type RkyvV2EngineOptions = {
+export type FrameEngineOptions = {
   /**
    * (F5) 빌드 시점 코드젠이 생성한 계약 해시(`GENERATED_CONTRACT_HASH`).
    * 설정하면 엔진 생성 시 네이티브의 실시간 해시(`getContractHash`)와 비교해
@@ -55,7 +55,7 @@ export type RkyvV2EngineOptions = {
    * `contractHash` 가 미설정이면 정책과 무관하게 검증하지 않는다(기존 계약 —
    * 정책은 검증의 강도를 고르는 노브이지 검증을 켜는 스위치가 아니다).
    *
-   * (한계) 이 정책은 네이티브 rkyv V2 엔진(`createRkyvV2Engine`) 경로에만
+   * (한계) 이 정책은 네이티브 Frame 엔진(`createFrameEngine`) 경로에만
    * 적용된다. JSON 엔진(`createJsonEngine`)은 transport 클로저만 받는 순수 JS
    * 경로라 네이티브 핸들·`getContractHash` 가 없어 계약 해시 검증 자체가 이
    * 경로에는 존재하지 않는다 — Node JSON 부트스트랩은 `@rustra/node` 의 스폰

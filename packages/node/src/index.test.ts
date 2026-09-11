@@ -534,10 +534,10 @@ processTest('createNodeLoopTransport keeps a persistent process and correlates b
   }
 });
 
-// ── 바이너리 모드 (트랙 D) — __hello 핸드셰이크 후 length-prefixed rkyv V2 ──
+// ── 바이너리 모드 (트랙 D) — __hello 핸드셰이크 후 length-prefixed Frame ──
 
 processTest(
-  'createNodeLoopTransport negotiates binary mode and round-trips rkyv V2 frames',
+  'createNodeLoopTransport negotiates binary mode and round-trips Frame frames',
   { timeout: 30_000 },
   async () => {
     const { createNodeLoopTransport } = await import('./index.js');
@@ -729,14 +729,14 @@ processTest(
   async () => {
     const { createNodeLoopTransport, subscribeEvent } = await import('./index.js');
     // test:ts:node 체인이 컴파일한 calculator 생성 레지스트리(dist-ts) —
-    // rkyvV2Registry 는 rkyv-registry.js 의 export(name→codec Map).
-    const { rkyvV2Registry } = await import(
-      resolve(repoRoot, 'dist-ts/examples/calculator/generated/rkyv-registry.js')
+    // frameRegistry 는 frame-registry.js 의 export(name→codec Map).
+    const { frameRegistry } = await import(
+      resolve(repoRoot, 'dist-ts/examples/calculator/generated/frame-registry.js')
     );
     const transport = createNodeLoopTransport({
       command: resolve(repoRoot, 'target/debug/loop-stdio'),
       args: [],
-      codecs: rkyvV2Registry as never,
+      codecs: frameRegistry as never,
     });
     try {
       // (1) 핸드셰이크 capability — 런타임이 events:"push" 를 수용했다.
@@ -1508,13 +1508,13 @@ processTest(
   { timeout: 30_000 },
   async () => {
     const { createNodeLoopTransport, createNodeChannel } = await import('./index.js');
-    const { rkyvV2Registry } = await import(
-      resolve(repoRoot, 'dist-ts/examples/calculator/generated/rkyv-registry.js')
+    const { frameRegistry } = await import(
+      resolve(repoRoot, 'dist-ts/examples/calculator/generated/frame-registry.js')
     );
     const transport = createNodeLoopTransport({
       command: resolve(repoRoot, 'target/debug/loop-stdio'),
       args: [],
-      codecs: rkyvV2Registry as never,
+      codecs: frameRegistry as never,
     });
     try {
       await transport.ready();
@@ -1720,13 +1720,13 @@ processTest(
   async () => {
     const { createNodeLoopTransport, createNodeBytesChannel, createNodeChannel } =
       await import('./index.js');
-    const { rkyvV2Registry } = await import(
-      resolve(repoRoot, 'dist-ts/examples/calculator/generated/rkyv-registry.js')
+    const { frameRegistry } = await import(
+      resolve(repoRoot, 'dist-ts/examples/calculator/generated/frame-registry.js')
     );
     const transport = createNodeLoopTransport({
       command: resolve(repoRoot, 'target/debug/loop-stdio'),
       args: [],
-      codecs: rkyvV2Registry as never,
+      codecs: frameRegistry as never,
     });
     try {
       await transport.ready();

@@ -7,7 +7,7 @@ export function generateReactNativeEntryTs(): string {
   return `${generatedFileHeader('react-native.ts', 'schema → host entry')}import { createRustraBootstrap } from '@rustra/react-native';
 import { installRustraJSI, getRustraNative } from ${moduleLiteral};
 import { GENERATED_CONTRACT_HASH, SCHEMA_VERSION } from './contract.js';
-import { rkyvV2Registry } from './rkyv-registry.js';
+import { frameRegistry } from './frame-registry.js';
 
 export * from './commands.js';
 export { subscribeEvent } from '@rustra/react-native';
@@ -15,7 +15,7 @@ export { subscribeEvent } from '@rustra/react-native';
 export const rustra = createRustraBootstrap({
   install: installRustraJSI,
   getNative: getRustraNative,
-  rkyvV2Codecs: rkyvV2Registry,
+  frameCodecs: frameRegistry,
   contractHash: GENERATED_CONTRACT_HASH,
   contractVerification: 'strict',
   schemaVersion: SCHEMA_VERSION,
@@ -100,7 +100,7 @@ export function generateBunEntryTs(
 import { suffix } from 'bun:ffi';
 import { createBunBootstrap, createBunEventSubscription } from '@rustra/bun';
 import { GENERATED_CONTRACT_HASH, SCHEMA_VERSION } from './contract.js';
-import { rkyvV2Registry } from './rkyv-registry.js';
+import { frameRegistry } from './frame-registry.js';
 
 export * from './commands.js';
 
@@ -113,7 +113,7 @@ export const rustra = createBunBootstrap({
     fileURLToPath(new URL(\`release/\${library}\`, targetDirectory)),
     fileURLToPath(new URL(\`debug/\${library}\`, targetDirectory)),
   ],
-  rkyvV2Codecs: rkyvV2Registry,
+  frameCodecs: frameRegistry,
   contractHash: GENERATED_CONTRACT_HASH,
   contractVerification: 'strict',
   schemaVersion: SCHEMA_VERSION,
@@ -135,7 +135,7 @@ export const subscribeEvent = events.subscribeEvent;
 import { suffix } from 'bun:ffi';
 import { createBunBootstrap } from '@rustra/bun';
 import { GENERATED_CONTRACT_HASH, SCHEMA_VERSION } from './contract.js';
-import { rkyvV2Registry } from './rkyv-registry.js';
+import { frameRegistry } from './frame-registry.js';
 
 export * from './commands.js';
 
@@ -148,7 +148,7 @@ export const rustra = createBunBootstrap({
     fileURLToPath(new URL(\`release/\${library}\`, targetDirectory)),
     fileURLToPath(new URL(\`debug/\${library}\`, targetDirectory)),
   ],
-  rkyvV2Codecs: rkyvV2Registry,
+  frameCodecs: frameRegistry,
   contractHash: GENERATED_CONTRACT_HASH,
   contractVerification: 'strict',
   schemaVersion: SCHEMA_VERSION,

@@ -28,7 +28,7 @@
  * 바이트 프레임 [len u32 LE][0xfff9 u16 LE][handle u32 LE][payload bytes]
  * ```
  *
- * 페이로드는 rkyv V2 프레임 등 임의 바이트를 JSON 래핑 없이 그대로 실으며
+ * 페이로드는 Frame 프레임 등 임의 바이트를 JSON 래핑 없이 그대로 실으며
  * 길이 접두가 없다(프레임 래퍼의 len 이 경계를 제공). 해제(0xfffa)는 두 경로를
  * 같이 내리는 코어 `drop_channel` 을 공유한다. 한 핸들은 한 경로로만 동작한다
  * (JSON xor bytes — 코어 ChannelHost 계약). 바이너리 모드 협상에 더해 런타임이
@@ -64,7 +64,7 @@ export type NodeChannel = {
   close(): Promise<boolean>;
 };
 
-/** 바이너리 채널 콜백 — 페이로드는 JSON 파싱 없는 원시 바이트(rkyv V2 프레임 등). */
+/** 바이너리 채널 콜백 — 페이로드는 JSON 파싱 없는 원시 바이트(Frame 프레임 등). */
 export type NodeBytesChannelCallback = (payload: Uint8Array) => void;
 
 /** 바이너리 채널 — JSON 채널(NodeChannel)과 동일 { handle, close() } 계약. */
@@ -143,7 +143,7 @@ function channelCloser(
  *
  * @example
  * ```ts
- * const transport = createNodeLoopTransport({ command: bin, codecs: rkyvV2Registry });
+ * const transport = createNodeLoopTransport({ command: bin, codecs: frameRegistry });
  * const channel = await createNodeChannel(transport, (payload) => console.log(payload));
  * await channelDemo(engine, { channel: channel.handle, ticks: 3 });
  * await channel.close();
@@ -216,7 +216,7 @@ export async function createNodeChannel(
  *
  * @example
  * ```ts
- * const transport = createNodeLoopTransport({ command: bin, codecs: rkyvV2Registry });
+ * const transport = createNodeLoopTransport({ command: bin, codecs: frameRegistry });
  * const channel = await createNodeBytesChannel(transport, (frame) => decode(frame));
  * await channelDemoBytes(engine, { channel: channel.handle, ticks: 3 });
  * await channel.close();

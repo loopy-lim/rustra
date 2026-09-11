@@ -1,6 +1,6 @@
 import { isRetryableCode, RustraCommandError } from './errors.js';
 import { decodeUtf8 } from './utf8.js';
-import type { RkyvV2Codec } from './public.js';
+import type { FrameCodec } from './public.js';
 
 /**
  * tier 2(JS 코덱) 응답 프레임을 결과/에러로 환산한다 — `dispatch` 와 전파
@@ -10,10 +10,10 @@ import type { RkyvV2Codec } from './public.js';
  * 새어나가면 프라미스가 영원히 정착하지 않는다. 이 함수 자체는 throw 하지 않는다.
  */
 export function tier2Outcome<T>(
-  codec: RkyvV2Codec<unknown, unknown>,
+  codec: FrameCodec<unknown, unknown>,
   frame: ArrayBuffer | ArrayBufferView,
 ): { ok: true; value: T } | { ok: false; error: Error } {
-  let response: ReturnType<RkyvV2Codec<unknown, unknown>['decode']>;
+  let response: ReturnType<FrameCodec<unknown, unknown>['decode']>;
   try {
     response = codec.decode(frame);
   } catch (err) {
@@ -26,7 +26,7 @@ export function tier2Outcome<T>(
     };
   }
   if (!response.ok) {
-    const e = response.error ?? { code: 'invoke.failed', message: 'RkyvV2 invoke failed' };
+    const e = response.error ?? { code: 'invoke.failed', message: 'Frame invoke failed' };
     return {
       ok: false,
       error: new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code)),
@@ -54,14 +54,14 @@ export function payloadTooLargeError(
   );
 }
 
-import type { RkyvV2SchemaNative } from './live-schema.js';
-import type { RkyvSchemaRuntime } from './rkyv-engine-context.js';
-import type { RkyvV2EngineOptions } from './rkyv-engine-options.js';
+import type { FrameSchemaNative } from './live-schema.js';
+import type { FrameSchemaRuntime } from './frame-engine-context.js';
+import type { FrameEngineOptions } from './frame-engine-options.js';
 
-export function validateRkyvEngineOptions(
-  native: RkyvV2SchemaNative,
-  options: RkyvV2EngineOptions | undefined,
-  schema: RkyvSchemaRuntime,
+export function validateFrameEngineOptions(
+  native: FrameSchemaNative,
+  options: FrameEngineOptions | undefined,
+  schema: FrameSchemaRuntime,
 ): void {
   // F5 (opt-in) + A2 (정책): 계약 해시 검증. 빌드 시점 hash 와 네이티브 실시간
   // hash 가 다르면 기본적으로 엔진을 만들지 않고 즉시 실패(fail-fast)한다. T2

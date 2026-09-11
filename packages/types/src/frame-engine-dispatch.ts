@@ -2,12 +2,12 @@ import { isRetryableCode, RustraCommandError } from './errors.js';
 import { CODEC_RAW, CODEC_POSITIONAL } from './global.js';
 import { decodeTier3Response, encodeTier3Request } from './json-wire.js';
 import { traceWire } from './debug.js';
-import { tier2Outcome, payloadTooLargeError } from './rkyv-engine-contract.js';
-import { createDynamicCodecRuntime } from './rkyv-engine-dynamic-codec.js';
-import type { RkyvDispatchRuntime, RkyvEngineContext } from './rkyv-engine-context.js';
-import type { RkyvV2Codec } from './public.js';
+import { tier2Outcome, payloadTooLargeError } from './frame-engine-contract.js';
+import { createDynamicCodecRuntime } from './frame-engine-dynamic-codec.js';
+import type { FrameDispatchRuntime, FrameEngineContext } from './frame-engine-context.js';
+import type { FrameCodec } from './public.js';
 
-export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispatchRuntime {
+export function createFrameDispatchRuntime(context: FrameEngineContext): FrameDispatchRuntime {
   const { native, registry, schema, payloadLimit } = context;
   const dynamicCodecs = createDynamicCodecRuntime(schema);
   const {
@@ -26,13 +26,13 @@ export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispa
   const roundTrip = <T>(
     command: string,
     encoded: ArrayBuffer,
-    codec: RkyvV2Codec<unknown, unknown>,
+    codec: FrameCodec<unknown, unknown>,
   ): T => {
-    // (T3) 네이티브 왕복 전에 크기 검사 — 초과면 invokeRkyvV2 를 부르지 않는다.
+    // (T3) 네이티브 왕복 전에 크기 검사 — 초과면 invokeFrame 를 부르지 않는다.
     const tooLarge = payloadTooLargeError(encoded.byteLength, payloadLimit);
     if (tooLarge) throw tooLarge;
     traceWire('request', command, encoded);
-    const resultBytes = native.invokeRkyvV2(encoded);
+    const resultBytes = native.invokeFrame(encoded);
     traceWire('response', command, resultBytes);
     // Reject (do not throw) so the declared Promise<T> contract holds and
     // callers can use .catch() / await-try-consistently for command errors.
@@ -58,7 +58,7 @@ export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispa
     if (codec) {
       // encodeInto(재사용 버퍼)가 있으면 호출당 신규 할당을 피한다. 버퍼는
       // 커맨드별로 1개(단일 진입 dispatch 는 동시에 한 요청만 인코딩한다)다.
-      // invokeRkyvV2 는 왕복 전에 버퍼를 소비하므로 재진입 안전하다.
+      // invokeFrame 는 왕복 전에 버퍼를 소비하므로 재진입 안전하다.
       let encoded: ArrayBuffer;
       if (codec.encodeInto) {
         const bucket = encodeIntoBuffers;
@@ -86,7 +86,7 @@ export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispa
     if (!entry) {
       throw new RustraCommandError(
         'command.not_found',
-        `RkyvV2: no codec and not in live schema for "${command}"`,
+        `Frame: no codec and not in live schema for "${command}"`,
       );
     }
     const dynamicCodec = dynamicCodecs.lookupBinaryCodec(entry);
@@ -99,11 +99,11 @@ export function createRkyvDispatchRuntime(context: RkyvEngineContext): RkyvDispa
     const tooLarge = payloadTooLargeError(tier3Request.byteLength, payloadLimit);
     if (tooLarge) throw tooLarge;
     traceWire('request', command, tier3Request);
-    const tier3Response = native.invokeRkyvV2(tier3Request);
+    const tier3Response = native.invokeFrame(tier3Request);
     traceWire('response', command, tier3Response);
     const resp = decodeTier3Response(tier3Response);
     if (!resp.ok) {
-      const e = resp.error ?? { code: 'invoke.failed', message: 'RkyvV2 (tier3) invoke failed' };
+      const e = resp.error ?? { code: 'invoke.failed', message: 'Frame (tier3) invoke failed' };
       throw new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code));
     }
     return resp.result as T;

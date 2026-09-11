@@ -1,21 +1,21 @@
 /**
  * loop-stdio 바이너리 와이어 프로토콜 — [len u32 LE] 프레임 경계 누적·분할,
  * 예약 cmd id(0xfffd 푸시 / 0xfffc JSON 채널 / 0xfff9 바이트 채널) 프레임
- * 디멀티플렉싱, rkyv V2 요청 인코딩과 예약 커맨드(0xfffe drain / 0xfffb 발급 /
+ * 디멀티플렉싱, Frame 요청 인코딩과 예약 커맨드(0xfffe drain / 0xfffb 발급 /
  * 0xfffa 해제) 요청·응답 조립을 담는다. 프로세스 스폰·대기 큐·리스너 수명 등
  * transport 상태는 node-loop.ts / node-binary-session.ts 가 소유하고, 이 모듈은
  * 프로세스 의존성 없는 순수 함수·클로저만 갖는다(node-loop.test.ts 가 스폰 없이
  * 단위 검증하는 경로 그대로).
  */
-import type { RkyvV2Codec } from '@rustra/types';
+import type { FrameCodec } from '@rustra/types';
 
 /**
- * 바이너리 모드 코덱 표면 — generated `rkyvV2Registry` 를 그대로 넘긴다.
+ * 바이너리 모드 코덱 표면 — generated `frameRegistry` 를 그대로 넘긴다.
  * `encodeInto` 재사용 버퍼로 요청을 조립하고 `decode` 로 응답 프레임을
- * 파싱한다(둘 다 rkyv V2 프레임 계약 — [cmd_id u16][postcard] 요청,
+ * 파싱한다(둘 다 Frame 프레임 계약 — [cmd_id u16][postcard] 요청,
  * [ok u8][pad][len][body] 응답).
  */
-export type NodeLoopBinaryCodecs = Map<string, RkyvV2Codec<unknown, unknown>>;
+export type NodeLoopBinaryCodecs = Map<string, FrameCodec<unknown, unknown>>;
 
 /** 이벤트 drain 예약 커맨드 id — loop-stdio 의 BINARY_DRAIN_EVENTS_CMD 와 짝. */
 const BINARY_DRAIN_EVENTS_CMD = 0xfffe;
@@ -52,7 +52,7 @@ export type NodePushEventFrame = { name: string; payload: string; seq: number };
 export type NodeChannelFrame = { handle: number; payload: string };
 
 /** 바이너리 채널 푸시 프레임 본문 — handle 은 발급 핸들, payload 는 원시 바이트
- * (rkyv V2 프레임 등 — JSON 파싱 경로를 거치지 않는다). payload 는 수신 누적
+ * (Frame 프레임 등 — JSON 파싱 경로를 거치지 않는다). payload 는 수신 누적
  * 버퍼의 뷰다 — 사용자 코드로 내보내는 경계(createNodeBytesChannel)에서
  * 복사한다. */
 export type NodeChannelBytesFrame = { handle: number; payload: Uint8Array };
@@ -66,7 +66,7 @@ const frameDecoder = new TextDecoder();
  * 브로드캐스트, 그 외(응답)면 `onResponse` 로 위임. 순수 함수로 추출해 프레임
  * 경로를 스폰 없이 단위 검증할 수 있다 (node-loop.test.ts).
  *
- * 응답 프레임은 rkyv V2 셰이프 `[ok u8][pad 3][len u32][body]` — 첫 u16 LE
+ * 응답 프레임은 Frame 셰이프 `[ok u8][pad 3][len u32][body]` — 첫 u16 LE
  * (ok|pad)가 0xfffd/0xfffc/0xfff9(ok는 0/1)가 될 수 없다는 와이어 사실이 판별
  * 근거다. 푸시/채널 본문의 JSON 파싱 실패는 조용히 건너뛴다(폴링 drain 파싱과
  * 동일 정책 — 프로토콜 오염 한 프레임이 transport 전체를 죽이지 않는다).
@@ -171,8 +171,8 @@ export function createBinaryFrameAccumulator(
   };
 }
 
-/** 요청 프레임 [len u32 LE][rkyv V2 요청] 조립 — encodeInto 재사용 버퍼 우선. */
-export function encodeBinaryRequest(codec: RkyvV2Codec<unknown, unknown>, args: unknown): Buffer {
+/** 요청 프레임 [len u32 LE][Frame 요청] 조립 — encodeInto 재사용 버퍼 우선. */
+export function encodeBinaryRequest(codec: FrameCodec<unknown, unknown>, args: unknown): Buffer {
   const encoded = codec.encodeInto ? codec.encodeInto(args) : codec.encode(args);
   const bytes =
     encoded instanceof Uint8Array

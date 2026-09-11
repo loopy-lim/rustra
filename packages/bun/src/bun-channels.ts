@@ -4,7 +4,7 @@
  * Rust 채널 코어(`channels.rs` ChannelHost)를 Bun FFI 로 소비한다.
  *
  * 바이너리 경로(`createBunChannelBytesBridge`)는 `rustra_ffi_channel_create_bytes`
- * 로 발급하는 RN `createBytesChannel` 의 쌍둥이다 — 콜백이 rkyv V2 프레임 등
+ * 로 발급하는 RN `createBytesChannel` 의 쌍둥이다 — 콜백이 Frame 프레임 등
  * 임의 바이트(Uint8Array)를 받고, 한 핸들은 JSON/바이너리 정확히 한 경로로만
  * 동작한다(ffi_channel.rs — 어긋난 경로 send 는 조용히 0).
  *
@@ -173,7 +173,7 @@ export async function createBunChannelBridge(
 /**
  * Bun 바이너리 채널 브릿지를 만든다 — RN `createBytesChannel` 의 FFI 쌍둥.
  * `rustra_ffi_channel_create_bytes` 로 발급하고, 콜백은 `Uint8Array` 페이로드를
- * 받는다(rkyv V2 프레임 등 임의 바이트). 한 핸들은 한 경로(JSON xor bytes)로만
+ * 받는다(Frame 프레임 등 임의 바이트). 한 핸들은 한 경로(JSON xor bytes)로만
  * 동작하고, drop 은 JSON 경로와 같은 `rustra_ffi_channel_drop` 을 공유한다.
  *
  * 네이티브(여기서는 cdylib)가 바이너리 경로를 노출하지 않으면 RN 과 동일하게

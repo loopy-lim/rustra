@@ -17,7 +17,7 @@
  * 의도적 생략이다. loop-stdio 런타임은 argv 를 읽지 않으므로(부트스트랩의
  * `args:["invoke"]` 도 사실상 장식) 이벤트 transport 가 다른 argv 로 스폰될
  * 일이 없다. `codecs` 는 부트스트랩과 공유하지 않는다(엔트리가 이벤트 팩토리에
- * `rkyvV2Registry` 를 넘기지 않는다): codecs 부재 시 핸드셰이크가 실행되지
+ * `frameRegistry` 를 넘기지 않는다): codecs 부재 시 핸드셰이크가 실행되지
  * 않아 transport 는 NDJSON 모드로 남고 `pushCapable` 은 false — 2-모드
  * dispatch(node-events.ts)의 능력 재판정이 이를 확인해 **폴링으로 확정**한다.
  * 즉 이 팩토리의 전달 경로는 폴링이며, push 승격이 필요하면 codecs 를 직접
@@ -35,7 +35,7 @@
  * // push 승격 — codecs 를 주입한 transport 로 직접 구독(0xfffd 프레임 수신):
  * const transport = createNodeLoopTransport({
  *   command: bin,
- *   codecs: rkyvV2Registry,
+ *   codecs: frameRegistry,
  * });
  * subscribeEvent(transport, 'progress.tick', (payload) => console.log(payload));
  * ```

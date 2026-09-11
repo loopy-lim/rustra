@@ -16,7 +16,7 @@ crate-type = ["rlib", "cdylib"]
 ```
 
 `rustra.json`에는 `"bun": {}`만 추가합니다. 생성된 파일이 Cargo metadata로 Release,
-Debug library 후보를 만들고, 실제 ABI 심볼까지 검사한 뒤 rkyv V2 engine을 lazy
+Debug library 후보를 만들고, 실제 ABI 심볼까지 검사한 뒤 Frame engine을 lazy
 설치합니다.
 
 ```ts

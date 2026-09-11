@@ -3,7 +3,7 @@ English | [한국어](./README.ko.md)
 # @rustra/cli
 
 The TypeScript code generation CLI for rustra-bridge. Generates type-safe clients
-(commands/types/contract/rkyv codec) from the `schema.json` exported by the Rust backend.
+(commands/types/contract/frame codec) from the `schema.json` exported by the Rust backend.
 
 ## Usage
 
@@ -61,7 +61,7 @@ import { generateTypesTs, generateCommandsTs, diffSchemas } from '@rustra/cli';
 
 | Module            | Contents                                                            |
 | ----------------- | ------------------------------------------------------------------- |
-| `generate`        | generator functions for types/commands/contract/rkyv codec/registry |
+| `generate`        | generator functions for types/commands/contract/frame codec/registry |
 | `schema`          | `PackageSchema` parsing and validation                              |
 | `schema-diff`     | breaking-change detection between schema versions (`diffSchemas`)   |
 | `validate-engine` | runtime invoke validation engine wrapper (`createValidatedEngine`)  |
