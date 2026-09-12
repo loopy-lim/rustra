@@ -117,16 +117,16 @@ function 으로 발급한다(진짜 유니캐스트). CallInvoker 가 있으면 
 
 | Package                | Manifest version |
 | ---------------------- | ---------------- |
-| Rust workspace crates  | 0.9.0            |
-| `@rustra/bun`          | 0.9.0            |
-| `@rustra/cli`          | 0.9.0            |
-| `@rustra/devtools`     | 0.6.2            |
-| `@rustra/node`         | 0.9.0            |
-| `@rustra/react`        | 0.7.1            |
-| `@rustra/react-native` | 0.8.0            |
-| `@rustra/tauri`        | 0.8.0            |
-| `@rustra/testing`      | 0.6.2            |
-| `@rustra/types`        | 0.9.0            |
+| Rust workspace crates  | 0.10.0           |
+| `@rustra/bun`          | 0.10.0           |
+| `@rustra/cli`          | 0.10.0           |
+| `@rustra/devtools`     | 0.7.0            |
+| `@rustra/node`         | 0.10.0           |
+| `@rustra/react`        | 0.8.0            |
+| `@rustra/react-native` | 0.9.0            |
+| `@rustra/tauri`        | 0.9.0            |
+| `@rustra/testing`      | 0.7.0            |
+| `@rustra/types`        | 0.10.0           |
 
 <!-- release:versions:end -->
 

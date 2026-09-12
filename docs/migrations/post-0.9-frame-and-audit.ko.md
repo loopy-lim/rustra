@@ -1,18 +1,17 @@
 [English](./post-0.9-frame-and-audit.md) | 한국어
 
-# 0.9 이후 Frame·감사 수정 마이그레이션 (릴리스 준비)
+# 0.9 이후 Frame·감사 수정 마이그레이션
 
-이 문서는 **아직 발행하지 않은 동시 업그레이드 계획**이다. 2026-09-10 릴리스에서
-Rust와 types/node/bun/cli는 이미 0.9.0을 사용했으므로 같은 버전을 재사용하지 않는다.
-열린 릴리스 작업의 정확한 대상과 최종 커밋은 확인이 필요하다. 현재 manifest 버전은
-변경하지 않았으며, [호환 표](../compatibility-matrix.ko.md)는 이 manifest를 기준으로 한다.
+동시 업그레이드는 [PR #69](https://github.com/loopy-lim/rustra/pull/69)에서 준비한다.
+2026-09-10 릴리스에서 Rust와 types/node/bun/cli는 이미 0.9.0을 사용했으므로
+새 버전으로 올린다. [호환 표](../compatibility-matrix.ko.md)는 릴리스 manifest를
+기준으로 하며 레지스트리 발행은 별도로 검증한다.
 
-대기 changeset은 변경된 JS 9개 패키지의 pre-1.0 minor bump를 제안한다.
+버전 단계에서 변경된 JS 9개 패키지의 pre-1.0 minor bump를 적용한다.
 types/node/bun/cli 0.9.0 → 0.10.0, tauri/react-native 0.8.0 → 0.9.0,
-react 0.7.1 → 0.8.0, testing/devtools 0.6.2 → 0.7.0이며 **아직 적용하지 않았다**.
-Rust workspace의 다음 breaking minor(제안 0.10.0)와 CLI의
-`rustraTemplate.cargoRange`도 공유 types 라인에 맞춰 함께 조정한다. 버전 workflow에서
-npm 내부 의존 범위, CLI RN 템플릿 범위, lockfile과 생성 manifest를 갱신한다.
+react 0.7.1 → 0.8.0, testing/devtools 0.6.2 → 0.7.0이다. Rust workspace는 0.10.0,
+CLI의 `rustraTemplate.cargoRange`는 ^0.10.0, RN 어댑터 범위는 ^0.9.0이다.
+npm 내부 의존 범위·lockfile·생성 manifest를 같은 릴리스 후보에서 갱신한다.
 독립 어댑터는 각각의 버전 번호를 유지한다.
 
 ## 네이티브 라이브러리·JS·생성물을 함께 교체

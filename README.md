@@ -2,9 +2,10 @@ English | [한국어](./README.ko.md)
 
 # rustra
 
-The Frame rename and audit fixes require an unreleased coordinated upgrade. Do not
-reuse the already published 0.9.0; see the [release preparation guide](docs/migrations/post-0.9-frame-and-audit.md)
-for proposed versions, consumer checks, and rollback.
+The Frame rename and audit fixes target Rust 0.10.0 and the coordinated package
+versions below. Upgrade native libraries, JS adapters, and generated output together;
+see the [migration guide](docs/migrations/post-0.9-frame-and-audit.md) for consumer
+checks and rollback.
 
 [![CI](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml/badge.svg)](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@rustra/types)](https://www.npmjs.com/package/@rustra/types)
@@ -164,7 +165,7 @@ JS/native combination drift at runtime.
 
 ```toml
 [dependencies]
-rustra = "0.9.0"
+rustra = "0.10.0"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -174,12 +175,12 @@ Installation versions follow the current Rust and npm manifests. Adapters have i
 ### TypeScript adapters (only the environments you need)
 
 ```bash
-bun add @rustra/node@0.9.0      # Node.js
-bun add @rustra/bun@0.9.0       # Bun
-bun add @rustra/tauri@0.8.0     # Tauri
-bun add @rustra/react-native@0.8.0  # React Native
-bun add @rustra/testing@0.6.2       # Mock engine (tests)
-bun add @rustra/devtools@0.6.2      # Invocation observability (dev)
+bun add @rustra/node@0.10.0      # Node.js
+bun add @rustra/bun@0.10.0       # Bun
+bun add @rustra/tauri@0.9.0     # Tauri
+bun add @rustra/react-native@0.9.0  # React Native
+bun add @rustra/testing@0.7.0       # Mock engine (tests)
+bun add @rustra/devtools@0.7.0      # Invocation observability (dev)
 ```
 
 ## Quick Example
@@ -236,7 +237,7 @@ Specifying the Rust generator in `rustra.json` processes schema generation throu
 Then run:
 
 ```bash
-bunx --bun @rustra/cli@0.9.0 codegen --config rustra.json
+bunx --bun @rustra/cli@0.10.0 codegen --config rustra.json
 ```
 
 If you only need to re-render an existing schema, use `generate --config`
@@ -273,10 +274,10 @@ rustra::native_entry!(my_package);
 ```
 
 ```bash
-bun add @rustra/react-native@0.8.0 @rustra/types@0.9.0
-bun add -d @rustra/cli@0.9.0
-bunx --bun @rustra/cli@0.9.0 doctor --config rustra.json
-bunx --bun @rustra/cli@0.9.0 codegen --config rustra.json
+bun add @rustra/react-native@0.9.0 @rustra/types@0.10.0
+bun add -d @rustra/cli@0.10.0
+bunx --bun @rustra/cli@0.10.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.10.0 codegen --config rustra.json
 bun install
 ```
 
@@ -617,7 +618,7 @@ identically regardless of platform.
 Enable the `tauri` feature:
 
 ```toml
-rustra = { version = "0.9.0", features = ["tauri"] }
+rustra = { version = "0.10.0", features = ["tauri"] }
 ```
 
 Rust side:
@@ -781,16 +782,16 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 
 # Diagnose the dev environment
-bunx --bun @rustra/cli@0.9.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.10.0 doctor --config rustra.json
 
 # Generate Rust schema + TS/C++/RN in one shot
-bunx --bun @rustra/cli@0.9.0 codegen --config rustra.json
+bunx --bun @rustra/cli@0.10.0 codegen --config rustra.json
 
 # Generated-file sync CI gate (TS/C++/RN excluded)
-bunx --bun @rustra/cli@0.9.0 generate --config rustra.json --check
+bunx --bun @rustra/cli@0.10.0 generate --config rustra.json --check
 
 # Watch Rust sources + re-run integrated codegen automatically
-bunx --bun @rustra/cli@0.9.0 dev --config rustra.json
+bunx --bun @rustra/cli@0.10.0 dev --config rustra.json
 ```
 
 ## Documentation

@@ -2,10 +2,10 @@
 
 # rustra 시작하기
 
-> **미발행 Frame 변경 안내:** 이 문서는 현재 checkout의 Frame API와 생성물을 설명한다.
-> 아래 설치 명령은 현재 manifest 버전에 맞췄지만, 레지스트리에 발행된 0.9.0에는
-> 이 Frame 전환이 포함되지 않는다. 해당 생성물을 사용하려면 동시 업그레이드가
-> 필요하다. 버전 제안과 절차는 [릴리스 준비 문서](migrations/post-0.9-frame-and-audit.ko.md)를 따른다.
+> **Frame 마이그레이션:** 이 문서는 Rust와 공통 패키지 0.10.0 및 아래 어댑터 버전을
+> 대상으로 한다. 0.9.0에는 Frame 이름 전환이 포함되지 않는다. 네이티브 라이브러리·
+> JS 패키지·생성물을 함께 갱신한다. 버전과 절차는
+> [마이그레이션 문서](migrations/post-0.9-frame-and-audit.ko.md)를 따른다.
 
 rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 어디에서나 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크다.
 
@@ -34,7 +34,7 @@ rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 
 ### 가장 빠른 시작 — `rustra init`
 
 ```bash
-bunx --bun @rustra/cli@0.9.0 init my-project
+bunx --bun @rustra/cli@0.10.0 init my-project
 cd my-project
 bun install
 bun run doctor
@@ -54,14 +54,14 @@ package.json(doctor/codegen/codegen:check/dev/demo 스크립트), `.gitignore`
 `--force`를 붙인다:
 
 ```bash
-bunx --bun @rustra/cli@0.9.0 init my-project --force
+bunx --bun @rustra/cli@0.10.0 init my-project --force
 ```
 
 ### 외부 프로젝트에서 사용
 
 ```toml
 [dependencies]
-rustra = "0.9.0"
+rustra = "0.10.0"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -71,10 +71,10 @@ schemars = { version = "0.8", features = ["derive"] }
 TypeScript 어댑터는 사용할 환경만 설치하면 된다:
 
 ```bash
-bun add @rustra/node@0.9.0      # Node.js
-bun add @rustra/bun@0.9.0       # Bun
-bun add @rustra/tauri@0.8.0     # Tauri
-bun add @rustra/react-native@0.8.0  # React Native
+bun add @rustra/node@0.10.0      # Node.js
+bun add @rustra/bun@0.10.0       # Bun
+bun add @rustra/tauri@0.9.0     # Tauri
+bun add @rustra/react-native@0.9.0  # React Native
 ```
 
 ### 모노레포 / workspace에서 사용
@@ -875,8 +875,8 @@ RN JSI `invokeTyped` 진입을 직접 호출한다. 해당 형태 밖의 명령�
 `commands.ts` 경로를 유지한다.
 
 ```bash
-bunx --bun @rustra/cli@0.9.0 doctor --config rustra.json
-bunx --bun @rustra/cli@0.9.0 codegen --config rustra.json
+bunx --bun @rustra/cli@0.10.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.10.0 codegen --config rustra.json
 ```
 
 **TypeScript 측 사용:**

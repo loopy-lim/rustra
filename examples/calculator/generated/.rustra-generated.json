@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "schemaHash": "7c07f78e1f38dc37f251920c7c453ec5b6d65a817f95a1b51b5b4649f63a2ae3",
-  "generatorVersion": "0.9.0",
+  "generatorVersion": "0.10.0",
   "files": [
     {
       "path": "bun.ts",

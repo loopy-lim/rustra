@@ -1,20 +1,18 @@
 English | [한국어](./post-0.9-frame-and-audit.ko.md)
 
-# After 0.9: Frame and audit migration (release preparation)
+# After 0.9: Frame and audit migration
 
-This is an **unreleased coordinated-upgrade plan**, not a published version claim.
-The 2026-09-10 release already used 0.9.0 for Rust and types/node/bun/cli. That
-version must not be reused for this branch. The exact open release item and final
-release commit still need confirmation. Current manifests remain unchanged; the
-[compatibility table](../compatibility-matrix.md) is generated from those manifests.
+The coordinated release is prepared in [PR #69](https://github.com/loopy-lim/rustra/pull/69).
+The 2026-09-10 release already used 0.9.0 for Rust and types/node/bun/cli, so this
+release uses new versions. The [compatibility table](../compatibility-matrix.md)
+is generated from release manifests; registry publication is verified separately.
 
-The pending changeset proposes pre-1.0 minor bumps for all nine affected JS packages:
+The version step applies pre-1.0 minor bumps to all nine affected JS packages:
 types/node/bun/cli 0.9.0 → 0.10.0, tauri/react-native 0.8.0 → 0.9.0,
-react 0.7.1 → 0.8.0, testing/devtools 0.6.2 → 0.7.0. These are proposals only.
-Coordinate the Rust workspace's next breaking minor (proposed 0.10.0) and CLI
-`rustraTemplate.cargoRange` with the shared types line. Regenerate internal npm
-ranges, CLI RN template range, lockfiles, and generated manifests through the
-version workflow. Independent adapters keep their own version numbers.
+react 0.7.1 → 0.8.0, testing/devtools 0.6.2 → 0.7.0. The Rust workspace is 0.10.0;
+CLI `rustraTemplate.cargoRange` is ^0.10.0 and its RN adapter range is ^0.9.0.
+Internal npm ranges, lockfiles, and generated manifests are updated in the same
+release candidate. Independent adapters keep their own version numbers.
 
 ## Upgrade the native library, JS packages, and generated output together
 
