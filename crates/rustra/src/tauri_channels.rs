@@ -8,13 +8,22 @@
 //!
 //! - 이벤트 푸시: `Package::emit` → `rustra://{name}` 채널 emit
 //!   ([`tauri_event_sink`]·[`event_channel`]).
-//! - 채널 푸시: JS 어댑터 발급 핸들 → `rustra://channel/{h}` /
-//!   `rustra://channel-bytes/{h}` 채널 emit ([`create_channel_for`]·
-//!   [`create_bytes_channel_for`]).
+//! - JS 채널: 호출 WebView에 묶인 IPC 콜백으로 크기가 제한된 조각 전송.
+//! - 신뢰된 Rust 호스트 헬퍼: 앱 전체 이벤트 broadcast
+//!   ([`create_channel_for`]·[`create_bytes_channel_for`]).
 use crate::PackageBuilder;
 use serde_json::{Value, json};
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use tauri::Emitter;
+use tauri::ipc::{Channel, InvokeResponseBody};
+
+#[path = "tauri_channel_ipc.rs"]
+mod ipc;
+#[path = "tauri_channel_ownership.rs"]
+mod ownership;
+
+pub(crate) use ownership::plugin as channel_ownership_plugin;
 
 /// rustra 이벤트 채널의 접두사. 이벤트 `name` 은 `rustra://{name}` 채널로
 /// emit 된다.
@@ -34,37 +43,54 @@ pub const CHANNEL_EVENT_PREFIX: &str = "rustra://channel/";
 /// `-` 는 Tauri 채널 이름에 허용되는 문자다.
 pub const CHANNEL_BYTES_EVENT_PREFIX: &str = "rustra://channel-bytes/";
 
-/// JS 어댑터 발급 커맨드 — `createChannel(callback)` 이 invoke 한다.
-/// Tauri IPC 는 함수 값을 실어 보낼 수 없으므로 콜백은 받지 않는다: 핸들만
-/// 발급하고, sender 는 [`create_channel_for`] 가 `rustra://channel/{handle}`
-/// emit 으로 고정 배선한다(어댑터가 같은 채널을 listen).
-///
-/// 반환: `{ "handle": u32 }`. 핸들 공간 소진 시 `handle: 0` — JS 어댑터가
-/// loud-fail 한다.
+/// Create a channel bound by Tauri to the invoking WebView's IPC callback.
 #[tauri::command]
-pub fn rustra_channel_create<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Value {
-    let handle = create_channel_for(&app);
-    json!({ "handle": handle })
+pub fn rustra_channel_create<R: tauri::Runtime>(
+    webview: tauri::Webview<R>,
+    on_message: Channel<InvokeResponseBody>,
+) -> Value {
+    json!({ "handle": create_webview_channel(&webview, on_message, false), "transport": "ipc-channel-chunks-v1" })
 }
 
-/// JS 어댑터 발급 커맨드 — `createChannelBytes(callback)` 이 invoke 한다.
-/// [`rustra_channel_create`] 의 바이너리 변형: 핸들만 발급하고 sender 는
-/// [`create_bytes_channel_for`] 가 `rustra://channel-bytes/{handle}` emit 으로
-/// 고정 배선한다(어댑터가 같은 채널을 listen).
-///
-/// 반환: `{ "handle": u32 }`. 핸들 공간 소진 시 `handle: 0` — JS 어댑터가
-/// loud-fail 한다. 해제는 공용 [`rustra_channel_drop`] — `ChannelHost::drop_channel`
-/// 이 JSON/바이너리 양쪽 테이블을 해제하므로 별도 drop 커맨드가 필요 없다.
+/// Binary counterpart of [`rustra_channel_create`], delivered as raw IPC bytes.
 #[tauri::command]
-pub fn rustra_channel_create_bytes<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> Value {
-    let handle = create_bytes_channel_for(&app);
-    json!({ "handle": handle })
+pub fn rustra_channel_create_bytes<R: tauri::Runtime>(
+    webview: tauri::Webview<R>,
+    on_message: Channel<InvokeResponseBody>,
+) -> Value {
+    json!({ "handle": create_webview_channel(&webview, on_message, true), "transport": "ipc-channel-chunks-v1" })
 }
 
-/// JS 어댑터 `close()` 가 invoke 한다 — [`drop_channel_for`] 참고.
+/// Only the calling WebView can release its own handle.
 #[tauri::command]
-pub fn rustra_channel_drop<R: tauri::Runtime>(app: tauri::AppHandle<R>, handle: u32) -> bool {
-    drop_channel_for(&app, handle)
+pub fn rustra_channel_drop<R: tauri::Runtime>(webview: tauri::Webview<R>, handle: u32) -> bool {
+    ownership::drop_webview(&webview, handle)
+}
+
+fn create_webview_channel<R: tauri::Runtime>(
+    webview: &tauri::Webview<R>,
+    channel: Channel<InvokeResponseBody>,
+    binary: bool,
+) -> u32 {
+    let handle = crate::channels::host().reserve_handle();
+    if handle == 0 {
+        return 0;
+    }
+    ownership::publish_webview(webview, handle, |active| {
+        let sender = ipc::Sender::new(channel, active, handle);
+        if binary {
+            crate::channels::host().register_channel_bytes_with_handle(
+                handle,
+                Arc::new(move |payload| sender.send(payload)),
+            );
+        } else {
+            crate::channels::host().register_channel_with_handle(
+                handle,
+                Arc::new(move |payload| sender.send(payload.as_bytes())),
+            );
+        }
+    });
+    handle
 }
 
 /// `AppHandle` 로 이벤트를 emit 하는 [`crate::events::EventSink`] 를 만든다.
@@ -96,48 +122,51 @@ pub fn tauri_event_sink<R: tauri::Runtime>(app: tauri::AppHandle<R>) -> crate::e
     })
 }
 
-/// 웹뷰(JS) 발급자용 채널을 `ChannelHost` 에 등록하고 핸들을 발급한다.
+/// 신뢰된 Rust 호스트용 앱 전체 broadcast 채널을 등록한다.
 ///
 /// sender 는 `AppHandle` 과 핸들을 캡처해 [`CHANNEL_EVENT_PREFIX`]{handle}
-/// 채널로 emit 한다 — JS 어댑터(`packages/tauri` createChannel)가 같은 채널을
-/// `listen` 하여 콜백으로 변환한다. 핸들 캡처를 위해 reserve→insert 2단계를
+/// 채널로 emit 한다. JS `createChannel`은 별도의 전용 IPC 경로를 사용한다. 핸들 캡처를 위해 reserve→insert 2단계를
 /// 쓴다(`ffi_channel.rs` 와 동일 관용).
 ///
 /// 반환 핸들은 1부터 단조 증가하며 0 은 핸들 공간 소진(u32 exhaustion) —
 /// 호출자(JS 어댑터)가 loud-fail 한다.
 ///
-/// # 근사 유니캐스트
+/// # Trusted host scope
 ///
-/// 채널 계약([`crate::channels`])은 호출 귀속 유니캐스트지만 Tauri emit 은
-/// 브로드캐스트다. `rustra://channel/{handle}` 채널명으로 근사한다 — 같은
-/// 프로세스의 다른 웹뷰가 같은 채널명을 listen 하면 프레임을 관측할 수 있다.
-/// 정상 흐름(단일 발급자 = 단일 listen)에서는 유니캐스트와 동일하다.
+/// This Rust helper intentionally broadcasts within the app. JS-issued channels
+/// use the calling WebView's resource table and targeted delivery instead.
+/// Only this app may close handles issued by this helper.
 pub fn create_channel_for<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> u32 {
     let handle = crate::channels::host().reserve_handle();
     if handle == 0 {
         return 0;
     }
     let app_for_sender = app.clone();
-    crate::channels::host().register_channel_with_handle(
-        handle,
-        Arc::new(move |payload: &str| {
-            let channel = format!("{CHANNEL_EVENT_PREFIX}{handle}");
-            if let Err(error) = app_for_sender.emit_str(&channel, payload.to_string()) {
-                eprintln!("rustra: tauri channel emit failed (handle {handle}): {error}");
-            }
-        }),
-    );
+    ownership::publish_app(app, handle, |active| {
+        crate::channels::host().register_channel_with_handle(
+            handle,
+            Arc::new(move |payload: &str| {
+                if !active.load(Ordering::Acquire) {
+                    return;
+                }
+                let channel = format!("{CHANNEL_EVENT_PREFIX}{handle}");
+                if let Err(error) = app_for_sender.emit_str(&channel, payload.to_string()) {
+                    eprintln!("rustra: tauri channel emit failed (handle {handle}): {error}");
+                }
+            }),
+        );
+    });
     handle
 }
 
 /// JS 어댑터 `close()` 의 Rust 측 — 채널을 해제한다. 이후 동일 핸들 send 는
 /// `false`(stale). 이미 없는 핸들은 `false`(double-drop 무해). JSON 채널과
 /// 바이너리 채널 양쪽을 해제한다(`ChannelHost::drop_channel`).
-pub fn drop_channel_for<R: tauri::Runtime>(_app: &tauri::AppHandle<R>, handle: u32) -> bool {
-    crate::channels::host().drop_channel(handle)
+pub fn drop_channel_for<R: tauri::Runtime>(app: &tauri::AppHandle<R>, handle: u32) -> bool {
+    ownership::drop_app(app, handle)
 }
 
-/// 웹뷰(JS) 발급자용 **바이너리** 채널을 `ChannelHost` 에 등록하고 핸들을
+/// 신뢰된 Rust 호스트용 앱 전체 **바이너리** 채널을 등록하고 핸들을
 /// 발급한다 — [`create_channel_for`] 의 바이너리 대응. JSON 경로와 동일한
 /// 핸들 번호 공간과 배선 관용을 쓴다(reserve→insert 2단계, sender 가
 /// `AppHandle`+핸들을 캡처, send 클로저의 패닉은 `ChannelHost::send_bytes` 가
@@ -154,31 +183,35 @@ pub fn drop_channel_for<R: tauri::Runtime>(_app: &tauri::AppHandle<R>, handle: u
 /// 구분 쉼표)로 와이어가 최대 ~4배 부풀고, 웹뷰 쪽에서 배열 리터럴 평가 +
 /// 요소별 Number 박싱 비용이 추가된다. RN 경로(FFI 가 ArrayBuffer 를
 /// 무손실 전달)보다 눈에 띄게 비싸다. 기능 우선 패리티를 위해 이 비용을
-/// 수용한다 — 향후 Tauri 가 채널 수준 raw-bytes 전송 계층을 안정 노출하면
-/// 이 지점만 교체한다(JS 계약 `Uint8Array` 는 변하지 않는다).
+/// 수용한다. JS `createChannelBytes`는 작은 raw IPC 조각으로 전송하므로
+/// 이 신뢰된 호스트 broadcast 경로의 숫자 배열 비용과는 별개다.
 ///
-/// # 근사 유니캐스트
+/// # Trusted host scope
 ///
-/// [`create_channel_for`] 와 동일 — Tauri emit 은 브로드캐스트지만
-/// `rustra://channel-bytes/{handle}` 채널명으로 근사한다. 같은 프로세스의
-/// 다른 웹뷰가 같은 채널명을 listen 하면 프레임을 관측할 수 있다.
+/// Like [`create_channel_for`], this helper broadcasts within the app. The JS
+/// command uses WebView-scoped delivery and disposal.
 pub fn create_bytes_channel_for<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> u32 {
     let handle = crate::channels::host().reserve_handle();
     if handle == 0 {
         return 0;
     }
     let app_for_sender = app.clone();
-    crate::channels::host().register_channel_bytes_with_handle(
-        handle,
-        Arc::new(move |payload: &[u8]| {
-            let channel = format!("{CHANNEL_BYTES_EVENT_PREFIX}{handle}");
-            // serde 가 Vec<u8> 를 JSON 숫자 배열로 직렬화한다 — 비용 고지는
-            // 위 함수 doc 주석 참고.
-            if let Err(error) = app_for_sender.emit(&channel, payload.to_vec()) {
-                eprintln!("rustra: tauri bytes channel emit failed (handle {handle}): {error}");
-            }
-        }),
-    );
+    ownership::publish_app(app, handle, |active| {
+        crate::channels::host().register_channel_bytes_with_handle(
+            handle,
+            Arc::new(move |payload: &[u8]| {
+                if !active.load(Ordering::Acquire) {
+                    return;
+                }
+                let channel = format!("{CHANNEL_BYTES_EVENT_PREFIX}{handle}");
+                // serde 가 Vec<u8> 를 JSON 숫자 배열로 직렬화한다 — 비용 고지는
+                // 위 함수 doc 주석 참고.
+                if let Err(error) = app_for_sender.emit(&channel, payload.to_vec()) {
+                    eprintln!("rustra: tauri bytes channel emit failed (handle {handle}): {error}");
+                }
+            }),
+        );
+    });
     handle
 }
 

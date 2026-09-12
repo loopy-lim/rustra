@@ -706,267 +706,235 @@ test('A05: concurrent ready calls share one initialization promise (tauri)', asy
   }
 });
 
-// ── 채널 어댑터 — invoke 발급 + listen 콜백 브릿지 ──
-
-test('createChannel issues a handle via rustra_channel_create and listens on the handle channel', async () => {
-  const { createChannel } = await import('./index.js');
-  const calls: Array<{ command: string; args: unknown }> = [];
-  const channels = new Set<string>();
-  const fakeInvoke = async (command: string, args?: unknown) => {
-    calls.push({ command, args });
-    if (command === 'rustra_channel_create') return { handle: 7 };
-    if (command === 'rustra_channel_drop') return true;
-    throw new Error(`unexpected command: ${command}`);
+// IPC channels must be installed before native creation, never through events.
+function fakeIpcChannel() {
+  let fire: (payload: unknown) => void = () => {};
+  let disposed = 0;
+  const value = { id: 100 };
+  const send = (payload: unknown) => {
+    const bytes =
+      payload instanceof Uint8Array
+        ? payload
+        : payload instanceof ArrayBuffer
+          ? new Uint8Array(payload)
+          : new TextEncoder().encode(JSON.stringify(payload));
+    for (let offset = 0; offset < bytes.length || offset === 0; offset += 960) {
+      const body = bytes.subarray(offset, offset + 960);
+      const packet = new Uint8Array(8 + body.length);
+      const header = new DataView(packet.buffer);
+      header.setUint32(0, bytes.length, true);
+      header.setUint32(4, offset, true);
+      packet.set(body, 8);
+      fire(packet.buffer);
+    }
   };
-  const fakeListen = async (channel: string, handler: (e: { payload: string }) => void) => {
-    channels.add(channel);
-    (fakeInvoke as unknown as { __fire?: (p: string) => void }).__fire = (payload: string) =>
-      handler({ payload });
-    return () => {};
-  };
-
-  const received: unknown[] = [];
-  const channel = await createChannel((p) => received.push(p), {
-    invoke: fakeInvoke,
-    listen: fakeListen,
-  });
-  assert.equal(channel.handle, 7);
-  assert.deepEqual(calls, [{ command: 'rustra_channel_create', args: undefined }]);
-  assert.ok(channels.has('rustra://channel/7'), 'listener bound to rustra://channel/{handle}');
-
-  (fakeInvoke as unknown as { __fire: (p: string) => void }).__fire('{"step":1}');
-  assert.deepEqual(received, [{ step: 1 }], 'payload parsed once to a typed value');
-});
-
-test('createChannel falls back to the raw string payload when JSON parsing fails', async () => {
-  const { createChannel } = await import('./index.js');
-  let fire: ((p: string) => void) | null = null;
-  const channel = await createChannel((p) => received.push(p), {
-    invoke: async () => ({ handle: 3 }),
-    listen: async (_channel, handler) => {
-      fire = (payload) => handler({ payload });
-      return () => {};
+  return {
+    value,
+    fire: send,
+    raw: (payload: unknown) => fire(payload),
+    disposed: () => disposed,
+    createIpcChannel(callback: (payload: unknown) => void) {
+      fire = callback;
+      return {
+        value,
+        dispose: () => {
+          disposed += 1;
+        },
+      };
     },
-  });
-  const received: unknown[] = [];
-  fire!('not-json');
-  assert.equal(received[0], 'not-json');
-  void channel;
-});
+  };
+}
 
-test('createChannel loud-fails on handle 0 (channel-space exhaustion)', async () => {
-  const { createChannel } = await import('./index.js');
-  await assert.rejects(
-    createChannel(() => {}, { invoke: async () => ({ handle: 0 }) }),
-    (err: unknown) => err instanceof RustraCommandError,
-  );
-});
-
-test('createChannel loud-fails on invoke rejection', async () => {
-  const { createChannel } = await import('./index.js');
-  await assert.rejects(
-    createChannel(() => {}, {
-      invoke: async () => {
-        throw new Error('ipc dead');
+for (const binary of [false, true]) {
+  const name = binary ? 'createChannelBytes' : 'createChannel';
+  const command = binary ? 'rustra_channel_create_bytes' : 'rustra_channel_create';
+  test(`${name} binds IPC before allocation and closes once without any event listener`, async () => {
+    const api = await import('./index.js');
+    const received: unknown[] = [];
+    const wire = fakeIpcChannel();
+    const calls: Array<{ command: string; args: unknown }> = [];
+    const channel = await api[name]((payload: unknown) => received.push(payload), {
+      createIpcChannel: wire.createIpcChannel,
+      listen: async () => {
+        throw new Error('event transport must not be used');
       },
-    }),
-    /ipc dead/,
-  );
-});
-
-test('createChannel close() invokes rustra_channel_drop, unhooks the listener, ignores late frames', async () => {
-  const { createChannel } = await import('./index.js');
-  const calls: Array<{ command: string; args: unknown }> = [];
-  let unlistened = 0;
-  let fire: ((p: string) => void) | null = null;
-  const received: unknown[] = [];
-  const channel = await createChannel((p) => received.push(p), {
-    invoke: async (command, args) => {
-      calls.push({ command, args });
-      if (command === 'rustra_channel_create') return { handle: 9 };
-      if (command === 'rustra_channel_drop') return true;
-      throw new Error('unexpected');
-    },
-    listen: async (_channel, handler) => {
-      fire = (payload) => handler({ payload });
-      return () => {
-        unlistened += 1;
-      };
-    },
-  });
-
-  fire!('{"v":1}');
-  assert.deepEqual(received, [{ v: 1 }]);
-  assert.equal(await channel.close(), true);
-  assert.deepEqual(
-    calls.filter((c) => c.command === 'rustra_channel_drop'),
-    [{ command: 'rustra_channel_drop', args: { handle: 9 } }],
-  );
-  assert.equal(unlistened, 1, 'listener unhooked');
-  fire!('{"v":2}');
-  assert.deepEqual(received, [{ v: 1 }], 'late frames ignored after close');
-  assert.equal(await channel.close(), true, 'double close is idempotent');
-});
-
-test('createChannel discovers the Tauri global without explicit io', async () => {
-  const { createChannel } = await import('./index.js');
-  const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
-  const previous = root.__TAURI__;
-  root.__TAURI__ = {
-    core: { invoke: async (command: string) => ({ handle: 5, dropped: command === 'x' }) },
-    event: {
-      listen: async () => () => {},
-    },
-  };
-  try {
-    const channel = await createChannel(() => {});
-    assert.equal(channel.handle, 5);
-  } finally {
-    root.__TAURI__ = previous;
-  }
-});
-
-// ── 바이너리 채널 어댑터 — rustra_channel_create_bytes + bytes 이벤트 ──
-
-test('createChannelBytes issues a handle via rustra_channel_create_bytes and listens on the bytes channel', async () => {
-  const { createChannelBytes } = await import('./index.js');
-  const calls: Array<{ command: string; args: unknown }> = [];
-  const channels = new Set<string>();
-  let fire: ((payload: unknown) => void) | null = null;
-  const fakeInvoke = async (command: string, args?: unknown) => {
-    calls.push({ command, args });
-    if (command === 'rustra_channel_create_bytes') return { handle: 11 };
-    if (command === 'rustra_channel_drop') return true;
-    throw new Error(`unexpected command: ${command}`);
-  };
-  const fakeListen = async (channel: string, handler: (e: { payload: unknown }) => void) => {
-    channels.add(channel);
-    fire = (payload: unknown) => handler({ payload });
-    return () => {};
-  };
-
-  const received: Uint8Array[] = [];
-  const channel = await createChannelBytes((p) => received.push(p), {
-    invoke: fakeInvoke,
-    listen: fakeListen,
-  });
-  assert.equal(channel.handle, 11);
-  assert.deepEqual(calls, [{ command: 'rustra_channel_create_bytes', args: undefined }]);
-  assert.ok(
-    channels.has('rustra://channel-bytes/11'),
-    'listener bound to rustra://channel-bytes/{handle} — JSON 경로(rustra://channel/)와 분리',
-  );
-
-  // Rust sender 가 Vec<u8> 를 serde 로 내보내므로 웹뷰는 숫자 배열을 받는다.
-  fire!([104, 105, 250]);
-  const frame = received[0];
-  assert.ok(frame instanceof Uint8Array, 'callback receives a Uint8Array');
-  assert.deepEqual(Array.from(frame), [104, 105, 250]);
-});
-
-test('createChannelBytes loud-fails with channel.unavailable when the Tauri global is missing', async () => {
-  const { createChannelBytes } = await import('./index.js');
-  const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
-  const previous = root.__TAURI__;
-  delete root.__TAURI__;
-  try {
-    await assert.rejects(
-      createChannelBytes(() => {}),
-      (err: unknown) => err instanceof RustraCommandError && err.code === 'channel.unavailable',
-    );
-  } finally {
-    root.__TAURI__ = previous;
-  }
-});
-
-test('createChannelBytes loud-fails on handle 0 (channel-space exhaustion)', async () => {
-  const { createChannelBytes } = await import('./index.js');
-  await assert.rejects(
-    createChannelBytes(() => {}, { invoke: async () => ({ handle: 0 }) }),
-    (err: unknown) => err instanceof RustraCommandError && err.code === 'channel.unavailable',
-  );
-});
-
-test('createChannelBytes close() invokes rustra_channel_drop once, unhooks, ignores late frames', async () => {
-  const { createChannelBytes } = await import('./index.js');
-  const calls: Array<{ command: string; args: unknown }> = [];
-  let unlistened = 0;
-  let fire: ((payload: unknown) => void) | null = null;
-  const received: Uint8Array[] = [];
-  const channel = await createChannelBytes((p) => received.push(p), {
-    invoke: async (command, args) => {
-      calls.push({ command, args });
-      if (command === 'rustra_channel_create_bytes') return { handle: 13 };
-      if (command === 'rustra_channel_drop') return true;
-      throw new Error('unexpected');
-    },
-    listen: async (_channel, handler) => {
-      fire = (payload: unknown) => handler({ payload });
-      return () => {
-        unlistened += 1;
-      };
-    },
-  });
-
-  fire!([1, 2, 3]);
-  assert.equal(received.length, 1);
-  assert.equal(await channel.close(), true);
-  const dropCalls = calls.filter((c) => c.command === 'rustra_channel_drop');
-  assert.deepEqual(dropCalls, [{ command: 'rustra_channel_drop', args: { handle: 13 } }]);
-  assert.equal(unlistened, 1, 'listener unhooked');
-  fire!([4]);
-  assert.equal(received.length, 1, 'late frames ignored after close');
-  assert.equal(await channel.close(), true, 'double close is idempotent');
-  assert.equal(
-    calls.filter((c) => c.command === 'rustra_channel_drop').length,
-    1,
-    'idempotent close does not drop twice',
-  );
-});
-
-test('createChannelBytes observes and skips payloads that are not byte arrays', async () => {
-  const { createChannelBytes } = await import('./index.js');
-  const events: RustraDebugEvent[] = [];
-  configureDebug((event) => events.push(event));
-  let fire: ((payload: unknown) => void) | null = null;
-  try {
-    const received: Uint8Array[] = [];
-    const channel = await createChannelBytes((p) => received.push(p), {
-      invoke: async () => ({ handle: 4 }),
-      listen: async (_channel, handler) => {
-        fire = (payload: unknown) => handler({ payload });
-        return () => {};
+      invoke: async (cmd, args) => {
+        calls.push({ command: cmd, args });
+        if (cmd === command) {
+          assert.equal((args as { onMessage?: unknown } | undefined)?.onMessage, wire.value);
+          wire.fire(binary ? new Uint8Array([1, 2]).buffer : { private: 42 });
+          return { handle: 7, transport: 'ipc-channel-chunks-v1' };
+        }
+        return true;
       },
     });
+    assert.equal(channel.handle, 7);
+    assert.deepEqual(received, [binary ? new Uint8Array([1, 2]) : { private: 42 }]);
+    const first = channel.close();
+    assert.equal(channel.close(), first);
+    assert.equal(await first, true);
+    wire.fire(binary ? [9] : 'late');
+    assert.equal(received.length, 1);
+    assert.equal(wire.disposed(), 1);
+    assert.deepEqual(calls[1], { command: 'rustra_channel_drop', args: { handle: 7 } });
+    assert.equal(calls.length, 2);
+  });
 
-    // 계약 밖 페이로드(문자열) — 콜백 계약(Uint8Array)을 지키기 위해 건너뛰되
-    // debug 싱크로 관측한다(조용한 드롭 아님).
-    fire!('garbage');
-    assert.equal(received.length, 0, 'non-array payload does not reach the callback');
-    const observed = events.filter((event) => event.kind === 'tauri.bytes_payload_error');
-    assert.equal(observed.length, 1, 'exactly one bytes_payload_error diagnostic');
-    assert.equal(observed[0]!.command, 'rustra://channel-bytes/4');
-    void channel;
+  test(`${name} releases callbacks on IPC rejection and invalid handles`, async () => {
+    const api = await import('./index.js');
+    for (const invalid of [0, -1, 1.5, 2 ** 32, '7', undefined, 'reject']) {
+      const wire = fakeIpcChannel();
+      let received = 0;
+      await assert.rejects(
+        api[name](
+          () => {
+            received += 1;
+          },
+          {
+            createIpcChannel: wire.createIpcChannel,
+            invoke: async () => {
+              if (invalid === 'reject') throw new Error('ipc dead');
+              return { handle: invalid, transport: 'ipc-channel-chunks-v1' };
+            },
+          },
+        ),
+        invalid === 'reject' ? /ipc dead/ : /invalid u32 handle/,
+      );
+      wire.fire(binary ? [1] : {});
+      assert.equal(received, 0);
+      assert.equal(wire.disposed(), 1);
+    }
+  });
+
+  test(`${name} rejects an old broadcast host and drops its handle`, async () => {
+    const api = await import('./index.js');
+    const wire = fakeIpcChannel();
+    const dropped: unknown[] = [];
+    await assert.rejects(
+      api[name](() => {}, {
+        createIpcChannel: wire.createIpcChannel,
+        invoke: async (cmd, args) => {
+          if (cmd === command) return { handle: 12 };
+          dropped.push(args);
+          return true;
+        },
+      }),
+      /protocol is incompatible/,
+    );
+    assert.deepEqual(dropped, [{ handle: 12 }]);
+    assert.equal(wire.disposed(), 1);
+  });
+
+  test(`${name} releases callback even if native close rejects`, async () => {
+    const api = await import('./index.js');
+    const wire = fakeIpcChannel();
+    const channel = await api[name](() => {}, {
+      createIpcChannel: wire.createIpcChannel,
+      invoke: async (cmd) => {
+        if (cmd === command) return { handle: 3, transport: 'ipc-channel-chunks-v1' };
+        throw new Error('drop failed');
+      },
+    });
+    await assert.rejects(channel.close(), /drop failed/);
+    await assert.rejects(channel.close(), /drop failed/);
+    assert.equal(wire.disposed(), 1);
+  });
+
+  test(`${name} requires IPC support before allocating a native handle`, async () => {
+    const api = await import('./index.js');
+    const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
+    const previous = root.__TAURI__;
+    delete root.__TAURI__;
+    let invoked = 0;
+    try {
+      await assert.rejects(
+        api[name](() => {}, {
+          invoke: async () => {
+            invoked++;
+            return { handle: 4 };
+          },
+        }),
+        (error: unknown) =>
+          error instanceof RustraCommandError &&
+          error.code === (binary ? 'channel.unavailable' : 'transport.unavailable'),
+      );
+      assert.equal(invoked, 0);
+    } finally {
+      root.__TAURI__ = previous;
+    }
+  });
+}
+
+test('JSON IPC preserves string values without parsing them a second time', async () => {
+  const { createChannel } = await import('./index.js');
+  const wire = fakeIpcChannel();
+  const received: unknown[] = [];
+  const channel = await createChannel((value) => received.push(value), {
+    createIpcChannel: wire.createIpcChannel,
+    invoke: async () => ({ handle: 3, transport: 'ipc-channel-chunks-v1' }),
+  });
+  wire.fire('42');
+  wire.fire('{"step":1}');
+  wire.fire({ step: 1 });
+  assert.deepEqual(received, ['42', '{"step":1}', { step: 1 }]);
+  await channel.close();
+});
+
+test('bytes IPC rejects invalid arrays and reports diagnostics', async () => {
+  const { createChannelBytes } = await import('./index.js');
+  const wire = fakeIpcChannel();
+  const events: RustraDebugEvent[] = [];
+  const received: Uint8Array[] = [];
+  configureDebug((event) => events.push(event));
+  try {
+    const channel = await createChannelBytes((value) => received.push(value), {
+      createIpcChannel: wire.createIpcChannel,
+      invoke: async () => ({ handle: 4, transport: 'ipc-channel-chunks-v1' }),
+    });
+    for (const invalid of ['garbage', [256], [-1], [1.5], ['1']]) wire.raw(invalid);
+    assert.equal(received.length, 0);
+    assert.equal(events.filter((event) => event.kind === 'tauri.bytes_payload_error').length, 5);
+    wire.fire(new Uint8Array([0, 255]));
+    assert.deepEqual(received, [new Uint8Array([0, 255])]);
+    await channel.close();
   } finally {
     configureDebug(undefined);
   }
 });
 
-test('createChannelBytes discovers the Tauri global without explicit io', async () => {
-  const { createChannelBytes } = await import('./index.js');
-  const root = globalThis as typeof globalThis & { __TAURI__?: unknown };
-  const previous = root.__TAURI__;
-  root.__TAURI__ = {
-    core: { invoke: async () => ({ handle: 21 }) },
-    event: {
-      listen: async () => () => {},
-    },
+test('global IPC Channel callback is unregistered on failure and close', async () => {
+  const { createChannel } = await import('./index.js');
+  const root = globalThis as typeof globalThis & {
+    __TAURI__?: unknown;
+    __TAURI_INTERNALS__?: unknown;
   };
+  const previous = root.__TAURI__;
+  const oldInternals = root.__TAURI_INTERNALS__;
+  const unregistered: number[] = [];
+  let count = 0;
+  class Channel {
+    id = ++count;
+    constructor(public onmessage: (payload: unknown) => void) {}
+  }
+  root.__TAURI__ = {
+    core: { Channel, invoke: async () => ({ handle: 5, transport: 'ipc-channel-chunks-v1' }) },
+  };
+  root.__TAURI_INTERNALS__ = { unregisterCallback: (id: number) => unregistered.push(id) };
   try {
-    const channel = await createChannelBytes(() => {});
-    assert.equal(channel.handle, 21);
+    const channel = await createChannel(() => {});
+    await channel.close();
+    await assert.rejects(
+      createChannel(() => {}, {
+        invoke: async () => {
+          throw new Error('no host');
+        },
+      }),
+      /no host/,
+    );
+    assert.deepEqual(unregistered, [1, 2]);
   } finally {
     root.__TAURI__ = previous;
+    root.__TAURI_INTERNALS__ = oldInternals;
   }
 });
 
@@ -1019,5 +987,46 @@ test('subscribeHotSwap rejects loudly when the Tauri global listen API is missin
     );
   } finally {
     root.__TAURI__ = previous;
+  }
+});
+
+test('IPC frame decoder bounds allocation, rejects gaps, and resets on disposal', async () => {
+  const { createChannelFrameDecoder, MAX_CHANNEL_FRAME_BYTES } =
+    await import('./tauri-channel-frames.js');
+  const frames: Uint8Array[] = [];
+  const decoder = createChannelFrameDecoder((frame) => frames.push(frame));
+  const packet = (total: number, offset: number, body: number[]) => {
+    const bytes = new Uint8Array(8 + body.length);
+    const view = new DataView(bytes.buffer);
+    view.setUint32(0, total, true);
+    view.setUint32(4, offset, true);
+    bytes.set(body, 8);
+    return bytes;
+  };
+  assert.throws(() => decoder.accept(packet(MAX_CHANNEL_FRAME_BYTES + 1, 0, [1])), /length/);
+  decoder.accept(packet(4, 0, [1, 2]));
+  assert.throws(() => decoder.accept(packet(4, 3, [4])), /out-of-order/);
+  decoder.accept(packet(4, 0, [1, 2]));
+  decoder.dispose();
+  assert.throws(() => decoder.accept(packet(4, 2, [3, 4])), /out-of-order/);
+  decoder.accept(packet(4, 0, [1, 2]));
+  decoder.accept(packet(4, 2, [3, 4]));
+  assert.deepEqual(frames, [new Uint8Array([1, 2, 3, 4])]);
+});
+
+test('large JSON and binary frames reassemble across private IPC packets', async () => {
+  const { createChannel, createChannelBytes } = await import('./index.js');
+  for (const binary of [false, true]) {
+    const wire = fakeIpcChannel();
+    const received: unknown[] = [];
+    const value = binary ? new Uint8Array(16_000).fill(255) : { text: '가'.repeat(10_000) };
+    const create = binary ? createChannelBytes : createChannel;
+    const channel = await create((payload) => received.push(payload), {
+      createIpcChannel: wire.createIpcChannel,
+      invoke: async () => ({ handle: 8, transport: 'ipc-channel-chunks-v1' }),
+    });
+    wire.fire(value);
+    assert.deepEqual(received, [value]);
+    await channel.close();
   }
 });

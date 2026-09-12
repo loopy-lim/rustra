@@ -226,4 +226,5 @@ export {
   type RustraTauriChannel,
   type RustraTauriBytesChannel,
   type TauriChannelIo,
+  type TauriIpcChannel,
 } from './tauri-channels.js';

@@ -30,7 +30,9 @@ postcard.workspace = true
 # hot-core 전용 — tauri 와 마찬가지로 워크스페이스 공용 의존이 아닌 크레이트
 # 로컬 optional 의존으로 둔다(호스트 측 dlopen 프리미티브).
 libloading = { version = "0.9", optional = true }
-tauri = { version = "2", optional = true }
+# The bounded IPC channel uses the verified direct-delivery threshold in this
+# version. Review that boundary before accepting a different Tauri release.
+tauri = { version = "=2.11.1", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
