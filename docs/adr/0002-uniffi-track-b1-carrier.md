@@ -21,7 +21,7 @@ was language coverage: what carries pure Kotlin (Android) / Swift (iOS) hosts
 that want to consume Rust without the TS layer? Three options existed.
 
 1. **B2 — own native bindgen**: write Kotlin/Swift code generators directly
-   over the postcard/rkyv V2 blob ABI.
+   over the postcard/Frame blob ABI.
 2. **B1 — Mozilla UniFFI carrier**: uniffi generates the Kotlin/Swift bindings
    and the value transfer.
 3. Per-app hand-written FFI — not a product, just repeated labor.
@@ -52,11 +52,12 @@ schema walk.
 
 - `Package::invoke_typed<I, O>(name, &input)`
   (`crates/rustra/src/invoke_typed.rs`) — name→commandId lookup, postcard
-  request, the single dispatch path of `invoke_rkyv_v2`. No second JSON
+  request, the single dispatch path of `invoke_frame` (renamed from
+  `invoke_rkyv_v2` in the 0.9 Frame rename). No second JSON
   execution path is forked, so Rust↔TS binary compatibility is preserved
   without code duplication.
-- `decode_rkyv_v2_response`/`decode_rkyv_v2_error_parts`
-  (`crates/rustra/src/rkyv_error.rs`) — shared response-frame splitting
+- `decode_frame_response`/`decode_frame_error_parts`
+  (`crates/rustra/src/frame_error.rs`) — shared response-frame splitting
   helpers.
 
 The uniffi derives all live in the **generated mirror layer of the app crate**
@@ -113,7 +114,7 @@ extended.
 ## Consequences
 
 - **Positive**: a type-safe Kotlin/Swift surface without developing a bindgen
-  of our own. The single source of dispatch truth remains `invoke_rkyv_v2`,
+  of our own. The single source of dispatch truth remains `invoke_frame`,
   and the core stays uniffi-free so default builds stay light. Adding
   commands/types is reflected automatically from the schema.
 - **Negative/cost**: two mirror conversions plus an internal postcard round

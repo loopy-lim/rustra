@@ -487,7 +487,8 @@ let pkg = Package::builder("example.calculator")
 
 ### `.invoke::<I, O>(name, input)`
 
-타입 안전한 명령 호출입니다.
+타입 안전한 명령 호출입니다 — JSON 경로를 왕복하는 편의 래퍼입니다
+(`serde_json` → `invoke_json` → `serde_json`).
 
 ```rust
 let output: AddNumbersOutput = pkg.invoke("addNumbers", AddNumbersInput { a: 2, b: 3 })?;
@@ -508,6 +509,40 @@ use serde_json::json;
 
 let result: Value = pkg.invoke_json("addNumbers", json!({ "a": 2, "b": 3 }))?;
 ```
+
+### `.invoke_typed::<I, O>(name, &input)`
+
+Frame(postcard) 와이어 경로를 타는 타입 호출입니다 — TS 코덱이 쓰는 것과 같은
+단일 dispatch 경로입니다. 명령을 이름으로 조회하고(`invoke_json` 과 동일한
+frozen/mutable 이중 경로), Frame 요청 `[id: u16 LE @0][postcard(I) @2]` 을
+조립해 `invoke_frame` 으로 dispatch 하고 응답 프레임을 디코딩합니다 — 실행
+경로를 이원화하지 않으면서 Rust↔TS 바이너리 계약을 실제로 통과시킵니다.
+핸들러 에러는 `code`/`message` 가 그대로 보존됩니다(에러 프레임 인코딩은 FFI
+경계의 책임). postcard 가 직렬화하지 못하는 입력(Tier 3, JSON 전용)의 명령은
+typed 호출 대상이 아닙니다.
+
+```rust
+let output: AddNumbersOutput =
+    pkg.invoke_typed("addNumbers", &AddNumbersInput { a: 2, b: 3 })?;
+```
+
+### Frame 와이어 헬퍼 (크레이트 레벨 자유 함수)
+
+raw Frame 응답/에러 프레임을 다루는 모든 곳의 동반 헬퍼입니다
+(`crates/rustra/src/frame_error.rs`). 성공 프레임은
+`[ok:1][7B reserved][postcard(O) @8]`, 에러 프레임은
+`[ok: u8 @0 = 0][pad 7B][err_len: u16 @8 LE][postcard({code, message}) @10...]` 입니다.
+
+- `decode_frame_response(frame: &[u8]) -> Result<&[u8]>` — 성공 프레임의 postcard
+  본문을 빌려 반환합니다. 에러 프레임은 `code` 와 `message` 가 합쳐진
+  (`"{code}: {message}"`) `RustraError::internal` 로 돌아옵니다. 코드를 따로
+  필요하면 아래 구조화 변형을 쓰세요.
+- `decode_frame_error_parts(frame: &[u8]) -> Result<(String, String)>` — 에러
+  프레임 한정 구조화 변형: 소유 `(code, message)` 쌍을 반환합니다. 성공 프레임은
+  `command.invalid_args` 로 거절합니다.
+- `encode_frame_error(error: &RustraError) -> Vec<u8>` — 에러를 FFI 경계용 와이어
+  에러 프레임으로 인코딩합니다(postcard `{code, message}`, 메시지가 `u16::MAX` 를
+  넘으면 잘림 마커를 남깁니다).
 
 ### `.generate_typescript()`
 

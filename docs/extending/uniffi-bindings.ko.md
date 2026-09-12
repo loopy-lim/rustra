@@ -83,7 +83,7 @@ uniffi 섹션의 **존재 자체가 기능 스위치**다 — 없으면 코드�
 
 1. `[lib] crate-type = ["rlib", "cdylib"]` — library 모드 bindgen 이 cdylib 을
    읽는다.
-2. `uniffi = ["dep:uniffi"]` 피처(워크스페이스 의존은 exact pin — §7).
+2. `uniffi = ["dep:uniffi"]` 피처(워크스페이스 의존은 exact pin — §8).
 3. `src/bin/uniffi-bindgen.rs`:
    `fn main() { uniffi::uniffi_bindgen_main() }`.
 4. 프로브 바이너리가 `RUSTRA_UNIFFI_OUT` 환경변수를 존중해 미러 소스를
@@ -168,7 +168,28 @@ do {
 이 표면은 **정적/릴리스 빌드 전용**이고, dylib 핫스왑(`hot-core`)과는 조합할
 수 없다. dev 루프는 기존 TS/JSI 경로를 유지한다.
 
-## 6. 제한과 문서화된 갈림
+## 6. 런타임 스모크 하네스
+
+생성된 바인딩은 실제 에뮬레이터/시뮬레이터 런타임에서 두 개의 커밋된 스모크
+하네스로 증명되며, 둘 다 CI 잡으로 연결돼 있다(`.github/workflows/ci.yml`):
+
+- **Android** — `examples/uniffi-android-smoke`: 생성된 Kotlin 바인딩
+  (`uniffi.rustra_calculator_example`, JNA 기반)과 cargo-ndk 로 빌드한 Rust
+  `.so` 를 로드하는 최소 Gradle 앱. 행복 경로 `addNumbers(20, 22) == 42` 와
+  타입 에러 경로 `divide(10, 0)` → 코드 `"math.divide_by_zero"` 를 모두 증명한
+  뒤에야 `__RUSTRA_UNIFFI_OK__ addNumbers(20,22)=42` 마커를 `Log.w` 로 찍는다.
+  `uniffi-android` CI 잡이 x86_64 에뮬레이터를 부팅해 APK 를 설치하고 로그에서
+  마커를 단언한다.
+- **iOS** — `examples/uniffi-ios-smoke`: `build-and-run.sh` 가
+  `aarch64-apple-ios-sim` 용 staticlib 를 빌드하고 `swiftc` 로 링크하며(FFI
+  모듈 맵 등록), 시뮬레이터를 부팅해 `simctl` 로 스모크 바이너리를 spawn 한
+  뒤 같은 마커를 단언한다. `uniffi-ios` CI 잡으로 실행된다.
+
+이 하네스들이 바인딩 신선도 이야기의 런타임 절반이다: `--check-bindings` 바이트
+비교(§4)는 커밋된 소스의 드리프트를 잡고, 스모크 앱은 로드/링크 시점에만 드러나는
+것을 잡는다.
+
+## 7. 제한과 문서화된 갈림
 
 미러 타입 매핑에서 의도적으로 문서화된 기계적 갈림(전부 렌더러의 fail-closed
 규칙 안에서 결정된다):
@@ -191,7 +212,7 @@ do {
 - **XCFramework/AAR 발행 파이프라인** — 후속. Phase 1 은 로컬 빌드 + 생성
   바인딩 소스 검증까지다.
 
-## 7. uniffi 버전 고정 정책
+## 8. uniffi 버전 고정 정책
 
 워크스페이스 의존은 `uniffi = "=0.32.1"` — **exact pin** 이다. 성숙도 조사
 (`docs/research/2026-09-11-uniffi-maturity-catchup.md`)가 확인했듯 uniffi 는

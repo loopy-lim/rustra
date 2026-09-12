@@ -494,7 +494,8 @@ let pkg = Package::builder("example.calculator")
 
 ### `.invoke::<I, O>(name, input)`
 
-The type-safe command invocation.
+The type-safe command invocation — a convenience wrapper that round-trips through
+the JSON path (`serde_json` → `invoke_json` → `serde_json`).
 
 ```rust
 let output: AddNumbersOutput = pkg.invoke("addNumbers", AddNumbersInput { a: 2, b: 3 })?;
@@ -515,6 +516,41 @@ use serde_json::json;
 
 let result: Value = pkg.invoke_json("addNumbers", json!({ "a": 2, "b": 3 }))?;
 ```
+
+### `.invoke_typed::<I, O>(name, &input)`
+
+A typed invocation over the Frame (postcard) wire path — the same single dispatch
+path the TS codecs use. It looks the command up by name (the same frozen/mutable
+dual path as `invoke_json`), assembles the Frame request
+`[id: u16 LE @0][postcard(I) @2]`, dispatches it through `invoke_frame`, and
+decodes the response frame — so the Rust↔TS binary contract is exercised for
+real, without forking a second execution path. Handler errors keep their
+`code`/`message` verbatim (no error-frame wrapping — that is the FFI boundary's
+job). Commands whose input postcard cannot serialize (Tier 3, JSON-only) are not
+typed-callable.
+
+```rust
+let output: AddNumbersOutput =
+    pkg.invoke_typed("addNumbers", &AddNumbersInput { a: 2, b: 3 })?;
+```
+
+### Frame wire helpers (crate-level free functions)
+
+Companion helpers for anything that handles raw Frame response/error frames
+(`crates/rustra/src/frame_error.rs`). The success frame is
+`[ok:1][7B reserved][postcard(O) @8]`; the error frame is
+`[ok: u8 @0 = 0][pad 7B][err_len: u16 @8 LE][postcard({code, message}) @10...]`.
+
+- `decode_frame_response(frame: &[u8]) -> Result<&[u8]>` — borrows the postcard
+  body of a success frame; error frames come back as `RustraError::internal` with
+  `code` and `message` merged (`"{code}: {message}"`). Need the code separately?
+  Use the structured variant below.
+- `decode_frame_error_parts(frame: &[u8]) -> Result<(String, String)>` — the
+  structured variant for error frames: returns the owned `(code, message)` pair.
+  A success frame is rejected with `command.invalid_args`.
+- `encode_frame_error(error: &RustraError) -> Vec<u8>` — encodes an error into
+  the wire error frame for the FFI boundary (postcard `{code, message}`, with a
+  truncation marker when the message exceeds `u16::MAX`).
 
 ### `.generate_typescript()`
 

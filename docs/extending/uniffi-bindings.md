@@ -88,7 +88,7 @@ implementation — `examples/calculator/`):
 1. `[lib] crate-type = ["rlib", "cdylib"]` — library-mode bindgen reads the
    cdylib.
 2. A `uniffi = ["dep:uniffi"]` feature (the workspace dependency is an exact
-   pin — §7).
+   pin — §8).
 3. `src/bin/uniffi-bindgen.rs`:
    `fn main() { uniffi::uniffi_bindgen_main() }`.
 4. The probe binary honors the `RUSTRA_UNIFFI_OUT` environment variable and
@@ -181,7 +181,29 @@ Three generic functions are generated alongside:
 surface is therefore **static/release builds only** and cannot be combined with
 dylib hot-swap (`hot-core`); the dev loop stays on the existing TS/JSI path.
 
-## 6. Limitations and documented divergences
+## 6. Runtime smoke harnesses
+
+Generated bindings are proven on real emulator/simulator runtimes by two
+committed smoke harnesses, both wired as CI jobs (`.github/workflows/ci.yml`):
+
+- **Android** — `examples/uniffi-android-smoke`: a minimal Gradle app loading
+  the generated Kotlin bindings (`uniffi.rustra_calculator_example`, JNA-based)
+  plus the Rust `.so` built with cargo-ndk. The app proves the happy path
+  `addNumbers(20, 22) == 42` and the typed error path `divide(10, 0)` → code
+  `"math.divide_by_zero"`, and only then prints the
+  `__RUSTRA_UNIFFI_OK__ addNumbers(20,22)=42` marker via `Log.w`. The
+  `uniffi-android` CI job boots an x86_64 emulator, installs the APK, and
+  asserts the marker from the logcat.
+- **iOS** — `examples/uniffi-ios-smoke`: `build-and-run.sh` builds the
+  staticlib for `aarch64-apple-ios-sim`, links it with `swiftc` (registering
+  the FFI module map), boots a simulator, spawns the smoke binary via
+  `simctl`, and asserts the same marker. Runs as the `uniffi-ios` CI job.
+
+These harnesses are the runtime half of the binding-freshness story: the
+`--check-bindings` byte comparison (§4) catches committed-source drift, while
+the smoke apps catch what only shows up at load/link time.
+
+## 7. Limitations and documented divergences
 
 Mechanical divergences of the mirror type mapping, deliberately documented
 (each decided inside the renderer's fail-closed rules):
@@ -206,7 +228,7 @@ Remaining Phase 1 limitations:
 - **XCFramework/AAR publishing pipelines** — later. Phase 1 covers local builds
   plus verification of the committed binding sources.
 
-## 7. uniffi version pin policy
+## 8. uniffi version pin policy
 
 The workspace dependency is `uniffi = "=0.32.1"` — an **exact pin**. As the
 maturity study (`docs/research/2026-09-11-uniffi-maturity-catchup.md`)
