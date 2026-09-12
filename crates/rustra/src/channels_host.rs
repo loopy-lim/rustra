@@ -98,6 +98,9 @@ impl ChannelHost {
         handle: u32,
         sender: crate::channels::ChannelBytesSender,
     ) {
+        if handle == 0 {
+            return;
+        }
         self.bytes_channels
             .lock()
             .unwrap_or_else(|p| p.into_inner())
@@ -174,11 +177,16 @@ impl ChannelHost {
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .len();
+        let bytes_channels = self
+            .bytes_channels
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .len();
         let resources = self
             .resources
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .len();
-        (channels, resources)
+        (channels + bytes_channels, resources)
     }
 }

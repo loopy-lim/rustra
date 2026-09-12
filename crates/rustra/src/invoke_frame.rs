@@ -68,7 +68,9 @@ impl Package {
         };
         self.capability_satisfied(command.as_ref())?;
         // 핸들러 패닉 가드 — 다른 invoke 경로와 동일 계약(internal 정규화).
-        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| raw(slots)));
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            with_state_context(&self.states, || raw(slots))
+        }));
         match outcome {
             Ok(result) => result,
             Err(panic) => Err(RustraError::internal(format!(
