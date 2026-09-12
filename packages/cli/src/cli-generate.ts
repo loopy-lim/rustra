@@ -124,8 +124,10 @@ export async function runWatch(args: string[]): Promise<WatchHandle> {
   const loop = createWatchLoop(
     async () => {
       try {
+        // 재구독은 regenerate() 안에서(설정 재해석 직후, 산출물 쓰기 전) 일어난다.
+        // 여기서 다시 구독하면 재생성이 끝나는 순간의 재스냅샷이 그 사이에 들어온
+        // 스키마 변경을 삼킨다 — 폴링 감시자가 죽은 유일한 창이다.
         await regenerate();
-        if (!disposed) subscribeSchema();
         console.log(`[${new Date().toLocaleTimeString()}] Regenerated`);
       } catch (error) {
         console.error(`Regeneration failed: ${error instanceof Error ? error.message : error}`);
