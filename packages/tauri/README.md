@@ -97,3 +97,27 @@ A real WebView IPC example and the Release performance receipts are in
 [`tauri-calculator`](../../examples/tauri-calculator/). Measured on 2026-08-24 macOS
 arm64: 279.04µs average, p50 300µs — not a direct-Rust-call smoke test, but 3,000 calls
 of the generated `addNumbers` from a hidden WKWebView.
+
+## Channel ownership and lifetime
+
+JS-created Tauri channels use a native `Channel<InvokeResponseBody>` tied to the
+issuing physical WebView. `close()` revokes its native lease and disposes the JS
+callback; navigation, destruction, and app cleanup release owner resources. The
+`ipc-channel-chunks-v1` handshake rejects old broadcast-based native hosts: update
+`@rustra/tauri` and rebuild Rust together. Global setup needs `core.Channel` plus
+Tauri's callback-cleanup API; without globals, pass an explicit
+`createIpcChannel(onMessage)` factory returning `{ value, dispose() }` alongside
+`invoke`. Passing `listen` alone cannot create a channel.
+
+Raw fragments are at most 968 bytes, below Tauri's 1,024-byte direct IPC threshold.
+Native messages are capped at the smaller of the runtime payload limit and 16 MiB.
+The core defaults to a **1 MiB** payload limit, so an unconfigured native path is
+also limited to 1 MiB. JS reassembly has a 16 MiB ceiling and expires incomplete
+messages after 30 seconds.
+JSON is decoded once after final reassembly, preserving JSON strings as strings;
+binary callbacks receive `Uint8Array`. Ordinary event subscriptions still broadcast.
+Trusted Rust `create_channel_for`/`create_bytes_channel_for` helpers deliberately
+retain app-wide delivery. Mock IPC and JS tests cover the ownership protocol;
+physical WebView teardown still needs native GUI acceptance on each target.
+
+The Rust `tauri` feature currently pins Tauri 2.11.1: the private chunk path is verified against that version's direct IPC delivery threshold. Review the native/JS channel boundary and rerun its tests before updating this dependency. An app requiring a different exact Tauri version must resolve that compatibility requirement first.

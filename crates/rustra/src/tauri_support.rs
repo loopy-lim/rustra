@@ -226,7 +226,7 @@ where
         RustraState {
             dispatch: Arc::new(package),
         },
-        builder,
+        builder.plugin(crate::tauri_channels::channel_ownership_plugin()),
     )
 }
 
@@ -245,6 +245,7 @@ pub fn register_dispatch<R: tauri::Runtime>(
     builder: tauri::Builder<R>,
 ) -> tauri::Builder<R> {
     builder
+        .plugin(crate::tauri_channels::channel_ownership_plugin())
         .manage(RustraState { dispatch })
         .invoke_handler(tauri::generate_handler![
             rustra_dispatch,
