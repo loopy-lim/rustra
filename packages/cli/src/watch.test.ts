@@ -6,7 +6,10 @@ import { join } from 'node:path';
 import { createFileWatch, createSourceWatch, createWatchLoop } from './watch.js';
 
 async function until(predicate: () => boolean): Promise<void> {
-  const end = Date.now() + 2000;
+  // 100ms 폴링 감시자(F14)가 변화를 전달하기까지의 상한. CI 러너가 모바일 잡과
+  // 병렬로 돌면 설정 재해석+코드젠까지 2s를 넘기며 플래키해진다 — dev-parity-wiring
+  // 과 같은 10s 상한으로 통일한다(단언은 여전히 "반드시 도달" 그대로).
+  const end = Date.now() + 10_000;
   while (!predicate() && Date.now() < end) await new Promise((r) => setTimeout(r, 20));
   assert.ok(predicate(), 'expected filesystem change was not delivered');
 }

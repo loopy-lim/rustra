@@ -19,7 +19,7 @@ ADR 0001 이 rustra 자신의 계약을 기계화한(Track A) 뒤 남은 질문�
 커버리지였다: TS 레이어 없이 Rust 를 소비하려는 순수 Kotlin(Android)/Swift(iOS)
 호스트를 무엇이 받쳐주는가. 선택지는 세 개였다.
 
-1. **B2 — 자체 native bindgen**: postcard/rkyv V2 blob ABI 위에 Kotlin/Swift
+1. **B2 — 자체 native bindgen**: postcard/Frame blob ABI 위에 Kotlin/Swift
    코드 생성기를 직접 작성한다.
 2. **B1 — Mozilla UniFFI 캐리어**: uniffi 가 Kotlin/Swift 바인딩과 값 전송을
    생성한다.
@@ -48,10 +48,11 @@ blob 전송 표면(JSI/Tauri/Bun/Node)에만 스코프가 머문다. B2 를 기�
 
 - `Package::invoke_typed<I, O>(name, &input)`
   (`crates/rustra/src/invoke_typed.rs`) — 이름→commandId 조회, postcard 요청,
-  `invoke_rkyv_v2` 단일 dispatch 경로. JSON 실행 경로를 이원화하지 않아
+  `invoke_frame` 단일 dispatch 경로(0.9 Frame 리네임에서 `invoke_rkyv_v2` 에서
+  개명). JSON 실행 경로를 이원화하지 않아
   Rust↔TS 바이너리 호환이 코드 중복 없이 유지된다.
-- `decode_rkyv_v2_response`/`decode_rkyv_v2_error_parts`
-  (`crates/rustra/src/rkyv_error.rs`) — 응답 프레임 분리 공용 헬퍼.
+- `decode_frame_response`/`decode_frame_error_parts`
+  (`crates/rustra/src/frame_error.rs`) — 응답 프레임 분리 공용 헬퍼.
 
 uniffi derive 는 전부 **앱 크레이트 쪽 생성 미러 계층**
 (`uniffi_generated.rs`, `#[cfg(feature = "uniffi")] include!`)에 놓인다.
@@ -101,7 +102,7 @@ minor 마다 깨지는 churn 실측(성숙도 조사)에 따른 규율이다.
 ## 결과 (Consequences)
 
 - **긍정**: 타입 안전 Kotlin/Swift 표면을 bindgen 자체 개발 없이 확보했다.
-  dispatch 진실의 원천은 `invoke_rkyv_v2` 하나로 남고, 코어는 uniffi-free 로
+  dispatch 진실의 원천은 `invoke_frame` 하나로 남고, 코어는 uniffi-free 로
   기본 빌드가 가볍다. 커맨드/타입 추가는 스키마에서 자동 반영된다.
 - **부정/비용**: 호출당 미러 변환 2회 + 내부 postcard 왕복 오버헤드가 있다
   (단일 와이어 단순성을 산 대가 — 벤치는 후속). 문서화된 미러 갈림 목록을
