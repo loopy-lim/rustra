@@ -206,6 +206,13 @@ do {
 
 - **에러** — 단일 변형 record(§5). `decode_frame_response` 통합 디코더의
   `internal: "<code>: <message>"` 합침 한계(§2).
+- **식별자 정책** — 스키마에서 온 이름(타입·필드·enum 변형·커맨드명)은
+  유효한 비키워드 Rust 식별자여야 한다. 렌더러는 나중에 rustc 가 불투명하게
+  실패하는 대신 생성 시점에 정확한 스키마 경로와 함께 실패시킨다. 키워드
+  이름을 raw 식별자로 이스케이프하지 **않는다** — uniffi 0.32 proc-macro 와
+  Kotlin/Swift 생성기가 `r#` 를 안전하게 옮겨주지 않는다(에러 미러의
+  `message`→`detail` 재명명이 유일한 의도된 갈림). snake 변환 후 같은 필드로
+  겹치는 프로퍼티(예: `fooBar` + `foo_bar`)는 중복으로 거절된다.
 - **비동기 미지원** — Rust 커맨드 API 가 현재 sync 이므로 생성 함수도 전부
   sync 다. `signal`/`timeoutMs` 같은 TS 옵션 표면은 이 경로에 없다.
 - **이벤트/채널 제외** — Phase 2(uniffi callback interface + foreign trait).
