@@ -31,6 +31,27 @@
     `frame_*`)·fuzz 타깃(`invoke_rkyv_v2` → `invoke_frame`)·CI 경로 동반 갱신.
     마이그레이션 표는 docs/migration-guide.md 참고.
 
+### Added
+
+- `createFrameEngine` 옵션 `contractVerification: 'strict' | 'warn' | 'off'`
+  (기본 `undefined` ≡ `'strict'`) — 계약 해시 검증의 명시적 정책 노브. `'warn'` 은
+  mismatch/unenforceable 실패를 콘솔 경고로 강등해 degraded 모드로 계속하고,
+  `'off'` 는 `contractHash` 설정과 무관하게 검증을 생략한다(마이그레이션 기간
+  탈출구). 네이티브 Frame 엔진 경로 한정. ADR-0001 → ADR-0003.
+- `Package::invoke_typed`(이름 조회 + postcard 타입 입출력, `invoke_frame`
+  단일 dispatch 경로)와 응답 프레임 헬퍼 `decode_frame_response`·
+  `encode_frame_error`·`decode_frame_error_parts`(비게이트 pub, Rust 임베딩
+  호스트용).
+- UniFFI 전송(Track B1): 스키마→Kotlin/Swift 바인딩 코드젠(`rustra.json` 의
+  `uniffi` 섹션, `--check-bindings` 신선도 검증)과 모바일 런타임 스모크 하네스
+  (`examples/uniffi-android-smoke`·`uniffi-ios-smoke` + CI `uniffi-android`/
+  `uniffi-ios` 잡). 문서: `docs/extending/uniffi-bindings.md`, ADR-0002.
+- api-surface 스냅샷 v2 — 심볼 이름뿐 아니라 인자·반환·비동기성까지 심볼별
+  시그니처 드리프트를 게이트한다.
+- CI 게이팅: codegen 신선도 게이트(커밋된 생성물 드리프트 = 실패), RN 모바일
+  런타임 스모크(`rn-android`/`rn-ios` — 에뮬/시뮬 부팅 후 실행 결과 단언),
+  안전망 게이팅 강화.
+
 ### 감사 수정
 
 - Node/Bun 엔진 종료·등록 소유권, React 엔진별 캐시·훅 수명주기, Rust 상태 격리·응답 한도를 수정했다.

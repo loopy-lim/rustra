@@ -24,14 +24,19 @@ interoperable. Update the identifiers you reference:
 | `RkyvV2Engine`                         | `FrameEngine`                        |
 | `RkyvV2Codec`                          | `FrameCodec`                         |
 | `RkyvV2Native`                         | `FrameNative`                        |
+| `RkyvV2SchemaNative`                   | `FrameSchemaNative`                  |
 | `invokeRkyvV2`                         | `invokeFrame`                        |
 | `rkyv-codecs.ts`                       | `frame-codecs.ts`                    |
 | `rkyv-registry.ts`                     | `frame-registry.ts`                  |
 | `rkyv-engine`                          | `frame-engine`                       |
 | `rustra_ffi_invoke_rkyv_v2*`           | `rustra_ffi_invoke_frame*`           |
+| `decode_rkyv_v2_response`              | `decode_frame_response`              |
+| `encode_rkyv_v2_error`                 | `encode_frame_error`                 |
+| `decode_rkyv_v2_error_parts`           | `decode_frame_error_parts`           |
 | `BUN_RKYV_V2_ENGINE_SUPPORTS`          | `BUN_FRAME_ENGINE_SUPPORTS`          |
 | `REACT_NATIVE_RKYV_V2_ENGINE_SUPPORTS` | `REACT_NATIVE_FRAME_ENGINE_SUPPORTS` |
 | error prefix `"rkyv v2: ..."`          | `"frame: ..."`                       |
+| debug transport literal `'rkyv'`       | `'frame'`                            |
 
 The RN JSI host method follows the same rename (`invokeRkyvV2` → `invokeFrame`),
 and codegen output files land under the new names (`frame-codecs.ts`,
@@ -150,7 +155,13 @@ Add the command under a new name and keep the old name as an alias; once clients
 
 > In environments with contractHash verification enabled, a hash mismatch error
 > (`contract.mismatch`) can occur between steps 1→2, so turn verification off
-> during the migration window or update the hash in step 2.
+> during the migration window or update the hash in step 2. "Off" is the
+> `contractVerification` engine option (`createFrameEngine`):
+> `'strict' | 'warn' | 'off'` — the default `undefined` behaves as `'strict'`.
+> `'warn'` downgrades the mismatch/unenforceable failure to a console warning and
+> still creates the engine (degraded mode); `'off'` skips verification even when
+> `contractHash` is set. The knob applies only to the native Frame engine and only
+> chooses the strictness — verification never runs unless `contractHash` is passed.
 
 ## CI integration
 
