@@ -83,6 +83,7 @@ function seedProject(root: string, options: SeedOptions = {}): string {
     '  dir=$(dirname "$manifest")',
     '  printf \'{"target_directory":"%s/target","packages":[{"name":"x","manifest_path":"%s",',
     '"targets":[{"name":"generate","crate_types":["bin"],"kind":["bin"]},',
+    '{"name":"custom_bridge","crate_types":["cdylib"],"kind":["cdylib"]},',
     '{"name":"uniffi-bindgen","crate_types":["bin"],"kind":["bin"]}]}]}\\n\' "$dir" "$manifest"',
     '  exit 0',
     'fi',
@@ -99,6 +100,10 @@ function seedProject(root: string, options: SeedOptions = {}): string {
     '    exit 0',
     '  fi',
     '  if [ "$bin" = "uniffi-bindgen" ]; then',
+    '    host=""; prev=""',
+    '    for a in "$@"; do [ "$prev" = "--target" ] && host="$a"; prev="$a"; done',
+    '    if [ -z "$host" ] || [ "$host" = "mobile-triple" ]; then echo "bindgen must use host --target" >&2; exit 4; fi',
+    '    if [ -n "$FAKE_BINDGEN_EMPTY" ]; then exit 0; fi',
     '    if [ -n "$FAKE_BINDGEN_FAIL" ]; then echo "bindgen exploded" >&2; exit 3; fi',
     '    outdir=""; prev=""',
     '    for a in "$@"; do [ "$prev" = "--out-dir" ] && outdir="$a"; prev="$a"; done',
@@ -111,12 +116,14 @@ function seedProject(root: string, options: SeedOptions = {}): string {
     '  fi',
     'fi',
     'if [ "$1" = "build" ]; then',
-    '  if [ -n "$FAKE_SKIP_DYLIB" ]; then exit 0; fi',
+
     '  manifest=""; prev=""',
     '  for a in "$@"; do [ "$prev" = "--manifest-path" ] && manifest="$a"; prev="$a"; done',
     '  dir=$(dirname "$manifest")',
-    '  mkdir -p "$dir/target/debug" "$dir/target/release"',
-    '  for f in libx.dylib libx.so x.dll; do echo dylib > "$dir/target/debug/$f"; done',
+    '  mkdir -p "$dir/custom-target/mobile-triple/debug"',
+    '  artifact="$dir/custom-target/mobile-triple/debug/libcustom_bridge.so"',
+    '  if [ -z "$FAKE_SKIP_DYLIB" ]; then echo dylib > "$artifact"; fi',
+    '  printf \'{"reason":"compiler-artifact","target":{"name":"custom_bridge","kind":["cdylib"]},"filenames":["%s"]}\\n\' "$artifact"',
     '  exit 0',
     'fi',
     'echo "unexpected cargo invocation: $*" >&2',
@@ -150,6 +157,7 @@ function withFakeCargo(root: string, options: SeedOptions = {}): TestEnv {
   process.env.FAKE_CARGO_LOG = logPath;
   delete process.env.FAKE_BINDGEN_FAIL;
   delete process.env.FAKE_SKIP_DYLIB;
+  delete process.env.FAKE_BINDGEN_EMPTY;
   console.log = () => {};
   console.error = () => {};
   return {
@@ -163,6 +171,7 @@ function withFakeCargo(root: string, options: SeedOptions = {}): TestEnv {
       delete process.env.FAKE_CARGO_LOG;
       delete process.env.FAKE_BINDGEN_FAIL;
       delete process.env.FAKE_SKIP_DYLIB;
+      delete process.env.FAKE_BINDGEN_EMPTY;
     },
   };
 }
@@ -296,7 +305,7 @@ test('a missing cdylib after the build step is a clear fail-closed error', async
       () => runCodegen(['--config', join(env.project, 'rustra.json')]),
       (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error);
-        assert.match(message, /did not produce .*(libx\.(dylib|so)|x\.dll)/);
+        assert.match(message, /did not produce .*libcustom_bridge\.so/);
         assert.match(message, /crate-type/);
         return true;
       },
@@ -384,5 +393,152 @@ test('cli-uniffi helpers: dylib naming, output completeness, and drift compariso
     );
   } finally {
     rmSync(cmp, { recursive: true, force: true });
+  }
+});
+
+test('config dev reloads paths from atomically replaced rustra.json and watches new sources', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-dev-refresh-'));
+  const env = withFakeCargo(root);
+  let handle: { dispose(): void } | undefined;
+  const waitFor = async (predicate: () => boolean) => {
+    const deadline = Date.now() + 3000;
+    while (!predicate() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 40));
+    assert.ok(predicate(), 'dev failed to refresh configuration/sources');
+  };
+  try {
+    const { runDev } = await import('./dev.js');
+    const { renameSync } = await import('node:fs');
+    const configPath = join(env.project, 'rustra.json');
+    handle = await runDev(['--config', configPath]);
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    config.output = './next-generated';
+    config.schema = './next-generated/schema.json';
+    writeFileSync(`${configPath}.tmp`, JSON.stringify(config));
+    renameSync(`${configPath}.tmp`, configPath);
+    await waitFor(() => existsSync(join(env.project, 'next-generated', 'types.ts')));
+    writeFileSync(env.logPath, '');
+    mkdirSync(join(env.project, 'src', 'new'), { recursive: true });
+    writeFileSync(join(env.project, 'src', 'new', 'lib.rs'), 'fn new_source() {}');
+    await waitFor(() => spawnSequence(env.logPath).includes('run'));
+  } finally {
+    handle?.dispose();
+    env.restore();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('empty bindgen output cannot reuse old bindings and failure preserves the published tree', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-uniffi-empty-'));
+  const env = withFakeCargo(root, { uniffi: { output: './bindings/uniffi' } });
+  try {
+    await runCodegen(['--config', join(env.project, 'rustra.json')]);
+    const swift = join(env.project, 'bindings/uniffi/swift/bridge.swift');
+    const before = readFileSync(swift, 'utf8');
+    process.env.FAKE_BINDGEN_EMPTY = '1';
+    await assert.rejects(
+      () => runCodegen(['--config', join(env.project, 'rustra.json')]),
+      /incomplete/,
+    );
+    assert.equal(readFileSync(swift, 'utf8'), before);
+  } finally {
+    env.restore();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('--check-bindings detects actual Swift/Kotlin and extra-file drift without overwriting them', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-uniffi-drift-'));
+  const env = withFakeCargo(root, { uniffi: { output: './bindings/uniffi' } });
+  try {
+    const args = ['--config', join(env.project, 'rustra.json')];
+    await runCodegen(args);
+    await runCodegen([...args, '--check-bindings']);
+    const binding = join(env.project, 'bindings/uniffi/kotlin/bridge.kt');
+    const clean = readFileSync(binding, 'utf8');
+    writeFileSync(binding, 'tampered Kotlin');
+    await assert.rejects(() => runCodegen([...args, '--check-bindings']), /binding drift/);
+    assert.equal(readFileSync(binding, 'utf8'), 'tampered Kotlin');
+    writeFileSync(binding, clean);
+    const stale = join(env.project, 'bindings/uniffi/swift/stale.swift');
+    writeFileSync(stale, 'stale');
+    await assert.rejects(() => runCodegen([...args, '--check-bindings']), /binding drift/);
+    await runCodegen(args);
+    assert.equal(existsSync(stale), false, 'successful publish removes stale bindings');
+  } finally {
+    env.restore();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('config dev does not treat its generated UniFFI Rust mirror as a new source change', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-dev-uniffi-self-'));
+  const env = withFakeCargo(root, { uniffi: { output: './bindings/uniffi' } });
+  let handle: { dispose(): void } | undefined;
+  try {
+    const { runDev } = await import('./dev.js');
+    handle = await runDev(['--config', join(env.project, 'rustra.json')]);
+    const before = readFileSync(env.logPath, 'utf8');
+    await new Promise((r) => setTimeout(r, 900));
+    assert.equal(
+      readFileSync(env.logPath, 'utf8'),
+      before,
+      'generated mirror must not start another run',
+    );
+  } finally {
+    handle?.dispose();
+    env.restore();
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('overlapping binding output is rejected before probe or any existing file changes', async () => {
+  for (const output of ['./generated', '.', './src']) {
+    const root = mkdtempSync(join(tmpdir(), 'rustra-uniffi-overlap-'));
+    const env = withFakeCargo(root, { uniffi: { output } });
+    try {
+      const schema = join(env.project, 'generated/schema.json');
+      mkdirSync(join(env.project, 'generated'), { recursive: true });
+      writeFileSync(schema, 'user sentinel');
+      const source = join(env.project, 'src/lib.rs');
+      writeFileSync(source, 'source sentinel');
+      await assert.rejects(
+        runCodegen(['--config', join(env.project, 'rustra.json')]),
+        /dedicated.*binding|binding.*overlap/,
+      );
+      assert.equal(readFileSync(schema, 'utf8'), 'user sentinel');
+      assert.equal(readFileSync(source, 'utf8'), 'source sentinel');
+      assert.equal(
+        spawnSequence(env.logPath).filter((value) => value === 'run' || value === 'build').length,
+        0,
+      );
+    } finally {
+      env.restore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
+test('bindings inside src do not trigger their own dev rebuild loop', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-uniffi-self-watch-'));
+  const env = withFakeCargo(root, { uniffi: { output: './src/bindings' } });
+  let handle: { dispose(): void } | undefined;
+  try {
+    const { runDev } = await import('./dev.js');
+    handle = await runDev(['--config', join(env.project, 'rustra.json')]);
+    const builds = () => spawnSequence(env.logPath).filter((value) => value === 'build').length;
+    const initial = builds();
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    assert.equal(builds(), initial, 'native binding/staging writes must remain idle');
+    writeFileSync(join(env.project, 'src/changed.rs'), 'fn changed() {}');
+    const deadline = Date.now() + 3000;
+    while (builds() === initial && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    assert.equal(builds(), initial + 1, 'actual Rust source must still trigger a build');
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    assert.equal(builds(), initial + 1);
+  } finally {
+    handle?.dispose();
+    env.restore();
+    rmSync(root, { recursive: true, force: true });
   }
 });

@@ -22,7 +22,8 @@ import type { ResolvedDevDylib } from './dev-config.js';
 interface CargoArtifactMessage {
   reason?: string;
   filenames?: string[];
-  target?: { kind?: string[] };
+  target?: { kind?: string[]; name?: string };
+  package_id?: string;
 }
 
 /** 호스트 플랫폼 → cdylib 산출물 확장자. 미지 플랫폼은 호스트 선호 없이 수신 순. */
@@ -51,7 +52,11 @@ const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', 
  * 빌드가 수 분 걸릴 수 있어 "멈춤"으로 보이면 안 되는 것은 spawnInherit 과
  * 같은 이유다.
  */
-function spawnCapturingStdout(args: string[], cwd: string, progressLabel: string): Promise<string> {
+export function spawnCapturingStdout(
+  args: string[],
+  cwd: string,
+  progressLabel: string,
+): Promise<string> {
   return new Promise((resolveSpawn, rejectSpawn) => {
     const child = spawn('cargo', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
     const chunks: Buffer[] = [];
@@ -104,7 +109,10 @@ function isCdylibArtifact(message: CargoArtifactMessage): boolean {
  * 이긴다 — cargo 는 빌드 단위마다 메시지를 내므로 뒤 메시지가 최신 산출이다.
  * cdylib 가 아닌 산출물(rmeta, bin 등)은 애초에 후보가 아니다.
  */
-export function pickCdylibArtifact(stdout: string): string | undefined {
+export function pickCdylibArtifact(
+  stdout: string,
+  target?: { name: string; packageId?: string },
+): string | undefined {
   const hostExtension = HOST_DYLIB_EXTENSION[process.platform];
   let picked: string | undefined;
   for (const line of stdout.split('\n')) {
@@ -118,6 +126,8 @@ export function pickCdylibArtifact(stdout: string): string | undefined {
     }
     if (message.reason !== 'compiler-artifact') continue;
     if (!isCdylibArtifact(message)) continue;
+    if (target && message.target?.name !== target.name) continue;
+    if (target?.packageId && message.package_id !== target.packageId) continue;
     const candidates = (message.filenames ?? []).filter((file) =>
       DYLIB_EXTENSIONS.some((extension) => file.endsWith(extension)),
     );

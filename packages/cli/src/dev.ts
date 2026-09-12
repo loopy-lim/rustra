@@ -1,3 +1,4 @@
+import { isBindingOutputPath } from './uniffi-output-boundary.js';
 /** `rustra dev` — Rust 소스와 생성물의 dual-phase watch loop. */
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -8,14 +9,13 @@ import {
   createSourceWatch,
   createWatchLoop,
   isWithin,
-  sourceDirectories,
   createReloadHooks,
   type WatchHandle,
 } from './watch.js';
 import { assertDirectory, findRepoCli, readDevConfig, readSchemaSnapshot } from './dev-config.js';
 import type { ResolvedDevWasm } from './dev-config.js';
 import { buildDylibCore, liveArtifactPath, publishGatedArtifact } from './dev-dylib.js';
-import { detectConfigDirty, detectDirty, planPipeline, runOnce } from './dev-support.js';
+import { detectDirty, planPipeline, runOnce } from './dev-support.js';
 import { createParityGate, type ParitySnapshot } from './parity-gate.js';
 import { readCargoMetadata, selectHostPackage, requireTargetDirectory } from './cargo-metadata.js';
 import { sha256 } from './hash.js';
@@ -222,153 +222,154 @@ export async function runDev(args: string[]): Promise<DevWatchHandle> {
 }
 
 async function runConfigDev(configPath: string, inspect: boolean): Promise<DevWatchHandle> {
-  const config = readDevConfig(configPath);
-  const manifestDir = dirname(config.manifestPath);
-  assertDirectory(manifestDir, 'Cargo project root', 'set codegen.rustManifest');
-  assertDirectory(join(manifestDir, 'src'), 'Rust src', 'set codegen.rustManifest');
+  configPath = resolve(configPath);
+  let config = readDevConfig(configPath);
+  let manifestDir = dirname(config.manifestPath);
+  let configText = '';
+  let regenerating = false;
   let lastGeneratedSchema: string | undefined;
-  // detectConfigDirty 는 rust/ts 원인을 구분하지 못한다 — 보수적 기본값으로
-  // 성공한 재생성마다 reload 를 방출한다(호스트 재초기화는 멱함수여야 한다).
+  let subscriptions: WatchHandle[] = [];
+  let disposed = false;
+  let gate: ReturnType<typeof createParityGate> | undefined;
+  let gateKey = '';
+  let gateArmed = false;
   const reload = createReloadHooks();
-  // Task A2 — dev.target=wasm 이면 parity 게이트를 기본 켠다(`wasm.parityGate:
-  // false` 로 명시 끄기 전까지). capture 는 빌드타임 계약을 읽는다(계약 해시의
-  // 단일 소싱 근거는 captureSchemaParity 문서 참조). 코드젠이 만든 schema.json 은
-  // reload 방출 **전부터** 최신 상태이므로, 방출 직전에 미리 검증해도 방출 후
-  // 검증과 같은 판정이다 — 오히려 거부 시 reload 가 아예 방출되지 않아 호스트가
-  // 기존 엔진을 유지하는 것이 보장된다(방출 후 검증은 이미 호스트가 새 계약을
-  // 로드한 뒤라 롤백 책임이 호스트로 넘어간다). 불일치·capture 실패는 loud
-  // 기록되고 emitReload 는 건너뛴다. 루프 자체는 살아남는다(다음 변경에 다시
-  // 판정). dylib 타깃도 wasm 과 **같은 게이트**를 기본 켠다(무조정 스왑은 reload
-  // 자체가 방출되지 않는 fail-closed — `dev.dylib.parityGate: false` 로 명시 끔).
-  // 게이트 없는 것은 네이티브(native) 타깃뿐이다.
-  const gateEnabled =
-    (config.dev?.target === 'wasm' && config.dev?.wasm?.parityGate) ||
-    (config.dev?.target === 'dylib' && config.dev?.dylib?.parityGate);
-  const gate = gateEnabled
-    ? // readDevConfig 가 wasm/dylib parityGate 기본값(true)을 채워 주므로(주석은
-      // dev-config.ts) 곧장 진리 판정한다 — `!== false` 재판정 불필요.
-      createParityGate({ capture: () => captureSchemaParity(config.schemaPath) })
-    : undefined;
-  const codegen = async () => {
-    const { runCodegen } = await import('./index.js');
-    await runCodegen(['--config', resolve(configPath)]);
-    lastGeneratedSchema = readSchemaSnapshot(config.schemaPath);
-  };
+
+  function subscribe(): void {
+    for (const watch of subscriptions) watch.dispose();
+    const generatedRoots = [
+      config.outputPath,
+      config.schemaPath,
+      ...(config.uniffiMirrorPath ? [config.uniffiMirrorPath] : []),
+    ];
+    subscriptions = [
+      createSourceWatch(join(manifestDir, 'src'), (changed) => {
+        if (config.uniffiBindingPath && isBindingOutputPath(config.uniffiBindingPath, changed))
+          return;
+        if (!generatedRoots.some((root) => isWithin(root, changed))) loop.schedule('Rust change');
+      }),
+      createFileWatch(
+        [config.manifestPath, join(manifestDir, 'Cargo.lock')].map((path) => ({
+          path,
+          onChange: () => loop.schedule('Cargo change'),
+        })),
+      ),
+      createFileWatch([
+        {
+          path: config.schemaPath,
+          onChange: () => {
+            if (regenerating) return;
+            if (
+              existsSync(config.schemaPath) &&
+              readSchemaSnapshot(config.schemaPath) === lastGeneratedSchema
+            )
+              return;
+            loop.schedule('schema change');
+          },
+        },
+      ]),
+    ];
+  }
+
   const perform = async (reason: string) => {
-    console.log(`[dev] ${reason} → codegen --config ${resolve(configPath)}`);
+    console.log(`[dev] ${reason} → codegen --config ${configPath}`);
+    regenerating = true;
     try {
-      await codegen();
-      // Task A3 — target=wasm 이면 코드젠에 이어 wasm32 엔진 빌드를
-      // 오케스트레이션한다(A0 스파이크의 빌드 명령·산출물 레이아웃과 동일). 빌드
-      // 실패는 throw 로 전파되어 아래 catch 로 간다 — 새 엔진이 존재하지 않는
-      // reload 를 방출하지 않기 위해 게이트 검증보다 **먼저** 실패해야 한다.
-      // 기기로의 푸시(adb push / Documents 등)는 호스트 영역 — 산출물 경로 안내가
-      // 오케스트레이션의 끝이다.
+      const nextText = await readFile(configPath, 'utf8');
+      if (nextText !== configText) {
+        const next = readDevConfig(configPath);
+        assertDirectory(
+          dirname(next.manifestPath),
+          'Cargo project root',
+          'set codegen.rustManifest',
+        );
+        assertDirectory(
+          join(dirname(next.manifestPath), 'src'),
+          'Rust src',
+          'set codegen.rustManifest',
+        );
+        config = next;
+        manifestDir = dirname(config.manifestPath);
+        configText = nextText;
+        lastGeneratedSchema = undefined;
+        if (!disposed) subscribe();
+      }
+      const gateEnabled =
+        (config.dev?.target === 'wasm' && config.dev?.wasm?.parityGate) ||
+        (config.dev?.target === 'dylib' && config.dev?.dylib?.parityGate);
+      const nextGateKey = gateEnabled ? `${config.dev?.target}:${config.schemaPath}` : '';
+      if (gateKey !== nextGateKey) {
+        gateKey = nextGateKey;
+        gate = gateEnabled
+          ? createParityGate({ capture: () => captureSchemaParity(config.schemaPath) })
+          : undefined;
+        gateArmed = false;
+        if (gate && existsSync(config.schemaPath)) {
+          await gate.arm();
+          gateArmed = true;
+        }
+      }
+      const { runCodegen } = await import('./cli-codegen.js');
+      await runCodegen(['--config', configPath]);
+      lastGeneratedSchema = readSchemaSnapshot(config.schemaPath);
       if (config.devWasm) {
         const artifact = await buildWasmEngine(config.devWasm);
         console.log(`[dev:wasm] engine artifact: ${artifact}`);
       }
-      // dylib 타깃 — wasm 빌드와 같은 자리(codegen 직후, 게이트 검증 전)에서
-      // cdylib 를 빌드한다. 빌드는 cargo 타깃 경로(스크래치)에만 기록한다 — 감시자가
-      // 폴링하는 라이브 경로는 아래 게이트 통과 **후** 발행 단계에서만 닿는다(빌드
-      // 결과가 그대로 스왑되는 구멍을 막는 fail-closed 발행 계약). 빌드 실패는
-      // throw 로 전파되어 catch 로 간다 — 존재하지 않는 핫 코어에 대한 reload 를
-      // 막는다. 앱 측은 RUSTRA_HOT_CORE 아티팩트를 폴링해 스왑하므로 경로 안내가
-      // 오케스트레이션의 끝이다(wasm 의 "기기 푸시는 호스트 영역"과 동일 경계).
       let dylibPublish: { artifact: string; livePath: string } | undefined;
       if (config.devDylib) {
         const artifact = await buildDylibCore(config.devDylib);
         console.log(`[dev:dylib] core artifact: ${artifact}`);
         dylibPublish = { artifact, livePath: liveArtifactPath(artifact) };
       }
-      console.log(`[dev] ${new Date().toLocaleTimeString()} regenerated`);
-      if (inspect) inspectHint();
+      if (disposed) return;
       if (gate) {
-        const verdict = await gate.verify();
-        if (!verdict.ok) {
-          // 거부 — reload 신호를 방출하지 않는다(호스트는 기존 엔진 유지).
-          // verdict 가 이미 현재 상태로 재무장했으므로 다음 변경은 정상 판정된다.
-          console.error(`[dev] reload rejected — ${verdict.reason}`);
-          // dylib fail-closed — 드리프트된 빌드는 cargo 타깃 경로에 머물고 라이브
-          // 경로는 건드리지 않는다. 이전 발행물이 있으면 호스트가 그것을 계속
-          // 실행하고, 첫 발행 전이면 라이브가 없으므로 호스트를 띄우면 안 된다.
-          if (dylibPublish !== undefined) {
-            const { livePath } = dylibPublish;
-            if (existsSync(livePath)) {
+        if (!gateArmed) {
+          await gate.arm();
+          gateArmed = true;
+        } else {
+          const verdict = await gate.verify();
+          if (!verdict.ok) {
+            console.error(`[dev] reload rejected — ${verdict.reason}`);
+            if (dylibPublish) {
               console.error(
-                `[dev:dylib] gated live artifact untouched at ${livePath} — ` +
-                  `the host keeps running the previously published core`,
-              );
-            } else {
-              console.error(
-                `[dev:dylib] no gated live artifact was published — ` +
-                  `do not launch the host with RUSTRA_HOT_CORE=${livePath}`,
+                existsSync(dylibPublish.livePath)
+                  ? `[dev:dylib] gated live artifact untouched at ${dylibPublish.livePath} — the host keeps running the previously published core`
+                  : '[dev:dylib] no gated live artifact was published — do not launch the host',
               );
             }
+            return;
           }
-          return;
         }
       }
-      // 게이트 통과(또는 `parityGate: false` 명시 옵트아웃) — 이제서야 빌드를 라이브
-      // 경로로 원자적 발행한다(tmp 복사 → rename 스왑). RUSTRA_HOT_CORE 힌트는 게이트를
-      // 통과한 라이브 경로만 가리킨다 — 무게이트 cargo 타깃 경로는 결코 가리키지 않는다.
-      if (dylibPublish !== undefined) {
+      if (dylibPublish) {
         const livePath = publishGatedArtifact(dylibPublish.artifact, dylibPublish.livePath);
         console.log(`[dev:dylib] launch the host with RUSTRA_HOT_CORE=${livePath}`);
       }
+      console.log(`[dev] ${new Date().toLocaleTimeString()} regenerated`);
+      if (inspect) inspectHint();
       await reload.emitReload(reason);
     } catch (error) {
       console.error(`[dev] regeneration failed: ${error instanceof Error ? error.message : error}`);
+    } finally {
+      regenerating = false;
     }
   };
-  const loop = createWatchLoop(perform, () =>
-    detectConfigDirty(manifestDir, config.schemaPath, config.outputPath),
-  );
-  await loop.run('initial', true);
-  // 기준 스냅샷은 initial 코드젠이 schema.json 을 만든 **뒤**에 잡는다 — 없는
-  // 파일 앞에서 arm 이 실패하는 일을 막는다. arm 실패는 throw — 게이트가
-  // 요구됨(wasm + parityGate 기본)에도 계약을 못 잡는 상태로 감시에 들어가는
-  // 것은 fail-open 이므로 즉시 보인다.
-  if (gate) await gate.arm();
-  const generatedRoots = [config.outputPath, config.schemaPath];
-  const sourceWatch = createFileWatch(
-    sourceDirectories(join(manifestDir, 'src')).map((path) => ({
-      path,
-      onChange: (changed) => {
-        if (!generatedRoots.some((root) => isWithin(root, changed))) loop.schedule('Rust change');
-      },
-    })),
-  );
-  const projectWatch = createFileWatch(
-    [config.manifestPath, join(manifestDir, 'Cargo.lock')].map((path) => ({
-      path,
-      onChange: () => loop.schedule('config change'),
-    })),
-  );
-  const schemaWatch = createFileWatch([
-    {
-      path: dirname(config.schemaPath),
-      onChange: (changed) => {
-        if (resolve(changed) !== resolve(config.schemaPath) || !existsSync(config.schemaPath))
-          return;
-        if (
-          lastGeneratedSchema !== undefined &&
-          readSchemaSnapshot(config.schemaPath) === lastGeneratedSchema
-        )
-          return;
-        loop.schedule('schema change');
-      },
-    },
+  // Events themselves establish dirtiness (including deletion/config changes),
+  // which timestamp comparisons against generated files cannot reliably infer.
+  const loop = createWatchLoop(perform, () => true);
+  const configWatch = createFileWatch([
+    { path: configPath, onChange: () => loop.schedule('config change') },
   ]);
-  console.log(`\n[dev] watching ${manifestDir} and ${config.schemaPath} for changes...`);
-  const handle: DevWatchHandle = {
+  await loop.run('initial', true);
+  console.log(`\n[dev] watching ${manifestDir} and ${configPath} for changes...`);
+  return {
     dispose() {
+      disposed = true;
       loop.dispose();
-      sourceWatch.dispose();
-      projectWatch.dispose();
-      schemaWatch.dispose();
+      configWatch.dispose();
+      for (const watch of subscriptions) watch.dispose();
     },
     onReload: reload.onReload,
   };
-  return handle;
 }

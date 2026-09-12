@@ -97,20 +97,21 @@ uniffi 섹션의 **존재 자체가 기능 스위치**다 — 없으면 코드�
 1. **스키마 프로브** — 기존 프로브를 `RUSTRA_UNIFFI_OUT=<srcOut>` 환경변수와
    함께 스폰한다. 프로브는 미러 소스를 `uniffi_generated.rs` 로 렌더링해
    srcOut 에 쓴다(커밋 대상).
-2. **cdylib 빌드** — `cargo build --package <pkg> --features uniffi`
-   (`dylibProfile` 이 `"release"` 면 `--release`).
-3. **bindgen** — `cargo run --bin uniffi-bindgen -- generate --library <dylib>
---language kotlin --language swift --out-dir <output>` (library 모드).
-4. **산출물 검증** — fail-closed: `.kt`, `.swift`, `.h`, `*.modulemap` 이 각각
-   최소 1개씩 있어야 한다. bindgen 이 조용히 0 파일을 쓰고 exit 0 하는 변칙을
-   성공으로 지나가지 않는다.
+2. **cdylib 빌드** — `cargo build --package <pkg> --lib --features uniffi
+--message-format=json`(release 프로필이면 `--release`). 선택한 lib 타깃의
+   compiler artifact에서 실제 경로를 받아 사용자 지정 이름·타깃 디렉터리·트리플을 따른다.
+3. **bindgen** — 라이브러리의 Cargo 빌드 타깃과 관계없이 Rust 호스트 `--target`으로
+   실행하고, 빈 임시 디렉터리에 바인딩을 생성한다.
+4. **산출물 검증과 교체** — 새 디렉터리에 `.kt`, `.swift`, `.h`, `*.modulemap`이
+   각각 최소 1개씩 있어야 한다. 완전한 결과만 `uniffi.output`을 교체한다. 생성 실패는
+   기존 바인딩을 보존하고, 성공한 교체는 오래된 파일도 제거한다.
 
-`--check` 모드의 uniffi 신선도는 **`uniffi_generated.rs` 바이트 비교만**
-수행하고 cargo build/bindgen 은 의도적으로 건너뛴다 — CI 전수 신선도 게이트가
-매 실행 러스트를 재빌드하면 게이트가 수 분으로 늘어나기 때문이다. 미러 소스는
-프로브가 env 하나로 재현하므로 바이트가 같으면 바인딩도 재현 가능하다. 빌드
-실패/스폰 실패의 에러 계약은 스키마 프로브와 동일하다(원인 출력 + 문맥
-래핑, 산출물 부재는 fail-closed).
+`--check`는 UniFFI의 `uniffi_generated.rs`만 비교하는 저비용 검사이며,
+**Kotlin/Swift 신선도를 증명하지 않는다**. 전체 바인딩 CI 게이트는
+`rustra codegen --check-bindings`로 명시 실행한다. 이 옵션은 `--check`를 포함하며
+라이브러리 빌드와 빈 임시 디렉터리의 bindgen 생성을 거쳐 전체 경로와 바이트를 비교한다.
+Swift·Kotlin·헤더·modulemap과 오래된 추가 파일까지 검사하고 커밋된 출력은 교체하지 않는다.
+Cargo 타깃 디렉터리에 빌드 산출물은 쓸 수 있으며, 네이티브 빌드와 bindgen 실행 비용이 든다.
 
 오케스트레이션 구현은 `packages/cli/src/cli-uniffi.ts`, 미러 렌더러는
 `examples/calculator/src/uniffi_render.rs`(단위 테스트 11개 — 미러로
@@ -197,5 +198,13 @@ do {
 minor 마다 생성 바인딩과 런타임 헬퍼의 정합성이 깨지는 churn 이 있고, 생성된
 Kotlin 헬퍼는 컴파일된 Rust 컴포넌트와 **정확히 같은 버전**의 uniffi 를
 요구한다. 버전을 올릴 때는 워크스페이스 핀을 한 곳에서 바꾸고, 같은 PR 에서
-미러 소스와 커밋된 바인딩을 재생성한다 — `codegen --check` 의 바이트 비교가
+미러 소스와 커밋된 바인딩을 재생성한다 — `codegen --check-bindings`의 바이트 비교가
 드리프트를 잡는다.
+
+### 바인딩 출력 경계
+
+`uniffi.output`은 바인딩 전용 디렉터리여야 한다. CLI는 Rust probe 실행 전에
+경로를 정규화하여 schema·TypeScript 출력과의 중첩, Cargo manifest·Rust 소스 루트를
+덮는 경로를 거부한다. `uniffi/` 또는 `src/bindings/`처럼 별도 하위 디렉터리를 사용한다.
+전체 디렉터리를 교체하므로 수동 작성 파일을 함께 두지 않는다. 감시는 바인딩 출력과
+그 교체용 임시 디렉터리를 제외한다.
