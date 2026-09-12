@@ -220,6 +220,14 @@ Remaining Phase 1 limitations:
 
 - **Errors** — a single-variant record (§5). The merged decoder's
   `internal: "<code>: <message>"` flattening limitation (§2).
+- **Identifier policy** — schema-derived names (types, fields, enum variants,
+  command names) must be valid, non-keyword Rust identifiers. The renderer
+  fails at generation time with the exact schema path instead of letting
+  rustc fail opaquely later. Keyword names are deliberately **not**
+  raw-escaped: uniffi 0.32 proc-macros and the Kotlin/Swift generators do not
+  carry `r#` safely (the error mirror's `message`→`detail` rename is the one
+  deliberate divergence). Properties that collapse to the same snake_case
+  field (e.g. `fooBar` + `foo_bar`) are rejected as duplicates.
 - **No async** — the Rust command API is synchronous today, so every generated
   function is sync. TS-option surfaces like `signal`/`timeoutMs` do not exist
   on this path.
