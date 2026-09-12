@@ -182,6 +182,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       # test:compat 의 test:runtime:tauri 가 tauri-calculator release 빌드를
       # 돌린다 — gtk/webkit 시스템 의존이 필요하다 (rust 잡과 동일 목록).
@@ -408,50 +410,21 @@ jobs:
       # 에뮬레이터이므로 위 verify step 이 보장한 x86_64 librustra_bridge.so 가
       # 실제 로드된다. 활동 이름은 Expo prebuild 생성값에 의존하지 않게 monkey
       # LAUNCHER 로 기동한다(package 는 app.json 의 expo.android.package).
+      - name: Enable Android emulator hardware acceleration
+        run: |
+          sudo chmod a+rw /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm
       - name: Emulator runtime smoke (install, launch, assert engine marker)
+        timeout-minutes: 15
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           arch: x86_64
           target: google_apis
           disable-animations: true
-          script: |
-            set -u
-            APP_ID="com.altshifted.reactnativecalculator"
-            adb install -r examples/react-native-calculator/android/app/build/outputs/apk/release/app-release.apk
-            adb logcat -c
-            adb shell monkey -p "$APP_ID" -c android.intent.category.LAUNCHER 1
-            # JS 번들 로드 + 첫 엔진 호출 완료까지 마커를 폴링한다(상한 5분).
-            found=0
-            for i in $(seq 1 60); do
-              adb logcat -d > "$RUNNER_TEMP/rustra-logcat.txt" || true
-              if grep -q '__RUSTRA_SMOKE_FAIL__' "$RUNNER_TEMP/rustra-logcat.txt"; then
-                break
-              fi
-              if grep -q '__RUSTRA_SMOKE_OK__' "$RUNNER_TEMP/rustra-logcat.txt"; then
-                found=1
-                break
-              fi
-              sleep 5
-            done
-            # 단언 1: 엔진 호출 성공 마커(실패 마커가 먼저 찍히면 여기서 red).
-            if [ "$found" -ne 1 ]; then
-              echo "::error::__RUSTRA_SMOKE_OK__ 마커를 logcat 에서 관측하지 못했다"
-              tail -n 200 "$RUNNER_TEMP/rustra-logcat.txt" || true
-              exit 1
-            fi
-            if grep -q '__RUSTRA_SMOKE_FAIL__' "$RUNNER_TEMP/rustra-logcat.txt"; then
-              echo "::error::__RUSTRA_SMOKE_FAIL__ 마커 관측 — 엔진 호출 실패"
-              exit 1
-            fi
-            # 단언 2: 프로세스 생존 — 기동 직후 크래시(네이티브 lib 로드 실패 등)가
-            # 아니라는 뜻. pidof 출력이 비면(원격 실패 포함) 실패로 본다.
-            PID="$(adb shell pidof "$APP_ID" | tr -d '[:space:]\r')"
-            if [ -z "$PID" ]; then
-              echo "::error::앱 프로세스가 생존하지 않는다 (pidof $APP_ID 비었음)"
-              exit 1
-            fi
-            echo "smoke OK: pid=$PID, __RUSTRA_SMOKE_OK__ 관측"
+          disable-linux-hw-accel: false
+          emulator-boot-timeout: 300
+          script: bash scripts/ci-android-runtime-smoke.sh rn
 
       # 실패 로그 보존 — gradle/prebuild 로그는 잡 로그 retention 이 지나면 사라진다.
       # autolinking 실패는 주로 prebuild/codegen 단계에서, 네이티브 링크 실패는
@@ -533,6 +506,7 @@ jobs:
       # 동작하게 하기 위한 선택(로컬 실측: timeout 부재). console.warn →
       # NSLog/stderr → pty 캡처 경로로 마커를 관측한다.
       - name: Simulator runtime smoke (install, launch, assert engine marker)
+        timeout-minutes: 15
         shell: bash
         run: |
           set -u
@@ -645,50 +619,21 @@ jobs:
       # 런타임 스모크 — rn-android 잡과 동일한 에뮬레이터/마커 폴링 방식.
       # OK 마커는 앱이 행복 경로와 타입 에러 경로를 모두 통과한 뒤에만 찍히므로
       # OK 관측 = 두 경로 모두 증명. FAIL 마커는 즉시 red.
+      - name: Enable Android emulator hardware acceleration
+        run: |
+          sudo chmod a+rw /dev/kvm
+          test -r /dev/kvm && test -w /dev/kvm
       - name: Emulator runtime smoke (install, launch, assert uniffi marker)
+        timeout-minutes: 15
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           arch: x86_64
           target: google_apis
           disable-animations: true
-          script: |
-            set -u
-            APP_ID="dev.rustra.uniffi.smoke"
-            adb install -r examples/uniffi-android-smoke/app/build/outputs/apk/debug/app-debug.apk
-            adb logcat -c
-            adb shell monkey -p "$APP_ID" -c android.intent.category.LAUNCHER 1
-            # 바인딩 초기화 + 두 호출 완료까지 마커를 폴링한다(상한 5분).
-            found=0
-            for i in $(seq 1 60); do
-              adb logcat -d > "$RUNNER_TEMP/rustra-uniffi-logcat.txt" || true
-              if grep -q '__RUSTRA_UNIFFI_FAIL__' "$RUNNER_TEMP/rustra-uniffi-logcat.txt"; then
-                break
-              fi
-              if grep -q '__RUSTRA_UNIFFI_OK__ addNumbers(20,22)=42' "$RUNNER_TEMP/rustra-uniffi-logcat.txt"; then
-                found=1
-                break
-              fi
-              sleep 5
-            done
-            # 단언 1: OK 마커 관측(실패 마커가 먼저 찍히면 여기서 red).
-            if [ "$found" -ne 1 ]; then
-              echo "::error::__RUSTRA_UNIFFI_OK__ 마커를 logcat 에서 관측하지 못했다"
-              tail -n 200 "$RUNNER_TEMP/rustra-uniffi-logcat.txt" || true
-              exit 1
-            fi
-            if grep -q '__RUSTRA_UNIFFI_FAIL__' "$RUNNER_TEMP/rustra-uniffi-logcat.txt"; then
-              echo "::error::__RUSTRA_UNIFFI_FAIL__ 마커 관측 — 바인딩 실행 실패"
-              exit 1
-            fi
-            # 단언 2: 프로세스 생존 — 기동 직후 크래시(JNA/.so 로드 실패 등)가
-            # 아니라는 뜻. pidof 출력이 비면(원격 실패 포함) 실패로 본다.
-            PID="$(adb shell pidof "$APP_ID" | tr -d '[:space:]\r')"
-            if [ -z "$PID" ]; then
-              echo "::error::앱 프로세스가 생존하지 않는다 (pidof $APP_ID 비었음)"
-              exit 1
-            fi
-            echo "smoke OK: pid=$PID, __RUSTRA_UNIFFI_OK__ 관측"
+          disable-linux-hw-accel: false
+          emulator-boot-timeout: 300
+          script: bash scripts/ci-android-runtime-smoke.sh uniffi
 
       # 실패 로그 보존 — gradle 로그와 스모크 실패 진단용 logcat 덤프. 성공 시
       # 업로드하지 않는다(if: failure()).
