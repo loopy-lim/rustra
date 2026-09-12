@@ -498,65 +498,12 @@ jobs:
             exit 1
           fi
           tail -n 20 "$RUNNER_TEMP/rustra-xcodebuild.log"
-      # 런타임 스모크 — 러너에 있는 iPhone 시뮬레이터를 부팅해 Release .app 을
-      # 설치·기동한다. package/activity 이름 불일치 리스크가 없어 bundle id 로
-      # 직접 launch 한다(app.json 의 expo.ios.bundleIdentifier). --console-pty 는
-      # 앱이 살아 있는 동안 출력을 스트리밍하므로 백그라운드 스폰 후 마커를
-      # 폴링하고 발견 즉시 회수한다 — GNU timeout 이 없는 macOS 기본 환경에서도
-      # 동작하게 하기 위한 선택(로컬 실측: timeout 부재). console.warn →
-      # NSLog/stderr → pty 캡처 경로로 마커를 관측한다.
+      # React Native Release 마커는 stdout/stderr가 아닌 iOS 통합 로그에 기록된다.
+      # 실행한 앱의 PID와 시작 시각으로 범위를 제한해 이전 실행의 마커를 배제한다.
       - name: Simulator runtime smoke (install, launch, assert engine marker)
         timeout-minutes: 15
         shell: bash
-        run: |
-          set -u
-          BUNDLE_ID="com.alt-shifted.react-native-calculator"
-          APP="$RUNNER_TEMP/rustra-ios-dd/Build/Products/Release-iphonesimulator/reactnativecalculator.app"
-          test -d "$APP" || { echo "::error::.app 제품이 없다: $APP"; exit 1; }
-          # 러너의 iPhone 시뮬레이터는 전부 Shutdown 이지만, 부팅된 개체가
-          # 있어도 재사용한다(boot 의 "already booted" 는 흡수). 이름 추출은
-          # 첫 번째 available iPhone 기준.
-          SIM_NAME="$(xcrun simctl list devices available | awk -F'(' '/iPhone/ && (/Shutdown/ || /Booted/) { sub(/\(.*/, ""); gsub(/^[ \t]+|[ \t]+$/, ""); print; exit }')"
-          if [ -z "$SIM_NAME" ]; then
-            echo "::error::사용 가능한 iPhone 시뮬레이터가 없다"
-            xcrun simctl list devices available
-            exit 1
-          fi
-          echo "smoke simulator: $SIM_NAME"
-          xcrun simctl boot "$SIM_NAME" 2>/dev/null || true
-          xcrun simctl bootstatus "$SIM_NAME" -b
-          xcrun simctl install "$SIM_NAME" "$APP"
-          xcrun simctl launch --console-pty "$SIM_NAME" "$BUNDLE_ID" > "$RUNNER_TEMP/rustra-ios-console.log" 2>&1 &
-          LAUNCH_PID=$!
-          found=0
-          for i in $(seq 1 60); do
-            if grep -q '__RUSTRA_SMOKE_FAIL__' "$RUNNER_TEMP/rustra-ios-console.log" 2>/dev/null; then
-              break
-            fi
-            if grep -q '__RUSTRA_SMOKE_OK__' "$RUNNER_TEMP/rustra-ios-console.log" 2>/dev/null; then
-              found=1
-              break
-            fi
-            # launch 프로세스가 먼저 끝났다면 앱이 죽었거나 붙지 못한 것 —
-            # 마커는 더 이상 찍히지 않으므로 폴링을 끝낸다.
-            if ! kill -0 "$LAUNCH_PID" 2>/dev/null; then
-              break
-            fi
-            sleep 5
-          done
-          kill "$LAUNCH_PID" 2>/dev/null || true
-          wait "$LAUNCH_PID" 2>/dev/null || true
-          if [ "$found" -ne 1 ]; then
-            echo "::error::__RUSTRA_SMOKE_OK__ 마커를 콘솔 출력에서 관측하지 못했다"
-            tail -n 100 "$RUNNER_TEMP/rustra-ios-console.log" || true
-            exit 1
-          fi
-          if grep -q '__RUSTRA_SMOKE_FAIL__' "$RUNNER_TEMP/rustra-ios-console.log"; then
-            echo "::error::__RUSTRA_SMOKE_FAIL__ 마커 관측 — 엔진 호출 실패"
-            exit 1
-          fi
-          xcrun simctl terminate "$SIM_NAME" "$BUNDLE_ID" 2>/dev/null || true
-          echo "smoke OK: __RUSTRA_SMOKE_OK__ 관측 ($SIM_NAME)"
+        run: bash scripts/ci-ios-runtime-smoke.sh
       # 실패 로그 보존 — xcodebuild 로그는 기본 보존(90일) 후 사라지므로 artifact로
       # 남긴다. pod install 실패는 xcodebuild 로그가 아예 생성되지 않는 고장이므로
       # pod 로그도 함께 보존한다. 런타임 스모크 실패 진단용 콘솔 캡처도 함께
