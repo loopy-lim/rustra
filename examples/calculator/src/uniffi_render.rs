@@ -45,6 +45,50 @@ const SCALAR_NEWTYPE_REAL_PATHS: &[(&str, &str)] = &[
     ("ResourceHandle", "rustra::channels::ResourceHandle"),
 ];
 
+/// Rust 2024 에디션의 예약어(strict + reserved). 스키마에서 온 이름이 여기
+/// 있으면 미러가 그 이름으로는 선언 불가능하다 — raw 식별자(`r#type`)는 문법상
+/// 유효하지만 uniffi 0.32 proc-macro 와 Kotlin/Swift 생성기가 `r#` 접두를
+/// 안전하게 다뤄준다는 보장이 없다(`message`→`detail` 회피가 그 증거). 임의
+/// 재명명은 실제 타입(`crate::{name}`)과의 1:1 대응을 깨므로 하지 않는다.
+const RUST_KEYWORDS: &[&str] = &[
+    "as", "async", "await", "become", "box", "break", "const", "continue", "crate", "do", "dyn",
+    "else", "enum", "extern", "false", "final", "fn", "for", "gen", "if", "impl", "in", "let",
+    "loop", "macro", "match", "mod", "move", "mut", "override", "priv", "pub", "raw", "ref",
+    "return", "self", "Self", "static", "struct", "super", "trait", "true", "try", "type",
+    "typeof", "unsafe", "unsized", "use", "virtual", "where", "while", "yield",
+];
+
+/// 스키마에서 온 이름이 미러가 선언할 수 있는 Rust 식별자인지 검증한다.
+/// 이름은 코드젠 산출물 안에서 rustc 보다 먼저 — 정확한 스키마 경로와 함께 —
+/// 실패시키기 위한 것이다(유효 스키마의 출력은 바뀌지 않는다).
+fn ensure_rust_ident(kind: &str, name: &str, path: &str) -> Result<(), RenderError> {
+    let reason = if name.is_empty() {
+        format!("{kind} name is empty")
+    } else if name
+        .chars()
+        .any(|c| !(c.is_ascii_alphanumeric() || c == '_'))
+    {
+        format!(
+            "{kind} name `{name}` is not a valid Rust identifier \
+             (ASCII alphanumerics and `_` only)"
+        )
+    } else if name.starts_with(|c: char| c.is_ascii_digit()) {
+        format!("{kind} name `{name}` starts with a digit")
+    } else if RUST_KEYWORDS.contains(&name) {
+        format!(
+            "{kind} name `{name}` is a Rust keyword — the mirror cannot declare it \
+             (raw identifiers are not carried safely through uniffi 0.32 proc-macros \
+             and foreign generators); rename it on the Rust side"
+        )
+    } else {
+        return Ok(());
+    };
+    Err(RenderError {
+        path: path.to_string(),
+        reason,
+    })
+}
+
 /// 렌더 엔트리 포인트 — schema_json 을 미러 Rust 소스로 바꾼다.
 ///
 /// 반환 소스는 `src/uniffi_generated.rs` 로 쓰이고 `#[cfg(feature = "uniffi")]`
@@ -178,6 +222,7 @@ impl Renderer {
         let empty_defs = Value::Object(serde_json::Map::new());
         let defs = command.get("definitions").unwrap_or(&empty_defs);
         let base = format!("commands[{name}]");
+        ensure_rust_ident("command", &name, &format!("$.{base}.name"))?;
 
         // 입력 — `{"title":"Null","type":"null"}` 은 unit 입력 핸들러(파라미터 없음).
         let input = match command.get("inputSchema") {
@@ -223,6 +268,7 @@ impl Renderer {
         defs: &Value,
         path: &str,
     ) -> Result<usize, RenderError> {
+        ensure_rust_ident("type", name, path)?;
         if let Some(idx) = self.lookup(name) {
             return Ok(idx);
         }
@@ -277,6 +323,38 @@ impl Renderer {
         Err(self.error(path, format!("unsupported definition shape for `{name}`")))
     }
 
+    /// properties 맵 → 필드 IR. snake 변환 결과의 식별자 검증과 중복 선언
+    /// 검출을 같은 경계에서 수행한다(레코드 필드·변형 페이로드 공용).
+    fn collect_fields(
+        &mut self,
+        properties: &serde_json::Map<String, Value>,
+        defs: &Value,
+        path: &str,
+        owner: &str,
+    ) -> Result<Vec<FieldIr>, RenderError> {
+        let mut fields = Vec::with_capacity(properties.len());
+        let mut seen = Vec::with_capacity(properties.len());
+        for (field, field_schema) in properties {
+            let field_path = format!("{path}.properties.{field}");
+            // 스키마 camelCase → 실제 Rust 필드명과 같은 snake_case.
+            let snake = camel_to_snake(field);
+            ensure_rust_ident("field", &snake, &field_path)?;
+            if seen.contains(&snake) {
+                return Err(RenderError {
+                    path: field_path,
+                    reason: format!(
+                        "property `{field}` maps to field `{snake}` which is already \
+                         declared in `{owner}` — the mirror cannot declare duplicates"
+                    ),
+                });
+            }
+            seen.push(snake.clone());
+            let expr = self.type_expr(field_schema, defs, &field_path, owner, field)?;
+            fields.push(FieldIr { name: snake, expr });
+        }
+        Ok(fields)
+    }
+
     fn build_record_def(
         &mut self,
         name: &str,
@@ -299,16 +377,7 @@ impl Renderer {
                     format!("object definition `{name}` has no properties"),
                 )
             })?;
-        let mut fields = Vec::with_capacity(properties.len());
-        for (field, field_schema) in properties {
-            let field_path = format!("{path}.properties.{field}");
-            let expr = self.type_expr(field_schema, defs, &field_path, name, field)?;
-            fields.push(FieldIr {
-                // 스키마 camelCase → 실제 Rust 필드명과 같은 snake_case.
-                name: camel_to_snake(field),
-                expr,
-            });
-        }
+        let fields = self.collect_fields(properties, defs, path, name)?;
         Ok(DefIr::Record {
             name: name.to_string(),
             real_ty: format!("crate::{name}"),
@@ -347,6 +416,7 @@ impl Renderer {
                 )
             })?;
             let variant_path = format!("{path}.oneOf[{variant_name}]");
+            ensure_rust_ident("variant", variant_name, &variant_path)?;
             // unit 변형 — {"type":"string","enum":["이름"]}.
             let is_unit = one_of.iter().any(|candidate| {
                 candidate.get("type").and_then(Value::as_str) == Some("string")
@@ -388,15 +458,7 @@ impl Renderer {
                         format!("enum `{name}` variant `{variant_name}` payload is not an object"),
                     )
                 })?;
-            let mut fields = Vec::with_capacity(properties.len());
-            for (field, field_schema) in properties {
-                let field_path = format!("{variant_path}.properties.{field}");
-                let expr = self.type_expr(field_schema, defs, &field_path, name, field)?;
-                fields.push(FieldIr {
-                    name: camel_to_snake(field),
-                    expr,
-                });
-            }
+            let fields = self.collect_fields(properties, defs, &variant_path, name)?;
             variants.push(VariantIr {
                 name: variant_name.to_string(),
                 fields,
@@ -1431,5 +1493,151 @@ mod tests {
         assert_eq!(camel_to_snake("a"), "a");
         assert_eq!(camel_to_snake("droppedSends"), "dropped_sends");
         assert_eq!(pascal_case("pair"), "Pair");
+    }
+
+    // ── 식별자 검증 — rustc 가 아니라 렌더 시점, 스키마 경로와 함께 실패 ──────
+
+    #[test]
+    fn keyword_field_name_fails_with_schema_path() {
+        let error = render_uniffi_generated(&doc(serde_json::json!([object_command(
+            "kwField",
+            r#"{"title":"KwFieldInput","type":"object","required":["type"],
+                "properties":{"type":{"type":"string"}}}"#,
+            r#"{"title":"KwFieldOutput","type":"object","required":["value"],
+                "properties":{"value":{"type":"string"}}}"#
+        )])))
+        .unwrap_err();
+        assert!(
+            error
+                .path
+                .ends_with("commands[kwField].inputSchema.properties.type"),
+            "path: {}",
+            error.path
+        );
+        assert!(error.reason.contains("Rust keyword"), "{error}");
+        assert!(error.reason.contains("`type`"), "{error}");
+    }
+
+    #[test]
+    fn non_identifier_names_fail_at_render() {
+        let bad_digit = render_uniffi_generated(&doc(serde_json::json!([object_command(
+            "digitStart",
+            r#"{"title":"DigitStartInput","type":"object","required":["2fast"],
+                "properties":{"2fast":{"type":"string"}}}"#,
+            r#"{"title":"DigitStartOutput","type":"object","required":["value"],
+                "properties":{"value":{"type":"string"}}}"#
+        )])))
+        .unwrap_err();
+        assert!(
+            bad_digit.reason.contains("starts with a digit"),
+            "{bad_digit}"
+        );
+
+        let bad_dash = render_uniffi_generated(&doc(serde_json::json!([object_command(
+            "dashField",
+            r#"{"title":"DashFieldInput","type":"object","required":["foo-bar"],
+                "properties":{"foo-bar":{"type":"string"}}}"#,
+            r#"{"title":"DashFieldOutput","type":"object","required":["value"],
+                "properties":{"value":{"type":"string"}}}"#
+        )])))
+        .unwrap_err();
+        assert!(
+            bad_dash.reason.contains("not a valid Rust identifier"),
+            "{bad_dash}"
+        );
+        assert!(
+            bad_dash
+                .path
+                .ends_with("commands[dashField].inputSchema.properties.foo-bar"),
+            "path: {}",
+            bad_dash.path
+        );
+    }
+
+    #[test]
+    fn keyword_type_name_fails() {
+        // inputType/title 이 키워드면 미러 선언도 real_ty 경로도 성립하지 않는다.
+        let command = serde_json::json!([{
+            "name": "typeCmd",
+            "commandId": 1,
+            "inputType": "type",
+            "outputType": "TypeCmdOutput",
+            "inputSchema": {"title": "type", "type": "object", "required": ["value"],
+                "properties": {"value": {"type": "string"}}},
+            "outputSchema": {"title": "TypeCmdOutput", "type": "object", "required": ["value"],
+                "properties": {"value": {"type": "string"}}}
+        }]);
+        let error = render_uniffi_generated(&doc(command)).unwrap_err();
+        assert!(
+            error.path.ends_with("commands[typeCmd].inputSchema"),
+            "path: {}",
+            error.path
+        );
+        assert!(error.reason.contains("Rust keyword"), "{error}");
+    }
+
+    #[test]
+    fn keyword_command_name_fails() {
+        let command = serde_json::json!([{
+            "name": "match",
+            "commandId": 1,
+            "inputType": "MatchInput",
+            "outputType": "MatchOutput",
+            "inputSchema": {"title": "MatchInput", "type": "object", "required": ["value"],
+                "properties": {"value": {"type": "string"}}},
+            "outputSchema": {"title": "MatchOutput", "type": "object", "required": ["value"],
+                "properties": {"value": {"type": "string"}}}
+        }]);
+        let error = render_uniffi_generated(&doc(command)).unwrap_err();
+        assert!(
+            error.path.ends_with("commands[match].name"),
+            "path: {}",
+            error.path
+        );
+        assert!(error.reason.contains("Rust keyword"), "{error}");
+    }
+
+    #[test]
+    fn keyword_variant_name_fails() {
+        let mut command = object_command(
+            "kindEcho",
+            r##"{"title":"KindEchoInput","type":"object","required":["kind"],
+                "properties":{"kind":{"$ref":"#/definitions/OpKind"}}}"##,
+            r##"{"title":"KindEchoOutput","type":"object","required":["echoed"],
+                "properties":{"echoed":{"$ref":"#/definitions/OpKind"}}}"##,
+        );
+        command["definitions"] = serde_json::json!({
+            "OpKind": {
+                "oneOf": [
+                    {"type": "string", "enum": ["move"]}
+                ],
+                "x-rustra-variant-order": ["move"]
+            }
+        });
+        let error = render_uniffi_generated(&doc(serde_json::json!([command]))).unwrap_err();
+        assert!(error.path.ends_with("oneOf[move]"), "path: {}", error.path);
+        assert!(error.reason.contains("Rust keyword"), "{error}");
+    }
+
+    #[test]
+    fn duplicate_snake_field_mapping_fails() {
+        // `fooBar` 와 `foo_bar` 는 snake 변환 후 같은 필드로 충돌한다.
+        let error = render_uniffi_generated(&doc(serde_json::json!([object_command(
+            "dupFields",
+            r#"{"title":"DupFieldsInput","type":"object","required":["fooBar","foo_bar"],
+                "properties":{"fooBar":{"type":"string"},
+                              "foo_bar":{"type":"string"}}}"#,
+            r#"{"title":"DupFieldsOutput","type":"object","required":["value"],
+                "properties":{"value":{"type":"string"}}}"#
+        )])))
+        .unwrap_err();
+        assert!(error.reason.contains("already declared"), "{error}");
+        assert!(
+            error
+                .path
+                .ends_with("commands[dupFields].inputSchema.properties.foo_bar"),
+            "path: {}",
+            error.path
+        );
     }
 }
