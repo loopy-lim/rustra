@@ -342,23 +342,24 @@ fn items(
                     stack,
                 )?;
             }
-            Item::Macro(x) => {
-                // Invocation expansion is opaque, but pin invocations as well as macro exports.
-                if x.ident.is_none() || x.attrs.iter().any(|a| a.path().is_ident("macro_export")) {
-                    add(
-                        out,
-                        scope,
-                        format!(
-                            "macro:{}",
-                            x.ident
-                                .as_ref()
-                                .map(ToString::to_string)
-                                .unwrap_or_else(|| tokens(&x.mac.path))
-                        ),
-                        context,
-                        tokens(&x),
-                    );
-                }
+            // Invocation expansion is opaque, but pin invocations as well as macro exports.
+            Item::Macro(x)
+                if x.ident.is_none()
+                    || x.attrs.iter().any(|a| a.path().is_ident("macro_export")) =>
+            {
+                add(
+                    out,
+                    scope,
+                    format!(
+                        "macro:{}",
+                        x.ident
+                            .as_ref()
+                            .map(ToString::to_string)
+                            .unwrap_or_else(|| tokens(&x.mac.path))
+                    ),
+                    context,
+                    tokens(&x),
+                );
             }
             Item::ExternCrate(x) if public(&x.vis) => add(
                 out,
