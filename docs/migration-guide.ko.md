@@ -25,14 +25,19 @@ postcard 페이로드 코덱은 불변이므로 구·신 빌드는 상호 운용
 | `RkyvV2Engine`                         | `FrameEngine`                        |
 | `RkyvV2Codec`                          | `FrameCodec`                         |
 | `RkyvV2Native`                         | `FrameNative`                        |
+| `RkyvV2SchemaNative`                   | `FrameSchemaNative`                  |
 | `invokeRkyvV2`                         | `invokeFrame`                        |
 | `rkyv-codecs.ts`                       | `frame-codecs.ts`                    |
 | `rkyv-registry.ts`                     | `frame-registry.ts`                  |
 | `rkyv-engine`                          | `frame-engine`                       |
 | `rustra_ffi_invoke_rkyv_v2*`           | `rustra_ffi_invoke_frame*`           |
+| `decode_rkyv_v2_response`              | `decode_frame_response`              |
+| `encode_rkyv_v2_error`                 | `encode_frame_error`                 |
+| `decode_rkyv_v2_error_parts`           | `decode_frame_error_parts`           |
 | `BUN_RKYV_V2_ENGINE_SUPPORTS`          | `BUN_FRAME_ENGINE_SUPPORTS`          |
 | `REACT_NATIVE_RKYV_V2_ENGINE_SUPPORTS` | `REACT_NATIVE_FRAME_ENGINE_SUPPORTS` |
 | 에러 접두어 `"rkyv v2: ..."`           | `"frame: ..."`                       |
+| debug transport 리터럴 `'rkyv'`        | `'frame'`                            |
 
 RN JSI 호스트 메서드도 같은 리네임을 따른다(`invokeRkyvV2` → `invokeFrame`),
 그리고 codegen 산출 파일도 새 이름(`frame-codecs.ts`, `frame-registry.ts`)으로
@@ -159,7 +164,13 @@ fn new_name(input: NewInput) -> Result<NewOutput> { /* ... */ }
 
 > contractHash 검증을 켜둔 환경에서는 1→2 사이에 hash 불일치 에러
 > (`contract.mismatch`)가 날 수 있으므로, 마이그레이션 기간에는 검증을
-> 끄거나 2단계로 hash 를 갱신한다.
+> 끄거나 2단계로 hash 를 갱신한다. "끄기"는 엔진 옵션 `contractVerification`
+> (`createFrameEngine`): `'strict' | 'warn' | 'off'` — 미설정(`undefined`)은
+> `'strict'` 로 동작한다. `'warn'` 은 mismatch/unenforceable 실패를 콘솔 경고로
+> 강등하고 엔진 생성을 계속하고(degraded 모드), `'off'` 는 `contractHash` 를
+> 설정했더라도 검증 자체를 건너뛴다. 이 노브는 네이티브 Frame 엔진 경로에만
+> 적용되고 강도만 고른다 — `contractHash` 를 넘기지 않으면 검증은 원래 동작하지
+> 않는다.
 
 ## CI 통합
 

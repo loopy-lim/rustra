@@ -169,6 +169,8 @@ Docs that quote generated code must wrap it in `docs:sync` markers so
   line before `docs:sync:end`. The gate fails on structural violations.
 - Only `docs/` is scanned (`docs/plans/` excluded), so quoting this syntax in
   `CONTRIBUTING.md` itself cannot false-positive.
+- The gate also enforces **en/ko mirror completeness**: every in-scope `X.md`
+  must have its `X.ko.md` twin (and vice versa) — edit both sides in the same PR.
 - Run locally: `bun run test:docs`.
 
 ---
@@ -251,7 +253,11 @@ When a Tauri app returns an error from `rustra_dispatch`:
 
 ### React Native Notes
 
-- RN runtime tests are excluded from CI because they require a simulator/device
+- RN runtime smoke **is** in CI: the `rn-android`/`rn-ios` jobs build a Release
+  APK/app, boot an emulator/simulator, install it, and assert the app's computed
+  result from the unified log (`scripts/ci-android-runtime-smoke.sh`,
+  `scripts/ci-ios-runtime-smoke.sh`). The `uniffi-android`/`uniffi-ios` jobs do
+  the same for the UniFFI bindings (`examples/uniffi-*-smoke`)
 - `test:adapter:react-native` validates with a mocked transport (not real FFI)
 - For FFI issues, verify that the `@_silgen_name` function name in the Swift module matches the Rust `#[unsafe(no_mangle)]` function name
 

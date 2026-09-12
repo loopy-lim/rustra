@@ -152,20 +152,28 @@ loud abort 로 **fail-closed** 수렴한다 — 조용한 타협은 없다. 실�
 ### S7. fail-closed 게이트 철학
 
 - **불변식**: "계약을 검증할 수 없으면 계약이 없는 것과 같다" — 검증 장치는 의심 상태에서
-  통과하지 않는다. (a) 런타임 계약 검증: 소비자가 `contractHash` 를 넘기면 네이티브 해시와
-  다를 때 `contract.mismatch` 로 fail-fast (네이티브가 해시를 아예 못 주면
-  `contract.unenforceable` — 콜백으로도 우회 불가). (b) dev parity 게이트: wasm/dylib 타깃은
+  통과하지 않는다. (a) 런타임 계약 검증: 기본 정책(`contractVerification: 'strict'` —
+  `undefined` 도 동일 동작)에서 소비자가 `contractHash` 를 넘기면 네이티브 해시와 다를 때
+  `contract.mismatch` 로 fail-fast (네이티브가 해시를 아예 못 주면
+  `contract.unenforceable` — strict 에서는 콜백으로도 우회 불가). `contractVerification`
+  옵션이 유일한 명시적·호출자 소유의 탈출구다: `'warn'` 은 이 실패들을 콘솔 경고로
+  강등해 degraded 모드로 계속하고, `'off'` 는 `contractHash` 를 설정했더라도 검증을
+  건너뛴다. 이 노브는 네이티브 Frame 엔진 경로에만 적용되고 검증을 스스로 켜지 않는다 —
+  `contractHash` 가 없으면 검증할 것이 없다. (b) dev parity 게이트: wasm/dylib 타깃은
   기본 켜지고, 게이트가 거부하면 reload 자체가 방출되지 않는다 (호스트는 기존 엔진 유지).
   (c) Android 핫 코어 감시는 `FLAG_DEBUGGABLE` 빌드에서만 활성화 — 릴리스 빌드에는 감시
   스레드 자체가 존재하지 않는다. (d) `scripts/docs-gate.mjs` 는 마커 규약 위반·드리프트를
   fail-closed 로 모아 보고하고, ko 미러 완전성도 게이트가 강제한다.
 - **근거 코드**: `packages/types/src/frame-engine-contract.ts:61-163`
-  (`validateFrameEngineOptions` — mismatch/unenforceable), `packages/cli/src/dev.ts:233-330`
+  (`validateFrameEngineOptions` — mismatch/unenforceable),
+  `packages/types/src/frame-engine-options.ts:64` (`contractVerification` 정책 노브),
+  `packages/cli/src/dev.ts:233-330`
   (parity 게이트 fail-closed 발행), Android 게이트:
   `examples/react-native-calculator/modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt:35`
   (iOS 는 `RUSTRA_HOT_CORE_DIR` env 게이트와 대칭), `scripts/docs-gate.mjs`.
 - **위반 시 동작**: 게이트는 통과 대신 실패를 낸다 — 엔진 생성 거부, reload 미방출,
-  CI exit 1. "검증 스킵 후 진행"은 존재하지 않는다.
+  CI exit 1. "검증 스킵 후 진행"은 호출자가 `contractVerification` 정책으로 명시적으로
+  선택한 경우에만 존재한다 — 조용히 일어나는 스킵은 없다.
 - **검증 위치**: `packages/types/src/index.test.ts` (mismatch/unenforceable 경로),
   `packages/cli/src/dev-parity-wiring.test.ts`, `scripts/docs-gate.test.ts`.
 

@@ -6,10 +6,11 @@ rustra 의 계약 또는 그 강제 방식을 바꾸는 결정의 번호 기록.
 Status / Context / Decision / Consequences. 거부된 선택지도 기록할 가치가 있다 —
 왜 거부했는지까지 적는다.
 
-| 번호                                                     | 제목                                             | 상태     | 날짜       |
-| -------------------------------------------------------- | ------------------------------------------------ | -------- | ---------- |
-| [0001](0001-record-track-a-contract-mechanization.ko.md) | Track A: 계약의 기계화 (UniFFI 성숙도 관행 채택) | Accepted | 2026-09-11 |
-| [0002](0002-uniffi-track-b1-carrier.ko.md)               | Track B1: UniFFI 를 Kotlin/Swift 언어 캐리어로   | Accepted | 2026-09-11 |
+| 번호                                                     | 제목                                                       | 상태     | 날짜       |
+| -------------------------------------------------------- | ---------------------------------------------------------- | -------- | ---------- |
+| [0001](0001-record-track-a-contract-mechanization.ko.md) | Track A: 계약의 기계화 (UniFFI 성숙도 관행 채택)           | Accepted | 2026-09-11 |
+| [0002](0002-uniffi-track-b1-carrier.ko.md)               | Track B1: UniFFI 를 Kotlin/Swift 언어 캐리어로             | Accepted | 2026-09-11 |
+| [0003](0003-s7-contract-verification-escape-hatch.ko.md) | S7 서술 정합: contractVerification 을 명시적 탈출구로 기록 | Accepted | 2026-09-12 |
 
 ## 규약
 

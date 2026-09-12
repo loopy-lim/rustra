@@ -168,22 +168,31 @@ diagnostic, or a gate rejection.
 ### S7. Fail-closed gate philosophy
 
 - **Invariant**: "a contract that cannot be verified is not a contract" — enforcement
-  machinery never passes on a suspect state. (a) Runtime contract verification: when a
-  consumer passes `contractHash`, a hash mismatch fails fast with `contract.mismatch`
-  (and if the native side cannot produce a hash at all, `contract.unenforceable` — not
-  even a callback bypasses it). (b) The dev parity gate is default-on for wasm/dylib
-  targets, and a gate rejection means the reload signal itself is never emitted (the host
-  keeps its current engine). (c) Android hot-core watching activates only in
-  `FLAG_DEBUGGABLE` builds — release builds never spawn a watch thread. (d)
+  machinery never passes on a suspect state. (a) Runtime contract verification: under
+  the default policy (`contractVerification: 'strict'` — `undefined` behaves the same),
+  when a consumer passes `contractHash`, a hash mismatch fails fast with
+  `contract.mismatch` (and if the native side cannot produce a hash at all,
+  `contract.unenforceable` — not even a callback bypasses it). The
+  `contractVerification` option is the single explicit, caller-owned escape hatch:
+  `'warn'` downgrades those failures to a console warning and continues in degraded
+  mode, and `'off'` skips verification even when `contractHash` is set. It applies only
+  to the native Frame engine and never turns verification on by itself — without
+  `contractHash` there is nothing to verify. (b) The dev parity gate is default-on for
+  wasm/dylib targets, and a gate rejection means the reload signal itself is never
+  emitted (the host keeps its current engine). (c) Android hot-core watching activates
+  only in `FLAG_DEBUGGABLE` builds — release builds never spawn a watch thread. (d)
   `scripts/docs-gate.mjs` reports marker-contract violations and drift fail-closed, and
   also enforces ko mirror completeness.
 - **Evidence**: `packages/types/src/frame-engine-contract.ts:61-163`
-  (`validateFrameEngineOptions` — mismatch/unenforceable), `packages/cli/src/dev.ts:233-330`
+  (`validateFrameEngineOptions` — mismatch/unenforceable),
+  `packages/types/src/frame-engine-options.ts:64` (the `contractVerification` policy
+  knob), `packages/cli/src/dev.ts:233-330`
   (parity-gate fail-closed publish), Android gate:
   `examples/react-native-calculator/modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt:35`
   (iOS is symmetric via the `RUSTRA_HOT_CORE_DIR` env gate), `scripts/docs-gate.mjs`.
 - **On violation**: gates fail instead of passing — engine creation refused, reload not
-  emitted, CI exit 1. There is no "skip verification and continue".
+  emitted, CI exit 1. "Skip verification and continue" exists only when the caller
+  explicitly opts in via the `contractVerification` policy — never silently.
 - **Verified by**: `packages/types/src/index.test.ts` (mismatch/unenforceable paths),
   `packages/cli/src/dev-parity-wiring.test.ts`, `scripts/docs-gate.test.ts`.
 
