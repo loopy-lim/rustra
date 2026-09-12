@@ -36,10 +36,11 @@ where
             // 는 부족하면 SerializeBufferFull 로 실패하고 &output 은 소모되지
             // 않으므로(1.1.3 flavors.rs — 부분 기록은 있으나 폴백이 전체 재기록)
             // 폴백에서 to_extend 로 온전히 다시 쓴다.
-            if target.len() > 8 {
+            let available = target.len().min(crate::limits::max_payload_bytes());
+            if available > 8 {
                 target[..8].fill(0);
                 target[0] = 1;
-                match postcard::to_slice(&output, &mut target[8..]) {
+                match postcard::to_slice(&output, &mut target[8..available]) {
                     Ok(written) => {
                         return Ok(DirectResponse::Written(8 + written.len()));
                     }
@@ -50,7 +51,10 @@ where
 
             // 큰 응답은 현재 output을 정확히 한 번 직렬화해 캐시에 넘긴다.
             // 핸들러를 재실행하지 않으므로 비멱등 command도 안전하다.
-            let mut response = Vec::with_capacity(64);
+            let encoded_len = postcard::experimental::serialized_size(&output)
+                .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))?;
+            let response_len = checked_frame_response_len(encoded_len)?;
+            let mut response = Vec::with_capacity(response_len);
             response.resize(8, 0);
             response[0] = 1;
             let response = postcard::to_extend(&output, response)

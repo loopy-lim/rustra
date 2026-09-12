@@ -30,7 +30,8 @@ where
             // 직렬화한다. 병렬 JSI 호출에서 allocator lock 경합도 절반이 된다.
             let encoded_len = postcard::experimental::serialized_size(&output)
                 .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))?;
-            let mut buf = Vec::with_capacity(8 + encoded_len);
+            let response_len = checked_frame_response_len(encoded_len)?;
+            let mut buf = Vec::with_capacity(response_len);
             buf.resize(8, 0);
             buf[0] = 1; // ok = true
             postcard::to_extend(&output, buf)
@@ -73,6 +74,15 @@ where
     };
 
     frame_handler
+}
+
+fn checked_frame_response_len(body_len: usize) -> crate::Result<usize> {
+    let total = 8usize.saturating_add(body_len);
+    let limit = crate::limits::max_payload_bytes();
+    if total > limit {
+        return Err(RustraError::payload_too_large(total, limit));
+    }
+    Ok(total)
 }
 
 fn complex_decode_input<I, O, F>(

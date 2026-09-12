@@ -58,6 +58,15 @@ impl JsonDispatch for Package {
 mod dylib;
 
 #[cfg(feature = "hot-core")]
+#[path = "hot_core_retention.rs"]
+mod retention;
+
+#[cfg(feature = "hot-core")]
+pub use retention::{
+    RETAINED_LIBRARY_RESTART_INTERVAL, RetainedLibraryStats, retained_library_stats,
+};
+
+#[cfg(feature = "hot-core")]
 #[path = "hot_core_watch.rs"]
 mod watch;
 

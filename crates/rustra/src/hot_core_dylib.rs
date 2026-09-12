@@ -123,6 +123,11 @@ impl DylibCore {
             })?;
         // dlclose 금지 — 모듈 헤더의 제약 주석 참고. leak은 의도다.
         let library: &'static libloading::Library = Box::leak(Box::new(library));
+        super::retention::record_retained_library(
+            std::fs::metadata(artifact)
+                .map(|metadata| metadata.len())
+                .unwrap_or(0),
+        );
         let mobile_init: MobileInitFn = bind_symbol(library, "rustra_mobile_init")?;
         let invoke_json_fn: InvokeJsonFn = bind_symbol(library, "rustra_ffi_invoke_json")?;
         let contract_hash_fn: ContractHashFn = bind_symbol(library, "rustra_ffi_contract_hash")?;

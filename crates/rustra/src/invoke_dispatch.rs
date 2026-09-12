@@ -27,7 +27,12 @@ impl Package {
 
                 let params = (command.frame_decode)(payload)?;
                 let result = (command.invoke)(params)?;
-                Ok((command.frame_encode_response)(&result))
+                let response = (command.frame_encode_response)(&result);
+                let limit = crate::limits::max_payload_bytes();
+                if response.len() > limit {
+                    return Err(RustraError::payload_too_large(response.len(), limit));
+                }
+                Ok(response)
             })
         }));
         catch_handler_panic(outcome)
