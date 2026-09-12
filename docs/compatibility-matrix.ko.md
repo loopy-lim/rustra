@@ -16,17 +16,17 @@ JSON 엔진), `generated/bun.ts` → **Bun** 열(기본값은 FFI Frame 엔진 �
 (Kotlin/Swift) 표면은 `EngineClient` 열이 아니므로 아래
 [별도 절](#uniffi-바인딩-track-b1-타입-kotlinswift-표면)에서 다룬다.
 
-| 기능                                 | Node (`createNodeEngine`)                                                                                                                                                             | Bun (`createBunEngine`)                                                                                                | Tauri (`createTauriEngine`)                                                                                                       | RN (`createReactNativeEngine`)                                                        | RN (`createFrameEngine`)                                                                      |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `options.signal` (사전 abort)        | ✅ 즉시 `cancelled`                                                                                                                                                                   | ✅ 즉시 `cancelled`                                                                                                    | ✅ 즉시 `cancelled`                                                                                                               | ✅ 즉시 `cancelled`                                                                   | ✅ 즉시 `cancelled`                                                                           |
-| `options.signal` (진행 중 취소)      | ⚠️ 얕은 취소 (미abort signal 은 정상 실행, 실행 중 abort 는 결과 무시)                                                                                                                | ⚠️ 얕은 취소 (동일)                                                                                                    | ⚠️ 얕은 취소 (동일)                                                                                                               | ⚠️ 얕은 취소 (JS 프라미스만 거부)                                                     | ⚠️ 조건부 전파 — JS 코덱 + `invokeAsync`/`invokeCancel` 확인 시만 Rust 체크포인트까지         |
-| `invokeBatch`                        | ✅ per-entry Promise fallback                                                                                                                                                         | ✅ per-entry Promise fallback                                                                                          | ✅ per-entry Promise fallback                                                                                                     | ✅ per-entry Promise fallback                                                         | ✅ 정적 명령 단일 횡단 (`invokeTypedBatch[ById]`), signal 항목 포함 시 항목별 라우팅          |
-| 배치 항목별 취소                     | ✅ 각 `invoke`의 얕은 취소                                                                                                                                                            | ✅ 동일                                                                                                                | ✅ 동일                                                                                                                           | ✅ 동일                                                                               | ⚠️ 단일 횡단 배치는 취소 미지원 — signal 항목이 있으면 자동으로 항목별 `invoke` 경로로 라우팅 |
-| `options.timeoutMs`                  | ✅ 직접/글로벌 `invoke` 레이스 — `transport.timeout`(retryable)                                                                                                                       | ✅ 동일                                                                                                                | ✅ 동일                                                                                                                           | ⚠️ 동기 native 호출은 호출 중 선점 불가                                               | ✅ 동일 (글로벌 배치는 항목 최솟값으로 전체 레이스)                                           |
-| 이벤트 (`subscribeEvent`/`onEvent`)  | ✅ `subscribeEvent(transport, name, cb)` — 0xfffd 푸시 프레임 (폴백 폴링; 이벤트 불능 transport 는 loud-fail)                                                                         | ✅ `createBunEventBridge` — FFI 푸시 싱크 (폴백 폴링)                                                                  | ✅ `subscribeEvent`/`subscribeTauriEvent`                                                                                         | ✅ JSI 싱크 푸시; `pollMs` 옵션으로 CallInvoker 없는 호스트용 JS 폴링 drain 루프 추가 | ✅ `subscribeEvent`/`drainEvents` (CallInvoker 자동 drain)                                    |
-| 채널 (`createChannel`)               | ✅ `createNodeChannel(transport, cb)` — loop-stdio 채널 예약 프레임 0xfffb/0xfffa/0xfffc (바이너리 모드 전용; NDJSON 은 `channel.unavailable` loud-fail; 백그라운드 스레드 send 안전) | ✅ `createBunChannelBridge(options)(cb)` — FFI `rustra_ffi_channel_*` (JS 스레드 send 만 — `threadsafe:false` 계약)    | ✅ `createChannel(cb)` — Tauri 커맨드 + listen (근사 유니캐스트: 핸들별 `app.emit` 브로드캐스트)                                  | ✅ JSI handle + `close()`                                                             | ✅ JSI native channel handle + `{ pollMs }` 폴링 폴백 (CallInvoker-less)                      |
-| 바이너리 채널 (`createBytesChannel`) | ✅ `createNodeBytesChannel` — 0xfff9 프레임 (능력 협상 게이트; 구 런타임은 `channel.unavailable` loud-fail)                                                                           | ✅ `createBunChannelBytesBridge` — FFI `rustra_ffi_channel_create_bytes` (JS 스레드 send 만 — `threadsafe:false` 계약) | ✅ `createChannelBytes` — `rustra://channel-bytes/{handle}` emit (바이트는 JSON 숫자 배열 직렬화 — ~4배 와이어 비용, 기능 패리티) | ✅ JSI `createChannelBytes` — ArrayBuffer 복사본                                      | ✅ 동일 JSI 바이트 경로 + `{ pollMs }` 폴백                                                   |
-| Frame 바이너리 (`createFrameEngine`) | ✅ (napi/FFI 네이티브 필요)                                                                                                                                                           | ✅ (FFI 네이티브 필요)                                                                                                 | ✅ (`rustra_dispatch` 바이너리 경로)                                                                                              | —                                                                                     | ✅ JSI                                                                                        |
+| 기능                                 | Node (`createNodeEngine`)                                                                                                                                                             | Bun (`createBunEngine`)                                                                                                | Tauri (`createTauriEngine`)                                                        | RN (`createReactNativeEngine`)                                                        | RN (`createFrameEngine`)                                                                      |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `options.signal` (사전 abort)        | ✅ 즉시 `cancelled`                                                                                                                                                                   | ✅ 즉시 `cancelled`                                                                                                    | ✅ 즉시 `cancelled`                                                                | ✅ 즉시 `cancelled`                                                                   | ✅ 즉시 `cancelled`                                                                           |
+| `options.signal` (진행 중 취소)      | ⚠️ 얕은 취소 (미abort signal 은 정상 실행, 실행 중 abort 는 결과 무시)                                                                                                                | ⚠️ 얕은 취소 (동일)                                                                                                    | ⚠️ 얕은 취소 (동일)                                                                | ⚠️ 얕은 취소 (JS 프라미스만 거부)                                                     | ⚠️ 조건부 전파 — JS 코덱 + `invokeAsync`/`invokeCancel` 확인 시만 Rust 체크포인트까지         |
+| `invokeBatch`                        | ✅ per-entry Promise fallback                                                                                                                                                         | ✅ per-entry Promise fallback                                                                                          | ✅ per-entry Promise fallback                                                      | ✅ per-entry Promise fallback                                                         | ✅ 정적 명령 단일 횡단 (`invokeTypedBatch[ById]`), signal 항목 포함 시 항목별 라우팅          |
+| 배치 항목별 취소                     | ✅ 각 `invoke`의 얕은 취소                                                                                                                                                            | ✅ 동일                                                                                                                | ✅ 동일                                                                            | ✅ 동일                                                                               | ⚠️ 단일 횡단 배치는 취소 미지원 — signal 항목이 있으면 자동으로 항목별 `invoke` 경로로 라우팅 |
+| `options.timeoutMs`                  | ✅ 직접/글로벌 `invoke` 레이스 — `transport.timeout`(retryable)                                                                                                                       | ✅ 동일                                                                                                                | ✅ 동일                                                                            | ⚠️ 동기 native 호출은 호출 중 선점 불가                                               | ✅ 동일 (글로벌 배치는 항목 최솟값으로 전체 레이스)                                           |
+| 이벤트 (`subscribeEvent`/`onEvent`)  | ✅ `subscribeEvent(transport, name, cb)` — 0xfffd 푸시 프레임 (폴백 폴링; 이벤트 불능 transport 는 loud-fail)                                                                         | ✅ `createBunEventBridge` — FFI 푸시 싱크 (폴백 폴링)                                                                  | ✅ `subscribeEvent`/`subscribeTauriEvent`                                          | ✅ JSI 싱크 푸시; `pollMs` 옵션으로 CallInvoker 없는 호스트용 JS 폴링 drain 루프 추가 | ✅ `subscribeEvent`/`drainEvents` (CallInvoker 자동 drain)                                    |
+| 채널 (`createChannel`)               | ✅ `createNodeChannel(transport, cb)` — loop-stdio 채널 예약 프레임 0xfffb/0xfffa/0xfffc (바이너리 모드 전용; NDJSON 은 `channel.unavailable` loud-fail; 백그라운드 스레드 send 안전) | ✅ `createBunChannelBridge(options)(cb)` — FFI `rustra_ffi_channel_*` (JS 스레드 send 만 — `threadsafe:false` 계약)    | ✅ `createChannel(cb)` — Tauri IPC Channel (발급한 물리 WebView 전용)              | ✅ JSI handle + `close()`                                                             | ✅ JSI native channel handle + `{ pollMs }` 폴링 폴백 (CallInvoker-less)                      |
+| 바이너리 채널 (`createBytesChannel`) | ✅ `createNodeBytesChannel` — 0xfff9 프레임 (능력 협상 게이트; 구 런타임은 `channel.unavailable` loud-fail)                                                                           | ✅ `createBunChannelBytesBridge` — FFI `rustra_ffi_channel_create_bytes` (JS 스레드 send 만 — `threadsafe:false` 계약) | ✅ `createChannelBytes` — `Channel<InvokeResponseBody>` 바이트 조각 → `Uint8Array` | ✅ JSI `createChannelBytes` — ArrayBuffer 복사본                                      | ✅ 동일 JSI 바이트 경로 + `{ pollMs }` 폴백                                                   |
+| Frame 바이너리 (`createFrameEngine`) | ✅ (napi/FFI 네이티브 필요)                                                                                                                                                           | ✅ (FFI 네이티브 필요)                                                                                                 | ✅ (`rustra_dispatch` 바이너리 경로)                                               | —                                                                                     | ✅ JSI                                                                                        |
 
 ## 시그널 시맨틱 상세
 
@@ -82,16 +82,13 @@ JSON 엔진), `generated/bun.ts` → **Bun** 열(기본값은 FFI Frame 엔진 �
 한다. Bun 은 `rustra_ffi_channel_*` FFI 심볼로 발급하며 콜백이 `threadsafe:false`
 이므로 send 는 JS 스레드(동기 FFI invoke 체인)에 한정된다 — 백그라운드 send
 미지원. Tauri 는 `rustra_channel_create`/`rustra_channel_drop` 커맨드로 발급하고
-`app.emit("rustra://channel/{handle}")` 로 프레임을 전달한다 — **근사 유니캐스트**:
-채널 계약은 호출 귀속 유니캐스트지만 Tauri emit 은 브로드캐스트라 같은 채널명을
-listen 하는 다른 웹뷰가 프레임을 관측할 수 있다(단일 발급자 = 단일 listen 이 정상
-흐름). RN 은 C++ 콜백 디스패처가 받친 JSI `createChannel`/`dropChannel` host
+발급한 WebView에만 프레임을 전달하고, 종료 시 호출자의 네이티브 자원 테이블을 확인한다. 페이지 이동·창 파괴·앱 종료 시 채널을 정리한다. 신뢰된 Rust 호스트용 헬퍼는 명시적으로 앱 전체에 전달한다. RN 은 C++ 콜백 디스패처가 받친 JSI `createChannel`/`dropChannel` host
 function 으로 발급한다(진짜 유니캐스트). CallInvoker 가 있으면 디스패처가 JS
 스레드에서 자동 drain 하고, CallInvoker 없는 네이티브에서는 `drainEvents()` 가
 채널 큐까지 소비한다 — `createChannel(cb, native, { pollMs })`/`createBytesChannel`이
 이벤트와 동일한 JS 폴링 루프를 돈다(폴백이 없으면 프레임이 소비 없이 쌓인다).
 
-- **Tauri payload 계약 (decoded 우선, 문자열만 1회 parse)**: 실제 WebView 경계에서
+- **Tauri 이벤트 payload 계약 (decoded 우선, 문자열만 1회 parse)**: 실제 WebView 경계에서
   tauri 는 `emit_str` JSON 을 `payload: {…}` 로 페이지에 인라인 splice 하므로 JS
   listener 는 이미 해석된 값을 받는다 — `subscribeEvent` 는 문자열이 아닌 payload 는
   그대로 전달한다(재파싱 없음, 객체 신원 보존). `typeof payload === 'string'` 일 때만
@@ -114,7 +111,44 @@ function 으로 발급한다(진짜 유니캐스트). CallInvoker 가 있으면 
 
 ## 참고
 
-- **검증된 조합**: npm `@rustra/types` 0.8.x ↔ Rust crate 0.8.x (워크스페이스)가 현재 CI가 검증하는 조합이다. npm과 crates.io 버전 라인은 2026-09-06 발행 단계에서 정렬됐다 — `@rustra/*` 패키지는 독립 릴리스 라인이며, 이후 bump도 같은 발행 절차를 따르고 어댑터 코드와 무관하다.
+- **설치 버전 기준**: 아래 표는 `Cargo.toml`과 각 `packages/*/package.json`에서 읽은 버전이다. `bun run test:docs`가 README·시작하기 설치 명령과 이 표를 검증한다. 어댑터는 독립 릴리스 라인을 유지한다. 소스의 버전 정합이며 현재 브랜치의 CI·발행·실기기 검증을 뜻하지 않는다.
+
+<!-- release:versions:begin -->
+
+| Package                | Manifest version |
+| ---------------------- | ---------------- |
+| Rust workspace crates  | 0.9.0            |
+| `@rustra/bun`          | 0.9.0            |
+| `@rustra/cli`          | 0.9.0            |
+| `@rustra/devtools`     | 0.6.2            |
+| `@rustra/node`         | 0.9.0            |
+| `@rustra/react`        | 0.7.1            |
+| `@rustra/react-native` | 0.8.0            |
+| `@rustra/tauri`        | 0.8.0            |
+| `@rustra/testing`      | 0.6.2            |
+| `@rustra/types`        | 0.9.0            |
+
+<!-- release:versions:end -->
+
+JS가 생성하는 Tauri 채널은 발급한 물리 WebView에 귀속된 네이티브
+`Channel<InvokeResponseBody>`를 사용한다. `close()`는 네이티브 lease를 해제하고
+JS 콜백을 정리하며, 페이지 이동·파괴·앱 종료에서도 소유자의 자원을 정리한다.
+`ipc-channel-chunks-v1` handshake는 기존 브로드캐스트 네이티브를 거부하므로
+`@rustra/tauri`와 Rust를 함께 갱신하고 다시 빌드해야 한다. 전역 설정에는
+`core.Channel`과 Tauri 콜백 정리 API가 필요하다. 전역 API를 쓰지 않으면 `invoke`와
+함께 `{ value, dispose() }`를 반환하는 `createIpcChannel(onMessage)` 팩터리를
+명시한다. `listen`만 전달해서는 채널을 생성할 수 없다.
+
+원시 조각은 최대 968바이트로 Tauri의 직접 IPC 임계값 1,024바이트보다 작다.
+네이티브 메시지 한도는 런타임 페이로드 한도와 16 MiB 중 작은 값이다. 코어의 기본
+페이로드 한도는 **1 MiB**이므로, 설정을 바꾸지 않은 네이티브 경로의 실제 한도도
+1 MiB다. JS 재조립의 상한은 16 MiB이며 미완성 메시지는 30초 후 만료한다. JSON은 최종 재조립 후 한 번만
+해석하여 JSON 문자열도 문자열로 보존하며, 바이너리 콜백에는 `Uint8Array`를 전달한다.
+일반 이벤트 구독은 브로드캐스트를 유지한다. 신뢰된 Rust 호스트의
+`create_channel_for`/`create_bytes_channel_for` 헬퍼도 명시적으로 앱 전체에 전달한다.
+소유권 프로토콜은 Mock IPC와 JS 테스트로 검사했으며, 물리 WebView 종료는 각 대상의
+네이티브 GUI 검증이 별도로 필요하다.
+
 - **엔진 슬롯은 단일 엔진** (bootstrap 소유권): 첫 `configureLazy`/`configure` 등록이 승리하고, 첫 등록이 아직 소비되지 않은 상태에서의 두 번째 bootstrap 등록은 import 순서로 조용히 이기는 대신 `registry.frozen` 을 throw 한다. dispose/reload 재등록과 소비 뒤 교체는 기존대로 허용. 다중 엔진은 미지원.
 - **런타임 증거가 닿지 않는 플랫폼**: 이 매트릭스와 README 플랫폼 매트릭스의
   런타임 주장은 거기에 적힌 특정 host/OS/빌드 조합 — macOS(Tauri WebView,
