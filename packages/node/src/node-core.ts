@@ -1,5 +1,6 @@
 import {
   createJsonEngine,
+  disposedBootstrapError,
   parseRustraErrorString,
   RustraCommandError,
   type BootstrapState,
@@ -50,12 +51,28 @@ export function createNodeProcessTransport(
   options: NodeProcessTransportOptions,
 ): NodeProcessTransport {
   const argv = options.args ?? ['invoke'];
+  let disposed = false;
+  const pending = new Map<ChildProcessWithoutNullStreams, () => void>();
   let child: ChildProcessWithoutNullStreams | null = null;
   const invokeOnce = (command: string, args?: unknown): Promise<unknown> =>
     new Promise((resolve, reject) => {
+      if (disposed) {
+        reject(disposedBootstrapError('Node transport'));
+        return;
+      }
       let settled = false;
       const proc = spawn(options.command, argv, options.spawnOptions ?? {});
       child = proc as ChildProcessWithoutNullStreams;
+      const spawned = child;
+      pending.set(spawned, () => {
+        if (settled) return;
+        settled = true;
+        reject(disposedBootstrapError('Node transport'));
+      });
+      proc.once('close', () => {
+        pending.delete(spawned);
+        if (child === spawned) child = null;
+      });
       const stdout: Buffer[] = [];
       const stderr: Buffer[] = [];
       if (!proc.stdout || !proc.stderr) {
@@ -117,7 +134,13 @@ export function createNodeProcessTransport(
       return value;
     },
     dispose() {
-      if (child && child.exitCode === null) child.kill();
+      if (disposed) return;
+      disposed = true;
+      for (const [proc, reject] of pending) {
+        reject();
+        if (proc.exitCode === null) proc.kill();
+      }
+      pending.clear();
       child = null;
     },
     get pid() {

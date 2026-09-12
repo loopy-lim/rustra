@@ -41,19 +41,47 @@ function rejectConflictingRegistration(
   );
 }
 
-export function configure(engine: EngineClient, options?: ConfigureOptions): void {
+/** Releases only this registration, even after lazy initialization or replacement. */
+export type EngineRegistration = (() => void) & { isCurrent(): boolean };
+
+/** Opaque identity of the current global registration, stable across lazy setup. */
+export function getEngineRegistrationToken(): symbol | undefined {
+  return runtime.engineRegistration;
+}
+
+function claimRegistration(): EngineRegistration {
+  const token = Symbol('engine registration');
+  runtime.engineRegistration = token;
+  const isCurrent = () => runtime.engineRegistration === token;
+  return Object.assign(
+    () => {
+      if (!isCurrent()) return;
+      runtime.engine = null;
+      runtime.engineInitializer = undefined;
+      runtime.engineInitialization = undefined;
+      runtime.engineInitializerConsumed = false;
+      runtime.engineOwnerId = undefined;
+      runtime.engineRegistration = undefined;
+      resetConfiguredRoutes();
+    },
+    { isCurrent },
+  );
+}
+
+export function configure(engine: EngineClient, options?: ConfigureOptions): EngineRegistration {
   runtime.engine = engine;
   runtime.engineInitializer = undefined;
   runtime.engineInitialization = undefined;
   runtime.engineInitializerConsumed = false;
   runtime.engineOwnerId = options?.ownerId;
   resetConfiguredRoutes();
+  return claimRegistration();
 }
 
 export function configureLazy(
   initializer: () => EngineClient | Promise<EngineClient>,
   options?: ConfigureOptions,
-): void {
+): EngineRegistration {
   rejectConflictingRegistration(initializer, options);
   runtime.engine = null;
   runtime.engineInitializer = initializer;
@@ -61,6 +89,7 @@ export function configureLazy(
   runtime.engineInitializerConsumed = false;
   runtime.engineOwnerId = options?.ownerId;
   resetConfiguredRoutes();
+  return claimRegistration();
 }
 
 export function isLazyConfigured(): boolean {
@@ -88,7 +117,11 @@ export function ensureConfigured(): Promise<EngineClient> {
       .then((engine) => {
         if (runtime.engineGeneration !== generation || runtime.engineInitializer !== initializer)
           return runtime.engine ?? ensureConfigured();
-        configure(engine);
+        // Installing a lazy result preserves its registration's release authority.
+        runtime.engine = engine;
+        runtime.engineInitializer = undefined;
+        runtime.engineInitialization = undefined;
+        resetConfiguredRoutes();
         return engine as InternalEngineClient;
       })
       .catch((error) => {

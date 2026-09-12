@@ -444,12 +444,12 @@ test('A05: failed reload keeps the original error and stays retryable, not dispo
   const previous = process.env.RUSTRA_BUN_LIBRARY;
   delete process.env.RUSTRA_BUN_LIBRARY;
   const realDylib = resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`);
+  configure(A05_SLOT_ENGINE);
   const bootstrap = createBunBootstrap({
     libraryCandidates: [realDylib],
     frameCodecs: testRegistry,
   });
   try {
-    configure(A05_SLOT_ENGINE);
     await bootstrap.ready();
     assert.equal(bootstrap.state, 'ready');
     process.env.RUSTRA_BUN_LIBRARY = './missing-reloaded-library';
@@ -479,12 +479,12 @@ test('A05: dispose during reload re-init is honored at the await boundary (bun I
   // 어느 쪽이든 좀비(ready() 해소 + state=disposed)는 금지된다.
   const { configure } = await import('@rustra/types');
   const realDylib = resolve(repoRoot, `target/release/librustra_calculator_example.${suffix}`);
+  configure(A05_SLOT_ENGINE);
   const bootstrap = createBunBootstrap({
     libraryCandidates: [realDylib],
     frameCodecs: testRegistry,
   });
   try {
-    configure(A05_SLOT_ENGINE);
     await bootstrap.ready();
     const reloading = bootstrap.reload();
     bootstrap.dispose(); // await 중 dispose — 어느 순서든 좀비는 금지

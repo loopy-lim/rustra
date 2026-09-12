@@ -84,3 +84,19 @@ test('json-engine still accepts the plain function transport form', async () => 
   const engine = createJsonEngine(async () => ({ ok: true }));
   assert.deepEqual(await engine.invoke('health'), { ok: true });
 });
+
+// F02: cleanup is tied to a registration, including the pending-to-ready transition.
+test('registration cleanup removes its installed engine without clearing a replacement', async () => {
+  const { configure, configureLazy, ensureConfigured } = await import('./global-config.js');
+  configure({ invoke: async <T>() => null as T });
+  const release = configureLazy(() => ({ invoke: async <T>() => 'owned' as T }));
+  await ensureConfigured();
+  assert.equal(typeof release, 'function');
+  release();
+  await assert.rejects(ensureConfigured(), /not configured/i);
+  const oldRelease = configureLazy(() => ({ invoke: async <T>() => 'old' as T }));
+  const replacement = { invoke: async <T>() => 'new' as T };
+  configure(replacement);
+  oldRelease();
+  assert.equal(await ensureConfigured(), replacement);
+});
