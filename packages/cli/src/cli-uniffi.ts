@@ -12,11 +12,14 @@
  * 문맥을 덧붙인 에러로 감싸며(wrapError 계약), 기대 산출물 부재는 fail-closed.
  */
 import { existsSync, readdirSync } from 'node:fs';
-import { basename, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { readFile } from 'node:fs/promises';
 import type { DylibProfile, RustraUniffiConfig } from './config.js';
-import { readCargoMetadata, requireTargetDirectory } from './cargo-metadata.js';
+import { readCargoMetadata, selectHostPackage } from './cargo-metadata.js';
 import { spawnInherit } from './process.js';
+import { spawnCapturingStdout, pickCdylibArtifact } from './dev-dylib.js';
+import { execFileSync } from 'node:child_process';
+import { withBindingOutput } from './uniffi-output.js';
 
 /** Rust 프로브가 RUSTRA_UNIFFI_OUT 에 쓰는 파일명 — 커밋 대상이기도 하다. */
 export const UNIFFI_GENERATED_RS = 'uniffi_generated.rs';
@@ -39,17 +42,10 @@ const HOST_DYLIB_NAME: Record<NodeJS.Platform, ((stem: string) => string) | unde
   netbsd: undefined,
 };
 
-/**
- * cdylib 산출물 예상 경로 — cargo 관례(프로필 디렉터리 + 플랫폼별 확장자)로
- * **계산**한다. dev-dylib 가 compiler-artifact 메시지로 경로를 수신하는 것과
- * 다른 선택인 이유: 바인딩 단계는 cdylib 바이트를 dlopen 하지 않는다(uniffi
- * library mode 가 링크를 읽을 뿐), 그래서 정적 계산 + 존재 재확인으로 충분하고
- * stdout 파싱 계약(stdout 수집기)을 새로 들이지 않는다. 미지 플랫폼은
- * fail-closed — 짐작으로 경로를 만들지 않는다.
- */
+/** Legacy naming utility; builds use Cargo compiler-artifact paths instead. */
 export function expectedDylibPath(
   targetDirectory: string,
-  packageName: string,
+  libName: string,
   profile: DylibProfile,
 ): string {
   const naming = HOST_DYLIB_NAME[process.platform];
@@ -61,7 +57,7 @@ export function expectedDylibPath(
   }
   // crate name → 파일명 규약: 하이픈은 밑줄로 치환된다(rustra-calculator-example
   // → librustra_calculator_example.dylib).
-  return resolve(targetDirectory, profile, naming(packageName.replace(/-/g, '_')));
+  return resolve(targetDirectory, profile, naming(libName.replace(/-/g, '_')));
 }
 
 /** config 경로 관례 — schema/output 과 같은 config 파일 위치 기준 상대경로 해상도. */
@@ -85,6 +81,8 @@ export type UniffiSpawnContext = {
 
 /** 스폰 출력 라우팅 — 스키마 프로브가 --format json 을 판별하는 것과 같은 계약. */
 export type UniffiRunOptions = {
+  /** Rebuild and compare bindings without replacing the committed output. */
+  check?: boolean;
   /** JSON stdout 을 기계 판독 가능하게 지키려면 'stderr'. 기본 'stdout'. */
   progressStream?: 'stdout' | 'stderr';
   /** 자식 출력 상향 — JSON 모드에서는 'stderr' 로 흘려 stdout 을 오염시키지 않는다. */
@@ -103,16 +101,37 @@ export async function runUniffiBindings(
   options: UniffiRunOptions,
   progress: (message: string) => void,
 ): Promise<void> {
+  await withBindingOutput(bindingOutDir, options.check ?? false, async (emptyDirectory) => {
+    await generateUniffiBindings(ctx, uniffi, emptyDirectory, options, progress);
+  });
+}
+
+async function generateUniffiBindings(
+  ctx: UniffiSpawnContext,
+  uniffi: RustraUniffiConfig,
+  bindingOutDir: string,
+  options: UniffiRunOptions,
+  progress: (message: string) => void,
+): Promise<void> {
   const profile = uniffi.dylibProfile ?? 'debug';
   progress(
     `cargo build --manifest-path ${ctx.manifestPath} --package ${ctx.packageName} ` +
       `--features uniffi${profile === 'release' ? ' --release' : ''}`,
   );
+  const metadata = readCargoMetadata(ctx.manifestPath);
+  const pkg = selectHostPackage(metadata, ctx.manifestPath, ctx.packageName);
+  const libraries = pkg.targets.filter((target) => target.crate_types.includes('cdylib'));
+  if (libraries.length !== 1)
+    throw new Error(
+      `uniffi requires exactly one cdylib target in ${pkg.name}; declare crate-type = ["rlib", "cdylib"]`,
+    );
+  let buildOutput: string;
   try {
-    await spawnInherit(
-      'cargo',
+    buildOutput = await spawnCapturingStdout(
       [
         'build',
+        '--lib',
+        '--message-format=json',
         '--manifest-path',
         ctx.manifestPath,
         '--package',
@@ -122,11 +141,7 @@ export async function runUniffiBindings(
         ...(profile === 'release' ? ['--release'] : []),
       ],
       ctx.cwd,
-      {
-        progressLabel: `uniffi cdylib build (${ctx.packageName}, ${profile})`,
-        progressStream: options.progressStream ?? 'stdout',
-        childOutput: options.childOutput ?? 'inherit',
-      },
+      `uniffi cdylib build (${ctx.packageName}, ${profile})`,
     );
   } catch (error) {
     throw new Error(
@@ -136,17 +151,24 @@ export async function runUniffiBindings(
     );
   }
   // cargo 가 계산한 target 디렉터리를 근원으로 — 프로필 디렉터리 재발명 금지.
-  const targetDirectory = requireTargetDirectory(readCargoMetadata(ctx.manifestPath));
-  const dylibPath = expectedDylibPath(targetDirectory, ctx.packageName, profile);
-  if (!existsSync(dylibPath)) {
+  const dylibPath = pickCdylibArtifact(buildOutput, {
+    name: libraries[0]!.name,
+    packageId: pkg.id,
+  });
+  if (!dylibPath || !existsSync(dylibPath)) {
     throw new Error(
       `uniffi cdylib build did not produce ${dylibPath} — the package must declare ` +
         `crate-type "cdylib" (crate-type = ["rlib", "cdylib"]) and the ${profile} ` +
         `profile must emit the dylib`,
     );
   }
+  // Cargo build.target/CARGO_BUILD_TARGET can name a mobile target. The
+  // metadata-bearing library follows that configuration; bindgen must run here.
+  const rustcVersion = execFileSync('rustc', ['-vV'], { cwd: ctx.cwd, encoding: 'utf8' });
+  const host = /^host: (\S+)$/m.exec(rustcVersion)?.[1];
+  if (!host) throw new Error('Could not determine the Rust host target for uniffi-bindgen');
   progress(
-    `cargo run --manifest-path ${ctx.manifestPath} --package ${ctx.packageName} --bin ` +
+    `cargo run --target ${host} --manifest-path ${ctx.manifestPath} --package ${ctx.packageName} --bin ` +
       `${UNIFFI_BINDGEN_BIN} --features uniffi -- generate --library ${dylibPath} ` +
       `--language kotlin --language swift --out-dir ${bindingOutDir}`,
   );
@@ -155,6 +177,8 @@ export async function runUniffiBindings(
       'cargo',
       [
         'run',
+        '--target',
+        host,
         '--manifest-path',
         ctx.manifestPath,
         '--package',
@@ -198,7 +222,7 @@ function collectFiles(dir: string): string[] {
     for (const entry of readdirSync(current, { withFileTypes: true })) {
       const path = resolve(current, entry.name);
       if (entry.isDirectory()) visit(path);
-      else found.push(path);
+      else if (entry.isFile()) found.push(path);
     }
   };
   visit(dir);
@@ -227,14 +251,7 @@ export function assertBindingOutputs(bindingOutDir: string): void {
   }
 }
 
-/**
- * check 모드의 uniffi 신선도 비교 — 임시 디렉터리의 uniffi_generated.rs 를
- * 커밋된 파일과 바이트 비교한다. cargo build/bindgen 은 check 모드에서 의도적으로
- * 건너뛴다(고비용 — CI 전수 게이트 scripts/check-codegen-fresh.mjs 가 매 실행
- * 돌리므로, 러스트 재빌드를 여기 넣으면 게이트가 수 분으로 늘어난다). 씌인
- * 비교만으로 소스 드리프트는 잡힌다: uniffi_generated.rs 는 프로브가 env 하나로
- * 재현하니 바이트가 같으면 바인딩도 재현 가능하다.
- */
+/** Cheap Rust mirror check only. Use --check-bindings for actual foreign-language freshness. */
 export async function checkUniffiGeneratedRs(
   temporaryRsPath: string,
   committedRsPath: string,

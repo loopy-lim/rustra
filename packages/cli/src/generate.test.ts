@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import test from 'node:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   generateTypesTs,
   generateCommandsTs,
@@ -2817,6 +2825,12 @@ test('generated composite 64-bit codecs (vec_u64/map_i64/option_i64) encode and 
 
   // 생성물을 임시 모듈로 써서 실제 encode/decode 실행.
   const dir = mkdtempSync(join(tmpdir(), 'rustra-wide-composite-'));
+  mkdirSync(join(dir, 'node_modules', '@rustra'), { recursive: true });
+  symlinkSync(
+    fileURLToPath(new URL('../../types', import.meta.url)),
+    join(dir, 'node_modules', '@rustra', 'types'),
+    'junction',
+  );
   const stub =
     `type RustraError = { code: string; message: string };\n` +
     `export type FrameCodec<TIn, TOut> = {\n` +

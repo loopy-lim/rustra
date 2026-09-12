@@ -70,3 +70,43 @@ import { generateTypesTs, generateCommandsTs, diffSchemas } from '@rustra/cli';
 
 - [rustra-bridge](https://github.com/loopy-lim/rustra#readme)
 - `docs/getting-started.md` — the full pipeline (Rust `generate_typescript` → CLI)
+
+`rustra dev --config rustra.json` reloads configuration changes and follows new,
+removed, and atomically replaced source paths. It reconciles filesystem snapshots
+every 100 ms without retaining native watch descriptors (including on Node/Bun
+systems where `fs.watch` reaches its descriptor limit).
+
+For projects with `uniffi`, `rustra codegen --check` checks the Rust mirror plus
+schema/TypeScript/C++ output. Run `rustra codegen --check-bindings` as the explicit,
+more expensive CI gate for actual Kotlin, Swift, headers, and module maps: it builds
+the library, runs bindgen in an empty temporary directory, and compares all paths
+and bytes with `uniffi.output`. This flag implies `--check` and preserves committed
+files. Normal generation replaces the binding tree only after complete fresh
+output passes validation; obsolete files are removed on success. Cargo's reported
+compiler artifact controls the library path, while bindgen runs for the Rust host
+target even when the project configures a different build target.
+
+### Binding output boundary
+
+`uniffi.output` must be a dedicated binding directory. Before running the Rust
+probe, the CLI resolves paths and rejects overlap with schema/TypeScript outputs
+or paths that cover the Cargo manifest or Rust source root. A separate directory
+such as `uniffi/` or `src/bindings/` is valid. Keep handwritten files elsewhere because
+successful generation replaces the whole tree. Watch ignores this tree and its
+transaction staging directories.
+
+### Repository verification runtime
+
+Repository subprocess tests require Node 22 with `--experimental-strip-types`.
+The published CLI keeps its Node 18 minimum runtime contract. `test:codegen-fresh`
+builds the CLI and uses Node to check all six configured examples;
+`test:bindings-fresh` selects only UniFFI examples and regenerates Swift/Kotlin.
+
+### Hot-core retained-library diagnostics
+
+Hot-core intentionally retains loaded libraries until process exit for symbol safety.
+`rustra::hot_core::retained_library_stats()` exposes cumulative `libraries` (including
+loads whose symbol binding failed) and `artifact_bytes` (sum of loaded file sizes,
+not RSS). `restart_recommended()` becomes true at 32 retained loads; each additional
+32 loads emits a restart recommendation. Restart the development host to release
+them. Dropping a core does not unload libraries.

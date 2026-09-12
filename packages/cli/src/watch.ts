@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync, watch } from 'node:fs';
+import { existsSync, readdirSync, lstatSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 
 export type WatchLoop = {
@@ -109,7 +109,11 @@ export function createWatchLoop(
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
       timer = null;
-      void run(reason);
+      void run(reason).catch((error: unknown) => {
+        console.error(
+          `[dev] scheduled run failed: ${error instanceof Error ? error.message : error}`,
+        );
+      });
     }, debounceMs);
   }
 
@@ -126,22 +130,87 @@ export function createWatchLoop(
   };
 }
 
-/** Watches files/directories and gives callers one disposable subscription. */
-export function createFileWatch(specs: readonly FileWatchSpec[]): WatchHandle {
-  const watchers = specs.flatMap((spec) => {
-    if (!existsSync(spec.path)) return [];
-    const isDirectory = statSync(spec.path).isDirectory();
-    const watcher = watch(spec.path, (_event, filename) => {
-      const name = filename === undefined ? undefined : String(filename);
-      const changedPath = isDirectory && name ? resolve(spec.path, name) : spec.path;
-      spec.onChange(changedPath, name);
-    });
-    return [watcher];
-  });
-
+/**
+ * Poll pathname snapshots instead of retaining inode subscriptions. This avoids
+ * fs.watch descriptor limits/async EMFILE and reconciles atomic replacement,
+ * missing paths and directory creation equally on Node and Bun.
+ */
+function pollPaths(
+  snapshot: () => Map<string, string>,
+  onChange: (path: string) => void,
+): WatchHandle {
+  let previous = snapshot();
+  let disposed = false;
+  const timer = setInterval(() => {
+    if (disposed) return;
+    let next: Map<string, string>;
+    try {
+      next = snapshot();
+    } catch (error) {
+      console.error(
+        `[dev] watch reconciliation failed; retrying: ${error instanceof Error ? error.message : error}`,
+      );
+      return;
+    }
+    const changed = new Set([...previous.keys(), ...next.keys()]);
+    const before = previous;
+    previous = next;
+    for (const path of changed) {
+      if (disposed) break;
+      if (before.get(path) !== next.get(path)) onChange(path);
+    }
+  }, 100);
   return {
     dispose() {
-      for (const watcher of watchers) watcher.close();
+      disposed = true;
+      clearInterval(timer);
+    },
+  };
+}
+
+function snapshotPath(path: string, files: Map<string, string>, recursive: boolean): void {
+  try {
+    const stat = lstatSync(path);
+    // Do not follow symlinks out of the source tree or enter directory cycles.
+    files.set(
+      path,
+      stat.isDirectory()
+        ? `directory:${stat.ino}`
+        : `${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`,
+    );
+    if (!stat.isDirectory()) return;
+    for (const entry of readdirSync(path, { withFileTypes: true })) {
+      if (entry.name === 'target' || entry.name === 'node_modules' || entry.name === '.git')
+        continue;
+      const child = join(path, entry.name);
+      if (recursive || !entry.isDirectory()) snapshotPath(child, files, recursive);
+      else {
+        const stat = lstatSync(child);
+        files.set(child, `${stat.ino}:${stat.mtimeMs}:${stat.ctimeMs}`);
+      }
+    }
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== 'ENOENT' && code !== 'ENOTDIR') throw error;
+    // A missing path remains in the subscription and is discovered next tick.
+  }
+}
+
+/** Watches immediate children of directories, or individual pathnames. */
+export function createFileWatch(specs: readonly FileWatchSpec[]): WatchHandle {
+  const handles = specs.map((spec) =>
+    pollPaths(
+      () => {
+        const snapshot = new Map<string, string>();
+        snapshotPath(resolve(spec.path), snapshot, false);
+        return snapshot;
+      },
+      (path) => spec.onChange(path, relative(resolve(spec.path), path) || undefined),
+    ),
+  );
+  return {
+    dispose() {
+      for (const handle of handles) handle.dispose();
     },
   };
 }
@@ -166,10 +235,9 @@ export function createSourceWatch(
   root: string,
   onChange: (changedPath: string) => void,
 ): WatchHandle {
-  return createFileWatch(
-    sourceDirectories(root).map((path) => ({
-      path,
-      onChange: (changedPath) => onChange(changedPath),
-    })),
-  );
+  return pollPaths(() => {
+    const snapshot = new Map<string, string>();
+    snapshotPath(resolve(root), snapshot, true);
+    return snapshot;
+  }, onChange);
 }

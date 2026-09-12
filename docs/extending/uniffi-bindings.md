@@ -104,22 +104,25 @@ The uniffi stage of `rustra codegen --config rustra.json` (write mode):
    `RUSTRA_UNIFFI_OUT=<srcOut>` environment variable. The probe renders the
    mirror source into `uniffi_generated.rs` and writes it to srcOut (a commit
    target).
-2. **cdylib build** — `cargo build --package <pkg> --features uniffi`
-   (`--release` when `dylibProfile` is `"release"`).
-3. **bindgen** — `cargo run --bin uniffi-bindgen -- generate --library <dylib>
---language kotlin --language swift --out-dir <output>` (library mode).
-4. **Output verification** — fail-closed: at least one `.kt`, `.swift`, `.h`,
-   and `*.modulemap` must each exist. The anomaly of bindgen silently writing
-   zero files and exiting 0 is never treated as success.
+2. **cdylib build** — `cargo build --package <pkg> --lib --features uniffi
+--message-format=json` (`--release` for the release profile). The selected lib
+   target's compiler artifact supplies the actual library path, including custom
+   names and configured target directories/triples.
+3. **bindgen** — runs with an explicit Rust host `--target`, even if Cargo is
+   configured to build the library for another target. Bindings are written into
+   an empty temporary directory.
+4. **Output verification and publish** — at least one `.kt`, `.swift`, `.h`, and
+   `*.modulemap` must each exist in that fresh directory. Only a complete result
+   replaces `uniffi.output`; failed generation preserves the previous tree and
+   successful publication removes stale files.
 
-In `--check` mode the uniffi freshness check is **only a byte comparison of
-`uniffi_generated.rs`** — cargo build/bindgen are deliberately skipped, because
-a full-freshness CI gate re-running on every execution must not trigger a Rust
-rebuild (it would stretch the gate to minutes). The mirror source is
-reproducible by the probe from a single environment variable, so equal bytes
-imply reproducible bindings. The error contract for build/spawn failures
-matches the schema probe (cause output + context wrapping; missing outputs are
-fail-closed).
+`--check` compares only `uniffi_generated.rs` for UniFFI; this inexpensive check
+**does not prove Kotlin/Swift freshness**. Use `rustra codegen --check-bindings`
+as the explicit full binding CI gate. It implies `--check`, builds the library,
+generates into an empty temporary directory, and compares the complete path set
+and bytes (including Swift, Kotlin, headers, module maps and extra stale files)
+without replacing committed output. Build artifacts may be written to Cargo's
+target directory. This costs a native build and bindgen run.
 
 The orchestration lives in `packages/cli/src/cli-uniffi.ts`; the mirror
 renderer is `examples/calculator/src/uniffi_render.rs` (11 unit tests — meeting
@@ -211,4 +214,13 @@ established, uniffi churns per minor with breakage between generated bindings
 and runtime helpers, and the generated Kotlin helpers require **exactly the
 same uniffi version** as the compiled Rust component. To bump, change the
 workspace pin in one place and regenerate the mirror source and the committed
-bindings in the same PR — the `codegen --check` byte comparison catches drift.
+bindings in the same PR — the `codegen --check-bindings` byte comparison catches Swift/Kotlin drift.
+
+### Binding output boundary
+
+`uniffi.output` must be a dedicated binding directory. Before running the Rust
+probe, the CLI resolves paths and rejects overlap with schema/TypeScript outputs
+or paths that cover the Cargo manifest or Rust source root. A separate directory
+such as `uniffi/` or `src/bindings/` is valid. Keep handwritten files elsewhere because
+successful generation replaces the whole tree. Watch ignores this tree and its
+transaction staging directories.

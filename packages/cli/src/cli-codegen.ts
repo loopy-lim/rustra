@@ -1,3 +1,4 @@
+import { assertDedicatedBindingOutput } from './uniffi-output-boundary.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -88,8 +89,28 @@ export async function runCodegen(args: string[]): Promise<void> {
   // (env 추가 스폰 없음). 경로 해상도는 schema/output 과 같은 config 파일 위치
   // 기준 상대경로 관례를 따른다.
   const uniffi = config.uniffi;
+  if (options.checkBindings && !uniffi)
+    throw new Error('--check-bindings requires a uniffi configuration');
   const uniffiSrcOut = uniffi ? resolveUniffiSrcOut(dirname(configPath), uniffi) : null;
   const uniffiBindingOut = uniffi ? resolve(dirname(configPath), uniffi.output) : null;
+  if (uniffiBindingOut) {
+    const root = dirname(configPath);
+    assertDedicatedBindingOutput(
+      uniffiBindingOut,
+      [
+        configPath,
+        target.manifestPath,
+        dirname(target.manifestPath),
+        resolve(dirname(target.manifestPath), 'src'),
+        resolve(root, config.schema),
+        resolve(uniffiSrcOut!, UNIFFI_GENERATED_RS),
+      ],
+      [
+        resolve(root, config.output),
+        ...(config.cppOutput ? [resolve(root, config.cppOutput)] : []),
+      ],
+    );
+  }
   status(
     options.format,
     `[rustra] Rust schema: cargo run --manifest-path ${target.manifestPath} --package ${target.packageName} --bin ${target.binaryName}`,
@@ -142,13 +163,9 @@ export async function runCodegen(args: string[]): Promise<void> {
         error,
       );
     }
-    if (uniffi && !options.check && uniffiBindingOut) {
-      // uniffi-bindings 단계(쓰기 모드 한정) — cdylib 빌드 → bindgen → 산출물
-      // 검증. check 모드에서는 의도적으로 건너뛴다: cargo build/bindgen 은 수 분
-      // 급 고비용이고, CI 전수 게이트(scripts/check-codegen-fresh.mjs)가 매 실행
-      // 돌리는 --check 에 넣으면 게이트가 좌초한다. check 모드의 uniffi 신선도는
-      // 아래 uniffi_generated.rs 바이트 비교(저비용)가 대변한다 — 이 비대칭이
-      // 계약이다.
+    if (uniffi && (!options.check || options.checkBindings) && uniffiBindingOut) {
+      // --check keeps the cheap Rust mirror comparison; --check-bindings also
+      // builds and regenerates the actual Swift/Kotlin tree in empty staging.
       await runUniffiBindings(
         {
           manifestPath: target.manifestPath,
@@ -158,6 +175,7 @@ export async function runCodegen(args: string[]): Promise<void> {
         uniffi,
         uniffiBindingOut,
         {
+          check: options.checkBindings,
           // 스키마 프로브와 같은 판별 — JSON stdout 은 기계 계약이라 오염 금지.
           progressStream: options.format === 'json' ? 'stderr' : 'stdout',
           childOutput: options.format === 'json' ? 'stderr' : 'inherit',
@@ -197,7 +215,7 @@ export async function runCodegen(args: string[]): Promise<void> {
         // 대장이라, Rust 프로브 산출물을 억지로 편입하면 렌더러 계약이 흔들린다.
         status(
           options.format,
-          `[rustra] uniffi-bindings: check — ${UNIFFI_GENERATED_RS} byte comparison only (no cargo build / uniffi-bindgen)`,
+          `[rustra] uniffi-bindings: check — ${UNIFFI_GENERATED_RS} byte comparison${options.checkBindings ? ' (actual bindings also checked)' : ' only (no cargo build / uniffi-bindgen)'}`,
         );
         await checkUniffiGeneratedRs(
           resolve(checkRoot, 'uniffi-src', UNIFFI_GENERATED_RS),

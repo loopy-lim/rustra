@@ -7,6 +7,7 @@ export interface CodegenOptions {
   configPath?: string;
   check?: boolean;
   explain?: boolean;
+  checkBindings?: boolean;
   format?: CliOutputFormat;
   help?: boolean;
 }
@@ -25,7 +26,7 @@ export function parseCodegenArgs(args: string[]): CodegenOptions {
   const parsed = parseCliArgs(args, {
     command: 'codegen',
     valueFlags: ['config', 'format'],
-    booleanFlags: ['check', 'explain', 'help'],
+    booleanFlags: ['check', 'check-bindings', 'explain', 'help'],
   });
   const format = cliFormat(parsed.values.get('format'), 'codegen');
   const help = parsed.flags.has('help');
@@ -33,6 +34,10 @@ export function parseCodegenArgs(args: string[]): CodegenOptions {
   const options: CodegenOptions = {};
   if (configPath) options.configPath = configPath;
   if (parsed.flags.has('check')) options.check = true;
+  if (parsed.flags.has('check-bindings')) {
+    options.checkBindings = true;
+    options.check = true;
+  }
   if (parsed.flags.has('explain')) options.explain = true;
   if (format) options.format = format;
   if (help) options.help = true;
