@@ -3,9 +3,15 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { afterEach, test } from 'bun:test';
+import { afterEach, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { collectDocs, stripGeneratedHeader, verifyDocs } from './docs-gate.mjs';
+import {
+  collectDocs,
+  collectMirrorDocs,
+  stripGeneratedHeader,
+  verifyDocs,
+  verifyMirrors,
+} from './docs-gate.mjs';
 
 // CLI exit 테스트에서 실제 게이트 스크립트를 spawn하기 위한 절대 경로.
 const gatePath = join(resolve(dirname(fileURLToPath(import.meta.url))), 'docs-gate.mjs');
@@ -370,13 +376,117 @@ test('CLI: 마커 0개 문서는 exit 0으로 통과하되 명시적 상태 메�
   // 결정 고정: 마커 0 허용은 점진 채택 정책 — fail 전환하지 않는다. exit 0과
   // 안내 문구를 함께 고정해, fail 전환 변이가 들어오면 이 테스트가 깨진다.
   // "조용한 통과"가 아니라 게이트가 docs를 봤다는 증거를 stdout에 남긴다.
+  // 미러 게이트(A8)가 스코프 내 쌍을 요구하므로 fixture도 en/ko 쌍으로 만든다.
   const root = makeTmp();
   mkdirSync(join(root, 'docs'));
   writeFileSync(join(root, 'docs/plain.md'), '# 그냥 문서\n');
+  writeFileSync(join(root, 'docs/plain.ko.md'), '# 그냥 문서\n');
   const r = spawnSync(process.execPath, [gatePath], { cwd: root, encoding: 'utf8' });
   assert.equal(r.status, 0, `stderr: ${r.stderr}`);
   assert.match(r.stdout, /no docs:sync markers found/);
   assert.match(r.stdout, /마커 0이 의도인지 확인하세요/);
+  assert.match(r.stdout, /mirror 완전성 2개 문서 검사/);
+});
+
+// ── ko 미러 완전성 (A8) ─────────────────────────────────────────────────────
+
+test('미러가 있는 문서 쌍은 통과하고 스코프 문서 수를 보고한다', () => {
+  const root = makeTmp();
+  mkdirSync(join(root, 'docs'));
+  writeFileSync(join(root, 'docs/guide.md'), '# Guide\n');
+  writeFileSync(join(root, 'docs/guide.ko.md'), '# 가이드\n');
+  const report = verifyMirrors(root);
+  assert.equal(report.ok, true, JSON.stringify(report.failures));
+  assert.equal(report.checked, 2);
+});
+
+test('영문 원본만 있으면 한국어 미러 누락으로 실패하고 .ko.md 경로와 생성 힌트를 이름으로 보고한다', () => {
+  const root = makeTmp();
+  mkdirSync(join(root, 'docs'));
+  writeFileSync(join(root, 'docs/guide.md'), '# Guide\n');
+  const report = verifyMirrors(root);
+  assert.equal(report.ok, false);
+  assert.equal(report.failures.length, 1);
+  const f = report.failures[0];
+  assert.match(f.message, /docs\/guide\.md/);
+  assert.match(f.message, /docs\/guide\.ko\.md/);
+  assert.match(f.message, /한국어 미러가 없다/);
+  assert.match(f.message, /번역/); // 해소 힌트: 미러를 만들라는 안내
+});
+
+test('한국어 미러만 있으면 영문 원본 누락으로 실패한다 (양방향 검사)', () => {
+  const root = makeTmp();
+  mkdirSync(join(root, 'docs'));
+  writeFileSync(join(root, 'docs/guide.ko.md'), '# 가이드\n');
+  const report = verifyMirrors(root);
+  assert.equal(report.ok, false);
+  assert.match(report.failures[0].message, /docs\/guide\.ko\.md/);
+  assert.match(report.failures[0].message, /영문 원본이 없다/);
+});
+
+test('스코프 하위 디렉터리(extending/internal/adr)도 쌍을 강제한다', () => {
+  const root = makeTmp();
+  mkdirSync(join(root, 'docs/adr'), { recursive: true });
+  writeFileSync(join(root, 'docs/adr/0001-decision.md'), '# ADR 1\n');
+  writeFileSync(join(root, 'docs/adr/0001-decision.ko.md'), '# ADR 1\n');
+  mkdirSync(join(root, 'docs/extending'), { recursive: true });
+  writeFileSync(join(root, 'docs/extending/host.md'), '# Host\n');
+  const report = verifyMirrors(root);
+  assert.equal(report.ok, false);
+  assert.equal(report.failures.length, 1);
+  assert.match(report.failures[0].message, /docs\/extending\/host\.md/);
+  assert.match(report.failures[0].message, /한국어 미러가 없다/);
+});
+
+test('스코프 밖 디렉터리(research/plans/specs/prs/migrations/superpowers)는 단일 언어를 허용한다', () => {
+  const root = makeTmp();
+  mkdirSync(join(root, 'docs/research'), { recursive: true });
+  mkdirSync(join(root, 'docs/plans'), { recursive: true });
+  writeFileSync(join(root, 'docs/research/2026-01-01-note.md'), '# note\n');
+  writeFileSync(join(root, 'docs/plans/roadmap.md'), '# roadmap\n');
+  const report = verifyMirrors(root);
+  assert.equal(report.ok, true, JSON.stringify(report.failures));
+  // 스코프 문서 수에 세지 않는다 — 어디가 스코프인지 수로 고정.
+  assert.equal(report.checked, 0);
+});
+
+test('allowlist에 있던 미완결 문서는 베이스라인 예외로 통과한다', () => {
+  const root = makeTmp();
+  mkdirSync(join(root, 'docs'));
+  writeFileSync(join(root, 'docs/legacy.md'), '# legacy\n');
+  const report = verifyMirrors(root, { allowlist: ['legacy.md'] });
+  assert.equal(report.ok, true, JSON.stringify(report.failures));
+});
+
+test('미러 스코프는 최상위 + 고정 하위 디렉터리 1단계다 (중첩 재귀 아님)', () => {
+  const root = makeTmp();
+  mkdirSync(join(root, 'docs/adr'), { recursive: true });
+  mkdirSync(join(root, 'docs/adr/nested'), { recursive: true });
+  writeFileSync(join(root, 'docs/top.md'), '# t\n');
+  writeFileSync(join(root, 'docs/top.ko.md'), '# t\n');
+  writeFileSync(join(root, 'docs/adr/0001-x.md'), '# x\n');
+  writeFileSync(join(root, 'docs/adr/0001-x.ko.md'), '# x\n');
+  // 중첩 디렉터리 문서는 스코프 밖 — 세지 않는다. 경로는 docs 루트 기준(collectDocs와 같은 관례).
+  writeFileSync(join(root, 'docs/adr/nested/inner.md'), '# inner\n');
+  assert.deepEqual(collectMirrorDocs(root), [
+    'adr/0001-x.ko.md',
+    'adr/0001-x.md',
+    'top.ko.md',
+    'top.md',
+  ]);
+  const report = verifyMirrors(root);
+  assert.equal(report.ok, true, JSON.stringify(report.failures));
+  assert.equal(report.checked, 4);
+});
+
+test('CLI: 미러 누락은 실제 프로세스 exit 1과 한국어 진단을 낸다 (마커와 무관한 독립 게이트)', () => {
+  const root = makeTmp();
+  mkdirSync(join(root, 'docs'));
+  writeFileSync(join(root, 'docs/plain.md'), '# plain\n');
+  const r = spawnSync(process.execPath, [gatePath], { cwd: root, encoding: 'utf8' });
+  assert.equal(r.status, 1, `stdout: ${r.stdout}`);
+  assert.match(r.stderr, /한국어 미러가 없다/);
+  assert.match(r.stderr, /plain\.ko\.md/);
 });
 
 test('stripGeneratedHeader — 본문 첫 줄이 우연히 // ──로 시작해도 규약대로 strip한다 (트레이드오프 수용)', () => {

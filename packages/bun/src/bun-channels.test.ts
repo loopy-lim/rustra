@@ -107,7 +107,7 @@ test('bun channel bridge: throws TransportUnavailable when no library resolves',
 //
 // RN createBytesChannel 과 동일한 JS 계약({ handle, close() } + Uint8Array
 // 페이로드)을 검증한다. (1) JS 스레드에서 직접 send_bytes 하는 역방향,
-// (2) 생성된 rkyv 레지스트리의 channelDemoBytes 로 Rust→JS 왕복 — 동기 핸들러가
+// (2) 생성된 frame 레지스트리의 channelDemoBytes 로 Rust→JS 왕복 — 동기 핸들러가
 // FFI invoke 체인(JS 스레드) 안에서 send 하는 것이 threadsafe:false 계약의
 // 전제 경로 그 자체다, (3) 경로 배타성(한 핸들은 JSON xor bytes), (4) loud-fail
 // 분류(라이브러리 없음/rustra 아님 → transport, bytes 심볼 없음 → channel).
@@ -182,15 +182,15 @@ test('bun bytes channel bridge: JS callback exceptions are isolated between fram
   channel.close();
 });
 
-test('bun bytes channel bridge: channelDemoBytes round-trips LE u64 frames through the rkyv registry (real cdylib)', async () => {
+test('bun bytes channel bridge: channelDemoBytes round-trips LE u64 frames through the frame registry (real cdylib)', async () => {
   if (!dylibReady) return;
   const { createBunFfiEngine } = await import('./index.js');
   // 생성된 레지스트리를 그대로 코덱 소스로 쓴다(node e2e 의 channelDemo 왕복과
   // 동일한 증거를 bytes 경로로 — channelDemoBytesCodec 는 cmd_id=31).
-  const { rkyvV2Registry } = await import(
-    resolve(repoRoot, 'examples/calculator/generated/rkyv-registry.ts')
+  const { frameRegistry } = await import(
+    resolve(repoRoot, 'examples/calculator/generated/frame-registry.ts')
   );
-  const runtime = await createBunFfiEngine({ library: dylib, rkyvV2Codecs: rkyvV2Registry });
+  const runtime = await createBunFfiEngine({ library: dylib, frameCodecs: frameRegistry });
   try {
     const createBytesChannel = await createBunChannelBytesBridge({ library: dylib });
     const frames: Uint8Array[] = [];

@@ -72,13 +72,13 @@ the interaction steps. macOS first; Linux Tauri is build+smoke evidence only.
 
 ## 2. React Native real host (event shapes, listener exceptions, resubscription)
 
-Scope: the RN adapters (JSON and rkyv V2 JSI) on a real RN runtime.
+Scope: the RN adapters (JSON and Frame JSI) on a real RN runtime.
 Simulator level is the current bar; physical-device runs are a separate track —
 record what you actually ran in the Build/OS fields.
 
 - [ ] **String events** delivered with content intact.
 - [ ] **Primitive events** delivered as primitives (JSON adapter) — note the
-      rkyv V2 path's shape for the same payload.
+      Frame path's shape for the same payload.
 - [ ] **Unicode events** (Korean, emoji) survive encode/decode on both
       adapters.
 - [ ] **Listener exception containment** — a subscriber callback that throws

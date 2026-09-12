@@ -2,20 +2,20 @@ English | [한국어](./wire-format.ko.md)
 
 # Wire Format — Names and Real Measured Scope
 
-"rkyv V2" is Rustra's own frame/protocol name. It is not a claim of byte-level
-compatibility with the upstream `rkyv` archive format: the payload codec on the
-manifest/dispatch paths is postcard, and compatibility with upstream rkyv
-archives has not been separately verified. This page separates the names from
-the measured numbers so neither is quoted beyond its scope.
+"Frame" is Rustra's own frame/protocol name (formerly "rkyv V2" — reader's note
+for anyone arriving from older posts or CHANGELOGs). The payload codec on the
+manifest/dispatch paths is postcard; it is unrelated to, and claims no
+compatibility with, the upstream `rkyv` archive format. This page separates the
+names from the measured numbers so neither is quoted beyond its scope.
 
 ## Names
 
-| Name                 | What it actually is                                                                                   |
-| -------------------- | ----------------------------------------------------------------------------------------------------- |
-| rkyv V2              | Rustra's binary frame protocol (V2 framing + command ids + postcard payload codec). An internal name. |
-| postcard             | The payload codec used on the manifest/dispatch paths (serde-compatible compact format).              |
-| JSON wire            | The `invoke_json`/stdio line protocol used by adapters without codecs injected.                       |
-| zero-copy (JSI path) | The RN JSI fast path hands a native buffer view to the JS codec without an intermediate JS copy.      |
+| Name                 | What it actually is                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------ |
+| Frame                | Rustra's binary frame protocol (V2 framing + command ids + postcard payload codec).              |
+| postcard             | The payload codec used on the manifest/dispatch paths (serde-compatible compact format).         |
+| JSON wire            | The `invoke_json`/stdio line protocol used by adapters without codecs injected.                  |
+| zero-copy (JSI path) | The RN JSI fast path hands a native buffer view to the JS codec without an intermediate JS copy. |
 
 "Zero-copy" means one specific copy is removed: the extra JS-side buffer copy
 between the native call boundary and the codec. It does not mean the whole
@@ -59,10 +59,10 @@ wire fact is what the receiver's demultiplexer branches on. Reserved ids
 | `0xFFFA` | client → runtime | postcard varint `u32` handle           | channel drop (removes the handle from both the JSON and bytes tables) |
 | `0xFFF9` | runtime → client | `[handle u32 LE][payload bytes]`       | **binary channel push frame** (raw bytes, no JSON wrapping)           |
 
-Channel-create responses use the rkyv V2 response shape with a
+Channel-create responses use the Frame response shape with a
 `{"handle": u32}` JSON body on both paths.
 
-The `0xFFF9` body carries the payload as raw bytes (e.g. an rkyv V2 frame).
+The `0xFFF9` body carries the payload as raw bytes (e.g. a Frame).
 There is no payload length prefix inside the body — the frame wrapper's `len`
 already bounds it, and unlike the JSON channel body there is no internal
 structure that needs its own boundary. One handle works on exactly one path
@@ -84,7 +84,7 @@ the JSON path. `0xFFF9` frames only ever flow to a client that issued a
 ## Error frames (unchanged by typed errors)
 
 An error response uses the same frame wrapper as any other response with `ok=0`;
-the rkyv path carries `[ok=0][pad][len u16][postcard{code, message}]` and the JSON
+the Frame path carries `[ok=0][pad][len u16][postcard{code, message}]` and the JSON
 fallback re-splits a `Display` string back into `{code, message}`. That is the whole
 error surface on the wire — there is no payload field and no declaration data.
 

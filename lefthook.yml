@@ -9,4 +9,4 @@ pre-commit:
       run: bunx prettier --write {staged_files}
     rustfmt:
       glob: '*.rs'
-      run: rustfmt -- {staged_files}
+      run: rustfmt --edition 2024 -- {staged_files}

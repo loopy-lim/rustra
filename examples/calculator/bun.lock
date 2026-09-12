@@ -16,11 +16,11 @@
     "@rustra/types": "file:../../packages/types",
   },
   "packages": {
-    "@rustra/bun": ["@rustra/bun@file:../../packages/bun", { "dependencies": { "@rustra/types": "^0.4.0" }, "devDependencies": { "@types/bun": "^1.4.0", "typescript": "^5.9.0" } }],
+    "@rustra/bun": ["@rustra/bun@file:../../packages/bun", { "dependencies": { "@rustra/types": "^0.10.0" }, "devDependencies": { "@types/bun": "^1.4.0", "typescript": "^5.9.0" } }],
 
-    "@rustra/node": ["@rustra/node@file:../../packages/node", { "dependencies": { "@rustra/types": "^0.4.0" }, "devDependencies": { "typescript": "^5.9.0" } }],
+    "@rustra/node": ["@rustra/node@file:../../packages/node", { "dependencies": { "@rustra/types": "^0.10.0" }, "devDependencies": { "typescript": "^5.9.0" } }],
 
-    "@rustra/tauri": ["@rustra/tauri@file:../../packages/tauri", { "dependencies": { "@rustra/types": "^0.4.0" }, "devDependencies": { "typescript": "^5.9.0" } }],
+    "@rustra/tauri": ["@rustra/tauri@file:../../packages/tauri", { "dependencies": { "@rustra/types": "^0.10.0" }, "devDependencies": { "typescript": "^5.9.0" } }],
 
     "@rustra/types": ["@rustra/types@file:../../packages/types", { "devDependencies": { "typescript": "^5.9.0" } }],
 
@@ -34,10 +34,10 @@
 
     "undici-types": ["undici-types@8.3.0", "", {}, "sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ=="],
 
-    "@rustra/bun/@rustra/types": ["@rustra/types@file:../../packages/types", {}],
+    "@rustra/bun/@rustra/types": ["@rustra/types@file:../../packages/types", { "devDependencies": { "typescript": "^5.9.0" } }],
 
-    "@rustra/node/@rustra/types": ["@rustra/types@file:../../packages/types", {}],
+    "@rustra/node/@rustra/types": ["@rustra/types@file:../../packages/types", { "devDependencies": { "typescript": "^5.9.0" } }],
 
-    "@rustra/tauri/@rustra/types": ["@rustra/types@file:../../packages/types", {}],
+    "@rustra/tauri/@rustra/types": ["@rustra/types@file:../../packages/types", { "devDependencies": { "typescript": "^5.9.0" } }],
   }
 }

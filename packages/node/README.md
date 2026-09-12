@@ -78,7 +78,7 @@ need N-API level performance should opt into a separate native addon.
 ## Choosing a path for the performance you need
 
 Measured on 2026-08-24 macOS arm64 Release, the generated API averaged 2.76ms on the
-default one-shot path, 16.86µs on the persistent loop, and 1.26µs on N-API rkyv V2. Use
+default one-shot path, 16.86µs on the persistent loop, and 1.26µs on N-API Frame. Use
 the default path for CLIs and low-frequency work, `createNodeLoopTransport` for servers,
 and an N-API addon for high-frequency hot paths. A runnable comparison of the three paths
 is in [`node-performance.ts`](../../examples/calculator/apps/node-performance.ts).

@@ -56,7 +56,7 @@ function ItemActions({ onDone }: { onDone: () => void }) {
   );
 }
 
-/** 이벤트 — useEvent: Rust emit 을 구독(RN rkyv V2 엔진에서 활성화). */
+/** 이벤트 — useEvent: Rust emit 을 구독(RN Frame 엔진에서 활성화). */
 function LiveFeed() {
   const [last, setLast] = React.useState<string>('(대기 중)');
   useEvent('item.created', (payload: unknown) => {

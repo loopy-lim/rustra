@@ -102,6 +102,7 @@ export const runtime: {
   /** @internal — R08 소유권: pending 등록자 식별(진단 메시지용). */
   engineOwnerId?: string;
   engineGeneration: number;
+  engineRegistration?: symbol;
   generatedFieldsRoutes: Array<CachedGeneratedFieldsRoute | null | undefined>;
   generatedBytesRoutes: Array<CachedGeneratedBytesRoute | null | undefined>;
 } = (() => {

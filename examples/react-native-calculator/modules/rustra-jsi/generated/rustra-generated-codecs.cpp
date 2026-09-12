@@ -137,6 +137,8 @@ static void complex_encode_ref_ChannelHandle(jsi::Runtime&, const jsi::Value&, r
 static jsi::Value complex_decode_ref_ChannelHandle(jsi::Runtime&, rc::Reader&, size_t);
 static void complex_encode_ref_Item(jsi::Runtime&, const jsi::Value&, rc::Writer&, size_t);
 static jsi::Value complex_decode_ref_Item(jsi::Runtime&, rc::Reader&, size_t);
+static void complex_encode_ref_OpKind(jsi::Runtime&, const jsi::Value&, rc::Writer&, size_t);
+static jsi::Value complex_decode_ref_OpKind(jsi::Runtime&, rc::Reader&, size_t);
 static void complex_encode_ref_ResourceHandle(jsi::Runtime&, const jsi::Value&, rc::Writer&, size_t);
 static jsi::Value complex_decode_ref_ResourceHandle(jsi::Runtime&, rc::Reader&, size_t);
 
@@ -158,6 +160,26 @@ static void complex_encode_ref_Item(jsi::Runtime& rt, const jsi::Value& value, r
   }
 }
 static jsi::Value complex_decode_ref_Item(jsi::Runtime& rt, rc::Reader& r, size_t _depth) { if (_depth > 32) throw std::runtime_error("complex value depth exceeds 32"); return [&]() -> jsi::Value { auto _cx0 = jsi::Object(rt); _cx0.setProperty(rt, "active", jsi::Value(r.read_bool())); _cx0.setProperty(rt, "name", [&]() -> jsi::Value { auto _s = r.read_string_view(); return jsi::String::createFromUtf8(rt, _s.data, _s.size); }()); _cx0.setProperty(rt, "value", [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }()); return _cx0; }(); }
+static void complex_encode_ref_OpKind(jsi::Runtime& rt, const jsi::Value& value, rc::Writer& w, size_t _depth) { if (_depth > 32) throw std::runtime_error("complex value depth exceeds 32");
+  { int _cx0 = -1;
+    if (value.isString() && value.getString(rt).utf8(rt) == std::string("Clear")) _cx0 = 0;
+    if (value.isObject() && value.asObject(rt).hasProperty(rt, "Set")) _cx0 = 1;
+    if (_cx0 < 0) throw jsi::JSError(rt, "complex oneOf value mismatch");
+    w.push_uvar(static_cast<uint64_t>(_cx0));
+    if (_cx0 == 0) {
+      if (!(value.isString() && value.getString(rt).utf8(rt) == std::string("Clear"))) throw jsi::JSError(rt, "complex literal mismatch");
+    }
+    if (_cx0 == 1) {
+      auto _cx1 = value.asObject(rt);
+      { if (!_cx1.getProperty(rt, "Set").isObject() || _cx1.getProperty(rt, "Set").asObject(rt).isArray(rt)) throw jsi::JSError(rt, "complex object expected");
+        auto _cx2 = _cx1.getProperty(rt, "Set").asObject(rt);
+        auto _cx3 = _cx2.getProperty(rt, "value");
+        w.push_i64(rustra_i64(rt, _cx3, "complex integer"));
+      }
+    }
+  }
+}
+static jsi::Value complex_decode_ref_OpKind(jsi::Runtime& rt, rc::Reader& r, size_t _depth) { if (_depth > 32) throw std::runtime_error("complex value depth exceeds 32"); return [&]() -> jsi::Value { auto _cx0 = r.read_uvar(); if (_cx0 == 0) return jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>("Clear"), sizeof("Clear") - 1); if (_cx0 == 1) return [&]() -> jsi::Value { auto _cx2 = jsi::Object(rt); _cx2.setProperty(rt, "Set", [&]() -> jsi::Value { auto _cx1 = jsi::Object(rt); _cx1.setProperty(rt, "value", [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }()); return _cx1; }()); return _cx2; }(); throw std::runtime_error("complex oneOf index out of range"); }(); }
 static void complex_encode_ref_ResourceHandle(jsi::Runtime& rt, const jsi::Value& value, rc::Writer& w, size_t _depth) { if (_depth > 32) throw std::runtime_error("complex value depth exceeds 32");
   w.push_uvar(rustra_u64(rt, value, "complex integer"));
 }
@@ -760,6 +782,19 @@ static jsi::Value decode_complex_echoGroups(jsi::Runtime& rt, rc::Reader& r) {
   return [&]() -> jsi::Value { auto _cx0 = jsi::Object(rt); _cx0.setProperty(rt, "groups", [&]() -> jsi::Value { auto _cx1 = r.read_uvar(); if (_cx1 > 100000) throw std::runtime_error("complex map length exceeds 100000"); auto _cx2 = jsi::Object(rt); for (size_t _i = 0; _i < _cx1; _i++) { auto _cx3 = r.read_string_view(); auto _keyValue = jsi::String::createFromUtf8(rt, _cx3.data, _cx3.size); _cx2.setProperty(rt, _keyValue, [&]() -> jsi::Value { auto _cx4 = r.read_uvar(); if (_cx4 > 100000) throw std::runtime_error("complex collection length exceeds 100000"); auto _cx5 = jsi::Array(rt, static_cast<size_t>(_cx4)); for (size_t _i = 0; _i < _cx4; _i++) _cx5.setValueAtIndex(rt, _i, [&]() -> jsi::Value { auto _s = r.read_string_view(); return jsi::String::createFromUtf8(rt, _s.data, _s.size); }()); return _cx5; }()); } return _cx2; }()); return _cx0; }();
 }
 
+static void encode_complex_kindEcho(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(33); w.push_u8(0);
+  { if (!args.isObject() || args.asObject(rt).isArray(rt)) throw jsi::JSError(rt, "complex object expected");
+    auto _cx0 = args.asObject(rt);
+    auto _cx1 = _cx0.getProperty(rt, "kind");
+    complex_encode_ref_OpKind(rt, _cx1, w, 0 + 1);
+  }
+}
+
+static jsi::Value decode_complex_kindEcho(jsi::Runtime& rt, rc::Reader& r) {
+  return [&]() -> jsi::Value { auto _cx0 = jsi::Object(rt); _cx0.setProperty(rt, "echoed", complex_decode_ref_OpKind(rt, r, 0 + 1)); return _cx0; }();
+}
+
 static void encode_complex_tagSet(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(29); w.push_u8(0);
   { if (!args.isObject() || args.asObject(rt).isArray(rt)) throw jsi::JSError(rt, "complex object expected");
@@ -819,6 +854,7 @@ bool encode_by_name(Runtime& rt, const std::string& name, const Value& args, rc:
   if (name == "toUpper") { encode_toUpper(rt, args, w); return true; }
   if (name == "wideAgg") { encode_wideAgg(rt, args, w); return true; }
   if (name == "echoGroups") { encode_complex_echoGroups(rt, args, w); return true; }
+  if (name == "kindEcho") { encode_complex_kindEcho(rt, args, w); return true; }
   if (name == "tagSet") { encode_complex_tagSet(rt, args, w); return true; }
   return false; // 동적 명령 — JS 가 Tier 3 fallback 처리
 }
@@ -855,6 +891,7 @@ Value decode_by_name(Runtime& rt, const std::string& name, rc::Reader& r) {
   if (name == "toUpper") return decode_toUpper(rt, r);
   if (name == "wideAgg") return decode_wideAgg(rt, r);
   if (name == "echoGroups") return decode_complex_echoGroups(rt, r);
+  if (name == "kindEcho") return decode_complex_kindEcho(rt, r);
   if (name == "tagSet") return decode_complex_tagSet(rt, r);
   throw JSError(rt, "rustra: no C++ codec for '" + name + "'");
 }
@@ -892,6 +929,7 @@ bool encode_by_id(Runtime& rt, uint16_t cmd_id, const Value& args, rc::Writer& w
     case 7: encode_toUpper(rt, args, w); return true;
     case 28: encode_wideAgg(rt, args, w); return true;
     case 27: encode_complex_echoGroups(rt, args, w); return true;
+    case 33: encode_complex_kindEcho(rt, args, w); return true;
     case 29: encode_complex_tagSet(rt, args, w); return true;
     default: return false; // 동적/알 수 없는 cmd_id — JS 가 Tier 3 fallback 처리
   }
@@ -930,6 +968,7 @@ Value decode_by_id(Runtime& rt, uint16_t cmd_id, rc::Reader& r) {
     case 7: return decode_toUpper(rt, r);
     case 28: return decode_wideAgg(rt, r);
     case 27: return decode_complex_echoGroups(rt, r);
+    case 33: return decode_complex_kindEcho(rt, r);
     case 29: return decode_complex_tagSet(rt, r);
     default: throw JSError(rt, "rustra: no C++ codec for cmd_id " + std::to_string(cmd_id));
   }
@@ -967,6 +1006,7 @@ bool has_static_codec(const std::string& name) {
   if (name == "toUpper") return true;
   if (name == "wideAgg") return true;
   if (name == "echoGroups") return true;
+  if (name == "kindEcho") return true;
   if (name == "tagSet") return true;
   return false;
 }
@@ -1004,6 +1044,7 @@ bool has_static_codec_id(uint16_t cmd_id) {
     case 7: return true;
     case 28: return true;
     case 27: return true;
+    case 33: return true;
     case 29: return true;
     default: return false;
   }

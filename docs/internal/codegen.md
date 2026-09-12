@@ -29,8 +29,8 @@ Package::generate_typescript()
        ├─ write_schema_to_dir() → schema.json                    (Rust probe stops here)
        │
        └─ rustra codegen (TS CLI) reads schema.json and renders:
-            types.ts, commands.ts, contract.ts, rkyv-codecs.ts,
-            rkyv-registry.ts, events.ts/errors.ts/devices.ts (only when
+            types.ts, commands.ts, contract.ts, frame-codecs.ts,
+            frame-registry.ts, events.ts/errors.ts/devices.ts (only when
             declared), positional-facade.ts, host entries, C++ codecs
             + .rustra-generated.json (freshness sidecar)
 ```
@@ -289,6 +289,26 @@ export function addNumbers(
 export const GENERATED_CONTRACT_HASH = '<sha256-hex>';
 ```
 
+### Emission paths (fail-closed)
+
+The Rust schema bin's default output location (`generated/schema.json`) is
+relative to the spawn CWD. In normal `rustra codegen` (non-check mode) the CLI
+pins `RUSTRA_SCHEMA_OUT` to the directory declared by `config.schema`, so the
+schema binary's emission can never land outside the config-declared path.
+Without the pin, spawning from the config directory would publish a second copy
+elsewhere while `config.schemaPath` — the file the dev parity gate reads — goes
+stale, silently weakening the gate to a stale comparison (measured on the
+tauri-calculator `rustra.hot.json` layout, 2026-09-10). `rustra codegen --check`
+instead redirects emission to a throwaway temp directory — check compares
+without touching the declared tree.
+
+Host-entry (node/bun/tauri section) Cargo manifest resolution priority: the
+section's own `rustManifest` → the shared `codegen.rustManifest` → upward
+`Cargo.toml` search. If nothing resolves, the CLI fails loudly (`Node setup
+could not find Cargo.toml. Set node.rustManifest.` / the bun equivalent) rather
+than letting the upward search reach a workspace virtual manifest, where
+metadata resolves to zero candidate packages.
+
 ---
 
 ## 6. Current Limitations
@@ -299,7 +319,7 @@ rustra emits. Arbitrary schemas that a Rust type contract never generates,
 such as JSON Schema conditional keywords (`if`/`then`/`else`) or
 `patternProperties`, fall back safely to `unknown`.
 
-**postcard codec (rkyv-codecs.ts/C++) support policy**: commands with
+**postcard codec (frame-codecs.ts/C++) support policy**: commands with
 unsupported fields do not get a partial postcard codec. Instead, when the
 complex codec supports the full schema, the command is registered in the TS
 registry as a complex route. C++ includes only the complex subset that the

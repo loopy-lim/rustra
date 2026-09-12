@@ -168,7 +168,7 @@ Every generated file carries a self-describing header (file name, source, regen 
 
 Set `RUSTRA_DEBUG=1` (also `true` or `verbose`) in the process environment to turn on the opt-in diagnostics every adapter shares through `@rustra/types`. The value is read once per process at first use.
 
-- Every wire round trip is logged through `console.debug` as a `[rustra:debug]` event carrying `direction` (`request`/`response`/`error`), `transport` (`json`/`rkyv`/`typed`), `command`, a bounded hex `bytes` preview with `byteLength`, and a truncated `value` snapshot (depth 3, 32 entries, 2 KB budget). Nothing is logged unless debug is on, so secrets stay out of logs by default.
+- Every wire round trip is logged through `console.debug` as a `[rustra:debug]` event carrying `direction` (`request`/`response`/`error`), `transport` (`json`/`frame`/`typed`), `command`, a bounded hex `bytes` preview with `byteLength`, and a truncated `value` snapshot (depth 3, 32 entries, 2 KB budget). Nothing is logged unless debug is on, so secrets stay out of logs by default.
 - The raw wire bytes are additionally hex-dumped to stderr as `[rustra:wire] <direction> <hex>` (first 256 bytes).
 - The JSON engine emits a `kind: 'response.shape'` warning event when a resolved response looks like a wire-envelope anomaly — `reason` is one of `double_envelope`, `failed_without_error`, `envelope_missing_payload`, `resolved_error_envelope` — the usual symptom of a JS/native version skew. The warning never throws and never changes the result.
 - `@rustra/node` emits `kind: 'ndjson.unparsed'` for every stdout line the NDJSON loop could not parse and warns on stderr once. Without debug mode it instead keeps the last 32 unparsed lines (each cut at 4 096 characters) and attaches them to the error of requests still pending when the child process exits; in debug mode an 8 KB stderr tail is attached as well.
@@ -204,7 +204,7 @@ Bridge parameters and return values must be owned data expressible through `#[br
 
 ### Performance tiers
 
-Flattened primitive types, fixed tuples, and simple structs use the postcard/rkyv fast path. Nested structs, struct-valued maps, data enums, and the like are handled by the schema-driven complex codec, and unsupported shapes fall back to the Tier 3 JSON fallback. Performance claims therefore must separate per-type paths, and complex payloads must be benchmarked with the real schema.
+Flattened primitive types, fixed tuples, and simple structs use the Frame postcard fast path. Nested structs, struct-valued maps, data enums, and the like are handled by the schema-driven complex codec, and unsupported shapes fall back to the Tier 3 JSON fallback. Performance claims therefore must separate per-type paths, and complex payloads must be benchmarked with the real schema.
 
 ### Runtime registry and unsafe
 

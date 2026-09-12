@@ -2,7 +2,7 @@
 //!
 //! (1) register() 1회 비용 (스키마 생성 포함)
 //! (2) live_schema() 조회 비용
-//! (3) frozen vs mutable 상태의 invoke_rkyv_v2 read 경로 차이 (RwLock read 영향)
+//! (3) frozen vs mutable 상태의 invoke_frame read 경로 차이 (RwLock read 영향)
 //!
 //! 실행: `cargo bench -p rustra --profile dev -- dynamic_registry`
 
@@ -73,17 +73,17 @@ fn bench_invoke_frozen_vs_mutable(c: &mut Criterion) {
     let mut group = c.benchmark_group("dynamic_registry_invoke_read");
     group.sample_size(500);
 
-    group.bench_function(BenchmarkId::new("invoke_rkyv_v2", "mutable"), |b| {
+    group.bench_function(BenchmarkId::new("invoke_frame", "mutable"), |b| {
         b.iter(|| {
-            let resp = pkg_mut.invoke_rkyv_v2(&req_mut).unwrap();
+            let resp = pkg_mut.invoke_frame(&req_mut).unwrap();
             let out: common::EchoOutput = common::decode_postcard_response(&resp);
             out
         });
     });
 
-    group.bench_function(BenchmarkId::new("invoke_rkyv_v2", "frozen"), |b| {
+    group.bench_function(BenchmarkId::new("invoke_frame", "frozen"), |b| {
         b.iter(|| {
-            let resp = pkg_frz.invoke_rkyv_v2(&req_frz).unwrap();
+            let resp = pkg_frz.invoke_frame(&req_frz).unwrap();
             let out: common::EchoOutput = common::decode_postcard_response(&resp);
             out
         });

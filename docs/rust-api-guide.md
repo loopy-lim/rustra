@@ -698,7 +698,7 @@ await addNumbers({ a: 20, b: 22 }, { signal: controller.signal });
 await slowCompute({ workload: 'heavy' }, { timeoutMs: 500 });
 
 // batch — one array, order preserved; entries without a signal can take a
-// single native crossing on the rkyv V2 engine
+// single native crossing on the Frame engine
 const [sum, echo] = await invokeBatch([
   { command: 'addNumbers', args: { a: 20, b: 22 } },
   { command: 'echo', args: { message: 'hi' }, options: { timeoutMs: 1000 } },
@@ -902,7 +902,7 @@ export type AddNumbersOutput = {
 
 <!-- prettier-ignore -->
 ```typescript
-import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoBytesInput, ChannelDemoBytesOutput, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DeviceDemoOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, MultiplyInput, MultiplyOutput, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoBytesInput, ChannelDemoBytesOutput, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DeviceDemoOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, KindEchoInput, KindEchoOutput, MultiplyInput, MultiplyOutput, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
 import { createGeneratedFields2, invokeGenerated, invokeGeneratedBytes, invokeGeneratedFields1, invokeGeneratedFields3 } from '@rustra/types';
 import type { InvokeOptions } from '@rustra/types';
 
@@ -964,6 +964,11 @@ export function isEven(input: IsEvenInput, options?: InvokeOptions): Promise<IsE
   return invokeGeneratedFields1<IsEvenOutput>(3, 'isEven', input, input["n"], options);
 }
 isEven.commandId = 'isEven';
+
+export function kindEcho(input: KindEchoInput, options?: InvokeOptions): Promise<KindEchoOutput> {
+  return invokeGenerated<KindEchoOutput>(33, 'kindEcho', input, options);
+}
+kindEcho.commandId = 'kindEcho';
 
 export const multiply = createGeneratedFields2<MultiplyInput, MultiplyOutput>(2, 'multiply', "a", "b", 'multiply');
 
@@ -1087,6 +1092,106 @@ Provided items:
 
 ---
 
+## 11. Hot Core (`hot-core` feature, experimental)
+
+Dev-time native hot-swap: the host opens a cdylib core, a watch thread polls the
+artifact, and rebuilt bytes are swapped in without restarting the process. The
+`hot-core` cargo feature adds the `libloading` dependency and nothing else moves —
+the release static-link path is unchanged. The surface is experimental (the
+experimental-surface table in [versioning-policy.md](versioning-policy.md));
+contracts may break before 1.0.
+
+### Type inventory (`rustra::hot_core`)
+
+- `JsonDispatch` — `pub trait JsonDispatch: Send + Sync`; its single method
+  `fn invoke_json(&self, command: &str, args: serde_json::Value)` returning
+  `Result<serde_json::Value, serde_json::Value>`. Errors come back as the rustra
+  error wire shape `{"code": ..., "message": ...}`. Implemented by `Package` (the
+  static path) and `HotCoreHandle`; `Send + Sync` exists so `Arc<dyn JsonDispatch>`
+  can live in Tauri managed state. (`JsonDispatch` itself compiles without
+  `hot-core` — `tauri`-only hosts keep the dispatch indirection.)
+- `DylibCore` — `DylibCore::open(artifact: &Path) -> Result<Self, DylibCoreError>`
+  (dlopen `RTLD_LOCAL`, required-symbol bind, contract-hash read);
+  `.invoke_json(command, args)`; `.contract_hash()` returning
+  `Result<String, DylibCoreError>`.
+- `DylibCoreError` — variants `Open`, `Symbol`, `ContractHash`, `Dispatch`,
+  `Prepare`, `Codesign`, `Panic`. `Codesign` is a macOS ad-hoc re-sign failure
+  surfaced loudly (no silent skip); `Panic` catches panics from open/swap so the
+  watch thread and host survive.
+- `HotCoreHandle` — `.new(core)`; `.swap(new: DylibCore) -> DylibCore` returns the
+  old core — old libraries are deliberately never `dlclose`d; `.contract_hash()`;
+  implements `JsonDispatch` by routing to the current core.
+- `prepare_swap_copy(artifact: &Path, counter: u64)` returning
+  `Result<PathBuf, DylibCoreError>` — makes a unique versioned copy of the
+  artifact (and re-signs ad-hoc on macOS) so the mapped original is never
+  overwritten; re-dlopening the same path would return the stale mapping.
+- `SwapOutcome = Result<(String, String), DylibCoreError>` — Ok carries
+  `(old_contract_hash, new_contract_hash)`; the `on_swap` callback type
+  (`SwapCallback`) is `Arc<dyn Fn(SwapOutcome) + Send + Sync>`.
+- `DylibWatchConfig` — fields `artifact: PathBuf`, `poll: Duration` (default
+  300ms), `handle: Arc<HotCoreHandle>`, `on_swap: SwapCallback` (default no-op);
+  constructor `DylibWatchConfig::new(artifact, handle)`.
+- `spawn_dylib_watch(config) -> std::thread::JoinHandle<()>` — a std thread with
+  sleep polling (no notify-style dependency); polls the artifact sha256 and
+  applies swaps atomically.
+
+### Retry cap
+
+The same artifact bytes failing 5 consecutive swaps are poisoned and skipped
+until different bytes are published — each failure still reports
+`on_swap(Err(..))`, and new bytes always get a fresh retry window. Failed swaps
+do not update the baseline hash either, so a half-written artifact mid-build
+never kills the loop.
+
+### Tauri glue (`tauri` + `hot-core`)
+
+`tauri_support::HotSwapReporter` (`.new()`, `.report(outcome)`; the
+`.install(sink)` step is plugin-internal, not public API) reports outcomes to
+the reserved channel constant `HOT_SWAP_EVENT = "hot-core/swapped"` — the
+webview channel is `rustra://hot-core/swapped`.
+`tauri_support::register_dispatch_with_swap_events` — parameters
+`dispatch: Arc<dyn JsonDispatch>`, `reporter: HotSwapReporter`, and
+`builder: tauri::Builder<R>` (returns `tauri::Builder<R>`) — registers static
+dispatch plus a `rustra-hot-swap` plugin that installs the reporter on the
+Tauri event sink. Unlike `register_with_events`, package events are NOT wired
+(the swap-drops-core-event-state policy is unchanged) — this function adds
+exactly one new emission, the swap outcome. On the JS side the channel is
+consumed by `subscribeHotSwap` from `@rustra/tauri` (see
+[events-and-channels.md](events-and-channels.md)).
+
+### Example
+
+```rust
+use std::sync::Arc;
+use rustra::hot_core::{self, DylibCore, DylibWatchConfig, HotCoreHandle};
+use rustra::tauri_support::{self, HotSwapReporter};
+
+// 1) open the freshly built cdylib and wrap it in the shared swap point
+let core = DylibCore::open(artifact)?;            // dlopen + symbol bind + init
+let handle = Arc::new(HotCoreHandle::new(core));  // Arc<dyn JsonDispatch> → Tauri state
+
+// 2) watch the artifact; report every swap outcome to the webview channel
+let reporter = HotSwapReporter::new();
+let mut config = DylibWatchConfig::new(artifact, handle.clone());
+config.poll = std::time::Duration::from_millis(300); // default — shown for tuning
+let sink = reporter.clone();
+config.on_swap = Arc::new(move |outcome| {
+    eprintln!("rustra hot-core: swap {outcome:?}");
+    sink.report(outcome.map_err(|e| e.to_string()));
+});
+hot_core::spawn_dylib_watch(config);              // std thread, sha256 polling
+
+// 3) static dispatch + the rustra-hot-swap plugin
+tauri_support::register_dispatch_with_swap_events(handle, reporter, builder)
+```
+
+Design and status:
+[2026-09-09 native hot core design](plans/2026-09-09-native-hot-core-design.md).
+The React Native side of the same loop:
+[`packages/react-native/README.md`](../packages/react-native/README.md).
+
+---
+
 ## Appendix: Full Examples
 
 ### Advanced API Summary (public APIs not covered in the body)
@@ -1161,6 +1266,8 @@ assert!(pkg.is_frozen());
 - `tauri_support::register_with_events(...)` — includes event push
 - `tauri_support::register_profiled(...)` — bench-only, exposes `rustra_dispatch_profiled`
 - `tauri_support::rustra_dispatch(...)` — command dispatch
+- `tauri_support::register_dispatch_with_swap_events(...)` — hot-core swap
+  reporting on `rustra://hot-core/swapped` (see §11)
 
 **Schema/version** — `pkg.schema()` (the full schema JSON), `pkg.live_schema()`
 (including dynamic commands), the `.schema_version(v)` builder (T2/OTA negotiation).

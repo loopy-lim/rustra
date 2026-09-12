@@ -1,4 +1,4 @@
-fn build_rkyv_v2_handler<I, O, F>(
+fn build_frame_handler<I, O, F>(
     input_schema: &Value,
     output_schema: &Value,
     definitions: &Value,
@@ -14,13 +14,13 @@ where
     // Generate fast postcard-based binary handler that bypasses JSON Value.
     // 어느 바이너리 라우트도 지원하지 않으면(Tier 3) postcard fast-path 를 끄고
     // JSON fallback 으로 보낸다.
-    let rkyv_v2_handler: Option<BinHandler> = if !js_codec_supported && !complex_codec_supported {
+    let frame_handler: Option<BinHandler> = if !js_codec_supported && !complex_codec_supported {
         None
     } else if js_codec_supported {
         let handler_bin = handler.clone();
         Some(Arc::new(move |payload: &[u8]| {
             if payload.len() < 2 {
-                return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+                return Err(RustraError::invalid_args("frame: payload too short"));
             }
             let input: I = postcard::from_bytes(&payload[2..])
                 .map_err(|e| RustraError::invalid_args(format!("postcard decode: {e}")))?;
@@ -30,7 +30,8 @@ where
             // 직렬화한다. 병렬 JSI 호출에서 allocator lock 경합도 절반이 된다.
             let encoded_len = postcard::experimental::serialized_size(&output)
                 .map_err(|e| RustraError::internal(format!("postcard encode: {e}")))?;
-            let mut buf = Vec::with_capacity(8 + encoded_len);
+            let response_len = checked_frame_response_len(encoded_len)?;
+            let mut buf = Vec::with_capacity(response_len);
             buf.resize(8, 0);
             buf[0] = 1; // ok = true
             postcard::to_extend(&output, buf)
@@ -48,21 +49,19 @@ where
         let handler_complex = handler.clone();
         Some(Arc::new(move |payload: &[u8]| {
             if payload.len() < 2 {
-                return Err(RustraError::invalid_args("rkyv v2: payload too short"));
+                return Err(RustraError::invalid_args("frame: payload too short"));
             }
             let limits = ComplexCodecLimits {
                 max_payload_bytes: crate::limits::max_payload_bytes(),
                 ..ComplexCodecLimits::DEFAULT
             };
-            let output = if direct {
-                let input: I = input_codec.decode_direct(&payload[2..], limits)?;
-                handler_complex(input)?
-            } else {
-                let input_value = input_codec.decode(&payload[2..], limits)?;
-                let input: I = serde_json::from_value(input_value)
-                    .map_err(|e| RustraError::invalid_args(format!("complex decode: {e}")))?;
-                handler_complex(input)?
-            };
+            let output = complex_decode_input::<I, O, F>(
+                &input_codec,
+                direct,
+                payload,
+                limits,
+                &handler_complex,
+            )?;
             let body = if direct {
                 output_codec.encode_direct(&output, limits)?
             } else {
@@ -70,20 +69,56 @@ where
                     .map_err(|e| RustraError::internal(format!("complex encode: {e}")))?;
                 output_codec.encode(&output_value, limits)?
             };
-            let response_len = 8usize.saturating_add(body.len());
-            if response_len > limits.max_payload_bytes {
-                return Err(RustraError::payload_too_large(
-                    response_len,
-                    limits.max_payload_bytes,
-                ));
-            }
-            let mut response = Vec::with_capacity(response_len);
-            response.resize(8, 0);
-            response[0] = 1;
-            response.extend_from_slice(&body);
-            Ok(response)
+            frame_frame_from_body(body, limits.max_payload_bytes)
         }))
     };
 
-    rkyv_v2_handler
+    frame_handler
+}
+
+fn checked_frame_response_len(body_len: usize) -> crate::Result<usize> {
+    let total = 8usize.saturating_add(body_len);
+    let limit = crate::limits::max_payload_bytes();
+    if total > limit {
+        return Err(RustraError::payload_too_large(total, limit));
+    }
+    Ok(total)
+}
+
+fn complex_decode_input<I, O, F>(
+    input_codec: &CompiledComplex,
+    direct: bool,
+    payload: &[u8],
+    limits: ComplexCodecLimits,
+    handler: &F,
+) -> crate::Result<O>
+where
+    I: DeserializeOwned + 'static,
+    O: Serialize + 'static,
+    F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+{
+    if direct {
+        let input: I = input_codec.decode_direct(&payload[2..], limits)?;
+        handler(input)
+    } else {
+        let input_value = input_codec.decode(&payload[2..], limits)?;
+        let input: I = serde_json::from_value(input_value)
+            .map_err(|e| RustraError::invalid_args(format!("complex decode: {e}")))?;
+        handler(input)
+    }
+}
+
+fn frame_frame_from_body(body: Vec<u8>, max_payload_bytes: usize) -> crate::Result<Vec<u8>> {
+    let response_len = 8usize.saturating_add(body.len());
+    if response_len > max_payload_bytes {
+        return Err(RustraError::payload_too_large(
+            response_len,
+            max_payload_bytes,
+        ));
+    }
+    let mut response = Vec::with_capacity(response_len);
+    response.resize(8, 0);
+    response[0] = 1;
+    response.extend_from_slice(&body);
+    Ok(response)
 }

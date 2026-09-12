@@ -32,7 +32,7 @@ export function detectDirty(backendDir: string, generatedDir: string) {
   const schemaMtime = existsSync(schemaPath) ? statSync(schemaPath).mtimeMs : 0;
   const rustNewest = newestMtime(join(backendDir, 'src'));
   const codecsNewest = Math.max(
-    ...['rkyv-codecs.ts', 'rkyv-registry.ts'].map((file) => {
+    ...['frame-codecs.ts', 'frame-registry.ts'].map((file) => {
       const path = join(generatedDir, file);
       return existsSync(path) ? statSync(path).mtimeMs : 0;
     }),

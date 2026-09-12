@@ -35,8 +35,12 @@ export type {
 export { useMutation } from './useMutation.js';
 export type { UseMutationOptions, UseMutationResult } from './useMutation.js';
 
-export { useSuspenseCommand, invalidateCommands } from './useSuspenseCommand.js';
-export type { SuspenseEntry } from './useSuspenseCommand.js';
+export {
+  useSuspenseCommand,
+  invalidateCommands,
+  configureSuspenseCache,
+} from './useSuspenseCommand.js';
+export type { SuspenseEntry, SuspenseCacheOptions } from './useSuspenseCommand.js';
 
 export { useEvent } from './useEvent.js';
 export type { EventCallback, UnsubscribeFn, SubscribeResult, SubscribeFn } from './useEvent.js';

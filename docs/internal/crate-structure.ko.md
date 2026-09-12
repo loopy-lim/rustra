@@ -201,7 +201,7 @@ examples/calculator/
 │   ├── adapter-compat.test.ts    # 4개 adapter 동작 + host-specific import 없음
 │   ├── generated-client.test.ts  # command helper 동작 + banned import 체크
 │   └── runtime-contract.test.ts  # host 앱들의 zero-config 엔트리 사용 + RN FFI
-├── generated/          # codegen 출력 (schema.json, types.ts, commands.ts, contract.ts, rkyv-codecs.ts, rkyv-registry.ts, errors.ts, devices.ts, 호스트 엔트리, .rustra-generated.json)
+├── generated/          # codegen 출력 (schema.json, types.ts, commands.ts, contract.ts, frame-codecs.ts, frame-registry.ts, errors.ts, devices.ts, 호스트 엔트리, .rustra-generated.json)
 ├── apps/
 │   ├── node-app.ts     # Node.js 런타임 앱
 │   └── bun-app.ts      # Bun 런타임 앱

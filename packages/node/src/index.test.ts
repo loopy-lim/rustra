@@ -221,7 +221,9 @@ function writeRuntimeScript(directory: string, name: string, contractHash: strin
     `    process.stdout.write(JSON.stringify({ ok: true, result: ${JSON.stringify(contractHash)} }));`,
     '    return;',
     '  }',
-    '  process.stdout.write(JSON.stringify({ ok: true, result: { value: 42 } }));',
+    '  process.stdout.write(',
+    '    JSON.stringify({ ok: true, result: { value: request.args.a + request.args.b } }),',
+    '  );',
     '});',
   ].join('\n');
   const path = join(directory, name);
@@ -389,6 +391,78 @@ processTest(
   },
 );
 
+processTest(
+  'createNodeBootstrap contractVerification warn adopts the mismatched candidate with a warning',
+  { timeout: 30_000 },
+  async () => {
+    // (A2) warn 탈출구 — 불일치 후보를 기각하지 않고 console.warn 후 degraded
+    // 채택한다(OTA 롤백/지연 배포에서 앱 전체 마비를 피하는 정책).
+    const root = mkdtempSync(join(tmpdir(), 'rustra-node-warn-'));
+    const previous = process.env.RUSTRA_NODE_BINARY;
+    delete process.env.RUSTRA_NODE_BINARY;
+    const originalWarn = console.warn;
+    const warnings: string[] = [];
+    console.warn = (...args: unknown[]) => warnings.push(args.join(' '));
+    try {
+      const stale = writeRuntimeScript(root, 'stale-runtime', 'stale-contract-hash');
+      const bootstrap = createNodeBootstrap({
+        commandCandidates: [stale],
+        args: ['invoke'],
+        contractHash: 'fresh-contract-hash',
+        contractVerification: 'warn',
+      });
+      try {
+        const engine = await bootstrap.ready();
+        const result = await engine.invoke<{ value: number }>('addNumbers', { a: 20, b: 22 });
+        assert.equal(result.value, 42, 'warn 은 불일치 후보로도 invoke 를 서브한다');
+        assert.ok(
+          warnings.some((w) => w.includes('contract hash mismatch')),
+          '불일치가 console.warn 으로 표면화된다',
+        );
+      } finally {
+        bootstrap.dispose();
+      }
+    } finally {
+      console.warn = originalWarn;
+      if (previous === undefined) delete process.env.RUSTRA_NODE_BINARY;
+      else process.env.RUSTRA_NODE_BINARY = previous;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
+processTest(
+  'createNodeBootstrap contractVerification off skips the contract handshake',
+  { timeout: 30_000 },
+  async () => {
+    // (A2) off 탈출구 — 검증 자체를 생략한다. `__rustra_contract` 엔드포인트가
+    // 없는 런타임으로도 부트스트랩이 진행된다(생성 파일 한 줄 수정으로 끈다).
+    const root = mkdtempSync(join(tmpdir(), 'rustra-node-off-'));
+    const previous = process.env.RUSTRA_NODE_BINARY;
+    delete process.env.RUSTRA_NODE_BINARY;
+    try {
+      const stale = writeRuntimeScript(root, 'stale-runtime', 'stale-contract-hash');
+      const bootstrap = createNodeBootstrap({
+        commandCandidates: [stale],
+        args: ['invoke'],
+        contractHash: 'fresh-contract-hash',
+        contractVerification: 'off',
+      });
+      try {
+        const engine = await bootstrap.ready();
+        const result = await engine.invoke<{ value: number }>('addNumbers', { a: 1, b: 2 });
+        assert.equal(result.value, 3, 'off 는 검증 없이 첫 후보를 채택한다');
+      } finally {
+        bootstrap.dispose();
+      }
+    } finally {
+      if (previous === undefined) delete process.env.RUSTRA_NODE_BINARY;
+      else process.env.RUSTRA_NODE_BINARY = previous;
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);
+
 processTest('createNodeProcessTransport surfaces spawn failures as transport.error', async () => {
   const transport = createNodeProcessTransport({
     command: './definitely-not-a-real-binary',
@@ -462,10 +536,10 @@ processTest('createNodeLoopTransport keeps a persistent process and correlates b
   }
 });
 
-// ── 바이너리 모드 (트랙 D) — __hello 핸드셰이크 후 length-prefixed rkyv V2 ──
+// ── 바이너리 모드 (트랙 D) — __hello 핸드셰이크 후 length-prefixed Frame ──
 
 processTest(
-  'createNodeLoopTransport negotiates binary mode and round-trips rkyv V2 frames',
+  'createNodeLoopTransport negotiates binary mode and round-trips Frame frames',
   { timeout: 30_000 },
   async () => {
     const { createNodeLoopTransport } = await import('./index.js');
@@ -657,14 +731,14 @@ processTest(
   async () => {
     const { createNodeLoopTransport, subscribeEvent } = await import('./index.js');
     // test:ts:node 체인이 컴파일한 calculator 생성 레지스트리(dist-ts) —
-    // rkyvV2Registry 는 rkyv-registry.js 의 export(name→codec Map).
-    const { rkyvV2Registry } = await import(
-      resolve(repoRoot, 'dist-ts/examples/calculator/generated/rkyv-registry.js')
+    // frameRegistry 는 frame-registry.js 의 export(name→codec Map).
+    const { frameRegistry } = await import(
+      resolve(repoRoot, 'dist-ts/examples/calculator/generated/frame-registry.js')
     );
     const transport = createNodeLoopTransport({
       command: resolve(repoRoot, 'target/debug/loop-stdio'),
       args: [],
-      codecs: rkyvV2Registry as never,
+      codecs: frameRegistry as never,
     });
     try {
       // (1) 핸드셰이크 capability — 런타임이 events:"push" 를 수용했다.
@@ -1436,13 +1510,13 @@ processTest(
   { timeout: 30_000 },
   async () => {
     const { createNodeLoopTransport, createNodeChannel } = await import('./index.js');
-    const { rkyvV2Registry } = await import(
-      resolve(repoRoot, 'dist-ts/examples/calculator/generated/rkyv-registry.js')
+    const { frameRegistry } = await import(
+      resolve(repoRoot, 'dist-ts/examples/calculator/generated/frame-registry.js')
     );
     const transport = createNodeLoopTransport({
       command: resolve(repoRoot, 'target/debug/loop-stdio'),
       args: [],
-      codecs: rkyvV2Registry as never,
+      codecs: frameRegistry as never,
     });
     try {
       await transport.ready();
@@ -1648,13 +1722,13 @@ processTest(
   async () => {
     const { createNodeLoopTransport, createNodeBytesChannel, createNodeChannel } =
       await import('./index.js');
-    const { rkyvV2Registry } = await import(
-      resolve(repoRoot, 'dist-ts/examples/calculator/generated/rkyv-registry.js')
+    const { frameRegistry } = await import(
+      resolve(repoRoot, 'dist-ts/examples/calculator/generated/frame-registry.js')
     );
     const transport = createNodeLoopTransport({
       command: resolve(repoRoot, 'target/debug/loop-stdio'),
       args: [],
-      codecs: rkyvV2Registry as never,
+      codecs: frameRegistry as never,
     });
     try {
       await transport.ready();

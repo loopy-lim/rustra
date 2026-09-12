@@ -6,6 +6,7 @@ import { cargoPackagesForManifest } from './cargo.js';
 export type CargoMetadata = {
   target_directory?: string;
   packages: Array<{
+    id?: string;
     name: string;
     manifest_path: string;
     targets: Array<{ name: string; crate_types: string[]; kind?: string[] }>;

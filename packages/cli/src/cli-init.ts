@@ -33,6 +33,12 @@ export function detectInitHosts(root: string): InitHosts {
   }
 }
 
+function hostNoteFor(hostValue: string | undefined, hosts: InitHosts): string {
+  if (hostValue !== undefined) return ' (--host)';
+  if (hosts.reactNative) return ' (package.json)';
+  return '';
+}
+
 export async function runInit(args: string[]): Promise<void> {
   const parsed = parseCliArgs(args, {
     command: 'init',
@@ -95,14 +101,7 @@ export async function runInit(args: string[]): Promise<void> {
   console.log(`  ${Object.keys(contents).join(', ')}`);
   const hostSummary = hosts.reactNative ? 'node, react-native' : 'node';
   // 선택 이유 표시 — --host 로 감지를 바꿨다면 그 사실을 안내해 "왜 RN이 빠졌는지"를 남긴다.
-  const hostNote =
-    hostValue !== undefined
-      ? ' (--host)'
-      : hosts.reactNative
-        ? ' (package.json)'
-        : detected.reactNative
-          ? ' (--host override)'
-          : '';
+  const hostNote = hostNoteFor(hostValue, hosts);
   console.log(`  Config host sections: ${hostSummary}${hostNote}`);
   console.log('\nNext steps:');
   console.log(`  cd ${directories[0]}`);

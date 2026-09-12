@@ -34,11 +34,10 @@ export function autoRebuild(): void {
     const distDir = resolve(cliDir, 'dist');
     const sourceFiles = collectFileMtimes(srcDir, '.ts');
     const distFiles = collectFileMtimes(distDir, '.js');
-    const stale = [...sourceFiles].some(
-      ([sourcePath, sourceMtime]) =>
-        distFiles.get(`${sourcePath.slice(0, -3)}.js`) === undefined ||
-        sourceMtime > distFiles.get(`${sourcePath.slice(0, -3)}.js`)!,
-    );
+    const stale = [...sourceFiles].some(([sourcePath, sourceMtime]) => {
+      const distMtime = distFiles.get(`${sourcePath.slice(0, -3)}.js`);
+      return distMtime === undefined || sourceMtime > distMtime;
+    });
     if (stale) {
       console.log('CLI source is newer than dist — rebuilding...');
       execSync('bun run build', { cwd: cliDir, stdio: 'pipe' });

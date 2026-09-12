@@ -15,7 +15,7 @@
  * NOT measured here: Rust handler time, C++ JSI marshalling time, real
  * device. See docs/benchmarks.md Track B section for caveats.
  */
-import { wideAggCodec, tagSetCodec } from '../examples/calculator/generated/rkyv-codecs.js';
+import { wideAggCodec, tagSetCodec } from '../examples/calculator/generated/frame-codecs.js';
 
 const ITER = 20_000;
 const WARMUP = 2_000;

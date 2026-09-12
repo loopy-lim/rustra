@@ -1,0 +1,12 @@
+[package]
+name = "rustra-api-surface"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+syn = { version = "2", features = ["full", "visit-mut"] }
+quote = "1"
+serde_json = "1"

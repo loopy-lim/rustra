@@ -29,50 +29,15 @@ pub unsafe extern "C" fn rustra_ffi_invoke_async(
     on_complete: Option<unsafe extern "C" fn(*mut c_void, *mut u8, usize)>,
     invocation_id: *mut u64,
 ) {
-    let id = crate::cancel::register_invocation();
-    if !invocation_id.is_null() {
-        unsafe { *invocation_id = id };
-    }
-    let user_data_raw = user_data as usize;
-    // 크기 게이트를 복사 전에 검사한다 — 초과 페이로드를 일단 복사해 메모리가
-    // 일시적으로 2배가 되던 동작(주석이 스스로 인정하던 문제)을 제거한다.
-    if payload_len > max_payload_bytes() {
-        let e = crate::RustraError::payload_too_large(payload_len, max_payload_bytes());
-        deliver_spawn_failure(
-            id,
-            user_data_raw,
-            on_complete,
-            sync_serialize,
-            &e.to_string(),
-        );
-        return;
-    }
-    let bytes = if payload.is_null() || payload_len == 0 {
-        Vec::new()
-    } else {
-        unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
-    };
-
-    // 고정 워커 풀로 제출(백프레셔 포함) — 호출당 thread::spawn 의 스레드 폭증을
-    // 방지한다. 큐가 가득 차면 즉시 backpressure 프레임으로 거부한다(hang 없음).
-    if async_pool_submit(AsyncTask::Alloc((
-        id,
-        bytes,
-        user_data_raw,
+    submit_alloc_async(
+        payload,
+        payload_len,
+        user_data,
         on_complete,
+        invocation_id,
         rustra_ffi_invoke,
         sync_serialize,
-    )))
-    .is_err()
-    {
-        deliver_spawn_failure(
-            id,
-            user_data_raw,
-            on_complete,
-            sync_serialize,
-            "invoke.backpressure: async worker queue is full — retry after drain",
-        );
-    }
+    );
 }
 
 /// Async JSON FFI invoke entry point.
@@ -96,21 +61,36 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json_async(
     on_complete: Option<unsafe extern "C" fn(*mut c_void, *mut u8, usize)>,
     invocation_id: *mut u64,
 ) {
+    submit_alloc_async(
+        payload,
+        payload_len,
+        user_data,
+        on_complete,
+        invocation_id,
+        rustra_ffi_invoke_json,
+        json_serialize,
+    );
+}
+
+fn submit_alloc_async(
+    payload: *const u8,
+    payload_len: usize,
+    user_data: *mut c_void,
+    on_complete: Option<unsafe extern "C" fn(*mut c_void, *mut u8, usize)>,
+    invocation_id: *mut u64,
+    invoke_fn: unsafe extern "C" fn(*const u8, usize, *mut usize) -> *mut u8,
+    serialize: fn(&FfiResponse) -> Vec<u8>,
+) {
     let id = crate::cancel::register_invocation();
     if !invocation_id.is_null() {
         unsafe { *invocation_id = id };
     }
     let user_data_raw = user_data as usize;
-    // 크기 게이트를 복사 전에 검사한다(위 async 엔트리와 동일).
+    // 크기 게이트를 복사 전에 검사한다 — 초과 페이로드를 일단 복사해 메모리가
+    // 일시적으로 2배가 되던 동작(주석이 스스로 인정하던 문제)을 제거한다.
     if payload_len > max_payload_bytes() {
         let e = crate::RustraError::payload_too_large(payload_len, max_payload_bytes());
-        deliver_spawn_failure(
-            id,
-            user_data_raw,
-            on_complete,
-            json_serialize,
-            &e.to_string(),
-        );
+        deliver_spawn_failure(id, user_data_raw, on_complete, serialize, &e.to_string());
         return;
     }
     let bytes = if payload.is_null() || payload_len == 0 {
@@ -119,13 +99,15 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json_async(
         unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
     };
 
+    // 고정 워커 풀로 제출(백프레셔 포함) — 호출당 thread::spawn 의 스레드 폭증을
+    // 방지한다. 큐가 가득 차면 즉시 backpressure 프레임으로 거부한다(hang 없음).
     if async_pool_submit(AsyncTask::Alloc((
         id,
         bytes,
         user_data_raw,
         on_complete,
-        rustra_ffi_invoke_json,
-        json_serialize,
+        invoke_fn,
+        serialize,
     )))
     .is_err()
     {
@@ -133,7 +115,7 @@ pub unsafe extern "C" fn rustra_ffi_invoke_json_async(
             id,
             user_data_raw,
             on_complete,
-            json_serialize,
+            serialize,
             "invoke.backpressure: async worker queue is full — retry after drain",
         );
     }

@@ -68,11 +68,11 @@ invoke → 이벤트 → progress → 취소 → 구독 해제 → 복구 → di
 
 ## 2. React Native 실호스트 (이벤트 형태, listener 예외, 재구독)
 
-범위: 실제 RN 런타임 위의 RN 어댑터(JSON 및 rkyv V2 JSI). 시뮬레이터 수준이
+범위: 실제 RN 런타임 위의 RN 어댑터(JSON 및 Frame JSI). 시뮬레이터 수준이
 현재 기준이고 실기기 실행은 별도 트랙이다 — 실제로 돌린 것을 빌드/OS 칸에 기록.
 
 - [ ] **문자열 이벤트** 내용 온전히 전달.
-- [ ] **원시값 이벤트** 원시값으로 전달(JSON 어댑터) — 같은 payload 의 rkyv V2
+- [ ] **원시값 이벤트** 원시값으로 전달(JSON 어댑터) — 같은 payload 의 Frame
       경로 형태도 함께 기록.
 - [ ] **Unicode 이벤트**(한글, emoji) 양쪽 어댑터에서 encode/decode 생존.
 - [ ] **listener 예외 흡수** — 던지는 구독 콜백이 싱크/drain 루프나 다른

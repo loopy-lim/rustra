@@ -2,20 +2,19 @@ English | [English](./wire-format.md)
 
 # 와이어 포맷 — 명칭과 실측 범위
 
-"rkyv V2"는 Rustra 자체 프레임/프로토콜 이름이다. upstream `rkyv` 아카이브
-포맷과 바이트 수준 호환된다는 주장이 아니다: manifest/dispatch 경로의 payload
-코덱은 postcard이며, upstream rkyv 아카이브와의 호환은 별도 검증 없이 동일하다고
-표기하지 않는다. 이 문서는 명칭과 실측 수치를 분리해 어느 쪽도 범위를 넘어
-인용되지 않게 한다.
+"Frame"은 Rustra 자체 프레임/프로토콜 이름이다(구칭 "rkyv V2" — 예전 포스트나
+CHANGELOG에서 오 독자를 위한 참고). manifest/dispatch 경로의 payload 코덱은
+postcard이며, upstream `rkyv` 아카이브 포맷과는 무관하고 호환을 주장하지 않는다.
+이 문서는 명칭과 실측 수치를 분리해 어느 쪽도 범위를 넘어 인용되지 않게 한다.
 
 ## 명칭
 
-| 이름                 | 실제 의미                                                                                       |
-| -------------------- | ----------------------------------------------------------------------------------------------- |
-| rkyv V2              | Rustra의 바이너리 프레임 프로토콜(V2 프레이밍 + command id + postcard payload 코덱). 내부 명칭. |
-| postcard             | manifest/dispatch 경로에서 쓰이는 payload 코덱(serde 호환 컴팩트 포맷).                         |
-| JSON 와이어          | codecs 미주입 어댑터가 쓰는 `invoke_json`/stdio 라인 프로토콜.                                  |
-| zero-copy (JSI 경로) | RN JSI 패스트패스가 네이티브 버퍼 뷰를 JS 사본 없이 JS 코덱에 전달.                             |
+| 이름                 | 실제 의미                                                                            |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| Frame                | Rustra의 바이너리 프레임 프로토콜(V2 프레이밍 + command id + postcard payload 코덱). |
+| postcard             | manifest/dispatch 경로에서 쓰이는 payload 코덱(serde 호환 컴팩트 포맷).              |
+| JSON 와이어          | codecs 미주입 어댑터가 쓰는 `invoke_json`/stdio 라인 프로토콜.                       |
+| zero-copy (JSI 경로) | RN JSI 패스트패스가 네이티브 버퍼 뷰를 JS 사본 없이 JS 코덱에 전달.                  |
 
 "zero-copy"는 특정 한 번의 복사가 제거된다는 뜻이다: 네이티브 호출 경계와 코덱
 사이의 JS 측 버퍼 사본. 왕복 전체가 할당 없다는 의미가 아니며 JSON 와이어에는
@@ -56,10 +55,10 @@ loop-stdio 런타임은 요청/응답 프레임과 같은 길이 접두 스트�
 | `0xFFFA` | 클라이언트 → 런타임 | postcard varint `u32` 핸들          | 채널 해제 (JSON/바이트 두 테이블에서 함께 제거)             |
 | `0xFFF9` | 런타임 → 클라이언트 | `[handle u32 LE][payload bytes]`    | **바이너리 채널 푸시 프레임** (원시 바이트, JSON 래핑 없음) |
 
-채널 발급 응답은 두 경로 모두 rkyv V2 응답 셰이프에 `{"handle": u32}` JSON
+채널 발급 응답은 두 경로 모두 Frame 응답 셰이프에 `{"handle": u32}` JSON
 본문을 실는다.
 
-`0xFFF9` 본문은 페이로드를 원시 바이트(예: rkyv V2 프레임)로 그대로 싣는다.
+`0xFFF9` 본문은 페이로드를 원시 바이트(예: Frame)로 그대로 싣는다.
 본문 안에 페이로드 길이 접두가 없다 — 프레임 래퍼의 `len` 이 이미 경계를
 제공하며, JSON 채널 본문과 달리 자체 경계가 필요한 내부 구조도 없다. 한
 핸들은 생성 시점의 `0xFFFB` 모드 바이트로 정확히 한 경로에서만 동작한다
@@ -78,7 +77,7 @@ loop-stdio 런타임은 요청/응답 프레임과 같은 길이 접두 스트�
 
 ## 에러 프레임 (타입화 에러가 바꾸지 않는 것)
 
-에러 응답은 다른 응답과 같은 프레임 래퍼에 `ok=0` 을 실을 뿐이다. rkyv 경로는
+에러 응답은 다른 응답과 같은 프레임 래퍼에 `ok=0` 을 실을 뿐이다. Frame 경로는
 `[ok=0][pad][len u16][postcard{code, message}]` 를, JSON 폴백은 `Display` 문자열을
 `{code, message}` 로 되분할한다. 와이어의 에러 표면은 이게 전부이며 payload 필드도
 선언 데이터도 없다.

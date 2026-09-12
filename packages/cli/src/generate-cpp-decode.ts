@@ -4,6 +4,17 @@ import { collectPostcardFields } from './generate-postcard-graph.js';
 
 const safeInt = '9007199254740991';
 
+const MAP_VALUE_READER: Record<string, string> = {
+  map_zigzag: '_map.setProperty(rt, _k, (double)r.read_i64());',
+  map_uvar: '_map.setProperty(rt, _k, (double)r.read_uvar());',
+  map_i64: `{ auto _v = r.read_i64(); _map.setProperty(rt, _k, _v >= -${safeInt}ll && _v <= ${safeInt}ll ? jsi::Value(static_cast<double>(_v)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v))); }`,
+  map_u64: `{ auto _v = r.read_uvar(); _map.setProperty(rt, _k, _v <= ${safeInt}ull ? jsi::Value(static_cast<double>(_v)) : jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v))); }`,
+  map_f64: '_map.setProperty(rt, _k, r.read_f64());',
+  map_bool: '_map.setProperty(rt, _k, r.read_bool());',
+  map_string:
+    '{ auto _vs = r.read_string_view(); _map.setProperty(rt, _k, jsi::String::createFromUtf8(rt, _vs.data, _vs.size)); }',
+};
+
 export function cppFieldDecodeExpr(
   field: PostcardField,
   objExpr: string,
@@ -70,20 +81,7 @@ export function cppFieldDecodeExpr(
     case 'map_f64':
     case 'map_bool':
     case 'map_string': {
-      const readVal =
-        field.kind === 'map_zigzag'
-          ? '_map.setProperty(rt, _k, (double)r.read_i64());'
-          : field.kind === 'map_uvar'
-            ? '_map.setProperty(rt, _k, (double)r.read_uvar());'
-            : field.kind === 'map_i64'
-              ? `{ auto _v = r.read_i64(); _map.setProperty(rt, _k, _v >= -${safeInt}ll && _v <= ${safeInt}ll ? jsi::Value(static_cast<double>(_v)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v))); }`
-              : field.kind === 'map_u64'
-                ? `{ auto _v = r.read_uvar(); _map.setProperty(rt, _k, _v <= ${safeInt}ull ? jsi::Value(static_cast<double>(_v)) : jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v))); }`
-                : field.kind === 'map_f64'
-                  ? '_map.setProperty(rt, _k, r.read_f64());'
-                  : field.kind === 'map_bool'
-                    ? '_map.setProperty(rt, _k, r.read_bool());'
-                    : '{ auto _vs = r.read_string_view(); _map.setProperty(rt, _k, jsi::String::createFromUtf8(rt, _vs.data, _vs.size)); }';
+      const readVal = MAP_VALUE_READER[field.kind] ?? MAP_VALUE_READER.map_string;
       return `${indent}{ auto _n = r.read_uvar(); auto _map = jsi::Object(rt); for (size_t _i = 0; _i < _n; _i++) { auto _ks = r.read_string_view(); auto _k = jsi::String::createFromUtf8(rt, _ks.data, _ks.size); ${readVal} } ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), std::move(_map)); }`;
     }
     case 'tuple': {

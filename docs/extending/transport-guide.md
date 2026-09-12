@@ -41,12 +41,12 @@ Ordinary apps do not assemble transports at all — the generated host entry poi
 baseline you start from; everything after it in this guide is for **manual
 assembly** — custom hosts, custom transports, or replacing the default.
 
-| Host             | Default (generated entry)                                                      | Rust entry point                                             | Manual-assembly alternatives                                                                 |
-| ---------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| **Node**         | one-shot Cargo binary + stdio, contract check via `__rustra_contract`          | `main.rs` → `run_invoke_stdio()`                             | your own `spawnSync` stdio, `createNodeLoopTransport` (servers), napi-rs native module, WASM |
-| **Bun**          | cdylib + stable C ABI + rkyv V2 (`rustra_ffi_invoke_rkyv_v2`)                  | `lib.rs` → `rustra::native_entry!` + `register_ffi(...)`     | `bun:ffi` direct C FFI call (§4, JSON path)                                                  |
-| **Tauri**        | `rustra_dispatch` multiplexing (framework built-in)                            | `tauri_support::register[_with_events]()` (feature: `tauri`) | `createTauriEngine({ invoke })` with a custom invoke function                                |
-| **React Native** | autolinked JSI + rkyv V2 (`invokeRkyvV2`) via `@rustra/generated-react-native` | `rustra::native_entry!` (exports `rustra_mobile_init`)       | custom JSON transport (`createReactNativeEngine`), TurboModule, Nitro Modules                |
+| Host             | Default (generated entry)                                                   | Rust entry point                                             | Manual-assembly alternatives                                                                 |
+| ---------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| **Node**         | one-shot Cargo binary + stdio, contract check via `__rustra_contract`       | `main.rs` → `run_invoke_stdio()`                             | your own `spawnSync` stdio, `createNodeLoopTransport` (servers), napi-rs native module, WASM |
+| **Bun**          | cdylib + stable C ABI + Frame (`rustra_ffi_invoke_frame`)                   | `lib.rs` → `rustra::native_entry!` + `register_ffi(...)`     | `bun:ffi` direct C FFI call (§4, JSON path)                                                  |
+| **Tauri**        | `rustra_dispatch` multiplexing (framework built-in)                         | `tauri_support::register[_with_events]()` (feature: `tauri`) | `createTauriEngine({ invoke })` with a custom invoke function                                |
+| **React Native** | autolinked JSI + Frame (`invokeFrame`) via `@rustra/generated-react-native` | `rustra::native_entry!` (exports `rustra_mobile_init`)       | custom JSON transport (`createReactNativeEngine`), TurboModule, Nitro Modules                |
 
 ### Node — manual subprocess stdio
 
@@ -165,7 +165,7 @@ func invokeRawJSON(_ payload: String) throws -> String {
 ```
 
 Other core FFI symbols on the same cdylib/staticlib: `rustra_ffi_invoke` (default
-format dispatch), `rustra_ffi_invoke_postcard`, `rustra_ffi_invoke_rkyv_v2`,
+format dispatch), `rustra_ffi_invoke_postcard`, `rustra_ffi_invoke_frame`,
 `rustra_ffi_get_schema`, `rustra_ffi_contract_hash` — the full list with stability
 tiers is in the [Rust API guide — FFI appendix](../rust-api-guide.md) and the
 [versioning policy](../versioning-policy.md).
@@ -265,7 +265,7 @@ The tests call `configure(engine)` and then check that `addNumbers({ a: 20, b: 2
 ## 4. Example: Replacing with Bun FFI
 
 Bun can load `.dylib` / `.so` files directly via `bun:ffi`. The **default generated
-`bun.ts` entry** already does this over the rkyv V2 symbols; the JSON path below is
+`bun.ts` entry** already does this over the Frame symbols; the JSON path below is
 the manual-assembly variant for custom hosts, using the same core C ABI
 (`rustra_ffi_invoke_json`).
 
@@ -345,7 +345,7 @@ const result = await addNumbers({ a: 20, b: 22 });
 console.log(`bun FFI result: ${result.value}`); // 42
 ```
 
-The release-ready variant (rkyv V2 caller-buffer path with contract verification,
+The release-ready variant (Frame caller-buffer path with contract verification,
 no manual dlopen at all) is the generated `bun.ts` entry — see
 [`bun-ffi-app.ts`](../../examples/calculator/apps/bun-ffi-app.ts).
 
@@ -378,7 +378,7 @@ Advantages:
 
 ```rust
 // examples/calculator-napi/src/lib.rs — generic JSON pattern
-// (the shipped example now binds the rkyv V2 buffer path instead; see its README)
+// (the shipped example now binds the Frame buffer path instead; see its README)
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use rustra_calculator_example::calculator_package;

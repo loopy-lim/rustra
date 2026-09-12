@@ -11,10 +11,10 @@ export declare function rustraInvoke(command: string, argsJson?: string | undefi
 export declare function rustraInvokeBuffer(command: string, argsJson?: string | undefined | null): Buffer
 
 /**
- * 이미 등록된 calculator 패키지로 postcard(rkyv V2) 프레임을 실행한다.
- * 요청/응답 모두 코어 rkyv V2 레이아웃 그대로 — JS 측
- * `createRkyvV2Engine(native, registry)`의 `RkyvV2Native` 계약
- * (`invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer`)과 짝이 맞다.
+ * 이미 등록된 calculator 패키지로 postcard(Frame) 프레임을 실행한다.
+ * 요청/응답 모두 코어 Frame 레이아웃 그대로 — JS 측
+ * `createFrameEngine(native, registry)`의 `FrameNative` 계약
+ * (`invokeFrame(payload: ArrayBuffer): ArrayBuffer`)과 짝이 맞다.
  *
  * JSON String 왕복(`rustra_invoke`) 대비 UTF-16 복사와 JSON
  * 직렬화/파싱을 모두 건너뛴다 — 코어 실측 61.5ns vs JSON 1.11µs.
@@ -22,4 +22,4 @@ export declare function rustraInvokeBuffer(command: string, argsJson?: string | 
  * cargo test 빌드에서 cdylib 진입점이 죽은 코드로 보여 dead_code 경고가
  * 나지만 napi CLI 가 이 심볼을 JS 로 노출한다.
  */
-export declare function rustraInvokeRkyvV2(payload: Buffer): Buffer
+export declare function rustraInvokeFrame(payload: Buffer): Buffer

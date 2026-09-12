@@ -107,10 +107,10 @@ export type InvokeOptions = {
 };
 
 /**
- * createRkyvV2Engine 이 반환하는 구체 엔진. EngineClient 에 더해 invokeBatch(P0-2) 를
+ * createFrameEngine 이 반환하는 구체 엔진. EngineClient 에 더해 invokeBatch(P0-2) 를
  * 항상 지원한다 — 정적 전용이면 단일 횡단, 동적 혼합이면 항목별 라우팅.
  */
-export type RkyvV2Engine = EngineClient & {
+export type FrameEngine = EngineClient & {
   invokeById<T>(
     commandId: number,
     command: string,
@@ -122,13 +122,13 @@ export type RkyvV2Engine = EngineClient & {
   refreshLiveSchema(): ReadonlyMap<string, LiveSchemaEntry>;
 };
 
-// ── rkyv V2 codec types ────────────────────────────────────
+// ── Frame codec types ────────────────────────────────────
 
 /**
- * rkyv V2 코덱 — 각 명령의 바이너리 인코딩/디코딩을 담당합니다.
+ * Frame 코덱 — 각 명령의 바이너리 인코딩/디코딩을 담당합니다.
  * 코드젠이 명령별로 자동 생성합니다.
  */
-export type RkyvV2Codec<I, O> = {
+export type FrameCodec<I, O> = {
   commandId: number;
   encode(args: I): ArrayBuffer;
   /**
@@ -150,10 +150,10 @@ export { createComplexCodec } from './complex-codec.js';
 export type { ComplexCodecOptions, ComplexSchema } from './complex-codec.js';
 
 /**
- * rkyv V2 네이티브 인터페이스 — 플랫폼별 FFI 브릿지가 구현합니다.
+ * Frame 네이티브 인터페이스 — 플랫폼별 FFI 브릿지가 구현합니다.
  */
-export type RkyvV2Native = {
-  invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
+export type FrameNative = {
+  invokeFrame(payload: ArrayBuffer): ArrayBuffer;
 };
 
 /**
@@ -165,9 +165,8 @@ export type RustraNative = {
   invokeMsgpack(payload: ArrayBuffer): ArrayBuffer;
   invokeBincode(payload: ArrayBuffer): ArrayBuffer;
   invokePostcard(payload: ArrayBuffer): ArrayBuffer;
-  invokeRkyv(payload: ArrayBuffer): ArrayBuffer;
   invokeHybrid(payload: ArrayBuffer): ArrayBuffer;
-  invokeRkyvV2(payload: ArrayBuffer): ArrayBuffer;
+  invokeFrame(payload: ArrayBuffer): ArrayBuffer;
   invokeRaw(payload: ArrayBuffer): ArrayBuffer;
   noop(payload: ArrayBuffer): ArrayBuffer;
   /** Live schema query (정적 + 동적 명령). JSI/FFI 가 노출하면 사용. */

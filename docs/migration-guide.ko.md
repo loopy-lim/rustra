@@ -10,6 +10,33 @@ Rust 백엔드와 TypeScript 클라이언트가 공유하는 계약(schema)이 �
 - **0.3.x에서 올라오는 경우** — 먼저 [0.3에서 0.4로 마이그레이션](migrations/0.3-to-0.4.ko.md)을 따른 뒤 이 가이드를 쓴다.
 - **0.5.x에서 올라오는 경우** — 먼저 [0.5에서 0.6으로 마이그레이션](migrations/0.5-to-0.6.ko.md)을 따른다. 오래된 스키마는 CLI 검증에서 "generic type name" 오류로 실패할 수도 있다([Rust API 가이드 — 사용자 정의 제네릭](rust-api-guide.ko.md#사용자-정의-제네릭-타입)) — `rustra diff` 전에 현재 rustra로 `schema.json`을 재생성한다.
 - **0.6 이상(0.8 포함)** — 별도 마이그레이션 노트는 없다. 아래 레시피를 그대로 쓴다.
+- **0.9 시리즈 리네임(rkyv V2 → Frame)** — 아래 [리네임 표](#09-리네임-rkyv-v2--frame) 참고. 순수 이름 변경이며 와이어 포맷은 불변이다.
+
+## 0.9 리네임: rkyv V2 → Frame
+
+0.9 시리즈는 구칭 "rkyv V2"로 불리던 바이너리 프로토콜을 모든 API에서
+**Frame**으로 이름 바꾼다. 이름 변경만 있을 뿐 와이어 바이트, 프레이밍,
+postcard 페이로드 코덱은 불변이므로 구·신 빌드는 상호 운용된다. 참조하는
+식별자를 다음처럼 갱신한다:
+
+| 구(≤0.8)                               | 신(0.9+)                             |
+| -------------------------------------- | ------------------------------------ |
+| `createRkyvV2Engine`                   | `createFrameEngine`                  |
+| `RkyvV2Engine`                         | `FrameEngine`                        |
+| `RkyvV2Codec`                          | `FrameCodec`                         |
+| `RkyvV2Native`                         | `FrameNative`                        |
+| `invokeRkyvV2`                         | `invokeFrame`                        |
+| `rkyv-codecs.ts`                       | `frame-codecs.ts`                    |
+| `rkyv-registry.ts`                     | `frame-registry.ts`                  |
+| `rkyv-engine`                          | `frame-engine`                       |
+| `rustra_ffi_invoke_rkyv_v2*`           | `rustra_ffi_invoke_frame*`           |
+| `BUN_RKYV_V2_ENGINE_SUPPORTS`          | `BUN_FRAME_ENGINE_SUPPORTS`          |
+| `REACT_NATIVE_RKYV_V2_ENGINE_SUPPORTS` | `REACT_NATIVE_FRAME_ENGINE_SUPPORTS` |
+| 에러 접두어 `"rkyv v2: ..."`           | `"frame: ..."`                       |
+
+RN JSI 호스트 메서드도 같은 리네임을 따른다(`invokeRkyvV2` → `invokeFrame`),
+그리고 codegen 산출 파일도 새 이름(`frame-codecs.ts`, `frame-registry.ts`)으로
+떨어진다 — `rustra codegen`을 다시 실행하고 import를 갱신한다.
 
 ## 도구
 
@@ -114,7 +141,7 @@ fn new_name(input: NewInput) -> Result<NewOutput> { /* ... */ }
 ## 롤아웃 순서와 contract hash
 
 `contract.ts`의 `GENERATED_CONTRACT_HASH`는 스키마 전체의 SHA-256이다.
-스키마가 바뀌면 hash가 바뀐다. `createRkyvV2Engine`에 `contractHash` 옵션을
+스키마가 바뀌면 hash가 바뀐다. `createFrameEngine`에 `contractHash` 옵션을
 전달하면 런타임에 네이티브 해시와 비교해 불일치 시 즉시 실패한다(fail-fast).
 
 **안전한 배포 순서 (기본):**

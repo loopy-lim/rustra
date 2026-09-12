@@ -41,11 +41,17 @@ type LoopResponseFrame = {
   error?: string;
   events?: Array<{ name: string; payload: unknown }>;
 };
+
+type HandshakeFrame = LoopResponseFrame & {
+  binary?: boolean;
+  events?: string;
+  channelBytes?: boolean;
+};
 export type NodeLoopTransport = NodeInvokeTransport & {
   drainEvents(): Promise<Array<{ name: string; payload: unknown }>>;
   dispose(): void;
   readonly pid: number | null;
-  /** 'ndjson' = 레거시 라인 프로토콜, 'binary' = length-prefixed rkyv V2 (트랙 D). */
+  /** 'ndjson' = 레거시 라인 프로토콜, 'binary' = length-prefixed Frame (트랙 D). */
   readonly mode: 'ndjson' | 'binary';
   /**
    * 런타임이 `events:"push"` 핸드셰이크 capability 를 수용했는지 — ready() 정착
@@ -246,11 +252,7 @@ export function createNodeLoopTransport(options: {
     // 0xfffd 푸시 프레임이 stdout 으로 흐른다. 미수용(구 런타임, 필드 무시)이면
     // 푸시 프레임이 절대 오지 않으므로 기존 폴링이 그대로 동작한다.
     const frame = await write({ command: '__hello', args: {}, events: 'push' });
-    const result = frame as LoopResponseFrame & {
-      binary?: boolean;
-      events?: string;
-      channelBytes?: boolean;
-    };
+    const result = frame as HandshakeFrame;
     if (result.ok && result.binary === true) mode = 'binary';
     pushCapable = result.ok && result.binary === true && result.events === 'push';
     // 바이너리 채널 capability — 구 런타임은 이 필드가 없다(undefined → false).
@@ -268,16 +270,15 @@ export function createNodeLoopTransport(options: {
     ? handshake().catch(() => {})
     : Promise.resolve();
 
+  const isChannelCommand = (name: string): boolean =>
+    name === '__createChannel' || name === '__createChannelBytes' || name === '__dropChannel';
+
   return {
     invoke(command, args) {
       if (mode === 'binary') return session.invoke(command, args);
       // 채널은 바이너리 모드 전용 — 콜백 함수 값은 NDJSON 라인으로 전송 불가.
       // 조용한 command.not_found 대신 명확한 계약 에러로 loud-fail 한다.
-      if (
-        command === '__createChannel' ||
-        command === '__createChannelBytes' ||
-        command === '__dropChannel'
-      ) {
+      if (isChannelCommand(command)) {
         return Promise.reject(
           new RustraCommandError(
             RustraErrorCode.ChannelUnavailable,
@@ -289,11 +290,7 @@ export function createNodeLoopTransport(options: {
         // 핸드셰이크가 아직 정착하지 않은 첫 호출 — 정착을 기다린 뒤 재분기.
         return handshakeSettled.then(() => {
           if (mode === 'binary') return session.invoke(command, args);
-          if (
-            command === '__createChannel' ||
-            command === '__createChannelBytes' ||
-            command === '__dropChannel'
-          ) {
+          if (isChannelCommand(command)) {
             // 정착 후에도 NDJSON 구 런타임 — 위와 동일 loud-fail(능력 부재).
             return Promise.reject(
               new RustraCommandError(

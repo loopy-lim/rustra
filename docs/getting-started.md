@@ -2,6 +2,11 @@ English | [한국어](./getting-started.ko.md)
 
 # Getting Started with rustra
 
+> **Frame migration:** this guide targets Rust and shared packages 0.10.0 with the
+> adapter versions listed below. Release 0.9.0 does not include the Frame rename.
+> Upgrade native libraries, JS packages, and generated output together; see the
+> [migration guide](migrations/post-0.9-frame-and-audit.md) for versions and steps.
+
 rustra is a bridge framework that automatically generates a TypeScript client — working on Node, Bun, Tauri, and React Native alike — once you define a Rust package.
 
 This guide aims to get a developer new to rustra building their first package and generating a TypeScript client within 10 minutes.
@@ -30,7 +35,7 @@ This guide aims to get a developer new to rustra building their first package an
 ### The Fastest Start — `rustra init`
 
 ```bash
-bunx --bun @rustra/cli init my-project
+bunx --bun @rustra/cli@0.10.0 init my-project
 cd my-project
 bun install
 bun run doctor
@@ -51,30 +56,27 @@ Re-running init in a directory with existing files blocks overwriting. Add `--fo
 to replace them:
 
 ```bash
-bunx --bun @rustra/cli init my-project --force
+bunx --bun @rustra/cli@0.10.0 init my-project --force
 ```
 
 ### Using in an External Project
 
 ```toml
 [dependencies]
-rustra = "0.8"
+rustra = "0.10.0"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
 
-Verified combination: npm `@rustra/types` 0.8.x ↔ Rust crate 0.8.x. The
-`@rustra/*` packages are independent release lines — check each adapter
-package's own version (see the
-[compatibility matrix](compatibility-matrix.md#matrix)).
+Installation versions follow the current Rust and npm manifests. Adapters have independent versions; use the manifest-derived [compatibility table](compatibility-matrix.md) for installation. This table does not certify publication or CI success for this branch.
 
 For the TypeScript adapters, install only the environment you use:
 
 ```bash
-bun add @rustra/node      # Node.js
-bun add @rustra/bun       # Bun
-bun add @rustra/tauri     # Tauri
-bun add @rustra/react-native  # React Native
+bun add @rustra/node@0.10.0      # Node.js
+bun add @rustra/bun@0.10.0       # Bun
+bun add @rustra/tauri@0.9.0     # Tauri
+bun add @rustra/react-native@0.9.0  # React Native
 ```
 
 ### Using in a Monorepo / Workspace
@@ -276,7 +278,7 @@ Output:
 ```
 
 The `generated/` directory then contains the base files (`types.ts`, `commands.ts`,
-`contract.ts`, `rkyv-codecs.ts`, `rkyv-registry.ts`, `schema.json`) plus any configured
+`contract.ts`, `frame-codecs.ts`, `frame-registry.ts`, `schema.json`) plus any configured
 host entry points.
 
 ---
@@ -285,7 +287,7 @@ host entry points.
 
 The `generated/` directory contains the following base files. Configuring `node`,
 `bun`, `tauri`, or `reactNative` adds the corresponding host entry point, and the
-`codegen.rustBinary`-driven rkyv V2 fast path adds `rkyv-codecs.ts`/`rkyv-registry.ts`.
+`codegen.rustBinary`-driven Frame fast path adds `frame-codecs.ts`/`frame-registry.ts`.
 
 ### types.ts — Type Definitions
 
@@ -307,6 +309,12 @@ export type Item = {
   active: boolean;
   name: string;
   value: number | bigint;
+};
+
+export type OpKind = 'Clear' | {
+  Set: {
+  value: number | bigint;
+};
 };
 
 /**
@@ -452,6 +460,14 @@ export type IsEvenInput = {
 
 export type IsEvenOutput = {
   result: boolean;
+};
+
+export type KindEchoInput = {
+  kind: OpKind;
+};
+
+export type KindEchoOutput = {
+  echoed: OpKind;
 };
 
 export type MultiplyInput = {
@@ -638,7 +654,7 @@ export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutp
 
 <!-- prettier-ignore -->
 ```ts
-export const GENERATED_CONTRACT_HASH = '7279af1f50ca546411bb7be6476bb1f931b437ae53484d8ea9903eec07926039';
+export const GENERATED_CONTRACT_HASH = '7c07f78e1f38dc37f251920c7c453ec5b6d65a817f95a1b51b5b4649f63a2ae3';
 export const SCHEMA_VERSION = 1;
 ```
 
@@ -792,7 +808,7 @@ const result = await addNumbers({ a: 20, b: 22 });
 ```
 
 The generated entry point inspects Release/Debug cdylib candidates down to the actual ABI
-symbols and wires Bun FFI's stable C ABI into the rkyv V2 engine. The Rust response is
+symbols and wires Bun FFI's stable C ABI into the Frame engine. The Rust response is
 copied into a JS-owned `ArrayBuffer` and freed with the exact pointer/length. Specify a
 different deployment layout with `RUSTRA_BUN_LIBRARY`.
 
@@ -829,7 +845,7 @@ fn main() {
 
 ### React Native
 
-#### rkyv V2 (recommended — postcard binary + JSI synchronous calls)
+#### Frame (recommended — postcard binary + JSI synchronous calls)
 
 Uses JSI synchronous calls and postcard binary serialization. On the Rust side, declare
 the app package and native entry once.
@@ -869,8 +885,8 @@ commands whose input has 0–3 fields are published as field-positional helpers
 outside that shape keep the object-input `commands.ts` path.
 
 ```bash
-bunx --bun @rustra/cli doctor --config rustra.json
-bunx --bun @rustra/cli codegen --config rustra.json
+bunx --bun @rustra/cli@0.10.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.10.0 codegen --config rustra.json
 ```
 
 **TypeScript-side usage:**
@@ -882,7 +898,7 @@ const result = await addNumbers({ a: 20, b: 22 }); // JSI fast path
 ```
 
 On the first call, the generated entry point performs JSI installation, contract
-hash/schema version verification, and `rkyvV2Registry` fast-engine setup exactly once
+hash/schema version verification, and `frameRegistry` fast-engine setup exactly once
 even under concurrent calls. Failed installs are retried on the next call, and an engine
 explicitly `configure()`d by the app is never overwritten by a late-finishing install.
 The generator infers the Cargo package/library and builds the Podspec, Gradle/CMake/JNI,
@@ -929,13 +945,13 @@ caller-buffer fast path of the generated `react-native.ts`.
 
 ### Summary
 
-| Environment  | Default generated entry point        | Auto wiring                         | Performance (release, 2026-08-24)                      |
-| ------------ | ------------------------------------ | ----------------------------------- | ------------------------------------------------------ |
-| Node         | `generated/node.ts`                  | Cargo binary + stdio                | 2.76 ms one-shot; loop 16.86 µs; N-API rkyv V2 1.26 µs |
-| Bun          | `generated/bun.ts`                   | Cargo cdylib + stable FFI + rkyv V2 | 2.27 µs FFI rkyv V2                                    |
-| Tauri        | `generated/tauri.ts`                 | global invoke/event                 | 279.04 µs WebView IPC                                  |
-| React Native | `generated/react-native.ts`          | autolinked JSI + postcard codecs    | p50 2.71 µs (iOS Simulator receipt)                    |
-| React Native | `createReactNativeEngine(transport)` | custom JSON transport               | Depends on transport implementation                    |
+| Environment  | Default generated entry point        | Auto wiring                       | Performance (release, 2026-08-24)                    |
+| ------------ | ------------------------------------ | --------------------------------- | ---------------------------------------------------- |
+| Node         | `generated/node.ts`                  | Cargo binary + stdio              | 2.76 ms one-shot; loop 16.86 µs; N-API Frame 1.26 µs |
+| Bun          | `generated/bun.ts`                   | Cargo cdylib + stable FFI + Frame | 2.27 µs FFI Frame                                    |
+| Tauri        | `generated/tauri.ts`                 | global invoke/event               | 279.04 µs WebView IPC                                |
+| React Native | `generated/react-native.ts`          | autolinked JSI + postcard codecs  | p50 2.71 µs (iOS Simulator receipt)                  |
+| React Native | `createReactNativeEngine(transport)` | custom JSON transport             | Depends on transport implementation                  |
 
 > End-to-end Release measurements of `addNumbers({ a: 20, b: 22 })`, first
 > confirmed 2026-08-24 on Apple Silicon and identical to the README performance
@@ -1204,7 +1220,7 @@ Most Rust types convert correctly to TypeScript:
 | `anyOf` / `oneOf`                             | `A \| B` (union join)              |                                                            |
 
 `allOf` generates `A & B`, integer enums generate numeric literal unions, and
-`oneOf`+`const` generates discriminated unions. The postcard fast path (rkyv V2 codec)
+`oneOf`+`const` generates discriminated unions. The postcard fast path (Frame codec)
 supports primitives, Vec/Set/tuples, maps of primitive values, string enums, nested
 structs, and single-entry `allOf` newtype handles. Legacy schemas that cannot guarantee
 declaration order via the schema's `fieldOrder: "declaration"` produce a codegen warning.
@@ -1220,7 +1236,7 @@ Complex commands with a native-safe schema are marshalled directly by the RN C++
 codec, and native-safe wide-int paths including primitive-element `Set` and
 `int64`/`uint64` are also in that scope. Commands outside the native-safe determination,
 such as Sets of object/array elements, are carried by the JS complex codec through the
-native `invokeRkyvV2` to the Rust handler. Both paths use the same complex wire.
+native `invokeFrame` to the Rust handler. Both paths use the same complex wire.
 
 ---
 

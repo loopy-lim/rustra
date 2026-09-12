@@ -131,7 +131,7 @@ export function createMockEngine(mockOptions: MockEngineOptions = {}): MockEngin
       }
       log.push({ command, args, options });
       const effectiveDelay = delays.get(command) ?? mockOptions.delayMs ?? 0;
-      if (effectiveDelay !== undefined && effectiveDelay > 0) {
+      if (effectiveDelay > 0) {
         await new Promise<void>((resolve) => setTimeout(resolve, effectiveDelay));
       }
       const configuredFailure = failures.get(command);

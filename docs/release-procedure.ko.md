@@ -2,6 +2,9 @@
 
 # 발행 절차 (canary → stable → rollback)
 
+Frame 전환과 감사 수정은 0.10 동시 업그레이드 대상이다. 이미 사용한 0.9.0을
+재사용하지 않으며, 대상 버전·소비자 검증·롤백은 [릴리스 준비 문서](migrations/post-0.9-frame-and-audit.ko.md)를 따른다.
+
 감사 항목 8의 "canary 배포와 rollback 검증" 절차. 실제 실행은 별도 승인 후 진행한다.
 
 ## 사전 조건 (자동 게이트)

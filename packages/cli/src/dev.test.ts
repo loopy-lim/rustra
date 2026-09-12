@@ -149,7 +149,7 @@ test('runDev logs "clean — nothing to do" and skips codegen on an up-to-date t
     writeFileSync(join(backend, 'src', 'lib.rs'), 'fn main() {}');
     const schema = join(app, 'generated', 'schema.json');
     writeFileSync(schema, '{}');
-    writeFileSync(join(app, 'generated', 'rkyv-codecs.ts'), '');
+    writeFileSync(join(app, 'generated', 'frame-codecs.ts'), '');
     utimesSync(
       join(backend, 'src', 'lib.rs'),
       new Date('2026-08-16T12:00:00Z'),
@@ -157,7 +157,7 @@ test('runDev logs "clean — nothing to do" and skips codegen on an up-to-date t
     );
     utimesSync(schema, new Date('2026-08-16T12:00:05Z'), new Date('2026-08-16T12:00:05Z'));
     utimesSync(
-      join(app, 'generated', 'rkyv-codecs.ts'),
+      join(app, 'generated', 'frame-codecs.ts'),
       new Date('2026-08-16T12:00:10Z'),
       new Date('2026-08-16T12:00:10Z'),
     );

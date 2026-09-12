@@ -35,7 +35,7 @@ function ItemActions({ onDone }) {
         React.createElement("button", { disabled: update.loading, onClick: () => update.mutate({ id: 'first', name: 'Renamed', value: null }) }, "\uC218\uC815"),
         React.createElement("button", { disabled: remove.loading, onClick: () => remove.mutate({ id: 'first' }) }, "\uC0AD\uC81C")));
 }
-/** 이벤트 — useEvent: Rust emit 을 구독(RN rkyv V2 엔진에서 활성화). */
+/** 이벤트 — useEvent: Rust emit 을 구독(RN Frame 엔진에서 활성화). */
 function LiveFeed() {
     const [last, setLast] = React.useState('(대기 중)');
     useEvent('item.created', (payload) => {

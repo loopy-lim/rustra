@@ -43,6 +43,15 @@ function bench(label: string, fn: () => void, iterations = ITERATIONS) {
   return { label, avg, p50, p99 };
 }
 
+// ── Shared response parsing ─────────────────────────────
+
+/** `{ok, result, error}` 응답 JSON 파싱 — subprocess/napi 트랜스포트 공용. */
+function parseInvokeResponse(raw: string): unknown {
+  const response = JSON.parse(raw) as { ok: boolean; result?: unknown; error?: string };
+  if (!response.ok) throw new Error(response.error ?? 'invoke failed');
+  return response.result;
+}
+
 // ── Subprocess transport ────────────────────────────────
 
 function createSubprocessInvoke() {
@@ -53,9 +62,7 @@ function createSubprocessInvoke() {
       encoding: 'utf8',
     });
     if (output.status !== 0) throw new Error(output.stderr || `exited ${output.status}`);
-    const response = JSON.parse(output.stdout) as { ok: boolean; result?: unknown; error?: string };
-    if (!response.ok) throw new Error(response.error ?? 'invoke failed');
-    return response.result;
+    return parseInvokeResponse(output.stdout);
   };
 }
 
@@ -72,9 +79,7 @@ function createNapiInvoke() {
   return (command: string, args: unknown): unknown => {
     const argsJson = args !== undefined ? JSON.stringify(args) : undefined;
     const rawResponse = native.rustraInvoke(command, argsJson);
-    const response = JSON.parse(rawResponse) as { ok: boolean; result?: unknown; error?: string };
-    if (!response.ok) throw new Error(response.error ?? 'invoke failed');
-    return response.result;
+    return parseInvokeResponse(rawResponse);
   };
 }
 

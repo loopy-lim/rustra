@@ -218,7 +218,7 @@ examples/calculator/
 │   ├── adapter-compat.test.ts    # 4 adapter behaviors + no host-specific imports
 │   ├── generated-client.test.ts  # command helper behavior + banned import check
 │   └── runtime-contract.test.ts  # host apps use generated zero-config entries + RN FFI
-├── generated/          # codegen output (schema.json, types.ts, commands.ts, contract.ts, rkyv-codecs.ts, rkyv-registry.ts, errors.ts, devices.ts, host entries, .rustra-generated.json)
+├── generated/          # codegen output (schema.json, types.ts, commands.ts, contract.ts, frame-codecs.ts, frame-registry.ts, errors.ts, devices.ts, host entries, .rustra-generated.json)
 ├── apps/
 │   ├── node-app.ts     # Node.js runtime app
 │   └── bun-app.ts      # Bun runtime app

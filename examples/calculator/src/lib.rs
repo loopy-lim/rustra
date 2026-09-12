@@ -236,7 +236,7 @@ pub fn echo_groups(input: EchoGroupsInput) -> Result<EchoGroupsOutput> {
 
 // ── Tier 1 에러 전용 명령 (criterion 6: typed error roundtrip) ────────
 // divide 는 0으로 나눌 때 RustraError::custom("math.divide_by_zero", …) 를
-// 반환한다. rkyv V2 error wire([ok=0][pad][len u16][postcard{code,message}])를
+// 반환한다. Frame error wire([ok=0][pad][len u16][postcard{code,message}])를
 // 통해 code 가 그대로 건너가 JS 측 RustraCommandError(code, message) 로 복원되는
 // 것을 증명한다.
 
@@ -543,6 +543,35 @@ pub fn tag_set(input: TagSetInput) -> Result<TagSetOutput> {
     })
 }
 
+// ── A5 태그 enum 표본 — unit + data 변형 커맨드 ────────────────────
+// serde 외부 태그(기본 표현) enum: postcard 와이어는 [변형 인덱스 u32
+// varint][변형 본문] 다. unit 변형(Clear)은 인덱스 한 바이트, struct 변형
+// (Set{value})은 인덱스 + 필드 선언순. generated TS/C++ complex codec 이
+// oneOf 변형 인덱스 와이어를 동일하게 만들어내는지 cross-wire 픽스처로 고정한다.
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+pub enum OpKind {
+    Clear,
+    Set { value: i64 },
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct KindEchoInput {
+    pub kind: OpKind,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct KindEchoOutput {
+    pub echoed: OpKind,
+}
+
+/// enum 에코 — unit/data 변형 왕복(와이어는 변형 인덱스 varint).
+#[command]
+pub fn kind_echo(input: KindEchoInput) -> Result<KindEchoOutput> {
+    Ok(KindEchoOutput { echoed: input.kind })
+}
+
 // `rustraRegistryDemo` 는 빌드 시점에 등록되어 항상 호출 가능하며, 런타임에 live
 // package 를 mutate 한다. RN 이 사용하는 동일 FFI 경로(invoke_json)를 통해 동작하며,
 // mutation 사이에 rebuild 가 필요 없다. release 빌드에서는 frozen 이다.
@@ -806,6 +835,8 @@ pub fn calculator_package() -> Package {
             .command_fn(channel_demo_bytes)
             .command_fn(device_demo)
             .devices_meta_if(__RUstra_meta_device_demo, __RUstra_devices_device_demo)
+            // A5: 태그 enum 표본 — 신규 커맨드는 id 시프트 방지를 위해 체인 맨 뒤에.
+            .command_fn(kind_echo)
             .build();
 
             // Auto-register for generic FFI with JSON default
@@ -845,7 +876,7 @@ pub extern "C" fn rustra_calculator_init() {
     rustra_mobile_init();
 }
 
-/// rkyv v2: command_id (u16) based request — 코어 `rustra_ffi_invoke_rkyv_v2`
+/// frame: command_id (u16) based request — 코어 `rustra_ffi_invoke_frame`
 /// 심볼로 위임한다 (과거 이 파일에 복제되어 있던 패닉 가드+버퍼 프로토콜의
 /// 단일 구현). 심볼명만 calculator 네임스페이스로 재노출해 기존 C++/JSI 호스트
 /// 바인딩을 유지한다.
@@ -858,22 +889,22 @@ pub extern "C" fn rustra_calculator_init() {
 ///
 /// Caller must ensure `payload` is valid for `payload_len` bytes and `out_len` is a valid pointer.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2(
+pub unsafe extern "C" fn rustra_calculator_invoke_frame(
     payload: *const u8,
     payload_len: usize,
     out_len: *mut usize,
 ) -> *mut u8 {
-    unsafe { rustra::ffi::rustra_ffi_invoke_rkyv_v2(payload, payload_len, out_len) }
+    unsafe { rustra::ffi::rustra_ffi_invoke_frame(payload, payload_len, out_len) }
 }
 
-/// `rustra_calculator_invoke_rkyv_v2` 응답 버퍼 해제 — 코어 `rustra_ffi_free`
+/// `rustra_calculator_invoke_frame` 응답 버퍼 해제 — 코어 `rustra_ffi_free`
 /// 로 위임한다(할당이 코어 레이아웃이므로).
 ///
 /// # Safety
 ///
-/// `ptr`/`len` must be the exact pair returned by `rustra_calculator_invoke_rkyv_v2`.
+/// `ptr`/`len` must be the exact pair returned by `rustra_calculator_invoke_frame`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_calculator_free_rkyv_v2_buffer(ptr: *mut u8, len: usize) {
+pub unsafe extern "C" fn rustra_calculator_free_frame_buffer(ptr: *mut u8, len: usize) {
     unsafe { rustra::ffi::rustra_ffi_free(ptr, len) };
 }
 
@@ -908,15 +939,15 @@ pub unsafe extern "C" fn rustra_calculator_invoke_typed_raw(
     }
 }
 
-/// rkyv V2 비동기 완료 콜백 — `rustra_ffi_invoke_async` 의 on_complete 와 동일 계약.
+/// Frame 비동기 완료 콜백 — `rustra_ffi_invoke_async` 의 on_complete 와 동일 계약.
 /// 응답 버퍼는 코어 FFI 레이아웃으로 할당되며 콜백 첫 인자가 null 이 아니면
-/// `rustra_calculator_free_rkyv_v2_buffer` 로 해제해야 한다.
+/// `rustra_calculator_free_frame_buffer` 로 해제해야 한다.
 pub type RustraCalculatorAsyncCallback =
     unsafe extern "C" fn(user_data: *mut std::ffi::c_void, resp: *mut u8, resp_len: usize);
 
-/// rkyv V2 비동기 진입점 — `rustra_ffi_invoke_async` 와 동일한 계약
+/// Frame 비동기 진입점 — `rustra_ffi_invoke_async` 와 동일한 계약
 /// (invocation_id 발급, 워커 스레드 dispatch, cancel 체크포인트,
-/// complete 후 on_complete)을 rkyv V2 와이어로 제공한다.
+/// complete 후 on_complete)을 Frame 와이어로 제공한다.
 ///
 /// RN JSI `invokeTypedAsync` 참조 구현이 호출한다. 취소는
 /// `rustra_ffi_invoke_cancel(invocation_id)` 로 전달된다.
@@ -926,7 +957,7 @@ pub type RustraCalculatorAsyncCallback =
 /// `payload` 는 `payload_len` 바이트 유효 (null+0 허용). `on_complete` 는
 /// thread-safe C 콜백. `invocation_id` 는 null 또는 유효한 u64 쓰기 포인터.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2_async(
+pub unsafe extern "C" fn rustra_calculator_invoke_frame_async(
     payload: *const u8,
     payload_len: usize,
     user_data: *mut std::ffi::c_void,
@@ -937,7 +968,7 @@ pub unsafe extern "C" fn rustra_calculator_invoke_rkyv_v2_async(
     // 호출마다 thread::spawn 하던 구현은 burst 시 스레드 폭증과 메모리 고갈을
     // 일으켰고, payload 크기 게이트도 복사 뒤에 적용됐다.
     unsafe {
-        rustra::ffi::rustra_ffi_invoke_rkyv_v2_async(
+        rustra::ffi::rustra_ffi_invoke_frame_async(
             payload,
             payload_len,
             user_data,
@@ -1189,6 +1220,32 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// RN 이 쓰는 것과 동일한 FFI JSON 경로(`rustra_ffi_invoke_json` →
+    /// `Package::invoke_json`)로 커맨드를 호출하고 응답 JSON 을 돌려준다.
+    /// debug 전용 테스트에서만 사용된다.
+    #[cfg(debug_assertions)]
+    fn ffi_call(command: &str, args: serde_json::Value) -> serde_json::Value {
+        let req = serde_json::json!({ "command": command, "args": args });
+        let payload = serde_json::to_vec(&req).unwrap();
+        let mut out_len: usize = 0;
+        let ptr = unsafe {
+            rustra::ffi::rustra_ffi_invoke_json(payload.as_ptr(), payload.len(), &mut out_len)
+        };
+        assert!(!ptr.is_null());
+        let bytes = unsafe { std::slice::from_raw_parts(ptr, out_len) };
+        let resp: serde_json::Value = serde_json::from_slice(bytes).unwrap();
+        unsafe { rustra::ffi::rustra_ffi_free(ptr, out_len) };
+        resp
+    }
+
+    /// Frame 에러 와이어의 postcard {code, message} 페이로드.
+    #[derive(serde::Deserialize)]
+    #[allow(dead_code)]
+    struct WireError {
+        code: String,
+        message: String,
+    }
 
     /// 채널 왕복: 커맨드 인자로 받은 핸들로 흘린 페이로드가 호스트 콜백에
     /// 순서대로 도달한다(Tauri ipc::Channel 방향 — 네이티브→JS 스트림).
@@ -1447,19 +1504,15 @@ mod tests {
     }
 
     #[test]
-    fn test_rkyv_v2_generic_dispatch() {
+    fn test_frame_generic_dispatch() {
         ensure_registered();
         // Build request using postcard wire format:
         // [command_id: u16 @0][postcard(AddNumbersInput)]
-        let input = AddNumbersInput { a: 42, b: 58 };
-        let input_bytes = postcard::to_allocvec(&input).unwrap();
-        let mut payload = vec![0u8; 2 + input_bytes.len()];
-        payload[0..2].copy_from_slice(&1u16.to_le_bytes()); // command_id = 1 (addNumbers)
-        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
+        let payload = v2_request(1, &AddNumbersInput { a: 42, b: 58 });
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
-            rustra_calculator_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+            rustra_calculator_invoke_frame(payload.as_ptr(), payload.len(), &mut out_len)
         };
 
         assert!(!result_ptr.is_null());
@@ -1472,25 +1525,24 @@ mod tests {
         let output: AddNumbersOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
         assert_eq!(output.value, 100);
 
-        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_frame_buffer(result_ptr, out_len) };
     }
 
     #[test]
-    fn test_rkyv_v2_tier2_string_input() {
+    fn test_frame_tier2_string_input() {
         ensure_registered();
         // greet (command_id = 5): input has one String field "name"
         // Wire: [cmd_id: u16 @0][postcard(GreetInput)]
-        let input = GreetInput {
-            name: "World".into(),
-        };
-        let input_bytes = postcard::to_allocvec(&input).unwrap();
-        let mut payload = vec![0u8; 2 + input_bytes.len()];
-        payload[0..2].copy_from_slice(&5u16.to_le_bytes()); // command_id = 5 (greet)
-        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
+        let payload = v2_request(
+            5,
+            &GreetInput {
+                name: "World".into(),
+            },
+        );
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
-            rustra_calculator_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+            rustra_calculator_invoke_frame(payload.as_ptr(), payload.len(), &mut out_len)
         };
 
         assert!(!result_ptr.is_null());
@@ -1503,25 +1555,24 @@ mod tests {
         let output: GreetOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
         assert_eq!(output.message, "Hello, World!");
 
-        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_frame_buffer(result_ptr, out_len) };
     }
 
     #[test]
-    fn test_rkyv_v2_tier2_vec_input() {
+    fn test_frame_tier2_vec_input() {
         ensure_registered();
         // sum_list (command_id = 6): input has one Vec<i64> field "numbers"
         // Wire: [cmd_id: u16 @0][postcard(SumListInput)]
-        let input = SumListInput {
-            numbers: vec![10, 20, 30, 40],
-        };
-        let input_bytes = postcard::to_allocvec(&input).unwrap();
-        let mut payload = vec![0u8; 2 + input_bytes.len()];
-        payload[0..2].copy_from_slice(&6u16.to_le_bytes()); // command_id = 6 (sumList)
-        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
+        let payload = v2_request(
+            6,
+            &SumListInput {
+                numbers: vec![10, 20, 30, 40],
+            },
+        );
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
-            rustra_calculator_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+            rustra_calculator_invoke_frame(payload.as_ptr(), payload.len(), &mut out_len)
         };
 
         assert!(!result_ptr.is_null());
@@ -1535,23 +1586,19 @@ mod tests {
         assert_eq!(output.count, 4);
         assert_eq!(output.total, 100);
 
-        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_frame_buffer(result_ptr, out_len) };
     }
 
     #[test]
-    fn test_rkyv_v2_tier2_string_output() {
+    fn test_frame_tier2_string_output() {
         ensure_registered();
         // to_upper (command_id = 7): input has String field "s", output has String field "result"
         // Wire: [cmd_id: u16 @0][postcard(ToUpperInput)]
-        let input = ToUpperInput { s: "hello".into() };
-        let input_bytes = postcard::to_allocvec(&input).unwrap();
-        let mut payload = vec![0u8; 2 + input_bytes.len()];
-        payload[0..2].copy_from_slice(&7u16.to_le_bytes()); // command_id = 7 (toUpper)
-        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
+        let payload = v2_request(7, &ToUpperInput { s: "hello".into() });
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
-            rustra_calculator_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+            rustra_calculator_invoke_frame(payload.as_ptr(), payload.len(), &mut out_len)
         };
 
         assert!(!result_ptr.is_null());
@@ -1562,29 +1609,28 @@ mod tests {
         let output: ToUpperOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
         assert_eq!(output.result, "HELLO");
 
-        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_frame_buffer(result_ptr, out_len) };
     }
 
     #[test]
-    fn test_rkyv_v2_tier3_json_fallback() {
+    fn test_frame_tier3_json_fallback() {
         ensure_registered();
         // process_item (command_id = 9): now uses postcard (no more JSON fallback)
         // Wire: [cmd_id: u16 @0 LE][postcard(ProcessItemInput)]
-        let input = ProcessItemInput {
-            item: Item {
-                active: true,
-                name: "widget".into(),
-                value: 50,
+        let payload = v2_request(
+            9,
+            &ProcessItemInput {
+                item: Item {
+                    active: true,
+                    name: "widget".into(),
+                    value: 50,
+                },
             },
-        };
-        let input_bytes = postcard::to_allocvec(&input).unwrap();
-        let mut payload = vec![0u8; 2 + input_bytes.len()];
-        payload[0..2].copy_from_slice(&9u16.to_le_bytes()); // command_id = 9 (processItem)
-        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
+        );
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
-            rustra_calculator_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+            rustra_calculator_invoke_frame(payload.as_ptr(), payload.len(), &mut out_len)
         };
 
         assert!(!result_ptr.is_null());
@@ -1601,26 +1647,25 @@ mod tests {
         assert_eq!(output.item.active, false);
         assert_eq!(output.doubled, false);
 
-        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_frame_buffer(result_ptr, out_len) };
     }
 
     #[test]
-    fn test_rkyv_v2_tier3_create_item() {
+    fn test_frame_tier3_create_item() {
         ensure_registered();
         // create_item (command_id = 8): now uses postcard (no more JSON fallback)
         // Wire: [cmd_id: u16 @0 LE][postcard(CreateItemInput)]
-        let input = CreateItemInput {
-            name: "gadget".into(),
-            value: 42,
-        };
-        let input_bytes = postcard::to_allocvec(&input).unwrap();
-        let mut payload = vec![0u8; 2 + input_bytes.len()];
-        payload[0..2].copy_from_slice(&8u16.to_le_bytes()); // command_id = 8 (createItem)
-        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
+        let payload = v2_request(
+            8,
+            &CreateItemInput {
+                name: "gadget".into(),
+                value: 42,
+            },
+        );
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
-            rustra_calculator_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+            rustra_calculator_invoke_frame(payload.as_ptr(), payload.len(), &mut out_len)
         };
 
         assert!(!result_ptr.is_null());
@@ -1634,23 +1679,19 @@ mod tests {
         assert_eq!(output.item.value, 42);
         assert_eq!(output.item.active, true);
 
-        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_frame_buffer(result_ptr, out_len) };
     }
 
     #[test]
-    fn test_rkyv_v2_postcard_binary_handler() {
+    fn test_frame_postcard_binary_handler() {
         ensure_registered();
         // Test the fast postcard binary handler path
         // Build request: [cmd_id: u16 LE][postcard(AddNumbersInput)]
-        let input = AddNumbersInput { a: 42, b: 58 };
-        let input_bytes = postcard::to_allocvec(&input).unwrap();
-        let mut payload = vec![0u8; 2 + input_bytes.len()];
-        payload[0..2].copy_from_slice(&1u16.to_le_bytes()); // command_id = 1
-        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
+        let payload = v2_request(1, &AddNumbersInput { a: 42, b: 58 });
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
-            rustra_calculator_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+            rustra_calculator_invoke_frame(payload.as_ptr(), payload.len(), &mut out_len)
         };
 
         assert!(!result_ptr.is_null());
@@ -1663,146 +1704,130 @@ mod tests {
         let output: AddNumbersOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
         assert_eq!(output.value, 100);
 
-        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_frame_buffer(result_ptr, out_len) };
     }
 
     #[test]
-    fn test_rkyv_v2_postcard_all_tiers() {
+    fn test_frame_postcard_all_tiers() {
         ensure_registered();
         // Test all 9 commands through the postcard binary handler
 
         // Tier 1: addNumbers (cmd 1)
         {
-            let input = AddNumbersInput { a: 10, b: 20 };
-            let ib = postcard::to_allocvec(&input).unwrap();
-            let mut p = vec![0u8; 2 + ib.len()];
-            p[0..2].copy_from_slice(&1u16.to_le_bytes());
-            p[2..].copy_from_slice(&ib);
+            let p = v2_request(1, &AddNumbersInput { a: 10, b: 20 });
             let mut ol: usize = 0;
-            let rp = unsafe { rustra_calculator_invoke_rkyv_v2(p.as_ptr(), p.len(), &mut ol) };
+            let rp = unsafe { rustra_calculator_invoke_frame(p.as_ptr(), p.len(), &mut ol) };
             let rb = unsafe { std::slice::from_raw_parts(rp, ol) };
             assert_eq!(rb[0], 1);
             let out: AddNumbersOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert_eq!(out.value, 30);
-            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_frame_buffer(rp, ol) };
         }
 
         // Tier 1: multiply (cmd 2)
         {
-            let input = MultiplyInput { a: 1.5, b: 2.0 };
-            let ib = postcard::to_allocvec(&input).unwrap();
-            let mut p = vec![0u8; 2 + ib.len()];
-            p[0..2].copy_from_slice(&2u16.to_le_bytes());
-            p[2..].copy_from_slice(&ib);
+            let p = v2_request(2, &MultiplyInput { a: 1.5, b: 2.0 });
             let mut ol: usize = 0;
-            let rp = unsafe { rustra_calculator_invoke_rkyv_v2(p.as_ptr(), p.len(), &mut ol) };
+            let rp = unsafe { rustra_calculator_invoke_frame(p.as_ptr(), p.len(), &mut ol) };
             let rb = unsafe { std::slice::from_raw_parts(rp, ol) };
             assert_eq!(rb[0], 1);
             let out: MultiplyOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert!((out.value - 3.0).abs() < 0.01);
-            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_frame_buffer(rp, ol) };
         }
 
         // Tier 1: isEven (cmd 3)
         {
-            let input = IsEvenInput { n: 42 };
-            let ib = postcard::to_allocvec(&input).unwrap();
-            let mut p = vec![0u8; 2 + ib.len()];
-            p[0..2].copy_from_slice(&3u16.to_le_bytes());
-            p[2..].copy_from_slice(&ib);
+            let p = v2_request(3, &IsEvenInput { n: 42 });
             let mut ol: usize = 0;
-            let rp = unsafe { rustra_calculator_invoke_rkyv_v2(p.as_ptr(), p.len(), &mut ol) };
+            let rp = unsafe { rustra_calculator_invoke_frame(p.as_ptr(), p.len(), &mut ol) };
             let rb = unsafe { std::slice::from_raw_parts(rp, ol) };
             assert_eq!(rb[0], 1);
             let out: IsEvenOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert_eq!(out.result, true);
-            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_frame_buffer(rp, ol) };
         }
 
         // Tier 2: greet (cmd 5)
         {
-            let input = GreetInput {
-                name: "Rustra".into(),
-            };
-            let ib = postcard::to_allocvec(&input).unwrap();
-            let mut p = vec![0u8; 2 + ib.len()];
-            p[0..2].copy_from_slice(&5u16.to_le_bytes());
-            p[2..].copy_from_slice(&ib);
+            let p = v2_request(
+                5,
+                &GreetInput {
+                    name: "Rustra".into(),
+                },
+            );
             let mut ol: usize = 0;
-            let rp = unsafe { rustra_calculator_invoke_rkyv_v2(p.as_ptr(), p.len(), &mut ol) };
+            let rp = unsafe { rustra_calculator_invoke_frame(p.as_ptr(), p.len(), &mut ol) };
             let rb = unsafe { std::slice::from_raw_parts(rp, ol) };
             assert_eq!(rb[0], 1);
             let out: GreetOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert_eq!(out.message, "Hello, Rustra!");
-            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_frame_buffer(rp, ol) };
         }
 
         // Tier 2: sumList (cmd 6)
         {
-            let input = SumListInput {
-                numbers: vec![1, 2, 3, 4, 5],
-            };
-            let ib = postcard::to_allocvec(&input).unwrap();
-            let mut p = vec![0u8; 2 + ib.len()];
-            p[0..2].copy_from_slice(&6u16.to_le_bytes());
-            p[2..].copy_from_slice(&ib);
+            let p = v2_request(
+                6,
+                &SumListInput {
+                    numbers: vec![1, 2, 3, 4, 5],
+                },
+            );
             let mut ol: usize = 0;
-            let rp = unsafe { rustra_calculator_invoke_rkyv_v2(p.as_ptr(), p.len(), &mut ol) };
+            let rp = unsafe { rustra_calculator_invoke_frame(p.as_ptr(), p.len(), &mut ol) };
             let rb = unsafe { std::slice::from_raw_parts(rp, ol) };
             assert_eq!(rb[0], 1);
             let out: SumListOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert_eq!(out.total, 15);
             assert_eq!(out.count, 5);
-            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_frame_buffer(rp, ol) };
         }
 
         // Tier 3: createItem (cmd 8) — postcard handles nested structs!
         {
-            let input = CreateItemInput {
-                name: "Widget".into(),
-                value: 42,
-            };
-            let ib = postcard::to_allocvec(&input).unwrap();
-            let mut p = vec![0u8; 2 + ib.len()];
-            p[0..2].copy_from_slice(&8u16.to_le_bytes());
-            p[2..].copy_from_slice(&ib);
+            let p = v2_request(
+                8,
+                &CreateItemInput {
+                    name: "Widget".into(),
+                    value: 42,
+                },
+            );
             let mut ol: usize = 0;
-            let rp = unsafe { rustra_calculator_invoke_rkyv_v2(p.as_ptr(), p.len(), &mut ol) };
+            let rp = unsafe { rustra_calculator_invoke_frame(p.as_ptr(), p.len(), &mut ol) };
             let rb = unsafe { std::slice::from_raw_parts(rp, ol) };
             assert_eq!(rb[0], 1);
             let out: CreateItemOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert_eq!(out.item.name, "Widget");
             assert_eq!(out.item.value, 42);
             assert_eq!(out.item.active, true);
-            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_frame_buffer(rp, ol) };
         }
 
         // Tier 3: processItem (cmd 9)
         {
-            let input = ProcessItemInput {
-                item: Item {
-                    active: true,
-                    name: "Gadget".into(),
-                    value: 200,
+            let p = v2_request(
+                9,
+                &ProcessItemInput {
+                    item: Item {
+                        active: true,
+                        name: "Gadget".into(),
+                        value: 200,
+                    },
                 },
-            };
-            let ib = postcard::to_allocvec(&input).unwrap();
-            let mut p = vec![0u8; 2 + ib.len()];
-            p[0..2].copy_from_slice(&9u16.to_le_bytes());
-            p[2..].copy_from_slice(&ib);
+            );
             let mut ol: usize = 0;
-            let rp = unsafe { rustra_calculator_invoke_rkyv_v2(p.as_ptr(), p.len(), &mut ol) };
+            let rp = unsafe { rustra_calculator_invoke_frame(p.as_ptr(), p.len(), &mut ol) };
             let rb = unsafe { std::slice::from_raw_parts(rp, ol) };
             assert_eq!(rb[0], 1);
             let out: ProcessItemOutput = postcard::from_bytes(&rb[8..]).unwrap();
             assert_eq!(out.item.value, 400);
             assert_eq!(out.doubled, true);
-            unsafe { rustra_calculator_free_rkyv_v2_buffer(rp, ol) };
+            unsafe { rustra_calculator_free_frame_buffer(rp, ol) };
         }
     }
 
     #[test]
-    fn test_rkyv_v2_error_response_encoding() {
+    fn test_frame_error_response_encoding() {
         ensure_registered();
         // Send a payload with an unknown command_id to trigger an error.
         // Error wire: [ok=0 @0][pad 7B][err_len u16 @8][postcard({code,message}) @10]
@@ -1812,7 +1837,7 @@ mod tests {
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
-            rustra_calculator_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+            rustra_calculator_invoke_frame(payload.as_ptr(), payload.len(), &mut out_len)
         };
 
         assert!(!result_ptr.is_null());
@@ -1822,34 +1847,24 @@ mod tests {
         // Decode the structured postcard error payload → { code, message }.
         let error_len = u16::from_le_bytes(result_bytes[8..10].try_into().unwrap()) as usize;
         assert!(error_len > 0);
-        #[derive(serde::Deserialize)]
-        #[allow(dead_code)]
-        struct WireError {
-            code: String,
-            message: String,
-        }
         let wire: WireError = postcard::from_bytes(&result_bytes[10..10 + error_len]).unwrap();
         // Unknown command_id → command_not_found typed error (code preserved).
         assert_eq!(wire.code, "command.not_found");
         assert!(!wire.message.is_empty());
 
-        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_frame_buffer(result_ptr, out_len) };
     }
 
     #[test]
-    fn test_rkyv_v2_divide_by_zero_typed_error() {
+    fn test_frame_divide_by_zero_typed_error() {
         ensure_registered();
         // divide (command_id = 11) with b=0 → RustraError::custom("math.divide_by_zero").
-        // Proves a domain typed error code round-trips through the rkyv V2 error wire.
-        let input = DivideInput { a: 10, b: 0 };
-        let input_bytes = postcard::to_allocvec(&input).unwrap();
-        let mut payload = vec![0u8; 2 + input_bytes.len()];
-        payload[0..2].copy_from_slice(&10u16.to_le_bytes()); // command_id = 10 (divide)
-        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
+        // Proves a domain typed error code round-trips through the Frame error wire.
+        let payload = v2_request(10, &DivideInput { a: 10, b: 0 });
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
-            rustra_calculator_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+            rustra_calculator_invoke_frame(payload.as_ptr(), payload.len(), &mut out_len)
         };
 
         assert!(!result_ptr.is_null());
@@ -1857,32 +1872,22 @@ mod tests {
         assert_eq!(result_bytes[0], 0); // ok = false (error)
 
         let error_len = u16::from_le_bytes(result_bytes[8..10].try_into().unwrap()) as usize;
-        #[derive(serde::Deserialize)]
-        #[allow(dead_code)]
-        struct WireError {
-            code: String,
-            message: String,
-        }
         let wire: WireError = postcard::from_bytes(&result_bytes[10..10 + error_len]).unwrap();
         assert_eq!(wire.code, "math.divide_by_zero");
         assert_eq!(wire.message, "cannot divide by zero");
 
-        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_frame_buffer(result_ptr, out_len) };
     }
 
     #[test]
-    fn test_rkyv_v2_divide_success() {
+    fn test_frame_divide_success() {
         ensure_registered();
         // divide with b!=0 succeeds: [ok=1 @0][pad 7B][postcard(DivideOutput)@8]
-        let input = DivideInput { a: 20, b: 4 };
-        let input_bytes = postcard::to_allocvec(&input).unwrap();
-        let mut payload = vec![0u8; 2 + input_bytes.len()];
-        payload[0..2].copy_from_slice(&10u16.to_le_bytes()); // command_id = 10 (divide)
-        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
+        let payload = v2_request(10, &DivideInput { a: 20, b: 4 });
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
-            rustra_calculator_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+            rustra_calculator_invoke_frame(payload.as_ptr(), payload.len(), &mut out_len)
         };
 
         assert!(!result_ptr.is_null());
@@ -1891,24 +1896,20 @@ mod tests {
         let output: DivideOutput = postcard::from_bytes(&result_bytes[8..]).unwrap();
         assert_eq!(output.value, 5);
 
-        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_frame_buffer(result_ptr, out_len) };
     }
 
     #[test]
-    fn test_rkyv_v2_capability_deny() {
+    fn test_frame_capability_deny() {
         ensure_registered();
         // secureCompute (command_id = 13) requires capability "compute:secure".
         // In the debug build the package is mutable but the capability is never
         // granted here → deny-by-default → capability.denied wire error.
-        let input = SecureComputeInput { a: 6, b: 7 };
-        let input_bytes = postcard::to_allocvec(&input).unwrap();
-        let mut payload = vec![0u8; 2 + input_bytes.len()];
-        payload[0..2].copy_from_slice(&13u16.to_le_bytes()); // command_id = 13 (secureCompute)
-        payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
+        let payload = v2_request(13, &SecureComputeInput { a: 6, b: 7 });
 
         let mut out_len: usize = 0;
         let result_ptr = unsafe {
-            rustra_calculator_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+            rustra_calculator_invoke_frame(payload.as_ptr(), payload.len(), &mut out_len)
         };
 
         assert!(!result_ptr.is_null());
@@ -1916,21 +1917,15 @@ mod tests {
         assert_eq!(result_bytes[0], 0); // ok = false (denied)
 
         let error_len = u16::from_le_bytes(result_bytes[8..10].try_into().unwrap()) as usize;
-        #[derive(serde::Deserialize)]
-        #[allow(dead_code)]
-        struct WireError {
-            code: String,
-            message: String,
-        }
         let wire: WireError = postcard::from_bytes(&result_bytes[10..10 + error_len]).unwrap();
         assert_eq!(wire.code, "capability.denied");
 
-        unsafe { rustra_calculator_free_rkyv_v2_buffer(result_ptr, out_len) };
+        unsafe { rustra_calculator_free_frame_buffer(result_ptr, out_len) };
     }
 
     #[test]
     #[cfg(debug_assertions)]
-    fn test_rkyv_v2_capability_grant_then_allow() {
+    fn test_frame_capability_grant_then_allow() {
         // Grant on a FRESH local package (not the global FFI singleton) so the
         // deny test (which uses the global, never-granted package) stays
         // deterministic under parallel test execution.
@@ -1945,17 +1940,13 @@ mod tests {
         payload[0..2].copy_from_slice(&1u16.to_le_bytes()); // command_id = 1
         payload[2] = 0b0000_1010; // postcard zigzag varint: 5 → 10
         payload[3] = 0;
-        let err = pkg.invoke_rkyv_v2(&payload).unwrap_err();
+        let err = pkg.invoke_frame(&payload).unwrap_err();
         assert_eq!(err.code(), "capability.denied");
 
         // After grant: allowed.
         pkg.grant_capability("compute:secure").unwrap();
-        let input = SecureComputeInput { a: 6, b: 7 };
-        let input_bytes = postcard::to_allocvec(&input).unwrap();
-        let mut ok_payload = vec![0u8; 2 + input_bytes.len()];
-        ok_payload[0..2].copy_from_slice(&1u16.to_le_bytes());
-        ok_payload[2..2 + input_bytes.len()].copy_from_slice(&input_bytes);
-        let resp = pkg.invoke_rkyv_v2(&ok_payload).unwrap();
+        let ok_payload = v2_request(1, &SecureComputeInput { a: 6, b: 7 });
+        let resp = pkg.invoke_frame(&ok_payload).unwrap();
         assert_eq!(resp[0], 1); // ok = true
         let output: SecureComputeOutput = postcard::from_bytes(&resp[8..]).unwrap();
         assert_eq!(output.value, 42); // 6 * 7
@@ -1969,60 +1960,46 @@ mod tests {
     fn test_runtime_registry_through_ffi_invoke_json() {
         let _ = calculator_package(); // ensure global package initialized
 
-        let call = |command: &str, args: serde_json::Value| -> serde_json::Value {
-            let req = serde_json::json!({ "command": command, "args": args });
-            let payload = serde_json::to_vec(&req).unwrap();
-            let mut out_len: usize = 0;
-            let ptr = unsafe {
-                rustra::ffi::rustra_ffi_invoke_json(payload.as_ptr(), payload.len(), &mut out_len)
-            };
-            assert!(!ptr.is_null());
-            let bytes = unsafe { std::slice::from_raw_parts(ptr, out_len) };
-            let resp: serde_json::Value = serde_json::from_slice(bytes).unwrap();
-            unsafe { rustra::ffi::rustra_ffi_free(ptr, out_len) };
-            resp
-        };
-
         // debug build → not frozen
-        let state = call("rustraRegistryDemo", serde_json::json!({ "op": "state" }));
+        let state = ffi_call("rustraRegistryDemo", serde_json::json!({ "op": "state" }));
         assert_eq!(
             state["result"]["frozen"], false,
             "debug build must be mutable: {state}"
         );
 
         // 'ping' does not exist yet
-        let before = call("ping", serde_json::json!({}));
+        let before = ffi_call("ping", serde_json::json!({}));
         assert_eq!(before["ok"], false, "ping should not exist yet: {before}");
 
         // register at runtime (through the RN FFI path)
-        let r = call(
+        let r = ffi_call(
             "rustraRegistryDemo",
             serde_json::json!({ "op": "register" }),
         );
         assert_eq!(r["result"]["message"], "registered 'ping'");
-        let ping1 = call("ping", serde_json::json!({}));
+        let ping1 = ffi_call("ping", serde_json::json!({}));
         assert_eq!(
             ping1["result"]["pong"], true,
             "registered ping works: {ping1}"
         );
 
         // replace handler at runtime — same command, different behavior
-        call(
+        ffi_call(
             "rustraRegistryDemo",
             serde_json::json!({ "op": "replacePing" }),
         );
-        let ping2 = call("ping", serde_json::json!({}));
+        let ping2 = ffi_call("ping", serde_json::json!({}));
         assert_eq!(
             ping2["result"]["pong"], false,
             "replaced ping should return pong=false: {ping2}"
         );
 
         // unregister at runtime — command disappears
-        call(
+        ffi_call(
             "rustraRegistryDemo",
             serde_json::json!({ "op": "unregister" }),
         );
-        let after = call("ping", serde_json::json!({}));
+        let after = ffi_call("ping", serde_json::json!({}));
         assert_eq!(after["ok"], false, "ping gone after unregister: {after}");
     }
 
@@ -2032,22 +2009,8 @@ mod tests {
     fn test_runtime_registry_vec_input_through_ffi() {
         let _ = calculator_package();
 
-        let call = |command: &str, args: serde_json::Value| -> serde_json::Value {
-            let req = serde_json::json!({ "command": command, "args": args });
-            let payload = serde_json::to_vec(&req).unwrap();
-            let mut out_len: usize = 0;
-            let ptr = unsafe {
-                rustra::ffi::rustra_ffi_invoke_json(payload.as_ptr(), payload.len(), &mut out_len)
-            };
-            assert!(!ptr.is_null());
-            let bytes = unsafe { std::slice::from_raw_parts(ptr, out_len) };
-            let resp: serde_json::Value = serde_json::from_slice(bytes).unwrap();
-            unsafe { rustra::ffi::rustra_ffi_free(ptr, out_len) };
-            resp
-        };
-
         // register the Vec-input command at runtime
-        let r = call(
+        let r = ffi_call(
             "rustraRegistryDemo",
             serde_json::json!({ "op": "registerAvg" }),
         );
@@ -2057,7 +2020,7 @@ mod tests {
         );
 
         // variable-length array flows through invoke_json
-        let out = call(
+        let out = ffi_call(
             "average",
             serde_json::json!({ "numbers": [10.0, 20.0, 30.0] }),
         );
@@ -2066,15 +2029,15 @@ mod tests {
         assert!((out["result"]["average"].as_f64().unwrap() - 20.0).abs() < 1e-9);
 
         // unregister → gone
-        call(
+        ffi_call(
             "rustraRegistryDemo",
             serde_json::json!({ "op": "unregisterAvg" }),
         );
-        let after = call("average", serde_json::json!({ "numbers": [] }));
+        let after = ffi_call("average", serde_json::json!({ "numbers": [] }));
         assert_eq!(after["ok"], false, "average gone after unregister: {after}");
     }
 
-    // ── invoke_rkyv_v2_async (follow-up 3): id 발급 + 취소 체크포인트 ──
+    // ── invoke_frame_async (follow-up 3): id 발급 + 취소 체크포인트 ──
 
     /// on_complete 콜백이 받은 프레임을 캡처한다. 기존 sync 테스트와 동일하게
     /// addNumbers 는 command_id 1 로 고정이다.
@@ -2103,21 +2066,22 @@ mod tests {
             return;
         }
         let data = unsafe { std::slice::from_raw_parts(resp, resp_len) }.to_vec();
-        // rkyv V2 async delegates to the core allocator, so the matching core
+        // Frame async delegates to the core allocator, so the matching core
         // free wrapper is mandatory. The legacy calculator free has a different
         // allocation layout and intentionally aborts on this pointer.
-        unsafe { rustra_calculator_free_rkyv_v2_buffer(resp, resp_len) };
+        unsafe { rustra_calculator_free_frame_buffer(resp, resp_len) };
         *cap.frame.lock().unwrap() = Some((data, resp_len));
         // Publish completion only after the captured frame is visible.
         cap.fired.store(true, std::sync::atomic::Ordering::Release);
     }
 
-    /// addNumbers rkyv V2 요청 바이트를 만든다 (command_id 1 고정 — sync 테스트와 동일).
-    fn add_request(a: i64, b: i64) -> Vec<u8> {
-        let input = postcard::to_allocvec(&AddNumbersInput { a, b }).unwrap();
-        let mut req = vec![0u8; 2 + input.len()];
-        req[0..2].copy_from_slice(&1u16.to_le_bytes());
-        req[2..].copy_from_slice(&input);
+    /// Frame 요청 바이트 — `[cmd_id u16 LE][postcard(input)]`. 기존 add_request
+    /// (cmd_id 1 고정)를 일반화한 헬퍼로, 생성 바이트는 기존과 동일하다.
+    fn v2_request<I: serde::Serialize>(cmd_id: u16, input: &I) -> Vec<u8> {
+        let body = postcard::to_allocvec(input).unwrap();
+        let mut req = vec![0u8; 2 + body.len()];
+        req[0..2].copy_from_slice(&cmd_id.to_le_bytes());
+        req[2..].copy_from_slice(&body);
         req
     }
 
@@ -2132,7 +2096,7 @@ mod tests {
         panic!("async callback did not fire within timeout");
     }
 
-    /// rkyv V2 에러 프레임에서 postcard {code, message} 를 디코딩한다.
+    /// Frame 에러 프레임에서 postcard {code, message} 를 디코딩한다.
     fn decode_error_wire(frame: &[u8]) -> (String, String) {
         assert!(frame.len() >= 10, "error frame must carry the 10B header");
         assert_eq!(frame[0], 0, "ok flag must be 0 for an error frame");
@@ -2162,14 +2126,14 @@ mod tests {
     }
 
     #[test]
-    fn invoke_rkyv_v2_async_issues_id_and_round_trips() {
+    fn invoke_frame_async_issues_id_and_round_trips() {
         ensure_registered();
-        let req = add_request(20, 22);
+        let req = v2_request(1, &AddNumbersInput { a: 20, b: 22 });
 
         let cap = AsyncCapture::new();
         let mut invocation_id: u64 = 0;
         unsafe {
-            rustra_calculator_invoke_rkyv_v2_async(
+            rustra_calculator_invoke_frame_async(
                 req.as_ptr(),
                 req.len(),
                 &cap as *const _ as *mut std::ffi::c_void,
@@ -2197,14 +2161,14 @@ mod tests {
     }
 
     #[test]
-    fn invoke_rkyv_v2_async_pre_cancelled_returns_cancelled_frame() {
+    fn invoke_frame_async_pre_cancelled_returns_cancelled_frame() {
         ensure_registered();
-        let req = add_request(1, 2);
+        let req = v2_request(1, &AddNumbersInput { a: 1, b: 2 });
 
         let cap = AsyncCapture::new();
         let mut invocation_id: u64 = 0;
         unsafe {
-            rustra_calculator_invoke_rkyv_v2_async(
+            rustra_calculator_invoke_frame_async(
                 req.as_ptr(),
                 req.len(),
                 &cap as *const _ as *mut std::ffi::c_void,
@@ -2238,14 +2202,14 @@ mod tests {
     }
 
     #[test]
-    fn invoke_rkyv_v2_async_null_out_param_still_runs() {
+    fn invoke_frame_async_null_out_param_still_runs() {
         ensure_registered();
-        let req = add_request(2, 3);
+        let req = v2_request(1, &AddNumbersInput { a: 2, b: 3 });
 
         // invocation_id null — ID 발급은 일어나지만 호출자에게 노출되지 않는다.
         // on_complete 도 None 이면 워커는 버퍼를 만들지 않는다 (누수 없음).
         unsafe {
-            rustra_calculator_invoke_rkyv_v2_async(
+            rustra_calculator_invoke_frame_async(
                 req.as_ptr(),
                 req.len(),
                 std::ptr::null_mut(),
@@ -2257,3 +2221,15 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
 }
+
+// ── Track B1-2 — UniFFI 미러 계층 ────────────────────────────
+// 스키마 문서 → 미러 Rust 소스 렌더러. 코드젠(generate bin) 전용이지만 런타임
+// 의존이 없어 전 빌드에서 컴파일된다(단위 테스트는 uniffi 피처 불필요).
+pub mod uniffi_render;
+
+// `--features uniffi` 빌드에서만 코드젠 산출물을 붙인다. 파일 안의 모든 항목은
+// `pub mod uniffi_api`(미러 타입 + 커맨드별 `#[uniffi::export]` 래퍼)와 크레이트
+// 루트의 `uniffi::setup_scaffolding!()` 로 이루어진다. 재생성:
+//   RUSTRA_UNIFFI_OUT=src cargo run -p rustra-calculator-example --bin generate
+#[cfg(feature = "uniffi")]
+include!("uniffi_generated.rs");

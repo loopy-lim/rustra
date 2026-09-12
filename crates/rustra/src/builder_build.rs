@@ -65,7 +65,7 @@ impl PackageBuilder {
         // (성능) id → Command 직접 캐시 — alias id 포함 전체 id_to_name 키와
         // 정확히 같은 라우팅을 제공한다(lookup 일관성: id_to_name 이 가리키는
         // 모든 id 는 여기서도 같은 명령을 찾는다).
-        // 빌더의 owned Command를 한 번만 Arc로 감싼다. 이후 JSON/rkyv invoke의
+        // 빌더의 owned Command를 한 번만 Arc로 감싼다. 이후 JSON/frame invoke의
         // clone-out은 String/schema/handler를 각각 복제하지 않고 Arc refcount
         // 1회만 증가한다.
         let commands: BTreeMap<String, Arc<Command>> = commands

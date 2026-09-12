@@ -24,8 +24,8 @@ Package::generate_typescript()
        ├─ write_schema_to_dir() → schema.json                    (Rust 프로브는 여기까지)
        │
        └─ rustra codegen (TS CLI) 가 schema.json 읽어 렌더링:
-            types.ts, commands.ts, contract.ts, rkyv-codecs.ts,
-            rkyv-registry.ts, events.ts/errors.ts/devices.ts (선언된 경우만),
+            types.ts, commands.ts, contract.ts, frame-codecs.ts,
+            frame-registry.ts, events.ts/errors.ts/devices.ts (선언된 경우만),
             positional-facade.ts, 호스트 엔트리, C++ 코덱
             + .rustra-generated.json (신선도 사이드카)
 ```
@@ -273,6 +273,25 @@ export function addNumbers(
 export const GENERATED_CONTRACT_HASH = '<sha256-hex>';
 ```
 
+### 발행 경로 (fail-closed)
+
+Rust schema bin의 기본 발행 위치(`generated/schema.json`)는 스폰 CWD 상대다.
+일반 `rustra codegen`(check 아님 모드)에서 CLI는 `RUSTRA_SCHEMA_OUT`을
+`config.schema`가 선언한 디렉터리로 고정하므로, schema 바이너리의 발행물이
+config가 선언한 경로 바깥에 생기는 일은 없다. 이 고정이 없으면 config
+디렉터리에서 스폰할 때 다른 곳에 사본이 발행되는 동안 dev 패리티 게이트가
+읽는 `config.schemaPath`는 갱신되지 않아, 게이트가 조용히 stale 비교로
+무력화된다(tauri-calculator `rustra.hot.json` 레이아웃에서 실측, 2026-09-10).
+`rustra codegen --check`는 대신 발행을 버리는 임시 디렉터리로 우회한다 —
+check는 선언된 트리를 건드리지 않고 비교한다.
+
+호스트 엔트리(node/bun/tauri 섹션)의 Cargo 매니페스트 해석 우선순위: 섹션
+자신의 `rustManifest` → 공용 `codegen.rustManifest` → 상위 `Cargo.toml`
+탐색. 아무것도 해석되지 않으면 CLI는 워크스페이스 가상 매니페스트에 상위
+탐색이 닿아 metadata가 후보 0개로 해석되는 상황을 두고 조용히 넘기는 대신
+(`Node setup could not find Cargo.toml. Set node.rustManifest.` / bun 동등
+메시지) 크게 실패한다.
+
 ---
 
 ## 6. 현재 제한사항
@@ -282,7 +301,7 @@ literal enum, map/set/tuple/$ref 재귀 표면을 지원한다. JSON Schema의 �
 키워드(`if`/`then`/`else`)나 `patternProperties`처럼 Rust 타입 계약에서 생성하지
 않는 임의 스키마는 안전하게 `unknown`으로 폴백한다.
 
-**postcard 코덱(rkyv-codecs.ts/C++) 지원 정책**: 미지원 필드를 가진 명령은 부분
+**postcard 코덱(frame-codecs.ts/C++) 지원 정책**: 미지원 필드를 가진 명령은 부분
 postcard 코덱을 만들지 않는다. 대신 complex codec이 전체 schema를 지원하면 TS
 registry에 complex route로 등록한다. C++는 공용 Codec IR이 native-safe로 판정한
 complex subset만 정적 registry에 포함하고, 나머지는 제외한다. 두

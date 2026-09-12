@@ -13,7 +13,6 @@ import {
   processItem,
   echoGroups,
   multiply,
-  clamp,
   benchAdd,
   benchEchoString,
   benchEchoBytes,
@@ -28,7 +27,7 @@ import {
 import { installRustraJSI, getRustraNative } from '@rustra/generated-react-native';
 import RustraCalculator, { invokeCommand as invokeFfiCommand } from 'rustra-calculator';
 import { createJsonEngine } from './src/adapters/json-adapter';
-import { createRkyvV2Engine, rkyvV2Registry } from './src/adapters/rkyv-v2-adapter';
+import { createFrameEngine, frameRegistry } from './src/adapters/frame-adapter';
 import {
   analyzeRouteBottlenecks,
   pairedRatioConfidence95,
@@ -38,14 +37,10 @@ import {
 } from './src/benchmark-stats';
 import { decodeUtf8, encodeUtf8, exactArrayBuffer } from './src/utf8';
 import { RUSTRA_BUILD_FINGERPRINT } from './src/build-fingerprint';
+import { formatError } from './src/format-error';
 // ── End benchmark internals ─────────────────────────────────
 
 // ── Helpers ──────────────────────────────────────────────
-
-function bar(value: number, max: number, width = 25): string {
-  const filled = Math.max(1, Math.round((value / max) * width));
-  return '█'.repeat(filled) + '░'.repeat(width - filled);
-}
 
 function formatNs(ns: number): string {
   if (ns >= 1_000_000) return `${(ns / 1_000_000).toFixed(2)} ms`;
@@ -148,18 +143,18 @@ async function runBenchmarks(): Promise<string[]> {
   // DX example: how users would set up rustra in their app
   // ─────────────────────────────────────────────────────
   //   import { configure } from "@rustra/types";
-  //   import { createRkyvV2Engine } from "./src/adapters/rkyv-v2-adapter";
+  //   import { createFrameEngine } from "./src/adapters/frame-adapter";
   //   import { installRustraJSI, getRustraNative } from "./modules/rustra-jsi/src";
   //
   //   await installRustraJSI();
-  //   configure(createRkyvV2Engine(getRustraNative()));
+  //   configure(createFrameEngine(getRustraNative()));
   //
   //   // Then use generated commands anywhere:
   //   const result = await addNumbers({ a: 42, b: 58 });
   // ══════════════════════════════════════════════════════
 
   const jsonEngine = createJsonEngine(native);
-  const rkyvV2Engine = createRkyvV2Engine(native);
+  const frameEngine = createFrameEngine(native);
 
   const nitroBench = NitroModules.createHybridObject<NitroBench>('NitroBench');
 
@@ -167,7 +162,7 @@ async function runBenchmarks(): Promise<string[]> {
 
   // ══════════════════════════════════════════════════════
   log('╔════════════════════════════════════════════════╗');
-  log('║  rustra rkyv V2 — Multi-Tier Benchmark        ║');
+  log('║  rustra Frame — Multi-Tier Benchmark        ║');
   log('╚════════════════════════════════════════════════╝');
   log('');
 
@@ -175,7 +170,7 @@ async function runBenchmarks(): Promise<string[]> {
   log('┌─ Tier 1: Fixed-width primitives ─────────────┐');
   const adapters = [
     { name: 'JSON', engine: jsonEngine },
-    { name: 'rkyvV2', engine: rkyvV2Engine },
+    { name: 'frame', engine: frameEngine },
   ];
 
   for (const { name, engine } of adapters) {
@@ -189,17 +184,36 @@ async function runBenchmarks(): Promise<string[]> {
     }
   }
 
-  configure(rkyvV2Engine);
+  // A6 런타임 스모크 마커 — CI(rn-android/rn-ios)가 에뮬레이터/시뮬레이터에서 앱을
+  // 실제 기동시키고 이 토큰으로 "JS 번들 로드 + 첫 엔진 호출 성공"을 단언한다.
+  // console.warn 을 쓰는 이유: Release 빌드에서 RN 의 console.log 는 네이티브 로그
+  // 전달 임계값(warning) 아래로 잘려 logcat/os_log 에 보이지 않는다(iOS 벤치마크
+  // receipt 를 파일로 우회하는 것과 같은 이유). __DEV__ 조기 반환(Debug 빌드)에서는
+  // runBenchmarks 가 생략되므로 마커도 없다 — CI 스모크는 Release 빌드
+  // (assembleRelease / Release 구성) 전용 계약이다.
+  configure(frameEngine);
+  try {
+    const smoke = await addNumbers(INPUT);
+    if (smoke.value === 100) {
+      console.warn('__RUSTRA_SMOKE_OK__ addNumbers(42,58)=100');
+    } else {
+      console.warn(`__RUSTRA_SMOKE_FAIL__ addNumbers returned ${smoke.value}`);
+    }
+  } catch (e: any) {
+    console.warn(`__RUSTRA_SMOKE_FAIL__ ${String(e).slice(0, 80)}`);
+  }
+
+  configure(frameEngine);
   try {
     const even = await isEven({ n: 42 });
-    log(`│  rkyvV2    isEven(42)=true    ${even.result === true ? '✓' : '✗'}`);
+    log(`│  frame    isEven(42)=true    ${even.result === true ? '✓' : '✗'}`);
   } catch (e: any) {
     log(`│  isEven FAIL ${String(e).slice(0, 40)}`);
   }
 
   try {
     const mul = await multiply({ a: 3.14, b: 2.0 });
-    log(`│  rkyvV2    multiply(3.14,2)=6.28 ${Math.abs(mul.value - 6.28) < 0.01 ? '✓' : '✗'}`);
+    log(`│  frame    multiply(3.14,2)=6.28 ${Math.abs(mul.value - 6.28) < 0.01 ? '✓' : '✗'}`);
   } catch (e: any) {
     log(`│  multiply FAIL ${String(e).slice(0, 40)}`);
   }
@@ -208,7 +222,7 @@ async function runBenchmarks(): Promise<string[]> {
 
   // ── Tier 2 verification ──────────────────────────────
   log('┌─ Tier 2: String / Vec<primitive> ─────────────┐');
-  configure(rkyvV2Engine);
+  configure(frameEngine);
   try {
     const g = await greet({ name: 'Rustra' });
     log(`│  greet("Rustra")="${g.message}" ${g.message === 'Hello, Rustra!' ? '✓' : '✗'}`);
@@ -236,7 +250,7 @@ async function runBenchmarks(): Promise<string[]> {
 
   // ── Tier 3 verification ──────────────────────────────
   log('┌─ Tier 3: Nested structs (JSON fallback) ──────┐');
-  configure(rkyvV2Engine);
+  configure(frameEngine);
   try {
     const ci = await createItem({ name: 'Widget', value: 42 });
     const ok = ci.item.name === 'Widget' && ci.item.value === 42 && ci.item.active === true;
@@ -273,31 +287,31 @@ async function runBenchmarks(): Promise<string[]> {
   log('║  Micro-bench: Sync steps (100K iter)          ║');
   log('╠════════════════════════════════════════════════╣');
 
-  const codec = rkyvV2Registry.get('addNumbers')!;
-  const positionalCodec = rkyvV2Registry.get('benchAdd')!;
+  const codec = frameRegistry.get('addNumbers')!;
+  const positionalCodec = frameRegistry.get('benchAdd')!;
 
   // 1. Pure encode
-  const encodeBench = measureSync('rkyvV2 encode', () => codec.encode(INPUT));
+  const encodeBench = measureSync('frame encode', () => codec.encode(INPUT));
   log(
     `│  encode   avg: ${formatNs(encodeBench.avg).padStart(10)}  p50: ${formatNs(encodeBench.p50)}`,
   );
 
   // 2. Pure JSI call (pre-encoded payload)
   const preEncoded = codec.encode(INPUT);
-  const jsiBench = measureSync('rkyvV2 JSI', () => native.invokeRkyvV2(preEncoded));
+  const jsiBench = measureSync('frame JSI', () => native.invokeFrame(preEncoded));
   log(`│  JSI call avg: ${formatNs(jsiBench.avg).padStart(10)}  p50: ${formatNs(jsiBench.p50)}`);
 
   // 3. Pure decode (pre-encoded response)
-  const preResponse = native.invokeRkyvV2(preEncoded);
-  const decodeBench = measureSync('rkyvV2 decode', () => codec.decode(preResponse));
+  const preResponse = native.invokeFrame(preEncoded);
+  const decodeBench = measureSync('frame decode', () => codec.decode(preResponse));
   log(
     `│  decode   avg: ${formatNs(decodeBench.avg).padStart(10)}  p50: ${formatNs(decodeBench.p50)}`,
   );
 
   // 4. Full encode+JSI+decode (sync, no Promise)
-  const fullSyncBench = measureSync('rkyvV2 full sync', () => {
+  const fullSyncBench = measureSync('frame full sync', () => {
     const p = codec.encode(INPUT);
-    const r = native.invokeRkyvV2(p);
+    const r = native.invokeFrame(p);
     return codec.decode(r);
   });
   log(
@@ -308,7 +322,7 @@ async function runBenchmarks(): Promise<string[]> {
   // 생성/JS 코덱 encode 를 통째로 건너뛴다. addNumbers는 int64-shaped complex
   // 명령이라 이 경로에서 제외하고, 같은 두 f64 필드인 benchAdd를 측정한다.
   if (typeof native.invokeTypedPos === 'function') {
-    const posBench = measureSync('rkyvV2 pos', () => {
+    const posBench = measureSync('frame pos', () => {
       return (
         native as { invokeTypedPos(id: number, a: number, b: number): unknown }
       ).invokeTypedPos(positionalCodec.commandId, INPUT.a, INPUT.b);
@@ -320,7 +334,7 @@ async function runBenchmarks(): Promise<string[]> {
   }
   // byId 경로(객체 인자 유지, 코어 caller-buffer受益) — Tier 1 _into 효과 격리.
   if (typeof native.invokeTypedById === 'function') {
-    const byIdBench = measureSync('rkyvV2 byId', () => {
+    const byIdBench = measureSync('frame byId', () => {
       return (native as { invokeTypedById(id: number, args: unknown): unknown }).invokeTypedById(
         positionalCodec.commandId,
         INPUT,
@@ -400,10 +414,10 @@ async function runBenchmarks(): Promise<string[]> {
     `│  JSON     avg: ${formatNs(jsonResult.avg).padStart(10)}  p50: ${formatNs(jsonResult.p50)}  p99: ${formatNs(jsonResult.p99)}`,
   );
 
-  configure(rkyvV2Engine);
-  const rkyvV2Result = await measure('rkyvV2', () => addNumbers(INPUT));
+  configure(frameEngine);
+  const frameResult = await measure('frame', () => addNumbers(INPUT));
   log(
-    `│  rkyvV2   avg: ${formatNs(rkyvV2Result.avg).padStart(10)}  p50: ${formatNs(rkyvV2Result.p50)}  p99: ${formatNs(rkyvV2Result.p99)}`,
+    `│  frame   avg: ${formatNs(frameResult.avg).padStart(10)}  p50: ${formatNs(frameResult.p50)}  p99: ${formatNs(frameResult.p99)}`,
   );
 
   let ffiSyncResult: BenchResult | undefined;
@@ -437,7 +451,7 @@ async function runBenchmarks(): Promise<string[]> {
       );
       log('│  FFI async: included in the interleaved equivalent-op suite below');
     } catch (error: unknown) {
-      log(`│  Swift FFI unavailable: ${error instanceof Error ? error.message : String(error)}`);
+      log(`│  Swift FFI unavailable: ${formatError(error)}`);
     }
   } else {
     log('│  Swift FFI skipped: iOS-only comparison module');
@@ -451,10 +465,10 @@ async function runBenchmarks(): Promise<string[]> {
   log('║  Tier 2 (String): greet (10K iter)            ║');
   log('╠════════════════════════════════════════════════╣');
 
-  configure(rkyvV2Engine);
-  const greetRkyvV2 = await measure('greet rkyvV2', () => greet({ name: 'World' }));
+  configure(frameEngine);
+  const greetFrame = await measure('greet frame', () => greet({ name: 'World' }));
   log(
-    `│  rkyvV2   avg: ${formatNs(greetRkyvV2.avg).padStart(10)}  p50: ${formatNs(greetRkyvV2.p50)}  p99: ${formatNs(greetRkyvV2.p99)}`,
+    `│  frame   avg: ${formatNs(greetFrame.avg).padStart(10)}  p50: ${formatNs(greetFrame.p50)}  p99: ${formatNs(greetFrame.p99)}`,
   );
 
   configure(jsonEngine);
@@ -470,7 +484,7 @@ async function runBenchmarks(): Promise<string[]> {
   // 같은 JS 객체 모양, 같은 echo/add 연산, 같은 반환 모양을 호출 단위 순환
   // 측정한다. Nitro 원시 add(a,b)는 별도 lower bound일 뿐 ratio에 쓰지 않는다.
   log('╔════════════════════════════════════════════════╗');
-  log('║  Equivalent ops: Nitro/rkyvV2/FFI (10K)      ║');
+  log('║  Equivalent ops: Nitro/frame/FFI (10K)      ║');
   log('╠════════════════════════════════════════════════╣');
 
   const nitroRaw = await measure('nitro raw add', () => Promise.resolve(nitroBench.add(42, 58)));
@@ -507,7 +521,7 @@ async function runBenchmarks(): Promise<string[]> {
   // 수치보다 먼저 정답과 공개 결과 shape를 확인한다. 하나라도 다르면 timing을
   // 시작하지 않아 서로 다른 작업의 ratio가 로그에 남지 않는다.
   const nitroAddValue = nitroBench.benchAdd(INPUT);
-  configure(rkyvV2Engine);
+  configure(frameEngine);
   const rustraAddValue = await benchAdd(INPUT);
   const nitroStringValue = nitroBench.echoString(stringPayload);
   const rustraStringValue = await benchEchoString(stringPayload);
@@ -534,9 +548,7 @@ async function runBenchmarks(): Promise<string[]> {
       };
     } catch (error: unknown) {
       ffiSuiteAvailable = false;
-      log(
-        `│  Swift FFI correctness failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      log(`│  Swift FFI correctness failed: ${formatError(error)}`);
     }
   }
 
@@ -584,7 +596,7 @@ async function runBenchmarks(): Promise<string[]> {
     };
   };
 
-  configure(rkyvV2Engine);
+  configure(frameEngine);
   const addResults = await measureEquivalent(
     'add',
     () => Promise.resolve(nitroBench.benchAdd(INPUT)),
@@ -726,10 +738,10 @@ async function runBenchmarks(): Promise<string[]> {
     };
     // 커맨드 id는 register! 등록 순서에서 온다 — 하드코딩 대신 생성 codec 의
     // commandId 를 읽어야 신규 커맨드 추가로 인한 시프트에도 진단이 유효하다.
-    const benchAddId = rkyvV2Registry.get('benchAdd')!.commandId;
-    const benchEchoStringId = rkyvV2Registry.get('benchEchoString')!.commandId;
-    const benchEchoBytesId = rkyvV2Registry.get('benchEchoBytes')!.commandId;
-    const benchEchoPairId = rkyvV2Registry.get('benchEchoPair')!.commandId;
+    const benchAddId = frameRegistry.get('benchAdd')!.commandId;
+    const benchEchoStringId = frameRegistry.get('benchEchoString')!.commandId;
+    const benchEchoBytesId = frameRegistry.get('benchEchoBytes')!.commandId;
+    const benchEchoPairId = frameRegistry.get('benchEchoPair')!.commandId;
     generatedRouteDiagnostics = {
       add: await routeCases(
         'add',
@@ -748,9 +760,10 @@ async function runBenchmarks(): Promise<string[]> {
       ),
       pair: await routeCases(
         'pair',
-        () => Promise.resolve(
-          native.invokeTypedPos!(benchEchoPairId, pairPayload.name, pairPayload.value),
-        ),
+        () =>
+          Promise.resolve(
+            native.invokeTypedPos!(benchEchoPairId, pairPayload.name, pairPayload.value),
+          ),
         () => benchEchoPair(pairPayload),
       ),
     };
@@ -962,9 +975,7 @@ async function runBenchmarks(): Promise<string[]> {
       );
       lines.unshift(`RECEIPT ${filename}`, '');
     } catch (error: unknown) {
-      throw new Error(
-        `benchmark receipt export failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
+      throw new Error(`benchmark receipt export failed: ${formatError(error)}`);
     }
   }
   console.log(`RUSTRA_NITRO_JSON=${JSON.stringify(equivalentBenchmarkReceipt)}`);
@@ -1023,7 +1034,6 @@ async function runBenchmarks(): Promise<string[]> {
     log('╔════════════════════════════════════════════════╗');
     log('║  Channels & Resources (Tauri v2 model)        ║');
     log('╠════════════════════════════════════════════════╣');
-    const native = getRustraNative();
     if (native?.createChannel) {
       const received: string[] = [];
       const handle = native.createChannel((payloadJson: string) => {
@@ -1078,7 +1088,7 @@ async function runBenchmarks(): Promise<string[]> {
   log('║  Summary                                      ║');
   log('╠════════════════════════════════════════════════╣');
   log('│');
-  log('│  Breakdown (rkyvV2 addNumbers sync 100K):');
+  log('│  Breakdown (frame addNumbers sync 100K):');
   log(`│    encode  = ${formatNs(encodeBench.avg)}`);
   log(`│    JSI     = ${formatNs(jsiBench.avg)}`);
   log(`│    decode  = ${formatNs(decodeBench.avg)}`);
@@ -1091,17 +1101,17 @@ async function runBenchmarks(): Promise<string[]> {
   log(`│    total   = ${formatNs(jsonFullSync.avg)}`);
   log('│');
   log('│  Async overhead (Promise.resolve):');
-  log(`│    rkyvV2 async/sync = ${(rkyvV2Result.avg / fullSyncBench.avg).toFixed(1)}x`);
+  log(`│    frame async/sync = ${(frameResult.avg / fullSyncBench.avg).toFixed(1)}x`);
   log(`│    JSON async/sync   = ${(jsonResult.avg / jsonFullSync.avg).toFixed(1)}x`);
   if (ffiSyncResult && ffiAsyncResult) {
     log(`│    Swift FFI async/sync = ${(ffiAsyncResult.avg / ffiSyncResult.avg).toFixed(1)}x`);
   }
   log('│');
-  log(`│  rkyvV2 vs JSON (sync) = ${(jsonFullSync.avg / fullSyncBench.avg).toFixed(1)}x faster`);
-  log(`│  rkyvV2 vs JSON (async)= ${(jsonResult.avg / rkyvV2Result.avg).toFixed(1)}x faster`);
+  log(`│  frame vs JSON (sync) = ${(jsonFullSync.avg / fullSyncBench.avg).toFixed(1)}x faster`);
+  log(`│  frame vs JSON (async)= ${(jsonResult.avg / frameResult.avg).toFixed(1)}x faster`);
   log('│  Nitro ratios live in Equivalent ops (same JS shapes/operation/output)');
   log('│');
-  log(`│  Tier 2 greet: rkyvV2 vs JSON = ${(greetJson.avg / greetRkyvV2.avg).toFixed(1)}x faster`);
+  log(`│  Tier 2 greet: frame vs JSON = ${(greetJson.avg / greetFrame.avg).toFixed(1)}x faster`);
   log('╚════════════════════════════════════════════════╝');
 
   for (const line of lines) console.log(line);
@@ -1122,7 +1132,7 @@ export default function App() {
         setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: true }), 100);
       })
       .catch((e) => {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = formatError(e);
         setOutput(['Benchmark failed:', msg]);
       });
   }, []);

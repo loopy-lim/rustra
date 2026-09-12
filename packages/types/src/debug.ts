@@ -1,7 +1,7 @@
 /** Opt-in runtime diagnostics for transport and wire debugging. */
 export type RustraDebugEvent = {
   direction: 'request' | 'response' | 'error';
-  transport: 'json' | 'rkyv' | 'typed';
+  transport: 'json' | 'frame' | 'typed';
   command: string;
   bytes?: string;
   byteLength?: number;
@@ -87,13 +87,14 @@ export function resetDebugEnvForTests(): void {
 
 /** Emit diagnostics only when explicitly enabled; secrets are never logged by default. */
 export function debugRustra(event: RustraDebugEvent): void {
-  if (!isRustraDebugEnabled() && !configuredSink) return;
+  const enabled = isRustraDebugEnabled();
+  if (!enabled && !configuredSink) return;
   const safeEvent = {
     ...event,
     value: event.value === undefined ? undefined : snapshot(event.value),
   };
   configuredSink?.(safeEvent);
-  if (isRustraDebugEnabled()) {
+  if (enabled) {
     const logger = typeof console.debug === 'function' ? console.debug : console.log;
     logger('[rustra:debug]', safeEvent);
   }
@@ -135,7 +136,7 @@ export function traceWire(
   command: string,
   bytes: ArrayBuffer | ArrayBufferView,
 ): void {
-  debugWire(direction, 'rkyv', command, bytes);
+  debugWire(direction, 'frame', command, bytes);
   dumpWire(direction, bytes);
 }
 

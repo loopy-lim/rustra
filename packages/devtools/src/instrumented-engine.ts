@@ -49,35 +49,45 @@ export function createInstrumentedEngine(
     recordSlow(command, ms);
     return ms;
   };
+  const recordCall = async <T>(
+    kind: 'invoke' | 'invokeById',
+    command: string,
+    args: unknown,
+    call: () => Promise<T>,
+  ): Promise<T> => {
+    const start = now();
+    let failed = false;
+    try {
+      const result = await call();
+      recordLog({
+        kind,
+        command,
+        durationMs: now() - start,
+        ok: true,
+        payload: payload(args),
+        result: payload(result),
+      });
+      return result;
+    } catch (error) {
+      failed = true;
+      recordLog({
+        kind,
+        command,
+        durationMs: now() - start,
+        ok: false,
+        payload: payload(args),
+        error: errorSummary(error),
+      });
+      throw error;
+    } finally {
+      finish(command, start, failed);
+    }
+  };
   const engine: InstrumentedEngine = {
     async invoke<T>(command: string, args?: unknown, invokeOptions?: InvokeOptions): Promise<T> {
-      const start = now();
-      let failed = false;
-      try {
-        const result = await inner.invoke<T>(command, args, invokeOptions);
-        recordLog({
-          kind: 'invoke',
-          command,
-          durationMs: now() - start,
-          ok: true,
-          payload: payload(args),
-          result: payload(result),
-        });
-        return result;
-      } catch (error) {
-        failed = true;
-        recordLog({
-          kind: 'invoke',
-          command,
-          durationMs: now() - start,
-          ok: false,
-          payload: payload(args),
-          error: errorSummary(error),
-        });
-        throw error;
-      } finally {
-        finish(command, start, failed);
-      }
+      return recordCall('invoke', command, args, () =>
+        inner.invoke<T>(command, args, invokeOptions),
+      );
     },
     report(): DevtoolsReport {
       const commandStats: DevtoolsReport['commandStats'] = {};
@@ -99,35 +109,10 @@ export function createInstrumentedEngine(
       command: string,
       args?: unknown,
       invokeOptions?: InvokeOptions,
-    ) => {
-      const start = now();
-      let failed = false;
-      try {
-        const result = await inner.invokeById!<T>(id, command, args, invokeOptions);
-        recordLog({
-          kind: 'invokeById',
-          command,
-          durationMs: now() - start,
-          ok: true,
-          payload: payload(args),
-          result: payload(result),
-        });
-        return result;
-      } catch (error) {
-        failed = true;
-        recordLog({
-          kind: 'invokeById',
-          command,
-          durationMs: now() - start,
-          ok: false,
-          payload: payload(args),
-          error: errorSummary(error),
-        });
-        throw error;
-      } finally {
-        finish(command, start, failed);
-      }
-    };
+    ) =>
+      recordCall('invokeById', command, args, () =>
+        inner.invokeById!<T>(id, command, args, invokeOptions),
+      );
   }
   if (inner.invokeBatch) {
     engine.invokeBatch = async <T>(entries: BatchEntry[]) => {
@@ -164,7 +149,7 @@ export function createInstrumentedEngine(
         for (const entry of entries) {
           const stat = statFor(entry.command);
           stat.count += 1;
-          stat.totalMs += entries.length ? ms / entries.length : 0;
+          stat.totalMs += ms / entries.length;
         }
         recordSlow(command, ms);
       }

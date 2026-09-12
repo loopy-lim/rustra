@@ -58,11 +58,9 @@ impl<T: Send + Sync + 'static> Deref for State<T> {
 
 /// Sets the current state context during command execution.
 pub fn with_state_context<R>(states: &Arc<StateMap>, f: impl FnOnce() -> R) -> R {
-    // 대부분의 명령은 managed State를 쓰지 않는다. 빈 맵에서도 Arc를 TLS에
-    // clone/drop하면 모든 호출 스레드가 같은 refcount cache line에 쓰기를 해
-    // 병렬 처리량이 역확장된다. 조회 가능한 State가 없을 때는 컨텍스트 설치가
-    // 의미상 no-op이므로 사용자 함수를 바로 실행한다.
-    if states.is_empty() {
+    // 빈 최상위 호출은 공유 Arc refcount를 건드리지 않는다. 중첩 호출은
+    // 빈 맵이라도 외부 패키지의 State를 차단해야 한다.
+    if states.is_empty() && CURRENT_STATES.with(|cell| cell.borrow().is_none()) {
         return f();
     }
 
@@ -76,7 +74,8 @@ pub fn with_state_context<R>(states: &Arc<StateMap>, f: impl FnOnce() -> R) -> R
         }
     }
 
-    let prev = CURRENT_STATES.with(|cell| cell.borrow_mut().replace(states.clone()));
+    let next = (!states.is_empty()).then(|| states.clone());
+    let prev = CURRENT_STATES.with(|cell| std::mem::replace(&mut *cell.borrow_mut(), next));
     let _guard = ResetGuard(prev);
     f()
 }

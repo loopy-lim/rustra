@@ -19,6 +19,8 @@ export interface ResolvedDevConfig {
   root: string;
   schemaPath: string;
   outputPath: string;
+  uniffiMirrorPath?: string;
+  uniffiBindingPath?: string;
   manifestPath: string;
   dev?: ReturnType<typeof resolveDevSection>;
   /** target=wasm 일 때만 존재 — wasm32 엔진 빌드의 매니페스트·패키지 해석값. */
@@ -109,6 +111,12 @@ export function readDevConfig(configPath: string): ResolvedDevConfig {
     root,
     schemaPath: resolve(root, config.schema),
     outputPath: resolve(root, config.output),
+    ...(config.uniffi
+      ? {
+          uniffiMirrorPath: resolve(root, config.uniffi.srcOut ?? 'src', 'uniffi_generated.rs'),
+          uniffiBindingPath: resolve(root, config.uniffi.output),
+        }
+      : {}),
     manifestPath,
     dev,
     devWasm: resolveDevWasm(config, root, manifestPath),
