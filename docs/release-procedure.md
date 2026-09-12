@@ -2,9 +2,9 @@ English | [한국어](./release-procedure.ko.md)
 
 # Release procedure (canary → stable → rollback)
 
-The Frame rename and audit fixes require an unreleased coordinated upgrade. Do not
+The Frame rename and audit fixes target the coordinated 0.10 release. Do not
 reuse the already published 0.9.0; see the [release preparation guide](migrations/post-0.9-frame-and-audit.md)
-for proposed versions, consumer checks, and rollback.
+for target versions, consumer checks, and rollback.
 
 Audit item 8, "canary deploy and rollback verification" procedure. Actual execution
 proceeds only after separate approval.

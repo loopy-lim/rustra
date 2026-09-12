@@ -23,12 +23,13 @@
       "name": "@rustra/generated-react-native",
       "version": "0.0.0",
       "peerDependencies": {
-        "@rustra/react-native": "^0.8.0",
+        "@rustra/react-native": "^0.9.0",
         "react-native": ">=0.76",
       },
     },
   },
   "overrides": {
+    "@rustra/react-native": "file:../../packages/react-native",
     "@rustra/types": "file:../../packages/types",
   },
   "packages": {
@@ -184,7 +185,7 @@
 
     "@rustra/generated-react-native": ["@rustra/generated-react-native@workspace:modules/rustra-bridge"],
 
-    "@rustra/react-native": ["@rustra/react-native@file:../../packages/react-native", { "dependencies": { "@rustra/types": "^0.3.1" }, "devDependencies": { "typescript": "^5.9.0" }, "peerDependencies": { "react-native": ">=0.76" }, "optionalPeers": ["react-native"] }],
+    "@rustra/react-native": ["@rustra/react-native@file:../../packages/react-native", { "dependencies": { "@rustra/types": "^0.10.0" }, "devDependencies": { "typescript": "^5.9.0" }, "peerDependencies": { "react-native": ">=0.76" }, "optionalPeers": ["react-native"] }],
 
     "@rustra/types": ["@rustra/types@file:../../packages/types", { "devDependencies": { "typescript": "^5.9.0" } }],
 
@@ -872,7 +873,9 @@
 
     "@react-native/dev-middleware/open": ["open@7.4.2", "", { "dependencies": { "is-docker": "^2.0.0", "is-wsl": "^2.1.1" } }, "sha512-MVHddDVweXZF3awtlAS+6pgKLlm/JgxZ90+/NBurBoQctVOOB/zDdVjcyPzQ+0laDGbsWgrRkflI65sQeOgT9Q=="],
 
-    "@rustra/react-native/@rustra/types": ["@rustra/types@file:../../packages/types", { "devDependencies": { "typescript": "^5.9.0" } }],
+    "@rustra/generated-react-native/@rustra/react-native": ["@rustra/react-native@file:../../packages/react-native", { "dependencies": { "@rustra/types": "^0.10.0" }, "devDependencies": { "typescript": "^5.9.0" }, "peerDependencies": { "react-native": ">=0.76" }, "optionalPeers": ["react-native"] }],
+
+    "@rustra/react-native/@rustra/types": ["@rustra/types@file:../../packages/types", {}],
 
     "accepts/mime-types": ["mime-types@2.1.35", "", { "dependencies": { "mime-db": "1.52.0" } }, "sha512-ZDY+bPm5zTTF+YpCrAU9nK0UgICYPT0QtT1NZWFv4s++TNkcgVaT0g6+4R2uI4MjQjzysHB1zxuWL50hzaeXiw=="],
 
@@ -943,6 +946,8 @@
     "@istanbuljs/load-nyc-config/js-yaml/argparse": ["argparse@1.0.10", "", { "dependencies": { "sprintf-js": "~1.0.2" } }, "sha512-o5Roy6tNG4SL/FOkCAN6RzjiakZS25RLYFrcMttJqbdd8BWrnA+fGz57iN5Pb06pvBGvl5gQ0B48dJlslXvoTg=="],
 
     "@react-native/dev-middleware/open/is-wsl": ["is-wsl@2.2.0", "", { "dependencies": { "is-docker": "^2.0.0" } }, "sha512-fKzAra0rGJUUBwGBgNkHZuToZcn+TtXHpeCgmkMJMMYx1sQDYaCSyjJBSCa2nH1DGm7s3n1oBnohoVTBaN7Lww=="],
+
+    "@rustra/generated-react-native/@rustra/react-native/@rustra/types": ["@rustra/types@file:../../packages/types", {}],
 
     "accepts/mime-types/mime-db": ["mime-db@1.52.0", "", {}, "sha512-sPU4uV7dYlvtWJxwwxHD0PuihVNiE7TyAbQ5SWxDCB9mUYvOgroQOwYQQOKPJ8CIbE+1ETVlOoK1UC2nU3gYvg=="],
 

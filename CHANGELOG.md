@@ -5,6 +5,8 @@
 
 ## Unreleased
 
+## 0.10.0 (2026-09-12)
+
 ### Breaking
 
 - 바이너리 프로토콜 명칭을 "rkyv V2"에서 "Frame"으로 전면 교체한다. rkyv 크레이트는
@@ -28,6 +30,15 @@
   - 내부 파일명 `crates/rustra/src/rkyv_*.rs` → `frame_*.rs`, 테스트(`rkyv_v2_*` →
     `frame_*`)·fuzz 타깃(`invoke_rkyv_v2` → `invoke_frame`)·CI 경로 동반 갱신.
     마이그레이션 표는 docs/migration-guide.md 참고.
+
+### 감사 수정
+
+- Node/Bun 엔진 종료·등록 소유권, React 엔진별 캐시·훅 수명주기, Rust 상태 격리·응답 한도를 수정했다.
+- Tauri 채널을 WebView 소유 IPC로 전환하고 종료 정리를 보강했다. 검증한 Tauri 2.11.1을 사용한다.
+- CLI 설정 감시·UniFFI 실제 바인딩 비교·출력 경계 검증을 보강했다.
+- API 선언 계약, 퍼징 시드, 잠금 파일, 설치 문서와 릴리스 검사를 정비했다.
+- 패키지는 독립 버전이다: types/node/bun/cli 0.10.0, tauri/react-native 0.9.0, react 0.8.0, testing/devtools 0.7.0.
+- 동시 업그레이드와 롤백: `docs/migrations/post-0.9-frame-and-audit.ko.md`.
 
 ## 0.9.0 (2026-09-10)
 

@@ -60,16 +60,16 @@ Every host exposes the same `{ handle, close() }` contract; only the issuer (tra
 
 | Package                | Manifest version |
 | ---------------------- | ---------------- |
-| Rust workspace crates  | 0.9.0            |
-| `@rustra/bun`          | 0.9.0            |
-| `@rustra/cli`          | 0.9.0            |
-| `@rustra/devtools`     | 0.6.2            |
-| `@rustra/node`         | 0.9.0            |
-| `@rustra/react`        | 0.7.1            |
-| `@rustra/react-native` | 0.8.0            |
-| `@rustra/tauri`        | 0.8.0            |
-| `@rustra/testing`      | 0.6.2            |
-| `@rustra/types`        | 0.9.0            |
+| Rust workspace crates  | 0.10.0           |
+| `@rustra/bun`          | 0.10.0           |
+| `@rustra/cli`          | 0.10.0           |
+| `@rustra/devtools`     | 0.7.0            |
+| `@rustra/node`         | 0.10.0           |
+| `@rustra/react`        | 0.8.0            |
+| `@rustra/react-native` | 0.9.0            |
+| `@rustra/tauri`        | 0.9.0            |
+| `@rustra/testing`      | 0.7.0            |
+| `@rustra/types`        | 0.10.0           |
 
 <!-- release:versions:end -->
 
