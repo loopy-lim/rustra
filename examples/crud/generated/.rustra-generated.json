@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "schemaHash": "f8fd52b987f6bb8900dd6881c99bf7d14858887d28280b35f05428e142bf5834",
-  "generatorVersion": "0.6.0",
+  "generatorVersion": "0.10.0",
   "files": [
     {
       "path": "commands.ts",
@@ -12,12 +12,12 @@
       "sha256": "61c78724f98d10a7e0b363b32fd771112c6defa1bd2cb9e57913ddfda0ced8de"
     },
     {
-      "path": "rkyv-codecs.ts",
-      "sha256": "ccb40acfbba4bbc4ca856a784d845fe0e6dd1af95ed271e319960ecd75ce24cf"
+      "path": "frame-codecs.ts",
+      "sha256": "bc8b081dda3f5d7f38eeeaeebbf521e5665b75f0b8f565fec030ccf1a1e4a6c9"
     },
     {
-      "path": "rkyv-registry.ts",
-      "sha256": "2955c777e4774f704ab775efa4fb54b385ffd0fd6353e685875fe05122e633a7"
+      "path": "frame-registry.ts",
+      "sha256": "4b584ec58638c02a2d0187ef2e96f1b41d77875c7bdaa20a3a540aac15daaaa6"
     },
     {
       "path": "types.ts",

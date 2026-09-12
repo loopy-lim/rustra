@@ -14,18 +14,13 @@ export type CliArgParserOptions = {
   allowPositionals?: boolean;
 };
 
-/** Levenshtein "Did you mean" over the command's declared flags (case-sensitive). */
-function closestFlag(input: string, known: readonly string[]): string | undefined {
-  return closestMatch(input, known);
-}
-
 function unknownOptionError(
   command: string,
   argument: string,
   known: readonly string[],
 ): UsageError {
   const name = argument.replace(/^--?/, '');
-  const suggestion = closestFlag(name, known);
+  const suggestion = closestMatch(name, known);
   const available = known.map((flag) => `--${flag}`).join(', ');
   const hint = suggestion
     ? ` Did you mean --${suggestion}?`

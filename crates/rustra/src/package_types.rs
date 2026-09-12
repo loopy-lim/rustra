@@ -36,7 +36,7 @@ pub(crate) struct RegistryState {
     pub(crate) commands: BTreeMap<String, Arc<Command>>,
     pub(crate) id_to_name: BTreeMap<u16, String>,
     pub(crate) next_command_id: u16,
-    /// (성능) command_id → 핸들러 직접 캐시 — `invoke_rkyv_v2` 의 핫패스가
+    /// (성능) command_id → 핸들러 직접 캐시 — `invoke_frame` 의 핫패스가
     /// `id_to_name` → `commands` 이중 조회 + Arc 클론을 거치지 않게 한다.
     /// 등록/교체/해제 시점에 함께 유지된다(불변식: 값은 항상 `commands` 의
     /// 동일 명령과 같은 Arc 를 가리킨다).
@@ -158,11 +158,7 @@ impl GeneratedPackage {
     /// 동일하게 존중한다 — CLI의 `codegen --check` 가 임시 디렉토리에서
     /// Rust 산출물을 검증할 때 사용하는 우회 경로다.
     pub fn write_schema_to_dir(&self, output_dir: impl AsRef<Path>) -> crate::Result<()> {
-        let requested_dir = output_dir.as_ref();
-        let output_dir = std::env::var_os("RUSTRA_SCHEMA_OUT")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| requested_dir.to_path_buf());
-        fs::create_dir_all(&output_dir)?;
+        let output_dir = resolve_output_dir(output_dir.as_ref())?;
         write_if_changed(output_dir.join("schema.json"), &self.schema_json)?;
         Ok(())
     }
@@ -185,17 +181,21 @@ impl GeneratedPackage {
     /// - `commands.ts` — TypeScript 명령 헬퍼 함수
     /// - `contract.ts` — `GENERATED_CONTRACT_HASH`/`SCHEMA_VERSION` 상수
     pub fn write_to_dir(&self, output_dir: impl AsRef<Path>) -> crate::Result<()> {
-        let requested_dir = output_dir.as_ref();
-        let output_dir = std::env::var_os("RUSTRA_SCHEMA_OUT")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| requested_dir.to_path_buf());
-        fs::create_dir_all(&output_dir)?;
+        let output_dir = resolve_output_dir(output_dir.as_ref())?;
         write_if_changed(output_dir.join("schema.json"), &self.schema_json)?;
         write_if_changed(output_dir.join("types.ts"), &self.types_ts)?;
         write_if_changed(output_dir.join("commands.ts"), &self.commands_ts)?;
         write_if_changed(output_dir.join("contract.ts"), &self.contract_ts)?;
         Ok(())
     }
+}
+
+fn resolve_output_dir(requested: &Path) -> std::io::Result<PathBuf> {
+    let output_dir = std::env::var_os("RUSTRA_SCHEMA_OUT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| requested.to_path_buf());
+    fs::create_dir_all(&output_dir)?;
+    Ok(output_dir)
 }
 
 fn write_if_changed(path: impl AsRef<Path>, content: &str) -> std::io::Result<()> {

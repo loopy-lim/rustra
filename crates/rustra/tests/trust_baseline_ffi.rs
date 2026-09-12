@@ -350,8 +350,8 @@ fn caller_buffer_null_out_len_is_safe() {
             std::ptr::null_mut(),
         )
     };
-    let rkyv = unsafe {
-        rustra::ffi::rustra_ffi_invoke_rkyv_v2_into(
+    let frame = unsafe {
+        rustra::ffi::rustra_ffi_invoke_frame_into(
             payload.as_ptr(),
             payload.len(),
             std::ptr::null_mut(),
@@ -360,7 +360,7 @@ fn caller_buffer_null_out_len_is_safe() {
         )
     };
     assert_eq!(json, usize::MAX);
-    assert_eq!(rkyv, usize::MAX);
+    assert_eq!(frame, usize::MAX);
 }
 
 // ── caller-buffer FFI — 3중 복사 제거 경로(구현 완료) ────────
@@ -615,16 +615,16 @@ fn panic_message_format_is_uniform_across_paths() {
     );
 }
 
-/// rkyv V2 caller-buffer(`rustra_ffi_invoke_rkyv_v2_into`)의 probe → write
+/// Frame caller-buffer(`rustra_ffi_invoke_frame_into`)의 probe → write
 /// 프로토콜 검증 — JSON 변형과 동일한 계약(필요 크기 보고, 직접 기록, 부족 시
 /// 재probe 신호, 핸들러 1회 실행).
 #[test]
-fn caller_buffer_rkyv_v2_probe_then_write() {
-    use rustra::ffi::rustra_ffi_invoke_rkyv_v2_into;
+fn caller_buffer_frame_probe_then_write() {
+    use rustra::ffi::rustra_ffi_invoke_frame_into;
 
     test_package().register_ffi();
 
-    // countUp 을 rkyv V2 프레임으로 — tier 판정을 위해 postcard 입력이 아닌
+    // countUp 을 Frame 프레임으로 — tier 판정을 위해 postcard 입력이 아닌
     // Tier 3 JSON-in-binary 프레임으로 호출한다(command_id + JSON).
     // countUp 의 command_id 를 live_schema 에서 조회.
     let pkg = test_package();
@@ -642,14 +642,14 @@ fn caller_buffer_rkyv_v2_probe_then_write() {
     req.extend_from_slice(&id.to_le_bytes());
     req.extend_from_slice(br#"{}"#);
 
-    // countUp 은 serde_json::Value 핸들러라 rkyv V2 typed fast path 가 postcard
+    // countUp 은 serde_json::Value 핸들러라 Frame typed fast path 가 postcard
     // 디코드에 실패한다 — 에러 프레임(ok=0)도 유효한 응답이므로 여기선 프로토콜
     // (probe 크기 보고/직접 기록/재probe 신호)만 검증한다. 핸들러 1회 실행은
     // JSON caller-buffer 테스트(caller_buffer_probe_executes_handler_exactly_once)가
     // 고정한다.
     let mut needed: usize = 0;
     let probe = unsafe {
-        rustra_ffi_invoke_rkyv_v2_into(
+        rustra_ffi_invoke_frame_into(
             req.as_ptr(),
             req.len(),
             std::ptr::null_mut(),
@@ -657,13 +657,13 @@ fn caller_buffer_rkyv_v2_probe_then_write() {
             &mut needed,
         )
     };
-    assert_eq!(probe, 0, "rkyv v2 probe must return 0");
-    assert!(needed >= 10, "rkyv v2 frame must have 10-byte header");
+    assert_eq!(probe, 0, "frame probe must return 0");
+    assert!(needed >= 10, "frame frame must have 10-byte header");
 
     // write — caller 버퍼에 직접 기록된다.
     let mut buf = vec![0u8; needed];
     let n = unsafe {
-        rustra_ffi_invoke_rkyv_v2_into(
+        rustra_ffi_invoke_frame_into(
             req.as_ptr(),
             req.len(),
             buf.as_mut_ptr(),
@@ -674,7 +674,7 @@ fn caller_buffer_rkyv_v2_probe_then_write() {
     assert_eq!(n, needed, "write returns byte count");
     assert!(
         buf[0] == 1 || buf[0] == 0,
-        "rkyv v2 ok flag byte, got {}",
+        "frame ok flag byte, got {}",
         buf[0]
     );
 
@@ -682,7 +682,7 @@ fn caller_buffer_rkyv_v2_probe_then_write() {
     let mut small = vec![0u8; needed.saturating_sub(1)];
     let mut out2: usize = 0;
     let short = unsafe {
-        rustra_ffi_invoke_rkyv_v2_into(
+        rustra_ffi_invoke_frame_into(
             req.as_ptr(),
             req.len(),
             small.as_mut_ptr(),
@@ -699,8 +699,8 @@ fn caller_buffer_rkyv_v2_probe_then_write() {
 /// 전체에서 핸들러가 1회만 실행된다. 과거 어댑터가 큰 응답에서 alloc API로
 /// 폴백해 비멱등 명령을 두 번 실행하던 회귀를 코어 프로토콜 수준에서 고정한다.
 #[test]
-fn caller_buffer_rkyv_v2_large_response_executes_exactly_once() {
-    use rustra::ffi::rustra_ffi_invoke_rkyv_v2_into;
+fn caller_buffer_frame_large_response_executes_exactly_once() {
+    use rustra::ffi::rustra_ffi_invoke_frame_into;
 
     test_package().register_ffi();
     let schema = test_package().live_schema();
@@ -721,7 +721,7 @@ fn caller_buffer_rkyv_v2_large_response_executes_exactly_once() {
 
     let mut needed = 0usize;
     let probe = unsafe {
-        rustra_ffi_invoke_rkyv_v2_into(
+        rustra_ffi_invoke_frame_into(
             request.as_ptr(),
             request.len(),
             std::ptr::null_mut(),
@@ -741,7 +741,7 @@ fn caller_buffer_rkyv_v2_large_response_executes_exactly_once() {
 
     let mut small = vec![0u8; 512];
     let short = unsafe {
-        rustra_ffi_invoke_rkyv_v2_into(
+        rustra_ffi_invoke_frame_into(
             request.as_ptr(),
             request.len(),
             small.as_mut_ptr(),
@@ -758,7 +758,7 @@ fn caller_buffer_rkyv_v2_large_response_executes_exactly_once() {
 
     let mut response = vec![0u8; needed];
     let written = unsafe {
-        rustra_ffi_invoke_rkyv_v2_into(
+        rustra_ffi_invoke_frame_into(
             request.as_ptr(),
             request.len(),
             response.as_mut_ptr(),
@@ -778,7 +778,7 @@ fn caller_buffer_rkyv_v2_large_response_executes_exactly_once() {
     );
 }
 
-// ── async caller-buffer (rkyv V2 async into, F3) ────────────
+// ── async caller-buffer (Frame async into, F3) ────────────
 //
 // 비동기 완료 콜백이 caller 버퍼에 직접 기록하는 변형의 계약 검증.
 // 스레딩 모델: dispatch 와 on_complete 모두 워커 스레드에서 실행된다
@@ -872,7 +872,7 @@ fn large_counted_request(len: u32) -> Vec<u8> {
 /// 1회 실행된다. 완료 후 invocation 레지스트리도 정리된다.
 #[test]
 fn async_into_writes_caller_buffer_in_place() {
-    use rustra::ffi::rustra_ffi_invoke_rkyv_v2_async_into;
+    use rustra::ffi::rustra_ffi_invoke_frame_async_into;
 
     test_package().register_ffi();
     let request = large_counted_request(4);
@@ -886,7 +886,7 @@ fn async_into_writes_caller_buffer_in_place() {
     let mut invocation_id: u64 = 0;
     let before = ASYNC_INTO_COUNTER.load(std::sync::atomic::Ordering::SeqCst);
     unsafe {
-        rustra_ffi_invoke_rkyv_v2_async_into(
+        rustra_ffi_invoke_frame_async_into(
             request.as_ptr(),
             request.len(),
             buf.as_mut_ptr(),
@@ -928,7 +928,7 @@ fn async_into_writes_caller_buffer_in_place() {
 /// 폴백한다(owned=1). 핸들러 1회, rustra_ffi_free 짝이 성립한다.
 #[test]
 fn async_into_overflow_falls_back_to_owned_frame_exactly_once() {
-    use rustra::ffi::rustra_ffi_invoke_rkyv_v2_async_into;
+    use rustra::ffi::rustra_ffi_invoke_frame_async_into;
 
     test_package().register_ffi();
     let request = large_counted_request(2048);
@@ -942,7 +942,7 @@ fn async_into_overflow_falls_back_to_owned_frame_exactly_once() {
     let mut invocation_id: u64 = 0;
     let before = ASYNC_INTO_COUNTER.load(std::sync::atomic::Ordering::SeqCst);
     unsafe {
-        rustra_ffi_invoke_rkyv_v2_async_into(
+        rustra_ffi_invoke_frame_async_into(
             request.as_ptr(),
             request.len(),
             small.as_mut_ptr(),
@@ -980,7 +980,7 @@ fn async_into_overflow_falls_back_to_owned_frame_exactly_once() {
 /// 성립 조건(버퍼 제공)을 명시적으로 고정한다.
 #[test]
 fn async_into_null_buffer_delivers_owned_frame() {
-    use rustra::ffi::rustra_ffi_invoke_rkyv_v2_async_into;
+    use rustra::ffi::rustra_ffi_invoke_frame_async_into;
 
     test_package().register_ffi();
     let request = large_counted_request(4);
@@ -991,7 +991,7 @@ fn async_into_null_buffer_delivers_owned_frame() {
         .unwrap_or_else(|p| p.into_inner());
     let mut invocation_id: u64 = 0;
     unsafe {
-        rustra_ffi_invoke_rkyv_v2_async_into(
+        rustra_ffi_invoke_frame_async_into(
             request.as_ptr(),
             request.len(),
             std::ptr::null_mut(),
@@ -1012,7 +1012,7 @@ fn async_into_null_buffer_delivers_owned_frame() {
 /// 버퍼로 전달한다(워커가 먼저 통과한 드문 경합은 성공 프레임 — 계약상 허용).
 #[test]
 fn async_into_pre_cancelled_skips_handler_and_delivers_error_frame() {
-    use rustra::ffi::{rustra_ffi_invoke_cancel, rustra_ffi_invoke_rkyv_v2_async_into};
+    use rustra::ffi::{rustra_ffi_invoke_cancel, rustra_ffi_invoke_frame_async_into};
 
     test_package().register_ffi();
     let request = large_counted_request(4);
@@ -1025,7 +1025,7 @@ fn async_into_pre_cancelled_skips_handler_and_delivers_error_frame() {
     let mut invocation_id: u64 = 0;
     let before = ASYNC_INTO_COUNTER.load(std::sync::atomic::Ordering::SeqCst);
     unsafe {
-        rustra_ffi_invoke_rkyv_v2_async_into(
+        rustra_ffi_invoke_frame_async_into(
             request.as_ptr(),
             request.len(),
             buf.as_mut_ptr(),

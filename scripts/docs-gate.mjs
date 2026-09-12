@@ -19,6 +19,13 @@
  * - 마커 없는 문서는 통과한다(점진 채택).
  * - docs/plans/는 제외한다(로드맵 문서가 마커 문법 자체를 인용한다).
  *
+ * 미러 완전성(A8): 스코프 내 문서는 en/ko 쌍이어야 한다 — `X.md`에는 `X.ko.md`가,
+ * `X.ko.md`에는 `X.md`가 있어야 한다. 스코프는 docs/ 최상위 + 현재 쌍이 유지되는
+ * 하위 디렉터리(extending/internal/adr)로, research/plans/specs/prs/migrations/
+ * superpowers 는 단일 언어·역사 문서를 허용하기 위해 스코프 밖이다. 현재 스코프 내
+ * 전 문서가 쌍을 갖추고 있어 예외 허용목록(`MIRROR_ALLOWLIST`)은 비어 있다 —
+ * 게이트가 강제하는 것은 "새로 생기는 미완결 문서 없음"이다.
+ *
  * fail-closed: 구조 위반·드리프트·누락은 전부 모아 한 번에 보고하고 1로 끝난다.
  * `root`(저장소 루트)를 주입받아 로직은 저장소 docs 없이 테스트 가능(docs-gate.test.ts).
  */
@@ -217,18 +224,92 @@ function verifyRegion(root, rel, lines, open, endLine, failures, regions) {
   // 여기 도달하면 일치. (docBody.length === refLines.length는 루프가 보장)
 }
 
+// ── ko 미러 완전성 (A8) ─────────────────────────────────────────────────────
+
+/**
+ * 미러 검사 스코프 — docs/ 최상위에 더해 en/ko 쌍이 현재 유지되는 하위 디렉터리.
+ * research/plans/specs/prs/migrations/superpowers 는 단일 언어·역사 문서를 허용하는
+ * 정책으로 스코프 밖이다. 새 하위 디렉터리를 스코프에 넣을 조건은 "그 디렉터리의
+ * 모든 문서가 쌍을 갖출 때"다 — 미완결 상태로 넣으면 베이스라인이 오염된다.
+ */
+const MIRROR_SCOPE_SUBDIRS = ['extending', 'internal', 'adr'];
+
+/**
+ * 미완결 문서의 명시적 예외(베이스라인) — docs 루트 기준 상대 경로('extending/x.md').
+ * 현재 스코프 내 전 문서가 쌍을 갖추고 있어 **비어 있다**. 신규 갭은 허용목록이 아니라
+ * 미러를 만들어 해소한다 — 허용목록은 역사적 예외를 기록하는 자리일 뿐이다.
+ */
+const MIRROR_ALLOWLIST = [];
+
+/** 미러 스코프(최상위 + 스코프 하위 디렉터리)의 모든 .md를 docs 루트 기준 상대 경로로 수집. */
+export function collectMirrorDocs(root, { docsDir = 'docs' } = {}) {
+  const items = [];
+  const scan = (rel) => {
+    const dir = join(root, docsDir, rel);
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      // 스코프 하위 디렉터리는 저장소마다 존재하지 않을 수 있다(임시 fixture 등) —
+      // 없는 디렉터리는 검사 대상 0으로 취급한다.
+      return;
+    }
+    for (const entry of entries) {
+      const childRel = rel === '' ? entry.name : `${rel}/${entry.name}`;
+      if (entry.isDirectory()) continue; // 스코프 하위는 1단계만 — 중첩 디렉터리는 스코프 밖
+      if (entry.name.endsWith('.md')) items.push(childRel);
+    }
+  };
+  scan('');
+  for (const sub of MIRROR_SCOPE_SUBDIRS) scan(sub);
+  return items.sort();
+}
+
+/** `.md` ↔ `.ko.md` 쌍 경로. */
+function mirrorTwin(rel) {
+  return rel.endsWith('.ko.md')
+    ? rel.slice(0, -'.ko.md'.length) + '.md'
+    : rel.slice(0, -'.md'.length) + '.ko.md';
+}
+
+/**
+ * 미러 완전성 검사 — 스코프 내 모든 문서가 쌍을 갖는지(양방향). `MIRROR_ALLOWLIST`에
+ * 있는 경로는 건너뛴다(베이스라인 예외). ok=false면 failures에 한국어 진단이 쌓인다.
+ */
+export function verifyMirrors(root, { docsDir = 'docs', allowlist = MIRROR_ALLOWLIST } = {}) {
+  const failures = [];
+  const docs = collectMirrorDocs(root, { docsDir });
+  const seen = new Set(docs);
+  const allowed = new Set(allowlist);
+
+  for (const rel of docs) {
+    if (allowed.has(rel)) continue;
+    const twin = mirrorTwin(rel);
+    if (seen.has(twin)) continue;
+    const message = rel.endsWith('.ko.md')
+      ? `${docsDir}/${rel} — 영문 원본이 없다: ${docsDir}/${twin} (.ko.md 미러는 원본 없이 단독으로 존재할 수 없다 — 원본을 만들거나 이름을 정리하세요)`
+      : `${docsDir}/${rel} — 한국어 미러가 없다: ${docsDir}/${twin} (원본을 번역해 .ko.md 로 만들고 docs/README 인덱스도 함께 갱신하세요)`;
+    failures.push({ doc: rel, twin, message });
+  }
+
+  return { ok: failures.length === 0, failures, checked: docs.length };
+}
+
 function run() {
   const root = process.cwd(); // bun run/node scripts는 저장소 루트에서 실행한다(api-surface와 같은 관례).
   const report = verifyDocs(root);
+  const mirror = verifyMirrors(root);
+  const failures = [...report.failures, ...mirror.failures];
   // fail-closed: 불일치 판정을 마커 존재 판정보다 먼저 본다. 영역 파싱이 전부 깨진
   // 입력(CRLF, end 마커 뒤 공백, 종결 없는 begin)에서는 regions가 0이므로, 이 검사를
   // 먼저 하면 드리프트가 "no docs:sync markers found"로 위장해 거짓 통과한다.
-  if (!report.ok) {
-    console.error(`docs-gate: ${report.failures.length}개 불일치 — 문서와 현실이 갈라졌다:`);
-    for (const f of report.failures) console.error(`  - ${f.message}`);
+  if (failures.length > 0) {
+    console.error(`docs-gate: ${failures.length}개 불일치 — 문서와 현실이 갈라졌다:`);
+    for (const f of failures) console.error(`  - ${f.message}`);
     process.exitCode = 1;
     return;
   }
+  const mirrorLine = `docs-gate: mirror 완전성 ${mirror.checked}개 문서 검사 — en/ko 쌍 정합 (스코프: 최상위 + ${MIRROR_SCOPE_SUBDIRS.join('/')})`;
   if (report.regions.length === 0) {
     // 결정 고정: 마커 0 허용은 점진 채택 정책 — fail 전환하지 않는다. 다만 이
     // 출력이 "게이트가 실제로 docs를 봤는지"의 유일 증거이므로, 마커 0이
@@ -236,10 +317,12 @@ function run() {
     console.log(
       'docs-gate: no docs:sync markers found (게이트 우회 없음 확인용 — 마커 0이 의도인지 확인하세요)',
     );
+    console.log(mirrorLine);
     return;
   }
   const files = new Set(report.regions.map((r) => r.doc)).size;
   console.log(`docs-gate: ${report.regions.length} synced region(s) in ${files} file(s) verified`);
+  console.log(mirrorLine);
 }
 
 if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) run();

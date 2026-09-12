@@ -325,12 +325,12 @@ fn status_frame(body: &[u8]) -> Vec<u8> {
 fn frame_round_trips_both_complex_routes() {
     let pkg = malformed_pkg();
     let gate_response = pkg
-        .invoke_rkyv_v2(&gate_frame(&[0, 0, 1, 1, 97, 1, 0]))
+        .invoke_frame(&gate_frame(&[0, 0, 1, 1, 97, 1, 0]))
         .expect("gate");
     assert_eq!(gate_response[0], 1, "ok flag");
     assert_eq!(&gate_response[8..], &[0, 0, 1, 1, 97, 1, 0]);
     let status_response = pkg
-        .invoke_rkyv_v2(&status_frame(&[0, 18, 1, 1, 2, 104, 105]))
+        .invoke_frame(&status_frame(&[0, 18, 1, 1, 2, 104, 105]))
         .expect("status");
     assert_eq!(status_response[0], 1, "ok flag");
     assert_eq!(&status_response[8..], &[0, 18, 1, 1, 2, 104, 105]);
@@ -340,21 +340,21 @@ fn frame_round_trips_both_complex_routes() {
 fn frame_rejects_short_unknown_and_corrupt_requests() {
     let pkg = malformed_pkg();
     for frame in [&[][..], &[7][..]] {
-        let error = pkg.invoke_rkyv_v2(frame).expect_err("short frame");
+        let error = pkg.invoke_frame(frame).expect_err("short frame");
         assert_eq!(error.code(), "command.invalid_args");
-        assert_eq!(error.message(), "rkyv v2: payload too short");
+        assert_eq!(error.message(), "frame: payload too short");
     }
-    let error = pkg.invoke_rkyv_v2(&[0xFF, 0xFF]).expect_err("unknown id");
+    let error = pkg.invoke_frame(&[0xFF, 0xFF]).expect_err("unknown id");
     assert_eq!(error.code(), "command.not_found");
     let corrupt = pkg
-        .invoke_rkyv_v2(&gate_frame(&[7, 1, 10]))
+        .invoke_frame(&gate_frame(&[7, 1, 10]))
         .expect_err("gate");
     assert_eq!(corrupt.code(), "command.invalid_args");
     assert_eq!(
         corrupt.message(),
         "complex codec: enum variant index out of range"
     );
-    let corrupt = pkg.invoke_rkyv_v2(&status_frame(&[2])).expect_err("status");
+    let corrupt = pkg.invoke_frame(&status_frame(&[2])).expect_err("status");
     assert_eq!(
         corrupt.message(),
         "complex codec: enum variant index out of range"
@@ -365,7 +365,7 @@ fn frame_rejects_short_unknown_and_corrupt_requests() {
 fn frame_bit_flip_sweep_never_trips_panic_guard() {
     let pkg = malformed_pkg();
     let valid = gate_frame(&[0, 0, 1, 1, 97, 1, 1, 10]);
-    assert!(pkg.invoke_rkyv_v2(&valid).is_ok());
+    assert!(pkg.invoke_frame(&valid).is_ok());
     let mut target = [0u8; 64];
     for position in 0..valid.len() {
         for mask in [0x01u8, 0x80, 0xFF] {
@@ -373,14 +373,14 @@ fn frame_bit_flip_sweep_never_trips_panic_guard() {
             corrupt[position] ^= mask;
             // catch_unwind 가드가 패닉을 internal("panic in handler: …") 로
             // 정규화한다 — 무작위 바이트가 이 코드를 유발하면 디코더 버그다.
-            let buffered = pkg.invoke_rkyv_v2(&corrupt);
+            let buffered = pkg.invoke_frame(&corrupt);
             if let Err(error) = &buffered {
                 assert!(
                     !error.message().starts_with("panic in handler"),
                     "value path panicked on {corrupt:?}: {error}"
                 );
             }
-            let direct = pkg.invoke_rkyv_v2_into(&corrupt, &mut target);
+            let direct = pkg.invoke_frame_into(&corrupt, &mut target);
             if let Err(error) = &direct {
                 assert!(
                     !error.message().starts_with("panic in handler"),

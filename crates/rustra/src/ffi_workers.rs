@@ -66,7 +66,7 @@ fn run_worker(
 /// 체크포인트, complete→callback 순서, exactly-once)을 호출자 버퍼 변형으로
 /// 실행한다.
 ///
-/// 응답 크기가 `capacity` 이하면 `Package::invoke_rkyv_v2_into` 가 caller
+/// 응답 크기가 `capacity` 이하면 `Package::invoke_frame_into` 가 caller
 /// 버퍼에 직접 기록하고 `owned=0` 으로 전달한다 — Rust heap 할당과 복사가
 /// 없다. 부족하면 **같은 dispatch 안에서** heap 프레임으로 폴백해
 /// `owned=1` 로 전달한다. sync `_into` 처럼 재시도로 돌아오지 않는다:
@@ -91,7 +91,7 @@ fn run_worker_into(job: AsyncIntoJob) {
     let (resp_ptr, resp_len, owned) = if crate::cancel::status(id)
         == crate::cancel::Status::Cancelled
     {
-        let frame = crate::encode_rkyv_v2_error(&crate::RustraError::cancelled(
+        let frame = crate::encode_frame_error(&crate::RustraError::cancelled(
             "invocation cancelled before dispatch",
         ));
         deliver_into_frame(frame, buf, capacity)
@@ -107,19 +107,19 @@ fn run_worker_into(job: AsyncIntoJob) {
                 .ok_or_else(|| {
                     crate::RustraError::custom("ffi.not_registered", "package not registered")
                 })
-                .and_then(|pkg| pkg.invoke_rkyv_v2_into(&bytes, target))
+                .and_then(|pkg| pkg.invoke_frame_into(&bytes, target))
         })) {
             Ok(Ok(response)) => response,
             Ok(Err(error)) => {
-                crate::rkyv_codec::DirectResponse::Buffered(crate::encode_rkyv_v2_error(&error))
+                crate::frame_codec::DirectResponse::Buffered(crate::encode_frame_error(&error))
             }
-            Err(panic) => crate::rkyv_codec::DirectResponse::Buffered(crate::encode_rkyv_v2_error(
+            Err(panic) => crate::frame_codec::DirectResponse::Buffered(crate::encode_frame_error(
                 &crate::RustraError::internal(panic_frame_message(&*panic)),
             )),
         };
         match direct {
-            crate::rkyv_codec::DirectResponse::Written(written) => (buf, written, 0u8),
-            crate::rkyv_codec::DirectResponse::Buffered(response) => {
+            crate::frame_codec::DirectResponse::Written(written) => (buf, written, 0u8),
+            crate::frame_codec::DirectResponse::Buffered(response) => {
                 deliver_into_frame(response, buf, capacity)
             }
         }

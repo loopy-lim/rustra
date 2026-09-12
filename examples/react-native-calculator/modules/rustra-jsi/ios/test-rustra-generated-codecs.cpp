@@ -83,10 +83,11 @@ int main() {
   // Raw eligibility mirrors the Rust raw_invoke_shape contract: up to three
   // scalar fields, and since B1 that includes int64/uint64 (the u64 slot
   // carries the full-width value). benchAdd/clamp are the raw-safe f64s;
-  // benchEchoBytes(25)/benchEchoPair(26)/wideAgg(28)/tagSet(29) stay off raw.
+  // benchEchoBytes(25)/benchEchoPair(26)/wideAgg(28)/tagSet(29)/kindEcho(33)
+  // stay off raw.
   if (!gen::has_raw_codec(1) || !gen::has_raw_codec(23) || gen::has_raw_codec(24) ||
       gen::has_raw_codec(25) || gen::has_raw_codec(26) || gen::has_raw_codec(28) ||
-      gen::has_raw_codec(29)) {
+      gen::has_raw_codec(29) || gen::has_raw_codec(33)) {
     std::printf("FAIL raw capability set\n");
     ++g_failures;
   }
@@ -696,6 +697,8 @@ int main() {
     if (!gen::has_static_codec("echoGroups")) { std::printf("FAIL has_static_codec(echoGroups)\n"); ++g_failures; }
     if (!gen::has_static_codec("rustraRegistryDemo")) { std::printf("FAIL has_static_codec(rustraRegistryDemo)\n"); ++g_failures; }
     if (!gen::has_static_codec("tagSet")) { std::printf("FAIL has_static_codec(tagSet)\n"); ++g_failures; }
+    if (!gen::has_static_codec("kindEcho")) { std::printf("FAIL has_static_codec(kindEcho)\n"); ++g_failures; }
+    if (!gen::has_static_codec("processItem")) { std::printf("FAIL has_static_codec(processItem)\n"); ++g_failures; }
     if (gen::has_static_codec("dynamicCmd")) { std::printf("FAIL has_static_codec(dynamicCmd) should be false\n"); ++g_failures; }
   }
 
@@ -815,6 +818,175 @@ int main() {
       threw = true;
     }
     if (!threw) { std::printf("FAIL decode_by_id(9999) should throw JSError\n"); ++g_failures; }
+  }
+
+  // ── 2026-09-11 A5: 기능 타입 매트릭스 확장 공유 fixture ──────────────
+  // Rust wire_fixtures.rs KINDECHO_*/PROCESSITEM_*/ECHOGROUPS_*/SIZEOF_LARGE_*
+  // 및 TS cross-wire.test.ts 신규 블록과 byte-exact. 태그 enum(unit + data
+  // 변형), 중첩 구조체, 결정론 맵, 대용량 페이로드를 C++ codec 이 동일하게
+  // 만들어내는지 교차 검증한다.
+
+  // (1) kindEcho unit 변형 — {kind:"Clear"} → [cmd 33 LE][변형 인덱스 0]
+  //     == Rust/TS KINDECHO_UNIT_REQUEST "210000"
+  {
+    Object args(rt);
+    args.setProperty(rt, "kind", String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>("Clear"), 5));
+    Value argsV(rt, args);
+    rc::Writer w;
+    if (!gen::encode_by_id(rt, 33, argsV, w)) {
+      std::printf("FAIL encode_by_id(kindEcho=33 unit) returned false\n");
+      ++g_failures;
+    }
+    check_bytes(w.take(), {0x21, 0x00, 0x00}, "shared-fixture encode kindEcho unit variant");
+
+    // 응답 바디 00 → "Clear" 문자열 복원.
+    uint8_t body[] = {0x00};
+    rc::Reader r(body, sizeof(body));
+    Value result = gen::decode_by_id(rt, 33, r);
+    Value echoed = result.getObject(rt).getProperty(rt, "echoed");
+    if (!echoed.isString() || echoed.getString(rt).utf8(rt) != "Clear") {
+      std::printf("FAIL shared-fixture decode kindEcho unit variant\n");
+      ++g_failures;
+    }
+  }
+
+  // (2) kindEcho data 변형 — {kind:{Set:{value:-5}}} → [33 LE][인덱스 1][zigzag(-5)=9]
+  //     == Rust/TS KINDECHO_SET_REQUEST "21000109". TS 표면과 동일한 외부 태그
+  //     모양(키 객체)을 C++ 도 받는다.
+  {
+    Object args(rt);
+    Object setValue(rt);
+    setValue.setProperty(rt, "value", -5.0);
+    Object kind(rt);
+    kind.setProperty(rt, "Set", Value(rt, setValue));
+    args.setProperty(rt, "kind", Value(rt, kind));
+    Value argsV(rt, args);
+    rc::Writer w;
+    if (!gen::encode_by_id(rt, 33, argsV, w)) {
+      std::printf("FAIL encode_by_id(kindEcho=33 set) returned false\n");
+      ++g_failures;
+    }
+    check_bytes(w.take(), {0x21, 0x00, 0x01, 0x09}, "shared-fixture encode kindEcho data variant");
+
+    // 응답 바디 01 09 → {Set:{value:-5}} 복원.
+    uint8_t body[] = {0x01, 0x09};
+    rc::Reader r(body, sizeof(body));
+    Value result = gen::decode_by_id(rt, 33, r);
+    Object echoed = result.getObject(rt).getProperty(rt, "echoed").getObject(rt);
+    Value value = echoed.getProperty(rt, "Set").getObject(rt).getProperty(rt, "value");
+    if (!value.isNumber() || value.asNumber() != -5.0) {
+      std::printf("FAIL shared-fixture decode kindEcho data variant\n");
+      ++g_failures;
+    }
+  }
+
+  // (3) processItem 중첩 구조체 — {item:{active,name,value}} →
+  //     [cmd 9 LE][bool][str len + bytes][zigzag] 선언순
+  //     == Rust/TS PROCESSITEM_REQUEST "0900010370656e78"
+  {
+    Object item(rt);
+    item.setProperty(rt, "active", true);
+    item.setProperty(rt, "name", String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>("pen"), 3));
+    item.setProperty(rt, "value", 60.0);
+    Object args(rt);
+    args.setProperty(rt, "item", Value(rt, item));
+    Value argsV(rt, args);
+    rc::Writer w;
+    if (!gen::encode_by_id(rt, 9, argsV, w)) {
+      std::printf("FAIL encode_by_id(processItem=9) returned false\n");
+      ++g_failures;
+    }
+    check_bytes(w.take(), {0x09, 0x00, 0x01, 0x03, 'p', 'e', 'n', 0x78},
+                "shared-fixture encode processItem nested struct");
+
+    // 응답 바디(doubled=false, active=false, len 13 "processed_pen", zigzag 120)
+    // == PROCESSITEM_RESPONSE 바디. 선언순(doubled, item) 읽기 검증.
+    uint8_t body[] = {0x00, 0x00, 0x0d, 'p', 'r', 'o', 'c', 'e', 's', 's', 'e', 'd', '_', 'p', 'e', 'n', 0xf0, 0x01};
+    rc::Reader r(body, sizeof(body));
+    Value result = gen::decode_by_id(rt, 9, r);
+    Object obj = result.getObject(rt);
+    Object outItem = obj.getProperty(rt, "item").getObject(rt);
+    if (obj.getProperty(rt, "doubled").getBool()) {
+      std::printf("FAIL shared-fixture decode processItem doubled must be false\n");
+      ++g_failures;
+    }
+    Value outActive = outItem.getProperty(rt, "active");
+    Value outName = outItem.getProperty(rt, "name");
+    Value outValue = outItem.getProperty(rt, "value");
+    if (!outActive.isBool() || outActive.getBool()) {
+      std::printf("FAIL shared-fixture decode processItem active must be false\n");
+      ++g_failures;
+    }
+    if (outName.getString(rt).utf8(rt) != "processed_pen") {
+      std::printf("FAIL shared-fixture decode processItem name\n");
+      ++g_failures;
+    }
+    if (!outValue.isNumber() || outValue.asNumber() != 120.0) {
+      std::printf("FAIL shared-fixture decode processItem value\n");
+      ++g_failures;
+    }
+  }
+
+  // (4) echoGroups 응답 바디 — 요청 encode 는 위 native complex codec 절에서
+  //     이미 ECHOGROUPS_REQUEST "1b000201610101780162020179017a" 와 byte-exact
+  //     로 고정돼 있다. 여기서는 공유 응답 프레임 바디의 디코드를 짝으로 붙인다.
+  {
+    uint8_t body[] = {0x02, 0x01, 'a', 0x01, 0x01, 'x', 0x01, 'b', 0x02, 0x01, 'y', 0x01, 'z'};
+    rc::Reader r(body, sizeof(body));
+    Value result = gen::decode_by_id(rt, 27, r);
+    Object groups = result.getObject(rt).getProperty(rt, "groups").getObject(rt);
+    Array decodedA = groups.getProperty(rt, "a").getObject(rt).getArray(rt);
+    Array decodedB = groups.getProperty(rt, "b").getObject(rt).getArray(rt);
+    if (decodedA.length(rt) != 1 || decodedA.getValueAtIndex(rt, 0).getString(rt).utf8(rt) != "x" ||
+        decodedB.length(rt) != 2 || decodedB.getValueAtIndex(rt, 0).getString(rt).utf8(rt) != "y" ||
+        decodedB.getValueAtIndex(rt, 1).getString(rt).utf8(rt) != "z") {
+      std::printf("FAIL shared-fixture decode echoGroups response body\n");
+      ++g_failures;
+    }
+  }
+
+  // (5) sizeOf 2KB 대용량 페이로드 — 길이 varint 2048→[80 10] 프레이밍과
+  //     원시 복사. Rust/TS 는 KINDECHO… SIZEOF_LARGE 블록에서 같은 정의
+  //     (0x5A x 2048)로 바이트 일치를 비교한다. 응답 checksum 184320(80 a0 0b)
+  //     + len 2048(80 10).
+  {
+    Object args(rt);
+    Array arr(rt, 2048);
+    for (size_t i = 0; i < 2048; i++) arr.setValueAtIndex(rt, i, 90.0);
+    args.setProperty(rt, "data", arr);
+    Value argsV(rt, args);
+    rc::Writer w;
+    if (!gen::encode_by_id(rt, 14, argsV, w)) {
+      std::printf("FAIL encode_by_id(sizeOf=14 2KB) returned false\n");
+      ++g_failures;
+    } else {
+      std::vector<uint8_t> bytes = w.take();
+      bool framingOk = bytes.size() == 2052 && bytes[0] == 0x0e && bytes[1] == 0x00 &&
+                       bytes[2] == 0x80 && bytes[3] == 0x10;
+      bool payloadOk = true;
+      for (size_t i = 4; i < bytes.size(); i++) {
+        if (bytes[i] != 0x5a) { payloadOk = false; break; }
+      }
+      if (!framingOk || !payloadOk) {
+        std::printf("FAIL shared-fixture encode sizeOf 2KB framing/raw copy\n");
+        ++g_failures;
+      }
+    }
+
+    uint8_t body[] = {0x80, 0xa0, 0x0b, 0x80, 0x10};
+    rc::Reader r(body, sizeof(body));
+    Value result = gen::decode_by_id(rt, 14, r);
+    Object obj = result.getObject(rt);
+    Value checksum = obj.getProperty(rt, "checksum");
+    Value len = obj.getProperty(rt, "len");
+    if (!checksum.isNumber() || checksum.asNumber() != 184320.0) {
+      std::printf("FAIL shared-fixture decode sizeOf 2KB checksum\n");
+      ++g_failures;
+    }
+    if (!len.isNumber() || len.asNumber() != 2048.0) {
+      std::printf("FAIL shared-fixture decode sizeOf 2KB len\n");
+      ++g_failures;
+    }
   }
 
   if (g_failures == 0) {

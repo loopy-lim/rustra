@@ -28,7 +28,7 @@
  * 바이트 프레임 [len u32 LE][0xfff9 u16 LE][handle u32 LE][payload bytes]
  * ```
  *
- * 페이로드는 rkyv V2 프레임 등 임의 바이트를 JSON 래핑 없이 그대로 실으며
+ * 페이로드는 Frame 프레임 등 임의 바이트를 JSON 래핑 없이 그대로 실으며
  * 길이 접두가 없다(프레임 래퍼의 len 이 경계를 제공). 해제(0xfffa)는 두 경로를
  * 같이 내리는 코어 `drop_channel` 을 공유한다. 한 핸들은 한 경로로만 동작한다
  * (JSON xor bytes — 코어 ChannelHost 계약). 바이너리 모드 협상에 더해 런타임이
@@ -64,7 +64,7 @@ export type NodeChannel = {
   close(): Promise<boolean>;
 };
 
-/** 바이너리 채널 콜백 — 페이로드는 JSON 파싱 없는 원시 바이트(rkyv V2 프레임 등). */
+/** 바이너리 채널 콜백 — 페이로드는 JSON 파싱 없는 원시 바이트(Frame 프레임 등). */
 export type NodeBytesChannelCallback = (payload: Uint8Array) => void;
 
 /** 바이너리 채널 — JSON 채널(NodeChannel)과 동일 { handle, close() } 계약. */
@@ -92,6 +92,47 @@ type BytesChannelCapableTransport = NodeEventTransport & {
   readonly channelBytesCapable?: boolean;
 };
 
+async function ensureBinaryMode(
+  transport: Pick<ChannelCapableTransport, 'ready' | 'mode'>,
+  ndjsonMessage: string,
+): Promise<void> {
+  // 능력 확정 대기 — 바이너리 협상은 transport 생성 시 kick 되지만 정착은
+  // 비동기다. NDJSON 확정(구 런타임/codecs 미제공)이면 여기서 loud-fail 한다.
+  if (transport.ready) await transport.ready();
+  if (transport.mode === 'ndjson') {
+    throw new RustraCommandError(RustraErrorCode.ChannelUnavailable, ndjsonMessage);
+  }
+}
+
+async function issueNodeChannelHandle(
+  transport: Pick<ChannelCapableTransport, 'invoke'>,
+  createCommand: string,
+  invalidHandleMessage: string,
+): Promise<number> {
+  const issued = (await transport.invoke(createCommand)) as { handle?: unknown };
+  const handle = issued?.handle as number;
+  if (!Number.isSafeInteger(handle) || (handle as number) < 1) {
+    throw new RustraCommandError(RustraErrorCode.ChannelUnavailable, invalidHandleMessage);
+  }
+  return handle;
+}
+
+function channelCloser(
+  transport: Pick<ChannelCapableTransport, 'invoke'>,
+  state: { closed: boolean },
+  detach: () => void,
+  handle: number,
+): () => Promise<boolean> {
+  return async (): Promise<boolean> => {
+    if (state.closed) return false;
+    state.closed = true;
+    detach();
+    // 0xfffa drop 은 JSON/바이트 두 테이블을 같이 내린다(코어 drop_channel).
+    const dropped = (await transport.invoke('__dropChannel', { handle })) as unknown;
+    return dropped === true;
+  };
+}
+
 /**
  * loop-stdio transport 의 채널을 발급한다 — Rust `ChannelHandle::send` 가
  * 0xfffc 프레임으로 흘려보내는 역방향 스트림을 콜백으로 변환한다.
@@ -102,7 +143,7 @@ type BytesChannelCapableTransport = NodeEventTransport & {
  *
  * @example
  * ```ts
- * const transport = createNodeLoopTransport({ command: bin, codecs: rkyvV2Registry });
+ * const transport = createNodeLoopTransport({ command: bin, codecs: frameRegistry });
  * const channel = await createNodeChannel(transport, (payload) => console.log(payload));
  * await channelDemo(engine, { channel: channel.handle, ticks: 3 });
  * await channel.close();
@@ -118,30 +159,22 @@ export async function createNodeChannel(
       'This transport cannot deliver channel frames: it does not expose onChannelFrame. Attach channels to a createNodeLoopTransport({ command, codecs }) runtime (loop-stdio binary mode) instead of a one-shot invoke binary.',
     );
   }
-  // 능력 확정 대기 — 바이너리 협상은 transport 생성 시 kick 되지만 정착은
-  // 비동기다. NDJSON 확정(구 런타임/codecs 미제공)이면 여기서 loud-fail 한다.
-  if (transport.ready) await transport.ready();
-  if (transport.mode === 'ndjson') {
-    throw new RustraCommandError(
-      RustraErrorCode.ChannelUnavailable,
-      'transport stayed on legacy NDJSON (no binary capability) — channels require binary mode; create the transport with codecs',
-    );
-  }
+  await ensureBinaryMode(
+    transport,
+    'transport stayed on legacy NDJSON (no binary capability) — channels require binary mode; create the transport with codecs',
+  );
 
-  let closed = false;
   // 발급이 먼저다 — 구독 부재는 배선 에러고 발급 실패는 핸들 공간 에러다.
   // 발급 성공 후 구독 경로 자체는 동기 등록이라 실패하지 않지만, 등록 직후
   // closed 플래그로 late frame 을 무시한다(Tauri 어댑터와 동일 위상).
-  const issued = (await transport.invoke('__createChannel')) as { handle?: unknown };
-  const handle = issued?.handle as number;
-  if (!Number.isSafeInteger(handle) || (handle as number) < 1) {
-    throw new RustraCommandError(
-      RustraErrorCode.ChannelUnavailable,
-      'loop-stdio returned an invalid channel handle; expected a positive safe integer',
-    );
-  }
+  const state = { closed: false };
+  const handle = await issueNodeChannelHandle(
+    transport,
+    '__createChannel',
+    'loop-stdio returned an invalid channel handle; expected a positive safe integer',
+  );
   const detach = transport.onChannelFrame((frame) => {
-    if (closed || frame.handle !== handle) return;
+    if (state.closed || frame.handle !== handle) return;
     // Rust sender 가 문자열 JSON을 실어 보낸다 — 파싱 1회 복원. 실패 시 원본
     // 문자열 전달(조용한 드롭 방지 — Tauri/Bun 어댑터 동일 관용).
     let payload: unknown;
@@ -160,13 +193,7 @@ export async function createNodeChannel(
 
   return {
     handle,
-    async close(): Promise<boolean> {
-      if (closed) return false;
-      closed = true;
-      detach();
-      const dropped = (await transport.invoke('__dropChannel', { handle })) as unknown;
-      return dropped === true;
-    },
+    close: channelCloser(transport, state, detach, handle),
   };
 }
 
@@ -189,7 +216,7 @@ export async function createNodeChannel(
  *
  * @example
  * ```ts
- * const transport = createNodeLoopTransport({ command: bin, codecs: rkyvV2Registry });
+ * const transport = createNodeLoopTransport({ command: bin, codecs: frameRegistry });
  * const channel = await createNodeBytesChannel(transport, (frame) => decode(frame));
  * await channelDemoBytes(engine, { channel: channel.handle, ticks: 3 });
  * await channel.close();
@@ -205,14 +232,10 @@ export async function createNodeBytesChannel(
       'This transport cannot deliver binary channel frames: it does not expose onChannelBytesFrame. Attach channels to a createNodeLoopTransport({ command, codecs }) runtime (loop-stdio binary mode) instead of a one-shot invoke binary.',
     );
   }
-  // 능력 확정 대기 — createNodeChannel 과 동일 위상(정착 전 mode 는 'ndjson').
-  if (transport.ready) await transport.ready();
-  if (transport.mode === 'ndjson') {
-    throw new RustraCommandError(
-      RustraErrorCode.ChannelUnavailable,
-      'transport stayed on legacy NDJSON (no binary capability) — binary channels require binary mode; create the transport with codecs',
-    );
-  }
+  await ensureBinaryMode(
+    transport,
+    'transport stayed on legacy NDJSON (no binary capability) — binary channels require binary mode; create the transport with codecs',
+  );
   if (transport.channelBytesCapable !== true) {
     // 구 런타임: 0xfffb 모드 바이트를 무시하고 JSON 채널을 파버린다 — 프레임을
     // 보내기 전에 끊는다(0xfff9 구독은 영원히 비는 조용한 실패 방지).
@@ -222,18 +245,15 @@ export async function createNodeBytesChannel(
     );
   }
 
-  let closed = false;
   // 발급이 먼저다 — createNodeChannel 과 동일 위상(발급 실패 = 핸들 공간 에러).
-  const issued = (await transport.invoke('__createChannelBytes')) as { handle?: unknown };
-  const handle = issued?.handle as number;
-  if (!Number.isSafeInteger(handle) || (handle as number) < 1) {
-    throw new RustraCommandError(
-      RustraErrorCode.ChannelUnavailable,
-      'loop-stdio returned an invalid binary channel handle; expected a positive safe integer',
-    );
-  }
+  const state = { closed: false };
+  const handle = await issueNodeChannelHandle(
+    transport,
+    '__createChannelBytes',
+    'loop-stdio returned an invalid binary channel handle; expected a positive safe integer',
+  );
   const detach = transport.onChannelBytesFrame((frame) => {
-    if (closed || frame.handle !== handle) return;
+    if (state.closed || frame.handle !== handle) return;
     // 수신 누적 버퍼의 뷰를 복사해 내보낸다 — 사용자 코드가 프레임을 보관해도
     // transport 의 수신 버퍼 라이프사이클과 결합되지 않는다(버퍼 채택/concat
     // 최적화가 사용자 계약을 오염시키지 않는 경계).
@@ -248,14 +268,7 @@ export async function createNodeBytesChannel(
 
   return {
     handle,
-    async close(): Promise<boolean> {
-      if (closed) return false;
-      closed = true;
-      detach();
-      // 0xfffa drop 은 JSON/바이트 두 테이블을 같이 내린다(코어 drop_channel).
-      const dropped = (await transport.invoke('__dropChannel', { handle })) as unknown;
-      return dropped === true;
-    },
+    close: channelCloser(transport, state, detach, handle),
   };
 }
 // ── 코드젠 계약 정합(컴파일 타임 고정) ──────────────────────

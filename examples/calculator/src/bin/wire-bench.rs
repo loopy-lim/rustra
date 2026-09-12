@@ -1,5 +1,5 @@
 #!/usr/bin/env cargo run -p rustra-calculator-example --bin wire-bench --release --
-//! 와이어포맷(직렬화) 계층 벤치마크 — JSON vs postcard vs rkyv V2.
+//! 와이어포맷(직렬화) 계층 벤치마크 — JSON vs postcard vs Frame.
 //!
 //! 목적: 같은 addNumbers(42, 58) 호출을 각 와이어포맷 경로로 N 회 직접 호출해
 //! 순수 직렬화+디스패치+역직렬화 비용을 측정한다. JS↔FFI 경계 노이즈가
@@ -11,9 +11,9 @@
 //! 페이로드:
 //!   JSON     : invoke_json("addNumbers", {a:42,b:58})      (serde_json)
 //!   postcard : [cmd_id u16 LE][postcard AddNumbersInput]   (복사 반환 경로)
-//!   rkyv V2  : 동일 페이로드, caller-buffer 경로(invoke_rkyv_v2_into)
+//!   Frame  : 동일 페이로드, caller-buffer 경로(invoke_frame_into)
 //!
-//! postcard 와 rkyv V2 가 같은 와이어를 쓰는 이유: 두 경로의 차이는
+//! postcard 와 Frame 가 같은 와이어를 쓰는 이유: 두 경로의 차이는
 //! "응답을 새 Vec 으로 복사해 돌려주느냐(zero-copy access + caller buffer)"
 //! 이고, 이 차이가 곧 비교 대상이다.
 //!
@@ -104,7 +104,7 @@ fn main() {
         serde_json::to_vec(&value).unwrap().len()
     });
 
-    // ── postcard / rkyv V2 ───────────────────────────────────────────
+    // ── postcard / Frame ───────────────────────────────────────────
     // 동일 요청 와이어: [cmd_id u16 LE][postcard AddNumbersInput{a:42,b:58}]
     let input = AddNumbersInput { a: 42, b: 58 };
     let input_bytes = postcard::to_allocvec(&input).unwrap();
@@ -113,23 +113,23 @@ fn main() {
     req.extend_from_slice(&input_bytes);
     let req_len = req.len();
 
-    let r_pc = bench("postcard (invoke_rkyv_v2)", req_len, iters, || {
-        package.invoke_rkyv_v2(&req).expect("ok").len()
+    let r_pc = bench("postcard (invoke_frame)", req_len, iters, || {
+        package.invoke_frame(&req).expect("ok").len()
     });
 
     let mut out_buf = vec![0u8; 256];
-    let r_rkyv = bench(
-        "rkyv V2 (invoke_rkyv_v2_into)",
+    let r_frame = bench(
+        "Frame (invoke_frame_into)",
         req_len,
         iters,
-        || match package.invoke_rkyv_v2_into(&req, &mut out_buf).expect("ok") {
+        || match package.invoke_frame_into(&req, &mut out_buf).expect("ok") {
             DirectResponse::Written(n) => n,
             DirectResponse::Buffered(bytes) => bytes.len(),
         },
     );
 
     // ── 출력 ─────────────────────────────────────────────────────────
-    let results = [r_json, r_pc, r_rkyv];
+    let results = [r_json, r_pc, r_frame];
     let max_avg = results.iter().map(|r| r.avg).fold(0.0_f64, f64::max);
 
     println!(

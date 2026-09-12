@@ -5,8 +5,8 @@ import {
   getItemCodec,
   listItemsCodec,
   updateItemCodec,
-} from '../generated/rkyv-codecs.js';
-import { rkyvV2Registry } from '../generated/rkyv-registry.js';
+} from '../generated/frame-codecs.js';
+import { frameRegistry } from '../generated/frame-registry.js';
 
 /**
  * 와이어 round-trip 검증 — 과거 결함(미지원 필드 무음 삭제)의 재발 방지 게이트.
@@ -136,6 +136,6 @@ test('createItem/getItem round-trip', () => {
 test('all crud commands are registered — no silent partial codecs', () => {
   const names = ['createItem', 'getItem', 'listItems', 'updateItem', 'deleteItem'];
   for (const n of names) {
-    assert.ok(rkyvV2Registry.has(n), `command '${n}' must be in rkyvV2Registry`);
+    assert.ok(frameRegistry.has(n), `command '${n}' must be in frameRegistry`);
   }
 });

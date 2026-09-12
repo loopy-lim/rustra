@@ -311,12 +311,12 @@ fn shared_clone_sees_runtime_mutation() {
     assert_eq!(out.v, 1);
 }
 
-/// 동적(런타임 등록) 명령 중 양쪽 미지원 형태(payload enum/oneOf)가 rkyv V2
+/// 동적(런타임 등록) 명령 중 양쪽 미지원 형태(payload enum/oneOf)가 Frame
 /// Tier 3 경로로 호출되는지 검증. (T2-1 이후 지원 형태 동적 명령은 postcard
 /// binary 핸들러를 받으므로 Tier 3 fallback 증명에는 미지원 형태가 필요하다.)
 #[test]
 #[cfg(debug_assertions)]
-fn dynamic_command_invokable_via_rkyv_v2_tier3() {
+fn dynamic_command_invokable_via_frame_tier3() {
     let pkg = empty_pkg();
     pkg.register("anyShape", any_dyn).unwrap();
     let id = id_of(&pkg, "anyShape");
@@ -325,7 +325,7 @@ fn dynamic_command_invokable_via_rkyv_v2_tier3() {
     let mut payload = vec![0u8; 2 + json.len()];
     payload[0..2].copy_from_slice(&id.to_le_bytes());
     payload[2..].copy_from_slice(json);
-    let resp = pkg.invoke_rkyv_v2(&payload).unwrap();
+    let resp = pkg.invoke_frame(&payload).unwrap();
     // success tier3: [ok:1 @0][pad 3B][json_len: u32 LE @4][json @8]
     assert_eq!(resp[0], 1, "ok flag should be 1");
     let len = u32::from_le_bytes(resp[4..8].try_into().unwrap()) as usize;
@@ -414,10 +414,10 @@ fn non_gated_command_always_allowed() {
     assert_eq!(out.v, 1);
 }
 
-/// rkyv V2 바이너리 경로에서도 deny-by-default 가 동작한다.
+/// Frame 바이너리 경로에서도 deny-by-default 가 동작한다.
 #[test]
 #[cfg(debug_assertions)]
-fn capability_denied_on_rkyv_v2_path() {
+fn capability_denied_on_frame_path() {
     let pkg = Package::builder("test.wb")
         .command("locked", echo) // command_id 1
         .require_capability("locked", "compute:secure")
@@ -426,7 +426,7 @@ fn capability_denied_on_rkyv_v2_path() {
     // capability 게이트가 디코더보다 먼저 평가되므로 cmd_id 만 있어도 된다.
     let mut payload = vec![0u8; 2];
     payload[0..2].copy_from_slice(&1u16.to_le_bytes()); // command_id = 1
-    let err = pkg.invoke_rkyv_v2(&payload).unwrap_err();
+    let err = pkg.invoke_frame(&payload).unwrap_err();
     assert_eq!(err.code(), "capability.denied");
 }
 
@@ -459,13 +459,13 @@ fn grant_capability_allowed_when_frozen_but_register_blocked() {
     assert_eq!(out["v"], 1);
 }
 
-/// 코어 FFI rkyv V2 심볼이 등록된 패키지로 동작하는지 검증한다 —
+/// 코어 FFI Frame 심볼이 등록된 패키지로 동작하는지 검증한다 —
 /// 소비자마다 복제하던 패닉 가드+버퍼 프로토콜의 단일 구현.
 /// (전역 PACKAGE OnceLock 을 다른 FFI 테스트와 공유하므로, 여기서는
 /// 심볼의 정상 경로만 검증한다 — trust_baseline_ffi.rs 가 나머지 계약을
 /// 담당한다.)
 #[test]
-fn core_rkyv_v2_ffi_symbol_dispatches() {
+fn core_frame_ffi_symbol_dispatches() {
     let pkg = Package::builder("test.wb")
         .command("double", |args: serde_json::Value| {
             Ok::<_, RustraError>(serde_json::json!(args["v"].as_i64().unwrap_or(0) * 2))
@@ -477,14 +477,14 @@ fn core_rkyv_v2_ffi_symbol_dispatches() {
     payload[0..2].copy_from_slice(&1u16.to_le_bytes());
     let mut out_len = 0usize;
     let ptr = unsafe {
-        crate::ffi::rustra_ffi_invoke_rkyv_v2(payload.as_ptr(), payload.len(), &mut out_len)
+        crate::ffi::rustra_ffi_invoke_frame(payload.as_ptr(), payload.len(), &mut out_len)
     };
     // 전역 패키지가 다른 테스트의 것일 수 있다(OnceLock 선점) — 어느 쪽이든
     // 심볼이 유효한 프레임을 반환하는지만 검증한다(에러 프레임도 ok=0 헤더를
     // 가진다). null/빈 응답이 아니면 심블의 계약은 성립이다.
     assert!(
         out_len >= 10,
-        "rkyv V2 frame must have 10-byte header, got {out_len}"
+        "Frame frame must have 10-byte header, got {out_len}"
     );
     if !ptr.is_null() {
         let bytes = unsafe { std::slice::from_raw_parts(ptr, out_len) };
@@ -578,7 +578,7 @@ fn ffi_schema_generation_returns_current_generation() {
 fn dynamic_postcard_supported_command_gets_binary_handler() {
     let pkg = empty_pkg();
     // EchoIn { v: i64 } — JS postcard 지원 형태 → 동적 등록이라도 postcard
-    // (binary) 핸들러를 받아야 한다. rkyv_v2_handler 가 JSON-in-binary 요청을
+    // (binary) 핸들러를 받아야 한다. frame_handler 가 JSON-in-binary 요청을
     // 거부하는 대신 postcard 요청으로 invoke 가 성공해야 한다.
     pkg.register("echo", echo).unwrap();
     let id = id_of(&pkg, "echo");
@@ -587,14 +587,14 @@ fn dynamic_postcard_supported_command_gets_binary_handler() {
     req[0..2].copy_from_slice(&id.to_le_bytes());
     req.extend_from_slice(&postcard::to_allocvec(&EchoIn { v: 7 }).unwrap());
     let resp = pkg
-        .invoke_rkyv_v2(&req)
+        .invoke_frame(&req)
         .expect("postcard request must succeed");
     assert_eq!(resp[0], 1, "expected ok binary (postcard) response");
     // postcard 응답: [ok u8][pad 3][postcard(EchoOut) @8]
     let out: EchoOut = postcard::from_bytes(&resp[8..]).expect("postcard decode");
     assert_eq!(out.v, 7);
 
-    // 지원 형태 명령의 rkyv_v2_tier3 플래그가 내려갔는지도 확인 — JS 엔진이
+    // 지원 형태 명령의 frame_tier3 플래그가 내려갔는지도 확인 — JS 엔진이
     // Tier 3 로 라우팅하지 않도록 하는 Rust 측 계약.
     let tier3 = pkg
         .state
@@ -603,7 +603,7 @@ fn dynamic_postcard_supported_command_gets_binary_handler() {
         .commands
         .get("echo")
         .unwrap()
-        .rkyv_v2_tier3;
+        .frame_tier3;
     assert!(
         !tier3,
         "postcard-supported dynamic command must not be tier3"
@@ -624,7 +624,7 @@ fn dynamic_unsupported_schema_stays_tier3() {
     req[0..2].copy_from_slice(&id.to_le_bytes());
     req[2..].copy_from_slice(json);
     let resp = pkg
-        .invoke_rkyv_v2(&req)
+        .invoke_frame(&req)
         .expect("tier3 request must succeed on unsupported schema");
     assert_eq!(resp[0], 1, "expected ok tier3 json response");
     let len = u32::from_le_bytes(resp[4..8].try_into().unwrap()) as usize;
@@ -637,7 +637,7 @@ fn dynamic_unsupported_schema_stays_tier3() {
         .commands
         .get("anyShape")
         .unwrap()
-        .rkyv_v2_tier3;
+        .frame_tier3;
     assert!(tier3, "3-variant untagged dynamic command must stay tier3");
 }
 
@@ -655,7 +655,7 @@ fn dynamic_oneof_schema_gets_complex_binary_handler() {
     let mut req = vec![0u8; 2];
     req[0..2].copy_from_slice(&id.to_le_bytes());
     req.extend_from_slice(&[0, 14]); // variant 0 (Active), level=zigzag(9)=18? → probe
-    let resp = pkg.invoke_rkyv_v2(&req);
+    let resp = pkg.invoke_frame(&req);
     // complex 라우트 승격 자체가 계약 — 디코드 성공 여부와 무관하게 tier3 플래그만 고정.
     let _ = resp;
     let tier3 = pkg
@@ -665,7 +665,7 @@ fn dynamic_oneof_schema_gets_complex_binary_handler() {
         .commands
         .get("shape")
         .unwrap()
-        .rkyv_v2_tier3;
+        .frame_tier3;
     assert!(
         !tier3,
         "oneOf dynamic command must take the complex binary route"
@@ -690,7 +690,7 @@ fn dynamic_map_schema_gets_postcard_handler() {
         buf.extend_from_slice(&postcard::to_allocvec(&MapIn { scores }).unwrap());
         buf
     };
-    let resp = pkg.invoke_rkyv_v2(&req).expect("postcard map request");
+    let resp = pkg.invoke_frame(&req).expect("postcard map request");
     assert_eq!(resp[0], 1);
     let out: MapOut = postcard::from_bytes(&resp[8..]).expect("postcard decode");
     assert_eq!(out.total, 3);

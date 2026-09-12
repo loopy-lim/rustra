@@ -119,10 +119,7 @@ function parseJsonPayload(raw: string, name: string): unknown {
  * 정확히 되돌린다. 같은 dylib 에 대한 2회 dlopen 은 로드 비용 없이 심볼
  * 노출만 확장한다(Bun 1.4 실증).
  */
-async function createFfiEventBridge(
-  libraryPath: string,
-  _options: BunEventBridgeOptions,
-): Promise<BunEventBridge> {
+async function createFfiEventBridge(libraryPath: string): Promise<BunEventBridge> {
   const { dlopen, FFIType, JSCallback } = (await import('bun:ffi')) as typeof import('bun:ffi');
   const lib = dlopen(libraryPath, {
     rustra_ffi_event_sink_register: { args: ['ptr', 'ptr'], returns: FFIType.void },
@@ -249,7 +246,7 @@ export async function createBunEventBridge(
 ): Promise<BunEventBridge> {
   if (options.library) {
     try {
-      return await createFfiEventBridge(options.library, options);
+      return await createFfiEventBridge(options.library);
     } catch (error) {
       if (!options.poll || options.fallbackToPolling === false) throw error;
       console.warn('Rustra: FFI event sink registration failed; falling back to polling:', error);

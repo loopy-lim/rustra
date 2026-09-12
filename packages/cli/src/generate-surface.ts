@@ -168,14 +168,14 @@ export function generateContractTs(schemaJson: string): string {
   );
 }
 
-// ── rkyv V2 codec generation (postcard wire format) ────────────────────
+// ── Frame codec generation (postcard wire format) ────────────────────
 
 /** Postcard field types for schema classification. */
 // ── 새 정수 폭(i128 등) 추가 체크리스트 ──────────────────────
 // 다음 전부를 손봐야 한다: (1) 이 union, (2) classifyPostcardField 스칼라 arm,
 // (3) generateFieldEncodeExpr / generateFieldDecodeExpr / generateFieldEncodeIntoExpr
 // (+ ENC_INTO_KINDS), (4) 복합 대응 kind(vec_/set_/map_/option_* — 있으면),
-// (5) tsFieldType 타입 표면, (6) Rust 미러 게이트(rkyv_codec.rs
+// (5) tsFieldType 타입 표면, (6) Rust 미러 게이트(frame_codec.rs
 // js_field_supported[_with_defs]), (7) Rust ts_type_from_schema(codegen.rs),
 // (8) C++ 게이트(cppComplexNativeSupported), (9) 64-bit 헬퍼
 // 코드젠(codegen.ts postcardHelperSource) + 와이어 픽스처 양면.

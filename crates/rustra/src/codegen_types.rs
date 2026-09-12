@@ -21,16 +21,15 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
         return parts.join(" & ");
     }
 
-    if let Some(any_of) = schema.get("anyOf").and_then(Value::as_array) {
+    // anyOf 우선 — anyOf 키가 비배열로 존재하면(예: boolean schema) oneOf 배열로
+    // 폴백한다. `.get().or_else()` 가 아니라 as_array 성공 기준 폴백이어야 한다
+    // (or_else 는 키 부재에서만 대체하므로 비배열 anyOf 가 oneOf 를 가린다).
+    let choices = schema
+        .get("anyOf")
+        .and_then(Value::as_array)
+        .or_else(|| schema.get("oneOf").and_then(Value::as_array));
+    if let Some(any_of) = choices {
         let parts: Vec<String> = any_of
-            .iter()
-            .map(|s| ts_type_from_schema(s, definitions))
-            .collect();
-        return parts.join(" | ");
-    }
-
-    if let Some(one_of) = schema.get("oneOf").and_then(Value::as_array) {
-        let parts: Vec<String> = one_of
             .iter()
             .map(|s| ts_type_from_schema(s, definitions))
             .collect();
@@ -83,15 +82,15 @@ pub(super) fn ts_type_from_schema(schema: &Value, definitions: &Value) -> String
             }
             "boolean" => "boolean".to_string(),
             "array" => {
-                if let Some(items) = schema.get("items").and_then(Value::as_array) {
-                    let element_types: Vec<String> = items
-                        .iter()
-                        .map(|s| ts_type_from_schema(s, definitions))
-                        .collect();
-                    return format!("[{}]", element_types.join(", "));
-                }
-                let prefix = schema.get("prefixItems").and_then(Value::as_array);
-                if let Some(items) = prefix {
+                // items 배열(트리 튜플) 우선, 비배열 items(예: 2020-12 폐쇄 튜플의
+                // `items: false`)면 prefixItems 로 폴백한다. or_else 키-존재 검사가
+                // 아니라 as_array 성공 기준 폴백이어야 비배열 items 가 prefixItems
+                // 를 가리지 않는다.
+                let tuple_items = schema
+                    .get("items")
+                    .and_then(Value::as_array)
+                    .or_else(|| schema.get("prefixItems").and_then(Value::as_array));
+                if let Some(items) = tuple_items {
                     let element_types: Vec<String> = items
                         .iter()
                         .map(|s| ts_type_from_schema(s, definitions))

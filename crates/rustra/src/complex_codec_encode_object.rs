@@ -56,6 +56,10 @@ impl CompiledComplex {
         self.direct
     }
 
+    fn ir(&self) -> Result<&Arc<IrNode>> {
+        self.ir.as_ref().map_err(|error| error.clone())
+    }
+
     /// 와이어 → `I` 직결 역직렬화 (트랙 B). `serde_direct()`가 true 일 때만
     /// 유효하다.
     pub(crate) fn decode_direct<I: serde::de::DeserializeOwned>(
@@ -63,7 +67,7 @@ impl CompiledComplex {
         bytes: &[u8],
         limits: ComplexCodecLimits,
     ) -> Result<I> {
-        let ir = self.ir.as_ref().map_err(|error| error.clone())?;
+        let ir = self.ir()?;
         complex_serde::from_bytes(bytes, ir, limits)
     }
 
@@ -73,7 +77,7 @@ impl CompiledComplex {
         value: &O,
         limits: ComplexCodecLimits,
     ) -> Result<Vec<u8>> {
-        let ir = self.ir.as_ref().map_err(|error| error.clone())?;
+        let ir = self.ir()?;
         complex_serde::to_bytes(value, ir, limits)
     }
 
@@ -85,14 +89,14 @@ impl CompiledComplex {
         target: &mut [u8],
         limits: ComplexCodecLimits,
     ) -> Result<usize> {
-        let ir = self.ir.as_ref().map_err(|error| error.clone())?;
+        let ir = self.ir()?;
         let mut writer = Writer::into_slice(target, limits);
         complex_serde::to_writer(value, &mut writer, ir, limits, 0)?;
         Ok(writer.written)
     }
 
     pub(crate) fn encode(&self, value: &Value, limits: ComplexCodecLimits) -> Result<Vec<u8>> {
-        let ir = self.ir.as_ref().map_err(|error| error.clone())?;
+        let ir = self.ir()?;
         let mut writer = Writer::new(limits);
         encode_node_ir(&mut writer, ir, value, limits, 0)?;
         Ok(writer.finish())
@@ -104,14 +108,14 @@ impl CompiledComplex {
         target: &mut [u8],
         limits: ComplexCodecLimits,
     ) -> Result<usize> {
-        let ir = self.ir.as_ref().map_err(|error| error.clone())?;
+        let ir = self.ir()?;
         let mut writer = Writer::into_slice(target, limits);
         encode_node_ir(&mut writer, ir, value, limits, 0)?;
         Ok(writer.written)
     }
 
     pub(crate) fn decode(&self, bytes: &[u8], limits: ComplexCodecLimits) -> Result<Value> {
-        let ir = self.ir.as_ref().map_err(|error| error.clone())?;
+        let ir = self.ir()?;
         let mut reader = Reader::new(bytes, limits)?;
         let value = decode_node_ir(&mut reader, ir, limits, 0)?;
         if reader.remaining() != 0 {

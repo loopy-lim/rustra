@@ -1,0 +1,7 @@
+# 빌드 산출물 — 커밋하지 않는다(바인딩 사본과 .so 는 sync-bindings.sh 가 생성).
+app/src/main/java/uniffi/
+app/src/main/jniLibs/
+app/build/
+.gradle/
+build/
+local.properties

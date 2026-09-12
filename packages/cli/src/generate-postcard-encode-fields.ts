@@ -3,6 +3,16 @@ import { collectPostcardFields } from './generate-postcard-graph.js';
 import { OPTION_INNER_KIND } from './generate-postcard-types.js';
 import { generateCollectionEncodeExpr } from './generate-postcard-encode-collections.js';
 
+const MAP_VALUE_ENCODER: Record<string, string> = {
+  map_zigzag: '_pcEncodeZigzagVarint(_v)',
+  map_uvar: '_pcEncodeVarint(_v)',
+  map_i64: '_pcEncodeZigzag64(_v)',
+  map_u64: '_pcEncodeVarint64(_v)',
+  map_f64: '_pcEncodeF64(_v)',
+  map_bool: 'new Uint8Array([_v ? 1 : 0])',
+  map_string: '_pcEncodeString(_v)',
+};
+
 export function generateFieldEncodeExpr(
   field: PostcardField,
   valueExpr: string,
@@ -99,20 +109,7 @@ export function generateFieldEncodeExpr(
     case 'map_f64':
     case 'map_bool':
     case 'map_string': {
-      const valueEncoder =
-        field.kind === 'map_zigzag'
-          ? '_pcEncodeZigzagVarint(_v)'
-          : field.kind === 'map_uvar'
-            ? '_pcEncodeVarint(_v)'
-            : field.kind === 'map_i64'
-              ? '_pcEncodeZigzag64(_v)'
-              : field.kind === 'map_u64'
-                ? '_pcEncodeVarint64(_v)'
-                : field.kind === 'map_f64'
-                  ? '_pcEncodeF64(_v)'
-                  : field.kind === 'map_bool'
-                    ? 'new Uint8Array([_v ? 1 : 0])'
-                    : '_pcEncodeString(_v)';
+      const valueEncoder = MAP_VALUE_ENCODER[field.kind] ?? '_pcEncodeString(_v)';
       return (
         `${indent}{\n` +
         `${indent}  const _map = ${valueExpr};\n` +

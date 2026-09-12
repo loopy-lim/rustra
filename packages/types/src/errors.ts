@@ -44,7 +44,7 @@ export class CancelledError extends RustraCommandError {
 /**
  * Rust `RustraError::Display` 포맷(`"{code}: {message}"`)의 평탄화된 문자열을
  * [`RustraCommandError`]로 파싱한다. JSON fallback 경로(네이티브 모듈)에서 사용 —
- * rkyv V2 경로(Node/Tauri)는 구조화된 `{code, message}` 객체를 받으므로 불필요.
+ * Frame 경로(Node/Tauri)는 구조화된 `{code, message}` 객체를 받으므로 불필요.
  *
  * `": "` 앞이 dot-notation 코드 토큰(`command.not_found`, `internal`,
  * `math.divide_by_zero` 등 — 소문자/숫자/`.`/`_` 만)이면 code/message 를 분리하고,
@@ -72,7 +72,7 @@ export function parseRustraErrorString(error: string | undefined | null): Rustra
       return new RustraCommandError(code, raw.slice(idx + 2), isRetryableCode(code));
     }
   }
-  return new RustraCommandError('invoke.failed', raw);
+  return new RustraCommandError(RustraErrorCode.InvokeFailed, raw);
 }
 
 /**
@@ -106,7 +106,9 @@ export function normalizeRustraError(error: unknown): RustraCommandError {
     // `unknown` adapter contract. Structured Rustra JSON and Display strings
     // still go through the parser so retryable metadata is not lost.
     const parsed = parseRustraErrorString(error);
-    return parsed.code === 'invoke.failed' ? new RustraCommandError('unknown', error) : parsed;
+    return parsed.code === RustraErrorCode.InvokeFailed
+      ? new RustraCommandError(RustraErrorCode.Unknown, error)
+      : parsed;
   }
   return new RustraCommandError('unknown', String(error));
 }
@@ -119,7 +121,11 @@ export function normalizeRustraError(error: unknown): RustraCommandError {
  * 미러링한다 (T1 — JSON fallback 경로의 취소 에러 정합).
  */
 export function isRetryableCode(code: string): boolean {
-  return code === 'transport.error' || code === 'transport.timeout' || code === 'cancelled';
+  return (
+    code === RustraErrorCode.TransportError ||
+    code === RustraErrorCode.TransportTimeout ||
+    code === RustraErrorCode.Cancelled
+  );
 }
 
 /**

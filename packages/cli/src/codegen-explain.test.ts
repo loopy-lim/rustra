@@ -12,8 +12,8 @@ const FULL: ExplainFacts = {
 test('explain lists every surface with source and stage', () => {
   const rows = explainCodegenSurfaces(FULL);
   assert.ok(rows.some((row) => row.output === 'types.ts' && row.renderer === 'ts renderer'));
-  assert.ok(rows.some((row) => row.output === 'rkyv-codecs.ts'));
-  assert.ok(rows.some((row) => row.output === 'rkyv-registry.ts'));
+  assert.ok(rows.some((row) => row.output === 'frame-codecs.ts'));
+  assert.ok(rows.some((row) => row.output === 'frame-registry.ts'));
   // C++ 표면
   assert.ok(rows.some((row) => row.renderer === 'cpp codec renderer'));
   // RN 스캐폴드 + positional facade
@@ -46,8 +46,8 @@ test('explain honors config without cpp/rn sections', () => {
     'types.ts',
     'commands.ts',
     'contract.ts',
-    'rkyv-codecs.ts',
-    'rkyv-registry.ts',
+    'frame-codecs.ts',
+    'frame-registry.ts',
   ])
     assert.ok(
       rows.some((row) => row.output === core),

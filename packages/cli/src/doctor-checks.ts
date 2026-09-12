@@ -263,10 +263,15 @@ export function collectConfigChecks(
     addAndroidChecks(checks, runner, options.env ?? process.env);
   }
   if (config.tauri) {
-    const command =
-      platform === 'darwin' ? 'xcodebuild' : platform === 'win32' ? 'cl' : 'pkg-config';
-    const args =
-      command === 'xcodebuild' ? ['-version'] : command === 'pkg-config' ? ['--version'] : [];
+    let command = 'pkg-config';
+    let args = ['--version'];
+    if (platform === 'darwin') {
+      command = 'xcodebuild';
+      args = ['-version'];
+    } else if (platform === 'win32') {
+      command = 'cl';
+      args = [];
+    }
     checks.push(
       commandCheck(runner, command, args, 'tauri.platform_tools', `Tauri ${platform} build tools`, [
         'Install the native build tools required by the current platform',

@@ -4,7 +4,7 @@ import { configure } from '@rustra/types';
 import { createAsyncEngine, createFastEngine } from '../../packages/react-native/src';
 import { benchEchoBytes } from '../calculator/generated/commands';
 import { GENERATED_CONTRACT_HASH, SCHEMA_VERSION } from '../calculator/generated/contract';
-import { rkyvV2Registry } from '../calculator/generated/rkyv-registry';
+import { frameRegistry } from '../calculator/generated/frame-registry';
 import { getRustraNative, installRustraJSI } from '@rustra/generated-react-native';
 
 const LOG_PREFIX = '[RustraReloadStress]';
@@ -47,7 +47,7 @@ export default function ReloadStressApp() {
         // Runtime. Debug allocator guards turn a double/wrong free into a loud
         // process failure instead of allowing silent corruption.
         const engineOptions = {
-          rkyvV2Codecs: rkyvV2Registry,
+          frameCodecs: frameRegistry,
           contractHash: GENERATED_CONTRACT_HASH,
           schemaVersion: SCHEMA_VERSION,
         };

@@ -3,11 +3,11 @@ export type {
   EngineClient,
   BootstrapState,
   RustraError,
-  RkyvV2Codec,
-  RkyvV2Native,
-  RkyvV2EngineOptions,
+  FrameCodec,
+  FrameNative,
+  FrameEngineOptions,
   InvokeOptions,
-  RkyvV2Engine,
+  FrameEngine,
   EngineSupports,
 } from '@rustra/types';
 export {
@@ -17,12 +17,12 @@ export {
   disposedBootstrapError,
   ensureConfigured,
   invoke,
-  createRkyvV2Engine,
+  createFrameEngine,
   createJsonEngine,
 } from '@rustra/types';
 import { createJsonEngine } from '@rustra/types';
 import { BUN_ENGINE_SUPPORTS } from './bun-ffi.js';
-export { BUN_ENGINE_SUPPORTS, BUN_RKYV_V2_ENGINE_SUPPORTS } from './bun-ffi.js';
+export { BUN_ENGINE_SUPPORTS, BUN_FRAME_ENGINE_SUPPORTS } from './bun-ffi.js';
 
 export type BunInvokeTransport = {
   invoke(command: string, args?: unknown): Promise<unknown> | unknown;

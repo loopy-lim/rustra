@@ -75,7 +75,7 @@ stdio protocol을 사용하므로, N-API 수준 성능이 필요한 배포는 �
 ## 성능에 맞는 경로 선택
 
 2026-08-24 macOS arm64 Release의 generated API 실측은 기본 one-shot 평균 2.76ms,
-persistent loop 16.86µs, N-API rkyv V2 1.26µs였습니다. 따라서 기본 경로는 CLI와
+persistent loop 16.86µs, N-API Frame 1.26µs였습니다. 따라서 기본 경로는 CLI와
 저빈도 작업에 사용하고, 서버는 `createNodeLoopTransport`, 고빈도 hot path는 N-API
 addon을 사용해야 합니다. 세 경로의 실행 가능한 비교는
 [`node-performance.ts`](../../examples/calculator/apps/node-performance.ts)에 있습니다.

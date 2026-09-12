@@ -76,16 +76,22 @@ export function generateComplexDecodeExpr(
 }
 
 function generateMapDecodeExpr(field: PostcardField, lvalue: string, indent: string): string {
-  const valueDecoder =
-    field.kind === 'map_zigzag'
-      ? '_pcDecodeZigzagVarint(u8, offset)'
-      : field.kind === 'map_uvar'
-        ? '_pcDecodeVarint(u8, offset)'
-        : field.kind === 'map_i64' || field.kind === 'map_u64'
-          ? '_pcDecodeVarint64(u8, offset)'
-          : field.kind === 'map_f64'
-            ? '_pcDecodeF64(u8, offset)'
-            : null;
+  let valueDecoder: string | null = null;
+  switch (field.kind) {
+    case 'map_zigzag':
+      valueDecoder = '_pcDecodeZigzagVarint(u8, offset)';
+      break;
+    case 'map_uvar':
+      valueDecoder = '_pcDecodeVarint(u8, offset)';
+      break;
+    case 'map_i64':
+    case 'map_u64':
+      valueDecoder = '_pcDecodeVarint64(u8, offset)';
+      break;
+    case 'map_f64':
+      valueDecoder = '_pcDecodeF64(u8, offset)';
+      break;
+  }
   const lines = [
     `${indent}{`,
     `${indent}  const _len = _pcDecodeVarint(u8, offset);`,

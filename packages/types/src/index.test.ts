@@ -1,4 +1,4 @@
-// createRkyvV2Engine Tier 3 fallback + getLiveSchema 단위 테스트.
+// createFrameEngine Tier 3 fallback + getLiveSchema 단위 테스트.
 // 저장소 표준(node:test + node:assert/strict, ESM) 사용 — 새 의존성 없음.
 
 import assert from 'node:assert/strict';
@@ -8,7 +8,7 @@ import {
   configureLazy,
   createGeneratedFields2,
   createJsonEngine,
-  createRkyvV2Engine,
+  createFrameEngine,
   getDeviceStatus,
   getLiveSchema,
   ensureConfigured,
@@ -36,8 +36,8 @@ import {
   debugWire,
 } from './index.js';
 import type {
-  RkyvV2SchemaNative,
-  RkyvV2Codec,
+  FrameSchemaNative,
+  FrameCodec,
   BatchEntry,
   BatchSettledEntry,
   EngineClient,
@@ -215,10 +215,10 @@ interface NativeOpts {
   schemaGeneration?: () => number;
 }
 
-function makeNative(opts: NativeOpts): RkyvV2SchemaNative {
-  const native: RkyvV2SchemaNative = {
+function makeNative(opts: NativeOpts): FrameSchemaNative {
+  const native: FrameSchemaNative = {
     getSchema: () => opts.schema ?? schemaBytes([]),
-    invokeRkyvV2: (payload) => (opts.invokeImpl ? opts.invokeImpl(payload) : new ArrayBuffer(0)),
+    invokeFrame: (payload) => (opts.invokeImpl ? opts.invokeImpl(payload) : new ArrayBuffer(0)),
   };
   if (opts.contractHash !== undefined) {
     native.getContractHash = () =>
@@ -248,20 +248,20 @@ test('getLiveSchema parses commands into a name→entry map', () => {
 test('getLiveSchema throws schema.unavailable when getSchema missing', () => {
   // (의미론 마감) getSchema 미노출은 "빈 스키마"가 아니라 조회 불능 —
   // 조용한 빈 Map 대신 명시적 에러.
-  const native = { invokeRkyvV2: () => new ArrayBuffer(0) } as RkyvV2SchemaNative;
+  const native = { invokeFrame: () => new ArrayBuffer(0) } as FrameSchemaNative;
   assert.throws(
     () => getLiveSchema(native),
     (e: unknown) => e instanceof RustraCommandError && e.code === 'schema.unavailable',
   );
   // 엔진의 tier-3 디스패치는 이를 흡수해 기존 command.not_found 계약 유지.
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   return assert.rejects(
     engine.invoke('dynCmd', {}),
     (e: unknown) => e instanceof RustraCommandError && e.code === 'command.not_found',
   );
 });
 
-// ── createRkyvV2Engine: 정적 codec fast-path ────────────────
+// ── createFrameEngine: 정적 codec fast-path ────────────────
 
 test('engine uses static codec when present (postcard fast-path)', async () => {
   let invoked = false;
@@ -271,19 +271,19 @@ test('engine uses static codec when present (postcard fast-path)', async () => {
       return tier3Success({ value: 42 });
     },
   });
-  const codec: RkyvV2Codec<{ a: number }, { value: number }> = {
+  const codec: FrameCodec<{ a: number }, { value: number }> = {
     commandId: 1,
     encode: () => new ArrayBuffer(2),
     decode: () => ({ ok: true, result: { value: 42 } }),
   };
-  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([['add', codec]]);
-  const engine = createRkyvV2Engine(native, registry);
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([['add', codec]]);
+  const engine = createFrameEngine(native, registry);
   const out = await engine.invoke<{ value: number }>('add', { a: 1 });
   assert.equal(out.value, 42);
   assert.equal(invoked, true);
 });
 
-// ── createRkyvV2Engine: 동적 Tier 3 fallback ────────────────
+// ── createFrameEngine: 동적 Tier 3 fallback ────────────────
 
 test('engine falls back to Tier 3 for non-codegen dynamic commands', async () => {
   // holder 패턴 — closure 내 할당을 TS CFA 가 놓치지 않도록.
@@ -295,7 +295,7 @@ test('engine falls back to Tier 3 for non-codegen dynamic commands', async () =>
       return tier3Success({ v: 7 });
     },
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   const out = await engine.invoke<{ v: number }>('echo', { v: 7 });
   assert.equal(out.v, 7);
 
@@ -325,9 +325,9 @@ test('Hermes UTF-8 fallback preserves long Korean and emoji payloads', async () 
     const moduleUrl = new URL('./index.js?hermes-utf8-fallback', import.meta.url).href;
     const fallback = (await import(moduleUrl)) as typeof import('./index.js');
     let captured: Uint8Array | undefined;
-    const native: RkyvV2SchemaNative = {
+    const native: FrameSchemaNative = {
       getSchema: () => schema,
-      invokeRkyvV2(payload) {
+      invokeFrame(payload) {
         captured = new Uint8Array(payload).slice();
         return response;
       },
@@ -335,7 +335,7 @@ test('Hermes UTF-8 fallback preserves long Korean and emoji payloads', async () 
     const input = {
       text: `${'한글'.repeat(64)}🙂🚀${'경계'.repeat(65)}`,
     };
-    await fallback.createRkyvV2Engine(native, new Map()).invoke('echoUnicode', input);
+    await fallback.createFrameEngine(native, new Map()).invoke('echoUnicode', input);
 
     assert.ok(captured, 'Tier 3 request must reach the native boundary');
     assert.equal(new DataView(captured.buffer).getUint16(0, true), 77);
@@ -364,7 +364,7 @@ test('engine Tier 3 fallback decodes string/vec/nested result types', async () =
       return tier3Success({ outer: { inner: { v: 99 }, tags: ['a', 'b'] } });
     },
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   const g = await engine.invoke<{ message: string }>('greet', {});
   assert.equal(g.message, 'hello');
   const l = await engine.invoke<{ items: number[]; count: number }>('list', {});
@@ -378,14 +378,14 @@ test('engine Tier 3 fallback decodes string/vec/nested result types', async () =
 test('engine caches live schema on the dynamic hot path and supports explicit refresh', async () => {
   let calls = 0;
   let schema = schemaBytes([{ name: 'dynamicEcho', commandId: 31 }]);
-  const native: RkyvV2SchemaNative = {
+  const native: FrameSchemaNative = {
     getSchema() {
       calls += 1;
       return schema;
     },
-    invokeRkyvV2: () => tier3Success({ value: 42 }),
+    invokeFrame: () => tier3Success({ value: 42 }),
   };
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   await engine.invoke('dynamicEcho', { value: 1 });
   await engine.invoke('dynamicEcho', { value: 2 });
   assert.equal(calls, 1, 'cached dynamic command must not parse live schema per invoke');
@@ -406,7 +406,7 @@ test('engine Tier 3 fallback propagates typed error wire', async () => {
     schema: schemaBytes([{ name: 'boom', commandId: 1 }]),
     invokeImpl: () => tier3Error('math.divide_by_zero', 'handler exploded'),
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   // invoke 가 에러 시 동기 throw 하므로 async 래퍼로 rejection 처리.
   await assert.rejects(
     async () => {
@@ -426,7 +426,7 @@ test('engine throws RustraCommandError for command absent from registry AND live
     schema: schemaBytes([{ name: 'known', commandId: 1 }]),
     invokeImpl: () => tier3Success({}),
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   await assert.rejects(
     async () => {
       await engine.invoke('unknown', {});
@@ -448,8 +448,8 @@ test('engine throws RustraCommandError for command absent from registry AND live
 });
 
 test('engine throws when native has no getSchema and command not in registry', async () => {
-  const native = { invokeRkyvV2: () => new ArrayBuffer(0) } as RkyvV2SchemaNative;
-  const engine = createRkyvV2Engine(native, new Map());
+  const native = { invokeFrame: () => new ArrayBuffer(0) } as FrameSchemaNative;
+  const engine = createFrameEngine(native, new Map());
   await assert.rejects(
     async () => {
       await engine.invoke('dyn', {});
@@ -458,7 +458,7 @@ test('engine throws when native has no getSchema and command not in registry', a
   );
 });
 
-// ── createRkyvV2Engine: B1 (C++ invokeTyped fast path) ──────
+// ── createFrameEngine: B1 (C++ invokeTyped fast path) ──────
 
 /**
  * 정적 명령 이름들로 최소 registry 를 만든다 (P0-3). 정적-id 캐시 스윕은
@@ -466,7 +466,7 @@ test('engine throws when native has no getSchema and command not in registry', a
  * registry 에 있어야 한다 — 실제 앱에서 registry 는 코드젠 산출물로
  * 정적 명령을 전부 담고 있는 것과 동일한 형태다.
  */
-function staticRegistry(...names: string[]): Map<string, RkyvV2Codec<unknown, unknown>> {
+function staticRegistry(...names: string[]): Map<string, FrameCodec<unknown, unknown>> {
   return new Map(
     names.map((name, i) => [
       name,
@@ -492,9 +492,9 @@ function makeTypedNative(
     invokeTypedPos?: (cmdId: number, ...fields: unknown[]) => unknown;
     invokeTypedBuffer?: (cmdId: number, value: Uint8Array | ArrayBuffer) => unknown;
   },
-): RkyvV2SchemaNative {
+): FrameSchemaNative {
   const base = makeNative(opts);
-  const typed: RkyvV2SchemaNative = { ...base };
+  const typed: FrameSchemaNative = { ...base };
   if (opts.hasStaticCodec) typed.hasStaticCodec = opts.hasStaticCodec;
   if (opts.invokeTyped) typed.invokeTyped = opts.invokeTyped;
   if (opts.invokeTypedBatch) typed.invokeTypedBatch = opts.invokeTypedBatch;
@@ -509,10 +509,10 @@ function makeTypedNative(
 
 test('engine uses C++ invokeTyped fast path when hasStaticCodec is true (B1)', async () => {
   let typedCalled = false;
-  let invokeRkyvCalled = false;
+  let invokeFrameCalled = false;
   const native = makeTypedNative({
     invokeImpl: () => {
-      invokeRkyvCalled = true;
+      invokeFrameCalled = true;
       return tier3Success({ value: 0 });
     },
     hasStaticCodec: (name) => name === 'add',
@@ -522,17 +522,17 @@ test('engine uses C++ invokeTyped fast path when hasStaticCodec is true (B1)', a
     },
   });
   // registry 에 codec 이 있어도 B1 path 가 우선해야 한다.
-  const codec: RkyvV2Codec<{ a: number }, { value: number }> = {
+  const codec: FrameCodec<{ a: number }, { value: number }> = {
     commandId: 1,
     encode: () => new ArrayBuffer(2),
     decode: () => ({ ok: true, result: { value: 0 } }),
   };
-  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([['add', codec]]);
-  const engine = createRkyvV2Engine(native, registry);
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([['add', codec]]);
+  const engine = createFrameEngine(native, registry);
   const out = await engine.invoke<{ value: number }>('add', { a: 1 });
   assert.equal(out.value, 42);
   assert.equal(typedCalled, true, 'invokeTyped must be called');
-  assert.equal(invokeRkyvCalled, false, 'invokeRkyvV2/JS codec must be bypassed on B1 path');
+  assert.equal(invokeFrameCalled, false, 'invokeFrame/JS codec must be bypassed on B1 path');
 });
 
 test('engine falls through B1 path when hasStaticCodec returns false', async () => {
@@ -544,7 +544,7 @@ test('engine falls through B1 path when hasStaticCodec returns false', async () 
       throw new Error('invokeTyped must not be called for dynamic commands');
     },
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   const out = await engine.invoke<{ v: number }>('dyn', {});
   assert.equal(out.v, 9);
 });
@@ -556,7 +556,7 @@ test('engine propagates invokeTyped errors (B1, Rust handler failure)', async ()
       throw new Error('rust handler exploded');
     },
   });
-  const engine = createRkyvV2Engine(native, staticRegistry('add'));
+  const engine = createFrameEngine(native, staticRegistry('add'));
   await assert.rejects(
     async () => {
       await engine.invoke('add', {});
@@ -565,7 +565,7 @@ test('engine propagates invokeTyped errors (B1, Rust handler failure)', async ()
   );
 });
 
-// ── createRkyvV2Engine: byId 진입 + 정적 명령 집합 JS 캐시 (P0-#3) ──
+// ── createFrameEngine: byId 진입 + 정적 명령 집합 JS 캐시 (P0-#3) ──
 
 test('typed dispatch uses invokeTypedById when available (P0-3)', async () => {
   const calls: string[] = [];
@@ -583,7 +583,7 @@ test('typed dispatch uses invokeTypedById when available (P0-3)', async () => {
       return { value: 3 };
     },
   });
-  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([
     [
       'addNumbers',
       {
@@ -593,7 +593,7 @@ test('typed dispatch uses invokeTypedById when available (P0-3)', async () => {
       },
     ],
   ]);
-  const engine = createRkyvV2Engine(native, registry);
+  const engine = createFrameEngine(native, registry);
 
   // 1) 결과가 byId 경로 값
   const out = await engine.invoke<{ value: number }>('addNumbers', { a: 1, b: 2 });
@@ -625,7 +625,7 @@ test('generated dispatch uses its verified numeric id without name dispatch', as
       return { value: 42 };
     },
   });
-  const engine = createRkyvV2Engine(native, staticRegistry('addNumbers'));
+  const engine = createFrameEngine(native, staticRegistry('addNumbers'));
 
   const out = await engine.invokeById<{ value: number }>(1, 'addNumbers', { a: 20, b: 22 });
 
@@ -650,7 +650,7 @@ test('generated dispatch safely re-resolves the registered id when id and name d
       return { value: 99 };
     },
   });
-  const engine = createRkyvV2Engine(native, staticRegistry('addNumbers'));
+  const engine = createFrameEngine(native, staticRegistry('addNumbers'));
 
   const out = await engine.invokeById<{ value: number }>(99, 'addNumbers', {});
 
@@ -682,7 +682,7 @@ test('generated field dispatch selects raw before positional and preserves outpu
       return { value: -2 };
     },
   });
-  const engine = createRkyvV2Engine(native, staticRegistry('addNumbers'));
+  const engine = createFrameEngine(native, staticRegistry('addNumbers'));
   configure(engine);
 
   const input = { a: 20, b: 22 };
@@ -712,7 +712,7 @@ test('generated field dispatch falls from raw marker to positional', async () =>
       return { value: Number(fields[0]) + Number(fields[1]) };
     },
   });
-  configure(createRkyvV2Engine(native, staticRegistry('addNumbers')));
+  configure(createFrameEngine(native, staticRegistry('addNumbers')));
 
   const out = await invokeGeneratedFields2<{ value: number }>(
     1,
@@ -737,7 +737,7 @@ test('generated field dispatch keeps old-native by-id fallback', async () => {
       return { value: input.a + input.b };
     },
   });
-  configure(createRkyvV2Engine(native, staticRegistry('addNumbers')));
+  configure(createFrameEngine(native, staticRegistry('addNumbers')));
 
   const out = await invokeGeneratedFields2<{ value: number }>(
     1,
@@ -768,7 +768,7 @@ test('generated field dispatch uses the established option path', async () => {
       return { value: 42 };
     },
   });
-  configure(createRkyvV2Engine(native, staticRegistry('addNumbers')));
+  configure(createFrameEngine(native, staticRegistry('addNumbers')));
 
   const out = await invokeGeneratedFields2<{ value: number }>(
     1,
@@ -803,7 +803,7 @@ test('generated two-field command caches the native route and preserves metadata
     'b',
     'addNumbers',
   );
-  configure(createRkyvV2Engine(native, staticRegistry('addNumbers')));
+  configure(createFrameEngine(native, staticRegistry('addNumbers')));
 
   assert.deepEqual(await addNumbers({ a: 20, b: 22 }), { value: 42 });
   assert.deepEqual(await addNumbers({ a: 1, b: 2 }), { value: 3 });
@@ -820,7 +820,7 @@ test('generated two-field command invalidates its route after configure', async 
     'b',
   );
   const engineForOffset = (offset: number) =>
-    createRkyvV2Engine(
+    createFrameEngine(
       makeTypedNative({
         getCodecCapabilities: () => 1 | 2 | 4,
         invokeTypedById: () => ({ value: -1 }),
@@ -846,7 +846,7 @@ test('generated two-field command keeps options on the established path', async 
     'b',
   );
   configure(
-    createRkyvV2Engine(
+    createFrameEngine(
       makeTypedNative({
         getCodecCapabilities: () => 1 | 2 | 4,
         invokeTypedById: () => {
@@ -886,7 +886,7 @@ test('generated bytes dispatch selects the dedicated native path for ArrayBuffer
       return { data: new Uint8Array([1, 2, 3]).buffer };
     },
   });
-  configure(createRkyvV2Engine(native, staticRegistry('echoBytes')));
+  configure(createFrameEngine(native, staticRegistry('echoBytes')));
 
   const out = await invokeGeneratedBytes<{ data: ArrayBuffer }>(
     1,
@@ -909,7 +909,7 @@ test('generated bytes dispatch accepts ArrayBuffer including an empty buffer', a
       return { data: new ArrayBuffer(0) };
     },
   });
-  configure(createRkyvV2Engine(native, staticRegistry('echoBytes')));
+  configure(createFrameEngine(native, staticRegistry('echoBytes')));
 
   await invokeGeneratedBytes(1, 'echoBytes', { data: new ArrayBuffer(0) }, new ArrayBuffer(0));
 
@@ -929,7 +929,7 @@ test('generated bytes keeps number arrays and missing buffer methods on compatib
       return { data: value };
     },
   });
-  configure(createRkyvV2Engine(native, staticRegistry('echoBytes')));
+  configure(createFrameEngine(native, staticRegistry('echoBytes')));
 
   await invokeGeneratedBytes(1, 'echoBytes', { data: [1, 2] }, [1, 2]);
   await invokeGeneratedBytes(1, 'echoBytes', { data: new Uint8Array([3]) }, new Uint8Array([3]));
@@ -950,7 +950,7 @@ test('generated bytes bypasses the new route for options and mismatched ids', as
       return { data: new ArrayBuffer(0) };
     },
   });
-  configure(createRkyvV2Engine(native, staticRegistry('echoBytes')));
+  configure(createFrameEngine(native, staticRegistry('echoBytes')));
 
   await invokeGeneratedBytes(1, 'echoBytes', { data: new ArrayBuffer(0) }, new ArrayBuffer(0), {
     timeoutMs: 100,
@@ -968,7 +968,7 @@ test('generated bytes converts native synchronous errors to rejected promises', 
       throw new Error('detached byte buffer');
     },
   });
-  configure(createRkyvV2Engine(native, staticRegistry('echoBytes')));
+  configure(createFrameEngine(native, staticRegistry('echoBytes')));
 
   await assert.rejects(
     invokeGeneratedBytes(1, 'echoBytes', { data: new Uint8Array(0) }, new Uint8Array(0)),
@@ -989,7 +989,7 @@ test('typed dispatch falls back to name-based invokeTyped without invokeTypedByI
       return { value: 42 };
     },
   });
-  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([
     [
       'addNumbers',
       {
@@ -999,7 +999,7 @@ test('typed dispatch falls back to name-based invokeTyped without invokeTypedByI
       },
     ],
   ]);
-  const engine = createRkyvV2Engine(native, registry);
+  const engine = createFrameEngine(native, registry);
   const out = await engine.invoke<{ value: number }>('addNumbers', { a: 1, b: 2 });
   assert.equal(out.value, 42, 'fallback must resolve via name-based invokeTyped');
   assert.ok(calls.includes('typed:addNumbers'), 'invokeTyped must be called on fallback');
@@ -1027,7 +1027,7 @@ test('dynamic command skips the static-id cache and stays on Tier 3 (P0-3)', asy
       throw new Error('invokeTypedById must not be called for dynamic commands');
     },
   });
-  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([
     [
       'addNumbers',
       {
@@ -1037,7 +1037,7 @@ test('dynamic command skips the static-id cache and stays on Tier 3 (P0-3)', asy
       },
     ],
   ]);
-  const engine = createRkyvV2Engine(native, registry);
+  const engine = createFrameEngine(native, registry);
   const out = await engine.invoke<{ v: number }>('dyn', {});
   assert.equal(out.v, 7, 'dynamic command must resolve via Tier 3');
   await engine.invoke<{ v: number }>('dyn', {});
@@ -1053,7 +1053,7 @@ test('dynamic command skips the static-id cache and stays on Tier 3 (P0-3)', asy
   );
 });
 
-// ── createRkyvV2Engine: P0-2 invokeBatch (단일 횡단 배치) ────
+// ── createFrameEngine: P0-2 invokeBatch (단일 횡단 배치) ────
 
 test('invokeBatch uses single invokeTypedBatch when all entries are static (P0-2)', async () => {
   let batchCalls = 0;
@@ -1070,7 +1070,7 @@ test('invokeBatch uses single invokeTypedBatch when all entries are static (P0-2
       return names.map((n) => ({ value: n === 'add' ? 3 : 6 }));
     },
   });
-  const engine = createRkyvV2Engine(native, staticRegistry('add', 'mul'));
+  const engine = createFrameEngine(native, staticRegistry('add', 'mul'));
   const out = await engine.invokeBatch<Array<{ value: number }>>([
     { command: 'add', args: { a: 1, b: 2 } },
     { command: 'mul', args: { a: 2, b: 3 } },
@@ -1093,7 +1093,7 @@ test('invokeBatch turns a synchronous native batch throw into a rejected Promise
       throw new RustraCommandError('transport.error', 'batch transport failed', true);
     },
   });
-  const engine = createRkyvV2Engine(native, staticRegistry('add'));
+  const engine = createFrameEngine(native, staticRegistry('add'));
   const returned = engine.invokeBatch([{ command: 'add', args: {} }]);
   assert.equal(typeof returned.then, 'function');
   await assert.rejects(
@@ -1120,7 +1120,7 @@ test('invokeBatch falls back to per-entry invoke when dynamic commands are mixed
       return [];
     },
   });
-  const engine = createRkyvV2Engine(native, staticRegistry('add'));
+  const engine = createFrameEngine(native, staticRegistry('add'));
   const out = await engine.invokeBatch<Array<{ value: number } | { v: number }>>([
     { command: 'add', args: {} }, // 정적 → invokeTyped
     { command: 'dyn', args: {} }, // 동적 → Tier 3
@@ -1143,7 +1143,7 @@ test('invokeBatch entry signal routes the whole batch off the single crossing (T
       return [];
     },
   });
-  const engine = createRkyvV2Engine(native, staticRegistry('a', 'b'));
+  const engine = createFrameEngine(native, staticRegistry('a', 'b'));
 
   const ac = new AbortController();
   const p = engine.invokeBatch([
@@ -1171,7 +1171,7 @@ test('invokeBatch signal-less static entries still use the single crossing (T1 f
       return names.map(() => ({ value: 1 }));
     },
   });
-  const engine = createRkyvV2Engine(native, staticRegistry('a', 'b'));
+  const engine = createFrameEngine(native, staticRegistry('a', 'b'));
   const out = await engine.invokeBatch<Array<{ value: number }>>([
     { command: 'a', args: {}, options: {} }, // options 있지만 signal 없음
     { command: 'b' }, // 기존 형태 그대로
@@ -1192,7 +1192,7 @@ test('invokeBatch entry cancel only rejects that entry independently (T1 follow-
       return { echo: name };
     },
   });
-  const engine = createRkyvV2Engine(native, staticRegistry('a', 'b'));
+  const engine = createFrameEngine(native, staticRegistry('a', 'b'));
 
   const ac = new AbortController();
   ac.abort(); // 사전 중단 — 'b' 는 절대 네이티브에 닿으면 안 된다.
@@ -1215,7 +1215,7 @@ test('invokeBatch without typed-batch native falls back to per-entry', async () 
     hasStaticCodec: () => true,
     invokeTyped: (name) => ({ echo: name }),
   });
-  const engine = createRkyvV2Engine(native, staticRegistry('a', 'b'));
+  const engine = createFrameEngine(native, staticRegistry('a', 'b'));
   const out = await engine.invokeBatch<Array<{ echo: string }>>([
     { command: 'a', args: {} },
     { command: 'b', args: {} },
@@ -1223,7 +1223,7 @@ test('invokeBatch without typed-batch native falls back to per-entry', async () 
   assert.deepEqual(out, [{ echo: 'a' }, { echo: 'b' }]);
 });
 
-// ── createRkyvV2Engine: P0-2 byId 배치 (invokeTypedBatchById) ──
+// ── createFrameEngine: P0-2 byId 배치 (invokeTypedBatchById) ──
 
 test('invokeBatch uses invokeTypedBatchById with cmd_id array when available (P0-2 byId)', async () => {
   // byId 배치 진입: 모든 항목이 정적 캐시에 있으면 이름 배열 대신 cmd_id 배열로
@@ -1243,7 +1243,7 @@ test('invokeBatch uses invokeTypedBatchById with cmd_id array when available (P0
       return ids.map((id) => ({ value: id * 10 }));
     },
   });
-  const engine = createRkyvV2Engine(native, staticRegistry('add', 'mul'));
+  const engine = createFrameEngine(native, staticRegistry('add', 'mul'));
   const out = await engine.invokeBatch<Array<{ value: number }>>([
     { command: 'add', args: { a: 1, b: 2 } }, // cmdId 1
     { command: 'mul', args: { a: 2, b: 3 } }, // cmdId 2
@@ -1270,7 +1270,7 @@ test('invokeBatch falls back to name-based invokeTypedBatch without invokeTypedB
       return names.map((n) => ({ echo: n }));
     },
   });
-  const engine = createRkyvV2Engine(native, staticRegistry('a', 'b'));
+  const engine = createFrameEngine(native, staticRegistry('a', 'b'));
   const out = await engine.invokeBatch<Array<{ echo: string }>>([
     { command: 'a', args: {} },
     { command: 'b', args: {} },
@@ -1294,7 +1294,7 @@ test('invokeBatch skips invokeTypedBatchById when a cache-miss (dynamic) entry i
       throw new Error('invokeTypedBatchById must not run for mixed batches');
     },
   });
-  const engine = createRkyvV2Engine(native, staticRegistry('add'));
+  const engine = createFrameEngine(native, staticRegistry('add'));
   const out = await engine.invokeBatch<Array<{ value: number } | { v: number }>>([
     { command: 'add', args: {} }, // 정적 → invokeTyped
     { command: 'dyn', args: {} }, // 동적(캐시 미스) → Tier 3
@@ -1311,7 +1311,7 @@ test('invokeBatch skips invokeTypedBatchById when a cache-miss (dynamic) entry i
 type EchoOut = { tag: number; msg: string };
 
 /** echo 코덱 (Task 3.3 / T1 공용). request [cmd 200 LE][tag][msg]. */
-function echoCodec(): RkyvV2Codec<{ tag: number; msg: string }, EchoOut> {
+function echoCodec(): FrameCodec<{ tag: number; msg: string }, EchoOut> {
   const enc = new TextEncoder();
   return {
     commandId: 200,
@@ -1366,10 +1366,10 @@ function echoEngine(failTags: Set<number> = new Set()) {
       return fr.buffer;
     },
   });
-  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
-    ['echo', codec as unknown as RkyvV2Codec<unknown, unknown>],
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([
+    ['echo', codec as unknown as FrameCodec<unknown, unknown>],
   ]);
-  return createRkyvV2Engine(native, registry);
+  return createFrameEngine(native, registry);
 }
 
 test('concurrent invokes do not cross-correlate (Task 3.3)', async () => {
@@ -1423,7 +1423,7 @@ test('F5: contractHash mismatch throws at engine creation (opt-in enforcement)',
   // 옵션의 hash 와 네이티브 실시간 hash 가 다르면 엔진 생성 단계에서 즉시 실패한다.
   const native = makeNative({ contractHash: 'a'.repeat(64) });
   assert.throws(
-    () => createRkyvV2Engine(native, new Map(), { contractHash: 'b'.repeat(64) }),
+    () => createFrameEngine(native, new Map(), { contractHash: 'b'.repeat(64) }),
     (err: unknown) => {
       assert.ok(err instanceof RustraCommandError, 'must be RustraCommandError');
       assert.equal(
@@ -1440,7 +1440,7 @@ test('F5: contractHash mismatch throws at engine creation (opt-in enforcement)',
 test('F5: matching contractHash creates the engine successfully', () => {
   const hash = 'c'.repeat(64);
   const native = makeNative({ contractHash: hash });
-  const engine = createRkyvV2Engine(native, new Map(), { contractHash: hash });
+  const engine = createFrameEngine(native, new Map(), { contractHash: hash });
   assert.ok(engine, 'matching hash must create the engine');
   assert.equal(typeof engine.invoke, 'function');
 });
@@ -1449,7 +1449,7 @@ test('F5: contractHash option without native getContractHash throws contract.une
   // 옵션은 설정했으나 네이티브가 getContractHash 를 노출하지 않으면 검증 불가 → 명시적 에러.
   const native = makeNative({}); // contractHash undefined → getContractHash 미노출
   assert.throws(
-    () => createRkyvV2Engine(native, new Map(), { contractHash: 'd'.repeat(64) }),
+    () => createFrameEngine(native, new Map(), { contractHash: 'd'.repeat(64) }),
     (err: unknown) => {
       assert.ok(err instanceof RustraCommandError);
       assert.equal((err as RustraCommandError).code, 'contract.unenforceable');
@@ -1460,7 +1460,7 @@ test('F5: contractHash option without native getContractHash throws contract.une
 
 test('F5: no contractHash option skips verification (backward compatible)', () => {
   // 옵션 미설정 시 검증하지 않는다 (기본값, 하위 호환).
-  const engine = createRkyvV2Engine(makeNative({}), new Map());
+  const engine = createFrameEngine(makeNative({}), new Map());
   assert.ok(engine, 'engine created without any contract-hash argument');
   assert.equal(typeof engine.invoke, 'function', 'exposes invoke per EngineClient');
 });
@@ -1471,7 +1471,7 @@ test('T2: mismatch + no callback still throws contract.mismatch (regression pin)
   // onContractMismatch 미설정 시 기존 fail-fast 동작이 그대로 유지되어야 한다.
   const native = makeNative({ contractHash: 'a'.repeat(64) });
   assert.throws(
-    () => createRkyvV2Engine(native, new Map(), { contractHash: 'b'.repeat(64) }),
+    () => createFrameEngine(native, new Map(), { contractHash: 'b'.repeat(64) }),
     (err: unknown) =>
       err instanceof RustraCommandError && (err as RustraCommandError).code === 'contract.mismatch',
   );
@@ -1482,7 +1482,7 @@ test('T2: mismatch + onContractMismatch creates degraded engine, callback sees b
   const expectedHash = 'b'.repeat(64);
   const native = makeNative({ contractHash: nativeHash });
   const calls: Array<{ nativeHash: string; expectedHash: string }> = [];
-  const engine = createRkyvV2Engine(native, new Map(), {
+  const engine = createFrameEngine(native, new Map(), {
     contractHash: expectedHash,
     onContractMismatch: (info) => calls.push(info),
   });
@@ -1499,7 +1499,7 @@ test('T2: unenforceable + onContractMismatch still throws (nothing to verify)', 
   const native = makeNative({}); // contractHash undefined → getContractHash 미노출
   assert.throws(
     () =>
-      createRkyvV2Engine(native, new Map(), {
+      createFrameEngine(native, new Map(), {
         contractHash: 'd'.repeat(64),
         onContractMismatch: () => {
           throw new Error('callback must not be invoked for unenforceable');
@@ -1520,7 +1520,7 @@ test('B4: engine callback info leaves diagnosis undefined (additive contract)', 
   const nativeHash = 'a'.repeat(64);
   const native = makeNative({ contractHash: nativeHash });
   const calls: Array<{ nativeHash: string; expectedHash: string; diagnosis?: unknown }> = [];
-  createRkyvV2Engine(native, new Map(), {
+  createFrameEngine(native, new Map(), {
     contractHash: 'b'.repeat(64),
     onContractMismatch: (info) => calls.push(info),
   });
@@ -1550,10 +1550,161 @@ test('B4: ContractMismatchDiagnosis round-trips as a plain object', () => {
   assert.equal(json.diagnoses[0].detail.includes('command id changed'), true);
 });
 
+// ── A2/A3: contractVerification 정책 — failure-injection 매트릭스 ──────────
+// 계약 검증의 고장 주입(injection) 행렬: 정책('strict'/'warn'/'off'/미설정) ×
+// 고장(해시 불일치 / getContractHash 미노출) 조합이 계약대로 동작하는지 한
+// 곳에 모은다. strict(및 미설정)은 fail-fast, warn 은 절대 throw 하지 않고
+// 경고로 강등해 엔진 생성을 항상 보장하고(OTA degraded 배포), off 는 검증
+// 자체를 생략한다(생성 엔트리의 탈출구). 에러 코드는 기존 두 개만 재사용한다
+// — 새 RustraError 코드 없음(A3 제약).
+
+test('contract verification injection: strict + wrong hash throws contract.mismatch with the actionable message', () => {
+  const native = makeNative({ contractHash: 'a'.repeat(64) });
+  assert.throws(
+    () =>
+      createFrameEngine(native, new Map(), {
+        contractHash: 'b'.repeat(64),
+        contractVerification: 'strict',
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError, 'must be RustraCommandError');
+      assert.equal((err as RustraCommandError).code, 'contract.mismatch');
+      // 실행 가능한 메시지 — 상태(양쪽 해시)와 처방(재생성·재빌드)을 함께 쓴다.
+      assert.match((err as Error).message, /native="a{16}…"/);
+      assert.match((err as Error).message, /expected="b{16}…"/);
+      assert.match((err as Error).message, /out of sync/);
+      assert.match((err as Error).message, /regenerate the TypeScript and native codecs/);
+      return true;
+    },
+  );
+});
+
+test('contract verification injection: warn + wrong hash creates the engine and warns instead of throwing', () => {
+  // OTA degraded 배포 계약 — warn 정책은 절대 throw 하지 않는다.
+  const nativeHash = 'a'.repeat(64);
+  const expectedHash = 'b'.repeat(64);
+  const native = makeNative({ contractHash: nativeHash });
+  const warns = mockConsoleWarn();
+  try {
+    const engine = createFrameEngine(native, new Map(), {
+      contractHash: expectedHash,
+      contractVerification: 'warn',
+    });
+    assert.ok(engine, 'warn policy must never block engine creation');
+    assert.equal(typeof engine.invoke, 'function');
+    assert.equal(warns.calls.length, 1, 'console.warn fallback must fire exactly once');
+    assert.match(warns.calls[0] ?? '', /contract hash mismatch/);
+    assert.match(warns.calls[0] ?? '', new RegExp(`native="${nativeHash.slice(0, 16)}`));
+    assert.match(warns.calls[0] ?? '', new RegExp(`expected="${expectedHash.slice(0, 16)}`));
+    assert.match(warns.calls[0] ?? '', /continuing with a degraded engine/);
+  } finally {
+    warns.restore();
+  }
+});
+
+test('contract verification injection: warn + missing native getContractHash warns without throwing', () => {
+  // 미노출(unenforceable)도 warn 정책 아래에서는 치명적이지 않다 — 검증 불가
+  // 상태에서도 앱은 동작해야 한다(non-fatal 계약).
+  const native = makeNative({}); // contractHash undefined → getContractHash 미노출
+  const warns = mockConsoleWarn();
+  try {
+    const engine = createFrameEngine(native, new Map(), {
+      contractHash: 'd'.repeat(64),
+      contractVerification: 'warn',
+    });
+    assert.ok(engine, 'unenforceable must degrade to a warning under the warn policy');
+    assert.equal(typeof engine.invoke, 'function');
+    assert.equal(warns.calls.length, 1, 'console.warn fallback must fire exactly once');
+    assert.match(warns.calls[0] ?? '', /contract verification skipped/);
+    assert.match(warns.calls[0] ?? '', /getContractHash/);
+    assert.match(warns.calls[0] ?? '', /continuing without verification/);
+  } finally {
+    warns.restore();
+  }
+});
+
+test('contract verification injection: strict + missing native getContractHash throws contract.unenforceable', () => {
+  const native = makeNative({}); // contractHash undefined → getContractHash 미노출
+  assert.throws(
+    () =>
+      createFrameEngine(native, new Map(), {
+        contractHash: 'd'.repeat(64),
+        contractVerification: 'strict',
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof RustraCommandError);
+      assert.equal((err as RustraCommandError).code, 'contract.unenforceable');
+      return true;
+    },
+  );
+});
+
+test('contract verification injection: off skips verification entirely even with a wrong hash and the getter present', () => {
+  // 'off' 는 네이티브 해시를 읽지도 않는다 — getter 호출 0 회가 증거다.
+  let getterCalls = 0;
+  const native = makeNative({ contractHash: 'a'.repeat(64) });
+  const originalGetter = native.getContractHash!;
+  native.getContractHash = () => {
+    getterCalls++;
+    return originalGetter();
+  };
+  const warns = mockConsoleWarn();
+  try {
+    const engine = createFrameEngine(native, new Map(), {
+      contractHash: 'b'.repeat(64),
+      contractVerification: 'off',
+    });
+    assert.ok(engine, "'off' must create the engine despite the hash mismatch");
+    assert.equal(getterCalls, 0, "'off' must not even read the native hash");
+    assert.equal(warns.calls.length, 0, "'off' must stay silent — verification is skipped");
+  } finally {
+    warns.restore();
+  }
+});
+
+test('contract verification injection: warn + onContractMismatch prefers the callback over console.warn', () => {
+  const nativeHash = 'a'.repeat(64);
+  const expectedHash = 'b'.repeat(64);
+  const native = makeNative({ contractHash: nativeHash });
+  const calls: Array<{ nativeHash: string; expectedHash: string }> = [];
+  const warns = mockConsoleWarn();
+  try {
+    const engine = createFrameEngine(native, new Map(), {
+      contractHash: expectedHash,
+      contractVerification: 'warn',
+      onContractMismatch: (info) => calls.push(info),
+    });
+    assert.ok(engine, 'engine must be created in degraded mode');
+    assert.equal(calls.length, 1, 'callback must be called exactly once');
+    assert.deepEqual(calls[0], { nativeHash, expectedHash });
+    assert.equal(warns.calls.length, 0, 'callback set → console.warn fallback must stay silent');
+  } finally {
+    warns.restore();
+  }
+});
+
+test('contract verification injection: undefined policy keeps the exact legacy fail-fast behavior (back-compat pin)', () => {
+  // A2 이전 동작 고정 — 정책 미설정은 'strict' 와 동일하다. 이 테스트가 깨진다면
+  // 기본 동작이 시프트한 것(A2 의 하위 호환 계약 위반).
+  const mismatchNative = makeNative({ contractHash: 'a'.repeat(64) });
+  assert.throws(
+    () => createFrameEngine(mismatchNative, new Map(), { contractHash: 'b'.repeat(64) }),
+    (err: unknown) =>
+      err instanceof RustraCommandError && (err as RustraCommandError).code === 'contract.mismatch',
+  );
+  const unenforceableNative = makeNative({}); // getContractHash 미노출
+  assert.throws(
+    () => createFrameEngine(unenforceableNative, new Map(), { contractHash: 'd'.repeat(64) }),
+    (err: unknown) =>
+      err instanceof RustraCommandError &&
+      (err as RustraCommandError).code === 'contract.unenforceable',
+  );
+});
+
 test('T2: schemaVersion equal → no staleness warning', () => {
   const native = makeNative({ schema: schemaBytes([{ name: 'add', commandId: 1 }], 3) });
   const stale = mockSchemaStale();
-  const engine = createRkyvV2Engine(native, new Map(), {
+  const engine = createFrameEngine(native, new Map(), {
     schemaVersion: 3,
     onSchemaStale: stale.cb,
   });
@@ -1565,7 +1716,7 @@ test('T2: schemaVersion JS < native → no warning (normal upgrade path)', () =>
   // 구 JS + 신 네이티브 — 신 기능은 못 써도 기존 동작은 정상인 조합.
   const native = makeNative({ schema: schemaBytes([{ name: 'add', commandId: 1 }], 5) });
   const stale = mockSchemaStale();
-  const engine = createRkyvV2Engine(native, new Map(), {
+  const engine = createFrameEngine(native, new Map(), {
     schemaVersion: 4,
     onSchemaStale: stale.cb,
   });
@@ -1577,7 +1728,7 @@ test('T2: schemaVersion JS > native → onSchemaStale receives both versions', (
   // 신 JS + 구 네이티브 — OTA 롤백/지연 배포. fatal 아님: 경고만.
   const native = makeNative({ schema: schemaBytes([{ name: 'add', commandId: 1 }], 2) });
   const stale = mockSchemaStale();
-  const engine = createRkyvV2Engine(native, new Map(), {
+  const engine = createFrameEngine(native, new Map(), {
     schemaVersion: 4,
     onSchemaStale: stale.cb,
   });
@@ -1590,7 +1741,7 @@ test('T2: schemaVersion JS > native without callback → console.warn fallback',
   const native = makeNative({ schema: schemaBytes([{ name: 'add', commandId: 1 }], 1) });
   const warns = mockConsoleWarn();
   try {
-    const engine = createRkyvV2Engine(native, new Map(), { schemaVersion: 2 });
+    const engine = createFrameEngine(native, new Map(), { schemaVersion: 2 });
     assert.ok(engine);
     assert.equal(warns.calls.length, 1, 'console.warn fallback must fire exactly once');
     assert.match(warns.calls[0] ?? '', /schema stale/);
@@ -1609,20 +1760,20 @@ test('T2: native schema without schemaVersion field defaults to 1 (old-native pi
   // 1 로 취급. JS=1 이면 경고 없음, JS=2 면 경고.
   const oldNative = makeNative({ schema: schemaBytes([{ name: 'add', commandId: 1 }]) });
   const quiet = mockSchemaStale();
-  createRkyvV2Engine(oldNative, new Map(), { schemaVersion: 1, onSchemaStale: quiet.cb });
+  createFrameEngine(oldNative, new Map(), { schemaVersion: 1, onSchemaStale: quiet.cb });
   assert.equal(quiet.calls.length, 0, 'JS=1 vs old native (default 1) must not warn');
 
   const warned = mockSchemaStale();
-  createRkyvV2Engine(oldNative, new Map(), { schemaVersion: 2, onSchemaStale: warned.cb });
+  createFrameEngine(oldNative, new Map(), { schemaVersion: 2, onSchemaStale: warned.cb });
   assert.equal(warned.calls.length, 1, 'JS=2 vs old native (default 1) must warn');
   assert.deepEqual(warned.calls[0], { nativeVersion: 1, jsVersion: 2 });
 });
 
 test('T2: schemaVersion option + native without getSchema → silent no-op', () => {
   // getSchema 미노출 구 네이티브 — 비교할 스키마가 없으므로 조용히 건너뛴다.
-  const native = { invokeRkyvV2: () => new ArrayBuffer(0) } as RkyvV2SchemaNative;
+  const native = { invokeFrame: () => new ArrayBuffer(0) } as FrameSchemaNative;
   const stale = mockSchemaStale();
-  const engine = createRkyvV2Engine(native, new Map(), {
+  const engine = createFrameEngine(native, new Map(), {
     schemaVersion: 99,
     onSchemaStale: stale.cb,
   });
@@ -1632,14 +1783,14 @@ test('T2: schemaVersion option + native without getSchema → silent no-op', () 
 
 test('T2: garbage getSchema bytes + schemaVersion set → engine created, no throw, no warn', () => {
   // Task 9 리뷰 Important: staleness 검사가 생성 시점에 스키마를 무방비하게
-  // 파싱해 malformed JSON 이 createRkyvV2Engine 밖으로 새어나갔다. "경고 기능은
+  // 파싱해 malformed JSON 이 createFrameEngine 밖으로 새어나갔다. "경고 기능은
   // 절대 치명적이지 않다" 계약의 위반 — 파싱 실패는 getSchema 미노출과 동일하게
   // 조용히 건너뛴다 (onSchemaStale 미발생, console.warn 미발생).
   const garbageNative = makeNative({ schema: bytesFromStrings(['<<<not json at all>>>']) });
   const stale = mockSchemaStale();
   const warns = mockConsoleWarn();
   try {
-    const engine = createRkyvV2Engine(garbageNative, new Map(), {
+    const engine = createFrameEngine(garbageNative, new Map(), {
       schemaVersion: 2,
       onSchemaStale: stale.cb,
     });
@@ -1662,11 +1813,11 @@ test('T2: schemaVersion as string in schema JSON → treated as absent, defaults
   });
   const native = makeNative({ schema: bytesFromStrings([stringVersionDoc]) });
   const quiet = mockSchemaStale();
-  createRkyvV2Engine(native, new Map(), { schemaVersion: 1, onSchemaStale: quiet.cb });
+  createFrameEngine(native, new Map(), { schemaVersion: 1, onSchemaStale: quiet.cb });
   assert.equal(quiet.calls.length, 0, 'JS=1 vs string-version native (default 1) must not warn');
 
   const warned = mockSchemaStale();
-  createRkyvV2Engine(native, new Map(), { schemaVersion: 2, onSchemaStale: warned.cb });
+  createFrameEngine(native, new Map(), { schemaVersion: 2, onSchemaStale: warned.cb });
   assert.equal(warned.calls.length, 1, 'JS=2 vs string-version native must warn against default 1');
   assert.deepEqual(warned.calls[0], { nativeVersion: 1, jsVersion: 2 });
 });
@@ -1814,7 +1965,7 @@ test('opt-in debug sink receives bounded wire previews', () => {
   const events: Array<{ bytes?: string; byteLength?: number }> = [];
   configureDebug((event) => events.push({ bytes: event.bytes, byteLength: event.byteLength }));
   try {
-    debugWire('request', 'rkyv', 'echo', new Uint8Array([0, 1, 255]).buffer);
+    debugWire('request', 'frame', 'echo', new Uint8Array([0, 1, 255]).buffer);
     assert.deepEqual(events, [{ bytes: '0001ff', byteLength: 3 }]);
   } finally {
     configureDebug(undefined);
@@ -1833,7 +1984,7 @@ test('invoke without signal never calls invokeCancel (T1)', async () => {
     cancels++;
     return false;
   };
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   await engine.invoke('dyn', { a: 1 }); // tier3 dynamic path via getSchema
   assert.equal(cancels, 0);
 });
@@ -1847,7 +1998,7 @@ test('pre-aborted signal rejects immediately without native call (T1)', async ()
       return tier3Success({});
     },
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   const ac = new AbortController();
   ac.abort();
   await assert.rejects(engine.invoke('dyn', {}, { signal: ac.signal }), (e: unknown) => {
@@ -1870,7 +2021,7 @@ test('abort mid-flight: shallow path rejects with cancelled (T1)', async () => {
       return tier3Success({ ok: true });
     },
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   const ac = new AbortController();
   const p = engine.invoke('dyn', {}, { signal: ac.signal });
   ac.abort();
@@ -1904,10 +2055,10 @@ test('typed-path command falls back to shallow cancel even with invokeAsync expo
     return true;
   };
   // registry 에 코덱이 있어도 B1 typed path 가 우선한다.
-  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
-    ['echo', echoCodec() as unknown as RkyvV2Codec<unknown, unknown>],
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([
+    ['echo', echoCodec() as unknown as FrameCodec<unknown, unknown>],
   ]);
-  const engine = createRkyvV2Engine(native, registry);
+  const engine = createFrameEngine(native, registry);
   const ac = new AbortController();
   const p = engine.invoke<{ value: number }>('echo', { tag: 1, msg: 'm' }, { signal: ac.signal });
   ac.abort();
@@ -1939,7 +2090,7 @@ test('tier3 dynamic command propagates cancel via invokeAsync (semantic closure)
     cancels++;
     return true;
   };
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   const ac = new AbortController();
   const p = engine.invoke<{ v: number }>('dyn', { x: 1 }, { signal: ac.signal });
   ac.abort();
@@ -1969,10 +2120,10 @@ test('abort mid-flight: propagate path calls invokeCancel and rejects (T1)', asy
     cancelled = true;
     return true;
   };
-  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
-    ['echo', echoCodec() as unknown as RkyvV2Codec<unknown, unknown>],
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([
+    ['echo', echoCodec() as unknown as FrameCodec<unknown, unknown>],
   ]);
-  const engine = createRkyvV2Engine(native, registry);
+  const engine = createFrameEngine(native, registry);
   const ac = new AbortController();
   const p = engine.invoke<EchoOut>('echo', { tag: 1, msg: 'm' }, { signal: ac.signal });
   ac.abort();
@@ -2002,7 +2153,7 @@ test('late invokeAsync delivery after abort is ignored (T1)', async () => {
   };
   const base = echoCodec();
   let decodeCalls = 0;
-  const codec: RkyvV2Codec<unknown, unknown> = {
+  const codec: FrameCodec<unknown, unknown> = {
     commandId: base.commandId,
     encode: base.encode,
     decode: (_frame: ArrayBuffer) => {
@@ -2010,8 +2161,8 @@ test('late invokeAsync delivery after abort is ignored (T1)', async () => {
       throw new Error('decode must not run after abort'); // sentinel
     },
   };
-  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([['echo', codec]]);
-  const engine = createRkyvV2Engine(native, registry);
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([['echo', codec]]);
+  const engine = createFrameEngine(native, registry);
   const ac = new AbortController();
   const p = engine.invoke<EchoOut>('echo', { tag: 1, msg: 'm' }, { signal: ac.signal });
   ac.abort();
@@ -2039,15 +2190,15 @@ test('propagate path settles when codec.decode throws on a malformed frame (T1)'
   };
   native.invokeCancel = () => true;
   const base = echoCodec();
-  const codec: RkyvV2Codec<unknown, unknown> = {
+  const codec: FrameCodec<unknown, unknown> = {
     commandId: base.commandId,
     encode: base.encode,
     decode: () => {
       throw new Error('malformed frame');
     },
   };
-  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([['echo', codec]]);
-  const engine = createRkyvV2Engine(native, registry);
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([['echo', codec]]);
+  const engine = createFrameEngine(native, registry);
   const ac = new AbortController();
   await assert.rejects(
     engine.invoke<EchoOut>('echo', { tag: 1, msg: 'm' }, { signal: ac.signal }),
@@ -2070,15 +2221,15 @@ test('propagate executor cleans up abort listener on synchronous throw (T1)', as
     return true;
   };
   const base = echoCodec();
-  const codec: RkyvV2Codec<unknown, unknown> = {
+  const codec: FrameCodec<unknown, unknown> = {
     commandId: base.commandId,
     encode: () => {
       throw new Error('encode exploded');
     },
     decode: base.decode,
   };
-  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([['echo', codec]]);
-  const engine = createRkyvV2Engine(native, registry);
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([['echo', codec]]);
+  const engine = createFrameEngine(native, registry);
   const ac = new AbortController();
   await assert.rejects(
     engine.invoke<EchoOut>('echo', { tag: 1, msg: 'm' }, { signal: ac.signal }),
@@ -2106,10 +2257,10 @@ test('propagate path resolves normally when invokeAsync completes first (T1)', a
     return 1;
   };
   native.invokeCancel = () => true; // 전파 경로 진입 조건 (호출되지 않음)
-  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
-    ['echo', echoCodec() as unknown as RkyvV2Codec<unknown, unknown>],
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([
+    ['echo', echoCodec() as unknown as FrameCodec<unknown, unknown>],
   ]);
-  const engine = createRkyvV2Engine(native, registry);
+  const engine = createFrameEngine(native, registry);
   const ac = new AbortController(); // abort 하지 않는 신호 — 전파 경로 유지
   const out = await engine.invoke<EchoOut>('echo', { tag: 5, msg: 'late' }, { signal: ac.signal });
   assert.equal(out.tag, 5);
@@ -2191,7 +2342,7 @@ test('global invokeGenerated uses one-Promise sync route for rustra engines', as
     },
     invokeTypedById: (id) => ({ value: id }),
   });
-  const engine = createRkyvV2Engine(native, staticRegistry('benchAdd'));
+  const engine = createFrameEngine(native, staticRegistry('benchAdd'));
   const publicInvokeById = engine.invokeById;
   engine.invokeById = () => {
     throw new Error('public Promise wrapper must be bypassed without options');
@@ -2251,10 +2402,10 @@ test('T3: over-limit tier-2 payload rejects payload.too_large without native cal
       return new ArrayBuffer(0);
     },
   });
-  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
-    ['echo', echoCodec() as unknown as RkyvV2Codec<unknown, unknown>],
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([
+    ['echo', echoCodec() as unknown as FrameCodec<unknown, unknown>],
   ]);
-  const engine = createRkyvV2Engine(native, registry, { maxPayloadBytes: 8 });
+  const engine = createFrameEngine(native, registry, { maxPayloadBytes: 8 });
   // echoCodec 인코딩: 2(cmd) + 1(tag) + msg — 'way over the limit' → 21B > 8B.
   await assert.rejects(
     engine.invoke<EchoOut>('echo', { tag: 1, msg: 'way over the limit' }),
@@ -2265,7 +2416,7 @@ test('T3: over-limit tier-2 payload rejects payload.too_large without native cal
       return true;
     },
   );
-  assert.equal(invokes, 0, 'invokeRkyvV2 must NEVER be called for over-limit payloads');
+  assert.equal(invokes, 0, 'invokeFrame must NEVER be called for over-limit payloads');
 });
 
 test('T3: within-limit tier-2 payload dispatches normally (control)', async () => {
@@ -2280,10 +2431,10 @@ test('T3: within-limit tier-2 payload dispatches normally (control)', async () =
       return fr.buffer;
     },
   });
-  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
-    ['echo', echoCodec() as unknown as RkyvV2Codec<unknown, unknown>],
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([
+    ['echo', echoCodec() as unknown as FrameCodec<unknown, unknown>],
   ]);
-  const engine = createRkyvV2Engine(native, registry, { maxPayloadBytes: 8 });
+  const engine = createFrameEngine(native, registry, { maxPayloadBytes: 8 });
   // 'abc' → 2 + 1 + 3 = 6B ≤ 8B.
   const out = await engine.invoke<EchoOut>('echo', { tag: 2, msg: 'abc' });
   assert.equal(out.tag, 2);
@@ -2299,14 +2450,14 @@ test('T3: over-limit tier-3 dynamic payload rejects before native call', async (
       return tier3Success({});
     },
   });
-  const engine = createRkyvV2Engine(native, new Map(), { maxPayloadBytes: 8 });
+  const engine = createFrameEngine(native, new Map(), { maxPayloadBytes: 8 });
   // tier3 요청: 2(cmd_id) + JSON 본체 — 이 인자면 훨씬 8B 를 넘는다.
   await assert.rejects(engine.invoke('dyn', { padding: '0123456789abcdef' }), (e: unknown) => {
     assert.ok(e instanceof RustraCommandError);
     assert.equal((e as RustraCommandError).code, 'payload.too_large');
     return true;
   });
-  assert.equal(invokes, 0, 'tier-3 must reject before invokeRkyvV2');
+  assert.equal(invokes, 0, 'tier-3 must reject before invokeFrame');
 });
 
 test('T3: within-limit tier-3 dynamic payload dispatches normally (control)', async () => {
@@ -2319,7 +2470,7 @@ test('T3: within-limit tier-3 dynamic payload dispatches normally (control)', as
       return tier3Success({ echoId: id });
     },
   });
-  const engine = createRkyvV2Engine(native, new Map(), { maxPayloadBytes: 32 });
+  const engine = createFrameEngine(native, new Map(), { maxPayloadBytes: 32 });
   // tier3 요청: 2(cmd_id) + JSON 본체('{"v":1}' 6B) = 8B ≤ 32B.
   const out = await engine.invoke<{ echoId: number }>('dyn', { v: 1 });
   assert.equal(out.echoId, 7, 'tier-3 control must reach native and round-trip');
@@ -2336,7 +2487,7 @@ test('T3: typed (tier 1) path skips the pre-check — invokeTyped still called',
       return { value: 42 };
     },
   });
-  const engine = createRkyvV2Engine(native, staticRegistry('add'), { maxPayloadBytes: 8 });
+  const engine = createFrameEngine(native, staticRegistry('add'), { maxPayloadBytes: 8 });
   const out = await engine.invoke<{ value: number }>('add', { big: 'x'.repeat(64) });
   assert.equal(out.value, 42);
   assert.equal(typedCalls, 1, 'typed path must NOT be gated by maxPayloadBytes');
@@ -2351,10 +2502,10 @@ test('T3: over-limit payload on propagate path rejects, invokeAsync never called
     return 1;
   };
   native.invokeCancel = () => true;
-  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
-    ['echo', echoCodec() as unknown as RkyvV2Codec<unknown, unknown>],
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([
+    ['echo', echoCodec() as unknown as FrameCodec<unknown, unknown>],
   ]);
-  const engine = createRkyvV2Engine(native, registry, { maxPayloadBytes: 8 });
+  const engine = createFrameEngine(native, registry, { maxPayloadBytes: 8 });
   const ac = new AbortController(); // abort 하지 않는 신호 — 전파 경로 유지
   // catch 경로 정리를 스파이로 직접 증명 — 늦은 abort + invokeCancel 부재로는
   // "리스너가 아예 등록 안 됐다"는 변이와 구별되지 않는다(vacuous).
@@ -2378,10 +2529,10 @@ test('T3: over-limit payload on propagate path rejects, invokeAsync never called
 
 test('T3: payload.too_large message carries both actual and limit byte sizes', async () => {
   const native = makeNative({});
-  const registry = new Map<string, RkyvV2Codec<unknown, unknown>>([
-    ['echo', echoCodec() as unknown as RkyvV2Codec<unknown, unknown>],
+  const registry = new Map<string, FrameCodec<unknown, unknown>>([
+    ['echo', echoCodec() as unknown as FrameCodec<unknown, unknown>],
   ]);
-  const engine = createRkyvV2Engine(native, registry, { maxPayloadBytes: 8 });
+  const engine = createFrameEngine(native, registry, { maxPayloadBytes: 8 });
   await assert.rejects(
     engine.invoke<EchoOut>('echo', { tag: 1, msg: 'way over the limit' }),
     (e: unknown) => {
@@ -2417,7 +2568,7 @@ test('typed(tier 1) command propagates cancel via invokeAsync when codec is abse
     cancels++;
     return true;
   };
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   const ac = new AbortController();
   const p = engine.invoke<{ ok: boolean }>('typedCmd', {}, { signal: ac.signal });
   ac.abort();
@@ -2441,7 +2592,7 @@ test('dynamic command without live schema keeps shallow cancel (no commandId sou
     return 1;
   };
   native.invokeCancel = () => true;
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   const ac = new AbortController();
   const p = engine.invoke<{ v: number }>('ghost', {}, { signal: ac.signal });
   ac.abort();
@@ -2485,16 +2636,16 @@ test('timeout race ignores late result without unhandled rejection', async () =>
   await new Promise((r) => setTimeout(r, 20)); // unhandled rejection 이 여기서 터지면 테스트 프로세스가 죽는다
 });
 
-test('RkyvV2 engine applies timeoutMs to an async native dispatch', async () => {
+test('Frame engine applies timeoutMs to an async native dispatch', async () => {
   const native = makeNative({ schema: schemaBytes([{ name: 'slow', commandId: 7 }]) });
   native.invokeAsync = () => 77; // callback intentionally never arrives
   native.invokeCancel = () => true;
-  const codec: RkyvV2Codec<unknown, unknown> = {
+  const codec: FrameCodec<unknown, unknown> = {
     commandId: 7,
     encode: () => new ArrayBuffer(2),
     decode: () => ({ ok: true, result: {} }),
   };
-  const engine = createRkyvV2Engine(native, new Map([['slow', codec]]));
+  const engine = createFrameEngine(native, new Map([['slow', codec]]));
   const controller = new AbortController();
   await assert.rejects(
     engine.invoke('slow', {}, { signal: controller.signal, timeoutMs: 10 }),
@@ -2676,7 +2827,7 @@ test('dynamic route resyncs live schema when native generation advances (T0-3)',
     return schemaBytes([{ name: 'dyn', commandId: dynamicCommandId }], undefined, generation);
   };
 
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   await engine.invoke<{ v: number }>('dyn', {});
   assert.deepEqual(seenIds, [7]);
 
@@ -2699,7 +2850,7 @@ test('dynamic route skips generation polling when native does not expose it (T0-
     schemaFetches++;
     return schemaBytes([{ name: 'dyn', commandId: 3 }]);
   };
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   await engine.invoke('dyn', {});
   await engine.invoke('dyn', {});
   assert.equal(schemaFetches, 1, 'without generation exposure the cache must hold');
@@ -2717,7 +2868,7 @@ test('stale cached dynamic command is not found after resync shows removal (T0-3
   (native as { getSchema: () => ArrayBuffer }).getSchema = () =>
     schemaBytes(present ? [{ name: 'dyn', commandId: 7 }] : [], undefined, generation);
 
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   await engine.invoke('dyn', {});
   present = false;
   generation = 2;
@@ -2750,7 +2901,7 @@ test('async propagate path gates on generation resync before live schema lookup 
     return 1;
   };
   native.invokeCancel = () => true;
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   await engine.invoke<{ v: number }>('dyn', {});
   assert.deepEqual(seenIds, [7]);
 
@@ -2765,19 +2916,19 @@ test('async propagate path gates on generation resync before live schema lookup 
 test('dynamic codec cache prunes stale-generation codecs when the resync epoch advances', async () => {
   // 세대가 바뀌면(resync 에포크 상승) 이전 세대 entry 의 코덱은 회수 가능해야
   // 한다 — 강한 참조 맵이라 GC 에 맡기면 dev 치환 반복에서 구 코덱이 누적된다.
-  const { createRkyvSchemaRuntime } = await import('./rkyv-engine-schema.js');
-  const { createDynamicCodecRuntime } = await import('./rkyv-engine-dynamic-codec.js');
+  const { createFrameSchemaRuntime } = await import('./frame-engine-schema.js');
+  const { createDynamicCodecRuntime } = await import('./frame-engine-dynamic-codec.js');
   let generation = 1;
   let commands: Array<Record<string, unknown>> = [];
-  const native: RkyvV2SchemaNative = {
+  const native: FrameSchemaNative = {
     getSchema: () => {
       const doc = { packageId: 't', schemaGeneration: generation, commands };
       return bytesFromStrings([JSON.stringify(doc)]);
     },
     getSchemaGeneration: () => generation,
-    invokeRkyvV2: () => new ArrayBuffer(0),
+    invokeFrame: () => new ArrayBuffer(0),
   };
-  const schema = createRkyvSchemaRuntime(native);
+  const schema = createFrameSchemaRuntime(native);
   const codecs = createDynamicCodecRuntime(schema);
 
   const postcardSchema = {
@@ -3164,7 +3315,7 @@ test('schema codec: $ref resolution through definitions', () => {
 
 test('engine routes postcard-supported dynamic commands through the schema interpreter (T2-3)', async () => {
   // Rust 계약: register("echo", echo) — EchoIn{v:i64} 는 postcard 지원 →
-  // rkyv_v2_tier3=false, 핸들러는 [ok][pad][postcard(EchoOut)] 로 응답한다.
+  // frame_tier3=false, 핸들러는 [ok][pad][postcard(EchoOut)] 로 응답한다.
   const holder: { req: ArrayBuffer | null } = { req: null };
   const native = makeNative({
     schema: schemaBytes(
@@ -3197,7 +3348,7 @@ test('engine routes postcard-supported dynamic commands through the schema inter
       return ab;
     },
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   const out = await engine.invoke<{ v: number }>('echo', { v: 7 });
   assert.equal(out.v, 7);
   // 요청이 postcard binary(Tier 3 JSON 아님)임을 고정 — [id u16][zigzag(7)].
@@ -3268,7 +3419,7 @@ test('engine routes dynamic oneOf commands through a compiled complex codec (T2-
       return ab;
     },
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   const out = await engine.invoke<{ label: string }>('shape', {
     status: { Active: { level: 9 } },
   });
@@ -3287,7 +3438,7 @@ test('engine routes dynamic oneOf commands through a compiled complex codec (T2-
 
 test('engine keeps unsupported dynamic schemas on Tier 3 (T2-3)', async () => {
   // Rust 계약: 3-변형 untagged enum(anyOf 3항)은 postcard/complex 둘 다 거부 →
-  // rkyv_v2_tier3=true. JS 인터프리터도 null 이므로 기존 JSON 경로가 유지된다.
+  // frame_tier3=true. JS 인터프리터도 null 이므로 기존 JSON 경로가 유지된다.
   const holder: { req: ArrayBuffer | null } = { req: null };
   const native = makeNative({
     schema: schemaBytes([
@@ -3313,7 +3464,7 @@ test('engine keeps unsupported dynamic schemas on Tier 3 (T2-3)', async () => {
       return tier3Success({ label: 'text:hi' });
     },
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   const out = await engine.invoke<{ label: string }>('anyShape', { v: 'hi' });
   assert.equal(out.label, 'text:hi');
   // 요청이 Tier 3 JSON([id u16][json]) 임을 고정.
@@ -3365,7 +3516,7 @@ test('schema interpreter recompiles after generation resync picks up a new codec
     const doc = { packageId: 't', schemaGeneration: generation, commands: docCommands };
     return bytesFromStrings([JSON.stringify(doc)]);
   };
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   await engine.invoke('dyn', { v: 'text' });
   assert.equal(
     new TextDecoder().decode(new Uint8Array(frames[0]!).slice(2)),
@@ -4017,14 +4168,14 @@ test('raceAbort and invokeCallbackWithAbort reject with CancelledError instances
 });
 
 test('engine-level pre-aborted invoke and invokeById reject with CancelledError', async () => {
-  // rkyv-engine-surface.ts invokeById pre-abort + invokeRaw pre-abort paths.
+  // frame-engine-surface.ts invokeById pre-abort + invokeRaw pre-abort paths.
   const native = makeNative({
     schema: schemaBytes([{ name: 'dyn', commandId: 1 }]),
     invokeImpl: () => {
       throw new Error('native must not be called when already aborted');
     },
   });
-  const engine = createRkyvV2Engine(native, new Map());
+  const engine = createFrameEngine(native, new Map());
   const ac = new AbortController();
   ac.abort();
   await assert.rejects(engine.invoke('dyn', {}, { signal: ac.signal }), (e: unknown) => {

@@ -4,11 +4,11 @@ English | [한국어](./complex-codecs.ko.md)
 
 Rustra selects a wire route per command.
 
-| Route          | Targets                                                                                      | RN path                                                                              |
-| -------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| postcard       | primitives, Vec/Set/tuple, primitive maps, string enums, and the rest of the verified subset | C++ JSI or JS codec                                                                  |
-| complex binary | recursive structs, struct-valued maps, data enums, combinational Options                     | native-safe schemas go through C++ JSI; the rest go JS codec → `invokeRkyvV2` → Rust |
-| Tier 3 JSON    | schemas neither binary codec supports, or runtime-registered commands                        | JSON-in-binary                                                                       |
+| Route          | Targets                                                                                      | RN path                                                                             |
+| -------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| postcard       | primitives, Vec/Set/tuple, primitive maps, string enums, and the rest of the verified subset | C++ JSI or JS codec                                                                 |
+| complex binary | recursive structs, struct-valued maps, data enums, combinational Options                     | native-safe schemas go through C++ JSI; the rest go JS codec → `invokeFrame` → Rust |
+| Tier 3 JSON    | schemas neither binary codec supports, or runtime-registered commands                        | JSON-in-binary                                                                      |
 
 A complex request is `[command_id: u16 LE][body]`; a success response is the
 existing 8-byte header followed by the complex body. Struct fields are written
@@ -21,6 +21,16 @@ registered on the complex route and is sent as Tier 3 JSON. Anonymous variants m
 declare `x-rustra-variant-order: ["key-for-first", "key-for-second"]` in the
 schema. The actual wire index is computed by sorting these stable keys in UTF-8
 byte order.
+
+Variant identification is a compiled per-variant matcher, in precedence order: an exact
+discriminator (a property that must equal a tag — the tag is a `const` property or a
+single-value `enum` property, the shape schemars emits for serde's adjacent/internal
+tags), then single-property key presence, then const value, then a single-enum value,
+then the type fallback (string/object). Encoder and decoder compile the same matcher on
+all three faces (Rust, TS, C++), and the encoder takes the exact-tag matcher first, so a
+looser fallback matcher cannot claim a value that belongs to an exact-tag variant — a
+mis-tagged value fails loudly at encode instead of producing a frame the decoder would
+route to a different variant.
 
 The default limits are depth 32, payload 1 MiB, and collection/string length 100,000.
 Truncated frames, duplicate map keys, invalid variants, and trailing bytes are

@@ -33,7 +33,7 @@ rustra.dispose();
 4. **TypeScript 생성** — 계약 프로브(`src/bin/generate.rs`)가 `schema.json`만 발행하면 `rustra codegen`이 TS/C++ 표면을 렌더링
 5. **Host 생성 진입점** — `node.ts`, `bun.ts`, `tauri.ts`, `react-native.ts`
 6. **네이티브 진입점** — `native_entry!` 한 줄로 stable C ABI와 RN staticlib 공유
-7. **고성능 선택지** — Node persistent loop/N-API와 Bun FFI rkyv V2 실측
+7. **고성능 선택지** — Node persistent loop/N-API와 Bun FFI Frame 실측
 
 ## 생성되는 파일
 
@@ -43,7 +43,7 @@ rustra.dispose();
 - `types.ts` — TypeScript 타입 정의
 - `commands.ts` — 커맨드 헬퍼 함수
 - `contract.ts` — 계약 해시
-- `rkyv-codecs.ts`, `rkyv-registry.ts` — rkyv V2 바이너리 fast-path 코덱
+- `frame-codecs.ts`, `frame-registry.ts` — Frame 바이너리 fast-path 코덱
 - `node.ts`, `bun.ts`, `tauri.ts`, `react-native.ts` — host별 zero-config bootstrap
 
 `positional` 옵션을 켜면(React Native 예시가 그렇다) 추가로 `positional-facade.ts`가
@@ -71,7 +71,7 @@ bun run bench:hosts
 ```
 
 [`apps/node-performance.ts`](apps/node-performance.ts)는 Node 기본 one-shot,
-persistent loop, N-API rkyv V2를 각각 재고,
+persistent loop, N-API Frame를 각각 재고,
 [`apps/bun-performance.ts`](apps/bun-performance.ts)는 생성된 Bun FFI 경로를 잽니다.
 기본 Node 경로는 단순 배포를 위한 CLI/저빈도 경로입니다. 서버 hot path에서 매 호출
 프로세스를 시작하지 않도록 loop 또는 N-API를 명시적으로 선택해야 합니다.

@@ -70,14 +70,14 @@ cargo test
 
 ### Complex binary codec
 
-`crates/rustra/src/complex_codec.rs` and `crates/rustra/tests/rkyv_v2_wire.rs`
+`crates/rustra/src/complex_codec.rs` and `crates/rustra/tests/frame_wire.rs`
 verify the schema-driven codec's map key ordering, Option, Set, data enum
 variant keys, and malformed/trailing payload boundaries. The TypeScript
 counterpart fixture lives in `packages/types/src/complex-codec.test.ts`, and
 the golden data-enum wire must be identical across both implementations.
 
 ```bash
-cargo test -p rustra --test rkyv_v2_wire oneof_command_uses_complex_binary_wire
+cargo test -p rustra --test frame_wire oneof_command_uses_complex_binary_wire
 bun test packages/types/src/complex-codec.test.ts
 bun run bench:complex
 ```

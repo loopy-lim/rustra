@@ -27,23 +27,12 @@ fn serialize_int(
         return Err(error("expected integer node"));
     };
     if *uint {
-        let value = signed.map(i64::saturate_to_lossy).unwrap_or(unsigned);
+        let value = signed.unwrap_or(unsigned);
         let value =
             u64::try_from(value).map_err(|_| error("unsigned integer must be non-negative"))?;
         writer.varint(u128::from(value))
     } else {
         writer.zigzag(i128::from(unsigned))
-    }
-}
-
-// `from_*` 이름은 clippy wrong_self_convention(no-self convention)과 충돌한다
-// — lossy 시그니처(u64 입력 없음)를 유지하기 위해 네이밍만 피한다.
-trait I64Ext {
-    fn saturate_to_lossy(self) -> i64;
-}
-impl I64Ext for i64 {
-    fn saturate_to_lossy(self) -> i64 {
-        self
     }
 }
 

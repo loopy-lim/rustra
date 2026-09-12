@@ -122,7 +122,9 @@ jobs:
             exit 1
           fi
           test "$conclusion" = "success"
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.95.0
+        with:
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - name: Validate publishable crates
         run: |

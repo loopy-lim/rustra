@@ -655,6 +655,73 @@
       }
     },
     {
+      "name": "kindEcho",
+      "commandId": 33,
+      "inputType": "KindEchoInput",
+      "outputType": "KindEchoOutput",
+      "inputSchema": {
+        "title": "KindEchoInput",
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/definitions/OpKind"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "KindEchoOutput",
+        "type": "object",
+        "required": [
+          "echoed"
+        ],
+        "properties": {
+          "echoed": {
+            "$ref": "#/definitions/OpKind"
+          }
+        }
+      },
+      "definitions": {
+        "OpKind": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "Clear"
+              ]
+            },
+            {
+              "type": "object",
+              "required": [
+                "Set"
+              ],
+              "properties": {
+                "Set": {
+                  "type": "object",
+                  "required": [
+                    "value"
+                  ],
+                  "properties": {
+                    "value": {
+                      "type": "integer",
+                      "format": "int64"
+                    }
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          ],
+          "x-rustra-variant-order": [
+            "Clear",
+            "Set"
+          ]
+        }
+      }
+    },
+    {
       "name": "multiply",
       "commandId": 2,
       "inputType": "MultiplyInput",

@@ -7,10 +7,10 @@ export const REQUIRED_ARCHIVE_SYMBOLS = [
   'rustra_ffi_invoke_raw',
   'rustra_ffi_has_raw',
   'rustra_ffi_free_owned_bytes',
-  'rustra_ffi_invoke_rkyv_v2_async',
-  'rustra_calculator_invoke_rkyv_v2',
+  'rustra_ffi_invoke_frame_async',
+  'rustra_calculator_invoke_frame',
   'rustra_calculator_invoke_typed_raw',
-  'rustra_calculator_free_rkyv_v2_buffer',
+  'rustra_calculator_free_frame_buffer',
 ];
 const REQUIRED_INSTALLED_SYMBOLS = REQUIRED_ARCHIVE_SYMBOLS.filter(
   (symbol) => symbol !== 'rustra_calculator_invoke_typed_raw',

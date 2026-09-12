@@ -39,12 +39,12 @@ export function createNodeEngine(transport: NodeInvokeTransport): NodeEngineClie
 기준선이고, 이 가이드의 나머지는 **수동 조립** — 커스텀 호스트, 커스텀
 transport, 기본 경로 교체 — 용이다.
 
-| Host             | 기본 (생성 엔트리)                                                          | Rust 진입점                                                  | 수동 조립 대안                                                                       |
-| ---------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| **Node**         | one-shot Cargo binary + stdio, `__rustra_contract` 계약 검사                | `main.rs` → `run_invoke_stdio()`                             | 직접 `spawnSync` stdio, `createNodeLoopTransport`(서버), napi-rs 네이티브 모듈, WASM |
-| **Bun**          | cdylib + stable C ABI + rkyv V2 (`rustra_ffi_invoke_rkyv_v2`)               | `lib.rs` → `rustra::native_entry!` + `register_ffi(...)`     | `bun:ffi` 직접 C FFI 호출 (§4, JSON 경로)                                            |
-| **Tauri**        | `rustra_dispatch` 멀티플렉스 (프레임워크 내장)                              | `tauri_support::register[_with_events]()` (feature: `tauri`) | 커스텀 invoke 함수를 받는 `createTauriEngine({ invoke })`                            |
-| **React Native** | autolinked JSI + rkyv V2 (`invokeRkyvV2`), `@rustra/generated-react-native` | `rustra::native_entry!` (`rustra_mobile_init` export)        | 커스텀 JSON transport(`createReactNativeEngine`), TurboModule, Nitro Modules         |
+| Host             | 기본 (생성 엔트리)                                                       | Rust 진입점                                                  | 수동 조립 대안                                                                       |
+| ---------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| **Node**         | one-shot Cargo binary + stdio, `__rustra_contract` 계약 검사             | `main.rs` → `run_invoke_stdio()`                             | 직접 `spawnSync` stdio, `createNodeLoopTransport`(서버), napi-rs 네이티브 모듈, WASM |
+| **Bun**          | cdylib + stable C ABI + Frame (`rustra_ffi_invoke_frame`)                | `lib.rs` → `rustra::native_entry!` + `register_ffi(...)`     | `bun:ffi` 직접 C FFI 호출 (§4, JSON 경로)                                            |
+| **Tauri**        | `rustra_dispatch` 멀티플렉스 (프레임워크 내장)                           | `tauri_support::register[_with_events]()` (feature: `tauri`) | 커스텀 invoke 함수를 받는 `createTauriEngine({ invoke })`                            |
+| **React Native** | autolinked JSI + Frame (`invokeFrame`), `@rustra/generated-react-native` | `rustra::native_entry!` (`rustra_mobile_init` export)        | 커스텀 JSON transport(`createReactNativeEngine`), TurboModule, Nitro Modules         |
 
 ### Node — 수동 subprocess stdio
 
@@ -163,7 +163,7 @@ func invokeRawJSON(_ payload: String) throws -> String {
 ```
 
 같은 cdylib/staticlib의 다른 코어 FFI 심볼: `rustra_ffi_invoke`(기본 포맷
-디스패치), `rustra_ffi_invoke_postcard`, `rustra_ffi_invoke_rkyv_v2`,
+디스패치), `rustra_ffi_invoke_postcard`, `rustra_ffi_invoke_frame`,
 `rustra_ffi_get_schema`, `rustra_ffi_contract_hash` — 안정 등급을 포함한 전체
 목록은 [Rust API 가이드 — FFI 부록](../rust-api-guide.ko.md)과
 [버전 정책](../versioning-policy.ko.md)에 있다.
@@ -262,7 +262,7 @@ bun run test:runtime:bun
 ## 4. 예시: Bun FFI로 교체
 
 Bun은 `bun:ffi`로 `.dylib` / `.so`를 직접 로드할 수 있다. **기본 생성 `bun.ts`
-엔트리**가 rkyv V2 심볼로 이미 이 일을 한다. 아래 JSON 경로는 커스텀 호스트용
+엔트리**가 Frame 심볼로 이미 이 일을 한다. 아래 JSON 경로는 커스텀 호스트용
 수동 조립 변형으로, 같은 코어 C ABI(`rustra_ffi_invoke_json`)를 쓴다.
 
 ### Rust 준비
@@ -340,7 +340,7 @@ const result = await addNumbers({ a: 20, b: 22 });
 console.log(`bun FFI result: ${result.value}`); // 42
 ```
 
-릴리스용 변형(계약 검증까지 포함, 수동 dlopen이 전혀 없는 rkyv V2
+릴리스용 변형(계약 검증까지 포함, 수동 dlopen이 전혀 없는 Frame
 caller-buffer 경로)은 생성 `bun.ts` 엔트리다 —
 [`bun-ffi-app.ts`](../../examples/calculator/apps/bun-ffi-app.ts) 참고.
 
@@ -373,7 +373,7 @@ const rawPtr = lib.symbols.rustra_ffi_invoke_json(payload, BigInt(payload.length
 
 ```rust
 // examples/calculator-napi/src/lib.rs — 일반 JSON 패턴
-// (실제 예제는 현재 rkyv V2 버퍼 경로를 바인딩한다 — 해당 README 참고)
+// (실제 예제는 현재 Frame 버퍼 경로를 바인딩한다 — 해당 README 참고)
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use rustra_calculator_example::calculator_package;

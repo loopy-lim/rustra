@@ -4,11 +4,11 @@
 
 Rustra는 명령마다 wire route를 선택한다.
 
-| Route          | 대상                                                                  | RN 경로                                                                 |
-| -------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| postcard       | primitive, Vec/Set/tuple, primitive map, string enum 등 검증된 subset | C++ JSI 또는 JS codec                                                   |
-| complex binary | recursive struct, struct-valued map, data enum, 조합형 Option         | native-safe schema는 C++ JSI, 나머지는 JS codec → `invokeRkyvV2` → Rust |
-| Tier 3 JSON    | 두 binary codec이 모두 지원하지 않는 schema 또는 runtime 등록 명령    | JSON-in-binary                                                          |
+| Route          | 대상                                                                  | RN 경로                                                                |
+| -------------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| postcard       | primitive, Vec/Set/tuple, primitive map, string enum 등 검증된 subset | C++ JSI 또는 JS codec                                                  |
+| complex binary | recursive struct, struct-valued map, data enum, 조합형 Option         | native-safe schema는 C++ JSI, 나머지는 JS codec → `invokeFrame` → Rust |
+| Tier 3 JSON    | 두 binary codec이 모두 지원하지 않는 schema 또는 runtime 등록 명령    | JSON-in-binary                                                         |
 
 Complex request는 `[command_id: u16 LE][body]`, success response는 기존 8-byte
 header 뒤에 complex body가 이어진다. Struct field는 schema declaration 순서로
@@ -19,6 +19,16 @@ TypeScript 사이에서 달라도 wire index가 바뀌지 않는다.
 등록하지 않고 Tier 3 JSON으로 보낸다. 익명 variant는 스키마에
 `x-rustra-variant-order: ["key-for-first", "key-for-second"]`를 명시할 수
 있다. 실제 wire index는 이 stable key를 UTF-8 byte 순으로 정렬해 계산한다.
+
+변형 식별은 컴파일된 변형별 매처(matcher)다. 우선순위 순으로: 정확한
+판별자(discriminator — 태그와
+일치해야 하는 프로퍼티 — 태그는 `const` 프로퍼티 또는 단일 값 `enum`
+프로퍼티로, schemars가 serde의 adjacent/internal 태그에 내보내는 모양), 그다음
+단일 프로퍼티 키 존재, 그다음 const 값, 그다음 단일 enum 값, 그다음 type
+폴백(string/object)이다. 인코더와 디코더는 세 표면(Rust, TS, C++) 모두에서 같은
+매처를 컴파일하며, 인코더는 정확 태그 매처를 먼저 적용하므로 느슨한 폴백
+매처가 정확 태그 변형에 속한 값을 선취할 수 없다 — 잘못 태그된 값은 디코더가
+다른 변형으로 라우팅할 프레임을 만드는 대신 인코딩에서 크게 실패한다.
 
 기본 limits는 depth 32, payload 1 MiB, collection/string length 100,000이다.
 잘린 frame, 중복 map key, 잘못된 variant, trailing byte는 성공 결과가 아니라

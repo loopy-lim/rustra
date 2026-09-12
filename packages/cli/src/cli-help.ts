@@ -7,7 +7,7 @@ export function printHelp(command?: string): void {
   }
   if (command === 'codegen') {
     console.log(
-      'Usage: rustra codegen [--config <path>] [--check] [--explain] [--format text|json]\n\nOptions:\n  --config <path>  Path to rustra.json (defaults to ./rustra.json when present)\n  --check          Verify generated files without writing\n  --explain        Show where each generated surface comes from (no generation)\n  --format <fmt>   text (default) or json\n  --help, -h       Show this help message',
+      'Usage: rustra codegen [--config <path>] [--check] [--check-bindings] [--explain] [--format text|json]\n\nOptions:\n  --config <path>  Path to rustra.json (defaults to ./rustra.json when present)\n  --check          Verify schema/TS/C++ and Rust mirror without writing\n  --check-bindings Also rebuild and compare actual UniFFI Swift/Kotlin bindings\n  --explain        Show where each generated surface comes from (no generation)\n  --format <fmt>   text (default) or json\n  --help, -h       Show this help message',
     );
     return;
   }

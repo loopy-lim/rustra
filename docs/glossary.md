@@ -14,54 +14,52 @@ In Korean prose, a descriptive gloss such as 핫코어/핫스왑 may accompany t
 identifier, but the identifier itself (`hot-core`, `parity gate`, `contract
 hash`) is not transliterated.
 
-| Term                    | In one line                                                                          |
-| ----------------------- | ------------------------------------------------------------------------------------ |
-| rkyv vs rkyv V2         | upstream crate (not used) vs Rustra's own binary frame protocol name                 |
-| postcard                | the actual payload codec (serde-compatible compact format)                           |
-| Tier 1 / 2 / 3          | wire codec tiers: static postcard / complex schema / JSON-in-binary fallback         |
-| dev tier                | "dynamic in dev, static in release" development mechanisms — unrelated to wire tiers |
-| hot-core                | native dylib hot-swap dev mechanism (experimental)                                   |
-| `rustra_ffi_hot_reload` | the older hot-* mechanism: replace-semantics reload injection                        |
-| parity gate             | `rustra dev` rebuild gate comparing the contract hash before announcing a reload     |
-| contract hash           | SHA-256 of the schema JSON only                                                      |
-| dylib / cdylib          | Rust dynamic-library crate-type — the hot-swap unit                                  |
-| channel family          | `ChannelHandle` + the four per-host binary-channel factories                         |
-| host                    | four senses: embedding app / `ChannelHost` / JSI host object / host promotions       |
-| snapshot                | four senses: API snapshot / inspector dump / debug-log value / changeset canary      |
-| gate (standalone)       | overloaded: profiles, capability, drift, release, acceptance, api-surface, scripts   |
-| codec / Codec IR        | payload serializer / the shared schema IR behind complex codecs                      |
-| mirror                  | three senses: en/ko document pair / hand-maintained duplicate / verb "to mirror"     |
-| subsecond               | dioxus hot-reload tech — evaluated and deferred; not part of the architecture        |
+| Term                    | In one line                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- |
+| Frame                   | Rustra's binary frame protocol — V2 framing + command ids + postcard payload codec (formerly "rkyv V2") |
+| postcard                | the actual payload codec (serde-compatible compact format)                                              |
+| Tier 1 / 2 / 3          | wire codec tiers: static postcard / complex schema / JSON-in-binary fallback                            |
+| dev tier                | "dynamic in dev, static in release" development mechanisms — unrelated to wire tiers                    |
+| hot-core                | native dylib hot-swap dev mechanism (experimental)                                                      |
+| `rustra_ffi_hot_reload` | the older hot-* mechanism: replace-semantics reload injection                                           |
+| parity gate             | `rustra dev` rebuild gate comparing the contract hash before announcing a reload                        |
+| contract hash           | SHA-256 of the schema JSON only                                                                         |
+| dylib / cdylib          | Rust dynamic-library crate-type — the hot-swap unit                                                     |
+| channel family          | `ChannelHandle` + the four per-host binary-channel factories                                            |
+| host                    | four senses: embedding app / `ChannelHost` / JSI host object / host promotions                          |
+| snapshot                | four senses: API snapshot / inspector dump / debug-log value / changeset canary                         |
+| gate (standalone)       | overloaded: profiles, capability, drift, release, acceptance, api-surface, scripts                      |
+| codec / Codec IR        | payload serializer / the shared schema IR behind complex codecs                                         |
+| mirror                  | three senses: en/ko document pair / hand-maintained duplicate / verb "to mirror"                        |
+| subsecond               | dioxus hot-reload tech — evaluated and deferred; not part of the architecture                           |
 
-## rkyv vs rkyv V2
+## Frame
 
-**rkyv V2** is Rustra's own name for its binary frame protocol (V2 framing +
-command ids + postcard payload codec). It is **not** the upstream `rkyv` crate:
-the crate is absent from `Cargo.lock`, and the payload codec is postcard.
-Canonical wire shape — request `[cmd_id u16 LE][postcard body]`, response
-`[ok u8][pad][...]` with a path-specific body, error frame
+**Frame** is the name of Rustra's binary frame protocol (V2 framing + command
+ids + postcard payload codec); it was formerly named "rkyv V2". The payload
+codec is postcard, not the upstream `rkyv` crate — that crate is absent from
+`Cargo.lock`. Canonical wire shape — request `[cmd_id u16 LE][postcard body]`,
+response `[ok u8][pad][...]` with a path-specific body, error frame
 `[ok=0][pad][err_len u16 LE][postcard {code, message}]`. The wire-level
 authority is the "Names" table in [wire-format.md](wire-format.md). Generated
-artifacts and symbols keep the rkyv name (`rkyv-codecs.ts`, `invokeRkyvV2`) —
-they are protocol names, not crate dependencies.
+artifacts and symbols carry the Frame name (`frame-codecs.ts`, `invokeFrame`).
 
 ## postcard
 
 The payload serializer actually used on the manifest/dispatch paths
 (`postcard` dependency in `crates/rustra/Cargo.toml`). A serde-compatible
 compact binary format. When a document says a command is "postcard-encoded",
-that is the concrete codec behind an rkyv V2 frame.
+that is the concrete codec behind a Frame.
 
 ## Tier 1 / Tier 2 / Tier 3 (wire codec tiers)
 
-The three wire codec routes a command's payload can take inside an rkyv V2
-frame:
+The three wire codec routes a command's payload can take inside a Frame:
 
 - **Tier 1** — static postcard: schema-known simple fields, encoded postcard.
 - **Tier 2** — complex schema: recursive map/enum/Option/Set/BigInt shapes via
   the schema-driven complex codec.
 - **Tier 3** — JSON-in-binary fallback: `[cmd_id u16 LE][JSON]`, for schemas
-  neither binary codec supports. Implementation: `crates/rustra/src/rkyv_tier3.rs`.
+  neither binary codec supports. Implementation: `crates/rustra/src/frame_tier3.rs`.
 
 See [architecture.md](architecture.md) ("Invocation Path for Dynamic
 Commands") and [complex-codecs.md](complex-codecs.md).
@@ -82,8 +80,10 @@ The native dylib hot-swap development mechanism: the Rust core is built as a
 cdylib and swapped into a running host without restart. Consists of the
 `hot-core` cargo feature, the `DylibCore`/`HotCoreHandle` primitives, the
 sha256 poll watcher, and the `RUSTRA_HOT_CORE` environment variable pointing
-the host at the artifact. **Experimental** (see the experimental-surface table
-in [versioning-policy.md](versioning-policy.md)). Design and status:
+the host at the artifact (the React Native adapter instead polls a directory
+named by `RUSTRA_HOT_CORE_DIR` — a file path and a directory are two different
+variables). **Experimental** (see the experimental-surface table in
+[versioning-policy.md](versioning-policy.md)). Design and status:
 [plans/2026-09-09-native-hot-core-design.md](plans/2026-09-09-native-hot-core-design.md).
 
 Canonical spelling: `hot-core` in both languages. In Korean prose, concept
@@ -158,7 +158,7 @@ Four senses, ranked by how often each appears:
    (`crates/rustra/src/channels_host.rs`). Nearly the **inverse** of sense 1:
    this host lives inside the core and hands handles out to the embedding app.
 3. **JSI host object / host function** — the RN native side: the C++/TurboModule
-   object exposing `invokeRkyvV2` etc. to JavaScript.
+   object exposing `invokeFrame` etc. to JavaScript.
 4. **Host promotions** (host promotions / 호스트 승격) — the adapter-side error
    promotion points where a wire error becomes a thrown JS error (see
    [wire-format.md](wire-format.md)).

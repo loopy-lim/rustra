@@ -33,7 +33,7 @@ where
             obj.insert(key, value);
         }
     }
-    let (postcard_decoder, _input_tier) = build_rkyv_v2_decoder(&input_schema);
+    let (postcard_decoder, _input_tier) = build_frame_decoder(&input_schema);
 
     // Wrap handler in Arc so both JSON and binary paths can use it
     let handler = Arc::new(handler);
@@ -43,7 +43,7 @@ where
     // 엔진이 Tier 3(JSON-in-binary) 로 라우팅한다. Rust 가 typed postcard 핸들러를
     // 그대로 켜두면 와이어가 어긋난다(JS 는 JSON 바이트를 보내고 Rust 는 postcard
     // 로 디코딩을 시도). 따라서 JS 코덱 지원 판정을 미러해 미지원 명령의
-    // fast-path 를 끄고 JSON 경류(rkyv_v2_decode/encode_response — is_tier3 면
+    // fast-path 를 끄고 JSON 경류(frame_decode/encode_response — is_tier3 면
     // JSON-in-binary 프레임)로 통일한다.
     let js_codec_supported = js_postcard_codec_supported_with_defs(&input_schema, &definitions)
         && js_postcard_codec_supported_with_defs(&output_schema, &definitions);
@@ -57,14 +57,14 @@ where
     // codec, and finally Tier 3 JSON only when neither binary route supports
     // the schema.
     let is_tier3 = !js_codec_supported && !complex_codec_supported;
-    let rkyv_v2_decoder = if is_tier3 {
+    let frame_decoder = if is_tier3 {
         build_tier3_json_decoder()
     } else {
         postcard_decoder
     };
-    let rkyv_v2_response_encoder = build_rkyv_v2_response_encoder(&output_schema, is_tier3);
+    let frame_response_encoder = build_frame_response_encoder(&output_schema, is_tier3);
 
-    let rkyv_v2_handler = build_rkyv_v2_handler::<I, O, F>(
+    let frame_handler = build_frame_handler::<I, O, F>(
         &input_schema,
         &output_schema,
         &definitions,
@@ -72,7 +72,7 @@ where
         js_codec_supported,
         complex_codec_supported,
     );
-    let rkyv_v2_into_handler = build_rkyv_v2_into_handler::<I, O, F>(
+    let frame_into_handler = build_frame_into_handler::<I, O, F>(
         &input_schema,
         &output_schema,
         &definitions,
@@ -100,14 +100,14 @@ where
             let output = handler(input)?;
             serde_json::to_value(output).map_err(RustraError::internal)
         }),
-        rkyv_v2_handler,
-        rkyv_v2_into_handler,
+        frame_handler,
+        frame_into_handler,
         raw_handler,
         buffer_handler: None,
         raw_input_kinds,
-        rkyv_v2_decode: rkyv_v2_decoder,
-        rkyv_v2_encode_response: rkyv_v2_response_encoder,
-        rkyv_v2_tier3: is_tier3,
+        frame_decode: frame_decoder,
+        frame_encode_response: frame_response_encoder,
+        frame_tier3: is_tier3,
         required_capability: None,
         platforms: Vec::new(),
         error_variants: Vec::new(),

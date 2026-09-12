@@ -1,6 +1,6 @@
-/// rkyv V2 비동기 진입점 — [`rustra_ffi_invoke_async`] 와 동일한 계약
+/// Frame 비동기 진입점 — [`rustra_ffi_invoke_async`] 와 동일한 계약
 /// (invocation_id 발급, 워커 스레드 dispatch, cancel 체크포인트, complete 후
-/// on_complete 1회)을 rkyv V2 와이어로 제공한다.
+/// on_complete 1회)을 Frame 와이어로 제공한다.
 ///
 /// # Safety
 ///
@@ -9,56 +9,25 @@
 /// - `invocation_id` must be null or a valid u64 write pointer (out-param).
 /// - The caller must free `response_ptr` using `rustra_ffi_free`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2_async(
+pub unsafe extern "C" fn rustra_ffi_invoke_frame_async(
     payload: *const u8,
     payload_len: usize,
     user_data: *mut c_void,
     on_complete: Option<unsafe extern "C" fn(*mut c_void, *mut u8, usize)>,
     invocation_id: *mut u64,
 ) {
-    let id = crate::cancel::register_invocation();
-    if !invocation_id.is_null() {
-        unsafe { *invocation_id = id };
-    }
-    let user_data_raw = user_data as usize;
-    if payload_len > max_payload_bytes() {
-        let e = crate::RustraError::payload_too_large(payload_len, max_payload_bytes());
-        deliver_spawn_failure(
-            id,
-            user_data_raw,
-            on_complete,
-            rkyv_error_bytes,
-            &e.to_string(),
-        );
-        return;
-    }
-    let bytes = if payload.is_null() || payload_len == 0 {
-        Vec::new()
-    } else {
-        unsafe { std::slice::from_raw_parts(payload, payload_len).to_vec() }
-    };
-
-    if async_pool_submit(AsyncTask::Alloc((
-        id,
-        bytes,
-        user_data_raw,
+    submit_alloc_async(
+        payload,
+        payload_len,
+        user_data,
         on_complete,
-        rustra_ffi_invoke_rkyv_v2,
-        rkyv_error_bytes,
-    )))
-    .is_err()
-    {
-        deliver_spawn_failure(
-            id,
-            user_data_raw,
-            on_complete,
-            rkyv_error_bytes,
-            "invoke.backpressure: async worker queue is full — retry after drain",
-        );
-    }
+        invocation_id,
+        rustra_ffi_invoke_frame,
+        frame_error_bytes,
+    );
 }
 
-/// rkyv V2 비동기 caller-buffer 변형 — [`rustra_ffi_invoke_rkyv_v2_async`] 와
+/// Frame 비동기 caller-buffer 변형 — [`rustra_ffi_invoke_frame_async`] 와
 /// 동일한 계약(invocation_id 발급, 워커 스레드 dispatch, cancel 체크포인트,
 /// complete 후 on_complete 1회)에 호스트 제공 응답 버퍼를 더한다.
 ///
@@ -92,7 +61,7 @@ pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2_async(
 ///   with `rustra_ffi_free`. With `owned=0` the pointer is the caller's own
 ///   buffer and must not be freed through the FFI.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2_async_into(
+pub unsafe extern "C" fn rustra_ffi_invoke_frame_async_into(
     payload: *const u8,
     payload_len: usize,
     buf: *mut u8,
@@ -121,7 +90,7 @@ pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2_async_into(
     if payload_len > max_payload_bytes() {
         // 크기 게이트 실패는 호출 스레드에서 즉시 완료한다.
         let e = crate::RustraError::payload_too_large(payload_len, max_payload_bytes());
-        deliver_immediate(crate::encode_rkyv_v2_error(&e));
+        deliver_immediate(crate::encode_frame_error(&e));
         return;
     }
     let bytes = if payload.is_null() || payload_len == 0 {
@@ -146,6 +115,6 @@ pub unsafe extern "C" fn rustra_ffi_invoke_rkyv_v2_async_into(
             "async worker queue is full — retry after drain",
         )
         .retryable();
-        deliver_immediate(crate::encode_rkyv_v2_error(&e));
+        deliver_immediate(crate::encode_frame_error(&e));
     }
 }

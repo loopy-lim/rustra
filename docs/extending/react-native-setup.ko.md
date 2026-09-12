@@ -75,7 +75,7 @@ bun install
 generated/
   react-native.ts
   commands.ts
-  rkyv-registry.ts
+  frame-registry.ts
 modules/rustra-bridge/
   package.json
   react-native.config.js
@@ -178,7 +178,7 @@ rustra::TypedInvokeResult result =
 switch (result.status) {
   case rustra::TypedInvokeStatus::Ok:            // result.value — 디코딩된 출력
     break;
-  case rustra::TypedInvokeStatus::NoStaticCodec: // invokeRkyvV2 로 폴백
+  case rustra::TypedInvokeStatus::NoStaticCodec: // invokeFrame 로 폴백
     break;
   case rustra::TypedInvokeStatus::CommandError:  // result.value: {code, message}
     break;                                       // (예: platform.unavailable)
@@ -199,7 +199,7 @@ switch (result.status) {
   헤더 계약 참고).
 - **바이너리 채널** — `createChannelBytes(callback)`(JS: `createBytesChannel`)
   는 채널 페이로드를 ArrayBuffer 복사본으로 전달한다 — JSON 직렬화 없이
-  rkyv V2 프레임. JSON 채널과 동일한 핸들/close 계약, 한 핸들은 한 경로.
+  Frame 프레임. JSON 채널과 동일한 핸들/close 계약, 한 핸들은 한 경로.
 - **동기 invoke** — `invokeTypedSync(name, args)`(`@rustra/react-native`)는
   UI 핫패스에서 Promise 홉 없이 C++ typed fast path 를 직접 쓴다 — 미지원
   환경은 `sync.unavailable` 로 loud-fail.

@@ -1,8 +1,13 @@
 name: Fuzz
 
-# rkyv V2 디코드 경로(신뢰 경계) 무작위 입력 검증 — 10분 타임박스 (배경 트랙 B2).
+# Frame 디코드 경로(신뢰 경계) 무작위 입력 검증 — 10분 타임박스 (배경 트랙 B2).
 # cargo-fuzz 는 nightly + 별도 crate (fuzz/, 메인 workspace 비멤버) 로 격리.
 # 크래시 아티팩트는 업로드 후 이슈로 수동 등록한다.
+#
+# A9 안전망 게이팅 — 이 워크플로는 schedule/workflow_dispatch 전용이라 PR gate
+# 에는 일절 참여하지 않는다(ci.yml gate 의 needs 목록 밖). 대신 스케줄 실패가
+# run 을 빨갛게 만들어 조용히 지나가지 않는다(구 continue-on-error 제거).
+# 실패 처리는 repo 관례를 따른다: 내 diff 귀속 전에 red baseline 부터 확인한다.
 
 on:
   workflow_dispatch:
@@ -13,7 +18,13 @@ jobs:
   fuzz:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    continue-on-error: true # 실험 — 크래시 발견도 수확
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [invoke_frame, invoke_complex_value, invoke_complex_serde]
+    # continue-on-error 없음 — 주간 가시성 게이트. 실패 run 을 red 로 남겨
+    # 크래시/빌드 고장을 반드시 triage 한다(크래시 발견 자체는 수확이다 —
+    # 아티팩트를 이슈로 승격).
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly
@@ -24,13 +35,25 @@ jobs:
       # 시드 corpus(git 추적, 대표 100개)를 먼저 재생 — 주간 실행이 매번 0시드로
       # 시작하던 것을 개선한다. 발견한 새 커버리지는 아티팩트로 남는다.
       - name: Replay seed corpus
-        run: cd fuzz && cargo fuzz run invoke_rkyv_v2 fuzz/seeds/ -- -runs=0
-      - name: Fuzz invoke_rkyv_v2 (10min)
-        run: cd fuzz && cargo fuzz run invoke_rkyv_v2 -- -max_total_time=600 -max_len=1024
+        working-directory: fuzz
+        run: |
+          mkdir -p corpus/${{ matrix.target }}
+          cp -R seeds/. corpus/${{ matrix.target }}/
+          cargo fuzz run ${{ matrix.target }} corpus/${{ matrix.target }} -- -runs=0
+      - name: Fuzz ${{ matrix.target }} (10min)
+        working-directory: fuzz
+        run: cargo fuzz run ${{ matrix.target }} corpus/${{ matrix.target }} -- -max_total_time=600 -max_len=1024
+      - name: Upload evolved corpus
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          path: fuzz/corpus/${{ matrix.target }}/
+          if-no-files-found: error
       - name: Upload crash artifacts
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: fuzz-crash-${{ github.run_id }}
+          name: fuzz-crash-${{ matrix.target }}-${{ github.run_id }}
           path: fuzz/artifacts/
           if-no-files-found: ignore

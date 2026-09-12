@@ -116,7 +116,7 @@ pub(crate) fn decode_node_ir(
 }
 
 /// 변형 본체 디코드 — 원본 `decode_variant` 의 IR 사본.
-pub(crate) fn decode_variant_ir(
+fn decode_variant_ir(
     reader: &mut Reader<'_>,
     variant: &IrVariant,
     limits: ComplexCodecLimits,

@@ -6,7 +6,7 @@
 // 검증 전략:
 //   1. known-value: 인코딩 결과가 Rust `postcard` crate 의 출력과 바이트-동일.
 //   2. round-trip: encode → decode 로 값 보존.
-//   3. 복합(요청/응답 와이어): addNumbers 요청/응답 바이트가 문서화된 rkyv V2 wire 와 일치.
+//   3. 복합(요청/응답 와이어): addNumbers 요청/응답 바이트가 문서화된 Frame wire 와 일치.
 
 #include "rustra-codec.hpp"
 

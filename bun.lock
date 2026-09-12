@@ -22,9 +22,9 @@
     },
     "packages/bun": {
       "name": "@rustra/bun",
-      "version": "0.9.0",
+      "version": "0.10.0",
       "dependencies": {
-        "@rustra/types": "^0.9.0",
+        "@rustra/types": "^0.10.0",
       },
       "devDependencies": {
         "@types/bun": "^1.4.0",
@@ -33,12 +33,12 @@
     },
     "packages/cli": {
       "name": "@rustra/cli",
-      "version": "0.9.0",
+      "version": "0.10.0",
       "bin": {
         "rustra": "./dist/index.js",
       },
       "dependencies": {
-        "@rustra/types": "^0.9.0",
+        "@rustra/types": "^0.10.0",
       },
       "devDependencies": {
         "@types/node": "^26.3.0",
@@ -47,9 +47,9 @@
     },
     "packages/devtools": {
       "name": "@rustra/devtools",
-      "version": "0.6.2",
+      "version": "0.7.0",
       "dependencies": {
-        "@rustra/types": "^0.9.0",
+        "@rustra/types": "^0.10.0",
       },
       "devDependencies": {
         "typescript": "^5.9.0",
@@ -57,9 +57,9 @@
     },
     "packages/node": {
       "name": "@rustra/node",
-      "version": "0.9.0",
+      "version": "0.10.0",
       "dependencies": {
-        "@rustra/types": "^0.9.0",
+        "@rustra/types": "^0.10.0",
       },
       "devDependencies": {
         "typescript": "^5.9.0",
@@ -67,13 +67,17 @@
     },
     "packages/react": {
       "name": "@rustra/react",
-      "version": "0.7.1",
+      "version": "0.8.0",
       "dependencies": {
-        "@rustra/types": "^0.9.0",
+        "@rustra/types": "^0.10.0",
       },
       "devDependencies": {
         "@types/react": "^19.0.0",
-        "react": "^19.0.0",
+        "@types/react-dom": "^19.0.0",
+        "@types/react-test-renderer": "^19.0.0",
+        "react": "19.2.8",
+        "react-dom": "19.2.8",
+        "react-test-renderer": "19.2.8",
         "typescript": "^5.9.0",
       },
       "peerDependencies": {
@@ -82,9 +86,9 @@
     },
     "packages/react-native": {
       "name": "@rustra/react-native",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
-        "@rustra/types": "^0.9.0",
+        "@rustra/types": "^0.10.0",
       },
       "devDependencies": {
         "typescript": "^5.9.0",
@@ -98,9 +102,9 @@
     },
     "packages/tauri": {
       "name": "@rustra/tauri",
-      "version": "0.8.0",
+      "version": "0.9.0",
       "dependencies": {
-        "@rustra/types": "^0.9.0",
+        "@rustra/types": "^0.10.0",
       },
       "devDependencies": {
         "typescript": "^5.9.0",
@@ -108,9 +112,9 @@
     },
     "packages/testing": {
       "name": "@rustra/testing",
-      "version": "0.6.2",
+      "version": "0.7.0",
       "dependencies": {
-        "@rustra/types": "^0.9.0",
+        "@rustra/types": "^0.10.0",
       },
       "devDependencies": {
         "typescript": "^5.9.0",
@@ -118,7 +122,7 @@
     },
     "packages/types": {
       "name": "@rustra/types",
-      "version": "0.9.0",
+      "version": "0.10.0",
       "devDependencies": {
         "typescript": "^5.9.0",
       },
@@ -248,6 +252,8 @@
     "@types/react": ["@types/react@19.2.18", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w=="],
 
     "@types/react-dom": ["@types/react-dom@19.2.7", "", { "peerDependencies": { "@types/react": "^19.2.0" } }, "sha512-I8bPpDLcHBv1qiIiXDCy71Rt8eQDKJP0sMSWJphDdAcdqiJ1sGpZamavoEIRZmYzjia9LuEb2HlYdDpmoENpvQ=="],
+
+    "@types/react-test-renderer": ["@types/react-test-renderer@19.3.0", "", { "dependencies": { "@types/react": "*" } }, "sha512-TX4p2D4Z2oigM3SXU7+QyLSUnSR0vR1S1Pfxm/qFL9nHQ3jclgi6ioGoWQmlIr1DeKRVmPJrmNlhgM0JlWlLUg=="],
 
     "@types/unist": ["@types/unist@3.0.3", "", {}, "sha512-ko/gIFJRv177XgZsZcBwnqJN5x/Gien8qNOn0D5bQU/zAzVf9Zt3BlcUiLqhV9y4ARk0GbT3tnUiPNgnTXzc/Q=="],
 
@@ -418,6 +424,10 @@
     "react": ["react@19.2.8", "", {}, "sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw=="],
 
     "react-dom": ["react-dom@19.2.8", "", { "dependencies": { "scheduler": "^0.27.0" }, "peerDependencies": { "react": "^19.2.8" } }, "sha512-rVprimfGBG3DR+Tq0IQG2DT5PxKth1WIGDmj5yPmlzr4YBe7uyE+Du4oVqTDXZSHGGGXRtTJEGSSePyQCMBglQ=="],
+
+    "react-is": ["react-is@19.3.0", "", {}, "sha512-UpMYezM4v5/18F28aC66AEsjXIgE02kyEMH6yLdgLXu/UTfa1Ntwck/nNLrbqJsEXW7gPb0coNO9FQse9WTovA=="],
+
+    "react-test-renderer": ["react-test-renderer@19.2.8", "", { "dependencies": { "react-is": "^19.2.8", "scheduler": "^0.27.0" }, "peerDependencies": { "react": "^19.2.8" } }, "sha512-GHKPaDRaNYU24PHTLG8Bx8VMY9t+qNfxQbt/Yjp7aMWBkKU6766SR0n6TnYu7P5I1MfEuAMUadqiyDHyI4Yy9Q=="],
 
     "scheduler": ["scheduler@0.27.0", "", {}, "sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q=="],
 

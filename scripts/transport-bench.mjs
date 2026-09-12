@@ -6,8 +6,8 @@
 //   node scripts/transport-bench.mjs       # Node subprocess + napi-rs
 //   bun scripts/transport-bench.mjs        # Bun subprocess + Bun FFI
 
-import { execSync, spawnSync } from 'child_process';
-import { readFileSync, existsSync } from 'fs';
+import { spawnSync } from 'child_process';
+import { existsSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
@@ -40,6 +40,30 @@ function percentile(sorted, pct) {
   return sorted[idx];
 }
 
+const NAPI_ADDON_PATH = join(
+  ROOT,
+  `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`,
+);
+
+function loadNapi() {
+  return createRequire(__dirname)(NAPI_ADDON_PATH);
+}
+
+// release 우선 — debug 라이브러리는 최적화가 꺼져 브릿지 비용이 ~7x 부풀어
+// 오른다. release 가 없을 때만 debug 로 폴백하고 프로필을 이름에 노출한다.
+function findCalculatorDylib(suffix) {
+  const candidates = [
+    { dir: 'release', label: '' },
+    { dir: 'debug', label: ' (debug)' },
+  ];
+  return candidates
+    .map((c) => ({
+      ...c,
+      path: join(ROOT, `target/${c.dir}/librustra_calculator_example.${suffix}`),
+    }))
+    .find((c) => existsSync(c.path));
+}
+
 // ── Transport implementations ────────────────────────────
 
 function createSubprocessTransport(binPath) {
@@ -61,18 +85,7 @@ function createSubprocessTransport(binPath) {
 
 function createBunFfiTransport() {
   const { dlopen, FFIType, suffix, CString } = require('bun:ffi');
-  // release 우선 — debug 라이브러리는 최적화가 꺼져 브릿지 비용이 ~7x 부풀어
-  // 오른다. release 가 없을 때만 debug 로 폴백하고 프로필을 이름에 노출한다.
-  const candidates = [
-    { dir: 'release', label: '' },
-    { dir: 'debug', label: ' (debug)' },
-  ];
-  const found = candidates
-    .map((c) => ({
-      ...c,
-      path: join(ROOT, `target/${c.dir}/librustra_calculator_example.${suffix}`),
-    }))
-    .find((c) => existsSync(c.path));
+  const found = findCalculatorDylib(suffix);
   if (!found) {
     throw new Error(
       'no librustra_calculator_example dylib in target/release|debug — run cargo build --release -p rustra-calculator-example',
@@ -107,11 +120,7 @@ function createBunFfiTransport() {
 }
 
 function createNapiBufferTransport() {
-  const napiPath = join(
-    ROOT,
-    `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`,
-  );
-  const native = createRequire(__dirname)(napiPath);
+  const native = loadNapi();
   return {
     name: 'Node napi Buffer',
     invoke(command, args) {
@@ -126,11 +135,7 @@ function createNapiBufferTransport() {
 }
 
 function createNapiTransport() {
-  const napiPath = join(
-    ROOT,
-    `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`,
-  );
-  const native = createRequire(__dirname)(napiPath);
+  const native = loadNapi();
   return {
     name: 'Node napi-rs',
     invoke(command, args) {
@@ -143,10 +148,10 @@ function createNapiTransport() {
   };
 }
 
-// ── rkyv V2 direct transports (postcard 왕복 — JSON/UTF-16 없음) ──
+// ── Frame direct transports (postcard 왕복 — JSON/UTF-16 없음) ──
 //
-// 코어 FFI(rustra_ffi_invoke_rkyv_v2, wire-bench 61.5ns)를 버퍼 직결로 태운다.
-// napi는 rustraInvokeRkyvV2 바인딩, Bun은 dlopen 심볼 직접 바인딩. JS 코덱
+// 코어 FFI(rustra_ffi_invoke_frame, wire-bench 61.5ns)를 버퍼 직결로 태운다.
+// napi는 rustraInvokeFrame 바인딩, Bun은 dlopen 심볼 직접 바인딩. JS 코덱
 // 인코딩은 bench harness에서 고정 프레임을 재사용해 측정한다(코덱 자체 비용은
 // adapter-bench/JS codec 벤치가 담당) — 여기선 transport 비용만 격리한다.
 
@@ -162,9 +167,9 @@ function zigzagVarint(n) {
   return bytes;
 }
 
-function decodeRkyvV2Result(frame) {
+function decodeFrameResult(frame) {
   // [ok:1][pad3][len u32 LE @4][postcard body @8]
-  if (frame[0] !== 1) throw new Error('rkyv V2 bench: error frame');
+  if (frame[0] !== 1) throw new Error('Frame bench: error frame');
   let v = 0;
   let shift = 0;
   let i = 8;
@@ -177,52 +182,39 @@ function decodeRkyvV2Result(frame) {
   return (v >>> 1) ^ -(v & 1);
 }
 
-function createNapiRkyvTransport() {
-  const napiPath = join(
-    ROOT,
-    `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`,
-  );
-  const native = createRequire(__dirname)(napiPath);
-  if (typeof native.rustraInvokeRkyvV2 !== 'function') {
-    throw new Error('napi addon predates rustraInvokeRkyvV2 — rebuild with napi build');
+function createNapiFrameTransport() {
+  const native = loadNapi();
+  if (typeof native.rustraInvokeFrame !== 'function') {
+    throw new Error('napi addon predates rustraInvokeFrame — rebuild with napi build');
   }
   // addNumbers(cmd_id=1) 고정 프레임 — { a: 42, b: 58 }의 postcard 인코딩.
   const frame = Buffer.from([1, 0, ...zigzagVarint(42), ...zigzagVarint(58)]);
   return {
-    name: 'Node napi rkyv V2',
+    name: 'Node napi Frame',
     invoke(command, args) {
       void command;
       void args;
-      const resp = native.rustraInvokeRkyvV2(frame);
-      return decodeRkyvV2Result(resp);
+      const resp = native.rustraInvokeFrame(frame);
+      return decodeFrameResult(resp);
     },
   };
 }
 
-function createBunRkyvTransport() {
+function createBunFrameTransport() {
   // createBunFfiTransport 와 동일한 release-우선 탐색을 공유한다. bun:ffi 는
   // 이 스크립트가 Bun 으로 실행될 때만 존재한다(호출부가 isBun 으로 게이트).
   // eslint-disable-next-line import/no-extraneous-dependencies
   const { dlopen, FFIType, suffix, toArrayBuffer } = Bun
     ? require('bun:ffi')
     : { dlopen: undefined, FFIType: undefined, suffix: undefined, toArrayBuffer: undefined };
-  const candidates = [
-    { dir: 'release', label: '' },
-    { dir: 'debug', label: ' (debug)' },
-  ];
-  const found = candidates
-    .map((c) => ({
-      ...c,
-      path: join(ROOT, `target/${c.dir}/librustra_calculator_example.${suffix}`),
-    }))
-    .find((c) => existsSync(c.path));
+  const found = findCalculatorDylib(suffix);
   if (!found) throw new Error('no librustra_calculator_example dylib');
   const lib = dlopen(found.path, {
-    rustra_calculator_invoke_rkyv_v2: {
+    rustra_calculator_invoke_frame: {
       args: [FFIType.ptr, FFIType.usize, FFIType.ptr],
       returns: FFIType.ptr,
     },
-    rustra_calculator_free_rkyv_v2_buffer: {
+    rustra_calculator_free_frame_buffer: {
       args: [FFIType.ptr, FFIType.usize],
       returns: FFIType.void,
     },
@@ -230,22 +222,22 @@ function createBunRkyvTransport() {
   const frame = Buffer.from([1, 0, ...zigzagVarint(42), ...zigzagVarint(58)]);
   const outLen = new BigUint64Array(1);
   return {
-    name: `Bun FFI rkyv V2${found.label}`,
+    name: `Bun FFI Frame${found.label}`,
     invoke(command, args) {
       void command;
       void args;
-      const ptr = lib.symbols.rustra_calculator_invoke_rkyv_v2(
+      const ptr = lib.symbols.rustra_calculator_invoke_frame(
         frame,
         BigInt(frame.byteLength),
         outLen,
       );
-      if (ptr === 0) throw new Error('Bun FFI rkyv V2 returned null');
+      if (ptr === 0) throw new Error('Bun FFI Frame returned null');
       const len = Number(outLen[0]);
       // toArrayBuffer 는 Rust 메모리를 참조하는 뷰고 new Uint8Array(뷰) 도
       // 버퍼를 공유한다 — free 전에 값 복사로 materialize 해야 한다.
       const copied = Array.from(new Uint8Array(toArrayBuffer(ptr, 0, len)));
-      lib.symbols.rustra_calculator_free_rkyv_v2_buffer(ptr, BigInt(len));
-      return decodeRkyvV2Result(copied);
+      lib.symbols.rustra_calculator_free_frame_buffer(ptr, BigInt(len));
+      return decodeFrameResult(copied);
     },
   };
 }
@@ -305,9 +297,9 @@ if (isBun) {
     console.log(`  (Bun FFI unavailable: ${e.message})`);
   }
   try {
-    transports.push(createBunRkyvTransport());
+    transports.push(createBunFrameTransport());
   } catch (e) {
-    console.log(`  (Bun FFI rkyv V2 unavailable: ${e.message})`);
+    console.log(`  (Bun FFI Frame unavailable: ${e.message})`);
   }
 }
 
@@ -315,23 +307,16 @@ if (isBun) {
 if (!isBun) {
   try {
     transports.push(createNapiTransport());
-    if (
-      typeof createRequire(__dirname)(
-        join(
-          ROOT,
-          `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`,
-        ),
-      ).rustraInvokeBuffer === 'function'
-    ) {
+    if (typeof loadNapi().rustraInvokeBuffer === 'function') {
       transports.push(createNapiBufferTransport());
     }
   } catch (e) {
     console.log(`  (napi-rs unavailable: ${e.message})`);
   }
   try {
-    transports.push(createNapiRkyvTransport());
+    transports.push(createNapiFrameTransport());
   } catch (e) {
-    console.log(`  (napi rkyv V2 unavailable: ${e.message})`);
+    console.log(`  (napi Frame unavailable: ${e.message})`);
   }
 }
 
@@ -513,11 +498,7 @@ if (nativeResult && subprocessResult) {
 // 작은 응답(addNumbers)에선 Buffer 할당+toString 비용으로 오히려 느릴 수 있다.
 if (!isBun) {
   try {
-    const napiPath = join(
-      ROOT,
-      `examples/calculator-napi/calculator-napi.${process.platform}-${process.arch}.node`,
-    );
-    const native = createRequire(__dirname)(napiPath);
+    const native = loadNapi();
     if (typeof native.rustraInvokeBuffer === 'function') {
       console.log('┌─ 4) Response Size Scaling — String vs Buffer (napi) ──┐');
       console.log(`│`);

@@ -7,7 +7,7 @@
 //! 타깃 근거: adjacent tagged enum(변형 키가 title/프로퍼티명에서 유도되는
 //! `IrBody::Node` 본체)은 serde 직결 게이트(`serde_direct_supported`)를
 //! 통과하지 못해 Value 경로에 남는다 — complex 라우트 디코더의 신뢰 경계.
-//! 와이어는 `[command_id u16 LE][complex 본문]` 프레임(invoke_rkyv_v2 참조).
+//! 와이어는 `[command_id u16 LE][complex 본문]` 프레임(invoke_frame 참조).
 //!
 //! 페이로드는 id 1 프레임으로 감싸 본문 전체가 디코더로 가는 경로와, 원본
 //! 그대로(앞 2바이트가 id 로 재해석) 경로, 그리고 1KiB 상한 컷 세 가지로
@@ -67,13 +67,13 @@ fuzz_target!(|data: &[u8]| {
     let mut frame = Vec::with_capacity(data.len().min(1024) + 2);
     frame.extend_from_slice(&1u16.to_le_bytes());
     frame.extend_from_slice(&data[..data.len().min(1024)]);
-    deny_panic_guard(pkg.invoke_rkyv_v2(&frame));
+    deny_panic_guard(pkg.invoke_frame(&frame));
 
     let mut target = [0u8; 1024];
-    deny_panic_guard(pkg.invoke_rkyv_v2_into(&frame, &mut target));
+    deny_panic_guard(pkg.invoke_frame_into(&frame, &mut target));
 
     // 원본 그대로 — 앞 2바이트가 command_id 로 재해석되는 경로(unknown id,
     // too short 포함).
     let clipped = &data[..data.len().min(1024)];
-    deny_panic_guard(pkg.invoke_rkyv_v2(clipped));
+    deny_panic_guard(pkg.invoke_frame(clipped));
 });

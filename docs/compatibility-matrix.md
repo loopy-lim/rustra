@@ -9,30 +9,32 @@ A matrix of the invoke features (signal/cancellation, batch, events) each adapte
 Columns are keyed by the low-level engine factories. If you use the generated
 host entry points (the default path), map them to columns like this:
 `generated/node.ts` → the **Node** column (one-shot stdio JSON engine),
-`generated/bun.ts` → the **Bun** column (its default is the FFI rkyv V2 engine —
-see the rkyv V2 row and the `supports` table below), `generated/tauri.ts` → the
-**Tauri** column, and `generated/react-native.ts` → the RN **`createRkyvV2Engine`**
+`generated/bun.ts` → the **Bun** column (its default is the FFI Frame engine —
+see the Frame row and the `supports` table below), `generated/tauri.ts` → the
+**Tauri** column, and `generated/react-native.ts` → the RN **`createFrameEngine`**
 column. The RN JSON column applies only when you pass a custom transport to
-`createReactNativeEngine` yourself.
+`createReactNativeEngine` yourself. The UniFFI (Kotlin/Swift) surface is
+covered in its [own section](#uniffi-bindings-track-b1-typed-kotlinswift-surface)
+below — it is not an `EngineClient` column.
 
-| Feature                                   | Node (`createNodeEngine`)                                                                                                                                                             | Bun (`createBunEngine`)                                                                                                      | Tauri (`createTauriEngine`)                                                                                                                  | RN (`createReactNativeEngine`)                                                            | RN (`createRkyvV2Engine`)                                                                                                                   |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `options.signal` (pre-abort)              | ✅ immediate `cancelled`                                                                                                                                                              | ✅ immediate `cancelled`                                                                                                     | ✅ immediate `cancelled`                                                                                                                     | ✅ immediate `cancelled`                                                                  | ✅ immediate `cancelled`                                                                                                                    |
-| `options.signal` (in-flight cancellation) | ⚠️ shallow cancellation (a non-aborted signal runs normally; an abort mid-run discards the result)                                                                                    | ⚠️ shallow cancellation (same)                                                                                               | ⚠️ shallow cancellation (same)                                                                                                               | ⚠️ shallow cancellation (rejects the JS promise only)                                     | ⚠️ conditional propagation — reaches the Rust checkpoint only when the JS codec + `invokeAsync`/`invokeCancel` are confirmed                |
-| `invokeBatch`                             | ✅ per-entry Promise fallback                                                                                                                                                         | ✅ per-entry Promise fallback                                                                                                | ✅ per-entry Promise fallback                                                                                                                | ✅ per-entry Promise fallback                                                             | ✅ single crossing for static commands (`invokeTypedBatch[ById]`); per-entry routing when signal entries are present                        |
-| Per-entry batch cancellation              | ✅ shallow cancellation of each `invoke`                                                                                                                                              | ✅ same                                                                                                                      | ✅ same                                                                                                                                      | ✅ same                                                                                   | ⚠️ single-crossing batches do not support cancellation — routed automatically to the per-entry `invoke` path when a signal entry is present |
-| `options.timeoutMs`                       | ✅ direct/global `invoke` race — `transport.timeout` (retryable)                                                                                                                      | ✅ same                                                                                                                      | ✅ same                                                                                                                                      | ⚠️ synchronous native calls cannot be preempted mid-call                                  | ✅ same (a global batch races the whole batch at the per-entry minimum)                                                                     |
-| Events (`subscribeEvent`/`onEvent`)       | ✅ `subscribeEvent(transport, name, cb)` — 0xfffd push frames (polling fallback; loud-fail on event-incapable transports)                                                             | ✅ `createBunEventBridge` — FFI push sink (polling fallback)                                                                 | ✅ `subscribeEvent`/`subscribeTauriEvent`                                                                                                    | ✅ JSI sink push; `pollMs` option adds a JS polling-drain loop for CallInvoker-less hosts | ✅ `subscribeEvent`/`drainEvents` (CallInvoker auto drain)                                                                                  |
-| Channels (`createChannel`)                | ✅ `createNodeChannel(transport, cb)` — loop-stdio reservation frames 0xfffb/0xfffa/0xfffc (binary mode only; `channel.unavailable` loud-fail on NDJSON; background-thread send safe) | ✅ `createBunChannelBridge(options)(cb)` — FFI `rustra_ffi_channel_*` (JS-thread send only — `threadsafe:false` contract)    | ✅ `createChannel(cb)` — Tauri commands + listen (approximate unicast: `app.emit` broadcast per handle)                                      | ✅ JSI handle + `close()`                                                                 | ✅ JSI native channel handle + `{ pollMs }` polling fallback (CallInvoker-less)                                                             |
-| Binary channels (`createBytesChannel`)    | ✅ `createNodeBytesChannel` — 0xfff9 frames (capability-gated; loud-fail `channel.unavailable` on old runtimes)                                                                       | ✅ `createBunChannelBytesBridge` — FFI `rustra_ffi_channel_create_bytes` (JS-thread send only — `threadsafe:false` contract) | ✅ `createChannelBytes` — `rustra://channel-bytes/{handle}` emit (bytes serialize as a JSON number array — ~4x wire cost, functional parity) | ✅ JSI `createChannelBytes` — ArrayBuffer copies                                          | ✅ same JSI bytes path + `{ pollMs }` fallback                                                                                              |
-| rkyv V2 binary (`createRkyvV2Engine`)     | ✅ (requires the napi/FFI native)                                                                                                                                                     | ✅ (requires the FFI native)                                                                                                 | ✅ (`rustra_dispatch` binary path)                                                                                                           | —                                                                                         | ✅ JSI                                                                                                                                      |
+| Feature                                   | Node (`createNodeEngine`)                                                                                                                                                             | Bun (`createBunEngine`)                                                                                                      | Tauri (`createTauriEngine`)                                                               | RN (`createReactNativeEngine`)                                                            | RN (`createFrameEngine`)                                                                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `options.signal` (pre-abort)              | ✅ immediate `cancelled`                                                                                                                                                              | ✅ immediate `cancelled`                                                                                                     | ✅ immediate `cancelled`                                                                  | ✅ immediate `cancelled`                                                                  | ✅ immediate `cancelled`                                                                                                                    |
+| `options.signal` (in-flight cancellation) | ⚠️ shallow cancellation (a non-aborted signal runs normally; an abort mid-run discards the result)                                                                                    | ⚠️ shallow cancellation (same)                                                                                               | ⚠️ shallow cancellation (same)                                                            | ⚠️ shallow cancellation (rejects the JS promise only)                                     | ⚠️ conditional propagation — reaches the Rust checkpoint only when the JS codec + `invokeAsync`/`invokeCancel` are confirmed                |
+| `invokeBatch`                             | ✅ per-entry Promise fallback                                                                                                                                                         | ✅ per-entry Promise fallback                                                                                                | ✅ per-entry Promise fallback                                                             | ✅ per-entry Promise fallback                                                             | ✅ single crossing for static commands (`invokeTypedBatch[ById]`); per-entry routing when signal entries are present                        |
+| Per-entry batch cancellation              | ✅ shallow cancellation of each `invoke`                                                                                                                                              | ✅ same                                                                                                                      | ✅ same                                                                                   | ✅ same                                                                                   | ⚠️ single-crossing batches do not support cancellation — routed automatically to the per-entry `invoke` path when a signal entry is present |
+| `options.timeoutMs`                       | ✅ direct/global `invoke` race — `transport.timeout` (retryable)                                                                                                                      | ✅ same                                                                                                                      | ✅ same                                                                                   | ⚠️ synchronous native calls cannot be preempted mid-call                                  | ✅ same (a global batch races the whole batch at the per-entry minimum)                                                                     |
+| Events (`subscribeEvent`/`onEvent`)       | ✅ `subscribeEvent(transport, name, cb)` — 0xfffd push frames (polling fallback; loud-fail on event-incapable transports)                                                             | ✅ `createBunEventBridge` — FFI push sink (polling fallback)                                                                 | ✅ `subscribeEvent`/`subscribeTauriEvent`                                                 | ✅ JSI sink push; `pollMs` option adds a JS polling-drain loop for CallInvoker-less hosts | ✅ `subscribeEvent`/`drainEvents` (CallInvoker auto drain)                                                                                  |
+| Channels (`createChannel`)                | ✅ `createNodeChannel(transport, cb)` — loop-stdio reservation frames 0xfffb/0xfffa/0xfffc (binary mode only; `channel.unavailable` loud-fail on NDJSON; background-thread send safe) | ✅ `createBunChannelBridge(options)(cb)` — FFI `rustra_ffi_channel_*` (JS-thread send only — `threadsafe:false` contract)    | ✅ `createChannel(cb)` — Tauri IPC Channel (issuing physical WebView only)                | ✅ JSI handle + `close()`                                                                 | ✅ JSI native channel handle + `{ pollMs }` polling fallback (CallInvoker-less)                                                             |
+| Binary channels (`createBytesChannel`)    | ✅ `createNodeBytesChannel` — 0xfff9 frames (capability-gated; loud-fail `channel.unavailable` on old runtimes)                                                                       | ✅ `createBunChannelBytesBridge` — FFI `rustra_ffi_channel_create_bytes` (JS-thread send only — `threadsafe:false` contract) | ✅ `createChannelBytes` — `Channel<InvokeResponseBody>` raw byte fragments → `Uint8Array` | ✅ JSI `createChannelBytes` — ArrayBuffer copies                                          | ✅ same JSI bytes path + `{ pollMs }` fallback                                                                                              |
+| Frame binary (`createFrameEngine`)        | ✅ (requires the napi/FFI native)                                                                                                                                                     | ✅ (requires the FFI native)                                                                                                 | ✅ (`rustra_dispatch` binary path)                                                        | —                                                                                         | ✅ JSI                                                                                                                                      |
 
 ## Signal semantics in detail
 
 - **Pre-abort**: every adapter rejects immediately with `cancelled` — the request has not been sent yet.
 - **In-flight cancellation**:
   - JSON transports (Node/Bun/Tauri and the RN JSON adapter) forward the round trip to the native side and cannot interrupt execution itself. Under the **shallow cancellation policy** they reject only the JS Promise with `cancelled` and ignore late results.
-  - The RN rkyv V2 engine **propagates** to the Rust checkpoint when `invokeAsync`+`invokeCancel` exist and the commandId/codec path is confirmed. Static typed paths, legacy natives, and paths where the commandId cannot be confirmed fall back to shallow cancellation.
+  - The RN Frame engine **propagates** to the Rust checkpoint when `invokeAsync`+`invokeCancel` exist and the commandId/codec path is confirmed. Static typed paths, legacy natives, and paths where the commandId cannot be confirmed fall back to shallow cancellation.
 - **Timeout** (`options.timeoutMs`): common to all engines — the global `invoke` starts a settle race. On expiry it rejects with `transport.timeout` (retryable) and late responses are ignored. A batch (`invokeBatch`) races the entire batch with the **minimum** of the per-entry `timeoutMs` values. The wire-batch (single-crossing) path applies the same per-entry contract as a single `invoke`: `timeoutMs: 0` counts as a deadline (the check is `!== undefined`, so a zero deadline is never silently dropped onto the single-crossing path), entry `args` pass through the same normalizer, and a synchronous throw from the transport or a custom normalizer surfaces as a rejected Promise instead of escaping the caller's `await`.
 - **Shallow cancellation/timeout ≠ the command did not run**: the ⚠️ cells on shallow cancellation and `timeoutMs` mark the _JS observation_, not the Rust execution. On a shallow-cancel adapter (`signal` without `invokeCancel` propagation) or after a timeout, the Rust command keeps running or has already completed — its result is discarded, not its execution. `retryable: true` (`transport.timeout`, `cancelled`, `transport.error`) therefore means "the failure class may clear on a retry", never "re-running the command is safe". Retry non-idempotent commands only after a status re-query proves the earlier attempt did not land; see "Timeout, Cancellation, and Retry Semantics" in [rust-api-guide.md](rust-api-guide.md).
 - **Event subscription call shape**: every adapter uses `(name, callback[, ...])`. RN accepts `subscribeEvent(name, callback[, options])` with the native module resolved from `globalThis.__rustraNative` (the legacy `(native, name, callback)` overload was removed in 0.7.0); Tauri accepts `subscribeEvent(name, callback[, listen])` with an optional `listen` injection or the global Tauri event API.
@@ -40,19 +42,57 @@ column. The RN JSON column applies only when you pass a custom transport to
 
 ### Channel delivery path
 
-Every host exposes the same `{ handle, close() }` contract; only the issuer (transport) differs. Node issues channel handles through the loop-stdio binary-mode reservation frames (0xfffb create / 0xfffa drop / 0xfffc push) and is safe for background-thread `send` (stdout frames arrive as JS turn data events); NDJSON transports loud-fail with `channel.unavailable`. Bun issues through the `rustra_ffi_channel_*` FFI symbols with a `threadsafe:false` callback — sends must stay on the JS thread (synchronous FFI invoke chains); background sends are unsupported. Tauri issues through `rustra_channel_create`/`rustra_channel_drop` commands and delivers frames via `app.emit("rustra://channel/{handle}")` — **approximate unicast**: the channel contract is invocation-scoped unicast, but Tauri emit is a broadcast, so another webview listening on the same channel name can observe frames (single issuer = single listener is the normal flow). RN issues through the JSI `createChannel`/`dropChannel` host functions backed by the C++ callback dispatcher (true unicast); with a CallInvoker the dispatcher drains on the JS thread automatically, and on CallInvoker-less natives `drainEvents()` drains the channel queues too — `createChannel(cb, native, { pollMs })`/`createBytesChannel` run the same client-side polling loop as events (frames would otherwise queue unconsumed).
+Every host exposes the same `{ handle, close() }` contract; only the issuer (transport) differs. Node issues channel handles through the loop-stdio binary-mode reservation frames (0xfffb create / 0xfffa drop / 0xfffc push) and is safe for background-thread `send` (stdout frames arrive as JS turn data events); NDJSON transports loud-fail with `channel.unavailable`. Bun issues through the `rustra_ffi_channel_*` FFI symbols with a `threadsafe:false` callback — sends must stay on the JS thread (synchronous FFI invoke chains); background sends are unsupported. Tauri issues through `rustra_channel_create`/`rustra_channel_drop` and targets the issuing WebView. Closing a handle requires the caller's native resource-table lease. Navigation, window destruction and app cleanup release channels; trusted Rust host helpers retain explicitly app-wide delivery. RN issues through the JSI `createChannel`/`dropChannel` host functions backed by the C++ callback dispatcher (true unicast); with a CallInvoker the dispatcher drains on the JS thread automatically, and on CallInvoker-less natives `drainEvents()` drains the channel queues too — `createChannel(cb, native, { pollMs })`/`createBytesChannel` run the same client-side polling loop as events (frames would otherwise queue unconsumed).
 
-- **Tauri payload contract (decoded-first, string-only single parse)**: at the real WebView boundary tauri splices the `emit_str` JSON into the page as `payload: {…}`, so the JS listener already receives a decoded value — `subscribeEvent` passes any non-string payload through untouched (no re-parse, object identity preserved). Only `typeof payload === 'string'` gets exactly one `JSON.parse`; if the result is an object, array, or string it is delivered (an escaped-JSON string unwraps exactly once), and if the result is a primitive (`'123'`, `'true'`) the original string is kept — a string payload never silently changes type. Parse failure delivers the original string. There is no content-based sniffing: a string payload stays a string even when it looks like JSON. Legacy injected transports (`__TAURI__` fakes delivering serialized strings) are covered by the same rule, with no separate mode. One known divergence between the two delivery modes: primitive event payloads arrive as the primitive itself under the real WebView (`payload: 42`) but stay the original string (`'42'`) under a legacy-string transport — the production boundary is the real WebView.
+- **Tauri event payload contract (decoded-first, string-only single parse)**: at the real WebView boundary tauri splices the `emit_str` JSON into the page as `payload: {…}`, so the JS listener already receives a decoded value — `subscribeEvent` passes any non-string payload through untouched (no re-parse, object identity preserved). Only `typeof payload === 'string'` gets exactly one `JSON.parse`; if the result is an object, array, or string it is delivered (an escaped-JSON string unwraps exactly once), and if the result is a primitive (`'123'`, `'true'`) the original string is kept — a string payload never silently changes type. Parse failure delivers the original string. There is no content-based sniffing: a string payload stays a string even when it looks like JSON. Legacy injected transports (`__TAURI__` fakes delivering serialized strings) are covered by the same rule, with no separate mode. One known divergence between the two delivery modes: primitive event payloads arrive as the primitive itself under the real WebView (`payload: 42`) but stay the original string (`'42'`) under a legacy-string transport — the production boundary is the real WebView.
 
 ## invokeBatch semantics
 
-- Every adapter exposes a Promise-based `invokeBatch`. Node/Bun/Tauri/RN JSON run each entry through the common `invoke` and preserve order. The rkyv V2 engine bundles supported static commands into a single native crossing.
+- Every adapter exposes a Promise-based `invokeBatch`. Node/Bun/Tauri/RN JSON run each entry through the common `invoke` and preserve order. The Frame engine bundles supported static commands into a single native crossing.
 - Static commands without a signal → single JSI crossing (`invokeTypedBatchById` preferred).
 - Mixed dynamic commands or a signal present → routed to per-entry `invoke` (each entry's cancellation policy applies).
 
 ## Notes
 
-- **Verified combination**: npm `@rustra/types` 0.8.x ↔ Rust crate 0.8.x (workspace) is the combination currently exercised by CI. The npm and crates.io version lines were aligned in the 2026-09-06 release step; the `@rustra/*` packages are independent release lines, and future bumps follow the same release procedure, not adapter code.
+- **Installation version source**: the table below reads `Cargo.toml` and each `packages/*/package.json`. `bun run test:docs` validates README/getting-started commands and this table. Adapters keep independent release lines. Manifest coherence does not prove current-branch CI, publication, or physical-device acceptance.
+
+<!-- release:versions:begin -->
+
+| Package                | Manifest version |
+| ---------------------- | ---------------- |
+| Rust workspace crates  | 0.10.0           |
+| `@rustra/bun`          | 0.10.0           |
+| `@rustra/cli`          | 0.10.0           |
+| `@rustra/devtools`     | 0.7.0            |
+| `@rustra/node`         | 0.10.0           |
+| `@rustra/react`        | 0.8.0            |
+| `@rustra/react-native` | 0.9.0            |
+| `@rustra/tauri`        | 0.9.0            |
+| `@rustra/testing`      | 0.7.0            |
+| `@rustra/types`        | 0.10.0           |
+
+<!-- release:versions:end -->
+
+JS-created Tauri channels use a native `Channel<InvokeResponseBody>` tied to the
+issuing physical WebView. `close()` revokes its native lease and disposes the JS
+callback; navigation, destruction, and app cleanup release owner resources. The
+`ipc-channel-chunks-v1` handshake rejects old broadcast-based native hosts: update
+`@rustra/tauri` and rebuild Rust together. Global setup needs `core.Channel` plus
+Tauri's callback-cleanup API; without globals, pass an explicit
+`createIpcChannel(onMessage)` factory returning `{ value, dispose() }` alongside
+`invoke`. Passing `listen` alone cannot create a channel.
+
+Raw fragments are at most 968 bytes, below Tauri's 1,024-byte direct IPC threshold.
+Native messages are capped at the smaller of the runtime payload limit and 16 MiB.
+The core defaults to a **1 MiB** payload limit, so an unconfigured native path is
+also limited to 1 MiB. JS reassembly has a 16 MiB ceiling and expires incomplete
+messages after 30 seconds.
+JSON is decoded once after final reassembly, preserving JSON strings as strings;
+binary callbacks receive `Uint8Array`. Ordinary event subscriptions still broadcast.
+Trusted Rust `create_channel_for`/`create_bytes_channel_for` helpers deliberately
+retain app-wide delivery. Mock IPC and JS tests cover the ownership protocol;
+physical WebView teardown still needs native GUI acceptance on each target.
+
 - **Engine slot is single-engine** (bootstrap ownership): first `configureLazy`/`configure` registration wins; a second bootstrap registered while the first is still pending throws `registry.frozen` instead of silently winning by import order. Dispose/reload re-registration and post-consumption replacement stay allowed. Multi-engine is not supported.
 - **Platforms not covered by runtime evidence**: the runtime claims in this
   matrix and in the README platform matrix are backed by the specific
@@ -73,21 +113,21 @@ Each adapter's engine factory exposes a `supports` object (`@rustra/types`
 claims. Apps can branch before any side effect, e.g.
 `engine.supports?.cancellation === 'cooperative'`. The mapping per column:
 
-| `supports` field    | Node        | Bun JSON / Bun FFI rkyv V2 | Tauri       | RN JSON     | RN rkyv V2        |
-| ------------------- | ----------- | -------------------------- | ----------- | ----------- | ----------------- |
-| `cancellation`      | `shallow`   | `shallow` / `shallow`      | `shallow`   | `shallow`   | `cooperative`     |
-| `batch`             | `per-entry` | `per-entry` / `per-entry`  | `per-entry` | `per-entry` | `single-crossing` |
-| `events`            | `push`      | `push` / `push`            | `push`      | `none`      | `push`            |
-| `channels`          | `false`     | `false` / `false`          | `false`     | `true`      | `true`            |
-| `timeoutPreemption` | `true`      | `true` / `true`            | `true`      | `false`     | `true`            |
+| `supports` field    | Node        | Bun JSON / Bun FFI Frame  | Tauri       | RN JSON     | RN Frame          |
+| ------------------- | ----------- | ------------------------- | ----------- | ----------- | ----------------- |
+| `cancellation`      | `shallow`   | `shallow` / `shallow`     | `shallow`   | `shallow`   | `cooperative`     |
+| `batch`             | `per-entry` | `per-entry` / `per-entry` | `per-entry` | `per-entry` | `single-crossing` |
+| `events`            | `push`      | `push` / `push`           | `push`      | `none`      | `push`            |
+| `channels`          | `false`     | `false` / `false`         | `false`     | `true`      | `true`            |
+| `timeoutPreemption` | `true`      | `true` / `true`           | `true`      | `false`     | `true`            |
 
 Nuances that do not fit one enum value stay in the matrix prose, not the enum:
-RN rkyv V2 `cancellation: 'cooperative'` means the matrix's "conditional
+RN Frame `cancellation: 'cooperative'` means the matrix's "conditional
 propagation" cell (reaches the Rust checkpoint only when
 `invokeAsync`+`invokeCancel` are exposed and the commandId/codec path is
 confirmed; static typed paths and legacy natives fall back to shallow). The
-Bun FFI rkyv V2 engine shares the same `createRkyvV2Engine` core, but its FFI
-native binds only `invokeRkyvV2`/`getSchema`/`getContractHash`/
+Bun FFI Frame engine shares the same `createFrameEngine` core, but its FFI
+native binds only `invokeFrame`/`getSchema`/`getContractHash`/
 `getSchemaGeneration` — the `invokeAsync`/`invokeCancel` and
 `invokeTypedBatch` symbols are not bound, so the conditional-propagation and
 single-crossing conditions are unreachable and the engine is observed as
@@ -121,12 +161,50 @@ A `draining` state is deliberately not modeled: drain is transparent to the
 three-state lifecycle. See the hot-swap section below for the reload contract
 this builds on.
 
+## UniFFI bindings (Track B1): typed Kotlin/Swift surface
+
+The UniFFI surface is deliberately **not a column above**: the matrix keys TS
+`EngineClient` adapters, while UniFFI bypasses the TS layer entirely — Kotlin
+or Swift host code calls generated per-command functions over uniffi's own
+RustBuffer transfer. The setup, codegen flow, and consumption are in the
+[UniFFI bindings guide](extending/uniffi-bindings.md); this section transcribes
+its coverage into the row grammar used above:
+
+| Feature                                | UniFFI (Kotlin/Swift)                                                                                                                                                        |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Per-command typed invoke               | ✅ one generated function per command (`addNumbers(input:)` …) plus the generic `invokeJson`/`getSchema`/`contractHash`                                                      |
+| `options.signal` (pre-abort/in-flight) | — no TS options surface; generated functions are synchronous (the Rust command API is sync today), so interruption is the host's concern                                     |
+| `invokeBatch`                          | — not generated in Phase 1 (per-command surface only)                                                                                                                        |
+| `options.timeoutMs`                    | — synchronous native calls cannot be preempted mid-call                                                                                                                      |
+| Events (`subscribeEvent`/`onEvent`)    | — Phase 2 (uniffi callback interfaces / foreign traits)                                                                                                                      |
+| Channels (`createChannel`/bytes)       | — Phase 2                                                                                                                                                                    |
+| Frame binary wire                      | ✅ single dispatch path — the generated wrapper calls `Package::invoke_typed`, which posts a postcard request through `invoke_frame` (no second wire)                        |
+| Contract integrity                     | ✅ uniffi's own checksums + contract version govern this surface; rustra's `contract_hash`/`contract.mismatch` gate stays scoped to the blob transports (Node/Bun/Tauri/JSI) |
+| Hot swap                               | — uniffi hosts bind symbols at load time — static/release builds only; the dev loop stays on TS/JSI                                                                          |
+
+Notes:
+
+- **Error model**: a single-variant failure record
+  `RustraCommandFailure.Failure { code, message, retryable }` — the same shape
+  as the TS `RustraCommandError`. A uniffi enum mapping was rejected by design:
+  rustra's error code space is open (custom string codes), and an enum would
+  close it. Decision record: [ADR 0002](adr/0002-uniffi-track-b1-carrier.md).
+- **Mirror layer is generated, not hand-written**: the schema probe renders the
+  feature-gated `uniffi_generated.rs` (fail-closed renderer). Its mechanical
+  divergences are documented in the guide: sets → `Vec` mirrors collected into
+  real `BTreeSet`s, fixed tuples → synthetic records, maps by inference-based
+  collect, `getSchema()` returns the live schema (generation counter included),
+  and channel/resource handle newtypes map to `u32` via an explicit path table.
+- **Freshness**: the committed `uniffi_generated.rs` is guarded by a byte
+  comparison in `codegen --check` (no cargo build in check mode); the committed
+  Kotlin/Swift bindings regenerate with the same flow.
+
 ## Spike: wasm32 engine in wasm3 (React Native) — VERDICT: PASS (spike)
 
 Task A0 spike (`examples/rn-wasm-spike/`, 2026-08-31) proved a rustra engine
 compiled to `wasm32-unknown-unknown` runs inside a wasm3 interpreter embedded
 in a React Native app, as a THIRD execution mode alongside the JSON adapter and
-rkyv V2 JSI:
+Frame JSI:
 
 | Aspect                         | Result                                                                                                                                                                                                                                                                                   |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -9,6 +9,33 @@ When the contract (schema) shared by the Rust backend and TypeScript clients cha
 - **From 0.3.x** — follow [migrating from 0.3 to 0.4](migrations/0.3-to-0.4.md) first, then use this guide.
 - **From 0.5.x** — follow [migrating from 0.5 to 0.6](migrations/0.5-to-0.6.md) first. Old schemas may also fail CLI validation with a "generic type name" error (see the [Rust API guide — user-defined generics](rust-api-guide.md#user-defined-generic-types)); rebuild `schema.json` with the current rustra before running `rustra diff`.
 - **0.6 and later (incl. 0.8)** — no migration note needed; the recipes below apply directly.
+- **0.9-series rename (rkyv V2 → Frame)** — see [the rename table](#09-rename-rkyv-v2--frame) below; a pure rename, the wire format is unchanged.
+
+## 0.9 rename: rkyv V2 → Frame
+
+The 0.9 series renames the binary protocol formerly called "rkyv V2" to
+**Frame** across all APIs. This is a naming change only — the wire bytes,
+framing, and postcard payload codec are unchanged, so old and new builds stay
+interoperable. Update the identifiers you reference:
+
+| Old (≤0.8)                             | New (0.9+)                           |
+| -------------------------------------- | ------------------------------------ |
+| `createRkyvV2Engine`                   | `createFrameEngine`                  |
+| `RkyvV2Engine`                         | `FrameEngine`                        |
+| `RkyvV2Codec`                          | `FrameCodec`                         |
+| `RkyvV2Native`                         | `FrameNative`                        |
+| `invokeRkyvV2`                         | `invokeFrame`                        |
+| `rkyv-codecs.ts`                       | `frame-codecs.ts`                    |
+| `rkyv-registry.ts`                     | `frame-registry.ts`                  |
+| `rkyv-engine`                          | `frame-engine`                       |
+| `rustra_ffi_invoke_rkyv_v2*`           | `rustra_ffi_invoke_frame*`           |
+| `BUN_RKYV_V2_ENGINE_SUPPORTS`          | `BUN_FRAME_ENGINE_SUPPORTS`          |
+| `REACT_NATIVE_RKYV_V2_ENGINE_SUPPORTS` | `REACT_NATIVE_FRAME_ENGINE_SUPPORTS` |
+| error prefix `"rkyv v2: ..."`          | `"frame: ..."`                       |
+
+The RN JSI host method follows the same rename (`invokeRkyvV2` → `invokeFrame`),
+and codegen output files land under the new names (`frame-codecs.ts`,
+`frame-registry.ts`) — re-run `rustra codegen` and update imports.
 
 ## Tools
 
@@ -106,7 +133,7 @@ Add the command under a new name and keep the old name as an alias; once clients
 
 ## Rollout order and contract hash
 
-`GENERATED_CONTRACT_HASH` in `contract.ts` is the SHA-256 of the entire schema. When the schema changes, the hash changes. Passing the `contractHash` option to `createRkyvV2Engine` compares against the native hash at runtime and fails immediately on mismatch (fail-fast).
+`GENERATED_CONTRACT_HASH` in `contract.ts` is the SHA-256 of the entire schema. When the schema changes, the hash changes. Passing the `contractHash` option to `createFrameEngine` compares against the native hash at runtime and fails immediately on mismatch (fail-fast).
 
 **Safe deployment order (default):**
 

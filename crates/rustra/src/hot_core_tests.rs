@@ -202,6 +202,7 @@ fn build_calculator_cdylib() -> PathBuf {
 #[test]
 fn dylib_core_opens_invokes_and_swaps_calculator_cdylib() {
     let artifact = build_calculator_cdylib();
+    let before = retained_library_stats();
 
     // open — Bun 어댑터와 동일 초기화(dlopen → rustra_mobile_init)를 거친다.
     let core = DylibCore::open(&artifact).expect("calculator cdylib must open");
@@ -223,6 +224,14 @@ fn dylib_core_opens_invokes_and_swaps_calculator_cdylib() {
     let copy = prepare_swap_copy(&artifact, 1).expect("swap copy");
     assert_ne!(copy, artifact);
     let swapped_core = DylibCore::open(&copy).expect("copied cdylib must open");
+    let after = retained_library_stats();
+    assert!(after.libraries >= before.libraries + 2);
+    assert!(
+        after.artifact_bytes
+            >= before.artifact_bytes
+                + std::fs::metadata(&artifact).unwrap().len()
+                + std::fs::metadata(&copy).unwrap().len()
+    );
     assert_eq!(
         swapped_core.contract_hash().expect("copy contract hash"),
         hash,

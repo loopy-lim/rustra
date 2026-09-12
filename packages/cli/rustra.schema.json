@@ -182,6 +182,29 @@
           "default": "diagnose"
         }
       }
+    },
+    "uniffi": {
+      "description": "UniFFI Kotlin/Swift binding generation. The presence of this section enables the uniffi-bindings stage of rustra codegen.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "output": {
+          "description": "Directory the Kotlin/Swift bindings are generated into (relative to this config file).",
+          "type": "string",
+          "minLength": 1
+        },
+        "srcOut": {
+          "description": "Directory holding the committed uniffi_generated.rs the Rust probe writes (relative to this config file). Defaults to \"src\".",
+          "type": "string",
+          "minLength": 1,
+          "default": "src"
+        },
+        "dylibProfile": {
+          "description": "Cargo profile used for the cdylib build that uniffi-bindgen scans. Defaults to \"debug\".",
+          "enum": ["debug", "release"],
+          "default": "debug"
+        }
+      }
     }
   }
 }

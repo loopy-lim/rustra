@@ -13,7 +13,7 @@
 export type CommandSchema = {
   /** 명령 이름 (예: "addNumbers") */
   name: string;
-  /** 명령 ID (rkyv V2 바이너리 프로토콜용, 1부터 시작) */
+  /** 명령 ID (Frame 바이너리 프로토콜용, 1부터 시작) */
   commandId: number;
   /** 입력 타입의 짧은 이름 (예: "AddNumbersInput") */
   inputType: string;

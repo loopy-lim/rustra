@@ -23,4 +23,5 @@ export const rustra = createNodeBootstrap({
   ],
   args: ["invoke"],
   contractHash: GENERATED_CONTRACT_HASH,
+  contractVerification: 'strict',
 });

@@ -25,7 +25,7 @@ fn legacy_command_id_still_dispatches_after_schema_growth() {
         .extend_from_slice(&postcard::to_allocvec(&common::AddInput { a: 2, b: 3 }).unwrap());
 
     let resp = pkg
-        .invoke_rkyv_v2(&legacy_payload)
+        .invoke_frame(&legacy_payload)
         .expect("legacy id must dispatch");
     // Tier1 응답: ok=1 @0, pad 7B, value @8
     assert_eq!(resp[0], 1);
@@ -43,7 +43,7 @@ fn current_command_id_still_works_alongside_alias() {
     // 문제없이 동작해야 한다.
     let mut payload = vec![1, 0];
     payload.extend_from_slice(&postcard::to_allocvec(&common::AddInput { a: 10, b: 20 }).unwrap());
-    let resp = pkg.invoke_rkyv_v2(&payload).unwrap();
+    let resp = pkg.invoke_frame(&payload).unwrap();
     assert_eq!(resp[0], 1);
     let value = postcard::from_bytes::<common::AddOutput>(&resp[8..]).unwrap();
     assert_eq!(value.value, 30);
@@ -104,7 +104,7 @@ fn unregister_removes_alias_entries_too() {
     // wire 에서도: 구 id 1 로 invoke 하면 command.not_found (stale 라우팅 아님).
     let mut legacy = 1u16.to_le_bytes().to_vec();
     legacy.extend_from_slice(&postcard::to_allocvec(&common::AddInput { a: 1, b: 1 }).unwrap());
-    let err = pkg.invoke_rkyv_v2(&legacy).unwrap_err();
+    let err = pkg.invoke_frame(&legacy).unwrap_err();
     assert_eq!(err.code(), "command.not_found");
 }
 
@@ -133,7 +133,7 @@ fn displaced_command_never_lands_on_a_merged_alias_id() {
     assert_ne!(run_id, 4, "displaced fresh id must not land on alias id 4");
     let mut payload = run_id.to_le_bytes().to_vec();
     payload.extend_from_slice(&postcard::to_allocvec(&common::AddInput { a: 1, b: 2 }).unwrap());
-    let resp = pkg.invoke_rkyv_v2(&payload).unwrap();
+    let resp = pkg.invoke_frame(&payload).unwrap();
     assert_eq!(resp[0], 1);
     assert_eq!(
         postcard::from_bytes::<common::AddOutput>(&resp[8..])
@@ -145,7 +145,7 @@ fn displaced_command_never_lands_on_a_merged_alias_id() {
     // wire 디스패치: 구 id 4 로 호출하면 oldone(echo) 이 실행되어야 한다.
     let mut legacy = 4u16.to_le_bytes().to_vec();
     legacy.extend_from_slice(&postcard::to_allocvec(&common::EchoInput { v: 42 }).unwrap());
-    let resp = pkg.invoke_rkyv_v2(&legacy).unwrap();
+    let resp = pkg.invoke_frame(&legacy).unwrap();
     assert_eq!(resp[0], 1);
     assert_eq!(
         postcard::from_bytes::<common::EchoOutput>(&resp[8..])

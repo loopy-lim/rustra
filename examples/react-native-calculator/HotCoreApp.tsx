@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { configure } from '@rustra/types';
 import { createFastEngine } from '../../packages/react-native/src';
 import { GENERATED_CONTRACT_HASH, SCHEMA_VERSION } from './generated/contract';
-import { rkyvV2Registry } from './generated/rkyv-registry';
+import { frameRegistry } from './generated/frame-registry';
 import { getRustraNative, installRustraJSI } from '@rustra/generated-react-native';
 
 const LOG_PREFIX = '[RustraHotCore]';
@@ -80,7 +80,7 @@ export default function HotCoreApp() {
         if (typeof invokeTypedPos !== 'function') {
           throw new Error('invokeTypedPos is unavailable');
         }
-        const addId = rkyvV2Registry.get(ADD_NUMBERS_NAME)!.commandId;
+        const addId = frameRegistry.get(ADD_NUMBERS_NAME)!.commandId;
         const invokeAdd = (): number => {
           const result = invokeTypedPos(addId, 2, 3) as { value?: unknown };
           if (result === null || typeof result !== 'object' || typeof result.value !== 'number') {
@@ -92,7 +92,7 @@ export default function HotCoreApp() {
         const baseline = invokeAdd();
         configure(
           createFastEngine(native, {
-            rkyvV2Codecs: rkyvV2Registry,
+            frameCodecs: frameRegistry,
             contractHash: GENERATED_CONTRACT_HASH,
             schemaVersion: SCHEMA_VERSION,
           }),

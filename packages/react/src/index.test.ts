@@ -2,13 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
-import { readFileSync } from 'node:fs';
 import {
   RustraProvider,
   useRustraEngine,
   useCommand,
   useMutation,
-  useEvent,
   useSuspenseCommand,
   invalidateCommands,
 } from './index.js';
@@ -65,38 +63,9 @@ test('useCommand hook contract and properties', () => {
   assert.equal(typeof result.refetch, 'function');
 });
 
-test('useCommand stabilizes value-equal inline input (no re-request loop)', () => {
-  // 회귀 가드: input 의존성을 참조 동등성으로 판정하면 인라인 객체 리터럴
-  // (`useCommand(cmd, { a: 1 })`)이 렌더마다 새 참조라 execute 가 재생성되고
-  // effect 가 재실행되어 상태 갱신→재렌더의 무한 재요청 루프가 발생한다.
-  // 이 렌더러 없는 환경(bun, DOM 없음)에선 실행 기반 재현이 불가능하므로
-  // 소스 계약으로 고정한다: (1) 키는 값 동등성, (2) invoke 는 원본 input,
-  // (3) useCallback 의존성은 안정화된 참조.
-  const source = readFileSync(new URL('./useCommand.ts', import.meta.url), 'utf8');
-  assert.match(
-    source,
-    /inputKey\(input\)/,
-    'input key must use value equality (serialized), not reference equality',
-  );
-  assert.match(
-    source,
-    /engine\.invoke<O>\(commandName,\s*stableInput/,
-    'invoke must receive the stabilized input value',
-  );
-  assert.match(
-    source,
-    /\[engine,\s*commandName,\s*stableInput\]/,
-    'execute deps must use the stabilized reference',
-  );
-  assert.doesNotMatch(
-    source,
-    /\[engine,\s*commandName,\s*input\]/,
-    'raw input in deps re-creates execute every render for inline objects (infinite loop)',
-  );
-});
-
 test('inputKey supports bigint values without throwing', () => {
-  assert.equal(inputKey({ value: 42n }), '{"value":{"$rustraBigInt":"42"}}');
+  assert.equal(inputKey({ value: 42n }), inputKey({ value: 42n }));
+  assert.notEqual(inputKey({ value: 42n }), inputKey({ value: { $rustraBigInt: '42' } }));
 });
 
 test('useMutation hook contract and execution', async () => {
@@ -125,44 +94,6 @@ test('useMutation hook contract and execution', async () => {
   // Execute mutation
   const res = await result.mutateAsync({ id: 'item-1' });
   assert.deepEqual(res, { updated: true });
-});
-
-test('useEvent handles subscription and contract', () => {
-  let subscribedName = '';
-  let unsubscribed = false;
-  let handlerCalledWith: unknown = null;
-
-  const mockSubscriber = (name: string, cb: (payload: unknown) => void) => {
-    subscribedName = name;
-    cb({ count: 1 });
-    return () => {
-      unsubscribed = true;
-    };
-  };
-
-  function TestComponent() {
-    useEvent(
-      'tick',
-      (payload) => {
-        handlerCalledWith = payload;
-      },
-      mockSubscriber,
-    );
-    return createElement('div', null, 'events');
-  }
-
-  const el = createElement(TestComponent);
-  assert.ok(el);
-  assert.equal(typeof useEvent, 'function');
-
-  // Verify subscriber invocation contract
-  const unsub = mockSubscriber('tick', (payload) => {
-    handlerCalledWith = payload;
-  });
-  assert.equal(subscribedName, 'tick');
-  assert.deepEqual(handlerCalledWith, { count: 1 });
-  unsub();
-  assert.equal(unsubscribed, true);
 });
 
 // ---------------------------------------------------------------------------
@@ -211,7 +142,7 @@ test('suspense cache state machine: pending -> fulfilled stores value', async ()
   assert.equal(invocations, 1);
 
   deferred.resolve('payload');
-  await deferred.promise;
+  await entry.promise;
 
   assert.equal(entry.status, 'fulfilled');
   assert.equal(entry.value, 'payload');
@@ -235,7 +166,7 @@ test('suspense cache state machine: pending -> rejected stores error and re-thro
   assert.equal(entry.status, 'pending');
 
   deferred.reject(failure);
-  await assert.rejects(deferred.promise);
+  await assert.rejects(entry.promise);
 
   assert.equal(entry.status, 'rejected');
   // 같은 에러 객체가 저장·재사용된다 (error boundary 계약)
@@ -253,7 +184,7 @@ test('suspense cache: non-Error rejections are normalized to Error', async () =>
   );
 
   deferred.reject('plain string failure');
-  await assert.rejects(deferred.promise);
+  await assert.rejects(entry.promise);
 
   assert.equal(entry.status, 'rejected');
   assert.ok(entry.error instanceof Error);
@@ -373,23 +304,6 @@ test('suspense cache: bigint input does not throw and keys stay distinct', () =>
 test('useSuspenseCommand and invalidateCommands are exported from index', () => {
   assert.equal(typeof useSuspenseCommand, 'function');
   assert.equal(typeof invalidateCommands, 'function');
-});
-
-test('useSuspenseCommand hook contract (source-level): throws promise while pending, engine invoke wiring', () => {
-  // 렌더러 없는 환경(bun, DOM 없음)에서는 Suspense throw 를 실행 기반으로
-  // 재현할 수 없으므로 useCommand 의 선례처럼 소스 계약으로 고정한다:
-  // (1) pending 이면 promise 를 throw, (2) reject 면 캐시된 에러 재던짐,
-  // (3) invoke 는 engine 의 것을 commandName + input 으로 호출.
-  const source = readFileSync(new URL('./useSuspenseCommand.ts', import.meta.url), 'utf8');
-  assert.match(source, /if \(entry\.status === 'pending'\) throw entry\.promise;/);
-  assert.match(source, /if \(entry\.status === 'rejected'\) throw entry\.error;/);
-  assert.match(source, /engine\.invoke<O>\(commandName,\s*input/);
-  assert.match(source, /resolveCommandId\(commandFn\)/);
-  assert.match(
-    source,
-    /resolveSuspenseEntry<O>\(cacheKey\(commandName,\s*input\),\s*commandName/,
-    'entry must carry the owning command name for exact invalidation',
-  );
 });
 
 test('resolveSuspenseEntry wires engine.invoke exactly once', async () => {

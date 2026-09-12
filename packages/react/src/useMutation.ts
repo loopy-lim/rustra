@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useInsertionEffect, useMemo } from 'react';
 import type { InvokeOptions } from '@rustra/types';
 import { resolveCommandId } from '@rustra/types';
 import { useRustraEngine } from './context.js';
@@ -24,56 +24,77 @@ export function useMutation<I = void, O = unknown>(
   options?: UseMutationOptions<I, O>,
 ): UseMutationResult<I, O> {
   const engine = useRustraEngine();
-  const [data, setData] = useState<O | undefined>(undefined);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<Error | null>(null);
-
-  // minify-안전 식별: 코드젠이 심은 commandId 를 우선한다 (Function.name 은
-  // 프로덕션 번들러 mangling 으로 바뀔 수 있다).
   const commandName = resolveCommandId(commandFn);
-  const optionsRef = useRef(options);
-  const latestCallRef = useRef(0);
-  const pendingCallsRef = useRef(0);
-  const generationRef = useRef(0);
+  // Each engine/command pair owns its counters and callback snapshot. Retained
+  // async functions cannot borrow a replacement scope's callbacks or state.
+  const scope = useMemo(
+    () => ({
+      engine,
+      commandName,
+      active: true,
+      generation: 0,
+      latestCall: 0,
+      pendingCalls: 0,
+      options: undefined as UseMutationOptions<I, O> | undefined,
+    }),
+    [engine, commandName],
+  );
+  const emptyState = {
+    scope,
+    data: undefined as O | undefined,
+    loading: false,
+    error: null as Error | null,
+  };
+  const [state, setState] = useState(emptyState);
+  if (state.scope !== scope) setState(emptyState);
 
+  // Publish only committed options, before any descendant layout effect can
+  // invoke the stable mutation function. Render-time writes leak aborted renders.
+  useInsertionEffect(() => {
+    scope.options = options;
+  }, [scope, options]);
   useEffect(() => {
-    optionsRef.current = options;
-  }, [options]);
+    scope.active = true;
+    return () => {
+      scope.active = false;
+      scope.generation += 1;
+      scope.pendingCalls = 0;
+    };
+  }, [scope]);
 
   const mutateAsync = useCallback(
     async (input: I, invokeOptions?: InvokeOptions): Promise<O> => {
-      const generation = generationRef.current;
-      const callId = ++latestCallRef.current;
-      pendingCallsRef.current += 1;
-      setLoading(true);
-      setError(null);
-
+      const generation = scope.generation;
+      const callId = ++scope.latestCall;
+      const callbacks = scope.options;
+      const isCurrent = () => scope.active && scope.generation === generation;
+      const update = (changes: Partial<typeof emptyState>) => {
+        if (!isCurrent()) return;
+        setState((current) => (current.scope === scope ? { ...current, ...changes } : current));
+      };
+      scope.pendingCalls += 1;
+      update({ loading: true, error: null });
       let result: O;
       try {
-        result = await engine.invoke<O>(commandName, input, invokeOptions);
+        result = await scope.engine.invoke<O>(scope.commandName, input, invokeOptions);
       } catch (err: unknown) {
         const parsedError = err instanceof Error ? err : new Error(String(err));
-        if (generationRef.current === generation && latestCallRef.current === callId) {
-          setError(parsedError);
-        }
-        optionsRef.current?.onError?.(parsedError, input);
-        optionsRef.current?.onSettled?.(undefined, parsedError, input);
+        if (scope.latestCall === callId) update({ error: parsedError });
+        callbacks?.onError?.(parsedError, input);
+        callbacks?.onSettled?.(undefined, parsedError, input);
         throw parsedError;
       } finally {
-        if (generationRef.current === generation) {
-          pendingCallsRef.current = Math.max(0, pendingCallsRef.current - 1);
-          setLoading(pendingCallsRef.current > 0);
+        if (isCurrent()) {
+          scope.pendingCalls = Math.max(0, scope.pendingCalls - 1);
+          update({ loading: scope.pendingCalls > 0 });
         }
       }
-
-      if (generationRef.current === generation && latestCallRef.current === callId) {
-        setData(result);
-      }
-      optionsRef.current?.onSuccess?.(result, input);
-      optionsRef.current?.onSettled?.(result, null, input);
+      if (scope.latestCall === callId) update({ data: result });
+      callbacks?.onSuccess?.(result, input);
+      callbacks?.onSettled?.(result, null, input);
       return result;
     },
-    [engine, commandName],
+    [scope],
   );
 
   const mutate = useCallback(
@@ -86,19 +107,20 @@ export function useMutation<I = void, O = unknown>(
   );
 
   const reset = useCallback(() => {
-    generationRef.current += 1;
-    pendingCallsRef.current = 0;
-    setData(undefined);
-    setError(null);
-    setLoading(false);
-  }, []);
+    scope.generation += 1;
+    scope.pendingCalls = 0;
+    setState((current) =>
+      current.scope === scope ? { scope, data: undefined, error: null, loading: false } : current,
+    );
+  }, [scope]);
 
+  const current = state.scope === scope ? state : emptyState;
   return {
     mutate,
     mutateAsync,
-    data,
-    loading,
-    error,
+    data: current.data,
+    loading: current.loading,
+    error: current.error,
     reset,
   };
 }

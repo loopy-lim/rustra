@@ -8,6 +8,28 @@ fn postcard_uvar_len(mut value: usize) -> usize {
 }
 
 impl Package {
+    fn command_by_id(&self, command_id: u16) -> crate::Result<Arc<Command>> {
+        if self.is_frozen() {
+            self.frozen_registry
+                .get()
+                .and_then(|registry| registry.id_to_command.get(command_id as usize))
+                .and_then(Option::as_ref)
+                .cloned()
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))
+        } else {
+            let state = self
+                .state
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let command = state
+                .id_to_command
+                .get(&command_id)
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
+                .clone();
+            Ok(command)
+        }
+    }
+
     /// Invoke a schema-proven single-byte-field command without constructing a
     /// postcard request/response frame. The borrowed input is copied into an
     /// owned Rust value before user code runs and is never retained.
@@ -19,24 +41,7 @@ impl Package {
         if wire_size > limit {
             return Err(RustraError::payload_too_large(wire_size, limit));
         }
-        let command = if self.is_frozen() {
-            self.frozen_registry
-                .get()
-                .and_then(|registry| registry.id_to_command.get(command_id as usize))
-                .and_then(Option::as_ref)
-                .cloned()
-                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
-        } else {
-            let state = self
-                .state
-                .read()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            state
-                .id_to_command
-                .get(&command_id)
-                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
-                .clone()
-        };
+        let command = self.command_by_id(command_id)?;
         let Some(handler) = command.buffer_handler.as_ref() else {
             return Err(RustraError::invalid_args(format!(
                 "buffer invoke: command id:{command_id} has no buffer handler"
@@ -46,34 +51,15 @@ impl Package {
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             with_state_context(&self.states, || handler(bytes))
         }));
-        match outcome {
-            Ok(result) => result,
-            Err(panic) => Err(RustraError::internal(format!(
-                "panic in handler: {}",
-                crate::ffi::panic_message(&panic)
-            ))),
-        }
+        catch_handler_panic(outcome)
     }
 
     /// Whether a command owns the direct byte-buffer handler required by a
     /// native host capability handshake.
     pub fn has_buffer_handler(&self, command_id: u16) -> bool {
-        if self.is_frozen() {
-            return self
-                .frozen_registry
-                .get()
-                .and_then(|registry| registry.id_to_command.get(command_id as usize))
-                .and_then(Option::as_ref)
-                .is_some_and(|command| command.buffer_handler.is_some());
-        }
-        let state = self
-            .state
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        state
-            .id_to_command
-            .get(&command_id)
-            .is_some_and(|command| command.buffer_handler.is_some())
+        self.command_by_id(command_id)
+            .map(|command| command.buffer_handler.is_some())
+            .unwrap_or(false)
     }
 
     /// raw 직결 가능 여부 — 호스트가 스키마 없이 폴백 여부를 미리 판정한다.
@@ -83,29 +69,12 @@ impl Package {
     pub fn raw_invoke_shape(
         &self,
         command_id: u16,
-    ) -> Option<Vec<crate::rkyv_codec::RawFieldKind>> {
-        let (has_raw, kinds) = if self.is_frozen() {
-            let command = self
-                .frozen_registry
-                .get()?
-                .id_to_command
-                .get(command_id as usize)
-                .and_then(Option::as_ref)?;
-            (
-                command.raw_handler.is_some(),
-                command.raw_input_kinds.clone(),
-            )
+    ) -> Option<Vec<crate::frame_codec::RawFieldKind>> {
+        let command = self.command_by_id(command_id).ok()?;
+        if command.raw_handler.is_some() {
+            Some(command.raw_input_kinds.clone())
         } else {
-            let state = self
-                .state
-                .read()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            let command = state.id_to_command.get(&command_id)?;
-            (
-                command.raw_handler.is_some(),
-                command.raw_input_kinds.clone(),
-            )
-        };
-        if has_raw { Some(kinds) } else { None }
+            None
+        }
     }
 }

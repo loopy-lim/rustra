@@ -4,15 +4,15 @@ import type {
   EngineClient as EngineClientType,
   EngineSupports,
   InvokeOptions,
-  RkyvV2Engine,
-  RkyvV2EngineOptions,
-  RkyvV2SchemaNative,
+  FrameEngine,
+  FrameEngineOptions,
+  FrameSchemaNative,
   RustraNative,
 } from '@rustra/types';
 import {
   CancelledError,
   configureLazy,
-  createRkyvV2Engine,
+  createFrameEngine,
   decodeUtf8,
   disposedBootstrapError,
   encodeUtf8,
@@ -26,14 +26,14 @@ import {
 export type ReactNativeEngine = EngineClientType & {
   invokeBatch<T>(entries: BatchEntry[]): Promise<T[]>;
 };
-export type RustraJSINative = RkyvV2SchemaNative & {
+export type RustraJSINative = FrameSchemaNative & {
   invoke(payload: ArrayBuffer): ArrayBuffer;
   onEvent?(name: string, callback: (payloadJson: string) => void): void;
   offEvent?(name: string): void;
   /** JS 폴링 drain(CallInvoker 없는 호스트). 처리된 이벤트+채널 프레임 수 반환. */
   drainEvents?(): number;
   createChannel?(callback: (payloadJson: string) => void): number;
-  /** 바이너리 채널 — 콜백이 rkyv V2 프레임 등 임의 바이트를 받는다. */
+  /** 바이너리 채널 — 콜백이 Frame 프레임 등 임의 바이트를 받는다. */
   createChannelBytes?(callback: (payload: ArrayBuffer | Uint8Array) => void): number;
   dropChannel?(handle: number): boolean;
   /**
@@ -72,13 +72,13 @@ export const REACT_NATIVE_JSON_ENGINE_SUPPORTS: EngineSupports = {
 };
 
 /**
- * RN rkyv V2 엔진의 기술적 지표(A02) — compatibility-matrix.md 의 RN
- * `createRkyvV2Engine` 열 셀을 그대로 옮긴 것: 취소는 조건부 전파(JS 코덱 +
+ * RN Frame 엔진의 기술적 지표(A02) — compatibility-matrix.md 의 RN
+ * `createFrameEngine` 열 셀을 그대로 옮긴 것: 취소는 조건부 전파(JS 코덱 +
  * invokeAsync/invokeCancel 확인 시 Rust 체크포인트까지 — 정적 typed 경로는
  * 얕은 취소 폴백), 배치는 정적 명령 단일 횡단(signal 항목은 항목별 라우팅),
  * 이벤트 푸시(CallInvoker 자동 drain), 채널 JSI handle, timeoutMs 레이스 있음.
  */
-export const REACT_NATIVE_RKYV_V2_ENGINE_SUPPORTS: EngineSupports = {
+export const REACT_NATIVE_FRAME_ENGINE_SUPPORTS: EngineSupports = {
   cancellation: 'cooperative',
   batch: 'single-crossing',
   events: 'push',
@@ -125,8 +125,8 @@ export function createReactNativeEngine(native: {
 }
 
 export type FastEngineOptions = {
-  rkyvV2Codecs: Map<string, import('@rustra/types').RkyvV2Codec<unknown, unknown>>;
-} & RkyvV2EngineOptions;
+  frameCodecs: Map<string, import('@rustra/types').FrameCodec<unknown, unknown>>;
+} & FrameEngineOptions;
 export type RustraBootstrapOptions = FastEngineOptions & {
   install(): Promise<void>;
   getNative(): RustraJSINative;
@@ -137,7 +137,7 @@ export type RustraBootstrap = {
    * dispose 는 멱등이고 dispose 후 ready 는 loud-fail 한다.
    */
   readonly state: BootstrapState;
-  ready(): Promise<RkyvV2Engine>;
+  ready(): Promise<FrameEngine>;
   /** (A05) dispose-once — 두 번째 호출은 no-op. JS reload 는 네이티브 drift 를 못 고친다. */
   dispose(): void;
 };
@@ -170,7 +170,7 @@ export function createRustraBootstrap(options: RustraBootstrapOptions): RustraBo
     },
     ready: () => {
       if (state === 'disposed') return Promise.reject(disposed());
-      return (ensureConfigured() as Promise<RkyvV2Engine>).then((engine) => {
+      return (ensureConfigured() as Promise<FrameEngine>).then((engine) => {
         if (state === 'disposed') throw disposed();
         state = 'ready';
         return engine;
@@ -192,18 +192,16 @@ export function getRustraNative(): RustraJSINative & RustraNative {
   return native as RustraJSINative & RustraNative;
 }
 
-export function createFastEngine(
-  native: RustraJSINative,
-  options: FastEngineOptions,
-): RkyvV2Engine {
+export function createFastEngine(native: RustraJSINative, options: FastEngineOptions): FrameEngine {
   const engineOptions = {
     contractHash: options.contractHash,
+    contractVerification: options.contractVerification,
     onContractMismatch: options.onContractMismatch,
     schemaVersion: options.schemaVersion,
     onSchemaStale: options.onSchemaStale,
     maxPayloadBytes: options.maxPayloadBytes,
-  } satisfies RkyvV2EngineOptions;
-  const engine = createRkyvV2Engine(native, options.rkyvV2Codecs, engineOptions);
-  engine.supports = { ...REACT_NATIVE_RKYV_V2_ENGINE_SUPPORTS };
+  } satisfies FrameEngineOptions;
+  const engine = createFrameEngine(native, options.frameCodecs, engineOptions);
+  engine.supports = { ...REACT_NATIVE_FRAME_ENGINE_SUPPORTS };
   return engine;
 }

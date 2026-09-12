@@ -19,7 +19,7 @@ export function generateComplexCodec(
   const outType = command.outputType === '()' ? 'void' : command.outputType;
   return (
     `/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */\n` +
-    `export const ${fnName}ComplexCodec: RkyvV2Codec<${inType}, ${outType}> = createComplexCodec<${inType}, ${outType}>({\n` +
+    `export const ${fnName}ComplexCodec: FrameCodec<${inType}, ${outType}> = createComplexCodec<${inType}, ${outType}>({\n` +
     `  commandId: ${command.commandId},\n` +
     `  inputSchema: ${JSON.stringify(command.inputSchema)} as ComplexSchema,\n` +
     `  outputSchema: ${JSON.stringify(command.outputSchema)} as ComplexSchema,\n` +

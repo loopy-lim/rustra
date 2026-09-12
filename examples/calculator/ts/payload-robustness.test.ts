@@ -17,9 +17,9 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
-import { addNumbersCodec, divideCodec } from '../generated/rkyv-codecs.js';
-import { rkyvV2Registry } from '../generated/rkyv-registry.js';
-import { createRkyvV2Engine, RustraCommandError } from '@rustra/types';
+import { addNumbersCodec, divideCodec } from '../generated/frame-codecs.js';
+import { frameRegistry } from '../generated/frame-registry.js';
+import { createFrameEngine, RustraCommandError } from '@rustra/types';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // dist-ts/examples/calculator/ts → 저장소 루트 — transport-bench.test.ts 와 동일한
@@ -87,14 +87,14 @@ test('divideCodec.decode empty buffer → too_short (codec 무관 동일 가드)
 /// 모든 invoke 에 대해 동일한 canned 응답 프레임을 반환하는 mock native.
 function nativeReturning(frame: ArrayBuffer) {
   return {
-    invokeRkyvV2(_payload: ArrayBuffer): ArrayBuffer {
+    invokeFrame(_payload: ArrayBuffer): ArrayBuffer {
       return frame;
     },
   };
 }
 
 test('engine: too-short response → reject RustraCommandError(invoke.too_short)', async () => {
-  const engine = createRkyvV2Engine(nativeReturning(new ArrayBuffer(4)), rkyvV2Registry);
+  const engine = createFrameEngine(nativeReturning(new ArrayBuffer(4)), frameRegistry);
   await assert.rejects(
     () => engine.invoke('addNumbers', { a: 2, b: 3 }),
     (err: unknown) => {
@@ -108,7 +108,7 @@ test('engine: too-short response → reject RustraCommandError(invoke.too_short)
 test('engine: error response → reject RustraCommandError(command code)', async () => {
   // 호스트가 divide-by-zero error 프레임을 내면 engine 이 code/message 를
   // RustraCommandError 로 투명하게 전달해야 한다.
-  const engine = createRkyvV2Engine(nativeReturning(hexToBytes(DIVIDE_RESPONSE)), rkyvV2Registry);
+  const engine = createFrameEngine(nativeReturning(hexToBytes(DIVIDE_RESPONSE)), frameRegistry);
   await assert.rejects(
     () => engine.invoke('addNumbers', { a: 2, b: 3 }),
     (err: unknown) => {
@@ -121,7 +121,7 @@ test('engine: error response → reject RustraCommandError(command code)', async
 });
 
 test('engine: empty response → reject RustraCommandError(invoke.too_short)', async () => {
-  const engine = createRkyvV2Engine(nativeReturning(new ArrayBuffer(0)), rkyvV2Registry);
+  const engine = createFrameEngine(nativeReturning(new ArrayBuffer(0)), frameRegistry);
   await assert.rejects(
     () => engine.invoke('addNumbers', { a: 2, b: 3 }),
     (err: unknown) => {

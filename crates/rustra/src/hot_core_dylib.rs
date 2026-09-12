@@ -123,6 +123,11 @@ impl DylibCore {
             })?;
         // dlclose 금지 — 모듈 헤더의 제약 주석 참고. leak은 의도다.
         let library: &'static libloading::Library = Box::leak(Box::new(library));
+        super::retention::record_retained_library(
+            std::fs::metadata(artifact)
+                .map(|metadata| metadata.len())
+                .unwrap_or(0),
+        );
         let mobile_init: MobileInitFn = bind_symbol(library, "rustra_mobile_init")?;
         let invoke_json_fn: InvokeJsonFn = bind_symbol(library, "rustra_ffi_invoke_json")?;
         let contract_hash_fn: ContractHashFn = bind_symbol(library, "rustra_ffi_contract_hash")?;
@@ -144,7 +149,7 @@ impl DylibCore {
     ///
     /// 실패 값은 코어가 돌려준 FfiResponse.error 문자열을
     /// `{code, message}` 로 재분할한 객체다 — 분할 규칙은 코어
-    /// `rkyv_error_bytes` 와 동일(첫 `": "` 기준, 없으면 `invoke.failed`).
+    /// `frame_error_bytes` 와 동일(첫 `": "` 기준, 없으면 `invoke.failed`).
     pub fn invoke_json(&self, command: &str, args: Value) -> Result<Value, Value> {
         let envelope = json!({"command": command, "args": args});
         let payload = serde_json::to_vec(&envelope).map_err(
@@ -219,7 +224,7 @@ fn bind_symbol<T: Copy + 'static>(
 }
 
 /// FfiResponse.error 표시 문자열(`"code: message"`)을 에러 와이어 객체로
-/// 재분할한다 — 코어 `rkyv_error_bytes` 의 재구성 규칙과 동일하다.
+/// 재분할한다 — 코어 `frame_error_bytes` 의 재구성 규칙과 동일하다.
 fn split_error_wire(raw: &str) -> Value {
     match raw.split_once(": ") {
         Some((code, message)) => json!({"code": code, "message": message}),

@@ -104,27 +104,28 @@ function resolvePaths(
 export async function runWatch(args: string[]): Promise<WatchHandle> {
   const options = parseGenerateArgs(args);
   if (options.help) return { dispose() {} };
-  const paths = resolvePaths(options);
-  await generateFromSchema(
-    paths.schemaPath,
-    paths.outputPath,
-    paths.cppOutputPath,
-    paths.positional,
-    paths.reactNativeScaffold,
-    paths.hostEntries,
-  );
+  let paths = resolvePaths(options);
+  let schemaWatch: WatchHandle | undefined;
+  let disposed = false;
+  async function regenerate(): Promise<void> {
+    paths = resolvePaths(options);
+    if (schemaWatch && !disposed) subscribeSchema();
+    await generateFromSchema(
+      paths.schemaPath,
+      paths.outputPath,
+      paths.cppOutputPath,
+      paths.positional,
+      paths.reactNativeScaffold,
+      paths.hostEntries,
+    );
+  }
+  await regenerate();
   console.log(`\nWatching ${paths.schemaPath} for changes...`);
   const loop = createWatchLoop(
     async () => {
       try {
-        await generateFromSchema(
-          paths.schemaPath,
-          paths.outputPath,
-          paths.cppOutputPath,
-          paths.positional,
-          paths.reactNativeScaffold,
-          paths.hostEntries,
-        );
+        await regenerate();
+        if (!disposed) subscribeSchema();
         console.log(`[${new Date().toLocaleTimeString()}] Regenerated`);
       } catch (error) {
         console.error(`Regeneration failed: ${error instanceof Error ? error.message : error}`);
@@ -133,19 +134,24 @@ export async function runWatch(args: string[]): Promise<WatchHandle> {
     () => true,
     100,
   );
-  const fileWatch = createFileWatch([
-    {
-      path: dirname(paths.schemaPath),
-      onChange: (_path, filename) => {
-        if (filename && resolve(dirname(paths.schemaPath), filename) === resolve(paths.schemaPath))
-          loop.schedule('schema change');
-      },
-    },
-  ]);
+  function subscribeSchema(): void {
+    schemaWatch?.dispose();
+    schemaWatch = createFileWatch([
+      { path: paths.schemaPath, onChange: () => loop.schedule('schema change') },
+    ]);
+  }
+  subscribeSchema();
+  const configWatch = createFileWatch(
+    options.configPath
+      ? [{ path: resolve(options.configPath), onChange: () => loop.schedule('config change') }]
+      : [],
+  );
   return {
     dispose() {
+      disposed = true;
       loop.dispose();
-      fileWatch.dispose();
+      schemaWatch?.dispose();
+      configWatch.dispose();
     },
   };
 }

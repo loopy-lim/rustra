@@ -32,11 +32,12 @@
     "test:release-coherence": "bun scripts/check-release-coherence.mjs",
     "test:architecture": "bun test scripts/architecture-boundaries.test.ts",
     "test:api-surface": "node scripts/api-surface.mjs",
-    "test:onboarding": "bun test scripts/onboarding-gate.test.ts && node scripts/onboarding-gate.mjs",
-    "test:docs": "bun test scripts/docs-gate.test.ts && node scripts/docs-gate.mjs",
+    "test:codegen-fresh": "bun run --cwd packages/cli build && node --experimental-strip-types --test scripts/check-codegen-fresh.test.ts && node scripts/check-codegen-fresh.mjs",
+    "test:onboarding": "bun run --cwd packages/cli build && node --experimental-strip-types --test scripts/onboarding-gate.test.ts && node scripts/onboarding-gate.mjs",
+    "test:docs": "node --experimental-strip-types --test scripts/docs-gate.test.ts scripts/check-release-docs.test.ts && node scripts/docs-gate.mjs && node scripts/check-release-docs.mjs",
     "verify:package:react-native": "node scripts/check-react-native-package.mjs",
     "verify:consumer:react-native": "bun scripts/check-packed-react-native-consumer.mjs",
-    "test:release-tools": "bun test scripts/check-release-coherence.test.ts scripts/check-packed-react-native-consumer.test.ts scripts/api-surface.test.ts scripts/version-packages.test.ts",
+    "test:release-tools": "node --experimental-strip-types --test scripts/ci-mobile-smoke.test.mjs scripts/ci-ios-smoke.test.mjs scripts/check-release-coherence.test.ts scripts/check-packed-react-native-consumer.test.ts scripts/api-surface.test.ts scripts/version-packages.test.ts",
     "test:complex-codec-bench": "bun test scripts/complex-codec-bench.test.ts scripts/track-b-bench.test.ts",
     "bench:complex": "bun scripts/complex-codec-bench.mjs",
     "bench:track-b": "bun scripts/track-b-bench.mjs",
@@ -64,7 +65,8 @@
     "release": "bun run build && bunx changeset publish",
     "audit:prod": "bun audit --audit-level=high",
     "prepare": "lefthook install",
-    "docs:api": "typedoc"
+    "docs:api": "typedoc",
+    "test:bindings-fresh": "bun run --cwd packages/cli build && node scripts/check-codegen-fresh.mjs --bindings"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.1",

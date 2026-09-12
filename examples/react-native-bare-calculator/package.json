@@ -29,6 +29,7 @@
     "typescript": "~5.9.2"
   },
   "overrides": {
+    "@rustra/react-native": "file:../../packages/react-native",
     "@rustra/types": "file:../../packages/types"
   }
 }

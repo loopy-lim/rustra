@@ -2,20 +2,7 @@
 // rustra-bridge adapter benchmark: Node vs Bun
 // Measures end-to-end bridge overhead from JavaScript side
 
-import { execSync, spawnSync } from 'child_process';
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(__dirname, '..');
-
 // ── Helpers ──────────────────────────────────────────────
-
-function bar(value, max, width = 40) {
-  const filled = Math.round((value / max) * width);
-  return '█'.repeat(filled) + '░'.repeat(width - filled);
-}
 
 function runBench(label, fn, iterations = 50000) {
   // Warm up

@@ -1,6 +1,6 @@
 {
   "name": "@rustra/cli",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "CLI for rustra-bridge TypeScript code generation",
   "license": "MIT",
   "type": "module",
@@ -9,8 +9,8 @@
   },
   "sideEffects": false,
   "rustraTemplate": {
-    "cargoRange": "^0.9.0",
-    "reactNativeRange": "^0.8.0"
+    "cargoRange": "^0.10.0",
+    "reactNativeRange": "^0.9.0"
   },
   "engines": {
     "node": ">=18"
@@ -54,11 +54,11 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
-    "test": "bun test src/doctor.test.ts src/generate.test.ts src/schema-diff.test.ts src/dev.test.ts src/dev-dylib.test.ts src/dev-parity-wiring.test.ts src/parity-gate.test.ts src/vite.test.ts src/config-validation.test.ts src/cli-init.test.ts src/cli-arg-parser.test.ts src/inspect.test.ts src/cli-json-format.test.ts src/cli-codegen-json.test.ts src/cli-codegen-text.test.ts src/codegen-explain.test.ts src/generated-header.test.ts src/process.test.ts src/cargo-metadata.test.ts",
+    "test": "bun run test:compile && node --test dist-test/cargo-metadata.test.js dist-test/cli-codegen-json.test.js dist-test/cli-codegen-text.test.js dist-test/cli-codegen-uniffi.test.js dist-test/cli-init.test.js dist-test/cli-json-format.test.js dist-test/codegen-explain.test.js dist-test/config-validation.test.js dist-test/dev-dylib.test.js dist-test/dev-parity-wiring.test.js dist-test/dev.test.js dist-test/doctor.test.js dist-test/generate.test.js dist-test/host-entries.test.js dist-test/inspect.test.js dist-test/parity-gate.test.js dist-test/process.test.js dist-test/schema-diff.test.js dist-test/vite.test.js dist-test/watch.test.js && bun test src/cli-arg-parser.test.ts src/generated-header.test.ts",
     "test:compile": "tsc -p tsconfig.test.json"
   },
   "dependencies": {
-    "@rustra/types": "^0.9.0"
+    "@rustra/types": "^0.10.0"
   },
   "devDependencies": {
     "@types/node": "^26.3.0",

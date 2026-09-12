@@ -20,7 +20,7 @@ crate-type = ["rlib", "cdylib"]
 
 Add only `"bun": {}` to `rustra.json`. The generated file builds Release and Debug library
 candidates from Cargo metadata, verifies the actual ABI symbols, and lazily installs the
-rkyv V2 engine.
+Frame engine.
 
 ```ts
 import { addNumbers } from './generated/bun.js';

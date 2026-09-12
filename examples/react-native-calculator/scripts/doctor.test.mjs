@@ -21,10 +21,10 @@ const REQUIRED_SYMBOLS = `
 000 T _rustra_ffi_invoke_raw
 000 T _rustra_ffi_has_raw
 000 T _rustra_ffi_free_owned_bytes
-000 T _rustra_ffi_invoke_rkyv_v2_async
-000 T _rustra_calculator_invoke_rkyv_v2
+000 T _rustra_ffi_invoke_frame_async
+000 T _rustra_calculator_invoke_frame
 000 T _rustra_calculator_invoke_typed_raw
-000 T _rustra_calculator_free_rkyv_v2_buffer
+000 T _rustra_calculator_free_frame_buffer
 `;
 
 describe('RN doctor', () => {

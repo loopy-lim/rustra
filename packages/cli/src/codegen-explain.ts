@@ -28,8 +28,8 @@ const TS_CORE: Array<{ output: string; stage: string }> = [
   { output: 'types.ts', stage: 'types' },
   { output: 'commands.ts', stage: 'command helpers' },
   { output: 'contract.ts', stage: 'contract hash + schema version' },
-  { output: 'rkyv-codecs.ts', stage: 'rkyv codecs (TS)' },
-  { output: 'rkyv-registry.ts', stage: 'rkyv registry (TS)' },
+  { output: 'frame-codecs.ts', stage: 'frame codecs (TS)' },
+  { output: 'frame-registry.ts', stage: 'frame registry (TS)' },
 ];
 
 export function explainCodegenSurfaces(facts: ExplainFacts): ExplainRow[] {
@@ -54,7 +54,7 @@ export function explainCodegenSurfaces(facts: ExplainFacts): ExplainRow[] {
     rows.push({
       output: 'rustra-generated-codecs.hpp / .cpp',
       renderer: 'cpp codec renderer',
-      stage: 'rkyv codecs (C++)',
+      stage: 'frame codecs (C++)',
     });
   if (facts.hasReactNative)
     rows.push({

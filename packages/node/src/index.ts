@@ -3,8 +3,8 @@ export type {
   EngineClient,
   EngineSupports,
   RustraError,
-  RkyvV2Codec,
-  RkyvV2Native,
+  FrameCodec,
+  FrameNative,
   InvokeOptions,
   EngineClientWithBatch,
 } from '@rustra/types';
@@ -15,7 +15,7 @@ export {
   disposedBootstrapError,
   ensureConfigured,
   invoke,
-  createRkyvV2Engine,
+  createFrameEngine,
 } from '@rustra/types';
 export * from './node-core.js';
 export * from './node-bootstrap.js';

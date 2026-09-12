@@ -1,4 +1,4 @@
-use crate::rkyv_codec::RawFieldKind;
+use crate::frame_codec::RawFieldKind;
 
 fn decode_raw_output(encoded: &[u8], out_kind: RawFieldKind) -> crate::Result<u64> {
     let mut r: &[u8] = encoded;
@@ -32,7 +32,7 @@ fn decode_raw_output(encoded: &[u8], out_kind: RawFieldKind) -> crate::Result<u6
             let mut b4 = [0u8; 4];
             b4.copy_from_slice(&r[..4]);
             let f = f32::from_le_bytes(b4);
-            crate::rkyv_codec::u64_from_f64(f as f64)
+            crate::frame_codec::u64_from_f64(f as f64)
         }
         RawFieldKind::Bool => u64::from(r[0] != 0),
     };

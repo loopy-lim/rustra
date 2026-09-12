@@ -17,14 +17,16 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 7. [Tauri 셋업](extending/tauri-setup.md) — 기존 Tauri 앱에 rustra 얹기
 8. [Transport 교체 가이드](extending/transport-guide.md) — Bun FFI, Node napi-rs 등 transport 교체
 9. [새 Host 추가 가이드](extending/adding-host.md) — Electron, Deno 등 새 host adapter 추가
-10. [동적 개발 티어](dev-tier.ko.md) — loose invoke 프로토타이핑, 디바이스 토큰 실험, `test:fast`
+10. [UniFFI 바인딩 가이드](extending/uniffi-bindings.ko.md) — UniFFI 로 만드는 타입 안전 Kotlin/Swift 바인딩 (Android/iOS)
+11. [동적 개발 티어](dev-tier.ko.md) — loose invoke 프로토타이핑, 디바이스 토큰 실험, `test:fast`
 
 ### 프로젝트 기여자
 
 1. [아키텍처 개요](architecture.md) — 전체 구조와 핵심 개념 파악
-2. [Crate 및 Package 구조](internal/crate-structure.md) — 각 crate/package의 책임과 의존성
-3. [TypeScript 코드 생성](internal/codegen.md) — schema → TS 타입 매핑, command 이름 변환
-4. [테스트 구조](internal/testing.md) — 테스트 계층, 파일별 역할, 실행 명령어
+2. [안전 계약](safety-contract.ko.md) — 총괄 FFI 불변식과 코드 근거가 붙은 항목별 계약
+3. [Crate 및 Package 구조](internal/crate-structure.md) — 각 crate/package의 책임과 의존성
+4. [TypeScript 코드 생성](internal/codegen.md) — schema → TS 타입 매핑, command 이름 변환
+5. [테스트 구조](internal/testing.md) — 테스트 계층, 파일별 역할, 실행 명령어
 
 ## 전체 문서 목록
 
@@ -38,14 +40,15 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 | [React Native 셋업](extending/react-native-setup.md)                               | 사용자 | JSI 네이티브 모듈, iOS/Android 빌드, BenchmarkApp                                                                                                  |
 | [Tauri 셋업](extending/tauri-setup.md)                                             | 사용자 | 기존 Tauri 앱에 rustra 얹기 — 변경 5개 파일을 순서대로                                                                                             |
 | [새 Host 추가 가이드](extending/adding-host.md)                                    | 사용자 | adapter 만들기, Rust 진입점 선택, 테스트 추가                                                                                                      |
+| [UniFFI 바인딩 가이드](extending/uniffi-bindings.ko.md)                            | 사용자 | UniFFI 로 만드는 타입 안전 Kotlin/Swift 바인딩 — transport 선택, `uniffi` 설정, 코드젠 흐름, 에러 모델, 갈림, 버전 고정                            |
 | [동적 개발 티어](dev-tier.ko.md) ([English](dev-tier.md))                          | 사용자 | `invokeLoose` 프로토타이핑, 카탈로그 밖 토큰 실험, 게이트 프로파일                                                                                 |
 | [Crate 및 Package 구조](internal/crate-structure.md)                               | 기여자 | 각 crate/package 책임, 빌드 의존성                                                                                                                 |
 | [TypeScript 코드 생성](internal/codegen.md)                                        | 기여자 | codegen 파이프라인, 타입 매핑, 제한사항                                                                                                            |
 | [테스트 구조](internal/testing.md)                                                 | 기여자 | 테스트 계층, 스크립트 체인, host별 상태                                                                                                            |
 | [호환성 계약](compatibility-contract.ko.md) ([English](compatibility-contract.md)) | 기여자 | EngineClient 안정 계약, runtime acceptance gates                                                                                                   |
 | [호환성 매트릭스](compatibility-matrix.md)                                         | 사용자 | 기능(signal/취소/배치/이벤트) × 어댑터 지원 표                                                                                                     |
-| [와이어 포맷](wire-format.ko.md)                                                   | 전체   | "rkyv V2/postcard"의 실체, 티어별 바이트, 수치 인용 규칙                                                                                           |
-| [용어집](glossary.ko.md) ([English](glossary.md))                                  | 전체   | 과적합 용어의 표기 표준·의미 구분(rkyv V2, 와이어/dev 티어, hot-core, host, snapshot, gate)                                                        |
+| [와이어 포맷](wire-format.ko.md)                                                   | 전체   | Frame 프로토콜의 실체, 티어별 바이트, 수치 인용 규칙                                                                                               |
+| [용어집](glossary.ko.md) ([English](glossary.md))                                  | 전체   | 과적합 용어의 표기 표준·의미 구분(Frame, 와이어/dev 티어, hot-core, host, snapshot, gate)                                                          |
 | [검증 체크리스트](verification-checklist.ko.md)                                    | 기여자 | 증거 수준 표를 뒷받침하는 호스트별 수동 검증 기록 양식                                                                                             |
 | [계약 마이그레이션 가이드](migration-guide.md)                                     | 전체   | 스키마 breaking change 검출(rustra diff)·해결 레시피·롤아웃 순서                                                                                   |
 | [마이그레이션 노트](migrations/0.3-to-0.4.md), [0.5→0.6](migrations/0.5-to-0.6.md) | 사용자 | rustra 마이너 버전을 건너뛸 때의 단계별 노트                                                                                                       |
@@ -57,6 +60,8 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 | [보안 감사](security-audit.md)                                                     | 기여자 | lockfile 취약점/경고 상태, 해소 이력                                                                                                               |
 | [릴리즈 절차](release-procedure.md)                                                | 기여자 | changeset 발행 절차, 버전 관리                                                                                                                     |
 | [버전 정책](versioning-policy.md)                                                  | 전체   | 표면별 호환성 보장, 폐기 절차, MSRV, 실험 표면                                                                                                     |
+| [안전 계약](safety-contract.ko.md) ([English](safety-contract.md))                 | 기여자 | 총괄 FFI 불변식, 항목별 계약(패닉 차단, 외래 예외 abort, 버퍼 소유, 페이로드 한도, 핫코어 포이즌, 에러 봉투, fail-closed 게이트) — 코드 근거 첨부  |
+| [아키텍처 결정 기록](adr/)                                                         | 기여자 | 계약이나 강제 방식을 바꾸는 번호 결정 기록 (ADR 0001: Track A 계약의 기계화, ADR 0002: UniFFI Kotlin/Swift 캐리어)                                 |
 | [보안 정책](../.github/SECURITY.md)                                                | 전체   | 취약점 신고 채널, 지원 버전, 스코프                                                                                                                |
 | [기여 가이드](../CONTRIBUTING.md)                                                  | 기여자 | 개발 환경, 커밋 규칙, 디버깅, 릴리즈                                                                                                               |
 
@@ -91,3 +96,4 @@ rustra는 Rust 패키지를 한 번 정의하면 host-neutral TypeScript 클라�
 - [docs/specs/](specs/) — 기능별 설계 사양(spec)
 - [docs/plans/](plans/) — 구현 계획 및 스파이크 기록 (역사 문서 포함)
 - [docs/prs/](prs/) — 병합된 트랙의 PR 보고서
+- [docs/adr/](adr/) — 계약·강제 변경의 번호 결정 기록(안전 계약 변경은 ADR 필요)

@@ -8,13 +8,8 @@ impl PackageBuilder {
     /// # 패닉
     ///
     /// `name` 이 등록되어 있지 않으면 패닉한다.
-    pub fn require_capability(mut self, name: &str, cap: &'static str) -> Self {
-        let command = self
-            .commands
-            .get_mut(name)
-            .unwrap_or_else(|| panic!("require_capability: command '{name}' not registered"));
-        command.required_capability = Some(cap);
-        self
+    pub fn require_capability(self, name: &str, cap: &'static str) -> Self {
+        self.require_capability_if(name, Some(cap))
     }
 
     /// `#[command(capability = "...")]` 메타 상수를 받아 조건부 require 로 이어
@@ -38,7 +33,7 @@ impl PackageBuilder {
     /// (T2, OTA) 구 클라이언트의 command_id 를 현재 명령에 alias 로 수용한다.
     ///
     /// JS 번들만 OTA 갱신되는 배포에서 **구 JS + 신 네이티브** 조합이 발생한다.
-    /// rkyv V2 와이어에는 command_id 만 있으므로(이름 없음), 신 네이티브가
+    /// Frame 와이어에는 command_id 만 있으므로(이름 없음), 신 네이티브가
     /// 구 코드젠이 구운 id 를 alias 로 수용하는 것이 호환을 유지하는 유일한
     /// 경로다. alias 는 **부가적 라우팅 항목**이다 — 대상 명령의 실제
     /// command_id(신 클라이언트 코드젠이 굽는 값)는 그대로 두고, 구 id 가

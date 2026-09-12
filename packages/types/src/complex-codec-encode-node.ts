@@ -70,7 +70,7 @@ export function encodeNode(
         throw new ComplexCodecError('expected finite number');
       const buffer = new ArrayBuffer(node.single ? 4 : 8);
       const view = new DataView(buffer);
-      if (buffer.byteLength === 4) view.setFloat32(0, value, true);
+      if (node.single) view.setFloat32(0, value, true);
       else view.setFloat64(0, value, true);
       writer.push(new Uint8Array(buffer));
       return;

@@ -335,12 +335,14 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
             return Err(error("expected object"));
         };
         Ok(SerStructVariant {
-            writer: self.writer,
-            fields,
-            required,
-            next: 0,
-            limits: self.limits,
-            depth: self.depth + 1,
+            inner: SerStruct {
+                writer: self.writer,
+                fields,
+                required,
+                next: 0,
+                limits: self.limits,
+                depth: self.depth + 1,
+            },
         })
     }
 

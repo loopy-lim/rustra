@@ -1,3 +1,4 @@
+import { assertDedicatedBindingOutput } from './uniffi-output-boundary.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -9,9 +10,21 @@ import { runGenerate } from './cli-generate.js';
 import { parseCodegenArgs, type CliOutputFormat } from './cli-options.js';
 import { explainCodegenSurfaces, formatExplainText } from './codegen-explain.js';
 import { formatCodegenJson, formatExplainJson } from './cli-json-format.js';
+import {
+  UNIFFI_GENERATED_RS,
+  checkUniffiGeneratedRs,
+  resolveUniffiSrcOut,
+  runUniffiBindings,
+} from './cli-uniffi.js';
 
 function status(format: CliOutputFormat | undefined, message: string): void {
   (format === 'json' ? console.error : console.log)(message);
+}
+
+function wrapError(message: string, error: unknown): Error {
+  return new Error(`${message}: ${error instanceof Error ? error.message : String(error)}`, {
+    cause: error,
+  });
 }
 
 /** runGenerate 진행 표기의 drift 신호 — "(updated)" 접미어가 하나라도 있으면 갱신. */
@@ -72,6 +85,32 @@ export async function runCodegen(args: string[]): Promise<void> {
   const manifestPath = resolve(dirname(configPath), config.output, '.rustra-generated.json');
   if (options.check && !existsSync(manifestPath))
     throw new Error(`Generated check requires ${manifestPath}; run rustra codegen first`);
+  // uniffi 섹션 존재 자체가 기능 스위치다 — 없으면 아래 흐름은 이전과 바이트 동일
+  // (env 추가 스폰 없음). 경로 해상도는 schema/output 과 같은 config 파일 위치
+  // 기준 상대경로 관례를 따른다.
+  const uniffi = config.uniffi;
+  if (options.checkBindings && !uniffi)
+    throw new Error('--check-bindings requires a uniffi configuration');
+  const uniffiSrcOut = uniffi ? resolveUniffiSrcOut(dirname(configPath), uniffi) : null;
+  const uniffiBindingOut = uniffi ? resolve(dirname(configPath), uniffi.output) : null;
+  if (uniffiBindingOut) {
+    const root = dirname(configPath);
+    assertDedicatedBindingOutput(
+      uniffiBindingOut,
+      [
+        configPath,
+        target.manifestPath,
+        dirname(target.manifestPath),
+        resolve(dirname(target.manifestPath), 'src'),
+        resolve(root, config.schema),
+        resolve(uniffiSrcOut!, UNIFFI_GENERATED_RS),
+      ],
+      [
+        resolve(root, config.output),
+        ...(config.cppOutput ? [resolve(root, config.cppOutput)] : []),
+      ],
+    );
+  }
   status(
     options.format,
     `[rustra] Rust schema: cargo run --manifest-path ${target.manifestPath} --package ${target.packageName} --bin ${target.binaryName}`,
@@ -86,9 +125,7 @@ export async function runCodegen(args: string[]): Promise<void> {
     // 읽는 config.schemaPath 는 갱신되지 않아 게이트가 stale 비교로 무력화된다
     // (tauri-calculator rustra.hot.json 레이아웃, 2026-09-10 실측). check 모드는
     // 기존대로 임시 디렉터리로 우회한다.
-    const schemaOutDir = checkRoot
-      ? checkRoot
-      : dirname(resolve(dirname(configPath), config.schema));
+    const schemaOutDir = checkRoot ?? dirname(resolve(dirname(configPath), config.schema));
     try {
       await spawnInherit(
         'cargo',
@@ -103,16 +140,47 @@ export async function runCodegen(args: string[]): Promise<void> {
         ],
         target.cwd,
         {
-          env: { RUSTRA_SCHEMA_OUT: schemaOutDir },
+          env: {
+            RUSTRA_SCHEMA_OUT: schemaOutDir,
+            // uniffi 섹션이 있을 때만 프로브에 mirror 소스 출력 위치를 고정한다.
+            // write 모드는 커밋 위치(uniffi.srcOut, 기본 "src")로, check 모드는
+            // 임시 렌더 디렉터리로 우회시켜 커밋 파일을 더럽히지 않는다 — 스키마
+            // 출력의 check/write 분기(schemaOutDir)와 같은 모양이다.
+            ...(uniffiSrcOut
+              ? {
+                  RUSTRA_UNIFFI_OUT: checkRoot ? resolve(checkRoot, 'uniffi-src') : uniffiSrcOut,
+                }
+              : {}),
+          },
           progressLabel: `Rust schema generation (${target.packageName}/${target.binaryName})`,
           progressStream: options.format === 'json' ? 'stderr' : 'stdout',
           childOutput: options.format === 'json' ? 'stderr' : 'inherit',
         },
       );
     } catch (error) {
-      throw new Error(
-        `Rust schema generation failed for ${target.packageName}/${target.binaryName} (${target.manifestPath}): ${error instanceof Error ? error.message : String(error)}`,
-        { cause: error },
+      throw wrapError(
+        `Rust schema generation failed for ${target.packageName}/${target.binaryName} (${target.manifestPath})`,
+        error,
+      );
+    }
+    if (uniffi && (!options.check || options.checkBindings) && uniffiBindingOut) {
+      // --check keeps the cheap Rust mirror comparison; --check-bindings also
+      // builds and regenerates the actual Swift/Kotlin tree in empty staging.
+      await runUniffiBindings(
+        {
+          manifestPath: target.manifestPath,
+          packageName: target.packageName,
+          cwd: target.cwd,
+        },
+        uniffi,
+        uniffiBindingOut,
+        {
+          check: options.checkBindings,
+          // 스키마 프로브와 같은 판별 — JSON stdout 은 기계 계약이라 오염 금지.
+          progressStream: options.format === 'json' ? 'stderr' : 'stdout',
+          childOutput: options.format === 'json' ? 'stderr' : 'inherit',
+        },
+        (command) => status(options.format, `[rustra] uniffi-bindings: ${command}`),
       );
     }
     if (checkRoot) {
@@ -134,9 +202,24 @@ export async function runCodegen(args: string[]): Promise<void> {
           { quiet: true },
         );
       } catch (error) {
-        throw new Error(
-          `TypeScript/C++ generation check failed for ${configPath} (schema ${temporarySchema}): ${error instanceof Error ? error.message : String(error)}`,
-          { cause: error },
+        throw wrapError(
+          `TypeScript/C++ generation check failed for ${configPath} (schema ${temporarySchema})`,
+          error,
+        );
+      }
+      if (uniffi && uniffiSrcOut) {
+        // check 모드의 uniffi 신선도 — 프로브가 임시 디렉터리에 재현한
+        // uniffi_generated.rs 를 커밋 파일과 바이트 비교한다(위의 비대칭 주석).
+        // TS 매니페스트(.rustra-generated.json)에 편입하지 않은 이유: 매니페스트는
+        // config.output 루트에 뿌리내리고 예상 밖 항목을 거절하는 TS 렌더러 산출물
+        // 대장이라, Rust 프로브 산출물을 억지로 편입하면 렌더러 계약이 흔들린다.
+        status(
+          options.format,
+          `[rustra] uniffi-bindings: check — ${UNIFFI_GENERATED_RS} byte comparison${options.checkBindings ? ' (actual bindings also checked)' : ' only (no cargo build / uniffi-bindgen)'}`,
+        );
+        await checkUniffiGeneratedRs(
+          resolve(checkRoot, 'uniffi-src', UNIFFI_GENERATED_RS),
+          resolve(uniffiSrcOut, UNIFFI_GENERATED_RS),
         );
       }
     }
@@ -181,9 +264,6 @@ export async function runCodegen(args: string[]): Promise<void> {
       if (hint) console.log(hint);
     }
   } catch (error) {
-    throw new Error(
-      `TypeScript/C++ generation failed for ${configPath}: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
-    );
+    throw wrapError(`TypeScript/C++ generation failed for ${configPath}`, error);
   }
 }

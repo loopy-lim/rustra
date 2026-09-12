@@ -2,6 +2,11 @@ English | [한국어](./README.ko.md)
 
 # rustra
 
+The Frame rename and audit fixes target Rust 0.10.0 and the coordinated package
+versions below. Upgrade native libraries, JS adapters, and generated output together;
+see the [migration guide](docs/migrations/post-0.9-frame-and-audit.md) for consumer
+checks and rollback.
+
 [![CI](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml/badge.svg)](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@rustra/types)](https://www.npmjs.com/package/@rustra/types)
 [![crates.io](https://img.shields.io/crates/v/rustra.svg)](https://crates.io/crates/rustra)
@@ -26,13 +31,13 @@ Rust #[command] definition → TypeScript client codegen → platform adapter ex
 Tools that bridge a single Rust core to multiple JS hosts each make different
 trade-offs:
 
-|                                 | **rustra**                                                             | napi-rs                                                 | Nitro Modules | Tauri commands | tauri-specta |
-| ------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------- | ------------- | -------------- | ------------ |
-| Single Rust core × multi-host   | ✅ Node/Bun/Tauri/RN                                                   | Node (+ Electron)                                       | RN-centric    | Tauri only     | Tauri only   |
-| Type-safe codegen (both ways)   | ✅ commands+events                                                     | TS defs generated from Rust structs (attribute macros)¹ | ✅            | ❌ (manual)    | ✅           |
-| Compact binary wire             | ✅ rkyv V2 ([11.8× smaller request wire vs JSON](docs/wire-format.md)) | JSON/Buffer                                             | JSI objects   | JSON IPC       | JSON IPC     |
-| Contract gate (breaking change) | ✅ `rustra diff` + contract hash                                       | ❌                                                      | ❌            | ❌             | partial      |
-| Cancel/timeout/batch semantics  | ✅ documented as a matrix                                              | DIY                                                     | DIY           | ❌             | ❌           |
+|                                 | **rustra**                                                           | napi-rs                                                 | Nitro Modules | Tauri commands | tauri-specta |
+| ------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------- | ------------- | -------------- | ------------ |
+| Single Rust core × multi-host   | ✅ Node/Bun/Tauri/RN                                                 | Node (+ Electron)                                       | RN-centric    | Tauri only     | Tauri only   |
+| Type-safe codegen (both ways)   | ✅ commands+events                                                   | TS defs generated from Rust structs (attribute macros)¹ | ✅            | ❌ (manual)    | ✅           |
+| Compact binary wire             | ✅ Frame ([11.8× smaller request wire vs JSON](docs/wire-format.md)) | JSON/Buffer                                             | JSI objects   | JSON IPC       | JSON IPC     |
+| Contract gate (breaking change) | ✅ `rustra diff` + contract hash                                     | ❌                                                      | ❌            | ❌             | partial      |
+| Cancel/timeout/batch semantics  | ✅ documented as a matrix                                            | DIY                                                     | DIY           | ❌             | ❌           |
 
 rustra's choice: **own the whole RPC surface (definition → codegen → wire →
 verification) as a single contract.** Command invocation and contract
@@ -49,7 +54,7 @@ hosts, not that the others have no codegen.
 ## Roadmap
 
 - [x] 4 host adapters (Node/Bun/Tauri/RN iOS+Android) — 0.1
-- [x] rkyv V2 binary fast-path + cancel/timeout/batch — 0.1~0.2
+- [x] Frame binary fast-path + cancel/timeout/batch — 0.1~0.2
 - [x] Event contract codegen (`PackageBuilder::event`) — 0.2.x
 - [x] Persistent loop runtime + Node loop transport — 0.2.x
 - [x] Type parity stage 1 — fast path type expansion (2026-08-22): u8–u64 plain
@@ -115,8 +120,7 @@ hosts, not that the others have no codegen.
       `{ handle, close() }` contract now works on Node (loop-stdio binary
       reservation frames 0xfffb/0xfffa/0xfffc — background-thread send safe,
       NDJSON loud-fails), Bun (`rustra_ffi_channel_*` FFI — JS-thread send
-      only), and Tauri (`rustra_channel_create/drop` commands + listen —
-      approximate unicast over `app.emit`), alongside the existing RN JSI
+      only), and Tauri (native IPC Channels tied to the issuing WebView), alongside the existing RN JSI
       adapter. The RN JSON adapter's event gap is closed too: `subscribeEvent`
       gained a `pollMs` option that drains the C++ dispatcher queue on
       CallInvoker-less hosts. See the
@@ -161,25 +165,22 @@ JS/native combination drift at runtime.
 
 ```toml
 [dependencies]
-rustra = "0.8"
+rustra = "0.10.0"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
 
-Verified combination: npm `@rustra/types` 0.8.x ↔ Rust crate 0.8.x. The
-`@rustra/*` packages are independent release lines — check each adapter
-package's own version (see the
-[compatibility matrix](docs/compatibility-matrix.md#matrix)).
+Installation versions follow the current Rust and npm manifests. Adapters have independent versions; use the manifest-derived [compatibility table](docs/compatibility-matrix.md) for installation. This table does not certify publication or CI success for this branch.
 
 ### TypeScript adapters (only the environments you need)
 
 ```bash
-bun add @rustra/node      # Node.js
-bun add @rustra/bun       # Bun
-bun add @rustra/tauri     # Tauri
-bun add @rustra/react-native  # React Native
-bun add @rustra/testing       # Mock engine (tests)
-bun add @rustra/devtools      # Invocation observability (dev)
+bun add @rustra/node@0.10.0      # Node.js
+bun add @rustra/bun@0.10.0       # Bun
+bun add @rustra/tauri@0.9.0     # Tauri
+bun add @rustra/react-native@0.9.0  # React Native
+bun add @rustra/testing@0.7.0       # Mock engine (tests)
+bun add @rustra/devtools@0.7.0      # Invocation observability (dev)
 ```
 
 ## Quick Example
@@ -207,11 +208,7 @@ fn main() -> Result<()> {
 }
 ```
 
-To use the binary fast-path (rkyv V2, RN), also run the CLI codegen. Note:
-"rkyv V2" is Rustra's own binary frame protocol name, not the upstream `rkyv`
-crate — payloads are postcard-encoded (see the
-[wire format](docs/wire-format.md) and the
-[glossary](docs/glossary.md#rkyv-vs-rkyv-v2)). First create
+To use the binary fast-path (Frame, RN), also run the CLI codegen. First create
 `rustra.json` at the project root — this minimal form points the CLI at the
 published schema, the output directory, and the hosts you use:
 
@@ -224,7 +221,7 @@ published schema, the output directory, and the hosts you use:
 ```
 
 Specifying the Rust generator in `rustra.json` processes schema generation through
-`rkyv-codecs.ts`/`rkyv-registry.ts` in one shot:
+`frame-codecs.ts`/`frame-registry.ts` in one shot:
 
 ```json
 {
@@ -240,7 +237,7 @@ Specifying the Rust generator in `rustra.json` processes schema generation throu
 Then run:
 
 ```bash
-bunx --bun @rustra/cli codegen --config rustra.json
+bunx --bun @rustra/cli@0.10.0 codegen --config rustra.json
 ```
 
 If you only need to re-render an existing schema, use `generate --config`
@@ -277,10 +274,10 @@ rustra::native_entry!(my_package);
 ```
 
 ```bash
-bun add @rustra/react-native @rustra/types
-bun add -d @rustra/cli
-bunx --bun @rustra/cli doctor --config rustra.json
-bunx --bun @rustra/cli codegen --config rustra.json
+bun add @rustra/react-native@0.9.0 @rustra/types@0.10.0
+bun add -d @rustra/cli@0.10.0
+bunx --bun @rustra/cli@0.10.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.10.0 codegen --config rustra.json
 bun install
 ```
 
@@ -343,7 +340,7 @@ try {
 The default generated path is a one-shot process with simple installation,
 which suits low-frequency CLIs and batch jobs. For servers with continuous
 request flow, use `createNodeLoopTransport`; for microsecond-scale calls,
-choose N-API rkyv V2. Working code lives in
+choose the N-API Frame fast-path. Working code lives in
 [`node-app.ts`](examples/calculator/apps/node-app.ts) and the
 per-performance-tier picks in
 [`node-performance.ts`](examples/calculator/apps/node-performance.ts).
@@ -365,7 +362,7 @@ process.on('SIGTERM', () => {
 });
 ```
 
-This path uses the generated stable C ABI and rkyv V2 codec directly. No
+This path uses the generated stable C ABI and Frame codec directly. No
 separate `dlopen`, pointer freeing, or contract verification code is needed in
 the app. The runnable minimal example is
 [`bun-ffi-app.ts`](examples/calculator/apps/bun-ffi-app.ts).
@@ -385,6 +382,10 @@ button.addEventListener('click', async () => {
 After `withGlobalTauri` and the Rust-side `register_with_events`, there is no
 frontend configuration. [`tauri-calculator`](examples/tauri-calculator/)
 includes a real WebView IPC build, run, and performance receipt.
+
+Tauri JS channels use IPC Channels owned by the issuing WebView. Upgrade Rust and
+JS together; ordinary events continue to broadcast. See the
+[channel guide](docs/events-and-channels.md#5-channels--js-side) for limits and cleanup.
 
 ### Expo development build and bare React Native
 
@@ -428,7 +429,7 @@ crates/
   rustra-naming/   Shared identifier naming rules (Rust + proc-macro codegen)
 
 packages/
-  types/           Core types (EngineClient, errors, rkyv V2 codec, invokeLoose)
+  types/           Core types (EngineClient, errors, Frame codec, invokeLoose)
   cli/             rustra CLI (codegen, generate, dev, doctor, init, diff)
   node/            Node adapter
   bun/             Bun adapter
@@ -561,7 +562,7 @@ Rust FFI: `rustra_ffi_invoke_cancel(id)` / `rustra_ffi_cancellation_status(id)`
 Absorbs schema drift in JS-bundle-only deployments (old JS + new native):
 
 - `PackageBuilder::alias_command_id(name, legacy_id)` — the new native accepts
-  command_ids baked by old JS codegen as aliases (the rkyv V2 wire has no
+  command_ids baked by old JS codegen as aliases (the Frame wire has no
   names).
 - `schema_version(n)` — the version in schema.json. Codegen exposes it as
   `SCHEMA_VERSION`.
@@ -617,7 +618,7 @@ identically regardless of platform.
 Enable the `tauri` feature:
 
 ```toml
-rustra = { version = "0.8", features = ["tauri"] }
+rustra = { version = "0.10.0", features = ["tauri"] }
 ```
 
 Rust side:
@@ -656,11 +657,11 @@ the deployment layout differs, Node overrides the path with
 
 #### React Native
 
-React Native uses the rkyv V2 binary fast-path by default. The JSI native
-module must expose `invokeRkyvV2`. Commands whose input and output are each a
+React Native uses the Frame binary fast-path by default. The JSI native
+module must expose `invokeFrame`. Commands whose input and output are each a
 single required `Vec<u8>` field can also use the explicit `Uint8Array`/
 `ArrayBuffer`-only native path when registered explicitly in Rust. Complex
-schema commands go through the JS codec registry over the same `invokeRkyvV2`;
+schema commands go through the JS codec registry over the same `invokeFrame`;
 direct C++ marshalling is a separate performance extension.
 
 ```ts
@@ -701,14 +702,10 @@ Silicon, then repeated 3 times after warm-up.
 | ------------------------------- | -----------: | --------: | ------------: | ------------------- |
 | Node generated one-shot         |      2.76 ms |   2.76 ms |     363 ops/s | CLI, low-freq batch |
 | Node persistent loop            |     16.86 µs |  16.67 µs |  59,301 ops/s | General servers     |
-| Node N-API rkyv V2 escape hatch |      1.26 µs |   1.17 µs | 793,185 ops/s | High-freq hot path  |
-| Bun generated FFI rkyv V2       |      2.27 µs |   2.21 µs | 439,961 ops/s | Services, CLI       |
+| Node N-API Frame escape hatch   |      1.26 µs |   1.17 µs | 793,185 ops/s | High-freq hot path  |
+| Bun generated FFI Frame         |      2.27 µs |   2.21 µs | 439,961 ops/s | Services, CLI       |
 | Tauri generated WebView IPC     |    279.04 µs | 300.00 µs |   3,584 ops/s | Desktop UI commands |
 | RN generated JSI, iOS Simulator |            — |   2.71 µs |             — | Mobile hot path     |
-
-The rkyv V2 rows are Rustra's own binary frame protocol (postcard payload
-codec), not the upstream rkyv crate — see the
-[wire format](docs/wire-format.md).
 
 Mean and throughput are 5% two-sided trimmed means to reduce OS scheduling
 tail values. Tauri used per-call values from a 20-call batch due to WKWebView
@@ -785,16 +782,16 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 
 # Diagnose the dev environment
-bunx --bun @rustra/cli doctor --config rustra.json
+bunx --bun @rustra/cli@0.10.0 doctor --config rustra.json
 
 # Generate Rust schema + TS/C++/RN in one shot
-bunx --bun @rustra/cli codegen --config rustra.json
+bunx --bun @rustra/cli@0.10.0 codegen --config rustra.json
 
 # Generated-file sync CI gate (TS/C++/RN excluded)
-bunx --bun @rustra/cli generate --config rustra.json --check
+bunx --bun @rustra/cli@0.10.0 generate --config rustra.json --check
 
 # Watch Rust sources + re-run integrated codegen automatically
-bunx --bun @rustra/cli dev --config rustra.json
+bunx --bun @rustra/cli@0.10.0 dev --config rustra.json
 ```
 
 ## Documentation
