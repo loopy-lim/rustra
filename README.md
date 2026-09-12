@@ -2,6 +2,10 @@ English | [한국어](./README.ko.md)
 
 # rustra
 
+The Frame rename and audit fixes require an unreleased coordinated upgrade. Do not
+reuse the already published 0.9.0; see the [release preparation guide](docs/migrations/post-0.9-frame-and-audit.md)
+for proposed versions, consumer checks, and rollback.
+
 [![CI](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml/badge.svg)](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@rustra/types)](https://www.npmjs.com/package/@rustra/types)
 [![crates.io](https://img.shields.io/crates/v/rustra.svg)](https://crates.io/crates/rustra)
@@ -115,8 +119,7 @@ hosts, not that the others have no codegen.
       `{ handle, close() }` contract now works on Node (loop-stdio binary
       reservation frames 0xfffb/0xfffa/0xfffc — background-thread send safe,
       NDJSON loud-fails), Bun (`rustra_ffi_channel_*` FFI — JS-thread send
-      only), and Tauri (`rustra_channel_create/drop` commands + listen —
-      approximate unicast over `app.emit`), alongside the existing RN JSI
+      only), and Tauri (native IPC Channels tied to the issuing WebView), alongside the existing RN JSI
       adapter. The RN JSON adapter's event gap is closed too: `subscribeEvent`
       gained a `pollMs` option that drains the C++ dispatcher queue on
       CallInvoker-less hosts. See the
@@ -161,25 +164,22 @@ JS/native combination drift at runtime.
 
 ```toml
 [dependencies]
-rustra = "0.8"
+rustra = "0.9.0"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
 
-Verified combination: npm `@rustra/types` 0.8.x ↔ Rust crate 0.8.x. The
-`@rustra/*` packages are independent release lines — check each adapter
-package's own version (see the
-[compatibility matrix](docs/compatibility-matrix.md#matrix)).
+Installation versions follow the current Rust and npm manifests. Adapters have independent versions; use the manifest-derived [compatibility table](docs/compatibility-matrix.md) for installation. This table does not certify publication or CI success for this branch.
 
 ### TypeScript adapters (only the environments you need)
 
 ```bash
-bun add @rustra/node      # Node.js
-bun add @rustra/bun       # Bun
-bun add @rustra/tauri     # Tauri
-bun add @rustra/react-native  # React Native
-bun add @rustra/testing       # Mock engine (tests)
-bun add @rustra/devtools      # Invocation observability (dev)
+bun add @rustra/node@0.9.0      # Node.js
+bun add @rustra/bun@0.9.0       # Bun
+bun add @rustra/tauri@0.8.0     # Tauri
+bun add @rustra/react-native@0.8.0  # React Native
+bun add @rustra/testing@0.6.2       # Mock engine (tests)
+bun add @rustra/devtools@0.6.2      # Invocation observability (dev)
 ```
 
 ## Quick Example
@@ -236,7 +236,7 @@ Specifying the Rust generator in `rustra.json` processes schema generation throu
 Then run:
 
 ```bash
-bunx --bun @rustra/cli codegen --config rustra.json
+bunx --bun @rustra/cli@0.9.0 codegen --config rustra.json
 ```
 
 If you only need to re-render an existing schema, use `generate --config`
@@ -273,10 +273,10 @@ rustra::native_entry!(my_package);
 ```
 
 ```bash
-bun add @rustra/react-native @rustra/types
-bun add -d @rustra/cli
-bunx --bun @rustra/cli doctor --config rustra.json
-bunx --bun @rustra/cli codegen --config rustra.json
+bun add @rustra/react-native@0.8.0 @rustra/types@0.9.0
+bun add -d @rustra/cli@0.9.0
+bunx --bun @rustra/cli@0.9.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.9.0 codegen --config rustra.json
 bun install
 ```
 
@@ -381,6 +381,10 @@ button.addEventListener('click', async () => {
 After `withGlobalTauri` and the Rust-side `register_with_events`, there is no
 frontend configuration. [`tauri-calculator`](examples/tauri-calculator/)
 includes a real WebView IPC build, run, and performance receipt.
+
+Tauri JS channels use IPC Channels owned by the issuing WebView. Upgrade Rust and
+JS together; ordinary events continue to broadcast. See the
+[channel guide](docs/events-and-channels.md#5-channels--js-side) for limits and cleanup.
 
 ### Expo development build and bare React Native
 
@@ -613,7 +617,7 @@ identically regardless of platform.
 Enable the `tauri` feature:
 
 ```toml
-rustra = { version = "0.8", features = ["tauri"] }
+rustra = { version = "0.9.0", features = ["tauri"] }
 ```
 
 Rust side:
@@ -777,16 +781,16 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 
 # Diagnose the dev environment
-bunx --bun @rustra/cli doctor --config rustra.json
+bunx --bun @rustra/cli@0.9.0 doctor --config rustra.json
 
 # Generate Rust schema + TS/C++/RN in one shot
-bunx --bun @rustra/cli codegen --config rustra.json
+bunx --bun @rustra/cli@0.9.0 codegen --config rustra.json
 
 # Generated-file sync CI gate (TS/C++/RN excluded)
-bunx --bun @rustra/cli generate --config rustra.json --check
+bunx --bun @rustra/cli@0.9.0 generate --config rustra.json --check
 
 # Watch Rust sources + re-run integrated codegen automatically
-bunx --bun @rustra/cli dev --config rustra.json
+bunx --bun @rustra/cli@0.9.0 dev --config rustra.json
 ```
 
 ## Documentation

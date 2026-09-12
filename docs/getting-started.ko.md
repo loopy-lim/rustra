@@ -2,6 +2,11 @@
 
 # rustra 시작하기
 
+> **미발행 Frame 변경 안내:** 이 문서는 현재 checkout의 Frame API와 생성물을 설명한다.
+> 아래 설치 명령은 현재 manifest 버전에 맞췄지만, 레지스트리에 발행된 0.9.0에는
+> 이 Frame 전환이 포함되지 않는다. 해당 생성물을 사용하려면 동시 업그레이드가
+> 필요하다. 버전 제안과 절차는 [릴리스 준비 문서](migrations/post-0.9-frame-and-audit.ko.md)를 따른다.
+
 rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 어디에서나 동작하는 TypeScript 클라이언트를 자동 생성하는 브릿지 프레임워크다.
 
 이 가이드는 rustra를 처음 사용하는 개발자가 10분 안에 첫 패키지를 만들고 TypeScript 클라이언트를 생성하는 것을 목표로 한다.
@@ -29,7 +34,7 @@ rustra는 Rust 패키지를 한 번 정의하면 Node, Bun, Tauri, React Native 
 ### 가장 빠른 시작 — `rustra init`
 
 ```bash
-bunx --bun @rustra/cli init my-project
+bunx --bun @rustra/cli@0.9.0 init my-project
 cd my-project
 bun install
 bun run doctor
@@ -49,29 +54,27 @@ package.json(doctor/codegen/codegen:check/dev/demo 스크립트), `.gitignore`
 `--force`를 붙인다:
 
 ```bash
-bunx --bun @rustra/cli init my-project --force
+bunx --bun @rustra/cli@0.9.0 init my-project --force
 ```
 
 ### 외부 프로젝트에서 사용
 
 ```toml
 [dependencies]
-rustra = "0.8"
+rustra = "0.9.0"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
 
-검증된 조합: npm `@rustra/types` 0.8.x ↔ Rust crate 0.8.x. `@rustra/*` 패키지는
-독립 릴리스 라인이다 — 어댑터 패키지별 버전을 각각 확인한다
-([호환성 매트릭스](compatibility-matrix.ko.md#매트릭스) 참고).
+설치 버전은 현재 Rust·npm manifest를 기준으로 한다. 어댑터는 독립 버전이며, [호환 표](compatibility-matrix.ko.md)의 버전 표를 설치 기준으로 삼는다. 이 표는 발행 또는 이 브랜치의 CI 통과를 증명하지 않는다.
 
 TypeScript 어댑터는 사용할 환경만 설치하면 된다:
 
 ```bash
-bun add @rustra/node      # Node.js
-bun add @rustra/bun       # Bun
-bun add @rustra/tauri     # Tauri
-bun add @rustra/react-native  # React Native
+bun add @rustra/node@0.9.0      # Node.js
+bun add @rustra/bun@0.9.0       # Bun
+bun add @rustra/tauri@0.8.0     # Tauri
+bun add @rustra/react-native@0.8.0  # React Native
 ```
 
 ### 모노레포 / workspace에서 사용
@@ -872,8 +875,8 @@ RN JSI `invokeTyped` 진입을 직접 호출한다. 해당 형태 밖의 명령�
 `commands.ts` 경로를 유지한다.
 
 ```bash
-bunx --bun @rustra/cli doctor --config rustra.json
-bunx --bun @rustra/cli codegen --config rustra.json
+bunx --bun @rustra/cli@0.9.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.9.0 codegen --config rustra.json
 ```
 
 **TypeScript 측 사용:**

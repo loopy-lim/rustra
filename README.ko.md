@@ -2,6 +2,9 @@
 
 # rustra
 
+Frame 전환과 감사 수정은 미발행 동시 업그레이드 대상이다. 이미 사용한 0.9.0을
+재사용하지 않으며, 버전 제안·소비자 검증·롤백은 [릴리스 준비 문서](docs/migrations/post-0.9-frame-and-audit.ko.md)를 따른다.
+
 [![CI](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml/badge.svg)](https://github.com/loopy-lim/rustra/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@rustra/types)](https://www.npmjs.com/package/@rustra/types)
 [![crates.io](https://img.shields.io/crates/v/rustra.svg)](https://crates.io/crates/rustra)
@@ -74,8 +77,7 @@ rustra의 선택: **RPC 표면 전체(정의→코드젠→와이어→검증)�
 - [x] 모든 JS 호스트의 채널 어댑터 (2026-09-03): `{ handle, close() }` 계약이
       Node(loop-stdio 바이너리 예약 프레임 0xfffb/0xfffa/0xfffc — 백그라운드 스레드
       send 안전, NDJSON loud-fail), Bun(`rustra_ffi_channel_*` FFI — JS 스레드
-      send 전용), Tauri(`rustra_channel_create/drop` 커맨드 + listen — `app.emit`
-      근사 유니캐스트)에서 동작한다. 기존 RN JSI 어댑터에 더해, RN JSON 어댑터의
+      send 전용), Tauri(발급 WebView에 귀속되는 네이티브 IPC Channel)에서 동작한다. 기존 RN JSI 어댑터에 더해, RN JSON 어댑터의
       이벤트 갭도 해소: `subscribeEvent`에 `pollMs` 옵션이 생겨 CallInvoker 없는
       호스트에서 C++ 디스패처 큐를 drain 한다.
       [호환성 매트릭스](docs/compatibility-matrix.ko.md)에 ❌ 셀이 남지 않았다.
@@ -141,24 +143,22 @@ JS/네이티브 조합의 drift를 런타임에 감지한다.
 
 ```toml
 [dependencies]
-rustra = "0.8"
+rustra = "0.9.0"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
 
-검증된 조합: npm `@rustra/types` 0.8.x ↔ Rust crate 0.8.x. `@rustra/*` 패키지는
-독립 릴리스 라인이다 — 어댑터 패키지별 버전을 각각 확인한다
-([호환성 매트릭스](docs/compatibility-matrix.ko.md#매트릭스) 참고).
+설치 버전은 현재 Rust·npm manifest를 기준으로 한다. 어댑터는 독립 버전이며, [호환 표](docs/compatibility-matrix.ko.md)의 버전 표를 설치 기준으로 삼는다. 이 표는 발행 또는 이 브랜치의 CI 통과를 증명하지 않는다.
 
 ### TypeScript 어댑터 (필요한 환경만)
 
 ```bash
-bun add @rustra/node      # Node.js
-bun add @rustra/bun       # Bun
-bun add @rustra/tauri     # Tauri
-bun add @rustra/react-native  # React Native
-bun add @rustra/testing       # Mock 엔진 (테스트)
-bun add @rustra/devtools      # 호출 관측성 (개발)
+bun add @rustra/node@0.9.0      # Node.js
+bun add @rustra/bun@0.9.0       # Bun
+bun add @rustra/tauri@0.8.0     # Tauri
+bun add @rustra/react-native@0.8.0  # React Native
+bun add @rustra/testing@0.6.2       # Mock 엔진 (테스트)
+bun add @rustra/devtools@0.6.2      # 호출 관측성 (개발)
 ```
 
 ## 빠른 예제
@@ -215,7 +215,7 @@ fn main() -> Result<()> {
 그리고 실행한다:
 
 ```bash
-bunx --bun @rustra/cli codegen --config rustra.json
+bunx --bun @rustra/cli@0.9.0 codegen --config rustra.json
 ```
 
 기존 schema만 다시 렌더링해야 하는 경우에는 `generate --config`를 직접 사용할 수
@@ -251,10 +251,10 @@ rustra::native_entry!(my_package);
 ```
 
 ```bash
-bun add @rustra/react-native @rustra/types
-bun add -d @rustra/cli
-bunx --bun @rustra/cli doctor --config rustra.json
-bunx --bun @rustra/cli codegen --config rustra.json
+bun add @rustra/react-native@0.8.0 @rustra/types@0.9.0
+bun add -d @rustra/cli@0.9.0
+bunx --bun @rustra/cli@0.9.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.9.0 codegen --config rustra.json
 bun install
 ```
 
@@ -353,6 +353,10 @@ button.addEventListener('click', async () => {
 `withGlobalTauri`와 Rust 측 `register_with_events` 이후에는 프런트엔드 설정이 없다.
 [`tauri-calculator`](examples/tauri-calculator/)는 실제 WebView IPC 빌드, 실행, 성능
 영수증까지 포함한다.
+
+Tauri JS 채널은 발급 WebView의 IPC Channel을 사용한다. Rust와 JS를 함께 갱신해야
+하며, 이벤트 브로드캐스트와는 수신 경로가 다르다. 제한과 종료 정책은
+[이벤트·채널 가이드](docs/events-and-channels.ko.md#5-채널--js-쪽)를 참고한다.
 
 ### Expo development build와 bare React Native
 
@@ -572,7 +576,7 @@ type RustraError = {
 `tauri` feature를 활성화:
 
 ```toml
-rustra = { version = "0.8", features = ["tauri"] }
+rustra = { version = "0.9.0", features = ["tauri"] }
 ```
 
 Rust 측:
@@ -728,16 +732,16 @@ cargo clippy --all-targets -- -D warnings
 cargo fmt --all -- --check
 
 # 개발 환경 진단
-bunx --bun @rustra/cli doctor --config rustra.json
+bunx --bun @rustra/cli@0.9.0 doctor --config rustra.json
 
 # Rust schema + TS/C++/RN을 한 번에 생성
-bunx --bun @rustra/cli codegen --config rustra.json
+bunx --bun @rustra/cli@0.9.0 codegen --config rustra.json
 
 # generated 파일 동기화 CI 게이트 (TS/C++/RN은 쓰지 않음)
-bunx --bun @rustra/cli generate --config rustra.json --check
+bunx --bun @rustra/cli@0.9.0 generate --config rustra.json --check
 
 # Rust 소스 감시 + 통합 codegen 자동 재실행
-bunx --bun @rustra/cli dev --config rustra.json
+bunx --bun @rustra/cli@0.9.0 dev --config rustra.json
 ```
 
 ## 문서

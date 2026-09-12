@@ -2,6 +2,12 @@ English | [한국어](./getting-started.ko.md)
 
 # Getting Started with rustra
 
+> **Unreleased Frame changes:** this guide describes the current checkout's Frame APIs
+> and generated output. Installation commands below match current manifests, but
+> registry release 0.9.0 does not include this Frame rename. Using these generated
+> surfaces requires a coordinated upgrade; see the
+> [release preparation guide](migrations/post-0.9-frame-and-audit.md) for proposed versions and steps.
+
 rustra is a bridge framework that automatically generates a TypeScript client — working on Node, Bun, Tauri, and React Native alike — once you define a Rust package.
 
 This guide aims to get a developer new to rustra building their first package and generating a TypeScript client within 10 minutes.
@@ -30,7 +36,7 @@ This guide aims to get a developer new to rustra building their first package an
 ### The Fastest Start — `rustra init`
 
 ```bash
-bunx --bun @rustra/cli init my-project
+bunx --bun @rustra/cli@0.9.0 init my-project
 cd my-project
 bun install
 bun run doctor
@@ -51,30 +57,27 @@ Re-running init in a directory with existing files blocks overwriting. Add `--fo
 to replace them:
 
 ```bash
-bunx --bun @rustra/cli init my-project --force
+bunx --bun @rustra/cli@0.9.0 init my-project --force
 ```
 
 ### Using in an External Project
 
 ```toml
 [dependencies]
-rustra = "0.8"
+rustra = "0.9.0"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
 
-Verified combination: npm `@rustra/types` 0.8.x ↔ Rust crate 0.8.x. The
-`@rustra/*` packages are independent release lines — check each adapter
-package's own version (see the
-[compatibility matrix](compatibility-matrix.md#matrix)).
+Installation versions follow the current Rust and npm manifests. Adapters have independent versions; use the manifest-derived [compatibility table](compatibility-matrix.md) for installation. This table does not certify publication or CI success for this branch.
 
 For the TypeScript adapters, install only the environment you use:
 
 ```bash
-bun add @rustra/node      # Node.js
-bun add @rustra/bun       # Bun
-bun add @rustra/tauri     # Tauri
-bun add @rustra/react-native  # React Native
+bun add @rustra/node@0.9.0      # Node.js
+bun add @rustra/bun@0.9.0       # Bun
+bun add @rustra/tauri@0.8.0     # Tauri
+bun add @rustra/react-native@0.8.0  # React Native
 ```
 
 ### Using in a Monorepo / Workspace
@@ -883,8 +886,8 @@ commands whose input has 0–3 fields are published as field-positional helpers
 outside that shape keep the object-input `commands.ts` path.
 
 ```bash
-bunx --bun @rustra/cli doctor --config rustra.json
-bunx --bun @rustra/cli codegen --config rustra.json
+bunx --bun @rustra/cli@0.9.0 doctor --config rustra.json
+bunx --bun @rustra/cli@0.9.0 codegen --config rustra.json
 ```
 
 **TypeScript-side usage:**
