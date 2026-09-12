@@ -29,11 +29,13 @@ export function useMutation<I = void, O = unknown>(
   // async functions cannot borrow a replacement scope's callbacks or state.
   const scope = useMemo(
     () => ({
+      engine,
+      commandName,
       active: true,
       generation: 0,
       latestCall: 0,
       pendingCalls: 0,
-      options,
+      options: undefined as UseMutationOptions<I, O> | undefined,
     }),
     [engine, commandName],
   );
@@ -74,7 +76,7 @@ export function useMutation<I = void, O = unknown>(
       update({ loading: true, error: null });
       let result: O;
       try {
-        result = await engine.invoke<O>(commandName, input, invokeOptions);
+        result = await scope.engine.invoke<O>(scope.commandName, input, invokeOptions);
       } catch (err: unknown) {
         const parsedError = err instanceof Error ? err : new Error(String(err));
         if (scope.latestCall === callId) update({ error: parsedError });
@@ -92,7 +94,7 @@ export function useMutation<I = void, O = unknown>(
       callbacks?.onSettled?.(result, null, input);
       return result;
     },
-    [engine, commandName, scope],
+    [scope],
   );
 
   const mutate = useCallback(
