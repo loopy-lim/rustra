@@ -244,6 +244,10 @@ jobs:
         # check-criterion-regression.mjs 로직의 단위 테스트 — umbrella `test`
         # 스크립트에만 포함돼 CI가 놓치고 있었다.
         run: bun run test:bench-gate
+      - name: Format and lint private Rust API parser
+        run: |
+          cargo fmt --manifest-path scripts/api-surface-rust/Cargo.toml -- --check
+          cargo clippy --locked --manifest-path scripts/api-surface-rust/Cargo.toml --target-dir target/api-surface-rust -- -D warnings
       - name: API surface snapshot gate
         # Rust/TS 공개 export 를 api-surface/snapshot.json 에 고정하고 드리프트를
         # 잡는다 — umbrella `test`에 없어 CI가 놓치고 있었다.
@@ -255,6 +259,8 @@ jobs:
         # 툴체인/rust-cache 를 재사용하므로 "Build all packages" 이후에 둔다.
         # typescript 잡 자체가 gate 필수 잡이라 별도 gate 편입은 불필요하다.
         run: bun run test:codegen-fresh
+      - name: UniFFI Swift and Kotlin binding freshness
+        run: bun run test:bindings-fresh
       - name: Architecture boundaries gate
         # 모듈 경계/파일 라인 상한 위반을 게이트한다.
         run: bun run test:architecture

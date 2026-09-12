@@ -67,9 +67,9 @@ test('resolveCheckCommand ignores example codegen:check scripts and always uses 
   try {
     const [calc, stream] = discoverCodegenExamples(root);
     const expected = {
-      file: 'bun',
+      file: process.execPath,
       args: [
-        join(root, 'packages', 'cli', 'src', 'index.ts'),
+        join(root, 'packages', 'cli', 'dist', 'index.js'),
         'codegen',
         '--config',
         'rustra.json',
@@ -221,12 +221,14 @@ test('default exec path works end-to-end on a trivial command', () => {
   assert.equal(result.status, 0, result.stderr);
 });
 
-test('real repo has the four known rustra.json examples wired for this gate', () => {
+test('real repo has the six known rustra.json examples wired for this gate', () => {
   // 새 예제가 rustra.json 을 도입하면 이 게이트에 자동 편입된다(테스트 수정 불요).
-  // 아래 단언은 "최소 이 네 예제가 게이트 안에 있다"를 고정한다.
+  // 아래 단언은 "최소 이 여섯 예제가 게이트 안에 있다"를 고정한다.
   const names = discoverCodegenExamples(REPO_ROOT).map((example) => example.name);
   for (const expected of [
     'calculator',
+    'auth',
+    'crud',
     'react-native-bare-calculator',
     'react-native-calculator',
     'streaming',
@@ -238,3 +240,47 @@ test('real repo has the four known rustra.json examples wired for this gate', ()
 function basename(path: string): string {
   return path.split(/[\\/]/).at(-1) ?? path;
 }
+
+test('bindings mode selects only UniFFI configs and uses the independent binding gate', () => {
+  const root = makeFixture();
+  try {
+    const config = join(root, 'examples', 'calc', 'rustra.json');
+    writeFileSync(
+      config,
+      JSON.stringify({ output: './generated', uniffi: { output: './uniffi' } }),
+    );
+    const commands: ReturnType<typeof resolveCheckCommand>[] = [];
+    const result = runCodegenFreshChecks({
+      root,
+      bindings: true,
+      exec: (command) => {
+        commands.push(command);
+        return { status: 0 };
+      },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.ran, 1);
+    assert.equal(basename(commands[0].cwd), 'calc');
+    assert.equal(commands[0].file, process.execPath);
+    assert.equal(commands[0].args.at(-1), '--check-bindings');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('bindings mode fails closed when no configured UniFFI example matches', () => {
+  const root = makeFixture();
+  try {
+    const result = runCodegenFreshChecks({
+      root,
+      bindings: true,
+      exec: () => {
+        throw new Error('must not execute');
+      },
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.ran, 0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

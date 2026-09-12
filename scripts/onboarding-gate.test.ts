@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { test } from 'bun:test';
-import { renderInitProjectFiles, templateVersions } from '../packages/cli/src/init-template.ts';
+import { test } from 'node:test';
+import { renderInitProjectFiles, templateVersions } from '../packages/cli/dist/init-template.js';
 import {
   commandFor,
   mutateScaffoldProject,
