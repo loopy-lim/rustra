@@ -33,7 +33,7 @@ export function useEvent<T = unknown>(
     let result: SubscribeResult;
     try {
       result = subscribe(eventName, (payload) => {
-        callbackRef.current(payload);
+        if (active) callbackRef.current(payload);
       });
     } catch (error) {
       console.error(`Rustra: event subscription for "${eventName}" failed:`, error);
