@@ -245,7 +245,7 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "rustra"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "hex",
  "postcard",
@@ -269,17 +269,17 @@ dependencies = [
 
 [[package]]
 name = "rustra-macros"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "proc-macro2",
  "quote",
  "rustra-naming",
- "syn 2.0.119",
+ "syn 3.0.3",
 ]
 
 [[package]]
 name = "rustra-naming"
-version = "0.8.0"
+version = "0.9.0"
 
 [[package]]
 name = "schemars"

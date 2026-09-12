@@ -10,12 +10,15 @@
 // 않는다 — 먼저 드리프트 원인(schema/제너레이터 변경)을 확인한다.
 //
 // 사용법: `node scripts/check-codegen-fresh.mjs` (전수), `--example <name>` (단일,
-// 반복 지정 가능 — 로컬 디버깅용).
+// 반복 지정 가능 — 로컬 디버깅용), `--bindings` (UniFFI Swift/Kotlin 실제 재생성).
+// 먼저 `bun run --cwd packages/cli build` 로 CLI 를 빌드한다.
 //
 // 감지 범위 / known blind spots:
-// - rustra.json 이 없는 예제(calculator-napi, tauri-calculator 등)와 generated/ 만
-//   커밋돼 있고 설정이 없는 예제(auth, crud)는 이 게이트 밖이다 — 설정이 생기면
-//   자동으로 편입된다.
+// - 현재 auth, calculator, crud, react-native-bare-calculator, react-native-calculator,
+//   streaming 6개를 발견한다. rustra.json 이 없는 calculator-napi/tauri-calculator 는
+//   범위 밖이며 설정이 생기면 자동 편입된다.
+// - 기본 --check 는 UniFFI Rust mirror 만 검사한다. --bindings 는 uniffi 설정 예제만
+//   선택해 실제 Swift/Kotlin 재생성을 검사하며 native toolchain/build 비용이 든다.
 // - react-native-calculator 의 `codegen` 은 build:fingerprint 도 돌리지만 고정
 //   `--check` 호출은 fingerprint 를 검사하지 않는다(check 모드의 원래 범위).
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
@@ -54,15 +57,15 @@ export function discoverCodegenExamples(root) {
  * 게이트가 그것을 실행하면 스크립트를 `exit 0` 으로 바꾸는 것만으로 게이트가
  * 무력화된다. 신뢰 앵커는 게이트 밖(이 스크립트 + repo CLI)에 고정돼야 한다.
  */
-export function resolveCheckCommand(example, root) {
+export function resolveCheckCommand(example, root, { bindings = false } = {}) {
   return {
-    file: 'bun',
+    file: process.execPath,
     args: [
-      join(root, 'packages', 'cli', 'src', 'index.ts'),
+      join(root, 'packages', 'cli', 'dist', 'index.js'),
       'codegen',
       '--config',
       'rustra.json',
-      '--check',
+      bindings ? '--check-bindings' : '--check',
     ],
     cwd: example.dir,
   };
@@ -80,8 +83,15 @@ const defaultExec = (command) =>
  * diagnostics 로 남긴다(나머지 예제는 같은 원인일 가능성이 높다 — 첫 진단이
  * 판단의 근거가 된다). exec 은 테스트 주입용.
  */
-export function runCodegenFreshChecks({ root, filter = null, exec = defaultExec } = {}) {
-  const discovered = discoverCodegenExamples(root);
+export function runCodegenFreshChecks({
+  root,
+  filter = null,
+  bindings = false,
+  exec = defaultExec,
+} = {}) {
+  const discovered = discoverCodegenExamples(root).filter(
+    (example) => !bindings || example.config.uniffi,
+  );
   const targets =
     filter && filter.size > 0
       ? discovered.filter((example) => filter.has(example.name))
@@ -113,7 +123,7 @@ export function runCodegenFreshChecks({ root, filter = null, exec = defaultExec 
       });
       break;
     }
-    const command = resolveCheckCommand(example, root);
+    const command = resolveCheckCommand(example, root, { bindings });
     const result = exec(command);
     if (result.status !== 0) {
       failures.push({
@@ -122,7 +132,8 @@ export function runCodegenFreshChecks({ root, filter = null, exec = defaultExec 
           `codegen check 실패 (exit ${result.status ?? 'signal'}) — ` +
           `예제 디렉터리에서 bun run codegen 실행 후 생성물을 커밋하거나, ` +
           `의도하지 않은 드리프트면 원인(schema/제너레이터 변경)을 먼저 확인한다`,
-        output: `${result.stdout ?? ''}${result.stderr ?? ''}`.trim(),
+        output:
+          `${result.stdout ?? ''}${result.stderr ?? ''}${result.error ? `\n${result.error.message}` : ''}`.trim(),
       });
       break;
     }
@@ -133,8 +144,13 @@ export function runCodegenFreshChecks({ root, filter = null, exec = defaultExec 
 function run() {
   const root = process.cwd();
   const filter = new Set();
+  let bindings = false;
   const argv = process.argv.slice(2);
   for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--bindings') {
+      bindings = true;
+      continue;
+    }
     if (argv[i] === '--example') {
       const value = argv[i + 1];
       if (!value) throw new Error('--example 에는 예제 이름이 필요하다');
@@ -142,9 +158,9 @@ function run() {
       i++;
       continue;
     }
-    throw new Error(`알 수 없는 인자: ${argv[i]} (--example <name> 만 지원한다)`);
+    throw new Error(`알 수 없는 인자: ${argv[i]} (--example <name>, --bindings 지원)`);
   }
-  const { ok, failures, ran } = runCodegenFreshChecks({ root, filter });
+  const { ok, failures, ran } = runCodegenFreshChecks({ root, filter, bindings });
   if (!ok) {
     for (const failure of failures) {
       console.error(`FAIL ${failure.name}: ${failure.reason}`);
@@ -156,7 +172,9 @@ function run() {
     process.exitCode = 1;
     return;
   }
-  console.log(`OK: ${ran}개 예제 codegen check 통과 (committed 생성물이 재현 결과와 일치)`);
+  console.log(
+    `OK: ${ran}개 예제 codegen ${bindings ? 'bindings ' : ''}check 통과 (committed 생성물이 재현 결과와 일치)`,
+  );
 }
 
 if (resolve(process.argv[1] ?? '') === fileURLToPath(import.meta.url)) run();
