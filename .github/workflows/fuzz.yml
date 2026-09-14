@@ -4,12 +4,14 @@ name: Fuzz
 # cargo-fuzz 는 nightly + 별도 crate (fuzz/, 메인 workspace 비멤버) 로 격리.
 # 크래시 아티팩트는 업로드 후 이슈로 수동 등록한다.
 #
-# A9 안전망 게이팅 — 이 워크플로는 schedule/workflow_dispatch 전용이라 PR gate
-# 에는 일절 참여하지 않는다(ci.yml gate 의 needs 목록 밖). 대신 스케줄 실패가
-# run 을 빨갛게 만들어 조용히 지나가지 않는다(구 continue-on-error 제거).
-# 실패 처리는 repo 관례를 따른다: 내 diff 귀속 전에 red baseline 부터 확인한다.
+# A9 안전망 게이팅 — 주간/수동 실행과 Release 후보 검증에서 재사용한다.
 
 on:
+  workflow_call:
+    inputs:
+      candidate_sha:
+        required: true
+        type: string
   workflow_dispatch:
   schedule:
     - cron: '23 19 * * 6' # 토요일 KST 새벽 4:23 — 오프피크
@@ -27,6 +29,8 @@ jobs:
     # 아티팩트를 이슈로 승격).
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.candidate_sha || github.sha }}
       - uses: dtolnay/rust-toolchain@nightly
       - uses: Swatinem/rust-cache@v2
         with:
@@ -47,13 +51,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}
+          name: fuzz-corpus-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: fuzz/corpus/${{ matrix.target }}/
           if-no-files-found: error
       - name: Upload crash artifacts
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: fuzz-crash-${{ matrix.target }}-${{ github.run_id }}
+          name: fuzz-crash-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: fuzz/artifacts/
           if-no-files-found: ignore

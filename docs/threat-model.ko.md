@@ -57,7 +57,7 @@ Bun, Tauri WebView, React Native)이 이진 FFI 경계를 넘어 컴파일된 Ru
 | **S** — 스푸핑: 위조 이벤트 전달               | `rustra://` 채널의 JS 리스너                | `event_channel()`이 모든 채널에 `rustra://` 접두사를 붙이고 `sanitize_event_name()`(`tauri_support.rs`)이 Unicode 영숫자 + `-/:/_` 만 허용; 이벤트는 핸들러가 발행한 페이로드만 실는다                                                 | 같은 영역의 어떤 JS든 *구독*할 수 있고 호스트 이미터를 통해 그 네임스페이스로 *발행*할 수도 있다 — 이벤트별 출처 인증 없음. 동일 영역 신뢰 가정 — **미해결**                                                                                   |
 | **S** — 스푸핑: 전역 엔진 슬롯 탈취            | `Symbol.for` 전역(`global-state.ts`)        | 키가 **버전 부여**됨(`dev.rustra.types.v0.4.0.*`) — 버전이 다르면 대화 불가                                                                                                                                                            | 마지막에 등록된 bootstrap이 이김(R08, 안정화 문서); 한 영역 내 라이브러리 간 슬롯 선점은 **미해결**                                                                                                                                            |
 | **T** — 변조: malformed invoke 프레임          | FFI 진입점                                  | 복사 전 크기 게이트(`payload.too_large`, 기본 1 MiB, `limits.rs`); `command_id`를 동결된 레지스트리에서 조회(`command.not_found`, `invoke_dispatch.rs`); 인자는 필드별 검사로 디코드(`command.invalid_args`)                           | 이 경로에서 알려진 것 없음                                                                                                                                                                                                                     |
-| **T** — 변조: 조작된 Frame 페이로드            | `frame_decode.rs`                           | 수동 작성 경계 검사 커서 디코드(신뢰하지 않는 바이트의 `unchecked` 재해석 없음); 문자열 필드별 UTF-8 검증; 주간 fuzz(`fuzz.yml`, 시드 코퍼스, `invoke_frame` 10분 실행); 코어 로직 주간 miri(`miri.yml`)                               | fuzz/miri는 실험 트랙(`continue-on-error`)이지 게이트가 아니다 — 커버리지는 최선 노력. **미해결(수용)**                                                                                                                                        |
+| **T** — 변조: 조작된 Frame 페이로드            | `frame_decode.rs`                           | 수동 작성 경계 검사 커서 디코드(신뢰하지 않는 바이트의 `unchecked` 재해석 없음); 문자열 필드별 UTF-8 검증; 주간 fuzz(`fuzz.yml`, 시드 코퍼스, Frame/complex target 3개 각각 10분 실행); 코어 로직 주간 miri(`miri.yml`)                | 주간 실패는 실패 상태로 남는다(continue-on-error 없음). Release는 후보 SHA에서 새 Miri/ASan/Fuzz 성공을 요구한다. 제한된 검사 범위는 전체 프로그램의 안전 인증이 아니다.                                                                       |
 | **T** — 변조: OTA/클라이언트 불일치 라우팅     | command_id alias(`builder_capabilities.rs`) | 다른 명령의 실제 id를 그림자칠 alias는 선언/빌드 시점에 거부(panic — 조용히가 아니라 크게)                                                                                                                                             | 알려진 것 없음                                                                                                                                                                                                                                 |
 | **R** — 부인                                   | invoke/감사 흔적                            | 범위 밖: rustra는 라이브러리다 — 내장 감사 로그 없음. 부인 방지 증거가 필요한 호스트는 자기 경계에서 로깅해야 한다                                                                                                                     | **설계상 미해결**                                                                                                                                                                                                                              |
 | **I** — 정보 유출                              | 에러 프레임, 이벤트 페이로드                | 에러 프레임은 구조화된 `code` + 메시지만 실는다(`error.rs`) — raw 포인터·힙 주소·백트레이스는 경계를 넘지 않는다                                                                                                                       | 핸들러 작성자의 메시지는 그대로 흐른다 — 유출 규율은 핸들러 작성자의 책임. **미해결(문서화된 기대)**                                                                                                                                           |
@@ -98,8 +98,13 @@ Bun, Tauri WebView, React Native)이 이진 FFI 경계를 넘어 컴파일된 Ru
    안정화 트랙에 계획됐지 여기에는 없다.
 4. **release 빌드의 FFI 오용**: free-guard는 설계상 디버그 전용이다.
 5. **npm 의존성 자문**이 CI에서 게이트되지 않는다.
-6. **fuzz/miri/ASan은 실험 트랙**(`continue-on-error`)이지 필수 게이트가
-   아니다 — 발견은 수동 수확.
+6. **안전성 검사 범위는 제한적이다**: Miri는 lib/frame_wire/field_order_drift,
+   ASan/LSan은 lib, Fuzz는 invoke_frame/invoke_complex_value/invoke_complex_serde
+   각각 seed 재생과 600초 실행을 검사한다. 주간 실패는 workflow 실패로 남고,
+   `release.yml`의 두 발행 경로는 후보 SHA에서 새 검사가 모두 성공해야 진행한다.
+   발행 게이트이며 PR required check나 실기기·장시간 안전성 인증은 아니다.
+   Miri/ASan 로그·종료 코드·도구 버전·SHA는 실패 때도 업로드한다.
+   [발행 절차](release-procedure.ko.md)를 참고한다.
 7. **카운터 너머의 과부하 계측**: A08 최소 슬라이스
    (`rustra::ffi::async_pool_stats()`)가 제출/거부/완료 수를 측정한다 —
    큐 깊이 히스토그램, 명령별 귀속, 실행기 튜닝은 측정 근거가 쌓일 때까지
@@ -111,3 +116,11 @@ Bun, Tauri WebView, React Native)이 이진 FFI 경계를 넘어 컴파일된 Ru
 와이어 포맷 변경, 위 미해결 간극의 폐쇄. STRIDE 표의 "완화" 열은 항상
 실제 코드 경로를 지칭해야 한다 — 완화가 제거되면 같은 변경에서 해당 행을
 미해결 간극으로 옮긴다.
+
+## 2026-09-14 유지보수 기록
+
+기존 continue-on-error 설명은 `32573bf1` 이전 상태이므로 제거했다.
+소유 가능한 async 풀은 drop 때 큐를 배출하고 워커를 join한다. 운영 전역 풀은
+프로세스 수명을 유지한다. 이 변경은 테스트 종료를 고치며 host unload/shutdown
+계약을 새로 보장하지 않는다. 레지스트리 출처는 [배포 조합표](release-matrix.ko.md)로
+별도 확인한다.

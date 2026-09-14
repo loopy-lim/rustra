@@ -50,6 +50,7 @@ include!("complex_serde_de_core.rs");
 include!("complex_serde_de_enum.rs");
 include!("complex_serde_de_access.rs");
 include!("complex_serde_de_aux.rs");
+include!("complex_serde_ser_entry.rs");
 include!("complex_serde_ser_core.rs");
 include!("complex_serde_ser_access.rs");
 include!("complex_serde_ser_map_key.rs");

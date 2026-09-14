@@ -2,7 +2,7 @@
 
 # rustra
 
-Frame 전환과 감사 수정은 Rust 0.10.0과 아래 패키지 버전을 대상으로 한다.
+Frame 전환과 감사 수정은 Rust 0.10.1과 아래 패키지 버전을 대상으로 한다.
 네이티브 라이브러리·JS 어댑터·생성물을 함께 갱신한다. 소비자 검증과 롤백은
 [마이그레이션 문서](docs/migrations/post-0.9-frame-and-audit.ko.md)를 따른다.
 
@@ -144,7 +144,7 @@ JS/네이티브 조합의 drift를 런타임에 감지한다.
 
 ```toml
 [dependencies]
-rustra = "0.10.0"
+rustra = "0.10.1"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -577,7 +577,7 @@ type RustraError = {
 `tauri` feature를 활성화:
 
 ```toml
-rustra = { version = "0.10.0", features = ["tauri"] }
+rustra = { version = "0.10.1", features = ["tauri"] }
 ```
 
 Rust 측:
@@ -630,19 +630,23 @@ const result = await addNumbers({ a: 20, b: 22 });
 
 ### 플랫폼 지원 매트릭스
 
-| 플랫폼               | 현재 증거 수준             | 비고                                                               |
-| -------------------- | -------------------------- | ------------------------------------------------------------------ |
-| Node / Bun           | Runtime verified           | subprocess·N-API·Bun FFI 로컬 runtime + 어댑터 CI                  |
-| Tauri (macOS)        | WebView runtime verified   | Release WebView `rustra_dispatch` 정확성·성능 영수증               |
-| Tauri (Linux)        | Build + smoke verified     | 실제 WebView 사용자 흐름은 별도 E2E 필요                           |
-| React Native iOS     | Simulator runtime verified | Release build·설치·launch·reload·Nitro 비교; 실기기 증거는 별도    |
-| React Native Android | Release runtime verified   | `TB710FU` arm64 실기기와 arm64/x86_64 `.so` 확인; 다른 기기는 별도 |
+| 플랫폼               | 현재 증거 수준             | 비고                                                                          |
+| -------------------- | -------------------------- | ----------------------------------------------------------------------------- |
+| Node / Bun           | Runtime verified           | subprocess·N-API·Bun FFI 로컬 runtime + 어댑터 CI                             |
+| Tauri (macOS)        | WebView runtime verified   | Release WebView `rustra_dispatch` 정확성·성능 영수증                          |
+| Tauri (Linux)        | **Alpha** — 빌드 + smoke   | 실제 Linux WebView·수명주기·패키지 설치 통과 전에는 운영 지원을 주장하지 않음 |
+| React Native iOS     | Simulator runtime verified | Release build·설치·launch·reload·Nitro 비교; 실기기 증거는 별도               |
+| React Native Android | Release runtime verified   | `TB710FU` arm64 실기기와 arm64/x86_64 `.so` 확인; 다른 기기는 별도            |
 
 `bun run test:compat`는 JS 계약과 지원되는 로컬 runtime을 검증하고, CI 네이티브
 잡은 빌드·링크를 검증한다. 이 둘을 실제 기기 설치·화면 렌더 증거와 동일시하지 않는다.
 실제 WebView·실기기·emit 타이밍처럼 손으로 실행하고 기록해야 하는 검증은
 [호스트 검증 수동 체크리스트](docs/verification-checklist.ko.md)에 있다 — 이
 표의 증거 수준은 CI green 만이 아니라 채워진 체크리스트 블록이 뒤받는다.
+
+**Linux Alpha**는 소스 빌드와 문서화된 smoke 범위까지 평가할 수 있다는 뜻이며,
+운영 지원은 아직 입증되지 않았다. Linux x86_64 ASan/LSan은 릴리스 안전성
+게이트이며 Linux GUI·패키징·최종 사용자 런타임 영수증으로 취급하지 않는다.
 
 ## 성능
 

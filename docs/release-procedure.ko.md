@@ -9,9 +9,35 @@ Frame 전환과 감사 수정은 0.10 동시 업그레이드 대상이다. 이�
 
 ## 사전 조건 (자동 게이트)
 
-1. PR 머지 → main 에서 CI 전 잡 green (rust 3-OS + release 테스트 + rust-audit +
-   typescript/test:compat + rn-android + rn-ios + consumer-smoke)
-2. `release.yml` 은 `workflow_run: CI success` 로만 트리거된다 (수동 우회 불가)
+1. 발행 후보의 **정확한 SHA**에 대해 실제 push/PR CI의 최신 실행이 성공해야 한다.
+   schedule CI는 일부 job만 실행하므로 발행 근거로 인정하지 않는다.
+2. `release.yml`은 npm 자동 경로(`workflow_run: CI success`)와 crates 수동 경로
+   (`workflow_dispatch`, main 한정) 모두 후보 SHA를 고정하고 Miri·Sanitizer·Fuzz를
+   재사용 workflow로 새로 실행한다. 세 결과가 모두 성공해야 발행 job을 시작한다.
+   누락·실패·취소·skip은 차단하며, 발행 직전 CI 상태도 다시 확인한다.
+3. 검사 범위: Miri의 lib/frame_wire/field_order_drift, Linux x86_64 ASan+LSan lib,
+   Fuzz의 invoke_frame/invoke_complex_value/invoke_complex_serde 각각 seed 재생 및
+   600초. 주간 안전성 실행은 별도로 유지하며 PR required check와 구분한다.
+
+Linux x86_64 sanitizer job은 교차 플랫폼 메모리 안전성 게이트다. 호환성
+매트릭스의 실제 Tauri WebView·수명주기·패키지 설치 수용 기록을 확보하기 전까지
+Linux 지원 수준은 **Alpha**로 유지한다.
+
+독립 안전성 실행 결과를 조회하려면 다음 읽기 전용 감사를 사용한다. 같은 후보의
+최신 적격 실행만 인정하며 오래된 성공으로 최신 실패를 덮지 않는다. `GH_TOKEN`은
+기존 인증 환경에 제공하고 값을 출력하지 않는다.
+
+```bash
+node scripts/check-release-gates.mjs --repository loopy-lim/rustra --sha "$(git rev-parse HEAD)" > release-gates.json
+```
+
+Release 내부는 새 안전성 job의 `needs`로 검사 성공을 강제하므로 CI 조회에만
+`--ci-only`를 사용한다. 이를 독립 발행용 안전성 우회 옵션으로 사용하지 않는다.
+Miri/ASan artifact는 `*-report-<run_id>-<attempt>`에 SHA·도구 버전·stdout/stderr·
+종료 코드와 ASan 원본 보고서를 포함한다. 저장 경로는 절대 경로
+`$GITHUB_WORKSPACE/target/safety/`이며 결과와 무관하게 업로드한다. Miri의 한 suite가
+실패해도 다른 suite는 계속 실행하고 전체 job은 실패한다. 실패를 수정한 새 SHA의
+CI를 통과시키고 Release를 재실행한다. 새 실행이 통과하기 전에는 발행하지 않는다.
 
 ## 1단계 — changeset 확정
 
@@ -49,10 +75,14 @@ bunx changeset status   # 대상 패키지/범프 확인
 
 ## 2단계 — canary (사전 검증)
 
+canary 발행도 별도 승인과 후보 안전성 검사가 필요하다. Snapshot 버전 변경은
+별도 후보 커밋으로 고정한 뒤 그 SHA에서 위 전체 게이트를 확보한다. 검사 후
+manifest를 다시 변경해 이전 SHA의 증거를 재사용하지 않는다.
+
 ```bash
 bun run build
 bunx changeset version --snapshot canary
-bunx changeset publish --tag canary
+# 이 변경을 후보로 고정하고 전체 안전성 검사를 통과한 뒤, 승인된 canary 발행만 진행
 ```
 
 소비자 검증:
@@ -77,19 +107,12 @@ crates.io canary 는 지원하지 않는다 (버전 삭제 불가) — Rust 는 
 
 1. Version Packages PR 머지 → release.yml 자동 실행 (npm 9종)
 2. crates 수동 잡: Actions → Release → Run workflow는 `main`의 동일 SHA에 대해
-   CI 성공을 다시 확인한 뒤 rustra-naming → rustra-macros → rustra 순서로
+   실제 CI와 새 Miri·Sanitizer·Fuzz 성공을 확인한 뒤 rustra-naming → rustra-macros → rustra 순서로
    각 의존성의 인덱스 반영을 기다리며 발행
 
-```bash
-# 로컬 검증 후 수동 발행 (crates 는 되돌릴 수 없어 의존성 순서 게이트)
-cargo publish -p rustra-naming --dry-run --allow-dirty
-cargo publish -p rustra-naming
-sleep 30
-cargo publish -p rustra-macros --dry-run --allow-dirty
-cargo publish -p rustra-macros
-sleep 30
-cargo publish -p rustra
-```
+안전성 게이트를 거치는 위 수동 workflow를 사용한다. 로컬 `cargo publish`나
+`changeset publish`는 GitHub의 의존 job을 실행하지 않으므로 이 절차의 승인된
+stable 발행 경로가 아니다. 원본 결과는 Release run과 각 artifact에 보관한다.
 
 ## 3.5단계 — main 브랜치 보호 (2026-08-21 적용 완료)
 
@@ -137,6 +160,10 @@ cargo publish -p rustra
 ## 발행 후 확인
 
 ```bash
-bun info @rustra/node | tail -20
-cargo search rustra --limit 3
+node scripts/audit-release-registry.mjs --output /tmp/rustra-release-matrix.json
 ```
+
+[배포 조합표](release-matrix.ko.md)의 JSON/Markdown을 발행 전후에 보관한다.
+정확한 버전·latest·npm gitHead·crate VCS SHA·checksum을 비교한다. 생성물/native
+hash는 로컬 artifact 증거이며 레지스트리 설치·실기기 성공과 구분한다. 실제
+레지스트리 소비 검증은 해당 버전을 고정한 깨끗한 consumer에서 별도로 수행한다.

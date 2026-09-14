@@ -132,7 +132,7 @@ mod tests {
             "next": {"anyOf": [{"$ref": "#/definitions/Node"}, {"type": "null"}]}
         }, "required": ["value", "next"]}});
         let ir = crate::complex_codec::complex_schema_ir::compile(&schema, &definitions).unwrap();
-        assert!(serde_direct_supported(&ir));
+        assert!(!serde_direct_supported(&ir));
 
         let input = Node {
             value: 1,
@@ -147,6 +147,20 @@ mod tests {
         assert_eq!(bytes, expected);
         let back: Node = from_bytes(&bytes, &ir, limits()).unwrap();
         assert_eq!(back, input);
+        let mut trailing = bytes.clone();
+        trailing.push(0);
+        assert!(from_bytes::<Node>(&trailing, &ir, limits()).is_err());
+        let shallow = ComplexCodecLimits {
+            max_depth: 1,
+            ..limits()
+        };
+        assert!(to_bytes(&input, &ir, shallow).is_err());
+        assert!(from_bytes::<Node>(&bytes, &ir, shallow).is_err());
+        let mut buffer = [0; 128];
+        let mut writer = Writer::into_slice(&mut buffer, limits());
+        to_writer(&input, &mut writer, &ir, limits(), 0).unwrap();
+        let written = writer.written;
+        assert_eq!(&buffer[..written], bytes);
     }
 
     #[test]

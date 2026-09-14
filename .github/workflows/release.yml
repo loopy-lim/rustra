@@ -16,6 +16,50 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  candidate:
+    name: Pin and verify release candidate
+    if: >-
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event != 'schedule') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      sha: ${{ steps.candidate.outputs.sha }}
+    steps:
+      - id: candidate
+        env:
+          CANDIDATE_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+        run: echo "sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.candidate.outputs.sha }}
+      - name: Require current green CI for the exact candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check-release-gates.mjs --ci-only --sha "${{ steps.candidate.outputs.sha }}"
+
+  miri:
+    needs: candidate
+    uses: ./.github/workflows/miri.yml
+    with:
+      candidate_sha: ${{ needs.candidate.outputs.sha }}
+
+  sanitizer:
+    needs: candidate
+    uses: ./.github/workflows/sanitizer.yml
+    with:
+      candidate_sha: ${{ needs.candidate.outputs.sha }}
+
+  fuzz:
+    needs: candidate
+    uses: ./.github/workflows/fuzz.yml
+    with:
+      candidate_sha: ${{ needs.candidate.outputs.sha }}
+
   # CI가 green인 경우에만 발행을 시도한다 (CI 실패 시 release 스킵).
   # workflow_dispatch 우회를 제거해 이 조건은 workflow_run success 로만 만족한다.
   # event != 'schedule' 필수: CI 의 주간 schedule 실행은 rust-audit 외 전부 skip
@@ -24,11 +68,11 @@ jobs:
   # 116eae3d Release 를 트리거).
   release:
     name: Changesets Publish (npm)
-    if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event != 'schedule'
+    needs: [candidate, miri, sanitizer, fuzz]
+    if: github.event_name == 'workflow_run'
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: write
       pull-requests: write
       id-token: write
@@ -38,7 +82,7 @@ jobs:
           # changesets가 버전 커밋/PR을 만들 수 있도록 전체 히스토리 필요
           fetch-depth: 0
           # workflow_run에서는 CI가 실제로 검증한 commit을 checkout한다.
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ needs.candidate.outputs.sha }}
 
       - uses: actions/setup-node@v7
         with:
@@ -66,6 +110,11 @@ jobs:
         run: bun run verify:package:react-native
       - name: Verify packed React Native consumer
         run: bun run verify:consumer:react-native
+
+      - name: Recheck current green CI immediately before npm release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check-release-gates.mjs --ci-only --sha "${{ needs.candidate.outputs.sha }}"
 
       - name: Create release PR or publish
         id: changesets
@@ -96,6 +145,7 @@ jobs:
   # 실행 직전 동일 SHA의 CI 성공을 확인하므로 workflow_dispatch가 게이트를 우회하지 않는다.
   cargo-publish:
     name: Publish crates (manual)
+    needs: [candidate, miri, sanitizer, fuzz]
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -105,23 +155,8 @@ jobs:
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:
       - uses: actions/checkout@v7
-      - name: Require green CI for this exact commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # schedule 실행은 잡이 전부 skip 돼도 conclusion=success 로 기록된다.
-          # push/PR 트리거 실행(실제 게이트가 도는 유일한 실행)만 green 으로 인정한다.
-          # 주의: --event 플래그를 단독으로 두 번 쓰면(gh 2.98) 빈 결과를 반환하는
-          # 결함이 있다(2026-09-06 실측). event 필터 없이 목록을 받아 jq 로 push/PR
-          # 실행만 남긴다 — schedule 은 conclusion 이 success 여도 여기서 탈락한다.
-          conclusion="$(gh run list --commit "$GITHUB_SHA" --workflow CI \
-            --limit 20 --json event,conclusion \
-            --jq '[.[] | select(.event == "push" or .event == "pull_request")][0].conclusion // empty')"
-          if [ -z "$conclusion" ]; then
-            echo "no push/PR CI run found for $GITHUB_SHA — refusing to publish on unverified commit" >&2
-            exit 1
-          fi
-          test "$conclusion" = "success"
+        with:
+          ref: ${{ needs.candidate.outputs.sha }}
       - uses: dtolnay/rust-toolchain@1.95.0
         with:
           components: rustfmt, clippy
@@ -132,6 +167,10 @@ jobs:
           cargo clippy -p rustra-naming -p rustra -p rustra-macros --all-targets -- -D warnings
           cargo test -p rustra-naming -p rustra -p rustra-macros --release
           cargo publish -p rustra-naming --dry-run --locked
+      - name: Recheck current green CI immediately before crates release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/check-release-gates.mjs --ci-only --sha "${{ needs.candidate.outputs.sha }}"
       - name: Publish rustra-naming first (path dependency)
         run: cargo publish -p rustra-naming --locked
       - name: Wait for rustra-naming index propagation
