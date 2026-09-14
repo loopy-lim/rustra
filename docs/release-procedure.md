@@ -11,9 +11,37 @@ proceeds only after separate approval.
 
 ## Prerequisites (automated gates)
 
-1. PR merge → all CI jobs green on main (rust 3-OS + release tests + rust-audit +
-   typescript/test:compat + rn-android + rn-ios + consumer-smoke)
-2. `release.yml` triggers only via `workflow_run: CI success` (no manual bypass)
+1. The latest eligible push/PR CI run for the **exact candidate SHA** must succeed.
+   Scheduled CI runs execute only a subset of jobs and cannot authorize release.
+2. Both npm automation (`workflow_run: CI success`) and manual crates publishing
+   (`workflow_dispatch`, main only) in `release.yml` pin the candidate SHA and run
+   fresh Miri, Sanitizer and Fuzz reusable workflows. Publishing depends on all
+   three succeeding. Missing, failed, cancelled or skipped checks block it; CI is
+   checked again immediately before publishing.
+3. Scope: Miri lib/frame_wire/field_order_drift; Linux x86_64 ASan+LSan lib;
+   seed replay and 600 seconds for each Fuzz target invoke_frame,
+   invoke_complex_value and invoke_complex_serde. Weekly checks remain separate
+   from PR required checks.
+
+The Linux x86_64 sanitizer job is a cross-platform memory-safety gate. Linux
+remains **Alpha** until the separate real Tauri WebView, lifecycle, and packaged
+installation acceptance in the compatibility matrix is recorded.
+
+Audit independent safety runs with the read-only command below. Only the latest
+eligible run for the candidate counts; an old success cannot hide a newer failure.
+Provide `GH_TOKEN` through the existing authenticated environment without printing it.
+
+```bash
+node scripts/check-release-gates.mjs --repository loopy-lim/rustra --sha "$(git rev-parse HEAD)" > release-gates.json
+```
+
+Release uses `--ci-only` only because its `needs` dependencies require fresh safety
+jobs. It is not a standalone safety bypass for publishing. Miri/ASan artifacts
+`*-report-<run_id>-<attempt>` include SHA, toolchain, stdout/stderr, exit codes and
+raw ASan reports. The absolute `$GITHUB_WORKSPACE/target/safety/` path is uploaded
+regardless of test outcome. A failed Miri suite does not skip the other suites;
+the job still fails. After fixing a failure, pass CI on the new SHA and rerun
+Release. Publishing remains blocked until the new safety checks succeed.
 
 ## Step 1 — finalize changesets
 
@@ -54,10 +82,15 @@ bunx changeset status   # check target packages/bumps
 
 ## Step 2 — canary (pre-verification)
 
+Canary publication also requires separate approval and candidate safety checks.
+Commit snapshot version changes as a distinct candidate, then obtain all gates
+above for that SHA. Do not mutate manifests after validation and reuse the old
+SHA's evidence.
+
 ```bash
 bun run build
 bunx changeset version --snapshot canary
-bunx changeset publish --tag canary
+# Pin this candidate and pass every safety gate before approved canary publication.
 ```
 
 Consumer verification:
@@ -83,19 +116,13 @@ stable only.
 
 1. Merge the Version Packages PR → release.yml runs automatically (9 npm packages)
 2. crates manual job: Actions → Release → Run workflow re-verifies CI success for
-   the same SHA on `main`, then publishes in the order rustra-naming → rustra-macros →
+   the same SHA on `main`, requires fresh Miri/Sanitizer/Fuzz success, then publishes in the order rustra-naming → rustra-macros →
    rustra, waiting for the index after each dependency.
 
-```bash
-# manual publish after local verification (crates are irreversible: dependency-order gate)
-cargo publish -p rustra-naming --dry-run --allow-dirty
-cargo publish -p rustra-naming
-sleep 30
-cargo publish -p rustra-macros --dry-run --allow-dirty
-cargo publish -p rustra-macros
-sleep 30
-cargo publish -p rustra
-```
+Use the manual workflow above so the safety dependencies run. Local `cargo publish`
+or `changeset publish` does not execute GitHub job dependencies and is not the
+stable publishing path in this procedure. Keep the Release run and its artifacts
+as the publication evidence.
 
 ## Step 3.5 — main branch protection (applied 2026-08-21)
 
@@ -146,6 +173,11 @@ cargo publish -p rustra
 ## Post-publish checks
 
 ```bash
-bun info @rustra/node | tail -20
-cargo search rustra --limit 3
+node scripts/audit-release-registry.mjs --output /tmp/rustra-release-matrix.json
 ```
+
+Keep the [release matrix](release-matrix.md) JSON/Markdown before and after release.
+Compare exact versions, latest, npm gitHead, crate VCS SHA and checksums. Local
+generated/native hashes are artifact evidence, separate from registry installation
+and physical-device execution. Verify registry consumption separately in a clean
+consumer pinned to those versions.

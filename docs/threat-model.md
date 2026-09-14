@@ -60,7 +60,7 @@ runtime itself; application-level authz inside user command handlers
 | **S** — Spoofing: forged event delivery                           | JS listeners on `rustra://` channels            | `event_channel()` prefixes every channel with `rustra://` and `sanitize_event_name()` (`tauri_support.rs`) whitelists Unicode alphanumerics + `-/:/_`; events carry only handler-emitted payloads                                                            | Any JS in the realm can _listen_ and, via the host emitter, _emit_ onto the namespace — no per-event origin authentication. Same-realm trust assumption — **open**                                                                                                                                         |
 | **S** — Spoofing: hijacking the global engine slot                | `Symbol.for` globals (`global-state.ts`)        | Keys are **versioned** (`dev.rustra.types.v0.4.0.*`) so mismatched versions do not cross-talk                                                                                                                                                                | Last-registered bootstrap wins (R08 in the stabilization doc); cross-library slot squatting within one realm is **open**                                                                                                                                                                                   |
 | **T** — Tampering: malformed invoke frames                        | FFI entry points                                | Size gate before copy (`payload.too_large`, default 1 MiB, `limits.rs`); `command_id` resolved against the frozen registry (`command.not_found`, `invoke_dispatch.rs`); args decoded with per-field validation (`command.invalid_args`)                      | None known on these paths                                                                                                                                                                                                                                                                                  |
-| **T** — Tampering: crafted Frame payloads                         | `frame_decode.rs`                               | Hand-written bounds-checked cursor decode (no `unchecked` transmutes of untrusted bytes); UTF-8 validation per string field; weekly fuzz (`fuzz.yml`, seeded corpus, 10-min run on `invoke_frame`); weekly miri on core logic (`miri.yml`)                   | Fuzz/miri are experimental tracks (`continue-on-error`), not gates — coverage is best-effort. **Open (accepted)**                                                                                                                                                                                          |
+| **T** — Tampering: crafted Frame payloads                         | `frame_decode.rs`                               | Hand-written bounds-checked cursor decode (no `unchecked` transmutes of untrusted bytes); UTF-8 validation per string field; weekly fuzz (`fuzz.yml`, seeded corpus, 10-min runs on three Frame/complex targets); weekly miri on core logic (`miri.yml`)     | Scheduled failures are visible (no continue-on-error). Release requires fresh Miri/ASan/Fuzz success for the candidate SHA. Bounded coverage is not a whole-program safety proof.                                                                                                                          |
 | **T** — Tampering: OTA/client mismatch routing                    | command_id aliasing (`builder_capabilities.rs`) | Aliases that would shadow another command's real id are rejected at declaration/build time (panic — loud, not silent)                                                                                                                                        | None known                                                                                                                                                                                                                                                                                                 |
 | **R** — Repudiation                                               | invoke/audit trail                              | Out of scope: rustra is a library; no built-in audit log. Hosts that need repudiation evidence must log at their own boundary                                                                                                                                | **Open by design**                                                                                                                                                                                                                                                                                         |
 | **I** — Information disclosure                                    | error frames, event payloads                    | Error frames carry structured `code` + message (`error.rs`) — no raw pointers, no heap addresses, no backtraces cross the boundary                                                                                                                           | Handler-authored messages flow through verbatim; leak discipline is the handler author's responsibility — **open (documented expectation)**                                                                                                                                                                |
@@ -103,8 +103,13 @@ runtime itself; application-level authz inside user command handlers
    planned on the stabilization track, not present here.
 4. **Release-build FFI misuse**: free-guard is debug-only by design.
 5. **npm dependency advisories** are not gated in CI.
-6. **Fuzz/miri/ASan are experimental tracks** (`continue-on-error`), not
-   mandatory gates; findings are harvested manually.
+6. **Safety coverage is bounded**: Miri covers lib/frame_wire/field_order_drift;
+   ASan/LSan covers lib; Fuzz covers invoke_frame/invoke_complex_value/
+   invoke_complex_serde for 600 seconds each with seed replay. Scheduled failures
+   fail their runs; both publish paths in `release.yml` require fresh successful
+   checks on the candidate SHA. These are release gates, not PR required checks
+   or proof of native-device/long-duration safety. Miri and ASan logs, exit codes,
+   toolchain and SHA are uploaded even on failure. See [release procedure](release-procedure.md).
 7. **Overload telemetry beyond counters**: A08's minimal slice
    (`rustra::ffi::async_pool_stats()`) measures submit/reject/complete
    counts; queue-depth histograms, per-command attribution, and executor
@@ -116,3 +121,11 @@ Revisit this document when: a new trust boundary is added (new host adapter),
 the wire format changes, or any open gap above is closed. The
 STRIDE table's "Mitigated by" column must always name real code paths — if a
 mitigation is removed, move its row to Open gaps in the same change.
+
+## 2026-09-14 maintenance note
+
+The old continue-on-error description predates `32573bf1` and is removed.
+The owned async pool drains and joins when dropped; production retains its
+process-lifetime owner. This fixes test teardown and does not establish a host
+unload/shutdown contract. Registry provenance is recorded separately in the
+[release matrix](release-matrix.md).

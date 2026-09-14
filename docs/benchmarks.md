@@ -19,6 +19,35 @@ changes, past numbers are not treated as execution evidence of the current check
 | React Native  | 0.81.5 + Expo 54             |
 | iOS simulator | iPhone 17                    |
 
+## Recursive complex-route safety A/B (2026-09-14)
+
+The M0 change that removes the recursive IR's strong `Arc` cycle was compared on
+the same Apple M1 Max, macOS 26.6.2, Rust 1.98.0, and optimized bench profile.
+Baseline and candidate each ran in five independent processes; every case used a
+three-second warm-up and 500 Criterion samples. The table reports the median of
+the five per-process median point estimates.
+
+| `Package::invoke_frame` case   |  Baseline | Safety candidate |           Change |
+| ------------------------------ | --------: | ---------------: | ---------------: |
+| Non-recursive oneOf data enum  | 161.40 ns |        160.59 ns |           -0.50% |
+| Non-recursive map of sequences | 421.88 ns |        430.03 ns |           +1.93% |
+| Recursive node depth 1         | 213.78 ns |        831.30 ns | +288.86% (3.89x) |
+| Recursive node depth 8         |  1.472 µs |         4.602 µs | +212.65% (3.13x) |
+
+The first diagnostic run also found a redundant recursive-IR scan on every call
+to an already validated non-recursive direct path. Reusing the build-time
+`serde_direct` decision removed that overhead, and both release controls are now
+within the 10% regression budget. Recursive schemas retain a 3.13–3.89x cost
+because they use the safe Value codec instead of restoring the leaking strong
+cycle. An owned-reference or arena direct-serde design should be considered only
+after a real consumer shows recursive schemas on a hot path.
+
+The complete five-run distribution, source and benchmark binary hashes, and
+environment are in
+[`2026-09-14-m0-complex-route-ab.json`](benchmark-receipts/2026-09-14-m0-complex-route-ab.json).
+This is a Rust core-boundary measurement; it does not represent JS transport,
+WebView, JSI, a physical device, or real-consumer p95, CPU, or RSS.
+
 ## Complex binary codec receipt (2026-08-27)
 
 The complex path measures the JS codec cost in a separate receipt.

@@ -1,0 +1,88 @@
+{
+  "ok": false,
+  "repository": "loopy-lim/rustra",
+  "sha": "b1ed9aa422fb4e627131f02f67de9f50bdbfedf7",
+  "checked_at": "2026-09-14T06:18:47.878Z",
+  "gates": [
+    {
+      "ok": true,
+      "workflow": "ci.yml",
+      "reason": null,
+      "run": {
+        "id": 34689520866,
+        "run_attempt": 1,
+        "name": "CI",
+        "path": ".github/workflows/ci.yml",
+        "head_sha": "b1ed9aa422fb4e627131f02f67de9f50bdbfedf7",
+        "event": "push",
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-09-12T10:51:02Z",
+        "run_started_at": "2026-09-12T10:51:02Z",
+        "updated_at": "2026-09-12T11:12:46Z",
+        "html_url": "https://github.com/loopy-lim/rustra/actions/runs/34689520866",
+        "repository": "loopy-lim/rustra"
+      }
+    },
+    {
+      "ok": false,
+      "workflow": "miri.yml",
+      "reason": "latest exact-source run is status=completed conclusion=failure",
+      "run": {
+        "id": 34787154794,
+        "run_attempt": 1,
+        "name": "Miri",
+        "path": ".github/workflows/miri.yml",
+        "head_sha": "b1ed9aa422fb4e627131f02f67de9f50bdbfedf7",
+        "event": "schedule",
+        "status": "completed",
+        "conclusion": "failure",
+        "created_at": "2026-09-13T22:33:29Z",
+        "run_started_at": "2026-09-13T22:33:29Z",
+        "updated_at": "2026-09-13T22:37:17Z",
+        "html_url": "https://github.com/loopy-lim/rustra/actions/runs/34787154794",
+        "repository": "loopy-lim/rustra"
+      }
+    },
+    {
+      "ok": false,
+      "workflow": "sanitizer.yml",
+      "reason": "latest exact-source run is status=completed conclusion=failure",
+      "run": {
+        "id": 34789741873,
+        "run_attempt": 1,
+        "name": "Sanitizer",
+        "path": ".github/workflows/sanitizer.yml",
+        "head_sha": "b1ed9aa422fb4e627131f02f67de9f50bdbfedf7",
+        "event": "schedule",
+        "status": "completed",
+        "conclusion": "failure",
+        "created_at": "2026-09-13T23:27:12Z",
+        "run_started_at": "2026-09-13T23:27:12Z",
+        "updated_at": "2026-09-13T23:28:05Z",
+        "html_url": "https://github.com/loopy-lim/rustra/actions/runs/34789741873",
+        "repository": "loopy-lim/rustra"
+      }
+    },
+    {
+      "ok": true,
+      "workflow": "fuzz.yml",
+      "reason": null,
+      "run": {
+        "id": 34720107322,
+        "run_attempt": 1,
+        "name": "Fuzz",
+        "path": ".github/workflows/fuzz.yml",
+        "head_sha": "b1ed9aa422fb4e627131f02f67de9f50bdbfedf7",
+        "event": "schedule",
+        "status": "completed",
+        "conclusion": "success",
+        "created_at": "2026-09-12T21:29:38Z",
+        "run_started_at": "2026-09-12T21:29:38Z",
+        "updated_at": "2026-09-12T21:41:09Z",
+        "html_url": "https://github.com/loopy-lim/rustra/actions/runs/34720107322",
+        "repository": "loopy-lim/rustra"
+      }
+    }
+  ]
+}

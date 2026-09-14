@@ -103,6 +103,12 @@ physical WebView teardown still needs native GUI acceptance on each target.
   Android/iOS devices, RN Windows/macOS hosts — is **not** covered by a
   runtime claim here, and nothing in this matrix asserts it. Per-run manual
   checks: [verification checklist](verification-checklist.md).
+- **Linux support level: Alpha**. Current product evidence is limited to build
+  and smoke; the local safety receipt is Linux ARM64, while release still requires
+  the unrun Actions Linux x86_64 ASan/LSan gate for the exact candidate. Promotion from Alpha requires
+  a real Linux Tauri WebView receipt covering launch, invoke/event/channel
+  behavior, reload/close lifecycle, and installation from the packaged artifact.
+  A container safety pass alone cannot promote the support level.
 - Per-adapter stable scope and gates: [compatibility-contract.md](compatibility-contract.md)
 - Cancellation propagation design: `docs/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
 
