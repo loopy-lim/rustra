@@ -2,7 +2,7 @@ English | [한국어](./getting-started.ko.md)
 
 # Getting Started with rustra
 
-> **Frame migration:** this guide targets Rust and shared packages 0.10.0 with the
+> **Frame migration:** this guide targets Rust 0.10.1 and shared packages 0.10.0 with the
 > adapter versions listed below. Release 0.9.0 does not include the Frame rename.
 > Upgrade native libraries, JS packages, and generated output together; see the
 > [migration guide](migrations/post-0.9-frame-and-audit.md) for versions and steps.
@@ -63,7 +63,7 @@ bunx --bun @rustra/cli@0.10.0 init my-project --force
 
 ```toml
 [dependencies]
-rustra = "0.10.0"
+rustra = "0.10.1"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
