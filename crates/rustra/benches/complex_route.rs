@@ -62,10 +62,59 @@ pub fn groups_echo(input: GroupsIn) -> rustra::Result<GroupsOut> {
     })
 }
 
+// ── recursive $ref complex route ──────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ChainNode {
+    pub value: i64,
+    pub next: Option<Box<ChainNode>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RecursiveIn {
+    pub root: ChainNode,
+}
+
+#[derive(Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RecursiveOut {
+    pub root: ChainNode,
+}
+
+pub fn recursive_echo(input: RecursiveIn) -> rustra::Result<RecursiveOut> {
+    Ok(RecursiveOut { root: input.root })
+}
+
+fn push_uvar(mut value: u64, output: &mut Vec<u8>) {
+    while value >= 0x80 {
+        output.push((value as u8) | 0x80);
+        value >>= 7;
+    }
+    output.push(value as u8);
+}
+
+/// Positive `i64` values 1..=depth followed by an optional next pointer.
+/// `next` has both a non-required struct-field tag and an Option tag, so each
+/// node is `[zigzag(value)][field-present=1][next-present]`.
+fn recursive_request(command_id: u16, depth: usize) -> Vec<u8> {
+    assert!(depth > 0);
+    let mut request = Vec::with_capacity(2 + depth * 3);
+    request.extend_from_slice(&command_id.to_le_bytes());
+    for value in 1..=depth {
+        push_uvar((value as u64) << 1, &mut request);
+        request.push(1);
+        request.push(u8::from(value < depth));
+    }
+    request
+}
+
 fn build_pkg() -> Package {
     Package::builder("bench.complex_route")
         .command("oneofEcho", oneof_echo)
         .command("groupsEcho", groups_echo)
+        .command("recursiveEcho", recursive_echo)
         .build()
 }
 
@@ -73,6 +122,7 @@ fn bench_complex_route(c: &mut Criterion) {
     let pkg = build_pkg();
     let oneof_id = common::command_id_of(&pkg, "oneofEcho");
     let groups_id = common::command_id_of(&pkg, "groupsEcho");
+    let recursive_id = common::command_id_of(&pkg, "recursiveEcho");
 
     // oneOf 와이어: [variant index][active.level zigzag varint] — wire fixture
     // 와 동일 인코딩(frame_wire::oneof_command_uses_complex_binary_wire).
@@ -89,6 +139,8 @@ fn bench_complex_route(c: &mut Criterion) {
         84, /* zigzag 42 */
         86, /* zigzag -43 */
     ];
+    let recursive_depth_1 = recursive_request(recursive_id, 1);
+    let recursive_depth_8 = recursive_request(recursive_id, 8);
 
     // smoke — 와이어가 틀리면 벤치가 무의미해지므로 즉시 실패시킨다.
     let resp = pkg
@@ -100,6 +152,13 @@ fn bench_complex_route(c: &mut Criterion) {
         .invoke_frame(&groups_req)
         .expect("groups complex invoke must succeed");
     assert_eq!(resp[0], 1, "groups ok");
+    for request in [&recursive_depth_1, &recursive_depth_8] {
+        let resp = pkg
+            .invoke_frame(request)
+            .expect("recursive complex invoke must succeed");
+        assert_eq!(resp[0], 1, "recursive ok");
+        assert_eq!(&resp[8..], &request[2..], "recursive echo body");
+    }
 
     let mut group = c.benchmark_group("complex_route");
     group.sample_size(500);
@@ -112,6 +171,18 @@ fn bench_complex_route(c: &mut Criterion) {
     group.bench_function(BenchmarkId::new("invoke_frame", "map_of_seqs"), |b| {
         b.iter(|| {
             let resp = pkg.invoke_frame(&groups_req).unwrap();
+            std::hint::black_box(&resp);
+        });
+    });
+    group.bench_function(BenchmarkId::new("invoke_frame", "recursive_depth_1"), |b| {
+        b.iter(|| {
+            let resp = pkg.invoke_frame(&recursive_depth_1).unwrap();
+            std::hint::black_box(&resp);
+        });
+    });
+    group.bench_function(BenchmarkId::new("invoke_frame", "recursive_depth_8"), |b| {
+        b.iter(|| {
+            let resp = pkg.invoke_frame(&recursive_depth_8).unwrap();
             std::hint::black_box(&resp);
         });
     });
