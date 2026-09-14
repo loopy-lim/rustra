@@ -135,7 +135,7 @@ pub(crate) fn encode_node_ir(
         }
         IrNode::Ref { target } => {
             let node = compiled_ref(target)?;
-            encode_node_ir(writer, node, value, limits, depth)
+            encode_node_ir(writer, &node, value, limits, depth)
         }
     }
 }

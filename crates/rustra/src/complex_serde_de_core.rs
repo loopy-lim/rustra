@@ -2,7 +2,26 @@
 
 /// 컴파일된 IR 로 와이어 바이트를 `I` 로 역직렬화한다 — `complex_decode` +
 /// `from_value` 와 동일한 값, Value 트리 없음.
+#[cfg(test)]
 pub(crate) fn from_bytes<I: de::DeserializeOwned>(
+    bytes: &[u8],
+    ir: &IrNode,
+    limits: ComplexCodecLimits,
+) -> Result<I> {
+    let mut reader = Reader::new(bytes, limits)?;
+    if has_recursive_refs(ir) {
+        let value = super::complex_codec_decode::decode_node_ir(&mut reader, ir, limits, 0)?;
+        if reader.remaining() != 0 {
+            return Err(error("trailing bytes in complex payload"));
+        }
+        return serde_json::from_value(value).map_err(|err| error(err.to_string()));
+    }
+    from_bytes_direct(bytes, ir, limits)
+}
+
+/// `CompiledComplex::serde_direct()`가 true인 IR의 hot path. 호출자가 빌드
+/// 시점 판정을 이미 보유하므로 매 호출마다 IR 전체를 다시 스캔하지 않는다.
+pub(crate) fn from_bytes_direct<I: de::DeserializeOwned>(
     bytes: &[u8],
     ir: &IrNode,
     limits: ComplexCodecLimits,
@@ -58,10 +77,7 @@ impl<'de, 'b> De<'de, 'b> {
 /// (const+type 은 타입으로만 읽음)를 진입마다 적용한다.
 fn peel(ir: &IrNode) -> Result<&IrNode> {
     match ir {
-        IrNode::Ref { target } => target
-            .get()
-            .map(|node| node.as_ref())
-            .ok_or_else(|| error("unresolved schema reference")),
+        IrNode::Ref { .. } => Err(error("recursive schema requires Value codec")),
         IrNode::Const {
             inner: Some(node), ..
         } => Ok(node.as_ref()),

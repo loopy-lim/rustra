@@ -110,7 +110,7 @@ pub(crate) fn decode_node_ir(
         }
         IrNode::Ref { target } => {
             let node = compiled_ref(target)?;
-            decode_node_ir(reader, node, limits, depth)
+            decode_node_ir(reader, &node, limits, depth)
         }
     }
 }
