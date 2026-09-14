@@ -5,6 +5,22 @@
 
 ## Unreleased
 
+## 0.10.1 (2026-09-14)
+
+### Fixed
+
+- 비동기 FFI 워커 풀의 소유권과 종료 처리를 명확히 해 소유 풀은 수락한 작업을
+  배출한 뒤 워커를 join하고, 포화 거절과 완료 계측의 경합을 방지한다.
+- mutable registry에 writer가 대기하는 동안 존재하지 않는 JSON/typed 명령의 오류
+  제안을 만들 때 발생할 수 있던 재진입 읽기 잠금 교착을 방지한다.
+- 재귀 complex schema IR의 강한 참조 순환을 제거해 Miri와 ASan/LSan에서 확인된
+  메모리 누수를 수정한다. 재귀 경로는 안전한 Value codec으로 처리하며 성능 비용과
+  측정 결과를 `docs/benchmarks.ko.md`에 기록한다.
+- 발행 후보의 정확한 SHA에서 CI·Miri·Sanitizer·Fuzz를 확인하고 npm/crates.io
+  발행 전에 재검증하도록 릴리스 게이트와 실패 로그 보존을 강화한다.
+- npm `gitHead`, crate VCS SHA·checksum·yank 상태를 분리해 확인하는 읽기 전용
+  레지스트리 감사를 추가하고 Linux 지원 범위를 Alpha로 명시한다.
+
 ## 0.10.0 (2026-09-12)
 
 ### Breaking
