@@ -18,6 +18,32 @@
 | React Native   | 0.81.5 + Expo 54             |
 | iOS 시뮬레이터 | iPhone 17                    |
 
+## 재귀 complex route 안전성 A/B (2026-09-14)
+
+M0의 재귀 IR 강한 `Arc` 순환 제거 전후를 동일한 Apple M1 Max, macOS 26.6.2,
+Rust 1.98.0, 최적화 bench 프로필에서 비교했다. 기준판과 후보판을 각각 독립
+프로세스 5회 실행했고, 각 실행은 case마다 3초 워밍업과 Criterion 500 sample을
+사용했다. 표는 실행별 median point estimate 다섯 개의 중앙값이다.
+
+| `Package::invoke_frame` case |    기준판 | 안전성 수정판 |             변화 |
+| ---------------------------- | --------: | ------------: | ---------------: |
+| 비재귀 oneOf data enum       | 161.40 ns |     160.59 ns |           -0.50% |
+| 비재귀 map of sequences      | 421.88 ns |     430.03 ns |           +1.93% |
+| 재귀 node depth 1            | 213.78 ns |     831.30 ns | +288.86% (3.89x) |
+| 재귀 node depth 8            |  1.472 µs |      4.602 µs | +212.65% (3.13x) |
+
+초기 진단에서는 비재귀 direct 경로도 호출마다 재귀 IR을 다시 검사해 dev
+프로필에서 6–8% 느려졌다. 빌드 시점의 `serde_direct` 판정을 재사용하는 전용
+hot path로 분리한 뒤 release control은 모두 10% 회귀 예산 안으로 돌아왔다.
+재귀 경로는 누수를 만들던 강한 순환을 되살리지 않고 안전한 Value codec을 쓰므로
+3.13–3.89배 비용이 남는다. 실제 앱이 재귀 스키마를 hot path에서 사용한다는
+증거가 생기면 owned reference 또는 arena 기반 direct serde를 다음 후보로 평가한다.
+
+원본 5회 분포, 소스·벤치 바이너리 hash와 환경은
+[`2026-09-14-m0-complex-route-ab.json`](benchmark-receipts/2026-09-14-m0-complex-route-ab.json)에
+있다. 이 수치는 Rust 코어 경계만 측정하며 JS transport, WebView, JSI, 실기기,
+실제 소비자 작업의 p95·CPU·RSS를 나타내지 않는다.
+
 ## Complex binary codec receipt (2026-08-27)
 
 복잡 경로는 별도 receipt로 JS codec 비용을 측정한다.

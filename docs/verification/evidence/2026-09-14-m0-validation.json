@@ -1,0 +1,364 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-09-14T08:58:58Z",
+  "baseSha": "b1ed9aa422fb4e627131f02f67de9f50bdbfedf7",
+  "branch": "codex/m0-safety-release-gates",
+  "worktreeUncommitted": true,
+  "postValidationFormatting": {
+    "path": "crates/rustra/src/ffi_pool.rs",
+    "validatedSha256": "92907d9412685091fac42f05258eef32191482126a99a243223bd9239c6bf741",
+    "committedSha256": "68945451b5689665594aa31aa13bf7a7c373e5274d1adbbdcfa561e8f96fda47",
+    "classification": "rustfmt-only",
+    "localFinalSourceValidation": {
+      "cargoFmtCheck": "passed",
+      "rustraLibTestsPassed": 178,
+      "rustraLibTestsFailed": 0
+    },
+    "finalExactShaRemoteSafetyGatesExecuted": false
+  },
+  "sourceFiles": {
+    ".github/workflows/fuzz.yml": "b914ebb7ad6530d98051a11c190c14193b3f71594aa2ddbe1031a70d2312ccd5",
+    ".github/workflows/miri.yml": "01ec906efe08b10f8fa3cb75fce8d378ffceb1ef2117220d06df7894d1fe5179",
+    ".github/workflows/release.yml": "71d2b8cf5054a860419108014ab1fb69c1eaadb9b4632e9a300f28fec14337b2",
+    ".github/workflows/sanitizer.yml": "91c93d897039d27049b2ad3a1989b48734cc0acb279a27f62ce09090a49fd961",
+    "api-surface/snapshot.json": "9b474d6d0faf0d2b6fee2f97de8d4abea08eb94bea5b8bf3b0210dc2d6493571",
+    "crates/rustra/src/complex_codec_decode.rs": "17efa6919755a11a7e7c73ffc3876087062059f6fae28935b6ad363813ed527c",
+    "crates/rustra/src/complex_codec_encode.rs": "9db942fa3f823f02078e98d8e24d3c4957ad474dbb35e664082790c7b859314e",
+    "crates/rustra/src/complex_schema_ir.rs": "bdce05a934c398ea02dca89b712d7ddb819ca5c7c6fcb8ee2fab6cf06c88e3c1",
+    "crates/rustra/src/complex_schema_ir_compile.rs": "1fab09c84bad184f5984d1639277e618a5fdaf717e69dd642498279c4aff8bf8",
+    "crates/rustra/src/complex_serde_de_core.rs": "9b117440c89df020f30029371e42b795fee31ff59b1a8143b9b67de8f2cb22e0",
+    "crates/rustra/src/complex_serde_ser_core.rs": "c2a05473b979f186dfb09b7893f8c1423904bab0d26c765c4df6fd48e03c3bae",
+    "crates/rustra/src/complex_serde_support.rs": "efab548b444d3a2b98d9c8b09e13dde46f9b1d6e9dcf2c00b27e71eb34fb7bba",
+    "crates/rustra/src/complex_serde_tests.rs": "f5a4dd693efc99a7b171b4396d1b8a9fb4e23ff1865a12c7312c977d113059b3",
+    "crates/rustra/src/ffi_pool.rs": "92907d9412685091fac42f05258eef32191482126a99a243223bd9239c6bf741",
+    "crates/rustra/src/complex_codec_encode_object.rs": "0e720545f05d45ae78844a0bfb9caef03f880b7fc97bd66e26364f50e2626d13",
+    "crates/rustra/benches/complex_route.rs": "d497511152c72ebd75fd127bb560b556c7b9e2400353945767c57e585d228d8b",
+    ".github/workflows/bench.yml": "13615296ff1be03c1f2853d1f3d011b9960bf2f674844932ee7c57a36ce491bc",
+    "scripts/benchmark-workflow.test.mjs": "e1002c67728b955c6fad6debc6a474c5a127f5add72b1c2aca3ebc9083446061",
+    "docs/benchmark-receipts/2026-09-14-m0-complex-route-ab.json": "5f7fa9db490c31b4e7e62e188238df8e11ea786ee36c23d75360ce42d2b0a41d",
+    "package.json": "735b6ad43346a95fb8ef3a863f861036f2e813919d6c20ce293df15fb4f77ed4",
+    "scripts/audit-release-registry.mjs": "ec7f64bfbc68a58e7ab9832672c9652f3966162ccc9eefd78dcf3db2f3bb3b04",
+    "scripts/audit-release-registry.test.mjs": "d77e0fdcdf3c98bc295acd43fca2de16fdc31d5cadbb87294a6e6910c798bcc4",
+    "scripts/check-release-gates.mjs": "ca67e57e1d1f58ad9175cbfcd5f17300458d37bedae5dd7eefc8d726e31b0a53",
+    "scripts/check-release-gates.test.mjs": "97ddc8833cdabf928976c19ef3eea3f6600cd6d197a39c37c5ac19008644ba43",
+    "scripts/run-safety-check.sh": "65a34d567ab01871f87249b4b149f189413780b21f9c0255ffc37bec0ee63c68",
+    "scripts/run-safety-check.test.mjs": "af348bd8729ae60c057cc5324c593546ed251f7b792fa6b154bb84d7ad936371",
+    "Cargo.toml": "45c4c82dec484d20472615c2836af1faca844ae342ea16ac94568a07b014213a",
+    "Cargo.lock": "081d9bdaae7ca4841bb08c2138fe589373e246c29b52a46534445066d1e4a4df",
+    "crates/rustra/Cargo.toml": "9921ee09d763f616ced2fa836a381227b6fcc825bd9af299b779644b796e8ab8",
+    "fuzz/Cargo.toml": "6be5b4e5a3b9def79dff27dfa24b34ad34a04b4e11d28847ce8d61b00502c73c",
+    "fuzz/Cargo.lock": "661475c30aed9a02b512d26acbb4c185df39c44b68bdcfc8442c7c707662c37a"
+  },
+  "linuxRustSourcesComparedToWorktree": true,
+  "linuxTarget": "aarch64-unknown-linux-gnu",
+  "nightly": "1.100.0-nightly (4b6d04e70 2026-09-13)",
+  "miri": [
+    {
+      "suite": "lib",
+      "passed": 178,
+      "failed": 0,
+      "ignored": 0,
+      "durationSeconds": 156.11,
+      "exitCode": 0
+    },
+    {
+      "suite": "frame-wire",
+      "passed": 31,
+      "failed": 0,
+      "ignored": 0,
+      "durationSeconds": 650.67,
+      "exitCode": 0
+    },
+    {
+      "suite": "field-order",
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "durationSeconds": 1.36,
+      "exitCode": 0
+    }
+  ],
+  "asan": {
+    "libPassed": 178,
+    "exitCode": 0,
+    "detectLeaks": true,
+    "leakReports": 0
+  },
+  "fuzz": [
+    {
+      "target": "invoke_frame",
+      "runs": 53964068,
+      "durationSeconds": 601,
+      "exitCode": 0,
+      "seedExitCode": 0
+    },
+    {
+      "target": "invoke_complex_value",
+      "runs": 9817508,
+      "durationSeconds": 601,
+      "exitCode": 0,
+      "seedExitCode": 0
+    },
+    {
+      "target": "invoke_complex_serde",
+      "runs": 16309069,
+      "durationSeconds": 601,
+      "exitCode": 0,
+      "seedExitCode": 0
+    }
+  ],
+  "nativeDebug": {
+    "passed": 483,
+    "failed": 0,
+    "ignoredDoctests": 5
+  },
+  "nativeRelease": {
+    "passed": 295,
+    "failed": 0,
+    "ignoredDoctests": 2
+  },
+  "releaseTools": {
+    "latestFullSuitePassed": 77
+  },
+  "docsTestsPassed": 37,
+  "architectureTestsPassed": 4,
+  "actionlint": "passed for five changed workflows",
+  "review": "approved after registry validation corrections",
+  "remoteChangedWorkflowExecuted": false,
+  "published": false,
+  "sourceLimitations": [
+    "Recursive schemas use a measured Value fallback; host, app, CPU, RSS and energy costs remain unmeasured.",
+    "Production static pool retains process lifetime; no host unload API added.",
+    "Linux Miri, ASan/LSan and fuzz ran before rustfmt rewrote ffi_pool.rs; the committed formatted source passed cargo fmt and all 178 rustra lib tests, while exact final-SHA remote safety gates remain unexecuted.",
+    "Linux ARM64 checks do not certify Actions x86_64, a Linux GUI, packaged installation or physical devices; Linux support remains Alpha."
+  ],
+  "artifacts": [
+    {
+      "path": "/tmp/rustra-m0/final-miri/field-order.exit-code",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "/tmp/rustra-m0/final-miri/field-order.log",
+      "sha256": "1ddc5cf514857691cb2b86944d1920d45bea6b76e45b554486a5c048fe6abd38",
+      "bytes": 2339
+    },
+    {
+      "path": "/tmp/rustra-m0/final-miri/frame-wire.exit-code",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "/tmp/rustra-m0/final-miri/frame-wire.log",
+      "sha256": "e144e1ae6e5c63b8c6363805f2f19946db0a1de73d30503e6dbc50d1b1f9ba33",
+      "bytes": 3538
+    },
+    {
+      "path": "/tmp/rustra-m0/final-miri/lib.exit-code",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "/tmp/rustra-m0/final-miri/lib.log",
+      "sha256": "c64e06ea0176b79f4ae83ac2ad043795b673c69a56bd25254a9932d4886773f6",
+      "bytes": 19304
+    },
+    {
+      "path": "/tmp/rustra-m0/final-asan/lib.exit-code",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "/tmp/rustra-m0/final-asan/lib.log",
+      "sha256": "3d720ceeb6dd23fcd14073d41a98a2b86e9f5b27a9b2e244d532a9ead2c3aadd",
+      "bytes": 17158
+    },
+    {
+      "path": "/tmp/rustra-m0/final-fuzz/invoke_complex_serde/fuzz.exit-code",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "/tmp/rustra-m0/final-fuzz/invoke_complex_serde/fuzz.log",
+      "sha256": "b79fb0f461182f87d625a9f263ee6a34ad855b12ddcd38fd9f89a4bb8fd06c31",
+      "bytes": 188231
+    },
+    {
+      "path": "/tmp/rustra-m0/final-fuzz/invoke_complex_serde/seeds.exit-code",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "/tmp/rustra-m0/final-fuzz/invoke_complex_serde/seeds.log",
+      "sha256": "c6c778667abd4d6a673a79521566e6cf07826ed2e552444948aed623f5251f17",
+      "bytes": 4797
+    },
+    {
+      "path": "/tmp/rustra-m0/final-fuzz/invoke_complex_value/fuzz.exit-code",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "/tmp/rustra-m0/final-fuzz/invoke_complex_value/fuzz.log",
+      "sha256": "3398fe95536a0ada3826e44d5b3b2ebd4335f42aded073d33f6e031729894f85",
+      "bytes": 195611
+    },
+    {
+      "path": "/tmp/rustra-m0/final-fuzz/invoke_complex_value/seeds.exit-code",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "/tmp/rustra-m0/final-fuzz/invoke_complex_value/seeds.log",
+      "sha256": "1bbf34b6ecc663fde55a5b1aa2b3788c9c15d1113cc60b23ab4b77ffedfb21f2",
+      "bytes": 4853
+    },
+    {
+      "path": "/tmp/rustra-m0/final-fuzz/invoke_frame/fuzz.exit-code",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "/tmp/rustra-m0/final-fuzz/invoke_frame/fuzz.log",
+      "sha256": "9889ac844d3aff0a871c6a5bf24f69d4d4bbbe8b8250c3a4e99572fde9c04a1c",
+      "bytes": 17022
+    },
+    {
+      "path": "/tmp/rustra-m0/final-fuzz/invoke_frame/seeds.exit-code",
+      "sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa",
+      "bytes": 2
+    },
+    {
+      "path": "/tmp/rustra-m0/final-fuzz/invoke_frame/seeds.log",
+      "sha256": "9691a42faf9bde5f69704d73990f3626462375d80e08108c1d8fc44ae8896d84",
+      "bytes": 4865
+    },
+    {
+      "path": "/tmp/rustra-m0/miri-before.log",
+      "sha256": "5d6e20f4cf4fa81bd4d0f9de4585985db92bb9b8c4e652c8c2dcf3c9aea98520",
+      "bytes": 8876
+    },
+    {
+      "path": "/tmp/rustra-m0/miri-after-lib.log",
+      "sha256": "cfad9ad3ea60ab7ce41e743c94ab0c75582e7de0ed3db9d6ba4321be6345aa46",
+      "bytes": 162749
+    },
+    {
+      "path": "/tmp/rustra-m0/asan-before/asan.2477",
+      "sha256": "70a5749866516d7890b0009af8367474e748ecc1ff7b6898f562270efae0ce97",
+      "bytes": 189168
+    },
+    {
+      "path": "/tmp/rustra-m0/rust-regression.log",
+      "sha256": "11004a13e0a7cc617527d371658ddbca280d918d8882a35caa713b9119faea28",
+      "bytes": 30734
+    },
+    {
+      "path": "/tmp/rustra-m0/rust-release.log",
+      "sha256": "61d490764660fbe8eb06c29ec93e7b417f96512b09085a7777b0e7530041015b",
+      "bytes": 28845
+    },
+    {
+      "path": "/tmp/rustra-m0/release-tools-final.log",
+      "sha256": "625092832db19db9c4979a33a713428237f05ab8b55198339a1c6d1742e40ddc",
+      "bytes": 14013
+    },
+    {
+      "path": "/tmp/rustra-m0/final-new-tools.log",
+      "sha256": "7e3d2c1f4012db93db5c86ca53cb67c1390840e9a76eaa4127a4bea94a4ef51b",
+      "bytes": 5509
+    },
+    {
+      "path": "/tmp/rustra-m0/docs-check.log",
+      "sha256": "00ea32d2205835e760b6555a21cd3d5b40ad5c0ecf17b77a6b295347a8586501",
+      "bytes": 9144
+    },
+    {
+      "path": "/tmp/rustra-m0/clippy.log",
+      "sha256": "617113cf7df21de3316b4e4f73b65ac3a42f70b18ef261a94093737efcff4440",
+      "bytes": 337
+    },
+    {
+      "path": "/tmp/rustra-m0/architecture.log",
+      "sha256": "cb68af6dbd753b054ae7e9ce671e81c259b6b27e2e0dac27544c4806de41990e",
+      "bytes": 508
+    },
+    {
+      "path": "/tmp/rustra-m0/final-fuzz-corpus.tar.gz",
+      "sha256": "3ce5ff02f44532fc3527ccd521ed3196f5859fec141791c0ea6e78d1e0ecbf46",
+      "bytes": 59702
+    },
+    {
+      "path": "/tmp/rustra-m0/review-safety-release.md",
+      "sha256": "76ae80417efafb17813e8b62ff22c8b5e5af2bfca51bcc89388bd7039a37547a",
+      "bytes": 8054
+    },
+    {
+      "path": "/tmp/rustra-m0/safety-logs.tar.gz",
+      "sha256": "8653fd385e0e2d9ac6e35fdc8a3e6ec6c04cb27907bf35339364cd92c8255ca7",
+      "bytes": 108037
+    }
+  ],
+  "latestSafetyArtifacts": [
+    {
+      "path": "target/safety/miri-latest/lib.log",
+      "sha256": "445df8213499807a97e30ad811fb913098b55872f229a93a336b767d259515a9",
+      "bytes": 25488
+    },
+    {
+      "path": "target/safety/miri-latest/frame-wire.log",
+      "sha256": "a52e98f80c2d8350d7de9f5fca2e5b5137d979e331b0d2adc83bf3798c10b927",
+      "bytes": 3538
+    },
+    {
+      "path": "target/safety/miri-latest/field-order.log",
+      "sha256": "8de0acfaeabed4fa1ec6a545a9b535f1a1cf22b7b23e20c87951f6d1bcd588ec",
+      "bytes": 2339
+    },
+    {
+      "path": "target/safety/asan-latest/lib.log",
+      "sha256": "db6555420d4281ca6b94524a2f17ef2a1180f864f920eaa70ace51dda8a938d8",
+      "bytes": 20180
+    },
+    {
+      "path": "target/safety/fuzz-latest/invoke_frame/seeds.log",
+      "sha256": "3ebc260e66e74ce708d18f9af3f52448334135b1abf4df4f8136655558fde46d",
+      "bytes": 4795
+    },
+    {
+      "path": "target/safety/fuzz-latest/invoke_frame/fuzz.log",
+      "sha256": "86ae522709ae12f560523f211d5b94aa897aff82c2e1ebb83dee9396b9d04c91",
+      "bytes": 17528
+    },
+    {
+      "path": "target/safety/fuzz-latest/invoke_complex_value/seeds.log",
+      "sha256": "7b447f7639d5c37faa962d378fd7e81f6e812fd5f5e8ddecd6aec97ad58e447d",
+      "bytes": 4672
+    },
+    {
+      "path": "target/safety/fuzz-latest/invoke_complex_value/fuzz.log",
+      "sha256": "8f58d55a008776ca5c1a55b56f20b53d40e7726b174e5f3e701401c470e1a08c",
+      "bytes": 209774
+    },
+    {
+      "path": "target/safety/fuzz-latest/invoke_complex_serde/seeds.log",
+      "sha256": "d6976d1169c5e958b6f39a4dd5001fbda7efa7e288077a1d9e770ad0c21dc9b0",
+      "bytes": 4725
+    },
+    {
+      "path": "target/safety/fuzz-latest/invoke_complex_serde/fuzz.log",
+      "sha256": "23e659e763507ad67cdf20a31f91bec81dacca1993d483ac14c6bcdd44183402",
+      "bytes": 196092
+    },
+    {
+      "path": "/tmp/rustra-m0/latest-fuzz-corpus.tar.gz",
+      "sha256": "29ea3895bfd820bb76f22a123820f750e1539248200ea20509816c3934a28aa6",
+      "bytes": 66121
+    },
+    {
+      "path": "/tmp/rustra-m0/latest-safety-logs.tar.gz",
+      "sha256": "cb769f7545a6b24388af2f1419306d8cf9c8befc798fb3bb44403fa9bccb54aa",
+      "bytes": 75027
+    }
+  ]
+}
