@@ -51,92 +51,117 @@ enum AsyncTask {
     Into(AsyncIntoJob),
 }
 
-fn async_pool() -> &'static Mutex<std::sync::mpsc::SyncSender<AsyncTask>> {
-    static POOL: OnceLock<Mutex<std::sync::mpsc::SyncSender<AsyncTask>>> = OnceLock::new();
-    POOL.get_or_init(|| {
+/// The production owner has process lifetime. Owned pools drain and join on drop,
+/// so tests exercise the same queue/worker code without detached global workers.
+struct AsyncPool {
+    sender: Mutex<Option<std::sync::mpsc::SyncSender<AsyncTask>>>,
+    workers: Vec<std::thread::JoinHandle<()>>,
+    counters: std::sync::Arc<PoolCounters>,
+}
+
+#[derive(Default)]
+struct PoolCounters {
+    submitted: AtomicU64,
+    rejected: AtomicU64,
+    completed: AtomicU64,
+    inflight: AtomicU64,
+}
+
+impl AsyncPool {
+    fn new() -> Self {
         let (tx, rx) = std::sync::mpsc::sync_channel::<AsyncTask>(ASYNC_QUEUE_DEPTH);
-        // 수신자를 Arc 로 공유해 각 워커가 lock-recv 로 잡는다 — Mutex 가 잠기는
-        // 동안 다른 워커는 대기하지만 recv 자체가 블로킹이라 실제 경합은 짧다.
         let rx = std::sync::Arc::new(Mutex::new(rx));
+        let mut pool = Self {
+            sender: Mutex::new(Some(tx)),
+            workers: Vec::with_capacity(ASYNC_POOL_SIZE),
+            counters: std::sync::Arc::new(PoolCounters::default()),
+        };
         for _ in 0..ASYNC_POOL_SIZE {
             let rx = std::sync::Arc::clone(&rx);
-            std::thread::spawn(move || {
+            let counters = std::sync::Arc::clone(&pool.counters);
+            // A spawn panic drops the partially built pool and joins workers
+            // already started, rather than detaching them.
+            pool.workers.push(std::thread::spawn(move || {
                 loop {
-                    let job = {
-                        let guard = rx.lock().unwrap_or_else(|p| p.into_inner());
-                        guard.recv()
-                    };
+                    let job = rx.lock().unwrap_or_else(|p| p.into_inner()).recv();
+                    let Ok(job) = job else { break };
                     match job {
-                        Ok(AsyncTask::Alloc((
+                        AsyncTask::Alloc((
                             id,
                             bytes,
                             user_data_raw,
                             on_complete,
                             invoke_fn,
                             serialize,
-                        ))) => {
+                        )) => {
                             run_worker(id, bytes, user_data_raw, on_complete, invoke_fn, serialize);
-                            record_pool_completion();
                         }
-                        Ok(AsyncTask::Into(job)) => {
-                            run_worker_into(job);
-                            record_pool_completion();
-                        }
-                        Err(_) => break, // 송신자 전원 해제(프로세스 종료) — 워커 종료
+                        AsyncTask::Into(job) => run_worker_into(job),
                     }
+                    counters.inflight.fetch_sub(1, Ordering::Relaxed);
+                    counters.completed.fetch_add(1, Ordering::Relaxed);
                 }
-            });
+            }));
         }
-        Mutex::new(tx)
-    })
-}
+        pool
+    }
 
-/// 풀에 작업을 제출한다 — 큐가 가득 차면 Err(백프레셔). 호출자는
-/// `invoke.backpressure` 프레임으로 정규화한다.
-fn async_pool_submit(job: AsyncTask) -> Result<(), AsyncTask> {
-    let tx = async_pool()
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let verdict = tx.try_send(job);
-    // A08 overload 계측(최소 슬라이스) — 측정 근거 수집용 카운터. Relaxed 로
-    // 충분하다: 정확한 스냅샷이 아니라 "백프레셔가 실제로 발생하는가"의 근거가
-    // 목적이다. 제출 성공/거부는 여기서, 완료는 워커 루프에서 기록한다.
-    match &verdict {
-        Ok(()) => {
-            ASYNC_SUBMITTED.fetch_add(1, Ordering::Relaxed);
-            ASYNC_INFLIGHT.fetch_add(1, Ordering::Relaxed);
-        }
-        Err(_) => {
-            ASYNC_REJECTED.fetch_add(1, Ordering::Relaxed);
+    fn submit(&self, job: AsyncTask) -> Result<(), AsyncTask> {
+        let tx = self.sender.lock().unwrap_or_else(|p| p.into_inner());
+        // Reserve before publishing: a fast worker must never decrement zero.
+        self.counters.inflight.fetch_add(1, Ordering::Relaxed);
+        match tx.as_ref().expect("live pool sender").try_send(job) {
+            Ok(()) => {
+                self.counters.submitted.fetch_add(1, Ordering::Relaxed);
+                Ok(())
+            }
+            Err(error) => {
+                self.counters.inflight.fetch_sub(1, Ordering::Relaxed);
+                self.counters.rejected.fetch_add(1, Ordering::Relaxed);
+                Err(match error {
+                    std::sync::mpsc::TrySendError::Full(job)
+                    | std::sync::mpsc::TrySendError::Disconnected(job) => job,
+                })
+            }
         }
     }
-    verdict.map_err(|e| match e {
-        std::sync::mpsc::TrySendError::Full(job) => job,
-        std::sync::mpsc::TrySendError::Disconnected(job) => job,
-    })
+
+    fn stats(&self) -> AsyncPoolStats {
+        self.counters.stats()
+    }
 }
 
-// ── A08 overload 계측 카운터 ────────────────────────────────
-//
-// 안정화 통합 트랙(2026-09-05)의 A08 정의: "overload 계측 — 측정 근거 선행".
-// 실행기 튜닝(워커 수·큐 깊이 노출, executor 주입)은 측정 근거가 쌓인 뒤
-// 별도 트랙에서 결정한다. 이 슬라이스는 그 근거를 모으는 최소 계측이다:
-// - submitted/rejected: 백프레셔 발생 빈도(`invoke.backpressure` 가 얼마나
-//   자주 터지는가)와 투입량의 원시 근거.
-// - completed/inflight: 완료 처리량과 순간 동시 잡 수(과부하 시 inflight 가
-//   queue_depth + pool_size 근처에 붙는지 관찰).
-// 오버헤드는 제출/완료당 AtomicU64 Relaxed 1회씩 — 핫 경계 프로파일
-// (A07의 register_profiled)과 무관하게 상시 켠 채 둔다.
-static ASYNC_SUBMITTED: AtomicU64 = AtomicU64::new(0);
-static ASYNC_REJECTED: AtomicU64 = AtomicU64::new(0);
-static ASYNC_COMPLETED: AtomicU64 = AtomicU64::new(0);
-static ASYNC_INFLIGHT: AtomicU64 = AtomicU64::new(0);
+impl Drop for AsyncPool {
+    fn drop(&mut self) {
+        // Disconnect first. Receivers drain accepted jobs, then return Err.
+        self.sender
+            .get_mut()
+            .unwrap_or_else(|p| p.into_inner())
+            .take();
+        for worker in self.workers.drain(..) {
+            // Join every worker even if one unwound; do not double-panic in Drop.
+            let _ = worker.join();
+        }
+    }
+}
 
-/// 워커 루프의 잡 완료 기록 — run_worker/run_worker_into 반환은 곧 완료
-/// (on_complete 호출 포함)를 뜻하므로 이 지점이 유일한 완료 체크포인트다.
-fn record_pool_completion() {
-    ASYNC_COMPLETED.fetch_add(1, Ordering::Relaxed);
-    ASYNC_INFLIGHT.fetch_sub(1, Ordering::Relaxed);
+static ASYNC_POOL: OnceLock<AsyncPool> = OnceLock::new();
+
+fn async_pool_submit(job: AsyncTask) -> Result<(), AsyncTask> {
+    ASYNC_POOL.get_or_init(AsyncPool::new).submit(job)
+}
+
+impl PoolCounters {
+    fn stats(&self) -> AsyncPoolStats {
+        AsyncPoolStats {
+            pool_size: ASYNC_POOL_SIZE,
+            queue_depth: ASYNC_QUEUE_DEPTH,
+            submitted: self.submitted.load(Ordering::Relaxed),
+            rejected: self.rejected.load(Ordering::Relaxed),
+            completed: self.completed.load(Ordering::Relaxed),
+            inflight: self.inflight.load(Ordering::Relaxed),
+        }
+    }
 }
 
 /// async 워커 풀의 계측 스냅샷(A08 최소 슬라이스).
@@ -159,14 +184,10 @@ pub struct AsyncPoolStats {
 /// async 워커 풀 계측 스냅샷을 반환한다. 진단·측정용 — 완료 통계로 게이트를
 /// 걸지 말 것(Relaxed 카운터는 근사치다).
 pub fn async_pool_stats() -> AsyncPoolStats {
-    AsyncPoolStats {
-        pool_size: ASYNC_POOL_SIZE,
-        queue_depth: ASYNC_QUEUE_DEPTH,
-        submitted: ASYNC_SUBMITTED.load(Ordering::Relaxed),
-        rejected: ASYNC_REJECTED.load(Ordering::Relaxed),
-        completed: ASYNC_COMPLETED.load(Ordering::Relaxed),
-        inflight: ASYNC_INFLIGHT.load(Ordering::Relaxed),
-    }
+    ASYNC_POOL
+        .get()
+        .map(AsyncPool::stats)
+        .unwrap_or_else(|| PoolCounters::default().stats())
 }
 
 #[cfg(test)]
@@ -177,15 +198,94 @@ mod a08_tests {
         std::ptr::null_mut()
     }
 
+    fn noop_task() -> AsyncTask {
+        AsyncTask::Alloc((
+            crate::cancel::register_invocation(),
+            Vec::new(),
+            0,
+            None,
+            noop_invoke,
+            sync_serialize,
+        ))
+    }
+
+    #[test]
+    fn drop_drains_queued_jobs_and_joins_workers_repeatedly() {
+        for _ in 0..3 {
+            let pool = AsyncPool::new();
+            let counters = std::sync::Arc::clone(&pool.counters);
+            let mut ids = Vec::new();
+            for _ in 0..16 {
+                let job = noop_task();
+                if let AsyncTask::Alloc((id, ..)) = &job {
+                    ids.push(*id);
+                }
+                assert!(pool.submit(job).is_ok());
+            }
+            drop(pool);
+            let stats = counters.stats();
+            assert_eq!(stats.submitted, 16);
+            assert_eq!(stats.completed, 16);
+            assert_eq!(stats.inflight, 0);
+            for id in ids {
+                assert_eq!(crate::cancel::status(id), crate::cancel::Status::Unknown);
+            }
+        }
+    }
+
+    #[test]
+    fn full_queue_rejects_without_losing_accepted_jobs() {
+        static STARTED: std::sync::Barrier = std::sync::Barrier::new(3);
+        static RELEASE: std::sync::Barrier = std::sync::Barrier::new(3);
+        unsafe extern "C" fn blocked(_p: *const u8, _len: usize, _out: *mut usize) -> *mut u8 {
+            STARTED.wait();
+            RELEASE.wait();
+            std::ptr::null_mut()
+        }
+        let pool = AsyncPool::new();
+        for _ in 0..2 {
+            assert!(
+                pool.submit(AsyncTask::Alloc((
+                    crate::cancel::register_invocation(),
+                    Vec::new(),
+                    0,
+                    None,
+                    blocked,
+                    sync_serialize
+                )))
+                .is_ok()
+            );
+        }
+        STARTED.wait();
+        let accepted = (0..256)
+            .filter(|_| pool.submit(noop_task()).is_ok())
+            .count();
+        let rejected = pool.submit(noop_task());
+        let saturated = pool.stats();
+        RELEASE.wait();
+        let counters = std::sync::Arc::clone(&pool.counters);
+        drop(pool);
+        assert_eq!(accepted, 256);
+        assert_eq!(saturated.inflight, 258);
+        assert_eq!(saturated.rejected, 1);
+        match rejected {
+            Err(AsyncTask::Alloc((id, ..))) => crate::cancel::complete_invocation(id),
+            _ => panic!("full queue accepted a job"),
+        }
+        assert_eq!(counters.stats().completed, 258);
+        assert_eq!(counters.stats().inflight, 0);
+    }
+
     #[test]
     fn stats_expose_pool_constants_and_monotonic_counters() {
-        let before = async_pool_stats();
+        let pool = AsyncPool::new();
+        let before = pool.stats();
         assert_eq!(before.pool_size, ASYNC_POOL_SIZE);
         assert_eq!(before.queue_depth, ASYNC_QUEUE_DEPTH);
 
         // 잡 1건 제출 — null 반환 invoke_fn + null 콜백이라 워커가 안전하게
         // 소비한다(응답 프레임 없음, 해제 대상 없음).
-        let ok = async_pool_submit(AsyncTask::Alloc((
+        let ok = pool.submit(AsyncTask::Alloc((
             crate::cancel::register_invocation(),
             Vec::new(),
             0,
@@ -198,7 +298,7 @@ mod a08_tests {
         // 워커가 소진할 때까지 스핀 대기(상한 5초 — CI 타임아웃 방지).
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         let after = loop {
-            let s = async_pool_stats();
+            let s = pool.stats();
             if s.completed > before.completed || std::time::Instant::now() > deadline {
                 break s;
             }
@@ -211,5 +311,9 @@ mod a08_tests {
         assert!(after.submitted > before.submitted);
         // 불변: 제출 = 완료 + 실행 중 + (경합 무시 근사) — inflight 는 음이 될 수 없다.
         assert!(after.inflight <= after.submitted);
+        let counters = std::sync::Arc::clone(&pool.counters);
+        drop(pool);
+        assert_eq!(counters.stats().inflight, 0);
+        assert_eq!(counters.stats().completed, 1);
     }
 }

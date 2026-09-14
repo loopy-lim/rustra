@@ -368,7 +368,7 @@
       "# [path = \"complex_schema_ir.rs\"]  # [derive (Debug)] pub (crate) enum IrMatcher { Discriminator { key : String , tag : Value } , SingleProperty { key : String } , ConstEq (Value) , EnumSingle (Value) , AnyString , AnyObject , Never , }"
     ],
     "rustra::complex_codec::complex_schema_ir::enum:IrNode": [
-      "# [path = \"complex_schema_ir.rs\"]  # [derive (Debug)] pub (crate) enum IrNode { String , Boolean , Int { unsigned : bool } , Float { single : bool } , Null , Seq { tuple : Option < Vec < Arc < IrNode > > > , items : Option < Arc < IrNode > > , } , Option { inner : Arc < IrNode > } , Struct { fields : Vec < IrField > , required : Vec < bool > , } , Map { value : Arc < IrNode > } , Enum { values : Arc < [Value] > } , Const { value : Value , inner : Option < Arc < IrNode > > , } , OneOf { variants : Vec < IrVariant > } , Ref { target : Arc < OnceLock < Arc < IrNode > > > } , }"
+      "# [path = \"complex_schema_ir.rs\"]  # [derive (Debug)] pub (crate) enum IrNode { String , Boolean , Int { unsigned : bool } , Float { single : bool } , Null , Seq { tuple : Option < Vec < Arc < IrNode > > > , items : Option < Arc < IrNode > > , } , Option { inner : Arc < IrNode > } , Struct { fields : Vec < IrField > , required : Vec < bool > , } , Map { value : Arc < IrNode > } , Enum { values : Arc < [Value] > } , Const { value : Value , inner : Option < Arc < IrNode > > , } , OneOf { variants : Vec < IrVariant > } , Ref { target : Arc < OnceLock < Weak < IrNode > > > } , }"
     ],
     "rustra::complex_codec::complex_schema_ir::struct:Context": [
       "# [path = \"complex_schema_ir.rs\"]    struct Context < 'a > { } opaque_fields=true"
@@ -391,8 +391,8 @@
     "rustra::complex_codec::complex_schema_ir::use:std :: collections :: { BTreeSet , HashMap }": [
       "# [path = \"complex_schema_ir.rs\"]    use std :: collections :: { BTreeSet , HashMap } ;"
     ],
-    "rustra::complex_codec::complex_schema_ir::use:std :: sync :: { Arc , OnceLock }": [
-      "# [path = \"complex_schema_ir.rs\"]  use std :: sync :: { Arc , OnceLock } ;"
+    "rustra::complex_codec::complex_schema_ir::use:std :: sync :: { Arc , OnceLock , Weak }": [
+      "# [path = \"complex_schema_ir.rs\"]  use std :: sync :: { Arc , OnceLock , Weak } ;"
     ],
     "rustra::complex_codec::complex_schema_ir::use:super :: complex_codec_schema :: error": [
       "# [path = \"complex_schema_ir.rs\"]  use super :: complex_codec_schema :: error ;"
@@ -1543,6 +1543,9 @@
     "rustra::ffi::free_guard::use:std :: sync :: { Mutex , OnceLock }": [
       "# [cfg (debug_assertions)] use std :: sync :: { Mutex , OnceLock } ;"
     ],
+    "rustra::ffi::impl Drop for AsyncPool { }::fn:drop": [
+      "fn drop (& mut self)"
+    ],
     "rustra::ffi::impl Drop for EnsureComplete { }::fn:drop": [
       "fn drop (& mut self)"
     ],
@@ -1554,6 +1557,9 @@
     ],
     "rustra::ffi::impl Package { }::fn:register_ffi_with_default": [
       "pub fn register_ffi_with_default (& self , format : FfiFormat)"
+    ],
+    "rustra::ffi::impl:impl Drop for AsyncPool { }": [
+      "impl Drop for AsyncPool { }"
     ],
     "rustra::ffi::impl:impl Drop for EnsureComplete { }": [
       "impl Drop for EnsureComplete { }"
@@ -1584,6 +1590,9 @@
     ],
     "rustra::ffi::struct:AsyncIntoJob": [
       "struct AsyncIntoJob { } opaque_fields=true"
+    ],
+    "rustra::ffi::struct:AsyncPool": [
+      "struct AsyncPool { } opaque_fields=true"
     ],
     "rustra::ffi::struct:AsyncPoolStats": [
       "# [derive (Clone , Copy , Debug , PartialEq , Eq)] pub struct AsyncPoolStats { pub pool_size : usize , pub queue_depth : usize , pub submitted : u64 , pub rejected : u64 , pub completed : u64 , pub inflight : u64 } opaque_fields=false"
@@ -1638,6 +1647,9 @@
     ],
     "rustra::ffi::struct:HotReloadSkip": [
       "# [derive (Debug , Clone , serde :: Serialize)] struct HotReloadSkip { } opaque_fields=true"
+    ],
+    "rustra::ffi::struct:PoolCounters": [
+      "# [derive (Default)] struct PoolCounters { } opaque_fields=true"
     ],
     "rustra::ffi::struct:ProbeCacheEntry": [
       "struct ProbeCacheEntry { } opaque_fields=true"
