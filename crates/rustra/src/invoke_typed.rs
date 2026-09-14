@@ -44,12 +44,12 @@ impl Package {
                 .state
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            state
-                .commands
-                .get(name)
-                .ok_or_else(|| self.command_not_found(name))?
-                .clone()
+            state.commands.get(name).cloned()
         };
+        // Error suggestions re-read the registry, so construct them only after
+        // releasing this guard. A queued writer can otherwise deadlock the
+        // recursive read on writer-preferring RwLock implementations.
+        let command = command.ok_or_else(|| self.command_not_found(name))?;
         self.invoke_typed_command(command.as_ref(), input)
     }
 

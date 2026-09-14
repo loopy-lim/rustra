@@ -22,12 +22,12 @@ impl Package {
                 .state
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            state
-                .commands
-                .get(name)
-                .ok_or_else(|| self.command_not_found(name))?
-                .clone()
+            state.commands.get(name).cloned()
         };
+        // Build the suggestion after releasing the registry read lock. If a
+        // writer is queued, recursively taking another read lock here can
+        // deadlock with that writer on writer-preferring RwLock targets.
+        let command = command.ok_or_else(|| self.command_not_found(name))?;
         self.invoke_json_command(command.as_ref(), params)
     }
 
