@@ -70,6 +70,30 @@ fn serde_direct_supported_node(ir: &IrNode, walking: &mut Vec<*const IrNode>) ->
                 IrBody::Tagged { .. } | IrBody::Node(_) => false,
             }
         }),
-        IrNode::Ref { target } => target.get().is_some_and(|node| arc(node, walking)),
+        // Weak recursive targets cannot be borrowed for the serde adapter lifetime.
+        IrNode::Ref { .. } => false,
+    }
+}
+
+/// Only recursive back edges need the owning Value traversal. Strong child edges
+/// form a DAG, so this inspection never follows a recursive target.
+#[cfg(test)]
+fn has_recursive_refs(ir: &IrNode) -> bool {
+    match ir {
+        IrNode::Ref { .. } => true,
+        IrNode::Seq { tuple, items } => {
+            tuple.iter().flatten().any(|node| has_recursive_refs(node))
+                || items.as_ref().is_some_and(|node| has_recursive_refs(node))
+        }
+        IrNode::Option { inner } | IrNode::Map { value: inner } => has_recursive_refs(inner),
+        IrNode::Struct { fields, .. } => fields.iter().any(|field| has_recursive_refs(&field.node)),
+        IrNode::Const { inner, .. } => inner.as_ref().is_some_and(|node| has_recursive_refs(node)),
+        IrNode::OneOf { variants } => variants.iter().any(|variant| match &variant.body {
+            IrBody::Tagged { node } | IrBody::UnwrapSingle { node, .. } | IrBody::Node(node) => {
+                has_recursive_refs(node)
+            }
+            _ => false,
+        }),
+        _ => false,
     }
 }

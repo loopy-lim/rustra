@@ -10,7 +10,7 @@
 //! 매 호출 raw 스키마 모양을 보고 내리는 결정들을 빌드 시점에 스냅샷한다:
 //!
 //! - `$ref`/`allOf` 전개는 컴파일 시점에 완료. 재귀 정의는 사이클을 끊는
-//!   `Ref` 노드로 남고 정의 IR은 공유 `OnceLock` 에 메모이즈된다. 컴파일이
+//!   `Ref` 노드로 남고 정의 IR은 공유 `OnceLock<Weak<_>>` 에 메모이즈된다. 컴파일이
 //!   성공하면 도달한 모든 `Ref` 슬롯이 채워진 상태가 보장된다(실패한 정의
 //!   컴파일은 전체 Err 로 귀결되어 코덱이 만들어지지 않음).
 //! - `option_inner`(type:[T,null] / anyOf:[T,null]) 해석을 `Option` 노드로
@@ -30,7 +30,7 @@
 use super::complex_codec_schema::error;
 use crate::Result;
 use serde_json::Value;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, Weak};
 
 /// 컴파일된 complex 스키마 노드.
 #[derive(Debug)]
@@ -76,8 +76,9 @@ pub(crate) enum IrNode {
     OneOf { variants: Vec<IrVariant> },
     /// 재귀 `$ref` — 정의 IR 로 1-hop(원본이 `$ref` 를 인라인 해석하듯 깊이
     /// 카운터를 바꾸지 않는다). 정의 IR 은 컴파일 성공 시 채워진 공유
-    /// `OnceLock` 에 메모이즈된다.
-    Ref { target: Arc<OnceLock<Arc<IrNode>>> },
+    /// `OnceLock<Weak<_>>` 에 메모이즈된다. 강한 자식 소유권과 약한
+    /// 재귀 역참조를 분리해 마지막 루트가 사라지면 그래프도 해제된다.
+    Ref { target: Arc<OnceLock<Weak<IrNode>>> },
 }
 
 /// struct 필드 — 이름과 컴파일된 타입 노드.
@@ -150,10 +151,97 @@ fn ir_error(message: impl Into<String>) -> RustraError {
 
 /// 메모이즈된 Ref 슬롯 해석 — encode/decode 공통. 컴파일 성공 시 모든 도달
 /// Ref 슬롯이 채워진다 — 빈 슬롯은 컴파일러 버그.
-pub(crate) fn compiled_ref(target: &OnceLock<Arc<IrNode>>) -> Result<&Arc<IrNode>> {
+pub(crate) fn compiled_ref(target: &OnceLock<Weak<IrNode>>) -> Result<Arc<IrNode>> {
     target
         .get()
+        .and_then(Weak::upgrade)
         .ok_or_else(|| error("unresolved schema reference"))
 }
 
 include!("complex_schema_ir_compile.rs");
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn recursive_schema_releases_nodes_after_last_owner() {
+        let definitions = json!({"Node": {"type":"object", "properties": {
+            "next": {"anyOf":[{"$ref":"#/definitions/Node"},{"type":"null"}]}
+        }, "required":["next"]}});
+        let root = compile(&json!({"$ref":"#/definitions/Node"}), &definitions).unwrap();
+        let weak = Arc::downgrade(&root);
+        let clone = root.clone();
+        drop(root);
+        assert!(weak.upgrade().is_some());
+        drop(clone);
+        assert!(
+            weak.upgrade().is_none(),
+            "recursive IR retained a strong ownership cycle"
+        );
+    }
+
+    #[test]
+    fn mutual_recursion_and_shared_refs_release_all_nodes() {
+        let definitions = json!({
+            "A": {"type":"object", "properties":{"b":{"$ref":"#/definitions/B"}}},
+            "B": {"type":"object", "properties":{"a":{"anyOf":[{"$ref":"#/definitions/A"},{"type":"null"}]}}}
+        });
+        let schema = json!({"type":"array", "items":[
+            {"$ref":"#/definitions/A"}, {"$ref":"#/definitions/B"}, {"$ref":"#/definitions/A"}
+        ]});
+        let root = compile(&schema, &definitions).unwrap();
+        let IrNode::Seq {
+            tuple: Some(nodes), ..
+        } = root.as_ref()
+        else {
+            panic!("tuple")
+        };
+        assert!(Arc::ptr_eq(&nodes[0], &nodes[2]));
+        let refs: Vec<_> = nodes.iter().map(Arc::downgrade).collect();
+        assert!(!super::super::complex_serde::serde_direct_supported(&root));
+        drop(root);
+        assert!(refs.iter().all(|node| node.upgrade().is_none()));
+    }
+
+    #[test]
+    fn shared_nonrecursive_refs_keep_direct_serde_and_release() {
+        let definitions = json!({"Leaf":{"type":"integer"}});
+        let root = compile(
+            &json!({"type":"array", "items":[
+                {"$ref":"#/definitions/Leaf"}, {"$ref":"#/definitions/Leaf"}
+            ]}),
+            &definitions,
+        )
+        .unwrap();
+        let IrNode::Seq {
+            tuple: Some(nodes), ..
+        } = root.as_ref()
+        else {
+            panic!("tuple")
+        };
+        assert!(Arc::ptr_eq(&nodes[0], &nodes[1]));
+        let weak = Arc::downgrade(&nodes[0]);
+        assert!(super::super::complex_serde::serde_direct_supported(&root));
+        drop(root);
+        assert!(weak.upgrade().is_none());
+    }
+
+    #[test]
+    fn failed_compile_releases_completed_recursive_definition() {
+        let definitions = json!({"Node": {"type":"object", "properties": {
+            "next":{"anyOf":[{"$ref":"#/definitions/Node"},{"type":"null"}]}
+        }}});
+        let mut context = Context {
+            definitions: &definitions,
+            defs: HashMap::new(),
+        };
+        let schema = json!({"type":"array", "items":[
+            {"$ref":"#/definitions/Node"}, {"type":"unsupported"}
+        ]});
+        assert!(context.compile_node(&schema, 0).is_err());
+        let slot = context.defs.get("Node").unwrap();
+        assert!(compiled_ref(slot).is_err());
+    }
+}

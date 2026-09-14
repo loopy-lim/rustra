@@ -19,7 +19,7 @@ pub(crate) fn compile(schema: &Value, definitions: &Value) -> Result<Arc<IrNode>
 /// (사이클)을 검출하고, 정의 컴파일 성공 시 채운다.
 struct Context<'a> {
     definitions: &'a Value,
-    defs: HashMap<String, Arc<OnceLock<Arc<IrNode>>>>,
+    defs: HashMap<String, Arc<OnceLock<Weak<IrNode>>>>,
 }
 
 impl<'a> Context<'a> {
@@ -94,7 +94,9 @@ impl<'a> Context<'a> {
     fn compile_ref(&mut self, name: &str, reference: &str, depth: usize) -> Result<Arc<IrNode>> {
         if let Some(slot) = self.defs.get(name) {
             return match slot.get() {
-                Some(compiled) => Ok(compiled.clone()),
+                Some(compiled) => compiled
+                    .upgrade()
+                    .ok_or_else(|| error("unresolved schema reference")),
                 None => Ok(Arc::new(IrNode::Ref {
                     target: slot.clone(),
                 })),
@@ -107,7 +109,7 @@ impl<'a> Context<'a> {
         let slot = Arc::new(OnceLock::new());
         self.defs.insert(name.to_string(), slot.clone());
         let compiled = self.compile_node(definition, depth + 1)?;
-        let _ = slot.set(compiled.clone());
+        let _ = slot.set(Arc::downgrade(&compiled));
         Ok(compiled)
     }
 

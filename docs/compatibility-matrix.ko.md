@@ -117,7 +117,7 @@ function 으로 발급한다(진짜 유니캐스트). CallInvoker 가 있으면 
 
 | Package                | Manifest version |
 | ---------------------- | ---------------- |
-| Rust workspace crates  | 0.10.0           |
+| Rust workspace crates  | 0.10.1           |
 | `@rustra/bun`          | 0.10.0           |
 | `@rustra/cli`          | 0.10.0           |
 | `@rustra/devtools`     | 0.7.0            |
@@ -158,6 +158,11 @@ JS 콜백을 정리하며, 페이지 이동·파괴·앱 종료에서도 소유�
   RN Windows/macOS 호스트)는 여기 어떤 런타임 주장에도 닿지 않으며 이 매트릭스는
   그에 대해 아무것도 주장하지 않는다. 실행별 수동 검증:
   [검증 체크리스트](verification-checklist.ko.md).
+- **Linux 지원 수준: Alpha**. 현재 제품 증거는 빌드·smoke까지다. 로컬 안전성
+  영수증은 Linux ARM64이며, 정확한 후보의 Actions Linux x86_64 ASan/LSan 게이트는
+  아직 실행해야 한다. Alpha 승격에는 실제 Linux Tauri WebView에서
+  실행·invoke/event/channel 동작·reload/close 수명주기와 패키지 artifact 설치를
+  확인한 영수증이 필요하다. 컨테이너 안전성 통과만으로 지원 수준을 올리지 않는다.
 - 어댑터별 안정 범위와 게이트: [compatibility-contract.md](compatibility-contract.md)
 - 취소 전파 설계: `docs/plans/2026-08-18-followup3-typed-async-id-batch-cancel.md`
 

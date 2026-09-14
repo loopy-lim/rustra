@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-14T08:21:23Z",
+  "purpose": "Measure the release-profile cost of the M0 recursive IR ownership fix at the Package.invoke_frame boundary.",
+  "environment": {
+    "device": "MacBook Pro MacBookPro18,2",
+    "chip": "Apple M1 Max, 10 cores",
+    "memoryGiB": 64,
+    "os": "macOS 26.6.2 (25G83)",
+    "arch": "arm64",
+    "rustc": "1.98.0 (88d9e12ae178fab0fb5cc050a94da85685d449ea)",
+    "cargo": "1.98.0 (797e8a9bc 2026-08-05)",
+    "criterion": "0.8.2",
+    "profile": "bench (optimized)"
+  },
+  "method": {
+    "command": "cargo bench -p rustra --bench complex_route -- --noplot --save-baseline <run-name>",
+    "independentProcessesPerVariant": 5,
+    "warmupSecondsPerCase": 3,
+    "criterionSamplesPerCase": 500,
+    "reportedStatistic": "median of the five per-process Criterion median point estimates",
+    "latencyUnit": "ns/op",
+    "p95Reported": false,
+    "p95Reason": "This receipt uses Criterion distribution estimates rather than per-call wall-clock percentiles.",
+    "excludedRuns": []
+  },
+  "baseline": {
+    "runtimeSourceSha": "b1ed9aa422fb4e627131f02f67de9f50bdbfedf7",
+    "benchmarkSourceSha256": "d497511152c72ebd75fd127bb560b556c7b9e2400353945767c57e585d228d8b",
+    "benchmarkBinarySha256": "34276eb5f54124c313acf4ff04760c16de56604eb1ceb6cffb11ef09ac5a8377",
+    "note": "The benchmark harness was copied unchanged into a detached worktree at the runtime source SHA."
+  },
+  "candidate": {
+    "headSha": "b1ed9aa422fb4e627131f02f67de9f50bdbfedf7",
+    "dirty": true,
+    "relevantDiffSha256": "165aab644d62de2ba3c67289a6780aebf3f3af3363a3bedb61da98960c297ee5",
+    "benchmarkSourceSha256": "d497511152c72ebd75fd127bb560b556c7b9e2400353945767c57e585d228d8b",
+    "benchmarkBinarySha256": "f34053ee18b93ac1319975d260e102486a423be9a91342aa4a1e1dfec4122628",
+    "relevantSourceSha256": {
+      "crates/rustra/src/complex_schema_ir.rs": "bdce05a934c398ea02dca89b712d7ddb819ca5c7c6fcb8ee2fab6cf06c88e3c1",
+      "crates/rustra/src/complex_schema_ir_compile.rs": "1fab09c84bad184f5984d1639277e618a5fdaf717e69dd642498279c4aff8bf8",
+      "crates/rustra/src/complex_serde_support.rs": "efab548b444d3a2b98d9c8b09e13dde46f9b1d6e9dcf2c00b27e71eb34fb7bba",
+      "crates/rustra/src/complex_serde_ser_core.rs": "c2a05473b979f186dfb09b7893f8c1423904bab0d26c765c4df6fd48e03c3bae",
+      "crates/rustra/src/complex_serde_de_core.rs": "9b117440c89df020f30029371e42b795fee31ff59b1a8143b9b67de8f2cb22e0",
+      "crates/rustra/src/complex_codec_encode_object.rs": "0e720545f05d45ae78844a0bfb9caef03f880b7fc97bd66e26364f50e2626d13"
+    }
+  },
+  "results": [
+    {
+      "case": "oneof_data_enum",
+      "classification": "nonrecursive-control",
+      "baselineRunMediansNs": [160.140578, 161.403501, 169.270173, 160.513911, 162.698578],
+      "candidateRunMediansNs": [161.191609, 160.736308, 152.659945, 160.588951, 157.767534],
+      "baselineMedianNs": 161.403501,
+      "candidateMedianNs": 160.588951,
+      "changePercent": -0.504667,
+      "withinTenPercentRegressionBudget": true
+    },
+    {
+      "case": "map_of_seqs",
+      "classification": "nonrecursive-control",
+      "baselineRunMediansNs": [442.160783, 414.158775, 442.587237, 421.875466, 411.88309],
+      "candidateRunMediansNs": [433.015226, 437.342988, 430.02864, 417.230924, 411.742281],
+      "baselineMedianNs": 421.875466,
+      "candidateMedianNs": 430.02864,
+      "changePercent": 1.932602,
+      "withinTenPercentRegressionBudget": true
+    },
+    {
+      "case": "recursive_depth_1",
+      "classification": "recursive-safety-fallback",
+      "baselineRunMediansNs": [215.034094, 204.563386, 218.79388, 213.778603, 205.689078],
+      "candidateRunMediansNs": [831.295531, 842.433115, 835.090476, 829.856674, 829.846704],
+      "baselineMedianNs": 213.778603,
+      "candidateMedianNs": 831.295531,
+      "changePercent": 288.858155,
+      "candidateToBaselineRatio": 3.888582,
+      "knownScopedRegression": true
+    },
+    {
+      "case": "recursive_depth_8",
+      "classification": "recursive-safety-fallback",
+      "baselineRunMediansNs": [1466.35977, 1471.821875, 1474.696856, 1458.989279, 1481.885643],
+      "candidateRunMediansNs": [4601.663808, 4712.29008, 4569.635076, 4404.567217, 4641.333781],
+      "baselineMedianNs": 1471.821875,
+      "candidateMedianNs": 4601.663808,
+      "changePercent": 212.650864,
+      "candidateToBaselineRatio": 3.126509,
+      "knownScopedRegression": true
+    }
+  ],
+  "decision": {
+    "measurementValid": true,
+    "nonrecursiveControlsWithinBudget": true,
+    "recursivePathStatus": "known performance regression retained for memory safety",
+    "optimizationApplied": "Removed a redundant per-call recursive-IR scan from already validated nonrecursive direct paths.",
+    "nextDecision": "Measure recursive schemas in a real consumer before considering an owned-reference or arena direct-serde design.",
+    "roadmapStatus": "G0 core baseline collected; G3 and real-consumer performance remain incomplete."
+  },
+  "limitations": [
+    "Measures the Rust core Package.invoke_frame boundary, not JS transport, WebView, JSI, a physical device, or a real consumer workflow.",
+    "The candidate is an uncommitted working tree identified by source hashes, not a published package.",
+    "CPU, RSS, energy, event bursts, cancellation, and 64 KiB/1 MiB payloads are outside this focused recursive-codec A/B."
+  ]
+}

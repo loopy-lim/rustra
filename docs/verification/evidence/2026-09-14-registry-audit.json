@@ -1,0 +1,407 @@
+{
+  "schemaVersion": 1,
+  "fetchedAt": "2026-09-14T06:23:25.293Z",
+  "candidate": {
+    "sha": "b1ed9aa422fb4e627131f02f67de9f50bdbfedf7",
+    "dirty": true
+  },
+  "npm": [
+    {
+      "name": "@rustra/bun",
+      "workspaceVersion": "0.10.0",
+      "exactVersion": "0.10.0",
+      "latestVersion": "0.10.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Fbun",
+      "dist": {
+        "integrity": "sha512-opWnsSSj/vQ8eRlSxLfH6l8lmBIjYJD4U9kOMJwQsAUOpiwVNzjJxY2AjKvKnrUWHCBXzNsz3j9Br8oKmTYk2A==",
+        "shasum": "1ed2a751b97fb0ec2cbdc06b8c49479c88720f9b",
+        "tarball": "https://registry.npmjs.org/@rustra/bun/-/bun-0.10.0.tgz",
+        "fileCount": 52,
+        "unpackedSize": 207247,
+        "attestations": {
+          "url": "https://registry.npmjs.org/-/npm/v1/attestations/@rustra%2fbun@0.10.0",
+          "provenance": {
+            "predicateType": "https://slsa.dev/provenance/v1"
+          }
+        },
+        "signatures": [
+          {
+            "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+            "sig": "MEUCIEEw7rbijpHquQSUDiIPj5pGVdJldViJShRYJWdvxdcUAiEA/TmLCiE6BSS2dorfwco8GSbAkUNq7esufcVnt6Ja4Ho="
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "name": "@rustra/cli",
+      "workspaceVersion": "0.10.0",
+      "exactVersion": "0.10.0",
+      "latestVersion": "0.10.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Fcli",
+      "dist": {
+        "integrity": "sha512-rhtcOio71wPS6sOG7Zx2bwi4iStLb6uNThAJ97LQ/NVHNwoweFzm9h7MzAxqmVR0Bc39ibiNsac7ctMb8qOjyA==",
+        "shasum": "ab8e49a9598378ae9c288ae311eefd82c8c5be63",
+        "tarball": "https://registry.npmjs.org/@rustra/cli/-/cli-0.10.0.tgz",
+        "fileCount": 501,
+        "unpackedSize": 965852,
+        "attestations": {
+          "url": "https://registry.npmjs.org/-/npm/v1/attestations/@rustra%2fcli@0.10.0",
+          "provenance": {
+            "predicateType": "https://slsa.dev/provenance/v1"
+          }
+        },
+        "signatures": [
+          {
+            "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+            "sig": "MEUCIQC5IaNswJKzcOLJ4aADxx5k+KqfPOgalGfd/M6y0t/jggIgDiWZPcVQR2FVj9fZGzpx9imZz+6rIhFVopGl0AvpS7g="
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "name": "@rustra/devtools",
+      "workspaceVersion": "0.7.0",
+      "exactVersion": "0.7.0",
+      "latestVersion": "0.7.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Fdevtools",
+      "dist": {
+        "shasum": "4bc05423f337a78b6c3cc4271864feded6ccab5f",
+        "tarball": "https://registry.npmjs.org/@rustra/devtools/-/devtools-0.7.0.tgz",
+        "fileCount": 32,
+        "integrity": "sha512-afySjhoZYDHDXliSGN9qiHG3fj8J2JiYKIW6k8/LBHVJr73qi7hECGlY+pfKBQzH0W5imMY7lCubAe2uXTQyzA==",
+        "signatures": [
+          {
+            "sig": "MEYCIQDUUVw6souUYJ6ALyeKHYXQKDI/BKFfvizEDOj7wqM1QgIhAIZJT1JqKO52HjKZFrU/o4Zs3FudYub4/5dXBuJT7LBU",
+            "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+          },
+          {
+            "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+            "sig": "MEQCIFGRixsfkqmEto5AQxRKK04+XJxVSCieBKVFp8KEc6HoAiB69hcP80t3PlU04ZsmFtZOBZc+unD/lAIMHp8MYpRhVw=="
+          }
+        ],
+        "attestations": {
+          "url": "https://registry.npmjs.org/-/npm/v1/attestations/@rustra%2fdevtools@0.7.0",
+          "provenance": {
+            "predicateType": "https://slsa.dev/provenance/v1"
+          }
+        },
+        "unpackedSize": 58069
+      },
+      "error": null
+    },
+    {
+      "name": "@rustra/node",
+      "workspaceVersion": "0.10.0",
+      "exactVersion": "0.10.0",
+      "latestVersion": "0.10.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Fnode",
+      "dist": {
+        "integrity": "sha512-+YsrjVvBFb+kxbvObeZ/M6KT21LkjaQO6dwS5C/D+qkwPPyh5OJhpCX6cSfrfiZ6OgK16FFuJTTmH+Bu8+V2Fg==",
+        "shasum": "87744fac634e73292682310d2b4baa2ec0ed3723",
+        "tarball": "https://registry.npmjs.org/@rustra/node/-/node-0.10.0.tgz",
+        "fileCount": 64,
+        "unpackedSize": 388236,
+        "attestations": {
+          "url": "https://registry.npmjs.org/-/npm/v1/attestations/@rustra%2fnode@0.10.0",
+          "provenance": {
+            "predicateType": "https://slsa.dev/provenance/v1"
+          }
+        },
+        "signatures": [
+          {
+            "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+            "sig": "MEUCIDpsdLaoWUV8VRd2uE3UHCyl0dc/Ds0BsQeTGLNZvc2vAiEA5boyQ/PyMwuEuDf+f2bzUcnETHyajrWg1BhUhKGgydI="
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "name": "@rustra/react",
+      "workspaceVersion": "0.8.0",
+      "exactVersion": "0.8.0",
+      "latestVersion": "0.8.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Freact",
+      "dist": {
+        "shasum": "568e0e83da3eaffc86a94689a3c3740f1e36f52c",
+        "tarball": "https://registry.npmjs.org/@rustra/react/-/react-0.8.0.tgz",
+        "fileCount": 36,
+        "integrity": "sha512-43R5lgXf6OBvGV4/1EDWVg9xRKF/RjNCNcnnv5nOpsK2ycaK0L7EbUSsy5/VS5qqbzc0zXkp7Lb5Z6mMs1zAvA==",
+        "signatures": [
+          {
+            "sig": "MEYCIQCJQwZUF2mdUCaYT0LHzmJ1dUNLponYXuiyyBXF8GAC0QIhALE/Xep8SUNToLoMn29MSLADwVDQ18evEKaf24Vzot7m",
+            "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+          },
+          {
+            "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+            "sig": "MEUCIHlWERbiyGjTSejUbd2+U9BE7PUxQagbjT/IPEoERg6yAiEA9AXb+LqoSFFin3w2SNxu1zYdFJj6odNnJ2NjU8TCZmE="
+          }
+        ],
+        "attestations": {
+          "url": "https://registry.npmjs.org/-/npm/v1/attestations/@rustra%2freact@0.8.0",
+          "provenance": {
+            "predicateType": "https://slsa.dev/provenance/v1"
+          }
+        },
+        "unpackedSize": 62185
+      },
+      "error": null
+    },
+    {
+      "name": "@rustra/react-native",
+      "workspaceVersion": "0.9.0",
+      "exactVersion": "0.9.0",
+      "latestVersion": "0.9.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Freact-native",
+      "dist": {
+        "shasum": "3c3cb068c2de6f70f7c07feb0e2f3f4de002f30c",
+        "tarball": "https://registry.npmjs.org/@rustra/react-native/-/react-native-0.9.0.tgz",
+        "fileCount": 30,
+        "integrity": "sha512-+4v8fcIGIlM0Ksa7qjOe29d2YpEzjR4MNwnEAlO1Bt1yXm8cXqWw1Ihr4JD43zlFwN25ZmKJcIFKv9rQx66+lg==",
+        "signatures": [
+          {
+            "sig": "MEUCIQDe9uHDYGQHJU61qxRX27Os6E+fABcgdk2txkxF8qvjQAIgV1WyJKEBqIQHu+esKNsaePNfND67rNUuZp1qkHpDxKk=",
+            "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+          },
+          {
+            "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+            "sig": "MEQCIFRuIvACYjE0MKIPCluiffvqsre9bzGy5RB/YNJnya8aAiBLEgPMVSugN83gRJBgWl6U8hLHsr0Oq/xhafzsBLdYIA=="
+          }
+        ],
+        "attestations": {
+          "url": "https://registry.npmjs.org/-/npm/v1/attestations/@rustra%2freact-native@0.9.0",
+          "provenance": {
+            "predicateType": "https://slsa.dev/provenance/v1"
+          }
+        },
+        "unpackedSize": 311060
+      },
+      "error": null
+    },
+    {
+      "name": "@rustra/tauri",
+      "workspaceVersion": "0.9.0",
+      "exactVersion": "0.9.0",
+      "latestVersion": "0.9.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Ftauri",
+      "dist": {
+        "integrity": "sha512-ghfMgAlqXt3L7m9I1wn0ugWItZkGswyHql6AvLVxv97swQk838frcYK+7zKurrdUOHRV08saFOsSYLw4O6724A==",
+        "shasum": "652009aa0e14ff2237936373acb30b574b5d4f3a",
+        "tarball": "https://registry.npmjs.org/@rustra/tauri/-/tauri-0.9.0.tgz",
+        "fileCount": 28,
+        "unpackedSize": 145326,
+        "attestations": {
+          "url": "https://registry.npmjs.org/-/npm/v1/attestations/@rustra%2ftauri@0.9.0",
+          "provenance": {
+            "predicateType": "https://slsa.dev/provenance/v1"
+          }
+        },
+        "signatures": [
+          {
+            "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+            "sig": "MEUCIQDAR4aNB+WPJLGuX/RQ1kY0/4g7ScQuseRMax5qyZHg6QIgK+sAELA1ydvKRhn2ZvllS51TKr4TyTeL2bNBoJ7hiAM="
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "name": "@rustra/testing",
+      "workspaceVersion": "0.7.0",
+      "exactVersion": "0.7.0",
+      "latestVersion": "0.7.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Ftesting",
+      "dist": {
+        "integrity": "sha512-ar5FwBV+Vg63mkDVARrMH8PukglkUB7uJ0z35yjvCOT+tvC8xc4R8IXz1Ag0OB4sjJSL5vRxErmpu/Rc9BSPOA==",
+        "shasum": "a611f93560478bebccf1efa7ba47601471ef233c",
+        "tarball": "https://registry.npmjs.org/@rustra/testing/-/testing-0.7.0.tgz",
+        "fileCount": 21,
+        "unpackedSize": 80909,
+        "attestations": {
+          "url": "https://registry.npmjs.org/-/npm/v1/attestations/@rustra%2ftesting@0.7.0",
+          "provenance": {
+            "predicateType": "https://slsa.dev/provenance/v1"
+          }
+        },
+        "signatures": [
+          {
+            "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+            "sig": "MEQCIDB6N/deKqeqN0KCJHzxV+tsksZQuQGR6YWF2kbUxAMDAiAK+Fdd8anvBvq/+/JfdPRhd07PZFn3O79i4wTiKwoVGg=="
+          }
+        ]
+      },
+      "error": null
+    },
+    {
+      "name": "@rustra/types",
+      "workspaceVersion": "0.10.0",
+      "exactVersion": "0.10.0",
+      "latestVersion": "0.10.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Ftypes",
+      "dist": {
+        "integrity": "sha512-VR/SN6t9BQGJl0wpaT0e/PuOp/8G8/fwL2OclGDTgqtbkXcr2r7O2VPxFo2nSKXlNfZpI9Gz1+QrViEu2LEC0Q==",
+        "shasum": "36b087bc1f99c0dd7a894796db963faf48ba9872",
+        "tarball": "https://registry.npmjs.org/@rustra/types/-/types-0.10.0.tgz",
+        "fileCount": 192,
+        "unpackedSize": 438747,
+        "attestations": {
+          "url": "https://registry.npmjs.org/-/npm/v1/attestations/@rustra%2ftypes@0.10.0",
+          "provenance": {
+            "predicateType": "https://slsa.dev/provenance/v1"
+          }
+        },
+        "signatures": [
+          {
+            "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U",
+            "sig": "MEUCIQDJGjHLteLIhsYbNavvnG7h0taMlCUbsrpMj8wSDS7E/AIgNU+JHgYtxYpcVsiqDP5ek54VSO7UfOtuQJq3T9/P64U="
+          }
+        ]
+      },
+      "error": null
+    }
+  ],
+  "crates": [
+    {
+      "name": "rustra",
+      "workspaceVersion": "0.10.0",
+      "exactVersion": "0.10.0",
+      "exactYanked": false,
+      "latestVersion": "0.10.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": false
+      },
+      "registryUrl": "https://index.crates.io/ru/st/rustra",
+      "archiveUrl": "https://static.crates.io/crates/rustra/rustra-0.10.0.crate",
+      "checksum": {
+        "expected": "88d85b094de6ab1b5dc4224d8ecb3541ead940e256633617fa488d727f3d058b",
+        "actual": "88d85b094de6ab1b5dc4224d8ecb3541ead940e256633617fa488d727f3d058b",
+        "verified": true
+      },
+      "error": null
+    },
+    {
+      "name": "rustra-macros",
+      "workspaceVersion": "0.10.0",
+      "exactVersion": "0.10.0",
+      "exactYanked": false,
+      "latestVersion": "0.10.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": false
+      },
+      "registryUrl": "https://index.crates.io/ru/st/rustra-macros",
+      "archiveUrl": "https://static.crates.io/crates/rustra-macros/rustra-macros-0.10.0.crate",
+      "checksum": {
+        "expected": "bd9092002ccc708de179b5a59957b39e29ab455c90cfb96b3b43e585e5b672a1",
+        "actual": "bd9092002ccc708de179b5a59957b39e29ab455c90cfb96b3b43e585e5b672a1",
+        "verified": true
+      },
+      "error": null
+    },
+    {
+      "name": "rustra-naming",
+      "workspaceVersion": "0.10.0",
+      "exactVersion": "0.10.0",
+      "exactYanked": false,
+      "latestVersion": "0.10.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": false
+      },
+      "registryUrl": "https://index.crates.io/ru/st/rustra-naming",
+      "archiveUrl": "https://static.crates.io/crates/rustra-naming/rustra-naming-0.10.0.crate",
+      "checksum": {
+        "expected": "679462f66ca48f64c0e5a6df85212702fd84db01bfa35541c608e07dc67b8f80",
+        "actual": "679462f66ca48f64c0e5a6df85212702fd84db01bfa35541c608e07dc67b8f80",
+        "verified": true
+      },
+      "error": null
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "packages/react-native/native/cpp/RustraJSIBridge.cpp",
+      "bytes": 112616,
+      "sha256": "66c42498759b259412311ab423b69c9884fea710724704f1d90b09c9ab10a3be"
+    },
+    {
+      "path": "packages/react-native/native/android/rustra-jsi-jni.cpp",
+      "bytes": 4249,
+      "sha256": "e0e335e2e05745e5af7eadf5c53b133bfa32154f3429092c02e8c6b143ea0189"
+    },
+    {
+      "path": "packages/react-native/native/ios/RustraJSIModule.mm",
+      "bytes": 3813,
+      "sha256": "8ce2ae0223be65ea09f543924a9e5ec01de992609bf03e2da802bffe96155a70"
+    },
+    {
+      "path": "examples/react-native-bare-calculator/generated/.rustra-generated.json",
+      "bytes": 3821,
+      "sha256": "ff8532b67899dc6c95a172ec31453330fcfa7bf710672e7eeafef8160f6f830f"
+    }
+  ],
+  "errors": []
+}

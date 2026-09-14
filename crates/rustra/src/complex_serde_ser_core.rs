@@ -1,37 +1,5 @@
 // ── 직렬화: O → 와이어 ─────────────────────────────────────
 
-/// `O` 를 IR 을 따라 와이어로 직렬화한다 — `to_value` + `encode_node_ir` 와
-/// 바이트 단위 동일.
-pub(crate) fn to_bytes<O: ser::Serialize>(
-    value: &O,
-    ir: &IrNode,
-    limits: ComplexCodecLimits,
-) -> Result<Vec<u8>> {
-    let mut writer = Writer::new(limits);
-    value.serialize(Ser {
-        writer: &mut writer,
-        ir,
-        limits,
-        depth: 0,
-    })?;
-    Ok(writer.finish())
-}
-/// caller 버퍼 직기록 변형 — `Writer::into_slice` 를 쓰는 경로용.
-pub(crate) fn to_writer<O: ser::Serialize>(
-    value: &O,
-    writer: &mut Writer,
-    ir: &IrNode,
-    limits: ComplexCodecLimits,
-    depth: usize,
-) -> Result<()> {
-    value.serialize(Ser {
-        writer,
-        ir,
-        limits,
-        depth,
-    })
-}
-
 struct Ser<'s, 'w, 'b> {
     writer: &'s mut Writer<'w>,
     ir: &'b IrNode,
@@ -56,10 +24,7 @@ impl<'s, 'w, 'b> Ser<'s, 'w, 'b> {
 /// 실질 도달 불가). 스키마↔타입 어긋남은 Value 경로에서도 에러였다.
 fn peel_ser(ir: &IrNode) -> Result<&IrNode> {
     match ir {
-        IrNode::Ref { target } => target
-            .get()
-            .map(|node| node.as_ref())
-            .ok_or_else(|| error("unresolved schema reference")),
+        IrNode::Ref { .. } => Err(error("recursive schema requires Value codec")),
         IrNode::Const {
             inner: Some(node), ..
         } => Ok(node.as_ref()),

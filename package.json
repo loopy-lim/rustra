@@ -37,11 +37,11 @@
     "test:docs": "node --experimental-strip-types --test scripts/docs-gate.test.ts scripts/check-release-docs.test.ts && node scripts/docs-gate.mjs && node scripts/check-release-docs.mjs",
     "verify:package:react-native": "node scripts/check-react-native-package.mjs",
     "verify:consumer:react-native": "bun scripts/check-packed-react-native-consumer.mjs",
-    "test:release-tools": "node --experimental-strip-types --test scripts/ci-mobile-smoke.test.mjs scripts/ci-ios-smoke.test.mjs scripts/check-release-coherence.test.ts scripts/check-packed-react-native-consumer.test.ts scripts/api-surface.test.ts scripts/version-packages.test.ts",
+    "test:release-tools": "node --experimental-strip-types --test scripts/ci-mobile-smoke.test.mjs scripts/ci-ios-smoke.test.mjs scripts/check-release-coherence.test.ts scripts/check-packed-react-native-consumer.test.ts scripts/api-surface.test.ts scripts/version-packages.test.ts scripts/check-release-gates.test.mjs scripts/audit-release-registry.test.mjs scripts/run-safety-check.test.mjs",
     "test:complex-codec-bench": "bun test scripts/complex-codec-bench.test.ts scripts/track-b-bench.test.ts",
     "bench:complex": "bun scripts/complex-codec-bench.mjs",
     "bench:track-b": "bun scripts/track-b-bench.mjs",
-    "test:bench-gate": "bun test scripts/check-criterion-regression.test.ts",
+    "test:bench-gate": "bun test scripts/check-criterion-regression.test.ts scripts/benchmark-workflow.test.mjs",
     "bench": "bun scripts/transport-bench.mjs",
     "bench:bun": "bun scripts/transport-bench.mjs",
     "bench:hosts": "bun scripts/host-bench.mjs",
@@ -66,7 +66,9 @@
     "audit:prod": "bun audit --audit-level=high",
     "prepare": "lefthook install",
     "docs:api": "typedoc",
-    "test:bindings-fresh": "bun run --cwd packages/cli build && node scripts/check-codegen-fresh.mjs --bindings"
+    "test:bindings-fresh": "bun run --cwd packages/cli build && node scripts/check-codegen-fresh.mjs --bindings",
+    "audit:registry": "node scripts/audit-release-registry.mjs",
+    "verify:release-gates": "node scripts/check-release-gates.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.1",

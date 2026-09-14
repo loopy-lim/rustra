@@ -68,7 +68,7 @@ impl CompiledComplex {
         limits: ComplexCodecLimits,
     ) -> Result<I> {
         let ir = self.ir()?;
-        complex_serde::from_bytes(bytes, ir, limits)
+        complex_serde::from_bytes_direct(bytes, ir, limits)
     }
 
     /// `O` → 와이어 직결 직렬화 (트랙 B).
@@ -78,7 +78,7 @@ impl CompiledComplex {
         limits: ComplexCodecLimits,
     ) -> Result<Vec<u8>> {
         let ir = self.ir()?;
-        complex_serde::to_bytes(value, ir, limits)
+        complex_serde::to_bytes_direct(value, ir, limits)
     }
 
     /// `O` → 와이어 직결 직렬화, caller 버퍼에 직기록 (트랙 B). 반환값은 기록
@@ -91,7 +91,7 @@ impl CompiledComplex {
     ) -> Result<usize> {
         let ir = self.ir()?;
         let mut writer = Writer::into_slice(target, limits);
-        complex_serde::to_writer(value, &mut writer, ir, limits, 0)?;
+        complex_serde::to_writer_direct(value, &mut writer, ir, limits, 0)?;
         Ok(writer.written)
     }
 

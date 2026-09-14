@@ -2,7 +2,7 @@ English | [한국어](./README.ko.md)
 
 # rustra
 
-The Frame rename and audit fixes target Rust 0.10.0 and the coordinated package
+The Frame rename and audit fixes target Rust 0.10.1 and the coordinated package
 versions below. Upgrade native libraries, JS adapters, and generated output together;
 see the [migration guide](docs/migrations/post-0.9-frame-and-audit.md) for consumer
 checks and rollback.
@@ -165,7 +165,7 @@ JS/native combination drift at runtime.
 
 ```toml
 [dependencies]
-rustra = "0.10.0"
+rustra = "0.10.1"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -618,7 +618,7 @@ identically regardless of platform.
 Enable the `tauri` feature:
 
 ```toml
-rustra = { version = "0.10.0", features = ["tauri"] }
+rustra = { version = "0.10.1", features = ["tauri"] }
 ```
 
 Rust side:
@@ -675,13 +675,13 @@ For native module setup (iOS JSI / Android C++), see the
 
 ### Platform Support Matrix
 
-| Platform             | Current evidence level     | Notes                                                                                   |
-| -------------------- | -------------------------- | --------------------------------------------------------------------------------------- |
-| Node / Bun           | Runtime verified           | subprocess·N-API·Bun FFI local runtime + adapter CI                                     |
-| Tauri (macOS)        | WebView runtime verified   | Release WebView `rustra_dispatch` accuracy·performance receipt                          |
-| Tauri (Linux)        | Build + smoke verified     | Real WebView user flows need separate E2E                                               |
-| React Native iOS     | Simulator runtime verified | Release build·install·launch·reload·Nitro comparison; physical-device evidence separate |
-| React Native Android | Release runtime verified   | `TB710FU` arm64 physical device plus arm64/x86_64 `.so` checks; other devices separate  |
+| Platform             | Current evidence level     | Notes                                                                                      |
+| -------------------- | -------------------------- | ------------------------------------------------------------------------------------------ |
+| Node / Bun           | Runtime verified           | subprocess·N-API·Bun FFI local runtime + adapter CI                                        |
+| Tauri (macOS)        | WebView runtime verified   | Release WebView `rustra_dispatch` accuracy·performance receipt                             |
+| Tauri (Linux)        | **Alpha** — build + smoke  | No production support claim until real Linux WebView, lifecycle, and packaged install pass |
+| React Native iOS     | Simulator runtime verified | Release build·install·launch·reload·Nitro comparison; physical-device evidence separate    |
+| React Native Android | Release runtime verified   | `TB710FU` arm64 physical device plus arm64/x86_64 `.so` checks; other devices separate     |
 
 `bun run test:compat` verifies the JS contract and supported local runtimes,
 and the CI native jobs verify build and link. Neither should be equated with
@@ -690,6 +690,11 @@ and recorded by hand (real WebView, real device, emit timing) live in the
 [host verification manual checklist](docs/verification-checklist.md) — an
 evidence level in this table is backed by a filled checklist block, not by CI
 green alone.
+
+**Linux Alpha** means the source builds and the documented smoke scope is
+available for evaluation, while production support is still unproven. Linux
+x86_64 ASan/LSan is a release safety gate; it does not count as a Linux GUI,
+packaging, or end-user runtime receipt.
 
 ## Performance
 
