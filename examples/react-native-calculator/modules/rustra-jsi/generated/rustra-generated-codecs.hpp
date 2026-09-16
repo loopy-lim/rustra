@@ -17,9 +17,12 @@
 #include <string>
 #include "rustra-codec.hpp"
 
+// Optional adapter capability: old generated consumers omit this marker.
+#define RUSTRA_GENERATED_CODEC_CONTRACT_IDENTITY 1
+
 namespace rustra::generated {
 
-const facebook::jsi::PropNameID& cachedProp(facebook::jsi::Runtime& rt, const char* name);
+const char* compiled_contract_hash();
 
 facebook::jsi::Value make_array_buffer(facebook::jsi::Runtime& rt, const uint8_t* data, size_t size);
 
