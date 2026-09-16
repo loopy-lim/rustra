@@ -15,31 +15,6 @@ impl<'s, 'w, 'b> ser::SerializeTupleStruct for SerTupleStruct<'s, 'w, 'b> {
     }
 }
 
-/// 정수 공통 — unsigned 노드는 uvar(음수 거부, 원본 `value_as_u128` 계약),
-/// 아니면 zigzag.
-fn serialize_int(
-    writer: &mut Writer,
-    ir: &IrNode,
-    signed: Option<i64>,
-    unsigned: i64,
-) -> Result<()> {
-    let IrNode::Int { unsigned: uint } = peel_ser(ir)? else {
-        return Err(error("expected integer node"));
-    };
-    if *uint {
-        let value = signed.unwrap_or(unsigned);
-        let value =
-            u64::try_from(value).map_err(|_| error("unsigned integer must be non-negative"))?;
-        writer.varint(u128::from(value))
-    } else {
-        writer.zigzag(i128::from(unsigned))
-    }
-}
-
-fn is_unsigned(ir: &IrNode) -> bool {
-    matches!(ir, IrNode::Int { unsigned: true })
-}
-
 /// 유도 Serialize 가 건네는 변형 이름(camelCase 태그)을 IR 변형 순번으로
 /// 바꾼다. IR 변형의 정렬 키가 이름과 일치하면 그 순번이다 — schemars 가
 /// 유도하는 태그 값/변형 이름은 variant_key 유도 결과와 동일하다.
@@ -77,6 +52,7 @@ fn body_node(variant: &IrVariant) -> &IrNode {
 /// `serialize_seq` 에서 이미 기록됐다.
 struct SerSeq<'s, 'w, 'b> {
     writer: &'s mut Writer<'w>,
+    targets: &'b RecursiveTargets,
     tuple: Option<&'b [std::sync::Arc<IrNode>]>,
     items: Option<&'b IrNode>,
     declared: usize,
@@ -95,6 +71,7 @@ impl<'s, 'w, 'b> SerSeq<'s, 'w, 'b> {
             self.position += 1;
             return value.serialize(Ser {
                 writer: self.writer,
+                targets: self.targets,
                 ir: node,
                 limits: self.limits,
                 depth: self.depth,
@@ -109,6 +86,7 @@ impl<'s, 'w, 'b> SerSeq<'s, 'w, 'b> {
         };
         value.serialize(Ser {
             writer: self.writer,
+            targets: self.targets,
             ir: items,
             limits: self.limits,
             depth: self.depth,
@@ -152,7 +130,7 @@ impl<'s, 'w, 'b> SerializeTuple for SerSeq<'s, 'w, 'b> {
 
 /// tuple variant 직렬화 — 본체 노드를 시퀀스처럼 소비한다.
 struct SerTupleVariant<'s, 'w, 'b> {
-    ser: Ser<'s, 'w, 'b>,
+    inner: SerSeq<'s, 'w, 'b>,
 }
 
 impl<'s, 'w, 'b> SerializeTupleVariant for SerTupleVariant<'s, 'w, 'b> {
@@ -160,16 +138,11 @@ impl<'s, 'w, 'b> SerializeTupleVariant for SerTupleVariant<'s, 'w, 'b> {
     type Error = RustraError;
 
     fn serialize_field<T: ser::Serialize + ?Sized>(&mut self, value: &T) -> Result<()> {
-        value.serialize(Ser {
-            writer: self.ser.writer,
-            ir: self.ser.ir,
-            limits: self.ser.limits,
-            depth: self.ser.depth,
-        })
+        self.inner.element(value)
     }
 
     fn end(self) -> Result<()> {
-        Ok(())
+        self.inner.finish()
     }
 }
 
@@ -179,6 +152,7 @@ impl<'s, 'w, 'b> SerializeTupleVariant for SerTupleVariant<'s, 'w, 'b> {
 /// 바이트 정렬)으로 일괄 기록해 Value 경로와 바이트 동일을 보존한다.
 struct SerMap<'s, 'w, 'b> {
     writer: &'s mut Writer<'w>,
+    targets: &'b RecursiveTargets,
     buffer: Vec<(String, Vec<u8>)>,
     value: &'b std::sync::Arc<IrNode>,
     limits: ComplexCodecLimits,
@@ -204,6 +178,7 @@ impl<'s, 'w, 'b> SerializeMap for SerMap<'s, 'w, 'b> {
         let mut value_writer = Writer::new(self.limits);
         value.serialize(Ser {
             writer: &mut value_writer,
+            targets: self.targets,
             ir: self.value,
             limits: self.limits,
             depth: self.depth,

@@ -15,13 +15,15 @@ pub(crate) fn to_bytes<O: ser::Serialize>(
 
 /// `CompiledComplex::serde_direct()`가 true인 IR의 hot path. 호출자가 빌드
 /// 시점 판정을 이미 보유하므로 매 호출마다 IR 전체를 다시 스캔하지 않는다.
-pub(crate) fn to_bytes_direct<O: ser::Serialize>(
+#[inline]
+pub(super) fn to_bytes_direct<O: ser::Serialize>(
     value: &O,
     ir: &IrNode,
+    targets: &RecursiveTargets,
     limits: ComplexCodecLimits,
 ) -> Result<Vec<u8>> {
     let mut writer = Writer::new(limits);
-    to_writer_direct(value, &mut writer, ir, limits, 0)?;
+    to_writer_direct(value, &mut writer, ir, targets, limits, 0)?;
     Ok(writer.finish())
 }
 
@@ -34,23 +36,22 @@ pub(crate) fn to_writer<O: ser::Serialize>(
     limits: ComplexCodecLimits,
     depth: usize,
 ) -> Result<()> {
-    if has_recursive_refs(ir) {
-        let value = serde_json::to_value(value).map_err(|err| error(err.to_string()))?;
-        return super::complex_codec_encode::encode_node_ir(writer, ir, &value, limits, depth);
-    }
-    to_writer_direct(value, writer, ir, limits, depth)
+    to_writer_direct(value, writer, ir, &RecursiveTargets::new(ir), limits, depth)
 }
 
 /// 빌드 시점에 direct 지원을 확인한 IR의 caller-buffer hot path.
-pub(crate) fn to_writer_direct<O: ser::Serialize>(
+#[inline]
+pub(super) fn to_writer_direct<O: ser::Serialize>(
     value: &O,
     writer: &mut Writer,
     ir: &IrNode,
+    targets: &RecursiveTargets,
     limits: ComplexCodecLimits,
     depth: usize,
 ) -> Result<()> {
     value.serialize(Ser {
         writer,
+        targets,
         ir,
         limits,
         depth,

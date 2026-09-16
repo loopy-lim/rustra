@@ -10,10 +10,9 @@
 //!
 //! serde 유도 코드와의 대응:
 //! - struct → `deserialize_struct`→`visit_map`. 필드는 declaration 순서로
-//!   공급하고, absent optional 필드는 키와 함께 [`AbsentField`] 값
-//!   디시리얼라이저(`deserialize_option`→`visit_none`)를 건넨다 — 유도 코드는
-//!   `Option` 필드를 `None` 으로 채우고 map 이 끝난 뒤 누락된 required 필드를
-//!   `missing_field` 로 거부한다. Value 경로의 `from_value` 와 동일한 결과다.
+//!   공급하고 absent optional 필드는 건너뛴다. 유도 코드는 Option/default를
+//!   적용하고 map 종료 후 누락된 required 필드를 거부한다. Value 경로의
+//!   `from_value`와 동일한 결과다.
 //!   직렬화는 유도 코드가 declaration 순서로 `serialize_field` 를 부르므로,
 //!   건너뛴 optional 필드(None+skip_serializing_if)의 presence 0 을 제자리에
 //!   보충한다.
@@ -46,6 +45,8 @@ use std::fmt;
 type Result<T> = crate::Result<T>;
 
 include!("complex_serde_support.rs");
+include!("complex_serde_refs.rs");
+include!("complex_serde_de_entry.rs");
 include!("complex_serde_de_core.rs");
 include!("complex_serde_de_enum.rs");
 include!("complex_serde_de_access.rs");
@@ -57,3 +58,6 @@ include!("complex_serde_ser_map_key.rs");
 include!("complex_serde_ser_struct.rs");
 
 include!("complex_serde_tests.rs");
+include!("complex_serde_recursive_tests.rs");
+include!("complex_serde_compat_tests.rs");
+include!("complex_serde_pair_tests.rs");

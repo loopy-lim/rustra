@@ -43,8 +43,8 @@ where
         // 컴파일 결과(미지원 스키마 에러 포함)가 호출 시점에 재방출된다.
         // 트랙 B: IR 이 직결 안전하면 와이어 ↔ 타입을 serde 로 바로 구동해
         // Value 트리 3회 왕복을 건너뛴다. 게이트 미달이면 Value 경로.
-        let input_codec = CompiledComplex::new(input_schema, definitions);
-        let output_codec = CompiledComplex::new(output_schema, definitions);
+        let (input_codec, output_codec) =
+            CompiledComplex::pair(input_schema, output_schema, definitions);
         let direct = input_codec.serde_direct() && output_codec.serde_direct();
         let handler_complex = handler.clone();
         Some(Arc::new(move |payload: &[u8]| {
