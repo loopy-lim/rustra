@@ -3,6 +3,7 @@ import { sha256 } from './hash.js';
 import { generatedFileHeader } from './generated-header.js';
 import { analyzeCppCommands } from './generate-cpp-analysis.js';
 import { appendCppRuntimeHelpers } from './generate-cpp-runtime-helpers.js';
+import { appendCppMapEntries } from './generate-cpp-map-entries.js';
 import { appendCppGeneratedFunctions } from './generate-cpp-functions.js';
 import { appendCppDispatchCore } from './generate-cpp-dispatch-core.js';
 import { appendCppBufferDispatch } from './generate-cpp-dispatch-buffer.js';
@@ -14,6 +15,8 @@ export function generateFrameCodecsCpp(schema: PackageSchema, schemaContent?: st
     generatedFileHeader('rustra-generated-codecs.cpp', 'schema → cpp codec renderer').trimEnd(),
     `// C++ postcard codec for the RN JSI fast path (B1).`,
     `#include "rustra-generated-codecs.hpp"`,
+    `#include <algorithm>`,
+    `#include <array>`,
     `#include <cmath>`,
     `#include <cstring>`,
     `#include <jsi/jsi.h>`,
@@ -21,6 +24,7 @@ export function generateFrameCodecsCpp(schema: PackageSchema, schemaContent?: st
     `#include <stdexcept>`,
     `#include <string>`,
     `#include <utility>`,
+    `#include <vector>`,
     ``,
     `using namespace facebook::jsi;`,
     `namespace jsi = facebook::jsi;`,
@@ -32,6 +36,7 @@ export function generateFrameCodecsCpp(schema: PackageSchema, schemaContent?: st
     `}`,
     ``,
   ];
+  appendCppMapEntries(lines);
   appendCppRuntimeHelpers(lines);
   appendCppGeneratedFunctions(lines, sets);
   appendCppDispatchCore(lines, sets);

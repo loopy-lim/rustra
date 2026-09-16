@@ -7,6 +7,8 @@
 // ────────────────────────────────────────────────────────────
 // C++ postcard codec for the RN JSI fast path (B1).
 #include "rustra-generated-codecs.hpp"
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <jsi/jsi.h>
@@ -14,6 +16,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 using namespace facebook::jsi;
 namespace jsi = facebook::jsi;
@@ -21,6 +24,30 @@ namespace rc = rustra::codec;
 namespace rustra::generated {
 const char* compiled_contract_hash() { return "810750e747024dd13ff3416741e9e563e07f73349119e7d5de962d77b1bafbaf"; }
 }
+
+// Each invocation owns its captured map values until canonical encoding finishes.
+// Small maps avoid a vector allocation; larger maps retain bounded reservation.
+class RustraMapEntries {
+public:
+  using Entry = std::pair<std::string, jsi::Value>;
+  RustraMapEntries(jsi::Runtime& rt, size_t count) : use_inline_(count <= inline_entries_.size()) {
+    if (count > heap_entries_.max_size()) throw jsi::JSError(rt, "rustra: map size exceeds native capacity");
+    if (!use_inline_) heap_entries_.reserve(std::min<size_t>(count, 64));
+  }
+  void emplace_back(std::string&& key, jsi::Value&& value) {
+    if (use_inline_) inline_entries_[size_] = Entry(std::move(key), std::move(value));
+    else heap_entries_.emplace_back(std::move(key), std::move(value));
+    ++size_;
+  }
+  Entry* begin() { return use_inline_ ? inline_entries_.data() : heap_entries_.data(); }
+  Entry* end() { return begin() + size_; }
+  size_t size() const { return size_; }
+private:
+  std::array<Entry, 4> inline_entries_;
+  std::vector<Entry> heap_entries_;
+  size_t size_ = 0;
+  bool use_inline_;
+};
 
 // UTF8 may replace lone UTF16 surrogates. Preserve the prior normalized lookup
 // for replacement-containing keys; ordinary keys retain their original JSI string.
@@ -599,7 +626,7 @@ static void encode_parityEcho(jsi::Runtime& rt, const jsi::Value& args, rc::Writ
       { auto _v = _obj.getProperty(rt, _prop_2).getString(rt).utf8(rt); w.push_string(_v); }
       { auto _v = _obj.getProperty(rt, _prop_3).getString(rt).utf8(rt); w.push_string(_v); }
       { auto _option_value = _obj.getProperty(rt, _prop_4); if (_option_value.isNull() || _option_value.isUndefined()) { w.push_u8(0); } else { w.push_u8(1); { auto _v = _option_value.getString(rt).utf8(rt); w.push_string(_v); } } }
-      { auto _o = _obj.getProperty(rt, _prop_5).asObject(rt); std::vector<std::pair<std::string, jsi::Value>> _entries; auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); if (_count > _entries.max_size()) throw jsi::JSError(rt, "rustra: map size exceeds native capacity"); _entries.reserve(std::min<size_t>(_count, 64)); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_string(_e.getString(rt).utf8(rt)); } }
+      { auto _o = _obj.getProperty(rt, _prop_5).asObject(rt); auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); RustraMapEntries _entries(rt, _count); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_string(_e.getString(rt).utf8(rt)); } }
       { auto _arr = _obj.getProperty(rt, _prop_6).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_f64(rustra_f64(rt, _arr.getValueAtIndex(rt, _i), "children[]")); }
     } }
 }
@@ -644,7 +671,7 @@ static void encode_parityFind(jsi::Runtime& rt, const jsi::Value& args, rc::Writ
         { auto _v = _obj.getProperty(rt, _prop_3).getString(rt).utf8(rt); w.push_string(_v); }
         { auto _v = _obj.getProperty(rt, _prop_4).getString(rt).utf8(rt); w.push_string(_v); }
         { auto _option_value = _obj.getProperty(rt, _prop_5); if (_option_value.isNull() || _option_value.isUndefined()) { w.push_u8(0); } else { w.push_u8(1); { auto _v = _option_value.getString(rt).utf8(rt); w.push_string(_v); } } }
-        { auto _o = _obj.getProperty(rt, _prop_6).asObject(rt); std::vector<std::pair<std::string, jsi::Value>> _entries; auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); if (_count > _entries.max_size()) throw jsi::JSError(rt, "rustra: map size exceeds native capacity"); _entries.reserve(std::min<size_t>(_count, 64)); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_string(_e.getString(rt).utf8(rt)); } }
+        { auto _o = _obj.getProperty(rt, _prop_6).asObject(rt); auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); RustraMapEntries _entries(rt, _count); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_string(_e.getString(rt).utf8(rt)); } }
         { auto _arr = _obj.getProperty(rt, _prop_7).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_f64(rustra_f64(rt, _arr.getValueAtIndex(rt, _i), "children[]")); }
       } }
   }
@@ -734,7 +761,7 @@ static void encode_parityStore(jsi::Runtime& rt, const jsi::Value& args, rc::Wri
       { auto _v = _obj.getProperty(rt, _prop_2).getString(rt).utf8(rt); w.push_string(_v); }
       { auto _v = _obj.getProperty(rt, _prop_3).getString(rt).utf8(rt); w.push_string(_v); }
       { auto _option_value = _obj.getProperty(rt, _prop_4); if (_option_value.isNull() || _option_value.isUndefined()) { w.push_u8(0); } else { w.push_u8(1); { auto _v = _option_value.getString(rt).utf8(rt); w.push_string(_v); } } }
-      { auto _o = _obj.getProperty(rt, _prop_5).asObject(rt); std::vector<std::pair<std::string, jsi::Value>> _entries; auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); if (_count > _entries.max_size()) throw jsi::JSError(rt, "rustra: map size exceeds native capacity"); _entries.reserve(std::min<size_t>(_count, 64)); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_string(_e.getString(rt).utf8(rt)); } }
+      { auto _o = _obj.getProperty(rt, _prop_5).asObject(rt); auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); RustraMapEntries _entries(rt, _count); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_string(_e.getString(rt).utf8(rt)); } }
       { auto _arr = _obj.getProperty(rt, _prop_6).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_f64(rustra_f64(rt, _arr.getValueAtIndex(rt, _i), "children[]")); }
     } }
 }
@@ -815,7 +842,7 @@ static void encode_resourceOpen(jsi::Runtime& rt, const jsi::Value& args, rc::Wr
   w.push_u8(19); w.push_u8(0); // cmd_id = 19 LE
   auto argsObj = args.asObject(rt);
   const auto _prop_0 = jsi::PropNameID::forAscii(rt, "initial");
-  { auto _o = argsObj.getProperty(rt, _prop_0).asObject(rt); std::vector<std::pair<std::string, jsi::Value>> _entries; auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); if (_count > _entries.max_size()) throw jsi::JSError(rt, "rustra: map size exceeds native capacity"); _entries.reserve(std::min<size_t>(_count, 64)); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_string(_e.getString(rt).utf8(rt)); } }
+  { auto _o = argsObj.getProperty(rt, _prop_0).asObject(rt); auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); RustraMapEntries _entries(rt, _count); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_string(_e.getString(rt).utf8(rt)); } }
 }
 
 static jsi::Value decode_resourceOpen(jsi::Runtime& rt, rc::Reader& r) {
@@ -907,7 +934,7 @@ static void encode_scoreTotal(jsi::Runtime& rt, const jsi::Value& args, rc::Writ
   w.push_u8(15); w.push_u8(0); // cmd_id = 15 LE
   auto argsObj = args.asObject(rt);
   const auto _prop_0 = jsi::PropNameID::forAscii(rt, "scores");
-  { auto _o = argsObj.getProperty(rt, _prop_0).asObject(rt); std::vector<std::pair<std::string, jsi::Value>> _entries; auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); if (_count > _entries.max_size()) throw jsi::JSError(rt, "rustra: map size exceeds native capacity"); _entries.reserve(std::min<size_t>(_count, 64)); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_i64(rustra_i64(rt, _e, "scores{}")); } }
+  { auto _o = argsObj.getProperty(rt, _prop_0).asObject(rt); auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); RustraMapEntries _entries(rt, _count); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_i64(rustra_i64(rt, _e, "scores{}")); } }
 }
 
 static jsi::Value decode_scoreTotal(jsi::Runtime& rt, rc::Reader& r) {
