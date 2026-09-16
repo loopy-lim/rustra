@@ -5,6 +5,29 @@
 
 ## Unreleased
 
+## 0.10.2 (2026-09-16)
+
+### Performance
+
+- 지원 가능한 재귀 complex 타입의 중간 JSON Value 변환을 제거하고 direct serde 경로를
+  복구한다. 재귀 역참조는 Weak로 유지하고 codec이 대상 수명을 소유해
+  0.10.1에서 수정한 메모리 누수를 다시 만들지 않는다.
+- optional struct 필드의 임시 버퍼와 복사를 제거하고 선언 순서로 직렬화되는
+  필드의 검색 및 배열의 반복 용량 확장 비용을 줄인다. 공개 API, Frame wire, FFI 및 Linux Alpha 정책은 유지한다.
+- 실제 `Package::invoke_frame`의 재귀·optional·넓은 struct·대용량 payload와
+  대조군을 비교하는 벤치 및 별도 할당 계측을 추가한다. 결과와 증거 범위는
+  `docs/benchmarks.ko.md`와 성능 패치 receipt를 참고한다.
+- 복합 노드를 가진 균형·넓은·편향 트리와 최대 8,191노드의 전체 전달·검색·
+  보관된 트리 조회·순수 DFS를 분리해 측정하고 기본 깊이 제한을 검증한다.
+
+### Fixed
+
+- 재귀 direct 전환에서도 중첩 optional, flatten, 문자열 외 map 키의 기존 serde
+  동작을 유지한다. 입력·출력 중 한쪽만 재귀인 명령도 호환 경로를 공유하며
+  caller 버퍼 재시도에서 핸들러를 중복 실행하지 않는다.
+- 직접 역직렬화의 정수 범위, 깊이, 중복 키, 비유한 수, 생략된 기본값 필드
+  검증을 보완한다. const 제약은 Value 경로에 남겨 값 검증을 유지한다.
+
 ## 0.10.1 (2026-09-14)
 
 ### Fixed

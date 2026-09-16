@@ -67,8 +67,8 @@ where
         // 컴파일해 캡처한다(트랙 A). 출력만 bounded writer로 caller 버퍼에
         // 직접 기록한다. 트랙 B: 직결 안전 IR 은 serde 로 바로 구동해 Value
         // 트리 왕복을 건너뛴다(게이트 미달은 Value 경로 유지).
-        let input_codec = CompiledComplex::new(input_schema, definitions);
-        let output_codec = CompiledComplex::new(output_schema, definitions);
+        let (input_codec, output_codec) =
+            CompiledComplex::pair(input_schema, output_schema, definitions);
         let direct = input_codec.serde_direct() && output_codec.serde_direct();
         let handler_into = handler.clone();
         Some(Arc::new(move |payload: &[u8], target: &mut [u8]| {

@@ -404,13 +404,19 @@
       "# [path = \"complex_schema_ir.rs\"]    use super :: complex_codec_variants :: { explicit_variant_keys , variant_key } ;"
     ],
     "rustra::complex_codec::complex_serde::enum:MapMode": [
-      "# [path = \"complex_serde.rs\"]    enum MapMode < 'de > { Entries { value : & 'de std :: sync :: Arc < IrNode > , remaining : usize , } , Struct { fields : & 'de [IrField] , required : & 'de [bool] , position : usize , } , }"
+      "# [path = \"complex_serde.rs\"]    enum MapMode < 'de > { Entries { value : & 'de std :: sync :: Arc < IrNode > , remaining : usize , seen : SeenKeys < 'de > , } , Struct { fields : & 'de [IrField] , required : & 'de [bool] , position : usize , } , }"
+    ],
+    "rustra::complex_codec::complex_serde::enum:SeenKeys": [
+      "# [path = \"complex_serde.rs\"]    enum SeenKeys < 'de > { None , Pair (Option < & 'de str >) , Many (std :: collections :: HashSet < & 'de str >) , }"
     ],
     "rustra::complex_codec::complex_serde::impl < 'de , 'b > Deserializer < 'de > for De < 'de , 'b > { }::fn:deserialize_any": [
       "# [path = \"complex_serde.rs\"]      fn deserialize_any < V > (self , _visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
     ],
     "rustra::complex_codec::complex_serde::impl < 'de , 'b > Deserializer < 'de > for De < 'de , 'b > { }::fn:deserialize_bool": [
       "# [path = \"complex_serde.rs\"]      fn deserialize_bool < V > (self , visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
+    ],
+    "rustra::complex_codec::complex_serde::impl < 'de , 'b > Deserializer < 'de > for De < 'de , 'b > { }::fn:deserialize_char": [
+      "# [path = \"complex_serde.rs\"]      fn deserialize_char < V > (self , visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
     ],
     "rustra::complex_codec::complex_serde::impl < 'de , 'b > Deserializer < 'de > for De < 'de , 'b > { }::fn:deserialize_enum": [
       "# [path = \"complex_serde.rs\"]      fn deserialize_enum < V > (self , _name : & 'static str , _variants : & 'static [& 'static str] , visitor : V ,) -> Result < V :: Value > where V : Visitor < 'de > ,"
@@ -420,6 +426,9 @@
     ],
     "rustra::complex_codec::complex_serde::impl < 'de , 'b > Deserializer < 'de > for De < 'de , 'b > { }::fn:deserialize_f64": [
       "# [path = \"complex_serde.rs\"]      fn deserialize_f64 < V > (self , visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
+    ],
+    "rustra::complex_codec::complex_serde::impl < 'de , 'b > Deserializer < 'de > for De < 'de , 'b > { }::fn:deserialize_i128": [
+      "# [path = \"complex_serde.rs\"]      fn deserialize_i128 < V > (mut self , visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
     ],
     "rustra::complex_codec::complex_serde::impl < 'de , 'b > Deserializer < 'de > for De < 'de , 'b > { }::fn:deserialize_i16": [
       "# [path = \"complex_serde.rs\"]      fn deserialize_i16 < V > (mut self , visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
@@ -454,6 +463,15 @@
     "rustra::complex_codec::complex_serde::impl < 'de , 'b > Deserializer < 'de > for De < 'de , 'b > { }::fn:deserialize_struct": [
       "# [path = \"complex_serde.rs\"]      fn deserialize_struct < V > (self , _name : & 'static str , _fields : & 'static [& 'static str] , visitor : V ,) -> Result < V :: Value > where V : Visitor < 'de > ,"
     ],
+    "rustra::complex_codec::complex_serde::impl < 'de , 'b > Deserializer < 'de > for De < 'de , 'b > { }::fn:deserialize_tuple": [
+      "# [path = \"complex_serde.rs\"]      fn deserialize_tuple < V > (self , _len : usize , visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
+    ],
+    "rustra::complex_codec::complex_serde::impl < 'de , 'b > Deserializer < 'de > for De < 'de , 'b > { }::fn:deserialize_tuple_struct": [
+      "# [path = \"complex_serde.rs\"]      fn deserialize_tuple_struct < V > (self , _name : & 'static str , len : usize , visitor : V ,) -> Result < V :: Value > where V : Visitor < 'de > ,"
+    ],
+    "rustra::complex_codec::complex_serde::impl < 'de , 'b > Deserializer < 'de > for De < 'de , 'b > { }::fn:deserialize_u128": [
+      "# [path = \"complex_serde.rs\"]      fn deserialize_u128 < V > (mut self , visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
+    ],
     "rustra::complex_codec::complex_serde::impl < 'de , 'b > Deserializer < 'de > for De < 'de , 'b > { }::fn:deserialize_u16": [
       "# [path = \"complex_serde.rs\"]      fn deserialize_u16 < V > (mut self , visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
     ],
@@ -473,7 +491,7 @@
       "# [path = \"complex_serde.rs\"]      fn deserialize_unit_struct < V > (self , _name : & 'static str , visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
     ],
     "rustra::complex_codec::complex_serde::impl < 'de , 'b > Deserializer < 'de > for De < 'de , 'b > { }::macro:serde :: forward_to_deserialize_any": [
-      "# [path = \"complex_serde.rs\"]    serde :: forward_to_deserialize_any ! { char bytes byte_buf identifier ignored_any tuple tuple_struct }"
+      "# [path = \"complex_serde.rs\"]    serde :: forward_to_deserialize_any ! { bytes byte_buf identifier ignored_any }"
     ],
     "rustra::complex_codec::complex_serde::impl < 'de , 'b > Deserializer < 'de > for De < 'de , 'b > { }::type:Error": [
       "# [path = \"complex_serde.rs\"]    type Error = RustraError ;"
@@ -499,6 +517,9 @@
     "rustra::complex_codec::complex_serde::impl < 'de , 'b > SeqAccess < 'de > for DeSeq < 'de , 'b > { }::fn:next_element_seed": [
       "# [path = \"complex_serde.rs\"]      fn next_element_seed < T > (& mut self , seed : T) -> Result < Option < T :: Value > > where T : DeserializeSeed < 'de > ,"
     ],
+    "rustra::complex_codec::complex_serde::impl < 'de , 'b > SeqAccess < 'de > for DeSeq < 'de , 'b > { }::fn:size_hint": [
+      "# [path = \"complex_serde.rs\"]      fn size_hint (& self) -> Option < usize >"
+    ],
     "rustra::complex_codec::complex_serde::impl < 'de , 'b > SeqAccess < 'de > for DeSeq < 'de , 'b > { }::type:Error": [
       "# [path = \"complex_serde.rs\"]    type Error = RustraError ;"
     ],
@@ -509,7 +530,7 @@
       "# [path = \"complex_serde.rs\"]      fn struct_variant < V > (self , _fields : & 'static [& 'static str] , visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
     ],
     "rustra::complex_codec::complex_serde::impl < 'de , 'b > VariantAccess < 'de > for DeVariant < 'de , 'b > { }::fn:tuple_variant": [
-      "# [path = \"complex_serde.rs\"]      fn tuple_variant < V > (self , _len : usize , _visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
+      "# [path = \"complex_serde.rs\"]      fn tuple_variant < V > (self , _len : usize , visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
     ],
     "rustra::complex_codec::complex_serde::impl < 'de , 'b > VariantAccess < 'de > for DeVariant < 'de , 'b > { }::fn:unit_variant": [
       "# [path = \"complex_serde.rs\"]      fn unit_variant (self) -> Result < () >"
@@ -544,18 +565,6 @@
     "rustra::complex_codec::complex_serde::impl < 'de , 's : 'de > Deserializer < 'de > for StrRef < 's > { }::type:Error": [
       "# [path = \"complex_serde.rs\"]    type Error = RustraError ;"
     ],
-    "rustra::complex_codec::complex_serde::impl < 'de > Deserializer < 'de > for AbsentField { }::fn:deserialize_any": [
-      "# [path = \"complex_serde.rs\"]      fn deserialize_any < V > (self , _visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
-    ],
-    "rustra::complex_codec::complex_serde::impl < 'de > Deserializer < 'de > for AbsentField { }::fn:deserialize_option": [
-      "# [path = \"complex_serde.rs\"]      fn deserialize_option < V > (self , visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
-    ],
-    "rustra::complex_codec::complex_serde::impl < 'de > Deserializer < 'de > for AbsentField { }::macro:serde :: forward_to_deserialize_any": [
-      "# [path = \"complex_serde.rs\"]    serde :: forward_to_deserialize_any ! { bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string bytes byte_buf unit unit_struct newtype_struct seq tuple tuple_struct map struct enum identifier ignored_any }"
-    ],
-    "rustra::complex_codec::complex_serde::impl < 'de > Deserializer < 'de > for AbsentField { }::type:Error": [
-      "# [path = \"complex_serde.rs\"]    type Error = RustraError ;"
-    ],
     "rustra::complex_codec::complex_serde::impl < 'de > Deserializer < 'de > for DeclIndex { }::fn:deserialize_any": [
       "# [path = \"complex_serde.rs\"]      fn deserialize_any < V > (self , visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
     ],
@@ -566,21 +575,6 @@
       "# [path = \"complex_serde.rs\"]    serde :: forward_to_deserialize_any ! { bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string bytes byte_buf option unit unit_struct newtype_struct seq tuple tuple_struct map struct enum ignored_any }"
     ],
     "rustra::complex_codec::complex_serde::impl < 'de > Deserializer < 'de > for DeclIndex { }::type:Error": [
-      "# [path = \"complex_serde.rs\"]    type Error = RustraError ;"
-    ],
-    "rustra::complex_codec::complex_serde::impl < 'de > Deserializer < 'de > for StrDe { }::fn:deserialize_any": [
-      "# [path = \"complex_serde.rs\"]      fn deserialize_any < V > (self , visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
-    ],
-    "rustra::complex_codec::complex_serde::impl < 'de > Deserializer < 'de > for StrDe { }::fn:deserialize_str": [
-      "# [path = \"complex_serde.rs\"]      fn deserialize_str < V > (self , visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
-    ],
-    "rustra::complex_codec::complex_serde::impl < 'de > Deserializer < 'de > for StrDe { }::fn:deserialize_string": [
-      "# [path = \"complex_serde.rs\"]      fn deserialize_string < V > (self , visitor : V) -> Result < V :: Value > where V : Visitor < 'de > ,"
-    ],
-    "rustra::complex_codec::complex_serde::impl < 'de > Deserializer < 'de > for StrDe { }::macro:serde :: forward_to_deserialize_any": [
-      "# [path = \"complex_serde.rs\"]    serde :: forward_to_deserialize_any ! { bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char bytes byte_buf option unit unit_struct newtype_struct seq tuple tuple_struct map struct enum identifier ignored_any }"
-    ],
-    "rustra::complex_codec::complex_serde::impl < 'de > Deserializer < 'de > for StrDe { }::type:Error": [
       "# [path = \"complex_serde.rs\"]    type Error = RustraError ;"
     ],
     "rustra::complex_codec::complex_serde::impl < 'de > EnumAccess < 'de > for PlainEnum { }::fn:variant_seed": [
@@ -808,6 +802,9 @@
     "rustra::complex_codec::complex_serde::impl < 's , 'w , 'b > Serializer for Ser < 's , 'w , 'b > { }::fn:serialize_f64": [
       "# [path = \"complex_serde.rs\"]      fn serialize_f64 (self , value : f64) -> Result < () >"
     ],
+    "rustra::complex_codec::complex_serde::impl < 's , 'w , 'b > Serializer for Ser < 's , 'w , 'b > { }::fn:serialize_i128": [
+      "# [path = \"complex_serde.rs\"]      fn serialize_i128 (self , value : i128) -> Result < () >"
+    ],
     "rustra::complex_codec::complex_serde::impl < 's , 'w , 'b > Serializer for Ser < 's , 'w , 'b > { }::fn:serialize_i16": [
       "# [path = \"complex_serde.rs\"]      fn serialize_i16 (self , value : i16) -> Result < () >"
     ],
@@ -854,7 +851,10 @@
       "# [path = \"complex_serde.rs\"]      fn serialize_tuple_struct (self , _name : & 'static str , len : usize ,) -> Result < Self :: SerializeTupleStruct >"
     ],
     "rustra::complex_codec::complex_serde::impl < 's , 'w , 'b > Serializer for Ser < 's , 'w , 'b > { }::fn:serialize_tuple_variant": [
-      "# [path = \"complex_serde.rs\"]      fn serialize_tuple_variant (self , _name : & 'static str , _variant_index : u32 , variant : & 'static str , _len : usize ,) -> Result < Self :: SerializeTupleVariant >"
+      "# [path = \"complex_serde.rs\"]      fn serialize_tuple_variant (self , _name : & 'static str , _variant_index : u32 , variant : & 'static str , len : usize ,) -> Result < Self :: SerializeTupleVariant >"
+    ],
+    "rustra::complex_codec::complex_serde::impl < 's , 'w , 'b > Serializer for Ser < 's , 'w , 'b > { }::fn:serialize_u128": [
+      "# [path = \"complex_serde.rs\"]      fn serialize_u128 (self , value : u128) -> Result < () >"
     ],
     "rustra::complex_codec::complex_serde::impl < 's , 'w , 'b > Serializer for Ser < 's , 'w , 'b > { }::fn:serialize_u16": [
       "# [path = \"complex_serde.rs\"]      fn serialize_u16 (self , value : u16) -> Result < () >"
@@ -1030,14 +1030,8 @@
     "rustra::complex_codec::complex_serde::impl:impl < 'de , 's : 'de > Deserializer < 'de > for StrRef < 's > { }": [
       "# [path = \"complex_serde.rs\"]    impl < 'de , 's : 'de > Deserializer < 'de > for StrRef < 's > { }"
     ],
-    "rustra::complex_codec::complex_serde::impl:impl < 'de > Deserializer < 'de > for AbsentField { }": [
-      "# [path = \"complex_serde.rs\"]    impl < 'de > Deserializer < 'de > for AbsentField { }"
-    ],
     "rustra::complex_codec::complex_serde::impl:impl < 'de > Deserializer < 'de > for DeclIndex { }": [
       "# [path = \"complex_serde.rs\"]    impl < 'de > Deserializer < 'de > for DeclIndex { }"
-    ],
-    "rustra::complex_codec::complex_serde::impl:impl < 'de > Deserializer < 'de > for StrDe { }": [
-      "# [path = \"complex_serde.rs\"]    impl < 'de > Deserializer < 'de > for StrDe { }"
     ],
     "rustra::complex_codec::complex_serde::impl:impl < 'de > EnumAccess < 'de > for PlainEnum { }": [
       "# [path = \"complex_serde.rs\"]    impl < 'de > EnumAccess < 'de > for PlainEnum { }"
@@ -1099,9 +1093,6 @@
     "rustra::complex_codec::complex_serde::impl:impl ser :: SerializeTupleVariant for Unimpl { }": [
       "# [path = \"complex_serde.rs\"]    impl ser :: SerializeTupleVariant for Unimpl { }"
     ],
-    "rustra::complex_codec::complex_serde::struct:AbsentField": [
-      "# [path = \"complex_serde.rs\"]    struct AbsentField ; opaque_fields=false"
-    ],
     "rustra::complex_codec::complex_serde::struct:AsMapKey": [
       "# [path = \"complex_serde.rs\"]    struct AsMapKey < 's , 'b > { } opaque_fields=true"
     ],
@@ -1129,6 +1120,9 @@
     "rustra::complex_codec::complex_serde::struct:PlainEnum": [
       "# [path = \"complex_serde.rs\"]    struct PlainEnum { } opaque_fields=true"
     ],
+    "rustra::complex_codec::complex_serde::struct:RecursiveTargets": [
+      "# [path = \"complex_serde.rs\"]    # [derive (Clone , Debug , Default)] pub (super) struct RecursiveTargets (_) ; opaque_fields=true"
+    ],
     "rustra::complex_codec::complex_serde::struct:Ser": [
       "# [path = \"complex_serde.rs\"]    struct Ser < 's , 'w , 'b > { } opaque_fields=true"
     ],
@@ -1149,9 +1143,6 @@
     ],
     "rustra::complex_codec::complex_serde::struct:SerTupleVariant": [
       "# [path = \"complex_serde.rs\"]    struct SerTupleVariant < 's , 'w , 'b > { } opaque_fields=true"
-    ],
-    "rustra::complex_codec::complex_serde::struct:StrDe": [
-      "# [path = \"complex_serde.rs\"]    struct StrDe { } opaque_fields=true"
     ],
     "rustra::complex_codec::complex_serde::struct:StrRef": [
       "# [path = \"complex_serde.rs\"]    struct StrRef < 's > { } opaque_fields=true"

@@ -1,10 +1,11 @@
 /// struct 직렬화 — 프로퍼티 declaration 순서, 선택 필드 presence 태그. 유도
 /// 코드는 필드를 declaration 순서로 부르므로, `next` 이전의 건너뛴(optional
 /// 이며 호출되지 않은) 필드의 presence 0 을 제자리에 보충한다 — Value 경로의
-/// `encode_struct_ir` 와 동일한 바이트 순서. optional 필드 값은 임시 버퍼로
-/// 직렬화해 presence 바이트가 Some/None 에 맞게 앞에 오도록 한다.
+/// `encode_struct_ir` 와 동일한 바이트 순서. 호출된 optional 필드는 None도
+/// presence 1이며, 그 뒤 Option 자체의 태그를 직접 기록한다.
 struct SerStruct<'s, 'w, 'b> {
     writer: &'s mut Writer<'w>,
+    targets: &'b RecursiveTargets,
     fields: &'b [IrField],
     required: &'b [bool],
     next: usize,
@@ -20,7 +21,16 @@ impl<'s, 'w, 'b> SerializeStruct for SerStruct<'s, 'w, 'b> {
         key: &'static str,
         value: &T,
     ) -> Result<()> {
-        let Some(index) = self.fields.iter().position(|field| field.name == key) else {
+        let index = if self
+            .fields
+            .get(self.next)
+            .is_some_and(|field| field.name == key)
+        {
+            Some(self.next)
+        } else {
+            self.fields.iter().position(|field| field.name == key)
+        };
+        let Some(index) = index else {
             return Ok(()); // 스키마에 없는 필드 — Value 경로와 동일하게 무시.
         };
         // 호출되지 않은 앞선 optional 필드의 presence 0 보충.
@@ -31,24 +41,16 @@ impl<'s, 'w, 'b> SerializeStruct for SerStruct<'s, 'w, 'b> {
             self.next += 1;
         }
         self.next = index + 1;
-        if self.required[index] {
-            return value.serialize(Ser {
-                writer: self.writer,
-                ir: &self.fields[index].node,
-                limits: self.limits,
-                depth: self.depth,
-            });
+        if !self.required[index] {
+            self.writer.byte(1)?;
         }
-        // optional — 값 직렬화를 버퍼링해 presence 바이트가 값과 인접하도록.
-        let mut buffer = Writer::new(self.limits);
         value.serialize(Ser {
-            writer: &mut buffer,
+            writer: self.writer,
+            targets: self.targets,
             ir: &self.fields[index].node,
             limits: self.limits,
             depth: self.depth,
-        })?;
-        self.writer.byte(1)?;
-        self.writer.push(&buffer.finish())
+        })
     }
 
     fn end(mut self) -> Result<()> {

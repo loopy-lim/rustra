@@ -31,24 +31,49 @@ pub(crate) fn complex_encode(
 #[derive(Clone, Debug)]
 pub(crate) struct CompiledComplex {
     ir: Result<Arc<IrNode>>,
-    /// IR 이 serde 직결 경로로 안전한지(트랙 B 게이트). 컴파일 성공 시에만
-    /// 판정한다.
+    /// IR 이 serde 직결 경로를 시도할 수 있는지(트랙 B 게이트). 재귀
+    /// 스키마에서 IR에 드러나지 않는 serde 모양은 Value 호환 경로로 재시도한다.
     direct: bool,
+    targets: complex_serde::RecursiveTargets,
+    compatibility_fallback: bool,
 }
 
 impl CompiledComplex {
     /// 스키마 → IR 빌드 시점 1회 컴파일.
     pub(crate) fn new(schema: &Value, definitions: &Value) -> Self {
         match compile(schema, definitions) {
-            Ok(ir) => Self {
-                direct: complex_serde::serde_direct_supported(&ir),
-                ir: Ok(ir),
-            },
+            Ok(ir) => {
+                let targets = complex_serde::RecursiveTargets::new(&ir);
+                Self {
+                    direct: complex_serde::serde_direct_supported(&ir),
+                    compatibility_fallback: !targets.is_empty(),
+                    targets,
+                    ir: Ok(ir),
+                }
+            }
             Err(error) => Self {
                 ir: Err(error),
                 direct: false,
+                targets: complex_serde::RecursiveTargets::default(),
+                compatibility_fallback: false,
             },
         }
+    }
+
+    /// Commands select direct routing jointly for input and output. If either
+    /// side was recursive, both sides previously used Value serde; preserve
+    /// compatibility for the nonrecursive side as well when enabling the pair.
+    pub(crate) fn pair(
+        input_schema: &Value,
+        output_schema: &Value,
+        definitions: &Value,
+    ) -> (Self, Self) {
+        let mut input = Self::new(input_schema, definitions);
+        let mut output = Self::new(output_schema, definitions);
+        let fallback = input.compatibility_fallback || output.compatibility_fallback;
+        input.compatibility_fallback = fallback;
+        output.compatibility_fallback = fallback;
+        (input, output)
     }
 
     /// serde 직결 경로 지원 여부 — 핸들러가 Value 트리 왕복을 건너뛸지 결정.
@@ -68,7 +93,11 @@ impl CompiledComplex {
         limits: ComplexCodecLimits,
     ) -> Result<I> {
         let ir = self.ir()?;
-        complex_serde::from_bytes_direct(bytes, ir, limits)
+        let direct = complex_serde::from_bytes_direct(bytes, ir, &self.targets, limits);
+        if direct.is_err() && self.compatibility_fallback {
+            return self.decode_compat(bytes, limits);
+        }
+        direct
     }
 
     /// `O` → 와이어 직결 직렬화 (트랙 B).
@@ -78,7 +107,11 @@ impl CompiledComplex {
         limits: ComplexCodecLimits,
     ) -> Result<Vec<u8>> {
         let ir = self.ir()?;
-        complex_serde::to_bytes_direct(value, ir, limits)
+        let direct = complex_serde::to_bytes_direct(value, ir, &self.targets, limits);
+        if direct.is_err() && self.compatibility_fallback {
+            return self.encode_compat(value, limits);
+        }
+        direct
     }
 
     /// `O` → 와이어 직결 직렬화, caller 버퍼에 직기록 (트랙 B). 반환값은 기록
@@ -90,9 +123,54 @@ impl CompiledComplex {
         limits: ComplexCodecLimits,
     ) -> Result<usize> {
         let ir = self.ir()?;
-        let mut writer = Writer::into_slice(target, limits);
-        complex_serde::to_writer_direct(value, &mut writer, ir, limits, 0)?;
-        Ok(writer.written)
+        let direct = {
+            let mut writer = Writer::into_slice(target, limits);
+            complex_serde::to_writer_direct(value, &mut writer, ir, &self.targets, limits, 0)
+                .map(|()| writer.written)
+        };
+        if direct.is_err() && self.compatibility_fallback {
+            return self.encode_compat_into(value, target, limits);
+        }
+        direct
+    }
+
+    // Keep the uncommon Value conversion outside the successful direct path.
+    // Schema IR cannot distinguish flatten, nested Options or typed map keys.
+    #[cold]
+    #[inline(never)]
+    fn decode_compat<I: serde::de::DeserializeOwned>(
+        &self,
+        bytes: &[u8],
+        limits: ComplexCodecLimits,
+    ) -> Result<I> {
+        serde_json::from_value(self.decode(bytes, limits)?)
+            .map_err(|err| crate::RustraError::invalid_args(format!("complex decode: {err}")))
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn encode_compat<O: serde::Serialize>(
+        &self,
+        value: &O,
+        limits: ComplexCodecLimits,
+    ) -> Result<Vec<u8>> {
+        let value = serde_json::to_value(value)
+            .map_err(|err| crate::RustraError::internal(format!("complex encode: {err}")))?;
+        self.encode(&value, limits)
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn encode_compat_into<O: serde::Serialize>(
+        &self,
+        value: &O,
+        target: &mut [u8],
+        limits: ComplexCodecLimits,
+    ) -> Result<usize> {
+        let value = serde_json::to_value(value)
+            .map_err(|err| crate::RustraError::internal(format!("complex encode: {err}")))?;
+        // Replace partial direct output from offset 0 without rerunning a handler.
+        self.encode_into(&value, target, limits)
     }
 
     pub(crate) fn encode(&self, value: &Value, limits: ComplexCodecLimits) -> Result<Vec<u8>> {
@@ -126,3 +204,31 @@ impl CompiledComplex {
 }
 
 use std::sync::Arc;
+
+#[cfg(test)]
+mod lifecycle_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn compiled_recursive_codec_releases_root_and_target_table() {
+        let codec = CompiledComplex::new(
+            &json!({"$ref":"#/definitions/Node"}),
+            &json!({
+                "Node":{"type":"object","properties":{
+                    "next":{"anyOf":[{"$ref":"#/definitions/Node"},{"type":"null"}]}
+                }}
+            }),
+        );
+        assert!(codec.serde_direct());
+        let root = Arc::downgrade(codec.ir().unwrap());
+        let clone = codec.clone();
+        drop(codec);
+        assert!(root.upgrade().is_some());
+        drop(clone);
+        assert!(
+            root.upgrade().is_none(),
+            "codec or target table retained the graph"
+        );
+    }
+}

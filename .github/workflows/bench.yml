@@ -88,6 +88,12 @@ jobs:
           # optimized path instead of the dev-only dynamic command profile.
           cargo bench -p rustra --bench complex_route 2>&1 | tee bench_complex.txt
 
+      - name: Run tree_route benchmark
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo bench -p rustra --bench tree_route 2>&1 | tee bench_tree.txt
+
       - name: Enforce 10% regression budget
         id: gate
         if: github.event_name != 'workflow_dispatch' || inputs.bootstrap_baseline != true
@@ -108,7 +114,7 @@ jobs:
           {
             echo "## Benchmark results"
             echo '```'
-            grep -E "time:|change:|Performance has" bench_tier.txt bench_scaling.txt bench_dynamic.txt bench_complex.txt || true
+            grep -E "time:|change:|Performance has" bench_tier.txt bench_scaling.txt bench_dynamic.txt bench_complex.txt bench_tree.txt || true
             echo '```'
             if [ "${{ steps.gate.outputs.mismatch }}" = "true" ]; then
               echo

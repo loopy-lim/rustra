@@ -350,3 +350,9 @@ P1~P6을 적용한다. 도메인 계산 비용이 대부분이면 브릿지 최�
 플랫폼 지원 표기도 함께 정리했다. Linux는 Alpha이며 현재 제품 근거는 빌드·smoke까지다. 최신 후보의 Linux ARM64 Miri·ASan/LSan·Fuzz는 로컬 통과했고, Actions Linux x86_64 게이트는 아직 실행하지 않았다. 컨테이너 안전성 통과를 실제 Linux GUI·패키지 설치 증거로 승격하지 않는다.
 
 이는 원격 Actions·발행·host/실기기·실제 소비자 검증 및 G0의 남은 온보딩·사용자 기준선을 대신하지 않는다. 특히 G3의 실제 소비자 p95 또는 CPU 개선을 달성했다는 뜻이 아니다.
+
+### 2026-09-16 성능 패치 후속
+
+[0.10.2 SPEC](2026-09-16-patch-performance.md)과 [PLAN](../plans/2026-09-16-patch-performance.md)에 따라 0.10.1의 안전성 비용을 줄였다. Weak 역참조를 유지하는 codec 소유 대상 테이블, optional 복사 제거, struct 탐색 개선을 각 5회 교차 측정했다. 재귀 depth 8 지연은 78.66%, 64 KiB optional은 50.36%, 32필드 struct는 59.56% 감소했다. 대조군은 2.88–9.60% 느려져 10% 예산 안이며, oneOf의 경계 근접도 함께 기록했다. [원본 영수증](../benchmark-receipts/2026-09-16-patch-performance-ab.json)과 [검증 기록](../verification/2026-09-16-patch-performance.md)을 근거로 한다. 이는 코어 측정이며 G3의 실제 소비자 p95·CPU·실기기 수용 완료를 뜻하지 않는다.
+
+추가로 복합 노드의 균형·넓은·편향·큰 payload 트리를 각 5회 비교했다. 8,191노드 전체 왕복은25.805→8.675 ms, 전체 입력 검색은13.235→4.776 ms이며, 같은 값을 Rust에 미리 보관한 ID 조회는20.459 µs다. 마지막 수치는 별도 사용 패턴이며 최초 적재나 변경 비용을 포함하지 않는다. [트리 receipt](../benchmark-receipts/2026-09-16-tree-performance-ab.json)와 benchmarks의 형상·깊이·입출력 크기를 함께 읽어야 한다. 검색 자체는 같은 DFS이며 복잡한 graph·인덱스·실기기 수용은 완료 처리하지 않는다.

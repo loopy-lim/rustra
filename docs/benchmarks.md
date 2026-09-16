@@ -19,6 +19,149 @@ changes, past numbers are not treated as execution evidence of the current check
 | React Native  | 0.81.5 + Expo 54             |
 | iOS simulator | iPhone 17                    |
 
+## 0.10.2 core performance patch (2026-09-16)
+
+Compared with published 0.10.1 (`1f277de2`), the patch reduces recursive codec,
+optional-field copying, and wide-struct lookup costs while preserving Weak IR
+backedges, public APIs, and wire format. Linux remains Alpha.
+
+Both versions used identical fixtures on the same Apple M1 Max, macOS 26.6.2,
+Rust 1.98.0, Criterion 0.8.2, and optimized bench profile. Each version ran in five
+independent processes, alternating AB/BA, with 0.5-second warm-up, two-second
+measurement, and 500 samples per case. Values are the median of five per-process
+Criterion median estimates. Lower latency is better; allocation counts come from
+separate instrumented binaries (100 warm-up and 1,000 measured calls per case).
+
+| Case                      | 0.10.1 (ns) | 0.10.2 (ns) |  Change | Allocation calls |
+| ------------------------- | ----------: | ----------: | ------: | ---------------: |
+| `map_keys_2`              |      641.11 |      664.07 |  +3.58% |          13 → 13 |
+| `map_keys_64`             |   17,179.27 |   18,251.27 |  +6.24% |        279 → 280 |
+| `map_of_seqs`             |      411.34 |      430.91 |  +4.76% |            8 → 8 |
+| `map_seq_1024`            |   19,456.82 |   20,120.59 |  +3.41% |          25 → 17 |
+| `oneof_data_enum`         |      152.49 |      167.12 |  +9.60% |            2 → 2 |
+| `optional_chunks_near_1m` |  131,935.47 |  105,729.69 | -19.86% |          28 → 24 |
+| `optional_none`           |      178.06 |      155.96 | -12.41% |            3 → 2 |
+| `optional_string_64`      |      333.86 |      258.49 | -22.58% |            6 → 4 |
+| `optional_string_64k`     |   13,453.30 |    6,678.66 | -50.36% |            6 → 4 |
+| `recursive_depth_1`       |      844.28 |      181.05 | -78.56% |           16 → 2 |
+| `recursive_depth_16`      |    8,816.80 |    1,934.79 | -78.06% |         154 → 20 |
+| `recursive_depth_8`       |    4,455.16 |      950.55 | -78.66% |          81 → 11 |
+| `scalar_control`          |       52.74 |       54.26 |  +2.88% |            1 → 1 |
+| `wide_struct_32`          |    3,622.29 |    1,464.85 | -59.56% |            5 → 5 |
+
+Recursive depth 8 falls from 4.455 µs to 0.951 µs (78.66%), with allocation calls
+falling from 81 to 11. A 64-KiB optional string halves latency and reduces requested
+allocation bytes from 262,184 to 196,636 per call. The near-1-MiB fixture uses 16
+chunks to preserve existing string/collection limits, reducing requested bytes
+from 5,177,667 to 4,128,933. These are allocation requests, not live memory or RSS.
+
+This is not an across-the-board speedup: oneOf is 9.60% slower, 64-key maps 6.24%
+slower (one extra allocation), and the other controls 2.88–4.76% slower. All
+repeated medians remain within the declared 10% regression budget; the oneOf
+result is close to that boundary and should remain a control in future work.
+Flattened fields, nested nullable values, typed map keys, and const schemas retain
+compatibility through the existing Value codec. A failed direct attempt may add
+work before this fallback, but never reruns the command handler.
+
+The [full receipt](benchmark-receipts/2026-09-16-patch-performance-ab.json) records
+all 10 runs, raw estimates, request sizes, allocation counts, environment, and
+source/harness/binary hashes. The candidate was measured before commit, so its
+base HEAD is not its final source identity; the recorded file hashes identify it.
+An [interrupted diagnostic](benchmark-receipts/2026-09-16-patch-performance-diagnostic.json)
+records a rejected earlier implementation and is not final acceptance evidence.
+
+To reproduce, check out 0.10.1 and this patch separately, copy this patch's
+`complex_route.rs`, `benches/support/complex_cases.rs`, `benches/common.rs`, and
+`examples/codec_allocations.rs` into the baseline, then build each with
+`cargo bench -p rustra --bench complex_route --no-run --locked` and
+`cargo build -p rustra --example codec_allocations --release --locked`. Run
+`python3 scripts/benchmark-complex-ab.py --help` and supply the two checkout roots,
+Criterion executables and allocation executables, a new artifact directory, and
+an output JSON path. Do not rebuild or edit the measured sources during the run.
+
+These fixtures measure `Package::invoke_frame`, not app p95, JS transport,
+WebView/JSI, physical-device performance, CPU, or energy. No such improvement is
+claimed. See the [SPEC](specs/2026-09-16-patch-performance.md) and
+[verification record](verification/2026-09-16-patch-performance.md).
+
+### Branching trees and search
+
+The tree suite supplements straight-chain recursion. Each node contains an ID,
+string, enum, two map entries containing integer arrays, optional text, and
+recursive child nodes. Fixtures include both populated and absent optional text.
+
+| Shape          | Nodes | Node levels | Max children | Echo input bytes |
+| -------------- | ----: | ----------: | -----------: | ---------------: |
+| `balanced31`   |    31 |           5 |            2 |            2,063 |
+| `balanced255`  |   255 |           8 |            2 |           17,659 |
+| `balanced1023` | 1,023 |          10 |            2 |           71,812 |
+| `balanced8191` | 8,191 |          13 |            2 |          579,544 |
+| `wide1025`     | 1,025 |           2 |        1,024 |           72,426 |
+| `skew_limit`   |    15 |          15 |            1 |              999 |
+| `payload255`   |   255 |           8 |            2 |          140,314 |
+
+Four modes use the same preorder DFS and search for the last node, verifying that
+every node was visited before timing:
+
+- `echo`: decode the entire incoming tree and return the whole tree.
+- `search`: decode the entire incoming tree, search it, and return only the result.
+- `resident`: keep the tree in Rust and send its index and target ID per query.
+- `dfs`: search an already allocated tree directly, without Rustra invocation.
+
+Five independent processes per version, alternating AB/BA, used the same host and
+optimized profiles as the complex suite. Each case used 100 Criterion samples,
+0.5-second warm-up and two-second measurement. Allocation runs were separate,
+with 20 warm-up calls and 100 measured calls. Geometry and frame sizes must agree
+across both variants and all repetitions. Values below are medians of five
+per-process median estimates, not p95.
+
+| Shape          | Echo 0.10.1 → 0.10.2 (µs) | Search 0.10.1 → 0.10.2 (µs) | Resident 0.10.2 (µs) | DFS 0.10.2 (µs) |
+| -------------- | ------------------------: | --------------------------: | -------------------: | --------------: |
+| `balanced31`   |             90.37 → 32.05 |               46.30 → 17.38 |                0.123 |           0.066 |
+| `balanced255`  |           738.64 → 262.22 |             375.91 → 146.37 |                0.665 |           0.603 |
+| `balanced1023` |       3,090.22 → 1,061.35 |           1,572.75 → 590.87 |                2.568 |           2.453 |
+| `balanced8191` |      25,805.35 → 8,675.21 |        13,235.35 → 4,775.80 |               20.459 |          20.338 |
+| `wide1025`     |       2,862.75 → 1,000.91 |           1,472.92 → 549.93 |                2.297 |           2.186 |
+| `skew_limit`   |             44.75 → 15.94 |                23.14 → 8.82 |                0.090 |           0.030 |
+| `payload255`   |           757.81 → 276.62 |             383.87 → 154.31 |                0.666 |           0.602 |
+
+Across the seven shapes, whole-tree round trips improve by 63.50–66.38% and
+full-input searches by 59.80–63.92%. The 8,191-node round trip falls from 25.805 ms
+to 8.675 ms; full-input search falls from 13.235 ms to 4.776 ms. Resident queries
+and pure DFS remain within -1.59% to +2.12% of baseline. The search algorithm is
+unchanged; these gains primarily concern tree conversion and transfer through
+the Rust core boundary. Transport between JS and Rust is not timed.
+
+The read-only resident query for that same tree takes 20.459 µs in the candidate.
+This is a different application data-lifetime pattern, not a 0.10.2 algorithmic
+speedup. Resident queries allocate one response per call; pure DFS allocates none.
+The [complete tree receipt](benchmark-receipts/2026-09-16-tree-performance-ab.json)
+includes every run and allocation count. The [interrupted diagnostic](benchmark-receipts/2026-09-16-tree-performance-diagnostic.json)
+was restarted after review added a missing shared-helper source hash and is not
+acceptance evidence. Reproduce using `--suite tree`, identical `tree_route.rs`,
+`support/tree_*.rs`, `common.rs`, and `tree_allocations.rs` in both checkouts; build
+`--bench tree_route` and `--example tree_allocations --release` before running the
+same A/B script. The tree suite is also registered in the Benchmark workflow.
+Its first hosted run creates a baseline for the new cases; this local A/B supplies
+the version comparison, and does not establish Linux/device performance.
+
+The 8,191-node search sends 579,546 bytes and returns 13 bytes. The equivalent
+resident request sends 5 bytes and returns 13 bytes. Resident setup/storage is
+outside the timed loop; it is not free and is not measured here. It uses existing
+command closures and shared ownership, with no new runtime API. Resident and
+plain DFS use separate equal tree instances with different memory layouts;
+subtracting their timings does not yield an exact invocation overhead.
+
+Depth 1–40 is checked before measurement. This compound node supports 15 business
+node levels under the unchanged codec depth limit of 32; 16–40 return the exact
+depth-limit error. Array/object/enum containers also consume codec depth. Depth
+limits and payload limits are separate from the total number of nodes.
+
+The resident fixture is read-only; mutation, locks and synchronization are not
+measured. The fixture measures worst-case linear DFS, not an indexed search or an
+arbitrary cyclic object graph. Repeated ID lookups in a real application may benefit from a
+maintained index, but that algorithm and its update/storage costs are not measured.
+
 ## Recursive complex-route safety A/B (2026-09-14)
 
 The M0 change that removes the recursive IR's strong `Arc` cycle was compared on
@@ -37,10 +180,10 @@ the five per-process median point estimates.
 The first diagnostic run also found a redundant recursive-IR scan on every call
 to an already validated non-recursive direct path. Reusing the build-time
 `serde_direct` decision removed that overhead, and both release controls are now
-within the 10% regression budget. Recursive schemas retain a 3.13–3.89x cost
-because they use the safe Value codec instead of restoring the leaking strong
-cycle. An owned-reference or arena direct-serde design should be considered only
-after a real consumer shows recursive schemas on a hot path.
+within the 10% regression budget. In 0.10.1, recursive schemas retained a
+3.13–3.89x cost through the safe Value codec. The 0.10.2 comparison above measures
+the follow-up using Weak backedges and codec-owned targets. Compare variants
+within each A/B; these two tables come from separate measurement sessions.
 
 The complete five-run distribution, source and benchmark binary hashes, and
 environment are in

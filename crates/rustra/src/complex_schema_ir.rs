@@ -200,7 +200,7 @@ mod lifecycle_tests {
         };
         assert!(Arc::ptr_eq(&nodes[0], &nodes[2]));
         let refs: Vec<_> = nodes.iter().map(Arc::downgrade).collect();
-        assert!(!super::super::complex_serde::serde_direct_supported(&root));
+        assert!(super::super::complex_serde::serde_direct_supported(&root));
         drop(root);
         assert!(refs.iter().all(|node| node.upgrade().is_none()));
     }

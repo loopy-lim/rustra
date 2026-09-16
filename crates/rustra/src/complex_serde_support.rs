@@ -55,10 +55,9 @@ fn serde_direct_supported_node(ir: &IrNode, walking: &mut Vec<*const IrNode>) ->
         }
         IrNode::Option { inner } | IrNode::Map { value: inner } => arc(inner, walking),
         IrNode::Struct { fields, .. } => fields.iter().all(|field| arc(&field.node, walking)),
-        IrNode::Const { inner, .. } => inner
-            .as_ref()
-            .map(|node| arc(node, walking))
-            .unwrap_or(false),
+        // Typed constants need value validation; the direct adapter only peels
+        // their type. Unit enum bodies below still have their dedicated codec.
+        IrNode::Const { .. } => false,
         IrNode::OneOf { variants } => variants.iter().all(|variant| {
             match &variant.body {
                 // UnwrapSingle 은 외부 태그 enum(기본 유도)과 대응한다. Tagged(
@@ -70,30 +69,14 @@ fn serde_direct_supported_node(ir: &IrNode, walking: &mut Vec<*const IrNode>) ->
                 IrBody::Tagged { .. } | IrBody::Node(_) => false,
             }
         }),
-        // Weak recursive targets cannot be borrowed for the serde adapter lifetime.
-        IrNode::Ref { .. } => false,
-    }
-}
-
-/// Only recursive back edges need the owning Value traversal. Strong child edges
-/// form a DAG, so this inspection never follows a recursive target.
-#[cfg(test)]
-fn has_recursive_refs(ir: &IrNode) -> bool {
-    match ir {
-        IrNode::Ref { .. } => true,
-        IrNode::Seq { tuple, items } => {
-            tuple.iter().flatten().any(|node| has_recursive_refs(node))
-                || items.as_ref().is_some_and(|node| has_recursive_refs(node))
+        IrNode::Ref { target } => {
+            let Ok(node) = super::complex_schema_ir::compiled_ref(target) else {
+                return false;
+            };
+            // A reference must make structural progress before another back
+            // edge. Alias-only/transparent cycles have no finite value codec.
+            !matches!(node.as_ref(), IrNode::Ref { .. } | IrNode::Const { .. })
+                && arc(&node, walking)
         }
-        IrNode::Option { inner } | IrNode::Map { value: inner } => has_recursive_refs(inner),
-        IrNode::Struct { fields, .. } => fields.iter().any(|field| has_recursive_refs(&field.node)),
-        IrNode::Const { inner, .. } => inner.as_ref().is_some_and(|node| has_recursive_refs(node)),
-        IrNode::OneOf { variants } => variants.iter().any(|variant| match &variant.body {
-            IrBody::Tagged { node } | IrBody::UnwrapSingle { node, .. } | IrBody::Node(node) => {
-                has_recursive_refs(node)
-            }
-            _ => false,
-        }),
-        _ => false,
     }
 }

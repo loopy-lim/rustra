@@ -1,0 +1,605 @@
+{
+  "schemaVersion": 1,
+  "acceptedAsFinalEvidence": false,
+  "reason": "Stopped during first baseline process: independent review found common.rs missing from the new tree harness identity list. Runtime and binaries unchanged; no complete A/B pair. Restart with complete harness provenance.",
+  "inputs": {
+    "baseline": {
+      "headSha": "1f277de2e68e2242b7a6503e6e0ab731833e60e3",
+      "runtimeSourceHashes": {
+        "crates/rustra/src/builder.rs": "65cad4b064739f14781996df866287a7100d4a2fef4a0a2605db1af7eef18d24",
+        "crates/rustra/src/builder_build.rs": "4d07bade1ecca8058c537036a77222e0ec44ab1b619eeb2e2a5426952e6bb66b",
+        "crates/rustra/src/builder_capabilities.rs": "ab41afb673d7de910c82e7fe886a1b12812f5d60bb83bcdc0edfdbaa7609ea4a",
+        "crates/rustra/src/builder_commands.rs": "7436fe15fe3af4f3c082beaaa7628ea1f24b9cf29aec2d7c8aa9a35775599d67",
+        "crates/rustra/src/builder_devices.rs": "5ef78bad666b98a7067b8f87350b7f726da37b9527e0e8a7909564641e792564",
+        "crates/rustra/src/builder_errors.rs": "00133f82d2fa1911399ee38ccc820915cbaeb12efb1a9b53bcb291be2ed43f13",
+        "crates/rustra/src/builder_events.rs": "4634c527110f7b88ceef222ca75938fb9f102190f6b2542f6b2cbba5d5efc077",
+        "crates/rustra/src/builder_platform.rs": "ece023d44ef51fd1ab537487aa3b2bd3b360ff3bd85ab23841378dbe5e052819",
+        "crates/rustra/src/byte_buffer.rs": "d54dd729f2e5173755f08c1c8d9a918dd51cbe96324cc049e1b7606a71b4fecd",
+        "crates/rustra/src/cancel.rs": "f94bcc5a42e8239a5a6cb1634cf888ae713f4df0dd16275760ec7c6f8895258b",
+        "crates/rustra/src/cancel_tests.rs": "647937485a2e22f4d1ce2b6d1e09f03560893762cb915c1ac879941c754ab0e5",
+        "crates/rustra/src/channels.rs": "65fcbaf8f74a948c6153f1d2f55acfd635710fa5ffe4cf99a5a6e9e1aa879a45",
+        "crates/rustra/src/channels_handles.rs": "1b7e722f0214bb0389476994a60c0ae158ac28d6ed4651dec9408cdd9b606234",
+        "crates/rustra/src/channels_host.rs": "a38888e649471269236eb2508e2b3b118ae0f6ac82856ca8a75ec94b0069a4a0",
+        "crates/rustra/src/channels_tests.rs": "c73e48f96396126f30137152912518106a8248420ab3383b00402199cf25ad2f",
+        "crates/rustra/src/codegen.rs": "e51b046be96accd505a37d4d3daef226a91bcd072abb9e33d92fd6e2fed7e3cb",
+        "crates/rustra/src/codegen_names.rs": "3f70b974be1e86e4afa325cb6cedc89c93aede46e14be547a069821c5a932210",
+        "crates/rustra/src/codegen_objects.rs": "da5139a276726bf48b885d48772bae1585e590722371551b750d721d1a7eb1dd",
+        "crates/rustra/src/codegen_types.rs": "6f8a2bf4a030f56fa405dadf2ae55c83da3a0bef953bb02c7e4c5867cabf47ac",
+        "crates/rustra/src/command.rs": "63bc863f0521992ab07062e60eb6343b039508d238c40f607c02c2baabf1ea09",
+        "crates/rustra/src/command_build.rs": "d05f91e51a5aec5eb201cb9767f9366fb262c08486f186a28b01ec088f5e6f49",
+        "crates/rustra/src/command_handlers.rs": "2efd130ecb5aa1cd983105a752f71106851854edb76930e8eeb64c657818e8b4",
+        "crates/rustra/src/command_into.rs": "ae7549bc6683428616f215aa555229425431adc0a6556315e6016ba33ef887f4",
+        "crates/rustra/src/command_raw.rs": "0d70bd117aca36dae051487070f854bc1ea972f2046019b0f896badce2bf1e9e",
+        "crates/rustra/src/command_raw_wire.rs": "0d2dbae6ed0e1c165de80f291896d7457c6c9fe3d18f0f37896c3b64e611e3c0",
+        "crates/rustra/src/command_schema.rs": "3532b73f0dbc54957241abd50534e7693aed19a30cab1aa9d0e1cd35b41c89fb",
+        "crates/rustra/src/command_types.rs": "2b2308640e356e0e894fd0febc76d54e5fc495dc1e1aadab60c7c4c15bb8de46",
+        "crates/rustra/src/complex_codec.rs": "5e2d1ec45e107c444498d99a174c4884eab242b2f2ce3c766a511696366e25f5",
+        "crates/rustra/src/complex_codec_decode.rs": "17efa6919755a11a7e7c73ffc3876087062059f6fae28935b6ad363813ed527c",
+        "crates/rustra/src/complex_codec_encode.rs": "9db942fa3f823f02078e98d8e24d3c4957ad474dbb35e664082790c7b859314e",
+        "crates/rustra/src/complex_codec_encode_object.rs": "0e720545f05d45ae78844a0bfb9caef03f880b7fc97bd66e26364f50e2626d13",
+        "crates/rustra/src/complex_codec_schema.rs": "029c8737aa2b4c09a2fecbe50c2c0ea4f1bd8d2f674917cdf5c8bc0c55f318dd",
+        "crates/rustra/src/complex_codec_tests.rs": "d9956c4aec695c1776cb84c5e34e233e6cc60774c1b6669ca548325e5d34a0fd",
+        "crates/rustra/src/complex_codec_variants.rs": "e7e15303a16f654b811c21ed2e87e7a3a870b26bc4af61a5129c1a89a080561c",
+        "crates/rustra/src/complex_codec_wire.rs": "a465fc8471049da0fc0fd45f604f8ede0e7b1513d9cf97edef23fdd6277a43b3",
+        "crates/rustra/src/complex_schema_ir.rs": "bdce05a934c398ea02dca89b712d7ddb819ca5c7c6fcb8ee2fab6cf06c88e3c1",
+        "crates/rustra/src/complex_schema_ir_compile.rs": "1fab09c84bad184f5984d1639277e618a5fdaf717e69dd642498279c4aff8bf8",
+        "crates/rustra/src/complex_serde.rs": "6abfef306d13bbbe50098dc14208464eed70cf2d60842dde23ef459ad9cfbe92",
+        "crates/rustra/src/complex_serde_de_access.rs": "a9eb5faf43dd9e4b36ba564eab075f785acaca601d761979133624c72e5946cd",
+        "crates/rustra/src/complex_serde_de_aux.rs": "04fcf5eebaea47e083bc37d3816e5da01c8ac65bd9bd62e393a69282d3257566",
+        "crates/rustra/src/complex_serde_de_core.rs": "9b117440c89df020f30029371e42b795fee31ff59b1a8143b9b67de8f2cb22e0",
+        "crates/rustra/src/complex_serde_de_enum.rs": "4775541fd7da48d05e02c6ee30fe7e21b2fd45e6b5d2dabf566d9a19cb45c698",
+        "crates/rustra/src/complex_serde_ser_access.rs": "33971ac15b5e018aac0bb8337d625fe8464637bfeee691655131d7f6d787a7b1",
+        "crates/rustra/src/complex_serde_ser_core.rs": "b3de3937dc847b456323090b40418bde28c0a0441d23dbdd923f99d3a22b8752",
+        "crates/rustra/src/complex_serde_ser_entry.rs": "8b31936173567391867ceaf479763f487fe60204a4a408e7ae6b04dd1336cece",
+        "crates/rustra/src/complex_serde_ser_map_key.rs": "ab97811e89fc5df4d5b99adc46c12ad684ad19b1a87ea50d3eeff1cc47fd3f19",
+        "crates/rustra/src/complex_serde_ser_struct.rs": "cce9321b7ff54afa9b05fdbc5b7852ee38912c90bb2d216769a190eb7d7553c8",
+        "crates/rustra/src/complex_serde_support.rs": "efab548b444d3a2b98d9c8b09e13dde46f9b1d6e9dcf2c00b27e71eb34fb7bba",
+        "crates/rustra/src/complex_serde_tests.rs": "f5a4dd693efc99a7b171b4396d1b8a9fb4e23ff1865a12c7312c977d113059b3",
+        "crates/rustra/src/device_capabilities.rs": "18d9710bbad7081ff96eea53850b901e880776f6c41e9fed9bcc464673c9be56",
+        "crates/rustra/src/entry.rs": "3d279dc0a1fd93e8a1c3f124996ac900a8164340f4d5d6362db0052d213c32ba",
+        "crates/rustra/src/error.rs": "a40509e78e8e0509d82e41bff8e47ea1ba53dfb50ac395bfbeacf4aaade65c94",
+        "crates/rustra/src/error_tests.rs": "d8940ed29d4aab3f565888c8c6690291cd27ddd0429018ab68406566af3d363f",
+        "crates/rustra/src/events.rs": "35f95fc4f026c370f90d9ea8af6aec2dbdfe5cea3d1b441ebe1d4dae73e0f960",
+        "crates/rustra/src/events_bus.rs": "6ded4835e9294828870f31d9f54e9a14ac22dbda62142b9de73627067a054ef2",
+        "crates/rustra/src/events_state.rs": "ede010f15a1c7015f36f134d97ff8cce3eb3f31666177b95102b7c3c00ecb977",
+        "crates/rustra/src/events_tests.rs": "8a312175bbc1fd314d3ec2bd1d90d163e7523639b767361632000f337d01d849",
+        "crates/rustra/src/executor.rs": "9689754dabb6a44072f040dfc3d616a452de2aed3dc148f22893d7b1298176e0",
+        "crates/rustra/src/ffi.rs": "2aa9ece5287598fc70d7fd9cb8060ac5729dedafb2db4a0fc609014d13abc30b",
+        "crates/rustra/src/ffi_async_entries.rs": "c25743e37fc657ec6d6f5b8ae5b447d85e814fc55d77a12c71c87cb77312a165",
+        "crates/rustra/src/ffi_buffer_entries.rs": "aabd16490c194a4bf268729cf60e5d217e7448ab02baa47ae36866ca9b18770c",
+        "crates/rustra/src/ffi_channel.rs": "26b631413e02a2bb642a8caa042887bc8e2926b8ff0a5b8bdf70ea5ace71b4e0",
+        "crates/rustra/src/ffi_dispatch.rs": "21c0f82d75013ed0bd3589e520da059fa6134a99052b0a0a4f852cf33a6139fd",
+        "crates/rustra/src/ffi_event_core.rs": "321835c9de365466b4ec8d7d205ed1c9dfd830a04d0b5a292e76a2e9bc39a356",
+        "crates/rustra/src/ffi_event_entries.rs": "36b0d5a1333475aa5389d049434913d4733a013cca56db4abd7ebb35d52b5c52",
+        "crates/rustra/src/ffi_free_guard.rs": "d03ac82802cff9b633d2644790018117bd591c4f4eca0fc54b1689019a296943",
+        "crates/rustra/src/ffi_hot_reload.rs": "cbcbc73b79b3256d4618578b1e1bcf210ad6efe05716e7fb8dde351c6ba57ad2",
+        "crates/rustra/src/ffi_hot_reload_tests.rs": "f68c23733f36bab3fb183a0f8a33626664a4b97b0b9df7b8a50f5a34a094afe5",
+        "crates/rustra/src/ffi_lifecycle_entries.rs": "602ac1e2dddbeab592372ef519dcd5f28af1b7191f4b5cdb108a2c13cdc0666e",
+        "crates/rustra/src/ffi_pool.rs": "68945451b5689665594aa31aa13bf7a7c373e5274d1adbbdcfa561e8f96fda47",
+        "crates/rustra/src/ffi_prelude.rs": "98fa904de5bb39eeac065788af1f63a43b626739ae71ad8e4510ac88d78065d3",
+        "crates/rustra/src/ffi_schema_entries.rs": "df7c68931558ab418150fc2f707c1ae86909fa53a721bbfbdcbf07c2beef56d1",
+        "crates/rustra/src/ffi_snapshot.rs": "7fa0049d9983ac28a791458c50e29ebe927250274410d61bc5aef01c91f38b90",
+        "crates/rustra/src/ffi_snapshot_tests.rs": "3e96b87f8a070e5d636e3d4d426232102fd90e56c8e74e35ab3140d2bff95de5",
+        "crates/rustra/src/ffi_sync_entries.rs": "06f2598dd0e656c8150e9ad8cac033db55038337c3252ab7a01bee9d2024bf72",
+        "crates/rustra/src/ffi_tests.rs": "479b96f66dc3b4a56b55d22d69d42de6181b859463565ce27e3b24cadbd0aab4",
+        "crates/rustra/src/ffi_typed_async.rs": "c043acecd09a360a3562982f0f18fc3745ed14a7a5bbc356ee8bc57e5c6c3544",
+        "crates/rustra/src/ffi_typed_buffer.rs": "62383dd9c5cc5f5c787fdfa6d19c251f593e576bcdf4f10646af4511b759b3b1",
+        "crates/rustra/src/ffi_typed_entries.rs": "8f217d5c52c7c0f3030478271fe4344b7c745dba1d28bb8986666eb7aa3806a8",
+        "crates/rustra/src/ffi_workers.rs": "a2fe3119a2e06adb89719c0e4a170ed83cc4f69adefaefb922f34ad2afeb97d7",
+        "crates/rustra/src/frame_codec.rs": "6efb2f41e8e23018ee4587a8d9c118fc99810db680019f42c13b5e745f96d7da",
+        "crates/rustra/src/frame_decode.rs": "cbe3cf7961895c1cf423fd3b941f333a77aae4c06b015fcd191e8d2fa5043d2d",
+        "crates/rustra/src/frame_error.rs": "ab0bd1a79eabbbe1471beaf5106c58e458c4838245c7709e34b55019579faadb",
+        "crates/rustra/src/frame_fields.rs": "5558ab000ba72a54925cbca51437fb5079fc3af97ac345c83b93a08c6d5ccf18",
+        "crates/rustra/src/frame_raw.rs": "371502f8173673772b0acfddacb6457afe61a6a2a2e8c1e7b6275c734cfee702",
+        "crates/rustra/src/frame_response.rs": "3bc560f7e3b33ad1ab6f9753f290d44fa77ab3eaa80a6d58da813c6c02cc780f",
+        "crates/rustra/src/frame_support.rs": "4cab2d24232582208d45a5ff254815b0ca8b672eb3105f5facfeee1d979793ba",
+        "crates/rustra/src/frame_support_extra.rs": "67707c9a0a38d835f55aa57e11492356c8dc417c994e4d54e871db1d455bda67",
+        "crates/rustra/src/frame_tier3.rs": "715bd4cbf0ca614a0a88baad60b44c26b12619b80bfa69439aeb6d3c042cc3f4",
+        "crates/rustra/src/frame_vec.rs": "cff69399feb60c1adefdaa783e50d8f91395ff6b3126cb6d0ed02d03c2f9b657",
+        "crates/rustra/src/hot_core.rs": "5e133b2a5f4fed9dc995932f343823726e6e019b9d561870f92c4576ae83f64d",
+        "crates/rustra/src/hot_core_dylib.rs": "88df0982db38ad3a672cc2b2c8f2c9356359a8f279c1df300ca1403bfe47fb8d",
+        "crates/rustra/src/hot_core_retention.rs": "9bb54c39f306e5f61e5ee5ca2cfa1be9ed6872fd5fe1c7d5dd30cc78c1015eb0",
+        "crates/rustra/src/hot_core_tests.rs": "4a8e2b1cfbd5a46819951a913853236a59a0e95eab17f5b49c5af43cfde7b244",
+        "crates/rustra/src/hot_core_watch.rs": "80e4dd98e0ce2627f44e80b696843380efbc6db26146d1be6a4417d528bd48ca",
+        "crates/rustra/src/internal_tests/buffer_invoke_tests.rs": "24b8168d6ae4e7b1fa10edb9321673af6a06f233b1d2fdc189ffe234e4237f40",
+        "crates/rustra/src/internal_tests/builder_devices_tests.rs": "f258051568fd6bb03f3be8f6af9261faff476e7d4718a4e0da53bc465cb0ad3a",
+        "crates/rustra/src/internal_tests/builder_errors_tests.rs": "52f3fb6c19a0434e7825e136629c44b3737e48594e9b6e65da8d3fee6a200f34",
+        "crates/rustra/src/internal_tests/builder_platform_tests.rs": "5963ae4fcf4dfe24e542b962b7ab2aeac34af4e2e5d51b00d89abfc94e1ef915",
+        "crates/rustra/src/internal_tests/complex_codec_adjacent_tests.rs": "a9b460c9ea64dcbe469e197baa9042f037f0e27d769a84100c70ed38bc8c8a9c",
+        "crates/rustra/src/internal_tests/complex_codec_malformed_tests.rs": "6432f82ac765cf6defa774cb459152e307a4b6e4d9fe1ea018d9fd360e159abb",
+        "crates/rustra/src/internal_tests/complex_into_tests.rs": "96de6f55a1dfa8347b4b7dc2c1ce6c20530bfe2807a399acae1f46a1d414c881",
+        "crates/rustra/src/internal_tests/raw_invoke_tests.rs": "c7936378dcdec8896f6de1ecf273d0964b400e598d77048bb339b553c634a4a7",
+        "crates/rustra/src/internal_tests/runtime_registry_tests.rs": "5a5329dd03aee6c237ce053b5ee56515825642f3dfe7d29dd0ce7773308ab657",
+        "crates/rustra/src/internal_tests.rs": "77f2ef05f6a72971a7d0341aeff87cd129fbab465c3533e984b039f3f776a44a",
+        "crates/rustra/src/invoke.rs": "47f9140b23fd56930ed6823ab3e55cc40f9f06f46e5734058823a32ba89f046d",
+        "crates/rustra/src/invoke_buffer.rs": "35ef8cb287684072880ce79bb3608b080ceef9eeb21283aa77746905d08b65d1",
+        "crates/rustra/src/invoke_dispatch.rs": "5d3819a61ec416c4d43721848f5ec08792af583625d18b31403243198174f8c2",
+        "crates/rustra/src/invoke_frame.rs": "41b07729de40e7fdb194d150e300e872e064b4be532bb70dc01369a68f09c939",
+        "crates/rustra/src/invoke_typed.rs": "a4323bc6926dcfa86ac8ddb4a64cfe3984bb2250b96abf607e3ef2c13dd1021d",
+        "crates/rustra/src/lib.rs": "07eeca83ccff6a3c146cd3a7ffec32b1af96c0218d5d7b8bfd01ca23605be6bb",
+        "crates/rustra/src/limits.rs": "928ccd26e88b5496630c8df9eeaf0be7c872d499d489d79e4fadebaa71b9ccf0",
+        "crates/rustra/src/package.rs": "3bedc9e798445435e406b9540be39ae4521afcb3addb5568eb35018957981995",
+        "crates/rustra/src/package_codegen.rs": "da97d6c1173c1ecddef627d683426c53efb127333af16bee22d51d2255c64adf",
+        "crates/rustra/src/package_commands_gen.rs": "57dbfa53b0d7c9360d41dc3557feab0e8967358d149bc558370d3bfd961b1b7f",
+        "crates/rustra/src/package_core.rs": "92683dffb983beaaf967a11bf6b544f8ed5c0507766f28ce8ffa10ca8a7e825a",
+        "crates/rustra/src/package_events.rs": "df6c520e6674280a840022ce4b7ea22cc05f0799de184806762ca2478564df46",
+        "crates/rustra/src/package_json.rs": "01f285793c381267789b7682c596e1414a129903e635c175be635dce2e163d13",
+        "crates/rustra/src/package_schema.rs": "4b2b6471d93056e039721c5b3606b391d0a92ea2ef801e213c4104b06d812e32",
+        "crates/rustra/src/package_types.rs": "0ec647c585ad53cdfc96a93bb8ea6b8d8eb14530cedba64142cb3eb75ae1231e",
+        "crates/rustra/src/package_types_gen.rs": "37c3985b253d1ad1152171a4ea4d125c56190cad9a990ba955e20afa57823533",
+        "crates/rustra/src/platform.rs": "e1c1b55acc9eb918a0f7b41c8e39005a300a8dc6687fc1aea2e72e4a49767602",
+        "crates/rustra/src/prelude.rs": "4c85efe6d1b767eaeca0ab21e10e11d9fa8c8725e367952af88c9ff1a1db683d",
+        "crates/rustra/src/private.rs": "4e3680bb25c1ef92ebae946d0e9507addc65610bdab80585e66a57bcafa569ed",
+        "crates/rustra/src/registry.rs": "7bcfe0c2fe6b78234a86d410c59432a74b2c5821dad5c1983b1af18dde453105",
+        "crates/rustra/src/schema.rs": "16519be6ad39c044a6295f3fd67bdeac480002dcb9ce3ac8ff1926a66efea053",
+        "crates/rustra/src/state.rs": "b00783ee53ca2ad5014a6212d1aa8b6a6ca66f5c8b412c34c0f2712f32756895",
+        "crates/rustra/src/tauri_channel_ipc.rs": "bdcf04bb99a3389a05e2b8c9e7317a9e849d10f3d15c6867132f42a4b8fc100c",
+        "crates/rustra/src/tauri_channel_ownership.rs": "b503457566ece9cdc57481e49a7c162dc736381230b085542556b470f0e9ee67",
+        "crates/rustra/src/tauri_channels.rs": "a58c668186641fa04db4ff94c11b9fd987e0886c1cfb6b2743ffd5536b0fba18",
+        "crates/rustra/src/tauri_support.rs": "50906f59b1aa2fad6772872799352c80d0e6983c5affcd490ad8f3376e291a61",
+        "crates/rustra/src/tauri_support_swap_report.rs": "f7740ac2e43cc4b1647139ce0e799a22bd60407da6f56726bd2385051c349b16",
+        "crates/rustra/src/tauri_support_tests.rs": "212df0a27efb3780f0ea69c449a933da4480d57e40be89eb5fce34574de8a856"
+      },
+      "manifestHashes": {
+        "Cargo.toml": "85d3002f3664499f6cd4daeb2fac4fdd041b9058316d4a4cebe70c9d69dc43ac",
+        "Cargo.lock": "14944226a77b0135c8520b7dc24a5f39c7af4887cd57d483fa3d1180ea96bc2a",
+        "crates/rustra/Cargo.toml": "4e828bbff33ae7495b73b2f47d02dd177c56a30d4147e86de5adee0e3b8ae588",
+        "crates/rustra-macros/Cargo.toml": "2fd304cf69ea3335d1c226041b8bd456e5ea2f89b31876f27da3de5ac12a6b7f",
+        "crates/rustra-naming/Cargo.toml": "15a07cd63b758329048a3a927dacb10068a8ee62d1df53ae7f27c58cc305b032"
+      },
+      "harnessHashes": {
+        "crates/rustra/benches/tree_route.rs": "545d6f6cbdc693af39a3c197be0e0da4848f05961a9e01bc8d035a812a444a71",
+        "crates/rustra/examples/tree_allocations.rs": "89b66906c2e7cbb56e50d3766bc190389ace67e397c322d3183f146ab79a1109",
+        "crates/rustra/benches/support/tree_cases.rs": "47a307a0b262970c15839791576735996e8409323e9e9b617f3898c22e10462f",
+        "crates/rustra/benches/support/tree_wire.rs": "7c6061ae5df5d26fb97d5af9aa27b2a5d09b32e896d7d637e811c8c27cdd49e1"
+      },
+      "benchmarkBinarySha256": "37f979810ba3e14b4fef290286ede666ef94645bcdbdf7fecf4881981bc1c9b4",
+      "allocationBinarySha256": "c97afeb48ee80208256b8d8bcd56d8948c020aa9c9dbd79074a54f25afb4294d",
+      "dirty": true
+    },
+    "candidate": {
+      "headSha": "1f277de2e68e2242b7a6503e6e0ab731833e60e3",
+      "runtimeSourceHashes": {
+        "crates/rustra/src/builder.rs": "65cad4b064739f14781996df866287a7100d4a2fef4a0a2605db1af7eef18d24",
+        "crates/rustra/src/builder_build.rs": "4d07bade1ecca8058c537036a77222e0ec44ab1b619eeb2e2a5426952e6bb66b",
+        "crates/rustra/src/builder_capabilities.rs": "ab41afb673d7de910c82e7fe886a1b12812f5d60bb83bcdc0edfdbaa7609ea4a",
+        "crates/rustra/src/builder_commands.rs": "7436fe15fe3af4f3c082beaaa7628ea1f24b9cf29aec2d7c8aa9a35775599d67",
+        "crates/rustra/src/builder_devices.rs": "5ef78bad666b98a7067b8f87350b7f726da37b9527e0e8a7909564641e792564",
+        "crates/rustra/src/builder_errors.rs": "00133f82d2fa1911399ee38ccc820915cbaeb12efb1a9b53bcb291be2ed43f13",
+        "crates/rustra/src/builder_events.rs": "4634c527110f7b88ceef222ca75938fb9f102190f6b2542f6b2cbba5d5efc077",
+        "crates/rustra/src/builder_platform.rs": "ece023d44ef51fd1ab537487aa3b2bd3b360ff3bd85ab23841378dbe5e052819",
+        "crates/rustra/src/byte_buffer.rs": "d54dd729f2e5173755f08c1c8d9a918dd51cbe96324cc049e1b7606a71b4fecd",
+        "crates/rustra/src/cancel.rs": "f94bcc5a42e8239a5a6cb1634cf888ae713f4df0dd16275760ec7c6f8895258b",
+        "crates/rustra/src/cancel_tests.rs": "647937485a2e22f4d1ce2b6d1e09f03560893762cb915c1ac879941c754ab0e5",
+        "crates/rustra/src/channels.rs": "65fcbaf8f74a948c6153f1d2f55acfd635710fa5ffe4cf99a5a6e9e1aa879a45",
+        "crates/rustra/src/channels_handles.rs": "1b7e722f0214bb0389476994a60c0ae158ac28d6ed4651dec9408cdd9b606234",
+        "crates/rustra/src/channels_host.rs": "a38888e649471269236eb2508e2b3b118ae0f6ac82856ca8a75ec94b0069a4a0",
+        "crates/rustra/src/channels_tests.rs": "c73e48f96396126f30137152912518106a8248420ab3383b00402199cf25ad2f",
+        "crates/rustra/src/codegen.rs": "e51b046be96accd505a37d4d3daef226a91bcd072abb9e33d92fd6e2fed7e3cb",
+        "crates/rustra/src/codegen_names.rs": "3f70b974be1e86e4afa325cb6cedc89c93aede46e14be547a069821c5a932210",
+        "crates/rustra/src/codegen_objects.rs": "da5139a276726bf48b885d48772bae1585e590722371551b750d721d1a7eb1dd",
+        "crates/rustra/src/codegen_types.rs": "6f8a2bf4a030f56fa405dadf2ae55c83da3a0bef953bb02c7e4c5867cabf47ac",
+        "crates/rustra/src/command.rs": "63bc863f0521992ab07062e60eb6343b039508d238c40f607c02c2baabf1ea09",
+        "crates/rustra/src/command_build.rs": "d05f91e51a5aec5eb201cb9767f9366fb262c08486f186a28b01ec088f5e6f49",
+        "crates/rustra/src/command_handlers.rs": "0212c60aa4293e0d48e2565ce8f8104e007af6450a1f6de0bb02e1588b83c3bc",
+        "crates/rustra/src/command_into.rs": "3d304faa68f4eb2f9da4e9c3c11d60088713edfdc904ae4832e09cfb4e68f107",
+        "crates/rustra/src/command_raw.rs": "0d70bd117aca36dae051487070f854bc1ea972f2046019b0f896badce2bf1e9e",
+        "crates/rustra/src/command_raw_wire.rs": "0d2dbae6ed0e1c165de80f291896d7457c6c9fe3d18f0f37896c3b64e611e3c0",
+        "crates/rustra/src/command_schema.rs": "3532b73f0dbc54957241abd50534e7693aed19a30cab1aa9d0e1cd35b41c89fb",
+        "crates/rustra/src/command_types.rs": "2b2308640e356e0e894fd0febc76d54e5fc495dc1e1aadab60c7c4c15bb8de46",
+        "crates/rustra/src/complex_codec.rs": "5e2d1ec45e107c444498d99a174c4884eab242b2f2ce3c766a511696366e25f5",
+        "crates/rustra/src/complex_codec_decode.rs": "17efa6919755a11a7e7c73ffc3876087062059f6fae28935b6ad363813ed527c",
+        "crates/rustra/src/complex_codec_encode.rs": "9db942fa3f823f02078e98d8e24d3c4957ad474dbb35e664082790c7b859314e",
+        "crates/rustra/src/complex_codec_encode_object.rs": "eb312cc2c82d7dca23657eccd1b9bf73a322bb4cd0615b376e6bd81ff1c32444",
+        "crates/rustra/src/complex_codec_schema.rs": "029c8737aa2b4c09a2fecbe50c2c0ea4f1bd8d2f674917cdf5c8bc0c55f318dd",
+        "crates/rustra/src/complex_codec_tests.rs": "d9956c4aec695c1776cb84c5e34e233e6cc60774c1b6669ca548325e5d34a0fd",
+        "crates/rustra/src/complex_codec_variants.rs": "e7e15303a16f654b811c21ed2e87e7a3a870b26bc4af61a5129c1a89a080561c",
+        "crates/rustra/src/complex_codec_wire.rs": "a465fc8471049da0fc0fd45f604f8ede0e7b1513d9cf97edef23fdd6277a43b3",
+        "crates/rustra/src/complex_schema_ir.rs": "3f3af4cffcb22628305ec7d9cc7d75b49f8fb3b587d0deefd720de6e940e68b6",
+        "crates/rustra/src/complex_schema_ir_compile.rs": "1fab09c84bad184f5984d1639277e618a5fdaf717e69dd642498279c4aff8bf8",
+        "crates/rustra/src/complex_serde.rs": "90e0a96db013bd86c2457b47afe16c92861e16958a9dbd337f010d90e1d52a11",
+        "crates/rustra/src/complex_serde_compat_tests.rs": "9d60a0c37d88b4e9ded5ed66305a3ebbed49e82c6da3c6b4ed93c85665fde80e",
+        "crates/rustra/src/complex_serde_de_access.rs": "f51659924ad8826daa7eb8194b44129e0c816dd7ab022dc5c0267fcf33329cb1",
+        "crates/rustra/src/complex_serde_de_aux.rs": "2cb641b40799b55615622bacabfde88f7720e1e5385adc998c2f8bcb873ab1d2",
+        "crates/rustra/src/complex_serde_de_core.rs": "9523ec639ed3ad1b7b5aac1caac606d7e6dc43ed40d08f34ad417e882cf626d4",
+        "crates/rustra/src/complex_serde_de_entry.rs": "100189b35972005ccaba2f2918f15b626e6aa1c049e26bc6974fe94ab52b0a71",
+        "crates/rustra/src/complex_serde_de_enum.rs": "be5923bee08ac5befce7e0d91237ebe5de03d5a7bca335f38522ebb002884654",
+        "crates/rustra/src/complex_serde_pair_tests.rs": "5e385c370b83ad59ebe6b78cef2222e66f28684f7a6da2f4d6939f65fe56bdc5",
+        "crates/rustra/src/complex_serde_recursive_tests.rs": "5670afe3e9bce51eb2dcd32e5e153b5338d0f92121d42320c343acf972227914",
+        "crates/rustra/src/complex_serde_refs.rs": "f1914fada36141ee424ece26684c309a9015375a9e2022c7fc9595a5edd726dc",
+        "crates/rustra/src/complex_serde_ser_access.rs": "47a3f7b21fbdddffcadaf4824c83db950329fbc2568e7b8a24f665e71983e066",
+        "crates/rustra/src/complex_serde_ser_core.rs": "8322bb10efeb1229fd4cc04f70819afabbbaef84031f7cf90ff1dbf10d9b09b7",
+        "crates/rustra/src/complex_serde_ser_entry.rs": "e446fb08077f5259c6d582a2d5743da0d4138a08cb7595c3ebdcd85eb9024a0f",
+        "crates/rustra/src/complex_serde_ser_map_key.rs": "ab97811e89fc5df4d5b99adc46c12ad684ad19b1a87ea50d3eeff1cc47fd3f19",
+        "crates/rustra/src/complex_serde_ser_struct.rs": "963479a71758195c3706e5beff469f583c16e7a8482b9a5e98e1f3f9f7997609",
+        "crates/rustra/src/complex_serde_support.rs": "b4b0784ea8e50b25f4a2ffca62ddc24bd0d3f63c19fd3ef4852a83ab2158f9ef",
+        "crates/rustra/src/complex_serde_tests.rs": "ebf574e1ff0eb1f94888b247ae76503b37c031bae6a3be89111a1f8b9ee22d47",
+        "crates/rustra/src/complex_serde_validation_tests.rs": "f86d64b92a11ce1905abb703095039d328631fcde679bac1d12189b677c95eab",
+        "crates/rustra/src/device_capabilities.rs": "18d9710bbad7081ff96eea53850b901e880776f6c41e9fed9bcc464673c9be56",
+        "crates/rustra/src/entry.rs": "3d279dc0a1fd93e8a1c3f124996ac900a8164340f4d5d6362db0052d213c32ba",
+        "crates/rustra/src/error.rs": "a40509e78e8e0509d82e41bff8e47ea1ba53dfb50ac395bfbeacf4aaade65c94",
+        "crates/rustra/src/error_tests.rs": "d8940ed29d4aab3f565888c8c6690291cd27ddd0429018ab68406566af3d363f",
+        "crates/rustra/src/events.rs": "35f95fc4f026c370f90d9ea8af6aec2dbdfe5cea3d1b441ebe1d4dae73e0f960",
+        "crates/rustra/src/events_bus.rs": "6ded4835e9294828870f31d9f54e9a14ac22dbda62142b9de73627067a054ef2",
+        "crates/rustra/src/events_state.rs": "ede010f15a1c7015f36f134d97ff8cce3eb3f31666177b95102b7c3c00ecb977",
+        "crates/rustra/src/events_tests.rs": "8a312175bbc1fd314d3ec2bd1d90d163e7523639b767361632000f337d01d849",
+        "crates/rustra/src/executor.rs": "9689754dabb6a44072f040dfc3d616a452de2aed3dc148f22893d7b1298176e0",
+        "crates/rustra/src/ffi.rs": "2aa9ece5287598fc70d7fd9cb8060ac5729dedafb2db4a0fc609014d13abc30b",
+        "crates/rustra/src/ffi_async_entries.rs": "c25743e37fc657ec6d6f5b8ae5b447d85e814fc55d77a12c71c87cb77312a165",
+        "crates/rustra/src/ffi_buffer_entries.rs": "aabd16490c194a4bf268729cf60e5d217e7448ab02baa47ae36866ca9b18770c",
+        "crates/rustra/src/ffi_channel.rs": "26b631413e02a2bb642a8caa042887bc8e2926b8ff0a5b8bdf70ea5ace71b4e0",
+        "crates/rustra/src/ffi_dispatch.rs": "21c0f82d75013ed0bd3589e520da059fa6134a99052b0a0a4f852cf33a6139fd",
+        "crates/rustra/src/ffi_event_core.rs": "321835c9de365466b4ec8d7d205ed1c9dfd830a04d0b5a292e76a2e9bc39a356",
+        "crates/rustra/src/ffi_event_entries.rs": "36b0d5a1333475aa5389d049434913d4733a013cca56db4abd7ebb35d52b5c52",
+        "crates/rustra/src/ffi_free_guard.rs": "d03ac82802cff9b633d2644790018117bd591c4f4eca0fc54b1689019a296943",
+        "crates/rustra/src/ffi_hot_reload.rs": "cbcbc73b79b3256d4618578b1e1bcf210ad6efe05716e7fb8dde351c6ba57ad2",
+        "crates/rustra/src/ffi_hot_reload_tests.rs": "f68c23733f36bab3fb183a0f8a33626664a4b97b0b9df7b8a50f5a34a094afe5",
+        "crates/rustra/src/ffi_lifecycle_entries.rs": "602ac1e2dddbeab592372ef519dcd5f28af1b7191f4b5cdb108a2c13cdc0666e",
+        "crates/rustra/src/ffi_pool.rs": "68945451b5689665594aa31aa13bf7a7c373e5274d1adbbdcfa561e8f96fda47",
+        "crates/rustra/src/ffi_prelude.rs": "98fa904de5bb39eeac065788af1f63a43b626739ae71ad8e4510ac88d78065d3",
+        "crates/rustra/src/ffi_schema_entries.rs": "df7c68931558ab418150fc2f707c1ae86909fa53a721bbfbdcbf07c2beef56d1",
+        "crates/rustra/src/ffi_snapshot.rs": "7fa0049d9983ac28a791458c50e29ebe927250274410d61bc5aef01c91f38b90",
+        "crates/rustra/src/ffi_snapshot_tests.rs": "3e96b87f8a070e5d636e3d4d426232102fd90e56c8e74e35ab3140d2bff95de5",
+        "crates/rustra/src/ffi_sync_entries.rs": "06f2598dd0e656c8150e9ad8cac033db55038337c3252ab7a01bee9d2024bf72",
+        "crates/rustra/src/ffi_tests.rs": "479b96f66dc3b4a56b55d22d69d42de6181b859463565ce27e3b24cadbd0aab4",
+        "crates/rustra/src/ffi_typed_async.rs": "c043acecd09a360a3562982f0f18fc3745ed14a7a5bbc356ee8bc57e5c6c3544",
+        "crates/rustra/src/ffi_typed_buffer.rs": "62383dd9c5cc5f5c787fdfa6d19c251f593e576bcdf4f10646af4511b759b3b1",
+        "crates/rustra/src/ffi_typed_entries.rs": "8f217d5c52c7c0f3030478271fe4344b7c745dba1d28bb8986666eb7aa3806a8",
+        "crates/rustra/src/ffi_workers.rs": "a2fe3119a2e06adb89719c0e4a170ed83cc4f69adefaefb922f34ad2afeb97d7",
+        "crates/rustra/src/frame_codec.rs": "6efb2f41e8e23018ee4587a8d9c118fc99810db680019f42c13b5e745f96d7da",
+        "crates/rustra/src/frame_decode.rs": "cbe3cf7961895c1cf423fd3b941f333a77aae4c06b015fcd191e8d2fa5043d2d",
+        "crates/rustra/src/frame_error.rs": "ab0bd1a79eabbbe1471beaf5106c58e458c4838245c7709e34b55019579faadb",
+        "crates/rustra/src/frame_fields.rs": "5558ab000ba72a54925cbca51437fb5079fc3af97ac345c83b93a08c6d5ccf18",
+        "crates/rustra/src/frame_raw.rs": "371502f8173673772b0acfddacb6457afe61a6a2a2e8c1e7b6275c734cfee702",
+        "crates/rustra/src/frame_response.rs": "3bc560f7e3b33ad1ab6f9753f290d44fa77ab3eaa80a6d58da813c6c02cc780f",
+        "crates/rustra/src/frame_support.rs": "4cab2d24232582208d45a5ff254815b0ca8b672eb3105f5facfeee1d979793ba",
+        "crates/rustra/src/frame_support_extra.rs": "67707c9a0a38d835f55aa57e11492356c8dc417c994e4d54e871db1d455bda67",
+        "crates/rustra/src/frame_tier3.rs": "715bd4cbf0ca614a0a88baad60b44c26b12619b80bfa69439aeb6d3c042cc3f4",
+        "crates/rustra/src/frame_vec.rs": "cff69399feb60c1adefdaa783e50d8f91395ff6b3126cb6d0ed02d03c2f9b657",
+        "crates/rustra/src/hot_core.rs": "5e133b2a5f4fed9dc995932f343823726e6e019b9d561870f92c4576ae83f64d",
+        "crates/rustra/src/hot_core_dylib.rs": "88df0982db38ad3a672cc2b2c8f2c9356359a8f279c1df300ca1403bfe47fb8d",
+        "crates/rustra/src/hot_core_retention.rs": "9bb54c39f306e5f61e5ee5ca2cfa1be9ed6872fd5fe1c7d5dd30cc78c1015eb0",
+        "crates/rustra/src/hot_core_tests.rs": "4a8e2b1cfbd5a46819951a913853236a59a0e95eab17f5b49c5af43cfde7b244",
+        "crates/rustra/src/hot_core_watch.rs": "80e4dd98e0ce2627f44e80b696843380efbc6db26146d1be6a4417d528bd48ca",
+        "crates/rustra/src/internal_tests/buffer_invoke_tests.rs": "24b8168d6ae4e7b1fa10edb9321673af6a06f233b1d2fdc189ffe234e4237f40",
+        "crates/rustra/src/internal_tests/builder_devices_tests.rs": "f258051568fd6bb03f3be8f6af9261faff476e7d4718a4e0da53bc465cb0ad3a",
+        "crates/rustra/src/internal_tests/builder_errors_tests.rs": "52f3fb6c19a0434e7825e136629c44b3737e48594e9b6e65da8d3fee6a200f34",
+        "crates/rustra/src/internal_tests/builder_platform_tests.rs": "5963ae4fcf4dfe24e542b962b7ab2aeac34af4e2e5d51b00d89abfc94e1ef915",
+        "crates/rustra/src/internal_tests/complex_codec_adjacent_tests.rs": "a9b460c9ea64dcbe469e197baa9042f037f0e27d769a84100c70ed38bc8c8a9c",
+        "crates/rustra/src/internal_tests/complex_codec_malformed_tests.rs": "6432f82ac765cf6defa774cb459152e307a4b6e4d9fe1ea018d9fd360e159abb",
+        "crates/rustra/src/internal_tests/complex_into_tests.rs": "96de6f55a1dfa8347b4b7dc2c1ce6c20530bfe2807a399acae1f46a1d414c881",
+        "crates/rustra/src/internal_tests/raw_invoke_tests.rs": "c7936378dcdec8896f6de1ecf273d0964b400e598d77048bb339b553c634a4a7",
+        "crates/rustra/src/internal_tests/runtime_registry_tests.rs": "5a5329dd03aee6c237ce053b5ee56515825642f3dfe7d29dd0ce7773308ab657",
+        "crates/rustra/src/internal_tests.rs": "77f2ef05f6a72971a7d0341aeff87cd129fbab465c3533e984b039f3f776a44a",
+        "crates/rustra/src/invoke.rs": "47f9140b23fd56930ed6823ab3e55cc40f9f06f46e5734058823a32ba89f046d",
+        "crates/rustra/src/invoke_buffer.rs": "35ef8cb287684072880ce79bb3608b080ceef9eeb21283aa77746905d08b65d1",
+        "crates/rustra/src/invoke_dispatch.rs": "5d3819a61ec416c4d43721848f5ec08792af583625d18b31403243198174f8c2",
+        "crates/rustra/src/invoke_frame.rs": "41b07729de40e7fdb194d150e300e872e064b4be532bb70dc01369a68f09c939",
+        "crates/rustra/src/invoke_typed.rs": "a4323bc6926dcfa86ac8ddb4a64cfe3984bb2250b96abf607e3ef2c13dd1021d",
+        "crates/rustra/src/lib.rs": "07eeca83ccff6a3c146cd3a7ffec32b1af96c0218d5d7b8bfd01ca23605be6bb",
+        "crates/rustra/src/limits.rs": "928ccd26e88b5496630c8df9eeaf0be7c872d499d489d79e4fadebaa71b9ccf0",
+        "crates/rustra/src/package.rs": "3bedc9e798445435e406b9540be39ae4521afcb3addb5568eb35018957981995",
+        "crates/rustra/src/package_codegen.rs": "da97d6c1173c1ecddef627d683426c53efb127333af16bee22d51d2255c64adf",
+        "crates/rustra/src/package_commands_gen.rs": "57dbfa53b0d7c9360d41dc3557feab0e8967358d149bc558370d3bfd961b1b7f",
+        "crates/rustra/src/package_core.rs": "92683dffb983beaaf967a11bf6b544f8ed5c0507766f28ce8ffa10ca8a7e825a",
+        "crates/rustra/src/package_events.rs": "df6c520e6674280a840022ce4b7ea22cc05f0799de184806762ca2478564df46",
+        "crates/rustra/src/package_json.rs": "01f285793c381267789b7682c596e1414a129903e635c175be635dce2e163d13",
+        "crates/rustra/src/package_schema.rs": "4b2b6471d93056e039721c5b3606b391d0a92ea2ef801e213c4104b06d812e32",
+        "crates/rustra/src/package_types.rs": "0ec647c585ad53cdfc96a93bb8ea6b8d8eb14530cedba64142cb3eb75ae1231e",
+        "crates/rustra/src/package_types_gen.rs": "37c3985b253d1ad1152171a4ea4d125c56190cad9a990ba955e20afa57823533",
+        "crates/rustra/src/platform.rs": "e1c1b55acc9eb918a0f7b41c8e39005a300a8dc6687fc1aea2e72e4a49767602",
+        "crates/rustra/src/prelude.rs": "4c85efe6d1b767eaeca0ab21e10e11d9fa8c8725e367952af88c9ff1a1db683d",
+        "crates/rustra/src/private.rs": "4e3680bb25c1ef92ebae946d0e9507addc65610bdab80585e66a57bcafa569ed",
+        "crates/rustra/src/registry.rs": "7bcfe0c2fe6b78234a86d410c59432a74b2c5821dad5c1983b1af18dde453105",
+        "crates/rustra/src/schema.rs": "16519be6ad39c044a6295f3fd67bdeac480002dcb9ce3ac8ff1926a66efea053",
+        "crates/rustra/src/state.rs": "b00783ee53ca2ad5014a6212d1aa8b6a6ca66f5c8b412c34c0f2712f32756895",
+        "crates/rustra/src/tauri_channel_ipc.rs": "bdcf04bb99a3389a05e2b8c9e7317a9e849d10f3d15c6867132f42a4b8fc100c",
+        "crates/rustra/src/tauri_channel_ownership.rs": "b503457566ece9cdc57481e49a7c162dc736381230b085542556b470f0e9ee67",
+        "crates/rustra/src/tauri_channels.rs": "a58c668186641fa04db4ff94c11b9fd987e0886c1cfb6b2743ffd5536b0fba18",
+        "crates/rustra/src/tauri_support.rs": "50906f59b1aa2fad6772872799352c80d0e6983c5affcd490ad8f3376e291a61",
+        "crates/rustra/src/tauri_support_swap_report.rs": "f7740ac2e43cc4b1647139ce0e799a22bd60407da6f56726bd2385051c349b16",
+        "crates/rustra/src/tauri_support_tests.rs": "212df0a27efb3780f0ea69c449a933da4480d57e40be89eb5fce34574de8a856"
+      },
+      "manifestHashes": {
+        "Cargo.toml": "3169235b87e9e3560aa4d9d5209019180a4fee9e64ce4e9585c2171f382628a3",
+        "Cargo.lock": "1df3928b145e793a3252598b4821e624dea44c1c7f0d293136053a65f8679fd4",
+        "crates/rustra/Cargo.toml": "e3e5c9a52a69336701775e427656db399a9cf2e75dc28322c77ef8c9fd729605",
+        "crates/rustra-macros/Cargo.toml": "2fd304cf69ea3335d1c226041b8bd456e5ea2f89b31876f27da3de5ac12a6b7f",
+        "crates/rustra-naming/Cargo.toml": "15a07cd63b758329048a3a927dacb10068a8ee62d1df53ae7f27c58cc305b032"
+      },
+      "harnessHashes": {
+        "crates/rustra/benches/tree_route.rs": "545d6f6cbdc693af39a3c197be0e0da4848f05961a9e01bc8d035a812a444a71",
+        "crates/rustra/examples/tree_allocations.rs": "89b66906c2e7cbb56e50d3766bc190389ace67e397c322d3183f146ab79a1109",
+        "crates/rustra/benches/support/tree_cases.rs": "47a307a0b262970c15839791576735996e8409323e9e9b617f3898c22e10462f",
+        "crates/rustra/benches/support/tree_wire.rs": "7c6061ae5df5d26fb97d5af9aa27b2a5d09b32e896d7d637e811c8c27cdd49e1"
+      },
+      "benchmarkBinarySha256": "38d496e192dbdd73cfca39f7693c34bb679237e212a16812162cd5c65a7ac932",
+      "allocationBinarySha256": "dcea2f98826c8b6c5b156c31ce41646ba0903a1fec2816eded03b6f8f3f915c4",
+      "dirty": true
+    }
+  },
+  "partialEstimates": {
+    "1-baseline/tree_route/dfs/balanced31/new/estimates.json": {
+      "mean": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 65.86389932108554,
+          "upper_bound": 66.39410730300195
+        },
+        "point_estimate": 66.11858180161101,
+        "standard_error": 0.13523839358642886
+      },
+      "median": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 65.61344609632333,
+          "upper_bound": 66.37663933054394
+        },
+        "point_estimate": 65.89068279336337,
+        "standard_error": 0.1884198083036375
+      },
+      "median_abs_dev": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 0.8656147324918482,
+          "upper_bound": 1.310922340743205
+        },
+        "point_estimate": 1.050120728621432,
+        "standard_error": 0.11337657545627366
+      },
+      "slope": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 66.10275595386788,
+          "upper_bound": 66.67284160845642
+        },
+        "point_estimate": 66.36088905487064,
+        "standard_error": 0.145640350155051
+      },
+      "std_dev": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 1.0036663121856513,
+          "upper_bound": 1.6814333648928863
+        },
+        "point_estimate": 1.3580248785490838,
+        "standard_error": 0.17306240827245625
+      }
+    },
+    "1-baseline/tree_route/echo/balanced255/new/estimates.json": {
+      "mean": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 732256.6209559272,
+          "upper_bound": 737365.820391714
+        },
+        "point_estimate": 734669.9933684001,
+        "standard_error": 1301.6448829944056
+      },
+      "median": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 730093.0212765958,
+          "upper_bound": 734079.18
+        },
+        "point_estimate": 731462.0277777778,
+        "standard_error": 934.1795954520102
+      },
+      "median_abs_dev": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 5061.034356487843,
+          "upper_bound": 8995.304555273935
+        },
+        "point_estimate": 6878.322866926446,
+        "standard_error": 1041.9835741675215
+      },
+      "slope": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 731075.3707494232,
+          "upper_bound": 734444.1120004058
+        },
+        "point_estimate": 732631.7029614304,
+        "standard_error": 861.905099260355
+      },
+      "std_dev": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 9300.776488967645,
+          "upper_bound": 16761.865942269535
+        },
+        "point_estimate": 13084.791754932663,
+        "standard_error": 1929.6727825582732
+      }
+    },
+    "1-baseline/tree_route/echo/balanced31/new/estimates.json": {
+      "mean": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 89375.05232847185,
+          "upper_bound": 89798.43009482883
+        },
+        "point_estimate": 89577.57811990874,
+        "standard_error": 108.31179936228607
+      },
+      "median": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 89340.36883116883,
+          "upper_bound": 89721.09393939393
+        },
+        "point_estimate": 89453.88474446988,
+        "standard_error": 110.49858040787899
+      },
+      "median_abs_dev": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 500.9368356520491,
+          "upper_bound": 839.0915022513528
+        },
+        "point_estimate": 633.2248506694681,
+        "standard_error": 83.66362666447014
+      },
+      "slope": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 89472.57844031727,
+          "upper_bound": 89835.10290626052
+        },
+        "point_estimate": 89641.2135368701,
+        "standard_error": 92.44523846062617
+      },
+      "std_dev": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 768.1615198383384,
+          "upper_bound": 1428.3957886019298
+        },
+        "point_estimate": 1082.8385776132257,
+        "standard_error": 177.0533562938586
+      }
+    },
+    "1-baseline/tree_route/resident/balanced31/new/estimates.json": {
+      "mean": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 121.87123478441696,
+          "upper_bound": 122.72396486083368
+        },
+        "point_estimate": 122.27469304446927,
+        "standard_error": 0.2179352967980972
+      },
+      "median": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 121.47189727834889,
+          "upper_bound": 121.907893838539
+        },
+        "point_estimate": 121.71852288971834,
+        "standard_error": 0.11275436671192426
+      },
+      "median_abs_dev": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 0.7629831218394669,
+          "upper_bound": 1.4965277325155493
+        },
+        "point_estimate": 1.1724080723927877,
+        "standard_error": 0.18843135245920542
+      },
+      "slope": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 121.28000843805792,
+          "upper_bound": 121.68397174505766
+        },
+        "point_estimate": 121.47376578348391,
+        "standard_error": 0.10302712666818944
+      },
+      "std_dev": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 1.5896376895246438,
+          "upper_bound": 2.766618411490109
+        },
+        "point_estimate": 2.1889343997736863,
+        "standard_error": 0.3033491165105314
+      }
+    },
+    "1-baseline/tree_route/search/balanced255/new/estimates.json": {
+      "mean": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 373837.2973763941,
+          "upper_bound": 376145.20756859356
+        },
+        "point_estimate": 374929.6580298665,
+        "standard_error": 586.333672196151
+      },
+      "median": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 373154.4347826087,
+          "upper_bound": 374518.6309259259
+        },
+        "point_estimate": 373617.6390773406,
+        "standard_error": 333.148891619454
+      },
+      "median_abs_dev": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 2142.820019097604,
+          "upper_bound": 3653.435210138574
+        },
+        "point_estimate": 2618.886920478995,
+        "standard_error": 401.55144497914483
+      },
+      "slope": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 373133.4450811652,
+          "upper_bound": 374270.13272403233
+        },
+        "point_estimate": 373673.24622284615,
+        "standard_error": 289.6963812621384
+      },
+      "std_dev": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 4201.695899877864,
+          "upper_bound": 7558.400894416649
+        },
+        "point_estimate": 5910.662027772291,
+        "standard_error": 865.2648384250213
+      }
+    },
+    "1-baseline/tree_route/search/balanced31/new/estimates.json": {
+      "mean": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 46051.08394965589,
+          "upper_bound": 46263.701339306914
+        },
+        "point_estimate": 46155.37873054233,
+        "standard_error": 54.23488636946187
+      },
+      "median": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 45963.23880597015,
+          "upper_bound": 46206.67512425846
+        },
+        "point_estimate": 46090.945383789585,
+        "standard_error": 61.79848845927577
+      },
+      "median_abs_dev": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 308.48890077322903,
+          "upper_bound": 509.4695655059569
+        },
+        "point_estimate": 408.2476620220118,
+        "standard_error": 51.14773634354298
+      },
+      "slope": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 46059.09484619142,
+          "upper_bound": 46237.540647823116
+        },
+        "point_estimate": 46141.16710474032,
+        "standard_error": 45.52363521566593
+      },
+      "std_dev": {
+        "confidence_interval": {
+          "confidence_level": 0.95,
+          "lower_bound": 426.2944338488378,
+          "upper_bound": 657.789659318929
+        },
+        "point_estimate": 545.6108016872623,
+        "standard_error": 59.21532769794474
+      }
+    }
+  }
+}

@@ -2,7 +2,7 @@
 
 # rustra 시작하기
 
-> **Frame 마이그레이션:** 이 문서는 Rust 0.10.1, 공통 패키지 0.10.0 및 아래 어댑터 버전을
+> **Frame 마이그레이션:** 이 문서는 Rust 0.10.2, 공통 패키지 0.10.0 및 아래 어댑터 버전을
 > 대상으로 한다. 0.9.0에는 Frame 이름 전환이 포함되지 않는다. 네이티브 라이브러리·
 > JS 패키지·생성물을 함께 갱신한다. 버전과 절차는
 > [마이그레이션 문서](migrations/post-0.9-frame-and-audit.ko.md)를 따른다.
@@ -61,7 +61,7 @@ bunx --bun @rustra/cli@0.10.0 init my-project --force
 
 ```toml
 [dependencies]
-rustra = "0.10.1"
+rustra = "0.10.2"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```

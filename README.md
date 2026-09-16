@@ -2,7 +2,7 @@ English | [한국어](./README.ko.md)
 
 # rustra
 
-The Frame rename and audit fixes target Rust 0.10.1 and the coordinated package
+The Frame rename and audit fixes target Rust 0.10.2 and the coordinated package
 versions below. Upgrade native libraries, JS adapters, and generated output together;
 see the [migration guide](docs/migrations/post-0.9-frame-and-audit.md) for consumer
 checks and rollback.
@@ -165,7 +165,7 @@ JS/native combination drift at runtime.
 
 ```toml
 [dependencies]
-rustra = "0.10.1"
+rustra = "0.10.2"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -618,7 +618,7 @@ identically regardless of platform.
 Enable the `tauri` feature:
 
 ```toml
-rustra = { version = "0.10.1", features = ["tauri"] }
+rustra = { version = "0.10.2", features = ["tauri"] }
 ```
 
 Rust side:

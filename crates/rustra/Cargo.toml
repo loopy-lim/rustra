@@ -52,6 +52,10 @@ name = "complex_route"
 harness = false
 
 [[bench]]
+name = "tree_route"
+harness = false
+
+[[bench]]
 name = "dynamic_registry"
 harness = false
 

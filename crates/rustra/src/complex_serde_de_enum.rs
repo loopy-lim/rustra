@@ -3,6 +3,7 @@
 struct OneOfEnum<'de, 'b> {
     variant: &'de IrVariant,
     reader: &'b mut Reader<'de>,
+    targets: &'de RecursiveTargets,
     limits: ComplexCodecLimits,
     depth: usize,
 }
@@ -20,6 +21,7 @@ impl<'de, 'b> EnumAccess<'de> for OneOfEnum<'de, 'b> {
             DeVariant {
                 variant: self.variant,
                 reader: self.reader,
+                targets: self.targets,
                 limits: self.limits,
                 depth: self.depth,
             },
@@ -140,6 +142,7 @@ impl<'de> Deserializer<'de> for DeclIndex {
 struct DeVariant<'de, 'b> {
     variant: &'de IrVariant,
     reader: &'b mut Reader<'de>,
+    targets: &'de RecursiveTargets,
     limits: ComplexCodecLimits,
     depth: usize,
 }
@@ -160,6 +163,7 @@ impl<'de, 'b> VariantAccess<'de> for DeVariant<'de, 'b> {
             // 단일 프로퍼티 언래핑 — 프로퍼티 값만 와이어에 있다.
             IrBody::UnwrapSingle { node, .. } => seed.deserialize(De {
                 reader: self.reader,
+                targets: self.targets,
                 ir: node,
                 limits: self.limits,
                 depth: self.depth,
@@ -167,6 +171,7 @@ impl<'de, 'b> VariantAccess<'de> for DeVariant<'de, 'b> {
             // 폴스루 — 변형 전체가 값.
             IrBody::Node(node) => seed.deserialize(De {
                 reader: self.reader,
+                targets: self.targets,
                 ir: node,
                 limits: self.limits,
                 depth: self.depth,
@@ -177,11 +182,21 @@ impl<'de, 'b> VariantAccess<'de> for DeVariant<'de, 'b> {
         }
     }
 
-    fn tuple_variant<V>(self, _len: usize, _visitor: V) -> Result<V::Value>
+    fn tuple_variant<V>(self, _len: usize, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        Err(error("tuple variants are not supported"))
+        let IrBody::UnwrapSingle { node, .. } = &self.variant.body else {
+            return Err(error("expected tagged enum variant"));
+        };
+        De {
+            reader: self.reader,
+            targets: self.targets,
+            ir: node,
+            limits: self.limits,
+            depth: self.depth,
+        }
+        .deserialize_seq(visitor)
     }
 
     fn struct_variant<V>(self, _fields: &'static [&'static str], visitor: V) -> Result<V::Value>
@@ -197,9 +212,16 @@ impl<'de, 'b> VariantAccess<'de> for DeVariant<'de, 'b> {
         let IrNode::Struct { fields, required } = node.as_ref() else {
             return Err(error("expected object"));
         };
+        if self.depth > self.limits.max_depth {
+            return Err(error(format!(
+                "value depth exceeds {}",
+                self.limits.max_depth
+            )));
+        }
         visitor.visit_map(DeMap {
             de: De {
                 reader: self.reader,
+                targets: self.targets,
                 ir: node,
                 limits: self.limits,
                 depth: self.depth,
@@ -209,7 +231,6 @@ impl<'de, 'b> VariantAccess<'de> for DeVariant<'de, 'b> {
                 required,
                 position: 0,
             },
-            absent: false,
         })
     }
 }

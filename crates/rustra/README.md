@@ -10,7 +10,7 @@ once.
 
 ```toml
 [dependencies]
-rustra = "0.4"
+rustra = "0.10.2"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -76,38 +76,38 @@ fn main() -> Result<()> {
 
 ### Package / PackageBuilder
 
-| Method                              | Description                                                               |
-| ----------------------------------- | ------------------------------------------------------------------------- |
-| `Package::builder(id)`              | Creates a `PackageBuilder`                                                 |
+| Method                              | Description                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------------------ |
+| `Package::builder(id)`              | Creates a `PackageBuilder`                                                     |
 | `builder.command_fn(handler)`       | Registers a `#[command]` function. The name is auto-extracted from `type_name` |
-| `builder.command(name, handler)`    | Registers a handler with an explicit name                                  |
-| `builder.build()`                   | Creates a `Package`                                                        |
-| `register!(builder, fn1, fn2, ...)` | Macro registering multiple `#[command]` functions at once                  |
+| `builder.command(name, handler)`    | Registers a handler with an explicit name                                      |
+| `builder.build()`                   | Creates a `Package`                                                            |
+| `register!(builder, fn1, fn2, ...)` | Macro registering multiple `#[command]` functions at once                      |
 
 ### RustraError
 
-| Method                           | Description                                            |
-| -------------------------------- | ------------------------------------------------------ |
-| `RustraError::custom(code, msg)` | Creates a custom error with a stable code and message  |
-| `error.code()`                   | Returns the error code                                 |
-| `error.message()`                | Returns the error message                              |
+| Method                           | Description                                           |
+| -------------------------------- | ----------------------------------------------------- |
+| `RustraError::custom(code, msg)` | Creates a custom error with a stable code and message |
+| `error.code()`                   | Returns the error code                                |
+| `error.message()`                | Returns the error message                             |
 
 `RustraError` implements `Serialize`, so it is serialized and delivered to the
 TypeScript side.
 
 ### invoke
 
-| Method                                | Description                                          |
-| ------------------------------------- | ---------------------------------------------------- |
-| `package.invoke::<I, O>(name, input)` | Type-safe invocation, including (de)serialization    |
-| `package.invoke_json(name, params)`   | Invocation based on `serde_json::Value`              |
+| Method                                | Description                                       |
+| ------------------------------------- | ------------------------------------------------- |
+| `package.invoke::<I, O>(name, input)` | Type-safe invocation, including (de)serialization |
+| `package.invoke_json(name, params)`   | Invocation based on `serde_json::Value`           |
 
 ### TypeScript generation
 
-| Method                          | Description                                                                        |
-| ------------------------------- | ---------------------------------------------------------------------------------- |
-| `package.generate_typescript()` | Returns a `GeneratedPackage`                                                        |
-| `generated.write_to_dir(path)`  | Writes `schema.json`, `types.ts`, `commands.ts`, `contract.ts`                     |
+| Method                          | Description                                                    |
+| ------------------------------- | -------------------------------------------------------------- |
+| `package.generate_typescript()` | Returns a `GeneratedPackage`                                   |
+| `generated.write_to_dir(path)`  | Writes `schema.json`, `types.ts`, `commands.ts`, `contract.ts` |
 
 ### Generated output
 
@@ -163,7 +163,7 @@ integration into Tauri apps:
 
 ```toml
 [dependencies]
-rustra = { version = "0.4", features = ["tauri"] }
+rustra = { version = "0.10.2", features = ["tauri"] }
 ```
 
 ```rust

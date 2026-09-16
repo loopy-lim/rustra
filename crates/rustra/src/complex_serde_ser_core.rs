@@ -2,12 +2,20 @@
 
 struct Ser<'s, 'w, 'b> {
     writer: &'s mut Writer<'w>,
+    targets: &'b RecursiveTargets,
     ir: &'b IrNode,
     limits: ComplexCodecLimits,
     depth: usize,
 }
 
 impl<'s, 'w, 'b> Ser<'s, 'w, 'b> {
+    #[inline]
+    fn node(&self) -> Result<&'b IrNode> {
+        self.depth_guard()?;
+        peel_ser(self.ir, self.targets)
+    }
+
+    #[inline]
     fn depth_guard(&self) -> Result<()> {
         if self.depth > self.limits.max_depth {
             return Err(error(format!(
@@ -22,12 +30,11 @@ impl<'s, 'w, 'b> Ser<'s, 'w, 'b> {
 /// `$ref`/const 폴스루 — 원본 encode_node 와 동일하되 const 값 검사는 건너뛴다
 /// (Rust 타입이 값의 출처다; const 스키마는 타입 자신의 모양에서 유래하므로
 /// 실질 도달 불가). 스키마↔타입 어긋남은 Value 경로에서도 에러였다.
-fn peel_ser(ir: &IrNode) -> Result<&IrNode> {
-    match ir {
-        IrNode::Ref { .. } => Err(error("recursive schema requires Value codec")),
+fn peel_ser<'a>(ir: &'a IrNode, targets: &'a RecursiveTargets) -> Result<&'a IrNode> {
+    match targets.resolve(ir)? {
         IrNode::Const {
             inner: Some(node), ..
-        } => Ok(node.as_ref()),
+        } => targets.resolve(node),
         IrNode::Const { inner: None, .. } => Err(error("expected object")),
         other => Ok(other),
     }
@@ -45,7 +52,7 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
     type SerializeStructVariant = SerStructVariant<'s, 'w, 'b>;
 
     fn serialize_bool(self, value: bool) -> Result<()> {
-        let IrNode::Boolean = peel_ser(self.ir)? else {
+        let IrNode::Boolean = self.node()? else {
             return Err(error("expected boolean"));
         };
         self.writer.byte(u8::from(value))
@@ -64,14 +71,16 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
     }
 
     fn serialize_i64(self, value: i64) -> Result<()> {
-        let unsigned = is_unsigned(peel_ser(self.ir)?);
-        let Ser {
-            writer,
-            ir,
-            limits: _,
-            depth: _,
-        } = self;
-        serialize_int(writer, ir, if unsigned { None } else { Some(value) }, value)
+        let IrNode::Int { unsigned } = self.node()? else {
+            return Err(error("expected integer node"));
+        };
+        if *unsigned {
+            let value =
+                u64::try_from(value).map_err(|_| error("unsigned integer must be non-negative"))?;
+            self.writer.varint(u128::from(value))
+        } else {
+            self.writer.zigzag(i128::from(value))
+        }
     }
 
     fn serialize_u8(self, value: u8) -> Result<()> {
@@ -87,13 +96,26 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
     }
 
     fn serialize_u64(self, value: u64) -> Result<()> {
-        let Ser {
-            writer,
-            ir,
-            limits: _,
-            depth: _,
-        } = self;
-        serialize_int(writer, ir, None, value as i64)
+        let IrNode::Int { unsigned } = self.node()? else {
+            return Err(error("expected integer node"));
+        };
+        if *unsigned {
+            self.writer.varint(u128::from(value))
+        } else {
+            self.writer.zigzag(i128::from(value))
+        }
+    }
+
+    fn serialize_i128(self, value: i128) -> Result<()> {
+        if let Ok(value) = i64::try_from(value) {
+            self.serialize_i64(value)
+        } else {
+            self.serialize_u64(u64::try_from(value).map_err(|_| error("number out of range"))?)
+        }
+    }
+
+    fn serialize_u128(self, value: u128) -> Result<()> {
+        self.serialize_u64(u64::try_from(value).map_err(|_| error("number out of range"))?)
     }
 
     fn serialize_f32(self, value: f32) -> Result<()> {
@@ -101,7 +123,7 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
     }
 
     fn serialize_f64(self, value: f64) -> Result<()> {
-        let IrNode::Float { single } = peel_ser(self.ir)? else {
+        let IrNode::Float { single } = self.node()? else {
             return Err(error("expected number node"));
         };
         if !value.is_finite() {
@@ -119,7 +141,7 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
     }
 
     fn serialize_str(self, value: &str) -> Result<()> {
-        let IrNode::String = peel_ser(self.ir)? else {
+        let IrNode::String = self.node()? else {
             return Err(error("expected string"));
         };
         self.writer.string(value)
@@ -127,7 +149,7 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
 
     fn serialize_unit(self) -> Result<()> {
         // Null 노드는 와이어 0바이트.
-        if matches!(peel_ser(self.ir)?, IrNode::Null) {
+        if matches!(self.node()?, IrNode::Null) {
             Ok(())
         } else {
             Err(error("expected null"))
@@ -135,20 +157,20 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
     }
 
     fn serialize_none(self) -> Result<()> {
-        let IrNode::Option { .. } = peel_ser(self.ir)? else {
+        let IrNode::Option { .. } = self.node()? else {
             return Err(error("expected option node"));
         };
         self.writer.byte(0)
     }
 
     fn serialize_some<T: ser::Serialize + ?Sized>(self, value: &T) -> Result<()> {
-        let IrNode::Option { inner } = peel_ser(self.ir)? else {
+        let IrNode::Option { inner } = self.node()? else {
             return Err(error("expected option node"));
         };
-        self.depth_guard()?;
         self.writer.byte(1)?;
         value.serialize(Ser {
             writer: self.writer,
+            targets: self.targets,
             ir: inner,
             limits: self.limits,
             depth: self.depth + 1,
@@ -156,11 +178,10 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
     }
 
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
-        let ir = peel_ser(self.ir)?;
+        let ir = self.node()?;
         let IrNode::Seq { tuple, items } = ir else {
             return Err(error("expected array node"));
         };
-        self.depth_guard()?;
         // 길이 프리픽스 — 유도 코드는 Vec/배열/Set 에 정확한 길이를 건넨다.
         // 모르는 이터레이터(None)는 원본 encode 와 달라질 수 있으므로 거부.
         let Some(len) = len else {
@@ -175,6 +196,7 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
         self.writer.varint(len as u128)?;
         Ok(SerSeq {
             writer: self.writer,
+            targets: self.targets,
             tuple: tuple.as_deref(),
             items: items.as_deref(),
             declared: len,
@@ -185,13 +207,13 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
     }
 
     fn serialize_map(self, _len: Option<usize>) -> Result<Self::SerializeMap> {
-        let ir = peel_ser(self.ir)?;
+        let ir = self.node()?;
         let IrNode::Map { value } = ir else {
             return Err(error("expected object node"));
         };
-        self.depth_guard()?;
         Ok(SerMap {
             writer: self.writer,
+            targets: self.targets,
             buffer: Vec::new(),
             value,
             limits: self.limits,
@@ -200,13 +222,13 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
     }
 
     fn serialize_struct(self, _name: &'static str, _len: usize) -> Result<Self::SerializeStruct> {
-        let ir = peel_ser(self.ir)?;
+        let ir = self.node()?;
         let IrNode::Struct { fields, required } = ir else {
             return Err(error("expected object"));
         };
-        self.depth_guard()?;
         Ok(SerStruct {
             writer: self.writer,
+            targets: self.targets,
             fields,
             required,
             next: 0,
@@ -223,8 +245,14 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
     ) -> Result<()> {
         // 유도 Serialize 는 선언 인덱스를 건네지만 와이어 인덱스는 IR 정렬
         // 순서(OneOf)거나 declaration 순서(Enum)다 — 변형 이름으로 찾는다.
-        match peel_ser(self.ir)? {
+        match self.node()? {
             IrNode::OneOf { variants } => {
+                if self.depth + 1 > self.limits.max_depth {
+                    return Err(error(format!(
+                        "value depth exceeds {}",
+                        self.limits.max_depth
+                    )));
+                }
                 let index = resolve_variant_index(variants, variant)?;
                 self.writer.varint(index as u128)
             }
@@ -243,13 +271,14 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
         variant: &'static str,
         value: &T,
     ) -> Result<()> {
-        let IrNode::OneOf { variants } = peel_ser(self.ir)? else {
+        let IrNode::OneOf { variants } = self.node()? else {
             return Err(error("expected oneof node"));
         };
         let index = resolve_variant_index(variants, variant)?;
         self.writer.varint(index as u128)?;
         value.serialize(Ser {
             writer: self.writer,
+            targets: self.targets,
             ir: body_node(&variants[index]),
             limits: self.limits,
             depth: self.depth + 1,
@@ -261,21 +290,22 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
         _name: &'static str,
         _variant_index: u32,
         variant: &'static str,
-        _len: usize,
+        len: usize,
     ) -> Result<Self::SerializeTupleVariant> {
-        let IrNode::OneOf { variants } = peel_ser(self.ir)? else {
+        let IrNode::OneOf { variants } = self.node()? else {
             return Err(error("expected oneof node"));
         };
         let index = resolve_variant_index(variants, variant)?;
         self.writer.varint(index as u128)?;
-        let ir = body_node(&variants[index]);
         Ok(SerTupleVariant {
-            ser: Ser {
+            inner: Ser {
                 writer: self.writer,
-                ir,
+                targets: self.targets,
+                ir: body_node(&variants[index]),
                 limits: self.limits,
                 depth: self.depth + 1,
-            },
+            }
+            .serialize_seq(Some(len))?,
         })
     }
 
@@ -286,9 +316,15 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
         variant: &'static str,
         _len: usize,
     ) -> Result<Self::SerializeStructVariant> {
-        let IrNode::OneOf { variants } = peel_ser(self.ir)? else {
+        let IrNode::OneOf { variants } = self.node()? else {
             return Err(error("expected oneof node"));
         };
+        if self.depth + 1 > self.limits.max_depth {
+            return Err(error(format!(
+                "value depth exceeds {}",
+                self.limits.max_depth
+            )));
+        }
         let index = resolve_variant_index(variants, variant)?;
         self.writer.varint(index as u128)?;
         // 외부 태그 enum 의 struct 변형 — 와이어 본체는 UnwrapSingle 프로퍼티
@@ -302,11 +338,12 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
         Ok(SerStructVariant {
             inner: SerStruct {
                 writer: self.writer,
+                targets: self.targets,
                 fields,
                 required,
                 next: 0,
                 limits: self.limits,
-                depth: self.depth + 1,
+                depth: self.depth + 2,
             },
         })
     }
@@ -330,8 +367,7 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
     }
 
     fn serialize_unit_struct(self, _name: &'static str) -> Result<()> {
-        // 유닛 struct 는 값 없는 와이어 — Null 노드와 동일하게 0바이트.
-        Ok(())
+        self.serialize_unit()
     }
 
     fn serialize_newtype_struct<T: ser::Serialize + ?Sized>(

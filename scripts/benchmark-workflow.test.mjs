@@ -22,3 +22,8 @@ test('benchmark workflow measures every registered core Criterion route', () => 
 test('benchmark summary includes the complex route log', () => {
   assert.match(workflow, /bench_complex\.txt/);
 });
+
+test('branching tree route uses the optimized profile and is included in reports', () => {
+  assert.match(workflow, /cargo bench -p rustra --bench tree_route/);
+  assert.match(workflow, /bench_tree\.txt/);
+});
