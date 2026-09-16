@@ -76,3 +76,7 @@
 - [공개 동기 API의 사용 조건](../synchronous-bindings.md)
 
 추가 스트레스 검사는 사용자 요청에 따라 중단했다. 일반 회귀 테스트와 같은 조건의 성능 측정은 계속한다. 현재 후보에 성공한 퍼징 또는 Linux LeakSanitizer 증거가 있다고 주장하지 않는다.
+
+### 2026-09-16 잔여 차이 후속 검증
+
+[후속 PLAN](../plans/2026-09-16-nitro-parity-followup.md)에 따라 Android 버퍼의 순서 의존성, 실제 DFS의 보관 용량·스택 성장, 작은 호출 후보 및 큰 객체 직렬화를 조사했다. 작은 맵 인코더를 개선했고 악화된 postcard 후보는 폐기했다. 새 iOS/Android Release의 각 5회×90항목에서 공개 동기는 양쪽 20/30, Promise API는 iOS19/30·Android20/30이 동급 이상이다. 전 항목 목표는 미달이며 모든 판정·진단 한계는 [후속 결과](../research/2026-09-16-nitro-parity-followup.md)에 남겼다. 새 발행이나 플랫폼 인증 완료로 처리하지 않는다.

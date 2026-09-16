@@ -33,3 +33,7 @@ API/wire/FFI 호환성, handler 단일 실행, 입력 제한, 누수 방지를 �
 공개 동기 binding, 생성 JSI 코덱·Rust complex 코덱 및 숫자 raw 호출의 일반적인 비용을 줄이고, 동일 후보를 iOS Simulator와 물리 Android에서 각각 5회×90항목 검증했다. 공개 동기에서 동급 이상은 iOS18/30, Android19/30이며 **전 항목 Nitro 동급 이상 목표는 미달**이다. 문자열·pair·indexed와 일부 resident/버퍼 결과의 차이를 남긴다. [전체 결과와 근거](../research/2026-09-16-nitro-parity-candidate.md)는 모든180항목과 실패한 중간 실행을 포함한다.
 
 구현·독립 검토·일반 회귀 테스트·반복 native 측정은 수행했다. 추가 무작위 스트레스 검사는 사용자 요청으로 중단했다. 현재 소스의 전체 플랫폼 인증 또는 새 버전 발행은 완료로 표시하지 않는다. 사용자 승인으로 로컬 커밋을 완료했다. PR/발행은 후속 단계다.
+
+### 2026-09-16 잔여 차이 후속 검증
+
+[후속 PLAN](../plans/2026-09-16-nitro-parity-followup.md)에 따라 Android 버퍼의 순서 의존성, 실제 DFS의 보관 용량·스택 성장, 작은 호출 후보 및 큰 객체 직렬화를 조사했다. 작은 맵 인코더를 개선했고 악화된 postcard 후보는 폐기했다. 새 iOS/Android Release의 각 5회×90항목에서 공개 동기는 양쪽 20/30, Promise API는 iOS19/30·Android20/30이 동급 이상이다. 전 항목 목표는 미달이며 모든 판정·진단 한계는 [후속 결과](../research/2026-09-16-nitro-parity-followup.md)에 남겼다. 새 발행이나 플랫폼 인증 완료로 처리하지 않는다.
