@@ -1,3 +1,6 @@
+pub mod parity_bench;
+#[cfg(feature = "uniffi")]
+use parity_bench::*;
 use rustra::ffi::FfiFormat;
 use rustra::prelude::*;
 
@@ -787,7 +790,7 @@ static CACHED_PACKAGE: std::sync::OnceLock<Package> = std::sync::OnceLock::new()
 pub fn calculator_package() -> Package {
     CACHED_PACKAGE
         .get_or_init(|| {
-            let pkg = register!(
+            let builder = register!(
                 Package::builder("examples.calculator"),
                 add_numbers,
                 multiply,
@@ -815,7 +818,15 @@ pub fn calculator_package() -> Package {
                 bench_echo_string
             )
             .buffer_command_fn(bench_echo_bytes)
+            .command_execution(
+                __RUstra_meta_bench_echo_bytes,
+                __RUstra_execution_bench_echo_bytes,
+            )
             .command_fn(bench_echo_pair)
+            .command_execution(
+                __RUstra_meta_bench_echo_pair,
+                __RUstra_execution_bench_echo_pair,
+            )
             .command_fn(echo_groups)
             // register! 튜플은 .command_fn 체인만 생성하므로 buffered 커맨드들이
             // 중간에 끼일 수 없다 — 신규 커맨드는 체인 맨 뒤에 붙여야 기존 id가
@@ -836,8 +847,8 @@ pub fn calculator_package() -> Package {
             .command_fn(device_demo)
             .devices_meta_if(__RUstra_meta_device_demo, __RUstra_devices_device_demo)
             // A5: 태그 enum 표본 — 신규 커맨드는 id 시프트 방지를 위해 체인 맨 뒤에.
-            .command_fn(kind_echo)
-            .build();
+            .command_fn(kind_echo);
+            let pkg = parity_bench::register_commands(builder).build();
 
             // Auto-register for generic FFI with JSON default
             pkg.register_ffi_with_default(FfiFormat::Json);

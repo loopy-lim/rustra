@@ -55,6 +55,9 @@ public:
   static PropNameID forAscii(Runtime&, const std::string& name) {
     return PropNameID{name};
   }
+  static PropNameID forUtf8(Runtime&, const uint8_t* data, size_t size) {
+    return PropNameID{std::string(reinterpret_cast<const char*>(data), size)};
+  }
   const std::string& utf8(Runtime&) const { return name_; }
 
 private:
@@ -203,12 +206,15 @@ public:
     if (it == data_->props.end()) return Value();
     return it->second;
   }
-  // 생성된 코덱은 PropertyName 가 아닌 문자열 이름으로 접근한다.
+  // 문자열 이름 접근도 실제 JSI와 함께 지원한다.
   Value getProperty(Runtime& rt, const char* name) const {
     return getProperty(rt, std::string(name));
   }
-  // 실 RN jsi 계약과 동일한 String 오버로드 — map 코덱이 std::string →
-  // jsi::String 변환 후 접근한다.
+  // 고정 필드와 동적 맵 키가 쓰는 실제 JSI 이름 오버로드.
+  Value getProperty(Runtime& rt, const PropNameID& name) const {
+    return getProperty(rt, name.utf8(rt));
+  }
+
   Value getProperty(Runtime& rt, const String& name) const {
     return getProperty(rt, name.utf8(rt));
   }

@@ -11,56 +11,23 @@
 #include <cstring>
 #include <jsi/jsi.h>
 #include <limits>
-#include <memory>
 #include <stdexcept>
 #include <string>
-#include <unordered_map>
 #include <utility>
 
 using namespace facebook::jsi;
 namespace jsi = facebook::jsi;
 namespace rc = rustra::codec;
+namespace rustra::generated {
+const char* compiled_contract_hash() { return "810750e747024dd13ff3416741e9e563e07f73349119e7d5de962d77b1bafbaf"; }
+}
 
-namespace rustra { namespace generated {
-#ifdef RUSTRA_TEST_JSI_SHIM
-  using RuntimePropNameCache = std::unordered_map<std::string, jsi::PropNameID>;
-  std::shared_ptr<RuntimePropNameCache> runtimePropNameCache(jsi::Runtime&) {
-    static auto cache = std::make_shared<RuntimePropNameCache>();
-    return cache;
-  }
-#else
-  class RuntimePropNameCache final : public jsi::NativeState {
-  public:
-    std::unordered_map<std::string, jsi::PropNameID> values;
-  };
-  std::shared_ptr<RuntimePropNameCache> runtimePropNameCache(jsi::Runtime& rt) {
-    static std::unordered_map<jsi::Runtime*, std::weak_ptr<RuntimePropNameCache>> caches;
-    auto found = caches.find(&rt);
-    if (found != caches.end()) {
-      if (auto cache = found->second.lock()) return cache;
-    }
-    auto cache = std::make_shared<RuntimePropNameCache>();
-    jsi::Object holder(rt);
-    holder.setNativeState(rt, cache);
-    rt.global().setProperty(rt, "__rustraPropNameCache", std::move(holder));
-    caches[&rt] = cache;
-    return cache;
-  }
-#endif
-  const jsi::PropNameID& cachedProp(jsi::Runtime& rt, const char* name) {
-    auto cache = runtimePropNameCache(rt);
-#ifdef RUSTRA_TEST_JSI_SHIM
-    auto& values = *cache;
-#else
-    auto& values = cache->values;
-#endif
-    auto it = values.find(name);
-    if (it == values.end()) {
-      it = values.emplace(name, jsi::PropNameID::forAscii(rt, name)).first;
-    }
-    return it->second;
-  }
-}}
+// UTF8 may replace lone UTF16 surrogates. Preserve the prior normalized lookup
+// for replacement-containing keys; ordinary keys retain their original JSI string.
+[[maybe_unused]] static jsi::Value rustra_map_value(jsi::Runtime& rt, const jsi::Object& object, const jsi::String& key, const std::string& utf8) {
+  if (utf8.find("\xEF\xBF\xBD") == std::string::npos) return object.getProperty(rt, key);
+  return object.getProperty(rt, jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(utf8.data()), utf8.size()));
+}
 
 [[maybe_unused]] static double rustra_f64(jsi::Runtime& rt, const jsi::Value& value, const char* field) {
   if (!value.isNumber()) throw jsi::JSError(rt, std::string("rustra: '") + field + "' must be a number");
@@ -139,6 +106,10 @@ static void complex_encode_ref_Item(jsi::Runtime&, const jsi::Value&, rc::Writer
 static jsi::Value complex_decode_ref_Item(jsi::Runtime&, rc::Reader&, size_t);
 static void complex_encode_ref_OpKind(jsi::Runtime&, const jsi::Value&, rc::Writer&, size_t);
 static jsi::Value complex_decode_ref_OpKind(jsi::Runtime&, rc::Reader&, size_t);
+static void complex_encode_ref_ParityNode(jsi::Runtime&, const jsi::Value&, rc::Writer&, size_t);
+static jsi::Value complex_decode_ref_ParityNode(jsi::Runtime&, rc::Reader&, size_t);
+static void complex_encode_ref_ParityTree(jsi::Runtime&, const jsi::Value&, rc::Writer&, size_t);
+static jsi::Value complex_decode_ref_ParityTree(jsi::Runtime&, rc::Reader&, size_t);
 static void complex_encode_ref_ResourceHandle(jsi::Runtime&, const jsi::Value&, rc::Writer&, size_t);
 static jsi::Value complex_decode_ref_ResourceHandle(jsi::Runtime&, rc::Reader&, size_t);
 
@@ -180,6 +151,58 @@ static void complex_encode_ref_OpKind(jsi::Runtime& rt, const jsi::Value& value,
   }
 }
 static jsi::Value complex_decode_ref_OpKind(jsi::Runtime& rt, rc::Reader& r, size_t _depth) { if (_depth > 32) throw std::runtime_error("complex value depth exceeds 32"); return [&]() -> jsi::Value { auto _cx0 = r.read_uvar(); if (_cx0 == 0) return jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>("Clear"), sizeof("Clear") - 1); if (_cx0 == 1) return [&]() -> jsi::Value { auto _cx2 = jsi::Object(rt); _cx2.setProperty(rt, "Set", [&]() -> jsi::Value { auto _cx1 = jsi::Object(rt); _cx1.setProperty(rt, "value", [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }()); return _cx1; }()); return _cx2; }(); throw std::runtime_error("complex oneOf index out of range"); }(); }
+static void complex_encode_ref_ParityNode(jsi::Runtime& rt, const jsi::Value& value, rc::Writer& w, size_t _depth) { if (_depth > 32) throw std::runtime_error("complex value depth exceeds 32");
+  { if (!value.isObject() || value.asObject(rt).isArray(rt)) throw jsi::JSError(rt, "complex object expected");
+    auto _cx0 = value.asObject(rt);
+    auto _cx1 = _cx0.getProperty(rt, "id");
+    w.push_f64(rustra_f64(rt, _cx1, "complex number"));
+    auto _cx2 = _cx0.getProperty(rt, "name");
+    if (!_cx2.isString()) throw jsi::JSError(rt, "complex string expected");
+    w.push_string(_cx2.getString(rt).utf8(rt));
+    auto _cx3 = _cx0.getProperty(rt, "tag");
+    if (!_cx3.isString()) throw jsi::JSError(rt, "complex string expected");
+    w.push_string(_cx3.getString(rt).utf8(rt));
+    auto _cx4 = _cx0.getProperty(rt, "note"); if (_cx0.hasProperty(rt, "note") && !_cx4.isUndefined()) { w.push_u8(1);
+      { if (_cx4.isNull() || _cx4.isUndefined()) { w.push_u8(0); } else { w.push_u8(1);
+        if (!_cx4.isString()) throw jsi::JSError(rt, "complex string expected");
+        w.push_string(_cx4.getString(rt).utf8(rt));
+      } }
+    } else { w.push_u8(0); }
+    auto _cx5 = _cx0.getProperty(rt, "metadata");
+    { if (!_cx5.isObject() || _cx5.asObject(rt).isArray(rt)) throw jsi::JSError(rt, "complex object map expected");
+      auto _cx6 = _cx5.asObject(rt); auto _cx7 = _cx6.getPropertyNames(rt);
+      std::vector<std::pair<std::string, jsi::Value>> _cx8;
+      for (size_t _i = 0; _i < _cx7.length(rt); _i++) { auto _key = _cx7.getValueAtIndex(rt, _i).getString(rt).utf8(rt); auto _property = _cx6.getProperty(rt, jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_key.data()), _key.size())); _cx8.push_back({_key, std::move(_property)}); }
+      std::sort(_cx8.begin(), _cx8.end(), [](const auto& _a, const auto& _b) { const auto& a = _a.first; const auto& b = _b.first; const size_t n = std::min(a.size(), b.size()); for (size_t i = 0; i < n; ++i) { const auto ca = static_cast<unsigned char>(a[i]); const auto cb = static_cast<unsigned char>(b[i]); if (ca != cb) return ca < cb; } return a.size() < b.size(); });
+      w.push_uvar(_cx8.size()); for (auto& _entry : _cx8) { w.push_string(_entry.first); auto& _value = _entry.second;
+        if (!_value.isString()) throw jsi::JSError(rt, "complex string expected");
+        w.push_string(_value.getString(rt).utf8(rt));
+      } }
+    auto _cx9 = _cx0.getProperty(rt, "children");
+    { auto _cx10 = _cx9.asObject(rt);
+      if (!_cx9.isObject() || !_cx10.isArray(rt)) throw jsi::JSError(rt, "complex array expected");
+      auto _cx11 = _cx10.getArray(rt); auto _cx12 = _cx11.length(rt);
+      w.push_uvar(_cx12);
+      for (size_t _i = 0; _i < _cx12; _i++) {
+        w.push_f64(rustra_f64(rt, _cx11.getValueAtIndex(rt, _i), "complex number"));
+      } }
+  }
+}
+static jsi::Value complex_decode_ref_ParityNode(jsi::Runtime& rt, rc::Reader& r, size_t _depth) { if (_depth > 32) throw std::runtime_error("complex value depth exceeds 32"); return [&]() -> jsi::Value { auto _cx0 = jsi::Object(rt); _cx0.setProperty(rt, "id", jsi::Value(r.read_f64())); _cx0.setProperty(rt, "name", [&]() -> jsi::Value { auto _s = r.read_string_view(); return jsi::String::createFromUtf8(rt, _s.data, _s.size); }()); _cx0.setProperty(rt, "tag", [&]() -> jsi::Value { auto _s = r.read_string_view(); return jsi::String::createFromUtf8(rt, _s.data, _s.size); }()); auto _cx2 = r.read_u8(); if (_cx2 > 1) throw std::runtime_error("complex optional field presence tag"); if (_cx2 == 1) _cx0.setProperty(rt, "note", [&]() -> jsi::Value { auto _cx1 = r.read_u8(); if (_cx1 == 0) return jsi::Value::null(); if (_cx1 != 1) throw std::runtime_error("complex optional presence tag"); return [&]() -> jsi::Value { auto _s = r.read_string_view(); return jsi::String::createFromUtf8(rt, _s.data, _s.size); }(); }()); _cx0.setProperty(rt, "metadata", [&]() -> jsi::Value { auto _cx3 = r.read_uvar(); if (_cx3 > 100000) throw std::runtime_error("complex map length exceeds 100000"); auto _cx4 = jsi::Object(rt); for (size_t _i = 0; _i < _cx3; _i++) { auto _cx5 = r.read_string_view(); auto _keyValue = jsi::String::createFromUtf8(rt, _cx5.data, _cx5.size); _cx4.setProperty(rt, _keyValue, [&]() -> jsi::Value { auto _s = r.read_string_view(); return jsi::String::createFromUtf8(rt, _s.data, _s.size); }()); } return _cx4; }()); _cx0.setProperty(rt, "children", [&]() -> jsi::Value { auto _cx6 = r.read_uvar(); if (_cx6 > 100000) throw std::runtime_error("complex collection length exceeds 100000"); auto _cx7 = jsi::Array(rt, static_cast<size_t>(_cx6)); for (size_t _i = 0; _i < _cx6; _i++) _cx7.setValueAtIndex(rt, _i, jsi::Value(r.read_f64())); return _cx7; }()); return _cx0; }(); }
+static void complex_encode_ref_ParityTree(jsi::Runtime& rt, const jsi::Value& value, rc::Writer& w, size_t _depth) { if (_depth > 32) throw std::runtime_error("complex value depth exceeds 32");
+  { if (!value.isObject() || value.asObject(rt).isArray(rt)) throw jsi::JSError(rt, "complex object expected");
+    auto _cx0 = value.asObject(rt);
+    auto _cx1 = _cx0.getProperty(rt, "nodes");
+    { auto _cx2 = _cx1.asObject(rt);
+      if (!_cx1.isObject() || !_cx2.isArray(rt)) throw jsi::JSError(rt, "complex array expected");
+      auto _cx3 = _cx2.getArray(rt); auto _cx4 = _cx3.length(rt);
+      w.push_uvar(_cx4);
+      for (size_t _i = 0; _i < _cx4; _i++) {
+        complex_encode_ref_ParityNode(rt, _cx3.getValueAtIndex(rt, _i), w, _depth + 1 + 1);
+      } }
+  }
+}
+static jsi::Value complex_decode_ref_ParityTree(jsi::Runtime& rt, rc::Reader& r, size_t _depth) { if (_depth > 32) throw std::runtime_error("complex value depth exceeds 32"); return [&]() -> jsi::Value { auto _cx0 = jsi::Object(rt); _cx0.setProperty(rt, "nodes", [&]() -> jsi::Value { auto _cx1 = r.read_uvar(); if (_cx1 > 100000) throw std::runtime_error("complex collection length exceeds 100000"); auto _cx2 = jsi::Array(rt, static_cast<size_t>(_cx1)); for (size_t _i = 0; _i < _cx1; _i++) _cx2.setValueAtIndex(rt, _i, complex_decode_ref_ParityNode(rt, r, _depth + 1 + 1)); return _cx2; }()); return _cx0; }(); }
 static void complex_encode_ref_ResourceHandle(jsi::Runtime& rt, const jsi::Value& value, rc::Writer& w, size_t _depth) { if (_depth > 32) throw std::runtime_error("complex value depth exceeds 32");
   w.push_uvar(rustra_u64(rt, value, "complex integer"));
 }
@@ -187,8 +210,10 @@ static jsi::Value complex_decode_ref_ResourceHandle(jsi::Runtime& rt, rc::Reader
 static void encode_addNumbers(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(1); w.push_u8(0); // cmd_id = 1 LE
   auto argsObj = args.asObject(rt);
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, "a"), "a"));
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, "b"), "b"));
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "a");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "b");
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_0), "a"));
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "b"));
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -201,15 +226,18 @@ static void encode_pos_addNumbers(jsi::Runtime& rt, const jsi::Value* argv, size
 
 static jsi::Value decode_addNumbers(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "value"), [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "value");
+  resultObj.setProperty(rt, _prop_0, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
   return std::move(resultObj);
 }
 
 static void encode_benchAdd(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(23); w.push_u8(0); // cmd_id = 23 LE
   auto argsObj = args.asObject(rt);
-  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, "a"), "a"));
-  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, "b"), "b"));
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "a");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "b");
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_0), "a"));
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_1), "b"));
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -222,14 +250,16 @@ static void encode_pos_benchAdd(jsi::Runtime& rt, const jsi::Value* argv, size_t
 
 static jsi::Value decode_benchAdd(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "value"), r.read_f64());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "value");
+  resultObj.setProperty(rt, _prop_0, r.read_f64());
   return std::move(resultObj);
 }
 
 static void encode_benchEchoBytes(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(25); w.push_u8(0); // cmd_id = 25 LE
   auto argsObj = args.asObject(rt);
-  { const auto& _v = argsObj.getProperty(rt, "data"); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _span = rustra_bytes(rt, _v, "data"); w.push_uvar(_span.size); w.push_bytes(_span.data, _span.size); } }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "data");
+  { const auto& _v = argsObj.getProperty(rt, _prop_0); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _span = rustra_bytes(rt, _v, "data"); w.push_uvar(_span.size); w.push_bytes(_span.data, _span.size); } }
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -241,15 +271,18 @@ static void encode_pos_benchEchoBytes(jsi::Runtime& rt, const jsi::Value* argv, 
 
 static jsi::Value decode_benchEchoBytes(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  { auto _n = r.read_uvar(); auto _bytes = r.read_bytes_view((size_t)_n); resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "data"), rustra::generated::make_array_buffer(rt, _bytes.data, _bytes.size)); }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "data");
+  { auto _n = r.read_uvar(); auto _bytes = r.read_bytes_view((size_t)_n); resultObj.setProperty(rt, _prop_0, rustra::generated::make_array_buffer(rt, _bytes.data, _bytes.size)); }
   return std::move(resultObj);
 }
 
 static void encode_benchEchoPair(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(26); w.push_u8(0); // cmd_id = 26 LE
   auto argsObj = args.asObject(rt);
-  { auto _v = argsObj.getProperty(rt, "name").getString(rt).utf8(rt); w.push_string(_v); }
-  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, "value"), "value"));
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "name");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "value");
+  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_1), "value"));
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -262,15 +295,18 @@ static void encode_pos_benchEchoPair(jsi::Runtime& rt, const jsi::Value* argv, s
 
 static jsi::Value decode_benchEchoPair(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  { auto _s = r.read_string_view(); resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "name"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "value"), r.read_f64());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "name");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "value");
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_0, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  resultObj.setProperty(rt, _prop_1, r.read_f64());
   return std::move(resultObj);
 }
 
 static void encode_benchEchoString(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(24); w.push_u8(0); // cmd_id = 24 LE
   auto argsObj = args.asObject(rt);
-  { auto _v = argsObj.getProperty(rt, "value").getString(rt).utf8(rt); w.push_string(_v); }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "value");
+  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -282,15 +318,18 @@ static void encode_pos_benchEchoString(jsi::Runtime& rt, const jsi::Value* argv,
 
 static jsi::Value decode_benchEchoString(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  { auto _s = r.read_string_view(); resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "value"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "value");
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_0, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   return std::move(resultObj);
 }
 
 static void encode_channelDemo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(18); w.push_u8(0); // cmd_id = 18 LE
   auto argsObj = args.asObject(rt);
-  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, "channel"), "channel"));
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, "ticks"), "ticks"));
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "channel");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "ticks");
+  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_0), "channel"));
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "ticks"));
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -303,16 +342,20 @@ static void encode_pos_channelDemo(jsi::Runtime& rt, const jsi::Value* argv, siz
 
 static jsi::Value decode_channelDemo(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "sent"), (double)r.read_i64());
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "droppedSends"), (double)r.read_i64());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "sent");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "droppedSends");
+  resultObj.setProperty(rt, _prop_0, (double)r.read_i64());
+  resultObj.setProperty(rt, _prop_1, (double)r.read_i64());
   return std::move(resultObj);
 }
 
 static void encode_channelDemoBytes(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(31); w.push_u8(0); // cmd_id = 31 LE
   auto argsObj = args.asObject(rt);
-  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, "channel"), "channel"));
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, "ticks"), "ticks"));
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "channel");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "ticks");
+  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_0), "channel"));
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "ticks"));
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -325,17 +368,22 @@ static void encode_pos_channelDemoBytes(jsi::Runtime& rt, const jsi::Value* argv
 
 static jsi::Value decode_channelDemoBytes(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "sent"), (double)r.read_uvar());
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "droppedSends"), (double)r.read_uvar());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "sent");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "droppedSends");
+  resultObj.setProperty(rt, _prop_0, (double)r.read_uvar());
+  resultObj.setProperty(rt, _prop_1, (double)r.read_uvar());
   return std::move(resultObj);
 }
 
 static void encode_clamp(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(4); w.push_u8(0); // cmd_id = 4 LE
   auto argsObj = args.asObject(rt);
-  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, "max"), "max"));
-  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, "min"), "min"));
-  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, "value"), "value"));
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "max");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "min");
+  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "value");
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_0), "max"));
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_1), "min"));
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_2), "value"));
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 3회 제거.
@@ -349,15 +397,18 @@ static void encode_pos_clamp(jsi::Runtime& rt, const jsi::Value* argv, size_t ar
 
 static jsi::Value decode_clamp(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "value"), r.read_f64());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "value");
+  resultObj.setProperty(rt, _prop_0, r.read_f64());
   return std::move(resultObj);
 }
 
 static void encode_createItem(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(8); w.push_u8(0); // cmd_id = 8 LE
   auto argsObj = args.asObject(rt);
-  { auto _v = argsObj.getProperty(rt, "name").getString(rt).utf8(rt); w.push_string(_v); }
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, "value"), "value"));
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "name");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "value");
+  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "value"));
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -370,11 +421,15 @@ static void encode_pos_createItem(jsi::Runtime& rt, const jsi::Value* argv, size
 
 static jsi::Value decode_createItem(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "item");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "active");
+  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "name");
+  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "value");
   { auto _obj = jsi::Object(rt);
-    _obj.setProperty(rt, rustra::generated::cachedProp(rt, "active"), r.read_bool());
-    { auto _s = r.read_string_view(); _obj.setProperty(rt, rustra::generated::cachedProp(rt, "name"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
-    _obj.setProperty(rt, rustra::generated::cachedProp(rt, "value"), [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
-    resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "item"), _obj); }
+    _obj.setProperty(rt, _prop_1, r.read_bool());
+    { auto _s = r.read_string_view(); _obj.setProperty(rt, _prop_2, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+    _obj.setProperty(rt, _prop_3, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
+    resultObj.setProperty(rt, _prop_0, _obj); }
   return std::move(resultObj);
 }
 
@@ -385,15 +440,18 @@ static void encode_deviceDemo(jsi::Runtime& rt, const jsi::Value& args, rc::Writ
 
 static jsi::Value decode_deviceDemo(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  { auto _s = r.read_string_view(); resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "os"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "os");
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_0, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   return std::move(resultObj);
 }
 
 static void encode_divide(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(10); w.push_u8(0); // cmd_id = 10 LE
   auto argsObj = args.asObject(rt);
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, "a"), "a"));
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, "b"), "b"));
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "a");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "b");
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_0), "a"));
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "b"));
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -406,15 +464,18 @@ static void encode_pos_divide(jsi::Runtime& rt, const jsi::Value* argv, size_t a
 
 static jsi::Value decode_divide(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "value"), [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "value");
+  resultObj.setProperty(rt, _prop_0, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
   return std::move(resultObj);
 }
 
 static void encode_emitDemo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(11); w.push_u8(0); // cmd_id = 11 LE
   auto argsObj = args.asObject(rt);
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, "ticks"), "ticks"));
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, "stepDelayMs"), "stepDelayMs"));
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "ticks");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "stepDelayMs");
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_0), "ticks"));
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "stepDelayMs"));
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -427,15 +488,18 @@ static void encode_pos_emitDemo(jsi::Runtime& rt, const jsi::Value* argv, size_t
 
 static jsi::Value decode_emitDemo(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "emitted"), [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "emitted");
+  resultObj.setProperty(rt, _prop_0, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
   return std::move(resultObj);
 }
 
 static void encode_gauge(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(17); w.push_u8(0); // cmd_id = 17 LE
   auto argsObj = args.asObject(rt);
-  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, "limit"), "limit"));
-  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, "offset"), "offset"));
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "limit");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "offset");
+  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_0), "limit"));
+  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_1), "offset"));
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -448,14 +512,16 @@ static void encode_pos_gauge(jsi::Runtime& rt, const jsi::Value* argv, size_t ar
 
 static jsi::Value decode_gauge(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "next"), [&]() -> jsi::Value { auto _v = r.read_uvar(); if (_v <= 9007199254740991ull) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v)); }());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "next");
+  resultObj.setProperty(rt, _prop_0, [&]() -> jsi::Value { auto _v = r.read_uvar(); if (_v <= 9007199254740991ull) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v)); }());
   return std::move(resultObj);
 }
 
 static void encode_greet(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(5); w.push_u8(0); // cmd_id = 5 LE
   auto argsObj = args.asObject(rt);
-  { auto _v = argsObj.getProperty(rt, "name").getString(rt).utf8(rt); w.push_string(_v); }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "name");
+  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -467,14 +533,16 @@ static void encode_pos_greet(jsi::Runtime& rt, const jsi::Value* argv, size_t ar
 
 static jsi::Value decode_greet(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  { auto _s = r.read_string_view(); resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "message"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "message");
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_0, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   return std::move(resultObj);
 }
 
 static void encode_isEven(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(3); w.push_u8(0); // cmd_id = 3 LE
   auto argsObj = args.asObject(rt);
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, "n"), "n"));
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "n");
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_0), "n"));
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -486,15 +554,18 @@ static void encode_pos_isEven(jsi::Runtime& rt, const jsi::Value* argv, size_t a
 
 static jsi::Value decode_isEven(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "result"), r.read_bool());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "result");
+  resultObj.setProperty(rt, _prop_0, r.read_bool());
   return std::move(resultObj);
 }
 
 static void encode_multiply(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(2); w.push_u8(0); // cmd_id = 2 LE
   auto argsObj = args.asObject(rt);
-  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, "a"), "a"));
-  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, "b"), "b"));
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "a");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "b");
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_0), "a"));
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_1), "b"));
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -507,7 +578,171 @@ static void encode_pos_multiply(jsi::Runtime& rt, const jsi::Value* argv, size_t
 
 static jsi::Value decode_multiply(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "value"), r.read_f64());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "value");
+  resultObj.setProperty(rt, _prop_0, r.read_f64());
+  return std::move(resultObj);
+}
+
+static void encode_parityEcho(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(34); w.push_u8(0); // cmd_id = 34 LE
+  auto argsObj = args.asObject(rt);
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "nodes");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "id");
+  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "name");
+  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "tag");
+  const auto _prop_4 = jsi::PropNameID::forAscii(rt, "note");
+  const auto _prop_5 = jsi::PropNameID::forAscii(rt, "metadata");
+  const auto _prop_6 = jsi::PropNameID::forAscii(rt, "children");
+  { auto _arr = argsObj.getProperty(rt, _prop_0).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n);
+    for (size_t _i = 0; _i < _n; _i++) { auto _obj = _arr.getValueAtIndex(rt, _i).getObject(rt);
+      w.push_f64(rustra_f64(rt, _obj.getProperty(rt, _prop_1), "id"));
+      { auto _v = _obj.getProperty(rt, _prop_2).getString(rt).utf8(rt); w.push_string(_v); }
+      { auto _v = _obj.getProperty(rt, _prop_3).getString(rt).utf8(rt); w.push_string(_v); }
+      { auto _option_value = _obj.getProperty(rt, _prop_4); if (_option_value.isNull() || _option_value.isUndefined()) { w.push_u8(0); } else { w.push_u8(1); { auto _v = _option_value.getString(rt).utf8(rt); w.push_string(_v); } } }
+      { auto _o = _obj.getProperty(rt, _prop_5).asObject(rt); std::vector<std::pair<std::string, jsi::Value>> _entries; auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); if (_count > _entries.max_size()) throw jsi::JSError(rt, "rustra: map size exceeds native capacity"); _entries.reserve(std::min<size_t>(_count, 64)); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_string(_e.getString(rt).utf8(rt)); } }
+      { auto _arr = _obj.getProperty(rt, _prop_6).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_f64(rustra_f64(rt, _arr.getValueAtIndex(rt, _i), "children[]")); }
+    } }
+}
+
+static jsi::Value decode_parityEcho(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "nodes");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "id");
+  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "name");
+  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "tag");
+  const auto _prop_4 = jsi::PropNameID::forAscii(rt, "note");
+  const auto _prop_5 = jsi::PropNameID::forAscii(rt, "metadata");
+  const auto _prop_6 = jsi::PropNameID::forAscii(rt, "children");
+  { auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);
+    for (size_t _i = 0; _i < _n; _i++) { auto _obj = jsi::Object(rt);
+      _obj.setProperty(rt, _prop_1, r.read_f64());
+      { auto _s = r.read_string_view(); _obj.setProperty(rt, _prop_2, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+      { auto _s = r.read_string_view(); _obj.setProperty(rt, _prop_3, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+      { auto _tag = r.read_u8(); if (_tag == 0) { _obj.setProperty(rt, _prop_4, jsi::Value::null()); } else { { auto _s = r.read_string_view(); _obj.setProperty(rt, _prop_4, jsi::String::createFromUtf8(rt, _s.data, _s.size)); } } }
+      { auto _n = r.read_uvar(); auto _map = jsi::Object(rt); for (size_t _i = 0; _i < _n; _i++) { auto _ks = r.read_string_view(); auto _k = jsi::PropNameID::forUtf8(rt, _ks.data, _ks.size); { auto _vs = r.read_string_view(); _map.setProperty(rt, _k, jsi::String::createFromUtf8(rt, _vs.data, _vs.size)); } } _obj.setProperty(rt, _prop_5, std::move(_map)); }
+      { auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, r.read_f64()); } _obj.setProperty(rt, _prop_6, _arr); }
+      _arr.setValueAtIndex(rt, _i, std::move(_obj)); }
+    resultObj.setProperty(rt, _prop_0, _arr); }
+  return std::move(resultObj);
+}
+
+static void encode_parityFind(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(35); w.push_u8(0); // cmd_id = 35 LE
+  auto argsObj = args.asObject(rt);
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "tree");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "nodes");
+  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "id");
+  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "name");
+  const auto _prop_4 = jsi::PropNameID::forAscii(rt, "tag");
+  const auto _prop_5 = jsi::PropNameID::forAscii(rt, "note");
+  const auto _prop_6 = jsi::PropNameID::forAscii(rt, "metadata");
+  const auto _prop_7 = jsi::PropNameID::forAscii(rt, "children");
+  { auto _struct_2 = argsObj.getProperty(rt, _prop_0).asObject(rt);
+    { auto _arr = _struct_2.getProperty(rt, _prop_1).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n);
+      for (size_t _i = 0; _i < _n; _i++) { auto _obj = _arr.getValueAtIndex(rt, _i).getObject(rt);
+        w.push_f64(rustra_f64(rt, _obj.getProperty(rt, _prop_2), "id"));
+        { auto _v = _obj.getProperty(rt, _prop_3).getString(rt).utf8(rt); w.push_string(_v); }
+        { auto _v = _obj.getProperty(rt, _prop_4).getString(rt).utf8(rt); w.push_string(_v); }
+        { auto _option_value = _obj.getProperty(rt, _prop_5); if (_option_value.isNull() || _option_value.isUndefined()) { w.push_u8(0); } else { w.push_u8(1); { auto _v = _option_value.getString(rt).utf8(rt); w.push_string(_v); } } }
+        { auto _o = _obj.getProperty(rt, _prop_6).asObject(rt); std::vector<std::pair<std::string, jsi::Value>> _entries; auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); if (_count > _entries.max_size()) throw jsi::JSError(rt, "rustra: map size exceeds native capacity"); _entries.reserve(std::min<size_t>(_count, 64)); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_string(_e.getString(rt).utf8(rt)); } }
+        { auto _arr = _obj.getProperty(rt, _prop_7).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_f64(rustra_f64(rt, _arr.getValueAtIndex(rt, _i), "children[]")); }
+      } }
+  }
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_2), "id"));
+}
+
+static jsi::Value decode_parityFind(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "found");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "id");
+  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "name");
+  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "visited");
+  resultObj.setProperty(rt, _prop_0, r.read_bool());
+  resultObj.setProperty(rt, _prop_1, r.read_f64());
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_2, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  resultObj.setProperty(rt, _prop_3, r.read_f64());
+  return std::move(resultObj);
+}
+
+static void encode_parityIndexed(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(38); w.push_u8(0); // cmd_id = 38 LE
+  auto argsObj = args.asObject(rt);
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "id");
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_0), "id"));
+}
+
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
+static void encode_pos_parityIndexed(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  if (argc != 1) throw jsi::JSError(rt, "rustra: parityIndexed expects 1 positional argument(s), got " + std::to_string(argc));
+  w.push_u8(38); w.push_u8(0); // cmd_id = 38 LE
+  w.push_f64(rustra_f64(rt, argv[0], "id"));
+}
+
+static jsi::Value decode_parityIndexed(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "found");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "id");
+  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "name");
+  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "visited");
+  resultObj.setProperty(rt, _prop_0, r.read_bool());
+  resultObj.setProperty(rt, _prop_1, r.read_f64());
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_2, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  resultObj.setProperty(rt, _prop_3, r.read_f64());
+  return std::move(resultObj);
+}
+
+static void encode_parityResident(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(37); w.push_u8(0); // cmd_id = 37 LE
+  auto argsObj = args.asObject(rt);
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "id");
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_0), "id"));
+}
+
+// (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
+static void encode_pos_parityResident(jsi::Runtime& rt, const jsi::Value* argv, size_t argc, rc::Writer& w) {
+  if (argc != 1) throw jsi::JSError(rt, "rustra: parityResident expects 1 positional argument(s), got " + std::to_string(argc));
+  w.push_u8(37); w.push_u8(0); // cmd_id = 37 LE
+  w.push_f64(rustra_f64(rt, argv[0], "id"));
+}
+
+static jsi::Value decode_parityResident(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "found");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "id");
+  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "name");
+  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "visited");
+  resultObj.setProperty(rt, _prop_0, r.read_bool());
+  resultObj.setProperty(rt, _prop_1, r.read_f64());
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_2, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  resultObj.setProperty(rt, _prop_3, r.read_f64());
+  return std::move(resultObj);
+}
+
+static void encode_parityStore(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(36); w.push_u8(0); // cmd_id = 36 LE
+  auto argsObj = args.asObject(rt);
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "nodes");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "id");
+  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "name");
+  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "tag");
+  const auto _prop_4 = jsi::PropNameID::forAscii(rt, "note");
+  const auto _prop_5 = jsi::PropNameID::forAscii(rt, "metadata");
+  const auto _prop_6 = jsi::PropNameID::forAscii(rt, "children");
+  { auto _arr = argsObj.getProperty(rt, _prop_0).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n);
+    for (size_t _i = 0; _i < _n; _i++) { auto _obj = _arr.getValueAtIndex(rt, _i).getObject(rt);
+      w.push_f64(rustra_f64(rt, _obj.getProperty(rt, _prop_1), "id"));
+      { auto _v = _obj.getProperty(rt, _prop_2).getString(rt).utf8(rt); w.push_string(_v); }
+      { auto _v = _obj.getProperty(rt, _prop_3).getString(rt).utf8(rt); w.push_string(_v); }
+      { auto _option_value = _obj.getProperty(rt, _prop_4); if (_option_value.isNull() || _option_value.isUndefined()) { w.push_u8(0); } else { w.push_u8(1); { auto _v = _option_value.getString(rt).utf8(rt); w.push_string(_v); } } }
+      { auto _o = _obj.getProperty(rt, _prop_5).asObject(rt); std::vector<std::pair<std::string, jsi::Value>> _entries; auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); if (_count > _entries.max_size()) throw jsi::JSError(rt, "rustra: map size exceeds native capacity"); _entries.reserve(std::min<size_t>(_count, 64)); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_string(_e.getString(rt).utf8(rt)); } }
+      { auto _arr = _obj.getProperty(rt, _prop_6).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_f64(rustra_f64(rt, _arr.getValueAtIndex(rt, _i), "children[]")); }
+    } }
+}
+
+static jsi::Value decode_parityStore(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "nodes");
+  resultObj.setProperty(rt, _prop_0, r.read_f64());
   return std::move(resultObj);
 }
 
@@ -518,34 +753,48 @@ static void encode_platformNativeInfo(jsi::Runtime& rt, const jsi::Value& args, 
 
 static jsi::Value decode_platformNativeInfo(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  { auto _s = r.read_string_view(); resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "os"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
-  { auto _s = r.read_string_view(); resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "windowKind"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "os");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "windowKind");
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_0, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_1, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   return std::move(resultObj);
 }
 
 static void encode_processItem(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(9); w.push_u8(0); // cmd_id = 9 LE
   auto argsObj = args.asObject(rt);
-  { auto _v = argsObj.getProperty(rt, "item").asObject(rt).getProperty(rt, "active").getBool(); w.push_bool(_v); }
-  { auto _v = argsObj.getProperty(rt, "item").asObject(rt).getProperty(rt, "name").getString(rt).utf8(rt); w.push_string(_v); }
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, "item").asObject(rt).getProperty(rt, "value"), "value"));
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "item");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "active");
+  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "name");
+  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "value");
+  { auto _struct_2 = argsObj.getProperty(rt, _prop_0).asObject(rt);
+    { auto _v = _struct_2.getProperty(rt, _prop_1).getBool(); w.push_bool(_v); }
+    { auto _v = _struct_2.getProperty(rt, _prop_2).getString(rt).utf8(rt); w.push_string(_v); }
+    w.push_i64(rustra_i64(rt, _struct_2.getProperty(rt, _prop_3), "value"));
+  }
 }
 
 static jsi::Value decode_processItem(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "doubled"), r.read_bool());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "doubled");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "item");
+  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "active");
+  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "name");
+  const auto _prop_4 = jsi::PropNameID::forAscii(rt, "value");
+  resultObj.setProperty(rt, _prop_0, r.read_bool());
   { auto _obj = jsi::Object(rt);
-    _obj.setProperty(rt, rustra::generated::cachedProp(rt, "active"), r.read_bool());
-    { auto _s = r.read_string_view(); _obj.setProperty(rt, rustra::generated::cachedProp(rt, "name"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
-    _obj.setProperty(rt, rustra::generated::cachedProp(rt, "value"), [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
-    resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "item"), _obj); }
+    _obj.setProperty(rt, _prop_2, r.read_bool());
+    { auto _s = r.read_string_view(); _obj.setProperty(rt, _prop_3, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+    _obj.setProperty(rt, _prop_4, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
+    resultObj.setProperty(rt, _prop_1, _obj); }
   return std::move(resultObj);
 }
 
 static void encode_resourceClose(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(22); w.push_u8(0); // cmd_id = 22 LE
   auto argsObj = args.asObject(rt);
-  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, "handle"), "handle"));
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "handle");
+  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_0), "handle"));
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -557,27 +806,32 @@ static void encode_pos_resourceClose(jsi::Runtime& rt, const jsi::Value* argv, s
 
 static jsi::Value decode_resourceClose(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "closed"), r.read_bool());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "closed");
+  resultObj.setProperty(rt, _prop_0, r.read_bool());
   return std::move(resultObj);
 }
 
 static void encode_resourceOpen(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(19); w.push_u8(0); // cmd_id = 19 LE
   auto argsObj = args.asObject(rt);
-  { auto _o = argsObj.getProperty(rt, "initial").asObject(rt); std::vector<std::pair<std::string, jsi::Value>> _entries; auto _names = _o.getPropertyNames(rt); for (size_t _j = 0; _j < _names.length(rt); _j++) { auto _k = _names.getValueAtIndex(rt, _j).getString(rt).utf8(rt); _entries.push_back({std::move(_k), _o.getProperty(rt, jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_k.data()), _k.size()))}); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_string(_e.getString(rt).utf8(rt)); } }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "initial");
+  { auto _o = argsObj.getProperty(rt, _prop_0).asObject(rt); std::vector<std::pair<std::string, jsi::Value>> _entries; auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); if (_count > _entries.max_size()) throw jsi::JSError(rt, "rustra: map size exceeds native capacity"); _entries.reserve(std::min<size_t>(_count, 64)); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_string(_e.getString(rt).utf8(rt)); } }
 }
 
 static jsi::Value decode_resourceOpen(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "handle"), (double)r.read_uvar());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "handle");
+  resultObj.setProperty(rt, _prop_0, (double)r.read_uvar());
   return std::move(resultObj);
 }
 
 static void encode_resourceRead(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(20); w.push_u8(0); // cmd_id = 20 LE
   auto argsObj = args.asObject(rt);
-  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, "handle"), "handle"));
-  { auto _v = argsObj.getProperty(rt, "key").getString(rt).utf8(rt); w.push_string(_v); }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "handle");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "key");
+  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_0), "handle"));
+  { auto _v = argsObj.getProperty(rt, _prop_1).getString(rt).utf8(rt); w.push_string(_v); }
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -590,17 +844,22 @@ static void encode_pos_resourceRead(jsi::Runtime& rt, const jsi::Value* argv, si
 
 static jsi::Value decode_resourceRead(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "found"), r.read_bool());
-  { auto _tag = r.read_u8(); if (_tag == 0) { resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "value"), jsi::Value::null()); } else { { auto _s = r.read_string_view(); resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "value"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); } } }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "found");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "value");
+  resultObj.setProperty(rt, _prop_0, r.read_bool());
+  { auto _tag = r.read_u8(); if (_tag == 0) { resultObj.setProperty(rt, _prop_1, jsi::Value::null()); } else { { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_1, jsi::String::createFromUtf8(rt, _s.data, _s.size)); } } }
   return std::move(resultObj);
 }
 
 static void encode_resourceWrite(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(21); w.push_u8(0); // cmd_id = 21 LE
   auto argsObj = args.asObject(rt);
-  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, "handle"), "handle"));
-  { auto _v = argsObj.getProperty(rt, "key").getString(rt).utf8(rt); w.push_string(_v); }
-  { auto _v = argsObj.getProperty(rt, "value").getString(rt).utf8(rt); w.push_string(_v); }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "handle");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "key");
+  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "value");
+  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_0), "handle"));
+  { auto _v = argsObj.getProperty(rt, _prop_1).getString(rt).utf8(rt); w.push_string(_v); }
+  { auto _v = argsObj.getProperty(rt, _prop_2).getString(rt).utf8(rt); w.push_string(_v); }
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 3회 제거.
@@ -614,14 +873,16 @@ static void encode_pos_resourceWrite(jsi::Runtime& rt, const jsi::Value* argv, s
 
 static jsi::Value decode_resourceWrite(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "entries"), (double)r.read_i64());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "entries");
+  resultObj.setProperty(rt, _prop_0, (double)r.read_i64());
   return std::move(resultObj);
 }
 
 static void encode_rustraRegistryDemo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(12); w.push_u8(0); // cmd_id = 12 LE
   auto argsObj = args.asObject(rt);
-  { auto _v = argsObj.getProperty(rt, "op").getString(rt).utf8(rt); w.push_string(_v); }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "op");
+  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -633,30 +894,38 @@ static void encode_pos_rustraRegistryDemo(jsi::Runtime& rt, const jsi::Value* ar
 
 static jsi::Value decode_rustraRegistryDemo(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "ok"), r.read_bool());
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "frozen"), r.read_bool());
-  { auto _s = r.read_string_view(); resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "message"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "ok");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "frozen");
+  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "message");
+  resultObj.setProperty(rt, _prop_0, r.read_bool());
+  resultObj.setProperty(rt, _prop_1, r.read_bool());
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_2, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   return std::move(resultObj);
 }
 
 static void encode_scoreTotal(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(15); w.push_u8(0); // cmd_id = 15 LE
   auto argsObj = args.asObject(rt);
-  { auto _o = argsObj.getProperty(rt, "scores").asObject(rt); std::vector<std::pair<std::string, jsi::Value>> _entries; auto _names = _o.getPropertyNames(rt); for (size_t _j = 0; _j < _names.length(rt); _j++) { auto _k = _names.getValueAtIndex(rt, _j).getString(rt).utf8(rt); _entries.push_back({std::move(_k), _o.getProperty(rt, jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_k.data()), _k.size()))}); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_i64(rustra_i64(rt, _e, "scores{}")); } }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "scores");
+  { auto _o = argsObj.getProperty(rt, _prop_0).asObject(rt); std::vector<std::pair<std::string, jsi::Value>> _entries; auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); if (_count > _entries.max_size()) throw jsi::JSError(rt, "rustra: map size exceeds native capacity"); _entries.reserve(std::min<size_t>(_count, 64)); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_i64(rustra_i64(rt, _e, "scores{}")); } }
 }
 
 static jsi::Value decode_scoreTotal(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "count"), (double)r.read_uvar());
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "total"), [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "count");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "total");
+  resultObj.setProperty(rt, _prop_0, (double)r.read_uvar());
+  resultObj.setProperty(rt, _prop_1, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
   return std::move(resultObj);
 }
 
 static void encode_secureCompute(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(13); w.push_u8(0); // cmd_id = 13 LE
   auto argsObj = args.asObject(rt);
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, "a"), "a"));
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, "b"), "b"));
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "a");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "b");
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_0), "a"));
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "b"));
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -669,14 +938,16 @@ static void encode_pos_secureCompute(jsi::Runtime& rt, const jsi::Value* argv, s
 
 static jsi::Value decode_secureCompute(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "value"), [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "value");
+  resultObj.setProperty(rt, _prop_0, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
   return std::move(resultObj);
 }
 
 static void encode_sizeOf(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(14); w.push_u8(0); // cmd_id = 14 LE
   auto argsObj = args.asObject(rt);
-  { const auto& _v = argsObj.getProperty(rt, "data"); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _span = rustra_bytes(rt, _v, "data"); w.push_uvar(_span.size); w.push_bytes(_span.data, _span.size); } }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "data");
+  { const auto& _v = argsObj.getProperty(rt, _prop_0); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _span = rustra_bytes(rt, _v, "data"); w.push_uvar(_span.size); w.push_bytes(_span.data, _span.size); } }
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -688,15 +959,20 @@ static void encode_pos_sizeOf(jsi::Runtime& rt, const jsi::Value* argv, size_t a
 
 static jsi::Value decode_sizeOf(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "checksum"), (double)r.read_uvar());
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "len"), (double)r.read_uvar());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "checksum");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "len");
+  resultObj.setProperty(rt, _prop_0, (double)r.read_uvar());
+  resultObj.setProperty(rt, _prop_1, (double)r.read_uvar());
   return std::move(resultObj);
 }
 
 static void encode_span(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(16); w.push_u8(0); // cmd_id = 16 LE
   auto argsObj = args.asObject(rt);
-  { auto _arr = argsObj.getProperty(rt, "pair").asObject(rt).getArray(rt);
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "pair");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "value");
+  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "_");
+  { auto _arr = argsObj.getProperty(rt, _prop_0).asObject(rt).getArray(rt);
     { auto _v = _arr.getValueAtIndex(rt, 0).getString(rt).utf8(rt); w.push_string(_v); }
     w.push_i64(rustra_i64(rt, _arr.getValueAtIndex(rt, 1), "_"));
   }
@@ -704,28 +980,34 @@ static void encode_span(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w)
 
 static jsi::Value decode_span(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  { auto _s = r.read_string_view(); resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "first"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "second"), [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "first");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "second");
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_0, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  resultObj.setProperty(rt, _prop_1, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
   return std::move(resultObj);
 }
 
 static void encode_sumList(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(6); w.push_u8(0); // cmd_id = 6 LE
   auto argsObj = args.asObject(rt);
-  { auto _arr = argsObj.getProperty(rt, "numbers").asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_i64(rustra_i64(rt, _arr.getValueAtIndex(rt, _i), "numbers[]")); }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "numbers");
+  { auto _arr = argsObj.getProperty(rt, _prop_0).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_i64(rustra_i64(rt, _arr.getValueAtIndex(rt, _i), "numbers[]")); }
 }
 
 static jsi::Value decode_sumList(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "count"), (double)r.read_i64());
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "total"), [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "count");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "total");
+  resultObj.setProperty(rt, _prop_0, (double)r.read_i64());
+  resultObj.setProperty(rt, _prop_1, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
   return std::move(resultObj);
 }
 
 static void encode_toUpper(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(7); w.push_u8(0); // cmd_id = 7 LE
   auto argsObj = args.asObject(rt);
-  { auto _v = argsObj.getProperty(rt, "s").getString(rt).utf8(rt); w.push_string(_v); }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "s");
+  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -737,21 +1019,26 @@ static void encode_pos_toUpper(jsi::Runtime& rt, const jsi::Value* argv, size_t 
 
 static jsi::Value decode_toUpper(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  { auto _s = r.read_string_view(); resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "result"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "result");
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_0, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   return std::move(resultObj);
 }
 
 static void encode_wideAgg(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(28); w.push_u8(0); // cmd_id = 28 LE
   auto argsObj = args.asObject(rt);
-  { auto _arr = argsObj.getProperty(rt, "samples").asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_uvar(rustra_u64(rt, _arr.getValueAtIndex(rt, _i), "samples[]")); }
-  { auto _v = argsObj.getProperty(rt, "offset"); if (_v.isNull() || _v.isUndefined()) { w.push_u8(0); } else { w.push_u8(1); w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, "offset"), "offset")); } }
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "samples");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "offset");
+  { auto _arr = argsObj.getProperty(rt, _prop_0).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_uvar(rustra_u64(rt, _arr.getValueAtIndex(rt, _i), "samples[]")); }
+  { auto _option_value = argsObj.getProperty(rt, _prop_1); if (_option_value.isNull() || _option_value.isUndefined()) { w.push_u8(0); } else { w.push_u8(1); w.push_i64(rustra_i64(rt, _option_value, "offset")); } }
 }
 
 static jsi::Value decode_wideAgg(jsi::Runtime& rt, rc::Reader& r) {
   auto resultObj = jsi::Object(rt);
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "max"), [&]() -> jsi::Value { auto _v = r.read_uvar(); if (_v <= 9007199254740991ull) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v)); }());
-  resultObj.setProperty(rt, rustra::generated::cachedProp(rt, "adjusted"), [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
+  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "max");
+  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "adjusted");
+  resultObj.setProperty(rt, _prop_0, [&]() -> jsi::Value { auto _v = r.read_uvar(); if (_v <= 9007199254740991ull) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v)); }());
+  resultObj.setProperty(rt, _prop_1, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
   return std::move(resultObj);
 }
 
@@ -839,6 +1126,11 @@ bool encode_by_name(Runtime& rt, const std::string& name, const Value& args, rc:
   if (name == "greet") { encode_greet(rt, args, w); return true; }
   if (name == "isEven") { encode_isEven(rt, args, w); return true; }
   if (name == "multiply") { encode_multiply(rt, args, w); return true; }
+  if (name == "parityEcho") { encode_parityEcho(rt, args, w); return true; }
+  if (name == "parityFind") { encode_parityFind(rt, args, w); return true; }
+  if (name == "parityIndexed") { encode_parityIndexed(rt, args, w); return true; }
+  if (name == "parityResident") { encode_parityResident(rt, args, w); return true; }
+  if (name == "parityStore") { encode_parityStore(rt, args, w); return true; }
   if (name == "platformNativeInfo") { encode_platformNativeInfo(rt, args, w); return true; }
   if (name == "processItem") { encode_processItem(rt, args, w); return true; }
   if (name == "resourceClose") { encode_resourceClose(rt, args, w); return true; }
@@ -876,6 +1168,11 @@ Value decode_by_name(Runtime& rt, const std::string& name, rc::Reader& r) {
   if (name == "greet") return decode_greet(rt, r);
   if (name == "isEven") return decode_isEven(rt, r);
   if (name == "multiply") return decode_multiply(rt, r);
+  if (name == "parityEcho") return decode_parityEcho(rt, r);
+  if (name == "parityFind") return decode_parityFind(rt, r);
+  if (name == "parityIndexed") return decode_parityIndexed(rt, r);
+  if (name == "parityResident") return decode_parityResident(rt, r);
+  if (name == "parityStore") return decode_parityStore(rt, r);
   if (name == "platformNativeInfo") return decode_platformNativeInfo(rt, r);
   if (name == "processItem") return decode_processItem(rt, r);
   if (name == "resourceClose") return decode_resourceClose(rt, r);
@@ -914,6 +1211,11 @@ bool encode_by_id(Runtime& rt, uint16_t cmd_id, const Value& args, rc::Writer& w
     case 5: encode_greet(rt, args, w); return true;
     case 3: encode_isEven(rt, args, w); return true;
     case 2: encode_multiply(rt, args, w); return true;
+    case 34: encode_parityEcho(rt, args, w); return true;
+    case 35: encode_parityFind(rt, args, w); return true;
+    case 38: encode_parityIndexed(rt, args, w); return true;
+    case 37: encode_parityResident(rt, args, w); return true;
+    case 36: encode_parityStore(rt, args, w); return true;
     case 30: encode_platformNativeInfo(rt, args, w); return true;
     case 9: encode_processItem(rt, args, w); return true;
     case 22: encode_resourceClose(rt, args, w); return true;
@@ -953,6 +1255,11 @@ Value decode_by_id(Runtime& rt, uint16_t cmd_id, rc::Reader& r) {
     case 5: return decode_greet(rt, r);
     case 3: return decode_isEven(rt, r);
     case 2: return decode_multiply(rt, r);
+    case 34: return decode_parityEcho(rt, r);
+    case 35: return decode_parityFind(rt, r);
+    case 38: return decode_parityIndexed(rt, r);
+    case 37: return decode_parityResident(rt, r);
+    case 36: return decode_parityStore(rt, r);
     case 30: return decode_platformNativeInfo(rt, r);
     case 9: return decode_processItem(rt, r);
     case 22: return decode_resourceClose(rt, r);
@@ -991,6 +1298,11 @@ bool has_static_codec(const std::string& name) {
   if (name == "greet") return true;
   if (name == "isEven") return true;
   if (name == "multiply") return true;
+  if (name == "parityEcho") return true;
+  if (name == "parityFind") return true;
+  if (name == "parityIndexed") return true;
+  if (name == "parityResident") return true;
+  if (name == "parityStore") return true;
   if (name == "platformNativeInfo") return true;
   if (name == "processItem") return true;
   if (name == "resourceClose") return true;
@@ -1029,6 +1341,11 @@ bool has_static_codec_id(uint16_t cmd_id) {
     case 5: return true;
     case 3: return true;
     case 2: return true;
+    case 34: return true;
+    case 35: return true;
+    case 38: return true;
+    case 37: return true;
+    case 36: return true;
     case 30: return true;
     case 9: return true;
     case 22: return true;
@@ -1067,6 +1384,8 @@ bool has_pos_codec(uint16_t cmd_id) {
   if (cmd_id == 5) return true;
   if (cmd_id == 3) return true;
   if (cmd_id == 2) return true;
+  if (cmd_id == 38) return true;
+  if (cmd_id == 37) return true;
   if (cmd_id == 22) return true;
   if (cmd_id == 20) return true;
   if (cmd_id == 21) return true;
@@ -1095,6 +1414,8 @@ void encode_pos_by_id(jsi::Runtime& rt, uint16_t cmd_id, const jsi::Value* argv,
     case 5: encode_pos_greet(rt, argv, argc, w); return;
     case 3: encode_pos_isEven(rt, argv, argc, w); return;
     case 2: encode_pos_multiply(rt, argv, argc, w); return;
+    case 38: encode_pos_parityIndexed(rt, argv, argc, w); return;
+    case 37: encode_pos_parityResident(rt, argv, argc, w); return;
     case 22: encode_pos_resourceClose(rt, argv, argc, w); return;
     case 20: encode_pos_resourceRead(rt, argv, argc, w); return;
     case 21: encode_pos_resourceWrite(rt, argv, argc, w); return;
@@ -1134,7 +1455,7 @@ Value decode_buffer_result_by_id(Runtime& rt, uint16_t cmd_id, Value buffer) {
   switch (cmd_id) {
     case 25: {
       auto result = Object(rt);
-      result.setProperty(rt, cachedProp(rt, "data"), std::move(buffer));
+      result.setProperty(rt, jsi::PropNameID::forAscii(rt, "data"), std::move(buffer));
       return result;
     }
     default: throw JSError(rt, "rustra: no buffer result codec for cmd_id " + std::to_string(cmd_id));
@@ -1227,58 +1548,58 @@ Value decode_raw_result(Runtime& rt, uint16_t cmd_id, uint64_t slot) {
     case 1: {
       Object result(rt);
       int64_t value; std::memcpy(&value, &slot, sizeof(value));
-      result.setProperty(rt, cachedProp(rt, "value"), value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));
+      result.setProperty(rt, jsi::PropNameID::forAscii(rt, "value"), value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));
       return std::move(result);
     }
     case 23: {
       Object result(rt);
       double value; std::memcpy(&value, &slot, sizeof(value));
-      result.setProperty(rt, cachedProp(rt, "value"), value);
+      result.setProperty(rt, jsi::PropNameID::forAscii(rt, "value"), value);
       return std::move(result);
     }
     case 4: {
       Object result(rt);
       double value; std::memcpy(&value, &slot, sizeof(value));
-      result.setProperty(rt, cachedProp(rt, "value"), value);
+      result.setProperty(rt, jsi::PropNameID::forAscii(rt, "value"), value);
       return std::move(result);
     }
     case 10: {
       Object result(rt);
       int64_t value; std::memcpy(&value, &slot, sizeof(value));
-      result.setProperty(rt, cachedProp(rt, "value"), value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));
+      result.setProperty(rt, jsi::PropNameID::forAscii(rt, "value"), value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));
       return std::move(result);
     }
     case 11: {
       Object result(rt);
       int64_t value; std::memcpy(&value, &slot, sizeof(value));
-      result.setProperty(rt, cachedProp(rt, "emitted"), value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));
+      result.setProperty(rt, jsi::PropNameID::forAscii(rt, "emitted"), value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));
       return std::move(result);
     }
     case 17: {
       Object result(rt);
-      result.setProperty(rt, cachedProp(rt, "next"), slot <= 9007199254740991ull ? jsi::Value(static_cast<double>(slot)) : jsi::Value(rt, jsi::BigInt::fromUint64(rt, slot)));
+      result.setProperty(rt, jsi::PropNameID::forAscii(rt, "next"), slot <= 9007199254740991ull ? jsi::Value(static_cast<double>(slot)) : jsi::Value(rt, jsi::BigInt::fromUint64(rt, slot)));
       return std::move(result);
     }
     case 3: {
       Object result(rt);
-      result.setProperty(rt, cachedProp(rt, "result"), slot != 0);
+      result.setProperty(rt, jsi::PropNameID::forAscii(rt, "result"), slot != 0);
       return std::move(result);
     }
     case 2: {
       Object result(rt);
       double value; std::memcpy(&value, &slot, sizeof(value));
-      result.setProperty(rt, cachedProp(rt, "value"), value);
+      result.setProperty(rt, jsi::PropNameID::forAscii(rt, "value"), value);
       return std::move(result);
     }
     case 22: {
       Object result(rt);
-      result.setProperty(rt, cachedProp(rt, "closed"), slot != 0);
+      result.setProperty(rt, jsi::PropNameID::forAscii(rt, "closed"), slot != 0);
       return std::move(result);
     }
     case 13: {
       Object result(rt);
       int64_t value; std::memcpy(&value, &slot, sizeof(value));
-      result.setProperty(rt, cachedProp(rt, "value"), value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));
+      result.setProperty(rt, jsi::PropNameID::forAscii(rt, "value"), value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));
       return std::move(result);
     }
     default: throw JSError(rt, "rustra: no raw result codec for cmd_id " + std::to_string(cmd_id));
