@@ -2,6 +2,7 @@ import type { CommandSchema } from './schema.js';
 import { commandFunctionName } from './codegen.js';
 import { collectPostcardFields, type PostcardField } from './generate-postcard-ir.js';
 import { cppEncodeWithGetter, cppFieldDecodeExpr } from './generate-cpp-fields.js';
+import { cppProperties } from './generate-cpp-properties.js';
 import { bufferCommandField, generatedFieldRoute, RAW_SCALAR_KINDS } from './generate-routing.js';
 
 export function bufferCommandResultField(
@@ -123,8 +124,10 @@ export function cppDecodeCommand(
   const lines: string[] = [];
   lines.push(`static jsi::Value decode_${fnName}(jsi::Runtime& rt, rc::Reader& r) {`);
   lines.push(`  auto resultObj = jsi::Object(rt);`);
+  const properties = cppProperties(outFields, definitions);
+  lines.push(...properties.declarations);
   for (const f of outFields) {
-    lines.push(cppFieldDecodeExpr(f, 'resultObj', definitions, '  '));
+    lines.push(cppFieldDecodeExpr(f, 'resultObj', definitions, '  ', properties.property));
   }
   lines.push(`  return std::move(resultObj);`);
   lines.push(`}`);

@@ -6,6 +6,8 @@ import { createFrameCapabilityRuntime } from './frame-engine-capabilities.js';
 import { createFrameDispatchRuntime } from './frame-engine-dispatch.js';
 import { createFrameRouteRuntime } from './frame-engine-routes.js';
 import { createFrameInvokeRaw } from './frame-engine-async.js';
+import { createSyncBindingResolver } from './frame-engine-sync.js';
+import { resolveSyncBinding } from './global-state.js';
 import { createFrameEngineSurface } from './frame-engine-surface.js';
 export type { FrameEngineOptions, ContractMismatchDiagnosis } from './frame-engine-options.js';
 import type { FrameEngineOptions } from './frame-engine-options.js';
@@ -35,5 +37,7 @@ export function createFrameEngine(
   const dispatch = createFrameDispatchRuntime(context);
   const routes = createFrameRouteRuntime(context, dispatch.dispatchById);
   const invokeRaw = createFrameInvokeRaw(context, dispatch);
-  return createFrameEngineSurface(context, dispatch, routes, invokeRaw);
+  const engine = createFrameEngineSurface(context, dispatch, routes, invokeRaw);
+  engine[resolveSyncBinding] = createSyncBindingResolver(context, options?.contractHash);
+  return engine;
 }

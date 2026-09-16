@@ -39,7 +39,7 @@ export function appendCppBufferDispatch(lines: string[], sets: CppCommandSets): 
     lines.push(
       `    case ${cmd.commandId}: {`,
       `      auto result = Object(rt);`,
-      `      result.setProperty(rt, cachedProp(rt, "${output.name}"), std::move(buffer));`,
+      `      result.setProperty(rt, jsi::PropNameID::forAscii(rt, "${output.name}"), std::move(buffer));`,
       `      return result;`,
       `    }`,
     );
@@ -127,27 +127,30 @@ function appendRawResult(
     if (field.kind === 'zigzag')
       lines.push(
         `      int64_t value; std::memcpy(&value, &slot, sizeof(value));`,
-        `      result.setProperty(rt, cachedProp(rt, ${name}), static_cast<double>(value));`,
+        `      result.setProperty(rt, jsi::PropNameID::forAscii(rt, ${name}), static_cast<double>(value));`,
       );
     else if (field.kind === 'zigzag64')
       lines.push(
         `      int64_t value; std::memcpy(&value, &slot, sizeof(value));`,
-        `      result.setProperty(rt, cachedProp(rt, ${name}), value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));`,
+        `      result.setProperty(rt, jsi::PropNameID::forAscii(rt, ${name}), value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));`,
       );
     else if (field.kind === 'uvar')
       lines.push(
-        `      result.setProperty(rt, cachedProp(rt, ${name}), static_cast<double>(slot));`,
+        `      result.setProperty(rt, jsi::PropNameID::forAscii(rt, ${name}), static_cast<double>(slot));`,
       );
     else if (field.kind === 'uvar64')
       lines.push(
-        `      result.setProperty(rt, cachedProp(rt, ${name}), slot <= 9007199254740991ull ? jsi::Value(static_cast<double>(slot)) : jsi::Value(rt, jsi::BigInt::fromUint64(rt, slot)));`,
+        `      result.setProperty(rt, jsi::PropNameID::forAscii(rt, ${name}), slot <= 9007199254740991ull ? jsi::Value(static_cast<double>(slot)) : jsi::Value(rt, jsi::BigInt::fromUint64(rt, slot)));`,
       );
     else if (field.kind === 'f64' || field.kind === 'f32')
       lines.push(
         `      double value; std::memcpy(&value, &slot, sizeof(value));`,
-        `      result.setProperty(rt, cachedProp(rt, ${name}), value);`,
+        `      result.setProperty(rt, jsi::PropNameID::forAscii(rt, ${name}), value);`,
       );
-    else lines.push(`      result.setProperty(rt, cachedProp(rt, ${name}), slot != 0);`);
+    else
+      lines.push(
+        `      result.setProperty(rt, jsi::PropNameID::forAscii(rt, ${name}), slot != 0);`,
+      );
     lines.push(`      return std::move(result);`);
   }
   lines.push(`    }`);

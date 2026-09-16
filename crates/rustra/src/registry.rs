@@ -10,10 +10,15 @@ impl Package {
         // registry writer와 직렬화한 뒤 frozen을 publish한다. mutation 쪽도
         // writer를 얻은 뒤 다시 검사하므로, ensure_mutable → lock 사이에
         // freeze가 끼어든 뒤 명령이 등록되는 TOCTOU가 없다.
-        let state = self
+        let mut state = self
             .state
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if self.is_frozen() {
+            return;
+        }
+        state.live_schema_cache = None;
+        state.schema_generation = state.schema_generation.wrapping_add(1);
         let _ = self.frozen_registry.set(FrozenRegistry::from_state(&state));
         self.frozen.store(true, Ordering::Release);
     }

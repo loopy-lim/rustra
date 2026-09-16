@@ -214,7 +214,7 @@ impl<'s, 'w, 'b> Serializer for Ser<'s, 'w, 'b> {
         Ok(SerMap {
             writer: self.writer,
             targets: self.targets,
-            buffer: Vec::new(),
+            buffer: MapEntries::default(),
             value,
             limits: self.limits,
             depth: self.depth + 1,

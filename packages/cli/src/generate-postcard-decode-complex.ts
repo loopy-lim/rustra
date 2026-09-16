@@ -92,11 +92,19 @@ function generateMapDecodeExpr(field: PostcardField, lvalue: string, indent: str
       valueDecoder = '_pcDecodeF64(u8, offset)';
       break;
   }
+  const valueType =
+    field.kind === 'map_string'
+      ? 'string'
+      : field.kind === 'map_bool'
+        ? 'boolean'
+        : field.kind === 'map_i64' || field.kind === 'map_u64'
+          ? 'number | bigint'
+          : 'number';
   const lines = [
     `${indent}{`,
     `${indent}  const _len = _pcDecodeVarint(u8, offset);`,
     `${indent}  offset += _len.bytesRead;`,
-    `${indent}  const _map: Record<string, unknown> = {};`,
+    `${indent}  const _map: Record<string, ${valueType}> = {};`,
     `${indent}  for (let _i = 0; _i < _len.value; _i++) {`,
     `${indent}    const _k = _pcDecodeString(u8, offset);`,
     `${indent}    offset += _k.bytesRead;`,

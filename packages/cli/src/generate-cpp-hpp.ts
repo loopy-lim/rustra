@@ -11,8 +11,10 @@ export function generateFrameCodecsHpp(_schema: PackageSchema): string {
     `// JS Tier 3 fallback을 사용한다.\n` +
     `#pragma once\n\n` +
     `#include <cstddef>\n#include <cstdint>\n#include <jsi/jsi.h>\n#include <string>\n#include "rustra-codec.hpp"\n\n` +
+    `// Optional adapter capability: old generated consumers omit this marker.\n` +
+    `#define RUSTRA_GENERATED_CODEC_CONTRACT_IDENTITY 1\n\n` +
     `namespace rustra::generated {\n\n` +
-    `const facebook::jsi::PropNameID& cachedProp(facebook::jsi::Runtime& rt, const char* name);\n\n` +
+    `const char* compiled_contract_hash();\n\n` +
     `facebook::jsi::Value make_array_buffer(facebook::jsi::Runtime& rt, const uint8_t* data, size_t size);\n\n` +
     `bool encode_by_name(facebook::jsi::Runtime& rt, const std::string& name, const facebook::jsi::Value& args, rustra::codec::Writer& w);\n` +
     `facebook::jsi::Value decode_by_name(facebook::jsi::Runtime& rt, const std::string& name, rustra::codec::Reader& r);\n\n` +
