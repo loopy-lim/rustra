@@ -50,9 +50,11 @@ include!("complex_serde_de_entry.rs");
 include!("complex_serde_de_core.rs");
 include!("complex_serde_de_enum.rs");
 include!("complex_serde_de_access.rs");
+include!("complex_serde_de_integer_seq.rs");
 include!("complex_serde_de_aux.rs");
 include!("complex_serde_ser_entry.rs");
 include!("complex_serde_ser_core.rs");
+include!("complex_serde_map_scratch.rs");
 include!("complex_serde_ser_access.rs");
 include!("complex_serde_ser_map_key.rs");
 include!("complex_serde_ser_struct.rs");
@@ -61,3 +63,11 @@ include!("complex_serde_tests.rs");
 include!("complex_serde_recursive_tests.rs");
 include!("complex_serde_compat_tests.rs");
 include!("complex_serde_pair_tests.rs");
+
+#[cfg(test)]
+#[path = "complex_serde_scratch_tests.rs"]
+mod scratch_tests;
+
+#[cfg(test)]
+#[path = "complex_serde_integer_seq_tests.rs"]
+mod integer_seq_tests;

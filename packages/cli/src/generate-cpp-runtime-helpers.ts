@@ -1,46 +1,13 @@
 export function appendCppRuntimeHelpers(lines: string[]): void {
-  lines.push(`namespace rustra { namespace generated {`);
-  lines.push(`#ifdef RUSTRA_TEST_JSI_SHIM`);
-  lines.push(`  using RuntimePropNameCache = std::unordered_map<std::string, jsi::PropNameID>;`);
-  lines.push(`  std::shared_ptr<RuntimePropNameCache> runtimePropNameCache(jsi::Runtime&) {`);
-  lines.push(`    static auto cache = std::make_shared<RuntimePropNameCache>();`);
-  lines.push(`    return cache;`);
-  lines.push(`  }`);
-  lines.push(`#else`);
-  lines.push(`  class RuntimePropNameCache final : public jsi::NativeState {`);
-  lines.push(`  public:`);
-  lines.push(`    std::unordered_map<std::string, jsi::PropNameID> values;`);
-  lines.push(`  };`);
-  lines.push(`  std::shared_ptr<RuntimePropNameCache> runtimePropNameCache(jsi::Runtime& rt) {`);
   lines.push(
-    `    static std::unordered_map<jsi::Runtime*, std::weak_ptr<RuntimePropNameCache>> caches;`,
+    `// UTF8 may replace lone UTF16 surrogates. Preserve the prior normalized lookup`,
+    `// for replacement-containing keys; ordinary keys retain their original JSI string.`,
+    `[[maybe_unused]] static jsi::Value rustra_map_value(jsi::Runtime& rt, const jsi::Object& object, const jsi::String& key, const std::string& utf8) {`,
+    `  if (utf8.find("\\xEF\\xBF\\xBD") == std::string::npos) return object.getProperty(rt, key);`,
+    `  return object.getProperty(rt, jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(utf8.data()), utf8.size()));`,
+    `}`,
+    ``,
   );
-  lines.push(`    auto found = caches.find(&rt);`);
-  lines.push(`    if (found != caches.end()) {`);
-  lines.push(`      if (auto cache = found->second.lock()) return cache;`);
-  lines.push(`    }`);
-  lines.push(`    auto cache = std::make_shared<RuntimePropNameCache>();`);
-  lines.push(`    jsi::Object holder(rt);`);
-  lines.push(`    holder.setNativeState(rt, cache);`);
-  lines.push(`    rt.global().setProperty(rt, "__rustraPropNameCache", std::move(holder));`);
-  lines.push(`    caches[&rt] = cache;`);
-  lines.push(`    return cache;`);
-  lines.push(`  }`);
-  lines.push(`#endif`);
-  lines.push(`  const jsi::PropNameID& cachedProp(jsi::Runtime& rt, const char* name) {`);
-  lines.push(`    auto cache = runtimePropNameCache(rt);`);
-  lines.push(`#ifdef RUSTRA_TEST_JSI_SHIM`);
-  lines.push(`    auto& values = *cache;`);
-  lines.push(`#else`);
-  lines.push(`    auto& values = cache->values;`);
-  lines.push(`#endif`);
-  lines.push(`    auto it = values.find(name);`);
-  lines.push(`    if (it == values.end()) {`);
-  lines.push(`      it = values.emplace(name, jsi::PropNameID::forAscii(rt, name)).first;`);
-  lines.push(`    }`);
-  lines.push(`    return it->second;`);
-  lines.push(`  }`);
-  lines.push(`}}`, ``);
   lines.push(
     `[[maybe_unused]] static double rustra_f64(jsi::Runtime& rt, const jsi::Value& value, const char* field) {`,
   );

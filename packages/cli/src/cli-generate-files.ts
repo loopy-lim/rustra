@@ -114,7 +114,11 @@ export async function generateFromSchema(
   if (hostEntries?.tauri) addFile(outputPath, 'tauri.ts', generateTauriEntryTs());
   if (cppOutputPath) {
     addFile(cppOutputPath, 'rustra-generated-codecs.hpp', generateFrameCodecsHpp(schema));
-    addFile(cppOutputPath, 'rustra-generated-codecs.cpp', generateFrameCodecsCpp(schema));
+    addFile(
+      cppOutputPath,
+      'rustra-generated-codecs.cpp',
+      generateFrameCodecsCpp(schema, schemaContent),
+    );
   }
   if (reactNativeScaffold) {
     for (const [name, content] of Object.entries(renderReactNativeModule(reactNativeScaffold)))

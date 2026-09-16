@@ -599,16 +599,15 @@ test('generateFrameCodecsCpp assigns tuple decode values to array slots', () => 
   assert.ok(!cpp.includes('_arr_tmp_1'));
 });
 
-test('generateFrameCodecsCpp binds PropNameID cache lifetime to its JSI Runtime', () => {
+test('generateFrameCodecsCpp owns finite property names within each invocation', () => {
   const hpp = generateFrameCodecsHpp(cppSchema);
   const cpp = generateFrameCodecsCpp(cppSchema);
-
-  assert.ok(cpp.includes('class RuntimePropNameCache final : public jsi::NativeState'));
-  assert.ok(cpp.includes('std::weak_ptr<RuntimePropNameCache>'));
-  assert.ok(cpp.includes('holder.setNativeState(rt, cache)'));
-  assert.ok(cpp.includes('rt.global().setProperty(rt, "__rustraPropNameCache"'));
-  assert.ok(!cpp.includes('void resetPropNameCache()'));
-  assert.ok(!hpp.includes('void resetPropNameCache()'));
+  assert.match(cpp, /const auto _prop_\d+ = jsi::PropNameID::forAscii\(rt, "/);
+  assert.ok(!cpp.includes('PropertyNameContext'));
+  assert.ok(!cpp.includes('NativeState'));
+  assert.ok(!cpp.includes('RuntimePropNameCache'));
+  assert.ok(!cpp.includes('cachedProp'));
+  assert.ok(!hpp.includes('cachedProp'));
 });
 
 test('generateFrameCodecsCpp emits by_id switch dispatch (P0-3)', () => {
@@ -638,7 +637,7 @@ test('generateFrameCodecsCpp emits raw capability and public result-shape restor
   assert.ok(cpp.includes('int64_t value = rustra_i64(rt, argv[0], "a")'));
   assert.ok(cpp.includes('Value decode_raw_result(Runtime& rt, uint16_t cmd_id, uint64_t slot)'));
   assert.ok(cpp.includes('int64_t value; std::memcpy(&value, &slot, sizeof(value));'));
-  assert.ok(cpp.includes('cachedProp(rt, "value")'));
+  assert.ok(cpp.includes('jsi::PropNameID::forAscii(rt, "value")'));
   assert.ok(cpp.includes('return std::move(result);'));
 });
 
@@ -916,11 +915,11 @@ test('int64/uint64 fields join the postcard fast path with 64-bit helpers', () =
   assert.match(cpp, /readCounter/);
   assert.match(
     cpp,
-    /w\.push_i64\(rustra_i64\(rt, argsObj\.getProperty\(rt, "value"\), "value"\)\)/,
+    /w\.push_i64\(rustra_i64\(rt, argsObj\.getProperty\(rt, _prop_\d+\), "value"\)\)/,
   );
   assert.match(
     cpp,
-    /w\.push_uvar\(rustra_u64\(rt, argsObj\.getProperty\(rt, "offset"\), "offset"\)\)/,
+    /w\.push_uvar\(rustra_u64\(rt, argsObj\.getProperty\(rt, _prop_\d+\), "offset"\)\)/,
   );
 });
 

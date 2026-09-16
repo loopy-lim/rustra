@@ -113,14 +113,7 @@ where
                 }
             }
 
-            let body = if direct {
-                output_codec.encode_direct(&output, limits)?
-            } else {
-                let output_value = serde_json::to_value(&output)
-                    .map_err(|e| RustraError::internal(format!("complex encode: {e}")))?;
-                output_codec.encode(&output_value, limits)?
-            };
-            let response = frame_frame_from_body(body, limits.max_payload_bytes)?;
+            let response = complex_encode_response(&output_codec, &output, direct, limits)?;
             Ok(DirectResponse::Buffered(response))
         }))
     };

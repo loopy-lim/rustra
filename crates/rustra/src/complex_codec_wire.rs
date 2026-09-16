@@ -4,6 +4,7 @@ use crate::Result;
 pub(crate) struct Writer<'s> {
     heap: Vec<u8>,
     into: Option<&'s mut [u8]>,
+    spill: bool,
     pub(crate) written: usize,
     limits: ComplexCodecLimits,
 }
@@ -13,6 +14,7 @@ impl<'s> Writer<'s> {
         Self {
             heap: Vec::new(),
             into: None,
+            spill: false,
             written: 0,
             limits,
         }
@@ -21,9 +23,31 @@ impl<'s> Writer<'s> {
         Self {
             heap: Vec::new(),
             into: Some(target),
+            spill: false,
             written: 0,
             limits,
         }
+    }
+    /// Keep framing bytes outside the codec's body-only payload accounting.
+    pub(crate) fn with_prefix(prefix: &[u8], limits: ComplexCodecLimits) -> Self {
+        if prefix.is_empty() {
+            return Self::new(limits);
+        }
+        let mut writer = Self::new(limits);
+        writer.heap.reserve(prefix.len().saturating_add(8));
+        writer.heap.extend_from_slice(prefix);
+        writer
+    }
+    /// Borrowed map scratch may grow; caller-owned output slices must not.
+    pub(crate) fn with_scratch(target: &'s mut [u8], limits: ComplexCodecLimits) -> Self {
+        Self {
+            spill: true,
+            ..Self::into_slice(target, limits)
+        }
+    }
+    pub(crate) fn finish_scratch(self) -> Option<Vec<u8>> {
+        debug_assert!(self.spill);
+        self.into.is_none().then_some(self.heap)
     }
     pub(crate) fn finish(self) -> Vec<u8> {
         debug_assert!(self.into.is_none());
@@ -36,6 +60,16 @@ impl<'s> Writer<'s> {
                 "payload exceeds {} bytes",
                 self.limits.max_payload_bytes
             )));
+        }
+        if self.spill
+            && self
+                .into
+                .as_ref()
+                .is_some_and(|target| next_len > target.len())
+        {
+            let target = self.into.take().unwrap();
+            self.heap.reserve(next_len);
+            self.heap.extend_from_slice(&target[..self.written]);
         }
         match &mut self.into {
             Some(target) => {

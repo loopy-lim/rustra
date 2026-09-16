@@ -153,7 +153,7 @@ impl<'s, 'w, 'b> SerializeTupleVariant for SerTupleVariant<'s, 'w, 'b> {
 struct SerMap<'s, 'w, 'b> {
     writer: &'s mut Writer<'w>,
     targets: &'b RecursiveTargets,
-    buffer: Vec<(String, Vec<u8>)>,
+    buffer: MapEntries,
     value: &'b std::sync::Arc<IrNode>,
     limits: ComplexCodecLimits,
     depth: usize,
@@ -164,30 +164,28 @@ impl<'s, 'w, 'b> SerializeMap for SerMap<'s, 'w, 'b> {
     type Error = RustraError;
 
     fn serialize_key<T: ser::Serialize + ?Sized>(&mut self, key: &T) -> Result<()> {
-        let mut key_writer = Writer::new(self.limits);
-        key.serialize(AsMapKey {
-            writer: &mut key_writer,
-        })?;
-        let bytes = key_writer.finish();
-        let key = String::from_utf8(bytes).map_err(|_| error("map keys must be strings"))?;
-        self.buffer.push((key, Vec::new()));
+        let key = MapBytes::serialize(self.limits, |writer| key.serialize(AsMapKey { writer }))?;
+        std::str::from_utf8(key.as_slice()).map_err(|_| error("map keys must be strings"))?;
+        self.buffer.push((key, MapBytes::default()));
         Ok(())
     }
 
     fn serialize_value<T: ser::Serialize + ?Sized>(&mut self, value: &T) -> Result<()> {
-        let mut value_writer = Writer::new(self.limits);
-        value.serialize(Ser {
-            writer: &mut value_writer,
-            targets: self.targets,
-            ir: self.value,
-            limits: self.limits,
-            depth: self.depth,
+        let bytes = MapBytes::serialize(self.limits, |writer| {
+            value.serialize(Ser {
+                writer,
+                targets: self.targets,
+                ir: self.value,
+                limits: self.limits,
+                depth: self.depth,
+            })
         })?;
         let entry = self
             .buffer
+            .as_mut_slice()
             .last_mut()
             .ok_or_else(|| error("map key must precede value"))?;
-        entry.1 = value_writer.finish();
+        entry.1 = bytes;
         Ok(())
     }
 
@@ -198,7 +196,7 @@ impl<'s, 'w, 'b> SerializeMap for SerMap<'s, 'w, 'b> {
             limits,
             ..
         } = self;
-        if buffer.len() > limits.max_collection_length {
+        if buffer.len > limits.max_collection_length {
             return Err(error(format!(
                 "collection length exceeds {}",
                 limits.max_collection_length
@@ -206,11 +204,13 @@ impl<'s, 'w, 'b> SerializeMap for SerMap<'s, 'w, 'b> {
         }
         // 정렬은 원본과 동일한 바이트 비교. 총량 한도는 기록하면서 Writer 의
         // payload 한도가 대신 검사한다.
-        buffer.sort_by(|left, right| left.0.as_bytes().cmp(right.0.as_bytes()));
-        writer.varint(buffer.len() as u128)?;
-        for (key, value) in &buffer {
-            writer.string(key)?;
-            writer.push(value)?;
+        let entries = buffer.as_mut_slice();
+        entries.sort_by(|left, right| left.0.as_slice().cmp(right.0.as_slice()));
+        writer.varint(entries.len() as u128)?;
+        for (key, value) in entries {
+            writer.varint(key.as_slice().len() as u128)?;
+            writer.push(key.as_slice())?;
+            writer.push(value.as_slice())?;
         }
         Ok(())
     }

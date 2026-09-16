@@ -1,6 +1,7 @@
 import type { PostcardField } from './generate-postcard-types.js';
 import { OPTION_INNER_KIND } from './generate-postcard-types.js';
 import { collectPostcardFields } from './generate-postcard-graph.js';
+import { directCppProperty, type CppProperty } from './generate-cpp-properties.js';
 
 const MAP_VALUE_PUSHER: Record<string, (name: string) => string> = {
   map_zigzag: (name) => `w.push_i64(rustra_i64(rt, _e, "${name}{}"));`,
@@ -17,12 +18,14 @@ export function cppFieldEncodeExpr(
   objExpr: string,
   definitions: Record<string, import('./schema.js').JsonSchema>,
   indent: string,
+  property: CppProperty = directCppProperty,
 ): string {
   return cppEncodeWithGetter(
     field,
-    `${objExpr}.getProperty(rt, "${field.name}")`,
+    `${objExpr}.getProperty(rt, ${property(field.name)})`,
     definitions,
     indent,
+    property,
   );
 }
 
@@ -31,6 +34,7 @@ export function cppEncodeWithGetter(
   get: string,
   definitions: Record<string, import('./schema.js').JsonSchema>,
   indent: string,
+  property: CppProperty = directCppProperty,
 ): string {
   switch (field.kind) {
     case 'zigzag':
@@ -70,10 +74,15 @@ export function cppEncodeWithGetter(
       if (!field.refType) return `${indent}// unknown struct field: ${field.name}`;
       const definition = definitions[field.refType];
       if (!definition) return `${indent}// missing definition for ${field.refType}`;
-      const object = `${get}.asObject(rt)`;
-      return collectPostcardFields(definition, definitions)
-        .fields.map((subField) => cppFieldEncodeExpr(subField, object, definitions, indent))
-        .join('\n');
+      const object = `_struct_${indent.length}`;
+      const fields = collectPostcardFields(definition, definitions).fields;
+      return [
+        `${indent}{ auto ${object} = ${get}.asObject(rt);`,
+        ...fields.map((subField) =>
+          cppFieldEncodeExpr(subField, object, definitions, `${indent}  `, property),
+        ),
+        `${indent}}`,
+      ].join('\n');
     }
     case 'vec_string':
       return `${indent}{ auto _arr = ${get}.asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) { auto _e = _arr.getValueAtIndex(rt, _i).getString(rt).utf8(rt); w.push_string(_e); } }`;
@@ -87,7 +96,7 @@ export function cppEncodeWithGetter(
       const push = MAP_VALUE_PUSHER[field.kind];
       const pushVal =
         push !== undefined ? push(field.name) : 'w.push_string(_e.getString(rt).utf8(rt));';
-      return `${indent}{ auto _o = ${get}.asObject(rt); std::vector<std::pair<std::string, jsi::Value>> _entries; auto _names = _o.getPropertyNames(rt); for (size_t _j = 0; _j < _names.length(rt); _j++) { auto _k = _names.getValueAtIndex(rt, _j).getString(rt).utf8(rt); _entries.push_back({std::move(_k), _o.getProperty(rt, jsi::String::createFromUtf8(rt, reinterpret_cast<const uint8_t*>(_k.data()), _k.size()))}); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; ${pushVal} } }`;
+      return `${indent}{ auto _o = ${get}.asObject(rt); std::vector<std::pair<std::string, jsi::Value>> _entries; auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); if (_count > _entries.max_size()) throw jsi::JSError(rt, "rustra: map size exceeds native capacity"); _entries.reserve(std::min<size_t>(_count, 64)); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; ${pushVal} } }`;
     }
     case 'tuple': {
       const lines = [`${indent}{ auto _arr = ${get}.asObject(rt).getArray(rt);`];
@@ -98,6 +107,7 @@ export function cppEncodeWithGetter(
             `_arr.getValueAtIndex(rt, ${index})`,
             definitions,
             `${indent}  `,
+            property,
           ),
         ),
       );
@@ -113,7 +123,7 @@ export function cppEncodeWithGetter(
         `${indent}  for (size_t _i = 0; _i < _n; _i++) { auto _obj = _arr.getValueAtIndex(rt, _i).getObject(rt);`,
       ];
       for (const subField of collectPostcardFields(definition, definitions).fields)
-        lines.push(cppFieldEncodeExpr(subField, '_obj', definitions, `${indent}    `));
+        lines.push(cppFieldEncodeExpr(subField, '_obj', definitions, `${indent}    `, property));
       lines.push(`${indent}  } }`);
       return lines.join('\n');
     }
@@ -128,7 +138,7 @@ export function cppEncodeWithGetter(
     case 'option_struct':
     case 'option_bytes': {
       const inner: PostcardField = { ...field, kind: OPTION_INNER_KIND[field.kind] };
-      return `${indent}{ auto _v = ${get}; if (_v.isNull() || _v.isUndefined()) { w.push_u8(0); } else { w.push_u8(1); ${cppEncodeWithGetter(inner, get, definitions, '')} } }`;
+      return `${indent}{ auto _option_value = ${get}; if (_option_value.isNull() || _option_value.isUndefined()) { w.push_u8(0); } else { w.push_u8(1); ${cppEncodeWithGetter(inner, '_option_value', definitions, '', property)} } }`;
     }
     case 'enum_str': {
       const variants = `{${(field.enumVariants ?? []).map((variant) => JSON.stringify(variant)).join(',')}}`;

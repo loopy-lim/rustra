@@ -1,4 +1,5 @@
 import type { PackageSchema } from './schema.js';
+import { sha256 } from './hash.js';
 import { generatedFileHeader } from './generated-header.js';
 import { analyzeCppCommands } from './generate-cpp-analysis.js';
 import { appendCppRuntimeHelpers } from './generate-cpp-runtime-helpers.js';
@@ -7,7 +8,7 @@ import { appendCppDispatchCore } from './generate-cpp-dispatch-core.js';
 import { appendCppBufferDispatch } from './generate-cpp-dispatch-buffer.js';
 export { generateFrameCodecsHpp } from './generate-cpp-hpp.js';
 
-export function generateFrameCodecsCpp(schema: PackageSchema): string {
+export function generateFrameCodecsCpp(schema: PackageSchema, schemaContent?: string): string {
   const sets = analyzeCppCommands(schema);
   const lines: string[] = [
     generatedFileHeader('rustra-generated-codecs.cpp', 'schema → cpp codec renderer').trimEnd(),
@@ -17,15 +18,18 @@ export function generateFrameCodecsCpp(schema: PackageSchema): string {
     `#include <cstring>`,
     `#include <jsi/jsi.h>`,
     `#include <limits>`,
-    `#include <memory>`,
     `#include <stdexcept>`,
     `#include <string>`,
-    `#include <unordered_map>`,
     `#include <utility>`,
     ``,
     `using namespace facebook::jsi;`,
     `namespace jsi = facebook::jsi;`,
     `namespace rc = rustra::codec;`,
+    // Hash the original bytes, exactly as contract.ts does. Object serialization
+    // cannot recover whitespace/order from a parsed or legacy schema argument.
+    `namespace rustra::generated {`,
+    `const char* compiled_contract_hash() { return ${schemaContent === undefined ? 'nullptr' : JSON.stringify(sha256(schemaContent))}; }`,
+    `}`,
     ``,
   ];
   appendCppRuntimeHelpers(lines);

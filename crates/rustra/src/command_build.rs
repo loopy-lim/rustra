@@ -89,6 +89,7 @@ where
 
     Command {
         command_id,
+        execution: None,
         description: None,
         input_type: unit_or_contract_name::<I>(),
         output_type: unit_or_contract_name::<O>(),
