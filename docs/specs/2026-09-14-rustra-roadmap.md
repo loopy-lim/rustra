@@ -356,3 +356,9 @@ P1~P6을 적용한다. 도메인 계산 비용이 대부분이면 브릿지 최�
 [0.10.2 SPEC](2026-09-16-patch-performance.md)과 [PLAN](../plans/2026-09-16-patch-performance.md)에 따라 0.10.1의 안전성 비용을 줄였다. Weak 역참조를 유지하는 codec 소유 대상 테이블, optional 복사 제거, struct 탐색 개선을 각 5회 교차 측정했다. 재귀 depth 8 지연은 78.66%, 64 KiB optional은 50.36%, 32필드 struct는 59.56% 감소했다. 대조군은 2.88–9.60% 느려져 10% 예산 안이며, oneOf의 경계 근접도 함께 기록했다. [원본 영수증](../benchmark-receipts/2026-09-16-patch-performance-ab.json)과 [검증 기록](../verification/2026-09-16-patch-performance.md)을 근거로 한다. 이는 코어 측정이며 G3의 실제 소비자 p95·CPU·실기기 수용 완료를 뜻하지 않는다.
 
 추가로 복합 노드의 균형·넓은·편향·큰 payload 트리를 각 5회 비교했다. 8,191노드 전체 왕복은25.805→8.675 ms, 전체 입력 검색은13.235→4.776 ms이며, 같은 값을 Rust에 미리 보관한 ID 조회는20.459 µs다. 마지막 수치는 별도 사용 패턴이며 최초 적재나 변경 비용을 포함하지 않는다. [트리 receipt](../benchmark-receipts/2026-09-16-tree-performance-ab.json)와 benchmarks의 형상·깊이·입출력 크기를 함께 읽어야 한다. 검색 자체는 같은 DFS이며 복잡한 graph·인덱스·실기기 수용은 완료 처리하지 않는다.
+
+### 2026-09-16 Nitro 동일 조건 비교 후속
+
+[Nitro 비교 SPEC](2026-09-16-nitro-parity.md)·[PLAN](../plans/2026-09-16-nitro-parity.md)에 따라 공개 동기 API와 호출·코덱 비용을 개선하고, iOS Simulator 및 Android 실기기에서 같은 후보를 각각5회×90항목 측정했다. 공개 동기30항목 중 Nitro 동급 이상은 iOS18개, Android19개이며 전 항목 목표는 미달이다. [최종 보고서](../research/2026-09-16-nitro-parity-candidate.md)와 [원본180항목](../benchmark-receipts/2026-09-16-nitro-parity-candidate.json)에 개선·남은 차이·실패한 중간 실행을 함께 기록했다.
+
+동일 flat arena의 결과이며 재귀 DTO 동급, 개별 호출 p95, 전체 G3 또는 새 릴리스 완료로 승격하지 않는다. 추가 무작위 스트레스 검사는 사용자 요청으로 중단했고, 이번 후보의 성공한 fuzz·Linux LSan 증거는 주장하지 않는다.
