@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "schemaHash": "7c07f78e1f38dc37f251920c7c453ec5b6d65a817f95a1b51b5b4649f63a2ae3",
+  "schemaHash": "810750e747024dd13ff3416741e9e563e07f73349119e7d5de962d77b1bafbaf",
   "generatorVersion": "0.10.0",
   "files": [
     {
@@ -29,11 +29,11 @@
     },
     {
       "path": "../modules/rustra-bridge/generated/rustra-generated-codecs.cpp",
-      "sha256": "914b1b5156edf43e9441f85e407f329715a8e5cd6232a19137adbc51980f1202"
+      "sha256": "690841f0cdd99a55f9895f8e238209c3ca63cf655935106e54284219d58e8352"
     },
     {
       "path": "../modules/rustra-bridge/generated/rustra-generated-codecs.hpp",
-      "sha256": "d901bf617faebfde8609d5c28150086929aa3d419f29b7468307c3401344dfa8"
+      "sha256": "305998cbad940063c9cc6a5e35887eca2e8070b9cf763c8033bcb87fe50f0979"
     },
     {
       "path": "../modules/rustra-bridge/ios/build-rust-ios.sh",
@@ -65,11 +65,11 @@
     },
     {
       "path": "commands.ts",
-      "sha256": "a75e1524f334ec412a9d6dc02ff4019004b600c4f8c51a4c574c3f76fdb6d04b"
+      "sha256": "591b96440b6501bd3baa920abfe8918f97f1b73a48584d9f5d2245180a4dcd9a"
     },
     {
       "path": "contract.ts",
-      "sha256": "551f56821ab6bb1dbec713402c8fe27978a9be523d9346e9ff3d137220a0349a"
+      "sha256": "a2489afa3a08759019d8803fbbcc79d1cbd650b419f985507ddf31d1d872bebb"
     },
     {
       "path": "devices.ts",
@@ -81,15 +81,15 @@
     },
     {
       "path": "frame-codecs.ts",
-      "sha256": "b3d4d8a6f3530d4d8cc56a9595519c2dec654b3adced69f50af3a133e015ec43"
+      "sha256": "a71d1d153ac983d105c228be1c41319d7e1122aa26fbd4a62651c1ad6298e736"
     },
     {
       "path": "frame-registry.ts",
-      "sha256": "60e7ace49b6e4b7b55593304388ef324382047af16bc571b55e0aa5850e9736c"
+      "sha256": "5584970dc9bd926c03bf8564793cd98305f4dd50ffdd273e58efc92fb3347469"
     },
     {
       "path": "positional-facade.ts",
-      "sha256": "fee0a2c6e92e6ffcda39e0ca9b7cd5361baa7736f3872d9e6eb25d5688b38649"
+      "sha256": "1e7e0c051c63cc4faaa2dd74150e546366f98da2fb2cad730687a1a0f9d8db31"
     },
     {
       "path": "react-native.ts",
@@ -97,7 +97,7 @@
     },
     {
       "path": "types.ts",
-      "sha256": "74c4a06e44adbecb16acea5cf58fff797f425e6b04a4d7bf32c0367af7491678"
+      "sha256": "7731a22a3e5cf80c7b25f319dc098014249e133a40dae2b09f3fe5ef96e5de4a"
     }
   ]
 }
