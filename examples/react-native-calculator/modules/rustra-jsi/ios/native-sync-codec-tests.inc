@@ -33,7 +33,7 @@ static void codecTests(jsi::Runtime& rt) {
   )JS");
   run(rt, "map canonical order and long Unicode NUL keys", R"JS(
     const f=bind(34,"parityEcho"); const keys=["z","a","10","2","한글😀","long".repeat(200),"nul\0key","constructor","prototype",...Array.from({length:80},(_,i)=>"key"+i)];
-    for(const count of [0,1,2,keys.length]) {
+    for(const count of [0,1,2,4,5,64,65,keys.length]) {
       const m=Object.create(null), reverse=Object.create(null);
       for(const k of keys.slice(0,count)) m[k]="v:"+k;
       for(const k of keys.slice(0,count).reverse()) reverse[k]=m[k];
@@ -45,6 +45,58 @@ static void codecTests(jsi::Runtime& rt) {
     Object.defineProperty(m,"key",{enumerable:true,get(){reads++;return "value";}});
     assert(f({nodes:[node(m)]}).nodes[0].metadata.key==="value" && reads===1,"map getter repeat");
   )JS");
+  run(rt, "map storage boundaries retain one getter snapshot in enumeration order", R"JS(
+    const f=bind(34,"parityEcho");
+    for(const count of [0,1,2,4,5,64,65]) {
+      const keys=["z","a","10","2",...Array.from({length:61},(_,i)=>"key"+i)].slice(0,count);
+      const m=Object.create(null), plain=Object.create(null), reads=[];
+      // The test runtime disables block scoping; capture each key as a function argument.
+      const getterFor=key=>()=>{reads.push(key);return plain[key];};
+      for(const key of keys) {
+        plain[key]="value:"+key;
+        Object.defineProperty(m,key,{enumerable:true,get:getterFor(key)});
+      }
+      const expectedOrder=Object.keys(m).join("|");
+      const out=f({nodes:[node(m)]}).nodes[0].metadata;
+      assert(reads.join("|")===expectedOrder,"map getter count or enumeration order changed count="+count+" reads="+reads.join("|")+" expected="+expectedOrder);
+      for(const key of keys) assert(out[key]===plain[key],"map getter value snapshot changed");
+    }
+  )JS");
+  run(rt, "small and fallback maps retain long Unicode NUL keys", R"JS(
+    const f=bind(34,"parityEcho"), keys=["long".repeat(200),"nul\0key","한글😀","\ufffd","tail"];
+    for(const count of [4,5]) {
+      const m=Object.create(null), reverse=Object.create(null);
+      for(const key of keys.slice(0,count)) m[key]="value:"+key;
+      for(const key of keys.slice(0,count).reverse()) reverse[key]=m[key];
+      assert(encodedHex(34,{nodes:[node(m)]})===encodedHex(34,{nodes:[node(reverse)]}),"Unicode canonical order changed");
+      const out=f({nodes:[node(m)]}).nodes[0].metadata;
+      for(const key of keys.slice(0,count)) assert(out[key]===m[key],"Unicode key or value changed");
+    }
+  )JS");
+  run(rt, "map getter throw and reentry preserve owned entries at storage boundaries", R"JS(
+    const f=bind(34,"parityEcho");
+    for(const count of [4,5]) {
+      const m=Object.create(null), reads=[]; let inner;
+      const getterFor=i=>()=>{
+        reads.push(i);
+        if(i===1) { collect(); inner=f({nodes:[node({inner:"nested"})]}); collect(); }
+        return "outer:"+i;
+      };
+      for(let i=0;i<count;i++) Object.defineProperty(m,"key"+i,{enumerable:true,get:getterFor(i)});
+      const out=f({nodes:[node(m)]}).nodes[0].metadata;
+      assert(reads.join(",")===Array.from({length:count},(_,i)=>i).join(","),"reentry changed getter order count="+count+" reads="+reads.join(","));
+      assert(inner.nodes[0].metadata.inner==="nested","nested map result changed");
+      for(let i=0;i<count;i++) assert(out["key"+i]==="outer:"+i,"reentry lost outer map value");
+      const throwing=Object.create(null), thrownReads=[];
+      const throwingGetterFor=i=>()=>{
+        thrownReads.push(i); if(i===1) throw new Error("map getter"); return "value:"+i;
+      };
+      for(let i=0;i<count;i++) Object.defineProperty(throwing,"key"+i,{enumerable:true,get:throwingGetterFor(i)});
+      rejects(()=>f({nodes:[node(throwing)]}));
+      assert(thrownReads.join(",")==="0,1","throwing map read additional getters");
+      assert(f({nodes:[node({after:"ok"})]}).nodes[0].metadata.after==="ok","map throw contaminated next encode");
+    }
+  )JS");
   run(rt, "map prototype key retains existing output behavior", R"JS(
     const m=Object.create(null); m.__proto__="text";
     const out=bind(34,"parityEcho")({nodes:[node(m)]}).nodes[0].metadata;
@@ -52,9 +104,12 @@ static void codecTests(jsi::Runtime& rt) {
     assert(Object.getPrototypeOf(out)===Object.prototype);
   )JS");
   run(rt, "map lone surrogate normalization remains compatible", R"JS(
-    const m=Object.create(null); m["\ud800"]="original"; m["\ufffd"]="normalized";
-    const out=bind(34,"parityEcho")({nodes:[node(m)]}).nodes[0].metadata;
-    assert(out["\ufffd"]==="normalized" && !("\ud800" in out),"UTF8 normalization lookup changed");
+    for(const count of [2,5]) {
+      const m=Object.create(null); m["\ud800"]="original"; m["\ufffd"]="normalized";
+      for(let i=2;i<count;i++) m["padding"+i]="value";
+      const out=bind(34,"parityEcho")({nodes:[node(m)]}).nodes[0].metadata;
+      assert(out["\ufffd"]==="normalized" && !("\ud800" in out),"UTF8 normalization lookup changed");
+    }
   )JS");
   run(rt, "getter throw and reentry leave subsequent codec usable", R"JS(
     const f=bind(34,"parityEcho"), n=node();
