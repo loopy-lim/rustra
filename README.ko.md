@@ -2,7 +2,7 @@
 
 # rustra
 
-Frame 전환과 감사 수정은 Rust 0.10.1과 아래 패키지 버전을 대상으로 한다.
+Frame 전환과 감사 수정은 Rust 0.10.2과 아래 패키지 버전을 대상으로 한다.
 네이티브 라이브러리·JS 어댑터·생성물을 함께 갱신한다. 소비자 검증과 롤백은
 [마이그레이션 문서](docs/migrations/post-0.9-frame-and-audit.ko.md)를 따른다.
 
@@ -144,7 +144,7 @@ JS/네이티브 조합의 drift를 런타임에 감지한다.
 
 ```toml
 [dependencies]
-rustra = "0.10.1"
+rustra = "0.10.2"
 serde = { version = "1", features = ["derive"] }
 schemars = { version = "0.8", features = ["derive"] }
 ```
@@ -577,7 +577,7 @@ type RustraError = {
 `tauri` feature를 활성화:
 
 ```toml
-rustra = { version = "0.10.1", features = ["tauri"] }
+rustra = { version = "0.10.2", features = ["tauri"] }
 ```
 
 Rust 측:

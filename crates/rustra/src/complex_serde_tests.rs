@@ -132,7 +132,7 @@ mod tests {
             "next": {"anyOf": [{"$ref": "#/definitions/Node"}, {"type": "null"}]}
         }, "required": ["value", "next"]}});
         let ir = crate::complex_codec::complex_schema_ir::compile(&schema, &definitions).unwrap();
-        assert!(!serde_direct_supported(&ir));
+        assert!(serde_direct_supported(&ir));
 
         let input = Node {
             value: 1,

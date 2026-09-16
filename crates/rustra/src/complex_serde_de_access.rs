@@ -10,6 +10,12 @@ struct DeSeq<'de, 'b> {
 impl<'de, 'b> SeqAccess<'de> for DeSeq<'de, 'b> {
     type Error = RustraError;
 
+    fn size_hint(&self) -> Option<usize> {
+        // A malicious length prefix must not reserve more than the supplied
+        // payload. Zero-byte items can safely grow beyond this lower estimate.
+        Some((self.length - self.position).min(self.de.reader.remaining()))
+    }
+
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
     where
         T: DeserializeSeed<'de>,
@@ -27,6 +33,7 @@ impl<'de, 'b> SeqAccess<'de> for DeSeq<'de, 'b> {
             return seed
                 .deserialize(De {
                     reader: &mut *self.de.reader,
+                    targets: self.de.targets,
                     ir: node,
                     limits: self.de.limits,
                     depth: self.de.depth + 1,
@@ -42,6 +49,7 @@ impl<'de, 'b> SeqAccess<'de> for DeSeq<'de, 'b> {
         };
         seed.deserialize(De {
             reader: &mut *self.de.reader,
+            targets: self.de.targets,
             ir: items,
             limits: self.de.limits,
             depth: self.de.depth + 1,
@@ -50,11 +58,44 @@ impl<'de, 'b> SeqAccess<'de> for DeSeq<'de, 'b> {
     }
 }
 
+/// Borrow wire keys without allocating for the common zero/one/two-key maps.
+enum SeenKeys<'de> {
+    None,
+    Pair(Option<&'de str>),
+    Many(std::collections::HashSet<&'de str>),
+}
+
+impl<'de> SeenKeys<'de> {
+    fn new(length: usize) -> Self {
+        match length {
+            0 | 1 => Self::None,
+            2 => Self::Pair(None),
+            // Bound reservation for a large declaration with truncated bytes.
+            _ => Self::Many(std::collections::HashSet::with_capacity(length.min(64))),
+        }
+    }
+
+    fn insert(&mut self, key: &'de str) -> bool {
+        match self {
+            Self::None => true,
+            Self::Pair(first) => match first {
+                Some(first) => *first != key,
+                None => {
+                    *first = Some(key);
+                    true
+                }
+            },
+            Self::Many(keys) => keys.insert(key),
+        }
+    }
+}
+
 /// MapAccess 모드 — 일반 map(엔트리 반복)과 struct(필드 스냅샷).
 enum MapMode<'de> {
     Entries {
         value: &'de std::sync::Arc<IrNode>,
         remaining: usize,
+        seen: SeenKeys<'de>,
     },
     Struct {
         fields: &'de [IrField],
@@ -66,9 +107,6 @@ enum MapMode<'de> {
 struct DeMap<'de, 'b> {
     de: De<'de, 'b>,
     mode: MapMode<'de>,
-    /// 직전 struct 키가 presence 0 이었는지 — `next_value_seed` 가 AbsentField
-    /// 로 전환할 때 쓴다.
-    absent: bool,
 }
 
 impl<'de, 'b> MapAccess<'de> for DeMap<'de, 'b> {
@@ -79,38 +117,44 @@ impl<'de, 'b> MapAccess<'de> for DeMap<'de, 'b> {
         K: DeserializeSeed<'de>,
     {
         match &mut self.mode {
-            MapMode::Entries { remaining, .. } => {
+            MapMode::Entries {
+                remaining, seen, ..
+            } => {
                 if *remaining == 0 {
                     return Ok(None);
                 }
                 *remaining -= 1;
-                let key = self.de.reader.string()?;
-                seed.deserialize(StrDe { value: key }).map(Some)
+                let length = self.de.reader.length()?;
+                let key = std::str::from_utf8(self.de.reader.raw(length)?)
+                    .map_err(|_| error("invalid UTF-8 string"))?;
+                if !seen.insert(key) {
+                    return Err(error(format!("duplicate map key {key}")));
+                }
+                seed.deserialize(StrRef { name: key }).map(Some)
             }
             MapMode::Struct {
                 fields,
                 required,
                 position,
             } => {
-                if *position >= fields.len() {
-                    return Ok(None);
-                }
-                let index = *position;
-                *position += 1;
-                // optional 필드는 presence 태그 — 원본 decode_struct 와 동일.
-                // absent 여도 키는 계속 공급한다(required 필드가 뒤에 있을 수
-                // 있다) — 값은 AbsentField 가 Option 계약을 대신한다.
-                if !required[index] {
-                    match self.de.reader.byte()? {
-                        0 => self.absent = true,
-                        1 => self.absent = false,
-                        _ => return Err(error("invalid optional field presence tag")),
+                loop {
+                    if *position >= fields.len() {
+                        return Ok(None);
                     }
-                } else {
-                    self.absent = false;
+                    let index = *position;
+                    *position += 1;
+                    if !required[index] {
+                        match self.de.reader.byte()? {
+                            0 => continue,
+                            1 => {}
+                            _ => return Err(error("invalid optional field presence tag")),
+                        }
+                    }
+                    // Omit absent keys so serde applies Option/default/missing
+                    // field semantics exactly as it does for the Value object.
+                    let name = fields[index].name.as_str();
+                    return seed.deserialize(StrRef { name }).map(Some);
                 }
-                let name = fields[index].name.as_str();
-                seed.deserialize(StrRef { name }).map(Some)
             }
         }
     }
@@ -119,7 +163,6 @@ impl<'de, 'b> MapAccess<'de> for DeMap<'de, 'b> {
     where
         V: DeserializeSeed<'de>,
     {
-        let absent = std::mem::take(&mut self.absent);
         let (node, depth): (&IrNode, usize) = match &self.mode {
             MapMode::Entries { value, .. } => (&**value, self.de.depth + 1),
             MapMode::Struct {
@@ -129,11 +172,9 @@ impl<'de, 'b> MapAccess<'de> for DeMap<'de, 'b> {
                 (node_of(&fields[index]), self.de.depth + 1)
             }
         };
-        if absent {
-            return seed.deserialize(AbsentField);
-        }
         seed.deserialize(De {
             reader: &mut *self.de.reader,
+            targets: self.de.targets,
             ir: node,
             limits: self.de.limits,
             depth,

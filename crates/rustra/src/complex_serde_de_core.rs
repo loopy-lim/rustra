@@ -1,90 +1,3 @@
-// ── 역직렬화: 와이어 → I ────────────────────────────────────
-
-/// 컴파일된 IR 로 와이어 바이트를 `I` 로 역직렬화한다 — `complex_decode` +
-/// `from_value` 와 동일한 값, Value 트리 없음.
-#[cfg(test)]
-pub(crate) fn from_bytes<I: de::DeserializeOwned>(
-    bytes: &[u8],
-    ir: &IrNode,
-    limits: ComplexCodecLimits,
-) -> Result<I> {
-    let mut reader = Reader::new(bytes, limits)?;
-    if has_recursive_refs(ir) {
-        let value = super::complex_codec_decode::decode_node_ir(&mut reader, ir, limits, 0)?;
-        if reader.remaining() != 0 {
-            return Err(error("trailing bytes in complex payload"));
-        }
-        return serde_json::from_value(value).map_err(|err| error(err.to_string()));
-    }
-    from_bytes_direct(bytes, ir, limits)
-}
-
-/// `CompiledComplex::serde_direct()`가 true인 IR의 hot path. 호출자가 빌드
-/// 시점 판정을 이미 보유하므로 매 호출마다 IR 전체를 다시 스캔하지 않는다.
-pub(crate) fn from_bytes_direct<I: de::DeserializeOwned>(
-    bytes: &[u8],
-    ir: &IrNode,
-    limits: ComplexCodecLimits,
-) -> Result<I> {
-    let mut reader = Reader::new(bytes, limits)?;
-    let value = I::deserialize(De {
-        reader: &mut reader,
-        ir,
-        limits,
-        depth: 0,
-    })?;
-    if reader.remaining() != 0 {
-        return Err(error("trailing bytes in complex payload"));
-    }
-    Ok(value)
-}
-/// IR 노드를 따라가는 serde `Deserializer`. self-describing 이 아니므로 모든
-/// 진입은 유도 코드의 타입 지정 `deserialize_*` 호출로 온다. `'de` 는 데이터
-/// (와이어 슬라이스 + IR 트리) 수명, `'b` 는 reader 차용 수명이다.
-struct De<'de, 'b> {
-    reader: &'b mut Reader<'de>,
-    ir: &'de IrNode,
-    limits: ComplexCodecLimits,
-    depth: usize,
-}
-
-impl<'de, 'b> De<'de, 'b> {
-    fn depth_guard(&self) -> Result<()> {
-        if self.depth > self.limits.max_depth {
-            return Err(error(format!(
-                "value depth exceeds {}",
-                self.limits.max_depth
-            )));
-        }
-        Ok(())
-    }
-
-    /// 자식 `De` — reader 를 재빌려 공유한다. `'de` 는 불변(ir/데이터)이고
-    /// reader 만 재빌리므로 재귀 중 별칭 충돌이 없다. 호출부가 self 를
-    /// 소비하지 않는 경로는 `De` 필드를 직접 만든다.
-    #[allow(clippy::needless_lifetimes)]
-    fn child<'c>(&'c mut self, ir: &'de IrNode, depth: usize) -> De<'de, 'c> {
-        De {
-            reader: self.reader,
-            ir,
-            limits: self.limits,
-            depth,
-        }
-    }
-}
-
-/// `$ref`/const+type 해석 — 원본 decode_node 의 Ref 폴스루와 const 무시
-/// (const+type 은 타입으로만 읽음)를 진입마다 적용한다.
-fn peel(ir: &IrNode) -> Result<&IrNode> {
-    match ir {
-        IrNode::Ref { .. } => Err(error("recursive schema requires Value codec")),
-        IrNode::Const {
-            inner: Some(node), ..
-        } => Ok(node.as_ref()),
-        other => Ok(other),
-    }
-}
-
 impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
     type Error = RustraError;
 
@@ -101,10 +14,9 @@ impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
     where
         V: Visitor<'de>,
     {
-        let IrNode::Option { inner } = peel(self.ir)? else {
+        let IrNode::Option { inner } = self.node()? else {
             return Err(error("expected option node"));
         };
-        self.depth_guard()?;
         match self.reader.byte()? {
             0 => visitor.visit_none(),
             1 => visitor.visit_some(self.child(inner, self.depth + 1)),
@@ -116,7 +28,7 @@ impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
     where
         V: Visitor<'de>,
     {
-        let IrNode::Null = peel(self.ir)? else {
+        let IrNode::Null = self.node()? else {
             return Err(error("expected null"));
         };
         visitor.visit_unit()
@@ -142,7 +54,7 @@ impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
     where
         V: Visitor<'de>,
     {
-        let IrNode::Boolean = peel(self.ir)? else {
+        let IrNode::Boolean = self.node()? else {
             return Err(error("expected boolean"));
         };
         match self.reader.byte()? {
@@ -156,63 +68,77 @@ impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
     where
         V: Visitor<'de>,
     {
-        self.deserialize_int(|value, visitor| visitor.visit_i8(value as i8), visitor)
+        self.deserialize_int(visitor)
     }
 
     fn deserialize_i16<V>(mut self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        self.deserialize_int(|value, visitor| visitor.visit_i16(value as i16), visitor)
+        self.deserialize_int(visitor)
     }
 
     fn deserialize_i32<V>(mut self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        self.deserialize_int(|value, visitor| visitor.visit_i32(value as i32), visitor)
+        self.deserialize_int(visitor)
     }
 
     fn deserialize_i64<V>(mut self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        self.deserialize_int(|value, visitor| visitor.visit_i64(value), visitor)
+        self.deserialize_int(visitor)
     }
 
     fn deserialize_u8<V>(mut self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        self.deserialize_int(|value, visitor| visitor.visit_u8(value as u8), visitor)
+        self.deserialize_int(visitor)
     }
 
     fn deserialize_u16<V>(mut self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        self.deserialize_int(|value, visitor| visitor.visit_u16(value as u16), visitor)
+        self.deserialize_int(visitor)
     }
 
     fn deserialize_u32<V>(mut self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        self.deserialize_int(|value, visitor| visitor.visit_u32(value as u32), visitor)
+        self.deserialize_int(visitor)
     }
 
     fn deserialize_u64<V>(mut self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        self.deserialize_int(|value, visitor| visitor.visit_u64(value as u64), visitor)
+        self.deserialize_int(visitor)
+    }
+
+    fn deserialize_i128<V>(mut self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_int(visitor)
+    }
+
+    fn deserialize_u128<V>(mut self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_int(visitor)
     }
 
     fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        let IrNode::Float { single } = peel(self.ir)? else {
+        let IrNode::Float { single } = self.node()? else {
             return Err(error("expected number node"));
         };
         let bytes = self.reader.raw(if *single { 4 } else { 8 })?;
@@ -221,6 +147,9 @@ impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
         } else {
             f64::from_le_bytes(bytes.try_into().unwrap()) as f32
         };
+        if !value.is_finite() {
+            return Err(error("decoded non-finite number"));
+        }
         visitor.visit_f32(value)
     }
 
@@ -228,7 +157,7 @@ impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
     where
         V: Visitor<'de>,
     {
-        let IrNode::Float { single } = peel(self.ir)? else {
+        let IrNode::Float { single } = self.node()? else {
             return Err(error("expected number node"));
         };
         let bytes = self.reader.raw(if *single { 4 } else { 8 })?;
@@ -237,7 +166,17 @@ impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
         } else {
             f64::from_le_bytes(bytes.try_into().unwrap())
         };
+        if !value.is_finite() {
+            return Err(error("decoded non-finite number"));
+        }
         visitor.visit_f64(value)
+    }
+
+    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_string(visitor)
     }
 
     fn deserialize_str<V>(self, visitor: V) -> Result<V::Value>
@@ -251,7 +190,7 @@ impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
     where
         V: Visitor<'de>,
     {
-        let IrNode::String = peel(self.ir)? else {
+        let IrNode::String = self.node()? else {
             return Err(error("expected string node"));
         };
         visitor.visit_string(self.reader.string()?)
@@ -261,26 +200,32 @@ impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
     where
         V: Visitor<'de>,
     {
-        let IrNode::Seq { tuple, items } = peel(self.ir)? else {
+        let IrNode::Seq { tuple, items } = self.node()? else {
             return Err(error("expected array node"));
         };
-        self.depth_guard()?;
         let length = self.reader.length()?;
-        visitor.visit_seq(DeSeq {
+        if tuple.as_ref().is_some_and(|nodes| nodes.len() != length) {
+            return Err(error("tuple length mismatch"));
+        }
+        let mut access = DeSeq {
             de: self,
             tuple: tuple.as_deref(),
             items: items.as_deref(),
             position: 0,
             length,
-        })
+        };
+        let result = visitor.visit_seq(&mut access)?;
+        if access.position != length {
+            return Err(error("tuple length mismatch"));
+        }
+        Ok(result)
     }
 
     fn deserialize_map<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        let ir = peel(self.ir)?;
-        self.depth_guard()?;
+        let ir = self.node()?;
         match ir {
             IrNode::Map { value } => {
                 let length = self.reader.length()?;
@@ -289,8 +234,8 @@ impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
                     mode: MapMode::Entries {
                         value,
                         remaining: length,
+                        seen: SeenKeys::new(length),
                     },
-                    absent: false,
                 })
             }
             IrNode::Struct { fields, required } => visitor.visit_map(DeMap {
@@ -300,7 +245,6 @@ impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
                     required,
                     position: 0,
                 },
-                absent: false,
             }),
             _ => Err(error("expected object node")),
         }
@@ -327,8 +271,7 @@ impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
     where
         V: Visitor<'de>,
     {
-        let ir = peel(self.ir)?;
-        self.depth_guard()?;
+        let ir = self.node()?;
         match ir {
             IrNode::OneOf { variants } => {
                 let index = self.reader.varint()? as usize;
@@ -338,6 +281,7 @@ impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
                 visitor.visit_enum(OneOfEnum {
                     variant,
                     reader: self.reader,
+                    targets: self.targets,
                     limits: self.limits,
                     depth: self.depth + 1,
                 })
@@ -353,33 +297,47 @@ impl<'de, 'b> Deserializer<'de> for De<'de, 'b> {
         }
     }
 
+    fn deserialize_tuple<V>(self, _len: usize, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_seq(visitor)
+    }
+
+    fn deserialize_tuple_struct<V>(
+        self,
+        _name: &'static str,
+        len: usize,
+        visitor: V,
+    ) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        self.deserialize_tuple(len, visitor)
+    }
+
     serde::forward_to_deserialize_any! {
-        char bytes byte_buf identifier ignored_any tuple tuple_struct
+        bytes byte_buf identifier ignored_any
     }
 }
 
 impl<'de, 'b> De<'de, 'b> {
-    /// 정수 공통 — 원본 decode_node 와 동일하게 unsigned 노드는 uvar, 아니면
-    /// zigzag 로 읽고 타입별 범위 검사는 visitor 에 맡긴다(serde_json
-    /// `from_value` 와 같은 범위 계약).
-    fn deserialize_int<V, F>(&mut self, visit: F, visitor: V) -> Result<V::Value>
+    /// Keep the wire integer width until serde's visitor checks the target type.
+    fn deserialize_int<V>(&mut self, visitor: V) -> Result<V::Value>
     where
-        F: FnOnce(i64, V) -> std::result::Result<V::Value, RustraError>,
         V: Visitor<'de>,
     {
-        let IrNode::Int { unsigned } = peel(self.ir)? else {
+        let IrNode::Int { unsigned } = self.node()? else {
             return Err(error("expected integer node"));
         };
         if *unsigned {
             let value = u64::try_from(self.reader.varint()?)
                 .map_err(|_| error("decoded unsigned integer exceeds u64"))?;
-            let value = i64::try_from(value)
-                .map_err(|_| error("decoded unsigned integer exceeds JSON safe range"))?;
-            visit(value, visitor)
+            visitor.visit_u64(value)
         } else {
             let value = i64::try_from(self.reader.zigzag()?)
                 .map_err(|_| error("decoded integer exceeds JSON safe range"))?;
-            visit(value, visitor)
+            visitor.visit_i64(value)
         }
     }
 }
