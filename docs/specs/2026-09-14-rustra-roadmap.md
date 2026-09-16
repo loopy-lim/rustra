@@ -362,3 +362,7 @@ P1~P6을 적용한다. 도메인 계산 비용이 대부분이면 브릿지 최�
 [Nitro 비교 SPEC](2026-09-16-nitro-parity.md)·[PLAN](../plans/2026-09-16-nitro-parity.md)에 따라 공개 동기 API와 호출·코덱 비용을 개선하고, iOS Simulator 및 Android 실기기에서 같은 후보를 각각5회×90항목 측정했다. 공개 동기30항목 중 Nitro 동급 이상은 iOS18개, Android19개이며 전 항목 목표는 미달이다. [최종 보고서](../research/2026-09-16-nitro-parity-candidate.md)와 [원본180항목](../benchmark-receipts/2026-09-16-nitro-parity-candidate.json)에 개선·남은 차이·실패한 중간 실행을 함께 기록했다.
 
 동일 flat arena의 결과이며 재귀 DTO 동급, 개별 호출 p95, 전체 G3 또는 새 릴리스 완료로 승격하지 않는다. 추가 무작위 스트레스 검사는 사용자 요청으로 중단했고, 이번 후보의 성공한 fuzz·Linux LSan 증거는 주장하지 않는다.
+
+### 2026-09-16 잔여 차이 후속 검증
+
+[후속 PLAN](../plans/2026-09-16-nitro-parity-followup.md)에 따라 Android 버퍼의 순서 의존성, 실제 DFS의 보관 용량·스택 성장, 작은 호출 후보 및 큰 객체 직렬화를 조사했다. 작은 맵 인코더를 개선했고 악화된 postcard 후보는 폐기했다. 새 iOS/Android Release의 각 5회×90항목에서 공개 동기는 양쪽 20/30, Promise API는 iOS19/30·Android20/30이 동급 이상이다. 전 항목 목표는 미달이며 모든 판정·진단 한계는 [후속 결과](../research/2026-09-16-nitro-parity-followup.md)에 남겼다. 새 발행이나 플랫폼 인증 완료로 처리하지 않는다.
