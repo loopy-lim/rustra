@@ -166,6 +166,8 @@ import type { JobStatusInput, JobStatusOutput, StartJobInput, StartJobOutput } f
 
 export const jobStatusCodec: FrameCodec<JobStatusInput, JobStatusOutput> = {
   commandId: 2,
+  execution: "sync",
+  syncFields: ["jobId"],
 
   encode(args: JobStatusInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(JobStatusInput)]
@@ -238,6 +240,8 @@ export const jobStatusCodec: FrameCodec<JobStatusInput, JobStatusOutput> = {
 
 export const startJobCodec: FrameCodec<StartJobInput, StartJobOutput> = {
   commandId: 1,
+  execution: "sync",
+  syncFields: ["jobId","totalSteps","stepDelayMs"],
 
   encode(args: StartJobInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(StartJobInput)]

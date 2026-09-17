@@ -38,7 +38,8 @@
             "format": "int64"
           }
         }
-      }
+      },
+      "execution": "sync"
     },
     {
       "name": "startJob",
@@ -79,7 +80,8 @@
             "type": "boolean"
           }
         }
-      }
+      },
+      "execution": "sync"
     }
   ],
   "events": [

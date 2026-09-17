@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "schemaHash": "73afb8cbfb541f442828e70ec9e0ab678000b9a944ef10f0bb079318b27d022d",
+  "schemaHash": "c2e40a1b8c403cec893650dbd6abba1f940a894d6754bfe06fe9a86f17bb1d12",
   "generatorVersion": "0.10.0",
   "files": [
     {
@@ -9,7 +9,7 @@
     },
     {
       "path": "contract.ts",
-      "sha256": "c5c51448440c886de3439b409d976d97201e1a21f0a5531ecd3366d3766750a7"
+      "sha256": "80f209f26e206b152661262a6ad7a8db38da450a52ee139dd0efccbbf7c2cc63"
     },
     {
       "path": "events.ts",
@@ -17,7 +17,7 @@
     },
     {
       "path": "frame-codecs.ts",
-      "sha256": "73f732d5aa4ef67e365f8ef371049562c78223744747e38455207e937ad53534"
+      "sha256": "713cbcb2c7f18278e164490600c03ff6402ad199609e3200c905c59fecec1ee8"
     },
     {
       "path": "frame-registry.ts",

@@ -45,7 +45,8 @@
             }
           }
         }
-      }
+      },
+      "execution": "sync"
     },
     {
       "name": "grant",
@@ -79,7 +80,8 @@
             "type": "boolean"
           }
         }
-      }
+      },
+      "execution": "sync"
     },
     {
       "name": "signIn",
@@ -118,7 +120,8 @@
             "type": "string"
           }
         }
-      }
+      },
+      "execution": "sync"
     },
     {
       "name": "signOut",
@@ -148,7 +151,8 @@
             "type": "boolean"
           }
         }
-      }
+      },
+      "execution": "sync"
     }
   ]
 }
