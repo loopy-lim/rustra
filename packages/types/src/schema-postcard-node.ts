@@ -1,3 +1,4 @@
+import { compileFixedArray } from './schema-postcard-fixed-array.js';
 import type { ComplexSchema } from './complex-codec-types.js';
 import { optionInner } from './complex-codec-schema.js';
 import {
@@ -74,6 +75,11 @@ function compileNode(
   depth: number,
 ): SchemaNode | null {
   if (depth > 8) return null;
+  if (schema.type === 'null')
+    return {
+      encode: () => new Uint8Array(0),
+      decode: () => ({ value: null, bytesRead: 0 }),
+    };
 
   // tuple newtype (schemars: single-entry allOf + $ref) — 내부로 투명하게.
   if (Array.isArray(schema.allOf) && schema.allOf.length === 1) {
@@ -104,7 +110,7 @@ function compileNode(
     const resolved = resolveRef(schema, definitions);
     if (!resolved) return null;
     if (resolved.type === 'object' && resolved.properties && !resolved.additionalProperties) {
-      return compileStruct(resolved, definitions, depth);
+      return compileStruct(resolved, definitions, depth + 1);
     }
     return compileNode(resolved, definitions, depth + 1);
   }
@@ -117,6 +123,17 @@ function compileNode(
   }
 
   if (schema.type === 'integer') {
+    if (schema.format === 'uint8' || schema.format === 'int8')
+      return {
+        encode: (value) => new Uint8Array([value as number]),
+        decode: (buf, offset) => {
+          if (offset >= buf.length) throw new Error('byte out of bounds');
+          return {
+            value: schema.format === 'int8' && buf[offset] >= 128 ? buf[offset] - 256 : buf[offset],
+            bytesRead: 1,
+          };
+        },
+      };
     if (schema.format === 'uint64') {
       return {
         encode: (v) => encVarint64(v as number | bigint),
@@ -195,7 +212,9 @@ function compileNode(
         const nodes = items as SchemaNode[];
         return {
           encode: (v) => {
-            const arr = v as unknown[];
+            if (!Array.isArray(v) || v.length !== nodes.length)
+              throw new Error('invalid tuple arity');
+            const arr = v;
             return concatBytes(arr.map((el, i) => nodes[i].encode(el)));
           },
           decode: (buf, offset) => {
@@ -213,6 +232,20 @@ function compileNode(
       return null;
     }
     const items = schema.items as ComplexSchema;
+    if (
+      Number.isInteger(schema.minItems) &&
+      schema.minItems === schema.maxItems &&
+      (schema.minItems as number) >= 0
+    ) {
+      const element = compileNode(items, definitions, depth + 1);
+      return element
+        ? compileFixedArray(
+            schema.minItems as number,
+            element,
+            items.type === 'integer' && items.format === 'uint8',
+          )
+        : null;
+    }
     const uniqueItems = schema.uniqueItems === true;
     // bytes 특례 — Vec<u8> 은 len + raw.
     if (!uniqueItems && items.type === 'integer' && items.format === 'uint8') {
@@ -305,8 +338,8 @@ function compileNode(
   }
 
   // struct — properties 선언순(postcard 필드순).
-  if (schema.type === 'object' && schema.properties && !schema.additionalProperties) {
-    return compileStruct(schema, definitions, depth);
+  if (schema.type === 'object' && !schema.additionalProperties) {
+    return compileStruct(schema, definitions, depth + 1);
   }
 
   return null;
@@ -315,7 +348,7 @@ function compileNode(
 function compileStruct(
   schema: ComplexSchema,
   definitions: Record<string, ComplexSchema>,
-  depth: number,
+  fieldDepth: number,
 ): SchemaNode | null {
   const names = Object.keys(schema.properties ?? {});
   const nodes: SchemaNode[] = [];
@@ -323,7 +356,7 @@ function compileStruct(
     const node = compileNode(
       (schema.properties as Record<string, ComplexSchema>)[name],
       definitions,
-      depth + 1,
+      fieldDepth,
     );
     if (!node) return null;
     nodes.push(node);
@@ -346,6 +379,6 @@ function compileStruct(
   };
 }
 
-export { compileNode };
+export { compileNode, compileStruct };
 
 // ── FrameCodec 조립 ────────────────────────────────────────

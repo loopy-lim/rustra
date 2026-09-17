@@ -20,6 +20,8 @@ export function generateFieldEncodeExpr(
   indent: string,
 ): string {
   switch (field.kind) {
+    case 'unit':
+      return `${indent}// unit has no postcard bytes`;
     case 'zigzag':
       return `${indent}parts.push(_pcEncodeZigzagVarint(${valueExpr}));`;
     case 'uvar':

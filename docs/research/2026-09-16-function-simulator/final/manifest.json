@@ -1,0 +1,39 @@
+{
+  "demo": "functions",
+  "configuration": "Release",
+  "simulator": {
+    "udid": "99B087B5-DEF6-4CF1-9177-81A5DE564CFC",
+    "name": "iPhone 17",
+    "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-2"
+  },
+  "bundleId": "com.alt-shifted.react-native-calculator",
+  "fingerprint": "65c339a0ba66770cf2c7b57fbf31a89477776c7039c2768521295210668322f1",
+  "contractHash": "bb88ac05d152c16fac2fe5e194323a3222534cbdd7b1d13b5b590d120dcf8a7c",
+  "artifacts": {
+    "reactnativecalculator": "3b353929792b89e1a9ee3b9383549bf43658257179c635f0b5ac47160a5f9ddf",
+    "main.jsbundle": "4f82c1881f0054c46123bb6b78e52460d019d6dfbd07a4528e9cd546e229f157"
+  },
+  "runs": [
+    {
+      "run": 1,
+      "launch": "com.alt-shifted.react-native-calculator: 18632",
+      "startedAt": "2026-09-15T19:43:08.978Z",
+      "generatedAt": "2026-09-15T19:43:10.977Z",
+      "receiptSha256": "d27fd3744681ce5457d2c0f441625faca4c546ae237d62bea3ae04b082ed8d2c"
+    },
+    {
+      "run": 2,
+      "launch": "com.alt-shifted.react-native-calculator: 18679",
+      "startedAt": "2026-09-15T19:43:11.485Z",
+      "generatedAt": "2026-09-15T19:43:13.463Z",
+      "receiptSha256": "6cd95ffcb09c9bde01677428fc6ddd661eecd44102c1dc44b425ccd54d025c1e"
+    },
+    {
+      "run": 3,
+      "launch": "com.alt-shifted.react-native-calculator: 18742",
+      "startedAt": "2026-09-15T19:43:13.749Z",
+      "generatedAt": "2026-09-15T19:43:15.708Z",
+      "receiptSha256": "c6fa03e50393352e112d8beeb9975cdbc89ebcbb5323ffd573922899a9bf0844"
+    }
+  ]
+}

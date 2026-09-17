@@ -1030,3 +1030,20 @@ test('large JSON and binary frames reassemble across private IPC packets', async
     await channel.close();
   }
 });
+
+test('JSON adapter preserves explicit null while legacy omitted input remains an object', async () => {
+  const engine = createTauriEngine({
+    async invoke(command, args) {
+      const value = args as { args?: unknown; requests?: { args: unknown }[] };
+      return command === 'rustra_dispatch_batch'
+        ? value.requests!.map((request) => ({ ok: true, result: request.args }))
+        : value.args;
+    },
+  });
+  assert.equal(await engine.invoke('reset', null), null);
+  assert.deepEqual(await engine.invoke('legacy'), {});
+  assert.deepEqual(
+    await engine.invokeBatch([{ command: 'reset', args: null }, { command: 'legacy' }]),
+    [null, {}],
+  );
+});

@@ -15,7 +15,7 @@ export function generateComplexCodec(
   definitions: Record<string, JsonSchema>,
 ): string {
   const fnName = commandFunctionName(command.name);
-  const inType = command.inputType;
+  const inType = command.inputType === '()' ? 'void' : command.inputType;
   const outType = command.outputType === '()' ? 'void' : command.outputType;
   return (
     `/** route: complex-binary; RN uses native C++ when the schema is native-safe, otherwise JS. */\n` +

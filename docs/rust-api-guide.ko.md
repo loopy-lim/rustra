@@ -926,6 +926,11 @@ import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, 
 import { createGeneratedFields2, invokeGenerated, invokeGeneratedBytes, invokeGeneratedFields1, invokeGeneratedFields3 } from '@rustra/types';
 import type { InvokeOptions } from '@rustra/types';
 
+export function add(arg0: Tuple_of_int32_and_int32[0], arg1: Tuple_of_int32_and_int32[1], options?: InvokeOptions): Promise<int32> {
+  return invokeGenerated<int32>(34, 'add', [arg0, arg1], options);
+}
+add.commandId = 'add';
+
 export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutput>(1, 'addNumbers', "a", "b", 'addNumbers');
 
 export const benchAdd = createGeneratedFields2<BenchAddInput, BenchAddOutput>(23, 'benchAdd', "a", "b", 'benchAdd');
@@ -980,6 +985,11 @@ export function greet(input: GreetInput, options?: InvokeOptions): Promise<Greet
 }
 greet.commandId = 'greet';
 
+export function greetPerson(arg0: Tuple_of_String[0], options?: InvokeOptions): Promise<String> {
+  return invokeGenerated<String>(35, 'greetPerson', [arg0], options);
+}
+greetPerson.commandId = 'greetPerson';
+
 export function isEven(input: IsEvenInput, options?: InvokeOptions): Promise<IsEvenOutput> {
   return invokeGeneratedFields1<IsEvenOutput>(3, 'isEven', input, input["n"], options);
 }
@@ -1027,6 +1037,21 @@ export function processItem(input: ProcessItemInput, options?: InvokeOptions): P
 }
 processItem.commandId = 'processItem';
 
+export function readRemembered(options?: InvokeOptions): Promise<int32> {
+  return invokeGenerated<int32>(38, 'readRemembered', null, options);
+}
+readRemembered.commandId = 'readRemembered';
+
+export function remember(arg0: Tuple_of_int32[0], options?: InvokeOptions): Promise<void> {
+  return invokeGenerated<void>(37, 'remember', [arg0], options).then(() => undefined);
+}
+remember.commandId = 'remember';
+
+export function reset(options?: InvokeOptions): Promise<void> {
+  return invokeGenerated<void>(39, 'reset', null, options).then(() => undefined);
+}
+reset.commandId = 'reset';
+
 export function resourceClose(input: ResourceCloseInput, options?: InvokeOptions): Promise<ResourceCloseOutput> {
   return invokeGeneratedFields1<ResourceCloseOutput>(22, 'resourceClose', input, input["handle"], options);
 }
@@ -1052,6 +1077,11 @@ export function rustraRegistryDemo(input: RegistryDemoInput, options?: InvokeOpt
   return invokeGeneratedFields1<RegistryDemoOutput>(12, 'rustraRegistryDemo', input, input["op"], options);
 }
 rustraRegistryDemo.commandId = 'rustraRegistryDemo';
+
+export function safeDivide(arg0: Tuple_of_double_and_double[0], arg1: Tuple_of_double_and_double[1], options?: InvokeOptions): Promise<double> {
+  return invokeGenerated<double>(36, 'safeDivide', [arg0, arg1], options);
+}
+safeDivide.commandId = 'safeDivide';
 
 /**
  * HashMap<String, i64>(동적 맵) — count + (key,value)* 와이어 고정.

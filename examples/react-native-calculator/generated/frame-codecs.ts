@@ -162,12 +162,81 @@ function _pcDecodeF32(buf: Uint8Array, offset: number): { value: number; bytesRe
 
 import { createComplexCodec } from '@rustra/types';
 import type { FrameCodec, RustraError, ComplexSchema } from '@rustra/types';
-import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoBytesInput, ChannelDemoBytesOutput, ChannelDemoInput, ChannelDemoOutput, ChannelHandle, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DeviceDemoOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, Item, KindEchoInput, KindEchoOutput, MultiplyInput, MultiplyOutput, OpKind, ParityFindInput, ParityNode, ParityQuery, ParitySearch, ParityStored, ParityTree, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandle, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, WideAggInput, WideAggOutput } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoBytesInput, ChannelDemoBytesOutput, ChannelDemoInput, ChannelDemoOutput, ChannelHandle, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DeviceDemoOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, Item, KindEchoInput, KindEchoOutput, MultiplyInput, MultiplyOutput, OpKind, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandle, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, String, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, Tuple_of_String, Tuple_of_double_and_double, Tuple_of_int32, Tuple_of_int32_and_int32, WideAggInput, WideAggOutput, double, int32 } from './types.js';
+
+export const addCodec: FrameCodec<Tuple_of_int32_and_int32, int32> = {
+  commandId: 34,
+
+  encode(args: Tuple_of_int32_and_int32): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(Tuple_of_int32_and_int32)]
+    if (!Array.isArray(args) || args.length !== 2) throw new Error('invalid tuple arity');
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 34, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeZigzagVarint(args[0]));
+    parts.push(_pcEncodeZigzagVarint(args[1]));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: Tuple_of_int32_and_int32, reuse?: Uint8Array): Uint8Array {
+    if (!Array.isArray(args) || args.length !== 2) throw new Error('invalid tuple arity');
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 34; out[w++] = 0;
+    { const _z = args[0] >= 0 ? args[0] * 2 : -args[0] * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    { const _z = args[1] >= 0 ? args[1] * 2 : -args[1] * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: int32; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    if (u8[0] !== 1) {
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    let result!: int32;
+    {
+      const _v = _pcDecodeZigzagVarint(u8, offset);
+      result = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as int32 };
+  },
+};
 
 export const addNumbersCodec: FrameCodec<AddNumbersInput, AddNumbersOutput> = {
   commandId: 1,
-  execution: "sync",
-  syncFields: ["a","b"],
 
   encode(args: AddNumbersInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(AddNumbersInput)]
@@ -237,8 +306,6 @@ export const addNumbersCodec: FrameCodec<AddNumbersInput, AddNumbersOutput> = {
 
 export const benchAddCodec: FrameCodec<BenchAddInput, BenchAddOutput> = {
   commandId: 23,
-  execution: "sync",
-  syncFields: ["a","b"],
 
   encode(args: BenchAddInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(BenchAddInput)]
@@ -308,9 +375,6 @@ export const benchAddCodec: FrameCodec<BenchAddInput, BenchAddOutput> = {
 
 export const benchEchoBytesCodec: FrameCodec<BenchBytesPayload, BenchBytesPayload> = {
   commandId: 25,
-  execution: "sync",
-  syncFields: ["data"],
-  syncByteField: "data",
 
   encode(args: BenchBytesPayload): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(BenchBytesPayload)]
@@ -384,8 +448,6 @@ export const benchEchoBytesCodec: FrameCodec<BenchBytesPayload, BenchBytesPayloa
 
 export const benchEchoPairCodec: FrameCodec<BenchPairPayload, BenchPairPayload> = {
   commandId: 26,
-  execution: "sync",
-  syncFields: ["name","value"],
 
   encode(args: BenchPairPayload): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(BenchPairPayload)]
@@ -460,8 +522,6 @@ export const benchEchoPairCodec: FrameCodec<BenchPairPayload, BenchPairPayload> 
 
 export const benchEchoStringCodec: FrameCodec<BenchStringPayload, BenchStringPayload> = {
   commandId: 24,
-  execution: "sync",
-  syncFields: ["value"],
 
   encode(args: BenchStringPayload): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(BenchStringPayload)]
@@ -529,8 +589,6 @@ export const benchEchoStringCodec: FrameCodec<BenchStringPayload, BenchStringPay
 
 export const channelDemoCodec: FrameCodec<ChannelDemoInput, ChannelDemoOutput> = {
   commandId: 18,
-  execution: "sync",
-  syncFields: ["channel","ticks"],
 
   encode(args: ChannelDemoInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(ChannelDemoInput)]
@@ -679,8 +737,6 @@ export const channelDemoBytesCodec: FrameCodec<ChannelDemoBytesInput, ChannelDem
 
 export const clampCodec: FrameCodec<ClampInput, ClampOutput> = {
   commandId: 4,
-  execution: "sync",
-  syncFields: ["max","min","value"],
 
   encode(args: ClampInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(ClampInput)]
@@ -752,8 +808,6 @@ export const clampCodec: FrameCodec<ClampInput, ClampOutput> = {
 
 export const createItemCodec: FrameCodec<CreateItemInput, CreateItemOutput> = {
   commandId: 8,
-  execution: "sync",
-  syncFields: ["name","value"],
 
   encode(args: CreateItemInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(CreateItemInput)]
@@ -901,8 +955,6 @@ export const deviceDemoCodec: FrameCodec<void, DeviceDemoOutput> = {
 
 export const divideCodec: FrameCodec<DivideInput, DivideOutput> = {
   commandId: 10,
-  execution: "sync",
-  syncFields: ["a","b"],
 
   encode(args: DivideInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(DivideInput)]
@@ -975,15 +1027,13 @@ export const echoGroupsComplexCodec: FrameCodec<EchoGroupsInput, EchoGroupsOutpu
   commandId: 27,
   inputSchema: {"title":"EchoGroupsInput","type":"object","required":["groups"],"properties":{"groups":{"type":"object","additionalProperties":{"type":"array","items":{"type":"string"}}}}} as ComplexSchema,
   outputSchema: {"title":"EchoGroupsOutput","type":"object","required":["groups"],"properties":{"groups":{"type":"object","additionalProperties":{"type":"array","items":{"type":"string"}}}}} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"OpKind":{"oneOf":[{"type":"string","enum":["Clear"]},{"type":"object","required":["Set"],"properties":{"Set":{"type":"object","required":["value"],"properties":{"value":{"type":"integer","format":"int64"}}}},"additionalProperties":false}],"x-rustra-variant-order":["Clear","Set"]},"ParityNode":{"type":"object","required":["children","id","metadata","name","tag"],"properties":{"id":{"type":"number","format":"double"},"name":{"type":"string"},"tag":{"type":"string"},"note":{"type":["string","null"]},"metadata":{"type":"object","additionalProperties":{"type":"string"}},"children":{"type":"array","items":{"type":"number","format":"double"}}}},"ParityTree":{"type":"object","required":["nodes"],"properties":{"nodes":{"type":"array","items":{"$ref":"#/definitions/ParityNode"}}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
+  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"OpKind":{"oneOf":[{"type":"string","enum":["Clear"]},{"type":"object","required":["Set"],"properties":{"Set":{"type":"object","required":["value"],"properties":{"value":{"type":"integer","format":"int64"}}}},"additionalProperties":false}],"x-rustra-variant-order":["Clear","Set"]},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
 });
 
 export const echoGroupsCodec = echoGroupsComplexCodec;
 
 export const emitDemoCodec: FrameCodec<EmitDemoInput, EmitDemoOutput> = {
   commandId: 11,
-  execution: "sync",
-  syncFields: ["ticks","stepDelayMs"],
 
   encode(args: EmitDemoInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(EmitDemoInput)]
@@ -1053,8 +1103,6 @@ export const emitDemoCodec: FrameCodec<EmitDemoInput, EmitDemoOutput> = {
 
 export const gaugeCodec: FrameCodec<GaugeInput, GaugeOutput> = {
   commandId: 17,
-  execution: "sync",
-  syncFields: ["limit","offset"],
 
   encode(args: GaugeInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(GaugeInput)]
@@ -1124,8 +1172,6 @@ export const gaugeCodec: FrameCodec<GaugeInput, GaugeOutput> = {
 
 export const greetCodec: FrameCodec<GreetInput, GreetOutput> = {
   commandId: 5,
-  execution: "sync",
-  syncFields: ["name"],
 
   encode(args: GreetInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(GreetInput)]
@@ -1191,10 +1237,77 @@ export const greetCodec: FrameCodec<GreetInput, GreetOutput> = {
   },
 };
 
+export const greetPersonCodec: FrameCodec<Tuple_of_String, String> = {
+  commandId: 35,
+
+  encode(args: Tuple_of_String): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(Tuple_of_String)]
+    if (!Array.isArray(args) || args.length !== 1) throw new Error('invalid tuple arity');
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 35, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeString(args[0]));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: Tuple_of_String, reuse?: Uint8Array): Uint8Array {
+    if (!Array.isArray(args) || args.length !== 1) throw new Error('invalid tuple arity');
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 35; out[w++] = 0;
+    { const _s = args[0]; const _u = _utf8Encode(_s); ensure(5 + _u.length); let _v = _u.length; do { out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; out.set(_u, w); w += _u.length; }
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: String; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    if (u8[0] !== 1) {
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    let result!: String;
+    {
+      const _v = _pcDecodeString(u8, offset);
+      result = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as String };
+  },
+};
+
 export const isEvenCodec: FrameCodec<IsEvenInput, IsEvenOutput> = {
   commandId: 3,
-  execution: "sync",
-  syncFields: ["n"],
 
   encode(args: IsEvenInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(IsEvenInput)]
@@ -1264,15 +1377,13 @@ export const kindEchoComplexCodec: FrameCodec<KindEchoInput, KindEchoOutput> = c
   commandId: 33,
   inputSchema: {"title":"KindEchoInput","type":"object","required":["kind"],"properties":{"kind":{"$ref":"#/definitions/OpKind"}}} as ComplexSchema,
   outputSchema: {"title":"KindEchoOutput","type":"object","required":["echoed"],"properties":{"echoed":{"$ref":"#/definitions/OpKind"}}} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"OpKind":{"oneOf":[{"type":"string","enum":["Clear"]},{"type":"object","required":["Set"],"properties":{"Set":{"type":"object","required":["value"],"properties":{"value":{"type":"integer","format":"int64"}}}},"additionalProperties":false}],"x-rustra-variant-order":["Clear","Set"]},"ParityNode":{"type":"object","required":["children","id","metadata","name","tag"],"properties":{"id":{"type":"number","format":"double"},"name":{"type":"string"},"tag":{"type":"string"},"note":{"type":["string","null"]},"metadata":{"type":"object","additionalProperties":{"type":"string"}},"children":{"type":"array","items":{"type":"number","format":"double"}}}},"ParityTree":{"type":"object","required":["nodes"],"properties":{"nodes":{"type":"array","items":{"$ref":"#/definitions/ParityNode"}}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
+  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"OpKind":{"oneOf":[{"type":"string","enum":["Clear"]},{"type":"object","required":["Set"],"properties":{"Set":{"type":"object","required":["value"],"properties":{"value":{"type":"integer","format":"int64"}}}},"additionalProperties":false}],"x-rustra-variant-order":["Clear","Set"]},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
 });
 
 export const kindEchoCodec = kindEchoComplexCodec;
 
 export const multiplyCodec: FrameCodec<MultiplyInput, MultiplyOutput> = {
   commandId: 2,
-  execution: "sync",
-  syncFields: ["a","b"],
 
   encode(args: MultiplyInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(MultiplyInput)]
@@ -1337,505 +1448,6 @@ export const multiplyCodec: FrameCodec<MultiplyInput, MultiplyOutput> = {
       offset += _v.bytesRead;
     }
     return { ok: true, result: result as MultiplyOutput };
-  },
-};
-
-export const parityEchoCodec: FrameCodec<ParityTree, ParityTree> = {
-  commandId: 34,
-  execution: "sync",
-
-  encode(args: ParityTree): ArrayBuffer {
-    // [cmd_id: u16 LE][postcard(ParityTree)]
-    const parts: Uint8Array[] = [];
-    const cmdId = new Uint8Array(2);
-    new DataView(cmdId.buffer).setUint16(0, 34, true);
-    parts.push(cmdId);
-    {
-      const _arr = args.nodes;
-      parts.push(_pcEncodeVarint(_arr.length));
-      for (let _i = 0; _i < _arr.length; _i++) {
-        parts.push(_pcEncodeF64(args.nodes[_i].id));
-        parts.push(_pcEncodeString(args.nodes[_i].name));
-        parts.push(_pcEncodeString(args.nodes[_i].tag));
-        {
-          const _opt = args.nodes[_i].note;
-          if (_opt === null || _opt === undefined) {
-            parts.push(new Uint8Array([0]));
-          } else {
-            parts.push(new Uint8Array([1]));
-            parts.push(_pcEncodeString(_opt));
-          }
-        }
-        {
-          const _map = args.nodes[_i].metadata;
-          const _keys = Object.keys(_map).sort();
-          parts.push(_pcEncodeVarint(_keys.length));
-          for (const _k of _keys) {
-            const _v = _map[_k];
-            parts.push(_pcEncodeString(_k));
-            parts.push(_pcEncodeString(_v));
-          }
-        }
-        {
-          const _arr = args.nodes[_i].children;
-          parts.push(_pcEncodeVarint(_arr.length));
-          for (let _i = 0; _i < _arr.length; _i++) {
-            parts.push(_pcEncodeF64(_arr[_i]));
-          }
-        }
-      }
-    }
-    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
-  },
-
-  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: ParityTree; error?: RustraError } {
-    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
-    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
-    // (buf.buffer, byteOffset) 로 정규화한다.
-    const isView = ArrayBuffer.isView(buf);
-    const u8 = isView
-      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
-      : new Uint8Array(buf);
-    const view = isView
-      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
-      : new DataView(buf);
-    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    if (u8[0] !== 1) {
-      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      try {
-        const errLen = view.getUint16(8, true);
-        if (errLen > 0) {
-          // postcard({ code: String, message: String })
-          const c = _pcDecodeString(u8, 10);
-          const m = _pcDecodeString(u8, 10 + c.bytesRead);
-          err = { code: c.value, message: m.value };
-        }
-      } catch {
-        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
-      }
-      return { ok: false, error: err };
-    }
-    // Decode postcard from offset 8
-    let offset = 8;
-    const result: Partial<ParityTree> = {};
-    {
-      const _len = _pcDecodeVarint(u8, offset);
-      offset += _len.bytesRead;
-      const _arr: ParityNode[] = new Array(_len.value);
-      for (let _i = 0; _i < _len.value; _i++) {
-        const _obj: ParityNode = {} as ParityNode;
-        {
-          const _v = _pcDecodeF64(u8, offset);
-          _obj.id = _v.value;
-          offset += _v.bytesRead;
-        }
-        {
-          const _v = _pcDecodeString(u8, offset);
-          _obj.name = _v.value;
-          offset += _v.bytesRead;
-        }
-        {
-          const _v = _pcDecodeString(u8, offset);
-          _obj.tag = _v.value;
-          offset += _v.bytesRead;
-        }
-        {
-          const _tag = u8[offset];
-          offset += 1;
-          if (_tag === 0) {
-            _obj.note = null;
-          } else {
-            {
-              const _v = _pcDecodeString(u8, offset);
-              _obj.note = _v.value;
-              offset += _v.bytesRead;
-            }
-          }
-        }
-        {
-          const _len = _pcDecodeVarint(u8, offset);
-          offset += _len.bytesRead;
-          const _map: Record<string, string> = {};
-          for (let _i = 0; _i < _len.value; _i++) {
-            const _k = _pcDecodeString(u8, offset);
-            offset += _k.bytesRead;
-            const _v = _pcDecodeString(u8, offset);
-            _map[_k.value] = _v.value;
-            offset += _v.bytesRead;
-          }
-          _obj.metadata = _map;
-        }
-        {
-          const _len = _pcDecodeVarint(u8, offset);
-          offset += _len.bytesRead;
-          const _arr: number[] = new Array(_len.value);
-          for (let _i = 0; _i < _len.value; _i++) {
-            const _v = _pcDecodeF64(u8, offset);
-            _arr[_i] = _v.value;
-            offset += _v.bytesRead;
-          }
-          _obj.children = _arr;
-        }
-        _arr[_i] = _obj;
-      }
-      result.nodes = _arr;
-    }
-    return { ok: true, result: result as ParityTree };
-  },
-};
-
-export const parityFindCodec: FrameCodec<ParityFindInput, ParitySearch> = {
-  commandId: 35,
-  execution: "sync",
-
-  encode(args: ParityFindInput): ArrayBuffer {
-    // [cmd_id: u16 LE][postcard(ParityFindInput)]
-    const parts: Uint8Array[] = [];
-    const cmdId = new Uint8Array(2);
-    new DataView(cmdId.buffer).setUint16(0, 35, true);
-    parts.push(cmdId);
-    {
-      const _arr = args.tree.nodes;
-      parts.push(_pcEncodeVarint(_arr.length));
-      for (let _i = 0; _i < _arr.length; _i++) {
-        parts.push(_pcEncodeF64(args.tree.nodes[_i].id));
-        parts.push(_pcEncodeString(args.tree.nodes[_i].name));
-        parts.push(_pcEncodeString(args.tree.nodes[_i].tag));
-        {
-          const _opt = args.tree.nodes[_i].note;
-          if (_opt === null || _opt === undefined) {
-            parts.push(new Uint8Array([0]));
-          } else {
-            parts.push(new Uint8Array([1]));
-            parts.push(_pcEncodeString(_opt));
-          }
-        }
-        {
-          const _map = args.tree.nodes[_i].metadata;
-          const _keys = Object.keys(_map).sort();
-          parts.push(_pcEncodeVarint(_keys.length));
-          for (const _k of _keys) {
-            const _v = _map[_k];
-            parts.push(_pcEncodeString(_k));
-            parts.push(_pcEncodeString(_v));
-          }
-        }
-        {
-          const _arr = args.tree.nodes[_i].children;
-          parts.push(_pcEncodeVarint(_arr.length));
-          for (let _i = 0; _i < _arr.length; _i++) {
-            parts.push(_pcEncodeF64(_arr[_i]));
-          }
-        }
-      }
-    }
-    parts.push(_pcEncodeF64(args.id));
-    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
-  },
-
-  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: ParitySearch; error?: RustraError } {
-    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
-    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
-    // (buf.buffer, byteOffset) 로 정규화한다.
-    const isView = ArrayBuffer.isView(buf);
-    const u8 = isView
-      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
-      : new Uint8Array(buf);
-    const view = isView
-      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
-      : new DataView(buf);
-    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    if (u8[0] !== 1) {
-      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      try {
-        const errLen = view.getUint16(8, true);
-        if (errLen > 0) {
-          // postcard({ code: String, message: String })
-          const c = _pcDecodeString(u8, 10);
-          const m = _pcDecodeString(u8, 10 + c.bytesRead);
-          err = { code: c.value, message: m.value };
-        }
-      } catch {
-        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
-      }
-      return { ok: false, error: err };
-    }
-    // Decode postcard from offset 8
-    let offset = 8;
-    const result: Partial<ParitySearch> = {};
-    {
-      result.found = u8[offset] === 1;
-      offset += 1;
-    }
-    {
-      const _v = _pcDecodeF64(u8, offset);
-      result.id = _v.value;
-      offset += _v.bytesRead;
-    }
-    {
-      const _v = _pcDecodeString(u8, offset);
-      result.name = _v.value;
-      offset += _v.bytesRead;
-    }
-    {
-      const _v = _pcDecodeF64(u8, offset);
-      result.visited = _v.value;
-      offset += _v.bytesRead;
-    }
-    return { ok: true, result: result as ParitySearch };
-  },
-};
-
-export const parityIndexedCodec: FrameCodec<ParityQuery, ParitySearch> = {
-  commandId: 38,
-  execution: "sync",
-  syncFields: ["id"],
-
-  encode(args: ParityQuery): ArrayBuffer {
-    // [cmd_id: u16 LE][postcard(ParityQuery)]
-    const parts: Uint8Array[] = [];
-    const cmdId = new Uint8Array(2);
-    new DataView(cmdId.buffer).setUint16(0, 38, true);
-    parts.push(cmdId);
-    parts.push(_pcEncodeF64(args.id));
-    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
-  },
-
-  encodeInto(args: ParityQuery, reuse?: Uint8Array): Uint8Array {
-    let out = reuse ?? new Uint8Array(64);
-    let w = 0;
-    const ensure = (need: number) => {
-      if (w + need <= out.length) return;
-      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
-      grown.set(out.subarray(0, w));
-      out = grown;
-    };
-    ensure(2);
-    out[w++] = 38; out[w++] = 0;
-    { ensure(8); _dvScratch.setFloat64(0, args.id, true); for (let _i = 0; _i < 8; _i++) out[w++] = _dvScratchU8[_i]; }
-    return out.subarray(0, w);
-  },
-
-  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: ParitySearch; error?: RustraError } {
-    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
-    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
-    // (buf.buffer, byteOffset) 로 정규화한다.
-    const isView = ArrayBuffer.isView(buf);
-    const u8 = isView
-      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
-      : new Uint8Array(buf);
-    const view = isView
-      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
-      : new DataView(buf);
-    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    if (u8[0] !== 1) {
-      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      try {
-        const errLen = view.getUint16(8, true);
-        if (errLen > 0) {
-          // postcard({ code: String, message: String })
-          const c = _pcDecodeString(u8, 10);
-          const m = _pcDecodeString(u8, 10 + c.bytesRead);
-          err = { code: c.value, message: m.value };
-        }
-      } catch {
-        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
-      }
-      return { ok: false, error: err };
-    }
-    // Decode postcard from offset 8
-    let offset = 8;
-    const result: Partial<ParitySearch> = {};
-    {
-      result.found = u8[offset] === 1;
-      offset += 1;
-    }
-    {
-      const _v = _pcDecodeF64(u8, offset);
-      result.id = _v.value;
-      offset += _v.bytesRead;
-    }
-    {
-      const _v = _pcDecodeString(u8, offset);
-      result.name = _v.value;
-      offset += _v.bytesRead;
-    }
-    {
-      const _v = _pcDecodeF64(u8, offset);
-      result.visited = _v.value;
-      offset += _v.bytesRead;
-    }
-    return { ok: true, result: result as ParitySearch };
-  },
-};
-
-export const parityResidentCodec: FrameCodec<ParityQuery, ParitySearch> = {
-  commandId: 37,
-  execution: "sync",
-  syncFields: ["id"],
-
-  encode(args: ParityQuery): ArrayBuffer {
-    // [cmd_id: u16 LE][postcard(ParityQuery)]
-    const parts: Uint8Array[] = [];
-    const cmdId = new Uint8Array(2);
-    new DataView(cmdId.buffer).setUint16(0, 37, true);
-    parts.push(cmdId);
-    parts.push(_pcEncodeF64(args.id));
-    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
-  },
-
-  encodeInto(args: ParityQuery, reuse?: Uint8Array): Uint8Array {
-    let out = reuse ?? new Uint8Array(64);
-    let w = 0;
-    const ensure = (need: number) => {
-      if (w + need <= out.length) return;
-      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
-      grown.set(out.subarray(0, w));
-      out = grown;
-    };
-    ensure(2);
-    out[w++] = 37; out[w++] = 0;
-    { ensure(8); _dvScratch.setFloat64(0, args.id, true); for (let _i = 0; _i < 8; _i++) out[w++] = _dvScratchU8[_i]; }
-    return out.subarray(0, w);
-  },
-
-  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: ParitySearch; error?: RustraError } {
-    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
-    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
-    // (buf.buffer, byteOffset) 로 정규화한다.
-    const isView = ArrayBuffer.isView(buf);
-    const u8 = isView
-      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
-      : new Uint8Array(buf);
-    const view = isView
-      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
-      : new DataView(buf);
-    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    if (u8[0] !== 1) {
-      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      try {
-        const errLen = view.getUint16(8, true);
-        if (errLen > 0) {
-          // postcard({ code: String, message: String })
-          const c = _pcDecodeString(u8, 10);
-          const m = _pcDecodeString(u8, 10 + c.bytesRead);
-          err = { code: c.value, message: m.value };
-        }
-      } catch {
-        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
-      }
-      return { ok: false, error: err };
-    }
-    // Decode postcard from offset 8
-    let offset = 8;
-    const result: Partial<ParitySearch> = {};
-    {
-      result.found = u8[offset] === 1;
-      offset += 1;
-    }
-    {
-      const _v = _pcDecodeF64(u8, offset);
-      result.id = _v.value;
-      offset += _v.bytesRead;
-    }
-    {
-      const _v = _pcDecodeString(u8, offset);
-      result.name = _v.value;
-      offset += _v.bytesRead;
-    }
-    {
-      const _v = _pcDecodeF64(u8, offset);
-      result.visited = _v.value;
-      offset += _v.bytesRead;
-    }
-    return { ok: true, result: result as ParitySearch };
-  },
-};
-
-export const parityStoreCodec: FrameCodec<ParityTree, ParityStored> = {
-  commandId: 36,
-  execution: "sync",
-
-  encode(args: ParityTree): ArrayBuffer {
-    // [cmd_id: u16 LE][postcard(ParityTree)]
-    const parts: Uint8Array[] = [];
-    const cmdId = new Uint8Array(2);
-    new DataView(cmdId.buffer).setUint16(0, 36, true);
-    parts.push(cmdId);
-    {
-      const _arr = args.nodes;
-      parts.push(_pcEncodeVarint(_arr.length));
-      for (let _i = 0; _i < _arr.length; _i++) {
-        parts.push(_pcEncodeF64(args.nodes[_i].id));
-        parts.push(_pcEncodeString(args.nodes[_i].name));
-        parts.push(_pcEncodeString(args.nodes[_i].tag));
-        {
-          const _opt = args.nodes[_i].note;
-          if (_opt === null || _opt === undefined) {
-            parts.push(new Uint8Array([0]));
-          } else {
-            parts.push(new Uint8Array([1]));
-            parts.push(_pcEncodeString(_opt));
-          }
-        }
-        {
-          const _map = args.nodes[_i].metadata;
-          const _keys = Object.keys(_map).sort();
-          parts.push(_pcEncodeVarint(_keys.length));
-          for (const _k of _keys) {
-            const _v = _map[_k];
-            parts.push(_pcEncodeString(_k));
-            parts.push(_pcEncodeString(_v));
-          }
-        }
-        {
-          const _arr = args.nodes[_i].children;
-          parts.push(_pcEncodeVarint(_arr.length));
-          for (let _i = 0; _i < _arr.length; _i++) {
-            parts.push(_pcEncodeF64(_arr[_i]));
-          }
-        }
-      }
-    }
-    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
-  },
-
-  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: ParityStored; error?: RustraError } {
-    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
-    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
-    // (buf.buffer, byteOffset) 로 정규화한다.
-    const isView = ArrayBuffer.isView(buf);
-    const u8 = isView
-      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
-      : new Uint8Array(buf);
-    const view = isView
-      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
-      : new DataView(buf);
-    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
-    if (u8[0] !== 1) {
-      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
-      try {
-        const errLen = view.getUint16(8, true);
-        if (errLen > 0) {
-          // postcard({ code: String, message: String })
-          const c = _pcDecodeString(u8, 10);
-          const m = _pcDecodeString(u8, 10 + c.bytesRead);
-          err = { code: c.value, message: m.value };
-        }
-      } catch {
-        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
-      }
-      return { ok: false, error: err };
-    }
-    // Decode postcard from offset 8
-    let offset = 8;
-    const result: Partial<ParityStored> = {};
-    {
-      const _v = _pcDecodeF64(u8, offset);
-      result.nodes = _v.value;
-      offset += _v.bytesRead;
-    }
-    return { ok: true, result: result as ParityStored };
   },
 };
 
@@ -1911,7 +1523,6 @@ export const platformNativeInfoCodec: FrameCodec<void, PlatformNativeInfoOutput>
 
 export const processItemCodec: FrameCodec<ProcessItemInput, ProcessItemOutput> = {
   commandId: 9,
-  execution: "sync",
 
   encode(args: ProcessItemInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(ProcessItemInput)]
@@ -1981,10 +1592,191 @@ export const processItemCodec: FrameCodec<ProcessItemInput, ProcessItemOutput> =
   },
 };
 
+export const readRememberedCodec: FrameCodec<void, int32> = {
+  commandId: 38,
+
+  encode(args: void): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(void)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 38, true);
+    parts.push(cmdId);
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: void, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 38; out[w++] = 0;
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: int32; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    if (u8[0] !== 1) {
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    let result!: int32;
+    {
+      const _v = _pcDecodeZigzagVarint(u8, offset);
+      result = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as int32 };
+  },
+};
+
+export const rememberCodec: FrameCodec<Tuple_of_int32, void> = {
+  commandId: 37,
+
+  encode(args: Tuple_of_int32): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(Tuple_of_int32)]
+    if (!Array.isArray(args) || args.length !== 1) throw new Error('invalid tuple arity');
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 37, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeZigzagVarint(args[0]));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: Tuple_of_int32, reuse?: Uint8Array): Uint8Array {
+    if (!Array.isArray(args) || args.length !== 1) throw new Error('invalid tuple arity');
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 37; out[w++] = 0;
+    { const _z = args[0] >= 0 ? args[0] * 2 : -args[0] * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: void; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    if (u8[0] !== 1) {
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
+      }
+      return { ok: false, error: err };
+    }
+    return { ok: true, result: undefined as void };
+  },
+};
+
+export const resetCodec: FrameCodec<void, void> = {
+  commandId: 39,
+
+  encode(args: void): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(void)]
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 39, true);
+    parts.push(cmdId);
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: void, reuse?: Uint8Array): Uint8Array {
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 39; out[w++] = 0;
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: void; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    if (u8[0] !== 1) {
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
+      }
+      return { ok: false, error: err };
+    }
+    return { ok: true, result: undefined as void };
+  },
+};
+
 export const resourceCloseCodec: FrameCodec<ResourceCloseInput, ResourceCloseOutput> = {
   commandId: 22,
-  execution: "sync",
-  syncFields: ["handle"],
 
   encode(args: ResourceCloseInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(ResourceCloseInput)]
@@ -2051,7 +1843,6 @@ export const resourceCloseCodec: FrameCodec<ResourceCloseInput, ResourceCloseOut
 
 export const resourceOpenCodec: FrameCodec<ResourceOpenInput, ResourceHandleOutput> = {
   commandId: 19,
-  execution: "sync",
 
   encode(args: ResourceOpenInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(ResourceOpenInput)]
@@ -2113,8 +1904,6 @@ export const resourceOpenCodec: FrameCodec<ResourceOpenInput, ResourceHandleOutp
 
 export const resourceReadCodec: FrameCodec<ResourceReadInput, ResourceReadOutput> = {
   commandId: 20,
-  execution: "sync",
-  syncFields: ["handle","key"],
 
   encode(args: ResourceReadInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(ResourceReadInput)]
@@ -2196,8 +1985,6 @@ export const resourceReadCodec: FrameCodec<ResourceReadInput, ResourceReadOutput
 
 export const resourceWriteCodec: FrameCodec<ResourceWriteInput, ResourceWriteOutput> = {
   commandId: 21,
-  execution: "sync",
-  syncFields: ["handle","key","value"],
 
   encode(args: ResourceWriteInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(ResourceWriteInput)]
@@ -2269,8 +2056,6 @@ export const resourceWriteCodec: FrameCodec<ResourceWriteInput, ResourceWriteOut
 
 export const rustraRegistryDemoCodec: FrameCodec<RegistryDemoInput, RegistryDemoOutput> = {
   commandId: 12,
-  execution: "sync",
-  syncFields: ["op"],
 
   encode(args: RegistryDemoInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(RegistryDemoInput)]
@@ -2344,9 +2129,79 @@ export const rustraRegistryDemoCodec: FrameCodec<RegistryDemoInput, RegistryDemo
   },
 };
 
+export const safeDivideCodec: FrameCodec<Tuple_of_double_and_double, double> = {
+  commandId: 36,
+
+  encode(args: Tuple_of_double_and_double): ArrayBuffer {
+    // [cmd_id: u16 LE][postcard(Tuple_of_double_and_double)]
+    if (!Array.isArray(args) || args.length !== 2) throw new Error('invalid tuple arity');
+    const parts: Uint8Array[] = [];
+    const cmdId = new Uint8Array(2);
+    new DataView(cmdId.buffer).setUint16(0, 36, true);
+    parts.push(cmdId);
+    parts.push(_pcEncodeF64(args[0]));
+    parts.push(_pcEncodeF64(args[1]));
+    return _pcConcatUint8Arrays(parts).buffer as ArrayBuffer;
+  },
+
+  encodeInto(args: Tuple_of_double_and_double, reuse?: Uint8Array): Uint8Array {
+    if (!Array.isArray(args) || args.length !== 2) throw new Error('invalid tuple arity');
+    let out = reuse ?? new Uint8Array(64);
+    let w = 0;
+    const ensure = (need: number) => {
+      if (w + need <= out.length) return;
+      const grown = new Uint8Array(Math.max(out.length * 2, w + need));
+      grown.set(out.subarray(0, w));
+      out = grown;
+    };
+    ensure(2);
+    out[w++] = 36; out[w++] = 0;
+    { ensure(8); _dvScratch.setFloat64(0, args[0], true); for (let _i = 0; _i < 8; _i++) out[w++] = _dvScratchU8[_i]; }
+    { ensure(8); _dvScratch.setFloat64(0, args[1], true); for (let _i = 0; _i < 8; _i++) out[w++] = _dvScratchU8[_i]; }
+    return out.subarray(0, w);
+  },
+
+  decode(buf: ArrayBuffer | ArrayBufferView): { ok: boolean; result?: double; error?: RustraError } {
+    // caller-buffer 뷰(Uint8Array subarray 등)도 받는다 — node-loop 가 왕복당
+    // 사본 없이 프레임 뷰를 그대로 넘긴다. DataView 는 ArrayBuffer 만 받으므로
+    // (buf.buffer, byteOffset) 로 정규화한다.
+    const isView = ArrayBuffer.isView(buf);
+    const u8 = isView
+      ? new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new Uint8Array(buf);
+    const view = isView
+      ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+      : new DataView(buf);
+    if (view.byteLength < 8) return { ok: false, error: { code: 'invoke.too_short', message: 'response too short' } };
+    if (u8[0] !== 1) {
+      let err: RustraError = { code: 'invoke.failed', message: 'invoke failed' };
+      try {
+        const errLen = view.getUint16(8, true);
+        if (errLen > 0) {
+          // postcard({ code: String, message: String })
+          const c = _pcDecodeString(u8, 10);
+          const m = _pcDecodeString(u8, 10 + c.bytesRead);
+          err = { code: c.value, message: m.value };
+        }
+      } catch {
+        // 잘린/뒤틀린 에러 프레임 — 기본 err 를 유지한다.
+      }
+      return { ok: false, error: err };
+    }
+    // Decode postcard from offset 8
+    let offset = 8;
+    let result!: double;
+    {
+      const _v = _pcDecodeF64(u8, offset);
+      result = _v.value;
+      offset += _v.bytesRead;
+    }
+    return { ok: true, result: result as double };
+  },
+};
+
 export const scoreTotalCodec: FrameCodec<ScoreTotalInput, ScoreTotalOutput> = {
   commandId: 15,
-  execution: "sync",
 
   encode(args: ScoreTotalInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(ScoreTotalInput)]
@@ -2413,8 +2268,6 @@ export const scoreTotalCodec: FrameCodec<ScoreTotalInput, ScoreTotalOutput> = {
 
 export const secureComputeCodec: FrameCodec<SecureComputeInput, SecureComputeOutput> = {
   commandId: 13,
-  execution: "sync",
-  syncFields: ["a","b"],
 
   encode(args: SecureComputeInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(SecureComputeInput)]
@@ -2484,9 +2337,6 @@ export const secureComputeCodec: FrameCodec<SecureComputeInput, SecureComputeOut
 
 export const sizeOfCodec: FrameCodec<SizeOfInput, SizeOfOutput> = {
   commandId: 14,
-  execution: "sync",
-  syncFields: ["data"],
-  syncByteField: "data",
 
   encode(args: SizeOfInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(SizeOfInput)]
@@ -2564,7 +2414,6 @@ export const sizeOfCodec: FrameCodec<SizeOfInput, SizeOfOutput> = {
 
 export const spanCodec: FrameCodec<SpanInput, SpanOutput> = {
   commandId: 16,
-  execution: "sync",
 
   encode(args: SpanInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(SpanInput)]
@@ -2625,7 +2474,6 @@ export const spanCodec: FrameCodec<SpanInput, SpanOutput> = {
 
 export const sumListCodec: FrameCodec<SumListInput, SumListOutput> = {
   commandId: 6,
-  execution: "sync",
 
   encode(args: SumListInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(SumListInput)]
@@ -2692,15 +2540,13 @@ export const tagSetComplexCodec: FrameCodec<TagSetInput, TagSetOutput> = createC
   commandId: 29,
   inputSchema: {"title":"TagSetInput","type":"object","required":["ids"],"properties":{"ids":{"type":"array","items":{"type":"integer","format":"int64"},"uniqueItems":true}}} as ComplexSchema,
   outputSchema: {"title":"TagSetOutput","type":"object","required":["tags"],"properties":{"tags":{"type":"array","items":{"type":"string"},"uniqueItems":true}}} as ComplexSchema,
-  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"OpKind":{"oneOf":[{"type":"string","enum":["Clear"]},{"type":"object","required":["Set"],"properties":{"Set":{"type":"object","required":["value"],"properties":{"value":{"type":"integer","format":"int64"}}}},"additionalProperties":false}],"x-rustra-variant-order":["Clear","Set"]},"ParityNode":{"type":"object","required":["children","id","metadata","name","tag"],"properties":{"id":{"type":"number","format":"double"},"name":{"type":"string"},"tag":{"type":"string"},"note":{"type":["string","null"]},"metadata":{"type":"object","additionalProperties":{"type":"string"}},"children":{"type":"array","items":{"type":"number","format":"double"}}}},"ParityTree":{"type":"object","required":["nodes"],"properties":{"nodes":{"type":"array","items":{"$ref":"#/definitions/ParityNode"}}}},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
+  definitions: {"ChannelHandle":{"description":"커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).","type":"integer","format":"uint32","minimum":0},"Item":{"type":"object","required":["active","name","value"],"properties":{"active":{"type":"boolean"},"name":{"type":"string"},"value":{"type":"integer","format":"int64"}}},"OpKind":{"oneOf":[{"type":"string","enum":["Clear"]},{"type":"object","required":["Set"],"properties":{"Set":{"type":"object","required":["value"],"properties":{"value":{"type":"integer","format":"int64"}}}},"additionalProperties":false}],"x-rustra-variant-order":["Clear","Set"]},"ResourceHandle":{"description":"커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.","type":"integer","format":"uint32","minimum":0}} as Record<string, ComplexSchema>,
 });
 
 export const tagSetCodec = tagSetComplexCodec;
 
 export const toUpperCodec: FrameCodec<ToUpperInput, ToUpperOutput> = {
   commandId: 7,
-  execution: "sync",
-  syncFields: ["s"],
 
   encode(args: ToUpperInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(ToUpperInput)]

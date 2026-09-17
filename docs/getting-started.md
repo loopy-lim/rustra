@@ -2,6 +2,8 @@ English | [한국어](./getting-started.ko.md)
 
 # Getting Started with rustra
 
+For ordinary functions with multiple arguments and plain returns, see [function registration](./function-registration.md).
+
 > **Frame migration:** this guide targets Rust 0.10.2 and shared packages 0.10.0 with the
 > adapter versions listed below. Release 0.9.0 does not include the Frame rename.
 > Upgrade native libraries, JS packages, and generated output together; see the
@@ -335,6 +337,10 @@ export type ParityTree = {
  */
 export type ResourceHandle = number;
 
+export type Tuple_of_int32_and_int32 = [number, number];
+
+export type int32 = number;
+
 export type AddNumbersInput = {
   a: number | bigint;
   b: number | bigint;
@@ -467,6 +473,10 @@ export type GreetOutput = {
   message: string;
 };
 
+export type Tuple_of_String = [string];
+
+export type String = string;
+
 export type IsEvenInput = {
   n: number | bigint;
 };
@@ -533,6 +543,8 @@ export type ProcessItemOutput = {
   item: Item;
 };
 
+export type Tuple_of_int32 = [number];
+
 export type ResourceCloseInput = {
   handle: ResourceHandle;
 };
@@ -578,6 +590,10 @@ export type RegistryDemoOutput = {
   frozen: boolean;
   message: string;
 };
+
+export type Tuple_of_double_and_double = [number, number];
+
+export type double = number;
 
 export type ScoreTotalInput = {
   scores: Record<string, number | bigint>;

@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'bun:test';
 
-import { createJsonEngine, decodeUtf8, encodeUtf8, exactArrayBuffer } from './index.js';
+import {
+  createFrameEngine,
+  createJsonEngine,
+  decodeUtf8,
+  encodeUtf8,
+  exactArrayBuffer,
+} from './index.js';
+import type { FrameCodec } from './index.js';
 
 test('shared runtime helpers are available from the package facade', async () => {
   const text = 'Rustra 한글 🚀';
@@ -100,3 +107,130 @@ test('registration cleanup removes its installed engine without clearing a repla
   oldRelease();
   assert.equal(await ensureConfigured(), replacement);
 });
+
+function reusableBytesCodec(offset = 0): FrameCodec<unknown, number[]> {
+  return {
+    commandId: 1,
+    encode(args) {
+      assert.ok(Array.isArray(args));
+      return Uint8Array.from(args).buffer;
+    },
+    encodeInto(args, reuse) {
+      assert.ok(Array.isArray(args));
+      const capacity = Math.max(64, offset + args.length);
+      const out =
+        reuse && reuse.buffer.byteLength >= capacity
+          ? new Uint8Array(reuse.buffer)
+          : new Uint8Array(capacity);
+      out.fill(199);
+      out.set(args, offset);
+      return out.subarray(offset, offset + args.length);
+    },
+    decode(frame) {
+      const bytes =
+        frame instanceof ArrayBuffer
+          ? new Uint8Array(frame)
+          : new Uint8Array(frame.buffer, frame.byteOffset, frame.byteLength);
+      return { ok: true, result: Array.from(bytes) };
+    },
+  };
+}
+
+for (const offset of [0, 3]) {
+  test(`frame encodeInto reuses exact transport buffers across stable lengths at offset ${offset}`, async () => {
+    const received: ArrayBuffer[] = [];
+    const engine = createFrameEngine(
+      {
+        invokeFrame(request) {
+          received.push(request);
+          return request;
+        },
+      },
+      new Map([['bytes', reusableBytesCodec(offset)]]),
+    );
+    const lengths = [4, 4, 80, 80, 2, 2, 0, 0, 64, 64];
+    for (let i = 0; i < lengths.length; i++) {
+      const args = Array.from({ length: lengths[i] }, (_, j) => (i + j) % 128);
+      assert.deepEqual(await engine.invoke('bytes', args), args);
+      assert.equal(received[i].byteLength, args.length, 'native must see exact frame length');
+      if (i % 2 === 1) {
+        assert.equal(received[i], received[i - 1], 'stable lengths must reuse the ArrayBuffer');
+      }
+    }
+  });
+}
+
+test('frame encodeInto releases reusable buffers after native and decode errors', async () => {
+  const nativeError = new Error('native failed');
+  const decodeError = new Error('decode failed');
+  const encodeError = new Error('encode failed');
+  const received: ArrayBuffer[] = [];
+  const codec = reusableBytesCodec();
+  const encodeInto = codec.encodeInto!;
+  const decode = codec.decode;
+  let failure: 'native' | 'decode' | 'outcome' | 'encode' | undefined;
+  codec.encodeInto = (args, reuse) => {
+    if (failure === 'encode') throw encodeError;
+    return encodeInto(args, reuse);
+  };
+  codec.decode = (frame) => {
+    if (failure === 'decode') throw decodeError;
+    if (failure === 'outcome')
+      return { ok: false, error: { code: 'invoke.failed', message: 'denied' } };
+    return decode(frame);
+  };
+  const engine = createFrameEngine(
+    {
+      invokeFrame(request) {
+        received.push(request);
+        if (failure === 'native') throw nativeError;
+        return request;
+      },
+    },
+    new Map([['bytes', codec]]),
+  );
+  await engine.invoke('bytes', [1, 2, 3, 4]);
+  for (const [kind, error] of [
+    ['native', nativeError],
+    ['decode', decodeError],
+    ['encode', encodeError],
+  ] as const) {
+    failure = kind;
+    await assert.rejects(engine.invoke('bytes', [5, 6, 7, 8]), (actual) => actual === error);
+    failure = undefined;
+    assert.deepEqual(await engine.invoke('bytes', [9, 10, 11, 12]), [9, 10, 11, 12]);
+  }
+  failure = 'outcome';
+  await assert.rejects(engine.invoke('bytes', [1, 2, 3, 4]), /denied/);
+  failure = undefined;
+  await engine.invoke('bytes', [2, 3, 4, 5]);
+  for (const request of received) assert.equal(request, received[0]);
+});
+
+for (const length of [4, 64]) {
+  test(`frame encodeInto keeps ${length}-byte request intact during synchronous reentry`, async () => {
+    const outerArgs = Array.from({ length }, (_, i) => i + 1);
+    const nestedArgs = Array.from({ length }, (_, i) => i + 9);
+    const requests: ArrayBuffer[] = [];
+    let nested: Promise<unknown> | undefined;
+    const engine = createFrameEngine(
+      {
+        invokeFrame(request) {
+          requests.push(request);
+          const consumed = Array.from(new Uint8Array(request));
+          if (consumed[0] === 1) {
+            nested = engine.invoke('bytes', nestedArgs);
+            assert.deepEqual(Array.from(new Uint8Array(request)), consumed);
+          }
+          return request;
+        },
+      },
+      new Map([['bytes', reusableBytesCodec()]]),
+    );
+    assert.deepEqual(await engine.invoke('bytes', outerArgs), outerArgs);
+    assert.deepEqual(await nested, nestedArgs);
+    assert.notEqual(requests[0], requests[1], 'active request cannot be borrowed by reentry');
+    await engine.invoke('bytes', nestedArgs);
+    assert.equal(requests[2], requests[0], 'outer buffer returns to the reusable slot');
+  });
+}

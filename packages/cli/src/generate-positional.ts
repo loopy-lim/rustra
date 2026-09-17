@@ -1,5 +1,6 @@
 import type { PackageSchema } from './schema.js';
 import { commandFunctionName } from './codegen.js';
+import { validateFunctionArgs } from './function-schema.js';
 import { generatedFileHeader } from './generated-header.js';
 import {
   collectAllDefinitions,
@@ -12,7 +13,9 @@ import { POSITIONAL_SCALAR_KINDS } from './generate-routing.js';
 /**
  * 패키지 스키마에서 positional facade 파일(`positional-facade.ts`)을 생성한다.
  *
- * 각 정적 명령에 대해:
+ * Ordinary functions re-export their already-positional commands.ts helpers,
+ * retaining options, unit normalization, errors, and portable fallback routes.
+ * 각 기존 객체 명령에 대해:
  * - 입력 필드가 0..3개면 positional 파라미터 시그니처
  * - 그 외는 객체 인자 그대로 pass-through
  * 내부적으로 `installRustraPositional(native)` 로 주입받은 native 의
@@ -25,7 +28,11 @@ import { POSITIONAL_SCALAR_KINDS } from './generate-routing.js';
  */
 export function generatePositionalFacadeTs(schema: PackageSchema): string {
   const definitions = collectAllDefinitions(schema);
-  const supported = schema.commands.filter((c) => commandCodecSupported(c, definitions));
+  const functions = schema.commands.filter((command) => command.functionArgs !== undefined);
+  for (const command of functions) validateFunctionArgs(command);
+  const supported = schema.commands.filter(
+    (command) => command.functionArgs === undefined && commandCodecSupported(command, definitions),
+  );
 
   let output =
     generatedFileHeader('positional-facade.ts', 'schema → positional facade') +
@@ -116,6 +123,12 @@ export function generatePositionalFacadeTs(schema: PackageSchema): string {
         `  return call<${outType}>(${cmdId}, '${command.name}', input);\n` +
         `}\n\n`;
     }
+  }
+  if (functions.length > 0) {
+    const names = functions.map((command) => commandFunctionName(command.name)).join(', ');
+    output +=
+      `// Ordinary functions retain the generated positional API and portable invoke route.\n` +
+      `export { ${names} } from './commands.js';\n`;
   }
   return `${output.trimEnd()}\n`;
 }

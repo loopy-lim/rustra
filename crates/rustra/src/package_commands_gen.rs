@@ -48,6 +48,28 @@ impl Package {
             if let Some(desc) = command.description.as_deref() {
                 output.push_str(&format!("/**\n * {}\n */\n", desc.replace('\n', "\n * ")));
             }
+            if let Some(arity) = command.function_args {
+                let args = (0..arity).map(|i| format!("arg{i}")).collect::<Vec<_>>();
+                let mut params = args
+                    .iter()
+                    .enumerate()
+                    .map(|(i, arg)| format!("{arg}: {}[{i}]", command.input_type))
+                    .collect::<Vec<_>>();
+                params.push("options?: InvokeOptions".to_owned());
+                let payload = if arity == 0 {
+                    "null".to_owned()
+                } else {
+                    format!("[{}]", args.join(", "))
+                };
+                let normalize = if out_type == "void" {
+                    ".then(() => undefined)"
+                } else {
+                    ""
+                };
+                let function_name = command_function_name(name);
+                output.push_str(&format!("export function {function_name}({}): Promise<{out_type}> {{\n  return invokeGenerated<{out_type}>({}, '{name}', {payload}, options){normalize};\n}}\n{function_name}.commandId = '{name}';\n\n", params.join(", "), command.command_id));
+                continue;
+            }
             if command.input_type == "()" {
                 output.push_str(&format!(
                     "export function {}(options?: InvokeOptions): Promise<{}> {{\n  return invokeGenerated<{}>({}, '{}', undefined, options);\n}}\n{}.commandId = '{}';\n\n",

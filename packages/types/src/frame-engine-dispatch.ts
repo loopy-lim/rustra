@@ -20,9 +20,13 @@ export function createFrameDispatchRuntime(context: FrameEngineContext): FrameDi
     isVerifiedStaticId,
   } = context.capabilities;
   // 신호 없는 기본 3-티어 dispatch (T1 리팩터링 — 로직은 기존 그대로).
-  // encodeInto 재사용 버퍼 풀 — 커맨드 이름별 최근 버퍼 1개(단일 진입 dispatch
-  // 의 직렬 인코딩 전제). 미사용 시 맵은 비어 있어 오버헤드 0이다.
-  const encodeIntoBuffers = new Map<string, Uint8Array>();
+  // Keep encoding capacity and the last exact transport length separately.
+  // A busy slot stays leased through decode; synchronous reentry uses a temporary
+  // slot so neither encoding nor native callbacks can overwrite the active frame.
+  const encodeIntoBuffers = new Map<
+    string,
+    { busy: boolean; encoded?: Uint8Array; transport?: Uint8Array }
+  >();
   const roundTrip = <T>(
     command: string,
     encoded: ArrayBuffer,
@@ -56,25 +60,32 @@ export function createFrameDispatchRuntime(context: FrameEngineContext): FrameDi
     // 2순위: JS codec (Node/Bun/Tauri 또는 typed 누락 시). 정적 명령.
     const codec = registry.get(command);
     if (codec) {
-      // encodeInto(재사용 버퍼)가 있으면 호출당 신규 할당을 피한다. 버퍼는
-      // 커맨드별로 1개(단일 진입 dispatch 는 동시에 한 요청만 인코딩한다)다.
-      // invokeFrame 는 왕복 전에 버퍼를 소비하므로 재진입 안전하다.
-      let encoded: ArrayBuffer;
-      if (codec.encodeInto) {
-        const bucket = encodeIntoBuffers;
-        const reuse = bucket.get(command);
-        const written = codec.encodeInto(args, reuse);
-        if (written.buffer !== reuse?.buffer) bucket.set(command, written);
-        encoded = written.buffer as ArrayBuffer;
-        if (written.byteOffset !== 0 || written.byteLength !== written.buffer.byteLength) {
-          // 재사용 버퍼가 subarray 라면 정확한 슬라이스 ArrayBuffer 로 사본을
-          // 만든다(첫 호출 grow 후엔 byteOffset 0/full-length 로 수렴한다).
-          encoded = written.slice().buffer as ArrayBuffer;
-        }
-      } else {
-        encoded = codec.encode(args);
+      if (!codec.encodeInto) return roundTrip<T>(command, codec.encode(args), codec);
+      let slot = encodeIntoBuffers.get(command);
+      if (!slot) {
+        slot = { busy: false };
+        encodeIntoBuffers.set(command, slot);
+      } else if (slot.busy) {
+        slot = { busy: false };
       }
-      return roundTrip<T>(command, encoded, codec);
+      slot.busy = true;
+      try {
+        const written = codec.encodeInto(args, slot.encoded);
+        slot.encoded = written;
+        let encoded = written.buffer as ArrayBuffer;
+        if (written.byteOffset !== 0 || written.byteLength !== written.buffer.byteLength) {
+          // invokeFrame accepts an exact ArrayBuffer, not a view into spare capacity.
+          // Stable lengths reuse this copy target; only length changes allocate.
+          if (slot.transport?.byteLength !== written.byteLength) {
+            slot.transport = new Uint8Array(written.byteLength);
+          }
+          slot.transport.set(written);
+          encoded = slot.transport.buffer as ArrayBuffer;
+        }
+        return roundTrip<T>(command, encoded, codec);
+      } finally {
+        slot.busy = false;
+      }
     }
     // 3순위: 동적 명령 → live schema 의 commandId 사용. (T2-3) Rust registry 의
     // 3-way 판정을 미러해 binary 코덱(postcard → complex)이 가능한 스키마는
@@ -94,7 +105,11 @@ export function createFrameDispatchRuntime(context: FrameEngineContext): FrameDi
       // tier 2(정적 코덱)와 동일한 왕복 계약 — encode/검사/invoke/decode.
       return roundTrip<T>(command, dynamicCodec.encode(args), dynamicCodec);
     }
-    const tier3Request = encodeTier3Request(entry.commandId, args);
+    const tier3Request = encodeTier3Request(
+      entry.commandId,
+      args,
+      (entry.inputSchema as { type?: unknown } | undefined)?.type === 'null',
+    );
     // (T3) tier 2 와 동일한 사전 검사 — 네이티브 호출 전에 조기 실패.
     const tooLarge = payloadTooLargeError(tier3Request.byteLength, payloadLimit);
     if (tooLarge) throw tooLarge;
@@ -106,7 +121,11 @@ export function createFrameDispatchRuntime(context: FrameEngineContext): FrameDi
       const e = resp.error ?? { code: 'invoke.failed', message: 'Frame (tier3) invoke failed' };
       throw new RustraCommandError(e.code, e.message, e.retryable ?? isRetryableCode(e.code));
     }
-    return resp.result as T;
+    return (
+      (entry.outputSchema as { type?: unknown } | undefined)?.type === 'null'
+        ? undefined
+        : resp.result
+    ) as T;
   };
 
   // 공개 EngineClient는 항상 Promise를 반환하지만 RN JSI/Node/Bun의 기본

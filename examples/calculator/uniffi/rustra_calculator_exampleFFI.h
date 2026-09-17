@@ -243,6 +243,11 @@ typedef void (*UniffiForeignFutureCompleteVoid)(uint64_t, UniffiForeignFutureRes
     );
 
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_ADD
+#define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_ADD
+int32_t uniffi_rustra_calculator_example_fn_func_add(int32_t arg0, int32_t arg1, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_ADDNUMBERS
 #define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_ADDNUMBERS
 RustBuffer uniffi_rustra_calculator_example_fn_func_addnumbers(RustBuffer input, RustCallStatus *_Nonnull out_status
@@ -331,6 +336,11 @@ RustBuffer uniffi_rustra_calculator_example_fn_func_getschema(RustCallStatus *_N
 RustBuffer uniffi_rustra_calculator_example_fn_func_greet(RustBuffer input, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_GREETPERSON
+#define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_GREETPERSON
+RustBuffer uniffi_rustra_calculator_example_fn_func_greetperson(RustBuffer arg0, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_INVOKEJSON
 #define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_INVOKEJSON
 RustBuffer uniffi_rustra_calculator_example_fn_func_invokejson(RustBuffer command, RustBuffer args_json, RustCallStatus *_Nonnull out_status
@@ -387,6 +397,23 @@ RustBuffer uniffi_rustra_calculator_example_fn_func_platformnativeinfo(RustCallS
 RustBuffer uniffi_rustra_calculator_example_fn_func_processitem(RustBuffer input, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_READREMEMBERED
+#define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_READREMEMBERED
+int32_t uniffi_rustra_calculator_example_fn_func_readremembered(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_REMEMBER
+#define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_REMEMBER
+void uniffi_rustra_calculator_example_fn_func_remember(int32_t arg0, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_RESET
+#define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_RESET
+void uniffi_rustra_calculator_example_fn_func_reset(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_RESOURCECLOSE
 #define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_RESOURCECLOSE
 RustBuffer uniffi_rustra_calculator_example_fn_func_resourceclose(RustBuffer input, RustCallStatus *_Nonnull out_status
@@ -410,6 +437,11 @@ RustBuffer uniffi_rustra_calculator_example_fn_func_resourcewrite(RustBuffer inp
 #ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_RUSTRAREGISTRYDEMO
 #define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_RUSTRAREGISTRYDEMO
 RustBuffer uniffi_rustra_calculator_example_fn_func_rustraregistrydemo(RustBuffer input, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_SAFEDIVIDE
+#define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_SAFEDIVIDE
+double uniffi_rustra_calculator_example_fn_func_safedivide(double arg0, double arg1, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_FN_FUNC_SCORETOTAL
@@ -712,6 +744,12 @@ void ffi_rustra_calculator_example_rust_future_free_void(uint64_t handle
 void ffi_rustra_calculator_example_rust_future_complete_void(uint64_t handle, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_ADD
+#define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_ADD
+uint16_t uniffi_rustra_calculator_example_checksum_func_add(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_ADDNUMBERS
 #define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_ADDNUMBERS
 uint16_t uniffi_rustra_calculator_example_checksum_func_addnumbers(void
@@ -814,6 +852,12 @@ uint16_t uniffi_rustra_calculator_example_checksum_func_greet(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_GREETPERSON
+#define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_GREETPERSON
+uint16_t uniffi_rustra_calculator_example_checksum_func_greetperson(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_INVOKEJSON
 #define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_INVOKEJSON
 uint16_t uniffi_rustra_calculator_example_checksum_func_invokejson(void
@@ -880,6 +924,24 @@ uint16_t uniffi_rustra_calculator_example_checksum_func_processitem(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_READREMEMBERED
+#define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_READREMEMBERED
+uint16_t uniffi_rustra_calculator_example_checksum_func_readremembered(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_REMEMBER
+#define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_REMEMBER
+uint16_t uniffi_rustra_calculator_example_checksum_func_remember(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_RESET
+#define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_RESET
+uint16_t uniffi_rustra_calculator_example_checksum_func_reset(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_RESOURCECLOSE
 #define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_RESOURCECLOSE
 uint16_t uniffi_rustra_calculator_example_checksum_func_resourceclose(void
@@ -907,6 +969,12 @@ uint16_t uniffi_rustra_calculator_example_checksum_func_resourcewrite(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_RUSTRAREGISTRYDEMO
 #define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_RUSTRAREGISTRYDEMO
 uint16_t uniffi_rustra_calculator_example_checksum_func_rustraregistrydemo(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_SAFEDIVIDE
+#define UNIFFI_FFIDEF_UNIFFI_RUSTRA_CALCULATOR_EXAMPLE_CHECKSUM_FUNC_SAFEDIVIDE
+uint16_t uniffi_rustra_calculator_example_checksum_func_safedivide(void
     
 );
 #endif

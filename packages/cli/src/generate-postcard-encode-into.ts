@@ -11,6 +11,8 @@ export function generateFieldEncodeIntoExpr(
   const writeZigzag = (target: string) =>
     `${indent}{ const _z = ${target} >= 0 ? ${target} * 2 : -${target} * 2 - 1; let _v = _z; do { ensure(1); out[w++] = (_v % 128) | 0x80; _v = Math.floor(_v / 128); } while (_v > 0); out[w - 1] &= 0x7f; }`;
   switch (field.kind) {
+    case 'unit':
+      return `${indent}// unit has no postcard bytes`;
     case 'zigzag':
       return writeZigzag(valueExpr);
     case 'uvar':

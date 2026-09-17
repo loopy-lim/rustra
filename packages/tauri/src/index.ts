@@ -145,7 +145,10 @@ export function createTauriEngine(options: TauriEngineOptions = {}) {
       // 실패 항목만 RustraCommandError 로 재구성해 reject 한다.
       invokeBatch: async (entries) => {
         const responses = (await tauriInvoke('rustra_dispatch_batch', {
-          requests: entries.map((entry) => ({ command: entry.command, args: entry.args ?? {} })),
+          requests: entries.map((entry) => ({
+            command: entry.command,
+            args: entry.args === undefined ? {} : entry.args,
+          })),
         })) as Array<{ ok: boolean; result?: unknown; error?: unknown }>;
         return Promise.all(
           responses.map(async (response, index) => {
@@ -160,7 +163,7 @@ export function createTauriEngine(options: TauriEngineOptions = {}) {
         );
       },
     },
-    (args) => args ?? {},
+    (args) => (args === undefined ? {} : args),
     { ...TAURI_ENGINE_SUPPORTS },
   );
 }
