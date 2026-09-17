@@ -11,6 +11,7 @@
   "scripts": {
     "codegen": "bun ../../packages/cli/src/index.ts codegen --config rustra.json",
     "codegen:check": "bun ../../packages/cli/src/index.ts codegen --config rustra.json --check",
+    "postinstall": "node scripts/link-live-packages.mjs",
     "test:autolink": "bun scripts/check-autolink.mjs",
     "typecheck": "tsc --noEmit"
   },
