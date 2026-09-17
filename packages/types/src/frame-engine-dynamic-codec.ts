@@ -65,6 +65,7 @@ function compileDynamicCodec(entry: LiveSchemaEntry): FrameCodec<unknown, unknow
     inputSchema,
     outputSchema,
     definitions,
+    true,
   );
   if (postcard) return postcard;
   // 2순위: complex 코덱 — Rust 가 oneOf payload enum 을 complex binary 로

@@ -1,4 +1,5 @@
-import type { PackageSchema } from './schema.js';
+import type { PackageSchema, CommandSchema } from './schema.js';
+import { validateFunctionArgs } from './function-schema.js';
 
 const TS_IDENTIFIER = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 
@@ -99,6 +100,7 @@ export function parsePackageSchema(value: unknown): PackageSchema {
     if (typeof cmd.inputSchema !== 'object' || typeof cmd.outputSchema !== 'object') {
       throw new Error(`Invalid schema: commands[${i}] must have inputSchema and outputSchema`);
     }
+    validateFunctionArgs(cmd as CommandSchema);
     assertIdentifier(cmd.name, `commands[${i}].name`);
     if (cmd.inputType !== '()') assertIdentifier(cmd.inputType, `commands[${i}].inputType`);
     if (cmd.outputType !== '()') assertIdentifier(cmd.outputType, `commands[${i}].outputType`);

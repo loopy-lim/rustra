@@ -1,7 +1,7 @@
 import type { PackageSchema } from './schema.js';
 import type { CommandSchema } from './schema.js';
 import { buildCodecIr } from './codec-ir.js';
-import { collectAllDefinitions } from './generate-postcard-ir.js';
+import { collectAllDefinitions, hasFixedArray } from './generate-postcard-ir.js';
 import { commandCodecSupported } from './generate-postcard-support.js';
 import { bufferCommandResultField, rawCommandShape } from './generate-cpp-routes.js';
 import { bufferCommandField } from './generate-routing.js';
@@ -11,12 +11,25 @@ import type { CppCommandSets } from './generate-cpp-output-types.js';
 
 export function analyzeCppCommands(schema: PackageSchema): CppCommandSets {
   const definitions = collectAllDefinitions(schema);
-  const supported = schema.commands.filter((command) =>
-    commandCodecSupported(command, definitions),
+  const nativeObjectRoots = (command: CommandSchema) =>
+    command.functionArgs === undefined &&
+    !hasFixedArray(command.inputSchema, definitions) &&
+    !hasFixedArray(command.outputSchema, definitions) &&
+    [
+      [command.inputType, command.inputSchema],
+      [command.outputType, command.outputSchema],
+    ].every(
+      ([type, root]) =>
+        type === '()' ||
+        (typeof root !== 'string' && root.type === 'object' && !root.additionalProperties),
+    );
+  const supported = schema.commands.filter(
+    (command) => nativeObjectRoots(command) && commandCodecSupported(command, definitions),
   );
   const complexSupported = schema.commands
     .map((command) => {
-      if (commandCodecSupported(command, definitions)) return null;
+      if (command.functionArgs !== undefined || commandCodecSupported(command, definitions))
+        return null;
       const input = buildCodecIr(command.inputSchema, definitions);
       const output = buildCodecIr(command.outputSchema, definitions);
       return input.ok &&

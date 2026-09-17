@@ -6,8 +6,14 @@ import type { RustraError } from './errors.js';
 // success:  [ok:1 @0][pad 3B][json_len: u32 LE @4][json @8]
 // error:    [ok:0 @0][pad to @8][err_len: u16 LE @8][postcard({code,message}) @10]
 
-export function encodeTier3Request(commandId: number, args: unknown): ArrayBuffer {
-  const json = encodeUtf8(JSON.stringify(args ?? {}, _jsonSetReplacer));
+export function encodeTier3Request(
+  commandId: number,
+  args: unknown,
+  unitInput = false,
+): ArrayBuffer {
+  const json = encodeUtf8(
+    JSON.stringify(args === undefined ? (unitInput ? null : {}) : args, _jsonSetReplacer),
+  );
   const buf = new Uint8Array(2 + json.length);
   new DataView(buf.buffer).setUint16(0, commandId, true);
   buf.set(json, 2);

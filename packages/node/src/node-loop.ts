@@ -299,10 +299,12 @@ export function createNodeLoopTransport(options: {
               ),
             );
           }
-          return write({ command, args: args ?? {} }).then((frame) => frame.result);
+          return write({ command, args: args === undefined ? {} : args }).then(
+            (frame) => frame.result,
+          );
         });
       }
-      return write({ command, args: args ?? {} }).then((frame) => frame.result);
+      return write({ command, args: args === undefined ? {} : args }).then((frame) => frame.result);
     },
     async drainEvents() {
       if (mode === 'binary') {

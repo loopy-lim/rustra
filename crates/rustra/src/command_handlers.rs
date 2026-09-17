@@ -5,6 +5,7 @@ fn build_frame_handler<I, O, F>(
     handler: &Arc<F>,
     js_codec_supported: bool,
     complex_codec_supported: bool,
+    strict_args: bool,
 ) -> Option<BinHandler>
 where
     I: DeserializeOwned + 'static,
@@ -22,8 +23,13 @@ where
             if payload.len() < 2 {
                 return Err(RustraError::invalid_args("frame: payload too short"));
             }
-            let input: I = postcard::from_bytes(&payload[2..])
+            let (input, remaining): (I, _) = postcard::take_from_bytes(&payload[2..])
                 .map_err(|e| RustraError::invalid_args(format!("postcard decode: {e}")))?;
+            if strict_args && !remaining.is_empty() {
+                return Err(RustraError::invalid_args(
+                    "postcard decode: trailing argument bytes",
+                ));
+            }
             let output = handler_bin(input)?;
             // 응답 body 임시 Vec + frame Vec의 2회 할당/복사를 피한다. 정확한
             // postcard 크기로 최종 frame을 한 번만 할당하고 그 뒤에 바로

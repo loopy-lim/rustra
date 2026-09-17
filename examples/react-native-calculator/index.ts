@@ -3,6 +3,7 @@ import { registerRootComponent } from 'expo';
 
 import BenchmarkApp from './BenchmarkApp';
 import NitroParityApp from './NitroParityApp';
+import FunctionsApp from './App';
 import DynamicRegistryApp from './DynamicRegistryApp';
 import HotCoreApp from './HotCoreApp';
 import ReloadStressApp from './ReloadStressApp';
@@ -11,6 +12,7 @@ const demo = process.env.EXPO_PUBLIC_RUSTRA_DEMO;
 
 const APPS: Record<string, ComponentType> = {
   'nitro-parity': NitroParityApp,
+  functions: FunctionsApp,
   dynamic: DynamicRegistryApp,
   reload: ReloadStressApp,
   'hot-core': HotCoreApp,

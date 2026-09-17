@@ -118,7 +118,7 @@ export function createNodeProcessTransport(
         reject(new RustraCommandError('transport.error', 'stdin unavailable', true));
         return;
       }
-      proc.stdin.write(JSON.stringify({ command, args: args ?? {} }));
+      proc.stdin.write(JSON.stringify({ command, args: args === undefined ? {} : args }));
       proc.stdin.end();
     });
 

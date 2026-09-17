@@ -24,6 +24,7 @@ export function classifyPostcardField(
   depth = 0,
 ): PostcardFieldKind | null {
   if (depth > 8) return null;
+  if (schema.type === 'null') return 'unit';
   if (Array.isArray(schema.allOf) && schema.allOf.length === 1) {
     return classifyPostcardField(schema.allOf[0], definitions, depth + 1);
   }

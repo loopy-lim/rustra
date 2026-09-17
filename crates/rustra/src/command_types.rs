@@ -2,6 +2,7 @@ pub(crate) struct Command {
     pub(crate) command_id: u16,
     pub(crate) execution: Option<crate::CommandExecution>,
     pub(crate) description: Option<String>,
+    pub(crate) function_args: Option<u8>,
     pub(crate) input_type: String,
     pub(crate) output_type: String,
     pub(crate) input_schema: Arc<Value>,
