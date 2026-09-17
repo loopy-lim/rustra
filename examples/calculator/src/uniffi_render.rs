@@ -1753,7 +1753,7 @@ mod tests {
             let name = command["name"].as_str().unwrap();
             let marker = format!("    /// `{name}`");
             let rendered_wrapper = wrapper_block(&formatted, &marker);
-            let committed_wrapper = wrapper_block(committed, &marker);
+            let committed_wrapper = wrapper_block(&committed, &marker);
             assert_eq!(rendered_wrapper, committed_wrapper, "legacy wrapper {name}");
         }
     }
