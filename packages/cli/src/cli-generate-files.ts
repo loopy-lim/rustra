@@ -30,7 +30,7 @@ import {
 } from './manifest.js';
 import { ensureHostDependencies, ensureReactNativeDependency } from './dependencies.js';
 import type { HostEntries } from './host-entries.js';
-import { cliVersion } from './cli-runtime.js';
+import { cliVersion, hostDependencyRanges } from './cli-runtime.js';
 import { generatedFileHeader } from './generated-header.js';
 import {
   clearCodegenWarnings,
@@ -157,7 +157,7 @@ export async function generateFromSchema(
       reactNativeScaffold.moduleDir,
       reactNativeScaffold.adapterRange,
     );
-  if (hostEntries) await ensureHostDependencies(hostEntries, cliVersion);
+  if (hostEntries) await ensureHostDependencies(hostEntries, hostDependencyRanges);
   await writeFile(
     resolve(outputPath, '.rustra-generated.json'),
     `${JSON.stringify(

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * changesets version 스텝의 래퍼 — `changeset version` 이 패키지 버전을 올린
- * 뒤, @rustra/cli 의 rustraTemplate.reactNativeRange 를 새 @rustra/react-native
- * 버전에 맞춘다. 어댑터 버전은 version PR 이 올리지만 범위는 아무도 안 올렸다 —
+ * 뒤, @rustra/cli 의 호스트별 rustraTemplate 범위를 각 어댑터 버전에
+ * 맞춘다. 독립 어댑터 버전은 version PR 과 같은 커밋에서 범위도 맞춘다 —
  * 범위가 뒤처지면 코드젠의 어댑터 버전 게이트가 새 버전을 거부해 main CI 가
  * 깨진다(2026-09-10 첫 RN 마이너 발행에서 실발). 범위와 버전은 같은 커밋에서
  * 움직여야 하고, 그 커밋은 version PR 이다.
@@ -40,6 +40,27 @@ export function syncReactNativeRange(cliManifestPath, reactNativeVersion) {
   return true;
 }
 
+/** Sync generated-host defaults without tying them to the CLI version. */
+export function syncHostRanges(cliManifestPath, versions) {
+  const fields = {
+    node: 'nodeRange',
+    bun: 'bunRange',
+    tauri: 'tauriRange',
+    'react-native': 'reactNativeRange',
+  };
+  let text = readFileSync(cliManifestPath, 'utf8');
+  const original = text;
+  for (const [name, field] of Object.entries(fields)) {
+    const expected = caretMinorRange(versions[name]);
+    const pattern = new RegExp(`("${field}"\\s*:\\s*")([^"]+)(")`);
+    if (!pattern.test(text)) throw new Error(`${field} key not found in ${cliManifestPath}`);
+    text = text.replace(pattern, `$1${expected}$3`);
+  }
+  if (text === original) return false;
+  writeFileSync(cliManifestPath, text);
+  return true;
+}
+
 /**
  * bun.lock 워크스페이스 블록의 메타데이터(version, @rustra/* 내부 의존 범위)를
  * manifest 로 맞춘다. bun install 은 이 필드들을 다시 쓰지 않는다(2026-09-10
@@ -52,7 +73,9 @@ export function syncLockWorkspaceMetadata(lockPath, manifests) {
   let text = readFileSync(lockPath, 'utf8');
   let changed = false;
   for (const [packageDir, manifest] of Object.entries(manifests)) {
-    const blockPattern = new RegExp(`("${packageDir.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}"\\s*:\\s*\\{)([\\s\\S]*?)(\\n    \\},)`);
+    const blockPattern = new RegExp(
+      `("${packageDir.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}"\\s*:\\s*\\{)([\\s\\S]*?)(\\n    \\},)`,
+    );
     const blockMatch = blockPattern.exec(text);
     if (!blockMatch) continue;
     let block = blockMatch[2];
@@ -88,11 +111,14 @@ function main() {
     ['changeset', 'version', ...args],
     { stdio: 'inherit', cwd: root },
   );
-  const reactNativeVersion = JSON.parse(
-    readFileSync(join(root, 'packages/react-native/package.json'), 'utf8'),
-  ).version;
-  if (syncReactNativeRange(join(root, 'packages/cli/package.json'), reactNativeVersion)) {
-    console.log(`[version] rustraTemplate.reactNativeRange synced to ${reactNativeVersion}`);
+  const hostVersions = Object.fromEntries(
+    ['node', 'bun', 'tauri', 'react-native'].map((name) => [
+      name,
+      JSON.parse(readFileSync(join(root, 'packages', name, 'package.json'), 'utf8')).version,
+    ]),
+  );
+  if (syncHostRanges(join(root, 'packages/cli/package.json'), hostVersions)) {
+    console.log('[version] generated host compatibility ranges synced');
   }
   // 버전이 오른 manifest 와 bun.lock 워크스페이스 메타데이터가 어긋나면
   // release-coherence 가 version PR CI 를 깨뜨린다(manifest=0.9.0, lock=0.8.0 —

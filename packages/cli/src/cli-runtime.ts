@@ -6,11 +6,23 @@ import { createRequire } from 'node:module';
 export interface CliManifest {
   version: string;
   dependencies: { '@rustra/types': string };
-  rustraTemplate: { cargoRange: string; reactNativeRange: string };
+  rustraTemplate: {
+    cargoRange: string;
+    reactNativeRange: string;
+    nodeRange: string;
+    bunRange: string;
+    tauriRange: string;
+  };
 }
 
 export const cliManifest = createRequire(import.meta.url)('../package.json') as CliManifest;
 export const cliVersion = cliManifest.version;
+export const hostDependencyRanges: Record<string, string> = {
+  '@rustra/types': cliManifest.dependencies['@rustra/types'],
+  '@rustra/node': cliManifest.rustraTemplate.nodeRange,
+  '@rustra/bun': cliManifest.rustraTemplate.bunRange,
+  '@rustra/tauri': cliManifest.rustraTemplate.tauriRange,
+};
 export const CLI_COMMANDS = [
   'generate',
   'codegen',
