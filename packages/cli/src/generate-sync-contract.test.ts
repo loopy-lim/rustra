@@ -88,4 +88,5 @@ int main() {
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
-});
+  // 콜드 러너에서 생성된 TU의 C++ 컴파일이 기본 5초를 넘는다.
+}, 120_000);
