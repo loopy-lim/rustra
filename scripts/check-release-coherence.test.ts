@@ -37,7 +37,13 @@ function makeFixture(): string {
       files: ['LICENSE'],
     };
     if (name === 'cli') {
-      manifest.rustraTemplate = { cargoRange: '^0.4.0', reactNativeRange: '^0.4.0' };
+      manifest.rustraTemplate = {
+        cargoRange: '^0.4.0',
+        reactNativeRange: '^0.4.0',
+        nodeRange: '^0.4.0',
+        bunRange: '^0.4.0',
+        tauriRange: '^0.4.0',
+      };
     }
     if (name !== 'types') {
       manifest.dependencies = { '@rustra/types': '^0.4.0' };
@@ -135,6 +141,24 @@ test('reports a reactNativeRange that no longer contains the adapter version', (
       failures.join('\n'),
       /reactNativeRange=\^0\.4\.0 does not contain @rustra\/react-native 0\.5\.0/,
     );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('codegen host ranges must contain independently published host versions', () => {
+  const root = makeFixture();
+  try {
+    const path = join(root, 'packages/cli/package.json');
+    const cli = JSON.parse(readFileSync(path, 'utf8'));
+    Object.assign(cli.rustraTemplate, {
+      nodeRange: '^0.9.0',
+      bunRange: '^0.9.0',
+      tauriRange: '^0.9.0',
+    });
+    writeFileSync(path, JSON.stringify(cli));
+    const failures = checkReleaseCoherence(root).join('\n');
+    for (const host of ['node', 'bun', 'tauri']) assert.match(failures, new RegExp(`${host}Range`));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

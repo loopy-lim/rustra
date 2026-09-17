@@ -68,6 +68,7 @@ export async function runInit(args: string[]): Promise<void> {
   // 감지는 파일을 쓰기 전에 — 기존 프로젝트 위로 init 하는 경우가 관찰 대상이다.
   const detected = detectInitHosts(root);
   const hosts: InitHosts = {
+    nodeRange: cliManifest.rustraTemplate.nodeRange,
     reactNative: hostValue === 'react-native' || (hostValue === undefined && detected.reactNative),
   };
   const versions = templateVersions(

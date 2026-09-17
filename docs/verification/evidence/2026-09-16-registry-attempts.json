@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "failedAttempts": [
+    {
+      "receiptPath": "/tmp/rustra-m1-live-20260916/receipt.json",
+      "receiptSha256": "e1ee907996796f27f7ea3bee5e3ae3f576ef641c9a2c8c3b5b3fcec9f97dc4b4",
+      "ok": false,
+      "durationMs": 2584,
+      "step": "verify-clean-fixture-before-install",
+      "assessment": "Cargo executable path misclassified as dependency; gate fixed"
+    },
+    {
+      "receiptPath": "/tmp/rustra-m1-live-20260916-v2/receipt.json",
+      "receiptSha256": "510252227f6b2a0aedde857cae43e2d2795b24d3a0d53af45d9ec5f3a630323c",
+      "ok": false,
+      "durationMs": 11726,
+      "step": "baseline-initial-codegen",
+      "assessment": "Public CLI exact manifest pin rejection; local CLI fixed; published path uses exact lock enforcement"
+    },
+    {
+      "receiptPath": "/tmp/rustra-m1-live-20260916-v3/receipt.json",
+      "receiptSha256": "13c501b12353b2f84678fa17659744cfb194c80a42585749cd2d5194e0af473b",
+      "ok": false,
+      "durationMs": 12223,
+      "step": "baseline-original-provenance",
+      "assessment": "macOS root manifest alias mismatch; gate canonicalization fixed"
+    },
+    {
+      "receiptPath": "/tmp/rustra-m1-live-20260916-v4/receipt.json",
+      "receiptSha256": "ab4b1b19d71913fdfe335fb39ae348a869a7715abcac3a583adcb2da15d3791b",
+      "ok": false,
+      "durationMs": 14628,
+      "step": "baseline-extended-bun-ffi",
+      "assessment": "Extended fixture omitted FFI registration; fixture fixed"
+    },
+    {
+      "receiptPath": "/tmp/rustra-m1-live-20260916-v5/receipt.json",
+      "receiptSha256": "b290e70019ebd4422b5b358c59594859e8d9f2a6acab53f88b82ee28ef2ab580",
+      "ok": false,
+      "durationMs": 11204,
+      "step": "baseline-extended-build",
+      "assessment": "Extended fixture builder replacement was malformed; full-expression anchor fixed and actual compilation verified"
+    }
+  ],
+  "successfulReceipt": "2026-09-16-registry-consumer.json",
+  "successfulReceiptSha256": "9e83fdc2c39df138a7ba9671a30fdb41544b870b9c79b3254910d79f24ca8e61",
+  "evidenceBoundary": "Earlier failed receipts and logs are preserved at original local paths; no failed attempt counts as success."
+}
