@@ -20,6 +20,20 @@ namespace margelo::nitro::nitrobench {
       prototype.registerHybridMethod("echoBytes", &HybridNitroBenchSpec::echoBytes);
       prototype.registerHybridMethod("echoBuffer", &HybridNitroBenchSpec::echoBuffer);
       prototype.registerHybridMethod("echoPair", &HybridNitroBenchSpec::echoPair);
+      prototype.registerHybridMethod("benchAddAsync", &HybridNitroBenchSpec::benchAddAsync);
+      prototype.registerHybridMethod("echoStringAsync", &HybridNitroBenchSpec::echoStringAsync);
+      prototype.registerHybridMethod("echoPairAsync", &HybridNitroBenchSpec::echoPairAsync);
+      prototype.registerHybridMethod("echoBufferAsync", &HybridNitroBenchSpec::echoBufferAsync);
+      prototype.registerHybridMethod("parityEcho", &HybridNitroBenchSpec::parityEcho);
+      prototype.registerHybridMethod("parityFind", &HybridNitroBenchSpec::parityFind);
+      prototype.registerHybridMethod("parityStore", &HybridNitroBenchSpec::parityStore);
+      prototype.registerHybridMethod("parityResident", &HybridNitroBenchSpec::parityResident);
+      prototype.registerHybridMethod("parityIndexed", &HybridNitroBenchSpec::parityIndexed);
+      prototype.registerHybridMethod("parityEchoAsync", &HybridNitroBenchSpec::parityEchoAsync);
+      prototype.registerHybridMethod("parityFindAsync", &HybridNitroBenchSpec::parityFindAsync);
+      prototype.registerHybridMethod("parityStoreAsync", &HybridNitroBenchSpec::parityStoreAsync);
+      prototype.registerHybridMethod("parityResidentAsync", &HybridNitroBenchSpec::parityResidentAsync);
+      prototype.registerHybridMethod("parityIndexedAsync", &HybridNitroBenchSpec::parityIndexedAsync);
     });
   }
 

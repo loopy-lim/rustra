@@ -260,6 +260,51 @@ pub mod uniffi_api {
         pub value: f64,
     }
 
+    /// `ParityTree` 미러 — 실제 타입 `crate::ParityTree`.
+    #[derive(Debug, uniffi::Record)]
+    pub struct ParityTree {
+        pub nodes: Vec<ParityNode>,
+    }
+
+    /// `ParityNode` 미러 — 실제 타입 `crate::ParityNode`.
+    #[derive(Debug, uniffi::Record)]
+    pub struct ParityNode {
+        pub id: f64,
+        pub name: String,
+        pub tag: String,
+        pub note: Option<String>,
+        pub metadata: std::collections::HashMap<String, String>,
+        pub children: Vec<f64>,
+    }
+
+    /// `ParityFindInput` 미러 — 실제 타입 `crate::ParityFindInput`.
+    #[derive(Debug, uniffi::Record)]
+    pub struct ParityFindInput {
+        pub tree: ParityTree,
+        pub id: f64,
+    }
+
+    /// `ParitySearch` 미러 — 실제 타입 `crate::ParitySearch`.
+    #[derive(Debug, uniffi::Record)]
+    pub struct ParitySearch {
+        pub found: bool,
+        pub id: f64,
+        pub name: String,
+        pub visited: f64,
+    }
+
+    /// `ParityQuery` 미러 — 실제 타입 `crate::ParityQuery`.
+    #[derive(Debug, uniffi::Record)]
+    pub struct ParityQuery {
+        pub id: f64,
+    }
+
+    /// `ParityStored` 미러 — 실제 타입 `crate::ParityStored`.
+    #[derive(Debug, uniffi::Record)]
+    pub struct ParityStored {
+        pub nodes: f64,
+    }
+
     /// `PlatformNativeInfoOutput` 미러 — 실제 타입 `crate::PlatformNativeInfoOutput`.
     #[derive(Debug, uniffi::Record)]
     pub struct PlatformNativeInfoOutput {
@@ -991,6 +1036,112 @@ pub mod uniffi_api {
         }
     }
 
+    impl From<ParityTree> for crate::ParityTree {
+        fn from(input: ParityTree) -> Self {
+            Self {
+                nodes: input.nodes.into_iter().map(|v| v.into()).collect(),
+            }
+        }
+    }
+
+    impl From<crate::ParityTree> for ParityTree {
+        fn from(input: crate::ParityTree) -> Self {
+            Self {
+                nodes: input.nodes.into_iter().map(|v| v.into()).collect(),
+            }
+        }
+    }
+
+    impl From<ParityNode> for crate::ParityNode {
+        fn from(input: ParityNode) -> Self {
+            Self {
+                id: input.id,
+                name: input.name,
+                tag: input.tag,
+                note: input.note,
+                metadata: input.metadata.into_iter().collect(),
+                children: input.children,
+            }
+        }
+    }
+
+    impl From<crate::ParityNode> for ParityNode {
+        fn from(input: crate::ParityNode) -> Self {
+            Self {
+                id: input.id,
+                name: input.name,
+                tag: input.tag,
+                note: input.note,
+                metadata: input.metadata.into_iter().collect(),
+                children: input.children,
+            }
+        }
+    }
+
+    impl From<ParityFindInput> for crate::ParityFindInput {
+        fn from(input: ParityFindInput) -> Self {
+            Self {
+                tree: input.tree.into(),
+                id: input.id,
+            }
+        }
+    }
+
+    impl From<crate::ParityFindInput> for ParityFindInput {
+        fn from(input: crate::ParityFindInput) -> Self {
+            Self {
+                tree: input.tree.into(),
+                id: input.id,
+            }
+        }
+    }
+
+    impl From<ParitySearch> for crate::ParitySearch {
+        fn from(input: ParitySearch) -> Self {
+            Self {
+                found: input.found,
+                id: input.id,
+                name: input.name,
+                visited: input.visited,
+            }
+        }
+    }
+
+    impl From<crate::ParitySearch> for ParitySearch {
+        fn from(input: crate::ParitySearch) -> Self {
+            Self {
+                found: input.found,
+                id: input.id,
+                name: input.name,
+                visited: input.visited,
+            }
+        }
+    }
+
+    impl From<ParityQuery> for crate::ParityQuery {
+        fn from(input: ParityQuery) -> Self {
+            Self { id: input.id }
+        }
+    }
+
+    impl From<crate::ParityQuery> for ParityQuery {
+        fn from(input: crate::ParityQuery) -> Self {
+            Self { id: input.id }
+        }
+    }
+
+    impl From<ParityStored> for crate::ParityStored {
+        fn from(input: ParityStored) -> Self {
+            Self { nodes: input.nodes }
+        }
+    }
+
+    impl From<crate::ParityStored> for ParityStored {
+        fn from(input: crate::ParityStored) -> Self {
+            Self { nodes: input.nodes }
+        }
+    }
+
     impl From<PlatformNativeInfoOutput> for crate::PlatformNativeInfoOutput {
         fn from(input: PlatformNativeInfoOutput) -> Self {
             Self {
@@ -1693,6 +1844,60 @@ pub mod uniffi_api {
                 "multiply",
                 &input.into(),
             )?;
+        Ok(out.into())
+    }
+
+    /// `parityEcho` — `crate::parity_echo` 커맨드의 UniFFI 타입 래퍼.
+    #[uniffi::export]
+    #[allow(non_snake_case)]
+    pub fn parityEcho(input: ParityTree) -> Result<ParityTree, RustraCommandFailure> {
+        let out: crate::ParityTree = package()
+            .invoke_typed::<crate::ParityTree, crate::ParityTree>("parityEcho", &input.into())?;
+        Ok(out.into())
+    }
+
+    /// `parityFind` — `crate::parity_find` 커맨드의 UniFFI 타입 래퍼.
+    #[uniffi::export]
+    #[allow(non_snake_case)]
+    pub fn parityFind(input: ParityFindInput) -> Result<ParitySearch, RustraCommandFailure> {
+        let out: crate::ParitySearch = package()
+            .invoke_typed::<crate::ParityFindInput, crate::ParitySearch>(
+                "parityFind",
+                &input.into(),
+            )?;
+        Ok(out.into())
+    }
+
+    /// `parityIndexed` — `crate::parity_indexed` 커맨드의 UniFFI 타입 래퍼.
+    #[uniffi::export]
+    #[allow(non_snake_case)]
+    pub fn parityIndexed(input: ParityQuery) -> Result<ParitySearch, RustraCommandFailure> {
+        let out: crate::ParitySearch = package()
+            .invoke_typed::<crate::ParityQuery, crate::ParitySearch>(
+                "parityIndexed",
+                &input.into(),
+            )?;
+        Ok(out.into())
+    }
+
+    /// `parityResident` — `crate::parity_resident` 커맨드의 UniFFI 타입 래퍼.
+    #[uniffi::export]
+    #[allow(non_snake_case)]
+    pub fn parityResident(input: ParityQuery) -> Result<ParitySearch, RustraCommandFailure> {
+        let out: crate::ParitySearch = package()
+            .invoke_typed::<crate::ParityQuery, crate::ParitySearch>(
+                "parityResident",
+                &input.into(),
+            )?;
+        Ok(out.into())
+    }
+
+    /// `parityStore` — `crate::parity_store` 커맨드의 UniFFI 타입 래퍼.
+    #[uniffi::export]
+    #[allow(non_snake_case)]
+    pub fn parityStore(input: ParityTree) -> Result<ParityStored, RustraCommandFailure> {
+        let out: crate::ParityStored = package()
+            .invoke_typed::<crate::ParityTree, crate::ParityStored>("parityStore", &input.into())?;
         Ok(out.into())
     }
 

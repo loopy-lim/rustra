@@ -34,6 +34,10 @@ fn command_chain_entry(fn_name: &Ident) -> TokenStream2 {
         &format!("__RUstra_meta_{}", fn_name),
         proc_macro2::Span::call_site(),
     );
+    let execution_ident = Ident::new(
+        &format!("__RUstra_execution_{}", fn_name),
+        proc_macro2::Span::call_site(),
+    );
     let cap_ident = Ident::new(
         &format!("__RUstra_cap_{}", fn_name),
         proc_macro2::Span::call_site(),
@@ -72,6 +76,7 @@ fn command_chain_entry(fn_name: &Ident) -> TokenStream2 {
     quote! {
         .command(#meta_ident, #register_ident)
         .command_doc(#meta_ident, #doc_ident)
+        .command_execution(#meta_ident, #execution_ident)
         .require_capability_if(#meta_ident, #cap_ident)
         .platform_meta_if(#meta_ident, #platforms_ident)
         .errors_meta_if(#meta_ident, #errors_ident)
@@ -110,11 +115,7 @@ pub fn register(input: TokenStream) -> TokenStream {
     }
 
     let builder = &input.builder;
-    let chain: TokenStream2 = input
-        .commands
-        .iter()
-        .map(command_chain_entry)
-        .collect();
+    let chain: TokenStream2 = input.commands.iter().map(command_chain_entry).collect();
 
     let expanded = quote! {
         #builder #chain

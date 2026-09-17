@@ -1,6 +1,7 @@
 import type { PostcardField } from './generate-postcard-types.js';
 import { OPTION_INNER_KIND } from './generate-postcard-types.js';
 import { collectPostcardFields } from './generate-postcard-graph.js';
+import { directCppProperty, type CppProperty } from './generate-cpp-properties.js';
 
 const safeInt = '9007199254740991';
 
@@ -20,9 +21,10 @@ export function cppFieldDecodeExpr(
   objExpr: string,
   definitions: Record<string, import('./schema.js').JsonSchema>,
   indent: string,
+  property: CppProperty = directCppProperty,
 ): string {
   const setProp = (value: string) =>
-    `${indent}${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), ${value});`;
+    `${indent}${objExpr}.setProperty(rt, ${property(field.name)}, ${value});`;
   switch (field.kind) {
     case 'zigzag':
       return setProp('(double)r.read_i64()');
@@ -43,37 +45,35 @@ export function cppFieldDecodeExpr(
     case 'bool':
       return setProp('r.read_bool()');
     case 'string':
-      return `${indent}{ auto _s = r.read_string_view(); ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), jsi::String::createFromUtf8(rt, _s.data, _s.size)); }`;
+      return `${indent}{ auto _s = r.read_string_view(); ${objExpr}.setProperty(rt, ${property(field.name)}, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }`;
     case 'bytes':
-      return `${indent}{ auto _n = r.read_uvar(); auto _bytes = r.read_bytes_view((size_t)_n); ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), rustra::generated::make_array_buffer(rt, _bytes.data, _bytes.size)); }`;
+      return `${indent}{ auto _n = r.read_uvar(); auto _bytes = r.read_bytes_view((size_t)_n); ${objExpr}.setProperty(rt, ${property(field.name)}, rustra::generated::make_array_buffer(rt, _bytes.data, _bytes.size)); }`;
     case 'vec_zigzag':
-      return `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, (double)r.read_i64()); } ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`;
+      return `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, (double)r.read_i64()); } ${objExpr}.setProperty(rt, ${property(field.name)}, _arr); }`;
     case 'vec_i64':
     case 'set_i64':
-      return `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); for (size_t _i = 0; _i < _n; _i++) { auto _v = r.read_i64(); _arr.setValueAtIndex(rt, _i, _v >= -${safeInt}ll && _v <= ${safeInt}ll ? jsi::Value(static_cast<double>(_v)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v))); } ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`;
+      return `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); for (size_t _i = 0; _i < _n; _i++) { auto _v = r.read_i64(); _arr.setValueAtIndex(rt, _i, _v >= -${safeInt}ll && _v <= ${safeInt}ll ? jsi::Value(static_cast<double>(_v)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v))); } ${objExpr}.setProperty(rt, ${property(field.name)}, _arr); }`;
     case 'vec_u64':
     case 'set_u64':
-      return `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); for (size_t _i = 0; _i < _n; _i++) { auto _v = r.read_uvar(); _arr.setValueAtIndex(rt, _i, _v <= ${safeInt}ull ? jsi::Value(static_cast<double>(_v)) : jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v))); } ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`;
+      return `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); for (size_t _i = 0; _i < _n; _i++) { auto _v = r.read_uvar(); _arr.setValueAtIndex(rt, _i, _v <= ${safeInt}ull ? jsi::Value(static_cast<double>(_v)) : jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v))); } ${objExpr}.setProperty(rt, ${property(field.name)}, _arr); }`;
     case 'vec_f64':
-      return `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, r.read_f64()); } ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`;
+      return `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, r.read_f64()); } ${objExpr}.setProperty(rt, ${property(field.name)}, _arr); }`;
     case 'vec_uvar':
-      return `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, (double)r.read_uvar()); } ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`;
+      return `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, (double)r.read_uvar()); } ${objExpr}.setProperty(rt, ${property(field.name)}, _arr); }`;
     case 'vec_bool':
-      return `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, r.read_bool()); } ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`;
+      return `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); for (size_t _i = 0; _i < _n; _i++) { _arr.setValueAtIndex(rt, _i, r.read_bool()); } ${objExpr}.setProperty(rt, ${property(field.name)}, _arr); }`;
     case 'struct': {
       if (!field.refType) return `${indent}// unknown struct field: ${field.name}`;
       const definition = definitions[field.refType];
       if (!definition) return `${indent}// missing definition for ${field.refType}`;
       const lines = [`${indent}{ auto _obj = jsi::Object(rt);`];
       for (const subField of collectPostcardFields(definition, definitions).fields)
-        lines.push(cppFieldDecodeExpr(subField, '_obj', definitions, `${indent}  `));
-      lines.push(
-        `${indent}  ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _obj); }`,
-      );
+        lines.push(cppFieldDecodeExpr(subField, '_obj', definitions, `${indent}  `, property));
+      lines.push(`${indent}  ${objExpr}.setProperty(rt, ${property(field.name)}, _obj); }`);
       return lines.join('\n');
     }
     case 'vec_string':
-      return `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); for (size_t _i = 0; _i < _n; _i++) { auto _s = r.read_string_view(); _arr.setValueAtIndex(rt, _i, jsi::String::createFromUtf8(rt, _s.data, _s.size)); } ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`;
+      return `${indent}{ auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n); for (size_t _i = 0; _i < _n; _i++) { auto _s = r.read_string_view(); _arr.setValueAtIndex(rt, _i, jsi::String::createFromUtf8(rt, _s.data, _s.size)); } ${objExpr}.setProperty(rt, ${property(field.name)}, _arr); }`;
     case 'map_zigzag':
     case 'map_uvar':
     case 'map_i64':
@@ -82,7 +82,7 @@ export function cppFieldDecodeExpr(
     case 'map_bool':
     case 'map_string': {
       const readVal = MAP_VALUE_READER[field.kind] ?? MAP_VALUE_READER.map_string;
-      return `${indent}{ auto _n = r.read_uvar(); auto _map = jsi::Object(rt); for (size_t _i = 0; _i < _n; _i++) { auto _ks = r.read_string_view(); auto _k = jsi::String::createFromUtf8(rt, _ks.data, _ks.size); ${readVal} } ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), std::move(_map)); }`;
+      return `${indent}{ auto _n = r.read_uvar(); auto _map = jsi::Object(rt); for (size_t _i = 0; _i < _n; _i++) { auto _ks = r.read_string_view(); auto _k = jsi::PropNameID::forUtf8(rt, _ks.data, _ks.size); ${readVal} } ${objExpr}.setProperty(rt, ${property(field.name)}, std::move(_map)); }`;
     }
     case 'tuple': {
       const items = field.tupleItems ?? [];
@@ -91,13 +91,17 @@ export function cppFieldDecodeExpr(
         const itemObject = `_tuple_item_${index}`;
         lines.push(
           `${indent}  { auto ${itemObject} = jsi::Object(rt);`,
-          cppFieldDecodeExpr({ ...item, name: 'value' }, itemObject, definitions, `${indent}    `),
-          `${indent}    _arr.setValueAtIndex(rt, ${index}, ${itemObject}.getProperty(rustra::generated::cachedProp(rt, "value"))); }`,
+          cppFieldDecodeExpr(
+            { ...item, name: 'value' },
+            itemObject,
+            definitions,
+            `${indent}    `,
+            property,
+          ),
+          `${indent}    _arr.setValueAtIndex(rt, ${index}, ${itemObject}.getProperty(rt, ${property('value')})); }`,
         );
       });
-      lines.push(
-        `${indent}  ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`,
-      );
+      lines.push(`${indent}  ${objExpr}.setProperty(rt, ${property(field.name)}, _arr); }`);
       return lines.join('\n');
     }
     case 'vec_struct': {
@@ -109,10 +113,10 @@ export function cppFieldDecodeExpr(
         `${indent}  for (size_t _i = 0; _i < _n; _i++) { auto _obj = jsi::Object(rt);`,
       ];
       for (const subField of collectPostcardFields(definition, definitions).fields)
-        lines.push(cppFieldDecodeExpr(subField, '_obj', definitions, `${indent}    `));
+        lines.push(cppFieldDecodeExpr(subField, '_obj', definitions, `${indent}    `, property));
       lines.push(
         `${indent}    _arr.setValueAtIndex(rt, _i, std::move(_obj)); }`,
-        `${indent}  ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), _arr); }`,
+        `${indent}  ${objExpr}.setProperty(rt, ${property(field.name)}, _arr); }`,
       );
       return lines.join('\n');
     }
@@ -127,12 +131,12 @@ export function cppFieldDecodeExpr(
     case 'option_struct':
     case 'option_bytes': {
       const inner: PostcardField = { ...field, kind: OPTION_INNER_KIND[field.kind] };
-      const decoded = cppFieldDecodeExpr(inner, objExpr, definitions, '');
-      return `${indent}{ auto _tag = r.read_u8(); if (_tag == 0) { ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), jsi::Value::null()); } else { ${decoded} } }`;
+      const decoded = cppFieldDecodeExpr(inner, objExpr, definitions, '', property);
+      return `${indent}{ auto _tag = r.read_u8(); if (_tag == 0) { ${objExpr}.setProperty(rt, ${property(field.name)}, jsi::Value::null()); } else { ${decoded} } }`;
     }
     case 'enum_str': {
       const variants = `{${(field.enumVariants ?? []).map((variant) => JSON.stringify(variant)).join(',')}}`;
-      return `${indent}{ auto _idx = r.read_uvar(); const char* _variants[] = ${variants}; if (_idx >= ${(field.enumVariants ?? []).length}) throw jsi::JSError(rt, "invalid enum index for ${field.name}"); ${objExpr}.setProperty(rt, rustra::generated::cachedProp(rt, "${field.name}"), jsi::String::createFromAscii(rt, _variants[_idx])); }`;
+      return `${indent}{ auto _idx = r.read_uvar(); const char* _variants[] = ${variants}; if (_idx >= ${(field.enumVariants ?? []).length}) throw jsi::JSError(rt, "invalid enum index for ${field.name}"); ${objExpr}.setProperty(rt, ${property(field.name)}, jsi::String::createFromAscii(rt, _variants[_idx])); }`;
     }
     default:
       return `${indent}// unsupported field kind: ${field.kind}`;

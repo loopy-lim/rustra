@@ -1,0 +1,2816 @@
+{
+  "contract": "rustra-nitro-core-investigation/v1",
+  "status": "host-only-diagnostic-not-public-parity",
+  "exploratoryTiming": {
+    "kind": "host-core-only-diagnostic",
+    "source": {
+      "ParityNode": {
+        "source": "examples/react-native-calculator/modules/nitro-bench/nitro-bench/nitrogen/generated/shared/c++/ParityNode.hpp",
+        "sliceSha256": "a978f4c061d4447b4836247f8e27afeb4a61f89e2021a9ff470fb27b74bee7c1"
+      },
+      "ParityTree": {
+        "source": "examples/react-native-calculator/modules/nitro-bench/nitro-bench/nitrogen/generated/shared/c++/ParityTree.hpp",
+        "sliceSha256": "b1449aa90e7727710195ca884be957da971732ae9b578d8df4a184944f822a9c"
+      },
+      "ParityFindInput": {
+        "source": "examples/react-native-calculator/modules/nitro-bench/nitro-bench/nitrogen/generated/shared/c++/ParityFindInput.hpp",
+        "sliceSha256": "1f48182c51669be35a7948e2e7c876ad1e0a39f3afa0dd35e3c9b98879f86f84"
+      },
+      "ParityQuery": {
+        "source": "examples/react-native-calculator/modules/nitro-bench/nitro-bench/nitrogen/generated/shared/c++/ParityQuery.hpp",
+        "sliceSha256": "c8eb3ae03bf97be9a70d7127c1e1529b1cc488ff4eaf96ce4e95178adda90998"
+      },
+      "ParitySearch": {
+        "source": "examples/react-native-calculator/modules/nitro-bench/nitro-bench/nitrogen/generated/shared/c++/ParitySearch.hpp",
+        "sliceSha256": "1bf6a04290f6a821afb16e50d3553b357c0a79661282460210278506f45675bd"
+      },
+      "ParityStored": {
+        "source": "examples/react-native-calculator/modules/nitro-bench/nitro-bench/nitrogen/generated/shared/c++/ParityStored.hpp",
+        "sliceSha256": "1f5c8ae1285e25cc80ab6ef9da9cc593d75489ef47c30a71ec4a4b15f165a453"
+      },
+      "methods": {
+        "source": "examples/react-native-calculator/modules/nitro-bench/nitro-bench/ios/HybridNitroBench.cpp",
+        "sliceSha256": "0769745c423f92b9b9170259c6f7e7e221817fb9aa2c4266a5afe8c39d6618fe"
+      },
+      "balanced255": {
+        "jsonSha256": "51849aea7142f3b0b90a0ab45d683fceab924aa84f8db84ee09f8c82cbea8f98",
+        "textSha256": "b4626cb0e60bd599327a838f8307cb6281cc927dcc7d514ffa03243d686c47a5"
+      },
+      "balanced1023": {
+        "jsonSha256": "84ca6f61a608416f0641336a1b07594ef6c2a2a9da90979f9df5511cb57dc85f",
+        "textSha256": "fe5698ae66f597c9af25e490d18ce47eeb603ce35005dfc029b662d3440c4cd4"
+      },
+      "wide1025": {
+        "jsonSha256": "5959c850d5b2900e02719ee0ef3fff3e02ba8832131a681e5fc0a137127a95b7",
+        "textSha256": "a1e0ea8f324530091aea3b391e61b89ace2fbbac71c09fd40f70496a9dbf5f30"
+      },
+      "balanced8191": {
+        "jsonSha256": "7bbce981d49558e4b539b57857d4e86ef2c33b3a056989791f710af8d2108020",
+        "textSha256": "0bf317c53f6b3014d91a1694af662b8abf14483b8d4f7d89cc4061fc45ee37b6"
+      }
+    },
+    "binaries": {
+      "rustra": "64477559f9a5d913d807a2f70d7006efa877eba462587310184667d2cb42d221",
+      "nitro": "da4c538cee77e8a2c815b9d2f0d79bdf88e54ae91915489f43731117147eb949"
+    },
+    "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+    "clang": "Apple clang version 17.0.0 (clang-1700.6.3.2)\nTarget: arm64-apple-darwin25.6.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+    "runs": [
+      {
+        "pair": 1,
+        "framework": "rustra",
+        "rows": [
+          {
+            "layout": {
+              "nodeSize": 128,
+              "nodeAlign": 8,
+              "id": 96,
+              "name": 0,
+              "tag": 24,
+              "note": 72,
+              "metadata": 104,
+              "children": 48,
+              "searchSize": 48
+            }
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.json",
+            "nodes": 255,
+            "nodeCapacity": 255,
+            "childCapacitySum": 254,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              1304.6875, 1335.9375, 1335.9375, 1341.1875, 1341.1875, 1335.9375, 1330.6875, 1330.75,
+              1335.9375, 1338.5, 1341.125, 1348.9375, 1341.125, 1356.75, 1341.1875, 1341.125,
+              1338.5, 1341.1875, 1341.1875, 1942.75, 1338.5, 1348.9375, 1341.125, 1338.5625,
+              1343.75, 1338.5625, 1341.125, 1348.9375, 1348.9375, 1356.75, 1356.75
+            ],
+            "checksum": 281792.0
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.json",
+            "nodes": 1023,
+            "nodeCapacity": 1023,
+            "childCapacitySum": 1022,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              5716.125, 5656.25, 5734.375, 5679.6875, 5703.125, 5625.0, 5463.5625, 5523.4375,
+              11820.3125, 5533.875, 5507.8125, 5507.8125, 5513.0, 5515.625, 5606.75, 5481.75,
+              5492.1875, 5476.5625, 5520.8125, 5497.375, 5494.75, 5494.8125, 5520.875, 5497.4375,
+              5507.8125, 5450.5625, 5474.0, 5484.375, 5484.375, 5502.5625, 5494.8125
+            ],
+            "checksum": 1117920.0
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.json",
+            "nodes": 8191,
+            "nodeCapacity": 8191,
+            "childCapacitySum": 8190,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              41666.6875, 38502.625, 38783.8125, 40260.4375, 38958.375, 39067.6875, 41609.375,
+              41559.875, 38007.8125, 38994.8125, 39442.6875, 37984.375, 40099.0, 38062.5,
+              39911.4375, 38260.4375, 39033.8125, 40781.25, 39416.6875, 40239.5625, 40171.875,
+              39843.75, 39369.8125, 39974.0, 39309.9375, 39164.0625, 43669.3125, 38979.1875,
+              40429.6875, 40007.8125, 43523.4375
+            ],
+            "checksum": 8916704.0
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.json",
+            "nodes": 1025,
+            "nodeCapacity": 1025,
+            "childCapacitySum": 1024,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              1958.3125, 1997.375, 2067.6875, 1947.875, 1940.125, 1929.6875, 1932.25, 1937.5,
+              1940.0625, 1942.6875, 1955.6875, 1940.125, 1945.3125, 1937.5, 1934.875, 1945.3125,
+              1937.5, 1937.5, 1932.3125, 1927.0625, 1932.25, 1940.125, 1934.9375, 1921.875,
+              1927.0625, 1937.5, 1945.3125, 1934.875, 1937.5, 1934.875, 1937.5
+            ],
+            "checksum": 1120096.0
+          }
+        ]
+      },
+      {
+        "pair": 1,
+        "framework": "nitro",
+        "rows": [
+          {
+            "layout": {
+              "nodeSize": 152,
+              "nodeAlign": 8,
+              "id": 0,
+              "name": 8,
+              "tag": 32,
+              "note": 56,
+              "metadata": 88,
+              "children": 128,
+              "searchSize": 48
+            }
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.txt",
+            "nodes": 255,
+            "nodeCapacity": 255,
+            "childCapacitySum": 254,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 281792,
+            "samplesNs": [
+              1291.625, 1291.625, 1286.4375, 1296.875, 1367.1875, 1273.4375, 1278.625, 1276.0625,
+              1283.8125, 1278.625, 1278.625, 1273.4375, 1270.8125, 1273.4375, 1283.8125, 1273.4375,
+              1281.25, 1283.875, 1291.6875, 1281.25, 1276, 1255.1875, 1244.8125, 1244.8125, 1244.75,
+              1250, 1231.75, 1244.8125, 1242.1875, 1234.375, 1239.5625
+            ]
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.txt",
+            "nodes": 1023,
+            "nodeCapacity": 1023,
+            "childCapacitySum": 1022,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 1117920,
+            "samplesNs": [
+              6453.125, 5283.875, 5291.6875, 5239.5625, 5273.4375, 5151, 5117.1875, 5104.1875,
+              5252.5625, 5302.0625, 5291.6875, 5281.25, 5312.5, 5283.875, 5276, 10403.625, 5096.375,
+              4950.5, 4963.5625, 4942.6875, 4947.875, 4963.5625, 4958.3125, 4992.1875, 4934.875,
+              4945.3125, 4950.5625, 4981.75, 4968.75, 4958.3125, 4914.0625
+            ]
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.txt",
+            "nodes": 8191,
+            "nodeCapacity": 8191,
+            "childCapacitySum": 8190,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 8916704,
+            "samplesNs": [
+              38158.875, 37987, 37927.0625, 37612, 38955.6875, 37549.5, 37494.75, 37723.9375,
+              40867.1875, 38710.9375, 38885.4375, 40213.5, 38072.9375, 39424.4375, 38028.6875,
+              37966.125, 40419.25, 37630.25, 37559.875, 37609.375, 37903.625, 38338.5, 37669.25,
+              38265.625, 40067.75, 37776.0625, 38023.4375, 38343.75, 37552.0625, 37606.75,
+              38270.8125
+            ]
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.txt",
+            "nodes": 1025,
+            "nodeCapacity": 1025,
+            "childCapacitySum": 1024,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 1120096,
+            "samplesNs": [
+              2622.4375, 2619.8125, 2601.5625, 2606.75, 2648.4375, 3875, 2635.4375, 2500, 2505.25,
+              2507.8125, 2505.25, 2494.8125, 2484.375, 2424.5, 2427.125, 2432.25, 2437.5, 2442.75,
+              2434.875, 2427.0625, 2427.0625, 2765.625, 2588.5, 2572.9375, 2427.0625, 2429.6875,
+              2994.75, 2497.375, 2505.25, 2523.4375, 2432.25
+            ]
+          }
+        ]
+      },
+      {
+        "pair": 2,
+        "framework": "nitro",
+        "rows": [
+          {
+            "layout": {
+              "nodeSize": 152,
+              "nodeAlign": 8,
+              "id": 0,
+              "name": 8,
+              "tag": 32,
+              "note": 56,
+              "metadata": 88,
+              "children": 128,
+              "searchSize": 48
+            }
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.txt",
+            "nodes": 255,
+            "nodeCapacity": 255,
+            "childCapacitySum": 254,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 281792,
+            "samplesNs": [
+              1203.125, 1200.5625, 1197.9375, 1208.3125, 1210.9375, 1205.75, 1229.1875, 1213.5,
+              1244.8125, 1239.5625, 1294.25, 1289.0625, 1296.875, 1231.75, 1205.75, 1218.75,
+              1216.125, 1283.875, 1294.25, 1315.0625, 1268.25, 1242.1875, 1252.5625, 1242.1875,
+              1218.75, 1231.75, 1210.9375, 1210.9375, 1208.3125, 1229.1875, 1210.9375
+            ]
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.txt",
+            "nodes": 1023,
+            "nodeCapacity": 1023,
+            "childCapacitySum": 1022,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 1117920,
+            "samplesNs": [
+              5414.0625, 5375, 5403.625, 5338.5625, 5312.5, 5335.9375, 5455.75, 5385.375, 5320.3125,
+              5695.3125, 5364.625, 5453.125, 5479.1875, 5434.9375, 5278.625, 5351.5625, 5346.3125,
+              5518.25, 5458.375, 5372.375, 5393.25, 5359.375, 5333.3125, 5333.3125, 5411.5, 5455.75,
+              5322.9375, 5453.125, 5375, 5359.375, 5263
+            ]
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.txt",
+            "nodes": 8191,
+            "nodeCapacity": 8191,
+            "childCapacitySum": 8190,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 8916704,
+            "samplesNs": [
+              39052.125, 42447.9375, 41200.5625, 40125, 39791.6875, 39039.0625, 40338.5625,
+              41781.25, 37872.4375, 37575.5625, 37958.3125, 38455.6875, 38351.5625, 37599, 38369.75,
+              38346.375, 38250, 39945.3125, 38382.8125, 38286.4375, 40099, 39736.9375, 39505.25,
+              38950.5625, 38864.625, 39164.0625, 38921.875, 40770.8125, 39893.1875, 39612,
+              39598.9375
+            ]
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.txt",
+            "nodes": 1025,
+            "nodeCapacity": 1025,
+            "childCapacitySum": 1024,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 1120096,
+            "samplesNs": [
+              2487, 2492.1875, 2502.5625, 2489.625, 2893.1875, 2489.625, 2484.375, 2479.1875,
+              2476.5625, 2473.9375, 2463.5625, 2468.75, 2471.3125, 2474, 2473.9375, 2473.9375,
+              2463.5, 2489.5625, 2468.75, 2463.5625, 2476.5625, 2473.9375, 2502.625, 2494.8125,
+              2487, 2471.3125, 2476.5625, 2487, 2476.5625, 2479.1875, 2476.5625
+            ]
+          }
+        ]
+      },
+      {
+        "pair": 2,
+        "framework": "rustra",
+        "rows": [
+          {
+            "layout": {
+              "nodeSize": 128,
+              "nodeAlign": 8,
+              "id": 96,
+              "name": 0,
+              "tag": 24,
+              "note": 72,
+              "metadata": 104,
+              "children": 48,
+              "searchSize": 48
+            }
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.json",
+            "nodes": 255,
+            "nodeCapacity": 255,
+            "childCapacitySum": 254,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              1356.75, 1351.5625, 1348.9375, 1362.0, 1351.5625, 1341.125, 1335.9375, 1338.5,
+              1333.3125, 1354.125, 1372.375, 1351.5625, 1359.375, 1369.75, 1356.75, 1348.9375,
+              1317.6875, 1328.125, 1315.0625, 1317.6875, 1325.5, 1309.875, 1320.3125, 1351.5625,
+              1367.1875, 1349.0, 1351.5625, 1380.1875, 1309.875, 1307.3125, 1309.9375
+            ],
+            "checksum": 281792.0
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.json",
+            "nodes": 1023,
+            "nodeCapacity": 1023,
+            "childCapacitySum": 1022,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              6184.875, 5627.5625, 5960.9375, 5638.0, 5395.8125, 5593.75, 5487.0, 5953.125,
+              5533.8125, 5684.875, 5924.4375, 5968.75, 5539.0625, 5539.0625, 5484.375, 6153.625,
+              5559.9375, 5390.625, 5554.6875, 5453.125, 6119.8125, 5625.0, 5572.875, 5531.25,
+              6429.6875, 5739.625, 5781.25, 5929.6875, 6708.3125, 6000.0, 5789.0625
+            ],
+            "checksum": 1117920.0
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.json",
+            "nodes": 8191,
+            "nodeCapacity": 8191,
+            "childCapacitySum": 8190,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              39804.6875, 39304.6875, 40385.4375, 39552.0625, 42953.125, 38796.875, 40106.8125,
+              39203.125, 38739.5625, 40846.375, 40513.0, 42656.25, 42044.3125, 40085.9375, 39830.75,
+              39557.3125, 38914.0625, 39377.5625, 39927.0625, 38677.0625, 38661.4375, 38940.125,
+              38888.0, 40585.9375, 39906.25, 39992.1875, 39606.75, 39789.0625, 39653.625, 39502.625,
+              41497.4375
+            ],
+            "checksum": 8916704.0
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.json",
+            "nodes": 1025,
+            "nodeCapacity": 1025,
+            "childCapacitySum": 1024,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              2078.125, 2049.5, 2005.1875, 1966.125, 1950.5, 1955.6875, 1945.3125, 1940.0625,
+              1971.375, 2028.625, 2046.875, 2036.5, 2028.6875, 2015.625, 2023.4375, 2164.0625,
+              2570.3125, 2044.25, 2046.875, 1994.8125, 2039.0625, 2026.0625, 2049.5, 1890.625,
+              1942.75, 2046.875, 2072.9375, 2046.875, 1966.125, 2052.0625, 2044.25
+            ],
+            "checksum": 1120096.0
+          }
+        ]
+      },
+      {
+        "pair": 3,
+        "framework": "rustra",
+        "rows": [
+          {
+            "layout": {
+              "nodeSize": 128,
+              "nodeAlign": 8,
+              "id": 96,
+              "name": 0,
+              "tag": 24,
+              "note": 72,
+              "metadata": 104,
+              "children": 48,
+              "searchSize": 48
+            }
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.json",
+            "nodes": 255,
+            "nodeCapacity": 255,
+            "childCapacitySum": 254,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              1333.375, 1335.9375, 1330.6875, 1333.3125, 1333.3125, 1338.5625, 1330.6875, 1330.75,
+              1335.9375, 1333.375, 1328.125, 1335.9375, 1333.3125, 1330.6875, 1335.9375, 1356.75,
+              1958.3125, 1330.75, 1341.1875, 1328.125, 1333.3125, 1333.3125, 1325.5, 1333.3125,
+              1330.75, 1333.375, 1325.5625, 1333.375, 1333.375, 1328.125, 1333.3125
+            ],
+            "checksum": 281792.0
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.json",
+            "nodes": 1023,
+            "nodeCapacity": 1023,
+            "childCapacitySum": 1022,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              6184.9375, 6132.8125, 5796.875, 6809.875, 5580.75, 5401.0625, 5500.0, 5437.5,
+              6476.5625, 5622.4375, 5716.125, 5960.9375, 5812.5, 5799.5, 5773.4375, 5729.1875,
+              5716.125, 5375.0, 5473.9375, 5502.5625, 5536.4375, 5830.75, 5541.625, 5416.6875,
+              5388.0625, 6867.1875, 5440.125, 5442.6875, 5575.5, 5867.1875, 6140.625
+            ],
+            "checksum": 1117920.0
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.json",
+            "nodes": 8191,
+            "nodeCapacity": 8191,
+            "childCapacitySum": 8190,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              39963.5625, 40174.4375, 39096.375, 40835.9375, 39468.75, 41080.75, 40614.5625,
+              40492.1875, 39742.1875, 38414.0625, 39627.625, 37955.75, 41382.8125, 40929.6875,
+              41736.9375, 38614.5625, 38455.75, 38114.5625, 38046.875, 37981.75, 38002.5625,
+              37976.5625, 38067.75, 37997.375, 38075.5, 38320.3125, 38135.4375, 38200.5, 42500.0,
+              39994.75, 39403.625
+            ],
+            "checksum": 8916704.0
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.json",
+            "nodes": 1025,
+            "nodeCapacity": 1025,
+            "childCapacitySum": 1024,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              1916.6875, 1940.125, 1916.6875, 1914.0625, 1908.8125, 1911.5, 1908.875, 1914.0625,
+              1942.6875, 1916.6875, 1934.875, 1929.6875, 1908.875, 1927.0625, 1908.8125, 1911.4375,
+              1916.6875, 1916.6875, 1932.3125, 1919.25, 1921.875, 1921.875, 1945.3125, 1903.625,
+              1942.6875, 1914.0625, 1901.0625, 1906.25, 1919.3125, 1927.0625, 1960.9375
+            ],
+            "checksum": 1120096.0
+          }
+        ]
+      },
+      {
+        "pair": 3,
+        "framework": "nitro",
+        "rows": [
+          {
+            "layout": {
+              "nodeSize": 152,
+              "nodeAlign": 8,
+              "id": 0,
+              "name": 8,
+              "tag": 32,
+              "note": 56,
+              "metadata": 88,
+              "children": 128,
+              "searchSize": 48
+            }
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.txt",
+            "nodes": 255,
+            "nodeCapacity": 255,
+            "childCapacitySum": 254,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 281792,
+            "samplesNs": [
+              1421.875, 1247.375, 1237, 1242.1875, 1247.375, 1393.25, 1291.625, 1302.0625,
+              1291.6875, 1286.4375, 1276.0625, 1278.6875, 1294.3125, 1273.4375, 1278.6875,
+              1273.4375, 1273.4375, 1276.0625, 1270.875, 1281.25, 1278.625, 1273.4375, 1276,
+              1289.0625, 1291.6875, 1278.625, 1278.625, 1302.125, 1549.4375, 1304.6875, 1302.125
+            ]
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.txt",
+            "nodes": 1023,
+            "nodeCapacity": 1023,
+            "childCapacitySum": 1022,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 1117920,
+            "samplesNs": [
+              5479.125, 5507.8125, 6070.3125, 5554.6875, 5539.0625, 5468.75, 5296.875, 5562.5,
+              5778.625, 5786.4375, 6018.1875, 5981.75, 5885.4375, 5911.5, 5997.4375, 6127.5625,
+              6049.5, 5927.0625, 5934.9375, 5859.375, 5817.75, 5739.625, 5830.75, 6239.5625,
+              5755.1875, 5856.75, 5755.1875, 5763, 5864.625, 5708.3125, 5872.375
+            ]
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.txt",
+            "nodes": 8191,
+            "nodeCapacity": 8191,
+            "childCapacitySum": 8190,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 8916704,
+            "samplesNs": [
+              37289.0625, 37278.6875, 37218.75, 37369.75, 37369.8125, 40934.9375, 49122.4375,
+              39273.4375, 37921.875, 38250, 41044.25, 38986.9375, 38919.3125, 38901, 38372.375,
+              38349, 38658.875, 41369.8125, 40265.625, 39570.3125, 38588.5625, 39432.25, 43138.0625,
+              39927.0625, 39458.3125, 46869.8125, 37218.75, 37351.5625, 38903.625, 37283.8125,
+              37216.125
+            ]
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.txt",
+            "nodes": 1025,
+            "nodeCapacity": 1025,
+            "childCapacitySum": 1024,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 1120096,
+            "samplesNs": [
+              2351.5625, 2359.375, 2351.5625, 2362, 2359.375, 2362, 2351.5625, 2343.75, 2346.375,
+              2356.75, 2351.5625, 2367.1875, 2346.375, 2367.1875, 2369.75, 2416.6875, 2398.4375,
+              2398.4375, 2421.875, 2382.8125, 2411.4375, 5239.5625, 2440.125, 2424.5, 2406.25,
+              2450.5, 2406.25, 2531.25, 2481.75, 2684.875, 2437.5
+            ]
+          }
+        ]
+      },
+      {
+        "pair": 4,
+        "framework": "nitro",
+        "rows": [
+          {
+            "layout": {
+              "nodeSize": 152,
+              "nodeAlign": 8,
+              "id": 0,
+              "name": 8,
+              "tag": 32,
+              "note": 56,
+              "metadata": 88,
+              "children": 128,
+              "searchSize": 48
+            }
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.txt",
+            "nodes": 255,
+            "nodeCapacity": 255,
+            "childCapacitySum": 254,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 281792,
+            "samplesNs": [
+              1260.4375, 1247.4375, 1210.9375, 1276.0625, 1203.125, 1552.125, 1213.5, 1224,
+              1200.5625, 1617.1875, 1226.5625, 1552.125, 1223.9375, 1203.125, 1799.4375, 1526.0625,
+              1221.3125, 1208.3125, 1593.75, 1218.75, 1554.6875, 1591.125, 1213.5625, 1619.8125,
+              1299.4375, 2067.75, 1278.6875, 1268.25, 1276, 1281.25, 1276.0625
+            ]
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.txt",
+            "nodes": 1023,
+            "nodeCapacity": 1023,
+            "childCapacitySum": 1022,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 1117920,
+            "samplesNs": [
+              4960.9375, 4989.625, 4919.3125, 4958.375, 4953.125, 4960.9375, 4968.75, 4942.75,
+              4955.75, 4934.875, 4971.375, 4963.5625, 5000, 4955.75, 4994.8125, 4997.4375,
+              4958.3125, 4981.75, 4979.1875, 5039.0625, 4984.375, 4966.125, 4966.125, 4960.9375,
+              4958.3125, 8036.5, 6135.4375, 5791.625, 5520.875, 6252.5625, 6932.3125
+            ]
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.txt",
+            "nodes": 8191,
+            "nodeCapacity": 8191,
+            "childCapacitySum": 8190,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 8916704,
+            "samplesNs": [
+              39200.5, 38885.375, 39070.3125, 39773.4375, 38724, 40958.3125, 40114.5625, 40119.8125,
+              39708.3125, 39674.4375, 40921.875, 40697.9375, 39367.1875, 45921.875, 37510.4375,
+              37552.125, 38830.75, 37669.25, 37583.3125, 37838.5625, 37559.875, 39333.3125,
+              39377.5625, 37533.875, 39067.6875, 39583.375, 38994.75, 39278.625, 39268.25,
+              38739.5625, 38958.375
+            ]
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.txt",
+            "nodes": 1025,
+            "nodeCapacity": 1025,
+            "childCapacitySum": 1024,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 1120096,
+            "samplesNs": [
+              2734.375, 2437.5, 2427.0625, 2442.75, 2440.0625, 2434.875, 2432.3125, 2411.4375,
+              2408.875, 2429.6875, 2427.0625, 2416.6875, 2432.3125, 2411.5, 2455.75, 2466.125,
+              3802.0625, 2567.6875, 3059.875, 2526.0625, 2518.1875, 2523.4375, 2507.8125, 2531.25,
+              2520.8125, 2515.625, 3072.875, 4005.1875, 2773.4375, 2565.0625, 3757.8125
+            ]
+          }
+        ]
+      },
+      {
+        "pair": 4,
+        "framework": "rustra",
+        "rows": [
+          {
+            "layout": {
+              "nodeSize": 128,
+              "nodeAlign": 8,
+              "id": 96,
+              "name": 0,
+              "tag": 24,
+              "note": 72,
+              "metadata": 104,
+              "children": 48,
+              "searchSize": 48
+            }
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.json",
+            "nodes": 255,
+            "nodeCapacity": 255,
+            "childCapacitySum": 254,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              1299.4375, 1296.875, 1296.875, 1294.25, 1296.875, 1294.3125, 1289.0625, 1289.0625,
+              1289.0625, 1302.0625, 1296.875, 1294.25, 1291.6875, 1294.3125, 1304.6875, 1302.0625,
+              1296.875, 1299.5, 1338.5625, 1309.9375, 1325.5625, 1299.5, 1296.875, 1299.5,
+              1299.4375, 1315.125, 1309.9375, 1302.125, 1296.875, 1294.25, 1296.875
+            ],
+            "checksum": 281792.0
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.json",
+            "nodes": 1023,
+            "nodeCapacity": 1023,
+            "childCapacitySum": 1022,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              5411.4375, 5414.0625, 5414.0625, 5390.625, 5468.75, 5424.5, 5421.875, 5432.3125,
+              5432.3125, 5411.5, 5367.1875, 5377.625, 5424.4375, 5437.5, 5442.6875, 5437.5, 5406.25,
+              5471.3125, 5411.4375, 6190.125, 5484.375, 5398.4375, 6054.6875, 6075.5625, 5849.0,
+              5421.875, 6955.6875, 5502.625, 5398.4375, 6419.25, 5458.3125
+            ],
+            "checksum": 1117920.0
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.json",
+            "nodes": 8191,
+            "nodeCapacity": 8191,
+            "childCapacitySum": 8190,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              37976.5625, 37932.3125, 38580.6875, 43377.625, 39078.125, 39145.8125, 42289.0625,
+              40825.5, 38984.375, 40552.0625, 39510.375, 42242.1875, 38487.0, 38096.375, 38291.625,
+              38757.8125, 38117.1875, 38052.125, 38903.625, 39981.75, 39260.4375, 38880.1875,
+              39091.125, 38005.1875, 39388.0, 41101.5625, 39885.4375, 39908.8125, 39531.25,
+              39218.75, 39169.3125
+            ],
+            "checksum": 8916704.0
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.json",
+            "nodes": 1025,
+            "nodeCapacity": 1025,
+            "childCapacitySum": 1024,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              2140.625, 2111.9375, 2101.5625, 2117.1875, 2112.0, 2127.625, 2138.0625, 2138.0625,
+              2151.0625, 2085.9375, 2098.9375, 2106.75, 2096.375, 2101.5625, 2096.375, 2109.375,
+              2109.375, 2119.8125, 2020.875, 2036.5, 2135.4375, 2072.875, 2026.0625, 2052.125,
+              1989.625, 2036.5, 2119.8125, 2151.0, 2145.8125, 2132.8125, 2067.6875
+            ],
+            "checksum": 1120096.0
+          }
+        ]
+      },
+      {
+        "pair": 5,
+        "framework": "rustra",
+        "rows": [
+          {
+            "layout": {
+              "nodeSize": 128,
+              "nodeAlign": 8,
+              "id": 96,
+              "name": 0,
+              "tag": 24,
+              "note": 72,
+              "metadata": 104,
+              "children": 48,
+              "searchSize": 48
+            }
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.json",
+            "nodes": 255,
+            "nodeCapacity": 255,
+            "childCapacitySum": 254,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              1291.6875, 1286.5, 1291.6875, 1294.25, 1289.0625, 1286.5, 1286.5, 1283.875, 1302.0625,
+              1315.125, 1309.875, 1351.5625, 1377.5625, 1348.9375, 1289.0625, 1286.4375, 1299.4375,
+              1299.5, 1315.0625, 1315.125, 1304.6875, 1299.5, 1309.9375, 1304.6875, 1302.0625,
+              1294.25, 1307.3125, 1312.5, 1307.25, 1309.9375, 1307.3125
+            ],
+            "checksum": 281792.0
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.json",
+            "nodes": 1023,
+            "nodeCapacity": 1023,
+            "childCapacitySum": 1022,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              5690.0625, 5893.1875, 5953.125, 6020.8125, 6041.6875, 5966.125, 5765.625, 7450.5,
+              5487.0, 5937.5, 5989.625, 6023.4375, 6083.3125, 5804.6875, 5974.0, 6187.5, 5950.5,
+              5429.6875, 5432.3125, 5437.5, 5447.9375, 5445.3125, 5424.5, 5427.0625, 5432.3125,
+              5434.9375, 5442.75, 5424.4375, 6614.5625, 5484.375, 5731.75
+            ],
+            "checksum": 1117920.0
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.json",
+            "nodes": 8191,
+            "nodeCapacity": 8191,
+            "childCapacitySum": 8190,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              38460.9375, 38882.8125, 38903.6875, 38838.5625, 42846.3125, 40442.6875, 42877.625,
+              39570.3125, 38880.1875, 38799.4375, 39421.875, 40359.375, 38023.4375, 38289.0625,
+              38091.125, 37916.6875, 38505.25, 38096.375, 38471.375, 38619.75, 41216.125,
+              39101.5625, 40385.4375, 39072.875, 40067.6875, 39945.3125, 39468.75, 40317.75,
+              39388.0625, 40713.5625, 39700.5
+            ],
+            "checksum": 8916704.0
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.json",
+            "nodes": 1025,
+            "nodeCapacity": 1025,
+            "childCapacitySum": 1024,
+            "batch": 16,
+            "warmup": 3,
+            "samplesNs": [
+              1921.875, 1927.125, 1940.0625, 1929.6875, 1924.4375, 1927.0625, 1916.625, 1932.3125,
+              1932.3125, 1916.6875, 1911.4375, 1911.5, 1901.0625, 1914.0625, 2005.1875, 1971.3125,
+              1934.9375, 1960.9375, 1997.375, 1932.25, 1914.0625, 1898.4375, 1903.625, 1921.875,
+              1903.625, 1929.6875, 1924.5, 1916.625, 1908.875, 1898.4375, 1927.125
+            ],
+            "checksum": 1120096.0
+          }
+        ]
+      },
+      {
+        "pair": 5,
+        "framework": "nitro",
+        "rows": [
+          {
+            "layout": {
+              "nodeSize": 152,
+              "nodeAlign": 8,
+              "id": 0,
+              "name": 8,
+              "tag": 32,
+              "note": 56,
+              "metadata": 88,
+              "children": 128,
+              "searchSize": 48
+            }
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.txt",
+            "nodes": 255,
+            "nodeCapacity": 255,
+            "childCapacitySum": 254,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 281792,
+            "samplesNs": [
+              1343.75, 1239.5625, 1231.75, 1239.625, 1346.3125, 1229.125, 1226.5625, 1223.9375,
+              1224, 1226.5625, 1226.5625, 1226.5625, 1226.5625, 1224, 1224, 1239.625, 1257.8125,
+              1252.5625, 1231.8125, 1224, 1226.5625, 1221.375, 1221.375, 1226.5625, 1226.5625,
+              1226.5625, 1224, 1255.1875, 1242.1875, 2044.25, 1239.5625
+            ]
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.txt",
+            "nodes": 1023,
+            "nodeCapacity": 1023,
+            "childCapacitySum": 1022,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 1117920,
+            "samplesNs": [
+              6268.1875, 6273.4375, 7515.625, 5401, 6039.0625, 5062.5, 5471.3125, 5609.375,
+              5213.5625, 5372.375, 5046.875, 5210.9375, 5015.625, 5036.5, 5083.3125, 5007.8125,
+              5072.9375, 4971.375, 5033.8125, 5112, 5067.75, 5106.75, 5869.75, 5651.0625, 5148.4375,
+              4984.375, 5109.375, 5416.625, 5640.625, 5236.9375, 5382.8125
+            ]
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.txt",
+            "nodes": 8191,
+            "nodeCapacity": 8191,
+            "childCapacitySum": 8190,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 8916704,
+            "samplesNs": [
+              42080.6875, 37640.625, 37445.3125, 37476.5625, 38296.875, 37411.4375, 39093.75,
+              37645.8125, 37854.1875, 38276.0625, 38231.75, 40101.5625, 40533.875, 39437.5,
+              39018.25, 39224, 38966.1875, 38960.9375, 38661.4375, 41989.5625, 40104.1875,
+              40059.9375, 40088.5, 40049.5, 41742.1875, 40153.6875, 45114.5625, 37356.75, 37468.75,
+              37835.9375, 38223.9375
+            ]
+          },
+          {
+            "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.txt",
+            "nodes": 1025,
+            "nodeCapacity": 1025,
+            "childCapacitySum": 1024,
+            "batch": 16,
+            "warmup": 3,
+            "checksum": 1120096,
+            "samplesNs": [
+              2424.5, 2429.6875, 2432.3125, 2408.8125, 2414.0625, 2875, 2401.0625, 2416.6875,
+              2414.0625, 2447.9375, 2429.6875, 2421.875, 2424.4375, 2419.3125, 2416.625, 2981.8125,
+              2450.5, 2419.25, 2424.4375, 2411.5, 2447.875, 2416.6875, 2440.0625, 2416.6875,
+              2419.25, 2419.25, 2424.5, 2414.0625, 2401.0625, 2432.3125, 2414.0625
+            ]
+          }
+        ]
+      }
+    ],
+    "summary": [
+      {
+        "fixture": "balanced255",
+        "launchMeansNs": {
+          "rustra": [
+            1360.211693548387, 1341.7237903225807, 1353.4959677419354, 1300.4092741935483,
+            1305.782258064516
+          ],
+          "nitro": [
+            1271.7479838709678, 1236.304435483871, 1295.5342741935483, 1371.141129032258, 1265.125
+          ]
+        },
+        "ratio": 1.0344371474628595
+      },
+      {
+        "fixture": "balanced1023",
+        "launchMeansNs": {
+          "rustra": [
+            5741.3487903225805, 5769.4838709677415, 5769.322580645161, 5587.282258064516,
+            5800.907258064516
+          ],
+          "nitro": [
+            5315.6875, 5392.056451612903, 5804.518145161291, 5254.544354838709, 5401.0362903225805
+          ]
+        },
+        "ratio": 1.0552308120443035
+      },
+      {
+        "fixture": "balanced8191",
+        "launchMeansNs": {
+          "rustra": [
+            39841.4879032258, 39945.145161290326, 39335.596774193546, 39439.42741935484,
+            39473.37096774193
+          ],
+          "nitro": [
+            38342.40120967742, 39299.57056451613, 39414.65120967742, 39284.43951612903,
+            39243.36491935484
+          ]
+        },
+        "ratio": 1.012529631519166
+      },
+      {
+        "fixture": "wide1025",
+        "launchMeansNs": {
+          "rustra": [
+            1944.211693548387, 2033.5181451612902, 1921.288306451613, 2098.3790322580644,
+            1927.5846774193549
+          ],
+          "nitro": [
+            2574.094758064516, 2492.9435483870966, 2492.858870967742, 2659.8568548387098,
+            2455.141129032258
+          ]
+        },
+        "ratio": 0.7830425205527565
+      }
+    ]
+  },
+  "nonTimedInspection": {
+    "protocol": "rustra-nitro-host-core-dfs-diagnostic/v2",
+    "runId": "core-dfs-next-2026-09-16T12:49:42.192309+00:00",
+    "preparedAt": "2026-09-16T12:49:42.192318+00:00",
+    "root": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity",
+    "host": {
+      "system": "Darwin",
+      "machine": "arm64",
+      "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O"
+    },
+    "fixtureOrder": ["balanced255", "balanced1023", "balanced8191", "wide1025"],
+    "limitations": [
+      "Host macOS arm64 only; neither iOS Simulator nor Android/device ABI or public-call parity evidence.",
+      "Rust LLVM 22 and Apple clang 17 are different compiler implementations. O3/release and one host do not establish matched compiler/target/allocator settings; actual versions/options are recorded.",
+      "Original host-only loaders retained. C++ does not reserve metadata, bypasses generated ParityTree(vector) copy constructor, and passes lvalues to generated node constructors. This does not reproduce Nitro JSIConverter allocator history.",
+      "Rust JSON decode followed by postcard round-trip creates extra temporary allocations absent from native dispatch. Its final input capacities are inferred resident capacities solely because parity_store moves the same owned tree without transforming its fields.",
+      "C++ final resident observation includes repeated optional copy assignment across the ordered fixtures, including balanced8191 then wide1025. Resident is never reconstructed or shrunk to force capacity equality.",
+      "No JSI/FFI/conversion/setup is inside the measured interval. The C++ handwritten class shim omits Nitro/JSI inheritance and virtual surface, so this is not exact native ABI or heap-history evidence.",
+      "Timing includes 16 calls, result consumption/checksum, and result destruction. Rust adds black_box on query and result; C++ consumes an externally compiled result with separate translation units and -fno-lto. Barriers differ.",
+      "Rust default release LTO=false permits compiler-local thin LTO with default multiple codegen units; C++ explicitly disables LTO. Neither driver uses explicit target-cpu/features overrides unless captured in the environment/compiler invocation.",
+      "The non-timed probes preserve exact original initialization and child-push expressions; trace-vector allocations and observer branches perturb allocator activity, so they establish growth policy, not timing or cache causality.",
+      "Rust probe reads final input before move outside lock; C++ probe reads final resident under mutex. These observations do not measure identical lock/setup paths.",
+      "Map bucket count is meaningful for libc++ unordered_map only. Rust BTreeMap has no public bucket count; heap bytes and allocation counts remain unmeasured.",
+      "Fixture loader format is restricted to printable ASCII by the TypeScript exporter. std::quoted is not a general JSON Unicode/control-escape decoder.",
+      "Five launch means per framework are descriptive. Ratio is arithmetic mean(Rust launch means) / arithmetic mean(C++ launch means). No confidence interval, public-v2 acceptance threshold, statistical equality, regression, or causal layout claim is inferred.",
+      "Inspection is a separate process launch from timing. Actual C++ resident capacities describe deterministic setup in inspection; allocator placement of later timing processes is not directly observed."
+    ],
+    "evidenceFiles": [
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/commands.jsonl",
+        "sha256": "9fcde70bea3610e1c9ebc544945db8f119fe1ae8245588c243eae413e2d5290b"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/source-freeze.json",
+        "sha256": "c274790eca5cbae56324431233e6e3729a98be58581011d341d060520f823a6a"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/source-correspondence.json",
+        "sha256": "c38b269e8bc2377d66a65df1e384eb2251cb47ec936c1230ec65262cf9c323fe"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/instrumentation.diff",
+        "sha256": "1c63db7786fe08c3a41db2b37645c5baf4d281890f0bcb34c5b57505b69fc5c1"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/binaries.json",
+        "sha256": "ad7356dbf219762c91c8ff8623989becb925b4ed79433d826b0b79849b6d9c03"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/build-options.json",
+        "sha256": "3a300f2b8f97ee5f81e1011c5c1ed431f9f3b5be2f8fee44fc0d80517c479b6f"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/inspection.json",
+        "sha256": "6aee6fe6de4d91a06d15f7b29b616cf669d6ae7c75c2ca195def89b8a7407f8d"
+      }
+    ],
+    "binaries": {
+      "rustra": {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/rustra_core_dfs",
+        "sha256": "f6792a561e0a8cfc1f0d3b616613a0375ba3bf2d71457df4ea44c319c59021f6"
+      },
+      "nitro": {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/nitro_core_dfs",
+        "sha256": "c36faf39536832ff3602522e93bc3518f3413d2bf1bc40fe8bcf0780bfeeb862"
+      },
+      "cppObject": {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/core.o",
+        "sha256": "8b62337ace4fb7c6659253c12f9a07d5a70f2964a410b422e7f3abce6279512d"
+      }
+    },
+    "inspection": {
+      "protocol": "rustra-nitro-host-core-dfs-diagnostic/v2",
+      "kind": "non-timed-observation",
+      "fixtureOrder": ["balanced255", "balanced1023", "balanced8191", "wide1025"],
+      "fullFixtureCorrespondence": "all fields of every node matched actual TypeScript exports after absent note to null and integral float to integer normalization",
+      "frameworks": {
+        "rustra": {
+          "raw": {
+            "id": "inspect-rustra",
+            "argv": [
+              "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/rustra_core_dfs",
+              "--inspect",
+              "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced255.json",
+              "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced1023.json",
+              "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced8191.json",
+              "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/wide1025.json"
+            ],
+            "cwd": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity",
+            "startedAt": "2026-09-16T12:50:38.482274+00:00",
+            "endedAt": "2026-09-16T12:50:38.553582+00:00",
+            "exitCode": 0,
+            "stdout": {
+              "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/logs/inspect-rustra.stdout",
+              "sha256": "94938323c7bb786f9d65845c8deefb119b2b57adedb2b6d8d0c7070a2bef73e6"
+            },
+            "stderr": {
+              "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/logs/inspect-rustra.stderr",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          },
+          "rows": [
+            {
+              "layout": {
+                "nodeSize": 128,
+                "nodeAlign": 8,
+                "id": 96,
+                "name": 0,
+                "tag": 24,
+                "note": 72,
+                "metadata": 104,
+                "children": 48,
+                "searchSize": 48
+              }
+            },
+            {
+              "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced255.json",
+              "nodes": 255,
+              "mode": "inspect",
+              "inputNodeCapacity": 255,
+              "inputChildCapacitySum": 254,
+              "residentCapacityEvidence": "inferred from exact final input moved unchanged into Resident; not a resident getter",
+              "residentCapacitiesInferredFromMove": {
+                "nodeCapacity": 255,
+                "childCapacitySum": 254,
+                "childCapacityDistribution": {
+                  "0": 128,
+                  "2": 127
+                },
+                "nonemptyChildrenWithAllocation": 127,
+                "emptyChildrenWithAllocation": 0,
+                "metadataEntries": 510,
+                "metadataBucketCounts": null,
+                "metadataBucketEvidence": "BTreeMap exposes no bucket count; allocation footprint unmeasured"
+              },
+              "stackProbe": {
+                "capacitySequence": [1, 4, 8],
+                "initialAllocationCount": 1,
+                "growthCountAfterInitial": 2,
+                "maxLive": 8,
+                "result": {
+                  "found": true,
+                  "id": 254.0,
+                  "name": "node-254",
+                  "visited": 255.0
+                },
+                "scope": "separate instrumented search of final restored input, outside lock and timing"
+              },
+              "canonicalFullTreeSha256": "d98ca7eae6e4b9c683736a1ac76ea1e303272d74f46f6570006b588baffea520"
+            },
+            {
+              "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced1023.json",
+              "nodes": 1023,
+              "mode": "inspect",
+              "inputNodeCapacity": 1023,
+              "inputChildCapacitySum": 1022,
+              "residentCapacityEvidence": "inferred from exact final input moved unchanged into Resident; not a resident getter",
+              "residentCapacitiesInferredFromMove": {
+                "nodeCapacity": 1023,
+                "childCapacitySum": 1022,
+                "childCapacityDistribution": {
+                  "0": 512,
+                  "2": 511
+                },
+                "nonemptyChildrenWithAllocation": 511,
+                "emptyChildrenWithAllocation": 0,
+                "metadataEntries": 2046,
+                "metadataBucketCounts": null,
+                "metadataBucketEvidence": "BTreeMap exposes no bucket count; allocation footprint unmeasured"
+              },
+              "stackProbe": {
+                "capacitySequence": [1, 4, 8, 16],
+                "initialAllocationCount": 1,
+                "growthCountAfterInitial": 3,
+                "maxLive": 10,
+                "result": {
+                  "found": true,
+                  "id": 1022.0,
+                  "name": "node-1022",
+                  "visited": 1023.0
+                },
+                "scope": "separate instrumented search of final restored input, outside lock and timing"
+              },
+              "canonicalFullTreeSha256": "dc37af560d22e08ff70fefe07199098ad2ffb9f3aa967d2ac8d8e72dbed772bc"
+            },
+            {
+              "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced8191.json",
+              "nodes": 8191,
+              "mode": "inspect",
+              "inputNodeCapacity": 8191,
+              "inputChildCapacitySum": 8190,
+              "residentCapacityEvidence": "inferred from exact final input moved unchanged into Resident; not a resident getter",
+              "residentCapacitiesInferredFromMove": {
+                "nodeCapacity": 8191,
+                "childCapacitySum": 8190,
+                "childCapacityDistribution": {
+                  "0": 4096,
+                  "2": 4095
+                },
+                "nonemptyChildrenWithAllocation": 4095,
+                "emptyChildrenWithAllocation": 0,
+                "metadataEntries": 16382,
+                "metadataBucketCounts": null,
+                "metadataBucketEvidence": "BTreeMap exposes no bucket count; allocation footprint unmeasured"
+              },
+              "stackProbe": {
+                "capacitySequence": [1, 4, 8, 16],
+                "initialAllocationCount": 1,
+                "growthCountAfterInitial": 3,
+                "maxLive": 13,
+                "result": {
+                  "found": true,
+                  "id": 8190.0,
+                  "name": "node-8190",
+                  "visited": 8191.0
+                },
+                "scope": "separate instrumented search of final restored input, outside lock and timing"
+              },
+              "canonicalFullTreeSha256": "3f76ce5091a148d0c7bf87dd45712a2007aeb5edf420778a0d9dc673f16b4323"
+            },
+            {
+              "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/wide1025.json",
+              "nodes": 1025,
+              "mode": "inspect",
+              "inputNodeCapacity": 1025,
+              "inputChildCapacitySum": 1024,
+              "residentCapacityEvidence": "inferred from exact final input moved unchanged into Resident; not a resident getter",
+              "residentCapacitiesInferredFromMove": {
+                "nodeCapacity": 1025,
+                "childCapacitySum": 1024,
+                "childCapacityDistribution": {
+                  "0": 1024,
+                  "1024": 1
+                },
+                "nonemptyChildrenWithAllocation": 1,
+                "emptyChildrenWithAllocation": 0,
+                "metadataEntries": 2050,
+                "metadataBucketCounts": null,
+                "metadataBucketEvidence": "BTreeMap exposes no bucket count; allocation footprint unmeasured"
+              },
+              "stackProbe": {
+                "capacitySequence": [1, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
+                "initialAllocationCount": 1,
+                "growthCountAfterInitial": 9,
+                "maxLive": 1024,
+                "result": {
+                  "found": true,
+                  "id": 1024.0,
+                  "name": "node-1024",
+                  "visited": 1025.0
+                },
+                "scope": "separate instrumented search of final restored input, outside lock and timing"
+              },
+              "canonicalFullTreeSha256": "024b92d4ef02dd6f77d89676cfc1943ec16105d0aa012f8bd2a18e6bd2242c76"
+            }
+          ]
+        },
+        "nitro": {
+          "raw": {
+            "id": "inspect-nitro",
+            "argv": [
+              "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/nitro_core_dfs",
+              "--inspect",
+              "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced255.txt",
+              "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced1023.txt",
+              "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced8191.txt",
+              "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/wide1025.txt"
+            ],
+            "cwd": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity",
+            "startedAt": "2026-09-16T12:50:38.684611+00:00",
+            "endedAt": "2026-09-16T12:50:38.761615+00:00",
+            "exitCode": 0,
+            "stdout": {
+              "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/logs/inspect-nitro.stdout",
+              "sha256": "a18226859d493ef3add83d547c63b8b1f99a648ece79525623696580a302999a"
+            },
+            "stderr": {
+              "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/logs/inspect-nitro.stderr",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            }
+          },
+          "rows": [
+            {
+              "layout": {
+                "nodeSize": 152,
+                "nodeAlign": 8,
+                "id": 0,
+                "name": 8,
+                "tag": 32,
+                "note": 56,
+                "metadata": 88,
+                "children": 128,
+                "searchSize": 48
+              }
+            },
+            {
+              "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced255.txt",
+              "nodes": 255,
+              "mode": "inspect",
+              "inputNodeCapacity": 255,
+              "inputChildCapacitySum": 254,
+              "residentCapacityEvidence": "observed actual final resident through diagnostic-only shim getter under mutex",
+              "residentCapacitiesObserved": {
+                "nodeCapacity": 255,
+                "childCapacitySum": 254,
+                "childCapacityDistribution": {
+                  "0": 128,
+                  "2": 127
+                },
+                "nonemptyChildrenWithAllocation": 127,
+                "emptyChildrenWithAllocation": 0,
+                "metadataEntries": 510,
+                "metadataBucketCountDistribution": {
+                  "2": 255
+                }
+              },
+              "stackProbe": {
+                "capacitySequence": [1, 2, 4, 8],
+                "initialAllocationCount": 1,
+                "growthCountAfterInitial": 3,
+                "maxLive": 8,
+                "result": {
+                  "found": true,
+                  "id": 254,
+                  "name": "node-254",
+                  "visited": 255
+                },
+                "scope": "separate instrumented search of final resident under mutex, outside timing"
+              },
+              "canonicalFullTreeSha256": "d98ca7eae6e4b9c683736a1ac76ea1e303272d74f46f6570006b588baffea520"
+            },
+            {
+              "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced1023.txt",
+              "nodes": 1023,
+              "mode": "inspect",
+              "inputNodeCapacity": 1023,
+              "inputChildCapacitySum": 1022,
+              "residentCapacityEvidence": "observed actual final resident through diagnostic-only shim getter under mutex",
+              "residentCapacitiesObserved": {
+                "nodeCapacity": 1023,
+                "childCapacitySum": 1022,
+                "childCapacityDistribution": {
+                  "0": 512,
+                  "2": 511
+                },
+                "nonemptyChildrenWithAllocation": 511,
+                "emptyChildrenWithAllocation": 0,
+                "metadataEntries": 2046,
+                "metadataBucketCountDistribution": {
+                  "2": 1023
+                }
+              },
+              "stackProbe": {
+                "capacitySequence": [1, 2, 4, 8, 16],
+                "initialAllocationCount": 1,
+                "growthCountAfterInitial": 4,
+                "maxLive": 10,
+                "result": {
+                  "found": true,
+                  "id": 1022,
+                  "name": "node-1022",
+                  "visited": 1023
+                },
+                "scope": "separate instrumented search of final resident under mutex, outside timing"
+              },
+              "canonicalFullTreeSha256": "dc37af560d22e08ff70fefe07199098ad2ffb9f3aa967d2ac8d8e72dbed772bc"
+            },
+            {
+              "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced8191.txt",
+              "nodes": 8191,
+              "mode": "inspect",
+              "inputNodeCapacity": 8191,
+              "inputChildCapacitySum": 8190,
+              "residentCapacityEvidence": "observed actual final resident through diagnostic-only shim getter under mutex",
+              "residentCapacitiesObserved": {
+                "nodeCapacity": 8191,
+                "childCapacitySum": 8190,
+                "childCapacityDistribution": {
+                  "0": 4096,
+                  "2": 4095
+                },
+                "nonemptyChildrenWithAllocation": 4095,
+                "emptyChildrenWithAllocation": 0,
+                "metadataEntries": 16382,
+                "metadataBucketCountDistribution": {
+                  "2": 8191
+                }
+              },
+              "stackProbe": {
+                "capacitySequence": [1, 2, 4, 8, 16],
+                "initialAllocationCount": 1,
+                "growthCountAfterInitial": 4,
+                "maxLive": 13,
+                "result": {
+                  "found": true,
+                  "id": 8190,
+                  "name": "node-8190",
+                  "visited": 8191
+                },
+                "scope": "separate instrumented search of final resident under mutex, outside timing"
+              },
+              "canonicalFullTreeSha256": "3f76ce5091a148d0c7bf87dd45712a2007aeb5edf420778a0d9dc673f16b4323"
+            },
+            {
+              "fixture": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/wide1025.txt",
+              "nodes": 1025,
+              "mode": "inspect",
+              "inputNodeCapacity": 1025,
+              "inputChildCapacitySum": 1024,
+              "residentCapacityEvidence": "observed actual final resident through diagnostic-only shim getter under mutex",
+              "residentCapacitiesObserved": {
+                "nodeCapacity": 8191,
+                "childCapacitySum": 2050,
+                "childCapacityDistribution": {
+                  "0": 511,
+                  "2": 513,
+                  "1024": 1
+                },
+                "nonemptyChildrenWithAllocation": 1,
+                "emptyChildrenWithAllocation": 513,
+                "metadataEntries": 2050,
+                "metadataBucketCountDistribution": {
+                  "2": 1025
+                }
+              },
+              "stackProbe": {
+                "capacitySequence": [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024],
+                "initialAllocationCount": 1,
+                "growthCountAfterInitial": 10,
+                "maxLive": 1024,
+                "result": {
+                  "found": true,
+                  "id": 1024,
+                  "name": "node-1024",
+                  "visited": 1025
+                },
+                "scope": "separate instrumented search of final resident under mutex, outside timing"
+              },
+              "canonicalFullTreeSha256": "024b92d4ef02dd6f77d89676cfc1943ec16105d0aa012f8bd2a18e6bd2242c76"
+            }
+          ]
+        }
+      }
+    },
+    "timing": null,
+    "completedAt": "2026-09-16T12:50:38.879985+00:00"
+  },
+  "legacySupplement": {
+    "protocol": "rustra-nitro-host-core-dfs-legacy-supplement/v1",
+    "originalReceipt": {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/receipt.json",
+      "sha256": "33794b57294d013812b5005925d3c80956fd24041205fac2f38da79195420147"
+    },
+    "originalReceiptUnmodified": true,
+    "originalBinaryHashesVerified": true,
+    "recordedSourceCaptureCaveat": "The Rust driver was saved immediately before its diagnostic-only edit. Current Rust DFS, Cargo manifests, and lockfile are capture-time hashes, not a contemporaneous complete build freeze. Historical source/binary correspondence cannot be fully reconstructed from this record.",
+    "parentReportedBuildCommands": [
+      {
+        "cwd": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity",
+        "argv": [
+          "cargo",
+          "build",
+          "--release",
+          "--locked",
+          "-p",
+          "rustra-calculator-example",
+          "--example",
+          "nitro_core_dfs",
+          "-j2"
+        ]
+      },
+      {
+        "cwd": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs",
+        "argv": [
+          "clang++",
+          "-std=c++20",
+          "-O3",
+          "-DNDEBUG",
+          "-fno-lto",
+          "-c",
+          "core.cpp",
+          "-o",
+          "core.o"
+        ]
+      },
+      {
+        "cwd": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs",
+        "argv": [
+          "clang++",
+          "-std=c++20",
+          "-O3",
+          "-DNDEBUG",
+          "-fno-lto",
+          "driver.cpp",
+          "core.o",
+          "-o",
+          "nitro_core_dfs"
+        ]
+      }
+    ],
+    "buildEvidence": "commands and alternating process order supplied by parent execution history, not independently recovered from compiler logs",
+    "rustCompiler": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8\n",
+    "cppCompiler": "Apple clang version 17.0.0 (clang-1700.6.3.2)\nTarget: arm64-apple-darwin25.6.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin\n",
+    "buildOptions": {
+      "rustOptLevel": "Cargo release default 3; no release override in captured Cargo.toml",
+      "rustCodegenUnits": "default 16; not directly recorded at original build",
+      "rustLto": "Cargo false default permits local thin LTO; not matched to explicit C++ -fno-lto",
+      "rustPanic": "default unwind; no original verbose invocation retained",
+      "rustFlags": "original reviewer observed fingerprint rustflags=[]",
+      "cppOptLevel": "-O3",
+      "cppLto": "-fno-lto at compile and link",
+      "cppExceptions": "compiler default enabled",
+      "targetCpuFeatures": "not explicitly selected by reported commands; historical implicit CPU/features/environment not captured",
+      "environmentOverrides": "not contemporaneously captured; do not infer full environment equality"
+    },
+    "capacityFieldCorrection": {
+      "nodeCapacity": "inputNodeCapacity",
+      "childCapacitySum": "inputChildCapacitySum",
+      "appliesTo": "original rows remain unchanged; interpret their values as first loader input observations, not final resident capacities"
+    },
+    "fixtureOrder": ["balanced255", "balanced1023", "balanced8191", "wide1025"],
+    "launches": [
+      {
+        "pair": 1,
+        "framework": "rustra",
+        "argv": [
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/target/release/examples/nitro_core_dfs",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.json",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.json",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.json",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.json"
+        ],
+        "raw": {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/rustra-1.jsonl",
+          "sha256": "615c245372454792b0d385e9865490e135aac73787b3723a5ea5d88cd2f65931"
+        },
+        "exitCode": 0,
+        "exitCodeEvidence": "successful execution reported by parent; original command event log is not in this directory"
+      },
+      {
+        "pair": 1,
+        "framework": "nitro",
+        "argv": [
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/nitro_core_dfs",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.txt",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.txt",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.txt",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.txt"
+        ],
+        "raw": {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/nitro-1.jsonl",
+          "sha256": "b478d8f083e941e17f23d577dd1d56421188106733fc24cf524ec8a3dc0e52df"
+        },
+        "exitCode": 0,
+        "exitCodeEvidence": "successful execution reported by parent; original command event log is not in this directory"
+      },
+      {
+        "pair": 2,
+        "framework": "nitro",
+        "argv": [
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/nitro_core_dfs",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.txt",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.txt",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.txt",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.txt"
+        ],
+        "raw": {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/nitro-2.jsonl",
+          "sha256": "5104d5c54c06e18ad88a844fa4ddeba625895d0fbde2af1f08ce295076d74a7a"
+        },
+        "exitCode": 0,
+        "exitCodeEvidence": "successful execution reported by parent; original command event log is not in this directory"
+      },
+      {
+        "pair": 2,
+        "framework": "rustra",
+        "argv": [
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/target/release/examples/nitro_core_dfs",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.json",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.json",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.json",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.json"
+        ],
+        "raw": {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/rustra-2.jsonl",
+          "sha256": "d346925a9f2747155f0a480ba3459a33dd9090b856b2206c8d664995ceb34c9b"
+        },
+        "exitCode": 0,
+        "exitCodeEvidence": "successful execution reported by parent; original command event log is not in this directory"
+      },
+      {
+        "pair": 3,
+        "framework": "rustra",
+        "argv": [
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/target/release/examples/nitro_core_dfs",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.json",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.json",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.json",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.json"
+        ],
+        "raw": {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/rustra-3.jsonl",
+          "sha256": "e3109ca4168053fcdaca15261111291474206e09337112edd35b5b33d1030ae1"
+        },
+        "exitCode": 0,
+        "exitCodeEvidence": "successful execution reported by parent; original command event log is not in this directory"
+      },
+      {
+        "pair": 3,
+        "framework": "nitro",
+        "argv": [
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/nitro_core_dfs",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.txt",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.txt",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.txt",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.txt"
+        ],
+        "raw": {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/nitro-3.jsonl",
+          "sha256": "905791f0397e47d48aa3c832bf3229d5bc19e0f3e08a10da1ab93b42d167fa1a"
+        },
+        "exitCode": 0,
+        "exitCodeEvidence": "successful execution reported by parent; original command event log is not in this directory"
+      },
+      {
+        "pair": 4,
+        "framework": "nitro",
+        "argv": [
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/nitro_core_dfs",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.txt",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.txt",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.txt",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.txt"
+        ],
+        "raw": {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/nitro-4.jsonl",
+          "sha256": "374909f5880edb8c2c89e9e39bd655142177462747cbea32c402e73a3f3e1b45"
+        },
+        "exitCode": 0,
+        "exitCodeEvidence": "successful execution reported by parent; original command event log is not in this directory"
+      },
+      {
+        "pair": 4,
+        "framework": "rustra",
+        "argv": [
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/target/release/examples/nitro_core_dfs",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.json",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.json",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.json",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.json"
+        ],
+        "raw": {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/rustra-4.jsonl",
+          "sha256": "a1443eb978a2e17cc4e485e89426d9fb6a5b858c9fe33f9cadd86b736435f7da"
+        },
+        "exitCode": 0,
+        "exitCodeEvidence": "successful execution reported by parent; original command event log is not in this directory"
+      },
+      {
+        "pair": 5,
+        "framework": "rustra",
+        "argv": [
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/target/release/examples/nitro_core_dfs",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.json",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.json",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.json",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.json"
+        ],
+        "raw": {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/rustra-5.jsonl",
+          "sha256": "4d74847821d55775476655798682271b1cb765c507a01584784bccf50c515623"
+        },
+        "exitCode": 0,
+        "exitCodeEvidence": "successful execution reported by parent; original command event log is not in this directory"
+      },
+      {
+        "pair": 5,
+        "framework": "nitro",
+        "argv": [
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/nitro_core_dfs",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.txt",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.txt",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.txt",
+          "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.txt"
+        ],
+        "raw": {
+          "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/nitro-5.jsonl",
+          "sha256": "45d0c579ef9131dfd4814504f330958fbbbcd7b324952001db19b188edfcabbb"
+        },
+        "exitCode": 0,
+        "exitCodeEvidence": "successful execution reported by parent; original command event log is not in this directory"
+      }
+    ],
+    "aggregationFormula": "mean of 31 samples per launch; ratio = mean of five Rust launch means / mean of five C++ launch means",
+    "acceptanceRule": null,
+    "files": [
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.json",
+        "sha256": "84ca6f61a608416f0641336a1b07594ef6c2a2a9da90979f9df5511cb57dc85f"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced1023.txt",
+        "sha256": "fe5698ae66f597c9af25e490d18ce47eeb603ce35005dfc029b662d3440c4cd4"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.json",
+        "sha256": "51849aea7142f3b0b90a0ab45d683fceab924aa84f8db84ee09f8c82cbea8f98"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced255.txt",
+        "sha256": "b4626cb0e60bd599327a838f8307cb6281cc927dcc7d514ffa03243d686c47a5"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.json",
+        "sha256": "7bbce981d49558e4b539b57857d4e86ef2c33b3a056989791f710af8d2108020"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/balanced8191.txt",
+        "sha256": "0bf317c53f6b3014d91a1694af662b8abf14483b8d4f7d89cc4061fc45ee37b6"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/core.cpp",
+        "sha256": "6dcbd9f6a8db76ac32f8edd5aaa06fec535588108bc7b12bc71ad4735b0a4b57"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/core.hpp",
+        "sha256": "c1a21931ee1828fda61684dc423bc19666dc4def423adcd8ad0492a16485b0ba"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/core.o",
+        "sha256": "3113380281b202113d42b979ee06f04a7d848c5ff1b6635afb95a571b51ca88d"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/driver.cpp",
+        "sha256": "54b8182ab23f323933fb7e31b85a39c95019075b01ca533401f97ab3ebba781f"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/nitro-1.jsonl",
+        "sha256": "b478d8f083e941e17f23d577dd1d56421188106733fc24cf524ec8a3dc0e52df"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/nitro-2.jsonl",
+        "sha256": "5104d5c54c06e18ad88a844fa4ddeba625895d0fbde2af1f08ce295076d74a7a"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/nitro-3.jsonl",
+        "sha256": "905791f0397e47d48aa3c832bf3229d5bc19e0f3e08a10da1ab93b42d167fa1a"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/nitro-4.jsonl",
+        "sha256": "374909f5880edb8c2c89e9e39bd655142177462747cbea32c402e73a3f3e1b45"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/nitro-5.jsonl",
+        "sha256": "45d0c579ef9131dfd4814504f330958fbbbcd7b324952001db19b188edfcabbb"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/nitro_core_dfs",
+        "sha256": "da4c538cee77e8a2c815b9d2f0d79bdf88e54ae91915489f43731117147eb949"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/prepare.py",
+        "sha256": "fbfefb6529a5a31c57fd31c1ae6edd15e7d71afc8124b5233f2ad7b2a17223a9"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/receipt.json",
+        "sha256": "33794b57294d013812b5005925d3c80956fd24041205fac2f38da79195420147"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/rustra-1.jsonl",
+        "sha256": "615c245372454792b0d385e9865490e135aac73787b3723a5ea5d88cd2f65931"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/rustra-2.jsonl",
+        "sha256": "d346925a9f2747155f0a480ba3459a33dd9090b856b2206c8d664995ceb34c9b"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/rustra-3.jsonl",
+        "sha256": "e3109ca4168053fcdaca15261111291474206e09337112edd35b5b33d1030ae1"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/rustra-4.jsonl",
+        "sha256": "a1443eb978a2e17cc4e485e89426d9fb6a5b858c9fe33f9cadd86b736435f7da"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/rustra-5.jsonl",
+        "sha256": "4d74847821d55775476655798682271b1cb765c507a01584784bccf50c515623"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/source-correspondence.json",
+        "sha256": "226e3502bb15ad92163832407b860108e21547ff060522fbb3da1bbc75cfc77a"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.json",
+        "sha256": "5959c850d5b2900e02719ee0ef3fff3e02ba8832131a681e5fc0a137127a95b7"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs/wide1025.txt",
+        "sha256": "a1e0ea8f324530091aea3b391e61b89ace2fbbac71c09fd40f70496a9dbf5f30"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/legacy-sources/nitro_core_dfs.rs",
+        "sha256": "aaac4a117b9b7e6e4559eeeaca034a3fbda4ee94f5867053e35065b9089a3b6e"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/legacy-sources/rustra_core_dfs",
+        "sha256": "64477559f9a5d913d807a2f70d7006efa877eba462587310184667d2cb42d221"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/Cargo.lock",
+        "sha256": "1df3928b145e793a3252598b4821e624dea44c1c7f0d293136053a65f8679fd4"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/Cargo.toml",
+        "sha256": "3169235b87e9e3560aa4d9d5209019180a4fee9e64ce4e9585c2171f382628a3"
+      },
+      {
+        "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/src/parity_bench.rs",
+        "sha256": "5fe2864c1d3ff086bdb751ba08176e80a98f945682b09caa2cb0c45d87592cdb"
+      }
+    ],
+    "fixtureCanonicalHashes": {
+      "balanced255": "d98ca7eae6e4b9c683736a1ac76ea1e303272d74f46f6570006b588baffea520",
+      "balanced1023": "dc37af560d22e08ff70fefe07199098ad2ffb9f3aa967d2ac8d8e72dbed772bc",
+      "balanced8191": "3f76ce5091a148d0c7bf87dd45712a2007aeb5edf420778a0d9dc673f16b4323",
+      "wide1025": "024b92d4ef02dd6f77d89676cfc1943ec16105d0aa012f8bd2a18e6bd2242c76"
+    },
+    "limitations": [
+      "Host macOS arm64 only; neither iOS Simulator nor Android/device ABI or public-call parity evidence.",
+      "Rust LLVM 22 and Apple clang 17 are different compiler implementations. O3/release and one host do not establish matched compiler/target/allocator settings; actual versions/options are recorded.",
+      "Original host-only loaders retained. C++ does not reserve metadata, bypasses generated ParityTree(vector) copy constructor, and passes lvalues to generated node constructors. This does not reproduce Nitro JSIConverter allocator history.",
+      "Rust JSON decode followed by postcard round-trip creates extra temporary allocations absent from native dispatch. Its final input capacities are inferred resident capacities solely because parity_store moves the same owned tree without transforming its fields.",
+      "C++ final resident observation includes repeated optional copy assignment across the ordered fixtures, including balanced8191 then wide1025. Resident is never reconstructed or shrunk to force capacity equality.",
+      "No JSI/FFI/conversion/setup is inside the measured interval. The C++ handwritten class shim omits Nitro/JSI inheritance and virtual surface, so this is not exact native ABI or heap-history evidence.",
+      "Timing includes 16 calls, result consumption/checksum, and result destruction. Rust adds black_box on query and result; C++ consumes an externally compiled result with separate translation units and -fno-lto. Barriers differ.",
+      "Rust default release LTO=false permits compiler-local thin LTO with default multiple codegen units; C++ explicitly disables LTO. Neither driver uses explicit target-cpu/features overrides unless captured in the environment/compiler invocation.",
+      "The non-timed probes preserve exact original initialization and child-push expressions; trace-vector allocations and observer branches perturb allocator activity, so they establish growth policy, not timing or cache causality.",
+      "Rust probe reads final input before move outside lock; C++ probe reads final resident under mutex. These observations do not measure identical lock/setup paths.",
+      "Map bucket count is meaningful for libc++ unordered_map only. Rust BTreeMap has no public bucket count; heap bytes and allocation counts remain unmeasured.",
+      "Fixture loader format is restricted to printable ASCII by the TypeScript exporter. std::quoted is not a general JSON Unicode/control-escape decoder.",
+      "Five launch means per framework are descriptive. Ratio is arithmetic mean(Rust launch means) / arithmetic mean(C++ launch means). No confidence interval, public-v2 acceptance threshold, statistical equality, regression, or causal layout claim is inferred.",
+      "Inspection is a separate process launch from timing. Actual C++ resident capacities describe deterministic setup in inspection; allocator placement of later timing processes is not directly observed.",
+      "Legacy ratios are unchanged descriptive estimates. New non-timed observations do not retrospectively authenticate capacities or heap addresses of the old timing processes."
+    ]
+  },
+  "buildOptions": {
+    "inheritedAllowlistedOverrides": {
+      "RUSTFLAGS": null,
+      "CARGO_ENCODED_RUSTFLAGS": null,
+      "RUSTC": null,
+      "RUSTC_WRAPPER": null,
+      "RUSTC_WORKSPACE_WRAPPER": null,
+      "CARGO_BUILD_TARGET": null,
+      "CARGO_TARGET_DIR": null,
+      "CARGO_HOME": null,
+      "CC": null,
+      "CXX": null,
+      "CFLAGS": null,
+      "CXXFLAGS": null,
+      "LDFLAGS": null,
+      "MACOSX_DEPLOYMENT_TARGET": null,
+      "SDKROOT": null
+    },
+    "diagnosticOverride": {
+      "CARGO_TERM_VERBOSE": "true"
+    },
+    "rust": {
+      "recipe": [
+        "cargo",
+        "build",
+        "--release",
+        "--locked",
+        "-p",
+        "rustra-calculator-example",
+        "--example",
+        "nitro_core_dfs",
+        "-j2"
+      ],
+      "profile": "Cargo default release (workspace has no release override)",
+      "optLevel": 3,
+      "codegenUnits": 16,
+      "lto": "Cargo false default: local thin LTO possible; no explicit cross-crate LTO",
+      "panic": "unwind",
+      "debugAssertions": false,
+      "overflowChecks": false,
+      "target": "rustc host aarch64-apple-darwin",
+      "cpuFeatures": "compiler default; see rust-default-cfg and verbose build stderr"
+    },
+    "cpp": {
+      "flags": ["-std=c++20", "-O3", "-DNDEBUG", "-fno-lto"],
+      "compileAndLink": "separate translation units, both commands explicitly disable LTO",
+      "exceptions": "enabled compiler default, active require throws on mismatch",
+      "targetCpuFeatures": "compiler default; see clang-default-invocation stderr"
+    },
+    "comparisonClaim": "same host, ordinary optimized builds; compiler backend, LTO defaults, barrier and ABI settings are not identical"
+  },
+  "sourceFreeze": [
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/Cargo.lock",
+      "sha256": "1df3928b145e793a3252598b4821e624dea44c1c7f0d293136053a65f8679fd4"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/Cargo.toml",
+      "sha256": "3169235b87e9e3560aa4d9d5209019180a4fee9e64ce4e9585c2171f382628a3"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/Cargo.toml",
+      "sha256": "e3e5c9a52a69336701775e427656db399a9cf2e75dc28322c77ef8c9fd729605"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/benches/common.rs",
+      "sha256": "c6ad6a7955087384cff677d01c9c33f4fda0a45a4b920233b7a95022339de776"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/benches/complex_route.rs",
+      "sha256": "6d98086180fe9e52a88cddc2b7d6f685637ea3edc842783415245debd340968c"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/benches/dynamic_registry.rs",
+      "sha256": "457abd018c09090155b71a1433666d23d246581aa8cabc5150a05aa772b418ad"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/benches/support/complex_cases.rs",
+      "sha256": "6ac075caa3bd0a8aa810c80c238717d010f27dcea16b5a1f23a7571913cb2c95"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/benches/support/tree_cases.rs",
+      "sha256": "47a307a0b262970c15839791576735996e8409323e9e9b617f3898c22e10462f"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/benches/support/tree_wire.rs",
+      "sha256": "7c6061ae5df5d26fb97d5af9aa27b2a5d09b32e896d7d637e811c8c27cdd49e1"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/benches/tier_compare.rs",
+      "sha256": "252c18467031d5fb7048d13cb1b463fd57fbc431ab2658bd0a648fe7e6ad0204"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/benches/tree_route.rs",
+      "sha256": "545d6f6cbdc693af39a3c197be0e0da4848f05961a9e01bc8d035a812a444a71"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/benches/type_scaling.rs",
+      "sha256": "2186851f721ca36df60d02d367d4b5aa97f4a64cced137974000feece75bbc3f"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/examples/basic.rs",
+      "sha256": "e81eed2663d4cf1acc8ac6097c0f31b0de2bff03ca21c3a0bc8c9027353b88a5"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/examples/codec_allocations.rs",
+      "sha256": "e28e21372c6452be8bb62affee4e3774b91dda31ce241a61a2b24dcfef0aa54d"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/examples/tree_allocations.rs",
+      "sha256": "89b66906c2e7cbb56e50d3766bc190389ace67e397c322d3183f146ab79a1109"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/builder.rs",
+      "sha256": "65cad4b064739f14781996df866287a7100d4a2fef4a0a2605db1af7eef18d24"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/builder_build.rs",
+      "sha256": "4d07bade1ecca8058c537036a77222e0ec44ab1b619eeb2e2a5426952e6bb66b"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/builder_capabilities.rs",
+      "sha256": "ab41afb673d7de910c82e7fe886a1b12812f5d60bb83bcdc0edfdbaa7609ea4a"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/builder_commands.rs",
+      "sha256": "15c787db7c06053851c3de69d75e53d77f994ccb85782c283cf19b85dfb2254c"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/builder_devices.rs",
+      "sha256": "5ef78bad666b98a7067b8f87350b7f726da37b9527e0e8a7909564641e792564"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/builder_errors.rs",
+      "sha256": "00133f82d2fa1911399ee38ccc820915cbaeb12efb1a9b53bcb291be2ed43f13"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/builder_events.rs",
+      "sha256": "4634c527110f7b88ceef222ca75938fb9f102190f6b2542f6b2cbba5d5efc077"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/builder_platform.rs",
+      "sha256": "ece023d44ef51fd1ab537487aa3b2bd3b360ff3bd85ab23841378dbe5e052819"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/byte_buffer.rs",
+      "sha256": "d54dd729f2e5173755f08c1c8d9a918dd51cbe96324cc049e1b7606a71b4fecd"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/cancel.rs",
+      "sha256": "f94bcc5a42e8239a5a6cb1634cf888ae713f4df0dd16275760ec7c6f8895258b"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/cancel_tests.rs",
+      "sha256": "647937485a2e22f4d1ce2b6d1e09f03560893762cb915c1ac879941c754ab0e5"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/channels.rs",
+      "sha256": "65fcbaf8f74a948c6153f1d2f55acfd635710fa5ffe4cf99a5a6e9e1aa879a45"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/channels_handles.rs",
+      "sha256": "1b7e722f0214bb0389476994a60c0ae158ac28d6ed4651dec9408cdd9b606234"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/channels_host.rs",
+      "sha256": "a38888e649471269236eb2508e2b3b118ae0f6ac82856ca8a75ec94b0069a4a0"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/channels_tests.rs",
+      "sha256": "c73e48f96396126f30137152912518106a8248420ab3383b00402199cf25ad2f"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/codegen.rs",
+      "sha256": "e51b046be96accd505a37d4d3daef226a91bcd072abb9e33d92fd6e2fed7e3cb"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/codegen_names.rs",
+      "sha256": "3f70b974be1e86e4afa325cb6cedc89c93aede46e14be547a069821c5a932210"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/codegen_objects.rs",
+      "sha256": "da5139a276726bf48b885d48772bae1585e590722371551b750d721d1a7eb1dd"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/codegen_types.rs",
+      "sha256": "6f8a2bf4a030f56fa405dadf2ae55c83da3a0bef953bb02c7e4c5867cabf47ac"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/command.rs",
+      "sha256": "63bc863f0521992ab07062e60eb6343b039508d238c40f607c02c2baabf1ea09"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/command_build.rs",
+      "sha256": "b9444c1c26a0343e0858670c016ff8aa3dcbfb2abe1fb617e922b97dc12bbe93"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/command_execution.rs",
+      "sha256": "92beecef6fc6575c67d07c28fa696b3bcabd5f3faa0d50c7d69fdb609d56e47f"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/command_handlers.rs",
+      "sha256": "143e468a7674e95b71a760e95cfc8a40ca69b25f3bed95d8c88340c5cfa3ecd6"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/command_into.rs",
+      "sha256": "64df130bae9c01dd37823a73599ff22e3ad3dd66dca8d33222aadbd90fd29c5d"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/command_raw.rs",
+      "sha256": "0d70bd117aca36dae051487070f854bc1ea972f2046019b0f896badce2bf1e9e"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/command_raw_wire.rs",
+      "sha256": "0d2dbae6ed0e1c165de80f291896d7457c6c9fe3d18f0f37896c3b64e611e3c0"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/command_schema.rs",
+      "sha256": "3532b73f0dbc54957241abd50534e7693aed19a30cab1aa9d0e1cd35b41c89fb"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/command_types.rs",
+      "sha256": "cc5a4e8e8cd91afa8e0b60bc2fbae7b4f3c64fa7d0785752d02ac4db03b35f7e"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_codec.rs",
+      "sha256": "5e2d1ec45e107c444498d99a174c4884eab242b2f2ce3c766a511696366e25f5"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_codec_decode.rs",
+      "sha256": "17efa6919755a11a7e7c73ffc3876087062059f6fae28935b6ad363813ed527c"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_codec_encode.rs",
+      "sha256": "9db942fa3f823f02078e98d8e24d3c4957ad474dbb35e664082790c7b859314e"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_codec_encode_object.rs",
+      "sha256": "c6ca046d21ca39032054973aef71acb61e29750bdcd2d2abb38b662414d8832b"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_codec_schema.rs",
+      "sha256": "029c8737aa2b4c09a2fecbe50c2c0ea4f1bd8d2f674917cdf5c8bc0c55f318dd"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_codec_tests.rs",
+      "sha256": "d9956c4aec695c1776cb84c5e34e233e6cc60774c1b6669ca548325e5d34a0fd"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_codec_variants.rs",
+      "sha256": "e7e15303a16f654b811c21ed2e87e7a3a870b26bc4af61a5129c1a89a080561c"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_codec_wire.rs",
+      "sha256": "1c11306eefb2eafafef42588869ec38e4db58fa5ea02785fd78d5bdc9f2d0918"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_schema_ir.rs",
+      "sha256": "3f3af4cffcb22628305ec7d9cc7d75b49f8fb3b587d0deefd720de6e940e68b6"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_schema_ir_compile.rs",
+      "sha256": "1fab09c84bad184f5984d1639277e618a5fdaf717e69dd642498279c4aff8bf8"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde.rs",
+      "sha256": "f5ca25c386191418f55944baf99d0c14d883671612e717b7470cf3bdfbcca820"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_compat_tests.rs",
+      "sha256": "9d60a0c37d88b4e9ded5ed66305a3ebbed49e82c6da3c6b4ed93c85665fde80e"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_de_access.rs",
+      "sha256": "f51659924ad8826daa7eb8194b44129e0c816dd7ab022dc5c0267fcf33329cb1"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_de_aux.rs",
+      "sha256": "2cb641b40799b55615622bacabfde88f7720e1e5385adc998c2f8bcb873ab1d2"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_de_core.rs",
+      "sha256": "6a240cbbd5b37b9ca7402143ee961d7ae2fdd463b15754db3ecdc3e06de4c0c1"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_de_entry.rs",
+      "sha256": "100189b35972005ccaba2f2918f15b626e6aa1c049e26bc6974fe94ab52b0a71"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_de_enum.rs",
+      "sha256": "be5923bee08ac5befce7e0d91237ebe5de03d5a7bca335f38522ebb002884654"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_de_integer_seq.rs",
+      "sha256": "1c2cdda1d4b695c530330b23776e256382b5930185f2a024c164de0bc1335393"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_integer_seq_tests.rs",
+      "sha256": "3148069a26719c31158d983289e23c17ae48c7ed5fa900b41cbfbb5bc05581d2"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_map_scratch.rs",
+      "sha256": "99c2ec08df9913c35f2b3a6fd0f1a1f998df75bd670d8d5f427c847f79251255"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_pair_tests.rs",
+      "sha256": "5e385c370b83ad59ebe6b78cef2222e66f28684f7a6da2f4d6939f65fe56bdc5"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_recursive_tests.rs",
+      "sha256": "5670afe3e9bce51eb2dcd32e5e153b5338d0f92121d42320c343acf972227914"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_refs.rs",
+      "sha256": "f1914fada36141ee424ece26684c309a9015375a9e2022c7fc9595a5edd726dc"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_scratch_tests.rs",
+      "sha256": "f861afa0269e493b63ed46468e26636df4e2fcbfe4f2931642f24dd1d9073dc0"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_ser_access.rs",
+      "sha256": "e5f8159cee7943a4142c210cde2ac8fd6c3a4befd51aaf615d04dfbdeb2250ea"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_ser_core.rs",
+      "sha256": "d0d08b6196efc9982995330e17dfca0ce8c773db88b593391610505a62ea1780"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_ser_entry.rs",
+      "sha256": "e97e7ed79422d4c808d97d53d1bd265fb7977c411161e0b1322cb4839e6f5504"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_ser_map_key.rs",
+      "sha256": "ab97811e89fc5df4d5b99adc46c12ad684ad19b1a87ea50d3eeff1cc47fd3f19"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_ser_struct.rs",
+      "sha256": "963479a71758195c3706e5beff469f583c16e7a8482b9a5e98e1f3f9f7997609"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_support.rs",
+      "sha256": "b4b0784ea8e50b25f4a2ffca62ddc24bd0d3f63c19fd3ef4852a83ab2158f9ef"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_tests.rs",
+      "sha256": "ebf574e1ff0eb1f94888b247ae76503b37c031bae6a3be89111a1f8b9ee22d47"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/complex_serde_validation_tests.rs",
+      "sha256": "f86d64b92a11ce1905abb703095039d328631fcde679bac1d12189b677c95eab"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/device_capabilities.rs",
+      "sha256": "18d9710bbad7081ff96eea53850b901e880776f6c41e9fed9bcc464673c9be56"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/entry.rs",
+      "sha256": "3d279dc0a1fd93e8a1c3f124996ac900a8164340f4d5d6362db0052d213c32ba"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/error.rs",
+      "sha256": "a40509e78e8e0509d82e41bff8e47ea1ba53dfb50ac395bfbeacf4aaade65c94"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/error_tests.rs",
+      "sha256": "d8940ed29d4aab3f565888c8c6690291cd27ddd0429018ab68406566af3d363f"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/events.rs",
+      "sha256": "35f95fc4f026c370f90d9ea8af6aec2dbdfe5cea3d1b441ebe1d4dae73e0f960"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/events_bus.rs",
+      "sha256": "6ded4835e9294828870f31d9f54e9a14ac22dbda62142b9de73627067a054ef2"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/events_state.rs",
+      "sha256": "ede010f15a1c7015f36f134d97ff8cce3eb3f31666177b95102b7c3c00ecb977"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/events_tests.rs",
+      "sha256": "8a312175bbc1fd314d3ec2bd1d90d163e7523639b767361632000f337d01d849"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/executor.rs",
+      "sha256": "9689754dabb6a44072f040dfc3d616a452de2aed3dc148f22893d7b1298176e0"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi.rs",
+      "sha256": "2aa9ece5287598fc70d7fd9cb8060ac5729dedafb2db4a0fc609014d13abc30b"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_async_entries.rs",
+      "sha256": "c25743e37fc657ec6d6f5b8ae5b447d85e814fc55d77a12c71c87cb77312a165"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_buffer_entries.rs",
+      "sha256": "aabd16490c194a4bf268729cf60e5d217e7448ab02baa47ae36866ca9b18770c"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_channel.rs",
+      "sha256": "26b631413e02a2bb642a8caa042887bc8e2926b8ff0a5b8bdf70ea5ace71b4e0"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_dispatch.rs",
+      "sha256": "21c0f82d75013ed0bd3589e520da059fa6134a99052b0a0a4f852cf33a6139fd"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_event_core.rs",
+      "sha256": "321835c9de365466b4ec8d7d205ed1c9dfd830a04d0b5a292e76a2e9bc39a356"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_event_entries.rs",
+      "sha256": "36b0d5a1333475aa5389d049434913d4733a013cca56db4abd7ebb35d52b5c52"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_free_guard.rs",
+      "sha256": "d03ac82802cff9b633d2644790018117bd591c4f4eca0fc54b1689019a296943"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_hot_reload.rs",
+      "sha256": "cbcbc73b79b3256d4618578b1e1bcf210ad6efe05716e7fb8dde351c6ba57ad2"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_hot_reload_tests.rs",
+      "sha256": "f68c23733f36bab3fb183a0f8a33626664a4b97b0b9df7b8a50f5a34a094afe5"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_lifecycle_entries.rs",
+      "sha256": "602ac1e2dddbeab592372ef519dcd5f28af1b7191f4b5cdb108a2c13cdc0666e"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_pool.rs",
+      "sha256": "68945451b5689665594aa31aa13bf7a7c373e5274d1adbbdcfa561e8f96fda47"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_prelude.rs",
+      "sha256": "98fa904de5bb39eeac065788af1f63a43b626739ae71ad8e4510ac88d78065d3"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_schema_entries.rs",
+      "sha256": "df7c68931558ab418150fc2f707c1ae86909fa53a721bbfbdcbf07c2beef56d1"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_snapshot.rs",
+      "sha256": "7fa0049d9983ac28a791458c50e29ebe927250274410d61bc5aef01c91f38b90"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_snapshot_tests.rs",
+      "sha256": "3e96b87f8a070e5d636e3d4d426232102fd90e56c8e74e35ab3140d2bff95de5"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_sync_entries.rs",
+      "sha256": "06f2598dd0e656c8150e9ad8cac033db55038337c3252ab7a01bee9d2024bf72"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_tests.rs",
+      "sha256": "479b96f66dc3b4a56b55d22d69d42de6181b859463565ce27e3b24cadbd0aab4"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_typed_async.rs",
+      "sha256": "c043acecd09a360a3562982f0f18fc3745ed14a7a5bbc356ee8bc57e5c6c3544"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_typed_buffer.rs",
+      "sha256": "f62ba581f7e0bb8125ae607cadc7c299e38c0123a6205b7281de0e02e1813d82"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_typed_entries.rs",
+      "sha256": "342c572a9ac2564e7b211873a2e82c48ce4d7565eb84c8e50bddd526ee27ba9d"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/ffi_workers.rs",
+      "sha256": "a2fe3119a2e06adb89719c0e4a170ed83cc4f69adefaefb922f34ad2afeb97d7"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/frame_codec.rs",
+      "sha256": "6efb2f41e8e23018ee4587a8d9c118fc99810db680019f42c13b5e745f96d7da"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/frame_decode.rs",
+      "sha256": "cbe3cf7961895c1cf423fd3b941f333a77aae4c06b015fcd191e8d2fa5043d2d"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/frame_error.rs",
+      "sha256": "ab0bd1a79eabbbe1471beaf5106c58e458c4838245c7709e34b55019579faadb"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/frame_fields.rs",
+      "sha256": "5558ab000ba72a54925cbca51437fb5079fc3af97ac345c83b93a08c6d5ccf18"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/frame_raw.rs",
+      "sha256": "371502f8173673772b0acfddacb6457afe61a6a2a2e8c1e7b6275c734cfee702"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/frame_response.rs",
+      "sha256": "3bc560f7e3b33ad1ab6f9753f290d44fa77ab3eaa80a6d58da813c6c02cc780f"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/frame_support.rs",
+      "sha256": "4cab2d24232582208d45a5ff254815b0ca8b672eb3105f5facfeee1d979793ba"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/frame_support_extra.rs",
+      "sha256": "67707c9a0a38d835f55aa57e11492356c8dc417c994e4d54e871db1d455bda67"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/frame_tier3.rs",
+      "sha256": "715bd4cbf0ca614a0a88baad60b44c26b12619b80bfa69439aeb6d3c042cc3f4"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/frame_vec.rs",
+      "sha256": "cff69399feb60c1adefdaa783e50d8f91395ff6b3126cb6d0ed02d03c2f9b657"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/hot_core.rs",
+      "sha256": "5e133b2a5f4fed9dc995932f343823726e6e019b9d561870f92c4576ae83f64d"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/hot_core_dylib.rs",
+      "sha256": "88df0982db38ad3a672cc2b2c8f2c9356359a8f279c1df300ca1403bfe47fb8d"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/hot_core_retention.rs",
+      "sha256": "9bb54c39f306e5f61e5ee5ca2cfa1be9ed6872fd5fe1c7d5dd30cc78c1015eb0"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/hot_core_tests.rs",
+      "sha256": "4a8e2b1cfbd5a46819951a913853236a59a0e95eab17f5b49c5af43cfde7b244"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/hot_core_watch.rs",
+      "sha256": "80e4dd98e0ce2627f44e80b696843380efbc6db26146d1be6a4417d528bd48ca"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/internal_tests/buffer_invoke_tests.rs",
+      "sha256": "24b8168d6ae4e7b1fa10edb9321673af6a06f233b1d2fdc189ffe234e4237f40"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/internal_tests/builder_devices_tests.rs",
+      "sha256": "f258051568fd6bb03f3be8f6af9261faff476e7d4718a4e0da53bc465cb0ad3a"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/internal_tests/builder_errors_tests.rs",
+      "sha256": "52f3fb6c19a0434e7825e136629c44b3737e48594e9b6e65da8d3fee6a200f34"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/internal_tests/builder_platform_tests.rs",
+      "sha256": "5963ae4fcf4dfe24e542b962b7ab2aeac34af4e2e5d51b00d89abfc94e1ef915"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/internal_tests/complex_codec_adjacent_tests.rs",
+      "sha256": "a9b460c9ea64dcbe469e197baa9042f037f0e27d769a84100c70ed38bc8c8a9c"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/internal_tests/complex_codec_malformed_tests.rs",
+      "sha256": "6432f82ac765cf6defa774cb459152e307a4b6e4d9fe1ea018d9fd360e159abb"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/internal_tests/complex_into_tests.rs",
+      "sha256": "96de6f55a1dfa8347b4b7dc2c1ce6c20530bfe2807a399acae1f46a1d414c881"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/internal_tests/raw_invoke_tests.rs",
+      "sha256": "c7936378dcdec8896f6de1ecf273d0964b400e598d77048bb339b553c634a4a7"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/internal_tests/runtime_registry_tests.rs",
+      "sha256": "5a5329dd03aee6c237ce053b5ee56515825642f3dfe7d29dd0ce7773308ab657"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/internal_tests.rs",
+      "sha256": "77f2ef05f6a72971a7d0341aeff87cd129fbab465c3533e984b039f3f776a44a"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/invoke.rs",
+      "sha256": "47f9140b23fd56930ed6823ab3e55cc40f9f06f46e5734058823a32ba89f046d"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/invoke_buffer.rs",
+      "sha256": "752c36c38b71e1bc9dcfb38fdec801b706147cc6dacaaff581632f3a7b5742a1"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/invoke_dispatch.rs",
+      "sha256": "5d3819a61ec416c4d43721848f5ec08792af583625d18b31403243198174f8c2"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/invoke_frame.rs",
+      "sha256": "d54776c2db79a9859c27c6078732e6876e86d23656ea4e30f3aa20eb5812df3f"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/invoke_typed.rs",
+      "sha256": "a4323bc6926dcfa86ac8ddb4a64cfe3984bb2250b96abf607e3ef2c13dd1021d"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/lib.rs",
+      "sha256": "23944a6054d23fa0f3b9987db3c5a556fcc7e635509eb037cf0231f8f5721aea"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/limits.rs",
+      "sha256": "928ccd26e88b5496630c8df9eeaf0be7c872d499d489d79e4fadebaa71b9ccf0"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/package.rs",
+      "sha256": "3bedc9e798445435e406b9540be39ae4521afcb3addb5568eb35018957981995"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/package_codegen.rs",
+      "sha256": "da97d6c1173c1ecddef627d683426c53efb127333af16bee22d51d2255c64adf"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/package_commands_gen.rs",
+      "sha256": "57dbfa53b0d7c9360d41dc3557feab0e8967358d149bc558370d3bfd961b1b7f"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/package_core.rs",
+      "sha256": "92683dffb983beaaf967a11bf6b544f8ed5c0507766f28ce8ffa10ca8a7e825a"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/package_events.rs",
+      "sha256": "df6c520e6674280a840022ce4b7ea22cc05f0799de184806762ca2478564df46"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/package_json.rs",
+      "sha256": "01f285793c381267789b7682c596e1414a129903e635c175be635dce2e163d13"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/package_schema.rs",
+      "sha256": "add69224cdf1bce98a36f2611943b70bca16663037cd35b4a17b54cbc14e0028"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/package_types.rs",
+      "sha256": "0ec647c585ad53cdfc96a93bb8ea6b8d8eb14530cedba64142cb3eb75ae1231e"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/package_types_gen.rs",
+      "sha256": "37c3985b253d1ad1152171a4ea4d125c56190cad9a990ba955e20afa57823533"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/platform.rs",
+      "sha256": "e1c1b55acc9eb918a0f7b41c8e39005a300a8dc6687fc1aea2e72e4a49767602"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/prelude.rs",
+      "sha256": "4c85efe6d1b767eaeca0ab21e10e11d9fa8c8725e367952af88c9ff1a1db683d"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/private.rs",
+      "sha256": "4e3680bb25c1ef92ebae946d0e9507addc65610bdab80585e66a57bcafa569ed"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/registry.rs",
+      "sha256": "819c862e9b89268d17ab395230aa9ef0d7e2198b8675607137ff4b52d606238f"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/schema.rs",
+      "sha256": "16519be6ad39c044a6295f3fd67bdeac480002dcb9ce3ac8ff1926a66efea053"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/state.rs",
+      "sha256": "b00783ee53ca2ad5014a6212d1aa8b6a6ca66f5c8b412c34c0f2712f32756895"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/tauri_channel_ipc.rs",
+      "sha256": "bdcf04bb99a3389a05e2b8c9e7317a9e849d10f3d15c6867132f42a4b8fc100c"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/tauri_channel_ownership.rs",
+      "sha256": "b503457566ece9cdc57481e49a7c162dc736381230b085542556b470f0e9ee67"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/tauri_channels.rs",
+      "sha256": "a58c668186641fa04db4ff94c11b9fd987e0886c1cfb6b2743ffd5536b0fba18"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/tauri_support.rs",
+      "sha256": "50906f59b1aa2fad6772872799352c80d0e6983c5affcd490ad8f3376e291a61"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/tauri_support_swap_report.rs",
+      "sha256": "f7740ac2e43cc4b1647139ce0e799a22bd60407da6f56726bd2385051c349b16"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/src/tauri_support_tests.rs",
+      "sha256": "212df0a27efb3780f0ea69c449a933da4480d57e40be89eb5fce34574de8a856"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/cancel_tests.rs",
+      "sha256": "a32efd12c6a5159f7a4d1eb1a79425126a8fa25809a3fc71687cddd6b37fad63"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/event_sink_tests.rs",
+      "sha256": "e87b8b8aec30d75a10baf4cddbf821211484567fde9e58a16f6f4e436217483e"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/ffi_concurrency.rs",
+      "sha256": "fa21ef5d604fc518ffee0c01b03b9121586e2c6b6ea88d9f3e4a892c3b7ec020"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/field_order_drift.rs",
+      "sha256": "01d011d87e89019750ed4d63ce77920483753bc80c2a4e2a1bb48a5b84cacb3c"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/frame_concurrency.rs",
+      "sha256": "b2f428f7277a424323673ef249d71a9cd5a8290e98f933650bd5534cfa43ed9b"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/frame_fuzz.rs",
+      "sha256": "5e53b186c903e00326c1b2d58294633fc02c3f8ff320bf2898e784dc3b0fdd43"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/frame_panic.rs",
+      "sha256": "5c1df7e54fb4c391ae96d060b59938d1341b4ffe7b2e64e2598500f658f33004"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/frame_wire.rs",
+      "sha256": "c59eb39648ae760725644b33cfe9ea728adeca04a20d80a4c475f1757239259a"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/inspector_golden.rs",
+      "sha256": "59c84d5256e352282ca539b86b702e8b47ed86669dc41a15bfe5f998f640e51f"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/integer_sequence_route.rs",
+      "sha256": "df96dd72bcc21f6f7d6fde23b2a9b0f498f715a36a1be22677a5ad0ab4cdeba3"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/invocation_isolation.rs",
+      "sha256": "a049eb0aad5c420475501b67e662757f448ea8dd851f19c0b0d0e8dbc7494a53"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/invoke_typed_tests.rs",
+      "sha256": "514ed7c60ef0e39e0e8b59c0d18bf1b1e6e4ecdbe44dc5fa4588fa3080b5c35d"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/ota_compat_tests.rs",
+      "sha256": "63b51497feba49a737739d3f75fc06b4dca67f20bd3b9784a0827ee789b860ed"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/payload_robustness.rs",
+      "sha256": "5ea0ded65da7c6d42784dfcf3ef50e518509b645305473e4f8a41a302473cdc1"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/public_authoring_api_tests.rs",
+      "sha256": "ac2a1cde789a5f54e0378cde24baedffc77900613064838353143094b655e24f"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/raw_dispatch_contract.rs",
+      "sha256": "e00eda15836eac671737866ebba180aad9ce87576389468173e93dc4b57108c9"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/raw_ffi_allocations.rs",
+      "sha256": "1b872e2123ed2cfc77d5481b72667d934779a0912d02118bb91ef7fb4a8e7f02"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/response_limits.rs",
+      "sha256": "35235155a4a9988023344f574d8ab8f673808a55baebb9e310bb7b32f353d67f"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/sync_execution.rs",
+      "sha256": "dfc84817043e54004a2de7c8cc843352e95d5c61465157dbf0984e760b55368f"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/tree_benchmark_fixtures.rs",
+      "sha256": "5d1e9b755e0f01d93792c7d59ee42220b4662b2ba9ffd895144815c35300f24f"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra/tests/trust_baseline_ffi.rs",
+      "sha256": "12b739a8cad3897dd7e25a731cd789f210c71d465f29eb0df882560212c19247"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra-macros/Cargo.toml",
+      "sha256": "2fd304cf69ea3335d1c226041b8bd456e5ea2f89b31876f27da3de5ac12a6b7f"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra-macros/src/lib.rs",
+      "sha256": "f9a55f5880a6d7b41448e0fceb90af863693bee110449c4fdf88d9a6bd991794"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra-macros/src/macro_bridge_type.rs",
+      "sha256": "bf73882db0c72d2c65c96c4161db0ba2499d6ebafef456b3b00e9a9c4018f731"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra-macros/src/macro_build.rs",
+      "sha256": "4488f6add790d8a1f503b487939b7ef654327f515835a8e21282f1c3e7fcb702"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra-macros/src/macro_command.rs",
+      "sha256": "4982243981e30a79f8b01dd99666bd6c3f2e9b1a5be213fbf6649461dc9e7b9e"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra-macros/src/macro_command_support.rs",
+      "sha256": "fd1737ba9de81b9654397ef2619a32849d3788eee0e838f547ed1dbc36da0ac5"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra-macros/src/macro_register.rs",
+      "sha256": "a5e453bfb961a6eed192fa6058357692f7aeae5e72f09ae1c4d72b323325f76d"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra-naming/Cargo.toml",
+      "sha256": "15a07cd63b758329048a3a927dacb10068a8ee62d1df53ae7f27c58cc305b032"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra-naming/src/lib.rs",
+      "sha256": "775466df7d830b535ab2980ddb7d604a6fcaef90306234b0c36e0b3e0248ba5c"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/crates/rustra-naming/tests/naming.rs",
+      "sha256": "674fa745b9c9b749863fe66a6e0e316ed9ff377c0b6f36ee15207423b6c06c3d"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/Cargo.toml",
+      "sha256": "2773aa4459036577a7667fcdcfd299f2df654e2b2f68dcd8eb522dda63076ba8"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/examples/nitro_core_dfs.rs",
+      "sha256": "1b09e3713df2ef4f16c9207c6d8025d348b6660a0c1ea452b9798af15b00539a"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/src/bin/generate.rs",
+      "sha256": "12c8d3ea3a387d9228e8908cca9b0225eacd9dd9d71fde110ef30ae9c1e2f262"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/src/bin/loop-stdio.rs",
+      "sha256": "f58f2db527d5a61b4ba44752da34143b8fd1365974cf40bfa94c12273c24847e"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/src/bin/uniffi-bindgen.rs",
+      "sha256": "b2f9bdb7089dc718a60380c2c385c5cb71f60e742c04cc62bdda5862f1d52ea6"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/src/bin/wire-bench.rs",
+      "sha256": "b2a638ad903dc580cbf61ef5cdd1f3291b583b89d83cd0b1beff181ae9f90219"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/src/lib.rs",
+      "sha256": "1a303cb865ad9990ff58551e992ddc7234bc69fd576264947964dcb8579749c9"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/src/loop_stdio.rs",
+      "sha256": "e8062e3f9bd4ba9dd677cd658fd057f3de70183dc77940ce4e607dfad037e7a9"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/src/main.rs",
+      "sha256": "31246e90e84b5e623ad6c203eacebffa8ade7eca3ab1fd6307b5afa60e72cc1a"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/src/parity_bench.rs",
+      "sha256": "5fe2864c1d3ff086bdb751ba08176e80a98f945682b09caa2cb0c45d87592cdb"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/src/uniffi_generated.rs",
+      "sha256": "8ed929cc206f3485574a19951b0b7652fd33ac1da9d43c04cd150b67ad7edeb9"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/src/uniffi_render.rs",
+      "sha256": "cea7d56026c3b15a7725f84aa1a003200e8709eae137d3f5d4d08360e4bc7049"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/tests/example_contract.rs",
+      "sha256": "131f99311233467f9c9ded20a18fa0ec637cfc363bd86509e94bd0ade0189819"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/tests/frame_panic_guard.rs",
+      "sha256": "d71cd61d1551862524dd9fe6b5ddab0b66b2c37f3129bf7a3d46b0f89aa8cbc2"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/tests/loop_stdio_channels.rs",
+      "sha256": "3a1442cb6307589026419fe59cebccb57ee81099523ccfba2e60ecba3e8a7475"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/tests/loop_stdio_events.rs",
+      "sha256": "12e0b3d358fba1e157be2e13b03ce26b8887d6a4cd95fe9df6f2bc61c1971a81"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/tests/parity_fixtures.rs",
+      "sha256": "b47f9866e4341f1cd1c79bc9df44a5b10e8d7a6942f03c86daac3cca9327bf91"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/tests/uniffi_api.rs",
+      "sha256": "b6f106264cf95c4b90209252f58535f378d9157d412cdef5eb6e27bae8e50644"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/calculator/tests/wire_fixtures.rs",
+      "sha256": "8c04efa3cca0bcd2792668b0e0397d330395f326bbd03428c6f4889b733968f1"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/react-native-calculator/modules/nitro-bench/nitro-bench/ios/HybridNitroBench.cpp",
+      "sha256": "030793f8e291eb2e6701a66599449b0d0acc0252ffb7a7468bddff79a0373b9f"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/react-native-calculator/modules/nitro-bench/nitro-bench/nitrogen/generated/shared/c++/ParityFindInput.hpp",
+      "sha256": "0d93fa5ef8c238e09f4aeaa073dd25299231e1b63971f9e63a5f3f0cdeda32ce"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/react-native-calculator/modules/nitro-bench/nitro-bench/nitrogen/generated/shared/c++/ParityNode.hpp",
+      "sha256": "20dc473c6ed36240c827738ccf666d92ad66e67bbf4523667c005b15a0aed80f"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/react-native-calculator/modules/nitro-bench/nitro-bench/nitrogen/generated/shared/c++/ParityQuery.hpp",
+      "sha256": "01cd7abc7433f5bd8a6b8138e6a3a224c42460df88bcd73cfe76004ec0e55d01"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/react-native-calculator/modules/nitro-bench/nitro-bench/nitrogen/generated/shared/c++/ParitySearch.hpp",
+      "sha256": "4279847c73df2ad3eb4b1588f4f32c13e7187c8ccbc4d3e855c207be05bb94d3"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/react-native-calculator/modules/nitro-bench/nitro-bench/nitrogen/generated/shared/c++/ParityStored.hpp",
+      "sha256": "6a24cb466c14a4df0be9f73c02976bdbe6cad32dc4d71d65182ed9016f2d37c1"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/react-native-calculator/modules/nitro-bench/nitro-bench/nitrogen/generated/shared/c++/ParityTree.hpp",
+      "sha256": "27480140d1638da1cd87849bfcf7b7cd420ec908945c4581cd4ac0013428fd9c"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/examples/react-native-calculator/src/nitro-parity/fixtures.ts",
+      "sha256": "74032ea6902e19b9b066d41e3029d0b37b181e23d2296b80bf51118565c1af5d"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/scripts/nitro-core-diagnostic/README.md",
+      "sha256": "4fde1c8fef1934d4bac534a47ac8cf87f22b3b575e9afdf6572aa3c23b8b3d48"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/scripts/nitro-core-diagnostic/driver.cpp",
+      "sha256": "fc32cf69299fe25c7e089f075f5867e129ae648cdf843fdf096f3e1b14a5c922"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/scripts/nitro-core-diagnostic/export.ts",
+      "sha256": "54c58cd802297c3fdbcb9e7e7d11e9083feb6b324880c6d3c73637f1908b8042"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/scripts/nitro-core-diagnostic/legacy.py",
+      "sha256": "15606dc3cab3284149f8879db37cf7ad3f820b06fa65ab1e5644ba80fb921bee"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/scripts/nitro-core-diagnostic/observations.inc",
+      "sha256": "f1e35e41d5c49c68114ce30c53bb49f09e34ffd083518134ad3be9afb87f391b"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/scripts/nitro-core-diagnostic/prepare.py",
+      "sha256": "9885707ab6efb0dd960e7284f2d8ef59f2152600a124551724c66ca924d8d6ea"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/scripts/nitro-core-diagnostic/run.py",
+      "sha256": "52203deb333c1e6cdb7ba980b246e6f6c0b0de779f2149d17f607966506658a5"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/core.hpp",
+      "sha256": "dd3f99fd99e4041bb37c3babbdba4d6b78742bb791668cc7979258f7a0f0530b"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/core.cpp",
+      "sha256": "a16502c8a983e97cb86d6d4f7dc32bf2e24b7280f32786aa0ce7c5f72f6183f9"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/driver.cpp",
+      "sha256": "fc32cf69299fe25c7e089f075f5867e129ae648cdf843fdf096f3e1b14a5c922"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/source-correspondence.json",
+      "sha256": "c38b269e8bc2377d66a65df1e384eb2251cb47ec936c1230ec65262cf9c323fe"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/instrumentation.diff",
+      "sha256": "1c63db7786fe08c3a41db2b37645c5baf4d281890f0bcb34c5b57505b69fc5c1"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/fixture-order.json",
+      "sha256": "e211447eb6156534aadf2a34ff87d0afd29f806c433002e5546e61ab953212a2"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced255.json",
+      "sha256": "270cd1fcc55717af13c8009cdd2aca73e3a5fb85a623d5728f219558ebca1ba8"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced255.txt",
+      "sha256": "b4626cb0e60bd599327a838f8307cb6281cc927dcc7d514ffa03243d686c47a5"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced1023.json",
+      "sha256": "a2d6ccb72602f242af419f15d815c587285a252ce5ce26b6bb1cd87b9b778ab4"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced1023.txt",
+      "sha256": "fe5698ae66f597c9af25e490d18ce47eeb603ce35005dfc029b662d3440c4cd4"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced8191.json",
+      "sha256": "254bdd527b919bfe6e93beb5c84a22c07dfd141f93ea5939ceea707c806f3c47"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/balanced8191.txt",
+      "sha256": "0bf317c53f6b3014d91a1694af662b8abf14483b8d4f7d89cc4061fc45ee37b6"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/wide1025.json",
+      "sha256": "d11daa279807d9cb5017154209dcab6a231cf8f58f22f189a0d8979777cb940d"
+    },
+    {
+      "path": "/Users/loopy/dev/ll3/rustra-bridge/.worktrees/nitro-parity/.superpowers/sdd/2026-09-16-nitro-parity-followup/core-dfs-next/wide1025.txt",
+      "sha256": "a1e0ea8f324530091aea3b391e61b89ace2fbbac71c09fd40f70496a9dbf5f30"
+    }
+  ],
+  "instrumentationDiff": "--- Rust production search\n+++ Rust non-timed probe\n@@ -1,9 +1,10 @@\n-fn search(tree: &ParityTree, id: f64) -> ParitySearch {\n+fn search_probe(tree: &ParityTree, id: f64, trace: &mut StackTrace) -> ParitySearch {\n     let mut stack = if tree.nodes.is_empty() {\n         vec![]\n     } else {\n         vec![0usize]\n     };\n+    trace.observe(&stack); // DIAGNOSTIC_OBSERVE\n     let mut visited = 0;\n     while let Some(position) = stack.pop() {\n         let Some(node) = tree.nodes.get(position) else {\n@@ -20,7 +21,8 @@\n         }\n         for &child in node.children.iter().rev() {\n             stack.push(child as usize);\n+            trace.observe(&stack); // DIAGNOSTIC_OBSERVE\n         }\n     }\n     missing(id, visited)\n-}+}\n--- C++ production search\n+++ C++ non-timed probe\n@@ -1,13 +1,14 @@\n-ParitySearch search(const ParityTree& tree, double id) {\n+ParitySearch search_probe(const ParityTree& tree, double id, StackTrace& trace) {\n   std::vector<size_t> stack;\n   if (!tree.nodes.empty()) stack.push_back(0);\n+  trace.observe(stack); // DIAGNOSTIC_OBSERVE\n   size_t visited = 0;\n   while (!stack.empty()) {\n     const auto position = stack.back(); stack.pop_back();\n     if (position >= tree.nodes.size()) continue;\n     const auto& node = tree.nodes[position]; ++visited;\n     if (node.id == id) return ParitySearch(true, id, node.name, static_cast<double>(visited));\n-    for (auto child = node.children.rbegin(); child != node.children.rend(); ++child) stack.push_back(static_cast<size_t>(*child));\n+    for (auto child = node.children.rbegin(); child != node.children.rend(); ++child) { stack.push_back(static_cast<size_t>(*child)); trace.observe(stack); /* DIAGNOSTIC_OBSERVE */ }\n   }\n   return missing(id, visited);\n }",
+  "review": "# Task 3 core harness fix1 review\n\n2026-09-16. Scoped read-only re-review of the four P2 findings in `task-3-core-review.md`, the new `scripts/nitro-core-diagnostic/` sources, updated Rust example, source instrumentation diff, legacy supplement/snapshots, and the parent's completed `core-dfs-next` command/inspection/build/receipt evidence. No build, test, benchmark, or device call was run by this reviewer. Only this report was written.\n\n**Verdict: the four original review findings are addressed for the explicitly limited host diagnostic. No new blocking correctness/fairness issue found in the reviewed scope. A new timing run is not required to close these review findings.** This does not declare phone/public parity, matched compiler backends, allocator equivalence or a causal performance explanation.\n\n## Finding disposition\n\n| Original finding | Disposition | Evidence and remaining boundary |\n|---|---|---|\n| Input capacity mislabeled as resident capacity | Addressed | Both drivers label input values explicitly. The C++ diagnostic getter reads the actual final resident under its original mutex after the three replacements, preserving a single object across all four shapes. Rust explicitly labels final-input capacities as inferred from the unchanged move into Resident; it does not pretend to use a getter. New inspection is not retroactively assigned to old timing-process heap state. |\n| Incomplete source/build/run provenance | Addressed prospectively, historical gaps disclosed | Versioned v2 runner freezes source/generated/input hashes; preserves command argv/cwd/time/exit/stdout/stderr hashes; records compiler/default-target information and build options; copies/hashes actual binaries. The parent build commands and both inspect commands have exit 0. Legacy supplement preserves original binary/raw hashes and labels historical commands/status as parent-reported, with incomplete contemporaneous environment/source evidence retained as a limitation. |\n| Loader differs from actual Nitro conversion | Addressed by narrowed claim | The original loaders remain, and README/receipt limitations identify Nitro reserve/constructor/lvalue-copy differences and Rust JSON/postcard temporary allocation history. All fields of each final tree now compare against actual TypeScript exports, with documented absent-note/integral-number normalization. Same semantic input is established separately from heap/construction equivalence. |\n| Missing stack growth evidence | Addressed | Inspection-only copied search probes retain the exact original initialization, traversal and child-push expressions. Preparation restores and byte-compares only the whitelisted observer/signature/braces changes; the recorded instrumentation diff agrees. Capacity sequences, growth counts, max-live values and results are present and validated in the parent's inspection receipt. Timed production search bodies remain unchanged. |\n\n## Concrete observations in the new receipt\n\n- The fixed fixture order is balanced255, balanced1023, balanced8191, wide1025. C++ wide1025 retains **node capacity 8191**, child-capacity sum **2050**, and **513 empty child vectors with allocations**. Rust's final restored wide input, moved unchanged into resident, has **node capacity 1025**, child-capacity sum **1024**, and no allocated empty children. The new labels correctly distinguish direct observation from move-based inference.\n- Rust stack sequences start `1,4,8`; C++ starts `1,2,4,8`. Post-initial growth counts for balanced255/1023/8191/wide1025 are respectively **Rust 2/3/3/9** and **C++ 3/4/4/10**. Both max-live sequences are **8/10/13/1024**. These are inspection-probe capacity-policy observations, not allocator latency or total allocation-byte measurements.\n- The full-tree canonical digests agree across frameworks for all four fixtures. `run.py` compares all actual reconstructed fields with TypeScript-exported expected trees before assigning the canonical digest. The raw full trees remain available; compact receipts do not replace their evidence.\n- Current host node sizes remain Rust **128 bytes**, C++ **152 bytes**, alignment 8; search sizes are 48. Heap allocations and device layouts are not inferred from these numbers.\n\n## Source and lifetime checks\n\nInspection branches run before any timer and in separate processes. Rust's inspection-only tree clone and JSON observation allocations do not run in timing mode. C++ introspection holds the original mutex and does not clear or shrink resident state. Both timing loops retain the real resident call and per-iteration result consumption/destruction; C++ still releases its loader tree after storage. The Rust query/result black-box difference and C++ separate-translation-unit surface are documented. The handwritten C++ class ABI and loader construction history remain intentionally different from the app.\n\nThe whitelisted Rust/C++ probes preserve original stack initialization and push expressions. Observer allocations can perturb allocator activity, so they establish capacity sequences rather than timing/cache effects; the documentation states this. TypeScript export restricts string content to printable ASCII, matching the current custom quoted-text loader's supported scope.\n\nThe new build record uses ordinary Rust release and C++ O3 with explicit C++ `-fno-lto`; it correctly discloses Rust local thin-LTO/default CPU and compiler-backend differences instead of claiming a perfectly matched toolchain. Source hashes and commands make this a reproducible host recipe within those disclosed constraints.\n\n## Completion boundary\n\nThe reviewed new `receipt.json` has **`timing: null`**. Its command history ends with successful non-timed Rust/C++ inspection. The existing four legacy point ratios remain exploratory observations of the original host harness; the new observations do not authenticate the earlier processes' exact capacities/addresses and do not prove why a ratio occurred. A separately identified timing run is available if the parent later needs one, but rerunning it would not be necessary merely to close these four review findings.\n\nThe fixer's report describes build/inspection as pending at its pre-handoff point. The parent's later successful command logs and inspection receipt, reviewed here, supply that missing execution evidence. No source changes or additional benchmark request result from this review.\n",
+  "reproduction": "python3 scripts/nitro-core-diagnostic/run.py all --out /absolute/new-directory (parent must run with no concurrent heavy work); original exploratory timing differs from final inspection binary, and was not rerun or retroactively authenticated",
+  "originalRawHashes": {
+    "nitro-4.jsonl": "374909f5880edb8c2c89e9e39bd655142177462747cbea32c402e73a3f3e1b45",
+    "rustra-2.jsonl": "d346925a9f2747155f0a480ba3459a33dd9090b856b2206c8d664995ceb34c9b",
+    "nitro-2.jsonl": "5104d5c54c06e18ad88a844fa4ddeba625895d0fbde2af1f08ce295076d74a7a",
+    "rustra-4.jsonl": "a1443eb978a2e17cc4e485e89426d9fb6a5b858c9fe33f9cadd86b736435f7da",
+    "rustra-1.jsonl": "615c245372454792b0d385e9865490e135aac73787b3723a5ea5d88cd2f65931",
+    "nitro-5.jsonl": "45d0c579ef9131dfd4814504f330958fbbbcd7b324952001db19b188edfcabbb",
+    "rustra-3.jsonl": "e3109ca4168053fcdaca15261111291474206e09337112edd35b5b33d1030ae1",
+    "nitro-1.jsonl": "b478d8f083e941e17f23d577dd1d56421188106733fc24cf524ec8a3dc0e52df",
+    "nitro-3.jsonl": "905791f0397e47d48aa3c832bf3229d5bc19e0f3e08a10da1ab93b42d167fa1a",
+    "rustra-5.jsonl": "4d74847821d55775476655798682271b1cb765c507a01584784bccf50c515623"
+  },
+  "postInspectionFormatting": {
+    "path": "scripts/nitro-core-diagnostic/export.ts",
+    "originalSha256": "54c58cd802297c3fdbcb9e7e7d11e9083feb6b324880c6d3c73637f1908b8042",
+    "originalSource": "import { mkdirSync, writeFileSync } from 'node:fs';\nimport { resolve } from 'node:path';\nimport { FIXTURES, makeTree } from '../../examples/react-native-calculator/src/nitro-parity/fixtures';\n\nconst directory = resolve(process.argv[2]);\nmkdirSync(directory, { recursive: true });\nfor (const [shape, count] of FIXTURES) {\n  const tree = makeTree(shape, count);\n  // std::quoted is deliberately kept from the original host-only loader. Reject\n  // strings requiring JSON control/unicode escaping instead of misdecoding them.\n  for (const node of tree.nodes) {\n    for (const text of [node.name, node.tag, node.note ?? '', ...Object.keys(node.metadata), ...Object.values(node.metadata)]) {\n      if (!/^[\\x20-\\x7e]*$/.test(text)) throw new Error('host loader requires printable ASCII strings');\n    }\n  }\n  writeFileSync(resolve(directory, `${shape}${count}.json`), JSON.stringify(tree) + '\\n');\n}\nwriteFileSync(resolve(directory, 'fixture-order.json'), JSON.stringify(FIXTURES.map(([shape, count]) => `${shape}${count}`)) + '\\n');\n",
+    "formattedSha256": "c92981d6bf7e8c80c15df325812002c4997f3e584b88b9439240ac1bc161f058",
+    "change": "Prettier line wrapping only after inspection; historical sourceFreeze retained without alteration. No timing or native source changed.",
+    "fixtureOutputChecks": [
+      {
+        "file": "balanced1023.json",
+        "sha256": "a2d6ccb72602f242af419f15d815c587285a252ce5ce26b6bb1cd87b9b778ab4",
+        "matchesOriginalBytes": true
+      },
+      {
+        "file": "balanced255.json",
+        "sha256": "270cd1fcc55717af13c8009cdd2aca73e3a5fb85a623d5728f219558ebca1ba8",
+        "matchesOriginalBytes": true
+      },
+      {
+        "file": "balanced8191.json",
+        "sha256": "254bdd527b919bfe6e93beb5c84a22c07dfd141f93ea5939ceea707c806f3c47",
+        "matchesOriginalBytes": true
+      },
+      {
+        "file": "fixture-order.json",
+        "sha256": "e211447eb6156534aadf2a34ff87d0afd29f806c433002e5546e61ab953212a2",
+        "matchesOriginalBytes": true
+      },
+      {
+        "file": "wide1025.json",
+        "sha256": "d11daa279807d9cb5017154209dcab6a231cf8f58f22f189a0d8979777cb940d",
+        "matchesOriginalBytes": true
+      }
+    ]
+  }
+}

@@ -9,6 +9,7 @@ import {
 } from './generate-postcard-encode.js';
 import { generateFieldDecodeExpr } from './generate-postcard-decode.js';
 import { commandCodecSupported, complexCodecSupported } from './generate-postcard-support.js';
+import { generatedSyncMetadata } from './generate-sync-metadata.js';
 import { generateComplexCodec } from './generate-complex-codec.js';
 
 export function generateFrameCodecsTs(schema: PackageSchema): string {
@@ -50,6 +51,7 @@ function generatePostcardCodec(
   const lines: string[] = [
     `export const ${fnName}Codec: FrameCodec<${inType}, ${outType}> = {`,
     `  commandId: ${command.commandId},`,
+    ...generatedSyncMetadata(command, definitions),
     '',
     `  encode(args: ${inType}): ArrayBuffer {`,
     `    // [cmd_id: u16 LE][postcard(${inType})]`,

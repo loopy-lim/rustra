@@ -41,6 +41,7 @@ export function createComplexCodec<I, O>(options: ComplexCodecOptions): FrameCod
 
   return {
     commandId: options.commandId,
+    ...(options.execution ? { execution: options.execution } : {}),
     encode,
     encodeInto(args, reuse) {
       const encoded = new Uint8Array(encode(args));

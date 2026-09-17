@@ -714,6 +714,16 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_rustra_calculator_example_checksum_func_multiply(
     ): Int
+    external fun uniffi_rustra_calculator_example_checksum_func_parityecho(
+    ): Int
+    external fun uniffi_rustra_calculator_example_checksum_func_parityfind(
+    ): Int
+    external fun uniffi_rustra_calculator_example_checksum_func_parityindexed(
+    ): Int
+    external fun uniffi_rustra_calculator_example_checksum_func_parityresident(
+    ): Int
+    external fun uniffi_rustra_calculator_example_checksum_func_paritystore(
+    ): Int
     external fun uniffi_rustra_calculator_example_checksum_func_platformnativeinfo(
     ): Int
     external fun uniffi_rustra_calculator_example_checksum_func_processitem(
@@ -798,6 +808,16 @@ internal object UniffiLib {
     external fun uniffi_rustra_calculator_example_fn_func_kindecho(`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_rustra_calculator_example_fn_func_multiply(`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_rustra_calculator_example_fn_func_parityecho(`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_rustra_calculator_example_fn_func_parityfind(`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_rustra_calculator_example_fn_func_parityindexed(`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_rustra_calculator_example_fn_func_parityresident(`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_rustra_calculator_example_fn_func_paritystore(`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_rustra_calculator_example_fn_func_platformnativeinfo(uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1009,6 +1029,21 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_rustra_calculator_example_checksum_func_multiply() and 0xFFFF) != 37534) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_rustra_calculator_example_checksum_func_parityecho() and 0xFFFF) != 52339) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_rustra_calculator_example_checksum_func_parityfind() and 0xFFFF) != 39123) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_rustra_calculator_example_checksum_func_parityindexed() and 0xFFFF) != 40255) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_rustra_calculator_example_checksum_func_parityresident() and 0xFFFF) != 60842) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_rustra_calculator_example_checksum_func_paritystore() and 0xFFFF) != 45315) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_rustra_calculator_example_checksum_func_platformnativeinfo() and 0xFFFF) != 56716) {
@@ -2634,6 +2669,267 @@ public object FfiConverterTypeMultiplyOutput: FfiConverterRustBuffer<MultiplyOut
 
 
 /**
+ * `ParityFindInput` 미러 — 실제 타입 `crate::ParityFindInput`.
+ */
+data class ParityFindInput (
+    var `tree`: ParityTree
+    , 
+    var `id`: kotlin.Double
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeParityFindInput: FfiConverterRustBuffer<ParityFindInput> {
+    override fun read(buf: ByteBuffer): ParityFindInput {
+        return ParityFindInput(
+            FfiConverterTypeParityTree.read(buf),
+            FfiConverterDouble.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ParityFindInput) = (
+            FfiConverterTypeParityTree.allocationSize(value.`tree`) +
+            FfiConverterDouble.allocationSize(value.`id`)
+    )
+
+    override fun write(value: ParityFindInput, buf: ByteBuffer) {
+            FfiConverterTypeParityTree.write(value.`tree`, buf)
+            FfiConverterDouble.write(value.`id`, buf)
+    }
+}
+
+
+
+/**
+ * `ParityNode` 미러 — 실제 타입 `crate::ParityNode`.
+ */
+data class ParityNode (
+    var `id`: kotlin.Double
+    , 
+    var `name`: kotlin.String
+    , 
+    var `tag`: kotlin.String
+    , 
+    var `note`: kotlin.String?
+    , 
+    var `metadata`: Map<kotlin.String, kotlin.String>
+    , 
+    var `children`: List<kotlin.Double>
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeParityNode: FfiConverterRustBuffer<ParityNode> {
+    override fun read(buf: ByteBuffer): ParityNode {
+        return ParityNode(
+            FfiConverterDouble.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterMapStringString.read(buf),
+            FfiConverterSequenceDouble.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ParityNode) = (
+            FfiConverterDouble.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`name`) +
+            FfiConverterString.allocationSize(value.`tag`) +
+            FfiConverterOptionalString.allocationSize(value.`note`) +
+            FfiConverterMapStringString.allocationSize(value.`metadata`) +
+            FfiConverterSequenceDouble.allocationSize(value.`children`)
+    )
+
+    override fun write(value: ParityNode, buf: ByteBuffer) {
+            FfiConverterDouble.write(value.`id`, buf)
+            FfiConverterString.write(value.`name`, buf)
+            FfiConverterString.write(value.`tag`, buf)
+            FfiConverterOptionalString.write(value.`note`, buf)
+            FfiConverterMapStringString.write(value.`metadata`, buf)
+            FfiConverterSequenceDouble.write(value.`children`, buf)
+    }
+}
+
+
+
+/**
+ * `ParityQuery` 미러 — 실제 타입 `crate::ParityQuery`.
+ */
+data class ParityQuery (
+    var `id`: kotlin.Double
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeParityQuery: FfiConverterRustBuffer<ParityQuery> {
+    override fun read(buf: ByteBuffer): ParityQuery {
+        return ParityQuery(
+            FfiConverterDouble.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ParityQuery) = (
+            FfiConverterDouble.allocationSize(value.`id`)
+    )
+
+    override fun write(value: ParityQuery, buf: ByteBuffer) {
+            FfiConverterDouble.write(value.`id`, buf)
+    }
+}
+
+
+
+/**
+ * `ParitySearch` 미러 — 실제 타입 `crate::ParitySearch`.
+ */
+data class ParitySearch (
+    var `found`: kotlin.Boolean
+    , 
+    var `id`: kotlin.Double
+    , 
+    var `name`: kotlin.String
+    , 
+    var `visited`: kotlin.Double
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeParitySearch: FfiConverterRustBuffer<ParitySearch> {
+    override fun read(buf: ByteBuffer): ParitySearch {
+        return ParitySearch(
+            FfiConverterBoolean.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterDouble.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ParitySearch) = (
+            FfiConverterBoolean.allocationSize(value.`found`) +
+            FfiConverterDouble.allocationSize(value.`id`) +
+            FfiConverterString.allocationSize(value.`name`) +
+            FfiConverterDouble.allocationSize(value.`visited`)
+    )
+
+    override fun write(value: ParitySearch, buf: ByteBuffer) {
+            FfiConverterBoolean.write(value.`found`, buf)
+            FfiConverterDouble.write(value.`id`, buf)
+            FfiConverterString.write(value.`name`, buf)
+            FfiConverterDouble.write(value.`visited`, buf)
+    }
+}
+
+
+
+/**
+ * `ParityStored` 미러 — 실제 타입 `crate::ParityStored`.
+ */
+data class ParityStored (
+    var `nodes`: kotlin.Double
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeParityStored: FfiConverterRustBuffer<ParityStored> {
+    override fun read(buf: ByteBuffer): ParityStored {
+        return ParityStored(
+            FfiConverterDouble.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ParityStored) = (
+            FfiConverterDouble.allocationSize(value.`nodes`)
+    )
+
+    override fun write(value: ParityStored, buf: ByteBuffer) {
+            FfiConverterDouble.write(value.`nodes`, buf)
+    }
+}
+
+
+
+/**
+ * `ParityTree` 미러 — 실제 타입 `crate::ParityTree`.
+ */
+data class ParityTree (
+    var `nodes`: List<ParityNode>
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeParityTree: FfiConverterRustBuffer<ParityTree> {
+    override fun read(buf: ByteBuffer): ParityTree {
+        return ParityTree(
+            FfiConverterSequenceTypeParityNode.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: ParityTree) = (
+            FfiConverterSequenceTypeParityNode.allocationSize(value.`nodes`)
+    )
+
+    override fun write(value: ParityTree, buf: ByteBuffer) {
+            FfiConverterSequenceTypeParityNode.write(value.`nodes`, buf)
+    }
+}
+
+
+
+/**
  * `PlatformNativeInfoOutput` 미러 — 실제 타입 `crate::PlatformNativeInfoOutput`.
  */
 data class PlatformNativeInfoOutput (
@@ -4065,6 +4361,34 @@ public object FfiConverterSequenceLong: FfiConverterRustBuffer<List<kotlin.Long>
 /**
  * @suppress
  */
+public object FfiConverterSequenceDouble: FfiConverterRustBuffer<List<kotlin.Double>> {
+    override fun read(buf: ByteBuffer): List<kotlin.Double> {
+        val len = buf.getInt()
+        return List<kotlin.Double>(len) {
+            FfiConverterDouble.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<kotlin.Double>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterDouble.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<kotlin.Double>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterDouble.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.String>> {
     override fun read(buf: ByteBuffer): List<kotlin.String> {
         val len = buf.getInt()
@@ -4083,6 +4407,34 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterString.write(it, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeParityNode: FfiConverterRustBuffer<List<ParityNode>> {
+    override fun read(buf: ByteBuffer): List<ParityNode> {
+        val len = buf.getInt()
+        return List<ParityNode>(len) {
+            FfiConverterTypeParityNode.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<ParityNode>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeParityNode.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(value: List<ParityNode>, buf: ByteBuffer) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeParityNode.write(it, buf)
         }
     }
 }
@@ -4511,6 +4863,81 @@ public object FfiConverterMapStringSequenceString: FfiConverterRustBuffer<Map<ko
     
         
         FfiConverterTypeMultiplyInput.lower(`input`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * `parityEcho` — `crate::parity_echo` 커맨드의 UniFFI 타입 래퍼.
+         */
+    @Throws(RustraCommandFailure::class) fun `parityEcho`(`input`: ParityTree): ParityTree {
+            return FfiConverterTypeParityTree.lift(
+    uniffiRustCallWithError(RustraCommandFailure) { _status ->
+    UniffiLib.uniffi_rustra_calculator_example_fn_func_parityecho(
+    
+        
+        FfiConverterTypeParityTree.lower(`input`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * `parityFind` — `crate::parity_find` 커맨드의 UniFFI 타입 래퍼.
+         */
+    @Throws(RustraCommandFailure::class) fun `parityFind`(`input`: ParityFindInput): ParitySearch {
+            return FfiConverterTypeParitySearch.lift(
+    uniffiRustCallWithError(RustraCommandFailure) { _status ->
+    UniffiLib.uniffi_rustra_calculator_example_fn_func_parityfind(
+    
+        
+        FfiConverterTypeParityFindInput.lower(`input`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * `parityIndexed` — `crate::parity_indexed` 커맨드의 UniFFI 타입 래퍼.
+         */
+    @Throws(RustraCommandFailure::class) fun `parityIndexed`(`input`: ParityQuery): ParitySearch {
+            return FfiConverterTypeParitySearch.lift(
+    uniffiRustCallWithError(RustraCommandFailure) { _status ->
+    UniffiLib.uniffi_rustra_calculator_example_fn_func_parityindexed(
+    
+        
+        FfiConverterTypeParityQuery.lower(`input`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * `parityResident` — `crate::parity_resident` 커맨드의 UniFFI 타입 래퍼.
+         */
+    @Throws(RustraCommandFailure::class) fun `parityResident`(`input`: ParityQuery): ParitySearch {
+            return FfiConverterTypeParitySearch.lift(
+    uniffiRustCallWithError(RustraCommandFailure) { _status ->
+    UniffiLib.uniffi_rustra_calculator_example_fn_func_parityresident(
+    
+        
+        FfiConverterTypeParityQuery.lower(`input`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * `parityStore` — `crate::parity_store` 커맨드의 UniFFI 타입 래퍼.
+         */
+    @Throws(RustraCommandFailure::class) fun `parityStore`(`input`: ParityTree): ParityStored {
+            return FfiConverterTypeParityStored.lift(
+    uniffiRustCallWithError(RustraCommandFailure) { _status ->
+    UniffiLib.uniffi_rustra_calculator_example_fn_func_paritystore(
+    
+        
+        FfiConverterTypeParityTree.lower(`input`),_status)
 }
     )
     }

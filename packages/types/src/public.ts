@@ -130,6 +130,12 @@ export type FrameEngine = EngineClient & {
  */
 export type FrameCodec<I, O> = {
   commandId: number;
+  /** Generated producer metadata; absence never grants synchronous eligibility. */
+  execution?: 'sync' | 'async';
+  /** Generated flat-field route keys, in wire order. */
+  syncFields?: readonly string[];
+  /** Generated single required byte field, when the dedicated route is valid. */
+  syncByteField?: string;
   encode(args: I): ArrayBuffer;
   /**
    * (선택) 재사용 버퍼에 직접 인코딩한다. 대형 페이로드(≥64KiB)에서 매 호출

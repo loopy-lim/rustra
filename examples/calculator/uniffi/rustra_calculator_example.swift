@@ -2445,6 +2445,360 @@ public func FfiConverterTypeMultiplyOutput_lower(_ value: MultiplyOutput) -> Rus
 
 
 /**
+ * `ParityFindInput` 미러 — 실제 타입 `crate::ParityFindInput`.
+ */
+public struct ParityFindInput: Equatable, Hashable {
+    public var tree: ParityTree
+    public var id: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(tree: ParityTree, id: Double) {
+        self.tree = tree
+        self.id = id
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ParityFindInput: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeParityFindInput: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ParityFindInput {
+        return
+            try ParityFindInput(
+                tree: FfiConverterTypeParityTree.read(from: &buf), 
+                id: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ParityFindInput, into buf: inout [UInt8]) {
+        FfiConverterTypeParityTree.write(value.tree, into: &buf)
+        FfiConverterDouble.write(value.id, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParityFindInput_lift(_ buf: RustBuffer) throws -> ParityFindInput {
+    return try FfiConverterTypeParityFindInput.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParityFindInput_lower(_ value: ParityFindInput) -> RustBuffer {
+    return FfiConverterTypeParityFindInput.lower(value)
+}
+
+
+/**
+ * `ParityNode` 미러 — 실제 타입 `crate::ParityNode`.
+ */
+public struct ParityNode: Equatable, Hashable {
+    public var id: Double
+    public var name: String
+    public var tag: String
+    public var note: String?
+    public var metadata: [String: String]
+    public var children: [Double]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: Double, name: String, tag: String, note: String?, metadata: [String: String], children: [Double]) {
+        self.id = id
+        self.name = name
+        self.tag = tag
+        self.note = note
+        self.metadata = metadata
+        self.children = children
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ParityNode: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeParityNode: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ParityNode {
+        return
+            try ParityNode(
+                id: FfiConverterDouble.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                tag: FfiConverterString.read(from: &buf), 
+                note: FfiConverterOptionString.read(from: &buf), 
+                metadata: FfiConverterDictionaryStringString.read(from: &buf), 
+                children: FfiConverterSequenceDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ParityNode, into buf: inout [UInt8]) {
+        FfiConverterDouble.write(value.id, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.tag, into: &buf)
+        FfiConverterOptionString.write(value.note, into: &buf)
+        FfiConverterDictionaryStringString.write(value.metadata, into: &buf)
+        FfiConverterSequenceDouble.write(value.children, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParityNode_lift(_ buf: RustBuffer) throws -> ParityNode {
+    return try FfiConverterTypeParityNode.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParityNode_lower(_ value: ParityNode) -> RustBuffer {
+    return FfiConverterTypeParityNode.lower(value)
+}
+
+
+/**
+ * `ParityQuery` 미러 — 실제 타입 `crate::ParityQuery`.
+ */
+public struct ParityQuery: Equatable, Hashable {
+    public var id: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: Double) {
+        self.id = id
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ParityQuery: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeParityQuery: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ParityQuery {
+        return
+            try ParityQuery(
+                id: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ParityQuery, into buf: inout [UInt8]) {
+        FfiConverterDouble.write(value.id, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParityQuery_lift(_ buf: RustBuffer) throws -> ParityQuery {
+    return try FfiConverterTypeParityQuery.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParityQuery_lower(_ value: ParityQuery) -> RustBuffer {
+    return FfiConverterTypeParityQuery.lower(value)
+}
+
+
+/**
+ * `ParitySearch` 미러 — 실제 타입 `crate::ParitySearch`.
+ */
+public struct ParitySearch: Equatable, Hashable {
+    public var found: Bool
+    public var id: Double
+    public var name: String
+    public var visited: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(found: Bool, id: Double, name: String, visited: Double) {
+        self.found = found
+        self.id = id
+        self.name = name
+        self.visited = visited
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ParitySearch: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeParitySearch: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ParitySearch {
+        return
+            try ParitySearch(
+                found: FfiConverterBool.read(from: &buf), 
+                id: FfiConverterDouble.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                visited: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ParitySearch, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.found, into: &buf)
+        FfiConverterDouble.write(value.id, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterDouble.write(value.visited, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParitySearch_lift(_ buf: RustBuffer) throws -> ParitySearch {
+    return try FfiConverterTypeParitySearch.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParitySearch_lower(_ value: ParitySearch) -> RustBuffer {
+    return FfiConverterTypeParitySearch.lower(value)
+}
+
+
+/**
+ * `ParityStored` 미러 — 실제 타입 `crate::ParityStored`.
+ */
+public struct ParityStored: Equatable, Hashable {
+    public var nodes: Double
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(nodes: Double) {
+        self.nodes = nodes
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ParityStored: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeParityStored: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ParityStored {
+        return
+            try ParityStored(
+                nodes: FfiConverterDouble.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ParityStored, into buf: inout [UInt8]) {
+        FfiConverterDouble.write(value.nodes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParityStored_lift(_ buf: RustBuffer) throws -> ParityStored {
+    return try FfiConverterTypeParityStored.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParityStored_lower(_ value: ParityStored) -> RustBuffer {
+    return FfiConverterTypeParityStored.lower(value)
+}
+
+
+/**
+ * `ParityTree` 미러 — 실제 타입 `crate::ParityTree`.
+ */
+public struct ParityTree: Equatable, Hashable {
+    public var nodes: [ParityNode]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(nodes: [ParityNode]) {
+        self.nodes = nodes
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ParityTree: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeParityTree: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ParityTree {
+        return
+            try ParityTree(
+                nodes: FfiConverterSequenceTypeParityNode.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ParityTree, into buf: inout [UInt8]) {
+        FfiConverterSequenceTypeParityNode.write(value.nodes, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParityTree_lift(_ buf: RustBuffer) throws -> ParityTree {
+    return try FfiConverterTypeParityTree.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeParityTree_lower(_ value: ParityTree) -> RustBuffer {
+    return FfiConverterTypeParityTree.lower(value)
+}
+
+
+/**
  * `PlatformNativeInfoOutput` 미러 — 실제 타입 `crate::PlatformNativeInfoOutput`.
  */
 public struct PlatformNativeInfoOutput: Equatable, Hashable {
@@ -4349,6 +4703,31 @@ fileprivate struct FfiConverterSequenceInt64: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceDouble: FfiConverterRustBuffer {
+    typealias SwiftType = [Double]
+
+    public static func write(_ value: [Double], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterDouble.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Double] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [Double]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterDouble.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
     typealias SwiftType = [String]
 
@@ -4366,6 +4745,31 @@ fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterString.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeParityNode: FfiConverterRustBuffer {
+    typealias SwiftType = [ParityNode]
+
+    public static func write(_ value: [ParityNode], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeParityNode.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ParityNode] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ParityNode]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeParityNode.read(from: &buf))
         }
         return seq
     }
@@ -4679,6 +5083,61 @@ public func multiply(input: MultiplyInput)throws  -> MultiplyOutput  {
 })
 }
 /**
+ * `parityEcho` — `crate::parity_echo` 커맨드의 UniFFI 타입 래퍼.
+ */
+public func parityEcho(input: ParityTree)throws  -> ParityTree  {
+    return try  FfiConverterTypeParityTree_lift(try rustCallWithError(FfiConverterTypeRustraCommandFailure_lift) {
+        uniffiCallStatus in
+    uniffi_rustra_calculator_example_fn_func_parityecho(
+        FfiConverterTypeParityTree_lower(input),uniffiCallStatus
+    )
+})
+}
+/**
+ * `parityFind` — `crate::parity_find` 커맨드의 UniFFI 타입 래퍼.
+ */
+public func parityFind(input: ParityFindInput)throws  -> ParitySearch  {
+    return try  FfiConverterTypeParitySearch_lift(try rustCallWithError(FfiConverterTypeRustraCommandFailure_lift) {
+        uniffiCallStatus in
+    uniffi_rustra_calculator_example_fn_func_parityfind(
+        FfiConverterTypeParityFindInput_lower(input),uniffiCallStatus
+    )
+})
+}
+/**
+ * `parityIndexed` — `crate::parity_indexed` 커맨드의 UniFFI 타입 래퍼.
+ */
+public func parityIndexed(input: ParityQuery)throws  -> ParitySearch  {
+    return try  FfiConverterTypeParitySearch_lift(try rustCallWithError(FfiConverterTypeRustraCommandFailure_lift) {
+        uniffiCallStatus in
+    uniffi_rustra_calculator_example_fn_func_parityindexed(
+        FfiConverterTypeParityQuery_lower(input),uniffiCallStatus
+    )
+})
+}
+/**
+ * `parityResident` — `crate::parity_resident` 커맨드의 UniFFI 타입 래퍼.
+ */
+public func parityResident(input: ParityQuery)throws  -> ParitySearch  {
+    return try  FfiConverterTypeParitySearch_lift(try rustCallWithError(FfiConverterTypeRustraCommandFailure_lift) {
+        uniffiCallStatus in
+    uniffi_rustra_calculator_example_fn_func_parityresident(
+        FfiConverterTypeParityQuery_lower(input),uniffiCallStatus
+    )
+})
+}
+/**
+ * `parityStore` — `crate::parity_store` 커맨드의 UniFFI 타입 래퍼.
+ */
+public func parityStore(input: ParityTree)throws  -> ParityStored  {
+    return try  FfiConverterTypeParityStored_lift(try rustCallWithError(FfiConverterTypeRustraCommandFailure_lift) {
+        uniffiCallStatus in
+    uniffi_rustra_calculator_example_fn_func_paritystore(
+        FfiConverterTypeParityTree_lower(input),uniffiCallStatus
+    )
+})
+}
+/**
  * `platformNativeInfo` — `crate::platform_native_info`(unit 입력)의 UniFFI 타입 래퍼.
  */
 public func platformNativeInfo()throws  -> PlatformNativeInfoOutput  {
@@ -4919,6 +5378,21 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_rustra_calculator_example_checksum_func_multiply() != 37534) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_rustra_calculator_example_checksum_func_parityecho() != 52339) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_rustra_calculator_example_checksum_func_parityfind() != 39123) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_rustra_calculator_example_checksum_func_parityindexed() != 40255) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_rustra_calculator_example_checksum_func_parityresident() != 60842) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_rustra_calculator_example_checksum_func_paritystore() != 45315) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_rustra_calculator_example_checksum_func_platformnativeinfo() != 56716) {

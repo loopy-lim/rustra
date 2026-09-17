@@ -1,5 +1,6 @@
 pub(crate) struct Command {
     pub(crate) command_id: u16,
+    pub(crate) execution: Option<crate::CommandExecution>,
     pub(crate) description: Option<String>,
     pub(crate) input_type: String,
     pub(crate) output_type: String,
