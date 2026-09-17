@@ -43,10 +43,10 @@ stateful closures and a mapped domain error:
 import { add, remember, readRemembered, reset, safeDivide } from './generated/react-native';
 
 const total = await add(42, 58); // number, no input/output DTO
-await remember(total);         // void
-await reset();                 // no arguments, void
+await remember(total); // void
+await reset(); // no arguments, void
 const stored = await readRemembered(); // 0
-await safeDivide(1, 0);        // rejects with math.zero_divisor
+await safeDivide(1, 0); // rejects with math.zero_divisor
 ```
 
 ```sh
@@ -63,7 +63,6 @@ also measure generated calls and request encoding with warmup and alternating
 batches. Rebuild native code after changing Rust; a Metro reload only updates JS.
 The Rust registrations are in `../calculator/src/ordinary_functions.rs` and append
 to the existing commands, preserving their IDs. See the [API guide](../../docs/function-registration.md).
-
 
 After installing a Release `functions` build, verify three independent Simulator launches:
 

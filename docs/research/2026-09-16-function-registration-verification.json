@@ -118,11 +118,7 @@
       "scope": "after R1",
       "logPath": "/tmp/rustra-function-types-final.log",
       "logSha256": "7b6e04872702e9f6fadfec995cedf1c6b7efcedb4829bf305fec43d3323ead5f",
-      "summaries": [
-        " 271 pass",
-        " 0 fail",
-        "Ran 271 tests across 8 files. [400.00ms]"
-      ]
+      "summaries": [" 271 pass", " 0 fail", "Ran 271 tests across 8 files. [400.00ms]"]
     },
     "cli": {
       "status": "passed",
@@ -162,9 +158,7 @@
       "scope": "after R1; all six examples",
       "logPath": "/tmp/rustra-function-codegen-final.log",
       "logSha256": "137b19bab15b36f724d8b9a63d771b10e5cd153251a8cfa1f91f033de3c26c94",
-      "summaries": [
-        "OK: 6개 예제 codegen check 통과 (committed 생성물이 재현 결과와 일치)"
-      ]
+      "summaries": ["OK: 6개 예제 codegen check 통과 (committed 생성물이 재현 결과와 일치)"]
     },
     "gates": {
       "status": "passed",
@@ -197,12 +191,7 @@
       "scope": "before R1; unchanged Node transport source",
       "logPath": "/tmp/rustra-function-node-tests.log",
       "logSha256": "cf220563a7aac97364da1442c248ee9335fc171e65f0b1444ba8bc42a5382513",
-      "summaries": [
-        " 74 pass",
-        " 29 skip",
-        " 0 fail",
-        "Ran 103 tests across 5 files. [131.00ms]"
-      ]
+      "summaries": [" 74 pass", " 29 skip", " 0 fail", "Ran 103 tests across 5 files. [131.00ms]"]
     },
     "nodeRuntime": {
       "status": "passed",
@@ -210,12 +199,7 @@
       "scope": "before R1; real calculator runtime; unchanged Node transport source",
       "logPath": "/tmp/rustra-function-node-runtime.log",
       "logSha256": "5733c0ccfbacbaf691bc314cdc4a0cba8393fc7b608630f1810f16f509dfd675",
-      "summaries": [
-        "# tests 71",
-        "# pass 71",
-        "# fail 0",
-        "# skipped 0"
-      ]
+      "summaries": ["# tests 71", "# pass 71", "# fail 0", "# skipped 0"]
     },
     "tauri": {
       "status": "passed",
@@ -223,11 +207,7 @@
       "scope": "before R1; unchanged Tauri adapter source",
       "logPath": "/tmp/rustra-function-tauri-tests.log",
       "logSha256": "7ed34ef015b44cd6d322f27e5b5a5e12321f2fd80bb3eae925f499ff5e6cf2ed",
-      "summaries": [
-        " 47 pass",
-        " 0 fail",
-        "Ran 47 tests across 1 file. [39.00ms]"
-      ]
+      "summaries": [" 47 pass", " 0 fail", "Ran 47 tests across 1 file. [39.00ms]"]
     },
     "finalReportDocs": {
       "status": "passed",
@@ -235,12 +215,7 @@
       "scope": "After adding the final report and receipt",
       "logPath": "/tmp/rustra-function-docs-report-final.log",
       "logSha256": "483e183563430c3c0a1ffc795e4077d7a5aad58924666a641151f46b5f687f58",
-      "summaries": [
-        "# tests 37",
-        "# pass 37",
-        "# fail 0",
-        "# skipped 0"
-      ]
+      "summaries": ["# tests 37", "# pass 37", "# fail 0", "# skipped 0"]
     }
   },
   "integration": {

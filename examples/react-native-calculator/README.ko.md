@@ -40,10 +40,10 @@ bun run bench:ios:receipt -- --output /tmp/rustra-rn-receipt.json
 import { add, remember, readRemembered, reset, safeDivide } from './generated/react-native';
 
 const total = await add(42, 58); // 입력·출력 DTO 없이 number 반환
-await remember(total);         // void
-await reset();                 // 인자 없음, void
+await remember(total); // void
+await reset(); // 인자 없음, void
 const stored = await readRemembered(); // 0
-await safeDivide(1, 0);        // math.zero_divisor 오류로 reject
+await safeDivide(1, 0); // math.zero_divisor 오류로 reject
 ```
 
 ```sh
@@ -60,7 +60,6 @@ bun run demo:functions
 네이티브 앱을 다시 빌드해야 합니다. Metro reload는 JS만 갱신합니다.
 등록 코드는 `../calculator/src/ordinary_functions.rs`에 있으며 기존 명령 뒤에 추가해
 명령 번호를 유지합니다. [API 가이드](../../docs/function-registration.ko.md)를 참고하세요.
-
 
 Release `functions` 앱 설치 후 시뮬레이터에서 독립 실행 3회를 검증합니다.
 
