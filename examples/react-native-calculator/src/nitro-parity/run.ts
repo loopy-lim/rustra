@@ -31,6 +31,8 @@ export async function runParity(progress: (message: string) => void): Promise<Re
   for (const lane of LANES)
     for (const entry of cases) {
       progress(`${lane}: ${entry.id} (verify)`);
+      // 케이스별 네이티브 준비가 끝나야 다음 측정이 의미 있다 — 순차 검증이 계약이다.
+      // react-doctor-disable-next-line async-await-in-loop
       await entry.preflight();
       const options = { batch: entry.batch, rounds: 31, warmup: 3 };
       const samples =
