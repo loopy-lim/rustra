@@ -149,7 +149,7 @@ test:app:react-native → cd react-native-calculator && bun run typecheck
 test:runtime:tauri  → cd tauri-calculator && bun run build && bun run smoke
 test:adapters       → test:adapter:tauri + test:adapter:react-native + test:app:react-native
 test:runtime        → test:runtime:node + test:runtime:bun + test:runtime:tauri
-test:compat         → test:adapters + test:runtime
+test:compat         → test:ts:node + test:ts:bun + test:adapters + test:runtime
 ```
 
 ### Tauri Smoke Test Procedure

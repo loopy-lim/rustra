@@ -27,6 +27,9 @@ Rust #[command] 정의 → TypeScript 클라이언트 자동 생성 → 각 플�
 - Rust 쪽에서 `#[command]`로 함수를 정의
 - `generate_typescript()` 호출 시 타입 안전한 TS 클라이언트 코드 생성
 - Node, Bun, Tauri, React Native 어댑터가 동일한 `EngineClient` 인터페이스로 라우팅
+- 일반 Rust 함수도 그대로 — `PackageBuilder::function` 으로 매크로 없이 0~12 인자
+  함수를 등록하고 위치 인자 TS 시그니처를 생성합니다
+  ([일반 함수 등록](docs/function-registration.ko.md))
 
 ## 왜 rustra인가 (비교)
 

@@ -19,12 +19,12 @@ This guide describes how to contribute to rustra.
 
 ```bash
 git clone <repo-url> && cd rustra-bridge
+bun install                 # workspace deps
 
-# Verify the Rust build
-# (--workspace ignores default-members, so it also builds the macOS-only tauri-calculator)
+bun run test:fast           # first signal in minutes: cargo check + calculator tsc + cli unit tests
+
+# Full battery (slower; --workspace also builds the macOS-only tauri-calculator)
 cargo build --workspace
-
-# Run the full test suite
 cargo test --workspace
 bun run test:compat
 ```
@@ -116,6 +116,21 @@ bun run test:runtime  ← Real Rust↔TS execution (required)
     ↓
 bun run test:compat   ← Full integration (required for PRs)
 ```
+
+### Which Gate When
+
+| Command                            | When to run                                          | Checks                                                                   |
+| ---------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------ |
+| `bun run test:fast`                | every local edit loop                                | cargo check + calculator tsc + cli unit tests                            |
+| `bun run test:docs`                | docs/ or docs:sync regions touched                   | en/ko mirrors, synced regions, install docs vs manifests                 |
+| `bun run test:codegen-fresh`       | schema, generator, or `examples/*/generated` touched | committed generated files reproduce from current sources                 |
+| `bun run test:api-surface`         | any public TS/Rust surface change                    | diff vs `api-surface/snapshot.json` (`--update` to accept intentionally) |
+| `bun run test:architecture`        | module boundaries touched                            | file-size/module boundary limits                                         |
+| `bun run test:release-coherence`   | versions, ranges, lockfiles touched                  | package/lockfile/range invariants                                        |
+| `bun run test:release-tools`       | scripts/ or release flow touched                     | release tooling unit tests                                               |
+| `bun run test:functions`           | ordinary-function registration touched               | end-to-end function registration integration                             |
+| `bun run test:registry-consumer`   | host pins or consumer install path touched           | registry consumer install gate                                           |
+| `bun run test:complex-codec-bench` | complex codec touched                                | codec receipt regression                                                 |
 
 ### Rust Tests
 
