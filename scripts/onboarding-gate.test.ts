@@ -102,6 +102,95 @@ test('gate aborts at the first failed step without running later steps', async (
   assert.deepEqual(ran, ['init', 'doctor'], 'steps after a failure must not run');
 });
 
+test('gate converts a throwing runner into a named fail-closed report', async () => {
+  const ran: string[] = [];
+  const report = await runOnboardingSteps({
+    root: ROOT,
+    mutate: () => ran.push('mutate'),
+    runner: async (step) => {
+      ran.push(step);
+      if (step === 'init') throw new Error('spawn rustra ENOENT');
+      return { ok: true, output: '' };
+    },
+  });
+  assert.equal(report.ok, false);
+  assert.match(report.error ?? '', /step "init"/);
+  assert.match(report.error ?? '', /spawn rustra ENOENT/);
+  assert.deepEqual(ran, ['init']);
+});
+
+test('gate fails closed when the runner throws an empty Error or empty string', async () => {
+  for (const thrown of [new Error(), '']) {
+    const ran: string[] = [];
+    const report = await runOnboardingSteps({
+      root: ROOT,
+      mutate: () => ran.push('mutate'),
+      runner: async (step) => {
+        ran.push(step);
+        if (step === 'init') throw thrown;
+        return { ok: true, output: '' };
+      },
+    });
+    assert.equal(report.ok, false);
+    assert.match(report.error ?? '', /step "init"/);
+    assert.match(report.error ?? '', /without diagnostics/);
+    assert.deepEqual(ran, ['init']);
+  }
+});
+
+test('gate treats a nonzero runner result with empty output as failure', async () => {
+  const ran: string[] = [];
+  const report = await runOnboardingSteps({
+    root: ROOT,
+    mutate: () => ran.push('mutate'),
+    runner: async (step) => {
+      ran.push(step);
+      return step === 'init'
+        ? { ok: false, output: '', status: 127, error: 'spawnSync rustra ENOENT' }
+        : { ok: true, output: '' };
+    },
+  });
+  assert.equal(report.ok, false);
+  assert.match(report.error ?? '', /step "init"/);
+  assert.match(report.error ?? '', /status 127/);
+  assert.match(report.error ?? '', /spawnSync rustra ENOENT/);
+  assert.deepEqual(ran, ['init']);
+});
+
+test('gate aborts when hidden workspace patch preparation fails on disk', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rustra-onboarding-patch-failure-'));
+  const repoRoot = join(root, 'repo');
+  const projectRoot = join(root, 'scratch');
+  const projectDir = join(projectRoot, 'onboarding-probe');
+  const ran: string[] = [];
+  try {
+    mkdirSync(join(repoRoot, 'crates', 'rustra'), { recursive: true });
+    writeFileSync(join(repoRoot, 'crates', 'rustra', 'Cargo.toml'), '[package]\nname="rustra"\n');
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(join(projectDir, '.cargo'), 'blocks mkdir');
+    const report = await runOnboardingSteps({
+      root: projectRoot,
+      repoRoot,
+      mutate: () => ran.push('mutate'),
+      runner: async (step) => {
+        ran.push(step);
+        return { ok: true, output: '' };
+      },
+    });
+    assert.equal(report.ok, false);
+    assert.match(report.error ?? '', /step "patch"/);
+    assert.match(report.error ?? '', /EEXIST|file already exists/i);
+    assert.deepEqual(ran, ['init']);
+    assert.deepEqual(
+      report.steps.map((step) => step.name),
+      ['init', 'patch'],
+      'a hidden preparation step is disclosed only when it fails',
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('scaffold generate bin honors RUSTRA_SCHEMA_OUT (codegen:check contract)', () => {
   // cli-codegen.ts check 모드는 RUSTRA_SCHEMA_OUT=<mkdtemp 디렉터리> 를 넘기고
   // resolve(checkRoot, 'schema.json') 이 존재하는지 요구한다. 스캐폴드의 generate bin

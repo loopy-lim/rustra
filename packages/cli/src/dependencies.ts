@@ -59,9 +59,30 @@ export async function ensureReactNativeDependency(
   if (next !== raw) await writeFile(manifestPath, next);
 }
 
+// Keep the configured range or an exact stable version it admits. Do not expand
+// arbitrary user ranges: that could silently accept an incompatible release line.
+function acceptsDependency(existing: string, expected: string): boolean {
+  if (existing === expected || existing === expected.replace(/^\^/, '')) return true;
+  const exact = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+  const candidate = exact.exec(existing)?.slice(1).map(Number);
+  const base = expected.startsWith('^')
+    ? exact.exec(expected.slice(1))?.slice(1).map(Number)
+    : null;
+  if (!candidate || !base || ![...candidate, ...base].every(Number.isSafeInteger)) return false;
+  const compare = (left: number[], right: number[]) =>
+    left[0]! - right[0]! || left[1]! - right[1]! || left[2]! - right[2]!;
+  const upper =
+    base[0]! > 0
+      ? [base[0]! + 1, 0, 0]
+      : base[1]! > 0
+        ? [0, base[1]! + 1, 0]
+        : [0, 0, base[2]! + 1];
+  return compare(candidate, base) >= 0 && compare(candidate, upper) < 0;
+}
+
 export async function ensureHostDependencies(
   hosts: HostEntries,
-  cliVersion: string,
+  ranges: Record<string, string>,
 ): Promise<void> {
   const manifestPath = resolve(hosts.appRoot, 'package.json');
   let raw: string;
@@ -81,12 +102,13 @@ export async function ensureHostDependencies(
     ...(hosts.bun ? ['@rustra/bun'] : []),
     ...(hosts.tauri ? ['@rustra/tauri'] : []),
   ];
-  const expected = `^${cliVersion}`;
   for (const name of required) {
+    const expected = ranges[name];
+    if (!expected) throw new Error(`Missing compatibility range for ${name}`);
     const existing = dependencies[name] ?? manifest.devDependencies?.[name];
     if (
       existing !== undefined &&
-      existing !== expected &&
+      !acceptsDependency(existing, expected) &&
       !existing.startsWith('file:') &&
       !existing.startsWith('workspace:')
     ) {
