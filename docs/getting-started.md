@@ -287,9 +287,9 @@ host entry points.
 
 ## 3. Generated TypeScript Output
 
-The `generated/` directory contains the following base files. Configuring `node`,
-`bun`, `tauri`, or `reactNative` adds the corresponding host entry point, and the
-`codegen.rustBinary`-driven Frame fast path adds `frame-codecs.ts`/`frame-registry.ts`.
+The `generated/` directory contains the base files below plus the Frame fast path
+files `frame-codecs.ts`/`frame-registry.ts` (always emitted). Configuring `node`,
+`bun`, `tauri`, or `reactNative` adds the corresponding host entry point.
 
 ### types.ts — Type Definitions
 
@@ -760,7 +760,8 @@ engine or call `configure()` themselves — the platform entry point installs th
 
 ### Node
 
-Add a Node block to `rustra.json`. `rustra init` creates this configuration automatically.
+Add a Node block to `rustra.json` — `rustra init` scaffolds the same block with
+`output: ./src/generated` (imports from `src/index.ts` are then `./generated/...`).
 
 ```json
 { "schema": "./generated/schema.json", "output": "./generated", "node": {} }

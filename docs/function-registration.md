@@ -29,8 +29,14 @@ let package = Package::builder("app.functions")
 assert_eq!(package.invoke_json("add", serde_json::json!([2, 3])).unwrap(), serde_json::json!(5));
 ```
 
-After the usual code generation and host configuration, call the generated
-functions directly:
+After each change to registered functions, regenerate and typecheck:
+
+```sh
+rustra codegen            # or the scaffold script: bun run codegen
+bunx tsc --noEmit         # positional signatures are compile-time checked
+```
+
+Then call the generated functions directly:
 
 ```ts
 import { add, reset, read } from './generated/commands.js';
