@@ -11,6 +11,8 @@
  * Rust의 `Package::schema()` 출력에서 각 명령 항목에 해당합니다.
  */
 export type CommandSchema = {
+  /** Producer execution kind; omitted by legacy or unannotated registrations. */
+  execution?: 'sync' | 'async';
   /** 명령 이름 (예: "addNumbers") */
   name: string;
   /** 명령 ID (Frame 바이너리 프로토콜용, 1부터 시작) */

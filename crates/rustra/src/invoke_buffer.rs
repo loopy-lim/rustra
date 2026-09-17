@@ -62,6 +62,24 @@ impl Package {
             .unwrap_or(false)
     }
 
+    /// Checks handler presence without copying the owned handshake shape.
+    pub(crate) fn has_raw_handler(&self, command_id: u16) -> bool {
+        if self.is_frozen() {
+            return self
+                .frozen_registry
+                .get()
+                .and_then(|registry| registry.id_to_command.get(command_id as usize))
+                .and_then(Option::as_ref)
+                .is_some_and(|command| command.raw_handler.is_some());
+        }
+        self.state
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .id_to_command
+            .get(&command_id)
+            .is_some_and(|command| command.raw_handler.is_some())
+    }
+
     /// raw 직결 가능 여부 — 호스트가 스키마 없이 폴백 여부를 미리 판정한다.
     /// 입력 슬롯 종류를 함께 돌려준다(호스트가 같은 순서로 비트를 해석).
     /// 잠금 수명에서 벗어나도록 소유 복사본을 반환한다(호출 빈도가 낮다 —

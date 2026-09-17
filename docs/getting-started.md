@@ -317,6 +317,19 @@ export type OpKind = 'Clear' | {
 };
 };
 
+export type ParityNode = {
+  id: number;
+  name: string;
+  tag: string;
+  note?: string | null;
+  metadata: Record<string, string>;
+  children: number[];
+};
+
+export type ParityTree = {
+  nodes: ParityNode[];
+};
+
 /**
  * 커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.
  */
@@ -477,6 +490,26 @@ export type MultiplyInput = {
 
 export type MultiplyOutput = {
   value: number;
+};
+
+export type ParityFindInput = {
+  tree: ParityTree;
+  id: number;
+};
+
+export type ParitySearch = {
+  found: boolean;
+  id: number;
+  name: string;
+  visited: number;
+};
+
+export type ParityQuery = {
+  id: number;
+};
+
+export type ParityStored = {
+  nodes: number;
 };
 
 /**
@@ -654,7 +687,7 @@ export const addNumbers = createGeneratedFields2<AddNumbersInput, AddNumbersOutp
 
 <!-- prettier-ignore -->
 ```ts
-export const GENERATED_CONTRACT_HASH = '7c07f78e1f38dc37f251920c7c453ec5b6d65a817f95a1b51b5b4649f63a2ae3';
+export const GENERATED_CONTRACT_HASH = '810750e747024dd13ff3416741e9e563e07f73349119e7d5de962d77b1bafbaf';
 export const SCHEMA_VERSION = 1;
 ```
 

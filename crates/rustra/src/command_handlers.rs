@@ -62,14 +62,7 @@ where
                 limits,
                 &handler_complex,
             )?;
-            let body = if direct {
-                output_codec.encode_direct(&output, limits)?
-            } else {
-                let output_value = serde_json::to_value(&output)
-                    .map_err(|e| RustraError::internal(format!("complex encode: {e}")))?;
-                output_codec.encode(&output_value, limits)?
-            };
-            frame_frame_from_body(body, limits.max_payload_bytes)
+            complex_encode_response(&output_codec, &output, direct, limits)
         }))
     };
 
@@ -108,17 +101,25 @@ where
     }
 }
 
-fn frame_frame_from_body(body: Vec<u8>, max_payload_bytes: usize) -> crate::Result<Vec<u8>> {
-    let response_len = 8usize.saturating_add(body.len());
-    if response_len > max_payload_bytes {
+fn complex_encode_response<O: Serialize>(
+    codec: &CompiledComplex,
+    output: &O,
+    direct: bool,
+    limits: ComplexCodecLimits,
+) -> crate::Result<Vec<u8>> {
+    const HEADER: [u8; 8] = [1, 0, 0, 0, 0, 0, 0, 0];
+    let response = if direct {
+        codec.encode_direct_prefixed(output, &HEADER, limits)?
+    } else {
+        let value = serde_json::to_value(output)
+            .map_err(|e| RustraError::internal(format!("complex encode: {e}")))?;
+        codec.encode_prefixed(&value, &HEADER, limits)?
+    };
+    if response.len() > limits.max_payload_bytes {
         return Err(RustraError::payload_too_large(
-            response_len,
-            max_payload_bytes,
+            response.len(),
+            limits.max_payload_bytes,
         ));
     }
-    let mut response = Vec::with_capacity(response_len);
-    response.resize(8, 0);
-    response[0] = 1;
-    response.extend_from_slice(&body);
     Ok(response)
 }

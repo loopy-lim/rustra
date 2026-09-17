@@ -166,6 +166,8 @@ import type { AdminStatsInput, AdminStatsOutput, GrantInput, GrantOutput, SignIn
 
 export const adminStatsCodec: FrameCodec<AdminStatsInput, AdminStatsOutput> = {
   commandId: 4,
+  execution: "sync",
+  syncFields: ["token"],
 
   encode(args: AdminStatsInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(AdminStatsInput)]
@@ -249,6 +251,8 @@ export const adminStatsCodec: FrameCodec<AdminStatsInput, AdminStatsOutput> = {
 
 export const grantCodec: FrameCodec<GrantInput, GrantOutput> = {
   commandId: 3,
+  execution: "sync",
+  syncFields: ["token","capability"],
 
   encode(args: GrantInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(GrantInput)]
@@ -317,6 +321,8 @@ export const grantCodec: FrameCodec<GrantInput, GrantOutput> = {
 
 export const signInCodec: FrameCodec<SignInInput, SignInOutput> = {
   commandId: 1,
+  execution: "sync",
+  syncFields: ["username","password"],
 
   encode(args: SignInInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(SignInInput)]
@@ -391,6 +397,8 @@ export const signInCodec: FrameCodec<SignInInput, SignInOutput> = {
 
 export const signOutCodec: FrameCodec<SignOutInput, SignOutOutput> = {
   commandId: 2,
+  execution: "sync",
+  syncFields: ["token"],
 
   encode(args: SignOutInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(SignOutInput)]

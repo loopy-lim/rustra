@@ -101,17 +101,33 @@ impl CompiledComplex {
     }
 
     /// `O` → 와이어 직결 직렬화 (트랙 B).
+    #[cfg(test)]
     pub(crate) fn encode_direct<O: serde::Serialize>(
         &self,
         value: &O,
         limits: ComplexCodecLimits,
     ) -> Result<Vec<u8>> {
+        self.encode_direct_prefixed(value, &[], limits)
+    }
+
+    pub(crate) fn encode_direct_prefixed<O: serde::Serialize>(
+        &self,
+        value: &O,
+        prefix: &[u8],
+        limits: ComplexCodecLimits,
+    ) -> Result<Vec<u8>> {
         let ir = self.ir()?;
-        let direct = complex_serde::to_bytes_direct(value, ir, &self.targets, limits);
+        let mut writer = Writer::with_prefix(prefix, limits);
+        let direct =
+            complex_serde::to_writer_direct(value, &mut writer, ir, &self.targets, limits, 0);
         if direct.is_err() && self.compatibility_fallback {
-            return self.encode_compat(value, limits);
+            // Discard partial output before compatibility serialization. The
+            // handler's owned value is reused; the handler is never replayed.
+            drop(writer);
+            return self.encode_compat_prefixed(value, prefix, limits);
         }
-        direct
+        direct?;
+        Ok(writer.finish())
     }
 
     /// `O` → 와이어 직결 직렬화, caller 버퍼에 직기록 (트랙 B). 반환값은 기록
@@ -149,14 +165,15 @@ impl CompiledComplex {
 
     #[cold]
     #[inline(never)]
-    fn encode_compat<O: serde::Serialize>(
+    fn encode_compat_prefixed<O: serde::Serialize>(
         &self,
         value: &O,
+        prefix: &[u8],
         limits: ComplexCodecLimits,
     ) -> Result<Vec<u8>> {
         let value = serde_json::to_value(value)
             .map_err(|err| crate::RustraError::internal(format!("complex encode: {err}")))?;
-        self.encode(&value, limits)
+        self.encode_prefixed(&value, prefix, limits)
     }
 
     #[cold]
@@ -173,9 +190,19 @@ impl CompiledComplex {
         self.encode_into(&value, target, limits)
     }
 
+    #[cfg(test)]
     pub(crate) fn encode(&self, value: &Value, limits: ComplexCodecLimits) -> Result<Vec<u8>> {
+        self.encode_prefixed(value, &[], limits)
+    }
+
+    pub(crate) fn encode_prefixed(
+        &self,
+        value: &Value,
+        prefix: &[u8],
+        limits: ComplexCodecLimits,
+    ) -> Result<Vec<u8>> {
         let ir = self.ir()?;
-        let mut writer = Writer::new(limits);
+        let mut writer = Writer::with_prefix(prefix, limits);
         encode_node_ir(&mut writer, ir, value, limits, 0)?;
         Ok(writer.finish())
     }

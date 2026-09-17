@@ -1,20 +1,6 @@
 import ExpoModulesCore
 import Foundation
 
-private enum BenchmarkReceiptError: LocalizedError {
-  case invalidJSON
-  case tooLarge
-
-  var errorDescription: String? {
-    switch self {
-    case .invalidJSON:
-      return "benchmark receipt must be a JSON object"
-    case .tooLarge:
-      return "benchmark receipt exceeds the 8 MiB safety limit"
-    }
-  }
-}
-
 public class RustraCalculatorModule: Module {
   /// Core `rustra_ffi_invoke_json` contract: UTF-8 request bytes in
   /// (`{"command":...,"args":...}`), JSON envelope bytes out
@@ -94,21 +80,13 @@ public class RustraCalculatorModule: Module {
     // runner resolve the app data container with simctl and collect the exact
     // JSON without scraping console output or screenshots.
     Function("writeBenchmarkReceipt") { (receipt: String) throws -> String in
-      let data = Data(receipt.utf8)
-      guard data.count <= 8 * 1024 * 1024 else { throw BenchmarkReceiptError.tooLarge }
-      guard let object = try? JSONSerialization.jsonObject(with: data),
-            object is [String: Any]
-      else { throw BenchmarkReceiptError.invalidJSON }
-
       let documents = try FileManager.default.url(
         for: .documentDirectory,
         in: .userDomainMask,
         appropriateFor: nil,
         create: true
       )
-      let destination = documents.appendingPathComponent("rustra-benchmark-receipt.json")
-      try data.write(to: destination, options: .atomic)
-      return destination.lastPathComponent
+      return try BenchmarkReceiptWriter.write(receipt, to: documents)
     }
   }
 }

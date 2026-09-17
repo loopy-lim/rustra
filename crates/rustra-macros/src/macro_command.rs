@@ -110,6 +110,15 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
         &format!("__RUstra_meta_{}", fn_name),
         proc_macro2::Span::call_site(),
     );
+    let execution_ident = Ident::new(
+        &format!("__RUstra_execution_{}", fn_name),
+        proc_macro2::Span::call_site(),
+    );
+    let execution = if is_async {
+        quote! { rustra::CommandExecution::Async }
+    } else {
+        quote! { rustra::CommandExecution::Sync }
+    };
     let doc_ident = Ident::new(
         &format!("__RUstra_doc_{}", fn_name),
         proc_macro2::Span::call_site(),
@@ -318,6 +327,9 @@ pub fn command(attr: TokenStream, item: TokenStream) -> TokenStream {
             #(#state_bindings)*
             #inner_invocation
         }
+
+        #[allow(non_upper_case_globals, dead_code)]
+        const #execution_ident: rustra::CommandExecution = #execution;
 
         #capability_const
 

@@ -166,6 +166,8 @@ import type { CreateItemInput, CreateItemOutput, DeleteItemInput, DeleteItemOutp
 
 export const createItemCodec: FrameCodec<CreateItemInput, CreateItemOutput> = {
   commandId: 1,
+  execution: "sync",
+  syncFields: ["name","value"],
 
   encode(args: CreateItemInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(CreateItemInput)]
@@ -249,6 +251,8 @@ export const createItemCodec: FrameCodec<CreateItemInput, CreateItemOutput> = {
 
 export const deleteItemCodec: FrameCodec<DeleteItemInput, DeleteItemOutput> = {
   commandId: 5,
+  execution: "sync",
+  syncFields: ["id"],
 
   encode(args: DeleteItemInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(DeleteItemInput)]
@@ -315,6 +319,8 @@ export const deleteItemCodec: FrameCodec<DeleteItemInput, DeleteItemOutput> = {
 
 export const getItemCodec: FrameCodec<GetItemInput, GetItemOutput> = {
   commandId: 2,
+  execution: "sync",
+  syncFields: ["id"],
 
   encode(args: GetItemInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(GetItemInput)]
@@ -404,6 +410,7 @@ export const getItemCodec: FrameCodec<GetItemInput, GetItemOutput> = {
 
 export const listItemsCodec: FrameCodec<ListItemsInput, ListItemsOutput> = {
   commandId: 3,
+  execution: "sync",
 
   encode(args: ListItemsInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(ListItemsInput)]
@@ -484,6 +491,7 @@ export const listItemsCodec: FrameCodec<ListItemsInput, ListItemsOutput> = {
 
 export const updateItemCodec: FrameCodec<UpdateItemInput, UpdateItemOutput> = {
   commandId: 4,
+  execution: "sync",
 
   encode(args: UpdateItemInput): ArrayBuffer {
     // [cmd_id: u16 LE][postcard(UpdateItemInput)]
