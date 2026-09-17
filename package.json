@@ -68,7 +68,9 @@
     "docs:api": "typedoc",
     "test:bindings-fresh": "bun run --cwd packages/cli build && node scripts/check-codegen-fresh.mjs --bindings",
     "audit:registry": "node scripts/audit-release-registry.mjs",
-    "verify:release-gates": "node scripts/check-release-gates.mjs"
+    "verify:release-gates": "node scripts/check-release-gates.mjs",
+    "test:registry-consumer": "node --test scripts/registry-consumer-gate.test.mjs",
+    "verify:consumer:registry": "node scripts/registry-consumer-gate.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.1",

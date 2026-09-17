@@ -163,6 +163,16 @@ export function checkReleaseCoherence(root = process.cwd()) {
     );
   }
 
+  for (const host of ['node', 'bun', 'tauri']) {
+    const hostVersion = readJson(root, `packages/${host}/package.json`).version;
+    const hostRange = cli.rustraTemplate?.[`${host}Range`];
+    if (typeof hostRange !== 'string' || !rangeContainsVersion(hostRange, hostVersion)) {
+      failures.push(
+        `@rustra/cli rustraTemplate.${host}Range=${hostRange} does not contain @rustra/${host} ${hostVersion}`,
+      );
+    }
+  }
+
   const typesVersion = types.version;
   for (const name of PUBLISHED_PACKAGES) {
     const packagePath = `packages/${name}`;

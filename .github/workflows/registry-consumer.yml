@@ -1,0 +1,33 @@
+name: Registry consumer
+
+# Public-registry acceptance is independent of the pre-publication source gate.
+# Run after the selected exact versions have propagated to both registries.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - uses: dtolnay/rust-toolchain@1.95.0
+      - name: Verify exact public packages and rollback
+        run: node scripts/registry-consumer-gate.mjs --output "$RUNNER_TEMP/rustra-registry/receipt.json"
+      - name: Preserve result and logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: registry-consumer-macos-${{ github.sha }}
+          path: ${{ runner.temp }}/rustra-registry/
+          if-no-files-found: error
+          retention-days: 30
