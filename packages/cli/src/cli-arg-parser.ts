@@ -60,14 +60,17 @@ export function parseCliArgs(args: readonly string[], options: CliArgParserOptio
     const [name, inlineValue] = argument.slice(2).split('=', 2);
     if (booleanFlags.has(name!)) {
       if (inlineValue !== undefined) {
-        throw new UsageError(`--${name} does not accept a value`);
+        throw new UsageError(
+          `--${name} does not accept a value. Run "rustra ${options.command} --help".`,
+        );
       }
       flags.add(name!);
       continue;
     }
     if (!valueFlags.has(name!)) throw unknownOptionError(options.command, argument, known);
     const value = inlineValue ?? args[++index];
-    if (!value || value.startsWith('--')) throw new UsageError(`--${name} requires a value`);
+    if (!value || value.startsWith('--'))
+      throw new UsageError(`--${name} requires a value. Run "rustra ${options.command} --help".`);
     values.set(name!, value);
   }
 
@@ -77,7 +80,7 @@ export function parseCliArgs(args: readonly string[], options: CliArgParserOptio
 export function cliFormat(value: string | undefined, command: string): 'text' | 'json' | undefined {
   if (value === undefined) return undefined;
   if (value !== 'text' && value !== 'json') {
-    throw new UsageError(`${command} --format must be text or json`);
+    throw new UsageError(`${command} --format must be text or json, got "${value}"`);
   }
   return value;
 }

@@ -280,9 +280,9 @@ bun run --cwd examples/calculator codegen                # schema.json에서 TS 
 
 ## 3. 생성된 TypeScript 결과물
 
-`generated/` 디렉토리에는 다음 기본 파일이 생성된다. `node`, `bun`, `tauri`,
-`reactNative`를 설정하면 해당 호스트 진입점도 추가되고, `codegen.rustBinary`로 구동되는
-Frame fast path는 `frame-codecs.ts`/`frame-registry.ts`를 추가한다.
+`generated/` 디렉토리에는 아래 기본 파일과 Frame fast path 파일인
+`frame-codecs.ts`/`frame-registry.ts`(항상 생성)가 담긴다. `node`, `bun`, `tauri`,
+`reactNative`를 설정하면 해당 호스트 진입점이 추가된다.
 
 ### types.ts — 타입 정의
 
@@ -752,7 +752,8 @@ export const SCHEMA_VERSION = 1;
 
 ### Node
 
-`rustra.json`에 Node 블록을 추가한다. `rustra init`은 이 설정을 자동으로 만든다.
+`rustra.json`에 Node 블록을 추가한다 — `rustra init`은 같은 블록을
+`output: ./src/generated` 로 스캐폴드한다(`src/index.ts` 기준 import는 `./generated/...`).
 
 ```json
 { "schema": "./generated/schema.json", "output": "./generated", "node": {} }

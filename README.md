@@ -25,6 +25,9 @@ Rust #[command] definition → TypeScript client codegen → platform adapter ex
 - `generate_typescript()` publishes the contract; `rustra codegen` renders type-safe TS client code from it
 - Node, Bun, Tauri, and React Native adapters all route through the same
   `EngineClient` interface
+- Plain Rust functions work too — `PackageBuilder::function` registers 0–12-argument
+  functions without macros and generates positional TS signatures
+  ([function registration](docs/function-registration.md))
 
 ## Why rustra (Comparison)
 

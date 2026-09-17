@@ -17,12 +17,12 @@ rustra에 기여하는 방법을 정리한다.
 
 ```bash
 git clone <repo-url> && cd rustra-bridge
+bun install                 # 워크스페이스 의존성
 
-# Rust 빌드 확인
-# (--workspace 는 default-members 를 무시하므로 macOS 전용 tauri-calculator 까지 빌드된다)
+bun run test:fast           # 몇 분 안에 첫 신호: cargo check + calculator tsc + cli 유닛 테스트
+
+# 전체 배터리(느림; --workspace 는 macOS 전용 tauri-calculator 까지 빌드한다)
 cargo build --workspace
-
-# 전체 테스트 실행
 cargo test --workspace
 bun run test:compat
 ```
@@ -114,6 +114,21 @@ bun run test:runtime  ← 실제 Rust↔TS 실행 (필수)
     ↓
 bun run test:compat   ← 전체 통합 (PR 필수)
 ```
+
+### 어떤 게이트를 언제
+
+| 명령                               | 실행 시점                                        | 검사 내용                                                     |
+| ---------------------------------- | ------------------------------------------------ | ------------------------------------------------------------- |
+| `bun run test:fast`                | 로컬 편집 루프마다                               | cargo check + calculator tsc + cli 유닛 테스트                |
+| `bun run test:docs`                | docs/ 또는 docs:sync 리전 수정 시                | en/ko 미러, 동기화 리전, 설치 문서-매니페스트 정합            |
+| `bun run test:codegen-fresh`       | 스키마·제너레이터·`examples/*/generated` 수정 시 | 커밋된 생성물이 현재 소스에서 재현되는지                      |
+| `bun run test:api-surface`         | 공개 TS/Rust 표면 변경 시                        | `api-surface/snapshot.json` 대비 diff(의도 수용은 `--update`) |
+| `bun run test:architecture`        | 모듈 경계 수정 시                                | 파일 크기·모듈 경계 상한                                      |
+| `bun run test:release-coherence`   | 버전·범위·락파일 수정 시                         | 패키지/락파일/범위 불변식                                     |
+| `bun run test:release-tools`       | scripts/ 또는 릴리스 흐름 수정 시                | 릴리스 도구 유닛 테스트                                       |
+| `bun run test:functions`           | 일반 함수 등록 수정 시                           | 함수 등록 엔드투엔드 통합                                     |
+| `bun run test:registry-consumer`   | 호스트 핀·소비자 설치 경로 수정 시               | 레지스트리 소비자 설치 게이트                                 |
+| `bun run test:complex-codec-bench` | complex codec 수정 시                            | codec receipt 회귀                                            |
 
 ### Rust 테스트
 
