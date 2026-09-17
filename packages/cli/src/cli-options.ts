@@ -46,7 +46,10 @@ export function parseCodegenArgs(args: string[]): CodegenOptions {
   // `rustra codegen` 이 관례화된 파일명에서 동작해야 첫 사용 흐름이 짧아진다.
   if (!options.help && !options.configPath) {
     if (existsSync('rustra.json')) options.configPath = 'rustra.json';
-    else throw new UsageError('codegen requires --config <path>');
+    else
+      throw new UsageError(
+        'codegen requires --config <path> — no rustra.json in the working directory. Run "rustra init <dir>" or pass --config <path>.',
+      );
   }
   return options;
 }

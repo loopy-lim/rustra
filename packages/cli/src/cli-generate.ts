@@ -121,6 +121,9 @@ export async function runWatch(args: string[]): Promise<WatchHandle> {
   }
   await regenerate();
   console.log(`\nWatching ${paths.schemaPath} for changes...`);
+  console.log(
+    'Only the schema file is watched — Rust edits need a regenerate source (cargo run … generate) or "rustra dev".',
+  );
   const loop = createWatchLoop(
     async () => {
       try {

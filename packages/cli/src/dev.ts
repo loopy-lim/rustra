@@ -148,8 +148,8 @@ export function parseDevArgs(args: string[]): DevOptions {
 }
 
 function inspectHint(): void {
-  console.log('[dev:inspect] 앱 프로세스에서 createInstrumentedEngine 로 감싸면');
-  console.log('[dev:inspect] report() 를 콘솔/원격으로 노출할 수 있습니다: @rustra/devtools');
+  console.log('[dev:inspect] Wrap your engine with createInstrumentedEngine in the app process');
+  console.log('[dev:inspect] to expose report() via console or remote: @rustra/devtools');
 }
 
 function watchPlan(backendDir: string, generatedDir: string): () => boolean {

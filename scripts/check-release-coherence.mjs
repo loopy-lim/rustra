@@ -226,6 +226,9 @@ function run() {
   const failures = checkReleaseCoherence();
   if (failures.length > 0) {
     console.error('release coherence failed:\n- ' + failures.join('\n- '));
+    console.error(
+      'Fix: version bumps flow through a version PR ("bun run version"); see docs/release-procedure.md and docs/versioning-policy.md.',
+    );
     process.exitCode = 1;
     return;
   }
