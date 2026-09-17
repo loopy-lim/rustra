@@ -1,6 +1,20 @@
 import ExpoModulesCore
 import Foundation
 
+private enum BenchmarkReceiptError: LocalizedError {
+  case invalidJSON
+  case tooLarge
+
+  var errorDescription: String? {
+    switch self {
+    case .invalidJSON:
+      return "benchmark receipt must be a JSON object"
+    case .tooLarge:
+      return "benchmark receipt exceeds the 8 MiB safety limit"
+    }
+  }
+}
+
 public class RustraCalculatorModule: Module {
   /// Core `rustra_ffi_invoke_json` contract: UTF-8 request bytes in
   /// (`{"command":...,"args":...}`), JSON envelope bytes out

@@ -86,6 +86,8 @@ export async function runFunctionDemo() {
           : (['generatedFunction', 'legacyCommand'] as const);
       for (const name of order) {
         const start = performance.now();
+        // 이전 호출 완료를 기다린 뒤 다음 호출을 재는 순차 측정이 계약이다.
+        // react-doctor-disable-next-line async-await-in-loop
         for (let i = 0; i < 1_000; i++) await operations[name]();
         if (round >= 2) samples[name].push(((performance.now() - start) * 1e6) / 1_000);
       }
