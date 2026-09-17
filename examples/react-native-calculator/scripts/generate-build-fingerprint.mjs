@@ -32,6 +32,8 @@ export async function buildInputFiles(appRoot = DEFAULT_APP_ROOT) {
   const files = [
     resolve(appRoot, 'App.tsx'),
     resolve(appRoot, 'BenchmarkApp.tsx'),
+    resolve(appRoot, 'NitroParityApp.tsx'),
+    resolve(appRoot, 'modules/nitro-bench/nitro-bench/package.json'),
     resolve(appRoot, 'DynamicRegistryApp.tsx'),
     resolve(appRoot, 'ReloadStressApp.tsx'),
     resolve(appRoot, 'app.json'),
@@ -51,6 +53,9 @@ export async function buildInputFiles(appRoot = DEFAULT_APP_ROOT) {
     resolve(repoRoot, 'examples/calculator/Cargo.toml'),
   ];
   const directories = [
+    [resolve(appRoot, 'modules/nitro-bench/nitro-bench/src'), new Set(['.ts'])],
+    [resolve(appRoot, 'modules/nitro-bench/nitro-bench/ios'), new Set(['.cpp', '.hpp'])],
+    [resolve(appRoot, 'modules/nitro-bench/nitro-bench/nitrogen/generated'), new Set(['.cpp', '.hpp', '.mm', '.swift', '.cmake', '.gradle', '.kt', '.rb'])],
     [resolve(appRoot, 'src'), new Set(['.ts', '.tsx'])],
     [resolve(appRoot, 'modules/rustra-jsi/src'), new Set(['.ts'])],
     [
@@ -64,7 +69,7 @@ export async function buildInputFiles(appRoot = DEFAULT_APP_ROOT) {
     [generatedRoot, new Set(['.ts', '.json'])],
     [resolve(repoRoot, 'packages/types/src'), new Set(['.ts'])],
     [resolve(repoRoot, 'packages/react-native/src'), new Set(['.ts'])],
-    [resolve(repoRoot, 'packages/react-native/native'), new Set(['.cpp', '.hpp', '.mm'])],
+    [resolve(repoRoot, 'packages/react-native/native'), new Set(['.cpp', '.hpp', '.mm', '.inc'])],
     [resolve(repoRoot, 'crates/rustra/src'), new Set(['.rs'])],
     [resolve(repoRoot, 'crates/rustra-macros/src'), new Set(['.rs'])],
     [resolve(repoRoot, 'examples/calculator/src'), new Set(['.rs'])],

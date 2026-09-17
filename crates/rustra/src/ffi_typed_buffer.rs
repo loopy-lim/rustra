@@ -3,11 +3,7 @@
 /// generated codec metadata before advertising Tier 0 to JavaScript.
 #[unsafe(no_mangle)]
 pub extern "C" fn rustra_ffi_has_raw(command_id: u16) -> u8 {
-    u8::from(
-        get_package()
-            .and_then(|pkg| pkg.raw_invoke_shape(command_id))
-            .is_some(),
-    )
+    u8::from(get_package().is_some_and(|pkg| pkg.has_raw_handler(command_id)))
 }
 
 /// Frame caller-buffer 변형 — JSI typed fast path 의 malloc→memcpy→free

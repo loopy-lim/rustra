@@ -1,4 +1,14 @@
 impl PackageBuilder {
+    /// Declares the producer's execution contract. Existing unannotated registrations
+    /// remain unknown; an async macro wrapper must be declared Async, not Sync.
+    pub fn command_execution(mut self, name: &str, execution: crate::CommandExecution) -> Self {
+        self.commands
+            .get_mut(name)
+            .unwrap_or_else(|| panic!("command_execution: command '{name}' not registered"))
+            .execution = Some(execution);
+        self
+    }
+
     /// `#[command]` 속성으로 정의된 함수를 이름 자동 추론으로 등록합니다.
     ///
     /// 함수 이름에서 `_command` 접미사를 제거한 뒤 lowerCamelCase로 변환하여

@@ -38,7 +38,8 @@
             "format": "int64"
           }
         }
-      }
+      },
+      "execution": "sync"
     },
     {
       "name": "benchAdd",
@@ -75,7 +76,8 @@
             "format": "double"
           }
         }
-      }
+      },
+      "execution": "sync"
     },
     {
       "name": "benchEchoBytes",
@@ -115,7 +117,8 @@
             }
           }
         }
-      }
+      },
+      "execution": "sync"
     },
     {
       "name": "benchEchoPair",
@@ -155,7 +158,8 @@
             "format": "double"
           }
         }
-      }
+      },
+      "execution": "sync"
     },
     {
       "name": "benchEchoString",
@@ -185,7 +189,8 @@
             "type": "string"
           }
         }
-      }
+      },
+      "execution": "sync"
     },
     {
       "name": "channelDemo",
@@ -233,6 +238,7 @@
           }
         }
       },
+      "execution": "sync",
       "definitions": {
         "ChannelHandle": {
           "description": "커맨드 인자로 받은 채널 핸들 — serde 표면은 plain `u32`다.\n\n코드젠은 이 타입을 인식하면 TS 를 `RustraChannel` 마커 타입으로 발행한다(런타임 값은 여전히 number — wire 는 u32 varint).",
@@ -340,7 +346,8 @@
             "format": "double"
           }
         }
-      }
+      },
+      "execution": "sync"
     },
     {
       "name": "createItem",
@@ -376,6 +383,7 @@
           }
         }
       },
+      "execution": "sync",
       "definitions": {
         "Item": {
           "type": "object",
@@ -463,6 +471,7 @@
           }
         }
       },
+      "execution": "sync",
       "errors": [
         {
           "code": "math.divide_by_zero",
@@ -550,7 +559,8 @@
             "format": "int64"
           }
         }
-      }
+      },
+      "execution": "sync"
     },
     {
       "name": "gauge",
@@ -591,6 +601,7 @@
           }
         }
       },
+      "execution": "sync",
       "description": "u64/u32 필드 — plain varint(uvar) 와이어 고정(과거 zigzag 버그 수정 증명)."
     },
     {
@@ -621,7 +632,8 @@
             "type": "string"
           }
         }
-      }
+      },
+      "execution": "sync"
     },
     {
       "name": "isEven",
@@ -652,7 +664,8 @@
             "type": "boolean"
           }
         }
-      }
+      },
+      "execution": "sync"
     },
     {
       "name": "kindEcho",
@@ -756,6 +769,364 @@
             "format": "double"
           }
         }
+      },
+      "execution": "sync"
+    },
+    {
+      "name": "parityEcho",
+      "commandId": 34,
+      "inputType": "ParityTree",
+      "outputType": "ParityTree",
+      "inputSchema": {
+        "title": "ParityTree",
+        "type": "object",
+        "required": [
+          "nodes"
+        ],
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/ParityNode"
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ParityTree",
+        "type": "object",
+        "required": [
+          "nodes"
+        ],
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/ParityNode"
+            }
+          }
+        }
+      },
+      "execution": "sync",
+      "definitions": {
+        "ParityNode": {
+          "type": "object",
+          "required": [
+            "children",
+            "id",
+            "metadata",
+            "name",
+            "tag"
+          ],
+          "properties": {
+            "id": {
+              "type": "number",
+              "format": "double"
+            },
+            "name": {
+              "type": "string"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "note": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "metadata": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "children": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "double"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "parityFind",
+      "commandId": 35,
+      "inputType": "ParityFindInput",
+      "outputType": "ParitySearch",
+      "inputSchema": {
+        "title": "ParityFindInput",
+        "type": "object",
+        "required": [
+          "id",
+          "tree"
+        ],
+        "properties": {
+          "tree": {
+            "$ref": "#/definitions/ParityTree"
+          },
+          "id": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ParitySearch",
+        "type": "object",
+        "required": [
+          "found",
+          "id",
+          "name",
+          "visited"
+        ],
+        "properties": {
+          "found": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "number",
+            "format": "double"
+          },
+          "name": {
+            "type": "string"
+          },
+          "visited": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "execution": "sync",
+      "definitions": {
+        "ParityTree": {
+          "type": "object",
+          "required": [
+            "nodes"
+          ],
+          "properties": {
+            "nodes": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/ParityNode"
+              }
+            }
+          }
+        },
+        "ParityNode": {
+          "type": "object",
+          "required": [
+            "children",
+            "id",
+            "metadata",
+            "name",
+            "tag"
+          ],
+          "properties": {
+            "id": {
+              "type": "number",
+              "format": "double"
+            },
+            "name": {
+              "type": "string"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "note": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "metadata": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "children": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "double"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "parityIndexed",
+      "commandId": 38,
+      "inputType": "ParityQuery",
+      "outputType": "ParitySearch",
+      "inputSchema": {
+        "title": "ParityQuery",
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ParitySearch",
+        "type": "object",
+        "required": [
+          "found",
+          "id",
+          "name",
+          "visited"
+        ],
+        "properties": {
+          "found": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "number",
+            "format": "double"
+          },
+          "name": {
+            "type": "string"
+          },
+          "visited": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "execution": "sync"
+    },
+    {
+      "name": "parityResident",
+      "commandId": 37,
+      "inputType": "ParityQuery",
+      "outputType": "ParitySearch",
+      "inputSchema": {
+        "title": "ParityQuery",
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ParitySearch",
+        "type": "object",
+        "required": [
+          "found",
+          "id",
+          "name",
+          "visited"
+        ],
+        "properties": {
+          "found": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "number",
+            "format": "double"
+          },
+          "name": {
+            "type": "string"
+          },
+          "visited": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "execution": "sync"
+    },
+    {
+      "name": "parityStore",
+      "commandId": 36,
+      "inputType": "ParityTree",
+      "outputType": "ParityStored",
+      "inputSchema": {
+        "title": "ParityTree",
+        "type": "object",
+        "required": [
+          "nodes"
+        ],
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/ParityNode"
+            }
+          }
+        }
+      },
+      "outputSchema": {
+        "title": "ParityStored",
+        "type": "object",
+        "required": [
+          "nodes"
+        ],
+        "properties": {
+          "nodes": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "execution": "sync",
+      "definitions": {
+        "ParityNode": {
+          "type": "object",
+          "required": [
+            "children",
+            "id",
+            "metadata",
+            "name",
+            "tag"
+          ],
+          "properties": {
+            "id": {
+              "type": "number",
+              "format": "double"
+            },
+            "name": {
+              "type": "string"
+            },
+            "tag": {
+              "type": "string"
+            },
+            "note": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "metadata": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "children": {
+              "type": "array",
+              "items": {
+                "type": "number",
+                "format": "double"
+              }
+            }
+          }
+        }
       }
     },
     {
@@ -824,6 +1195,7 @@
           }
         }
       },
+      "execution": "sync",
       "definitions": {
         "Item": {
           "type": "object",
@@ -876,6 +1248,7 @@
           }
         }
       },
+      "execution": "sync",
       "definitions": {
         "ResourceHandle": {
           "description": "커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.",
@@ -917,6 +1290,7 @@
           }
         }
       },
+      "execution": "sync",
       "definitions": {
         "ResourceHandle": {
           "description": "커맨드 반환값/필드로 받은 리소스 핸들 — serde 표면은 plain `u32`.",
@@ -965,6 +1339,7 @@
           }
         }
       },
+      "execution": "sync",
       "errors": [
         {
           "code": "resource.not_found",
@@ -1020,6 +1395,7 @@
           }
         }
       },
+      "execution": "sync",
       "errors": [
         {
           "code": "resource.not_found",
@@ -1073,6 +1449,7 @@
           }
         }
       },
+      "execution": "sync",
       "description": "런타임 registry 제어 명령. op:\n`register` / `unregister` / `replacePing` / `replaceAdd` / `restoreAdd` / `freeze` / `state`."
     },
     {
@@ -1115,6 +1492,7 @@
           }
         }
       },
+      "execution": "sync",
       "description": "HashMap<String, i64>(동적 맵) — count + (key,value)* 와이어 고정."
     },
     {
@@ -1152,7 +1530,8 @@
             "format": "int64"
           }
         }
-      }
+      },
+      "execution": "sync"
     },
     {
       "name": "sizeOf",
@@ -1196,6 +1575,7 @@
           }
         }
       },
+      "execution": "sync",
       "description": "Vec<u8>(postcard bytes) 입력 + u32 출력 — plain varint 와이어 고정."
     },
     {
@@ -1243,6 +1623,7 @@
           }
         }
       },
+      "execution": "sync",
       "description": "(String, i64) 튜플 — i64 때문에 complex-binary count + elements 와이어."
     },
     {
@@ -1283,7 +1664,8 @@
             "format": "int64"
           }
         }
-      }
+      },
+      "execution": "sync"
     },
     {
       "name": "tagSet",
@@ -1352,7 +1734,8 @@
             "type": "string"
           }
         }
-      }
+      },
+      "execution": "sync"
     },
     {
       "name": "wideAgg",

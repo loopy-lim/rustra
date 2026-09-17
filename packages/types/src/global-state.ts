@@ -6,6 +6,7 @@ import type { EngineClient } from './public.js';
  * InternalEngineClient). Plumbing between this package's facade and its
  * engines; not public API.
  */
+export const resolveSyncBinding = Symbol.for('dev.rustra.types.v0.10.resolveSyncBinding');
 export const invokeByIdSync = Symbol.for('dev.rustra.types.v0.4.0.invokeByIdSync');
 /** @internal — dispatch protocol key, see {@link invokeByIdSync}. */
 export const invokeGeneratedFieldsSync = Symbol.for(
@@ -64,6 +65,7 @@ export type GeneratedCommand<TInput, TOutput> = ((
 
 /** @internal — engine contract extended with the optional sync fast-path symbols; not public API. */
 export type InternalEngineClient = EngineClient & {
+  [resolveSyncBinding]?(command: string): (input: unknown) => unknown;
   [invokeByIdSync]?<T>(commandId: number, command: string, args?: unknown): T;
   [invokeGeneratedFieldsSync]?<T>(
     commandId: number,

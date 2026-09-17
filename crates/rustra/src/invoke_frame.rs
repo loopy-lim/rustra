@@ -36,21 +36,25 @@ impl Package {
         self.invoke_frame_command(command.as_ref(), payload)
     }
 
-    /// 스칼라 직결(raw) invoke — postcard 왕복 없이 u64 슬롯으로 주고받는다.
-    /// 대상 명령이 raw 직결 조건(스칼라 1..3 입력 + 단일 스칼라/unit 출력)을
-    /// 만족하지 않으면 `command.invalid_args` 를 반환해 호출자(호스트 JSI)가
-    /// by-id 경로로 폴백하게 한다. 와이어 포맷은 존재하지 않는다(계약이 슬롯
-    /// 배열 자체) — 코덱 게이트 대상 아니다.
+    /// 스칼라 직결(raw) invoke — FFI 경계에서는 u64 슬롯으로 주고받는다.
+    /// raw 핸들러 내부의 stack buffer 기반 postcard 입력/출력 변환은 유지된다.
+    /// 대상 명령에 raw 핸들러가 없으면 `command.invalid_args` 를 반환한다.
+    /// 실행 오류는 호스트 폴백 신호가 아니다. FFI는 실행 전 raw 핸들러 부재를
+    /// 별도로 검사해 폴백을 알리고, 실행 후 오류는 재시도 없이 전달한다.
     pub fn invoke_raw(&self, command_id: u16, slots: &[u64]) -> crate::Result<u64> {
-        // 양쪽 가지 모두 Arc 클론으로 통일 — 핸들러 실행은 잠금 밖에서.
-        let command = if self.is_frozen() {
-            self.frozen_registry
+        if self.is_frozen() {
+            let command = self
+                .frozen_registry
                 .get()
                 .and_then(|registry| registry.id_to_command.get(command_id as usize))
                 .and_then(Option::as_ref)
-                .cloned()
-                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
-        } else {
+                .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?;
+            return self.invoke_raw_command(command, command_id, slots);
+        }
+
+        // Retain the mutable command, but release its registry lock before
+        // capability checks or user code can reenter and mutate the package.
+        let command = {
             let state = self
                 .state
                 .read()
@@ -61,12 +65,21 @@ impl Package {
                 .ok_or_else(|| RustraError::command_not_found(format!("id:{command_id}")))?
                 .clone()
         };
+        self.invoke_raw_command(command.as_ref(), command_id, slots)
+    }
+
+    fn invoke_raw_command(
+        &self,
+        command: &Command,
+        command_id: u16,
+        slots: &[u64],
+    ) -> crate::Result<u64> {
         let Some(raw) = command.raw_handler.as_ref() else {
             return Err(RustraError::invalid_args(format!(
                 "raw invoke: command id:{command_id} has no raw handler"
             )));
         };
-        self.capability_satisfied(command.as_ref())?;
+        self.capability_satisfied(command)?;
         // 핸들러 패닉 가드 — 다른 invoke 경로와 동일 계약(internal 정규화).
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             with_state_context(&self.states, || raw(slots))

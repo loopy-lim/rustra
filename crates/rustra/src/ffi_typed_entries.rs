@@ -117,7 +117,7 @@ pub unsafe extern "C" fn rustra_ffi_invoke_raw(
         return u32::MAX;
     };
     // raw 직결 불가 명령 폴백 신호 — 호스트가 by-id 경로로 되돌린다.
-    if pkg.raw_invoke_shape(command_id).is_none() {
+    if !pkg.has_raw_handler(command_id) {
         unsafe { *err_len = 0 };
         return u32::MAX;
     }

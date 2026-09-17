@@ -35,6 +35,10 @@ impl Package {
                 "schemaGeneration".into(),
                 Value::from(state.schema_generation),
             );
+        schema
+            .as_object_mut()
+            .expect("live schema root is an object")
+            .insert("registryFrozen".into(), Value::Bool(self.is_frozen()));
         state.live_schema_cache = Some(schema.clone());
         schema
     }
@@ -175,6 +179,12 @@ pub(crate) fn command_schema_entry(name: &str, command: &Command) -> Value {
         "inputSchema": input_schema,
         "outputSchema": output_schema,
     });
+    if let Some(execution) = command.execution {
+        entry
+            .as_object_mut()
+            .expect("command schema is an object")
+            .insert("execution".into(), Value::String(execution.as_str().into()));
+    }
     // 플랫폼 특화 명령 — 지원 플랫폼 목록. 전 플랫폼에서 동일하게 기록되므로
     // 계약 해시도 플랫폼 무관하게 안정이다(빈 목록=전 플랫폼은 미기록).
     if !command.platforms.is_empty() {
