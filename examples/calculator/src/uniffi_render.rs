@@ -1740,6 +1740,11 @@ mod tests {
         let formatted = std::fs::read_to_string(&path).unwrap();
         std::fs::remove_file(path).unwrap();
         let committed = include_str!("uniffi_generated.rs");
+        // rustfmt 출력과 체크아웃 파일은 개행 스타일이 플랫폼마다 다르다(Windows
+        // autocrlf) — 바이트 동일성 계약은 LF 정규화 기준으로 비교한다.
+        let normalize = |s: &str| s.replace("\r\n", "\n");
+        let formatted = normalize(&formatted);
+        let committed = normalize(committed);
         let schema: Value = serde_json::from_str(include_str!("../generated/schema.json")).unwrap();
         for command in schema["commands"].as_array().unwrap() {
             if command.get("functionArgs").is_some() {
