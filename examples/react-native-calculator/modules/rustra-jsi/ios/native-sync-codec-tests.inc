@@ -1,4 +1,50 @@
 static void codecTests(jsi::Runtime& rt) {
+  run(rt, "bound HostFunctions retain fixed names across calls and GC", "checkBoundConversionWork();");
+  run(rt, "context construction failure exposes no partial binding", "checkBoundConstructionFailure();");
+  run(rt, "generic tuple input restores distinct result names and fresh descriptors", R"JS(
+    const f=bind(16,"span"); const input={pair:["tuple caption",37]};
+    const a=f(input); collect(); const b=f(input);
+    assert(a!==b && a.first==="tuple caption" && a.second===37 && b.second===37);
+    assert(Object.keys(a).join(",")==="first,second");
+    for(const key of ["first","second"]) { const d=Object.getOwnPropertyDescriptor(a,key); assert(d.writable && d.enumerable && d.configurable); }
+  )JS");
+  run(rt, "bound results preserve order descriptors and fresh identity", R"JS(
+    const f=bind(26,"benchEchoPair"); const a=f({name:"caption",value:7}), b=f({name:"caption",value:7});
+    assert(a!==b && a.name==="caption" && a.value===7);
+    assert(Object.keys(a).join(",")==="name,value");
+    for(const key of ["name","value"]) { const d=Object.getOwnPropertyDescriptor(a,key); assert(d.writable && d.enumerable && d.configurable); }
+  )JS");
+  run(rt, "getter drops outer binding roots and reenters same and different contexts", R"JS(
+    globalThis.outerBinding=bind(34,"parityEcho"); const other=bind(26,"benchEchoPair"); let inner, pair;
+    const n=node();
+    Object.defineProperty(n,"note",{get(){
+      const active=globalThis.outerBinding; globalThis.outerBinding=null;
+      delete globalThis.__rustraPropNameCache; globalThis.__rustraNative={replaced:true}; collect();
+      inner=active({nodes:[node({},"inner")]}); pair=other({name:"other",value:9}); collect(); return "outer";
+    }});
+    const out=outerBinding({nodes:[n]});
+    assert(out.nodes[0].note==="outer" && inner.nodes[0].note==="inner" && pair.name==="other" && pair.value===9);
+    delete globalThis.outerBinding; delete globalThis.__rustraNative;
+  )JS");
+  run(rt, "nested result setter reentry and throw preserve context and fresh output", R"JS(
+    const f=bind(34,"parityEcho"); let depth=0, inner, shouldThrow=false;
+    Object.defineProperty(Object.prototype,"note",{configurable:true,set(value){
+      if(shouldThrow) throw new Error("result setter");
+      if(depth===0) { depth++; collect(); inner=f({nodes:[node({},"inner")]}); depth--; }
+      Object.defineProperty(this,"note",{value,writable:true,enumerable:true,configurable:true});
+    }});
+    try {
+      const out=f({nodes:[node({},"outer")]});
+      assert(out.nodes[0].note==="outer" && inner.nodes[0].note==="inner");
+      shouldThrow=true; const before=stat(0,"frames"); rejects(()=>f({nodes:[node()]}));
+      assert(stat(0,"frames")===before+1,"decode failure retried handler");
+      shouldThrow=false; assert(f({nodes:[node({},"after")]}).nodes[0].note==="after");
+    } finally { delete Object.prototype.note; }
+  )JS");
+  run(rt, "bound contexts remain managed until VM shutdown", R"JS(
+    globalThis.retainedShutdownBindings=[bind(34,"parityEcho"),bind(26,"benchEchoPair")];
+    collect(); assert(retainedShutdownBindings[0]({nodes:[node({},"shutdown")]}).nodes[0].note==="shutdown");
+  )JS");
   run(rt, "encode uses only invocation-owned property state", "checkConversionWork(3);");
   run(rt, "decode uses only invocation-owned property state", "checkConversionWork(4);");
   run(rt, "raw result owns its actual property name", "checkResultPropertyState(false);");

@@ -12,6 +12,7 @@
 #include <cmath>
 #include <cstring>
 #include <jsi/jsi.h>
+#include <initializer_list>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -127,6 +128,66 @@ struct RustraByteSpan { const uint8_t* data; size_t size; };
   return static_cast<float>(number);
 }
 
+namespace rustra::generated {
+struct BoundCodecContext {
+  const uint16_t commandId;
+  const std::vector<jsi::PropNameID> input;
+  const std::vector<jsi::PropNameID> output;
+private:
+  static std::vector<jsi::PropNameID> ownNames(Runtime& rt, std::initializer_list<const char*> names) {
+    std::vector<jsi::PropNameID> result; result.reserve(names.size());
+    for (auto name : names) result.push_back(jsi::PropNameID::forAscii(rt, name));
+    return result;
+  }
+  BoundCodecContext(Runtime& rt, uint16_t id, std::initializer_list<const char*> in, std::initializer_list<const char*> out)
+    : commandId(id), input(ownNames(rt, in)), output(ownNames(rt, out)) {}
+  friend std::shared_ptr<const BoundCodecContext> make_bound_codec_context(Runtime&, uint16_t);
+};
+std::shared_ptr<const BoundCodecContext> make_bound_codec_context(Runtime& rt, uint16_t commandId) {
+  switch (commandId) {
+    case 1: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"a", "b"}, {"value"}));
+    case 23: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"a", "b"}, {"value"}));
+    case 25: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"data"}, {"data"}));
+    case 26: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"name", "value"}, {"name", "value"}));
+    case 24: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"value"}, {"value"}));
+    case 18: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"channel", "ticks"}, {"sent", "droppedSends"}));
+    case 31: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"channel", "ticks"}, {"sent", "droppedSends"}));
+    case 4: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"max", "min", "value"}, {"value"}));
+    case 8: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"name", "value"}, {"item", "active", "name", "value"}));
+    case 32: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {}, {"os"}));
+    case 10: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"a", "b"}, {"value"}));
+    case 11: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"ticks", "stepDelayMs"}, {"emitted"}));
+    case 17: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"limit", "offset"}, {"next"}));
+    case 5: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"name"}, {"message"}));
+    case 3: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"n"}, {"result"}));
+    case 2: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"a", "b"}, {"value"}));
+    case 34: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"nodes", "id", "name", "tag", "note", "metadata", "children"}, {"nodes", "id", "name", "tag", "note", "metadata", "children"}));
+    case 35: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"tree", "nodes", "id", "name", "tag", "note", "metadata", "children"}, {"found", "id", "name", "visited"}));
+    case 38: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"id"}, {"found", "id", "name", "visited"}));
+    case 37: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"id"}, {"found", "id", "name", "visited"}));
+    case 36: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"nodes", "id", "name", "tag", "note", "metadata", "children"}, {"nodes"}));
+    case 30: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {}, {"os", "windowKind"}));
+    case 9: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"item", "active", "name", "value"}, {"doubled", "item", "active", "name", "value"}));
+    case 22: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"handle"}, {"closed"}));
+    case 19: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"initial"}, {"handle"}));
+    case 20: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"handle", "key"}, {"found", "value"}));
+    case 21: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"handle", "key", "value"}, {"entries"}));
+    case 12: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"op"}, {"ok", "frozen", "message"}));
+    case 15: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"scores"}, {"count", "total"}));
+    case 13: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"a", "b"}, {"value"}));
+    case 14: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"data"}, {"checksum", "len"}));
+    case 16: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"pair", "value", "_"}, {"first", "second"}));
+    case 6: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"numbers"}, {"count", "total"}));
+    case 7: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"s"}, {"result"}));
+    case 28: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"samples", "offset"}, {"max", "adjusted"}));
+    case 27: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {}, {}));
+    case 33: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {}, {}));
+    case 29: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {}, {}));
+    default: throw JSError(rt, "rustra: no bound codec for cmd_id " + std::to_string(commandId));
+  }
+}
+} // namespace rustra::generated
+
 static void complex_encode_ref_ChannelHandle(jsi::Runtime&, const jsi::Value&, rc::Writer&, size_t);
 static jsi::Value complex_decode_ref_ChannelHandle(jsi::Runtime&, rc::Reader&, size_t);
 static void complex_encode_ref_Item(jsi::Runtime&, const jsi::Value&, rc::Writer&, size_t);
@@ -234,13 +295,17 @@ static void complex_encode_ref_ResourceHandle(jsi::Runtime& rt, const jsi::Value
   w.push_uvar(rustra_u64(rt, value, "complex integer"));
 }
 static jsi::Value complex_decode_ref_ResourceHandle(jsi::Runtime& rt, rc::Reader& r, size_t _depth) { if (_depth > 32) throw std::runtime_error("complex value depth exceeds 32"); return [&]() -> jsi::Value { auto _v = r.read_uvar(); if (_v <= 9007199254740991ull) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v)); }(); }
+static void encode_body_addNumbers(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_0), "a"));
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "b"));
+}
 static void encode_addNumbers(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(1); w.push_u8(0); // cmd_id = 1 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "a");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "b");
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_0), "a"));
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "b"));
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "a"), jsi::PropNameID::forAscii(rt, "b")};
+  encode_body_addNumbers(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -251,20 +316,28 @@ static void encode_pos_addNumbers(jsi::Runtime& rt, const jsi::Value* argv, size
   w.push_i64(rustra_i64(rt, argv[1], "b"));
 }
 
-static jsi::Value decode_addNumbers(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "value");
+static jsi::Value decode_body_addNumbers(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   resultObj.setProperty(rt, _prop_0, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
   return std::move(resultObj);
 }
+static jsi::Value decode_addNumbers(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "value")};
+  return decode_body_addNumbers(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_benchAdd(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_0), "a"));
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_1), "b"));
+}
 static void encode_benchAdd(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(23); w.push_u8(0); // cmd_id = 23 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "a");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "b");
-  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_0), "a"));
-  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_1), "b"));
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "a"), jsi::PropNameID::forAscii(rt, "b")};
+  encode_body_benchAdd(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -275,18 +348,26 @@ static void encode_pos_benchAdd(jsi::Runtime& rt, const jsi::Value* argv, size_t
   w.push_f64(rustra_f64(rt, argv[1], "b"));
 }
 
-static jsi::Value decode_benchAdd(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "value");
+static jsi::Value decode_body_benchAdd(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   resultObj.setProperty(rt, _prop_0, r.read_f64());
   return std::move(resultObj);
 }
+static jsi::Value decode_benchAdd(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "value")};
+  return decode_body_benchAdd(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_benchEchoBytes(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  { const auto& _v = argsObj.getProperty(rt, _prop_0); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _span = rustra_bytes(rt, _v, "data"); w.push_uvar(_span.size); w.push_bytes(_span.data, _span.size); } }
+}
 static void encode_benchEchoBytes(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(25); w.push_u8(0); // cmd_id = 25 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "data");
-  { const auto& _v = argsObj.getProperty(rt, _prop_0); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _span = rustra_bytes(rt, _v, "data"); w.push_uvar(_span.size); w.push_bytes(_span.data, _span.size); } }
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "data")};
+  encode_body_benchEchoBytes(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -296,20 +377,28 @@ static void encode_pos_benchEchoBytes(jsi::Runtime& rt, const jsi::Value* argv, 
   { const auto& _v = argv[0]; auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _span = rustra_bytes(rt, _v, "data"); w.push_uvar(_span.size); w.push_bytes(_span.data, _span.size); } }
 }
 
-static jsi::Value decode_benchEchoBytes(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "data");
+static jsi::Value decode_body_benchEchoBytes(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   { auto _n = r.read_uvar(); auto _bytes = r.read_bytes_view((size_t)_n); resultObj.setProperty(rt, _prop_0, rustra::generated::make_array_buffer(rt, _bytes.data, _bytes.size)); }
   return std::move(resultObj);
 }
+static jsi::Value decode_benchEchoBytes(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "data")};
+  return decode_body_benchEchoBytes(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_benchEchoPair(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_1), "value"));
+}
 static void encode_benchEchoPair(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(26); w.push_u8(0); // cmd_id = 26 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "name");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "value");
-  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
-  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_1), "value"));
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "name"), jsi::PropNameID::forAscii(rt, "value")};
+  encode_body_benchEchoPair(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -320,20 +409,28 @@ static void encode_pos_benchEchoPair(jsi::Runtime& rt, const jsi::Value* argv, s
   w.push_f64(rustra_f64(rt, argv[1], "value"));
 }
 
-static jsi::Value decode_benchEchoPair(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "name");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "value");
+static jsi::Value decode_body_benchEchoPair(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
   { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_0, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   resultObj.setProperty(rt, _prop_1, r.read_f64());
   return std::move(resultObj);
 }
+static jsi::Value decode_benchEchoPair(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "name"), jsi::PropNameID::forAscii(rt, "value")};
+  return decode_body_benchEchoPair(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_benchEchoString(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
+}
 static void encode_benchEchoString(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(24); w.push_u8(0); // cmd_id = 24 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "value");
-  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "value")};
+  encode_body_benchEchoString(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -343,20 +440,28 @@ static void encode_pos_benchEchoString(jsi::Runtime& rt, const jsi::Value* argv,
   { auto _s = argv[0].asString(rt).utf8(rt); w.push_string(_s); }
 }
 
-static jsi::Value decode_benchEchoString(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "value");
+static jsi::Value decode_body_benchEchoString(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_0, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   return std::move(resultObj);
 }
+static jsi::Value decode_benchEchoString(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "value")};
+  return decode_body_benchEchoString(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_channelDemo(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_0), "channel"));
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "ticks"));
+}
 static void encode_channelDemo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(18); w.push_u8(0); // cmd_id = 18 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "channel");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "ticks");
-  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_0), "channel"));
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "ticks"));
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "channel"), jsi::PropNameID::forAscii(rt, "ticks")};
+  encode_body_channelDemo(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -367,22 +472,30 @@ static void encode_pos_channelDemo(jsi::Runtime& rt, const jsi::Value* argv, siz
   w.push_i64(rustra_i64(rt, argv[1], "ticks"));
 }
 
-static jsi::Value decode_channelDemo(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "sent");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "droppedSends");
+static jsi::Value decode_body_channelDemo(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
   resultObj.setProperty(rt, _prop_0, (double)r.read_i64());
   resultObj.setProperty(rt, _prop_1, (double)r.read_i64());
   return std::move(resultObj);
 }
+static jsi::Value decode_channelDemo(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "sent"), jsi::PropNameID::forAscii(rt, "droppedSends")};
+  return decode_body_channelDemo(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_channelDemoBytes(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_0), "channel"));
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "ticks"));
+}
 static void encode_channelDemoBytes(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(31); w.push_u8(0); // cmd_id = 31 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "channel");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "ticks");
-  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_0), "channel"));
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "ticks"));
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "channel"), jsi::PropNameID::forAscii(rt, "ticks")};
+  encode_body_channelDemoBytes(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -393,24 +506,32 @@ static void encode_pos_channelDemoBytes(jsi::Runtime& rt, const jsi::Value* argv
   w.push_i64(rustra_i64(rt, argv[1], "ticks"));
 }
 
-static jsi::Value decode_channelDemoBytes(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "sent");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "droppedSends");
+static jsi::Value decode_body_channelDemoBytes(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
   resultObj.setProperty(rt, _prop_0, (double)r.read_uvar());
   resultObj.setProperty(rt, _prop_1, (double)r.read_uvar());
   return std::move(resultObj);
 }
+static jsi::Value decode_channelDemoBytes(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "sent"), jsi::PropNameID::forAscii(rt, "droppedSends")};
+  return decode_body_channelDemoBytes(rt, resultObj, r, _properties.data());
+}
 
-static void encode_clamp(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
-  w.push_u8(4); w.push_u8(0); // cmd_id = 4 LE
-  auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "max");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "min");
-  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "value");
+static void encode_body_clamp(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  const auto& _prop_2 = _properties[2];
   w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_0), "max"));
   w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_1), "min"));
   w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_2), "value"));
+}
+static void encode_clamp(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(4); w.push_u8(0); // cmd_id = 4 LE
+  auto argsObj = args.asObject(rt);
+  const std::array<jsi::PropNameID, 3> _properties{jsi::PropNameID::forAscii(rt, "max"), jsi::PropNameID::forAscii(rt, "min"), jsi::PropNameID::forAscii(rt, "value")};
+  encode_body_clamp(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 3회 제거.
@@ -422,20 +543,28 @@ static void encode_pos_clamp(jsi::Runtime& rt, const jsi::Value* argv, size_t ar
   w.push_f64(rustra_f64(rt, argv[2], "value"));
 }
 
-static jsi::Value decode_clamp(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "value");
+static jsi::Value decode_body_clamp(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   resultObj.setProperty(rt, _prop_0, r.read_f64());
   return std::move(resultObj);
 }
+static jsi::Value decode_clamp(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "value")};
+  return decode_body_clamp(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_createItem(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "value"));
+}
 static void encode_createItem(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(8); w.push_u8(0); // cmd_id = 8 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "name");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "value");
-  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "value"));
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "name"), jsi::PropNameID::forAscii(rt, "value")};
+  encode_body_createItem(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -446,12 +575,11 @@ static void encode_pos_createItem(jsi::Runtime& rt, const jsi::Value* argv, size
   w.push_i64(rustra_i64(rt, argv[1], "value"));
 }
 
-static jsi::Value decode_createItem(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "item");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "active");
-  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "name");
-  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "value");
+static jsi::Value decode_body_createItem(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  const auto& _prop_2 = _properties[2];
+  const auto& _prop_3 = _properties[3];
   { auto _obj = jsi::Object(rt);
     _obj.setProperty(rt, _prop_1, r.read_bool());
     { auto _s = r.read_string_view(); _obj.setProperty(rt, _prop_2, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
@@ -459,26 +587,43 @@ static jsi::Value decode_createItem(jsi::Runtime& rt, rc::Reader& r) {
     resultObj.setProperty(rt, _prop_0, _obj); }
   return std::move(resultObj);
 }
+static jsi::Value decode_createItem(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 4> _properties{jsi::PropNameID::forAscii(rt, "item"), jsi::PropNameID::forAscii(rt, "active"), jsi::PropNameID::forAscii(rt, "name"), jsi::PropNameID::forAscii(rt, "value")};
+  return decode_body_createItem(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_deviceDemo(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+}
 static void encode_deviceDemo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(32); w.push_u8(0); // cmd_id = 32 LE
   auto argsObj = args.asObject(rt);
+  const std::array<jsi::PropNameID, 0> _properties{};
+  encode_body_deviceDemo(rt, argsObj, w, _properties.data());
 }
 
-static jsi::Value decode_deviceDemo(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "os");
+static jsi::Value decode_body_deviceDemo(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_0, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   return std::move(resultObj);
 }
+static jsi::Value decode_deviceDemo(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "os")};
+  return decode_body_deviceDemo(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_divide(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_0), "a"));
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "b"));
+}
 static void encode_divide(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(10); w.push_u8(0); // cmd_id = 10 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "a");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "b");
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_0), "a"));
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "b"));
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "a"), jsi::PropNameID::forAscii(rt, "b")};
+  encode_body_divide(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -489,20 +634,28 @@ static void encode_pos_divide(jsi::Runtime& rt, const jsi::Value* argv, size_t a
   w.push_i64(rustra_i64(rt, argv[1], "b"));
 }
 
-static jsi::Value decode_divide(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "value");
+static jsi::Value decode_body_divide(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   resultObj.setProperty(rt, _prop_0, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
   return std::move(resultObj);
 }
+static jsi::Value decode_divide(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "value")};
+  return decode_body_divide(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_emitDemo(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_0), "ticks"));
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "stepDelayMs"));
+}
 static void encode_emitDemo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(11); w.push_u8(0); // cmd_id = 11 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "ticks");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "stepDelayMs");
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_0), "ticks"));
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "stepDelayMs"));
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "ticks"), jsi::PropNameID::forAscii(rt, "stepDelayMs")};
+  encode_body_emitDemo(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -513,20 +666,28 @@ static void encode_pos_emitDemo(jsi::Runtime& rt, const jsi::Value* argv, size_t
   w.push_i64(rustra_i64(rt, argv[1], "stepDelayMs"));
 }
 
-static jsi::Value decode_emitDemo(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "emitted");
+static jsi::Value decode_body_emitDemo(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   resultObj.setProperty(rt, _prop_0, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
   return std::move(resultObj);
 }
+static jsi::Value decode_emitDemo(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "emitted")};
+  return decode_body_emitDemo(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_gauge(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_0), "limit"));
+  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_1), "offset"));
+}
 static void encode_gauge(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(17); w.push_u8(0); // cmd_id = 17 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "limit");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "offset");
-  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_0), "limit"));
-  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_1), "offset"));
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "limit"), jsi::PropNameID::forAscii(rt, "offset")};
+  encode_body_gauge(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -537,18 +698,26 @@ static void encode_pos_gauge(jsi::Runtime& rt, const jsi::Value* argv, size_t ar
   w.push_uvar(rustra_u64(rt, argv[1], "offset"));
 }
 
-static jsi::Value decode_gauge(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "next");
+static jsi::Value decode_body_gauge(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   resultObj.setProperty(rt, _prop_0, [&]() -> jsi::Value { auto _v = r.read_uvar(); if (_v <= 9007199254740991ull) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v)); }());
   return std::move(resultObj);
 }
+static jsi::Value decode_gauge(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "next")};
+  return decode_body_gauge(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_greet(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
+}
 static void encode_greet(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(5); w.push_u8(0); // cmd_id = 5 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "name");
-  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "name")};
+  encode_body_greet(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -558,18 +727,26 @@ static void encode_pos_greet(jsi::Runtime& rt, const jsi::Value* argv, size_t ar
   { auto _s = argv[0].asString(rt).utf8(rt); w.push_string(_s); }
 }
 
-static jsi::Value decode_greet(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "message");
+static jsi::Value decode_body_greet(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_0, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   return std::move(resultObj);
 }
+static jsi::Value decode_greet(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "message")};
+  return decode_body_greet(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_isEven(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_0), "n"));
+}
 static void encode_isEven(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(3); w.push_u8(0); // cmd_id = 3 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "n");
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_0), "n"));
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "n")};
+  encode_body_isEven(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -579,20 +756,28 @@ static void encode_pos_isEven(jsi::Runtime& rt, const jsi::Value* argv, size_t a
   w.push_i64(rustra_i64(rt, argv[0], "n"));
 }
 
-static jsi::Value decode_isEven(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "result");
+static jsi::Value decode_body_isEven(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   resultObj.setProperty(rt, _prop_0, r.read_bool());
   return std::move(resultObj);
 }
+static jsi::Value decode_isEven(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "result")};
+  return decode_body_isEven(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_multiply(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_0), "a"));
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_1), "b"));
+}
 static void encode_multiply(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(2); w.push_u8(0); // cmd_id = 2 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "a");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "b");
-  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_0), "a"));
-  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_1), "b"));
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "a"), jsi::PropNameID::forAscii(rt, "b")};
+  encode_body_multiply(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -603,23 +788,25 @@ static void encode_pos_multiply(jsi::Runtime& rt, const jsi::Value* argv, size_t
   w.push_f64(rustra_f64(rt, argv[1], "b"));
 }
 
-static jsi::Value decode_multiply(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "value");
+static jsi::Value decode_body_multiply(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   resultObj.setProperty(rt, _prop_0, r.read_f64());
   return std::move(resultObj);
 }
+static jsi::Value decode_multiply(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "value")};
+  return decode_body_multiply(rt, resultObj, r, _properties.data());
+}
 
-static void encode_parityEcho(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
-  w.push_u8(34); w.push_u8(0); // cmd_id = 34 LE
-  auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "nodes");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "id");
-  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "name");
-  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "tag");
-  const auto _prop_4 = jsi::PropNameID::forAscii(rt, "note");
-  const auto _prop_5 = jsi::PropNameID::forAscii(rt, "metadata");
-  const auto _prop_6 = jsi::PropNameID::forAscii(rt, "children");
+static void encode_body_parityEcho(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  const auto& _prop_2 = _properties[2];
+  const auto& _prop_3 = _properties[3];
+  const auto& _prop_4 = _properties[4];
+  const auto& _prop_5 = _properties[5];
+  const auto& _prop_6 = _properties[6];
   { auto _arr = argsObj.getProperty(rt, _prop_0).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n);
     for (size_t _i = 0; _i < _n; _i++) { auto _obj = _arr.getValueAtIndex(rt, _i).getObject(rt);
       w.push_f64(rustra_f64(rt, _obj.getProperty(rt, _prop_1), "id"));
@@ -630,16 +817,21 @@ static void encode_parityEcho(jsi::Runtime& rt, const jsi::Value& args, rc::Writ
       { auto _arr = _obj.getProperty(rt, _prop_6).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_f64(rustra_f64(rt, _arr.getValueAtIndex(rt, _i), "children[]")); }
     } }
 }
+static void encode_parityEcho(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(34); w.push_u8(0); // cmd_id = 34 LE
+  auto argsObj = args.asObject(rt);
+  const std::array<jsi::PropNameID, 7> _properties{jsi::PropNameID::forAscii(rt, "nodes"), jsi::PropNameID::forAscii(rt, "id"), jsi::PropNameID::forAscii(rt, "name"), jsi::PropNameID::forAscii(rt, "tag"), jsi::PropNameID::forAscii(rt, "note"), jsi::PropNameID::forAscii(rt, "metadata"), jsi::PropNameID::forAscii(rt, "children")};
+  encode_body_parityEcho(rt, argsObj, w, _properties.data());
+}
 
-static jsi::Value decode_parityEcho(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "nodes");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "id");
-  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "name");
-  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "tag");
-  const auto _prop_4 = jsi::PropNameID::forAscii(rt, "note");
-  const auto _prop_5 = jsi::PropNameID::forAscii(rt, "metadata");
-  const auto _prop_6 = jsi::PropNameID::forAscii(rt, "children");
+static jsi::Value decode_body_parityEcho(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  const auto& _prop_2 = _properties[2];
+  const auto& _prop_3 = _properties[3];
+  const auto& _prop_4 = _properties[4];
+  const auto& _prop_5 = _properties[5];
+  const auto& _prop_6 = _properties[6];
   { auto _n = r.read_uvar(); auto _arr = jsi::Array(rt, (size_t)_n);
     for (size_t _i = 0; _i < _n; _i++) { auto _obj = jsi::Object(rt);
       _obj.setProperty(rt, _prop_1, r.read_f64());
@@ -652,18 +844,21 @@ static jsi::Value decode_parityEcho(jsi::Runtime& rt, rc::Reader& r) {
     resultObj.setProperty(rt, _prop_0, _arr); }
   return std::move(resultObj);
 }
+static jsi::Value decode_parityEcho(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 7> _properties{jsi::PropNameID::forAscii(rt, "nodes"), jsi::PropNameID::forAscii(rt, "id"), jsi::PropNameID::forAscii(rt, "name"), jsi::PropNameID::forAscii(rt, "tag"), jsi::PropNameID::forAscii(rt, "note"), jsi::PropNameID::forAscii(rt, "metadata"), jsi::PropNameID::forAscii(rt, "children")};
+  return decode_body_parityEcho(rt, resultObj, r, _properties.data());
+}
 
-static void encode_parityFind(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
-  w.push_u8(35); w.push_u8(0); // cmd_id = 35 LE
-  auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "tree");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "nodes");
-  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "id");
-  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "name");
-  const auto _prop_4 = jsi::PropNameID::forAscii(rt, "tag");
-  const auto _prop_5 = jsi::PropNameID::forAscii(rt, "note");
-  const auto _prop_6 = jsi::PropNameID::forAscii(rt, "metadata");
-  const auto _prop_7 = jsi::PropNameID::forAscii(rt, "children");
+static void encode_body_parityFind(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  const auto& _prop_2 = _properties[2];
+  const auto& _prop_3 = _properties[3];
+  const auto& _prop_4 = _properties[4];
+  const auto& _prop_5 = _properties[5];
+  const auto& _prop_6 = _properties[6];
+  const auto& _prop_7 = _properties[7];
   { auto _struct_2 = argsObj.getProperty(rt, _prop_0).asObject(rt);
     { auto _arr = _struct_2.getProperty(rt, _prop_1).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n);
       for (size_t _i = 0; _i < _n; _i++) { auto _obj = _arr.getValueAtIndex(rt, _i).getObject(rt);
@@ -677,25 +872,39 @@ static void encode_parityFind(jsi::Runtime& rt, const jsi::Value& args, rc::Writ
   }
   w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_2), "id"));
 }
+static void encode_parityFind(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(35); w.push_u8(0); // cmd_id = 35 LE
+  auto argsObj = args.asObject(rt);
+  const std::array<jsi::PropNameID, 8> _properties{jsi::PropNameID::forAscii(rt, "tree"), jsi::PropNameID::forAscii(rt, "nodes"), jsi::PropNameID::forAscii(rt, "id"), jsi::PropNameID::forAscii(rt, "name"), jsi::PropNameID::forAscii(rt, "tag"), jsi::PropNameID::forAscii(rt, "note"), jsi::PropNameID::forAscii(rt, "metadata"), jsi::PropNameID::forAscii(rt, "children")};
+  encode_body_parityFind(rt, argsObj, w, _properties.data());
+}
 
-static jsi::Value decode_parityFind(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "found");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "id");
-  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "name");
-  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "visited");
+static jsi::Value decode_body_parityFind(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  const auto& _prop_2 = _properties[2];
+  const auto& _prop_3 = _properties[3];
   resultObj.setProperty(rt, _prop_0, r.read_bool());
   resultObj.setProperty(rt, _prop_1, r.read_f64());
   { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_2, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   resultObj.setProperty(rt, _prop_3, r.read_f64());
   return std::move(resultObj);
 }
+static jsi::Value decode_parityFind(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 4> _properties{jsi::PropNameID::forAscii(rt, "found"), jsi::PropNameID::forAscii(rt, "id"), jsi::PropNameID::forAscii(rt, "name"), jsi::PropNameID::forAscii(rt, "visited")};
+  return decode_body_parityFind(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_parityIndexed(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_0), "id"));
+}
 static void encode_parityIndexed(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(38); w.push_u8(0); // cmd_id = 38 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "id");
-  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_0), "id"));
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "id")};
+  encode_body_parityIndexed(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -705,24 +914,32 @@ static void encode_pos_parityIndexed(jsi::Runtime& rt, const jsi::Value* argv, s
   w.push_f64(rustra_f64(rt, argv[0], "id"));
 }
 
-static jsi::Value decode_parityIndexed(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "found");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "id");
-  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "name");
-  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "visited");
+static jsi::Value decode_body_parityIndexed(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  const auto& _prop_2 = _properties[2];
+  const auto& _prop_3 = _properties[3];
   resultObj.setProperty(rt, _prop_0, r.read_bool());
   resultObj.setProperty(rt, _prop_1, r.read_f64());
   { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_2, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   resultObj.setProperty(rt, _prop_3, r.read_f64());
   return std::move(resultObj);
 }
+static jsi::Value decode_parityIndexed(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 4> _properties{jsi::PropNameID::forAscii(rt, "found"), jsi::PropNameID::forAscii(rt, "id"), jsi::PropNameID::forAscii(rt, "name"), jsi::PropNameID::forAscii(rt, "visited")};
+  return decode_body_parityIndexed(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_parityResident(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_0), "id"));
+}
 static void encode_parityResident(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(37); w.push_u8(0); // cmd_id = 37 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "id");
-  w.push_f64(rustra_f64(rt, argsObj.getProperty(rt, _prop_0), "id"));
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "id")};
+  encode_body_parityResident(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -732,29 +949,31 @@ static void encode_pos_parityResident(jsi::Runtime& rt, const jsi::Value* argv, 
   w.push_f64(rustra_f64(rt, argv[0], "id"));
 }
 
-static jsi::Value decode_parityResident(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "found");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "id");
-  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "name");
-  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "visited");
+static jsi::Value decode_body_parityResident(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  const auto& _prop_2 = _properties[2];
+  const auto& _prop_3 = _properties[3];
   resultObj.setProperty(rt, _prop_0, r.read_bool());
   resultObj.setProperty(rt, _prop_1, r.read_f64());
   { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_2, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   resultObj.setProperty(rt, _prop_3, r.read_f64());
   return std::move(resultObj);
 }
+static jsi::Value decode_parityResident(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 4> _properties{jsi::PropNameID::forAscii(rt, "found"), jsi::PropNameID::forAscii(rt, "id"), jsi::PropNameID::forAscii(rt, "name"), jsi::PropNameID::forAscii(rt, "visited")};
+  return decode_body_parityResident(rt, resultObj, r, _properties.data());
+}
 
-static void encode_parityStore(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
-  w.push_u8(36); w.push_u8(0); // cmd_id = 36 LE
-  auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "nodes");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "id");
-  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "name");
-  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "tag");
-  const auto _prop_4 = jsi::PropNameID::forAscii(rt, "note");
-  const auto _prop_5 = jsi::PropNameID::forAscii(rt, "metadata");
-  const auto _prop_6 = jsi::PropNameID::forAscii(rt, "children");
+static void encode_body_parityStore(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  const auto& _prop_2 = _properties[2];
+  const auto& _prop_3 = _properties[3];
+  const auto& _prop_4 = _properties[4];
+  const auto& _prop_5 = _properties[5];
+  const auto& _prop_6 = _properties[6];
   { auto _arr = argsObj.getProperty(rt, _prop_0).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n);
     for (size_t _i = 0; _i < _n; _i++) { auto _obj = _arr.getValueAtIndex(rt, _i).getObject(rt);
       w.push_f64(rustra_f64(rt, _obj.getProperty(rt, _prop_1), "id"));
@@ -765,49 +984,70 @@ static void encode_parityStore(jsi::Runtime& rt, const jsi::Value& args, rc::Wri
       { auto _arr = _obj.getProperty(rt, _prop_6).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_f64(rustra_f64(rt, _arr.getValueAtIndex(rt, _i), "children[]")); }
     } }
 }
+static void encode_parityStore(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(36); w.push_u8(0); // cmd_id = 36 LE
+  auto argsObj = args.asObject(rt);
+  const std::array<jsi::PropNameID, 7> _properties{jsi::PropNameID::forAscii(rt, "nodes"), jsi::PropNameID::forAscii(rt, "id"), jsi::PropNameID::forAscii(rt, "name"), jsi::PropNameID::forAscii(rt, "tag"), jsi::PropNameID::forAscii(rt, "note"), jsi::PropNameID::forAscii(rt, "metadata"), jsi::PropNameID::forAscii(rt, "children")};
+  encode_body_parityStore(rt, argsObj, w, _properties.data());
+}
 
-static jsi::Value decode_parityStore(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "nodes");
+static jsi::Value decode_body_parityStore(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   resultObj.setProperty(rt, _prop_0, r.read_f64());
   return std::move(resultObj);
 }
+static jsi::Value decode_parityStore(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "nodes")};
+  return decode_body_parityStore(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_platformNativeInfo(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+}
 static void encode_platformNativeInfo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(30); w.push_u8(0); // cmd_id = 30 LE
   auto argsObj = args.asObject(rt);
+  const std::array<jsi::PropNameID, 0> _properties{};
+  encode_body_platformNativeInfo(rt, argsObj, w, _properties.data());
 }
 
-static jsi::Value decode_platformNativeInfo(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "os");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "windowKind");
+static jsi::Value decode_body_platformNativeInfo(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
   { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_0, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_1, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   return std::move(resultObj);
 }
+static jsi::Value decode_platformNativeInfo(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "os"), jsi::PropNameID::forAscii(rt, "windowKind")};
+  return decode_body_platformNativeInfo(rt, resultObj, r, _properties.data());
+}
 
-static void encode_processItem(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
-  w.push_u8(9); w.push_u8(0); // cmd_id = 9 LE
-  auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "item");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "active");
-  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "name");
-  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "value");
+static void encode_body_processItem(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  const auto& _prop_2 = _properties[2];
+  const auto& _prop_3 = _properties[3];
   { auto _struct_2 = argsObj.getProperty(rt, _prop_0).asObject(rt);
     { auto _v = _struct_2.getProperty(rt, _prop_1).getBool(); w.push_bool(_v); }
     { auto _v = _struct_2.getProperty(rt, _prop_2).getString(rt).utf8(rt); w.push_string(_v); }
     w.push_i64(rustra_i64(rt, _struct_2.getProperty(rt, _prop_3), "value"));
   }
 }
+static void encode_processItem(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(9); w.push_u8(0); // cmd_id = 9 LE
+  auto argsObj = args.asObject(rt);
+  const std::array<jsi::PropNameID, 4> _properties{jsi::PropNameID::forAscii(rt, "item"), jsi::PropNameID::forAscii(rt, "active"), jsi::PropNameID::forAscii(rt, "name"), jsi::PropNameID::forAscii(rt, "value")};
+  encode_body_processItem(rt, argsObj, w, _properties.data());
+}
 
-static jsi::Value decode_processItem(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "doubled");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "item");
-  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "active");
-  const auto _prop_3 = jsi::PropNameID::forAscii(rt, "name");
-  const auto _prop_4 = jsi::PropNameID::forAscii(rt, "value");
+static jsi::Value decode_body_processItem(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  const auto& _prop_2 = _properties[2];
+  const auto& _prop_3 = _properties[3];
+  const auto& _prop_4 = _properties[4];
   resultObj.setProperty(rt, _prop_0, r.read_bool());
   { auto _obj = jsi::Object(rt);
     _obj.setProperty(rt, _prop_2, r.read_bool());
@@ -816,12 +1056,21 @@ static jsi::Value decode_processItem(jsi::Runtime& rt, rc::Reader& r) {
     resultObj.setProperty(rt, _prop_1, _obj); }
   return std::move(resultObj);
 }
+static jsi::Value decode_processItem(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 5> _properties{jsi::PropNameID::forAscii(rt, "doubled"), jsi::PropNameID::forAscii(rt, "item"), jsi::PropNameID::forAscii(rt, "active"), jsi::PropNameID::forAscii(rt, "name"), jsi::PropNameID::forAscii(rt, "value")};
+  return decode_body_processItem(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_resourceClose(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_0), "handle"));
+}
 static void encode_resourceClose(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(22); w.push_u8(0); // cmd_id = 22 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "handle");
-  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_0), "handle"));
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "handle")};
+  encode_body_resourceClose(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -831,34 +1080,50 @@ static void encode_pos_resourceClose(jsi::Runtime& rt, const jsi::Value* argv, s
   w.push_uvar(rustra_u64(rt, argv[0], "handle"));
 }
 
-static jsi::Value decode_resourceClose(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "closed");
+static jsi::Value decode_body_resourceClose(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   resultObj.setProperty(rt, _prop_0, r.read_bool());
   return std::move(resultObj);
 }
+static jsi::Value decode_resourceClose(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "closed")};
+  return decode_body_resourceClose(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_resourceOpen(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  { auto _o = argsObj.getProperty(rt, _prop_0).asObject(rt); auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); RustraMapEntries _entries(rt, _count); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_string(_e.getString(rt).utf8(rt)); } }
+}
 static void encode_resourceOpen(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(19); w.push_u8(0); // cmd_id = 19 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "initial");
-  { auto _o = argsObj.getProperty(rt, _prop_0).asObject(rt); auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); RustraMapEntries _entries(rt, _count); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_string(_e.getString(rt).utf8(rt)); } }
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "initial")};
+  encode_body_resourceOpen(rt, argsObj, w, _properties.data());
 }
 
-static jsi::Value decode_resourceOpen(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "handle");
+static jsi::Value decode_body_resourceOpen(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   resultObj.setProperty(rt, _prop_0, (double)r.read_uvar());
   return std::move(resultObj);
 }
+static jsi::Value decode_resourceOpen(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "handle")};
+  return decode_body_resourceOpen(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_resourceRead(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_0), "handle"));
+  { auto _v = argsObj.getProperty(rt, _prop_1).getString(rt).utf8(rt); w.push_string(_v); }
+}
 static void encode_resourceRead(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(20); w.push_u8(0); // cmd_id = 20 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "handle");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "key");
-  w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_0), "handle"));
-  { auto _v = argsObj.getProperty(rt, _prop_1).getString(rt).utf8(rt); w.push_string(_v); }
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "handle"), jsi::PropNameID::forAscii(rt, "key")};
+  encode_body_resourceRead(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -869,24 +1134,32 @@ static void encode_pos_resourceRead(jsi::Runtime& rt, const jsi::Value* argv, si
   { auto _s = argv[1].asString(rt).utf8(rt); w.push_string(_s); }
 }
 
-static jsi::Value decode_resourceRead(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "found");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "value");
+static jsi::Value decode_body_resourceRead(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
   resultObj.setProperty(rt, _prop_0, r.read_bool());
   { auto _tag = r.read_u8(); if (_tag == 0) { resultObj.setProperty(rt, _prop_1, jsi::Value::null()); } else { { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_1, jsi::String::createFromUtf8(rt, _s.data, _s.size)); } } }
   return std::move(resultObj);
 }
+static jsi::Value decode_resourceRead(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "found"), jsi::PropNameID::forAscii(rt, "value")};
+  return decode_body_resourceRead(rt, resultObj, r, _properties.data());
+}
 
-static void encode_resourceWrite(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
-  w.push_u8(21); w.push_u8(0); // cmd_id = 21 LE
-  auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "handle");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "key");
-  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "value");
+static void encode_body_resourceWrite(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  const auto& _prop_2 = _properties[2];
   w.push_uvar(rustra_u64(rt, argsObj.getProperty(rt, _prop_0), "handle"));
   { auto _v = argsObj.getProperty(rt, _prop_1).getString(rt).utf8(rt); w.push_string(_v); }
   { auto _v = argsObj.getProperty(rt, _prop_2).getString(rt).utf8(rt); w.push_string(_v); }
+}
+static void encode_resourceWrite(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(21); w.push_u8(0); // cmd_id = 21 LE
+  auto argsObj = args.asObject(rt);
+  const std::array<jsi::PropNameID, 3> _properties{jsi::PropNameID::forAscii(rt, "handle"), jsi::PropNameID::forAscii(rt, "key"), jsi::PropNameID::forAscii(rt, "value")};
+  encode_body_resourceWrite(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 3회 제거.
@@ -898,18 +1171,26 @@ static void encode_pos_resourceWrite(jsi::Runtime& rt, const jsi::Value* argv, s
   { auto _s = argv[2].asString(rt).utf8(rt); w.push_string(_s); }
 }
 
-static jsi::Value decode_resourceWrite(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "entries");
+static jsi::Value decode_body_resourceWrite(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   resultObj.setProperty(rt, _prop_0, (double)r.read_i64());
   return std::move(resultObj);
 }
+static jsi::Value decode_resourceWrite(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "entries")};
+  return decode_body_resourceWrite(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_rustraRegistryDemo(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
+}
 static void encode_rustraRegistryDemo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(12); w.push_u8(0); // cmd_id = 12 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "op");
-  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "op")};
+  encode_body_rustraRegistryDemo(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -919,40 +1200,56 @@ static void encode_pos_rustraRegistryDemo(jsi::Runtime& rt, const jsi::Value* ar
   { auto _s = argv[0].asString(rt).utf8(rt); w.push_string(_s); }
 }
 
-static jsi::Value decode_rustraRegistryDemo(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "ok");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "frozen");
-  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "message");
+static jsi::Value decode_body_rustraRegistryDemo(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  const auto& _prop_2 = _properties[2];
   resultObj.setProperty(rt, _prop_0, r.read_bool());
   resultObj.setProperty(rt, _prop_1, r.read_bool());
   { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_2, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   return std::move(resultObj);
 }
+static jsi::Value decode_rustraRegistryDemo(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 3> _properties{jsi::PropNameID::forAscii(rt, "ok"), jsi::PropNameID::forAscii(rt, "frozen"), jsi::PropNameID::forAscii(rt, "message")};
+  return decode_body_rustraRegistryDemo(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_scoreTotal(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  { auto _o = argsObj.getProperty(rt, _prop_0).asObject(rt); auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); RustraMapEntries _entries(rt, _count); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_i64(rustra_i64(rt, _e, "scores{}")); } }
+}
 static void encode_scoreTotal(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(15); w.push_u8(0); // cmd_id = 15 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "scores");
-  { auto _o = argsObj.getProperty(rt, _prop_0).asObject(rt); auto _names = _o.getPropertyNames(rt); const auto _count = _names.length(rt); RustraMapEntries _entries(rt, _count); for (size_t _j = 0; _j < _count; _j++) { auto _key = _names.getValueAtIndex(rt, _j).getString(rt); auto _k = _key.utf8(rt); auto _value = rustra_map_value(rt, _o, _key, _k); _entries.emplace_back(std::move(_k), std::move(_value)); } std::sort(_entries.begin(), _entries.end(), [](const auto& _a, const auto& _b){ return _a.first < _b.first; }); w.push_uvar(_entries.size()); for (auto& _it : _entries) { w.push_string(_it.first); jsi::Value& _e = _it.second; w.push_i64(rustra_i64(rt, _e, "scores{}")); } }
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "scores")};
+  encode_body_scoreTotal(rt, argsObj, w, _properties.data());
 }
 
-static jsi::Value decode_scoreTotal(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "count");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "total");
+static jsi::Value decode_body_scoreTotal(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
   resultObj.setProperty(rt, _prop_0, (double)r.read_uvar());
   resultObj.setProperty(rt, _prop_1, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
   return std::move(resultObj);
 }
+static jsi::Value decode_scoreTotal(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "count"), jsi::PropNameID::forAscii(rt, "total")};
+  return decode_body_scoreTotal(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_secureCompute(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_0), "a"));
+  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "b"));
+}
 static void encode_secureCompute(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(13); w.push_u8(0); // cmd_id = 13 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "a");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "b");
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_0), "a"));
-  w.push_i64(rustra_i64(rt, argsObj.getProperty(rt, _prop_1), "b"));
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "a"), jsi::PropNameID::forAscii(rt, "b")};
+  encode_body_secureCompute(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 2회 제거.
@@ -963,18 +1260,26 @@ static void encode_pos_secureCompute(jsi::Runtime& rt, const jsi::Value* argv, s
   w.push_i64(rustra_i64(rt, argv[1], "b"));
 }
 
-static jsi::Value decode_secureCompute(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "value");
+static jsi::Value decode_body_secureCompute(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   resultObj.setProperty(rt, _prop_0, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
   return std::move(resultObj);
 }
+static jsi::Value decode_secureCompute(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "value")};
+  return decode_body_secureCompute(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_sizeOf(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  { const auto& _v = argsObj.getProperty(rt, _prop_0); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _span = rustra_bytes(rt, _v, "data"); w.push_uvar(_span.size); w.push_bytes(_span.data, _span.size); } }
+}
 static void encode_sizeOf(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(14); w.push_u8(0); // cmd_id = 14 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "data");
-  { const auto& _v = argsObj.getProperty(rt, _prop_0); auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _span = rustra_bytes(rt, _v, "data"); w.push_uvar(_span.size); w.push_bytes(_span.data, _span.size); } }
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "data")};
+  encode_body_sizeOf(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -984,57 +1289,81 @@ static void encode_pos_sizeOf(jsi::Runtime& rt, const jsi::Value* argv, size_t a
   { const auto& _v = argv[0]; auto _o = _v.asObject(rt); if (_o.isArray(rt)) { auto _arr = _o.getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); auto _dst = w.append_uninitialized(_n); for (size_t _i = 0; _i < _n; _i++) _dst[_i] = rustra_u8(rt, _arr.getValueAtIndex(rt, _i), "data[]"); } else { auto _span = rustra_bytes(rt, _v, "data"); w.push_uvar(_span.size); w.push_bytes(_span.data, _span.size); } }
 }
 
-static jsi::Value decode_sizeOf(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "checksum");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "len");
+static jsi::Value decode_body_sizeOf(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
   resultObj.setProperty(rt, _prop_0, (double)r.read_uvar());
   resultObj.setProperty(rt, _prop_1, (double)r.read_uvar());
   return std::move(resultObj);
 }
+static jsi::Value decode_sizeOf(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "checksum"), jsi::PropNameID::forAscii(rt, "len")};
+  return decode_body_sizeOf(rt, resultObj, r, _properties.data());
+}
 
-static void encode_span(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
-  w.push_u8(16); w.push_u8(0); // cmd_id = 16 LE
-  auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "pair");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "value");
-  const auto _prop_2 = jsi::PropNameID::forAscii(rt, "_");
+static void encode_body_span(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  const auto& _prop_2 = _properties[2];
   { auto _arr = argsObj.getProperty(rt, _prop_0).asObject(rt).getArray(rt);
     { auto _v = _arr.getValueAtIndex(rt, 0).getString(rt).utf8(rt); w.push_string(_v); }
     w.push_i64(rustra_i64(rt, _arr.getValueAtIndex(rt, 1), "_"));
   }
 }
+static void encode_span(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(16); w.push_u8(0); // cmd_id = 16 LE
+  auto argsObj = args.asObject(rt);
+  const std::array<jsi::PropNameID, 3> _properties{jsi::PropNameID::forAscii(rt, "pair"), jsi::PropNameID::forAscii(rt, "value"), jsi::PropNameID::forAscii(rt, "_")};
+  encode_body_span(rt, argsObj, w, _properties.data());
+}
 
-static jsi::Value decode_span(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "first");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "second");
+static jsi::Value decode_body_span(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
   { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_0, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   resultObj.setProperty(rt, _prop_1, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
   return std::move(resultObj);
 }
+static jsi::Value decode_span(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "first"), jsi::PropNameID::forAscii(rt, "second")};
+  return decode_body_span(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_sumList(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  { auto _arr = argsObj.getProperty(rt, _prop_0).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_i64(rustra_i64(rt, _arr.getValueAtIndex(rt, _i), "numbers[]")); }
+}
 static void encode_sumList(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(6); w.push_u8(0); // cmd_id = 6 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "numbers");
-  { auto _arr = argsObj.getProperty(rt, _prop_0).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_i64(rustra_i64(rt, _arr.getValueAtIndex(rt, _i), "numbers[]")); }
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "numbers")};
+  encode_body_sumList(rt, argsObj, w, _properties.data());
 }
 
-static jsi::Value decode_sumList(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "count");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "total");
+static jsi::Value decode_body_sumList(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
   resultObj.setProperty(rt, _prop_0, (double)r.read_i64());
   resultObj.setProperty(rt, _prop_1, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
   return std::move(resultObj);
 }
+static jsi::Value decode_sumList(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "count"), jsi::PropNameID::forAscii(rt, "total")};
+  return decode_body_sumList(rt, resultObj, r, _properties.data());
+}
 
+static void encode_body_toUpper(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
+}
 static void encode_toUpper(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(7); w.push_u8(0); // cmd_id = 7 LE
   auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "s");
-  { auto _v = argsObj.getProperty(rt, _prop_0).getString(rt).utf8(rt); w.push_string(_v); }
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "s")};
+  encode_body_toUpper(rt, argsObj, w, _properties.data());
 }
 
 // (Tier 1 positional) 개별 인자 → 직접 인코딩. argsObj 경유 대비 JSI 프로퍼티 조회 1회 제거.
@@ -1044,29 +1373,41 @@ static void encode_pos_toUpper(jsi::Runtime& rt, const jsi::Value* argv, size_t 
   { auto _s = argv[0].asString(rt).utf8(rt); w.push_string(_s); }
 }
 
-static jsi::Value decode_toUpper(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "result");
+static jsi::Value decode_body_toUpper(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
   { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_0, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
   return std::move(resultObj);
 }
+static jsi::Value decode_toUpper(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "result")};
+  return decode_body_toUpper(rt, resultObj, r, _properties.data());
+}
 
-static void encode_wideAgg(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
-  w.push_u8(28); w.push_u8(0); // cmd_id = 28 LE
-  auto argsObj = args.asObject(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "samples");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "offset");
+static void encode_body_wideAgg(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
   { auto _arr = argsObj.getProperty(rt, _prop_0).asObject(rt).getArray(rt); auto _n = _arr.length(rt); w.push_uvar(_n); for (size_t _i = 0; _i < _n; _i++) w.push_uvar(rustra_u64(rt, _arr.getValueAtIndex(rt, _i), "samples[]")); }
   { auto _option_value = argsObj.getProperty(rt, _prop_1); if (_option_value.isNull() || _option_value.isUndefined()) { w.push_u8(0); } else { w.push_u8(1); w.push_i64(rustra_i64(rt, _option_value, "offset")); } }
 }
+static void encode_wideAgg(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(28); w.push_u8(0); // cmd_id = 28 LE
+  auto argsObj = args.asObject(rt);
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "samples"), jsi::PropNameID::forAscii(rt, "offset")};
+  encode_body_wideAgg(rt, argsObj, w, _properties.data());
+}
 
-static jsi::Value decode_wideAgg(jsi::Runtime& rt, rc::Reader& r) {
-  auto resultObj = jsi::Object(rt);
-  const auto _prop_0 = jsi::PropNameID::forAscii(rt, "max");
-  const auto _prop_1 = jsi::PropNameID::forAscii(rt, "adjusted");
+static jsi::Value decode_body_wideAgg(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
   resultObj.setProperty(rt, _prop_0, [&]() -> jsi::Value { auto _v = r.read_uvar(); if (_v <= 9007199254740991ull) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromUint64(rt, _v)); }());
   resultObj.setProperty(rt, _prop_1, [&]() -> jsi::Value { auto _v = r.read_i64(); if (_v >= -9007199254740991ll && _v <= 9007199254740991ll) return jsi::Value(static_cast<double>(_v)); return jsi::Value(rt, jsi::BigInt::fromInt64(rt, _v)); }());
   return std::move(resultObj);
+}
+static jsi::Value decode_wideAgg(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "max"), jsi::PropNameID::forAscii(rt, "adjusted")};
+  return decode_body_wideAgg(rt, resultObj, r, _properties.data());
 }
 
 static void encode_complex_echoGroups(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
@@ -1135,6 +1476,339 @@ static jsi::Value decode_complex_tagSet(jsi::Runtime& rt, rc::Reader& r) {
 }
 
 namespace rustra::generated {
+
+bool encode_bound(Runtime& rt, const BoundCodecContext& context, const Value& args, rc::Writer& w) {
+  switch (context.commandId) {
+    case 1: {
+      w.push_u8(1); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_addNumbers(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 23: {
+      w.push_u8(23); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_benchAdd(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 25: {
+      w.push_u8(25); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_benchEchoBytes(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 26: {
+      w.push_u8(26); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_benchEchoPair(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 24: {
+      w.push_u8(24); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_benchEchoString(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 18: {
+      w.push_u8(18); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_channelDemo(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 31: {
+      w.push_u8(31); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_channelDemoBytes(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 4: {
+      w.push_u8(4); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_clamp(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 8: {
+      w.push_u8(8); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_createItem(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 32: {
+      w.push_u8(32); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_deviceDemo(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 10: {
+      w.push_u8(10); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_divide(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 11: {
+      w.push_u8(11); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_emitDemo(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 17: {
+      w.push_u8(17); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_gauge(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 5: {
+      w.push_u8(5); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_greet(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 3: {
+      w.push_u8(3); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_isEven(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 2: {
+      w.push_u8(2); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_multiply(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 34: {
+      w.push_u8(34); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_parityEcho(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 35: {
+      w.push_u8(35); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_parityFind(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 38: {
+      w.push_u8(38); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_parityIndexed(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 37: {
+      w.push_u8(37); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_parityResident(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 36: {
+      w.push_u8(36); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_parityStore(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 30: {
+      w.push_u8(30); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_platformNativeInfo(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 9: {
+      w.push_u8(9); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_processItem(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 22: {
+      w.push_u8(22); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_resourceClose(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 19: {
+      w.push_u8(19); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_resourceOpen(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 20: {
+      w.push_u8(20); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_resourceRead(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 21: {
+      w.push_u8(21); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_resourceWrite(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 12: {
+      w.push_u8(12); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_rustraRegistryDemo(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 15: {
+      w.push_u8(15); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_scoreTotal(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 13: {
+      w.push_u8(13); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_secureCompute(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 14: {
+      w.push_u8(14); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_sizeOf(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 16: {
+      w.push_u8(16); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_span(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 6: {
+      w.push_u8(6); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_sumList(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 7: {
+      w.push_u8(7); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_toUpper(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 28: {
+      w.push_u8(28); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_wideAgg(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 27: encode_complex_echoGroups(rt, args, w); return true;
+    case 33: encode_complex_kindEcho(rt, args, w); return true;
+    case 29: encode_complex_tagSet(rt, args, w); return true;
+    default: return false;
+  }
+}
+
+Value decode_bound(Runtime& rt, const BoundCodecContext& context, rc::Reader& r) {
+  switch (context.commandId) {
+    case 1: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_addNumbers(rt, resultObj, r, context.output.data());
+    }
+    case 23: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_benchAdd(rt, resultObj, r, context.output.data());
+    }
+    case 25: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_benchEchoBytes(rt, resultObj, r, context.output.data());
+    }
+    case 26: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_benchEchoPair(rt, resultObj, r, context.output.data());
+    }
+    case 24: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_benchEchoString(rt, resultObj, r, context.output.data());
+    }
+    case 18: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_channelDemo(rt, resultObj, r, context.output.data());
+    }
+    case 31: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_channelDemoBytes(rt, resultObj, r, context.output.data());
+    }
+    case 4: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_clamp(rt, resultObj, r, context.output.data());
+    }
+    case 8: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_createItem(rt, resultObj, r, context.output.data());
+    }
+    case 32: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_deviceDemo(rt, resultObj, r, context.output.data());
+    }
+    case 10: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_divide(rt, resultObj, r, context.output.data());
+    }
+    case 11: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_emitDemo(rt, resultObj, r, context.output.data());
+    }
+    case 17: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_gauge(rt, resultObj, r, context.output.data());
+    }
+    case 5: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_greet(rt, resultObj, r, context.output.data());
+    }
+    case 3: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_isEven(rt, resultObj, r, context.output.data());
+    }
+    case 2: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_multiply(rt, resultObj, r, context.output.data());
+    }
+    case 34: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_parityEcho(rt, resultObj, r, context.output.data());
+    }
+    case 35: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_parityFind(rt, resultObj, r, context.output.data());
+    }
+    case 38: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_parityIndexed(rt, resultObj, r, context.output.data());
+    }
+    case 37: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_parityResident(rt, resultObj, r, context.output.data());
+    }
+    case 36: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_parityStore(rt, resultObj, r, context.output.data());
+    }
+    case 30: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_platformNativeInfo(rt, resultObj, r, context.output.data());
+    }
+    case 9: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_processItem(rt, resultObj, r, context.output.data());
+    }
+    case 22: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_resourceClose(rt, resultObj, r, context.output.data());
+    }
+    case 19: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_resourceOpen(rt, resultObj, r, context.output.data());
+    }
+    case 20: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_resourceRead(rt, resultObj, r, context.output.data());
+    }
+    case 21: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_resourceWrite(rt, resultObj, r, context.output.data());
+    }
+    case 12: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_rustraRegistryDemo(rt, resultObj, r, context.output.data());
+    }
+    case 15: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_scoreTotal(rt, resultObj, r, context.output.data());
+    }
+    case 13: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_secureCompute(rt, resultObj, r, context.output.data());
+    }
+    case 14: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_sizeOf(rt, resultObj, r, context.output.data());
+    }
+    case 16: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_span(rt, resultObj, r, context.output.data());
+    }
+    case 6: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_sumList(rt, resultObj, r, context.output.data());
+    }
+    case 7: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_toUpper(rt, resultObj, r, context.output.data());
+    }
+    case 28: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_wideAgg(rt, resultObj, r, context.output.data());
+    }
+    case 27: return decode_complex_echoGroups(rt, r);
+    case 33: return decode_complex_kindEcho(rt, r);
+    case 29: return decode_complex_tagSet(rt, r);
+    default: throw JSError(rt, "rustra: no bound codec");
+  }
+}
 
 bool encode_by_name(Runtime& rt, const std::string& name, const Value& args, rc::Writer& w) {
   if (name == "addNumbers") { encode_addNumbers(rt, args, w); return true; }
@@ -1489,6 +2163,17 @@ Value decode_buffer_result_by_id(Runtime& rt, uint16_t cmd_id, Value buffer) {
   }
 }
 
+Value decode_buffer_bound(Runtime& rt, const BoundCodecContext& context, Value buffer) {
+  switch (context.commandId) {
+    case 25: {
+      auto result = Object(rt);
+      result.setProperty(rt, context.output[0], std::move(buffer));
+      return result;
+    }
+    default: throw JSError(rt, "rustra: no bound buffer result codec");
+  }
+}
+
 bool has_raw_codec(uint16_t cmd_id) {
   switch (cmd_id) {
     case 1: return true;
@@ -1630,6 +2315,69 @@ Value decode_raw_result(Runtime& rt, uint16_t cmd_id, uint64_t slot) {
       return std::move(result);
     }
     default: throw JSError(rt, "rustra: no raw result codec for cmd_id " + std::to_string(cmd_id));
+  }
+}
+
+Value decode_raw_bound(Runtime& rt, const BoundCodecContext& context, uint64_t slot) {
+  switch (context.commandId) {
+    case 1: {
+      Object result(rt);
+      int64_t value; std::memcpy(&value, &slot, sizeof(value));
+      result.setProperty(rt, context.output[0], value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));
+      return std::move(result);
+    }
+    case 23: {
+      Object result(rt);
+      double value; std::memcpy(&value, &slot, sizeof(value));
+      result.setProperty(rt, context.output[0], value);
+      return std::move(result);
+    }
+    case 4: {
+      Object result(rt);
+      double value; std::memcpy(&value, &slot, sizeof(value));
+      result.setProperty(rt, context.output[0], value);
+      return std::move(result);
+    }
+    case 10: {
+      Object result(rt);
+      int64_t value; std::memcpy(&value, &slot, sizeof(value));
+      result.setProperty(rt, context.output[0], value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));
+      return std::move(result);
+    }
+    case 11: {
+      Object result(rt);
+      int64_t value; std::memcpy(&value, &slot, sizeof(value));
+      result.setProperty(rt, context.output[0], value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));
+      return std::move(result);
+    }
+    case 17: {
+      Object result(rt);
+      result.setProperty(rt, context.output[0], slot <= 9007199254740991ull ? jsi::Value(static_cast<double>(slot)) : jsi::Value(rt, jsi::BigInt::fromUint64(rt, slot)));
+      return std::move(result);
+    }
+    case 3: {
+      Object result(rt);
+      result.setProperty(rt, context.output[0], slot != 0);
+      return std::move(result);
+    }
+    case 2: {
+      Object result(rt);
+      double value; std::memcpy(&value, &slot, sizeof(value));
+      result.setProperty(rt, context.output[0], value);
+      return std::move(result);
+    }
+    case 22: {
+      Object result(rt);
+      result.setProperty(rt, context.output[0], slot != 0);
+      return std::move(result);
+    }
+    case 13: {
+      Object result(rt);
+      int64_t value; std::memcpy(&value, &slot, sizeof(value));
+      result.setProperty(rt, context.output[0], value >= -9007199254740991ll && value <= 9007199254740991ll ? jsi::Value(static_cast<double>(value)) : jsi::Value(rt, jsi::BigInt::fromInt64(rt, value)));
+      return std::move(result);
+    }
+    default: throw JSError(rt, "rustra: no bound raw result codec");
   }
 }
 

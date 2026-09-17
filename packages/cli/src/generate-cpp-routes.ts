@@ -122,14 +122,22 @@ export function cppDecodeCommand(
   const fnName = commandFunctionName(command.name);
   const { fields: outFields } = collectPostcardFields(command.outputSchema, definitions);
   const lines: string[] = [];
-  lines.push(`static jsi::Value decode_${fnName}(jsi::Runtime& rt, rc::Reader& r) {`);
-  lines.push(`  auto resultObj = jsi::Object(rt);`);
+  lines.push(
+    `static jsi::Value decode_body_${fnName}(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {`,
+  );
   const properties = cppProperties(outFields, definitions);
-  lines.push(...properties.declarations);
+  lines.push(...properties.references);
   for (const f of outFields) {
     lines.push(cppFieldDecodeExpr(f, 'resultObj', definitions, '  ', properties.property));
   }
   lines.push(`  return std::move(resultObj);`);
-  lines.push(`}`);
+  lines.push(
+    `}`,
+    `static jsi::Value decode_${fnName}(jsi::Runtime& rt, rc::Reader& r) {`,
+    `  auto resultObj = jsi::Object(rt);`,
+    ...properties.declarations,
+    `  return decode_body_${fnName}(rt, resultObj, r, _properties.data());`,
+    `}`,
+  );
   return lines.join('\n') + '\n';
 }

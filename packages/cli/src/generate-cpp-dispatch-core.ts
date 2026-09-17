@@ -35,6 +35,42 @@ export function appendCppDispatchCore(lines: string[], sets: CppCommandSets): vo
     .join('\n');
   lines.push(`namespace rustra::generated {`, ``);
   lines.push(
+    `bool encode_bound(Runtime& rt, const BoundCodecContext& context, const Value& args, rc::Writer& w) {`,
+    `  switch (context.commandId) {`,
+  );
+  for (const { command, route } of staticCommands) {
+    const fn = commandFunctionName(command.name);
+    if (route === 'complex')
+      lines.push(`    case ${command.commandId}: encode_complex_${fn}(rt, args, w); return true;`);
+    else
+      lines.push(
+        `    case ${command.commandId}: {`,
+        `      w.push_u8(${command.commandId & 0xff}); w.push_u8(${(command.commandId >> 8) & 0xff});`,
+        `      auto argsObj = args.asObject(rt);`,
+        `      encode_body_${fn}(rt, argsObj, w, context.input.data()); return true;`,
+        `    }`,
+      );
+  }
+  lines.push(`    default: return false;`, `  }`, `}`, ``);
+  lines.push(
+    `Value decode_bound(Runtime& rt, const BoundCodecContext& context, rc::Reader& r) {`,
+    `  switch (context.commandId) {`,
+  );
+  for (const { command, route } of staticCommands) {
+    const fn = commandFunctionName(command.name);
+    if (route === 'complex')
+      lines.push(`    case ${command.commandId}: return decode_complex_${fn}(rt, r);`);
+    else
+      lines.push(
+        `    case ${command.commandId}: {`,
+        `      auto resultObj = jsi::Object(rt);`,
+        `      return decode_body_${fn}(rt, resultObj, r, context.output.data());`,
+        `    }`,
+      );
+  }
+  lines.push(`    default: throw JSError(rt, "rustra: no bound codec");`, `  }`, `}`, ``);
+
+  lines.push(
     `bool encode_by_name(Runtime& rt, const std::string& name, const Value& args, rc::Writer& w) {`,
     encodeCases,
     `  return false; // 동적 명령 — JS 가 Tier 3 fallback 처리`,
