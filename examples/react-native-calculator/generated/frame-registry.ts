@@ -6,7 +6,7 @@
 // DO NOT EDIT — changes will be overwritten and fail codegen --check.
 // ────────────────────────────────────────────────────────────
 
-import { addCodec, addNumbersCodec, benchAddCodec, benchEchoBytesCodec, benchEchoPairCodec, benchEchoStringCodec, channelDemoCodec, channelDemoBytesCodec, clampCodec, createItemCodec, deviceDemoCodec, divideCodec, echoGroupsComplexCodec, emitDemoCodec, gaugeCodec, greetCodec, greetPersonCodec, isEvenCodec, kindEchoComplexCodec, multiplyCodec, platformNativeInfoCodec, processItemCodec, readRememberedCodec, rememberCodec, resetCodec, resourceCloseCodec, resourceOpenCodec, resourceReadCodec, resourceWriteCodec, rustraRegistryDemoCodec, safeDivideCodec, scoreTotalCodec, secureComputeCodec, sizeOfCodec, spanCodec, sumListCodec, tagSetComplexCodec, toUpperCodec, wideAggCodec } from './frame-codecs.js';
+import { addCodec, addNumbersCodec, benchAddCodec, benchEchoBytesCodec, benchEchoPairCodec, benchEchoStringCodec, channelDemoCodec, channelDemoBytesCodec, clampCodec, createItemCodec, deviceDemoComplexCodec, divideCodec, echoGroupsComplexCodec, emitDemoCodec, gaugeCodec, greetCodec, greetPersonCodec, isEvenCodec, kindEchoComplexCodec, multiplyCodec, parityEchoCodec, parityFindCodec, parityIndexedCodec, parityResidentCodec, parityStoreCodec, platformNativeInfoComplexCodec, processItemCodec, readRememberedComplexCodec, rememberComplexCodec, resetComplexCodec, resourceCloseCodec, resourceOpenCodec, resourceReadCodec, resourceWriteCodec, rustraRegistryDemoCodec, safeDivideCodec, scoreTotalCodec, secureComputeCodec, sizeOfCodec, spanCodec, sumListCodec, tagSetComplexCodec, toUpperCodec, wideAggCodec } from './frame-codecs.js';
 
 export const frameRegistry = new Map<string, import('@rustra/types').FrameCodec<any, any>>([
   // route: postcard
@@ -29,8 +29,8 @@ export const frameRegistry = new Map<string, import('@rustra/types').FrameCodec<
   ['clamp', clampCodec],
   // route: postcard
   ['createItem', createItemCodec],
-  // route: postcard
-  ['deviceDemo', deviceDemoCodec],
+  // route: complex
+  ['deviceDemo', deviceDemoComplexCodec],
   // route: postcard
   ['divide', divideCodec],
   // route: complex
@@ -50,15 +50,25 @@ export const frameRegistry = new Map<string, import('@rustra/types').FrameCodec<
   // route: postcard
   ['multiply', multiplyCodec],
   // route: postcard
-  ['platformNativeInfo', platformNativeInfoCodec],
+  ['parityEcho', parityEchoCodec],
+  // route: postcard
+  ['parityFind', parityFindCodec],
+  // route: postcard
+  ['parityIndexed', parityIndexedCodec],
+  // route: postcard
+  ['parityResident', parityResidentCodec],
+  // route: postcard
+  ['parityStore', parityStoreCodec],
+  // route: complex
+  ['platformNativeInfo', platformNativeInfoComplexCodec],
   // route: postcard
   ['processItem', processItemCodec],
-  // route: postcard
-  ['readRemembered', readRememberedCodec],
-  // route: postcard
-  ['remember', rememberCodec],
-  // route: postcard
-  ['reset', resetCodec],
+  // route: complex
+  ['readRemembered', readRememberedComplexCodec],
+  // route: complex
+  ['remember', rememberComplexCodec],
+  // route: complex
+  ['reset', resetComplexCodec],
   // route: postcard
   ['resourceClose', resourceCloseCodec],
   // route: postcard

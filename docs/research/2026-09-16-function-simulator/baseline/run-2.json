@@ -1,1 +1,106 @@
-{"kind":"rustra-ordinary-functions","schemaVersion":1,"generatedAt":"2026-09-15T19:35:45.155Z","platform":"ios","buildMode":"release","buildFingerprint":"278ee8f3225c70ece1050a91b45dd98cd84cfaf19f0aa11464ef78c751c3125c","contractHash":"bb88ac05d152c16fac2fe5e194323a3222534cbdd7b1d13b5b590d120dcf8a7c","checks":[{"name":"add(42, 58)","actual":100,"passed":true},{"name":"greetPerson(\"민지\")","actual":"Hello, 민지!","passed":true},{"name":"remember(100) returns void","actual":"undefined","passed":true},{"name":"readRemembered()","actual":100,"passed":true},{"name":"reset() returns void","actual":"undefined","passed":true},{"name":"reset clears Rust state","actual":0,"passed":true},{"name":"safeDivide(84, 2)","actual":42,"passed":true},{"name":"zero divisor maps domain error","actual":"math.zero_divisor","passed":true},{"name":"function uses supported JS frame route","actual":0,"passed":true},{"name":"live schema add","actual":100,"passed":true},{"name":"live schema reset returns void","actual":"undefined","passed":true},{"name":"cursor matches generated wire","actual":"34,0,84,116","passed":true},{"name":"legacy addNumbers still works","actual":100,"passed":true}],"correctness":{"passed":true,"checkedBeforeTiming":true},"benchmark":{"scope":"Hermes on-device JS. Generated calls include await and native roundtrip; legacy input/output shape and i64 width differ. Encoding excludes native and exact-buffer transport copies.","samples":20,"callIterationsPerSample":1000,"encodingIterationsPerSample":5000,"checksum":11211552,"nanoseconds":{"generatedFunction":{"label":"generatedFunction","avg":15004.162496328354,"stddev":279.94173375531125,"min":14440.457940101624,"p50":15060.624957084656,"p95":15592.000007629395,"p99":15592.000007629395,"max":15592.000007629395,"ops":66648.17181530182,"batchMeans":[14881.500005722046,14655.707955360413,15465.250015258789,15060.624957084656,15150.040984153748,15592.000007629395,15028.666973114014,14830.707907676697,15175.791025161743,14705.042004585266,15150.375008583069,15116.124987602234,14768.45908164978,14440.457940101624,15267.208933830261,14937.749981880188,15156.584024429321,15206.250071525574,14851.83298587799,14642.875075340271]},"legacyCommand":{"label":"legacyCommand","avg":4996.131294965744,"stddev":256.3868818231384,"min":4674.374938011169,"p50":4949.333071708679,"p95":5708.458065986633,"p99":5708.458065986633,"max":5708.458065986633,"ops":200154.86802911502,"batchMeans":[5352.708101272583,4908.125042915344,4900.5420207977295,5420.91703414917,5066.792011260986,5708.458065986633,5027.999997138977,4788.458943367004,4856.833934783936,5186.124920845032,5054.58402633667,4773.874998092651,4949.333071708679,4754.87494468689,4713.124990463257,5147.458076477051,4884.749889373779,4674.374938011169,4970.124959945679,4783.16593170166]},"encode":{"label":"encode","avg":2092.1712732315063,"stddev":55.899897773556646,"min":2005.3418159484863,"p50":2102.208185195923,"p95":2179.8084020614624,"p99":2179.8084020614624,"max":2179.8084020614624,"ops":477972.3404075945,"batchMeans":[2032.8999996185303,2018.5750007629395,2115.9583806991577,2124.2000102996826,2113.4000062942505,2178.8000106811523,2015.0668144226074,2049.33340549469,2102.208185195923,2166.449999809265,2097.350001335144,2145.9500074386597,2005.3418159484863,2067.200016975403,2086.9668006896973,2154.5416116714478,2121.5749979019165,2179.8084020614624,2045.86660861969,2021.933388710022]},"encodeInto":{"label":"encodeInto","avg":667.7962374687195,"stddev":54.50478083877378,"min":617.7167892456055,"p50":644.3166017532349,"p95":776.9665956497192,"p99":776.9665956497192,"max":776.9665956497192,"ops":1497462.7646757914,"batchMeans":[774.1915941238403,686.5750074386597,632.1084022521973,635.983395576477,646.5833902359009,644.3166017532349,776.9665956497192,674.4750022888184,636.0666036605835,636.5499973297119,617.7167892456055,623.2249975204468,773.5749959945679,668.624997138977,619.283390045166,641.5832042694092,634.1081857681274,618.9499855041504,758.0582141876221,656.9833993911743]}}}}
+{
+  "kind": "rustra-ordinary-functions",
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-15T19:35:45.155Z",
+  "platform": "ios",
+  "buildMode": "release",
+  "buildFingerprint": "278ee8f3225c70ece1050a91b45dd98cd84cfaf19f0aa11464ef78c751c3125c",
+  "contractHash": "bb88ac05d152c16fac2fe5e194323a3222534cbdd7b1d13b5b590d120dcf8a7c",
+  "checks": [
+    { "name": "add(42, 58)", "actual": 100, "passed": true },
+    { "name": "greetPerson(\"민지\")", "actual": "Hello, 민지!", "passed": true },
+    { "name": "remember(100) returns void", "actual": "undefined", "passed": true },
+    { "name": "readRemembered()", "actual": 100, "passed": true },
+    { "name": "reset() returns void", "actual": "undefined", "passed": true },
+    { "name": "reset clears Rust state", "actual": 0, "passed": true },
+    { "name": "safeDivide(84, 2)", "actual": 42, "passed": true },
+    { "name": "zero divisor maps domain error", "actual": "math.zero_divisor", "passed": true },
+    { "name": "function uses supported JS frame route", "actual": 0, "passed": true },
+    { "name": "live schema add", "actual": 100, "passed": true },
+    { "name": "live schema reset returns void", "actual": "undefined", "passed": true },
+    { "name": "cursor matches generated wire", "actual": "34,0,84,116", "passed": true },
+    { "name": "legacy addNumbers still works", "actual": 100, "passed": true }
+  ],
+  "correctness": { "passed": true, "checkedBeforeTiming": true },
+  "benchmark": {
+    "scope": "Hermes on-device JS. Generated calls include await and native roundtrip; legacy input/output shape and i64 width differ. Encoding excludes native and exact-buffer transport copies.",
+    "samples": 20,
+    "callIterationsPerSample": 1000,
+    "encodingIterationsPerSample": 5000,
+    "checksum": 11211552,
+    "nanoseconds": {
+      "generatedFunction": {
+        "label": "generatedFunction",
+        "avg": 15004.162496328354,
+        "stddev": 279.94173375531125,
+        "min": 14440.457940101624,
+        "p50": 15060.624957084656,
+        "p95": 15592.000007629395,
+        "p99": 15592.000007629395,
+        "max": 15592.000007629395,
+        "ops": 66648.17181530182,
+        "batchMeans": [
+          14881.500005722046, 14655.707955360413, 15465.250015258789, 15060.624957084656,
+          15150.040984153748, 15592.000007629395, 15028.666973114014, 14830.707907676697,
+          15175.791025161743, 14705.042004585266, 15150.375008583069, 15116.124987602234,
+          14768.45908164978, 14440.457940101624, 15267.208933830261, 14937.749981880188,
+          15156.584024429321, 15206.250071525574, 14851.83298587799, 14642.875075340271
+        ]
+      },
+      "legacyCommand": {
+        "label": "legacyCommand",
+        "avg": 4996.131294965744,
+        "stddev": 256.3868818231384,
+        "min": 4674.374938011169,
+        "p50": 4949.333071708679,
+        "p95": 5708.458065986633,
+        "p99": 5708.458065986633,
+        "max": 5708.458065986633,
+        "ops": 200154.86802911502,
+        "batchMeans": [
+          5352.708101272583, 4908.125042915344, 4900.5420207977295, 5420.91703414917,
+          5066.792011260986, 5708.458065986633, 5027.999997138977, 4788.458943367004,
+          4856.833934783936, 5186.124920845032, 5054.58402633667, 4773.874998092651,
+          4949.333071708679, 4754.87494468689, 4713.124990463257, 5147.458076477051,
+          4884.749889373779, 4674.374938011169, 4970.124959945679, 4783.16593170166
+        ]
+      },
+      "encode": {
+        "label": "encode",
+        "avg": 2092.1712732315063,
+        "stddev": 55.899897773556646,
+        "min": 2005.3418159484863,
+        "p50": 2102.208185195923,
+        "p95": 2179.8084020614624,
+        "p99": 2179.8084020614624,
+        "max": 2179.8084020614624,
+        "ops": 477972.3404075945,
+        "batchMeans": [
+          2032.8999996185303, 2018.5750007629395, 2115.9583806991577, 2124.2000102996826,
+          2113.4000062942505, 2178.8000106811523, 2015.0668144226074, 2049.33340549469,
+          2102.208185195923, 2166.449999809265, 2097.350001335144, 2145.9500074386597,
+          2005.3418159484863, 2067.200016975403, 2086.9668006896973, 2154.5416116714478,
+          2121.5749979019165, 2179.8084020614624, 2045.86660861969, 2021.933388710022
+        ]
+      },
+      "encodeInto": {
+        "label": "encodeInto",
+        "avg": 667.7962374687195,
+        "stddev": 54.50478083877378,
+        "min": 617.7167892456055,
+        "p50": 644.3166017532349,
+        "p95": 776.9665956497192,
+        "p99": 776.9665956497192,
+        "max": 776.9665956497192,
+        "ops": 1497462.7646757914,
+        "batchMeans": [
+          774.1915941238403, 686.5750074386597, 632.1084022521973, 635.983395576477,
+          646.5833902359009, 644.3166017532349, 776.9665956497192, 674.4750022888184,
+          636.0666036605835, 636.5499973297119, 617.7167892456055, 623.2249975204468,
+          773.5749959945679, 668.624997138977, 619.283390045166, 641.5832042694092,
+          634.1081857681274, 618.9499855041504, 758.0582141876221, 656.9833993911743
+        ]
+      }
+    }
+  }
+}

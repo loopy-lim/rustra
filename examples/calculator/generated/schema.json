@@ -5,7 +5,7 @@
   "commands": [
     {
       "name": "add",
-      "commandId": 34,
+      "commandId": 39,
       "inputType": "Tuple_of_int32_and_int32",
       "outputType": "int32",
       "inputSchema": {
@@ -665,7 +665,7 @@
     },
     {
       "name": "greetPerson",
-      "commandId": 35,
+      "commandId": 40,
       "inputType": "Tuple_of_String",
       "outputType": "String",
       "inputSchema": {
@@ -1271,7 +1271,7 @@
     },
     {
       "name": "readRemembered",
-      "commandId": 38,
+      "commandId": 43,
       "inputType": "()",
       "outputType": "int32",
       "inputSchema": {
@@ -1287,7 +1287,7 @@
     },
     {
       "name": "remember",
-      "commandId": 37,
+      "commandId": 42,
       "inputType": "Tuple_of_int32",
       "outputType": "()",
       "inputSchema": {
@@ -1310,7 +1310,7 @@
     },
     {
       "name": "reset",
-      "commandId": 39,
+      "commandId": 44,
       "inputType": "()",
       "outputType": "()",
       "inputSchema": {
@@ -1558,7 +1558,7 @@
     },
     {
       "name": "safeDivide",
-      "commandId": 36,
+      "commandId": 41,
       "inputType": "Tuple_of_double_and_double",
       "outputType": "double",
       "inputSchema": {
