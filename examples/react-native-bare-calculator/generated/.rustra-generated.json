@@ -29,7 +29,7 @@
     },
     {
       "path": "../modules/rustra-bridge/generated/rustra-generated-codecs.cpp",
-      "sha256": "bc5d95580b8b24c77ec73b167a13d496f3e126d63811dd4469e7a0b5345c2123"
+      "sha256": "b25b98046764e60bb30aebe776487a14b007a48ca37cb2433603839a83079f87"
     },
     {
       "path": "../modules/rustra-bridge/generated/rustra-generated-codecs.hpp",
@@ -81,15 +81,15 @@
     },
     {
       "path": "frame-codecs.ts",
-      "sha256": "43d2c75a7e8b3519ae0899cde8af2ebab1ac2acc842a1acacfd7920fa0b0dd0d"
+      "sha256": "a1e5ee165e733a63c8bd340b3893018a22ec806850f4952a5b17d7fd6432e415"
     },
     {
       "path": "frame-registry.ts",
-      "sha256": "4770ac28136a1412eacde7d477cb6e7bc5ba500f4700bd31d1084e8afffd2d6c"
+      "sha256": "5c0b5eaaf01fd732f9aa1b25e13190e6fc328871544af451a48587a60e6de136"
     },
     {
       "path": "positional-facade.ts",
-      "sha256": "e72a1bdfdf5e81b914c356c1537949bc526a75515e364091b7d1951115a29485"
+      "sha256": "9851448a8e98803fdeba9198ad21c4c9cb998190ed1a71ea1e0f3d0816cb8081"
     },
     {
       "path": "react-native.ts",

@@ -6,12 +6,12 @@
 // DO NOT EDIT — changes will be overwritten and fail codegen --check.
 // ────────────────────────────────────────────────────────────
 
-import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoBytesInput, ChannelDemoBytesOutput, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DeviceDemoOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, KindEchoInput, KindEchoOutput, MultiplyInput, MultiplyOutput, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, String, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, Tuple_of_String, Tuple_of_double_and_double, Tuple_of_int32, Tuple_of_int32_and_int32, WideAggInput, WideAggOutput, double, int32 } from './types.js';
+import type { AddNumbersInput, AddNumbersOutput, BenchAddInput, BenchAddOutput, BenchBytesPayload, BenchPairPayload, BenchStringPayload, ChannelDemoBytesInput, ChannelDemoBytesOutput, ChannelDemoInput, ChannelDemoOutput, ClampInput, ClampOutput, CreateItemInput, CreateItemOutput, DeviceDemoOutput, DivideInput, DivideOutput, EchoGroupsInput, EchoGroupsOutput, EmitDemoInput, EmitDemoOutput, GaugeInput, GaugeOutput, GreetInput, GreetOutput, IsEvenInput, IsEvenOutput, KindEchoInput, KindEchoOutput, MultiplyInput, MultiplyOutput, ParityFindInput, ParityQuery, ParitySearch, ParityStored, ParityTree, PlatformNativeInfoOutput, ProcessItemInput, ProcessItemOutput, RegistryDemoInput, RegistryDemoOutput, ResourceCloseInput, ResourceCloseOutput, ResourceHandleOutput, ResourceOpenInput, ResourceReadInput, ResourceReadOutput, ResourceWriteInput, ResourceWriteOutput, ScoreTotalInput, ScoreTotalOutput, SecureComputeInput, SecureComputeOutput, SizeOfInput, SizeOfOutput, SpanInput, SpanOutput, String, SumListInput, SumListOutput, TagSetInput, TagSetOutput, ToUpperInput, ToUpperOutput, Tuple_of_String, Tuple_of_double_and_double, Tuple_of_int32, Tuple_of_int32_and_int32, WideAggInput, WideAggOutput, double, int32 } from './types.js';
 import { createGeneratedFields2, invokeGenerated, invokeGeneratedBytes, invokeGeneratedFields1, invokeGeneratedFields3 } from '@rustra/types';
 import type { InvokeOptions } from '@rustra/types';
 
 export function add(arg0: Tuple_of_int32_and_int32[0], arg1: Tuple_of_int32_and_int32[1], options?: InvokeOptions): Promise<int32> {
-  return invokeGenerated<int32>(34, 'add', [arg0, arg1], options);
+  return invokeGenerated<int32>(39, 'add', [arg0, arg1], options);
 }
 add.commandId = 'add';
 
@@ -70,7 +70,7 @@ export function greet(input: GreetInput, options?: InvokeOptions): Promise<Greet
 greet.commandId = 'greet';
 
 export function greetPerson(arg0: Tuple_of_String[0], options?: InvokeOptions): Promise<String> {
-  return invokeGenerated<String>(35, 'greetPerson', [arg0], options);
+  return invokeGenerated<String>(40, 'greetPerson', [arg0], options);
 }
 greetPerson.commandId = 'greetPerson';
 
@@ -86,6 +86,31 @@ kindEcho.commandId = 'kindEcho';
 
 export const multiply = createGeneratedFields2<MultiplyInput, MultiplyOutput>(2, 'multiply', "a", "b", 'multiply');
 
+export function parityEcho(input: ParityTree, options?: InvokeOptions): Promise<ParityTree> {
+  return invokeGenerated<ParityTree>(34, 'parityEcho', input, options);
+}
+parityEcho.commandId = 'parityEcho';
+
+export function parityFind(input: ParityFindInput, options?: InvokeOptions): Promise<ParitySearch> {
+  return invokeGenerated<ParitySearch>(35, 'parityFind', input, options);
+}
+parityFind.commandId = 'parityFind';
+
+export function parityIndexed(input: ParityQuery, options?: InvokeOptions): Promise<ParitySearch> {
+  return invokeGeneratedFields1<ParitySearch>(38, 'parityIndexed', input, input["id"], options);
+}
+parityIndexed.commandId = 'parityIndexed';
+
+export function parityResident(input: ParityQuery, options?: InvokeOptions): Promise<ParitySearch> {
+  return invokeGeneratedFields1<ParitySearch>(37, 'parityResident', input, input["id"], options);
+}
+parityResident.commandId = 'parityResident';
+
+export function parityStore(input: ParityTree, options?: InvokeOptions): Promise<ParityStored> {
+  return invokeGenerated<ParityStored>(36, 'parityStore', input, options);
+}
+parityStore.commandId = 'parityStore';
+
 export function platformNativeInfo(options?: InvokeOptions): Promise<PlatformNativeInfoOutput> {
   return invokeGenerated<PlatformNativeInfoOutput>(30, 'platformNativeInfo', undefined, options);
 }
@@ -97,17 +122,17 @@ export function processItem(input: ProcessItemInput, options?: InvokeOptions): P
 processItem.commandId = 'processItem';
 
 export function readRemembered(options?: InvokeOptions): Promise<int32> {
-  return invokeGenerated<int32>(38, 'readRemembered', null, options);
+  return invokeGenerated<int32>(43, 'readRemembered', null, options);
 }
 readRemembered.commandId = 'readRemembered';
 
 export function remember(arg0: Tuple_of_int32[0], options?: InvokeOptions): Promise<void> {
-  return invokeGenerated<void>(37, 'remember', [arg0], options).then(() => undefined);
+  return invokeGenerated<void>(42, 'remember', [arg0], options).then(() => undefined);
 }
 remember.commandId = 'remember';
 
 export function reset(options?: InvokeOptions): Promise<void> {
-  return invokeGenerated<void>(39, 'reset', null, options).then(() => undefined);
+  return invokeGenerated<void>(44, 'reset', null, options).then(() => undefined);
 }
 reset.commandId = 'reset';
 
@@ -138,7 +163,7 @@ export function rustraRegistryDemo(input: RegistryDemoInput, options?: InvokeOpt
 rustraRegistryDemo.commandId = 'rustraRegistryDemo';
 
 export function safeDivide(arg0: Tuple_of_double_and_double[0], arg1: Tuple_of_double_and_double[1], options?: InvokeOptions): Promise<double> {
-  return invokeGenerated<double>(36, 'safeDivide', [arg0, arg1], options);
+  return invokeGenerated<double>(41, 'safeDivide', [arg0, arg1], options);
 }
 safeDivide.commandId = 'safeDivide';
 

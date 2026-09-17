@@ -154,6 +154,7 @@ std::shared_ptr<const BoundCodecContext> make_bound_codec_context(Runtime& rt, u
     case 31: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"channel", "ticks"}, {"sent", "droppedSends"}));
     case 4: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"max", "min", "value"}, {"value"}));
     case 8: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"name", "value"}, {"item", "active", "name", "value"}));
+    case 32: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {}, {"os"}));
     case 10: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"a", "b"}, {"value"}));
     case 11: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"ticks", "stepDelayMs"}, {"emitted"}));
     case 17: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"limit", "offset"}, {"next"}));
@@ -165,6 +166,7 @@ std::shared_ptr<const BoundCodecContext> make_bound_codec_context(Runtime& rt, u
     case 38: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"id"}, {"found", "id", "name", "visited"}));
     case 37: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"id"}, {"found", "id", "name", "visited"}));
     case 36: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"nodes", "id", "name", "tag", "note", "metadata", "children"}, {"nodes"}));
+    case 30: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {}, {"os", "windowKind"}));
     case 9: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"item", "active", "name", "value"}, {"doubled", "item", "active", "name", "value"}));
     case 22: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"handle"}, {"closed"}));
     case 19: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"initial"}, {"handle"}));
@@ -178,10 +180,8 @@ std::shared_ptr<const BoundCodecContext> make_bound_codec_context(Runtime& rt, u
     case 6: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"numbers"}, {"count", "total"}));
     case 7: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"s"}, {"result"}));
     case 28: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {"samples", "offset"}, {"max", "adjusted"}));
-    case 32: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {}, {}));
     case 27: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {}, {}));
     case 33: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {}, {}));
-    case 30: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {}, {}));
     case 29: return std::shared_ptr<const BoundCodecContext>(new BoundCodecContext(rt, commandId, {}, {}));
     default: throw JSError(rt, "rustra: no bound codec for cmd_id " + std::to_string(commandId));
   }
@@ -593,6 +593,26 @@ static jsi::Value decode_createItem(jsi::Runtime& rt, rc::Reader& r) {
   return decode_body_createItem(rt, resultObj, r, _properties.data());
 }
 
+static void encode_body_deviceDemo(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+}
+static void encode_deviceDemo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(32); w.push_u8(0); // cmd_id = 32 LE
+  auto argsObj = args.asObject(rt);
+  const std::array<jsi::PropNameID, 0> _properties{};
+  encode_body_deviceDemo(rt, argsObj, w, _properties.data());
+}
+
+static jsi::Value decode_body_deviceDemo(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_0, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  return std::move(resultObj);
+}
+static jsi::Value decode_deviceDemo(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 1> _properties{jsi::PropNameID::forAscii(rt, "os")};
+  return decode_body_deviceDemo(rt, resultObj, r, _properties.data());
+}
+
 static void encode_body_divide(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
   const auto& _prop_0 = _properties[0];
   const auto& _prop_1 = _properties[1];
@@ -982,6 +1002,28 @@ static jsi::Value decode_parityStore(jsi::Runtime& rt, rc::Reader& r) {
   return decode_body_parityStore(rt, resultObj, r, _properties.data());
 }
 
+static void encode_body_platformNativeInfo(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
+}
+static void encode_platformNativeInfo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
+  w.push_u8(30); w.push_u8(0); // cmd_id = 30 LE
+  auto argsObj = args.asObject(rt);
+  const std::array<jsi::PropNameID, 0> _properties{};
+  encode_body_platformNativeInfo(rt, argsObj, w, _properties.data());
+}
+
+static jsi::Value decode_body_platformNativeInfo(jsi::Runtime& rt, jsi::Object& resultObj, rc::Reader& r, const jsi::PropNameID* _properties) {
+  const auto& _prop_0 = _properties[0];
+  const auto& _prop_1 = _properties[1];
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_0, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  { auto _s = r.read_string_view(); resultObj.setProperty(rt, _prop_1, jsi::String::createFromUtf8(rt, _s.data, _s.size)); }
+  return std::move(resultObj);
+}
+static jsi::Value decode_platformNativeInfo(jsi::Runtime& rt, rc::Reader& r) {
+  auto resultObj = jsi::Object(rt);
+  const std::array<jsi::PropNameID, 2> _properties{jsi::PropNameID::forAscii(rt, "os"), jsi::PropNameID::forAscii(rt, "windowKind")};
+  return decode_body_platformNativeInfo(rt, resultObj, r, _properties.data());
+}
+
 static void encode_body_processItem(jsi::Runtime& rt, const jsi::Object& argsObj, rc::Writer& w, const jsi::PropNameID* _properties) {
   const auto& _prop_0 = _properties[0];
   const auto& _prop_1 = _properties[1];
@@ -1368,15 +1410,6 @@ static jsi::Value decode_wideAgg(jsi::Runtime& rt, rc::Reader& r) {
   return decode_body_wideAgg(rt, resultObj, r, _properties.data());
 }
 
-static void encode_complex_deviceDemo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
-  w.push_u8(32); w.push_u8(0);
-  if (!args.isNull()) throw jsi::JSError(rt, "complex null expected");
-}
-
-static jsi::Value decode_complex_deviceDemo(jsi::Runtime& rt, rc::Reader& r) {
-  return [&]() -> jsi::Value { auto _cx0 = jsi::Object(rt); _cx0.setProperty(rt, "os", [&]() -> jsi::Value { auto _s = r.read_string_view(); return jsi::String::createFromUtf8(rt, _s.data, _s.size); }()); return _cx0; }();
-}
-
 static void encode_complex_echoGroups(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
   w.push_u8(27); w.push_u8(0);
   { if (!args.isObject() || args.asObject(rt).isArray(rt)) throw jsi::JSError(rt, "complex object expected");
@@ -1415,15 +1448,6 @@ static void encode_complex_kindEcho(jsi::Runtime& rt, const jsi::Value& args, rc
 
 static jsi::Value decode_complex_kindEcho(jsi::Runtime& rt, rc::Reader& r) {
   return [&]() -> jsi::Value { auto _cx0 = jsi::Object(rt); _cx0.setProperty(rt, "echoed", complex_decode_ref_OpKind(rt, r, 0 + 1)); return _cx0; }();
-}
-
-static void encode_complex_platformNativeInfo(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
-  w.push_u8(30); w.push_u8(0);
-  if (!args.isNull()) throw jsi::JSError(rt, "complex null expected");
-}
-
-static jsi::Value decode_complex_platformNativeInfo(jsi::Runtime& rt, rc::Reader& r) {
-  return [&]() -> jsi::Value { auto _cx0 = jsi::Object(rt); _cx0.setProperty(rt, "os", [&]() -> jsi::Value { auto _s = r.read_string_view(); return jsi::String::createFromUtf8(rt, _s.data, _s.size); }()); _cx0.setProperty(rt, "windowKind", [&]() -> jsi::Value { auto _s = r.read_string_view(); return jsi::String::createFromUtf8(rt, _s.data, _s.size); }()); return _cx0; }();
 }
 
 static void encode_complex_tagSet(jsi::Runtime& rt, const jsi::Value& args, rc::Writer& w) {
@@ -1500,6 +1524,11 @@ bool encode_bound(Runtime& rt, const BoundCodecContext& context, const Value& ar
       auto argsObj = args.asObject(rt);
       encode_body_createItem(rt, argsObj, w, context.input.data()); return true;
     }
+    case 32: {
+      w.push_u8(32); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_deviceDemo(rt, argsObj, w, context.input.data()); return true;
+    }
     case 10: {
       w.push_u8(10); w.push_u8(0);
       auto argsObj = args.asObject(rt);
@@ -1554,6 +1583,11 @@ bool encode_bound(Runtime& rt, const BoundCodecContext& context, const Value& ar
       w.push_u8(36); w.push_u8(0);
       auto argsObj = args.asObject(rt);
       encode_body_parityStore(rt, argsObj, w, context.input.data()); return true;
+    }
+    case 30: {
+      w.push_u8(30); w.push_u8(0);
+      auto argsObj = args.asObject(rt);
+      encode_body_platformNativeInfo(rt, argsObj, w, context.input.data()); return true;
     }
     case 9: {
       w.push_u8(9); w.push_u8(0);
@@ -1620,10 +1654,8 @@ bool encode_bound(Runtime& rt, const BoundCodecContext& context, const Value& ar
       auto argsObj = args.asObject(rt);
       encode_body_wideAgg(rt, argsObj, w, context.input.data()); return true;
     }
-    case 32: encode_complex_deviceDemo(rt, args, w); return true;
     case 27: encode_complex_echoGroups(rt, args, w); return true;
     case 33: encode_complex_kindEcho(rt, args, w); return true;
-    case 30: encode_complex_platformNativeInfo(rt, args, w); return true;
     case 29: encode_complex_tagSet(rt, args, w); return true;
     default: return false;
   }
@@ -1666,6 +1698,10 @@ Value decode_bound(Runtime& rt, const BoundCodecContext& context, rc::Reader& r)
     case 8: {
       auto resultObj = jsi::Object(rt);
       return decode_body_createItem(rt, resultObj, r, context.output.data());
+    }
+    case 32: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_deviceDemo(rt, resultObj, r, context.output.data());
     }
     case 10: {
       auto resultObj = jsi::Object(rt);
@@ -1710,6 +1746,10 @@ Value decode_bound(Runtime& rt, const BoundCodecContext& context, rc::Reader& r)
     case 36: {
       auto resultObj = jsi::Object(rt);
       return decode_body_parityStore(rt, resultObj, r, context.output.data());
+    }
+    case 30: {
+      auto resultObj = jsi::Object(rt);
+      return decode_body_platformNativeInfo(rt, resultObj, r, context.output.data());
     }
     case 9: {
       auto resultObj = jsi::Object(rt);
@@ -1763,10 +1803,8 @@ Value decode_bound(Runtime& rt, const BoundCodecContext& context, rc::Reader& r)
       auto resultObj = jsi::Object(rt);
       return decode_body_wideAgg(rt, resultObj, r, context.output.data());
     }
-    case 32: return decode_complex_deviceDemo(rt, r);
     case 27: return decode_complex_echoGroups(rt, r);
     case 33: return decode_complex_kindEcho(rt, r);
-    case 30: return decode_complex_platformNativeInfo(rt, r);
     case 29: return decode_complex_tagSet(rt, r);
     default: throw JSError(rt, "rustra: no bound codec");
   }
@@ -1782,6 +1820,7 @@ bool encode_by_name(Runtime& rt, const std::string& name, const Value& args, rc:
   if (name == "channelDemoBytes") { encode_channelDemoBytes(rt, args, w); return true; }
   if (name == "clamp") { encode_clamp(rt, args, w); return true; }
   if (name == "createItem") { encode_createItem(rt, args, w); return true; }
+  if (name == "deviceDemo") { encode_deviceDemo(rt, args, w); return true; }
   if (name == "divide") { encode_divide(rt, args, w); return true; }
   if (name == "emitDemo") { encode_emitDemo(rt, args, w); return true; }
   if (name == "gauge") { encode_gauge(rt, args, w); return true; }
@@ -1793,6 +1832,7 @@ bool encode_by_name(Runtime& rt, const std::string& name, const Value& args, rc:
   if (name == "parityIndexed") { encode_parityIndexed(rt, args, w); return true; }
   if (name == "parityResident") { encode_parityResident(rt, args, w); return true; }
   if (name == "parityStore") { encode_parityStore(rt, args, w); return true; }
+  if (name == "platformNativeInfo") { encode_platformNativeInfo(rt, args, w); return true; }
   if (name == "processItem") { encode_processItem(rt, args, w); return true; }
   if (name == "resourceClose") { encode_resourceClose(rt, args, w); return true; }
   if (name == "resourceOpen") { encode_resourceOpen(rt, args, w); return true; }
@@ -1806,10 +1846,8 @@ bool encode_by_name(Runtime& rt, const std::string& name, const Value& args, rc:
   if (name == "sumList") { encode_sumList(rt, args, w); return true; }
   if (name == "toUpper") { encode_toUpper(rt, args, w); return true; }
   if (name == "wideAgg") { encode_wideAgg(rt, args, w); return true; }
-  if (name == "deviceDemo") { encode_complex_deviceDemo(rt, args, w); return true; }
   if (name == "echoGroups") { encode_complex_echoGroups(rt, args, w); return true; }
   if (name == "kindEcho") { encode_complex_kindEcho(rt, args, w); return true; }
-  if (name == "platformNativeInfo") { encode_complex_platformNativeInfo(rt, args, w); return true; }
   if (name == "tagSet") { encode_complex_tagSet(rt, args, w); return true; }
   return false; // 동적 명령 — JS 가 Tier 3 fallback 처리
 }
@@ -1824,6 +1862,7 @@ Value decode_by_name(Runtime& rt, const std::string& name, rc::Reader& r) {
   if (name == "channelDemoBytes") return decode_channelDemoBytes(rt, r);
   if (name == "clamp") return decode_clamp(rt, r);
   if (name == "createItem") return decode_createItem(rt, r);
+  if (name == "deviceDemo") return decode_deviceDemo(rt, r);
   if (name == "divide") return decode_divide(rt, r);
   if (name == "emitDemo") return decode_emitDemo(rt, r);
   if (name == "gauge") return decode_gauge(rt, r);
@@ -1835,6 +1874,7 @@ Value decode_by_name(Runtime& rt, const std::string& name, rc::Reader& r) {
   if (name == "parityIndexed") return decode_parityIndexed(rt, r);
   if (name == "parityResident") return decode_parityResident(rt, r);
   if (name == "parityStore") return decode_parityStore(rt, r);
+  if (name == "platformNativeInfo") return decode_platformNativeInfo(rt, r);
   if (name == "processItem") return decode_processItem(rt, r);
   if (name == "resourceClose") return decode_resourceClose(rt, r);
   if (name == "resourceOpen") return decode_resourceOpen(rt, r);
@@ -1848,10 +1888,8 @@ Value decode_by_name(Runtime& rt, const std::string& name, rc::Reader& r) {
   if (name == "sumList") return decode_sumList(rt, r);
   if (name == "toUpper") return decode_toUpper(rt, r);
   if (name == "wideAgg") return decode_wideAgg(rt, r);
-  if (name == "deviceDemo") return decode_complex_deviceDemo(rt, r);
   if (name == "echoGroups") return decode_complex_echoGroups(rt, r);
   if (name == "kindEcho") return decode_complex_kindEcho(rt, r);
-  if (name == "platformNativeInfo") return decode_complex_platformNativeInfo(rt, r);
   if (name == "tagSet") return decode_complex_tagSet(rt, r);
   throw JSError(rt, "rustra: no C++ codec for '" + name + "'");
 }
@@ -1867,6 +1905,7 @@ bool encode_by_id(Runtime& rt, uint16_t cmd_id, const Value& args, rc::Writer& w
     case 31: encode_channelDemoBytes(rt, args, w); return true;
     case 4: encode_clamp(rt, args, w); return true;
     case 8: encode_createItem(rt, args, w); return true;
+    case 32: encode_deviceDemo(rt, args, w); return true;
     case 10: encode_divide(rt, args, w); return true;
     case 11: encode_emitDemo(rt, args, w); return true;
     case 17: encode_gauge(rt, args, w); return true;
@@ -1878,6 +1917,7 @@ bool encode_by_id(Runtime& rt, uint16_t cmd_id, const Value& args, rc::Writer& w
     case 38: encode_parityIndexed(rt, args, w); return true;
     case 37: encode_parityResident(rt, args, w); return true;
     case 36: encode_parityStore(rt, args, w); return true;
+    case 30: encode_platformNativeInfo(rt, args, w); return true;
     case 9: encode_processItem(rt, args, w); return true;
     case 22: encode_resourceClose(rt, args, w); return true;
     case 19: encode_resourceOpen(rt, args, w); return true;
@@ -1891,10 +1931,8 @@ bool encode_by_id(Runtime& rt, uint16_t cmd_id, const Value& args, rc::Writer& w
     case 6: encode_sumList(rt, args, w); return true;
     case 7: encode_toUpper(rt, args, w); return true;
     case 28: encode_wideAgg(rt, args, w); return true;
-    case 32: encode_complex_deviceDemo(rt, args, w); return true;
     case 27: encode_complex_echoGroups(rt, args, w); return true;
     case 33: encode_complex_kindEcho(rt, args, w); return true;
-    case 30: encode_complex_platformNativeInfo(rt, args, w); return true;
     case 29: encode_complex_tagSet(rt, args, w); return true;
     default: return false; // 동적/알 수 없는 cmd_id — JS 가 Tier 3 fallback 처리
   }
@@ -1911,6 +1949,7 @@ Value decode_by_id(Runtime& rt, uint16_t cmd_id, rc::Reader& r) {
     case 31: return decode_channelDemoBytes(rt, r);
     case 4: return decode_clamp(rt, r);
     case 8: return decode_createItem(rt, r);
+    case 32: return decode_deviceDemo(rt, r);
     case 10: return decode_divide(rt, r);
     case 11: return decode_emitDemo(rt, r);
     case 17: return decode_gauge(rt, r);
@@ -1922,6 +1961,7 @@ Value decode_by_id(Runtime& rt, uint16_t cmd_id, rc::Reader& r) {
     case 38: return decode_parityIndexed(rt, r);
     case 37: return decode_parityResident(rt, r);
     case 36: return decode_parityStore(rt, r);
+    case 30: return decode_platformNativeInfo(rt, r);
     case 9: return decode_processItem(rt, r);
     case 22: return decode_resourceClose(rt, r);
     case 19: return decode_resourceOpen(rt, r);
@@ -1935,10 +1975,8 @@ Value decode_by_id(Runtime& rt, uint16_t cmd_id, rc::Reader& r) {
     case 6: return decode_sumList(rt, r);
     case 7: return decode_toUpper(rt, r);
     case 28: return decode_wideAgg(rt, r);
-    case 32: return decode_complex_deviceDemo(rt, r);
     case 27: return decode_complex_echoGroups(rt, r);
     case 33: return decode_complex_kindEcho(rt, r);
-    case 30: return decode_complex_platformNativeInfo(rt, r);
     case 29: return decode_complex_tagSet(rt, r);
     default: throw JSError(rt, "rustra: no C++ codec for cmd_id " + std::to_string(cmd_id));
   }
@@ -1954,6 +1992,7 @@ bool has_static_codec(const std::string& name) {
   if (name == "channelDemoBytes") return true;
   if (name == "clamp") return true;
   if (name == "createItem") return true;
+  if (name == "deviceDemo") return true;
   if (name == "divide") return true;
   if (name == "emitDemo") return true;
   if (name == "gauge") return true;
@@ -1965,6 +2004,7 @@ bool has_static_codec(const std::string& name) {
   if (name == "parityIndexed") return true;
   if (name == "parityResident") return true;
   if (name == "parityStore") return true;
+  if (name == "platformNativeInfo") return true;
   if (name == "processItem") return true;
   if (name == "resourceClose") return true;
   if (name == "resourceOpen") return true;
@@ -1978,10 +2018,8 @@ bool has_static_codec(const std::string& name) {
   if (name == "sumList") return true;
   if (name == "toUpper") return true;
   if (name == "wideAgg") return true;
-  if (name == "deviceDemo") return true;
   if (name == "echoGroups") return true;
   if (name == "kindEcho") return true;
-  if (name == "platformNativeInfo") return true;
   if (name == "tagSet") return true;
   return false;
 }
@@ -1997,6 +2035,7 @@ bool has_static_codec_id(uint16_t cmd_id) {
     case 31: return true;
     case 4: return true;
     case 8: return true;
+    case 32: return true;
     case 10: return true;
     case 11: return true;
     case 17: return true;
@@ -2008,6 +2047,7 @@ bool has_static_codec_id(uint16_t cmd_id) {
     case 38: return true;
     case 37: return true;
     case 36: return true;
+    case 30: return true;
     case 9: return true;
     case 22: return true;
     case 19: return true;
@@ -2021,10 +2061,8 @@ bool has_static_codec_id(uint16_t cmd_id) {
     case 6: return true;
     case 7: return true;
     case 28: return true;
-    case 32: return true;
     case 27: return true;
     case 33: return true;
-    case 30: return true;
     case 29: return true;
     default: return false;
   }
