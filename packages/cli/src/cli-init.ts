@@ -108,6 +108,7 @@ export async function runInit(args: string[]): Promise<void> {
   console.log(`  cd ${directories[0]}`);
   console.log('  cargo build   # first build downloads deps and takes a few minutes');
   console.log('  bun install');
+  console.log('  bun run doctor   # environment + config checks');
   console.log('  bun run codegen');
   console.log('  bun run demo');
   console.log('  cargo run');
