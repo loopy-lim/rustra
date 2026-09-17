@@ -68,6 +68,8 @@ export async function measureAsyncPair(
       for (let i = 0; i < options.batch; i++) {
         const promise = call();
         if (!thenable(promise)) throw new Error('async lane did not return Promise');
+        // 이전 호출의 완료를 기다린 뒤 다음 호출을 측정하는 순차 처리가 계약이다.
+        // react-doctor-disable-next-line async-await-in-loop
         result.checksum += consume(await promise);
       }
       if (round >= 0) result[key].push(((clock() - start) * 1e6) / options.batch);
