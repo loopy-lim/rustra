@@ -25,6 +25,24 @@ where
     O: Serialize + JsonSchema + 'static,
     F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
 {
+    build_command_inner(command_id, handler, None)
+}
+
+pub(crate) fn build_function_command<I, O, F>(command_id: u16, handler: F, arity: u8) -> Command
+where
+    I: DeserializeOwned + JsonSchema + 'static,
+    O: Serialize + JsonSchema + 'static,
+    F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+{
+    build_command_inner(command_id, handler, Some(arity))
+}
+
+fn build_command_inner<I, O, F>(command_id: u16, handler: F, function_args: Option<u8>) -> Command
+where
+    I: DeserializeOwned + JsonSchema + 'static,
+    O: Serialize + JsonSchema + 'static,
+    F: Fn(I) -> crate::Result<O> + Send + Sync + 'static,
+{
     let (input_schema, input_defs) = schema_value::<I>();
     let (output_schema, output_defs) = schema_value::<O>();
     let mut definitions = input_defs;
@@ -71,6 +89,7 @@ where
         &handler,
         js_codec_supported,
         complex_codec_supported,
+        function_args.is_some(),
     );
     let frame_into_handler = build_frame_into_handler::<I, O, F>(
         &input_schema,
@@ -79,6 +98,7 @@ where
         &handler,
         js_codec_supported,
         complex_codec_supported,
+        function_args.is_some(),
     );
 
     // ── 스칼라 직결 raw 핸들러 ──
@@ -90,6 +110,7 @@ where
     Command {
         command_id,
         description: None,
+        function_args,
         input_type: unit_or_contract_name::<I>(),
         output_type: unit_or_contract_name::<O>(),
         input_schema: Arc::new(input_schema),

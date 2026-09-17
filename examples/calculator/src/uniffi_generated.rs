@@ -1490,6 +1490,17 @@ pub mod uniffi_api {
     }
 
     // ── 커맨드별 타입 래퍼 — 스키마 등록 순서 ──
+    /// `add` — 일반 함수의 UniFFI 위치 인수 래퍼.
+    #[uniffi::export]
+    #[allow(non_snake_case)]
+    pub fn add(arg0: i32, arg1: i32) -> Result<i32, RustraCommandFailure> {
+        let args = serde_json::to_value((arg0, arg1)).map_err(rustra::RustraError::internal)?;
+        let out = package().invoke_json("add", args)?;
+        serde_json::from_value::<i32>(out)
+            .map_err(rustra::RustraError::internal)
+            .map_err(RustraCommandFailure::from)
+    }
+
     /// `addNumbers` — `crate::add_numbers` 커맨드의 UniFFI 타입 래퍼.
     #[uniffi::export]
     #[allow(non_snake_case)]
@@ -1663,6 +1674,17 @@ pub mod uniffi_api {
         Ok(out.into())
     }
 
+    /// `greetPerson` — 일반 함수의 UniFFI 위치 인수 래퍼.
+    #[uniffi::export]
+    #[allow(non_snake_case)]
+    pub fn greetPerson(arg0: String) -> Result<String, RustraCommandFailure> {
+        let args = serde_json::to_value((arg0,)).map_err(rustra::RustraError::internal)?;
+        let out = package().invoke_json("greetPerson", args)?;
+        serde_json::from_value::<String>(out)
+            .map_err(rustra::RustraError::internal)
+            .map_err(RustraCommandFailure::from)
+    }
+
     /// `isEven` — `crate::is_even` 커맨드의 UniFFI 타입 래퍼.
     #[uniffi::export]
     #[allow(non_snake_case)]
@@ -1715,6 +1737,39 @@ pub mod uniffi_api {
                 &input.into(),
             )?;
         Ok(out.into())
+    }
+
+    /// `readRemembered` — 일반 함수의 UniFFI 위치 인수 래퍼.
+    #[uniffi::export]
+    #[allow(non_snake_case)]
+    pub fn readRemembered() -> Result<i32, RustraCommandFailure> {
+        let args = serde_json::to_value(()).map_err(rustra::RustraError::internal)?;
+        let out = package().invoke_json("readRemembered", args)?;
+        serde_json::from_value::<i32>(out)
+            .map_err(rustra::RustraError::internal)
+            .map_err(RustraCommandFailure::from)
+    }
+
+    /// `remember` — 일반 함수의 UniFFI 위치 인수 래퍼.
+    #[uniffi::export]
+    #[allow(non_snake_case)]
+    pub fn remember(arg0: i32) -> Result<(), RustraCommandFailure> {
+        let args = serde_json::to_value((arg0,)).map_err(rustra::RustraError::internal)?;
+        let out = package().invoke_json("remember", args)?;
+        serde_json::from_value::<()>(out)
+            .map_err(rustra::RustraError::internal)
+            .map_err(RustraCommandFailure::from)
+    }
+
+    /// `reset` — 일반 함수의 UniFFI 위치 인수 래퍼.
+    #[uniffi::export]
+    #[allow(non_snake_case)]
+    pub fn reset() -> Result<(), RustraCommandFailure> {
+        let args = serde_json::to_value(()).map_err(rustra::RustraError::internal)?;
+        let out = package().invoke_json("reset", args)?;
+        serde_json::from_value::<()>(out)
+            .map_err(rustra::RustraError::internal)
+            .map_err(RustraCommandFailure::from)
     }
 
     /// `resourceClose` — `crate::resource_close` 커맨드의 UniFFI 타입 래퍼.
@@ -1785,6 +1840,17 @@ pub mod uniffi_api {
                 &input.into(),
             )?;
         Ok(out.into())
+    }
+
+    /// `safeDivide` — 일반 함수의 UniFFI 위치 인수 래퍼.
+    #[uniffi::export]
+    #[allow(non_snake_case)]
+    pub fn safeDivide(arg0: f64, arg1: f64) -> Result<f64, RustraCommandFailure> {
+        let args = serde_json::to_value((arg0, arg1)).map_err(rustra::RustraError::internal)?;
+        let out = package().invoke_json("safeDivide", args)?;
+        serde_json::from_value::<f64>(out)
+            .map_err(rustra::RustraError::internal)
+            .map_err(RustraCommandFailure::from)
     }
 
     /// `scoreTotal` — `crate::score_total` 커맨드의 UniFFI 타입 래퍼.

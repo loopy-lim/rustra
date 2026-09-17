@@ -34,6 +34,7 @@ export type RustraCalculatorType = {
   invokeSync(command: string, argsJson?: string): string;
   addSync(a: number, b: number): number;
   writeBenchmarkReceipt?(receipt: string): string;
+  writeFunctionReceipt?(receipt: string): string;
 };
 
 export default RustraCalculator as RustraCalculatorType;

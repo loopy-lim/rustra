@@ -20,14 +20,18 @@ export function generateComplexDecodeExpr(
     if (!field.refType) return `${indent}// unknown struct field: ${field.name}`;
     const structDef = definitions[field.refType];
     if (!structDef) return `${indent}// missing definition for ${field.refType}`;
+    // A nested struct must assign into the enclosing object, not shadow it.
+    const objectName = /^_obj[0-9]*(?:\.|\[)/.test(lvalue) ? `_obj${indent.length}` : '_obj';
     const lines = [
       `${indent}{`,
-      `${indent}  const _obj: ${field.refType} = {} as ${field.refType};`,
+      `${indent}  const ${objectName}: ${field.refType} = {} as ${field.refType};`,
     ];
     for (const subField of collectPostcardFields(structDef, definitions).fields) {
-      lines.push(generateField(subField, `_obj.${subField.name}`, definitions, `${indent}  `));
+      lines.push(
+        generateField(subField, `${objectName}.${subField.name}`, definitions, `${indent}  `),
+      );
     }
-    lines.push(`${indent}  ${lvalue} = _obj;`, `${indent}}`);
+    lines.push(`${indent}  ${lvalue} = ${objectName};`, `${indent}}`);
     return lines.join('\n');
   }
   if (field.kind === 'vec_string') {
@@ -35,7 +39,7 @@ export function generateComplexDecodeExpr(
   }
   if (field.kind.startsWith('map_')) return generateMapDecodeExpr(field, lvalue, indent);
   if (field.kind === 'tuple') {
-    const lines = [`${indent}{`];
+    const lines = [`${indent}{`, `${indent}  ${lvalue} = [] as unknown as typeof ${lvalue};`];
     (field.tupleItems ?? []).forEach((item, index) => {
       lines.push(generateField(item, `${lvalue}[${index}]`, definitions, `${indent}  `));
     });

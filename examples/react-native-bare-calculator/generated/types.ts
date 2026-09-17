@@ -33,6 +33,10 @@ export type OpKind = 'Clear' | {
  */
 export type ResourceHandle = number;
 
+export type Tuple_of_int32_and_int32 = [number, number];
+
+export type int32 = number;
+
 export type AddNumbersInput = {
   a: number | bigint;
   b: number | bigint;
@@ -165,6 +169,10 @@ export type GreetOutput = {
   message: string;
 };
 
+export type Tuple_of_String = [string];
+
+export type String = string;
+
 export type IsEvenInput = {
   n: number | bigint;
 };
@@ -211,6 +219,8 @@ export type ProcessItemOutput = {
   item: Item;
 };
 
+export type Tuple_of_int32 = [number];
+
 export type ResourceCloseInput = {
   handle: ResourceHandle;
 };
@@ -256,6 +266,10 @@ export type RegistryDemoOutput = {
   frozen: boolean;
   message: string;
 };
+
+export type Tuple_of_double_and_double = [number, number];
+
+export type double = number;
 
 export type ScoreTotalInput = {
   scores: Record<string, number | bigint>;

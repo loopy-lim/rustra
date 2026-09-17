@@ -19,42 +19,67 @@ export function unwrapOptionSchema(schema: JsonSchema): JsonSchema | null {
   return null;
 }
 
+export function postcardField(
+  name: string,
+  source: JsonSchema,
+  definitions: Record<string, JsonSchema>,
+  depth = 0,
+): PostcardField | null {
+  if (depth > 8) return null;
+  if (source.allOf?.length === 1)
+    return postcardField(name, source.allOf[0], definitions, depth + 1);
+  if (source.$ref) {
+    const resolved = definitions[refTypeName(source.$ref)];
+    if (!resolved) return null;
+    if (resolved.type !== 'object' || !resolved.properties || resolved.additionalProperties)
+      return postcardField(name, resolved, definitions, depth + 1);
+  }
+  const kind = classifyPostcardField(source, definitions);
+  if (!kind) return null;
+  const field: PostcardField = { name, kind };
+  if (kind === 'enum_str') field.enumVariants = source.enum as string[];
+  if (kind === 'struct' && source.$ref) field.refType = refTypeName(source.$ref);
+  if (kind === 'tuple' && Array.isArray(source.items)) {
+    const items = source.items.map((item) => postcardField('_', item, definitions, depth + 1));
+    if (items.some((item) => item === null)) return null;
+    field.tupleItems = items as PostcardField[];
+  }
+  if (kind === 'vec_struct' || kind === 'option_struct') {
+    const inner = kind === 'option_struct' ? unwrapOptionSchema(source) : source.items;
+    const ref = inner && !Array.isArray(inner) ? inner.$ref : undefined;
+    if (!ref) return null;
+    field.refType = refTypeName(ref);
+  }
+  return field;
+}
+
 export function collectPostcardFields(
   schema: JsonSchema,
   definitions: Record<string, JsonSchema>,
 ): { fields: PostcardField[]; unsupported: string[] } {
+  const entries =
+    schema.type === 'null'
+      ? []
+      : schema.type === 'object' && !schema.additionalProperties
+        ? Object.entries(schema.properties ?? {})
+        : schema.type === 'array' && Array.isArray(schema.items)
+          ? schema.items.map((item, i) => [String(i), item] as const)
+          : [['', schema] as const];
   const fields: PostcardField[] = [];
   const unsupported: string[] = [];
-  for (const [name, propSchema] of Object.entries(schema.properties ?? {})) {
-    const kind = classifyPostcardField(propSchema, definitions);
-    if (!kind) {
-      unsupported.push(name);
-      continue;
-    }
-    const field: PostcardField = { name, kind };
-    if (kind === 'enum_str' && Array.isArray(propSchema.enum)) {
-      field.enumVariants = propSchema.enum.filter(
-        (value): value is string => typeof value === 'string',
-      );
-    }
-    if (kind === 'struct' && propSchema.$ref) field.refType = refTypeName(propSchema.$ref);
-    if (kind === 'tuple' && Array.isArray(propSchema.items)) {
-      field.tupleItems = propSchema.items
-        .map((item) => {
-          const itemKind = classifyPostcardField(item, definitions);
-          return itemKind ? ({ name: '_', kind: itemKind } as PostcardField) : null;
-        })
-        .filter((item): item is PostcardField => item !== null);
-    }
-    if ((kind === 'vec_struct' || kind === 'option_struct') && !field.refType) {
-      const items = propSchema.items;
-      const itemsRef = items && !Array.isArray(items) ? items.$ref : undefined;
-      const innerRef = itemsRef ?? propSchema.anyOf?.find((item) => item.$ref)?.$ref ?? undefined;
-      if (innerRef) field.refType = refTypeName(innerRef);
-    }
-    fields.push(field);
+  for (const [name, source] of entries) {
+    const field = postcardField(name, source, definitions);
+    if (field) fields.push(field);
+    else unsupported.push(name);
   }
   return { fields, unsupported };
+}
+
+/** Root tuples are positional; all other non-object roots are a single value. */
+export function postcardRootAccess(schema: JsonSchema, root: string, name: string): string {
+  if (schema.type === 'object' && !schema.additionalProperties) return `${root}.${name}`;
+  if (schema.type === 'array' && Array.isArray(schema.items)) return `${root}[${name}]`;
+  return root;
 }
 
 export function refTypeName(ref: string): string {
@@ -120,4 +145,26 @@ export function collectAllDefinitions(schema: PackageSchema): Record<string, Jso
     Object.assign(definitions, command.outputSchema.definitions);
   }
   return definitions;
+}
+
+/** Fixed homogeneous arrays must not use a length-prefixed vector emitter. */
+export function hasFixedArray(
+  schema: JsonSchema,
+  definitions: Record<string, JsonSchema>,
+  depth = 0,
+): boolean {
+  if (depth > 8) return false;
+  if (schema.$ref) {
+    const target = definitions[refTypeName(schema.$ref)];
+    return !!target && hasFixedArray(target, definitions, depth + 1);
+  }
+  if (
+    schema.type === 'array' &&
+    schema.items &&
+    !Array.isArray(schema.items) &&
+    Number.isInteger(schema.minItems) &&
+    schema.minItems === schema.maxItems
+  )
+    return true;
+  return schemaChildren(schema).some((child) => hasFixedArray(child, definitions, depth + 1));
 }

@@ -1,0 +1,1054 @@
+{
+  "fingerprint": "65c339a0ba66770cf2c7b57fbf31a89477776c7039c2768521295210668322f1",
+  "inputCount": 262,
+  "files": [
+    {
+      "path": "Cargo.lock",
+      "sha256": "14944226a77b0135c8520b7dc24a5f39c7af4887cd57d483fa3d1180ea96bc2a"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha256": "85d3002f3664499f6cd4daeb2fac4fdd041b9058316d4a4cebe70c9d69dc43ac"
+    },
+    {
+      "path": "bun.lock",
+      "sha256": "add007461d91064ab92ad376fa74f17da55c17794f07f2d50537f528390c3e94"
+    },
+    {
+      "path": "crates/rustra-macros/Cargo.toml",
+      "sha256": "2fd304cf69ea3335d1c226041b8bd456e5ea2f89b31876f27da3de5ac12a6b7f"
+    },
+    {
+      "path": "crates/rustra-macros/src/lib.rs",
+      "sha256": "f9a55f5880a6d7b41448e0fceb90af863693bee110449c4fdf88d9a6bd991794"
+    },
+    {
+      "path": "crates/rustra-macros/src/macro_bridge_type.rs",
+      "sha256": "bf73882db0c72d2c65c96c4161db0ba2499d6ebafef456b3b00e9a9c4018f731"
+    },
+    {
+      "path": "crates/rustra-macros/src/macro_build.rs",
+      "sha256": "4488f6add790d8a1f503b487939b7ef654327f515835a8e21282f1c3e7fcb702"
+    },
+    {
+      "path": "crates/rustra-macros/src/macro_command.rs",
+      "sha256": "af6f1c416048aff3573809ec440adb610bdc6044546bea1e57eacafa727d40ff"
+    },
+    {
+      "path": "crates/rustra-macros/src/macro_command_support.rs",
+      "sha256": "fd1737ba9de81b9654397ef2619a32849d3788eee0e838f547ed1dbc36da0ac5"
+    },
+    {
+      "path": "crates/rustra-macros/src/macro_register.rs",
+      "sha256": "96b3493cc5f412076525eac9858c517c97244c78adf2974e076b1a071c76f488"
+    },
+    {
+      "path": "crates/rustra/Cargo.toml",
+      "sha256": "f2784fb48b2fad62703d661680b1626c0cf21a8cad9fbe45e2a3e7da2490a38a"
+    },
+    {
+      "path": "crates/rustra/src/builder.rs",
+      "sha256": "1d7b9d9acfdea47379fed9323e0b3f5028ed4265cd4e6131189946b4925c31be"
+    },
+    {
+      "path": "crates/rustra/src/builder_build.rs",
+      "sha256": "4d07bade1ecca8058c537036a77222e0ec44ab1b619eeb2e2a5426952e6bb66b"
+    },
+    {
+      "path": "crates/rustra/src/builder_capabilities.rs",
+      "sha256": "ab41afb673d7de910c82e7fe886a1b12812f5d60bb83bcdc0edfdbaa7609ea4a"
+    },
+    {
+      "path": "crates/rustra/src/builder_commands.rs",
+      "sha256": "7436fe15fe3af4f3c082beaaa7628ea1f24b9cf29aec2d7c8aa9a35775599d67"
+    },
+    {
+      "path": "crates/rustra/src/builder_devices.rs",
+      "sha256": "5ef78bad666b98a7067b8f87350b7f726da37b9527e0e8a7909564641e792564"
+    },
+    {
+      "path": "crates/rustra/src/builder_errors.rs",
+      "sha256": "00133f82d2fa1911399ee38ccc820915cbaeb12efb1a9b53bcb291be2ed43f13"
+    },
+    {
+      "path": "crates/rustra/src/builder_events.rs",
+      "sha256": "4634c527110f7b88ceef222ca75938fb9f102190f6b2542f6b2cbba5d5efc077"
+    },
+    {
+      "path": "crates/rustra/src/builder_functions.rs",
+      "sha256": "b563748f6c64316985e772a39e567e42d8fb0307ca4cba1ba9497d7602b34e12"
+    },
+    {
+      "path": "crates/rustra/src/builder_platform.rs",
+      "sha256": "ece023d44ef51fd1ab537487aa3b2bd3b360ff3bd85ab23841378dbe5e052819"
+    },
+    {
+      "path": "crates/rustra/src/byte_buffer.rs",
+      "sha256": "d54dd729f2e5173755f08c1c8d9a918dd51cbe96324cc049e1b7606a71b4fecd"
+    },
+    {
+      "path": "crates/rustra/src/cancel.rs",
+      "sha256": "f94bcc5a42e8239a5a6cb1634cf888ae713f4df0dd16275760ec7c6f8895258b"
+    },
+    {
+      "path": "crates/rustra/src/cancel_tests.rs",
+      "sha256": "647937485a2e22f4d1ce2b6d1e09f03560893762cb915c1ac879941c754ab0e5"
+    },
+    {
+      "path": "crates/rustra/src/channels.rs",
+      "sha256": "65fcbaf8f74a948c6153f1d2f55acfd635710fa5ffe4cf99a5a6e9e1aa879a45"
+    },
+    {
+      "path": "crates/rustra/src/channels_handles.rs",
+      "sha256": "1b7e722f0214bb0389476994a60c0ae158ac28d6ed4651dec9408cdd9b606234"
+    },
+    {
+      "path": "crates/rustra/src/channels_host.rs",
+      "sha256": "a38888e649471269236eb2508e2b3b118ae0f6ac82856ca8a75ec94b0069a4a0"
+    },
+    {
+      "path": "crates/rustra/src/channels_tests.rs",
+      "sha256": "c73e48f96396126f30137152912518106a8248420ab3383b00402199cf25ad2f"
+    },
+    {
+      "path": "crates/rustra/src/codegen.rs",
+      "sha256": "e51b046be96accd505a37d4d3daef226a91bcd072abb9e33d92fd6e2fed7e3cb"
+    },
+    {
+      "path": "crates/rustra/src/codegen_names.rs",
+      "sha256": "3f70b974be1e86e4afa325cb6cedc89c93aede46e14be547a069821c5a932210"
+    },
+    {
+      "path": "crates/rustra/src/codegen_objects.rs",
+      "sha256": "da5139a276726bf48b885d48772bae1585e590722371551b750d721d1a7eb1dd"
+    },
+    {
+      "path": "crates/rustra/src/codegen_types.rs",
+      "sha256": "6f8a2bf4a030f56fa405dadf2ae55c83da3a0bef953bb02c7e4c5867cabf47ac"
+    },
+    {
+      "path": "crates/rustra/src/command.rs",
+      "sha256": "63bc863f0521992ab07062e60eb6343b039508d238c40f607c02c2baabf1ea09"
+    },
+    {
+      "path": "crates/rustra/src/command_build.rs",
+      "sha256": "49d1f2c5cb5502973d0bab0985a51503de7bddffd2755c800c613311fd8585a6"
+    },
+    {
+      "path": "crates/rustra/src/command_handlers.rs",
+      "sha256": "b079f538c6da09a6186c1505d422d8350de1b639497470f25e5fddb95bd826a7"
+    },
+    {
+      "path": "crates/rustra/src/command_into.rs",
+      "sha256": "a0cd8afd8ff15d87c27bf31aee48c0577db8138a6b74f0434b598a8eed85a663"
+    },
+    {
+      "path": "crates/rustra/src/command_raw.rs",
+      "sha256": "0d70bd117aca36dae051487070f854bc1ea972f2046019b0f896badce2bf1e9e"
+    },
+    {
+      "path": "crates/rustra/src/command_raw_wire.rs",
+      "sha256": "0d2dbae6ed0e1c165de80f291896d7457c6c9fe3d18f0f37896c3b64e611e3c0"
+    },
+    {
+      "path": "crates/rustra/src/command_schema.rs",
+      "sha256": "3532b73f0dbc54957241abd50534e7693aed19a30cab1aa9d0e1cd35b41c89fb"
+    },
+    {
+      "path": "crates/rustra/src/command_types.rs",
+      "sha256": "93e8261b2bd3db5379b75bfd0b48a4ec5b710eed91fb5e7e040de019f9962e1a"
+    },
+    {
+      "path": "crates/rustra/src/complex_codec.rs",
+      "sha256": "5e2d1ec45e107c444498d99a174c4884eab242b2f2ce3c766a511696366e25f5"
+    },
+    {
+      "path": "crates/rustra/src/complex_codec_decode.rs",
+      "sha256": "17efa6919755a11a7e7c73ffc3876087062059f6fae28935b6ad363813ed527c"
+    },
+    {
+      "path": "crates/rustra/src/complex_codec_encode.rs",
+      "sha256": "9db942fa3f823f02078e98d8e24d3c4957ad474dbb35e664082790c7b859314e"
+    },
+    {
+      "path": "crates/rustra/src/complex_codec_encode_object.rs",
+      "sha256": "0e720545f05d45ae78844a0bfb9caef03f880b7fc97bd66e26364f50e2626d13"
+    },
+    {
+      "path": "crates/rustra/src/complex_codec_schema.rs",
+      "sha256": "029c8737aa2b4c09a2fecbe50c2c0ea4f1bd8d2f674917cdf5c8bc0c55f318dd"
+    },
+    {
+      "path": "crates/rustra/src/complex_codec_tests.rs",
+      "sha256": "d9956c4aec695c1776cb84c5e34e233e6cc60774c1b6669ca548325e5d34a0fd"
+    },
+    {
+      "path": "crates/rustra/src/complex_codec_variants.rs",
+      "sha256": "e7e15303a16f654b811c21ed2e87e7a3a870b26bc4af61a5129c1a89a080561c"
+    },
+    {
+      "path": "crates/rustra/src/complex_codec_wire.rs",
+      "sha256": "a465fc8471049da0fc0fd45f604f8ede0e7b1513d9cf97edef23fdd6277a43b3"
+    },
+    {
+      "path": "crates/rustra/src/complex_schema_ir.rs",
+      "sha256": "bdce05a934c398ea02dca89b712d7ddb819ca5c7c6fcb8ee2fab6cf06c88e3c1"
+    },
+    {
+      "path": "crates/rustra/src/complex_schema_ir_compile.rs",
+      "sha256": "1fab09c84bad184f5984d1639277e618a5fdaf717e69dd642498279c4aff8bf8"
+    },
+    {
+      "path": "crates/rustra/src/complex_serde.rs",
+      "sha256": "6abfef306d13bbbe50098dc14208464eed70cf2d60842dde23ef459ad9cfbe92"
+    },
+    {
+      "path": "crates/rustra/src/complex_serde_de_access.rs",
+      "sha256": "a9eb5faf43dd9e4b36ba564eab075f785acaca601d761979133624c72e5946cd"
+    },
+    {
+      "path": "crates/rustra/src/complex_serde_de_aux.rs",
+      "sha256": "04fcf5eebaea47e083bc37d3816e5da01c8ac65bd9bd62e393a69282d3257566"
+    },
+    {
+      "path": "crates/rustra/src/complex_serde_de_core.rs",
+      "sha256": "9b117440c89df020f30029371e42b795fee31ff59b1a8143b9b67de8f2cb22e0"
+    },
+    {
+      "path": "crates/rustra/src/complex_serde_de_enum.rs",
+      "sha256": "4775541fd7da48d05e02c6ee30fe7e21b2fd45e6b5d2dabf566d9a19cb45c698"
+    },
+    {
+      "path": "crates/rustra/src/complex_serde_ser_access.rs",
+      "sha256": "33971ac15b5e018aac0bb8337d625fe8464637bfeee691655131d7f6d787a7b1"
+    },
+    {
+      "path": "crates/rustra/src/complex_serde_ser_core.rs",
+      "sha256": "b3de3937dc847b456323090b40418bde28c0a0441d23dbdd923f99d3a22b8752"
+    },
+    {
+      "path": "crates/rustra/src/complex_serde_ser_entry.rs",
+      "sha256": "8b31936173567391867ceaf479763f487fe60204a4a408e7ae6b04dd1336cece"
+    },
+    {
+      "path": "crates/rustra/src/complex_serde_ser_map_key.rs",
+      "sha256": "ab97811e89fc5df4d5b99adc46c12ad684ad19b1a87ea50d3eeff1cc47fd3f19"
+    },
+    {
+      "path": "crates/rustra/src/complex_serde_ser_struct.rs",
+      "sha256": "cce9321b7ff54afa9b05fdbc5b7852ee38912c90bb2d216769a190eb7d7553c8"
+    },
+    {
+      "path": "crates/rustra/src/complex_serde_support.rs",
+      "sha256": "efab548b444d3a2b98d9c8b09e13dde46f9b1d6e9dcf2c00b27e71eb34fb7bba"
+    },
+    {
+      "path": "crates/rustra/src/complex_serde_tests.rs",
+      "sha256": "f5a4dd693efc99a7b171b4396d1b8a9fb4e23ff1865a12c7312c977d113059b3"
+    },
+    {
+      "path": "crates/rustra/src/device_capabilities.rs",
+      "sha256": "18d9710bbad7081ff96eea53850b901e880776f6c41e9fed9bcc464673c9be56"
+    },
+    {
+      "path": "crates/rustra/src/entry.rs",
+      "sha256": "3d279dc0a1fd93e8a1c3f124996ac900a8164340f4d5d6362db0052d213c32ba"
+    },
+    {
+      "path": "crates/rustra/src/error.rs",
+      "sha256": "a40509e78e8e0509d82e41bff8e47ea1ba53dfb50ac395bfbeacf4aaade65c94"
+    },
+    {
+      "path": "crates/rustra/src/error_tests.rs",
+      "sha256": "d8940ed29d4aab3f565888c8c6690291cd27ddd0429018ab68406566af3d363f"
+    },
+    {
+      "path": "crates/rustra/src/events.rs",
+      "sha256": "35f95fc4f026c370f90d9ea8af6aec2dbdfe5cea3d1b441ebe1d4dae73e0f960"
+    },
+    {
+      "path": "crates/rustra/src/events_bus.rs",
+      "sha256": "6ded4835e9294828870f31d9f54e9a14ac22dbda62142b9de73627067a054ef2"
+    },
+    {
+      "path": "crates/rustra/src/events_state.rs",
+      "sha256": "ede010f15a1c7015f36f134d97ff8cce3eb3f31666177b95102b7c3c00ecb977"
+    },
+    {
+      "path": "crates/rustra/src/events_tests.rs",
+      "sha256": "8a312175bbc1fd314d3ec2bd1d90d163e7523639b767361632000f337d01d849"
+    },
+    {
+      "path": "crates/rustra/src/executor.rs",
+      "sha256": "9689754dabb6a44072f040dfc3d616a452de2aed3dc148f22893d7b1298176e0"
+    },
+    {
+      "path": "crates/rustra/src/ffi.rs",
+      "sha256": "2aa9ece5287598fc70d7fd9cb8060ac5729dedafb2db4a0fc609014d13abc30b"
+    },
+    {
+      "path": "crates/rustra/src/ffi_async_entries.rs",
+      "sha256": "c25743e37fc657ec6d6f5b8ae5b447d85e814fc55d77a12c71c87cb77312a165"
+    },
+    {
+      "path": "crates/rustra/src/ffi_buffer_entries.rs",
+      "sha256": "aabd16490c194a4bf268729cf60e5d217e7448ab02baa47ae36866ca9b18770c"
+    },
+    {
+      "path": "crates/rustra/src/ffi_channel.rs",
+      "sha256": "26b631413e02a2bb642a8caa042887bc8e2926b8ff0a5b8bdf70ea5ace71b4e0"
+    },
+    {
+      "path": "crates/rustra/src/ffi_dispatch.rs",
+      "sha256": "21c0f82d75013ed0bd3589e520da059fa6134a99052b0a0a4f852cf33a6139fd"
+    },
+    {
+      "path": "crates/rustra/src/ffi_event_core.rs",
+      "sha256": "321835c9de365466b4ec8d7d205ed1c9dfd830a04d0b5a292e76a2e9bc39a356"
+    },
+    {
+      "path": "crates/rustra/src/ffi_event_entries.rs",
+      "sha256": "36b0d5a1333475aa5389d049434913d4733a013cca56db4abd7ebb35d52b5c52"
+    },
+    {
+      "path": "crates/rustra/src/ffi_free_guard.rs",
+      "sha256": "d03ac82802cff9b633d2644790018117bd591c4f4eca0fc54b1689019a296943"
+    },
+    {
+      "path": "crates/rustra/src/ffi_hot_reload.rs",
+      "sha256": "cbcbc73b79b3256d4618578b1e1bcf210ad6efe05716e7fb8dde351c6ba57ad2"
+    },
+    {
+      "path": "crates/rustra/src/ffi_hot_reload_tests.rs",
+      "sha256": "f68c23733f36bab3fb183a0f8a33626664a4b97b0b9df7b8a50f5a34a094afe5"
+    },
+    {
+      "path": "crates/rustra/src/ffi_lifecycle_entries.rs",
+      "sha256": "602ac1e2dddbeab592372ef519dcd5f28af1b7191f4b5cdb108a2c13cdc0666e"
+    },
+    {
+      "path": "crates/rustra/src/ffi_pool.rs",
+      "sha256": "68945451b5689665594aa31aa13bf7a7c373e5274d1adbbdcfa561e8f96fda47"
+    },
+    {
+      "path": "crates/rustra/src/ffi_prelude.rs",
+      "sha256": "98fa904de5bb39eeac065788af1f63a43b626739ae71ad8e4510ac88d78065d3"
+    },
+    {
+      "path": "crates/rustra/src/ffi_schema_entries.rs",
+      "sha256": "df7c68931558ab418150fc2f707c1ae86909fa53a721bbfbdcbf07c2beef56d1"
+    },
+    {
+      "path": "crates/rustra/src/ffi_snapshot.rs",
+      "sha256": "7fa0049d9983ac28a791458c50e29ebe927250274410d61bc5aef01c91f38b90"
+    },
+    {
+      "path": "crates/rustra/src/ffi_snapshot_tests.rs",
+      "sha256": "3e96b87f8a070e5d636e3d4d426232102fd90e56c8e74e35ab3140d2bff95de5"
+    },
+    {
+      "path": "crates/rustra/src/ffi_sync_entries.rs",
+      "sha256": "06f2598dd0e656c8150e9ad8cac033db55038337c3252ab7a01bee9d2024bf72"
+    },
+    {
+      "path": "crates/rustra/src/ffi_tests.rs",
+      "sha256": "479b96f66dc3b4a56b55d22d69d42de6181b859463565ce27e3b24cadbd0aab4"
+    },
+    {
+      "path": "crates/rustra/src/ffi_typed_async.rs",
+      "sha256": "c043acecd09a360a3562982f0f18fc3745ed14a7a5bbc356ee8bc57e5c6c3544"
+    },
+    {
+      "path": "crates/rustra/src/ffi_typed_buffer.rs",
+      "sha256": "62383dd9c5cc5f5c787fdfa6d19c251f593e576bcdf4f10646af4511b759b3b1"
+    },
+    {
+      "path": "crates/rustra/src/ffi_typed_entries.rs",
+      "sha256": "8f217d5c52c7c0f3030478271fe4344b7c745dba1d28bb8986666eb7aa3806a8"
+    },
+    {
+      "path": "crates/rustra/src/ffi_workers.rs",
+      "sha256": "a2fe3119a2e06adb89719c0e4a170ed83cc4f69adefaefb922f34ad2afeb97d7"
+    },
+    {
+      "path": "crates/rustra/src/frame_codec.rs",
+      "sha256": "6efb2f41e8e23018ee4587a8d9c118fc99810db680019f42c13b5e745f96d7da"
+    },
+    {
+      "path": "crates/rustra/src/frame_decode.rs",
+      "sha256": "cbe3cf7961895c1cf423fd3b941f333a77aae4c06b015fcd191e8d2fa5043d2d"
+    },
+    {
+      "path": "crates/rustra/src/frame_error.rs",
+      "sha256": "ab0bd1a79eabbbe1471beaf5106c58e458c4838245c7709e34b55019579faadb"
+    },
+    {
+      "path": "crates/rustra/src/frame_fields.rs",
+      "sha256": "5558ab000ba72a54925cbca51437fb5079fc3af97ac345c83b93a08c6d5ccf18"
+    },
+    {
+      "path": "crates/rustra/src/frame_raw.rs",
+      "sha256": "371502f8173673772b0acfddacb6457afe61a6a2a2e8c1e7b6275c734cfee702"
+    },
+    {
+      "path": "crates/rustra/src/frame_response.rs",
+      "sha256": "3bc560f7e3b33ad1ab6f9753f290d44fa77ab3eaa80a6d58da813c6c02cc780f"
+    },
+    {
+      "path": "crates/rustra/src/frame_support.rs",
+      "sha256": "c5f89d7cc87107e3d5b203f456c41c5ab77ac651968ce407b7eaab30e34281ab"
+    },
+    {
+      "path": "crates/rustra/src/frame_support_extra.rs",
+      "sha256": "67707c9a0a38d835f55aa57e11492356c8dc417c994e4d54e871db1d455bda67"
+    },
+    {
+      "path": "crates/rustra/src/frame_tier3.rs",
+      "sha256": "715bd4cbf0ca614a0a88baad60b44c26b12619b80bfa69439aeb6d3c042cc3f4"
+    },
+    {
+      "path": "crates/rustra/src/frame_vec.rs",
+      "sha256": "cff69399feb60c1adefdaa783e50d8f91395ff6b3126cb6d0ed02d03c2f9b657"
+    },
+    {
+      "path": "crates/rustra/src/function.rs",
+      "sha256": "8f6c526278c4898fb9d70023b26e762a52e9a9e69b1c41e0632bf1b686e75ef5"
+    },
+    {
+      "path": "crates/rustra/src/hot_core.rs",
+      "sha256": "5e133b2a5f4fed9dc995932f343823726e6e019b9d561870f92c4576ae83f64d"
+    },
+    {
+      "path": "crates/rustra/src/hot_core_dylib.rs",
+      "sha256": "88df0982db38ad3a672cc2b2c8f2c9356359a8f279c1df300ca1403bfe47fb8d"
+    },
+    {
+      "path": "crates/rustra/src/hot_core_retention.rs",
+      "sha256": "9bb54c39f306e5f61e5ee5ca2cfa1be9ed6872fd5fe1c7d5dd30cc78c1015eb0"
+    },
+    {
+      "path": "crates/rustra/src/hot_core_tests.rs",
+      "sha256": "4a8e2b1cfbd5a46819951a913853236a59a0e95eab17f5b49c5af43cfde7b244"
+    },
+    {
+      "path": "crates/rustra/src/hot_core_watch.rs",
+      "sha256": "80e4dd98e0ce2627f44e80b696843380efbc6db26146d1be6a4417d528bd48ca"
+    },
+    {
+      "path": "crates/rustra/src/internal_tests.rs",
+      "sha256": "77f2ef05f6a72971a7d0341aeff87cd129fbab465c3533e984b039f3f776a44a"
+    },
+    {
+      "path": "crates/rustra/src/internal_tests/buffer_invoke_tests.rs",
+      "sha256": "24b8168d6ae4e7b1fa10edb9321673af6a06f233b1d2fdc189ffe234e4237f40"
+    },
+    {
+      "path": "crates/rustra/src/internal_tests/builder_devices_tests.rs",
+      "sha256": "f258051568fd6bb03f3be8f6af9261faff476e7d4718a4e0da53bc465cb0ad3a"
+    },
+    {
+      "path": "crates/rustra/src/internal_tests/builder_errors_tests.rs",
+      "sha256": "52f3fb6c19a0434e7825e136629c44b3737e48594e9b6e65da8d3fee6a200f34"
+    },
+    {
+      "path": "crates/rustra/src/internal_tests/builder_platform_tests.rs",
+      "sha256": "5963ae4fcf4dfe24e542b962b7ab2aeac34af4e2e5d51b00d89abfc94e1ef915"
+    },
+    {
+      "path": "crates/rustra/src/internal_tests/complex_codec_adjacent_tests.rs",
+      "sha256": "a9b460c9ea64dcbe469e197baa9042f037f0e27d769a84100c70ed38bc8c8a9c"
+    },
+    {
+      "path": "crates/rustra/src/internal_tests/complex_codec_malformed_tests.rs",
+      "sha256": "6432f82ac765cf6defa774cb459152e307a4b6e4d9fe1ea018d9fd360e159abb"
+    },
+    {
+      "path": "crates/rustra/src/internal_tests/complex_into_tests.rs",
+      "sha256": "96de6f55a1dfa8347b4b7dc2c1ce6c20530bfe2807a399acae1f46a1d414c881"
+    },
+    {
+      "path": "crates/rustra/src/internal_tests/raw_invoke_tests.rs",
+      "sha256": "c7936378dcdec8896f6de1ecf273d0964b400e598d77048bb339b553c634a4a7"
+    },
+    {
+      "path": "crates/rustra/src/internal_tests/runtime_registry_tests.rs",
+      "sha256": "5a5329dd03aee6c237ce053b5ee56515825642f3dfe7d29dd0ce7773308ab657"
+    },
+    {
+      "path": "crates/rustra/src/invoke.rs",
+      "sha256": "47f9140b23fd56930ed6823ab3e55cc40f9f06f46e5734058823a32ba89f046d"
+    },
+    {
+      "path": "crates/rustra/src/invoke_buffer.rs",
+      "sha256": "35ef8cb287684072880ce79bb3608b080ceef9eeb21283aa77746905d08b65d1"
+    },
+    {
+      "path": "crates/rustra/src/invoke_dispatch.rs",
+      "sha256": "5d3819a61ec416c4d43721848f5ec08792af583625d18b31403243198174f8c2"
+    },
+    {
+      "path": "crates/rustra/src/invoke_frame.rs",
+      "sha256": "41b07729de40e7fdb194d150e300e872e064b4be532bb70dc01369a68f09c939"
+    },
+    {
+      "path": "crates/rustra/src/invoke_typed.rs",
+      "sha256": "a4323bc6926dcfa86ac8ddb4a64cfe3984bb2250b96abf607e3ef2c13dd1021d"
+    },
+    {
+      "path": "crates/rustra/src/lib.rs",
+      "sha256": "d0abba25330360189654e55417f07842debe79066f0189c75eef2f80f4a9a48d"
+    },
+    {
+      "path": "crates/rustra/src/limits.rs",
+      "sha256": "928ccd26e88b5496630c8df9eeaf0be7c872d499d489d79e4fadebaa71b9ccf0"
+    },
+    {
+      "path": "crates/rustra/src/package.rs",
+      "sha256": "3bedc9e798445435e406b9540be39ae4521afcb3addb5568eb35018957981995"
+    },
+    {
+      "path": "crates/rustra/src/package_codegen.rs",
+      "sha256": "da97d6c1173c1ecddef627d683426c53efb127333af16bee22d51d2255c64adf"
+    },
+    {
+      "path": "crates/rustra/src/package_commands_gen.rs",
+      "sha256": "dbb3ddecf95d5e6577bc92e13285b858c3ed57c0908c850a4eeb778684c2e09e"
+    },
+    {
+      "path": "crates/rustra/src/package_core.rs",
+      "sha256": "92683dffb983beaaf967a11bf6b544f8ed5c0507766f28ce8ffa10ca8a7e825a"
+    },
+    {
+      "path": "crates/rustra/src/package_events.rs",
+      "sha256": "df6c520e6674280a840022ce4b7ea22cc05f0799de184806762ca2478564df46"
+    },
+    {
+      "path": "crates/rustra/src/package_json.rs",
+      "sha256": "01f285793c381267789b7682c596e1414a129903e635c175be635dce2e163d13"
+    },
+    {
+      "path": "crates/rustra/src/package_schema.rs",
+      "sha256": "c742e12e647384cf46d0bfd3bed0f26c4ae429ba1f20e674f27868eeb8555c1a"
+    },
+    {
+      "path": "crates/rustra/src/package_types.rs",
+      "sha256": "0ec647c585ad53cdfc96a93bb8ea6b8d8eb14530cedba64142cb3eb75ae1231e"
+    },
+    {
+      "path": "crates/rustra/src/package_types_gen.rs",
+      "sha256": "37c3985b253d1ad1152171a4ea4d125c56190cad9a990ba955e20afa57823533"
+    },
+    {
+      "path": "crates/rustra/src/platform.rs",
+      "sha256": "e1c1b55acc9eb918a0f7b41c8e39005a300a8dc6687fc1aea2e72e4a49767602"
+    },
+    {
+      "path": "crates/rustra/src/prelude.rs",
+      "sha256": "4c85efe6d1b767eaeca0ab21e10e11d9fa8c8725e367952af88c9ff1a1db683d"
+    },
+    {
+      "path": "crates/rustra/src/private.rs",
+      "sha256": "4e3680bb25c1ef92ebae946d0e9507addc65610bdab80585e66a57bcafa569ed"
+    },
+    {
+      "path": "crates/rustra/src/registry.rs",
+      "sha256": "7bcfe0c2fe6b78234a86d410c59432a74b2c5821dad5c1983b1af18dde453105"
+    },
+    {
+      "path": "crates/rustra/src/schema.rs",
+      "sha256": "16519be6ad39c044a6295f3fd67bdeac480002dcb9ce3ac8ff1926a66efea053"
+    },
+    {
+      "path": "crates/rustra/src/state.rs",
+      "sha256": "b00783ee53ca2ad5014a6212d1aa8b6a6ca66f5c8b412c34c0f2712f32756895"
+    },
+    {
+      "path": "crates/rustra/src/tauri_channel_ipc.rs",
+      "sha256": "bdcf04bb99a3389a05e2b8c9e7317a9e849d10f3d15c6867132f42a4b8fc100c"
+    },
+    {
+      "path": "crates/rustra/src/tauri_channel_ownership.rs",
+      "sha256": "b503457566ece9cdc57481e49a7c162dc736381230b085542556b470f0e9ee67"
+    },
+    {
+      "path": "crates/rustra/src/tauri_channels.rs",
+      "sha256": "a58c668186641fa04db4ff94c11b9fd987e0886c1cfb6b2743ffd5536b0fba18"
+    },
+    {
+      "path": "crates/rustra/src/tauri_support.rs",
+      "sha256": "50906f59b1aa2fad6772872799352c80d0e6983c5affcd490ad8f3376e291a61"
+    },
+    {
+      "path": "crates/rustra/src/tauri_support_swap_report.rs",
+      "sha256": "f7740ac2e43cc4b1647139ce0e799a22bd60407da6f56726bd2385051c349b16"
+    },
+    {
+      "path": "crates/rustra/src/tauri_support_tests.rs",
+      "sha256": "212df0a27efb3780f0ea69c449a933da4480d57e40be89eb5fce34574de8a856"
+    },
+    {
+      "path": "examples/calculator/Cargo.toml",
+      "sha256": "2773aa4459036577a7667fcdcfd299f2df654e2b2f68dcd8eb522dda63076ba8"
+    },
+    {
+      "path": "examples/calculator/src/bin/generate.rs",
+      "sha256": "12c8d3ea3a387d9228e8908cca9b0225eacd9dd9d71fde110ef30ae9c1e2f262"
+    },
+    {
+      "path": "examples/calculator/src/bin/loop-stdio.rs",
+      "sha256": "f58f2db527d5a61b4ba44752da34143b8fd1365974cf40bfa94c12273c24847e"
+    },
+    {
+      "path": "examples/calculator/src/bin/uniffi-bindgen.rs",
+      "sha256": "b2f9bdb7089dc718a60380c2c385c5cb71f60e742c04cc62bdda5862f1d52ea6"
+    },
+    {
+      "path": "examples/calculator/src/bin/wire-bench.rs",
+      "sha256": "b2a638ad903dc580cbf61ef5cdd1f3291b583b89d83cd0b1beff181ae9f90219"
+    },
+    {
+      "path": "examples/calculator/src/lib.rs",
+      "sha256": "5ddec857af9c0f37fe8b9f284d3f14f999904ba734982894edb57456f9b3aee5"
+    },
+    {
+      "path": "examples/calculator/src/loop_stdio.rs",
+      "sha256": "e8062e3f9bd4ba9dd677cd658fd057f3de70183dc77940ce4e607dfad037e7a9"
+    },
+    {
+      "path": "examples/calculator/src/main.rs",
+      "sha256": "31246e90e84b5e623ad6c203eacebffa8ade7eca3ab1fd6307b5afa60e72cc1a"
+    },
+    {
+      "path": "examples/calculator/src/ordinary_functions.rs",
+      "sha256": "994def507494cd07af9a0be20b3928c2f7dba3788f0b23d1161b12737fe973ad"
+    },
+    {
+      "path": "examples/calculator/src/uniffi_generated.rs",
+      "sha256": "7984c7e2dea7e1b72e3dfa23507169daab511d358596eefb4c42dcbb96a4dee0"
+    },
+    {
+      "path": "examples/calculator/src/uniffi_render.rs",
+      "sha256": "9509c4e75650469d7a039073c3b4f8aa6fede84cc7742a07c432259d8fbe027c"
+    },
+    {
+      "path": "examples/react-native-calculator/App.tsx",
+      "sha256": "f1076f67e89c83bd0b1762fe12b9e25ee6dbb13ad4f4f896ceb9efb3f1b20788"
+    },
+    {
+      "path": "examples/react-native-calculator/BenchmarkApp.tsx",
+      "sha256": "ce21cd46d4558ccc279dcc309527ba4e4ad02802b7062d0072997b487357c5f0"
+    },
+    {
+      "path": "examples/react-native-calculator/DynamicRegistryApp.tsx",
+      "sha256": "10040262d02222f6760537d886a28e5f1a03c2a153d668d4e30730cf15fcf937"
+    },
+    {
+      "path": "examples/react-native-calculator/ReloadStressApp.tsx",
+      "sha256": "2bef355758c4bae497526f2b965476cd2e0c60052cb858d987022a0a1f973876"
+    },
+    {
+      "path": "examples/react-native-calculator/app.json",
+      "sha256": "816234c3441ade6e9a69470449edec298e13a60e67d41d388a64123db1d1ea76"
+    },
+    {
+      "path": "examples/react-native-calculator/bun.lock",
+      "sha256": "84783bd52f3f71a1bf8e62c5313e42afa19553ea31bc9e0ab2fffd6c3a99b9ba"
+    },
+    {
+      "path": "examples/react-native-calculator/generated/.rustra-generated.json",
+      "sha256": "072f2c11b1c6425eb7f6019d32471a0d4e74836e7145406f0d30d8dee7c0459e"
+    },
+    {
+      "path": "examples/react-native-calculator/generated/commands.ts",
+      "sha256": "dabc27094fd23f143e536f3dce2cd15f9e440dc5c0ce4127b620330aad1de31a"
+    },
+    {
+      "path": "examples/react-native-calculator/generated/contract.ts",
+      "sha256": "f636d9d980cb8e72d434ff20de53b04faeb5e576ec146271e1840ee2ca25c5fb"
+    },
+    {
+      "path": "examples/react-native-calculator/generated/devices.ts",
+      "sha256": "2be579d552f36a83114ff751934b58b2e8cf764ce2970f79b5273a045127a7e9"
+    },
+    {
+      "path": "examples/react-native-calculator/generated/errors.ts",
+      "sha256": "01de485660ff23d21fcd77009c5d23310ed8dae06da1b4b21be7576f57ef08b7"
+    },
+    {
+      "path": "examples/react-native-calculator/generated/frame-codecs.ts",
+      "sha256": "f2769c0d973e670a60f90c9de84b1a889868a4b1bb6b1624f8079769bbbeac02"
+    },
+    {
+      "path": "examples/react-native-calculator/generated/frame-registry.ts",
+      "sha256": "1df35b0fa14e618df21a142c5db3f7085cc1e341381ee43338aaab7c27a10457"
+    },
+    {
+      "path": "examples/react-native-calculator/generated/positional-facade.ts",
+      "sha256": "eb507643a8ccae799846ea23ce30b435a98bd5bec2d2a6c0c72ce389df11219e"
+    },
+    {
+      "path": "examples/react-native-calculator/generated/react-native.ts",
+      "sha256": "82dba0c52d0d216c32194413ae473d8260f38e462cc93a2dee4565244ab7fbc8"
+    },
+    {
+      "path": "examples/react-native-calculator/generated/schema.json",
+      "sha256": "7279af1f50ca546411bb7be6476bb1f931b437ae53484d8ea9903eec07926039"
+    },
+    {
+      "path": "examples/react-native-calculator/generated/types.ts",
+      "sha256": "ac338851c2ab9903f0b20e0870699a6fc5fe0355e88ae20796523948b9892efa"
+    },
+    {
+      "path": "examples/react-native-calculator/index.ts",
+      "sha256": "40ee53a0d58ec2389f12f028306d47bc78abe9911cecb058b3c35cf5ee305dee"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-calculator/expo-module.config.json",
+      "sha256": "7fc3688a29bc0e5ff74b05e9bfd698e9b2b487b63713483d5886caf5b4a1c417"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-calculator/ios/RustraCalculator.podspec",
+      "sha256": "800c5bd1149ff8068ed761895ad59da957bba084fd81439cf4ac0c2d19334fc1"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-calculator/ios/RustraCalculatorModule.swift",
+      "sha256": "5bada728d8761657d1510ff896e331b403697723c7427a5f0928bd2731c86ffa"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-calculator/src/index.ts",
+      "sha256": "419387f2e49bc8b84de97422951363597d0494f37bd2a697fe386ca659c5d878"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-jsi/RustraBridge.podspec",
+      "sha256": "4f55ec5ef3af8d6b4aad8c9237749fcf0517732cbac8b6efe9723ce035cd50ae"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-jsi/android/build.gradle",
+      "sha256": "93186e3c6b9e97a502eab63b6efc2ff3d8571fa6e73f5e368ee9f02f9ff79601"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-jsi/android/src/main/AndroidManifest.xml",
+      "sha256": "29a5250621c15524c26a69d3f3f62199b1a2946cce7a0b738acf299f9ca6e547"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgeModule.kt",
+      "sha256": "00a18821f535a84b030efa59a1ab753e95095a9c86756395cce238fceed55921"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-jsi/android/src/main/java/dev/rustra/bridge/RustraBridgePackage.kt",
+      "sha256": "92feda53ca4718d0e2980440003af58b43d22262e72d2e883cce713f232e8e07"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-jsi/generated/rustra-generated-codecs.cpp",
+      "sha256": "914b1b5156edf43e9441f85e407f329715a8e5cd6232a19137adbc51980f1202"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-jsi/generated/rustra-generated-codecs.hpp",
+      "sha256": "d901bf617faebfde8609d5c28150086929aa3d419f29b7468307c3401344dfa8"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-jsi/ios/RustraBridge.cpp",
+      "sha256": "c1976b169699047ba51a3777bb16ddda2c52279220af72ee6f24e48b10893798"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-jsi/ios/RustraBridgeModule.mm",
+      "sha256": "f19d84598dbdfdce63845af9ec3076df61e84a577ab34fb1a8f6ef7ac163d785"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-jsi/ios/rustrajsi/rustrajsi-Bridging-Header.h",
+      "sha256": "4a625b53abd4333ca454a4161ba62ab1b0cb44e8a4581326c0bcfe03dc26dd5c"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-jsi/ios/test-jsi-shim.hpp",
+      "sha256": "4dc23983a32e07c1bcf8f493c58e8ca1ab77970e440e664a1b06e80bfa1d1af6"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-jsi/ios/test-rustra-codec.cpp",
+      "sha256": "4968a1baa4b0f8c181dfc9ab1e535cb06ea492ab32fc2e240aad607d1b7656c4"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-jsi/ios/test-rustra-generated-codecs.cpp",
+      "sha256": "114dc499f5075077105a01546ae4c9720ddf754bb5f9540965d4eb60ffd1173d"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-jsi/package.json",
+      "sha256": "70aff97f3cd65f1f1d8b11cac8549e9081d9c45a2cbb75cf41956a08be97b5c9"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-jsi/react-native.config.js",
+      "sha256": "d86b7c9c1a00caea8b0b06d07e719d790c83212a285303a730d9b6805cec8d3b"
+    },
+    {
+      "path": "examples/react-native-calculator/modules/rustra-jsi/src/index.ts",
+      "sha256": "ff47f63762759f76cbb71017c5b129de4900761895a42e31b5a6c0c3750076ff"
+    },
+    {
+      "path": "examples/react-native-calculator/package.json",
+      "sha256": "efb1ddc0e9d8e745dbf0422bb44e75e4322a385f43f49f00d094e4668bcc528d"
+    },
+    {
+      "path": "examples/react-native-calculator/rustra.json",
+      "sha256": "e6340432860ed7c5fe8aef232526f0219e26dfa41281497dd7e323ef810c53fc"
+    },
+    {
+      "path": "examples/react-native-calculator/src/adapters/frame-adapter.ts",
+      "sha256": "5ce5aa0e051a69b2de260bc27f0f828af487d72fccef56d467429406f18c391a"
+    },
+    {
+      "path": "examples/react-native-calculator/src/adapters/json-adapter.ts",
+      "sha256": "9e674a9af010d8f1b340cb0389d4788777570ffb13f2a2ee2057f2bc55151c79"
+    },
+    {
+      "path": "examples/react-native-calculator/src/benchmark-stats.ts",
+      "sha256": "be413298853225d8a90fe292d7999fbac6376520bb23100bff346f6c6b69c6ee"
+    },
+    {
+      "path": "examples/react-native-calculator/src/format-error.ts",
+      "sha256": "0687e5578f92322ffa6e1f252166295b668693f479c03c7394b07f26531dbe8c"
+    },
+    {
+      "path": "examples/react-native-calculator/src/function-demo.ts",
+      "sha256": "90793af6da400239cdfdf0ba14f6636f892fab860f1b20f8f6c1e3a08f1dde0b"
+    },
+    {
+      "path": "examples/react-native-calculator/src/utf8.ts",
+      "sha256": "8fa4e58d0a8e08f3b25abc7faa9fce618ae5e11ac3d91f5c0fe81e39e7bbac21"
+    },
+    {
+      "path": "packages/react-native/native/android/rustra-jsi-jni.cpp",
+      "sha256": "e0e335e2e05745e5af7eadf5c53b133bfa32154f3429092c02e8c6b143ea0189"
+    },
+    {
+      "path": "packages/react-native/native/cpp/RustraJSIBridge.cpp",
+      "sha256": "66c42498759b259412311ab423b69c9884fea710724704f1d90b09c9ab10a3be"
+    },
+    {
+      "path": "packages/react-native/native/cpp/RustraJSIBridge.hpp",
+      "sha256": "a0c6d17e2c6e5a6bf64d23d2144bae4b5359c8034b41dbaf8c992dd76bd5e60c"
+    },
+    {
+      "path": "packages/react-native/native/cpp/RustraTurboInterop.hpp",
+      "sha256": "6bb7b7b2ae0baa837120d1997b602cb8bf5ee387f215cfe525ebb86505531a7d"
+    },
+    {
+      "path": "packages/react-native/native/cpp/rustra-codec.hpp",
+      "sha256": "91b88699c64834df50af3e726f2220698a22719a2be664eabd7fc06befe9bf9c"
+    },
+    {
+      "path": "packages/react-native/native/ios/RustraJSIModule.mm",
+      "sha256": "8ce2ae0223be65ea09f543924a9e5ec01de992609bf03e2da802bffe96155a70"
+    },
+    {
+      "path": "packages/react-native/src/index.ts",
+      "sha256": "37412636bf45cf944fb1d85bda37f02c33e9b4b9997fb5be718dc4bb62dc101f"
+    },
+    {
+      "path": "packages/react-native/src/react-native-async.ts",
+      "sha256": "a6023a8c572ab8178045a5313cedb0c7c1a1fe7c79c8dd8cf7ba1d5bda360775"
+    },
+    {
+      "path": "packages/react-native/src/react-native-core.ts",
+      "sha256": "b5246c540899c0fb33d8d39e1608ff353dd835d2e84ad2e331158a8f3ac6d5aa"
+    },
+    {
+      "path": "packages/react-native/src/react-native-events.ts",
+      "sha256": "bb942cfcb8b6136653eb36ab98b5d0151839ef7c0ff99beb12186094db005333"
+    },
+    {
+      "path": "packages/types/src/bootstrap-lifecycle.ts",
+      "sha256": "10521099b807683fc7e4bfd821ce60c026a17fa4d65f6c04005be1baedd3f1cc"
+    },
+    {
+      "path": "packages/types/src/cancel-abort.ts",
+      "sha256": "16d90575c20dc1a3270ef662331c0468f3057083118efeebab9efd0ff508618a"
+    },
+    {
+      "path": "packages/types/src/cancel-by-id.ts",
+      "sha256": "99696cd6f9edbec9c6fd697aec54c9712f34f532b647c4275c40d9c9bab075e0"
+    },
+    {
+      "path": "packages/types/src/cancel.ts",
+      "sha256": "135325188ff4cd50f4847c06fc32ee3562aba92e2f76002475eeb677f683888a"
+    },
+    {
+      "path": "packages/types/src/complex-codec-compiled.ts",
+      "sha256": "3601f46d76f3a59822df53b296e4806c9da6ee980a1fcf07f7d7ae5303ea286b"
+    },
+    {
+      "path": "packages/types/src/complex-codec-decode-node.ts",
+      "sha256": "a48a1858769039d9fe18f366eb272290cc32e909844fdbbf5a953b2b3763dd64"
+    },
+    {
+      "path": "packages/types/src/complex-codec-encode-node.ts",
+      "sha256": "3d4fe69e55f23aaf53ae7540b8fe15af8f6c1fafd0fffef6a19564a3a3762d2b"
+    },
+    {
+      "path": "packages/types/src/complex-codec-error.ts",
+      "sha256": "d9491753c25c41be454cfd58a9ae2553d309fda647edce96d8972b507d16aefd"
+    },
+    {
+      "path": "packages/types/src/complex-codec-reader.ts",
+      "sha256": "2e0c3577e385fe3cd4818a12a067a30a9e6ca667575765319e05116b461e2c38"
+    },
+    {
+      "path": "packages/types/src/complex-codec-schema.ts",
+      "sha256": "ed2b3d38efea547ad639da69d028db3f7cfe6baa0f2126ad715fe727c0e98f9a"
+    },
+    {
+      "path": "packages/types/src/complex-codec-types.ts",
+      "sha256": "991c0b078bb5caedad6386a54a3fb67548badbb4eb27f6c01500e913ce712aa7"
+    },
+    {
+      "path": "packages/types/src/complex-codec-variants.ts",
+      "sha256": "f9669f9627889a80931283391ecdffb72c44214b1bd867108c820fc6424f9edd"
+    },
+    {
+      "path": "packages/types/src/complex-codec-wire.ts",
+      "sha256": "f018de8672f737171424ad72b9f5aee8e2edfac2bd46902b5b9277e89a24c844"
+    },
+    {
+      "path": "packages/types/src/complex-codec.ts",
+      "sha256": "4c223cdfde738aa8c3428a62daa9da4b7f6ba3725d0e5baac75f201d844a7978"
+    },
+    {
+      "path": "packages/types/src/debug.ts",
+      "sha256": "3f0d7eabdabc56adf9e0c1a32c50f634a4472dbc82ccb67ce0913d68c5ae7991"
+    },
+    {
+      "path": "packages/types/src/device-status.ts",
+      "sha256": "884067f0ec6bc775ff48e8be28623fdb073210120ee25b19d6276ddc53bc287b"
+    },
+    {
+      "path": "packages/types/src/errors.ts",
+      "sha256": "2c9ad65464628232800f0501adfe970f8099341a5ab038dbca2e3986c230e73d"
+    },
+    {
+      "path": "packages/types/src/frame-engine-async.ts",
+      "sha256": "0d9dc3ae87c46956c7cb79f58a2a8e97d117f5335d11904a39c05f56cf2c194c"
+    },
+    {
+      "path": "packages/types/src/frame-engine-capabilities.ts",
+      "sha256": "6a805daa633353d6fcb6b7020ef8f8ff7a5df88401d5726e7af928d0da781292"
+    },
+    {
+      "path": "packages/types/src/frame-engine-context.ts",
+      "sha256": "6bc85d6cc3abf7956f5bba5c196d06285774bea6a924e438bb595f0f1d71621f"
+    },
+    {
+      "path": "packages/types/src/frame-engine-contract.ts",
+      "sha256": "b837d1fc40f5521ebf1e149839e2f5783e64e964430d274075ed2aff5c99d845"
+    },
+    {
+      "path": "packages/types/src/frame-engine-dispatch.ts",
+      "sha256": "8d1225a9e1b81b5f4328ebb801956e46cfe63420dfbcca5ce8b40753d3099096"
+    },
+    {
+      "path": "packages/types/src/frame-engine-dynamic-codec.ts",
+      "sha256": "e13ff35a540ef04423928dfa186ea92cf928cf3a7f6d56ec7ab793ccd6789373"
+    },
+    {
+      "path": "packages/types/src/frame-engine-options.ts",
+      "sha256": "ee4a8d3d24afa18587123af1e32093c1e98a5db7dcbe3b341664e036a6cb295d"
+    },
+    {
+      "path": "packages/types/src/frame-engine-routes.ts",
+      "sha256": "316a59d7262b3a8759ccd9b8d9ba1fae67f1e49a29744748ee8f0f18d99d33de"
+    },
+    {
+      "path": "packages/types/src/frame-engine-schema.ts",
+      "sha256": "13a35b4ac74689d4072870d93f06b80b56dde797fc3cb1e2b57928ee4771f734"
+    },
+    {
+      "path": "packages/types/src/frame-engine-surface.ts",
+      "sha256": "451bc1204bfa6c022b8b8a44a301957e207f7cd43500b896dfeb03ed1b7bf25d"
+    },
+    {
+      "path": "packages/types/src/frame-engine.ts",
+      "sha256": "889fce4bf5a9251d56ab8d9156aef48d850b51dd44d968a4b0cbbabf1ef4d4b9"
+    },
+    {
+      "path": "packages/types/src/global-batch-settled.ts",
+      "sha256": "09d6a3f79fcc2ccaa6991dcdae109805cec4397c263a01912c35b737806e43b4"
+    },
+    {
+      "path": "packages/types/src/global-batch.ts",
+      "sha256": "ad03528ae6177c08ef3b94755b877fbf6a3884dad364f83c963fef7e733b1261"
+    },
+    {
+      "path": "packages/types/src/global-bytes.ts",
+      "sha256": "77a699d61924df740959fa21ec35f6b4a13ecfccb8bbe415655b03967be1bf01"
+    },
+    {
+      "path": "packages/types/src/global-config.ts",
+      "sha256": "8143c7a0d309f1d2c4aa1ee5d75a9cccec2e096e7480d4ad2e3fd85b29ed761f"
+    },
+    {
+      "path": "packages/types/src/global-fields.ts",
+      "sha256": "a2ced4928f52986850e3f31f9ccf0a00cd1e86da1cf63201112d0063a69a0d86"
+    },
+    {
+      "path": "packages/types/src/global-state.ts",
+      "sha256": "f7a0f8304ff0b2db8b6b8ead595e21265f97f1193a211cea16ebf3fd6912b3f7"
+    },
+    {
+      "path": "packages/types/src/global.ts",
+      "sha256": "d7063961c3ccc5ac883e6e9a51e6159eabb2f1ab8004f83d6a82dbd429b29392"
+    },
+    {
+      "path": "packages/types/src/index.ts",
+      "sha256": "2e533cf86a8e9bb8d493481160635b34e903e56c282550ef287810d60dfd550a"
+    },
+    {
+      "path": "packages/types/src/inspector.ts",
+      "sha256": "726fd72e8e4b134bd920d10a6964eb7f0d5b1413e87e20acbfa1de120aefa1bd"
+    },
+    {
+      "path": "packages/types/src/invoke-loose.ts",
+      "sha256": "3ef83f100080c9404de8d5d65db6d7a227430fc7c6792e087c6c12bb325775af"
+    },
+    {
+      "path": "packages/types/src/json-engine.ts",
+      "sha256": "060fa166c89c6fca8dbaafcafa8ccd4db0412a446a52e54a35c136fbd4a18840"
+    },
+    {
+      "path": "packages/types/src/json-wire.ts",
+      "sha256": "e3affc5600d421366643237a10fc175f192aac43b1bc7bea990bcd241c452112"
+    },
+    {
+      "path": "packages/types/src/live-schema.ts",
+      "sha256": "75d624b9ec1c7a8d9e6b52311c35c8b094d1793868febbe25bd6d6c6826df711"
+    },
+    {
+      "path": "packages/types/src/public.ts",
+      "sha256": "c1e1d7ba31b15d2f7eca25b1280052e29788ee407ef9c25d559d5ed2a7f365eb"
+    },
+    {
+      "path": "packages/types/src/retry.ts",
+      "sha256": "db077b2c801968d4f6a9930b20ce87856886fd5fda016c2349ec2ede7908e84e"
+    },
+    {
+      "path": "packages/types/src/schema-postcard-codec.ts",
+      "sha256": "ddda378e14c06d1e2844cb6ebf08ee1dfcfe45c415c37925151929c3e87d3d93"
+    },
+    {
+      "path": "packages/types/src/schema-postcard-fixed-array.ts",
+      "sha256": "533343759185ae5e7ed3a48e538f56292d6ea55c1114e5d2da0e988ca3adf012"
+    },
+    {
+      "path": "packages/types/src/schema-postcard-node.ts",
+      "sha256": "79815fb3ae193679104da932cda5bce4ee0ea5207d8780669a93f656ac842fe0"
+    },
+    {
+      "path": "packages/types/src/schema-postcard-support.ts",
+      "sha256": "1ddd9d7b933749e73b512384264e1d488490ea80082f07aa46a9e8a166a0f9a2"
+    },
+    {
+      "path": "packages/types/src/schema-postcard-wire.ts",
+      "sha256": "c6ca519cb77c9f200ced50d7464bff3acf11097e527e47159ff427b05571faed"
+    },
+    {
+      "path": "packages/types/src/utf8.ts",
+      "sha256": "19170eef9d879d2c0f968d7d092fdcf6ee4eaf0c38aaef2a595c7360e5822eb6"
+    }
+  ]
+}

@@ -124,6 +124,9 @@
     "rustra::builder::impl PackageBuilder { }::fn:event_capacity": [
       "pub fn event_capacity (mut self , capacity : usize) -> Self"
     ],
+    "rustra::builder::impl PackageBuilder { }::fn:function": [
+      "pub fn function < Args , O , F > (self , name : impl Into < String > , handler : F) -> Self where Args : DeserializeOwned + JsonSchema + 'static , O : Serialize + JsonSchema + 'static , F : crate :: Function < Args , Output = O > ,"
+    ],
     "rustra::builder::impl PackageBuilder { }::fn:manage": [
       "pub fn manage < T : Send + Sync + 'static > (mut self , state : T) -> Self"
     ],
@@ -144,6 +147,9 @@
     ],
     "rustra::builder::impl PackageBuilder { }::fn:schema_version": [
       "pub fn schema_version (mut self , version : u32) -> Self"
+    ],
+    "rustra::builder::impl PackageBuilder { }::fn:try_function": [
+      "pub fn try_function < Args , O , E , F , M > (self , name : impl Into < String > , handler : F , map_error : M ,) -> Self where Args : DeserializeOwned + JsonSchema + 'static , O : Serialize + JsonSchema + 'static , F : crate :: Function < Args , Output = std :: result :: Result < O , E > > , M : Fn (E) -> RustraError + Send + Sync + 'static ,"
     ],
     "rustra::builder::use:super :: *": [
       "use super :: * ;"
@@ -1756,6 +1762,44 @@
     "rustra::frame_codec::use:std :: sync :: Arc": [
       "use std :: sync :: Arc ;"
     ],
+    "rustra::function::impl < F , O > Function < () > for F where F : Fn () -> O + Send + Sync + 'static , { }::const:ARITY": [
+      "const ARITY : u8 = 0 ;"
+    ],
+    "rustra::function::impl < F , O > Function < () > for F where F : Fn () -> O + Send + Sync + 'static , { }::fn:call": [
+      "fn call (& self , () : ()) -> O"
+    ],
+    "rustra::function::impl < F , O > Function < () > for F where F : Fn () -> O + Send + Sync + 'static , { }::type:Output": [
+      "type Output = O ;"
+    ],
+    "rustra::function::impl:impl < F , O > Function < () > for F where F : Fn () -> O + Send + Sync + 'static , { }": [
+      "impl < F , O > Function < () > for F where F : Fn () -> O + Send + Sync + 'static , { }"
+    ],
+    "rustra::function::impl:impl < F , O > sealed :: Sealed < () > for F where F : Fn () -> O + Send + Sync + 'static { }": [
+      "impl < F , O > sealed :: Sealed < () > for F where F : Fn () -> O + Send + Sync + 'static { }"
+    ],
+    "rustra::function::macro:impl_function": [
+      "impl_function ! (1 ; A0) ;",
+      "impl_function ! (10 ; A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8 , A9) ;",
+      "impl_function ! (11 ; A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8 , A9 , A10) ;",
+      "impl_function ! (12 ; A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8 , A9 , A10 , A11) ;",
+      "impl_function ! (2 ; A0 , A1) ;",
+      "impl_function ! (3 ; A0 , A1 , A2) ;",
+      "impl_function ! (4 ; A0 , A1 , A2 , A3) ;",
+      "impl_function ! (5 ; A0 , A1 , A2 , A3 , A4) ;",
+      "impl_function ! (6 ; A0 , A1 , A2 , A3 , A4 , A5) ;",
+      "impl_function ! (7 ; A0 , A1 , A2 , A3 , A4 , A5 , A6) ;",
+      "impl_function ! (8 ; A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7) ;",
+      "impl_function ! (9 ; A0 , A1 , A2 , A3 , A4 , A5 , A6 , A7 , A8) ;"
+    ],
+    "rustra::function::sealed::trait:Sealed": [
+      "pub trait Sealed < Args > { }"
+    ],
+    "rustra::function::trait:Function": [
+      "pub trait Function < Args > : sealed :: Sealed < Args > + Send + Sync + 'static { type Output ; const ARITY : u8 ; fn call (& self , args : Args) -> Self :: Output ; }"
+    ],
+    "rustra::function::use:crate :: { DeserializeOwned , JsonSchema }": [
+      "use crate :: { DeserializeOwned , JsonSchema } ;"
+    ],
     "rustra::hot_core::dylib::enum:DylibCoreError": [
       "# [cfg (any (feature = \"hot-core\" , feature = \"tauri\"))]  # [cfg (feature = \"hot-core\")] # [path = \"hot_core_dylib.rs\"]  # [derive (Debug)] pub enum DylibCoreError { Open { path : PathBuf , source : String } , Symbol { symbol : & 'static str , source : String , } , ContractHash { message : String } , Dispatch { message : String } , Prepare { path : PathBuf , message : String } , Codesign { path : PathBuf , message : String } , Panic { message : String } , }"
     ],
@@ -2389,6 +2433,9 @@
     "rustra::use:frame_codec :: { BinHandler , BinIntoHandler , DecodeFn , EncodeFn , RawHandler , build_frame_decoder , build_frame_response_encoder , build_tier3_json_decoder , js_postcard_codec_supported_with_defs , }": [
       "pub (crate) use frame_codec :: { BinHandler , BinIntoHandler , DecodeFn , EncodeFn , RawHandler , build_frame_decoder , build_frame_response_encoder , build_tier3_json_decoder , js_postcard_codec_supported_with_defs , } ;"
     ],
+    "rustra::use:function :: Function": [
+      "pub use function :: Function ;"
+    ],
     "rustra::use:package :: { FrozenRegistry , RegistryState }": [
       "pub (crate) use package :: { FrozenRegistry , RegistryState } ;"
     ],
@@ -2494,7 +2541,7 @@
     "packages/cli/src/schema-diff-format.ts": "import type { DiffResult } from './schema-diff.js';\nexport declare function formatDiffResult(result: DiffResult): string;",
     "packages/cli/src/schema-diff.ts": "import type { PackageSchema } from './schema.js';\nexport { formatDiffResult } from './schema-diff-format.js';\nexport type BreakingChange = {\n    type: 'field_removed';\n    command: string;\n    field: string;\n} | {\n    type: 'field_type_changed';\n    command: string;\n    field: string;\n    from: string;\n    to: string;\n} | {\n    type: 'required_field_added';\n    command: string;\n    field: string;\n} | {\n    type: 'field_became_required';\n    command: string;\n    field: string;\n} | {\n    type: 'field_became_optional';\n    command: string;\n    field: string;\n} | {\n    type: 'definition_removed';\n    command: string;\n    field: string;\n} | {\n    type: 'command_removed';\n    command: string;\n} | {\n    type: 'command_id_changed';\n    command: string;\n    from: number;\n    to: number;\n} | {\n    type: 'event_removed';\n    event: string;\n} | {\n    type: 'event_payload_changed';\n    event: string;\n    path: string;\n    before: string;\n    after: string;\n};\nexport type ContractDiagnosis = {\n    code: 'command_id_displaced';\n    command: string;\n    oldId: number;\n    newId: number;\n    detail: string;\n} | {\n    code: 'alias_missing';\n    command: string;\n    legacyId: number;\n    occupiedBy: string;\n    detail: string;\n} | {\n    code: 'wire_type_changed';\n    command: string;\n    field: string;\n    from: string;\n    to: string;\n    detail: string;\n};\nexport interface DiffResult {\n    breaking: BreakingChange[];\n    compatible: string[];\n    diagnoses: ContractDiagnosis[];\n}\nexport declare function diffSchemas(oldSchema: PackageSchema, newSchema: PackageSchema): DiffResult;",
     "packages/cli/src/schema-validation.ts": "import type { PackageSchema } from './schema.js';\nexport declare function parsePackageSchema(value: unknown): PackageSchema;",
-    "packages/cli/src/schema.ts": "export type CommandSchema = {\n    name: string;\n    commandId: number;\n    inputType: string;\n    outputType: string;\n    inputSchema: JsonSchema;\n    outputSchema: JsonSchema;\n    description?: string;\n    errors?: CommandErrorVariantSchema[];\n    devices?: string[];\n    definitions?: Record<string, JsonSchema>;\n};\nexport type CommandErrorVariantSchema = {\n    code: string;\n    description?: string | null;\n    retryable?: boolean;\n};\nexport type PackageSchema = {\n    packageId: string;\n    schemaVersion?: number;\n    fieldOrder?: 'declaration';\n    commands: CommandSchema[];\n    events?: EventSchema[];\n    deviceCapabilities?: string[];\n};\nexport type EventSchema = {\n    name: string;\n    payload: JsonSchema;\n    definitions?: Record<string, JsonSchema>;\n};\nexport type JsonSchema = {\n    type?: string | string[];\n    properties?: Record<string, JsonSchema>;\n    required?: string[];\n    items?: JsonSchema | JsonSchema[];\n    prefixItems?: JsonSchema[];\n    uniqueItems?: boolean;\n    additionalProperties?: JsonSchema | boolean;\n    $ref?: string;\n    anyOf?: JsonSchema[];\n    oneOf?: JsonSchema[];\n    allOf?: JsonSchema[];\n    const?: unknown;\n    'x-rustra-variant-order'?: string[];\n    enum?: (string | number | boolean | null)[];\n    title?: string;\n    format?: string;\n    definitions?: Record<string, JsonSchema>;\n    [key: string]: unknown;\n};",
+    "packages/cli/src/schema.ts": "export type CommandSchema = {\n    name: string;\n    functionArgs?: number;\n    commandId: number;\n    inputType: string;\n    outputType: string;\n    inputSchema: JsonSchema;\n    outputSchema: JsonSchema;\n    description?: string;\n    errors?: CommandErrorVariantSchema[];\n    devices?: string[];\n    definitions?: Record<string, JsonSchema>;\n};\nexport type CommandErrorVariantSchema = {\n    code: string;\n    description?: string | null;\n    retryable?: boolean;\n};\nexport type PackageSchema = {\n    packageId: string;\n    schemaVersion?: number;\n    fieldOrder?: 'declaration';\n    commands: CommandSchema[];\n    events?: EventSchema[];\n    deviceCapabilities?: string[];\n};\nexport type EventSchema = {\n    name: string;\n    payload: JsonSchema;\n    definitions?: Record<string, JsonSchema>;\n};\nexport type JsonSchema = {\n    type?: string | string[];\n    properties?: Record<string, JsonSchema>;\n    required?: string[];\n    items?: JsonSchema | JsonSchema[];\n    prefixItems?: JsonSchema[];\n    uniqueItems?: boolean;\n    additionalProperties?: JsonSchema | boolean;\n    $ref?: string;\n    anyOf?: JsonSchema[];\n    oneOf?: JsonSchema[];\n    allOf?: JsonSchema[];\n    const?: unknown;\n    'x-rustra-variant-order'?: string[];\n    enum?: (string | number | boolean | null)[];\n    title?: string;\n    format?: string;\n    definitions?: Record<string, JsonSchema>;\n    [key: string]: unknown;\n};",
     "packages/cli/src/validate-engine.ts": "import type { PackageSchema } from './schema.js';\nexport type EngineClient = {\n    invoke<T>(command: string, args?: unknown): Promise<T>;\n};\nexport type ValidateOptions = {\n    schema: PackageSchema;\n    engine: EngineClient;\n    onViolation?: (type: 'input' | 'output', command: string, errors: string[]) => void;\n};\nexport declare function createValidatedEngine(options: ValidateOptions): EngineClient;",
     "packages/cli/src/vite.ts": "export interface RustraVitePluginOptions {\n    backendDir?: string;\n    generatedDir?: string;\n}\nexport declare function rustraPlugin(options?: RustraVitePluginOptions): {\n    name: string;\n    buildStart(): Promise<void>;\n    handleHotUpdate(ctx: {\n        file: string;\n        server: {\n            ws: {\n                send: (msg: unknown) => void;\n            };\n        };\n    }): Promise<void>;\n};",
     "packages/cli/src/watch.ts": "export type WatchLoop = {\n    run(reason: string, force?: boolean): Promise<void>;\n    schedule(reason: string): void;\n    dispose(): void;\n    onReload(cb: (reason: string) => void | Promise<void>): void;\n};\nexport declare function createReloadHooks(): {\n    onReload(cb: (reason: string) => void | Promise<void>): void;\n    emitReload(reason: string): Promise<void>;\n};\nexport type FileWatchSpec = {\n    path: string;\n    onChange: (changedPath: string, filename?: string) => void;\n};\nexport type WatchHandle = {\n    dispose(): void;\n};\nexport declare function createWatchLoop(perform: (reason: string) => Promise<void>, shouldRun: () => boolean | Promise<boolean>, debounceMs?: number): WatchLoop;\nexport declare function createFileWatch(specs: readonly FileWatchSpec[]): WatchHandle;\nexport declare function sourceDirectories(root: string): string[];\nexport declare function isWithin(root: string, candidate: string): boolean;\nexport declare function createSourceWatch(root: string, onChange: (changedPath: string) => void): WatchHandle;",
@@ -2552,7 +2599,7 @@
     "packages/types/src/live-schema.ts": "import type { ComplexSchema } from './complex-codec-types.js';\nexport type LiveSchemaEntry = {\n    commandId: number;\n    inputSchema?: unknown;\n    outputSchema?: unknown;\n    definitions?: Record<string, ComplexSchema>;\n};\nexport type FrameSchemaNative = {\n    invokeFrame(payload: ArrayBuffer): ArrayBuffer | ArrayBufferView;\n    getSchema?(): ArrayBuffer;\n    getSchemaGeneration?(): number;\n    getContractHash?(): ArrayBuffer;\n    hasStaticCodec?(name: string): boolean;\n    invokeTyped?(name: string, args: unknown): unknown;\n    invokeTypedById?(cmdId: number, args: unknown): unknown;\n    getCodecCapabilities?(cmdId: number): number;\n    invokeTypedRaw?(cmdId: number, ...fields: unknown[]): unknown;\n    invokeTypedPos?(cmdId: number, ...fields: unknown[]): unknown;\n    invokeTypedBuffer?(cmdId: number, value: Uint8Array | ArrayBuffer): unknown;\n    invokeTypedBatch?(names: string[], args: unknown[]): unknown[];\n    invokeTypedBatchById?(cmdIds: number[], args: unknown[]): unknown[];\n    invokeAsync?(payload: ArrayBuffer, onDone: (response: ArrayBuffer) => void): number;\n    invokeCancel?(invocationId: number): boolean;\n};\nexport type LiveSchemaDocument = {\n    commands: Map<string, LiveSchemaEntry>;\n    schemaVersion?: number;\n    schemaGeneration?: number;\n};\nexport declare function parseLiveSchemaDocument(native: {\n    getSchema?(): ArrayBuffer;\n}): LiveSchemaDocument;\nexport declare function getLiveSchema(native: {\n    getSchema?(): ArrayBuffer;\n}): Map<string, LiveSchemaEntry>;",
     "packages/types/src/public.ts": "import type { RustraError } from './errors.js';\nimport type { LiveSchemaEntry } from './live-schema.js';\nexport type EngineSupports = {\n    cancellation: 'pre-abort' | 'shallow' | 'cooperative';\n    batch: 'single-crossing' | 'per-entry' | 'none';\n    events: 'push' | 'polling' | 'none';\n    channels: boolean;\n    timeoutPreemption: boolean;\n};\nexport type EngineClient = {\n    supports?: EngineSupports;\n    invoke<T>(command: string, args?: unknown, options?: InvokeOptions): Promise<T>;\n    invokeById?<T>(commandId: number, command: string, args?: unknown, options?: InvokeOptions): Promise<T>;\n    invokeBatch?<T>(entries: BatchEntry[]): Promise<T[]>;\n};\nexport type BatchEntry = {\n    command: string;\n    args?: unknown;\n    options?: InvokeOptions;\n};\nexport type BatchSettledEntry<T> = {\n    status: 'fulfilled';\n    value: T;\n} | {\n    status: 'rejected';\n    reason: unknown;\n} | {\n    status: 'unexecuted';\n};\nexport type EngineClientWithBatch = EngineClient & {\n    invokeBatch<T>(entries: BatchEntry[]): Promise<T[]>;\n};\nexport type InvokeOptions = {\n    signal?: AbortSignal;\n    timeoutMs?: number;\n};\nexport type FrameEngine = EngineClient & {\n    invokeById<T>(commandId: number, command: string, args?: unknown, options?: InvokeOptions): Promise<T>;\n    invokeBatch<T>(entries: BatchEntry[]): Promise<T[]>;\n    refreshLiveSchema(): ReadonlyMap<string, LiveSchemaEntry>;\n};\nexport type FrameCodec<I, O> = {\n    commandId: number;\n    encode(args: I): ArrayBuffer;\n    encodeInto?(args: I, reuse?: Uint8Array): Uint8Array;\n    decode(buf: ArrayBuffer | ArrayBufferView): {\n        ok: boolean;\n        result?: O;\n        error?: RustraError;\n    };\n};\nexport { createComplexCodec } from './complex-codec.js';\nexport type { ComplexCodecOptions, ComplexSchema } from './complex-codec.js';\nexport type FrameNative = {\n    invokeFrame(payload: ArrayBuffer): ArrayBuffer;\n};\nexport type RustraNative = {\n    invoke(payload: ArrayBuffer): ArrayBuffer;\n    invokeMsgpack(payload: ArrayBuffer): ArrayBuffer;\n    invokeBincode(payload: ArrayBuffer): ArrayBuffer;\n    invokePostcard(payload: ArrayBuffer): ArrayBuffer;\n    invokeHybrid(payload: ArrayBuffer): ArrayBuffer;\n    invokeFrame(payload: ArrayBuffer): ArrayBuffer;\n    invokeRaw(payload: ArrayBuffer): ArrayBuffer;\n    noop(payload: ArrayBuffer): ArrayBuffer;\n    getSchema?(): ArrayBuffer;\n    hasStaticCodec?(name: string): boolean;\n    invokeTyped?(name: string, args: unknown): unknown;\n    invokeTypedById?(cmdId: number, args: unknown): unknown;\n    getCodecCapabilities?(cmdId: number): number;\n    invokeTypedRaw?(cmdId: number, ...fields: unknown[]): unknown;\n    invokeTypedPos?(cmdId: number, ...fields: unknown[]): unknown;\n    invokeTypedBuffer?(cmdId: number, value: Uint8Array | ArrayBuffer): unknown;\n    invokeTypedBatch?(names: string[], args: unknown[]): unknown[];\n    invokeTypedBatchById?(cmdIds: number[], args: unknown[]): unknown[];\n    onEvent?(name: string, callback: (payloadJson: string) => void): void;\n    offEvent?(name: string): void;\n    drainEvents?(): number;\n    invokeCancel?(invocationId: number): boolean;\n};",
     "packages/types/src/retry.ts": "import { RustraCommandError } from './errors.js';\nexport type RetryOptions = {\n    retries?: number;\n    baseDelayMs?: number;\n    signal?: AbortSignal;\n    retryIf?: (error: RustraCommandError, attempt: number) => boolean;\n};\nexport declare function withRetry<T>(fn: (attempt: number) => Promise<T>, options?: RetryOptions): Promise<T>;",
-    "packages/types/src/schema-postcard-codec.ts": "import type { ComplexSchema } from './complex-codec-types.js';\nimport type { FrameCodec } from './public.js';\nexport declare function createSchemaPostcardCodec(commandId: number, inputSchema: ComplexSchema, outputSchema: ComplexSchema, definitions?: Record<string, ComplexSchema>): FrameCodec<unknown, unknown> | null;",
+    "packages/types/src/schema-postcard-codec.ts": "import type { ComplexSchema } from './complex-codec-types.js';\nimport type { FrameCodec } from './public.js';\nexport declare function createSchemaPostcardCodec(commandId: number, inputSchema: ComplexSchema, outputSchema: ComplexSchema, definitions?: Record<string, ComplexSchema>, respectRustRoute?: boolean): FrameCodec<unknown, unknown> | null;",
     "packages/types/src/utf8.ts": "export declare function encodeUtf8(input: string): Uint8Array;\nexport declare function decodeUtf8(input: ArrayBuffer | Uint8Array, start?: number, end?: number): string;\nexport declare function exactArrayBuffer(bytes: Uint8Array): ArrayBuffer;"
   }
 }

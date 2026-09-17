@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "schemaHash": "7c07f78e1f38dc37f251920c7c453ec5b6d65a817f95a1b51b5b4649f63a2ae3",
+  "schemaHash": "bb88ac05d152c16fac2fe5e194323a3222534cbdd7b1d13b5b590d120dcf8a7c",
   "generatorVersion": "0.10.0",
   "files": [
     {
@@ -65,11 +65,11 @@
     },
     {
       "path": "commands.ts",
-      "sha256": "a75e1524f334ec412a9d6dc02ff4019004b600c4f8c51a4c574c3f76fdb6d04b"
+      "sha256": "dabc27094fd23f143e536f3dce2cd15f9e440dc5c0ce4127b620330aad1de31a"
     },
     {
       "path": "contract.ts",
-      "sha256": "551f56821ab6bb1dbec713402c8fe27978a9be523d9346e9ff3d137220a0349a"
+      "sha256": "f636d9d980cb8e72d434ff20de53b04faeb5e576ec146271e1840ee2ca25c5fb"
     },
     {
       "path": "devices.ts",
@@ -81,15 +81,15 @@
     },
     {
       "path": "frame-codecs.ts",
-      "sha256": "b3d4d8a6f3530d4d8cc56a9595519c2dec654b3adced69f50af3a133e015ec43"
+      "sha256": "f2769c0d973e670a60f90c9de84b1a889868a4b1bb6b1624f8079769bbbeac02"
     },
     {
       "path": "frame-registry.ts",
-      "sha256": "60e7ace49b6e4b7b55593304388ef324382047af16bc571b55e0aa5850e9736c"
+      "sha256": "1df35b0fa14e618df21a142c5db3f7085cc1e341381ee43338aaab7c27a10457"
     },
     {
       "path": "positional-facade.ts",
-      "sha256": "fee0a2c6e92e6ffcda39e0ca9b7cd5361baa7736f3872d9e6eb25d5688b38649"
+      "sha256": "eb507643a8ccae799846ea23ce30b435a98bd5bec2d2a6c0c72ce389df11219e"
     },
     {
       "path": "react-native.ts",
@@ -97,7 +97,7 @@
     },
     {
       "path": "types.ts",
-      "sha256": "74c4a06e44adbecb16acea5cf58fff797f425e6b04a4d7bf32c0367af7491678"
+      "sha256": "ac338851c2ab9903f0b20e0870699a6fc5fe0355e88ae20796523948b9892efa"
     }
   ]
 }

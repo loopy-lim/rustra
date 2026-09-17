@@ -18,6 +18,7 @@ export function generateFieldDecodeExpr(
   definitions: Record<string, import('./schema.js').JsonSchema>,
   indent: string,
 ): string {
+  if (field.kind === 'unit') return `${indent}${lvalue} = null;`;
   const primitive = generatePrimitiveDecodeExpr(field.kind, lvalue, indent);
   if (primitive !== null) return primitive;
   if (COLLECTION_ELEMENT_DECODER[field.kind]) {

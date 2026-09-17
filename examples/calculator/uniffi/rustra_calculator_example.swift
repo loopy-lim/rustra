@@ -4449,6 +4449,18 @@ fileprivate struct FfiConverterDictionaryStringSequenceString: FfiConverterRustB
     }
 }
 /**
+ * `add` — 일반 함수의 UniFFI 위치 인수 래퍼.
+ */
+public func add(arg0: Int32, arg1: Int32)throws  -> Int32  {
+    return try  FfiConverterInt32.lift(try rustCallWithError(FfiConverterTypeRustraCommandFailure_lift) {
+        uniffiCallStatus in
+    uniffi_rustra_calculator_example_fn_func_add(
+        FfiConverterInt32.lower(arg0),
+        FfiConverterInt32.lower(arg1),uniffiCallStatus
+    )
+})
+}
+/**
  * `addNumbers` — `crate::add_numbers` 커맨드의 UniFFI 타입 래퍼.
  */
 public func addNumbers(input: AddNumbersInput)throws  -> AddNumbersOutput  {
@@ -4634,6 +4646,17 @@ public func greet(input: GreetInput)throws  -> GreetOutput  {
 })
 }
 /**
+ * `greetPerson` — 일반 함수의 UniFFI 위치 인수 래퍼.
+ */
+public func greetPerson(arg0: String)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeRustraCommandFailure_lift) {
+        uniffiCallStatus in
+    uniffi_rustra_calculator_example_fn_func_greetperson(
+        FfiConverterString.lower(arg0),uniffiCallStatus
+    )
+})
+}
+/**
  * 이름 기반 JSON 호출 — `Package::invoke_json` 의 문자열 경계 래퍼.
  */
 public func invokeJson(command: String, argsJson: String)throws  -> String  {
@@ -4700,6 +4723,35 @@ public func processItem(input: ProcessItemInput)throws  -> ProcessItemOutput  {
 })
 }
 /**
+ * `readRemembered` — 일반 함수의 UniFFI 위치 인수 래퍼.
+ */
+public func readRemembered()throws  -> Int32  {
+    return try  FfiConverterInt32.lift(try rustCallWithError(FfiConverterTypeRustraCommandFailure_lift) {
+        uniffiCallStatus in
+    uniffi_rustra_calculator_example_fn_func_readremembered(uniffiCallStatus
+    )
+})
+}
+/**
+ * `remember` — 일반 함수의 UniFFI 위치 인수 래퍼.
+ */
+public func remember(arg0: Int32)throws   {try rustCallWithError(FfiConverterTypeRustraCommandFailure_lift) {
+        uniffiCallStatus in
+    uniffi_rustra_calculator_example_fn_func_remember(
+        FfiConverterInt32.lower(arg0),uniffiCallStatus
+    )
+}
+}
+/**
+ * `reset` — 일반 함수의 UniFFI 위치 인수 래퍼.
+ */
+public func reset()throws   {try rustCallWithError(FfiConverterTypeRustraCommandFailure_lift) {
+        uniffiCallStatus in
+    uniffi_rustra_calculator_example_fn_func_reset(uniffiCallStatus
+    )
+}
+}
+/**
  * `resourceClose` — `crate::resource_close` 커맨드의 UniFFI 타입 래퍼.
  */
 public func resourceClose(input: ResourceCloseInput)throws  -> ResourceCloseOutput  {
@@ -4751,6 +4803,18 @@ public func rustraRegistryDemo(input: RegistryDemoInput)throws  -> RegistryDemoO
         uniffiCallStatus in
     uniffi_rustra_calculator_example_fn_func_rustraregistrydemo(
         FfiConverterTypeRegistryDemoInput_lower(input),uniffiCallStatus
+    )
+})
+}
+/**
+ * `safeDivide` — 일반 함수의 UniFFI 위치 인수 래퍼.
+ */
+public func safeDivide(arg0: Double, arg1: Double)throws  -> Double  {
+    return try  FfiConverterDouble.lift(try rustCallWithError(FfiConverterTypeRustraCommandFailure_lift) {
+        uniffiCallStatus in
+    uniffi_rustra_calculator_example_fn_func_safedivide(
+        FfiConverterDouble.lower(arg0),
+        FfiConverterDouble.lower(arg1),uniffiCallStatus
     )
 })
 }
@@ -4858,6 +4922,9 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
+    if (uniffi_rustra_calculator_example_checksum_func_add() != 7317) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_rustra_calculator_example_checksum_func_addnumbers() != 26346) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -4909,6 +4976,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_rustra_calculator_example_checksum_func_greet() != 40983) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_rustra_calculator_example_checksum_func_greetperson() != 12281) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_rustra_calculator_example_checksum_func_invokejson() != 15830) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -4927,6 +4997,15 @@ private let initializationResult: InitializationResult = {
     if (uniffi_rustra_calculator_example_checksum_func_processitem() != 6741) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_rustra_calculator_example_checksum_func_readremembered() != 1137) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_rustra_calculator_example_checksum_func_remember() != 37808) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_rustra_calculator_example_checksum_func_reset() != 42920) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_rustra_calculator_example_checksum_func_resourceclose() != 35746) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -4940,6 +5019,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_rustra_calculator_example_checksum_func_rustraregistrydemo() != 30147) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_rustra_calculator_example_checksum_func_safedivide() != 65085) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_rustra_calculator_example_checksum_func_scoretotal() != 64792) {

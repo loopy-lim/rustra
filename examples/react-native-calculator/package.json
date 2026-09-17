@@ -19,6 +19,8 @@
     "check": "bun run doctor && bun run typecheck && bun run test && bun run test:cpp-codec",
     "web": "expo start --web",
     "demo:dynamic": "EXPO_PUBLIC_RUSTRA_DEMO=dynamic expo start",
+    "demo:functions": "EXPO_PUBLIC_RUSTRA_DEMO=functions expo start --dev-client",
+    "ios:functions": "bun run build:fingerprint && bun run rust:ios && EXPO_PUBLIC_RUSTRA_DEMO=functions expo run:ios --configuration Release",
     "demo:reload": "EXPO_PUBLIC_RUSTRA_DEMO=reload expo start --dev-client",
     "demo:hot-core": "EXPO_PUBLIC_RUSTRA_DEMO=hot-core expo start --dev-client",
     "test:reload:ios": "bun scripts/reload-stress.mjs",
@@ -37,7 +39,8 @@
     "verify:native:ios:release": "xcodebuild -workspace ios/reactnativecalculator.xcworkspace -scheme reactnativecalculator -configuration Release -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath ios/build/rustra-release-derived-data CODE_SIGNING_ALLOWED=NO build",
     "install:ios:release": "xcrun simctl install booted ios/build/rustra-release-derived-data/Build/Products/Release-iphonesimulator/reactnativecalculator.app",
     "install:ios:debug": "xcrun simctl install booted ios/build/rustra-derived-data/Build/Products/Debug-iphonesimulator/reactnativecalculator.app",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:functions:ios": "bun scripts/verify-function-simulator.mjs"
   },
   "dependencies": {
     "@msgpack/msgpack": "^3.1.3",

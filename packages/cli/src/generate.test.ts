@@ -3017,3 +3017,145 @@ test('generated C++ oneOf variants commit only on their exact inline enum tag', 
     assert.ok(predicate.includes(`"${tag}"`), key);
   }
 });
+
+test('ordinary function positional facades preserve generated signatures and routes', async () => {
+  const integer = { type: 'integer', format: 'int32' };
+  const tuple = (items: import('./schema.js').JsonSchema[]) => ({
+    type: 'array',
+    items,
+    minItems: items.length,
+    maxItems: items.length,
+  });
+  const functions: PackageSchema = {
+    packageId: 'test.facade.functions',
+    commands: [
+      {
+        name: 'ordinaryAdd',
+        commandId: 1,
+        functionArgs: 2,
+        inputType: 'AddArgs',
+        outputType: 'Num',
+        inputSchema: tuple([integer, integer]),
+        outputSchema: integer,
+      },
+      {
+        name: 'resetFn',
+        commandId: 2,
+        functionArgs: 0,
+        inputType: '()',
+        outputType: '()',
+        inputSchema: { type: 'null' },
+        outputSchema: { type: 'null' },
+      },
+      {
+        name: 'unitArg',
+        commandId: 3,
+        functionArgs: 1,
+        inputType: 'UnitArgs',
+        outputType: 'Num',
+        inputSchema: tuple([{ type: 'null' }]),
+        outputSchema: integer,
+      },
+      {
+        name: 'failFn',
+        commandId: 4,
+        functionArgs: 0,
+        inputType: '()',
+        outputType: 'Num',
+        inputSchema: { type: 'null' },
+        outputSchema: integer,
+      },
+      {
+        name: 'dynamicFn',
+        commandId: 5,
+        functionArgs: 0,
+        inputType: '()',
+        outputType: 'Dynamic',
+        inputSchema: { type: 'null' },
+        outputSchema: { anyOf: [integer, { type: 'boolean' }, { type: 'string' }] },
+      },
+    ],
+  };
+  const source = generatePositionalFacadeTs(functions);
+  assert.match(
+    source,
+    /export \{ ordinaryAdd, resetFn, unitArg, failFn, dynamicFn \} from '.\/commands.js'/,
+  );
+  assert.doesNotMatch(source, /export function ordinaryAdd\(0:/);
+  const dir = mkdtempSync(join(tmpdir(), 'rustra-function-facade-'));
+  mkdirSync(join(dir, 'node_modules/@rustra'), { recursive: true });
+  symlinkSync(
+    fileURLToPath(new URL('../../types', import.meta.url)),
+    join(dir, 'node_modules/@rustra/types'),
+    'junction',
+  );
+  const file = join(dir, 'positional-facade.ts');
+  writeFileSync(file, source);
+  writeFileSync(join(dir, 'commands.ts'), generateCommandsTs(functions));
+  writeFileSync(join(dir, 'types.ts'), generateTypesTs(functions));
+  writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
+  writeFileSync(
+    join(dir, 'consumer.ts'),
+    `import {ordinaryAdd, resetFn, unitArg, dynamicFn} from './positional-facade.js';
+const number:Promise<number> = ordinaryAdd(2,3,{timeoutMs:100});
+const unit:Promise<void> = resetFn({timeoutMs:100});
+unitArg(null,{timeoutMs:100}); dynamicFn({timeoutMs:100});
+// @ts-expect-error The second positional argument is required.
+ordinaryAdd(2);
+// @ts-expect-error A unit argument cannot be mistaken for InvokeOptions.
+unitArg({timeoutMs:100});
+void [number,unit];`,
+  );
+  const { configure } = await import('@rustra/types');
+  const calls: { command: string; args: unknown; options: unknown }[] = [];
+  const error = new Error('mapped domain error');
+  const registration = configure({
+    async invoke<T>(command: string, args?: unknown, options?: unknown): Promise<T> {
+      calls.push({ command, args, options });
+      if (command === 'failFn') throw error;
+      return (command === 'ordinaryAdd' ? 5 : command === 'unitArg' ? 7 : null) as T;
+    },
+  });
+  try {
+    const ts = await import('typescript');
+    const program = ts.createProgram([join(dir, 'consumer.ts')], {
+      module: ts.ModuleKind.NodeNext,
+      moduleResolution: ts.ModuleResolutionKind.NodeNext,
+      target: ts.ScriptTarget.ES2022,
+      outDir: join(dir, 'dist'),
+      rootDir: dir,
+      noEmitOnError: true,
+      strict: true,
+      skipLibCheck: true,
+    });
+    const diagnostics = ts.getPreEmitDiagnostics(program);
+    assert.deepEqual(
+      diagnostics.map((diagnostic) =>
+        ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'),
+      ),
+      [],
+    );
+    // Exercise the emitted ESM graph: Node does not resolve .js imports to .ts.
+    const emitted = program.emit();
+    assert.equal(emitted.emitSkipped, false);
+    assert.deepEqual(emitted.diagnostics, []);
+    const facade = await import(pathToFileURL(join(dir, 'dist/positional-facade.js')).href);
+    const commands = await import(pathToFileURL(join(dir, 'dist/commands.js')).href);
+    for (const name of functions.commands.map((command) => command.name))
+      assert.equal(facade[name], commands[name]);
+    const options = { timeoutMs: 100 };
+    assert.equal(await facade.ordinaryAdd(2, 3, options), 5);
+    assert.equal(await facade.resetFn(options), undefined);
+    assert.equal(await facade.unitArg(null, options), 7);
+    await assert.rejects(facade.failFn(options), (caught: unknown) => caught === error);
+    assert.equal(await facade.dynamicFn(options), null);
+    assert.deepEqual(
+      calls.map(({ args }) => args),
+      [[2, 3], null, [null], null, null],
+    );
+    for (const call of calls) assert.equal(call.options, options);
+  } finally {
+    registration();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
