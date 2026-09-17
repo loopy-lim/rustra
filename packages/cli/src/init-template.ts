@@ -13,6 +13,7 @@ export const INIT_CONFIG_SCHEMA_PATH = './node_modules/@rustra/cli/rustra.schema
 
 /** init 이 뽑아줄 호스트 섹션 선택 — 감지(detectInitHosts) 또는 --host 로 결정된다. */
 export interface InitHosts {
+  nodeRange?: string;
   reactNative: boolean;
 }
 
@@ -54,7 +55,7 @@ export function renderInitProjectFiles(
   // 기록은 발행 API(rustra 0.5+ GeneratedPackage.schema_json) + std fs 로만 —
   // write_schema_to_dir 는 현재 라인에서 발행 보장이 없어 쓰지 않는다.
   const generateRs = `use std::path::PathBuf;\n\nfn main() -> rustra::Result<()> {\n    let generated = rustra_app::package().generate_typescript()?;\n    let out = match std::env::var_os("RUSTRA_SCHEMA_OUT") {\n        Some(p) if !p.is_empty() => PathBuf::from(p).join("schema.json"),\n        _ => PathBuf::from("generated").join("schema.json"),\n    };\n    if let Some(parent) = out.parent() {\n        std::fs::create_dir_all(parent)?;\n    }\n    std::fs::write(&out, generated.schema_json)?;\n    println!("{} written", out.display());\n    Ok(())\n}\n`;
-  const packageJson = `{\n  "name": "rustra-app",\n  "private": true,\n  "packageManager": "bun@1.4.0",\n  "type": "module",\n  "scripts": {\n    "doctor": "rustra doctor --config rustra.json",\n    "codegen": "rustra codegen --config rustra.json",\n    "codegen:check": "rustra codegen --config rustra.json --check",\n    "dev": "rustra dev --config rustra.json",\n    "demo": "bun run src/index.ts"\n  },\n  "dependencies": {\n    "@rustra/node": "${v.npmCliCaret}",\n    "@rustra/types": "${v.npmTypesRange}"\n  },\n  "devDependencies": {\n    "@rustra/cli": "${v.npmCliCaret}"\n  }\n}\n`;
+  const packageJson = `{\n  "name": "rustra-app",\n  "private": true,\n  "packageManager": "bun@1.4.0",\n  "type": "module",\n  "scripts": {\n    "doctor": "rustra doctor --config rustra.json",\n    "codegen": "rustra codegen --config rustra.json",\n    "codegen:check": "rustra codegen --config rustra.json --check",\n    "dev": "rustra dev --config rustra.json",\n    "demo": "bun run src/index.ts"\n  },\n  "dependencies": {\n    "@rustra/node": "${hosts.nodeRange ?? v.npmCliCaret}",\n    "@rustra/types": "${v.npmTypesRange}"\n  },\n  "devDependencies": {\n    "@rustra/cli": "${v.npmCliCaret}"\n  }\n}\n`;
   // 키 순서는 $schema 먼저 — 에디터가 스키마를 즉시 묶어 자동완성을 제공하게 한다.
   const configObject: Record<string, unknown> = {
     $schema: INIT_CONFIG_SCHEMA_PATH,

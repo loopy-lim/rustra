@@ -90,10 +90,61 @@ test('syncLockWorkspaceMetadata rewrites workspace version and internal ranges o
     assert.match(updated, /"typescript@5\.9\.0": \{\n      "version": "5\.9\.0"/);
     assert.doesNotMatch(updated, /"typescript": "\^0\.9\.0"/);
 
+    assert.equal(syncLockWorkspaceMetadata(lockPath, manifests), false, 'already synced — no-op');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('version step tracks each host independently of a CLI-only patch', async () => {
+  const { syncHostRanges } = await import('./version-packages.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'rustra-host-ranges-'));
+  try {
+    const path = join(root, 'package.json');
+    writeFileSync(
+      path,
+      JSON.stringify(
+        {
+          version: '0.10.1',
+          rustraTemplate: {
+            cargoRange: '^0.10.0',
+            nodeRange: '^0.8.0',
+            bunRange: '^0.8.0',
+            tauriRange: '^0.8.0',
+            reactNativeRange: '^0.8.0',
+          },
+        },
+        null,
+        2,
+      ),
+    );
     assert.equal(
-      syncLockWorkspaceMetadata(lockPath, manifests),
+      syncHostRanges(path, {
+        node: '0.10.0',
+        bun: '0.10.2',
+        tauri: '0.9.0',
+        'react-native': '0.9.1',
+      }),
+      true,
+    );
+    assert.deepEqual(JSON.parse(readFileSync(path, 'utf8')), {
+      version: '0.10.1',
+      rustraTemplate: {
+        cargoRange: '^0.10.0',
+        nodeRange: '^0.10.0',
+        bunRange: '^0.10.0',
+        tauriRange: '^0.9.0',
+        reactNativeRange: '^0.9.0',
+      },
+    });
+    assert.equal(
+      syncHostRanges(path, {
+        node: '0.10.0',
+        bun: '0.10.2',
+        tauri: '0.9.0',
+        'react-native': '0.9.1',
+      }),
       false,
-      'already synced — no-op',
     );
   } finally {
     rmSync(root, { recursive: true, force: true });

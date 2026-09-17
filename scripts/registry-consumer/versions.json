@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "npm": {
+    "@rustra/cli": "0.10.0",
+    "@rustra/types": "0.10.0",
+    "@rustra/node": "0.10.0",
+    "@rustra/bun": "0.10.0"
+  },
+  "phases": {
+    "baseline": {
+      "rustra": "0.10.0",
+      "rustra-macros": "0.10.0",
+      "rustra-naming": "0.10.0"
+    },
+    "candidate": {
+      "rustra": "0.10.1",
+      "rustra-macros": "0.10.1",
+      "rustra-naming": "0.10.1"
+    },
+    "rollback": {
+      "rustra": "0.10.0",
+      "rustra-macros": "0.10.0",
+      "rustra-naming": "0.10.0"
+    }
+  }
+}

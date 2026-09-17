@@ -1,0 +1,204 @@
+{
+  "schemaVersion": 1,
+  "fetchedAt": "2026-09-15T16:59:29.906Z",
+  "candidate": {
+    "sha": "1f277de2e68e2242b7a6503e6e0ab731833e60e3",
+    "dirty": true
+  },
+  "npm": [
+    {
+      "name": "@rustra/bun",
+      "workspaceVersion": "0.10.0",
+      "exactVersion": "0.10.0",
+      "latestVersion": "0.10.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Fbun",
+      "error": null
+    },
+    {
+      "name": "@rustra/cli",
+      "workspaceVersion": "0.10.0",
+      "exactVersion": "0.10.0",
+      "latestVersion": "0.10.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Fcli",
+      "error": null
+    },
+    {
+      "name": "@rustra/devtools",
+      "workspaceVersion": "0.7.0",
+      "exactVersion": "0.7.0",
+      "latestVersion": "0.7.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Fdevtools",
+      "error": null
+    },
+    {
+      "name": "@rustra/node",
+      "workspaceVersion": "0.10.0",
+      "exactVersion": "0.10.0",
+      "latestVersion": "0.10.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Fnode",
+      "error": null
+    },
+    {
+      "name": "@rustra/react",
+      "workspaceVersion": "0.8.0",
+      "exactVersion": "0.8.0",
+      "latestVersion": "0.8.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Freact",
+      "error": null
+    },
+    {
+      "name": "@rustra/react-native",
+      "workspaceVersion": "0.9.0",
+      "exactVersion": "0.9.0",
+      "latestVersion": "0.9.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Freact-native",
+      "error": null
+    },
+    {
+      "name": "@rustra/tauri",
+      "workspaceVersion": "0.9.0",
+      "exactVersion": "0.9.0",
+      "latestVersion": "0.9.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Ftauri",
+      "error": null
+    },
+    {
+      "name": "@rustra/testing",
+      "workspaceVersion": "0.7.0",
+      "exactVersion": "0.7.0",
+      "latestVersion": "0.7.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Ftesting",
+      "error": null
+    },
+    {
+      "name": "@rustra/types",
+      "workspaceVersion": "0.10.0",
+      "exactVersion": "0.10.0",
+      "latestVersion": "0.10.0",
+      "publication": "published",
+      "source": {
+        "revision": "30c73bd66159f4c777054527236573559c106c98",
+        "relation": "different",
+        "dirty": null
+      },
+      "registryUrl": "https://registry.npmjs.org/%40rustra%2Ftypes",
+      "error": null
+    }
+  ],
+  "crates": [
+    {
+      "name": "rustra",
+      "workspaceVersion": "0.10.1",
+      "exactVersion": "0.10.1",
+      "exactYanked": false,
+      "latestVersion": "0.10.1",
+      "publication": "published",
+      "source": {
+        "revision": "1f277de2e68e2242b7a6503e6e0ab731833e60e3",
+        "relation": "exact",
+        "dirty": false
+      },
+      "registryUrl": "https://index.crates.io/ru/st/rustra",
+      "archiveUrl": "https://static.crates.io/crates/rustra/rustra-0.10.1.crate",
+      "checksum": {
+        "expected": "618da08d21c4c649a2fbd88c22e691f1146d4dad315a501f848d4d898bdb6a08",
+        "actual": "618da08d21c4c649a2fbd88c22e691f1146d4dad315a501f848d4d898bdb6a08",
+        "verified": true
+      },
+      "error": null
+    },
+    {
+      "name": "rustra-macros",
+      "workspaceVersion": "0.10.1",
+      "exactVersion": "0.10.1",
+      "exactYanked": false,
+      "latestVersion": "0.10.1",
+      "publication": "published",
+      "source": {
+        "revision": "1f277de2e68e2242b7a6503e6e0ab731833e60e3",
+        "relation": "exact",
+        "dirty": false
+      },
+      "registryUrl": "https://index.crates.io/ru/st/rustra-macros",
+      "archiveUrl": "https://static.crates.io/crates/rustra-macros/rustra-macros-0.10.1.crate",
+      "checksum": {
+        "expected": "fffacb3c1239e14f83f933b5a4b54c6cbb5bef2f5d36303133d9d2f05a9ed219",
+        "actual": "fffacb3c1239e14f83f933b5a4b54c6cbb5bef2f5d36303133d9d2f05a9ed219",
+        "verified": true
+      },
+      "error": null
+    },
+    {
+      "name": "rustra-naming",
+      "workspaceVersion": "0.10.1",
+      "exactVersion": "0.10.1",
+      "exactYanked": false,
+      "latestVersion": "0.10.1",
+      "publication": "published",
+      "source": {
+        "revision": "1f277de2e68e2242b7a6503e6e0ab731833e60e3",
+        "relation": "exact",
+        "dirty": false
+      },
+      "registryUrl": "https://index.crates.io/ru/st/rustra-naming",
+      "archiveUrl": "https://static.crates.io/crates/rustra-naming/rustra-naming-0.10.1.crate",
+      "checksum": {
+        "expected": "d4772360dcdf7c157cd4bc2f494532174f8cfa549318745ceef0d77f569d42fc",
+        "actual": "d4772360dcdf7c157cd4bc2f494532174f8cfa549318745ceef0d77f569d42fc",
+        "verified": true
+      },
+      "error": null
+    }
+  ],
+  "artifacts": [],
+  "errors": [],
+  "note": "Read-only registry snapshot on 2026-09-16 KST. candidate.dirty reflects local worktree preparation. Rust source/checksums verify the released main SHA; npm source is an earlier independent publication."
+}
